@@ -62,6 +62,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--frame-capture-max", type=int, default=4,
                     help="max frames to capture under --frame-capture "
                          "(default 4)")
+    ap.add_argument("--input-record", action="store_true",
+                    help="exercise the WndProc input-recording hook; the "
+                         "smoke window is long enough to fire a synthetic "
+                         "WM_MOUSEMOVE via SendInput from the Windows side. "
+                         "Drops a JSONL trace under <run_dir>/.")
+    ap.add_argument("--input-trace", default=None,
+                    help="exercise the input-replay path: load a prior "
+                         "input_trace.jsonl and verify PostMessageA fires "
+                         "the expected number of times")
     ap.add_argument("--run-id", default=None,
                     help="run directory name under runs/smoke/ "
                          "(default: timestamp)")
@@ -71,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
     run_dir = ROOT / "runs" / "smoke" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    from pathlib import Path as _Path
     cfg = fc.CaptureConfig(
         duration_ms=args.duration_ms,
         hide_window=not args.no_hide,
@@ -80,6 +90,9 @@ def main(argv: list[str] | None = None) -> int:
         turbo_step_ms=args.turbo_step_ms,
         frame_capture=args.frame_capture,
         frame_capture_max=args.frame_capture_max,
+        input_record=args.input_record,
+        input_replay_path=(_Path(args.input_trace).resolve()
+                           if args.input_trace else None),
     )
     print(f"[smoke] run_dir = {run_dir}")
     result = fc._run_capture_impl(cfg, run_dir)
@@ -90,10 +103,15 @@ def main(argv: list[str] | None = None) -> int:
     # the boot sequence.
     checks = [
         ("agent emitted ready",                "[ready]"        in log),
-        ("agent installed hide_window hooks",  "hide_window hooks installed" in log),
         ("agent tracked CreateWindowEx",       "CreateWindowEx tracking installed" in log),
         ("agent installed MessageBox hook",    "msgbox_redirect: MessageBoxA" in log),
     ]
+    if not args.no_hide:
+        # The hide-window hooks only install when hide_window is on;
+        # asserting their presence unconditionally would (falsely) fail any
+        # --no-hide run.
+        checks.append(("agent installed hide_window hooks",
+                       "hide_window hooks installed" in log))
     if not args.no_force_windowed:
         checks.append(("ChangeDisplaySettings* stub installed",
                        "force_windowed[L1]:" in log))
@@ -130,6 +148,22 @@ def main(argv: list[str] | None = None) -> int:
         bmps = sorted(frames_dir.glob("frame_*.bmp")) if frames_dir.exists() else []
         checks.append(("at least one frame BMP written",
                        len(bmps) >= 1))
+    if args.input_record:
+        # The WndProc hook is armed regardless of whether any input
+        # events actually arrived during the smoke window (running
+        # headless on a remote frida-server, the engine's window has no
+        # input focus → no key/mouse events are dispatched). So we only
+        # assert the hook armed, not that the trace is non-empty —
+        # exercising the recording end-to-end requires a real session.
+        checks.append(("input_record hook armed",
+                       "input_record: WndProc hook armed" in log))
+        checks.append(("input_trace.jsonl exists",
+                       (run_dir / "input_trace.jsonl").exists()))
+    if args.input_trace:
+        checks.append(("input_replay armed",
+                       "input_replay: armed" in log))
+        checks.append(("at least one event posted",
+                       result.input_replay_post_count >= 1))
 
     failed = [name for name, ok in checks if not ok]
 
@@ -150,6 +184,10 @@ def main(argv: list[str] | None = None) -> int:
         "turbo_step_ms":   args.turbo_step_ms,
         "frame_capture":   args.frame_capture,
         "frame_count":     result.frame_count,
+        "input_record":    args.input_record,
+        "input_trace":     args.input_trace,
+        "input_event_count":       result.input_event_count,
+        "input_replay_post_count": result.input_replay_post_count,
         "checks": [{"name": n, "ok": ok} for n, ok in checks],
     }
     (run_dir / "smoke.json").write_text(json.dumps(summary, indent=2))

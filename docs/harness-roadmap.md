@@ -47,11 +47,19 @@ implemented.
 
 ## Phase 3 — Input replay
 
-- [ ] `DispatchMessage` hook records every `WM_KEY*` / `WM_MOUSE*`
-      / `WM_CHAR` as a sparse JSONL trace.
-- [ ] `--input-trace FILE` replay path: `SendMessageA` / 
-      `PostMessageA` the recorded events back into the engine's
-      main HWND at the right engine-frame offset.
+- [x] WndProc hook (preferred over `DispatchMessage` — args already on
+      stack, and avoids round-tripping the engine's own internal
+      `PostMessageA` re-entries) records every `WM_KEY*` /
+      `WM_MOUSE*` / `WM_CHAR` as a sparse JSONL trace, stamped with
+      `engine_tick` count.  See `docs/findings/input-replay.md`.
+- [x] `--input-trace FILE` replay path: `PostMessageA` (not Send —
+      avoids cross-thread deadlock since the drain runs on the engine
+      main thread) the recorded events back into the engine's cached
+      main HWND (`DAT_004e5a00`) at the right `engine_tick` count.
+- [ ] Real interactive recording session: blocked on either a hostable
+      fullscreen Windows session or a fix for the DWM-windowed
+      visibility quirk.  Synthetic traces exercise the machinery
+      tick-accurately; real recording is gated on the harness host.
 - [ ] Side-by-side runs: same trace, retail vs ours, frame-diff
       the divergence.
 

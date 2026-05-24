@@ -157,6 +157,13 @@ class CaptureConfig:
     frame_capture:              bool = False
     frame_capture_max:          int  = 16   # 0 = unlimited
     frame_capture_warmup_secs:  int  = 5    # skip captures for first N cum-secs
+    # Input recording: when set, the WndProc hook emits one JSONL line per
+    # dispatched input message to <run_dir>/input_trace.jsonl.
+    input_record:      bool = False
+    # Input replay: path to a JSONL trace produced by input_record. Loaded
+    # eagerly and shipped to the agent inline via init opts (the Windows-side
+    # agent has no access to WSL filesystem paths).
+    input_replay_path: Path | None = None
     exe_args:          list[str] = field(default_factory=list)
 
 
@@ -174,6 +181,8 @@ class CaptureResult:
     last_avg_fps:     int = 0
     last_cum_seconds: int = 0
     frame_count:      int = 0
+    input_event_count: int = 0
+    input_replay_post_count: int = 0
 
 
 # ─── BMP writer ───────────────────────────────────────────────────────────
@@ -225,19 +234,63 @@ def _write_paletted_bmp(out: Path, width: int, height: int,
             fp.write(row_out)
 
 
+def _load_input_trace(path: Path) -> list[dict[str, int]]:
+    """Read a JSONL input trace. Each line must decode to an object with
+    integer fields t/m/w/l (tick, msg, wparam, lparam). Blank lines and
+    lines starting with `#` are skipped — same convention as the input
+    traces in the sibling projects.
+    """
+    out: list[dict[str, int]] = []
+    for lineno, raw in enumerate(path.read_text().splitlines(), 1):
+        s = raw.strip()
+        if not s or s.startswith("#"):
+            continue
+        try:
+            obj = json.loads(s)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"{path}:{lineno}: {e}") from e
+        try:
+            out.append({"t": int(obj["t"]),
+                        "m": int(obj["m"]),
+                        "w": int(obj["w"]),
+                        "l": int(obj["l"])})
+        except (KeyError, TypeError, ValueError) as e:
+            raise ValueError(
+                f"{path}:{lineno}: missing/invalid t/m/w/l field: {e}") from e
+    return out
+
+
 def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
     agent_log = run_dir / "agent.log"
     f_log = agent_log.open("w", buffering=1)
 
     counts = {"hwnd": 0, "hide": 0, "msgbox": 0, "ddraw_coop": 0,
               "dsound_coop": 0, "audio_mute": 0, "display_blocked": 0,
-              "fps_sample": 0, "frame": 0}
+              "fps_sample": 0, "frame": 0, "input_event": 0,
+              "input_replay_post": 0}
     fps_last = {"current_fps": 0, "avg_fps": 0, "cum_secs": 0}
     done = threading.Event()
 
     frames_dir = run_dir / "frames"
     if cfg.frame_capture:
         frames_dir.mkdir(exist_ok=True)
+
+    # Open the input-trace sink (one JSONL line per recorded WM_*).  We hold
+    # the file open across the run; the agent emits events asynchronously
+    # via on_message.
+    input_trace_fp = None
+    if cfg.input_record:
+        input_trace_fp = (run_dir / "input_trace.jsonl").open("w", buffering=1)
+
+    # Preload the replay events so any parse failure surfaces before we
+    # spawn the engine.  The agent expects a JSON array of {t,m,w,l}
+    # objects passed via init opts; the Frida send/recv layer marshals it
+    # transparently as long as everything's plain JSON-safe primitives.
+    input_replay_events: list[dict[str, int]] = []
+    if cfg.input_replay_path is not None:
+        input_replay_events = _load_input_trace(cfg.input_replay_path)
+        f_log.write(f"[input_replay] loaded {len(input_replay_events)} events "
+                    f"from {cfg.input_replay_path}\n")
 
     def on_message(message: dict[str, Any], data: bytes | None):
         if message.get("type") == "error":
@@ -362,6 +415,28 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
                 f"virt_ms={p.get('virtual_now_ms')} "
                 f"t_ms={p.get('t_ms')}\n")
             return
+        if kind == "input_event":
+            counts["input_event"] += 1
+            ev = {"t": int(p.get("t", 0)),
+                  "m": int(p.get("m", 0)),
+                  "w": int(p.get("w", 0)),
+                  "l": int(p.get("l", 0))}
+            if input_trace_fp is not None:
+                input_trace_fp.write(json.dumps(ev) + "\n")
+            f_log.write(
+                f"[input] t={ev['t']} m=0x{ev['m']:x} "
+                f"w=0x{ev['w']:x} l=0x{ev['l']:x} "
+                f"hwnd={p.get('hwnd')}\n")
+            return
+        if kind == "input_replay_post":
+            counts["input_replay_post"] += 1
+            f_log.write(
+                f"[replay] idx={p.get('idx')} t={p.get('t')} "
+                f"tick_now={p.get('tick_now')} "
+                f"m=0x{int(p.get('m', 0)):x} "
+                f"w=0x{int(p.get('w', 0)):x} "
+                f"l=0x{int(p.get('l', 0)):x}\n")
+            return
         # unknown kind — log it raw so we can spot agent extensions we
         # haven't wired up yet.
         f_log.write(f"[unknown-event] {json.dumps(p)}\n")
@@ -412,6 +487,8 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "frame_capture":             bool(cfg.frame_capture),
             "frame_capture_max":         int(cfg.frame_capture_max),
             "frame_capture_warmup_secs": int(cfg.frame_capture_warmup_secs),
+            "input_record":              bool(cfg.input_record),
+            "input_replay":              input_replay_events,
         }
         script.exports_sync.init(init_cfg)
         device.resume(pid)
@@ -439,6 +516,8 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
     elapsed_ms = int((time.monotonic() - t0) * 1000)
     f_log.write(f"[summary] {counts}\n")
     f_log.close()
+    if input_trace_fp is not None:
+        input_trace_fp.close()
 
     return CaptureResult(
         exit_code=exit_code,
@@ -453,6 +532,8 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         last_avg_fps=fps_last["avg_fps"],
         last_cum_seconds=fps_last["cum_secs"],
         frame_count=counts["frame"],
+        input_event_count=counts["input_event"],
+        input_replay_post_count=counts["input_replay_post"],
     )
 
 
@@ -494,6 +575,16 @@ def main(argv: list[str] | None = None) -> int:
                     help="skip captures for the first N engine "
                          "cumulative-seconds rollovers so the engine has "
                          "time to render a first frame (default 5)")
+    ap.add_argument("--input-record", action="store_true",
+                    help="record every dispatched WM_KEY*/WM_CHAR/WM_MOUSE* "
+                         "event to <run_dir>/input_trace.jsonl, stamped with "
+                         "the engine_tick count at moment of dispatch")
+    ap.add_argument("--input-trace",
+                    default=None,
+                    help="replay a JSONL trace previously captured with "
+                         "--input-record: PostMessageA each event to the "
+                         "engine's main HWND when its recorded tick stamp "
+                         "is reached")
     ap.add_argument("--exe-arg", action="append", default=[],
                     help="argument to pass to the spawned exe (repeatable)")
     args = ap.parse_args(argv)
@@ -515,6 +606,9 @@ def main(argv: list[str] | None = None) -> int:
         frame_capture=args.frame_capture,
         frame_capture_max=args.frame_capture_max,
         frame_capture_warmup_secs=args.frame_capture_warmup_secs,
+        input_record=args.input_record,
+        input_replay_path=(Path(args.input_trace).resolve()
+                           if args.input_trace else None),
         exe_args=list(args.exe_arg),
     )
     print(f"[capture] run_dir = {run_dir}")
@@ -525,7 +619,9 @@ def main(argv: list[str] | None = None) -> int:
           f"turbo={cfg.turbo} turbo_step_ms={cfg.turbo_step_ms} "
           f"frame_capture={cfg.frame_capture} "
           f"frame_capture_max={cfg.frame_capture_max} "
-          f"frame_capture_warmup_secs={cfg.frame_capture_warmup_secs}")
+          f"frame_capture_warmup_secs={cfg.frame_capture_warmup_secs} "
+          f"input_record={cfg.input_record} "
+          f"input_replay={cfg.input_replay_path}")
 
     result = _run_capture_impl(cfg, run_dir)
 
@@ -549,6 +645,11 @@ def main(argv: list[str] | None = None) -> int:
         "frame_capture_max":         cfg.frame_capture_max,
         "frame_capture_warmup_secs": cfg.frame_capture_warmup_secs,
         "frame_count":               result.frame_count,
+        "input_record":              cfg.input_record,
+        "input_replay_path":         (str(cfg.input_replay_path)
+                                      if cfg.input_replay_path else None),
+        "input_event_count":         result.input_event_count,
+        "input_replay_post_count":   result.input_replay_post_count,
     }
     (run_dir / "run.json").write_text(json.dumps(meta, indent=2))
     print(json.dumps(meta, indent=2))

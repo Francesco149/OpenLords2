@@ -7,6 +7,142 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Input record + replay (Phase 3 of harness-roadmap)
+
+Picked the "What's next" pointer from the previous entry: input replay
+is the most productive non-engine slice while the screen-dispatch
+ladder is still blocked on per-screen subsystems.  The machinery is
+fully landed and tick-accurate against retail; a real interactive
+recording session is gated on a separate host-display issue (see
+"Limitations" below).
+
+### Agent (`tools/frida/openlords2-agent.js`)
+
+- Two new `ADDR` entries: `fn_wndproc` (`FUN_004b29be`) and
+  `var_main_hwnd` (`DAT_004e5a00`).  Cached main-HWND is read directly
+  from BSS rather than discovered via CreateWindowEx — the engine sets
+  it during InitInstance and our drain runs only after engine_tick
+  fires (i.e., after the main loop has started), so it's guaranteed
+  non-null.
+- New `g_tick_count` — 1-indexed engine_tick counter, bumped in
+  `engine_tick.onEnter` at the top.  Used as both the recording
+  timestamp and the replay schedule index.
+- `installInputRecordHook()` attaches to `fn_wndproc.onEnter`, filters
+  `args[1]` against the user-input WM_* set (KEY/CHAR/MOUSE — see
+  `docs/findings/input-replay.md` for the full list), and emits one
+  `kind:'input_event'` event per dispatched message with
+  `{t, m, w, l, hwnd}`.
+- `drainInputReplayForTick(tick)` posts queued events when their
+  stamp ≤ current tick.  `PostMessageA` resolved lazily from
+  user32.dll on first use.  Called from `engine_tick.onEnter` right
+  after `g_tick_count++`, which puts the posted message in the main
+  thread's queue *during* tick N → engine's `PeekMessage` picks it up
+  before tick N+1.  Reverse of the recording: same gap between the
+  same two ticks.
+- Init RPC: two new opts (`input_record: bool`,
+  `input_replay: array<{t,m,w,l}>`); ready event reports both.
+
+### Driver (`tools/frida_capture.py`, `tools/smoke-test.py`)
+
+- `CaptureConfig` grew `input_record: bool` and
+  `input_replay_path: Path | None`.  The driver preloads the JSONL
+  trace before spawn (parse failures surface immediately) and passes
+  the parsed array inline via init opts — the Windows-side agent has
+  no access to WSL filesystem paths.
+- `_load_input_trace()` accepts comments (`#`) and blank lines so
+  hand-authored synthetic traces stay readable.
+- Two new `on_message` handlers: `input_event` writes a JSONL line to
+  `<run_dir>/input_trace.jsonl` + logs to agent.log;
+  `input_replay_post` increments a per-run counter for the smoke
+  assertion.  Both are no-ops when their respective modes are off.
+- New CLI flags `--input-record` / `--input-trace FILE` on both
+  driver and smoke; smoke fails if `--input-trace` is set and zero
+  events are posted by the end of the window.
+- Bonus fix: smoke's "hide_window hooks installed" check was
+  unconditional but the hide hooks correctly only install with
+  `hide_window=true`.  Moved into the `not args.no_hide` arm so
+  `--no-hide` smoke runs don't false-fail.
+
+### Verified
+
+Three smokes against retail (via `cutestation.soy:27042`):
+
+1. `--input-record --turbo` (5 s, hidden window): WndProc hook armed,
+   `input_trace.jsonl` created (empty — no events fired because
+   hidden window has no focus to dispatch input to).  All 14
+   baseline checks pass.
+2. `--input-trace runs/synthetic/input_trace.jsonl --turbo` (4 s,
+   then 6 s for diagnosis): synthetic trace of 4 events at ticks
+   50/100/150/200.  Events 1..3 posted exactly at tick_now=50/100/150
+   (`[replay] idx=0 t=50 tick_now=50 m=0x100 w=0x74 l=0x0`).  Event 4
+   never fired — diagnosed: the 3rd event (VK_ESCAPE keydown at
+   tick 150) hit retail's WndProc ESCAPE handler which sets
+   `DAT_005aeb68 = 1` (deferred shutdown) when engine state isn't
+   ingame.  Engine drained and exited cleanly within ~250 ticks; the
+   smoke's cum_secs dropped from 2515 (baseline) to 2 (engine quit).
+   This *validates* both the post mechanism and the engine's escape
+   semantics — and is a property worth preserving in our port
+   (VK_ESCAPE outside ingame state ≡ Alt-F4).
+3. `--no-hide --no-force-windowed` (8 s): engine creates its main
+   window (`WinLords2Class` "Lords2") but freezes before DSound init
+   when forced into exclusive fullscreen.  Documented as a harness
+   limitation in `input-replay.md` (not a regression — base
+   `--force-windowed` smoke still gets ~117 fps).
+
+### Limitations on real interactive recording
+
+A live human-driven recording needs the engine's window to be both
+visible AND responsive on the harness host.  Today's harness defaults
+hit one of two walls:
+
+- `--force-windowed` (default): window appears, but content is
+  invisible under DWM (the documented `DDraw NORMAL Blt invisible
+  under DWM` quirk).  Can't see what you're clicking.
+- `--no-force-windowed`: engine attempts exclusive fullscreen on
+  cutestation and hangs before DSound init (probably the desktop
+  session isn't attached enough for exclusive mode-set).
+
+Synthetic traces hand-authored from `wndproc.md`'s VK/WM table
+round-trip end-to-end and prove the machinery works tick-accurately.
+Real recording-from-a-live-session is gated on either a fullscreen-
+capable Windows host or a re-impl menu (which uses GDI StretchDIBits
+and renders correctly under DWM).
+
+### What's next
+
+The harness now has all three primitives needed for scenario-driven
+differential testing: turbo (Phase 1), frame capture (Phase 2), input
+replay (Phase 3).  Next slices, in roughly priority order:
+
+1. **Resume engine-port** inside `engine_tick`.  Pre-tick
+   `FUN_00499a1c` (174 B, music/audio update) lands together with the
+   audio subsystem; the screen-dispatch ladder unblocks per-screen as
+   we land each subsystem.  Both are blocked on subsystems we
+   haven't started.
+2. **Pure-function differential** (Phase 4 of harness-roadmap) — for
+   each ported function, cross-check its output against retail via
+   Frida `NativeFunction` invocation with the engine suspended.
+   `engine_rng_step` (`FUN_00404a46`) and the FPS counter
+   (`FUN_004b27bf`) are the obvious first targets: pure, small, and
+   already have ASan-passing host-side ports.
+3. **DDraw Blt-via-GDI seat** — short-circuit the "Blt invisible
+   under DWM" quirk by intercepting `IDirectDrawSurface::Blt` and
+   re-routing through `GDI StretchDIBits` (using the same path
+   `src/gfx.c` uses for our re-impl).  Unblocks live recording
+   sessions.  Probably half a day's work — vtable patch, lock the
+   back, StretchDIBits to the HDC of the window we already track.
+4. **Save-file format** — `castles.dat` / `c_hist.dat` /
+   `history.dat` parsers.  Lands as a `docs/findings/save-file.md`
+   plus a host-side decoder TU and starts to unlock the simulation
+   subsystem ports.
+
+Top-down RE bias next time: option 2 is the highest-leverage —
+catches arithmetic drift in our ports before scenarios surface it, and
+costs nothing relative to its protection.  Option 3 is the unlock
+for option 1's recording-driven scenarios.
+
+---
+
 ## 2026-05-24 — Sub-step body skeleton + double-LFSR RNG port (FUN_00404a46)
 
 Continued the entry-chain port one slot deeper.  The sub-step body

@@ -42,6 +42,14 @@
 //   {kind:"ddraw_cooplevel_rewrite", iface, hwnd, original, forced}
 //   {kind:"dsound_cooplevel_rewrite", iface, hwnd, original, forced}
 //   {kind:"audio_mute",         api, original}
+//   {kind:"fps_sample",         current_fps, cumulative_fps,
+//                               cumulative_seconds, avg_fps,
+//                               virtual_now_ms, t_ms}
+//   {kind:"frame",              frame_idx, width, height, pitch,
+//                               virtual_now_ms, t_ms} (+ binary payload)
+//   {kind:"input_event",        t (tick), m (msg), w (wparam), l (lparam),
+//                               hwnd}
+//   {kind:"input_replay_post",  idx, t, m, w, l, tick_now}
 
 'use strict';
 
@@ -70,6 +78,15 @@ const ADDR = {
     var_dd_primary:    0x004eabd0,  // IDirectDrawSurface* — primary
     var_dd_back:       0x004eafac,  // IDirectDrawSurface* — back (offscreen plain)
     var_dd_palette:    0x004df288,  // IDirectDrawPalette* — 256-entry palette
+    // Input subsystem — WndProc and the cached main-HWND global.  See
+    // docs/findings/wndproc.md for the message-dispatch breakdown.  Hook the
+    // class wndproc directly rather than user32!DispatchMessage* because the
+    // wndproc has the four args already on the stack (hwnd, msg, wp, lp) —
+    // DispatchMessage would force us to dereference the MSG* and would also
+    // catch internal posts (e.g. PostMessageA from inside the engine on
+    // Alt-X) that we don't want to round-trip.
+    fn_wndproc:        0x004b29be,  // FUN_004b29be — class wndproc
+    var_main_hwnd:     0x004e5a00,  // DAT_004e5a00 — cached main HWND
 };
 
 // ─── runtime state ──────────────────────────────────────────────────────
@@ -118,6 +135,31 @@ let g_nf_surface_lock        = null;
 let g_nf_surface_unlock      = null;
 let g_nf_palette_get_entries = null;
 let g_capture_scratch        = null;   // pre-allocated payload buffer
+
+// Per-tick anchor counter. Bumped in engine_tick.onEnter (1-indexed: equals
+// the tick number currently executing). Used both as the timestamp for
+// recorded input events and as the schedule index for replaying them.
+let g_tick_count          = 0;
+
+// Input recording. When armed, the WndProc hook emits one `input_event`
+// per dispatched input message (WM_KEY*/WM_CHAR/WM_MOUSE*), stamped with
+// g_tick_count at moment of dispatch.  The dispatch happens *between*
+// engine_tick calls (engine's main loop is PeekMessage → DispatchMessage
+// → engine_tick), so the stamp identifies "the most recent tick before
+// the event was consumed by the engine".  Replay reverses this: posting
+// in engine_tick.onEnter (right after g_tick_count is bumped) makes the
+// messages get processed before the next engine_tick — matching the
+// recording's timing.
+let g_input_record_enabled = false;
+
+// Input replay. Holds the trace as an array of {t, m, w, l} objects sorted
+// by t. g_replay_idx advances as events are posted.  The PostMessageA stub
+// is resolved lazily on first use (user32.dll is loaded before we ever get
+// here because the engine itself imports it).
+let g_input_replay_events  = null;     // array | null
+let g_replay_idx           = 0;
+let g_replay_post_count    = 0;
+let g_nf_post_message_a    = null;
 
 // ─── helpers ────────────────────────────────────────────────────────────
 
@@ -1013,10 +1055,109 @@ function captureFrameOnce() {
     }
 }
 
+// ─── input record / replay ─────────────────────────────────────────────
+// WM_* values we care about.  The WndProc-side recorder filters the full
+// message stream down to this set so the trace stays sparse — every other
+// message (WM_PAINT, WM_TIMER, WM_ACTIVATEAPP, …) is irrelevant for
+// scenario reproduction.  Retail's WndProc handles 0x100..0x102 and
+// 0x200..0x206 directly; 0x104..0x106 (system key / sys-char) go to
+// DefWindowProcA but are still part of the user-input stream the engine
+// can react to via PostMessage redirection (see WM_SYSCHAR Alt-X).
+const WM_KEYDOWN       = 0x100;
+const WM_KEYUP         = 0x101;
+const WM_CHAR          = 0x102;
+const WM_SYSKEYDOWN    = 0x104;
+const WM_SYSKEYUP      = 0x105;
+const WM_SYSCHAR       = 0x106;
+const WM_MOUSEMOVE     = 0x200;
+const WM_LBUTTONDOWN   = 0x201;
+const WM_LBUTTONUP     = 0x202;
+const WM_LBUTTONDBLCLK = 0x203;
+const WM_RBUTTONDOWN   = 0x204;
+const WM_RBUTTONUP     = 0x205;
+const WM_RBUTTONDBLCLK = 0x206;
+
+function isRecordedInputMsg(m) {
+    return (m >= WM_KEYDOWN && m <= WM_SYSCHAR && m !== 0x103 && m !== 0x107)
+        || (m >= WM_MOUSEMOVE && m <= WM_RBUTTONDBLCLK);
+}
+
+function installInputRecordHook() {
+    Interceptor.attach(rva(ADDR.fn_wndproc), {
+        onEnter: function (args) {
+            const msg = args[1].toUInt32();
+            if (!isRecordedInputMsg(msg)) return;
+            // wparam is a UINT_PTR (DWORD on x86), lparam is LPARAM (signed
+            // DWORD). Emit both as raw 32-bit values; the consumer is
+            // responsible for sign-interpreting lparam fields if needed
+            // (e.g. WM_MOUSEMOVE packs signed shorts into the low/high).
+            send({kind: 'input_event',
+                  t: g_tick_count,
+                  m: msg,
+                  w: args[2].toUInt32(),
+                  l: args[3].toUInt32(),
+                  hwnd: args[0].toString()});
+        },
+    });
+    log('input_record: WndProc hook armed @ ' + rva(ADDR.fn_wndproc) +
+        ' (FUN_004b29be)');
+}
+
+// Resolve PostMessageA lazily. user32.dll is mapped before our agent loads
+// (Lords2.exe imports it directly), so this should never fail in practice.
+function resolvePostMessageA() {
+    if (g_nf_post_message_a) return g_nf_post_message_a;
+    const u32 = Process.findModuleByName('user32.dll');
+    if (!u32) { err('input_replay', 'user32.dll not loaded'); return null; }
+    const exp = u32.findExportByName('PostMessageA');
+    if (!exp) { err('input_replay', 'user32!PostMessageA not found'); return null; }
+    g_nf_post_message_a = new NativeFunction(
+        exp, 'int32', ['pointer', 'uint32', 'uint32', 'uint32'], 'stdcall');
+    return g_nf_post_message_a;
+}
+
+// Drain all replay events whose stamp <= the current tick. Called from
+// engine_tick.onEnter right after g_tick_count is bumped: posted messages
+// land in the main thread's queue and are picked up by the engine's
+// PeekMessage on its very next iteration — i.e., right after this tick
+// returns and before the next tick starts. That matches the recording
+// timing exactly: events were recorded when DispatchMessage fired
+// "between tick g_tick_count and the next", and replayed between the
+// same two.
+function drainInputReplayForTick(tick) {
+    if (!g_input_replay_events) return;
+    if (g_replay_idx >= g_input_replay_events.length) return;
+    const post = resolvePostMessageA();
+    if (!post) return;
+    const hwnd = rva(ADDR.var_main_hwnd).readPointer();
+    if (hwnd.isNull()) return;     // wait until the main window exists
+    while (g_replay_idx < g_input_replay_events.length) {
+        const ev = g_input_replay_events[g_replay_idx];
+        if (ev.t > tick) break;
+        try {
+            post(hwnd, ev.m >>> 0, ev.w >>> 0, ev.l >>> 0);
+            g_replay_post_count++;
+            send({kind: 'input_replay_post',
+                  idx: g_replay_idx,
+                  t: ev.t,
+                  m: ev.m,
+                  w: ev.w,
+                  l: ev.l,
+                  tick_now: tick});
+        } catch (e) {
+            err('drainInputReplay.PostMessageA', e.message);
+        }
+        g_replay_idx++;
+    }
+}
+
 // Per-tick anchor — `FUN_004b99c0` is called once per main-loop iteration.
 // We use its onEnter as:
 //   1. main-thread-id capture (first entry only) for the virtual-clock gate.
 //   2. virtual-clock advance by g_turbo_step_ms (when turbo v2 is active).
+//   3. g_tick_count++ — 1-indexed tick id used as the timestamp for input
+//      recording / replay.
+//   4. Input-replay drain (posts queued WM_* messages for this tick).
 // We use its onLeave to publish an `fps_sample` event whenever the engine's
 // FPS-counter cumulative_seconds counter ticks — this is the verification
 // knob for turbo: without turbo, fps_sample.current_fps lands wherever
@@ -1036,6 +1177,10 @@ function installEngineTickHook() {
             }
             if (g_clock_virtualised) {
                 g_virtual_now_ms = (g_virtual_now_ms + g_turbo_step_ms) >>> 0;
+            }
+            g_tick_count = (g_tick_count + 1) >>> 0;
+            if (g_input_replay_events) {
+                drainInputReplayForTick(g_tick_count);
             }
         },
         onLeave: function () {
@@ -1098,6 +1243,23 @@ rpc.exports = {
         g_frame_capture_warmup_secs = (opts.frame_capture_warmup_secs | 0);
         g_frame_capture_count       = 0;
 
+        g_input_record_enabled = !!opts.input_record;
+        // input_replay arrives as an array of {t, m, w, l} events sorted by
+        // t.  Coerce defensively — a malformed entry would otherwise blow
+        // up inside PostMessageA where the error message is opaque.
+        if (Array.isArray(opts.input_replay) && opts.input_replay.length > 0) {
+            g_input_replay_events = opts.input_replay.map(function (e) {
+                return {t: (e.t | 0),
+                        m: (e.m | 0),
+                        w: (e.w | 0),
+                        l: (e.l | 0)};
+            }).sort(function (a, b) { return a.t - b.t; });
+        } else {
+            g_input_replay_events = null;
+        }
+        g_replay_idx           = 0;
+        g_replay_post_count    = 0;
+
         const mod = Process.findModuleByName(g_target_module_name);
         if (!mod) {
             err('init', 'target module not loaded: ' + g_target_module_name);
@@ -1139,6 +1301,16 @@ rpc.exports = {
                 ', cadence=1 capture per engine cum-secs rollover)');
         }
 
+        if (g_input_record_enabled) {
+            installInputRecordHook();
+        }
+        if (g_input_replay_events) {
+            log('input_replay: armed (' + g_input_replay_events.length +
+                ' events; first tick=' + g_input_replay_events[0].t +
+                ', last tick=' +
+                g_input_replay_events[g_input_replay_events.length - 1].t + ')');
+        }
+
         send({kind: 'ready',
               module:        g_target_module_name,
               base:          g_base.toString(),
@@ -1151,6 +1323,9 @@ rpc.exports = {
               turbo_step_ms: g_turbo_step_ms,
               frame_capture: g_frame_capture_enabled,
               frame_capture_max: g_frame_capture_max,
-              frame_capture_warmup_secs: g_frame_capture_warmup_secs});
+              frame_capture_warmup_secs: g_frame_capture_warmup_secs,
+              input_record:  g_input_record_enabled,
+              input_replay_count:
+                  g_input_replay_events ? g_input_replay_events.length : 0});
     },
 };
