@@ -57,6 +57,7 @@
 #include <string.h>
 #include <stdint.h>
 
+#include "audio.h"
 #include "dev_hooks.h"
 #include "gfx.h"
 
@@ -91,6 +92,16 @@ static int       g_show_msgbox;     /* --show-msgbox: skip MessageBox→stderr h
  * case: `tools/run-openlords2.sh --gfx-init --show-window`. */
 static int       g_gfx_init;
 static int       g_gfx_active;
+/* --audio-init: call audio_init() after window creation.  Off by
+ * default — SetCooperativeLevel(PRIORITY) modifies process audio
+ * state and the headless smoke harness has no way to validate
+ * output audibly.  The Frida harness already hooks
+ * IDirectSound::SetCooperativeLevel to demote PRIORITY→NORMAL, so
+ * once we cross-validate that path under our own code we can flip
+ * the default to on.  Manual: `tools/run-openlords2.sh
+ * --audio-init`. */
+static int       g_audio_init;
+static int       g_audio_active;
 /* --capture-to DIR / --capture-every N : enable back-buffer
  * captures.  Implies --gfx-init; off when DIR is NULL.  Filenames
  * are `<DIR>/frame_NNNNN.bmp`, indexed by g_frame_counter. */
@@ -233,6 +244,18 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
         }
     }
 
+    /* DSound bring-up — retail calls this from WinMain *after*
+     * InitInstance (FUN_004b2258) returns, i.e. after the window
+     * exists but independent of DDraw.  See
+     * docs/findings/ddraw-dsound-bringup.md. */
+    if (g_audio_init) {
+        if (audio_init(g_hwnd)) {
+            g_audio_active = 1;
+        } else {
+            log_line("audio_init failed — continuing without DSound");
+        }
+    }
+
     /* Make the capture dir if needed.  ERROR_ALREADY_EXISTS is fine.
      *
      * Auto-translate a Linux-style absolute path ("/tmp/foo") into
@@ -277,6 +300,10 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
 
     log_line("main loop exited after %u frame(s)", g_frame_counter);
 
+    if (g_audio_active) {
+        audio_shutdown();
+        g_audio_active = 0;
+    }
     if (g_gfx_active) {
         gfx_shutdown();
         g_gfx_active = 0;
@@ -771,6 +798,7 @@ static void parse_cmdline(LPSTR lpCmd)
         else if (!strcmp(a, "--allow-multi"))    g_allow_multi = 1;
         else if (!strcmp(a, "--show-msgbox"))    g_show_msgbox = 1;
         else if (!strcmp(a, "--gfx-init"))       g_gfx_init    = 1;
+        else if (!strcmp(a, "--audio-init"))     g_audio_init  = 1;
         else if (!strcmp(a, "--capture-to") && i + 1 < ntok) {
             g_capture_dir = tokens[++i];
             g_gfx_init = 1;     /* capture implies gfx */

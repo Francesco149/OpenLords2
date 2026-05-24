@@ -7,6 +7,79 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — DSound bring-up (`src/audio.c`)
+
+Ported retail's `FUN_00425b10 @ 0x425b10` (DSound init) into a new
+`src/audio.c`.  Continues the WinMain entry-chain: retail calls this
+*after* `FUN_004b2258` (InitInstance) returns, so it slots in after
+`gfx_init` in our `WinMain`.
+
+### Scope landed
+
+- `audio_init(HWND)` — `DirectSoundCreate(NULL, &lpDS, NULL)` +
+  `SetCooperativeLevel(hwnd, DSSCL_PRIORITY)` + `CreateSoundBuffer`
+  primary (`DSBCAPS_PRIMARYBUFFER`) + `SetFormat(&wfx)` with retail's
+  `FUN_00425ded` template: **11025 Hz stereo 8-bit PCM**.  All four
+  error paths log retail's exact strings (`ERR:DS failed open`,
+  `ERR:DS failed set co-op`, `ERR:DS failed setup primary buffer`,
+  `ERR:DS failed to change primary buffer format`) at byte addresses
+  `0x4d4768..0x4d47bc`; success arm logs `OK :DS Installed.` from
+  `0x4d47ec`.
+- `audio_shutdown()` — releases primary buffer + IDirectSound in
+  reverse order, logs `OK :DS Released.` from `0x4d4800`.
+  Idempotent — safe to call on a failed/skipped init.
+- Voice slot zeroing (`DAT_00522b00[20]`, `DAT_00522b80[2]`,
+  `DAT_00522b50[2]`) is left as a TODO — those slots are only
+  meaningful once the SFX/music playback path exists.
+
+### Default-off gating
+
+`audio_init` is gated behind `--audio-init` in main.c, mirroring the
+`--gfx-init` convention.  `SetCooperativeLevel(PRIORITY)` modifies
+process-global DSound state and the headless smoke harness has no
+way to validate output audibly — so default-off keeps
+`tools/run-openlords2.sh` runs harmless.
+
+### Verification
+
+- Baseline smoke (`--frames 50`) clean — no change in transcript
+  (only `OK :Active.` / `OK :Not active.`).
+- `--audio-init` smoke clean — transcript shows
+  `OK :DS Installed.` after `OK :Active.` and `OK :DS Released.`
+  during shutdown, exits rc=0.
+- `--gfx-init --audio-init` combined smoke clean — full DDraw
+  bring-up + palette load + DSound install + clean teardown in one
+  run.
+
+### Other changes
+
+- `src/Makefile` links `-ldsound`.
+- `audio.c` includes `mmsystem.h` before `dsound.h` to pull in
+  `WAVEFORMATEX` (mingw's `dsound.h` doesn't include it itself).
+
+### What's next
+
+The entry chain past WinMain is now ported end-to-end: window class
++ creation (`FUN_004b2258`) → DDraw bring-up (`FUN_004b2922` chain)
+→ DSound bring-up (`FUN_00425b10`).  Remaining bring-up gaps:
+
+1. **Render rate-limiter + dirty-rect tracker** — port
+   `FUN_00452160` / `FUN_00452306` so we mirror retail's actual
+   present cadence (currently we present every frame
+   unconditionally).
+2. **Surface-restore wire-up** — connect WndProc's
+   `WM_ACTIVATEAPP` active-with-lost-surfaces branch to a real
+   `IDirectDrawSurface::Restore` chain via gfx.c accessors.
+3. **First real drawing primitive** — port one of the sprite-blit
+   helpers so we can capture a recognisable image and diff against
+   a Frida-captured retail screenshot.
+4. **Main-loop driver** — `FUN_004b99c0` (sim+render driver, ~2200
+   B).  This is what consumes `g_shutdown_request`'s 3→1→4
+   escalator and what the per-tick `FUN_0040e8bb` / `FUN_004bb978`
+   rate gate flows into.  Largest single port still ahead.
+
+---
+
 ## 2026-05-24 — Windowed present via GDI (DWM workaround)
 
 User flagged: visible window was black despite captures showing
