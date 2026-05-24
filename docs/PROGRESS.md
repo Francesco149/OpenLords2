@@ -7,6 +7,83 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — DDraw/DSound + main-loop findings + InitInstance port
+
+Continued top-down chip-away from the entry point.  Three landings:
+
+### Two new findings docs
+
+- [`docs/findings/ddraw-dsound-bringup.md`](findings/ddraw-dsound-bringup.md)
+  decodes the post-window init chain.  `FUN_004b2922` is just an
+  orchestrator; the real work is `FUN_004b284e` →
+  `FUN_0042e5c0` (`DirectDrawCreate` + `SetCooperativeLevel` +
+  `SetDisplayMode`) and `FUN_0042ec91` (primary surface, back
+  buffer, clipper, lock-probe).  `FUN_00425b10` is the DSound
+  bring-up called separately from WinMain after `FUN_004b2258`
+  returns: `DirectSoundCreate` + `SetCooperativeLevel(PRIORITY)`
+  + `CreateSoundBuffer` primary + `SetFormat`.  All vtable
+  offsets + log-prefix strings mapped, so the existing Frida
+  hooks have a paper trail.
+
+- [`docs/findings/main-loop-tick.md`](findings/main-loop-tick.md)
+  corrects a misread from the first session:
+  `FUN_004b8c3a` is the **DPlay receive pump**, not the
+  per-tick driver.  The real sim+render path is `FUN_0040e8bb`
+  (surface-lost guard) → `FUN_0040e890` → `FUN_004b99c0` (2222 B
+  sim+render driver, with a variable sub-step loop fed by
+  `FUN_004bb978`'s rate gate on `_DAT_0053f230` speed slider and
+  `_DAT_004e5b0c` last-tick wall-clock).
+
+  Key turbo-v2 insight: the rate gate depends on `timeGetTime` for
+  sim+render+FPS+UI, but the DPlay pump uses `GetTickCount`.
+  Virtualising **only** `timeGetTime` thus accelerates the
+  client-side sim cleanly while leaving multiplayer wire timing
+  on real wall-clock.  No need to do both APIs.
+
+### `FUN_004b2258` (InitInstance) ported into `src/main.c`
+
+Class registration and window creation now match retail:
+
+- Class name `WinLords2Class` (so `FindWindowA` from outside the
+  process resolves identically — matches what retail's class
+  registration uses, see `s_WinLords2Class_004df5b0`).
+- Title `Lords2` matches `s_Lords2_004df5c0`.
+- `CS_DBLCLKS`, NULL cursor, `BLACK_BRUSH` background, NULL menu.
+- `UpdateWindow` + `SetFocus` after create.
+
+Deliberate deviations preserved:
+
+- `WS_VISIBLE` never set inline — `--show-window` does ShowWindow
+  separately so `--hidden` headless runs compose cleanly.
+- Default style is `WS_OVERLAPPEDWINDOW` at 640×480 centred (the
+  exact shape retail transforms to in `FUN_0042e5c0`'s now-dead-code
+  8bpp-desktop windowed branch).  `--fullscreen` opts back into
+  retail's WS_POPUP full-screen-sized popup.
+
+Smoke verified: 50 frames in well under 8 s under
+`tools/run-openlords2.sh`; class registers, window creates,
+loop exits cleanly with rc=0.
+
+### What's next
+
+1. Port `FUN_004b29be` (the 2545-byte WndProc) into `src/main.c`'s
+   `wndproc`.  Mostly state-mux on `param_2` (WM_*) → engine
+   substate jumps.  Worth a dedicated findings doc.
+2. Port the bring-up *body* of `FUN_004b2922` into a new
+   `src/gfx.c` — DirectDrawCreate + SetCooperativeLevel + surface
+   create + palette load.  First real DDraw code in the drop-in.
+3. Add turbo v2 to the Frida agent now that we know the
+   `timeGetTime`-only seat suffices.  Validate against retail
+   behaviour: `DAT_0057c998` should rise N× faster on a chosen
+   scale; FPS counter `DAT_004ea174` should be unaffected at the
+   monitor cap but FPS-since-boot `DAT_004ea0f4 / DAT_004ea83c`
+   should drift.
+4. Read `FUN_004b29be` first (item 1) before doing the DDraw port,
+   since several DDraw surface-restore paths post WM_PAINT /
+   WM_ACTIVATE messages that the wndproc must already handle.
+
+---
+
 ## 2026-05-24 — Harness verified end-to-end + first findings
 
 Initial bootstrap session continued.

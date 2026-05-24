@@ -1,25 +1,40 @@
 /*
  * OpenLords2 — drop-in replacement for Lords2.exe (bootstrap skeleton).
  *
- * Boots, registers a window class, opens a hidden 800x600 window, runs
- * a PeekMessage / DispatchMessage loop with a Sleep(1) frame limiter,
- * exits cleanly on WM_QUIT or after `--frames N` iterations.  No DDraw
- * yet, no game-state init — those land in subsequent slices.
+ * Boots, registers the WinLords2Class window class, opens a 640×480
+ * window (hidden by default), runs a PeekMessage / DispatchMessage
+ * loop with a Sleep(1) frame limiter, exits cleanly on WM_QUIT or
+ * after `--frames N` iterations.  No DDraw yet, no game-state init
+ * — those land in subsequent slices.
+ *
+ * Class registration + window creation are ported from retail's
+ * `FUN_004b2258 @ 0x4b2258` (the "InitInstance"-equivalent).  See
+ * `docs/findings/winmain-and-bootstrap.md` for the chain.
  *
  * Deliberate deviations from retail (phase 1 — bootstrap defaults):
- *   - Window stays hidden by default.  Pass --show-window to display.
- *     This is the opposite default from a "real drop-in" so that running
- *     the binary under the dev loop never disrupts the host desktop.
- *   - Window class name is our own "OpenLords2Main" placeholder.  Retail
- *     class TBD once the Ghidra analysis lands.
+ *   - WS_VISIBLE is NEVER set in CreateWindowExA.  Retail bakes it
+ *     into dwStyle (`0x90080000`) which makes the window appear
+ *     during the create call.  We split it out so `--show-window`
+ *     (a separate ShowWindow call) composes cleanly with hidden
+ *     headless runs.
+ *   - Default style is windowed overlapped (640×480 centred frame),
+ *     not retail's fullscreen WS_POPUP.  `--fullscreen` opts into
+ *     retail's full-screen-sized borderless popup if the user wants
+ *     visual parity with the original.  Mirrors the
+ *     project_drop_in_defaults memory.
+ *   - Cursor + icon preloads from retail's FUN_004b2258 are skipped
+ *     until we embed the .ico/.cur resources — `LoadCursor(hInst,
+ *     MAKEINTRESOURCE(0x65))` returns NULL without an .rc.
  *   - Auto-cd into the directory of our own .exe at startup so the
  *     DDraw/DSound/Smacker DLL resolves no matter where the .exe was
- *     invoked from.  This matches retail behavior (the .exe is meant to
- *     sit inside the game directory and finds its data via relative paths
- *     from CWD per L2.INI's `CDDrive=.`, `WindowsDir=.`).  It's also a
- *     footgun guard learned from OpenMare: without it, dev runs of the
- *     drop-in from outside the game dir silently picked up system32
- *     DDraw instead of any wrapper sitting next to retail.
+ *     invoked from.  Footgun guard learned from OpenMare: without
+ *     it, dev runs of the drop-in from outside the game dir silently
+ *     picked up system32 DDraw instead of any wrapper sitting next
+ *     to retail.
+ *
+ * Class name is preserved as "WinLords2Class" (matches retail) so
+ * external tools — `FindWindowA("WinLords2Class", NULL)`, Frida
+ * agents keyed on the class — locate us identically to Lords2.exe.
  *
  * Build: `make -C src` from inside `nix develop`.
  */
@@ -35,14 +50,17 @@
 
 #include "dev_hooks.h"
 
-#define OPENLORDS2_CLASS  "OpenLords2Main"
-#define OPENLORDS2_TITLE  "Lords of the Realm II"
+/* Class name matches retail FUN_004b2258's `s_WinLords2Class_004df5b0`
+ * so FindWindowA from external tools resolves to us identically.
+ * Window title likewise matches retail's `s_Lords2_004df5c0` for the
+ * same reason. */
+#define OPENLORDS2_CLASS  "WinLords2Class"
+#define OPENLORDS2_TITLE  "Lords2"
 
-/* Lords II's original resolution is 640x480 256-color.  The GOG patch
- * supports 800x600 too — TBD once we ship rendering.  For the bootstrap
- * window we just pick something reasonable. */
-#define DEFAULT_WIDTH   800
-#define DEFAULT_HEIGHT  600
+/* Retail's native render resolution.  Stored at DAT_004eb274 /
+ * DAT_004eac4c.  Lords 2 was designed for 640×480×8 throughout. */
+#define DEFAULT_WIDTH   640
+#define DEFAULT_HEIGHT  480
 
 /* 50 FPS = 20 ms per frame is a reasonable placeholder until we know
  * retail's actual frame-limiter constant. */
@@ -51,12 +69,19 @@
 static HINSTANCE g_hInstance;
 static HWND      g_hwnd;
 static int       g_show_window;     /* --show-window: ShowWindow at startup */
+static int       g_fullscreen;      /* --fullscreen: retail-style WS_POPUP full-screen popup */
 static int       g_skip_cd;         /* --no-cd: skip auto-cd to exe dir */
 static int       g_allow_multi;     /* --allow-multi: skip single-instance mutex */
 static unsigned  g_max_frames;      /* --frames N: voluntary exit after N frames (0 = forever) */
 static int       g_show_msgbox;     /* --show-msgbox: skip MessageBox→stderr hook */
 static int       g_shutdown;
 static HANDLE    g_singleton_mutex;
+
+/* Cached screen metrics — retail caches these at FUN_004b2258 entry
+ * into DAT_004e65a0 / DAT_004ea838 and reuses across the DDraw
+ * bring-up to centre the window. */
+static int g_screen_cx;
+static int g_screen_cy;
 
 #define SINGLETON_MUTEX_NAME  "OpenLords2-SingleInstance"
 
@@ -160,28 +185,95 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcA(hwnd, msg, wp, lp);
 }
 
+/* Port of retail FUN_004b2258 @ 0x4b2258 class-registration block.
+ *
+ * Retail uses CS_DBLCLKS, no class cursor (NULL — the game's own
+ * cursor manager picks one in WM_SETCURSOR via DAT_004ea834 et al),
+ * BLACK_BRUSH background to avoid the WM_ERASEBKGND flash on
+ * activation, and icon ID 0x65 / cursor IDs 0x65..0x71 from the .rc.
+ *
+ * We skip the icon + cursor preloads until we embed an .rc — without
+ * resources, LoadIcon/LoadCursor return NULL which is harmless. */
 static int register_window_class(void)
 {
     WNDCLASSA wc = {0};
+    wc.style         = CS_DBLCLKS;
     wc.lpfnWndProc   = wndproc;
     wc.hInstance     = g_hInstance;
-    wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wc.hIcon         = NULL;
+    wc.hCursor       = NULL;
+    wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+    wc.lpszMenuName  = NULL;
     wc.lpszClassName = OPENLORDS2_CLASS;
     return RegisterClassA(&wc) != 0;
 }
 
+/* Port of retail FUN_004b2258 @ 0x4b2258 window-creation block.
+ *
+ * Retail call:
+ *     CreateWindowExA(
+ *         0x40000,                          // WS_EX_APPWINDOW
+ *         "WinLords2Class", "Lords2",
+ *         0x90080000,                       // WS_POPUP|WS_VISIBLE|WS_SYSMENU
+ *         0, 0,
+ *         GetSystemMetrics(SM_CXSCREEN),
+ *         GetSystemMetrics(SM_CYSCREEN),
+ *         NULL, NULL, hInst, NULL);
+ *
+ * With --fullscreen we mirror this exactly, sans WS_VISIBLE (we
+ * always defer the show to a separate ShowWindow call so --hidden
+ * composes cleanly).
+ *
+ * Without --fullscreen we default to a 640×480 centred overlapped
+ * window with WS_OVERLAPPEDWINDOW = WS_OVERLAPPED|WS_CAPTION|
+ * WS_SYSMENU|WS_THICKFRAME|WS_MINIMIZEBOX|WS_MAXIMIZEBOX = 0xcf0000
+ * — which is the *exact* style retail's DDraw bring-up transforms
+ * the popup into when running in the (now-dead-code) 8bpp-desktop
+ * windowed branch.  Drop-in default per the project_drop_in_defaults
+ * memory. */
 static int create_main_window(void)
 {
+    g_screen_cx = GetSystemMetrics(SM_CXSCREEN);
+    g_screen_cy = GetSystemMetrics(SM_CYSCREEN);
+
+    DWORD dwExStyle = WS_EX_APPWINDOW;
+    DWORD dwStyle;
+    int x, y, w, h;
+
+    if (g_fullscreen) {
+        /* Retail-style fullscreen borderless popup. */
+        dwStyle = WS_POPUP | WS_SYSMENU;        /* WS_VISIBLE stripped */
+        x = 0;
+        y = 0;
+        w = g_screen_cx;
+        h = g_screen_cy;
+    } else {
+        /* Windowed default — 640×480 client area, frame adjusted out,
+         * centred on the primary monitor. */
+        dwStyle = WS_OVERLAPPEDWINDOW;
+        RECT rc = { 0, 0, DEFAULT_WIDTH, DEFAULT_HEIGHT };
+        AdjustWindowRectEx(&rc, dwStyle, FALSE, dwExStyle);
+        w = rc.right - rc.left;
+        h = rc.bottom - rc.top;
+        x = (g_screen_cx - w) / 2;
+        y = (g_screen_cy - h) / 2;
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
+    }
+
     g_hwnd = CreateWindowExA(
-        0,
+        dwExStyle,
         OPENLORDS2_CLASS,
         OPENLORDS2_TITLE,
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT,
-        DEFAULT_WIDTH, DEFAULT_HEIGHT,
+        dwStyle,
+        x, y, w, h,
         NULL, NULL, g_hInstance, NULL);
-    return g_hwnd != NULL;
+    if (!g_hwnd) return 0;
+
+    /* Retail calls UpdateWindow + SetFocus immediately after create. */
+    UpdateWindow(g_hwnd);
+    SetFocus(g_hwnd);
+    return 1;
 }
 
 static void main_loop_body(void)
@@ -309,6 +401,7 @@ static void parse_cmdline(LPSTR lpCmd)
     for (int i = 0; i < ntok; i++) {
         const char *a = tokens[i];
         if (!strcmp(a, "--show-window"))   g_show_window = 1;
+        else if (!strcmp(a, "--fullscreen")) g_fullscreen = 1;
         else if (!strcmp(a, "--no-cd"))    g_skip_cd     = 1;
         else if (!strcmp(a, "--allow-multi"))    g_allow_multi = 1;
         else if (!strcmp(a, "--show-msgbox"))    g_show_msgbox = 1;
