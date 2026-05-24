@@ -7,6 +7,189 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Seventh diff target: engine_compute_sim_sub_steps (chained with scenario_hint)
+
+Closed out the per-tick driver's pure-function diff coverage.  Ported
+`FUN_0043de70` (the scenario_hint computer that `FUN_004bb978` calls
+internally) and wired the **chained pair** into the diff machinery —
+one retail RPC exercises both ports, the orchestrator chains them
+host-side and compares the combined output.
+
+The "highest complexity of the diff targets so far" note from the
+prior dispatch was accurate: scope is ~30 scalar globals, four
+strided per-player arrays (slots 1..6, three byte-strided + one int-
+strided), a 2400-byte rate-gate LUT, and the deepest race surface
+yet — large enough that the engine main thread reliably **crashed**
+on the injection rather than just racing.
+
+### `src/engine_rate.c` — `engine_compute_scenario_hint`
+
+Pure-C port of `FUN_0043de70` (1211 bytes retail-side, ~250 LOC C).
+Three retail helpers (FUN_0043e433 count-active-allies, FUN_0043e330
+min-tick-filtered, FUN_0043e50d min-tick-all) inlined as file-static
+helpers; per-slot strided arrays flattened into 7-entry tables.
+
+Four rate-selection ladders (extracted into named static helpers so
+the bucket boundaries audit visually):
+
+- `behind_ladder`: peers-ahead-of-me 0..10000+ → -2/-3/-4/-5/-6/-7/-8/-10
+  fast-skip codes.
+- `ahead_ladder_mode5`: my-lead 0..710+ → 10..140 ms-per-step
+  buckets, 13-step fine-grained.
+- `ahead_ladder_coarse`: my-lead 0..401+ → 20..140 ms-per-step
+  buckets, 8-step.
+- `alone_ladder`: my-lead 0..801+ → 1/30/70/90 ms-per-step (4-step),
+  with -1 sentinel for "not ahead", floored at `base_delta*3` by
+  the caller.
+
+The function has two side-effect calls retail-side: `FUN_0043eda0(10, 0)`
+(MP broadcast event 10) fires when `slow_frame_count` exceeds 100; the
+sibling `FUN_0043eda0(0xf, 0)` (autosave-done event 15) lives in
+FUN_004bb978's autosave-expiry branch.  Both surfaced via output
+flags (`notify_slow_frame` / `notify_autosave_done`) instead of
+firing inline — diff orchestrator pins vectors so retail's matching
+trigger doesn't fire either, keeping the engine undisturbed.
+
+20 host unit tests cover every branch + ladder boundary (the prior
+24 sim_sub_steps tests carried over).  142 unit tests total pass
+under ASan + UBSan.
+
+### Agent: full snapshot/inject + LUT install + engine freeze
+
+`tools/frida/openlords2-agent.js` gained ~400 lines spanning:
+
+- ~30 new ADDR entries — scalar globals (game_state_phase, mp_active,
+  local_player_idx, ally_a/b, frame_count, max_stride, stride_sum,
+  avg_stride, slow_frame_count, base_delta, active_count, etc.) plus
+  per-player array bases (player_active stride 0x160, player_disconnected
+  stride 0x2c, player_ticks stride 4).
+- `runRetailSimSubSteps(in_obj)` — snapshots all the above + the two
+  single-byte table reads (screen_freeze, mp_skip) at exactly the index
+  the function will use.  Injects vector, pushes mock_time to clock
+  queue, calls retail, reads outputs, restores.
+- `installSimSubStepsRateLut(bytes)` / `uninstall` — one-shot per test
+  plan.  Writes the orchestrator-supplied 2400 bytes of the rate-gate
+  table; saves a 4.8 KB readback+writeback per vector vs. doing it
+  inline.  Lazy snapshot of retail's original bytes for restore.
+- `installSimSubStepsEngineFreeze` / `uninstall` — the load-bearing
+  new pattern (see below).
+
+### The engine-tick freeze (new race-handling pattern)
+
+The first six diff targets dealt with engine races as a **readback
+correctness** problem — the engine's parallel call overwrites a
+global between retail's write and our readback, and we detect+retry.
+sim_sub_steps escalated this to a **process-crash** problem:
+
+- We inject `game_state_phase = 3` (ingame) for vectors that test
+  the MP / ahead-ladder paths.
+- The engine main thread's per-tick driver also reads this global.
+- During our inject→call→readback→restore window, if `engine_tick`
+  fires, its own `FUN_004bb978` returns >0 (driven by our injected
+  state) and enters the sub-step body.
+- The sub-step body calls retail sim sub-functions that require a
+  fully-initialised ingame state (player tables, deferred-action
+  queue at `DAT_0050d7c0`, sprite/UI/map subsystems) which we have
+  NOT provided — AV → frida script destroyed.
+
+First 25 vectors landed cleanly by timing luck; 50+ crashed reliably.
+
+Resolution: `installSimSubStepsEngineFreeze()` uses `Interceptor.
+replace(FUN_0040e890, no-op_callback)` to swap engine_tick_dispatch
+with a NativeCallback that returns immediately.  The engine's main
+loop keeps pumping messages (PeekMessage / DispatchMessage still
+works → process stays responsive to subsequent agent RPCs), but
+all per-tick work — sim sub-step loop, render phase, LFSR, autosave
+pump, FPS counter — is skipped for the duration of the sim_sub_steps
+test plan.  Paired uninstall restores normal behavior.
+
+Trade-off: with the freeze active, the structural `raced` flag is
+permanently 0 (no engine ticks to delta `g_tick_count`), so the
+orchestrator falls back entirely on the function-specific canary —
+`derived_hint` readback matches port-computed value AND
+`new_last_step_ms` lands in `{vec[now_ms], vec[last_step_ms]}` (the
+only two values retail's tail write can produce).
+
+### Orchestrator (`tools/diff_test.py`)
+
+- `EngineScenarioHintIn/Out` + `EngineRateIn/Out` ctypes mirrors.
+- `gen_sim_sub_steps_vectors(n, rng)`: 21 fixed edge cases (state-not-
+  ingame, SP/MP, pause_lock, screen_freeze 0/1/2, extended_pause
+  SP-vs-MP-with-skip, four scenario_hint paths, ladder boundaries,
+  phase wrap, time overflow, 140 ms ceiling at slow_frame_count=99)
+  + random fill biased toward MP-active.
+- `gen_sim_sub_steps_rate_lut(rng)`: 2400-byte deterministic LUT
+  (seeded; 85 % non-zero so the LUT gate has actual signal).
+- `run_port_sim_sub_steps`: **chained call** — first
+  `engine_compute_scenario_hint` to compute `scenario_hint`, then
+  `engine_compute_sim_sub_steps` with that hint.  Combines outputs.
+- `diff_sim_sub_steps`: 11 output fields compared as u32 (sub_steps,
+  new_last_step_ms, new_phase, derived_hint, new_frame_count,
+  new_max_stride, new_stride_sum, new_avg_stride, new_slow_frame_count,
+  new_autosave_start_ms, new_active_count).
+- Dispatch arm with engine-freeze install/uninstall wrapping the
+  per-vector loop.
+
+### Constraints baked into vectors
+
+- `autosave_start_ms = 0` always — skip FUN_004bb978's 5000 ms branch
+  so retail's `FUN_0043eda0(0xf, 0)` never fires.
+- `slow_frame_count ≤ 99` always — after retail's `++`, value stays
+  ≤ 100; gate `100 < value` is false, `FUN_0043eda0(10, 0)` never
+  fires.
+
+With these, the entire FUN_004bb978 → FUN_0043de70 → helpers call
+chain has zero retail-side side effects beyond the snapshot+restore
+surface — the engine sees a no-op.
+
+### Verified
+
+`nix develop -c python3 tools/diff_test.py --vectors 200 --seed 1
+--remote cutestation.soy:27042 --functions sim_sub_steps`:
+
+| target          | result                       |
+|-----------------|------------------------------|
+| `sim_sub_steps` | 200/200 pass, 0 race-pass    |
+
+All 142 host unit tests still pass under ASan + UBSan.  Windows
+drop-in still builds clean.
+
+### Known issue surfaced (not addressed here)
+
+Orchestrator teardown (script.unload + session.detach + device.kill)
+hangs after the test reports success.  The 200/200 pass result is
+written to `runs/diff/<ts>/diff.log` before the hang.  Likely Frida
+interaction with `Interceptor.replace` + `NativeCallback` during
+script teardown — none of the other diff targets use that pattern.
+Worth a dedicated investigation; for now, the test result is
+captured cleanly and the user can `kill` the orchestrator after
+seeing the summary.
+
+### What's next
+
+Per-tick driver pure-function diff coverage is now **complete** —
+seven targets (rng_step, fps_step, anim_cycle, frame_delta,
+phase_ticks, input_state, sim_sub_steps), 1400/1400 vectors pass at
+seed 1.  Remaining top-down RE candidates:
+
+1. **Save-file format** — `castles.dat` / `c_hist.dat` / `history.dat`
+   parsers.  Unlocks the simulation subsystem ports.  Largest
+   subsystem unlock available — once the parsers land, sub-step body
+   ports (FUN_004472ce MP sim tick, FUN_0049b8b0 turn-timeout, etc.)
+   can start using real ingame state instead of stubs.
+2. **Diagnose the Quit-Game freeze** — engine hangs on ESC →
+   confirmation; would unblock unattended end-to-end smoke runs.
+   Lower complexity, lower coverage win.
+3. **Fix the diff_test orchestrator teardown hang** — small
+   investigation slice; would make the diff machinery less awkward
+   to invoke from CI.
+
+Top-down RE bias next time: option 1 is the next subsystem unlock
+on the dependency tree; option 3 is a cleanup that pays off every
+diff run.
+
+---
+
 ## 2026-05-25 — Sixth diff target: engine_compute_input_state + GetCursorPos hook
 
 Continued the "more diff targets" thread.  Wired `FUN_004b191e` (the

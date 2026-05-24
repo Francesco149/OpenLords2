@@ -26,6 +26,7 @@ in our port that would corrupt the engine on boot is caught immediately.
 | `engine_compute_frame_delta`  | `FUN_004b20ed`    | `src/engine_delta.c`      | frame delta with 30 ms low-pass gate          |
 | `engine_compute_phase_ticks`  | `FUN_004bbc80`    | `src/engine_phase.c`      | 9-flag animation phase tick (10 in, 18 out)   |
 | `engine_compute_input_state`  | `FUN_004b191e`    | `src/engine_input.c`      | mouse-input resolver (25 in, 30 out; scripted `GetCursorPos`) |
+| `engine_compute_sim_sub_steps` + `engine_compute_scenario_hint` | `FUN_004bb978` + `FUN_0043de70` | `src/engine_rate.c` | sim sub-step rate gate + scenario_hint computer (chained — outer calls inner internally; orchestrator chains both ports host-side and compares against ONE retail RPC) |
 
 Each has a host-side unit-test file under `tests/test_engine_*.c`; the
 diff test complements those by proving they match retail behavior for
@@ -48,11 +49,17 @@ Knobs (full list in `--help`):
   - `--warmup-s N` — how long to wait for engine_tick to start ticking
     before firing RPCs (default 10)
 
-Latest verified run: **200/200 pass on all six functions** (2026-05-25,
+Latest verified run: **200/200 pass on all seven functions** (2026-05-25,
 retail build via cutestation.soy, seed 1).  FPS reported 1 race-pass,
 input_state reported 29 race-passes — see "Race classification" below.
 RNG / anim-cycle / frame-delta / phase_ticks saw zero races on this
 run, but the same machinery applies if they ever surface.
+
+`sim_sub_steps` runs under an **engine-tick freeze** for the duration
+of its test plan — see "Engine-tick freeze for sim_sub_steps" below for
+the rationale; with the freeze, classic post-call races still occur but
+the engine main thread can't bring down the process by entering retail's
+sub-step body with our injected (incomplete) ingame state.
 
 ## Agent shape
 
@@ -239,6 +246,46 @@ behaviour is well-pinned by the host-side unit tests
 (`test_engine_input.c`, 22 tests), so a real port bug would show up
 deterministically across non-racing vectors.  Typical race-pass rate
 on a 200-vector run: ~15 % (cf. ~1 % for phase_ticks).
+
+### Engine-tick freeze for sim_sub_steps
+
+`engine_compute_sim_sub_steps` is the first diff target where letting the
+engine main thread race on our injected globals isn't merely a *racing
+readback* problem — it's a *crash* problem.
+
+The function reads `DAT_0052af94` (engine state phase).  We inject `3`
+(ingame) for most vectors so retail takes the MP / SP per-player rate-
+selection paths.  But the engine main thread's own per-tick driver
+(`FUN_004b99c0`) also reads `DAT_0052af94`, and if it sees `3` while we
+have it injected, its own call to `FUN_004bb978` returns >0 → it enters
+the sub-step body → the sub-step body calls retail sim functions that
+require a fully-initialised ingame state (player tables, deferred-action
+queue at `DAT_0050d7c0`, sprite/UI/map subsystems) which we have NOT
+provided.  Result: AV in retail's sub-step body → frida script destroyed.
+
+First 25 vectors happened to land cleanly (the random fill hadn't yet
+hit a combination that triggered the engine to enter the sub-step body
+during a racing window).  At 50+ vectors the crash was reliable.
+
+Resolution: install an **engine-tick freeze** for the duration of the
+sim_sub_steps test plan.  The agent's `installSimSubStepsEngineFreeze()`
+RPC uses `Interceptor.replace` to swap `FUN_0040e890` (engine_tick_dispatch
+— the caller of the per-tick driver) with a no-op `NativeCallback`.  The
+engine's main loop keeps pumping messages (PeekMessage / DispatchMessage
+still works, so the process stays responsive to its own WndProc and to
+our agent's subsequent RPCs), but the per-tick work — sim sub-step loop,
+render phase, LFSR, autosave pump, FPS counter — is all skipped.
+
+Pair with `uninstallSimSubStepsEngineFreeze()` at the end of the test
+plan to restore normal behavior.  The freeze is scoped to sim_sub_steps
+only — other diff targets that ran earlier in the same orchestrator run
+had a live engine ticking.
+
+Trade-off: with the freeze active, the structural `raced` flag is
+permanently 0 (no engine ticks to delta `g_tick_count`), so the orchestrator
+falls back entirely on the function-specific `_sim_sub_steps_race_free`
+canary (derived_hint readback matches port + new_last_step_ms in
+expected-value set).
 
 ### Concurrent-execution races on multi-core
 
