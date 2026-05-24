@@ -328,6 +328,17 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 1;
     }
 
+    /* --- WM_ERASEBKGND (0x14) -------------------------------------
+     * Suppress the default background-erase.  Class hbrBackground is
+     * set to BLACK_BRUSH so DefWindowProc would fill the client area
+     * with black on every WM_PAINT preamble — and since we redraw
+     * via DDraw Blt from gfx_present each frame, the black fill
+     * would (depending on timing) flicker through or completely
+     * occlude our render.  Returning non-zero tells the OS we
+     * handled the erase. */
+    case WM_ERASEBKGND:
+        return 1;
+
     /* --- WM_CREATE (0x01) — no-op in retail, no-op here. ------ */
     case WM_CREATE:
         return 0;
@@ -610,6 +621,9 @@ static void main_loop_body(void)
             wsprintfA(path, "%s\\frame_%05u.bmp",
                       g_capture_dir, g_frame_counter);
             gfx_capture_backbuffer(path);
+            wsprintfA(path, "%s\\frame_%05u-win.bmp",
+                      g_capture_dir, g_frame_counter);
+            gfx_capture_window(path);
         }
     }
 }

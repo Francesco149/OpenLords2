@@ -7,6 +7,69 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Windowed present via GDI (DWM workaround)
+
+User flagged: visible window was black despite captures showing
+red.  Confirmed via side-by-side back vs. GDI window capture
+(both pipelines newly added in the same session):
+
+```
+frame_00100.bmp     (back via DDraw Lock):     mean=(128,0,0)
+frame_00100-win.bmp (window via GDI BitBlt):   mean=(0,0,0)
+```
+
+The Blt was returning `DD_OK` but the visible surface never
+updated.  Classic modern-Windows + DWM compositing gotcha:
+DDraw NORMAL-mode Blts to primary go to the GPU's
+front-buffer and bypass DWM's window backing stores, so
+DWM re-composites the desktop from the unchanged backing
+store and the user never sees the painted pixels.
+
+### Fix
+
+Routed the windowed-mode present through GDI's
+`StretchDIBits` (Lock the back → build BITMAPINFO with the 256
+palette entries inline → blit to `GetDC(hwnd)` → Unlock).  GDI
+operations DO go through DWM's intercept layer, so the
+window's backing store updates and the composited result is
+visible.
+
+Fullscreen path keeps `IDirectDrawSurface::BltFast` (exclusive
+coop bypasses DWM entirely — no compositing mediation).
+
+User confirms visual: window now shows solid red, matching
+the captures.
+
+### Why retail doesn't have this problem
+
+`FUN_0042e5c0` auto-fullscreen-promotes any time the desktop
+isn't 8bpp — i.e. always, on modern hardware.  Exclusive coop
+level + SetDisplayMode puts retail's DDraw outside DWM
+compositing, sidestepping the issue.  Our default-windowed
+(`project_drop_in_defaults` memory) needs the GDI seat.
+
+### Other changes
+
+- `gfx_capture_window(path)` — GDI BitBlt of the window's
+  client area to a 24bpp BMP.  Bypasses DDraw entirely, so it
+  shows "what the user sees" rather than "what we drew".
+  Smoke harness now emits both `frame_NNNNN.bmp` (back) and
+  `frame_NNNNN-win.bmp` (visible) at every capture point.
+- `WM_ERASEBKGND` returns 1 to suppress the class
+  background-erase (BLACK_BRUSH would otherwise flash through
+  during paint cycles).
+- Memory recorded as `project_dwm_ddraw_normal.md` — this is
+  the kind of gotcha that wastes an afternoon if you don't
+  know it exists.
+
+### What's next
+
+Same as before: DSound bring-up, render rate-limiter, surface
+restore, first real drawing primitive.  The visual-verify loop
+is now closed end-to-end.
+
+---
+
 ## 2026-05-24 — Back-buffer capture (autonomous visual diff)
 
 User flagged that:

@@ -78,4 +78,11 @@ void gfx_fill_back_index(uint8_t palette_index);
  * matches openrecet's capture_backbuffer in spirit. */
 int  gfx_capture_backbuffer(const char *path);
 
+/* Capture the visible window's client area via GDI BitBlt (24bpp
+ * BMP).  Bypasses DDraw entirely — useful as a cross-check against
+ * gfx_capture_backbuffer to confirm that the back→primary Blt in
+ * gfx_present is actually reaching the screen (DWM-composited or
+ * not). */
+int  gfx_capture_window(const char *path);
+
 #endif /* OPENLORDS2_GFX_H */
