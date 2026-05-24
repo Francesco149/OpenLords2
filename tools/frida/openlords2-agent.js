@@ -179,8 +179,8 @@ let g_gdi_seat_enabled     = false;
 let g_agent_present_enabled    = false;
 let g_agent_present_every_ticks = 100;     // ~20 Hz at default turbo step
 let g_show_window_after_ms     = 0;        // 0 = never auto-show
-let g_show_window_client_w     = 1280;     // post-show client size — 5:4
-let g_show_window_client_h     = 1024;     // pixel-perfect for the GOG patch
+let g_show_window_client_w     = 640;      // post-show client size — engine's
+let g_show_window_client_h     = 480;      // native render res, 1:1 pixel-perfect
 let g_show_window_done         = false;
 let g_show_window_latch        = false;    // one-shot bypass for hide hooks
 let g_nf_show_window           = null;
