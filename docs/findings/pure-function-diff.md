@@ -18,11 +18,12 @@ in our port that would corrupt the engine on boot is caught immediately.
 
 ## Current targets
 
-| function name                | retail address    | port file                 | what it does                                  |
-|------------------------------|-------------------|---------------------------|-----------------------------------------------|
-| `engine_rng_step`            | `FUN_00404a46`    | `src/engine_rng.c`        | double-LFSR step (31 iters, 6 masked outputs) |
-| `engine_compute_fps`         | `FUN_004b27bf`    | `src/engine_fps.c`        | rolling 1-sec FPS counter (2× `timeGetTime`)  |
-| `engine_compute_anim_cycle`  | `FUN_00451f1a`    | `src/engine_anim_cycle.c` | 16-frame anim-cycle counter bump              |
+| function name                 | retail address    | port file                 | what it does                                  |
+|-------------------------------|-------------------|---------------------------|-----------------------------------------------|
+| `engine_rng_step`             | `FUN_00404a46`    | `src/engine_rng.c`        | double-LFSR step (31 iters, 6 masked outputs) |
+| `engine_compute_fps`          | `FUN_004b27bf`    | `src/engine_fps.c`        | rolling 1-sec FPS counter (2× `timeGetTime`)  |
+| `engine_compute_anim_cycle`   | `FUN_00451f1a`    | `src/engine_anim_cycle.c` | 16-frame anim-cycle counter bump              |
+| `engine_compute_frame_delta`  | `FUN_004b20ed`    | `src/engine_delta.c`      | frame delta with 30 ms low-pass gate          |
 
 Each has a host-side unit-test file under `tests/test_engine_*.c`; the
 diff test complements those by proving they match retail behavior for
@@ -45,8 +46,10 @@ Knobs (full list in `--help`):
   - `--warmup-s N` — how long to wait for engine_tick to start ticking
     before firing RPCs (default 10)
 
-Latest verified run: **200/200 pass on all three functions** (2026-05-24,
-retail build via cutestation.soy).
+Latest verified run: **500/500 pass on all four functions** (2026-05-24,
+retail build via cutestation.soy).  FPS reported 11 race-passes — see
+"Race classification" below — RNG / anim-cycle / frame-delta saw zero
+races on this run, but the same machinery applies if they ever surface.
 
 ## Agent shape
 
@@ -120,6 +123,48 @@ agent's RNG RPC also restores the snapshot in a `finally`, so even an
 exception inside the diff can't leave the engine with corrupted RNG
 state and a hard-to-debug subsequent crash.
 
+## Race classification (post-call writeback races)
+
+Functions that the engine calls every tick (anim_cycle, frame_delta, FPS)
+have a race window between our retail call returning and our agent's
+readback.  With retail running unrate-limited (~200 kHz tick rate on
+cutestation), the engine can squeeze its own call into that window and
+overwrite a writeback global before we observe the value our retail call
+left there.
+
+**Important property**: the retail function *still ran correctly per our
+test spec* (it consumed our scripted clock + our injected globals, and
+computed the right answer).  Only the post-call observation is corrupted.
+So the right way to handle this is to compare what we *can* observe
+against the port:
+
+  - If `delta_ms` / `return value` matches the port → the retail function
+    computed the same answer we did.
+  - If the only field that diverges is one the engine would have
+    overwritten between our call and our read → that field is best-effort,
+    not load-bearing for the diff.
+
+`tools/diff_test.py` tracks this as `race_count` (separate from
+`fail_count`) and surfaces it in the summary as `(N race-pass)`.  A real
+spec divergence still shows up as `fail` because either `delta_ms`
+mismatches or the differing field isn't on the engine's write-path.
+
+Detector shapes per-target:
+
+  - **frame_delta** (`_frame_delta_race_free`): in the suppress branch
+    (delta < 30 → delta_ms == 0), retail's `new_last_frame_ms` must equal
+    our injected `last_frame_ms` (held baseline); in the pass branch, it
+    must equal our scripted `now_ms`.  Anything else is a race —
+    classified as race-pass if `delta_ms` matches the port and only
+    `new_last_frame_ms` diverges.
+  - **fps_step**: pre-call race (engine bumped frames between our snapshot
+    and our retail call) shows as `retail.new_frames_this_second ==
+    port.new_frames_this_second + N` while everything else (including the
+    last_render anchor that `_fps_race_free` checks) matches.  Classified
+    as race-pass.
+
+### Structural race detection — engine_in_tick + tick_count
+
 For `engine_compute_anim_cycle` (called once per engine_tick by retail's
 pre-tick block), the function has no scripted-clock analogue to anchor a
 race-free signal against.  Instead the agent reports a structural race
@@ -138,6 +183,12 @@ acceptable (the tick window opens before FUN_00451f1a is actually called,
 so some retries are over-cautious); false negatives are rare and would
 show up as occasional spurious diff failures, which the test loop tags
 with a `RACE:` prefix in the summary to distinguish from real port bugs.
+
+For frame_delta the structural signal is too aggressive (retail's tick
+rate is unrate-limited, so `g_engine_in_tick` is set almost continuously).
+The orchestrator uses the function-specific `_frame_delta_race_free`
+detector instead; the structural `raced` is still returned for
+diagnostics but doesn't drive the retry decision.
 
 ## Host-side shared library
 

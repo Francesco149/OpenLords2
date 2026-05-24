@@ -71,8 +71,9 @@ implemented.
       needing a scenario to surface them.  Driver:
       `tools/diff_test.py` + agent-side `runRetail*` RPCs.  Currently
       covers `engine_rng_step` (FUN_00404a46), `engine_compute_fps`
-      (FUN_004b27bf), and `engine_compute_anim_cycle` (FUN_00451f1a) —
-      200/200 vectors pass on all three.
+      (FUN_004b27bf), `engine_compute_anim_cycle` (FUN_00451f1a), and
+      `engine_compute_frame_delta` (FUN_004b20ed) — 500/500 vectors
+      pass on all four.
       See `docs/findings/pure-function-diff.md` for the engine-thread
       race + retry pattern (the engine main thread is still ticking
       during diffs; in-process spin and SuspendThread both deadlock,

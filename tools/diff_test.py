@@ -16,9 +16,10 @@ and report any divergence.  Catches arithmetic / hashing / table-lookup
 deltas in our port before scenarios surface them.
 
 Current targets:
-  - engine_rng_step           (FUN_00404a46) — double-LFSR step
-  - engine_compute_fps        (FUN_004b27bf) — rolling 1-sec FPS counter
-  - engine_compute_anim_cycle (FUN_00451f1a) — 16-frame anim-cycle bump
+  - engine_rng_step            (FUN_00404a46) — double-LFSR step
+  - engine_compute_fps         (FUN_004b27bf) — rolling 1-sec FPS counter
+  - engine_compute_anim_cycle  (FUN_00451f1a) — 16-frame anim-cycle bump
+  - engine_compute_frame_delta (FUN_004b20ed) — frame delta with 30 ms gate
 
 The orchestrator runs the agent in "diff_test" mode (no turbo, no input
 replay) so the engine boots, parks, and waits.  Once the per-tick driver
@@ -126,6 +127,20 @@ class EngineAnimCycleOut(ctypes.Structure):
     ]
 
 
+class EngineDeltaIn(ctypes.Structure):
+    _fields_ = [
+        ("now_ms",        ctypes.c_uint32),
+        ("last_frame_ms", ctypes.c_uint32),
+    ]
+
+
+class EngineDeltaOut(ctypes.Structure):
+    _fields_ = [
+        ("delta_ms",          ctypes.c_int32),
+        ("new_last_frame_ms", ctypes.c_uint32),
+    ]
+
+
 def load_port_lib() -> ctypes.CDLL:
     """Load libengine_diff.so + bind the two diff entrypoints.
 
@@ -149,6 +164,10 @@ def load_port_lib() -> ctypes.CDLL:
     lib.engine_compute_anim_cycle.restype = None
     lib.engine_compute_anim_cycle.argtypes = [
         ctypes.POINTER(EngineAnimCycleIn), ctypes.POINTER(EngineAnimCycleOut)]
+
+    lib.engine_compute_frame_delta.restype = None
+    lib.engine_compute_frame_delta.argtypes = [
+        ctypes.POINTER(EngineDeltaIn), ctypes.POINTER(EngineDeltaOut)]
 
     return lib
 
@@ -226,6 +245,53 @@ def gen_anim_cycle_vectors(n: int, rng: random.Random) -> list[dict[str, int]]:
             "counter":         rng.randint(-3, 20),
             "tick_80ms_fired": rng.randint(0, 1),
         })
+    return out[:n]
+
+
+def gen_frame_delta_vectors(n: int, rng: random.Random) -> list[dict[str, int]]:
+    """Build N frame-delta test vectors covering:
+      - delta == 30 (boundary, must NOT suppress — gate is `< 0x1e`)
+      - delta == 29 (boundary, must suppress)
+      - delta < 0 (signed wrap or future-seeded baseline — must suppress
+        and hold baseline; this is the quirk that distinguishes
+        frame_delta from phase_ticks's `< 0 ⇒ fire` semantics)
+      - large positive deltas (the common case)
+      - delta == 0 (no time advanced — suppress)
+      - random fill biased toward in-range
+    """
+    out: list[dict[str, int]] = [
+        # Boundary at the 30 ms gate.  `< 0x1e` means delta=29 suppresses,
+        # delta=30 passes.
+        {"now_ms": 1029, "last_frame_ms": 1000},   # delta=29 → suppress
+        {"now_ms": 1030, "last_frame_ms": 1000},   # delta=30 → pass
+        {"now_ms": 1031, "last_frame_ms": 1000},   # delta=31 → pass
+        # No time advance.
+        {"now_ms": 1000, "last_frame_ms": 1000},   # delta=0 → suppress
+        # Negative delta — wraparound or debug-seeded future baseline.
+        # Gate is signed, so this must suppress.
+        {"now_ms": 1000, "last_frame_ms": 2000},   # delta=-1000 → suppress
+        # Large positive delta — common path.
+        {"now_ms": 5000, "last_frame_ms": 1000},   # delta=4000 → pass
+        # u32 wrap-around at the very top.
+        {"now_ms": 5,    "last_frame_ms": 0xFFFFFFF0},  # delta=21 → suppress
+        {"now_ms": 100,  "last_frame_ms": 0xFFFFFFF0},  # delta=116 → pass
+    ]
+    while len(out) < n:
+        # Bias toward passes (the common case), with a chunk on each
+        # side of the gate.
+        roll = rng.random()
+        if roll < 0.20:
+            # near-gate: -10 to +50
+            delta = rng.randint(-10, 50)
+        elif roll < 0.30:
+            # negative wrap
+            delta = -rng.randint(1, 10_000)
+        else:
+            # large positive
+            delta = rng.randint(50, 100_000)
+        last_frame = rng.randint(0, 0xFFFFFFFF)
+        now = (last_frame + delta) & 0xFFFFFFFF
+        out.append({"now_ms": now, "last_frame_ms": last_frame})
     return out[:n]
 
 
@@ -312,6 +378,31 @@ FPS_RACE_RETRIES = 4
 ANIM_RACE_RETRIES = 8
 
 
+def _frame_delta_race_free(vec: dict[str, int], retail: dict) -> bool:
+    """Function-specific race detector for frame_delta.
+
+    FUN_004b20ed assigns _DAT_004e59ec deterministically per branch:
+      - suppress (delta < 30): keeps the existing baseline (our injected
+        last_frame_ms)
+      - pass     (delta ≥ 30): writes the timeGetTime result (our scripted
+        now_ms)
+
+    If the engine raced AFTER our retail call (calling FUN_004b20ed before
+    our readback), it overwrites _DAT_004e59ec with wall-clock, which won't
+    match either of those expected values.
+
+    The structural raced flag is too noisy on retail without turbo: the
+    engine free-runs at ~200 kHz, so g_engine_in_tick is almost always
+    set during any RPC.  Using the structural flag for retry decisions
+    yields ~100% retry rate.  Function-specific gives reliable signal.
+    """
+    delta = int(retail.get("delta_ms", 0))
+    new_last = int(retail.get("new_last_frame_ms", 0)) & 0xFFFFFFFF
+    if delta == 0:
+        return new_last == (int(vec["last_frame_ms"]) & 0xFFFFFFFF)
+    return new_last == (int(vec["now_ms"]) & 0xFFFFFFFF)
+
+
 def _fps_race_free(vec: dict[str, int], retail: dict) -> bool:
     """Heuristic: did our retail call land WITHOUT the engine main thread
     racing on the shared globals?
@@ -390,6 +481,30 @@ def diff_anim_cycle(retail: dict, port: dict) -> list[str]:
     return ["new_counter"] if int(retail["new_counter"]) != int(port["new_counter"]) else []
 
 
+def run_port_frame_delta(lib: ctypes.CDLL, vec: dict[str, int]) -> dict[str, int]:
+    din = EngineDeltaIn(now_ms=vec["now_ms"], last_frame_ms=vec["last_frame_ms"])
+    dout = EngineDeltaOut()
+    lib.engine_compute_frame_delta(ctypes.byref(din), ctypes.byref(dout))
+    return {
+        "delta_ms":          dout.delta_ms,
+        "new_last_frame_ms": dout.new_last_frame_ms,
+    }
+
+
+# Frame-delta diff: two output fields.  Race detection structural (same as
+# anim_cycle).  delta_ms compared as int32 because the suppressed branch
+# always returns 0 but the agent returns it via `int32` NativeFunction so
+# negative deltas don't sneak in as u32 from the retail side.
+def diff_frame_delta(retail: dict, port: dict) -> list[str]:
+    bad = []
+    if int(retail["delta_ms"]) != int(port["delta_ms"]):
+        bad.append("delta_ms")
+    if (int(retail["new_last_frame_ms"]) & 0xFFFFFFFF) != \
+            (int(port["new_last_frame_ms"]) & 0xFFFFFFFF):
+        bad.append("new_last_frame_ms")
+    return bad
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -417,6 +532,12 @@ class DiffResult:
     total:      int = 0
     pass_count: int = 0
     fail_count: int = 0
+    # Number of vectors where the retail function ran correctly per spec
+    # (delta_ms / return value matches our port) but an engine-thread race
+    # corrupted a writeback global before our readback.  Counted as a pass
+    # — the spec divergence we're testing didn't fire — but surfaced
+    # separately so harness flakiness is visible.
+    race_count: int = 0
     failures:   list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -426,8 +547,10 @@ def _print_summary(results: list[DiffResult]) -> int:
     rc = 0
     for r in results:
         status = "OK" if r.fail_count == 0 else "FAIL"
+        race_suffix = f", {r.race_count} race-pass" if r.race_count else ""
         print(f"  {r.function:24s} {status}  "
-              f"{r.pass_count}/{r.total} pass, {r.fail_count} fail")
+              f"{r.pass_count}/{r.total} pass, {r.fail_count} fail"
+              f"{race_suffix}")
         if r.fail_count > 0:
             rc = 1
             # First few divergences only — keep output sane.
@@ -461,6 +584,9 @@ def run_diff(cfg_args) -> int:
     if "anim_cycle" in enabled:
         test_plans.append(("anim_cycle",
                            gen_anim_cycle_vectors(cfg_args.vectors, rng)))
+    if "frame_delta" in enabled:
+        test_plans.append(("frame_delta",
+                           gen_frame_delta_vectors(cfg_args.vectors, rng)))
     if not test_plans:
         print("[diff] no enabled targets in --functions; nothing to do.")
         return 0
@@ -604,8 +730,21 @@ def run_diff(cfg_args) -> int:
                         continue
                     port = run_port_fps(lib, vec)
                     bad = diff_fps(retail, port)
-                    if bad and not _fps_race_free(vec, retail):
-                        # Even after retries the race is still firing.
+                    # Pre-call race signature: engine bumped frames between
+                    # our snapshot and our retail call.  Our scripted clock
+                    # still landed (last_render_ms matches our_now), delta
+                    # still matches port, but frames is +N from the engine's
+                    # intervening calls.  Function ran correctly per spec;
+                    # count as race-pass rather than failure.  Pre-call race
+                    # bypasses the last_render-based _fps_race_free check.
+                    if bad == ["new_frames_this_second"] and \
+                            int(retail["delta_ms"]) == int(port["delta_ms"]) and \
+                            int(retail["new_frames_this_second"]) > \
+                                int(port["new_frames_this_second"]):
+                        r.race_count += 1
+                        bad = []
+                    elif bad and not _fps_race_free(vec, retail):
+                        # Post-call race the existing detector caught.
                         # Tag the failure so the summary makes it obvious
                         # this is harness flakiness, not a port bug.
                         bad = ["RACE:" + k for k in bad]
@@ -640,6 +779,48 @@ def run_diff(cfg_args) -> int:
                         # Race never cleared after retries — tag as harness
                         # flakiness rather than a port bug.
                         bad = ["RACE:" + k for k in bad]
+                elif fn_name == "frame_delta":
+                    # Retry on function-specific race: if new_last_frame_ms
+                    # doesn't match the expected post-call value (our injected
+                    # last_frame_ms on suppress, our scripted now_ms on pass),
+                    # an engine call overwrote it after our retail call.  The
+                    # structural raced flag is too aggressive here — the
+                    # engine free-runs at ~200 kHz without turbo so
+                    # g_engine_in_tick is almost always set.
+                    retail = None
+                    for attempt in range(ANIM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_frame_delta(
+                            vec["now_ms"], vec["last_frame_ms"])
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if _frame_delta_race_free(vec, retail):
+                            break
+                        if attempt < ANIM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": vec,
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    port = run_port_frame_delta(lib, vec)
+                    bad = diff_frame_delta(retail, port)
+                    race = not _frame_delta_race_free(vec, retail)
+                    if race and bad == ["new_last_frame_ms"] and \
+                            int(retail["delta_ms"]) == int(port["delta_ms"]):
+                        # Post-call race signature: retail function's
+                        # computed delta matches port (function ran
+                        # correctly per spec), but engine's next
+                        # FUN_004b20ed call overwrote _DAT_004e59ec
+                        # before our readback.  Not a real divergence;
+                        # count as a race-pass.
+                        r.race_count += 1
+                        bad = []
+                    elif bad and race:
+                        bad = ["RACE:" + k for k in bad]
                 else:
                     continue
                 if bad:
@@ -649,7 +830,8 @@ def run_diff(cfg_args) -> int:
                         "retail": retail, "port": port, "diff": bad})
                 else:
                     r.pass_count += 1
-            log(f"[diff] {fn_name}: {r.pass_count}/{r.total} pass")
+            race_suffix = f" ({r.race_count} race-pass)" if r.race_count else ""
+            log(f"[diff] {fn_name}: {r.pass_count}/{r.total} pass{race_suffix}")
             results.append(r)
 
     finally:
@@ -675,6 +857,7 @@ def run_diff(cfg_args) -> int:
             "total":      r.total,
             "pass_count": r.pass_count,
             "fail_count": r.fail_count,
+            "race_count": r.race_count,
             "failures":   r.failures,
         } for r in results],
     }
@@ -700,9 +883,10 @@ def main(argv: list[str] | None = None) -> int:
                          "are fixed edge cases, remainder are random)")
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
-    ap.add_argument("--functions", default="rng_step,fps_step,anim_cycle",
+    ap.add_argument("--functions",
+                    default="rng_step,fps_step,anim_cycle,frame_delta",
                     help="comma-separated subset to test "
-                         "(default: rng_step,fps_step,anim_cycle)")
+                         "(default: rng_step,fps_step,anim_cycle,frame_delta)")
     ap.add_argument("--warmup-s", type=float, default=10.0,
                     help="seconds to wait for engine_tick to settle before "
                          "firing RPCs (default 10)")

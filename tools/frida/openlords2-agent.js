@@ -99,6 +99,7 @@ const ADDR = {
     fn_engine_rng_step:        0x00404a46,  // FUN_00404a46 — double-LFSR step
     fn_engine_compute_fps:     0x004b27bf,  // FUN_004b27bf — FPS counter
     fn_engine_anim_cycle:      0x00451f1a,  // FUN_00451f1a — 16-frame anim cycle bump
+    fn_engine_frame_delta:     0x004b20ed,  // FUN_004b20ed — frame delta w/ 30ms gate
     // RNG state + 6 output mirrors (see docs/findings/engine-quirks.md #5
     // and src/engine_rng.c for the mirror-↔-port mapping).
     var_rng_state_a:     0x0058fe28,  // DAT_0058fe28 — state_a (the seed-init at WinMain)
@@ -119,6 +120,8 @@ const ADDR = {
     // once per engine_tick (gated on the 80 ms phase tick).
     var_anim_cycle_counter:   0x0053e9a4,  // DAT_0053e9a4 — counter (0..15)
     var_phase_tick_80ms:      0x00591510,  // DAT_00591510 — 80 ms phase tick flag
+    // Frame-delta state (1 global) — see src/engine_delta.c.
+    var_frame_delta_last:     0x004e59ec,  // _DAT_004e59ec — last_frame_ms
 };
 
 // ─── runtime state ──────────────────────────────────────────────────────
@@ -222,6 +225,7 @@ let g_diff_test_caller_tid    = -1;
 let g_nf_retail_rng_step      = null;
 let g_nf_retail_compute_fps   = null;
 let g_nf_retail_anim_cycle    = null;
+let g_nf_retail_frame_delta   = null;
 
 // engine_tick depth tracker — 1 while the engine main thread is executing
 // FUN_004b99c0, 0 otherwise.  Used by per-tick race detection in diff RPCs
@@ -1325,11 +1329,13 @@ function installEngineTickHook() {
 
 // ─── pure-function differential test (Phase 4 of harness-roadmap) ─────
 // Retail functions whose pure-C ports live under src/engine_*.c:
-//   FUN_00404a46  (engine_rng_step)         — double-LFSR step, no Win32 deps
-//   FUN_004b27bf  (engine_compute_fps)      — calls winmm!timeGetTime twice on
-//                                              the rollover branch
-//   FUN_00451f1a  (engine_compute_anim_cycle) — bumps a mod-16 counter once
-//                                              per 80 ms phase tick
+//   FUN_00404a46  (engine_rng_step)            — double-LFSR step, no Win32 deps
+//   FUN_004b27bf  (engine_compute_fps)         — calls winmm!timeGetTime twice
+//                                                  on the rollover branch
+//   FUN_00451f1a  (engine_compute_anim_cycle)  — bumps a mod-16 counter once
+//                                                  per 80 ms phase tick
+//   FUN_004b20ed  (engine_compute_frame_delta) — calls timeGetTime once,
+//                                                  computes delta with 30 ms gate
 //
 // Each runRetail* RPC snapshots ALL observable globals (state + output
 // mirrors), writes the test-vector's inputs, invokes the retail function
@@ -1354,6 +1360,8 @@ function resolveRetailFunctions() {
         rva(ADDR.fn_engine_compute_fps), 'int32', [], 'stdcall');
     g_nf_retail_anim_cycle = new NativeFunction(
         rva(ADDR.fn_engine_anim_cycle), 'void', [], 'stdcall');
+    g_nf_retail_frame_delta = new NativeFunction(
+        rva(ADDR.fn_engine_frame_delta), 'int32', [], 'stdcall');
     return true;
 }
 
@@ -1550,6 +1558,52 @@ function runRetailAnimCycle(counter, tick_80ms_fired) {
     return out;
 }
 
+// Frame-delta diff: 1 retail global (last_frame_ms) + 1 scripted timeGetTime
+// return.  FUN_004b20ed calls timeGetTime() exactly once, computes
+// delta = now - last_frame_ms, and either suppresses (delta < 30) or
+// advances the baseline.  Returns the delta (int).
+//
+// Race shape matches anim_cycle (called once per engine_tick in the
+// pre-tick block, right after FUN_00451f1a).  Same structural detector:
+// raced=1 if g_tick_count advanced or g_engine_in_tick was non-zero at
+// any sample point during the RPC.
+function runRetailFrameDelta(in_now_ms, in_last_frame_ms) {
+    if (!g_diff_test_enabled) {
+        return {error: 'diff_test not enabled at init'};
+    }
+    if (!resolveRetailFunctions()) {
+        return {error: 'NativeFunction resolution failed'};
+    }
+    g_diff_test_caller_tid = Process.getCurrentThreadId();
+    // Start with an empty queue so a prior test's leftover can't bleed in.
+    g_diff_test_clock_queue.length = 0;
+    const tick_count_before = g_tick_count;
+    const in_tick_before    = g_engine_in_tick;
+    const snap = {
+        last_frame_ms: rva(ADDR.var_frame_delta_last).readU32(),
+    };
+    let out;
+    try {
+        rva(ADDR.var_frame_delta_last).writeU32(in_last_frame_ms >>> 0);
+        g_diff_test_clock_queue.push(in_now_ms >>> 0);
+        const delta_ms = g_nf_retail_frame_delta() | 0;
+        const new_last_frame_ms = rva(ADDR.var_frame_delta_last).readU32();
+        const tick_count_after = g_tick_count;
+        const in_tick_after    = g_engine_in_tick;
+        out = {
+            delta_ms:          delta_ms,
+            new_last_frame_ms: new_last_frame_ms,
+            raced: ((tick_count_after !== tick_count_before) ||
+                    in_tick_before !== 0 || in_tick_after !== 0) ? 1 : 0,
+        };
+    } finally {
+        rva(ADDR.var_frame_delta_last).writeU32(snap.last_frame_ms);
+        g_diff_test_clock_queue.length = 0;
+        g_diff_test_caller_tid = -1;
+    }
+    return out;
+}
+
 // ─── init RPC ──────────────────────────────────────────────────────────
 
 rpc.exports = {
@@ -1668,8 +1722,8 @@ rpc.exports = {
 
         if (g_diff_test_enabled) {
             log('diff_test: armed (runRetailRngStep / runRetailComputeFps / ' +
-                'runRetailAnimCycle RPCs live; orchestrator drives test ' +
-                'vectors)');
+                'runRetailAnimCycle / runRetailFrameDelta RPCs live; ' +
+                'orchestrator drives test vectors)');
         }
     },
 
@@ -1689,5 +1743,9 @@ rpc.exports = {
 
     runRetailAnimCycle: function (counter, tick_80ms_fired) {
         return runRetailAnimCycle(counter, tick_80ms_fired);
+    },
+
+    runRetailFrameDelta: function (now_ms, last_frame_ms) {
+        return runRetailFrameDelta(now_ms, last_frame_ms);
     },
 };
