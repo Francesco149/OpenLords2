@@ -54,6 +54,76 @@ user.
 > §"FUN_0042e5c0", Ghidra `FUN_0042e5c0` / `FUN_004b2730` /
 > `FUN_004b29be`.
 
+---
+
+## 2. The .ini parser reads past its own buffer (and gets away with it)
+
+`FUN_0040ecc4` (`l2.ini` + `sierra.ini` parser) allocates a fixed
+20000-byte scratch buffer and reads a few KB of `.ini` text into
+the start of it.  Every key lookup is the same two-step:
+
+```c
+off = FUN_00401000(scratch, "CDROM", 20000);   // find substring
+eq  = FUN_00401085(scratch + off, '=', 20000); // find '=' AFTER it
+off = off + eq;
+if (off > 0) value = atoi(scratch + off);
+```
+
+The bound passed to `find_char` is **the full 20000**, not the
+remaining bytes after `off`.  So once `find_substr` returns a
+non-zero offset, the subsequent `find_char` is searching a window
+of `20000 - off + 20000` bytes — i.e. it walks up to `off` bytes
+past the end of the malloc.
+
+That's a heap-OOB read in textbook terms.  Modern ASan would
+scream.  Retail gets away with it because:
+
+1. `malloc(20000)` on the Win32 CRT typically lands inside a
+   ≥4 KiB heap segment with surrounding bookkeeping that's
+   readable — the OOB doesn't touch unmapped memory.
+2. Whatever garbage bytes the scan happens to traverse, they end
+   up either (a) not matching `'='`, in which case the search
+   gives up and returns 0 (harmless); or (b) matching `'='` by
+   coincidence, in which case `atoi` reads more garbage starting
+   there.  `atoi` of a random non-digit byte returns 0, of an
+   ASCII digit byte returns 1–9, both of which are valid-looking
+   small ints that fit the config schema.
+3. The parser is structurally robust to "wrong but small int"
+   — the misparses get overwritten by later keys that are
+   actually present in the file, or they land in fields where
+   `0` is a reasonable fallback (`VideoSpeed=0` is the default).
+
+The same mass-bound shows up in `FUN_00401000`'s substring search
+itself and in the CPU= line's 20-byte dash scan
+(`for (dash = 0; dash < 0x14 && buf[off + dash] != '-'; dash++)`).
+All three can technically walk past the buffer; all three are
+de-facto safe by the same robustness argument.
+
+Layered on top is a related quirk in `FUN_00401000` itself: it
+returns `0` for both "not found" *and* "found at offset 0".
+Callers (`FUN_0040ecc4`) work around this with the convention
+that real keys never sit at offset 0 (`.ini` files start with
+`[Section]` headers or comments).  When that convention holds, the
+ambiguity is invisible.  When it doesn't — say, a missing key
+combined with any other `=` in the file — the parser silently
+parses the wrong value.  Real sierra.ini files have all the
+expected keys, so this never bites in retail's actual workload.
+
+We caught both quirks the moment the parser ran under ASan in
+`make -C tests run`.  Our port (`src/config.c`) clamps
+`find_char` to the remaining bytes and disambiguates
+`find_substr`'s 0-return with an explicit `memcmp(buf, key, klen)`
+— both flagged in the comment block of `seek_past_equals` as
+deliberate retail deviations.  The on-disk behaviour is identical
+on well-formed `.ini` inputs; it's the malformed / partial / weird
+ones that now do the safer thing instead of the lucky thing.
+
+> 📍 `src/config.c` (`seek_past_equals`), `tests/test_config.c`,
+> `docs/findings/winmain-pre-init.md` §"String-helper family",
+> Ghidra `FUN_0040ecc4` / `FUN_00401000` / `FUN_00401085`.
+
+---
+
 <!--
 Template for new entries:
 
