@@ -7,6 +7,152 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Render-phase tail survey + FPS counter port (FUN_004b27bf)
+
+Continued exiting the per-tick driver one slot at a time.  Surveyed
+the small slot between the input-step and screen-dispatch ladder
+(`FUN_0040f1a0` — itself another screen-state dispatcher, deferred),
+then surveyed and ported the bottom-of-driver render-phase tail.
+
+### Survey results
+
+**Between input-step and screen-dispatch** (single slot):
+
+| Retail        | Size   | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                            |
+|---------------|--------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `FUN_0040f1a0` | 1117 B | **Deferred — screen-state dispatcher itself.**  Gated on `DAT_0057d340 != 0` (the deferred-screen-change cookie).  Body is ~40 `else if (DAT_004eac50 == <id>)` branches → per-screen UI subfunctions.  Each subfunction blocked on its corresponding screen subsystem.  Lands incrementally as each screen gets ported. |
+
+**Render-phase tail** (six functions, gated on `g_savepump_request == 0`):
+
+| Retail        | Size  | Disposition                                                                                                                                                                                                                |
+|---------------|-------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `FUN_00429b1d` | 135 B | **Deferred.**  Map-scroll-offset clamp.  Blocked on map subsystem (no producer of the scroll values + dimensions).                                                                                                          |
+| `FUN_0047ed34` | 103 B | **Deferred.**  UI-scroll-offset clamp.  Blocked on UI subsystem.                                                                                                                                                            |
+| `FUN_00426529` | 11 B  | **Deferred — empty body.**  Same disposition as the other debug-stripped stubs.                                                                                                                                              |
+| `FUN_004b27bf` | 143 B | **Ported.**  Rolling 1-second FPS counter — see below.                                                                                                                                                                       |
+| `FUN_004b12fb` | 21 B  | **Deferred — `return 1` stub.**  Likely debug-build gate optimised out.                                                                                                                                                      |
+| `FUN_004b0e03` | 875 B | **Deferred.**  Palette-fade machine, gated on screen `0x23` (Smacker/intro).  20 ms cadence, 12-step-per-RGB lerp across 256 palette entries; blocked on intro-screen subsystem.                                              |
+
+### Port: `engine_compute_fps` (`FUN_004b27bf`, 143 B)
+
+- **`src/engine_fps.c`** (new TU, pure C, no Win32 deps) — port of
+  the rolling 1-second FPS counter.  Inputs: now_ms,
+  rollover_now_ms (a SECOND timeGetTime call retail uses only on
+  rollover frames as the new window-start basis), last_render_ms,
+  second_window_start_ms, frames_this_second, current_fps,
+  cumulative_fps, cumulative_seconds.  Outputs: ms-since-last-render
+  (delta_ms — retail's caller discards it but the math runs every
+  call), new_last_render_ms, new_second_window_start_ms,
+  new_frames_this_second, new_current_fps, new_cumulative_fps,
+  new_cumulative_seconds, and a `window_rolled_over` test helper.
+- **`src/engine.c`** — wiring.  6 new file-static mirrors
+  (`g_fps_last_render_ms`, `g_fps_second_window_start_ms`,
+  `g_fps_frames_this_second`, `g_fps_current`,
+  `g_fps_cumulative_fps`, `g_fps_cumulative_seconds`).  Wrapper
+  `engine_tick_fps_step` reads timeGetTime twice (matches retail's
+  2-call shape), bundles + calls + writes back.  Lazy-init for
+  `g_fps_second_window_start_ms` on first call: retail's
+  `FUN_004b2258` does `DAT_004eaba0 = timeGetTime()` at line 83665
+  before the main loop spins; we don't have an InitInstance hook
+  point yet so we substitute first-call-init.  Without it, the
+  first frame would see `now - 0 > 1000` and fire a bogus rollover.
+  Wired into `engine_tick`'s render-phase tail, gated on
+  `g_savepump_request == 0` (matches retail; always true today).
+- **`src/main.c`** — shutdown smoke summary.  After `main loop
+  exited after N frame(s)`, prints
+  `engine_ticks=X current_fps=Y avg_fps=Z (over W s)` so the harness
+  can confirm the per-tick driver is alive and the counter is
+  computing plausible values.  Four new public engine readers:
+  `engine_get_current_fps/cumulative_fps/cumulative_seconds/frame_counter`.
+
+### Tests landed (9 new, 114/114 total under ASan + UBSan)
+
+- Basic frame: count bumps, no rollover, delta_ms = now - last_render.
+- Delta is computed against last_render (not window_start).
+- Rollover fires at 1001 ms elapsed; current_fps published, cumulative
+  pair advances, window_start becomes the SECOND timeGetTime value
+  (rollover_now_ms), frames_this_second resets to 0.
+- Strict-boundary: exactly 1000 ms does NOT fire (the gate is
+  `1000 < elapsed`).
+- Two back-to-back rollovers — cumulative pair adds CURRENT FPS each
+  time, not stale.
+- Negative elapsed (clock wrap or debug-seeded future window_start) →
+  signed-compare suppresses the rollover branch, frame count just
+  bumps.  Same quirk shape as `engine_compute_frame_delta`.
+- Two-call shape: rollover_now_ms (not now_ms) becomes the new
+  window-start basis, but last_render uses the FIRST call.
+- All-zeros first-call boundary (now_ms == 0 too) — no rollover.
+- 3-second window pathological case (harness pause + resume) — math
+  divides by the FULL elapsed not 1000; cumulative_seconds bumps by
+  1 not 3 (it counts rollover events, not actual wall-clock seconds).
+
+### Verified
+
+- `make -C tests run` — 114/114 pass under ASan + UBSan
+  (was 105/105; +9 FPS tests).
+- `make -C src` — both .exe targets clean, no warnings.
+- `tools/run-openlords2.sh --frames 50` — transcript identical to
+  pre-slice except for the new shutdown summary line
+  (`engine_ticks=0 current_fps=0 avg_fps=0 (over 0 s)` — engine path
+  not running without `--gfx-init`).
+- `tools/run-openlords2.sh --frames 50 --gfx-init` — `engine_ticks=50`
+  confirms the per-tick driver is firing; FPS row reads 0 because
+  50 frames is well under 1 second wall time.
+- `tools/run-openlords2.sh --frames 5000 --gfx-init` —
+  `engine_ticks=5000 current_fps=649 avg_fps=643 (over 7 s)`.
+  Plausible numbers (Sleep(1) on Windows rounds to 1-2 ms → 500-1000
+  FPS range).
+
+### Engine quirks
+
+No new entry — the two preserved quirks here (signed-rollover gate
+shared with the frame-delta function; two-timeGetTime-call shape)
+are documented inline in `engine_fps.c` and pinned by tests, not
+load-bearing enough to need their own entries.  The first is a
+shared shape with the frame-delta engine-quirk already documented;
+the second is benign codegen drift on the order of microseconds.
+
+### What's next
+
+The render phase is now structurally split into three slices:
+
+1. **Render-phase head — done** (input step + the deferred-screen
+   dispatcher trampoline `FUN_0040f1a0` surveyed-as-deferred).
+2. **Screen-dispatch ladder** — the bulk of `FUN_004b99c0`.  ~30
+   subsystem calls + a long stream of phase functions
+   (`FUN_00472a31`, `FUN_00419c78`, `FUN_0040c725`, …) interspersed
+   with the `FUN_004b1cf3(N)` scoreboard dispatch.  This is where
+   the bulk of per-frame UI/sim work runs.  Blocked on the
+   corresponding subsystems; lands as those land.
+3. **Render-phase tail — five-of-six deferred, FPS counter ported.**
+   The remaining five are blocked on map/UI/intro subsystems.
+
+The natural next slice is one of:
+
+1. **Sub-step body** — retail's per-sim-tick block inside the
+   variable-rate loop.  Blocked on the sim subsystem (`FUN_004472ce`
+   itself is a major chunk).  Largest unblock and most productive
+   for forward progress, but also the biggest single chunk.
+2. **Turbo v2 in the Frida agent** — virtualise `timeGetTime` so
+   the harness can drive faster-than-real-time soak runs.  Now
+   that the FPS counter is alive, we have an immediate visual
+   confirmation knob (current_fps should rise N× with the turbo
+   scale).  Same shape as OpenMare's; small port.
+3. **Engine state mirror** — write a producer that can transition
+   `g_engine_state` to 3 (ingame).  Unblocks the rate controller's
+   real scenario-hint path, the sub-step body's screen-state
+   branches, the music-update gate (`FUN_00499a1c`), and the dead
+   `engine_scenario_rate_hint` body.  Substantial — depends on
+   menu→ingame transition which itself depends on the savepump
+   chain.
+
+Top-down RE bias says turbo v2 — the FPS counter just landed; it's
+the smallest verifiable step that also gives us a knob for the next
+soak-test cycle.  Lift in the harness, validate against the new
+smoke summary.
+
+---
+
 ## 2026-05-24 — Render-phase head survey + mouse-input resolver (FUN_004b191e)
 
 First slice exiting the pre-tick block.  Surveyed all three retail

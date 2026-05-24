@@ -345,6 +345,7 @@ The three outer wrappers are now ported to `src/engine.{c,h}`:
 | `FUN_00451f1a`        | `engine_compute_anim_cycle` | full (pure function in `src/engine_anim_cycle.c`).  Wrapper `engine_tick_anim_cycle_step` consumes `g_phase_tick_80ms` (produced upstream by phase step) and bumps `g_anim_cycle_counter` mod 16.  Downstream consumer (`FUN_004071a0`, sprite-strip indexer) unported, so the counter spins with nothing reading it.  7 unit tests; defensive-but-unreachable lower clamp documented in engine-quirks #4 |
 | `FUN_004bb978`        | `engine_compute_sim_sub_steps` | full (pure function in `src/engine_rate.c`).  Wrapper `engine_tick_rate_step` in `engine.c` bundles file-static globals (`g_sim_*`) into the input struct + writes deltas back.  LUT (`DAT_004e3260`) not extracted yet — wrapper passes `NULL` (treats as all-zeros) since today scenario hint == 0 prevents the LUT branch from executing.  24 unit tests cover every branch |
 | `FUN_004b191e`        | `engine_compute_input_state` | full (pure function in `src/engine_input.c`).  Wrapper `engine_tick_input_step` in `engine.c` calls `GetCursorPos` + `timeGetTime`, bundles file-static `g_input_*` mirrors + the WndProc-mirrored `g_mouse_*` globals + `g_client_screen` into the input struct, calls the pure function, writes outputs back, then clears `g_mouse_dblclk` (retail's `DAT_004eada1 = 0` final statement).  Resolves screen-cursor + button-state into game-coord cursor + per-frame edge flags + 300 ms delayed-single-click events + double-click events.  22 unit tests cover the matrix.  Downstream consumers (UI dispatcher) unported, so the outputs land in write-only mirrors today |
+| `FUN_004b27bf`        | `engine_compute_fps`         | full (pure function in `src/engine_fps.c`).  Wrapper `engine_tick_fps_step` reads `timeGetTime` twice (matches retail's 2-call shape — second call only used as the new window-start basis on rollover frames), bundles file-static `g_fps_*` mirrors into the input struct, runs the pure function, writes outputs back.  Lazy-initialises `g_fps_second_window_start_ms` on first call to skip the spurious boot-time rollover (retail's `FUN_004b2258` does the equivalent at line 83665 before the main loop spins).  Wired into `engine_tick`'s render-phase tail, gated on `g_savepump_request == 0` (always true today).  9 unit tests cover boundary + rollover + cumulative + clock-wrap branches.  Current FPS is write-only from our side (UI overlay unported); cumulative pair read by `FUN_004b2636` (session-diag, unported) and by main.c's shutdown summary as a smoke artifact (printed via four new public readers `engine_get_current_fps/cumulative_fps/cumulative_seconds/frame_counter`) |
 | `FUN_004bb8c0`        | `engine_run_gate` (file-static) | stub returning 1 (matches retail — the function literally `return 1` in retail too).  No follow-up needed unless retail's debug build reveals a different body |
 | `FUN_0043de70`        | `engine_scenario_rate_hint` (file-static) | outer arm only — `return 0` unless `g_engine_state == 3`; today always returns 0.  The full 1211-byte body (scenario-rate selector based on per-player tick budgets) lands when the player-faction data (`DAT_0057bf04`) + current-player mirror (`DAT_0057c8cc`) become available |
 | `FUN_004b2730`        | `gfx_restore`               | full (prior slice) |
@@ -373,6 +374,35 @@ runs against a retail trace will see the same divergence — the
 trace will show these functions being called and we will not, but
 the global state we'd be reading is also all-zero, so the would-be
 mutations are no-ops.
+
+### Render-phase tail — surveyed + FPS counter ported (2026-05-24)
+
+Six functions run at the tail of the render phase, after the screen-
+dispatch ladder, gated on `DAT_005c9274 == 0` (g_savepump_request).
+
+| Retail        | Size  | Disposition | Notes |
+|---------------|-------|-------------|-------|
+| `FUN_00429b1d` | 135 B | **Deferred — blocked on map subsystem.** Clamps the map-scroll offsets `DAT_005651b4` / `DAT_005651b8` against the map dimensions `DAT_0053e8ac` / `DAT_0056d67c`.  Trivial pure function; lands when the map subsystem provides the producers for the scroll values and the dimensions. |
+| `FUN_0047ed34` | 103 B | **Deferred — blocked on UI subsystem.**  Clamps the UI-scroll offsets `DAT_0055ce70` / `DAT_005678a0` against constants 0x41 / 0x42.  Trivial pure function; lands when the UI subsystem provides the producers for the scroll values. |
+| `FUN_00426529` | 11 B  | **Deferred — empty body.**  Same disposition as `FUN_004b0aaa` / `FUN_004b1de0` / `FUN_004b12fb` — ship-build-stripped debug hook.  No port — the slot stands surveyed. |
+| `FUN_004b27bf` | 143 B | **Ported.**  FPS counter — see below. |
+| `FUN_004b12fb` | 21 B  | **Deferred — `return 1` stub in retail.**  Likely a debug-build gate optimised out in the ship build.  No port — the slot stands surveyed.  If the stub becomes meaningful in some future debug path (e.g. ASLR-pinned save-state validator) it's a single-line landing. |
+| `FUN_004b0e03` | 875 B | **Deferred — blocked on intro/Smacker screen.**  Palette-fade machine, gated on `DAT_004eac50 == '#' (0x23)`.  Drives a 12-step-per-RGB lerp from `DAT_004ea530..532` source triplet array → `DAT_004ea1b0..1b2` live palette, on a 20 ms cadence.  On convergence (or the per-screen frame-budget timer `DAT_004e65e0` running out), snaps the palette, transitions screen ID to `DAT_004e65c8`, schedules a deferred screen-change action via `DAT_0057d340 = 2`.  Calls `FUN_0042f58c` to upload the palette to the DAC.  Lands together with the intro/Smacker screen subsystem. |
+
+After the tail, retail has the deferred-shutdown trigger gated on
+`DAT_005aeb68 == 4` — that path is the sim-requested-shutdown branch
+which is not yet reachable from anything our drop-in can produce
+(`g_engine_state` never transitions above 0 today).
+
+### Render-phase head between sim sub-step loop and screen-dispatch — surveyed (2026-05-24)
+
+A single one-liner sits between the input-state resolver
+(`FUN_004b191e`, ported) and the screen-dispatch ladder.  Survey
+result:
+
+| Retail        | Size  | Disposition | Notes |
+|---------------|-------|-------------|-------|
+| `FUN_0040f1a0` | 1117 B | **Deferred — itself a screen-state ladder.**  Gated on `DAT_0057d340 != 0` (the deferred-screen-change cookie).  Body is ~40 `else if (DAT_004eac50 == <id>)` branches dispatching into per-screen UI subsystems (FUN_004110b1, FUN_0041e7e1, FUN_00414819, …).  Every called subfunction is per-screen UI work, blocked on the corresponding screen subsystem.  Lands incrementally as each screen gets its UI port. |
 
 ### Render-phase head — surveyed (2026-05-24)
 
