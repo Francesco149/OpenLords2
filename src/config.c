@@ -72,66 +72,96 @@ static char g_ini_scratch[CONFIG_INI_SCRATCH];
 
 /* Returns the offset of the byte FOLLOWING the '=' after the first
  * occurrence of `key` in the first `max` bytes of `buf`, or 0 if
- * either `key` or the trailing `=` couldn't be found.  Matches
- * retail's local idiom:
+ * either `key` or the trailing `=` couldn't be found.
  *
- *     off = find_substr(buf, key, max);
- *     eq  = find_char(buf + off, '=', max);
- *     off = off + eq;
- *     if (off > 0) { ... use buf[off] ... }
+ * Two deliberate deviations from retail's verbatim two-step:
  *
- * Returns 0 for "not found" *or* "key at offset 0 with '=' at
- * offset 0" — but the latter is structurally impossible in any real
- * .ini file (you can't have an `=` literally at byte 0 *and* the key
- * starting there), so the ambiguity is benign. */
+ *  (a) `find_substr`'s "0 = not-found OR found-at-offset-0" return
+ *      quirk is disambiguated here.  If the substring really was
+ *      found at offset 0, `buf[0..klen)` matches `key`; otherwise
+ *      we treat 0 as "not found" and short-circuit.  Without this,
+ *      a missing key combined with any other `=` in the file would
+ *      have us parsing the wrong value — silently broken in retail,
+ *      but ASan-trippy and behaviourally wrong.
+ *
+ *  (b) `find_char`'s bound is `max - off`, not `max`.  Retail passes
+ *      the full 20000-byte malloc size to both calls — out-of-bounds
+ *      past the key position, harmless in practice because retail's
+ *      buffer is zero-padded past the file content.  Our pure-C
+ *      surface receives arbitrarily-sized buffers, so clamping keeps
+ *      the function ASan-clean.
+ *
+ * Both deviations are safer-than-retail and fix real bugs while
+ * preserving the contract on well-formed inputs (every key has its
+ * `=`, every value is followed by a newline or EOF). */
 static int seek_past_equals(const char *buf, const char *key, int max)
 {
     int off = strutil_find_substr(buf, key, max);
-    int eq  = strutil_find_char(buf + off, '=', max);
-    off = off + eq;
-    return (off > 0) ? off : 0;
+    if (off == 0) {
+        /* Disambiguate: only "found at offset 0" if buf actually
+         * starts with key.  Anything else is "not found". */
+        size_t klen = strlen(key);
+        if (max < (int)klen || memcmp(buf, key, klen) != 0) return 0;
+    }
+    int remaining = max - off;
+    if (remaining < 0) remaining = 0;
+    int eq  = strutil_find_char(buf + off, '=', remaining);
+    if (eq == 0) return 0;
+    return off + eq;
 }
 
 /* ---------------------------------------------------------------- *
- *  Parse sierra.ini into g_config.  Called once a successful read    *
- *  has placed the file bytes into g_ini_scratch.                    *
+ *  Pure-C parse of a sierra.ini-format buffer.  No globals, no I/O   *
+ *  — testable in isolation under host gcc + ASan.                    *
  * ---------------------------------------------------------------- */
-static void parse_sierra_ini(void)
+void config_set_defaults(config_t *out)
+{
+    out->cd_drive       = 'D';
+    out->cd_rom_speed   = 2;
+    out->physical_mem   = 8000;
+    out->cpu_class      = 0x1e6;
+    out->cpu_mhz        = 0x42;
+    out->video_speed    = 0;
+    out->sound_channels = 0xd;
+    out->fast_machine   = 0;
+}
+
+void config_parse_sierra_ini(const char *buf, int n, config_t *out)
 {
     int off;
 
     /* CDRomDrives=X — read the single byte right after the '='. */
-    off = seek_past_equals(g_ini_scratch, "CDRomDrives", CONFIG_INI_SCRATCH);
-    if (off > 0) g_config.cd_drive = g_ini_scratch[off];
+    off = seek_past_equals(buf, "CDRomDrives", n);
+    if (off > 0) out->cd_drive = buf[off];
 
-    off = seek_past_equals(g_ini_scratch, "CDROM", CONFIG_INI_SCRATCH);
-    if (off > 0) g_config.cd_rom_speed = atoi(g_ini_scratch + off);
+    off = seek_past_equals(buf, "CDROM", n);
+    if (off > 0) out->cd_rom_speed = atoi(buf + off);
 
-    off = seek_past_equals(g_ini_scratch, "SoundChannels", CONFIG_INI_SCRATCH);
-    if (off > 0) g_config.sound_channels = atoi(g_ini_scratch + off);
+    off = seek_past_equals(buf, "SoundChannels", n);
+    if (off > 0) out->sound_channels = atoi(buf + off);
 
-    off = seek_past_equals(g_ini_scratch, "PhysicalMem", CONFIG_INI_SCRATCH);
-    if (off > 0) g_config.physical_mem = atoi(g_ini_scratch + off);
+    off = seek_past_equals(buf, "PhysicalMem", n);
+    if (off > 0) out->physical_mem = atoi(buf + off);
 
-    off = seek_past_equals(g_ini_scratch, "VideoSpeed", CONFIG_INI_SCRATCH);
-    if (off > 0) g_config.video_speed = atoi(g_ini_scratch + off);
+    off = seek_past_equals(buf, "VideoSpeed", n);
+    if (off > 0) out->video_speed = atoi(buf + off);
 
     /* CPU= line — first char picks the class (Pentium-class vs.
      * 486-class), then an embedded '-' separates the class string
      * from the MHz number.  Retail logic verbatim. */
-    off = seek_past_equals(g_ini_scratch, "CPU", CONFIG_INI_SCRATCH);
+    off = seek_past_equals(buf, "CPU", n);
     if (off > 0) {
-        char c = g_ini_scratch[off];
-        if (c == '>' || c == 'p' || c == 'P') g_config.cpu_class = 0x24a;
-        else                                  g_config.cpu_class = 0x1e6;
+        char c = buf[off];
+        if (c == '>' || c == 'p' || c == 'P') out->cpu_class = 0x24a;
+        else                                  out->cpu_class = 0x1e6;
         /* Scan up to 20 bytes for '-'; atoi the byte after it. */
         int dash = 0;
-        for (; dash < 0x14 && g_ini_scratch[off + dash] != '-'; dash++) { }
-        g_config.cpu_mhz = atoi(g_ini_scratch + off + dash + 1);
+        for (; dash < 0x14 && buf[off + dash] != '-'; dash++) { }
+        out->cpu_mhz = atoi(buf + off + dash + 1);
     }
 
-    if (g_config.cd_rom_speed > 3 && g_config.cpu_mhz > 0x46)
-        g_config.fast_machine = 1;
+    if (out->cd_rom_speed > 3 && out->cpu_mhz > 0x46)
+        out->fast_machine = 1;
 }
 
 /* ---------------------------------------------------------------- *
@@ -204,16 +234,7 @@ static void load_l2_eng(void)
 
 void config_init(void)
 {
-    /* Defaults — matches retail's `DAT_0053f200 = 0x44; ...` block at
-     * the top of FUN_0040ecc4. */
-    g_config.cd_drive       = 'D';
-    g_config.cd_rom_speed   = 2;
-    g_config.physical_mem   = 8000;
-    g_config.cpu_class      = 0x1e6;
-    g_config.cpu_mhz        = 0x42;
-    g_config.video_speed    = 0;
-    g_config.sound_channels = 0xd;
-    g_config.fast_machine   = 0;
+    config_set_defaults(&g_config);
 
     load_l2_eng();
 
@@ -235,7 +256,7 @@ void config_init(void)
         log_line("Err:Could not read sierra.ini");
         return;
     }
-    parse_sierra_ini();
+    config_parse_sierra_ini(g_ini_scratch, CONFIG_INI_SCRATCH, &g_config);
     log_line("config: cd=%c cd_speed=%d sound_ch=%d mem=%d cpu=%s-%d "
              "video=%d fast=%d",
              g_config.cd_drive, g_config.cd_rom_speed,

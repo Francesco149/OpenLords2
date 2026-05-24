@@ -60,4 +60,20 @@ void config_init(void);
  * 120-KB blob. */
 const uint8_t *config_localization_data(size_t *size_out);
 
+/* Pure-C surface for unit tests + reuse.  These are exactly the
+ * routines under test in tests/test_config.c — kept here so the
+ * Win32-side I/O glue (load_l2_eng, try_l2ini_to_sierra_ini) and
+ * the pure parse logic are decoupled. */
+
+/* Reset `out` to the same defaults retail eagerly applies at the
+ * top of FUN_0040ecc4 (before any file read). */
+void config_set_defaults(config_t *out);
+
+/* Parse a sierra.ini-format buffer in-place.  Walks the same six
+ * keys as retail (CDRomDrives, CDROM, SoundChannels, PhysicalMem,
+ * VideoSpeed, CPU) and writes into `out`.  Keys not present are
+ * left untouched — caller should `config_set_defaults` first if
+ * they want the retail defaults-then-overrides semantics. */
+void config_parse_sierra_ini(const char *buf, int n, config_t *out);
+
 #endif /* OPENLORDS2_CONFIG_H */

@@ -72,6 +72,23 @@ session at inhuman speed, exercising different subsystems against
 retail and our re-impl in lock-step.  See
 [`docs/harness-roadmap.md`](docs/harness-roadmap.md).
 
+## Tests
+
+Pure-C parsers and decoders carry unit tests under host gcc +
+ASan/UBSan.  Win32-surface modules (gfx, audio, main) are smoke-
+tested in-process via `tools/run-openlords2.sh`.
+
+```fish
+nix develop
+make -C tests run          # unit tests
+make -C src                # cross-compile drop-in (mingw32)
+tools/run-openlords2.sh --frames 50
+```
+
+Shape mirrored from `/opt/src/openrecet/tests/` — single statically
+linked test binary, X-macro test registry in `tests/test_main.c`,
+tiny assertion macros in `tests/t.h`.
+
 ## Sibling projects
 
 OpenLords2 shares conventions with two other RE projects living in

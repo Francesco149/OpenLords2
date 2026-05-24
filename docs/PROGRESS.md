@@ -7,6 +7,102 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Unit test harness + caught real OOB
+
+Stood up a host-gcc unit test harness under ASan + UBSan,
+modelled on `/opt/src/openrecet/tests/`.  First-run found a real
+out-of-bounds read in the just-landed config parser — exactly the
+kind of bug the smoke tests miss (back-buffer captures look fine,
+nothing crashes on Windows because the production buffer is
+20000 zero-padded bytes that absorbs the OOB).
+
+### Scope landed
+
+- **`tests/Makefile`** — host gcc, `-fsanitize=address,undefined
+  -fno-sanitize-recover=all`.  Builds a single
+  `tests/build/run_tests` from the pure-C source under test
+  (`src/strutil.c`, `src/config.c`) plus the test files.
+- **`tests/t.h`** — tiny assertion macros (`T_FAIL`, `T_ASSERT`,
+  `T_ASSERT_EQ_I`, `T_ASSERT_EQ_S`, `T_ASSERT_MEM_EQ`, `T_SKIP`).
+  Mirrors openrecet's `t.h` verbatim — same return-code protocol
+  (0 pass, 1 fail, 2 skip).
+- **`tests/test_main.c`** — driver with X-macro test registry
+  (each test name appears exactly once; registry can't drift
+  from declarations).  Stubs `log_line` and `io_read_file_at` so
+  src/config.c links without dragging in the Win32 surface.
+- **`tests/test_strutil.c`** — 15 tests covering every quirk
+  claimed in `strutil.h`: substring search's "0 = not-found OR
+  found-at-0" ambiguity, char-search's 1-based return, bounded-
+  copy's no-null-terminator guarantee, strip_ctrl's `[0x20,
+  0xa6]` range edges.
+- **`tests/test_config.c`** — 17 tests covering defaults match,
+  per-key parse (CDRomDrives / CDROM / SoundChannels / PhysicalMem
+  / VideoSpeed / CPU), all four CPU class branches (`P`, `p`,
+  `>`, otherwise), the fast_machine threshold's `>` vs `>=`
+  boundaries, missing-keys behaviour, and a real-shape sierra.ini
+  round-trip.
+- **README "Tests" section** — points new contributors at the
+  harness.
+
+### Bug caught
+
+`config_parse_sierra_ini` was reading past the input buffer in two
+places:
+
+1. The `find_char` call in `seek_past_equals` used the full `max`
+   as bound instead of `max - off` (where `buf + off` is the
+   search start).  Retail does the same — out-of-bounds-past-key
+   read of up to 20000 bytes — but harmless because retail's
+   buffer is a 20000-byte malloc zero-padded after the file
+   content.  Our pure-C parser receives buffers of arbitrary
+   size, so clamping was needed.
+
+2. More serious — `FUN_00401000`'s "0 = not-found OR found-at-0"
+   quirk meant that when a key was absent but the buffer
+   contained any other `=` (very common: WindowsDir=., CDROM=,
+   etc.), the parser would set `off` to whatever value happened
+   to follow the first `=`.  For the CPU= line, this then ran a
+   20-byte dash-scan past random offsets, tripping ASan on test
+   inputs and (in retail) silently overwriting fields with
+   garbage.
+
+Both fixed in `src/config.c` — `seek_past_equals` now
+disambiguates the 0-quirk via `memcmp(buf, key, klen)` and clamps
+the `find_char` bound to remaining bytes.  Comments flag both as
+deliberate retail deviations.  Production smoke unchanged
+(transcript identical pre/post fix on a real game-dir run).
+
+### Refactor
+
+To make the parser testable in isolation, two pure-C symbols are
+now exported from `src/config.h`:
+
+- `config_set_defaults(config_t *out)` — applies retail's
+  defaults block.
+- `config_parse_sierra_ini(const char *buf, int n, config_t *out)`
+  — pure parser, no globals, no I/O.
+
+`config_init()` is now `config_set_defaults(&g_config) +
+load_l2_eng() + try_l2ini_to_sierra_ini() +
+config_parse_sierra_ini(g_ini_scratch, ..., &g_config)` — same
+behaviour as before, just exposing the seams.
+
+### Verified
+
+- `make -C tests run` — 32 tests, all green, no ASan/UBSan trips.
+- `make -C src` — both .exe targets build clean.
+- `tools/run-openlords2.sh --frames 50` — transcript identical
+  to pre-test-harness run.
+
+### What's next
+
+Same shortlist as the previous entry — first real drawing
+primitive, main-loop driver port, lords2.inf consumer chain.
+Test harness now ready to receive coverage as each pure-C parser
+or decoder lands.
+
+---
+
 ## 2026-05-24 — WinMain pre-init slice (config + strutil)
 
 Ported the WinMain pre-init chain: l2.eng localization load,
