@@ -106,6 +106,30 @@ function markOwnedHwnd(h, source) {
     send({kind: 'hwnd_owned', hwnd: k, source: source});
 }
 
+// CreateWindowEx argv (x86 stdcall, args[0..11]):
+//   0  dwExStyle
+//   1  lpClassName
+//   2  lpWindowName
+//   3  dwStyle       ← we strip WS_VISIBLE here if g_hide_window
+//   4  x
+//   5  y
+//   6  nWidth
+//   7  nHeight
+//   8  hWndParent
+//   9  hMenu
+//   10 hInstance
+//   11 lpParam
+//
+// Why strip WS_VISIBLE at create time rather than only hook ShowWindow:
+// Lords2.exe (and many 1996-era engines) pass WS_VISIBLE to CreateWindowEx
+// directly, so the window is shown *during* the create call — by the
+// time our onLeave fires to register the hwnd in g_owned_hwnds, the
+// window has already been displayed on screen.  ShowWindow never gets
+// called separately, so a hide_window hook on ShowWindow alone is
+// insufficient.  Verified 2026-05-24 against retail Lords2.exe: a
+// borderless black window appeared during init despite all four
+// show-path hooks being armed.
+
 function installCreateWindowExHooks() {
     const u32 = Process.findModuleByName('user32.dll');
     if (!u32) { err('installCreateWindowExHooks', 'user32.dll not loaded'); return; }
@@ -117,6 +141,7 @@ function installCreateWindowExHooks() {
             onEnter: function (args) {
                 this.cls = null;
                 this.wn  = null;
+                this.stripped_visible = false;
                 try {
                     const clsArg = args[1];
                     if (clsArg && !clsArg.isNull()) {
@@ -137,6 +162,22 @@ function installCreateWindowExHooks() {
                             : wnArg.readUtf16String();
                     }
                 } catch (_) { /* unreadable strings are harmless */ }
+
+                // Strip WS_VISIBLE pre-create if hide_window is on.
+                // We don't have an hwnd yet to gate by isOwnedHwnd, so we
+                // apply this to every CreateWindowEx from the target
+                // process — that excludes MessageBox / system error popups
+                // (they go through a kernel-internal path that doesn't
+                // hit this export), which is exactly the dividing line
+                // isOwnedHwnd was approximating.
+                if (g_hide_window) {
+                    const style = args[3].toUInt32();
+                    if (style & WS_VISIBLE) {
+                        const newStyle = (style & ~WS_VISIBLE) >>> 0;
+                        args[3] = ptr(newStyle);
+                        this.stripped_visible = true;
+                    }
+                }
             },
             onLeave: function (retval) {
                 markOwnedHwnd(retval, name);
@@ -146,6 +187,10 @@ function installCreateWindowExHooks() {
                           api:   name,
                           cls:   this.cls || '',
                           title: this.wn  || ''});
+                    if (this.stripped_visible) {
+                        send({kind: 'hide_force', api: name + '/WS_VISIBLE',
+                              hwnd: hwndKey(retval), original: WS_VISIBLE});
+                    }
                 }
             },
         });
