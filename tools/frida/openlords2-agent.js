@@ -109,6 +109,7 @@ const ADDR = {
     fn_engine_anim_cycle:      0x00451f1a,  // FUN_00451f1a — 16-frame anim cycle bump
     fn_engine_frame_delta:     0x004b20ed,  // FUN_004b20ed — frame delta w/ 30ms gate
     fn_engine_phase_ticks:     0x004bbc80,  // FUN_004bbc80 — 9-flag animation phase ticks
+    fn_engine_input_state:     0x004b191e,  // FUN_004b191e — mouse-input state resolver
     // RNG state + 6 output mirrors (see docs/findings/engine-quirks.md #5
     // and src/engine_rng.c for the mirror-↔-port mapping).
     var_rng_state_a:     0x0058fe28,  // DAT_0058fe28 — state_a (the seed-init at WinMain)
@@ -154,6 +155,64 @@ const ADDR = {
     var_phase_tick_1280ms:       0x005aeb3c, //  DAT_005aeb3c — flag
     var_phase_tick_1920ms:       0x005aeb38, //  DAT_005aeb38 — flag
     var_phase_tick_2560ms:       0x005aeb30, //  DAT_005aeb30 — flag
+    // Input-state mirrors (FUN_004b191e — engine_compute_input_state).  ~30
+    // globals split across input (read at entry, restored after), state
+    // (read at entry + overwritten in-place), and output (cleared at entry
+    // or conditionally written).  See src/engine_input.c for the per-field
+    // mapping.  Sizes follow Ghidra's labelling: byte-stride adjacency in
+    // the 0x4eabXX cluster forces u8 reads/writes; cached_cursor_{x,y} are
+    // i16; everything at 4-byte-aligned slots is s32/u32.
+    //   Mode + WndProc-mirrored inputs.
+    var_input_cursor_cache_enabled: 0x0057cac4, //  DAT_0057cac4 — s32
+    var_input_pending_dblclk:       0x004eada1, //  DAT_004eada1 — u8 (g_mouse_dblclk)
+    var_input_button_state:         0x004eabc2, //  DAT_004eabc2 — u8 (g_mouse_buttons)
+    //   Viewport bounds (RECT in screen-coord space) + game-coord extents.
+    var_input_viewport_x0:          0x004ea180, //  DAT_004ea180 — s32
+    var_input_viewport_y0:          0x004ea184, //  DAT_004ea184 — s32
+    var_input_viewport_x1:          0x004ea188, //  DAT_004ea188 — s32
+    var_input_viewport_y1:          0x004ea18c, //  DAT_004ea18c — s32
+    var_input_viewport_game_w:      0x004eb274, //  DAT_004eb274 — s32
+    var_input_viewport_game_h:      0x004eac4c, //  DAT_004eac4c — s32
+    //   Cached cursor (WM_MOUSEMOVE-tracked) — i16 each (CONCAT22 in WndProc).
+    var_input_cached_cursor_x:      0x004eabbe, //  DAT_004eabbe — i16
+    var_input_cached_cursor_y:      0x004eabc0, //  DAT_004eabc0 — i16
+    //   Per-frame raw cursor (always written from GetCursorPos result).
+    var_input_raw_cursor_x:         0x004e6594, //  DAT_004e6594 — s32
+    var_input_raw_cursor_y:         0x004e6598, //  DAT_004e6598 — s32
+    //   Snapshots of prior state (written unconditionally before computing
+    //   the new state).  Byte-stride-packed in the 0x4eabXX cluster.
+    var_input_prev_game_x_snap:     0x004ea198, //  DAT_004ea198 — s32
+    var_input_prev_game_y_snap:     0x004ea190, //  DAT_004ea190 — s32
+    var_input_prev_lmb_snap:        0x004eabbc, //  DAT_004eabbc — u8
+    var_input_prev_rmb_snap:        0x004eabc3, //  DAT_004eabc3 — u8
+    //   Game-coord cursor (prev_game_{x,y} on entry, game_{x,y} on exit).
+    var_input_game_x:               0x004e65fc, //  DAT_004e65fc — s32
+    var_input_game_y:               0x004e65f4, //  DAT_004e65f4 — s32
+    //   Per-frame event flags (cleared at entry, conditionally set).
+    var_input_mouse_event:          0x004ea4b0, //  DAT_004ea4b0 — s32
+    var_input_button_changed:       0x004eb264, // _DAT_004eb264 — s32
+    var_input_lmb_newly_pressed:    0x004eafb4, //  DAT_004eafb4 — s32
+    var_input_lmb_newly_released:   0x004e65d8, //  DAT_004e65d8 — s32
+    var_input_rmb_newly_pressed:    0x004eabe0, //  DAT_004eabe0 — s32
+    var_input_rmb_newly_released:   0x004e6900, //  DAT_004e6900 — s32
+    var_input_lmb_click_fired:      0x004eabf0, //  DAT_004eabf0 — s32
+    var_input_rmb_click_fired:      0x004ea51c, //  DAT_004ea51c — s32
+    var_input_lmb_dblclk:           0x004eabc5, //  DAT_004eabc5 — u8 (byte-adjacent)
+    var_input_rmb_dblclk:           0x004ea4b4, //  DAT_004ea4b4 — s32 (4-aligned)
+    //   Resolved button state (prev_lmb/rmb on entry, new_lmb/rmb on exit).
+    var_input_lmb:                  0x004e65cc, //  DAT_004e65cc — s32
+    var_input_rmb:                  0x004e8780, //  DAT_004e8780 — s32
+    //   Pending-click timer state + shared 300 ms baseline.
+    var_input_lmb_timer_armed:      0x004e65e8, //  DAT_004e65e8 — s32
+    var_input_rmb_timer_armed:      0x004e65c4, //  DAT_004e65c4 — s32
+    var_input_click_timer_ms:       0x004e59f8, // _DAT_004e59f8 — u32
+    var_input_motion_last_ms:       0x004e59f4, // _DAT_004e59f4 — u32
+    var_input_motion_idle_ms:       0x004eabfc, // _DAT_004eabfc — u32
+    //   Click-eligibility latch (char in Ghidra → u8).
+    var_input_click_eligible:       0x004e65f0, //  DAT_004e65f0 — u8
+    //   Last-click coords (carried through; overwritten on click-arming).
+    var_input_last_click_x:         0x004eac04, //  DAT_004eac04 — s32
+    var_input_last_click_y:         0x004eac08, //  DAT_004eac08 — s32
 };
 
 // ─── runtime state ──────────────────────────────────────────────────────
@@ -265,6 +324,12 @@ let g_nf_post_message_a    = null;
 // has to happen AFTER g_base is set (RVA translation depends on it).
 let g_diff_test_enabled       = false;
 let g_diff_test_clock_queue   = [];     // [u32 ms, ...] consumed by timeGetTime hook
+// Scripted cursor queue — parallel to clock_queue but for the user32!
+// GetCursorPos hook (FUN_004b191e calls it exactly once at entry).  Entries
+// are {x: i32, y: i32}; queue is drained FIFO from the GetCursorPos onLeave
+// when the calling thread matches the diff RPC's V8 thread and the queue
+// is non-empty.  See installGetCursorPosHook below for the hook body.
+let g_diff_test_cursor_queue  = [];
 // Only the thread currently executing a diff RPC may consume the scripted
 // clock queue.  Without this gate the engine main thread (still ticking
 // during diff tests) would race on the queue and steal scripted values
@@ -276,6 +341,7 @@ let g_nf_retail_compute_fps   = null;
 let g_nf_retail_anim_cycle    = null;
 let g_nf_retail_frame_delta   = null;
 let g_nf_retail_phase_ticks   = null;
+let g_nf_retail_input_state   = null;
 
 // engine_tick depth tracker — 1 while the engine main thread is executing
 // FUN_004b99c0, 0 otherwise.  Used by per-tick race detection in diff RPCs
@@ -1081,6 +1147,53 @@ function installVirtualClockHook() {
         '(step=' + g_turbo_step_ms + ' ms/tick, main-thread-gated)');
 }
 
+// ─── GetCursorPos scripted-return hook (diff_test only) ─────────────────
+//
+// FUN_004b191e (engine_compute_input_state) calls user32!GetCursorPos
+// exactly once at entry.  To drive the function deterministically from
+// runRetailInputState we install an onLeave hook that — when called by
+// the diff RPC's V8 thread AND the queue is non-empty — overwrites the
+// LPPOINT struct with our scripted (x, y) and forces the return value
+// to TRUE.
+//
+// Queue is FIFO, gated on caller_tid (same shape as g_diff_test_clock_queue
+// for timeGetTime).  Engine-thread calls fall through unchanged — they
+// see the real cursor pos.  The hook is idempotent.
+let g_getcursorpos_hooked = false;
+function installGetCursorPosHook() {
+    if (g_getcursorpos_hooked) return;
+    const user32 = Process.findModuleByName('user32.dll');
+    if (!user32) {
+        err('installGetCursorPosHook', 'user32.dll not loaded');
+        return;
+    }
+    const fn = user32.findExportByName('GetCursorPos');
+    if (!fn) {
+        err('installGetCursorPosHook', 'user32!GetCursorPos not found');
+        return;
+    }
+    Interceptor.attach(fn, {
+        onEnter: function (args) {
+            // Capture lpPoint so onLeave can overwrite the POINT struct.
+            // POINT layout: { LONG x; LONG y; } — 8 bytes, x at +0.
+            this.lpPoint = args[0];
+        },
+        onLeave: function (retval) {
+            if (g_diff_test_cursor_queue.length > 0 &&
+                Process.getCurrentThreadId() === g_diff_test_caller_tid) {
+                const v = g_diff_test_cursor_queue.shift();
+                if (!this.lpPoint.isNull()) {
+                    this.lpPoint.writeS32(v.x | 0);
+                    this.lpPoint.add(4).writeS32(v.y | 0);
+                }
+                retval.replace(ptr(1));  // BOOL TRUE — always succeed.
+            }
+        },
+    });
+    g_getcursorpos_hooked = true;
+    log('GetCursorPos hook installed @ ' + fn + ' (diff_test cursor queue)');
+}
+
 // ─── frame capture ──────────────────────────────────────────────────────
 // Lords II uses 8bpp paletted DDraw surfaces (640×480 in both windowed and
 // fullscreen modes — see docs/findings/ddraw-dsound-bringup.md).  The back
@@ -1847,6 +1960,8 @@ function resolveRetailFunctions() {
         rva(ADDR.fn_engine_frame_delta), 'int32', [], 'stdcall');
     g_nf_retail_phase_ticks = new NativeFunction(
         rva(ADDR.fn_engine_phase_ticks), 'void', [], 'stdcall');
+    g_nf_retail_input_state = new NativeFunction(
+        rva(ADDR.fn_engine_input_state), 'void', [], 'stdcall');
     return true;
 }
 
@@ -2240,6 +2355,221 @@ function runRetailPhaseTicks(in_now_ms,
     return out;
 }
 
+// Input-state diff: ~30 retail globals + 1 scripted timeGetTime + 1
+// scripted GetCursorPos.  FUN_004b191e is called with NO args (all I/O via
+// BSS globals).  See `var_input_*` ADDR entries above for the per-field
+// width rationale (byte-stride adjacency in the 0x4eabXX cluster forces
+// u8 reads/writes; cached_cursor_{x,y} are i16; everything else s32/u32).
+//
+// Race shape: function is called once per engine_tick in the render-phase
+// head.  We use the structural raced flag (engine_in_tick at any sample
+// point) for retry decisions.  Function-specific race-free check:
+// raw_cursor_{x,y} after the call MUST equal the scripted cursor we
+// injected via GetCursorPos — if it doesn't, the engine raced and ran its
+// own FUN_004b191e (which calls real GetCursorPos and overwrites the
+// raw_cursor globals).
+function runRetailInputState(in_obj) {
+    if (!g_diff_test_enabled) {
+        return {error: 'diff_test not enabled at init'};
+    }
+    if (!resolveRetailFunctions()) {
+        return {error: 'NativeFunction resolution failed'};
+    }
+    g_diff_test_caller_tid = Process.getCurrentThreadId();
+    g_diff_test_clock_queue.length = 0;
+    g_diff_test_cursor_queue.length = 0;
+    const tick_count_before = g_tick_count;
+    const in_tick_before    = g_engine_in_tick;
+    // Snapshot every global we touch (inputs and outputs alike) so the
+    // engine's own ticking state isn't disturbed across the RPC.
+    const snap = {
+        cursor_cache_enabled: rva(ADDR.var_input_cursor_cache_enabled).readS32(),
+        pending_dblclk:       rva(ADDR.var_input_pending_dblclk      ).readU8 (),
+        button_state:         rva(ADDR.var_input_button_state        ).readU8 (),
+        viewport_x0:          rva(ADDR.var_input_viewport_x0         ).readS32(),
+        viewport_y0:          rva(ADDR.var_input_viewport_y0         ).readS32(),
+        viewport_x1:          rva(ADDR.var_input_viewport_x1         ).readS32(),
+        viewport_y1:          rva(ADDR.var_input_viewport_y1         ).readS32(),
+        viewport_game_w:      rva(ADDR.var_input_viewport_game_w     ).readS32(),
+        viewport_game_h:      rva(ADDR.var_input_viewport_game_h     ).readS32(),
+        cached_cursor_x:      rva(ADDR.var_input_cached_cursor_x     ).readS16(),
+        cached_cursor_y:      rva(ADDR.var_input_cached_cursor_y     ).readS16(),
+        raw_cursor_x:         rva(ADDR.var_input_raw_cursor_x        ).readS32(),
+        raw_cursor_y:         rva(ADDR.var_input_raw_cursor_y        ).readS32(),
+        prev_game_x_snap:     rva(ADDR.var_input_prev_game_x_snap    ).readS32(),
+        prev_game_y_snap:     rva(ADDR.var_input_prev_game_y_snap    ).readS32(),
+        prev_lmb_snap:        rva(ADDR.var_input_prev_lmb_snap       ).readU8 (),
+        prev_rmb_snap:        rva(ADDR.var_input_prev_rmb_snap       ).readU8 (),
+        game_x:               rva(ADDR.var_input_game_x              ).readS32(),
+        game_y:               rva(ADDR.var_input_game_y              ).readS32(),
+        mouse_event:          rva(ADDR.var_input_mouse_event         ).readS32(),
+        button_changed:       rva(ADDR.var_input_button_changed      ).readS32(),
+        lmb_newly_pressed:    rva(ADDR.var_input_lmb_newly_pressed   ).readS32(),
+        lmb_newly_released:   rva(ADDR.var_input_lmb_newly_released  ).readS32(),
+        rmb_newly_pressed:    rva(ADDR.var_input_rmb_newly_pressed   ).readS32(),
+        rmb_newly_released:   rva(ADDR.var_input_rmb_newly_released  ).readS32(),
+        lmb_click_fired:      rva(ADDR.var_input_lmb_click_fired     ).readS32(),
+        rmb_click_fired:      rva(ADDR.var_input_rmb_click_fired     ).readS32(),
+        lmb_dblclk:           rva(ADDR.var_input_lmb_dblclk          ).readU8 (),
+        rmb_dblclk:           rva(ADDR.var_input_rmb_dblclk          ).readS32(),
+        lmb:                  rva(ADDR.var_input_lmb                 ).readS32(),
+        rmb:                  rva(ADDR.var_input_rmb                 ).readS32(),
+        lmb_timer_armed:      rva(ADDR.var_input_lmb_timer_armed     ).readS32(),
+        rmb_timer_armed:      rva(ADDR.var_input_rmb_timer_armed     ).readS32(),
+        click_timer_ms:       rva(ADDR.var_input_click_timer_ms      ).readU32(),
+        motion_last_ms:       rva(ADDR.var_input_motion_last_ms      ).readU32(),
+        motion_idle_ms:       rva(ADDR.var_input_motion_idle_ms      ).readU32(),
+        click_eligible:       rva(ADDR.var_input_click_eligible      ).readU8 (),
+        last_click_x:         rva(ADDR.var_input_last_click_x        ).readS32(),
+        last_click_y:         rva(ADDR.var_input_last_click_y        ).readS32(),
+    };
+    let out;
+    try {
+        // Inject inputs.  Order: mode + WndProc mirrors first, viewport,
+        // cached cursor, then state mirrors (prev_game/lmb/rmb, timers,
+        // click_eligible, last_click).  Per-frame OUT flags are cleared
+        // at retail's entry so no need to pre-clear here, but we DO need
+        // to clear the snap-mirrors (prev_lmb_snap, prev_rmb_snap,
+        // lmb_dblclk, rmb_dblclk) because retail writes them
+        // unconditionally — without a deterministic baseline the
+        // post-call readback can't distinguish "retail wrote 0" from
+        // "snapshot already had 0".  Same shape as phase_ticks's
+        // pre-clear of the 8 non-sticky flags.
+        rva(ADDR.var_input_cursor_cache_enabled).writeS32(in_obj.cursor_cache_enabled | 0);
+        rva(ADDR.var_input_pending_dblclk      ).writeU8 (in_obj.pending_dblclk & 0xff);
+        rva(ADDR.var_input_button_state        ).writeU8 (in_obj.button_state   & 0xff);
+        rva(ADDR.var_input_viewport_x0         ).writeS32(in_obj.viewport_x0 | 0);
+        rva(ADDR.var_input_viewport_y0         ).writeS32(in_obj.viewport_y0 | 0);
+        rva(ADDR.var_input_viewport_x1         ).writeS32(in_obj.viewport_x1 | 0);
+        rva(ADDR.var_input_viewport_y1         ).writeS32(in_obj.viewport_y1 | 0);
+        rva(ADDR.var_input_viewport_game_w     ).writeS32(in_obj.viewport_game_w | 0);
+        rva(ADDR.var_input_viewport_game_h     ).writeS32(in_obj.viewport_game_h | 0);
+        rva(ADDR.var_input_cached_cursor_x     ).writeS16(in_obj.cached_cursor_x | 0);
+        rva(ADDR.var_input_cached_cursor_y     ).writeS16(in_obj.cached_cursor_y | 0);
+        // prev_game_{x,y} feed DAT_004e65fc/4 (which retail snapshots to
+        // DAT_004ea198/0 then overwrites with the new game-coord cursor).
+        rva(ADDR.var_input_game_x              ).writeS32(in_obj.prev_game_x | 0);
+        rva(ADDR.var_input_game_y              ).writeS32(in_obj.prev_game_y | 0);
+        // prev_lmb/rmb feed DAT_004e65cc / DAT_004e8780 — same shape.
+        rva(ADDR.var_input_lmb                 ).writeS32(in_obj.prev_lmb | 0);
+        rva(ADDR.var_input_rmb                 ).writeS32(in_obj.prev_rmb | 0);
+        rva(ADDR.var_input_lmb_timer_armed     ).writeS32(in_obj.lmb_timer_armed | 0);
+        rva(ADDR.var_input_rmb_timer_armed     ).writeS32(in_obj.rmb_timer_armed | 0);
+        rva(ADDR.var_input_click_timer_ms      ).writeU32(in_obj.click_timer_ms >>> 0);
+        rva(ADDR.var_input_motion_last_ms      ).writeU32(in_obj.motion_last_ms >>> 0);
+        rva(ADDR.var_input_click_eligible      ).writeU8 (in_obj.click_eligible & 0xff);
+        rva(ADDR.var_input_last_click_x        ).writeS32(in_obj.prev_last_click_x | 0);
+        rva(ADDR.var_input_last_click_y        ).writeS32(in_obj.prev_last_click_y | 0);
+        // Clear snap mirrors so the post-call readback is "did THIS call
+        // write them" (retail writes them unconditionally; clearing keeps
+        // the semantics clean for restore + diff).
+        rva(ADDR.var_input_prev_game_x_snap    ).writeS32(0);
+        rva(ADDR.var_input_prev_game_y_snap    ).writeS32(0);
+        rva(ADDR.var_input_prev_lmb_snap       ).writeU8 (0);
+        rva(ADDR.var_input_prev_rmb_snap       ).writeU8 (0);
+        rva(ADDR.var_input_lmb_dblclk          ).writeU8 (0);
+        rva(ADDR.var_input_rmb_dblclk          ).writeS32(0);
+        rva(ADDR.var_input_motion_idle_ms      ).writeU32(0);
+
+        // Scripted clock + cursor — both consumed inside FUN_004b191e.
+        g_diff_test_clock_queue.push(in_obj.now_ms >>> 0);
+        g_diff_test_cursor_queue.push({x: in_obj.cursor_screen_x | 0,
+                                       y: in_obj.cursor_screen_y | 0});
+        g_nf_retail_input_state();
+
+        // Readback canary: raw_cursor_{x,y} must equal our injected cursor
+        // (retail writes them unconditionally from local_24).  Read FIRST
+        // as the start canary; the orchestrator's _input_state_race_free
+        // check confirms they match the expected post-call value.
+        const raw_x_start = rva(ADDR.var_input_raw_cursor_x).readS32();
+        const raw_y_start = rva(ADDR.var_input_raw_cursor_y).readS32();
+        out = {
+            raw_cursor_x:         raw_x_start,
+            raw_cursor_y:         raw_y_start,
+            new_cached_cursor_x:  rva(ADDR.var_input_cached_cursor_x   ).readS16(),
+            new_cached_cursor_y:  rva(ADDR.var_input_cached_cursor_y   ).readS16(),
+            prev_game_x_snapshot: rva(ADDR.var_input_prev_game_x_snap  ).readS32(),
+            prev_game_y_snapshot: rva(ADDR.var_input_prev_game_y_snap  ).readS32(),
+            prev_lmb_snapshot:    rva(ADDR.var_input_prev_lmb_snap     ).readU8 (),
+            prev_rmb_snapshot:    rva(ADDR.var_input_prev_rmb_snap     ).readU8 (),
+            game_x:               rva(ADDR.var_input_game_x            ).readS32(),
+            game_y:               rva(ADDR.var_input_game_y            ).readS32(),
+            mouse_event:          rva(ADDR.var_input_mouse_event       ).readS32(),
+            button_changed:       rva(ADDR.var_input_button_changed    ).readS32(),
+            lmb_newly_pressed:    rva(ADDR.var_input_lmb_newly_pressed ).readS32(),
+            lmb_newly_released:   rva(ADDR.var_input_lmb_newly_released).readS32(),
+            rmb_newly_pressed:    rva(ADDR.var_input_rmb_newly_pressed ).readS32(),
+            rmb_newly_released:   rva(ADDR.var_input_rmb_newly_released).readS32(),
+            lmb_click_fired:      rva(ADDR.var_input_lmb_click_fired   ).readS32(),
+            rmb_click_fired:      rva(ADDR.var_input_rmb_click_fired   ).readS32(),
+            lmb_dblclk:           rva(ADDR.var_input_lmb_dblclk        ).readU8 (),
+            rmb_dblclk:           rva(ADDR.var_input_rmb_dblclk        ).readS32(),
+            new_lmb:              rva(ADDR.var_input_lmb               ).readS32(),
+            new_rmb:              rva(ADDR.var_input_rmb               ).readS32(),
+            new_lmb_timer_armed:  rva(ADDR.var_input_lmb_timer_armed   ).readS32(),
+            new_rmb_timer_armed:  rva(ADDR.var_input_rmb_timer_armed   ).readS32(),
+            new_click_timer_ms:   rva(ADDR.var_input_click_timer_ms    ).readU32(),
+            new_motion_last_ms:   rva(ADDR.var_input_motion_last_ms    ).readU32(),
+            motion_idle_ms:       rva(ADDR.var_input_motion_idle_ms    ).readU32(),
+            last_click_x:         rva(ADDR.var_input_last_click_x      ).readS32(),
+            last_click_y:         rva(ADDR.var_input_last_click_y      ).readS32(),
+            new_click_eligible:   rva(ADDR.var_input_click_eligible    ).readU8 (),
+            // End canary — re-read raw_cursor to detect race-during-readback.
+            raw_cursor_x_end:     rva(ADDR.var_input_raw_cursor_x      ).readS32(),
+            raw_cursor_y_end:     rva(ADDR.var_input_raw_cursor_y      ).readS32(),
+        };
+        const tick_count_after = g_tick_count;
+        const in_tick_after    = g_engine_in_tick;
+        out.raced = ((tick_count_after !== tick_count_before) ||
+                     in_tick_before !== 0 || in_tick_after !== 0) ? 1 : 0;
+    } finally {
+        // Restore every snapshotted field — engine sees a no-op.
+        rva(ADDR.var_input_cursor_cache_enabled).writeS32(snap.cursor_cache_enabled);
+        rva(ADDR.var_input_pending_dblclk      ).writeU8 (snap.pending_dblclk);
+        rva(ADDR.var_input_button_state        ).writeU8 (snap.button_state);
+        rva(ADDR.var_input_viewport_x0         ).writeS32(snap.viewport_x0);
+        rva(ADDR.var_input_viewport_y0         ).writeS32(snap.viewport_y0);
+        rva(ADDR.var_input_viewport_x1         ).writeS32(snap.viewport_x1);
+        rva(ADDR.var_input_viewport_y1         ).writeS32(snap.viewport_y1);
+        rva(ADDR.var_input_viewport_game_w     ).writeS32(snap.viewport_game_w);
+        rva(ADDR.var_input_viewport_game_h     ).writeS32(snap.viewport_game_h);
+        rva(ADDR.var_input_cached_cursor_x     ).writeS16(snap.cached_cursor_x);
+        rva(ADDR.var_input_cached_cursor_y     ).writeS16(snap.cached_cursor_y);
+        rva(ADDR.var_input_raw_cursor_x        ).writeS32(snap.raw_cursor_x);
+        rva(ADDR.var_input_raw_cursor_y        ).writeS32(snap.raw_cursor_y);
+        rva(ADDR.var_input_prev_game_x_snap    ).writeS32(snap.prev_game_x_snap);
+        rva(ADDR.var_input_prev_game_y_snap    ).writeS32(snap.prev_game_y_snap);
+        rva(ADDR.var_input_prev_lmb_snap       ).writeU8 (snap.prev_lmb_snap);
+        rva(ADDR.var_input_prev_rmb_snap       ).writeU8 (snap.prev_rmb_snap);
+        rva(ADDR.var_input_game_x              ).writeS32(snap.game_x);
+        rva(ADDR.var_input_game_y              ).writeS32(snap.game_y);
+        rva(ADDR.var_input_mouse_event         ).writeS32(snap.mouse_event);
+        rva(ADDR.var_input_button_changed      ).writeS32(snap.button_changed);
+        rva(ADDR.var_input_lmb_newly_pressed   ).writeS32(snap.lmb_newly_pressed);
+        rva(ADDR.var_input_lmb_newly_released  ).writeS32(snap.lmb_newly_released);
+        rva(ADDR.var_input_rmb_newly_pressed   ).writeS32(snap.rmb_newly_pressed);
+        rva(ADDR.var_input_rmb_newly_released  ).writeS32(snap.rmb_newly_released);
+        rva(ADDR.var_input_lmb_click_fired     ).writeS32(snap.lmb_click_fired);
+        rva(ADDR.var_input_rmb_click_fired     ).writeS32(snap.rmb_click_fired);
+        rva(ADDR.var_input_lmb_dblclk          ).writeU8 (snap.lmb_dblclk);
+        rva(ADDR.var_input_rmb_dblclk          ).writeS32(snap.rmb_dblclk);
+        rva(ADDR.var_input_lmb                 ).writeS32(snap.lmb);
+        rva(ADDR.var_input_rmb                 ).writeS32(snap.rmb);
+        rva(ADDR.var_input_lmb_timer_armed     ).writeS32(snap.lmb_timer_armed);
+        rva(ADDR.var_input_rmb_timer_armed     ).writeS32(snap.rmb_timer_armed);
+        rva(ADDR.var_input_click_timer_ms      ).writeU32(snap.click_timer_ms);
+        rva(ADDR.var_input_motion_last_ms      ).writeU32(snap.motion_last_ms);
+        rva(ADDR.var_input_motion_idle_ms      ).writeU32(snap.motion_idle_ms);
+        rva(ADDR.var_input_click_eligible      ).writeU8 (snap.click_eligible);
+        rva(ADDR.var_input_last_click_x        ).writeS32(snap.last_click_x);
+        rva(ADDR.var_input_last_click_y        ).writeS32(snap.last_click_y);
+        g_diff_test_clock_queue.length = 0;
+        g_diff_test_cursor_queue.length = 0;
+        g_diff_test_caller_tid = -1;
+    }
+    return out;
+}
+
 // ─── init RPC ──────────────────────────────────────────────────────────
 
 rpc.exports = {
@@ -2347,6 +2677,13 @@ rpc.exports = {
             try { installTimeGetTimeHook(); }
             catch (e) { err('installTimeGetTimeHook', e.message); }
         }
+        if (g_diff_test_enabled) {
+            // GetCursorPos scripted-return — required for runRetailInputState
+            // (FUN_004b191e reads the cursor pos via GetCursorPos at entry).
+            // Idempotent; only installs once.
+            try { installGetCursorPosHook(); }
+            catch (e) { err('installGetCursorPosHook', e.message); }
+        }
 
         if (g_frame_capture_enabled) {
             log('frame_capture: armed (max=' +
@@ -2386,7 +2723,8 @@ rpc.exports = {
 
         if (g_diff_test_enabled) {
             log('diff_test: armed (runRetailRngStep / runRetailComputeFps / ' +
-                'runRetailAnimCycle / runRetailFrameDelta / runRetailPhaseTicks ' +
+                'runRetailAnimCycle / runRetailFrameDelta / runRetailPhaseTicks / ' +
+                'runRetailInputState ' +
                 'RPCs live; orchestrator drives test vectors)');
         }
     },
@@ -2424,6 +2762,10 @@ rpc.exports = {
             counter_2,  counter_4,
             counter_8,  counter_13,
             counter_16, counter_24, counter_32);
+    },
+
+    runRetailInputState: function (in_obj) {
+        return runRetailInputState(in_obj);
     },
 
     // Diagnostic counters for the DDraw → GDI seat.  Reflects everything

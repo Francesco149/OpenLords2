@@ -72,16 +72,20 @@ implemented.
       `tools/diff_test.py` + agent-side `runRetail*` RPCs.  Currently
       covers `engine_rng_step` (FUN_00404a46), `engine_compute_fps`
       (FUN_004b27bf), `engine_compute_anim_cycle` (FUN_00451f1a),
-      `engine_compute_frame_delta` (FUN_004b20ed), and
-      `engine_compute_phase_ticks` (FUN_004bbc80) — 500/500 vectors
-      pass on all five.
+      `engine_compute_frame_delta` (FUN_004b20ed),
+      `engine_compute_phase_ticks` (FUN_004bbc80), and
+      `engine_compute_input_state` (FUN_004b191e) — 200/200 vectors
+      pass on all six (seed 1).
       See `docs/findings/pure-function-diff.md` for the engine-thread
       race + retry pattern (the engine main thread is still ticking
       during diffs; in-process spin and SuspendThread both deadlock,
       so the orchestrator detects races + retries instead).
       Phase_ticks added the *concurrent-execution* race mode (multi-
       core engine + V8 thread both in FUN_004bbc80 simultaneously) +
-      the engine-clear race-pass signature for it.
+      the engine-clear race-pass signature for it.  Input_state added
+      the *pre-call modification* race mode (engine writes inputs we
+      injected before retail reads) + the GetCursorPos scripted-return
+      pattern parallel to the timeGetTime queue.
 
 ## Phase 5 — TAS bot
 

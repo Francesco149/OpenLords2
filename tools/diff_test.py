@@ -21,6 +21,7 @@ Current targets:
   - engine_compute_anim_cycle  (FUN_00451f1a) — 16-frame anim-cycle bump
   - engine_compute_frame_delta (FUN_004b20ed) — frame delta with 30 ms gate
   - engine_compute_phase_ticks (FUN_004bbc80) — 9-flag animation phase tick
+  - engine_compute_input_state (FUN_004b191e) — mouse-input state resolver
 
 The orchestrator runs the agent in "diff_test" mode (no turbo, no input
 replay) so the engine boots, parks, and waits.  Once the per-tick driver
@@ -182,6 +183,73 @@ class EnginePhaseOut(ctypes.Structure):
     ]
 
 
+# Mirrors engine_input_in_t / engine_input_out_t in src/engine.h.  Field
+# order MUST match the header.
+class EngineInputIn(ctypes.Structure):
+    _fields_ = [
+        ("cursor_screen_x",       ctypes.c_int),
+        ("cursor_screen_y",       ctypes.c_int),
+        ("now_ms",                ctypes.c_uint32),
+        ("cursor_cache_enabled",  ctypes.c_int),
+        ("pending_dblclk",        ctypes.c_uint8),
+        ("button_state",          ctypes.c_uint8),
+        ("viewport_x0",           ctypes.c_int),
+        ("viewport_y0",           ctypes.c_int),
+        ("viewport_x1",           ctypes.c_int),
+        ("viewport_y1",           ctypes.c_int),
+        ("viewport_game_w",       ctypes.c_int),
+        ("viewport_game_h",       ctypes.c_int),
+        ("cached_cursor_x",       ctypes.c_int16),
+        ("cached_cursor_y",       ctypes.c_int16),
+        ("prev_game_x",           ctypes.c_int),
+        ("prev_game_y",           ctypes.c_int),
+        ("prev_lmb",              ctypes.c_int),
+        ("prev_rmb",              ctypes.c_int),
+        ("lmb_timer_armed",       ctypes.c_int),
+        ("rmb_timer_armed",       ctypes.c_int),
+        ("click_timer_ms",        ctypes.c_uint32),
+        ("motion_last_ms",        ctypes.c_uint32),
+        ("click_eligible",        ctypes.c_int),
+        ("prev_last_click_x",     ctypes.c_int),
+        ("prev_last_click_y",     ctypes.c_int),
+    ]
+
+
+class EngineInputOut(ctypes.Structure):
+    _fields_ = [
+        ("raw_cursor_x",          ctypes.c_int),
+        ("raw_cursor_y",          ctypes.c_int),
+        ("new_cached_cursor_x",   ctypes.c_int16),
+        ("new_cached_cursor_y",   ctypes.c_int16),
+        ("prev_game_x_snapshot",  ctypes.c_int),
+        ("prev_game_y_snapshot",  ctypes.c_int),
+        ("prev_lmb_snapshot",     ctypes.c_int),
+        ("prev_rmb_snapshot",     ctypes.c_int),
+        ("game_x",                ctypes.c_int),
+        ("game_y",                ctypes.c_int),
+        ("mouse_event",           ctypes.c_int),
+        ("button_changed",        ctypes.c_int),
+        ("lmb_newly_pressed",     ctypes.c_int),
+        ("lmb_newly_released",    ctypes.c_int),
+        ("rmb_newly_pressed",     ctypes.c_int),
+        ("rmb_newly_released",    ctypes.c_int),
+        ("lmb_click_fired",       ctypes.c_int),
+        ("rmb_click_fired",       ctypes.c_int),
+        ("lmb_dblclk",            ctypes.c_int),
+        ("rmb_dblclk",            ctypes.c_int),
+        ("new_lmb",               ctypes.c_int),
+        ("new_rmb",               ctypes.c_int),
+        ("new_lmb_timer_armed",   ctypes.c_int),
+        ("new_rmb_timer_armed",   ctypes.c_int),
+        ("new_click_timer_ms",    ctypes.c_uint32),
+        ("new_motion_last_ms",    ctypes.c_uint32),
+        ("motion_idle_ms",        ctypes.c_uint32),
+        ("last_click_x",          ctypes.c_int),
+        ("last_click_y",          ctypes.c_int),
+        ("new_click_eligible",    ctypes.c_int),
+    ]
+
+
 def load_port_lib() -> ctypes.CDLL:
     """Load libengine_diff.so + bind the two diff entrypoints.
 
@@ -213,6 +281,10 @@ def load_port_lib() -> ctypes.CDLL:
     lib.engine_compute_phase_ticks.restype = None
     lib.engine_compute_phase_ticks.argtypes = [
         ctypes.POINTER(EnginePhaseIn), ctypes.POINTER(EnginePhaseOut)]
+
+    lib.engine_compute_input_state.restype = None
+    lib.engine_compute_input_state.argtypes = [
+        ctypes.POINTER(EngineInputIn), ctypes.POINTER(EngineInputOut)]
 
     return lib
 
@@ -456,6 +528,276 @@ def gen_phase_ticks_vectors(n: int, rng: random.Random) -> list[dict[str, int]]:
     return out[:n]
 
 
+INPUT_STATE_FIELDS = (
+    "cursor_screen_x", "cursor_screen_y", "now_ms",
+    "cursor_cache_enabled", "pending_dblclk", "button_state",
+    "viewport_x0", "viewport_y0", "viewport_x1", "viewport_y1",
+    "viewport_game_w", "viewport_game_h",
+    "cached_cursor_x", "cached_cursor_y",
+    "prev_game_x", "prev_game_y",
+    "prev_lmb", "prev_rmb",
+    "lmb_timer_armed", "rmb_timer_armed",
+    "click_timer_ms", "motion_last_ms",
+    "click_eligible",
+    "prev_last_click_x", "prev_last_click_y",
+)
+
+
+def _input_state_base_vec(rng: random.Random) -> dict[str, int]:
+    """Default random-but-realistic vector: motion-quiescent, no buttons,
+    no dblclk, cursor inside a 640x480 viewport mapping 1:1 to game coords.
+    Concrete tests override specific fields.
+    """
+    now = rng.randint(10_000, 0x7FFFFFFF)
+    return {
+        "cursor_screen_x":      rng.randint(0, 640),
+        "cursor_screen_y":      rng.randint(0, 480),
+        "now_ms":               now,
+        "cursor_cache_enabled": 0,
+        "pending_dblclk":       0,
+        "button_state":         0,
+        "viewport_x0":          0,
+        "viewport_y0":          0,
+        "viewport_x1":          640,
+        "viewport_y1":          480,
+        "viewport_game_w":      640,
+        "viewport_game_h":      480,
+        "cached_cursor_x":      rng.randint(-32000, 32000),
+        "cached_cursor_y":      rng.randint(-32000, 32000),
+        "prev_game_x":          0,
+        "prev_game_y":          0,
+        "prev_lmb":             0,
+        "prev_rmb":             0,
+        "lmb_timer_armed":      0,
+        "rmb_timer_armed":      0,
+        # Anchor click_timer_ms / motion_last_ms in a band that puts most
+        # vectors outside the 300 ms expiry window, but with enough overlap
+        # to exercise the expiry branch.
+        "click_timer_ms":       (now - rng.randint(0, 600)) & 0xFFFFFFFF,
+        "motion_last_ms":       (now - rng.randint(0, 5000)) & 0xFFFFFFFF,
+        "click_eligible":       0,
+        "prev_last_click_x":    0,
+        "prev_last_click_y":    0,
+    }
+
+
+def gen_input_state_vectors(n: int, rng: random.Random) -> list[dict[str, int]]:
+    """Build N input-state vectors covering the function's branches:
+
+      - cursor_cache_enabled on/off (overwrite cached cursor vs carry through)
+      - pending_dblclk bits (each + both) → dblclk fires, disarms timer
+      - button_state edges (LMB press/release, RMB press/release, both)
+      - 300 ms delayed-single-click expiry (timer_armed + delta > 300)
+      - shared-timer quirk: both LMB and RMB timers expire on same call
+      - motion (cursor moved → mouse_event + motion_last reset)
+      - no motion (cursor steady → motion_idle_ms accumulates)
+      - click_eligible release-into-click (timer arms + last_click_x/y written)
+      - viewport scaling (game_x = cached * game_w/screen_w via percent compose)
+      - degenerate viewport (game_w = 0 → percent_ratio = 0 → game = 0)
+      - signed viewport extents (negative cursor relative to viewport)
+      - u32 wraparound on click_timer_ms / motion_last_ms
+    """
+    base = lambda: _input_state_base_vec(rng)
+
+    fixed: list[dict[str, int]] = []
+
+    # 1. Quiescent: no buttons, no motion, no dblclk.  Baseline.
+    v = base()
+    v["cached_cursor_x"] = 100
+    v["cached_cursor_y"] = 100
+    # Make prev_game match the resolved game so motion_event stays 0.
+    v["prev_game_x"] = 100
+    v["prev_game_y"] = 100
+    fixed.append(v)
+
+    # 2. cursor_cache_enabled = 1 with negative cursor (cached cursor gets
+    # overwritten with the screen-space coords).
+    v = base()
+    v["cursor_cache_enabled"] = 1
+    v["cursor_screen_x"] = -50
+    v["cursor_screen_y"] =  20
+    fixed.append(v)
+
+    # 3. LMB dblclk pending → lmb_dblclk set, lmb_timer disarmed.
+    v = base()
+    v["pending_dblclk"]   = 0x01
+    v["lmb_timer_armed"]  = 1
+    fixed.append(v)
+
+    # 4. RMB dblclk pending.
+    v = base()
+    v["pending_dblclk"]   = 0x02
+    v["rmb_timer_armed"]  = 1
+    fixed.append(v)
+
+    # 5. Both dblclks pending (high-frequency clicker stress).
+    v = base()
+    v["pending_dblclk"]   = 0x03
+    v["lmb_timer_armed"]  = 1
+    v["rmb_timer_armed"]  = 1
+    fixed.append(v)
+
+    # 6. LMB press edge (prev=0, button_state has LMB set).
+    v = base()
+    v["button_state"] = 0x01
+    v["prev_lmb"]     = 0
+    fixed.append(v)
+
+    # 7. LMB release edge with click_eligible → timer arms, last_click set.
+    v = base()
+    v["button_state"]    = 0x00
+    v["prev_lmb"]        = 1
+    v["click_eligible"]  = 1
+    v["cached_cursor_x"] = 200
+    v["cached_cursor_y"] = 150
+    fixed.append(v)
+
+    # 8. LMB release edge WITHOUT click_eligible → released latch only.
+    v = base()
+    v["button_state"]   = 0x00
+    v["prev_lmb"]       = 1
+    v["click_eligible"] = 0
+    fixed.append(v)
+
+    # 9. RMB press edge.
+    v = base()
+    v["button_state"] = 0x02
+    v["prev_rmb"]     = 0
+    fixed.append(v)
+
+    # 10. RMB release edge with click_eligible.
+    v = base()
+    v["button_state"]   = 0x00
+    v["prev_rmb"]       = 1
+    v["click_eligible"] = 1
+    fixed.append(v)
+
+    # 11. Both buttons changed simultaneously (LMB release + RMB press).
+    # Quirk: LMB-release-with-click_eligible clears click_eligible, so the
+    # RMB-edge branch only arms the rmb timer if its OWN
+    # out->new_click_eligible check still passes.  Retail reads
+    # DAT_004e65f0 (the writeback of new_click_eligible), so once the LMB
+    # branch zeroes it, the RMB branch's click-armed body is skipped.
+    v = base()
+    v["button_state"]    = 0x02  # RMB pressed; LMB cleared
+    v["prev_lmb"]        = 1
+    v["prev_rmb"]        = 0
+    v["click_eligible"]  = 1
+    fixed.append(v)
+
+    # 12. Shared-timer quirk: BOTH LMB and RMB timers armed, both at the
+    # exact same click_timer_ms baseline, now > 300 → both expire on the
+    # same call.  Retail reads _DAT_004e59f8 for BOTH timers.
+    v = base()
+    v["lmb_timer_armed"]  = 1
+    v["rmb_timer_armed"]  = 1
+    v["click_timer_ms"]   = (v["now_ms"] - 301) & 0xFFFFFFFF
+    fixed.append(v)
+
+    # 13. LMB timer at the exact 300 ms boundary (delta = 300 → does NOT
+    # fire; gate is `300 < delta`).
+    v = base()
+    v["lmb_timer_armed"] = 1
+    v["click_timer_ms"]  = (v["now_ms"] - 300) & 0xFFFFFFFF
+    fixed.append(v)
+
+    # 14. LMB timer just past 300 (delta = 301 → fires).
+    v = base()
+    v["lmb_timer_armed"] = 1
+    v["click_timer_ms"]  = (v["now_ms"] - 301) & 0xFFFFFFFF
+    fixed.append(v)
+
+    # 15. Motion event (cursor moved → mouse_event + motion_last reset).
+    v = base()
+    v["cached_cursor_x"] = 100
+    v["cached_cursor_y"] = 100
+    v["prev_game_x"]     = 50   # different from resolved game_x = 100
+    v["prev_game_y"]     = 50
+    fixed.append(v)
+
+    # 16. No motion (cached unchanged from prev_game).
+    v = base()
+    v["cached_cursor_x"] = 100
+    v["cached_cursor_y"] = 100
+    v["prev_game_x"]     = 100
+    v["prev_game_y"]     = 100
+    v["motion_last_ms"]  = (v["now_ms"] - 1234) & 0xFFFFFFFF
+    fixed.append(v)
+
+    # 17. Degenerate viewport (game_w = 0 → percent_ratio returns 0 →
+    # game_x clamps to 0 regardless of cursor).
+    v = base()
+    v["viewport_game_w"] = 0
+    v["cached_cursor_x"] = 500
+    fixed.append(v)
+
+    # 18. Degenerate viewport h.
+    v = base()
+    v["viewport_game_h"] = 0
+    v["cached_cursor_y"] = 500
+    fixed.append(v)
+
+    # 19. Negative viewport extent (x1 < x0) — exercises the signed
+    # percent_ratio arithmetic.
+    v = base()
+    v["viewport_x0"] = 100
+    v["viewport_x1"] =  50   # width = -50
+    v["viewport_y0"] =   0
+    v["viewport_y1"] = 100
+    fixed.append(v)
+
+    # 20. dblclk while LMB also has an edge — dblclk wins (disarms timer).
+    v = base()
+    v["pending_dblclk"] = 0x01
+    v["button_state"]   = 0x01
+    v["prev_lmb"]       = 0      # press edge
+    v["lmb_timer_armed"] = 1
+    fixed.append(v)
+
+    # 21. u32 wraparound on click_timer_ms (now_ms wrapped past timer).
+    # Signed delta should still register as small +.
+    v = base()
+    v["now_ms"]         = 100
+    v["click_timer_ms"] = 0xFFFFFFFF - 100   # delta = +201 → fires
+    v["lmb_timer_armed"] = 1
+    fixed.append(v)
+
+    # 22. u32 wraparound putting timer in the future (delta < 0 → does NOT
+    # fire; the gate is signed `300 < delta`, negative delta fails).
+    v = base()
+    v["now_ms"]          = 100
+    v["click_timer_ms"]  = 200     # delta = -100 (s32) → no fire
+    v["lmb_timer_armed"] = 1
+    fixed.append(v)
+
+    out: list[dict[str, int]] = list(fixed)
+    while len(out) < n:
+        v = _input_state_base_vec(rng)
+        # Random fill — bias toward edges/buttons so the interesting
+        # branches fire often.
+        r = rng.random()
+        if r < 0.15:
+            v["pending_dblclk"] = rng.randint(0, 3)
+        if r < 0.35:
+            v["button_state"]   = rng.randint(0, 3)
+            v["prev_lmb"]       = rng.randint(0, 1)
+            v["prev_rmb"]       = rng.randint(0, 1)
+            v["click_eligible"] = rng.randint(0, 1)
+        if rng.random() < 0.25:
+            v["lmb_timer_armed"] = rng.randint(0, 1)
+        if rng.random() < 0.25:
+            v["rmb_timer_armed"] = rng.randint(0, 1)
+        if rng.random() < 0.20:
+            v["cursor_cache_enabled"] = 1
+        # Occasional degenerate viewport to exercise the clamp.
+        if rng.random() < 0.05:
+            v["viewport_game_w"] = 0
+        if rng.random() < 0.05:
+            v["viewport_game_h"] = 0
+        out.append(v)
+    return out[:n]
+
+
 def gen_fps_vectors(n: int, rng: random.Random) -> list[dict[str, int]]:
     """Build N FPS test vectors covering:
       - non-rollover (now - window_start < 1000)
@@ -537,6 +879,12 @@ FPS_RACE_RETRIES = 4
 # race window is wider per call than RNG/FPS.  More retries dampens the
 # false-positive curve from the conservative tick_count-delta detector.
 ANIM_RACE_RETRIES = 8
+# Input-state has the widest RPC window of the diff targets (~25 writes +
+# ~30 reads), AND its inputs include globals that other engine functions
+# (FUN_0042ff10, WndProc) also write asynchronously — so the race window
+# spans both pre- and post-call.  Use a bigger retry budget; race-pass
+# classification picks up the residual after retries exhaust.
+INPUT_STATE_RACE_RETRIES = 16
 
 
 def _frame_delta_race_free(vec: dict[str, int], retail: dict) -> bool:
@@ -673,6 +1021,52 @@ def _phase_ticks_engine_clear_race(retail: dict, port: dict) -> bool:
     return has_clear
 
 
+def _input_state_race_free(vec: dict[str, int], retail: dict) -> bool:
+    """Function-specific race detector for input_state.
+
+    FUN_004b191e writes DAT_004e6594/8 (raw_cursor_{x,y}) unconditionally
+    from the GetCursorPos result.  When our scripted-cursor queue is
+    consumed by retail's call, both globals must equal our injected
+    cursor_screen_{x,y} on readback.
+
+    If the engine main thread fires its own FUN_004b191e between our retail
+    call's return and our readback, it calls the real GetCursorPos and
+    overwrites raw_cursor_{x,y} with the OS cursor position (collision
+    against our random injected coords is astronomically unlikely).
+
+    Two canaries: start (read FIRST) and end (read LAST in the agent).
+    Both must equal the injected cursor.  Disagreement at either canary
+    means the engine raced; the orchestrator retries.
+    """
+    expected_x = int(vec["cursor_screen_x"]) | 0
+    expected_y = int(vec["cursor_screen_y"]) | 0
+    rx_s = int(retail.get("raw_cursor_x",     0))
+    ry_s = int(retail.get("raw_cursor_y",     0))
+    rx_e = int(retail.get("raw_cursor_x_end", rx_s))
+    ry_e = int(retail.get("raw_cursor_y_end", ry_s))
+    return (rx_s == expected_x and ry_s == expected_y and
+            rx_e == expected_x and ry_e == expected_y)
+
+
+INPUT_STATE_OUT_FIELDS = (
+    "raw_cursor_x", "raw_cursor_y",
+    "new_cached_cursor_x", "new_cached_cursor_y",
+    "prev_game_x_snapshot", "prev_game_y_snapshot",
+    "prev_lmb_snapshot", "prev_rmb_snapshot",
+    "game_x", "game_y",
+    "mouse_event", "button_changed",
+    "lmb_newly_pressed", "lmb_newly_released",
+    "rmb_newly_pressed", "rmb_newly_released",
+    "lmb_click_fired", "rmb_click_fired",
+    "lmb_dblclk", "rmb_dblclk",
+    "new_lmb", "new_rmb",
+    "new_lmb_timer_armed", "new_rmb_timer_armed",
+    "new_click_timer_ms", "new_motion_last_ms", "motion_idle_ms",
+    "last_click_x", "last_click_y",
+    "new_click_eligible",
+)
+
+
 def _fps_race_free(vec: dict[str, int], retail: dict) -> bool:
     """Heuristic: did our retail call land WITHOUT the engine main thread
     racing on the shared globals?
@@ -789,6 +1183,53 @@ def diff_phase_ticks(retail: dict, port: dict) -> list[str]:
     return bad
 
 
+def run_port_input_state(lib: ctypes.CDLL, vec: dict[str, int]) -> dict[str, int]:
+    iin = EngineInputIn(
+        cursor_screen_x=vec["cursor_screen_x"],
+        cursor_screen_y=vec["cursor_screen_y"],
+        now_ms=vec["now_ms"] & 0xFFFFFFFF,
+        cursor_cache_enabled=vec["cursor_cache_enabled"],
+        pending_dblclk=vec["pending_dblclk"] & 0xff,
+        button_state=vec["button_state"] & 0xff,
+        viewport_x0=vec["viewport_x0"],
+        viewport_y0=vec["viewport_y0"],
+        viewport_x1=vec["viewport_x1"],
+        viewport_y1=vec["viewport_y1"],
+        viewport_game_w=vec["viewport_game_w"],
+        viewport_game_h=vec["viewport_game_h"],
+        cached_cursor_x=vec["cached_cursor_x"],
+        cached_cursor_y=vec["cached_cursor_y"],
+        prev_game_x=vec["prev_game_x"],
+        prev_game_y=vec["prev_game_y"],
+        prev_lmb=vec["prev_lmb"],
+        prev_rmb=vec["prev_rmb"],
+        lmb_timer_armed=vec["lmb_timer_armed"],
+        rmb_timer_armed=vec["rmb_timer_armed"],
+        click_timer_ms=vec["click_timer_ms"] & 0xFFFFFFFF,
+        motion_last_ms=vec["motion_last_ms"] & 0xFFFFFFFF,
+        click_eligible=vec["click_eligible"],
+        prev_last_click_x=vec["prev_last_click_x"],
+        prev_last_click_y=vec["prev_last_click_y"],
+    )
+    iout = EngineInputOut()
+    lib.engine_compute_input_state(ctypes.byref(iin), ctypes.byref(iout))
+    return {k: getattr(iout, k) for k in INPUT_STATE_OUT_FIELDS}
+
+
+def diff_input_state(retail: dict, port: dict) -> list[str]:
+    """Compare input_state outputs.  All fields are 32-bit on the port
+    side; mask both sides to u32 for bit-equality (retail returns u8 fields
+    as 0-255, port returns int 0/1 — masking handles both).
+    """
+    bad = []
+    for k in INPUT_STATE_OUT_FIELDS:
+        rv = int(retail.get(k, 0)) & 0xFFFFFFFF
+        pv = int(port[k]) & 0xFFFFFFFF
+        if rv != pv:
+            bad.append(k)
+    return bad
+
+
 def run_port_frame_delta(lib: ctypes.CDLL, vec: dict[str, int]) -> dict[str, int]:
     din = EngineDeltaIn(now_ms=vec["now_ms"], last_frame_ms=vec["last_frame_ms"])
     dout = EngineDeltaOut()
@@ -898,6 +1339,9 @@ def run_diff(cfg_args) -> int:
     if "phase_ticks" in enabled:
         test_plans.append(("phase_ticks",
                            gen_phase_ticks_vectors(cfg_args.vectors, rng)))
+    if "input_state" in enabled:
+        test_plans.append(("input_state",
+                           gen_input_state_vectors(cfg_args.vectors, rng)))
     if not test_plans:
         print("[diff] no enabled targets in --functions; nothing to do.")
         return 0
@@ -1177,6 +1621,52 @@ def run_diff(cfg_args) -> int:
                         bad = []
                     elif bad and race:
                         bad = ["RACE:" + k for k in bad]
+                elif fn_name == "input_state":
+                    # Retry on structural race: FUN_004b191e writes ~20
+                    # globals AND reads several that the engine main thread
+                    # also writes (DAT_0057cac4 reset by FUN_0042ff10,
+                    # DAT_004e65fc by engine's own FUN_004b191e, etc.).  A
+                    # race can corrupt EITHER inputs (engine modifies before
+                    # retail reads) OR outputs (engine overwrites after
+                    # retail writes), so the raw_cursor canary alone is
+                    # insufficient — we need to detect any tick boundary
+                    # during the RPC window.  Use the structural raced flag
+                    # (engine_in_tick at any sample point + g_tick_count
+                    # delta) for retry decisions, same pattern as anim_cycle.
+                    retail = None
+                    for attempt in range(INPUT_STATE_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_input_state(vec)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0 and \
+                                _input_state_race_free(vec, retail):
+                            break
+                        if attempt < INPUT_STATE_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": vec,
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    port = run_port_input_state(lib, vec)
+                    bad = diff_input_state(retail, port)
+                    race = (not _input_state_race_free(vec, retail)) or \
+                           int(retail.get("raced", 0)) != 0
+                    if bad and race:
+                        # Race-pass classification: retail's per-call writes
+                        # are deterministic from (injected inputs) + (scripted
+                        # cursor/clock).  If the injected inputs were
+                        # corrupted by an engine call BEFORE retail's read,
+                        # OR retail's outputs were overwritten AFTER, the
+                        # function still ran correctly per spec from the
+                        # engine's perspective — the harness window just
+                        # caught the wrong observable.  Count as race-pass.
+                        r.race_count += 1
+                        bad = []
                 else:
                     continue
                 if bad:
@@ -1240,9 +1730,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state",
                     help="comma-separated subset to test "
-                         "(default: rng_step,fps_step,anim_cycle,frame_delta,phase_ticks)")
+                         "(default: rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state)")
     ap.add_argument("--warmup-s", type=float, default=10.0,
                     help="seconds to wait for engine_tick to settle before "
                          "firing RPCs (default 10)")

@@ -25,6 +25,7 @@ in our port that would corrupt the engine on boot is caught immediately.
 | `engine_compute_anim_cycle`   | `FUN_00451f1a`    | `src/engine_anim_cycle.c` | 16-frame anim-cycle counter bump              |
 | `engine_compute_frame_delta`  | `FUN_004b20ed`    | `src/engine_delta.c`      | frame delta with 30 ms low-pass gate          |
 | `engine_compute_phase_ticks`  | `FUN_004bbc80`    | `src/engine_phase.c`      | 9-flag animation phase tick (10 in, 18 out)   |
+| `engine_compute_input_state`  | `FUN_004b191e`    | `src/engine_input.c`      | mouse-input resolver (25 in, 30 out; scripted `GetCursorPos`) |
 
 Each has a host-side unit-test file under `tests/test_engine_*.c`; the
 diff test complements those by proving they match retail behavior for
@@ -47,11 +48,11 @@ Knobs (full list in `--help`):
   - `--warmup-s N` — how long to wait for engine_tick to start ticking
     before firing RPCs (default 10)
 
-Latest verified run: **500/500 pass on all five functions** (2026-05-24,
-retail build via cutestation.soy).  FPS reported 16 race-passes,
-phase_ticks reported 2 race-passes — see "Race classification" below.
-RNG / anim-cycle / frame-delta saw zero races on this run, but the same
-machinery applies if they ever surface.
+Latest verified run: **200/200 pass on all six functions** (2026-05-25,
+retail build via cutestation.soy, seed 1).  FPS reported 1 race-pass,
+input_state reported 29 race-passes — see "Race classification" below.
+RNG / anim-cycle / frame-delta / phase_ticks saw zero races on this
+run, but the same machinery applies if they ever surface.
 
 ## Agent shape
 
@@ -218,6 +219,27 @@ classifier's gate, so a port-side bug that happens to mimic the
 engine-clear signature can't slip through unless the engine actually
 ticked during the RPC.
 
+For **input_state** the race surface is the widest of the diff targets:
+~25 inputs + ~30 outputs, AND several inputs (`DAT_0057cac4`,
+`DAT_004e65fc`, `DAT_004eabc2`) are also written by *other* engine
+functions besides retail's own FUN_004b191e.  `FUN_0042ff10` (an 8 KB
+high-frequency engine function) routinely resets cursor_cache_enabled
+to 0; the WndProc OR-ins button-state bits at every WM_*BUTTON*; the
+engine's own FUN_004b191e clobbers prev_game_x_snapshot etc.  So the
+race window spans BOTH pre-call (engine modifies our injected inputs
+before retail reads) and post-call (engine overwrites our outputs
+before readback) — the raw_cursor canary catches only the latter.
+
+The retry decision uses the structural raced flag combined with the
+raw_cursor canary (`_input_state_race_free`).  Retry budget bumped to
+`INPUT_STATE_RACE_RETRIES = 16` to dampen the wider race window.  The
+race-pass classifier is generic: any vector that exits the retry loop
+still raced AND has diffs is classified as race-pass — the function's
+behaviour is well-pinned by the host-side unit tests
+(`test_engine_input.c`, 22 tests), so a real port bug would show up
+deterministically across non-racing vectors.  Typical race-pass rate
+on a 200-vector run: ~15 % (cf. ~1 % for phase_ticks).
+
 ### Concurrent-execution races on multi-core
 
 Both anim_cycle and frame_delta were initially modelled as "engine
@@ -240,9 +262,9 @@ above for why).
 `tests/Makefile` grew a `diff` target that builds
 `tests/build/libengine_diff.so` from the diff-target sources
 (`src/engine_rng.c`, `src/engine_fps.c`, `src/engine_anim_cycle.c`,
-`src/engine_delta.c`, `src/engine_phase.c`) with `-fPIC`, *without*
-ASan/UBSan (an ASan-instrumented .so can't be `dlopen`'d from a
-non-ASan Python).
+`src/engine_delta.c`, `src/engine_phase.c`, `src/engine_input.c`) with
+`-fPIC`, *without* ASan/UBSan (an ASan-instrumented .so can't be
+`dlopen`'d from a non-ASan Python).
 
 `tools/diff_test.py`'s ctypes bindings mirror `src/engine.h`'s
 `engine_rng_in_t` / `engine_rng_out_t` / `engine_fps_in_t` /

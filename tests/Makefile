@@ -49,7 +49,7 @@ OUT  := build/run_tests
 # instrumented .so can't be dlopen'd from a non-ASan Python).
 DIFF_SRCS := ../src/engine_rng.c ../src/engine_fps.c \
              ../src/engine_anim_cycle.c ../src/engine_delta.c \
-             ../src/engine_phase.c
+             ../src/engine_phase.c ../src/engine_input.c
 DIFF_OBJS := $(addprefix build/diff_,$(notdir $(DIFF_SRCS:.c=.o)))
 DIFF_OUT  := build/libengine_diff.so
 DIFF_CFLAGS := -std=c11 -O2 -fPIC -Wall -Wextra -Wno-unused-parameter -I../src
