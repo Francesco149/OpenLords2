@@ -70,8 +70,9 @@ implemented.
       Catches arithmetic / hashing / table-lookup deltas without
       needing a scenario to surface them.  Driver:
       `tools/diff_test.py` + agent-side `runRetail*` RPCs.  Currently
-      covers `engine_rng_step` (FUN_00404a46) and `engine_compute_fps`
-      (FUN_004b27bf) — 200/200 vectors pass on both.
+      covers `engine_rng_step` (FUN_00404a46), `engine_compute_fps`
+      (FUN_004b27bf), and `engine_compute_anim_cycle` (FUN_00451f1a) —
+      200/200 vectors pass on all three.
       See `docs/findings/pure-function-diff.md` for the engine-thread
       race + retry pattern (the engine main thread is still ticking
       during diffs; in-process spin and SuspendThread both deadlock,

@@ -18,15 +18,15 @@ in our port that would corrupt the engine on boot is caught immediately.
 
 ## Current targets
 
-| function name           | retail address    | port file              | what it does                                  |
-|-------------------------|-------------------|------------------------|-----------------------------------------------|
-| `engine_rng_step`       | `FUN_00404a46`    | `src/engine_rng.c`     | double-LFSR step (31 iters, 6 masked outputs) |
-| `engine_compute_fps`    | `FUN_004b27bf`    | `src/engine_fps.c`     | rolling 1-sec FPS counter (2× `timeGetTime`)  |
+| function name                | retail address    | port file                 | what it does                                  |
+|------------------------------|-------------------|---------------------------|-----------------------------------------------|
+| `engine_rng_step`            | `FUN_00404a46`    | `src/engine_rng.c`        | double-LFSR step (31 iters, 6 masked outputs) |
+| `engine_compute_fps`         | `FUN_004b27bf`    | `src/engine_fps.c`        | rolling 1-sec FPS counter (2× `timeGetTime`)  |
+| `engine_compute_anim_cycle`  | `FUN_00451f1a`    | `src/engine_anim_cycle.c` | 16-frame anim-cycle counter bump              |
 
-Each has a host-side unit-test file under `tests/test_engine_*.c` (114 +9
-tests, 123 total under ASan + UBSan); the diff test complements those by
-proving they match retail behavior for the same inputs, not just our
-spec.
+Each has a host-side unit-test file under `tests/test_engine_*.c`; the
+diff test complements those by proving they match retail behavior for
+the same inputs, not just our spec.
 
 ## Run
 
@@ -45,7 +45,7 @@ Knobs (full list in `--help`):
   - `--warmup-s N` — how long to wait for engine_tick to start ticking
     before firing RPCs (default 10)
 
-Latest verified run: **200/200 pass on both functions** (2026-05-24,
+Latest verified run: **200/200 pass on all three functions** (2026-05-24,
 retail build via cutestation.soy).
 
 ## Agent shape
@@ -119,6 +119,25 @@ unblocked), so the engine doesn't ambient-call it during diffs.  The
 agent's RNG RPC also restores the snapshot in a `finally`, so even an
 exception inside the diff can't leave the engine with corrupted RNG
 state and a hard-to-debug subsequent crash.
+
+For `engine_compute_anim_cycle` (called once per engine_tick by retail's
+pre-tick block), the function has no scripted-clock analogue to anchor a
+race-free signal against.  Instead the agent reports a structural race
+flag based on two pieces of state maintained by the engine_tick hook:
+
+  - `g_tick_count` — bumped at every engine_tick.onEnter.  If this
+    advanced during the RPC, a fresh tick fired and necessarily called
+    FUN_00451f1a once with our injected globals.
+  - `g_engine_in_tick` — set to 1 at engine_tick.onEnter, cleared at
+    onLeave.  If non-zero at any sample point of the RPC, engine is
+    mid-tick and may have already called or will call FUN_00451f1a.
+
+The RPC returns `raced: 1` when either signal fires.  Orchestrator retries
+up to `ANIM_RACE_RETRIES = 8` with 10 ms sleeps.  False positives are
+acceptable (the tick window opens before FUN_00451f1a is actually called,
+so some retries are over-cautious); false negatives are rare and would
+show up as occasional spurious diff failures, which the test loop tags
+with a `RACE:` prefix in the summary to distinguish from real port bugs.
 
 ## Host-side shared library
 

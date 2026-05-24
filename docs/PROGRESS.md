@@ -7,6 +7,127 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Third diff target: engine_compute_anim_cycle
+
+Took the prior entry's option-4 follow-up ("more diff targets — the diff
+machinery is now generic enough that any future pure-C port can be wired
+in with ~60 LOC of agent RPC + ~30 LOC of ctypes binding").  Anim-cycle
+was the lowest-risk candidate: 81 retail bytes, takes no args, reads two
+globals (one as input, one as I/O), no `timeGetTime` dependency.
+
+### Agent (`tools/frida/openlords2-agent.js`)
+
+- New `ADDR` entries: `fn_engine_anim_cycle` (`FUN_00451f1a`),
+  `var_anim_cycle_counter` (`DAT_0053e9a4`), `var_phase_tick_80ms`
+  (`DAT_00591510`).
+- New `g_nf_retail_anim_cycle` NativeFunction stub resolved alongside the
+  existing RNG / FPS stubs in `resolveRetailFunctions()`.
+- New `runRetailAnimCycle(counter, tick_80ms_fired)` RPC.  Snapshot →
+  inject → invoke → readback → restore in a `finally`, same shape as
+  the prior two but with a different race-detection strategy (below).
+- Engine-tick hook augmented with `g_engine_in_tick` flag (set in
+  `onEnter`, cleared in `onLeave` finally).  Reused by the anim-cycle
+  RPC's race signal — see below.
+- Counter readback uses `readS32` / `writeS32` because the field is
+  signed in retail (the `< 0` defensive lower-clamp is the tell).  An
+  initial smoke run with `readU32` caught this: a vector with
+  `counter = -1` round-tripped via retail as `0xFFFFFFFF` and as `-1`
+  via the port's `c_int`, which `int(...) != int(...)` flagged as a
+  divergence.  Fixing the read to signed brought 15/16 → 16/16, then
+  16/16 → 200/200 on the stress run.
+
+### Race detection — tick-driven targets
+
+The earlier RNG / FPS RPCs use function-specific race signals (RNG: no
+race in practice because the engine doesn't ambient-call it; FPS:
+`new_last_render_ms == in_now_ms` because the function unconditionally
+stores the scripted clock there).  Anim-cycle has no such signal — the
+function only mutates the counter, which is the thing we're trying to
+diff.  So we can't distinguish "race overwrote the value" from "port is
+wrong".
+
+Workaround uses two pieces of state maintained by the existing
+engine_tick interceptor:
+
+  - `g_tick_count` (already bumped per onEnter) — if it advanced during
+    the RPC, a fresh tick fired and necessarily called FUN_00451f1a.
+  - `g_engine_in_tick` (new) — set to 1 at onEnter, cleared at onLeave.
+    If non-zero at any sample point of the RPC, the engine is mid-tick.
+
+The RPC returns `raced: 1` if either signal fires; the orchestrator
+retries up to `ANIM_RACE_RETRIES = 8`.  In practice the stress run
+above produced no permanent races.  False positives are acceptable
+(the tick window opens before FUN_00451f1a fires, so some retries are
+over-cautious); false negatives would manifest as occasional `RACE:`-
+tagged failures, which the summary distinguishes from real port bugs.
+
+### Orchestrator (`tools/diff_test.py`)
+
+- `EngineAnimCycleIn` / `EngineAnimCycleOut` ctypes mirrors of
+  `src/engine.h`'s structs.
+- `lib.engine_compute_anim_cycle` binding added in `load_port_lib()`.
+- `gen_anim_cycle_vectors(n, rng)` — 11 fixed edge cases (no-op at the
+  counter range boundaries, normal bumps, rollover at 15, the
+  unreachable lower-clamp paths, an OOB-positive sanity check),
+  remainder random with `counter ∈ [-3, 20]` so the random fill exercises
+  both clamps.
+- `run_port_anim_cycle` + `diff_anim_cycle` (single field; trivial).
+- Per-vector dispatch arm with the retry loop pattern adapted from FPS.
+- CLI default `--functions` now includes `anim_cycle`.
+
+### Build
+
+`tests/Makefile`: `engine_anim_cycle.c` added to `DIFF_SRCS`.  Builds
+cleanly under `-O2 -fPIC -Wall -Wextra` (no sanitizers — same rule as
+the other diff sources).
+
+### Verified
+
+`nix develop -c python3 tools/diff_test.py --vectors 200 --remote
+cutestation.soy:27042`:
+
+| target        | pass     |
+|---------------|----------|
+| `rng_step`    | 200/200  |
+| `fps_step`    | 200/200  |
+| `anim_cycle`  | 200/200  |
+
+All 123 host unit tests still pass under ASan + UBSan.  Smoke
+(`tools/smoke-test.py --turbo`) still green — the engine_tick hook
+gained a single in-tick flag mutation but otherwise behaves identically.
+
+### What's next
+
+The three threads from the prior entry, minus the one just landed:
+
+1. **DDraw Blt-via-GDI seat** — short-circuit the "Blt invisible under
+   DWM" quirk by intercepting `IDirectDrawSurface::Blt` and re-routing
+   through `GDI StretchDIBits` (the same path `src/gfx.c` uses).
+   Unblocks live recording-driven scenarios.  Roughly half a day's work.
+   This is the unlock for the second-most-productive thread.
+2. **Save-file format** — `castles.dat` / `c_hist.dat` / `history.dat`
+   parsers.  Lands as `docs/findings/save-file.md` + a host-side
+   decoder TU; starts unlocking the simulation subsystem ports in
+   parallel with the engine-port main thread.
+3. **More diff targets** — easy follow-ups:
+   - `engine_compute_frame_delta` (FUN_004b20ed) — 1 input, 2 outputs,
+     1 `timeGetTime` call.  Use the scripted-clock queue already in
+     place.  Race detection: same tick-delta pattern (called per-tick
+     too).
+   - `engine_compute_phase_ticks` (FUN_004bbc80) — 11 inputs, 18 outputs,
+     1 `timeGetTime` call.  Largest of the small targets but mechanical.
+   - `engine_compute_sim_sub_steps` (FUN_004bb978) — has internal callees
+     (FUN_004bb8c0, FUN_0043de70) we'd have to either stub or accept the
+     returns of; the LUT pointer arg needs an OOB-safe injection
+     strategy.  Higher complexity than the others.
+
+Top-down RE bias next time: option 1 (DDraw Blt seat) is the highest-
+leverage — recording-driven frame-diffs are how we'll catch render
+regressions once the screen subsystems start porting.  Option 3 is
+mechanical and easy to chain in.
+
+---
+
 ## 2026-05-24 — Pure-function differential testing (Phase 4 of harness-roadmap)
 
 Took the prior entry's "What's next" pointer — pure-function diff was

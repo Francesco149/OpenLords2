@@ -16,8 +16,9 @@ and report any divergence.  Catches arithmetic / hashing / table-lookup
 deltas in our port before scenarios surface them.
 
 Current targets:
-  - engine_rng_step        (FUN_00404a46) — double-LFSR step
-  - engine_compute_fps     (FUN_004b27bf) — rolling 1-sec FPS counter
+  - engine_rng_step           (FUN_00404a46) — double-LFSR step
+  - engine_compute_fps        (FUN_004b27bf) — rolling 1-sec FPS counter
+  - engine_compute_anim_cycle (FUN_00451f1a) — 16-frame anim-cycle bump
 
 The orchestrator runs the agent in "diff_test" mode (no turbo, no input
 replay) so the engine boots, parks, and waits.  Once the per-tick driver
@@ -112,6 +113,19 @@ class EngineFpsOut(ctypes.Structure):
     ]
 
 
+class EngineAnimCycleIn(ctypes.Structure):
+    _fields_ = [
+        ("counter",         ctypes.c_int),
+        ("tick_80ms_fired", ctypes.c_int),
+    ]
+
+
+class EngineAnimCycleOut(ctypes.Structure):
+    _fields_ = [
+        ("new_counter", ctypes.c_int),
+    ]
+
+
 def load_port_lib() -> ctypes.CDLL:
     """Load libengine_diff.so + bind the two diff entrypoints.
 
@@ -131,6 +145,10 @@ def load_port_lib() -> ctypes.CDLL:
     lib.engine_compute_fps.restype = None
     lib.engine_compute_fps.argtypes = [
         ctypes.POINTER(EngineFpsIn), ctypes.POINTER(EngineFpsOut)]
+
+    lib.engine_compute_anim_cycle.restype = None
+    lib.engine_compute_anim_cycle.argtypes = [
+        ctypes.POINTER(EngineAnimCycleIn), ctypes.POINTER(EngineAnimCycleOut)]
 
     return lib
 
@@ -168,6 +186,45 @@ def gen_rng_vectors(n: int, rng: random.Random) -> list[dict[str, int]]:
         out.append({
             "state_a": rng.getrandbits(32),
             "state_b": rng.getrandbits(32),
+        })
+    return out[:n]
+
+
+def gen_anim_cycle_vectors(n: int, rng: random.Random) -> list[dict[str, int]]:
+    """Build N anim-cycle test vectors covering:
+      - the natural value range (counter 0..15, both tick_80ms_fired states)
+      - the wrap boundary (counter == 15 + fired → resets to 0)
+      - the unreachable lower-clamp (counter < 0 + fired → resets to 0;
+        engine-quirks #N — defensive code that never executes in normal flow,
+        but the port preserves it for byte-shape parity)
+      - random fill for general coverage
+    """
+    out: list[dict[str, int]] = [
+        # No-op: tick didn't fire → counter unchanged.
+        {"counter": 0,  "tick_80ms_fired": 0},
+        {"counter": 7,  "tick_80ms_fired": 0},
+        {"counter": 15, "tick_80ms_fired": 0},
+        # Normal bumps across the 0..15 range.
+        {"counter": 0,  "tick_80ms_fired": 1},
+        {"counter": 1,  "tick_80ms_fired": 1},
+        {"counter": 7,  "tick_80ms_fired": 1},
+        {"counter": 14, "tick_80ms_fired": 1},
+        # Rollover boundary: 15 + fired → 0.
+        {"counter": 15, "tick_80ms_fired": 1},
+        # Defensive lower-clamp paths (unreachable in normal flow, but the
+        # retail function still executes the comparison — exercise both
+        # branches to lock in the byte-shape parity).
+        {"counter": -1, "tick_80ms_fired": 1},
+        {"counter": -1, "tick_80ms_fired": 0},
+        # Out-of-range positive — counter > 15 + fired → bumps to >16,
+        # upper clamp resets to 0.
+        {"counter": 100, "tick_80ms_fired": 1},
+    ]
+    while len(out) < n:
+        # Bias toward in-range values (the common case) but include OOB.
+        out.append({
+            "counter":         rng.randint(-3, 20),
+            "tick_80ms_fired": rng.randint(0, 1),
         })
     return out[:n]
 
@@ -248,6 +305,11 @@ def gen_fps_vectors(n: int, rng: random.Random) -> list[dict[str, int]]:
 # unblocked yet) so no retry path is needed.
 
 FPS_RACE_RETRIES = 4
+# Anim-cycle is called every engine_tick by retail (inside the per-tick
+# driver's pre-tick block), so without turbo's free-running rate-limit the
+# race window is wider per call than RNG/FPS.  More retries dampens the
+# false-positive curve from the conservative tick_count-delta detector.
+ANIM_RACE_RETRIES = 8
 
 
 def _fps_race_free(vec: dict[str, int], retail: dict) -> bool:
@@ -311,6 +373,21 @@ def run_port_fps(lib: ctypes.CDLL, vec: dict[str, int]) -> dict[str, int]:
         # window_start advanced ⇒ rolled over).  Exclude from the diff;
         # compare cumulative_seconds bumping instead.
     }
+
+
+def run_port_anim_cycle(lib: ctypes.CDLL, vec: dict[str, int]) -> dict[str, int]:
+    ain = EngineAnimCycleIn(counter=vec["counter"],
+                            tick_80ms_fired=vec["tick_80ms_fired"])
+    aout = EngineAnimCycleOut()
+    lib.engine_compute_anim_cycle(ctypes.byref(ain), ctypes.byref(aout))
+    return {"new_counter": aout.new_counter}
+
+
+# Anim-cycle diff: single output field.  Race detection is structural —
+# `retail['raced']` is set by the agent when engine_tick fired during the
+# RPC window; the orchestrator retries on raced=true (see ANIM_RACE_RETRIES).
+def diff_anim_cycle(retail: dict, port: dict) -> list[str]:
+    return ["new_counter"] if int(retail["new_counter"]) != int(port["new_counter"]) else []
 
 
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
@@ -381,6 +458,9 @@ def run_diff(cfg_args) -> int:
         test_plans.append(("rng_step", gen_rng_vectors(cfg_args.vectors, rng)))
     if "fps_step" in enabled:
         test_plans.append(("fps_step", gen_fps_vectors(cfg_args.vectors, rng)))
+    if "anim_cycle" in enabled:
+        test_plans.append(("anim_cycle",
+                           gen_anim_cycle_vectors(cfg_args.vectors, rng)))
     if not test_plans:
         print("[diff] no enabled targets in --functions; nothing to do.")
         return 0
@@ -529,6 +609,37 @@ def run_diff(cfg_args) -> int:
                         # Tag the failure so the summary makes it obvious
                         # this is harness flakiness, not a port bug.
                         bad = ["RACE:" + k for k in bad]
+                elif fn_name == "anim_cycle":
+                    # Retry on race detection: the agent sets retail['raced']
+                    # when g_engine_in_tick was non-zero at any sample point
+                    # or g_tick_count advanced during the RPC.  Either case
+                    # means the engine may have called FUN_00451f1a with our
+                    # injected globals during the RPC window.
+                    retail = None
+                    for attempt in range(ANIM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_anim_cycle(
+                            vec["counter"], vec["tick_80ms_fired"])
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < ANIM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": vec,
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    port = run_port_anim_cycle(lib, vec)
+                    bad = diff_anim_cycle(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        # Race never cleared after retries — tag as harness
+                        # flakiness rather than a port bug.
+                        bad = ["RACE:" + k for k in bad]
                 else:
                     continue
                 if bad:
@@ -589,9 +700,9 @@ def main(argv: list[str] | None = None) -> int:
                          "are fixed edge cases, remainder are random)")
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
-    ap.add_argument("--functions", default="rng_step,fps_step",
+    ap.add_argument("--functions", default="rng_step,fps_step,anim_cycle",
                     help="comma-separated subset to test "
-                         "(default: rng_step,fps_step)")
+                         "(default: rng_step,fps_step,anim_cycle)")
     ap.add_argument("--warmup-s", type=float, default=10.0,
                     help="seconds to wait for engine_tick to settle before "
                          "firing RPCs (default 10)")

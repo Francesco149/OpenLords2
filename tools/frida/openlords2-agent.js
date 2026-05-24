@@ -98,6 +98,7 @@ const ADDR = {
     // restore the snapshot so the engine isn't disturbed.
     fn_engine_rng_step:        0x00404a46,  // FUN_00404a46 — double-LFSR step
     fn_engine_compute_fps:     0x004b27bf,  // FUN_004b27bf — FPS counter
+    fn_engine_anim_cycle:      0x00451f1a,  // FUN_00451f1a — 16-frame anim cycle bump
     // RNG state + 6 output mirrors (see docs/findings/engine-quirks.md #5
     // and src/engine_rng.c for the mirror-↔-port mapping).
     var_rng_state_a:     0x0058fe28,  // DAT_0058fe28 — state_a (the seed-init at WinMain)
@@ -114,6 +115,10 @@ const ADDR = {
     var_fps_window_start:     0x004eaba0,  // DAT_004eaba0 — second_window_start_ms
     // (var_fps_current, var_fps_cum_sum, var_fps_cum_secs already above —
     // ride the same heartbeat.)
+    // Anim-cycle state (2 globals) — see src/engine_anim_cycle.c.  Bumped
+    // once per engine_tick (gated on the 80 ms phase tick).
+    var_anim_cycle_counter:   0x0053e9a4,  // DAT_0053e9a4 — counter (0..15)
+    var_phase_tick_80ms:      0x00591510,  // DAT_00591510 — 80 ms phase tick flag
 };
 
 // ─── runtime state ──────────────────────────────────────────────────────
@@ -216,6 +221,16 @@ let g_diff_test_clock_queue   = [];     // [u32 ms, ...] consumed by timeGetTime
 let g_diff_test_caller_tid    = -1;
 let g_nf_retail_rng_step      = null;
 let g_nf_retail_compute_fps   = null;
+let g_nf_retail_anim_cycle    = null;
+
+// engine_tick depth tracker — 1 while the engine main thread is executing
+// FUN_004b99c0, 0 otherwise.  Used by per-tick race detection in diff RPCs
+// for retail functions that the engine calls every tick (e.g. FUN_00451f1a):
+// if the depth is non-zero at any point during the RPC, the engine may have
+// fired the target function with our injected globals — retry on the
+// orchestrator side.  Maintained inside the engine_tick interceptor; safe
+// to read from the V8/RPC thread.
+let g_engine_in_tick          = 0;
 
 // ─── helpers ────────────────────────────────────────────────────────────
 
@@ -1263,6 +1278,7 @@ function installEngineTickHook() {
                 g_virtual_now_ms = (g_virtual_now_ms + g_turbo_step_ms) >>> 0;
             }
             g_tick_count = (g_tick_count + 1) >>> 0;
+            g_engine_in_tick = 1;
             if (g_input_replay_events) {
                 drainInputReplayForTick(g_tick_count);
             }
@@ -1298,6 +1314,8 @@ function installEngineTickHook() {
                 }
             } catch (e) {
                 err('engine_tick.onLeave', e.message);
+            } finally {
+                g_engine_in_tick = 0;
             }
         },
     });
@@ -1306,12 +1324,14 @@ function installEngineTickHook() {
 }
 
 // ─── pure-function differential test (Phase 4 of harness-roadmap) ─────
-// Two retail functions whose pure-C ports live under src/engine_*.c:
-//   FUN_00404a46  (engine_rng_step)  — double-LFSR step, no Win32 deps
-//   FUN_004b27bf  (engine_compute_fps) — calls winmm!timeGetTime twice on
-//                                         the rollover branch
+// Retail functions whose pure-C ports live under src/engine_*.c:
+//   FUN_00404a46  (engine_rng_step)         — double-LFSR step, no Win32 deps
+//   FUN_004b27bf  (engine_compute_fps)      — calls winmm!timeGetTime twice on
+//                                              the rollover branch
+//   FUN_00451f1a  (engine_compute_anim_cycle) — bumps a mod-16 counter once
+//                                              per 80 ms phase tick
 //
-// Each runRetail*Step RPC snapshots ALL observable globals (state + output
+// Each runRetail* RPC snapshots ALL observable globals (state + output
 // mirrors), writes the test-vector's inputs, invokes the retail function
 // via NativeFunction, snapshots outputs, then restores the snapshot — so
 // the engine itself never sees a perturbation, no matter how many vectors
@@ -1332,6 +1352,8 @@ function resolveRetailFunctions() {
         rva(ADDR.fn_engine_rng_step), 'void', [], 'stdcall');
     g_nf_retail_compute_fps = new NativeFunction(
         rva(ADDR.fn_engine_compute_fps), 'int32', [], 'stdcall');
+    g_nf_retail_anim_cycle = new NativeFunction(
+        rva(ADDR.fn_engine_anim_cycle), 'void', [], 'stdcall');
     return true;
 }
 
@@ -1476,6 +1498,58 @@ function runRetailComputeFps(in_now_ms, in_rollover_now_ms,
     return out;
 }
 
+// Anim-cycle diff: 2 retail globals (the counter mirror + the 80 ms phase
+// tick flag).  FUN_00451f1a takes no args + reads/writes only these two
+// globals — snapshot + restore is exhaustive.
+//
+// Race shape differs from RNG/FPS: the engine calls FUN_00451f1a once per
+// engine_tick (inside FUN_004b99c0's pre-tick block, gated on the same
+// phase tick flag we're injecting), so any tick that fires during our RPC
+// window will exercise the function with our injected globals.  Detection
+// piggybacks on g_engine_in_tick + g_tick_count:
+//   - g_engine_in_tick != 0 at any sample point → engine is mid-tick →
+//     might have called or will call FUN_00451f1a with our values
+//   - g_tick_count advanced during the RPC → a fresh engine_tick fired,
+//     necessarily calling FUN_00451f1a once
+// The orchestrator retries on raced=true.
+function runRetailAnimCycle(counter, tick_80ms_fired) {
+    if (!g_diff_test_enabled) {
+        return {error: 'diff_test not enabled at init'};
+    }
+    if (!resolveRetailFunctions()) {
+        return {error: 'NativeFunction resolution failed'};
+    }
+    g_diff_test_caller_tid = Process.getCurrentThreadId();
+    const tick_count_before = g_tick_count;
+    const in_tick_before    = g_engine_in_tick;
+    // counter is a signed int in retail (the `< 0` defensive clamp is the
+    // tell).  Read signed so vectors that inject negative values round-trip
+    // cleanly through JSON without u32-vs-i32 sign confusion on readback.
+    const snap = {
+        counter:         rva(ADDR.var_anim_cycle_counter).readS32(),
+        phase_tick_80ms: rva(ADDR.var_phase_tick_80ms   ).readU32(),
+    };
+    let out;
+    try {
+        rva(ADDR.var_anim_cycle_counter).writeS32(counter | 0);
+        rva(ADDR.var_phase_tick_80ms   ).writeU32(tick_80ms_fired >>> 0);
+        g_nf_retail_anim_cycle();
+        const new_counter = rva(ADDR.var_anim_cycle_counter).readS32();
+        const tick_count_after = g_tick_count;
+        const in_tick_after    = g_engine_in_tick;
+        out = {
+            new_counter: new_counter,
+            raced: ((tick_count_after !== tick_count_before) ||
+                    in_tick_before !== 0 || in_tick_after !== 0) ? 1 : 0,
+        };
+    } finally {
+        rva(ADDR.var_anim_cycle_counter).writeS32(snap.counter | 0);
+        rva(ADDR.var_phase_tick_80ms   ).writeU32(snap.phase_tick_80ms);
+        g_diff_test_caller_tid = -1;
+    }
+    return out;
+}
+
 // ─── init RPC ──────────────────────────────────────────────────────────
 
 rpc.exports = {
@@ -1593,8 +1667,9 @@ rpc.exports = {
               diff_test:     g_diff_test_enabled});
 
         if (g_diff_test_enabled) {
-            log('diff_test: armed (runRetailRngStep / runRetailComputeFps ' +
-                'RPCs live; orchestrator drives test vectors)');
+            log('diff_test: armed (runRetailRngStep / runRetailComputeFps / ' +
+                'runRetailAnimCycle RPCs live; orchestrator drives test ' +
+                'vectors)');
         }
     },
 
@@ -1610,5 +1685,9 @@ rpc.exports = {
                                    last_render_ms, window_start_ms,
                                    frames_this_second, current_fps,
                                    cumulative_fps, cumulative_seconds);
+    },
+
+    runRetailAnimCycle: function (counter, tick_80ms_fired) {
+        return runRetailAnimCycle(counter, tick_80ms_fired);
     },
 };
