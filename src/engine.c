@@ -79,6 +79,52 @@ static int g_sim_phase;
  * parity. */
 static int g_sim_derived_hint;
 
+/* ─── Sim screen sub-state mirror ───────────────────────────────────
+ *
+ * Retail DAT_0057c8fc.  0 = normal ingame, 2 = alt UI (combat
+ * resolution / events screen).  Gates several sub-step body branches.
+ * No producer in our port today — stays 0.  Lands when the screen-
+ * state machine ports. */
+static uint8_t g_sim_screen_substate;          /* DAT_0057c8fc */
+
+/* "This player is human/active" gate.  Retail (&DAT_0057bf04)[player_index *
+ * 0x160].  Indexed by current-player mirror DAT_0057c8cc.  The whole
+ * scheduled-events block in the sub-step body is gated on this byte
+ * being non-zero.  Today no producer — defaults to 0 → scheduled-events
+ * block is skipped. */
+static uint8_t g_sim_player_human_active;      /* DAT_0057bf04[curp] */
+
+/* "Turn end pending" latch.  Retail DAT_0056d6a4.  Set by FUN_0049b8b0
+ * (turn-timeout subsystem); consumed by the sub-step body's SP-only
+ * branch to break out of the sub-step loop (forces local_c = 0).  No
+ * producer in our port today. */
+static int g_sim_turn_end_pending;             /* DAT_0056d6a4 */
+
+/* "Turn progress" flag.  Retail DAT_00553fc8.  Cleared when turn ends.
+ * The sub-step body checks this when consuming the turn-end pending
+ * latch: if turn-progress is also 0, the pending latch is cleared.
+ * Today no producer; defaults to 0. */
+static int g_sim_turn_progress;                /* DAT_00553fc8 */
+
+/* ─── Double-LFSR RNG mirrors (FUN_00404a46 state) ──────────────────
+ *
+ * 31-bit Galois LFSR state + six masked-output mirrors.  Retail seeds
+ * the state in FUN_004b2258 / InitInstance (lines 83635-83636); we
+ * mirror that at .bss-init time via static initialisers so the LFSR
+ * is in a non-degenerate state from the first call.
+ *
+ * Output mirrors are write-only from our side today — no consumer in
+ * the drop-in yet.  Retail's bounded-bitmask sampler (FUN_00404b99,
+ * unported) is the primary reader. */
+static uint32_t g_rng_state_a    = 0x54657687u;   /* DAT_0058fe28 */
+static uint32_t g_rng_state_b    = 0x72641663u;   /* DAT_0058fe08 */
+static uint32_t g_rng_15bit_a;                    /* DAT_005aea58 */
+static uint32_t g_rng_7bit_a;                     /* DAT_0058fd7c */
+static uint32_t g_rng_3bit_a;                     /* _DAT_0058fd70 */
+static uint32_t g_rng_15bit_b;                    /* _DAT_005aea5c */
+static uint32_t g_rng_7bit_b;                     /* DAT_0058fd60 */
+static uint32_t g_rng_3bit_b;                     /* _DAT_0058fd6c */
+
 /* ─── Animation-phase tick mirrors (FUN_004bbc80 state) ────────────
  *
  * One non-sticky flag per "did event X fire this call" cadence
@@ -390,6 +436,28 @@ static void engine_tick_fps_step(void)
      * caller of FUN_004b27bf ignores the return value). */
 }
 
+/* Wrapper around engine_rng_step — bundles the two state mirrors,
+ * runs the pure function, writes the new state + six masked outputs
+ * back.  Called from the SP-only branch of the sub-step body (matches
+ * retail FUN_004b99c0 @ line 88780, gated on DAT_00553030 == 0). */
+static void engine_tick_rng_step(void)
+{
+    engine_rng_in_t  in  = { .state_a = g_rng_state_a,
+                             .state_b = g_rng_state_b };
+    engine_rng_out_t out = {0};
+
+    engine_rng_step(&in, &out);
+
+    g_rng_state_a = out.new_state_a;
+    g_rng_state_b = out.new_state_b;
+    g_rng_15bit_a = out.rng_15bit_a;
+    g_rng_7bit_a  = out.rng_7bit_a;
+    g_rng_3bit_a  = out.rng_3bit_a;
+    g_rng_15bit_b = out.rng_15bit_b;
+    g_rng_7bit_b  = out.rng_7bit_b;
+    g_rng_3bit_b  = out.rng_3bit_b;
+}
+
 /* Public readers used by main.c's shutdown summary so the harness can
  * verify the FPS counter is alive without poking file-static state. */
 uint32_t engine_get_current_fps(void)        { return g_fps_current; }
@@ -592,20 +660,114 @@ void engine_tick(void)
     /* TODO(sim): remaining pre-tick subfunctions. */
 
     int sub_steps = engine_tick_rate_step();
+    int load_bailout = 0;
     for (int i = 0; i < sub_steps; i++) {
-        /* TODO(sim): sub-step body.  Retail does:
-         *   DAT_0057c998++;                          // master tick
-         *   ... 1000/0x82/10-tick scheduled events ...
-         *   FUN_004472ce(DAT_0057c998);              // advance sim
-         *   if (SP) FUN_00404a46();                  // SP-only step
-         *   if (g_engine_state == 10) break;         // saving
-         *   if (g_engine_state == 0xb) return;       // loading
-         *   ... screen-state-specific extra updates ...
-         *
-         * Until any of that lands, sub-step body is a no-op.  But
-         * the loop is in place so when the sim does land, only the
-         * body needs to fill in. */
         (void)i;
+
+        /* Skeleton of retail FUN_004b99c0's sub-step body @ lines
+         * 88749-88803.  In SP mode (which is the only mode our
+         * drop-in can produce today) the body collapses substantially:
+         * retail's two biggest callees — FUN_004472ce (1046 B "sim
+         * tick") and FUN_0043eda0 (637 B "scheduled events
+         * dispatcher") — are BOTH gated entirely on DAT_00553030 != 0
+         * (MP active) and become no-ops in SP.  The only real per-
+         * step work in SP is:
+         *   - master tick counter bump
+         *   - FUN_00404a46 (LFSR advance — ported as engine_rng_step)
+         *   - FUN_0049b8b0 (turn-timeout, unported)
+         *   - screen-state-specific FUN_0040490d / FUN_0049a010 /
+         *     FUN_004650b0 (sub-state 0) or the sub-state-2 chain
+         *
+         * Today sub_steps is always 0 because scenario_hint == 0
+         * (engine state != 3), so this body is unreachable until the
+         * ingame state machine lands.  Structural seam in place. */
+
+        /* 1. Master sim tick counter.  retail DAT_0057c998. */
+        g_sim_tick_counter++;
+
+        /* 2. Scheduled events — gated on the per-player "human/active"
+         *    flag.  In SP all the FUN_0043eda0 calls are no-ops (gated
+         *    on DAT_00553030 != 0 inside), so we only mirror the SP
+         *    branch's other side effects. */
+        if (g_sim_player_human_active != 0) {
+            if (g_sim_screen_substate == 2) {
+                /* TODO(sim): MP sub-state 2 path.
+                 *   - tick % 0x82 == 0    → FUN_0043eda0(0xc, 0)  // MP-only, no-op in SP
+                 *   - else tick % 10 == 0 → FUN_0043eda0(10, 0)   // MP-only, no-op in SP
+                 *   - else tick % 0x82 == 0x2d → local_c = FUN_00440666()
+                 *     (FUN_00440666 is 383 B, unported — manipulates
+                 *      the deferred-action selection).  Today the
+                 *      sub_steps loop sees local_c as the rate-step
+                 *      output (constant for the iter), so this write
+                 *      would change loop termination mid-iter; faithful
+                 *      port requires reworking the rate-step / loop
+                 *      contract. */
+            } else {
+                /* SP path: FUN_0043eda0(10, 0) is MP-only no-op.
+                 * The real work here is FUN_0049b8b0() (turn-timeout
+                 * subsystem — 195 B, gated on DAT_00553fc8 != 0 &&
+                 * DAT_00553248 != 0; both are 0 today so the function
+                 * itself is a no-op anyway) and the turn-end-pending
+                 * consumer. */
+                /* TODO(sim): FUN_0049b8b0 turn-timeout subsystem. */
+
+                if (g_sim_turn_end_pending) {
+                    if (g_sim_turn_progress == 0) {
+                        g_sim_turn_end_pending = 0;
+                    }
+                    /* retail also sets local_c = 0 here — same
+                     * mid-iter loop-termination shape as the sub-
+                     * state-2 path above.  Deferred until FUN_00440666
+                     * etc land. */
+                }
+            }
+        }
+
+        /* 3. Sim tick — retail FUN_004472ce(DAT_0057c998).  Entirely
+         *    MP-gated (DAT_00553030 != 0), so no-op in SP.  Body is
+         *    the MP "process deferred actions due at this tick" walker
+         *    over a 400-element table (DAT_0050d7c0 + i*0x38), with
+         *    a per-action function-table dispatch via PTR_FUN_004d5c98
+         *    indexed by the action's type byte.  Lands together with
+         *    the MP subsystem. */
+        /* TODO(mp): FUN_004472ce port — 1046 B MP-only deferred-action
+         * processor. */
+
+        /* 4. SP-only step — retail's `if (DAT_00553030 == 0) FUN_00404a46();`
+         *    Now a real port: the LFSR advance. */
+        if (g_sim_mp_active == 0) {
+            engine_tick_rng_step();
+        }
+
+        /* 5. State-machine breaks — saving (10) breaks the loop;
+         *    loading (0xb) returns from engine_tick entirely. */
+        if (g_engine_state == 10) {
+            break;
+        }
+        if (g_engine_state == 0xb) {
+            load_bailout = 1;
+            break;
+        }
+
+        /* 6. Screen-state-specific extras.  Both branches are
+         *    deferred — all of their callees are blocked on the
+         *    sim / UI / map subsystems.  Surveyed in
+         *    main-loop-tick.md §"sub-step body screen-state extras". */
+        if (g_sim_screen_substate == 0 && sub_steps != 0) {
+            /* TODO(sim): FUN_0040490d (313 B), FUN_0049a010 (982 B),
+             * FUN_004650b0 (265 B). */
+        } else if (g_sim_screen_substate == 2 && sub_steps != 0) {
+            /* TODO(sim): FUN_00478952 (53 B) + per-screen chain
+             * FUN_00488dfe (943 B), FUN_004822ed (644 B),
+             * FUN_00485bb1 (1592 B), FUN_00489401 (595 B),
+             * FUN_004859e5 (354 B), FUN_00477dfc (1225 B) when
+             * DAT_004eac50 < 0x2b. */
+        }
+    }
+    if (load_bailout) {
+        /* Retail's loading branch returns from FUN_004b99c0 entirely
+         * (skipping the render phase).  Same shape here. */
+        return;
     }
 
     /* Render-phase head — retail calls (in order):
