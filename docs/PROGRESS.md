@@ -7,6 +7,71 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Harness verified end-to-end + first findings
+
+Initial bootstrap session continued.
+
+### Retail harness verified against Lords2.exe
+
+Ran `tools/smoke-test.py --duration-ms 8000` against the real GOG
+`Lords2.exe` via the cutestation.soy frida-server.  Results:
+
+```
+hwnd_count:        5        (1 game + 4 system: OLE, CIC, MSCTFIME)
+hide_count:        2        (CreateWindowExA/WS_VISIBLE + SetWindowLongA)
+ddraw_coop:        1        (0x13 EXCL|FULLSCREEN|ALLOWREBOOT → 0x0a NORMAL|ALLOWREBOOT)
+SetDisplayMode:    1 blocked (640×480×8 — the classic 8-bit mode-set)
+dsound_coop:       1        (0x2 PRIORITY → 0x1 NORMAL)
+msgbox:            0
+audio_mute:        0        (waveOutSetVolume not called yet in first 8s)
+```
+
+**First-run gotcha caught.**  The initial smoke run produced a
+borderless black window flash on the host desktop despite all four
+post-create show-path hooks being armed.  Root cause: Lords2.exe
+passes `WS_VISIBLE` directly in `CreateWindowExA`'s `dwStyle` (style
+`0x90080000` = `WS_POPUP|WS_VISIBLE|WS_SYSMENU`), so the window is
+shown *during* the create call — by the time `onLeave` registers the
+HWND, the display has already happened.  Added a pre-create
+`WS_VISIBLE` strip in `CreateWindowEx` `onEnter` (commit `3c093ba`);
+second run is fully invisible.
+
+### First Ghidra-headless run completed
+
+`tools/ghidra-headless.sh` decompiled the binary in single-digit
+minutes: **2452 functions**, 3 MB `all.c`.
+
+Documented the WinMain → InitInstance → main-loop chain in
+[`docs/findings/winmain-and-bootstrap.md`](findings/winmain-and-bootstrap.md):
+
+- `entry @ 0x4c3370` — CRT bootstrap, calls `FUN_0040e9ab(hInstance)`
+- `FUN_0040e9ab @ 0x40e9ab` — WinMain-equivalent.  641 B.  Hands off
+  to `FUN_004b2258` for window+class setup, then drops into the
+  PeekMessage/GetMessage main loop with a `Sleep(200)` paused-mode
+  branch.
+- `FUN_004b2258 @ 0x4b2258` — InitInstance-like.  Registers
+  `WinLords2Class` (wndproc `FUN_004b29be`), creates the main window
+  full-screen-sized at (0,0), then calls `FUN_004b2922` for what is
+  likely DDraw/DSound bring-up.
+- Default render size globals confirmed: `0x4eb250 = 640`,
+  `0x4eb254 = 480`.
+
+### What's next
+
+1. Read `FUN_004b2922` to understand the DDraw/DSound bring-up chain
+   — that's where the 640×480×8 mode-set lives.
+2. Read `FUN_004b8c3a` (per-tick driver, called every main-loop
+   iteration when no Win32 message is pending) — likely contains sim
+   step + render dispatch.
+3. Decide whether to add turbo v2 (virtual `timeGetTime`) to the
+   harness now or wait until we have the frame counter located.
+4. Begin porting `FUN_004b2258` to `src/main.c`'s
+   `register_window_class` + `create_main_window` so the drop-in's
+   window matches retail (class name, style bits, popup vs
+   overlapped).
+
+---
+
 ## 2026-05-24 — Bootstrap (initial project setup)
 
 Project skeleton created from scratch.  Adapts the conventions from
