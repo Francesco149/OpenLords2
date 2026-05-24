@@ -54,7 +54,7 @@ All addresses are preferred-base (ImageBase `0x00400000`).
 | Address       | Type | Meaning (best guess) |
 |---------------|------|----------------------|
 | `0x004e5a00`  | HWND | `g_main_hwnd` — main window, set in FUN_004b2258 |
-| `0x004eaba0`  | u32  | base `timeGetTime()` value, captured in FUN_004b2258 |
+| `0x004eaba0`  | u32  | FPS-counter 1-second window start — see [`main-loop-tick.md`](main-loop-tick.md). *(Earlier I labelled this "base timeGetTime at boot" — corrected.)* |
 | `0x004eb250`  | u32  | render width (`0x280 = 640`) |
 | `0x004eb254`  | u32  | render height (`0x1e0 = 480`) |
 | `0x004ea120`  | u32  | another width (640) — duplicated state |
@@ -95,11 +95,15 @@ the main HWND from outside the process.
   the message queue is empty AND `DAT_004e65d0 == 0 && DAT_004e65a8 != 0`
   (some kind of "paused" condition).  Otherwise it spins doing work in
   `FUN_004b8c3a()` per iteration.
-- **`FUN_004b8c3a` is the per-tick driver.**  Likely contains the
-  simulation step + render dispatch.  TBD.
-- **`FUN_0040e8bb` is the alternate per-tick path.**  Called when
-  `DAT_004e65d0 == 0 && DAT_004e65a8 != 0` evaluates false — likely
-  the "actively running, not paused" path.
+- **`FUN_004b8c3a` is the DPlay receive pump** *(corrected from the
+  original guess of "per-tick driver").* It only does work when
+  `DAT_00553030 != 0` (multiplayer active); SP path is a no-op
+  beyond a jitter counter.  Drains DPlay messages.  See
+  [`main-loop-tick.md`](main-loop-tick.md).
+- **`FUN_0040e8bb` is the surface-lost guard + sim/render entry.**
+  Called when `DAT_004e65d0 == 0 && DAT_004e65a8 != 0`.  Checks
+  DDraw surface-lost, then dispatches via `FUN_0040e890` →
+  `FUN_004b99c0` (the actual sim+render driver).
 - The `0x10 = WM_CLOSE` PostMessage on flag `DAT_005aeb68` suggests
   the engine has a one-shot "close requested from somewhere outside
   the wndproc" defer mechanism.
@@ -115,14 +119,17 @@ bring-up details.
 
 ## Open questions for the next session
 
-1. **What is `FUN_004b8c3a`?**  The per-tick driver — sim+render
-   dispatch?  Find its callees and label.
-2. **What is `FUN_0040e8bb`?**  The non-paused per-tick path.
-3. **DDraw bring-up.**  Which function calls `DirectDrawCreate`?
-   What surfaces does it create immediately?  What's the engine's
-   primary/backbuffer convention?
+1. ~~**What is `FUN_004b8c3a`?**~~  → DPlay receive pump, documented in
+   [`main-loop-tick.md`](main-loop-tick.md).
+2. ~~**What is `FUN_0040e8bb`?**~~  → Surface-lost guard + sim/render
+   entry, documented in [`main-loop-tick.md`](main-loop-tick.md).
+3. ~~**DDraw bring-up.**~~  → documented in
+   [`ddraw-dsound-bringup.md`](ddraw-dsound-bringup.md).
 4. **DPlay init.**  When does `dplayx.dll` get touched?  Lazy
-   (only when "Play Multiplayer" is clicked) or eager?
+   (only when "Play Multiplayer" is clicked) or eager?  The DPlay
+   pump only does work when `DAT_00553030 != 0` and uses
+   `DAT_004e2a2c` (`IDirectPlay4*`) and `DAT_004e2a30` (custom RGM
+   transport) — neither obviously initialised in the boot chain.
 5. **Smacker.**  Does the engine call into `smackw32.dll` at boot
    for the intro, or only on the menu screen?  Check call sites.
 
