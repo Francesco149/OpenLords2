@@ -213,6 +213,60 @@ reach the clamp because there's no input that gets there.
 
 ---
 
+## 5. The "sim tick" function is an MP-only no-op
+
+Retail's per-frame sub-step body (inside `FUN_004b99c0`'s
+variable-rate loop) reads, on the surface, like the canonical "this
+is where the simulation advances":
+
+```c
+DAT_0057c998 = DAT_0057c998 + 1;                  // master tick
+... 1000/0x82/10-tick scheduled events ...
+FUN_004472ce(DAT_0057c998);                       // "advance sim"
+if (DAT_00553030 == 0) FUN_00404a46();            // SP-only step
+```
+
+The natural assumption is that `FUN_004472ce` — the function whose
+parameter is the master tick counter, in the slot labelled "advance
+sim by 1 tick" — is the heart of the simulation step.  It's 1046
+bytes; it visibly walks a 400-element table; it dispatches actions
+through a function pointer table.
+
+But the entire function is gated on `if (DAT_00553030 != 0)` (i.e.
+MP active).  In single-player it returns immediately.  Same with
+`FUN_0043eda0` (637 B, the "scheduled events" dispatcher called on
+1000/0x82/10 tick boundaries) — also entirely MP-gated.
+
+So in SP mode, the sub-step body's *actual* per-step work collapses
+to: bump the master tick counter, advance the LFSR (`FUN_00404a46`
+— ported as `engine_rng_step`), check the savepump state machine
+breaks, and run the screen-state-specific extras (which themselves
+hand off to per-screen subsystems).  The real per-frame sim work in
+SP happens elsewhere — in the pre-tick block (anim phase, frame
+delta) and inside the screen-dispatch ladder's per-screen handlers.
+
+The shape suggests an architecture where SP and MP share the same
+top-level main-loop driver, but the "deterministic action queue"
+machinery (commit actions at the synchronised tick they were
+scheduled for) is MP-only because SP doesn't need to synchronise
+across peers — it can act on UI events the same frame they fire.
+`DAT_0057c998` (the master tick) still increments in SP because the
+LUT-driven rate gate depends on it, and because the savefile
+captures it, but no `FUN_004472ce` walk consumes it.
+
+We discovered this while surveying the sub-step body for porting.
+Our skeleton calls `engine_tick_rng_step` in the SP-only branch and
+leaves the MP dispatcher as a comment-only TODO — observably
+correct in SP because retail does the same thing.
+
+> 📍 `src/engine.c` (`engine_tick` sub-step body),
+> `docs/findings/main-loop-tick.md` §"sub-step body",
+> Ghidra `FUN_004472ce` (1046 B, MP-gated body),
+> `FUN_0043eda0` (637 B, MP-gated body),
+> `FUN_004b99c0` lines 88749..88803.
+
+---
+
 <!--
 Template for new entries:
 

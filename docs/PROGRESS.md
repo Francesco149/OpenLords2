@@ -7,6 +7,152 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Sub-step body skeleton + double-LFSR RNG port (FUN_00404a46)
+
+Continued the entry-chain port one slot deeper.  The sub-step body
+(retail `FUN_004b99c0` lines 88749..88803, inside the
+variable-rate sim loop) is now skeletoned in `engine_tick`, with
+the SP-only LFSR advance landing as a real port and the rest
+documented-as-deferred.
+
+### Survey result — the biggest sub-step callees are MP-only
+
+Reading retail's body end-to-end turned up a finding worth a
+dedicated engine-quirks entry: the two functions that look like
+"the heart of the sim tick" — `FUN_004472ce` (1046 B,
+"advance sim by 1 tick") and `FUN_0043eda0` (637 B, "scheduled
+events dispatcher") — are **both entirely MP-gated**.  Their
+bodies are wrapped in `if (DAT_00553030 != 0)`, so in SP they
+return immediately.
+
+Implication: in SP mode (which is everything our drop-in can
+produce today), the sub-step body's actual per-step work is:
+
+- Master tick counter bump (`DAT_0057c998++`).
+- LFSR advance (`FUN_00404a46`) — ported this session.
+- Turn-end / autosave check (`FUN_0049b8b0`) — deferred, blocks on
+  turn subsystem.
+- State-machine breaks for save/load.
+- Screen-state-specific extras (~11 functions, all blocked on the
+  sim / combat / map subsystems).
+
+That's it.  All other "sim work" happens in the pre-tick block
+(anim phase, frame delta — already ported) or inside the screen-
+dispatch ladder's per-screen handlers.  Documented as engine-quirk
+#5.
+
+### Port: `engine_rng_step` (`FUN_00404a46`, 230 B)
+
+- **`src/engine_rng.c`** (new TU, pure C) — port of retail's
+  double-LFSR step.  Two independent 32-bit Galois LFSRs with taps
+  at bits 0 and 4; feedback injected into bit 30 (not bit 31).
+  31 iterations per call.  Outputs six masked snapshots of the new
+  state — 15/7/3 bits for each LFSR.  Pure function; every input
+  + state mutation in the in/out structs.
+- **`src/engine.c`** — wiring.  Eight new file-static mirrors
+  (`g_rng_state_a/b` initialised to retail seeds `0x54657687` /
+  `0x72641663` from FUN_004b2258 lines 83635-83636; six masked
+  output mirrors).  Wrapper `engine_tick_rng_step` bundles + runs
+  + writes back.  Wired into the sub-step body's SP-only branch
+  (`g_sim_mp_active == 0`), matching retail's call site.
+- **`src/engine.h`** — `engine_rng_in_t` / `engine_rng_out_t`
+  structs and the pure-function declaration.
+
+### Skeleton: sub-step body
+
+- **`src/engine.c`** — `engine_tick`'s `for (i in 0..sub_steps)`
+  loop body now has retail's structural shape.  Five new file-
+  static mirrors land alongside (`g_sim_screen_substate`,
+  `g_sim_player_human_active`, `g_sim_turn_end_pending`,
+  `g_sim_turn_progress`, plus the eight RNG mirrors).  Each
+  mirror's retail `DAT_*` cross-reference and producer status is
+  documented inline.
+- The `load_bailout` flag implements retail's "engine state 0xb →
+  return from FUN_004b99c0 entirely" branch (skips the render
+  phase tail).
+- Everything else inside the sub-step body is a comment-only TODO
+  with the retail subfunction address + size + blocker recorded.
+- Today still produces 0 sub-steps every call (rate controller's
+  scenario hint is 0 until engine state 3), so the loop body is
+  unreached and observable behaviour is identical to the prior
+  slice.
+
+### Tests landed (9 new, 123/123 total under ASan + UBSan)
+
+- All-zero state stays zero (degenerate LFSR fixed point).
+- Seed=1 traces to a specific value (`0x08000001`).  Pinned as a
+  regression — naive trace says "state=1 returns to 1" because it
+  misses the secondary feedback at iter 28 when the walking bit
+  re-hits position 4.  The test prevents future "small clean-up"
+  from this not-actually-clean codegen.
+- Bit 31 is always cleared after any call (the LFSR is effectively
+  31-bit because feedback targets bit 30 and the shift is logical).
+- State A and B are independent (zero-state-B stays 0 even when
+  state-A evolves).
+- Masked outputs match `new_state & mask` for all six fields.
+- Reproducibility: same input → same output.
+- Retail seed produces non-degenerate (non-zero, non-identity)
+  output.
+- Reference-comparison: against an independent inline `ref_advance`
+  function, for four arbitrary seeds.
+- Multi-call evolution: 10 consecutive calls from retail seed,
+  each step changes state + cumulative 15-bit OR exceeds 0xff.
+
+### Engine quirks
+
+[`docs/findings/engine-quirks.md`](findings/engine-quirks.md) entry
+#5 — the SP/MP asymmetry of the sub-step body.  The two biggest
+"sim tick" functions are MP-only no-ops; SP's actual per-step work
+collapses to LFSR + screen-state extras.
+
+Two smaller LFSR oddities are documented inline in `engine_rng.c`
+but not promoted to engine-quirks entries: the 31-bit-state-on-32-
+bit-word shape (bit 31 always 0 after first call) and the seed=1
+trivial trajectory.  Neither is load-bearing.
+
+### Verified
+
+- `make -C tests run` — 123/123 pass under ASan + UBSan
+  (was 114/114; +9 RNG tests).
+- `make -C src` — both .exe targets clean, no warnings.
+- `tools/run-openlords2.sh --frames 50 --gfx-init` — transcript
+  identical to pre-slice (sub_steps == 0 → loop body never runs;
+  observable behaviour unchanged).
+- `tools/run-openlords2.sh --frames 5000 --gfx-init` —
+  `engine_ticks=5000 current_fps=652 avg_fps=648 (over 7 s)`.
+  Plausible numbers, no FPS regression from the new mirror
+  bookkeeping.
+
+### What's next
+
+The sub-step body is now structurally accounted for (one ported,
+eleven-plus deferred with blockers).  The render-phase head + tail
+slots are similarly structured.  The remaining unblocked work
+inside `engine_tick` is:
+
+1. **Pre-tick FUN_00499a1c port** (174 B) — music/audio update,
+   gated on `g_engine_state == 3`.  Body calls `FUN_004af502` +
+   `FUN_004af8d9` + `FUN_004afab9` — each is the audio
+   subsystem's PL8/song-bank loader, unported.  Lands together
+   with the audio subsystem.
+2. **Screen-dispatch ladder** — the bulk of `FUN_004b99c0`, ~30
+   subsystem dispatches based on `DAT_004eac50`.  Each branch
+   blocked on its respective screen subsystem; lands incrementally.
+3. **Input replay** — Phase 3 of `docs/harness-roadmap.md`.
+   Record `WM_KEY*` / `WM_MOUSE*` as JSONL, replay back through
+   `SendMessageA`.  Standalone harness slice independent of the
+   engine ports.
+
+Top-down RE bias next time: the engine-port slots inside
+`engine_tick` are nearly exhausted, modulo the per-screen
+subsystems.  The most productive next slice is probably **input
+replay** — gives us scenario reproducibility for when the screen-
+dispatch ladder starts landing per-screen handlers.  After that
+the engine ports unblock once the first screen subsystem (probably
+the title screen / FUN_004afab9 audio update) lands.
+
+---
+
 ## 2026-05-24 — Phase 2 frame capture (DDraw back surface → BMP)
 
 Picked option 1 from the prior entry's "What's next": hook the retail

@@ -356,6 +356,7 @@ The three outer wrappers are now ported to `src/engine.{c,h}`:
 | `FUN_004b2730`        | `gfx_restore`               | full (prior slice) |
 | `FUN_004b26b8`        | (skipped)                   | retail logs `"OK :Paused."` + InvalidateRects after a successful Restore-during-guard.  Deferred — `engine_tick_guard` comment flags it.  No behavioural delta for the smoke harness (we have no Smacker movie that would care about the invalidation) |
 | `FUN_004978ad / 0049792e / 00497a34` | `savepump_begin_sp` / `savepump_step` | stubs.  Engine state can't transition above 3 today, so `g_savepump_request` never sets; dispatch arm never runs |
+| `FUN_00404a46`        | `engine_rng_step`            | full (pure function in `src/engine_rng.c`).  Wrapper `engine_tick_rng_step` mirrors the two LFSR state words + six masked outputs.  Initial seeds (`0x54657687`, `0x72641663`) come from .bss-time static initialisers — substitute for retail's `FUN_004b2258` runtime init at lines 83635-83636.  Wired into `engine_tick`'s sub-step body in the SP-only branch (`g_sim_mp_active == 0`).  Today sub_steps is always 0 so the LFSR doesn't actually advance through this seat in the drop-in; other call sites (FUN_00404b99 bounded-bitmask sampler etc, all unported) would also advance it.  9 unit tests cover zero state / single-bit seed regression / bit-31 clear quirk / state-independence / mask correctness / reproducibility / multi-call evolution |
 
 ### Pre-tick subfunctions — surveyed, deferred
 
@@ -379,6 +380,63 @@ runs against a retail trace will see the same divergence — the
 trace will show these functions being called and we will not, but
 the global state we'd be reading is also all-zero, so the would-be
 mutations are no-ops.
+
+### Sub-step body — skeleton wired + RNG ported (2026-05-24)
+
+The variable-rate sim sub-step loop runs 0..2 iterations per
+`engine_tick` call.  Today the rate controller returns 0 every call
+(scenario hint == 0 unless engine state is 3 / ingame), so the
+loop body is never reached.  Structural skeleton is in place so that
+when ingame state becomes producible, only the per-callee port slots
+need to fill in.
+
+Per-iteration shape (in retail call order):
+
+1. **Master tick counter** — `DAT_0057c998++` → mirrored as
+   `g_sim_tick_counter`.
+2. **Scheduled events** — three `FUN_0043eda0` calls (637 B, MP-only
+   no-op).  Surveyed below.
+3. **Sim tick** — `FUN_004472ce(DAT_0057c998)` (1046 B, MP-only
+   no-op).  Surveyed below.
+4. **SP-only step** — `FUN_00404a46()` ported as `engine_rng_step`.
+5. **State-machine breaks** — `g_engine_state == 10` (saving) breaks
+   the loop; `g_engine_state == 0xb` (loading) returns from
+   `engine_tick` entirely (skips the render phase).
+6. **Screen-state extras** — large per-screen functions.  Surveyed
+   below.
+
+| Retail        | Size  | Gate                          | Disposition |
+|---------------|-------|-------------------------------|-------------|
+| `FUN_0043eda0` | 637 B | MP-only (`DAT_00553030 != 0` first line of body) | **No-op in SP — see quirk #5.**  Body is the MP "broadcast deferred action ID" path: looks up param_1 in `DAT_004d5b90[]`, computes a 0x104-byte slot in `DAT_00512fb0[idx]`, writes the action type + a `FUN_00440038` checksum, and broadcasts via `FUN_004b90fb` (3-phase commit pattern for non-confirm ops, 1-phase for the 11 confirm-only op codes listed in the OR-chain).  Lands together with the DirectPlay broadcast layer. |
+| `FUN_004472ce` | 1046 B | MP-only (`DAT_00553030 != 0` wraps entire body) | **No-op in SP — see quirk #5.**  Body walks the 400-element deferred-action table (`DAT_0050d7c0 + i*0x38`), builds a sorted list of actions whose ready-time (param_1 = current master tick) has passed, and dispatches each through `PTR_FUN_004d5c98[type_byte]` indirect call.  The `DAT_0057c8fc == 2` branch additionally interleaves a sub-priority pass for action types in `[0x21, 0x24)` matching `DAT_005681ec`.  Lands with the MP subsystem. |
+| `FUN_00404a46` | 230 B | SP-only (`DAT_00553030 == 0`)   | **Ported** — `engine_rng_step`.  Double 31-bit Galois LFSR advance (taps at bits 0 and 4, feedback into bit 30).  31 iters per call.  Outputs 15/7/3-bit masks of each state for the bounded-bitmask sampler (`FUN_00404b99`, unported).  See engine.c port-status table. |
+| `FUN_0049b8b0` | 195 B | SP "every tick" inside human-player gate                    | **Deferred — blocked on turn/autosave subsystem.**  Self-gates on `DAT_00553fc8 != 0 && DAT_00553248 != 0`; both 0 today so the function is itself a no-op.  Body times turn-end with a 10 s wall-clock budget (`_DAT_0056d658`), or — if the budget elapsed — fires the MP autosave-begun broadcast + a 1 second `Sleep(1000)`.  Lands with the turn timer + autosave. |
+| `FUN_00440666` | 383 B | Sub-state 2, tick % 0x82 == 0x2d                | **Deferred — blocked on deferred-action selection.**  Writes a sub-step-loop terminator into `local_c` mid-iter — same mid-iter loop-termination shape as the turn-end-pending consumer below.  Port requires reworking the rate-step ↔ loop-iteration contract.  Lands with the MP deferred-action machinery. |
+| Turn-end pending consumer | (inline) | SP, human-player gate | **Skeleton wired.**  Reads `g_sim_turn_end_pending` (retail `DAT_0056d6a4`); if set and turn-progress is 0, clears it.  Retail also writes `local_c = 0` to terminate the loop mid-iteration — that mid-iter write isn't honoured by our skeleton yet (the rate-step returns the sub-step count up front; rewriting it mid-loop would require changing the loop contract).  Deferred. |
+
+**Screen-state extras** (after the state-machine breaks, gated on
+`sub_steps != 0`):
+
+| Retail        | Size  | Gate                          | Disposition |
+|---------------|-------|-------------------------------|-------------|
+| `FUN_0040490d` | 313 B | Sub-state 0 | **Deferred — sim subsystem.** |
+| `FUN_0049a010` | 982 B | Sub-state 0 | **Deferred — sim subsystem.** |
+| `FUN_004650b0` | 265 B | Sub-state 0 | **Deferred — sim subsystem.** |
+| `FUN_00478952` | 53 B  | Sub-state 2 (no inner gate) | **Deferred — sim subsystem.** |
+| `FUN_0040490d` | 313 B | Sub-state 2 AND `DAT_004eac50 < 0x2b` (combat-resolution screen lower-half) | **Deferred — combat subsystem.** |
+| `FUN_00488dfe` | 943 B | as above | **Deferred — combat subsystem.** |
+| `FUN_004822ed` | 644 B | as above | **Deferred — combat subsystem.** |
+| `FUN_00485bb1` | 1592 B | as above | **Deferred — combat subsystem.**  Largest single sub-step-body extra. |
+| `FUN_00489401` | 595 B | as above | **Deferred — combat subsystem.** |
+| `FUN_004859e5` | 354 B | as above | **Deferred — combat subsystem.** |
+| `FUN_00477dfc` | 1225 B | Sub-state 2 (no inner gate)  | **Deferred — combat subsystem.** |
+
+Combined observable delta from the sub-step body being skeleton-only
+today: zero, because the loop never iterates (scenario hint == 0 →
+sub_steps == 0).  When the rate controller starts producing
+sub-steps, the skeleton wires the master-tick counter, LFSR, and
+state-machine breaks; everything else stays a TODO until the
+respective subsystem ports.
 
 ### Render-phase tail — surveyed + FPS counter ported (2026-05-24)
 
