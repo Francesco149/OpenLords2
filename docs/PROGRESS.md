@@ -7,6 +7,60 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Surface-restore wire-up
+
+Ported retail's `FUN_004b2730 @ 0x4b2730` as `gfx_restore()`.  Closes
+the WndProc TODO that's been carried since the WndProc port landed.
+
+### Scope landed
+
+- **`gfx_restore()`** in `src/gfx.c` — `IDirectDrawSurface::Restore`
+  on primary then back.  Returns 1 on success, 0 on failure.  Logs
+  retail's exact strings (`ERR:Can't restore front buffer.` /
+  `ERR:Can't restore back buffer.`) at `0x4df668` / `0x4df68c`.
+- **`gfx_surface_lost()`** accessor + internal latch.  Set in
+  `gfx_present` whenever `BltFast` (fullscreen) or `Lock` (windowed)
+  returns `DDERR_SURFACELOST`.  Cleared by a successful
+  `gfx_restore` or a fresh `gfx_init`.
+- **WndProc `WM_ACTIVATEAPP` escalator** in `src/main.c` — on focus
+  regain with the latch set, call `gfx_restore()`.  On failure,
+  escalate: `gfx_shutdown()` + `gfx_init()` (port of retail's outer
+  `FUN_004b2922` wrapper around `FUN_004b2730`).  On either success
+  path, clear `g_surface_lost` and mark `g_render_dirty = 2` so the
+  next present repaints fully.
+
+### Verified
+
+Baseline + `--gfx-init` smoke runs both clean — no regressions.
+The restore path itself isn't exercised by a smoke run (no real
+focus-loss event under headless), so this slice is "wired but not
+end-to-end tested".  Manual validation candidate: run with
+`--show-window`, switch to another fullscreen app, switch back —
+should see `OK :Active.` followed by either a clean restore or a
+re-init sequence in the transcript.
+
+### What's next
+
+Same as before, minus surface-restore (now done):
+
+1. **Render rate-limiter + dirty-rect tracker** —
+   `FUN_00452160` / `FUN_00452306`.  Mid-size port; touches several
+   undecoded globals around the dirty-rect accumulator, so worth a
+   dedicated findings doc first.
+2. **First real drawing primitive** — sprite-blit helper so we can
+   capture a recognisable image and diff against retail.
+3. **Main-loop driver** — `FUN_004b99c0` (~2200 B).  Largest single
+   port remaining; what consumes the `g_shutdown_request` escalator
+   and the per-tick rate gate.
+4. **WinMain pre-init slice** — `l2.eng` localization load + l2.ini
+   parse (`FUN_0040ecc4`) + Sierra config (`FUN_004ae1b8`).  Lots of
+   global init touching `g_cd_drive`, `g_sound_channels`,
+   `g_video_speed`, etc.  Self-contained, but pure setup — only
+   becomes load-bearing once the consumers (SFX, video, screen-state
+   code) land.
+
+---
+
 ## 2026-05-24 — DSound bring-up (`src/audio.c`)
 
 Ported retail's `FUN_00425b10 @ 0x425b10` (DSound init) into a new

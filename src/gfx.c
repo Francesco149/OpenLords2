@@ -89,6 +89,12 @@ static int                  g_back_pitch;     /* DAT_004ea1a8 */
 static int                  g_primary_lockable; /* DAT_004df28c */
 static int                  g_fullscreen;
 static HWND                 g_hwnd;
+/* "any present-side operation reported DDERR_SURFACELOST since the
+ * last gfx_restore success" latch.  Mirror of retail's DAT_004e65d0
+ * — but retail sets it from many call sites; we only set it from
+ * gfx_present today (the only place we touch surfaces in steady
+ * state).  Cleared by a successful gfx_restore or a fresh gfx_init. */
+static int                  g_surface_lost_latch;
 
 /* Loaded palette RGB triplets (×4-expanded from 6-bit VGA to 8-bit).
  * Mirror of retail's DAT_004ea1b0[256*3] — held in this TU so the
@@ -184,6 +190,42 @@ void gfx_shutdown(void)
     g_back_pitch = 0;
     g_primary_lockable = 0;
     g_hwnd = NULL;
+    g_surface_lost_latch = 0;
+}
+
+/* Port of retail FUN_004b2730 @ 0x4b2730.  Try IDirectDrawSurface::
+ * Restore on the primary first (early-out on failure with the front-
+ * buffer log), then on the back.  Either failure returns 0 — the
+ * caller's escalation path is to gfx_shutdown + gfx_init (retail's
+ * outer FUN_004b2922 wrapper).
+ *
+ * On success the surface-lost latch clears, so the next focus-regain
+ * doesn't try to restore again. */
+int gfx_restore(void)
+{
+    if (!g_primary) {
+        log_line("ERR:Can't restore front buffer.");
+        return 0;
+    }
+    HRESULT hr = IDirectDrawSurface_Restore(g_primary);
+    if (FAILED(hr)) {
+        log_line("ERR:Can't restore front buffer.");
+        return 0;
+    }
+    if (g_back) {
+        hr = IDirectDrawSurface_Restore(g_back);
+        if (FAILED(hr)) {
+            log_line("ERR:Can't restore back buffer.");
+            return 0;
+        }
+    }
+    g_surface_lost_latch = 0;
+    return 1;
+}
+
+int gfx_surface_lost(void)
+{
+    return g_surface_lost_latch;
 }
 
 /* ---------------------------------------------------------------- *
@@ -698,6 +740,7 @@ static int present_via_gdi(void)
                                          DDLOCK_WAIT | DDLOCK_READONLY,
                                          NULL);
     if (FAILED(hr) || !desc.lpSurface) {
+        if (hr == DDERR_SURFACELOST) g_surface_lost_latch = 1;
         static unsigned diag_lock;
         if (diag_lock == 0 || (diag_lock % 500) == 0)
             log_line("gfx_present Lock hr=0x%08lx", (unsigned long)hr);
@@ -762,6 +805,7 @@ void gfx_present(void)
         HRESULT hr = IDirectDrawSurface_BltFast(g_primary, 0, 0, g_back,
                                                 &src, DDBLTFAST_WAIT);
         if (FAILED(hr)) {
+            if (hr == DDERR_SURFACELOST) g_surface_lost_latch = 1;
             static unsigned diag_n_fs;
             if (diag_n_fs == 0 || (diag_n_fs % 500) == 0)
                 log_line("gfx_present BltFast hr=0x%08lx",

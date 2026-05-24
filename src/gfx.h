@@ -85,4 +85,22 @@ int  gfx_capture_backbuffer(const char *path);
  * not). */
 int  gfx_capture_window(const char *path);
 
+/* Call IDirectDrawSurface::Restore on the primary and back surfaces.
+ * Returns 1 on success, 0 on failure.  Port of retail's
+ * `FUN_004b2730 @ 0x4b2730`.  Caller decides what to do on failure
+ * (typically: full gfx_shutdown + gfx_init, the outer FUN_004b2922
+ * wrapper).
+ *
+ * Logs retail's exact failure strings ("ERR:Can't restore front
+ * buffer." at 0x4df668 / "ERR:Can't restore back buffer." at
+ * 0x4df68c). */
+int  gfx_restore(void);
+
+/* Read-back the "any present-side Blt/Lock returned DDERR_SURFACELOST
+ * since last clear" flag.  WndProc consults this on WM_ACTIVATEAPP
+ * focus-regain so it knows whether to call gfx_restore.  Cleared by
+ * gfx_restore on success (or by a successful gfx_init reseating the
+ * pointers). */
+int  gfx_surface_lost(void);
+
 #endif /* OPENLORDS2_GFX_H */

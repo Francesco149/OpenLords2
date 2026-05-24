@@ -428,8 +428,10 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     /* --- WM_ACTIVATEAPP (0x1c) -------------------------------------
      * Retail toggles g_focused based on wp + foreground + iconic
      * status, logs "OK :Active." or "OK :Not active.", and on
-     * focus-regained-with-lost-surfaces runs the DDraw restore path.
-     * We don't have surfaces yet, so just track the flag and log. */
+     * focus-regained-with-lost-surfaces runs the DDraw restore path
+     * (FUN_004b2730 → on failure FUN_004b2922 = gfx_shutdown +
+     * gfx_init).  We port the same escalation: try gfx_restore
+     * first; if it fails, tear down and re-init. */
     case WM_ACTIVATEAPP: {
         HWND fg = GetForegroundWindow();
         if (wp == 0 || fg != hwnd || IsIconic(hwnd))
@@ -437,8 +439,25 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         else
             g_focused = 1;
         log_line(g_focused ? "OK :Active." : "OK :Not active.");
-        /* TODO(gfx): if (g_surface_lost && g_focused) → DDraw Restore
-         * via the FUN_004b2730 / FUN_004b2922 path. */
+        if (g_focused && g_gfx_active && gfx_surface_lost()) {
+            if (!gfx_restore()) {
+                /* Escalate — full re-init.  Matches retail's outer
+                 * FUN_004b2922 wrapper around FUN_004b2730. */
+                gfx_shutdown();
+                g_gfx_active = 0;
+                if (gfx_init(g_hwnd, g_fullscreen)) {
+                    g_gfx_active = 1;
+                    g_surface_lost = 0;
+                    g_render_dirty = 2;
+                } else {
+                    log_line("WM_ACTIVATEAPP: gfx re-init failed "
+                             "after Restore failed — DDraw is down");
+                }
+            } else {
+                g_surface_lost = 0;
+                g_render_dirty = 2;
+            }
+        }
         return 0;
     }
 
