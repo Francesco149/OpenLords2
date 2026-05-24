@@ -90,6 +90,17 @@ static int g_sim_derived_hint;
  * `delta = now - 0` which is huge, fires the base tick, and from
  * there the counters spin up naturally. */
 
+/* ─── Frame-delta mirrors (FUN_004b20ed state) ─────────────────────
+ *
+ * `_DAT_004e59ec` baseline timestamp + `DAT_004ea128` last-published
+ * delta.  The baseline is read+written each call; the delta is
+ * write-only from our side (downstream sprite-animation updaters
+ * read it once it lands; none of those callers exist in the drop-in
+ * yet so the delta is currently dropped).  Same 30 ms low-pass +
+ * signed-gate semantics as retail. */
+static uint32_t g_frame_delta_last_ms;         /* _DAT_004e59ec */
+static int      g_frame_delta_ms;              /* DAT_004ea128 */
+
 static uint32_t g_phase_last_base_tick_ms;     /* _DAT_004e5b10 */
 static uint32_t g_phase_base_tick_counter;     /* DAT_005aeb2c */
 static uint32_t g_phase_counter_2;             /* DAT_0058feb4 */
@@ -113,6 +124,26 @@ static int g_phase_tick_1040ms_sticky;         /* _DAT_005aeb28 (sticky) */
 static int g_phase_tick_1280ms;                /* DAT_005aeb3c */
 static int g_phase_tick_1920ms;                /* DAT_005aeb38 */
 static int g_phase_tick_2560ms;                /* DAT_005aeb30 */
+
+/* Win32 wrapper around engine_compute_frame_delta — reads
+ * timeGetTime, bundles into the input struct, calls the pure
+ * function, writes the baseline + delta back into the file-static
+ * mirrors.  No-op observable today: nothing consumes
+ * g_frame_delta_ms yet.  The structural seam slots the producer
+ * into pre-tick at retail's exact position. */
+static void engine_tick_delta_step(void)
+{
+    engine_delta_in_t  in  = {0};
+    engine_delta_out_t out = {0};
+
+    in.now_ms        = timeGetTime();
+    in.last_frame_ms = g_frame_delta_last_ms;
+
+    engine_compute_frame_delta(&in, &out);
+
+    g_frame_delta_last_ms = out.new_last_frame_ms;
+    g_frame_delta_ms      = out.delta_ms;
+}
 
 static void engine_tick_phase_step(void)
 {
@@ -296,11 +327,12 @@ void engine_tick(void)
 
     /* Pre-tick block — retail does (in order): FUN_004b0aaa input
      * poll, FUN_00499a1c music (only when ingame), FUN_00498458,
-     * FUN_004b20ed, FUN_004bbc80 (← ported), FUN_00481b9a,
+     * FUN_004b20ed (← ported), FUN_004bbc80 (← ported), FUN_00481b9a,
      * FUN_00482111, FUN_004782c5, FUN_00451f1a.  Order between
-     * these doesn't matter for behavior (each is independent state
-     * update) so we land them as they come; FUN_004bbc80 first
-     * since it's pure timing. */
+     * the pure timing slices doesn't matter for behavior (each is
+     * independent state update); we keep them in retail order so
+     * future bisection against retail traces stays apples-to-apples. */
+    engine_tick_delta_step();
     engine_tick_phase_step();
     /* TODO(sim): remaining pre-tick subfunctions. */
 

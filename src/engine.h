@@ -190,4 +190,29 @@ typedef struct {
 void engine_compute_phase_ticks(const engine_phase_in_t *in,
                                 engine_phase_out_t *out);
 
+/* ─── frame delta (port of FUN_004b20ed) ───────────────────────────
+ *
+ * Wall-clock delta-ms generator with a 30 ms low-pass: deltas below
+ * 0x1e (including negatives from clock wrap or future-seeded
+ * baselines — the gate is signed) report as 0 and hold the
+ * baseline; otherwise advance the baseline and report the delta.
+ * Downstream sprite-animation updaters consume the result.
+ *
+ * Pure function — every input explicit, every state mutation in
+ * out.  See engine_delta.c for the per-field commentary and retail
+ * cross-references.
+ */
+typedef struct {
+    uint32_t now_ms;          /* timeGetTime() at call site */
+    uint32_t last_frame_ms;   /* timestamp of last accepted frame */
+} engine_delta_in_t;
+
+typedef struct {
+    int      delta_ms;            /* 0 if suppressed, else ms since last */
+    uint32_t new_last_frame_ms;   /* baseline writeback (advanced or held) */
+} engine_delta_out_t;
+
+void engine_compute_frame_delta(const engine_delta_in_t *in,
+                                engine_delta_out_t *out);
+
 #endif /* OPENLORDS2_ENGINE_H */

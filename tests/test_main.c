@@ -109,6 +109,15 @@ struct test_case {
     X(engine_phase_1040ms_off_by_one) \
     X(engine_phase_no_fire_no_state_change) \
     X(engine_phase_default_clears_all_flags) \
+    \
+    X(engine_delta_below_threshold_holds_baseline) \
+    X(engine_delta_at_threshold_advances_baseline) \
+    X(engine_delta_just_below_threshold_holds) \
+    X(engine_delta_large_delta_advances) \
+    X(engine_delta_zero_delta_holds) \
+    X(engine_delta_negative_delta_clock_wrap_holds) \
+    X(engine_delta_overflow_wrap_then_advance) \
+    X(engine_delta_baseline_zero_first_call_advances) \
     /* end */
 
 /* Emit extern decls. */

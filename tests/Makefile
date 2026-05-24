@@ -25,12 +25,14 @@ LDFLAGS := $(SAN)
 # (e.g. localization-blob decoder, sprite-format reader), add them
 # here.
 SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c \
-                   ../src/engine_rate.c ../src/engine_phase.c
+                   ../src/engine_rate.c ../src/engine_phase.c \
+                   ../src/engine_delta.c
 
 # Test files — each defines one or more `int test_<name>(void)`
 # functions registered in test_main.c.
 SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
-                   test_engine_rate.c test_engine_phase.c
+                   test_engine_rate.c test_engine_phase.c \
+                   test_engine_delta.c
 
 OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o)) \
                             $(SRCS_TESTS:.c=.o))
