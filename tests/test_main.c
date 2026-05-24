@@ -71,6 +71,31 @@ struct test_case {
     X(config_parse_fast_machine_threshold_cpu_alone_insufficient) \
     X(config_parse_missing_key_keeps_existing) \
     X(config_parse_real_sierra_ini_shape) \
+    \
+    X(engine_rate_gate_zero_returns_zero) \
+    X(engine_rate_autosave_window_active_returns_zero_no_change) \
+    X(engine_rate_autosave_window_boundary_4999ms_still_blocks) \
+    X(engine_rate_autosave_window_boundary_5000ms_expires) \
+    X(engine_rate_autosave_expiry_in_mp_fires_notification) \
+    X(engine_rate_scenario_hint_zero_returns_zero) \
+    X(engine_rate_fast_skip_warmup_returns_one) \
+    X(engine_rate_fast_skip_cruise_returns_two) \
+    X(engine_rate_hint_clamped_to_0x8c) \
+    X(engine_rate_lut_zero_blocks_step) \
+    X(engine_rate_pause_lock_blocks_step) \
+    X(engine_rate_screen_freeze_2_blocks_sp) \
+    X(engine_rate_screen_freeze_2_passes_mp) \
+    X(engine_rate_screen_freeze_1_blocks_both) \
+    X(engine_rate_extended_pause_sp_blocks) \
+    X(engine_rate_extended_pause_mp_skip_flag_blocks) \
+    X(engine_rate_extended_pause_mp_no_skip_proceeds) \
+    X(engine_rate_slider_max_slow_blocks) \
+    X(engine_rate_slider_threshold_just_below_blocks) \
+    X(engine_rate_slider_threshold_at_passes) \
+    X(engine_rate_mp_max_speed_uncapped) \
+    X(engine_rate_phase_wraps_at_0xa0) \
+    X(engine_rate_phase_no_wrap_at_0x9e) \
+    X(engine_rate_time_overflow_local_8_clamps_to_10000) \
     /* end */
 
 /* Emit extern decls. */

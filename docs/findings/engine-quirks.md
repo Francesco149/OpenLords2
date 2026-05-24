@@ -124,6 +124,54 @@ ones that now do the safer thing instead of the lucky thing.
 
 ---
 
+## 3. The sim-rate LUT is read ~500 bytes past its allocated end
+
+`FUN_004bb978` (sim sub-step rate controller) consults a flat byte
+table at `DAT_004e3260` to decide whether to allow a sim step in the
+current "0.1× hint × phase column" bucket.  The lookup is:
+
+```c
+if ((&DAT_004e3260)[DAT_004d2164 + ((int)local_14 / 10) * 0xa0] == '\0') {
+    local_10 = 0;
+}
+```
+
+`DAT_004d2164` (the phase counter) is `0..0x9f`.  `local_14` is the
+clamped scenario hint, `0..0x8c` (140).  So `local_14 / 10` ranges
+`0..14`, and the index is up to `0x9f + 14*0xa0 = 0x8df`.
+
+The table is documented (in the binary's only debug-style symbol
+density nearby) as having 11 rows × `0xa0` bytes = `0x6e0` bytes
+(1760 B).  The actual max index reached is `0x8df` — **480 bytes
+past the documented end**.  Same shape as the .ini parser's OOB:
+adjacent .data is readable, the bytes that land there happen to be
+benign (zero or harmless), the engine never knows.
+
+This is reachable in retail when the scenario hint exceeds 110 ms
+per sim sub-step.  `FUN_0043de70`'s rate selector produces values up
+to `0x8c` for "Renaissance" scenarios, so the OOB rows 11..14 are
+exercised on the actual shipped maps — they just happen to read
+into adjacent .data that's all zero (or non-zero but coincidentally
+"step allowed", which is the safer-of-the-two failure mode).
+
+Our port (`src/engine_rate.c`) takes the LUT as a pointer, so we
+have to extract the real bytes from retail's `.data` and decide
+whether to allocate 0x6e0 or 0x8e0 (or beyond).  Today we pass
+`NULL` (treats as all-zeros) — the LUT path is never reached
+because `engine_scenario_rate_hint()` returns 0 until the engine
+reaches ingame state, which our drop-in can't do yet.  The
+extraction lands when the consumer subsystems land.
+
+The test suite uses a privately-allocated LUT to exercise the
+function past this boundary (`tests/test_engine_rate.c`
+`test_engine_rate_hint_clamped_to_0x8c`).
+
+> 📍 `src/engine_rate.c` (`engine_compute_sim_sub_steps`),
+> `tests/test_engine_rate.c`, `docs/findings/main-loop-tick.md`
+> §"FUN_004bb978", Ghidra `FUN_004bb978`.
+
+---
+
 <!--
 Template for new entries:
 

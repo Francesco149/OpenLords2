@@ -7,6 +7,132 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Sim sub-step rate controller (FUN_004bb978)
+
+Ported the variable-rate sim sub-step gate as a pure function +
+Win32 wrapper, plus 24 unit tests covering every branch.  Closes
+the second item from the previous entry's "What's next" (the
+sub-step gate variant), and reshapes `engine_tick` into retail's
+true skeleton: pre-tick block → variable-rate sub-step loop →
+render phase tail.  Today the loop runs 0 sub-steps every iteration
+(scenario hint == 0 because engine state isn't ingame yet), so
+runtime behaviour is unchanged — but the structural seam is in
+place, and each subsystem port will now slot directly into the
+right phase.
+
+### New + restructured
+
+- **`src/engine_rate.c`** (new TU, pure C, no Win32 deps) —
+  `engine_compute_sim_sub_steps(in, out)` is the port of retail
+  `FUN_004bb978 @ 0x4bb978`.  Takes a full input struct (now_ms,
+  last_step_ms, autosave window, run gate, scenario hint, MP flag,
+  master sim tick, game speed, pause lock, per-screen freeze,
+  extended pause, MP skip flag, phase counter, LUT pointer) and
+  returns a deltas-only output struct (sub_steps + writebacks +
+  notification flag).  Pure means the test harness compiles it
+  under host gcc + ASan/UBSan without any stubs.
+- **`src/engine.c`** — added file-static mirrors for the 12 retail
+  globals the controller reads/writes (`g_sim_last_step_ms`,
+  `g_sim_autosave_start_ms`, `g_sim_tick_counter`,
+  `g_sim_mp_active`, `g_sim_game_speed`, `g_sim_pause_lock`,
+  `g_sim_current_screen`, `g_sim_screen_freeze_table[256]`,
+  `g_sim_extended_pause`, `g_sim_mp_skip_table[256]`,
+  `g_sim_mp_player_index`, `g_sim_phase`, `g_sim_derived_hint`).
+  All file-static — no exposure in `engine.h` until something
+  outside engine.c needs to read them.
+- **`engine_run_gate`** (file-static, port of retail
+  `FUN_004bb8c0`) — returns 1.  That's what retail does too;
+  literally `return 1` in the decomp.  Probably a debug-build
+  toggle optimised out at ship.
+- **`engine_scenario_rate_hint`** (file-static, port of retail
+  `FUN_0043de70` outer arm only) — returns 0 unless
+  `g_engine_state == 3` (ingame).  Today we can't reach ingame, so
+  always 0.  Full 1211-byte body deferred until player-faction
+  data + current-player mirror land.
+- **`engine_tick_rate_step`** (file-static, Win32 wrapper) —
+  reads `timeGetTime()`, bundles into the input struct, calls
+  the pure function, writes deltas back.  Returns sub-step count.
+- **`engine_tick`** restructured — now: bump frame counter →
+  `[TODO: pre-tick block]` → `for (i in 0..sub_steps) { [TODO:
+  sub-step body] }` → `[TODO: render phase]` → `gfx_tick_present(0)`.
+  Today the loop never iterates (sub_steps always 0) so observable
+  behaviour is identical, but the loop is in place for when sub-step
+  body slices land.
+
+### Tests landed (24, all under ASan + UBSan)
+
+- gate=0 → 0 sub-steps, no state change.
+- Autosave window active (< 5000 ms since start) → 0, no change.
+- Autosave window boundary cases: 4999 ms blocks, 5000 ms expires.
+- Autosave expiry in MP fires the notification flag.
+- Scenario hint == 0 → 0 sub-steps.
+- Fast-skip warm-up (negative hint, sim_tick < 100) → 1 sub-step.
+- Fast-skip cruise (negative hint, sim_tick ≥ 100) → 2 sub-steps.
+- Hint > 0x8c → clamped to 0x8c (also verifies the LUT OOB —
+  the lookup index for hint=0x8c reaches 0x8c1, which is 480 B
+  past the documented LUT end).
+- LUT byte == 0 → 0 sub-steps.
+- Pause lock → 0 sub-steps; phase + derived_hint still mutated.
+- Screen freeze 2 blocks SP, passes MP.
+- Screen freeze 1 (or any non-2 non-0) blocks both.
+- Extended pause blocks SP; in MP, blocks if mp_skip_flag set,
+  passes otherwise (MP at max speed → 1 sub-step, no advance).
+- Slider max-slow (game_speed=0 → iVar3=10) blocks.
+- Slider rate-gate boundary: 51 ms < threshold 52 ms → 0, 52 ms
+  >= 52 → 1 sub-step + last_step_ms advances to now.
+- MP at max speed (iVar3=0, mp_active=1) → 1 sub-step, no
+  advance (uncapped).
+- Phase counter wrap: 0x9f → 0 (next call), 0x9e → 0x9f.
+- Time overflow sentinel: now < last_step → local_8 clamped to
+  10000 → step accepted at any threshold.
+
+### LUT OOB engine quirk
+
+[`docs/findings/engine-quirks.md`](findings/engine-quirks.md) entry
+#3 covers the LUT (`DAT_004e3260`) read past its documented
+0x6e0-byte end — by up to 0x1ff bytes when scenario hint
+reaches the `0x8c` clamp.  Same shape as the .ini parser's OOB: it
+works in retail because adjacent .data is benign.  Our port takes
+the LUT as a pointer; tests allocate a fresh buffer large enough
+to cover the actual indices reached.  The drop-in passes `NULL`
+(no LUT) since today the function returns 0 before reaching the
+LUT branch.
+
+### Verified
+
+- `make -C tests run` — 56/56 pass under ASan + UBSan (was 32/32;
+  +24 engine-rate tests).
+- `make -C src` — both .exe targets clean, no warnings.
+- `tools/run-openlords2.sh --frames 50` — transcript identical to
+  pre-slice (no scenario hint produced → 0 sub-steps every iter →
+  the new loop is a no-op).
+- `tools/run-openlords2.sh --frames 50 --gfx-init` — full DDraw
+  bring-up + present loop transcript identical to pre-slice.
+
+### What's next
+
+The pre-tick / sub-step-body / render-phase slots in `engine_tick`
+are all open.  Per the top-down-RE memory, the right next slice is
+the smallest one that unblocks the entry chain:
+
+1. **Pre-tick block subfunctions** — `FUN_004b0aaa` (input poll),
+   `FUN_00498458`, `FUN_004b20ed`, `FUN_004bbc80`, `FUN_00481b9a`,
+   `FUN_00482111`, `FUN_004782c5`, `FUN_00451f1a`.  Most are
+   unknown body — needs survey before commit-to-port.
+2. **`FUN_004bbc80`** (465 B) — already decoded inline in
+   `main-loop-tick.md`: it's a wall-clock-driven phase counter
+   bank (mod-2/4/8/12/16/24 schedulers).  Pure timing, no
+   subsystem deps — would slot in clean.  Probably the right next
+   pre-tick port.
+3. **LUT extraction** — pull `DAT_004e3260` bytes from retail's
+   `.data` once a scenario consumer makes it worthwhile.  Today
+   no consumer.
+4. **First real drawing primitive** — sprite-blit helper.  Still
+   the most user-visible next step independent of the per-tick
+   chain.
+
+---
+
 ## 2026-05-24 — Engine tick guard + dispatcher (FUN_0040e8bb + FUN_0040e890)
 
 Ported the two small wrappers that bracket retail's per-tick driver

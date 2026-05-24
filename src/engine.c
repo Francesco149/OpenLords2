@@ -17,6 +17,8 @@
 
 #include "gfx.h"
 
+#include <mmsystem.h>     /* timeGetTime — gfx.h transitively pulled in
+                           * windows.h, but not mmsystem.h */
 #include <stdint.h>
 
 int g_engine_state;
@@ -29,6 +31,91 @@ int g_savepump_request;
  * uses it as a "frames since boot" cookie across save metadata and
  * the dev profiler. */
 static uint32_t g_engine_frame_counter;
+
+/* ─── Sim rate-controller mirrors (retail FUN_004bb978 state) ──────
+ *
+ * Each is a file-static mirror of the retail global the rate
+ * controller reads/writes.  See engine_rate.c for the per-global
+ * commentary; here we only hold the state.  None are exposed in
+ * engine.h yet — no consumer outside engine_tick_rate_step. */
+
+/* Last accepted sim-step timestamp (ms).  retail _DAT_004e5b0c. */
+static uint32_t g_sim_last_step_ms;
+/* Autosave-window start (ms, 0 = no window).  retail DAT_0056d8b4.
+ * No producer in our drop-in yet — the autosave subsystem sets it
+ * when it begins; the rate controller clears it 5000 ms later. */
+static uint32_t g_sim_autosave_start_ms;
+/* Master sim tick counter.  retail DAT_0057c998.  Bumped once per
+ * sim sub-step body — today nothing produces sub-steps, so it stays
+ * 0. */
+static uint32_t g_sim_tick_counter;
+/* Multiplayer-session active flag.  retail DAT_00553030.  SP only
+ * today, so always 0. */
+static int g_sim_mp_active;
+/* Game-speed slider (0..100, retail _DAT_0053f230).  Default 100
+ * (max speed) until the UI slider lands. */
+static int g_sim_game_speed = 100;
+/* Pause lock — non-zero freezes the sim.  retail DAT_0053f238.
+ * Today no UI sets it, so always 0. */
+static int g_sim_pause_lock;
+/* Current screen ID.  retail DAT_004eac50 — single byte indexing the
+ * per-screen tables.  Today nothing transitions screens, so 0. */
+static uint8_t g_sim_current_screen;
+/* Per-screen freeze table.  retail DAT_004e31b0[].  All zeros today;
+ * the real bytes need extraction from retail's .data.  TODO. */
+static uint8_t g_sim_screen_freeze_table[256];
+/* Extended-pause flag (modal dialog etc.).  retail DAT_0053e910.
+ * Today no producer. */
+static int g_sim_extended_pause;
+/* MP player skip table.  retail DAT_004e3240[], indexed by
+ * DAT_005440a4.  Bytes + producers TODO. */
+static uint8_t g_sim_mp_skip_table[256];
+static uint8_t g_sim_mp_player_index;
+/* Phase counter — advances each rate-step call that gets past the
+ * scenario_hint == 0 gate.  retail DAT_004d2164.  Wraps at 0xa0. */
+static int g_sim_phase;
+/* Derived hint mirror.  retail DAT_004d215c.  Written by the rate
+ * controller, no documented consumer in retail either — kept for
+ * parity. */
+static int g_sim_derived_hint;
+
+/* Stubs of the two helpers retail FUN_004bb978 calls inline.  Both
+ * are placeholders for full ports; see findings doc for what they
+ * really do.
+ *
+ *   FUN_004bb8c0 — 84 B, `return 1` in retail.  Truly a stub upstream
+ *                  too; possibly a debug-build pause toggle that
+ *                  shipped optimised out.
+ *
+ *   FUN_0043de70 — 1211 B, scenario-rate selector.  Returns 0 unless
+ *                  the engine is in ingame state (DAT_0052af94 == 3).
+ *                  Our g_engine_state is hardcoded to 0 today, so
+ *                  the function effectively returns 0 → the rate
+ *                  controller returns 0 sub-steps → no sim runs.
+ *                  Full port lands when player-faction data
+ *                  (DAT_0057bf04) + current-player mirror
+ *                  (DAT_0057c8cc) are available. */
+static int engine_run_gate(void)
+{
+    /* Port of FUN_004bb8c0. */
+    return 1;
+}
+
+static int engine_scenario_rate_hint(void)
+{
+    /* Port of FUN_0043de70 — outermost branch only.  All inner
+     * branches are guarded on DAT_0052af94 == 3 (ingame), which we
+     * can't reach yet, so they're elided.  When ingame state
+     * becomes producible, the full selector lands here. */
+    if (g_engine_state == 3) {
+        /* TODO(sim): full FUN_0043de70 body — selects ms-per-step
+         * from the scenario's per-player tick budget + the current
+         * sub-state.  Returns negative for fast-skip mode. */
+        return 1;   /* harmless default — real selector returns a
+                     * scenario-derived value */
+    }
+    return 0;
+}
 
 /* TODO(savepump): retail's save/load pump.
  *
@@ -52,6 +139,57 @@ static void savepump_step(int is_mp) { (void)is_mp; }
 /* MP equivalent (port of FUN_0049792e) lands with the multiplayer
  * slice; until then engine_tick_guard never takes the MP branch. */
 
+/* Win32 wrapper around engine_compute_sim_sub_steps — bundles the
+ * file-static mirrors into an input struct, runs the pure function,
+ * writes the deltas back, fires the autosave-done notification if
+ * needed.  Returns the sub-step count.
+ *
+ * No-op for everything but the frame-counter + timeGetTime side
+ * effects today: scenario_hint == 0 (engine state != 3) makes the
+ * function return 0 every call.  When the sim lands and ingame state
+ * becomes reachable, sub_steps will start producing 1 or 2 each
+ * iteration on a slider-and-LUT-driven cadence. */
+static int engine_tick_rate_step(void)
+{
+    engine_rate_in_t  in  = {0};
+    engine_rate_out_t out = {0};
+
+    in.now_ms             = timeGetTime();
+    in.last_step_ms       = g_sim_last_step_ms;
+    in.autosave_start_ms  = g_sim_autosave_start_ms;
+    in.run_gate           = engine_run_gate();
+    in.scenario_hint      = engine_scenario_rate_hint();
+    in.mp_active          = g_sim_mp_active;
+    in.sim_tick_counter   = g_sim_tick_counter;
+    in.game_speed         = g_sim_game_speed;
+    in.pause_lock         = g_sim_pause_lock;
+    in.screen_freeze      = g_sim_screen_freeze_table[g_sim_current_screen];
+    in.extended_pause     = g_sim_extended_pause;
+    in.mp_skip_flag       = g_sim_mp_skip_table[g_sim_mp_player_index];
+    in.phase              = g_sim_phase;
+    in.rate_lut           = NULL;       /* TODO: extract DAT_004e3260 bytes from
+                                         * retail.  NULL → treat as all-zeros,
+                                         * which forces 0 sub-steps via the
+                                         * LUT==0 branch.  Today the function
+                                         * returns 0 before reaching the LUT
+                                         * anyway (scenario_hint == 0). */
+
+    engine_compute_sim_sub_steps(&in, &out);
+
+    g_sim_last_step_ms        = out.new_last_step_ms;
+    g_sim_autosave_start_ms   = out.new_autosave_start_ms;
+    g_sim_phase               = out.new_phase;
+    g_sim_derived_hint        = out.derived_hint;
+    if (out.notify_autosave_done) {
+        /* TODO(mp): port FUN_0043eda0(0xf, 0) — the MP "autosave
+         * complete" broadcast.  Today MP isn't wired, so the flag
+         * never fires (g_sim_mp_active == 0 short-circuits the
+         * notification path inside the pure function too). */
+    }
+
+    return out.sub_steps;
+}
+
 void engine_tick(void)
 {
     /* Scaffold of retail FUN_004b99c0 @ 0x4b99c0.  The retail body
@@ -60,12 +198,47 @@ void engine_tick(void)
      * slice; see docs/findings/main-loop-tick.md for the per-
      * subfunction breakdown.
      *
-     * Today we do only the two things that have no subsystem
-     * dependencies:
+     * Today's scaffold has the structural skeleton in place:
      *   1. Bump the wall-clock frame counter (retail _DAT_005bb4c8).
-     *   2. Call the rate-gated present (retail FUN_00452160(0)). */
+     *   2. Pre-tick block — TODO (all retail subfunctions still
+     *      unported: FUN_004b0aaa input poll, FUN_00499a1c music,
+     *      FUN_00498458 unknown, FUN_004b20ed unknown, …).
+     *   3. Variable-rate sim sub-step loop — driven by
+     *      engine_tick_rate_step.  Currently produces 0 sub-steps
+     *      because scenario_hint is hardcoded to "engine state != 3
+     *      → 0", so the loop body never executes.
+     *   4. Render phase — TODO (all retail subfunctions unported).
+     *   5. Rate-gated present (retail FUN_00452160(0)) — runs once
+     *      per call regardless of sub-step count. */
 
     g_engine_frame_counter++;
+
+    /* TODO(sim): pre-tick block (FUN_004b0aaa, FUN_00499a1c if
+     * ingame, FUN_00498458, FUN_004b20ed, FUN_004bbc80, FUN_00481b9a,
+     * FUN_00482111, FUN_004782c5, FUN_00451f1a). */
+
+    int sub_steps = engine_tick_rate_step();
+    for (int i = 0; i < sub_steps; i++) {
+        /* TODO(sim): sub-step body.  Retail does:
+         *   DAT_0057c998++;                          // master tick
+         *   ... 1000/0x82/10-tick scheduled events ...
+         *   FUN_004472ce(DAT_0057c998);              // advance sim
+         *   if (SP) FUN_00404a46();                  // SP-only step
+         *   if (g_engine_state == 10) break;         // saving
+         *   if (g_engine_state == 0xb) return;       // loading
+         *   ... screen-state-specific extra updates ...
+         *
+         * Until any of that lands, sub-step body is a no-op.  But
+         * the loop is in place so when the sim does land, only the
+         * body needs to fill in. */
+        (void)i;
+    }
+
+    /* TODO(render): render-phase tail.  Retail dispatches ~30
+     * subsystem renders here based on g_current_screen, then the
+     * FPS counter / map redraw / finalisers (gated on
+     * g_savepump_request == 0).  Until those land, the rate-gated
+     * present is the only thing that paints. */
 
     gfx_tick_present(0);
 }

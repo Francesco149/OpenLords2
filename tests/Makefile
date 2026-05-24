@@ -24,11 +24,11 @@ LDFLAGS := $(SAN)
 # Pure-C source under test.  As more portable modules land
 # (e.g. localization-blob decoder, sprite-format reader), add them
 # here.
-SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c
+SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c ../src/engine_rate.c
 
 # Test files — each defines one or more `int test_<name>(void)`
 # functions registered in test_main.c.
-SRCS_TESTS      := test_main.c test_strutil.c test_config.c
+SRCS_TESTS      := test_main.c test_strutil.c test_config.c test_engine_rate.c
 
 OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o)) \
                             $(SRCS_TESTS:.c=.o))
