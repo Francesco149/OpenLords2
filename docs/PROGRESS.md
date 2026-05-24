@@ -7,6 +7,64 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — gfx_present + back-buffer fill
+
+Added the per-frame back→primary present primitive and a simple
+back-buffer fill so the existing palette load becomes visually
+verifiable on the next manual run.
+
+### Scope landed
+
+- **`gfx_present()`** in `src/gfx.c` — port of the inner Blt /
+  BltFast from retail's `FUN_00452160 @ 0x452160` (the
+  "present" function).  Windowed: `primary->Blt(client_rect,
+  back, NULL, DDBLT_WAIT, NULL)`.  Fullscreen:
+  `primary->BltFast(0, 0, back, (0,0,640,480), DDBLTFAST_WAIT)`.
+  Client rect is re-queried each call via
+  `GetClientRect`+`ClientToScreen` so WM_MOVE/WM_SIZE don't need
+  to push state into gfx.c yet (cheap query, no per-frame
+  syscall hot path concern at this stage).
+- **`gfx_fill_back_index(uint8_t)`** — 8-bit COLORFILL of the
+  back buffer with a palette index.  For 8bpp DDraw surfaces,
+  `DDBLTFX.dwFillColor` IS the palette index in the low byte —
+  no RGB lookup needed.
+- `gfx_init` primes the back buffer with index 1 at startup, so
+  the next frame's present makes the visible window
+  `base01.256[1]`'s colour (and stays black if no palette
+  loaded — entry 0 is forced black).
+- Main loop calls `gfx_present()` once per
+  iteration when `--gfx-init` is active.  No rate limiter yet —
+  retail's `FUN_00452160` gates on a 50-tick counter
+  (`DAT_004eabe8`) and a dirty-rect tracker
+  (`DAT_0050d09c`/`DAT_0050a4bc..c8`); both are deferred until
+  the render driver lands.
+
+### Verification
+
+- Baseline smoke clean (50 frames).
+- `--gfx-init` smoke clean (50 frames, present runs each frame
+  against the hidden window, no errors).
+- **Manual visual verification needed** on the next
+  game-dir run: `--gfx-init --show-window` should display a
+  solid colour (palette index 1 from `base01.256`) instead of
+  black for the duration of the run.  If the window stays
+  black, either the palette didn't load or the present isn't
+  reaching the visible surface.
+
+### What's next
+
+Same as before plus:
+
+1. **DSound bring-up** — port `FUN_00425b10` once human
+   confirms gfx_present is visible.
+2. **Render rate-limiter + dirty-rect tracker** — port
+   `FUN_00452306` (dirty-rect accumulator) + the gating logic
+   in `FUN_00452160` so we mirror retail's actual present
+   cadence.  Right now we present every frame unconditionally.
+3. **Surface-restore wire-up** still pending.
+
+---
+
 ## 2026-05-24 — DDraw palette load (+ `src/io.c`)
 
 DDraw bring-up confirmed visually on Windows by the user (`--gfx-init

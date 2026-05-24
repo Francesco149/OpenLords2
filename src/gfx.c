@@ -145,6 +145,14 @@ int gfx_init(HWND hwnd, int fullscreen)
                  "retail's data files)");
     }
 
+    /* Bring-up test pattern — fill the back buffer with palette
+     * index 1 so the next gfx_present makes the visible window
+     * the colour of base01.256[1] (and stays black if no palette
+     * was loaded — entry-0 boundary is forced black).  This is the
+     * cheapest sanity test that the present pipeline + palette
+     * upload are end-to-end correct. */
+    gfx_fill_back_index(1);
+
     log_line("OK :GFX DirectDraw enabled.");
     return 1;
 }
@@ -446,4 +454,43 @@ static int blt_color_fill(LPDIRECTDRAWSURFACE surf, DWORD color, LPRECT dst)
         return 0;
     }
     return 1;
+}
+
+/* ---------------------------------------------------------------- *
+ *  Present + back-buffer fill — ports of the inner Blt /            *
+ *  COLORFILL primitives the engine's render-tail (FUN_00452160)    *
+ *  uses each frame.                                                  *
+ * ---------------------------------------------------------------- */
+
+void gfx_fill_back_index(uint8_t palette_index)
+{
+    if (!g_back) return;
+    /* For 8-bit DDraw surfaces, DDBLTFX.dwFillColor IS the
+     * palette index (low 8 bits).  No need to look up the RGB. */
+    (void)blt_color_fill(g_back, palette_index, NULL);
+}
+
+void gfx_present(void)
+{
+    if (!g_primary || !g_back) return;
+
+    if (g_fullscreen) {
+        /* Fullscreen — primary IS the screen at 640×480.  BltFast
+         * the whole back buffer to (0,0). */
+        RECT src = { 0, 0, GFX_RENDER_W, GFX_RENDER_H };
+        IDirectDrawSurface_BltFast(g_primary, 0, 0, g_back,
+                                   &src, DDBLTFAST_WAIT);
+    } else {
+        /* Windowed — primary is the desktop; we need to land the
+         * back buffer at our window's client-area position on the
+         * desktop.  Re-query each call (cheap) so we don't go
+         * stale across WM_MOVE / WM_SIZE.  Clipper handles
+         * off-screen trimming. */
+        RECT client;
+        GetClientRect(g_hwnd, &client);
+        ClientToScreen(g_hwnd, (LPPOINT)&client.left);
+        ClientToScreen(g_hwnd, (LPPOINT)&client.right);
+        IDirectDrawSurface_Blt(g_primary, &client, g_back, NULL,
+                               DDBLT_WAIT, NULL);
+    }
 }

@@ -26,6 +26,7 @@
 #ifndef OPENLORDS2_GFX_H
 #define OPENLORDS2_GFX_H
 
+#include <stdint.h>
 #include <windows.h>
 
 /* Render dimensions — retail's DAT_004eb274 / DAT_004eac4c.  Constants
@@ -55,5 +56,18 @@ void gfx_shutdown(void);
  * mismatch, CreatePalette, SetPalette).  Called by gfx_init with
  * "base01.256" — additional palette swaps land via direct call. */
 int  gfx_load_palette(const char *path);
+
+/* Present the back buffer to the primary surface.  In windowed
+ * mode the back is Blt'd into the on-screen client rectangle (the
+ * clipper trims).  In fullscreen mode the back is BltFast'd to
+ * primary at (0,0).  Port of the inner present from retail's
+ * `FUN_00452160 @ 0x452160`. */
+void gfx_present(void);
+
+/* 8-bit color-fill the back buffer with a palette index.  Useful
+ * for bring-up smoke tests — fills with a non-black index so the
+ * present can be visually distinguished from "no palette loaded /
+ * stuck on entry 0". */
+void gfx_fill_back_index(uint8_t palette_index);
 
 #endif /* OPENLORDS2_GFX_H */

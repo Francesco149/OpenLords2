@@ -559,6 +559,11 @@ static void main_loop_body(void)
         TranslateMessage(&msg);
         DispatchMessageA(&msg);
     }
+    /* Per-frame present — mirror of the inner Blt of retail's
+     * FUN_00452160.  No rate-limiter yet (retail gates on a 50-tick
+     * counter), no Smacker handoff yet.  Once those land, this
+     * call moves into a fuller render-driver port. */
+    if (g_gfx_active) gfx_present();
 }
 
 static void frame_limiter(void)
