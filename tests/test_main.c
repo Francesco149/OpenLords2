@@ -96,6 +96,19 @@ struct test_case {
     X(engine_rate_phase_wraps_at_0xa0) \
     X(engine_rate_phase_no_wrap_at_0x9e) \
     X(engine_rate_time_overflow_local_8_clamps_to_10000) \
+    \
+    X(engine_phase_no_time_passed_fires_nothing) \
+    X(engine_phase_19ms_below_threshold) \
+    X(engine_phase_20ms_fires_base_tick) \
+    X(engine_phase_negative_delta_clock_wrap_fires_base) \
+    X(engine_phase_base_counter_3_no_80ms) \
+    X(engine_phase_base_counter_2_yields_3_no_80ms) \
+    X(engine_phase_no_20ms_means_no_80ms_even_with_full_counter) \
+    X(engine_phase_counter_2_rollover_at_2nd) \
+    X(engine_phase_all_long_cycles_at_max_rollover) \
+    X(engine_phase_1040ms_off_by_one) \
+    X(engine_phase_no_fire_no_state_change) \
+    X(engine_phase_default_clears_all_flags) \
     /* end */
 
 /* Emit extern decls. */

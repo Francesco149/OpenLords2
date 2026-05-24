@@ -136,4 +136,58 @@ typedef struct {
 void engine_compute_sim_sub_steps(const engine_rate_in_t *in,
                                   engine_rate_out_t *out);
 
+/* ─── animation phase ticks (port of FUN_004bbc80) ─────────────────
+ *
+ * Maintains 9 "did event X fire this call" flags driven by
+ * `timeGetTime`: a base 20 ms tick + 8 mod-N rollover flags gated
+ * off it.  Downstream sprite/UI updaters consume the flags once per
+ * frame to drive animation cadence.
+ *
+ * Pure function — every input explicit, every state mutation in
+ * out.  See engine_phase.c for the per-flag commentary and retail
+ * cross-references.
+ */
+typedef struct {
+    uint32_t now_ms;             /* timeGetTime() at call site */
+    uint32_t last_base_tick_ms;  /* timestamp of last accepted base tick */
+    uint32_t base_tick_counter;  /* counts 20 ms ticks 0..3 toward the
+                                  * 80 ms rollover */
+    uint32_t counter_2;          /* 80 ms tick × 2  → 160 ms */
+    uint32_t counter_4;          /* 80 ms tick × 4  → 320 ms */
+    uint32_t counter_8;          /* 80 ms tick × 8  → 640 ms */
+    uint32_t counter_13;         /* 80 ms tick × 13 → 1040 ms */
+    uint32_t counter_16;         /* 80 ms tick × 16 → 1280 ms */
+    uint32_t counter_24;         /* 80 ms tick × 24 → 1920 ms */
+    uint32_t counter_32;         /* 80 ms tick × 32 → 2560 ms */
+} engine_phase_in_t;
+
+typedef struct {
+    /* Did-fire flags (0 or 1).  Eight are non-sticky in retail (the
+     * wrapper clears each on every call before reading the new
+     * value); the 1040 ms flag is sticky (consumers clear it
+     * themselves). */
+    int tick_20ms;
+    int tick_80ms;
+    int tick_160ms;
+    int tick_320ms;
+    int tick_640ms;
+    int tick_1040ms;
+    int tick_1280ms;
+    int tick_1920ms;
+    int tick_2560ms;
+    /* Writebacks. */
+    uint32_t new_last_base_tick_ms;
+    uint32_t new_base_tick_counter;
+    uint32_t new_counter_2;
+    uint32_t new_counter_4;
+    uint32_t new_counter_8;
+    uint32_t new_counter_13;
+    uint32_t new_counter_16;
+    uint32_t new_counter_24;
+    uint32_t new_counter_32;
+} engine_phase_out_t;
+
+void engine_compute_phase_ticks(const engine_phase_in_t *in,
+                                engine_phase_out_t *out);
+
 #endif /* OPENLORDS2_ENGINE_H */

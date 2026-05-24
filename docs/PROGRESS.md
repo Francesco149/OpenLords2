@@ -7,6 +7,78 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Animation-phase tick generator (FUN_004bbc80)
+
+Ported the 9-flag animation-cadence generator that retail invokes
+in the pre-tick block.  Wires into `engine_tick`'s newly-created
+pre-tick slot.  Same shape as the rate-controller slice that
+landed just before: pure function in its own TU + Win32 wrapper in
+engine.c + file-static globals + unit tests.
+
+### Ports
+
+- **`src/engine_phase.c`** (new TU, pure C, no Win32 deps) —
+  `engine_compute_phase_ticks(in, out)` is the port of retail
+  `FUN_004bbc80 @ 0x4bbc80` (465 B).  Maintains 9 "did event X
+  fire" flags driven by `timeGetTime`: a base 20 ms tick + 8
+  mod-N rollover flags (80 ms / 160 / 320 / 640 / 1040 / 1280 /
+  1920 / 2560).
+- **`src/engine.c`** — file-static mirrors for the 9 retail
+  counters + 9 flags (`g_phase_last_base_tick_ms`,
+  `g_phase_base_tick_counter`, `g_phase_counter_{2,4,8,13,16,24,32}`,
+  `g_phase_tick_{20ms,80ms,160ms,320ms,640ms,1040ms_sticky,1280ms,1920ms,2560ms}`).
+- **`engine_tick_phase_step`** (file-static, Win32 wrapper) —
+  reads `timeGetTime`, bundles into input struct, calls pure
+  function, writes deltas back.  Implements the sticky-vs-fresh
+  semantics for the 1040 ms flag (OR-into-live, no clear)
+  separately from the other 8 (clear-then-overwrite, matching
+  retail's clear-at-entry pattern).
+- **`engine_tick`** — pre-tick slot now invokes
+  `engine_tick_phase_step` before `engine_tick_rate_step`.
+
+### Tests landed (12, all under ASan + UBSan)
+
+- No time passed → no flags fire.
+- 19 ms (below threshold) → no flags fire.
+- 20 ms (at threshold, `0x13 < 20`) → base fires, counter bumps.
+- Negative delta (clock wrap / debug-seeded future) → base fires.
+- Base counter 3 → 4 → 80 ms fires + resets.
+- Base counter 2 → 3 → 80 ms does NOT fire (`3 < 3` false).
+- Stale counter case: 20 ms didn't fire but base counter > 3 from
+  a previous frame → 80 ms still fires (catches stuck counters
+  from unconsumed state).
+- counter_2 rollover: 0→1 no fire, 1→2 fires + resets.
+- All long cycles at max — every counter at its threshold fires
+  in one call.
+- 1040 ms off-by-one: counter 0xb → 0xc no fire, 0xc → 0xd fires.
+- No-fire-no-state-change: 10 ms delta + counter_4=2 → counters
+  carry through unchanged.
+- Default clears all flags — pure function overwrites any garbage
+  the caller hands in for the flag outputs.
+
+### Verified
+
+- `make -C tests run` — 68/68 pass under ASan + UBSan (was 56/56;
+  +12 phase tests).
+- `make -C src` — both .exe targets clean, no warnings.
+- `tools/run-openlords2.sh --frames 50` — transcript identical to
+  pre-slice (phase ticks fire but nothing consumes them yet).
+- `tools/run-openlords2.sh --frames 50 --gfx-init` — full DDraw
+  bring-up + present loop transcript identical to pre-slice.
+
+### What's next
+
+- **Remaining pre-tick subfunctions** — `FUN_004b0aaa` (input
+  poll), `FUN_00498458`, `FUN_004b20ed`, `FUN_00481b9a`,
+  `FUN_00482111`, `FUN_004782c5`, `FUN_00451f1a`.  Each needs a
+  brief survey before commit-to-port; some likely depend on
+  subsystems that aren't there yet (input subsystem, sprite
+  manager, etc.).
+- **First sprite-blit primitive** — still the most user-visible
+  outstanding piece.
+
+---
+
 ## 2026-05-24 — Sim sub-step rate controller (FUN_004bb978)
 
 Ported the variable-rate sim sub-step gate as a pure function +

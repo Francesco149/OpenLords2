@@ -79,6 +79,87 @@ static int g_sim_phase;
  * parity. */
 static int g_sim_derived_hint;
 
+/* ─── Animation-phase tick mirrors (FUN_004bbc80 state) ────────────
+ *
+ * One non-sticky flag per "did event X fire this call" cadence
+ * (consumers re-read every frame, wrapper clears before refresh)
+ * + one sticky flag at 1040 ms (consumers clear themselves).  Plus
+ * the eight underlying counters that drive the cadence.
+ *
+ * All zero at boot, which is correct: the first call sees
+ * `delta = now - 0` which is huge, fires the base tick, and from
+ * there the counters spin up naturally. */
+
+static uint32_t g_phase_last_base_tick_ms;     /* _DAT_004e5b10 */
+static uint32_t g_phase_base_tick_counter;     /* DAT_005aeb2c */
+static uint32_t g_phase_counter_2;             /* DAT_0058feb4 */
+static uint32_t g_phase_counter_4;             /* DAT_0058feb0 */
+static uint32_t g_phase_counter_8;             /* DAT_0058feb8 */
+static uint32_t g_phase_counter_13;            /* DAT_005aea54 */
+static uint32_t g_phase_counter_16;            /* DAT_005aea44 */
+static uint32_t g_phase_counter_24;            /* DAT_005aea48 */
+static uint32_t g_phase_counter_32;            /* DAT_005aea4c */
+
+/* Live flags — each frame's animation consumers read these.  The
+ * eight non-sticky flags are cleared inside the wrapper before the
+ * pure function runs (matching retail's clear-at-entry); the sticky
+ * one is OR-in only. */
+static int g_phase_tick_20ms;                  /* DAT_0058fcb0 */
+static int g_phase_tick_80ms;                  /* DAT_00591510 */
+static int g_phase_tick_160ms;                 /* DAT_0057d3ac */
+static int g_phase_tick_320ms;                 /* DAT_0057d3c8 */
+static int g_phase_tick_640ms;                 /* DAT_0058fd08 */
+static int g_phase_tick_1040ms_sticky;         /* _DAT_005aeb28 (sticky) */
+static int g_phase_tick_1280ms;                /* DAT_005aeb3c */
+static int g_phase_tick_1920ms;                /* DAT_005aeb38 */
+static int g_phase_tick_2560ms;                /* DAT_005aeb30 */
+
+static void engine_tick_phase_step(void)
+{
+    engine_phase_in_t  in  = {0};
+    engine_phase_out_t out = {0};
+
+    in.now_ms              = timeGetTime();
+    in.last_base_tick_ms   = g_phase_last_base_tick_ms;
+    in.base_tick_counter   = g_phase_base_tick_counter;
+    in.counter_2           = g_phase_counter_2;
+    in.counter_4           = g_phase_counter_4;
+    in.counter_8           = g_phase_counter_8;
+    in.counter_13          = g_phase_counter_13;
+    in.counter_16          = g_phase_counter_16;
+    in.counter_24          = g_phase_counter_24;
+    in.counter_32          = g_phase_counter_32;
+
+    engine_compute_phase_ticks(&in, &out);
+
+    /* Clear-then-write for the 8 non-sticky flags (matches retail's
+     * unconditional `DAT_xxx = 0` at function entry, then conditional
+     * `DAT_xxx = 1` later). */
+    g_phase_tick_20ms      = out.tick_20ms;
+    g_phase_tick_80ms      = out.tick_80ms;
+    g_phase_tick_160ms     = out.tick_160ms;
+    g_phase_tick_320ms     = out.tick_320ms;
+    g_phase_tick_640ms     = out.tick_640ms;
+    g_phase_tick_1280ms    = out.tick_1280ms;
+    g_phase_tick_1920ms    = out.tick_1920ms;
+    g_phase_tick_2560ms    = out.tick_2560ms;
+    /* OR-in for the sticky 1040 ms — retail does NOT clear this at
+     * entry, so a fresh fire ORs with the previous (possibly
+     * unconsumed) value.  Consumer clears it after reading. */
+    g_phase_tick_1040ms_sticky |= out.tick_1040ms;
+
+    /* Counter / timestamp writebacks. */
+    g_phase_last_base_tick_ms  = out.new_last_base_tick_ms;
+    g_phase_base_tick_counter  = out.new_base_tick_counter;
+    g_phase_counter_2          = out.new_counter_2;
+    g_phase_counter_4          = out.new_counter_4;
+    g_phase_counter_8          = out.new_counter_8;
+    g_phase_counter_13         = out.new_counter_13;
+    g_phase_counter_16         = out.new_counter_16;
+    g_phase_counter_24         = out.new_counter_24;
+    g_phase_counter_32         = out.new_counter_32;
+}
+
 /* Stubs of the two helpers retail FUN_004bb978 calls inline.  Both
  * are placeholders for full ports; see findings doc for what they
  * really do.
@@ -213,9 +294,15 @@ void engine_tick(void)
 
     g_engine_frame_counter++;
 
-    /* TODO(sim): pre-tick block (FUN_004b0aaa, FUN_00499a1c if
-     * ingame, FUN_00498458, FUN_004b20ed, FUN_004bbc80, FUN_00481b9a,
-     * FUN_00482111, FUN_004782c5, FUN_00451f1a). */
+    /* Pre-tick block — retail does (in order): FUN_004b0aaa input
+     * poll, FUN_00499a1c music (only when ingame), FUN_00498458,
+     * FUN_004b20ed, FUN_004bbc80 (← ported), FUN_00481b9a,
+     * FUN_00482111, FUN_004782c5, FUN_00451f1a.  Order between
+     * these doesn't matter for behavior (each is independent state
+     * update) so we land them as they come; FUN_004bbc80 first
+     * since it's pure timing. */
+    engine_tick_phase_step();
+    /* TODO(sim): remaining pre-tick subfunctions. */
 
     int sub_steps = engine_tick_rate_step();
     for (int i = 0; i < sub_steps; i++) {
