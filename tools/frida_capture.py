@@ -175,6 +175,14 @@ class CaptureConfig:
     # for reasons orthogonal to this work) then make the window visible
     # so the agent-driven present has somewhere to land.
     show_window_after_ms:        int  = 0
+    # Client-area size to resize the engine's window to after show.
+    # 1280×1024 is the empirically-observed pixel-perfect display size
+    # for the GOG patch 2.0.0.3 build (user-verified) — 5:4 aspect,
+    # consistent with the SVGA-era assets being authored against 5:4
+    # monitors.  Our GDI StretchDIBits seat scales transparently so
+    # any size works; this default just lands sharpest.
+    show_window_client_w:        int  = 1280
+    show_window_client_h:        int  = 1024
     frame_capture:              bool = False
     frame_capture_max:          int  = 16   # 0 = unlimited
     frame_capture_warmup_secs:  int  = 5    # skip captures for first N cum-secs
@@ -520,6 +528,8 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "agent_present":             bool(cfg.agent_present),
             "agent_present_every_ticks": int(cfg.agent_present_every_ticks),
             "show_window_after_ms":      int(cfg.show_window_after_ms),
+            "show_window_client_w":      int(cfg.show_window_client_w),
+            "show_window_client_h":      int(cfg.show_window_client_h),
             "frame_capture":             bool(cfg.frame_capture),
             "frame_capture_max":         int(cfg.frame_capture_max),
             "frame_capture_warmup_secs": int(cfg.frame_capture_warmup_secs),
@@ -629,6 +639,16 @@ def main(argv: list[str] | None = None) -> int:
                          "have elapsed since init.  0 = never auto-show. "
                          "Pairs with --agent-present and hide_window=on "
                          "(default) for interactive visual verification.")
+    ap.add_argument("--show-window-client-w", type=int, default=1280,
+                    help="client-area width to resize the engine's "
+                         "window to after --show-window-after-ms.  "
+                         "Default 1280 (pixel-perfect with the engine's "
+                         "render res on the GOG patch — verified "
+                         "empirically).")
+    ap.add_argument("--show-window-client-h", type=int, default=1024,
+                    help="client-area height to resize the engine's "
+                         "window to after --show-window-after-ms.  "
+                         "Default 1024.")
     ap.add_argument("--turbo", action="store_true",
                     help="enable Sleep no-op (v1) + virtual timeGetTime (v2)")
     ap.add_argument("--turbo-step-ms", type=int, default=17,
@@ -675,6 +695,8 @@ def main(argv: list[str] | None = None) -> int:
         agent_present=args.agent_present,
         agent_present_every_ticks=args.agent_present_every_ticks,
         show_window_after_ms=args.show_window_after_ms,
+        show_window_client_w=args.show_window_client_w,
+        show_window_client_h=args.show_window_client_h,
         turbo=args.turbo,
         turbo_step_ms=args.turbo_step_ms,
         frame_capture=args.frame_capture,

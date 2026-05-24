@@ -179,6 +179,8 @@ let g_gdi_seat_enabled     = false;
 let g_agent_present_enabled    = false;
 let g_agent_present_every_ticks = 100;     // ~20 Hz at default turbo step
 let g_show_window_after_ms     = 0;        // 0 = never auto-show
+let g_show_window_client_w     = 1280;     // post-show client size — 5:4
+let g_show_window_client_h     = 1024;     // pixel-perfect for the GOG patch
 let g_show_window_done         = false;
 let g_show_window_latch        = false;    // one-shot bypass for hide hooks
 let g_nf_show_window           = null;
@@ -1521,8 +1523,8 @@ function tryShowEngineWindow() {
             const rect = Memory.alloc(16);
             rect.writeS32(0);
             rect.add(4 ).writeS32(0);
-            rect.add(8 ).writeS32(800);
-            rect.add(12).writeS32(600);
+            rect.add(8 ).writeS32(g_show_window_client_w);
+            rect.add(12).writeS32(g_show_window_client_h);
             nfAdjust(rect, style, 0);
             const w = rect.add(8 ).readS32() - rect.add(0).readS32();
             const h = rect.add(12).readS32() - rect.add(4).readS32();
@@ -1530,7 +1532,8 @@ function tryShowEngineWindow() {
             // = 0x16 — keep current position + z-order + don't steal
             // focus.
             nfSetPos(hwnd, NULL, 0, 0, w, h, 0x16);
-            log('agent: window resized to 800x600 client ' +
+            log('agent: window resized to ' + g_show_window_client_w +
+                'x' + g_show_window_client_h + ' client ' +
                 '(outer ' + w + 'x' + h + ')');
         }
     } catch (e) {
@@ -2252,6 +2255,10 @@ rpc.exports = {
         const apEvery        = (opts.agent_present_every_ticks | 0);
         g_agent_present_every_ticks = apEvery > 0 ? apEvery : 100;
         g_show_window_after_ms = (opts.show_window_after_ms | 0);
+        const swW = (opts.show_window_client_w | 0);
+        const swH = (opts.show_window_client_h | 0);
+        if (swW > 0) g_show_window_client_w = swW;
+        if (swH > 0) g_show_window_client_h = swH;
         // Turbo step in virtual-ms per per-tick-driver iteration. The
         // default (17 ms) yields ~58 ticks/s perceived time, close to
         // 60 Hz; raise it to fast-forward.  0 disables turbo v2 even if
