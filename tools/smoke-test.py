@@ -50,6 +50,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-force-windowed", action="store_true",
                     help="don't strip DDraw exclusive-fullscreen flags "
                          "(debug aid — VERY disruptive on Lords 2!)")
+    ap.add_argument("--turbo", action="store_true",
+                    help="exercise turbo v1 (Sleep no-op) + v2 "
+                         "(virtual timeGetTime)")
+    ap.add_argument("--turbo-step-ms", type=int, default=17,
+                    help="virtual-ms per per-tick driver iteration "
+                         "when --turbo is set")
     ap.add_argument("--run-id", default=None,
                     help="run directory name under runs/smoke/ "
                          "(default: timestamp)")
@@ -64,6 +70,8 @@ def main(argv: list[str] | None = None) -> int:
         hide_window=not args.no_hide,
         silent_audio=not args.no_silent_audio,
         force_windowed=not args.no_force_windowed,
+        turbo=args.turbo,
+        turbo_step_ms=args.turbo_step_ms,
     )
     print(f"[smoke] run_dir = {run_dir}")
     result = fc._run_capture_impl(cfg, run_dir)
@@ -92,6 +100,18 @@ def main(argv: list[str] | None = None) -> int:
         # With hide_window on, at least one owned HWND should appear during
         # init (engine creates its main window before doing anything else).
         checks.append(("at least one HWND tracked",  "[hwnd]" in log))
+    if args.turbo:
+        checks.append(("turbo v1: Sleep no-op",
+                       "turbo v1: kernel32!Sleep no-op installed" in log))
+        checks.append(("turbo v2: timeGetTime virtualised",
+                       "turbo v2: winmm!timeGetTime virtualised" in log))
+        # The engine_tick anchor lands unconditionally; with turbo on we
+        # additionally expect the main-thread capture to land within the
+        # smoke window.  Both are confirmed via the agent log.
+        checks.append(("engine_tick anchor armed",
+                       "engine_tick anchor installed" in log))
+        checks.append(("engine main thread captured",
+                       "engine_tick: main thread id captured" in log))
 
     failed = [name for name, ok in checks if not ok]
 
@@ -104,6 +124,12 @@ def main(argv: list[str] | None = None) -> int:
         "msgbox_count":    result.msgbox_count,
         "cooplevel_count": result.cooplevel_count,
         "audio_mute_count": result.audio_mute_count,
+        "fps_sample_count": result.fps_sample_count,
+        "last_current_fps": result.last_current_fps,
+        "last_avg_fps":     result.last_avg_fps,
+        "last_cum_seconds": result.last_cum_seconds,
+        "turbo":           args.turbo,
+        "turbo_step_ms":   args.turbo_step_ms,
         "checks": [{"name": n, "ok": ok} for n, ok in checks],
     }
     (run_dir / "smoke.json").write_text(json.dumps(summary, indent=2))

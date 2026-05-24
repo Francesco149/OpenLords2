@@ -21,11 +21,20 @@ implemented.
 - [x] DSound mute: clamp `IDirectSoundBuffer::SetVolume` and
       `waveOutSetVolume` calls to silence.
 - [x] Turbo v1: `kernel32!Sleep` → no-op for the main thread.
-- [ ] Turbo v2: virtualised `timeGetTime` clock pinned to the
-      main thread (so the engine *perceives* time moving faster
-      rather than just spinning).
+- [x] Turbo v2: virtualised `winmm!timeGetTime` clock pinned to
+      the main thread.  Bumped by `--turbo-step-ms` (default 17)
+      on every entry to retail's per-tick driver
+      `FUN_004b99c0`.  Verified against retail (smoke 2026-05-24:
+      1993 engine cumulative-seconds in 4 real seconds at the
+      default step, vs 3 without turbo).
+- [x] FPS-sample emitter (always on): read retail's FPS-counter
+      globals (`DAT_004ea174` / `DAT_004ea0f4` / `DAT_004ea83c`)
+      on every engine cumulative-seconds rollover and publish a
+      `kind:'fps_sample'` event so the harness can plot the
+      perceived-time curve without spelunking memory itself.
 - [x] Smoke test: spawn → 5 s window → assert hooks installed →
-      teardown.
+      teardown.  Now also exercises the turbo path via
+      `--turbo` / `--turbo-step-ms N`.
 
 ## Phase 2 — Frame capture
 

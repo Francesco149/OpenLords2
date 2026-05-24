@@ -152,6 +152,7 @@ class CaptureConfig:
     silent_audio:      bool = True
     force_windowed:    bool = True
     turbo:             bool = False
+    turbo_step_ms:     int  = 17        # virtual-ms per per-tick driver iteration
     exe_args:          list[str] = field(default_factory=list)
 
 
@@ -164,6 +165,10 @@ class CaptureResult:
     msgbox_count: int = 0
     cooplevel_count: int = 0
     audio_mute_count: int = 0
+    fps_sample_count: int = 0
+    last_current_fps: int = 0
+    last_avg_fps:     int = 0
+    last_cum_seconds: int = 0
 
 
 def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
@@ -171,7 +176,9 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
     f_log = agent_log.open("w", buffering=1)
 
     counts = {"hwnd": 0, "hide": 0, "msgbox": 0, "ddraw_coop": 0,
-              "dsound_coop": 0, "audio_mute": 0, "display_blocked": 0}
+              "dsound_coop": 0, "audio_mute": 0, "display_blocked": 0,
+              "fps_sample": 0}
+    fps_last = {"current_fps": 0, "avg_fps": 0, "cum_secs": 0}
     done = threading.Event()
 
     def on_message(message: dict[str, Any], data: bytes | None):
@@ -257,6 +264,18 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             f_log.write(f"[mute] {p.get('api')} "
                         f"original={p.get('original')}\n")
             return
+        if kind == "fps_sample":
+            counts["fps_sample"] += 1
+            fps_last["current_fps"] = int(p.get("current_fps", 0))
+            fps_last["avg_fps"]     = int(p.get("avg_fps", 0))
+            fps_last["cum_secs"]    = int(p.get("cumulative_seconds", 0))
+            f_log.write(
+                f"[fps] current={p.get('current_fps')} "
+                f"avg={p.get('avg_fps')} "
+                f"cum_secs={p.get('cumulative_seconds')} "
+                f"virt_ms={p.get('virtual_now_ms')} "
+                f"t_ms={p.get('t_ms')}\n")
+            return
         # unknown kind — log it raw so we can spot agent extensions we
         # haven't wired up yet.
         f_log.write(f"[unknown-event] {json.dumps(p)}\n")
@@ -303,6 +322,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "silent_audio":   bool(cfg.silent_audio),
             "force_windowed": bool(cfg.force_windowed),
             "turbo":          bool(cfg.turbo),
+            "turbo_step_ms":  int(cfg.turbo_step_ms),
         }
         script.exports_sync.init(init_cfg)
         device.resume(pid)
@@ -339,6 +359,10 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         msgbox_count=counts["msgbox"],
         cooplevel_count=counts["ddraw_coop"] + counts["dsound_coop"],
         audio_mute_count=counts["audio_mute"],
+        fps_sample_count=counts["fps_sample"],
+        last_current_fps=fps_last["current_fps"],
+        last_avg_fps=fps_last["avg_fps"],
+        last_cum_seconds=fps_last["cum_secs"],
     )
 
 
@@ -364,7 +388,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-hide", action="store_true")
     ap.add_argument("--no-silent-audio", action="store_true")
     ap.add_argument("--no-force-windowed", action="store_true")
-    ap.add_argument("--turbo", action="store_true")
+    ap.add_argument("--turbo", action="store_true",
+                    help="enable Sleep no-op (v1) + virtual timeGetTime (v2)")
+    ap.add_argument("--turbo-step-ms", type=int, default=17,
+                    help="virtual-ms advanced per per-tick driver iteration "
+                         "when --turbo is set (default 17 ≈ 58 ticks/s perceived)")
     ap.add_argument("--exe-arg", action="append", default=[],
                     help="argument to pass to the spawned exe (repeatable)")
     args = ap.parse_args(argv)
@@ -382,6 +410,7 @@ def main(argv: list[str] | None = None) -> int:
         silent_audio=not args.no_silent_audio,
         force_windowed=not args.no_force_windowed,
         turbo=args.turbo,
+        turbo_step_ms=args.turbo_step_ms,
         exe_args=list(args.exe_arg),
     )
     print(f"[capture] run_dir = {run_dir}")
@@ -389,7 +418,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[capture] cwd     = {cfg.cwd}")
     print(f"[capture] flags   = hide={cfg.hide_window} "
           f"silent={cfg.silent_audio} fwin={cfg.force_windowed} "
-          f"turbo={cfg.turbo}")
+          f"turbo={cfg.turbo} turbo_step_ms={cfg.turbo_step_ms}")
 
     result = _run_capture_impl(cfg, run_dir)
 
@@ -403,6 +432,12 @@ def main(argv: list[str] | None = None) -> int:
         "msgbox_count":    result.msgbox_count,
         "cooplevel_count": result.cooplevel_count,
         "audio_mute_count": result.audio_mute_count,
+        "fps_sample_count": result.fps_sample_count,
+        "last_current_fps": result.last_current_fps,
+        "last_avg_fps":     result.last_avg_fps,
+        "last_cum_seconds": result.last_cum_seconds,
+        "turbo":            cfg.turbo,
+        "turbo_step_ms":    cfg.turbo_step_ms,
     }
     (run_dir / "run.json").write_text(json.dumps(meta, indent=2))
     print(json.dumps(meta, indent=2))

@@ -51,6 +51,18 @@ const MODULE_NAME = 'Lords2.exe';
 const IMAGE_BASE  = ptr('0x00400000');
 let   g_target_module_name = MODULE_NAME;
 
+// ─── retail address table (Lords2.exe, build verified 2026-05-24) ──────
+// VA → resolved against the actual module base via rva() at hook time.
+// Cross-referenced in docs/findings/main-loop-tick.md.
+const ADDR = {
+    fn_engine_tick:    0x004b99c0,  // FUN_004b99c0 — per-tick driver (sim + render)
+    // FPS-counter globals (read once per engine second-rollover to publish
+    // an `fps_sample` event for turbo verification).
+    var_fps_current:   0x004ea174,  // DAT_004ea174 — current FPS (refreshed once / sec)
+    var_fps_cum_sum:   0x004ea0f4,  // DAT_004ea0f4 — cumulative FPS sum (for avg)
+    var_fps_cum_secs:  0x004ea83c,  // DAT_004ea83c — cumulative seconds counter
+};
+
 // ─── runtime state ──────────────────────────────────────────────────────
 
 let g_base = null;
@@ -62,6 +74,23 @@ let g_owned_hwnds         = {};   // key = hwnd hex, val = {source}
 let g_silent_audio_enabled = false;
 let g_force_windowed       = false;
 let g_turbo_enabled        = false;
+
+// Turbo v2 — virtualised winmm!timeGetTime, gated to the engine main thread.
+// `g_virtual_now_ms` is bumped by `g_turbo_step_ms` on every per-tick driver
+// entry; main-thread timeGetTime calls have their retval overwritten with
+// it. Side threads (DPlay, Smacker, DSound mixer) keep wall-clock. See the
+// rationale block above installVirtualClockHook(). Mirrors OpenMare's
+// pattern (openmare-agent.js installFrameCounterHook / installVirtualClockHook).
+let g_turbo_step_ms       = 17;
+let g_virtual_now_ms      = 0;
+let g_clock_virtualised   = false;
+let g_main_thread_id      = -1;   // captured on first per-tick driver entry
+
+// FPS sample emission. Once the engine's cumulative_seconds counter ticks,
+// we publish the engine's FPS readout so the harness can plot the trajectory
+// without having to spelunk memory itself.
+let g_last_fps_cum_secs   = 0;
+let g_fps_sample_count    = 0;
 
 // ─── helpers ────────────────────────────────────────────────────────────
 
@@ -740,12 +769,33 @@ function installSilentAudioDSound() {
     }
 }
 
-// ─── turbo v1 (Sleep no-op) ────────────────────────────────────────────
-// Many 1996-era engines sleep between frames via kernel32!Sleep.  Making
-// it a no-op lets the loop spin as fast as the host CPU allows.
-// Turbo v2 (virtualised timeGetTime) lands once we've located the
-// engine's main thread and its frame counter — see OpenMare's
-// installVirtualClockHook for the pattern.
+// ─── turbo ──────────────────────────────────────────────────────────────
+// Two cooperating pieces (mirrors OpenMare's pattern):
+//
+//   v1) kernel32!Sleep → no-op. Lords2 sleeps in its render-rate limiter
+//       (see docs/findings/render-rate-limiter.md); zeroing Sleep lets the
+//       main loop spin as fast as the host CPU allows.
+//
+//   v2) winmm!timeGetTime → virtual clock, gated to the engine main thread.
+//       Seeded from a one-shot real timeGetTime read at install time; bumped
+//       by g_turbo_step_ms on every entry to the per-tick driver
+//       FUN_004b99c0 (the natural per-frame anchor). All retail timeGetTime
+//       call sites that we care about — the FPS counter (FUN_004b27bf), the
+//       frame-delta generator (FUN_004b20ed), the sim rate-gate
+//       (FUN_004bb978) — read this virtualised clock; DPlay's GetTickCount
+//       reads stay on real wall-clock (the DPlay pump uses GetTickCount, not
+//       timeGetTime — verified via decompile grep, see main-loop-tick.md).
+//
+// Without v2, v1 alone makes the loop spin pointlessly: timeGetTime still
+// returns wall-clock, so the rate-gate falls back to "no progress yet" and
+// the FPS counter just counts more iterations per real second.  With v2 on,
+// the engine's *perceived* time moves at (1000 / step_ms) Hz — at the
+// default 17 ms/iter, ~58 ticks/s — which is what the FPS counter samples
+// to compute current_fps.
+//
+// Side-thread safety: only main-thread callers get the virtual return;
+// DSound/Smacker/audio threads see the real timeGetTime untouched so their
+// internal scheduling isn't disrupted.
 
 function installTurboSleepHook() {
     const k32 = Process.findModuleByName('kernel32.dll');
@@ -760,6 +810,86 @@ function installTurboSleepHook() {
     log('turbo v1: kernel32!Sleep no-op installed');
 }
 
+function installVirtualClockHook() {
+    const winmm = Process.findModuleByName('winmm.dll');
+    if (!winmm) { err('installVirtualClock', 'winmm.dll not loaded'); return; }
+    const tgt = winmm.findExportByName('timeGetTime');
+    if (!tgt) { err('installVirtualClock', 'winmm!timeGetTime not found'); return; }
+
+    // Seed the virtual clock with the current real timeGetTime so the
+    // engine's first read sees a sane baseline — the FPS counter +
+    // frame-delta both subtract this from later samples, so a zero seed
+    // would make the first window look like the engine has been running
+    // for 49.7 days.  Use NativeFunction (not Interceptor.replace) so the
+    // seed read doesn't re-enter our own onLeave handler.
+    const realTGT = new NativeFunction(tgt, 'uint32', [], 'stdcall');
+    g_virtual_now_ms = realTGT() >>> 0;
+
+    Interceptor.attach(tgt, {
+        onLeave: function (retval) {
+            if (!g_clock_virtualised) return;
+            if (g_main_thread_id === -1) return;
+            if (Process.getCurrentThreadId() !== g_main_thread_id) return;
+            retval.replace(ptr(g_virtual_now_ms >>> 0));
+        },
+    });
+
+    g_clock_virtualised = true;
+    log('turbo v2: winmm!timeGetTime virtualised ' +
+        '(step=' + g_turbo_step_ms + ' ms/tick, main-thread-gated, ' +
+        'seed=' + g_virtual_now_ms + ')');
+}
+
+// Per-tick anchor — `FUN_004b99c0` is called once per main-loop iteration.
+// We use its onEnter as:
+//   1. main-thread-id capture (first entry only) for the virtual-clock gate.
+//   2. virtual-clock advance by g_turbo_step_ms (when turbo v2 is active).
+// We use its onLeave to publish an `fps_sample` event whenever the engine's
+// FPS-counter cumulative_seconds counter ticks — this is the verification
+// knob for turbo: without turbo, fps_sample.current_fps lands wherever
+// retail's render path actually clocks (~30 in Lords2's default cap);
+// with turbo at 17 ms/tick we expect ~58.
+//
+// Hook installs unconditionally — the bump is gated on g_clock_virtualised
+// so a non-turbo run still benefits from the FPS-sample emission without
+// disturbing wall-clock time.
+
+function installEngineTickHook() {
+    Interceptor.attach(rva(ADDR.fn_engine_tick), {
+        onEnter: function () {
+            if (g_main_thread_id === -1) {
+                g_main_thread_id = Process.getCurrentThreadId();
+                log('engine_tick: main thread id captured = ' + g_main_thread_id);
+            }
+            if (g_clock_virtualised) {
+                g_virtual_now_ms = (g_virtual_now_ms + g_turbo_step_ms) >>> 0;
+            }
+        },
+        onLeave: function () {
+            try {
+                const cum_secs = rva(ADDR.var_fps_cum_secs).readU32();
+                if (cum_secs === g_last_fps_cum_secs) return;
+                g_last_fps_cum_secs = cum_secs;
+                const current_fps = rva(ADDR.var_fps_current).readU32();
+                const cum_sum     = rva(ADDR.var_fps_cum_sum).readU32();
+                const avg_fps     = cum_secs > 0 ? (cum_sum / cum_secs) | 0 : 0;
+                g_fps_sample_count++;
+                send({kind: 'fps_sample',
+                      current_fps: current_fps,
+                      cumulative_fps: cum_sum,
+                      cumulative_seconds: cum_secs,
+                      avg_fps: avg_fps,
+                      virtual_now_ms: g_virtual_now_ms,
+                      t_ms: nowMs()});
+            } catch (e) {
+                err('engine_tick.onLeave', e.message);
+            }
+        },
+    });
+    log('engine_tick anchor installed @ ' + rva(ADDR.fn_engine_tick) +
+        ' (FUN_004b99c0)');
+}
+
 // ─── init RPC ──────────────────────────────────────────────────────────
 
 rpc.exports = {
@@ -770,6 +900,12 @@ rpc.exports = {
         g_silent_audio_enabled = !!opts.silent_audio;
         g_force_windowed     = !!opts.force_windowed;
         g_turbo_enabled      = !!opts.turbo;
+        // Turbo step in virtual-ms per per-tick-driver iteration. The
+        // default (17 ms) yields ~58 ticks/s perceived time, close to
+        // 60 Hz; raise it to fast-forward.  0 disables turbo v2 even if
+        // opts.turbo is set, falling back to turbo v1 (Sleep no-op only).
+        const stepOpt = (opts.turbo_step_ms | 0);
+        g_turbo_step_ms = stepOpt > 0 ? stepOpt : 17;
 
         const mod = Process.findModuleByName(g_target_module_name);
         if (!mod) {
@@ -778,9 +914,12 @@ rpc.exports = {
         }
         g_base = mod.base;
 
-        // Always-on hooks: HWND tracking, MessageBox capture.
+        // Always-on hooks: HWND tracking, MessageBox capture, engine-tick
+        // anchor (publishes fps_sample even without turbo so the harness
+        // can plot a baseline curve).
         installCreateWindowExHooks();
         installMessageBoxRedirectHook();
+        installEngineTickHook();
 
         // Conditionally-on hooks based on init flags.
         if (g_hide_window)     installWindowHideHooks();
@@ -788,7 +927,19 @@ rpc.exports = {
                                  installForceWindowedDDraw(); }
         if (g_silent_audio_enabled) { installWaveOutMute();
                                       installSilentAudioDSound(); }
-        if (g_turbo_enabled)   installTurboSleepHook();
+        if (g_turbo_enabled) {
+            // Order matters: virtualise timeGetTime BEFORE the Sleep
+            // no-op so the engine never observes a real-clock baseline
+            // once turbo is armed.  The clock is gated on the main
+            // thread, which won't be known until the first engine_tick
+            // entry — so g_clock_virtualised goes true at install but
+            // the gate inside the onLeave hook fails silently until
+            // engine_tick captures the thread id.
+            try { installVirtualClockHook(); }
+            catch (e) { err('installVirtualClockHook', e.message); }
+            try { installTurboSleepHook(); }
+            catch (e) { err('installTurboSleepHook', e.message); }
+        }
 
         send({kind: 'ready',
               module:        g_target_module_name,
@@ -798,6 +949,7 @@ rpc.exports = {
               hide_window:   g_hide_window,
               force_windowed: g_force_windowed,
               silent_audio:  g_silent_audio_enabled,
-              turbo:         g_turbo_enabled});
+              turbo:         g_turbo_enabled,
+              turbo_step_ms: g_turbo_step_ms});
     },
 };

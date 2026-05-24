@@ -7,6 +7,116 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Turbo v2 (virtualised `timeGetTime`) + retail FPS sampler
+
+First non-port harness slice in a few sessions.  Picked up the
+turbo-v2 hook the FPS port had set up as the obvious next step
+(see the prior entry's "What's next") and landed it end-to-end
+plus the verification stream.
+
+### Agent changes (`tools/frida/openlords2-agent.js`)
+
+- New `ADDR` table at the top: `fn_engine_tick = 0x004b99c0`
+  (retail's per-tick driver), `var_fps_current = 0x004ea174`,
+  `var_fps_cum_sum = 0x004ea0f4`, `var_fps_cum_secs = 0x004ea83c`.
+  Centralises the four engine addresses the new hooks touch so the
+  next port-style address rev only changes one place.
+- New `installVirtualClockHook()` — seeds `g_virtual_now_ms` from a
+  one-shot real-`timeGetTime` read (avoids the 49.7-day-old-baseline
+  trap the FPS counter would otherwise hit on the first window),
+  then attaches `winmm!timeGetTime` with `Interceptor.attach`
+  +`retval.replace` so the real syscall still runs (cheap on modern
+  Windows, just a `QueryPerformanceCounter` shim) and we only
+  overwrite the return on the main thread.  Side threads (DPlay,
+  DSound mixer, Smacker) keep wall-clock.
+- New `installEngineTickHook()` — always on, regardless of turbo.
+  `onEnter`:
+  - Captures `g_main_thread_id` the first time it sees the engine
+    main thread (the virtual-clock gate needs this; without it the
+    virtual clock would silently never apply).
+  - Advances `g_virtual_now_ms` by `g_turbo_step_ms` when turbo is
+    armed.  Bump happens BEFORE the engine reads `timeGetTime` later
+    in the same iteration, so the FPS counter / frame-delta / rate
+    gate all see the new virtual time within the same tick.
+  `onLeave`:
+  - Reads `DAT_004ea83c` (cum-seconds); if it changed since the last
+    sample, also reads `DAT_004ea174` (current FPS) +
+    `DAT_004ea0f4` (cum FPS sum) and emits a `kind:'fps_sample'`
+    event.  Once-per-engine-cumulative-second cadence keeps the
+    event stream sparse (~1 per virtual second).
+- New init opt `turbo_step_ms` (default 17 — matches OpenMare's
+  default for a 60 Hz-ish perceived clock under that harness; for
+  Lords2's much faster per-tick driver this produces ~500× wall-
+  clock speedup, see verification below).  `init` install order:
+  always-on hooks first, then the conditional set; turbo block
+  installs the virtual clock BEFORE the Sleep no-op so the engine
+  never observes a real-clock baseline once turbo is armed.
+
+### Driver changes (`tools/frida_capture.py`, `tools/smoke-test.py`)
+
+- `CaptureConfig` grew `turbo_step_ms`; `CaptureResult` grew
+  `fps_sample_count` + `last_current_fps` / `last_avg_fps` /
+  `last_cum_seconds` so callers can summarise the turbo curve from
+  the result struct without re-parsing the log.
+- New `kind: 'fps_sample'` handler in `on_message` — logs a
+  one-line `[fps] current=… avg=… cum_secs=… virt_ms=… t_ms=…`
+  trace into `agent.log` and tallies into the counter dict.
+- CLI: `--turbo-step-ms N` on `frida_capture.py`; smoke-test grew
+  `--turbo` + `--turbo-step-ms` knobs plus four new check rows
+  that the turbo path actually installed.
+
+### Verified (4 s smoke window, retail Lords2.exe)
+
+Two back-to-back smoke runs, same hide/silent/force-windowed
+defaults, only `--turbo` toggled:
+
+| Run            | fps_sample_count | last_cum_seconds | last_current_fps | last_avg_fps |
+|----------------|------------------|------------------|------------------|--------------|
+| `--turbo` off  | 3                | 3                | 566 743          | 534 152      |
+| `--turbo` on   | 1993             | 1993             | 117              | 117          |
+
+The off-baseline "current_fps = 566 743" is the engine's own
+counter sampling itself at the CPU-bound iter rate against the
+real wall-clock — the engine literally believes it's running at
+half a megaframe per second.  Under turbo, virtual time advances
+faster than wall-clock by a factor of ≈ 500×, so the counter
+re-normalises to the actual frames-per-virtual-second the loop
+achieves: 117 — a believable per-render-frame rate.
+
+Both runs passed all 12 smoke checks (8 base + 4 turbo).
+
+### Engine-quirk side note (not a new entry)
+
+The off-baseline FPS read (566 743) is a useful reminder of why
+turbo v2 specifically virtualises `timeGetTime` rather than just
+nopping Sleep.  Turbo v1 alone makes the loop spin pointlessly:
+`timeGetTime` still returns wall-clock so the FPS counter blows
+up.  This is documented as the v1 trade-off comment in
+`installTurboSleepHook` and the install-order comment in `init`.
+
+### What's next
+
+Three viable threads now that the harness can run the engine at
+multiplied wall-clock speed:
+
+1. **DDraw frame capture** — the Phase-2 roadmap item.  Hook
+   `IDirectDrawSurface::Lock` on the primary, serialise back-buffer
+   contents as BGRA BMP under
+   `runs/<scenario>/<ts>/frames/frame_NNNNN.bmp`.  Pairs naturally
+   with the FPS sampler — capture-on-rollover gives an automatic
+   1-per-virtual-second screenshot stream.
+2. **Sub-step body** — still the largest single port unblock.
+   Now with turbo, soak-testing the eventual port becomes cheap.
+3. **Screen-dispatch ladder** — incremental; lands as each screen
+   subsystem ports.
+
+Top-down RE bias still: option 1 is the smallest verifiable step
+that unblocks the diff-render workflow.  Sub-step body is the
+biggest unblock but also the biggest single chunk; better tackled
+once we have frame capture to validate against.
+
+---
+
 ## 2026-05-24 — Render-phase tail survey + FPS counter port (FUN_004b27bf)
 
 Continued exiting the per-tick driver one slot at a time.  Surveyed

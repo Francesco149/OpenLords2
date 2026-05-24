@@ -316,16 +316,21 @@ in the next pass.
 
 ## Mapping to harness
 
-The current Frida harness doesn't hook the per-tick path.  When
-turbo v2 lands, the natural seat is `winmm!timeGetTime` —
-virtualise to advance N× real time per call.  Bound the speedup
-via a `--turbo-scale` flag (1.0 default = identity).
+**Turbo v2 — installed 2026-05-24.**  The Frida agent
+(`tools/frida/openlords2-agent.js`) virtualises `winmm!timeGetTime`
+and uses `FUN_004b99c0` (entry) as the per-frame bump anchor: each
+entry advances `g_virtual_now_ms` by `--turbo-step-ms` (default 17).
+The virtual clock is gated to the engine main thread (captured on
+first `FUN_004b99c0` entry); DPlay's `GetTickCount` reads, the
+DSound mixer, and the Smacker thread keep wall-clock so audio +
+network timing aren't disrupted.
 
-A complementary trace mode would log
-`DAT_0057c998`/`_DAT_005bb4c8`/`DAT_004ea174` once per second so we
-can verify the turbo factor visually instead of via "I think it
-looked faster".  Same validate-against-perceived-behavior rule from
-the OpenMare carry-over memory.
+Engine FPS-counter globals (`DAT_004ea174` / `DAT_004ea0f4` /
+`DAT_004ea83c`) are sampled on every cumulative-seconds rollover and
+republished as `kind:'fps_sample'` events — turbo factor is now
+visible end-to-end without speluncking memory.  Verified on retail
+(2026-05-24 smoke run, 4 s wall time, `--turbo-step-ms 17`):
+1993 engine cum-seconds vs 3 without turbo (~500×).
 
 > 📍  Sources: `docs/decompiled/all.c` lines 7524 (FUN_0040e890),
 > 7537 (FUN_0040e8bb), 88042 (FUN_004b8c3a), 88528 (FUN_004b99c0),
