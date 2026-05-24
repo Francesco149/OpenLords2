@@ -96,6 +96,25 @@ struct test_case {
     X(engine_rate_phase_wraps_at_0xa0) \
     X(engine_rate_phase_no_wrap_at_0x9e) \
     X(engine_rate_time_overflow_local_8_clamps_to_10000) \
+    X(engine_scenario_hint_state_not_ingame_returns_zero) \
+    X(engine_scenario_hint_sp_returns_one) \
+    X(engine_scenario_hint_local_player_inactive_returns_one) \
+    X(engine_scenario_hint_invalid_slot_returns_one) \
+    X(engine_scenario_hint_single_active_player_returns_one) \
+    X(engine_scenario_hint_catch_up_small_behind_returns_neg2) \
+    X(engine_scenario_hint_catch_up_ladder_boundaries) \
+    X(engine_scenario_hint_ahead_coarse_ladder) \
+    X(engine_scenario_hint_ahead_mode5_ladder) \
+    X(engine_scenario_hint_ahead_throttle_writes_stride) \
+    X(engine_scenario_hint_max_stride_carries_through_when_not_exceeded) \
+    X(engine_scenario_hint_slow_frame_increments_at_140ms_cap) \
+    X(engine_scenario_hint_slow_frame_notify_on_hundred) \
+    X(engine_scenario_hint_alone_in_mode2_uses_alone_ladder) \
+    X(engine_scenario_hint_alone_negative_lead_returns_minus_one) \
+    X(engine_scenario_hint_alone_floors_at_base_delta_times_three) \
+    X(engine_scenario_hint_mode2_two_allies_uses_normal_path) \
+    X(engine_scenario_hint_mode2_filter_excludes_non_allies) \
+    X(engine_scenario_hint_disconnected_player_excluded) \
     \
     X(engine_phase_no_time_passed_fires_nothing) \
     X(engine_phase_19ms_below_threshold) \

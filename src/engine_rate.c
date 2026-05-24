@@ -213,3 +213,301 @@ void engine_compute_sim_sub_steps(const engine_rate_in_t *in,
     out->new_last_step_ms = DVar1;
     out->sub_steps        = local_10;
 }
+
+/* ─── engine_compute_scenario_hint — port of FUN_0043de70 @ 0x43de70 ──
+ *
+ * Sub-step rate selector.  Retail flow recap:
+ *
+ *   1. engine state != 3 (ingame) → return 0.  Sub-step loop won't run.
+ *   2. SP (mp_active == 0) → return 1.  Engine sub-steps freely.
+ *   3. MP, local player slot inactive → return 1.  Same effect.
+ *   4. MP, active.  Branch on count_active_allies:
+ *      a. 2+ active allies (or not mode-2): "normal MP" path — compute
+ *         my-lead-or-deficit vs slowest peer, pick from one of two
+ *         ladders based on game_mode_speed (==5 fine, else coarse).
+ *      b. <2 active allies in mode-2: "alone in mode-2" path — compute
+ *         lead vs all-min, pick from a separate 4-step ladder floored
+ *         at base_delta*3.
+ *
+ * The three retail helpers (FUN_0043e433, FUN_0043e330, FUN_0043e50d)
+ * are tiny — inlined here as file-static helpers.
+ */
+
+/* Port of FUN_0043e433 @ 0x43e433 (218 B) — "few-allies" detector.
+ * Returns 1 iff in mode-2 AND fewer than 2 of (ally_a, ally_b) are
+ * active-eligible; else 0.  In any non-mode-2 mode the function
+ * returns 0 outright (regardless of slot state).  Retail's iteration
+ * walks slots 1..6 but the body's `slot == ally_a || slot == ally_b`
+ * filter means only those two contribute. */
+static int count_active_allies_low(const engine_scenario_hint_in_t *in)
+{
+    if (in->game_mode_speed != 2) {
+        return 0;
+    }
+    int count = 0;
+    for (int i = 1; i < 7; i++) {
+        if (in->player_active[i] != 0 &&
+            in->player_has_data[i] != 0 &&
+            in->player_disconnected[i] == 0 &&
+            (i == in->ally_a || i == in->ally_b)) {
+            count++;
+        }
+    }
+    return (count < 2) ? 1 : 0;
+}
+
+/* Port of FUN_0043e330 @ 0x43e330 (259 B) — min-tick + active-count
+ * walker.  Resets active_count, then walks slots 1..6:
+ *   - Every active-eligible slot bumps active_count.
+ *   - Additionally, slots matching the (exclude_slot, mode-2 ally)
+ *     filter contribute their player_ticks[i] to the running min.
+ *
+ * Returns sentinel 10000000 if no eligible slot is found (retail
+ * relies on this as a "no peer to compare against" indicator —
+ * `my_ticks - 10000000 = large negative = catch-up branch`). */
+static int min_tick_filtered(const engine_scenario_hint_in_t *in,
+                             int exclude_slot,
+                             int *out_active_count)
+{
+    int min_tick = 10000000;
+    int active_count = 0;
+    for (int i = 1; i < 7; i++) {
+        if (in->player_active[i] != 0 &&
+            in->player_has_data[i] != 0 &&
+            in->player_disconnected[i] == 0) {
+            active_count++;
+            if (i != exclude_slot &&
+                (in->game_mode_speed != 2 ||
+                 i == in->ally_a || i == in->ally_b)) {
+                if (in->player_ticks[i] < min_tick) {
+                    min_tick = in->player_ticks[i];
+                }
+            }
+        }
+    }
+    *out_active_count = active_count;
+    return min_tick;
+}
+
+/* Port of FUN_0043e50d @ 0x43e50d (180 B) — like min_tick_filtered
+ * but without the exclude_slot OR the mode-2 ally filter.  Just the
+ * unconditional min over all active-eligible slots.  Sentinel 10000000
+ * for no-peer.  Used by the "alone-in-mode-2" path. */
+static int min_tick_all(const engine_scenario_hint_in_t *in)
+{
+    int min_tick = 10000000;
+    for (int i = 1; i < 7; i++) {
+        if (in->player_active[i] != 0 &&
+            in->player_has_data[i] != 0 &&
+            in->player_disconnected[i] == 0) {
+            if (in->player_ticks[i] < min_tick) {
+                min_tick = in->player_ticks[i];
+            }
+        }
+    }
+    return min_tick;
+}
+
+/* "Ahead" ladders.  Both pick a ms-per-step bucket from `delta` (how
+ * many ticks I'm ahead).  Retail's nested if/else chains are linearised
+ * into ascending threshold ladders here — easier to audit. */
+static int ahead_ladder_mode5(int delta)
+{
+    /* Fine-grained 13-step ladder.  Buckets (delta range → hint):
+     *   [0..9]     → 10        [10..29]   → 20        [30..49]  → 30
+     *   [50..89]   → 40        [90..100]  → 50        [101..129] → 60
+     *   [130..169] → 70        [170..209] → 80        [210..309] → 90
+     *   [310..409] → 100       [410..509] → 110       [510..609] → 120
+     *   [610..709] → 130       [710..∞]   → 140 (cap) */
+    if (delta >= 0x2c6) return 0x8c;   /* >= 710 → 140 */
+    if (delta < 10)     return 10;
+    if (delta < 0x1e)   return 0x14;
+    if (delta < 0x32)   return 0x1e;
+    if (delta < 0x5a)   return 0x28;
+    if (delta < 0x65)   return 0x32;
+    if (delta < 0x82)   return 0x3c;
+    if (delta < 0xaa)   return 0x46;
+    if (delta < 0xd2)   return 0x50;
+    if (delta < 0x136)  return 0x5a;
+    if (delta < 0x19a)  return 100;
+    if (delta < 0x1fe)  return 0x6e;
+    if (delta < 0x262)  return 0x78;
+    return 0x82;                        /* [610..709] → 130 */
+}
+
+static int ahead_ladder_coarse(int delta)
+{
+    /* Coarse 8-step ladder.  Used for any game_mode_speed != 5.
+     * Buckets (delta range → hint):
+     *   [0..9]     → 20        [10..19]   → 40        [20..29]  → 60
+     *   [30..39]   → 80        [40..49]   → 100       [50..59]  → 110
+     *   [60..200]  → 120       [201..400] → 130       [401..∞]  → 140 (cap) */
+    if (delta >= 0x191) return 0x8c;   /* >= 401 → 140 */
+    if (delta >= 0xc9)  return 0x82;   /* [201..400] → 130 */
+    if (delta >= 0x3c)  return 0x78;   /* [60..200] → 120 */
+    if (delta < 10)     return 0x14;
+    if (delta < 0x14)   return 0x28;
+    if (delta < 0x1e)   return 0x3c;
+    if (delta < 0x28)   return 0x50;
+    if (delta < 0x32)   return 100;
+    return 0x6e;                        /* [50..59] → 110 */
+}
+
+/* "Behind" ladder.  delta = peers_ahead_of_me (positive).  Returns the
+ * negative fast-skip code that sim_sub_steps interprets. */
+static int behind_ladder(int behind)
+{
+    if (behind < 0x14)    return -2;
+    if (behind < 0x32)    return -3;
+    if (behind < 100)     return -4;
+    if (behind < 200)     return -5;
+    if (behind < 400)     return -6;
+    if (behind < 1000)    return -7;
+    if (behind < 10000)   return -8;
+    return -10;                         /* >= 10000 → -10 (deep stall) */
+}
+
+/* "Alone-in-mode-2" ladder.  4-step + sentinel for very-behind.
+ * Returns 0xffffffff (-1) for "I'm not ahead at all" sentinel, else a
+ * positive ms-per-step (floored at base_delta*3 by the caller). */
+static int alone_ladder(int delta)
+{
+    if (delta < 1)        return -1;    /* sentinel, caller short-circuits */
+    if (delta < 0x33)     return 1;
+    if (delta < 0x191)    return 0x1e;
+    if (delta < 0x321)    return 0x46;
+    return 0x5a;
+}
+
+void engine_compute_scenario_hint(const engine_scenario_hint_in_t *in,
+                                  engine_scenario_hint_out_t *out)
+{
+    /* Default outputs — carry through everything unchanged.  The
+     * branches below overwrite selectively to match retail's per-path
+     * side effects. */
+    out->hint                 = 0;
+    out->new_frame_count      = in->frame_count;
+    out->new_max_stride       = in->max_stride;
+    out->new_stride_sum       = in->stride_sum;
+    out->new_avg_stride       = in->avg_stride;
+    out->new_slow_frame_count = in->slow_frame_count;
+    out->new_active_count     = in->active_count;
+    out->notify_slow_frame    = 0;
+
+    /* Gate 1: engine state must be ingame (==3).  Otherwise return 0
+     * (the global remains, no other writes). */
+    if (in->game_state_phase != 3) {
+        return;
+    }
+
+    /* Gate 2: SP → trivial return 1.  No other writes. */
+    if (in->mp_active == 0) {
+        out->hint = 1;
+        return;
+    }
+
+    /* Gate 3: MP but local player slot has no data → return 1.
+     * Retail reads `(&DAT_0057bf04)[DAT_0057c8cc * 0x160]` — that's
+     * the byte at slot's active-flag position. */
+    int slot = in->local_player_idx;
+    if (slot < 1 || slot > 6 || in->player_active[slot] == 0) {
+        out->hint = 1;
+        return;
+    }
+
+    /* Gate 4: alone-in-mode-2 path branches off FUN_0043e433.  Returns
+     * 1 iff mode==2 and 0 or 1 active ally — i.e., the local player
+     * has no MP peer to sync with through the mode-2 ally filter. */
+    if (count_active_allies_low(in)) {
+        /* Alone-in-mode-2 path.  Uses the unfiltered min-tick walker
+         * (FUN_0043e50d) — doesn't write active_count.  Catch-up
+         * sentinel (-1) returns early. */
+        int peer_min = min_tick_all(in);
+        int delta    = in->player_ticks[slot] - peer_min;
+
+        int hint = alone_ladder(delta);
+        if (hint == -1) {
+            out->hint = -1;
+            return;
+        }
+        /* Floor at base_delta * 3.  Retail compares as signed —
+         * negative base_delta*3 would underfloor.  We mirror exactly. */
+        if (hint < in->base_delta * 3) {
+            hint = in->base_delta * 3;
+        }
+        out->hint = hint;
+        return;
+    }
+
+    /* Normal MP path.  First call to min_tick_filtered sets the active
+     * count via the side-channel out param.  Single-active short-
+     * circuits to 1 (only me here, no point throttling). */
+    int active_count = 0;
+    int peer_min_inc = min_tick_filtered(in, 0, &active_count);
+    out->new_active_count = active_count;
+
+    if (active_count == 1) {
+        out->hint = 1;
+        return;
+    }
+
+    /* Bump frame_count BEFORE the lead/deficit branch (retail does the
+     * same — and it's load-bearing for the avg_stride writeback gate). */
+    out->new_frame_count = in->frame_count + 1;
+
+    int my_ticks = in->player_ticks[slot];
+    int lead     = my_ticks - peer_min_inc;
+
+    if (lead < 1) {
+        /* Catch-up: compute peers-ahead-of-me (with self excluded so a
+         * dropped-out self doesn't skew the min) and pick from the
+         * negative fast-skip ladder.  No writes to max/sum/avg/slow —
+         * those carry through. */
+        int active_excl = 0;
+        int peer_min_excl = min_tick_filtered(in, slot, &active_excl);
+        int behind = peer_min_excl - my_ticks;
+        out->hint  = behind_ladder(behind);
+        return;
+    }
+
+    /* Throttle: pick from the ahead ladder, then update stride
+     * metrics + slow_frame_count book-keeping. */
+    int hint = (in->game_mode_speed == 5) ? ahead_ladder_mode5(lead)
+                                          : ahead_ladder_coarse(lead);
+
+    if (in->max_stride < lead) {
+        out->new_max_stride = lead;
+    }
+    out->new_stride_sum = in->stride_sum + lead;
+    /* `if (DAT_00515b20 != 0)` post-bump — frame_count+1 is 0 only if
+     * the addend overflowed (the diff orchestrator's vectors don't go
+     * anywhere near INT_MAX, so we treat this as always-true in
+     * practice; but the gate matches retail). */
+    if (out->new_frame_count != 0) {
+        out->new_avg_stride = out->new_stride_sum / out->new_frame_count;
+    }
+
+    if (hint < 0x8c) {
+        /* Not at the 140 ms ceiling — reset the slow-frame run length. */
+        out->new_slow_frame_count = 0;
+    } else {
+        /* Bumped slow frame.  Retail fires FUN_0043eda0(10, 0) when
+         * the post-bump value exceeds 100 (gate is `100 < value`, so
+         * a starting 100 → bumped to 101 → fires).  Diff vectors are
+         * constrained `slow_frame_count ≤ 99` so this stays unfired
+         * retail-side, but the port still computes the trigger so
+         * unit tests cover it. */
+        int new_slow = in->slow_frame_count + 1;
+        if (new_slow > 100) {
+            out->notify_slow_frame    = 1;
+            out->new_slow_frame_count = 0;     /* retail resets after fire */
+        } else {
+            out->new_slow_frame_count = new_slow;
+        }
+    }
+
+    /* Final hint = base_delta + ladder bucket.  base_delta is the
+     * scenario's tick budget; adding it gives the "ms until I should
+     * step again given my current lead". */
+    out->hint = in->base_delta + hint;
+}

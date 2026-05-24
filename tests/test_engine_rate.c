@@ -490,3 +490,419 @@ int test_engine_rate_time_overflow_local_8_clamps_to_10000(void)
     T_ASSERT_EQ_I(out.sub_steps, 1);
     return 0;
 }
+
+/* ─── engine_compute_scenario_hint (port of FUN_0043de70) ──────────
+ *
+ * Per-branch coverage of the MP rate selector.  Helpers + ladders are
+ * exercised through their callers.  Defaults: ingame-MP with slot 1
+ * active + has-data + not disconnected; ally slots 2 and 3 active to
+ * satisfy mode-2; tick counters at 0 (so my_ticks == peer_min by
+ * default → catch-up branch via `lead < 1`).
+ */
+
+static void scenario_default_in(engine_scenario_hint_in_t *in)
+{
+    memset(in, 0, sizeof(*in));
+    in->game_state_phase = 3;        /* ingame */
+    in->mp_active        = 1;
+    in->local_player_idx = 1;
+    in->game_mode_speed  = 0;        /* coarse ladder */
+    in->ally_a           = 2;
+    in->ally_b           = 3;
+    in->frame_count      = 0;
+    in->max_stride       = 0;
+    in->stride_sum       = 0;
+    in->avg_stride       = 0xCAFEBABE;  /* canary — carries through unchanged */
+    in->slow_frame_count = 0;
+    in->base_delta       = 5;
+    in->active_count     = 0xDEADBEEF;  /* canary — overwritten in normal path */
+    in->player_active[1]       = 1; in->player_has_data[1] = 1;
+    in->player_active[2]       = 1; in->player_has_data[2] = 1;
+    in->player_active[3]       = 1; in->player_has_data[3] = 1;
+}
+
+int test_engine_scenario_hint_state_not_ingame_returns_zero(void)
+{
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.game_state_phase = 0;     /* menu state */
+    engine_compute_scenario_hint(&in, &out);
+    T_ASSERT_EQ_I(out.hint, 0);
+    /* No globals written — every output equals carry-through. */
+    T_ASSERT_EQ_U((uint32_t)out.new_active_count, 0xDEADBEEF);
+    T_ASSERT_EQ_U((uint32_t)out.new_avg_stride,   0xCAFEBABE);
+    return 0;
+}
+
+int test_engine_scenario_hint_sp_returns_one(void)
+{
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.mp_active = 0;
+    engine_compute_scenario_hint(&in, &out);
+    T_ASSERT_EQ_I(out.hint, 1);
+    /* SP path — no stride updates, no active_count write. */
+    T_ASSERT_EQ_U((uint32_t)out.new_active_count, 0xDEADBEEF);
+    return 0;
+}
+
+int test_engine_scenario_hint_local_player_inactive_returns_one(void)
+{
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.player_active[1] = 0;       /* my slot inactive */
+    engine_compute_scenario_hint(&in, &out);
+    T_ASSERT_EQ_I(out.hint, 1);
+    return 0;
+}
+
+int test_engine_scenario_hint_invalid_slot_returns_one(void)
+{
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.local_player_idx = 7;       /* out of range */
+    engine_compute_scenario_hint(&in, &out);
+    T_ASSERT_EQ_I(out.hint, 1);
+    return 0;
+}
+
+int test_engine_scenario_hint_single_active_player_returns_one(void)
+{
+    /* Only slot 1 (me) is active.  active_count = 1 → return 1.
+     * Stride metrics not updated (we short-circuited before the ++). */
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.player_active[2] = 0;
+    in.player_has_data[2] = 0;
+    in.player_active[3] = 0;
+    in.player_has_data[3] = 0;
+    in.frame_count = 100;
+    engine_compute_scenario_hint(&in, &out);
+    T_ASSERT_EQ_I(out.hint, 1);
+    T_ASSERT_EQ_I(out.new_active_count, 1);
+    T_ASSERT_EQ_I(out.new_frame_count, 100);  /* NOT bumped */
+    return 0;
+}
+
+int test_engine_scenario_hint_catch_up_small_behind_returns_neg2(void)
+{
+    /* I'm 10 ticks behind a single peer.  behind < 0x14 → hint = -2.
+     * Stride metrics NOT updated (catch-up branch). */
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.player_ticks[1] = 0;
+    in.player_ticks[2] = 10;       /* peer 10 ahead */
+    in.frame_count = 50;
+    in.stride_sum  = 1000;
+    in.max_stride  = 25;
+    engine_compute_scenario_hint(&in, &out);
+    T_ASSERT_EQ_I(out.hint, -2);
+    /* frame_count++ happened (before lead check), but stride/max/avg unchanged. */
+    T_ASSERT_EQ_I(out.new_frame_count, 51);
+    T_ASSERT_EQ_I(out.new_max_stride, 25);
+    T_ASSERT_EQ_I(out.new_stride_sum, 1000);
+    T_ASSERT_EQ_U((uint32_t)out.new_avg_stride, 0xCAFEBABE);  /* carry-through */
+    T_ASSERT_EQ_I(out.notify_slow_frame, 0);
+    return 0;
+}
+
+int test_engine_scenario_hint_catch_up_ladder_boundaries(void)
+{
+    /* Sweep the -2..-10 ladder.  behind = peer_min_excl - my_ticks. */
+    const struct { int behind; int expect; } cases[] = {
+        {0,     -2},                      /* < 0x14 */
+        {19,    -2},
+        {20,    -3},                      /* >= 0x14 */
+        {49,    -3},
+        {50,    -4},                      /* >= 0x32 */
+        {99,    -4},
+        {100,   -5},                      /* >= 100 */
+        {199,   -5},
+        {200,   -6},                      /* >= 200 */
+        {399,   -6},
+        {400,   -7},                      /* >= 400 */
+        {999,   -7},
+        {1000,  -8},                      /* >= 1000 */
+        {9999,  -8},
+        {10000, -10},                     /* >= 10000 */
+        {99999, -10},
+    };
+    for (size_t i = 0; i < sizeof(cases)/sizeof(cases[0]); i++) {
+        engine_scenario_hint_in_t  in;
+        engine_scenario_hint_out_t out;
+        scenario_default_in(&in);
+        in.player_ticks[1] = 0;
+        in.player_ticks[2] = cases[i].behind;
+        in.player_ticks[3] = cases[i].behind;   /* same so min unchanged */
+        engine_compute_scenario_hint(&in, &out);
+        T_ASSERT_EQ_I(out.hint, cases[i].expect);
+    }
+    return 0;
+}
+
+int test_engine_scenario_hint_ahead_coarse_ladder(void)
+{
+    /* Sweep the coarse "ahead" ladder.  hint = base_delta + bucket. */
+    const struct { int lead; int bucket; } cases[] = {
+        {1,    0x14},                    /* < 10 → 20 */
+        {9,    0x14},
+        {10,   0x28},                    /* < 20 → 40 */
+        {19,   0x28},
+        {20,   0x3c},                    /* < 30 → 60 */
+        {30,   0x50},                    /* < 40 → 80 */
+        {40,   100},                     /* < 50 → 100 */
+        {50,   0x6e},                    /* < 60 → 110 */
+        {59,   0x6e},
+        {60,   0x78},                    /* < 201 → 120 */
+        {200,  0x78},
+        {201,  0x82},                    /* < 401 → 130 */
+        {400,  0x82},
+        {401,  0x8c},                    /* >= 401 → 140 (ceiling) */
+        {99999, 0x8c},
+    };
+    for (size_t i = 0; i < sizeof(cases)/sizeof(cases[0]); i++) {
+        engine_scenario_hint_in_t  in;
+        engine_scenario_hint_out_t out;
+        scenario_default_in(&in);
+        in.game_mode_speed = 0;          /* coarse */
+        in.base_delta = 5;
+        in.player_ticks[1] = cases[i].lead;
+        in.player_ticks[2] = 0;
+        in.player_ticks[3] = 0;
+        engine_compute_scenario_hint(&in, &out);
+        T_ASSERT_EQ_I(out.hint, 5 + cases[i].bucket);
+    }
+    return 0;
+}
+
+int test_engine_scenario_hint_ahead_mode5_ladder(void)
+{
+    /* Sweep the fine-grained mode-5 ladder. */
+    const struct { int lead; int bucket; } cases[] = {
+        {1,    10},                      /* < 10 → 10 */
+        {9,    10},
+        {10,   0x14},                    /* < 30 → 20 */
+        {29,   0x14},
+        {30,   0x1e},                    /* < 50 → 30 */
+        {50,   0x28},                    /* < 90 → 40 */
+        {90,   0x32},                    /* < 101 → 50 */
+        {101,  0x3c},                    /* < 130 → 60 */
+        {130,  0x46},                    /* < 170 → 70 */
+        {170,  0x50},                    /* < 210 → 80 */
+        {210,  0x5a},                    /* < 310 → 90 */
+        {310,  100},                     /* < 410 → 100 */
+        {410,  0x6e},                    /* < 510 → 110 */
+        {510,  0x78},                    /* < 610 → 120 */
+        {610,  0x82},                    /* < 710 → 130 */
+        {710,  0x8c},                    /* >= 710 → 140 */
+        {99999, 0x8c},
+    };
+    for (size_t i = 0; i < sizeof(cases)/sizeof(cases[0]); i++) {
+        engine_scenario_hint_in_t  in;
+        engine_scenario_hint_out_t out;
+        scenario_default_in(&in);
+        in.game_mode_speed = 5;          /* fine-grained */
+        in.base_delta = 0;
+        in.player_ticks[1] = cases[i].lead;
+        in.player_ticks[2] = 0;
+        in.player_ticks[3] = 0;
+        engine_compute_scenario_hint(&in, &out);
+        T_ASSERT_EQ_I(out.hint, cases[i].bucket);
+    }
+    return 0;
+}
+
+int test_engine_scenario_hint_ahead_throttle_writes_stride(void)
+{
+    /* Verify the throttle branch writes max_stride, stride_sum, avg_stride. */
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.base_delta = 0;
+    in.frame_count = 99;       /* will become 100 after bump */
+    in.stride_sum  = 200;
+    in.max_stride  = 30;
+    in.avg_stride  = 5;
+    in.player_ticks[1] = 100;
+    in.player_ticks[2] = 0;
+    in.player_ticks[3] = 0;
+    /* lead = 100, coarse ladder → bucket 0x78=120 (the [60..200] range
+     * widens past the more-discrete 10-step buckets at the low end),
+     * hint = 0+120 = 120. */
+    engine_compute_scenario_hint(&in, &out);
+    T_ASSERT_EQ_I(out.hint, 120);
+    T_ASSERT_EQ_I(out.new_frame_count, 100);
+    T_ASSERT_EQ_I(out.new_max_stride, 100);             /* 30 < 100 → updated */
+    T_ASSERT_EQ_I(out.new_stride_sum, 300);             /* 200 + 100 */
+    T_ASSERT_EQ_I(out.new_avg_stride, 3);               /* 300 / 100 */
+    T_ASSERT_EQ_I(out.notify_slow_frame, 0);
+    T_ASSERT_EQ_I(out.new_slow_frame_count, 0);          /* hint < 0x8c → reset */
+    return 0;
+}
+
+int test_engine_scenario_hint_max_stride_carries_through_when_not_exceeded(void)
+{
+    /* max_stride only updated when current lead exceeds it.  Smaller
+     * leads carry through the existing value. */
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.max_stride = 999;
+    in.player_ticks[1] = 50;
+    in.player_ticks[2] = 0;
+    in.player_ticks[3] = 0;
+    engine_compute_scenario_hint(&in, &out);
+    T_ASSERT_EQ_I(out.new_max_stride, 999);
+    return 0;
+}
+
+int test_engine_scenario_hint_slow_frame_increments_at_140ms_cap(void)
+{
+    /* lead = 401 → coarse-ladder ceiling 140.  slow_frame_count bumps. */
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.slow_frame_count = 5;
+    in.player_ticks[1] = 500;       /* lead 500 → ceiling */
+    in.player_ticks[2] = 0;
+    in.player_ticks[3] = 0;
+    engine_compute_scenario_hint(&in, &out);
+    T_ASSERT_EQ_I(out.new_slow_frame_count, 6);
+    T_ASSERT_EQ_I(out.notify_slow_frame, 0);
+    return 0;
+}
+
+int test_engine_scenario_hint_slow_frame_notify_on_hundred(void)
+{
+    /* slow_frame_count = 100 → bumps to 101, gate `100 < 101` → notify
+     * fires, counter resets.  Diff vectors are constrained ≤ 99 to
+     * skip this; tests cover it directly. */
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.slow_frame_count = 100;
+    in.player_ticks[1] = 500;       /* ceiling lead */
+    in.player_ticks[2] = 0;
+    in.player_ticks[3] = 0;
+    engine_compute_scenario_hint(&in, &out);
+    T_ASSERT_EQ_I(out.notify_slow_frame, 1);
+    T_ASSERT_EQ_I(out.new_slow_frame_count, 0);
+    return 0;
+}
+
+int test_engine_scenario_hint_alone_in_mode2_uses_alone_ladder(void)
+{
+    /* mode-2 with only 1 active ally → alone-in-mode-2 path. */
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.game_mode_speed = 2;
+    in.ally_b = -1;                 /* only ally_a (slot 2) eligible → count = 1 */
+    in.base_delta = 10;
+    in.player_ticks[1] = 100;
+    in.player_ticks[2] = 50;
+    in.player_ticks[3] = 50;        /* peer_min = 50, lead = 50 */
+    /* lead 50 falls in [0x33..0x191) → bucket 0x1e = 30.  Floor at
+     * base_delta*3 = 30, so 30 ≥ 30, no floor → hint = 30. */
+    engine_compute_scenario_hint(&in, &out);
+    T_ASSERT_EQ_I(out.hint, 30);
+    /* active_count NOT written in the alone path. */
+    T_ASSERT_EQ_U((uint32_t)out.new_active_count, 0xDEADBEEF);
+    return 0;
+}
+
+int test_engine_scenario_hint_alone_negative_lead_returns_minus_one(void)
+{
+    /* Alone-in-mode-2 + lead < 1 → -1 sentinel. */
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.game_mode_speed = 2;
+    in.ally_b = -1;
+    in.player_ticks[1] = 0;
+    in.player_ticks[2] = 50;        /* peer ahead */
+    engine_compute_scenario_hint(&in, &out);
+    T_ASSERT_EQ_I(out.hint, -1);
+    return 0;
+}
+
+int test_engine_scenario_hint_alone_floors_at_base_delta_times_three(void)
+{
+    /* Alone path with small lead — hint should floor at base_delta*3. */
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.game_mode_speed = 2;
+    in.ally_b = -1;
+    in.base_delta = 100;            /* floor = 300 */
+    in.player_ticks[1] = 10;
+    in.player_ticks[2] = 5;         /* lead = 5 → bucket 1, but floored to 300 */
+    engine_compute_scenario_hint(&in, &out);
+    T_ASSERT_EQ_I(out.hint, 300);
+    return 0;
+}
+
+int test_engine_scenario_hint_mode2_two_allies_uses_normal_path(void)
+{
+    /* mode-2 with both allies active → normal-MP path (not alone). */
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.game_mode_speed = 2;
+    /* Already have slots 2 and 3 active as ally_a and ally_b → 2 allies */
+    in.player_ticks[1] = 10;
+    in.player_ticks[2] = 10;
+    in.player_ticks[3] = 10;
+    /* All equal → lead = 0 → catch-up branch with behind = 0 → -2 */
+    engine_compute_scenario_hint(&in, &out);
+    T_ASSERT_EQ_I(out.hint, -2);
+    /* active_count IS written in the normal path. */
+    T_ASSERT_EQ_I(out.new_active_count, 3);
+    return 0;
+}
+
+int test_engine_scenario_hint_mode2_filter_excludes_non_allies(void)
+{
+    /* In mode 2, the min-tick search only considers ally slots.  Slot 4
+     * is active but NOT an ally → its tick value (way ahead) is ignored
+     * when computing peer_min for the lead/deficit branch decision. */
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.game_mode_speed = 2;
+    in.player_active[4]  = 1;
+    in.player_has_data[4] = 1;
+    in.player_ticks[1] = 100;
+    in.player_ticks[2] = 100;       /* ally */
+    in.player_ticks[3] = 100;       /* ally */
+    in.player_ticks[4] = 0;         /* non-ally peer, but should be ignored
+                                     * for the lead calc */
+    engine_compute_scenario_hint(&in, &out);
+    /* peer_min over ally slots only = 100, lead = 0 → catch-up (-2). */
+    T_ASSERT_EQ_I(out.hint, -2);
+    /* But active_count still counts slot 4 too (no ally filter on count). */
+    T_ASSERT_EQ_I(out.new_active_count, 4);
+    return 0;
+}
+
+int test_engine_scenario_hint_disconnected_player_excluded(void)
+{
+    /* Disconnected players don't count as active (skips both filters). */
+    engine_scenario_hint_in_t  in;
+    engine_scenario_hint_out_t out;
+    scenario_default_in(&in);
+    in.player_disconnected[2] = 1;   /* slot 2 disconnected */
+    in.player_ticks[1] = 0;
+    in.player_ticks[2] = 0;
+    in.player_ticks[3] = 0;
+    engine_compute_scenario_hint(&in, &out);
+    /* active_count = 2 (slots 1 and 3 only). */
+    T_ASSERT_EQ_I(out.new_active_count, 2);
+    return 0;
+}

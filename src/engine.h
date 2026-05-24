@@ -136,6 +136,109 @@ typedef struct {
 void engine_compute_sim_sub_steps(const engine_rate_in_t *in,
                                   engine_rate_out_t *out);
 
+/* ─── scenario-rate hint (port of FUN_0043de70) ────────────────────
+ *
+ * Computes the `scenario_hint` value that engine_compute_sim_sub_steps
+ * consumes.  In SP, trivially returns 1.  In MP, walks the 6-player
+ * tick table (DAT_0053e8d0[i*4]) gated by per-slot active / has-data /
+ * disconnected flags, computes my-lead-or-deficit vs the slowest peer,
+ * and selects a ms-per-step value from one of three lookup ladders:
+ *
+ *   - "I'm behind" (delta < 1) — negative codes -2/-3/-4/-5/-6/-7/-8/-10
+ *     keyed to how far behind, drives the fast-skip branches in
+ *     sim_sub_steps.
+ *   - "I'm ahead in mode-5 (fine-grained)" — 13-step ladder, 10..130 ms
+ *     buckets, plus 140 ms ceiling.
+ *   - "I'm ahead in coarse mode" — 8-step ladder, 20..130 ms buckets,
+ *     plus 140 ms ceiling.
+ *
+ * A fourth path covers "mode==2 with <2 active allies" — uses
+ * FUN_0043e50d (min-tick, no exclude filter) and a 4-step ladder
+ * floored at base_delta*3.
+ *
+ * Pure function — every global read is an explicit input; every global
+ * write is in the output struct.  Helpers (FUN_0043e433 count_active_
+ * allies, FUN_0043e330 min_tick_filtered, FUN_0043e50d min_tick_all)
+ * are inlined as file-static helpers in engine_rate.c.
+ *
+ * Side-effect avoidance: retail can call FUN_0043eda0(10, 0) when
+ * slow_frame_count exceeds 100 (drives an MP broadcast event).  The
+ * port surfaces this via `notify_slow_frame`; the diff orchestrator
+ * pins `slow_frame_count ≤ 99` in test vectors so the trigger never
+ * fires retail-side either.
+ */
+typedef struct {
+    /* Engine state phase.  retail DAT_0052af94.  Must be 3 (ingame)
+     * for the function to return non-zero; otherwise hint = 0. */
+    int      game_state_phase;
+    /* Multiplayer session active flag.  retail DAT_00553030. */
+    int      mp_active;
+    /* Local player slot index (0..6).  retail DAT_0057c8cc.  Slot 0
+     * is unused in normal play; slots 1..6 carry the per-player state. */
+    int      local_player_idx;
+    /* Game-mode speed enum.  retail DAT_0057c8fc.
+     *   0/1/3/4 = coarse 8-step ladder when ahead
+     *   2       = ally-only filter + alone-in-mode-2 path possible
+     *   5       = fine-grained 13-step ladder when ahead */
+    int      game_mode_speed;
+    /* Mode-2 ally player slots.  retail DAT_005681ec / DAT_005681d8.
+     * Used by FUN_0043e433 + FUN_0043e330's mode-2 filter to restrict
+     * the min-tick search to "me + my two allies". */
+    int      ally_a;
+    int      ally_b;
+    /* Stride metrics (r/w).  Bumped on every throttle-branch call. */
+    int      frame_count;          /* DAT_00515b20 — total throttled frames */
+    int      max_stride;           /* DAT_00512fa8 — running max delta seen */
+    int      stride_sum;           /* DAT_00515914 — running sum of deltas */
+    int      avg_stride;           /* DAT_00515908 — stride_sum / frame_count
+                                    *   (only OVERWRITTEN in throttle branch;
+                                    *    catch-up + early-return paths carry
+                                    *    through this value unchanged) */
+    int      slow_frame_count;     /* DAT_004d5c90 — consecutive max-bucket
+                                    *   hits.  Constrained ≤99 in diff
+                                    *   vectors so the 100-trigger
+                                    *   FUN_0043eda0(10,0) never fires. */
+    int      base_delta;           /* DAT_004d2160 — additive offset on the
+                                    *   "I'm ahead" hint return; also a
+                                    *   ×3 floor in the alone-in-mode-2 path */
+    int      active_count;         /* DAT_0053f068 — write-only retail-side
+                                    *   (carried through when none of the
+                                    *   helpers that write it ran) */
+    /* Per-player slot tables.  retail layouts:
+     *   player_active[i]       = (&DAT_0057bf04)[i * 0x160]  (u8)
+     *   player_has_data[i]     = (&DAT_0057bf05)[i * 0x160]  (u8)
+     *   player_disconnected[i] = (&DAT_00553d76)[i * 0x2c]   (u8)
+     *   player_ticks[i]        = *(int *)(&DAT_0053e8d0 + i*4)  (s32)
+     * Only slots 1..6 are read; slot 0 is unused.  Strided layouts
+     * collapse into 7-entry arrays for the port. */
+    uint8_t  player_active[7];
+    uint8_t  player_has_data[7];
+    uint8_t  player_disconnected[7];
+    int      player_ticks[7];
+} engine_scenario_hint_in_t;
+
+typedef struct {
+    /* Return value: scenario_hint that engine_compute_sim_sub_steps
+     * consumes.  0 = freeze, <0 = fast-skip, >0 = ms-per-step bucket. */
+    int      hint;
+    /* Writebacks.  When unchanged (catch-up branch, early returns), the
+     * orchestrator restores the snapshotted value — so we return the
+     * effective post-call state (potentially equal to in->). */
+    int      new_frame_count;
+    int      new_max_stride;
+    int      new_stride_sum;
+    int      new_avg_stride;
+    int      new_slow_frame_count;
+    int      new_active_count;
+    /* 1 iff slow_frame_count would have hit 100 (retail fires
+     * FUN_0043eda0(10, 0)).  Diff vectors are constrained so this
+     * stays 0; tests exercise the flag directly. */
+    int      notify_slow_frame;
+} engine_scenario_hint_out_t;
+
+void engine_compute_scenario_hint(const engine_scenario_hint_in_t *in,
+                                  engine_scenario_hint_out_t *out);
+
 /* ─── animation phase ticks (port of FUN_004bbc80) ─────────────────
  *
  * Maintains 9 "did event X fire this call" flags driven by
