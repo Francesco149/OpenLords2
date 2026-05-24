@@ -7,6 +7,92 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — WndProc port + findings
+
+Continued top-down: ported retail's `FUN_004b29be @ 0x4b29be`
+(WinLords2Class WndProc) into `src/main.c`, with a dedicated
+findings doc.
+
+### `docs/findings/wndproc.md`
+
+Maps every message the retail WndProc handles to its retail
+behaviour, call-chain, and the globals it reads/writes:
+
+- WM_PAINT — Smacker-aware (delegates to `FUN_0042e3ba` if a
+  movie is playing, else plain Begin/EndPaint + optional
+  full-screen redraw when unfocused).
+- WM_DESTROY — full subsystem teardown chain: close Smacker
+  (`FUN_0042dfe2`), release palette (`FUN_004b28cd`), shut down
+  DSound (`FUN_00425d35`), shut down DPlay (`FUN_004b7180`),
+  then `PostQuitMessage(0)`.
+- WM_MOVE / WM_SIZE — recompute the **screen-space client
+  RECT** at `DAT_004ea180`+, log "OK :Window moved." / "OK
+  :Minimizing." / "OK :Paused.", drive a redraw based on engine
+  state.
+- WM_CLOSE — sets `DAT_005aeb68 = 3` and returns.  The actual
+  close is handled by the sim/render driver's escalator
+  (`3 → 1 → 4`), so an external Alt+F4 cleanly drains the engine
+  before the surfaces die.
+- WM_ACTIVATEAPP — toggles the focus flag, logs "OK :Active." /
+  "OK :Not active.", and on focus-regained-with-lost-surfaces
+  runs `FUN_004b2730` (DDraw `Restore`) and on failure
+  `FUN_004b2922` (full re-init).
+- WM_DISPLAYCHANGE — caches new screen bpp + size.
+- WM_KEYDOWN — a fat VK switch.  All 30-odd cases mapped to
+  their `FUN_xxxxx` handlers (digits with Ctrl-modifier,
+  F1/WinHelp, F2-cycle, F5/recentre, F7/F8 debug, ESC/menu, …).
+- WM_CHAR / WM_SYSCHAR — text input + Alt-shortcut mappings
+  (Alt-1, Alt-2..5, Alt-X = ESC).
+- Mouse — coord cache at `DAT_004eabbe/004eabc0`, button bitmask
+  `DAT_004eabc2`, dbl-click latch `DAT_004eada1`.
+- WM_PALETTECHANGED / WM_QUERYNEWPALETTE — only act in
+  windowed 8bpp; recreates the palette via `FUN_0042f1df`.
+
+Also catalogued the 10 retail log strings the WndProc emits via
+`FUN_004afab9` (`OK :Paused.`, `OK :Active.`, `ERR:Can't
+restore front buffer.`, etc.) so the drop-in can mirror them
+for differential transcripts later.
+
+### Port landed in `src/main.c`
+
+Structural messages fully ported — the drop-in now logs in
+retail's exact wording ("OK :Active." / "OK :Not active." /
+"OK :Window moved." / "OK :Minimizing." / "OK :Paused.")
+through the same code paths.  Mouse-state mirror (`g_mouse_x`,
+`g_mouse_y`, `g_mouse_buttons`, `g_mouse_dblclk`) and
+focus/shutdown-request flags (`g_focused`, `g_surface_lost`,
+`g_shutdown_request`) carry the same semantics as their
+retail DAT_* counterparts — so when the sim/render driver
+lands, the rename is global-replace.
+
+Game-state hotkeys remain TODOs (each labelled with the retail
+`FUN_xxxxx` it should call) — VK_ESCAPE/F1/F5/Ctrl are
+honoured as drop-in conveniences.  WM_CLOSE both sets the
+deferred-shutdown flag AND inlines `DestroyWindow` so we still
+exit cleanly without the sim escalator that doesn't exist yet.
+
+Smoke verified: 50 frames in <1 s under
+`tools/run-openlords2.sh`, transcript shows
+`OK :Active.` on window activation and `OK :Not active.` on
+the synchronous deactivation during DestroyWindow.
+
+### What's next
+
+1. **DDraw bring-up** — port `FUN_004b284e` (DirectDrawCreate +
+   SetCooperativeLevel + SetDisplayMode) and `FUN_0042ec91`
+   (primary surface, back buffer, clipper, lock-probe) into a
+   new `src/gfx.c`.  WndProc's surface-restore path can then
+   call into real code.
+2. **Turbo v2 in the Frida agent** — `timeGetTime`-only seat
+   per the `main-loop-tick` finding.  Verify rise rate of
+   `DAT_0057c998` against the scale.
+3. Defer porting the per-screen hotkeys (F2/F3/F4/F6/F7/F8/F9
+   etc.) until the screen-state machine + sim driver land —
+   they all bottom out in game-state code that doesn't exist
+   yet.
+
+---
+
 ## 2026-05-24 — DDraw/DSound + main-loop findings + InitInstance port
 
 Continued top-down chip-away from the entry point.  Three landings:

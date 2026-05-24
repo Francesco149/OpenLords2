@@ -11,6 +11,14 @@
  * `FUN_004b2258 @ 0x4b2258` (the "InitInstance"-equivalent).  See
  * `docs/findings/winmain-and-bootstrap.md` for the chain.
  *
+ * The WndProc is ported from retail's `FUN_004b29be @ 0x4b29be`.  See
+ * `docs/findings/wndproc.md` for the per-message breakdown.  Only the
+ * structural messages (paint, destroy, move/size, close, activateapp,
+ * displaychange, mouse-state cache) are fully implemented in this
+ * pass — every game-state hotkey case is a labelled TODO referring
+ * back to the retail FUN_004xxxxx so the port can resume once the
+ * called subsystem lands.
+ *
  * Deliberate deviations from retail (phase 1 — bootstrap defaults):
  *   - WS_VISIBLE is NEVER set in CreateWindowExA.  Retail bakes it
  *     into dwStyle (`0x90080000`) which makes the window appear
@@ -43,6 +51,7 @@
 #include <ctype.h>
 #include <windows.h>
 #include <mmsystem.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -88,6 +97,59 @@ static int g_screen_cy;
 /* Frame-counter — bumped once per main-loop iteration. */
 static uint32_t  g_frame_counter;
 static uint32_t  g_base_time_ms;
+
+/* ---------------------------------------------------------------- *
+ *  WndProc state mirror — retail keeps these in flat DAT_* globals  *
+ *  scattered through .data.  See docs/findings/wndproc.md for the   *
+ *  cross-reference; the comments here map each var to its retail    *
+ *  address so future ports can global-replace the rename.           *
+ * ---------------------------------------------------------------- */
+
+/* Mouse-coord cache — retail DAT_004eabbe (lo) / DAT_004eabc0 (hi).
+ * Updated by WM_MOUSEMOVE; read by sim/render code (not ported yet). */
+static int16_t g_mouse_x;
+static int16_t g_mouse_y;
+/* Mouse button-down bitmask — retail DAT_004eabc2.  bit0=LMB, bit1=RMB. */
+static uint8_t g_mouse_buttons;
+/* Double-click latch — retail DAT_004eada1.  bit0=LMB-dbl, bit1=RMB-dbl. */
+static uint8_t g_mouse_dblclk;
+/* Ctrl held — retail DAT_004df3a8.  Set by VK_CONTROL down, cleared by up. */
+static int     g_ctrl_down;
+
+/* Window-active flag — retail DAT_004e65a8.  Toggled by WM_ACTIVATEAPP
+ * and the focus branch of WM_MOVE/WM_SIZE. */
+static int     g_focused;
+/* Surface-LOST flag — retail DAT_004e65d0.  Set by the render path
+ * when DDraw reports DDERR_SURFACELOST; cleared on Restore() success
+ * inside the focus-regained path.  We don't have DDraw yet so this
+ * always reads 0, but the mirror is here so the port chain stays
+ * linear. */
+static int     g_surface_lost;
+/* Deferred-shutdown state — retail DAT_005aeb68.
+ *   3 = WM_CLOSE received, drain sim before destroying window
+ *   1 = sim ack'd the close, escalate next frame
+ *   4 = sim asked for shutdown itself (no WM_CLOSE)
+ * Today we have no main-loop escalator, so WM_CLOSE also force-quits
+ * by setting g_shutdown directly.  Once FUN_004b99c0 lands, the
+ * inline DestroyWindow() in wndproc disappears and this flag drives
+ * the dance from the main loop instead. */
+static int     g_shutdown_request;
+
+/* Client-area RECT in *screen* coords — retail DAT_004ea180/+4/+8/+c.
+ * Recomputed on WM_MOVE/WM_SIZE.  Used by DDraw blit destinations. */
+static RECT    g_client_screen;
+
+/* Cached screen metrics from WM_DISPLAYCHANGE.
+ *   g_screen_change_cx / cy mirror DAT_004e65a0 / DAT_004ea838.
+ *   g_screen_bpp mirrors _DAT_004eabd8. */
+static int     g_screen_change_cx;
+static int     g_screen_change_cy;
+static uint32_t g_screen_bpp;
+
+/* "Engine wants the next frame redrawn" marker — retail DAT_0057d340
+ * is set to 2 after WM_MOVE/WM_SIZE; the render driver consumes it.
+ * Mirrored so the port stays mechanical when the driver lands. */
+static int     g_render_dirty;
 
 static LRESULT CALLBACK wndproc(HWND, UINT, WPARAM, LPARAM);
 static int  register_window_class(void);
@@ -171,17 +233,206 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
     return 0;
 }
 
+/* Port of retail FUN_004b29be @ 0x4b29be — the WinLords2Class
+ * WndProc.  Structural messages (paint, destroy, move/size, close,
+ * activateapp, displaychange, mouse-state cache) are fully ported;
+ * game-state hotkeys and Smacker-aware paint are stubs until the
+ * underlying subsystems land.  See docs/findings/wndproc.md.
+ *
+ * Retail returns from this function fall into two patterns:
+ *   - explicit `return` (WM_PAINT, VK_ESCAPE in WM_KEYDOWN) — bypass
+ *     DefWindowProcA;
+ *   - implicit fall-through — every other branch ends at the tail
+ *     which writes the mouse cache and calls DefWindowProcA.
+ * The mirror of `DAT_004eabbe/004eabc0` is updated *only* by
+ * WM_MOUSEMOVE, so we just touch g_mouse_x/y there and call
+ * DefWindowProcA from the bottom. */
 static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
-    case WM_CLOSE:
-        DestroyWindow(hwnd);
+
+    /* --- WM_PAINT (0x0f) -------------------------------------------
+     * Retail: if a Smacker movie is playing (DAT_00516a4c != 0), call
+     *   FUN_0042e3ba which black-fills the dirty rect and SmackGotos
+     *   to the current frame.  Otherwise plain Begin/EndPaint, and if
+     *   not focused, repaint via FUN_00451f70.  Returns 1, bypassing
+     *   DefWindowProcA.  We have neither Smacker nor the full
+     *   surface-blit path yet, so just satisfy the OS's invalidation
+     *   bookkeeping with a Begin/EndPaint pair. */
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        BeginPaint(hwnd, &ps);
+        EndPaint(hwnd, &ps);
+        /* TODO(gfx): when surfaces exist, call the "blit back→primary
+         * at g_client_screen.left/top" helper here if !g_focused. */
+        return 1;
+    }
+
+    /* --- WM_CREATE (0x01) — no-op in retail, no-op here. ------ */
+    case WM_CREATE:
         return 0;
+
+    /* --- WM_DESTROY (0x02) -----------------------------------------
+     * Retail tears down every subsystem here: Smacker, palette,
+     * DSound, DPlay, then PostQuitMessage(0).  We have none of those
+     * yet — just PostQuitMessage and let the main loop exit. */
     case WM_DESTROY:
+        /* TODO(subsys-teardown): once DSound/DPlay/Smacker are ported,
+         * call the equivalents of FUN_0042dfe2, FUN_004b28cd(1),
+         * FUN_00425d35, FUN_004b7180(1) before PostQuitMessage. */
         PostQuitMessage(0);
         g_shutdown = 1;
         return 0;
+
+    /* --- WM_MOVE (0x03) / WM_SIZE (0x05) ---------------------------
+     * Retail recomputes g_client_screen, toggles g_focused based on
+     * IsIconic, logs the move, and triggers a full redraw if the
+     * engine is in any state other than "menu". */
+    case WM_MOVE:
+    case WM_SIZE:
+        if (!IsIconic(hwnd)) {
+            g_focused = 1;
+            /* Retail logs "OK :Unpaused." here via FUN_004b26f8 when
+             * the foreground window is ours.  Clears surface-LOST. */
+            g_surface_lost = 0;
+        } else {
+            g_focused = 0;
+            g_surface_lost = 0;
+            log_line("OK :Minimizing.");
+            log_line("OK :Paused.");
+            InvalidateRect(hwnd, NULL, TRUE);
+        }
+        if (g_fullscreen) {
+            SetRect(&g_client_screen, 0, 0,
+                    GetSystemMetrics(SM_CXSCREEN),
+                    GetSystemMetrics(SM_CYSCREEN));
+        } else {
+            GetClientRect(hwnd, &g_client_screen);
+            ClientToScreen(hwnd, (LPPOINT)&g_client_screen.left);
+            ClientToScreen(hwnd, (LPPOINT)&g_client_screen.right);
+        }
+        log_line("OK :Window moved.");
+        g_render_dirty = 2;
+        /* TODO(sim): retail re-blits / calls FUN_00451f70 here based
+         * on engine state — wire in once the render path exists. */
+        return 0;
+
+    /* --- WM_CLOSE (0x10) -------------------------------------------
+     * Retail just sets DAT_005aeb68 = 3 — a "drain then quit" flag
+     * consumed by the sim/render driver (see main-loop-tick.md).
+     * Until that escalator is ported, we also DestroyWindow inline so
+     * the drop-in still quits cleanly on Alt+F4 / taskbar-close. */
+    case WM_CLOSE:
+        g_shutdown_request = 3;
+        DestroyWindow(hwnd);    /* TODO(sim): remove once escalator exists */
+        return 0;
+
+    /* --- WM_ACTIVATEAPP (0x1c) -------------------------------------
+     * Retail toggles g_focused based on wp + foreground + iconic
+     * status, logs "OK :Active." or "OK :Not active.", and on
+     * focus-regained-with-lost-surfaces runs the DDraw restore path.
+     * We don't have surfaces yet, so just track the flag and log. */
+    case WM_ACTIVATEAPP: {
+        HWND fg = GetForegroundWindow();
+        if (wp == 0 || fg != hwnd || IsIconic(hwnd))
+            g_focused = 0;
+        else
+            g_focused = 1;
+        log_line(g_focused ? "OK :Active." : "OK :Not active.");
+        /* TODO(gfx): if (g_surface_lost && g_focused) → DDraw Restore
+         * via the FUN_004b2730 / FUN_004b2922 path. */
+        return 0;
     }
+
+    /* --- WM_DISPLAYCHANGE (0x7e) — cache new screen metrics. ----- */
+    case WM_DISPLAYCHANGE:
+        g_screen_bpp        = (uint32_t)wp;
+        g_screen_change_cx  = LOWORD(lp);
+        g_screen_change_cy  = HIWORD(lp);
+        return 0;
+
+    /* --- WM_KEYDOWN (0x100) ----------------------------------------
+     * Retail dispatches a fat switch on virtual key.  Almost every
+     * case calls game-state code we don't have.  Port only the
+     * subset the bootstrap can sensibly honour:
+     *   VK_ESCAPE → request shutdown (retail posts a menu first
+     *               when engine state == ingame; we have no menu).
+     *   VK_F1     → WinHelp on l2help.hlp (matches retail exactly).
+     *   VK_F5     → recentre to 640×480 (windowed only).
+     *   VK_CONTROL→ track g_ctrl_down for the digit-key modifier.
+     * Other keys: noted and ignored. */
+    case WM_KEYDOWN:
+        switch (wp) {
+        case VK_CONTROL:
+            g_ctrl_down = 1;
+            break;
+        case VK_ESCAPE:
+            log_line("VK_ESCAPE → shutdown request");
+            g_shutdown_request = 1;
+            DestroyWindow(hwnd);    /* TODO(sim): remove once escalator exists */
+            return 0;
+        case VK_F1:
+            WinHelpA(hwnd, "l2help.hlp", HELP_CONTEXT, 1);
+            break;
+        case VK_F5:
+            if (!g_fullscreen) {
+                RECT rc = { 0, 0, DEFAULT_WIDTH, DEFAULT_HEIGHT };
+                DWORD exStyle = (DWORD)GetWindowLongA(hwnd, GWL_EXSTYLE);
+                DWORD style   = (DWORD)GetWindowLongA(hwnd, GWL_STYLE);
+                BOOL  hasMenu = (GetMenu(hwnd) != NULL);
+                AdjustWindowRectEx(&rc, style, hasMenu, exStyle);
+                int w = rc.right - rc.left;
+                int h = rc.bottom - rc.top;
+                int x = (g_screen_cx - w) / 2;
+                int y = (g_screen_cy - h) / 2;
+                SetWindowPos(hwnd, NULL, x, y, w, h,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            break;
+        default:
+            /* TODO(input): VK_BACK/RETURN/HOME/END/arrows/INS/DEL/
+             * digits/F2..F12 all map to game-state functions in
+             * retail.  See docs/findings/wndproc.md for the full
+             * VK→FUN_xxxxx mapping. */
+            break;
+        }
+        return 0;
+
+    /* --- WM_KEYUP (0x101) — only VK_CONTROL is special. --------- */
+    case WM_KEYUP:
+        if (wp == VK_CONTROL) g_ctrl_down = 0;
+        return 0;
+
+    /* --- WM_CHAR (0x102), WM_SYSCHAR (0x105) ----------------------
+     * Retail dispatches to game-state code.  Stubbed. */
+    case WM_CHAR:
+    case WM_SYSCHAR:
+        /* TODO(input): port the per-screen H/V hotkeys and the
+         * Alt-1..5 / Alt-X mappings from FUN_004b29be. */
+        return 0;
+
+    /* --- Mouse cache ------------------------------------------------ */
+    case WM_MOUSEMOVE:
+        g_mouse_x = (int16_t)LOWORD(lp);
+        g_mouse_y = (int16_t)HIWORD(lp);
+        return 0;
+    case WM_LBUTTONDOWN:    g_mouse_buttons |= 0x01; return 0;
+    case WM_LBUTTONUP:      g_mouse_buttons &= ~0x01; return 0;
+    case WM_LBUTTONDBLCLK:  g_mouse_dblclk  |= 0x01; return 0;
+    case WM_RBUTTONDOWN:    g_mouse_buttons |= 0x02; return 0;
+    case WM_RBUTTONUP:      g_mouse_buttons &= ~0x02; return 0;
+    case WM_RBUTTONDBLCLK:  g_mouse_dblclk  |= 0x02; return 0;
+
+    /* --- Palette messages (0x30f, 0x311) ---------------------------
+     * Only matters in windowed 8bpp once we have a DDraw palette.
+     * No-op until then. */
+    case WM_PALETTECHANGED:
+    case WM_QUERYNEWPALETTE:
+        /* TODO(gfx): port FUN_0042f1df once IDirectDrawPalette
+         * exists.  Guarded on (!g_fullscreen && g_primary_surface). */
+        break;
+    }
+
     return DefWindowProcA(hwnd, msg, wp, lp);
 }
 
