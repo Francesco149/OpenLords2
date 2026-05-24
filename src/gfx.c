@@ -245,14 +245,33 @@ int gfx_load_palette(const char *path)
         g_palette = NULL;
         return 0;
     }
-    hr = IDirectDrawSurface_SetPalette(g_primary, g_palette);
+
+    /* In fullscreen the primary IS 8bpp after SetDisplayMode, so we
+     * attach the palette to it (matches retail FUN_0042f1df).  In
+     * windowed mode the primary is the desktop's bit depth (32bpp
+     * on any modern host), so an 8bpp palette can't legally attach
+     * — DDERR_INVALIDPIXELFORMAT (0x88760091).  We bind the palette
+     * to the 8bpp back buffer instead; DDraw applies it during the
+     * back→primary format-conversion Blt in gfx_present.
+     *
+     * This is a deliberate divergence from retail: retail never
+     * actually exercises the windowed-on-32bpp regime because its
+     * auto-fullscreen-promote in FUN_0042e5c0 kicks in any time the
+     * desktop is non-8bpp.  We default-windowed (drop_in_defaults
+     * memory) and need this split to make palette work in our
+     * default regime. */
+    LPDIRECTDRAWSURFACE target = g_fullscreen ? g_primary : g_back;
+    hr = IDirectDrawSurface_SetPalette(target, g_palette);
     if (FAILED(hr)) {
-        log_line("ERR:Palette SetPalette failed 0x%08lx", (unsigned long)hr);
+        log_line("ERR:Palette SetPalette failed 0x%08lx (target=%s)",
+                 (unsigned long)hr,
+                 g_fullscreen ? "primary" : "back");
         IDirectDrawPalette_Release(g_palette);
         g_palette = NULL;
         return 0;
     }
-    log_line("OK :Palette installed (%s).", path);
+    log_line("OK :Palette installed (%s, %s).", path,
+             g_fullscreen ? "primary" : "back");
     return 1;
 }
 
@@ -358,13 +377,27 @@ static int do_create_surfaces(void)
 
     /* Offscreen back buffer in system memory — retail's
      * FUN_0042f148(w, h, 1) — DDSD_CAPS|DDSD_HEIGHT|DDSD_WIDTH with
-     * DDSCAPS_OFFSCREENPLAIN|DDSCAPS_SYSTEMMEMORY. */
+     * DDSCAPS_OFFSCREENPLAIN|DDSCAPS_SYSTEMMEMORY.
+     *
+     * Retail relies on the primary's pixel format (auto-promoted to
+     * 8bpp in fullscreen via SetDisplayMode) being inherited by the
+     * back.  We default to windowed mode where the primary is the
+     * desktop's 32bpp — without an explicit DDPF_PALETTEINDEXED8 in
+     * the descriptor, the back also gets 32bpp and our 8-bit
+     * palette can't attach (DDERR_INVALIDPIXELFORMAT 0x88760091).
+     *
+     * Always-explicit 8bpp here matches what retail logically wants
+     * regardless of cooperative mode. */
     ZeroMemory(&desc, sizeof(desc));
     desc.dwSize         = sizeof(desc);
-    desc.dwFlags        = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH;
+    desc.dwFlags        = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH
+                        | DDSD_PIXELFORMAT;
     desc.dwWidth        = GFX_RENDER_W;
     desc.dwHeight       = GFX_RENDER_H;
     desc.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY;
+    desc.ddpfPixelFormat.dwSize        = sizeof(desc.ddpfPixelFormat);
+    desc.ddpfPixelFormat.dwFlags       = DDPF_RGB | DDPF_PALETTEINDEXED8;
+    desc.ddpfPixelFormat.dwRGBBitCount = 8;
 
     hr = IDirectDraw_CreateSurface(g_dd, &desc, &g_back, NULL);
     if (FAILED(hr) || !g_back) {

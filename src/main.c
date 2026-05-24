@@ -613,40 +613,66 @@ static void release_singleton(void)
     }
 }
 
-/* Chdir into the directory of our own .exe.  This is what makes a
- * drop-in actually drop-in: when the user double-clicks Lords2.exe
- * (replaced by openlords2.exe), the OS sets CWD to wherever the
- * shortcut points, NOT necessarily to the exe's location.  Without
- * this, a launcher that runs the exe from /tmp/ would resolve DLL
- * imports against /tmp/ first.  Same plumbing OpenMare's init_game_dir
- * implements; here we always derive the path from GetModuleFileName
- * rather than reading $OPENMARE_GAME_DIR — the drop-in is meant to
- * work in real deploys where the dev env vars aren't set. */
+/* Anchor CWD + DLL search to the game data directory.
+ *
+ * Resolution order:
+ *
+ *   1. $OPENLORDS2_GAME_DIR — wins if set.  The dev flake exports
+ *      this and propagates it across the WSL→Windows boundary via
+ *      WSLENV/p (auto path-translation), so the .exe receives a
+ *      native Windows path.  This is the path that lets the
+ *      smoke harness copy our exe to /tmp/ for a fresh PE mapping
+ *      while keeping data-file lookups (palettes, .pl8 atlases,
+ *      .smk movies) pointed at the real game install.
+ *
+ *   2. GetModuleFileName parent dir — fallback for the production
+ *      drop-in scenario where the .exe lives next to the data and
+ *      the env var isn't set.
+ *
+ * Same shape as OpenMare's init_game_dir (cf. feedback_no_subagents
+ * memory: OpenMare is the canonical harness/workflow reference). */
 static void init_exe_dir(void)
 {
     char buf[MAX_PATH];
-    DWORD n = GetModuleFileNameA(NULL, buf, sizeof(buf));
-    if (n == 0 || n >= sizeof(buf)) {
-        log_line("GetModuleFileName failed: %lu", GetLastError());
-        return;
+    const char *env = getenv("OPENLORDS2_GAME_DIR");
+    int from_env = (env && env[0]);
+
+    if (from_env) {
+        /* WSLENV/p already translated /mnt/X/… to X:\… for us, but
+         * defensive copy + bound check anyway. */
+        size_t n = strlen(env);
+        if (n == 0 || n >= sizeof(buf)) {
+            log_line("OPENLORDS2_GAME_DIR too long (%zu chars) — "
+                     "falling back to exe dir", n);
+            from_env = 0;
+        } else {
+            memcpy(buf, env, n + 1);
+        }
     }
-    /* Strip the basename. */
-    char *slash = strrchr(buf, '\\');
-    if (!slash) slash = strrchr(buf, '/');
-    if (!slash) return;
-    *slash = 0;
+    if (!from_env) {
+        DWORD n = GetModuleFileNameA(NULL, buf, sizeof(buf));
+        if (n == 0 || n >= sizeof(buf)) {
+            log_line("GetModuleFileName failed: %lu", GetLastError());
+            return;
+        }
+        char *slash = strrchr(buf, '\\');
+        if (!slash) slash = strrchr(buf, '/');
+        if (!slash) return;
+        *slash = 0;
+    }
 
     if (!SetCurrentDirectoryA(buf)) {
         log_line("SetCurrentDirectory(%s) failed: %lu", buf, GetLastError());
         return;
     }
-    /* Also restrict the DLL search to safe + the exe dir, so explicit
+    /* Also restrict the DLL search to safe + this dir, so explicit
      * LoadLibrary calls and static imports both prefer game-dir DLLs
      * over system32. */
     if (!SetDllDirectoryA(buf)) {
         log_line("SetDllDirectory(%s) failed: %lu", buf, GetLastError());
     }
-    log_line("cwd anchored to %s", buf);
+    log_line("cwd anchored to %s (%s)", buf,
+             from_env ? "from $OPENLORDS2_GAME_DIR" : "from exe dir");
 }
 
 static int parse_uint(const char *s, unsigned *out)
