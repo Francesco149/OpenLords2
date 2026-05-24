@@ -427,14 +427,16 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
 
     /* --- WM_CLOSE (0x10) -------------------------------------------
-     * Retail just sets DAT_005aeb68 = 3 — a "drain then quit" flag
-     * consumed by the sim/render driver (see main-loop-tick.md).
-     * Until that escalator is ported, we also DestroyWindow inline so
-     * the drop-in still quits cleanly on Alt+F4 / taskbar-close. */
+     * Retail just sets DAT_005aeb68 = 3 and falls through to
+     * DefWindowProcA — the default proc handles WM_CLOSE by calling
+     * DestroyWindow, which sends WM_DESTROY → PostQuitMessage.  The
+     * 3-then-1 state dance is the structural seam for the sim to
+     * ack the drain (engine_tick_guard does the 3→1 transition);
+     * by the time it matters, DestroyWindow has already started
+     * tearing the window down.  Same shape as retail. */
     case WM_CLOSE:
         g_shutdown_request = 3;
-        DestroyWindow(hwnd);    /* TODO(sim): remove once escalator exists */
-        return 0;
+        break;
 
     /* --- WM_ACTIVATEAPP (0x1c) -------------------------------------
      * Retail toggles g_focused based on wp + foreground + iconic
@@ -495,9 +497,14 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             g_ctrl_down = 1;
             break;
         case VK_ESCAPE:
+            /* Retail: outside ingame, VK_ESCAPE sets DAT_005aeb68 = 1
+             * directly (FUN_004343f8 is the ingame-menu hook we
+             * don't have yet).  The main-loop tail then PostMessages
+             * WM_CLOSE to escalate to DefWindowProc → DestroyWindow.
+             * No inline DestroyWindow — the escalator does the
+             * teardown one frame later. */
             log_line("VK_ESCAPE → shutdown request");
             g_shutdown_request = 1;
-            DestroyWindow(hwnd);    /* TODO(sim): remove once escalator exists */
             return 0;
         case VK_F1:
             WinHelpA(hwnd, "l2help.hlp", HELP_CONTEXT, 1);
@@ -690,6 +697,25 @@ static void main_loop_body(void)
                       g_capture_dir, g_frame_counter);
             gfx_capture_window(path);
         }
+    }
+    /* Deferred-shutdown escalator — port of retail's main-loop tail
+     *
+     *   if (DAT_005aeb68 == 1) {
+     *       PostMessageA(hwnd, WM_CLOSE, 0, 0);
+     *       DAT_005aeb68 = 0;
+     *   }
+     *
+     * The state reaches 1 either via VK_ESCAPE (sets it directly)
+     * or via the 3→1 transition that engine_tick_guard does after
+     * a WM_CLOSE.  In the WM_CLOSE case DefWindowProc has already
+     * started tearing the window down, so PostMessage WM_CLOSE
+     * here is a no-op race — harmless either way.  In the
+     * VK_ESCAPE case it's the actual escalator: next iteration
+     * processes the posted WM_CLOSE, the WndProc falls through to
+     * DefWindowProcA, and the OS teardown chain runs. */
+    if (g_shutdown_request == 1 && g_hwnd) {
+        PostMessageA(g_hwnd, WM_CLOSE, 0, 0);
+        g_shutdown_request = 0;
     }
 }
 
