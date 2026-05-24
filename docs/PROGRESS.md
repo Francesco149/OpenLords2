@@ -7,6 +7,94 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Engine tick guard + dispatcher (FUN_0040e8bb + FUN_0040e890)
+
+Ported the two small wrappers that bracket retail's per-tick driver
+into a new `src/engine.{c,h}` module, plus a scaffold of
+`FUN_004b99c0` itself.  Closes "main-loop driver" from the previous
+entry's What's-next, but in slice form — the scaffold lets every
+future subsystem port slot into `engine_tick()` rather than into
+the bare main loop body, matching retail's shape.
+
+### Ports
+
+- **`src/engine.{c,h}`** — three functions + three engine-state
+  mirrors.
+  - `engine_tick_guard()` (port of `FUN_0040e8bb`) — surface-lost
+    Restore-before-dispatch, deferred-shutdown 3→1 escalator,
+    savepump dispatcher (SP arm only — MP arm waits on the
+    `DAT_00553030` mirror), gate on `g_shutdown_request == 1`.
+  - `engine_tick_dispatch()` (port of `FUN_0040e890`) — calls
+    `engine_tick`, latches `g_savepump_request = 1` on
+    `g_engine_state > 8`.
+  - `engine_tick()` (scaffold of `FUN_004b99c0`) — bumps
+    `g_engine_frame_counter` (retail `_DAT_005bb4c8`) then calls
+    `gfx_tick_present(0)` (retail `FUN_00452160(0)`).  Every other
+    call inside retail's 2222-byte body is deferred — the pre-tick
+    block, the sim sub-step loop, and the ~30 render-phase
+    subsystem dispatches each land in their own slice.
+  - Mirrors: `g_engine_state` (DAT_0052af94), `g_shutdown_request`
+    (DAT_005aeb68 — moved out of `main.c` since `engine_tick_guard`
+    now owns its escalator), `g_savepump_request` (DAT_005c9274).
+- **`src/main.c`** — `main_loop_body` now routes through
+  `engine_tick_guard()` instead of calling `gfx_tick_present`
+  directly.  The capture-every-N-frames sidecar moves with it.
+
+### Structural deviations from retail
+
+- Surface-lost detection is a *sticky latch* in our gfx layer
+  (`gfx_surface_lost()`) rather than retail's per-iteration
+  `IDirectDrawSurface::IsLost` poll on both surfaces.  The present
+  path is the only producer of fresh IsLost results in retail too,
+  so the latch-style is equivalent for our purposes.  Comment in
+  `engine.c` documents the equivalence.
+- `FUN_004b26b8`'s `"OK :Paused."` log + InvalidateRects after a
+  successful Restore-during-guard is skipped for now.  No Smacker
+  movie in flight that would care; the InvalidateRect would just
+  re-fire our no-op WM_PAINT.  TODO flagged in the guard.
+- WndProc's `WM_CLOSE` / `VK_ESCAPE` handlers still call
+  `DestroyWindow` inline.  The structural seam to remove that is
+  now in place (the guard's `shutdown_request == 1` early-return),
+  but the actual removal waits on a sim that can ack the deferred
+  shutdown — until then there's no producer of the "drain one
+  frame" half of the dance, so dropping the inline would just
+  block shutdown.
+
+### Verified
+
+- `make -C src` — both .exe targets build clean, no warnings.
+- `make -C tests run` — 32/32 tests pass (no change; engine.c is
+  Win32-coupled and not included in the test build).
+- `tools/run-openlords2.sh --frames 50` — transcript identical to
+  the pre-slice run (engine-state machine sees no transitions in a
+  bootless smoke).
+- `tools/run-openlords2.sh --frames 50 --gfx-init` — DDraw bring-up
+  + present-loop transcript identical to the pre-slice version.
+  `engine_tick_guard` is fully exercised (the gfx-init arm is the
+  one that actually runs the dispatch).
+
+### What's next
+
+Same shortlist mostly survives, now with one of the items closed:
+
+1. **First real drawing primitive** — sprite-blit helper.  Still
+   the most user-visible next step.
+2. **`FUN_004b99c0` body — first slice of subsystems.** The
+   scaffold is up; the natural next layer inside it is either the
+   pre-tick block (small, mostly state-machine reads:
+   `FUN_004b0aaa` input poll, `FUN_00499a1c` music update,
+   `FUN_004b20ed` ?, the wall-clock increment) or the sim
+   sub-step gate (`FUN_004bb978` rate controller — pure decision
+   function, would slot into the test harness).
+3. **`FUN_004ae1b8`** (lords2.inf 1128-byte persistence load) —
+   still deferred until at least one consumer chain decoder lands.
+4. **Sim ack of the deferred shutdown** — small follow-on slice
+   that removes the WM_CLOSE / VK_ESCAPE inline `DestroyWindow`
+   workarounds in WndProc once there's a sim that can roll the
+   shutdown_request 3→1 transition into a clean main-loop exit.
+
+---
+
 ## 2026-05-24 — Unit test harness + caught real OOB
 
 Stood up a host-gcc unit test harness under ASan + UBSan,

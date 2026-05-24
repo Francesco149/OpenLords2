@@ -330,3 +330,54 @@ the OpenMare carry-over memory.
 > 📍  Sources: `docs/decompiled/all.c` lines 7524 (FUN_0040e890),
 > 7537 (FUN_0040e8bb), 88042 (FUN_004b8c3a), 88528 (FUN_004b99c0),
 > 89413 (FUN_004bb978), 83824 (FUN_004b27bf).
+
+## Port status (2026-05-24)
+
+The three outer wrappers are now ported to `src/engine.{c,h}`:
+
+| Retail                | OpenLords2                  | Status                       |
+|-----------------------|-----------------------------|------------------------------|
+| `FUN_0040e8bb`        | `engine_tick_guard`         | full — surface-lost guard, deferred-shutdown escalator (3→1), savepump dispatcher (SP arm only — MP arm waits on the `DAT_00553030` mirror), gate on `g_shutdown_request == 1` |
+| `FUN_0040e890`        | `engine_tick_dispatch`      | full — calls `engine_tick`, latches `g_savepump_request = 1` on `g_engine_state > 8` |
+| `FUN_004b99c0`        | `engine_tick`               | scaffold only — bumps `g_engine_frame_counter` (retail `_DAT_005bb4c8`) then calls `gfx_tick_present(0)` (retail `FUN_00452160(0)`).  Every other call inside retail FUN_004b99c0 — pre-tick block, sim sub-step loop, ~30 render-phase subsystem calls — is deferred to follow-up slices keyed by subsystem |
+| `FUN_004b2730`        | `gfx_restore`               | full (prior slice) |
+| `FUN_004b26b8`        | (skipped)                   | retail logs `"OK :Paused."` + InvalidateRects after a successful Restore-during-guard.  Deferred — `engine_tick_guard` comment flags it.  No behavioural delta for the smoke harness (we have no Smacker movie that would care about the invalidation) |
+| `FUN_004978ad / 0049792e / 00497a34` | `savepump_begin_sp` / `savepump_step` | stubs.  Engine state can't transition above 3 today, so `g_savepump_request` never sets; dispatch arm never runs |
+
+Engine-state mirrors landed in `engine.h`:
+
+| Retail global  | OpenLords2          | Initial | Notes |
+|----------------|---------------------|---------|-------|
+| `DAT_0052af94` | `g_engine_state`    | 0       | menus.  Only `engine_tick_dispatch` reads it (>8 fast-skip latch); no writer yet |
+| `DAT_005aeb68` | `g_shutdown_request`| 0       | WndProc writes 3 on WM_CLOSE / 1 on VK_ESCAPE.  Inline `DestroyWindow` still in WndProc until the sim that acks the deferred shutdown lands |
+| `DAT_005c9274` | `g_savepump_request`| 0       | latched by `engine_tick_dispatch`; cleared by retail's full savepump (stubbed) |
+| `_DAT_005bb4c8`| `g_engine_frame_counter` (file-static) | 0 | retail uses it as a frames-since-boot cookie in save metadata; no consumer in our port yet |
+
+Main loop body now matches retail's shape:
+
+```
+PeekMessage / DispatchMessage drain
+    ↓
+engine_tick_guard()          (only fires while g_gfx_active)
+    ↓
+    ├─ gfx_surface_lost()?  → gfx_restore — if !ok, return 0
+    ├─ shutdown_request == 3 → set to 1
+    ├─ savepump_request      → SP savepump_step() (stub)
+    ├─ shutdown_request == 1 → return 0
+    ↓
+engine_tick_dispatch()
+    ↓
+engine_tick() = frame_counter++ + gfx_tick_present(0)
+    ↓
+(g_engine_state > 8) ? g_savepump_request = 1 : ()
+```
+
+Behavioural delta vs the pre-slice direct-call shape:
+
+- Surface-lost path now wired into the per-frame body — if a
+  present-side Blt/Lock returns `DDERR_SURFACELOST`, the next loop
+  iteration calls `gfx_restore` before attempting another present.
+  Previously the latch was consulted only on `WM_ACTIVATEAPP`.
+- Shutdown path unchanged in practice (WndProc inline `DestroyWindow`
+  still wins the race), but the structural seam is now in place for
+  the follow-up slice that removes the inline.

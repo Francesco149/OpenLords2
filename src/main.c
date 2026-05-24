@@ -60,6 +60,7 @@
 #include "audio.h"
 #include "config.h"
 #include "dev_hooks.h"
+#include "engine.h"
 #include "gfx.h"
 
 /* Class name matches retail FUN_004b2258's `s_WinLords2Class_004df5b0`
@@ -150,15 +151,9 @@ static int     g_focused;
  * always reads 0, but the mirror is here so the port chain stays
  * linear. */
 static int     g_surface_lost;
-/* Deferred-shutdown state — retail DAT_005aeb68.
- *   3 = WM_CLOSE received, drain sim before destroying window
- *   1 = sim ack'd the close, escalate next frame
- *   4 = sim asked for shutdown itself (no WM_CLOSE)
- * Today we have no main-loop escalator, so WM_CLOSE also force-quits
- * by setting g_shutdown directly.  Once FUN_004b99c0 lands, the
- * inline DestroyWindow() in wndproc disappears and this flag drives
- * the dance from the main loop instead. */
-static int     g_shutdown_request;
+/* Deferred-shutdown state lives in engine.c now (g_shutdown_request,
+ * mirror of retail DAT_005aeb68).  See engine.h for the meaning of
+ * each value and which retail FUN_xxxxx consumes it. */
 
 /* Client-area RECT in *screen* coords — retail DAT_004ea180/+4/+8/+c.
  * Recomputed on WM_MOVE/WM_SIZE.  Used by DDraw blit destinations. */
@@ -671,14 +666,20 @@ static void main_loop_body(void)
         TranslateMessage(&msg);
         DispatchMessageA(&msg);
     }
-    /* Per-frame present — port of retail's FUN_00452160(0) call
-     * pattern from FUN_004b99c0's render tail.  Rate-gated 50-unit
-     * accumulator + dirty-count + Smacker bypass + suppression
-     * gate all live in gfx_tick_present.  At our current ~1 ms
-     * per loop iteration this fires once every ~50 frames in
-     * steady state. */
+    /* Per-frame engine dispatch — port of retail's
+     *   FUN_0040e8bb (surface-lost guard + savepump dispatcher)
+     *     ↓
+     *   FUN_0040e890 (fast-skip dispatcher)
+     *     ↓
+     *   FUN_004b99c0 (per-tick driver — scaffold-only today;
+     *                 wraps the same rate-gated present that the
+     *                 previous direct-call version invoked).
+     *
+     * The guard returns 0 when the surface is still lost after a
+     * Restore attempt or when shutdown_request has latched to 1;
+     * in both cases the present is skipped, matching retail. */
     if (g_gfx_active) {
-        gfx_tick_present(0);
+        engine_tick_guard();
         if (g_capture_dir
                 && (g_frame_counter % g_capture_every) == 0) {
             char path[MAX_PATH];
