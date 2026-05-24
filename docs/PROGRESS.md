@@ -7,6 +7,141 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — DDraw → GDI present seat for retail under the harness
+
+Top-down RE bias entry from the prior dispatch: the diff machinery
+covers the small pure-function targets, so the next-highest-leverage
+unlock is making retail render *visibly* under the harness.  Without
+this, the harness can ship turbo + frame capture + diff tests just
+fine — but a human looking at the screen sees a black window while
+the engine internally renders fine to the back buffer.
+
+### The hidden quirk
+
+Modern Windows DWM intercepts windowed DDraw NORMAL-mode Blts.  The
+Blt returns DD_OK, the back surface legitimately holds the rendered
+pixels, but DWM never propagates the paint to the window's
+redirection bitmap.  The composited desktop re-paints from the
+unchanged backing store and the visible window stays black.
+
+Retail Lords2.exe dodges this by accident: `FUN_0042e5c0` auto-
+fullscreen-promotes on any non-8bpp desktop (always, on modern
+hardware), going to exclusive coop + `SetDisplayMode` and bypassing
+DWM entirely.  Our harness strips those flags (force_windowed[L2])
+to keep dev-loop sessions from taking over the desktop — which is
+what surfaces the quirk.
+
+Documented as engine-quirks.md #6.
+
+### Agent (`tools/frida/openlords2-agent.js`)
+
+- New `gdi_seat` init flag (default on in `frida_capture.py` /
+  `smoke-test.py`).
+- New `installPrimaryBltGdiSeat()`: lazy install from
+  `engine_tick.onLeave` once the engine's BSS pointers
+  (`var_dd_primary`, `var_dd_back`, `var_dd_palette`) are non-NULL.
+  Patches `IDirectDrawSurface::Blt` (vtable slot 5, byte offset
+  0x14) on the primary surface's vtable via `Interceptor.attach`.
+- New `presentBackToWindowViaGdi()`: locks the 8bpp back surface,
+  pulls 256 palette entries via `IDirectDrawPalette::GetEntries`,
+  swaps R↔B on the PALETTEENTRY→RGBQUAD copy, calls
+  `gdi32!StretchDIBits` against `user32!GetDC(hwnd)` (using
+  `var_main_hwnd`), unlocks.  Caches `BITMAPINFO` scratch + a
+  pitch-adjustment row buffer.
+- onEnter intercept filter: skip `DDBLT_COLORFILL` (no source),
+  skip non-back sources, skip non-primary `this`.  Backed by live
+  global reads so a hypothetical surface re-init doesn't intercept
+  the wrong vtable.
+- onLeave: force `DD_OK` (0) after a successful GDI present so the
+  caller's HRESULT check doesn't disagree with what we actually
+  drew (a couple of driver combos return benign warning hresults
+  for invisible-Blt cases).
+- New `gdi_seat_present` event kind (throttled: first 3, then 1 per
+  100) for the Python driver's heartbeat counter.
+- New `getGdiSeatStats()` RPC: returns `{patched, blt_observed,
+  blt_skipped_fill, blt_skipped_other, gdi_presents}` for end-of-run
+  diagnostics.
+
+### Python driver (`tools/frida_capture.py`, `tools/smoke-test.py`)
+
+- New `gdi_seat` field on `CaptureConfig` (default `True`) and
+  `gdi_seat_present_count` on `CaptureResult`.
+- New `--no-gdi-seat` debug flag on both CLIs.
+- New `gdi_seat_present` event handler, counter, and summary
+  surface.
+- End-of-run RPC pull of `getGdiSeatStats()` writes a
+  `[gdi_seat_stats]` line to `agent.log` so post-mortem analysis
+  can see "did the engine call Blt at all, and were we filtering
+  it correctly".
+- smoke-test gains a `gdi_seat armed` check (gated on
+  `--no-gdi-seat`).
+
+### Mirror in the drop-in
+
+The same fix already exists in `src/gfx.c`'s `present_via_gdi`
+(landed when bringing up our windowed render path — the original
+empirical diagnosis lives in the `project_dwm_ddraw_normal` auto-
+memory).  The harness seat is the symmetric piece for retail under
+our turbo / frame-capture / diff-test pipeline.
+
+### Verified
+
+`nix develop -c python3 tools/smoke-test.py --duration-ms 7000
+--turbo --remote cutestation.soy:27042`:
+
+```
+[agent] gdi_seat: armed (lazy install on first engine_tick after
+        retail finishes DDraw surface bring-up)
+[agent] gdi_seat: IDirectDrawSurface::Blt patched
+        (primary=0x3f0ce88, vtable=0x728bd120, Blt @ 0x72f14520)
+```
+
+All smoke checks pass.  `gdi_seat_stats {patched: True,
+blt_observed: 0, gdi_presents: 0}` — under hide_window + turbo the
+engine ticks ~3000 perceived seconds in 7 real seconds but never
+calls `IDirectDrawSurface::Blt(primary, back)`.  Confirmed not a
+filter bug (every observed call is counted regardless of filter).
+The engine appears to be stuck waiting for input at an intro screen
+where the entire render pipeline is dormant (no
+`dirty_rect_union` calls → `DAT_0050d09c == 0` → rate-gate's dirty
+check short-circuits the Blt).  All 123 host unit tests still pass.
+
+### What's next
+
+**Visual verification needed** — the harness is installed and
+verified to patch; whether GDI presents actually become visible
+requires a non-headless run with a non-hidden window so the human
+can confirm.  The natural followup is either:
+
+1. **Run the harness without `--hide-window`** for visual
+   confirmation.  Side issue surfaced: an early-exit happens
+   under `--no-hide` that needs a separate diagnostic
+   pass (the engine creates its main window then the script
+   terminates without reaching engine_tick — possibly an
+   uncaught exception in our hook chain when the window is
+   visible).
+2. **Send a synthetic input event** during the smoke window so
+   the intro screen can advance to the title screen where the
+   render pipeline should produce dirty rects.  `--input-trace`
+   plumbing already exists; the missing piece is a "click to
+   skip intro" trace.
+3. **Save-file format** (option 2 from the prior dispatch).
+   Parsers for `castles.dat` / `c_hist.dat` / `history.dat`.
+   Starts unlocking the simulation subsystem ports.
+4. **More diff targets** (option 3 from the prior dispatch).
+   Two mechanical follow-ups remain:
+   - `engine_compute_input_state` (FUN_004b191e) — needs a
+     `GetCursorPos` scripted-return pattern.
+   - `engine_compute_sim_sub_steps` (FUN_004bb978) — has internal
+     callees + a pointer-array LUT.
+
+Top-down RE bias next time: option 1 (visual verification +
+diagnose the `--no-hide` early-exit) is the natural close-out for
+this thread — confirms the seat actually shows pixels, and unblocks
+the user's recording-driven scenarios.
+
+---
+
 ## 2026-05-24 — Fifth diff target: engine_compute_phase_ticks + concurrent-race
 
 Continued the "more diff targets" thread.  Wired `FUN_004bbc80` (the 9-flag

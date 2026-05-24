@@ -50,6 +50,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-force-windowed", action="store_true",
                     help="don't strip DDraw exclusive-fullscreen flags "
                          "(debug aid — VERY disruptive on Lords 2!)")
+    ap.add_argument("--no-gdi-seat", action="store_true",
+                    help="don't reroute retail's primary Blt through GDI "
+                         "StretchDIBits (debug aid — windowed renders go "
+                         "invisible under DWM without this)")
     ap.add_argument("--turbo", action="store_true",
                     help="exercise turbo v1 (Sleep no-op) + v2 "
                          "(virtual timeGetTime)")
@@ -86,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
         hide_window=not args.no_hide,
         silent_audio=not args.no_silent_audio,
         force_windowed=not args.no_force_windowed,
+        gdi_seat=not args.no_gdi_seat,
         turbo=args.turbo,
         turbo_step_ms=args.turbo_step_ms,
         frame_capture=args.frame_capture,
@@ -119,6 +124,14 @@ def main(argv: list[str] | None = None) -> int:
                        "force_windowed[L2]: ddraw!DirectDrawCreate armed"
                        in log or "force_windowed[L2]: ddraw.dll not loaded"
                        in log))
+    if not args.no_gdi_seat:
+        # The seat is armed at init but the vtable patch only lands once
+        # the engine creates the primary surface (post FUN_0042ec91 — a
+        # second or two into startup).  We don't assert the patch line
+        # itself (engine may not get there inside a 5 s smoke window if
+        # the host is slow), only that the seat was armed.
+        checks.append(("gdi_seat armed",
+                       "gdi_seat: armed" in log))
     if not args.no_silent_audio:
         checks.append(("waveOutSetVolume mute armed",
                        "silent_audio: winmm!waveOutSetVolume" in log))
@@ -182,6 +195,8 @@ def main(argv: list[str] | None = None) -> int:
         "last_cum_seconds": result.last_cum_seconds,
         "turbo":           args.turbo,
         "turbo_step_ms":   args.turbo_step_ms,
+        "gdi_seat":        not args.no_gdi_seat,
+        "gdi_seat_present_count": result.gdi_seat_present_count,
         "frame_capture":   args.frame_capture,
         "frame_count":     result.frame_count,
         "input_record":    args.input_record,

@@ -159,6 +159,7 @@ let g_owned_hwnds         = {};   // key = hwnd hex, val = {source}
 let g_silent_audio_enabled = false;
 let g_force_windowed       = false;
 let g_turbo_enabled        = false;
+let g_gdi_seat_enabled     = false;
 
 // Turbo v2 — virtualised winmm!timeGetTime, gated to the engine main thread.
 // `g_virtual_now_ms` is bumped by `g_turbo_step_ms` on every per-tick driver
@@ -1183,6 +1184,309 @@ function captureFrameOnce() {
     }
 }
 
+// ─── DDraw → GDI present seat ──────────────────────────────────────────
+// Modern Windows DWM (Desktop Window Manager) intercepts windowed
+// DDraw NORMAL-mode Blts to the primary surface: the Blt returns
+// DD_OK and the back-buffer legitimately has the rendered pixels,
+// but DWM never propagates the paint to the window's redirection-
+// bitmap backing store — the visible window stays at whatever DWM
+// last composited (typically WM_ERASEBKGND's background-erase).
+//
+// Retail Lords2.exe sidesteps this entirely because its FUN_0042e5c0
+// auto-fullscreen-promotes on any non-8bpp desktop (always, on
+// modern hardware) — exclusive coop + SetDisplayMode put DDraw
+// outside DWM's intercept path.  But our harness strips those flags
+// (force_windowed[L2]) so it can dev-loop without taking over the
+// desktop, leaving retail rendering invisible.
+//
+// Fix: intercept IDirectDrawSurface::Blt on the primary surface
+// (vtable slot 5, byte offset 0x14), and on back→primary Blts do a
+// GDI StretchDIBits from the back buffer to the window's HDC.  GDI
+// calls DO go through DWM's intercept and update the redirection
+// bitmap correctly.  We let the original Blt run too — it's a DWM
+// no-op now but its return code is what the engine observes.
+//
+// Mirror implementation in src/gfx.c's present_via_gdi (drop-in's
+// windowed present path), same workaround rationale documented in
+// engine-quirks.md / project_dwm_ddraw_normal memory.
+//
+// Lazy install: the primary surface pointer (var_dd_primary) is NULL
+// until retail finishes FUN_0042ec91 (surface creation), so we poll
+// in engine_tick.onLeave and patch the vtable the first time all
+// three globals (primary, back, palette) are non-NULL.
+
+const DDBLT_COLORFILL = 0x00000400;
+const DIB_RGB_COLORS  = 0;
+const SRCCOPY         = 0x00CC0020;
+const COLORONCOLOR    = 3;
+const BITMAPINFO_SZ   = 40 + 256 * 4;     // BITMAPINFOHEADER + 256 RGBQUAD
+
+let g_primary_blt_patched   = false;
+let g_gdi_present_count     = 0;
+let g_gdi_blt_observed      = 0;   // Blt() invocations on the primary vtable
+let g_gdi_blt_skipped_fill  = 0;   // DDBLT_COLORFILL (no source) — let through
+let g_gdi_blt_skipped_other = 0;   // src != back or this != primary
+let g_nf_gdi_get_dc         = null;
+let g_nf_gdi_release_dc     = null;
+let g_nf_gdi_get_client_rect= null;
+let g_nf_gdi_stretch_dibs   = null;
+let g_nf_gdi_set_stretch_mode = null;
+let g_gdi_bitmapinfo_buf    = null;       // scratch: BITMAPINFOHEADER + 256 RGBQUAD
+let g_gdi_palette_buf       = null;       // scratch: 256 PALETTEENTRY readback
+let g_gdi_rect_buf          = null;       // scratch: RECT for GetClientRect
+let g_gdi_row_scratch       = null;       // scratch: pitch-adjusted rows for StretchDIBits
+let g_gdi_row_scratch_sz    = 0;
+
+function resolveGdiSeatFunctions() {
+    if (g_nf_gdi_stretch_dibs) return true;
+    const u32 = Process.findModuleByName('user32.dll');
+    const gdi = Process.findModuleByName('gdi32.dll');
+    if (!u32 || !gdi) {
+        err('gdi_seat', 'user32.dll or gdi32.dll not loaded');
+        return false;
+    }
+    const u_getdc = u32.findExportByName('GetDC');
+    const u_reldc = u32.findExportByName('ReleaseDC');
+    const u_gcr   = u32.findExportByName('GetClientRect');
+    const g_sdb   = gdi.findExportByName('StretchDIBits');
+    const g_ssbm  = gdi.findExportByName('SetStretchBltMode');
+    if (!u_getdc || !u_reldc || !u_gcr || !g_sdb || !g_ssbm) {
+        err('gdi_seat', 'missing GDI/user32 export');
+        return false;
+    }
+    g_nf_gdi_get_dc         = new NativeFunction(u_getdc, 'pointer',
+                                ['pointer'], 'stdcall');
+    g_nf_gdi_release_dc     = new NativeFunction(u_reldc, 'int32',
+                                ['pointer', 'pointer'], 'stdcall');
+    g_nf_gdi_get_client_rect= new NativeFunction(u_gcr,   'int32',
+                                ['pointer', 'pointer'], 'stdcall');
+    g_nf_gdi_stretch_dibs   = new NativeFunction(g_sdb, 'int32',
+        ['pointer', 'int', 'int', 'int', 'int',
+         'int', 'int', 'int', 'int',
+         'pointer', 'pointer', 'uint32', 'uint32'], 'stdcall');
+    g_nf_gdi_set_stretch_mode = new NativeFunction(g_ssbm, 'int32',
+                                ['pointer', 'int'], 'stdcall');
+    return true;
+}
+
+// Lock the back surface, walk its 8bpp bytes through the engine's
+// DDraw palette, StretchDIBits into the window's client area, unlock.
+// Returns true on success.  Caller has already verified that all
+// three globals (back, palette, hwnd) are non-NULL.
+function presentBackToWindowViaGdi(back, palette, hwnd) {
+    if (!resolveGdiSeatFunctions()) return false;
+
+    // Reuse the frame-capture path's lazy NativeFunction stubs
+    // (already declared at module scope for the frame-capture path).
+    if (!g_nf_surface_lock) {
+        g_nf_surface_lock = vfn(back, 25, 'int32',
+            ['pointer', 'pointer', 'pointer', 'uint32', 'pointer']);
+        g_nf_surface_unlock = vfn(back, 32, 'int32',
+            ['pointer', 'pointer']);
+    }
+    if (!g_nf_palette_get_entries) {
+        g_nf_palette_get_entries = vfn(palette, 4, 'int32',
+            ['pointer', 'uint32', 'uint32', 'uint32', 'pointer']);
+    }
+
+    const desc = Memory.alloc(DDSURFACEDESC_SZ);
+    desc.writeU32(DDSURFACEDESC_SZ);
+    const hr = g_nf_surface_lock(back, NULL, desc,
+                                 DDLOCK_WAIT | DDLOCK_READONLY, NULL);
+    if (hr !== 0) {
+        // Surface may legitimately be lost (alt-tab in fullscreen, ...).
+        // Bail; the next present cycle will retry.
+        return false;
+    }
+
+    try {
+        const height    = desc.add(8 ).readU32();
+        const width     = desc.add(12).readU32();
+        const pitch     = desc.add(16).readS32();
+        const lpSurface = desc.add(36).readPointer();
+        if (lpSurface.isNull() || width === 0 || height === 0) {
+            return false;
+        }
+
+        // BITMAPINFO buffer — header + 256 RGBQUAD palette.  Zero on
+        // first build; palette refreshed per present (DDraw palette can
+        // mutate when retail does palette-cycle effects or screen-state
+        // transitions, so a stale cache would be wrong).
+        if (!g_gdi_bitmapinfo_buf) {
+            g_gdi_bitmapinfo_buf = Memory.alloc(BITMAPINFO_SZ);
+            // BITMAPINFOHEADER (one-time): biSize, biPlanes, biBitCount,
+            // biCompression=BI_RGB, biClrUsed.
+            g_gdi_bitmapinfo_buf.writeU32(40);                    // biSize
+            g_gdi_bitmapinfo_buf.add(12).writeU16(1);             // biPlanes
+            g_gdi_bitmapinfo_buf.add(14).writeU16(8);             // biBitCount
+            g_gdi_bitmapinfo_buf.add(16).writeU32(0);             // biCompression
+            g_gdi_bitmapinfo_buf.add(32).writeU32(256);           // biClrUsed
+        }
+        const bi = g_gdi_bitmapinfo_buf;
+        bi.add(4 ).writeS32(width);                               // biWidth
+        bi.add(8 ).writeS32(-height);                             // biHeight (top-down)
+
+        // Palette → bi+40 as RGBQUAD (B,G,R,reserved).  GetEntries
+        // hands us PALETTEENTRY (R,G,B,peFlags) — swap R↔B on copy.
+        if (!g_gdi_palette_buf) g_gdi_palette_buf = Memory.alloc(256 * 4);
+        const palOut = g_gdi_palette_buf;
+        const phr = g_nf_palette_get_entries(palette, 0, 0, 256, palOut);
+        if (phr !== 0) {
+            // Palette read failed — paint with whatever's currently in
+            // bi+40 (may be all-zero on the first frame).  Keeps the
+            // pipeline alive instead of erroring out mid-render.
+            err('gdi_seat.GetEntries', '0x' + (phr >>> 0).toString(16));
+        } else {
+            const rgbQuads = bi.add(40);
+            for (let i = 0; i < 256; i++) {
+                const r = palOut.add(i * 4 + 0).readU8();
+                const g = palOut.add(i * 4 + 1).readU8();
+                const b = palOut.add(i * 4 + 2).readU8();
+                rgbQuads.add(i * 4 + 0).writeU8(b);
+                rgbQuads.add(i * 4 + 1).writeU8(g);
+                rgbQuads.add(i * 4 + 2).writeU8(r);
+                rgbQuads.add(i * 4 + 3).writeU8(0);
+            }
+        }
+
+        // GetClientRect → destination size.  StretchDIBits scales from
+        // src (back's natural 640×480 or whatever it is) to dst (the
+        // window's current client size — accommodates user resize).
+        if (!g_gdi_rect_buf) g_gdi_rect_buf = Memory.alloc(16);
+        g_nf_gdi_get_client_rect(hwnd, g_gdi_rect_buf);
+        const dst_w = g_gdi_rect_buf.add(8 ).readS32() -
+                      g_gdi_rect_buf.add(0 ).readS32();
+        const dst_h = g_gdi_rect_buf.add(12).readS32() -
+                      g_gdi_rect_buf.add(4 ).readS32();
+        if (dst_w <= 0 || dst_h <= 0) {
+            // Minimised / hidden — nothing to draw.  Treat as a no-op
+            // success so the caller doesn't think we failed and try
+            // again next frame at the same rate.
+            return true;
+        }
+
+        // StretchDIBits expects 8bpp source rows padded to a 4-byte
+        // boundary.  DDraw sysmem back surfaces usually have
+        // pitch == width (640) which is already 4-byte aligned, but
+        // some drivers pad to 16 or 32 — copy into a tight-stride
+        // scratch buffer when pitch differs.
+        const row_stride = (width + 3) & ~3;
+        let pixSrc = lpSurface;
+        if (pitch !== row_stride) {
+            const needed = row_stride * height;
+            if (!g_gdi_row_scratch || g_gdi_row_scratch_sz < needed) {
+                g_gdi_row_scratch = Memory.alloc(needed);
+                g_gdi_row_scratch_sz = needed;
+            }
+            for (let y = 0; y < height; y++) {
+                Memory.copy(g_gdi_row_scratch.add(y * row_stride),
+                            lpSurface.add(y * pitch),
+                            width);
+            }
+            pixSrc = g_gdi_row_scratch;
+        }
+
+        const hdc = g_nf_gdi_get_dc(hwnd);
+        if (hdc.isNull()) return false;
+        try {
+            g_nf_gdi_set_stretch_mode(hdc, COLORONCOLOR);
+            g_nf_gdi_stretch_dibs(hdc,
+                0, 0, dst_w, dst_h,
+                0, 0, width, height,
+                pixSrc, bi, DIB_RGB_COLORS, SRCCOPY);
+        } finally {
+            g_nf_gdi_release_dc(hwnd, hdc);
+        }
+        g_gdi_present_count++;
+        return true;
+    } finally {
+        try { g_nf_surface_unlock(back, NULL); }
+        catch (e) { err('gdi_seat.Unlock', e.message); }
+    }
+}
+
+// Patch the primary surface's IDirectDrawSurface::Blt slot (slot 5,
+// byte offset 0x14).  Idempotent — once patched we never touch it
+// again.  Called lazily from engine_tick.onLeave when both surfaces
+// (var_dd_primary and var_dd_back) and the palette pointer are
+// non-NULL.
+function installPrimaryBltGdiSeat() {
+    if (g_primary_blt_patched) return;
+    const primary = rva(ADDR.var_dd_primary).readPointer();
+    const back    = rva(ADDR.var_dd_back   ).readPointer();
+    const palette = rva(ADDR.var_dd_palette).readPointer();
+    if (primary.isNull() || back.isNull() || palette.isNull()) return;
+    if (!resolveGdiSeatFunctions()) return;
+
+    try {
+        const vtable = primary.readPointer();
+        const bltFn  = vtable.add(5 * Process.pointerSize).readPointer();
+        Interceptor.attach(bltFn, {
+            onEnter: function (args) {
+                this.handled = false;
+                if (!g_gdi_seat_enabled) return;
+                // args: this, lpDestRect, lpDDSrcSurface, lpSrcRect, flags, lpDDBltFx
+                const self  = args[0];
+                const src   = args[2];
+                const flags = args[4].toUInt32();
+                g_gdi_blt_observed++;
+                // COLORFILL Blts have no source surface — let through.
+                // (Retail uses these for the initial black-fill in
+                // FUN_0042eb7c.  Visible result is just a black flash,
+                // not worth GDI presenting.)
+                if (flags & DDBLT_COLORFILL) { g_gdi_blt_skipped_fill++; return; }
+                if (src.isNull()) { g_gdi_blt_skipped_other++; return; }
+                // Only intercept back→primary Blts.  Compare against
+                // the live globals so a re-init (with a different
+                // primary pointer) doesn't intercept the wrong surface.
+                const cachedPrimary = rva(ADDR.var_dd_primary).readPointer();
+                const cachedBack    = rva(ADDR.var_dd_back   ).readPointer();
+                if (cachedPrimary.isNull() || cachedBack.isNull()) {
+                    g_gdi_blt_skipped_other++; return;
+                }
+                if (!self.equals(cachedPrimary)) {
+                    g_gdi_blt_skipped_other++; return;
+                }
+                if (!src.equals(cachedBack)) {
+                    g_gdi_blt_skipped_other++; return;
+                }
+                const cachedPalette = rva(ADDR.var_dd_palette).readPointer();
+                if (cachedPalette.isNull()) return;
+                const hwnd = rva(ADDR.var_main_hwnd).readPointer();
+                if (hwnd.isNull()) return;
+
+                this.handled = presentBackToWindowViaGdi(
+                    cachedBack, cachedPalette, hwnd);
+                // First-few-presents diagnostic — emit a heartbeat
+                // event so the Python driver can confirm the seat is
+                // actually firing without crawling the agent log.
+                // Throttle: first 3 events, then one per 100.
+                if (this.handled &&
+                    (g_gdi_present_count <= 3 ||
+                     (g_gdi_present_count % 100) === 0)) {
+                    send({kind: 'gdi_seat_present',
+                          count: g_gdi_present_count,
+                          t_ms:  nowMs()});
+                }
+            },
+            onLeave: function (retval) {
+                // Override DDraw's HRESULT to DD_OK after a successful
+                // GDI present — guarantees the engine's per-call retval
+                // check doesn't disagree with what we drew, even on
+                // hardware/driver combos where DDraw's invisible Blt
+                // would normally return a benign warning hresult.
+                if (this.handled) retval.replace(ptr(0));
+            },
+        });
+        g_primary_blt_patched = true;
+        log('gdi_seat: IDirectDrawSurface::Blt patched ' +
+            '(primary=' + primary + ', vtable=' + vtable +
+            ', Blt @ ' + bltFn + ')');
+    } catch (e) {
+        err('installPrimaryBltGdiSeat', e.message);
+    }
+}
+
 // ─── input record / replay ─────────────────────────────────────────────
 // WM_* values we care about.  The WndProc-side recorder filters the full
 // message stream down to this set so the trace stays sparse — every other
@@ -1345,6 +1649,14 @@ function installEngineTickHook() {
                 err('engine_tick.onLeave', e.message);
             } finally {
                 g_engine_in_tick = 0;
+                // Lazy install of the DDraw → GDI present seat.  The
+                // primary surface pointer doesn't exist until retail's
+                // FUN_0042ec91 returns; engine_tick is the cheapest
+                // available "post bring-up" hook to poll.  Once patched
+                // the call short-circuits via g_primary_blt_patched.
+                if (g_gdi_seat_enabled && !g_primary_blt_patched) {
+                    installPrimaryBltGdiSeat();
+                }
             }
         },
     });
@@ -1792,6 +2104,7 @@ rpc.exports = {
         g_silent_audio_enabled = !!opts.silent_audio;
         g_force_windowed     = !!opts.force_windowed;
         g_turbo_enabled      = !!opts.turbo;
+        g_gdi_seat_enabled   = !!opts.gdi_seat;
         // Turbo step in virtual-ms per per-tick-driver iteration. The
         // default (17 ms) yields ~58 ticks/s perceived time, close to
         // 60 Hz; raise it to fast-forward.  0 disables turbo v2 even if
@@ -1841,6 +2154,15 @@ rpc.exports = {
         if (g_hide_window)     installWindowHideHooks();
         if (g_force_windowed)  { installChangeDisplaySettingsStub();
                                  installForceWindowedDDraw(); }
+        if (g_gdi_seat_enabled) {
+            // Hook installs lazily from engine_tick.onLeave (the
+            // primary surface pointer doesn't exist until retail's
+            // FUN_0042ec91 returns).  Verify at runtime with
+            // "gdi_seat: IDirectDrawSurface::Blt patched" in the
+            // agent log.
+            log('gdi_seat: armed (lazy install on first engine_tick ' +
+                'after retail finishes DDraw surface bring-up)');
+        }
         if (g_silent_audio_enabled) { installWaveOutMute();
                                       installSilentAudioDSound(); }
         if (g_turbo_enabled) {
@@ -1890,6 +2212,7 @@ rpc.exports = {
               silent_audio:  g_silent_audio_enabled,
               turbo:         g_turbo_enabled,
               turbo_step_ms: g_turbo_step_ms,
+              gdi_seat:      g_gdi_seat_enabled,
               frame_capture: g_frame_capture_enabled,
               frame_capture_max: g_frame_capture_max,
               frame_capture_warmup_secs: g_frame_capture_warmup_secs,
@@ -1938,5 +2261,18 @@ rpc.exports = {
             counter_2,  counter_4,
             counter_8,  counter_13,
             counter_16, counter_24, counter_32);
+    },
+
+    // Diagnostic counters for the DDraw → GDI seat.  Reflects everything
+    // the Interceptor.attach onEnter observed; null counters mean the
+    // seat never patched (engine didn't reach surface bring-up).
+    getGdiSeatStats: function () {
+        return {
+            patched:         g_primary_blt_patched,
+            blt_observed:    g_gdi_blt_observed,
+            blt_skipped_fill: g_gdi_blt_skipped_fill,
+            blt_skipped_other: g_gdi_blt_skipped_other,
+            gdi_presents:    g_gdi_present_count,
+        };
     },
 };

@@ -154,6 +154,13 @@ class CaptureConfig:
     force_windowed:    bool = True
     turbo:             bool = False
     turbo_step_ms:     int  = 17        # virtual-ms per per-tick driver iteration
+    # GDI present seat — intercept retail's IDirectDrawSurface::Blt to
+    # primary and re-route through StretchDIBits.  DWM never propagates
+    # DDraw NORMAL-mode Blts to the window's backing store, so without
+    # this seat windowed retail under the harness renders to an
+    # invisible primary surface.  See engine-quirks.md / the
+    # project_dwm_ddraw_normal memory.
+    gdi_seat:          bool = True
     frame_capture:              bool = False
     frame_capture_max:          int  = 16   # 0 = unlimited
     frame_capture_warmup_secs:  int  = 5    # skip captures for first N cum-secs
@@ -183,6 +190,7 @@ class CaptureResult:
     frame_count:      int = 0
     input_event_count: int = 0
     input_replay_post_count: int = 0
+    gdi_seat_present_count: int = 0
 
 
 # ─── BMP writer ───────────────────────────────────────────────────────────
@@ -267,7 +275,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
     counts = {"hwnd": 0, "hide": 0, "msgbox": 0, "ddraw_coop": 0,
               "dsound_coop": 0, "audio_mute": 0, "display_blocked": 0,
               "fps_sample": 0, "frame": 0, "input_event": 0,
-              "input_replay_post": 0}
+              "input_replay_post": 0, "gdi_seat_present": 0}
     fps_last = {"current_fps": 0, "avg_fps": 0, "cum_secs": 0}
     done = threading.Event()
 
@@ -437,6 +445,11 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
                 f"w=0x{int(p.get('w', 0)):x} "
                 f"l=0x{int(p.get('l', 0)):x}\n")
             return
+        if kind == "gdi_seat_present":
+            counts["gdi_seat_present"] += 1
+            f_log.write(
+                f"[gdi_seat] present #{p.get('count')} t_ms={p.get('t_ms')}\n")
+            return
         # unknown kind — log it raw so we can spot agent extensions we
         # haven't wired up yet.
         f_log.write(f"[unknown-event] {json.dumps(p)}\n")
@@ -484,6 +497,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "force_windowed":            bool(cfg.force_windowed),
             "turbo":                     bool(cfg.turbo),
             "turbo_step_ms":             int(cfg.turbo_step_ms),
+            "gdi_seat":                  bool(cfg.gdi_seat),
             "frame_capture":             bool(cfg.frame_capture),
             "frame_capture_max":         int(cfg.frame_capture_max),
             "frame_capture_warmup_secs": int(cfg.frame_capture_warmup_secs),
@@ -499,6 +513,19 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
 
         elapsed_ms = int((time.monotonic() - t0) * 1000)
     finally:
+        # Pull seat diagnostic counters before tearing the script down.
+        # Best-effort: if the agent has already crashed the RPC may not
+        # answer.
+        if script is not None and cfg.gdi_seat:
+            try:
+                stats = script.exports_sync.get_gdi_seat_stats()
+                f_log.write(f"[gdi_seat_stats] {stats}\n")
+                counts["gdi_seat_observed_blts"] = int(stats.get("blt_observed", 0))
+                counts["gdi_seat_skipped_fill"]  = int(stats.get("blt_skipped_fill", 0))
+                counts["gdi_seat_skipped_other"] = int(stats.get("blt_skipped_other", 0))
+                counts["gdi_seat_patched"]       = bool(stats.get("patched", False))
+            except Exception as e:
+                f_log.write(f"[gdi_seat_stats] fetch failed: {e}\n")
         if script is not None:
             try: script.unload()
             except Exception as e: f_log.write(f"[shutdown] script unload: {e}\n")
@@ -534,6 +561,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         frame_count=counts["frame"],
         input_event_count=counts["input_event"],
         input_replay_post_count=counts["input_replay_post"],
+        gdi_seat_present_count=counts["gdi_seat_present"],
     )
 
 
@@ -559,6 +587,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-hide", action="store_true")
     ap.add_argument("--no-silent-audio", action="store_true")
     ap.add_argument("--no-force-windowed", action="store_true")
+    ap.add_argument("--no-gdi-seat", action="store_true",
+                    help="don't reroute retail's primary-surface Blt "
+                         "through GDI StretchDIBits.  Disables visual "
+                         "rendering under DWM in windowed mode (debug aid).")
     ap.add_argument("--turbo", action="store_true",
                     help="enable Sleep no-op (v1) + virtual timeGetTime (v2)")
     ap.add_argument("--turbo-step-ms", type=int, default=17,
@@ -601,6 +633,7 @@ def main(argv: list[str] | None = None) -> int:
         hide_window=not args.no_hide,
         silent_audio=not args.no_silent_audio,
         force_windowed=not args.no_force_windowed,
+        gdi_seat=not args.no_gdi_seat,
         turbo=args.turbo,
         turbo_step_ms=args.turbo_step_ms,
         frame_capture=args.frame_capture,
@@ -616,6 +649,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[capture] cwd     = {cfg.cwd}")
     print(f"[capture] flags   = hide={cfg.hide_window} "
           f"silent={cfg.silent_audio} fwin={cfg.force_windowed} "
+          f"gdi_seat={cfg.gdi_seat} "
           f"turbo={cfg.turbo} turbo_step_ms={cfg.turbo_step_ms} "
           f"frame_capture={cfg.frame_capture} "
           f"frame_capture_max={cfg.frame_capture_max} "
@@ -641,6 +675,8 @@ def main(argv: list[str] | None = None) -> int:
         "last_cum_seconds": result.last_cum_seconds,
         "turbo":            cfg.turbo,
         "turbo_step_ms":    cfg.turbo_step_ms,
+        "gdi_seat":         cfg.gdi_seat,
+        "gdi_seat_present_count": result.gdi_seat_present_count,
         "frame_capture":             cfg.frame_capture,
         "frame_capture_max":         cfg.frame_capture_max,
         "frame_capture_warmup_secs": cfg.frame_capture_warmup_secs,

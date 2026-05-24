@@ -267,6 +267,54 @@ correct in SP because retail does the same thing.
 
 ---
 
+## 6. DDraw NORMAL Blt is invisible under DWM — and retail dodges this by accident
+
+Modern Windows runs DWM compositing.  Each top-level window has a
+"redirection bitmap" backing store; DWM composites the visible
+desktop from those.  DDraw NORMAL-mode Blts go straight to the
+*physical* primary surface and **bypass the redirection bitmap
+entirely**.  The Blt returns `DD_OK`, the back buffer holds the
+correct pixels, but DWM re-composites the desktop from the unchanged
+backing store and the window stays black.
+
+Confirmed empirically: a windowed-mode `gfx_capture_backbuffer`
+shows the rendered fill colour while `gfx_capture_window` (GDI BitBlt
+of the same window's client area at the same instant) shows uniform
+`(0,0,0)`.
+
+Retail Lords2.exe never bites this because of quirk #1 above: its
+`FUN_0042e5c0` auto-fullscreen-promotes any time the desktop isn't
+8bpp.  Exclusive coop + `SetDisplayMode` put DDraw outside DWM
+compositing, so retail's Blts hit the real front-buffer and DWM
+isn't in the loop at all.  The windowed branch — which we default
+to — is what exposes the issue.
+
+Fix in two places:
+
+```
+src/gfx.c          present_via_gdi()   (drop-in's windowed present)
+tools/frida/...    presentBackToWindowViaGdi() + Blt-vtable patch
+                   (retail under the harness — visual verification)
+```
+
+Both Lock the 8bpp DDraw back surface, build a `BITMAPINFO` with
+the 256 palette entries inline (RGBQUAD B,G,R order — DDraw's
+PALETTEENTRY hands us R,G,B and the swap is the only non-obvious
+bit), and `StretchDIBits` to the window's HDC.  GDI calls DO go
+through DWM's intercept, so the redirection bitmap updates and the
+composited result is visible.
+
+Fullscreen `BltFast` still works (no DWM mediation in exclusive
+coop) — so the GDI seat is a windowed-mode-only insertion.
+
+> 📍 `src/gfx.c` (`present_via_gdi`),
+> `tools/frida/openlords2-agent.js` (`presentBackToWindowViaGdi`,
+> `installPrimaryBltGdiSeat`),
+> the `project_dwm_ddraw_normal` auto-memory entry for the original
+> empirical diagnosis, Ghidra `FUN_0042e5c0`.
+
+---
+
 <!--
 Template for new entries:
 
