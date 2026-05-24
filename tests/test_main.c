@@ -118,6 +118,14 @@ struct test_case {
     X(engine_delta_negative_delta_clock_wrap_holds) \
     X(engine_delta_overflow_wrap_then_advance) \
     X(engine_delta_baseline_zero_first_call_advances) \
+    \
+    X(engine_anim_cycle_no_tick_holds) \
+    X(engine_anim_cycle_tick_bumps) \
+    X(engine_anim_cycle_from_zero_bumps) \
+    X(engine_anim_cycle_wraps_at_15_to_0) \
+    X(engine_anim_cycle_14_to_15_no_wrap) \
+    X(engine_anim_cycle_full_16_cycle) \
+    X(engine_anim_cycle_no_tick_with_max_counter) \
     /* end */
 
 /* Emit extern decls. */

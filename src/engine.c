@@ -101,6 +101,15 @@ static int g_sim_derived_hint;
 static uint32_t g_frame_delta_last_ms;         /* _DAT_004e59ec */
 static int      g_frame_delta_ms;              /* DAT_004ea128 */
 
+/* ─── 16-frame animation cycle mirror (FUN_00451f1a state) ─────────
+ *
+ * Single counter, bumped mod 16 each time the 80 ms phase tick fires.
+ * Consumed by retail's sprite-strip renderer (FUN_004071a0) as a
+ * frame index into a 16-contiguous-frame PL8 strip.  No consumer in
+ * our drop-in yet (the sprite renderer is unported), so the counter
+ * spins but nothing reads it. */
+static int g_anim_cycle_counter;               /* DAT_0053e9a4 */
+
 static uint32_t g_phase_last_base_tick_ms;     /* _DAT_004e5b10 */
 static uint32_t g_phase_base_tick_counter;     /* DAT_005aeb2c */
 static uint32_t g_phase_counter_2;             /* DAT_0058feb4 */
@@ -143,6 +152,26 @@ static void engine_tick_delta_step(void)
 
     g_frame_delta_last_ms = out.new_last_frame_ms;
     g_frame_delta_ms      = out.delta_ms;
+}
+
+/* Win32 wrapper around engine_compute_anim_cycle — bundles the
+ * 80 ms phase tick + counter mirror into the input struct, runs
+ * the pure function, writes the new counter back.  Must run AFTER
+ * engine_tick_phase_step in the pre-tick block since it consumes
+ * g_phase_tick_80ms (which the phase step produces).  Matches
+ * retail's call order: FUN_004bbc80 (phase) then ... then
+ * FUN_00451f1a (anim) at the tail of the pre-tick block. */
+static void engine_tick_anim_cycle_step(void)
+{
+    engine_anim_cycle_in_t  in  = {0};
+    engine_anim_cycle_out_t out = {0};
+
+    in.counter         = g_anim_cycle_counter;
+    in.tick_80ms_fired = g_phase_tick_80ms;
+
+    engine_compute_anim_cycle(&in, &out);
+
+    g_anim_cycle_counter = out.new_counter;
 }
 
 static void engine_tick_phase_step(void)
@@ -328,12 +357,15 @@ void engine_tick(void)
     /* Pre-tick block — retail does (in order): FUN_004b0aaa input
      * poll, FUN_00499a1c music (only when ingame), FUN_00498458,
      * FUN_004b20ed (← ported), FUN_004bbc80 (← ported), FUN_00481b9a,
-     * FUN_00482111, FUN_004782c5, FUN_00451f1a.  Order between
-     * the pure timing slices doesn't matter for behavior (each is
-     * independent state update); we keep them in retail order so
-     * future bisection against retail traces stays apples-to-apples. */
+     * FUN_00482111, FUN_004782c5, FUN_00451f1a (← ported).  Order
+     * between independent state updates doesn't matter for
+     * behavior, but we keep them in retail order so future bisection
+     * against retail traces stays apples-to-apples.  Note:
+     * anim_cycle_step MUST run after phase_step because it consumes
+     * g_phase_tick_80ms — retail has the same data dependency. */
     engine_tick_delta_step();
     engine_tick_phase_step();
+    engine_tick_anim_cycle_step();
     /* TODO(sim): remaining pre-tick subfunctions. */
 
     int sub_steps = engine_tick_rate_step();

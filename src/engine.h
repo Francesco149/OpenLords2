@@ -215,4 +215,24 @@ typedef struct {
 void engine_compute_frame_delta(const engine_delta_in_t *in,
                                 engine_delta_out_t *out);
 
+/* ─── 16-frame animation cycle (port of FUN_00451f1a) ──────────────
+ *
+ * Bumps a mod-16 counter once per 80 ms phase tick.  Downstream
+ * sprite renderers use the counter as a frame index into a 16-frame
+ * strip (full cycle is 16 × 80 ms = 1280 ms).  See engine_anim_cycle.c
+ * for the per-field commentary and the unreachable-lower-clamp
+ * engine quirk.
+ */
+typedef struct {
+    int counter;          /* current value (always 0..15 in normal flow) */
+    int tick_80ms_fired;  /* gate — consumes g_phase_tick_80ms output */
+} engine_anim_cycle_in_t;
+
+typedef struct {
+    int new_counter;      /* counter writeback (0..15) */
+} engine_anim_cycle_out_t;
+
+void engine_compute_anim_cycle(const engine_anim_cycle_in_t *in,
+                               engine_anim_cycle_out_t *out);
+
 #endif /* OPENLORDS2_ENGINE_H */

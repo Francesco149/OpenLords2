@@ -172,6 +172,47 @@ function past this boundary (`tests/test_engine_rate.c`
 
 ---
 
+## 4. The 16-frame anim counter has a defensive clamp for negative values
+
+`FUN_00451f1a` (the pre-tick subfunction that drives the 16-frame
+sprite-strip animation cycle) increments `DAT_0053e9a4` mod 16 each
+time the 80 ms phase tick fires:
+
+```c
+if (DAT_00591510 != 0) {
+    DAT_0053e9a4 = DAT_0053e9a4 + 1;
+    if (0xf < DAT_0053e9a4) DAT_0053e9a4 = 0;
+    if (DAT_0053e9a4 < 0)   DAT_0053e9a4 = 0;
+}
+```
+
+The second clamp is unreachable.  The counter lives in .bss
+(zero-initialised), the only writer is this function, and the only
+operations are `+1` followed by the upward clamp that resets to 0
+before the value could ever turn negative.  Every consumer
+(`FUN_004071a0` is the only one) reads it inside an
+`if (0xf < counter) return;` early-out, so even an out-of-range
+value couldn't cause an OOB sprite-index lookup downstream — but
+the producer guards anyway.
+
+It's hard to say whether the author had a specific failure mode in
+mind (maybe an earlier signed-int variant where wraparound could
+underflow?) or whether it's just a "belt and braces" habit.  Either
+way, the binary carries the extra two-instruction check on every
+pre-tick iteration — a few wasted cycles in the hot path for a
+condition that physically can't occur.
+
+We port it faithfully (`src/engine_anim_cycle.c`) — same byte
+shape, same dead clamp.  The unit tests don't even attempt to
+reach the clamp because there's no input that gets there.
+
+> 📍 `src/engine_anim_cycle.c` (`engine_compute_anim_cycle`),
+> `tests/test_engine_anim_cycle.c`,
+> `docs/findings/main-loop-tick.md` §"pre-tick block",
+> Ghidra `FUN_00451f1a`.
+
+---
+
 <!--
 Template for new entries:
 
