@@ -43,11 +43,22 @@ OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o)) \
 DEPS := $(OBJS:.o=.d)
 OUT  := build/run_tests
 
-.PHONY: all run clean
-all: $(OUT)
+# Differential-test shared library — host-built, loaded via ctypes by
+# tools/diff_test.py.  Same source as $(SRCS_UNDER_TEST) for the two diff
+# targets (engine_rng.c + engine_fps.c), but compiled WITHOUT sanitizers
+# (ASan-instrumented .so can't be dlopen'd from a non-ASan Python).
+DIFF_SRCS := ../src/engine_rng.c ../src/engine_fps.c
+DIFF_OBJS := $(addprefix build/diff_,$(notdir $(DIFF_SRCS:.c=.o)))
+DIFF_OUT  := build/libengine_diff.so
+DIFF_CFLAGS := -std=c11 -O2 -fPIC -Wall -Wextra -Wno-unused-parameter -I../src
+
+.PHONY: all run clean diff
+all: $(OUT) $(DIFF_OUT)
 
 run: $(OUT)
 	./$(OUT)
+
+diff: $(DIFF_OUT)
 
 build/%.o: ../src/%.c | build
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -55,8 +66,14 @@ build/%.o: ../src/%.c | build
 build/%.o: %.c | build
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+build/diff_%.o: ../src/%.c | build
+	$(CC) $(DIFF_CFLAGS) -c -o $@ $<
+
 $(OUT): $(OBJS)
 	$(CC) $(LDFLAGS) -o $@ $(OBJS)
+
+$(DIFF_OUT): $(DIFF_OBJS)
+	$(CC) -shared -fPIC -o $@ $(DIFF_OBJS)
 
 build:
 	@mkdir -p $@

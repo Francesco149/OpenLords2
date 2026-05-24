@@ -87,6 +87,33 @@ const ADDR = {
     // Alt-X) that we don't want to round-trip.
     fn_wndproc:        0x004b29be,  // FUN_004b29be — class wndproc
     var_main_hwnd:     0x004e5a00,  // DAT_004e5a00 — cached main HWND
+    // ── Pure-function differential targets (Phase 4 of harness-roadmap).
+    // Two retail functions whose pure-C ports live under src/engine_*.c:
+    //   FUN_00404a46  — double-LFSR step (engine_rng_step / src/engine_rng.c)
+    //   FUN_004b27bf  — rolling 1-sec FPS counter (engine_compute_fps /
+    //                   src/engine_fps.c)
+    // Each is called with the engine's per-tick driver suspended; the diff
+    // wrappers snapshot all observable globals, write a test-vector's inputs,
+    // invoke the retail function via NativeFunction, snapshot outputs, then
+    // restore the snapshot so the engine isn't disturbed.
+    fn_engine_rng_step:        0x00404a46,  // FUN_00404a46 — double-LFSR step
+    fn_engine_compute_fps:     0x004b27bf,  // FUN_004b27bf — FPS counter
+    // RNG state + 6 output mirrors (see docs/findings/engine-quirks.md #5
+    // and src/engine_rng.c for the mirror-↔-port mapping).
+    var_rng_state_a:     0x0058fe28,  // DAT_0058fe28 — state_a (the seed-init at WinMain)
+    var_rng_state_b:     0x0058fe08,  // DAT_0058fe08 — state_b
+    var_rng_15bit_a:     0x005aea58,  // DAT_005aea58 — state_a & 0x7fff
+    var_rng_7bit_a:      0x0058fd7c,  // DAT_0058fd7c — state_a & 0x7f
+    var_rng_3bit_a:      0x0058fd70,  // _DAT_0058fd70 — state_a & 0x7
+    var_rng_15bit_b:     0x005aea5c,  // _DAT_005aea5c — state_b & 0x7fff
+    var_rng_7bit_b:      0x0058fd60,  // DAT_0058fd60 — state_b & 0x7f
+    var_rng_3bit_b:      0x0058fd6c,  // _DAT_0058fd6c — state_b & 0x7
+    // FPS counter state (6 globals) — see src/engine_fps.c for the mapping.
+    var_fps_frames:           0x004eada4,  // DAT_004eada4 — frames_this_second
+    var_fps_last_render:      0x004e59e0,  // _DAT_004e59e0 — last_render_ms
+    var_fps_window_start:     0x004eaba0,  // DAT_004eaba0 — second_window_start_ms
+    // (var_fps_current, var_fps_cum_sum, var_fps_cum_secs already above —
+    // ride the same heartbeat.)
 };
 
 // ─── runtime state ──────────────────────────────────────────────────────
@@ -160,6 +187,35 @@ let g_input_replay_events  = null;     // array | null
 let g_replay_idx           = 0;
 let g_replay_post_count    = 0;
 let g_nf_post_message_a    = null;
+
+// Pure-function differential test machinery (Phase 4 of harness-roadmap).
+// `diff_test` init opt installs:
+//   - the always-on timeGetTime hook (its onLeave checks a scripted-return
+//     queue before falling through to the turbo virtual clock — lets us
+//     control exactly what FUN_004b27bf sees on its two-call rollover path)
+//   - the runRetailRngStep / runRetailFpsStep RPC entrypoints (always live in
+//     rpc.exports, but they refuse to fire if `g_diff_test_enabled` is false,
+//     so a normal capture run can't accidentally trip them)
+//
+// The clock queue holds u32 timestamps for the next N timeGetTime calls.
+// When non-empty, the queue is drained head-first (FIFO) and the dequeued
+// value is what timeGetTime returns; once empty, the existing virtual /
+// wall-clock path takes over.  Diff tests push a small batch (1 or 2
+// values) per call; they should never leak into the post-test engine state
+// because the tests run synchronously and clear the queue at finish.
+//
+// NativeFunction stubs are resolved lazily on first call: the resolution
+// has to happen AFTER g_base is set (RVA translation depends on it).
+let g_diff_test_enabled       = false;
+let g_diff_test_clock_queue   = [];     // [u32 ms, ...] consumed by timeGetTime hook
+// Only the thread currently executing a diff RPC may consume the scripted
+// clock queue.  Without this gate the engine main thread (still ticking
+// during diff tests) would race on the queue and steal scripted values
+// intended for the retail function call we're driving.  Set non-null at
+// the top of each diff RPC, cleared in its `finally`.
+let g_diff_test_caller_tid    = -1;
+let g_nf_retail_rng_step      = null;
+let g_nf_retail_compute_fps   = null;
 
 // ─── helpers ────────────────────────────────────────────────────────────
 
@@ -879,11 +935,16 @@ function installTurboSleepHook() {
     log('turbo v1: kernel32!Sleep no-op installed');
 }
 
-function installVirtualClockHook() {
+// Tracks whether installTimeGetTimeHook() has already attached, so callers
+// (turbo + diff_test) can request it independently without double-attaching.
+let g_timeGetTime_hooked = false;
+
+function installTimeGetTimeHook() {
+    if (g_timeGetTime_hooked) return;
     const winmm = Process.findModuleByName('winmm.dll');
-    if (!winmm) { err('installVirtualClock', 'winmm.dll not loaded'); return; }
+    if (!winmm) { err('installTimeGetTime', 'winmm.dll not loaded'); return; }
     const tgt = winmm.findExportByName('timeGetTime');
-    if (!tgt) { err('installVirtualClock', 'winmm!timeGetTime not found'); return; }
+    if (!tgt) { err('installTimeGetTime', 'winmm!timeGetTime not found'); return; }
 
     // Seed the virtual clock with the current real timeGetTime so the
     // engine's first read sees a sane baseline — the FPS counter +
@@ -896,6 +957,19 @@ function installVirtualClockHook() {
 
     Interceptor.attach(tgt, {
         onLeave: function (retval) {
+            // Diff-test scripted clock takes priority over the turbo virtual
+            // clock — but ONLY when the calling thread matches the diff RPC's
+            // V8 thread.  The engine main thread keeps ticking during diff
+            // tests; without the gate it would race on the queue and steal
+            // scripted values meant for our retail-function call.
+            // Queue is FIFO; an empty queue (or wrong thread) falls through
+            // to the existing virtual / wall-clock path.
+            if (g_diff_test_clock_queue.length > 0 &&
+                Process.getCurrentThreadId() === g_diff_test_caller_tid) {
+                const v = g_diff_test_clock_queue.shift();
+                retval.replace(ptr(v >>> 0));
+                return;
+            }
             if (!g_clock_virtualised) return;
             if (g_main_thread_id === -1) return;
             if (Process.getCurrentThreadId() !== g_main_thread_id) return;
@@ -903,10 +977,20 @@ function installVirtualClockHook() {
         },
     });
 
+    g_timeGetTime_hooked = true;
+    log('timeGetTime hook installed @ ' + tgt +
+        ' (seed=' + g_virtual_now_ms + ', diff_test_queue_check=on)');
+}
+
+// Backwards-compat helper for the turbo install path — installs the hook
+// (idempotent) and arms the virtualisation flag.  The log line wording is
+// load-bearing: tools/smoke-test.py's --turbo assertion greps for the exact
+// "turbo v2: winmm!timeGetTime virtualised" prefix.
+function installVirtualClockHook() {
+    installTimeGetTimeHook();
     g_clock_virtualised = true;
     log('turbo v2: winmm!timeGetTime virtualised ' +
-        '(step=' + g_turbo_step_ms + ' ms/tick, main-thread-gated, ' +
-        'seed=' + g_virtual_now_ms + ')');
+        '(step=' + g_turbo_step_ms + ' ms/tick, main-thread-gated)');
 }
 
 // ─── frame capture ──────────────────────────────────────────────────────
@@ -1221,6 +1305,177 @@ function installEngineTickHook() {
         ' (FUN_004b99c0)');
 }
 
+// ─── pure-function differential test (Phase 4 of harness-roadmap) ─────
+// Two retail functions whose pure-C ports live under src/engine_*.c:
+//   FUN_00404a46  (engine_rng_step)  — double-LFSR step, no Win32 deps
+//   FUN_004b27bf  (engine_compute_fps) — calls winmm!timeGetTime twice on
+//                                         the rollover branch
+//
+// Each runRetail*Step RPC snapshots ALL observable globals (state + output
+// mirrors), writes the test-vector's inputs, invokes the retail function
+// via NativeFunction, snapshots outputs, then restores the snapshot — so
+// the engine itself never sees a perturbation, no matter how many vectors
+// the orchestrator runs through.
+//
+// The orchestrator is responsible for diffing the returned outputs against
+// our port (compiled host-side via tests/Makefile's libengine path, called
+// via ctypes from tools/diff_test.py).  This agent does NOT compare; it
+// only reports the retail observation.
+
+function resolveRetailFunctions() {
+    if (g_nf_retail_rng_step) return true;
+    if (g_base === null) {
+        err('diff_test', 'g_base unset (init not completed yet?)');
+        return false;
+    }
+    g_nf_retail_rng_step = new NativeFunction(
+        rva(ADDR.fn_engine_rng_step), 'void', [], 'stdcall');
+    g_nf_retail_compute_fps = new NativeFunction(
+        rva(ADDR.fn_engine_compute_fps), 'int32', [], 'stdcall');
+    return true;
+}
+
+// Engine-thread race notes — there is NO on-target guard.
+//
+// First attempt installed an Interceptor.attach onEnter on each retail
+// function that spun while caller_tid was set.  This deadlocked: Frida's
+// V8 isolate is single-threaded; the engine main thread's onEnter
+// callback grabs the V8 lock to run its JS body; the spin holds the lock
+// forever; the V8 RPC starves and never clears caller_tid.
+//
+// Second attempt called SuspendThread on the engine main thread.  This
+// deadlocked too: Frida's V8 heap shares the process heap with the
+// engine; suspending the engine while it held an internal heap lock
+// wedged the next V8 allocation.
+//
+// Pragmatic approach: skip the guard, accept a small per-call race
+// window, detect it on the orchestrator side, retry.  For FPS the tell
+// is "the function we called did NOT see our scripted clock" — measurable
+// from the returned delta_ms.  See tools/diff_test.py's race-retry path.
+
+// RNG diff: 8 retail globals (2 state + 6 masked output mirrors).  The
+// function takes no args + reads/writes only these globals, so the snapshot
+// + restore is exhaustive — there is no other observable state.
+function runRetailRngStep(state_a, state_b) {
+    if (!g_diff_test_enabled) {
+        return {error: 'diff_test not enabled at init'};
+    }
+    if (!resolveRetailFunctions()) {
+        return {error: 'NativeFunction resolution failed'};
+    }
+    g_diff_test_caller_tid = Process.getCurrentThreadId();
+    // Snapshot — race-safe because installDiffTestGuards holds the engine
+    // at fn_engine_rng_step.onEnter for the duration of this RPC.
+    const snap = {
+        state_a:     rva(ADDR.var_rng_state_a).readU32(),
+        state_b:     rva(ADDR.var_rng_state_b).readU32(),
+        rng_15bit_a: rva(ADDR.var_rng_15bit_a).readU32(),
+        rng_7bit_a:  rva(ADDR.var_rng_7bit_a ).readU32(),
+        rng_3bit_a:  rva(ADDR.var_rng_3bit_a ).readU32(),
+        rng_15bit_b: rva(ADDR.var_rng_15bit_b).readU32(),
+        rng_7bit_b:  rva(ADDR.var_rng_7bit_b ).readU32(),
+        rng_3bit_b:  rva(ADDR.var_rng_3bit_b ).readU32(),
+    };
+    let out;
+    try {
+        rva(ADDR.var_rng_state_a).writeU32(state_a >>> 0);
+        rva(ADDR.var_rng_state_b).writeU32(state_b >>> 0);
+        g_nf_retail_rng_step();
+        out = {
+            new_state_a:  rva(ADDR.var_rng_state_a ).readU32(),
+            new_state_b:  rva(ADDR.var_rng_state_b ).readU32(),
+            rng_15bit_a:  rva(ADDR.var_rng_15bit_a ).readU32(),
+            rng_7bit_a:   rva(ADDR.var_rng_7bit_a  ).readU32(),
+            rng_3bit_a:   rva(ADDR.var_rng_3bit_a  ).readU32(),
+            rng_15bit_b:  rva(ADDR.var_rng_15bit_b ).readU32(),
+            rng_7bit_b:   rva(ADDR.var_rng_7bit_b  ).readU32(),
+            rng_3bit_b:   rva(ADDR.var_rng_3bit_b  ).readU32(),
+        };
+    } finally {
+        rva(ADDR.var_rng_state_a).writeU32(snap.state_a);
+        rva(ADDR.var_rng_state_b).writeU32(snap.state_b);
+        rva(ADDR.var_rng_15bit_a).writeU32(snap.rng_15bit_a);
+        rva(ADDR.var_rng_7bit_a ).writeU32(snap.rng_7bit_a);
+        rva(ADDR.var_rng_3bit_a ).writeU32(snap.rng_3bit_a);
+        rva(ADDR.var_rng_15bit_b).writeU32(snap.rng_15bit_b);
+        rva(ADDR.var_rng_7bit_b ).writeU32(snap.rng_7bit_b);
+        rva(ADDR.var_rng_3bit_b ).writeU32(snap.rng_3bit_b);
+        g_diff_test_caller_tid = -1;
+    }
+    return out;
+}
+
+// FPS diff: 6 retail globals + 2 scripted timeGetTime returns.  FUN_004b27bf
+// calls timeGetTime() exactly twice on a rollover frame (once for the delta,
+// once for the new window-start basis), and exactly once on a non-rollover
+// frame.  We push BOTH values to the clock queue and let the function drain
+// whichever it needs; any leftover is cleared at the end so the next call
+// starts fresh.
+//
+// `now_ms` and `rollover_now_ms` are caller-supplied — for a non-rollover
+// test, set them equal; for a rollover test, set rollover_now_ms slightly
+// later (matches retail's "two real wall-clock reads back-to-back, ms
+// apart" shape that engine_compute_fps's pure port preserves).
+function runRetailComputeFps(in_now_ms, in_rollover_now_ms,
+                             in_last_render_ms, in_window_start_ms,
+                             in_frames_this_second, in_current_fps,
+                             in_cumulative_fps, in_cumulative_seconds) {
+    if (!g_diff_test_enabled) {
+        return {error: 'diff_test not enabled at init'};
+    }
+    if (!resolveRetailFunctions()) {
+        return {error: 'NativeFunction resolution failed'};
+    }
+    g_diff_test_caller_tid = Process.getCurrentThreadId();
+    // Always start with an empty clock queue so a prior test's leftover
+    // can't bleed in.
+    g_diff_test_clock_queue.length = 0;
+    // Snapshot — race-safe because installDiffTestGuards holds the engine
+    // at fn_engine_compute_fps.onEnter for the duration of this RPC.
+    const snap = {
+        frames:       rva(ADDR.var_fps_frames      ).readU32(),
+        last_render:  rva(ADDR.var_fps_last_render ).readU32(),
+        window_start: rva(ADDR.var_fps_window_start).readU32(),
+        current_fps:  rva(ADDR.var_fps_current     ).readU32(),
+        cum_fps:      rva(ADDR.var_fps_cum_sum     ).readU32(),
+        cum_secs:     rva(ADDR.var_fps_cum_secs    ).readU32(),
+    };
+    let out;
+    try {
+        rva(ADDR.var_fps_frames      ).writeU32(in_frames_this_second >>> 0);
+        rva(ADDR.var_fps_last_render ).writeU32(in_last_render_ms     >>> 0);
+        rva(ADDR.var_fps_window_start).writeU32(in_window_start_ms    >>> 0);
+        rva(ADDR.var_fps_current     ).writeU32(in_current_fps        >>> 0);
+        rva(ADDR.var_fps_cum_sum     ).writeU32(in_cumulative_fps     >>> 0);
+        rva(ADDR.var_fps_cum_secs    ).writeU32(in_cumulative_seconds >>> 0);
+        // Script clock returns.  Push BOTH values: the rollover branch
+        // needs both reads; non-rollover only consumes the first.  Any
+        // leftover is cleared in the outer finally.
+        g_diff_test_clock_queue.push(in_now_ms          >>> 0);
+        g_diff_test_clock_queue.push(in_rollover_now_ms >>> 0);
+        const delta_ms = g_nf_retail_compute_fps() | 0;
+        out = {
+            delta_ms:                    delta_ms,
+            new_frames_this_second:      rva(ADDR.var_fps_frames      ).readU32(),
+            new_last_render_ms:          rva(ADDR.var_fps_last_render ).readU32(),
+            new_second_window_start_ms:  rva(ADDR.var_fps_window_start).readU32(),
+            new_current_fps:             rva(ADDR.var_fps_current     ).readU32(),
+            new_cumulative_fps:          rva(ADDR.var_fps_cum_sum     ).readU32(),
+            new_cumulative_seconds:      rva(ADDR.var_fps_cum_secs    ).readU32(),
+        };
+    } finally {
+        rva(ADDR.var_fps_frames      ).writeU32(snap.frames);
+        rva(ADDR.var_fps_last_render ).writeU32(snap.last_render);
+        rva(ADDR.var_fps_window_start).writeU32(snap.window_start);
+        rva(ADDR.var_fps_current     ).writeU32(snap.current_fps);
+        rva(ADDR.var_fps_cum_sum     ).writeU32(snap.cum_fps);
+        rva(ADDR.var_fps_cum_secs    ).writeU32(snap.cum_secs);
+        g_diff_test_clock_queue.length = 0;
+        g_diff_test_caller_tid = -1;
+    }
+    return out;
+}
+
 // ─── init RPC ──────────────────────────────────────────────────────────
 
 rpc.exports = {
@@ -1242,6 +1497,8 @@ rpc.exports = {
         g_frame_capture_max         = (opts.frame_capture_max | 0);
         g_frame_capture_warmup_secs = (opts.frame_capture_warmup_secs | 0);
         g_frame_capture_count       = 0;
+
+        g_diff_test_enabled = !!opts.diff_test;
 
         g_input_record_enabled = !!opts.input_record;
         // input_replay arrives as an array of {t, m, w, l} events sorted by
@@ -1292,6 +1549,12 @@ rpc.exports = {
             catch (e) { err('installVirtualClockHook', e.message); }
             try { installTurboSleepHook(); }
             catch (e) { err('installTurboSleepHook', e.message); }
+        } else if (g_diff_test_enabled) {
+            // Diff-test mode without turbo still needs the timeGetTime hook
+            // for the FPS function's scripted-clock queue.  The hook is
+            // idempotent, so a turbo+diff combined run only attaches once.
+            try { installTimeGetTimeHook(); }
+            catch (e) { err('installTimeGetTimeHook', e.message); }
         }
 
         if (g_frame_capture_enabled) {
@@ -1326,6 +1589,26 @@ rpc.exports = {
               frame_capture_warmup_secs: g_frame_capture_warmup_secs,
               input_record:  g_input_record_enabled,
               input_replay_count:
-                  g_input_replay_events ? g_input_replay_events.length : 0});
+                  g_input_replay_events ? g_input_replay_events.length : 0,
+              diff_test:     g_diff_test_enabled});
+
+        if (g_diff_test_enabled) {
+            log('diff_test: armed (runRetailRngStep / runRetailComputeFps ' +
+                'RPCs live; orchestrator drives test vectors)');
+        }
+    },
+
+    runRetailRngStep: function (state_a, state_b) {
+        return runRetailRngStep(state_a, state_b);
+    },
+
+    runRetailComputeFps: function (now_ms, rollover_now_ms,
+                                   last_render_ms, window_start_ms,
+                                   frames_this_second, current_fps,
+                                   cumulative_fps, cumulative_seconds) {
+        return runRetailComputeFps(now_ms, rollover_now_ms,
+                                   last_render_ms, window_start_ms,
+                                   frames_this_second, current_fps,
+                                   cumulative_fps, cumulative_seconds);
     },
 };

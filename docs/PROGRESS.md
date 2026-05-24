@@ -7,6 +7,136 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Pure-function differential testing (Phase 4 of harness-roadmap)
+
+Took the prior entry's "What's next" pointer — pure-function diff was
+flagged as highest-leverage there ("catches arithmetic drift in our
+ports before scenarios surface it").  Now landed end-to-end, covering
+both ported pure functions: `engine_rng_step` and `engine_compute_fps`.
+
+### Agent (`tools/frida/openlords2-agent.js`)
+
+- New `ADDR` block: `fn_engine_rng_step` (`FUN_00404a46`),
+  `fn_engine_compute_fps` (`FUN_004b27bf`), and every global the two
+  functions read/write (8 for RNG, 6 for FPS — addresses cross-
+  referenced to `src/engine_*.c`'s mirror tables).
+- Refactored `installVirtualClockHook` → `installTimeGetTimeHook` +
+  thin compat wrapper.  The new shape lets the diff path install the
+  `timeGetTime` interceptor without arming turbo's virtual clock.
+- New scripted-clock primitive: `g_diff_test_clock_queue` (FIFO of u32
+  ms values).  The `timeGetTime` `onLeave` hook checks the queue head
+  before the virtual-clock fallback.  Queue access is gated on
+  `Process.getCurrentThreadId() === g_diff_test_caller_tid` so the
+  engine main thread (still ticking during diffs) can't steal scripted
+  values.
+- New init opt `diff_test: bool` + two RPC entrypoints:
+  - `runRetailRngStep(state_a, state_b)` — writes 2 inputs, calls
+    retail, returns 8 outputs.
+  - `runRetailComputeFps(now, rollover_now, last_render, window_start,
+    frames, current_fps, cumulative_fps, cumulative_seconds)` — writes
+    6 inputs, pushes 2 clock values, calls retail, returns 7 outputs
+    (including return value as `delta_ms`).
+- Both RPCs: snapshot all observable globals → write inputs → invoke
+  via `NativeFunction` → readback → restore.  Restore is in `finally`
+  so a thrown exception can't leave the engine perturbed.
+
+### Orchestrator (`tools/diff_test.py`, new file)
+
+- Builds `tests/build/libengine_diff.so` (new Makefile target,
+  `-shared -fPIC`, no ASan since ASan-instrumented .so can't be
+  `dlopen`'d from non-ASan Python).
+- ctypes mirrors of `engine_rng_in_t` / `engine_rng_out_t` /
+  `engine_fps_in_t` / `engine_fps_out_t` from `src/engine.h`.
+- Vector generators: each starts with a fixed set of edge cases
+  (retail seed pair, degenerate fixed points, all-ones, bit-30 set
+  for RNG; rollover / non-rollover / strict-boundary / signed-wrap /
+  long-window for FPS), then random fill to `--vectors N`.
+- Per vector: invoke agent's RPC, invoke our port via ctypes, diff
+  field-by-field.  Mismatch → recorded as failure with full vector +
+  retail + port + diff list for the summary print.
+
+### The engine-thread race + how it's handled
+
+The engine main thread is still calling `FUN_004b27bf` every per-tick
+driver iteration (≈200 Hz during boot).  Without protection, between
+our retail call returning and our readback firing, the engine squeezes
+in its own call and overwrites `_DAT_004e59e0` with wall-clock.
+
+Two attempts at an on-target guard both **deadlocked**:
+
+1. **`Interceptor.attach onEnter` spin** — spin while
+   `g_diff_test_caller_tid !== -1`.  Frida's V8 isolate is single-
+   threaded; the spin holds the isolate lock; the V8 RPC needs that
+   lock to make progress; never clears caller_tid.
+2. **`kernel32!SuspendThread` on the engine main thread** — Frida's V8
+   heap and the engine share the process heap; suspending the engine
+   while it holds an internal heap lock wedges the next V8 allocation.
+
+Pragmatic resolution lives **on the Python side**: detect the race +
+retry.  Strongest signal is `new_last_render_ms == in_now_ms` —
+`FUN_004b27bf` unconditionally writes the first `timeGetTime` result
+into that global, and our scripted clock always returns `in_now_ms` for
+that read.  If readback differs, the engine raced us after the retail
+call returned.  Retry up to 4× with 10 ms sleep between attempts so the
+engine's intermediate calls land elsewhere.
+
+RNG doesn't need retries — `FUN_00404a46` isn't on the per-frame hot
+path today (its SP call sites are inside sim subsystems we haven't
+unblocked), so the engine doesn't ambient-call it during diffs.
+
+### Verified
+
+Two stress runs against retail (via `cutestation.soy:27042`):
+
+| Run                    | rng_step       | fps_step       | retries (rough)  |
+|------------------------|----------------|----------------|------------------|
+| `--vectors 12`         | 12/12          | 12/12          | ~0–1 / call      |
+| `--vectors 200`        | 200/200        | 200/200        | a handful        |
+
+This is the **first bit-exact validation of any ported function
+against retail's actual code**.  All 14 baseline smoke checks still
+pass (smoke run with `--turbo` exercises the refactored
+`installVirtualClockHook` codepath and confirms the smoke-test's
+load-bearing log-line greps still match).  Unit tests: 123/123
+under ASan + UBSan, unchanged.
+
+### Findings doc
+
+[`docs/findings/pure-function-diff.md`](findings/pure-function-diff.md)
+— full design: agent shape, the engine-thread race + why both guards
+deadlocked, the host-side ctypes path, how to extend with a new
+target, and what this catches / doesn't catch.
+
+### What's next
+
+The three threads from the prior entry remain, minus the one just
+landed:
+
+1. **Resume engine-port** inside `engine_tick`.  Pre-tick
+   `FUN_00499a1c` (174 B, music/audio update) lands together with the
+   audio subsystem; the screen-dispatch ladder unblocks per-screen as
+   each subsystem ports.  Both gated on subsystems we haven't started.
+2. **DDraw Blt-via-GDI seat** — short-circuit the "Blt invisible under
+   DWM" quirk by intercepting `IDirectDrawSurface::Blt` and re-routing
+   through GDI `StretchDIBits` (same path our `src/gfx.c` uses).
+   Unblocks live recording sessions.  Roughly half a day's work.
+3. **Save-file format** — `castles.dat` / `c_hist.dat` / `history.dat`
+   parsers.  Lands as `docs/findings/save-file.md` + a host-side
+   decoder TU; starts unlocking the simulation subsystem ports.
+4. **More diff targets** — the diff machinery is now generic enough
+   that any future pure-C port can be wired in with ~60 LOC of agent
+   RPC + ~30 LOC of ctypes binding.  Next obvious candidates as they
+   port: `engine_compute_anim_cycle` (FUN_00451f1a), the rate
+   controller (FUN_004bb978), the bounded-bitmask RNG sampler
+   (FUN_00404b99, calls into FUN_00404a46 with retries).
+
+Top-down RE bias next time: option 2 unblocks recording-driven
+scenarios, which then unblocks the per-screen subsystem ports
+incrementally.  Option 3 unblocks the simulation subsystem chain in
+parallel.  Pick whichever feels more interesting next session.
+
+---
+
 ## 2026-05-24 — Input record + replay (Phase 3 of harness-roadmap)
 
 Picked the "What's next" pointer from the previous entry: input replay
