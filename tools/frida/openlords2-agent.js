@@ -110,6 +110,15 @@ const ADDR = {
     fn_engine_frame_delta:     0x004b20ed,  // FUN_004b20ed — frame delta w/ 30ms gate
     fn_engine_phase_ticks:     0x004bbc80,  // FUN_004bbc80 — 9-flag animation phase ticks
     fn_engine_input_state:     0x004b191e,  // FUN_004b191e — mouse-input state resolver
+    fn_engine_sim_sub_steps:   0x004bb978,  // FUN_004bb978 — sim sub-step rate gate
+    // engine_tick_dispatch (FUN_0040e890) — wraps the per-tick driver FUN_004b99c0.
+    // Replaced with a no-op during sim_sub_steps diff vectors to prevent the
+    // engine main thread from racing into the sub-step body with our injected
+    // ingame-state globals.  Lower-level than FUN_004b99c0 itself so the existing
+    // engine_tick anchor (attached to 0x4b99c0) doesn't have to deal with a
+    // body-replaced function (Interceptor.attach + Interceptor.replace on the
+    // same address have undefined interaction order — safer to swap the caller).
+    fn_engine_tick_dispatch:   0x0040e890,  // FUN_0040e890 — per-tick dispatcher
     // RNG state + 6 output mirrors (see docs/findings/engine-quirks.md #5
     // and src/engine_rng.c for the mirror-↔-port mapping).
     var_rng_state_a:     0x0058fe28,  // DAT_0058fe28 — state_a (the seed-init at WinMain)
@@ -213,7 +222,63 @@ const ADDR = {
     //   Last-click coords (carried through; overwritten on click-arming).
     var_input_last_click_x:         0x004eac04, //  DAT_004eac04 — s32
     var_input_last_click_y:         0x004eac08, //  DAT_004eac08 — s32
+    // Sim sub-step rate gate (FUN_004bb978 — engine_compute_sim_sub_steps) +
+    // its delegated hint helper (FUN_0043de70 — engine_compute_scenario_hint).
+    // ~30 scalars + 4 per-player strided arrays (slots 1..6 used) + a 2400-byte
+    // rate-gate LUT.  See src/engine_rate.c for the per-global commentary.
+    //   FUN_004bb978 direct reads/writes:
+    var_sim_last_step_ms:           0x004e5b0c, // _DAT_004e5b0c — u32 r/w
+    var_sim_autosave_start_ms:      0x0056d8b4, //  DAT_0056d8b4 — u32 r/w
+    var_sim_mp_active:              0x00553030, //  DAT_00553030 — s32 r
+    var_sim_tick_counter:           0x0057c998, //  DAT_0057c998 — u32 r
+    var_sim_derived_hint:           0x004d215c, //  DAT_004d215c — s32 w
+    var_sim_phase:                  0x004d2164, //  DAT_004d2164 — s32 r/w (0..0x9f)
+    var_sim_game_speed:             0x0053f230, // _DAT_0053f230 — s32 r (0..100)
+    var_sim_pause_lock:             0x0053f238, //  DAT_0053f238 — s32 r
+    var_sim_current_screen:         0x004eac50, //  DAT_004eac50 — u8 r (table idx)
+    var_sim_extended_pause:         0x0053e910, //  DAT_0053e910 — s32 r
+    var_sim_mp_player_index:        0x005440a4, //  DAT_005440a4 — u8 r (table idx)
+    //   FUN_004bb978 indirect table reads — single byte at table[idx]; we
+    //   inject the byte at the exact index via the screen_freeze_byte /
+    //   mp_skip_byte input fields rather than mirroring the full 256-byte
+    //   table.  Index control comes from current_screen / mp_player_index.
+    var_sim_screen_freeze_table:    0x004e31b0, //  DAT_004e31b0 — u8[]
+    var_sim_mp_skip_table:          0x004e3240, //  DAT_004e3240 — u8[]
+    //   Rate-gate LUT (FUN_004bb978 reads 1 byte at computed index).
+    //   Index range [0, 14*0xa0 + 0x9f] = [0, 0x95f] = 2400 bytes.  We
+    //   inject the full 2400 bytes once per test plan via installSimSubStepsRateLut
+    //   so vectors share a deterministic LUT.  See engine_rate.c's OOB-note for
+    //   why the documented size (0x6e0) is exceeded by 481 B.
+    var_sim_rate_gate_lut:          0x004e3260, //  DAT_004e3260 — u8[2400] r
+    //   FUN_0043de70 reads/writes:
+    var_sim_game_state_phase:       0x0052af94, //  DAT_0052af94 — s32 r (must be 3)
+    var_sim_local_player_idx:       0x0057c8cc, //  DAT_0057c8cc — s32 r (1..6)
+    var_sim_game_mode_speed:        0x0057c8fc, //  DAT_0057c8fc — u8 r (0/2/5)
+    var_sim_ally_a:                 0x005681ec, //  DAT_005681ec — s32 r
+    var_sim_ally_b:                 0x005681d8, //  DAT_005681d8 — s32 r
+    var_sim_frame_count:            0x00515b20, //  DAT_00515b20 — s32 r/w
+    var_sim_max_stride:             0x00512fa8, //  DAT_00512fa8 — s32 r/w
+    var_sim_stride_sum:             0x00515914, //  DAT_00515914 — s32 r/w
+    var_sim_avg_stride:             0x00515908, //  DAT_00515908 — s32 w (carry-through)
+    var_sim_slow_frame_count:       0x004d5c90, //  DAT_004d5c90 — s32 r/w (≤99 to avoid notify)
+    var_sim_base_delta:             0x004d2160, //  DAT_004d2160 — s32 r
+    var_sim_active_count:           0x0053f068, //  DAT_0053f068 — s32 w (carry-through)
+    //   Per-player strided arrays.  7 entries (slots 0..6, 1..6 used).
+    //   The base address is the slot-0 byte; per-slot byte is at base+i*stride.
+    var_sim_player_active_base:     0x0057bf04, //  &DAT_0057bf04 — stride 0x160, u8
+    var_sim_player_has_data_base:   0x0057bf05, //  &DAT_0057bf05 — stride 0x160, u8 (+1)
+    var_sim_player_disconnected_base: 0x00553d76, //  &DAT_00553d76 — stride 0x2c, u8
+    var_sim_player_ticks_base:      0x0053e8d0, //  &DAT_0053e8d0 — stride 4, s32
 };
+
+// Per-slot strides — used inside the runRetailSimSubSteps RPC + the LUT
+// install/uninstall helpers.  Sizes verified against the Ghidra retail
+// decompile (FUN_004bb978 / FUN_0043de70 access patterns).
+const SIM_PLAYER_SLOT_COUNT      = 7;            // slots 0..6 (1..6 used)
+const SIM_PLAYER_ACTIVE_STRIDE   = 0x160;        // bytes
+const SIM_PLAYER_DISCONN_STRIDE  = 0x2c;         // bytes
+const SIM_PLAYER_TICKS_STRIDE    = 4;            // bytes
+const SIM_RATE_LUT_BYTES         = 2400;         // (14*0xa0 + 0x9f) + 1 → 0x960
 
 // ─── runtime state ──────────────────────────────────────────────────────
 
@@ -342,6 +407,30 @@ let g_nf_retail_anim_cycle    = null;
 let g_nf_retail_frame_delta   = null;
 let g_nf_retail_phase_ticks   = null;
 let g_nf_retail_input_state   = null;
+let g_nf_retail_sim_sub_steps = null;
+
+// Sim sub-step rate-gate LUT install state.  installSimSubStepsRateLut() is
+// a one-shot per test plan: snapshot the original 2400 bytes once, write the
+// orchestrator-supplied bytes, leave installed until uninstallSimSubStepsRateLut()
+// flushes the snapshot back.  Lazy snapshot lets re-runs of the test plan
+// re-install without piling up duplicate backups.
+let g_sim_rate_lut_backup = null;       // Uint8Array of original bytes (or null)
+
+// Engine-tick freeze state.  installSimSubStepsEngineFreeze() replaces
+// FUN_0040e890 with a no-op so the engine main thread skips the per-tick
+// driver entirely.  Necessary during sim_sub_steps diff vectors because:
+//   - we inject game_state_phase=3 (ingame), mp_active=1, and per-player
+//     arrays into globals retail's engine main thread also reads;
+//   - if engine_tick fires during the inject→call→readback→restore window,
+//     its own FUN_004bb978 returns >0 (driven by our injected state) and
+//     the sub-step body runs — calls retail's sim sub-functions that
+//     expect a fully-initialised ingame state which we have NOT provided.
+//   - those functions then crash on unmapped pointer reads (DAT_0050d7c0
+//     deferred-action table, DAT_0057bf04+offset player struct internals).
+// Freezing engine_tick guarantees no parallel calls reach the sub-step body,
+// at the cost of suspending sim/render ticking entirely for the duration.
+// Pair install with uninstall to restore normal behavior.
+let g_sim_engine_freeze_callback = null;   // NativeCallback (or null = not installed)
 
 // engine_tick depth tracker — 1 while the engine main thread is executing
 // FUN_004b99c0, 0 otherwise.  Used by per-tick race detection in diff RPCs
@@ -1962,7 +2051,295 @@ function resolveRetailFunctions() {
         rva(ADDR.fn_engine_phase_ticks), 'void', [], 'stdcall');
     g_nf_retail_input_state = new NativeFunction(
         rva(ADDR.fn_engine_input_state), 'void', [], 'stdcall');
+    // FUN_004bb978 returns the sub-step count (0/1/2) — declared int32.
+    g_nf_retail_sim_sub_steps = new NativeFunction(
+        rva(ADDR.fn_engine_sim_sub_steps), 'int32', [], 'stdcall');
     return true;
+}
+
+// One-shot per test plan: snapshot retail's 2400-byte rate-gate LUT at
+// DAT_004e3260, then write the orchestrator-supplied LUT bytes (a Uint8Array-
+// like array of 2400 u8s).  Re-runs (e.g. retries) skip the snapshot on
+// subsequent calls.  Pair with uninstallSimSubStepsRateLut() to flush the
+// backup back when the test plan finishes.
+function installSimSubStepsRateLut(lut_bytes) {
+    if (g_base === null) {
+        return {error: 'init not completed yet'};
+    }
+    if (!Array.isArray(lut_bytes) || lut_bytes.length !== SIM_RATE_LUT_BYTES) {
+        return {error: 'lut_bytes must be a ' + SIM_RATE_LUT_BYTES +
+                       '-element array (got ' +
+                       (Array.isArray(lut_bytes) ? lut_bytes.length : typeof lut_bytes) +
+                       ')'};
+    }
+    const lut_ptr = rva(ADDR.var_sim_rate_gate_lut);
+    if (g_sim_rate_lut_backup === null) {
+        g_sim_rate_lut_backup = new Uint8Array(SIM_RATE_LUT_BYTES);
+        const src = lut_ptr.readByteArray(SIM_RATE_LUT_BYTES);
+        g_sim_rate_lut_backup.set(new Uint8Array(src));
+    }
+    const buf = new Uint8Array(SIM_RATE_LUT_BYTES);
+    for (let i = 0; i < SIM_RATE_LUT_BYTES; i++) {
+        buf[i] = lut_bytes[i] & 0xff;
+    }
+    lut_ptr.writeByteArray(buf.buffer);
+    return {ok: true, snapshotted: g_sim_rate_lut_backup !== null};
+}
+
+function uninstallSimSubStepsRateLut() {
+    if (g_base === null) {
+        return {error: 'init not completed yet'};
+    }
+    if (g_sim_rate_lut_backup === null) {
+        return {ok: true, restored: false};
+    }
+    rva(ADDR.var_sim_rate_gate_lut).writeByteArray(g_sim_rate_lut_backup.buffer);
+    g_sim_rate_lut_backup = null;
+    return {ok: true, restored: true};
+}
+
+// Engine-tick freeze: replace FUN_0040e890 (engine_tick_dispatch) with a no-op.
+// The engine main thread's message pump keeps running (PeekMessage /
+// DispatchMessage) so the process stays responsive; but the sim sub-step loop
+// + render phase + LFSR + autosave pump are all skipped.  Used to isolate
+// sim_sub_steps diff vectors from the engine main thread's parallel reads of
+// our injected globals — see g_sim_engine_freeze_callback's commentary.
+function installSimSubStepsEngineFreeze() {
+    if (g_base === null) {
+        return {error: 'init not completed yet'};
+    }
+    if (g_sim_engine_freeze_callback !== null) {
+        // Already installed — caller might be retrying a test plan run.
+        return {ok: true, already_installed: true};
+    }
+    // No-op callback: returns immediately, no state change.  Stdcall
+    // matches retail's calling convention for FUN_0040e890 (no args,
+    // no return value).
+    g_sim_engine_freeze_callback = new NativeCallback(
+        function () { /* engine-tick suspended for diff */ },
+        'void', [], 'stdcall');
+    Interceptor.replace(rva(ADDR.fn_engine_tick_dispatch),
+                        g_sim_engine_freeze_callback);
+    // Flush the interceptor so the replacement is live before we return.
+    Interceptor.flush();
+    return {ok: true, already_installed: false};
+}
+
+function uninstallSimSubStepsEngineFreeze() {
+    if (g_base === null) {
+        return {error: 'init not completed yet'};
+    }
+    if (g_sim_engine_freeze_callback === null) {
+        return {ok: true, restored: false};
+    }
+    Interceptor.revert(rva(ADDR.fn_engine_tick_dispatch));
+    Interceptor.flush();
+    g_sim_engine_freeze_callback = null;
+    return {ok: true, restored: true};
+}
+
+// Sim sub-step rate gate diff.  Wraps FUN_004bb978, which internally calls
+// FUN_0043de70 (engine_compute_scenario_hint).  The orchestrator runs BOTH
+// our ports chained together host-side; the RPC drives ONE retail call that
+// transitively exercises both retail functions.
+//
+// Snapshot/inject surface is larger than any prior diff target:
+//   ~20 scalars (FUN_004bb978 + FUN_0043de70 inputs/outputs combined),
+//   4 per-player strided arrays (7 slots × {active, has_data, disconnected,
+//   ticks}), plus 2 single-byte table reads (screen_freeze, mp_skip — we
+//   write the byte at the table index the function will read, vs. the full
+//   256-byte table).  The 2400-byte rate-gate LUT is installed once per
+//   test plan separately (installSimSubStepsRateLut) so this hot path stays
+//   lean.
+//
+// Constraints baked into the orchestrator-side vector generator (NOT
+// enforced here — agent trusts caller):
+//   - autosave_start_ms = 0 → skip the 5000 ms autosave-expiry branch, so
+//     FUN_0043eda0(0xf, 0) never fires.
+//   - slow_frame_count ≤ 99 → after `++` retail stays ≤ 100, so the gate
+//     `100 < value` is false and FUN_0043eda0(10, 0) never fires.
+// With those, the whole call chain has zero retail-side side effects beyond
+// the snapshot+restore surface — so the RPC restores cleanly.
+function runRetailSimSubSteps(in_obj) {
+    if (!g_diff_test_enabled) {
+        return {error: 'diff_test not enabled at init'};
+    }
+    if (!resolveRetailFunctions()) {
+        return {error: 'NativeFunction resolution failed'};
+    }
+    g_diff_test_caller_tid = Process.getCurrentThreadId();
+    g_diff_test_clock_queue.length = 0;
+    const tick_count_before = g_tick_count;
+    const in_tick_before    = g_engine_in_tick;
+
+    // Snapshot every scalar + every per-player array slot we'll touch.
+    // The rate-gate LUT itself is NOT snapshotted here — that's handled
+    // by installSimSubStepsRateLut at test-plan boundaries.
+    const snap = {
+        // FUN_004bb978 scalars
+        last_step_ms:        rva(ADDR.var_sim_last_step_ms      ).readU32(),
+        autosave_start_ms:   rva(ADDR.var_sim_autosave_start_ms ).readU32(),
+        mp_active:           rva(ADDR.var_sim_mp_active         ).readS32(),
+        tick_counter:        rva(ADDR.var_sim_tick_counter      ).readU32(),
+        derived_hint:        rva(ADDR.var_sim_derived_hint      ).readS32(),
+        phase:               rva(ADDR.var_sim_phase             ).readS32(),
+        game_speed:          rva(ADDR.var_sim_game_speed        ).readS32(),
+        pause_lock:          rva(ADDR.var_sim_pause_lock        ).readS32(),
+        current_screen:     rva(ADDR.var_sim_current_screen     ).readU8 (),
+        extended_pause:      rva(ADDR.var_sim_extended_pause    ).readS32(),
+        mp_player_index:    rva(ADDR.var_sim_mp_player_index    ).readU8 (),
+        // FUN_0043de70 scalars
+        game_state_phase:    rva(ADDR.var_sim_game_state_phase  ).readS32(),
+        local_player_idx:    rva(ADDR.var_sim_local_player_idx  ).readS32(),
+        game_mode_speed:     rva(ADDR.var_sim_game_mode_speed   ).readU8 (),
+        ally_a:              rva(ADDR.var_sim_ally_a            ).readS32(),
+        ally_b:              rva(ADDR.var_sim_ally_b            ).readS32(),
+        frame_count:         rva(ADDR.var_sim_frame_count       ).readS32(),
+        max_stride:          rva(ADDR.var_sim_max_stride        ).readS32(),
+        stride_sum:          rva(ADDR.var_sim_stride_sum        ).readS32(),
+        avg_stride:          rva(ADDR.var_sim_avg_stride        ).readS32(),
+        slow_frame_count:    rva(ADDR.var_sim_slow_frame_count  ).readS32(),
+        base_delta:          rva(ADDR.var_sim_base_delta        ).readS32(),
+        active_count:        rva(ADDR.var_sim_active_count      ).readS32(),
+        // Indirect single-byte table reads at runtime indices.  Index
+        // is in_obj.current_screen / in_obj.mp_player_index — both also
+        // injected on each call.
+        screen_freeze_byte:  rva(ADDR.var_sim_screen_freeze_table)
+                                .add(in_obj.current_screen & 0xff).readU8(),
+        mp_skip_byte:        rva(ADDR.var_sim_mp_skip_table)
+                                .add(in_obj.mp_player_index & 0xff).readU8(),
+        // Per-player arrays — snapshot all 7 slots' worth of each table
+        // (slots 1..6 used, 0 unused but read for parity).
+        player_active:       [], player_has_data:    [],
+        player_disconnected: [], player_ticks:       [],
+    };
+    for (let i = 0; i < SIM_PLAYER_SLOT_COUNT; i++) {
+        snap.player_active[i] = rva(ADDR.var_sim_player_active_base)
+            .add(i * SIM_PLAYER_ACTIVE_STRIDE).readU8();
+        snap.player_has_data[i] = rva(ADDR.var_sim_player_has_data_base)
+            .add(i * SIM_PLAYER_ACTIVE_STRIDE).readU8();
+        snap.player_disconnected[i] = rva(ADDR.var_sim_player_disconnected_base)
+            .add(i * SIM_PLAYER_DISCONN_STRIDE).readU8();
+        snap.player_ticks[i] = rva(ADDR.var_sim_player_ticks_base)
+            .add(i * SIM_PLAYER_TICKS_STRIDE).readS32();
+    }
+
+    let out;
+    try {
+        // Inject scalars.
+        rva(ADDR.var_sim_last_step_ms      ).writeU32(in_obj.last_step_ms       >>> 0);
+        rva(ADDR.var_sim_autosave_start_ms ).writeU32(in_obj.autosave_start_ms  >>> 0);
+        rva(ADDR.var_sim_mp_active         ).writeS32(in_obj.mp_active          |  0);
+        rva(ADDR.var_sim_tick_counter      ).writeU32(in_obj.tick_counter       >>> 0);
+        // derived_hint is a canary (clear so post-call readback is "did THIS
+        // call write it").
+        rva(ADDR.var_sim_derived_hint      ).writeS32(0);
+        rva(ADDR.var_sim_phase             ).writeS32(in_obj.phase              |  0);
+        rva(ADDR.var_sim_game_speed        ).writeS32(in_obj.game_speed         |  0);
+        rva(ADDR.var_sim_pause_lock        ).writeS32(in_obj.pause_lock         |  0);
+        rva(ADDR.var_sim_current_screen    ).writeU8 (in_obj.current_screen     & 0xff);
+        rva(ADDR.var_sim_extended_pause    ).writeS32(in_obj.extended_pause     |  0);
+        rva(ADDR.var_sim_mp_player_index   ).writeU8 (in_obj.mp_player_index    & 0xff);
+        rva(ADDR.var_sim_game_state_phase  ).writeS32(in_obj.game_state_phase   |  0);
+        rva(ADDR.var_sim_local_player_idx  ).writeS32(in_obj.local_player_idx   |  0);
+        rva(ADDR.var_sim_game_mode_speed   ).writeU8 (in_obj.game_mode_speed    & 0xff);
+        rva(ADDR.var_sim_ally_a            ).writeS32(in_obj.ally_a             |  0);
+        rva(ADDR.var_sim_ally_b            ).writeS32(in_obj.ally_b             |  0);
+        rva(ADDR.var_sim_frame_count       ).writeS32(in_obj.frame_count        |  0);
+        rva(ADDR.var_sim_max_stride        ).writeS32(in_obj.max_stride         |  0);
+        rva(ADDR.var_sim_stride_sum        ).writeS32(in_obj.stride_sum         |  0);
+        rva(ADDR.var_sim_avg_stride        ).writeS32(in_obj.avg_stride         |  0);
+        rva(ADDR.var_sim_slow_frame_count  ).writeS32(in_obj.slow_frame_count   |  0);
+        rva(ADDR.var_sim_base_delta        ).writeS32(in_obj.base_delta         |  0);
+        rva(ADDR.var_sim_active_count      ).writeS32(in_obj.active_count       |  0);
+        // Inject the two single-byte table reads at the same indices the
+        // function will use — we control both index and byte.
+        rva(ADDR.var_sim_screen_freeze_table)
+            .add(in_obj.current_screen & 0xff).writeU8(in_obj.screen_freeze_byte & 0xff);
+        rva(ADDR.var_sim_mp_skip_table)
+            .add(in_obj.mp_player_index & 0xff).writeU8(in_obj.mp_skip_byte & 0xff);
+        // Per-player arrays.  Slot 0 is unused but injected for snapshot
+        // parity (slot-0 active is always 0 in retail; vectors always set
+        // it to 0 too).
+        for (let i = 0; i < SIM_PLAYER_SLOT_COUNT; i++) {
+            rva(ADDR.var_sim_player_active_base).add(i * SIM_PLAYER_ACTIVE_STRIDE)
+                .writeU8(in_obj.player_active[i] & 0xff);
+            rva(ADDR.var_sim_player_has_data_base).add(i * SIM_PLAYER_ACTIVE_STRIDE)
+                .writeU8(in_obj.player_has_data[i] & 0xff);
+            rva(ADDR.var_sim_player_disconnected_base).add(i * SIM_PLAYER_DISCONN_STRIDE)
+                .writeU8(in_obj.player_disconnected[i] & 0xff);
+            rva(ADDR.var_sim_player_ticks_base).add(i * SIM_PLAYER_TICKS_STRIDE)
+                .writeS32(in_obj.player_ticks[i] | 0);
+        }
+
+        // Scripted timeGetTime — one value drained by FUN_004bb978's lone
+        // timeGetTime call at function head.
+        g_diff_test_clock_queue.push(in_obj.now_ms >>> 0);
+
+        // Invoke retail.  Return is the sub-step count (0/1/2).
+        const sub_steps = g_nf_retail_sim_sub_steps();
+
+        // Read every output: return value + every dirty global.
+        out = {
+            sub_steps:               sub_steps | 0,
+            new_last_step_ms:        rva(ADDR.var_sim_last_step_ms     ).readU32(),
+            new_autosave_start_ms:   rva(ADDR.var_sim_autosave_start_ms).readU32(),
+            new_phase:               rva(ADDR.var_sim_phase            ).readS32(),
+            derived_hint:            rva(ADDR.var_sim_derived_hint     ).readS32(),
+            new_frame_count:         rva(ADDR.var_sim_frame_count      ).readS32(),
+            new_max_stride:          rva(ADDR.var_sim_max_stride       ).readS32(),
+            new_stride_sum:          rva(ADDR.var_sim_stride_sum       ).readS32(),
+            new_avg_stride:          rva(ADDR.var_sim_avg_stride       ).readS32(),
+            new_slow_frame_count:    rva(ADDR.var_sim_slow_frame_count ).readS32(),
+            new_active_count:        rva(ADDR.var_sim_active_count     ).readS32(),
+        };
+        const tick_count_after = g_tick_count;
+        const in_tick_after    = g_engine_in_tick;
+        out.raced = ((tick_count_after !== tick_count_before) ||
+                     in_tick_before !== 0 || in_tick_after !== 0) ? 1 : 0;
+    } finally {
+        // Restore every snapshotted field.
+        rva(ADDR.var_sim_last_step_ms      ).writeU32(snap.last_step_ms);
+        rva(ADDR.var_sim_autosave_start_ms ).writeU32(snap.autosave_start_ms);
+        rva(ADDR.var_sim_mp_active         ).writeS32(snap.mp_active);
+        rva(ADDR.var_sim_tick_counter      ).writeU32(snap.tick_counter);
+        rva(ADDR.var_sim_derived_hint      ).writeS32(snap.derived_hint);
+        rva(ADDR.var_sim_phase             ).writeS32(snap.phase);
+        rva(ADDR.var_sim_game_speed        ).writeS32(snap.game_speed);
+        rva(ADDR.var_sim_pause_lock        ).writeS32(snap.pause_lock);
+        rva(ADDR.var_sim_current_screen    ).writeU8 (snap.current_screen);
+        rva(ADDR.var_sim_extended_pause    ).writeS32(snap.extended_pause);
+        rva(ADDR.var_sim_mp_player_index   ).writeU8 (snap.mp_player_index);
+        rva(ADDR.var_sim_game_state_phase  ).writeS32(snap.game_state_phase);
+        rva(ADDR.var_sim_local_player_idx  ).writeS32(snap.local_player_idx);
+        rva(ADDR.var_sim_game_mode_speed   ).writeU8 (snap.game_mode_speed);
+        rva(ADDR.var_sim_ally_a            ).writeS32(snap.ally_a);
+        rva(ADDR.var_sim_ally_b            ).writeS32(snap.ally_b);
+        rva(ADDR.var_sim_frame_count       ).writeS32(snap.frame_count);
+        rva(ADDR.var_sim_max_stride        ).writeS32(snap.max_stride);
+        rva(ADDR.var_sim_stride_sum        ).writeS32(snap.stride_sum);
+        rva(ADDR.var_sim_avg_stride        ).writeS32(snap.avg_stride);
+        rva(ADDR.var_sim_slow_frame_count  ).writeS32(snap.slow_frame_count);
+        rva(ADDR.var_sim_base_delta        ).writeS32(snap.base_delta);
+        rva(ADDR.var_sim_active_count      ).writeS32(snap.active_count);
+        rva(ADDR.var_sim_screen_freeze_table)
+            .add(in_obj.current_screen & 0xff).writeU8(snap.screen_freeze_byte);
+        rva(ADDR.var_sim_mp_skip_table)
+            .add(in_obj.mp_player_index & 0xff).writeU8(snap.mp_skip_byte);
+        for (let i = 0; i < SIM_PLAYER_SLOT_COUNT; i++) {
+            rva(ADDR.var_sim_player_active_base).add(i * SIM_PLAYER_ACTIVE_STRIDE)
+                .writeU8(snap.player_active[i]);
+            rva(ADDR.var_sim_player_has_data_base).add(i * SIM_PLAYER_ACTIVE_STRIDE)
+                .writeU8(snap.player_has_data[i]);
+            rva(ADDR.var_sim_player_disconnected_base).add(i * SIM_PLAYER_DISCONN_STRIDE)
+                .writeU8(snap.player_disconnected[i]);
+            rva(ADDR.var_sim_player_ticks_base).add(i * SIM_PLAYER_TICKS_STRIDE)
+                .writeS32(snap.player_ticks[i]);
+        }
+        g_diff_test_clock_queue.length = 0;
+        g_diff_test_caller_tid = -1;
+    }
+    return out;
 }
 
 // Engine-thread race notes — there is NO on-target guard.
@@ -2724,7 +3101,7 @@ rpc.exports = {
         if (g_diff_test_enabled) {
             log('diff_test: armed (runRetailRngStep / runRetailComputeFps / ' +
                 'runRetailAnimCycle / runRetailFrameDelta / runRetailPhaseTicks / ' +
-                'runRetailInputState ' +
+                'runRetailInputState / runRetailSimSubSteps ' +
                 'RPCs live; orchestrator drives test vectors)');
         }
     },
@@ -2766,6 +3143,26 @@ rpc.exports = {
 
     runRetailInputState: function (in_obj) {
         return runRetailInputState(in_obj);
+    },
+
+    runRetailSimSubSteps: function (in_obj) {
+        return runRetailSimSubSteps(in_obj);
+    },
+
+    installSimSubStepsRateLut: function (lut_bytes) {
+        return installSimSubStepsRateLut(lut_bytes);
+    },
+
+    uninstallSimSubStepsRateLut: function () {
+        return uninstallSimSubStepsRateLut();
+    },
+
+    installSimSubStepsEngineFreeze: function () {
+        return installSimSubStepsEngineFreeze();
+    },
+
+    uninstallSimSubStepsEngineFreeze: function () {
+        return uninstallSimSubStepsEngineFreeze();
     },
 
     // Diagnostic counters for the DDraw → GDI seat.  Reflects everything

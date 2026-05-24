@@ -16,12 +16,15 @@ and report any divergence.  Catches arithmetic / hashing / table-lookup
 deltas in our port before scenarios surface them.
 
 Current targets:
-  - engine_rng_step            (FUN_00404a46) — double-LFSR step
-  - engine_compute_fps         (FUN_004b27bf) — rolling 1-sec FPS counter
-  - engine_compute_anim_cycle  (FUN_00451f1a) — 16-frame anim-cycle bump
-  - engine_compute_frame_delta (FUN_004b20ed) — frame delta with 30 ms gate
-  - engine_compute_phase_ticks (FUN_004bbc80) — 9-flag animation phase tick
-  - engine_compute_input_state (FUN_004b191e) — mouse-input state resolver
+  - engine_rng_step              (FUN_00404a46) — double-LFSR step
+  - engine_compute_fps           (FUN_004b27bf) — rolling 1-sec FPS counter
+  - engine_compute_anim_cycle    (FUN_00451f1a) — 16-frame anim-cycle bump
+  - engine_compute_frame_delta   (FUN_004b20ed) — frame delta with 30 ms gate
+  - engine_compute_phase_ticks   (FUN_004bbc80) — 9-flag animation phase tick
+  - engine_compute_input_state   (FUN_004b191e) — mouse-input state resolver
+  - engine_compute_sim_sub_steps (FUN_004bb978) + engine_compute_scenario_hint
+                                 (FUN_0043de70) — sim sub-step rate gate
+                                 (chained: hint feeds gate)
 
 The orchestrator runs the agent in "diff_test" mode (no turbo, no input
 replay) so the engine boots, parks, and waits.  Once the per-tick driver
@@ -215,6 +218,71 @@ class EngineInputIn(ctypes.Structure):
     ]
 
 
+class EngineRateIn(ctypes.Structure):
+    _fields_ = [
+        ("now_ms",            ctypes.c_uint32),
+        ("last_step_ms",      ctypes.c_uint32),
+        ("autosave_start_ms", ctypes.c_uint32),
+        ("run_gate",          ctypes.c_int),
+        ("scenario_hint",     ctypes.c_int),
+        ("mp_active",         ctypes.c_int),
+        ("sim_tick_counter",  ctypes.c_uint32),
+        ("game_speed",        ctypes.c_int),
+        ("pause_lock",        ctypes.c_int),
+        ("screen_freeze",     ctypes.c_int),
+        ("extended_pause",    ctypes.c_int),
+        ("mp_skip_flag",      ctypes.c_int),
+        ("phase",             ctypes.c_int),
+        ("rate_lut",          ctypes.POINTER(ctypes.c_uint8)),
+    ]
+
+
+class EngineRateOut(ctypes.Structure):
+    _fields_ = [
+        ("sub_steps",              ctypes.c_int),
+        ("new_last_step_ms",       ctypes.c_uint32),
+        ("new_autosave_start_ms",  ctypes.c_uint32),
+        ("new_phase",              ctypes.c_int),
+        ("derived_hint",           ctypes.c_int),
+        ("notify_autosave_done",   ctypes.c_int),
+    ]
+
+
+class EngineScenarioHintIn(ctypes.Structure):
+    _fields_ = [
+        ("game_state_phase",     ctypes.c_int),
+        ("mp_active",            ctypes.c_int),
+        ("local_player_idx",     ctypes.c_int),
+        ("game_mode_speed",      ctypes.c_int),
+        ("ally_a",               ctypes.c_int),
+        ("ally_b",               ctypes.c_int),
+        ("frame_count",          ctypes.c_int),
+        ("max_stride",           ctypes.c_int),
+        ("stride_sum",           ctypes.c_int),
+        ("avg_stride",           ctypes.c_int),
+        ("slow_frame_count",     ctypes.c_int),
+        ("base_delta",           ctypes.c_int),
+        ("active_count",         ctypes.c_int),
+        ("player_active",        ctypes.c_uint8 * 7),
+        ("player_has_data",      ctypes.c_uint8 * 7),
+        ("player_disconnected",  ctypes.c_uint8 * 7),
+        ("player_ticks",         ctypes.c_int   * 7),
+    ]
+
+
+class EngineScenarioHintOut(ctypes.Structure):
+    _fields_ = [
+        ("hint",                  ctypes.c_int),
+        ("new_frame_count",       ctypes.c_int),
+        ("new_max_stride",        ctypes.c_int),
+        ("new_stride_sum",        ctypes.c_int),
+        ("new_avg_stride",        ctypes.c_int),
+        ("new_slow_frame_count",  ctypes.c_int),
+        ("new_active_count",      ctypes.c_int),
+        ("notify_slow_frame",     ctypes.c_int),
+    ]
+
+
 class EngineInputOut(ctypes.Structure):
     _fields_ = [
         ("raw_cursor_x",          ctypes.c_int),
@@ -285,6 +353,14 @@ def load_port_lib() -> ctypes.CDLL:
     lib.engine_compute_input_state.restype = None
     lib.engine_compute_input_state.argtypes = [
         ctypes.POINTER(EngineInputIn), ctypes.POINTER(EngineInputOut)]
+
+    lib.engine_compute_sim_sub_steps.restype = None
+    lib.engine_compute_sim_sub_steps.argtypes = [
+        ctypes.POINTER(EngineRateIn), ctypes.POINTER(EngineRateOut)]
+
+    lib.engine_compute_scenario_hint.restype = None
+    lib.engine_compute_scenario_hint.argtypes = [
+        ctypes.POINTER(EngineScenarioHintIn), ctypes.POINTER(EngineScenarioHintOut)]
 
     return lib
 
@@ -1230,6 +1306,428 @@ def diff_input_state(retail: dict, port: dict) -> list[str]:
     return bad
 
 
+# ─── sim_sub_steps test plan (FUN_004bb978 + FUN_0043de70 chain) ─────────
+#
+# Spans two retail functions called in sequence; the diff orchestrator
+# chains BOTH our ports host-side and compares against the single retail
+# call.  Vector format mirrors the agent's runRetailSimSubSteps in_obj
+# shape — see tools/frida/openlords2-agent.js for the snapshot/inject
+# surface.
+
+# Per-call retry budget.  Wider than INPUT_STATE_RACE_RETRIES because the
+# chained call surface is larger — more globals = more race surfaces.
+SIM_SUB_STEPS_RACE_RETRIES = 16
+
+# Rate-gate LUT size (bytes).  Matches SIM_RATE_LUT_BYTES in the agent.
+# Index range used by retail: [0, 14*0xa0 + 0x9f] = [0, 0x95f] = 2400.
+SIM_RATE_LUT_BYTES = 2400
+
+SIM_SUB_STEPS_OUT_FIELDS = (
+    "sub_steps",
+    "new_last_step_ms",
+    "new_autosave_start_ms",
+    "new_phase",
+    "derived_hint",
+    "new_frame_count",
+    "new_max_stride",
+    "new_stride_sum",
+    "new_avg_stride",
+    "new_slow_frame_count",
+    "new_active_count",
+)
+
+
+def _sim_sub_steps_base_vec(rng: random.Random) -> dict[str, Any]:
+    """Quiescent baseline: ingame SP at max speed, my slot active, no
+    ally peers, no autosave, no extended pause, all per-player tables
+    zeroed.  Concrete cases override fields to walk specific branches.
+    """
+    now = rng.randint(1000, 0x7FFFFFFF)
+    return {
+        # FUN_004bb978 scalars
+        "now_ms":             now,
+        "last_step_ms":       (now - rng.randint(0, 100)) & 0xFFFFFFFF,
+        "autosave_start_ms":  0,                    # MUST stay 0 to skip
+                                                    # the 5000 ms branch
+                                                    # (avoids retail's
+                                                    # FUN_0043eda0(0xf,0))
+        "mp_active":          0,                    # SP — simplest baseline
+        "tick_counter":       rng.randint(0, 200),
+        "phase":              rng.randint(0, 0x9f),
+        "game_speed":         100,                  # max → iVar3=0
+        "pause_lock":         0,
+        "current_screen":     0,                    # screen 0 has gate byte 0
+        "extended_pause":     0,
+        "mp_player_index":    0,
+        "screen_freeze_byte": 0,                    # at table[current_screen]
+        "mp_skip_byte":       0,                    # at table[mp_player_index]
+        # FUN_0043de70 scalars
+        "game_state_phase":   3,                    # ingame (so non-zero hint)
+        "local_player_idx":   1,
+        "game_mode_speed":    0,
+        "ally_a":             2,
+        "ally_b":             3,
+        "frame_count":        0,
+        "max_stride":         0,
+        "stride_sum":         0,
+        "avg_stride":         0,
+        "slow_frame_count":   0,                    # MUST stay ≤99 (after ++
+                                                    # retail stays ≤100 so the
+                                                    # FUN_0043eda0(10,0) gate
+                                                    # `100 < value` stays false)
+        "base_delta":         0,
+        "active_count":       0,
+        "player_active":         [0] * 7,
+        "player_has_data":       [0] * 7,
+        "player_disconnected":   [0] * 7,
+        "player_ticks":          [0] * 7,
+    }
+
+
+def gen_sim_sub_steps_vectors(n: int, rng: random.Random) -> list[dict[str, Any]]:
+    """Build N sim_sub_steps vectors covering:
+      - all four scenario_hint paths (state-not-ingame, SP, MP normal,
+        alone-in-mode-2)
+      - run_gate paths via FUN_004bb8c0 (which retail always returns 1 from —
+        we don't test the run_gate==0 branch in the diff; covered by unit tests)
+      - sub_steps return values 0, 1, 2
+      - phase wrap at 0x9f → 0
+      - rate-gate LUT byte 0 vs non-zero
+      - speed slider gradations 0..100
+      - pause_lock blocking
+      - screen_freeze byte values (0, 1, 2)
+      - extended_pause SP-vs-MP-with-skip-flag-vs-MP-without
+      - autosave_start_ms = 0 (always — constraint preserves retail side
+        effects).  The 4999 ms-still-blocks / 5000 ms-expires paths
+        diverge from this convention; they're covered by host unit tests
+        instead.
+      - per-player tick deltas at every behind-ladder + ahead-ladder
+        boundary
+    """
+    fixed: list[dict[str, Any]] = []
+
+    # 1. SP baseline — should produce sub_steps=0 (rate-gate LUT byte 0).
+    v = _sim_sub_steps_base_vec(rng)
+    fixed.append(v)
+
+    # 2. SP, scenario_hint = 1 (SP path always returns 1), LUT byte 1
+    # at the index (phase=0 → bumped to 1 → LUT[1 + 0*0xa0] = LUT[1]).
+    # Vector marker for the LUT installer; actual LUT bytes are global.
+    v = _sim_sub_steps_base_vec(rng)
+    v["phase"] = 0
+    v["game_speed"] = 100
+    fixed.append(v)
+
+    # 3. SP, scenario_hint = 1, slider middle (game_speed=50 → iVar3=5,
+    # threshold=52 ms).  now - last_step = 100 → step accepted.
+    v = _sim_sub_steps_base_vec(rng)
+    v["game_speed"] = 50
+    v["now_ms"]      = 1000
+    v["last_step_ms"] = 900   # delta = 100 ms
+    fixed.append(v)
+
+    # 4. SP, pause_lock = 1 (rate gate blocked at the pause check).
+    v = _sim_sub_steps_base_vec(rng)
+    v["pause_lock"] = 1
+    fixed.append(v)
+
+    # 5. SP, screen_freeze byte = 1 (blocks both SP + MP).
+    v = _sim_sub_steps_base_vec(rng)
+    v["screen_freeze_byte"] = 1
+    fixed.append(v)
+
+    # 6. SP, screen_freeze byte = 2 (blocks SP only — mp_active=0 → blocked).
+    v = _sim_sub_steps_base_vec(rng)
+    v["screen_freeze_byte"] = 2
+    fixed.append(v)
+
+    # 7. SP, extended_pause = 1 (blocks SP).
+    v = _sim_sub_steps_base_vec(rng)
+    v["extended_pause"] = 1
+    fixed.append(v)
+
+    # 8. game_state_phase != 3 → scenario_hint = 0 → sub_steps = 0,
+    # phase NOT advanced.
+    v = _sim_sub_steps_base_vec(rng)
+    v["game_state_phase"] = 0
+    fixed.append(v)
+
+    # 9. game_speed = 0 → iVar3 = 10 → sub_steps = 0 (slider pegged slow).
+    v = _sim_sub_steps_base_vec(rng)
+    v["game_speed"] = 0
+    fixed.append(v)
+
+    # 10. MP, mp_active=1, all slots inactive → scenario_hint path 3
+    # (local_player_idx slot inactive → hint = 1).
+    v = _sim_sub_steps_base_vec(rng)
+    v["mp_active"] = 1
+    # player_active[1] = 0 already (default)
+    fixed.append(v)
+
+    # 11. MP, single active player (just me) → FUN_0043de70 takes the
+    # "active_count == 1" early-return-1 path.
+    v = _sim_sub_steps_base_vec(rng)
+    v["mp_active"] = 1
+    v["player_active"][1] = 1
+    v["player_has_data"][1] = 1
+    fixed.append(v)
+
+    # 12. MP, normal path, I'm behind by 50 → behind ladder bucket -4.
+    v = _sim_sub_steps_base_vec(rng)
+    v["mp_active"] = 1
+    v["player_active"]   = [0, 1, 1, 1, 0, 0, 0]
+    v["player_has_data"] = [0, 1, 1, 1, 0, 0, 0]
+    v["player_ticks"]    = [0, 0, 50, 50, 0, 0, 0]
+    fixed.append(v)
+
+    # 13. MP, normal path, I'm ahead by 50 (coarse ladder → bucket 110).
+    v = _sim_sub_steps_base_vec(rng)
+    v["mp_active"] = 1
+    v["player_active"]   = [0, 1, 1, 1, 0, 0, 0]
+    v["player_has_data"] = [0, 1, 1, 1, 0, 0, 0]
+    v["player_ticks"]    = [0, 50, 0, 0, 0, 0, 0]
+    v["base_delta"]      = 10
+    fixed.append(v)
+
+    # 14. MP, mode-5 fine-grained ladder, lead = 50 → bucket 40.
+    v = _sim_sub_steps_base_vec(rng)
+    v["mp_active"]       = 1
+    v["game_mode_speed"] = 5
+    v["player_active"]   = [0, 1, 1, 1, 0, 0, 0]
+    v["player_has_data"] = [0, 1, 1, 1, 0, 0, 0]
+    v["player_ticks"]    = [0, 50, 0, 0, 0, 0, 0]
+    fixed.append(v)
+
+    # 15. MP mode-2, two allies → normal path.
+    v = _sim_sub_steps_base_vec(rng)
+    v["mp_active"]       = 1
+    v["game_mode_speed"] = 2
+    v["player_active"]   = [0, 1, 1, 1, 0, 0, 0]
+    v["player_has_data"] = [0, 1, 1, 1, 0, 0, 0]
+    fixed.append(v)
+
+    # 16. MP mode-2, single ally → alone path.
+    v = _sim_sub_steps_base_vec(rng)
+    v["mp_active"]       = 1
+    v["game_mode_speed"] = 2
+    v["player_active"]   = [0, 1, 1, 0, 0, 0, 0]
+    v["player_has_data"] = [0, 1, 1, 0, 0, 0, 0]
+    v["ally_b"]          = -1
+    v["base_delta"]      = 10
+    v["player_ticks"]    = [0, 100, 50, 0, 0, 0, 0]   # lead = 50 → bucket 30
+    fixed.append(v)
+
+    # 17. Phase wrap: phase=0x9f → bumps to 0xa0 → wrap to 0.
+    v = _sim_sub_steps_base_vec(rng)
+    v["phase"] = 0x9f
+    fixed.append(v)
+
+    # 18. Time overflow: now < last_step → local_8 clamps to 10000.
+    v = _sim_sub_steps_base_vec(rng)
+    v["now_ms"]       = 500
+    v["last_step_ms"] = 1000
+    fixed.append(v)
+
+    # 19. MP at max speed (uncapped — gate condition false → step + no
+    # advance).
+    v = _sim_sub_steps_base_vec(rng)
+    v["mp_active"]       = 1
+    v["player_active"]   = [0, 1, 1, 0, 0, 0, 0]
+    v["player_has_data"] = [0, 1, 1, 0, 0, 0, 0]
+    v["game_speed"]      = 100
+    fixed.append(v)
+
+    # 20. Behind ladder: peers way ahead (10000+) → bucket -10.
+    v = _sim_sub_steps_base_vec(rng)
+    v["mp_active"]       = 1
+    v["player_active"]   = [0, 1, 1, 0, 0, 0, 0]
+    v["player_has_data"] = [0, 1, 1, 0, 0, 0, 0]
+    v["player_ticks"]    = [0, 0, 20000, 0, 0, 0, 0]
+    fixed.append(v)
+
+    # 21. Slow-frame at 140 ms ceiling — slow_frame_count just below
+    # the trip threshold (constrained ≤99 to skip the retail-side
+    # FUN_0043eda0(10,0) trigger).
+    v = _sim_sub_steps_base_vec(rng)
+    v["mp_active"]       = 1
+    v["player_active"]   = [0, 1, 1, 0, 0, 0, 0]
+    v["player_has_data"] = [0, 1, 1, 0, 0, 0, 0]
+    v["player_ticks"]    = [0, 500, 0, 0, 0, 0, 0]   # lead 500 → ceiling 140
+    v["slow_frame_count"] = 99                        # bumps to 100, gate 100 < 100
+                                                      # false → no notify
+    fixed.append(v)
+
+    out: list[dict[str, Any]] = list(fixed)
+    while len(out) < n:
+        v = _sim_sub_steps_base_vec(rng)
+        # Random fill — bias toward interesting branches.
+        r = rng.random()
+        if r < 0.40:
+            # MP path with random per-player setup
+            v["mp_active"] = 1
+            for i in range(1, 7):
+                if rng.random() < 0.5:
+                    v["player_active"][i]   = 1
+                    v["player_has_data"][i] = 1
+                    v["player_disconnected"][i] = 1 if rng.random() < 0.1 else 0
+                    v["player_ticks"][i] = rng.randint(0, 1000)
+            v["game_mode_speed"] = rng.choice([0, 2, 5])
+            v["ally_a"] = rng.randint(1, 6)
+            v["ally_b"] = rng.randint(1, 6)
+            v["base_delta"] = rng.randint(0, 20)
+        if rng.random() < 0.10:
+            v["pause_lock"] = 1
+        if rng.random() < 0.10:
+            v["extended_pause"] = 1
+            if rng.random() < 0.5 and v["mp_active"]:
+                v["mp_skip_byte"] = 1
+        if rng.random() < 0.10:
+            v["screen_freeze_byte"] = rng.choice([0, 1, 2])
+        if rng.random() < 0.15:
+            v["game_speed"] = rng.randint(0, 100)
+        if rng.random() < 0.10:
+            v["phase"] = 0x9f                  # wrap boundary
+        # Stride/state mirrors — keep frame_count reasonable so avg_stride
+        # stays in int range even with worst-case stride_sum.
+        v["frame_count"]     = rng.randint(0, 1000)
+        v["stride_sum"]      = rng.randint(0, 100000)
+        v["max_stride"]      = rng.randint(0, 200)
+        v["slow_frame_count"] = rng.randint(0, 99)
+        out.append(v)
+    return out[:n]
+
+
+def gen_sim_sub_steps_rate_lut(rng: random.Random) -> list[int]:
+    """Generate a deterministic 2400-byte rate-gate LUT for the test plan.
+    Mostly non-zero so the LUT-gate doesn't trivially zero out the step
+    decision, but with a sprinkle of zeros to exercise the gate-off branch.
+    Single seeded RNG run → same LUT every time for a given --seed.
+    """
+    return [0 if rng.random() < 0.15 else rng.randint(1, 255)
+            for _ in range(SIM_RATE_LUT_BYTES)]
+
+
+def _sim_sub_steps_canary_value(vec: dict, port: dict) -> int:
+    """Compute the post-call value retail should write to derived_hint
+    (== port's derived_hint).  Used as a race-detector — retail's only
+    write to DAT_004d215c is `local_14` on the scenario_hint != 0 path
+    (cleared to 0 pre-call by the agent).  If readback differs from
+    expected, the engine raced our derived_hint global between our
+    call's return and our readback."""
+    return int(port["derived_hint"])
+
+
+def _sim_sub_steps_race_free(vec: dict, retail: dict, port: dict) -> bool:
+    """Race detector for sim_sub_steps.
+
+    Two complementary checks:
+      1. derived_hint readback matches port-computed value (post-call canary).
+         Retail's only writer for DAT_004d215c is FUN_004bb978's own scope
+         (`DAT_004d215c = local_14` in the scenario_hint != 0 branch).  We
+         pre-cleared it to 0 before injection; the post-call readback should
+         equal port's derived_hint output if no race.
+      2. new_last_step_ms ∈ {vec[now_ms], vec[last_step_ms]} — retail's
+         tail-write is one of these two values.  Anything else (esp. a
+         large real-clock timestamp) means the engine main thread
+         overwrote DAT_004e5b0c after our call returned.
+    """
+    expected_hint = _sim_sub_steps_canary_value(vec, port)
+    actual_hint = int(retail.get("derived_hint", 0))
+    if actual_hint != expected_hint:
+        return False
+    last = int(retail.get("new_last_step_ms", 0)) & 0xFFFFFFFF
+    expected = {int(vec["now_ms"]) & 0xFFFFFFFF,
+                int(vec["last_step_ms"]) & 0xFFFFFFFF}
+    return last in expected
+
+
+def run_port_sim_sub_steps(lib: ctypes.CDLL,
+                           vec: dict,
+                           lut_bytes: list[int]) -> dict[str, int]:
+    """Chain our two ports: first engine_compute_scenario_hint, then
+    engine_compute_sim_sub_steps with the resulting hint.  Combines the
+    outputs of both into a single dict matching retail's RPC return shape.
+    """
+    # ─── scenario_hint port ───
+    sh_in = EngineScenarioHintIn(
+        game_state_phase=vec["game_state_phase"],
+        mp_active=vec["mp_active"],
+        local_player_idx=vec["local_player_idx"],
+        game_mode_speed=vec["game_mode_speed"],
+        ally_a=vec["ally_a"],
+        ally_b=vec["ally_b"],
+        frame_count=vec["frame_count"],
+        max_stride=vec["max_stride"],
+        stride_sum=vec["stride_sum"],
+        avg_stride=vec["avg_stride"],
+        slow_frame_count=vec["slow_frame_count"],
+        base_delta=vec["base_delta"],
+        active_count=vec["active_count"],
+    )
+    for i in range(7):
+        sh_in.player_active[i]       = vec["player_active"][i]       & 0xff
+        sh_in.player_has_data[i]     = vec["player_has_data"][i]     & 0xff
+        sh_in.player_disconnected[i] = vec["player_disconnected"][i] & 0xff
+        sh_in.player_ticks[i]        = vec["player_ticks"][i]
+    sh_out = EngineScenarioHintOut()
+    lib.engine_compute_scenario_hint(ctypes.byref(sh_in), ctypes.byref(sh_out))
+
+    # ─── sim_sub_steps port ───
+    # run_gate is FUN_004bb8c0 retail-side, which always returns 1 (the
+    # function is a stub).  Our port treats it as caller-supplied → 1.
+    lut_buf = (ctypes.c_uint8 * SIM_RATE_LUT_BYTES)(*lut_bytes)
+    rate_in = EngineRateIn(
+        now_ms=vec["now_ms"] & 0xFFFFFFFF,
+        last_step_ms=vec["last_step_ms"] & 0xFFFFFFFF,
+        autosave_start_ms=vec["autosave_start_ms"] & 0xFFFFFFFF,
+        run_gate=1,
+        scenario_hint=sh_out.hint,
+        mp_active=vec["mp_active"],
+        sim_tick_counter=vec["tick_counter"] & 0xFFFFFFFF,
+        game_speed=vec["game_speed"],
+        pause_lock=vec["pause_lock"],
+        screen_freeze=vec["screen_freeze_byte"] & 0xff,
+        extended_pause=vec["extended_pause"],
+        mp_skip_flag=vec["mp_skip_byte"] & 0xff,
+        phase=vec["phase"],
+        rate_lut=lut_buf,
+    )
+    rate_out = EngineRateOut()
+    lib.engine_compute_sim_sub_steps(ctypes.byref(rate_in), ctypes.byref(rate_out))
+
+    # Combine.  Note: when the rate gate takes one of the early-return
+    # paths (autosave window active, screen_freeze block, extended_pause
+    # block), the rate function returns WITHOUT writing back to phase or
+    # derived_hint via the tail assignment — its `out` defaults carry
+    # through.  Our port's `out.new_phase` correctly reflects whether
+    # the phase mutation fired (it happens before the early return in
+    # the LUT-gate branch).
+    return {
+        "sub_steps":              rate_out.sub_steps,
+        "new_last_step_ms":       rate_out.new_last_step_ms,
+        "new_autosave_start_ms":  rate_out.new_autosave_start_ms,
+        "new_phase":              rate_out.new_phase,
+        "derived_hint":           rate_out.derived_hint,
+        # From scenario_hint:
+        "new_frame_count":        sh_out.new_frame_count,
+        "new_max_stride":         sh_out.new_max_stride,
+        "new_stride_sum":         sh_out.new_stride_sum,
+        "new_avg_stride":         sh_out.new_avg_stride,
+        "new_slow_frame_count":   sh_out.new_slow_frame_count,
+        "new_active_count":       sh_out.new_active_count,
+    }
+
+
+def diff_sim_sub_steps(retail: dict, port: dict) -> list[str]:
+    bad = []
+    for k in SIM_SUB_STEPS_OUT_FIELDS:
+        rv = int(retail.get(k, 0)) & 0xFFFFFFFF
+        pv = int(port[k]) & 0xFFFFFFFF
+        if rv != pv:
+            bad.append(k)
+    return bad
+
+
 def run_port_frame_delta(lib: ctypes.CDLL, vec: dict[str, int]) -> dict[str, int]:
     din = EngineDeltaIn(now_ms=vec["now_ms"], last_frame_ms=vec["last_frame_ms"])
     dout = EngineDeltaOut()
@@ -1342,6 +1840,14 @@ def run_diff(cfg_args) -> int:
     if "input_state" in enabled:
         test_plans.append(("input_state",
                            gen_input_state_vectors(cfg_args.vectors, rng)))
+    if "sim_sub_steps" in enabled:
+        test_plans.append(("sim_sub_steps",
+                           gen_sim_sub_steps_vectors(cfg_args.vectors, rng)))
+    # Pre-generate the rate-gate LUT — one per run, used by all
+    # sim_sub_steps vectors so a re-run with the same seed produces
+    # the same LUT (and thus the same retail-side gate decisions).
+    sim_rate_lut = gen_sim_sub_steps_rate_lut(rng) \
+        if "sim_sub_steps" in enabled else None
     if not test_plans:
         print("[diff] no enabled targets in --functions; nothing to do.")
         return 0
@@ -1439,6 +1945,41 @@ def run_diff(cfg_args) -> int:
         # ─── execute test plans ───
         for fn_name, vectors in test_plans:
             log(f"[diff] {fn_name}: {len(vectors)} vectors")
+            # Sim sub-step rate-gate LUT install — one-shot per test plan.
+            # Saves a ~2400-byte readback/writeback per vector by sharing
+            # the LUT bytes across all sim_sub_steps vectors.  The agent
+            # snapshots retail's original bytes lazily and restores them
+            # in the matching uninstall below.
+            if fn_name == "sim_sub_steps":
+                install_resp = script.exports_sync.install_sim_sub_steps_rate_lut(
+                    sim_rate_lut)
+                if isinstance(install_resp, dict) and install_resp.get("error"):
+                    log(f"[diff] sim_sub_steps: LUT install failed: "
+                        f"{install_resp['error']}")
+                    results.append(DiffResult(
+                        function=fn_name, total=len(vectors),
+                        fail_count=len(vectors),
+                        failures=[{"idx": -1, "vector": None,
+                                   "retail": install_resp, "port": None,
+                                   "diff": ["lut-install-error"]}]))
+                    continue
+                # Freeze the engine main thread's per-tick dispatch.  Diff
+                # vectors inject game_state_phase=3 + MP + active-player
+                # tables; without the freeze the engine main thread's own
+                # FUN_004bb978 fires with our injected state and the
+                # sub-step body crashes accessing unmapped sim state.
+                # See g_sim_engine_freeze_callback in the agent for the
+                # full rationale.
+                freeze_resp = script.exports_sync.install_sim_sub_steps_engine_freeze()
+                if isinstance(freeze_resp, dict) and freeze_resp.get("error"):
+                    log(f"[diff] sim_sub_steps: engine freeze failed: "
+                        f"{freeze_resp['error']}")
+                    # Best-effort: still attempt the vectors (some might pass
+                    # without the freeze if the engine main thread happens
+                    # to stay out of the sub-step body for the run).
+                else:
+                    log(f"[diff] sim_sub_steps: engine_tick frozen "
+                        f"(already_installed={freeze_resp.get('already_installed')})")
             r = DiffResult(function=fn_name, total=len(vectors))
             for i, vec in enumerate(vectors):
                 if fn_name == "rng_step":
@@ -1667,6 +2208,38 @@ def run_diff(cfg_args) -> int:
                         # caught the wrong observable.  Count as race-pass.
                         r.race_count += 1
                         bad = []
+                elif fn_name == "sim_sub_steps":
+                    # Same retry-on-race pattern as input_state.  We need
+                    # the port output to compute the canary expected value
+                    # (derived_hint), so race-free check is structured
+                    # around (retail, port-computed-expected) rather than
+                    # just (vec, retail).
+                    port = run_port_sim_sub_steps(lib, vec, sim_rate_lut)
+                    retail = None
+                    for attempt in range(SIM_SUB_STEPS_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_sim_sub_steps(vec)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0 and \
+                                _sim_sub_steps_race_free(vec, retail, port):
+                            break
+                        if attempt < SIM_SUB_STEPS_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": vec,
+                            "retail": retail, "port": port,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_sim_sub_steps(retail, port)
+                    race = (not _sim_sub_steps_race_free(vec, retail, port)) or \
+                           int(retail.get("raced", 0)) != 0
+                    if bad and race:
+                        r.race_count += 1
+                        bad = []
                 else:
                     continue
                 if bad:
@@ -1679,6 +2252,21 @@ def run_diff(cfg_args) -> int:
             race_suffix = f" ({r.race_count} race-pass)" if r.race_count else ""
             log(f"[diff] {fn_name}: {r.pass_count}/{r.total} pass{race_suffix}")
             results.append(r)
+            # Pair install with uninstall — restores retail's original LUT
+            # bytes so a subsequent target's run sees an unperturbed engine
+            # (relevant if other diff targets read DAT_004e3260 transitively;
+            # none today, but the contract holds).
+            if fn_name == "sim_sub_steps":
+                uninstall_resp = script.exports_sync.uninstall_sim_sub_steps_rate_lut()
+                if isinstance(uninstall_resp, dict) and uninstall_resp.get("error"):
+                    log(f"[diff] sim_sub_steps: LUT uninstall failed: "
+                        f"{uninstall_resp['error']}")
+                freeze_resp = script.exports_sync.uninstall_sim_sub_steps_engine_freeze()
+                if isinstance(freeze_resp, dict) and freeze_resp.get("error"):
+                    log(f"[diff] sim_sub_steps: engine freeze uninstall failed: "
+                        f"{freeze_resp['error']}")
+                elif freeze_resp.get("restored"):
+                    log("[diff] sim_sub_steps: engine_tick resumed")
 
     finally:
         if script is not None:
@@ -1730,9 +2318,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps",
                     help="comma-separated subset to test "
-                         "(default: rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state)")
+                         "(default: rng_step,fps_step,anim_cycle,frame_delta,"
+                         "phase_ticks,input_state,sim_sub_steps)")
     ap.add_argument("--warmup-s", type=float, default=10.0,
                     help="seconds to wait for engine_tick to settle before "
                          "firing RPCs (default 10)")
