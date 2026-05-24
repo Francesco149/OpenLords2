@@ -415,6 +415,41 @@ typedef struct {
 
 void engine_compute_fps(const engine_fps_in_t *in, engine_fps_out_t *out);
 
+/* ─── Double-LFSR RNG advance (port of FUN_00404a46) ───────────────
+ *
+ * 31-iteration Galois LFSR step over two independent 32-bit state
+ * words (taps at bits 0 and 4, feedback injected into bit 30).
+ * Produces six bit-masked outputs per call (15/7/3 bits for each
+ * state).  Consumers read the output mirrors directly; the bounded
+ * bitmask sampler (retail FUN_00404b99) re-runs this advance up to
+ * 10 times if the 15-bit value lands above the requested ceiling.
+ *
+ * Retail seeds (FUN_004b2258 / InitInstance @ lines 83635-83636):
+ *   state_a = 0x54657687, state_b = 0x72641663.
+ *
+ * The LFSR is effectively 31-bit (bit 31 always 0 after the first
+ * call — see engine_rng.c).  This is a deliberate engine quirk
+ * preserved for byte-shape parity.
+ */
+typedef struct {
+    uint32_t state_a;        /* DAT_0058fe28 */
+    uint32_t state_b;        /* DAT_0058fe08 */
+} engine_rng_in_t;
+
+typedef struct {
+    uint32_t new_state_a;    /* DAT_0058fe28 writeback */
+    uint32_t new_state_b;    /* DAT_0058fe08 writeback */
+    /* Six output mirrors — masked snapshots of the new state. */
+    uint32_t rng_15bit_a;    /* DAT_005aea58  (state_a & 0x7fff) */
+    uint32_t rng_7bit_a;     /* DAT_0058fd7c  (state_a & 0x7f)   */
+    uint32_t rng_3bit_a;     /* _DAT_0058fd70 (state_a & 0x7)    */
+    uint32_t rng_15bit_b;    /* _DAT_005aea5c (state_b & 0x7fff) */
+    uint32_t rng_7bit_b;     /* DAT_0058fd60  (state_b & 0x7f)   */
+    uint32_t rng_3bit_b;     /* _DAT_0058fd6c (state_b & 0x7)    */
+} engine_rng_out_t;
+
+void engine_rng_step(const engine_rng_in_t *in, engine_rng_out_t *out);
+
 /* Read-only accessors for the FPS counter + frame counter mirrors.
  * Used by main.c at shutdown to print a smoke summary — the values
  * confirm that the per-tick driver is actually ticking and the FPS

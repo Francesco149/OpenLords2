@@ -159,6 +159,16 @@ struct test_case {
     X(engine_fps_two_call_shape_window_basis) \
     X(engine_fps_first_frame_with_zero_baselines) \
     X(engine_fps_high_fps_3sec_window) \
+    \
+    X(engine_rng_zero_state_stays_zero) \
+    X(engine_rng_seed_one_traces_to_specific_value) \
+    X(engine_rng_bit_31_always_cleared) \
+    X(engine_rng_states_are_independent) \
+    X(engine_rng_output_masks_match_state) \
+    X(engine_rng_reproducibility) \
+    X(engine_rng_retail_seed_produces_nonzero) \
+    X(engine_rng_matches_reference) \
+    X(engine_rng_multi_call_evolves) \
     /* end */
 
 /* Emit extern decls. */

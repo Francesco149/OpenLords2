@@ -27,14 +27,16 @@ LDFLAGS := $(SAN)
 SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c \
                    ../src/engine_rate.c ../src/engine_phase.c \
                    ../src/engine_delta.c ../src/engine_anim_cycle.c \
-                   ../src/engine_input.c ../src/engine_fps.c
+                   ../src/engine_input.c ../src/engine_fps.c \
+                   ../src/engine_rng.c
 
 # Test files — each defines one or more `int test_<name>(void)`
 # functions registered in test_main.c.
 SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_rate.c test_engine_phase.c \
                    test_engine_delta.c test_engine_anim_cycle.c \
-                   test_engine_input.c test_engine_fps.c
+                   test_engine_input.c test_engine_fps.c \
+                   test_engine_rng.c
 
 OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o)) \
                             $(SRCS_TESTS:.c=.o))
