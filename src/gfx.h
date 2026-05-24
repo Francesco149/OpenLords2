@@ -37,10 +37,23 @@
  * exclusive cooperative level + SetDisplayMode(640,480,8).  When 0,
  * stays in NORMAL coop level and skips the mode-set (windowed 8bpp
  * via a clipper).  Returns 1 on success, 0 on failure.  On failure
- * the partial state is rolled back. */
+ * the partial state is rolled back.
+ *
+ * Also attempts to load `base01.256` (256 × 8-bit RGB triplets)
+ * relative to CWD via io_read_file_at, expand to a full 256-entry
+ * IDirectDrawPalette, and SetPalette on the primary.  Failure here
+ * is non-fatal (logged + skipped) — the primary still presents in
+ * the OS default palette. */
 int  gfx_init(HWND hwnd, int fullscreen);
 
 /* Release everything created by gfx_init in the reverse order. */
 void gfx_shutdown(void);
+
+/* Load palette from a 768-byte RGB triplet file (e.g. base01.256),
+ * upload to a fresh IDirectDrawPalette, attach to the primary
+ * surface.  Returns 1 on success, 0 on any failure (file open, size
+ * mismatch, CreatePalette, SetPalette).  Called by gfx_init with
+ * "base01.256" — additional palette swaps land via direct call. */
+int  gfx_load_palette(const char *path);
 
 #endif /* OPENLORDS2_GFX_H */

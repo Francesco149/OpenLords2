@@ -63,10 +63,12 @@
 
 #include <windows.h>
 #include <ddraw.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "gfx.h"
+#include "io.h"
 
 /* Logger lives in main.c — declared here as a weak local prototype
  * so we don't drag dev_hooks.h into this TU. */
@@ -81,10 +83,17 @@ static LPDIRECTDRAW         g_dd;             /* DAT_004e6974 */
 static LPDIRECTDRAWSURFACE  g_primary;        /* DAT_004eabd0 */
 static LPDIRECTDRAWSURFACE  g_back;           /* DAT_004eafac */
 static LPDIRECTDRAWCLIPPER  g_clipper;        /* DAT_004ea12c */
+static LPDIRECTDRAWPALETTE  g_palette;        /* DAT_004df288 */
 static int                  g_back_pitch;     /* DAT_004ea1a8 */
 static int                  g_primary_lockable; /* DAT_004df28c */
 static int                  g_fullscreen;
 static HWND                 g_hwnd;
+
+/* Loaded palette RGB triplets (×4-expanded from 6-bit VGA to 8-bit).
+ * Mirror of retail's DAT_004ea1b0[256*3] — held in this TU so the
+ * surface-paint helpers (which read it for fallback fills) can
+ * eventually share. */
+static uint8_t g_palette_rgb[256 * 3];
 
 /* ---------------------------------------------------------------- */
 
@@ -127,6 +136,15 @@ int gfx_init(HWND hwnd, int fullscreen)
         return 0;
     }
 
+    /* Palette load is best-effort — when running from /tmp (smoke
+     * harness) base01.256 isn't reachable.  Continue without if it
+     * fails; the primary still presents in the OS default palette. */
+    if (!gfx_load_palette("base01.256")) {
+        log_line("gfx_init: palette load skipped (base01.256 not "
+                 "readable from CWD — drop-in needs to live next to "
+                 "retail's data files)");
+    }
+
     log_line("OK :GFX DirectDraw enabled.");
     return 1;
 }
@@ -134,6 +152,10 @@ int gfx_init(HWND hwnd, int fullscreen)
 void gfx_shutdown(void)
 {
     /* Reverse order of creation.  Mirrors FUN_004b28cd cleanup. */
+    if (g_palette) {
+        IDirectDrawPalette_Release(g_palette);
+        g_palette = NULL;
+    }
     if (g_clipper) {
         IDirectDrawClipper_Release(g_clipper);
         g_clipper = NULL;
@@ -153,6 +175,77 @@ void gfx_shutdown(void)
     g_back_pitch = 0;
     g_primary_lockable = 0;
     g_hwnd = NULL;
+}
+
+/* ---------------------------------------------------------------- *
+ *  Palette load — ports retail's `FUN_004af8d9("base01.256",        *
+ *  &DAT_004ea8a0, 0x300, 0)` + `FUN_004b0ab5` (×4 expand) +         *
+ *  `FUN_0042f1df`/`FUN_0042f449`/`FUN_0042f306` (build              *
+ *  PALETTEENTRY[256] + CreatePalette + SetPalette).                 *
+ *                                                                    *
+ *  Simplifications relative to retail:                              *
+ *                                                                    *
+ *  - We don't preserve OS-reserved palette slots (0..9, 246..255).  *
+ *    Retail does this to play nice with the desktop palette         *
+ *    manager when running 8bpp on an 8bpp desktop.  In windowed     *
+ *    mode on a 32bpp host (our typical drop-in scenario) DDraw      *
+ *    handles the format conversion, so we're free to take all 256  *
+ *    entries.  Entry 0 stays (0,0,0) and entry 255 stays            *
+ *    (0xff,0xff,0xff) to match retail's "Windows reserved"          *
+ *    boundary contract (the read at 0x4d50f0 / 0x4d512b matches).   *
+ *  - No SetSystemPaletteUse — only matters in windowed 8bpp.        *
+ * ---------------------------------------------------------------- */
+int gfx_load_palette(const char *path)
+{
+    if (!g_dd || !g_primary) {
+        log_line("gfx_load_palette: gfx not initialised");
+        return 0;
+    }
+
+    uint8_t rgb[256 * 3];
+    int n = io_read_file_at(path, rgb, sizeof(rgb), 0);
+    if (n != (int)sizeof(rgb)) {
+        log_line("gfx_load_palette: read %s got %d/%u",
+                 path, n, (unsigned)sizeof(rgb));
+        return 0;
+    }
+
+    /* ×4 expansion — retail palettes are stored as 6-bit VGA values
+     * (range 0..63), so we shift left by 2 to get 8-bit RGB. */
+    for (int i = 0; i < 256 * 3; i++) g_palette_rgb[i] = rgb[i] << 2;
+    /* Boundary entries — match retail's reads. */
+    g_palette_rgb[0] = g_palette_rgb[1] = g_palette_rgb[2] = 0x00;
+    g_palette_rgb[255*3+0] = g_palette_rgb[255*3+1] = g_palette_rgb[255*3+2] = 0xff;
+
+    PALETTEENTRY entries[256];
+    for (int i = 0; i < 256; i++) {
+        entries[i].peRed   = g_palette_rgb[i*3+0];
+        entries[i].peGreen = g_palette_rgb[i*3+1];
+        entries[i].peBlue  = g_palette_rgb[i*3+2];
+        entries[i].peFlags = (i == 0 || i == 255) ? 0 : PC_RESERVED;
+    }
+
+    /* Replace any prior palette in-place (retail Releases first). */
+    if (g_palette) {
+        IDirectDrawPalette_Release(g_palette);
+        g_palette = NULL;
+    }
+    HRESULT hr = IDirectDraw_CreatePalette(
+        g_dd, DDPCAPS_8BIT | DDPCAPS_ALLOW256, entries, &g_palette, NULL);
+    if (FAILED(hr) || !g_palette) {
+        log_line("ERR:Palette create failed 0x%08lx", (unsigned long)hr);
+        g_palette = NULL;
+        return 0;
+    }
+    hr = IDirectDrawSurface_SetPalette(g_primary, g_palette);
+    if (FAILED(hr)) {
+        log_line("ERR:Palette SetPalette failed 0x%08lx", (unsigned long)hr);
+        IDirectDrawPalette_Release(g_palette);
+        g_palette = NULL;
+        return 0;
+    }
+    log_line("OK :Palette installed (%s).", path);
+    return 1;
 }
 
 /* ---------------------------------------------------------------- *

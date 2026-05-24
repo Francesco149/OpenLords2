@@ -7,6 +7,77 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — DDraw palette load (+ `src/io.c`)
+
+DDraw bring-up confirmed visually on Windows by the user (`--gfx-init
+--show-window` shows a brief black window, exits clean — matches
+PROGRESS expectation).  Continued the chain with the palette load.
+
+### Scope landed
+
+- **`src/io.c`** — minimal file-IO helper `io_read_file_at(path,
+  buf, len, offset)` that wraps `CreateFileA`+`SetFilePointer`+
+  `ReadFile`+`CloseHandle`.  First-tier port of retail's
+  `FUN_004af8d9`; the three-tier retry chain
+  (`FUN_004af312`/`FUN_004af116`) is a TODO — we lean on
+  `init_exe_dir` for the CWD anchor.
+- **`gfx_load_palette(path)` in `src/gfx.c`** — reads 768 bytes
+  (256 RGB triplets) from the given path, ×4-expands 6-bit VGA →
+  8-bit RGB, builds a 256-entry `PALETTEENTRY` array with
+  `PC_RESERVED` on entries 1..254 (entry 0 forced black, entry
+  255 forced white per retail's boundary contract), calls
+  `IDirectDraw::CreatePalette` + `IDirectDrawSurface::
+  SetPalette` on the primary.  Releases any prior palette
+  first so re-loads are clean.
+- `gfx_init` now best-effort-loads `base01.256` after the
+  initial Blt.  Failure is logged and skipped — primary still
+  presents in the OS default palette.
+- `gfx_shutdown` releases `g_palette` first in the cleanup
+  chain.
+
+### Simplifications from retail
+
+- We don't preserve OS-reserved palette slots (0..9, 246..255)
+  the way retail's `FUN_0042f449` does — that's only meaningful
+  when running 8bpp on an 8bpp desktop, which today's hosts
+  aren't.  In windowed mode on a 32bpp host DDraw handles the
+  format conversion, so all 256 entries are ours.
+- No `SetSystemPaletteUse` (windowed-8bpp-only concern).
+
+### Verification
+
+- **Baseline smoke** (no `--gfx-init`): 50 frames clean — only
+  `OK :Active.` / `OK :Not active.` in the transcript.
+- **`--gfx-init` from /tmp** (no `base01.256` reachable): full
+  bring-up runs, palette load logs the graceful skip
+  ("gfx_load_palette: read base01.256 got 0/768"), `OK :GFX
+  DirectDraw enabled.` still fires, clean exit.
+- **Success path live-verification** deferred — copying the exe
+  to the game-dir via /mnt/c/ trips a Windows-side execute
+  permission issue; needs human run on a native Windows shell
+  to actually validate the colour load.  Code path is logically
+  identical to the failure path with the success-arm taken;
+  next manual run from the game dir is the ground-truth check.
+
+### What's next
+
+1. **Smoker bringup helper `FUN_00425b10`** — DSound init.  The
+   harness already hooks `IDirectSound::SetCooperativeLevel`
+   to demote PRIORITY→NORMAL; porting the bring-up gives us
+   actual audio output paths.
+2. **Surface-restore wire-up.**  Now that `gfx.c` owns
+   primary/back/palette, expose accessors so WndProc's
+   `WM_ACTIVATEAPP` active+lost arm can call
+   `IDirectDrawSurface::Restore` and on failure
+   `gfx_shutdown(); gfx_init()` — the `FUN_004b2922` outer
+   call's equivalent.
+3. **The flip helper `FUN_0045240a` → `FUN_00452306`.**  The
+   per-frame present.  Once we know its exact `Blt` shape we
+   can wire a "draw a recognisable pattern → present → confirm
+   visually" sanity test in the smoke flow.
+
+---
+
 ## 2026-05-24 — DDraw bring-up (`src/gfx.c`)
 
 Ported the retail DDraw chain into a new `src/gfx.c`.
