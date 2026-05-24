@@ -7,6 +7,134 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Frame delta + 16-frame anim cycle (FUN_004b20ed, FUN_00451f1a)
+
+Two more pre-tick slices landed back-to-back, plus the survey
+result for the five remaining pre-tick subfunctions.  Pre-tick
+block is now fully accounted for: three ports landed, five
+documented-as-deferred.
+
+### Ports
+
+- **`src/engine_delta.c`** (new TU, pure C) —
+  `engine_compute_frame_delta(in, out)` is the port of retail
+  `FUN_004b20ed @ 0x4b20ed` (68 B).  Wall-clock ms-since-last-frame
+  generator with a 30 ms signed low-pass.  Suppresses both small
+  positive deltas (< 30 ms) and negative deltas (clock wrap,
+  debug-seeded future baseline) — divergent from the phase-tick
+  generator which fires on negative.  Result lands in
+  `g_frame_delta_ms` (retail `DAT_004ea128`); downstream
+  sprite-animation updaters (e.g. `FUN_0040da1e`) consume it but
+  none of those are ported yet, so the value is write-only today.
+- **`src/engine_anim_cycle.c`** (new TU, pure C) —
+  `engine_compute_anim_cycle(in, out)` is the port of retail
+  `FUN_00451f1a @ 0x451f1a` (81 B).  16-frame counter that bumps
+  once per 80 ms phase tick — full cycle 1280 ms.  First slice
+  with an in-pure-function data dependency between two ports:
+  consumes `g_phase_tick_80ms` produced by `engine_compute_phase_ticks`
+  last commit.  Downstream consumer (`FUN_004071a0`, sprite-strip
+  indexer reading the counter as a frame index into a 16-slot
+  strip starting at `0x28`) unported, so the counter spins with
+  no reader.
+- **`src/engine.c`** — wiring.  Two new file-static wrappers
+  (`engine_tick_delta_step`, `engine_tick_anim_cycle_step`) added
+  + new mirrors (`g_frame_delta_last_ms`, `g_frame_delta_ms`,
+  `g_anim_cycle_counter`).  `engine_tick`'s pre-tick block now
+  invokes `delta_step → phase_step → anim_cycle_step` in that
+  order; the dependency between phase and anim is commented inline
+  since it's a real ordering constraint (other slices' order is
+  cosmetic-only, retail-trace-bisection convenience).
+
+### Tests landed (15 new, 83/83 total under ASan + UBSan)
+
+Frame delta (8):
+- Below threshold (29 ms) → 0, baseline held.
+- At threshold (30 ms) → 30, baseline advances.
+- Just below (29 ms) — boundary on the other side.
+- Large delta (4000 ms) → 4000, advances.
+- Zero delta → 0, baseline held.
+- Negative delta (clock wrap) → 0, baseline held — KEY divergence
+  from phase-tick's clock-wrap-fires behaviour, pinned here.
+- 32-bit overflow at the wraparound seam → small-positive ms ⇒
+  advances normally.
+- Boot path (baseline = 0) → first call past 30 ms advances.
+
+Anim cycle (7):
+- No tick → counter held.
+- Tick at counter 7 → 8.
+- Tick at counter 0 → 1.
+- Wrap at 15→0 (the retail `0xf < c` after-bump test).
+- 14→15 no-wrap boundary on the other side.
+- Full 16-tick cycle returns to 0.
+- No tick with max counter holds.
+
+### Engine-quirks entry #4
+
+The 16-frame anim counter has a defensive lower clamp (`c < 0 →
+c = 0`) that's provably unreachable from the only writer.  Counter
+starts at 0 in .bss, only ever bumped by 1, only ever reset to 0
+by the upper clamp.  Two wasted instructions on every pre-tick
+iteration for a condition that physically can't occur.  Ported
+faithfully for byte-shape parity.
+
+### Pre-tick survey — completed
+
+Five functions remain in the pre-tick block; all surveyed
+end-to-end this session.  Disposition documented in
+[`docs/findings/main-loop-tick.md`](findings/main-loop-tick.md)
+§"Pre-tick subfunctions — surveyed, deferred":
+
+- `FUN_004b0aaa` (11 B) — empty body in retail.  Nothing to port.
+- `FUN_00498458` (132 B) — menu refresh; blocked on menu subsystem.
+- `FUN_00481b9a` (1399 B) — castle grid iterator; blocked on castle
+  table + 0x50×0x50 collision grid.  Largest pre-tick subfunction.
+- `FUN_00482111` (476 B) — army/unit grid iterator (sibling of
+  481b9a); blocked on the unit subsystem.
+- `FUN_004782c5` (340 B) — load-screen timeout; blocked on the
+  load-screen state machine.
+
+Combined observable delta from skipping all five: zero — each is
+gated on a screen ID / sub-state that the drop-in cannot produce.
+
+### Verified
+
+- `make -C tests run` — 83/83 pass under ASan + UBSan (was 68/68;
+  +15 delta + anim-cycle tests).
+- `make -C src` — both .exe targets clean, no warnings.
+- `tools/run-openlords2.sh --frames 50` — transcript identical to
+  pre-slice.
+- `tools/run-openlords2.sh --frames 50 --gfx-init` — full DDraw
+  bring-up + present loop transcript identical to pre-slice.
+
+### What's next
+
+Pre-tick block is structurally complete (three ported, five
+deferred with documented blockers).  The next natural slice should
+exit the pre-tick block and move toward either:
+
+1. **Sub-step body** — retail's per-sim-tick block: `DAT_0057c998`
+   bump + mod-10/0x82/1000 scheduled events + `FUN_004472ce` (sim
+   tick) + `FUN_00404a46` (SP-only step) + state-machine breaks for
+   save/load.  Today produces 0 sub-steps so the body never runs;
+   structural seam exists.  Substantive work blocked on the sim
+   subsystem (`FUN_004472ce` itself is a major chunk).
+2. **Render phase head** — `FUN_0049a3e6` / `FUN_004b1de0` /
+   `FUN_004b191e` run before the screen-dispatch.  Likely tiny like
+   the pre-tick block; survey first.
+3. **Render phase tail** — `FUN_00429b1d` / `FUN_0047ed34` /
+   `FUN_00426529` / `FUN_004b27bf` (FPS counter) / `FUN_004b12fb` /
+   `FUN_004b0e03` + the WM_CLOSE deferred-shutdown trigger.  Gated
+   on `g_savepump_request == 0` which is always true today.  FPS
+   counter alone might be a useful smoke artifact even with no
+   render subsystem to feed it.
+
+Top-down RE bias says option 2 (survey-then-port the render-phase
+head) — moves the entry-chain port forward by the smallest verifiable
+step.  Sub-step body and the FPS counter are both productive but
+further down the dependency graph.
+
+---
+
 ## 2026-05-24 — Animation-phase tick generator (FUN_004bbc80)
 
 Ported the 9-flag animation-cadence generator that retail invokes
