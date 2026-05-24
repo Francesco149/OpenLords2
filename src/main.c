@@ -239,6 +239,14 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
     if (g_gfx_init) {
         if (gfx_init(g_hwnd, g_fullscreen)) {
             g_gfx_active = 1;
+            /* Bring-up tail — force the first present immediately so
+             * frame 0 captures and the visible window show the
+             * initial back-buffer state rather than the
+             * background-erase black.  Mirrors retail's pattern of
+             * pairing FUN_0045240a with an immediate FUN_00452160(1)
+             * after major state changes (gfx_init already marks all
+             * dirty at its tail). */
+            gfx_tick_present(1);
         } else {
             log_line("gfx_init failed — continuing without DDraw");
         }
@@ -655,12 +663,14 @@ static void main_loop_body(void)
         TranslateMessage(&msg);
         DispatchMessageA(&msg);
     }
-    /* Per-frame present — mirror of the inner Blt of retail's
-     * FUN_00452160.  No rate-limiter yet (retail gates on a 50-tick
-     * counter), no Smacker handoff yet.  Once those land, this
-     * call moves into a fuller render-driver port. */
+    /* Per-frame present — port of retail's FUN_00452160(0) call
+     * pattern from FUN_004b99c0's render tail.  Rate-gated 50-unit
+     * accumulator + dirty-count + Smacker bypass + suppression
+     * gate all live in gfx_tick_present.  At our current ~1 ms
+     * per loop iteration this fires once every ~50 frames in
+     * steady state. */
     if (g_gfx_active) {
-        gfx_present();
+        gfx_tick_present(0);
         if (g_capture_dir
                 && (g_frame_counter % g_capture_every) == 0) {
             char path[MAX_PATH];

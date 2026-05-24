@@ -62,6 +62,7 @@
 #define COBJMACROS
 
 #include <windows.h>
+#include <mmsystem.h>   /* timeGetTime — winmm */
 #include <ddraw.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -101,6 +102,29 @@ static int                  g_surface_lost_latch;
  * surface-paint helpers (which read it for fallback fills) can
  * eventually share. */
 static uint8_t g_palette_rgb[256 * 3];
+
+/* Rate-limiter + dirty-rect state — port of retail's globals around
+ * FUN_00452160 / FUN_00452306.  See docs/findings/render-rate-limiter.md.
+ *
+ * `g_present_accum` (DAT_004eabe8) is the 50-unit threshold counter
+ * fed by timeGetTime deltas.  Crossing 50 triggers a present.
+ * `g_force_present_latch` (DAT_005651ac) is the sticky "next tick
+ * presents regardless" flag; cleared by the next present.
+ * `g_dirty_count` (DAT_0050d09c) gates whether to actually call the
+ * blit primitive — no point presenting if nothing changed.
+ * Dirty-rect bounds (DAT_0050a4bc/c0/c4/c8) are accumulated for
+ * future incremental-redraw consumers but not yet read by anyone
+ * in our drop-in. */
+#define GFX_PRESENT_THRESHOLD  50
+static int   g_present_accum;
+static int   g_force_present_latch;
+static int   g_dirty_count;
+static int   g_dirty_l;       /* min_x — sentinel (W-1) when no dirty */
+static int   g_dirty_t;       /* min_y — sentinel (H-1) when no dirty */
+static int   g_dirty_r;       /* max_x — sentinel 0 when no dirty */
+static int   g_dirty_b;       /* max_y — sentinel 0 when no dirty */
+static DWORD g_last_tick_ms;  /* DAT_..._004e59e0 in retail (delta source) */
+static int   g_last_tick_init;
 
 /* ---------------------------------------------------------------- */
 
@@ -160,6 +184,13 @@ int gfx_init(HWND hwnd, int fullscreen)
      * upload are end-to-end correct. */
     gfx_fill_back_index(1);
 
+    /* Match retail's bring-up tail: after the initial Blt/palette,
+     * FUN_004b2922 calls FUN_0045240a (mark_all_dirty) so the first
+     * scheduled present has work to do.  The actual force-present
+     * happens at the first screen-state transition (forwarding
+     * through FUN_00452160(1)) — we leave that to the caller. */
+    gfx_mark_all_dirty();
+
     log_line("OK :GFX DirectDraw enabled.");
     return 1;
 }
@@ -191,6 +222,17 @@ void gfx_shutdown(void)
     g_primary_lockable = 0;
     g_hwnd = NULL;
     g_surface_lost_latch = 0;
+
+    /* Reset rate-limiter / dirty-rect state.  Sentinel-empty so the
+     * first dirty-rect union after a re-init produces correct bounds. */
+    g_present_accum       = 0;
+    g_force_present_latch = 0;
+    g_dirty_count         = 0;
+    g_dirty_l             = GFX_RENDER_W - 1;
+    g_dirty_t             = GFX_RENDER_H - 1;
+    g_dirty_r             = 0;
+    g_dirty_b             = 0;
+    g_last_tick_init      = 0;
 }
 
 /* Port of retail FUN_004b2730 @ 0x4b2730.  Try IDirectDrawSurface::
@@ -543,7 +585,98 @@ void gfx_fill_back_index(uint8_t palette_index)
     if (!g_back) return;
     /* For 8-bit DDraw surfaces, DDBLTFX.dwFillColor IS the
      * palette index (low 8 bits).  No need to look up the RGB. */
-    (void)blt_color_fill(g_back, palette_index, NULL);
+    if (blt_color_fill(g_back, palette_index, NULL)) {
+        /* Whole back changed → next present must paint. */
+        gfx_mark_all_dirty();
+    }
+}
+
+/* ---------------------------------------------------------------- *
+ *  Rate-limiter + dirty-rect — port of retail's FUN_00452160 /     *
+ *  FUN_00452306 / FUN_0045240a.  See                                *
+ *  docs/findings/render-rate-limiter.md for the full mapping.       *
+ * ---------------------------------------------------------------- */
+
+/* Internal: read ms since last call, prime the marker on first use.
+ * Replacement for retail's FUN_004b27bf delta-return — without the
+ * FPS-counter side effects (DAT_004eada4 / DAT_004ea174 / etc.) which
+ * we'll add when the FPS-display path lands. */
+static int rate_tick_delta(void)
+{
+    DWORD now = timeGetTime();
+    if (!g_last_tick_init) {
+        g_last_tick_init = 1;
+        g_last_tick_ms = now;
+        return 0;
+    }
+    int delta = (int)(now - g_last_tick_ms);
+    g_last_tick_ms = now;
+    return delta;
+}
+
+void gfx_force_present_next(void)
+{
+    g_force_present_latch = 1;
+}
+
+void gfx_dirty_rect_union(int l, int t, int r, int b)
+{
+    /* Reproduce retail's FUN_00452306 arithmetic verbatim, including
+     * the retail typo at the max_y clamp (threshold compared against
+     * width-1 but clamped to height-1).  Inputs are always
+     * pre-bounded by callers, so the typo doesn't bite. */
+    if (g_dirty_count < 1) g_dirty_count = 1;
+    if (l < g_dirty_l) g_dirty_l = l;
+    if (g_dirty_r < r) g_dirty_r = r;
+    if (t < g_dirty_t) g_dirty_t = t;
+    if (g_dirty_b < b) g_dirty_b = b;
+    if (g_dirty_l < 0) g_dirty_l = 0;
+    if (g_dirty_t < 0) g_dirty_t = 0;
+    if ((GFX_RENDER_W - 1) < g_dirty_r) g_dirty_r = GFX_RENDER_W - 1;
+    if ((GFX_RENDER_W - 1) < g_dirty_b) g_dirty_b = GFX_RENDER_H - 1;
+}
+
+void gfx_mark_all_dirty(void)
+{
+    gfx_dirty_rect_union(0, 0, GFX_RENDER_W - 1, GFX_RENDER_H - 1);
+}
+
+void gfx_tick_present(int force)
+{
+    if (!g_primary || !g_back) return;
+
+    /* Smacker bypass — retail suppresses presents entirely when a
+     * Smacker movie is actively playing AND has an open handle.  We
+     * have no Smacker yet; both flags are 0, so the guard never
+     * trips.  When Smacker lands, this expands to:
+     *
+     *     if (g_smacker_playing && g_smacker_has_handle) return; */
+
+    g_present_accum += rate_tick_delta();
+    if (g_present_accum < 0)         g_present_accum = 0;
+    if (force)                       g_present_accum = GFX_PRESENT_THRESHOLD;
+    if (g_force_present_latch)       g_present_accum = GFX_PRESENT_THRESHOLD;
+
+    /* Retail also gates on (DAT_0056d650 == 0 || DAT_00553008 < 1) —
+     * the "alternate composition active" + "forced-redraw insurance"
+     * pair.  Both flags are dead in our drop-in until the cutscene /
+     * video-load paths land, so the gate simplifies to the threshold
+     * check. */
+    if (g_present_accum > GFX_PRESENT_THRESHOLD - 1) {
+        g_present_accum       = 0;
+        g_force_present_latch = 0;
+        if (g_dirty_count > 0) {
+            gfx_present();
+            g_dirty_count--;
+            if (g_dirty_count < 1) {
+                g_dirty_count = 0;
+                g_dirty_l     = GFX_RENDER_W - 1;
+                g_dirty_t     = GFX_RENDER_H - 1;
+                g_dirty_r     = 0;
+                g_dirty_b     = 0;
+            }
+        }
+    }
 }
 
 /* ---------------------------------------------------------------- *

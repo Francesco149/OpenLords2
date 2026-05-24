@@ -7,6 +7,84 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Render rate-limiter + dirty-rect tracker
+
+Ported `FUN_00452160` (rate-gated present), `FUN_00452306`
+(`dirty_rect_union`), and `FUN_0045240a` (`mark_all_dirty`) into
+`src/gfx.c`.  Closes the punchlist item that's been carried since
+the `gfx_present` slice landed ("we present every frame
+unconditionally — needs the 50-tick gate").
+
+New findings doc:
+[`docs/findings/render-rate-limiter.md`](findings/render-rate-limiter.md)
+covers the three functions + their shared global state in full
+(accumulator, sticky force latch, dirty count, dirty bounds, Smacker
+bypass, alternate-composition suppression gate + forced-redraw
+insurance).  Per-function summary in the doc; the gist:
+
+- The accumulator (`DAT_004eabe8`) is fed by `timeGetTime` deltas
+  via the same source that ticks the FPS counter.  Threshold = 50.
+- `force=1` and the sticky `DAT_005651ac` latch pin the accumulator
+  past the threshold — used by screen-state transitions.
+- Dirty-count gating (`DAT_0050d09c`) means presents that have no
+  visual work are no-ops.
+- Dirty-rect bounds (`DAT_0050a4bc/c0/c4/c8`) are accumulated for
+  incremental-redraw consumers but the rate-limited present itself
+  doesn't use them — it always blits the full back via
+  `DAT_004ea180` (the visible client rect).  Bookkeeping is
+  currently write-only in our drop-in.
+- Smacker bypass and the cutscene-suppression gate are dead in
+  steady state (both flags zero); ported as stubs/comments for
+  when those subsystems land.
+
+### Port
+
+- **`gfx_tick_present(int force)`** in `src/gfx.c` — the rate-gated
+  present.  Replaces the prior unconditional `gfx_present` call.
+  `gfx_present` itself stays as the blit primitive (used by
+  `gfx_tick_present` internally + available for one-shot bring-up
+  tests).
+- **`gfx_dirty_rect_union(int l, int t, int r, int b)`** — reproduces
+  retail's `FUN_00452306` arithmetic verbatim, including the retail
+  typo at the max_y clamp (compares against `width-1` but clamps to
+  `height-1`; harmless because inputs are pre-bounded).
+- **`gfx_mark_all_dirty()`** — `dirty_rect_union(0, 0, 639, 479)`.
+- **`gfx_force_present_next()`** — sets the sticky latch, mirror of
+  `DAT_005651ac = 1` callsites in retail.
+- `gfx_init` ends with `gfx_mark_all_dirty()` (matches retail's
+  bring-up tail).  `gfx_fill_back_index` also marks dirty after the
+  fill so the next present is guaranteed to flush.
+- `main.c` wires `gfx_tick_present(1)` once immediately after a
+  successful `gfx_init` so frame-0 capture / show-window has visible
+  content, then `gfx_tick_present(0)` per main-loop iteration.
+
+### Verified
+
+- Baseline smoke (`--frames 50`): clean.
+- `--gfx-init` smoke (`--frames 50`): clean — full bring-up + clean
+  shutdown.
+- `--gfx-init --capture-to /tmp/openlords2-rate --capture-every 20`
+  over `--frames 200`: 10 back-buffer captures each show
+  `(128,0,0)` at centre (palette index 1 from `base01.256`).  Window
+  captures show `(0,0,0)` because the run is hidden — DWM has
+  nothing to composite when the window isn't shown.  Manual
+  `--show-window` validation deferred to the user (same constraint
+  as every other visual-correctness slice).
+
+### What's next
+
+Same as before, minus the rate-limiter (now done):
+
+1. **First real drawing primitive** — sprite-blit helper so we can
+   capture a recognisable image and diff against retail.  Next
+   natural step now that the present cadence matches retail.
+2. **Main-loop driver** — `FUN_004b99c0` (~2200 B).  Largest single
+   port remaining.
+3. **WinMain pre-init slice** — `l2.eng` localization load + l2.ini
+   parse (`FUN_0040ecc4`) + Sierra config (`FUN_004ae1b8`).
+
+---
+
 ## 2026-05-24 — Surface-restore wire-up
 
 Ported retail's `FUN_004b2730 @ 0x4b2730` as `gfx_restore()`.  Closes

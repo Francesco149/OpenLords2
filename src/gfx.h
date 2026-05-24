@@ -61,8 +61,43 @@ int  gfx_load_palette(const char *path);
  * mode the back is Blt'd into the on-screen client rectangle (the
  * clipper trims).  In fullscreen mode the back is BltFast'd to
  * primary at (0,0).  Port of the inner present from retail's
- * `FUN_00452160 @ 0x452160`. */
+ * `FUN_00452160 @ 0x452160`.
+ *
+ * Unconditional — no rate gate, no dirty-rect check.  Used as the
+ * blit primitive by gfx_tick_present and exposed for callers that
+ * need to force a paint outside the engine's own cadence (e.g.
+ * one-shot bring-up tests).  Steady-state callers should use
+ * gfx_tick_present instead. */
 void gfx_present(void);
+
+/* Tick the rate-limited present accumulator.  Port of retail's
+ * `FUN_00452160 @ 0x452160`.
+ *
+ * Adds a `timeGetTime`-delta to a 50-unit accumulator on every call.
+ * Once the accumulator crosses the threshold, calls gfx_present
+ * (only if something is marked dirty) and resets.  `force != 0`
+ * pins the accumulator past the threshold so the present happens
+ * this iteration regardless of timing — used by retail after
+ * screen-state transitions to guarantee an immediate visible
+ * update.  See docs/findings/render-rate-limiter.md. */
+void gfx_tick_present(int force);
+
+/* Set the sticky "force present next tick" latch — port of retail's
+ * `DAT_005651ac` semantics.  Lower-level than gfx_tick_present(1):
+ * the latch persists across calls until consumed by the next
+ * present.  Used by code that wants to schedule a forced present
+ * without immediately triggering it. */
+void gfx_force_present_next(void);
+
+/* Union (l,t,r,b) into the dirty-rect bounds + bump the dirty
+ * count.  Port of retail's `FUN_00452306 @ 0x452306`.  Coordinates
+ * are clamped to [0, GFX_RENDER_W-1] × [0, GFX_RENDER_H-1]. */
+void gfx_dirty_rect_union(int l, int t, int r, int b);
+
+/* Mark the full 640×480 screen dirty.  Port of retail's
+ * `FUN_0045240a @ 0x45240a` — convenience wrapper for
+ * `gfx_dirty_rect_union(0, 0, GFX_RENDER_W-1, GFX_RENDER_H-1)`. */
+void gfx_mark_all_dirty(void);
 
 /* 8-bit color-fill the back buffer with a palette index.  Useful
  * for bring-up smoke tests — fills with a non-black index so the
