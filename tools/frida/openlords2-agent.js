@@ -64,6 +64,14 @@ let   g_target_module_name = MODULE_NAME;
 // Cross-referenced in docs/findings/main-loop-tick.md.
 const ADDR = {
     fn_engine_tick:    0x004b99c0,  // FUN_004b99c0 — per-tick driver (sim + render)
+    // Fullscreen-mode global (1 = exclusive, 0 = windowed) — read 50+
+    // places throughout the engine.  FUN_0042e5c0 auto-promotes to 1 on
+    // any non-8bpp desktop, so retail effectively always goes
+    // fullscreen on modern hardware.  We override to 0 in the
+    // SetCooperativeLevel hook so retail takes its (mostly-dead-code)
+    // windowed branch: overlapped-window style, 640×480 centered, Blt
+    // instead of BltFast for the present.  See engine-quirks.md #1.
+    var_fullscreen_flag: 0x0053f228,  // DAT_0053f228
     // FPS-counter globals (read once per engine second-rollover to publish
     // an `fps_sample` event for turbo verification).
     var_fps_current:   0x004ea174,  // DAT_004ea174 — current FPS (refreshed once / sec)
@@ -160,6 +168,20 @@ let g_silent_audio_enabled = false;
 let g_force_windowed       = false;
 let g_turbo_enabled        = false;
 let g_gdi_seat_enabled     = false;
+
+// Agent-driven continuous GDI present (interactive verification only).
+// When enabled, engine_tick.onLeave calls presentBackToWindowViaGdi
+// every g_agent_present_every_ticks engine_ticks regardless of whether
+// retail itself Blts to the primary.  Niche: lets a human see the
+// engine render during Smacker intro / other stretches where retail's
+// own rate-gate is suppressed.  Pairs with g_show_window_after_ms so
+// the window doesn't stay hidden after init.
+let g_agent_present_enabled    = false;
+let g_agent_present_every_ticks = 100;     // ~20 Hz at default turbo step
+let g_show_window_after_ms     = 0;        // 0 = never auto-show
+let g_show_window_done         = false;
+let g_show_window_latch        = false;    // one-shot bypass for hide hooks
+let g_nf_show_window           = null;
 
 // Turbo v2 — virtualised winmm!timeGetTime, gated to the engine main thread.
 // `g_virtual_now_ms` is bumped by `g_turbo_step_ms` on every per-tick driver
@@ -286,6 +308,7 @@ function vtableSlot(thisPtr, idx) {
 // owned HWNDs.
 
 const SW_HIDE          = 0;
+const SW_SHOWNORMAL    = 1;
 const SW_SHOW          = 5;
 const SWP_SHOWWINDOW   = 0x40;
 const SWP_HIDEWINDOW   = 0x80;
@@ -411,6 +434,13 @@ function installWindowHideHooks() {
                 const cmd  = args[1].toInt32();
                 if (cmd === SW_HIDE) return;
                 if (!isOwnedHwnd(hwnd)) return;
+                // One-shot bypass: when the agent is programmatically
+                // showing the window post-init (g_show_window_after_ms
+                // path), let the SW_SHOW through and clear the latch.
+                if (g_show_window_latch) {
+                    g_show_window_latch = false;
+                    return;
+                }
                 args[1] = ptr(SW_HIDE);
                 send({kind: 'hide_force', api: 'ShowWindow',
                       hwnd: hwndKey(hwnd), original: cmd});
@@ -641,6 +671,17 @@ function patchDDrawVtable(ifacePtr, ifaceName) {
                 const forced =
                     (original & ~(DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN)) | DDSCL_NORMAL;
                 args[2] = ptr(forced);
+                // Override the fullscreen-flag global so the engine's
+                // post-SetCooperativeLevel branch (which inspects
+                // DAT_0053f228 to choose windowed-style vs. popup-style
+                // window) takes the windowed path: overlapped-window
+                // style + 640×480 centered.  Without this, retail's
+                // auto-fullscreen-promote on non-8bpp desktops leaves
+                // the global set to 1 and our window ends up as a
+                // borderless popup squashed to desktop res.  See
+                // engine-quirks.md #1 / ddraw-dsound-bringup.md.
+                try { rva(ADDR.var_fullscreen_flag).writeU32(0); }
+                catch (e) { err('force_windowed.flag_override', e.message); }
                 send({kind: 'ddraw_cooplevel_rewrite',
                       iface: ifaceName,
                       hwnd:  hwnd.toString(),
@@ -1405,6 +1446,103 @@ function presentBackToWindowViaGdi(back, palette, hwnd) {
     }
 }
 
+// Agent-driven continuous GDI present.  When `g_agent_present_enabled`
+// is on, engine_tick.onLeave drives a present every
+// g_agent_present_every_ticks ticks regardless of whether retail's
+// own present pipeline is firing.  Interactive verification only —
+// retail's Blt-to-primary is the real signal for a "production"
+// behavioural test.
+//
+// Skips silently when surfaces aren't ready yet (same NULL checks as
+// the Blt-vtable seat).
+function tryAgentDrivenPresent() {
+    if (!g_agent_present_enabled) return;
+    if ((g_tick_count % g_agent_present_every_ticks) !== 0) return;
+    const back    = rva(ADDR.var_dd_back   ).readPointer();
+    const palette = rva(ADDR.var_dd_palette).readPointer();
+    if (back.isNull() || palette.isNull()) return;
+    const hwnd    = rva(ADDR.var_main_hwnd ).readPointer();
+    if (hwnd.isNull()) return;
+    presentBackToWindowViaGdi(back, palette, hwnd);
+}
+
+// Programmatically show the engine's main window once enough time
+// has elapsed since spawn.  Latch-protected so our hide hook lets the
+// SW_SHOW through.  One-shot: clears g_show_window_done.
+//
+// SW_SHOWNORMAL (not SW_SHOW): SW_SHOW honours the window's "last
+// show state" (which is the never-shown default after our hide hooks
+// stripped WS_VISIBLE during init — leaves the window minimised on
+// many DWM configurations).  SW_SHOWNORMAL forces the normal
+// restored state.
+//
+// After the show, resize the client area to 800×600 (user
+// preference) — the engine's windowed branch sized it to 640×480
+// natively, but our GDI seat's StretchDIBits scales transparently so
+// any client size works.  Add the non-client frame insets via
+// AdjustWindowRect.
+function tryShowEngineWindow() {
+    if (g_show_window_done) return;
+    if (g_show_window_after_ms <= 0) return;
+    if (nowMs() < g_show_window_after_ms) return;
+    const hwnd = rva(ADDR.var_main_hwnd).readPointer();
+    if (hwnd.isNull()) return;
+    const u32 = Process.findModuleByName('user32.dll');
+    if (!u32) return;
+    if (!g_nf_show_window) {
+        const fn = u32.findExportByName('ShowWindow');
+        if (!fn) return;
+        g_nf_show_window = new NativeFunction(fn, 'int32',
+            ['pointer', 'int32'], 'stdcall');
+    }
+    g_show_window_latch = true;
+    g_nf_show_window(hwnd, SW_SHOWNORMAL);
+    g_show_window_done = true;
+    log('agent: ShowWindow(SW_SHOWNORMAL) called after ' +
+        g_show_window_after_ms + ' ms warmup');
+
+    // Resize client area to 800×600.  AdjustWindowRect computes the
+    // outer size needed to wrap that client size under the current
+    // window style.
+    try {
+        const getStyle = u32.findExportByName('GetWindowLongA');
+        const adjust   = u32.findExportByName('AdjustWindowRect');
+        const setPos   = u32.findExportByName('SetWindowPos');
+        if (getStyle && adjust && setPos) {
+            const nfStyle = new NativeFunction(getStyle, 'int32',
+                ['pointer', 'int32'], 'stdcall');
+            const nfAdjust = new NativeFunction(adjust, 'int32',
+                ['pointer', 'uint32', 'int32'], 'stdcall');
+            const nfSetPos = new NativeFunction(setPos, 'int32',
+                ['pointer', 'pointer', 'int32', 'int32', 'int32',
+                 'int32', 'uint32'], 'stdcall');
+            const GWL_STYLE_ = -16;
+            const style = nfStyle(hwnd, GWL_STYLE_) >>> 0;
+            const rect = Memory.alloc(16);
+            rect.writeS32(0);
+            rect.add(4 ).writeS32(0);
+            rect.add(8 ).writeS32(800);
+            rect.add(12).writeS32(600);
+            nfAdjust(rect, style, 0);
+            const w = rect.add(8 ).readS32() - rect.add(0).readS32();
+            const h = rect.add(12).readS32() - rect.add(4).readS32();
+            // SWP_NOMOVE (2) | SWP_NOZORDER (4) | SWP_NOACTIVATE (0x10)
+            // = 0x16 — keep current position + z-order + don't steal
+            // focus.
+            nfSetPos(hwnd, NULL, 0, 0, w, h, 0x16);
+            log('agent: window resized to 800x600 client ' +
+                '(outer ' + w + 'x' + h + ')');
+        }
+    } catch (e) {
+        err('tryShowEngineWindow.resize', e.message);
+    }
+
+    send({kind: 'agent_show_window',
+          hwnd: hwnd.toString(),
+          after_ms: g_show_window_after_ms,
+          t_ms: nowMs()});
+}
+
 // Patch the primary surface's IDirectDrawSurface::Blt slot (slot 5,
 // byte offset 0x14).  Idempotent — once patched we never touch it
 // again.  Called lazily from engine_tick.onLeave when both surfaces
@@ -1657,6 +1795,11 @@ function installEngineTickHook() {
                 if (g_gdi_seat_enabled && !g_primary_blt_patched) {
                     installPrimaryBltGdiSeat();
                 }
+                // Interactive verification path — drive a continuous
+                // GDI present + auto-show the engine's main window.
+                // Both early-return when their gating flags are off.
+                tryShowEngineWindow();
+                tryAgentDrivenPresent();
             }
         },
     });
@@ -2105,6 +2248,10 @@ rpc.exports = {
         g_force_windowed     = !!opts.force_windowed;
         g_turbo_enabled      = !!opts.turbo;
         g_gdi_seat_enabled   = !!opts.gdi_seat;
+        g_agent_present_enabled = !!opts.agent_present;
+        const apEvery        = (opts.agent_present_every_ticks | 0);
+        g_agent_present_every_ticks = apEvery > 0 ? apEvery : 100;
+        g_show_window_after_ms = (opts.show_window_after_ms | 0);
         // Turbo step in virtual-ms per per-tick-driver iteration. The
         // default (17 ms) yields ~58 ticks/s perceived time, close to
         // 60 Hz; raise it to fast-forward.  0 disables turbo v2 even if
@@ -2162,6 +2309,15 @@ rpc.exports = {
             // agent log.
             log('gdi_seat: armed (lazy install on first engine_tick ' +
                 'after retail finishes DDraw surface bring-up)');
+        }
+        if (g_agent_present_enabled) {
+            log('agent_present: armed (every ' +
+                g_agent_present_every_ticks + ' engine_ticks, ' +
+                'via presentBackToWindowViaGdi — interactive only)');
+        }
+        if (g_show_window_after_ms > 0) {
+            log('show_window_after_ms: ' + g_show_window_after_ms +
+                ' (will ShowWindow(SW_SHOW) once elapsed)');
         }
         if (g_silent_audio_enabled) { installWaveOutMute();
                                       installSilentAudioDSound(); }

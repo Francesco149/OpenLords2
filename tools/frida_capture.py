@@ -161,6 +161,20 @@ class CaptureConfig:
     # invisible primary surface.  See engine-quirks.md / the
     # project_dwm_ddraw_normal memory.
     gdi_seat:          bool = True
+    # Agent-driven continuous GDI present.  Interactive-only — drives a
+    # GDI present every N engine_ticks regardless of whether retail
+    # itself Blts to primary.  Lets a human watching the window see the
+    # engine render during stretches where retail's own present pipe is
+    # dormant (Smacker intro, dirty-rect lulls).  Pairs with
+    # show_window_after_ms to un-hide the window post-init.
+    agent_present:               bool = False
+    agent_present_every_ticks:   int  = 100
+    # When > 0, the agent calls ShowWindow(hwnd, SW_SHOW) on the engine's
+    # main HWND once this many real-ms have elapsed since init.  Lets
+    # hide_window survive engine bring-up (which dies under --no-hide
+    # for reasons orthogonal to this work) then make the window visible
+    # so the agent-driven present has somewhere to land.
+    show_window_after_ms:        int  = 0
     frame_capture:              bool = False
     frame_capture_max:          int  = 16   # 0 = unlimited
     frame_capture_warmup_secs:  int  = 5    # skip captures for first N cum-secs
@@ -450,6 +464,11 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             f_log.write(
                 f"[gdi_seat] present #{p.get('count')} t_ms={p.get('t_ms')}\n")
             return
+        if kind == "agent_show_window":
+            f_log.write(
+                f"[show_window] hwnd={p.get('hwnd')} "
+                f"after_ms={p.get('after_ms')} t_ms={p.get('t_ms')}\n")
+            return
         # unknown kind — log it raw so we can spot agent extensions we
         # haven't wired up yet.
         f_log.write(f"[unknown-event] {json.dumps(p)}\n")
@@ -498,6 +517,9 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "turbo":                     bool(cfg.turbo),
             "turbo_step_ms":             int(cfg.turbo_step_ms),
             "gdi_seat":                  bool(cfg.gdi_seat),
+            "agent_present":             bool(cfg.agent_present),
+            "agent_present_every_ticks": int(cfg.agent_present_every_ticks),
+            "show_window_after_ms":      int(cfg.show_window_after_ms),
             "frame_capture":             bool(cfg.frame_capture),
             "frame_capture_max":         int(cfg.frame_capture_max),
             "frame_capture_warmup_secs": int(cfg.frame_capture_warmup_secs),
@@ -591,6 +613,22 @@ def main(argv: list[str] | None = None) -> int:
                     help="don't reroute retail's primary-surface Blt "
                          "through GDI StretchDIBits.  Disables visual "
                          "rendering under DWM in windowed mode (debug aid).")
+    ap.add_argument("--agent-present", action="store_true",
+                    help="agent-driven continuous GDI present every N "
+                         "engine_ticks.  Interactive verification only — "
+                         "lets you watch the engine render during "
+                         "stretches where retail's own present pipeline "
+                         "is dormant (Smacker intro, etc).")
+    ap.add_argument("--agent-present-every-ticks", type=int, default=100,
+                    help="when --agent-present is set, drive a present "
+                         "every N engine_ticks (default 100 ≈ 20 Hz at "
+                         "default turbo step)")
+    ap.add_argument("--show-window-after-ms", type=int, default=0,
+                    help="programmatically ShowWindow(SW_SHOW) on the "
+                         "engine's main window once this many real-ms "
+                         "have elapsed since init.  0 = never auto-show. "
+                         "Pairs with --agent-present and hide_window=on "
+                         "(default) for interactive visual verification.")
     ap.add_argument("--turbo", action="store_true",
                     help="enable Sleep no-op (v1) + virtual timeGetTime (v2)")
     ap.add_argument("--turbo-step-ms", type=int, default=17,
@@ -634,6 +672,9 @@ def main(argv: list[str] | None = None) -> int:
         silent_audio=not args.no_silent_audio,
         force_windowed=not args.no_force_windowed,
         gdi_seat=not args.no_gdi_seat,
+        agent_present=args.agent_present,
+        agent_present_every_ticks=args.agent_present_every_ticks,
+        show_window_after_ms=args.show_window_after_ms,
         turbo=args.turbo,
         turbo_step_ms=args.turbo_step_ms,
         frame_capture=args.frame_capture,

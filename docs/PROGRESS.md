@@ -7,6 +7,109 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Interactive verification mode: agent-driven present + visible window
+
+The prior dispatch landed the IDirectDrawSurface::Blt → GDI seat but
+left visual verification incomplete: under the smoke configuration the
+engine never called `Blt(primary, back)` because the Smacker intro's
+present path is `WM_PAINT` + `PatBlt`-to-window-DC, not DDraw.  This
+dispatch adds an opt-in interactive verification mode that drives the
+GDI present from the agent regardless of retail's render gates, plus
+the supporting fixes to make the visible window actually correct.
+
+### Agent (`tools/frida/openlords2-agent.js`)
+
+- New `agent_present` init flag.  When on, `engine_tick.onLeave`
+  drives a `presentBackToWindowViaGdi` every N ticks (default 100,
+  configurable via `agent_present_every_ticks`).  Reuses the same
+  Lock-back + palette readback + StretchDIBits primitive as the
+  Blt-vtable seat.
+- New `show_window_after_ms` init flag.  When > 0, the agent calls
+  `ShowWindow(hwnd, SW_SHOWNORMAL)` on the engine's main window once
+  the configured real-ms elapses since spawn.  Pairs with
+  `hide_window=True` (default) so the engine survives bring-up
+  (a `--no-hide` run dies before reaching engine_tick — separate
+  unrelated bug, noted below).
+- Hide-window hook gains a one-shot bypass latch (`g_show_window_
+  latch`) so the agent's programmatic `SW_SHOWNORMAL` isn't rewritten
+  back to `SW_HIDE`.
+- After the show, the agent issues a `SetWindowPos` to resize the
+  client area to 800×600 (user preference).  `GFX_RENDER_W/H` is
+  640×480 natively; StretchDIBits scales transparently.
+- New `ADDR.var_fullscreen_flag = 0x0053f228`.  Our existing
+  SetCooperativeLevel hook now also writes 0 to this global so retail
+  takes its (mostly-dead-code) **windowed** branch in `FUN_0042e5c0`:
+  overlapped-window style, 640×480 centered, regular Blt (not BltFast).
+  Without this, the engine's auto-fullscreen-promote on non-8bpp
+  desktops leaves the global at 1 and the window spawns as a
+  borderless popup with `WS_MAXIMIZE` set — squashed to desktop res
+  when our `SW_SHOW` first revealed it.  See engine-quirks.md #1.
+- `SW_SHOW` → `SW_SHOWNORMAL`: `SW_SHOW` honours the window's last
+  show state (never-shown after our hide_window strip), which DWM
+  treats as still-minimised on some configurations.
+- New `agent_show_window` event (handled in Python — was showing as
+  `[unknown-event]` in the first cut).
+
+### Python driver (`tools/frida_capture.py`)
+
+- `CaptureConfig` gains `agent_present`, `agent_present_every_ticks`,
+  `show_window_after_ms`.  Smoke-test stays interactive-free (these
+  flags don't affect the smoke surface).
+- CLI flags: `--agent-present`, `--agent-present-every-ticks N`,
+  `--show-window-after-ms N`.
+- `agent_show_window` event surfaces as `[show_window]` in agent.log.
+
+### Verified
+
+Interactive run via `cutestation.soy:27042`:
+
+```
+nix develop -c python3 tools/frida_capture.py \
+  --duration-ms 60000 --turbo \
+  --agent-present --agent-present-every-ticks 50 \
+  --show-window-after-ms 3000
+```
+
+- 17,262 GDI presents fired across 60 s.
+- `ShowWindow` fires at the 3 s mark.
+- User confirmed: Smacker intro plays visibly, main menu reachable.
+
+### Known issues surfaced during this work (not addressed here)
+
+1. **Quit-Game freeze**.  Clicking "Quit Game" or pressing ESC →
+   confirmation hangs the engine — process doesn't terminate; Ctrl-C
+   needed.  Likely an engine shutdown path that waits on something
+   our harness suppresses (audio buffer drain, Smacker outro,
+   DirectPlay session teardown).  Wants a separate diagnostic pass
+   with hooks on WM_CLOSE / engine's shutdown chain.
+2. **`--no-hide` early-exit**.  Running with the window WS_VISIBLE
+   from create kills the engine before it reaches `engine_tick`.
+   Specifically, the WinLords2Class window gets created, no
+   `[ddraw_coop]` events fire, the script gets destroyed.  The
+   `hide_window` + `show_window_after_ms` combo sidesteps this for
+   interactive use but the underlying cause is unknown.
+
+### What's next
+
+The harness now has full interactive visual verification.  Other
+threads to pick up next:
+
+1. **Save-file format** (option 2 from prior dispatch) — `castles.dat`
+   / `c_hist.dat` / `history.dat` parsers.  Unlocks the simulation
+   subsystem ports.
+2. **More diff targets** (option 3 from prior dispatch) — two
+   mechanical follow-ups remain (`engine_compute_input_state`,
+   `engine_compute_sim_sub_steps`).
+3. **Diagnose the Quit-Game freeze** — would unblock unattended
+   smoke runs that actually exercise the full game lifecycle, not
+   just the intro.
+
+Top-down RE bias next time: option 3 keeps the harness thread alive
+and unblocks longer interactive sessions; option 1 starts the
+simulation-subsystem unlock.
+
+---
+
 ## 2026-05-24 — DDraw → GDI present seat for retail under the harness
 
 Top-down RE bias entry from the prior dispatch: the diff machinery
