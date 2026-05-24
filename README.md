@@ -1,0 +1,91 @@
+# OpenLords2
+
+An open-source reimplementation of **Lords of the Realm II**
+(Impressions Games / Sierra On-Line, 1996).
+
+This is an **educational reverse-engineering and game-preservation
+project**.  The goal is a drop-in replacement for `Lords2.exe` that
+behaves indistinguishably from the original for a user who owns a
+legitimate copy of the game.
+
+**Not distributed:** no game assets, no decompiled binary code, no
+copyrighted content of any kind.  You supply your own copy of the game
+(GOG, retail CD, …).
+
+## Status
+
+Bootstrap phase — see [`docs/PLAN.md`](docs/PLAN.md) for the roadmap
+and [`docs/PROGRESS.md`](docs/PROGRESS.md) for the changelog.
+
+## Getting started (NixOS / WSL2)
+
+```fish
+nix develop
+./tools/setup.sh        # symlinks game into vendor/, prepares analysis dirs
+```
+
+This enters a dev shell with the full RE toolchain (Ghidra, radare2,
+mingw-w64 32-bit cross-compiler, Frida, Pillow/numpy/scikit-image, …)
+and prepares the game files for analysis.
+
+The game's `Lords2.exe` (GOG release, sha256 checked at setup time) is
+a **clean 32-bit MSVC PE** (linker 4.20, 1996 era) — no DRM wrapper,
+no Steamless/UPX/etc. — so the decompile pipeline runs against the
+original bytes directly.  Imports include `DDRAW.dll` (DirectDraw
+rendering), `DSOUND.dll` (DirectSound), `DPLAYX.dll` (DirectPlay
+multiplayer), `WINMM.dll`, and `smackw32.DLL` (Smacker video for
+cutscenes).
+
+## Layout
+
+```
+docs/         design notes, file-format specs, progress log, engine quirks
+src/          our C reimplementation (cross-compiled with mingw32)
+tests/        unit suite + scenario harness (golden BMP + audio/input traces)
+tools/        setup, build, extract, capture, contact-sheet, ghidra-headless,
+              Frida agent + driver, launcher wrapper
+vendor/       game files (gitignored) — symlink into the user's GOG install
+ghidra/       Ghidra projects (gitignored — derived from the original binary)
+runs/         test artifacts (gitignored)
+```
+
+## Workflow
+
+Heavy use of a Frida-based harness against the retail exe for
+ground-truth probing:
+
+- **Hidden window + turbo + muted audio** from day 1 — the agent
+  rewrites `ShowWindow` → `SW_HIDE`, suppresses fullscreen mode-sets
+  (DDraw `SetCooperativeLevel` exclusive bits are stripped), clamps
+  DirectSound volumes to 0, and virtualises the wall-clock reader so
+  the engine ticks as fast as the host can churn through it.
+- **MessageBox capture** — every `MessageBox{A,W}` is intercepted,
+  the body + caption are dumped to stderr with a loud banner, and
+  IDOK is returned so the engine never blocks on a modal.
+- **Bit-exact frame diffs** between retail and our re-impl via DDraw
+  surface lock hooks, with red-tint overlay on mismatch.
+- **Input trace** sparse JSONL format the harness replays into both
+  targets for deterministic side-by-side runs.
+
+The harness grows into a **TAS bot** that can drive a whole game
+session at inhuman speed, exercising different subsystems against
+retail and our re-impl in lock-step.  See
+[`docs/harness-roadmap.md`](docs/harness-roadmap.md).
+
+## Sibling projects
+
+OpenLords2 shares conventions with two other RE projects living in
+`/opt/src/`:
+
+- **[openrecet]** — the first decomp project; established the
+  Ghidra-headless / Frida-harness / co-author-trailer commits style.
+- **[OpenMare]** — newer, refined workflow; the launcher Job-Object
+  pattern, single-TU C builds, MessageBox redirect hooks, and turbo
+  v2 virtual clock all originate there.
+
+Cross-pollinate freely; never copy code across projects.
+
+## License
+
+MIT.  See [`LICENSE`](LICENSE).  The license covers OpenLords2's own
+code only; no rights are granted to the original game.
