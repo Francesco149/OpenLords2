@@ -7,6 +7,120 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Render-phase head survey + mouse-input resolver (FUN_004b191e)
+
+First slice exiting the pre-tick block.  Surveyed all three retail
+render-phase-head functions; ported the one substantive function;
+documented the two trivial slots as deferred.
+
+### Survey result
+
+| Retail        | Size  | Disposition                                                                                                                                                |
+|---------------|-------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `FUN_0049a3e6` | 109 B | **Deferred — dead branch.**  Gated on `DAT_004eac50 == 0x24`.  Cross-grep of every site that *writes* to the screen-ID byte: 0x23 and 0x25 are produced; 0x24 is never written.  Function is unreachable in retail.  Likely an orphaned screen state from an earlier revision. |
+| `FUN_004b1de0` | 11 B  | **Deferred — empty body.**  Twin of `FUN_004b0aaa` from pre-tick: ship-build-stripped debug hook.                                                            |
+| `FUN_004b191e` | 981 B | **Ported.**  Mouse-input resolver — see below.                                                                                                              |
+
+### Port: `engine_compute_input_state` (`FUN_004b191e`, 981 B)
+
+- **`src/engine_input.c`** (new TU, pure C, no Win32 deps) — port of
+  the per-frame mouse-state resolver.  Inputs: screen-space cursor,
+  `timeGetTime` ms, WndProc-mirrored button + dblclk bitmasks,
+  viewport bounds, prior frame's resolved input state.  Outputs:
+  game-coord cursor, motion event flag, button-edge flags (newly
+  pressed / newly released for LMB + RMB), 300 ms delayed-single-
+  click events, double-click events, click coordinates.  Two retail
+  helpers (`FUN_00404dc1`, `FUN_00404d6b`) inlined as static
+  `percent_ratio` / `apply_percent` — they're a percent-ratio +
+  percent-application pair used in the viewport→game-coord mapping.
+- **`src/engine.c`** — wiring.  New file-static `g_input_*` mirrors
+  for the 25 retail globals this function touches; `extern` decls
+  for the 5 already-existing main.c-owned mirrors (`g_mouse_x/y`,
+  `g_mouse_buttons`, `g_mouse_dblclk`, `g_client_screen`).  New
+  wrapper `engine_tick_input_step` calls `GetCursorPos` +
+  `timeGetTime`, bundles into the input struct, runs the pure
+  function, writes outputs back, and clears `g_mouse_dblclk` to
+  mirror retail's `DAT_004eada1 = 0` final statement.  Wired into
+  `engine_tick`'s render-phase head, right after the sim sub-step
+  loop (matches retail's call order in `FUN_004b99c0`).
+- **`src/main.c`** — promoted `g_mouse_x/y`, `g_mouse_buttons`,
+  `g_mouse_dblclk`, `g_client_screen` from `static` to non-static so
+  `engine.c` can `extern` them.  Comments updated to point at
+  `engine_tick_input_step` as the new consumer.
+
+### Tests landed (22 new, 105/105 total under ASan + UBSan)
+
+Core matrix (22):
+- Raw cursor always written.
+- Cache update gated on `cursor_cache_enabled` (both branches).
+- Game-coord 1:1 mapping + scaled mapping + div-by-zero clamp.
+- Default clears all 10 event flags.
+- Dblclk bits → flags + matching pending-click timer cleared.
+- Button bits decoded into `new_lmb` / `new_rmb`.
+- LMB press edge → `lmb_newly_pressed` + `mouse_event` +
+  `button_changed`; timer NOT armed.
+- LMB release: `lmb_newly_released` ALWAYS set (the
+  `(DAT_004e65d8 = 1, DAT_004e65f0 != 0)` comma quirk in retail);
+  arm only when `click_eligible`.
+- LMB release-with-eligibility: arms timer, clears eligibility,
+  records click coords, advances `click_timer_ms`.
+- RMB mirror of the LMB block.
+- 300 ms expiry: at 301 ms fires + disarms; at exactly 300 ms does
+  NOT fire (strict `300 <` boundary).
+- Shared-baseline quirk: both LMB+RMB armed against the same
+  `click_timer_ms` → both fire on the same call when the window
+  expires.  Quirk preserved.
+- Motion x-change / y-change set `mouse_event` + reset
+  `motion_last_ms`; no-motion computes `motion_idle_ms`.
+- `prev_*` snapshots always written.
+- `last_click_x/y` carried through on non-click frames (this is
+  why the input struct grew `prev_last_click_x/y`).
+
+### Verified
+
+- `make -C tests run` — 105/105 pass under ASan + UBSan (was 83/83;
+  +22 input tests).
+- `make -C src` — both .exe targets clean, no warnings.
+- `tools/run-openlords2.sh --frames 50` — transcript identical to
+  pre-slice (`OpenLords2 starting → main loop exited → OK :Not
+  active.`).
+- `tools/run-openlords2.sh --frames 50 --gfx-init` — full DDraw
+  bring-up + present loop transcript identical to pre-slice.
+
+### Engine quirks
+
+No new entry — the shared-300 ms-timer baseline between LMB and RMB
+is unusual but documented inline in `engine_input.c` and pinned by
+test, not load-bearing enough to need an engine-quirks entry of its
+own.  The dead branch in `FUN_0049a3e6` (gate value 0x24 never
+written) is a structural finding documented in main-loop-tick.md,
+not a behavioural quirk in code.
+
+### What's next
+
+The render phase has two more head slots and a tail:
+
+1. **Render-phase head: rest of `FUN_004b99c0` between input step
+   and the screen-dispatch.**  Need to survey what runs between
+   `FUN_004b191e` and the big `else if (DAT_004eac50 == ...)`
+   screen-dispatch ladder.  Probably small.
+2. **Render-phase tail** — `FUN_00429b1d` / `FUN_0047ed34` /
+   `FUN_00426529` / `FUN_004b27bf` (FPS counter) / `FUN_004b12fb` /
+   `FUN_004b0e03` + the WM_CLOSE deferred-shutdown trigger.  Gated
+   on `g_savepump_request == 0` which is always true today.
+3. **Screen-dispatch ladder** — the 30+ `else if (DAT_004eac50 ==
+   <id>)` branches that drive per-screen rendering.  Largest single
+   chunk in the function; lands incrementally as the menu / load /
+   ingame screens get their UI subsystems.
+
+Top-down RE bias: option 1 (survey between input-step and screen-
+dispatch) is the smallest verifiable step.  If it turns out to be
+empty / one trivial slot, option 2 (FPS counter) is the next
+productive lift — gives a visible smoke artifact even without the
+render subsystem to feed it.
+
+---
+
 ## 2026-05-24 — Frame delta + 16-frame anim cycle (FUN_004b20ed, FUN_00451f1a)
 
 Two more pre-tick slices landed back-to-back, plus the survey

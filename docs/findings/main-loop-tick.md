@@ -344,6 +344,7 @@ The three outer wrappers are now ported to `src/engine.{c,h}`:
 | `FUN_004bbc80`        | `engine_compute_phase_ticks` | full (pure function in `src/engine_phase.c`).  Wrapper `engine_tick_phase_step` in `engine.c` bundles file-static globals (`g_phase_*`) into the input struct + writes deltas back.  Sticky-flag semantics for the 1040 ms cadence (retail `_DAT_005aeb28`) live in the wrapper — pure function always SETs the flag on rollover, wrapper ORs into the live global rather than overwriting.  12 unit tests cover base + boundary + all-cycles + carry-through paths |
 | `FUN_00451f1a`        | `engine_compute_anim_cycle` | full (pure function in `src/engine_anim_cycle.c`).  Wrapper `engine_tick_anim_cycle_step` consumes `g_phase_tick_80ms` (produced upstream by phase step) and bumps `g_anim_cycle_counter` mod 16.  Downstream consumer (`FUN_004071a0`, sprite-strip indexer) unported, so the counter spins with nothing reading it.  7 unit tests; defensive-but-unreachable lower clamp documented in engine-quirks #4 |
 | `FUN_004bb978`        | `engine_compute_sim_sub_steps` | full (pure function in `src/engine_rate.c`).  Wrapper `engine_tick_rate_step` in `engine.c` bundles file-static globals (`g_sim_*`) into the input struct + writes deltas back.  LUT (`DAT_004e3260`) not extracted yet — wrapper passes `NULL` (treats as all-zeros) since today scenario hint == 0 prevents the LUT branch from executing.  24 unit tests cover every branch |
+| `FUN_004b191e`        | `engine_compute_input_state` | full (pure function in `src/engine_input.c`).  Wrapper `engine_tick_input_step` in `engine.c` calls `GetCursorPos` + `timeGetTime`, bundles file-static `g_input_*` mirrors + the WndProc-mirrored `g_mouse_*` globals + `g_client_screen` into the input struct, calls the pure function, writes outputs back, then clears `g_mouse_dblclk` (retail's `DAT_004eada1 = 0` final statement).  Resolves screen-cursor + button-state into game-coord cursor + per-frame edge flags + 300 ms delayed-single-click events + double-click events.  22 unit tests cover the matrix.  Downstream consumers (UI dispatcher) unported, so the outputs land in write-only mirrors today |
 | `FUN_004bb8c0`        | `engine_run_gate` (file-static) | stub returning 1 (matches retail — the function literally `return 1` in retail too).  No follow-up needed unless retail's debug build reveals a different body |
 | `FUN_0043de70`        | `engine_scenario_rate_hint` (file-static) | outer arm only — `return 0` unless `g_engine_state == 3`; today always returns 0.  The full 1211-byte body (scenario-rate selector based on per-player tick budgets) lands when the player-faction data (`DAT_0057bf04`) + current-player mirror (`DAT_0057c8cc`) become available |
 | `FUN_004b2730`        | `gfx_restore`               | full (prior slice) |
@@ -372,6 +373,17 @@ runs against a retail trace will see the same divergence — the
 trace will show these functions being called and we will not, but
 the global state we'd be reading is also all-zero, so the would-be
 mutations are no-ops.
+
+### Render-phase head — surveyed (2026-05-24)
+
+Three functions run at the head of the render phase (after the sim
+sub-step loop, before the screen-dispatch).  Survey result:
+
+| Retail        | Size  | Disposition | Notes |
+|---------------|-------|-------------|-------|
+| `FUN_0049a3e6` | 109 B | **Deferred — dead branch.**  Body is gated on `DAT_004eac50 == 0x24` (the screen-ID byte).  Cross-referencing `grep -h "DAT_004eac50 *=" ...` shows screen IDs 0x23 and 0x25 are written, but 0x24 is **never written anywhere in retail**.  The whole body is unreachable.  Likely an orphaned screen state from an earlier revision of the menu state machine, kept in the binary by the linker because the function is referenced through a vtable / function pointer chain that the compiler couldn't dead-strip.  Not ported — the test for `0x24` would never fire even if every called subfunction inside were ported. |
+| `FUN_004b1de0` | 11 B  | **Deferred — empty body.**  Same disposition as `FUN_004b0aaa` from pre-tick: ship build's optimised-out debug hook.  No port — the slot stands surveyed in this doc. |
+| `FUN_004b191e` | 981 B | **Ported** — see `engine_compute_input_state` in the port-status table above.  Substantive: cursor edge detection, dblclk consumption, 300 ms delayed-single-click, motion idle tracking.  All data dependencies satisfied by the existing WndProc mirrors (`g_mouse_buttons`, `g_mouse_dblclk`, `g_mouse_x/y`, `g_client_screen`). |
 
 Engine-state mirrors landed in `engine.h`:
 
@@ -410,3 +422,29 @@ Behavioural delta vs the pre-slice direct-call shape:
 - Shutdown path unchanged in practice (WndProc inline `DestroyWindow`
   still wins the race), but the structural seam is now in place for
   the follow-up slice that removes the inline.
+- Mouse input now resolved once per frame in the render-phase head
+  (matches retail's call site for `FUN_004b191e`).  The WndProc-
+  cached button + dblclk bitmasks get consumed each tick: dblclk
+  bits clear, button-edge events latch into `g_input_*` mirrors,
+  and the 300 ms delayed-single-click timer runs.  No downstream
+  consumer yet, so the outputs are write-only.  The
+  `g_input_cursor_cache_enabled` mirror defaults to 0 — retail's
+  cursor-capture / DDraw exclusive-mode-fullscreen path would set
+  it, but our windowed-mode harness never enters that state.
+
+### Wiring: cross-TU mouse globals
+
+Promoted from `static` in `main.c` so `engine.c` can `extern` them:
+
+- `g_mouse_x`, `g_mouse_y` (int16) — WM_MOUSEMOVE-cached client-space
+  cursor coords.  Read by `engine_tick_input_step` (which can
+  optionally overwrite them with screen-space coords when
+  `g_input_cursor_cache_enabled != 0`).
+- `g_mouse_buttons` (uint8) — current button bitmask.
+- `g_mouse_dblclk` (uint8) — pending dblclk bitmask, cleared by
+  `engine_tick_input_step` after each tick.
+- `g_client_screen` (RECT) — client rect in screen coords.  Used
+  for the viewport-to-game-coord mapping.  `engine.c` forward-
+  declares `struct tagRECT` (the Win32 layout `{ LONG left, top,
+  right, bottom }`) and reads through a `const LONG *` cast to
+  avoid pulling `windows.h` into headers.
