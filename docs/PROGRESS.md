@@ -7,6 +7,85 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Back-buffer capture (autonomous visual diff)
+
+User flagged that:
+
+1. The smoke harness's CWD anchor was wrong — `init_exe_dir` was
+   pinning CWD to the /tmp copy of the exe, so `base01.256`
+   lookup failed.
+2. We needed a screenshot mechanism so visual verification could
+   happen without a human in the loop (parity with openrecet).
+
+### Fixes landed
+
+- **`init_exe_dir` now prefers `$OPENLORDS2_GAME_DIR`** (matches
+  OpenMare's `init_game_dir` shape).  The flake's shellHook
+  already propagates this across the WSL→Windows boundary as a
+  native Windows path via `WSLENV/p`, so the .exe receives
+  `C:\GOG Games\Lords of the Realm II` directly.  Falls back to
+  the exe's parent dir when the env var is unset (production
+  drop-in scenario).
+- **Back buffer is now explicitly 8bpp.**  Without
+  `DDPF_PALETTEINDEXED8` in the `CreateSurface` descriptor,
+  DDraw inherits the primary's format — which on a 32bpp host
+  is 32bpp.  An 8-bit palette can't attach to a 32bpp surface,
+  so `SetPalette` returned `DDERR_INVALIDPIXELFORMAT`
+  (`0x88760091`).  Always-explicit 8bpp on the back fixes this.
+  The palette now attaches to the **back** in windowed mode
+  (where the primary is 32bpp) and to the **primary** in
+  fullscreen (where SetDisplayMode already made it 8bpp).
+- **`gfx_capture_backbuffer(path)`** in `src/gfx.c` —
+  `Lock(READONLY)` + per-pixel palette lookup via
+  `g_palette_rgb` + top-down 24bpp BMP write.  Same spirit as
+  openrecet's `capture_backbuffer` (which used D3D8 LockRect +
+  32bpp), but pre-resolves palette → BGR so the BMP needs no
+  palette section and viewers Just Work.
+- **`--capture-to DIR --capture-every N`** flags in main.c.
+  Implies `--gfx-init`.  Auto-creates the directory.  Linux
+  paths (`/tmp/foo`) auto-translate to WSL UNC
+  (`\\wsl.localhost\<WSL_DISTRO_NAME>\tmp\foo`) for the
+  Windows-side process — propagated via `WSLENV`.
+
+### Verified
+
+Captured frames at `--capture-every 10` against an
+unfilled-except-for-index-1 back buffer.  Every BMP is a
+uniform `#800000` — palette index 1 from `base01.256`,
+×4-expanded from its 6-bit VGA source.  Confirms end-to-end:
+
+1. CWD anchoring works (768 bytes read from `base01.256`).
+2. Palette load works (8bpp palette attached to back).
+3. Back-buffer fill works (every pixel = idx 1).
+4. Capture pipeline works (BMP shows the right colour).
+
+### Why this matters
+
+Visual verification now runs without a human in the loop.
+When the next slice adds a real drawing primitive (a single
+rectangle, a sprite blit, etc.), the smoke harness produces
+BMPs the assistant reads back and confirms.  Bug-find loop
+goes from "build → ship to user → wait" to "build → capture →
+read pixel → iterate" in one session.
+
+Adapted directly from openrecet's screenshot setup (see
+`/opt/src/openrecet/src/main.c` `capture_backbuffer` and the
+companion `--capture-to` / `--capture-every-ms` flags).  Same
+pattern, swapped D3D8 → DDraw 8bpp, time-based → frame-based.
+
+### What's next
+
+1. **DSound bring-up** (`FUN_00425b10`).
+2. **Render rate-limiter + dirty-rect tracker**
+   (`FUN_00452160`/`FUN_00452306`).
+3. **Surface-restore wire-up**.
+4. **First real drawing primitive** — once we port one of the
+   sprite-blit helpers (TBD which) we can capture a recognisable
+   image and diff against a Frida-captured retail screenshot of
+   the same content.
+
+---
+
 ## 2026-05-24 — gfx_present + back-buffer fill
 
 Added the per-frame back→primary present primitive and a simple

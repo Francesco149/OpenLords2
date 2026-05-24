@@ -91,6 +91,11 @@ static int       g_show_msgbox;     /* --show-msgbox: skip MessageBox→stderr h
  * case: `tools/run-openlords2.sh --gfx-init --show-window`. */
 static int       g_gfx_init;
 static int       g_gfx_active;
+/* --capture-to DIR / --capture-every N : enable back-buffer
+ * captures.  Implies --gfx-init; off when DIR is NULL.  Filenames
+ * are `<DIR>/frame_NNNNN.bmp`, indexed by g_frame_counter. */
+static const char *g_capture_dir;
+static unsigned   g_capture_every = 25;
 static int       g_shutdown;
 static HANDLE    g_singleton_mutex;
 
@@ -225,6 +230,40 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
             g_gfx_active = 1;
         } else {
             log_line("gfx_init failed — continuing without DDraw");
+        }
+    }
+
+    /* Make the capture dir if needed.  ERROR_ALREADY_EXISTS is fine.
+     *
+     * Auto-translate a Linux-style absolute path ("/tmp/foo") into
+     * a WSL UNC path ("\\wsl.localhost\<distro>\tmp\foo") so the
+     * Windows-side exe can write through.  Only kicks in if
+     * WSL_DISTRO_NAME is in the env (the flake propagates it via
+     * WSLENV).  Without that, the user has to provide a native
+     * Windows path. */
+    static char capture_dir_buf[MAX_PATH];
+    if (g_capture_dir && g_capture_dir[0] == '/') {
+        const char *distro = getenv("WSL_DISTRO_NAME");
+        if (distro && distro[0]) {
+            int n = wsprintfA(capture_dir_buf,
+                              "\\\\wsl.localhost\\%s%s", distro,
+                              g_capture_dir);
+            (void)n;
+            /* Backslashify path separators after the UNC prefix. */
+            for (char *p = capture_dir_buf; *p; p++)
+                if (*p == '/') *p = '\\';
+            g_capture_dir = capture_dir_buf;
+        }
+    }
+    if (g_capture_dir) {
+        if (!CreateDirectoryA(g_capture_dir, NULL)
+                && GetLastError() != ERROR_ALREADY_EXISTS) {
+            log_line("CreateDirectory(%s) failed: %lu — captures disabled",
+                     g_capture_dir, GetLastError());
+            g_capture_dir = NULL;
+        } else {
+            log_line("captures → %s every %u frame(s)",
+                     g_capture_dir, g_capture_every);
         }
     }
 
@@ -563,7 +602,16 @@ static void main_loop_body(void)
      * FUN_00452160.  No rate-limiter yet (retail gates on a 50-tick
      * counter), no Smacker handoff yet.  Once those land, this
      * call moves into a fuller render-driver port. */
-    if (g_gfx_active) gfx_present();
+    if (g_gfx_active) {
+        gfx_present();
+        if (g_capture_dir
+                && (g_frame_counter % g_capture_every) == 0) {
+            char path[MAX_PATH];
+            wsprintfA(path, "%s\\frame_%05u.bmp",
+                      g_capture_dir, g_frame_counter);
+            gfx_capture_backbuffer(path);
+        }
+    }
 }
 
 static void frame_limiter(void)
@@ -709,6 +757,20 @@ static void parse_cmdline(LPSTR lpCmd)
         else if (!strcmp(a, "--allow-multi"))    g_allow_multi = 1;
         else if (!strcmp(a, "--show-msgbox"))    g_show_msgbox = 1;
         else if (!strcmp(a, "--gfx-init"))       g_gfx_init    = 1;
+        else if (!strcmp(a, "--capture-to") && i + 1 < ntok) {
+            g_capture_dir = tokens[++i];
+            g_gfx_init = 1;     /* capture implies gfx */
+        } else if (!strncmp(a, "--capture-to=", 13)) {
+            g_capture_dir = a + 13;
+            g_gfx_init = 1;
+        } else if (!strcmp(a, "--capture-every") && i + 1 < ntok) {
+            if (!parse_uint(tokens[++i], &g_capture_every)
+                    || g_capture_every == 0) {
+                fprintf(stderr,
+                        "[openlords2] bad --capture-every (need >0)\n");
+                g_capture_every = 25;
+            }
+        }
         else if (!strcmp(a, "--frames") && i + 1 < ntok) {
             if (!parse_uint(tokens[++i], &g_max_frames)) {
                 fprintf(stderr, "[openlords2] bad --frames value\n");

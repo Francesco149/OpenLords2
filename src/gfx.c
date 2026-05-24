@@ -503,6 +503,98 @@ void gfx_fill_back_index(uint8_t palette_index)
     (void)blt_color_fill(g_back, palette_index, NULL);
 }
 
+/* ---------------------------------------------------------------- *
+ *  Back-buffer capture — adapted from openrecet's                    *
+ *  capture_backbuffer (which used D3D8 LockRect + 32bpp BMP).  We    *
+ *  walk our 8bpp back through `g_palette_rgb` to produce a 24bpp    *
+ *  BMP so it's directly viewable without dragging the palette       *
+ *  along.  Top-down (negative biHeight) so row 0 is the top scan-   *
+ *  line — matches what every viewer expects.                        *
+ * ---------------------------------------------------------------- */
+int gfx_capture_backbuffer(const char *path)
+{
+    if (!g_back || !path) return 0;
+
+    DDSURFACEDESC desc;
+    ZeroMemory(&desc, sizeof(desc));
+    desc.dwSize = sizeof(desc);
+    HRESULT hr = IDirectDrawSurface_Lock(g_back, NULL, &desc,
+                                         DDLOCK_WAIT | DDLOCK_READONLY,
+                                         NULL);
+    if (FAILED(hr) || !desc.lpSurface) {
+        log_line("gfx_capture: Lock failed 0x%08lx", (unsigned long)hr);
+        return 0;
+    }
+
+    const int w = (int)desc.dwWidth;
+    const int h = (int)desc.dwHeight;
+    const int pitch = (int)desc.lPitch;
+    /* 24bpp BMP rows are padded to 4-byte boundaries. */
+    const int row_bgr   = w * 3;
+    const int row_pad   = (4 - (row_bgr & 3)) & 3;
+    const int row_total = row_bgr + row_pad;
+    const DWORD img_size  = (DWORD)(row_total * h);
+    const DWORD file_size = 14 + 40 + img_size;
+
+    FILE *fp = fopen(path, "wb");
+    if (!fp) {
+        log_line("gfx_capture: fopen(%s) failed", path);
+        IDirectDrawSurface_Unlock(g_back, NULL);
+        return 0;
+    }
+
+    /* BITMAPFILEHEADER */
+    uint8_t fhdr[14] = {0};
+    fhdr[0] = 'B';  fhdr[1] = 'M';
+    fhdr[2]  = (uint8_t)(file_size);
+    fhdr[3]  = (uint8_t)(file_size >> 8);
+    fhdr[4]  = (uint8_t)(file_size >> 16);
+    fhdr[5]  = (uint8_t)(file_size >> 24);
+    fhdr[10] = 54;  /* bfOffBits = 14 + 40 */
+    fwrite(fhdr, 1, 14, fp);
+
+    /* BITMAPINFOHEADER — biHeight negative for top-down. */
+    int32_t neg_h = -h;
+    uint8_t ihdr[40] = {0};
+    ihdr[0] = 40;
+    ihdr[4] = (uint8_t)(w);
+    ihdr[5] = (uint8_t)(w >> 8);
+    ihdr[6] = (uint8_t)(w >> 16);
+    ihdr[7] = (uint8_t)(w >> 24);
+    ihdr[8]  = (uint8_t)(neg_h);
+    ihdr[9]  = (uint8_t)((uint32_t)neg_h >> 8);
+    ihdr[10] = (uint8_t)((uint32_t)neg_h >> 16);
+    ihdr[11] = (uint8_t)((uint32_t)neg_h >> 24);
+    ihdr[12] = 1;        /* biPlanes */
+    ihdr[14] = 24;       /* biBitCount */
+    ihdr[20] = (uint8_t)(img_size);
+    ihdr[21] = (uint8_t)(img_size >> 8);
+    ihdr[22] = (uint8_t)(img_size >> 16);
+    ihdr[23] = (uint8_t)(img_size >> 24);
+    fwrite(ihdr, 1, 40, fp);
+
+    /* Pixel data — palette lookup per pixel, BGR byte order. */
+    const uint8_t *base = (const uint8_t *)desc.lpSurface;
+    uint8_t row[GFX_RENDER_W * 3 + 4];   /* +4 covers any padding */
+    for (int y = 0; y < h; y++) {
+        const uint8_t *src = base + y * pitch;
+        uint8_t *dst = row;
+        for (int x = 0; x < w; x++) {
+            uint8_t idx = src[x];
+            *dst++ = g_palette_rgb[idx * 3 + 2];   /* B */
+            *dst++ = g_palette_rgb[idx * 3 + 1];   /* G */
+            *dst++ = g_palette_rgb[idx * 3 + 0];   /* R */
+        }
+        /* Zero-fill the row padding. */
+        for (int p = 0; p < row_pad; p++) *dst++ = 0;
+        fwrite(row, 1, row_total, fp);
+    }
+    fclose(fp);
+
+    IDirectDrawSurface_Unlock(g_back, NULL);
+    return 1;
+}
+
 void gfx_present(void)
 {
     if (!g_primary || !g_back) return;

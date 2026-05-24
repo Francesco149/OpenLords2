@@ -70,4 +70,12 @@ void gfx_present(void);
  * stuck on entry 0". */
 void gfx_fill_back_index(uint8_t palette_index);
 
+/* Capture the back buffer to a 24bpp BMP file at the given path
+ * (resolves palette index → BGR via the loaded palette).  Returns
+ * 1 on success, 0 on any failure (no back buffer, Lock failure,
+ * file write failure).  Used by the smoke harness to make
+ * autonomous visual diffs possible without a human in the loop —
+ * matches openrecet's capture_backbuffer in spirit. */
+int  gfx_capture_backbuffer(const char *path);
+
 #endif /* OPENLORDS2_GFX_H */

@@ -117,7 +117,7 @@
             # tells WSL to auto-translate /mnt/X/... to X:\... when crossing
             # into Windows, so the .exe gets a native Windows path with no
             # client-side translation needed.
-            export WSLENV="''${WSLENV:+$WSLENV:}OPENLORDS2_GAME_DIR/p"
+            export WSLENV="''${WSLENV:+$WSLENV:}OPENLORDS2_GAME_DIR/p:WSL_DISTRO_NAME"
 
             # mingw cross-compiler convenience aliases.
             export MINGW_CC=i686-w64-mingw32-gcc
