@@ -25,7 +25,8 @@ CFLAGS  ?= -std=c11 -O2 -g \
            -DWINVER=0x0500 -D_WIN32_WINNT=0x0500
 LDFLAGS ?= -static-libgcc
 LIBS    ?= -lwinmm -lgdi32 -luser32 -lkernel32 \
-           -ladvapi32 -lshell32 -lole32
+           -ladvapi32 -lshell32 -lole32 \
+           -lddraw
 
 SRCS := $(wildcard *.c)
 

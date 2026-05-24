@@ -7,6 +7,101 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — DDraw bring-up (`src/gfx.c`)
+
+Ported the retail DDraw chain into a new `src/gfx.c`.
+
+### Scope landed
+
+- `gfx_init(HWND, fullscreen)` — `DirectDrawCreate` +
+  `SetCooperativeLevel` (`NORMAL` for windowed, `EXCL|FULLSCREEN|
+  ALLOWREBOOT` for fullscreen) + `SetDisplayMode(640,480,8)` for
+  fullscreen only.
+- Primary surface (`DDSCAPS_PRIMARYSURFACE`).
+- Back buffer (system memory, `DDSCAPS_OFFSCREENPLAIN |
+  DDSCAPS_SYSTEMMEMORY`, 640×480).
+- Lock-probe on both surfaces (matches retail's
+  `FUN_0042ec91` — caches `lPitch` for the render path's
+  scanline-stride math).
+- Clipper (windowed only — `IDirectDrawClipper` +
+  `SetHWnd(hwnd)` + `IDirectDrawSurface::SetClipper`).
+- Initial `Blt(COLORFILL=black, DDBLT_WAIT)`.
+- `gfx_shutdown()` — releases everything in reverse order
+  (clipper → back → primary → IDirectDraw).
+- All status log lines mirror retail's exact wording —
+  "OK :DD SetCooperative Level.", "OK :DD Kept resolution.",
+  "OK :DD Set resolution.", "OK :DD Creating one Vram and one
+  system surface.", "OK :DD Creating one Vram only.",
+  "OK :DD Surfaces created and clipper attached.",
+  "OK :DD Surface created.", "OK :GFX DirectDraw enabled." —
+  so transcripts diff cleanly against a Frida-captured retail
+  run.
+
+### Scope deferred
+
+- **Palette load.** Requires porting the file-read helper
+  `FUN_004af8d9` (with its `FUN_004af116` /
+  `FUN_004af312` retry layer for alternate game-dir search
+  paths) first.  Without a palette the 8bpp primary is
+  technically usable but renders against the OS's logical
+  default palette — fine for bring-up smoke but not visually
+  correct.
+- **Smacker-aware paint.**  `FUN_0042e3ba` belongs in a
+  Smacker-wrapper TU we don't have.
+- **Surface-restore on focus regain.** WndProc's
+  `WM_ACTIVATEAPP` path will call `IDirectDrawSurface::Restore`
+  once `g_primary / g_back` are reachable from that side — the
+  state mirror is already in place, just needs the helper.
+
+### Default-off gating
+
+`gfx_init` is gated behind `--gfx-init` in main.c.  `SetCooperative
+Level` modifies process-global DDraw state and the headless smoke
+harness has no way to validate the result visually — so default-off
+keeps `tools/run-openlords2.sh` runs harmless and reserves the
+DDraw path for an explicit `tools/run-openlords2.sh --gfx-init
+--show-window`.
+
+Baseline smoke (no flag) still passes — 50 frames clean, only
+`OK :Active.` / `OK :Not active.` in the transcript.
+
+With `--gfx-init` the full bring-up runs cleanly even against a
+hidden window — six status lines + clean shutdown, no leaks
+visible.  **Visual correctness needs a human run on a Windows
+desktop** (per the validate-subjectively memory) — that's the
+deferred item before this slice is "verified".
+
+### Other changes
+
+- `log_line` extern-visible (was static) so `gfx.c` can use the
+  same logger.  No call-site change.
+- `Makefile` links `-lddraw`.
+- WndProc's `g_surface_lost` / `g_focused` / `g_render_dirty`
+  mirrors from the previous slice are now reachable from
+  `gfx.c`'s side — the surface-restore wire-up is one TODO away.
+
+### What's next
+
+1. **Palette load.**  Port `FUN_004af8d9` (open + lseek + read,
+   with two retries on alternate paths) into a tiny `src/io.c`,
+   then `FUN_004b0ab5` (×4 RGB expansion) and `FUN_0042f1df` →
+   `FUN_0042f449` / `FUN_0042f306` (palette buffer construction
+   + `IDirectDraw::CreatePalette` + `IDirectDrawSurface::
+   SetPalette`).  At that point `--gfx-init` becomes visually
+   correct enough to start diff-testing against retail.
+2. **Visual verification on Windows.**  Manual `tools/
+   run-openlords2.sh --gfx-init --show-window` from a Windows
+   host — confirm the window appears, stays black for the run,
+   exits clean.  Compare against a Frida-captured retail
+   transcript of the same sequence.
+3. **Surface-restore wire-up.** From WndProc's
+   `WM_ACTIVATEAPP` active+lost path, call
+   `IDirectDrawSurface::Restore(g_primary)` +
+   `Restore(g_back)`; on failure, call `gfx_shutdown(); gfx_init()`
+   (the equivalent of `FUN_004b2922`'s outer call).
+
+---
+
 ## 2026-05-24 — WndProc port + findings
 
 Continued top-down: ported retail's `FUN_004b29be @ 0x4b29be`

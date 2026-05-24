@@ -58,6 +58,7 @@
 #include <stdint.h>
 
 #include "dev_hooks.h"
+#include "gfx.h"
 
 /* Class name matches retail FUN_004b2258's `s_WinLords2Class_004df5b0`
  * so FindWindowA from external tools resolves to us identically.
@@ -83,6 +84,13 @@ static int       g_skip_cd;         /* --no-cd: skip auto-cd to exe dir */
 static int       g_allow_multi;     /* --allow-multi: skip single-instance mutex */
 static unsigned  g_max_frames;      /* --frames N: voluntary exit after N frames (0 = forever) */
 static int       g_show_msgbox;     /* --show-msgbox: skip MessageBox→stderr hook */
+/* --gfx-init: call gfx_init() after window creation.  Off by default
+ * — would alter desktop cooperative-level state on every smoke run
+ * if always on, and the headless harness has no way to verify the
+ * resulting paint visually.  Manual visual validation is the use
+ * case: `tools/run-openlords2.sh --gfx-init --show-window`. */
+static int       g_gfx_init;
+static int       g_gfx_active;
 static int       g_shutdown;
 static HANDLE    g_singleton_mutex;
 
@@ -160,7 +168,7 @@ static int  acquire_singleton(void);
 static void release_singleton(void);
 static void frame_limiter(void);
 static void main_loop_body(void);
-static void log_line(const char *fmt, ...);
+void log_line(const char *fmt, ...);   /* non-static — gfx.c links to this */
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdShow)
 {
@@ -212,6 +220,14 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
         UpdateWindow(g_hwnd);
     }
 
+    if (g_gfx_init) {
+        if (gfx_init(g_hwnd, g_fullscreen)) {
+            g_gfx_active = 1;
+        } else {
+            log_line("gfx_init failed — continuing without DDraw");
+        }
+    }
+
     g_base_time_ms = timeGetTime();
 
     while (!g_shutdown && (g_max_frames == 0 || g_frame_counter < g_max_frames)) {
@@ -221,6 +237,11 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
     }
 
     log_line("main loop exited after %u frame(s)", g_frame_counter);
+
+    if (g_gfx_active) {
+        gfx_shutdown();
+        g_gfx_active = 0;
+    }
 
     DestroyWindow(g_hwnd);
     UnregisterClassA(OPENLORDS2_CLASS, g_hInstance);
@@ -550,7 +571,7 @@ static void frame_limiter(void)
     (void)FRAME_PERIOD_MS;
 }
 
-static void log_line(const char *fmt, ...)
+void log_line(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
@@ -656,6 +677,7 @@ static void parse_cmdline(LPSTR lpCmd)
         else if (!strcmp(a, "--no-cd"))    g_skip_cd     = 1;
         else if (!strcmp(a, "--allow-multi"))    g_allow_multi = 1;
         else if (!strcmp(a, "--show-msgbox"))    g_show_msgbox = 1;
+        else if (!strcmp(a, "--gfx-init"))       g_gfx_init    = 1;
         else if (!strcmp(a, "--frames") && i + 1 < ntok) {
             if (!parse_uint(tokens[++i], &g_max_frames)) {
                 fprintf(stderr, "[openlords2] bad --frames value\n");
