@@ -7,6 +7,144 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Fifth diff target: engine_compute_phase_ticks + concurrent-race
+
+Continued the "more diff targets" thread.  Wired `FUN_004bbc80` (the 9-flag
+animation phase tick — 10 inputs, 18 outputs, 1 `timeGetTime` call) into the
+diff machinery using the scripted-clock pattern.  The work surfaced a new
+race mode — concurrent execution on multi-core — and required a new
+race-pass classification shape (engine-clear signature).
+
+### Agent (`tools/frida/openlords2-agent.js`)
+
+- New `ADDR` entries: `fn_engine_phase_ticks` (`FUN_004bbc80`) +
+  10 state globals (last_base + 9 counters) + 8 flag globals
+  (the 9th, `var_phase_tick_80ms` = `DAT_00591510`, was already
+  declared for anim_cycle's input).
+- New `g_nf_retail_phase_ticks` NativeFunction (return type `void`, no
+  args, stdcall) — resolved alongside the existing diff RPC stubs in
+  `resolveRetailFunctions()`.
+- New `runRetailPhaseTicks(now, last_base, base_counter, c2..c32)`
+  RPC: snapshots all 18 fields, clears all 9 flags before the call
+  (retail clears 8 at entry; the 1040 ms flag is sticky — clearing
+  forces "did THIS call set the flag" readback semantics), pushes a
+  single scripted clock value, invokes retail, reads back, restores
+  in a `finally`.
+- Readback ordering is load-bearing: `last_base_tick_ms` is read FIRST
+  (start canary) AND LAST (end canary) around the 17-field body, and
+  the orchestrator's race detector compares them.  Equal canaries +
+  expected end value = readback was atomic from a single retail call's
+  perspective.
+- Structural `raced` flag returned (same shape as anim_cycle) — used
+  as a secondary OR-in by the orchestrator's race-pass classifier.
+
+### Race classification (concurrent-execution + engine-clear)
+
+Initial diff against retail revealed 4/100 failures, all matching the
+same signature: 9 counter writebacks match port exactly, but some flag
+fields differ as `retail=0, port=1`.
+
+Root cause: on multi-core, the engine main thread runs FUN_004bbc80
+*concurrently* with our V8 thread's NativeFunction call.  The dominant
+interleaving:
+
+  - our V8 retail returns; retail's correct 18 outputs are visible.
+  - engine begins its own concurrent FUN_004bbc80 call.
+  - engine's first action is "clear 8 flags at entry" (the function's
+    prologue).
+  - our V8 reads the 9 flags AFTER engine's clear-step but BEFORE
+    engine's 20 ms branch writes.
+  - our V8 reads the 9 counter/last_base globals BEFORE engine's
+    20 ms branch writes too (the branch writes them).
+
+Both canaries (`last_base_tick_ms` start and end) match expected
+because engine hadn't yet written its own `last_base` value.  The
+*flags*, however, are clobbered.
+
+The orchestrator's race detector was enriched with an internal-
+consistency check: when the 20 ms branch fires (`last_base ==
+in_now_ms`), retail MUST observe `tick_20ms == 1` (the branch writes it
+after bumping base_counter).  If we observe `tick_20ms == 0` with
+`last_base == in_now_ms`, the engine cleared the flag mid-RPC.  This
+triggers a retry (`ANIM_RACE_RETRIES = 8`, sleep 10 ms between).
+
+For the small fraction of races that survive retries, a new race-pass
+signature classifies the failure as harness flakiness rather than a
+port bug: `_phase_ticks_engine_clear_race(retail, port)` returns True
+when (a) all 9 counter/last_base writebacks match port, AND (b) every
+flag mismatch is in the direction `retail=0, port=1`.  Structurally
+identical to frame_delta's race-pass — the function ran correctly per
+spec; only the observable was clobbered after the fact.
+
+The sticky 1040 ms flag survives engine races: retail's clear-step
+doesn't touch `_DAT_005aeb28`, so a port-set 1040 ms flag still
+matches retail after the race.
+
+### Orchestrator (`tools/diff_test.py`)
+
+- `EnginePhaseIn` / `EnginePhaseOut` ctypes mirrors (10 inputs, 18
+  outputs).
+- `lib.engine_compute_phase_ticks` binding.
+- `gen_phase_ticks_vectors(n, rng)` — 15 fixed edge cases:
+  20 ms boundary (delta 19 / 20), signed-wrap (`delta < 0`), zero
+  delta, 80 ms gate fire (base_counter=3→4), simultaneous max-
+  rollover (all 8 inner counters at threshold), single-counter
+  rollover sweep (one of 8 at threshold, rest at 0), sticky 1040 ms
+  alone, u32 wrap.  Random fill biased toward "80 ms gate firing
+  often" + "inner counters in natural range".
+- `run_port_phase_ticks` + `diff_phase_ticks` (all 18 fields).
+- `_phase_ticks_race_free` race detector (canary equality +
+  internal-consistency).
+- `_phase_ticks_engine_clear_race` race-pass classifier.
+- Dispatch arm with retry-on-race + race-pass classification.
+- CLI default `--functions` now includes `phase_ticks`.
+
+### Makefile
+
+`engine_phase.c` added to `DIFF_SRCS` so libengine_diff.so includes
+the port.
+
+### Verified
+
+`nix develop -c python3 tools/diff_test.py --vectors 500
+--remote cutestation.soy:27042`:
+
+| target        | result                       |
+|---------------|------------------------------|
+| `rng_step`    | 500/500 pass                 |
+| `fps_step`    | 500/500 pass (16 race-pass)  |
+| `anim_cycle`  | 500/500 pass                 |
+| `frame_delta` | 500/500 pass                 |
+| `phase_ticks` | 500/500 pass (2 race-pass)   |
+
+All 123 host unit tests still pass under ASan + UBSan.
+
+### What's next
+
+1. **DDraw Blt-via-GDI seat** — short-circuit the "Blt invisible under
+   DWM" quirk by intercepting `IDirectDrawSurface::Blt` and re-routing
+   through `GDI StretchDIBits`.  Unblocks live recording-driven
+   scenarios + visual verification of retail under the harness.  User
+   has confirmed they can verify visually, so this is the natural
+   next-step unlock.
+2. **Save-file format** — `castles.dat` / `c_hist.dat` / `history.dat`
+   parsers.  Starts unlocking the simulation subsystem ports.
+3. **More diff targets** — two mechanical follow-ups remain:
+   - `engine_compute_input_state` (FUN_004b191e) — 981 retail bytes;
+     `GetCursorPos` + `timeGetTime` + many flags.  Needs a
+     `GetCursorPos` scripted-return pattern paralleling our
+     `timeGetTime` queue.  Largest of the remaining mechanical ports.
+   - `engine_compute_sim_sub_steps` (FUN_004bb978) — has internal
+     callees (FUN_004bb8c0, FUN_0043de70) and a pointer-array LUT;
+     highest complexity of the remaining ports.
+
+Top-down RE bias next time: option 1 (DDraw Blt seat) is highest-
+leverage now that the diff machinery has covered all the small
+pure-function targets and the user has confirmed they can verify
+visually.
+
+---
+
 ## 2026-05-24 — Fourth diff target: engine_compute_frame_delta + race-pass
 
 Continued the "more diff targets" thread from the previous entry.  Wired

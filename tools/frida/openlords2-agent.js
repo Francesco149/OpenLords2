@@ -100,6 +100,7 @@ const ADDR = {
     fn_engine_compute_fps:     0x004b27bf,  // FUN_004b27bf — FPS counter
     fn_engine_anim_cycle:      0x00451f1a,  // FUN_00451f1a — 16-frame anim cycle bump
     fn_engine_frame_delta:     0x004b20ed,  // FUN_004b20ed — frame delta w/ 30ms gate
+    fn_engine_phase_ticks:     0x004bbc80,  // FUN_004bbc80 — 9-flag animation phase ticks
     // RNG state + 6 output mirrors (see docs/findings/engine-quirks.md #5
     // and src/engine_rng.c for the mirror-↔-port mapping).
     var_rng_state_a:     0x0058fe28,  // DAT_0058fe28 — state_a (the seed-init at WinMain)
@@ -122,6 +123,29 @@ const ADDR = {
     var_phase_tick_80ms:      0x00591510,  // DAT_00591510 — 80 ms phase tick flag
     // Frame-delta state (1 global) — see src/engine_delta.c.
     var_frame_delta_last:     0x004e59ec,  // _DAT_004e59ec — last_frame_ms
+    // Phase-ticks state (10 globals + 9 flags) — see src/engine_phase.c.
+    // 8 of the 9 flags are cleared by retail at entry to FUN_004bbc80; the
+    // 1040 ms flag is sticky.  The diff RPC clears all 9 going in so the
+    // post-call readback is "did THIS call set the flag".
+    var_phase_last_base_tick_ms: 0x004e5b10, // _DAT_004e5b10
+    var_phase_base_tick_counter: 0x005aeb2c, //  DAT_005aeb2c
+    var_phase_counter_2:         0x0058feb4, //  DAT_0058feb4 (×2  → 160 ms)
+    var_phase_counter_4:         0x0058feb0, //  DAT_0058feb0 (×4  → 320 ms)
+    var_phase_counter_8:         0x0058feb8, //  DAT_0058feb8 (×8  → 640 ms)
+    var_phase_counter_13:        0x005aea54, //  DAT_005aea54 (×13 → 1040 ms)
+    var_phase_counter_16:        0x005aea44, //  DAT_005aea44 (×16 → 1280 ms)
+    var_phase_counter_24:        0x005aea48, //  DAT_005aea48 (×24 → 1920 ms)
+    var_phase_counter_32:        0x005aea4c, //  DAT_005aea4c (×32 → 2560 ms)
+    var_phase_tick_20ms:         0x0058fcb0, //  DAT_0058fcb0 — flag (base tick)
+    // var_phase_tick_80ms already declared above (DAT_00591510, also used by
+    // anim_cycle as the 80 ms gate signal).
+    var_phase_tick_160ms:        0x0057d3ac, //  DAT_0057d3ac — flag
+    var_phase_tick_320ms:        0x0057d3c8, //  DAT_0057d3c8 — flag
+    var_phase_tick_640ms:        0x0058fd08, //  DAT_0058fd08 — flag
+    var_phase_tick_1040ms:       0x005aeb28, // _DAT_005aeb28 — flag (sticky in wrapper)
+    var_phase_tick_1280ms:       0x005aeb3c, //  DAT_005aeb3c — flag
+    var_phase_tick_1920ms:       0x005aeb38, //  DAT_005aeb38 — flag
+    var_phase_tick_2560ms:       0x005aeb30, //  DAT_005aeb30 — flag
 };
 
 // ─── runtime state ──────────────────────────────────────────────────────
@@ -226,6 +250,7 @@ let g_nf_retail_rng_step      = null;
 let g_nf_retail_compute_fps   = null;
 let g_nf_retail_anim_cycle    = null;
 let g_nf_retail_frame_delta   = null;
+let g_nf_retail_phase_ticks   = null;
 
 // engine_tick depth tracker — 1 while the engine main thread is executing
 // FUN_004b99c0, 0 otherwise.  Used by per-tick race detection in diff RPCs
@@ -1362,6 +1387,8 @@ function resolveRetailFunctions() {
         rva(ADDR.fn_engine_anim_cycle), 'void', [], 'stdcall');
     g_nf_retail_frame_delta = new NativeFunction(
         rva(ADDR.fn_engine_frame_delta), 'int32', [], 'stdcall');
+    g_nf_retail_phase_ticks = new NativeFunction(
+        rva(ADDR.fn_engine_phase_ticks), 'void', [], 'stdcall');
     return true;
 }
 
@@ -1604,6 +1631,157 @@ function runRetailFrameDelta(in_now_ms, in_last_frame_ms) {
     return out;
 }
 
+// Phase-ticks diff: 10 retail globals (last_base_tick_ms + 9 counters) +
+// 9 flag globals + 1 scripted timeGetTime return.  FUN_004bbc80 calls
+// timeGetTime() exactly once and writes 9 flags (8 cleared at entry, the
+// 1040 ms flag is sticky → not cleared at entry).  We clear ALL 9 going
+// in so the post-call readback reflects only this call's writes, which is
+// the shape the pure port outputs.
+//
+// Race shape matches anim_cycle / frame_delta (called once per engine_tick
+// in the pre-tick block of FUN_004b99c0).  No structural detector here —
+// the orchestrator uses a function-specific check on new_last_base_tick_ms
+// (mirrors frame_delta's pattern).
+function runRetailPhaseTicks(in_now_ms,
+                             in_last_base_tick_ms,
+                             in_base_tick_counter,
+                             in_counter_2,  in_counter_4,
+                             in_counter_8,  in_counter_13,
+                             in_counter_16, in_counter_24,
+                             in_counter_32) {
+    if (!g_diff_test_enabled) {
+        return {error: 'diff_test not enabled at init'};
+    }
+    if (!resolveRetailFunctions()) {
+        return {error: 'NativeFunction resolution failed'};
+    }
+    g_diff_test_caller_tid = Process.getCurrentThreadId();
+    // Start with an empty queue so a prior test's leftover can't bleed in.
+    g_diff_test_clock_queue.length = 0;
+    const tick_count_before = g_tick_count;
+    const in_tick_before    = g_engine_in_tick;
+    const snap = {
+        last_base_tick_ms: rva(ADDR.var_phase_last_base_tick_ms).readU32(),
+        base_tick_counter: rva(ADDR.var_phase_base_tick_counter).readS32(),
+        counter_2:         rva(ADDR.var_phase_counter_2 ).readS32(),
+        counter_4:         rva(ADDR.var_phase_counter_4 ).readS32(),
+        counter_8:         rva(ADDR.var_phase_counter_8 ).readS32(),
+        counter_13:        rva(ADDR.var_phase_counter_13).readS32(),
+        counter_16:        rva(ADDR.var_phase_counter_16).readS32(),
+        counter_24:        rva(ADDR.var_phase_counter_24).readS32(),
+        counter_32:        rva(ADDR.var_phase_counter_32).readS32(),
+        tick_20ms:         rva(ADDR.var_phase_tick_20ms  ).readU32(),
+        tick_80ms:         rva(ADDR.var_phase_tick_80ms  ).readU32(),
+        tick_160ms:        rva(ADDR.var_phase_tick_160ms ).readU32(),
+        tick_320ms:        rva(ADDR.var_phase_tick_320ms ).readU32(),
+        tick_640ms:        rva(ADDR.var_phase_tick_640ms ).readU32(),
+        tick_1040ms:       rva(ADDR.var_phase_tick_1040ms).readU32(),
+        tick_1280ms:       rva(ADDR.var_phase_tick_1280ms).readU32(),
+        tick_1920ms:       rva(ADDR.var_phase_tick_1920ms).readU32(),
+        tick_2560ms:       rva(ADDR.var_phase_tick_2560ms).readU32(),
+    };
+    let out;
+    try {
+        // Inputs — 10 state globals (counters are signed in retail's
+        // `int N < counter` comparisons; readS32/writeS32 round-trips
+        // negative test values cleanly through JSON).
+        rva(ADDR.var_phase_last_base_tick_ms).writeU32(in_last_base_tick_ms >>> 0);
+        rva(ADDR.var_phase_base_tick_counter).writeS32(in_base_tick_counter | 0);
+        rva(ADDR.var_phase_counter_2 ).writeS32(in_counter_2  | 0);
+        rva(ADDR.var_phase_counter_4 ).writeS32(in_counter_4  | 0);
+        rva(ADDR.var_phase_counter_8 ).writeS32(in_counter_8  | 0);
+        rva(ADDR.var_phase_counter_13).writeS32(in_counter_13 | 0);
+        rva(ADDR.var_phase_counter_16).writeS32(in_counter_16 | 0);
+        rva(ADDR.var_phase_counter_24).writeS32(in_counter_24 | 0);
+        rva(ADDR.var_phase_counter_32).writeS32(in_counter_32 | 0);
+        // Clear all 9 flags (retail clears 8 at entry; the 1040 ms flag
+        // is sticky and only set on rollover — pre-clearing matches the
+        // pure port's "all flags start at 0, set on rollover" shape).
+        rva(ADDR.var_phase_tick_20ms  ).writeU32(0);
+        rva(ADDR.var_phase_tick_80ms  ).writeU32(0);
+        rva(ADDR.var_phase_tick_160ms ).writeU32(0);
+        rva(ADDR.var_phase_tick_320ms ).writeU32(0);
+        rva(ADDR.var_phase_tick_640ms ).writeU32(0);
+        rva(ADDR.var_phase_tick_1040ms).writeU32(0);
+        rva(ADDR.var_phase_tick_1280ms).writeU32(0);
+        rva(ADDR.var_phase_tick_1920ms).writeU32(0);
+        rva(ADDR.var_phase_tick_2560ms).writeU32(0);
+        // Scripted clock for the single timeGetTime() call.
+        g_diff_test_clock_queue.push(in_now_ms >>> 0);
+        g_nf_retail_phase_ticks();
+        // Readback ordering is load-bearing: 18 fields take many V8/JS
+        // round-trips to read, and the engine main thread can squeeze a
+        // FUN_004bbc80 call in BETWEEN any two reads.  We want a single
+        // canary that detects "engine raced at any point during readback".
+        // `last_base_tick_ms` is that canary — read FIRST and LAST.  If the
+        // start and end values disagree, or if either disagrees with the
+        // expected post-call value, retail's writebacks were clobbered
+        // mid-readback and the orchestrator will retry.
+        //
+        // Order chosen: flags first (smallest contiguous group), counters
+        // next, then last_base.  Putting last_base last makes the simple
+        // "end-value matches expected" check cover the entire readback.
+        const last_base_start = rva(ADDR.var_phase_last_base_tick_ms).readU32();
+        out = {
+            tick_20ms:             rva(ADDR.var_phase_tick_20ms  ).readU32(),
+            tick_80ms:             rva(ADDR.var_phase_tick_80ms  ).readU32(),
+            tick_160ms:            rva(ADDR.var_phase_tick_160ms ).readU32(),
+            tick_320ms:            rva(ADDR.var_phase_tick_320ms ).readU32(),
+            tick_640ms:            rva(ADDR.var_phase_tick_640ms ).readU32(),
+            tick_1040ms:           rva(ADDR.var_phase_tick_1040ms).readU32(),
+            tick_1280ms:           rva(ADDR.var_phase_tick_1280ms).readU32(),
+            tick_1920ms:           rva(ADDR.var_phase_tick_1920ms).readU32(),
+            tick_2560ms:           rva(ADDR.var_phase_tick_2560ms).readU32(),
+            new_base_tick_counter: rva(ADDR.var_phase_base_tick_counter).readS32(),
+            new_counter_2:         rva(ADDR.var_phase_counter_2 ).readS32(),
+            new_counter_4:         rva(ADDR.var_phase_counter_4 ).readS32(),
+            new_counter_8:         rva(ADDR.var_phase_counter_8 ).readS32(),
+            new_counter_13:        rva(ADDR.var_phase_counter_13).readS32(),
+            new_counter_16:        rva(ADDR.var_phase_counter_16).readS32(),
+            new_counter_24:        rva(ADDR.var_phase_counter_24).readS32(),
+            new_counter_32:        rva(ADDR.var_phase_counter_32).readS32(),
+            // Canary read LAST.  Orchestrator's race detector checks this.
+            new_last_base_tick_ms: rva(ADDR.var_phase_last_base_tick_ms).readU32(),
+        };
+        // Also surface the start canary so the orchestrator can sanity-
+        // check the readback was atomic (start == end).  Equal values
+        // mean no race during readback; unequal means the engine fired
+        // FUN_004bbc80 mid-readback.
+        out.last_base_tick_ms_start = last_base_start;
+        // Structural race indicator — same shape as anim_cycle.  Engine
+        // is mid-tick during our RPC ⇒ might have run FUN_004bbc80
+        // concurrently (multi-core, no kernel-level serialisation).
+        // Used by the orchestrator's engine-clear race-pass classifier
+        // to distinguish "harness flakiness" from a real port bug.
+        const tick_count_after = g_tick_count;
+        const in_tick_after    = g_engine_in_tick;
+        out.raced = ((tick_count_after !== tick_count_before) ||
+                     in_tick_before !== 0 || in_tick_after !== 0) ? 1 : 0;
+    } finally {
+        rva(ADDR.var_phase_last_base_tick_ms).writeU32(snap.last_base_tick_ms);
+        rva(ADDR.var_phase_base_tick_counter).writeS32(snap.base_tick_counter);
+        rva(ADDR.var_phase_counter_2 ).writeS32(snap.counter_2);
+        rva(ADDR.var_phase_counter_4 ).writeS32(snap.counter_4);
+        rva(ADDR.var_phase_counter_8 ).writeS32(snap.counter_8);
+        rva(ADDR.var_phase_counter_13).writeS32(snap.counter_13);
+        rva(ADDR.var_phase_counter_16).writeS32(snap.counter_16);
+        rva(ADDR.var_phase_counter_24).writeS32(snap.counter_24);
+        rva(ADDR.var_phase_counter_32).writeS32(snap.counter_32);
+        rva(ADDR.var_phase_tick_20ms  ).writeU32(snap.tick_20ms);
+        rva(ADDR.var_phase_tick_80ms  ).writeU32(snap.tick_80ms);
+        rva(ADDR.var_phase_tick_160ms ).writeU32(snap.tick_160ms);
+        rva(ADDR.var_phase_tick_320ms ).writeU32(snap.tick_320ms);
+        rva(ADDR.var_phase_tick_640ms ).writeU32(snap.tick_640ms);
+        rva(ADDR.var_phase_tick_1040ms).writeU32(snap.tick_1040ms);
+        rva(ADDR.var_phase_tick_1280ms).writeU32(snap.tick_1280ms);
+        rva(ADDR.var_phase_tick_1920ms).writeU32(snap.tick_1920ms);
+        rva(ADDR.var_phase_tick_2560ms).writeU32(snap.tick_2560ms);
+        g_diff_test_clock_queue.length = 0;
+        g_diff_test_caller_tid = -1;
+    }
+    return out;
+}
+
 // ─── init RPC ──────────────────────────────────────────────────────────
 
 rpc.exports = {
@@ -1722,8 +1900,8 @@ rpc.exports = {
 
         if (g_diff_test_enabled) {
             log('diff_test: armed (runRetailRngStep / runRetailComputeFps / ' +
-                'runRetailAnimCycle / runRetailFrameDelta RPCs live; ' +
-                'orchestrator drives test vectors)');
+                'runRetailAnimCycle / runRetailFrameDelta / runRetailPhaseTicks ' +
+                'RPCs live; orchestrator drives test vectors)');
         }
     },
 
@@ -1747,5 +1925,18 @@ rpc.exports = {
 
     runRetailFrameDelta: function (now_ms, last_frame_ms) {
         return runRetailFrameDelta(now_ms, last_frame_ms);
+    },
+
+    runRetailPhaseTicks: function (now_ms,
+                                   last_base_tick_ms, base_tick_counter,
+                                   counter_2,  counter_4,
+                                   counter_8,  counter_13,
+                                   counter_16, counter_24, counter_32) {
+        return runRetailPhaseTicks(
+            now_ms,
+            last_base_tick_ms, base_tick_counter,
+            counter_2,  counter_4,
+            counter_8,  counter_13,
+            counter_16, counter_24, counter_32);
     },
 };

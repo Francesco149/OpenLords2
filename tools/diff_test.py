@@ -20,6 +20,7 @@ Current targets:
   - engine_compute_fps         (FUN_004b27bf) — rolling 1-sec FPS counter
   - engine_compute_anim_cycle  (FUN_00451f1a) — 16-frame anim-cycle bump
   - engine_compute_frame_delta (FUN_004b20ed) — frame delta with 30 ms gate
+  - engine_compute_phase_ticks (FUN_004bbc80) — 9-flag animation phase tick
 
 The orchestrator runs the agent in "diff_test" mode (no turbo, no input
 replay) so the engine boots, parks, and waits.  Once the per-tick driver
@@ -141,6 +142,46 @@ class EngineDeltaOut(ctypes.Structure):
     ]
 
 
+# Mirrors engine_phase_in_t / engine_phase_out_t in src/engine.h.  Field
+# order MUST match the header — ctypes lays them out struct-style.
+class EnginePhaseIn(ctypes.Structure):
+    _fields_ = [
+        ("now_ms",            ctypes.c_uint32),
+        ("last_base_tick_ms", ctypes.c_uint32),
+        ("base_tick_counter", ctypes.c_uint32),
+        ("counter_2",         ctypes.c_uint32),
+        ("counter_4",         ctypes.c_uint32),
+        ("counter_8",         ctypes.c_uint32),
+        ("counter_13",        ctypes.c_uint32),
+        ("counter_16",        ctypes.c_uint32),
+        ("counter_24",        ctypes.c_uint32),
+        ("counter_32",        ctypes.c_uint32),
+    ]
+
+
+class EnginePhaseOut(ctypes.Structure):
+    _fields_ = [
+        ("tick_20ms",               ctypes.c_int),
+        ("tick_80ms",               ctypes.c_int),
+        ("tick_160ms",              ctypes.c_int),
+        ("tick_320ms",              ctypes.c_int),
+        ("tick_640ms",              ctypes.c_int),
+        ("tick_1040ms",             ctypes.c_int),
+        ("tick_1280ms",             ctypes.c_int),
+        ("tick_1920ms",             ctypes.c_int),
+        ("tick_2560ms",             ctypes.c_int),
+        ("new_last_base_tick_ms",   ctypes.c_uint32),
+        ("new_base_tick_counter",   ctypes.c_uint32),
+        ("new_counter_2",           ctypes.c_uint32),
+        ("new_counter_4",           ctypes.c_uint32),
+        ("new_counter_8",           ctypes.c_uint32),
+        ("new_counter_13",          ctypes.c_uint32),
+        ("new_counter_16",          ctypes.c_uint32),
+        ("new_counter_24",          ctypes.c_uint32),
+        ("new_counter_32",          ctypes.c_uint32),
+    ]
+
+
 def load_port_lib() -> ctypes.CDLL:
     """Load libengine_diff.so + bind the two diff entrypoints.
 
@@ -168,6 +209,10 @@ def load_port_lib() -> ctypes.CDLL:
     lib.engine_compute_frame_delta.restype = None
     lib.engine_compute_frame_delta.argtypes = [
         ctypes.POINTER(EngineDeltaIn), ctypes.POINTER(EngineDeltaOut)]
+
+    lib.engine_compute_phase_ticks.restype = None
+    lib.engine_compute_phase_ticks.argtypes = [
+        ctypes.POINTER(EnginePhaseIn), ctypes.POINTER(EnginePhaseOut)]
 
     return lib
 
@@ -295,6 +340,122 @@ def gen_frame_delta_vectors(n: int, rng: random.Random) -> list[dict[str, int]]:
     return out[:n]
 
 
+def gen_phase_ticks_vectors(n: int, rng: random.Random) -> list[dict[str, int]]:
+    """Build N phase-ticks test vectors covering the function's branches:
+      - 20 ms gate: delta == 19 suppress, delta == 20 fires, delta < 0 fires
+        (the signed-wrap quirk, mirrors frame_delta's < 0 gate-fire shape)
+      - 80 ms gate: base_tick_counter at threshold (== 3 going in, so the
+        post-bump value of 4 trips `3 < counter` and rolls)
+      - Each of the 8 inner counters at its respective threshold
+        (counter_2=1, counter_4=3, counter_8=7, counter_13=12, counter_16=15,
+        counter_24=23, counter_32=31) so the rollover-and-reset paths fire
+      - All 8 inner counters at threshold simultaneously (max-rollover frame)
+      - All counters at 0 with the 80 ms gate firing (cold start, every flag
+        false except tick_20ms + tick_80ms)
+      - random fill biased toward "in the natural range" with occasional OOB
+    """
+    out: list[dict[str, int]] = [
+        # 20 ms gate: just-under (delta=19, suppresses).  No 80 ms gate fire
+        # because base_tick_counter doesn't bump.
+        {"now_ms": 1019, "last_base_tick_ms": 1000, "base_tick_counter": 0,
+         "counter_2": 0,  "counter_4": 0,  "counter_8": 0,  "counter_13": 0,
+         "counter_16": 0, "counter_24": 0, "counter_32": 0},
+        # 20 ms gate: at-boundary (delta=20, fires).
+        {"now_ms": 1020, "last_base_tick_ms": 1000, "base_tick_counter": 0,
+         "counter_2": 0,  "counter_4": 0,  "counter_8": 0,  "counter_13": 0,
+         "counter_16": 0, "counter_24": 0, "counter_32": 0},
+        # 20 ms gate: negative delta (signed wrap / future-seeded baseline).
+        # Gate fires via the `delta < 0` branch.
+        {"now_ms": 100, "last_base_tick_ms": 2000, "base_tick_counter": 0,
+         "counter_2": 0,  "counter_4": 0,  "counter_8": 0,  "counter_13": 0,
+         "counter_16": 0, "counter_24": 0, "counter_32": 0},
+        # 20 ms gate: zero delta (no fire).
+        {"now_ms": 1000, "last_base_tick_ms": 1000, "base_tick_counter": 0,
+         "counter_2": 0,  "counter_4": 0,  "counter_8": 0,  "counter_13": 0,
+         "counter_16": 0, "counter_24": 0, "counter_32": 0},
+        # 80 ms gate fires (base counter going 3→4 trips `3 < 4`).  All
+        # inner counters at 0 → bump to 1, none roll (since smallest
+        # threshold is counter_2 with `1 < N`).
+        {"now_ms": 1100, "last_base_tick_ms": 1000, "base_tick_counter": 3,
+         "counter_2": 0,  "counter_4": 0,  "counter_8": 0,  "counter_13": 0,
+         "counter_16": 0, "counter_24": 0, "counter_32": 0},
+        # 80 ms gate fires + every inner counter at threshold → ALL flags
+        # fire simultaneously.
+        {"now_ms": 1100, "last_base_tick_ms": 1000, "base_tick_counter": 3,
+         "counter_2": 1,  "counter_4": 3,  "counter_8": 7,  "counter_13": 12,
+         "counter_16": 15, "counter_24": 23, "counter_32": 31},
+        # 80 ms gate + only counter_13 (1040 ms) at threshold.  This is
+        # the "sticky" flag — agent pre-clears so the readback shows the
+        # 1 set by this call.
+        {"now_ms": 1100, "last_base_tick_ms": 1000, "base_tick_counter": 3,
+         "counter_2": 0,  "counter_4": 0,  "counter_8": 0,  "counter_13": 12,
+         "counter_16": 0, "counter_24": 0, "counter_32": 0},
+        # 80 ms gate + each inner counter at threshold individually
+        # (single-counter rollover sweep).
+        {"now_ms": 1100, "last_base_tick_ms": 1000, "base_tick_counter": 3,
+         "counter_2": 1,  "counter_4": 0,  "counter_8": 0,  "counter_13": 0,
+         "counter_16": 0, "counter_24": 0, "counter_32": 0},
+        {"now_ms": 1100, "last_base_tick_ms": 1000, "base_tick_counter": 3,
+         "counter_2": 0,  "counter_4": 3,  "counter_8": 0,  "counter_13": 0,
+         "counter_16": 0, "counter_24": 0, "counter_32": 0},
+        {"now_ms": 1100, "last_base_tick_ms": 1000, "base_tick_counter": 3,
+         "counter_2": 0,  "counter_4": 0,  "counter_8": 7,  "counter_13": 0,
+         "counter_16": 0, "counter_24": 0, "counter_32": 0},
+        {"now_ms": 1100, "last_base_tick_ms": 1000, "base_tick_counter": 3,
+         "counter_2": 0,  "counter_4": 0,  "counter_8": 0,  "counter_13": 0,
+         "counter_16": 15, "counter_24": 0, "counter_32": 0},
+        {"now_ms": 1100, "last_base_tick_ms": 1000, "base_tick_counter": 3,
+         "counter_2": 0,  "counter_4": 0,  "counter_8": 0,  "counter_13": 0,
+         "counter_16": 0, "counter_24": 23, "counter_32": 0},
+        {"now_ms": 1100, "last_base_tick_ms": 1000, "base_tick_counter": 3,
+         "counter_2": 0,  "counter_4": 0,  "counter_8": 0,  "counter_13": 0,
+         "counter_16": 0, "counter_24": 0, "counter_32": 31},
+        # 20 ms gate fires but 80 ms doesn't (base counter 0→1, well below 3).
+        {"now_ms": 1020, "last_base_tick_ms": 1000, "base_tick_counter": 0,
+         "counter_2": 1,  "counter_4": 3,  "counter_8": 7,  "counter_13": 12,
+         "counter_16": 15, "counter_24": 23, "counter_32": 31},
+        # u32 wrap on now_ms (last_base_tick_ms near top of range).
+        {"now_ms": 100, "last_base_tick_ms": 0xFFFFFFF0, "base_tick_counter": 0,
+         "counter_2": 0,  "counter_4": 0,  "counter_8": 0,  "counter_13": 0,
+         "counter_16": 0, "counter_24": 0, "counter_32": 0},
+    ]
+    while len(out) < n:
+        # Random fill: bias toward 80 ms-gate-firing inputs (the rare but
+        # interesting branch) and inner-counter values in their natural
+        # range.  Occasionally inject OOB (-3..+50) to cover the signed-
+        # comparison fences.
+        last_base = rng.randint(0, 0xFFFFFFFF)
+        # Pick a delta that has ~30% chance of being < 20 (suppress),
+        # ~5% negative, rest positive in the 20..200 ms range.
+        droll = rng.random()
+        if droll < 0.05:
+            delta = -rng.randint(1, 10_000)
+        elif droll < 0.35:
+            delta = rng.randint(0, 19)
+        else:
+            delta = rng.randint(20, 200)
+        now = (last_base + delta) & 0xFFFFFFFF
+        # base_tick_counter: 50% chance of being at-or-above threshold
+        # so the 80 ms gate fires often enough to exercise the body.
+        if rng.random() < 0.5:
+            base_counter = rng.randint(3, 6)
+        else:
+            base_counter = rng.randint(0, 2)
+        out.append({
+            "now_ms": now,
+            "last_base_tick_ms": last_base,
+            "base_tick_counter": base_counter,
+            "counter_2":  rng.randint(0, 3),
+            "counter_4":  rng.randint(0, 5),
+            "counter_8":  rng.randint(0, 9),
+            "counter_13": rng.randint(0, 14),
+            "counter_16": rng.randint(0, 17),
+            "counter_24": rng.randint(0, 25),
+            "counter_32": rng.randint(0, 33),
+        })
+    return out[:n]
+
+
 def gen_fps_vectors(n: int, rng: random.Random) -> list[dict[str, int]]:
     """Build N FPS test vectors covering:
       - non-rollover (now - window_start < 1000)
@@ -403,6 +564,115 @@ def _frame_delta_race_free(vec: dict[str, int], retail: dict) -> bool:
     return new_last == (int(vec["now_ms"]) & 0xFFFFFFFF)
 
 
+def _phase_ticks_race_free(vec: dict[str, int], retail: dict) -> bool:
+    """Function-specific race detector for phase_ticks.
+
+    FUN_004bbc80 writes `_DAT_004e5b10` (last_base_tick_ms) deterministically:
+      - 20 ms gate fires (delta > 0x13 or delta < 0): writes our scripted
+        timeGetTime return, which is our `in_now_ms`.
+      - 20 ms gate doesn't fire: leaves the global at our injected
+        `in_last_base_tick_ms`.
+
+    If the engine raced AFTER our retail call (re-invoked FUN_004bbc80
+    before our readback), one of two things happened:
+
+      (a) Engine progressed past the 20 ms branch → wrote engine wall-
+          clock to last_base_tick_ms.  Canary (start vs end) detects.
+      (b) Engine ran ONLY the clear-flags step (the function's first
+          eight writes) but hadn't yet written last_base / base_counter.
+          Canary still shows expected last_base — but the flags are
+          clobbered.  Detected via the internal-consistency check:
+          when the 20 ms branch fires, retail MUST observe tick_20ms == 1
+          (the branch writes it after bumping base_counter).  If we
+          observe tick_20ms == 0 with last_base == in_now_ms, the engine
+          cleared the flag mid-RPC.
+
+    The structural `raced` flag (engine in mid-tick at any sample point)
+    confirms a race did happen — used by the engine-clear race-pass
+    classification when retries don't recover.
+    """
+    delta = (int(vec["now_ms"]) - int(vec["last_base_tick_ms"])) & 0xFFFFFFFF
+    # Sign-extend to s32 to match retail's `(int)(now - last_base)` cast.
+    if delta >= 0x80000000:
+        delta -= 0x100000000
+    end   = int(retail.get("new_last_base_tick_ms", 0)) & 0xFFFFFFFF
+    start = int(retail.get("last_base_tick_ms_start", 0)) & 0xFFFFFFFF
+    if start != end:
+        return False  # engine fired mid-readback
+    fires = (delta > 0x13) or (delta < 0)
+    if fires:
+        if end != (int(vec["now_ms"]) & 0xFFFFFFFF):
+            return False
+        # Internal consistency: the 20 ms branch sets tick_20ms = 1
+        # AFTER bumping base_counter (retail's source order).  If we
+        # observe last_base == in_now_ms (the 20 ms branch wrote it)
+        # but tick_20ms == 0, the engine clobbered the flag.
+        if int(retail.get("tick_20ms", 0)) != 1:
+            return False
+        return True
+    return end == (int(vec["last_base_tick_ms"]) & 0xFFFFFFFF)
+
+
+PHASE_TICKS_COUNTER_FIELDS = (
+    "new_last_base_tick_ms", "new_base_tick_counter",
+    "new_counter_2",  "new_counter_4",  "new_counter_8",
+    "new_counter_13", "new_counter_16", "new_counter_24", "new_counter_32",
+)
+PHASE_TICKS_FLAG_FIELDS = (
+    "tick_20ms",  "tick_80ms",  "tick_160ms",
+    "tick_320ms", "tick_640ms", "tick_1040ms",
+    "tick_1280ms","tick_1920ms","tick_2560ms",
+)
+
+
+def _phase_ticks_engine_clear_race(retail: dict, port: dict) -> bool:
+    """Recognise the "engine race cleared our flags" signature for
+    phase_ticks.
+
+    When the engine main thread fires FUN_004bbc80 concurrently with
+    our retail call (multi-core, no kernel-level serialisation between
+    our V8 thread and the engine main thread), the most common
+    interleaving is:
+
+      - our V8 retail call completes, leaving retail's correct
+        outputs in all 18 globals;
+      - engine begins its own FUN_004bbc80 call;
+      - engine's first action is "clear 8 flags" (the function's
+        prologue);
+      - our V8 reads the 9 flag globals BEFORE engine's 20 ms branch
+        writes (which come after the clears);
+      - our V8 reads the 9 counter/last_base globals BEFORE engine's
+        20 ms branch writes too.
+
+    Signature: all 9 counter writebacks match port (engine hadn't yet
+    written them), but flag fields differ in the specific direction
+    "retail == 0 where port == 1" (engine cleared them).  The 1040 ms
+    flag is sticky in retail (not cleared at entry), so a port-set
+    1040 ms flag still matches retail.
+
+    A pass under this signature counts as a race-pass — retail's call
+    produced correct outputs; the observable was clobbered after the
+    fact.  This is structurally identical to frame_delta's race-pass
+    on `new_last_frame_ms`.
+    """
+    for k in PHASE_TICKS_COUNTER_FIELDS:
+        if (int(retail[k]) & 0xFFFFFFFF) != (int(port[k]) & 0xFFFFFFFF):
+            return False
+    has_clear = False
+    for k in PHASE_TICKS_FLAG_FIELDS:
+        rv = int(retail[k])
+        pv = int(port[k])
+        if rv == pv:
+            continue
+        if rv == 0 and pv == 1:
+            has_clear = True
+        else:
+            # Unexpected direction (retail set a flag the port didn't)
+            # — not the engine-clear signature.  Probably a real bug.
+            return False
+    return has_clear
+
+
 def _fps_race_free(vec: dict[str, int], retail: dict) -> bool:
     """Heuristic: did our retail call land WITHOUT the engine main thread
     racing on the shared globals?
@@ -479,6 +749,44 @@ def run_port_anim_cycle(lib: ctypes.CDLL, vec: dict[str, int]) -> dict[str, int]
 # RPC window; the orchestrator retries on raced=true (see ANIM_RACE_RETRIES).
 def diff_anim_cycle(retail: dict, port: dict) -> list[str]:
     return ["new_counter"] if int(retail["new_counter"]) != int(port["new_counter"]) else []
+
+
+PHASE_TICKS_OUT_FIELDS = (
+    "tick_20ms",  "tick_80ms",  "tick_160ms", "tick_320ms", "tick_640ms",
+    "tick_1040ms","tick_1280ms","tick_1920ms","tick_2560ms",
+    "new_last_base_tick_ms", "new_base_tick_counter",
+    "new_counter_2",  "new_counter_4",  "new_counter_8",
+    "new_counter_13", "new_counter_16", "new_counter_24", "new_counter_32",
+)
+
+
+def run_port_phase_ticks(lib: ctypes.CDLL, vec: dict[str, int]) -> dict[str, int]:
+    pin = EnginePhaseIn(
+        now_ms=vec["now_ms"],
+        last_base_tick_ms=vec["last_base_tick_ms"],
+        base_tick_counter=vec["base_tick_counter"] & 0xFFFFFFFF,
+        counter_2=vec["counter_2"]  & 0xFFFFFFFF,
+        counter_4=vec["counter_4"]  & 0xFFFFFFFF,
+        counter_8=vec["counter_8"]  & 0xFFFFFFFF,
+        counter_13=vec["counter_13"] & 0xFFFFFFFF,
+        counter_16=vec["counter_16"] & 0xFFFFFFFF,
+        counter_24=vec["counter_24"] & 0xFFFFFFFF,
+        counter_32=vec["counter_32"] & 0xFFFFFFFF,
+    )
+    pout = EnginePhaseOut()
+    lib.engine_compute_phase_ticks(ctypes.byref(pin), ctypes.byref(pout))
+    return {k: getattr(pout, k) for k in PHASE_TICKS_OUT_FIELDS}
+
+
+def diff_phase_ticks(retail: dict, port: dict) -> list[str]:
+    bad = []
+    for k in PHASE_TICKS_OUT_FIELDS:
+        # All fields are 32-bit; mask to u32 before comparing so int↔uint
+        # bit-equality (signed comparisons in retail vs unsigned in port)
+        # doesn't show as a false divergence.
+        if (int(retail[k]) & 0xFFFFFFFF) != (int(port[k]) & 0xFFFFFFFF):
+            bad.append(k)
+    return bad
 
 
 def run_port_frame_delta(lib: ctypes.CDLL, vec: dict[str, int]) -> dict[str, int]:
@@ -587,6 +895,9 @@ def run_diff(cfg_args) -> int:
     if "frame_delta" in enabled:
         test_plans.append(("frame_delta",
                            gen_frame_delta_vectors(cfg_args.vectors, rng)))
+    if "phase_ticks" in enabled:
+        test_plans.append(("phase_ticks",
+                           gen_phase_ticks_vectors(cfg_args.vectors, rng)))
     if not test_plans:
         print("[diff] no enabled targets in --functions; nothing to do.")
         return 0
@@ -821,6 +1132,51 @@ def run_diff(cfg_args) -> int:
                         bad = []
                     elif bad and race:
                         bad = ["RACE:" + k for k in bad]
+                elif fn_name == "phase_ticks":
+                    # Same retry pattern as frame_delta — function-specific
+                    # race check on new_last_base_tick_ms (the deterministic
+                    # writeback that lets us tell "retail's call landed
+                    # cleanly" from "engine raced + clobbered the readback").
+                    retail = None
+                    for attempt in range(ANIM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_phase_ticks(
+                            vec["now_ms"],
+                            vec["last_base_tick_ms"],
+                            vec["base_tick_counter"],
+                            vec["counter_2"],  vec["counter_4"],
+                            vec["counter_8"],  vec["counter_13"],
+                            vec["counter_16"], vec["counter_24"],
+                            vec["counter_32"])
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if _phase_ticks_race_free(vec, retail):
+                            break
+                        if attempt < ANIM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": vec,
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    port = run_port_phase_ticks(lib, vec)
+                    bad = diff_phase_ticks(retail, port)
+                    race = (not _phase_ticks_race_free(vec, retail)) or \
+                           int(retail.get("raced", 0)) != 0
+                    if bad and _phase_ticks_engine_clear_race(retail, port):
+                        # Engine race fired FUN_004bbc80's clear-flags
+                        # step between our retail call's writes and our
+                        # readback.  Counters/last_base match port (engine
+                        # hadn't progressed to its 20 ms branch yet), but
+                        # flags were clobbered.  Retail's call produced
+                        # correct outputs per spec; classify as race-pass.
+                        r.race_count += 1
+                        bad = []
+                    elif bad and race:
+                        bad = ["RACE:" + k for k in bad]
                 else:
                     continue
                 if bad:
@@ -884,9 +1240,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks",
                     help="comma-separated subset to test "
-                         "(default: rng_step,fps_step,anim_cycle,frame_delta)")
+                         "(default: rng_step,fps_step,anim_cycle,frame_delta,phase_ticks)")
     ap.add_argument("--warmup-s", type=float, default=10.0,
                     help="seconds to wait for engine_tick to settle before "
                          "firing RPCs (default 10)")

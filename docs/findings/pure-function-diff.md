@@ -24,6 +24,7 @@ in our port that would corrupt the engine on boot is caught immediately.
 | `engine_compute_fps`          | `FUN_004b27bf`    | `src/engine_fps.c`        | rolling 1-sec FPS counter (2× `timeGetTime`)  |
 | `engine_compute_anim_cycle`   | `FUN_00451f1a`    | `src/engine_anim_cycle.c` | 16-frame anim-cycle counter bump              |
 | `engine_compute_frame_delta`  | `FUN_004b20ed`    | `src/engine_delta.c`      | frame delta with 30 ms low-pass gate          |
+| `engine_compute_phase_ticks`  | `FUN_004bbc80`    | `src/engine_phase.c`      | 9-flag animation phase tick (10 in, 18 out)   |
 
 Each has a host-side unit-test file under `tests/test_engine_*.c`; the
 diff test complements those by proving they match retail behavior for
@@ -46,10 +47,11 @@ Knobs (full list in `--help`):
   - `--warmup-s N` — how long to wait for engine_tick to start ticking
     before firing RPCs (default 10)
 
-Latest verified run: **500/500 pass on all four functions** (2026-05-24,
-retail build via cutestation.soy).  FPS reported 11 race-passes — see
-"Race classification" below — RNG / anim-cycle / frame-delta saw zero
-races on this run, but the same machinery applies if they ever surface.
+Latest verified run: **500/500 pass on all five functions** (2026-05-24,
+retail build via cutestation.soy).  FPS reported 16 race-passes,
+phase_ticks reported 2 race-passes — see "Race classification" below.
+RNG / anim-cycle / frame-delta saw zero races on this run, but the same
+machinery applies if they ever surface.
 
 ## Agent shape
 
@@ -162,6 +164,20 @@ Detector shapes per-target:
     port.new_frames_this_second + N` while everything else (including the
     last_render anchor that `_fps_race_free` checks) matches.  Classified
     as race-pass.
+  - **phase_ticks** (`_phase_ticks_engine_clear_race`): the *engine-clear*
+    signature — same shape as frame_delta's race-pass but adapted for
+    FUN_004bbc80's 18-output readback.  Because the retail function's
+    first action is "clear 8 flags at entry", and our readback reads
+    flags + counters + last_base in sequence, the dominant race shape is:
+    engine begins a concurrent FUN_004bbc80 call AFTER our retail's
+    writes; engine's clear-step zeroes our flags BEFORE engine progresses
+    to its 20 ms branch; our V8 reads flags (cleared) + counters (still
+    matching port — engine hadn't bumped them yet) + last_base (still
+    matching port — engine hadn't written it yet).  The classifier
+    accepts a race-pass when (a) all 9 counter/last_base fields match
+    port AND (b) every flag mismatch is in the direction `retail=0,
+    port=1` (engine cleared what port set).  The sticky 1040 ms flag
+    survives the race because retail's clear-step doesn't touch it.
 
 ### Structural race detection — engine_in_tick + tick_count
 
@@ -190,12 +206,43 @@ The orchestrator uses the function-specific `_frame_delta_race_free`
 detector instead; the structural `raced` is still returned for
 diagnostics but doesn't drive the retry decision.
 
+For **phase_ticks** the structural signal is similarly too aggressive
+for retry-decision use.  The retry decision uses an enriched
+`_phase_ticks_race_free` that combines the canary (`last_base_tick_ms`
+read first AND last in the readback, must equal expected) with an
+internal-consistency check (if the 20 ms branch fired — `last_base ==
+in_now_ms` — then `tick_20ms` MUST be 1; otherwise the engine cleared
+it between retail's set and our flag readback).  The structural `raced`
+flag is returned and used as a secondary OR-in for the race-pass
+classifier's gate, so a port-side bug that happens to mimic the
+engine-clear signature can't slip through unless the engine actually
+ticked during the RPC.
+
+### Concurrent-execution races on multi-core
+
+Both anim_cycle and frame_delta were initially modelled as "engine
+fires its call AFTER ours, before our readback" races (sequential
+interleaving).  Phase_ticks surfaced a different mode: on a multi-core
+host the engine main thread can run FUN_004bbc80 *concurrently* with
+our V8 thread's NativeFunction call — same function, two threads,
+unsynchronised memory writes.
+
+The most-visible signature is the one above (engine-clear race): our
+V8 retail returns, engine's overlapping call has just finished its
+clear-step but not yet its 20 ms branch writes, our readback observes
+the inconsistent intermediate.  The fix is detection + race-pass
+classification, not synchronisation — both `Interceptor.attach onEnter`
+spin and `SuspendThread` deadlock (see the "engine-thread race" block
+above for why).
+
 ## Host-side shared library
 
 `tests/Makefile` grew a `diff` target that builds
-`tests/build/libengine_diff.so` from `src/engine_rng.c` +
-`src/engine_fps.c` with `-fPIC`, *without* ASan/UBSan (an
-ASan-instrumented .so can't be `dlopen`'d from a non-ASan Python).
+`tests/build/libengine_diff.so` from the diff-target sources
+(`src/engine_rng.c`, `src/engine_fps.c`, `src/engine_anim_cycle.c`,
+`src/engine_delta.c`, `src/engine_phase.c`) with `-fPIC`, *without*
+ASan/UBSan (an ASan-instrumented .so can't be `dlopen`'d from a
+non-ASan Python).
 
 `tools/diff_test.py`'s ctypes bindings mirror `src/engine.h`'s
 `engine_rng_in_t` / `engine_rng_out_t` / `engine_fps_in_t` /

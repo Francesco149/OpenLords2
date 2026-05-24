@@ -44,11 +44,12 @@ DEPS := $(OBJS:.o=.d)
 OUT  := build/run_tests
 
 # Differential-test shared library — host-built, loaded via ctypes by
-# tools/diff_test.py.  Same source as $(SRCS_UNDER_TEST) for the two diff
-# targets (engine_rng.c + engine_fps.c), but compiled WITHOUT sanitizers
-# (ASan-instrumented .so can't be dlopen'd from a non-ASan Python).
+# tools/diff_test.py.  Same source as $(SRCS_UNDER_TEST) for the diff
+# targets currently wired in, but compiled WITHOUT sanitizers (ASan-
+# instrumented .so can't be dlopen'd from a non-ASan Python).
 DIFF_SRCS := ../src/engine_rng.c ../src/engine_fps.c \
-             ../src/engine_anim_cycle.c ../src/engine_delta.c
+             ../src/engine_anim_cycle.c ../src/engine_delta.c \
+             ../src/engine_phase.c
 DIFF_OBJS := $(addprefix build/diff_,$(notdir $(DIFF_SRCS:.c=.o)))
 DIFF_OUT  := build/libengine_diff.so
 DIFF_CFLAGS := -std=c11 -O2 -fPIC -Wall -Wextra -Wno-unused-parameter -I../src
