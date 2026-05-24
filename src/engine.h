@@ -235,4 +235,136 @@ typedef struct {
 void engine_compute_anim_cycle(const engine_anim_cycle_in_t *in,
                                engine_anim_cycle_out_t *out);
 
+/* ─── mouse-input resolver (port of FUN_004b191e) ──────────────────
+ *
+ * Per-iteration mouse-state update.  Inputs: a screen-space cursor
+ * position (retail calls GetCursorPos), wall-clock timestamp, the
+ * WndProc-mirrored button + dblclk bitmasks, viewport bounds, and
+ * the prior frame's resolved input state.  Outputs: motion event
+ * flag, button-edge flags, 300 ms delayed-single-click events,
+ * double-click events, cursor position in game-coord space, and
+ * a small set of state-writeback fields the wrapper feeds back
+ * into the file-static mirrors.
+ *
+ * Pure function — every input explicit, every state mutation in out.
+ * See engine_input.c for the per-field commentary, helpers, and the
+ * shared-300 ms-timer quirk between LMB and RMB.
+ */
+typedef struct {
+    /* Win32-provided inputs (wrapper fills from GetCursorPos +
+     * timeGetTime). */
+    int      cursor_screen_x;
+    int      cursor_screen_y;
+    uint32_t now_ms;
+
+    /* Mode flag.  retail DAT_0057cac4 — gates the per-frame cursor-
+     * cache overwrite (cache_enabled==0 means the WM_MOUSEMOVE-cached
+     * client-space coords carry through; ==1 means the screen-space
+     * GetCursorPos result is stored instead). */
+    int      cursor_cache_enabled;
+
+    /* WndProc-mirrored event bitmasks.  bit 0 = LMB, bit 1 = RMB. */
+    uint8_t  pending_dblclk;     /* g_mouse_dblclk (DAT_004eada1) */
+    uint8_t  button_state;       /* g_mouse_buttons (DAT_004eabc2) */
+
+    /* Viewport bounds — screen-space rectangle the cursor is
+     * mapped against.  retail DAT_004ea180..18c (g_client_screen). */
+    int      viewport_x0;
+    int      viewport_y0;
+    int      viewport_x1;
+    int      viewport_y1;
+    /* Viewport extents in game-coord space.  retail DAT_004eb274 / DAT_004eac4c. */
+    int      viewport_game_w;
+    int      viewport_game_h;
+
+    /* Prior cached cursor (WM_MOUSEMOVE-tracked).  retail DAT_004eabbe/c0. */
+    int16_t  cached_cursor_x;
+    int16_t  cached_cursor_y;
+    /* Prior game-coord cursor.  retail DAT_004e65fc / DAT_004e65f4. */
+    int      prev_game_x;
+    int      prev_game_y;
+    /* Prior resolved LMB/RMB state (0 or 1).  retail DAT_004e65cc / DAT_004e8780. */
+    int      prev_lmb;
+    int      prev_rmb;
+
+    /* Pending-click timer state.  retail DAT_004e65e8 / DAT_004e65c4. */
+    int      lmb_timer_armed;
+    int      rmb_timer_armed;
+    /* Shared click-timer baseline.  retail _DAT_004e59f8 — both LMB
+     * and RMB releases reset this; both expiries read it.  Quirk
+     * preserved (see engine_input.c). */
+    uint32_t click_timer_ms;
+    /* Last-motion timestamp.  retail _DAT_004e59f4. */
+    uint32_t motion_last_ms;
+    /* Click-eligibility latch.  retail DAT_004e65f0.  Cleared on
+     * release-into-click; presumably set elsewhere on press over
+     * an interactive UI region (writer not yet ported).  Today our
+     * wrapper hardcodes it to 0 — no UI yet — so the click-arming
+     * branches stay inert. */
+    int      click_eligible;
+    /* Prior last-click coords.  retail DAT_004eac04 / DAT_004eac08.
+     * Carried through unchanged on non-click frames; overwritten in
+     * the click-armed release branches. */
+    int      prev_last_click_x;
+    int      prev_last_click_y;
+} engine_input_in_t;
+
+typedef struct {
+    /* Per-frame raw cursor (always written). */
+    int      raw_cursor_x;            /* DAT_004e6594 */
+    int      raw_cursor_y;            /* DAT_004e6598 */
+
+    /* Cached cursor — either freshly written from cursor_screen_x/y
+     * (cursor_cache_enabled) or carried through unchanged. */
+    int16_t  new_cached_cursor_x;     /* DAT_004eabbe */
+    int16_t  new_cached_cursor_y;     /* DAT_004eabc0 */
+
+    /* Snapshots of prior state for downstream consumers.  Retail
+     * writes these unconditionally before computing the new state. */
+    int      prev_game_x_snapshot;    /* DAT_004ea198 */
+    int      prev_game_y_snapshot;    /* DAT_004ea190 */
+    int      prev_lmb_snapshot;       /* DAT_004eabbc */
+    int      prev_rmb_snapshot;       /* DAT_004eabc3 */
+
+    /* Resolved game-coord cursor for this frame. */
+    int      game_x;                  /* DAT_004e65fc */
+    int      game_y;                  /* DAT_004e65f4 */
+
+    /* Per-frame event flags (all 0 unless the corresponding edge
+     * fired this frame). */
+    int      mouse_event;             /* DAT_004ea4b0 — any mouse activity */
+    int      button_changed;          /* _DAT_004eb264 — LMB or RMB edge */
+    int      lmb_newly_pressed;       /* DAT_004eafb4 */
+    int      lmb_newly_released;      /* DAT_004e65d8 */
+    int      rmb_newly_pressed;       /* DAT_004eabe0 */
+    int      rmb_newly_released;      /* DAT_004e6900 */
+    int      lmb_click_fired;         /* DAT_004eabf0 — 300 ms expiry */
+    int      rmb_click_fired;         /* DAT_004ea51c — 300 ms expiry */
+    int      lmb_dblclk;              /* DAT_004eabc5 — from WndProc dblclk bit */
+    int      rmb_dblclk;              /* DAT_004ea4b4 */
+
+    /* Resolved LMB/RMB state (0 or 1) — cached for next frame. */
+    int      new_lmb;                 /* DAT_004e65cc */
+    int      new_rmb;                 /* DAT_004e8780 */
+
+    /* Pending-click timer writebacks. */
+    int      new_lmb_timer_armed;     /* DAT_004e65e8 */
+    int      new_rmb_timer_armed;     /* DAT_004e65c4 */
+    uint32_t new_click_timer_ms;      /* _DAT_004e59f8 */
+    uint32_t new_motion_last_ms;      /* _DAT_004e59f4 */
+    /* Idle ms since the last motion (0 on motion frames). */
+    uint32_t motion_idle_ms;          /* _DAT_004eabfc */
+
+    /* Last-click coordinates (in game-coord space).  Updated on
+     * release-into-click; otherwise carried through. */
+    int      last_click_x;            /* DAT_004eac04 */
+    int      last_click_y;            /* DAT_004eac08 */
+
+    /* Click-eligibility writeback (cleared on release-into-click). */
+    int      new_click_eligible;      /* DAT_004e65f0 */
+} engine_input_out_t;
+
+void engine_compute_input_state(const engine_input_in_t *in,
+                                engine_input_out_t *out);
+
 #endif /* OPENLORDS2_ENGINE_H */

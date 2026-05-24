@@ -132,13 +132,18 @@ static uint32_t  g_base_time_ms;
  * ---------------------------------------------------------------- */
 
 /* Mouse-coord cache — retail DAT_004eabbe (lo) / DAT_004eabc0 (hi).
- * Updated by WM_MOUSEMOVE; read by sim/render code (not ported yet). */
-static int16_t g_mouse_x;
-static int16_t g_mouse_y;
+ * Updated by WM_MOUSEMOVE; consumed each iteration by
+ * engine_tick_input_step (the FUN_004b191e port) in engine.c, so
+ * non-static — see the extern decls in engine.c. */
+int16_t g_mouse_x;
+int16_t g_mouse_y;
 /* Mouse button-down bitmask — retail DAT_004eabc2.  bit0=LMB, bit1=RMB. */
-static uint8_t g_mouse_buttons;
-/* Double-click latch — retail DAT_004eada1.  bit0=LMB-dbl, bit1=RMB-dbl. */
-static uint8_t g_mouse_dblclk;
+uint8_t g_mouse_buttons;
+/* Double-click latch — retail DAT_004eada1.  bit0=LMB-dbl, bit1=RMB-dbl.
+ * Cleared by engine_tick_input_step after consuming the bits each
+ * iteration (matches retail's `DAT_004eada1 = 0` at the end of
+ * FUN_004b191e). */
+uint8_t g_mouse_dblclk;
 /* Ctrl held — retail DAT_004df3a8.  Set by VK_CONTROL down, cleared by up. */
 static int     g_ctrl_down;
 
@@ -156,8 +161,10 @@ static int     g_surface_lost;
  * each value and which retail FUN_xxxxx consumes it. */
 
 /* Client-area RECT in *screen* coords — retail DAT_004ea180/+4/+8/+c.
- * Recomputed on WM_MOVE/WM_SIZE.  Used by DDraw blit destinations. */
-static RECT    g_client_screen;
+ * Recomputed on WM_MOVE/WM_SIZE.  Used by DDraw blit destinations
+ * AND by engine_tick_input_step (the FUN_004b191e port) for the
+ * viewport→game-coord mapping — non-static so engine.c can extern. */
+RECT    g_client_screen;
 
 /* Cached screen metrics from WM_DISPLAYCHANGE.
  *   g_screen_change_cx / cy mirror DAT_004e65a0 / DAT_004ea838.

@@ -126,6 +126,29 @@ struct test_case {
     X(engine_anim_cycle_14_to_15_no_wrap) \
     X(engine_anim_cycle_full_16_cycle) \
     X(engine_anim_cycle_no_tick_with_max_counter) \
+    \
+    X(engine_input_raw_cursor_always_written) \
+    X(engine_input_cache_update_gated_on_flag) \
+    X(engine_input_cache_carries_through_when_disabled) \
+    X(engine_input_game_coord_1to1_mapping) \
+    X(engine_input_game_coord_scaled) \
+    X(engine_input_game_coord_div_by_zero_clamp) \
+    X(engine_input_default_clears_event_flags) \
+    X(engine_input_dblclk_bit0_lmb) \
+    X(engine_input_dblclk_bit1_rmb) \
+    X(engine_input_button_state_decoded) \
+    X(engine_input_lmb_press_edge) \
+    X(engine_input_lmb_release_always_sets_released_flag) \
+    X(engine_input_lmb_release_with_eligibility_arms_timer) \
+    X(engine_input_rmb_release_with_eligibility_arms_rmb_timer) \
+    X(engine_input_click_expiry_lmb_fires) \
+    X(engine_input_click_expiry_boundary_at_300_does_not_fire) \
+    X(engine_input_shared_timer_baseline_quirk) \
+    X(engine_input_motion_x_change_sets_event) \
+    X(engine_input_motion_y_change_sets_event) \
+    X(engine_input_no_motion_computes_idle_ms) \
+    X(engine_input_prev_snapshots_always_written) \
+    X(engine_input_last_click_carries_through_no_click) \
     /* end */
 
 /* Emit extern decls. */

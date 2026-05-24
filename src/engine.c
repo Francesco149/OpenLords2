@@ -110,6 +110,73 @@ static int      g_frame_delta_ms;              /* DAT_004ea128 */
  * spins but nothing reads it. */
 static int g_anim_cycle_counter;               /* DAT_0053e9a4 */
 
+/* ─── Mouse-input resolver mirrors (FUN_004b191e state) ────────────
+ *
+ * The wrapper engine_tick_input_step bundles all this into the input
+ * struct, calls engine_compute_input_state, writes outputs back.
+ *
+ * g_mouse_x / g_mouse_y / g_mouse_buttons / g_mouse_dblclk live in
+ * main.c (owned by the WndProc that writes them); externed below.
+ * g_client_screen too — same reason.
+ *
+ * Everything else lands here as file-static because engine_input is
+ * the sole reader (and writer) outside of save/load.  The names
+ * mirror retail's role rather than the raw DAT_* number, for
+ * grep-readability across the wrapper + pure function. */
+extern int16_t g_mouse_x;            /* retail DAT_004eabbe */
+extern int16_t g_mouse_y;            /* retail DAT_004eabc0 */
+extern uint8_t g_mouse_buttons;      /* retail DAT_004eabc2 */
+extern uint8_t g_mouse_dblclk;       /* retail DAT_004eada1 */
+
+/* Client RECT lives in main.c.  Don't pull windows.h in just for
+ * the type — forward-declare the struct and extern by it.  Field
+ * layout is fixed by the Win32 ABI: { LONG left, top, right, bottom }. */
+struct tagRECT;
+extern struct tagRECT g_client_screen;
+
+static int g_input_raw_cursor_x;            /* DAT_004e6594 */
+static int g_input_raw_cursor_y;            /* DAT_004e6598 */
+static int g_input_prev_game_x_snap;        /* DAT_004ea198 */
+static int g_input_prev_game_y_snap;        /* DAT_004ea190 */
+static int g_input_prev_lmb_snap;           /* DAT_004eabbc */
+static int g_input_prev_rmb_snap;           /* DAT_004eabc3 */
+static int g_input_game_x;                  /* DAT_004e65fc */
+static int g_input_game_y;                  /* DAT_004e65f4 */
+static int g_input_lmb;                     /* DAT_004e65cc */
+static int g_input_rmb;                     /* DAT_004e8780 */
+static int g_input_mouse_event;             /* DAT_004ea4b0 */
+static int g_input_button_changed;          /* _DAT_004eb264 */
+static int g_input_lmb_newly_pressed;       /* DAT_004eafb4 */
+static int g_input_lmb_newly_released;      /* DAT_004e65d8 */
+static int g_input_rmb_newly_pressed;       /* DAT_004eabe0 */
+static int g_input_rmb_newly_released;      /* DAT_004e6900 */
+static int g_input_lmb_click_fired;         /* DAT_004eabf0 */
+static int g_input_rmb_click_fired;         /* DAT_004ea51c */
+static int g_input_lmb_dblclk;              /* DAT_004eabc5 */
+static int g_input_rmb_dblclk;              /* DAT_004ea4b4 */
+static int g_input_lmb_timer_armed;         /* DAT_004e65e8 */
+static int g_input_rmb_timer_armed;         /* DAT_004e65c4 */
+static uint32_t g_input_click_timer_ms;     /* _DAT_004e59f8 */
+static uint32_t g_input_motion_last_ms;     /* _DAT_004e59f4 */
+static uint32_t g_input_motion_idle_ms;     /* _DAT_004eabfc */
+static int g_input_last_click_x;            /* DAT_004eac04 */
+static int g_input_last_click_y;            /* DAT_004eac08 */
+/* Viewport game-coord extents.  retail DAT_004eb274 / DAT_004eac4c.
+ * Mirror the values the UI subsystem (unported) writes — 0 today,
+ * which makes percent_ratio return 0 and pins game_x/y to 0.  When
+ * the UI lands, those globals get producers and these mirrors take
+ * the corresponding writebacks. */
+static int g_input_viewport_game_w;         /* DAT_004eb274 */
+static int g_input_viewport_game_h;         /* DAT_004eac4c */
+/* Cache-enabled mode flag.  retail DAT_0057cac4.  Writer not yet
+ * ported (lives in the cursor-capture path of the UI subsystem);
+ * defaults to 0 = use WM_MOUSEMOVE-cached client-space coords. */
+static int g_input_cursor_cache_enabled;    /* DAT_0057cac4 */
+/* Click-eligibility latch.  retail DAT_004e65f0.  Set elsewhere
+ * (on press over an interactive UI region — writer unported);
+ * cleared by engine_compute_input_state on release-into-click. */
+static int g_input_click_eligible;          /* DAT_004e65f0 */
+
 static uint32_t g_phase_last_base_tick_ms;     /* _DAT_004e5b10 */
 static uint32_t g_phase_base_tick_counter;     /* DAT_005aeb2c */
 static uint32_t g_phase_counter_2;             /* DAT_0058feb4 */
@@ -172,6 +239,91 @@ static void engine_tick_anim_cycle_step(void)
     engine_compute_anim_cycle(&in, &out);
 
     g_anim_cycle_counter = out.new_counter;
+}
+
+/* Win32 wrapper around engine_compute_input_state — reads
+ * GetCursorPos + timeGetTime + the live globals, runs the pure
+ * function, writes outputs back into the file-static mirrors, then
+ * clears g_mouse_dblclk (matches retail's `DAT_004eada1 = 0` at the
+ * end of FUN_004b191e).  Runs once per engine_tick iteration, at the
+ * head of the render phase (right after the sim sub-step loop). */
+static void engine_tick_input_step(void)
+{
+    POINT cursor;
+    GetCursorPos(&cursor);
+
+    /* g_client_screen is a RECT — { LONG left, top, right, bottom }.
+     * Reach in through the forward-declared struct with a local cast
+     * that knows the layout, so the rest of the file doesn't need
+     * RECT. */
+    const LONG *rect = (const LONG *)&g_client_screen;
+
+    engine_input_in_t  in  = {0};
+    engine_input_out_t out = {0};
+
+    in.cursor_screen_x      = cursor.x;
+    in.cursor_screen_y      = cursor.y;
+    in.now_ms               = timeGetTime();
+    in.cursor_cache_enabled = g_input_cursor_cache_enabled;
+    in.pending_dblclk       = g_mouse_dblclk;
+    in.button_state         = g_mouse_buttons;
+    in.viewport_x0          = rect[0];   /* left */
+    in.viewport_y0          = rect[1];   /* top */
+    in.viewport_x1          = rect[2];   /* right */
+    in.viewport_y1          = rect[3];   /* bottom */
+    in.viewport_game_w      = g_input_viewport_game_w;
+    in.viewport_game_h      = g_input_viewport_game_h;
+    in.cached_cursor_x      = g_mouse_x;
+    in.cached_cursor_y      = g_mouse_y;
+    in.prev_game_x          = g_input_game_x;
+    in.prev_game_y          = g_input_game_y;
+    in.prev_lmb             = g_input_lmb;
+    in.prev_rmb             = g_input_rmb;
+    in.lmb_timer_armed      = g_input_lmb_timer_armed;
+    in.rmb_timer_armed      = g_input_rmb_timer_armed;
+    in.click_timer_ms       = g_input_click_timer_ms;
+    in.motion_last_ms       = g_input_motion_last_ms;
+    in.click_eligible       = g_input_click_eligible;
+    in.prev_last_click_x    = g_input_last_click_x;
+    in.prev_last_click_y    = g_input_last_click_y;
+
+    engine_compute_input_state(&in, &out);
+
+    g_input_raw_cursor_x       = out.raw_cursor_x;
+    g_input_raw_cursor_y       = out.raw_cursor_y;
+    g_mouse_x                  = out.new_cached_cursor_x;
+    g_mouse_y                  = out.new_cached_cursor_y;
+    g_input_prev_game_x_snap   = out.prev_game_x_snapshot;
+    g_input_prev_game_y_snap   = out.prev_game_y_snapshot;
+    g_input_prev_lmb_snap      = out.prev_lmb_snapshot;
+    g_input_prev_rmb_snap      = out.prev_rmb_snapshot;
+    g_input_game_x             = out.game_x;
+    g_input_game_y             = out.game_y;
+    g_input_mouse_event        = out.mouse_event;
+    g_input_button_changed     = out.button_changed;
+    g_input_lmb_newly_pressed  = out.lmb_newly_pressed;
+    g_input_lmb_newly_released = out.lmb_newly_released;
+    g_input_rmb_newly_pressed  = out.rmb_newly_pressed;
+    g_input_rmb_newly_released = out.rmb_newly_released;
+    g_input_lmb_click_fired    = out.lmb_click_fired;
+    g_input_rmb_click_fired    = out.rmb_click_fired;
+    g_input_lmb_dblclk         = out.lmb_dblclk;
+    g_input_rmb_dblclk         = out.rmb_dblclk;
+    g_input_lmb                = out.new_lmb;
+    g_input_rmb                = out.new_rmb;
+    g_input_lmb_timer_armed    = out.new_lmb_timer_armed;
+    g_input_rmb_timer_armed    = out.new_rmb_timer_armed;
+    g_input_click_timer_ms     = out.new_click_timer_ms;
+    g_input_motion_last_ms     = out.new_motion_last_ms;
+    g_input_motion_idle_ms     = out.motion_idle_ms;
+    g_input_last_click_x       = out.last_click_x;
+    g_input_last_click_y       = out.last_click_y;
+    g_input_click_eligible     = out.new_click_eligible;
+
+    /* Consume the pending dblclk bits — retail's final statement
+     * `DAT_004eada1 = 0` (unconditional, regardless of whether dblclk
+     * fired this frame). */
+    g_mouse_dblclk = 0;
 }
 
 static void engine_tick_phase_step(void)
@@ -384,6 +536,21 @@ void engine_tick(void)
          * body needs to fill in. */
         (void)i;
     }
+
+    /* Render-phase head — retail calls (in order):
+     *   FUN_0049a3e6  surveyed: gated on DAT_004eac50 == 0x24, which
+     *                 is never written anywhere in retail.  Dead
+     *                 branch.  Not ported.  See findings doc.
+     *   FUN_004b1de0  surveyed: empty body (`return;`).  Not ported —
+     *                 same disposition as FUN_004b0aaa from pre-tick.
+     *   FUN_004b191e  ported.  Mouse-input state resolver — runs
+     *                 GetCursorPos, edge-detects the WndProc-mirrored
+     *                 button bits, fires 300 ms delayed-single-click
+     *                 events.  All outputs land in file-static
+     *                 mirrors with no downstream consumer in the
+     *                 drop-in yet (the UI dispatcher reads them in
+     *                 retail). */
+    engine_tick_input_step();
 
     /* TODO(render): render-phase tail.  Retail dispatches ~30
      * subsystem renders here based on g_current_screen, then the
