@@ -7,6 +7,125 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — Phase 2 frame capture (DDraw back surface → BMP)
+
+Picked option 1 from the prior entry's "What's next": hook the retail
+engine's DDraw back buffer and dump the contents as a BMP per virtual
+second.  Pairs with the FPS sampler (riding the same cum-secs
+heartbeat), gives us the first viewable artifacts from the harness
+without yet having to port any renderer code.
+
+### Agent changes (`tools/frida/openlords2-agent.js`)
+
+- Three new `ADDR` entries pointing at the engine's DDraw surface +
+  palette globals (`var_dd_primary` `0x004eabd0`, `var_dd_back`
+  `0x004eafac`, `var_dd_palette` `0x004df288`).  These were already
+  reverse-engineered in `docs/findings/ddraw-dsound-bringup.md`; the
+  agent reads them directly rather than hooking
+  `IDirectDraw::CreateSurface` to discover them — three pointer reads
+  is cheaper than vtable interception, and the engine never
+  recreates these mid-run.
+- New `captureFrameOnce()` — lazy-builds three `NativeFunction`
+  stubs (`IDirectDrawSurface::Lock` slot 25 / `Unlock` slot 32 /
+  `IDirectDrawPalette::GetEntries` slot 4 — slot numbers documented
+  in `ddraw-dsound-bringup.md`), Locks the back with
+  `DDLOCK_WAIT | DDLOCK_READONLY`, reads the `DDSURFACEDESC`
+  (width / height / `lPitch` / `lpSurface`), GetEntries-fills a 256-
+  entry `PALETTEENTRY` scratch, row-copies pitched indices into a
+  tight `width*height` buffer, and emits a `send({kind:'frame', …},
+  binaryPayload)`.  Payload shape: `[u32 w][u32 h][u32 idx][1024
+  palette][w*h pixels]`.  Unlock in `finally`.
+- `engine_tick.onLeave` already detected cum-secs rollovers for the
+  FPS-sample emit; threaded the frame-capture trigger through the
+  same branch so capture cadence rides the existing heartbeat (one
+  capture per virtual second).  Three new init opts:
+  `frame_capture`, `frame_capture_max` (default unlimited from
+  agent, 16 from Python), `frame_capture_warmup_secs` (default 5 —
+  skip captures while the back surface is still uninitialised).
+- DDraw vtable slots (`Lock=25 / Unlock=32 / GetEntries=4`) and
+  `DDSURFACEDESC` layout (108 B, dwSize-prefixed, lpSurface at +36)
+  documented inline so the next reader doesn't have to chase
+  headers.
+
+### Driver changes (`tools/frida_capture.py`, `tools/smoke-test.py`)
+
+- New `kind:'frame'` handler in `on_message` — unpacks the payload
+  header, slices off the palette + tight pixels, writes a 24-bpp
+  top-down BMP via `_write_paletted_bmp` under `<run_dir>/frames/
+  frame_NNNNN.bmp`.  Same on-disk shape as
+  `src/gfx.c:gfx_capture_backbuffer` so retail-vs-our-port frames are
+  trivially diffable.
+- `CaptureConfig` + `CaptureResult` grew matching fields; CLI grew
+  `--frame-capture` / `--frame-capture-max N` /
+  `--frame-capture-warmup-secs N`.
+- `smoke-test.py` grew `--frame-capture` / `--frame-capture-max`
+  and two new checks: "frame_capture armed" (log marker) and "at
+  least one frame BMP written" (filesystem check).
+
+### Verified
+
+Two retail smokes:
+
+1. 6 s window, default warmup=4 → 4 BMPs captured but all-black.
+   Pixel histogram showed only one unique byte (0) per frame.  The
+   captures were landing during the engine's pre-render phase
+   (engine had ticked through cum-secs 1..4 in ~5 ms wall-clock with
+   turbo on, well before any render call).  Diagnosis: the back
+   surface had been created (`var_dd_back` non-NULL → Lock
+   succeeded), but never drawn to.
+
+2. 10 s window, `--frame-capture-warmup-secs 10` → 8 BMPs at
+   virtual seconds 11..18.  Pixel histograms now show 21–55 unique
+   byte values per frame and ~26 % non-zero pixel coverage.  Mid-
+   row RGB sample of the late frames returns dark grays/browns
+   matching the Sierra logo screen palette — palette conversion +
+   row-pitch tight-pack are correct.
+
+This is the first behaviour-visible artifact from the harness — up
+to now we've been emitting events + log lines.  The 26 % non-zero
+coverage on the Sierra logo screen also matches expectations: most
+of the screen is the black background; the logo bitmap occupies the
+middle band.
+
+### Engine quirk side note (not a new entry)
+
+The pre-warmup all-black frames are a useful artifact themselves —
+they confirm that Lords II's `FUN_004b99c0` driver runs *before*
+the engine paints to the back surface for the first time.  That is,
+the per-tick driver is structured "process input, advance sim, draw"
+but the first ticks process input + sim only (because the title-
+screen state machine hasn't loaded its bitmaps yet); drawing
+doesn't start until cum-secs ≈ 5 with our turbo step.  Worth keeping
+in mind when we start porting the screen-dispatch ladder — early
+ticks see uninitialised render state.
+
+### Findings doc
+
+[`docs/findings/frame-capture.md`](findings/frame-capture.md) —
+vtable slots, DDSURFACEDESC layout, the read-three-globals choice
+vs. hooking CreateSurface, payload schema, warmup rationale.
+
+### What's next
+
+Same three threads as before, minus the one we just landed:
+
+1. **Sub-step body** — still the largest single port unblock.
+   With frame capture now in place, we have a way to verify visual
+   behaviour matches retail before/after major sim changes.
+2. **Screen-dispatch ladder** — incremental; lands as each screen
+   subsystem ports.  Visual diff with frame capture is now
+   actionable, so the "is this screen rendering correctly?" question
+   has a clear answer.
+3. **Input replay** — Phase 3 of the harness roadmap.  Record
+   keyboard / mouse events as JSONL, replay back; combine with
+   frame capture for side-by-side diffs of identical input streams.
+
+Top-down RE bias still: sub-step body is the biggest unblock for
+porting more of the engine.  Input replay is the next biggest
+harness investment (lets us script scenarios reproducibly).
+
+---
+
 ## 2026-05-24 — Turbo v2 (virtualised `timeGetTime`) + retail FPS sampler
 
 First non-port harness slice in a few sessions.  Picked up the

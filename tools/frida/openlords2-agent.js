@@ -61,6 +61,15 @@ const ADDR = {
     var_fps_current:   0x004ea174,  // DAT_004ea174 — current FPS (refreshed once / sec)
     var_fps_cum_sum:   0x004ea0f4,  // DAT_004ea0f4 — cumulative FPS sum (for avg)
     var_fps_cum_secs:  0x004ea83c,  // DAT_004ea83c — cumulative seconds counter
+    // DDraw surface + palette pointers — populated by FUN_0042ec91 once the
+    // engine has finished bring-up.  See docs/findings/ddraw-dsound-bringup.md
+    // for the surface-creation chain.  Read directly from BSS rather than
+    // hooking IDirectDraw::CreateSurface — three pointer reads is cheaper +
+    // simpler than vtable interception, and the engine never recreates these
+    // mid-run.
+    var_dd_primary:    0x004eabd0,  // IDirectDrawSurface* — primary
+    var_dd_back:       0x004eafac,  // IDirectDrawSurface* — back (offscreen plain)
+    var_dd_palette:    0x004df288,  // IDirectDrawPalette* — 256-entry palette
 };
 
 // ─── runtime state ──────────────────────────────────────────────────────
@@ -91,6 +100,24 @@ let g_main_thread_id      = -1;   // captured on first per-tick driver entry
 // without having to spelunk memory itself.
 let g_last_fps_cum_secs   = 0;
 let g_fps_sample_count    = 0;
+
+// Frame capture. Lazy: only resolves NativeFunction stubs the first time the
+// engine's DDraw globals (var_dd_primary / _back / _palette) are non-NULL.
+// Capture cadence rides the FPS-sample heartbeat — one frame per engine
+// cumulative-seconds rollover, but only AFTER g_frame_capture_warmup_secs
+// virtual-seconds have elapsed (lets the engine finish DDraw bring-up +
+// first-screen renders before we start sampling — captures pre-render are
+// just the uninitialised back surface, which paints uniformly black).  At
+// default turbo step (17 ms/tick) the per-real-second yield is ~500
+// rollovers, so cap via g_frame_capture_max for longer runs.
+let g_frame_capture_enabled    = false;
+let g_frame_capture_max        = 0;   // 0 = unlimited
+let g_frame_capture_count      = 0;
+let g_frame_capture_warmup_secs = 0;
+let g_nf_surface_lock        = null;
+let g_nf_surface_unlock      = null;
+let g_nf_palette_get_entries = null;
+let g_capture_scratch        = null;   // pre-allocated payload buffer
 
 // ─── helpers ────────────────────────────────────────────────────────────
 
@@ -840,6 +867,152 @@ function installVirtualClockHook() {
         'seed=' + g_virtual_now_ms + ')');
 }
 
+// ─── frame capture ──────────────────────────────────────────────────────
+// Lords II uses 8bpp paletted DDraw surfaces (640×480 in both windowed and
+// fullscreen modes — see docs/findings/ddraw-dsound-bringup.md).  The back
+// surface is DDSCAPS_OFFSCREENPLAIN | SYSTEMMEMORY → directly lockable; no
+// sysmem-bounce dance needed (cf. openrecet's D3D8 capture path, which
+// has to GetBackBuffer + CreateImageSurface + CopyRects to land somewhere
+// lockable).
+//
+// IDirectDrawSurface vtable slots (see docs/findings/ddraw-dsound-bringup.md):
+//   5    Blt          (byte offset 0x14)
+//   25   Lock         (byte offset 0x64)
+//   32   Unlock       (byte offset 0x80)
+//
+// IDirectDrawPalette vtable slots:
+//   4    GetEntries   (byte offset 0x10)
+//
+// DDSURFACEDESC layout (108 bytes, dwSize=108 for DDraw1):
+//   +0   dwSize
+//   +4   dwFlags
+//   +8   dwHeight
+//   +12  dwWidth
+//   +16  lPitch (union with dwLinearSize)
+//   ...
+//   +36  lpSurface
+//
+// Lock signature:
+//   HRESULT Lock(this, LPRECT, LPDDSURFACEDESC, DWORD flags, HANDLE event)
+// Unlock signature:
+//   HRESULT Unlock(this, LPVOID lpSurfaceData)
+// GetEntries signature:
+//   HRESULT GetEntries(this, DWORD flags, DWORD start, DWORD count,
+//                      LPPALETTEENTRY out)
+//
+// PALETTEENTRY is 4 bytes: peRed, peGreen, peBlue, peFlags.
+
+const DDLOCK_WAIT      = 0x00000001;
+const DDLOCK_READONLY  = 0x00000020;
+const DDSURFACEDESC_SZ = 108;
+const PALETTE_BYTES    = 256 * 4;     // 256 × PALETTEENTRY
+const FRAME_HEADER_SZ  = 12;          // u32 width, u32 height, u32 frame_idx
+
+function vfn(thisPtr, slotIdx, retType, argTypes) {
+    const vtable = thisPtr.readPointer();
+    const fn     = vtable.add(slotIdx * Process.pointerSize).readPointer();
+    return new NativeFunction(fn, retType, argTypes, 'stdcall');
+}
+
+function captureFrameOnce() {
+    let back = NULL;
+    let locked = false;
+    try {
+        const primary = rva(ADDR.var_dd_primary).readPointer();
+        back          = rva(ADDR.var_dd_back).readPointer();
+        const palette = rva(ADDR.var_dd_palette).readPointer();
+        // DDraw init may not have completed yet on very-early ticks; skip
+        // silently and try again on the next cum-secs rollover.
+        if (primary.isNull() || back.isNull() || palette.isNull()) return;
+
+        // Lazy NativeFunction resolution. Vtables are stable once DDraw is
+        // up, so cache after first success.
+        if (!g_nf_surface_lock) {
+            g_nf_surface_lock = vfn(back, 25, 'int32',
+                ['pointer', 'pointer', 'pointer', 'uint32', 'pointer']);
+            g_nf_surface_unlock = vfn(back, 32, 'int32',
+                ['pointer', 'pointer']);
+            g_nf_palette_get_entries = vfn(palette, 4, 'int32',
+                ['pointer', 'uint32', 'uint32', 'uint32', 'pointer']);
+        }
+
+        // Only dwSize needs to be set before Lock (the API uses it to
+        // detect DDSURFACEDESC vs DDSURFACEDESC2).  Other fields are
+        // out-params filled in by the implementation.
+        const desc = Memory.alloc(DDSURFACEDESC_SZ);
+        desc.writeU32(DDSURFACEDESC_SZ);
+
+        const hr = g_nf_surface_lock(back, NULL, desc,
+                                     DDLOCK_WAIT | DDLOCK_READONLY, NULL);
+        if (hr !== 0) {
+            err('captureFrame.Lock', '0x' + (hr >>> 0).toString(16));
+            return;
+        }
+        locked = true;
+
+        const height    = desc.add(8 ).readU32();
+        const width     = desc.add(12).readU32();
+        const pitch     = desc.add(16).readS32();
+        const lpSurface = desc.add(36).readPointer();
+        if (lpSurface.isNull() || width === 0 || height === 0) {
+            err('captureFrame.descCheck',
+                'w=' + width + ' h=' + height + ' surf=' + lpSurface);
+            return;
+        }
+
+        // Allocate / grow scratch buffer for one frame's worth of payload:
+        //   [header 12] [palette 1024] [tight pixels w*h]
+        const payloadSz = FRAME_HEADER_SZ + PALETTE_BYTES + width * height;
+        if (!g_capture_scratch || g_capture_scratch._sz < payloadSz) {
+            g_capture_scratch = Memory.alloc(payloadSz);
+            g_capture_scratch._sz = payloadSz;
+        }
+        const scratch  = g_capture_scratch;
+        const palStart = scratch.add(FRAME_HEADER_SZ);
+        const pxStart  = scratch.add(FRAME_HEADER_SZ + PALETTE_BYTES);
+
+        // Header.
+        scratch.writeU32(width);
+        scratch.add(4).writeU32(height);
+        scratch.add(8).writeU32(g_frame_capture_count);
+
+        // Palette → palStart (256 PALETTEENTRY, 4 bytes each).
+        const phr = g_nf_palette_get_entries(palette, 0, 0, 256, palStart);
+        if (phr !== 0) {
+            err('captureFrame.GetEntries',
+                '0x' + (phr >>> 0).toString(16));
+            // continue anyway — leaves palette as previous-frame's residue
+            // (or zeroed on first call), which the Python side renders as
+            // black/garbage but doesn't crash the capture.
+        }
+
+        // Tight-pack pixels row by row.  If pitch == width we could do a
+        // single Memory.copy; the row-loop handles both cases.
+        for (let y = 0; y < height; y++) {
+            Memory.copy(pxStart.add(y * width),
+                        lpSurface.add(y * pitch),
+                        width);
+        }
+
+        const ab = scratch.readByteArray(payloadSz);
+        g_frame_capture_count++;
+        send({kind:    'frame',
+              frame_idx: g_frame_capture_count - 1,
+              width:    width,
+              height:   height,
+              pitch:    pitch,
+              virtual_now_ms: g_virtual_now_ms,
+              t_ms:     nowMs()}, ab);
+    } catch (e) {
+        err('captureFrameOnce', e.message);
+    } finally {
+        if (locked && !back.isNull() && g_nf_surface_unlock) {
+            try { g_nf_surface_unlock(back, NULL); }
+            catch (e) { err('captureFrame.Unlock', e.message); }
+        }
+    }
+}
+
 // Per-tick anchor — `FUN_004b99c0` is called once per main-loop iteration.
 // We use its onEnter as:
 //   1. main-thread-id capture (first entry only) for the virtual-clock gate.
@@ -881,6 +1054,19 @@ function installEngineTickHook() {
                       avg_fps: avg_fps,
                       virtual_now_ms: g_virtual_now_ms,
                       t_ms: nowMs()});
+                // Frame-capture rides the same heartbeat — one capture per
+                // engine cumulative-seconds rollover, until the configured
+                // cap is reached.  Skip the first N rollovers so the engine
+                // has time to finish DDraw bring-up + paint a real first
+                // frame (the back surface is uninitialised before that, so
+                // captures land all-black).  Capture is safe here because
+                // we're strictly between engine_tick iterations.
+                if (g_frame_capture_enabled &&
+                    cum_secs > g_frame_capture_warmup_secs &&
+                    (g_frame_capture_max === 0 ||
+                     g_frame_capture_count < g_frame_capture_max)) {
+                    captureFrameOnce();
+                }
             } catch (e) {
                 err('engine_tick.onLeave', e.message);
             }
@@ -906,6 +1092,11 @@ rpc.exports = {
         // opts.turbo is set, falling back to turbo v1 (Sleep no-op only).
         const stepOpt = (opts.turbo_step_ms | 0);
         g_turbo_step_ms = stepOpt > 0 ? stepOpt : 17;
+
+        g_frame_capture_enabled     = !!opts.frame_capture;
+        g_frame_capture_max         = (opts.frame_capture_max | 0);
+        g_frame_capture_warmup_secs = (opts.frame_capture_warmup_secs | 0);
+        g_frame_capture_count       = 0;
 
         const mod = Process.findModuleByName(g_target_module_name);
         if (!mod) {
@@ -941,6 +1132,13 @@ rpc.exports = {
             catch (e) { err('installTurboSleepHook', e.message); }
         }
 
+        if (g_frame_capture_enabled) {
+            log('frame_capture: armed (max=' +
+                (g_frame_capture_max === 0 ? 'unlimited' : g_frame_capture_max) +
+                ', warmup_secs=' + g_frame_capture_warmup_secs +
+                ', cadence=1 capture per engine cum-secs rollover)');
+        }
+
         send({kind: 'ready',
               module:        g_target_module_name,
               base:          g_base.toString(),
@@ -950,6 +1148,9 @@ rpc.exports = {
               force_windowed: g_force_windowed,
               silent_audio:  g_silent_audio_enabled,
               turbo:         g_turbo_enabled,
-              turbo_step_ms: g_turbo_step_ms});
+              turbo_step_ms: g_turbo_step_ms,
+              frame_capture: g_frame_capture_enabled,
+              frame_capture_max: g_frame_capture_max,
+              frame_capture_warmup_secs: g_frame_capture_warmup_secs});
     },
 };

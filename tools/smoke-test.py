@@ -56,6 +56,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--turbo-step-ms", type=int, default=17,
                     help="virtual-ms per per-tick driver iteration "
                          "when --turbo is set")
+    ap.add_argument("--frame-capture", action="store_true",
+                    help="exercise the DDraw frame-capture path; produces "
+                         "BMPs under <run_dir>/frames/")
+    ap.add_argument("--frame-capture-max", type=int, default=4,
+                    help="max frames to capture under --frame-capture "
+                         "(default 4)")
     ap.add_argument("--run-id", default=None,
                     help="run directory name under runs/smoke/ "
                          "(default: timestamp)")
@@ -72,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
         force_windowed=not args.no_force_windowed,
         turbo=args.turbo,
         turbo_step_ms=args.turbo_step_ms,
+        frame_capture=args.frame_capture,
+        frame_capture_max=args.frame_capture_max,
     )
     print(f"[smoke] run_dir = {run_dir}")
     result = fc._run_capture_impl(cfg, run_dir)
@@ -112,6 +120,16 @@ def main(argv: list[str] | None = None) -> int:
                        "engine_tick anchor installed" in log))
         checks.append(("engine main thread captured",
                        "engine_tick: main thread id captured" in log))
+    if args.frame_capture:
+        checks.append(("frame_capture armed",
+                       "frame_capture: armed" in log))
+        # At least one BMP should have landed; turbo + ≥3 s window is
+        # enough for the engine to finish DDraw bring-up and tick the
+        # cum-secs counter at least once.
+        frames_dir = run_dir / "frames"
+        bmps = sorted(frames_dir.glob("frame_*.bmp")) if frames_dir.exists() else []
+        checks.append(("at least one frame BMP written",
+                       len(bmps) >= 1))
 
     failed = [name for name, ok in checks if not ok]
 
@@ -130,6 +148,8 @@ def main(argv: list[str] | None = None) -> int:
         "last_cum_seconds": result.last_cum_seconds,
         "turbo":           args.turbo,
         "turbo_step_ms":   args.turbo_step_ms,
+        "frame_capture":   args.frame_capture,
+        "frame_count":     result.frame_count,
         "checks": [{"name": n, "ok": ok} for n, ok in checks],
     }
     (run_dir / "smoke.json").write_text(json.dumps(summary, indent=2))

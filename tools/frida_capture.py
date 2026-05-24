@@ -36,6 +36,7 @@ import json
 import os
 import signal
 import socket
+import struct
 import subprocess
 import sys
 import threading
@@ -153,6 +154,9 @@ class CaptureConfig:
     force_windowed:    bool = True
     turbo:             bool = False
     turbo_step_ms:     int  = 17        # virtual-ms per per-tick driver iteration
+    frame_capture:              bool = False
+    frame_capture_max:          int  = 16   # 0 = unlimited
+    frame_capture_warmup_secs:  int  = 5    # skip captures for first N cum-secs
     exe_args:          list[str] = field(default_factory=list)
 
 
@@ -169,6 +173,56 @@ class CaptureResult:
     last_current_fps: int = 0
     last_avg_fps:     int = 0
     last_cum_seconds: int = 0
+    frame_count:      int = 0
+
+
+# ─── BMP writer ───────────────────────────────────────────────────────────
+#
+# 24-bpp top-down BMP, mirrors src/gfx.c:gfx_capture_backbuffer.  We don't
+# write 8-bpp paletted BMPs — every viewer handles 24-bpp uniformly, and the
+# size delta (922 KB vs 308 KB for 640×480) doesn't matter for the
+# verification stream.
+
+
+def _write_paletted_bmp(out: Path, width: int, height: int,
+                        palette: bytes, pixels: bytes) -> None:
+    """Write a 24-bpp top-down BMP from 8-bpp paletted source.
+
+    `palette` is 256 PALETTEENTRYs (R, G, B, peFlags) — 1024 bytes.
+    `pixels`  is width*height bytes of palette indices, tight-packed.
+    """
+    row_bgr   = width * 3
+    row_pad   = (4 - (row_bgr & 3)) & 3
+    row_total = row_bgr + row_pad
+    img_size  = row_total * height
+    file_size = 14 + 40 + img_size
+
+    with out.open("wb") as fp:
+        # BITMAPFILEHEADER (14 bytes)
+        fp.write(b"BM")
+        fp.write(struct.pack("<I", file_size))
+        fp.write(b"\x00\x00\x00\x00")          # reserved
+        fp.write(struct.pack("<I", 54))        # bfOffBits = 14 + 40
+        # BITMAPINFOHEADER (40 bytes), biHeight negative ⇒ top-down rows.
+        fp.write(struct.pack(
+            "<IiiHHIIiiII",
+            40, width, -height, 1, 24, 0, img_size, 0, 0, 0, 0))
+        # Pixel data — palette lookup, BGR byte order, row padding.
+        pad = b"\x00" * row_pad
+        for y in range(height):
+            row_in = pixels[y * width : (y + 1) * width]
+            row_out = bytearray(row_total)
+            j = 0
+            for idx in row_in:
+                # PALETTEENTRY: R, G, B, peFlags.  BMP wants B, G, R.
+                p = idx * 4
+                row_out[j    ] = palette[p + 2]   # B
+                row_out[j + 1] = palette[p + 1]   # G
+                row_out[j + 2] = palette[p    ]   # R
+                j += 3
+            if row_pad:
+                row_out[row_bgr:] = pad
+            fp.write(row_out)
 
 
 def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
@@ -177,9 +231,13 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
 
     counts = {"hwnd": 0, "hide": 0, "msgbox": 0, "ddraw_coop": 0,
               "dsound_coop": 0, "audio_mute": 0, "display_blocked": 0,
-              "fps_sample": 0}
+              "fps_sample": 0, "frame": 0}
     fps_last = {"current_fps": 0, "avg_fps": 0, "cum_secs": 0}
     done = threading.Event()
+
+    frames_dir = run_dir / "frames"
+    if cfg.frame_capture:
+        frames_dir.mkdir(exist_ok=True)
 
     def on_message(message: dict[str, Any], data: bytes | None):
         if message.get("type") == "error":
@@ -264,6 +322,34 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             f_log.write(f"[mute] {p.get('api')} "
                         f"original={p.get('original')}\n")
             return
+        if kind == "frame":
+            if data is None:
+                f_log.write("[frame] payload missing\n")
+                return
+            # Agent payload: [header 12 bytes][palette 1024 bytes][pixels W*H].
+            try:
+                w, h, fi = struct.unpack("<III", data[:12])
+            except struct.error as e:
+                f_log.write(f"[frame] header unpack failed: {e}\n")
+                return
+            palette_bytes = data[12:12 + 1024]
+            pixels_off    = 12 + 1024
+            expected      = pixels_off + w * h
+            if len(data) < expected:
+                f_log.write(f"[frame] short payload: got {len(data)} "
+                            f"want {expected} (w={w} h={h})\n")
+                return
+            pixels = data[pixels_off:expected]
+            out = frames_dir / f"frame_{fi:05d}.bmp"
+            try:
+                _write_paletted_bmp(out, w, h, palette_bytes, pixels)
+                counts["frame"] += 1
+                f_log.write(f"[frame] #{fi} {w}x{h} -> {out.name} "
+                            f"virt_ms={p.get('virtual_now_ms')} "
+                            f"t_ms={p.get('t_ms')}\n")
+            except Exception as e:
+                f_log.write(f"[frame] write failed {out}: {e}\n")
+            return
         if kind == "fps_sample":
             counts["fps_sample"] += 1
             fps_last["current_fps"] = int(p.get("current_fps", 0))
@@ -317,12 +403,15 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         script.load()
 
         init_cfg = {
-            "module":         cfg.exe.name,
-            "hide_window":    bool(cfg.hide_window),
-            "silent_audio":   bool(cfg.silent_audio),
-            "force_windowed": bool(cfg.force_windowed),
-            "turbo":          bool(cfg.turbo),
-            "turbo_step_ms":  int(cfg.turbo_step_ms),
+            "module":                    cfg.exe.name,
+            "hide_window":               bool(cfg.hide_window),
+            "silent_audio":              bool(cfg.silent_audio),
+            "force_windowed":            bool(cfg.force_windowed),
+            "turbo":                     bool(cfg.turbo),
+            "turbo_step_ms":             int(cfg.turbo_step_ms),
+            "frame_capture":             bool(cfg.frame_capture),
+            "frame_capture_max":         int(cfg.frame_capture_max),
+            "frame_capture_warmup_secs": int(cfg.frame_capture_warmup_secs),
         }
         script.exports_sync.init(init_cfg)
         device.resume(pid)
@@ -363,6 +452,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         last_current_fps=fps_last["current_fps"],
         last_avg_fps=fps_last["avg_fps"],
         last_cum_seconds=fps_last["cum_secs"],
+        frame_count=counts["frame"],
     )
 
 
@@ -393,6 +483,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--turbo-step-ms", type=int, default=17,
                     help="virtual-ms advanced per per-tick driver iteration "
                          "when --turbo is set (default 17 ≈ 58 ticks/s perceived)")
+    ap.add_argument("--frame-capture", action="store_true",
+                    help="grab the DDraw back surface once per engine "
+                         "cumulative-seconds rollover; writes one BMP per "
+                         "capture under <run_dir>/frames/")
+    ap.add_argument("--frame-capture-max", type=int, default=16,
+                    help="stop frame capture after this many frames "
+                         "(default 16, 0 = unlimited)")
+    ap.add_argument("--frame-capture-warmup-secs", type=int, default=5,
+                    help="skip captures for the first N engine "
+                         "cumulative-seconds rollovers so the engine has "
+                         "time to render a first frame (default 5)")
     ap.add_argument("--exe-arg", action="append", default=[],
                     help="argument to pass to the spawned exe (repeatable)")
     args = ap.parse_args(argv)
@@ -411,6 +512,9 @@ def main(argv: list[str] | None = None) -> int:
         force_windowed=not args.no_force_windowed,
         turbo=args.turbo,
         turbo_step_ms=args.turbo_step_ms,
+        frame_capture=args.frame_capture,
+        frame_capture_max=args.frame_capture_max,
+        frame_capture_warmup_secs=args.frame_capture_warmup_secs,
         exe_args=list(args.exe_arg),
     )
     print(f"[capture] run_dir = {run_dir}")
@@ -418,7 +522,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[capture] cwd     = {cfg.cwd}")
     print(f"[capture] flags   = hide={cfg.hide_window} "
           f"silent={cfg.silent_audio} fwin={cfg.force_windowed} "
-          f"turbo={cfg.turbo} turbo_step_ms={cfg.turbo_step_ms}")
+          f"turbo={cfg.turbo} turbo_step_ms={cfg.turbo_step_ms} "
+          f"frame_capture={cfg.frame_capture} "
+          f"frame_capture_max={cfg.frame_capture_max} "
+          f"frame_capture_warmup_secs={cfg.frame_capture_warmup_secs}")
 
     result = _run_capture_impl(cfg, run_dir)
 
@@ -438,6 +545,10 @@ def main(argv: list[str] | None = None) -> int:
         "last_cum_seconds": result.last_cum_seconds,
         "turbo":            cfg.turbo,
         "turbo_step_ms":    cfg.turbo_step_ms,
+        "frame_capture":             cfg.frame_capture,
+        "frame_capture_max":         cfg.frame_capture_max,
+        "frame_capture_warmup_secs": cfg.frame_capture_warmup_secs,
+        "frame_count":               result.frame_count,
     }
     (run_dir / "run.json").write_text(json.dumps(meta, indent=2))
     print(json.dumps(meta, indent=2))
