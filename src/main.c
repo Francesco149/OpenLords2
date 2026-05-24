@@ -58,6 +58,7 @@
 #include <stdint.h>
 
 #include "audio.h"
+#include "config.h"
 #include "dev_hooks.h"
 #include "gfx.h"
 
@@ -216,6 +217,13 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
 
     log_line("OpenLords2 starting (show_window=%d, max_frames=%u)",
              g_show_window, g_max_frames);
+
+    /* Pre-init slice from retail FUN_0040e9ab — load l2.eng
+     * (120 KB localization blob), parse l2.ini → sierra.ini for
+     * CD/sound/video/CPU settings.  Tolerates missing files.  All
+     * downstream consumers (none yet) read from g_config and the
+     * config_localization_data accessor. */
+    config_init();
 
     timeBeginPeriod(1);
 

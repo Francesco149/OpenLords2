@@ -7,6 +7,81 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-24 — WinMain pre-init slice (config + strutil)
+
+Ported the WinMain pre-init chain: l2.eng localization load,
+l2.ini → sierra.ini parse, and the small string-helper quartet
+they depend on.  Closes item 3 from the previous progress entry's
+"What's next".
+
+### New findings doc
+
+[`docs/findings/winmain-pre-init.md`](findings/winmain-pre-init.md)
+maps `FUN_0040e9ab`'s pre-init calls in order, decodes
+`FUN_0040ecc4`'s defaults-first then file-overrides pattern with
+all six sierra.ini keys + the derived "fast machine" flag, and
+catalogues the string-helper quartet (`FUN_00401000` substring
+search, `FUN_00401085` char search, `FUN_00401136` bounded copy,
+`FUN_004012a2` strip-ctrl).
+
+### Ports
+
+- **`src/strutil.{c,h}`** — the four engine string helpers, ported
+  verbatim including their quirks: `strutil_find_substr` is 0-based
+  with the "0 = not-found OR found-at-0" ambiguity (preserved —
+  real .ini callsites never trigger it), `strutil_find_char` is
+  1-based, `strutil_bounded_copy` doesn't null-terminate,
+  `strutil_strip_ctrl` null-terminates at the first byte outside
+  `[0x20, 0xa6]`.  Each function ≤ a dozen lines.
+- **`src/config.{c,h}`** — `config_init()` walks the same lookup
+  chain as retail: defaults → l2.ini (for WindowsDir) →
+  `<WindowsDir>\sierra.ini` → fallback `sierra.ini` from CWD.  The
+  asymmetric retail control flow (WindowsDir-missing skips the
+  fallback that l2.ini-missing reaches via fall-through) is
+  preserved with a comment flagging it as retail-as-shipped.  The
+  six sierra.ini keys cook into a `config_t g_config` struct +
+  the derived `fast_machine` flag.  l2.eng is loaded into a static
+  120-KB buffer; future UI text consumers read it via
+  `config_localization_data`.
+- **`src/main.c`** — calls `config_init()` after `init_exe_dir`
+  but before window creation, matching retail's
+  `__getcwd → l2.eng → FUN_004ae1b8 → FUN_0040ecc4 → FUN_004b2258`
+  ordering.
+
+### Deferred
+
+- **`FUN_004ae1b8`** (lords2.inf 1128-byte persistence load) — the
+  load itself is trivial but the consumer chain (`FUN_004ae2bd`,
+  `FUN_004ae2ab`, `FUN_004ae310`, `FUN_004aecf0`) hasn't been
+  decoded.  Loading the bytes without consumers would be
+  write-only state, so this lands when at least one consumer
+  does.
+
+### Verified
+
+- Baseline smoke (`--frames 50`): clean.  Transcript shows
+  `config: loaded l2.eng (100016 bytes)` and
+  `Err:Could not read sierra.ini` (game-dir has no
+  `sierra.ini`; L2.INI's `WindowsDir=.` triggers the `.\sierra.ini`
+  attempt which also misses; defaults take effect).  Retail
+  behavior matches: GOG installer doesn't lay down sierra.ini, the
+  defaults are the load-bearing values.
+- No regression in `--gfx-init` or smoke transcripts beyond the
+  new pre-init log lines.
+
+### What's next
+
+1. **First real drawing primitive** — sprite-blit helper.  Visual
+   diff against Frida-captured retail would close the loop on
+   "what does the engine actually paint".
+2. **Main-loop driver** — `FUN_004b99c0` (~2200 B).  Bottoms out
+   in ~40 subfunctions across most subsystems; too large for one
+   session.  Would need a multi-slice plan.
+3. **`FUN_004ae1b8` (lords2.inf load)** — once a consumer chain
+   decoder lands.
+
+---
+
 ## 2026-05-24 — Render rate-limiter + dirty-rect tracker
 
 Ported `FUN_00452160` (rate-gated present), `FUN_00452306`
