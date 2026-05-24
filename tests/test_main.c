@@ -149,6 +149,16 @@ struct test_case {
     X(engine_input_no_motion_computes_idle_ms) \
     X(engine_input_prev_snapshots_always_written) \
     X(engine_input_last_click_carries_through_no_click) \
+    \
+    X(engine_fps_basic_frame_bumps_count) \
+    X(engine_fps_delta_independent_of_window) \
+    X(engine_fps_rollover_at_1001ms_publishes) \
+    X(engine_fps_rollover_boundary_exactly_1000ms_does_not_fire) \
+    X(engine_fps_cumulative_accumulates_across_rollovers) \
+    X(engine_fps_negative_elapsed_clock_wrap_suppressed) \
+    X(engine_fps_two_call_shape_window_basis) \
+    X(engine_fps_first_frame_with_zero_baselines) \
+    X(engine_fps_high_fps_3sec_window) \
     /* end */
 
 /* Emit extern decls. */

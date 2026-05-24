@@ -367,4 +367,61 @@ typedef struct {
 void engine_compute_input_state(const engine_input_in_t *in,
                                 engine_input_out_t *out);
 
+/* ─── FPS counter (port of FUN_004b27bf) ───────────────────────────
+ *
+ * Rolling 1-second FPS measurement.  Bumps frames-this-second on every
+ * call; once the window elapses (> 1000 ms), publishes the current FPS
+ * and rolls the cumulative-FPS / cumulative-seconds counters used by
+ * retail's session-diag (FUN_004b2636 — reports average FPS).
+ *
+ * Also returns ms since the previous frame (delta_ms) — retail's
+ * caller discards this, but the value is computed regardless because
+ * the baseline (`last_render_ms`) is unconditionally advanced on every
+ * call.
+ *
+ * Pure function — every input explicit, every state mutation in out.
+ * See engine_fps.c for the per-field commentary and the two preserved
+ * quirks (signed rollover gate; two-timeGetTime-call shape).
+ */
+typedef struct {
+    uint32_t now_ms;                  /* timeGetTime() at call site */
+    uint32_t rollover_now_ms;         /* second timeGetTime() — used only
+                                       * inside the rollover branch as the
+                                       * new window-start basis (matches
+                                       * retail's 2-call shape) */
+    uint32_t last_render_ms;          /* _DAT_004e59e0 */
+    uint32_t second_window_start_ms;  /* DAT_004eaba0 */
+    uint32_t frames_this_second;      /* DAT_004eada4 */
+    uint32_t current_fps;             /* DAT_004ea174 */
+    uint32_t cumulative_fps;          /* DAT_004ea0f4 */
+    uint32_t cumulative_seconds;      /* DAT_004ea83c */
+} engine_fps_in_t;
+
+typedef struct {
+    uint32_t delta_ms;                    /* return value (ms since previous
+                                           * frame) — retail discards it */
+    uint32_t new_last_render_ms;
+    uint32_t new_second_window_start_ms;
+    uint32_t new_frames_this_second;
+    uint32_t new_current_fps;
+    uint32_t new_cumulative_fps;
+    uint32_t new_cumulative_seconds;
+    int      window_rolled_over;          /* 1 iff the 1-second window
+                                           * rolled over this call; helps
+                                           * tests + lets the wrapper note
+                                           * which writebacks were the
+                                           * "live" ones */
+} engine_fps_out_t;
+
+void engine_compute_fps(const engine_fps_in_t *in, engine_fps_out_t *out);
+
+/* Read-only accessors for the FPS counter + frame counter mirrors.
+ * Used by main.c at shutdown to print a smoke summary — the values
+ * confirm that the per-tick driver is actually ticking and the FPS
+ * counter is alive.  No setters; the wrappers in engine.c own writes. */
+uint32_t engine_get_current_fps(void);
+uint32_t engine_get_cumulative_fps(void);
+uint32_t engine_get_cumulative_seconds(void);
+uint32_t engine_get_frame_counter(void);
+
 #endif /* OPENLORDS2_ENGINE_H */

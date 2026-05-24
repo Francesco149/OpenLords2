@@ -318,6 +318,25 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
 
     log_line("main loop exited after %u frame(s)", g_frame_counter);
 
+    /* Smoke summary: the engine-tick chain bumps its own frame
+     * counter (independently of g_frame_counter, which counts Win32
+     * pump iterations) and the FPS counter publishes a current FPS
+     * value at every 1-second boundary.  Print both at shutdown so
+     * the harness can verify the per-tick driver is alive without
+     * polling internal state mid-run.  Average FPS is the
+     * cumulative-FPS / cumulative-seconds ratio retail's session-diag
+     * uses (FUN_004b2636); skipped if no second boundary has elapsed
+     * yet (e.g. very short --frames runs). */
+    {
+        uint32_t cum_secs = engine_get_cumulative_seconds();
+        uint32_t avg_fps  = cum_secs ? (engine_get_cumulative_fps() / cum_secs) : 0;
+        log_line("engine_ticks=%u current_fps=%u avg_fps=%u (over %u s)",
+                 engine_get_frame_counter(),
+                 engine_get_current_fps(),
+                 avg_fps,
+                 cum_secs);
+    }
+
     if (g_audio_active) {
         audio_shutdown();
         g_audio_active = 0;

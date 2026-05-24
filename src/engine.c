@@ -110,6 +110,27 @@ static int      g_frame_delta_ms;              /* DAT_004ea128 */
  * spins but nothing reads it. */
 static int g_anim_cycle_counter;               /* DAT_0053e9a4 */
 
+/* ─── FPS counter mirrors (FUN_004b27bf state) ─────────────────────
+ *
+ * Rolling 1-second FPS measurement.  `g_fps_second_window_start_ms`
+ * is lazy-initialised on first call to dodge a spurious first-second
+ * rollover — retail's InitInstance (FUN_004b2258 @ line 83665) does
+ * `DAT_004eaba0 = timeGetTime();` before the main loop spins, but our
+ * drop-in doesn't have an InitInstance hook point yet, so the wrapper
+ * substitutes a 0-sentinel + first-call init.
+ *
+ * `g_fps_current` is write-only today — retail's on-screen FPS
+ * overlay (UI subsystem, unported) is the reader.  Cumulative pair is
+ * read by retail's session-diag (FUN_004b2636, unported), and also by
+ * our smoke-print at shutdown so the harness can verify the counter
+ * is alive. */
+static uint32_t g_fps_last_render_ms;          /* _DAT_004e59e0 */
+static uint32_t g_fps_second_window_start_ms;  /* DAT_004eaba0 (0 → lazy init) */
+static uint32_t g_fps_frames_this_second;      /* DAT_004eada4 */
+static uint32_t g_fps_current;                 /* DAT_004ea174 */
+static uint32_t g_fps_cumulative_fps;          /* DAT_004ea0f4 */
+static uint32_t g_fps_cumulative_seconds;      /* DAT_004ea83c */
+
 /* ─── Mouse-input resolver mirrors (FUN_004b191e state) ────────────
  *
  * The wrapper engine_tick_input_step bundles all this into the input
@@ -325,6 +346,56 @@ static void engine_tick_input_step(void)
      * fired this frame). */
     g_mouse_dblclk = 0;
 }
+
+/* Win32 wrapper around engine_compute_fps — reads timeGetTime twice
+ * to match retail's 2-call shape (the second call is what retail uses
+ * as the new window-start basis on rollover frames), bundles into the
+ * input struct, runs the pure function, writes outputs back.  Lazy-
+ * initialises the window-start on first call to skip the spurious
+ * boot-time rollover.
+ *
+ * Runs in the render-phase tail, gated on g_savepump_request == 0 —
+ * same shape as retail. */
+static void engine_tick_fps_step(void)
+{
+    engine_fps_in_t  in  = {0};
+    engine_fps_out_t out = {0};
+
+    in.now_ms          = timeGetTime();
+    in.rollover_now_ms = timeGetTime();
+    in.last_render_ms  = g_fps_last_render_ms;
+
+    /* Lazy init — retail's InitInstance sets the window-start basis
+     * before the main loop ever calls this; in our drop-in we just
+     * substitute the first call's timestamp.  Same effect: the first
+     * rollover happens 1 second after boot, not on frame 1. */
+    if (g_fps_second_window_start_ms == 0) {
+        g_fps_second_window_start_ms = in.now_ms;
+    }
+    in.second_window_start_ms = g_fps_second_window_start_ms;
+    in.frames_this_second     = g_fps_frames_this_second;
+    in.current_fps            = g_fps_current;
+    in.cumulative_fps         = g_fps_cumulative_fps;
+    in.cumulative_seconds     = g_fps_cumulative_seconds;
+
+    engine_compute_fps(&in, &out);
+
+    g_fps_last_render_ms          = out.new_last_render_ms;
+    g_fps_second_window_start_ms  = out.new_second_window_start_ms;
+    g_fps_frames_this_second      = out.new_frames_this_second;
+    g_fps_current                 = out.new_current_fps;
+    g_fps_cumulative_fps          = out.new_cumulative_fps;
+    g_fps_cumulative_seconds      = out.new_cumulative_seconds;
+    /* delta_ms discarded — retail does the same (FUN_004b99c0's
+     * caller of FUN_004b27bf ignores the return value). */
+}
+
+/* Public readers used by main.c's shutdown summary so the harness can
+ * verify the FPS counter is alive without poking file-static state. */
+uint32_t engine_get_current_fps(void)        { return g_fps_current; }
+uint32_t engine_get_cumulative_fps(void)     { return g_fps_cumulative_fps; }
+uint32_t engine_get_cumulative_seconds(void) { return g_fps_cumulative_seconds; }
+uint32_t engine_get_frame_counter(void)      { return g_engine_frame_counter; }
 
 static void engine_tick_phase_step(void)
 {
@@ -552,11 +623,35 @@ void engine_tick(void)
      *                 retail). */
     engine_tick_input_step();
 
-    /* TODO(render): render-phase tail.  Retail dispatches ~30
-     * subsystem renders here based on g_current_screen, then the
-     * FPS counter / map redraw / finalisers (gated on
-     * g_savepump_request == 0).  Until those land, the rate-gated
-     * present is the only thing that paints. */
+    /* TODO(render): screen-dispatch ladder + per-subsystem renders go
+     * here.  Retail dispatches ~30 subsystem renders based on
+     * g_current_screen between the input step and the tail block
+     * below; all blocked on the respective UI / map / sprite
+     * subsystems.  Surveyed in docs/findings/main-loop-tick.md. */
+
+    /* Render-phase tail — retail gates the whole block on
+     * `DAT_005c9274 == 0` (g_savepump_request).  Today's port:
+     *
+     *   FUN_00429b1d  surveyed: map-scroll clamp, blocked on map
+     *                 subsystem (no producer of the scroll offsets yet)
+     *   FUN_0047ed34  surveyed: UI-scroll clamp, blocked on the UI
+     *                 subsystem that produces those scroll values
+     *   FUN_00426529  surveyed: empty body (debug hook optimised out)
+     *   FUN_004b27bf  ported.  Rolling 1-second FPS counter.  Bumps
+     *                 frame counts, computes ms/frame, publishes
+     *                 current FPS at second boundaries.
+     *   FUN_004b12fb  surveyed: stub `return 1` in retail (likely
+     *                 debug-build gate optimised out)
+     *   FUN_004b0e03  surveyed: palette-fade machine, gated on screen
+     *                 0x23 (Smacker/intro), blocked on intro screen
+     *
+     * After that retail has a deferred-shutdown trigger gated on
+     * `DAT_005aeb68 == 4` — covered by g_shutdown_request handling
+     * which today still lives inline in WndProc; the structural seam
+     * comes when the sim that acks the shutdown lands. */
+    if (g_savepump_request == 0) {
+        engine_tick_fps_step();
+    }
 
     gfx_tick_present(0);
 }
