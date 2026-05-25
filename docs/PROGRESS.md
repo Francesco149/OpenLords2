@@ -7,6 +7,158 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Army drawer ports complete (1 chip, 2 fns + label sub-renderer)
+
+Continuation of the same unattended session.  The previous dispatch
+landed 5 of 6 strategic-mode overlay functions and identified the
+army drawer (`FUN_004071a0`, 3179 B) as the only remaining gap.
+This dispatch closes it out — strategic-mode rendering is now
+end-to-end in `src/`.
+
+### Discovery: there's a 7th cluster function
+
+Surveying the army drawer's call topology surfaced a child function,
+`FUN_00407f82` @ 0x407f82 (548 B), called exclusively by the army
+drawer's "large army at territory" branch.  It renders a fixed
+"label background" sprite (slot 0x82 of the overlay blob) plus a
+centered decimal text label below it — effectively the
+army-strength indicator the player sees over territories with
+significant garrisons.
+
+So the cluster grew from 6 to 7 functions; both new ones land here.
+
+### Chip landed
+
+**`src/engine_overlay_render` (replaced army stub with full port)**:
+
+  - `FUN_004071a0` → `engine_overlay_render_tile_army`        (3179 B)
+    Real body replaces last chip's call-counter stub.  Holds the
+    4-way flag-bit priority chain, 13-category state machine, and
+    common dispatch tail.
+  - `FUN_00407f82` → `army_render_label` (static helper)        (548 B)
+    Army-label sub-renderer.  View-mode-0-only.  Stages sprite
+    0x82 + centered text via `gfx_text_label_render_dec_centered`
+    (already ported), validates `src_off ≤ 310000`.
+
+Total new code: ~360 LOC added to `engine_overlay_render.c`
+(`tile_army` + helpers `army_step_band`, `army_end_frame_band`,
+`army_render_label`, `army_dispatch_tail`, plus small accessors).
+
+### Five new state setters
+
+The army drawer reads five retail globals not previously exposed:
+
+  - `set_render_mode(mode)` — `DAT_0053f264`.  Top-level filter
+    that gates army draw on `descriptor[+2] & 0x20`.
+  - `set_overlay_base_index(base)` — `DAT_0057d390`.  Base for
+    fortress + owner-color sprites (`base + owner*8 - 8`).
+  - `set_arrow_marker_base_index(base)` — `_DAT_0057d38c`.  Base
+    for directional arrows (low: `+0x67`, high: `+0x55`).
+  - `set_animation_tick(tick)` — `DAT_0053e9a4`, [0..0xf] cycle.
+    End-frame branches dispatch `sprite_idx = tick + 0x28`.
+  - `set_animation_rate_flags(t0, t1, t2, t3)` — four globals at
+    `DAT_0058fd08`, `DAT_0057d3c8`, `DAT_0057d3ac`, `DAT_00591510`.
+    Per-tier toggles selected by `(cur - prev)` distance bin.
+
+Plus one new array binding: `bind_army_records(records)` — points
+into `g_per_army_768` (save schema entry 4, 17 × 0x300 B).
+
+### Filed quirks (#70, #71, #72, #73, #74)
+
+  - **#70** — Army drawer's `bit 0x40` path with `descriptor[+4] &
+    0xf` outside {0, 2} sets NO sprite_idx but still hits the
+    dispatch tail.  Result: stale sprite from the dispatcher's
+    most-recent staging gets re-drawn at offset (0, 0).  Visually
+    surfaces as garbled markers.
+  - **#71** — Army drawer's main dispatch tail uses `src_off <
+    0x11171` (= 70001) — over 4× tighter than the city / primary
+    pass / army-label sub-renderer's `< 0x4baf1` (310001).
+    Partitions the overlay blob into a 70 KB "army region" and a
+    310 KB "everything-else region".
+  - **#72** — End-frame categories (3, 6, 9, 12 + the 0x10 path)
+    write the new frame to `descriptor[+3]` BEFORE checking the
+    tier-byte / tick gates.  A failed gate leaves the descriptor
+    in its end-frame state — the animation "completes" even
+    though the final frame's sprite was never drawn.
+  - **#73** — The 0x20 arrow path's high sub-branch silently
+    filters `first_byte == 0x13` via byte-arithmetic underflow:
+    `if (2 < (byte)(bVar2 - 0x14)) return;` evaluates to
+    `0xff > 2` for `bVar2 = 0x13`.  The port replicates with a
+    signed delta check.
+  - **#74** — The four animation-rate tier flags are SINGLE
+    GLOBAL booleans, not per-army timers.  Step categories pick
+    a tier per army based on `(cur - prev)` distance, but the
+    advance is a frame-wide toggle.  The setter of these flags
+    lives elsewhere — probably an FPS-throttled main-loop hook.
+
+### Headline numbers
+
+- **708 → 741 host tests** (+33), all green under ASan/UBSan.
+- **2 retail functions ported** (the army drawer + its label
+  sub-renderer): 3179 + 548 = **3727 B of decompilation**.
+- **5 new engine quirks filed** (#70, #71, #72, #73, #74).
+- **Updated findings doc** (`docs/findings/overlay-render.md` —
+  army section grew from ~10 lines to ~180 lines covering the
+  full state-machine table, dispatch tail, and bindings).
+- Cross-compile (mingw32) clean — `openlords2.exe` and
+  `openlords2-debug.exe` both link without warning.
+
+### Renderer pipeline state
+
+| layer                                        | status     |
+| -------------------------------------------- | ---------- |
+| (text + line + sprite-family layers — see prior dispatches)      | ported     |
+| sprite blit RLE (unclipped + 2× clipped)     | ported     |
+| sprite render — RLE from blob                | ported     |
+| strategic-mode primary frame driver          | ported     |
+| strategic-mode primary row iterators × 2     | ported     |
+| strategic-mode primary per-tile drawer       | ported     |
+| strategic-mode overlay frame driver          | ported     |
+| strategic-mode overlay row iterators × 2     | ported     |
+| strategic-mode overlay city drawer           | ported     |
+| strategic-mode overlay debug-text helper     | ported     |
+| **strategic-mode overlay army drawer**       | **ported (this chip)** |
+| **army-label sub-renderer (FUN_00407f82)**   | **ported (this chip)** |
+| sprite descriptor reader (PL8 header)        | unanalyzed |
+| error log formatter (`FUN_004afab9`)         | unanalyzed |
+| battlefield (combat-mode) iterators          | unlocated  |
+
+Strategic-mode rendering is now **fully end-to-end**.  Engine code
+can render a complete strategic-mode frame by binding the territory
+record array, per-tile descriptor table, sprite blobs, army records,
+and camera state, then invoking `engine_overlay_render_frame()` and
+`engine_map_render_frame()` back-to-back.
+
+### What's next
+
+The three frontiers shift again:
+
+1. **Wire gfx.c runtime to renderer + map** — Windows-host
+   validation chip.  Now blocked only on user availability for
+   visual verification.  This is the highest-value next milestone
+   — first frame on screen would validate every piece of the
+   strategic-mode renderer simultaneously.
+2. **Tier-flag driver discovery** — quirk #74 leaves the four
+   global rate flags' setter unlocated.  Likely a small function
+   in the main loop adjacent to the FPS limiter
+   (`src/engine_fps.c`'s `_DAT_005c8a4c` family).  Low-LOC
+   payoff but unblocks correct unit-animation cadence.
+3. **Battlefield (combat-mode) renderer cluster** — still
+   unlocated.  With strategic-mode complete, the combat-mode
+   cluster is the next major scope.  Probably starts with a
+   parent driver in the `0x405000..0x408000` range that uses
+   `g_per_battle_hex_432` (save entry 7).  Worth a fresh survey.
+
+Picking **#1 or #3** next.  #1 needs user verification (gated)
+so it's deferred until the user is back; #2 is a quick win that
+unblocks #1's visual fidelity; #3 is the natural extension of
+this chip's scope.
+
+This is a natural `/clear` point — strategic-mode rendering is
+in, the next milestone needs human verification or a fresh survey.
+
+---
+
 ## 2026-05-25 — Strategic-mode overlay renderer cluster (1 chip, 5 of 6 fns)
 
 Continuation of the same unattended session.  The previous dispatch

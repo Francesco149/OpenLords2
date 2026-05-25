@@ -2463,6 +2463,161 @@ on a global mode — typical "load-bearing if" pattern.
 
 ---
 
+## 70. Army drawer 0x40 path dispatches stale sprite for unhandled low-nibble
+
+The army drawer's `bit 0x40` branch dispatches sub-branches keyed by
+`descriptor[+4] & 0x0f`:
+
+  - low-nibble == 0 → fortress sprite (uses army record's +0x07 byte)
+  - low-nibble == 2 → march-out sprite (fixed 0x81)
+  - **low-nibble ∈ {1, 3, 4, …, 15}** → **no sprite_idx set, no
+    offsets set, BUT the dispatch tail still runs.**
+
+The dispatch tail reads `DAT_005c9288` (the last-glyph-index global)
+to stage from the overlay blob.  In the unhandled-nibble case, that
+global retains whatever value it held from the most recent staging —
+typically a city sprite from the city drawer earlier in the same
+frame, or another army sprite from the previous tile.
+
+Result: the cell at (cur_col, cur_row) gets a STALE sprite drawn at
+its cursor position (offset 0,0 because dx/dy weren't set either).
+Visually surfaces as garbled territory markers when a tile has both
+`descriptor[+1] & 0x40` set AND `descriptor[+4] & 0x0f` outside
+{0, 2}.
+
+The port mirrors this by pulling `gfx_dispatch_last_glyph_index()`
+into the local sprite_idx when no branch supplied one.
+
+> 📍 `src/engine_overlay_render.c` (`engine_overlay_render_tile_army`,
+> stale-sprite fall-through comment), Ghidra `FUN_004071a0` lines
+> 265-294 (the `bit 0x40 → else if low_nibble == 0 / 2` chain has no
+> default — control falls through to the unconditional dispatch tail).
+
+---
+
+## 71. Army drawer src_off gate is TIGHTER than city / primary pass
+
+Three different overlay-blob src_off validation gates exist for the
+same physical blob (`DAT_0055ce5c`):
+
+  - **Primary pass `engine_map_render_tile`**: `src_off ≤ 310000`
+    (= `0x4baf0`).
+  - **City drawer `engine_overlay_render_tile_city`**: same `≤ 310000`.
+  - **Army label sub-renderer `army_render_label` (FUN_00407f82)**:
+    same `< 0x4baf1` ⇒ `≤ 310000`.
+  - **Army drawer `engine_overlay_render_tile_army` main dispatch
+    tail**: `src_off < 0x11171` (= `≤ 70000`) — over 4× tighter.
+
+The army drawer's tighter gate effectively partitions the overlay
+blob into a "first 70 KB" region usable by army sprites and a
+"first 310 KB" region usable by cities + the army-label sprite
+(0x82).  Sprites at offsets in (70000, 310000] are valid for the
+city / label paths but flagged as errors by the army drawer.
+
+Practical implication: the overlay blob's first 70 KB must contain
+ALL the unit-category sprites (tick+0x28 family, fortress family,
+arrow markers, owner-color territory sprites) — the level-edit /
+PL8-pack layout MUST honor this boundary.
+
+> 📍 `src/engine_overlay_render.c` (`OVERLAY_ARMY_SRC_OFFSET_MAX` =
+> 70000 vs `OVERLAY_SRC_OFFSET_MAX` = 310000),
+> Ghidra `FUN_004071a0` line 310 (`< 0x11171`)
+> vs `FUN_004081a6` line 41 (`< 0x4baf1`).
+
+---
+
+## 72. End-frame animation byte committed even when dispatch is suppressed
+
+The army drawer's "end-frame" branches (categories 3, 6, 9, 12 and
+the 0x10 path with `first == 0x13`) write a fixed end-frame value
+to `descriptor[+3]` BEFORE checking the tier byte / tick-cycle gates
+that decide whether to dispatch:
+
+```c
+descriptors[cell + 3] = END_FRAME_BAND_X;
+if (army[tier_off] < 3)             return;   // no dispatch
+if (g_animation_tick > 0xf)         return;   // no dispatch
+sprite_idx = tick + 0x28;
+// → fall through to dispatch
+```
+
+A failed gate leaves the descriptor in its end-frame state (0x2e /
+0x09 / 0x13 / 0x1d) — meaning the animation "completes" visually
+even if the sprite for that frame was never drawn.  On the NEXT
+frame the cell will be in a different category band (because the
+descriptor[+0] category byte determines which band) — but the
+descriptor[+3] frame byte reflects a transition the player never
+saw rendered.
+
+This is observable as units that appear to "skip" the last frame of
+their animation when the army-record's tier byte hasn't ramped up
+to the dispatch threshold yet.
+
+> 📍 `src/engine_overlay_render.c` (`army_end_frame_band`),
+> Ghidra `FUN_004071a0` lines 60-71 (cat 3),
+> 98-109 (cat 6), 136-147 (cat 9), 174-185 (cat 12).
+
+---
+
+## 73. Arrow-marker sub-branch silently filters 0x13 via byte underflow
+
+The army drawer's `bit 0x20` (no 0x40, no 0x10) directional-arrow
+branch is range-gated to `first_byte ∈ [0xf, 0x16]`, then split at
+0x13 into low (0x10..0x12) and high (0x14..0x16) sub-branches.  The
+high sub-branch's inner gate is:
+
+```c
+if (2 < (byte)(bVar2 - 0x14)) return;
+```
+
+When `bVar2 == 0x13`, `bVar2 - 0x14` underflows in the byte cast to
+`0xff` — well over 2 — so the gate trips and the function returns.
+Net effect: 0x13 is FILTERED by the upper sub-branch via byte
+arithmetic underflow, not by an explicit equality check.
+
+The port replicates this faithfully via a signed `delta < 0 || delta
+> 2` test, matching the same outcome without relying on
+implementation-defined unsigned wrap.
+
+Practical implication: the 0x13 value of `first_byte` is reserved by
+the OTHER `bit 0x10` branch (animation-end path) — having both arms
+silently filter it keeps the descriptor reach unambiguous.
+
+> 📍 `src/engine_overlay_render.c`
+> (`engine_overlay_render_tile_army`, 0x20 high sub-branch),
+> Ghidra `FUN_004071a0` lines 240-246.
+
+---
+
+## 74. Animation-tier flag is a GLOBAL toggle, not a per-army timer
+
+The four animation-rate "tier" flags (`DAT_0058fd08`, `DAT_0057d3c8`,
+`DAT_0057d3ac`, `DAT_00591510`) are SINGLE GLOBAL booleans, not
+per-army or per-tile state.  The army drawer's step categories
+(0, 2, 5, 8, 11) compute `distance = army[cur] - army[prev]` per
+tile, then pick a tier based on `distance` bin — but the tier flag
+itself is a frame-level toggle that bumps EVERY army in that
+distance bin uniformly.
+
+When the global tier flag is non-zero, every army record matching
+that distance bin advances its frame by 1 this iteration.  When the
+flag is zero, none of them advance.  The "distance" computation
+exists only to BIN armies into rate tiers; the actual time-base is
+shared.
+
+This is why fast-moving armies (small cur-prev gap) get the tier-0
+flag (most aggressive), while idle armies (large gap from prior
+frame) end up in tier 3 (slowest).  The driver of the tier flags
+themselves lives elsewhere — probably a frame-rate-throttled
+toggle in the main loop.
+
+> 📍 `src/engine_overlay_render.c`
+> (`engine_overlay_render_set_animation_rate_flags`,
+> `pick_rate_tier`), Ghidra `FUN_004071a0` lines 41-54
+> (and parallels at 80-91, 119-130, 156-167).
+
+---
+
 <!--
 Template for new entries:
 
