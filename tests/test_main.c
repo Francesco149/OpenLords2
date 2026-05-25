@@ -213,6 +213,28 @@ struct test_case {
     X(castles_scenario_round_trip_byte13) \
     X(castles_scenario_independent_slots) \
     X(castles_read_fixup_flag_bit1) \
+    \
+    X(engine_tile_push_into_empty_list_takes_slot_0) \
+    X(engine_tile_push_skips_occupied_slots) \
+    X(engine_tile_push_full_list_writes_last_only) \
+    X(engine_tile_stage_scratch_copies_plus4_byte) \
+    X(engine_tile_path_scratch_outer_ring_is_999) \
+    X(engine_tile_path_scratch_flag10_marks_impassable) \
+    X(engine_tile_neighbor_flags_orient0_center_plus4) \
+    X(engine_tile_neighbor_flags_orient0_writes_diagonals) \
+    X(engine_tile_neighbor_flags_orient0_horiz_neighbors) \
+    X(engine_tile_neighbor_flags_orient2_vert_neighbors) \
+    X(engine_tile_expand_unrecognized_anchor_is_noop) \
+    X(engine_tile_expand_anchor_at_writes_footprint_glyphs) \
+    X(engine_tile_expand_each_orient_glyphs) \
+    X(engine_tile_expand_clears_low_bits_then_sets_bit2) \
+    X(engine_tile_expand_center_marker_bit80) \
+    X(engine_tile_expand_door_orient0_above_top_middle) \
+    X(engine_tile_expand_door_orient4_below_bottom_middle) \
+    X(engine_tile_expand_door_orient2_right_of_middle_right) \
+    X(engine_tile_expand_door_orient6_left_of_middle_left) \
+    X(engine_tile_expand_refreshes_scratches) \
+    X(engine_tile_expand_inserts_into_footprint_list) \
     /* end */
 
 /* Emit extern decls. */
