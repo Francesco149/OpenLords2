@@ -643,6 +643,34 @@ struct test_case {
     X(gfx_line_rect_bevel_dark_tl_inverts_palette) \
     X(gfx_line_rect_bevel_x_zero_skips_right_clamp_per_quirk_39) \
     X(gfx_line_rect_solid_x_zero_still_clamps_right) \
+    \
+    X(gfx_text_label_format_dec_zero) \
+    X(gfx_text_label_format_dec_single_digit) \
+    X(gfx_text_label_format_dec_multi_digit) \
+    X(gfx_text_label_format_dec_negative) \
+    X(gfx_text_label_format_dec_with_plus) \
+    X(gfx_text_label_format_dec_with_plus_zero) \
+    X(gfx_text_label_format_dec_offset) \
+    X(gfx_text_label_format_dec_large_value_silent) \
+    X(gfx_text_label_format_dec_large_negative_silent) \
+    X(gfx_text_label_format_hex_zero) \
+    X(gfx_text_label_format_hex_low_nibble) \
+    X(gfx_text_label_format_hex_multi_digit) \
+    X(gfx_text_label_format_hex_uppercase_digits) \
+    X(gfx_text_label_format_hex_negative) \
+    X(gfx_text_label_format_hex_large_value_silent) \
+    X(gfx_text_label_format_only_zeros_first_100_bytes) \
+    X(gfx_text_label_render_dec_assembles_buffer) \
+    X(gfx_text_label_render_dec_prefix_overwrites_byte_0) \
+    X(gfx_text_label_render_dec_zero_prefix_skips_overwrite) \
+    X(gfx_text_label_render_hex_assembles_buffer) \
+    X(gfx_text_label_render_dec_paints_pixels) \
+    X(gfx_text_label_render_dec_centered_embeds_nul_per_quirk_45) \
+    X(gfx_text_label_render_dec_no_embedded_nul) \
+    X(gfx_text_label_render_dec_signed_skips_when_both_zero) \
+    X(gfx_text_label_render_dec_signed_renders_when_value_nonzero) \
+    X(gfx_text_label_render_dec_signed_negative_picks_color_neg) \
+    X(gfx_text_label_render_dec_signed_renders_when_companion_nonzero) \
     /* end */
 
 /* Emit extern decls. */
