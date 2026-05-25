@@ -7,6 +7,136 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Compound label+signed-value wrapper (1 chip, 1 fn)
+
+Continuation of the same unattended session.  The previous dispatch
+listed the compound "label + signed value" wrapper as the smallest
+remaining text-cluster chip — `FUN_00402e0c` (344 B), the entry point
+for the in-game stat readouts that pair a localization label with a
+sign-coloured decimal value.  This dispatch ports it and closes the
+last retail text-class entry point.
+
+### Chip landed
+
+**`src/gfx_text_label`** — extended with one new function:
+
+  - `FUN_00402e0c` → `gfx_text_label_render_labeled_signed` (344 B)
+    Compound two-half render — label first (via the line renderer at
+    its caller-supplied (x, y)), then the value (via the existing
+    `gfx_text_label_render_dec` wrapper, positioned at
+    `x + line_x_acc` so it lands flush against the label).  Sign-
+    conditional label color + a mode/sign-based prefix-char decision
+    tree on the value render:
+
+      mode == 2  → '@' prefix, color_positive (value as-is)
+      value <  0 → '-' prefix, color_negative (value negated)
+      value == 0 → '@' prefix, color_positive
+      value >  0 → '+' prefix, color_positive
+
+    Wraps the render in a save/reset/restore dance against the global
+    horizontal accumulator `line_x_acc` (DAT_005cd404).  Non-zero
+    callsites observe the accumulator incremented by the combined
+    width of the compound render; the all-zero callsite (gated out by
+    the early-return check) clobbers it to 0 — see quirk #46.
+
+No new private helpers — composes the renderer and the existing
+label-render wrapper, both already in place.  No new module state.
+
+### Filed quirks (#46, #47)
+
+Two new entries in `docs/findings/engine-quirks.md`:
+
+  - **#46** — `gfx_text_label_render_labeled_signed` resets
+    `line_x_acc` to 0 BEFORE the early-return gate and restores it
+    INSIDE the gate's then-branch.  When both `value` and `mode` are
+    zero the restore never runs, silently clobbering the caller's
+    running x accumulator instead of leaving it unchanged.  Likely a
+    bug; preserved verbatim with a witness test.
+  - **#47** — Label color tracks the value's sign even when `mode == 2`
+    neutralizes the value's prefix to '@'.  A `(value < 0, mode == 2)`
+    call therefore paints a negative-coloured label paired with a
+    positive-coloured value.  And — because the formatter still emits
+    its own sign byte for negative values — the assembled value buffer
+    is `"@-N"` (the '@' prefix overwrites buffer[0] but the formatter-
+    emitted '-' survives at buffer[1]).  No captured callsite invokes
+    this path with a negative value; the asymmetry may be latent.
+
+### Headline numbers
+
+- **607 → 615 host tests** (+8), all green under ASan/UBSan.
+- **1 retail function ported** (344 B decompilation).
+- **0 new modules** — extends `src/gfx_text_label` with one
+  function (no new state, no new helpers).
+- **2 new engine quirks filed** (#46, #47).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Renderer pipeline state
+
+| layer                          | status     |
+| ------------------------------ | ---------- |
+| char width                     | ported     |
+| buffer width                   | ported     |
+| bounded buffer width           | ported     |
+| word width + chars             | ported     |
+| editor (text_input)            | ported     |
+| localization blob access       | ported     |
+| dirty-rect tracking            | ported     |
+| 1-pixel / 2x1 painters         | ported     |
+| clipped pixel / 2x1            | ported     |
+| glyph blitter (unclipped)      | ported     |
+| glyph blitter (clipped × 2)    | ported     |
+| glyph dispatcher (per-char)    | ported     |
+| clip setters (X + Y)           | ported     |
+| text renderer (per-line)       | ported     |
+| centered-text wrapper          | ported     |
+| substitution stream            | ported     |
+| word-wrap renderer (buffer)    | ported     |
+| word-wrap renderer (localized) | ported     |
+| localization line render       | ported     |
+| localization line centered     | ported     |
+| solid Bresenham line           | ported     |
+| dotted axis-aligned line       | ported     |
+| solid rect outline             | ported     |
+| 3D bevel rect (3 palettes)     | ported     |
+| int formatter (dec + hex)      | ported     |
+| label render (dec + hex + centered) | ported |
+| label render (signed-color)    | ported     |
+| **compound "label + signed value"** | **ported (this chip)** |
+| sprite blitters (4x4/6x6/8x8)  | unanalyzed |
+
+With this chip in, **every entry point in the text-control family is
+now end-to-end in `src/`**.  Engine code can render any combination of
+glyph, word, line, localized line, word-wrapped paragraph, primitive
+line/rectangle, formatted int label, centered signed-color value, or
+compound label-plus-value through pure portable C — backed by the
+canvas-binding gfx_paint layer.  The next frontier is runtime wiring
+(making the renderer paint to the actual DDraw-backed canvas) or
+sprite blitters (a new subsystem entirely).
+
+### What's next
+
+Two natural continuations:
+
+1. **Wire gfx.c runtime to the renderer** — extend the
+   `IDirectDrawSurface::Lock` probe to set `lpSurface` onto the
+   gfx_paint canvas, then trigger a render of a real string + frame
+   during boot.  Visible-pixels milestone earned at this point.
+   Small chip but requires user-observed Windows-host validation.
+2. **Sprite blitter (4x4 / 6x6 / 8x8 tiles)** — the next deferred
+   leaf class.  Larger scope; uncovers the tile-format readers the
+   renderer needs for the map view.  Pure autonomous work.
+
+Picking #1 unlocks visible-pixels validation but is gated on
+human verification.  Picking #2 keeps autonomous progress moving and
+opens the next subsystem — fresh enough to justify a `/clear`.
+
+This is a natural `/clear` point — the text-control family is closed
+out and the remaining frontiers (runtime wiring, sprite blitters) are
+fresh scope worth a fresh conversation.
+
+---
+
 ## 2026-05-25 — Int formatter + label-render cluster (1 chip, 6 fns)
 
 Continuation of the same unattended session.  The previous dispatch

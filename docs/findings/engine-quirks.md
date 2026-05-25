@@ -1736,6 +1736,89 @@ witnesses the embedded NUL on the centered path.
 
 ---
 
+## 46. Compound label+value render clobbers line_x_acc when both inputs are zero
+
+The compound "label + signed value" renderer at `FUN_00402e0c` wraps
+its two-half render in a save/reset/restore dance against the global
+horizontal accumulator `DAT_005cd404` (`line_x_acc`):
+
+    iVar1 = DAT_005cd404;       /* save */
+    DAT_005cd404 = 0;            /* reset (BEFORE the gate) */
+    if ((value != 0) || (mode != 0)) {
+        /* render label (mutates DAT_005cd404 to label width) */
+        /* render value at x + DAT_005cd404 */
+        DAT_005cd404 = DAT_005cd404 + iVar1;   /* restore (inside gate) */
+    }
+    return;
+
+The reset happens BEFORE the early-return check, but the restore lives
+INSIDE the active branch.  When both `value` and `mode` are zero, the
+function returns with `DAT_005cd404 = 0` — silently clobbering the
+caller's running x accumulator.
+
+The non-zero path leaves `DAT_005cd404` at
+`(label_width + value_width) + saved`, which is the intended
+"increment the caller's accumulator by my combined width" semantic.
+The zero path was almost certainly meant to leave `DAT_005cd404`
+untouched (i.e. be a transparent no-op) but the early reset and the
+gated restore conspire to break that invariant.
+
+Likely a bug.  In practice the gate condition is almost never hit at a
+moment where the caller cares about preserving `line_x_acc` across an
+all-zero compound render (the captured callsites mostly use the
+function as a standalone stat row), but a caller threading
+`line_x_acc` through a sequence of compound renders WOULD see their
+running advance silently zeroed by an all-zero entry.
+
+Our port preserves the divergence verbatim.  A test witnesses the
+clobber by pre-loading `line_x_acc` and asserting it ends up zero
+after an all-zero call.
+
+> 📍 `src/gfx_text_label.c`'s `gfx_text_label_render_labeled_signed`,
+> Ghidra `FUN_00402e0c @ 0x402e0c`.
+
+---
+
+## 47. Label color tracks value sign even when `mode == 2` neutralizes the value display
+
+`FUN_00402e0c`'s mode parameter has a special value (`2`) that makes
+the value half render with a neutral '@' prefix in `color_positive`,
+regardless of the value's sign:
+
+    if (mode == 2) {
+        render_value(value, '@', color_positive);
+    } else if (value < 0) {
+        render_value(-value, '-', color_negative);
+    } else { /* + or @ for zero, both color_positive */ }
+
+But the label half's color is selected by the value's sign alone — the
+mode does not enter the decision:
+
+    if (value < 0) render_label(label, ..., color_negative);
+    else           render_label(label, ..., color_positive);
+
+So a call with `value < 0` AND `mode == 2` paints a label in
+`color_negative` paired with a value in `color_positive`.  The label
+visually says "negative" while the value displays neutrally as `@N`.
+
+Worse: the formatter inside `gfx_text_label_render_dec` still emits
+its own sign byte when given a negative value, so the assembled value
+buffer is `"@-N"` (not `"@N"`) — the '@' overwrites buffer[0], but the
+formatter-emitted '-' survives at buffer[1].  The visible glyph stream
+is therefore `@-N` for negative-value-mode-2 — the '-' "leaks" through
+even though the mode was apparently intended to suppress sign display.
+
+Whether this is a bug depends on the caller's intent for mode==2.  No
+captured callsite invokes the path with a negative value, so the
+asymmetric color and the leaked '-' may both be latent — present in
+the binary but never triggered.  We preserve them verbatim.
+
+> 📍 `src/gfx_text_label.c`'s `gfx_text_label_render_labeled_signed`,
+> Ghidra `FUN_00402e0c @ 0x402e0c` (mode-decision tree at `0x402e7c`
+> onward) + `FUN_00402f64 @ 0x402f64` (formatter's sign-byte emission).
+
+---
+
 <!--
 Template for new entries:
 
