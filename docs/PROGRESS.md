@@ -7,6 +7,142 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Localization cluster + word-wrap measurer (2 chips, 5 fns)
+
+Continuation of the same unattended session.  The prior dispatch
+closed out the text-input subsystem's editor leaves and adjacent
+dependencies.  This dispatch lands two more chips along the
+roadmap's "localization" branch — surfacing l2_eng.dat to the
+ported codebase, and porting the word-wrap measurer that the
+deferred text renderer (`FUN_00402637`) will need.
+
+### Chips landed
+
+1. **`src/localization` (NEW, ~135 LOC + 17 tests)** — accessor
+   cluster for the 120 KB localization blob loaded at retail
+   address `0x591580` by WinMain.  Four retail leaves:
+
+   - `FUN_0040187a` → `localization_offset`   (93 B) — 24-bit LE
+     offset decoder for the primary section table at `blob+8`.
+   - `FUN_004018d7` → `localization_seek_skip` (173 B) — set the
+     walker to a section, then skip N sub-string boundaries,
+     then skip leading control bytes.  Uses the "permissive"
+     boundary detector that accepts NUL-after-NUL.
+   - `FUN_004017bf` → `localization_read`      (187 B) — same as
+     seek_skip + memcpy out.  Uses the "strict" boundary detector
+     (no NUL-after-NUL).
+   - `FUN_004016f3` → `localization_write`     (204 B) — write
+     path; **zero retail callers**, asymmetric secondary offset
+     table (16-bit BE at `blob+0x1c`), no bounds check.  Ported
+     faithfully as dead code.
+
+2. **`src/font_metrics` extension (1 fn, 11 tests)** — next-word
+   pixel-width measurer for the word-wrap renderer:
+
+   - `FUN_004036f9` → `font_metrics_word_width` (235 B) — measures
+     the next word in a stream, returning pixel width and writing
+     `chars_consumed` (retail `DAT_005c9a7c`) for the byte count.
+     Implements the word-wrap state machine: leading spaces
+     contribute width (+4 each), internal space/'$' terminate the
+     word.  Used by `FUN_0040328e` (the 673-byte word-wrap loop
+     that the text renderer wraps).
+
+### Filed quirks (#20–#25)
+
+Six new entries in `docs/findings/engine-quirks.md`:
+
+  - **#20** — localization seek vs. read paths use DIFFERENT
+    boundary detectors.  Seek accepts NUL-after-NUL; read does
+    not.  A blob with consecutive NULs yields divergent boundary
+    counts between `seek N` and `read N` for the same N.
+  - **#21** — localization write uses an asymmetric secondary
+    offset table (16-bit BE, base anchor `blob+0x1c`) vs. the
+    read-side primary table (24-bit LE, base `blob[0]`).  Plus
+    zero retail callers — almost certainly dead editor-build code.
+  - **#22** — bounds checks are off-by-one in the read path
+    (`walker < base + 120001`) and absent entirely in the write
+    path.  Faithful port preserves both.
+  - **#23** — word-width measurer treats leading spaces as
+    word-internal (each contributes +4 width), but the first
+    internal space terminates the word.  Classic word-wrap rule.
+  - **#24** — `$` is a soft word boundary.  Leading `$` is
+    silently consumed.  The engine uses `$` as a macro-expansion
+    sigil (`$P` for player name, etc.) — the wrap state machine
+    consumes the sigil prefix before measuring the macro body.
+  - **#25** — 1999-iteration cap in word_width — one less than
+    the 2000-byte editor buffer size, a safety margin against
+    a buffer that lost its NUL terminator.
+
+### Headline numbers
+
+- **426 → 454 host tests** across both chips (17 + 11 new),
+  all green under ASan/UBSan.
+- **5 retail functions ported** (~890 B decompilation; 4 + 1).
+- **2 commits** — one per chip.
+- **1 new module** (`src/localization`).
+- **1 module extension** (`src/font_metrics`).
+- **6 new engine quirks filed**.
+- Cross-compile (mingw32) still clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### State of the text/rendering pipeline
+
+What's now in place:
+
+| layer                    | status     |
+| ------------------------ | ---------- |
+| char width               | ported     |
+| buffer width             | ported     |
+| bounded buffer width     | ported     |
+| word width + chars       | ported     |
+| editor (text_input)      | ported     |
+| localization blob access | ported     |
+| dirty-rect tracking      | ported     |
+| **text renderer**        | **deferred** (989 B, FUN_00402637) |
+| word-wrap renderer       | deferred (673 B, FUN_0040328e) |
+| centered-text wrapper    | deferred (96 B, FUN_004025d7) |
+| text-input renderer      | deferred (989 B, the editor's per-frame body) |
+
+Everything that the deferred renderers READ from is now ported.
+The deferred renderers themselves WRITE to the framebuffer (via
+the palette + draw primitives we don't have yet) and call into
+the keyboard-state globals — that's the next big scope.
+
+### What's next
+
+Two natural continuations:
+
+1. **Begin the renderer port** — `FUN_004025d7` (centered text
+   wrapper, 96 B) is the smallest and only depends on
+   `font_metrics_buffer_width_bounded` (have it) and
+   `FUN_00402637` (the actual renderer).  Could be ported as a
+   wrapper-only chip leaving `00402637` as an unimplemented
+   stub for now; that's a slightly weird shape but it lets us
+   move forward incrementally rather than landing the whole
+   989-byte renderer in one shot.  Alternative: port
+   `FUN_00402637` itself directly — that's a multi-chip endeavor
+   (the function paints into the framebuffer, manages the cursor
+   anchor state machine, drives keyboard repeat timers...).
+
+2. **Per-army struct modeling + handler ports** — the same
+   roadmap entry that's been deferred for two sessions now.
+   Spans multiple chips: 80-slot army table at `0x554492`
+   (`0x1b0` B/slot), then the type-30 delayed-action handler
+   (`FUN_0044800e` → `FUN_0047a76d`), then ~10 follow-up
+   handlers, plus army-distance/state probes
+   (`FUN_004673b8` / `FUN_00472227`).  Highest long-term
+   impact for the simulation port but doesn't help the
+   "see something running" milestone.
+
+Picking #1 (renderer wrapper or full) advances the visible-pixels
+milestone.  Picking #2 advances the simulation-fidelity milestone.
+
+This is a natural `/clear` point — both milestones are fresh
+scopes worth a fresh conversation, and the durable docs
+(PROGRESS, quirks, headers) capture everything needed to resume.
+
+---
+
 ## 2026-05-25 — Text-input subsystem follow-up (4 chips, 23 fns)
 
 Continuation of the same unattended session.  The previous
