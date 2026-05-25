@@ -1140,6 +1140,122 @@ upstream filter is the only thing keeping it dormant in retail.
 
 ---
 
+## 29. Glyph descriptor has two height fields, used at different stages
+
+Each 16-byte glyph descriptor in a Lords II font blob carries TWO
+"height-shaped" fields, read by different consumers:
+
+  - **`short` at descriptor +2** — the "natural" glyph extent in rows.
+    The Y-clip setter (`FUN_0040477b`) uses this to decide whether the
+    glyph fits inside the clip rect and to compute the top/bottom skip.
+  - **`byte` at descriptor +0xd** — a per-glyph cursor_y advance.  The
+    dispatcher reads it into `DAT_005bb478` and immediately *adds it to
+    cursor_y*, as if it were a line advance.
+
+What makes this interesting: `DAT_005bb478` then gets OVERWRITTEN by
+the Y-clip setter with the visible (post-clip) row count — that's the
+value the blitter actually reads as its outer-loop bound.  So one
+global has two unrelated uses, ordered carefully by the dispatcher to
+avoid clobbering before the cursor update:
+
+```c
+DAT_005bb478 = byte_at_descriptor_+0xd;          // step 1: stage advance
+DAT_00591528 += DAT_005bb478;                    // step 2: cursor_y += advance
+... (default-font tweak shaves) ...
+FUN_0040477b(...);                               // step 3: clip; OVERWRITES
+                                                 //         DAT_005bb478
+                                                 //         with row count
+FUN_004b41b7(font);                              // step 4: blitter reads the
+                                                 //         post-clip value
+```
+
+The natural reading is that the `short` at +2 is the *glyph height for
+clip math* and the `byte` at +0xd is the *cursor advance for the next
+glyph*.  Almost always they should be equal (a glyph occupies as many
+rows as it advances the cursor), but the engine treats them as
+independent — handy for descenders, accent marks above the baseline,
+or zero-height combining marks that consume zero rows but still
+advance the line.
+
+> 📍 `src/gfx_dispatch.c`'s `gfx_dispatch_glyph`,
+> `docs/decompiled/by-address/402a14.c`, Ghidra `FUN_00402a14` lines
+> reading `psVar2[1]` (height short) vs `psVar2[+0xd]` (advance byte).
+
+---
+
+## 30. Glyph dispatcher hard-codes per-character kerning tweaks for one font
+
+`FUN_00402a14` has three independent character-range checks that each
+decrement `cursor_y` by one pixel — but ONLY when the font passed in
+matches a specific global (`DAT_005af8f0`, one of the Charset blobs):
+
+```c
+if (font_base == &DAT_005af8f0) {
+    if (0x60 < c && c < 0x6e) cursor_y -= 1;   // 'a'..'m'
+    if (0x72 < c && c < 0x78) cursor_y -= 1;   // 's'..'w'
+    if (0x7f < c && c < 0x85) cursor_y -= 1;   // 0x80..0x84
+}
+```
+
+A few observations:
+
+  - **The tweaks are baked into the dispatcher, not the font.**  Two
+    callers using the same font data with different `font_base`
+    pointers would get different kerning.  Almost certainly a way to
+    reuse the same font blob with and without the tweak (one pointer
+    is the "tweaked" alias, the other is the raw).
+  - **The ranges look like a manual kerning pass.**  Lowercase
+    `'a'..'m'` covers most of the high-x-height lowercase letters
+    (a, c, e, m, n, o…); `'s'..'w'` picks up the rest.  The third
+    range is in the extended Latin block (0x80..0x84) — almost
+    certainly accented variants of the same lowercase letters.  A
+    type-designer would say these glyphs sit one pixel "tall" in the
+    font blob and need to be drawn one pixel "lower" to align.
+  - **The decrement happens AFTER `cursor_y += advance`.**  So the
+    effective draw position is `(prev_cursor_y + advance) - 1` — a
+    one-pixel shave per tweaked character.  Glyphs are positioned
+    vertically per-character.
+
+We expose the trigger font as a runtime registration
+(`gfx_dispatch_set_default_font`) so the test harness can pick which
+font gets the tweak.
+
+> 📍 `src/gfx_dispatch.c`'s `gfx_dispatch_glyph` default-font branch,
+> `docs/decompiled/by-address/402a14.c`, Ghidra `FUN_00402a14` at
+> `0x402a97` (`cmp dword [arg_8h], 0x5af8f0`).
+
+---
+
+## 31. Alt-clip rect mixes runtime globals with hard-coded constants
+
+The glyph dispatcher's alt-clip branch — used when an overlay panel
+(scenario list, hint text) wants to confine glyphs to a sub-rectangle
+— sources its clip bounds from FOUR places:
+
+  - **Left**: `DAT_0052afdc` (runtime global).
+  - **Right**: `0x1de` (hard-coded immediate in the dispatcher body).
+  - **Top**: `0x18` (hard-coded immediate).
+  - **Bottom**: `DAT_00553254` (runtime global).
+
+The two constants (478, 24) are pixel-perfect for the panel-overlay
+layout in 640×480 mode — they correspond to specific UI element
+edges baked into the dispatcher's body rather than configured
+externally.  Our port preserves the asymmetry: `set_alt_clip(enabled,
+left, bottom)` takes runtime values for the two axes that retail
+loads from globals, and the constants are encoded as `#define`s
+inside `src/gfx_dispatch.c`.
+
+This means OpenLords2 can't render text in a panel of a different
+size without re-compiling — the same constraint retail had.  Not a
+bug; just a design choice from 1996 where "the overlay is always 24
+pixels from the top and 478 pixels wide" was a fixed assumption.
+
+> 📍 `src/gfx_dispatch.c`'s `GFX_DISPATCH_ALT_CLIP_TOP/RIGHT` +
+> `gfx_dispatch_glyph` alt-clip branch, Ghidra `FUN_00402a14` at
+> `0x402b1b` / `0x402b34` (push immediates 0x1de / 0x18).
+
+---
+
 <!--
 Template for new entries:
 

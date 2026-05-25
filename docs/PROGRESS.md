@@ -7,6 +7,145 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Glyph dispatcher + clip setters (1 chip, 3 fns)
+
+Continuation of the same unattended session.  The previous dispatch
+landed the per-character glyph blitters and listed three follow-ups,
+with the glyph dispatcher + clip setters as the recommended next move
+toward the visible-pixels milestone.  This dispatch takes that step:
+ports the dispatcher cluster that drives the freshly-landed blitters
+on a per-character basis.
+
+### Chip landed
+
+**`src/gfx_dispatch` (NEW, ~310 LOC + 30 tests)** — 3 retail leaves
+spanning the (font_base, char_code) → blitter call path:
+
+  - `FUN_00402a14` → `gfx_dispatch_glyph`         (514 B) — the
+    per-character entry point.  Looks up glyph index, reads the
+    16-byte descriptor, advances cursor_y by the per-glyph advance
+    byte, applies default-font character-range tweaks, runs the two
+    clip setters, bakes top/left skips into the source pointer, and
+    dispatches one of the three blitters based on the X-clip mode
+    tag (gated on Y-clip != skip).
+  - `FUN_0040464c` → `gfx_dispatch_clip_x`        (303 B) — horizontal
+    clip setup.  Four outcomes: no-clip (0), left-clip (1, cursor_x
+    shifted to `left`), right-clip (2, clipped_w narrowed), skip (5,
+    glyph fully off-canvas).  Writes clipped_w / src_stride_pad /
+    dst_stride_pad through gfx_glyph's setters; dispatcher-private
+    state for the mode tag and left skip.
+  - `FUN_0040477b` → `gfx_dispatch_clip_y`        (291 B) — vertical
+    counterpart.  Same shape, plus the X→Y "skip" propagation rule
+    (X-clip of 5 forces Y-clip to 5 even when the glyph fits
+    vertically).  Writes the visible row count through a new
+    `gfx_glyph_set_glyph_h` setter — overwriting the per-glyph
+    advance byte the dispatcher staged earlier.
+
+State sharing with `gfx_glyph` is via three new getter/setter pairs:
+`gfx_glyph_cursor_x/y()`, `gfx_glyph_glyph_w/h()`, and
+`gfx_glyph_set_glyph_h()`.  Dispatcher-private state (clip-mode tags,
+height short, last_glyph_index, alt-clip rect) is held in
+`src/gfx_dispatch.c`'s file-statics — mirrors retail's BSS layout.
+
+### Filed quirks (#29, #30, #31)
+
+Three new entries in `docs/findings/engine-quirks.md`:
+
+  - **#29** — the 16-byte glyph descriptor has TWO height-shaped
+    fields: a `short` at +2 (read by clip_y for clip math) and a
+    `byte` at +0xd (used as cursor_y advance, then overwritten by
+    clip_y with the visible row count).  The dispatcher carefully
+    orders the writes so the advance is added to cursor_y BEFORE the
+    clipper clobbers the global.  Almost always equal, but treated as
+    independent — handy for descenders / accent marks / zero-height
+    combining marks.
+  - **#30** — the dispatcher hard-codes three character-range cursor_y
+    decrements (`'a'..'m'` / `'s'..'w'` / 0x80..0x84) that trigger
+    ONLY when the font matches a specific global (`DAT_005af8f0`).
+    Looks like a per-glyph kerning tweak baked into the dispatcher so
+    the same font blob can be reused with or without the tweak just
+    by passing a different font pointer.  We expose the trigger font
+    via `gfx_dispatch_set_default_font`.
+  - **#31** — the alt-clip rect (used when overlay panels need a
+    sub-rect for text) mixes runtime globals (left, bottom) with
+    hard-coded constants (top=0x18, right=0x1de) inside the
+    dispatcher body.  Pixel-perfect for the panel-overlay layout in
+    640×480 mode; OpenLords2 preserves the asymmetry — the constants
+    are `#define`s in `gfx_dispatch.c`, the runtime values are
+    settable via `gfx_dispatch_set_alt_clip`.
+
+### Headline numbers
+
+- **489 → 519 host tests** (30 new), all green under ASan/UBSan.
+- **3 retail functions ported** (~1.1 KB decompilation, 514 + 303 +
+  291 B).
+- **1 new module** (`src/gfx_dispatch`) + 3-pair extension to
+  `src/gfx_glyph` (4 getters + 1 row-count setter).
+- **3 new engine quirks filed** (#29, #30, #31).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Renderer pipeline state
+
+| layer                          | status     |
+| ------------------------------ | ---------- |
+| char width                     | ported     |
+| buffer width                   | ported     |
+| bounded buffer width           | ported     |
+| word width + chars             | ported     |
+| editor (text_input)            | ported     |
+| localization blob access       | ported     |
+| dirty-rect tracking            | ported     |
+| 1-pixel / 2x1 painters         | ported     |
+| clipped pixel / 2x1            | ported     |
+| glyph blitter (unclipped)      | ported     |
+| glyph blitter (clipped × 2)    | ported     |
+| **glyph dispatcher (per-char)** | **ported (this chip)** |
+| **clip setters (X + Y)**       | **ported (this chip)** |
+| line drawers (axis + diag)     | deferred (4 fns, 347+442+171+197 B) |
+| text renderer                  | deferred (989 B, `FUN_00402637`) |
+| word-wrap renderer             | deferred (673 B, `FUN_0040328e`) |
+| centered-text wrapper          | deferred (96 B, `FUN_004025d7`) |
+| sprite blitters (4x4/6x6/8x8)  | unanalyzed |
+
+The per-character path is now end-to-end in `src/`.  The test
+harness can hand a font blob + char-glyph table + char_code to
+`gfx_dispatch_glyph` and produce pixels on a bound canvas — verified
+across all four clip outcomes on both axes, the default-font
+character-range tweaks, and the source-pointer fixup after clip.
+
+### What's next
+
+Three natural continuations:
+
+1. **Text renderer** — port `FUN_00402637` (989 B), the per-frame
+   line/multi-line renderer that calls `gfx_dispatch_glyph` in a
+   loop.  Closes the remaining gap to "render a string in CI."
+   Depends on understanding the line layout state (cursor_x reset
+   per line, line-height accumulation, etc.) but everything below it
+   is now ported.
+2. **Word-wrap renderer** — `FUN_0040328e` (673 B), the multi-line
+   word-wrapping variant used by long help / scenario text.  Depends
+   on the same per-character path plus the word_width measurer
+   (already ported).
+3. **Wire gfx.c runtime to gfx_paint/gfx_glyph** — extend the
+   existing `IDirectDrawSurface::Lock` probe to set `lpSurface` onto
+   the gfx_paint canvas.  Small chip but requires a runtime smoke
+   test on the Windows host to validate.  Unblocks "draw a real
+   glyph during boot" as a manual end-to-end check.
+
+Picking #1 (text renderer) advances the visible-pixels milestone
+most directly — once it lands, the test harness can produce pixel-
+by-pixel golden comparisons against Frida-captured retail
+screenshots for arbitrary text strings.
+
+This is a natural `/clear` point — the per-character path is a
+complete stratum, and the next frontier (the text renderer that
+drives it in a loop) is a fresh multi-state scope worth a fresh
+conversation.
+
+---
+
 ## 2026-05-25 — Glyph blitter cluster (1 chip, 3 fns, byte-identical dedup)
 
 Continuation of the same unattended session.  The previous dispatch
