@@ -53,6 +53,26 @@ struct test_case {
     X(strutil_strip_ctrl_at_high_byte) \
     X(strutil_strip_ctrl_range_edges) \
     X(strutil_strip_ctrl_empty_string) \
+    X(strutil_to_upper_char_lowercase_in_range) \
+    X(strutil_to_upper_char_non_lowercase_returns_zero) \
+    X(strutil_to_lower_char_uppercase_in_range) \
+    X(strutil_to_lower_char_non_uppercase_returns_zero) \
+    X(strutil_to_upper_inplace_preserves_non_letters) \
+    X(strutil_to_upper_inplace_all_lowercase) \
+    X(strutil_to_upper_inplace_no_letters_unchanged) \
+    X(strutil_to_lower_inplace_preserves_non_letters) \
+    X(strutil_to_lower_inplace_all_uppercase) \
+    X(strutil_shift_left_deletes_first_byte) \
+    X(strutil_shift_left_at_interior_offset) \
+    X(strutil_shift_right_inserts_space) \
+    X(strutil_shift_right_interior_range) \
+    X(strutil_strip_leading_spaces_basic) \
+    X(strutil_strip_leading_spaces_no_leading) \
+    X(strutil_strip_leading_spaces_all_spaces) \
+    X(strutil_strip_leading_spaces_empty) \
+    X(strutil_trim_trailing_spaces_basic) \
+    X(strutil_trim_trailing_spaces_no_trailing) \
+    X(strutil_trim_trailing_spaces_preserves_leading) \
     \
     X(config_defaults_match_retail) \
     X(config_parse_empty_keeps_defaults) \

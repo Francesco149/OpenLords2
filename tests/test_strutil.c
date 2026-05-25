@@ -190,3 +190,206 @@ int test_strutil_strip_ctrl_empty_string(void)
     T_ASSERT_EQ_S((char *)s, "");
     return 0;
 }
+
+/* ──────────────────────────── case conversion ────────────────────── */
+
+int test_strutil_to_upper_char_lowercase_in_range(void)
+{
+    T_ASSERT_EQ_U(strutil_to_upper_char('a'), 'A');
+    T_ASSERT_EQ_U(strutil_to_upper_char('z'), 'Z');
+    T_ASSERT_EQ_U(strutil_to_upper_char('m'), 'M');
+    return 0;
+}
+
+int test_strutil_to_upper_char_non_lowercase_returns_zero(void)
+{
+    /* QUIRK: out-of-range inputs return 0, NOT the input. */
+    T_ASSERT_EQ_U(strutil_to_upper_char('A'), 0);   /* already uppercase */
+    T_ASSERT_EQ_U(strutil_to_upper_char('0'), 0);
+    T_ASSERT_EQ_U(strutil_to_upper_char(' '), 0);
+    T_ASSERT_EQ_U(strutil_to_upper_char('`'), 0);   /* 0x60, just below 'a' */
+    T_ASSERT_EQ_U(strutil_to_upper_char('{'), 0);   /* 0x7b, just above 'z' */
+    return 0;
+}
+
+int test_strutil_to_lower_char_uppercase_in_range(void)
+{
+    T_ASSERT_EQ_U(strutil_to_lower_char('A'), 'a');
+    T_ASSERT_EQ_U(strutil_to_lower_char('Z'), 'z');
+    T_ASSERT_EQ_U(strutil_to_lower_char('M'), 'm');
+    return 0;
+}
+
+int test_strutil_to_lower_char_non_uppercase_returns_zero(void)
+{
+    T_ASSERT_EQ_U(strutil_to_lower_char('a'), 0);
+    T_ASSERT_EQ_U(strutil_to_lower_char('0'), 0);
+    T_ASSERT_EQ_U(strutil_to_lower_char('@'), 0);   /* 0x40, just below 'A' */
+    T_ASSERT_EQ_U(strutil_to_lower_char('['), 0);   /* 0x5b, just above 'Z' */
+    return 0;
+}
+
+int test_strutil_to_upper_inplace_preserves_non_letters(void)
+{
+    /* Different from single-char: non-letters pass through unchanged
+     * (the single-char variant would zero them). */
+    unsigned char s[] = "Hello, World! 123";
+    strutil_to_upper_inplace(s);
+    T_ASSERT_EQ_S((char *)s, "HELLO, WORLD! 123");
+    return 0;
+}
+
+int test_strutil_to_upper_inplace_all_lowercase(void)
+{
+    unsigned char s[] = "abcdef";
+    strutil_to_upper_inplace(s);
+    T_ASSERT_EQ_S((char *)s, "ABCDEF");
+    return 0;
+}
+
+int test_strutil_to_upper_inplace_no_letters_unchanged(void)
+{
+    unsigned char s[] = "12345!@#";
+    strutil_to_upper_inplace(s);
+    T_ASSERT_EQ_S((char *)s, "12345!@#");
+    return 0;
+}
+
+int test_strutil_to_lower_inplace_preserves_non_letters(void)
+{
+    unsigned char s[] = "Hello, World! 123";
+    strutil_to_lower_inplace(s);
+    T_ASSERT_EQ_S((char *)s, "hello, world! 123");
+    return 0;
+}
+
+int test_strutil_to_lower_inplace_all_uppercase(void)
+{
+    unsigned char s[] = "ABCDEF";
+    strutil_to_lower_inplace(s);
+    T_ASSERT_EQ_S((char *)s, "abcdef");
+    return 0;
+}
+
+/* ──────────────────────────── shift_left / shift_right ──────────── */
+
+int test_strutil_shift_left_deletes_first_byte(void)
+{
+    unsigned char s[] = "ABCDE!";
+    /* Delete s[0] ('A'), shifting BCDE down; end at &s[5] (the '!'). */
+    strutil_shift_left(s, &s[5]);
+    /* Expected: "BCDE" with '\0' at index 5 (was '!'). */
+    T_ASSERT_EQ_I(s[0], 'B');
+    T_ASSERT_EQ_I(s[1], 'C');
+    T_ASSERT_EQ_I(s[2], 'D');
+    T_ASSERT_EQ_I(s[3], 'E');
+    T_ASSERT_EQ_I(s[4], '!');
+    T_ASSERT_EQ_I(s[5], 0);
+    return 0;
+}
+
+int test_strutil_shift_left_at_interior_offset(void)
+{
+    /* Delete s[2], range [s[2], s[5]]. */
+    unsigned char s[] = "ABCDEF";   /* "ABCDEF\0" */
+    strutil_shift_left(&s[2], &s[5]);
+    /* Expected: "ABDEF" with '\0' at index 5 (was 'F'). */
+    T_ASSERT_EQ_I(s[0], 'A');
+    T_ASSERT_EQ_I(s[1], 'B');
+    T_ASSERT_EQ_I(s[2], 'D');
+    T_ASSERT_EQ_I(s[3], 'E');
+    T_ASSERT_EQ_I(s[4], 'F');
+    T_ASSERT_EQ_I(s[5], 0);
+    return 0;
+}
+
+int test_strutil_shift_right_inserts_space(void)
+{
+    /* Insert at s[0], range [s[0], s[2]].  Buffer must have room for
+     * one more byte (end[1] gets the new terminator). */
+    unsigned char s[] = "AB" "\0\0\0";  /* "AB" + 3 extra bytes */
+    strutil_shift_right(s, &s[2]);
+    /* Expected: s[0] = 'A' (unchanged), s[1] = 'A' (shifted from
+     * s[0]), s[2] = 'B' (shifted from s[1]), s[3] = 0 (new term). */
+    T_ASSERT_EQ_I(s[0], 'A');
+    T_ASSERT_EQ_I(s[1], 'A');
+    T_ASSERT_EQ_I(s[2], 'B');
+    T_ASSERT_EQ_I(s[3], 0);
+    return 0;
+}
+
+int test_strutil_shift_right_interior_range(void)
+{
+    /* Shift right within "ABCDEF\0\0" — range [s[2], s[5]]. */
+    unsigned char s[] = "ABCDEF" "\0";  /* "ABCDEF" + 1 extra byte */
+    strutil_shift_right(&s[2], &s[5]);
+    /* s[0..1] unchanged; s[2] retains 'C' (orig); s[3] = 'C' (from
+     * orig s[2]); s[4] = 'D' (from orig s[3]); s[5] = 'E' (from orig
+     * s[4]); s[6] = 0 (new terminator). */
+    T_ASSERT_EQ_I(s[0], 'A');
+    T_ASSERT_EQ_I(s[1], 'B');
+    T_ASSERT_EQ_I(s[2], 'C');
+    T_ASSERT_EQ_I(s[3], 'C');
+    T_ASSERT_EQ_I(s[4], 'D');
+    T_ASSERT_EQ_I(s[5], 'E');
+    T_ASSERT_EQ_I(s[6], 0);
+    return 0;
+}
+
+/* ──────────────────────────── strip_leading / trim_trailing ────── */
+
+int test_strutil_strip_leading_spaces_basic(void)
+{
+    char s[] = "   hello";
+    strutil_strip_leading_spaces(s);
+    T_ASSERT_EQ_S(s, "hello");
+    return 0;
+}
+
+int test_strutil_strip_leading_spaces_no_leading(void)
+{
+    char s[] = "hello   ";
+    strutil_strip_leading_spaces(s);
+    T_ASSERT_EQ_S(s, "hello   ");   /* trailing untouched */
+    return 0;
+}
+
+int test_strutil_strip_leading_spaces_all_spaces(void)
+{
+    char s[] = "    ";
+    strutil_strip_leading_spaces(s);
+    T_ASSERT_EQ_S(s, "");
+    return 0;
+}
+
+int test_strutil_strip_leading_spaces_empty(void)
+{
+    char s[] = "";
+    strutil_strip_leading_spaces(s);
+    T_ASSERT_EQ_S(s, "");
+    return 0;
+}
+
+int test_strutil_trim_trailing_spaces_basic(void)
+{
+    char s[] = "hello   ";
+    strutil_trim_trailing_spaces(s);
+    T_ASSERT_EQ_S(s, "hello");
+    return 0;
+}
+
+int test_strutil_trim_trailing_spaces_no_trailing(void)
+{
+    char s[] = "hello";
+    strutil_trim_trailing_spaces(s);
+    T_ASSERT_EQ_S(s, "hello");
+    return 0;
+}
+
+int test_strutil_trim_trailing_spaces_preserves_leading(void)
+{
+    char s[] = "  hello  ";
+    strutil_trim_trailing_spaces(s);
+    T_ASSERT_EQ_S(s, "  hello");
+    return 0;
+}

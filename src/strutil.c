@@ -66,3 +66,105 @@ void strutil_strip_ctrl(unsigned char *str)
     }
     /* Already null-terminated at this point. */
 }
+
+/* ----- case conversion -------------------------------------------- */
+
+unsigned int strutil_to_upper_char(unsigned char c)
+{
+    /* Retail: 0 unless c ∈ ('`', '{') exclusive — i.e. 'a' through 'z'.
+     * Note the comparison `0x60 < c && c < 0x7b`. */
+    if (0x60 < c && c < 0x7b) {
+        return (unsigned int)(c - 0x20);
+    }
+    return 0;
+}
+
+unsigned int strutil_to_lower_char(unsigned char c)
+{
+    if (0x40 < c && c < 0x5b) {
+        return (unsigned int)(c + 0x20);
+    }
+    return 0;
+}
+
+void strutil_to_upper_inplace(unsigned char *str)
+{
+    /* Different from the single-char variant: this one preserves
+     * non-letter bytes (the single-char variant would zero them). */
+    if (!str) return;
+    for (; *str; str++) {
+        unsigned char c = *str;
+        if (0x60 < c && c < 0x7b) {
+            *str = (unsigned char)(c - 0x20);
+        }
+    }
+}
+
+void strutil_to_lower_inplace(unsigned char *str)
+{
+    if (!str) return;
+    for (; *str; str++) {
+        unsigned char c = *str;
+        if (0x40 < c && c < 0x5b) {
+            *str = (unsigned char)(c + 0x20);
+        }
+    }
+}
+
+/* ----- string mutation -------------------------------------------- */
+
+void strutil_shift_left(unsigned char *start, unsigned char *end)
+{
+    /* Walks p from start to end-1, copying p[1] into p[0].  After the
+     * loop p == end; the terminator write at *end finalizes the
+     * deletion. */
+    unsigned char *p = start;
+    for (; p < end; p++) {
+        *p = p[1];
+    }
+    *p = 0;     /* *end = 0 */
+}
+
+void strutil_shift_right(unsigned char *start, unsigned char *end)
+{
+    /* Right-shift, iterating end→start+1 to avoid clobbering source.
+     * end[1] is the new terminator slot. */
+    end[1] = 0;
+    for (; start < end; end--) {
+        *end = end[-1];
+    }
+    /* On exit end == start; *start is untouched (retains its original
+     * byte, which is now duplicated into *(start+1)).  Caller usually
+     * overwrites *start with its inserted character. */
+}
+
+void strutil_strip_leading_spaces(char *str)
+{
+    /* Quadratic — for each leading space, shift the entire string
+     * one byte left.  Retail does this verbatim; we mirror it. */
+    if (!str) return;
+    while (*str == ' ') {
+        for (int i = 0; str[i] != '\0'; i++) {
+            str[i] = str[i + 1];
+        }
+    }
+}
+
+void strutil_trim_trailing_spaces(char *str)
+{
+    if (!str) return;
+
+    /* First pass: find the position of the null terminator. */
+    int i = 0;
+    while (str[i] != '\0') i++;
+
+    /* Walk backward, replacing trailing spaces with '\0'.  Retail's
+     * loop decrements i BEFORE checking, so on an all-spaces string
+     * the final check reads str[-1].  We mirror that read literally —
+     * see header for the OOB-read quirk note. */
+    for (;;) {
+        i--;
+        if (str[i] != ' ') break;
+        str[i] = '\0';
+    }
+}

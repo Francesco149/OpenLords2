@@ -61,4 +61,60 @@ void strutil_bounded_copy(void *dst, const void *src, int n);
  * stripping trailing CR/LF/whitespace from .ini value lines. */
 void strutil_strip_ctrl(unsigned char *str);
 
+/* ----- case conversion -------------------------------------------- */
+
+/* Port of `FUN_00401176 @ 0x401176`.  Single-char to-upper.
+ * Returns param-0x20 iff param ∈ ['a', 'z'], else 0.
+ * Note: out-of-range inputs return 0, NOT param unchanged. */
+unsigned int strutil_to_upper_char(unsigned char c);
+
+/* Port of `FUN_004011b0 @ 0x4011b0`.  Single-char to-lower.
+ * Returns param+0x20 iff param ∈ ['A', 'Z'], else 0.
+ * Same out-of-range-returns-zero quirk as the upper variant. */
+unsigned int strutil_to_lower_char(unsigned char c);
+
+/* Port of `FUN_004011ea @ 0x4011ea`.  In-place to-upper across a
+ * null-terminated string.  Each char in ['a','z'] is converted to
+ * the corresponding uppercase; other chars pass through unchanged.
+ * (Note: the whole-string variant is DIFFERENT from the single-char
+ * variant — it preserves non-letter bytes, while strutil_to_upper_char
+ * zeros them.  Both behaviors are preserved verbatim.) */
+void strutil_to_upper_inplace(unsigned char *str);
+
+/* Port of `FUN_00401246 @ 0x401246`.  In-place to-lower mirror of
+ * the above; chars in ['A','Z'] become lowercase, others pass
+ * through unchanged. */
+void strutil_to_lower_inplace(unsigned char *str);
+
+/* ----- string mutation -------------------------------------------- */
+
+/* Port of `FUN_00401303 @ 0x401303`.  Left-shift the slice
+ * [start, end] by one byte: deletes the character at *start, shifts
+ * (end - start) bytes leftward, and writes '\0' at *end.
+ * Effectively `memmove(start, start+1, end - start); *end = '\0';`. */
+void strutil_shift_left(unsigned char *start, unsigned char *end);
+
+/* Port of `FUN_00401333 @ 0x401333`.  Right-shift the slice
+ * [start, end] by one byte: writes '\0' at end[1] (extends by one),
+ * shifts (end - start) bytes rightward.  Leaves the byte at *start
+ * with its original value (effectively duplicated into start[1]) —
+ * caller typically overwrites *start immediately after. */
+void strutil_shift_right(unsigned char *start, unsigned char *end);
+
+/* Port of `FUN_00401364 @ 0x401364`.  Strip ALL leading spaces from
+ * `str` in place.  Operates as: while *str == ' ', shift the entire
+ * string one byte left.  Quadratic in the number of leading spaces;
+ * preserved verbatim from retail. */
+void strutil_strip_leading_spaces(char *str);
+
+/* Port of `FUN_004013bc @ 0x4013bc`.  Trim trailing spaces from
+ * `str` in place by replacing them with '\0' from the end backward.
+ * QUIRK: if the string is all-spaces, retail's decrement-then-test
+ * loop reads one byte before the start (`str[-1]`) on the exit
+ * check.  Caller-invisible iff the byte before isn't ' '.  Preserved
+ * verbatim — callers in retail are documented as always passing
+ * pointers to interior offsets of larger buffers, so the OOB read
+ * never goes past the surrounding allocation. */
+void strutil_trim_trailing_spaces(char *str);
+
 #endif /* OPENLORDS2_STRUTIL_H */
