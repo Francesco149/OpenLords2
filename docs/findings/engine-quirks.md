@@ -1551,6 +1551,191 @@ deliberately fail.
 
 ---
 
+## 41. Label-render `prefix` overwrites buffer[0] rather than prepending
+
+The four label-render wrappers (`FUN_00402f64`, `FUN_00403015`,
+`FUN_004030c6`, `FUN_00403190`) all take a `char prefix` parameter.
+The wrapper body is:
+
+    FUN_004022bd(value, 1, 0);          /* format digits at offset 1 */
+    if (prefix != 0) {
+        DAT_0058fda0 = prefix;          /* OVERWRITE byte 0 */
+    }
+    /* ...append suffix, render... */
+
+The formatter is called with offset=1, so it writes the sign (if any)
+at buffer[1] and digits at buffer[1..count].  Buffer[0] is left as 0
+by the prior zero-fill.  The prefix then drops INTO buffer[0] — it
+isn't a "prepended" character; it's the byte-0 sentinel slot.
+
+So `prefix=' '` with value=42 yields the buffer `" 42\0"` (space at
+[0], "42" at [1..2]); `prefix='@'` yields `"@42\0"`.  All retail
+callers rely on this slot being either a separator (' ') for rank
+lists or an icon-like sigil ('@') for stat readouts — there's no
+"unprefixed" path that uses buffer[0] for a digit.  The width budget
+implicitly includes the prefix slot.
+
+A future caller passing `prefix=0` will get a 1-byte gap (NUL) at
+the start of the buffer, which the renderer skips silently — but no
+retail callsite does this.
+
+> 📍 `src/gfx_text_label.c`'s `apply_prefix`, Ghidra `FUN_00402f64
+> @ 0x402f64` / `FUN_00403015 @ 0x403015` / `FUN_004030c6 @ 0x4030c6`
+> / `FUN_00403190 @ 0x403190`.
+
+---
+
+## 42. Integer formatters silently render zero digits for large values
+
+The two digit formatters (`FUN_004022bd` decimal, `FUN_00402447` hex)
+both pick a digit count by walking a magnitude cascade:
+
+    if      (v <         10) count = 1;
+    else if (v <        100) count = 2;
+    ...
+    else if (v < 1000000000) count = 9;
+    else                     count = 0;       /* dec */
+
+    if      (v < 0x10)       count = 1;
+    ...
+    else if (v < 0x10000000) count = 7;
+    else                     count = 0;       /* hex */
+
+The digit-write loop then iterates `count` times.  When `count == 0`,
+the loop body never executes — the formatter writes the sign byte
+(if any), then no digits.  Net effect: values ≥ 10^9 (decimal) or
+≥ 0x10000000 (hex) render as just `""`, `"-"`, or `"+"` with no
+number.
+
+Almost certainly a "callers never pass values this large" assumption
+— in 1996 a 30-bit player stat was implausible.  Modern callers that
+land in this regime (e.g. an experimental mod with high resource
+caps) would see the digits silently vanish with no diagnostic.
+
+Our port keeps the silent-zero branch verbatim; tests assert that
+`format_dec(10^9, ...)` produces an empty string and
+`format_dec(-10^9, ...)` produces `"-"`.
+
+> 📍 `src/gfx_text_label.c`'s `gfx_text_label_format_dec` /
+> `gfx_text_label_format_hex`, Ghidra `FUN_004022bd @ 0x4022bd` /
+> `FUN_00402447 @ 0x402447`.
+
+---
+
+## 43. Format buffer pre-zero scope is 100 bytes (not the full 8000)
+
+Both integer formatters open with:
+
+    for (i = 0; i < 100; i++) {
+        DAT_0058fda0[i] = 0;
+    }
+
+The format buffer (`DAT_0058fda0`) is 8000 bytes wide.  Only the
+first 100 bytes are zeroed before each format/render — bytes 100+
+retain whatever a prior caller left there.
+
+This is fine in practice because:
+  - The longest formatted prefix+digits+suffix sequence in real
+    callers is well under 100 bytes (typically ≤ 16 bytes).
+  - The suffix-append walks until the first NUL, which always lies
+    within the zeroed region.
+
+But the buffer is **genuinely shared mutable state** across multiple
+subsystems: the label-render path here, and the save-name copy paths
+in `FUN_004afab9` and `FUN_004afeed` (not yet ported) which READ
+bytes 0..99 of the same buffer.  Any future addition that wants to
+stage longer strings in this buffer needs to extend the zero scope.
+
+> 📍 `src/gfx_text_label.c`'s `format_zero_and_sign`, Ghidra
+> `FUN_004022bd @ 0x4022bd` and `FUN_00402447 @ 0x402447`.
+
+---
+
+## 44. Signed-color label render skips entirely when both inputs are zero
+
+`FUN_00403190` is the only label-render wrapper with an "early
+return" gate:
+
+    if ((param_1 != 0) || (param_2 != 0)) {
+        /* ...format + render... */
+    }
+    /* fall through with no render */
+
+`param_1` is the value to format; `param_2` is a sister value (no
+captured callers; semantics inferred).  When BOTH are zero, the
+wrapper returns without touching the format buffer or invoking the
+renderer.
+
+Inferred design: the wrapper renders a delta (e.g. "+5" or "-3"), and
+`param_2` is a companion stat for the same UI row.  When both stats
+are zero, the whole row is uninteresting and gets suppressed — a
+common pattern in resource panels where empty deltas would clutter
+the display.
+
+No captured callsite exists in the decompiled corpus for this
+function, so the semantics are unverified.  Our port honors the gate
+verbatim; tests assert that `render_dec_signed(0, 0, ...)` leaves
+the format buffer untouched (sentinel survives) and produces zero
+pixels.
+
+> 📍 `src/gfx_text_label.c`'s `gfx_text_label_render_dec_signed`,
+> Ghidra `FUN_00403190 @ 0x403190`.
+
+---
+
+## 45. Centered label-render variants embed a NUL between digits and suffix
+
+Two pairs of label-render wrappers share the same shape — format
+digits, optional prefix, append suffix, render — but the centered
+variants (`FUN_004030c6` and `FUN_00403190`) walk the buffer with a
+do/while loop that advances ONE byte past the first NUL:
+
+    /* centered variant — buggy off-by-one */
+    do {
+        prev = local_8;
+        local_8++;
+    } while (buf[prev] != 0);
+    /* loop exits with local_8 = (first-NUL-index) + 1 */
+
+The non-centered variants (`FUN_00402f64`, `FUN_00403015`) use the
+standard for-loop pattern that stops AT the NUL:
+
+    /* non-centered variant — correct */
+    while (buf[local_8] != 0) {
+        local_8++;
+    }
+    /* loop exits with local_8 = first-NUL-index */
+
+The suffix is then appended starting at `buf[local_8]`.  In the
+centered case, that's one byte PAST the formatter's terminating NUL
+— leaving an embedded NUL between the digits and the suffix.  The
+text renderer stops at the first NUL, so the suffix is **never
+rendered**.
+
+This is a real bug in retail — the centered render effectively only
+shows the formatted number, never the suffix.  It survived for 30
+years because every retail callsite passes either an empty suffix or
+a single-char suffix (typically `" "`).  The "missing" trailing space
+on a centered row is invisible to the eye.
+
+Source-level the two implementations look identical; the divergence
+appears to be MSVC 4.20 emitting different loop shapes for what was
+probably copy-pasted code with a small textual difference (an extra
+`++` operator, a different for-loop init, etc.).  R2 disassembly of
+both functions confirms the divergence at the byte level — not a
+Ghidra mis-decompilation.
+
+Our port preserves both behaviors as distinct helpers
+(`append_suffix` vs `append_suffix_off_by_one`); a regression test
+witnesses the embedded NUL on the centered path.
+
+> 📍 `src/gfx_text_label.c`'s `append_suffix` and
+> `append_suffix_off_by_one`, Ghidra `FUN_00402f64 @ 0x402f64` /
+> `FUN_00403015 @ 0x403015` (correct) vs `FUN_004030c6 @ 0x4030c6` /
+> `FUN_00403190 @ 0x403190` (off-by-one).
+
+---
+
 <!--
 Template for new entries:
 

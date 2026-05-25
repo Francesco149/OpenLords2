@@ -7,6 +7,189 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Int formatter + label-render cluster (1 chip, 6 fns)
+
+Continuation of the same unattended session.  The previous dispatch
+landed the line drawer and axis-rect wrappers and listed three
+follow-ups.  The first of those — porting `FUN_00403015`, the small
+string-concat-and-render wrapper — expanded once the surrounding
+cluster was surveyed: the wrapper sits atop a 6-function family
+(two integer formatters + four render wrappers) that share a single
+8000-byte format buffer and a common shape.  This dispatch ports the
+entire cluster.  Closes out the last text-control entry-point block.
+
+### Chip landed
+
+**`src/gfx_text_label` (NEW, ~280 LOC + 27 tests)** — 6 retail leaves
++ 3 private helpers spanning the int-format-then-render family:
+
+  - `FUN_004022bd` → `gfx_text_label_format_dec`        (394 B)
+    Integer → decimal digits.  1-9 digits sized to magnitude;
+    ≥10^9 silently writes ZERO digits (quirk #42).  Sign byte
+    ('-' for negatives, '+' if `with_plus`) written at `offset`,
+    digit start shifted accordingly.
+  - `FUN_00402447` → `gfx_text_label_format_hex`        (400 B)
+    Same shape, uppercase hex.  1-7 digits; ≥0x10000000 silent.
+    MSVC's sign-aware abs trick (`(b ^ s) - s & 0xf ^ s) - s`) for
+    nibble extraction simplified to `& 0xf` since the prelude
+    strips the sign — bytes-on-disk identical.
+  - `FUN_00402f64` → `gfx_text_label_render_dec`        (177 B)
+    Render `"<prefix?><dec(value)><suffix>"` via
+    `gfx_text_render_line`.  Prefix overwrites buffer[0] — see
+    quirk #41.
+  - `FUN_00403015` → `gfx_text_label_render_hex`        (177 B)
+    Same shape, uppercase hex — used by the leaderboard / rank
+    screens.
+  - `FUN_004030c6` → `gfx_text_label_render_dec_centered` (202 B)
+    Centered variant — routes through
+    `gfx_text_render_line_centered`.  Buggy off-by-one strlen
+    leaves an embedded NUL between digits and suffix — see quirk
+    #45.
+  - `FUN_00403190` → `gfx_text_label_render_dec_signed` (254 B)
+    Centered + signed-color variant.  Skips render when both
+    `value` and `zero_companion` are zero (quirk #44).  Picks
+    `color_positive` or `color_negative` by sign; formats with
+    `with_plus=1` so positives render with a leading '+'.  No
+    captured callsites — semantics inferred from control flow.
+
+Module state: a single module-private 8000-byte format buffer
+(`g_format_buffer`, mirrors retail's `DAT_0058fda0`) that the
+formatters write into and the renderers read from.  Exposed via
+`gfx_text_label_buffer()` / `gfx_text_label_buffer_size()` so the
+save-name copy paths (`FUN_004afab9` / `FUN_004afeed`, not yet
+ported) can share the same storage when they land.
+
+Private helpers:
+
+  - `format_zero_and_sign` — shared prelude for both formatters
+    (zeros first 100 bytes, emits sign byte, returns updated digit
+    offset).
+  - `apply_prefix` — overwrites buffer[0] when prefix != 0.
+  - `append_suffix` / `append_suffix_off_by_one` — two strlen-
+    equivalent suffix-appenders mirroring the for-loop (correct)
+    and do-while (off-by-one) patterns retail uses for the
+    non-centered and centered variants respectively.
+
+Verified the divergent strlen shape via `r2 -c 'af; pdf'` against
+retail's `Lords2.exe` — Ghidra's decomp of the do/while loop is
+faithful at the byte level, not a decompiler artifact.
+
+### Filed quirks (#41, #42, #43, #44, #45)
+
+Five new entries in `docs/findings/engine-quirks.md`:
+
+  - **#41** — `prefix` parameter OVERWRITES buffer[0] rather than
+    prepending.  The formatter is called with offset=1, leaving
+    buffer[0] as the byte-0 sentinel; the prefix drops into it.
+    All retail callers rely on buffer[0] being either a separator
+    (' ') or icon-like sigil ('@').
+  - **#42** — Integer formatters silently emit ZERO digits for
+    values ≥ 10^9 (decimal) or ≥ 0x10000000 (hex).  The digit-
+    count cascade has a default `count = 0` branch and the digit-
+    write loop simply doesn't fire.  Sign byte still emitted.
+    Almost certainly a "no caller passes values this large" 1996
+    assumption — invisible in practice but a latent footgun for
+    high-cap mods.
+  - **#43** — Format buffer pre-zero scope is 100 bytes (of an
+    8000-byte buffer).  Bytes 100+ retain prior caller state.  The
+    label-render path's prefix+digits+suffix stays well under 100,
+    but the buffer is shared with the save-name copy paths.
+  - **#44** — `FUN_00403190` early-returns when both `value` and
+    `zero_companion` are zero — no formatter call, no render.
+    Inferred as a "suppress all-zero rows" gate for a delta UI.
+  - **#45** — The centered label-render variants embed a NUL
+    between the digits and the suffix because their do/while
+    strlen-equivalent advances ONE byte past the first NUL.  The
+    text renderer stops at the first NUL → the suffix is INVISIBLE.
+    Real bug, present in retail for 30 years, masked by every
+    callsite using a single-char (" ") or empty suffix.
+
+### Headline numbers
+
+- **580 → 607 host tests** (27 new), all green under ASan/UBSan.
+- **6 retail functions ported** (~1.6 KB decompilation, 394 + 400
+  + 177 + 177 + 202 + 254 B = 1604 B counting all six).
+- **1 new module** (`src/gfx_text_label`) — no extensions to other
+  modules; the renderer (`gfx_text_render_line` /
+  `gfx_text_render_line_centered`) and dispatcher
+  (`gfx_dispatch_set_alt_clip_enabled`) were already in place.
+- **5 new engine quirks filed** (#41, #42, #43, #44, #45).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Renderer pipeline state
+
+| layer                          | status     |
+| ------------------------------ | ---------- |
+| char width                     | ported     |
+| buffer width                   | ported     |
+| bounded buffer width           | ported     |
+| word width + chars             | ported     |
+| editor (text_input)            | ported     |
+| localization blob access       | ported     |
+| dirty-rect tracking            | ported     |
+| 1-pixel / 2x1 painters         | ported     |
+| clipped pixel / 2x1            | ported     |
+| glyph blitter (unclipped)      | ported     |
+| glyph blitter (clipped × 2)    | ported     |
+| glyph dispatcher (per-char)    | ported     |
+| clip setters (X + Y)           | ported     |
+| text renderer (per-line)       | ported     |
+| centered-text wrapper          | ported     |
+| substitution stream            | ported     |
+| word-wrap renderer (buffer)    | ported     |
+| word-wrap renderer (localized) | ported     |
+| localization line render       | ported     |
+| localization line centered     | ported     |
+| solid Bresenham line           | ported     |
+| dotted axis-aligned line       | ported     |
+| solid rect outline             | ported     |
+| 3D bevel rect (3 palettes)     | ported     |
+| **int formatter (dec + hex)**       | **ported (this chip)** |
+| **label render (dec + hex + centered)** | **ported (this chip)** |
+| **label render (signed-color)**         | **ported (this chip)** |
+| compound "label + signed value" | deferred (344 B, `FUN_00402e0c`) |
+| sprite blitters (4x4/6x6/8x8)  | unanalyzed |
+
+The text-control entry points are now end-to-end in `src/`.  The
+last text-class deferred function is `FUN_00402e0c` (344 B), a
+compound wrapper that renders a localization-string label then a
+signed value with sign-conditional color — discovered while
+auditing callers of `FUN_00402f64`.  It composes the renderer and
+the label-render module ported here; could be folded in as a
+follow-up chip if needed, or skipped in favor of the next subsystem.
+
+### What's next
+
+Three natural continuations:
+
+1. **Compound label + signed value** — port `FUN_00402e0c`
+   (344 B), the wrapper that combines a localization-string render
+   with a signed-value render in two halves.  Small chip; closes
+   the very last text-cluster entry point.  Composes
+   `gfx_text_render_line` and the label-render module ported here.
+2. **Wire gfx.c runtime to the renderer** — extend the
+   `IDirectDrawSurface::Lock` probe to set `lpSurface` onto the
+   gfx_paint canvas.  Small chip but requires a runtime smoke test
+   on the Windows host to validate "render a real string + frame
+   during boot".  Visible-pixels milestone earned at this point.
+3. **Sprite blitter (4x4 / 6x6 / 8x8 tiles)** — the next deferred
+   class of leaves.  Larger scope; uncovers the tile-format readers
+   the renderer needs for the map view.
+
+Picking #2 (runtime wiring) would unlock visible-pixels validation
+end-to-end, but it's gated on user-observed Windows-host behavior.
+Picking #1 (compound wrapper) is the smallest remaining text chip
+and keeps autonomous progress moving; #3 is a much larger scope and
+a fresh subsystem.
+
+This is a natural `/clear` point — the int-formatter + label-render
+cluster is now end-to-end, and the next frontier (compound wrapper,
+runtime wiring, or sprite blitters) is a fresh scope worth a fresh
+conversation.
+
+---
+
 ## 2026-05-25 — Line drawer + axis-rect wrappers (1 chip, 6 fns)
 
 Continuation of the same unattended session.  The previous dispatch
