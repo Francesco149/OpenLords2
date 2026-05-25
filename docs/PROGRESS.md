@@ -7,6 +7,108 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Per-tile struct pinned + FUN_004917dd ported
+
+Two tightly-coupled units of work this session.
+
+### Per-tile 8-byte struct pin-down (gap from prior dispatch)
+
+Closed the "unknowns" item from the save-format finding: every byte
+offset 0..7 of the 6400-record array at `DAT_005440e0` has a confirmed
+role, derived from a full sweep of byte-offset writers across `all.c`.
+Replaced the provisional table in `docs/findings/save-format.md` with:
+
+| offset | persistent | meaning |
+|--------|:-:|---------|
+| +0 | no  | terrain/improvement type (enum 0..0x29; ranges 0x40..0x4F pass through) |
+| +1 | YES | flags; bit 0x10 = "footprint cell" confirmed |
+| +2 | no  | runtime flags (& 0xe3 mask; bit 0x80 = building center) |
+| +3 | YES | dual-use — disk anchor char ('@'/'C'/'X'/'[') or runtime footprint glyph ('A'..'R') from the table at `0x4d9dd0` |
+| +4 | no  | build/improvement stage (0..15) driving +7 transitions |
+| +5 | no  | back-pointer to per-castle slot index (via per-castle struct's +0x1c) |
+| +6 | no  | back-pointer to combat-unit index (via per-combat-unit struct's +0x1c) |
+| +7 | no  | runtime visual stage / sprite frame (autotiled against +7 of neighbors) |
+
+Bonus: the 80×80 grid dimensions are now positively confirmed (vs
+provisional) — the scenario-byte translator's nested loop has both
+x and y bounded by 0x50, with row stride 640.  Also decoded the
+scenario-byte → +0 mapping in full (e.g. `0` → grass, `0x20..0x3F`
+→ building anchor with `+3 = raw char`, `0x50..0x5F` → road segment
+with `+3 = raw_char + 0x2c`).
+
+### Ninth port: `FUN_004917dd` (castle-load footprint expansion)
+
+Cashed in the pin-down by porting the gap-closer the save dispatch
+flagged.  When a Castles.dat scenario block loads, every tile whose
++3 holds a building anchor char needs runtime expansion: lay down a
+3×3 footprint of glyphs, mark a door neighbor, refresh two whole-grid
+scratches, and record the change in a small recent-changes list.
+
+Functions ported (all pure C; no globals, no Win32 deps; ~280 LOC
+of port for ~700 B retail):
+
+  - `FUN_004917dd` → `engine_tile_expand_footprint`  (top-level)
+  - `FUN_004921e5` → `engine_tile_set_footprint_neighbor_flags`
+  - `FUN_00471c1f` → `engine_tile_refresh_path_scratch`
+  - `FUN_00471d30` → `engine_tile_refresh_stage_scratch`
+  - `FUN_0048ee46` → `engine_tile_push_footprint_record`
+
+The 9-glyph-per-orientation footprint table at retail VA `0x4d9dd0`
+was extracted off-line via PE-section walk; transcribed in-place into
+`k_footprint_glyphs` (4 rows for orients 0/2/4/6, keyed by anchor
+char).  Indices 1/3/5 of the table are zero-filled in retail and
+unused — the engine never feeds an odd orient.
+
+21 host unit tests added — every helper, every recognized anchor's
+glyph pattern, every door-neighbor write triplet, plus the unrecog-
+nized-anchor no-op.  **186 tests total pass** under ASan + UBSan
+(was 165).  Diff-test .so build target also picks up the new module.
+
+### Quirk #8 filed
+
+Documented in `docs/findings/engine-quirks.md`: the neighbor-flag
+helper has a load-bearing bug where the y-direction (+4) writes are
+gated on the *orthogonal* axis's bound (e.g. `col < 79` gates an up/
+down neighbor write).  Geometrically nonsense, but callers feed only
+interior coords so the write stays in-array.  Preserved verbatim in
+the port.
+
+### What's next
+
+1. **Wire FUN_004917dd into the diff harness as the 9th target.**
+   The retail-side state surface is large (~70 KB across 4 tile-
+   adjacent globals + a 19-entry list + a scalar), but the seed-shared
+   payload pattern from `state_hash` carries over.  This is the
+   bigger leftover from this session.
+
+2. **Start porting `FUN_004472ce` (MP delayed-action dispatcher)** —
+   carried from prior dispatch.  Smaller in line count (1046 B
+   retail) than initially feared but the vtable dispatch at
+   `PTR_FUN_004d5c98[type]` means most of it isn't testable in
+   isolation until the handlers are ported.  Queue-management half
+   (everything up to the dispatch) is diffable with a stubbed
+   table.
+
+3. **Pull the castle-load fixup into our save_load chain.**  The
+   port exists but the load path still doesn't call it.  After
+   `castles_read_scenario` populates +1/+3 from disk, we should
+   walk the 6400 cells and invoke `engine_tile_expand_footprint`
+   on every tile whose +3 is one of '@'/'C'/'X'/'['.  Pre-req
+   for any "load + render" smoke test.
+
+4. **Wire save/load into the drop-in's runtime command surface**
+   — carried over from the prior dispatch; no progress this round.
+
+5. **Diagnose the Quit-Game freeze + orchestrator-teardown hang** —
+   carried over from prior dispatches.
+
+Bias next time: option 1 (diff harness wiring for the new port) so
+the ninth target lands fully validated, then option 3 (call the
+fixup from `castles_read_scenario`) since both are needed before
+the first end-to-end load+render smoke test.
+
+---
+
 ## 2026-05-25 — Eighth diff target: engine_compute_state_hash (FUN_00440231)
 
 First sub-step body port unlocked by yesterday's save-schema map.
