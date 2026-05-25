@@ -38,6 +38,7 @@ SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c \
                    ../src/engine_math.c \
                    ../src/engine_path.c \
                    ../src/text_input.c \
+                   ../src/font_metrics.c \
                    ../src/save.c
 
 # Test files — each defines one or more `int test_<name>(void)`
@@ -56,6 +57,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_math.c \
                    test_engine_path.c \
                    test_text_input.c \
+                   test_font_metrics.c \
                    test_save.c
 
 OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o)) \

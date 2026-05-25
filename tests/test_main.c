@@ -436,6 +436,21 @@ struct test_case {
     X(text_input_copy_out_zero_max_writes_only_terminator) \
     X(text_input_copy_out_empty_buf_writes_only_terminator) \
     X(text_input_scenario_type_then_backspace) \
+    \
+    X(font_metrics_char_width_null_char_returns_zero) \
+    X(font_metrics_char_width_space_returns_four) \
+    X(font_metrics_char_width_missing_returns_zero_clears_idx) \
+    X(font_metrics_char_width_null_table_treats_as_missing) \
+    X(font_metrics_char_width_glyph_one_byte_low) \
+    X(font_metrics_char_width_glyph_combined_hi_lo) \
+    X(font_metrics_char_width_cache_reflects_last_call) \
+    X(font_metrics_buffer_width_sums_chars) \
+    X(font_metrics_buffer_width_empty_string_zero) \
+    X(font_metrics_buffer_width_spaces_only) \
+    X(font_metrics_buffer_width_missing_chars_count_zero) \
+    X(font_metrics_buffer_width_overflow_at_threshold) \
+    X(font_metrics_buffer_width_overflow_just_below_threshold) \
+    X(font_metrics_buffer_width_overflow_clears_on_subsequent_call) \
     /* end */
 
 /* Emit extern decls. */
