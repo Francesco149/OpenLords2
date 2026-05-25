@@ -52,3 +52,43 @@ int font_metrics_buffer_width(font_metrics_state_t *s,
     s->pixel_overflow = (max_pixel_width <= total) ? 1 : 0;
     return total;
 }
+
+int font_metrics_buffer_width_bounded(font_metrics_state_t *s,
+                                      const unsigned char *buf,
+                                      const unsigned char *font)
+{
+    int total     = 0;
+    int remaining = 10000;
+    while (remaining >= 1) {
+        unsigned char c = *buf;
+        buf++;
+        if (c == 0) {
+            return total;
+        }
+        if (c == 0x20) {
+            total += 4;
+        } else {
+            /* Retail does `last_glyph_index = tbl[c]` unconditionally
+             * first (so missing chars end up with last_glyph_index=0),
+             * then conditionally decrements to the 0-based index. */
+            int glyph_idx_one_based = 0;
+            if (s->char_glyph_index != NULL) {
+                glyph_idx_one_based = s->char_glyph_index[c];
+            }
+            s->last_glyph_index = glyph_idx_one_based;
+            if (glyph_idx_one_based != 0) {
+                s->last_glyph_index  = glyph_idx_one_based - 1;
+                s->last_glyph_offset = s->last_glyph_index
+                                     * FONT_METRICS_GLYPH_STRIDE
+                                     + FONT_METRICS_WIDTH_LO_OFFSET;
+                int lo = font[s->last_glyph_offset];
+                int hi = font[s->last_glyph_index
+                            * FONT_METRICS_GLYPH_STRIDE
+                            + FONT_METRICS_WIDTH_HI_OFFSET];
+                total += hi * 0x100 + lo + 1;
+            }
+        }
+        remaining--;
+    }
+    return total;
+}

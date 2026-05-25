@@ -549,6 +549,40 @@ int test_text_input_copy_out_empty_buf_writes_only_terminator(void) {
  * end-to-end editing scenario
  * ────────────────────────────────────────────────────────────────── */
 
+int test_text_input_insert_char_and_clamp_runs_post_insert_clamp(void) {
+    /* The wrapper calls insert_char then clamp_cursor.  The post-
+     * insert clamp re-validates the cursor.  Verify the cursor's
+     * final position matches both: cursor advances by 1 after the
+     * insert and then the trailing clamp normalizes it. */
+    text_input_state_t s;
+    seed(&s, "abc", 100, 480);
+    s.insert_mode = 0;       /* overwrite */
+    s.cursor = 1;
+    text_input_insert_char_and_clamp(&s, 'X');
+    /* Insert: buf="aXc", cursor=2.  Clamp: cursor inside [0, length+1] →
+     * clamp_state=0. */
+    T_ASSERT_EQ_S((const char *)s.buf, "aXc");
+    T_ASSERT_EQ_I(s.cursor, 2);
+    T_ASSERT_EQ_I(s.clamp_state, 0);
+    return 0;
+}
+
+int test_text_input_insert_char_and_clamp_pixel_overflow_escalates(void) {
+    /* Pre-set pixel_overflow; insert is blocked (clamp_state=2
+     * inside insert_char), but the trailing clamp re-sets
+     * clamp_state to 2 on the unmoved cursor. */
+    text_input_state_t s;
+    seed(&s, "abc", 100, 480);
+    s.insert_mode = 0;
+    s.cursor = 1;
+    s.pixel_overflow = 1;
+    text_input_insert_char_and_clamp(&s, 'X');
+    T_ASSERT_EQ_S((const char *)s.buf, "abc");      /* no write */
+    T_ASSERT_EQ_I(s.cursor, 1);
+    T_ASSERT_EQ_I(s.clamp_state, 2);
+    return 0;
+}
+
 int test_text_input_scenario_type_then_backspace(void) {
     /* Simulate typing "HELP" with insert mode then backspacing twice. */
     text_input_state_t s;

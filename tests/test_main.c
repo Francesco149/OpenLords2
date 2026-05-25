@@ -435,6 +435,8 @@ struct test_case {
     X(text_input_copy_out_full_string_when_max_large) \
     X(text_input_copy_out_zero_max_writes_only_terminator) \
     X(text_input_copy_out_empty_buf_writes_only_terminator) \
+    X(text_input_insert_char_and_clamp_runs_post_insert_clamp) \
+    X(text_input_insert_char_and_clamp_pixel_overflow_escalates) \
     X(text_input_scenario_type_then_backspace) \
     \
     X(font_metrics_char_width_null_char_returns_zero) \
@@ -451,6 +453,11 @@ struct test_case {
     X(font_metrics_buffer_width_overflow_at_threshold) \
     X(font_metrics_buffer_width_overflow_just_below_threshold) \
     X(font_metrics_buffer_width_overflow_clears_on_subsequent_call) \
+    X(font_metrics_buffer_width_bounded_sums_chars) \
+    X(font_metrics_buffer_width_bounded_caps_at_10000) \
+    X(font_metrics_buffer_width_bounded_stops_at_terminator) \
+    X(font_metrics_buffer_width_bounded_missing_glyph_clears_cache) \
+    X(font_metrics_buffer_width_bounded_no_pixel_overflow_side_effect) \
     /* end */
 
 /* Emit extern decls. */

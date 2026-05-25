@@ -114,6 +114,12 @@ void text_input_insert_char(text_input_state_t *s, unsigned char c)
     }
 }
 
+void text_input_insert_char_and_clamp(text_input_state_t *s, unsigned char c)
+{
+    text_input_insert_char(s, c);
+    text_input_clamp_cursor(s);
+}
+
 void text_input_delete_char(text_input_state_t *s)
 {
     if (!s->enabled) {

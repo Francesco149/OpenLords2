@@ -244,3 +244,80 @@ int test_font_metrics_buffer_width_overflow_clears_on_subsequent_call(void) {
     T_ASSERT_EQ_I(s.pixel_overflow, 0);
     return 0;
 }
+
+/* ──────────────────────────────────────────────────────────────────
+ * buffer_width_bounded — general renderer measurer
+ * ────────────────────────────────────────────────────────────────── */
+
+int test_font_metrics_buffer_width_bounded_sums_chars(void) {
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+    int w = font_metrics_buffer_width_bounded(&s, (const unsigned char *)"ABC", font);
+    /* "ABC" = 7 + 11 + 257 = 275. */
+    T_ASSERT_EQ_I(w, 275);
+    /* No pixel_overflow side effect — flag stays at default. */
+    T_ASSERT_EQ_I(s.pixel_overflow, 0);
+    return 0;
+}
+
+int test_font_metrics_buffer_width_bounded_caps_at_10000(void) {
+    /* Build a non-null-terminated buffer of 12000 'A's; the bounded
+     * helper should stop at 10000 chars rather than reading off the
+     * end.  Each 'A' is 7 pixels → total = 7 * 10000 = 70000. */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+
+    /* Allocate +1 slot past the cap to confirm we don't read past
+     * char index 9999 — set buf[10000] to a sentinel.  ASan would
+     * catch an out-of-bounds read regardless. */
+    static unsigned char big_buf[12001];
+    memset(big_buf, 'A', 12000);
+    big_buf[12000] = 0;
+    int w = font_metrics_buffer_width_bounded(&s, big_buf, font);
+    T_ASSERT_EQ_I(w, 7 * 10000);
+    return 0;
+}
+
+int test_font_metrics_buffer_width_bounded_stops_at_terminator(void) {
+    /* Terminator should win over the cap when it comes first. */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+    int w = font_metrics_buffer_width_bounded(&s, (const unsigned char *)"AB", font);
+    T_ASSERT_EQ_I(w, 18);
+    return 0;
+}
+
+int test_font_metrics_buffer_width_bounded_missing_glyph_clears_cache(void) {
+    /* Verify the unconditional-write-then-conditional-decrement
+     * shape from FUN_004014f0 — a missing glyph clears
+     * last_glyph_index (because the raw 1-based value is 0). */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+    s.last_glyph_index = 42;
+    /* "Z" alone: missing.  Width = 0; cache cleared. */
+    int w = font_metrics_buffer_width_bounded(&s, (const unsigned char *)"Z", font);
+    T_ASSERT_EQ_I(w, 0);
+    T_ASSERT_EQ_I(s.last_glyph_index, 0);
+    return 0;
+}
+
+int test_font_metrics_buffer_width_bounded_no_pixel_overflow_side_effect(void) {
+    /* This helper must NOT touch pixel_overflow even on huge totals.
+     * Drive a big total and pre-set pixel_overflow to verify. */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+    s.pixel_overflow = 1;
+    font_metrics_buffer_width_bounded(&s, (const unsigned char *)"CCC", font);
+    T_ASSERT_EQ_I(s.pixel_overflow, 1);   /* unchanged */
+    return 0;
+}

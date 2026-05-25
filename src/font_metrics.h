@@ -10,6 +10,7 @@
  *
  *   FUN_004015b9 @ 0x4015b9 (173 B) → font_metrics_char_width
  *   FUN_00401f8f @ 0x401f8f (122 B) → font_metrics_buffer_width
+ *   FUN_004014f0 @ 0x4014f0 (201 B) → font_metrics_buffer_width_bounded
  *
  * Data model:
  *
@@ -109,5 +110,21 @@ int font_metrics_buffer_width(font_metrics_state_t *s,
                               const unsigned char *buf,
                               const unsigned char *font,
                               int max_pixel_width);
+
+/* Port of FUN_004014f0.  General buffer-width helper used by the
+ * renderer for arbitrary caller-supplied strings (not the editor's
+ * fixed buffer).  Differences from font_metrics_buffer_width:
+ *
+ *   - Hard iteration cap of 10000 characters — returns the
+ *     running total once 10000 chars have been consumed, even if
+ *     the buffer isn't null-terminated.
+ *   - Does NOT update s->pixel_overflow (no max_pixel_width
+ *     comparison — this is the unbounded measurer).
+ *   - Inlines the char-width logic rather than calling char_width;
+ *     same special-cases ('\0' → stop, ' ' → +4, missing → +0
+ *     with last_glyph_index := 0). */
+int font_metrics_buffer_width_bounded(font_metrics_state_t *s,
+                                      const unsigned char *buf,
+                                      const unsigned char *font);
 
 #endif /* OPENLORDS2_FONT_METRICS_H */

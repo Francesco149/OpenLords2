@@ -22,6 +22,15 @@
  *   FUN_004020ae @ 0x4020ae  (94 B)  → text_input_clear
  *   FUN_00402009 @ 0x402009 (165 B)  → text_input_init
  *   FUN_0040210c @ 0x40210c  (90 B)  → text_input_copy_out
+ *   FUN_00401c3f @ 0x401c3f  (28 B)  → text_input_insert_char_and_clamp
+ *
+ * Thunks / aliases not exported:
+ *
+ *   FUN_00401c93 @ 0x401c93  (16 B)  — bare jmp to FUN_00401dc8
+ *     (text_input_delete_char).  No state difference between the
+ *     two addresses; the alias likely exists so a function table
+ *     can point at a stable address.  Call text_input_delete_char
+ *     directly.
  *
  * Data layout (mirrors retail globals):
  *
@@ -167,6 +176,13 @@ void text_input_toggle_insert_mode(text_input_state_t *s);
  *                                    shift_right(buf+cursor, buf+1+length)
  *                                    buf[cursor]=c; cursor++. */
 void text_input_insert_char(text_input_state_t *s, unsigned char c);
+
+/* Port of FUN_00401c3f (28 B).  Calls insert_char(c) then re-runs
+ * clamp_cursor.  insert_char already clamps internally at the
+ * top — this wrapper re-clamps AFTER the insert so the post-advance
+ * cursor is re-validated.  Used by callers that don't trust the
+ * caller-side bookkeeping (e.g. paste-buffer flush). */
+void text_input_insert_char_and_clamp(text_input_state_t *s, unsigned char c);
 
 /* Port of FUN_00401dc8 (delete_char).  Guard: no-op if !enabled.
  * shift_left(buf+cursor, buf+length); then clamp_cursor.  Deletes
