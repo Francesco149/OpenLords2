@@ -356,6 +356,47 @@ in the right position for retail to load our saves.
 
 ---
 
+## 8. Footprint-neighbor helper uses the orthogonal-axis bound for the wrong axis's bounds check
+
+`FUN_004921e5` (the helper that flags the neighbors of a building
+footprint center cell at castle-load time) has two write blocks per
+orientation branch — one writing `+1` flag bits to the axis the
+building "faces", and one writing `+4` build-stage bytes to the
+perpendicular axis.  The flag writes are bounded correctly.  The
+stage writes are bounded on the **wrong axis**:
+
+```c
+if ((param_3 == 0) || (param_3 == 4)) {           /* vertical orientation */
+    if (param_1 < 0x4f) (&DAT_005440e9)[iVar1] |= 0x10;   /* right.+1 — gated on x<79 ✓ */
+    if (0 < param_1)    (&DAT_005440d9)[iVar1] |= 0x10;   /* left.+1  — gated on x>0  ✓ */
+    if (param_1 < 0x4f) (&DAT_00543e64)[iVar1] = 1;       /* up.+4    — gated on x<79 ✗ */
+    if (0 < param_1)    (&DAT_00544364)[iVar1] = 1;       /* down.+4  — gated on x>0  ✗ */
+}
+```
+
+The `up.+4` write only depends on the row being > 0; gating it on
+`col < 79` is geometric nonsense.  The else branch (horizontal
+orientation) is the mirror image of the same bug — vertical neighbor
+flag writes are gated on row, but the right/left neighbor `+4`
+writes are also gated on row.
+
+The bug is *load-bearing by accident*: every caller of `FUN_004921e5`
+(via `FUN_004917dd`) feeds it a center cell from a 3x3 footprint
+whose top-left was placed by the scenario format, and scenario tooling
+constrains anchors to interior coords where both axes are in
+`[1, 78]`.  So the gates never fire on a value that would put the
+write OOB, even when the gate value is geometrically the wrong axis.
+
+The port preserves this verbatim — `src/engine_tile.c`'s
+`engine_tile_set_footprint_neighbor_flags` uses the same axis on the
+same write — because a fix would break byte-identical round-trips on
+saves that depend on the side-effect surface staying constant.
+
+> 📍 `src/engine_tile.c`'s `engine_tile_set_footprint_neighbor_flags`,
+> Ghidra `FUN_004921e5 @ 0x4921e5`.
+
+---
+
 <!--
 Template for new entries:
 
