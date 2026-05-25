@@ -33,6 +33,11 @@ Current targets:
                                  expander (per-vector pre-state re-seed
                                  of tiles + footprint_list + last_footprint;
                                  engine-tick freeze required)
+  - engine_dispatch_delayed_actions (FUN_004472ce) — per-tick delayed-action
+                                 dispatcher (sparse per-vector record list;
+                                 50-entry dispatch table stubbed to no-op
+                                 at test-plan install; engine-tick freeze
+                                 required)
 
 The orchestrator runs the agent in "diff_test" mode (no turbo, no input
 replay) so the engine boots, parks, and waits.  Once the per-tick driver
@@ -363,6 +368,67 @@ class EngineTileExpandState(ctypes.Structure):
     ]
 
 
+# Mirrors engine_delayed_action_record_t in src/engine_delayed_action.h.
+# Per-record stride = 0x38 (retail constant); 11 i32 fields + 10 B pad +
+# active byte + type byte.  The runtime unit-test test_engine_delayed_action_
+# record_size_layout cross-checks the offsets host-side.
+class EngineDelayedActionRecord(ctypes.Structure):
+    _fields_ = [
+        ("due_tick",  ctypes.c_int32),
+        ("arg0",      ctypes.c_int32),
+        ("arg1",      ctypes.c_int32),
+        ("arg2",      ctypes.c_int32),
+        ("arg3",      ctypes.c_int32),
+        ("arg4",      ctypes.c_int32),
+        ("arg5",      ctypes.c_int32),
+        ("arg6",      ctypes.c_int32),
+        ("arg7",      ctypes.c_int32),
+        ("arg8",      ctypes.c_int32),
+        ("arg9",      ctypes.c_int32),
+        ("pad",       ctypes.c_uint8 * 10),
+        ("active",    ctypes.c_uint8),
+        ("type",      ctypes.c_uint8),
+    ]
+assert ctypes.sizeof(EngineDelayedActionRecord) == 0x38, \
+    f"record size = {ctypes.sizeof(EngineDelayedActionRecord)}, want 0x38"
+
+
+# Function pointer table type for the dispatch handlers.  void (*)(void *user)
+# matches engine_delayed_action_handler_t.  In diff vectors we leave the
+# whole table NULL (port-side: no-op skip) and stub retail's PTR_FUN_004d5c98
+# entries to a no-op NativeCallback agent-side; observable surface across
+# both sides is identical.
+DA_HANDLER = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+DA_DISPATCH_TABLE_LEN = 256
+
+
+class EngineDelayedActionState(ctypes.Structure):
+    _fields_ = [
+        ("master_switch",  ctypes.c_int),
+        ("game_mode",      ctypes.c_int),
+        ("local_player",   ctypes.c_int),
+        ("action_counter", ctypes.c_int),
+        ("current_idx",    ctypes.c_int),
+        ("disp_a0",        ctypes.c_int32),
+        ("disp_a1",        ctypes.c_int32),
+        ("disp_a2",        ctypes.c_int32),
+        ("disp_a3",        ctypes.c_int32),
+        ("disp_a4",        ctypes.c_int32),
+        ("disp_a5",        ctypes.c_int32),
+        ("disp_a6",        ctypes.c_int32),
+        ("disp_a7",        ctypes.c_int32),
+        ("disp_a8",        ctypes.c_int32),
+        ("disp_a9",        ctypes.c_int32),
+        ("queue",          ctypes.c_int32 * 100),
+        ("queue_count",    ctypes.c_int),
+        ("hipri_stash",    ctypes.c_int32 * 100),
+        ("hipri_count",    ctypes.c_int),
+        ("records",        EngineDelayedActionRecord * 400),
+        ("dispatch",       DA_HANDLER * DA_DISPATCH_TABLE_LEN),
+        ("dispatch_user",  ctypes.c_void_p),
+    ]
+
+
 def load_port_lib() -> ctypes.CDLL:
     """Load libengine_diff.so + bind the two diff entrypoints.
 
@@ -414,6 +480,10 @@ def load_port_lib() -> ctypes.CDLL:
     lib.engine_tile_expand_footprint.restype = ctypes.c_int
     lib.engine_tile_expand_footprint.argtypes = [
         ctypes.POINTER(EngineTileExpandState)]
+
+    lib.engine_dispatch_delayed_actions.restype = None
+    lib.engine_dispatch_delayed_actions.argtypes = [
+        ctypes.POINTER(EngineDelayedActionState), ctypes.c_int]
 
     return lib
 
@@ -1024,6 +1094,9 @@ STATE_HASH_RACE_RETRIES = 2
 # shouldn't race into tiles/path_scratch/stage_scratch during our window.
 # Same low budget as state_hash.
 TILE_EXPAND_RACE_RETRIES = 2
+# Delayed-action also runs under the engine-tick freeze (same install).
+# Same low budget — main thread should never enter FUN_004472ce.
+DELAYED_ACTION_RACE_RETRIES = 2
 
 
 def _frame_delta_race_free(vec: dict[str, int], retail: dict) -> bool:
@@ -2138,6 +2211,301 @@ def diff_tile_expand(retail: dict, port: dict, vec: dict) -> list[str]:
     return bad
 
 
+# ─── delayed_action (FUN_004472ce — engine_dispatch_delayed_actions) ─────
+
+# State surface (must match constants in tools/frida/openlords2-agent.js).
+# Each per-call vector specifies a sparse list of records to stamp active
+# (rather than a full 22400-byte records-array blob) — only a handful of
+# slots are populated per vector, so sparse encoding keeps both the wire
+# size and the test-vector intent readable.
+DA_RECORDS_BYTES   = 22400      # 400 × 0x38
+DA_QUEUE_BYTES     = 400        # 100 × i32
+DA_HIPRI_BYTES     = 400        # 100 × i32
+
+# Maximum dispatch type the agent's PTR_FUN_004d5c98 stub covers.  Retail
+# has 50 entries (0..49); vectors must clamp types to this range or the
+# dispatch lookup would fall off the table.
+DA_MAX_TYPE = 49
+
+# Sentinel sweep-clear value the function writes into queue[] at entry.
+# int32 == 0xffff (NOT -1 — explicit comparison is `< 0xffff`).
+DA_QUEUE_EMPTY = 0xffff
+
+
+def _da_make_record(idx: int, *,
+                    active: int = 1,
+                    type_: int = 0,
+                    due_tick: int = 0,
+                    args: list[int] | None = None) -> dict[str, Any]:
+    if args is None:
+        args = [0] * 10
+    if len(args) < 10:
+        args = args + [0] * (10 - len(args))
+    return {
+        "idx":      idx,
+        "active":   int(active) & 0xff,
+        "type":     int(type_) & 0xff,
+        "due_tick": int(due_tick),
+        "args":     [int(a) for a in args[:10]],
+    }
+
+
+def gen_delayed_action_vectors(n: int, rng: random.Random) -> list[dict[str, Any]]:
+    """Build N delayed-action vectors.
+
+    Coverage:
+      - master_switch=0 (function early-returns; queue/hipri/disp/counters
+        all carry through from our pre-seeded values).
+      - No active records (clears queue, leaves everything else alone).
+      - All records future-dated (skipped by the due_tick filter).
+      - Single dispatched record per game_mode (0, 1, 2, 3, 5).
+      - Multiple dispatched records, in-order (mode != 2 / mode==2 with
+        queue_count==1 → reorder branch skipped).
+      - MP reorder (mode==2, >=2 due records):
+          - All relay candidates (types 0x21..0x23 from non-local) — full
+            queue → empty after reorder → re-appended at slot 0.
+          - Mixed relay + non-relay.
+          - Relays from local_player (filter rejects, stays in place).
+          - Type boundaries 0x20 (excluded) and 0x24 (excluded).
+      - action_counter pre-seeded to a non-zero value to verify it
+        decrements per dispatch.
+      - current_idx + disp_pre seeded non-zero so carry-through is
+        observable in the no-dispatch cases.
+    """
+    out: list[dict[str, Any]] = []
+
+    # Common pre-state seeds — make sure they're observable and unique
+    # so any reordering would show up in the diff.
+    base = lambda **kw: {  # noqa: E731
+        "master_switch":  1,
+        "game_mode":      0,
+        "local_player":   1,
+        "action_counter": 10,
+        "current_idx":    42,
+        "current_tick":   100,
+        "disp_pre":       [0xa0, 0xa1, 0xa2, 0xa3, 0xa4,
+                           0xa5, 0xa6, 0xa7, 0xa8, 0xa9],
+        "queue_pre":      [DA_QUEUE_EMPTY] * 100,
+        "hipri_pre":      [0] * 100,
+        "queue_count":    0,
+        "hipri_count":    0,
+        "records":        [],
+        **kw,
+    }
+
+    # 1. Master switch off — entire function is a no-op.  Seed records
+    #    AND queue+counts so the post-state carry-through is non-trivial.
+    out.append(base(master_switch=0,
+                    queue_pre=[5, 7, 11] + [DA_QUEUE_EMPTY] * 97,
+                    hipri_pre=[13, 17] + [0] * 98,
+                    queue_count=3, hipri_count=2,
+                    records=[_da_make_record(10, type_=5, due_tick=50)]))
+
+    # 2. No due records — sweep finds nothing; queue cleared, counters
+    #    intact, dispatch mirrors unchanged.
+    out.append(base())  # No records at all.
+    out.append(base(records=[_da_make_record(0, active=0, type_=3, due_tick=0)]))
+    out.append(base(records=[_da_make_record(5, type_=2, due_tick=999)]))  # future
+
+    # 3. Single record dispatched — game_mode varies to exercise the
+    #    mode != 2 branches.
+    for mode in [0, 1, 3, 5]:
+        out.append(base(game_mode=mode,
+                        records=[_da_make_record(50, type_=7,
+                                                  due_tick=100,
+                                                  args=[100, 200, 300, 400, 500,
+                                                         600, 700, 800, 900, 1000])]))
+
+    # 4. Multiple records — mode 0, in-order dispatch.
+    out.append(base(records=[
+        _da_make_record(10,  type_=0, due_tick=50,  args=[1] * 10),
+        _da_make_record(100, type_=1, due_tick=75,  args=[2] * 10),
+        _da_make_record(200, type_=2, due_tick=100, args=[3] * 10),
+    ]))
+
+    # 5. MP reorder — single relay; queue_count==1 short-circuits.
+    out.append(base(game_mode=2,
+                    records=[_da_make_record(50, type_=0x22, due_tick=0,
+                                              args=[99, 0, 0, 0, 0, 0, 0, 0, 0, 0])]))
+
+    # 6. MP reorder — multiple due records, relay candidates pulled back.
+    out.append(base(game_mode=2,
+                    records=[
+                        _da_make_record(10, type_=0x00, due_tick=0, args=[1] * 10),
+                        _da_make_record(20, type_=0x22, due_tick=0,
+                                        args=[99, 22, 0, 0, 0, 0, 0, 0, 0, 0]),
+                        _da_make_record(30, type_=0x10, due_tick=0, args=[3] * 10),
+                    ]))
+
+    # 7. MP reorder — all 3 records are relay candidates.
+    out.append(base(game_mode=2,
+                    records=[
+                        _da_make_record(10, type_=0x21, due_tick=0,
+                                        args=[99] + [0] * 9),
+                        _da_make_record(20, type_=0x22, due_tick=0,
+                                        args=[99] + [0] * 9),
+                        _da_make_record(30, type_=0x23, due_tick=0,
+                                        args=[99] + [0] * 9),
+                    ]))
+
+    # 8. MP reorder — relay from local player (filter rejects).
+    out.append(base(game_mode=2, local_player=1,
+                    records=[
+                        _da_make_record(10, type_=0x22, due_tick=0,
+                                        args=[1] + [0] * 9),  # local → no move
+                        _da_make_record(20, type_=0x22, due_tick=0,
+                                        args=[2] + [0] * 9),  # peer → moves
+                    ]))
+
+    # 9. MP reorder — types at boundaries 0x20 (not a relay), 0x24
+    #    (not a relay), 0x21/0x23 (are relays).
+    out.append(base(game_mode=2,
+                    records=[
+                        _da_make_record(10, type_=0x20, due_tick=0,
+                                        args=[99] + [0] * 9),  # NOT relay
+                        _da_make_record(20, type_=0x21, due_tick=0,
+                                        args=[99] + [0] * 9),  # relay
+                        _da_make_record(30, type_=0x23, due_tick=0,
+                                        args=[99] + [0] * 9),  # relay
+                        _da_make_record(40, type_=0x24, due_tick=0,
+                                        args=[99] + [0] * 9),  # NOT relay
+                    ]))
+
+    # 10. Due-tick boundary inclusive — record.due_tick == current_tick fires.
+    out.append(base(current_tick=100,
+                    records=[_da_make_record(7, type_=3, due_tick=100)]))
+
+    # Random fill — keep sizes modest so wire traffic stays sane.
+    while len(out) < n:
+        n_records = rng.randint(0, 6)
+        records = []
+        used = set()
+        for _ in range(n_records):
+            # Avoid duplicate slot indices in a single vector (retail's
+            # sweep would only see the LAST stamped one, but we want
+            # deterministic behavior).
+            for _try in range(8):
+                idx = rng.randint(0, 399)
+                if idx not in used:
+                    used.add(idx)
+                    break
+            else:
+                continue
+            records.append(_da_make_record(
+                idx,
+                active=rng.choice([0, 1, 1, 1]),    # bias to active
+                type_=rng.randint(0, DA_MAX_TYPE),
+                due_tick=rng.choice([0, 50, 100, 200]),
+                args=[rng.randint(-1000, 1000) for _ in range(10)]))
+        out.append({
+            "master_switch":  rng.choice([0, 1, 1, 1, 1]),
+            "game_mode":      rng.choice([0, 1, 2, 2, 3, 5]),
+            "local_player":   rng.randint(1, 6),
+            "action_counter": rng.randint(0, 100),
+            "current_idx":    rng.randint(0, 399),
+            "current_tick":   100,
+            "disp_pre":       [rng.randint(-1000, 1000) for _ in range(10)],
+            # Keep queue_pre / hipri_pre at default sentinels for the random
+            # vectors — they only matter for the master_switch=0 fixed cases.
+            "queue_pre":      [DA_QUEUE_EMPTY] * 100,
+            "hipri_pre":      [0] * 100,
+            "queue_count":    0,
+            "hipri_count":    0,
+            "records":        records,
+        })
+
+    return out[:n]
+
+
+def run_port_delayed_action(lib: ctypes.CDLL,
+                            vec: dict[str, Any]) -> dict[str, Any]:
+    """Run our engine_dispatch_delayed_actions port.  Mirrors the agent's
+    per-call setup: zero-fill records, apply the sparse list, seed scalars
+    + dispatch mirrors + queue/hipri pre-state, run, then read back the
+    observable surface."""
+    state = EngineDelayedActionState()
+    # ctypes default-zero-inits everything.  Apply the vector's inputs.
+    state.master_switch  = int(vec["master_switch"])
+    state.game_mode      = int(vec["game_mode"])
+    state.local_player   = int(vec["local_player"])
+    state.action_counter = int(vec["action_counter"])
+    state.current_idx    = int(vec["current_idx"])
+    pre = vec.get("disp_pre", [0] * 10)
+    state.disp_a0, state.disp_a1, state.disp_a2 = pre[0], pre[1], pre[2]
+    state.disp_a3, state.disp_a4, state.disp_a5 = pre[3], pre[4], pre[5]
+    state.disp_a6, state.disp_a7, state.disp_a8 = pre[6], pre[7], pre[8]
+    state.disp_a9                                = pre[9]
+    state.queue_count = int(vec.get("queue_count", 0))
+    state.hipri_count = int(vec.get("hipri_count", 0))
+    queue_pre = vec.get("queue_pre", [DA_QUEUE_EMPTY] * 100)
+    hipri_pre = vec.get("hipri_pre", [0] * 100)
+    for i in range(100):
+        state.queue[i]       = int(queue_pre[i]) if i < len(queue_pre) else 0
+        state.hipri_stash[i] = int(hipri_pre[i]) if i < len(hipri_pre) else 0
+    for rec in vec.get("records", []):
+        idx = int(rec["idx"])
+        r = state.records[idx]
+        r.due_tick = int(rec["due_tick"])
+        for i, a in enumerate(rec["args"]):
+            setattr(r, f"arg{i}", int(a))
+        r.active = int(rec["active"]) & 0xff
+        r.type   = int(rec["type"])   & 0xff
+
+    lib.engine_dispatch_delayed_actions(ctypes.byref(state),
+                                        ctypes.c_int(int(vec["current_tick"])))
+
+    # Read back the observable surface.  records[] is bytewise-comparable
+    # against retail's 22400-byte readback; queue + hipri_stash same way.
+    rec_bytes = ctypes.string_at(ctypes.byref(state.records),
+                                 ctypes.sizeof(state.records))
+    queue_bytes = ctypes.string_at(ctypes.byref(state.queue),
+                                   ctypes.sizeof(state.queue))
+    hipri_bytes = ctypes.string_at(ctypes.byref(state.hipri_stash),
+                                   ctypes.sizeof(state.hipri_stash))
+    return {
+        "records":        list(rec_bytes),
+        "queue":          list(queue_bytes),
+        "hipri_stash":    list(hipri_bytes),
+        "queue_count":    int(state.queue_count),
+        "hipri_count":    int(state.hipri_count),
+        "action_counter": int(state.action_counter),
+        "current_idx":    int(state.current_idx),
+        "disp": [int(state.disp_a0), int(state.disp_a1),
+                 int(state.disp_a2), int(state.disp_a3),
+                 int(state.disp_a4), int(state.disp_a5),
+                 int(state.disp_a6), int(state.disp_a7),
+                 int(state.disp_a8), int(state.disp_a9)],
+    }
+
+
+def diff_delayed_action(retail: dict, port: dict) -> list[str]:
+    """Bytewise diff of the observable surface.
+
+    All 8 outputs are checked.  The 10-entry disp[] list is compared
+    element-wise so a single divergence reports a specific index."""
+    bad = []
+    if list(retail.get("records") or []) != port["records"]:
+        bad.append("records")
+    if list(retail.get("queue") or []) != port["queue"]:
+        bad.append("queue")
+    if list(retail.get("hipri_stash") or []) != port["hipri_stash"]:
+        bad.append("hipri_stash")
+    if int(retail.get("queue_count", 0)) != int(port["queue_count"]):
+        bad.append("queue_count")
+    if int(retail.get("hipri_count", 0)) != int(port["hipri_count"]):
+        bad.append("hipri_count")
+    if int(retail.get("action_counter", 0)) != int(port["action_counter"]):
+        bad.append("action_counter")
+    if int(retail.get("current_idx", 0)) != int(port["current_idx"]):
+        bad.append("current_idx")
+    r_disp = list(retail.get("disp") or [])
+    p_disp = list(port["disp"])
+    for i in range(min(len(r_disp), len(p_disp), 10)):
+        if int(r_disp[i]) != int(p_disp[i]):
+            bad.append(f"disp[{i}]")
+    return bad
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -2235,6 +2603,9 @@ def run_diff(cfg_args) -> int:
     if "tile_expand" in enabled:
         test_plans.append(("tile_expand",
                            gen_tile_expand_vectors(cfg_args.vectors, rng)))
+    if "delayed_action" in enabled:
+        test_plans.append(("delayed_action",
+                           gen_delayed_action_vectors(cfg_args.vectors, rng)))
     # Pre-generate the rate-gate LUT — one per run, used by all
     # sim_sub_steps vectors so a re-run with the same seed produces
     # the same LUT (and thus the same retail-side gate decisions).
@@ -2359,7 +2730,8 @@ def run_diff(cfg_args) -> int:
         # vectors, uninstall ONCE in the finally block.  The per-target setup
         # below still calls install (which returns already_installed=true);
         # this is a no-op at the agent but keeps the per-target log shape.
-        shared_freeze_targets = {"sim_sub_steps", "state_hash", "tile_expand"}
+        shared_freeze_targets = {"sim_sub_steps", "state_hash", "tile_expand",
+                                 "delayed_action"}
         shared_freeze_installed = False
         if shared_freeze_targets & {n for (n, _) in test_plans}:
             fresp = script.exports_sync.install_sim_sub_steps_engine_freeze()
@@ -2437,6 +2809,26 @@ def run_diff(cfg_args) -> int:
                 log(f"[diff] tile_expand: backup installed "
                     f"(seed=0x{tile_expand_seed:08x}, "
                     f"snapshot_bytes={install_resp.get('snapshot_bytes')})")
+            # Delayed-action dispatch stub install — snapshots the 50-entry
+            # PTR_FUN_004d5c98 dispatch table + 5 scalars + 3 arrays + 10
+            # mirrors, then stamps a no-op NativeCallback into every dispatch
+            # slot so the function's `(*table[type])()` is harmless.  Engine
+            # freeze already installed via the shared install above (delayed_
+            # action is in shared_freeze_targets).
+            if fn_name == "delayed_action":
+                install_resp = script.exports_sync.install_delayed_action_stub()
+                if isinstance(install_resp, dict) and install_resp.get("error"):
+                    log(f"[diff] delayed_action: stub install failed: "
+                        f"{install_resp['error']}")
+                    results.append(DiffResult(
+                        function=fn_name, total=len(vectors),
+                        fail_count=len(vectors),
+                        failures=[{"idx": -1, "vector": None,
+                                   "retail": install_resp, "port": None,
+                                   "diff": ["stub-install-error"]}]))
+                    continue
+                log(f"[diff] delayed_action: stub installed "
+                    f"(snapshot_bytes={install_resp.get('snapshot_bytes')})")
             r = DiffResult(function=fn_name, total=len(vectors))
             for i, vec in enumerate(vectors):
                 if fn_name == "rng_step":
@@ -2769,6 +3161,37 @@ def run_diff(cfg_args) -> int:
                     if bad and int(retail.get("raced", 0)) != 0:
                         r.race_count += 1
                         bad = []
+                elif fn_name == "delayed_action":
+                    # FUN_004472ce: stateful — sweeps records[400], drains
+                    # the queue, calls (stubbed) per-type handlers.  Both
+                    # sides start from the vector's specified pre-state; the
+                    # post-state byte-diff covers records + queue + hipri +
+                    # 4 counters + 10 dispatch-arg mirrors.  Engine freeze
+                    # keeps the main thread's own per-tick driver from
+                    # racing into FUN_004472ce.
+                    port = run_port_delayed_action(lib, vec)
+                    retail = None
+                    for attempt in range(DELAYED_ACTION_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_delayed_action(vec)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < DELAYED_ACTION_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": vec,
+                            "retail": retail, "port": port,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_delayed_action(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
                 else:
                     continue
                 if bad:
@@ -2814,6 +3237,19 @@ def run_diff(cfg_args) -> int:
                             f"{uninstall_resp['error']}")
                 except Exception as e:
                     log(f"[diff] tile_expand: backup uninstall: agent dead ({e!r}); "
+                        f"skipping (frida cleanup will fire on script.unload)")
+            if fn_name == "delayed_action":
+                # Restore the dispatch table + 5 scalars + 3 arrays + 10
+                # mirrors.  Without this the agent leaves retail's per-type
+                # handler pointers stubbed out — game logic would silently
+                # no-op.  Best-effort: agent crash → script.unload cleans up.
+                try:
+                    uninstall_resp = script.exports_sync.uninstall_delayed_action_stub()
+                    if isinstance(uninstall_resp, dict) and uninstall_resp.get("error"):
+                        log(f"[diff] delayed_action: stub uninstall failed: "
+                            f"{uninstall_resp['error']}")
+                except Exception as e:
+                    log(f"[diff] delayed_action: stub uninstall: agent dead ({e!r}); "
                         f"skipping (frida cleanup will fire on script.unload)")
 
         # ─── shared engine-tick freeze release ───
@@ -2881,11 +3317,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action",
                     help="comma-separated subset to test "
                          "(default: rng_step,fps_step,anim_cycle,frame_delta,"
                          "phase_ticks,input_state,sim_sub_steps,state_hash,"
-                         "tile_expand)")
+                         "tile_expand,delayed_action)")
     ap.add_argument("--warmup-s", type=float, default=10.0,
                     help="seconds to wait for engine_tick to settle before "
                          "firing RPCs (default 10)")

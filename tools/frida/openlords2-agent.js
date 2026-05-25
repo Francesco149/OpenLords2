@@ -302,6 +302,41 @@ const ADDR = {
     var_tile_stage_scratch:         0x004f7d80, //  DAT_004f7d80 — 6400 × u8  (6400 B)
     var_tile_footprint_list:        0x00553c80, //  DAT_00553c80 — 19 × 2 × i32 (152 B)
     var_tile_last_footprint:        0x00553d18, // _DAT_00553d18 — i32 (4 B)
+    // Delayed-action dispatcher (FUN_004472ce — engine_dispatch_delayed_actions).
+    // Drains the 400-slot pending-action table once per sim sub-step; per-record
+    // 0x38 stride; 50-entry function-pointer dispatch table at 0x4d5c98.  The
+    // dispatch handlers (FUN_004479de .. FUN_00448422) touch a sprawling set of
+    // global state — for the diff harness we stub the entire table to a no-op
+    // NativeCallback so the function's observable surface is just the queue/
+    // record/scalar globals listed below.  Reuses the shared engine-tick freeze
+    // (installSimSubStepsEngineFreeze) since the engine main thread also
+    // dispatches FUN_004472ce as part of its own per-tick driver.
+    fn_engine_delayed_action_dispatch: 0x004472ce, // FUN_004472ce
+    var_da_dispatch_table:          0x004d5c98, // PTR_FUN_004d5c98 — 50 × ptr (200 B, .rdata)
+    var_da_master_switch:           0x00553030, //  DAT_00553030  — int gate (0 = bail)
+    var_da_game_mode:               0x0057c8fc, //  DAT_0057c8fc  — int (2 enables MP reorder)
+    var_da_local_player:            0x005681ec, //  DAT_005681ec  — int player slot
+    var_da_action_counter:          0x00512f6c, //  DAT_00512f6c  — int (decremented per dispatch)
+    var_da_current_idx:             0x0051590c, //  DAT_0051590c  — int (last dispatched record)
+    var_da_records:                 0x0050d7c0, //  DAT_0050d7c0  — 400 × 0x38 (22400 B)
+    var_da_queue:                   0x00515990, //  DAT_00515990  — 100 × i32 (400 B)
+    var_da_queue_count:             0x00515910, //  DAT_00515910  — int
+    var_da_hipri_stash:             0x0050d620, //  DAT_0050d620  — 100 × i32 (400 B)
+    var_da_hipri_count:             0x00512f58, //  DAT_00512f58  — int
+    // 10 dispatch-argument mirrors — retail copies record.arg0..arg9 here
+    // immediately before invoking the per-type handler.  Scattered addresses
+    // (cf. record's contiguous arg0..arg9); we list them in arg-order so the
+    // python orchestrator + ctypes binding can match by index.
+    var_da_disp_a0:                 0x005158e8, //  DAT_005158e8  ← record.arg0
+    var_da_disp_a1:                 0x005158a8, //  DAT_005158a8  ← record.arg1
+    var_da_disp_a2:                 0x005158a4, //  DAT_005158a4  ← record.arg2
+    var_da_disp_a3:                 0x005158b0, //  DAT_005158b0  ← record.arg3
+    var_da_disp_a4:                 0x005158ac, //  DAT_005158ac  ← record.arg4
+    var_da_disp_a5:                 0x005158bc, //  DAT_005158bc  ← record.arg5
+    var_da_disp_a6:                 0x005158b4, //  DAT_005158b4  ← record.arg6
+    var_da_disp_a7:                 0x005158c4, // _DAT_005158c4  ← record.arg7
+    var_da_disp_a8:                 0x005158c0, // _DAT_005158c0  ← record.arg8
+    var_da_disp_a9:                 0x0050d7bc, // _DAT_0050d7bc  ← record.arg9
 };
 
 // Per-slot strides — used inside the runRetailSimSubSteps RPC + the LUT
@@ -350,6 +385,19 @@ const TILE_EXPAND_PATH_SCRATCH_BYTES    = 12800;      // 6400 × u16
 const TILE_EXPAND_STAGE_SCRATCH_BYTES   = 6400;       // 6400 × u8
 const TILE_EXPAND_FOOTPRINT_LIST_BYTES  = 152;        // 19 × 2 × i32
 const TILE_EXPAND_LAST_FOOTPRINT_BYTES  = 4;          // 1 × i32
+
+// Delayed-action dispatcher (FUN_004472ce) state-surface byte counts.
+// records is 400 × 0x38; the 50-entry dispatch table is 50 × i32 ptrs.
+// Queue/hipri_stash are 100 × i32 each; the 10 dispatch-arg mirrors are
+// scattered across .data (snapshotted individually).
+const DA_RECORD_BYTES               = 0x38;            // per-slot stride
+const DA_RECORD_COUNT               = 400;
+const DA_RECORDS_BYTES              = DA_RECORD_BYTES * DA_RECORD_COUNT; // 22400
+const DA_QUEUE_BYTES                = 400;             // 100 × i32
+const DA_HIPRI_BYTES                = 400;             // 100 × i32
+const DA_DISPATCH_TABLE_LEN         = 50;
+const DA_DISPATCH_TABLE_BYTES       = DA_DISPATCH_TABLE_LEN * 4;     // 200
+const DA_DISP_MIRROR_COUNT          = 10;
 
 // ─── runtime state ──────────────────────────────────────────────────────
 
@@ -481,6 +529,7 @@ let g_nf_retail_input_state   = null;
 let g_nf_retail_sim_sub_steps = null;
 let g_nf_retail_state_hash    = null;
 let g_nf_retail_tile_expand   = null;
+let g_nf_retail_delayed_action = null;
 
 // Sim sub-step rate-gate LUT install state.  installSimSubStepsRateLut() is
 // a one-shot per test plan: snapshot the original 2400 bytes once, write the
@@ -527,6 +576,21 @@ let g_tile_expand_path_scratch_backup      = null;
 let g_tile_expand_stage_scratch_backup     = null;
 let g_tile_expand_footprint_list_backup    = null;
 let g_tile_expand_last_footprint_backup    = null;
+
+// Delayed-action backup state.  installDelayedActionStub() snapshots the
+// 50-entry dispatch table (so we can restore retail's real handlers at
+// uninstall) plus the 5 scalars / 3 arrays / 10 dispatch-arg mirrors that
+// per-call writes touch — so retail's pre-test state survives the test
+// plan even though every call overwrites all of them.  Also allocates a
+// single no-op NativeCallback once and stamps it into every dispatch-
+// table slot, so the dispatcher's `(*table[type])()` is harmless. */
+let g_da_dispatch_table_backup     = null;   // Uint8Array(200)
+let g_da_records_backup            = null;   // Uint8Array(22400)
+let g_da_queue_backup              = null;   // Uint8Array(400)
+let g_da_hipri_backup              = null;   // Uint8Array(400)
+let g_da_scalar_backup             = null;   // {master_switch, game_mode, ...}
+let g_da_disp_mirror_backup        = null;   // [10] of i32
+let g_da_noop_handler              = null;   // NativeCallback (void, [], stdcall)
 
 // engine_tick depth tracker — 1 while the engine main thread is executing
 // FUN_004b99c0, 0 otherwise.  Used by per-tick race detection in diff RPCs
@@ -2159,6 +2223,12 @@ function resolveRetailFunctions() {
     g_nf_retail_tile_expand = new NativeFunction(
         rva(ADDR.fn_engine_tile_expand_footprint),
         'void', ['int32'], 'mscdecl');
+    // FUN_004472ce is __cdecl(int current_tick) — same shape as tile_expand
+    // (the only other cdecl target so far).  Declared 'void' (return value
+    // unused on the retail side too).
+    g_nf_retail_delayed_action = new NativeFunction(
+        rva(ADDR.fn_engine_delayed_action_dispatch),
+        'void', ['int32'], 'mscdecl');
     return true;
 }
 
@@ -2635,6 +2705,314 @@ function runRetailTileExpand(in_obj) {
             stage_scratch:       readChunked(ADDR.var_tile_stage_scratch,  TILE_EXPAND_STAGE_SCRATCH_BYTES),
             footprint_list:      readChunked(ADDR.var_tile_footprint_list, TILE_EXPAND_FOOTPRINT_LIST_BYTES),
             last_footprint_tile: rva(ADDR.var_tile_last_footprint).readS32(),
+        };
+        const tick_count_after = g_tick_count;
+        const in_tick_after    = g_engine_in_tick;
+        out.raced = ((tick_count_after !== tick_count_before) ||
+                     in_tick_before !== 0 || in_tick_after !== 0) ? 1 : 0;
+    } finally {
+        g_diff_test_caller_tid = -1;
+    }
+    return out;
+}
+
+// ─── delayed-action dispatcher (FUN_004472ce — engine_dispatch_delayed_actions) ─
+//
+// Drains the 400-slot pending-action table; dispatches each due record by
+// calling a per-type handler from the 50-entry PTR_FUN_004d5c98 table.
+// The real handlers touch dozens of unrelated globals — combat-action
+// commits, MP broadcasts, etc. — none of which we have ported.  For the
+// diff we therefore install a no-op stub at every entry of the dispatch
+// table at test-plan start (and restore the original 200 bytes at end);
+// the function's observable surface becomes just the queue/record/scalar
+// globals.  This mirrors the approach for the dispatch handler whose
+// "side effect" is purely the post-call state of records[active=0] +
+// the decremented action_counter + the 10 dispatch-arg mirrors that hold
+// the LAST dispatched record's args.
+//
+// Wire traffic per call:
+//   in:  scalars (5 × i32) + disp_pre (10 × i32) + sparse record list +
+//        current_tick (1 × i32)
+//   pre-call writes: zero-fill records (22400 B), 4 i32 scalars +
+//                    10 i32 mirrors + per-record fields
+//   readback:        records (22400 B) + queue (400) + queue_count +
+//                    hipri_stash (400) + hipri_count + 4 scalars +
+//                    10 mirrors  (~23.7 KB total, chunked at <=32 KB)
+//
+// Engine freeze: REQUIRED.  The engine main thread's per-tick driver
+// also dispatches FUN_004472ce — running our injected records concurrently
+// would observably interleave with our RPC's call.  Re-use the shared
+// installSimSubStepsEngineFreeze; orchestrator adds 'delayed_action' to
+// its shared_freeze_targets set.
+
+// Allocate the no-op handler that will be stamped into every dispatch
+// table slot.  Stdcall + no args + void: matches retail's (*table[type])()
+// shape.  Lazy-allocated on first install so the test-plan re-runs don't
+// pile up duplicate callbacks.
+function installDelayedActionStub() {
+    if (g_base === null) {
+        return {error: 'init not completed yet'};
+    }
+    if (g_da_dispatch_table_backup !== null) {
+        return {ok: true, already_installed: true};
+    }
+    // 1. Snapshot the 200-byte dispatch table.  PTR_FUN_004d5c98 sits in
+    //    .rdata; we must Memory.protect it RWX before writing.  Make a
+    //    pristine copy of the original bytes first so uninstall can flush
+    //    them back.
+    const tablePtr = rva(ADDR.var_da_dispatch_table);
+    Memory.protect(tablePtr, DA_DISPATCH_TABLE_BYTES, 'rwx');
+    g_da_dispatch_table_backup = new Uint8Array(DA_DISPATCH_TABLE_BYTES);
+    g_da_dispatch_table_backup.set(
+        new Uint8Array(tablePtr.readByteArray(DA_DISPATCH_TABLE_BYTES)));
+
+    // 2. Snapshot the input/output buffers we'll overwrite each call.
+    //    Records (22400 B), queue (400 B), hipri_stash (400 B), 5 scalars,
+    //    10 dispatch-arg mirrors.  Restored at uninstall.
+    const snap = function (addr, len) {
+        const dst = new Uint8Array(len);
+        dst.set(new Uint8Array(rva(addr).readByteArray(len)));
+        return dst;
+    };
+    g_da_records_backup = snap(ADDR.var_da_records, DA_RECORDS_BYTES);
+    g_da_queue_backup   = snap(ADDR.var_da_queue,   DA_QUEUE_BYTES);
+    g_da_hipri_backup   = snap(ADDR.var_da_hipri_stash, DA_HIPRI_BYTES);
+    g_da_scalar_backup = {
+        master_switch:  rva(ADDR.var_da_master_switch ).readS32(),
+        game_mode:      rva(ADDR.var_da_game_mode     ).readS32(),
+        local_player:   rva(ADDR.var_da_local_player  ).readS32(),
+        action_counter: rva(ADDR.var_da_action_counter).readS32(),
+        current_idx:    rva(ADDR.var_da_current_idx   ).readS32(),
+        queue_count:    rva(ADDR.var_da_queue_count   ).readS32(),
+        hipri_count:    rva(ADDR.var_da_hipri_count   ).readS32(),
+    };
+    g_da_disp_mirror_backup = [
+        rva(ADDR.var_da_disp_a0).readS32(),
+        rva(ADDR.var_da_disp_a1).readS32(),
+        rva(ADDR.var_da_disp_a2).readS32(),
+        rva(ADDR.var_da_disp_a3).readS32(),
+        rva(ADDR.var_da_disp_a4).readS32(),
+        rva(ADDR.var_da_disp_a5).readS32(),
+        rva(ADDR.var_da_disp_a6).readS32(),
+        rva(ADDR.var_da_disp_a7).readS32(),
+        rva(ADDR.var_da_disp_a8).readS32(),
+        rva(ADDR.var_da_disp_a9).readS32(),
+    ];
+
+    // 3. Stamp the no-op handler into every dispatch-table slot.  We
+    //    overwrite all 50 entries with the same NativeCallback address —
+    //    cheaper than 50 Interceptor.replace calls, and the table is in
+    //    .data-ish memory (we Memory.protect'd above), so plain writes
+    //    suffice.  No Interceptor.flush() needed since we never modify
+    //    code, only data.
+    if (g_da_noop_handler === null) {
+        g_da_noop_handler = new NativeCallback(
+            function () { /* dispatch handler stubbed for diff */ },
+            'void', [], 'stdcall');
+    }
+    const handlerPtr = g_da_noop_handler;
+    // Write 50 × 4-byte pointer values.  Use writeU32 per slot — the
+    // handler's address is a NativePointer; treat its integer value as
+    // the 32-bit slot value (we're on a 32-bit target, so pointers fit).
+    const handlerAddr = handlerPtr.toUInt32();
+    const tableBuf = new Uint8Array(DA_DISPATCH_TABLE_BYTES);
+    const view = new DataView(tableBuf.buffer);
+    for (let i = 0; i < DA_DISPATCH_TABLE_LEN; i++) {
+        view.setUint32(i * 4, handlerAddr, /*littleEndian*/ true);
+    }
+    tablePtr.writeByteArray(tableBuf.buffer);
+    return {ok: true, already_installed: false,
+            snapshot_bytes: DA_DISPATCH_TABLE_BYTES + DA_RECORDS_BYTES +
+                            DA_QUEUE_BYTES + DA_HIPRI_BYTES +
+                            7 * 4 + DA_DISP_MIRROR_COUNT * 4};
+}
+
+function uninstallDelayedActionStub() {
+    if (g_base === null) {
+        return {error: 'init not completed yet'};
+    }
+    if (g_da_dispatch_table_backup === null) {
+        return {ok: true, restored: false};
+    }
+    // Chunked restore for the records buffer (22400 B > 16 KB but well
+    // under the 32 KB threshold — single writeByteArray is fine).  Mirror
+    // the tile_expand pattern just for consistency.
+    const CHUNK = 32 * 1024;
+    function restoreInChunks(addr, backup) {
+        const total = backup.length;
+        const base = rva(addr);
+        for (let off = 0; off < total; off += CHUNK) {
+            const len = Math.min(CHUNK, total - off);
+            base.add(off).writeByteArray(backup.slice(off, off + len).buffer);
+        }
+    }
+    // Restore the dispatch table.  The .rdata page is still RWX from the
+    // install-side protect — Frida doesn't track our protect changes, so
+    // we don't try to put it back to RO; harmless since we won't write
+    // again.
+    rva(ADDR.var_da_dispatch_table).writeByteArray(g_da_dispatch_table_backup.buffer);
+
+    restoreInChunks(ADDR.var_da_records,     g_da_records_backup);
+    restoreInChunks(ADDR.var_da_queue,       g_da_queue_backup);
+    restoreInChunks(ADDR.var_da_hipri_stash, g_da_hipri_backup);
+
+    const s = g_da_scalar_backup;
+    rva(ADDR.var_da_master_switch ).writeS32(s.master_switch);
+    rva(ADDR.var_da_game_mode     ).writeS32(s.game_mode);
+    rva(ADDR.var_da_local_player  ).writeS32(s.local_player);
+    rva(ADDR.var_da_action_counter).writeS32(s.action_counter);
+    rva(ADDR.var_da_current_idx   ).writeS32(s.current_idx);
+    rva(ADDR.var_da_queue_count   ).writeS32(s.queue_count);
+    rva(ADDR.var_da_hipri_count   ).writeS32(s.hipri_count);
+
+    const m = g_da_disp_mirror_backup;
+    rva(ADDR.var_da_disp_a0).writeS32(m[0]);
+    rva(ADDR.var_da_disp_a1).writeS32(m[1]);
+    rva(ADDR.var_da_disp_a2).writeS32(m[2]);
+    rva(ADDR.var_da_disp_a3).writeS32(m[3]);
+    rva(ADDR.var_da_disp_a4).writeS32(m[4]);
+    rva(ADDR.var_da_disp_a5).writeS32(m[5]);
+    rva(ADDR.var_da_disp_a6).writeS32(m[6]);
+    rva(ADDR.var_da_disp_a7).writeS32(m[7]);
+    rva(ADDR.var_da_disp_a8).writeS32(m[8]);
+    rva(ADDR.var_da_disp_a9).writeS32(m[9]);
+
+    g_da_dispatch_table_backup = null;
+    g_da_records_backup        = null;
+    g_da_queue_backup          = null;
+    g_da_hipri_backup          = null;
+    g_da_scalar_backup         = null;
+    g_da_disp_mirror_backup    = null;
+    // Keep g_da_noop_handler alive (don't null) so re-installs can reuse
+    // the same NativeCallback.  GC will reclaim it when the script unloads.
+    return {ok: true, restored: true};
+}
+
+// Per-call: zero-fill the records region, apply the sparse record list,
+// write the 5 scalars + 10 disp-arg mirrors, call FUN_004472ce(tick),
+// read back everything that can have changed.
+function runRetailDelayedAction(in_obj) {
+    if (!g_diff_test_enabled) {
+        return {error: 'diff_test not enabled at init'};
+    }
+    if (!resolveRetailFunctions()) {
+        return {error: 'NativeFunction resolution failed'};
+    }
+    if (g_da_dispatch_table_backup === null) {
+        return {error: 'installDelayedActionStub not called'};
+    }
+    if (typeof in_obj.current_tick !== 'number') {
+        return {error: 'in_obj.current_tick must be a number'};
+    }
+
+    g_diff_test_caller_tid = Process.getCurrentThreadId();
+    const tick_count_before = g_tick_count;
+    const in_tick_before    = g_engine_in_tick;
+
+    let out;
+    try {
+        // 1. Zero-fill the 22400-byte records region so prior-call state
+        //    doesn't leak.  Single writeByteArray — 22400 < 32 KB.
+        rva(ADDR.var_da_records).writeByteArray(
+            new Uint8Array(DA_RECORDS_BYTES).buffer);
+
+        // 2. Apply the sparse record list.  Each entry stamps a 0x38-byte
+        //    record at records[idx].  We do per-field writes (rather than
+        //    building a 0x38-byte buffer) because the records are usually
+        //    sparse — a handful of active records per vector at most.
+        const recs = in_obj.records || [];
+        for (let r = 0; r < recs.length; r++) {
+            const rec = recs[r];
+            const base = rva(ADDR.var_da_records).add((rec.idx | 0) * DA_RECORD_BYTES);
+            base.add(0x00).writeS32(rec.due_tick | 0);
+            const args = rec.args || [];
+            for (let a = 0; a < 10; a++) {
+                base.add(0x04 + a * 4).writeS32(args[a] | 0);
+            }
+            // +0x2c..+0x35 padding stays zero from the prior wipe.
+            base.add(0x36).writeU8((rec.active | 0) & 0xff);
+            base.add(0x37).writeU8((rec.type   | 0) & 0xff);
+        }
+
+        // 3. Write the input scalars.  Includes queue_count and hipri_count
+        //    even though retail clears them at entry — for master_switch=0
+        //    vectors the function bails before the clear, and the pre-call
+        //    values carry through to the readback.  Same rationale for the
+        //    queue / hipri_stash byte arrays a few lines down.
+        rva(ADDR.var_da_master_switch ).writeS32(in_obj.master_switch  | 0);
+        rva(ADDR.var_da_game_mode     ).writeS32(in_obj.game_mode      | 0);
+        rva(ADDR.var_da_local_player  ).writeS32(in_obj.local_player   | 0);
+        rva(ADDR.var_da_action_counter).writeS32(in_obj.action_counter | 0);
+        rva(ADDR.var_da_current_idx   ).writeS32(in_obj.current_idx    | 0);
+        rva(ADDR.var_da_queue_count   ).writeS32(in_obj.queue_count    | 0);
+        rva(ADDR.var_da_hipri_count   ).writeS32(in_obj.hipri_count    | 0);
+
+        // Pre-seed queue + hipri_stash with the vector-supplied bytes.
+        // For master_switch=1 cases retail clears these at entry, so the
+        // values get clobbered immediately; for master_switch=0 they
+        // survive and contribute to the diff.  Cheapest to always write
+        // them (a single 400-byte writeByteArray each).
+        const queueBuf = new Uint8Array(DA_QUEUE_BYTES);
+        const hipriBuf = new Uint8Array(DA_HIPRI_BYTES);
+        const qPre = in_obj.queue_pre || [];
+        const hPre = in_obj.hipri_pre || [];
+        const qView = new DataView(queueBuf.buffer);
+        const hView = new DataView(hipriBuf.buffer);
+        for (let i = 0; i < qPre.length && i * 4 + 4 <= DA_QUEUE_BYTES; i++) {
+            qView.setInt32(i * 4, qPre[i] | 0, true);
+        }
+        for (let i = 0; i < hPre.length && i * 4 + 4 <= DA_HIPRI_BYTES; i++) {
+            hView.setInt32(i * 4, hPre[i] | 0, true);
+        }
+        rva(ADDR.var_da_queue      ).writeByteArray(queueBuf.buffer);
+        rva(ADDR.var_da_hipri_stash).writeByteArray(hipriBuf.buffer);
+
+        // 4. Seed the 10 dispatch-arg mirrors.  These get overwritten if
+        //    any record is dispatched; otherwise they carry through.
+        const pre = in_obj.disp_pre || [0,0,0,0,0,0,0,0,0,0];
+        rva(ADDR.var_da_disp_a0).writeS32(pre[0] | 0);
+        rva(ADDR.var_da_disp_a1).writeS32(pre[1] | 0);
+        rva(ADDR.var_da_disp_a2).writeS32(pre[2] | 0);
+        rva(ADDR.var_da_disp_a3).writeS32(pre[3] | 0);
+        rva(ADDR.var_da_disp_a4).writeS32(pre[4] | 0);
+        rva(ADDR.var_da_disp_a5).writeS32(pre[5] | 0);
+        rva(ADDR.var_da_disp_a6).writeS32(pre[6] | 0);
+        rva(ADDR.var_da_disp_a7).writeS32(pre[7] | 0);
+        rva(ADDR.var_da_disp_a8).writeS32(pre[8] | 0);
+        rva(ADDR.var_da_disp_a9).writeS32(pre[9] | 0);
+
+        // 5. Call retail.  __cdecl(int current_tick).
+        g_nf_retail_delayed_action(in_obj.current_tick | 0);
+
+        // 6. Read back records + queue + hipri + counts + scalars + mirrors.
+        //    Single readByteArray each — all chunks ≤32 KB.  Copy into a
+        //    fresh Uint8Array so we don't ship a dangling view onto the
+        //    Frida ArrayBuffer.
+        function readBytes(addr, len) {
+            const dst = new Uint8Array(len);
+            dst.set(new Uint8Array(rva(addr).readByteArray(len)));
+            return Array.from(dst);
+        }
+        out = {
+            records:        readBytes(ADDR.var_da_records,     DA_RECORDS_BYTES),
+            queue:          readBytes(ADDR.var_da_queue,       DA_QUEUE_BYTES),
+            hipri_stash:    readBytes(ADDR.var_da_hipri_stash, DA_HIPRI_BYTES),
+            queue_count:    rva(ADDR.var_da_queue_count   ).readS32(),
+            hipri_count:    rva(ADDR.var_da_hipri_count   ).readS32(),
+            action_counter: rva(ADDR.var_da_action_counter).readS32(),
+            current_idx:    rva(ADDR.var_da_current_idx   ).readS32(),
+            disp: [
+                rva(ADDR.var_da_disp_a0).readS32(),
+                rva(ADDR.var_da_disp_a1).readS32(),
+                rva(ADDR.var_da_disp_a2).readS32(),
+                rva(ADDR.var_da_disp_a3).readS32(),
+                rva(ADDR.var_da_disp_a4).readS32(),
+                rva(ADDR.var_da_disp_a5).readS32(),
+                rva(ADDR.var_da_disp_a6).readS32(),
+                rva(ADDR.var_da_disp_a7).readS32(),
+                rva(ADDR.var_da_disp_a8).readS32(),
+                rva(ADDR.var_da_disp_a9).readS32(),
+            ],
         };
         const tick_count_after = g_tick_count;
         const in_tick_after    = g_engine_in_tick;
@@ -3610,7 +3988,8 @@ rpc.exports = {
             log('diff_test: armed (runRetailRngStep / runRetailComputeFps / ' +
                 'runRetailAnimCycle / runRetailFrameDelta / runRetailPhaseTicks / ' +
                 'runRetailInputState / runRetailSimSubSteps / runRetailStateHash / ' +
-                'runRetailTileExpand RPCs live; orchestrator drives test vectors)');
+                'runRetailTileExpand / runRetailDelayedAction RPCs live; ' +
+                'orchestrator drives test vectors)');
         }
     },
 
@@ -3695,6 +4074,18 @@ rpc.exports = {
 
     runRetailTileExpand: function (in_obj) {
         return runRetailTileExpand(in_obj);
+    },
+
+    installDelayedActionStub: function () {
+        return installDelayedActionStub();
+    },
+
+    uninstallDelayedActionStub: function () {
+        return uninstallDelayedActionStub();
+    },
+
+    runRetailDelayedAction: function (in_obj) {
+        return runRetailDelayedAction(in_obj);
     },
 
     // Diagnostic counters for the DDraw → GDI seat.  Reflects everything
