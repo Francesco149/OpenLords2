@@ -25,6 +25,10 @@ Current targets:
   - engine_compute_sim_sub_steps (FUN_004bb978) + engine_compute_scenario_hint
                                  (FUN_0043de70) — sim sub-step rate gate
                                  (chained: hint feeds gate)
+  - engine_compute_state_hash    (FUN_00440231) — per-tick MP state hash
+                                 (source-array payload installed once
+                                  per test plan from a shared seed;
+                                  engine-tick freeze required)
 
 The orchestrator runs the agent in "diff_test" mode (no turbo, no input
 replay) so the engine boots, parks, and waits.  Once the per-tick driver
@@ -318,6 +322,28 @@ class EngineInputOut(ctypes.Structure):
     ]
 
 
+class EngineStateHashIn(ctypes.Structure):
+    _fields_ = [
+        ("mode",                     ctypes.c_int),
+        ("player_slot",              ctypes.c_int),
+        ("sim_tick_counter",         ctypes.c_uint32),
+        ("per_army_768",             ctypes.POINTER(ctypes.c_uint8)),
+        ("player_strategic_352",     ctypes.POINTER(ctypes.c_uint8)),
+        ("per_territory_420",        ctypes.POINTER(ctypes.c_uint8)),
+        ("per_battle_hex_432",       ctypes.POINTER(ctypes.c_uint8)),
+        ("per_combat_unit_76",       ctypes.POINTER(ctypes.c_uint8)),
+        ("per_battle_hex_aux_52",    ctypes.POINTER(ctypes.c_uint8)),
+    ]
+
+
+class EngineStateHashOut(ctypes.Structure):
+    _fields_ = [
+        ("bucket",                   ctypes.c_uint8 * 10),
+        ("hash_region",              ctypes.c_uint8 * 600),
+        ("notify_combat_snapshot",   ctypes.c_int),
+    ]
+
+
 def load_port_lib() -> ctypes.CDLL:
     """Load libengine_diff.so + bind the two diff entrypoints.
 
@@ -361,6 +387,10 @@ def load_port_lib() -> ctypes.CDLL:
     lib.engine_compute_scenario_hint.restype = None
     lib.engine_compute_scenario_hint.argtypes = [
         ctypes.POINTER(EngineScenarioHintIn), ctypes.POINTER(EngineScenarioHintOut)]
+
+    lib.engine_compute_state_hash.restype = None
+    lib.engine_compute_state_hash.argtypes = [
+        ctypes.POINTER(EngineStateHashIn), ctypes.POINTER(EngineStateHashOut)]
 
     return lib
 
@@ -961,6 +991,12 @@ ANIM_RACE_RETRIES = 8
 # spans both pre- and post-call.  Use a bigger retry budget; race-pass
 # classification picks up the residual after retries exhaust.
 INPUT_STATE_RACE_RETRIES = 16
+# State-hash runs under the engine-tick freeze (same install as
+# sim_sub_steps), so the engine main thread should never enter
+# FUN_00440231 during our RPC window.  Keep the retry budget low —
+# a high count would mask a real bug in the freeze or the structural
+# raced detector.
+STATE_HASH_RACE_RETRIES = 2
 
 
 def _frame_delta_race_free(vec: dict[str, int], retail: dict) -> bool:
@@ -1752,6 +1788,156 @@ def diff_frame_delta(retail: dict, port: dict) -> list[str]:
     return bad
 
 
+# ─── state_hash (FUN_00440231 — engine_compute_state_hash) ────────────
+
+# Source-array sizes — MUST match the constants in tools/frida/openlords2-agent.js
+# (STATE_HASH_*_BYTES).  The agent and orchestrator generate the same
+# 125,468-byte payload from a shared 32-bit seed via the xorshift32 helper
+# below.
+STATE_HASH_PER_ARMY_BYTES         = 17  * 0x300
+STATE_HASH_PLAYER_STRATEGIC_BYTES = 6   * 0x160
+STATE_HASH_PER_TERRITORY_BYTES    = 151 * 0x1a4
+STATE_HASH_PER_BATTLE_HEX_BYTES   = 81  * 0x1b0
+STATE_HASH_PER_COMBAT_UNIT_BYTES  = 101 * 0x4c
+STATE_HASH_PER_BATTLE_AUX_BYTES   = 81  * 0x34
+
+
+def state_hash_fill_bytes(seed: int, n: int) -> bytes:
+    """Shared 32-bit xorshift bit-for-bit equivalent of the agent's
+    `stateHashFillBytes` (tools/frida/openlords2-agent.js).  Both
+    sides MUST agree byte-for-byte; orchestrator generates the buffer
+    that gets passed to the port; agent fills retail's memory from the
+    same algorithm given the same seed."""
+    s = (seed & 0xFFFFFFFF) or 1
+    out = bytearray(n)
+    for i in range(n):
+        s ^= (s << 13) & 0xFFFFFFFF
+        s ^= (s >> 17) & 0xFFFFFFFF
+        s ^= (s << 5)  & 0xFFFFFFFF
+        s &= 0xFFFFFFFF
+        out[i] = s & 0xFF
+    return bytes(out)
+
+
+def gen_state_hash_payload(seed: int) -> dict[str, bytes]:
+    """Generate the same 6 source-array buffers the agent will fill
+    retail-side from `seed`.  Each array uses a sub-seed derived from
+    the master seed mixed with the array index (0..5) — must match the
+    agent's `installStateHashSources` per-array tag mixing exactly."""
+    GOLDEN = 0x9e3779b1
+    arrays = [
+        ("per_army_768",          STATE_HASH_PER_ARMY_BYTES,         0),
+        ("player_strategic_352",  STATE_HASH_PLAYER_STRATEGIC_BYTES, 1),
+        ("per_territory_420",     STATE_HASH_PER_TERRITORY_BYTES,    2),
+        ("per_battle_hex_432",    STATE_HASH_PER_BATTLE_HEX_BYTES,   3),
+        ("per_combat_unit_76",    STATE_HASH_PER_COMBAT_UNIT_BYTES,  4),
+        ("per_battle_hex_aux_52", STATE_HASH_PER_BATTLE_AUX_BYTES,   5),
+    ]
+    out = {}
+    for name, sz, tag in arrays:
+        sub_seed = (seed + GOLDEN * tag) & 0xFFFFFFFF
+        out[name] = state_hash_fill_bytes(sub_seed, sz)
+    return out
+
+
+def gen_state_hash_vectors(n: int, rng: random.Random) -> list[dict[str, int]]:
+    """Build N state-hash test vectors.  Each vector is a scalar tuple
+    (mode, player_slot, sim_tick_counter) — the source-array payload
+    is installed ONCE per test plan (see install_state_hash_sources)
+    and is the same for every vector.
+
+    Coverage spans:
+      - mode == 0 (strategic) at various player slots + tick counters
+      - mode == 2 (combat) at the same
+      - mode == 1 / 3 / 5 (neither-branch) at the same
+      - bucket[9] formula at tick LSBs 0x00, 0x7f, 0x80, 0xff
+      - player_slot = 0 (safe scratch in retail's storage)
+    """
+    out: list[dict[str, int]] = [
+        # Strategic / combat at slot 0, tick=0 (baseline).
+        {"mode": 0, "player_slot": 0, "sim_tick_counter": 0},
+        {"mode": 2, "player_slot": 0, "sim_tick_counter": 0},
+        # Neither-branch mode (mode==1) — only bucket[7]=1, bucket[9], bucket[0]=1 fire.
+        {"mode": 1, "player_slot": 0, "sim_tick_counter": 0},
+        # bucket[9] formula corners — verify (tick & 0x7f) + 1 across boundaries.
+        {"mode": 0, "player_slot": 0, "sim_tick_counter": 0x7f},
+        {"mode": 0, "player_slot": 0, "sim_tick_counter": 0x80},
+        {"mode": 0, "player_slot": 0, "sim_tick_counter": 0xff},
+        {"mode": 2, "player_slot": 0, "sim_tick_counter": 0xfffffffe},
+        # Modes 3 and 5 — also neither-branch; verify the dispatch is
+        # mode == 0 OR mode == 2, nothing else.
+        {"mode": 3, "player_slot": 0, "sim_tick_counter": 0x12},
+        {"mode": 5, "player_slot": 0, "sim_tick_counter": 0xab},
+    ]
+    while len(out) < n:
+        mode = rng.choice([0, 2, 1, 3, 5])
+        out.append({
+            "mode":             mode,
+            "player_slot":      0,
+            "sim_tick_counter": rng.getrandbits(32),
+        })
+    return out[:n]
+
+
+def run_port_state_hash(lib: ctypes.CDLL,
+                        vec: dict[str, int],
+                        payload: dict[str, bytes]) -> dict[str, Any]:
+    """Run our engine_compute_state_hash port with the given vector +
+    source-array payload (generated from the test plan's seed)."""
+    # Allocate ctypes buffers backed by the bytes objects.  ctypes
+    # treats `(c_uint8 * len)` as a mutable array; from_buffer_copy
+    # avoids aliasing the bytes-object's read-only buffer.
+    bufs = {}
+    for k, b in payload.items():
+        bufs[k] = (ctypes.c_uint8 * len(b)).from_buffer_copy(b)
+
+    sh_in = EngineStateHashIn(
+        mode=vec["mode"],
+        player_slot=vec["player_slot"],
+        sim_tick_counter=vec["sim_tick_counter"] & 0xFFFFFFFF,
+        per_army_768=ctypes.cast(bufs["per_army_768"],
+                                 ctypes.POINTER(ctypes.c_uint8)),
+        player_strategic_352=ctypes.cast(bufs["player_strategic_352"],
+                                         ctypes.POINTER(ctypes.c_uint8)),
+        per_territory_420=ctypes.cast(bufs["per_territory_420"],
+                                      ctypes.POINTER(ctypes.c_uint8)),
+        per_battle_hex_432=ctypes.cast(bufs["per_battle_hex_432"],
+                                       ctypes.POINTER(ctypes.c_uint8)),
+        per_combat_unit_76=ctypes.cast(bufs["per_combat_unit_76"],
+                                       ctypes.POINTER(ctypes.c_uint8)),
+        per_battle_hex_aux_52=ctypes.cast(bufs["per_battle_hex_aux_52"],
+                                          ctypes.POINTER(ctypes.c_uint8)),
+    )
+    sh_out = EngineStateHashOut()
+    lib.engine_compute_state_hash(ctypes.byref(sh_in), ctypes.byref(sh_out))
+    return {
+        "bucket":                 list(sh_out.bucket),
+        "hash_region":            list(sh_out.hash_region),
+        "notify_combat_snapshot": int(sh_out.notify_combat_snapshot),
+    }
+
+
+def diff_state_hash(retail: dict, port: dict) -> list[str]:
+    """Field-level diff for state_hash.  All three outputs are checked
+    bytewise; mismatches return field name + indicator (the per-element
+    index doesn't appear in the diff list, but the failure pretty-printer
+    in _print_summary prints the full retail/port dicts so the offending
+    bytes are visible)."""
+    bad = []
+    rb = list(retail.get("bucket") or [])
+    pb = list(port["bucket"])
+    if rb != pb:
+        bad.append("bucket")
+    rh = list(retail.get("hash_region") or [])
+    ph = list(port["hash_region"])
+    if rh != ph:
+        bad.append("hash_region")
+    if int(retail.get("notify_combat_snapshot", 0)) != \
+            int(port["notify_combat_snapshot"]):
+        bad.append("notify_combat_snapshot")
+    return bad
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -1843,11 +2029,22 @@ def run_diff(cfg_args) -> int:
     if "sim_sub_steps" in enabled:
         test_plans.append(("sim_sub_steps",
                            gen_sim_sub_steps_vectors(cfg_args.vectors, rng)))
+    if "state_hash" in enabled:
+        test_plans.append(("state_hash",
+                           gen_state_hash_vectors(cfg_args.vectors, rng)))
     # Pre-generate the rate-gate LUT — one per run, used by all
     # sim_sub_steps vectors so a re-run with the same seed produces
     # the same LUT (and thus the same retail-side gate decisions).
     sim_rate_lut = gen_sim_sub_steps_rate_lut(rng) \
         if "sim_sub_steps" in enabled else None
+    # Pre-generate the state-hash source-array payload — one seed per
+    # run, shared across every state_hash vector.  Agent installs the
+    # bytes once per test plan; orchestrator generates the same bytes
+    # for the host-port call.  Seed must be non-zero (xorshift can't
+    # escape 0); promote 0 to 1 if cfg_args.seed happens to be 0.
+    state_hash_seed = (rng.getrandbits(32) or 1) if "state_hash" in enabled else None
+    state_hash_payload = gen_state_hash_payload(state_hash_seed) \
+        if "state_hash" in enabled else None
     if not test_plans:
         print("[diff] no enabled targets in --functions; nothing to do.")
         return 0
@@ -1979,6 +2176,36 @@ def run_diff(cfg_args) -> int:
                     # to stay out of the sub-step body for the run).
                 else:
                     log(f"[diff] sim_sub_steps: engine_tick frozen "
+                        f"(already_installed={freeze_resp.get('already_installed')})")
+            # State-hash source-array install — one-shot per test plan.
+            # Sends only the SEED (not the 125 KB of bytes); agent
+            # synthesises the same payload host-side as the orchestrator.
+            # Also installs the engine-tick freeze for the same reason
+            # sim_sub_steps does: FUN_00440231 reads game-state arrays
+            # the engine main thread also reads — racing the source
+            # writes against an engine tick would corrupt both sides'
+            # observations.
+            if fn_name == "state_hash":
+                install_resp = script.exports_sync.install_state_hash_sources(
+                    state_hash_seed)
+                if isinstance(install_resp, dict) and install_resp.get("error"):
+                    log(f"[diff] state_hash: source install failed: "
+                        f"{install_resp['error']}")
+                    results.append(DiffResult(
+                        function=fn_name, total=len(vectors),
+                        fail_count=len(vectors),
+                        failures=[{"idx": -1, "vector": None,
+                                   "retail": install_resp, "port": None,
+                                   "diff": ["sources-install-error"]}]))
+                    continue
+                log(f"[diff] state_hash: sources installed (seed=0x{state_hash_seed:08x}, "
+                    f"payload_bytes={install_resp.get('payload_bytes')})")
+                freeze_resp = script.exports_sync.install_sim_sub_steps_engine_freeze()
+                if isinstance(freeze_resp, dict) and freeze_resp.get("error"):
+                    log(f"[diff] state_hash: engine freeze failed: "
+                        f"{freeze_resp['error']}")
+                else:
+                    log(f"[diff] state_hash: engine_tick frozen "
                         f"(already_installed={freeze_resp.get('already_installed')})")
             r = DiffResult(function=fn_name, total=len(vectors))
             for i, vec in enumerate(vectors):
@@ -2240,6 +2467,42 @@ def run_diff(cfg_args) -> int:
                     if bad and race:
                         r.race_count += 1
                         bad = []
+                elif fn_name == "state_hash":
+                    # The function only reads the source arrays and writes
+                    # the destination bucket+region; no scripted clock, no
+                    # GetCursorPos.  With the engine freeze installed, the
+                    # main thread can't enter FUN_00440231 during our RPC
+                    # window — so the raced flag should always be 0.  We
+                    # keep the retry loop short (2 attempts) as a guard
+                    # against the WndProc thread firing some other path
+                    # that incidentally touches the destination region.
+                    port = run_port_state_hash(lib, vec, state_hash_payload)
+                    retail = None
+                    for attempt in range(STATE_HASH_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_state_hash(vec)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < STATE_HASH_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": vec,
+                            "retail": retail, "port": port,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_state_hash(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        # Engine-tick fired during the RPC (despite the
+                        # freeze covering FUN_0040e890 — possible if the
+                        # freeze didn't install or the engine entered via
+                        # a non-dispatch path).  Classify as race-pass.
+                        r.race_count += 1
+                        bad = []
                 else:
                     continue
                 if bad:
@@ -2267,6 +2530,17 @@ def run_diff(cfg_args) -> int:
                         f"{freeze_resp['error']}")
                 elif freeze_resp.get("restored"):
                     log("[diff] sim_sub_steps: engine_tick resumed")
+            if fn_name == "state_hash":
+                uninstall_resp = script.exports_sync.uninstall_state_hash_sources()
+                if isinstance(uninstall_resp, dict) and uninstall_resp.get("error"):
+                    log(f"[diff] state_hash: sources uninstall failed: "
+                        f"{uninstall_resp['error']}")
+                freeze_resp = script.exports_sync.uninstall_sim_sub_steps_engine_freeze()
+                if isinstance(freeze_resp, dict) and freeze_resp.get("error"):
+                    log(f"[diff] state_hash: engine freeze uninstall failed: "
+                        f"{freeze_resp['error']}")
+                elif freeze_resp.get("restored"):
+                    log("[diff] state_hash: engine_tick resumed")
 
     finally:
         if script is not None:
@@ -2318,10 +2592,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash",
                     help="comma-separated subset to test "
                          "(default: rng_step,fps_step,anim_cycle,frame_delta,"
-                         "phase_ticks,input_state,sim_sub_steps)")
+                         "phase_ticks,input_state,sim_sub_steps,state_hash)")
     ap.add_argument("--warmup-s", type=float, default=10.0,
                     help="seconds to wait for engine_tick to settle before "
                          "firing RPCs (default 10)")

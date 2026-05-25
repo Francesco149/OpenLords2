@@ -111,6 +111,7 @@ const ADDR = {
     fn_engine_phase_ticks:     0x004bbc80,  // FUN_004bbc80 — 9-flag animation phase ticks
     fn_engine_input_state:     0x004b191e,  // FUN_004b191e — mouse-input state resolver
     fn_engine_sim_sub_steps:   0x004bb978,  // FUN_004bb978 — sim sub-step rate gate
+    fn_engine_state_hash:      0x00440231,  // FUN_00440231 — per-tick MP state hash
     // engine_tick_dispatch (FUN_0040e890) — wraps the per-tick driver FUN_004b99c0.
     // Replaced with a no-op during sim_sub_steps diff vectors to prevent the
     // engine main thread from racing into the sub-step body with our injected
@@ -269,6 +270,23 @@ const ADDR = {
     var_sim_player_has_data_base:   0x0057bf05, //  &DAT_0057bf05 — stride 0x160, u8 (+1)
     var_sim_player_disconnected_base: 0x00553d76, //  &DAT_00553d76 — stride 0x2c, u8
     var_sim_player_ticks_base:      0x0053e8d0, //  &DAT_0053e8d0 — stride 4, s32
+    // Per-tick state hash (FUN_00440231 — engine_compute_state_hash).
+    //   Inputs: re-uses var_sim_game_mode_speed (DAT_0057c8fc, mode),
+    //   var_sim_local_player_idx (DAT_0057c8cc, player_slot),
+    //   var_sim_tick_counter (DAT_0057c998, sim_tick_counter).
+    //   Source arrays — slot-0 bases.  Each indexed by slot*stride at the
+    //   strides documented in docs/findings/save-format.md.  The hash
+    //   function reads slots 1..N (slot 0 unused per the schema convention).
+    var_hash_per_army_768:          0x0053f9b0, //  DAT_0053f9b0 — 17  × 0x300 (768)
+    var_hash_player_strategic_352:  0x0057bf00, //  DAT_0057bf00 — 6   × 0x160 (352)
+    var_hash_per_territory_420:     0x0052f0b0, //  DAT_0052f0b0 — 151 × 0x1a4 (420)
+    var_hash_per_battle_hex_432:    0x00554480, //  DAT_00554480 — 81  × 0x1b0 (432)
+    var_hash_per_combat_unit_76:    0x0057a100, //  DAT_0057a100 — 101 × 0x4c  (76)
+    var_hash_per_battle_hex_aux_52: 0x00566520, //  DAT_00566520 — 81  × 0x34  (52)
+    //   Output regions — slot-0 bases.  Per player_slot: 10-byte bucket
+    //   at +slot*10, 600-byte hash region at +slot*600.
+    var_hash_bucket_base:           0x00569530, //  DAT_00569530 — stride 10
+    var_hash_region_base:           0x00565700, //  DAT_00565700 — stride 600
 };
 
 // Per-slot strides — used inside the runRetailSimSubSteps RPC + the LUT
@@ -279,6 +297,31 @@ const SIM_PLAYER_ACTIVE_STRIDE   = 0x160;        // bytes
 const SIM_PLAYER_DISCONN_STRIDE  = 0x2c;         // bytes
 const SIM_PLAYER_TICKS_STRIDE    = 4;            // bytes
 const SIM_RATE_LUT_BYTES         = 2400;         // (14*0xa0 + 0x9f) + 1 → 0x960
+
+// State-hash source-array sizes (matches docs/findings/save-format.md
+// entry 4/3/5/7/8/9).  Pre-multiplied: (max_slot + 1) × stride so the
+// install helper can snapshot the full retail-side blocks at fixed
+// offsets.  Combined: 125,468 bytes — snapshotted once per test plan.
+const STATE_HASH_PER_ARMY_SLOTS         = 17;
+const STATE_HASH_PER_ARMY_STRIDE        = 0x300;     // 768
+const STATE_HASH_PER_ARMY_BYTES         = STATE_HASH_PER_ARMY_SLOTS * STATE_HASH_PER_ARMY_STRIDE;
+const STATE_HASH_PLAYER_STRATEGIC_SLOTS = 6;
+const STATE_HASH_PLAYER_STRATEGIC_STRIDE = 0x160;    // 352
+const STATE_HASH_PLAYER_STRATEGIC_BYTES = STATE_HASH_PLAYER_STRATEGIC_SLOTS * STATE_HASH_PLAYER_STRATEGIC_STRIDE;
+const STATE_HASH_PER_TERRITORY_SLOTS    = 151;
+const STATE_HASH_PER_TERRITORY_STRIDE   = 0x1a4;     // 420
+const STATE_HASH_PER_TERRITORY_BYTES    = STATE_HASH_PER_TERRITORY_SLOTS * STATE_HASH_PER_TERRITORY_STRIDE;
+const STATE_HASH_PER_BATTLE_HEX_SLOTS   = 81;
+const STATE_HASH_PER_BATTLE_HEX_STRIDE  = 0x1b0;     // 432
+const STATE_HASH_PER_BATTLE_HEX_BYTES   = STATE_HASH_PER_BATTLE_HEX_SLOTS * STATE_HASH_PER_BATTLE_HEX_STRIDE;
+const STATE_HASH_PER_COMBAT_UNIT_SLOTS  = 101;
+const STATE_HASH_PER_COMBAT_UNIT_STRIDE = 0x4c;      // 76
+const STATE_HASH_PER_COMBAT_UNIT_BYTES  = STATE_HASH_PER_COMBAT_UNIT_SLOTS * STATE_HASH_PER_COMBAT_UNIT_STRIDE;
+const STATE_HASH_PER_BATTLE_AUX_SLOTS   = 81;
+const STATE_HASH_PER_BATTLE_AUX_STRIDE  = 0x34;      // 52
+const STATE_HASH_PER_BATTLE_AUX_BYTES   = STATE_HASH_PER_BATTLE_AUX_SLOTS * STATE_HASH_PER_BATTLE_AUX_STRIDE;
+const STATE_HASH_BUCKET_BYTES           = 10;         // per player_slot
+const STATE_HASH_REGION_BYTES           = 600;        // per player_slot
 
 // ─── runtime state ──────────────────────────────────────────────────────
 
@@ -408,6 +451,7 @@ let g_nf_retail_frame_delta   = null;
 let g_nf_retail_phase_ticks   = null;
 let g_nf_retail_input_state   = null;
 let g_nf_retail_sim_sub_steps = null;
+let g_nf_retail_state_hash    = null;
 
 // Sim sub-step rate-gate LUT install state.  installSimSubStepsRateLut() is
 // a one-shot per test plan: snapshot the original 2400 bytes once, write the
@@ -431,6 +475,18 @@ let g_sim_rate_lut_backup = null;       // Uint8Array of original bytes (or null
 // at the cost of suspending sim/render ticking entirely for the duration.
 // Pair install with uninstall to restore normal behavior.
 let g_sim_engine_freeze_callback = null;   // NativeCallback (or null = not installed)
+
+// State-hash source-array install state.  installStateHashSources() snapshots
+// retail's 6 source arrays once (lazy on first call), then fills them with
+// the orchestrator-supplied deterministic bytes (xorshift32 from a seed).
+// uninstallStateHashSources() flushes the snapshots back.  Combined snapshot
+// size is ~125 KB; one snapshot per test plan keeps the per-vector RPC lean.
+let g_state_hash_per_army_backup           = null;
+let g_state_hash_player_strategic_backup   = null;
+let g_state_hash_per_territory_backup      = null;
+let g_state_hash_per_battle_hex_backup     = null;
+let g_state_hash_per_combat_unit_backup    = null;
+let g_state_hash_per_battle_aux_backup     = null;
 
 // engine_tick depth tracker — 1 while the engine main thread is executing
 // FUN_004b99c0, 0 otherwise.  Used by per-tick race detection in diff RPCs
@@ -2054,6 +2110,8 @@ function resolveRetailFunctions() {
     // FUN_004bb978 returns the sub-step count (0/1/2) — declared int32.
     g_nf_retail_sim_sub_steps = new NativeFunction(
         rva(ADDR.fn_engine_sim_sub_steps), 'int32', [], 'stdcall');
+    g_nf_retail_state_hash = new NativeFunction(
+        rva(ADDR.fn_engine_state_hash), 'void', [], 'stdcall');
     return true;
 }
 
@@ -2136,6 +2194,181 @@ function uninstallSimSubStepsEngineFreeze() {
     Interceptor.flush();
     g_sim_engine_freeze_callback = null;
     return {ok: true, restored: true};
+}
+
+// ─── per-tick state hash (FUN_00440231 — engine_compute_state_hash) ─────
+//
+// Same install/runRetail/uninstall shape as sim_sub_steps, but the
+// pre-installed payload here is the SIX strided source arrays (combined
+// ~125 KB) rather than a single 2400-byte LUT.
+//
+// Wire-traffic optimisation: source arrays are filled from a 32-bit seed
+// via a shared xorshift32 algorithm (`stateHashFillBytes` below).  The
+// orchestrator generates the same bytes Python-side and passes them to
+// the port; only the SEED travels over the Frida wire.  Saves ~125 KB
+// of JSON per install vs sending the raw bytes.
+//
+// engine-tick freeze: REQUIRED before the source arrays get written.
+// FUN_00440231 reads the same source arrays the engine main thread also
+// reads (per-territory, per-army, etc.).  Without the freeze, an engine
+// tick during our write would hash inconsistent partial state, then our
+// retail call would hash the consistent post-write state — different
+// per-call buckets, false-positive race-pass — or worse, the engine
+// could crash on the perturbed arrays.  Re-use the existing
+// installSimSubStepsEngineFreeze() since the swap target is the same.
+
+// Shared 32-bit xorshift.  Match the Python implementation in
+// tools/diff_test.py one-for-one.  Initial state must be non-zero
+// (xorshift can't escape 0); the orchestrator guarantees seed != 0.
+function stateHashFillBytes(seed, buf, len) {
+    let s = (seed >>> 0) || 1;
+    const u8 = new Uint8Array(buf);
+    for (let i = 0; i < len; i++) {
+        s ^= (s << 13) >>> 0;
+        s ^= (s >>> 17);
+        s ^= (s << 5)  >>> 0;
+        s = s >>> 0;
+        u8[i] = s & 0xff;
+    }
+}
+
+function installStateHashSources(seed) {
+    if (g_base === null) {
+        return {error: 'init not completed yet'};
+    }
+    if (typeof seed !== 'number') {
+        return {error: 'seed must be a number'};
+    }
+    // Lazy snapshot — only on first install.  Re-installs (e.g. retries)
+    // share the same backup so we always restore the original retail bytes.
+    if (g_state_hash_per_army_backup === null) {
+        g_state_hash_per_army_backup = new Uint8Array(
+            rva(ADDR.var_hash_per_army_768).readByteArray(STATE_HASH_PER_ARMY_BYTES));
+        g_state_hash_player_strategic_backup = new Uint8Array(
+            rva(ADDR.var_hash_player_strategic_352).readByteArray(STATE_HASH_PLAYER_STRATEGIC_BYTES));
+        g_state_hash_per_territory_backup = new Uint8Array(
+            rva(ADDR.var_hash_per_territory_420).readByteArray(STATE_HASH_PER_TERRITORY_BYTES));
+        g_state_hash_per_battle_hex_backup = new Uint8Array(
+            rva(ADDR.var_hash_per_battle_hex_432).readByteArray(STATE_HASH_PER_BATTLE_HEX_BYTES));
+        g_state_hash_per_combat_unit_backup = new Uint8Array(
+            rva(ADDR.var_hash_per_combat_unit_76).readByteArray(STATE_HASH_PER_COMBAT_UNIT_BYTES));
+        g_state_hash_per_battle_aux_backup = new Uint8Array(
+            rva(ADDR.var_hash_per_battle_hex_aux_52).readByteArray(STATE_HASH_PER_BATTLE_AUX_BYTES));
+    }
+    // Synthesize the deterministic payload from the seed.  Each array
+    // gets ITS OWN contiguous slice of the xorshift stream — sub-seed
+    // each by mixing the array index into the seed so different arrays
+    // get different bytes even at small offsets.
+    const arrays = [
+        {addr: ADDR.var_hash_per_army_768,          len: STATE_HASH_PER_ARMY_BYTES,           tag: 0},
+        {addr: ADDR.var_hash_player_strategic_352,  len: STATE_HASH_PLAYER_STRATEGIC_BYTES,   tag: 1},
+        {addr: ADDR.var_hash_per_territory_420,     len: STATE_HASH_PER_TERRITORY_BYTES,      tag: 2},
+        {addr: ADDR.var_hash_per_battle_hex_432,    len: STATE_HASH_PER_BATTLE_HEX_BYTES,     tag: 3},
+        {addr: ADDR.var_hash_per_combat_unit_76,    len: STATE_HASH_PER_COMBAT_UNIT_BYTES,    tag: 4},
+        {addr: ADDR.var_hash_per_battle_hex_aux_52, len: STATE_HASH_PER_BATTLE_AUX_BYTES,     tag: 5},
+    ];
+    for (const a of arrays) {
+        const ab = new ArrayBuffer(a.len);
+        stateHashFillBytes((seed + 0x9e3779b1 * a.tag) >>> 0, ab, a.len);
+        rva(a.addr).writeByteArray(ab);
+    }
+    return {ok: true, snapshotted: g_state_hash_per_army_backup !== null,
+            payload_bytes: STATE_HASH_PER_ARMY_BYTES + STATE_HASH_PLAYER_STRATEGIC_BYTES +
+                           STATE_HASH_PER_TERRITORY_BYTES + STATE_HASH_PER_BATTLE_HEX_BYTES +
+                           STATE_HASH_PER_COMBAT_UNIT_BYTES + STATE_HASH_PER_BATTLE_AUX_BYTES};
+}
+
+function uninstallStateHashSources() {
+    if (g_base === null) {
+        return {error: 'init not completed yet'};
+    }
+    if (g_state_hash_per_army_backup === null) {
+        return {ok: true, restored: false};
+    }
+    rva(ADDR.var_hash_per_army_768).writeByteArray(g_state_hash_per_army_backup.buffer);
+    rva(ADDR.var_hash_player_strategic_352).writeByteArray(g_state_hash_player_strategic_backup.buffer);
+    rva(ADDR.var_hash_per_territory_420).writeByteArray(g_state_hash_per_territory_backup.buffer);
+    rva(ADDR.var_hash_per_battle_hex_432).writeByteArray(g_state_hash_per_battle_hex_backup.buffer);
+    rva(ADDR.var_hash_per_combat_unit_76).writeByteArray(g_state_hash_per_combat_unit_backup.buffer);
+    rva(ADDR.var_hash_per_battle_hex_aux_52).writeByteArray(g_state_hash_per_battle_aux_backup.buffer);
+    g_state_hash_per_army_backup         = null;
+    g_state_hash_player_strategic_backup = null;
+    g_state_hash_per_territory_backup    = null;
+    g_state_hash_per_battle_hex_backup   = null;
+    g_state_hash_per_combat_unit_backup  = null;
+    g_state_hash_per_battle_aux_backup   = null;
+    return {ok: true, restored: true};
+}
+
+// State-hash diff RPC.  Per-vector inject of 3 scalars (mode, player_slot,
+// sim_tick_counter); snapshot+restore of the destination 10-byte bucket
+// and 600-byte hash region for the indicated player_slot.  Source-array
+// bytes were installed once per test plan via installStateHashSources()
+// and are NOT touched per-call.
+//
+// Engine freeze: orchestrator MUST install installSimSubStepsEngineFreeze
+// before the first call (and uninstall at the end).  Without the freeze,
+// FUN_00440231's source-array reads race with the engine main thread.
+function runRetailStateHash(in_obj) {
+    if (!g_diff_test_enabled) {
+        return {error: 'diff_test not enabled at init'};
+    }
+    if (!resolveRetailFunctions()) {
+        return {error: 'NativeFunction resolution failed'};
+    }
+    if (g_state_hash_per_army_backup === null) {
+        return {error: 'installStateHashSources not called'};
+    }
+    g_diff_test_caller_tid = Process.getCurrentThreadId();
+    const tick_count_before = g_tick_count;
+    const in_tick_before    = g_engine_in_tick;
+    const slot = in_obj.player_slot | 0;
+    // Snapshot the 3 scalar inputs + the destination bucket + region.
+    // Mode is u8 in the existing var_sim_game_mode_speed entry.
+    const snap = {
+        mode:            rva(ADDR.var_sim_game_mode_speed ).readU8(),
+        player_slot:     rva(ADDR.var_sim_local_player_idx).readS32(),
+        tick_counter:    rva(ADDR.var_sim_tick_counter    ).readU32(),
+        bucket: new Uint8Array(
+            rva(ADDR.var_hash_bucket_base).add(slot * STATE_HASH_BUCKET_BYTES)
+                .readByteArray(STATE_HASH_BUCKET_BYTES)),
+        region: new Uint8Array(
+            rva(ADDR.var_hash_region_base).add(slot * STATE_HASH_REGION_BYTES)
+                .readByteArray(STATE_HASH_REGION_BYTES)),
+    };
+    let out;
+    try {
+        rva(ADDR.var_sim_game_mode_speed ).writeU8 (in_obj.mode             & 0xff);
+        rva(ADDR.var_sim_local_player_idx).writeS32(slot);
+        rva(ADDR.var_sim_tick_counter    ).writeU32(in_obj.sim_tick_counter >>> 0);
+        g_nf_retail_state_hash();
+        out = {
+            bucket: Array.from(new Uint8Array(
+                rva(ADDR.var_hash_bucket_base).add(slot * STATE_HASH_BUCKET_BYTES)
+                    .readByteArray(STATE_HASH_BUCKET_BYTES))),
+            hash_region: Array.from(new Uint8Array(
+                rva(ADDR.var_hash_region_base).add(slot * STATE_HASH_REGION_BYTES)
+                    .readByteArray(STATE_HASH_REGION_BYTES))),
+            // FUN_00440231 doesn't return notify_combat_snapshot directly —
+            // the orchestrator derives it from the input mode.  Echo it
+            // for parity with the port output.
+            notify_combat_snapshot: ((in_obj.mode | 0) === 2) ? 1 : 0,
+        };
+        const tick_count_after = g_tick_count;
+        const in_tick_after    = g_engine_in_tick;
+        out.raced = ((tick_count_after !== tick_count_before) ||
+                     in_tick_before !== 0 || in_tick_after !== 0) ? 1 : 0;
+    } finally {
+        rva(ADDR.var_sim_game_mode_speed ).writeU8 (snap.mode);
+        rva(ADDR.var_sim_local_player_idx).writeS32(snap.player_slot);
+        rva(ADDR.var_sim_tick_counter    ).writeU32(snap.tick_counter);
+        rva(ADDR.var_hash_bucket_base).add(slot * STATE_HASH_BUCKET_BYTES)
+            .writeByteArray(snap.bucket.buffer);
+        rva(ADDR.var_hash_region_base).add(slot * STATE_HASH_REGION_BYTES)
+            .writeByteArray(snap.region.buffer);
+        g_diff_test_caller_tid = -1;
+    }
+    return out;
 }
 
 // Sim sub-step rate gate diff.  Wraps FUN_004bb978, which internally calls
@@ -3101,7 +3334,7 @@ rpc.exports = {
         if (g_diff_test_enabled) {
             log('diff_test: armed (runRetailRngStep / runRetailComputeFps / ' +
                 'runRetailAnimCycle / runRetailFrameDelta / runRetailPhaseTicks / ' +
-                'runRetailInputState / runRetailSimSubSteps ' +
+                'runRetailInputState / runRetailSimSubSteps / runRetailStateHash ' +
                 'RPCs live; orchestrator drives test vectors)');
         }
     },
@@ -3163,6 +3396,18 @@ rpc.exports = {
 
     uninstallSimSubStepsEngineFreeze: function () {
         return uninstallSimSubStepsEngineFreeze();
+    },
+
+    installStateHashSources: function (seed) {
+        return installStateHashSources(seed);
+    },
+
+    uninstallStateHashSources: function () {
+        return uninstallStateHashSources();
+    },
+
+    runRetailStateHash: function (in_obj) {
+        return runRetailStateHash(in_obj);
     },
 
     // Diagnostic counters for the DDraw → GDI seat.  Reflects everything
