@@ -12,14 +12,14 @@ cluster (`FUN_004050f6` + 3 passes, all in `0x405000..0x408000`),
 but lives in a different address band (`0x4bc000..0x4bf300`) and
 uses a different tile format and storage layout.
 
-**Status**: chips 1, 2, 3, 3.5, 4, 5a.i, 5a.ii.a, 5a.ii.b, 5b, 6
+**Status**: chips 1, 2, 3, 3.5, 4, 5a.i, 5a.ii.a, 5a.ii.b, 5a.iii, 5b, 6
 ported (sprite primitives + frame driver + both zoom-dispatched
 terrain passes + zoom-32 overlay + middle-pass driver shell +
-sorted-entity infrastructure + per-entity draw base path + coord
-helpers).  Chip 5a.iii per-cell draw leaves still stubs.  Chip
-5a.iv (three type-special leaves consumed by per-entity draw) still
-stubs.  Late + final passes still stubs.  Survey landed 2026-05-25,
-chips 1–4 + 5b + 6 + 5a.i + 5a.ii.a + 5a.ii.b landed 2026-05-25.
+sorted-entity infrastructure + per-entity draw base path + three
+per-cell draw leaves + coord helpers).  Chip 5a.iv (three type-special
+leaves consumed by per-entity draw) still stubs.  Late + final passes
+still stubs.  Survey landed 2026-05-25, chips 1–4 + 5b + 6 + 5a.i +
+5a.ii.a + 5a.ii.b + 5a.iii landed 2026-05-25.
 
 ## Entry point
 
@@ -277,11 +277,21 @@ The cluster is too large to port in one chip.  Suggested chip plan:
        at unsupported zoom), #89 (dirty box sized by entity type
        not sprite dims).  **LANDED** (2026-05-25).
      - **chip 5a.iii** — per-cell draw leaves.  Real ports of
-       `FUN_004bd574` (player marker, animated through 8 frames),
-       `FUN_004bd759` (unit-key sprite, 4-byte map silently drops
-       unknown keys), `FUN_004beed4` (effect-chain walk, max 10
-       hops + self-loop detection, animated type-5 effects).
-       Future.
+       `FUN_004bd574` (player marker, 485 B — animated through 8
+       frames, slot from per-player banner-band table), `FUN_004bd759`
+       (unit-key sprite, 479 B — 4-byte map {0x49→0x1f, 0x4c→0x20,
+       0x61→0x21, 0x64→0x22} silently drops unknown keys),
+       `FUN_004beed4` (effect-chain walk, 805 B — max 10 hops, self-
+       loop guard, animated subtype-5 effects with their own 0..15
+       wrapped frame counter and 16-entry jitter table, subtype-7
+       skips render but continues walk).  New bindings:
+       `bind_player_marker_blob / slot_table / player_id / anim_advance`,
+       `bind_unit_key_blob`, `bind_effect_chain_table / shared_blob /
+       anim_table`, `bind_scroll_pad`.  Filed quirks #90 (effect-chain
+       glyph_offset gate aborts whole chain), #91 (player_marker +
+       unit_key Y-axis re-centering uses sprite WIDTH not height),
+       #92 (effect-chain dirty-box branch identical in both sides).
+       **LANDED** (2026-05-25).
 
    All four sub-helpers consumed by the chip-5a draw leaves —
    `FUN_004527a6` (cell-tiled dirty-rect mark), `FUN_004b4537`

@@ -185,6 +185,36 @@ static const uint8_t *g_anim_table_z32;
  * 9×9 box mark. */
 static engine_dirty_rect_state_t *g_dirty_state;
 
+/* ─── chip 5a.iii: per-cell draw leaves bindings ───────────────── */
+
+/* Player-marker (FUN_004bd574) bindings.  See header for the
+ * complete role of each. */
+static const uint8_t *g_player_marker_blob;        /* DAT_00566518 */
+static const uint8_t *g_player_marker_slot_table;  /* &DAT_0052f0b2 */
+static int            g_player_marker_slot_stride; /* 0x1a4 */
+static int            g_player_marker_player_id;   /* DAT_00568218 */
+static int            g_player_marker_anim_advance;/* DAT_00591510 */
+static int            g_player_marker_anim_frame;  /* DAT_004e5b18 */
+static int            g_player_marker_last_slot   = -1;
+static int            g_player_marker_blit_count;
+
+/* Unit-key (FUN_004bd759) bindings. */
+static const uint8_t *g_unit_key_blob;             /* DAT_00553250 */
+static int            g_unit_key_last_slot        = -1;
+static int            g_unit_key_blit_count;
+
+/* Effect-chain (FUN_004beed4) bindings. */
+static const uint8_t *g_effect_chain_base;         /* &DAT_0057a100 */
+static int            g_effect_chain_stride;       /* 0x4c */
+static int            g_effect_chain_max_id;       /* table size / stride - 1 */
+static const uint8_t *g_effect_chain_anim_table;   /* DAT_004e4470 */
+static const uint8_t *g_effect_chain_shared_blob;  /* port-only — see header */
+static int            g_effect_chain_anim_frame;   /* DAT_004e5b1c */
+static int            g_effect_chain_current_id;   /* DAT_00568994 */
+static int            g_effect_chain_iters;        /* local_c */
+static int            g_effect_chain_blit_count;
+static int            g_scroll_pad;                /* DAT_004e5d44 */
+
 /* Per-pass call counters.  See the header for what each one
  * represents.  All seven pass entry points (5 stubs + 1 real no-op
  * + 1 implicitly the frame driver) bump exactly one counter per
@@ -275,6 +305,56 @@ void engine_battlefield_render_bind_anim_offset_tables(const uint8_t *z16,
 void engine_battlefield_render_set_dirty_state(engine_dirty_rect_state_t *state)
 {
     g_dirty_state = state;
+}
+
+void engine_battlefield_render_bind_player_marker_blob(const uint8_t *blob)
+{
+    g_player_marker_blob = blob;
+}
+
+void engine_battlefield_render_bind_player_marker_slot_table(const uint8_t *table,
+                                                              int stride)
+{
+    g_player_marker_slot_table  = table;
+    g_player_marker_slot_stride = stride;
+}
+
+void engine_battlefield_render_set_player_marker_player_id(int player_id)
+{
+    g_player_marker_player_id = player_id;
+}
+
+void engine_battlefield_render_set_player_marker_anim_advance(int advance)
+{
+    g_player_marker_anim_advance = advance;
+}
+
+void engine_battlefield_render_bind_unit_key_blob(const uint8_t *blob)
+{
+    g_unit_key_blob = blob;
+}
+
+void engine_battlefield_render_bind_effect_chain_table(const uint8_t *base,
+                                                       int stride, int max_id)
+{
+    g_effect_chain_base   = base;
+    g_effect_chain_stride = stride;
+    g_effect_chain_max_id = max_id;
+}
+
+void engine_battlefield_render_bind_effect_chain_anim_table(const uint8_t *table)
+{
+    g_effect_chain_anim_table = table;
+}
+
+void engine_battlefield_render_bind_effect_chain_shared_blob(const uint8_t *blob)
+{
+    g_effect_chain_shared_blob = blob;
+}
+
+void engine_battlefield_render_bind_scroll_pad(int pad)
+{
+    g_scroll_pad = pad;
 }
 
 int engine_battlefield_render_terrain_blit_count(void)
@@ -681,21 +761,315 @@ static void middle_leaf_render_entity_list(void)
     }
 }
 
+/* Shared render-and-dispatch helper for player_marker and unit_key.
+ *
+ * Both leaves share the same shape AFTER slot selection: stage sprite
+ * descriptor, apply the [1, 0x4baf0] glyph-offset gate, re-center cursor
+ * by `(16 - sprite_w/2)` on BOTH axes (yes, the retail body uses
+ * sprite_w on both axes — likely a copy-paste bug since hex tiles
+ * aren't square, but preserved verbatim — see quirk on player_marker /
+ * unit_key Y-axis centering), mark a 4×4 tile dirty box at the new
+ * cursor (force_full = 2), set clip rect, dispatch RLE blit.  Cursor is
+ * restored to the entry value by the caller (each leaf saves/restores).
+ *
+ * Returns 1 if the blit was dispatched (i.e. blob present AND gate
+ * passed AND y_clip_mode != 5), 0 otherwise. */
+static int player_marker_or_unit_key_render(const uint8_t *blob, int slot)
+{
+    if (!blob) {
+        return 0;
+    }
+
+    gfx_dispatch_set_last_glyph_index(slot);
+    gfx_dispatch_stage_sprite_descriptor(blob, slot);
+
+    int glyph_off = gfx_glyph_glyph_offset();
+    if (glyph_off < 1 || glyph_off > 0x4baf0) {
+        return 0;
+    }
+
+    /* Re-center.  Both axes use sprite_w (not sprite_h) — retail
+     * verbatim; see the corresponding quirk. */
+    int sprite_w = gfx_glyph_glyph_w();
+    int adj      = 0x10 - (sprite_w >> 1);
+    int new_x    = gfx_glyph_cursor_x() + adj;
+    int new_y    = gfx_glyph_cursor_y() + adj;
+    gfx_glyph_set_cursor_x(new_x);
+    gfx_glyph_set_cursor_y(new_y);
+
+    if (g_dirty_state) {
+        engine_dirty_rect_mark_box_tiled(g_dirty_state,
+                                         new_x, new_y, 4, 4, /*force_full=*/2);
+    }
+
+    gfx_dispatch_clip_x(g_clip_left, g_clip_right);
+    gfx_dispatch_clip_y(g_clip_top,  g_clip_bottom);
+
+    int y_mode_before = gfx_dispatch_clip_y_mode();
+    gfx_dispatch_dispatch_sprite_rle(blob);
+    return (y_mode_before != 5) ? 1 : 0;
+}
+
+/* FUN_004bd574 (485 B) — player-marker draw.  Animated 8-frame sprite
+ * cycle drawn on the active player's marker hex.  Frame index lives in
+ * a module-static (retail DAT_004e5b18); advance gated on the bound
+ * `anim_advance` input (retail DAT_00591510).
+ *
+ * Slot computation: the per-player slot_table holds a single byte per
+ * player at offset `player_id * stride` (retail stride 0x1a4).  That
+ * byte is multiplied by 8 (to skip past the previous banner band's
+ * 8-frame cycle) and added to (frame + 0x21) to pick the slot in the
+ * marker sprite blob.
+ *
+ * Cursor save/restore wraps the whole render — leaf is side-effect free
+ * on cursor regardless of whether the blit actually fires. */
 static void middle_leaf_draw_player_marker(void)
 {
     g_middle_player_marker_count += 1;
+
+    int entry_x = gfx_glyph_cursor_x();
+    int entry_y = gfx_glyph_cursor_y();
+
+    /* Animation-frame advance.  The two clamps sit BEFORE the
+     * post-advance wrap test in retail, so a manually pre-set value
+     * outside [0, 7] normalizes to 0 BEFORE the conditional advance
+     * looks at it.  This means: setting g_player_marker_anim_frame = 9
+     * then calling with advance=0 yields a final frame of 0 (not 9). */
+    if (g_player_marker_anim_advance != 0) {
+        g_player_marker_anim_frame += 1;
+    }
+    if (g_player_marker_anim_frame < 0) {
+        g_player_marker_anim_frame = 0;
+    }
+    if (7 < g_player_marker_anim_frame) {
+        g_player_marker_anim_frame = 0;
+    }
+
+    /* Slot computation.  If no slot table bound, banner_byte defaults
+     * to 0 — slot becomes `frame + 0x21`, matching the "first banner
+     * band" baseline.  Tests that don't care about slot identity can
+     * leave the table unbound. */
+    int banner_byte = 0;
+    if (g_player_marker_slot_table && g_player_marker_slot_stride > 0) {
+        banner_byte = (int)g_player_marker_slot_table
+            [g_player_marker_player_id * g_player_marker_slot_stride];
+    }
+    int slot = banner_byte * 8 + g_player_marker_anim_frame + 0x21;
+
+    if (player_marker_or_unit_key_render(g_player_marker_blob, slot)) {
+        g_player_marker_blit_count += 1;
+        g_player_marker_last_slot   = slot;
+    }
+
+    gfx_glyph_set_cursor_x(entry_x);
+    gfx_glyph_set_cursor_y(entry_y);
 }
 
+/* FUN_004bd759 (479 B) — unit-key sprite draw.  Static (non-animated)
+ * letter sprite drawn over a unit's hex to identify it.  Slot is a
+ * 4-entry switch on the key byte:
+ *
+ *   key 0x49 ('I') → slot 0x1f       any other key → no render
+ *   key 0x4c ('L') → slot 0x20                       (leaf returns)
+ *   key 0x61 ('a') → slot 0x21
+ *   key 0x64 ('d') → slot 0x22
+ *
+ * The four mapped keys are 'I' / 'L' / 'a' / 'd' (initials of the
+ * unit classes — likely "Infantry / Lord / archer / defender"?).  Any
+ * other byte silently drops without blitting OR touching cursor —
+ * matches retail's early `if (...) return;` (before the cursor save). */
 static void middle_leaf_draw_unit_key(uint8_t key)
 {
     g_middle_unit_key_count += 1;
     g_middle_unit_key_last_arg = key;
+
+    int slot;
+    switch (key) {
+        case 0x49: slot = 0x1f; break;
+        case 0x4c: slot = 0x20; break;
+        case 0x61: slot = 0x21; break;
+        case 0x64: slot = 0x22; break;
+        default:                  return;
+    }
+
+    int entry_x = gfx_glyph_cursor_x();
+    int entry_y = gfx_glyph_cursor_y();
+
+    if (player_marker_or_unit_key_render(g_unit_key_blob, slot)) {
+        g_unit_key_blit_count += 1;
+        g_unit_key_last_slot   = slot;
+    }
+
+    gfx_glyph_set_cursor_x(entry_x);
+    gfx_glyph_set_cursor_y(entry_y);
 }
 
+/* Read a 16-bit little-endian signed short from a byte table at the
+ * given offset.  Used by the effect-chain leaf to read per-record
+ * x / y offsets and next-id / sprite-slot shorts. */
+static int read_le16s(const uint8_t *base, int byte_offset)
+{
+    int16_t v;
+    memcpy(&v, base + byte_offset, sizeof v);
+    return (int)v;
+}
+
+/* FUN_004beed4 (805 B) — effect-chain walk + draw.
+ *
+ * Walks a linked list of effect records starting at `head` (the byte
+ * stored in descriptor[+6]).  At most 10 hops per call; chain ends on
+ * id=0, type=0, or a self-loop (next-id == this id).
+ *
+ * Per record:
+ *   - Subtype 7 → skip render (chain walk continues).
+ *   - Subtype 5 → advance shared 0..15 anim counter, add per-frame
+ *                 (x_off, y_off) jitter from the anim table.
+ *   - Other    → render at static (x, y) offset.
+ *
+ * Sprite blob + slot come from the record itself (each effect can have
+ * its own art source).  Cursor is positioned at
+ * `viewport + (chain_xy - camera*0x20 [+ anim_jitter]) + scroll_pad`.
+ *
+ * Retail QUIRK preserved: when the [1, 0x4baf0] glyph-offset gate fires
+ * out-of-band, the leaf early-returns WITHOUT restoring the saved entry
+ * cursor — leaving cursor_x/cursor_y in whatever state the per-record
+ * position computation left them.  Filed as a quirk.  Tests assert this. */
 static void middle_leaf_draw_effect_chain(uint8_t head)
 {
-    g_middle_effect_chain_count += 1;
-    g_middle_effect_chain_last_arg = head;
+    g_middle_effect_chain_count   += 1;
+    g_middle_effect_chain_last_arg = (int)head;
+    g_effect_chain_iters           = 0;
+
+    int entry_x = gfx_glyph_cursor_x();
+    int entry_y = gfx_glyph_cursor_y();
+
+    int id = (int)head;
+
+    if (!g_effect_chain_base) {
+        gfx_glyph_set_cursor_x(entry_x);
+        gfx_glyph_set_cursor_y(entry_y);
+        return;
+    }
+
+    while (1) {
+        if (id == 0) {
+            gfx_glyph_set_cursor_x(entry_x);
+            gfx_glyph_set_cursor_y(entry_y);
+            return;
+        }
+        if (9 < g_effect_chain_iters) {
+            /* 10-hop safety cap. */
+            gfx_glyph_set_cursor_x(entry_x);
+            gfx_glyph_set_cursor_y(entry_y);
+            return;
+        }
+
+        g_effect_chain_current_id = id;
+
+        if (id < 0 || id > g_effect_chain_max_id) {
+            /* Out-of-range — defensive guard not present in retail (retail
+             * blindly indexes); short-circuit to chain end. */
+            gfx_glyph_set_cursor_x(entry_x);
+            gfx_glyph_set_cursor_y(entry_y);
+            return;
+        }
+
+        const uint8_t *rec = g_effect_chain_base + id * g_effect_chain_stride;
+
+        if (rec[ENGINE_BATTLEFIELD_EFFECT_OFFSET_TYPE] == 0) {
+            gfx_glyph_set_cursor_x(entry_x);
+            gfx_glyph_set_cursor_y(entry_y);
+            return;
+        }
+
+        int eff_x = read_le16s(rec, ENGINE_BATTLEFIELD_EFFECT_OFFSET_X_OFFSET)
+                  + g_camera_x * -0x20;
+        int eff_y = read_le16s(rec, ENGINE_BATTLEFIELD_EFFECT_OFFSET_Y_OFFSET)
+                  + g_camera_y * -0x20;
+
+        uint8_t subtype = rec[ENGINE_BATTLEFIELD_EFFECT_OFFSET_SUBTYPE];
+
+        if (subtype != 7) {
+            /* Subtype 5: animated — advance shared 0..15 counter, add
+             * (x_off, y_off) jitter from the anim table. */
+            if (subtype == 5) {
+                g_effect_chain_anim_frame += 1;
+                if (0xf < g_effect_chain_anim_frame) {
+                    g_effect_chain_anim_frame = 0;
+                }
+                if (g_effect_chain_anim_table) {
+                    int j_off = g_effect_chain_anim_frame * 8;
+                    eff_x += read_le32(g_effect_chain_anim_table, j_off + 0);
+                    eff_y += read_le32(g_effect_chain_anim_table, j_off + 4);
+                }
+            }
+
+            /* Blob + slot.  Retail reads a per-record blob pointer at
+             * +0x00; the port uses a single shared blob (see the
+             * `bind_effect_chain_shared_blob` notes on the layout
+             * collision with next_id on 64-bit hosts).  Slot is still
+             * per-record. */
+            const uint8_t *rec_blob = g_effect_chain_shared_blob;
+            int slot = read_le16s(rec, ENGINE_BATTLEFIELD_EFFECT_OFFSET_SLOT);
+
+            if (rec_blob) {
+                gfx_dispatch_set_last_glyph_index(slot);
+                gfx_dispatch_stage_sprite_descriptor(rec_blob, slot);
+
+                int glyph_off = gfx_glyph_glyph_offset();
+                if (glyph_off < 1 || glyph_off > 0x4baf0) {
+                    /* QUIRK: early-return WITHOUT cursor restore.  Retail
+                     * `return;` skips the epilogue that restores
+                     * DAT_00591524 / DAT_00591528. */
+                    return;
+                }
+
+                gfx_glyph_set_cursor_x(g_viewport_x + eff_x + g_scroll_pad);
+                gfx_glyph_set_cursor_y(g_viewport_y + eff_y + g_scroll_pad);
+
+                gfx_dispatch_clip_x(g_clip_left, g_clip_right);
+                gfx_dispatch_clip_y(g_clip_top,  g_clip_bottom);
+
+                /* Dirty box — 4×4 regardless of subtype.  Retail has two
+                 * branches (subtype 5 vs other) that BOTH call the same
+                 * dirty_rect_mark_box_tiled(cursor, cursor, 4, 4, 2).
+                 * We collapse to one. */
+                if (g_dirty_state) {
+                    engine_dirty_rect_mark_box_tiled(g_dirty_state,
+                                                     gfx_glyph_cursor_x(),
+                                                     gfx_glyph_cursor_y(),
+                                                     4, 4, /*force_full=*/2);
+                }
+
+                int y_mode_before = gfx_dispatch_clip_y_mode();
+                gfx_dispatch_dispatch_sprite_rle(rec_blob);
+                if (y_mode_before != 5) {
+                    g_effect_chain_blit_count += 1;
+                }
+            }
+        }
+        /* else: subtype 7 — skip render, fall through to chain walk. */
+
+        /* Chain walk: re-read the next-id from THIS record (read via
+         * g_effect_chain_current_id to mirror retail's DAT_00568994
+         * indirection — a recursive call below could theoretically have
+         * mutated `id`, but `g_effect_chain_current_id` is sticky). */
+        const uint8_t *cur_rec =
+            g_effect_chain_base
+          + g_effect_chain_current_id * g_effect_chain_stride;
+        int next_id = read_le16s(cur_rec,
+                                 ENGINE_BATTLEFIELD_EFFECT_OFFSET_NEXT_ID);
+
+        if (next_id == id) {
+            /* Self-loop guard — chain points to itself; abort. */
+            gfx_glyph_set_cursor_x(entry_x);
+            gfx_glyph_set_cursor_y(entry_y);
+            return;
+        }
+
+        id = next_id;
+        g_effect_chain_iters += 1;
+    }
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -1506,6 +1880,42 @@ int engine_battlefield_render_pixel_to_col_left_biased(int px)
     return col;
 }
 
+int engine_battlefield_render_middle_player_marker_blit_count(void)
+{
+    return g_player_marker_blit_count;
+}
+int engine_battlefield_render_middle_unit_key_blit_count(void)
+{
+    return g_unit_key_blit_count;
+}
+int engine_battlefield_render_middle_effect_chain_blit_count(void)
+{
+    return g_effect_chain_blit_count;
+}
+
+int engine_battlefield_render_player_marker_anim_frame(void)
+{
+    return g_player_marker_anim_frame;
+}
+int engine_battlefield_render_effect_chain_anim_frame(void)
+{
+    return g_effect_chain_anim_frame;
+}
+
+int engine_battlefield_render_middle_effect_chain_iters(void)
+{
+    return g_effect_chain_iters;
+}
+
+int engine_battlefield_render_middle_player_marker_last_slot(void)
+{
+    return g_player_marker_last_slot;
+}
+int engine_battlefield_render_middle_unit_key_last_slot(void)
+{
+    return g_unit_key_last_slot;
+}
+
 void engine_battlefield_render_reset_counts(void)
 {
     g_count_terrain_zoom16             = 0;
@@ -1545,4 +1955,15 @@ void engine_battlefield_render_reset_counts(void)
     g_middle_entity_type9_sub_last_id  = -1;
     g_middle_entity_no_blob_count      = 0;
     g_middle_entity_no_blob_last_id    = -1;
+
+    /* chip 5a.iii state */
+    g_player_marker_blit_count         = 0;
+    g_player_marker_last_slot          = -1;
+    g_player_marker_anim_frame         = 0;
+    g_unit_key_blit_count              = 0;
+    g_unit_key_last_slot               = -1;
+    g_effect_chain_anim_frame          = 0;
+    g_effect_chain_iters               = 0;
+    g_effect_chain_blit_count          = 0;
+    g_effect_chain_current_id          = 0;
 }

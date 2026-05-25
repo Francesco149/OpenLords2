@@ -100,8 +100,9 @@
  *              (effect-chain walk).  Independent of the bit-0x80 gate;
  *              evaluated for every cell.
  *
- *     The three draw leaves (FUN_004bd574 / FUN_004bd759 / FUN_004beed4)
- *     stay as counter-stubs for chip 5a.i; chip 5a.iii ports them.
+ *     The three per-cell draw leaves (FUN_004bd574 / FUN_004bd759 /
+ *     FUN_004beed4) are real ports as of chip 5a.iii; see the chip 5a.iii
+ *     bindings further below.
  *
  * The other two passes are NOT ported yet.  Each is wired here as a
  * static stub that bumps a per-pass call counter so the driver's
@@ -344,6 +345,146 @@ void engine_battlefield_render_set_dirty_state(engine_dirty_rect_state_t *state)
  * clipped blitter family). */
 void engine_battlefield_render_bind_clip_rect(int left, int top,
                                               int right, int bottom);
+
+/* ─────────────────────────────────────────────────────────────────
+ * Middle-pass per-cell draw leaves (chip 5a.iii)
+ * ───────────────────────────────────────────────────────────────── */
+
+/* Player-marker bindings (FUN_004bd574).  The marker is the small
+ * animated sprite drawn over the active player's hex (the 8-frame cycle
+ * at slots [0x21..0x28] within a banner band).  Three inputs:
+ *
+ *   blob          retail `DAT_00566518`  — sprite blob (PL8 payload) the
+ *                                          marker reads slots from.  NULL
+ *                                          ⇒ leaf is a no-op.
+ *   slot_table    retail `&DAT_0052f0b2` — byte-addressable per-player
+ *                                          table.  Byte at
+ *                                          `slot_table[player_id*stride]`
+ *                                          is the player's banner band
+ *                                          base (multiplied by 8 to skip
+ *                                          past the 8-frame cycle of the
+ *                                          previous band).  Inputs typically
+ *                                          come from castle/player ownership.
+ *   stride        retail `0x1a4`         — per-player record stride.
+ *   player_id     retail `DAT_00568218`  — current active player id
+ *                                          (0-based; 0..N-1 indexes the
+ *                                          slot_table).
+ *   anim_advance  retail `DAT_00591510`  — non-zero ⇒ advance frame
+ *                                          counter; zero ⇒ hold frame.
+ *                                          Set by a sibling "should
+ *                                          animate" tick elsewhere.
+ *
+ * The 0..7 wrapped animation frame counter (retail `DAT_004e5b18`) is
+ * owned by this module — `player_marker_anim_frame()` exposes it for
+ * tests; `reset_counts()` zeros it. */
+void engine_battlefield_render_bind_player_marker_blob(const uint8_t *blob);
+void engine_battlefield_render_bind_player_marker_slot_table(const uint8_t *table,
+                                                              int stride);
+void engine_battlefield_render_set_player_marker_player_id(int player_id);
+void engine_battlefield_render_set_player_marker_anim_advance(int advance);
+
+/* Retail per-player record stride for the slot table. */
+#define ENGINE_BATTLEFIELD_PLAYER_SLOT_TABLE_STRIDE_RETAIL 0x1a4
+
+/* Unit-key bindings (FUN_004bd759).  The unit-key sprite is the small
+ * letter sprite drawn over a unit's hex to identify it.  Just the blob
+ * pointer — slot selection is driven by the key byte the middle pass
+ * pulls from `descriptor[+3]`:
+ *
+ *   key  retail constant      slot
+ *   0x49 ('I')                0x1f
+ *   0x4c ('L')                0x20
+ *   0x61 ('a')                0x21
+ *   0x64 ('d')                0x22
+ *   anything else             no draw (leaf returns immediately)
+ *
+ *   blob  retail `DAT_00553250`  — sprite blob containing slots 0x1f..0x22. */
+void engine_battlefield_render_bind_unit_key_blob(const uint8_t *blob);
+
+/* Effect-chain bindings (FUN_004beed4).  The effect chain is a linked
+ * list of pending visual effects (arrows, hits, fire, etc) anchored to
+ * a particular battlefield cell.  Each effect record has its own blob
+ * pointer + per-record sprite slot — so multiple effects with
+ * heterogeneous sprite sources can layer on the same cell.
+ *
+ *   base    retail `&DAT_0057a100` — effect-record array.  Effect ids
+ *                                    1..max_id index into this; id 0 is
+ *                                    the chain terminator (never read).
+ *   stride  retail `0x4c`           — per-record byte count.
+ *   max_id  retail (table size /    — last valid effect id, inclusive.
+ *           stride - 1)               Caps recursion safety to this
+ *                                     value.  Tests pick whatever
+ *                                     accommodates the chain shape.
+ *
+ * Per-record field offsets:
+ *
+ *   +0x00  void*  sprite blob ptr — retail stores a 32-bit pointer
+ *                 here.  The port IGNORES this field (the host's 8-byte
+ *                 pointer would overlap +0x04 next_id on 64-bit) and
+ *                 instead pulls a single shared blob from
+ *                 `bind_effect_chain_shared_blob`.  All effects use that
+ *                 shared blob.  Once we have a real game capture
+ *                 demonstrating per-record blob differentiation, this
+ *                 will be promoted to a side-channel host blob table
+ *                 keyed by id; until then, the simpler shape suffices
+ *                 for the chip-5a.iii tests.
+ *   +0x04  short  next-id (for chain walk; 0 ends the chain; self-loop
+ *                 — next-id == this id — also ends, as a safety guard).
+ *   +0x08  char   type byte (0 ⇒ empty record, ends chain).
+ *   +0x09  char   subtype byte.  Special values:
+ *                   7  ⇒ skip render (chain walk continues to next-id).
+ *                   5  ⇒ animated; per-frame offset added (advances
+ *                        the shared 0..15 wrapped frame counter).
+ *                   any other ⇒ render at static (x, y) offset.
+ *   +0x0a  short  signed x offset (relative to the cell's pixel-space).
+ *   +0x0c  short  signed y offset.
+ *   +0x12  short  sprite slot index (into the record's own blob).
+ *
+ * Chain walk hard-caps at 10 hops per call (retail `9 < local_c` break).
+ * Each iteration sets retail `DAT_00568994` to the current id (so the
+ * end-of-loop next-pointer read is from the CURRENT record, even if
+ * recursive calls in nested logic mutated it — the port mirrors this
+ * with a module static). */
+void engine_battlefield_render_bind_effect_chain_table(const uint8_t *base,
+                                                       int stride,
+                                                       int max_id);
+
+/* Effect-chain shared blob — temporary substitute for the retail per-
+ * record blob pointer (see notes on +0x00 above).  All effects with
+ * subtype != 7 render from this blob; subtype-7 records skip render
+ * entirely.  NULL ⇒ every render attempt becomes a no-op (counters
+ * still bump). */
+void engine_battlefield_render_bind_effect_chain_shared_blob(const uint8_t *blob);
+
+/* Effect-chain animation-offset table (retail `DAT_004e4470`).  Used by
+ * subtype-5 (animated) effects to add a per-frame (x_off, y_off) jitter.
+ * 16 entries; entry i lives at `table + i * 8` and is a little-endian
+ * `(int x_off, int y_off)` pair.
+ *
+ * NULL ⇒ subtype-5 animation hold at (0, 0).  The shared 0..15 wrapped
+ * frame counter (retail `DAT_004e5b1c`) still advances. */
+void engine_battlefield_render_bind_effect_chain_anim_table(const uint8_t *table);
+
+/* Per-record stride + field offsets for the effect-chain table.  Exposed
+ * so tests can populate fixtures matching the retail layout. */
+#define ENGINE_BATTLEFIELD_EFFECT_CHAIN_STRIDE_RETAIL      0x4c
+#define ENGINE_BATTLEFIELD_EFFECT_ANIM_TABLE_FRAMES        0x10
+
+/* Retail's blob field at +0x00 is NOT consumed by the port; see
+ * `bind_effect_chain_shared_blob` above for the shared-blob substitute. */
+#define ENGINE_BATTLEFIELD_EFFECT_OFFSET_NEXT_ID  0x04
+#define ENGINE_BATTLEFIELD_EFFECT_OFFSET_TYPE     0x08
+#define ENGINE_BATTLEFIELD_EFFECT_OFFSET_SUBTYPE  0x09
+#define ENGINE_BATTLEFIELD_EFFECT_OFFSET_X_OFFSET 0x0a
+#define ENGINE_BATTLEFIELD_EFFECT_OFFSET_Y_OFFSET 0x0c
+#define ENGINE_BATTLEFIELD_EFFECT_OFFSET_SLOT     0x12
+
+/* Scroll/pan pad (retail `DAT_004e5d44`).  Added to BOTH cursor_x and
+ * cursor_y by the effect-chain leaf when it positions an effect from
+ * its (x, y) offset.  Likely a half-cell centering constant (so an
+ * effect anchored at hex (X, Y) draws centred rather than corner-
+ * aligned).  Tests typically leave at 0 unless probing this offset. */
+void engine_battlefield_render_bind_scroll_pad(int pad);
 
 /* ─────────────────────────────────────────────────────────────────
  * Frame render
@@ -601,13 +742,80 @@ int engine_battlefield_render_middle_entity_no_blob_last_id(void);
  * (regardless of whether the blit fires). */
 int engine_battlefield_render_middle_entity_blit_count(void);
 
-/* The unit_key and effect_chain stubs each capture the LAST byte they
+/* The unit_key and effect_chain leaves each capture the LAST byte they
  * were called with — descriptor[+3] for unit_key, descriptor[+6] for
  * effect_chain.  Tests use these to verify the driver passes the right
  * byte from the descriptor.  Initialized to -1 and reset to -1 by
- * `engine_battlefield_render_reset_counts`. */
+ * `engine_battlefield_render_reset_counts`.
+ *
+ * Captured ONCE per dispatch (at entry), so they remain meaningful even
+ * after the leaf body fans into the chain walk or skips work via gates. */
 int  engine_battlefield_render_middle_unit_key_last_arg(void);
 int  engine_battlefield_render_middle_effect_chain_last_arg(void);
+
+/* Per-leaf BLIT-dispatch counters (chip 5a.iii).  Each bumps once per
+ * call to `gfx_dispatch_dispatch_sprite_rle` made from the named leaf —
+ * AFTER the [1, 0x4baf0] glyph_offset gate AND the y_clip_mode != 5
+ * gate (the latter is applied inside the dispatcher).  Distinct from
+ * the per-leaf CALL counters above which bump once per dispatch
+ * regardless of how many internal gates fired.
+ *
+ *   player_marker  — bumps when FUN_004bd574 reaches the blit.  0 means
+ *                    either anim_advance was held with a slot whose
+ *                    src_off lies outside the gate, OR the blob/slot
+ *                    table wasn't bound.
+ *   unit_key       — bumps when FUN_004bd759 reaches the blit (key in
+ *                    {0x49, 0x4c, 0x61, 0x64} AND blob bound AND gate
+ *                    passes).
+ *   effect_chain   — bumps PER HOP in the chain walk that reaches the
+ *                    blit (so a 3-effect chain with all 3 visible can
+ *                    bump this counter by 3 in one outer call). */
+int engine_battlefield_render_middle_player_marker_blit_count(void);
+int engine_battlefield_render_middle_unit_key_blit_count(void);
+int engine_battlefield_render_middle_effect_chain_blit_count(void);
+
+/* Animation-frame accessors (chip 5a.iii).  Both counters are owned by
+ * this module and survive across frames — they only reset when
+ * `engine_battlefield_render_reset_counts` is called OR (for the player-
+ * marker) when the next call observes the counter outside [0, 7].
+ *
+ *   player_marker  — retail `DAT_004e5b18`.  0..7 wrapped.  Advances
+ *                    by 1 on each call where `anim_advance` is non-zero;
+ *                    stays put when `anim_advance` is zero.  Bounded by
+ *                    the pair `if (n < 0) n = 0; if (7 < n) n = 0;`
+ *                    sandwich on entry (so a manually pre-set value of
+ *                    e.g. 9 will normalize to 0 BEFORE the conditional
+ *                    advance).
+ *   effect_chain   — retail `DAT_004e5b1c`.  0..15 wrapped.  Advances
+ *                    by 1 on EACH subtype-5 (animated) hop in the chain
+ *                    walk; held on non-animated hops. */
+int engine_battlefield_render_player_marker_anim_frame(void);
+int engine_battlefield_render_effect_chain_anim_frame(void);
+
+/* Number of effect-chain hops walked during the most recent call to the
+ * leaf (retail `local_c` in FUN_004beed4).  0 when the chain head was 0
+ * (immediate return); positive otherwise.  Capped at 10 by the safety
+ * guard.  Useful for distinguishing "chain terminated cleanly" from
+ * "chain hit safety cap" in tests. */
+int engine_battlefield_render_middle_effect_chain_iters(void);
+
+/* Computed slot index the player marker used on its most recent
+ * successful blit (retail `DAT_005c9288 = banner_byte * 8 + frame + 0x21`
+ * at the call site).  -1 if the leaf hasn't blitted since reset.  Lets
+ * tests verify slot computation without inspecting the actual blob
+ * pixels. */
+int engine_battlefield_render_middle_player_marker_last_slot(void);
+
+/* Slot the unit_key leaf last picked from its key→slot map.  -1 if no
+ * blit since reset.  Maps:
+ *
+ *   key 0x49 → slot 0x1f
+ *   key 0x4c → slot 0x20
+ *   key 0x61 → slot 0x21
+ *   key 0x64 → slot 0x22
+ *
+ * Any other key bypasses the leaf entirely (no blit, no slot update). */
+int engine_battlefield_render_middle_unit_key_last_slot(void);
 
 /* Per-cell counter incremented by the middle pass for each cell it
  * visits (after gating).  This is the same `_DAT_004e5d64` global that

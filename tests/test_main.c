@@ -936,6 +936,37 @@ struct test_case {
     X(engine_battlefield_render_per_entity_type10_y_bonus) \
     X(engine_battlefield_render_per_entity_box_5x5_vs_9x9) \
     \
+    X(engine_battlefield_render_player_marker_null_blob_no_blit) \
+    X(engine_battlefield_render_player_marker_slot_default) \
+    X(engine_battlefield_render_player_marker_slot_from_table) \
+    X(engine_battlefield_render_player_marker_anim_advance) \
+    X(engine_battlefield_render_player_marker_anim_hold) \
+    X(engine_battlefield_render_player_marker_anim_wraps) \
+    X(engine_battlefield_render_player_marker_glyph_offset_gate) \
+    X(engine_battlefield_render_player_marker_dirty_box) \
+    X(engine_battlefield_render_player_marker_cursor_restored) \
+    X(engine_battlefield_render_unit_key_slot_I) \
+    X(engine_battlefield_render_unit_key_slot_L) \
+    X(engine_battlefield_render_unit_key_slot_a) \
+    X(engine_battlefield_render_unit_key_slot_d) \
+    X(engine_battlefield_render_unit_key_unknown_no_blit) \
+    X(engine_battlefield_render_unit_key_null_blob) \
+    X(engine_battlefield_render_unit_key_dirty_box) \
+    X(engine_battlefield_render_effect_chain_type_zero_ends) \
+    X(engine_battlefield_render_effect_chain_single_effect) \
+    X(engine_battlefield_render_effect_chain_walks_chain) \
+    X(engine_battlefield_render_effect_chain_self_loop_guard) \
+    X(engine_battlefield_render_effect_chain_safety_cap) \
+    X(engine_battlefield_render_effect_chain_subtype7_skips) \
+    X(engine_battlefield_render_effect_chain_subtype5_advances_anim) \
+    X(engine_battlefield_render_effect_chain_anim_wraps) \
+    X(engine_battlefield_render_effect_chain_nonsubtype5_holds_anim) \
+    X(engine_battlefield_render_effect_chain_glyph_offset_quirk) \
+    X(engine_battlefield_render_effect_chain_null_blob_continues) \
+    X(engine_battlefield_render_effect_chain_scroll_pad) \
+    X(engine_battlefield_render_effect_chain_anim_jitter) \
+    X(engine_battlefield_render_leaf_reset_clears_state) \
+    \
     X(engine_battlefield_render_screen_in_grid_inside) \
     X(engine_battlefield_render_screen_in_grid_outside) \
     X(engine_battlefield_render_pixel_to_col_basic) \

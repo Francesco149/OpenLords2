@@ -3248,6 +3248,114 @@ A few subtle properties:
 
 ---
 
+## 90. Battlefield effect-chain glyph_offset gate aborts the WHOLE chain walk
+
+`FUN_004beed4` (chip 5a.iii) walks a linked list of visual effect
+records anchored to a battlefield cell.  Per record, it gates the
+sprite blit on the `[1, 0x4baf0]` glyph_offset window — same gate that
+guards the per-cell terrain/overlay/per-entity paths.  But here the
+gate's failure path is a `return;` rather than a `continue;` — the
+whole function exits, abandoning any unwalked records remaining in the
+chain:
+
+```c
+if ((310000 < DAT_0058fe04) || (DAT_0058fe04 < 1)) {
+    return;       // exits FUN_004beed4 entirely — even if next-id is non-zero
+}
+```
+
+(The decompiler renders the constant as 310000; r2 confirms it's
+actually 0x4baf0 = 309488, same as everywhere else.)
+
+Net effect: a single mis-loaded effect record at position N silently
+prevents the rest of the chain from rendering this frame.  The
+`current_id` global isn't even updated to walk past the bad record
+— so on the NEXT frame, if `current_id` still points at the bad
+record, the chain restart hits the same gate and the same chain-
+abandonment.  Effects "behind" a bad record stay invisible until the
+bad record's metadata clears.
+
+The chain-abort also skips the saved-cursor restore epilogue
+(`DAT_00591524 / DAT_00591528 = saved`), but since the cursor isn't
+written before the gate check (cursor write sits AFTER the gate), this
+particular missing-restore is observably a no-op.
+
+> 📍 `src/engine_battlefield_render.c` (`middle_leaf_draw_effect_chain`),
+> `docs/findings/battlefield-render.md` §5a.iii,
+> Ghidra `FUN_004beed4` lines 50-51.
+
+---
+
+## 91. Battlefield player_marker / unit_key re-center cursor by sprite WIDTH on both axes
+
+`FUN_004bd574` (player marker) and `FUN_004bd759` (unit key) each
+re-center the cursor by `(16 - sprite_w/2)` BEFORE drawing.  Both
+axes use the SAME `sprite_w` term — the Y axis re-center does NOT use
+`sprite_h`:
+
+```c
+DAT_00591524 = DAT_00591524 + (0x10 - ((int)DAT_005c9258 >> 1));   // cursor_x
+DAT_00591528 = DAT_00591528 + (0x10 - ((int)DAT_005c9258 >> 1));   // cursor_y — same term
+```
+
+For 16×16 sprites (the actual marker / unit-key shape) this is
+incidentally correct (sprite_w == sprite_h), but it's a copy-paste bug
+that would yield mis-centered draws if either leaf is ever pointed at
+a non-square sprite.  Since both leaves only ever dispatch from a
+fixed slot range (0x21..0x28 for the player marker animation, 0x1f..0x22
+for the four unit-key letters), and the asset designer made all those
+slots square, the bug stays unobservable in retail.
+
+The per-entity draw (`FUN_004bdc31`, chip 5a.ii.b) does NOT share this
+bug — it has separate `(16 - sprite_w/2)` and `(- sprite_w/2 + 8)`
+expressions for X and Y, derived from the anim-offset table.
+
+> 📍 `src/engine_battlefield_render.c`
+> (`player_marker_or_unit_key_render`),
+> `docs/findings/battlefield-render.md` §5a.iii,
+> Ghidra `FUN_004bd574` lines 30-31, `FUN_004bd759` lines 35-36.
+
+---
+
+## 92. Battlefield effect-chain dirty-box branch is identical in both arms
+
+`FUN_004beed4` (chip 5a.iii) gates dirty-box marking on the per-record
+subtype:
+
+```c
+if ((&DAT_0057a109)[DAT_00568994 * 0x4c] == '\x05') {
+    FUN_004527a6(DAT_00591524, DAT_00591528, 4, 4, 2);   // subtype 5
+}
+else {
+    FUN_004527a6(DAT_00591524, DAT_00591528, 4, 4, 2);   // anything else
+}
+```
+
+Both arms call the SAME mark-box-tiled helper with the SAME arguments
+(4×4 tile box, force_full=2).  The conditional is dead code — likely
+a leftover from an earlier version where subtype-5's box size or
+force_full differed, then later collapsed without removing the
+branch.  The port folds the conditional away; behavior is identical.
+
+Three plausible histories for the leftover:
+
+1. Early version had a smaller box for non-animated effects (e.g. 3×3
+   for static, 4×4 for animated) — later equalized.
+2. Early version had different force_full escalation (1 vs 2) — later
+   standardized on 2.
+3. Pure cargo-cult: the dev assumed subtype 5 might need a special
+   box later and pre-stubbed the branch.
+
+Not behaviorally observable; documented because future RE work might
+otherwise read the branch as meaningful.
+
+> 📍 `src/engine_battlefield_render.c`
+> (`middle_leaf_draw_effect_chain`),
+> `docs/findings/battlefield-render.md` §5a.iii,
+> Ghidra `FUN_004beed4` lines 57-62.
+
+---
+
 <!--
 Template for new entries:
 

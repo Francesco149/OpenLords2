@@ -2701,6 +2701,740 @@ int test_engine_battlefield_render_per_entity_reset_clears_new_state(void)
 }
 
 /* ────────────────────────────────────────────────────────────────
+ * Chip 5a.iii — per-cell draw leaves (player_marker / unit_key /
+ * effect_chain).
+ *
+ * Each test stages a 3×3 visible grid at cam=(2,2) inside an 8×8
+ * physical table (so the middle-pass over-scan never clamps), unbinds
+ * the canvas (so RLE blit dispatches but is a no-op at the pixel
+ * level), and binds a fake sprite blob with a single populated slot.
+ * The leaf's call counter + blit counter + slot capture + dirty-rect
+ * state observe the body's behavior without needing real pixel output.
+ *
+ * The middle pass dispatches each leaf via the bit-0x80 / non-zero
+ * gates explored by the chip 5a.i tests above:
+ *
+ *   desc[+2] & 0x80, desc[+3] == 0  → player_marker
+ *   desc[+2] & 0x80, desc[+3] != 0  → unit_key(desc[+3])
+ *   desc[+6] != 0                    → effect_chain(desc[+6])
+ *
+ * So each leaf test sets up one cell with the appropriate descriptor
+ * shape and triggers `run_middle_only`.
+ * ──────────────────────────────────────────────────────────────── */
+
+#define PLAYER_MARKER_BLOB_SIZE 0x600
+static uint8_t g_player_marker_blob_buf[PLAYER_MARKER_BLOB_SIZE];
+
+#define PLAYER_SLOT_TABLE_SIZE  0x1000
+static uint8_t g_player_slot_table[PLAYER_SLOT_TABLE_SIZE];
+
+#define UNIT_KEY_BLOB_SIZE  0x400
+static uint8_t g_unit_key_blob_buf[UNIT_KEY_BLOB_SIZE];
+
+#define EFFECT_CHAIN_MAX_ID 0x10
+#define EFFECT_BLOB_SIZE    0x400
+static uint8_t g_effect_chain_buf[(EFFECT_CHAIN_MAX_ID + 1)
+    * ENGINE_BATTLEFIELD_EFFECT_CHAIN_STRIDE_RETAIL];
+static uint8_t g_effect_blob_buf[EFFECT_BLOB_SIZE];
+static uint8_t g_effect_anim_table[ENGINE_BATTLEFIELD_EFFECT_ANIM_TABLE_FRAMES * 8];
+
+/* Stage a leaf-test descriptor cell at (col, row) of the 8×8 physical
+ * table with the given (flags, key, effect6). */
+static void leaf_cell(int col, int row,
+                      uint8_t flags, uint8_t key3, uint8_t effect6)
+{
+    desc_set_middle(col, row, DESC_COLS_PHY,
+                    /*b1=*/0, flags, key3, effect6);
+}
+
+/* Common leaf scaffold.  Unbinds canvas (blits become no-ops at pixel
+ * level — we observe via the blit counters); zeros all per-leaf
+ * fixtures; binds a generous clip rect so y_clip_mode resolves to 0
+ * (blits reachable through the dispatcher). */
+static void leaf_scaffold(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    gfx_paint_bind_canvas(NULL, 0, 0);
+
+    memset(g_player_marker_blob_buf, 0, sizeof g_player_marker_blob_buf);
+    memset(g_player_slot_table,      0, sizeof g_player_slot_table);
+    memset(g_unit_key_blob_buf,      0, sizeof g_unit_key_blob_buf);
+    memset(g_effect_chain_buf,       0, sizeof g_effect_chain_buf);
+    memset(g_effect_blob_buf,        0, sizeof g_effect_blob_buf);
+    memset(g_effect_anim_table,      0, sizeof g_effect_anim_table);
+
+    engine_battlefield_render_bind_player_marker_blob(NULL);
+    engine_battlefield_render_bind_player_marker_slot_table(NULL, 0);
+    engine_battlefield_render_set_player_marker_player_id(0);
+    engine_battlefield_render_set_player_marker_anim_advance(0);
+    engine_battlefield_render_bind_unit_key_blob(NULL);
+    engine_battlefield_render_bind_effect_chain_table(NULL, 0, 0);
+    engine_battlefield_render_bind_effect_chain_anim_table(NULL);
+    engine_battlefield_render_bind_effect_chain_shared_blob(NULL);
+    engine_battlefield_render_bind_scroll_pad(0);
+    engine_battlefield_render_set_dirty_state(NULL);
+
+    engine_battlefield_render_bind_clip_rect(/*left=*/-1000, /*top=*/-1000,
+                                             /*right=*/2000, /*bottom=*/2000);
+}
+
+/* Stage an effect record at id with the given fields.  Blob comes from
+ * the shared bind (see leaf_scaffold and the header notes on the
+ * shared-blob substitute for the per-record indirection). */
+static void effect_set(int id,
+                       int16_t next_id, uint8_t type, uint8_t subtype,
+                       int16_t x_off, int16_t y_off, int16_t slot)
+{
+    uint8_t *rec = g_effect_chain_buf
+        + id * ENGINE_BATTLEFIELD_EFFECT_CHAIN_STRIDE_RETAIL;
+    memcpy(rec + ENGINE_BATTLEFIELD_EFFECT_OFFSET_NEXT_ID, &next_id, sizeof next_id);
+    rec[ENGINE_BATTLEFIELD_EFFECT_OFFSET_TYPE]    = type;
+    rec[ENGINE_BATTLEFIELD_EFFECT_OFFSET_SUBTYPE] = subtype;
+    memcpy(rec + ENGINE_BATTLEFIELD_EFFECT_OFFSET_X_OFFSET, &x_off, sizeof x_off);
+    memcpy(rec + ENGINE_BATTLEFIELD_EFFECT_OFFSET_Y_OFFSET, &y_off, sizeof y_off);
+    memcpy(rec + ENGINE_BATTLEFIELD_EFFECT_OFFSET_SLOT,     &slot,  sizeof slot);
+}
+
+/* ─── Player-marker tests ─────────────────────────────────────── */
+
+/* NULL blob: leaf fires (count bumps) but no blit dispatch. */
+int test_engine_battlefield_render_player_marker_null_blob_no_blit(void)
+{
+    leaf_scaffold();
+    leaf_cell(2, 2, /*flags=*/0x80, /*key3=*/0, /*effect6=*/0);
+
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_count(),       1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_blit_count(),  0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_last_slot(), -1);
+    return 0;
+}
+
+/* Blob bound, slot table NULL → banner_byte defaults to 0 → slot =
+ * frame + 0x21 = 0x21 on first call (frame=0, anim_advance=0). */
+int test_engine_battlefield_render_player_marker_slot_default(void)
+{
+    leaf_scaffold();
+    blob_set_slot(g_player_marker_blob_buf, /*slot=*/0x21,
+                  16, 16, /*src_off=*/0x100,
+                  /*flag_a=*/0, /*advance=*/16, /*flag_b=*/0);
+    engine_battlefield_render_bind_player_marker_blob(g_player_marker_blob_buf);
+
+    leaf_cell(2, 2, /*flags=*/0x80, 0, 0);
+
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_blit_count(), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_last_slot(), 0x21);
+    return 0;
+}
+
+/* Slot computation: banner_byte (from slot_table[player_id * stride])
+ * × 8 + frame + 0x21.  Pick banner_byte = 3, player_id = 5 → slot table
+ * write at offset 5 * 0x1a4 = 0x82c.  Slot = 3*8 + 0 + 0x21 = 0x39. */
+int test_engine_battlefield_render_player_marker_slot_from_table(void)
+{
+    leaf_scaffold();
+    g_player_slot_table[5 * ENGINE_BATTLEFIELD_PLAYER_SLOT_TABLE_STRIDE_RETAIL] = 3;
+    engine_battlefield_render_bind_player_marker_slot_table(
+        g_player_slot_table, ENGINE_BATTLEFIELD_PLAYER_SLOT_TABLE_STRIDE_RETAIL);
+    engine_battlefield_render_set_player_marker_player_id(5);
+
+    blob_set_slot(g_player_marker_blob_buf, /*slot=*/0x39,
+                  16, 16, /*src_off=*/0x100, 0, 16, 0);
+    engine_battlefield_render_bind_player_marker_blob(g_player_marker_blob_buf);
+
+    leaf_cell(2, 2, 0x80, 0, 0);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_last_slot(), 0x39);
+    return 0;
+}
+
+/* anim_advance non-zero advances frame by 1 each call. */
+int test_engine_battlefield_render_player_marker_anim_advance(void)
+{
+    leaf_scaffold();
+    engine_battlefield_render_set_player_marker_anim_advance(1);
+
+    leaf_cell(2, 2, 0x80, 0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_player_marker_anim_frame(), 0);
+    run_middle_only(2, 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_player_marker_anim_frame(), 1);
+    run_middle_only(2, 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_player_marker_anim_frame(), 2);
+    return 0;
+}
+
+/* anim_advance zero holds frame. */
+int test_engine_battlefield_render_player_marker_anim_hold(void)
+{
+    leaf_scaffold();
+    engine_battlefield_render_set_player_marker_anim_advance(0);
+
+    leaf_cell(2, 2, 0x80, 0, 0);
+
+    run_middle_only(2, 2);
+    run_middle_only(2, 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_player_marker_anim_frame(), 0);
+    return 0;
+}
+
+/* Frame wraps 0..7. */
+int test_engine_battlefield_render_player_marker_anim_wraps(void)
+{
+    leaf_scaffold();
+    engine_battlefield_render_set_player_marker_anim_advance(1);
+
+    leaf_cell(2, 2, 0x80, 0, 0);
+
+    /* 8 advances → frame goes 1, 2, 3, 4, 5, 6, 7, 0. */
+    for (int i = 0; i < 8; i++) {
+        run_middle_only(2, 2);
+    }
+    T_ASSERT_EQ_I(engine_battlefield_render_player_marker_anim_frame(), 0);
+    return 0;
+}
+
+/* Glyph offset out-of-band → no blit, no slot capture. */
+int test_engine_battlefield_render_player_marker_glyph_offset_gate(void)
+{
+    leaf_scaffold();
+    blob_set_slot(g_player_marker_blob_buf, /*slot=*/0x21,
+                  16, 16, /*src_off=*/0, 0, 16, 0);   /* offset = 0 → out-of-band */
+    engine_battlefield_render_bind_player_marker_blob(g_player_marker_blob_buf);
+
+    leaf_cell(2, 2, 0x80, 0, 0);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_count(),       1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_blit_count(),  0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_last_slot(), -1);
+    return 0;
+}
+
+/* Dirty box: 4×4 tiles (64×64 pixels) at the recentered cursor,
+ * force_full = 2.  Sprite width 16 → adj = 16 - 16/2 = 8.  Cell (2,2)
+ * with cam=(2,2): over-scan starts at cam-1=1, start_px_x=-16.  Cell
+ * (2,2) is at col_in_loop=1, so entry cursor = (-16+16, -16+16) = (0, 0).
+ * Re-centered: (8, 8).  Box: (8, 8)..(8+64, 8+64) = (8, 8)..(72, 72). */
+int test_engine_battlefield_render_player_marker_dirty_box(void)
+{
+    leaf_scaffold();
+    blob_set_slot(g_player_marker_blob_buf, /*slot=*/0x21,
+                  16, 16, /*src_off=*/0x100, 0, 16, 0);
+    engine_battlefield_render_bind_player_marker_blob(g_player_marker_blob_buf);
+
+    engine_dirty_rect_state_t dirty;
+    dirty_reset(&dirty);
+    engine_battlefield_render_set_dirty_state(&dirty);
+
+    leaf_cell(2, 2, 0x80, 0, 0);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(dirty.dirty_mark, 2);
+    T_ASSERT_EQ_I(dirty.dirty_xmin, 8);
+    T_ASSERT_EQ_I(dirty.dirty_ymin, 8);
+    T_ASSERT_EQ_I(dirty.dirty_xmax, 72);
+    T_ASSERT_EQ_I(dirty.dirty_ymax, 72);
+    return 0;
+}
+
+/* Cursor restored after blit — middle-pass per-cell cursor walks
+ * continue from the cell's pre-blit position. */
+int test_engine_battlefield_render_player_marker_cursor_restored(void)
+{
+    leaf_scaffold();
+    blob_set_slot(g_player_marker_blob_buf, /*slot=*/0x21,
+                  16, 16, /*src_off=*/0x100, 0, 16, 0);
+    engine_battlefield_render_bind_player_marker_blob(g_player_marker_blob_buf);
+
+    leaf_cell(2, 2, 0x80, 0, 0);
+    run_middle_only(2, 2);
+
+    /* The middle-pass cursor_x ends at start_px_x + num_cols*zoom =
+     * -16 + 5*16 = 64, regardless of whether the leaf re-centered cursor
+     * mid-frame.  This proves the leaf restored before its caller's
+     * per-cell advance. */
+    T_ASSERT_EQ_I(gfx_glyph_cursor_x(), 64);
+    return 0;
+}
+
+/* ─── Unit-key tests ──────────────────────────────────────────── */
+
+/* Key→slot map: 0x49 → 0x1f. */
+int test_engine_battlefield_render_unit_key_slot_I(void)
+{
+    leaf_scaffold();
+    blob_set_slot(g_unit_key_blob_buf, /*slot=*/0x1f,
+                  16, 16, /*src_off=*/0x100, 0, 16, 0);
+    engine_battlefield_render_bind_unit_key_blob(g_unit_key_blob_buf);
+
+    leaf_cell(2, 2, 0x80, /*key3=*/0x49, 0);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_count(),         1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_last_arg(),  0x49);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_blit_count(),    1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_last_slot(), 0x1f);
+    return 0;
+}
+
+/* Key→slot map: 0x4c → 0x20. */
+int test_engine_battlefield_render_unit_key_slot_L(void)
+{
+    leaf_scaffold();
+    blob_set_slot(g_unit_key_blob_buf, /*slot=*/0x20,
+                  16, 16, /*src_off=*/0x100, 0, 16, 0);
+    engine_battlefield_render_bind_unit_key_blob(g_unit_key_blob_buf);
+
+    leaf_cell(2, 2, 0x80, 0x4c, 0);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_last_slot(), 0x20);
+    return 0;
+}
+
+/* Key→slot map: 0x61 → 0x21. */
+int test_engine_battlefield_render_unit_key_slot_a(void)
+{
+    leaf_scaffold();
+    blob_set_slot(g_unit_key_blob_buf, /*slot=*/0x21,
+                  16, 16, /*src_off=*/0x100, 0, 16, 0);
+    engine_battlefield_render_bind_unit_key_blob(g_unit_key_blob_buf);
+
+    leaf_cell(2, 2, 0x80, 0x61, 0);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_last_slot(), 0x21);
+    return 0;
+}
+
+/* Key→slot map: 0x64 → 0x22. */
+int test_engine_battlefield_render_unit_key_slot_d(void)
+{
+    leaf_scaffold();
+    blob_set_slot(g_unit_key_blob_buf, /*slot=*/0x22,
+                  16, 16, /*src_off=*/0x100, 0, 16, 0);
+    engine_battlefield_render_bind_unit_key_blob(g_unit_key_blob_buf);
+
+    leaf_cell(2, 2, 0x80, 0x64, 0);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_last_slot(), 0x22);
+    return 0;
+}
+
+/* Unknown key → leaf returns immediately; no blit, no slot. */
+int test_engine_battlefield_render_unit_key_unknown_no_blit(void)
+{
+    leaf_scaffold();
+    /* Stage a blob at slot 0x1f so the gate would pass if dispatch ever
+     * reached it — to prove the early return cuts off cleanly. */
+    blob_set_slot(g_unit_key_blob_buf, 0x1f, 16, 16, 0x100, 0, 16, 0);
+    engine_battlefield_render_bind_unit_key_blob(g_unit_key_blob_buf);
+
+    leaf_cell(2, 2, 0x80, /*key3=*/0x55, 0);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_count(),         1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_last_arg(),  0x55);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_blit_count(),    0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_last_slot(),    -1);
+    return 0;
+}
+
+/* NULL blob → leaf reaches dispatch site but render helper returns 0. */
+int test_engine_battlefield_render_unit_key_null_blob(void)
+{
+    leaf_scaffold();
+    /* blob NOT bound — default NULL. */
+    leaf_cell(2, 2, 0x80, 0x49, 0);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_count(),         1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_blit_count(),    0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_last_slot(),    -1);
+    return 0;
+}
+
+/* Dirty box: cell (2,2), key 'I' → slot 0x1f.  Sprite w=16, adj = 8.
+ * Entry cursor (0, 0) at the cell, re-centered (8, 8), 4×4 box →
+ * (8,8)..(72,72). */
+int test_engine_battlefield_render_unit_key_dirty_box(void)
+{
+    leaf_scaffold();
+    blob_set_slot(g_unit_key_blob_buf, 0x1f, 16, 16, 0x100, 0, 16, 0);
+    engine_battlefield_render_bind_unit_key_blob(g_unit_key_blob_buf);
+
+    engine_dirty_rect_state_t dirty;
+    dirty_reset(&dirty);
+    engine_battlefield_render_set_dirty_state(&dirty);
+
+    leaf_cell(2, 2, 0x80, 0x49, 0);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(dirty.dirty_xmin, 8);
+    T_ASSERT_EQ_I(dirty.dirty_ymin, 8);
+    T_ASSERT_EQ_I(dirty.dirty_xmax, 72);
+    T_ASSERT_EQ_I(dirty.dirty_ymax, 72);
+    return 0;
+}
+
+/* ─── Effect-chain tests ──────────────────────────────────────── */
+
+static void bind_effect_table(int max_id)
+{
+    engine_battlefield_render_bind_effect_chain_table(
+        g_effect_chain_buf,
+        ENGINE_BATTLEFIELD_EFFECT_CHAIN_STRIDE_RETAIL,
+        max_id);
+    engine_battlefield_render_bind_effect_chain_shared_blob(g_effect_blob_buf);
+}
+
+/* descriptor[+6] == 1, but effect[1].type == 0 → chain terminates
+ * immediately; no blit, 0 iterations. */
+int test_engine_battlefield_render_effect_chain_type_zero_ends(void)
+{
+    leaf_scaffold();
+    bind_effect_table(4);
+    /* effect[1] left zeroed → type == 0. */
+
+    leaf_cell(2, 2, 0, 0, /*effect6=*/1);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_count(),    1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_blit_count(),0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_iters(),    0);
+    return 0;
+}
+
+/* Single non-animated effect with valid type, blob, slot → 1 blit.
+ * iters reaches 1 because the post-record advance happens before the
+ * loop sees id=0 and returns. */
+int test_engine_battlefield_render_effect_chain_single_effect(void)
+{
+    leaf_scaffold();
+    bind_effect_table(4);
+    blob_set_slot(g_effect_blob_buf, /*slot=*/3, 16, 16, 0x100, 0, 16, 0);
+    effect_set(/*id=*/1,
+               /*next_id=*/0, /*type=*/1, /*subtype=*/0,
+               /*x_off=*/0, /*y_off=*/0, /*slot=*/3);
+
+    leaf_cell(2, 2, 0, 0, /*effect6=*/1);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_count(),     1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_blit_count(),1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_iters(),     1);
+    return 0;
+}
+
+/* Two-effect chain → walks both, 2 blits, iters=2 (the iter counter
+ * increments AFTER each record's processing, so the final value reflects
+ * "records processed" exactly). */
+int test_engine_battlefield_render_effect_chain_walks_chain(void)
+{
+    leaf_scaffold();
+    bind_effect_table(4);
+    blob_set_slot(g_effect_blob_buf, 3, 16, 16, 0x100, 0, 16, 0);
+
+    effect_set(1, /*next_id=*/2, 1, 0, 0, 0, 3);
+    effect_set(2, /*next_id=*/0, 1, 0, 0, 0, 3);
+
+    leaf_cell(2, 2, 0, 0, 1);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_blit_count(), 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_iters(),      2);
+    return 0;
+}
+
+/* Self-loop: effect[1].next == 1 → walk does effect[1] then guard
+ * triggers, ending the chain.  1 blit, 0 iters (the iter counter is
+ * incremented AFTER the self-loop check, so it stays 0). */
+int test_engine_battlefield_render_effect_chain_self_loop_guard(void)
+{
+    leaf_scaffold();
+    bind_effect_table(4);
+    blob_set_slot(g_effect_blob_buf, 3, 16, 16, 0x100, 0, 16, 0);
+
+    effect_set(1, /*next_id=*/1, 1, 0, 0, 0, 3);
+
+    leaf_cell(2, 2, 0, 0, 1);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_blit_count(), 1);
+    return 0;
+}
+
+/* 10-hop safety cap: chain of 12 forward-linked effects.  The walk
+ * processes 10 iterations + the entry record → 11 blits, then the
+ * `9 < iters` break fires. */
+int test_engine_battlefield_render_effect_chain_safety_cap(void)
+{
+    leaf_scaffold();
+    bind_effect_table(EFFECT_CHAIN_MAX_ID);
+    blob_set_slot(g_effect_blob_buf, 3, 16, 16, 0x100, 0, 16, 0);
+
+    /* Chain 1 → 2 → 3 → ... → 12 → 0.  Build 12 records. */
+    for (int i = 1; i <= 12; i++) {
+        effect_set(i,
+                   /*next_id=*/(int16_t)((i == 12) ? 0 : i + 1),
+                   /*type=*/1, /*subtype=*/0,
+                   /*x_off=*/0, /*y_off=*/0, /*slot=*/3);
+    }
+
+    leaf_cell(2, 2, 0, 0, 1);
+    run_middle_only(2, 2);
+
+    /* Retail loop: enter with id=1, iters=0; at start of each iteration
+     * `9 < iters` checks for break BEFORE processing.  So records
+     * processed = 10 (iters values 0..9), then iters=10 fails the check
+     * and the loop breaks without processing record id=11.  Blit count
+     * should be exactly 10. */
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_blit_count(), 10);
+    return 0;
+}
+
+/* Subtype 7 → skip render, continue walk.  Two-effect chain: effect[1]
+ * is subtype 7 (skip), effect[2] is subtype 0 (renders).  Total: 1
+ * blit (only effect[2]). */
+int test_engine_battlefield_render_effect_chain_subtype7_skips(void)
+{
+    leaf_scaffold();
+    bind_effect_table(4);
+    blob_set_slot(g_effect_blob_buf, 3, 16, 16, 0x100, 0, 16, 0);
+
+    effect_set(1, /*next_id=*/2, 1, /*subtype=*/7, 0, 0, 3);
+    effect_set(2, /*next_id=*/0, 1, /*subtype=*/0, 0, 0, 3);
+
+    leaf_cell(2, 2, 0, 0, 1);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_blit_count(), 1);
+    /* But the chain walk DID continue past effect[1] — iters bumped on both. */
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_iters(),      2);
+    return 0;
+}
+
+/* Subtype 5 advances anim_frame counter. */
+int test_engine_battlefield_render_effect_chain_subtype5_advances_anim(void)
+{
+    leaf_scaffold();
+    bind_effect_table(4);
+    blob_set_slot(g_effect_blob_buf, 3, 16, 16, 0x100, 0, 16, 0);
+
+    effect_set(1, 0, 1, /*subtype=*/5, 0, 0, 3);
+
+    leaf_cell(2, 2, 0, 0, 1);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_effect_chain_anim_frame(), 0);
+    run_middle_only(2, 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_effect_chain_anim_frame(), 1);
+    run_middle_only(2, 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_effect_chain_anim_frame(), 2);
+    return 0;
+}
+
+/* Anim frame wraps 0..15. */
+int test_engine_battlefield_render_effect_chain_anim_wraps(void)
+{
+    leaf_scaffold();
+    bind_effect_table(4);
+    blob_set_slot(g_effect_blob_buf, 3, 16, 16, 0x100, 0, 16, 0);
+
+    effect_set(1, 0, 1, /*subtype=*/5, 0, 0, 3);
+
+    leaf_cell(2, 2, 0, 0, 1);
+
+    /* 16 advances → wraps back to 0. */
+    for (int i = 0; i < 16; i++) {
+        run_middle_only(2, 2);
+    }
+    T_ASSERT_EQ_I(engine_battlefield_render_effect_chain_anim_frame(), 0);
+    return 0;
+}
+
+/* Subtype != 5 does NOT advance anim_frame. */
+int test_engine_battlefield_render_effect_chain_nonsubtype5_holds_anim(void)
+{
+    leaf_scaffold();
+    bind_effect_table(4);
+    blob_set_slot(g_effect_blob_buf, 3, 16, 16, 0x100, 0, 16, 0);
+
+    effect_set(1, 0, 1, /*subtype=*/0, 0, 0, 3);
+
+    leaf_cell(2, 2, 0, 0, 1);
+    run_middle_only(2, 2);
+    run_middle_only(2, 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_effect_chain_anim_frame(), 0);
+    return 0;
+}
+
+/* QUIRK: glyph-offset gate out-of-band aborts the WHOLE chain walk —
+ * not just this record.  Two-effect chain with effect[1] having an
+ * out-of-band src_off and effect[2] perfectly renderable: the leaf
+ * still gates on effect[1] and `return`s, never advancing to effect[2].
+ * Verifies the abort behavior via blit_count: with a per-record skip
+ * we'd expect 1 blit (effect[2]); with the chain-walk abort, 0.  */
+int test_engine_battlefield_render_effect_chain_glyph_offset_quirk(void)
+{
+    leaf_scaffold();
+    bind_effect_table(4);
+
+    /* slot 3 has out-of-band src_off (0); slot 4 has a valid src_off
+     * (0x100) — visible if reached. */
+    blob_set_slot(g_effect_blob_buf, /*slot=*/3, 16, 16, /*src_off=*/0,    0, 16, 0);
+    blob_set_slot(g_effect_blob_buf, /*slot=*/4, 16, 16, /*src_off=*/0x100, 0, 16, 0);
+
+    effect_set(1, /*next_id=*/2, 1, /*subtype=*/0, 0, 0, /*slot=*/3);
+    effect_set(2, /*next_id=*/0, 1, /*subtype=*/0, 0, 0, /*slot=*/4);
+
+    leaf_cell(2, 2, 0, 0, /*effect6=*/1);
+    run_middle_only(2, 2);
+
+    /* Chain aborted by effect[1]'s gate → effect[2] never reached. */
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_blit_count(), 0);
+    /* iters stays at 0 because the early `return` skips the
+     * post-record `g_effect_chain_iters += 1`. */
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_iters(),      0);
+    return 0;
+}
+
+/* NULL shared blob → CONTINUE chain walk but no blits.  Two-effect chain:
+ * walk visits both, but the blob-NULL gate suppresses dispatch on each. */
+int test_engine_battlefield_render_effect_chain_null_blob_continues(void)
+{
+    leaf_scaffold();
+    bind_effect_table(4);
+    /* Override the shared blob installed by bind_effect_table. */
+    engine_battlefield_render_bind_effect_chain_shared_blob(NULL);
+    blob_set_slot(g_effect_blob_buf, 3, 16, 16, 0x100, 0, 16, 0);
+
+    effect_set(1, /*next_id=*/2, 1, 0, 0, 0, 3);
+    effect_set(2, /*next_id=*/0, 1, 0, 0, 0, 3);
+
+    leaf_cell(2, 2, 0, 0, 1);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_blit_count(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_iters(),      2);
+    return 0;
+}
+
+/* Scroll pad shifts cursor on the rendered effect.  Observe via the
+ * dirty-box max corner (mark_box_tiled clamps the TOP-LEFT to 0 — so
+ * to observe the pad we need a positive cursor, i.e. compensate the
+ * x_off so cam*32 doesn't pull it negative).
+ *
+ * x_off = 100 → eff_x = 100 - 2*32 = 36; cursor_x = 0 + 36 + pad.
+ * With pad=7: cursor=43; box (43, 43)..(107, 107) → xmax=107. */
+int test_engine_battlefield_render_effect_chain_scroll_pad(void)
+{
+    leaf_scaffold();
+    bind_effect_table(4);
+    blob_set_slot(g_effect_blob_buf, 3, 16, 16, 0x100, 0, 16, 0);
+    effect_set(1, 0, 1, /*subtype=*/0,
+               /*x_off=*/100, /*y_off=*/100, /*slot=*/3);
+    engine_battlefield_render_bind_scroll_pad(7);
+
+    engine_dirty_rect_state_t dirty;
+    dirty_reset(&dirty);
+    engine_battlefield_render_set_dirty_state(&dirty);
+
+    leaf_cell(2, 2, 0, 0, 1);
+    run_middle_only(2, 2);
+
+    /* Mark fired → dirty_mark escalates to 2 (force_full = 2). */
+    T_ASSERT_EQ_I(dirty.dirty_mark, 2);
+    T_ASSERT_EQ_I(dirty.dirty_xmin, 43);
+    T_ASSERT_EQ_I(dirty.dirty_ymin, 43);
+    T_ASSERT_EQ_I(dirty.dirty_xmax, 107);
+    T_ASSERT_EQ_I(dirty.dirty_ymax, 107);
+    return 0;
+}
+
+/* Subtype-5 anim jitter from the anim table.  Same approach as the
+ * scroll-pad test — compensate cam*32 with the record's x_off / y_off
+ * so the cursor stays positive and the dirty-box clamp doesn't fire.
+ *
+ * x_off=100, y_off=100, subtype 5, anim_frame advances 0→1 → table
+ * entry 1 = (10, 20).  Cursor = (100 + 10 - 64, 100 + 20 - 64) = (46, 56).
+ * Box: (46, 56)..(110, 120). */
+int test_engine_battlefield_render_effect_chain_anim_jitter(void)
+{
+    leaf_scaffold();
+    bind_effect_table(4);
+    blob_set_slot(g_effect_blob_buf, 3, 16, 16, 0x100, 0, 16, 0);
+    effect_set(1, 0, 1, /*subtype=*/5,
+               /*x_off=*/100, /*y_off=*/100, /*slot=*/3);
+
+    int32_t x_off = 10, y_off = 20;
+    memcpy(g_effect_anim_table + 1 * 8 + 0, &x_off, sizeof x_off);
+    memcpy(g_effect_anim_table + 1 * 8 + 4, &y_off, sizeof y_off);
+    engine_battlefield_render_bind_effect_chain_anim_table(g_effect_anim_table);
+
+    engine_dirty_rect_state_t dirty;
+    dirty_reset(&dirty);
+    engine_battlefield_render_set_dirty_state(&dirty);
+
+    leaf_cell(2, 2, 0, 0, 1);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(dirty.dirty_xmin, 46);
+    T_ASSERT_EQ_I(dirty.dirty_ymin, 56);
+    T_ASSERT_EQ_I(dirty.dirty_xmax, 110);
+    T_ASSERT_EQ_I(dirty.dirty_ymax, 120);
+    return 0;
+}
+
+/* ─── Reset / accumulator tests ──────────────────────────────── */
+
+/* Reset clears all chip-5a.iii state (counts, slots, anim counters). */
+int test_engine_battlefield_render_leaf_reset_clears_state(void)
+{
+    leaf_scaffold();
+    /* Don't enable player_marker anim_advance — frame stays 0 so slot
+     * lands on 0x21, the one we've staged.  Reset-of-anim_frame is
+     * verified separately (it starts at 0 anyway). */
+    blob_set_slot(g_player_marker_blob_buf, 0x21, 16, 16, 0x100, 0, 16, 0);
+    engine_battlefield_render_bind_player_marker_blob(g_player_marker_blob_buf);
+    blob_set_slot(g_unit_key_blob_buf, 0x1f, 16, 16, 0x100, 0, 16, 0);
+    engine_battlefield_render_bind_unit_key_blob(g_unit_key_blob_buf);
+    bind_effect_table(4);
+    blob_set_slot(g_effect_blob_buf, 3, 16, 16, 0x100, 0, 16, 0);
+    /* subtype 5 → advances effect_chain anim_frame, lets us observe
+     * reset zeros it. */
+    effect_set(1, 0, 1, 5, 0, 0, 3);
+
+    /* Cells must be within the cam=(2,2) over-scan window (physical
+     * cols/rows 1..5). */
+    leaf_cell(2, 2, 0x80, 0,    1);  /* player_marker + effect_chain */
+    leaf_cell(3, 2, 0x80, 0x49, 0);  /* unit_key */
+    run_middle_only(2, 2);
+
+    T_ASSERT(engine_battlefield_render_middle_player_marker_blit_count() > 0);
+    T_ASSERT(engine_battlefield_render_middle_unit_key_blit_count()      > 0);
+    T_ASSERT(engine_battlefield_render_middle_effect_chain_blit_count()  > 0);
+    T_ASSERT(engine_battlefield_render_effect_chain_anim_frame()         > 0);
+
+    engine_battlefield_render_reset_counts();
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_blit_count(),  0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_blit_count(),       0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_blit_count(),   0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_last_slot(),  -1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_last_slot(),       -1);
+    T_ASSERT_EQ_I(engine_battlefield_render_player_marker_anim_frame(),         0);
+    T_ASSERT_EQ_I(engine_battlefield_render_effect_chain_anim_frame(),          0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_iters(),        0);
+    return 0;
+}
+
+/* ────────────────────────────────────────────────────────────────
  * Coordinate helpers — ports of FUN_004bc222 / 2a5 / 2c5 / 2e5 / 346.
  *
  * Scaffold sets a 10×5 visible grid at viewport (100, 50), zoom 32,
