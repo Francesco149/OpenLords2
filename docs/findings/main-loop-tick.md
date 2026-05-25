@@ -438,15 +438,15 @@ sub-steps, the skeleton wires the master-tick counter, LFSR, and
 state-machine breaks; everything else stays a TODO until the
 respective subsystem ports.
 
-### Render-phase tail — surveyed + FPS counter ported (2026-05-24)
+### Render-phase tail — camera clamps + FPS counter ported (2026-05-24 / 26)
 
 Six functions run at the tail of the render phase, after the screen-
 dispatch ladder, gated on `DAT_005c9274 == 0` (g_savepump_request).
 
 | Retail        | Size  | Disposition | Notes |
 |---------------|-------|-------------|-------|
-| `FUN_00429b1d` | 135 B | **Deferred — blocked on map subsystem.** Clamps the map-scroll offsets `DAT_005651b4` / `DAT_005651b8` against the map dimensions `DAT_0053e8ac` / `DAT_0056d67c`.  Trivial pure function; lands when the map subsystem provides the producers for the scroll values and the dimensions. |
-| `FUN_0047ed34` | 103 B | **Deferred — blocked on UI subsystem.**  Clamps the UI-scroll offsets `DAT_0055ce70` / `DAT_005678a0` against constants 0x41 / 0x42.  Trivial pure function; lands when the UI subsystem provides the producers for the scroll values. |
+| `FUN_00429b1d` | 135 B | **Ported** — `engine_camera_clamp_scroll` in `src/engine_camera.c`.  Clamps the strategic-map scroll position `DAT_005651b4` / `DAT_005651b8` against variable bounds `0x40 - col_count` / `0x80 - row_count` (col/row counts are `DAT_0053e8ac` / `DAT_0056d67c`).  Wired into `engine_tick`'s render-phase tail as `engine_tick_camera_scroll_clamp`.  Today no producer writes the scroll position so the call is an idempotent no-op; structural seam in place for the future scroll-mutating ports (keyboard arrow handler, scrolled-into-view re-centering).  15 unit tests cover both axes + the oversize-visible-count quirk where the lower clamp fires first and can be undone by the upper clamp on the same call. |
+| `FUN_0047ed34` | 103 B | **Ported** — `engine_camera_clamp_anchor` in `src/engine_camera.c`.  Clamps the strategic / battlefield camera anchor `DAT_0055ce70` / `DAT_005678a0` against the hardcoded asymmetric bounds [0, 0x41] / [0, 0x42] (engine-quirks #103).  Wired into `engine_tick`'s render-phase tail as `engine_tick_camera_anchor_clamp`.  Today no producer; idempotent no-op.  13 unit tests pin all four bounds and the asymmetry. |
 | `FUN_00426529` | 11 B  | **Deferred — empty body.**  Same disposition as `FUN_004b0aaa` / `FUN_004b1de0` / `FUN_004b12fb` — ship-build-stripped debug hook.  No port — the slot stands surveyed. |
 | `FUN_004b27bf` | 143 B | **Ported.**  FPS counter — see below. |
 | `FUN_004b12fb` | 21 B  | **Deferred — `return 1` stub in retail.**  Likely a debug-build gate optimised out in the ship build.  No port — the slot stands surveyed.  If the stub becomes meaningful in some future debug path (e.g. ASLR-pinned save-state validator) it's a single-line landing. |

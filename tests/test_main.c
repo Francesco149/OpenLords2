@@ -1069,6 +1069,34 @@ struct test_case {
     X(engine_battlefield_render_minimap_reset_scan_pos) \
     X(engine_battlefield_render_minimap_bulk_binder_minimap_context) \
     X(engine_battlefield_render_minimap_bulk_binder_hex_grid_context) \
+    X(engine_camera_scroll_in_range_unchanged) \
+    X(engine_camera_scroll_zero_in_range) \
+    X(engine_camera_scroll_negative_col_clamped_to_zero) \
+    X(engine_camera_scroll_negative_row_clamped_to_zero) \
+    X(engine_camera_scroll_at_max_col_unchanged) \
+    X(engine_camera_scroll_one_over_max_col_clamped) \
+    X(engine_camera_scroll_huge_col_clamped) \
+    X(engine_camera_scroll_at_max_row_unchanged) \
+    X(engine_camera_scroll_one_over_max_row_clamped) \
+    X(engine_camera_scroll_huge_row_clamped) \
+    X(engine_camera_scroll_both_axes_independent) \
+    X(engine_camera_scroll_full_map_visible_col_pinned_to_zero) \
+    X(engine_camera_scroll_oversize_visible_count_pushes_negative) \
+    X(engine_camera_scroll_zero_visible_count) \
+    X(engine_camera_scroll_idempotent) \
+    X(engine_camera_anchor_zero_unchanged) \
+    X(engine_camera_anchor_in_range_unchanged) \
+    X(engine_camera_anchor_at_max_x_unchanged) \
+    X(engine_camera_anchor_at_max_y_unchanged) \
+    X(engine_camera_anchor_one_over_max_x_clamped) \
+    X(engine_camera_anchor_one_over_max_y_clamped) \
+    X(engine_camera_anchor_negative_x_clamped_to_zero) \
+    X(engine_camera_anchor_negative_y_clamped_to_zero) \
+    X(engine_camera_anchor_huge_x_clamped) \
+    X(engine_camera_anchor_huge_y_clamped) \
+    X(engine_camera_anchor_both_axes_independent) \
+    X(engine_camera_anchor_asymmetric_bounds_pinned) \
+    X(engine_camera_anchor_idempotent) \
     /* end */
 
 /* Emit extern decls. */

@@ -3708,6 +3708,77 @@ observe it without setting the engine state gate.
 
 ---
 
+## 103. Camera-anchor clamp uses asymmetric bounds (0x41 vs 0x42)
+
+`FUN_0047ed34` clamps the strategic / battlefield camera anchor
+`DAT_0055ce70` / `DAT_005678a0` to `[0, 0x41]` (x) and `[0, 0x42]`
+(y) — one cell taller than wide.  Both bounds are hardcoded literals
+in the binary; nothing scalar is fed in.
+
+```c
+if (DAT_0055ce70 < 0)    DAT_0055ce70 = 0;
+if (DAT_005678a0 < 0)    DAT_005678a0 = 0;
+if (0x41 < DAT_0055ce70) DAT_0055ce70 = 0x41;
+if (0x42 < DAT_005678a0) DAT_005678a0 = 0x42;
+```
+
+Strategic-map dimensions are 64 × 128 (0x40 × 0x80) — the wider
+sibling clamp `FUN_00429b1d` derives its upper bounds from those
+constants minus the per-frame visible-cells count.  This clamp's
+constants are NOT derived from anything that would naturally produce
+0x41 / 0x42:
+
+  - 0x41 = 0x40 + 1 — one past max map x.
+  - 0x42 = 0x40 + 2 — two past?  Or 0x80 / 2 + 2?  No obvious algebra.
+
+Likely the anchor coordinate space is a centered camera with a 16-cell
+viewport: valid centers would be 7..0x40-8 = 7..56 on the strategic
+map (or some battlefield-specific range).  But the implementation
+does not actually compute that — it just clamps to hardcoded 0x41 /
+0x42.  The asymmetry is probably a single-character typo in the
+source ("hand-tuned" by an artist who tweaked one value and forgot
+the other).  Preserved for parity.
+
+The clamp's test is `0x41 < x` (strict less-than), so 0x41 itself is
+INCLUSIVE.
+
+> 📍 `src/engine_camera.c` (`engine_camera_clamp_anchor`),
+> `docs/findings/main-loop-tick.md` §"render-phase tail",
+> Ghidra `FUN_0047ed34` lines 62798-62816.
+
+---
+
+## 104. Scroll clamp's lower-then-upper order can push 0 negative
+
+`FUN_00429b1d` clamps the strategic-map scroll position with a lower
+clamp followed by an upper clamp:
+
+```c
+if (DAT_005651b4 < 0) DAT_005651b4 = 0;                       // lower
+...
+if (0x41 - DAT_0053e8ac <= DAT_005651b4)                      // upper
+    DAT_005651b4 = 0x40 - DAT_0053e8ac;
+```
+
+If the visible-column count `DAT_0053e8ac` exceeds 0x40 (the map
+width), the upper-bound expression `0x40 - col_count` is negative.
+The upper clamp's test condition `0x41 - col_count <= 0` is true for
+any non-negative col, so even col == 0 fires the upper clamp and
+ends up at a negative value.  The lower clamp has already fired
+once this call — it does not re-fire — so the negative value is
+what remains.
+
+Never observed in practice (real visible-column counts max around
+0x10), but the boundary is in the binary and the test pins it.
+Documenting because it's a non-obvious consequence of the
+lower-then-upper test order.
+
+> 📍 `src/engine_camera.c` (`engine_camera_clamp_scroll`),
+> `docs/findings/main-loop-tick.md` §"render-phase tail",
+> Ghidra `FUN_00429b1d` lines 17006-17024.
+
+---
+
 <!--
 Template for new entries:
 

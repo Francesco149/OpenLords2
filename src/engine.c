@@ -15,6 +15,7 @@
 
 #include "engine.h"
 
+#include "engine_camera.h"
 #include "engine_overlay_render.h"
 #include "gfx.h"
 
@@ -269,6 +270,34 @@ static int g_phase_tick_1280ms;                /* DAT_005aeb3c */
 static int g_phase_tick_1920ms;                /* DAT_005aeb38 */
 static int g_phase_tick_2560ms;                /* DAT_005aeb30 */
 
+/* ─── Strategic-map camera mirrors (FUN_00429b1d + FUN_0047ed34 state) ─
+ *
+ * Two pairs of integer state for two related clamps run unconditionally
+ * at the head of retail's render-phase tail (decompile lines
+ * 88725-88726, gated on DAT_005c9274 == 0).  No producer in our port
+ * today — both pairs stay 0 — but the clamps are harmless idempotent
+ * no-ops when the values are already in range, so we wire the wrappers
+ * unconditionally to match retail's call shape.
+ *
+ * Scroll pair (FUN_00429b1d) — strategic-map cell-scroll position +
+ * the per-frame visible-row/col counts that bound it.  Bounds are
+ * variable: max valid scroll is `0x40 - col_count` / `0x80 - row_count`.
+ * Writers in retail: keyboard arrow handler (FUN_0042xxxx camera-pan),
+ * scrolled-into-view re-centering paths.  Today no writer.
+ *
+ * Anchor pair (FUN_0047ed34) — strategic-map / battlefield camera
+ * anchor.  Hardcoded bounds [0, 0x41] / [0, 0x42] — independent of
+ * the visible-cells count.  Writers: same keyboard-arrow handler,
+ * entity-centering (FUN_0042xxxx), castle-table-driven re-centering
+ * (decompile line 27137).  Today no writer.
+ */
+static int g_cam_scroll_col;           /* DAT_005651b4 */
+static int g_cam_scroll_row;           /* DAT_005651b8 */
+static int g_cam_visible_cols;         /* DAT_0053e8ac (col_count this frame) */
+static int g_cam_visible_rows;         /* DAT_0056d67c (row_count this frame) */
+static int g_cam_anchor_x;             /* DAT_0055ce70 */
+static int g_cam_anchor_y;             /* DAT_005678a0 */
+
 /* Win32 wrapper around engine_compute_frame_delta — reads
  * timeGetTime, bundles into the input struct, calls the pure
  * function, writes the baseline + delta back into the file-static
@@ -392,6 +421,27 @@ static void engine_tick_input_step(void)
      * `DAT_004eada1 = 0` (unconditional, regardless of whether dblclk
      * fired this frame). */
     g_mouse_dblclk = 0;
+}
+
+/* Wrappers around engine_camera_clamp_scroll / engine_camera_clamp_anchor.
+ * Both run in the render-phase tail before the FPS counter — same
+ * order as retail (decompile lines 88725-88726).  Bundle the file-
+ * static mirrors into pointer args, run the pure clamps, write back.
+ *
+ * Today there are no producers for any of these mirrors, so each
+ * call is an idempotent no-op (everything stays 0).  Wiring the
+ * structural seam now so future scroll-/anchor-mutating ports
+ * (keyboard arrow handler, entity-centering, castle-table re-center)
+ * can land without having to also wire the tail. */
+static void engine_tick_camera_scroll_clamp(void)
+{
+    engine_camera_clamp_scroll(&g_cam_scroll_col, &g_cam_scroll_row,
+                                g_cam_visible_cols, g_cam_visible_rows);
+}
+
+static void engine_tick_camera_anchor_clamp(void)
+{
+    engine_camera_clamp_anchor(&g_cam_anchor_x, &g_cam_anchor_y);
 }
 
 /* Win32 wrapper around engine_compute_fps — reads timeGetTime twice
@@ -816,10 +866,13 @@ void engine_tick(void)
     /* Render-phase tail — retail gates the whole block on
      * `DAT_005c9274 == 0` (g_savepump_request).  Today's port:
      *
-     *   FUN_00429b1d  surveyed: map-scroll clamp, blocked on map
-     *                 subsystem (no producer of the scroll offsets yet)
-     *   FUN_0047ed34  surveyed: UI-scroll clamp, blocked on the UI
-     *                 subsystem that produces those scroll values
+     *   FUN_00429b1d  ported.  Strategic-map scroll clamp (variable
+     *                 bounds from visible col/row counts).  Idempotent
+     *                 no-op today — no producer writes the scroll
+     *                 position.
+     *   FUN_0047ed34  ported.  Strategic / battlefield camera-anchor
+     *                 clamp (hardcoded [0, 0x41] × [0, 0x42]).  Same
+     *                 disposition — idempotent no-op today.
      *   FUN_00426529  surveyed: empty body (debug hook optimised out)
      *   FUN_004b27bf  ported.  Rolling 1-second FPS counter.  Bumps
      *                 frame counts, computes ms/frame, publishes
@@ -834,6 +887,8 @@ void engine_tick(void)
      * which today still lives inline in WndProc; the structural seam
      * comes when the sim that acks the shutdown lands. */
     if (g_savepump_request == 0) {
+        engine_tick_camera_scroll_clamp();
+        engine_tick_camera_anchor_clamp();
         engine_tick_fps_step();
     }
 
