@@ -1428,6 +1428,373 @@ int test_engine_battlefield_render_overlay_z32_blit_count_resets(void)
 }
 
 /* ────────────────────────────────────────────────────────────────
+ * Middle pass — port of FUN_004bd355 (chip 5a.i).
+ *
+ * The driver itself is real; the six leaves are still stubs that bump
+ * counters.  Tests verify:
+ *
+ *   - the three setup helpers (build / sort / render entity list) fire
+ *     ONCE each per frame, independent of any descriptor binding
+ *   - the cell loop iterates the over-scan extension
+ *     ((cols+2) × (rows+2) with start at (cam_x-1, cam_y-1)), clamped
+ *     against camera_row_stride / total_rows
+ *   - west/north clamps when cam_x == 0 / cam_y == 0
+ *   - per-cell dispatch shape:
+ *       desc[+2] & 0x80, desc[+3] == 0 → player marker AND re-dirty
+ *       desc[+2] & 0x80, desc[+3] != 0 → unit_key(desc[+3])
+ *       desc[+6] != 0                  → effect_chain(desc[+6])
+ *   - the re-dirty asymmetry (only the player-marker branch sets bit 1)
+ *   - per-cell counter advances per visited cell
+ *   - cursor advances by zoom per cell and per row
+ *
+ * Scaffold uses a 8×8 physical descriptor table (the same one the
+ * terrain tests use, `g_terrain_desc`).  We reuse `DESC_STRIDE` (8)
+ * which leaves room for the four bytes the middle pass reads
+ * (+0, +1, +2, +3, +6) within each slot.
+ * ──────────────────────────────────────────────────────────────── */
+
+/* Write the four descriptor bytes the middle pass reads at cell
+ * (col, row).  All other bytes in the slot are zeroed. */
+static void desc_set_middle(int col, int row, int phys_cols,
+                            uint8_t b1, uint8_t flags, uint8_t key3,
+                            uint8_t effect6)
+{
+    int off = (col + row * phys_cols) * DESC_STRIDE;
+    g_terrain_desc[off + 0] = 0;
+    g_terrain_desc[off + 1] = b1;
+    g_terrain_desc[off + 2] = flags;
+    g_terrain_desc[off + 3] = key3;
+    g_terrain_desc[off + 4] = 0;
+    g_terrain_desc[off + 5] = 0;
+    g_terrain_desc[off + 6] = effect6;
+    g_terrain_desc[off + 7] = 0;
+}
+
+/* Scaffold the middle pass with a `vis_cols × vis_rows` visible grid
+ * embedded in an 8×8 physical descriptor table.  Total grid extent =
+ * physical size (so over-scan never clamps unless tests deliberately
+ * cause it).  Viewport at (0, 0), zoom 16, camera at (0, 0) — tests
+ * adjust each as needed.  All cells start zeroed (no dispatch fires). */
+static void middle_scaffold(int vis_cols, int vis_rows)
+{
+    memset(g_terrain_desc, 0, sizeof g_terrain_desc);
+
+    engine_battlefield_render_reset_counts();
+    engine_battlefield_render_set_zoom(0x10);
+    engine_battlefield_render_set_force_redraw(0);
+    engine_battlefield_render_bind_descriptor_table(g_terrain_desc, DESC_STRIDE);
+    engine_battlefield_render_bind_grid(vis_cols, vis_rows,
+                                        /*row_wrap=*/0);
+    engine_battlefield_render_bind_viewport_offset(0, 0);
+    engine_battlefield_render_bind_camera_row_stride(DESC_COLS_PHY);
+    engine_battlefield_render_bind_total_rows(DESC_ROWS_PHY);
+    engine_battlefield_render_bind_blobs(NULL, NULL);
+
+    /* Reset cursor so per-cell advance assertions start from a known
+     * state.  gfx_glyph_set_dest writes both cursor_x and cursor_y. */
+    gfx_glyph_set_dest(0, 0);
+}
+
+/* Run the middle pass in isolation (no terrain / overlay / late /
+ * final dispatch).  Uses the test-only entry that bypasses the frame
+ * driver, so tests can keep zoom set to whatever value they want and
+ * inspect cursor / per-cell counter without sibling-pass contamination.
+ * The middle pass's own pitch comes from the bound zoom. */
+static void run_middle_only(int cam_x, int cam_y)
+{
+    engine_battlefield_render_run_pass_middle_for_test(cam_x, cam_y);
+}
+
+/* ─── Tests ──────────────────────────────────────────────────────── */
+
+int test_engine_battlefield_render_middle_setup_helpers_fire_once(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_build_count(),  1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_sort_count(),   1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_render_count(), 1);
+    return 0;
+}
+
+/* The setup helpers fire at the HEAD of the middle pass, BEFORE the
+ * descriptor-table short-circuit — they walk their own entity table
+ * (not yet ported in chip 5a.i), so an unbound descriptor table must
+ * still result in all three counters bumped. */
+int test_engine_battlefield_render_middle_setup_runs_without_descriptors(void)
+{
+    engine_battlefield_render_reset_counts();
+    engine_battlefield_render_set_zoom(99);
+    engine_battlefield_render_bind_descriptor_table(NULL, DESC_STRIDE);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_build_count(),  1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_sort_count(),   1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_render_count(), 1);
+    /* No cells visited because the descriptor short-circuit fires. */
+    T_ASSERT_EQ_I(engine_battlefield_render_per_frame_cell_counter(), 0);
+    return 0;
+}
+
+/* Over-scan extension: visible 3×3 grid at cam_x=2, cam_y=2 (well
+ * inside the 8×8 physical table) → iteration covers (cols+2)×(rows+2)
+ * = 5×5 = 25 cells; no clamps fire. */
+int test_engine_battlefield_render_middle_overscans_visible_grid(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    run_middle_only(/*cam_x=*/2, /*cam_y=*/2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_per_frame_cell_counter(), 25);
+    return 0;
+}
+
+/* West clamp: cam_x == 0 → start_col = 0 (not -1).  Over-scan is
+ * therefore cols+1 wide on the east side (since start moves right by
+ * one), but the loop still iterates (cols+2) cells because the start
+ * just shifts — the loop count `local_2c` is unaffected unless the
+ * east edge runs into the row_stride clamp.
+ *
+ * For cam_x=0, cam_y=2, cols=3, rows=3, row_stride=8: start_col=0,
+ * num_cols clamps from 5 to min(5, 8-0)=5.  Same for north: start_row=
+ * 0 effectively (cam_y-1 = 1, no clamp), so num_rows stays 5. */
+int test_engine_battlefield_render_middle_west_clamp_shifts_start(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    /* Cam at left edge: cam_x=0, cam_y=2 (so y over-scan still has
+     * room to extend north).  Compare cursor_x at end of frame vs.
+     * the unclamped case. */
+    run_middle_only(/*cam_x=*/0, /*cam_y=*/2);
+
+    /* num_cols still 5 (5 ≤ row_stride 8 → no clamp); num_rows = 5.
+     * 5 × 5 = 25 cells visited. */
+    T_ASSERT_EQ_I(engine_battlefield_render_per_frame_cell_counter(), 25);
+
+    /* Cursor X at end of frame: walked 5 cells of zoom-16 starting at
+     * viewport_x (because start_px_x = viewport_x - zoom + zoom (clamp
+     * cancel) = viewport_x = 0).  Last set is at viewport_x + 5 *
+     * zoom = 0 + 80 = 80. */
+    T_ASSERT_EQ_I(gfx_glyph_cursor_x(), 80);
+    return 0;
+}
+
+/* East clamp: cam_x near the right edge of the underlying table →
+ * num_cols clamps so we don't walk past the last valid column.
+ * For row_stride=8, cam_x=6, cols=3, rows=3: start_col=5, num_cols
+ * clamps from 5 to (8 - 5) = 3.  Loop visits 3 cols * 5 rows = 15
+ * cells. */
+int test_engine_battlefield_render_middle_east_clamp_reduces_cols(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    run_middle_only(/*cam_x=*/6, /*cam_y=*/2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_per_frame_cell_counter(), 15);
+    return 0;
+}
+
+/* South clamp: cam_y near the bottom of the underlying table →
+ * num_rows clamps.  For total_rows=8, cam_y=6, cols=3, rows=3:
+ * start_row=5, num_rows clamps from 5 to (8 - 5) = 3.  Visits
+ * 5 cols * 3 rows = 15 cells. */
+int test_engine_battlefield_render_middle_south_clamp_reduces_rows(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    run_middle_only(/*cam_x=*/2, /*cam_y=*/6);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_per_frame_cell_counter(), 15);
+    return 0;
+}
+
+/* Bit 0x80 set, descriptor[+3] == 0 → player marker draws AND the
+ * cell is re-dirtied (bit 0x01 set).  This is unique to the player-
+ * marker branch — quirk: animated sprite needs re-paint each frame. */
+int test_engine_battlefield_render_middle_bit80_key0_calls_player_marker(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    /* Cell (2, 2) — inside the over-scan window when cam=(2, 2). */
+    desc_set_middle(2, 2, DESC_COLS_PHY,
+                    /*b1=*/0, /*flags=*/0x80, /*key3=*/0, /*effect6=*/0);
+
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_count(), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_count(),      0);
+    /* Re-dirty: bit 0x01 set after the dispatch. */
+    int off = (2 + 2 * DESC_COLS_PHY) * DESC_STRIDE;
+    T_ASSERT_EQ_I(g_terrain_desc[off + 2] & 0x01, 0x01);
+    /* Bit 0x80 still present — only bit 1 was ORed in. */
+    T_ASSERT_EQ_I(g_terrain_desc[off + 2] & 0x80, 0x80);
+    return 0;
+}
+
+/* Bit 0x80 set, descriptor[+3] != 0 → unit_key called with that byte;
+ * no re-dirty. */
+int test_engine_battlefield_render_middle_bit80_nonzero_key_calls_unit_key(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    desc_set_middle(2, 2, DESC_COLS_PHY,
+                    /*b1=*/0, /*flags=*/0x80, /*key3=*/0x4c, /*effect6=*/0);
+
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_count(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_count(),      1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_last_arg(), 0x4c);
+    /* NO re-dirty for this branch. */
+    int off = (2 + 2 * DESC_COLS_PHY) * DESC_STRIDE;
+    T_ASSERT_EQ_I(g_terrain_desc[off + 2] & 0x01, 0);
+    return 0;
+}
+
+/* Bit 0x80 CLEAR → neither player_marker nor unit_key. */
+int test_engine_battlefield_render_middle_no_bit80_no_draw(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    desc_set_middle(2, 2, DESC_COLS_PHY,
+                    /*b1=*/0, /*flags=*/0x00, /*key3=*/0x4c, /*effect6=*/0);
+
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_count(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_count(),      0);
+    return 0;
+}
+
+/* descriptor[+6] != 0 → effect_chain called with that byte;
+ * independent of the bit-0x80 gate. */
+int test_engine_battlefield_render_middle_nonzero_effect6_calls_chain(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    desc_set_middle(2, 2, DESC_COLS_PHY,
+                    /*b1=*/0, /*flags=*/0x00, /*key3=*/0, /*effect6=*/0x42);
+
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_count(), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_last_arg(), 0x42);
+    return 0;
+}
+
+/* descriptor[+6] == 0 → no effect_chain dispatch. */
+int test_engine_battlefield_render_middle_zero_effect6_skips_chain(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    /* All cells zeroed by scaffold; no dispatch should fire. */
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_count(), 0);
+    return 0;
+}
+
+/* Bit 0x80 AND descriptor[+6] both set → BOTH dispatches fire on the
+ * same cell.  Verifies the two gates are independent. */
+int test_engine_battlefield_render_middle_combined_dispatch(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    desc_set_middle(2, 2, DESC_COLS_PHY,
+                    /*b1=*/0, /*flags=*/0x80, /*key3=*/0x4c,
+                    /*effect6=*/0x42);
+
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_count(),      1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_last_arg(), 0x4c);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_count(), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_last_arg(), 0x42);
+    return 0;
+}
+
+/* Zoom 32 changes the per-cell pitch — cursor advances by 32 instead
+ * of 16.  Cell count is unaffected (driven by num_cols × num_rows). */
+int test_engine_battlefield_render_middle_zoom32_advances_32px(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    engine_battlefield_render_set_zoom(0x20);
+    /* For zoom 32 + cam=(2,2) + cols=rows=3 → over-scan 5×5.
+     * start_px_x = viewport_x - 32 = -32; final cursor_x after 5
+     * cells = -32 + 5*32 = 128. */
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_per_frame_cell_counter(), 25);
+    T_ASSERT_EQ_I(gfx_glyph_cursor_x(), 128);
+    return 0;
+}
+
+/* Per-cell counter resets to 0 at the start of each frame. */
+int test_engine_battlefield_render_middle_per_frame_counter_resets(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+
+    run_middle_only(2, 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_per_frame_cell_counter(), 25);
+
+    /* Second frame at the same camera should observe the same count
+     * (i.e. counter reset before re-entry, not accumulated). */
+    run_middle_only(2, 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_per_frame_cell_counter(), 25);
+    return 0;
+}
+
+/* The middle leaf counters accumulate across frames (until reset). */
+int test_engine_battlefield_render_middle_counters_accumulate(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+
+    run_middle_only(2, 2);
+    run_middle_only(2, 2);
+    run_middle_only(2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_build_count(),  3);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_sort_count(),   3);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_render_count(), 3);
+    return 0;
+}
+
+/* reset_counts zeroes all middle counters and the two last-arg
+ * captures (back to -1). */
+int test_engine_battlefield_render_middle_reset_clears_state(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    desc_set_middle(2, 2, DESC_COLS_PHY,
+                    /*b1=*/0, /*flags=*/0x80, /*key3=*/0x99,
+                    /*effect6=*/0x44);
+    run_middle_only(2, 2);
+
+    /* Sanity — both last-arg captures set. */
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_last_arg(), 0x99);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_last_arg(), 0x44);
+
+    engine_battlefield_render_reset_counts();
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_build_count(),         0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_sort_count(),          0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_render_count(),        0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_player_marker_count(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_count(),      0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_count(),  0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_unit_key_last_arg(),     -1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_effect_chain_last_arg(), -1);
+    T_ASSERT_EQ_I(engine_battlefield_render_per_frame_cell_counter(),     0);
+    return 0;
+}
+
+/* The middle pass observes the camera args verbatim (just like
+ * terrain / overlay) — same camera readback applies. */
+int test_engine_battlefield_render_middle_uses_frame_camera(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+
+    /* Run at cam=(2, 2): cell counter = 25.  Then at cam=(6, 2):
+     * east clamp brings it down to 15. */
+    run_middle_only(2, 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_per_frame_cell_counter(), 25);
+
+    run_middle_only(6, 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_per_frame_cell_counter(), 15);
+    return 0;
+}
+
+/* ────────────────────────────────────────────────────────────────
  * Coordinate helpers — ports of FUN_004bc222 / 2a5 / 2c5 / 2e5 / 346.
  *
  * Scaffold sets a 10×5 visible grid at viewport (100, 50), zoom 32,

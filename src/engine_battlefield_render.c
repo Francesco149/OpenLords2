@@ -59,6 +59,11 @@ static int g_viewport_y;
  * `pixel_to_col_left_biased`. */
 static int g_camera_row_stride;
 
+/* Total row count of the underlying grid (retail DAT_004e6570).
+ * Used by the middle pass (chip 5a.i) to clamp its over-scan
+ * extension.  Not consumed by terrain / overlay. */
+static int g_total_rows;
+
 /* Cell sub-band width in pixels (retail DAT_004e5d3c).  Used by the
  * left/right-biased screen→hex variants to pick which neighbor a
  * pixel attributes to when it falls in a band of the cell.  See the
@@ -97,6 +102,22 @@ static int g_terrain_z32_second_blit_count;
 
 /* Per-blit dispatch counter for the zoom-32 overlay pass (chip 5b). */
 static int g_overlay_z32_blit_count;
+
+/* Per-leaf call counters for the middle pass (chip 5a.i).  Each leaf
+ * stub bumps its own counter; the driver itself bumps `g_count_middle`
+ * (already declared above). */
+static int g_middle_build_count;
+static int g_middle_sort_count;
+static int g_middle_render_count;
+static int g_middle_player_marker_count;
+static int g_middle_unit_key_count;
+static int g_middle_effect_chain_count;
+
+/* Last byte the unit-key / effect-chain stubs were called with —
+ * descriptor[+3] / descriptor[+6] of the most recent dispatch.  -1
+ * means "no call yet" (matches the reset value). */
+static int g_middle_unit_key_last_arg     = -1;
+static int g_middle_effect_chain_last_arg = -1;
 
 /* Per-pass call counters.  See the header for what each one
  * represents.  All seven pass entry points (5 stubs + 1 real no-op
@@ -145,6 +166,11 @@ void engine_battlefield_render_bind_viewport_offset(int x, int y)
 void engine_battlefield_render_bind_camera_row_stride(int row_stride)
 {
     g_camera_row_stride = row_stride;
+}
+
+void engine_battlefield_render_bind_total_rows(int total_rows)
+{
+    g_total_rows = total_rows;
 }
 
 void engine_battlefield_render_bind_blobs(const uint8_t *primary, const uint8_t *alt)
@@ -199,10 +225,63 @@ int engine_battlefield_render_overlay_zoom32_blit_count(void)
  * verification, which is a test-only embellishment over retail.
  * ────────────────────────────────────────────────────────────────── */
 
-static void pass_middle(void)           { g_count_middle += 1; }
 static void pass_overlay_zoom16(void)   { g_count_overlay_zoom16 += 1; }
 static void pass_late(void)             { g_count_late += 1; }
 static void pass_final(void)            { g_count_final += 1; }
+
+/* ──────────────────────────────────────────────────────────────────
+ * Middle-pass leaf stubs (chip 5a.i).
+ *
+ * Six retail functions invoked by the middle pass driver, each not
+ * yet ported.  Each stub bumps a per-leaf counter (and the two draw
+ * leaves with arguments capture the last argument they saw) so tests
+ * can verify the driver passes the right byte through.
+ *
+ * Setup helpers — FUN_004bd938 / FUN_004bda92 / FUN_004bdb95.  Each
+ * called once per frame at the head of the middle pass.  They build,
+ * sort by Y, and render a list of visible entities; for chip 5a.i
+ * they're inert stubs.  Chip 5a.ii ports them as a group, along with
+ * the per-entity draw helper FUN_004bdc31.
+ *
+ * Per-cell draw leaves — FUN_004bd574 (player marker, descriptor[+3]
+ * == 0 branch), FUN_004bd759 (unit-key sprite, descriptor[+3] != 0
+ * branch), FUN_004beed4 (effect chain, descriptor[+6] != 0).  Each
+ * dispatches one of three RLE blits (via gfx_dispatch_dispatch_sprite_rle)
+ * for visible cells; for chip 5a.i they're inert stubs.  Chip 5a.iii
+ * ports them as a group.
+ * ────────────────────────────────────────────────────────────────── */
+
+static void middle_leaf_build_entity_list(void)
+{
+    g_middle_build_count += 1;
+}
+
+static void middle_leaf_sort_entity_list(void)
+{
+    g_middle_sort_count += 1;
+}
+
+static void middle_leaf_render_entity_list(void)
+{
+    g_middle_render_count += 1;
+}
+
+static void middle_leaf_draw_player_marker(void)
+{
+    g_middle_player_marker_count += 1;
+}
+
+static void middle_leaf_draw_unit_key(uint8_t key)
+{
+    g_middle_unit_key_count += 1;
+    g_middle_unit_key_last_arg = key;
+}
+
+static void middle_leaf_draw_effect_chain(uint8_t head)
+{
+    g_middle_effect_chain_count += 1;
+    g_middle_effect_chain_last_arg = head;
+}
 
 /* ──────────────────────────────────────────────────────────────────
  * Terrain zoom-16 pass — port of FUN_004bc8fc @ 0x4bc8fc (725 B).
@@ -600,6 +679,180 @@ static void pass_overlay_zoom32(void)
 }
 
 /* ──────────────────────────────────────────────────────────────────
+ * Middle pass — port of FUN_004bd355 @ 0x4bd355 (543 B), chip 5a.i.
+ *
+ * Always-on, zoom-independent pass that runs between the terrain and
+ * overlay layers.  Three significant differences from the terrain
+ * passes:
+ *
+ *   1. Three setup helpers fire ONCE per frame at the head:
+ *        - middle_leaf_build_entity_list   (FUN_004bd938)
+ *        - middle_leaf_sort_entity_list    (FUN_004bda92)
+ *        - middle_leaf_render_entity_list  (FUN_004bdb95)
+ *      They build a list of visible entities, Y-sort it, and render
+ *      each one.  Chip 5a.i wires them as counter-stubs; chip 5a.ii
+ *      ports their bodies.
+ *
+ *   2. The cell loop iterates an OVER-SCAN EXTENSION of the visible
+ *      grid: starts one cell west / one cell north of the viewport,
+ *      ends up to two cells past the south-east corner.  The four
+ *      extension widths are clamped against the underlying grid extent
+ *      (`camera_row_stride` for columns, `total_rows` for rows) so the
+ *      cursor never walks past the last valid cell.  Net visible
+ *      iteration is `(cols+2) × (rows+2)` cells when no clamp fires,
+ *      reduced by the clamps near grid edges.  This is wider than the
+ *      terrain/overlay passes, which iterate exactly the visible grid
+ *      — likely to accommodate large unit/effect sprites that overlap
+ *      from off-screen cells into the visible area.
+ *
+ *   3. Per-cell dispatch is gated on TWO independent descriptor bits:
+ *
+ *        descriptor[+2] & 0x80:
+ *          - descriptor[+3] == 0  → player-marker draw (FUN_004bd574)
+ *                                   AND descriptor[+2] |= 1 (re-mark
+ *                                   the cell dirty so it gets re-drawn
+ *                                   next frame too).
+ *          - descriptor[+3] != 0  → unit-key sprite draw
+ *                                   (FUN_004bd759(descriptor[+3])).
+ *                                   NO re-dirty here.
+ *
+ *        descriptor[+6] != 0:
+ *          - effect-chain walk (FUN_004beed4(descriptor[+6])),
+ *            unconditional, evaluated AFTER the bit-0x80 dispatch.
+ *
+ * The asymmetric re-dirty (only the player-marker branch sets bit 0x01)
+ * is a quirk: it ensures the player marker is re-painted every frame
+ * (terrain pass picks it up on the next frame and clears it again),
+ * which matters because retail's player marker animates through 8 frames
+ * (the +0x21..+0x28 slot range driven by an internal frame counter).
+ * The unit-key sprite does NOT re-dirty because it's static per frame
+ * (re-renders only when the underlying cell becomes dirty for some
+ * other reason).
+ *
+ * Per-cell counter `_DAT_004e5d64` (g_per_frame_cell_counter): the
+ * middle pass reads + bumps this between the two dispatch gates, in
+ * the same place the zoom-16 terrain pass does.  We preserve the
+ * mid-loop placement (between bit-0x80 and effect-chain) verbatim.
+ *
+ * Cell pitch is `g_zoom` pixels (16 or 32).  Cursor (g_cursor_x /
+ * cursor_y) is updated per-cell so the leaves can read them, but
+ * since the leaves are stubs in chip 5a.i they don't observe it yet.
+ * Retail's DAT_00591524 / DAT_00591528 are the same fields gfx_glyph
+ * exposes.
+ * ────────────────────────────────────────────────────────────────── */
+
+static void pass_middle(void)
+{
+    g_count_middle += 1;
+
+    /* Setup helpers fire BEFORE the descriptor-table short-circuit:
+     * retail's FUN_004bd355 calls them unconditionally at the head, and
+     * since they walk their own entity table they do not depend on the
+     * battlefield descriptor table being bound.  Tests that bind only
+     * the partial state still observe all three counters bump. */
+    middle_leaf_build_entity_list();
+    middle_leaf_sort_entity_list();
+    middle_leaf_render_entity_list();
+
+    if (!g_desc_base) {
+        return;
+    }
+
+    /* Compute the over-scan extension.
+     *
+     *   start_col = cam_x - 1,  start_px_x = viewport_x - zoom
+     *      if start_col < 0: start_col = 0, start_px_x += zoom (cancel)
+     *
+     *   start_row = cam_y - 1,  start_px_y = viewport_y - zoom
+     *      if start_row < 0: start_row = 0, start_px_y += zoom (cancel)
+     *
+     *   num_cols  = grid_cols + 2,  clamped so start_col + num_cols
+     *               does not exceed camera_row_stride.
+     *
+     *   num_rows  = grid_rows + 2,  clamped so start_row + num_rows
+     *               does not exceed total_rows.
+     */
+    int start_col  = g_camera_x - 1;
+    int start_px_x = g_viewport_x - g_zoom;
+    if (start_col < 0) {
+        start_col  = 0;
+        start_px_x = start_px_x + g_zoom;
+    }
+    int start_row  = g_camera_y - 1;
+    int start_px_y = g_viewport_y - g_zoom;
+    if (start_row < 0) {
+        start_row  = 0;
+        start_px_y = start_px_y + g_zoom;
+    }
+    int num_cols = g_grid_cols + 2;
+    if (g_camera_row_stride <= num_cols + start_col) {
+        num_cols = g_camera_row_stride - start_col;
+    }
+    int num_rows = g_grid_rows + 2;
+    if (g_total_rows <= num_rows + start_row) {
+        num_rows = g_total_rows - start_row;
+    }
+
+    /* End-of-row skip (in descriptor bytes) to jump from the last
+     * iterated cell of one row to the first iterated cell of the next.
+     * Retail: `(DAT_004e6578 - local_2c) * DAT_004e5d50`. */
+    int end_of_row_skip = (g_camera_row_stride - num_cols) * g_desc_stride;
+
+    /* Initial descriptor cursor: (start_row * row_stride + start_col)
+     * * desc_stride.  Retail: DAT_004e6588 = ... */
+    g_desc_cursor_offset = (g_camera_row_stride * start_row + start_col)
+                         * g_desc_stride;
+
+    /* Reset the per-cell counter — retail _DAT_004e5d64 = 0; */
+    g_per_frame_cell_counter = 0;
+
+    /* Cursor Y starts at start_px_y (retail DAT_00591528 = local_20). */
+    gfx_glyph_set_cursor_y(start_px_y);
+
+    for (int row = 0; row < num_rows; row++) {
+        /* Cursor X resets to start_px_x at the head of each row
+         * (retail DAT_00591524 = local_c).  Read it back at end of
+         * row via gfx_glyph_cursor_x(). */
+        gfx_glyph_set_cursor_x(start_px_x);
+
+        for (int col = 0; col < num_cols; col++) {
+            uint8_t *desc  = &g_desc_base[g_desc_cursor_offset];
+            uint8_t  flags = desc[2];
+
+            if (flags & 0x80) {
+                uint8_t key = desc[3];
+                if (key == 0) {
+                    middle_leaf_draw_player_marker();
+                    /* Re-dirty: descriptor[+2] |= 1.  Re-read from the
+                     * descriptor in case the leaf mutated flags
+                     * (matches retail's `*(...) = *(...) | 1`, which
+                     * re-reads inside the OR). */
+                    desc[2] = (uint8_t)(desc[2] | 0x01);
+                } else {
+                    middle_leaf_draw_unit_key(key);
+                }
+            }
+
+            uint8_t chain_head = desc[6];
+            if (chain_head != 0) {
+                middle_leaf_draw_effect_chain(chain_head);
+            }
+
+            /* Advance descriptor cursor + per-cell counter + cursor_x.
+             * Retail order: cursor += stride, counter++, x += zoom. */
+            g_desc_cursor_offset     += g_desc_stride;
+            g_per_frame_cell_counter += 1;
+            gfx_glyph_set_cursor_x(gfx_glyph_cursor_x() + g_zoom);
+        }
+
+        /* End-of-row: jump cursor to next visible row's first cell,
+         * advance cursor_y by zoom. */
+        g_desc_cursor_offset += end_of_row_skip;
+        gfx_glyph_set_cursor_y(gfx_glyph_cursor_y() + g_zoom);
+    }
+}
+
+/* ──────────────────────────────────────────────────────────────────
  * Frame driver — port of FUN_004bc142 @ 0x4bc142 (143 B).
  *
  * Retail decompilation (verbatim shape):
@@ -672,6 +925,34 @@ int engine_battlefield_render_count_overlay_zoom32(void)  { return g_count_overl
 int engine_battlefield_render_count_late(void)            { return g_count_late; }
 int engine_battlefield_render_count_final(void)           { return g_count_final; }
 
+int engine_battlefield_render_middle_build_count(void)          { return g_middle_build_count; }
+int engine_battlefield_render_middle_sort_count(void)           { return g_middle_sort_count; }
+int engine_battlefield_render_middle_render_count(void)         { return g_middle_render_count; }
+int engine_battlefield_render_middle_player_marker_count(void)  { return g_middle_player_marker_count; }
+int engine_battlefield_render_middle_unit_key_count(void)       { return g_middle_unit_key_count; }
+int engine_battlefield_render_middle_effect_chain_count(void)   { return g_middle_effect_chain_count; }
+
+int engine_battlefield_render_middle_unit_key_last_arg(void)
+{
+    return g_middle_unit_key_last_arg;
+}
+int engine_battlefield_render_middle_effect_chain_last_arg(void)
+{
+    return g_middle_effect_chain_last_arg;
+}
+
+int engine_battlefield_render_per_frame_cell_counter(void)
+{
+    return g_per_frame_cell_counter;
+}
+
+void engine_battlefield_render_run_pass_middle_for_test(int camera_x, int camera_y)
+{
+    g_camera_x = camera_x;
+    g_camera_y = camera_y;
+    pass_middle();
+}
+
 /* ──────────────────────────────────────────────────────────────────
  * Coordinate helpers — ports of FUN_004bc222 / 2a5 / 2c5 / 2e5 / 346.
  *
@@ -741,4 +1022,13 @@ void engine_battlefield_render_reset_counts(void)
     g_terrain_z32_first_blit_count     = 0;
     g_terrain_z32_second_blit_count    = 0;
     g_overlay_z32_blit_count           = 0;
+    g_middle_build_count               = 0;
+    g_middle_sort_count                = 0;
+    g_middle_render_count              = 0;
+    g_middle_player_marker_count       = 0;
+    g_middle_unit_key_count            = 0;
+    g_middle_effect_chain_count        = 0;
+    g_middle_unit_key_last_arg         = -1;
+    g_middle_effect_chain_last_arg     = -1;
+    g_per_frame_cell_counter           = 0;
 }

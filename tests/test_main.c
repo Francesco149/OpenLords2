@@ -881,6 +881,24 @@ struct test_case {
     X(engine_battlefield_render_overlay_z32_no_descriptor_short_circuits) \
     X(engine_battlefield_render_overlay_z32_blit_count_resets) \
     \
+    X(engine_battlefield_render_middle_setup_helpers_fire_once) \
+    X(engine_battlefield_render_middle_setup_runs_without_descriptors) \
+    X(engine_battlefield_render_middle_overscans_visible_grid) \
+    X(engine_battlefield_render_middle_west_clamp_shifts_start) \
+    X(engine_battlefield_render_middle_east_clamp_reduces_cols) \
+    X(engine_battlefield_render_middle_south_clamp_reduces_rows) \
+    X(engine_battlefield_render_middle_bit80_key0_calls_player_marker) \
+    X(engine_battlefield_render_middle_bit80_nonzero_key_calls_unit_key) \
+    X(engine_battlefield_render_middle_no_bit80_no_draw) \
+    X(engine_battlefield_render_middle_nonzero_effect6_calls_chain) \
+    X(engine_battlefield_render_middle_zero_effect6_skips_chain) \
+    X(engine_battlefield_render_middle_combined_dispatch) \
+    X(engine_battlefield_render_middle_zoom32_advances_32px) \
+    X(engine_battlefield_render_middle_per_frame_counter_resets) \
+    X(engine_battlefield_render_middle_counters_accumulate) \
+    X(engine_battlefield_render_middle_reset_clears_state) \
+    X(engine_battlefield_render_middle_uses_frame_camera) \
+    \
     X(engine_battlefield_render_screen_in_grid_inside) \
     X(engine_battlefield_render_screen_in_grid_outside) \
     X(engine_battlefield_render_pixel_to_col_basic) \

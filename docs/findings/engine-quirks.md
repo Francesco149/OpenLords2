@@ -2943,6 +2943,105 @@ combine clamps; they're carefully tuned to their respective callers
 
 ---
 
+## 83. Battlefield middle pass iterates an OVER-SCAN extension of the visible grid
+
+The middle pass (`FUN_004bd355`, chip 5a.i) does NOT iterate the visible
+grid like its terrain / overlay siblings.  Instead it walks an extension
+that starts ONE cell west / ONE cell north of the camera and ends up to
+TWO cells past the south-east corner — a `(cols + 2) × (rows + 2)`
+window when no clamp fires, reduced near grid edges by clamps against
+the underlying grid extent (`camera_row_stride` for cols, `total_rows`
+— a new global `DAT_004e6570` — for rows).
+
+```c
+local_10 = DAT_004e657c - 1;            // start_col = cam_x - 1
+local_c  = DAT_004e6558 - DAT_004e656c; // start_px_x = viewport_x - zoom
+if (local_10 < 0) { local_10 = 0; local_c += DAT_004e656c; }  // west cancel
+local_18 = DAT_004e6580 - 1;            // start_row = cam_y - 1
+local_20 = DAT_004e6554 - DAT_004e656c; // start_px_y = viewport_y - zoom
+if (local_18 < 0) { local_18 = 0; local_20 += DAT_004e656c; }  // north cancel
+local_2c = DAT_004e5d5c + 2;            // num_cols = grid_cols + 2
+if (DAT_004e6578 <= local_2c + local_10) local_2c = DAT_004e6578 - local_10;
+local_28 = DAT_004e5d4c + 2;            // num_rows = grid_rows + 2
+if (DAT_004e6570 <= local_28 + local_18) local_28 = DAT_004e6570 - local_18;
+```
+
+Why the asymmetry (+1 west / +2 east, +1 north / +2 south)?  The
+middle pass renders Y-sorted entities (units/effects) plus per-cell
+extras whose sprites can be **larger than one hex cell**.  An entity
+anchored at a hex column adjacent to the visible viewport on the WEST
+side can still have its right edge visible inside the viewport; the
+middle pass needs to iterate that off-screen cell to draw the
+overlapping portion.  Similarly on the east / south, but those need
++2 cells of slack rather than +1 because the entities are drawn at
+cell-origin-PLUS-offset positions that can poke up to ~32 px past the
+anchor, which can span TWO cells at zoom 16.  Terrain and overlay
+passes don't have this problem because their sprites are exactly one
+cell, so they iterate only the visible cells.
+
+A separate consequence: the west / north start cells can have
+NEGATIVE pixel coordinates relative to the viewport's top-left
+(`start_px_x = viewport_x - zoom`).  Per-cell extras that draw at
+those coords rely on the clip rect to suppress the off-screen
+portions — quirk on its own that gates a future port (chip 5a.iii).
+
+The `DAT_004e6570` global is otherwise unbound by terrain / overlay,
+so it's a NEW binding introduced in chip 5a.i
+(`engine_battlefield_render_bind_total_rows`).
+
+> 📍 `src/engine_battlefield_render.c` (`pass_middle`),
+> `docs/findings/battlefield-render.md` §"What's next",
+> Ghidra `FUN_004bd355` lines for the local_10/c/18/20/2c/28 setup.
+
+---
+
+## 84. Battlefield middle pass re-dirties cell only on player-marker branch
+
+The middle pass's per-cell dispatch on `descriptor[+2] & 0x80` has
+TWO branches that differ in ONE crucial side-effect:
+
+```c
+if (descriptor[+2] & 0x80) {
+    if (descriptor[+3] == 0) {
+        FUN_004bd574();                       // player marker
+        descriptor[+2] = descriptor[+2] | 1;  // RE-DIRTY (!)
+    } else {
+        FUN_004bd759(descriptor[+3]);          // unit-key sprite
+        /* no re-dirty */
+    }
+}
+```
+
+Only the **player-marker branch** sets bit 0x01 (re-dirty) on the
+flag byte.  The unit-key branch does NOT.
+
+Why: the player marker is an **animated sprite** that cycles through
+8 frames driven by an internal counter (`DAT_004e5b18`, advanced once
+per call to `FUN_004bd574`).  Re-dirtying the cell ensures the terrain
+pass picks it up next frame and re-paints the cell, which causes the
+middle pass to re-render the marker with the next animation frame.
+Without the re-dirty the cell would only re-render when something else
+marked it dirty, and the animation would freeze.
+
+The unit-key sprite is static per frame (no animation counter), so it
+doesn't need the re-paint loop.  The unit-key branch is also called
+with a SPECIFIC byte from `descriptor[+3]` — only four values (0x49,
+0x4c, 0x61, 0x64) are valid; anything else is silently dropped by the
+leaf (separate quirk to file when chip 5a.iii lands).
+
+Caveat: the re-dirty bit is ORed into the flag byte READ AFTER the
+leaf returns (retail: `*(byte *)(...) = *(byte *)(...) | 1`).  If the
+leaf mutates the same byte (e.g. clearing a different bit), the
+re-read picks up that mutation.  For chip 5a.i the leaf is a stub
+that doesn't mutate, but the verbatim port preserves the re-read
+semantics for chip 5a.iii.
+
+> 📍 `src/engine_battlefield_render.c` (`pass_middle`),
+> `docs/findings/battlefield-render.md` §"What's next",
+> Ghidra `FUN_004bd355` lines 50-56.
+
+---
+
 <!--
 Template for new entries:
 

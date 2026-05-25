@@ -72,13 +72,40 @@
  *          out-of-band offsets just skip the blit (the only side-effect
  *          had already happened: dirty bit was cleared above the gate).
  *
- * The other three passes are NOT ported yet.  Each is wired here as a
+ *   FUN_004bd355 @ 0x4bd355 (543 B)  → internal pass_middle (chip 5a.i)
+ *     Middle pass — always-on, zoom-independent.  Three behaviors over
+ *     the terrain/overlay passes:
+ *
+ *       1. Three setup helpers called once each at the head of the pass
+ *          (FUN_004bd938 / FUN_004bda92 / FUN_004bdb95) that build,
+ *          sort, and render a Y-ordered list of visible entities.
+ *          These stay as counter-stubs for chip 5a.i; chip 5a.ii ports
+ *          the sorted-entity infrastructure.
+ *       2. Iterates an OVER-SCAN extension of the visible grid: starts
+ *          one cell west / one cell north of the viewport, ends up to
+ *          two cells past the south-east corner, clamped to the total
+ *          grid extent (`camera_row_stride` × `total_rows`).
+ *       3. Per-cell dispatch:
+ *            - descriptor[+2] & 0x80 SET, descriptor[+3] == 0 → call
+ *              FUN_004bd574 (player-marker draw) AND re-mark the cell
+ *              dirty (set descriptor[+2] |= 1).  Re-dirtying is unique
+ *              to this branch — the unit-key path below does NOT
+ *              re-dirty.
+ *            - descriptor[+2] & 0x80 SET, descriptor[+3] != 0 → call
+ *              FUN_004bd759(descriptor[+3]) (unit-key sprite draw).
+ *            - descriptor[+6] != 0 → call FUN_004beed4(descriptor[+6])
+ *              (effect-chain walk).  Independent of the bit-0x80 gate;
+ *              evaluated for every cell.
+ *
+ *     The three draw leaves (FUN_004bd574 / FUN_004bd759 / FUN_004beed4)
+ *     stay as counter-stubs for chip 5a.i; chip 5a.iii ports them.
+ *
+ * The other two passes are NOT ported yet.  Each is wired here as a
  * static stub that bumps a per-pass call counter so the driver's
  * dispatch shape (zoom-16 vs zoom-32, always-on vs zoom-gated) can be
  * verified before the bodies land.  Replacing a stub with a real port
  * is a one-line change in `engine_battlefield_render.c`:
  *
- *   FUN_004bd355 @ 0x4bd355 (543 B)  middle pass       [stub]
  *   FUN_004bd233 @ 0x4bd233 (290 B)  late pass         [stub]
  *   FUN_004bf1f9 @ 0x4bf1f9 (433 B)  final pass        [stub]
  *
@@ -165,6 +192,18 @@ void engine_battlefield_render_bind_viewport_offset(int x, int y);
  *
  *   row_stride  retail `DAT_004e6578`. */
 void engine_battlefield_render_bind_camera_row_stride(int row_stride);
+
+/* Bind the total row count of the underlying grid (retail
+ * `DAT_004e6570`).  Used by the middle pass to clamp the over-scan
+ * extension so it doesn't walk past the last valid row.  The
+ * over-scan analog for columns clamps against `camera_row_stride`,
+ * which is already bound separately.
+ *
+ * Not consumed by terrain / overlay passes, which iterate exactly the
+ * visible grid (`cols * rows`).  The middle pass extends iteration by
+ * 1 cell west/north and up to 2 cells east/south, clamped to the total
+ * extent. */
+void engine_battlefield_render_bind_total_rows(int total_rows);
 
 /* Bind the two sprite blobs the terrain pass dispatches to.
  *
@@ -343,5 +382,55 @@ int  engine_battlefield_render_terrain_zoom32_second_blit_count(void);
  * glyph_offset gate).  Distinct from the per-pass `count_overlay_zoom32`
  * which bumps once per FUN_004bd07f invocation. */
 int  engine_battlefield_render_overlay_zoom32_blit_count(void);
+
+/* Per-leaf call counters for the middle-pass stubs.  The middle-pass
+ * driver (chip 5a.i) is a real port of `FUN_004bd355`, but its six
+ * leaves are still stubs — each bumps its counter and returns.  The
+ * counters let tests verify the driver's per-cell dispatch shape
+ * (which leaf fires on which descriptor bits) without depending on
+ * real leaf bodies.  When a leaf is ported (chip 5a.ii / .iii) the
+ * counter can stay for cross-checking or be retired.
+ *
+ *   build / sort / render — three setup helpers (FUN_004bd938 /
+ *                           FUN_004bda92 / FUN_004bdb95) called once
+ *                           each at the head of the middle pass.
+ *   player_marker         — FUN_004bd574, dispatched when descriptor[+2]
+ *                           has bit 0x80 set AND descriptor[+3] == 0.
+ *   unit_key              — FUN_004bd759(descriptor[+3]), dispatched
+ *                           when bit 0x80 set AND descriptor[+3] != 0.
+ *   effect_chain          — FUN_004beed4(descriptor[+6]), dispatched
+ *                           per cell whenever descriptor[+6] != 0
+ *                           (independent of the bit-0x80 gate). */
+int  engine_battlefield_render_middle_build_count(void);
+int  engine_battlefield_render_middle_sort_count(void);
+int  engine_battlefield_render_middle_render_count(void);
+int  engine_battlefield_render_middle_player_marker_count(void);
+int  engine_battlefield_render_middle_unit_key_count(void);
+int  engine_battlefield_render_middle_effect_chain_count(void);
+
+/* The unit_key and effect_chain stubs each capture the LAST byte they
+ * were called with — descriptor[+3] for unit_key, descriptor[+6] for
+ * effect_chain.  Tests use these to verify the driver passes the right
+ * byte from the descriptor.  Initialized to -1 and reset to -1 by
+ * `engine_battlefield_render_reset_counts`. */
+int  engine_battlefield_render_middle_unit_key_last_arg(void);
+int  engine_battlefield_render_middle_effect_chain_last_arg(void);
+
+/* Per-cell counter incremented by the middle pass for each cell it
+ * visits (after gating).  This is the same `_DAT_004e5d64` global that
+ * the zoom-16 terrain pass also drives.  Exposed for chip 5a.i tests
+ * to verify cell-loop iteration counts (rows × cols of the over-scan
+ * extension). */
+int  engine_battlefield_render_per_frame_cell_counter(void);
+
+/* TEST-ONLY: run just the middle pass with the given camera.
+ *
+ * Bypasses the frame driver's terrain / overlay / late / final
+ * dispatch, so tests can inspect cursor and per-cell counter state
+ * without contamination from sibling passes that also mutate them.
+ * Sets the camera globals first (same effect as the frame driver's
+ * per-frame camera write) so the over-scan extension is computed from
+ * the test's chosen camera. */
+void engine_battlefield_render_run_pass_middle_for_test(int camera_x, int camera_y);
 
 #endif /* OPENLORDS2_ENGINE_BATTLEFIELD_RENDER_H */
