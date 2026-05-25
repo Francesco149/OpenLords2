@@ -619,6 +619,20 @@ struct test_case {
     X(gfx_sprite_render_error_latch_sticky_until_cleared) \
     X(gfx_sprite_render_log_hook_null_is_no_op) \
     \
+    X(gfx_sprite_rle_render_basic_decode) \
+    X(gfx_sprite_rle_render_16byte_literal) \
+    X(gfx_sprite_rle_render_null_blob_logs_and_latches) \
+    X(gfx_sprite_rle_render_offset_too_low_logs) \
+    X(gfx_sprite_rle_render_offset_too_high_logs) \
+    X(gfx_sprite_rle_render_left_clip) \
+    X(gfx_sprite_rle_render_right_clip) \
+    X(gfx_sprite_rle_render_top_skip) \
+    X(gfx_sprite_rle_render_fully_offscreen_no_op) \
+    X(gfx_sprite_rle_blit_zero_top_skip_helper_is_no_op) \
+    X(gfx_sprite_rle_sets_last_glyph_index) \
+    X(gfx_sprite_rle_blit_unclipped_direct_4x2) \
+    X(gfx_sprite_rle_blit_null_canvas_no_crash) \
+    \
     X(gfx_text_empty_buffer_pads_acc_by_4) \
     X(gfx_text_plain_renders_single_glyph) \
     X(gfx_text_underscore_renders_as_space) \

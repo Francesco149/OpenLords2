@@ -14,6 +14,7 @@
 #include "gfx_glyph.h"
 #include "gfx_paint.h"
 #include "gfx_sprite.h"
+#include "gfx_sprite_rle.h"
 
 /* Dispatcher-private state.  Variables grouped by which retail DAT_*
  * symbol they shadow; comments call out the offset/size encoded in
@@ -364,6 +365,18 @@ void gfx_dispatch_apply_skip_and_dispatch_sprite(const uint8_t *sprite_blob)
         } else {
             gfx_sprite_blit(sprite_blob);
         }
+    }
+}
+
+void gfx_dispatch_dispatch_sprite_rle(const uint8_t *sprite_blob)
+{
+    if (g_y_clip_mode == 5) return;
+    if (g_x_clip_mode == 1) {
+        gfx_sprite_rle_blit_left_clipped(sprite_blob);
+    } else if (g_x_clip_mode == 2) {
+        gfx_sprite_rle_blit_right_clipped(sprite_blob);
+    } else {
+        gfx_sprite_rle_blit(sprite_blob);
     }
 }
 

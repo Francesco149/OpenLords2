@@ -258,6 +258,14 @@ void gfx_dispatch_stage_sprite_descriptor(const uint8_t *sprite_blob,
  * Gated on y_clip_mode != 5. */
 void gfx_dispatch_apply_skip_and_dispatch_sprite(const uint8_t *sprite_blob);
 
+/* RLE-family counterpart: dispatch one of the three RLE sprite blitters
+ * (gfx_sprite_rle.c) based on the current x_clip_mode, gated on
+ * y_clip_mode != 5.  Does NOT bake top_skip/left_skip into the staged
+ * src_offset — the RLE blitters handle both intrinsically (top_skip
+ * via the rle_skip_top_rows row-walk, left_skip via the per-row
+ * dest pre-shift).  Used by gfx_sprite_render_rle_from_blob. */
+void gfx_dispatch_dispatch_sprite_rle(const uint8_t *sprite_blob);
+
 /* ────────────────────────────────────────────────────────────────
  * Sprite dispatchers
  *

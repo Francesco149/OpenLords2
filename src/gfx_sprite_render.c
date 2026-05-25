@@ -97,6 +97,17 @@ static void canvas_clip_and_dispatch(const uint8_t *blob)
     gfx_dispatch_apply_skip_and_dispatch_sprite(blob);
 }
 
+/* RLE counterpart — runs the same canvas-clip pair but routes through
+ * the no-skip-bake dispatch helper.  The RLE blitters consume the
+ * staged top_skip / left_skip themselves rather than reading from a
+ * pre-baked src_offset. */
+static void canvas_clip_and_dispatch_rle(const uint8_t *blob)
+{
+    gfx_dispatch_clip_x(0, gfx_paint_canvas_width());
+    gfx_dispatch_clip_y(0, gfx_paint_canvas_height());
+    gfx_dispatch_dispatch_sprite_rle(blob);
+}
+
 /* ──────────────────────────────────────────────────────────────────
  * Port of FUN_0040a01d — raw-buffer render
  * ────────────────────────────────────────────────────────────────── */
@@ -178,6 +189,37 @@ void gfx_sprite_render_from_blob(const uint8_t *blob,
 
     gfx_glyph_set_dest(x, y);
     canvas_clip_and_dispatch(blob);
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Port of FUN_0040a3d0 — caller-blob RLE render
+ *
+ * Sibling of FUN_0040a21a — same staging + validation shape, but does
+ * NOT pre-bake top_skip/left_skip into src_offset.  The RLE blitters
+ * handle both intrinsically.
+ * ────────────────────────────────────────────────────────────────── */
+
+void gfx_sprite_render_rle_from_blob(const uint8_t *blob,
+                                     int sprite_index,
+                                     int x, int y)
+{
+    if (blob == 0) {
+        log_error(GFX_SPRITE_RENDER_ERR_RLE_FROM_BLOB_NULL, sprite_index + 1);
+        latch_error(4);
+        return;
+    }
+
+    gfx_dispatch_set_last_glyph_index(sprite_index);
+    gfx_dispatch_stage_sprite_descriptor(blob, sprite_index);
+
+    if (!descriptor_offset_in_range(sprite_index + 1,
+                                    GFX_SPRITE_RENDER_ERR_RLE_FROM_BLOB_INDEX_TOO_LOW,
+                                    GFX_SPRITE_RENDER_ERR_RLE_FROM_BLOB_INDEX_TOO_HIGH)) {
+        return;
+    }
+
+    gfx_glyph_set_dest(x, y);
+    canvas_clip_and_dispatch_rle(blob);
 }
 
 /* ──────────────────────────────────────────────────────────────────

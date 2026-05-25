@@ -122,6 +122,9 @@ enum {
     GFX_SPRITE_RENDER_ERR_FROM_BLOB_NULL                = 0x4d2314,
     GFX_SPRITE_RENDER_ERR_FROM_BLOB_INDEX_TOO_HIGH      = 0x4d2330,
     GFX_SPRITE_RENDER_ERR_FROM_BLOB_INDEX_TOO_LOW       = 0x4d234c,
+    GFX_SPRITE_RENDER_ERR_RLE_FROM_BLOB_NULL            = 0x4d2368,
+    GFX_SPRITE_RENDER_ERR_RLE_FROM_BLOB_INDEX_TOO_HIGH  = 0x4d2384,
+    GFX_SPRITE_RENDER_ERR_RLE_FROM_BLOB_INDEX_TOO_LOW   = 0x4d23a4,
     GFX_SPRITE_RENDER_ERR_GLOBAL_INDEX_TOO_HIGH         = 0x4d2418,
     GFX_SPRITE_RENDER_ERR_GLOBAL_INDEX_TOO_LOW          = 0x4d2434,
     GFX_SPRITE_RENDER_ERR_TRUNCATE_BOTTOM_INDEX_TOO_HIGH= 0x4d2450,
@@ -171,6 +174,25 @@ const uint8_t *gfx_sprite_render_blob(void);
 void gfx_sprite_render_raw(const uint8_t *buffer,
                            int x, int y,
                            int16_t w, int16_t h);
+
+/* Port of FUN_0040a3d0.  Render sprite[index] from a caller-supplied
+ * RLE-encoded blob at (x, y).  The blob's per-sprite source data is
+ * an RLE stream consumed by the second blitter family (gfx_sprite_rle.c)
+ * rather than tightly-packed raw pixels.  The descriptor layout is
+ * the same as the first family (16-byte slot at blob + idx*16 + 8).
+ *
+ * Error gates (in order):
+ *   1. blob == NULL:                         GFX_SPRITE_RENDER_ERR_RLE_FROM_BLOB_NULL
+ *   2. descriptor.src_offset > 0x4baf0:      GFX_SPRITE_RENDER_ERR_RLE_FROM_BLOB_INDEX_TOO_HIGH
+ *   3. descriptor.src_offset < 1:            GFX_SPRITE_RENDER_ERR_RLE_FROM_BLOB_INDEX_TOO_LOW
+ *
+ * Same staging shape as gfx_sprite_render_from_blob; key difference is
+ * that the wrapper does NOT pre-bake top_skip/left_skip into src_offset
+ * — the RLE blitters handle both intrinsically (top_skip via row-walk,
+ * left_skip via dest pre-shift). */
+void gfx_sprite_render_rle_from_blob(const uint8_t *blob,
+                                     int sprite_index,
+                                     int x, int y);
 
 /* Port of FUN_0040a21a.  Render sprite[index] from a caller-supplied
  * blob at (x, y).
