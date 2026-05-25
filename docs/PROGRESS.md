@@ -7,6 +7,112 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Castle-load fixup wired into castles_read_scenario
+
+Closed the carry-over from prior dispatches.  `castles_read_scenario`
+now invokes the ported `engine_tile_expand_footprint` for every record
+whose flags have bit 0 set (and bit 1 clear), matching retail
+`FUN_004aea70`'s call to `FUN_004917dd`.  The first end-to-end
+"load + footprint expand" smoke is green.
+
+### Landed code
+
+- **`src/engine_tile.h/c`**: factored out a pointer-arg sibling,
+  `engine_tile_expand_footprint_at(int byte_off, uint8_t *tiles,
+  uint16_t *path_scratch, uint8_t *stage_scratch,
+  int32_t (*footprint_list)[2], int32_t *last_footprint_tile)`.  The
+  existing struct-based `engine_tile_expand_footprint(state*)` becomes
+  a thin wrapper that forwards to the pointer version.  All existing
+  unit tests + the pure-function diff harness keep working unchanged.
+
+- **`src/save.h/c`**: added the four runtime globals the expansion
+  reads/writes:
+  - `g_path_scratch[6400]`  (u16, retail `DAT_00507250`, not persisted)
+  - `g_stage_scratch[6400]` (u8,  retail `DAT_004f7d80`, not persisted)
+  - `g_footprint_storage_160[160]` (retail `DAT_00553c80`, **IS** in
+    the save schema as slot 110) — overlaid by macros
+    `g_footprint_list[19][2]` (the first 152 B) and
+    `g_last_footprint_tile` (4 B at offset 152), leaving 4 B trailing
+    pad that ride along through round-trips for byte-exact fidelity.
+
+- **`tools/gen_save_schema.py`**: extended `NAMED_BIG_BLOCKS` so any
+  schema slot (not just 0..12) can be promoted to a named global.
+  Slot 110 (the footprint storage) is now wired through the same
+  mechanism — `save_schema_table.h` regenerated, no anonymous
+  `s_slot_00553c80` static any more.
+
+- **`src/save.c`**'s `castles_read_scenario` now calls
+  `engine_tile_expand_footprint_at(j, g_castles_state, g_path_scratch,
+  g_stage_scratch, g_footprint_list, &g_last_footprint_tile)` on the
+  `flags & 0x01` branch, replacing the TODO no-op.
+
+### Tests
+
+- **207 passing** under ASan + UBSan (was 206).
+- New: `test_castles_read_fixup_flag_bit0` — plants flags=0x01 + anchor
+  'X' at an interior record, reads back, asserts on the observables
+  that survive the load-loop clobber (see quirk #10 below).
+- Fixed: `test_castles_scenario_round_trip_byte13` was previously
+  passing only because the flags & 0x01 branch was a no-op.  Now masks
+  the seed to keep bits 0+1 clear so the test's docstring intent ("no
+  fixups trigger") is actually honored.
+
+### Engine quirk #10 — castle-load loop clobbers expansion writes
+
+Filed in `docs/findings/engine-quirks.md`.  The load loop walks the
+6400 records in-order, copying `+1` and `+3` from disk to memory at
+each record.  `engine_tile_expand_footprint_at` is invoked mid-loop
+on flagged records — but every byte offset > anchor's offset will have
+its `+1`/`+3` overwritten by a later iteration of the SAME load loop.
+So almost all of the expansion's glyph writes get clobbered before
+control returns to the caller.  What survives:
+
+- Anchor cell's full state (the iter that fires the expansion is also
+  the iter that wrote anchor's `+1`/`+3` from disk — no later iter
+  touches it).
+- ALL cells' `+2` and `+4` (load loop only writes `+1` and `+3`).
+- `path_scratch[]`, `stage_scratch[]`, `footprint_list[]` (separate
+  globals).
+
+The renderable 3x3 of building glyphs is therefore NOT visible from
+the on-disk anchor + flags after a Castles.dat load.  Whatever the
+renderer reads must consult `+2` (center marker + footprint bit DO
+survive) or run a separate post-load expansion pass.  We'll find out
+when the render port lands; for now the load mirrors retail
+verbatim — surviving observables and all.
+
+### What's next
+
+1. **Port the per-type handlers** for the MP delayed-action dispatcher
+   (carried over).  The 50 entries in `PTR_FUN_004d5c98` were
+   surveyed: 5 are no-ops, 2 are 1-line counter mutations, 3 are the
+   MP-relay types (0x21..0x23) bigger, and the remaining ~40 are 1-3
+   line wrappers around as-yet-unported engine helpers (FUN_0043a23f,
+   FUN_004284ce, etc.).  Most aren't useful in isolation until their
+   callees are ported.  Bias toward the 7 trivial / counter ones for
+   a partial dispatch-table demo, then climb into the helpers one
+   subsystem at a time.
+
+2. **Next sub-step body port** — `FUN_0049b8b0` (turn-timeout, 195 B)
+   or `FUN_0045270a` (AI scheduler, calls `FUN_00452306`).  Same diff-
+   harness pattern as the prior ports.
+
+3. **Wire save/load into the drop-in's runtime command surface** —
+   carried over from prior dispatches.  Two options: `--load-save
+   PATH` boot flag, or hook F2/F3 keyboard for quick-save / quick-load.
+
+4. **Diagnose the Quit-Game freeze + orchestrator-teardown hang** —
+   carried over.  Add an RPC timeout to the orchestrator so
+   `script.exports_sync.*` calls don't block teardown forever on a
+   dead Frida script.
+
+Bias next time: option 2 (next sub-step body) — option 1 (handler
+ports) is parallelizable but each batch's value is gated on porting
+the per-handler callee subsystems.  A sub-step body is the same
+flavor of work that landed cleanly the last several dispatches.
+
+---
+
 ## 2026-05-25 — Tenth diff target: engine_dispatch_delayed_actions (FUN_004472ce)
 
 First MP sub-step body port unlocked by yesterday's state_hash + tile_

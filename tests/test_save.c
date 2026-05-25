@@ -19,6 +19,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#include "engine_tile.h"
 #include "save.h"
 
 static int read_file(const char *path, uint8_t **out_buf, size_t *out_len)
@@ -202,18 +203,19 @@ int test_castles_init_blank_makes_zero_file(void)
 
 /* write_scenario then read_scenario should reproduce the +1 and +3
  * bytes of every record.  The retail read path also applies fixups
- * based on the mem+7 byte and flags — we keep flags==0 and mem+7==0
- * here so no fixups trigger. */
+ * based on the mem+7 byte and flags — to keep none of them firing we
+ * keep flags bits 0+1 clear (no expansion/reshape) and let the wipe
+ * leave mem+7 at 0xff before the read (no flags==0 branch). */
 int test_castles_scenario_round_trip_byte13(void)
 {
     const char *path = "/tmp/openlords2_test_scenario.dat";
 
     /* Seed g_castles_state with a known pattern in the bytes that
-     * touch disk (+1 and +3 of each record).  Zero the rest to avoid
-     * triggering the read-side fixup branches. */
+     * touch disk (+1 and +3 of each record).  Mask off bits 0+1 of the
+     * +1 byte so the read fixup branches stay dormant. */
     for (size_t i = 0; i < sizeof g_castles_state; ++i) g_castles_state[i] = 0;
     for (int rec = 0; rec < 6400; ++rec) {
-        g_castles_state[rec * 8 + 1] = (uint8_t)((rec * 7) & 0xff);
+        g_castles_state[rec * 8 + 1] = (uint8_t)((rec * 7) & 0xfc);
         g_castles_state[rec * 8 + 3] = (uint8_t)((rec * 13) & 0xff);
     }
 
@@ -232,7 +234,7 @@ int test_castles_scenario_round_trip_byte13(void)
         T_FAIL("read_scenario failed");
 
     for (int rec = 0; rec < 6400; ++rec) {
-        uint8_t want1 = (uint8_t)((rec * 7) & 0xff);
+        uint8_t want1 = (uint8_t)((rec * 7) & 0xfc);
         uint8_t want3 = (uint8_t)((rec * 13) & 0xff);
         if (g_castles_state[rec * 8 + 1] != want1)
             T_FAIL("rec %d +1: got 0x%02x want 0x%02x",
@@ -280,6 +282,91 @@ int test_castles_scenario_independent_slots(void)
     T_ASSERT_EQ_U(got, 4);
     for (int i = 0; i < 4; ++i)
         T_ASSERT_EQ_U(hdr[i], 0);
+
+    remove(path);
+    return 0;
+}
+
+/* The read-side fixup: when flags & 0x01 (and bit 1 is clear), the
+ * engine calls engine_tile_expand_footprint_at on the anchor cell,
+ * laying down the 3x3 building footprint and recording the offset in
+ * g_footprint_list.  Verify by planting flags=0x01 with anchor 'X' on
+ * disk: the read path should overwrite the 3x3 cells starting at the
+ * anchor with the 'X'/'Y'/'Z'/'`'/'a'/'b'/'h'/'i'/'j' glyph row, mark
+ * the center cell's +2 with 0x80, and stamp the slot's byte offset in
+ * footprint_list[0][0]. */
+int test_castles_read_fixup_flag_bit0(void)
+{
+    const char *path = "/tmp/openlords2_test_fixup_flag0.dat";
+    if (castles_init_blank(path) != 0) T_FAIL("init_blank failed");
+
+    /* Place the anchor at a record that's safely interior (col 5,
+     * row 5 → byte offset 5*8 + 5*640 = 3240) so the 3x3 footprint
+     * stays inside the grid. */
+    const int anchor_byte = 5 * ENGINE_TILE_CELL_BYTES
+                            + 5 * ENGINE_TILE_ROW_BYTES;
+
+    for (size_t i = 0; i < sizeof g_castles_state; ++i) g_castles_state[i] = 0;
+    g_castles_state[anchor_byte + 1] = 0x01;   /* flags: trigger expansion */
+    g_castles_state[anchor_byte + 3] = 'X';    /* recognized anchor */
+    if (castles_write_scenario(path, 1) != 0) T_FAIL("write_scenario failed");
+
+    /* Wipe + reset runtime scratches so the test's pre-state is clean. */
+    for (size_t i = 0; i < sizeof g_castles_state; ++i) g_castles_state[i] = 0;
+    for (size_t i = 0; i < 6400; ++i) g_path_scratch [i] = 0;
+    for (size_t i = 0; i < 6400; ++i) g_stage_scratch[i] = 0;
+    for (size_t i = 0; i < sizeof g_footprint_storage_160; ++i)
+        g_footprint_storage_160[i] = 0;
+
+    if (castles_read_scenario(path, 1) != 0) T_FAIL("read_scenario failed");
+
+    /* IMPORTANT — the disk-load loop overwrites +1 and +3 of every
+     * record as it advances.  The expansion's writes to +1/+3 of cells
+     * with byte_offset > anchor_byte are therefore CLOBBERED by later
+     * iterations.  Only writes to +2/+4 (and the path/stage scratches
+     * + footprint_list — all separate state) survive intact.  See the
+     * "Castle load loop clobbers expansion +1/+3 writes" entry in
+     * docs/findings/engine-quirks.md.
+     *
+     * Below we verify only the observables that survive that clobber. */
+
+    /* Anchor cell: +1 starts at 0x01 from the disk read, then gets the
+     * corner-neighbor flag bit ORed in by the neighbor-flag helper (the
+     * anchor IS the upper-left corner of the 3x3 center, so it picks up
+     * the 0x10 bit).  +3 = 'X' (first glyph of the 'X'-row footprint
+     * table is the anchor char itself, so the value is preserved).
+     * Anchor's +1/+3 is the ONLY cell whose +1/+3 expansion writes
+     * survive — the load loop's disk write at this offset happens
+     * BEFORE the expansion, not after. */
+    T_ASSERT_EQ_U(g_castles_state[anchor_byte + 1], 0x11);
+    T_ASSERT_EQ_U(g_castles_state[anchor_byte + 3], 'X');
+
+    /* Anchor cell +2: set by the 3x3 walk to ((0 & 0xe3) | 0x04) = 0x04.
+     * +2 is never touched by the load loop, so this survives. */
+    T_ASSERT_EQ_U(g_castles_state[anchor_byte + 2], 0x04);
+
+    /* Center cell of the 3x3 (one row + one col down from anchor): +2
+     * picks up the center marker bit 0x80.  +3 is clobbered back to 0
+     * by the load-loop iter at this byte offset. */
+    int center = anchor_byte + ENGINE_TILE_CELL_BYTES + ENGINE_TILE_ROW_BYTES;
+    T_ASSERT(g_castles_state[center + 2] & 0x80);
+
+    /* footprint_list[0][0] holds the anchor byte offset — written by
+     * the stage-6 push helper into a separate global, so unaffected by
+     * the load-loop clobber. */
+    T_ASSERT_EQ_U(g_footprint_list[0][0], anchor_byte);
+
+    /* Stage scratch refresh: the orient-4 ('X' faces down) neighbor-flag
+     * helper stamps +4 = 1 onto cell (col 6, row 5) (the helper writes
+     * to neighbors of the 3x3 CENTER, which is (col 6, row 6)).  Cell
+     * index = 6 + 5*80 = 406.  +4 is never touched by the load loop, so
+     * this survives. */
+    T_ASSERT_EQ_U(g_stage_scratch[6 + 5 * 80], 1);
+
+    /* The orient-4 door-neighbor write stamps +4 = 2 onto (col 6, row 7)
+     * — cell 6 + 7*80 = 566 — in stage_scratch.  +4 is never touched
+     * by the load loop, so this survives. */
+    T_ASSERT_EQ_U(g_stage_scratch[6 + 7 * 80], 2);
 
     remove(path);
     return 0;

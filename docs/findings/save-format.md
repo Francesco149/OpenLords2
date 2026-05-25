@@ -177,9 +177,13 @@ table below replaces the earlier provisional one.
 | 0x40..0x4F    | pass-thru| stored verbatim — these are the footprint cells (`'@'..'O'`) the scenario file uses for pre-placed 3x3 patterns |
 | other         | (handled by separate branches not shown) | |
 
-The `+0 == 3` building-anchor cell is what `FUN_004917dd` (the unported
-castle-load fixup) reads from `+3` to choose a 3x3 footprint orientation
-(`'@'` → orient 0, `'C'` → 2, `'X'` → 4, `'['` → 6, others → no-op).
+The `+0 == 3` building-anchor cell is what `FUN_004917dd` (the
+castle-load fixup, ported as `engine_tile_expand_footprint`) reads
+from `+3` to choose a 3x3 footprint orientation (`'@'` → orient 0,
+`'C'` → 2, `'X'` → 4, `'['` → 6, others → no-op).  Wired into
+`castles_read_scenario` for every cell whose flags have bit 0 set
+and bit 1 clear; see engine-quirks.md §10 for the load-loop clobber
+quirk that erases most of the expansion's writes.
 
 ### Why 6400 records?
 

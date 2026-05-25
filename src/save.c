@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "engine_tile.h"
 #include "save.h"
 
 /* Big-block storage (entries 0..12).  See save.h for the address-to-
@@ -36,6 +37,15 @@ uint8_t g_misc_128              [  128];
 uint8_t g_misc_1360             [ 1360];
 
 uint8_t g_castles_scratch       [CASTLES_BLOCK_BYTES];
+
+/* Runtime tile scratches — see save.h for the retail-VA map. */
+uint16_t g_path_scratch          [6400];
+uint8_t  g_stage_scratch         [6400];
+
+/* Recent-footprint list storage (160 B = schema slot 110 at 0x00553c80).
+ * Overlaid by the g_footprint_list / g_last_footprint_tile macros in
+ * save.h. */
+uint8_t g_footprint_storage_160  [160];
 
 /* Pulls in the scalar-tail storage + the schema table. */
 #include "save_schema_table.h"
@@ -188,17 +198,14 @@ int castles_write_scenario(const char *castles_path, int scenario_idx)
  *
  *   flags bit 1 (mask 0x02)  →  force mem +7 = 9, mem +4 = 0,
  *                               mem +2 &= 0xe3, mem +2 |= 4
- *   flags bit 0 (mask 0x01)  →  call FUN_004917dd(slot_idx)
- *                               (NOT YET PORTED — see below)
+ *   flags bit 0 (mask 0x01)  →  engine_tile_expand_footprint_at(j, ...)
+ *                               (lay down 3x3 footprint, refresh path/
+ *                                stage scratches, record in footprint
+ *                                list — only for cells with a recognized
+ *                                anchor char in +3)
  *   flags == 0 + mem+7 == 2  →  force mem +7 = 1
  *   flags == 0 + mem+7 == 7  →  force mem +7 = 5, mem +4 = 0,
  *                               mem +2 &= 0xe3, mem +2 |= 4
- *
- * FUN_004917dd is called with a 0-based castle-record index for
- * castles flagged "preserved across reload".  We don't have it
- * ported yet; for now this path is a NO-OP and we leave a TODO.
- * No round-trip test we have today exercises a flags-bit-0 castle,
- * so the gap is observable but not blocking.
  *
  * Note the read direction is asymmetric vs. the write: write packs
  * 6400 × 8 → 6400 × 2; read unpacks 6400 × 2 → 6400 × 8 with the
@@ -234,8 +241,17 @@ int castles_read_scenario(const char *castles_path, int scenario_idx)
             g_castles_state[j + 2] &= 0xe3;
             g_castles_state[j + 2] |= 0x04;
         } else if (flags & 0x01) {
-            /* TODO: port FUN_004917dd(j_record_idx) — the "preserved
-             * castle" reset path.  Until then this branch is a no-op. */
+            /* Mirror of retail's `FUN_004917dd(local_c)` call.  Returns
+             * 0 if +3 holds an unrecognized anchor char — both retail and
+             * us no-op that case (retail's helper early-returns; ours
+             * returns 0 without modifying any state). */
+            engine_tile_expand_footprint_at(
+                j,
+                g_castles_state,
+                g_path_scratch,
+                g_stage_scratch,
+                g_footprint_list,
+                &g_last_footprint_tile);
         }
 
         if (flags == 0) {

@@ -212,6 +212,7 @@ struct test_case {
     X(castles_init_blank_makes_zero_file) \
     X(castles_scenario_round_trip_byte13) \
     X(castles_scenario_independent_slots) \
+    X(castles_read_fixup_flag_bit0) \
     X(castles_read_fixup_flag_bit1) \
     \
     X(engine_tile_push_into_empty_list_takes_slot_0) \

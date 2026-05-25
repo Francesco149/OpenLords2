@@ -232,10 +232,15 @@ static void write_door_neighbor(uint8_t *tiles, int anchor_off, int row_in_table
     }
 }
 
-int engine_tile_expand_footprint(engine_tile_footprint_state_t *state)
+int engine_tile_expand_footprint_at(int tile_byte_offset,
+                                    uint8_t *tiles,
+                                    uint16_t *path_scratch,
+                                    uint8_t *stage_scratch,
+                                    int32_t footprint_list[][2],
+                                    int32_t *last_footprint_tile)
 {
-    int anchor_off = state->tile_byte_offset;
-    int row_in_table = anchor_to_row(state->tiles[anchor_off + 3]);
+    int anchor_off = tile_byte_offset;
+    int row_in_table = anchor_to_row(tiles[anchor_off + 3]);
     if (row_in_table < 0) {
         return 0;
     }
@@ -249,7 +254,7 @@ int engine_tile_expand_footprint(engine_tile_footprint_state_t *state)
 
     /* Stage 2 — neighbor flags around the CENTER of the 3x3
      * (anchor_col+1, anchor_row+1). */
-    engine_tile_set_footprint_neighbor_flags(state->tiles,
+    engine_tile_set_footprint_neighbor_flags(tiles,
                                              anchor_col + 1,
                                              anchor_row + 1,
                                              row_to_orient(row_in_table));
@@ -267,27 +272,37 @@ int engine_tile_expand_footprint(engine_tile_footprint_state_t *state)
             int cell_off = ((anchor_row + dy) * ENGINE_TILE_GRID_W
                             + (anchor_col + dx))
                            * ENGINE_TILE_CELL_BYTES;
-            state->tiles[cell_off + 2] = (uint8_t)(state->tiles[cell_off + 2] & 0xe3);
-            state->tiles[cell_off + 2] = (uint8_t)(state->tiles[cell_off + 2] | 0x04);
-            state->tiles[cell_off + 3] = k_footprint_glyphs[row_in_table][glyph_idx];
+            tiles[cell_off + 2] = (uint8_t)(tiles[cell_off + 2] & 0xe3);
+            tiles[cell_off + 2] = (uint8_t)(tiles[cell_off + 2] | 0x04);
+            tiles[cell_off + 3] = k_footprint_glyphs[row_in_table][glyph_idx];
             glyph_idx++;
             if (dy == 1 && dx == 1) {
-                state->tiles[cell_off + 2] = (uint8_t)(state->tiles[cell_off + 2] | 0x80);
+                tiles[cell_off + 2] = (uint8_t)(tiles[cell_off + 2] | 0x80);
             }
         }
     }
 
     /* Stage 4 — per-orientation door-neighbor triplet write. */
-    write_door_neighbor(state->tiles, anchor_off, row_in_table);
+    write_door_neighbor(tiles, anchor_off, row_in_table);
 
     /* Stage 5 — refresh the two whole-grid scratches. */
-    engine_tile_refresh_path_scratch(state->tiles, state->path_scratch);
-    engine_tile_refresh_stage_scratch(state->tiles, state->stage_scratch);
+    engine_tile_refresh_path_scratch(tiles, path_scratch);
+    engine_tile_refresh_stage_scratch(tiles, stage_scratch);
 
     /* Stage 6 — insert into recent-footprint list + record last tile. */
-    engine_tile_push_footprint_record(state->footprint_list,
-                                      &state->last_footprint_tile,
+    engine_tile_push_footprint_record(footprint_list,
+                                      last_footprint_tile,
                                       anchor_off);
 
     return 1;
+}
+
+int engine_tile_expand_footprint(engine_tile_footprint_state_t *state)
+{
+    return engine_tile_expand_footprint_at(state->tile_byte_offset,
+                                           state->tiles,
+                                           state->path_scratch,
+                                           state->stage_scratch,
+                                           state->footprint_list,
+                                           &state->last_footprint_tile);
 }

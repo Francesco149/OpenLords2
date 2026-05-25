@@ -446,6 +446,53 @@ vectors, so the divergent read never fires.
 
 ---
 
+## 10. The castle-load loop clobbers most of the footprint expansion's writes
+
+`FUN_004aea70` (Castles.dat slot-load — `castles_read_scenario` in
+our port) walks the 6400 records in order, copying each record's `+1`
+(flags) and `+3` (anchor char) from disk into the live tile array.
+For records flagged "preserved across reload" (`flags & 0x01`,
+`flags & 0x02` clear), the loop also calls `FUN_004917dd(byte_off)` —
+our `engine_tile_expand_footprint_at` — to lay down a 3×3 building
+footprint: stamp glyphs into `+3` of all 9 cells, set `+2 |= 0x04`
+on each, set `+2 |= 0x80` on the center, write `+1 |= 0x10` to four
+diagonal neighbors of the center, write `+4 = 1` to two cardinal
+neighbors, and write `+4 = 2 / +3 = door-char / +1 = 0` to one
+"door" cell two rows past the anchor.
+
+But the expansion happens INSIDE the per-record loop, and the loop
+keeps advancing — overwriting `+1` and `+3` of every record at byte
+offset > anchor's byte offset.  So almost every glyph and flag the
+expansion just stamped gets immediately erased.  What survives:
+
+- Anchor cell's `+1`/`+3`/`+2`/`+4` (the anchor IS the iter that just
+  ran, no later iter touches it).
+- ALL cells' `+2` and `+4` (the load loop only writes `+1` and `+3`).
+- `path_scratch[]`, `stage_scratch[]`, `footprint_list[]` — separate
+  globals, untouched by the load loop.
+
+This means the renderable 3×3 of building glyphs is NOT visible from
+the on-disk anchor + flags after a Castles.dat load.  Whatever the
+renderer reads must either consult `+2` (the center marker + the 0x04
+"inside footprint" bit, which DO survive) or run a second pass that
+re-expands footprints after the load loop completes.  When we get
+that far in the port the resolution to that puzzle will land in
+`docs/findings/render-*.md`; for now the load path mirrors retail
+verbatim, surviving observables and all.
+
+The diff harness for `FUN_004917dd` (port's `engine_tile_expand_
+footprint`) runs it in isolation — outside the load loop — so the
+full expansion is visible to the diff vector.  The clobber is a
+load-path quirk, not a function-of-FUN_004917dd quirk.
+
+> 📍 `src/save.c`'s `castles_read_scenario`,
+> `src/engine_tile.c`'s `engine_tile_expand_footprint_at`,
+> `tests/test_save.c`'s `test_castles_read_fixup_flag_bit0` (which
+> only asserts on the surviving observables), Ghidra
+> `FUN_004aea70 @ 0x4aea70` and `FUN_004917dd @ 0x4917dd`.
+
+---
+
 <!--
 Template for new entries:
 

@@ -67,6 +67,40 @@ extern uint8_t g_misc_1360[1360];               /* entry 12 retail 0x53ea00  (un
  * .sav copy loops and by the per-scenario read/write helpers. */
 extern uint8_t g_castles_scratch[CASTLES_BLOCK_BYTES];
 
+/* Runtime tile scratches.  NOT persisted to .sav (not in the schema);
+ * recomputed on demand by engine_tile_refresh_path_scratch /
+ * engine_tile_refresh_stage_scratch (and as the tail of the castle-load
+ * footprint expansion).  Sized 6400 cells = 80×80 grid.
+ *
+ *   g_path_scratch   ← retail DAT_00507250  (6400 × u16  = 12800 B)
+ *   g_stage_scratch  ← retail DAT_004f7d80  (6400 × u8   =  6400 B)
+ */
+extern uint16_t g_path_scratch [6400];
+extern uint8_t  g_stage_scratch[6400];
+
+/* Recent-footprint list + overflow slot.  Persisted as save schema
+ * entry 110 (160 B at retail 0x00553c80).  Layout — preserved verbatim
+ * so the .sav byte-stream is unchanged — is:
+ *
+ *   [  0 .. 152)  g_footprint_list   — 19 × (int32, int32) pairs.
+ *                                       Only [i][0] is consumed by the
+ *                                       sparse insert; [i][1] is opaque
+ *                                       to the engine_tile helpers but
+ *                                       carries through round-trip.
+ *   [152 .. 156)  g_last_footprint_tile — overflow fallback when all 19
+ *                                       list slots are full.
+ *   [156 .. 160)  4 trailing bytes      — unread/unwritten by any
+ *                                       observed code path, but in the
+ *                                       persisted slot so they survive.
+ *
+ * Storage lives in save.c as a single 160-byte buffer named so that
+ * gen_save_schema.py wires it into schema slot 110; the typed names are
+ * macros that overlay structured fields onto that buffer.
+ */
+extern uint8_t g_footprint_storage_160[160];
+#define g_footprint_list       ((int32_t (*)[2])(&g_footprint_storage_160[  0]))
+#define g_last_footprint_tile  (*(int32_t *     )(&g_footprint_storage_160[152]))
+
 /* All four return 0 on success, non-zero on failure (matches retail's
  * `return 1;` convention for the save/load functions).
  *

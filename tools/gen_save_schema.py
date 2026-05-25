@@ -30,23 +30,30 @@ REPO = Path(__file__).resolve().parents[1]
 CSV  = REPO / "docs/findings/save-schema-table.csv"
 OUT  = REPO / "src/save_schema_table.h"
 
-# Entries 0..12 — the 13 big-block globals.  These get human-readable
-# names in save.h.  See docs/findings/save-format.md §"Major blocks".
+# Named schema slots.  These get human-readable storage names in save.h
+# (declared as `extern` there + defined in save.c) instead of the default
+# anonymous `s_slot_<va>` file-statics.  See docs/findings/save-format.md
+# §"Major blocks" for entries 0..12; later entries promoted as their
+# subsystems get ported.
 NAMED_BIG_BLOCKS = [
     # (entry idx, retail VA, size, C identifier)
-    ( 0, 0x00522f90, 32768, "g_overworld_map"),
-    ( 1, 0x005440e0, 51200, "g_castles_state"),
-    ( 2, 0x00553d50,   264, "g_player_aux_44"),
-    ( 3, 0x0057bf00,  2112, "g_player_strategic_352"),
-    ( 4, 0x0053f9b0, 13056, "g_per_army_768"),
-    ( 5, 0x0052f0b0, 63420, "g_per_territory_420"),
-    ( 6, 0x00568dc0,   260, "g_unit_table_20"),
-    ( 7, 0x00554480, 34992, "g_per_battle_hex_432"),
-    ( 8, 0x0057a100,  7676, "g_per_combat_unit_76"),
-    ( 9, 0x00566520,  4212, "g_per_battle_hex_aux_52"),
-    (10, 0x0056d8c0, 51200, "g_castles_shadow"),
-    (11, 0x00568480,   128, "g_misc_128"),
-    (12, 0x0053ea00,  1360, "g_misc_1360"),
+    (  0, 0x00522f90, 32768, "g_overworld_map"),
+    (  1, 0x005440e0, 51200, "g_castles_state"),
+    (  2, 0x00553d50,   264, "g_player_aux_44"),
+    (  3, 0x0057bf00,  2112, "g_player_strategic_352"),
+    (  4, 0x0053f9b0, 13056, "g_per_army_768"),
+    (  5, 0x0052f0b0, 63420, "g_per_territory_420"),
+    (  6, 0x00568dc0,   260, "g_unit_table_20"),
+    (  7, 0x00554480, 34992, "g_per_battle_hex_432"),
+    (  8, 0x0057a100,  7676, "g_per_combat_unit_76"),
+    (  9, 0x00566520,  4212, "g_per_battle_hex_aux_52"),
+    ( 10, 0x0056d8c0, 51200, "g_castles_shadow"),
+    ( 11, 0x00568480,   128, "g_misc_128"),
+    ( 12, 0x0053ea00,  1360, "g_misc_1360"),
+    # Footprint list overlay (engine_tile expansion target).  Storage is
+    # a single 160 B buffer in save.c; the g_footprint_list /
+    # g_last_footprint_tile names are macros over it (see save.h).
+    (110, 0x00553c80,   160, "g_footprint_storage_160"),
 ]
 
 def main():
@@ -63,10 +70,22 @@ def main():
             f"named-block mismatch at idx {idx}: CSV {r_va:#x}/{r_sz}, " \
             f"expected {va:#x}/{sz}"
 
-    # For tail entries (13..224), gather unique-VA → max-size.
+    # All named-block VAs — skipped when emitting anonymous file-static
+    # storage (they get their own extern decl in save.h + def in save.c).
+    named_vas = {va for _, va, _, _ in NAMED_BIG_BLOCKS}
+
+    # For tail entries (everything not in NAMED_BIG_BLOCKS), gather
+    # unique-VA → max-size for file-static emission.
+    named_idxs = {idx for idx, _, _, _ in NAMED_BIG_BLOCKS}
     unique_va_size: dict[int, int] = {}
-    for idx in range(13, 225):
+    for idx in range(225):
+        if idx in named_idxs:
+            continue
         _, va, sz = rows[idx]
+        if va in named_vas:
+            # A non-named entry that aliases a named VA — fall through and
+            # let the table-emission step point it at the named ident.
+            continue
         if va in unique_va_size:
             # Duplicate VA must have a consistent size (it does in our data).
             assert unique_va_size[va] == sz, \
@@ -113,18 +132,20 @@ def main():
         "/* 225-entry schema table.  Mirrors DAT_004de960 from retail. */",
         "const save_entry_t g_save_schema[SAVE_SCHEMA_COUNT] = {",
     ]
-    # Build a lookup for named-block idents.
+    # Build lookups for named-block idents — by idx for direct named
+    # entries, and by VA so aliasing rows reuse the named storage too.
     big_by_idx = {idx: ident for idx, _, _, ident in NAMED_BIG_BLOCKS}
+    big_by_va  = {va:  ident for _, va, _, ident in NAMED_BIG_BLOCKS}
     for idx, va, sz in rows:
         if idx in big_by_idx:
             ptr = big_by_idx[idx]
-            comment = f"/* {idx:3d}  retail {va:#010x} */"
-            lines.append(f"    {{ {ptr:<27}, {sz:6d} }}, {comment}")
+        elif va in big_by_va:
+            ptr = big_by_va[va]
         else:
             ident = f"s_slot_{va:08x}"
-            ref = f"&{ident}" if sz == 4 else ident
-            comment = f"/* {idx:3d}  retail {va:#010x} */"
-            lines.append(f"    {{ {ref:<27}, {sz:6d} }}, {comment}")
+            ptr = f"&{ident}" if sz == 4 else ident
+        comment = f"/* {idx:3d}  retail {va:#010x} */"
+        lines.append(f"    {{ {ptr:<27}, {sz:6d} }}, {comment}")
     lines.append("};")
     lines.append("")
     lines.append("#endif /* OPENLORDS2_SAVE_SCHEMA_TABLE_H */")

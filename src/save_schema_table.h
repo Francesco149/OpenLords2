@@ -104,7 +104,6 @@ static uint32_t s_slot_00553c58;
 static uint32_t s_slot_00553c64;
 static uint32_t s_slot_00553c70;
 static uint32_t s_slot_00553c74;
-static uint8_t  s_slot_00553c80[160];
 static uint32_t s_slot_00553d20;
 static uint32_t s_slot_00553d24;
 static uint32_t s_slot_00553d28;
@@ -334,7 +333,7 @@ const save_entry_t g_save_schema[SAVE_SCHEMA_COUNT] = {
     { &s_slot_005440a8           ,      4 }, /* 107  retail 0x005440a8 */
     { &s_slot_00553f9c           ,      4 }, /* 108  retail 0x00553f9c */
     { &s_slot_00553f3c           ,      4 }, /* 109  retail 0x00553f3c */
-    { s_slot_00553c80            ,    160 }, /* 110  retail 0x00553c80 */
+    { g_footprint_storage_160    ,    160 }, /* 110  retail 0x00553c80 */
     { &s_slot_00553e64           ,      4 }, /* 111  retail 0x00553e64 */
     { &s_slot_00553ff0           ,      4 }, /* 112  retail 0x00553ff0 */
     { &s_slot_0057cad4           ,      4 }, /* 113  retail 0x0057cad4 */

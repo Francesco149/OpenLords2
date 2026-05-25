@@ -108,6 +108,25 @@ typedef struct {
  */
 int engine_tile_expand_footprint(engine_tile_footprint_state_t *state);
 
+/* Pointer-arg sibling — for callers that already have the five backing
+ * regions live in their own storage (e.g. save.c's castles_read_scenario
+ * loop, which operates directly on g_castles_state + the runtime scratch
+ * globals).  Same behaviour as engine_tile_expand_footprint; just skips
+ * the state-struct wrap-up.
+ *
+ *   tiles               80×80 × 8-byte cells (51200 B)
+ *   path_scratch        6400 × u16 — recomputed end-to-end
+ *   stage_scratch       6400 × u8  — recomputed end-to-end
+ *   footprint_list      19 × (int, int) — sparse insert
+ *   last_footprint_tile fallback when the list is full
+ */
+int engine_tile_expand_footprint_at(int tile_byte_offset,
+                                    uint8_t *tiles,
+                                    uint16_t *path_scratch,
+                                    uint8_t *stage_scratch,
+                                    int32_t footprint_list[][2],
+                                    int32_t *last_footprint_tile);
+
 /* Inner helpers exposed for direct unit testing.  Production callers
  * should go through engine_tile_expand_footprint.  Each helper takes
  * pointers to the relevant fields rather than the whole state so tests
