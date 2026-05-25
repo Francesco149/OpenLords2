@@ -388,8 +388,19 @@ The cluster is too large to port in one chip.  Suggested chip plan:
      one new binding `bind_cell_band_width` for retail
      DAT_004e5d3c).  Filed quirk #82 (left-biased asymmetric
      clamp).
-   - `FUN_004bc1d1/51a` (scroll/pan) — possibly large state
-     machine for keyboard/mouse panning.
+   - `FUN_004bc3ac/40d/471/4bb/505` (Y-axis siblings + deltas
+     + zoom getter).  **LANDED** (2026-05-26) as chip 6b.
+     Five more tiny pure functions (21–102 B, 374 B total):
+     `pixel_to_row_bottom_biased` (Y sibling of right-biased X),
+     `pixel_to_row_top_biased` (Y sibling of left-biased X — but
+     clamps against `total_rows` not `camera_row_stride`),
+     `col_delta` / `row_delta` (signed cell-deltas between two
+     screen pixels), `get_zoom` (trivial scalar accessor).
+   - `FUN_004bc1d1/51a` (NOT scroll/pan — turned out to be the
+     mini-map renderer family: 2-pixel-tile blit primitive
+     `FUN_004b49b7`, bulk context binders `FUN_004bc020/107`,
+     rolling-scan trigger `FUN_004bc1d1`, mini-map row-strip
+     render `FUN_004bc51a`).  See chip 7 below.
 
 Total cluster: ~12 KB across ~34 functions.  Comparable in
 scope to strategic-mode rendering, which took 4 chips.

@@ -2627,12 +2627,14 @@ void engine_battlefield_render_run_pass_final_for_test(int camera_x, int camera_
 }
 
 /* ──────────────────────────────────────────────────────────────────
- * Coordinate helpers — ports of FUN_004bc222 / 2a5 / 2c5 / 2e5 / 346.
+ * Coordinate helpers — ports of FUN_004bc222 / 2a5 / 2c5 / 2e5 / 346
+ * (chip 6) and FUN_004bc3ac / 40d / 471 / 4bb / 505 (chip 6b).
  *
  * Tiny pure functions consumed by the input layer to translate screen
- * pixel coords into the battlefield's hex column / row.  Each reads
- * the same module statics the render passes do (viewport, zoom, grid
- * dims, camera_row_stride, cell_band_width).
+ * pixel coords into the battlefield's hex column / row, plus signed
+ * deltas in cells between two screen pixels and a zoom accessor.  Each
+ * reads the same module statics the render passes do (viewport, zoom,
+ * grid dims, camera_row_stride, total_rows, cell_band_width).
  * ────────────────────────────────────────────────────────────────── */
 
 int engine_battlefield_render_screen_in_grid(int px, int py)
@@ -2680,6 +2682,47 @@ int engine_battlefield_render_pixel_to_col_left_biased(int px)
         col = g_camera_row_stride - 1;
     }
     return col;
+}
+
+int engine_battlefield_render_pixel_to_row_bottom_biased(int py)
+{
+    int row = (py - g_viewport_y) / g_zoom;
+    if (g_cell_band_width * 3 <= (py - g_viewport_y) % g_zoom) {
+        row += 1;
+    }
+    if (row < 1) {
+        row = 0;
+    }
+    return row;
+}
+
+int engine_battlefield_render_pixel_to_row_top_biased(int py)
+{
+    int row = (py - g_viewport_y) / g_zoom;
+    if ((py - g_viewport_y) % g_zoom < g_cell_band_width) {
+        row += -1;
+    }
+    if (g_total_rows <= row) {
+        row = g_total_rows - 1;
+    }
+    return row;
+}
+
+int engine_battlefield_render_col_delta(int px_a, int px_b)
+{
+    return (px_b - g_viewport_x) / g_zoom
+         - (px_a - g_viewport_x) / g_zoom;
+}
+
+int engine_battlefield_render_row_delta(int py_a, int py_b)
+{
+    return (py_b - g_viewport_y) / g_zoom
+         - (py_a - g_viewport_y) / g_zoom;
+}
+
+int engine_battlefield_render_get_zoom(void)
+{
+    return g_zoom;
 }
 
 int engine_battlefield_render_middle_player_marker_blit_count(void)

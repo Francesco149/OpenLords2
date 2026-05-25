@@ -828,6 +828,56 @@ int engine_battlefield_render_pixel_to_col_right_biased(int px);
  * even after the -1 bias. */
 int engine_battlefield_render_pixel_to_col_left_biased(int px);
 
+/* Port of FUN_004bc3ac @ 0x4bc3ac (97 B).  Y-axis sibling of
+ * `pixel_to_col_right_biased`: biases towards the BOTTOM neighbor when
+ * the pixel falls in the third sub-band of the cell, then floor-clamps
+ * to 0:
+ *
+ *   row = (py - viewport_y) / zoom
+ *   if ((py - viewport_y) % zoom >= band_width * 3) row += 1
+ *   if (row < 1) row = 0
+ *
+ * Symmetric with the X-axis variant — same low-clamp behavior. */
+int engine_battlefield_render_pixel_to_row_bottom_biased(int py);
+
+/* Port of FUN_004bc40d @ 0x4bc40d (100 B).  Y-axis sibling of
+ * `pixel_to_col_left_biased`: biases towards the TOP neighbor when the
+ * pixel falls in the first sub-band of the cell, then ceiling-clamps
+ * to `total_rows - 1`:
+ *
+ *   row = (py - viewport_y) / zoom
+ *   if ((py - viewport_y) % zoom < band_width) row -= 1
+ *   if (row >= total_rows) row = total_rows - 1
+ *
+ * Note the asymmetry vs. the X-axis sibling: this clamps against
+ * `total_rows` (DAT_004e6570), NOT `grid_rows` (DAT_004e5d4c).  The
+ * X-axis left-biased sibling clamps against `camera_row_stride`
+ * (DAT_004e6578).  Both are "underlying-grid" extents, not the smaller
+ * "visible-grid" extents. */
+int engine_battlefield_render_pixel_to_row_top_biased(int py);
+
+/* Port of FUN_004bc471 @ 0x4bc471 (74 B).  Compute the number of hex
+ * columns between two screen-x pixels (signed delta in cells):
+ *
+ *   delta = (px_b - viewport_x) / zoom - (px_a - viewport_x) / zoom
+ *
+ * Subtraction order is `b - a` — positive when px_b is to the right of
+ * px_a.  Truncates towards zero (C integer division), not flooring; for
+ * fractional cells both inputs round the same way so the delta stays
+ * accurate over the integer band. */
+int engine_battlefield_render_col_delta(int px_a, int px_b);
+
+/* Port of FUN_004bc4bb @ 0x4bc4bb (74 B).  Y-axis sibling of
+ * `col_delta`:
+ *
+ *   delta = (py_b - viewport_y) / zoom - (py_a - viewport_y) / zoom */
+int engine_battlefield_render_row_delta(int py_a, int py_b);
+
+/* Port of FUN_004bc505 @ 0x4bc505 (21 B).  Return the currently-bound
+ * zoom level (retail DAT_004e656c).  Trivial scalar accessor — exposed
+ * separately because the engine occasionally reads it indirectly. */
+int engine_battlefield_render_get_zoom(void);
+
 /* ─────────────────────────────────────────────────────────────────
  * Test instrumentation — per-pass call counters
  * ───────────────────────────────────────────────────────────────── */

@@ -3753,6 +3753,8 @@ static void coords_scaffold(void)
     engine_battlefield_render_bind_viewport_offset(/*x=*/100, /*y=*/50);
     engine_battlefield_render_bind_camera_row_stride(20);
     engine_battlefield_render_bind_cell_band_width(8);
+    /* chip 6b — total_rows clamp for the top-biased row helper. */
+    engine_battlefield_render_bind_total_rows(15);
 }
 
 int test_engine_battlefield_render_screen_in_grid_inside(void)
@@ -3905,6 +3907,129 @@ int test_engine_battlefield_render_pixel_to_col_left_biased_no_low_clamp(void)
     /* Wait: -1 < 8 IS true in two's-complement, so the bias FIRES.
      * Verify negative result propagates. */
     T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_left_biased(99), -1);
+    return 0;
+}
+
+/* ────────────────────────────────────────────────────────────────
+ * Chip 6b — Y-axis siblings, delta helpers, zoom accessor.
+ * Same scaffold: viewport (100, 50), zoom 32, band_width 8,
+ * total_rows 15.
+ * ──────────────────────────────────────────────────────────────── */
+
+/* Bottom-biased: py in third band (residue >= 24) shifts row +1.
+ * Floor-clamps to 0 (no negative rows). */
+int test_engine_battlefield_render_pixel_to_row_bottom_biased_middle_band(void)
+{
+    coords_scaffold();
+
+    /* py=70 → residue=20 (middle band) → no shift, row=0. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row_bottom_biased(70), 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_pixel_to_row_bottom_biased_bottom_band(void)
+{
+    coords_scaffold();
+
+    /* py=74 → row=0, residue=24 (third band) → row=1. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row_bottom_biased(74), 1);
+    /* py=81 → row=0, residue=31 → still third band → row=1. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row_bottom_biased(81), 1);
+    return 0;
+}
+
+int test_engine_battlefield_render_pixel_to_row_bottom_biased_first_band(void)
+{
+    coords_scaffold();
+
+    /* py=52 → residue=2 (first band) → no shift, row=0. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row_bottom_biased(52), 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_pixel_to_row_bottom_biased_clamps_low(void)
+{
+    coords_scaffold();
+
+    /* py=49 → (49-50)/32 = 0 (C99 truncation), residue = -1, NOT >= 24
+     * → no shift, raw row = 0, < 1 → clamped to 0. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row_bottom_biased(49), 0);
+    /* py=18 → (-32)/32 = -1, residue = 0 (not >= 24) → row=-1, < 1 → 0. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row_bottom_biased(18), 0);
+    return 0;
+}
+
+/* Top-biased: py in first band (residue < 8) shifts row -1.
+ * Ceiling-clamps to total_rows - 1. */
+int test_engine_battlefield_render_pixel_to_row_top_biased_first_band(void)
+{
+    coords_scaffold();
+
+    /* py=89 → row=1, residue=39%32=7 → < 8, row -= 1 → 0. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row_top_biased(89), 0);
+    /* py=90 → row=1, residue=40%32=8 → NOT < 8, no shift, row=1. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row_top_biased(90), 1);
+    return 0;
+}
+
+int test_engine_battlefield_render_pixel_to_row_top_biased_clamps_high(void)
+{
+    coords_scaffold();
+
+    /* total_rows=15.  py = 50 + 15*32 = 530 → row=15 → clamp to 14. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row_top_biased(530), 14);
+    /* py = 50 + 20*32 = 690 → row=20 → clamp to 14. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row_top_biased(690), 14);
+    return 0;
+}
+
+int test_engine_battlefield_render_pixel_to_row_top_biased_no_low_clamp(void)
+{
+    coords_scaffold();
+
+    /* py=49 → (49-50)/32 = 0 (C99 truncation), residue = -1, < 8 →
+     * row -= 1 → -1.  No low clamp → returns -1. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row_top_biased(49), -1);
+    return 0;
+}
+
+/* Delta helpers — both are pure (b - a) integer-divided by zoom. */
+int test_engine_battlefield_render_col_delta_basic(void)
+{
+    coords_scaffold();
+
+    /* a=100 (col 0), b=260 (col 5) → delta = 5. */
+    T_ASSERT_EQ_I(engine_battlefield_render_col_delta(100, 260), 5);
+    /* a=260 (col 5), b=100 (col 0) → delta = -5. */
+    T_ASSERT_EQ_I(engine_battlefield_render_col_delta(260, 100), -5);
+    /* Same pixel → delta = 0. */
+    T_ASSERT_EQ_I(engine_battlefield_render_col_delta(160, 160), 0);
+    /* Both inside same cell (col 1) → delta = 0. */
+    T_ASSERT_EQ_I(engine_battlefield_render_col_delta(132, 163), 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_row_delta_basic(void)
+{
+    coords_scaffold();
+
+    /* a=50 (row 0), b=178 (row 4) → delta = 4. */
+    T_ASSERT_EQ_I(engine_battlefield_render_row_delta(50, 178), 4);
+    /* a=178 (row 4), b=50 (row 0) → delta = -4. */
+    T_ASSERT_EQ_I(engine_battlefield_render_row_delta(178, 50), -4);
+    /* Same pixel → delta = 0. */
+    T_ASSERT_EQ_I(engine_battlefield_render_row_delta(90, 90), 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_get_zoom_returns_bound(void)
+{
+    coords_scaffold();
+
+    T_ASSERT_EQ_I(engine_battlefield_render_get_zoom(), 32);
+
+    engine_battlefield_render_set_zoom(16);
+    T_ASSERT_EQ_I(engine_battlefield_render_get_zoom(), 16);
     return 0;
 }
 

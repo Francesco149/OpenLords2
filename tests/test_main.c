@@ -991,6 +991,16 @@ struct test_case {
     X(engine_battlefield_render_pixel_to_col_left_biased_middle_band) \
     X(engine_battlefield_render_pixel_to_col_left_biased_clamps_high) \
     X(engine_battlefield_render_pixel_to_col_left_biased_no_low_clamp) \
+    X(engine_battlefield_render_pixel_to_row_bottom_biased_middle_band) \
+    X(engine_battlefield_render_pixel_to_row_bottom_biased_bottom_band) \
+    X(engine_battlefield_render_pixel_to_row_bottom_biased_first_band) \
+    X(engine_battlefield_render_pixel_to_row_bottom_biased_clamps_low) \
+    X(engine_battlefield_render_pixel_to_row_top_biased_first_band) \
+    X(engine_battlefield_render_pixel_to_row_top_biased_clamps_high) \
+    X(engine_battlefield_render_pixel_to_row_top_biased_no_low_clamp) \
+    X(engine_battlefield_render_col_delta_basic) \
+    X(engine_battlefield_render_row_delta_basic) \
+    X(engine_battlefield_render_get_zoom_returns_bound) \
     \
     X(engine_battlefield_render_late_visits_visible_grid) \
     X(engine_battlefield_render_late_zero_id_no_draw) \
