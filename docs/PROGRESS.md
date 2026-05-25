@@ -7,6 +7,142 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Text-input subsystem follow-up (4 chips, 23 fns)
+
+Continuation of the same unattended session.  The previous
+dispatch landed the text_input editor cluster as a single big chip
+(15 fns); these four follow-ups closed out the subsystem's
+remaining leaves and adjacent dependencies.
+
+### Chips landed (in order)
+
+1. **`src/font_metrics` (NEW, ~90 LOC + 14 tests)** — pixel-width
+   measurer.  2 retail leaves:
+
+   - `FUN_004015b9` → `font_metrics_char_width` (173 B) — per-char
+     width via 256-byte char→glyph-index lookup + 16-byte glyph
+     descriptors.  Hardcoded specials: `'\0' → 0`, `' ' → 4`
+     (not table-driven).  Updates `last_glyph_index` /
+     `last_glyph_offset` cache fields (read by 50+ retail
+     renderers).
+   - `FUN_00401f8f` → `font_metrics_buffer_width` (122 B) — sums
+     widths of the text-input buffer and sets `pixel_overflow := 1`
+     iff total >= `max_pixel_width`.  Closes the loop on
+     `text_input_clamp_cursor`'s `pixel_overflow` driver (callers
+     wire the two by calling `font_metrics_buffer_width` on the
+     text_input buf then copying `pixel_overflow` over).
+
+2. **`src/font_metrics` + `src/text_input` extensions (3 fns,
+   7 tests)** — closed remaining adjacent leaves:
+
+   - `FUN_004014f0` → `font_metrics_buffer_width_bounded` (201 B):
+     general-purpose buffer-width helper with a 10000-char hard
+     cap and no `pixel_overflow` side effect.  Used by the
+     renderer for arbitrary caller-supplied strings.  Inlines the
+     char-width logic (instead of calling `font_metrics_char_width`)
+     but yields identical observable cache state.
+   - `FUN_00401c3f` → `text_input_insert_char_and_clamp` (28 B):
+     insert_char then redundant clamp_cursor.  For callers wanting
+     post-advance re-validation.
+   - `FUN_00401c93` (16 B): bare jmp to `text_input_delete_char` —
+     documented in `text_input.h` without a separate export.
+
+3. **`src/strutil` extension (2 fns, 14 tests)** — decimal parser
+   + space-collapse:
+
+   - `FUN_00401666` → `strutil_decimal_atoi` (141 B): leading
+     digit-run → int via 8-entry powers-of-10 table.  Retail's
+     table has only 8 entries; 9+ digit inputs read off the end
+     into adjacent .data string bytes ("ERR:_top_it not data...",
+     confirmed via od of the PE at file offset 0xd0250).  Our
+     port caps at 8 digits to avoid the UB.
+   - `FUN_00401415` → `strutil_collapse_double_spaces` (219 B):
+     two-pass in-place collapse.  Retail quirk: uninitialized
+     `local_c` in the pathological no-null-in-64K case; our port
+     initializes to 0 (no-op in the bad case).
+
+4. **`src/text_input` filtered keypress (1 fn, 12 tests)** — last
+   editor leaf with no unported dependencies:
+
+   - `FUN_00401a20` → `text_input_filtered_keypress` (543 B):
+     keyboard event classifier and dispatcher.  Permits ASCII
+     printables (digits, both case letters, hyphen, space) and
+     extended-Latin bytes (0x80..0x9a, 0xa0..0xa7, 0xe1).
+     Conditionally permits punctuation (`,` `.` `?` `!`) only when
+     `init_mode_param == 0`.  In `init_mode_param != 0` ("name
+     mode"), folds uppercase to lowercase before insert.  Always
+     ends with `clamp_cursor`, even on filtered chars.
+
+### Headline numbers
+
+- **337 → 426 host tests** across the 5 chips of this session
+  (chip 0 was the initial text_input cluster; chips 1-4 are the
+  follow-ups above).  All green under ASan/UBSan.
+- **23 retail functions ported** in the follow-up chips (15 +
+  23 = 38 across the full session).
+- **2 new modules** (`src/text_input`, `src/font_metrics`).
+- **2 module extensions** (`src/text_input`, `src/font_metrics`,
+  `src/strutil` — counting `text_input` once even though it
+  received both new functions and extensions).
+- **5 new engine quirks filed** (chip 0's #15-#19); no new quirks
+  in the follow-up chips (the smaller leaves were behaviorally
+  clean except for the documented edge cases in the chip-3
+  strutil pair).
+- Cross-compile (mingw32) still clean throughout.
+
+### State of the text-input subsystem
+
+The editor itself is now feature-complete except for the
+989-byte renderer (`FUN_00402637`) and the save/load pair
+(`FUN_00402166` / `FUN_0040220f`).  Both are deferred:
+
+- **Renderer** — pulls in font subsystem (now ported!), dirty-
+  rect (already ported), palette, keyboard-state globals, repeat-
+  key timers, the cursor-anchor (`DAT_005aeb64`) state machine,
+  and the indirect-text-area renderer.  Easily another full
+  session of work on its own.
+- **Save/load** — needs file IO leaves (`FUN_004af8d9` read-at +
+  `FUN_004b0502` write-at).  Those leaves pull in non-leaf
+  retry helpers (`FUN_004af312` / `FUN_004af116` / `FUN_004af502`
+  — likely CD-mount/swap dialog handlers).  A clean port requires
+  modeling the CD-swap logic too, which is non-trivial.
+
+### What's next
+
+For the next session:
+
+1. **Per-army struct modeling + handler ports** — the prior
+   session's deferred "type 30 delayed-action handler"
+   (`FUN_0044800e` → `FUN_0047a76d`) needs the 80-slot army table
+   (0x1b0 B/slot, base ≈ 0x554492) modeled first.  That's a
+   substantial chunk: army struct is reasonably tagged via field
+   names in adjacent functions, and modeling it unblocks 10+
+   subsequent handlers + the army-distance/state-probe sub-step
+   bodies (`FUN_004673b8` / `FUN_00472227`) noted in earlier
+   dispatches.
+
+2. **Localization-blob accessor cluster** — `FUN_0040187a` (93 B,
+   3-byte LE offset decoder), `FUN_004018d7` (173 B, "skip N
+   strings" walker), `FUN_004017bf` (187 B, read-string with
+   skip), `FUN_004016f3` (204 B, write-string with skip).  Models
+   the L2_ENG.DAT localization blob at 0x591580.  ~657 B total —
+   one solid chip.  Requires loading the localization blob into
+   memory (already done by the existing config/io path?).
+
+3. **Renderer port** — the big one.  Now that font_metrics is in
+   place, the next dependency for the text-input renderer is
+   the palette + dirty-rect glue (mostly ported) and the cursor-
+   anchor state machine.  Could be approached as a series of
+   chips: anchor state machine first, then the per-key dispatch,
+   then the actual paint.
+
+Picking #2 (localization cluster) next would be a satisfying
+~one-chip session, similar to today's wave.  #1 (per-army
+modeling) is the highest-impact long-term move but spans
+multiple chips.
+
+---
+
 ## 2026-05-25 — Text-input editor cluster (15 fns, 1 chip)
 
 Continuation of the same unattended session that landed the prior
