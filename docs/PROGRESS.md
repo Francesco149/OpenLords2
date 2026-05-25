@@ -7,6 +7,103 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-26 — Render-phase tail camera clamps (+28 tests, 2 new quirks)
+
+Small follow-on chip after the battlefield render cluster fully
+landed: ports the two surveyed-but-deferred clamp helpers that sit
+at the head of `engine_tick`'s render-phase tail.  Both are pure
+trivial functions (≤135 B), both ran every frame in retail right
+before the FPS counter (decompile lines 88725-88726), both were
+left as TODO comments in our port because they were "blocked on
+producer" — i.e. nothing in our drop-in writes the values they'd
+clamp.  Landing them as idempotent no-ops puts the structural
+seams in place so the future producer ports (keyboard arrow
+handler, entity-centering, castle-table re-center) can land
+without also wiring the tail.
+
+### What landed
+
+  - `engine_camera_clamp_scroll` (`FUN_00429b1d`, 135 B) →
+    `src/engine_camera.c`.  Clamps strategic-map cell-scroll
+    position `(col, row)` against variable bounds
+    `[0, 0x40-col_count]` × `[0, 0x80-row_count]`.  Strategic map
+    is hardcoded 64×128 in the binary.
+  - `engine_camera_clamp_anchor` (`FUN_0047ed34`, 103 B) →
+    same file.  Clamps strategic / battlefield camera anchor
+    `(x, y)` against hardcoded `[0, 0x41]` × `[0, 0x42]`.
+    Asymmetric upper bounds (quirk #103).
+  - Wrappers `engine_tick_camera_scroll_clamp` /
+    `engine_tick_camera_anchor_clamp` in `src/engine.c` bundle the
+    new file-static mirrors (`g_cam_scroll_*`, `g_cam_anchor_*`,
+    `g_cam_visible_*`) into pointer args, run the pure clamps,
+    write back.  Wired at the head of the render-phase tail
+    immediately before `engine_tick_fps_step`, matching retail's
+    call order at line 88725-88728.
+  - 28 unit tests cover both axes × {in-range, at-max, one-over,
+    huge, negative}, asymmetric upper bound, idempotence, and the
+    new "oversize visible count pushes 0 negative" quirk.
+
+### New engine quirks
+
+  - **#103** — `FUN_0047ed34` anchor clamp uses asymmetric bounds
+    (0x41 vs 0x42), probably a hand-tuned typo preserved in the
+    binary.
+  - **#104** — `FUN_00429b1d` scroll clamp's lower-then-upper test
+    order can push a value below 0 when `visible_cols > 0x40`
+    (never observed live, but pinned in tests).
+
+### Headline numbers
+
+- **989 → 1017 host tests** (+28), all green under ASan/UBSan.
+- **2 retail functions ported** (238 B total).
+- **2 new engine quirks** (#103, #104).
+- Cross-compile (mingw32) clean.
+
+### Render-phase tail port state
+
+| Retail        | Size  | Status     |
+| ------------- | ----- | ---------- |
+| `FUN_00429b1d` | 135 B | **ported (this session)** |
+| `FUN_0047ed34` | 103 B | **ported (this session)** |
+| `FUN_00426529` |  11 B | surveyed (empty body) |
+| `FUN_004b27bf` | 143 B | ported (2026-05-24) |
+| `FUN_004b12fb` |  21 B | surveyed (return-1 stub) |
+| `FUN_004b0e03` | 875 B | surveyed (palette-fade, blocked on intro) |
+
+Of the six tail functions: 3 ported, 3 surveyed (one blocked on
+intro/Smacker screen subsystem, two are debug-hook stubs).  The
+entire render-phase tail is now structurally complete to the
+extent it can be without subsystem-blocked work landing.
+
+### What's next
+
+1. **Pre-tick survey / port** — the pre-tick block still has five
+   subfunctions left, all gated on screen state our drop-in can't
+   produce today.  Each is documented in
+   `docs/findings/main-loop-tick.md` §"Pre-tick subfunctions —
+   surveyed, deferred".  Smallest is `FUN_004b0aaa` (11 B empty
+   body) — could be the next "structural acknowledgement" landing,
+   though it adds zero observable behaviour.
+
+2. **Asset-load helpers** — `FUN_004af502` (chdir), `FUN_004af8d9`
+   (open/seek/read/close, tier-1 already in `src/io.c`), and the
+   tier-2/tier-3 retry helpers `FUN_004af312` / `FUN_004af116` are
+   needed by both init functions (`FUN_004987b7` battlefield,
+   `FUN_00498dcb` strategic) and many other call sites.  Porting
+   them as a coherent IO-helper cluster would unblock the init
+   functions as a next chip.
+
+3. **gfx.c runtime wiring** — the battlefield + mini-map renderers
+   are end-to-end at host-test level.  Standing up real entity
+   data from a savegame remains the bigger lift gating "first
+   battlefield frame on screen".
+
+This is a natural `/clear` point — small clean chip lands two
+deferred functions, two new quirks documented, no in-flight work,
+tests green.
+
+---
+
 ## 2026-05-26 — Battlefield chips 6b + 7: leftover coord helpers + mini-map / hex-grid overview renderer (+34 tests, 3 new quirks) — ENTIRE 0x4bc BAND DRAINED
 
 Continuation of the same unattended session.  Previous dispatch
