@@ -235,6 +235,27 @@ struct test_case {
     X(engine_tile_expand_door_orient6_left_of_middle_left) \
     X(engine_tile_expand_refreshes_scratches) \
     X(engine_tile_expand_inserts_into_footprint_list) \
+    \
+    X(engine_delayed_action_master_switch_off_is_noop) \
+    X(engine_delayed_action_no_due_records_clears_queue) \
+    X(engine_delayed_action_inactive_records_excluded) \
+    X(engine_delayed_action_future_records_excluded) \
+    X(engine_delayed_action_due_at_boundary_includes) \
+    X(engine_delayed_action_in_order_dispatch_clears_active) \
+    X(engine_delayed_action_dispatch_args_mirror_last_record) \
+    X(engine_delayed_action_handler_called_per_dispatch) \
+    X(engine_delayed_action_null_handler_treated_as_noop) \
+    X(engine_delayed_action_mode2_with_one_record_skips_reorder) \
+    X(engine_delayed_action_mode_other_skips_reorder) \
+    X(engine_delayed_action_mp_reorder_pulls_relay_types_back) \
+    X(engine_delayed_action_mp_reorder_local_player_relay_stays) \
+    X(engine_delayed_action_mp_reorder_type_boundary_exclusive) \
+    X(engine_delayed_action_mp_reorder_no_relays_is_in_order) \
+    X(engine_delayed_action_mp_reorder_compaction_two_consecutive_holes) \
+    X(engine_delayed_action_mp_reorder_hipri_preserves_record_order) \
+    X(engine_delayed_action_dispatch_stops_at_first_empty_sentinel) \
+    X(engine_delayed_action_record_padding_is_inert) \
+    X(engine_delayed_action_record_size_layout) \
     /* end */
 
 /* Emit extern decls. */
