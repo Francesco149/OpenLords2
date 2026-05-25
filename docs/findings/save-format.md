@@ -141,35 +141,56 @@ the in-memory struct are runtime-computed.
 
 ### Per-record in-memory layout (8 bytes — `DAT_005440e0`)
 
-Heavily-used in the simulation (110+ references throughout `all.c`).
-First-byte access (`DAT_005440e0[i]` without `* 8`) is common; the
-byte at offset `+0` is a small-integer *type* field with values
-including 1, 3, 4, 6..9, 11..14, 20, 30, 40, 41 — these are the
-building/improvement types (peasant village, mill, dairy, market,
-manor, castle keep, stone keep, etc.).
+Heavily-used in the simulation (378 byte-offset references across
+`all.c`).  Updated after a full sweep of writers per offset; the
+table below replaces the earlier provisional one.
 
-| offset | type | meaning (provisional) |
-|--------|------|------------------------|
-| +0     | u8   | improvement/building type |
-| +1     | u8   | flags (from disk) |
-| +2     | u8   | (probably) timer/age |
-| +3     | u8   | from disk byte 0 |
-| +4     | u8   | (probably) owner |
-| +5..+7 | u8×3 | runtime overlays (animation phase, last-rendered, etc.) |
+| offset | type | persistent? | meaning |
+|--------|------|:-:|---------|
+| +0     | u8   | no  | **terrain / improvement type** (small enum; see values below) |
+| +1     | u8   | YES | **persistent flags**: bit `0x10` = "tile is part of a building/road footprint"; bits `0x04`, `0x08`, `0x20`, `0x40`, `0x80` also tested/set; `(flags & 0x60) == 0` tested as a combined gate |
+| +2     | u8   | no  | **runtime flags**: zeroed/reset at footprint expansion (`& 0xe3` clears bits 2,3,4); bit `0x04` set on every footprint cell, `0x80` set on the building's center cell only; bit `0x01` set by certain combat-mode updates |
+| +3     | u8   | YES | **display char / disk byte**: on disk this is the raw scenario byte (anchor type char `'@'/'C'/'X'/'['` for buildings, or `0x50..0x5F` for roads).  At runtime, footprint expansion overwrites the 8 non-anchor cells with `'A'..'R'` chars from the table `s__ABHIJPQR_004d9dd0` (9-char/orientation × 4 orientations).  Roads keep `disk_byte + 0x2c` |
+| +4     | u8   | no  | **build / improvement stage**: small enum 0..15.  Set to 1 on the center cell by `FUN_004921e5`.  Drives the +7 transition table below.  Lookups via `(&DAT_004d7d80)[bVar1 * 2]` / `(&DAT_004d7b80)[bVar1 * 2]` (2-byte-stride per-orientation tables) |
+| +5     | u8   | no  | **back-pointer to per-castle slot** (0..16).  Written via `(&DAT_005440e5)[*(int *)(&DAT_0055449c + slot * 0x1b0)] = slot;` — each per-castle struct (entry 6, 432-byte stride at `0x554480`, slot record `0x55449c` is `0x554480 + 0x1c`) stores a *tile byte offset* at +0x1c, and the back-pointer at the tile points to which castle owns it.  Cleared (`= 0`) when slot frees |
+| +6     | u8   | no  | **back-pointer to combat-unit index**.  Written via `(&DAT_005440e6)[*(int *)(&DAT_0057a11c + unit * 0x4c)] = unit;` — per-combat-unit struct (entry 8, 76-byte stride at `0x57a100`, slot `0x57a11c` is `+0x1c`) stores a tile byte offset.  Only 3 references — combat-mode only |
+| +7     | u8   | no  | **runtime visual stage / sprite frame**: small enum 0..15 driven by transitions on +4 (e.g. `+4==7 → +7=7`, `+4==8 → +7=8`, `+4==9 → +7=0xb`, `+4==10 → +7=0xe`).  Also read with neighbor offset `+ *(int *)(&DAT_004d8588 + idx * 4)` — autotiling against neighboring tiles' +7 |
 
-These are guesses informed by the byte-pair persisted; the offset+0
-type field is the only one cross-confirmed from multiple sites.
-Refining this is task-blocking work for porting the
-overworld-tile-render and building-update functions.
+#### +0 terrain/improvement enum (decoded from the scenario-byte translation table at `FUN_0048fe??` near `61153`)
+
+| scenario byte | +0 value | likely meaning |
+|--------------:|---------:|----------------|
+| 0             | 1        | grass / empty plain |
+| 2             | 4        | (terrain) |
+| 0x10          | 7        | (terrain) |
+| 0x12          | 8        | (terrain) |
+| 0x14          | 9        | (terrain) |
+| 9             | 0xb      | (terrain) |
+| 4             | 0x14     | (terrain — possibly forest) |
+| 0xf           | 0x1e     | (terrain) |
+| 7             | 0x28     | (terrain) |
+| 8             | 0x29     | (terrain) |
+| 10            | 0xc      | (terrain) |
+| 0x15          | 0xd      | (terrain) |
+| 0x20..0x3F    | 3        | **building anchor** — `+3 = scenario byte`, `+1 |= 0x10` |
+| 0x50..0x5F    | 6        | **road segment** — `+3 = scenario byte + 0x2c`, `+1 |= 0x10` |
+| 0x40..0x4F    | pass-thru| stored verbatim — these are the footprint cells (`'@'..'O'`) the scenario file uses for pre-placed 3x3 patterns |
+| other         | (handled by separate branches not shown) | |
+
+The `+0 == 3` building-anchor cell is what `FUN_004917dd` (the unported
+castle-load fixup) reads from `+3` to choose a 3x3 footprint orientation
+(`'@'` → orient 0, `'C'` → 2, `'X'` → 4, `'['` → 6, others → no-op).
 
 ### Why 6400 records?
 
 The overworld is **not** 6400 tiles — Lords II runs on a ~151
 territory map (cross-confirmed: entry 5 has 151 slots).  So
-`DAT_005440e0` is some finer-grained sub-grid: probably the per-tile
-improvement layer (where each *territory* contains many *tiles*).
-Maps as small as `80 × 80 = 6400` fit; the actual grid dimensions
-are still to be pinned down.
+`DAT_005440e0` is a finer-grained sub-grid.  The 80×80 read confirmed:
+the scenario-byte translation function iterates `DAT_00569570` (x) ×
+`DAT_00569578` (y) both `< 0x50` (80), so the grid is **80 × 80 =
+6400** with stride 8 bytes per cell and row stride 640.  Neighbor
+addressing uses `(y*80 + x) * 8` throughout (see `FUN_004921e5`,
+`FUN_004917dd`).
 
 ## Two distinct gameplay-mode schemas, one shared save-blob
 
@@ -255,8 +276,14 @@ state instead of all-zero stubs.
 
 ## Unknowns left
 
-- Per-castle 8-byte record fields at offsets +2/+4/+5/+6/+7 — the 6
-  runtime-only bytes.
+- The remaining +0 terrain enum values (`4, 7, 8, 9, 0xb, 0xc, 0xd,
+  0x14, 0x1e, 0x28, 0x29`) — we have the scenario-byte ↔ +0 mapping
+  but not yet the gameplay meaning (which is grass / mountain / forest
+  / hills / etc).  Cross-confirmable from sprite-pack indexing in the
+  overworld renderer.
+- Exact bit semantics of `+1`'s `0x04 / 0x08 / 0x20 / 0x40 / 0x80`
+  bits — `0x10` confirmed as "footprint cell", the others read/set
+  with no obvious anchor yet.
 - Block index → scenario-number mapping.  We assumed 1..16 = 16
   campaign scenarios; haven't yet matched these to the scenario
   list shown in the campaign select screen.
