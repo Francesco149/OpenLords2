@@ -7,6 +7,134 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Glyph blitter cluster (1 chip, 3 fns, byte-identical dedup)
+
+Continuation of the same unattended session.  The previous dispatch
+landed the framebuffer pixel painters and listed three follow-ups,
+with the glyph blitter as the recommended next move toward the
+visible-pixels milestone.  This dispatch takes that step: ports the
+per-character glyph emitter that sits between the (deferred) text
+renderer and the freshly-landed pixel painters.
+
+### Chip landed
+
+**`src/gfx_glyph` (NEW, ~170 LOC + 12 tests)** — 3 retail leaves
+that paint a glyph's source bytes onto the canvas via a row/col
+loop with optional clipping pads:
+
+  - `FUN_004b41b7` → `gfx_glyph_blit`              (165 B) — unclipped
+    path, two write modes (copy-byte vs color-fill), no source
+    stride pad.
+  - `FUN_004b425c` → `gfx_glyph_blit_left_clipped`  (105 B) — clipped
+    path with `clipped_w` inner count and source stride pad.  Color-
+    fill only.
+  - `FUN_004b42c5` → `gfx_glyph_blit_right_clipped` (105 B) — BYTE-
+    IDENTICAL retail body to `FUN_004b425c` (r2-verified).  Exposed
+    as a separate entry point for dispatcher topology; shares a
+    static helper with the left-clipped path.
+
+State is held in file-static globals that mirror the retail DAT_*
+set the dispatcher (`FUN_00402a14`, not yet ported) writes
+immediately before each call.  Setters expose the same writes to
+tests.  Canvas binding piggy-backs on `gfx_paint_bind_canvas` —
+`gfx_paint` gained read-only accessors
+(`gfx_paint_canvas_pixels` / `_width` / `_height`) so peer drawers
+can share a single canvas state.
+
+### Filed quirks (#27, #28)
+
+Two new entries in `docs/findings/engine-quirks.md`:
+
+  - **#27** — `FUN_004b425c` and `FUN_004b42c5` are byte-for-byte
+    identical (every instruction matches, both 105 B).  Almost
+    certainly two distinct source-level functions that reduced to
+    the same machine code post-MSVC-4.20 codegen, without COMDAT
+    folding catching the duplicate.  The dispatcher selects between
+    them by clip mode tag but they're behaviorally indistinguishable.
+    Our port preserves both names with one shared implementation.
+  - **#28** — the glyph blitters' inner loop ALWAYS runs at least
+    once, even at `glyph_w == 0` or `glyph_h == 0`.  The retail
+    `do { ... } while (post-test)` shape with `0 < counter` AND
+    `next != 0` guards is permissive on the first iteration.
+    Dormant in retail because the upstream dispatcher filters zero
+    dimensions, but the leaves themselves do not — faithful port
+    preserves the unguarded behavior with two dedicated tests.
+
+### Headline numbers
+
+- **477 → 489 host tests** (12 new), all green under ASan/UBSan.
+- **3 retail functions ported** (~375 B decompilation), with the
+  two byte-identical duplicates sharing a single static helper.
+- **1 new module** (`src/gfx_glyph`) + 3-line extension to
+  `src/gfx_paint` (canvas accessors).
+- **2 new engine quirks filed** (#27, #28).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Renderer pipeline state
+
+| layer                          | status     |
+| ------------------------------ | ---------- |
+| char width                     | ported     |
+| buffer width                   | ported     |
+| bounded buffer width           | ported     |
+| word width + chars             | ported     |
+| editor (text_input)            | ported     |
+| localization blob access       | ported     |
+| dirty-rect tracking            | ported     |
+| 1-pixel / 2x1 painters         | ported     |
+| clipped pixel / 2x1            | ported     |
+| **glyph blitter (unclipped)**  | **ported (this chip)** |
+| **glyph blitter (clipped × 2)** | **ported (this chip)** |
+| line drawers (axis + diag)     | deferred (4 fns, 347+442+171+197 B) |
+| glyph dispatcher (per-char)    | deferred (514 B, `FUN_00402a14`) |
+| glyph descriptor cluster       | deferred (`FUN_0040464c` / `FUN_0040477b` clip setters) |
+| text renderer                  | deferred (989 B, `FUN_00402637`) |
+| word-wrap renderer             | deferred (673 B, `FUN_0040328e`) |
+| centered-text wrapper          | deferred (96 B, `FUN_004025d7`) |
+| sprite blitters (4x4/6x6/8x8)  | unanalyzed |
+
+The text-rendering bottom is now fully ported.  Everything from a
+glyph's source bytes to the back buffer is present in `src/`.  The
+remaining gap to "render a text line in CI" is the glyph dispatcher
+(`FUN_00402a14`, 514 B — the per-character call site that wires up
+the descriptor table, clip setters, and one of the three blitters)
+plus the text/word-wrap renderers that drive it.
+
+### What's next
+
+Three natural continuations:
+
+1. **Glyph dispatcher + clip setters** — port `FUN_00402a14`
+   (514 B) along with `FUN_0040464c` (303 B) and `FUN_0040477b`
+   (291 B).  Three functions, ~1.1 KB decompilation.  This puts the
+   full per-character path in `src/`, exposing a clean
+   `draw_char(font_base, char_code)` API.  Depends on the font
+   descriptor format being understood (already covered by
+   `font_metrics_char_width` — the 256-byte char→glyph-index table
+   + 16-byte descriptors).
+2. **Text renderer** — port `FUN_00402637` (989 B), the per-frame
+   line/multi-line renderer that calls the dispatcher in a loop.
+   Larger function but everything below it is ported; depends on
+   #1 if we want to keep the call topology faithful, or could call
+   the leaves directly via the staged state.
+3. **Wire gfx.c runtime to gfx_paint/gfx_glyph** — extend the
+   existing `IDirectDrawSurface::Lock` probe to set `lpSurface`
+   onto the gfx_paint canvas.  Small chip but requires a runtime
+   smoke test on the Windows host to validate.  Unblocks "draw
+   a real glyph during boot" as a manual end-to-end check.
+
+Picking #1 advances the visible-pixels milestone most directly —
+once the dispatcher lands, the test harness can call `draw_char`
+on the real `Charset3.dat` font blob and produce a pixel-by-pixel
+golden comparison against a Frida-captured retail screenshot.
+
+This is a natural `/clear` point — the rendering bottom is now a
+complete stratum, and the next frontier (the dispatcher) is a fresh
+multi-function scope worth a fresh conversation.
+
+---
+
 ## 2026-05-25 — Framebuffer pixel painters (1 chip, 5 fns)
 
 Continuation of the same unattended session.  The prior dispatches

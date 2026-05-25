@@ -1054,6 +1054,92 @@ canvas does in fact get stomped.
 
 ---
 
+## 27. Glyph blitter clipped duplicates are byte-identical
+
+The text-glyph dispatcher (`FUN_00402a14`) selects between three
+leaf blitters by clip mode:
+
+  - `DAT_005cdd20 == 0` (unclipped)  → `FUN_004b41b7` (165 B)
+  - `DAT_005cdd20 == 1` (left-clip)  → `FUN_004b425c` (105 B)
+  - `DAT_005cdd20 == 2` (right-clip) → `FUN_004b42c5` (105 B)
+
+The two clipped functions are **byte-for-byte identical**.  Every
+instruction matches — same prologue, same DAT_* references, same
+loop structure, same epilogue.  r2 confirms (105 B each, identical
+disassembly modulo address):
+
+```
+0x004b425c: push ebp; mov ebp,esp; push ebx; push esi; push edi
+0x004b4262: mov esi,[ebp+8]; add esi,[0x58fe04]   ; src = font + glyph_offset
+0x004b426b: mov edi,[0x4ea1a8]; add edi,[0x591524]; dst = canvas + cursor_x
+0x004b4277: mov eax,[0x591528]; mov edx,[0x4eb274]; mul edx; add edi,eax  ; + cursor_y*W
+...
+```
+
+The retail source almost certainly had two distinct functions —
+`blit_clipped_left()` and `blit_clipped_right()` — that reduced to
+the same code after the column-stride / source-stride math was
+unified.  MSVC 4.20's inliner/de-duplicator did not catch the
+overlap (or the build settings disabled COMDAT folding), so both
+copies shipped.  The dispatcher selects "the right one" but they're
+behaviorally indistinguishable.
+
+Our port exposes both as named entry points
+(`gfx_glyph_blit_left_clipped` / `_right_clipped`) sharing a static
+helper.  Preserves the retail call topology and gives the eventual
+port of `FUN_00402a14` a 1:1 mapping for both clip cases, without
+duplicating the body.
+
+> 📍 `src/gfx_glyph.c`'s `gfx_glyph_blit_left_clipped` /
+> `_right_clipped` / shared `glyph_blit_clipped`,
+> `tests/test_gfx_glyph.c`'s
+> `gfx_glyph_blit_right_clipped_byte_identical_behavior`,
+> Ghidra `FUN_004b425c @ 0x4b425c`, `FUN_004b42c5 @ 0x4b42c5`.
+
+---
+
+## 28. Glyph blitter inner loop runs once even at zero counter
+
+The retail inner-loop shape (all three glyph blitters, Ghidra-
+decompiled):
+
+```c
+do {
+    /* body */
+    iVar3 = iVar4 + -1;
+    bVar1 = 0 < iVar4;
+    iVar4 = iVar3;
+} while (iVar3 != 0 && bVar1);
+```
+
+Translates to: post-decrement the counter, then loop while
+*post-decrement value is non-zero* AND *pre-decrement value was
+strictly positive*.  Because the body sits inside a `do { ... }
+while (...)` it ALWAYS executes at least once — including when the
+counter starts at 0 or negative.
+
+  - With `glyph_w == 0`: inner body runs once → one pixel write per
+    row.  Outer loop still runs `glyph_h` times → `glyph_h` rogue
+    writes at successive dest positions.
+  - With `glyph_h == 0`: outer body runs once → one full row of
+    `glyph_w` pixel writes.
+  - With both zero: one pixel write at the cursor.
+
+In practice the upstream dispatcher (`FUN_00402a14` via
+`FUN_0040464c` / `FUN_0040477b`) filters zero-width and zero-height
+glyphs by setting `DAT_005cdd20` / `DAT_0058fe18` to `'\x05'` and
+short-circuiting the call.  The leaf functions themselves do NOT
+guard.  Faithful port preserves the unguarded behavior; the
+upstream filter is the only thing keeping it dormant in retail.
+
+> 📍 `src/gfx_glyph.c`'s `gfx_glyph_blit`,
+> `tests/test_gfx_glyph.c`'s
+> `gfx_glyph_blit_zero_width_writes_one_pixel_per_row` and
+> `_zero_height_writes_one_row`,
+> Ghidra `FUN_004b41b7 @ 0x4b41b7`.
+
+---
+
 <!--
 Template for new entries:
 
