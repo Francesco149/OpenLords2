@@ -7,6 +7,149 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Strategic-mode overlay renderer cluster (1 chip, 5 of 6 fns)
+
+Continuation of the same unattended session.  The previous dispatch
+closed out the strategic-mode primary (territory) layer and picked
+the **battlefield (combat-mode) renderer** as the natural next target.
+That hypothesis turned out to be wrong: the actual next-natural target
+is the strategic-mode **overlay** pass — a second full-map sweep
+called RIGHT NEXT TO the primary pass in the same parent caller.
+
+### Discovery: it's a second strategic-mode pass, not battlefield
+
+Survey of `FUN_00405602` (608 B) revealed the same shape as the
+primary pass's driver `FUN_00405487`: same camera, same tile array,
+same per-tile descriptor base.  But it tests DIFFERENT descriptor
+flag bits (`0x80` and `0x40` vs the primary's `0x20`) and dispatches
+to different per-tile drawers.  Cross-reference of the parent caller
+confirmed:
+
+```c
+FUN_0040526e();      // preparatory work
+FUN_00405602();      // ← overlay pass (this chip)
+FUN_00405487();      // primary pass (previous chip, ported)
+```
+
+So this is the strategic-mode **units + cities overlay** layer, not
+the combat-mode battlefield.  The previous dispatch's battlefield
+hypothesis was based on the per-battle-hex 0x1b0 stride array — but
+that array is consumed by game-logic scanners (`for i in 1..0x50`
+loops), not by a renderer.  The battlefield renderer, if it exists
+as a tight cluster like this one, hasn't been located yet.
+
+### Chip landed
+
+**`src/engine_overlay_render` (NEW, ~620 LOC + 24 tests)** — 5 retail
+leaves over one shared module, with the 6th (army drawer) as a stub
+for the next chip:
+
+  - `FUN_00405602` → `engine_overlay_render_frame`            (608 B)
+    Outer driver.  View-mode-1 left-strip pre-clear, then top
+    phantom row + (row_count - 2)/2 row pairs + bottom phantom row.
+  - `FUN_00405eb5` → `engine_overlay_render_row_phase0`       (247 B)
+    Phase-0 row iterator.  All cells phase 0.  No left/right edge
+    extras (asymmetric vs primary pass — quirk #65).
+  - `FUN_00405fac` → `engine_overlay_render_row_phase1`       (497 B)
+    Phase-1 row iterator.  First cell phase 1, middle cells phase 0,
+    trailing cell phase 2.  Debug-text fires only on middle cells.
+  - `FUN_004081a6` → `engine_overlay_render_tile_city`        (658 B)
+    Per-tile city/town/settlement drawer (bit 0x40 selector).  Sprite
+    index derived from per-cell size table at retail `0x500c30` and
+    capped by the active territory's max-size band.  Dispatches via
+    RLE sprite family.
+  - `FUN_00408c50` → `engine_overlay_render_debug_text`       (390 B)
+    Two-mode developer overlay.  Mode 1 draws per-cell size table
+    value; mode 2 (winner) draws descriptor head-link byte.
+  - `FUN_004071a0` → `engine_overlay_render_tile_army` (STUB, 3179 B)
+    Per-tile army/units drawer (bit 0x80 selector).  Real body
+    deferred to next chip; stub bumps a per-call counter so the row
+    iterators can be tested for dispatch fidelity.
+
+The module shares the cursor (gfx_glyph's `g_cursor_x/y`) with the
+primary pass — they alternate sequentially per frame, never
+concurrently.  The error counter `_DAT_0058fea8` is retail-conflated
+but the port keeps each module's count private so tests can isolate.
+
+### Filed quirks (#65, #66, #67, #68, #69)
+
+Five new entries in `docs/findings/engine-quirks.md`:
+
+  - **#65** — Overlay phase-0 row has NO left/right edge cells.
+    Asymmetric vs primary pass which has both.  Visible at map edges.
+  - **#66** — Debug text fires only on MIDDLE cells of phase-1 row.
+    First (phase 1) and last (phase 2) cells skip the helper.
+  - **#67** — City drawer territory-cap test is asymmetric for
+    negative sizes — cap fires only when computed > cap_band.
+    Negative computed sizes pass through, producing sprite indices
+    below 0x38.
+  - **#68** — City drawer clears bit 0x40 of descriptor[+2] post-
+    dispatch.  Re-arm path is elsewhere — tests must re-arm between
+    frames.
+  - **#69** — Pre-clear strip (left 4-pixel column at y=24..443) is
+    VIEW-MODE-1-ONLY.  View-modes 0 and 2 leave it untouched.
+
+### Headline numbers
+
+- **684 → 708 host tests** (+24), all green under ASan/UBSan.
+- **5 retail functions ported** + 1 stub (army drawer).
+  - Ported: 608 + 247 + 497 + 658 + 390 = **2400 B**.
+  - Stubbed: 3179 B (next chip).
+- **1 new module** (`src/engine_overlay_render`, ~620 LOC).
+- **5 new engine quirks filed** (#65, #66, #67, #68, #69).
+- **1 new findings doc** (`docs/findings/overlay-render.md`, ~220 lines).
+- Cross-compile (mingw32) clean — `openlords2.exe` and
+  `openlords2-debug.exe` both link without warning.
+
+### Renderer pipeline state
+
+| layer                                        | status     |
+| -------------------------------------------- | ---------- |
+| (text + line + sprite-family layers — see prior dispatches)      | ported     |
+| sprite blit RLE (unclipped + 2× clipped)     | ported     |
+| sprite render — RLE from blob                | ported     |
+| strategic-mode primary frame driver          | ported     |
+| strategic-mode primary row iterators × 2     | ported     |
+| strategic-mode primary per-tile drawer       | ported     |
+| **strategic-mode overlay frame driver**      | **ported (this chip)** |
+| **strategic-mode overlay row iterators × 2** | **ported (this chip)** |
+| **strategic-mode overlay city drawer**       | **ported (this chip)** |
+| **strategic-mode overlay debug-text helper** | **ported (this chip)** |
+| **strategic-mode overlay army drawer**       | **stub (next chip)** |
+| sprite descriptor reader (PL8 header)        | unanalyzed |
+| error log formatter (`FUN_004afab9`)         | unanalyzed |
+| battlefield (combat-mode) iterators          | unlocated  |
+
+The strategic-mode overworld now has 5 of 6 cluster functions ported
+across two passes.  The army drawer's 3179 B body is the only piece
+missing before strategic-mode rendering is end-to-end.
+
+### What's next
+
+1. **Army drawer (`FUN_004071a0`, 3179 B)** — strictly the natural
+   next chip.  The stub already wires it into the iterators; the
+   real port fills the stub body.  Complexity is in the unit-category
+   state-machine logic (chase/fight/march/die) and the per-state frame
+   animation that writes to descriptor[+3].
+2. **Wire gfx.c runtime to renderer + map** — Windows-host validation
+   chip.  Bind DDraw backbuffer as gfx_paint canvas, build a
+   synthetic territory + tile + city + army scene, render one frame.
+   Requires user-observed validation.  Gated until user is back.
+3. **Battlefield (combat-mode) renderer cluster** — still
+   unlocated.  The hypothesis from the previous dispatch about
+   `g_per_battle_hex_432` being the natural anchor is plausible but
+   unconfirmed — that array's consumers are game-logic scanners, not
+   renderers.  Probably exists elsewhere in the binary; needs a fresh
+   survey.
+
+Picking #1 next.  It's the cleanest scope (one function, one chip)
+and finishes strategic-mode rendering end-to-end.
+
+This is a natural `/clear` point — strategic-mode overlay is in,
+the next chip is a single self-contained function port.
+
+---
+
 ## 2026-05-25 — Strategic-mode map renderer cluster (1 chip, 4 fns)
 
 Continuation of the same unattended session.  The previous dispatch

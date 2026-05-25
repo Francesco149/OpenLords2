@@ -2343,6 +2343,126 @@ or a defensive guard never trimmed by the compiler.
 
 ---
 
+## 65. Overlay-pass phase0 row has NO left/right edge cells (asymmetric vs primary pass)
+
+The strategic-mode OVERLAY pass at `FUN_00405eb5` (the phase-0 row
+iterator) walks exactly `col_count` cells, no more.  Contrast with the
+PRIMARY pass's phase-0 row iterator at `FUN_00405862` which walks
+`col_count + 2` cells (one extra left-edge cell gated on
+`col_start > 0`, plus one extra trailing cell gated on `cur_col < 0x40`).
+
+The two iterators have nearly identical shapes — same camera, same
+map array, same per-tile descriptor base — but the OVERLAY iterator
+omits both edge-cell paths entirely.  The visible consequence: at the
+left/right edges of the map, the territories layer extends one column
+further than the units/cities overlay.  This is rarely noticed because
+the camera typically positions away from the map edge.
+
+Suspect motivation: edge cells in the primary pass exist to draw
+half-visible decorative terrain (mountains, water).  The overlay pass
+doesn't need them — armies and cities are always anchored to whole
+tiles, never bleeding into half-tiles.
+
+> 📍 `src/engine_overlay_render.c` (`engine_overlay_render_row_phase0`),
+> Ghidra `FUN_00405eb5` (247 B) vs `FUN_00405862` (333 B).
+
+---
+
+## 66. Overlay debug text fires only on middle cells of phase1 row
+
+The debug-overlay text helper `FUN_00408c50` is called between cells in
+the row iterators, but its placement is asymmetric:
+
+  - `FUN_00405eb5` (phase-0 row): debug text fires on EVERY non-empty
+    cell — straightforwardly inside the column-loop body.
+  - `FUN_00405fac` (phase-1 row): debug text fires ONLY on the middle
+    cells (the inner column-loop body).  The first cell (phase 1) and
+    last cell (phase 2) are dispatched as standalone fragments
+    BEFORE/AFTER the loop, and neither fragment calls the debug helper.
+
+This is an artifact of how the phase-1 row is unrolled.  The first
+and last cells use a different `phase` argument to the per-tile
+drawers, so the loop body proper only handles uniform phase-0 middle
+cells.  The debug-text call lives inside that loop body and inherits
+its scope.
+
+Observable only when dev flags `DAT_005bb4a4` or `DAT_005bb4a5` are
+set — production builds have both at 0.
+
+> 📍 `src/engine_overlay_render.c` (`engine_overlay_render_row_phase1`),
+> Ghidra `FUN_00405fac` (497 B).
+
+---
+
+## 67. Overlay city drawer's territory-cap test is asymmetric for negative sizes
+
+The city drawer at `FUN_004081a6` computes a sprite-size selector
+from a per-cell size table:
+
+    local_c = (short *)0x500c30[cell/8] - 1;
+    if (max_hi - max_lo < local_c)  local_c = 0;
+    DAT_005c9288 = local_c + 0x38;
+
+The cap test fires only when the computed size EXCEEDS the territory's
+allowed band.  For negative `local_c` (table value < 1), the cap test
+does NOT fire — the negative size passes through unchecked, producing
+a sprite index BELOW `0x38` (e.g., `0x37` when table value is 0).
+
+This is a likely source of latent bugs.  Negative sprite indices read
+out-of-bounds descriptors in the overlay blob.  Map files that produce
+a 0 value in the per-cell table at any cell hosting a city would
+trigger this — but in practice the per-cell table seems to never hold
+0 at city-bearing cells (no error path observed in retail traces).
+
+> 📍 `src/engine_overlay_render.c` (`engine_overlay_render_tile_city`),
+> Ghidra `FUN_004081a6` lines 18-22.
+
+---
+
+## 68. Overlay city drawer clears bit 0x40 of descriptor[+2] post-dispatch
+
+After dispatching, `FUN_004081a6` clears bit `0x40` of the per-tile
+descriptor's flag byte (`& 0xbf`).  This is mid-frame mutation of
+descriptor table state.
+
+The bit is re-set elsewhere — likely by save-load, by city-state
+changes, or by a frame-edge "mark all visible" pass.  Whatever the
+re-arm path is, this clear is load-bearing: without it, every cell
+with a city would re-dispatch every frame, and the bit would never
+fall to 0.
+
+Tests must re-arm the bit between frames to verify multi-frame
+dispatch behavior.  See
+`test_engine_overlay_render_error_count_persists_across_frames`.
+
+> 📍 `src/engine_overlay_render.c` (`engine_overlay_render_tile_city`),
+> Ghidra `FUN_004081a6` line 13.
+
+---
+
+## 69. Overlay pre-clear strip is view-mode-1-only
+
+The driver `FUN_00405602` pre-clears a 4-pixel-wide vertical strip
+at column 0, rows `0x18..0x1bc`, by calling `FUN_004b4056` (4-byte
+write) in a 420-iteration loop at the very top of the function.  But
+this clear is GATED on `DAT_0057cb18 == 1` — only view-mode 1 (zoom-
+mid) triggers it.  View-modes 0 and 2 leave the strip undisturbed.
+
+The strip's position corresponds to the leftmost column of the visible
+map area in zoom-mid layout.  Suspected purpose: cleaning up stale
+pixels from view-mode-transition artifacts that only manifest at this
+zoom level.  Could also be a workaround for a clip-rect off-by-one
+that only matters when the half-step is exactly 16 pixels (the zoom-
+mid setting).
+
+Quirk-worth because the same driver function changes behavior based
+on a global mode — typical "load-bearing if" pattern.
+
+> 📍 `src/engine_overlay_render.c` (`engine_overlay_render_frame` →
+> `pre_clear_left_strip`), Ghidra `FUN_00405602` lines 10-14.
+
+---
+
 <!--
 Template for new entries:
 
