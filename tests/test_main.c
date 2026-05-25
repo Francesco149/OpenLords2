@@ -597,6 +597,10 @@ struct test_case {
     X(gfx_sprite_blit_16x16_raw_respects_cursor) \
     X(gfx_sprite_blit_16x16_raw_uses_glyph_offset) \
     X(gfx_sprite_blit_16x16_raw_null_canvas_no_crash) \
+    X(gfx_sprite_blit_32x32_raw_copies_all_1024_bytes) \
+    X(gfx_sprite_blit_32x32_raw_writes_zero_bytes_opaque) \
+    X(gfx_sprite_blit_32x32_raw_uses_glyph_offset) \
+    X(gfx_sprite_blit_32x32_raw_null_canvas_no_crash) \
     X(gfx_dispatch_sprite_paints_at_dest) \
     X(gfx_dispatch_sprite_left_clip_writes_visible_portion) \
     X(gfx_dispatch_sprite_right_clip_writes_visible_portion) \

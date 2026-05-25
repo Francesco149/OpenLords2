@@ -152,4 +152,30 @@ void gfx_sprite_blit_right_clipped(const uint8_t *sprite_blob);
  * least 16×16 = 256 bytes available from that offset. */
 void gfx_sprite_blit_16x16_raw(const uint8_t *sprite_blob);
 
+/* Port of FUN_004b5333 @ 0x4b5333.  Fixed-size 32×32 opaque raw blit.
+ *
+ * Sibling of `gfx_sprite_blit_16x16_raw` — same shape, larger size.
+ * Copies 32 rows × 32 bytes (= 1024 bytes total) from
+ * `sprite_blob + glyph_offset` to the dest origin computed from the
+ * canvas binding + cursor.  Source is densely packed at 32 bytes per
+ * row.  Dest row stride is **hardcoded to 640 bytes** (retail dword
+ * indexing `puVar2[0xa0] = puVar1[8]` — see engine-quirks #75 for the
+ * shared narrative).  No transparency check; every source byte is
+ * written, including zeroes.  No width/height staging consulted; the
+ * dimensions are baked in.
+ *
+ * Retail body is 32 unrolled 8-dword row copies — 0x10e0 bytes total.
+ * The port collapses to a row loop with memcpy; codegen is equivalent
+ * at -O2 on every modern compiler, and the source bytes are not
+ * guaranteed 4-byte aligned so memcpy avoids UB on unaligned loads
+ * under ASan/UBSan host tests.
+ *
+ * Used by the battlefield zoom-32 terrain pass (FUN_004bcbdc).
+ *
+ * `sprite_blob` is the same shape as the other sprite blits — a base
+ * pointer that the dispatcher offsets by `glyph_offset` to reach the
+ * sprite data.  Caller is responsible for ensuring the source has at
+ * least 32×32 = 1024 bytes available from that offset. */
+void gfx_sprite_blit_32x32_raw(const uint8_t *sprite_blob);
+
 #endif /* OPENLORDS2_GFX_SPRITE_H */

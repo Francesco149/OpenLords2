@@ -660,3 +660,119 @@ int test_gfx_sprite_blit_16x16_raw_null_canvas_no_crash(void)
     gfx_sprite_blit_16x16_raw(blob);
     return 0;
 }
+
+/* ────────────────────────────────────────────────────────────────
+ * gfx_sprite_blit_32x32_raw — FUN_004b5333
+ *
+ * Sibling of the 16×16 primitive — same hardcoded 640-byte dest
+ * stride, no transparency, no width/height staging consulted.
+ * Tests use the same BIG_W=640 / BIG_H=32 canvas: 32×32 at cursor
+ * (0, 0) fits exactly into the 32-row buffer.
+ * ──────────────────────────────────────────────────────────────── */
+
+static void fill_32x32_tile(uint8_t *out)
+{
+    /* Each byte = (row * 32 + col + 1) & 0xff — unique per-byte pattern
+     * within the 256-byte range (wraps every 256 bytes, but each row
+     * has a distinct first byte). */
+    for (int r = 0; r < 32; r++)
+        for (int c = 0; c < 32; c++)
+            out[r * 32 + c] = (uint8_t)(r * 32 + c + 1);
+}
+
+int test_gfx_sprite_blit_32x32_raw_copies_all_1024_bytes(void)
+{
+    big_canvas_t c; big_canvas_init(&c);
+
+    uint8_t blob[8 + 1024];
+    for (int i = 0; i < 8; i++) blob[i] = 0xff;     /* filler */
+    fill_32x32_tile(blob + 8);
+
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 32, 32);  /* glyph_offset = 8 → skip filler */
+
+    gfx_sprite_blit_32x32_raw(blob);
+
+    /* Every one of 32×32 = 1024 dest bytes matches its source. */
+    for (int r = 0; r < 32; r++)
+        for (int col = 0; col < 32; col++)
+            T_ASSERT_EQ_U(c.pixels[col + r * BIG_W],
+                          (uint8_t)(r * 32 + col + 1));
+    T_ASSERT(big_canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_blit_32x32_raw_writes_zero_bytes_opaque(void)
+{
+    /* Same as the 16×16 sibling: no transparency check.  Pre-fill the
+     * dest with non-zero, blit zeroes, verify overwrite. */
+    big_canvas_t c; big_canvas_init(&c);
+    for (int i = 0; i < (int)sizeof c.pixels; i++) c.pixels[i] = 0xa5;
+
+    uint8_t blob[8 + 1024] = {0};
+    for (int i = 0; i < 8; i++) blob[i] = 0xff;
+
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 32, 32);
+
+    gfx_sprite_blit_32x32_raw(blob);
+
+    /* All 32×32 dest bytes overwritten with zero source. */
+    for (int r = 0; r < 32; r++)
+        for (int col = 0; col < 32; col++)
+            T_ASSERT_EQ_U(c.pixels[col + r * BIG_W], 0x00);
+    /* Outside the 32×32 footprint, 0xa5 pre-fill is intact. */
+    T_ASSERT_EQ_U(c.pixels[32 + 0 * BIG_W], 0xa5);
+    T_ASSERT(big_canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_blit_32x32_raw_uses_glyph_offset(void)
+{
+    /* Two adjacent tiles in a blob: tile A all-0x11, tile B all-0x22.
+     * Each tile is 1024 bytes; the dispatcher's glyph_offset selects
+     * which one the blit consumes. */
+    big_canvas_t c; big_canvas_init(&c);
+
+    uint8_t blob[8 + 1024 + 1024];
+    for (int i = 0; i < 8; i++)        blob[i] = 0xff;
+    for (int i = 0; i < 1024; i++)     blob[8 + i] = 0x11;
+    for (int i = 0; i < 1024; i++)     blob[8 + 1024 + i] = 0x22;
+
+    /* First blit: tile A at (0, 0). */
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 32, 32);
+    gfx_sprite_blit_32x32_raw(blob);
+
+    /* All 32×32 of tile A's footprint should be 0x11. */
+    T_ASSERT_EQ_U(c.pixels[0 + 0 * BIG_W], 0x11);
+    T_ASSERT_EQ_U(c.pixels[31 + 31 * BIG_W], 0x11);
+
+    /* Second blit at a new position is harder to test without enough
+     * canvas height; instead verify the offset selects tile B by
+     * resetting and blitting AGAIN at (0, 0) with offset = 8 + 1024.
+     * The tile-A pattern is overwritten with tile-B's 0x22. */
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8 + 1024, 32, 32);
+    gfx_sprite_blit_32x32_raw(blob);
+
+    T_ASSERT_EQ_U(c.pixels[0 + 0 * BIG_W], 0x22);
+    T_ASSERT_EQ_U(c.pixels[31 + 31 * BIG_W], 0x22);
+    T_ASSERT(big_canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_blit_32x32_raw_null_canvas_no_crash(void)
+{
+    gfx_paint_bind_canvas(0, 0, 0);
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 32, 32);
+
+    uint8_t blob[8 + 1024];
+    for (int i = 0; i < 8; i++) blob[i] = 0xff;
+    fill_32x32_tile(blob + 8);
+
+    /* No crash, no observable output (nothing bound). */
+    gfx_sprite_blit_32x32_raw(blob);
+    return 0;
+}

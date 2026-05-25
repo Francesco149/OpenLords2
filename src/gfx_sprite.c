@@ -187,3 +187,25 @@ void gfx_sprite_blit_16x16_raw(const uint8_t *sprite_blob)
         dst += 640;     /* hardcoded — NOT the dynamic canvas pitch */
     }
 }
+
+/* Port of FUN_004b5333 @ 0x4b5333.  Fixed 32×32 opaque raw blit.
+ *
+ * Same structure as the 16×16 sibling — retail is 32 rows × 8 dword
+ * copies fully unrolled, with the dest stride baked into the literal
+ * indices (each row's index jumps by 0xa0 dwords = 640 bytes between
+ * row groups).  Source is densely packed: each row is 32 bytes,
+ * 32 rows = 1024 bytes per sprite.
+ *
+ * Hardcoded 640-byte dest stride preserved — same quirk #75. */
+void gfx_sprite_blit_32x32_raw(const uint8_t *sprite_blob)
+{
+    uint8_t *dst = dest_origin();
+    if (!dst) return;
+
+    const uint8_t *src = sprite_blob + gfx_glyph_glyph_offset();
+    for (int row = 0; row < 32; row++) {
+        memcpy(dst, src, 32);
+        src += 32;
+        dst += 640;     /* hardcoded — NOT the dynamic canvas pitch */
+    }
+}
