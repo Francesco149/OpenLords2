@@ -51,18 +51,17 @@ Knobs (full list in `--help`):
   - `--warmup-s N` — how long to wait for engine_tick to start ticking
     before firing RPCs (default 10)
 
-Latest verified run: **1600/1600 pass across all eight functions**
+Latest verified run: **1800/1800 pass across all nine functions**
 (2026-05-25, retail build via cutestation.soy, seed 1, 200 vectors
-each).  RNG / anim-cycle / frame-delta / phase_ticks / sim_sub_steps /
-state_hash saw zero races; FPS and input_state report a handful of
-race-passes (classified per "Race classification" below).
+each).  Zero races across the run — every target landed clean.
 
-Both `sim_sub_steps` and `state_hash` run under an **engine-tick freeze**
-— installed ONCE at run start if any target needs it, released ONCE at
-the end.  Cycling install→uninstall→install back-to-back on the same
-Interceptor.replace address triggered an intermittent Frida-internal
-TypeError that destroyed the agent script context; sharing the freeze
-across the run avoids the cycle.  See "Engine-tick freeze for sim_sub_steps"
+Three targets — `sim_sub_steps`, `state_hash`, and `tile_expand` —
+run under a shared **engine-tick freeze** installed ONCE at run start
+if any target needs it, released ONCE at the end.  Cycling
+install→uninstall→install back-to-back on the same Interceptor.replace
+address triggered an intermittent Frida-internal TypeError that
+destroyed the agent script context; sharing the freeze across the
+run avoids the cycle.  See "Engine-tick freeze for sim_sub_steps"
 below for the freeze-itself rationale.
 
 ## Agent shape
@@ -335,10 +334,10 @@ Two infrastructure quirks worth knowing:
     the script dies.  Always copy with `.set(new Uint8Array(...))` —
     matches the `installSimSubStepsRateLut` pattern.
 
-### Shared engine freeze for sim_sub_steps + state_hash
+### Shared engine freeze for sim_sub_steps + state_hash + tile_expand
 
-Both targets need `FUN_0040e890` (engine_tick_dispatch) patched to a
-no-op for the duration of their vectors.  Cycling install→uninstall
+All three targets need `FUN_0040e890` (engine_tick_dispatch) patched
+to a no-op for the duration of their vectors.  Cycling install→uninstall
 →install on the same Interceptor.replace address between consecutive
 test plans triggered an intermittent Frida-internal TypeError that
 destroyed the agent script context.
@@ -347,6 +346,30 @@ Workaround: the orchestrator installs the freeze ONCE upfront if any
 enabled target needs it, leaves it installed across all vectors, and
 releases it ONCE in the teardown path.  The per-target setup branches
 no longer touch the freeze.
+
+### Per-call pre-state re-seed for tile_expand
+
+`engine_tile_expand_footprint` is stateful — it mutates ~70 KB across
+5 globals (tiles, path_scratch, stage_scratch, footprint_list,
+last_footprint_tile).  Consecutive vectors must NOT see each other's
+output bytes, so the agent re-seeds the input arrays IN PLACE before
+every call using the same xorshift32 + tagged-sub-seed pattern
+state_hash uses for one-shot installs.
+
+Two of the five globals (path_scratch + stage_scratch) are pure outputs
+— fully recomputed inside the function by FUN_00471c1f / FUN_00471d30 —
+so they're skipped from the per-call re-seed (small win: ~19 KB less
+per-call writeback).  The other 3 inputs (tiles 51200, footprint_list
+152, last_footprint_tile 4) total 51356 B per-call re-seed, chunked at
+32 KB writes.  Plus one byte-write to inject the per-vector anchor at
+`tiles[offset + 3]`.
+
+Readback per call is the full ~70 KB across all 5 globals (chunked 32
+KB).  The orchestrator-side ctypes struct is 70560 B — bytewise diff
+of every field, with `path_scratch` + `stage_scratch` skipped when the
+port's return value is 0 (the unrecognised-anchor early-return — in
+that branch the function touches neither scratch, so retail keeps its
+prior bytes while the port has fresh zero-init: not a real divergence).
 
 ## Host-side shared library
 

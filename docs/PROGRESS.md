@@ -7,6 +7,114 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Ninth diff target: engine_tile_expand_footprint (FUN_004917dd)
+
+Cashed in yesterday's port by wiring `FUN_004917dd` into the pure-function
+diff harness as the ninth target.  **1800/1800 retail diff pass at
+seed 1** across the full nine-target suite — zero races.
+
+### What's new at the harness level
+
+`FUN_004917dd` is the first __cdecl(int) target — every prior diff
+function was 0-arg stdcall that pulled inputs from globals.  The agent
+declares it with `'mscdecl'` ABI and passes `tile_byte_offset` as the
+lone arg.  Otherwise the surface is bigger than any prior:
+
+  - **5 globals** touched (tiles[51200], path_scratch[12800],
+    stage_scratch[6400], footprint_list[152], last_footprint_tile[4])
+    — combined 70556 bytes of state.
+  - **Stateful** function (the prior eight were pure read-or-overwrite).
+    Each vector must start from the SAME deterministic baseline, so
+    re-seed the inputs in place every call.
+
+The new pattern this established: **per-call pre-state re-seed** from
+a shared test-plan seed.  Same xorshift32 + `(seed + 0x9e3779b1 * tag)`
+sub-seeding as `state_hash`, but applied per-call rather than once-per-
+plan.  Only 3 of the 5 globals need re-seeding (tiles + footprint_list
++ last_footprint_tile) — path/stage scratches are pure outputs (fully
+recomputed by the helpers) so we skip them in the writeback, saving
+~19 KB of per-call wire traffic.  Documented in
+`docs/findings/pure-function-diff.md`.
+
+Per-call cost breakdown:
+- Writeback: 51356 B (3 inputs, chunked at 32 KB → 2 writes).
+- Inject:   1 byte (anchor char at tiles[offset+3]).
+- Call:     1 NativeFunction invocation.
+- Readback: 70556 B (5 outputs, chunked at 32 KB → 3 reads).
+- Diff:     bytewise across all 5 fields; path/stage_scratch skipped
+            when the port returns 0 (unrecognized-anchor branch — neither
+            side touches the scratches, so retail keeps its prior bytes
+            while port has zero-init — not a real divergence).
+
+At seed 1, 200 vectors: tile_expand block completed in ~2 minutes;
+full nine-target suite in ~12 minutes.
+
+### Diff harness wiring
+
+- Agent (`tools/frida/openlords2-agent.js`, ~250 LOC):
+  - ADDR entries for FUN_004917dd + 5 globals; byte-count constants.
+  - `tileExpandFillBytes(seed, buf, len)` — xorshift32 mirror of orch.
+  - `installTileExpandBackup` / `uninstallTileExpandBackup` — one-shot
+    snapshot + chunked restore of all 5 globals so retail's pre-test
+    bytes survive the run.
+  - `runRetailTileExpand(in_obj)` — the per-call workhorse.
+  - rpc.exports + diff_test armed-log updated.
+
+- Orchestrator (`tools/diff_test.py`, ~280 LOC):
+  - `EngineTileExpandState` ctypes struct (70560 B; embedded arrays).
+  - `gen_tile_expand_pre_state(seed)` + `tile_expand_fill_bytes` —
+    Python-side mirror.
+  - `gen_tile_expand_vectors(n, rng)` — every recognized anchor
+    ('@', 'C', 'X', '[') at every safe interior position + 10 specific
+    edge-of-map corners that trip the orthogonal-axis quirk + every
+    unrecognized-anchor early-return path + random fill.
+  - `tile_expand` added to `shared_freeze_targets` (now {sim_sub_steps,
+    state_hash, tile_expand}) and the default `--functions` list.
+
+- Engine freeze: reused the shared install from sim_sub_steps + state_hash.
+  Same rationale (engine main thread also reads tiles/path/stage_scratch
+  during render + pathfinding).
+
+### Headline number
+
+**1800/1800 pass across all nine targets**, zero races, at seed 1.
+Was 1600/1600 across eight prior to this dispatch.
+
+### What's next
+
+1. **Pull the castle-load fixup into `castles_read_scenario`.**  The
+   port exists + is now diff-verified, but the load path still doesn't
+   call it.  Needs minor refactoring: either declare globals for
+   path_scratch/stage_scratch/footprint_list/last_footprint in save.c
+   (and bundle them per-call into the port's state struct), or add a
+   sibling `engine_tile_expand_footprint_inplace(...)` that takes
+   pointer args.  Carry-over from prior dispatch — no progress this
+   round; commit-as-you-go let the diff-harness wiring land standalone.
+
+2. **Start porting `FUN_004472ce` (MP delayed-action dispatcher)** —
+   carried from prior dispatch.  Smaller in line count (1046 B retail)
+   than initially feared but the vtable dispatch at `PTR_FUN_004d5c98[type]`
+   means most of it isn't testable in isolation until the handlers are
+   ported.  Queue-management half (everything up to the dispatch) is
+   diffable with a stubbed table.
+
+3. **Wire save/load into the drop-in's runtime command surface**
+   — carried over from prior dispatches.
+
+4. **Diagnose the Quit-Game freeze + orchestrator-teardown hang** —
+   carried over from prior dispatches.  Mild update from this session:
+   if Lords2.exe dies mid-RPC (e.g. user accidentally pressed Esc on
+   a visible window), the orchestrator's `script.exports_sync.*` calls
+   wait on dead Frida objects and block teardown indefinitely.  Should
+   add an RPC timeout to the orchestrator.
+
+Bias next time: option 2 (start the next sub-step body port).  Option
+1 (castles_read_scenario wiring) is small but doesn't unblock anything
+imminent — the renderer is not yet ported, so there's no end-to-end
+"load + render" smoke test to enable.
+
+---
+
 ## 2026-05-25 — Per-tile struct pinned + FUN_004917dd ported
 
 Two tightly-coupled units of work this session.
