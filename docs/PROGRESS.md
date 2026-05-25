@@ -7,6 +7,167 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Line drawer + axis-rect wrappers (1 chip, 6 fns)
+
+Continuation of the same unattended session.  The previous dispatch
+landed the word-wrap renderers and listed three follow-ups, with the
+line drawers as the recommended next move toward the visible-pixels
+milestone.  This dispatch takes that step: ports the Bresenham line
+core, the dotted-axis variant, and the four axis-aligned rectangle
+wrappers (solid + three 3D bevel palettes) — closing out the entire
+line-and-frame primitive set.
+
+### Chip landed
+
+**`src/gfx_line` (NEW, ~260 LOC + 23 tests)** — 6 retail leaves +
+2 private helpers spanning the engine's straight-line / rectangle
+primitives:
+
+  - `FUN_004037ee` → `bres_setup`              (347 B, private)
+    Bresenham endpoint reorder + abs(dx)/abs(dy) compute + per-axis
+    step-sign selection.
+  - `FUN_00403949` → `bres_err_update`         (126 B, private)
+    Per-iteration accumulator update.  Reads the (mutated) abs_dx /
+    abs_dy.
+  - `FUN_00403a8f` → `gfx_line_draw`           (442 B) — solid 1-px
+    Bresenham line.  Dispatches on endpoint shape (vertical /
+    horizontal / shallow / steep).
+  - `FUN_00403c49` → `gfx_line_draw_dotted`    (171 B) — axis-only
+    dotted line; step +2 on the dominant axis.  Diagonals are a
+    silent no-op (quirk #40).
+  - `FUN_00403cf4` → `gfx_line_rect`           (247 B) — solid
+    4-edge frame.  Sequential-`if` clamp.
+  - `FUN_00403deb` → `gfx_line_rect_bevel_dark_br` (249 B) — 3D
+    bevel rect, top+right at 0x10, bottom+left at 0x1f.
+  - `FUN_00403ee4` → `gfx_line_rect_bevel_palette_b` (249 B) — same
+    shape, palette pair 0x35 / 0x28.
+  - `FUN_00403fdd` → `gfx_line_rect_bevel_dark_tl` (249 B) — inverse
+    of bevel_dark_br: top+right at 0x1f, bottom+left at 0x10.
+
+State held in `src/gfx_line.c`'s file-statics — 9 slots mirroring
+retail's BSS layout for the Bresenham setup (`g_abs_dx`, `g_abs_dy`,
+`g_x_start/end`, `g_y_start/end`, `g_x_step`, `g_y_step`,
+`g_bres_err`).  No new state plumbing — pixel painting routes through
+the existing `gfx_paint_pixel_clipped` (FUN_004039c7, already
+ported) and canvas bounds come from `gfx_paint_canvas_width()` /
+`gfx_paint_canvas_height()`.
+
+The 4 rect wrappers share a `draw_rect_4lines(x, y, w, h, c_tr, c_bl)`
+helper — solid uses the same color for both pairs, bevels pass
+distinct colors.  Two clamp variants (`clamp_solid` for sequential
+`if`s, `clamp_bevel` for the asymmetric `if/else if`) preserve the
+retail quirk where bevel rects skip the right/bottom clamp when the
+left/top edge was clamped (quirk #39).
+
+### Filed quirks (#38, #39, #40)
+
+Three new entries in `docs/findings/engine-quirks.md`:
+
+  - **#38** — The Bresenham line drawer mutates the abs(dx) and
+    abs(dy) BSS slots inside its inner loop, decrementing one per
+    iteration and both when the err accumulator crosses zero.  The
+    err update consults the current (mutated) values each step.
+    Mathematically valid but produces a non-uniform pixel
+    distribution distinct from textbook Bresenham — endpoints land
+    correctly, total pixel count is preserved, but interior pixels
+    cluster non-symmetrically.  Possibly an MSVC 4.20 codegen
+    artifact, possibly a deliberate constant-load reduction.
+  - **#39** — The 3 bevel rect wrappers' bounds-clamp uses
+    `if/else if`, so when the left/top edge was clamped, the
+    right/bottom clamp is skipped.  The solid rect uses sequential
+    `if`s and clamps both unconditionally.  Behavior is unchanged
+    (per-pixel clipper drops off-canvas writes) but the bevel path
+    wastes loop iterations on oversize rects.  Looks like an
+    oversight that survived 30 years because common UI rect sizes
+    never hit the slow path.
+  - **#40** — The dotted-line variant (`FUN_00403c49`) only handles
+    pure-vertical and pure-horizontal lines.  Diagonals fall through
+    both branches and silently draw nothing.  Retail callers all
+    pass axis-aligned coords; the code is shaped for the axis path
+    only.  Our port preserves the silent no-op verbatim — a
+    diagonal-dotted-line regression test would deliberately fail.
+
+### Headline numbers
+
+- **557 → 580 host tests** (23 new), all green under ASan/UBSan.
+- **6 retail functions ported** (~1.85 KB decompilation: 347 + 126
+  + 442 + 171 + 247 + 249 + 249 + 249 B = 2080 B counting helpers).
+- **1 new module** (`src/gfx_line`) — no extensions to other
+  modules; the gfx_paint clipped-pixel writer was already in place.
+- **3 new engine quirks filed** (#38, #39, #40).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Renderer pipeline state
+
+| layer                          | status     |
+| ------------------------------ | ---------- |
+| char width                     | ported     |
+| buffer width                   | ported     |
+| bounded buffer width           | ported     |
+| word width + chars             | ported     |
+| editor (text_input)            | ported     |
+| localization blob access       | ported     |
+| dirty-rect tracking            | ported     |
+| 1-pixel / 2x1 painters         | ported     |
+| clipped pixel / 2x1            | ported     |
+| glyph blitter (unclipped)      | ported     |
+| glyph blitter (clipped × 2)    | ported     |
+| glyph dispatcher (per-char)    | ported     |
+| clip setters (X + Y)           | ported     |
+| text renderer (per-line)       | ported     |
+| centered-text wrapper          | ported     |
+| substitution stream            | ported     |
+| word-wrap renderer (buffer)    | ported     |
+| word-wrap renderer (localized) | ported     |
+| localization line render       | ported     |
+| localization line centered     | ported     |
+| **solid Bresenham line**       | **ported (this chip)** |
+| **dotted axis-aligned line**   | **ported (this chip)** |
+| **solid rect outline**         | **ported (this chip)** |
+| **3D bevel rect (3 palettes)** | **ported (this chip)** |
+| string-concat single-line render | deferred (177 B, `FUN_00403015`) |
+| sprite blitters (4x4/6x6/8x8)  | unanalyzed |
+
+The line + rect primitives are now end-to-end in `src/`.  Tests cover
+horizontal / vertical / 45° / shallow / steep / degenerate / clipped
+/ negative-coord lines (all endpoint-order invariant), the dotted
+axis variant + diagonal-no-op, solid rect with size clamp, and the
+bevel rect's corner-overwrite pattern (sequential edge paints mean
+later edges overwrite earlier ones at corners — only TR shows the
+top color on a typical bevel), plus the asymmetric clamp test that
+exposes quirk #39.
+
+### What's next
+
+Three natural continuations:
+
+1. **String-concat single-line render** — port `FUN_00403015`
+   (177 B), the small wrapper that concatenates a prefix into a
+   fixed 8000-byte buffer (`DAT_0058fda0`) then calls
+   `gfx_text_render_line`.  Closes the last text-control entry
+   point; called by the in-game name/title-prefix paths.
+2. **Wire gfx.c runtime to the renderer** — extend the
+   `IDirectDrawSurface::Lock` probe to set `lpSurface` onto the
+   gfx_paint canvas.  Small chip but requires a runtime smoke test
+   on the Windows host to validate "render a real string + frame
+   during boot".  Visible-pixels milestone earned at this point.
+3. **Sprite blitter (4x4 / 6x6 / 8x8 tiles)** — the next deferred
+   class of leaves.  Larger scope; uncovers the tile-format readers
+   the renderer needs for the map view.
+
+Picking #2 (runtime wiring) would unlock visible-pixels validation
+end-to-end, but it's gated on user-observed Windows-host behavior.
+Picking #1 (string-concat) is the smallest remaining text-control
+chip and keeps autonomous progress moving forward; #3 is a much
+larger scope and a fresh subsystem.
+
+This is a natural `/clear` point — the line-and-rect primitive set
+is now end-to-end, and the next frontier (runtime wiring or sprite
+blitters) is a fresh scope worth a fresh conversation.
+
+---
+
 ## 2026-05-25 — Word-wrap renderers (1 chip, 4 fns)
 
 Continuation of the same unattended session.  The previous dispatch

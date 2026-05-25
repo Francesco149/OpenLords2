@@ -1435,6 +1435,122 @@ the runtime loader puts in the equivalent BSS slot.
 
 ---
 
+## 38. Bresenham line drawer mutates the abs(dx)/abs(dy) BSS slots
+
+`FUN_00403a8f` is a Bresenham line drawer with an unusual variant:
+the `DAT_005aeb40` and `DAT_005aeb44` slots (set up by `FUN_004037ee`
+to hold abs(dx) and abs(dy)) are **decremented inside the inner
+loop** — one slot per iteration, and BOTH when the err accumulator
+crosses zero.
+
+Loop body:
+
+    paint(local_c, local_8, color);           // current pixel
+    bres_err_update(steep_mode);              // err update using
+                                              //   CURRENT abs_dx/dy
+    DAT_005aeb40-- (or 44, dominant axis);    // decrement
+    if (err > 0) {
+        DAT_005aeb44-- (or 40, other axis);   // also decrement
+        local_c += DAT_005aeb54 (x or y step);
+    }
+
+The accumulator update inside `FUN_00403949` reads the current
+(mutated) abs_dx / abs_dy each call.  Reads:
+
+  shallow: err < 0  → err += 2 * abs_dy
+           err >= 0 → err += 2 * (abs_dy - abs_dx)
+  steep:   err < 0  → err += 2 * abs_dx
+           err >= 0 → err += 2 * (abs_dx - abs_dy)
+
+This is mathematically valid but not the textbook form (textbook
+Bresenham keeps abs_dx/abs_dy fixed and updates err with the same
+constants every iteration).  The mutating form has a non-uniform
+pixel distribution along shallow / steep diagonals — e.g. a line
+from `(0,0)` to `(10,5)` plots 4 pixels at y=0, 3 at y=1, then 1
+each at y=2..5.  Distinct from textbook Bresenham's symmetric
+2-2-2-2-2-1 distribution, but endpoints land on the correct
+coordinates and total pixel count = `max(|dx|,|dy|) + 1` is
+preserved.
+
+Why retail did this is unclear — possibly an MSVC 4.20 codegen
+artifact from a hand-written algorithm, possibly an explicit choice
+(the per-iteration `abs_dx - abs_dy` motif removes one constant
+load).  Our port preserves the exact arithmetic verbatim.
+
+> 📍 `src/gfx_line.c`'s `bres_err_update` + `gfx_line_draw`, Ghidra
+> `FUN_00403a8f @ 0x403a8f` and `FUN_00403949 @ 0x403949`.
+
+---
+
+## 39. Bevel rects skip the right/bottom clamp when x/y was clamped
+
+The 3 axis-rect bevel wrappers (`FUN_00403deb`, `FUN_00403ee4`,
+`FUN_00403fdd`) all use the same bounds-clamp pattern at the top:
+
+    if (param_1 < 1) {
+        param_1 = 0;
+    } else if (DAT_004eb274 <= param_3 + param_1) {
+        param_3 = DAT_004eb274 - param_1;
+    }
+
+Note the `else if`.  The right-edge clamp ONLY fires when the
+left-edge clamp DIDN'T.  So a rect with x=0 (well in-canvas) gets
+its left edge clamped to 0 (no-op since x was already 0), but the
+right-edge-fit-in-canvas check is **skipped entirely**.  Same
+pattern for y / height.
+
+By contrast, the solid rect (`FUN_00403cf4`) uses sequential `if`s:
+
+    if (param_1 < 1)                              param_1 = 0;
+    if (DAT_004eb274 <= param_3 + param_1)        param_3 = DAT_004eb274 - param_1;
+
+Both clamps fire independently.
+
+Behaviorally the bevel skip is harmless — the per-pixel painter
+(`FUN_004039c7`) clips off-canvas writes, so the visible result is
+the same.  But the line drawer iterates the full unclamped width,
+wasting cycles painting pixels that then get dropped.  Looks like
+an oversight that survived for 30 years because the slow path is
+never hit at common rect sizes.
+
+Our port preserves both clamp shapes as distinct helpers
+(`clamp_solid` vs `clamp_bevel`) — the visible difference only
+shows up when oversize rects are stress-tested.
+
+> 📍 `src/gfx_line.c`'s `clamp_solid` + `clamp_bevel`, Ghidra
+> `FUN_00403cf4`, `FUN_00403deb`, `FUN_00403ee4`, `FUN_00403fdd`.
+
+---
+
+## 40. Dotted line drawer is axis-only — diagonals silently draw nothing
+
+`FUN_00403c49` is the dotted-line variant of the Bresenham line
+drawer.  Its body is the same setup + axis-dispatch shape as
+`FUN_00403a8f`, but trimmed:
+
+  - Pure vertical (x1==x2)   → loop with step +2 on y
+  - Pure horizontal (y1==y2) → loop with step +2 on x
+  - Anything else            → fall through, draw NOTHING
+
+There are no shallow or steep branches.  Diagonal calls reach the
+end of the function without painting a single pixel.
+
+The retail codebase never invokes this with diagonal endpoints (the
+two callsites both pass axis-aligned coords for UI panel borders),
+so this is "load-bearing only for the axis path".  A future caller
+that didn't check would draw an invisible line and have no
+diagnostic to point at.
+
+Our port preserves the silent no-op verbatim — tests assert that
+diagonal dotted-line calls produce zero pixels, so a future
+regression that "fixes" the body to draw diagonals would
+deliberately fail.
+
+> 📍 `src/gfx_line.c`'s `gfx_line_draw_dotted`, Ghidra
+> `FUN_00403c49 @ 0x403c49`.
+
+---
+
 <!--
 Template for new entries:
 
