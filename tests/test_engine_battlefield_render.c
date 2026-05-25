@@ -4919,3 +4919,557 @@ int test_engine_battlefield_render_late_reset_clears(void)
     T_ASSERT_EQ_I(engine_battlefield_render_late_world_dirty_hook_count(),     0);
     return 0;
 }
+
+/* ────────────────────────────────────────────────────────────────
+ * Chip 7 — mini-map / hex-grid overview renderer.
+ *
+ * Scaffold: 5×5 descriptor grid (total_rows = row_stride = 5), 8-byte
+ * cell stride, mini-map origin at (40, 20).  Each cell renders as a
+ * 2×2 pixel block on a 640×400 canvas.  The mini-map blobs and
+ * default descriptor each have predictable pixel colors per slot so
+ * tests can read back which path produced the blit.
+ * ──────────────────────────────────────────────────────────────── */
+
+#define MM_TOTAL_ROWS    5
+#define MM_ROW_STRIDE    5      /* = visible cols of mini-map */
+#define MM_STRIDE_BYTES  8      /* per-cell descriptor stride */
+#define MM_ORIGIN_X      40
+#define MM_Y_OFFSET      20
+
+static uint8_t g_mm_canvas[CANVAS_W * CANVAS_H];
+static uint8_t g_mm_desc[MM_STRIDE_BYTES * MM_ROW_STRIDE * MM_TOTAL_ROWS];
+
+#define MM_BLOB_SIZE    1024
+static uint8_t g_mm_blob_primary[MM_BLOB_SIZE];
+static uint8_t g_mm_blob_alt    [MM_BLOB_SIZE];
+static uint8_t g_mm_default_desc[MM_BLOB_SIZE];
+
+/* Owner / slot tables.  Small strides so the fixtures stay tiny.
+ * Retail strides are 0x1b0 / 0x160 but the port just uses them as a
+ * multiplier — any value works. */
+#define MM_OWNER_STRIDE  16
+#define MM_SLOT_STRIDE   16
+static uint8_t g_mm_owner_table [MM_OWNER_STRIDE * 32];
+static uint8_t g_mm_slot_table  [MM_SLOT_STRIDE  * 32];
+
+/* Stamp a 2×2 pattern at `src_off` into the given blob.  All 4 bytes
+ * are set to `tag` so a single pixel read identifies the source. */
+static void mm_blob_stamp(uint8_t *blob, uint32_t src_off, uint8_t tag)
+{
+    blob[src_off + 0] = tag;
+    blob[src_off + 1] = tag;
+    blob[src_off + 2] = tag;
+    blob[src_off + 3] = tag;
+}
+
+/* Configure slot `slot_idx` of `blob` to draw a 2×2 tile of color
+ * `tag`.  Uses src_off = 0x200 + slot*4 so each slot gets a distinct
+ * 4-byte region. */
+static void mm_blob_set_slot(uint8_t *blob, int slot_idx, uint8_t tag)
+{
+    uint32_t src_off = 0x200 + (uint32_t)slot_idx * 4;
+    blob_set_slot(blob, slot_idx, /*w=*/2, /*h=*/2, src_off,
+                  /*flag_a=*/0, /*advance=*/0, /*flag_b=*/0);
+    mm_blob_stamp(blob, src_off, tag);
+}
+
+/* Initialise the mini-map scaffold. */
+static void mm_scaffold(void)
+{
+    scaffold_init();
+    memset(g_mm_canvas,        0, sizeof g_mm_canvas);
+    memset(g_mm_desc,          0, sizeof g_mm_desc);
+    memset(g_mm_blob_primary,  0, sizeof g_mm_blob_primary);
+    memset(g_mm_blob_alt,      0, sizeof g_mm_blob_alt);
+    memset(g_mm_default_desc,  0, sizeof g_mm_default_desc);
+    memset(g_mm_owner_table,   0, sizeof g_mm_owner_table);
+    memset(g_mm_slot_table,    0, sizeof g_mm_slot_table);
+
+    gfx_paint_bind_canvas(g_mm_canvas, CANVAS_W, CANVAS_H);
+
+    engine_battlefield_render_bind_descriptor_table(g_mm_desc, MM_STRIDE_BYTES);
+    engine_battlefield_render_bind_camera_row_stride(MM_ROW_STRIDE);
+    engine_battlefield_render_bind_total_rows(MM_TOTAL_ROWS);
+
+    engine_battlefield_render_bind_minimap_origin(MM_ORIGIN_X, MM_Y_OFFSET);
+    engine_battlefield_render_set_minimap_mode_gate(2);
+    engine_battlefield_render_set_minimap_engine_state(0);
+    engine_battlefield_render_reset_minimap_scan_pos();
+
+    engine_battlefield_render_bind_minimap_blob_primary(g_mm_blob_primary);
+    engine_battlefield_render_bind_minimap_blob_alt(g_mm_blob_alt);
+    engine_battlefield_render_bind_minimap_default_descriptor(g_mm_default_desc);
+    engine_battlefield_render_bind_minimap_entity_owner_table(g_mm_owner_table,
+                                                              MM_OWNER_STRIDE);
+    engine_battlefield_render_bind_minimap_player_slot_table(g_mm_slot_table,
+                                                             MM_SLOT_STRIDE);
+
+    /* Stage some default slot data so blits actually paint pixels. */
+    mm_blob_set_slot(g_mm_blob_primary, 0, 0x11);
+    mm_blob_set_slot(g_mm_blob_primary, 1, 0x12);
+    mm_blob_set_slot(g_mm_blob_alt,     0, 0x21);
+    mm_blob_set_slot(g_mm_blob_alt,     1, 0x22);
+    mm_blob_set_slot(g_mm_default_desc, 0, 0x31);
+    mm_blob_set_slot(g_mm_default_desc, 5, 0x35);
+    mm_blob_set_slot(g_mm_default_desc, 6, 0x36);
+}
+
+/* Write descriptor fields (flags=+2, sprite_idx=+3, entity_id=+5) for
+ * cell (col, row). */
+static void mm_desc_set(int col, int row, uint8_t flags,
+                        uint8_t sprite_idx, uint8_t entity_id)
+{
+    int off = (col + row * MM_ROW_STRIDE) * MM_STRIDE_BYTES;
+    g_mm_desc[off + 2] = flags;
+    g_mm_desc[off + 3] = sprite_idx;
+    g_mm_desc[off + 5] = entity_id;
+}
+
+/* Read pixel at the top-left of the cell (col, row)'s on-screen 2×2
+ * block.  Assumes start_row = 0 for the strip; otherwise add
+ * `start_row * 2` to the y component. */
+static uint8_t mm_cell_pixel(int col, int row)
+{
+    int x = MM_ORIGIN_X + col * 2;
+    int y = MM_Y_OFFSET + row * 2;
+    return g_mm_canvas[x + y * CANVAS_W];
+}
+
+int test_engine_battlefield_render_minimap_scroll_bumps_scan_pos(void)
+{
+    mm_scaffold();
+
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_scan_pos(), 0);
+
+    engine_battlefield_render_minimap_scroll(2);
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_scan_pos(), 2);
+
+    engine_battlefield_render_minimap_scroll(1);
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_scan_pos(), 3);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_scroll_wraps_at_boundary(void)
+{
+    mm_scaffold();
+
+    /* total_rows = 5.  Scroll by 4 → scan_pos = 4.  Wrap check is
+     * `total_rows - rows < scan_pos`: 5 - 4 = 1 < 4 → WRAP to 0. */
+    engine_battlefield_render_minimap_scroll(4);
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_scan_pos(), 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_scroll_wrap_exact(void)
+{
+    mm_scaffold();
+
+    /* total_rows = 5.  Scroll by 1, 5 times → 1, 2, 3, 4, then wrap.
+     * Wrap formula: 5 - 1 = 4 < 5 → WRAP to 0.  Verify that the 5th
+     * call lands at 0 (not 5). */
+    engine_battlefield_render_minimap_scroll(1);
+    engine_battlefield_render_minimap_scroll(1);
+    engine_battlefield_render_minimap_scroll(1);
+    engine_battlefield_render_minimap_scroll(1);
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_scan_pos(), 4);
+    engine_battlefield_render_minimap_scroll(1);
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_scan_pos(), 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_scroll_renders_when_mode_2(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_minimap_mode_gate(2);
+
+    /* Pre-mark one cell dirty so the strip render has something to
+     * blit. */
+    mm_desc_set(2, 0, /*flags=*/0x01, /*sprite_idx=*/0, /*entity_id=*/0);
+
+    engine_battlefield_render_minimap_scroll(1);
+
+    /* Scan position bumped, AND the strip render fired (per-cell
+     * counter > 0). */
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_scan_pos(), 1);
+    T_ASSERT(engine_battlefield_render_minimap_per_cell_count() > 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_scroll_skips_when_mode_not_2(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_minimap_mode_gate(0);
+
+    mm_desc_set(2, 0, /*flags=*/0x01, /*sprite_idx=*/0, /*entity_id=*/0);
+
+    engine_battlefield_render_minimap_scroll(1);
+
+    /* Cursor still bumps even though no render. */
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_scan_pos(), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_per_cell_count(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_blit_count(), 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_visits_all_cells(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(1);
+
+    engine_battlefield_render_minimap_render_strip_for_test(/*start=*/0, /*count=*/3);
+
+    /* 3 rows × 5 cols = 15 cell visits, all blitted. */
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_per_cell_count(), 15);
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_blit_count(),     15);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_skips_clean_cells(void)
+{
+    mm_scaffold();
+    /* No force_redraw.  Mark only cell (1, 0) dirty. */
+    engine_battlefield_render_set_force_redraw(0);
+    mm_desc_set(1, 0, /*flags=*/0x01, /*sprite_idx=*/0, /*entity_id=*/0);
+
+    engine_battlefield_render_minimap_render_strip_for_test(0, 1);
+
+    /* 5 cells visited (whole row), but only 1 blitted (cell at col 1).
+     * Note: col 0 is the first-col special case but engine_state==0
+     * so it falls through to the normal blob-selector path, which is
+     * gated on the dirty bit (it's not set for col 0). */
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_per_cell_count(), 5);
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_blit_count(),     1);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_terrain_primary_blob(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(1);
+    /* Cell (2, 0) with flags=0 (which is also (& 0x1c) == 0) and
+     * sprite_idx=1.  Should pick PRIMARY blob slot 1 (color 0x12). */
+    mm_desc_set(2, 0, /*flags=*/0x00, /*sprite_idx=*/1, /*entity_id=*/0);
+
+    engine_battlefield_render_minimap_render_strip_for_test(0, 1);
+
+    T_ASSERT_EQ_U(mm_cell_pixel(2, 0), 0x12);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_terrain_alt_blob(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(1);
+    /* flags = 0x04 → (& 0x1c) == 4 → ALT blob.  sprite_idx=0 → slot 0
+     * → color 0x21. */
+    mm_desc_set(2, 0, /*flags=*/0x04, /*sprite_idx=*/0, /*entity_id=*/0);
+
+    engine_battlefield_render_minimap_render_strip_for_test(0, 1);
+
+    T_ASSERT_EQ_U(mm_cell_pixel(2, 0), 0x21);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_other_0x1c_drops_cell(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(1);
+    /* flags = 0x08 → (& 0x1c) == 8 → neither primary nor alt, cell
+     * dropped (no blit). */
+    mm_desc_set(2, 0, /*flags=*/0x08, /*sprite_idx=*/0, /*entity_id=*/0);
+
+    engine_battlefield_render_minimap_render_strip_for_test(0, 1);
+
+    /* Per-cell visited but no blit on this cell.  Total = 5 cells, 4
+     * blits (the others get the primary-slot-0 path since flags=0). */
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_per_cell_count(), 5);
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_blit_count(),     4);
+    /* The dropped cell shows the canvas's pre-fill (0). */
+    T_ASSERT_EQ_U(mm_cell_pixel(2, 0), 0x00);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_boundary_clears_bit(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(0);
+    /* flags = 0x02 (boundary, NOT dirty) — boundary alone activates
+     * the gate.  Default-descriptor slot 0 (color 0x31).  After draw,
+     * bit 0x02 should be CLEARED. */
+    mm_desc_set(2, 0, /*flags=*/0x02, /*sprite_idx=*/0, /*entity_id=*/0);
+
+    engine_battlefield_render_minimap_render_strip_for_test(0, 1);
+
+    T_ASSERT_EQ_U(mm_cell_pixel(2, 0), 0x31);
+    int off = (2 + 0 * MM_ROW_STRIDE) * MM_STRIDE_BYTES;
+    T_ASSERT_EQ_I(g_mm_desc[off + 2] & 0x02, 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_first_col_ingame_override(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(1);
+    engine_battlefield_render_set_minimap_engine_state(3);
+
+    /* First col with flags = 0 and a non-zero sprite_idx.  The first-
+     * col-ingame override should fire BEFORE the normal blob-selector,
+     * so even though sprite_idx=1, we get default desc slot 0 (color
+     * 0x31), not primary slot 1 (color 0x12). */
+    mm_desc_set(0, 0, /*flags=*/0x00, /*sprite_idx=*/1, /*entity_id=*/0);
+
+    engine_battlefield_render_minimap_render_strip_for_test(0, 1);
+
+    T_ASSERT_EQ_U(mm_cell_pixel(0, 0), 0x31);
+    /* Subsequent cols use the normal path — col 1, sprite_idx=0
+     * (default), primary slot 0 = 0x11. */
+    T_ASSERT_EQ_U(mm_cell_pixel(1, 0), 0x11);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_first_col_not_ingame_normal(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(1);
+    engine_battlefield_render_set_minimap_engine_state(0);
+
+    /* engine_state != 3, so first-col path goes through normal blob-
+     * selector.  flags = 0 → primary slot 1. */
+    mm_desc_set(0, 0, /*flags=*/0x00, /*sprite_idx=*/1, /*entity_id=*/0);
+
+    engine_battlefield_render_minimap_render_strip_for_test(0, 1);
+
+    T_ASSERT_EQ_U(mm_cell_pixel(0, 0), 0x12);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_entity_owner_lookup(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(1);
+    /* Entity id 1; owner table[1] = 4; slot_table[4] = 5.  Should
+     * blit default desc slot 5 (color 0x35). */
+    g_mm_owner_table[1 * MM_OWNER_STRIDE] = 4;
+    g_mm_slot_table [4 * MM_SLOT_STRIDE ] = 5;
+
+    mm_desc_set(2, 0, /*flags=*/0x00, /*sprite_idx=*/0, /*entity_id=*/1);
+
+    engine_battlefield_render_minimap_render_strip_for_test(0, 1);
+
+    T_ASSERT_EQ_U(mm_cell_pixel(2, 0), 0x35);
+    /* Boundary bit cleared even when not initially set. */
+    int off = (2 + 0 * MM_ROW_STRIDE) * MM_STRIDE_BYTES;
+    T_ASSERT_EQ_I(g_mm_desc[off + 2] & 0x02, 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_entity_owner_6_shortcut(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(1);
+    /* Owner type 6 short-circuits to slot 6 (color 0x36) — the slot
+     * table is NOT consulted. */
+    g_mm_owner_table[2 * MM_OWNER_STRIDE] = 6;
+    /* Sabotage slot_table[6] to verify it's NOT used. */
+    g_mm_slot_table[6 * MM_SLOT_STRIDE] = 0;
+
+    mm_desc_set(3, 0, /*flags=*/0x00, /*sprite_idx=*/0, /*entity_id=*/2);
+
+    engine_battlefield_render_minimap_render_strip_for_test(0, 1);
+
+    T_ASSERT_EQ_U(mm_cell_pixel(3, 0), 0x36);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_entity_slot_zero_skipped(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(1);
+    /* Owner type 5; slot_table[5] = 0 → slot is 0 → blit SKIPPED. */
+    g_mm_owner_table[7 * MM_OWNER_STRIDE] = 5;
+    g_mm_slot_table [5 * MM_SLOT_STRIDE ] = 0;
+
+    mm_desc_set(2, 0, /*flags=*/0x00, /*sprite_idx=*/0, /*entity_id=*/7);
+
+    /* Disable the other cells from painting so we can isolate cell
+     * (2, 0). */
+    /* Actually with force_redraw=1 every other cell will paint; that's
+     * fine — we read just (2, 0). */
+    engine_battlefield_render_minimap_render_strip_for_test(0, 1);
+
+    /* Cell (2, 0) stays at canvas pre-fill (0). */
+    T_ASSERT_EQ_U(mm_cell_pixel(2, 0), 0x00);
+    /* Other cells (col 0 with flags=0, sprite_idx=0 → primary slot 0 = 0x11). */
+    T_ASSERT_EQ_U(mm_cell_pixel(0, 0), 0x11);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_advances_cursor_pitch_2(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(1);
+    /* All cells use primary slot 0 → 0x11.  Verify 2-pixel pitch by
+     * checking that the cells land at (origin_x + col*2, y_offset +
+     * row*2). */
+    engine_battlefield_render_minimap_render_strip_for_test(0, 2);
+
+    /* Cell (0, 0): pixel at (40, 20). */
+    T_ASSERT_EQ_U(g_mm_canvas[40 + 20 * CANVAS_W], 0x11);
+    /* Cell (1, 0): pixel at (42, 20) — 2 pixels right. */
+    T_ASSERT_EQ_U(g_mm_canvas[42 + 20 * CANVAS_W], 0x11);
+    /* Cell (4, 0): pixel at (48, 20) — last col of row 0. */
+    T_ASSERT_EQ_U(g_mm_canvas[48 + 20 * CANVAS_W], 0x11);
+    /* Cell (0, 1): pixel at (40, 22) — 2 pixels down. */
+    T_ASSERT_EQ_U(g_mm_canvas[40 + 22 * CANVAS_W], 0x11);
+    /* Cell (4, 1): pixel at (48, 22). */
+    T_ASSERT_EQ_U(g_mm_canvas[48 + 22 * CANVAS_W], 0x11);
+    /* Each rendered 2×2 tile: cell (0, 0) also paints (41, 20),
+     * (40, 21), (41, 21). */
+    T_ASSERT_EQ_U(g_mm_canvas[41 + 20 * CANVAS_W], 0x11);
+    T_ASSERT_EQ_U(g_mm_canvas[40 + 21 * CANVAS_W], 0x11);
+    T_ASSERT_EQ_U(g_mm_canvas[41 + 21 * CANVAS_W], 0x11);
+    /* Right of cell (4, 0) — (50, 20) — should be untouched. */
+    T_ASSERT_EQ_U(g_mm_canvas[50 + 20 * CANVAS_W], 0x00);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_at_offset_row(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(1);
+    /* Render rows 2..3 — strip should land at y = 20 + 2*2 = 24. */
+    engine_battlefield_render_minimap_render_strip_for_test(2, 2);
+
+    /* Cell (0, 2): pixel at (40, 24). */
+    T_ASSERT_EQ_U(g_mm_canvas[40 + 24 * CANVAS_W], 0x11);
+    /* Cell (0, 3): pixel at (40, 26). */
+    T_ASSERT_EQ_U(g_mm_canvas[40 + 26 * CANVAS_W], 0x11);
+    /* Row 0 (y=20) untouched — strip started at row 2. */
+    T_ASSERT_EQ_U(g_mm_canvas[40 + 20 * CANVAS_W], 0x00);
+    /* Row 4 (y=28) untouched — count = 2 from start = 2 → ends at 3. */
+    T_ASSERT_EQ_U(g_mm_canvas[40 + 28 * CANVAS_W], 0x00);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_null_desc_no_op(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_bind_descriptor_table(NULL, MM_STRIDE_BYTES);
+
+    engine_battlefield_render_minimap_render_strip_for_test(0, 5);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_per_cell_count(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_blit_count(),     0);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_strip_zero_count_no_op(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(1);
+
+    engine_battlefield_render_minimap_render_strip_for_test(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_per_cell_count(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_blit_count(),     0);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_reset_clears_counters(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(1);
+    engine_battlefield_render_minimap_render_strip_for_test(0, 1);
+    T_ASSERT(engine_battlefield_render_minimap_per_cell_count() > 0);
+    T_ASSERT(engine_battlefield_render_minimap_blit_count()     > 0);
+
+    engine_battlefield_render_reset_counts();
+
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_per_cell_count(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_blit_count(),     0);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_reset_scan_pos(void)
+{
+    mm_scaffold();
+    engine_battlefield_render_minimap_scroll(2);
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_scan_pos(), 2);
+
+    engine_battlefield_render_reset_minimap_scan_pos();
+    T_ASSERT_EQ_I(engine_battlefield_render_minimap_scan_pos(), 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_bulk_binder_minimap_context(void)
+{
+    /* Verifies the bulk binder wires all 6 fields by setting bogus
+     * pointers via the bulk path, then triggering a strip render and
+     * checking the pixel pattern matches the bound blobs. */
+    mm_scaffold();
+    engine_battlefield_render_set_force_redraw(1);
+
+    /* Build two separate "alternate" blobs and rebind via the bulk
+     * call. */
+    static uint8_t alt_primary[MM_BLOB_SIZE];
+    static uint8_t alt_alt    [MM_BLOB_SIZE];
+    static uint8_t alt_default[MM_BLOB_SIZE];
+    memset(alt_primary, 0, sizeof alt_primary);
+    memset(alt_alt,     0, sizeof alt_alt);
+    memset(alt_default, 0, sizeof alt_default);
+    mm_blob_set_slot(alt_primary, 0, 0x71);
+    mm_blob_set_slot(alt_alt,     0, 0x81);
+    mm_blob_set_slot(alt_default, 0, 0x91);
+
+    engine_battlefield_render_bind_minimap_context(
+        alt_primary, alt_alt, alt_default,
+        /*origin_x=*/200, /*y_offset=*/100, /*mode_gate=*/2);
+
+    /* All cells flags=0 → primary blob slot 0 (color 0x71).  Origin
+     * shifted to (200, 100). */
+    engine_battlefield_render_minimap_render_strip_for_test(0, 1);
+
+    T_ASSERT_EQ_U(g_mm_canvas[200 + 100 * CANVAS_W], 0x71);
+    /* Mode gate is now 2 — scroll should dispatch. */
+    engine_battlefield_render_minimap_scroll(1);
+    T_ASSERT(engine_battlefield_render_minimap_per_cell_count() > 5);
+    return 0;
+}
+
+int test_engine_battlefield_render_minimap_bulk_binder_hex_grid_context(void)
+{
+    /* Verifies the hex-grid bulk binder wires all 11 params.  We
+     * check observable effects via the existing accessors and a
+     * derived round trip (clip rect right edge = viewport_x +
+     * visible_cols * zoom). */
+    mm_scaffold();
+
+    static uint8_t alt_primary[MM_BLOB_SIZE];
+    static uint8_t alt_alt    [MM_BLOB_SIZE];
+    static uint8_t alt_desc[ MM_STRIDE_BYTES * 4 * 4 ];
+    memset(alt_primary, 0, sizeof alt_primary);
+    memset(alt_alt,     0, sizeof alt_alt);
+    memset(alt_desc,    0, sizeof alt_desc);
+
+    engine_battlefield_render_bind_hex_grid_context(
+        alt_primary, alt_alt, alt_desc,
+        /*row_stride_in_cells=*/4,
+        /*total_rows=*/4,
+        /*cell_stride_bytes=*/MM_STRIDE_BYTES,
+        /*viewport_x=*/64, /*viewport_y=*/32,
+        /*visible_cols=*/3, /*visible_rows=*/3,
+        /*zoom=*/16);
+
+    /* Zoom dispatcher reflects the bound zoom. */
+    T_ASSERT_EQ_I(engine_battlefield_render_get_zoom(), 16);
+    /* viewport accessors via the grid hit-test (centre point inside
+     * grid (3 cols × 16 px = 48 wide, starting at x=64) → x=80, y=40
+     * should be inside; x=63, y=32 should be outside. */
+    T_ASSERT_EQ_I(engine_battlefield_render_screen_in_grid(80, 40), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_screen_in_grid(63, 40), 0);
+    /* Cell band width derived from zoom/4 = 4. */
+    /* pixel_to_col_right_biased: px=64+12 = 76 → residue=12; band*3=12;
+     * 12 >= 12 → col += 1 → col=1. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_right_biased(76), 1);
+    return 0;
+}

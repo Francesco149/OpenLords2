@@ -274,6 +274,52 @@ static const char    *g_debug_label_suffix;           /* DAT_004e4520 */
 static int g_final_per_cell_count;
 static int g_final_label_render_count;
 
+/* ─── chip 7: mini-map / hex-grid overview state ─────────────────── */
+
+/* Mini-map sprite blobs.
+ *   primary   retail DAT_004e6584  — terrain flag (& 0x1c) == 0
+ *   alt       retail DAT_004e6568  — terrain flag (& 0x1c) == 4
+ *   default   retail DAT_004e5d40  — boundary cells, first-col-ingame
+ *                                     override, entity dispatch
+ */
+static const uint8_t *g_minimap_blob_primary;
+static const uint8_t *g_minimap_blob_alt;
+static const uint8_t *g_minimap_default_descriptor;
+
+/* Mini-map screen origin (retail DAT_004e5d68 x, _DAT_004e5d60 y).
+ * cursor_x is reset to origin_x at start of each row; cursor_y begins
+ * at start_row * 2 + y_offset for each strip. */
+static int g_minimap_origin_x;
+static int g_minimap_y_offset;
+
+/* Mini-map mode gate (retail DAT_004e5d58).  Strip-render only fires
+ * from minimap_scroll when this equals 2. */
+static int g_minimap_mode_gate;
+
+/* Engine-state gate (retail DAT_0052af94).  When equal to 3 (= ingame)
+ * AND we're on the first col of a row in the strip render, the path
+ * switches to the default-descriptor slot-0 override. */
+static int g_minimap_engine_state;
+
+/* Entity-owner table (retail &DAT_005544ac, stride 0x1b0).  Indexed by
+ * descriptor[+5]; byte at offset 0 of each record is the owner type. */
+static const uint8_t *g_minimap_entity_owner_table;
+static int            g_minimap_entity_owner_stride;
+
+/* Per-owner mini-map sprite-slot table (retail &DAT_0057bf0a,
+ * stride 0x160).  Indexed by the owner-type byte; byte at offset 0 is
+ * the sprite slot to use from the default descriptor. */
+static const uint8_t *g_minimap_player_slot_table;
+static int            g_minimap_player_slot_stride;
+
+/* Rolling scan cursor (retail DAT_004e5d74).  Bumped by minimap_scroll;
+ * the strip render starts at this row. */
+static int g_minimap_scan_pos;
+
+/* Test-only counters. */
+static int g_minimap_per_cell_count;
+static int g_minimap_blit_count;
+
 /* Per-pass call counters.  See the header for what each one
  * represents.  All seven pass entry points (5 stubs + 1 real no-op
  * + 1 implicitly the frame driver) bump exactly one counter per
@@ -2866,4 +2912,280 @@ void engine_battlefield_render_reset_counts(void)
     /* chip 5d state */
     g_final_per_cell_count               = 0;
     g_final_label_render_count           = 0;
+
+    /* chip 7 state — counters only.  Scan position has its own reset
+     * via engine_battlefield_render_reset_minimap_scan_pos. */
+    g_minimap_per_cell_count             = 0;
+    g_minimap_blit_count                 = 0;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Chip 7 — mini-map / hex-grid overview renderer.
+ *
+ * Ports of FUN_004b49b7 (the 2×2 raw blit primitive — landed in
+ * gfx_sprite.c), FUN_004bc020 / 4bc107 (bulk binders), FUN_004bc1d1
+ * (rolling-scroll trigger), and FUN_004bc51a (strip render).
+ * ────────────────────────────────────────────────────────────────── */
+
+void engine_battlefield_render_bind_minimap_blob_primary(const uint8_t *blob)
+{
+    g_minimap_blob_primary = blob;
+}
+
+void engine_battlefield_render_bind_minimap_blob_alt(const uint8_t *blob)
+{
+    g_minimap_blob_alt = blob;
+}
+
+void engine_battlefield_render_bind_minimap_default_descriptor(const uint8_t *blob)
+{
+    g_minimap_default_descriptor = blob;
+}
+
+void engine_battlefield_render_bind_minimap_origin(int origin_x, int y_offset)
+{
+    g_minimap_origin_x = origin_x;
+    g_minimap_y_offset = y_offset;
+}
+
+void engine_battlefield_render_set_minimap_mode_gate(int gate_value)
+{
+    g_minimap_mode_gate = gate_value;
+}
+
+void engine_battlefield_render_set_minimap_engine_state(int engine_state)
+{
+    g_minimap_engine_state = engine_state;
+}
+
+void engine_battlefield_render_bind_minimap_entity_owner_table(const uint8_t *table,
+                                                                int stride)
+{
+    g_minimap_entity_owner_table  = table;
+    g_minimap_entity_owner_stride = stride;
+}
+
+void engine_battlefield_render_bind_minimap_player_slot_table(const uint8_t *table,
+                                                               int stride)
+{
+    g_minimap_player_slot_table  = table;
+    g_minimap_player_slot_stride = stride;
+}
+
+void engine_battlefield_render_bind_hex_grid_context(
+    const uint8_t *blob_primary,
+    const uint8_t *blob_alt,
+    uint8_t       *desc_base,
+    int            row_stride_in_cells,
+    int            total_rows,
+    int            cell_stride_bytes,
+    int            viewport_x,
+    int            viewport_y,
+    int            visible_cols,
+    int            visible_rows,
+    int            zoom)
+{
+    /* Retail FUN_004bc020 writes these fields directly to the shared
+     * globals.  We dispatch through our existing per-field binders so
+     * the bookkeeping (and any future binder-side validation) stays in
+     * one place.  Order chosen to match retail's write order. */
+    engine_battlefield_render_bind_blobs(blob_primary, blob_alt);
+    engine_battlefield_render_bind_descriptor_table(desc_base, cell_stride_bytes);
+    engine_battlefield_render_bind_camera_row_stride(row_stride_in_cells);
+    engine_battlefield_render_bind_total_rows(total_rows);
+    engine_battlefield_render_bind_viewport_offset(viewport_x, viewport_y);
+    engine_battlefield_render_bind_grid(visible_cols, visible_rows, /*row_wrap=*/0);
+    engine_battlefield_render_set_zoom(zoom);
+
+    /* Derived values.  Retail computes:
+     *   DAT_004e5d44 = zoom / 2                  → scroll_pad
+     *   DAT_004e5d3c = (zoom + ...) >> 2         → cell_band_width (= zoom/4)
+     *   _DAT_004e6550 = zoom * zoom              → unused elsewhere; skip
+     *   DAT_004e5d70 = (row_stride - visible_cols) * cell_stride  → row-wrap;
+     *                                              already derived inside
+     *                                              bind_camera_row_stride
+     *                                              + bind_grid + bind_desc_table
+     *   DAT_004e6564 = viewport_x                → clip_left
+     *   DAT_004e5d54 = visible_cols*zoom + vx    → clip_right
+     *   DAT_004e5d48 = viewport_y                → clip_top
+     *   DAT_004e5d6c = visible_rows*zoom + vy    → clip_bottom
+     */
+    engine_battlefield_render_bind_scroll_pad(zoom / 2);
+    engine_battlefield_render_bind_cell_band_width(zoom / 4);
+    engine_battlefield_render_bind_clip_rect(viewport_x,
+                                             viewport_y,
+                                             visible_cols * zoom + viewport_x,
+                                             visible_rows * zoom + viewport_y);
+}
+
+void engine_battlefield_render_bind_minimap_context(
+    const uint8_t *blob_primary,
+    const uint8_t *blob_alt,
+    const uint8_t *default_desc,
+    int            origin_x,
+    int            y_offset,
+    int            mode_gate)
+{
+    /* Retail FUN_004bc107 writes 6 globals in order.  Same dispatch-
+     * through-per-field-binder shape as the hex-grid context above. */
+    engine_battlefield_render_bind_minimap_blob_primary(blob_primary);
+    engine_battlefield_render_bind_minimap_blob_alt(blob_alt);
+    engine_battlefield_render_bind_minimap_default_descriptor(default_desc);
+    engine_battlefield_render_bind_minimap_origin(origin_x, y_offset);
+    engine_battlefield_render_set_minimap_mode_gate(mode_gate);
+}
+
+/* Mini-map strip render — port of FUN_004bc51a @ 0x4bc51a (994 B).
+ *
+ * Walks `count` rows starting at `start_row` of the bound descriptor
+ * table.  For each cell:
+ *
+ *   (a) Read flags = descriptor[+2], entity_id = descriptor[+5].
+ *   (b) Process iff (force_redraw OR boundary-bit OR dirty-bit).
+ *   (c) Dispatch one of four paths:
+ *
+ *         entity_id != 0    → look up sprite slot via owner-type
+ *                             → player-slot indirection; type==6
+ *                             short-circuits to slot 6.  Slot 0
+ *                             ⇒ skip blit.  Blob = default desc.
+ *                             Clear boundary bit.
+ *         flags & 0x02      → boundary cell.  Slot 0 of default desc.
+ *                             Clear boundary bit.
+ *         first-col + state=3
+ *                           → slot 0 of default desc (override).
+ *         (flags & 0x1c)==0 → terrain.  Slot = descriptor[+3], blob =
+ *                             minimap primary.
+ *         (flags & 0x1c)==4 → terrain.  Slot = descriptor[+3], blob =
+ *                             minimap alt.
+ *         other 0x1c values → no draw (cell dropped).
+ *
+ *   (d) Advance cursor.  Descriptor cursor += cell_stride; screen
+ *       cursor_x += 2 per cell; cursor_y += 2 per row.
+ *
+ * Each blit goes through the staging dispatcher
+ * (`gfx_dispatch_stage_sprite_descriptor`) into the 2×2 raw blit
+ * (`gfx_sprite_blit_2x2_raw`).  The dispatcher's cursor is the same
+ * shared one used by every other sprite blit (`gfx_glyph_set_cursor_x/y`). */
+static void minimap_dispatch_blit(const uint8_t *blob, int slot)
+{
+    if (!blob) return;
+    gfx_dispatch_stage_sprite_descriptor(blob, slot);
+    gfx_sprite_blit_2x2_raw(blob);
+    g_minimap_blit_count += 1;
+}
+
+static void minimap_render_strip(int start_row, int count)
+{
+    if (!g_desc_base) return;
+    if (count <= 0)   return;
+
+    int desc_cursor = g_desc_stride * g_camera_row_stride * start_row;
+    int cursor_y    = start_row * 2 + g_minimap_y_offset;
+
+    for (int row = start_row; row < start_row + count; row++) {
+        int cursor_x = g_minimap_origin_x;
+
+        for (int col = 0; col < g_camera_row_stride; col++) {
+            g_minimap_per_cell_count += 1;
+
+            uint8_t flags     = g_desc_base[desc_cursor + 2];
+            uint8_t entity_id = g_desc_base[desc_cursor + 5];
+
+            int gate = (g_force_redraw != 0)
+                    || (flags & 0x02)
+                    || (flags & 0x01);
+            if (gate) {
+                gfx_glyph_set_cursor_x(cursor_x);
+                gfx_glyph_set_cursor_y(cursor_y);
+
+                if (entity_id == 0) {
+                    /* Terrain / boundary path. */
+                    if ((flags & 0x02) == 0) {
+                        /* Not boundary. */
+                        if (col == 0 && g_minimap_engine_state == 3) {
+                            /* First-col-ingame override → default desc slot 0. */
+                            minimap_dispatch_blit(g_minimap_default_descriptor, 0);
+                        } else {
+                            /* Normal terrain — blob selected by flags & 0x1c. */
+                            int slot = g_desc_base[desc_cursor + 3];
+                            int sel  = flags & 0x1c;
+                            if (sel == 0) {
+                                minimap_dispatch_blit(g_minimap_blob_primary, slot);
+                            } else if (sel == 4) {
+                                minimap_dispatch_blit(g_minimap_blob_alt, slot);
+                            }
+                            /* sel ∈ {8,12,16,20,24,28} → cell dropped. */
+                        }
+                    } else {
+                        /* Boundary cell — clear bit 2 + render default. */
+                        g_desc_base[desc_cursor + 2] = flags & 0xfd;
+                        minimap_dispatch_blit(g_minimap_default_descriptor, 0);
+                    }
+                } else {
+                    /* Entity cell.  Clear boundary bit; look up slot. */
+                    g_desc_base[desc_cursor + 2] = flags & 0xfd;
+
+                    int slot;
+                    if (!g_minimap_entity_owner_table) {
+                        slot = 0;
+                    } else {
+                        uint8_t owner = g_minimap_entity_owner_table[
+                            entity_id * g_minimap_entity_owner_stride];
+                        if (owner == 6) {
+                            slot = 6;
+                        } else if (!g_minimap_player_slot_table) {
+                            slot = 0;
+                        } else {
+                            slot = g_minimap_player_slot_table[
+                                owner * g_minimap_player_slot_stride];
+                        }
+                    }
+                    if (slot != 0) {
+                        minimap_dispatch_blit(g_minimap_default_descriptor, slot);
+                    }
+                }
+            }
+
+            desc_cursor += g_desc_stride;
+            cursor_x    += 2;
+        }
+        cursor_y += 2;
+    }
+}
+
+void engine_battlefield_render_minimap_scroll(int rows)
+{
+    g_minimap_scan_pos += rows;
+    if (g_total_rows - rows < g_minimap_scan_pos) {
+        g_minimap_scan_pos = 0;
+    }
+    if (g_minimap_mode_gate == 2) {
+        minimap_render_strip(g_minimap_scan_pos, rows);
+    }
+}
+
+void engine_battlefield_render_minimap_render_strip_for_test(int start_row,
+                                                              int count)
+{
+    minimap_render_strip(start_row, count);
+}
+
+int engine_battlefield_render_minimap_scan_pos(void)
+{
+    return g_minimap_scan_pos;
+}
+
+void engine_battlefield_render_reset_minimap_scan_pos(void)
+{
+    g_minimap_scan_pos = 0;
+}
+
+int engine_battlefield_render_minimap_per_cell_count(void)
+{
+    return g_minimap_per_cell_count;
+}
+
+int engine_battlefield_render_minimap_blit_count(void)
+{
+    return g_minimap_blit_count;
 }

@@ -1167,4 +1167,195 @@ void engine_battlefield_render_run_pass_late_for_test(int camera_x, int camera_y
  * counters and render-state effects in isolation. */
 void engine_battlefield_render_run_pass_final_for_test(int camera_x, int camera_y);
 
+/* ─────────────────────────────────────────────────────────────────
+ * Chip 7 — mini-map / hex-grid overview renderer.
+ *
+ * A separate renderer family that walks the SAME descriptor table the
+ * battlefield terrain passes walk, but draws each cell as a 2×2 pixel
+ * block (via `gfx_sprite_blit_2x2_raw`) into a fixed-position 160×160
+ * overview area in the right margin.  Shared between strategic mode
+ * and battlefield mode — both `FUN_004987b7` (battlefield init) and
+ * `FUN_00498dcb` (strategic init) wire it up the same way (80×80 of
+ * the world map at 2 px/cell, positioned at x=466 / y=11 + row*2).
+ *
+ * The renderer is rolling — not redrawn fully every frame.  Each tick,
+ * `minimap_scroll(N)` advances a "next-row" cursor by N rows and
+ * redraws those N rows.  At ~50 Hz with `N=4`, the entire 80-row
+ * mini-map refreshes every ~0.4 s — visually smooth but cheap.
+ *
+ * Ports:
+ *   FUN_004bc020 — bulk binder for SHARED hex-grid context (also used
+ *                  by the battlefield terrain passes).  Calls the
+ *                  individual binders we already have plus the new
+ *                  `bind_minimap_*` ones.
+ *   FUN_004bc107 — bulk binder for mini-map specific context (3 sprite
+ *                  blobs + origin + mode gate).
+ *   FUN_004bc1d1 — rolling-scroll trigger.  Bumps the scan cursor,
+ *                  wraps when it would overflow, dispatches a strip
+ *                  redraw IF the mode gate is set.
+ *   FUN_004bc51a — strip render.  Walks N rows × all cols, dispatches
+ *                  one of four per-cell paths (terrain-default,
+ *                  terrain-blob, boundary, entity-owner).
+ * ───────────────────────────────────────────────────────────────── */
+
+/* Bind the primary mini-map sprite blob (retail `DAT_004e6584`).
+ * Used for terrain cells whose flag-bits `0x1c == 0`.  NULL ⇒ those
+ * cells are skipped (no blit). */
+void engine_battlefield_render_bind_minimap_blob_primary(const uint8_t *blob);
+
+/* Bind the alternate mini-map sprite blob (retail `DAT_004e6568`).
+ * Used for terrain cells whose flag-bits `0x1c == 4`.  NULL ⇒ those
+ * cells are skipped (no blit).  Cells with other flag values in the
+ * `0x1c` mask (`0x08`, `0x0c`, etc.) are also skipped — only `0` and
+ * `4` are mapped. */
+void engine_battlefield_render_bind_minimap_blob_alt(const uint8_t *blob);
+
+/* Bind the default mini-map sprite descriptor (retail `DAT_004e5d40`).
+ * Used in three per-cell paths:
+ *   - boundary cells (flags & 0x02) — always blits slot 0 of this blob
+ *   - terrain first-col cells when engine state is ingame — blits
+ *     slot 0 of this blob (overrides the normal blob-selector path)
+ *   - entity cells — blits the entity-owner-derived slot of this blob
+ * NULL ⇒ those cells are skipped. */
+void engine_battlefield_render_bind_minimap_default_descriptor(const uint8_t *blob);
+
+/* Bind the screen origin for the mini-map render area (retail
+ * `DAT_004e5d68` x, `_DAT_004e5d60` y_offset).  Cursor_x is reset to
+ * `origin_x` at the start of every row; cursor_y begins at
+ * `start_row * 2 + y_offset` for each strip. */
+void engine_battlefield_render_bind_minimap_origin(int origin_x, int y_offset);
+
+/* Bind the mini-map "active" mode gate (retail `DAT_004e5d58`).  The
+ * scroll trigger only dispatches a strip redraw when this gate equals
+ * the magic value 2 (set by `FUN_004bc107` from its 6th param — both
+ * battlefield init and strategic init pass 2 here).  Any other value
+ * suppresses the redraw (cursor still advances).  Set to 0 to
+ * temporarily disable the mini-map. */
+void engine_battlefield_render_set_minimap_mode_gate(int gate_value);
+
+/* Bind the engine-state gate (retail `DAT_0052af94`).  When the
+ * strip-render encounters the FIRST cell of a row, it consults this
+ * gate: if the value is 3 (= ingame), it uses the default descriptor
+ * at slot 0 instead of the normal blob-selector path.  Used as a
+ * "draw the map edge marker" override in-game. */
+void engine_battlefield_render_set_minimap_engine_state(int engine_state);
+
+/* Bind the entity-owner table (retail `&DAT_005544ac`, stride
+ * `0x1b0`).  Indexed by the descriptor's `+5` byte (entity_id): the
+ * byte at offset `0` of each record holds the owner type used to
+ * look up the sprite slot in the player-slot table below.
+ *
+ * Stride is exposed so tests can stand up smaller fixtures; the
+ * retail stride is fixed at 0x1b0. */
+void engine_battlefield_render_bind_minimap_entity_owner_table(const uint8_t *table,
+                                                                int stride);
+
+/* Bind the per-owner mini-map sprite-slot table (retail
+ * `&DAT_0057bf0a`, stride `0x160`).  Indexed by the entity-owner
+ * byte from the table above: the byte at offset `0` of each per-owner
+ * record holds the sprite slot to use from the default descriptor.
+ *
+ * Special case: owner type == 6 short-circuits this lookup and uses
+ * sprite slot 6 directly (port preserves this hardcoded branch).
+ *
+ * Slot == 0 ⇒ entity is rendered as a hole (no blit). */
+void engine_battlefield_render_bind_minimap_player_slot_table(const uint8_t *table,
+                                                               int stride);
+
+/* Bulk binder — port of `FUN_004bc020` @ 0x4bc020 (231 B).
+ *
+ * Binds the SHARED hex-grid context (descriptor table, dimensions,
+ * viewport, zoom, plus derived values).  Used by BOTH the battlefield
+ * terrain passes AND the mini-map renderer.  Equivalent to calling:
+ *
+ *   bind_blobs(blob_primary, blob_alt);   // terrain blobs
+ *   bind_descriptor_table(desc_base, cell_stride);
+ *   bind_camera_row_stride(row_stride);    // = total cols
+ *   bind_total_rows(total_rows);
+ *   bind_viewport_offset(viewport_x, viewport_y);
+ *   bind_grid(visible_cols, visible_rows, 0);
+ *   set_zoom(zoom);
+ *   bind_scroll_pad(zoom / 2);
+ *   bind_cell_band_width(zoom / 4);
+ *   bind_clip_rect(viewport_x, viewport_y,
+ *                  visible_cols * zoom + viewport_x,
+ *                  visible_rows * zoom + viewport_y);
+ *
+ * Parameter order mirrors retail's argument order verbatim so the
+ * Ghidra cross-reference stays straightforward.  Quirk: retail also
+ * sets `_DAT_004e6550 = zoom * zoom` — that derived value is unused
+ * elsewhere and the port skips it. */
+void engine_battlefield_render_bind_hex_grid_context(
+    const uint8_t *blob_primary,        /* retail param_1 */
+    const uint8_t *blob_alt,            /* retail param_2 */
+    uint8_t       *desc_base,           /* retail param_3 */
+    int            row_stride_in_cells, /* retail param_4 */
+    int            total_rows,          /* retail param_5 */
+    int            cell_stride_bytes,   /* retail param_6 */
+    int            viewport_x,          /* retail param_7 */
+    int            viewport_y,          /* retail param_8 */
+    int            visible_cols,        /* retail param_9 */
+    int            visible_rows,        /* retail param_10 */
+    int            zoom);               /* retail param_11 */
+
+/* Bulk binder — port of `FUN_004bc107` @ 0x4bc107 (59 B).
+ *
+ * Binds the mini-map-specific context (3 sprite blobs + origin +
+ * mode gate).  Equivalent to:
+ *
+ *   bind_minimap_blob_primary(blob_primary);
+ *   bind_minimap_blob_alt(blob_alt);
+ *   bind_minimap_default_descriptor(default_desc);
+ *   bind_minimap_origin(origin_x, y_offset);
+ *   set_minimap_mode_gate(mode_gate);
+ *
+ * Both `FUN_004987b7` (battlefield init) and `FUN_00498dcb` (strategic
+ * init) call this with `mode_gate = 2`. */
+void engine_battlefield_render_bind_minimap_context(
+    const uint8_t *blob_primary,    /* retail param_1 */
+    const uint8_t *blob_alt,        /* retail param_2 */
+    const uint8_t *default_desc,    /* retail param_3 */
+    int            origin_x,        /* retail param_4 */
+    int            y_offset,        /* retail param_5 */
+    int            mode_gate);      /* retail param_6 */
+
+/* Driver — port of `FUN_004bc1d1` @ 0x4bc1d1 (81 B).
+ *
+ * Advance the mini-map scan position by `rows`, wrap at the
+ * total-rows boundary, then (if the mode gate is set) dispatch a
+ * strip redraw covering the just-advanced rows.
+ *
+ *   scan_pos += rows;
+ *   if (total_rows - rows < scan_pos) scan_pos = 0;   // wrap
+ *   if (mode_gate == 2) minimap_render_strip(scan_pos, rows);
+ *
+ * Wrap formula uses `total_rows - rows` (not `total_rows`), so a
+ * partial strip never crosses the bottom edge — if `scan_pos + rows`
+ * would step past `total_rows`, the cursor snaps back to 0 BEFORE
+ * the render call.  Result: the last strip rendered when reaching the
+ * bottom is always the FIRST strip of the next cycle, never a half-
+ * strip wrapping around. */
+void engine_battlefield_render_minimap_scroll(int rows);
+
+/* TEST-ONLY: run just the mini-map strip render with the given start
+ * row + count.  Bypasses the scroll-trigger's gate / wrap logic so
+ * tests can drive arbitrary strip ranges. */
+void engine_battlefield_render_minimap_render_strip_for_test(int start_row,
+                                                              int count);
+
+/* TEST-ONLY: read / reset the mini-map scan position cursor (retail
+ * `DAT_004e5d74`).  Bumped by `minimap_scroll`. */
+int  engine_battlefield_render_minimap_scan_pos(void);
+void engine_battlefield_render_reset_minimap_scan_pos(void);
+
+/* TEST-ONLY: per-cell + per-blit counters for the mini-map strip
+ * render.  Both reset by `reset_counts`.
+ *
+ *   per_cell — bumped for EVERY cell visited by the strip render
+ *              (regardless of dirty/redraw gating).
+ *   blit     — bumped each time a 2×2 blit is actually dispatched
+ *              (after the dirty + gate + blob-selector checks). */
+int engine_battlefield_render_minimap_per_cell_count(void);
+int engine_battlefield_render_minimap_blit_count(void);
+
 #endif /* OPENLORDS2_ENGINE_BATTLEFIELD_RENDER_H */

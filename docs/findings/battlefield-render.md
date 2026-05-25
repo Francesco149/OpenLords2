@@ -13,15 +13,17 @@ but lives in a different address band (`0x4bc000..0x4bf300`) and
 uses a different tile format and storage layout.
 
 **Status**: ENTIRE CLUSTER LANDED — chips 1, 2, 3, 3.5, 4, 5a.i,
-5a.ii.a, 5a.ii.b, 5a.iii, 5a.iv, 5b, 5c, 5d, 6 ported (sprite
+5a.ii.a, 5a.ii.b, 5a.iii, 5a.iv, 5b, 5c, 5d, 6, 6b, 7 ported (sprite
 primitives + frame driver + both zoom-dispatched terrain passes +
 zoom-32 overlay + middle-pass driver shell + sorted-entity
 infrastructure + per-entity draw base path + three per-cell draw
 leaves + three type-special leaves + late-pass driver + per-cell
 creature draw + selection marker + debug-label overlay + coord
-helpers).  Only large remaining work in the address band is the
-scroll/pan family (`FUN_004bc1d1 / 51a` — input layer, not render).
-Survey landed 2026-05-25, all chips landed 2026-05-25.
+helpers + mini-map renderer).  Chip 7 — the function family the
+original survey called "scroll/pan" — turned out to be the strategic-
+map mini-map / overview renderer (2-pixel-per-cell second view of the
+same descriptor table the battlefield terrain passes walk).  Survey
+landed 2026-05-25, all chips landed 2026-05-25 / 26.
 
 ## Entry point
 
@@ -402,8 +404,51 @@ The cluster is too large to port in one chip.  Suggested chip plan:
      rolling-scan trigger `FUN_004bc1d1`, mini-map row-strip
      render `FUN_004bc51a`).  See chip 7 below.
 
-Total cluster: ~12 KB across ~34 functions.  Comparable in
-scope to strategic-mode rendering, which took 4 chips.
+7. **Chip 7 — mini-map / hex-grid overview renderer.**  Ported
+   2026-05-26.  Five functions totaling ~1.4 KB:
+
+   - `FUN_004b49b7` (64 B) → `gfx_sprite_blit_2x2_raw`.  Micro-
+     sibling of the 16×16 / 32×32 raw blits.  Two 16-bit writes:
+     one at the cursor (2 px of row 0) + one at cursor + 640 bytes
+     (2 px of row 1).  Hardcoded 640-byte dest stride matches
+     quirk #75.
+   - `FUN_004bc020` (231 B) → `bind_hex_grid_context`.  Bulk
+     binder for the SHARED hex-grid context (descriptor base,
+     stride, viewport, zoom, derived band/clip rect).  Dispatches
+     through the per-field binders we already have.  Used by
+     BOTH the battlefield terrain pass AND the mini-map.
+   - `FUN_004bc107` (59 B) → `bind_minimap_context`.  Bulk binder
+     for the mini-map-specific context (3 sprite blobs + screen
+     origin + mode gate).
+   - `FUN_004bc1d1` (81 B) → `minimap_scroll`.  Rolling-scan
+     trigger: bumps the next-row cursor by N, wraps at
+     `total_rows - N`, dispatches a strip render iff mode == 2.
+     Filed quirk #100 (one-row guard band).
+   - `FUN_004bc51a` (994 B) → `minimap_render_strip`.  Walks N
+     rows × all `row_stride` cols.  Per-cell paths: terrain
+     primary blob (flags & 0x1c == 0) / terrain alt blob
+     (flags & 0x1c == 4) / first-col-ingame override (default
+     desc slot 0) / boundary cell (default desc slot 0, bit 2
+     cleared) / entity cell (owner→slot indirection, owner==6
+     short-circuits to slot 6).  Filed quirks #101 (silent drop
+     on unmapped flag values) and #102 (first-col-ingame override
+     before blob-selector).
+
+   The mini-map is rolling: at ~50 Hz with the main-loop's
+   `FUN_004bc1d1(4)` call, the full 80-row strategic-map
+   mini-map refreshes every ~0.4 s.  Full-redraw call sites
+   (`FUN_004bc1d1(0x50)`) trigger an immediate complete sweep.
+
+   The descriptor table is SHARED with the battlefield terrain
+   passes — the mini-map just re-reads the same data at 2 px
+   per cell instead of 16/32 px.  Both modes (strategic /
+   battlefield) wire it up via identical params: 80×80 cells,
+   viewport (0, 24), visible 15×14, zoom 32, mini-map origin
+   (466 or 480, 11).
+
+Total cluster: ~14 KB across ~39 functions (all 7 chips landed).
+Comparable in scope to strategic-mode rendering, which took 4
+chips.
 
 > 📍 Ghidra `FUN_004bc142` (entry), `FUN_004b49f7` (sprite
 > primitive), `FUN_004b99c0` line 88581 (caller).

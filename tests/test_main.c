@@ -601,6 +601,11 @@ struct test_case {
     X(gfx_sprite_blit_32x32_raw_writes_zero_bytes_opaque) \
     X(gfx_sprite_blit_32x32_raw_uses_glyph_offset) \
     X(gfx_sprite_blit_32x32_raw_null_canvas_no_crash) \
+    X(gfx_sprite_blit_2x2_raw_copies_4_bytes) \
+    X(gfx_sprite_blit_2x2_raw_writes_zero_bytes_opaque) \
+    X(gfx_sprite_blit_2x2_raw_respects_cursor) \
+    X(gfx_sprite_blit_2x2_raw_uses_glyph_offset) \
+    X(gfx_sprite_blit_2x2_raw_null_canvas_no_crash) \
     X(gfx_dispatch_sprite_paints_at_dest) \
     X(gfx_dispatch_sprite_left_clip_writes_visible_portion) \
     X(gfx_dispatch_sprite_right_clip_writes_visible_portion) \
@@ -1039,6 +1044,31 @@ struct test_case {
     X(engine_battlefield_render_final_null_font_no_render) \
     X(engine_battlefield_render_final_multiple_labels) \
     X(engine_battlefield_render_final_reset_clears) \
+    \
+    X(engine_battlefield_render_minimap_scroll_bumps_scan_pos) \
+    X(engine_battlefield_render_minimap_scroll_wraps_at_boundary) \
+    X(engine_battlefield_render_minimap_scroll_wrap_exact) \
+    X(engine_battlefield_render_minimap_scroll_renders_when_mode_2) \
+    X(engine_battlefield_render_minimap_scroll_skips_when_mode_not_2) \
+    X(engine_battlefield_render_minimap_strip_visits_all_cells) \
+    X(engine_battlefield_render_minimap_strip_skips_clean_cells) \
+    X(engine_battlefield_render_minimap_strip_terrain_primary_blob) \
+    X(engine_battlefield_render_minimap_strip_terrain_alt_blob) \
+    X(engine_battlefield_render_minimap_strip_other_0x1c_drops_cell) \
+    X(engine_battlefield_render_minimap_strip_boundary_clears_bit) \
+    X(engine_battlefield_render_minimap_strip_first_col_ingame_override) \
+    X(engine_battlefield_render_minimap_strip_first_col_not_ingame_normal) \
+    X(engine_battlefield_render_minimap_strip_entity_owner_lookup) \
+    X(engine_battlefield_render_minimap_strip_entity_owner_6_shortcut) \
+    X(engine_battlefield_render_minimap_strip_entity_slot_zero_skipped) \
+    X(engine_battlefield_render_minimap_strip_advances_cursor_pitch_2) \
+    X(engine_battlefield_render_minimap_strip_at_offset_row) \
+    X(engine_battlefield_render_minimap_strip_null_desc_no_op) \
+    X(engine_battlefield_render_minimap_strip_zero_count_no_op) \
+    X(engine_battlefield_render_minimap_reset_clears_counters) \
+    X(engine_battlefield_render_minimap_reset_scan_pos) \
+    X(engine_battlefield_render_minimap_bulk_binder_minimap_context) \
+    X(engine_battlefield_render_minimap_bulk_binder_hex_grid_context) \
     /* end */
 
 /* Emit extern decls. */

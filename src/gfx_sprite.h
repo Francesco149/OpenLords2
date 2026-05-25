@@ -178,4 +178,31 @@ void gfx_sprite_blit_16x16_raw(const uint8_t *sprite_blob);
  * least 32×32 = 1024 bytes available from that offset. */
 void gfx_sprite_blit_32x32_raw(const uint8_t *sprite_blob);
 
+/* Port of FUN_004b49b7 @ 0x4b49b7 (64 B).  Fixed-size 2×2 opaque raw
+ * blit.  The micro-sibling of the 16×16 and 32×32 raw blits — used to
+ * paint the strategic-map mini-map / overview where each world cell
+ * occupies a 2×2-pixel block.
+ *
+ * Copies 4 bytes from `sprite_blob + glyph_offset` to the dest origin
+ * computed from the canvas binding + cursor:
+ *
+ *   dst[0..1]    = src[0..1]   // row 0, two pixels
+ *   dst[640..641] = src[2..3]  // row 1, two pixels  (same hardcoded
+ *                              //                      640-byte stride
+ *                              //                      as the 16×16/
+ *                              //                      32×32 siblings)
+ *
+ * Retail body is 2 dword-indexed copies (`*puVar2 = *puVar1;
+ * puVar2[0x140] = puVar1[1]`).  No transparency check.  No width/
+ * height staging consulted; dimensions are baked in.
+ *
+ * Used by the strategic-map mini-map row-strip renderer (FUN_004bc51a)
+ * once per cell across all 80×80 world cells.
+ *
+ * `sprite_blob` is the same shape as the other sprite blits — a base
+ * pointer that the dispatcher offsets by `glyph_offset` to reach the
+ * 4 source bytes.  Caller is responsible for ensuring the source has
+ * at least 4 bytes available from that offset. */
+void gfx_sprite_blit_2x2_raw(const uint8_t *sprite_blob);
+
 #endif /* OPENLORDS2_GFX_SPRITE_H */

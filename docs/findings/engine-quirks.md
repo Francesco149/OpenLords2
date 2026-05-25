@@ -3609,6 +3609,105 @@ would at zoom 16.
 
 ---
 
+## 100. Mini-map rolling-scan wrap formula leaves a one-row guard band
+
+`FUN_004bc1d1` bumps `DAT_004e5d74` (next-scan-row cursor) by `param_1`
+each call, then wraps when:
+
+```c
+if (DAT_004e6570 - param_1 < DAT_004e5d74) {
+    DAT_004e5d74 = 0;
+}
+```
+
+That is, the wrap fires when `scan_pos > total_rows - rows`, NOT when
+`scan_pos >= total_rows`.  Net effect: a `param_1`-row strip render
+never spills past the bottom — because the snap-to-zero happens
+BEFORE the render call, the last strip rendered at the bottom of a
+cycle is always the FIRST strip of the next cycle, never a partial
+half-strip.
+
+Strict reading: at `total_rows = 80`, `param_1 = 4`, the cursor reaches
+`{0, 4, 8, ..., 76}` and then on the next call (`72 + 4 = 76 + 4 = 80
+> 76`) it wraps to 0.  The "row 80" position would have been a valid
+zero-indexed off-grid row anyway, but the conservative formula avoids
+the off-by-one risk if `total_rows` ever ends up not-divisible by the
+typical scroll step.
+
+The same hardcoded `4` is used from the main-loop tick (`FUN_004b99c0`
+line 47), and `0x50` (=80, full sweep) from the many full-redraw call
+sites — so both paths benefit from the guard.
+
+> 📍 `src/engine_battlefield_render.c`
+> (`engine_battlefield_render_minimap_scroll`),
+> `docs/findings/battlefield-render.md` §7,
+> Ghidra `FUN_004bc1d1` lines 6-12.
+
+---
+
+## 101. Mini-map cell silently drops on unmapped flag values
+
+`FUN_004bc51a`'s terrain-cell path uses `flags & 0x1c` to select
+between the primary and alt mini-map sprite blobs:
+
+```c
+if ((bVar1 & 0x1c) == 0) FUN_004b49b7(DAT_004e6584);  // primary
+else if ((bVar1 & 0x1c) == 4) FUN_004b49b7(DAT_004e6568);  // alt
+// else: nothing
+```
+
+The mask spans 3 bits (0x1c = 0b00011100), so it can take values 0,
+4, 8, 0xc, 0x10, 0x14, 0x18, 0x1c — but only `0` and `4` map to a
+blob.  Cells whose flag bits land on any of the other 6 values are
+silently dropped (no blit, no error, no fallback to default).  In
+practice the engine should only ever set `0` or `4` here — the other
+combinations are probably "we never get there", but the code leaves
+no safety net.
+
+The boundary-cell branch (`flags & 0x02`) IS taken first, so a cell
+with both `0x02` set AND `0x08` set will paint the default descriptor
+(bit 2 cleared after) rather than being dropped.  Only pure-terrain
+cells (no boundary bit, no entity) fall into the silent-drop case.
+
+> 📍 `src/engine_battlefield_render.c` (`minimap_render_strip`),
+> `docs/findings/battlefield-render.md` §7,
+> Ghidra `FUN_004bc51a` lines 34-56.
+
+---
+
+## 102. Mini-map first-col-ingame override fires BEFORE the blob-selector
+
+For the first cell of each mini-map row (`local_24 == 0`), the strip
+render checks the engine state gate:
+
+```c
+if ((local_24 == 0) && (DAT_0052af94 == 3)) {
+    // Default descriptor slot 0 — overrides the normal path
+    ...
+} else {
+    // Normal blob-selector path (flags & 0x1c)
+    ...
+}
+```
+
+When the engine is in-game (state == 3), the leftmost column of the
+mini-map is ALWAYS painted from the default descriptor's slot 0,
+regardless of the cell's flags or sprite_idx.  This produces a
+consistent left-edge marker — almost certainly the world-map's
+left-edge boundary indicator.
+
+When NOT in-game (menu, save dialog, etc., state != 3), the first
+column falls through to the normal blob-selector path, which means
+the mini-map's left edge can look different across screens.  This
+is probably deliberate but worth flagging because tests can't
+observe it without setting the engine state gate.
+
+> 📍 `src/engine_battlefield_render.c` (`minimap_render_strip`),
+> `docs/findings/battlefield-render.md` §7,
+> Ghidra `FUN_004bc51a` lines 24-33.
+
+---
+
 <!--
 Template for new entries:
 

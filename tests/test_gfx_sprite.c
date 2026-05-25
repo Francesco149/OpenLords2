@@ -776,3 +776,114 @@ int test_gfx_sprite_blit_32x32_raw_null_canvas_no_crash(void)
     gfx_sprite_blit_32x32_raw(blob);
     return 0;
 }
+
+/* ────────────────────────────────────────────────────────────────
+ * gfx_sprite_blit_2x2_raw — FUN_004b49b7 (chip 7).
+ *
+ * The 2×2 raw blit hardcodes the same 640-byte dest row stride as
+ * its larger siblings (quirk #75).  Same big_canvas_t harness.
+ * ──────────────────────────────────────────────────────────────── */
+
+int test_gfx_sprite_blit_2x2_raw_copies_4_bytes(void)
+{
+    big_canvas_t c; big_canvas_init(&c);
+
+    /* Source: 4 bytes after an 8-byte filler.  Tag bytes 1..4. */
+    uint8_t blob[8 + 4] = {0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff,
+                            0x01, 0x02, 0x03, 0x04};
+
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 2, 2);
+
+    gfx_sprite_blit_2x2_raw(blob);
+
+    /* Row 0: (0,0)=0x01, (1,0)=0x02. */
+    T_ASSERT_EQ_U(c.pixels[0 + 0 * BIG_W], 0x01);
+    T_ASSERT_EQ_U(c.pixels[1 + 0 * BIG_W], 0x02);
+    /* Row 1: (0,1)=0x03, (1,1)=0x04. */
+    T_ASSERT_EQ_U(c.pixels[0 + 1 * BIG_W], 0x03);
+    T_ASSERT_EQ_U(c.pixels[1 + 1 * BIG_W], 0x04);
+    /* Adjacent untouched cells stay zero. */
+    T_ASSERT_EQ_U(c.pixels[2 + 0 * BIG_W], 0x00);
+    T_ASSERT_EQ_U(c.pixels[0 + 2 * BIG_W], 0x00);
+    T_ASSERT(big_canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_blit_2x2_raw_writes_zero_bytes_opaque(void)
+{
+    big_canvas_t c; big_canvas_init(&c);
+    for (int i = 0; i < (int)sizeof c.pixels; i++) c.pixels[i] = 0xa5;
+
+    uint8_t blob[8 + 4] = {0};  /* all-zero source */
+    for (int i = 0; i < 8; i++) blob[i] = 0xff;
+
+    gfx_glyph_set_dest(10, 10);
+    gfx_glyph_set_glyph(8, 2, 2);
+
+    gfx_sprite_blit_2x2_raw(blob);
+
+    /* The 2×2 footprint is overwritten with zeros even though source
+     * is zero (no transparency check). */
+    T_ASSERT_EQ_U(c.pixels[10 + 10 * BIG_W], 0x00);
+    T_ASSERT_EQ_U(c.pixels[11 + 10 * BIG_W], 0x00);
+    T_ASSERT_EQ_U(c.pixels[10 + 11 * BIG_W], 0x00);
+    T_ASSERT_EQ_U(c.pixels[11 + 11 * BIG_W], 0x00);
+    /* Adjacent pixel still has the 0xa5 pre-fill. */
+    T_ASSERT_EQ_U(c.pixels[12 + 10 * BIG_W], 0xa5);
+    return 0;
+}
+
+int test_gfx_sprite_blit_2x2_raw_respects_cursor(void)
+{
+    big_canvas_t c; big_canvas_init(&c);
+
+    uint8_t blob[8 + 4] = {0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff,
+                            0xa1, 0xa2, 0xa3, 0xa4};
+
+    gfx_glyph_set_dest(50, 20);
+    gfx_glyph_set_glyph(8, 2, 2);
+
+    gfx_sprite_blit_2x2_raw(blob);
+
+    T_ASSERT_EQ_U(c.pixels[50 + 20 * BIG_W], 0xa1);
+    T_ASSERT_EQ_U(c.pixels[51 + 20 * BIG_W], 0xa2);
+    T_ASSERT_EQ_U(c.pixels[50 + 21 * BIG_W], 0xa3);
+    T_ASSERT_EQ_U(c.pixels[51 + 21 * BIG_W], 0xa4);
+    return 0;
+}
+
+int test_gfx_sprite_blit_2x2_raw_uses_glyph_offset(void)
+{
+    big_canvas_t c; big_canvas_init(&c);
+
+    /* Two adjacent tiles in a blob. */
+    uint8_t blob[8 + 4 + 4];
+    for (int i = 0; i < 8; i++) blob[i] = 0xff;
+    blob[ 8] = 0x11; blob[ 9] = 0x11; blob[10] = 0x11; blob[11] = 0x11;
+    blob[12] = 0x22; blob[13] = 0x22; blob[14] = 0x22; blob[15] = 0x22;
+
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 2, 2);
+    gfx_sprite_blit_2x2_raw(blob);
+
+    gfx_glyph_set_dest(10, 0);
+    gfx_glyph_set_glyph(12, 2, 2);
+    gfx_sprite_blit_2x2_raw(blob);
+
+    T_ASSERT_EQ_U(c.pixels[0  + 0 * BIG_W], 0x11);
+    T_ASSERT_EQ_U(c.pixels[10 + 0 * BIG_W], 0x22);
+    T_ASSERT_EQ_U(c.pixels[11 + 1 * BIG_W], 0x22);
+    return 0;
+}
+
+int test_gfx_sprite_blit_2x2_raw_null_canvas_no_crash(void)
+{
+    gfx_paint_bind_canvas(0, 0, 0);
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 2, 2);
+
+    uint8_t blob[8 + 4] = {0};
+    gfx_sprite_blit_2x2_raw(blob);
+    return 0;
+}

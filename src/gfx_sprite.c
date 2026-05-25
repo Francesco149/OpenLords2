@@ -209,3 +209,26 @@ void gfx_sprite_blit_32x32_raw(const uint8_t *sprite_blob)
         dst += 640;     /* hardcoded — NOT the dynamic canvas pitch */
     }
 }
+
+/* Port of FUN_004b49b7 @ 0x4b49b7.  Fixed 2×2 opaque raw blit — the
+ * micro-sibling of the 16×16 / 32×32 raw blits.  Used for mini-map
+ * tile rendering where each world cell maps to a 2×2-pixel block.
+ *
+ * Retail body is 2 word-indexed copies:
+ *
+ *   *(short *)dst        = *(short *)src;      // 2 bytes at row 0
+ *   ((short *)dst)[0x140] = ((short *)src)[1]; // 2 bytes at row 1
+ *
+ * `[0x140]` indexes a 16-bit element, so offset = 0x140 * 2 = 0x280
+ * bytes = the same hardcoded 640-byte stride used by the larger
+ * siblings (quirk #75).  Port uses memcpy over uint8_t * for unaligned
+ * safety; codegen matches retail at -O2. */
+void gfx_sprite_blit_2x2_raw(const uint8_t *sprite_blob)
+{
+    uint8_t *dst = dest_origin();
+    if (!dst) return;
+
+    const uint8_t *src = sprite_blob + gfx_glyph_glyph_offset();
+    memcpy(dst,       src,     2);
+    memcpy(dst + 640, src + 2, 2);
+}
