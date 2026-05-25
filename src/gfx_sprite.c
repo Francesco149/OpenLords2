@@ -26,6 +26,8 @@
 #include "gfx_glyph.h"
 #include "gfx_paint.h"
 
+#include <string.h>
+
 /* Recompute the dest pointer from the gfx_paint canvas binding + the
  * staged cursor.  Mirrors the prologue of every retail blitter:
  *   DAT_004ea1a8 + DAT_00591524 + DAT_00591528 * DAT_004eb274 */
@@ -158,4 +160,30 @@ void gfx_sprite_blit_left_clipped(const uint8_t *sprite_blob)
 void gfx_sprite_blit_right_clipped(const uint8_t *sprite_blob)
 {
     sprite_blit_clipped(sprite_blob);
+}
+
+/* Port of FUN_004b49f7 @ 0x4b49f7.  Fixed 16×16 opaque raw blit.
+ *
+ * Retail is a fully-unrolled 16 rows × 4 dwords block: each
+ * `puVar2[N] = puVar1[M]` is an aligned uint32_t copy with the dest
+ * stride encoded into the literal indices (N jumps by 0xa0 dwords =
+ * 640 bytes between rows, M is contiguous).  The port uses memcpy
+ * over uint8_t * since the source is not guaranteed to be 4-byte
+ * aligned (the dispatcher's glyph_offset is byte-granular) — memcpy
+ * generates equivalent codegen on x86 without invoking UB on
+ * unaligned loads under ASan/UBSan host tests.
+ *
+ * Hardcoded 640-byte dest stride is preserved verbatim — see
+ * engine-quirks #75 for the narrative. */
+void gfx_sprite_blit_16x16_raw(const uint8_t *sprite_blob)
+{
+    uint8_t *dst = dest_origin();
+    if (!dst) return;
+
+    const uint8_t *src = sprite_blob + gfx_glyph_glyph_offset();
+    for (int row = 0; row < 16; row++) {
+        memcpy(dst, src, 16);
+        src += 16;
+        dst += 640;     /* hardcoded — NOT the dynamic canvas pitch */
+    }
 }

@@ -2640,6 +2640,34 @@ ports were the same generator.)
 
 ---
 
+## 75. 16×16 raw sprite blit has a HARDCODED 640-byte dest row stride
+
+`FUN_004b49f7` (ported as `gfx_sprite_blit_16x16_raw`) computes its
+destination row stride from compile-time dword indices, NOT from the
+runtime canvas pitch.  Each row writes via `puVar2[0xa0 * row + col]`
+where 0xa0 dwords = 640 bytes — the standard 640×480 back-buffer
+pitch.  In contrast, the destination *origin* is computed from
+`DAT_004ea1a8 + DAT_00591524 + DAT_00591528 * DAT_004eb274` — which
+DOES read the dynamic pitch global.
+
+So the origin respects whatever pitch is bound, but the per-row
+stride is locked.  If the bound canvas pitch is anything other than
+640, rows past the first land at offsets that DO NOT line up with the
+canvas's actual scanline structure — pixels written by the blit
+would overwrite arbitrary buffer locations.
+
+The function works correctly in retail because retail never binds a
+non-640 canvas at this primitive's call sites (battlefield terrain
+renderer and the 5 UI helpers at 0x40920..0x4097a).  The mismatch is
+a latent footgun, preserved verbatim in the port (16 rows × 16 byte
+memcpy with literal `dst += 640` between rows).  Tests use a 640-
+wide canvas to match retail's deployment.
+
+> 📍 `src/gfx_sprite.c` (`gfx_sprite_blit_16x16_raw`),
+> Ghidra `FUN_004b49f7` @ 0x4b49f7 (705 B).
+
+---
+
 <!--
 Template for new entries:
 

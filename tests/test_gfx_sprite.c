@@ -485,3 +485,178 @@ int test_gfx_dispatch_sprite_clipped_uses_supplied_rect(void)
     T_ASSERT(canvas_guards_intact(&c));
     return 0;
 }
+
+/* ────────────────────────────────────────────────────────────────
+ * gfx_sprite_blit_16x16_raw — FUN_004b49f7
+ *
+ * The 16×16 raw blit hardcodes a 640-byte dest row stride
+ * (independent of the bound canvas pitch).  Tests use a
+ * BIG_W-wide canvas with BIG_W == 640 so the hardcoded stride
+ * matches the real row pitch — that's how retail uses it.
+ * ──────────────────────────────────────────────────────────────── */
+
+enum { BIG_W = 640, BIG_H = 32 };
+
+typedef struct {
+    uint8_t guard_top[16];
+    uint8_t pixels[BIG_W * BIG_H];
+    uint8_t guard_bot[16];
+} big_canvas_t;
+
+static void big_canvas_init(big_canvas_t *c)
+{
+    for (int i = 0; i < (int)sizeof c->guard_top; i++) c->guard_top[i] = 0xee;
+    for (int i = 0; i < (int)sizeof c->pixels;    i++) c->pixels[i]    = 0;
+    for (int i = 0; i < (int)sizeof c->guard_bot; i++) c->guard_bot[i] = 0xee;
+    gfx_paint_bind_canvas(c->pixels, BIG_W, BIG_H);
+}
+
+static int big_canvas_guards_intact(const big_canvas_t *c)
+{
+    for (int i = 0; i < 16; i++) {
+        if (c->guard_top[i] != 0xee) return 0;
+        if (c->guard_bot[i] != 0xee) return 0;
+    }
+    return 1;
+}
+
+/* Build a 256-byte 16×16 source tile where each pixel encodes its
+ * own (row, col): byte at row r, col c = (r * 16) + c + 1.  Lets
+ * tests verify which source bytes land at which dest position. */
+static void fill_16x16_tile(uint8_t *out)
+{
+    for (int r = 0; r < 16; r++)
+        for (int c = 0; c < 16; c++)
+            out[r * 16 + c] = (uint8_t)(r * 16 + c + 1);
+}
+
+int test_gfx_sprite_blit_16x16_raw_copies_all_256_bytes(void)
+{
+    big_canvas_t c; big_canvas_init(&c);
+
+    uint8_t blob[8 + 256];
+    for (int i = 0; i < 8; i++) blob[i] = 0xff;     /* filler */
+    fill_16x16_tile(blob + 8);
+
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 16, 16);  /* glyph_offset = 8 → skip filler */
+
+    gfx_sprite_blit_16x16_raw(blob);
+
+    /* Every one of 16×16 = 256 dest bytes matches its source. */
+    for (int r = 0; r < 16; r++)
+        for (int col = 0; col < 16; col++)
+            T_ASSERT_EQ_U(c.pixels[col + r * BIG_W],
+                          (uint8_t)(r * 16 + col + 1));
+    T_ASSERT(big_canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_blit_16x16_raw_writes_zero_bytes_opaque(void)
+{
+    /* Unlike gfx_sprite_blit, this primitive has NO transparency
+     * check — every source byte is written, including zeros.
+     * Pre-fill the dest with a non-zero pattern and verify the blit
+     * overwrites it with zeros. */
+    big_canvas_t c; big_canvas_init(&c);
+    for (int i = 0; i < (int)sizeof c.pixels; i++) c.pixels[i] = 0xa5;
+
+    uint8_t blob[8 + 256] = {0};   /* all-zero src after filler */
+    for (int i = 0; i < 8; i++) blob[i] = 0xff;
+
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 16, 16);
+
+    gfx_sprite_blit_16x16_raw(blob);
+
+    /* All 16×16 dest bytes overwritten with the zero source — so
+     * the 0xa5 pre-fill is gone in the 16×16 footprint. */
+    for (int r = 0; r < 16; r++)
+        for (int col = 0; col < 16; col++)
+            T_ASSERT_EQ_U(c.pixels[col + r * BIG_W], 0x00);
+    /* Outside the 16×16 footprint, the 0xa5 pre-fill is intact. */
+    T_ASSERT_EQ_U(c.pixels[16 + 0 * BIG_W], 0xa5);
+    T_ASSERT_EQ_U(c.pixels[0 + 16 * BIG_W], 0xa5);
+    T_ASSERT(big_canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_blit_16x16_raw_respects_cursor(void)
+{
+    /* Cursor at (37, 5) — verify the blit lands at the right
+     * dest origin. */
+    big_canvas_t c; big_canvas_init(&c);
+
+    uint8_t blob[8 + 256];
+    for (int i = 0; i < 8; i++) blob[i] = 0xff;
+    fill_16x16_tile(blob + 8);
+
+    gfx_glyph_set_dest(37, 5);
+    gfx_glyph_set_glyph(8, 16, 16);
+
+    gfx_sprite_blit_16x16_raw(blob);
+
+    /* Top-left of blit: row 0, col 0 → source byte 1 at (37, 5). */
+    T_ASSERT_EQ_U(c.pixels[37 + 5 * BIG_W], 0x01);
+    /* Bottom-right of blit: row 15, col 15 → source byte 256
+     * (= 0x00 after wrap from 256 to uint8_t) at (52, 20). */
+    T_ASSERT_EQ_U(c.pixels[52 + 20 * BIG_W], (uint8_t)256);
+    /* Off-blit pixel: (36, 5) — column before footprint — still 0. */
+    T_ASSERT_EQ_U(c.pixels[36 + 5 * BIG_W], 0x00);
+    /* Off-blit pixel: (37, 4) — row before footprint — still 0. */
+    T_ASSERT_EQ_U(c.pixels[37 + 4 * BIG_W], 0x00);
+    T_ASSERT(big_canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_blit_16x16_raw_uses_glyph_offset(void)
+{
+    /* The dispatcher stages glyph_offset; the blit reads from
+     * sprite_blob + glyph_offset.  Two different offsets in the
+     * same blob produce two different tiles in the dest. */
+    big_canvas_t c; big_canvas_init(&c);
+
+    /* Two adjacent tiles in a blob: tile A starts at offset 8, tile
+     * B starts at offset 8 + 256.  Tile A is all-0x11, tile B is
+     * all-0x22. */
+    uint8_t blob[8 + 256 + 256];
+    for (int i = 0; i < 8; i++)        blob[i] = 0xff;
+    for (int i = 0; i < 256; i++)      blob[8 + i] = 0x11;
+    for (int i = 0; i < 256; i++)      blob[8 + 256 + i] = 0x22;
+
+    /* First blit — tile A at (0, 0). */
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 16, 16);
+    gfx_sprite_blit_16x16_raw(blob);
+
+    /* Second blit — tile B at (20, 0). */
+    gfx_glyph_set_dest(20, 0);
+    gfx_glyph_set_glyph(8 + 256, 16, 16);
+    gfx_sprite_blit_16x16_raw(blob);
+
+    /* Tile A footprint at (0..15, 0..15) is 0x11. */
+    T_ASSERT_EQ_U(c.pixels[0 + 0 * BIG_W], 0x11);
+    T_ASSERT_EQ_U(c.pixels[15 + 15 * BIG_W], 0x11);
+    /* Tile B footprint at (20..35, 0..15) is 0x22. */
+    T_ASSERT_EQ_U(c.pixels[20 + 0 * BIG_W], 0x22);
+    T_ASSERT_EQ_U(c.pixels[35 + 15 * BIG_W], 0x22);
+    /* Gap between tiles still 0. */
+    T_ASSERT_EQ_U(c.pixels[17 + 7 * BIG_W], 0x00);
+    T_ASSERT(big_canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_blit_16x16_raw_null_canvas_no_crash(void)
+{
+    gfx_paint_bind_canvas(0, 0, 0);
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 16, 16);
+
+    uint8_t blob[8 + 256];
+    for (int i = 0; i < 8; i++) blob[i] = 0xff;
+    fill_16x16_tile(blob + 8);
+
+    /* No crash, no observable output (nothing bound). */
+    gfx_sprite_blit_16x16_raw(blob);
+    return 0;
+}

@@ -46,6 +46,20 @@
  *                                       x_clip_mode tag to mirror retail
  *                                       call topology; shares its
  *                                       implementation.
+ *   FUN_004b49f7 @ 0x4b49f7 (705 B) → gfx_sprite_blit_16x16_raw
+ *                                       Fixed-size 16-wide × 16-tall
+ *                                       OPAQUE raw blit (no transparency
+ *                                       gate — every source byte
+ *                                       written, including zeroes).
+ *                                       Unlike the four blits above
+ *                                       this one does not consume the
+ *                                       width/height staging — both
+ *                                       dimensions are hardcoded.
+ *                                       Used by the battlefield (combat-
+ *                                       mode) terrain renderer + 5
+ *                                       non-battlefield callers (UI
+ *                                       tile fills at 0x4097a / 0x4092c
+ *                                       families).
  *
  * State globals — all reused from gfx_glyph.c via its getter API.
  * See gfx_glyph.h for the canonical retail DAT_* names.  The sprite
@@ -117,5 +131,25 @@ void gfx_sprite_blit_left_clipped(const uint8_t *sprite_blob);
  * preserving retail's call topology.  Shares the static
  * implementation with gfx_sprite_blit_left_clipped. */
 void gfx_sprite_blit_right_clipped(const uint8_t *sprite_blob);
+
+/* Port of FUN_004b49f7 @ 0x4b49f7.  Fixed-size 16×16 opaque raw blit.
+ *
+ * Copies 16 rows × 16 bytes (= 256 bytes total) from
+ * `sprite_blob + glyph_offset` to the dest origin computed from the
+ * canvas binding + cursor.  Source is densely packed at 16 bytes per
+ * row (no source stride pad).  Dest row stride is **hardcoded to 640
+ * bytes** (retail dword indexing `puVar2[0xa0] = puVar1[4]` — see
+ * engine-quirks).  No transparency check — every byte is written,
+ * including zeroes.  No width/height staging consulted; the
+ * dimensions are baked in.
+ *
+ * Used by the battlefield terrain renderer (FUN_004bc8fc /
+ * FUN_004bcbdc) and 5 UI helpers (tile fills around 0x40920..0x4097a).
+ *
+ * `sprite_blob` is the same shape as the other sprite blits — a base
+ * pointer that the dispatcher offsets by `glyph_offset` to reach the
+ * sprite data.  Caller is responsible for ensuring the source has at
+ * least 16×16 = 256 bytes available from that offset. */
+void gfx_sprite_blit_16x16_raw(const uint8_t *sprite_blob);
 
 #endif /* OPENLORDS2_GFX_SPRITE_H */
