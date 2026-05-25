@@ -117,4 +117,46 @@ void strutil_strip_leading_spaces(char *str);
  * never goes past the surrounding allocation. */
 void strutil_trim_trailing_spaces(char *str);
 
+/* Port of `FUN_00401666 @ 0x401666`.  Parses leading run of ASCII
+ * decimal digits (0x30..0x39) as a base-10 integer.  Returns the
+ * integer value; consumes characters only up to (but not including)
+ * the first non-digit.
+ *
+ * Retail implementation walks a powers-of-10 table at DAT_004d2030
+ * with one entry per digit position:
+ *     [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000]
+ * — only 8 entries.  If the input has 9+ digits, retail reads off
+ * the end of the table into the adjacent .data string "ERR:_top_it
+ * not data..." and multiplies digits by garbage.  Our port caps
+ * the digit count at 8 explicitly to avoid the UB; inputs with
+ * 9+ digits silently truncate to the first 8 (instead of doing
+ * the corrupted multiply).
+ *
+ * Sign / whitespace / leading-zero handling: none.  Pure leading
+ * digit run only.  Empty input or no leading digit returns 0.
+ *
+ * No callees, no globals read or written beyond the const table. */
+int strutil_decimal_atoi(const char *str);
+
+/* Port of `FUN_00401415 @ 0x401415`.  Collapses runs of two or more
+ * consecutive spaces into a single space, in place.  Two passes:
+ *
+ *   1. Scan forward to find the null terminator's position (cap at
+ *      64000 chars).
+ *   2. Walk again from the start; for each space that follows
+ *      another space, shift the remainder of the buffer one byte
+ *      left (calling strutil_shift_left), then re-process the
+ *      same position (which now holds the next char).
+ *
+ * Retail quirk: if the buffer has no null in its first 64000
+ * bytes, retail falls through to the second pass with an
+ * uninitialized `local_c` (read from the stack).  Our port
+ * initializes the terminator position to 0 in that case, making
+ * the second pass a no-op — different from retail's UB but
+ * defensible.  Callers must null-terminate inputs.
+ *
+ * Only adjacent spaces are collapsed; isolated single spaces are
+ * preserved.  Leading and trailing spaces collapse to one. */
+void strutil_collapse_double_spaces(char *str);
+
 #endif /* OPENLORDS2_STRUTIL_H */

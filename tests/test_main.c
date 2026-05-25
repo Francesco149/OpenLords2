@@ -73,6 +73,20 @@ struct test_case {
     X(strutil_trim_trailing_spaces_basic) \
     X(strutil_trim_trailing_spaces_no_trailing) \
     X(strutil_trim_trailing_spaces_preserves_leading) \
+    X(strutil_decimal_atoi_basic) \
+    X(strutil_decimal_atoi_single_digit) \
+    X(strutil_decimal_atoi_empty_returns_zero) \
+    X(strutil_decimal_atoi_no_leading_digit_returns_zero) \
+    X(strutil_decimal_atoi_stops_at_non_digit) \
+    X(strutil_decimal_atoi_eight_digit_max) \
+    X(strutil_decimal_atoi_nine_plus_digits_truncates_to_eight) \
+    X(strutil_decimal_atoi_zero_string) \
+    X(strutil_collapse_double_spaces_basic) \
+    X(strutil_collapse_double_spaces_three_run) \
+    X(strutil_collapse_double_spaces_no_doubles_unchanged) \
+    X(strutil_collapse_double_spaces_only_spaces) \
+    X(strutil_collapse_double_spaces_multiple_runs) \
+    X(strutil_collapse_double_spaces_empty_string) \
     \
     X(config_defaults_match_retail) \
     X(config_parse_empty_keeps_defaults) \

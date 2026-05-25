@@ -168,3 +168,70 @@ void strutil_trim_trailing_spaces(char *str)
         str[i] = '\0';
     }
 }
+
+/* ----- decimal parsing -------------------------------------------- */
+
+int strutil_decimal_atoi(const char *str)
+{
+    /* Retail's powers-of-10 table at DAT_004d2030.  Only 8 entries —
+     * matches retail exactly; see header for the 9+ digit quirk. */
+    static const int powers_of_10[8] = {
+        1, 10, 100, 1000, 10000, 100000, 1000000, 10000000
+    };
+
+    /* First pass: count leading digits (cap at 8 — see quirk note). */
+    int n_digits = 0;
+    const char *p = str;
+    while (*p >= '0' && *p <= '9') {
+        n_digits++;
+        p++;
+        if (n_digits == 8) break;
+    }
+
+    /* Second pass: walk back from rightmost-digit's power-of-10 entry. */
+    int result = 0;
+    p = str;
+    while (n_digits != 0) {
+        n_digits--;
+        result += powers_of_10[n_digits] * (*p - '0');
+        p++;
+    }
+    return result;
+}
+
+/* ----- whitespace collapse ---------------------------------------- */
+
+void strutil_collapse_double_spaces(char *str)
+{
+    /* First pass: find the null terminator's position, capped at 64000.
+     * Retail leaves `local_c` uninitialized if no null is found in
+     * the first 64000 chars (UB).  We initialize to 0 explicitly so
+     * the second pass is a no-op in that case — see header note. */
+    int terminator_pos = 0;
+    for (int i = 0; i <= 63999; i++) {
+        if (str[i] == '\0') {
+            terminator_pos = i;
+            break;
+        }
+    }
+
+    /* Second pass: collapse consecutive spaces.  `prev_was_space`
+     * tracks whether the previous index was also a space. */
+    int prev_was_space = 0;
+    for (int i = 0; i < terminator_pos && str[i] != '\0'; i++) {
+        if (str[i] == ' ') {
+            if (prev_was_space) {
+                /* Retail: back up local_8 by one then shift left.
+                 * After the shift, the same index now holds what
+                 * was the next char.  Loop's i++ moves us forward. */
+                i--;
+                strutil_shift_left((unsigned char *)(str + i),
+                                   (unsigned char *)(str + terminator_pos));
+            } else {
+                prev_was_space = 1;
+            }
+        } else {
+            prev_was_space = 0;
+        }
+    }
+}

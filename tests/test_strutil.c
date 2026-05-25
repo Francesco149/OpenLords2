@@ -393,3 +393,109 @@ int test_strutil_trim_trailing_spaces_preserves_leading(void)
     T_ASSERT_EQ_S(s, "  hello");
     return 0;
 }
+
+/* ──────────────────────────────────────────────────────────────────
+ * strutil_decimal_atoi
+ * ────────────────────────────────────────────────────────────────── */
+
+int test_strutil_decimal_atoi_basic(void)
+{
+    T_ASSERT_EQ_I(strutil_decimal_atoi("123"), 123);
+    return 0;
+}
+
+int test_strutil_decimal_atoi_single_digit(void)
+{
+    T_ASSERT_EQ_I(strutil_decimal_atoi("7"), 7);
+    return 0;
+}
+
+int test_strutil_decimal_atoi_empty_returns_zero(void)
+{
+    T_ASSERT_EQ_I(strutil_decimal_atoi(""), 0);
+    return 0;
+}
+
+int test_strutil_decimal_atoi_no_leading_digit_returns_zero(void)
+{
+    T_ASSERT_EQ_I(strutil_decimal_atoi("abc"), 0);
+    return 0;
+}
+
+int test_strutil_decimal_atoi_stops_at_non_digit(void)
+{
+    T_ASSERT_EQ_I(strutil_decimal_atoi("42xyz"), 42);
+    return 0;
+}
+
+int test_strutil_decimal_atoi_eight_digit_max(void)
+{
+    T_ASSERT_EQ_I(strutil_decimal_atoi("12345678"), 12345678);
+    return 0;
+}
+
+int test_strutil_decimal_atoi_nine_plus_digits_truncates_to_eight(void)
+{
+    /* Retail would read past the powers-of-10 table; our port caps
+     * at 8 digits.  "123456789" → reads "12345678", ignores '9'. */
+    T_ASSERT_EQ_I(strutil_decimal_atoi("123456789"), 12345678);
+    return 0;
+}
+
+int test_strutil_decimal_atoi_zero_string(void)
+{
+    T_ASSERT_EQ_I(strutil_decimal_atoi("0"), 0);
+    return 0;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * strutil_collapse_double_spaces
+ * ────────────────────────────────────────────────────────────────── */
+
+int test_strutil_collapse_double_spaces_basic(void)
+{
+    char s[] = "ab  cd";
+    strutil_collapse_double_spaces(s);
+    T_ASSERT_EQ_S(s, "ab cd");
+    return 0;
+}
+
+int test_strutil_collapse_double_spaces_three_run(void)
+{
+    char s[] = "a   b";
+    strutil_collapse_double_spaces(s);
+    T_ASSERT_EQ_S(s, "a b");
+    return 0;
+}
+
+int test_strutil_collapse_double_spaces_no_doubles_unchanged(void)
+{
+    char s[] = "a b c d";
+    strutil_collapse_double_spaces(s);
+    T_ASSERT_EQ_S(s, "a b c d");
+    return 0;
+}
+
+int test_strutil_collapse_double_spaces_only_spaces(void)
+{
+    char s[] = "     ";       /* 5 spaces */
+    strutil_collapse_double_spaces(s);
+    T_ASSERT_EQ_S(s, " ");
+    return 0;
+}
+
+int test_strutil_collapse_double_spaces_multiple_runs(void)
+{
+    char s[] = "hello   world  again";
+    strutil_collapse_double_spaces(s);
+    T_ASSERT_EQ_S(s, "hello world again");
+    return 0;
+}
+
+int test_strutil_collapse_double_spaces_empty_string(void)
+{
+    char s[] = "";
+    strutil_collapse_double_spaces(s);
+    T_ASSERT_EQ_S(s, "");
+    return 0;
+}
