@@ -272,3 +272,64 @@ int test_engine_dirty_rect_tile_80x48_noclamp_skips_prelude(void)
     T_ASSERT_EQ_I(s.dirty_ymax, 0x20);
     return 0;
 }
+
+/* ------------- engine_dirty_rect_mark_box_tiled -------------------- */
+
+int test_engine_dirty_rect_box_tiled_pixel_origin_box(void)
+{
+    /* Pixel start (100, 50), 3 tiles wide, 4 tiles tall.  Width =
+     * 48 px, height = 64 px.  Box (100, 50)..(148, 114). */
+    engine_dirty_rect_state_t s;
+    reset_state(&s);
+    engine_dirty_rect_mark_box_tiled(&s, 100, 50, 3, 4, /*force*/ 1);
+    T_ASSERT_EQ_I(s.dirty_xmin, 100);
+    T_ASSERT_EQ_I(s.dirty_ymin, 50);
+    T_ASSERT_EQ_I(s.dirty_xmax, 148);
+    T_ASSERT_EQ_I(s.dirty_ymax, 114);
+    T_ASSERT_EQ_I(s.dirty_mark, 1);     /* force=1 → no escalation */
+    return 0;
+}
+
+int test_engine_dirty_rect_box_tiled_force_full_escalates_mark(void)
+{
+    engine_dirty_rect_state_t s;
+    reset_state(&s);
+    engine_dirty_rect_mark_box_tiled(&s, 0, 0, 1, 1, /*force*/ 2);
+    T_ASSERT_EQ_I(s.dirty_mark, 2);     /* force > 1 → mark=2 override */
+    return 0;
+}
+
+int test_engine_dirty_rect_box_tiled_clamps_negative_topleft(void)
+{
+    /* Negative pixel origin — both clamped to 0 before computing the
+     * bottom-right.  Box: (0, 0)..(0 + 2*16, 0 + 3*16) = (0,0)..(32,48). */
+    engine_dirty_rect_state_t s;
+    reset_state(&s);
+    engine_dirty_rect_mark_box_tiled(&s, -10, -20, 2, 3, /*force*/ 1);
+    T_ASSERT_EQ_I(s.dirty_xmin, 0);
+    T_ASSERT_EQ_I(s.dirty_ymin, 0);
+    T_ASSERT_EQ_I(s.dirty_xmax, 32);
+    T_ASSERT_EQ_I(s.dirty_ymax, 48);
+    return 0;
+}
+
+int test_engine_dirty_rect_box_tiled_force_zero_no_escalation(void)
+{
+    /* force_full = 0 (not > 1) → mark stays whatever expand stamped. */
+    engine_dirty_rect_state_t s;
+    reset_state(&s);
+    engine_dirty_rect_mark_box_tiled(&s, 10, 10, 1, 1, /*force*/ 0);
+    T_ASSERT_EQ_I(s.dirty_mark, 1);     /* just the expand-stamped value */
+    return 0;
+}
+
+int test_engine_dirty_rect_box_tiled_escalation_overrides_preexisting(void)
+{
+    /* Pre-existing mark=2 — escalation still writes 2 (idempotent). */
+    engine_dirty_rect_state_t s;
+    reset_state(&s);
+    s.dirty_mark = 2;
+    engine_dirty_rect_mark_box_tiled(&s, 0, 0, 1, 1, /*force*/ 2);
+    T_ASSERT_EQ_I(s.dirty_mark, 2);
+    return 0;
+}

@@ -20,9 +20,16 @@
  *   FUN_004526b3 @ 0x4526b3  → engine_dirty_rect_mark_tile_200x160
  *   FUN_0045270a @ 0x45270a  → engine_dirty_rect_mark_below_status_bar
  *   FUN_00452735 @ 0x452735  → engine_dirty_rect_mark_below_status_bar_full
+ *   FUN_004527a6 @ 0x4527a6  → engine_dirty_rect_mark_box_tiled
  *
  * Two identical-pair wrappers (524dc / 5252f, 52582 / 52660) get one
  * port each; the retail addresses are duplicate codegen.
+ *
+ * One bare thunk (FUN_0043cc56 — 16 B `call FUN_0045270a; ret`) is
+ * an address-distinct alias for engine_dirty_rect_mark_below_status_bar;
+ * callers store the thunk's address in function-pointer tables where
+ * the call target needs a distinct identity.  No semantic difference
+ * from the underlying function — we don't define a separate symbol.
  */
 
 #ifndef OPENLORDS2_ENGINE_DIRTY_RECT_H
@@ -128,5 +135,29 @@ void engine_dirty_rect_mark_tile_200x160 (engine_dirty_rect_state_t *state,
  */
 void engine_dirty_rect_mark_tile_80x48_noclamp(engine_dirty_rect_state_t *state,
                                                int col, int row);
+
+/* ----------- parametric pixel/tile-stride wrapper ------------------ */
+
+/* Generic parametric box wrapper — port of FUN_004527a6.  Unlike the
+ * tile_* wrappers above which take a (col, row) tile coordinate and
+ * scale by 16, this one takes a PIXEL-coordinate top-left plus a
+ * tile-stride width/height (in 16-pixel units).  The clamp-to-zero
+ * for the top-left applies to BOTH axes here.
+ *
+ * Box covered: (px, py)..(px + w_tiles * 16, py + h_tiles * 16),
+ * clipped through the same x/y bounds as expand().
+ *
+ * The fifth argument is an escalation flag.  Values > 1 set
+ * dirty_mark = 2 AFTER the expand call (overriding the mark=1 the
+ * expand stamped).  Values 0 or 1 leave dirty_mark whatever expand
+ * set it to (max of pre-existing and 1).  Used by callers that need
+ * to force a full-repaint when they touch certain UI panels.
+ *
+ * Retail call sites pass param_5 in {1, 2}; we accept any int but
+ * only `> 1` triggers the escalation. */
+void engine_dirty_rect_mark_box_tiled(engine_dirty_rect_state_t *state,
+                                      int px, int py,
+                                      int w_tiles, int h_tiles,
+                                      int force_full);
 
 #endif /* OPENLORDS2_ENGINE_DIRTY_RECT_H */

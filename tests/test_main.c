@@ -278,6 +278,11 @@ struct test_case {
     X(engine_dirty_rect_tile_200x160_box) \
     X(engine_dirty_rect_tile_64_negative_inputs_clamped) \
     X(engine_dirty_rect_tile_80x48_noclamp_skips_prelude) \
+    X(engine_dirty_rect_box_tiled_pixel_origin_box) \
+    X(engine_dirty_rect_box_tiled_force_full_escalates_mark) \
+    X(engine_dirty_rect_box_tiled_clamps_negative_topleft) \
+    X(engine_dirty_rect_box_tiled_force_zero_no_escalation) \
+    X(engine_dirty_rect_box_tiled_escalation_overrides_preexisting) \
     \
     X(engine_event_queue_record_size_is_24) \
     X(engine_event_queue_capacity_is_50) \

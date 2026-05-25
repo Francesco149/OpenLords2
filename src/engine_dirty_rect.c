@@ -139,3 +139,27 @@ void engine_dirty_rect_mark_tile_80x48_noclamp(engine_dirty_rect_state_t *s,
                              col * 0x10, row * 0x10,
                              col * 0x10 + 0x50, row * 0x10 + 0x30);
 }
+
+void engine_dirty_rect_mark_box_tiled(engine_dirty_rect_state_t *s,
+                                      int px, int py,
+                                      int w_tiles, int h_tiles,
+                                      int force_full)
+{
+    /* Negative-input clamp on the top-left (same shape as the
+     * mark_tile_X wrappers but applied to PIXEL coords, not tile
+     * coords).  Retail clamps before computing the bottom-right so
+     * the box stays size-correct after the clamp. */
+    if (px < 0) px = 0;
+    if (py < 0) py = 0;
+
+    engine_dirty_rect_expand(s, px, py,
+                             px + w_tiles * 0x10,
+                             py + h_tiles * 0x10);
+
+    /* Escalation: force-full-repaint mark.  Retail writes the
+     * literal `2` directly to the dirty_mark global, overriding
+     * whatever expand() just stamped. */
+    if (1 < force_full) {
+        s->dirty_mark = 2;
+    }
+}
