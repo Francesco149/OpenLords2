@@ -7,6 +7,171 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-26 — Battlefield chips 6b + 7: leftover coord helpers + mini-map / hex-grid overview renderer (+34 tests, 3 new quirks) — ENTIRE 0x4bc BAND DRAINED
+
+Continuation of the same unattended session.  Previous dispatch
+landed chip 5d (final pass) and called the battlefield render
+cluster complete, leaving only "the scroll/pan family" in the
+address band.  This dispatch lands BOTH remaining chips: the five
+leftover coord helpers that chip 6 missed (chip 6b) AND the family
+that the original survey mislabeled "scroll/pan" but turned out to
+be the mini-map / hex-grid overview renderer (chip 7).  After this,
+EVERY surveyed function in the `0x4bc..0x4bf` address band is a real
+port — no stubs, no skips.
+
+### Survey correction
+
+The chip 6 helper-block in `docs/findings/battlefield-render.md`
+labeled `FUN_004bc1d1 / 51a` as "scroll/pan — possibly large state
+machine for keyboard/mouse panning."  Reading the actual code:
+
+  - `FUN_004b49b7` (64 B) is a 2-pixel raw blit primitive (writes
+    2×2 bytes at the cursor with the same hardcoded 640-byte stride
+    as the 16×16 / 32×32 siblings).
+  - `FUN_004bc51a` (994 B) walks the descriptor table at 2 px per
+    cell, calling that primitive once per cell.  At 80 × 80 cells,
+    that's exactly a 160 × 160 thumbnail.
+  - `FUN_004bc1d1` (81 B) increments a rolling "next-scan-row"
+    cursor by N and dispatches a strip render via 51a.
+  - `FUN_004bc020` + `4bc107` are bulk binders for the SHARED hex-
+    grid context (the descriptor table they walk IS the same one
+    the battlefield terrain passes walk).
+
+It's a mini-map, not a scroll/pan.  Filed the correction in the
+finding and renamed the chip family.
+
+### Chip 6b: 5 leftover coord helpers (374 B)
+
+  - `FUN_004bc3ac` (97 B) → `pixel_to_row_bottom_biased`.  Y-axis
+    sibling of `pixel_to_col_right_biased`.
+  - `FUN_004bc40d` (100 B) → `pixel_to_row_top_biased`.  Y-axis
+    sibling of `pixel_to_col_left_biased`, but clamps against
+    `total_rows` (DAT_004e6570) rather than the X sibling's
+    `camera_row_stride` (DAT_004e6578).  Different clamp axis on
+    each sibling — quirk-worthy but not filed (subsumed by quirk
+    #82 from chip 6).
+  - `FUN_004bc471` / `4bc4bb` (74 B each) → `col_delta` / `row_delta`.
+    Signed cell-distance helpers between two screen pixels.
+  - `FUN_004bc505` (21 B) → `get_zoom`.  Trivial scalar accessor.
+
+All five reuse module statics already bound by the render passes.
++10 tests.
+
+### Chip 7: mini-map / hex-grid overview renderer (1.4 KB across 5 funcs)
+
+  - `FUN_004b49b7` (64 B) → `gfx_sprite_blit_2x2_raw`.  Micro-
+    sibling of the 16×16 / 32×32 raw blits.  Same hardcoded 640-byte
+    stride (quirk #75).
+  - `FUN_004bc020` (231 B) → `bind_hex_grid_context`.  Bulk binder
+    for the SHARED hex-grid context (11 params).  Dispatches through
+    the per-field binders we already have.
+  - `FUN_004bc107` (59 B) → `bind_minimap_context`.  Bulk binder
+    for mini-map-specific context (6 params: 3 sprite blobs + origin
+    + mode gate).
+  - `FUN_004bc1d1` (81 B) → `minimap_scroll`.  Bumps the next-row
+    cursor by N, wraps at `total_rows - N`, dispatches a strip
+    render iff mode gate == 2.
+  - `FUN_004bc51a` (994 B) → `minimap_render_strip`.  Walks N rows
+    × all `row_stride` cols.  Five per-cell paths:
+      * Terrain primary blob (flags & 0x1c == 0)
+      * Terrain alt blob (flags & 0x1c == 4)
+      * First-col-ingame override (default desc slot 0 — overrides
+        the normal blob-selector path when engine state == 3)
+      * Boundary cell (default desc slot 0, bit 2 cleared after)
+      * Entity cell (owner→slot indirection via two tables, owner
+        type 6 short-circuits to slot 6, slot 0 ⇒ no blit)
+
+The mini-map is ROLLING.  At ~50 Hz with the main-loop's
+`FUN_004bc1d1(4)` call, the full 80-row strategic-map mini-map
+refreshes every ~0.4 s — visually smooth but cheap.  Full-redraw
+call sites use `FUN_004bc1d1(0x50)` for an immediate complete
+sweep.
+
+The same descriptor table that the battlefield terrain passes walk
+at 16/32 px per cell IS the table the mini-map walks at 2 px per
+cell.  Both strategic and battlefield init paths bind the renderer
+identically: 80×80 cells, viewport (0, 24), visible 15×14, zoom 32,
+mini-map origin (466 or 480, 11).
+
++24 tests (5 for the 2×2 raw primitive, 19 for the mini-map render
++ binders), all green under ASan/UBSan; mingw32 cross-compile
+clean.
+
+### New engine quirks
+
+  - **#100** — rolling-scan wrap formula uses
+    `total_rows - rows < scan_pos` so a partial strip never
+    overflows the bottom (one-row guard band).
+  - **#101** — unmapped `flags & 0x1c` values (8, 12, 16, 20, 24,
+    28) silently drop the cell.  Only 0 and 4 map to a blob.
+  - **#102** — first-col-ingame override fires BEFORE the blob-
+    selector, so the leftmost mini-map column is always painted from
+    the default descriptor slot 0 when engine state == 3.
+
+### Headline numbers
+
+- **950 → 989 host tests** (+39 across both chips), all green
+  under ASan/UBSan.
+- **10 retail functions ported**: 5 coord helpers (374 B) + 1
+  raw blit primitive (64 B) + 4 mini-map functions (1365 B).
+  Total ~1.8 KB of decompile → port.
+- **3 new engine quirks** (#100 wrap guard, #101 silent drop,
+  #102 first-col override).
+- Cross-compile (mingw32) clean.
+
+### Battlefield port state — FULLY COMPLETE
+
+| chip   | function                                      | size   | status     |
+| ------ | --------------------------------------------- | -----: | ---------- |
+| 1      | 16×16 raw blit primitive                      |  705 B | ported     |
+| 2      | frame driver + zoom-16 no-op                  |  154 B | ported     |
+| 3      | zoom-16 terrain pass                          |  725 B | ported     |
+| 3.5    | 32×32 raw blit primitive                      | 2997 B | ported     |
+| 4      | zoom-32 terrain pass                          | 1187 B | ported     |
+| 5a.i   | middle-pass driver shell                      |  543 B | ported     |
+| 5a.ii.a | sorted-entity infrastructure                 |  761 B | ported     |
+| 5a.ii.b | per-entity draw base path                    | 1087 B | ported     |
+| 5a.iii | per-cell draw leaves                          | 1769 B | ported     |
+| 5a.iv  | type-special leaves                           | 2549 B | ported     |
+| 5b     | zoom-32 overlay pass                          |  436 B | ported     |
+| 5c     | late pass driver + creature + marker          | 1425 B | ported     |
+| 5d     | final pass (debug label overlay)              |  433 B | ported     |
+| 6      | 5 coord helpers (X-axis + hit-test)           |  394 B | ported     |
+| 6b     | 5 coord helpers (Y-axis + deltas + zoom)      |  374 B | **ported (this session)** |
+| 7      | mini-map renderer (2×2 prim + 4 funcs)        | 1429 B | **ported (this session)** |
+
+**ENTIRE 0x4bc..0x4bf BAND DRAINED.**  ~16 KB across ~39 functions.
+Zero stubs, zero skips.
+
+### What's next
+
+1. **gfx.c runtime wiring** — battlefield rendering + mini-map are
+   now end-to-end at host-test level.  The next visual milestone
+   is "first battlefield frame" which still requires standing up
+   the entity table from real savegame data (the larger lift).
+   Visual verification remains gated on user availability.
+
+2. **Other clusters** — the chip-7 detour revealed that
+   `FUN_004987b7` (battlefield init) and `FUN_00498dcb` (strategic
+   init) are large init functions that wire all the asset loads
+   and bindings.  Both are good top-down candidates for the next
+   chip plan — they're entry points into the asset-loading +
+   blob-binding subsystems.
+
+3. **Strategic map main view** — the chip-7 work clarified that
+   the strategic-map MAIN-VIEW renderer (15×14 visible cells at
+   zoom 32) is the SAME function family as the battlefield (it
+   shares descriptor + bindings).  So all 14 battlefield chips
+   ALSO already render the strategic map's main view — once
+   `FUN_004987b7 / 498dcb` wires them up with the strategic
+   blobs + camera, the strategic map should render too.
+
+This is a natural `/clear` point — both chips land cleanly, all
+989 tests green, three new quirks documented, the survey-mislabel
+is corrected in the finding, no incomplete work in-flight.
+
+---
+
 ## 2026-05-25 — Battlefield chip 5d: final-pass debug-label overlay (+11 tests, 2 new quirks) — ENTIRE CLUSTER LANDED
 
 Continuation of the same unattended session.  Previous dispatch
