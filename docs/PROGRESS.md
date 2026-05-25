@@ -7,6 +7,117 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Tier-flag wiring + battlefield survey + 16×16 blit primitive (3 chips)
+
+Continuation of the same unattended session.  After army drawer
+ports closed strategic-mode rendering, three frontiers were on the
+table: gfx.c runtime wiring (needs user verification), tier-flag
+driver discovery, and battlefield renderer survey.  This dispatch
+lands the two unattended ones plus the first chip of the
+battlefield port.
+
+### Chip 1: tier-flag driver — already ported, needed wiring
+
+Quirk #74 from the previous dispatch claimed "the four animation-
+rate tier-flag driver lives elsewhere — probably a frame-rate-
+throttled toggle in the main loop."  It turned out to BE
+`FUN_004bbc80` (the 9-flag phase-tick generator), which had been
+ported as `engine_compute_phase_ticks` in `src/engine_phase.c` for
+many chips already.  The army drawer's four tier flags map directly
+to the 640/320/160/80-ms phase-tick outputs:
+
+  distance <  10  → tier 0 → 640 ms tick (slowest)
+  distance < 0x19 → tier 1 → 320 ms tick
+  distance < 0x32 → tier 2 → 160 ms tick
+  distance ≥ 0x32 → tier 3 →  80 ms tick (fastest)
+
+So the chip is just one new call from `engine_tick_phase_step` to
+`engine_overlay_render_set_animation_rate_flags`.  Closes the
+"driver lives elsewhere" claim and fixes an inverted narrative in
+quirk #74 (small distance = slow tier, not "most aggressive" — a
+slow-moving column should flicker its sprite less often than one
+at full speed).
+
+3 files changed, 51+/7-.  No new tests (wiring lives in the
+Win32-coupled wrapper, not in pure-function territory).
+
+### Chip 2: battlefield (combat-mode) renderer survey
+
+Located `FUN_004bc142` @ 0x4bc142 (143 B) as the combat-mode frame
+driver.  Called from the main-loop tick (`FUN_004b99c0` line 88581)
+inside the `DAT_0057c8fc == 2` branch.  Takes camera coords
+(`DAT_0055ce70`, `DAT_005678a0`) and fans out to 7 pass functions:
+
+  zoom-16 path: FUN_004bc8fc (terrain, 725 B) +
+                FUN_004bcbd1 (no-op stub, 11 B)
+  zoom-32 path: FUN_004bcbdc (terrain, 1187 B) +
+                FUN_004bd07f (overlay, 436 B)
+  shared:       FUN_004bd355 (middle, 543 B) +
+                FUN_004bd233 (late, 290 B) +
+                FUN_004bf1f9 (final, 433 B)
+
+Plus ~27 helpers (hit-test, scroll, screen↔hex coord conversion).
+Total cluster: ~12 KB across ~34 functions in 0x4bc000..0x4bf300.
+
+Previously hypothesized this would be near the strategic renderer
+in 0x405000..0x408000 — wrong; the actual address band is the
+0x4bc000 family.  Also surfaced a new sprite primitive
+`FUN_004b49f7` (705 B) shared by both the battlefield and 5 UI
+call sites — addressed in chip 3.
+
+Full survey landed in `docs/findings/battlefield-render.md` with a
+suggested 5-chip plan.
+
+### Chip 3: 16×16 raw blit primitive `FUN_004b49f7`
+
+First chip of the battlefield port.  Adds `gfx_sprite_blit_16x16_raw`
+to `gfx_sprite.{c,h}`.  Differences from existing sprite blits:
+
+  - No transparency gate (zero source bytes ARE written)
+  - Hardcoded 16×16 (no width/height staging)
+  - **Hardcoded 640-byte dest row stride** (quirk #75)
+
+Used by both the battlefield terrain renderer
+(FUN_004bc8fc/FUN_004bcbdc) and 5 UI helpers in 0x40920..0x4097a,
+so it unblocks more than just the battlefield path.  Filed quirk
+#75 documenting the 640 stride lock — works in retail because
+non-640 surfaces are never bound at these call sites, but tests
+have to use a 640-wide canvas to match.
+
+5 new host tests covering: 256-byte copy completeness, opaque-zero
+writes, cursor handling, glyph_offset indexing, NULL canvas safety.
+
+### Headline numbers
+
+- **741 → 746 host tests** (+5), all green under ASan/UBSan.
+- **1 retail function ported** (`FUN_004b49f7`, 705 B) +
+  1 wiring chip + 1 survey doc.
+- **1 new engine quirk** (#75 — hardcoded 640 dest stride).
+- **2 quirks updated** (#74 — driver resolved, narrative fixed).
+- **1 new findings doc** (`docs/findings/battlefield-render.md` —
+  ~220 lines documenting the cluster + chip plan).
+- Cross-compile clean.
+
+### What's next
+
+The battlefield port plan in `battlefield-render.md` has 5 chips.
+Chip 1 (16×16 primitive) just landed; chip 2 is the frame driver
++ zoom-16 stub (143 B + 11 B = small structural seam, lets the
+remaining passes be tested as stubs before they're ported).  Then
+the three substantive passes (chip 3 = zoom-16 first pass 725 B,
+chip 4 = zoom-32 first pass 1187 B, chip 5 = remaining four passes
+~1700 B combined).
+
+Alternative still on the table: wire `gfx.c` runtime to the
+strategic-mode renderer for visual verification — first frame on
+screen.  That's gated on user availability; not pursued in this
+unattended session.
+
+This is a natural `/clear` point — three chips landed, next chip
+(battlefield frame driver) is a discrete porting effort.
+
+---
+
 ## 2026-05-25 — Army drawer ports complete (1 chip, 2 fns + label sub-renderer)
 
 Continuation of the same unattended session.  The previous dispatch
