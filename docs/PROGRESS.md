@@ -7,6 +7,183 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Battlefield chip 5a.i: middle-pass driver shell (+17 tests, 2 new quirks, sub-chip plan landed)
+
+Continuation of the same unattended session.  Previous dispatch
+landed chips 5b + 6 (zoom-32 overlay + 5 coord helpers).  This
+dispatch surveys the middle-pass cluster, lands the first sub-chip
+(driver shell with leaves stubbed), and rewrites the chip plan to
+reflect what survey turned up.
+
+### Survey: the middle-pass cluster is way bigger than 543 B
+
+Previous chip plan listed `FUN_004bd355` as "chip 5a — middle pass
+(543 B)".  Survey through the decompilation pulled up an iceberg:
+the 543 B driver calls SIX leaves, two of which are setup helpers
+(`FUN_004bd938 / FUN_004bda92 / FUN_004bdb95` — 761 B total) that
+build/sort/render a Y-ordered visible-entity list, one of which
+(`FUN_004bdb95`) reaches into a 1087 B per-entity renderer
+(`FUN_004bdc31`) that fans out to three type-specials totaling
+2549 B (`FUN_004be4df / FUN_004be7be / FUN_004beab9`).  Plus three
+per-cell draw leaves (`FUN_004bd574` player-marker 485 B, `FUN_004bd759`
+unit-key 479 B, `FUN_004beed4` effect-chain walk 805 B).
+
+Headline: **~6700 B of decompilation across 11 functions, not 543 B
+across 1**.  Comparable in surface area to the entire strategic-mode
+renderer cluster (which took 4 chips).
+
+The good news: all four sub-helpers consumed by the draw leaves —
+`FUN_004527a6` (cell-tiled dirty-rect mark), `FUN_004b4537` (unclipped
+RLE blit), `FUN_004b4814` (left-clipped RLE), and `FUN_004b48b8`
+(right-clipped RLE) — are ALREADY PORTED in the project (showed up
+during a `grep` for their addresses).  No new infrastructure work
+needed for the draw path; chip 5a.iii will use the existing
+`gfx_dispatch_dispatch_sprite_rle()` directly.
+
+Chip 5a is therefore split into three sub-chips:
+
+  - **5a.i** — middle-pass driver shell (this dispatch).
+  - **5a.ii** — sorted-entity infrastructure (938 + da92 + db95 +
+    dc31 base path; type-specials stubbed).
+  - **5a.iii** — per-cell draw leaves (574 + 759 + beed4).
+
+### Chip 5a.i: middle-pass driver shell `FUN_004bd355` (543 B)
+
+Replaces the `pass_middle` stub with the real port.  The driver
+itself lands; all six leaves stay as static counter-stubs.  Two
+behaviors over the terrain/overlay passes distinguish this pass:
+
+**1. Over-scan extension.**  Where terrain/overlay iterate exactly
+`grid_cols × grid_rows` cells, the middle pass iterates `(cols+2) ×
+(rows+2)` cells starting at `(cam_x - 1, cam_y - 1)`, clamped against
+the underlying grid extent (`camera_row_stride` for cols, a new global
+`total_rows` (DAT_004e6570) for rows).  The west / north start cells
+have NEGATIVE pixel coordinates relative to the viewport's top-left
+(`start_px_x = viewport_x - zoom`); per-cell extras rely on the clip
+rect to suppress the off-screen portions.
+
+The asymmetry (+1 west / +1 north, +2 east / +2 south) is because
+unit/effect sprites are LARGER than one hex cell — an entity anchored
+at a hex column adjacent to the visible viewport on the west side can
+still have its right edge visible inside the viewport; on east/south
+the +2 cells accommodate sprites that poke up to ~32 px past the
+anchor (spanning TWO cells at zoom 16).  Filed as **quirk #83**.
+
+**2. Per-cell dispatch on two independent descriptor bits.**
+
+  - `descriptor[+2] & 0x80` set:
+    - `descriptor[+3] == 0` → player-marker draw AND re-dirty
+      (`descriptor[+2] |= 1`).  Re-dirty ensures the animated player
+      marker re-paints next frame.
+    - `descriptor[+3] != 0` → unit-key draw (no re-dirty).
+  - `descriptor[+6] != 0` → effect-chain walk (independent of bit
+    0x80; evaluated for every cell).
+
+The asymmetric re-dirty (only the player-marker branch sets bit 1)
+is filed as **quirk #84** — the unit-key sprite is static per frame,
+so it doesn't need the re-paint loop, but the player marker animates
+through 8 frames driven by an internal counter and would freeze
+without the re-dirty.
+
+### New API surface
+
+  - `engine_battlefield_render_bind_total_rows(int)` — binds retail
+    `DAT_004e6570`, the total row count of the underlying grid (not
+    the visible row count).  Used to clamp the south edge of the
+    over-scan extension.  Not consumed by terrain / overlay passes.
+
+  - Six new per-leaf counters + two last-arg captures for the stubbed
+    leaves (`middle_build_count`, `middle_sort_count`,
+    `middle_render_count`, `middle_player_marker_count`,
+    `middle_unit_key_count`, `middle_effect_chain_count`, plus
+    `middle_unit_key_last_arg` / `middle_effect_chain_last_arg`).
+    These let tests verify the driver's per-cell dispatch shape
+    without depending on real leaf bodies; they survive into chip
+    5a.ii / 5a.iii either as cross-checks or are retired as the
+    leaves get real bodies.
+
+  - `engine_battlefield_render_per_frame_cell_counter(void)` — exposes
+    the existing `g_per_frame_cell_counter` (retail `_DAT_004e5d64`)
+    for tests to verify cell-loop iteration counts.
+
+  - `engine_battlefield_render_run_pass_middle_for_test(cam_x, cam_y)`
+    — test-only entry that calls `pass_middle()` directly with the
+    given camera, bypassing the frame driver's terrain / overlay /
+    late / final dispatch.  Without this, tests can't isolate cursor
+    state from sibling passes that also mutate it.
+
+### Headline numbers
+
+- **821 → 838 host tests** (+17), all green under ASan/UBSan.
+- **1 retail function ported**: `FUN_004bd355` (543 B).
+- **2 new engine quirks** (#83 over-scan extension, #84 asymmetric
+  re-dirty).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Battlefield port state
+
+| chip   | function                                | size  | status     |
+| ------ | --------------------------------------- | ----: | ---------- |
+| 1      | 16×16 raw blit primitive                |  705 B | ported (3 sessions ago) |
+| 2      | frame driver + zoom-16 no-op            |  154 B | ported (prev session) |
+| 3      | zoom-16 terrain pass                    |  725 B | ported (prev session) |
+| 3.5    | 32×32 raw blit primitive                | 2997 B | ported (prev session) |
+| 4      | zoom-32 terrain pass                    | 1187 B | ported (prev session, gate fix this session) |
+| 5a.i   | middle-pass driver shell                |  543 B | **ported (this session)** |
+| 5a.ii  | sorted-entity infrastructure (938+da92+db95+dc31) | ~1848 B | stub (this dispatch) |
+| 5a.iii | per-cell draw leaves (574+759+beed4)    | ~1769 B | stub |
+| 5b     | zoom-32 overlay pass                    |  436 B | ported (prev session) |
+| 5c     | late pass                               |  290 B | stub       |
+| 5d     | final pass                              |  433 B | stub       |
+| 6      | 5 coord helpers (hit-test + screen↔hex) |  394 B | ported (prev session) |
+
+The middle-pass driver shell is real; the six leaves it calls stay as
+counter-stubs that bump per-dispatch counters.  Tests verify the
+driver's per-cell dispatch shape (which leaf fires on which descriptor
+bits) without depending on real leaf bodies.
+
+### What's next
+
+1. **Chip 5a.ii — sorted-entity infrastructure.**  Port
+   `FUN_004bd938` (entity-list build, walks the entity table at
+   `DAT_005544XX + id*0x1b0` for ids 1..0x50, filtering by alive byte
+   + visible viewport), `FUN_004bda92` (bubble sort with 500-iter
+   safety cap), `FUN_004bdb95` (per-entity render loop), and the
+   base path of `FUN_004bdc31` (per-entity draw — three type-
+   specials stay stubbed for chip 5a.iv/v/vi).  This unblocks the
+   middle pass's "draw Y-sorted units" path which is the primary
+   visual it contributes — the per-cell extras (player marker +
+   effect chain) are secondary.
+
+2. **Chip 5a.iii — per-cell draw leaves.**  Port `FUN_004bd574`,
+   `FUN_004bd759`, `FUN_004beed4`.  Each uses the shared dispatch
+   pattern: stage sprite metadata from a blob, set clip rect, mark
+   4×4 cells dirty, dispatch via `gfx_dispatch_dispatch_sprite_rle`.
+   The four sub-helpers (`FUN_004527a6`, `FUN_004b4537/4814/48b8`)
+   are already ported — no new infrastructure needed.  `FUN_004beed4`
+   adds a max-10-hop linked-list walk with self-loop detection;
+   `FUN_004bd574` adds an animation counter; `FUN_004bd759` adds a
+   4-byte unit-key map that silently drops unknown keys.
+
+3. **gfx.c runtime wiring** — strategic-mode rendering has been
+   end-to-end since multiple sessions ago.  Battlefield terrain +
+   overlay are end-to-end at zoom 32; the middle pass driver is
+   end-to-end but with leaves that draw nothing yet.  Visual
+   verification remains gated on user availability.
+
+Picking **#1 (chip 5a.ii)** next: porting the sorted-entity
+infrastructure is the bigger visual win — units / heroes / armies all
+render through that path.  Chip 5a.iii's leaves are smaller draws
+(player marker is one sprite, unit-key is a 4-glyph palette) and can
+go either before or after 5a.ii without dependency conflict.
+
+This is a natural `/clear` point — chip 5a.i lands cleanly, all
+838 tests green, the chip 5a sub-plan is documented in
+`docs/findings/battlefield-render.md`, no incomplete work in-flight.
+
+---
+
 ## 2026-05-25 — Battlefield chips 5b + 6: zoom-32 overlay + 5 coord helpers (+24 tests, 4 new quirks, 1 bug fix)
 
 Continuation of the same unattended session.  Previous dispatch
