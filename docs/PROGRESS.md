@@ -7,6 +7,95 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — UI / screen-message event-queue producer cluster (5 functions)
+
+Second leaf cluster of the dispatch.  The producer-side surface of the
+50-slot UI event ring at `&DAT_00568480` — `FUN_00472bc5` (the 560 B
+"post-event" workhorse with the 8 positional args), its two init
+functions, the slot-zeroer, and the bare-publish tail — ports as one
+unit.  The consumer (`FUN_00472e46`) is intentionally left for a later
+dispatch because its callees (`FUN_00476768`, `FUN_0047309e`) are still
+unported subsystems.
+
+### Landed code
+
+- **`src/engine_event_queue.h/c`** (~210 LOC):
+  - `engine_event_queue_record_t` — packed 24-byte record matching the
+    retail layout (i32 audience, i32 target, i32 code, i32 payload32a,
+    u8 pad16, u8 flag5..7, i32 payload32b).  Six `_Static_assert`s on
+    offsets so a layout shift fails at compile-time.
+  - `engine_event_queue_state_t` — scratch + 50-slot ring + write_idx /
+    read_idx / notify_flag / consumer_cooldown, all mirroring retail
+    globals (`DAT_00553510`, `DAT_00568480`, `DAT_00543fd0`,
+    `DAT_00553ec4`, `DAT_00565484`, `DAT_0057c954`).
+  - `engine_event_queue_init`, `_init_wrapper`, `_slot_zero`,
+    `_post(args..., player_has_data[7], local_player)`, `_publish_scratch`.
+  - Post-filter implemented as three branches matching retail
+    verbatim; all three reduce to "publish iff (audience == 0) OR
+    (audience == local_player)" but the dead arms are preserved for
+    future byte-equivalence diffs.
+
+- **`tests/test_engine_event_queue.c`** (~290 LOC, 19 tests):
+  - Record-size + capacity sanity.
+  - Init: index clears, slot-0 full clear, slots-1..49 keep-non-code
+    (quirk #12), init_wrapper byte-parity with init.
+  - Post: each of the three filter arms (target=0, target!=0 +
+    !has_data, target!=0 + has_data) × each audience case (0, local,
+    other).
+  - Wrap-around: write_idx 0x31 → 0 on the publishing path AND the raw
+    publish_scratch path.
+  - Scratch-on-filter-fail: post() updates scratch even when the
+    filter skips the ring write — the save/restore path relies on this.
+  - Publish_scratch ring-isolation: bytewise verify the 24-B memcpy
+    doesn't spill into neighboring slots.
+  - Slot-zero called with `slot == read_idx` (the consumer pattern)
+    clears all 7 fields cleanly — quirk #12 is benign in that mode.
+
+- **246 tests pass** under ASan + UBSan (was 227).
+
+### Engine quirk #12 — slot_zero's partial-zero in the init loop
+
+Filed: `FUN_00472b40` zeros field `+8` of `slot[param_1]` but the other
+six writes target `slot[DAT_00553ec4]` (the read index) regardless of
+`param_1`.  At runtime this is invisible (the consumer always passes
+`param_1 == read_idx`), but during init's 0..49 sweep `read_idx` is
+pinned to 0, so only slot 0 gets fully zeroed — slots 1..49 keep their
+pre-init bytes in every field but `code`.  r2 confirms the codegen
+literally (`lea eax, [eax+eax*2]` once from the arg, six times from a
+fresh `[0x553ec4]` load).  Benign at cold boot (BSS is loader-zero);
+matters on runtime re-init.  Preserved verbatim.
+
+### What's next
+
+1. **Port the next leaf cluster** — survey ahead for more no-callee
+   producer/consumer groupings.  The event-queue + dirty-rect ports
+   show the leaf-cluster pattern lands in one commit each with ~20-line
+   test suites; same shape worth chaining.  Candidates: the
+   `FUN_00472392` / `FUN_0047265d` / `FUN_00472875` group nearby (need
+   to verify leaf-ness); the dependency-free file-format parsers.
+
+2. **Port the per-type delayed-action handlers** — carried over.  Still
+   gated on per-handler callee porting except for the 7 trivial /
+   counter ones; that subset alone would let us drop the dispatch-table
+   stub for those slots in the diff harness.
+
+3. **Wire save/load into the drop-in's runtime command surface** —
+   carried over.
+
+4. **Diagnose the Quit-Game freeze + orchestrator-teardown hang** —
+   carried over.
+
+5. **Eventually port FUN_00472e46 (event-queue consumer)** — needs
+   FUN_00476768 + FUN_0047309e ported first (or stubbed-with-TODOs as
+   the dispatch-table pattern from delayed_action does).  Pairs with
+   this dispatch but is a separate logical unit.
+
+Bias next time: option 1 (next leaf cluster).  Two leaf-cluster ports
+in a row land cleanly with the same shape; survey for a third before
+peeling off into per-type handlers or consumer ports.
+
+---
+
 ## 2026-05-25 — Dirty-rect / render-invalidation cluster ported (14 functions)
 
 A whole subsystem in one logical unit.  The dirty-rectangle bookkeeper

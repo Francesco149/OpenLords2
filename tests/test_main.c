@@ -278,6 +278,26 @@ struct test_case {
     X(engine_dirty_rect_tile_200x160_box) \
     X(engine_dirty_rect_tile_64_negative_inputs_clamped) \
     X(engine_dirty_rect_tile_80x48_noclamp_skips_prelude) \
+    \
+    X(engine_event_queue_record_size_is_24) \
+    X(engine_event_queue_capacity_is_50) \
+    X(engine_event_queue_init_clears_indices_and_flags) \
+    X(engine_event_queue_init_zeros_slot_0_fully) \
+    X(engine_event_queue_init_quirk_slots_1_to_49_keep_non_code) \
+    X(engine_event_queue_init_wrapper_matches_init) \
+    X(engine_event_queue_post_broadcast_audience_publishes) \
+    X(engine_event_queue_post_audience_matches_local_publishes) \
+    X(engine_event_queue_post_audience_mismatches_local_skips) \
+    X(engine_event_queue_post_target_zero_filter) \
+    X(engine_event_queue_post_target_empty_filter) \
+    X(engine_event_queue_post_scratch_updated_even_on_filter_fail) \
+    X(engine_event_queue_post_wraps_write_idx) \
+    X(engine_event_queue_publish_scratch_bumps_and_notifies) \
+    X(engine_event_queue_publish_scratch_wraps_too) \
+    X(engine_event_queue_publish_scratch_does_not_touch_other_slots) \
+    X(engine_event_queue_post_pad16_stays_zero_through_publish) \
+    X(engine_event_queue_slot_zero_via_consumer_idx_matches) \
+    X(engine_event_queue_post_filter_target_populated_each_audience) \
     /* end */
 
 /* Emit extern decls. */

@@ -531,6 +531,55 @@ mask a hypothetical caller that has come to depend on the slack.
 
 ---
 
+## 12. Event-queue slot-zero only zeros one field at the loop-supplied index
+
+`FUN_00472b40` (port: `engine_event_queue_slot_zero`) clears the seven
+mutable fields of one record in the 50-slot UI-event ring at
+`&DAT_00568480`.  Retail's body looks like:
+
+```c
+*(int *)(&DAT_00568488 + param_1     * 0x18) = 0;  // slot[param_1]+8
+*(int *)(&DAT_0056848c + DAT_00553ec4 * 0x18) = 0;  // slot[read_idx]+12
+*(int *)(&DAT_00568494 + DAT_00553ec4 * 0x18) = 0;  // slot[read_idx]+20
+(&DAT_00568492)[DAT_00553ec4 * 0x18] = 0;           // slot[read_idx]+18
+(&DAT_00568493)[DAT_00553ec4 * 0x18] = 0;           // slot[read_idx]+19
+(&DAT_00568491)[DAT_00553ec4 * 0x18] = 0;           // slot[read_idx]+17
+*(int *)(&DAT_00568484 + DAT_00553ec4 * 0x18) = 0;  // slot[read_idx]+4
+```
+
+The first write honors the caller-supplied `param_1`; the other six
+target slot `DAT_00553ec4` (the consumer's *read* index), ignoring
+`param_1` entirely.  r2 confirms the codegen literally: an
+`8d 04 40` (`lea eax, [eax+eax*2]`) emerges once from `param_1` and
+six times from a fresh load of `[0x553ec4]`.
+
+This is observationally benign at runtime — the consumer
+(`FUN_00472e46`) is the only non-init caller and it passes
+`param_1 = DAT_00553ec4`.  But the *init* path (`FUN_00472ae0`) loops
+`local_8 = 0..0x31` while `DAT_00553ec4` is held at 0 throughout, so
+the 50-slot sweep only zeros every slot's `code` (+8) field — every
+other field on slots 1..49 retains its pre-init bytes.
+
+At cold boot retail's BSS is loader-zeroed and the divergence is
+invisible.  But a runtime re-init from a non-zero state (e.g.
+in-game→menu transitions that call `FUN_00472ae0` afresh) leaves stale
+audience / target / payload bytes in slots 1..49, which never get
+overwritten until a subsequent `engine_event_queue_post` lands on
+that slot.  Whether any caller observes the residual bytes depends on
+the consumer order — slots are drained sequentially from `read_idx`
+forward, and the live-check is on `+8` (the cleared field), so by the
+time a slot is considered drain-eligible its `+8` is whatever the most
+recent producer wrote, not the stale init bytes.
+
+Preserved verbatim — same byte sequence as retail.
+
+> 📍 `src/engine_event_queue.c`'s `engine_event_queue_slot_zero`,
+> `tests/test_engine_event_queue.c`'s
+> `engine_event_queue_init_quirk_slots_1_to_49_keep_non_code`, Ghidra
+> `FUN_00472b40 @ 0x472b40`.
+
+---
+
 <!--
 Template for new entries:
 
