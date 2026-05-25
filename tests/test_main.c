@@ -731,6 +731,27 @@ struct test_case {
     X(gfx_text_label_render_labeled_signed_clobbers_x_acc_on_zero) \
     X(gfx_text_label_render_labeled_signed_increments_x_acc) \
     X(gfx_text_label_render_labeled_signed_mode_2_negative_quirk_47) \
+    \
+    X(engine_map_render_frame_visits_row_count_plus_one_rows) \
+    X(engine_map_render_frame_skips_empty_cells) \
+    X(engine_map_render_drawer_walks_linked_list) \
+    X(engine_map_render_drawer_empty_head_short_circuits) \
+    X(engine_map_render_drawer_invalid_src_offset_bumps_error) \
+    X(engine_map_render_drawer_invalid_sprite_w_bumps_error) \
+    X(engine_map_render_drawer_render_mode_gate_blocks) \
+    X(engine_map_render_drawer_render_mode_gate_passes_with_flag) \
+    X(engine_map_render_drawer_type_3_uses_64px_dirty_box) \
+    X(engine_map_render_drawer_type_0_uses_32px_dirty_box) \
+    X(engine_map_render_drawer_type_4_picks_alt_blob) \
+    X(engine_map_render_drawer_type_other_picks_primary_blob) \
+    X(engine_map_render_drawer_restores_anchor_cursor) \
+    X(engine_map_render_drawer_overlay_type_1_with_byte_dispatches) \
+    X(engine_map_render_drawer_overlay_type_1_byte_zero_skips) \
+    X(engine_map_render_drawer_overlay_type_2_dispatches) \
+    X(engine_map_render_phase0_row_left_edge_gated_on_col_start) \
+    X(engine_map_render_phase0_row_no_left_edge_when_col_start_zero) \
+    X(engine_map_render_phase1_row_first_cell_phase_1) \
+    X(engine_map_render_error_count_persists_across_frames) \
     /* end */
 
 /* Emit extern decls. */
