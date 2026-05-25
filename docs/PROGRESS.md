@@ -7,6 +7,131 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Framebuffer pixel painters (1 chip, 5 fns)
+
+Continuation of the same unattended session.  The prior dispatches
+closed out the text-input / font-metrics / localization clusters
+and listed two candidate next moves: begin the renderer port (with
+a stub-only wrapper as the "slightly weird shape" option) or start
+modeling the per-army struct (multi-chip endeavor).  This dispatch
+takes a third path: port the framebuffer pixel-painter PRIMITIVES
+that sit at the bottom of the rendering stack.  These were the
+missing ingredient that made the renderer-port options weird —
+without them, the renderer would have had to stub `FUN_00402a14`'s
+callees too.  Now they're real.
+
+### Chip landed
+
+**`src/gfx_paint` (NEW, ~60 LOC + 23 tests)** — 5 retail leaves at
+the very bottom of every draw call (lines, boxes, glyphs, tile
+blits all bottom out here):
+
+  - `FUN_004b3f54` → `gfx_paint_pixel`           ( 38 B) — 1 pixel
+    at (x,y) := color.  Pure formula `pixels[x + y*width] = color`.
+  - `FUN_004b3f7a` → `gfx_paint_2x1`             ( 41 B) — 2-byte
+    horizontal brush.
+  - `FUN_004b3fa3` → `gfx_paint_2x1_under`       ( 61 B) — 2x1
+    paint-under: each pixel writes iff current value is 0.  Sprite
+    overlay primitive.
+  - `FUN_004039c7` → `gfx_paint_pixel_clipped`   (101 B) — bounds-
+    checked wrapper around the 1-pixel painter.
+  - `FUN_00403a2c` → `gfx_paint_2x1_clipped`     ( 99 B) — bounds-
+    checked wrapper around the 2x1 painter, BUT only checks the
+    LEFT pixel (quirk #26).
+
+Canvas binding mirrors retail's globals (DAT_004ea1a8 / 004eb274 /
+004eac4c) but exposes a `gfx_paint_bind_canvas(pixels, w, h)` entry
+point so tests can swap in a host-allocated buffer.  Runtime
+binding will land when gfx.c's existing Lock/Unlock probe gets
+extended to also store lpSurface (a pre-existing mis-label there:
+`g_back_pitch` is documented as DAT_004ea1a8 but stores `lPitch`
+— retail actually stores `lpSurface`.  Latent bug, no current
+reader, noted for the runtime-wire chip).
+
+### Filed quirks (#26)
+
+One new entry in `docs/findings/engine-quirks.md`:
+
+  - **#26** — the clipped 2x1 painter bounds-checks only the LEFT
+    pixel.  At `x == width - 1` the right pixel writes one column
+    past the row.  Contiguous canvas → wraps into the next row;
+    bottom-right corner → wraps one byte past the back buffer
+    entirely.  Retail callers (line/edge drawers) iterate with a
+    step that avoids this; we preserve the quirk verbatim and pin
+    it down with two dedicated tests.
+
+### Headline numbers
+
+- **454 → 477 host tests** (23 new), all green under ASan/UBSan.
+- **5 retail functions ported** (~340 B decompilation).
+- **1 new module** (`src/gfx_paint`).
+- **1 new engine quirk filed** (#26).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning (the existing
+  `src/Makefile`'s glob picks up the new TU automatically).
+
+### Renderer pipeline state
+
+| layer                    | status     |
+| ------------------------ | ---------- |
+| char width               | ported     |
+| buffer width             | ported     |
+| bounded buffer width     | ported     |
+| word width + chars       | ported     |
+| editor (text_input)      | ported     |
+| localization blob access | ported     |
+| dirty-rect tracking      | ported     |
+| **1-pixel / 2x1 painters** | **ported (this chip)** |
+| **clipped pixel / 2x1**    | **ported (this chip)** |
+| line drawers (axis + diag) | deferred (4 fns, 347+442+171+197 B) |
+| text renderer            | deferred (989 B, `FUN_00402637`) |
+| word-wrap renderer       | deferred (673 B, `FUN_0040328e`) |
+| centered-text wrapper    | deferred (96 B, `FUN_004025d7`) |
+| glyph blitter            | deferred (165 B, `FUN_004b41b7`) |
+| sprite blitters (4x4/6x6/8x8) | unanalyzed |
+
+The renderer-port chip is now substantially less weird: with the
+pixel painters in hand, `FUN_00402637` (the 989-byte text
+renderer) only needs the glyph blitter (`FUN_004b41b7`, 165 B —
+which depends on the font-blob descriptor fields and a handful of
+cursor-anchor globals) to actually paint.  No more painter stubs.
+
+### What's next
+
+Three natural continuations:
+
+1. **Glyph blitter** — port `FUN_004b41b7` (165 B) + its two
+   wrapping variants `FUN_004b425c` / `FUN_004b42c5` (both 105 B).
+   These read the per-glyph descriptor bytes already-modeled by
+   `font_metrics_char_width` and write into the canvas via the
+   pixel painters just landed.  Should be ~one chip, unblocks the
+   text renderer outright.
+
+2. **Line / box drawers** — `FUN_00403c49` (axis-aligned edge
+   drawer, 171 B), `FUN_0040437d` (filled horizontal-line variant,
+   197 B), and `FUN_004037ee` (line-clipper / setup, 347 B).  All
+   now backed by the painter primitives.  Lower priority than the
+   glyph blitter for the visible-pixels milestone, but they unlock
+   the rest of the UI chrome (window frames, divider bars, etc.).
+
+3. **Wire gfx.c runtime to gfx_paint** — extend gfx.c's existing
+   `IDirectDrawSurface::Lock` probe (lines ~498-504 of gfx.c) to
+   ALSO read `desc.lpSurface` (DDSURFACEDESC offset 0x24) and
+   call `gfx_paint_bind_canvas` with it.  Fix the pre-existing
+   `g_back_pitch` mis-labeling (it stores `lPitch`, retail's
+   DAT_004ea1a8 actually holds `lpSurface`).  Small chip but
+   requires a runtime smoke-test to validate.
+
+Picking #1 (glyph blitter) advances the visible-pixels milestone
+most directly — once it lands plus a thin renderer-wrapper, the
+engine can actually paint a text line into a back buffer in CI.
+
+This is a natural `/clear` point — the renderer port pipeline has
+a fresh frontier (glyph blitter) and the durable docs capture
+everything needed to resume.
+
+---
+
 ## 2026-05-25 — Localization cluster + word-wrap measurer (2 chips, 5 fns)
 
 Continuation of the same unattended session.  The prior dispatch
