@@ -7,6 +7,168 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Word-wrap renderers (1 chip, 4 fns)
+
+Continuation of the same unattended session.  The previous dispatch
+landed the per-line text renderer and listed three follow-ups, with
+the word-wrap renderer as the recommended next move toward the
+visible-pixels milestone.  This dispatch takes that step: ports the
+two multi-line word-wrap variants plus the two single-line
+localization-string wrappers that drive them through the localized
+seek path.
+
+### Chip landed
+
+**`src/gfx_wrap` (NEW, ~310 LOC + 15 tests)** — 4 retail leaves
+spanning the text-source-to-line-renderer control plane:
+
+  - `FUN_0040328e` → `gfx_wrap_localized`            (673 B) — the
+    full-feature multi-line word-wrap.  Seeks a localization sub-
+    string, greedily appends whole words to a 2000-byte line buffer
+    until the per-line pixel budget is met, hands each assembled
+    line to `gfx_text_render_line`, advances cursor_y by the per-
+    font line height (24 or 16 px), and supports two-stage
+    pagination (after `first_page_lines` lines, swap to
+    `next_page_x`/`next_page_width`).  Suppresses leading spaces at
+    the start of every wrapped line.  Resets `max_line_x` at top;
+    updates it after each line.  Hard cap of 99 lines.
+  - `FUN_0040352f` → `gfx_wrap_buffer`               (458 B) — the
+    simpler buffer-supplied word-wrap.  Same outer loop as
+    `gfx_wrap_localized` but takes a caller-supplied source pointer
+    (no localization), uses a 200-byte line buffer, has no
+    leading-space skip, no two-stage pagination, and does NOT reset
+    `max_line_x`.
+  - `FUN_00402d37` → `gfx_wrap_localized_line`       (213 B) — the
+    single-line localized render.  Localization seek + skip +
+    leading-control-skip + `gfx_text_render_line`.  Clears the
+    dispatcher's alt-clip flag on exit.
+  - `FUN_00402c5e` → `gfx_wrap_localized_line_centered` (217 B) —
+    centered variant of the above; routes through
+    `gfx_text_render_line_centered`.
+
+State held in `src/gfx_wrap.c`'s file-statics:
+
+  - `g_max_line_x` (DAT_005aeb88) — widest line emitted, read by
+    upstream UI code (e.g. retail's scenario-hint center at
+    `0x476e95`).  Reset by `gfx_wrap_localized` only.
+  - `g_tall_font_marker` (DAT_005b2fa0) — pointer-equality
+    discriminator for the line-height switch.  When the caller's
+    `font_base` equals the registered marker, per-line cursor_y
+    advance is 24 px instead of 16.
+  - Two intermediate line buffers (2000 + 200 bytes) mirroring
+    DAT_005c92a0 + DAT_005aea60.
+
+One new setter dropped into `gfx_text` to support the wrap layer's
+needs:
+
+  - `gfx_text_set_collapse_active` — per-call arm for the
+    `g_collapse_active` flag (DAT_005c925a) that disables the
+    consecutive-space-collapse rewind.  Wrap callers arm it
+    immediately before every per-line render; the renderer clears
+    it in its epilogue.
+
+The wrap module reuses the `localization_state_t` and
+`font_metrics_state_t` structs from the existing modules — no new
+state plumbing.
+
+### Filed quirks (#35, #36, #37)
+
+Three new entries in `docs/findings/engine-quirks.md`:
+
+  - **#35** — `FUN_0040328e` and `FUN_0040352f` share an outer-loop
+    structure that differs only by feature flags (localization vs
+    pre-resolved buffer, leading-space-skip on/off, two-stage
+    pagination on/off, large/small line buffer, max_line_x reset
+    on/off).  Source-level likely one function with optional
+    features; MSVC 4.20 emitted them separately and the linker
+    didn't fold them.  Our port factors the shared structure into
+    helpers but keeps the two entry points.
+  - **#36** — `max_line_x` is asymmetric: the localized wrap resets
+    at top, the buffer wrap does not.  Callers of the buffer wrap
+    must clear externally (via `gfx_wrap_set_max_line_x(0)`) for a
+    fresh reading.  Likely a deliberate retail compromise to let
+    multi-segment callers concatenate widths across calls.
+  - **#37** — the per-line cursor_y advance (24 vs 16 px) is keyed
+    off **pointer equality** with a specific font blob's BSS
+    address, not by reading a height byte from the font header.
+    Adds a font means re-using that blob OR duplicating the
+    pointer compare everywhere line-height matters.  Our port
+    exposes the discriminator as a registered marker pointer.
+
+### Headline numbers
+
+- **542 → 557 host tests** (15 new), all green under ASan/UBSan.
+- **4 retail functions ported** (~1.6 KB decompilation, 673 + 458 +
+  213 + 217 B).
+- **1 new module** (`src/gfx_wrap`) + 1-line extension to
+  `src/gfx_text` (`gfx_text_set_collapse_active`).
+- **3 new engine quirks filed** (#35, #36, #37).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Renderer pipeline state
+
+| layer                          | status     |
+| ------------------------------ | ---------- |
+| char width                     | ported     |
+| buffer width                   | ported     |
+| bounded buffer width           | ported     |
+| word width + chars             | ported     |
+| editor (text_input)            | ported     |
+| localization blob access       | ported     |
+| dirty-rect tracking            | ported     |
+| 1-pixel / 2x1 painters         | ported     |
+| clipped pixel / 2x1            | ported     |
+| glyph blitter (unclipped)      | ported     |
+| glyph blitter (clipped × 2)    | ported     |
+| glyph dispatcher (per-char)    | ported     |
+| clip setters (X + Y)           | ported     |
+| text renderer (per-line)       | ported     |
+| centered-text wrapper          | ported     |
+| substitution stream            | ported     |
+| **word-wrap renderer (buffer)**       | **ported (this chip)** |
+| **word-wrap renderer (localized)**    | **ported (this chip)** |
+| **localization line render**          | **ported (this chip)** |
+| **localization line centered**        | **ported (this chip)** |
+| string-concat single-line render | deferred (177 B, `FUN_00403015`) |
+| line drawers (axis + diag)     | deferred (4 fns, 347+442+171+197 B) |
+| sprite blitters (4x4/6x6/8x8)  | unanalyzed |
+
+The text path is now end-to-end in `src/`.  Tests verify two-line
+wrap with pixel budgets, line_y_acc advance per line, max_line_x
+tracking and reset asymmetry, leading-space skip on wrap (localized
+only), two-stage pagination, out-of-bounds localization seek, and
+the tall-font 24-px line-height switch via the marker pointer.
+
+### What's next
+
+Three natural continuations:
+
+1. **String-concat single-line render** — port `FUN_00403015`
+   (177 B), the small wrapper that concatenates a prefix into a
+   fixed 8000-byte buffer (`DAT_0058fda0`) then calls
+   `gfx_text_render_line`.  Closes the last text-control entry
+   point; called by the in-game name/title-prefix paths.
+2. **Line drawers** — port `FUN_00403c49` and friends (347+442+
+   171+197 B, 4 fns).  Axis-aligned + diagonal lines for the
+   battle-map's grid + the UI panel borders.  Needed for visible
+   pixels beyond the text path.
+3. **Wire gfx.c runtime to the text path** — extend the
+   `IDirectDrawSurface::Lock` probe to set `lpSurface` onto the
+   gfx_paint canvas.  Small chip but requires a runtime smoke test
+   on the Windows host to validate.  Unblocks "render a real
+   string during boot" as a manual end-to-end check.
+
+Picking #2 (line drawers) advances the visible-pixels milestone
+most directly — once they land, the UI panel borders and battle-
+map grid can be drawn under CI alongside the text path.
+
+This is a natural `/clear` point — the text-source-to-renderer
+chain is now end-to-end, and the next frontier (line drawing or
+runtime wiring) is a fresh scope worth a fresh conversation.
+
+---
+
 ## 2026-05-25 — Text-line renderer + centered wrapper (1 chip, 3 fns)
 
 Continuation of the same unattended session.  The previous dispatch

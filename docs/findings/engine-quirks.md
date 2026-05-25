@@ -1344,6 +1344,97 @@ where the side-effect lives inside the short-circuit gate.  Cute
 
 ---
 
+## 35. Two word-wrap renderers differ only by feature flags
+
+`FUN_0040328e` (673 B, localized) and `FUN_0040352f` (458 B,
+caller-supplied buffer) share the same outer loop structure — for
+each line up to a hard cap of 99: zero an intermediate line buffer,
+greedily append whole words until the running pixel width meets the
+budget, arm `substitution_on` + `line_x_acc = 0` +
+`collapse_active` and call `gfx_text_render_line`, then advance the
+local cursor_y and global `line_y_acc` by a per-font line height.
+
+`FUN_0040328e` adds four wrinkles on top:
+
+- A localization-blob seek at the top (`DAT_005c9270 = blob_base +
+  offset(loc_index)`) + the `param_2` sub-string skip + the
+  leading-control-byte skip.
+- A leading-space-skip flag (`bVar3`) armed at the start of every
+  wrapped line and cleared after the first printable byte is
+  copied.  Suppresses indent leak on soft wraps.
+- A two-stage pagination knob (`param_6 <= local_18` after each
+  emit swaps `cursor_x` to `param_7` and `line_width` to `param_8`).
+- A `DAT_005aeb88 = 0` reset at the top (the max-line-width
+  tracker).  `FUN_0040352f` does NOT reset it — see quirk #36.
+
+`FUN_0040328e` uses a 2000-byte line buffer (`DAT_005c92a0`);
+`FUN_0040352f` uses a 200-byte one (`DAT_005aea60`).  Source-level
+the two could plausibly be one function with optional features;
+MSVC 4.20 emitted them separately, and the dead-stripping linker
+didn't fold them.
+
+Our port factors the shared structure into shared helpers
+(`arm_line`, `track_max_line_x`, `advance_y`, `seek_localized`)
+inside `src/gfx_wrap.c`, but keeps the two entry points so each
+matches the retail call shape.
+
+> 📍 `src/gfx_wrap.c`'s `gfx_wrap_buffer` and `gfx_wrap_localized`,
+> Ghidra `FUN_0040352f @ 0x40352f` and `FUN_0040328e @ 0x40328e`.
+
+---
+
+## 36. max_line_x output is reset only by the localized word-wrap
+
+The wrap subsystem's `DAT_005aeb88` tracks the widest emitted line
+across the most recent multi-line render — caller-readable; used by
+upstream UI code (e.g. retail's scenario-hint center at `0x476e95`)
+to compute centering offsets.
+
+`FUN_0040328e` resets it to 0 at the top (`DAT_005aeb88 = 0;` is
+the FIRST statement of the function).  `FUN_0040352f` does NOT —
+it relies on the caller to seed the value externally.
+
+Effect: a `FUN_0040352f` call's reported max-width is "max of THIS
+render's lines AND whatever was already in the field".  Callers
+that want a fresh reading must zero `DAT_005aeb88` themselves
+before the call.  In retail this manifests as a few specific call
+sites doing the reset explicitly; a typo or omission would have
+yielded a stale-max bug.
+
+Our port exposes the asymmetry verbatim: `gfx_wrap_localized`
+resets, `gfx_wrap_buffer` does not.  `gfx_wrap_set_max_line_x` is
+the explicit reset helper for the latter.
+
+> 📍 `src/gfx_wrap.c`'s `gfx_wrap_buffer` (no reset) +
+> `gfx_wrap_localized` (resets at top), Ghidra `FUN_0040352f` and
+> `FUN_0040328e`.
+
+---
+
+## 37. Word-wrap line-height switch is by font-pointer identity
+
+Both word-wrap functions advance the line cursor by 24 px when
+`param_9 == &DAT_005b2fa0` and 16 px otherwise.  The discriminator
+is **pointer equality with the address of a specific font blob's
+BSS location**, not a property of the font itself.
+
+This means the "tall font" is identified externally by who-owns-the-
+pointer rather than by reading a height byte from the font header.
+Adding a new tall font requires either re-using the `DAT_005b2fa0`
+blob (overwriting it) or duplicating the comparison everywhere
+line-height matters.
+
+Our port exposes the discriminator as a registered marker pointer
+(`gfx_wrap_set_tall_font_marker`) so tests can register any blob
+address as "the tall one"; callers in src/ register the same blob
+the runtime loader puts in the equivalent BSS slot.
+
+> 📍 `src/gfx_wrap.c`'s `line_height_for`, Ghidra
+> `FUN_0040328e` and `FUN_0040352f` (the
+> `if (param_9 == &DAT_005b2fa0)` branch).
+
+---
+
 <!--
 Template for new entries:
 
