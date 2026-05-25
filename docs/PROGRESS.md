@@ -7,6 +7,187 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Battlefield chips 5a.iii + 5a.iv: per-cell draw leaves + type-special leaves (+41 tests, 5 new quirks)
+
+Continuation of the same unattended session.  Previous dispatch landed
+chip 5a.ii.a/b (sorted-entity infrastructure + per-entity draw base
+path).  This dispatch lands the two remaining chip-5a sub-chips —
+both the three per-cell draw leaves AND the three type-special leaves
+that the per-entity draw fans out to.  After this, the **entire
+chip-5a sub-plan is landed**; only chips 5c (late pass) and 5d (final
+pass) remain stubbed within the battlefield cluster.
+
+### Chip 5a.iii: per-cell draw leaves (`FUN_004bd574 / 4bd759 / 4beed4`)
+
+Replaces three counter-stubs with real ports.  All three are
+dispatched per-cell from the middle-pass driver shell under different
+descriptor-bit gates:
+
+  - `desc[+2] & 0x80, desc[+3] == 0` → `FUN_004bd574` player marker
+  - `desc[+2] & 0x80, desc[+3] != 0` → `FUN_004bd759` unit-key sprite
+  - `desc[+6] != 0`                  → `FUN_004beed4` effect chain
+                                        (independent of bit 0x80)
+
+**`FUN_004bd574` (485 B) — player marker.**  8-frame animated sprite
+cycle drawn over the active player's hex.  Slot computation:
+`banner_byte * 8 + frame + 0x21` where banner_byte comes from a
+per-player byte table at stride 0x1a4 (each player has a banner color
+that picks an 8-slot band of the marker sprite blob).  Frame counter
+(retail `DAT_004e5b18`, 0..7 wrapped) advances when the bound
+`anim_advance` flag is non-zero, holds when zero.
+
+**`FUN_004bd759` (479 B) — unit-key sprite.**  Static letter sprite.
+4-entry key→slot map: `0x49→0x1f, 0x4c→0x20, 0x61→0x21, 0x64→0x22`.
+Unknown keys early-return without dispatch (no blit, no slot capture).
+Otherwise same render path as player_marker (shared helper).
+
+**`FUN_004beed4` (805 B) — effect chain.**  Walks a linked list of
+visual-effect records anchored to a cell.  Each record has its own
+sprite slot (subject to a shared blob in the port — see API notes
+below).  10-hop safety cap, self-loop guard, terminator on `id==0` or
+`type==0`.  Subtype 7 skips render but continues walk; subtype 5
+advances a shared 0..15 wrapped anim counter (retail `DAT_004e5b1c`)
+and adds a per-frame (x_off, y_off) jitter from a 16-entry table;
+other subtypes render at static position.
+
+### Chip 5a.iv: type-special leaves (`FUN_004be4df / 4be7be / 4beab9`)
+
+Replaces three counter-stubs in `middle_leaf_draw_entity` (chip
+5a.ii.b) with real ports.  All three are PRE/POST-calls dispatched
+from the per-entity draw under type/subtype gates:
+
+  - `type == 6`                     → `FUN_004be4df` PRE-call
+  - `type == 7`                     → `FUN_004be7be` POST-call
+  - `type == 9 AND subtype == 0x0e` → `FUN_004beab9` POST-call
+
+All three share the same body shape (stage → gate [1, 0x4baf0] →
+zoom-conditional anim-offset + centering → 6×6 dirty box → set clip →
+RLE blit → restore cursor), but differ in blob source and slot offset:
+
+  - **type-6**: shadow/ground effect.  Blob from
+    `bind_entity_type6_blob` (port substitute for the entity's +0x04
+    secondary blob field — 8-byte host pointer can't safely live there
+    without colliding with primary at +0x00).  Slot from entity's
+    secondary frame index (+0x11).
+  - **type-7**: blob picked by entity facing direction
+    (`facing < 4` → low blob, `facing >= 4` → high blob).  Both bound
+    via `bind_entity_type7_blobs(low, high)`.  Slot from secondary frame.
+  - **type-9-sub-0xe**: TWO sprites per call from the entity's primary
+    blob.  First slot = `secondary_frame + 0x16` with `cursor_y -= 16`;
+    second slot = `secondary_frame + 0xd` with `cursor_y += 0x56`.
+    Both anchored at the SAVED entry cursor (not the first sprite's
+    post-adjustment cursor), yielding a fixed 102-pixel vertical
+    separation between the two sprites.
+
+### New API surface
+
+Chip 5a.iii bindings:
+
+  - `bind_player_marker_blob / slot_table / player_id / anim_advance`
+    — five inputs cover the marker's blob, per-player slot-table base
+    + stride, active player id, and the "should advance frame" tick.
+  - `bind_unit_key_blob` — just the blob; slot selection is internal
+    via the 4-entry key→slot switch.
+  - `bind_effect_chain_table / shared_blob / anim_table` — record
+    array (base + stride + max_id), shared blob (port-only substitute
+    for the per-record blob pointer that doesn't fit in 4 bytes on
+    64-bit hosts), and the 16-entry subtype-5 anim jitter table.
+  - `bind_scroll_pad` — half-cell centering pad added to effect
+    cursor (retail `DAT_004e5d44`).
+
+Chip 5a.iv bindings:
+
+  - `bind_entity_type6_blob` — shared blob for the type-6 PRE-call.
+  - `bind_entity_type7_blobs(low, high)` — facing-selected pair for
+    the type-7 POST-call.
+  - (type-9-sub-0xe reuses entity primary blob — no new binding)
+
+New accessors: per-leaf blit counts (player_marker / unit_key /
+effect_chain / type6 / type7 / type9_sub), animation frame counters
+(player_marker, effect_chain), effect_chain iteration count + last-arg
+captures, last-slot captures for player_marker / unit_key.
+
+### New engine quirks
+
+  - **#90** — effect-chain glyph_offset gate aborts WHOLE chain walk
+    (not just current record).  Bad metadata on record N silently
+    hides all subsequent effects in the chain.
+  - **#91** — player_marker / unit_key Y-axis re-centering uses
+    `sprite_w` (not `sprite_h`).  Bug masked because both leaves only
+    ever index square sprites in the retail asset.
+  - **#92** — effect-chain dirty-box branch identical in both arms
+    (subtype 5 vs other).  Dead code; folded away in the port.
+  - **#93** — type-9-sub-0xe leaf reads z32 anim table at zoom 16
+    too.  Likely subtype 0xe only occurs at zoom 32 in real data.
+  - **#94** — type-9-sub-0xe second sprite anchored at SAVED entry
+    cursor, not first sprite's adjusted cursor.  Yields a fixed
+    102-pixel Y separation regardless of anim state.
+
+### Headline numbers
+
+- **873 → 914 host tests** (+41), all green under ASan/UBSan.
+- **6 retail functions ported**: `FUN_004bd574` (485 B player marker),
+  `FUN_004bd759` (479 B unit key), `FUN_004beed4` (805 B effect chain),
+  `FUN_004be4df` (735 B type-6 PRE), `FUN_004be7be` (763 B type-7 POST),
+  `FUN_004beab9` (1051 B type-9-sub POST).  Total ~4318 B of decompile
+  → port.
+- **5 new engine quirks** (#90 chain abort, #91 sprite_w on both axes,
+  #92 dead conditional, #93 unconditional z32 read, #94 saved-cursor
+  anchor).
+- Two commits — `4d2f04f` (5a.iii) + `e49027b` (5a.iv) — each
+  self-contained.
+- Cross-compile (mingw32) clean.
+
+### Battlefield port state
+
+| chip   | function                                      | size   | status     |
+| ------ | --------------------------------------------- | -----: | ---------- |
+| 1      | 16×16 raw blit primitive                      |  705 B | ported     |
+| 2      | frame driver + zoom-16 no-op                  |  154 B | ported     |
+| 3      | zoom-16 terrain pass                          |  725 B | ported     |
+| 3.5    | 32×32 raw blit primitive                      | 2997 B | ported     |
+| 4      | zoom-32 terrain pass                          | 1187 B | ported     |
+| 5a.i   | middle-pass driver shell                      |  543 B | ported     |
+| 5a.ii.a | sorted-entity infrastructure (938+da92+db95) |  761 B | ported    |
+| 5a.ii.b | per-entity draw FUN_004bdc31 base path       | 1087 B | ported    |
+| 5a.iii | per-cell draw leaves (574+759+beed4)          | 1769 B | **ported (this session)** |
+| 5a.iv  | type-special leaves (4df+7be+ab9)             | 2549 B | **ported (this session)** |
+| 5b     | zoom-32 overlay pass                          |  436 B | ported     |
+| 5c     | late pass                                     |  290 B | stub       |
+| 5d     | final pass                                    |  433 B | stub       |
+| 6      | 5 coord helpers (hit-test + screen↔hex)       |  394 B | ported     |
+
+The entire chip-5a sub-plan is now landed.  Only chips 5c (late pass)
+and 5d (final pass) remain stubbed within the battlefield cluster —
+both are unsurveyed.
+
+### What's next
+
+1. **Chip 5c — late pass.**  `FUN_004bd233` (290 B).  Unsurveyed.
+   Likely a UI-overlay or transient-effect pass that runs after
+   terrain/middle/overlay.  Quick survey → port.
+
+2. **Chip 5d — final pass.**  `FUN_004bf1f9` (433 B).  Unsurveyed.
+   Likely the cursor / selection / debug-overlay pass.
+
+3. **gfx.c runtime wiring** — battlefield is now end-to-end at zoom
+   16/32 for all chip-5a layers.  Visual verification remains gated
+   on user availability — the next milestone where a screenshot
+   would be most informative is "first battlefield frame with units
+   rendered", which requires standing up the entity table from real
+   savegame data.  That's a larger lift than continuing the chip
+   plan.
+
+Picking **#1 (chip 5c)** next likely: smaller surface than 5d,
+and the late-pass-before-final ordering matters for understanding
+how the final pass consumes any state the late pass leaves behind.
+
+This is a natural `/clear` point — both chip-5a leaves landed
+cleanly, all 914 tests green, chip-5a sub-plan documented as complete
+in `docs/findings/battlefield-render.md`, no incomplete work in-flight.
+
+---
+
 ## 2026-05-25 — Battlefield chips 5a.ii.a + 5a.ii.b: sorted-entity infrastructure + per-entity draw (+35 tests, 5 new quirks)
 
 Continuation of the same unattended session.  Previous dispatch
