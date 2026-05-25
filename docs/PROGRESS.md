@@ -7,6 +7,116 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Save-file I/O ported + retail round-trip green
+
+Cashed in yesterday's schema-map by porting the save/load paths into
+`src/save.c` — and the headline check passes: load the real GOG
+`lastturn.sav`, write it back, byte-compare → 471828/471828 bytes
+identical.
+
+### Landed code
+
+- `src/save.h` + `src/save.c`:
+  - 13 named big-block globals (entries 0..12 of the schema; 262648
+    of the 267028 header bytes).  `g_castles_state`,
+    `g_per_territory_420`, `g_per_battle_hex_432`, etc. — see
+    `save.h` for the full name list with retail-VA cross-refs.
+  - `save_write` / `save_load` — mirror retail `FUN_004ade93` /
+    `FUN_004adfe6`: 225-entry positional dump + 16-block Castles.dat
+    copy.
+  - `castles_init_blank`, `castles_write_scenario`,
+    `castles_read_scenario` — mirror retail `FUN_004ae8a9 /
+    004ae968 / 004aea70` including the read-side flag-bit fixups
+    (force `mem+7=9, mem+4=0, mem+2` reshape on `flags&0x02`;
+    `mem+7=1` on `cVar=2`; `mem+7=5` + reshape on `cVar=7`).
+  - One TODO: `FUN_004917dd` (the "preserved castle" reset path on
+    `flags&0x01`) is not yet ported — no round-trip in our test set
+    touches that branch, so it's left as a clearly marked no-op.
+
+- `tools/gen_save_schema.py` + `src/save_schema_table.h`:
+  - Generator reads `docs/findings/save-schema-table.csv` and emits
+    the 225-entry table + per-unique-VA scalar tail storage.  203
+    unique tail VAs; duplicate-VA aliasing (slots 32/48 at
+    `0x53f010`; slots 216..224 at `0x4eb2ac`) is preserved through
+    shared backing storage.
+  - Header is checked in so the build doesn't need Python.  Re-run
+    the generator only if the CSV changes (i.e., never, unless we
+    discover a binary-side correction).
+
+### Tests
+
+7 new tests added to the host harness (149 total passing under
+ASan + UBSan):
+
+- `save_schema_table_shape` — 225 entries summing to 267028 bytes.
+- `save_schema_aliasing_preserved` — round-trip a `u32` through both
+  aliased slot groups to prove the table's pointer-sharing works.
+- `save_round_trip_retail_lastturn` — **the headline test**: load
+  real GOG `lastturn.sav` → `save_write` → byte-compare.  Skips
+  cleanly if `$OPENLORDS2_GAME_DIR` / `vendor/original/lastturn.sav`
+  are absent, so no repo data is required.
+- `castles_init_blank_makes_zero_file` — 204800 zero bytes.
+- `castles_scenario_round_trip_byte13` — write+read the +1/+3 disk
+  bytes for all 6400 records, no fixups triggered.
+- `castles_scenario_independent_slots` — confirms `(idx-1)*0x3200`
+  seek arithmetic doesn't bleed across slots.
+- `castles_read_fixup_flag_bit1` — confirms the `flags&0x02` fixup
+  (`mem+7=9, mem+4=0, mem+2` reshape).
+
+### What this unlocks
+
+This is the gating finding for porting any of the sub-step bodies:
+
+- `FUN_004472ce` (MP sim tick)
+- `FUN_0049b8b0` (turn-timeout)
+- `FUN_0045270a` (AI scheduler)
+- `FUN_00440231` (per-tick hash — we already documented its strides)
+
+Each reads+mutates the globals we just allocated.  We can populate
+them from a real `.sav` and diff-test the ports with realistic
+starting state instead of all-zero stubs, which would have made any
+non-trivial control flow uncoverable.
+
+### What's next
+
+1. **Wire save/load into the drop-in's runtime command surface.**
+   Currently the API exists but no caller invokes it.  Two options
+   that both pay off:
+   - On boot, optionally `--load-save PATH` so a launch can preload
+     a known game state — useful for harness scenarios where a
+     repro lives in a save.
+   - Stub the F2/F3 keyboard handlers (retail's quick-save /
+     quick-load) so an interactive session round-trips.
+
+2. **Port `FUN_004917dd`** — the missing castle-read fixup branch
+   (`flags & 0x01`).  Small port that closes the last gap in the
+   Castles.dat read path.  Currently this branch is a no-op with
+   a clearly marked TODO.
+
+3. **Pin down the per-castle 8-byte struct.**  +0 (type), +1
+   (flags), +3 (from disk) are confirmed.  +2/+4..+7 are runtime
+   — trace by reading every site that writes to those offsets on
+   `DAT_005440e0`.  Worth doing now while the save subsystem
+   context is fresh.
+
+4. **Decode entry 4 (16 × 768 B at `0x53f9b0`).**  Hashed in
+   strategic mode only.  16 slots smells like 16 saved-AI brains
+   (one per Castles.dat scenario), but cross-confirm.
+
+5. **Start porting a sub-step body** with the now-real globals —
+   `FUN_00440231` (per-tick hash) is the smallest test bed since
+   it's read-only.
+
+6. **Diagnose the Quit-Game freeze + orchestrator-teardown hang** —
+   carried over from prior dispatches as cleanup items.
+
+Bias next time: option 5 → option 1.  Sub-step body coverage is the
+high-leverage move now that the data exists; runtime wiring is
+trivial and can land alongside any port that actually needs to
+preload state.
+
+---
+
 ## 2026-05-25 — Save-file schema mapped
 
 Switched to the next subsystem: save-file format.  Mapped the entire
