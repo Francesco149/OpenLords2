@@ -32,6 +32,7 @@ SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c \
                    ../src/engine_tile.c \
                    ../src/engine_delayed_action.c \
                    ../src/engine_dirty_rect.c \
+                   ../src/engine_category_buckets.c \
                    ../src/engine_event_queue.c \
                    ../src/engine_handlers_da.c \
                    ../src/engine_path.c \
@@ -47,6 +48,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_tile.c \
                    test_engine_delayed_action.c \
                    test_engine_dirty_rect.c \
+                   test_engine_category_buckets.c \
                    test_engine_event_queue.c \
                    test_engine_handlers_da.c \
                    test_engine_path.c \

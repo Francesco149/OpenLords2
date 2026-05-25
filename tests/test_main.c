@@ -341,6 +341,21 @@ struct test_case {
     X(engine_handlers_da_counter_ignores_dispatch_args) \
     X(engine_handlers_da_mixed_records_in_order) \
     X(engine_handlers_da_other_types_still_treated_as_noop) \
+    \
+    X(engine_category_buckets_clear_zeros_both_tables) \
+    X(engine_category_buckets_clear_is_idempotent) \
+    X(engine_category_buckets_append_first_slot_of_empty_bucket) \
+    X(engine_category_buckets_append_advances_past_filled_slots) \
+    X(engine_category_buckets_append_independent_buckets) \
+    X(engine_category_buckets_append_full_bucket_silently_drops) \
+    X(engine_category_buckets_append_skips_zero_in_middle) \
+    X(engine_category_buckets_digest_contains_found) \
+    X(engine_category_buckets_digest_contains_not_found) \
+    X(engine_category_buckets_digest_contains_zero_matches_default) \
+    X(engine_category_buckets_refresh_picks_bucket0_initial) \
+    X(engine_category_buckets_refresh_skips_duplicate_initial) \
+    X(engine_category_buckets_refresh_probe_caps_at_6) \
+    X(engine_category_buckets_refresh_zero_value_flips_to_odd_parity) \
     /* end */
 
 /* Emit extern decls. */

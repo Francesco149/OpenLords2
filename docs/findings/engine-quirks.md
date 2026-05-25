@@ -622,6 +622,51 @@ documents the behavior with its own dedicated test case.
 
 ---
 
+## 14. Category-bucket digest probe flips to odd parity on zero
+
+`FUN_004291b3` (the per-category-bucket "first non-duplicate" digest
+refresher) walks each bucket's entries at every-other-byte stride
+(slots 0, 2, 4, 6, ...) when looking for a value not already in the
+digest:
+
+```c
+local_10 = (uint)(byte)(&DAT_00567970)[local_8 * 0x10];   // bucket[0]
+while ((iVar1 = FUN_0042925e(local_10), iVar1 != 0 &&
+       (local_c = local_c + 1, local_c < 6))) {
+  local_10 = (uint)*(byte *)(local_14 + 0x567972 + local_8 * 0x10);
+  local_14 = local_14 + 2;
+  if (local_10 == 0) {
+    local_14 = 1;     // <-- flip to odd-index parity
+  }
+}
+```
+
+The probe sequence is bucket[2], bucket[4], bucket[6], ... — until
+a probe hits a zero byte, at which point `local_14 = 1` flips the
+walk to odd indices: the NEXT probe reads bucket[1 + 2] = bucket[3],
+then bucket[5], bucket[7], etc.
+
+In practice this matters only when buckets are sparsely populated
+with zeros mixed in.  The map-load caller populates buckets densely
+from the top, so the zero-flip almost never fires.  But when crafting
+hermetic unit-test inputs it's observable — preserved verbatim and
+documented with its own test case
+(`engine_category_buckets_refresh_zero_value_flips_to_odd_parity`).
+
+The wider every-other-byte scheme also implies the digest never
+samples slots 7, 9, 11, 13, 15 in the no-flip case — those are
+unreachable from the initial offset=0 trajectory.  That's a
+documentable but separate limitation; we don't have evidence it
+affects production runs.
+
+> 📍 `src/engine_category_buckets.c`'s
+> `engine_category_buckets_refresh_digest`,
+> `tests/test_engine_category_buckets.c`'s
+> `engine_category_buckets_refresh_zero_value_flips_to_odd_parity`,
+> Ghidra `FUN_004291b3 @ 0x4291b3`.
+
+---
+
 <!--
 Template for new entries:
 
