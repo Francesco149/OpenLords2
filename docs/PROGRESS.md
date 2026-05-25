@@ -7,6 +7,151 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Text-line renderer + centered wrapper (1 chip, 3 fns)
+
+Continuation of the same unattended session.  The previous dispatch
+landed the glyph dispatcher + clip setters and listed three follow-
+ups, with the text renderer as the recommended next move toward the
+visible-pixels milestone.  This dispatch takes that step: ports the
+per-line renderer that drives `gfx_dispatch_glyph` in a loop, plus
+the small centering wrapper, plus the substitution-stream pull helper.
+
+### Chip landed
+
+**`src/gfx_text` (NEW, ~380 LOC + 23 tests)** — 3 retail leaves
+spanning the text-rendering control plane:
+
+  - `FUN_00402637` → `gfx_text_render_line`             (989 B) — the
+    per-line driver.  Walks a null-terminated byte buffer; for each
+    printable char runs the dispatcher up to three times (drop-shadow,
+    outline, or tight-shadow paths), updates running cursor + line
+    accumulators, handles the '#' substitution stream, the
+    consecutive-space collapse, the uppercase-highlight override, and
+    the first-position hook.  Clears substitution + alt-clip flags at
+    end-of-call.
+  - `FUN_00402c16` → `substitution_next`                ( 72 B) — pulls
+    one byte from the '#' macro buffer; wraps cursor to 0 and yields
+    space on NUL.  Static — only called from the renderer.
+  - `FUN_004025d7` → `gfx_text_render_line_centered`    ( 96 B) — pre-
+    measures via `font_metrics_buffer_width_bounded` then offsets X
+    by `(width - text_width) / 2`, clamped at 0.
+
+State is held in `src/gfx_text.c`'s file-statics — mirrors retail's
+BSS layout for the six render-mode flags, the substitution
+buffer/cursor/enable triple, the first-position hook (target + latch
++ recorded x/y), and the three running accumulators (line_x_acc,
+line_y_acc, char_counter).  Setters and getters expose every retail
+DAT_* writer's surface area.
+
+Two new dispatcher-adjacent setters dropped in to support the
+renderer's needs without bloating set_dest's contract:
+
+  - `gfx_glyph_set_cursor_x` / `gfx_glyph_set_cursor_y` (gfx_glyph) —
+    single-axis cursor writes for the shadow paths that vary only
+    cursor_y across passes.
+  - `gfx_dispatch_set_alt_clip_enabled` (gfx_dispatch) — toggle alt-
+    clip without disturbing the saved rect coords; called from the
+    renderer's end-of-call cleanup.
+
+### Filed quirks (#32, #33, #34)
+
+Three new entries in `docs/findings/engine-quirks.md`:
+
+  - **#32** — the renderer at `0x004d71f0` and font_metrics at
+    `0x004d71d0` look like distinct char→glyph tables but are the
+    same allocation viewed from two addresses (0x20 apart).  The
+    renderer indexes at `raw_char - 0x20`; font_metrics indexes at
+    `raw_char`.  Same byte for any printable.  Lifts the 32 control-
+    byte slots out of the renderer's range so they implicitly miss.
+  - **#33** — the substitution stream is one-shot but loop-sticky.
+    First '#' triggers the FIRST substitution at the top of the
+    loop; from that point on, the BOTTOM-of-loop advance keeps
+    pulling from the stream purely because the cursor is non-zero.
+    Stream stays engaged until its NUL terminator wraps the cursor
+    back to 0, at which point the source-buffer advance resumes.  So
+    a one-character source `#` with stream "AB" loaded renders as
+    two chars.
+  - **#34** — the uppercase-highlight color reset is a comma-
+    expression inside a short-circuit gate.  When the flag is on,
+    the per-glyph color is re-set to the caller's color EVERY
+    iteration before the A-Z check potentially overrides to 1.  When
+    off, the color isn't touched per-iter at all.  Defensive against
+    forward-bleed of a previous char's override.
+
+### Headline numbers
+
+- **519 → 542 host tests** (23 new), all green under ASan/UBSan.
+- **3 retail functions ported** (~1.1 KB decompilation, 989 + 72 +
+  96 B).
+- **1 new module** (`src/gfx_text`) + 3-line extension to
+  `src/gfx_glyph` (single-axis cursor setters) + 1-line extension
+  to `src/gfx_dispatch` (alt-clip enabled-only setter).
+- **3 new engine quirks filed** (#32, #33, #34).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Renderer pipeline state
+
+| layer                          | status     |
+| ------------------------------ | ---------- |
+| char width                     | ported     |
+| buffer width                   | ported     |
+| bounded buffer width           | ported     |
+| word width + chars             | ported     |
+| editor (text_input)            | ported     |
+| localization blob access       | ported     |
+| dirty-rect tracking            | ported     |
+| 1-pixel / 2x1 painters         | ported     |
+| clipped pixel / 2x1            | ported     |
+| glyph blitter (unclipped)      | ported     |
+| glyph blitter (clipped × 2)    | ported     |
+| glyph dispatcher (per-char)    | ported     |
+| clip setters (X + Y)           | ported     |
+| **text renderer (per-line)**   | **ported (this chip)** |
+| **centered-text wrapper**      | **ported (this chip)** |
+| **substitution stream**        | **ported (this chip)** |
+| line drawers (axis + diag)     | deferred (4 fns, 347+442+171+197 B) |
+| word-wrap renderer             | deferred (673 B, `FUN_0040328e`) |
+| sprite blitters (4x4/6x6/8x8)  | unanalyzed |
+
+The per-line path is now end-to-end in `src/`.  Tests render strings
+on a host-bound canvas with all three multi-pass paths (drop-shadow,
+outline, tight-shadow) and verify the per-pass colors land on the
+expected pixels.  Substitution stream, uppercase highlight, collapse-
+spaces, first-position hook, missing-glyph fallback, and the centered
+wrapper's offset math all have dedicated coverage.
+
+### What's next
+
+Three natural continuations:
+
+1. **Word-wrap renderer** — port `FUN_0040328e` (673 B) and
+   `FUN_0040352f` (458 B), the multi-line word-wrap variants used
+   by long help / scenario text.  Both call `gfx_text_render_line`
+   in a loop, using `font_metrics_word_width` (already ported) for
+   per-word measurement.  Closes the gap to "render a paragraph in
+   CI" against a Frida-captured retail golden.
+2. **Line drawers** — port `FUN_00403c49` and friends (347+442+
+   171+197 B, 4 fns).  Axis-aligned + diagonal lines for the
+   battle-map's grid + the UI panel borders.  Needed for visible
+   pixels beyond the text path.
+3. **Wire gfx.c runtime to gfx_paint** — extend the
+   `IDirectDrawSurface::Lock` probe to set `lpSurface` onto the
+   gfx_paint canvas.  Small chip but requires a runtime smoke test
+   on the Windows host to validate.  Unblocks "draw a real string
+   during boot" as a manual end-to-end check.
+
+Picking #1 (word-wrap renderer) advances the visible-pixels milestone
+most directly — once it lands, the test harness can render the
+scenario picker's hint text and the in-game tooltip cluster.
+
+This is a natural `/clear` point — the per-line renderer is a
+complete stratum, and the next frontier (the word-wrap renderer that
+drives it in a loop) is a fresh multi-state scope worth a fresh
+conversation.
+
+---
+
 ## 2026-05-25 — Glyph dispatcher + clip setters (1 chip, 3 fns)
 
 Continuation of the same unattended session.  The previous dispatch

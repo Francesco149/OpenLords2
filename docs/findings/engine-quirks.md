@@ -1256,6 +1256,94 @@ pixels from the top and 478 pixels wide" was a fixed assumption.
 
 ---
 
+## 32. Char→glyph table is one buffer viewed from two addresses
+
+The renderer at `FUN_00402637` and the font-metrics measurer at
+`FUN_004015b9` / `FUN_00401f8f` look up character glyphs through what
+appear to be two distinct tables: `DAT_004d71f0` (the renderer's) and
+`DAT_004d71d0` (font_metrics').  In fact those symbols are exactly
+0x20 bytes apart, and the renderer indexes its table at
+`raw_char - 0x20` while font_metrics indexes at `raw_char`.  The two
+reads land on the same byte.
+
+The trick: lift the 32 control-byte slots out of the renderer's
+indexed range entirely.  The renderer subtracts 0x20 from each
+character before indexing, so the table it consults has its origin at
+ASCII 0x20.  Font_metrics doesn't bother with the subtraction (its
+char-width function is called from places that may pass control
+bytes), so it consults the same data at its "true" address.  The two
+DAT_* symbols are just two views of one allocation.
+
+In our port we don't share addresses — `gfx_text` and `font_metrics`
+each take a `char_glyph_table` parameter.  Callers can either pass the
+same backing array twice with the renderer's pointer offset by 0x20
+(matching retail's memory layout) or pass two semantically-equivalent
+tables.  Tests use the first approach via an `overlapped_table_t`
+helper that materializes the memory layout retail relied on.
+
+> 📍 `src/gfx_text.c` (table indexed at `glyph_idx = ch - 0x20`) and
+> `src/font_metrics.c` (table indexed at raw `c`), Ghidra
+> `FUN_00402637` at `0x402683` (`subus`/`movzx` on `local_c - 0x20`).
+
+---
+
+## 33. Renderer's substitution stream is one-shot but loop-sticky
+
+The text renderer at `FUN_00402637` has a '#' macro: when the
+substitution flag (`DAT_005bb4c4`) is set and a '#' appears in the
+source, the renderer pulls bytes from a fixed substitution buffer
+(`DAT_005bb4d0`) instead.  But the stickiness is unusual.  The
+top-of-loop check `if (local_c == 0x23)` only triggers the FIRST
+substitution; from that point on, the BOTTOM-of-loop advance switches
+to "fetch from stream" purely because the stream cursor
+(`DAT_005bb4b4`) is non-zero.  Subsequent chars come from the stream
+without needing more '#'s in the source.
+
+When the stream's NUL terminator is hit, `FUN_00402c16` returns ' '
+and resets the cursor to 0.  THIS is what re-arms the source-buffer
+read: the bottom-of-loop advance checks `DAT_005bb4b4 == 0`, and once
+the cursor wraps to 0, the next iteration reads from the source
+buffer again.  The substituted '#' has been "consumed" by then.
+
+So `"text#more"` with substitution "AB" loaded renders as
+`"textABmore"` — exactly one source `#` triggers TWO substituted
+characters because once the stream is engaged, it stays engaged
+until exhausted.
+
+> 📍 `src/gfx_text.c`'s `gfx_text_render_line` (substitution stream
+> branch) + `substitution_next`, Ghidra `FUN_00402637` lines around
+> `0x402702` / `0x402a05` (top-of-loop '#' branch vs bottom-of-loop
+> stream advance).
+
+---
+
+## 34. Renderer's uppercase-highlight does a per-iteration color reset
+
+When `DAT_0058fe2c` (the uppercase-highlight flag) is non-zero, the
+text renderer at `FUN_00402637` reassigns the per-glyph color
+(`local_8 = param_5`) on EVERY loop iteration — then, if the current
+character is uppercase A-Z, overrides it to 1.  When the flag is
+zero, the renderer skips both the reset AND the override, leaving
+`local_8` at whatever value it had from the prior iteration (which
+starts at `param_5` from the function preamble).
+
+This means the behavior with the flag off is "use the caller's color
+throughout" — the reset-and-override is dead-equivalent to just
+"override per-char" when the flag is on.  The reset is a defensive
+write that costs an iteration store but ensures the previous char's
+override doesn't bleed forward.
+
+Implemented as a comma-expression in retail's source:
+`(DAT_0058fe2c != 0) && (local_8 = param_5, 0x40 < local_c) && ...`
+where the side-effect lives inside the short-circuit gate.  Cute
+1996-era pattern.
+
+> 📍 `src/gfx_text.c`'s `gfx_text_render_line` (the
+> `g_uppercase_highlight` block), Ghidra `FUN_00402637` at `0x4026d4`
+> (comma-expression with `mov dword [local_8], esi`).
+
+---
+
 <!--
 Template for new entries:
 
