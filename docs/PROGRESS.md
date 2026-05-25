@@ -7,6 +7,119 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Eighth diff target: engine_compute_state_hash (FUN_00440231)
+
+First sub-step body port unlocked by yesterday's save-schema map.
+`FUN_00440231` is retail's per-tick MP state hash — the input to the
+desync detector (`FUN_00440dd2`) that peers compare across the MP
+wire to spot simulation drift.  Read-only, small (1077 B in retail,
+~140 LOC in our port), and naturally exercises the per-territory /
+per-castle / per-army arrays we just got named storage for.
+
+200/200 retail diff pass at seed 1 — joining the prior seven targets
+for **1600/1600 total** across the full suite.
+
+### Landed code
+
+- `src/engine_state_hash.c` + `engine_compute_state_hash()` in
+  `src/engine.h`:
+  - Pure C, six source-array pointers in, 10-byte bucket + 600-byte
+    hash region + `notify_combat_snapshot` flag out.
+  - Three quirks preserved with commentary:
+    1. `bucket[7] = 1` ALWAYS fires after the per-mode loops, so
+       combat-mode's third-loop sum (per_battle_hex_aux_52) is
+       overwritten.  Looks like a copy-paste bug from strategic-
+       mode's bucket[3] target, but downstream MP code reads
+       bucket[7] expecting 1 — "fixing" it would break desync.
+    2. `bucket[0] = sum(bucket[1..8])` includes the bucket[7]=1
+       constant, so the sum is always ≥1 regardless of mode.
+    3. `bucket[9] = (tick_lsb & 0x7f) + 1` — the +1 sentinel
+       distinguishes the hash result from zero-init state.
+  - Combat-mode tail call to `FUN_0043f4b7` (memcpy-into-malloc'd
+    snapshot scratch) surfaced as a flag — the scratch pointers
+    aren't ported yet, and the diff orchestrator pins them null
+    retail-side so the memcpy branch stays dormant.
+
+- 16 host unit tests covering every branch + quirk + every per-
+  source-array slot boundary.  165 tests total pass under
+  ASan + UBSan (was 149).
+
+### Diff harness wiring
+
+The 8th target needed two new harness tricks worth pinning:
+
+- **Seed-shared source-array install**: the six source arrays
+  combined are ~125 KB.  Sending them per-vector as JSON would be
+  expensive; instead the orchestrator + agent both implement the
+  same 32-bit xorshift (`state_hash_fill_bytes` / `stateHashFillBytes`)
+  and only the 4-byte seed travels over the wire.  Per-array sub-
+  seeding (`seed + 0x9e3779b1 * tag`) keeps each array's bytes
+  uncorrelated.  Per-vector RPCs then inject only 3 scalars and
+  read 610 bytes.  Documented in `docs/findings/pure-function-diff.md`.
+
+- **Shared engine-tick freeze across the run**: both `sim_sub_steps`
+  and `state_hash` need `FUN_0040e890` patched to a no-op.  Cycling
+  install→uninstall→install on the same `Interceptor.replace`
+  address between consecutive test plans triggered an intermittent
+  Frida-internal TypeError that destroyed the agent script context.
+  Fix: install once upfront if any enabled target needs it, leave
+  it in place across all vectors, release once in the teardown.
+
+Two more potholes filed under the doc:
+- `writeByteArray` of a buffer ≥64 KB destabilises Frida — chunk
+  large writes at <=32 KB (per_territory at 63420 B is just past).
+- The snapshot Uint8Array must be a COPY (`.set(new Uint8Array(...))`),
+  not a view onto `readByteArray`'s buffer — Frida may reclaim that
+  buffer between RPC calls; a dangling view kills the script
+  mid-teardown.
+
+### What this unlocks
+
+Same gating as the prior dispatch: now that we have realistic per-
+tick state (from the save schema) AND a verified pure-function diff
+shape that can inject + invoke a sub-step body's worth of state, the
+remaining sub-step body ports are unblocked:
+
+- `FUN_004472ce` (MP sim tick)
+- `FUN_0049b8b0` (turn-timeout)
+- `FUN_0045270a` (AI scheduler)
+
+Each is bigger than `FUN_00440231` and reads+mutates state rather
+than just reading — but the harness pattern (seed-shared payload,
+shared engine freeze, chunked writes) carries over.
+
+### What's next
+
+1. **Pin down the per-castle 8-byte struct.**  +0 (type), +1
+   (flags), +3 (from disk) are confirmed.  +2/+4..+7 are runtime
+   — every site that writes to those offsets on `DAT_005440e0`
+   needs cataloguing.  This is now the smallest open item on the
+   save-format finding.
+
+2. **Port `FUN_004917dd`** — the missing castle-read fixup branch
+   (`flags & 0x01`) carried over from the save-file dispatch.
+
+3. **Diagnose the benign Frida TypeError** at engine-freeze release
+   — happens once at script teardown when the engine resumes; all
+   results are recorded cleanly before it fires, but tracing it
+   would tighten the harness.
+
+4. **Start porting `FUN_004472ce` (MP sim tick)** as the next
+   sub-step body.  Order of magnitude larger than `FUN_00440231`
+   but the harness shape (seed-shared sources, shared engine freeze)
+   is now proven.
+
+5. **Wire save/load into the drop-in's runtime command surface**
+   — carried over from the prior dispatch; no progress this round.
+
+6. **Diagnose the Quit-Game freeze + orchestrator-teardown hang** —
+   carried over from prior dispatches.
+
+Bias next time: option 4 — next sub-step body port now that the
+harness pattern is proven on a small example.
+
+---
+
 ## 2026-05-25 — Save-file I/O ported + retail round-trip green
 
 Cashed in yesterday's schema-map by porting the save/load paths into

@@ -27,6 +27,7 @@ in our port that would corrupt the engine on boot is caught immediately.
 | `engine_compute_phase_ticks`  | `FUN_004bbc80`    | `src/engine_phase.c`      | 9-flag animation phase tick (10 in, 18 out)   |
 | `engine_compute_input_state`  | `FUN_004b191e`    | `src/engine_input.c`      | mouse-input resolver (25 in, 30 out; scripted `GetCursorPos`) |
 | `engine_compute_sim_sub_steps` + `engine_compute_scenario_hint` | `FUN_004bb978` + `FUN_0043de70` | `src/engine_rate.c` | sim sub-step rate gate + scenario_hint computer (chained — outer calls inner internally; orchestrator chains both ports host-side and compares against ONE retail RPC) |
+| `engine_compute_state_hash`   | `FUN_00440231`    | `src/engine_state_hash.c` | per-tick MP state hash — 3 strided per-record byte hashes (strategic or combat) + 10-byte bucket vector + 600-byte per-record region.  Source-array payload (125 KB across 6 arrays) installed once per test plan from a shared xorshift32 seed; engine-tick freeze required |
 
 Each has a host-side unit-test file under `tests/test_engine_*.c`; the
 diff test complements those by proving they match retail behavior for
@@ -49,17 +50,19 @@ Knobs (full list in `--help`):
   - `--warmup-s N` — how long to wait for engine_tick to start ticking
     before firing RPCs (default 10)
 
-Latest verified run: **200/200 pass on all seven functions** (2026-05-25,
-retail build via cutestation.soy, seed 1).  FPS reported 1 race-pass,
-input_state reported 29 race-passes — see "Race classification" below.
-RNG / anim-cycle / frame-delta / phase_ticks saw zero races on this
-run, but the same machinery applies if they ever surface.
+Latest verified run: **1600/1600 pass across all eight functions**
+(2026-05-25, retail build via cutestation.soy, seed 1, 200 vectors
+each).  RNG / anim-cycle / frame-delta / phase_ticks / sim_sub_steps /
+state_hash saw zero races; FPS and input_state report a handful of
+race-passes (classified per "Race classification" below).
 
-`sim_sub_steps` runs under an **engine-tick freeze** for the duration
-of its test plan — see "Engine-tick freeze for sim_sub_steps" below for
-the rationale; with the freeze, classic post-call races still occur but
-the engine main thread can't bring down the process by entering retail's
-sub-step body with our injected (incomplete) ingame state.
+Both `sim_sub_steps` and `state_hash` run under an **engine-tick freeze**
+— installed ONCE at run start if any target needs it, released ONCE at
+the end.  Cycling install→uninstall→install back-to-back on the same
+Interceptor.replace address triggered an intermittent Frida-internal
+TypeError that destroyed the agent script context; sharing the freeze
+across the run avoids the cycle.  See "Engine-tick freeze for sim_sub_steps"
+below for the freeze-itself rationale.
 
 ## Agent shape
 
@@ -304,14 +307,55 @@ classification, not synchronisation — both `Interceptor.attach onEnter`
 spin and `SuspendThread` deadlock (see the "engine-thread race" block
 above for why).
 
+### Seed-shared source-array install for state_hash
+
+`engine_compute_state_hash` reads six strided source arrays — combined
+~125 KB.  Sending those bytes per-vector over the Frida wire would
+blow up the JSON encode cost; sending them once per test plan via
+`installStateHashSources(seed)` instead.
+
+The orchestrator and agent both implement the same 32-bit xorshift
+(`state_hash_fill_bytes` / `stateHashFillBytes` — verbatim equivalents),
+sub-seeding each of the six arrays with `seed + 0x9e3779b1 * tag`
+(tag 0..5).  Only the 4-byte seed travels over the wire; both sides
+synthesise the same ~125 KB payload locally.  Per-vector RPCs then
+inject only 3 scalars (mode, player_slot, sim_tick_counter) + read
+the 610-byte destination region.
+
+Two infrastructure quirks worth knowing:
+
+  - **writeByteArray chunk size**: writing a single buffer ≥64 KB
+    reliably destroyed the agent script context.  Per-array writes
+    are chunked at 32 KB (per_territory's 63420 B lands in two
+    chunks; others fit in one).
+  - **Snapshot must be a COPY, not a view**: `new Uint8Array(readByteArray(N))`
+    creates a view onto a buffer Frida may reclaim between RPC calls;
+    when uninstall tries to write from the (now dangling) backup,
+    the script dies.  Always copy with `.set(new Uint8Array(...))` —
+    matches the `installSimSubStepsRateLut` pattern.
+
+### Shared engine freeze for sim_sub_steps + state_hash
+
+Both targets need `FUN_0040e890` (engine_tick_dispatch) patched to a
+no-op for the duration of their vectors.  Cycling install→uninstall
+→install on the same Interceptor.replace address between consecutive
+test plans triggered an intermittent Frida-internal TypeError that
+destroyed the agent script context.
+
+Workaround: the orchestrator installs the freeze ONCE upfront if any
+enabled target needs it, leaves it installed across all vectors, and
+releases it ONCE in the teardown path.  The per-target setup branches
+no longer touch the freeze.
+
 ## Host-side shared library
 
 `tests/Makefile` grew a `diff` target that builds
 `tests/build/libengine_diff.so` from the diff-target sources
 (`src/engine_rng.c`, `src/engine_fps.c`, `src/engine_anim_cycle.c`,
-`src/engine_delta.c`, `src/engine_phase.c`, `src/engine_input.c`) with
-`-fPIC`, *without* ASan/UBSan (an ASan-instrumented .so can't be
-`dlopen`'d from a non-ASan Python).
+`src/engine_delta.c`, `src/engine_phase.c`, `src/engine_input.c`,
+`src/engine_rate.c`, `src/engine_state_hash.c`) with `-fPIC`,
+*without* ASan/UBSan (an ASan-instrumented .so can't be `dlopen`'d
+from a non-ASan Python).
 
 `tools/diff_test.py`'s ctypes bindings mirror `src/engine.h`'s
 `engine_rng_in_t` / `engine_rng_out_t` / `engine_fps_in_t` /
