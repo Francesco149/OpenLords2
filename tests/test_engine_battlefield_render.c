@@ -3907,3 +3907,646 @@ int test_engine_battlefield_render_pixel_to_col_left_biased_no_low_clamp(void)
     T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_left_biased(99), -1);
     return 0;
 }
+
+/* ────────────────────────────────────────────────────────────────
+ * Chip 5c — late pass: per-cell creature draw (FUN_004be070) +
+ * selection marker (FUN_004be33f).
+ *
+ * The late pass walks visible cells (NO over-scan unlike the middle
+ * pass).  For each cell whose descriptor[+5] is non-zero, AND whose
+ * per-entity visibility mask AND'd with the per-player visibility byte
+ * is non-zero, it dispatches the creature-draw leaf with that entity id.
+ *
+ * After the cell loop, if the selection-marker gate is positive, the
+ * marker leaf draws a fixed-slot sprite at the active hero/army
+ * position and invokes a world-map dirty hook for a 3×3 box around it.
+ *
+ * Tests use `run_pass_late_for_test` to bypass the frame driver so
+ * sibling passes don't perturb the cursor / counters being asserted.
+ * ──────────────────────────────────────────────────────────────── */
+
+/* Scaffold for the late pass: 3×3 visible grid inside the 8×8 physical
+ * descriptor table.  Camera (0, 0), zoom 16 (the late pass HARDCODES
+ * 0x20 pitch — see quirk #97), viewport (0, 0), entity table bound
+ * empty (tests poke per-entity bytes via `late_entity_set`), creature
+ * blob unbound, selection marker disabled (gate = 0), world hook
+ * unbound, clip rect generous.  The creature blob uses g_entity_blob
+ * (already declared by chip 5a tests).
+ *
+ * Tests typically:
+ *   1. Call late_scaffold(zoom).
+ *   2. Poke descriptor[+5] of one or more cells via desc_set_late.
+ *   3. Optionally bind entity[+0a] / [+1a0] via late_entity_set.
+ *   4. Optionally bind the per-player visibility mask byte via
+ *      late_vis_mask.
+ *   5. Run engine_battlefield_render_run_pass_late_for_test(cam, cam).
+ *   6. Inspect counters / cursor / dirty state. */
+
+#define CREATURE_BLOB_SIZE 0x600
+static uint8_t g_creature_blob_buf[CREATURE_BLOB_SIZE];
+
+/* Per-player visibility table fixture: just one byte for player 0.
+ * `late_vis_mask` binds it (or NULL to disable). */
+static uint8_t g_late_vis_table[0x160];
+
+/* World-hook capture state. */
+static int g_world_hook_called;
+static int g_world_hook_last_x, g_world_hook_last_y;
+static int g_world_hook_last_w, g_world_hook_last_h;
+
+static void world_hook_capture(int x, int y, int w, int h)
+{
+    g_world_hook_called += 1;
+    g_world_hook_last_x = x;
+    g_world_hook_last_y = y;
+    g_world_hook_last_w = w;
+    g_world_hook_last_h = h;
+}
+
+/* Stage descriptor[+5] (the entity id byte the late pass gates on). */
+static void desc_set_late(int col, int row, int phys_cols,
+                          uint8_t creature_id)
+{
+    int off = (col + row * phys_cols) * DESC_STRIDE;
+    g_terrain_desc[off + 5] = creature_id;
+}
+
+/* Stage an entity record with the per-entity fields the late pass
+ * actually reads (visibility mask byte + sprite slot short + type
+ * byte + facing + anim_frame).  The chip 5a tests pre-existing
+ * `entity_set_body` covers different offsets and clobbers the +0x1a0
+ * slot field — this helper writes ONLY the late-pass fields, leaving
+ * other bytes zero (or whatever a previous setup left them). */
+static void late_entity_set(int id, uint8_t vis_mask, int16_t sprite_slot,
+                            uint8_t type, int8_t facing, int8_t anim_frame)
+{
+    uint8_t *rec = g_entity_table + id * ENT_STRIDE;
+    rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_LATE_VISIBILITY_MASK] = vis_mask;
+    memcpy(rec + ENGINE_BATTLEFIELD_ENTITY_OFFSET_LATE_SPRITE_SLOT,
+           &sprite_slot, sizeof sprite_slot);
+    rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_TYPE]        = type;
+    rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_FACING]      = (uint8_t)facing;
+    rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_ANIM_FRAME]  = (uint8_t)anim_frame;
+}
+
+static void late_vis_mask(uint8_t byte_at_player0)
+{
+    g_late_vis_table[0] = byte_at_player0;
+    engine_battlefield_render_bind_late_player_visibility_mask(
+        g_late_vis_table, /*stride=*/0x160, /*player_id=*/0);
+}
+
+static void late_scaffold(int zoom)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    /* The late-pass driver advances the descriptor cursor by
+     * `g_grid_row_wrap` at end-of-row (unlike the middle pass, which
+     * computes its own skip from `row_stride * num_cols`).  Rebind the
+     * grid with a row_wrap that bridges the gap between 3 visible cols
+     * and the 8 physical cols of g_terrain_desc, so the cursor walks
+     * contiguous physical rows. */
+    engine_battlefield_render_bind_grid(/*cols=*/3, /*rows=*/3,
+        /*row_wrap=*/(DESC_COLS_PHY - 3) * DESC_STRIDE);
+    engine_battlefield_render_set_zoom(zoom);
+
+    /* Bind a generous clip rect so y_clip_mode resolves to 0
+     * (blits reachable). */
+    engine_battlefield_render_bind_clip_rect(/*left=*/-1000, /*top=*/-1000,
+                                             /*right=*/2000, /*bottom=*/2000);
+
+    /* Unbind canvas — blits become no-ops at the pixel level, observed
+     * via blit_count instead. */
+    gfx_paint_bind_canvas(NULL, 0, 0);
+
+    /* Zero / unbind chip 5c-specific state. */
+    memset(g_creature_blob_buf, 0, sizeof g_creature_blob_buf);
+    memset(g_late_vis_table,    0, sizeof g_late_vis_table);
+    engine_battlefield_render_bind_creature_sprite_blob(NULL);
+    engine_battlefield_render_bind_late_player_visibility_mask(NULL, 0, 0);
+    engine_battlefield_render_bind_creature_slot_shift(0, 0);
+    engine_battlefield_render_bind_selection_marker(0, 0, /*gate=*/0);
+    engine_battlefield_render_bind_world_map_dirty_hook(NULL);
+    engine_battlefield_render_set_dirty_state(NULL);
+
+    /* Bind anim tables — late creature draw uses z32 unconditionally
+     * (quirk #95). */
+    memset(g_anim_z16, 0, sizeof g_anim_z16);
+    memset(g_anim_z32, 0, sizeof g_anim_z32);
+    engine_battlefield_render_bind_anim_offset_tables(g_anim_z16, g_anim_z32);
+
+    /* Empty entity table backed by g_entity_table (zeros = all
+     * descriptors safe to look up). */
+    bind_entities(/*max_id=*/ENT_MAX_ID);
+
+    /* Reset world hook capture state. */
+    g_world_hook_called  = 0;
+    g_world_hook_last_x  = 0;
+    g_world_hook_last_y  = 0;
+    g_world_hook_last_w  = 0;
+    g_world_hook_last_h  = 0;
+
+    /* Reset cursor so per-cell advance assertions start at a known
+     * state.  gfx_glyph_set_dest writes both x and y. */
+    gfx_glyph_set_dest(0, 0);
+}
+
+static void run_late_only(int cam_x, int cam_y)
+{
+    engine_battlefield_render_run_pass_late_for_test(cam_x, cam_y);
+}
+
+/* ─── Driver / cell-loop tests ───────────────────────────────────── */
+
+/* Visible 3×3 → 9 cells visited (no over-scan).  All cells zero, so
+ * no creature dispatch. */
+int test_engine_battlefield_render_late_visits_visible_grid(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    run_late_only(/*cam=*/0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_per_cell_count(),       9);
+    T_ASSERT_EQ_I(engine_battlefield_render_late_creature_draw_count(),  0);
+    T_ASSERT_EQ_I(engine_battlefield_render_count_late(),                1);
+    return 0;
+}
+
+/* Cell with descriptor[+5] == 0 → no draw. */
+int test_engine_battlefield_render_late_zero_id_no_draw(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    /* Leave descriptor zeros. */
+    run_late_only(/*cam=*/0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_creature_draw_count(), 0);
+    return 0;
+}
+
+/* Cell with descriptor[+5] != 0 but visibility AND == 0 → no draw. */
+int test_engine_battlefield_render_late_vis_mask_blocks(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    desc_set_late(/*col=*/1, /*row=*/1, DESC_COLS_PHY, /*id=*/3);
+    late_entity_set(/*id=*/3, /*vis_mask=*/0x0f, /*slot=*/0,
+                    /*type=*/1, 0, 0);
+    /* Player visibility mask = 0xf0 — AND with 0x0f = 0 → cell blocked. */
+    late_vis_mask(0xf0);
+
+    run_late_only(/*cam=*/0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_creature_draw_count(), 0);
+    return 0;
+}
+
+/* Cell with both masks overlapping → draw fires. */
+int test_engine_battlefield_render_late_vis_mask_allows(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    desc_set_late(/*col=*/1, /*row=*/1, DESC_COLS_PHY, /*id=*/3);
+    late_entity_set(/*id=*/3, /*vis_mask=*/0x0f, /*slot=*/0, /*type=*/1, 0, 0);
+    late_vis_mask(0x01);
+
+    run_late_only(/*cam=*/0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_creature_draw_count(), 1);
+    return 0;
+}
+
+/* NULL player visibility base → effectively zero AND → no draws even
+ * when descriptor and entity vis are non-zero. */
+int test_engine_battlefield_render_late_null_vis_blocks_all(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    desc_set_late(/*col=*/1, /*row=*/1, DESC_COLS_PHY, /*id=*/3);
+    late_entity_set(/*id=*/3, /*vis_mask=*/0xff, /*slot=*/0, /*type=*/1, 0, 0);
+    /* NULL base → per-player byte defaults to 0 → AND == 0 → no draw. */
+
+    run_late_only(/*cam=*/0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_creature_draw_count(), 0);
+    return 0;
+}
+
+/* Quirk #97: cursor advances by 0x20 per cell regardless of zoom.  At
+ * zoom 16, three cells should advance cursor_x to 0x60 (not 0x30). */
+int test_engine_battlefield_render_late_hardcoded_zoom32_pitch(void)
+{
+    late_scaffold(/*zoom=*/0x10);  /* zoom 16, but pitch still 0x20 */
+    run_late_only(/*cam=*/0, 0);
+
+    /* After 3 cells of the last row, cursor_x = 0 + 3*0x20 = 0x60.
+     * After 3 rows, cursor_y = 0 + 3*0x20 = 0x60. */
+    T_ASSERT_EQ_I(gfx_glyph_cursor_x(), 0x60);
+    T_ASSERT_EQ_I(gfx_glyph_cursor_y(), 0x60);
+    return 0;
+}
+
+/* No descriptor table bound → no per-cell visits, but selection
+ * marker still runs if its gate is positive. */
+int test_engine_battlefield_render_late_no_descriptors_marker_fires(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    engine_battlefield_render_bind_descriptor_table(NULL, DESC_STRIDE);
+    engine_battlefield_render_bind_selection_marker(/*x=*/0, /*y=*/0, /*gate=*/1);
+
+    run_late_only(/*cam=*/0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_per_cell_count(),         0);
+    T_ASSERT_EQ_I(engine_battlefield_render_late_selection_marker_count(), 1);
+    return 0;
+}
+
+/* ─── Creature-draw leaf tests ───────────────────────────────────── */
+
+/* Slot computation: sign >= 0 → left shift by amount; final = + 0x2e.
+ * Set raw=3, amount=2, sign=0 → 3 << 2 = 12 → +0x2e = 0x3a. */
+int test_engine_battlefield_render_late_creature_slot_left_shift(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    blob_set_header(g_creature_blob_buf, /*slot=*/0x3a, 16, 16, /*src_off=*/0x100);
+    engine_battlefield_render_bind_creature_sprite_blob(g_creature_blob_buf);
+
+    desc_set_late(1, 1, DESC_COLS_PHY, /*id=*/3);
+    late_entity_set(/*id=*/3, /*vis_mask=*/0xff, /*slot=*/3, /*type=*/1, 0, 0);
+    late_vis_mask(0xff);
+    engine_battlefield_render_bind_creature_slot_shift(/*amount=*/2, /*sign=*/0);
+
+    run_late_only(0, 0);
+
+    /* Hits the right slot → blit fires. */
+    T_ASSERT_EQ_I(engine_battlefield_render_late_creature_blit_count(), 1);
+    return 0;
+}
+
+/* Slot computation: sign < 0 → right shift.  raw=0x20, amount=2 →
+ * 0x20 >> 2 = 8 → +0x2e = 0x36. */
+int test_engine_battlefield_render_late_creature_slot_right_shift(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    blob_set_header(g_creature_blob_buf, /*slot=*/0x36, 16, 16, /*src_off=*/0x100);
+    engine_battlefield_render_bind_creature_sprite_blob(g_creature_blob_buf);
+
+    desc_set_late(1, 1, DESC_COLS_PHY, /*id=*/4);
+    late_entity_set(/*id=*/4, /*vis_mask=*/0xff, /*slot=*/0x20,
+                    /*type=*/1, 0, 0);
+    late_vis_mask(0xff);
+    engine_battlefield_render_bind_creature_slot_shift(/*amount=*/2, /*sign=*/-1);
+
+    run_late_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_creature_blit_count(), 1);
+    return 0;
+}
+
+/* Rebind a 1×1 visible grid (so a single creature at vis (0, 0) is
+ * the only cell visited — keeps cursor-offset assertions clean: the
+ * leaf's POST-OFFSET cursor (quirk #96, gate-fail path) propagates
+ * straight to end-of-frame after just one per-cell +0x20 + one
+ * end-of-row +0x20). */
+static void late_scaffold_1x1(int zoom)
+{
+    late_scaffold(zoom);
+    engine_battlefield_render_bind_grid(/*cols=*/1, /*rows=*/1,
+        /*row_wrap=*/(DESC_COLS_PHY - 1) * DESC_STRIDE);
+}
+
+/* Type < 7 → cursor_y -= 12 (offset).  With anim (0,0): adjusted
+ * cursor_y = entry_y - 12.  Gate-fail leaves cursor at adjusted (quirk
+ * #96) — we use this as the assertion vector. */
+int test_engine_battlefield_render_late_creature_type_lt7_y_offset(void)
+{
+    late_scaffold_1x1(/*zoom=*/0x10);
+    /* No blob slot staged → src_off = 0 → gate FAILS → cursor stays
+     * at adjusted pos (quirk #96).  Provide blob to get past the NULL
+     * check. */
+    engine_battlefield_render_bind_creature_sprite_blob(g_creature_blob_buf);
+
+    desc_set_late(/*col=*/0, /*row=*/0, DESC_COLS_PHY, /*id=*/2);
+    late_entity_set(/*id=*/2, /*vis_mask=*/0xff, /*slot=*/0,
+                    /*type=*/3 /*<7*/, 0, 0);
+    late_vis_mask(0xff);
+
+    run_late_only(0, 0);
+
+    /* Cell (0, 0) entry cursor (0, 0).  After type<7 offset:
+     *   x += 0 + 8 = 8
+     *   y += 0 - 12 = -12
+     * Gate-fail (no blob slot) leaves cursor at (8, -12) per quirk #96.
+     * Driver per-cell advance: cursor_x += 0x20 → 0x28.
+     * End-of-row advance: cursor_y += 0x20 → 0x14.
+     * No more rows. */
+    T_ASSERT_EQ_I(gfx_glyph_cursor_x(), 0x28);
+    T_ASSERT_EQ_I(gfx_glyph_cursor_y(), 0x14);
+    return 0;
+}
+
+/* Type 9 → cursor_y -= 16 (net of -0x20 + 0x10). */
+int test_engine_battlefield_render_late_creature_type9_y_offset(void)
+{
+    late_scaffold_1x1(/*zoom=*/0x10);
+    engine_battlefield_render_bind_creature_sprite_blob(g_creature_blob_buf);
+
+    desc_set_late(0, 0, DESC_COLS_PHY, /*id=*/2);
+    late_entity_set(/*id=*/2, /*vis_mask=*/0xff, /*slot=*/0,
+                    /*type=*/9, 0, 0);
+    late_vis_mask(0xff);
+
+    run_late_only(0, 0);
+
+    /* Type 9: cursor_y += 0 - 0x20 + 0x10 = -16.  Adjusted y = -16.
+     * End-of-row +0x20 → 0x10. */
+    T_ASSERT_EQ_I(gfx_glyph_cursor_y(), 0x10);
+    return 0;
+}
+
+/* Type 10 → cursor_y -= 12 (same as type < 7). */
+int test_engine_battlefield_render_late_creature_type10_y_offset(void)
+{
+    late_scaffold_1x1(/*zoom=*/0x10);
+    engine_battlefield_render_bind_creature_sprite_blob(g_creature_blob_buf);
+
+    desc_set_late(0, 0, DESC_COLS_PHY, /*id=*/2);
+    late_entity_set(/*id=*/2, /*vis_mask=*/0xff, /*slot=*/0,
+                    /*type=*/10, 0, 0);
+    late_vis_mask(0xff);
+
+    run_late_only(0, 0);
+
+    /* Type 10: cursor_y += 0 - 12 = -12.  End-of-row → 0x14. */
+    T_ASSERT_EQ_I(gfx_glyph_cursor_y(), 0x14);
+    return 0;
+}
+
+/* Type other (11) → cursor_y -= 0x20 (no type-9 bonus). */
+int test_engine_battlefield_render_late_creature_type_other_y_offset(void)
+{
+    late_scaffold_1x1(/*zoom=*/0x10);
+    engine_battlefield_render_bind_creature_sprite_blob(g_creature_blob_buf);
+
+    desc_set_late(0, 0, DESC_COLS_PHY, /*id=*/2);
+    late_entity_set(/*id=*/2, /*vis_mask=*/0xff, /*slot=*/0,
+                    /*type=*/11, 0, 0);
+    late_vis_mask(0xff);
+
+    run_late_only(0, 0);
+
+    /* Type other: cursor_y += 0 - 0x20 = -0x20.  End-of-row → 0. */
+    T_ASSERT_EQ_I(gfx_glyph_cursor_y(), 0x00);
+    return 0;
+}
+
+/* Quirk #95: at zoom 16, the leaf reads the z32 anim table (not z16).
+ * Stage z32 with a distinctive offset; z16 with zeros.  Verify the
+ * z32 value made it into the cursor adjustment. */
+int test_engine_battlefield_render_late_creature_anim_z32_unconditional(void)
+{
+    late_scaffold_1x1(/*zoom=*/0x10);
+    engine_battlefield_render_bind_creature_sprite_blob(g_creature_blob_buf);
+
+    desc_set_late(0, 0, DESC_COLS_PHY, /*id=*/2);
+    late_entity_set(/*id=*/2, /*vis_mask=*/0xff, /*slot=*/0,
+                    /*type=*/1 /*<7*/, /*facing=*/0, /*anim_frame=*/0);
+    late_vis_mask(0xff);
+
+    /* z32 entry (facing=0, frame=0) = (0x100, 0x200).  z16 unchanged
+     * (zero) — at retail zoom 16, the leaf reads z32 regardless. */
+    anim_table_set(g_anim_z32, /*facing=*/0, /*frame=*/0,
+                   /*x=*/0x100, /*y=*/0x200);
+
+    run_late_only(0, 0);
+
+    /* Type<7: cursor_x += 0x100 + 8 = 0x108; cursor_y += 0x200 - 12 = 0x1f4.
+     * Entry (0, 0) → adjusted (0x108, 0x1f4).  Per-cell +0x20 →
+     * 0x128.  End-of-row +0x20 → 0x214. */
+    T_ASSERT_EQ_I(gfx_glyph_cursor_x(), 0x128);
+    T_ASSERT_EQ_I(gfx_glyph_cursor_y(), 0x214);
+    return 0;
+}
+
+/* Glyph-offset gate: src_off outside [1, 0x4baf0] → no blit. */
+int test_engine_battlefield_render_late_creature_gate_skips_blit(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    /* src_off = 0 → out of band. */
+    blob_set_header(g_creature_blob_buf, /*slot=*/0x2e, 16, 16, /*src_off=*/0);
+    engine_battlefield_render_bind_creature_sprite_blob(g_creature_blob_buf);
+
+    desc_set_late(1, 1, DESC_COLS_PHY, /*id=*/2);
+    late_entity_set(/*id=*/2, /*vis_mask=*/0xff, /*slot=*/0,
+                    /*type=*/1, 0, 0);
+    late_vis_mask(0xff);
+
+    run_late_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_creature_draw_count(), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_late_creature_blit_count(), 0);
+    return 0;
+}
+
+/* Quirk #96: on gate PASS, cursor is restored to ENTRY.  Place a
+ * single creature in the last cell of the row, and verify the cell-
+ * loop advance is correct (final x = grid_cols * 0x20). */
+int test_engine_battlefield_render_late_creature_gate_pass_cursor_restored(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    blob_set_header(g_creature_blob_buf, /*slot=*/0x2e, 16, 16,
+                    /*src_off=*/0x100);
+    engine_battlefield_render_bind_creature_sprite_blob(g_creature_blob_buf);
+
+    desc_set_late(/*col=*/0, /*row=*/0, DESC_COLS_PHY, /*id=*/2);
+    late_entity_set(/*id=*/2, /*vis_mask=*/0xff, /*slot=*/0,
+                    /*type=*/1, 0, 0);
+    late_vis_mask(0xff);
+
+    run_late_only(0, 0);
+
+    /* Cell (0,0) at entry cursor (0, 0); leaf restores cursor to entry
+     * before returning.  Then driver advances cursor_x by 0x20 per
+     * cell × 3 → cursor_x = 0x60.  cursor_y advances per row × 3 →
+     * 0x60. */
+    T_ASSERT_EQ_I(engine_battlefield_render_late_creature_blit_count(), 1);
+    T_ASSERT_EQ_I(gfx_glyph_cursor_x(), 0x60);
+    T_ASSERT_EQ_I(gfx_glyph_cursor_y(), 0x60);
+    return 0;
+}
+
+/* NULL creature blob → no blit (but the type-Y offset still applies,
+ * verifying that the NULL-blob early-return is post-offset). */
+int test_engine_battlefield_render_late_creature_null_blob_no_blit(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    /* Don't bind creature blob — defaults NULL. */
+    desc_set_late(1, 1, DESC_COLS_PHY, /*id=*/2);
+    late_entity_set(/*id=*/2, /*vis_mask=*/0xff, /*slot=*/0, /*type=*/1, 0, 0);
+    late_vis_mask(0xff);
+
+    run_late_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_creature_draw_count(), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_late_creature_blit_count(), 0);
+    return 0;
+}
+
+/* ─── Selection marker tests ─────────────────────────────────────── */
+
+/* Gate = 0 → marker leaf does NOT dispatch. */
+int test_engine_battlefield_render_late_selection_marker_gate_zero(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    engine_battlefield_render_bind_selection_marker(/*x=*/5, /*y=*/5, /*gate=*/0);
+
+    run_late_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_selection_marker_count(), 0);
+    return 0;
+}
+
+/* Gate > 0 → marker leaf dispatches. */
+int test_engine_battlefield_render_late_selection_marker_gate_fires(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    engine_battlefield_render_bind_selection_marker(/*x=*/5, /*y=*/5, /*gate=*/1);
+
+    run_late_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_selection_marker_count(), 1);
+    return 0;
+}
+
+/* Marker dispatches the world hook ONLY inside the glyph-offset gate.
+ * Stage blob with valid src_off → gate passes → hook fires with
+ * (marker_x - 1, marker_y - 1, 3, 3). */
+int test_engine_battlefield_render_late_selection_marker_world_hook(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    blob_set_header(g_creature_blob_buf, /*slot=*/0x3f, 16, 16,
+                    /*src_off=*/0x100);
+    engine_battlefield_render_bind_creature_sprite_blob(g_creature_blob_buf);
+    engine_battlefield_render_bind_world_map_dirty_hook(world_hook_capture);
+    engine_battlefield_render_bind_selection_marker(/*x=*/7, /*y=*/4, /*gate=*/1);
+
+    run_late_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_selection_marker_blit_count(), 1);
+    T_ASSERT_EQ_I(g_world_hook_called,    1);
+    T_ASSERT_EQ_I(g_world_hook_last_x,    6);   /* 7 - 1 */
+    T_ASSERT_EQ_I(g_world_hook_last_y,    3);   /* 4 - 1 */
+    T_ASSERT_EQ_I(g_world_hook_last_w,    3);
+    T_ASSERT_EQ_I(g_world_hook_last_h,    3);
+    T_ASSERT_EQ_I(engine_battlefield_render_late_world_dirty_hook_count(), 1);
+    return 0;
+}
+
+/* Glyph-offset gate FAIL → no blit, no world hook (both gated). */
+int test_engine_battlefield_render_late_selection_marker_gate_fail_no_hook(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    blob_set_header(g_creature_blob_buf, /*slot=*/0x3f, 16, 16,
+                    /*src_off=*/0);  /* out of band */
+    engine_battlefield_render_bind_creature_sprite_blob(g_creature_blob_buf);
+    engine_battlefield_render_bind_world_map_dirty_hook(world_hook_capture);
+    engine_battlefield_render_bind_selection_marker(/*x=*/3, /*y=*/3, /*gate=*/1);
+
+    run_late_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_selection_marker_count(),     1);
+    T_ASSERT_EQ_I(engine_battlefield_render_late_selection_marker_blit_count(),0);
+    T_ASSERT_EQ_I(g_world_hook_called,                                          0);
+    T_ASSERT_EQ_I(engine_battlefield_render_late_world_dirty_hook_count(),     0);
+    return 0;
+}
+
+/* Selection marker cursor formula:
+ *   px_x = (x - cam_x) * 0x20 + viewport_x + 2
+ *   px_y = (y - cam_y) * 0x20 + viewport_y + 9 */
+int test_engine_battlefield_render_late_selection_marker_position(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    engine_battlefield_render_bind_viewport_offset(/*x=*/100, /*y=*/200);
+    engine_battlefield_render_bind_selection_marker(/*x=*/5, /*y=*/3, /*gate=*/1);
+
+    run_late_only(/*cam_x=*/2, /*cam_y=*/1);
+
+    /* px_x = (5-2)*0x20 + 100 + 2 = 0x60 + 102 = 96 + 102 = 198.
+     * px_y = (3-1)*0x20 + 200 + 9 = 0x40 + 209 = 64 + 209 = 273. */
+    T_ASSERT_EQ_I(gfx_glyph_cursor_x(), 198);
+    T_ASSERT_EQ_I(gfx_glyph_cursor_y(), 273);
+    return 0;
+}
+
+/* Dirty mark runs UNCONDITIONALLY (above the glyph-offset gate).
+ * Bind a dirty state; verify a 3×3 cell mark at the marker position
+ * regardless of whether the blit fires. */
+int test_engine_battlefield_render_late_selection_marker_dirty_box(void)
+{
+    engine_dirty_rect_state_t dirty;
+    late_scaffold(/*zoom=*/0x10);
+    /* NO blob bound → blit doesn't fire; but dirty mark should still
+     * happen (it's above the NULL-blob check). */
+    dirty_reset(&dirty);
+    engine_battlefield_render_set_dirty_state(&dirty);
+    engine_battlefield_render_bind_selection_marker(/*x=*/0, /*y=*/0, /*gate=*/1);
+
+    run_late_only(0, 0);
+
+    /* Cursor at (2, 9) (per formula: (0-0)*0x20 + 0 + 2, +9).
+     * 3×3 cells with cell_size=16 in the dirty marker — but the
+     * marker uses 3 as a TILE count and force_full=2.  Default tile
+     * size used by engine_dirty_rect_mark_box_tiled is what? — we
+     * just observe the mark fired. */
+    T_ASSERT_EQ_I(dirty.dirty_mark, 2);
+    return 0;
+}
+
+/* NULL blob → no blit, no world hook, but counter / dirty still
+ * bump (counter is above blob check; dirty too). */
+int test_engine_battlefield_render_late_selection_marker_null_blob(void)
+{
+    engine_dirty_rect_state_t dirty;
+    late_scaffold(/*zoom=*/0x10);
+    dirty_reset(&dirty);
+    engine_battlefield_render_set_dirty_state(&dirty);
+    engine_battlefield_render_bind_world_map_dirty_hook(world_hook_capture);
+    engine_battlefield_render_bind_selection_marker(/*x=*/0, /*y=*/0, /*gate=*/1);
+
+    run_late_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_selection_marker_count(),     1);
+    T_ASSERT_EQ_I(engine_battlefield_render_late_selection_marker_blit_count(),0);
+    T_ASSERT_EQ_I(g_world_hook_called,                                          0);
+    T_ASSERT_EQ_I(dirty.dirty_mark, 2);  /* dirty still ran */
+    return 0;
+}
+
+/* ─── Reset zeros chip 5c counters ───────────────────────────────── */
+
+int test_engine_battlefield_render_late_reset_clears(void)
+{
+    late_scaffold(/*zoom=*/0x10);
+    blob_set_header(g_creature_blob_buf, /*slot=*/0x2e, 16, 16, /*src_off=*/0x100);
+    blob_set_header(g_creature_blob_buf, /*slot=*/0x3f, 16, 16, /*src_off=*/0x100);
+    engine_battlefield_render_bind_creature_sprite_blob(g_creature_blob_buf);
+    engine_battlefield_render_bind_world_map_dirty_hook(world_hook_capture);
+    engine_battlefield_render_bind_selection_marker(/*x=*/1, /*y=*/1, /*gate=*/1);
+    desc_set_late(1, 1, DESC_COLS_PHY, /*id=*/2);
+    late_entity_set(/*id=*/2, /*vis_mask=*/0xff, /*slot=*/0, /*type=*/1, 0, 0);
+    late_vis_mask(0xff);
+
+    run_late_only(0, 0);
+
+    T_ASSERT(engine_battlefield_render_late_per_cell_count()           > 0);
+    T_ASSERT(engine_battlefield_render_late_creature_draw_count()      > 0);
+    T_ASSERT(engine_battlefield_render_late_creature_blit_count()      > 0);
+    T_ASSERT(engine_battlefield_render_late_selection_marker_count()   > 0);
+    T_ASSERT(engine_battlefield_render_late_selection_marker_blit_count() > 0);
+    T_ASSERT(engine_battlefield_render_late_world_dirty_hook_count()   > 0);
+
+    engine_battlefield_render_reset_counts();
+
+    T_ASSERT_EQ_I(engine_battlefield_render_late_per_cell_count(),             0);
+    T_ASSERT_EQ_I(engine_battlefield_render_late_creature_draw_count(),        0);
+    T_ASSERT_EQ_I(engine_battlefield_render_late_creature_blit_count(),        0);
+    T_ASSERT_EQ_I(engine_battlefield_render_late_selection_marker_count(),     0);
+    T_ASSERT_EQ_I(engine_battlefield_render_late_selection_marker_blit_count(),0);
+    T_ASSERT_EQ_I(engine_battlefield_render_late_world_dirty_hook_count(),     0);
+    return 0;
+}

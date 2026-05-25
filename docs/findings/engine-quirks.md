@@ -3435,6 +3435,106 @@ first-sprite cursor) into the second sprite's cursor computation.
 
 ---
 
+## 95. Battlefield late-pass creature draw reads z32 anim table at zoom 16 too
+
+The chip-5c per-cell creature draw leaf (`FUN_004be070`) indexes into
+the z32 anim-offset table (`DAT_004e4030`) UNCONDITIONALLY — no
+`if (zoom == 0x20)` gate at all:
+
+```c
+iVar4 = *(int *)(&DAT_004e4030 +
+                 (char)(&DAT_00554498)[param_1 * 0x1b0] * 0x88 +
+                 (char)(&DAT_005544b2)[param_1 * 0x1b0] * 8);
+```
+
+The middle-pass per-entity draw (chip 5a.ii.b) gates this lookup by
+zoom (z16 table at zoom 0x10, z32 at zoom 0x20).  The late pass does
+not.  Whether this matters in practice depends on the late pass ever
+running at zoom 16 — which it does (the frame driver dispatches it
+unconditionally regardless of zoom — see quirk #97).  At zoom 16 the
+leaf still indexes z32, so the per-cell creature draw inherits z32
+anim offsets even though every other zoom-16 caller uses z16.
+
+> 📍 `src/engine_battlefield_render.c` (`late_leaf_draw_creature`),
+> `docs/findings/battlefield-render.md` §5c,
+> Ghidra `FUN_004be070` lines 14-16.
+
+---
+
+## 96. Battlefield late-pass creature draw lopsided cursor restore on gate fail
+
+`FUN_004be070` saves the entry cursor at the top (`iVar2 / iVar3`),
+applies a type-conditional offset, then dispatches the sprite stage +
+gate.  On gate PASS, the leaf restores cursor to entry; on gate FAIL,
+cursor stays at the POST-OFFSET value:
+
+```c
+iVar4 = DAT_00591524;   // re-read post-offset cursor_x
+iVar1 = DAT_00591528;   // re-read post-offset cursor_y
+if (gate passes) {
+    ... clip + stage ...
+    iVar4 = iVar2;     // OVERWRITE with entry x
+    iVar1 = iVar3;     // OVERWRITE with entry y
+    if (...) blit;
+}
+DAT_00591528 = iVar1;   // restore: entry on PASS, offset on FAIL
+DAT_00591524 = iVar4;
+```
+
+The late-pass driver resets cursor_x at the start of each ROW (so the
+damage stays localised within a row) but NEVER resets cursor_y within
+the frame.  A gate-fail in row N propagates the offset Y into every
+subsequent row's per-cell advance.  In practice every valid creature
+record passes the gate, so this is defensive territory.  Filed because
+it's a subtle "leaf cursor restore asymmetry" — the kind of thing a
+test discovers by accident and a reader can't reconstruct from the
+surrounding code.
+
+> 📍 `src/engine_battlefield_render.c` (`late_leaf_draw_creature`),
+> `docs/findings/battlefield-render.md` §5c,
+> Ghidra `FUN_004be070` lines 49-70.
+
+---
+
+## 97. Battlefield late-pass cell pitch is HARDCODED 0x20 regardless of zoom
+
+`FUN_004bd233`'s per-cell cursor advance is a hardcoded `+ 0x20`:
+
+```c
+for (local_10 = 0; local_10 < DAT_004e5d5c; ++local_10) {
+    ...
+    DAT_004e6588 = DAT_004e6588 + DAT_004e5d50;
+    DAT_00591524 = DAT_00591524 + 0x20;       // HARDCODED 32px pitch
+}
+DAT_004e6588 = DAT_004e6588 + DAT_004e5d70;
+DAT_00591528 = DAT_00591528 + 0x20;           // HARDCODED 32px pitch
+```
+
+The middle-pass driver uses `g_zoom` for its per-cell advance (16 at
+zoom 0x10, 32 at zoom 0x20); the late pass uses a literal `0x20`.
+Net effect: at zoom 16, the late pass walks the descriptor cursor
+correctly (by `g_desc_stride`), but the SCREEN cursor advances at
+zoom-32 spacing over a zoom-16 grid — creature sprites land at half-
+density (every other cell's worth of pixel space).
+
+The late pass is effectively a zoom-32-only feature even though it's
+dispatched unconditionally.  Probable cause: combat zoom 16 is the
+"strategic overview" view where creature draws aren't needed (or
+where the per-cell entity index byte at descriptor[+5] is always 0),
+so the misalignment never manifests visually.  Filed because the
+zoom-coupling assumption is implicit (no zoom branch in the driver)
+and easy to miss.
+
+The selection-marker leaf (`FUN_004be33f`) uses the same `0x20`
+literal for its cursor formula, inheriting the same quirk for the
+hero/army marker position.
+
+> 📍 `src/engine_battlefield_render.c` (`pass_late`),
+> `docs/findings/battlefield-render.md` §5c,
+> Ghidra `FUN_004bd233` lines 21, 24.
+
+---
+
 <!--
 Template for new entries:
 

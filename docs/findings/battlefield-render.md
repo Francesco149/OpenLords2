@@ -13,13 +13,13 @@ but lives in a different address band (`0x4bc000..0x4bf300`) and
 uses a different tile format and storage layout.
 
 **Status**: chips 1, 2, 3, 3.5, 4, 5a.i, 5a.ii.a, 5a.ii.b, 5a.iii,
-5a.iv, 5b, 6 ported (sprite primitives + frame driver + both zoom-
+5a.iv, 5b, 5c, 6 ported (sprite primitives + frame driver + both zoom-
 dispatched terrain passes + zoom-32 overlay + middle-pass driver
 shell + sorted-entity infrastructure + per-entity draw base path +
-three per-cell draw leaves + three type-special leaves + coord
-helpers).  Late + final passes still stubs.  Survey landed
-2026-05-25, chips 1–4 + 5b + 6 + 5a.i + 5a.ii.a + 5a.ii.b + 5a.iii +
-5a.iv landed 2026-05-25.
+three per-cell draw leaves + three type-special leaves + late-pass
+driver + per-cell creature draw + selection marker + coord helpers).
+Final pass still stubbed.  Survey landed 2026-05-25, chips 1–4 + 5b +
+6 + 5a.i + 5a.ii.a + 5a.ii.b + 5a.iii + 5a.iv + 5c landed 2026-05-25.
 
 ## Entry point
 
@@ -327,6 +327,35 @@ The cluster is too large to port in one chip.  Suggested chip plan:
    draws per frame, picked by the layer bit.  Always uses primary
    blob; no boundary marking; no second sprite.  Same [1, 0x4baf0]
    glyph_offset gate as terrain-z32.  Filed quirks #79, #80, #81.
+
+   **`FUN_004bd233` + `FUN_004be070` + `FUN_004be33f`** — chip 5c.
+   **LANDED** (2026-05-25) as `pass_late` + `late_leaf_draw_creature`
+   + `late_leaf_draw_selection_marker` inside
+   `engine_battlefield_render`.  The late pass walks visible cells
+   (NO over-scan, unlike the middle pass), gates each cell on
+   `descriptor[+5] != 0` AND the AND of two visibility-mask bytes
+   (per-entity at entity record offset +0x0a, per-player at the
+   bound mask-table base).  For each visible cell, dispatches the
+   per-cell creature draw leaf (`FUN_004be070`, 719 B):
+   stages a sprite descriptor from the creature blob with slot
+   derived from per-entity +0x1a0 short (shifted by the bound shift
+   amount, plus 0x2e), applies a type-conditional Y offset
+   (<7 / ==10 / else / +0x10 if ==9), and dispatches the RLE blit
+   through the same clipped family the chip 5a leaves use.  After
+   the cell loop, if the selection-marker gate is positive, the
+   second leaf (`FUN_004be33f`, 416 B) draws a fixed-slot (0x3f)
+   sprite at the active hero/army's world position, marks a 3×3
+   tile dirty box, and invokes a world-map dirty hook (bound as a
+   callback — retail's `FUN_0046c4a3` is intentionally NOT pulled
+   into the battlefield module).  Adds new bindings:
+   `bind_creature_sprite_blob` (retail DAT_005530c8 — misc_ske.PL8),
+   `bind_late_player_visibility_mask(base, stride, player_id)`,
+   `bind_creature_slot_shift(amount, sign)`,
+   `bind_selection_marker(x, y, gate)`, and
+   `bind_world_map_dirty_hook(hook)`.  Filed quirks #95 (creature
+   draw reads z32 anim table at zoom 16 too), #96 (lopsided cursor
+   restore on gate fail), #97 (per-cell pitch HARDCODED 0x20
+   regardless of zoom).
 
 6. Helpers — interleaved as required:
    - `FUN_004bc222/2a5/2c5/2e5/346` (hit-test, screen↔hex).

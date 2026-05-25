@@ -539,6 +539,150 @@ void engine_battlefield_render_bind_entity_type7_blobs(const uint8_t *low,
  * `bind_entity_table`. */
 
 /* ─────────────────────────────────────────────────────────────────
+ * Late-pass — per-cell creature draw + selection marker (chip 5c)
+ *
+ * Two leaves dispatched by the late-pass driver (FUN_004bd233 @ 0x4bd233):
+ *
+ *   FUN_004be070 (719 B)  per-cell creature draw — fires for each
+ *                         descriptor cell with descriptor[+5] != 0 AND
+ *                         the per-entity / per-player visibility mask
+ *                         AND'd byte is non-zero.
+ *
+ *   FUN_004be33f (416 B)  selection marker — fires once per frame, after
+ *                         the cell-loop, if the marker gate (retail
+ *                         DAT_00553f84) is positive.  Draws a fixed-slot
+ *                         (0x3f) sprite at a special world-position;
+ *                         also invokes a world-map dirty hook.
+ *
+ * Both leaves share the same sprite blob (retail DAT_005530c8 —
+ * "misc_ske.PL8") and dispatch through the same clipped-RLE blit family
+ * the per-entity / type-special leaves use.
+ *
+ * The late-pass driver has its own per-cell pitch (hardcoded 0x20),
+ * which differs from the middle pass (`g_zoom`) — see late-pass quirks
+ * for the cross-zoom implications.
+ * ───────────────────────────────────────────────────────────────── */
+
+/* Byte offset within each battlefield descriptor entry holding the
+ * entity id on that cell (0 ⇒ no entity, non-zero ⇒ index into the
+ * entity table bound via `bind_entity_table`).  Hardcoded at retail. */
+#define ENGINE_BATTLEFIELD_DESC_OFFSET_LATE_CREATURE_ID 5
+
+/* Additional per-entity record offsets consumed by the late-pass
+ * creature draw — sit alongside the chip 5a.ii.b offsets defined above. */
+#define ENGINE_BATTLEFIELD_ENTITY_OFFSET_LATE_VISIBILITY_MASK 0x0a
+#define ENGINE_BATTLEFIELD_ENTITY_OFFSET_LATE_SPRITE_SLOT     0x1a0
+
+/* Bind the creature sprite blob (retail DAT_005530c8).  Used by BOTH
+ * late-pass leaves: the per-cell creature draw picks slots from it via
+ * the per-entity +0x1a0 short (shifted by `bind_creature_slot_shift`,
+ * plus base 0x2e); the selection marker uses fixed slot 0x3f.
+ *
+ * NULL ⇒ both leaves are no-ops (counters still bump but no blits
+ * dispatch). */
+void engine_battlefield_render_bind_creature_sprite_blob(const uint8_t *blob);
+
+/* Bind the per-player visibility mask byte (retail base &DAT_0057bfee,
+ * stride 0x160, player_id DAT_0057c8cc).
+ *
+ *   base       byte address of player 0's visibility mask byte.  Bytes
+ *              for subsequent players sit at base[player_id * stride].
+ *   stride     per-player record stride (retail 0x160).
+ *   player_id  active local player id.
+ *
+ * The byte at `base[player_id * stride]` is AND'd with the per-entity
+ * visibility mask byte (at entity offset +0x0a) for each cell with a
+ * non-zero descriptor[+5].  Cells where the AND is zero are silently
+ * skipped (no creature draw, no counter bump).
+ *
+ * NULL base ⇒ every cell with descriptor[+5] != 0 is treated as
+ * visibility-failed (no draw).  Tests that want to bypass the mask can
+ * bind a single 0xff byte and player_id=0.
+ *
+ * The per-player visibility table is separate from the player-id used
+ * by the player marker (chip 5a.iii — that's a different retail global,
+ * DAT_00568218). */
+void engine_battlefield_render_bind_late_player_visibility_mask(
+    const uint8_t *base, int stride, int player_id);
+
+/* Bind the sprite slot shift control (retail DAT_00566514 / DAT_0056651c).
+ *
+ *   amount  shift amount (0..31, masked with 0x1f at use site).
+ *   sign    < 0 ⇒ right shift; >= 0 ⇒ left shift.
+ *
+ * Used by the creature draw leaf to derive the actual slot from the
+ * per-entity +0x1a0 short:
+ *
+ *   slot_short = (sign < 0) ? (raw >> (amount & 0x1f))
+ *                           : (raw << (amount & 0x1f))
+ *   slot       = slot_short + 0x2e
+ *
+ * Defaults to (amount=0, sign=0) — left-shift by 0 is identity. */
+void engine_battlefield_render_bind_creature_slot_shift(int amount, int sign);
+
+/* Bind the selection-marker special position (retail DAT_00553f14 /
+ * DAT_00553f18 / DAT_00553f84).
+ *
+ *   x     world-map x of the active hero / army.
+ *   y     world-map y of the active hero / army.
+ *   gate  non-zero ⇒ marker fires after the cell-loop; zero ⇒ skip.
+ *
+ * The marker draws at screen pixel
+ *
+ *   px_x = (x - cam_x) * 0x20 + viewport_x + 2
+ *   px_y = (y - cam_y) * 0x20 + viewport_y + 9
+ *
+ * with fixed slot 0x3f from the creature sprite blob.  After the draw
+ * (inside the glyph-offset gate), the world-map dirty hook is called
+ * with `(x - 1, y - 1, 3, 3)` to mark the corresponding 3×3 box of
+ * world-map cells dirty.  The dirty-rect mark on the battlefield's own
+ * dirty state (3×3 cells, force_full=2) ALWAYS runs, regardless of
+ * the glyph-offset gate.
+ *
+ * The marker reuses the late pass's hardcoded 0x20 cell pitch — at
+ * zoom 16 the marker is drawn at zoom-32 spacing (see late-pass quirks). */
+void engine_battlefield_render_bind_selection_marker(int x, int y, int gate);
+
+/* Bind the world-map dirty hook called by the selection marker leaf
+ * (retail FUN_0046c4a3).  Retail ORs bit 1 into the per-cell collision-
+ * grid byte at &DAT_005440e2 + (y*0x50+x)*8 for each cell of the box.
+ *
+ * The port leaves the actual world-map subsystem out of the battlefield
+ * module — bind a callback (or NULL ⇒ no-op).  Tests can bind a
+ * counting stub to verify the hook fires. */
+typedef void (*engine_battlefield_world_dirty_hook_t)(int x, int y,
+                                                       int w, int h);
+void engine_battlefield_render_bind_world_map_dirty_hook(
+    engine_battlefield_world_dirty_hook_t hook);
+
+/* Late-pass test counters.  Bumped by the real port (FUN_004bd233 +
+ * FUN_004be070 + FUN_004be33f).  Distinct from the per-pass call
+ * counter `count_late` — that bumps once per frame; these bump per
+ * sub-event.
+ *
+ *   per_cell_count             — cells visited (rows * cols).
+ *   creature_draw_count        — cells where descriptor[+5] != 0 AND
+ *                                visibility mask AND'd non-zero (i.e.
+ *                                creature leaf was actually dispatched).
+ *   creature_blit_count        — creature leaves that passed the
+ *                                glyph-offset gate AND reached the
+ *                                RLE blit dispatcher (post y_clip_mode
+ *                                != 5 gate).
+ *   selection_marker_count     — selection-marker leaf dispatched (gate
+ *                                was non-zero).
+ *   selection_marker_blit_count — selection-marker leaf reached the
+ *                                blit (gate non-zero + glyph-offset
+ *                                in band + y_clip_mode != 5).
+ *   world_dirty_hook_count     — world-map dirty hook fired (inside
+ *                                the selection-marker glyph-offset gate). */
+int engine_battlefield_render_late_per_cell_count(void);
+int engine_battlefield_render_late_creature_draw_count(void);
+int engine_battlefield_render_late_creature_blit_count(void);
+int engine_battlefield_render_late_selection_marker_count(void);
+int engine_battlefield_render_late_selection_marker_blit_count(void);
+int engine_battlefield_render_late_world_dirty_hook_count(void);
+
+/* ─────────────────────────────────────────────────────────────────
  * Frame render
  * ───────────────────────────────────────────────────────────────── */
 
@@ -553,7 +697,8 @@ void engine_battlefield_render_bind_entity_type7_blobs(const uint8_t *low,
  *   4. Dispatch the zoom-dependent overlay pass:
  *        zoom == 0x10 → FUN_004bcbd1 (real no-op, bumps counter)
  *        zoom == 0x20 → FUN_004bd07f (stub)
- *   5. Always: late pass (FUN_004bd233, stub).
+ *   5. Always: late pass (FUN_004bd233, port; per-cell creature draw +
+ *      selection marker).
  *   6. Always: final pass (FUN_004bf1f9, stub).
  *   7. Decrement force-redraw counter if non-zero. */
 void engine_battlefield_render_frame(int camera_x, int camera_y);
@@ -900,5 +1045,11 @@ int  engine_battlefield_render_per_frame_cell_counter(void);
  * per-frame camera write) so the over-scan extension is computed from
  * the test's chosen camera. */
 void engine_battlefield_render_run_pass_middle_for_test(int camera_x, int camera_y);
+
+/* TEST-ONLY: run just the late pass with the given camera.  Same
+ * rationale as the middle-pass equivalent — bypasses the frame driver
+ * so tests can inspect late-pass counters / dirty-rect / cursor without
+ * sibling-pass contamination. */
+void engine_battlefield_render_run_pass_late_for_test(int camera_x, int camera_y);
 
 #endif /* OPENLORDS2_ENGINE_BATTLEFIELD_RENDER_H */

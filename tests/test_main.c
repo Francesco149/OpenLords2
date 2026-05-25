@@ -991,6 +991,32 @@ struct test_case {
     X(engine_battlefield_render_pixel_to_col_left_biased_middle_band) \
     X(engine_battlefield_render_pixel_to_col_left_biased_clamps_high) \
     X(engine_battlefield_render_pixel_to_col_left_biased_no_low_clamp) \
+    \
+    X(engine_battlefield_render_late_visits_visible_grid) \
+    X(engine_battlefield_render_late_zero_id_no_draw) \
+    X(engine_battlefield_render_late_vis_mask_blocks) \
+    X(engine_battlefield_render_late_vis_mask_allows) \
+    X(engine_battlefield_render_late_null_vis_blocks_all) \
+    X(engine_battlefield_render_late_hardcoded_zoom32_pitch) \
+    X(engine_battlefield_render_late_no_descriptors_marker_fires) \
+    X(engine_battlefield_render_late_creature_slot_left_shift) \
+    X(engine_battlefield_render_late_creature_slot_right_shift) \
+    X(engine_battlefield_render_late_creature_type_lt7_y_offset) \
+    X(engine_battlefield_render_late_creature_type9_y_offset) \
+    X(engine_battlefield_render_late_creature_type10_y_offset) \
+    X(engine_battlefield_render_late_creature_type_other_y_offset) \
+    X(engine_battlefield_render_late_creature_anim_z32_unconditional) \
+    X(engine_battlefield_render_late_creature_gate_skips_blit) \
+    X(engine_battlefield_render_late_creature_gate_pass_cursor_restored) \
+    X(engine_battlefield_render_late_creature_null_blob_no_blit) \
+    X(engine_battlefield_render_late_selection_marker_gate_zero) \
+    X(engine_battlefield_render_late_selection_marker_gate_fires) \
+    X(engine_battlefield_render_late_selection_marker_world_hook) \
+    X(engine_battlefield_render_late_selection_marker_gate_fail_no_hook) \
+    X(engine_battlefield_render_late_selection_marker_position) \
+    X(engine_battlefield_render_late_selection_marker_dirty_box) \
+    X(engine_battlefield_render_late_selection_marker_null_blob) \
+    X(engine_battlefield_render_late_reset_clears) \
     /* end */
 
 /* Emit extern decls. */
