@@ -241,8 +241,14 @@ The cluster is too large to port in one chip.  Suggested chip plan:
    glyph_offset gate as terrain-z32.  Filed quirks #79, #80, #81.
 
 6. Helpers — interleaved as required:
-   - `FUN_004bc222/2a5/2c5/2e5/346` (hit-test, screen↔hex) —
-     ports cleanly as small pure functions; unblocks input.
+   - `FUN_004bc222/2a5/2c5/2e5/346` (hit-test, screen↔hex).
+     **LANDED** (2026-05-25) as the coordinate-helper family at
+     the end of `engine_battlefield_render.{c,h}`.  Five tiny
+     pure functions (32–131 B each, 394 B total) sharing the
+     module statics already bound by the render passes (plus
+     one new binding `bind_cell_band_width` for retail
+     DAT_004e5d3c).  Filed quirk #82 (left-biased asymmetric
+     clamp).
    - `FUN_004bc1d1/51a` (scroll/pan) — possibly large state
      machine for keyboard/mouse panning.
 

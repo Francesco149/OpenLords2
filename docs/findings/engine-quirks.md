@@ -2911,6 +2911,38 @@ block that gets skipped on abort, whereas overlay has none.
 
 ---
 
+## 82. Battlefield left-biased screen→hex clamp is asymmetric (high only)
+
+The five-helper coordinate family at the head of the battlefield
+cluster includes two "neighbor-biased" variants of the basic screen→hex
+column converter:
+
+  - `FUN_004bc2e5` — right-biased (residue ≥ band*3 → col+=1).
+    Clamps low: `col < 1 → col = 0`.
+  - `FUN_004bc346` — left-biased  (residue < band  → col-=1).
+    Clamps high: `col >= row_stride → col = row_stride - 1`.
+
+Neither variant clamps both sides.  In particular, the left-biased
+function can return NEGATIVE column indices when the input pixel is
+near the left edge of the grid AND falls in the first sub-band — a
+double-shift that's not blocked by any low clamp.  Callers must handle
+out-of-range columns themselves; the helpers are not safe to use as a
+"clip into grid" primitive.
+
+Real-world effect on input handling: a click 7 pixels left of the
+viewport but within the visible cell row evaluates to column -1, which
+will index past the descriptor table on the LOW side if used as-is.
+The right-biased variant has the OPPOSITE asymmetry — it clamps low
+but not high, so out-of-band column indices on the high side propagate
+freely.  Lesson: don't substitute either variant for the other or
+combine clamps; they're carefully tuned to their respective callers
+(unsurveyed).
+
+> 📍 `src/engine_battlefield_render.c` (`pixel_to_col_left_biased`,
+> `pixel_to_col_right_biased`), Ghidra `FUN_004bc346` + `FUN_004bc2e5`.
+
+---
+
 <!--
 Template for new entries:
 

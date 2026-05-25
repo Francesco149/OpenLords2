@@ -181,6 +181,21 @@ void engine_battlefield_render_bind_camera_row_stride(int row_stride);
 void engine_battlefield_render_bind_blobs(const uint8_t *primary,
                                           const uint8_t *alt);
 
+/* Bind the cell sub-band width (retail `DAT_004e5d3c`).  Hex tiles
+ * aren't square — the cell rect is divided into three vertical bands,
+ * each `band_width` pixels wide, used by the variant screen→hex
+ * converters (`pixel_to_col_left_biased` / `pixel_to_col_right_biased`)
+ * to pick the neighboring hex column when the pixel falls in the
+ * first / last band of a cell.  For a 32-px cell with a typical hex
+ * shape, `band_width` is ~8 (one quarter of the cell), so:
+ *
+ *   residue ∈ [0, band_width)            → first band  (left neighbor)
+ *   residue ∈ [band_width, band_width*3) → middle band (this cell)
+ *   residue ∈ [band_width*3, zoom)       → third band  (right neighbor)
+ *
+ * Not consumed by the basic `pixel_to_col` / `pixel_to_row` pair. */
+void engine_battlefield_render_bind_cell_band_width(int band_width);
+
 /* Bind the clip rect used by the zoom-32 pass's second-sprite-per-cell
  * path.  Retail passes these inline to FUN_0040464c / FUN_0040477b:
  *
@@ -221,6 +236,66 @@ void engine_battlefield_render_frame(int camera_x, int camera_y);
  * `engine_battlefield_render_frame` from its parameters. */
 int engine_battlefield_render_camera_x(void);
 int engine_battlefield_render_camera_y(void);
+
+/* ─────────────────────────────────────────────────────────────────
+ * Coordinate helpers — small pure functions for input handling.
+ * Each is a faithful 1:1 port of a tiny retail helper at the head of
+ * the battlefield cluster.  They read the same module statics the
+ * passes do (viewport, zoom, grid dims, camera_row_stride, cell band
+ * width), so the bindings used to drive a render frame also drive
+ * these queries.
+ * ───────────────────────────────────────────────────────────────── */
+
+/* Port of FUN_004bc222 @ 0x4bc222 (131 B).  Test whether the pixel
+ * coord (px, py) falls inside the visible grid rectangle.  Returns
+ * 1 if inside, 0 otherwise.
+ *
+ *   inside = px ∈ [viewport_x, viewport_x + cols*zoom)
+ *         ∧ py ∈ [viewport_y, viewport_y + rows*zoom)
+ *
+ * Uses `cols` (DAT_004e5d5c), `rows` (DAT_004e5d4c), `zoom`
+ * (DAT_004e656c), and the viewport (DAT_004e6558, DAT_004e6554). */
+int engine_battlefield_render_screen_in_grid(int px, int py);
+
+/* Port of FUN_004bc2a5 @ 0x4bc2a5 (32 B).  Map a screen pixel X to a
+ * visible-grid hex column.  Integer division — no sub-cell band
+ * correction:  `col = (px - viewport_x) / zoom`.
+ *
+ * No clamping to grid extents — caller is expected to either pre-check
+ * with `screen_in_grid` or accept out-of-range values. */
+int engine_battlefield_render_pixel_to_col(int px);
+
+/* Port of FUN_004bc2c5 @ 0x4bc2c5 (32 B).  Sibling of `pixel_to_col`
+ * on the Y axis:  `row = (py - viewport_y) / zoom`. */
+int engine_battlefield_render_pixel_to_row(int py);
+
+/* Port of FUN_004bc2e5 @ 0x4bc2e5 (97 B).  Variant of `pixel_to_col`
+ * that biases towards the RIGHT neighbor when the pixel falls in the
+ * third sub-band of the cell:
+ *
+ *   col = (px - viewport_x) / zoom
+ *   if ((px - viewport_x) % zoom >= band_width * 3) col += 1
+ *   if (col < 1) col = 0
+ *
+ * The < 1 → 0 clamp ensures negative columns floor to 0 (no left-of-
+ * grid columns ever emerge from this variant).  Used for input
+ * coordinate quantization where right-half pixels should attribute
+ * to the right-adjacent hex. */
+int engine_battlefield_render_pixel_to_col_right_biased(int px);
+
+/* Port of FUN_004bc346 @ 0x4bc346 (102 B).  Variant of `pixel_to_col`
+ * that biases towards the LEFT neighbor when the pixel falls in the
+ * first sub-band of the cell:
+ *
+ *   col = (px - viewport_x) / zoom
+ *   if ((px - viewport_x) % zoom < band_width) col -= 1
+ *   if (col >= camera_row_stride) col = camera_row_stride - 1
+ *
+ * Asymmetry vs. `pixel_to_col_right_biased`: this variant DOES clamp
+ * the upper bound (to `camera_row_stride - 1`) but does NOT clamp the
+ * lower bound.  Negative columns can propagate (left-of-grid hits)
+ * even after the -1 bias. */
+int engine_battlefield_render_pixel_to_col_left_biased(int px);
 
 /* ─────────────────────────────────────────────────────────────────
  * Test instrumentation — per-pass call counters

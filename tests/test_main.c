@@ -880,6 +880,19 @@ struct test_case {
     X(engine_battlefield_render_overlay_z32_cursor_advances_32px) \
     X(engine_battlefield_render_overlay_z32_no_descriptor_short_circuits) \
     X(engine_battlefield_render_overlay_z32_blit_count_resets) \
+    \
+    X(engine_battlefield_render_screen_in_grid_inside) \
+    X(engine_battlefield_render_screen_in_grid_outside) \
+    X(engine_battlefield_render_pixel_to_col_basic) \
+    X(engine_battlefield_render_pixel_to_row_basic) \
+    X(engine_battlefield_render_pixel_to_col_right_biased_middle_band) \
+    X(engine_battlefield_render_pixel_to_col_right_biased_right_band) \
+    X(engine_battlefield_render_pixel_to_col_right_biased_first_band) \
+    X(engine_battlefield_render_pixel_to_col_right_biased_clamps_low) \
+    X(engine_battlefield_render_pixel_to_col_left_biased_first_band) \
+    X(engine_battlefield_render_pixel_to_col_left_biased_middle_band) \
+    X(engine_battlefield_render_pixel_to_col_left_biased_clamps_high) \
+    X(engine_battlefield_render_pixel_to_col_left_biased_no_low_clamp) \
     /* end */
 
 /* Emit extern decls. */

@@ -55,8 +55,15 @@ static int g_viewport_x;
 static int g_viewport_y;
 
 /* Camera row stride in cells (retail DAT_004e6578) — used to compute
- * the per-frame descriptor cursor. */
+ * the per-frame descriptor cursor.  Also the upper-bound clamp in
+ * `pixel_to_col_left_biased`. */
 static int g_camera_row_stride;
+
+/* Cell sub-band width in pixels (retail DAT_004e5d3c).  Used by the
+ * left/right-biased screen→hex variants to pick which neighbor a
+ * pixel attributes to when it falls in a band of the cell.  See the
+ * header for the band → action table. */
+static int g_cell_band_width;
 
 /* Sprite blobs (retail DAT_004e5d78 primary, DAT_004e6560 alt) —
  * each cell's flags byte (bits 0x04..0x10) selects between them. */
@@ -144,6 +151,11 @@ void engine_battlefield_render_bind_blobs(const uint8_t *primary, const uint8_t 
 {
     g_blob_primary = primary;
     g_blob_alt     = alt;
+}
+
+void engine_battlefield_render_bind_cell_band_width(int band_width)
+{
+    g_cell_band_width = band_width;
 }
 
 void engine_battlefield_render_bind_clip_rect(int left, int top, int right, int bottom)
@@ -659,6 +671,62 @@ int engine_battlefield_render_count_overlay_zoom16(void)  { return g_count_overl
 int engine_battlefield_render_count_overlay_zoom32(void)  { return g_count_overlay_zoom32; }
 int engine_battlefield_render_count_late(void)            { return g_count_late; }
 int engine_battlefield_render_count_final(void)           { return g_count_final; }
+
+/* ──────────────────────────────────────────────────────────────────
+ * Coordinate helpers — ports of FUN_004bc222 / 2a5 / 2c5 / 2e5 / 346.
+ *
+ * Tiny pure functions consumed by the input layer to translate screen
+ * pixel coords into the battlefield's hex column / row.  Each reads
+ * the same module statics the render passes do (viewport, zoom, grid
+ * dims, camera_row_stride, cell_band_width).
+ * ────────────────────────────────────────────────────────────────── */
+
+int engine_battlefield_render_screen_in_grid(int px, int py)
+{
+    if (px < g_viewport_x) return 0;
+    if (py < g_viewport_y) return 0;
+    if (px < g_grid_cols * g_zoom + g_viewport_x) {
+        if (py < g_grid_rows * g_zoom + g_viewport_y) {
+            return 1;
+        }
+        return 0;
+    }
+    return 0;
+}
+
+int engine_battlefield_render_pixel_to_col(int px)
+{
+    return (px - g_viewport_x) / g_zoom;
+}
+
+int engine_battlefield_render_pixel_to_row(int py)
+{
+    return (py - g_viewport_y) / g_zoom;
+}
+
+int engine_battlefield_render_pixel_to_col_right_biased(int px)
+{
+    int col = (px - g_viewport_x) / g_zoom;
+    if (g_cell_band_width * 3 <= (px - g_viewport_x) % g_zoom) {
+        col += 1;
+    }
+    if (col < 1) {
+        col = 0;
+    }
+    return col;
+}
+
+int engine_battlefield_render_pixel_to_col_left_biased(int px)
+{
+    int col = (px - g_viewport_x) / g_zoom;
+    if ((px - g_viewport_x) % g_zoom < g_cell_band_width) {
+        col += -1;
+    }
+    if (g_camera_row_stride <= col) {
+        col = g_camera_row_stride - 1;
+    }
+    return col;
+}
 
 void engine_battlefield_render_reset_counts(void)
 {

@@ -1426,3 +1426,174 @@ int test_engine_battlefield_render_overlay_z32_blit_count_resets(void)
     T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(), 0);
     return 0;
 }
+
+/* ────────────────────────────────────────────────────────────────
+ * Coordinate helpers — ports of FUN_004bc222 / 2a5 / 2c5 / 2e5 / 346.
+ *
+ * Scaffold sets a 10×5 visible grid at viewport (100, 50), zoom 32,
+ * band_width 8 (so the cell is divided into bands [0,8)/[8,24)/[24,32)),
+ * camera_row_stride 20.
+ * ──────────────────────────────────────────────────────────────── */
+
+static void coords_scaffold(void)
+{
+    engine_battlefield_render_set_zoom(32);
+    engine_battlefield_render_bind_grid(/*cols=*/10, /*rows=*/5,
+                                        /*row_wrap=*/0);
+    engine_battlefield_render_bind_viewport_offset(/*x=*/100, /*y=*/50);
+    engine_battlefield_render_bind_camera_row_stride(20);
+    engine_battlefield_render_bind_cell_band_width(8);
+}
+
+int test_engine_battlefield_render_screen_in_grid_inside(void)
+{
+    coords_scaffold();
+
+    /* Centre pixel of the grid. */
+    T_ASSERT_EQ_I(engine_battlefield_render_screen_in_grid(160, 90), 1);
+    /* Top-left corner of grid (inclusive). */
+    T_ASSERT_EQ_I(engine_battlefield_render_screen_in_grid(100, 50), 1);
+    /* One pixel inside the bottom-right corner.  Grid extends to
+     * viewport_x + cols*zoom = 100 + 320 = 420, and y = 50 + 160 = 210
+     * — those are EXCLUSIVE upper bounds. */
+    T_ASSERT_EQ_I(engine_battlefield_render_screen_in_grid(419, 209), 1);
+    return 0;
+}
+
+int test_engine_battlefield_render_screen_in_grid_outside(void)
+{
+    coords_scaffold();
+
+    /* Just past upper bounds (exclusive). */
+    T_ASSERT_EQ_I(engine_battlefield_render_screen_in_grid(420, 90),  0);
+    T_ASSERT_EQ_I(engine_battlefield_render_screen_in_grid(160, 210), 0);
+    /* Below viewport. */
+    T_ASSERT_EQ_I(engine_battlefield_render_screen_in_grid(99, 90),   0);
+    T_ASSERT_EQ_I(engine_battlefield_render_screen_in_grid(160, 49),  0);
+    /* Both axes outside. */
+    T_ASSERT_EQ_I(engine_battlefield_render_screen_in_grid(0, 0),     0);
+    return 0;
+}
+
+int test_engine_battlefield_render_pixel_to_col_basic(void)
+{
+    coords_scaffold();
+
+    /* Pixel at viewport.x → col 0. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col(100), 0);
+    /* Pixel at viewport.x + 31 → still col 0 (last pixel of cell). */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col(131), 0);
+    /* Pixel at viewport.x + 32 → col 1. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col(132), 1);
+    /* Pixel at viewport.x + 5*32 → col 5. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col(260), 5);
+    return 0;
+}
+
+int test_engine_battlefield_render_pixel_to_row_basic(void)
+{
+    coords_scaffold();
+
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row(50),  0);
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row(81),  0);
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row(82),  1);
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_row(178), 4);
+    return 0;
+}
+
+/* Right-biased variant: pixel in third band (residue >= 24) shifts
+ * column +1. */
+int test_engine_battlefield_render_pixel_to_col_right_biased_middle_band(void)
+{
+    coords_scaffold();
+
+    /* px=120 → residue=20 (middle band, [8,24)) → no shift, col=0. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_right_biased(120), 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_pixel_to_col_right_biased_right_band(void)
+{
+    coords_scaffold();
+
+    /* px=124 → residue=24 (third band, [24,32)) → col=0+1=1. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_right_biased(124), 1);
+    /* px=131 → residue=31 (still third band) → col=1. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_right_biased(131), 1);
+    return 0;
+}
+
+int test_engine_battlefield_render_pixel_to_col_right_biased_first_band(void)
+{
+    coords_scaffold();
+
+    /* px=102 → residue=2 (first band, [0,8)) → no shift (function
+     * doesn't bias on first band). */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_right_biased(102), 0);
+    return 0;
+}
+
+/* Lower-bound clamp: any input giving raw col < 1 returns 0. */
+int test_engine_battlefield_render_pixel_to_col_right_biased_clamps_low(void)
+{
+    coords_scaffold();
+
+    /* px=99 → (99-100)/32 = 0 in C99 truncation (towards zero), then
+     * (-1)%32 = -1, which is < 24 so no shift.  col=0.  C-correct. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_right_biased(99), 0);
+    /* px=68 → (-32)/32 = -1, then bias: (68-100)%32 = -32%32 = 0,
+     * NOT >= 24, so no shift.  col=-1, but clamp says < 1 → 0. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_right_biased(68), 0);
+    return 0;
+}
+
+/* Left-biased variant: pixel in first band (residue < 8) shifts col -1. */
+int test_engine_battlefield_render_pixel_to_col_left_biased_first_band(void)
+{
+    coords_scaffold();
+
+    /* px=140 → (140-100)/32 = 1, residue = 40%32 = 8.  NOT < 8 →
+     * no shift, col=1. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_left_biased(140), 1);
+    /* px=139 → col=1, residue=39%32=7, < 8 → col=0. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_left_biased(139), 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_pixel_to_col_left_biased_middle_band(void)
+{
+    coords_scaffold();
+
+    /* px=120 → col=0, residue=20 (middle band) → no shift, col=0. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_left_biased(120), 0);
+    /* px=124 → col=0, residue=24 → not < 8 → no shift, col=0. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_left_biased(124), 0);
+    return 0;
+}
+
+/* Upper-bound clamp: col >= camera_row_stride floors to row_stride-1. */
+int test_engine_battlefield_render_pixel_to_col_left_biased_clamps_high(void)
+{
+    coords_scaffold();
+
+    /* camera_row_stride=20.  px far enough right to compute col >= 20.
+     * px = 100 + 20*32 = 740 → col=20 → clamp to 19. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_left_biased(740), 19);
+    /* px=100 + 25*32 = 900 → col=25 → clamp to 19. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_left_biased(900), 19);
+    return 0;
+}
+
+/* Asymmetry: left_biased does NOT clamp negative cols. */
+int test_engine_battlefield_render_pixel_to_col_left_biased_no_low_clamp(void)
+{
+    coords_scaffold();
+
+    /* px=99 → col = (99-100)/32 = 0 (truncated towards 0 in C99).
+     * residue = -1 % 32 = -1, NOT < 8 (since -1 < 8 is true!),
+     * so col -= 1 → col = -1.  No low clamp → returns -1. */
+    /* Wait: -1 < 8 IS true in two's-complement, so the bias FIRES.
+     * Verify negative result propagates. */
+    T_ASSERT_EQ_I(engine_battlefield_render_pixel_to_col_left_biased(99), -1);
+    return 0;
+}
