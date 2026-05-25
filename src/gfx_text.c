@@ -55,6 +55,7 @@ void gfx_text_set_outline(int enabled)             { g_outline = enabled; }
 void gfx_text_set_tight_shadow(int enabled)        { g_tight_shadow = enabled; }
 void gfx_text_set_uppercase_highlight(int enabled) { g_uppercase_highlight = enabled; }
 void gfx_text_set_collapse_spaces(int enabled)     { g_collapse_spaces = enabled; }
+void gfx_text_set_collapse_active(int enabled)     { g_collapse_active = enabled; }
 void gfx_text_set_language_tag(int tag)            { g_language_tag = tag; }
 
 /* ──────────────────────────────────────────────────────────────────

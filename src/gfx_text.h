@@ -197,6 +197,14 @@ void gfx_text_set_uppercase_highlight(int enabled);
  * word-wrap renderer to keep mid-line word breaks tidy. */
 void gfx_text_set_collapse_spaces(int enabled);
 
+/* DAT_005c925a — per-call "collapse_active" arm written by the word-
+ * wrap callers immediately before each per-line render.  When set,
+ * suppresses the renderer's consecutive-space-collapse rewind for
+ * this call (the wrap layer is already chopping at word boundaries
+ * and doesn't want adjacent spaces eaten mid-line).  Cleared by the
+ * renderer at the end of every call. */
+void gfx_text_set_collapse_active(int enabled);
+
 /* DAT_004eac50 — language tag governing the shadow color pair.  When
  * 0x1c or 0x1f, shadow colors are (0x36, 0x2c); else (0x10, 0x1f).
  * Set once at startup from the language config; the renderer reads

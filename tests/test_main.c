@@ -604,6 +604,21 @@ struct test_case {
     X(gfx_text_advances_running_x_by_dispatcher_width) \
     X(gfx_text_centered_offsets_x_by_half_remainder) \
     X(gfx_text_centered_clamps_offset_at_zero_when_overflow) \
+    X(gfx_wrap_localized_line_loads_and_renders) \
+    X(gfx_wrap_localized_line_skip_strings_advances_walker) \
+    X(gfx_wrap_localized_line_out_of_bounds_is_noop) \
+    X(gfx_wrap_localized_line_clears_alt_clip) \
+    X(gfx_wrap_localized_line_centered_offsets_x) \
+    X(gfx_wrap_buffer_wraps_at_pixel_budget) \
+    X(gfx_wrap_buffer_advances_line_y_acc_per_line) \
+    X(gfx_wrap_buffer_does_not_reset_max_line_x) \
+    X(gfx_wrap_buffer_max_line_x_tracks_widest_line) \
+    X(gfx_wrap_localized_resets_max_line_x_at_top) \
+    X(gfx_wrap_localized_suppresses_leading_spaces_on_wrap) \
+    X(gfx_wrap_localized_two_stage_pagination) \
+    X(gfx_wrap_localized_out_of_bounds_is_noop) \
+    X(gfx_wrap_tall_font_uses_24px_line_height) \
+    X(gfx_wrap_non_tall_font_uses_16px_line_height) \
     /* end */
 
 /* Emit extern decls. */
