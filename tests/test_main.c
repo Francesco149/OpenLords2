@@ -671,6 +671,14 @@ struct test_case {
     X(gfx_text_label_render_dec_signed_renders_when_value_nonzero) \
     X(gfx_text_label_render_dec_signed_negative_picks_color_neg) \
     X(gfx_text_label_render_dec_signed_renders_when_companion_nonzero) \
+    X(gfx_text_label_render_labeled_signed_positive) \
+    X(gfx_text_label_render_labeled_signed_zero_value_mode_1) \
+    X(gfx_text_label_render_labeled_signed_negative) \
+    X(gfx_text_label_render_labeled_signed_mode_2_positive) \
+    X(gfx_text_label_render_labeled_signed_skips_when_both_zero) \
+    X(gfx_text_label_render_labeled_signed_clobbers_x_acc_on_zero) \
+    X(gfx_text_label_render_labeled_signed_increments_x_acc) \
+    X(gfx_text_label_render_labeled_signed_mode_2_negative_quirk_47) \
     /* end */
 
 /* Emit extern decls. */

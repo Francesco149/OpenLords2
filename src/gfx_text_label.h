@@ -54,6 +54,22 @@
  *                                     entirely when both `value` and
  *                                     `zero_companion` are zero.
  *
+ *   FUN_00402e0c @ 0x402e0c (344 B) → gfx_text_label_render_labeled_signed
+ *                                     Compound "label + signed value"
+ *                                     entry point.  Renders a
+ *                                     localization-string label via
+ *                                     `gfx_text_render_line`, then a
+ *                                     decimal value via
+ *                                     `gfx_text_label_render_dec` at
+ *                                     `cursor_x + line_x_acc` (i.e.
+ *                                     positioned past the label).
+ *                                     Sign-conditional label color +
+ *                                     prefix-char selection on the
+ *                                     value render.  Sole captured
+ *                                     entry point for the in-game stat
+ *                                     readouts that pair a label with
+ *                                     a signed delta.
+ *
  * Shared state:
  *
  *   The 8000-byte format buffer (DAT_0058fda0) is module-private here.
@@ -93,6 +109,20 @@
  *     zero.  No call sites for this function exist in the captured
  *     decompilation — the parameter semantics are inferred from
  *     control flow; faithful but unvalidated against retail behavior.
+ *
+ *   - #46: `gfx_text_label_render_labeled_signed` resets `line_x_acc`
+ *     (DAT_005cd404) to 0 BEFORE the early-return gate and restores
+ *     it INSIDE the gate's then-branch.  When both `value` and `mode`
+ *     are zero the restore never runs, silently clobbering the
+ *     caller's running x accumulator.  Faithful to retail.
+ *
+ *   - #47: Label color tracks `value` sign even when `mode == 2`
+ *     neutralizes the value's prefix to '@'.  With value < 0 and
+ *     mode == 2, the label renders in `color_negative` but the value
+ *     renders in `color_positive`.  And — because the formatter still
+ *     emits a '-' byte at offset 1 for negative values — the assembled
+ *     buffer is "@-N" rather than "@N" (the '@' prefix overwrites
+ *     buffer[0]; the formatter-emitted '-' survives at [1]).
  *
  * Pure C; no Win32 deps.
  */
@@ -205,5 +235,36 @@ void gfx_text_label_render_dec_signed(int value,
                                       const unsigned char *char_glyph_table_metrics,
                                       uint8_t color_positive,
                                       uint8_t color_negative);
+
+/* Port of FUN_00402e0c.  Render a localization-string `label` at
+ * (cursor_x, cursor_y), then a decimal `value` positioned past the
+ * label (at `cursor_x + line_x_acc`, where the renderer's running x
+ * accumulator now holds the label's width).
+ *
+ *   - `mode == 2`: value renders with '@' prefix, in `color_positive`,
+ *     regardless of sign.  Label still colors by sign (quirk #47).
+ *   - `mode != 2` AND `value < 0`: value renders with '-' prefix, in
+ *     `color_negative` (and the value is negated before formatting so
+ *     digits land contiguous with the '-' at buffer[0]).
+ *   - `mode != 2` AND `value == 0`: value renders with '@' prefix, in
+ *     `color_positive`.
+ *   - `mode != 2` AND `value > 0`: value renders with '+' prefix, in
+ *     `color_positive`.
+ *
+ * Gating: the entire render (label + value) is skipped when BOTH
+ * `value` and `mode` are zero.  Note: `line_x_acc` is reset to 0
+ * BEFORE the gate check and only restored inside the active branch
+ * (quirk #46) — the no-op path clobbers the caller's running x
+ * accumulator.  Faithful to retail. */
+void gfx_text_label_render_labeled_signed(int value,
+                                          int mode,
+                                          const uint8_t *label,
+                                          const char *suffix,
+                                          int cursor_x,
+                                          int cursor_y,
+                                          const uint8_t *font_base,
+                                          const uint8_t *char_glyph_table,
+                                          uint8_t color_positive,
+                                          uint8_t color_negative);
 
 #endif /* OPENLORDS2_GFX_TEXT_LABEL_H */

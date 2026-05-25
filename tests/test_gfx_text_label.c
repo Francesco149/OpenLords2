@@ -521,3 +521,202 @@ int test_gfx_text_label_render_dec_signed_renders_when_companion_nonzero(void)
     T_ASSERT(count_pixels(&c, 7) > 0);  /* color_positive */
     return 0;
 }
+
+/* ──────────────────────────────────────────────────────────────────
+ * Group 6 — Compound "label + signed value" (FUN_00402e0c)
+ * ────────────────────────────────────────────────────────────────── */
+
+/* Positive value → '+' prefix on the value buffer; positive color. */
+int test_gfx_text_label_render_labeled_signed_positive(void)
+{
+    canvas_t c; canvas_init(&c);
+    label_reset();
+
+    uint8_t font[FONT_BLOB_LEN]; font_blob_init_1x1(font, 7, 0);
+    uint8_t table[256]; memset(table, 1, 256);
+
+    static const uint8_t label[] = "TAX:";
+    gfx_text_label_render_labeled_signed(7, 0, label, "", 0, 0,
+                                         font, table, 7, 8);
+
+    /* After the render, the format buffer holds the value half: "+7\0". */
+    T_ASSERT_EQ_S(buf_as_string(), "+7");
+    /* Only positive color used — both label and value share color_positive. */
+    T_ASSERT(count_pixels(&c, 7) > 0);
+    T_ASSERT_EQ_I(count_pixels(&c, 8), 0);
+    return 0;
+}
+
+/* Zero value with mode==1 → renders (gate is "value != 0 OR mode != 0"),
+ * '@' prefix per the value==0 branch. */
+int test_gfx_text_label_render_labeled_signed_zero_value_mode_1(void)
+{
+    canvas_t c; canvas_init(&c);
+    label_reset();
+
+    uint8_t font[FONT_BLOB_LEN]; font_blob_init_1x1(font, 7, 0);
+    uint8_t table[256]; memset(table, 1, 256);
+
+    static const uint8_t label[] = "X:";
+    gfx_text_label_render_labeled_signed(0, 1, label, "", 0, 0,
+                                         font, table, 7, 8);
+
+    /* value==0, mode != 2, value < 1 branch → '@' prefix, digits "0". */
+    T_ASSERT_EQ_S(buf_as_string(), "@0");
+    return 0;
+}
+
+/* Negative value → '-' prefix (via negate + prefix-overwrite),
+ * negative color for both label and value. */
+int test_gfx_text_label_render_labeled_signed_negative(void)
+{
+    canvas_t c; canvas_init(&c);
+    label_reset();
+
+    uint8_t font[FONT_BLOB_LEN]; font_blob_init_1x1(font, 7, 0);
+    uint8_t table[256]; memset(table, 1, 256);
+
+    static const uint8_t label[] = "X:";
+    gfx_text_label_render_labeled_signed(-42, 0, label, "", 0, 0,
+                                         font, table, 7, 8);
+
+    /* Value rendered as "-42" (contiguous: prefix '-' overwrites
+     * buffer[0], digits at [1..2]). */
+    T_ASSERT_EQ_S(buf_as_string(), "-42");
+    /* Both halves use negative color — only color 8 paints. */
+    T_ASSERT_EQ_I(count_pixels(&c, 7), 0);
+    T_ASSERT(count_pixels(&c, 8) > 0);
+    return 0;
+}
+
+/* mode == 2 with positive value → '@' prefix, positive color. */
+int test_gfx_text_label_render_labeled_signed_mode_2_positive(void)
+{
+    canvas_t c; canvas_init(&c);
+    label_reset();
+
+    uint8_t font[FONT_BLOB_LEN]; font_blob_init_1x1(font, 7, 0);
+    uint8_t table[256]; memset(table, 1, 256);
+
+    static const uint8_t label[] = "X:";
+    gfx_text_label_render_labeled_signed(5, 2, label, "", 0, 0,
+                                         font, table, 7, 8);
+
+    /* mode==2 takes precedence over sign — '@' prefix used. */
+    T_ASSERT_EQ_S(buf_as_string(), "@5");
+    /* Positive color (mode==2 → color_positive). */
+    T_ASSERT(count_pixels(&c, 7) > 0);
+    T_ASSERT_EQ_I(count_pixels(&c, 8), 0);
+    return 0;
+}
+
+/* Both inputs zero → no render at all.  Sentinel pre-stuff in the
+ * buffer survives. */
+int test_gfx_text_label_render_labeled_signed_skips_when_both_zero(void)
+{
+    canvas_t c; canvas_init(&c);
+    label_reset();
+
+    uint8_t font[FONT_BLOB_LEN]; font_blob_init_1x1(font, 7, 0);
+    uint8_t table[256]; memset(table, 1, 256);
+
+    uint8_t *buf = gfx_text_label_buffer();
+    buf[0] = 0x5a;
+    buf[1] = 0xa5;
+
+    static const uint8_t label[] = "X:";
+    gfx_text_label_render_labeled_signed(0, 0, label, "", 0, 0,
+                                         font, table, 7, 8);
+
+    /* Sentinel survives → no formatter / no render path was entered. */
+    T_ASSERT_EQ_U(buf[0], 0x5a);
+    T_ASSERT_EQ_U(buf[1], 0xa5);
+    /* Canvas untouched. */
+    T_ASSERT_EQ_I(count_pixels(&c, 7), 0);
+    T_ASSERT_EQ_I(count_pixels(&c, 8), 0);
+    return 0;
+}
+
+/* Quirk #46 witness — when both inputs are zero, the function resets
+ * line_x_acc to 0 but never restores it.  The caller's running x
+ * accumulator is silently clobbered. */
+int test_gfx_text_label_render_labeled_signed_clobbers_x_acc_on_zero(void)
+{
+    canvas_t c; canvas_init(&c);
+    label_reset();
+
+    uint8_t font[FONT_BLOB_LEN]; font_blob_init_1x1(font, 7, 0);
+    uint8_t table[256]; memset(table, 1, 256);
+
+    gfx_text_set_line_x_acc(42);   /* caller's running advance */
+
+    static const uint8_t label[] = "X:";
+    gfx_text_label_render_labeled_signed(0, 0, label, "", 0, 0,
+                                         font, table, 7, 8);
+
+    /* All-zero gate → line_x_acc was reset to 0 BEFORE the gate check
+     * but the restore lives INSIDE the (skipped) gate branch — so the
+     * caller's 42 is lost.  Quirk #46. */
+    T_ASSERT_EQ_I(gfx_text_line_x_acc(), 0);
+    return 0;
+}
+
+/* Non-zero path preserves and increments line_x_acc.  After the
+ * render: line_x_acc = saved + (label_width + value_width). */
+int test_gfx_text_label_render_labeled_signed_increments_x_acc(void)
+{
+    canvas_t c; canvas_init(&c);
+    label_reset();
+
+    uint8_t font[FONT_BLOB_LEN]; font_blob_init_1x1(font, 7, 0);
+    uint8_t table[256]; memset(table, 1, 256);
+
+    /* Empty label so width contribution is just the value's. */
+    static const uint8_t empty_label[] = "";
+    gfx_text_set_line_x_acc(100);
+
+    gfx_text_label_render_labeled_signed(1, 0, empty_label, "", 0, 0,
+                                         font, table, 7, 8);
+
+    /* Render happened; line_x_acc was reset to 0 then the value render
+     * advanced it by the value's per-glyph width.  Final value =
+     * value_width + saved (100).  We don't assert exact value-width
+     * here (font-fixture-dependent) but the saved-100 must be present. */
+    T_ASSERT(gfx_text_line_x_acc() >= 100);
+    /* And strictly greater — value advanced the accumulator by at
+     * least one glyph (the '+' or the digit). */
+    T_ASSERT(gfx_text_line_x_acc() > 100);
+    return 0;
+}
+
+/* Quirk #47 witness — mode==2 with negative value: label colors by
+ * value sign (color_negative), value renders with '@' prefix in
+ * color_positive.  Mismatched colors.  Also the assembled value buffer
+ * contains a hidden '-' byte at offset 1 (the formatter still emits
+ * its own sign byte for the negative value). */
+int test_gfx_text_label_render_labeled_signed_mode_2_negative_quirk_47(void)
+{
+    canvas_t c; canvas_init(&c);
+    label_reset();
+
+    uint8_t font[FONT_BLOB_LEN]; font_blob_init_1x1(font, 7, 0);
+    uint8_t table[256]; memset(table, 1, 256);
+
+    /* Empty label so only value pixels land on the canvas — that lets
+     * us assert the value color in isolation. */
+    static const uint8_t empty_label[] = "";
+    gfx_text_label_render_labeled_signed(-3, 2, empty_label, "", 0, 0,
+                                         font, table, 7, 8);
+
+    /* Value buffer: '@' at [0], '-' at [1] (formatter sign byte),
+     * '3' at [2], terminator at [3]. */
+    T_ASSERT_EQ_U(gfx_text_label_buffer()[0], '@');
+    T_ASSERT_EQ_U(gfx_text_label_buffer()[1], '-');
+    T_ASSERT_EQ_U(gfx_text_label_buffer()[2], '3');
+    T_ASSERT_EQ_U(gfx_text_label_buffer()[3], 0);
+    /* Value rendered in color_positive (mode==2 wins) — not
+     * color_negative even though value < 0. */
+    T_ASSERT(count_pixels(&c, 7) > 0);
+    T_ASSERT_EQ_I(count_pixels(&c, 8), 0);
+    return 0;
+}

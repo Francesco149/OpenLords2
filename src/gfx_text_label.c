@@ -302,3 +302,90 @@ void gfx_text_label_render_dec_signed(int value,
                                   char_glyph_table_metrics, color);
     gfx_dispatch_set_alt_clip_enabled(0);
 }
+
+/* ──────────────────────────────────────────────────────────────────
+ * Port of FUN_00402e0c — compound "label + signed value"
+ *
+ * Two-half render: a localization-string label, then a decimal value
+ * positioned past the label.  Sign-conditional label color + prefix-
+ * char selection on the value render.  Wraps everything in a
+ * line_x_acc reset/restore dance — the renderer mutates line_x_acc to
+ * track per-glyph horizontal advance, and this compound wrapper reuses
+ * that to position the value just past the label.
+ *
+ * Retail's gate-shape: the line_x_acc reset happens BEFORE the
+ * early-return check, but the restore happens INSIDE the active
+ * branch.  All-zero inputs therefore silently zero the caller's
+ * accumulator — see quirk #46.  Faithful here.
+ *
+ * Mode/value decision tree (mirrors retail's if-else chain — the
+ * `value < 1` retail branch is `value == 0` here since `value < 0`
+ * was already handled):
+ *
+ *   mode == 2          → '@' prefix, color_positive  (value as-is)
+ *   value <  0         → '-' prefix, color_negative  (value negated)
+ *   value == 0         → '@' prefix, color_positive
+ *   value >  0         → '+' prefix, color_positive
+ *
+ * The label render's color tracks the value's sign directly, NOT the
+ * mode — so a (value < 0, mode == 2) call produces a negative-colored
+ * label paired with a positive-colored value (quirk #47).
+ * ────────────────────────────────────────────────────────────────── */
+void gfx_text_label_render_labeled_signed(int value,
+                                          int mode,
+                                          const uint8_t *label,
+                                          const char *suffix,
+                                          int cursor_x,
+                                          int cursor_y,
+                                          const uint8_t *font_base,
+                                          const uint8_t *char_glyph_table,
+                                          uint8_t color_positive,
+                                          uint8_t color_negative)
+{
+    int saved_x_acc = gfx_text_line_x_acc();
+    gfx_text_set_line_x_acc(0);
+
+    if (value != 0 || mode != 0) {
+        /* Label color: by value sign — even under mode==2 (quirk #47). */
+        uint8_t label_color = (value < 0) ? color_negative : color_positive;
+        gfx_text_render_line(label, cursor_x, cursor_y,
+                             font_base, char_glyph_table, label_color);
+
+        /* Position value past the label.  line_x_acc was mutated by the
+         * label render to the per-glyph total advance. */
+        int value_x = cursor_x + gfx_text_line_x_acc();
+
+        if (mode == 2) {
+            gfx_text_label_render_dec(value, '@', suffix,
+                                      value_x, cursor_y,
+                                      font_base, char_glyph_table,
+                                      color_positive);
+        } else if (value < 0) {
+            /* Negate so the formatter writes only digits; the '-' goes
+             * into buffer[0] via the prefix overwrite (quirk #41).  This
+             * keeps the '-' contiguous with the digits. */
+            gfx_text_label_render_dec(-value, '-', suffix,
+                                      value_x, cursor_y,
+                                      font_base, char_glyph_table,
+                                      color_negative);
+        } else if (value == 0) {
+            gfx_text_label_render_dec(value, '@', suffix,
+                                      value_x, cursor_y,
+                                      font_base, char_glyph_table,
+                                      color_positive);
+        } else {
+            gfx_text_label_render_dec(value, '+', suffix,
+                                      value_x, cursor_y,
+                                      font_base, char_glyph_table,
+                                      color_positive);
+        }
+
+        /* Restore (add to current).  After the value render, line_x_acc
+         * = label_width + value_width; we leave it as that PLUS the
+         * caller's saved value, so the caller observes their accumulator
+         * incremented by the combined width of the compound render. */
+        gfx_text_set_line_x_acc(gfx_text_line_x_acc() + saved_x_acc);
+    }
+    /* else: line_x_acc stays at 0 — caller's saved_x_acc is silently
+     * dropped (quirk #46). */
+}
