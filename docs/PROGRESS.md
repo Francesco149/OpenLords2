@@ -7,6 +7,162 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Battlefield chip 5c: late-pass driver + per-cell creature draw + selection marker (+25 tests, 3 new quirks)
+
+Continuation of the same unattended session.  Previous dispatch
+landed chips 5a.iii + 5a.iv (the chip-5a sub-plan completion).  This
+dispatch lands the entire late-pass cluster as a single chip — the
+driver `FUN_004bd233` (290 B), the per-cell creature draw
+`FUN_004be070` (719 B), and the selection-marker leaf `FUN_004be33f`
+(416 B).  Total ~1425 B across three functions.  Only chip 5d (final
+pass, 433 B) remains stubbed in the battlefield cluster.
+
+### Chip 5c: late-pass driver + two leaves (`FUN_004bd233 / 4be070 / 4be33f`)
+
+Replaces the static stub `pass_late` with the real driver plus its
+two leaves.
+
+**`FUN_004bd233` (290 B) — late-pass driver.**  Walks visible cells
+(`rows × cols`, NO over-scan unlike the middle pass).  For each cell:
+
+  - Read `entity_id = descriptor[+5]`.  Skip when 0.
+  - AND two visibility-mask bytes:
+      - per-entity: entity record at offset `+0x0a` (new offset).
+      - per-player: byte at `vis_base[player_id * 0x160]`.
+    Skip when AND is 0.
+  - Dispatch `late_leaf_draw_creature(entity_id)`.
+
+After the cell loop, if the selection-marker gate
+(retail `DAT_00553f84`) is positive, dispatch the marker leaf.
+
+Per-cell cursor pitch is HARDCODED `0x20` (32 px) regardless of
+`g_zoom` — filed as quirk #97.  This means the late pass is
+effectively zoom-32-only despite being dispatched unconditionally.
+
+**`FUN_004be070` (719 B) — per-cell creature draw leaf.**  Stages
+sprite descriptor from the creature blob with slot computed as:
+`raw = entity[+0x1a0]` (signed short); `shifted = raw << amount`
+(or `>> amount` if shift_sign < 0); `slot = shifted + 0x2e`.  Then
+applies a type-conditional Y offset:
+  - type < 7        → cursor_y -= 12.
+  - type == 10      → cursor_y -= 12  (duplicate branch — preserved).
+  - else            → cursor_y -= 0x20.
+    - if type == 9  → cursor_y += 0x10  (net -16).
+
+X offset always: `cursor_x += anim_x + 8`.  Anim offsets pulled from
+the z32 table UNCONDITIONALLY (quirk #95 — chip 5a.ii.b gates this
+by zoom; chip 5c does not).
+
+Glyph-offset gate `[1, 0x4baf0]`.  On PASS: clip + dispatch RLE blit,
+cursor restored to entry.  On FAIL: cursor LEFT at post-offset
+position (quirk #96 — lopsided restore propagates into the next
+cell's per-cell advance within the same row).
+
+**`FUN_004be33f` (416 B) — selection-marker leaf.**  Draws a fixed-slot
+(0x3f) sprite at the active hero/army's world position
+(`px = (marker_x - cam_x) * 0x20 + viewport_x + 2`, etc.).  Marks a
+3×3 tile dirty box at the computed cursor (UNCONDITIONALLY — above
+the glyph-offset gate).  Inside the gate, invokes a world-map dirty
+hook with `(marker_x - 1, marker_y - 1, 3, 3)` — retail's
+`FUN_0046c4a3` writes bit 1 into the world-map collision grid at
+`&DAT_005440e2`.  The port substitutes a callback to avoid pulling
+the world-map subsystem into the battlefield module.
+
+### New API surface
+
+  - `bind_creature_sprite_blob(blob)` — retail `DAT_005530c8`
+    (misc_ske.PL8), shared by both leaves.
+  - `bind_late_player_visibility_mask(base, stride, player_id)` —
+    retail `&DAT_0057bfee`, stride 0x160, player id `DAT_0057c8cc`.
+  - `bind_creature_slot_shift(amount, sign)` — retail `DAT_00566514`,
+    `DAT_0056651c`.
+  - `bind_selection_marker(x, y, gate)` — retail `DAT_00553f14`,
+    `DAT_00553f18`, `DAT_00553f84`.
+  - `bind_world_map_dirty_hook(hook)` — port-only callback substitute
+    for retail's direct `FUN_0046c4a3` call.
+  - Test-only `run_pass_late_for_test(camera_x, camera_y)` sibling of
+    `run_pass_middle_for_test`.
+
+New entity-record offsets:
+  - `+0x0a` — late visibility mask byte.
+  - `+0x1a0` — late sprite slot (signed short).
+
+New accessors: per-cell visit count, creature draw/blit counts,
+selection-marker call/blit counts, world-dirty-hook call count.
+
+### New engine quirks
+
+  - **#95** — late creature draw reads z32 anim table even at zoom 16
+    (chip 5a.ii.b gates by zoom; chip 5c does not).
+  - **#96** — creature draw leaf has lopsided cursor restore: on
+    gate PASS, cursor → entry; on gate FAIL, cursor → post-offset
+    position.  Propagates into the rest of the row's cells (cursor_x
+    is reset per row; cursor_y never resets within a frame).
+  - **#97** — late-pass cell pitch HARDCODED `0x20` regardless of
+    `g_zoom`.  Effectively zoom-32-only despite unconditional
+    dispatch.
+
+### Headline numbers
+
+- **914 → 939 host tests** (+25), all green under ASan/UBSan.
+- **3 retail functions ported**: `FUN_004bd233` (290 B driver),
+  `FUN_004be070` (719 B creature draw), `FUN_004be33f` (416 B
+  selection marker).  Total ~1425 B of decompile → port.
+- **3 new engine quirks** (#95 unconditional z32 anim, #96 lopsided
+  cursor restore, #97 hardcoded 0x20 pitch).
+- Cross-compile (mingw32) clean.
+
+### Battlefield port state
+
+| chip   | function                                      | size   | status     |
+| ------ | --------------------------------------------- | -----: | ---------- |
+| 1      | 16×16 raw blit primitive                      |  705 B | ported     |
+| 2      | frame driver + zoom-16 no-op                  |  154 B | ported     |
+| 3      | zoom-16 terrain pass                          |  725 B | ported     |
+| 3.5    | 32×32 raw blit primitive                      | 2997 B | ported     |
+| 4      | zoom-32 terrain pass                          | 1187 B | ported     |
+| 5a.i   | middle-pass driver shell                      |  543 B | ported     |
+| 5a.ii.a | sorted-entity infrastructure (938+da92+db95) |  761 B | ported    |
+| 5a.ii.b | per-entity draw FUN_004bdc31 base path       | 1087 B | ported    |
+| 5a.iii | per-cell draw leaves (574+759+beed4)          | 1769 B | ported    |
+| 5a.iv  | type-special leaves (4df+7be+ab9)             | 2549 B | ported    |
+| 5b     | zoom-32 overlay pass                          |  436 B | ported     |
+| 5c     | late pass driver + creature + marker          | 1425 B | **ported (this session)** |
+| 5d     | final pass                                    |  433 B | stub       |
+| 6      | 5 coord helpers (hit-test + screen↔hex)       |  394 B | ported     |
+
+Only chip 5d remains within the battlefield cluster.
+
+### What's next
+
+1. **Chip 5d — final pass.**  `FUN_004bf1f9` (433 B).  Survey done
+   during chip 5c planning — appears to be a debug overlay that
+   draws per-creature numeric stats (a checksum-derived label) on
+   top of each visible creature, gated on `DAT_005bb4a5` (debug
+   flag).  Uses the same per-cell cursor formula as the late pass
+   but at zoom-level cursor pitch (`DAT_004e656c` directly — so
+   NO quirk-#97 mis-alignment).  Calls `FUN_00440089` (81 B —
+   byte-sum hash) and `FUN_00402f64` (text/value label, already
+   ported).  Smaller surface than chip 5c — likely a single short
+   dispatch.
+
+2. **gfx.c runtime wiring** — battlefield is now end-to-end at zoom
+   16/32 for all chip 5a + 5b + 5c layers.  Visual verification
+   remains gated on user availability; the next milestone where a
+   screenshot would be most informative is still "first battlefield
+   frame with units rendered" (requires standing up the entity
+   table from real savegame data).
+
+Picking **#1 (chip 5d)** next: the only remaining stub in the
+battlefield cluster and a debug-only feature, so it's a clean
+"finish the cluster" landing.
+
+This is a natural `/clear` point — chip 5c lands cleanly, all 939
+tests green, the chip-5c plan is documented in
+`docs/findings/battlefield-render.md`, no incomplete work in-flight.
+
+---
+
 ## 2026-05-25 — Battlefield chips 5a.iii + 5a.iv: per-cell draw leaves + type-special leaves (+41 tests, 5 new quirks)
 
 Continuation of the same unattended session.  Previous dispatch landed
