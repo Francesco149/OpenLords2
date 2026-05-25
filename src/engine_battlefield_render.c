@@ -215,6 +215,23 @@ static int            g_effect_chain_iters;        /* local_c */
 static int            g_effect_chain_blit_count;
 static int            g_scroll_pad;                /* DAT_004e5d44 */
 
+/* ─── chip 5a.iv: per-entity type-special leaves bindings ──────── */
+
+/* Type-6 PRE-call shared blob (see header for the layout-collision
+ * rationale).  All type-6 entities use this single bound blob; slot
+ * comes from entity record's +0x11. */
+static const uint8_t *g_entity_type6_blob;        /* port-only — see header */
+
+/* Type-7 POST-call facing-selected blob pair.  facing < 4 → low;
+ * facing >= 4 → high. */
+static const uint8_t *g_entity_type7_blob_low;    /* DAT_00553f6c */
+static const uint8_t *g_entity_type7_blob_high;   /* DAT_00522f78 */
+
+/* Per-blit counters for the three type-special leaves. */
+static int g_middle_entity_type6_blit_count;
+static int g_middle_entity_type7_blit_count;
+static int g_middle_entity_type9_sub_blit_count;
+
 /* Per-pass call counters.  See the header for what each one
  * represents.  All seven pass entry points (5 stubs + 1 real no-op
  * + 1 implicitly the frame driver) bump exactly one counter per
@@ -357,6 +374,18 @@ void engine_battlefield_render_bind_scroll_pad(int pad)
     g_scroll_pad = pad;
 }
 
+void engine_battlefield_render_bind_entity_type6_blob(const uint8_t *blob)
+{
+    g_entity_type6_blob = blob;
+}
+
+void engine_battlefield_render_bind_entity_type7_blobs(const uint8_t *low,
+                                                       const uint8_t *high)
+{
+    g_entity_type7_blob_low  = low;
+    g_entity_type7_blob_high = high;
+}
+
 int engine_battlefield_render_terrain_blit_count(void)
 {
     return g_terrain_blit_count;
@@ -411,23 +440,290 @@ static void pass_final(void)            { g_count_final += 1; }
  * the body processes.
  * ────────────────────────────────────────────────────────────────── */
 
-/* Per-entity TYPE-SPECIAL stubs (chip 5a.iv ports the real bodies). */
-static void entity_type6_pre_stub(int id)
+/* Read a 32-bit little-endian int from a byte table at the given byte
+ * offset.  memcpy is the strict-aliasing-safe path; on the host x86 it
+ * compiles to a single mov. */
+static int read_le32(const uint8_t *base, int byte_offset)
+{
+    int32_t v;
+    memcpy(&v, base + byte_offset, sizeof v);
+    return (int)v;
+}
+
+/* Read the (anim_x_off, anim_y_off) pair from the bound anim-offset
+ * table at the given zoom level.  Returns 0 in both out-params for
+ * unsupported zooms or unbound tables.  Shared by all three type-
+ * special leaves (chip 5a.iv) — they each apply the same zoom-
+ * conditional anim-offset lookup as the per-entity draw, but with
+ * different X/Y centering biases. */
+static void type_special_anim_offset(int8_t facing, int8_t anim_frame,
+                                      int *out_x, int *out_y)
+{
+    *out_x = 0;
+    *out_y = 0;
+    int entry_off = (int)facing     * ENGINE_BATTLEFIELD_ANIM_FACING_STRIDE
+                  + (int)anim_frame * ENGINE_BATTLEFIELD_ANIM_FRAME_STRIDE;
+    if (g_zoom == 0x20 && g_anim_table_z32) {
+        *out_x = read_le32(g_anim_table_z32, entry_off + 0);
+        *out_y = read_le32(g_anim_table_z32, entry_off + 4);
+    } else if (g_zoom == 0x10 && g_anim_table_z16) {
+        *out_x = read_le32(g_anim_table_z16, entry_off + 0);
+        *out_y = read_le32(g_anim_table_z16, entry_off + 4);
+    }
+}
+
+/* FUN_004be4df (735 B) — type-6 PRE-call.  Shadow / ground-effect draw
+ * beneath the main sprite.  Uses a shared bound blob (port substitute
+ * for the entity's secondary-blob field at +0x04 — see header).  Slot
+ * is the entity's secondary frame index (+0x11).  Centering follows
+ * the per-entity zoom logic with an additional anim-offset application
+ * (without the type-9/10 Y bonuses).  6×6 dirty box. */
+static void entity_type6_pre_call(int id)
 {
     g_middle_entity_type6_count   += 1;
     g_middle_entity_type6_last_id  = id;
+
+    if (!g_entity_type6_blob) {
+        return;
+    }
+
+    int entry_x = gfx_glyph_cursor_x();
+    int entry_y = gfx_glyph_cursor_y();
+
+    uint8_t *rec = g_entity_base + id * g_entity_stride;
+    int slot = (int)rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_FRAME];
+
+    gfx_dispatch_set_last_glyph_index(slot);
+    gfx_dispatch_stage_sprite_descriptor(g_entity_type6_blob, slot);
+
+    int glyph_off = gfx_glyph_glyph_offset();
+    if (glyph_off >= 1 && glyph_off <= 0x4baf0) {
+        int8_t facing = (int8_t)rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_FACING];
+        int8_t af     = (int8_t)rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_ANIM_FRAME];
+        int    sprite_w = gfx_glyph_glyph_w();
+        int    half_w   = sprite_w >> 1;
+
+        int off_x = 0, off_y = 0;
+        type_special_anim_offset(facing, af, &off_x, &off_y);
+
+        if (g_zoom == 0x20) {
+            off_x += (0x10 - half_w);
+            off_y += (   8 - half_w);
+        } else if (g_zoom == 0x10) {
+            off_x += (   8 - half_w);
+            off_y += (   4 - half_w);
+        }
+        /* else: unsupported zoom — offsets stay at anim-only values.
+         * Retail leaves locals uninitialised here — see quirk #88. */
+
+        int new_x = entry_x + off_x;
+        int new_y = entry_y + off_y;
+        gfx_glyph_set_cursor_x(new_x);
+        gfx_glyph_set_cursor_y(new_y);
+
+        if (g_dirty_state) {
+            engine_dirty_rect_mark_box_tiled(g_dirty_state,
+                                             new_x, new_y, 6, 6, 2);
+        }
+
+        gfx_dispatch_clip_x(g_clip_left, g_clip_right);
+        gfx_dispatch_clip_y(g_clip_top,  g_clip_bottom);
+
+        int y_mode_before = gfx_dispatch_clip_y_mode();
+        gfx_dispatch_dispatch_sprite_rle(g_entity_type6_blob);
+        if (y_mode_before != 5) {
+            g_middle_entity_type6_blit_count += 1;
+        }
+    }
+
+    gfx_glyph_set_cursor_x(entry_x);
+    gfx_glyph_set_cursor_y(entry_y);
 }
 
-static void entity_type7_post_stub(int id)
+/* FUN_004be7be (763 B) — type-7 POST-call.  Same body shape as type-6
+ * but with the blob picked by entity facing direction (facing < 4 →
+ * low, else → high).  Slot is the entity's secondary frame index. */
+static void entity_type7_post_call(int id)
 {
     g_middle_entity_type7_count   += 1;
     g_middle_entity_type7_last_id  = id;
+
+    uint8_t *rec = g_entity_base + id * g_entity_stride;
+    int8_t facing = (int8_t)rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_FACING];
+
+    const uint8_t *blob = (facing < 4)
+        ? g_entity_type7_blob_low
+        : g_entity_type7_blob_high;
+    if (!blob) {
+        return;
+    }
+
+    int entry_x = gfx_glyph_cursor_x();
+    int entry_y = gfx_glyph_cursor_y();
+
+    int slot = (int)rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_FRAME];
+
+    gfx_dispatch_set_last_glyph_index(slot);
+    gfx_dispatch_stage_sprite_descriptor(blob, slot);
+
+    int glyph_off = gfx_glyph_glyph_offset();
+    if (glyph_off >= 1 && glyph_off <= 0x4baf0) {
+        int8_t af = (int8_t)rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_ANIM_FRAME];
+        int    sprite_w = gfx_glyph_glyph_w();
+        int    half_w   = sprite_w >> 1;
+
+        int off_x = 0, off_y = 0;
+        type_special_anim_offset(facing, af, &off_x, &off_y);
+
+        if (g_zoom == 0x20) {
+            off_x += (0x10 - half_w);
+            off_y += (   8 - half_w);
+        } else if (g_zoom == 0x10) {
+            off_x += (   8 - half_w);
+            off_y += (   4 - half_w);
+        }
+
+        int new_x = entry_x + off_x;
+        int new_y = entry_y + off_y;
+        gfx_glyph_set_cursor_x(new_x);
+        gfx_glyph_set_cursor_y(new_y);
+
+        if (g_dirty_state) {
+            engine_dirty_rect_mark_box_tiled(g_dirty_state,
+                                             new_x, new_y, 6, 6, 2);
+        }
+
+        gfx_dispatch_clip_x(g_clip_left, g_clip_right);
+        gfx_dispatch_clip_y(g_clip_top,  g_clip_bottom);
+
+        int y_mode_before = gfx_dispatch_clip_y_mode();
+        gfx_dispatch_dispatch_sprite_rle(blob);
+        if (y_mode_before != 5) {
+            g_middle_entity_type7_blit_count += 1;
+        }
+    }
+
+    gfx_glyph_set_cursor_x(entry_x);
+    gfx_glyph_set_cursor_y(entry_y);
 }
 
-static void entity_type9_subtype_e_post_stub(int id)
+/* FUN_004beab9 (1051 B) — type-9-subtype-0xe POST-call.  Draws TWO
+ * sprites per call from the entity's PRIMARY blob (entity[+0x00]):
+ *
+ *   First  sprite: slot = secondary_frame + 0x16, cursor_y -= 16.
+ *   Second sprite: slot = secondary_frame + 0xd,  cursor_y += 0x56,
+ *                  anchored at the SAVED entry cursor (not the
+ *                  post-first-sprite cursor).  Only fires if the first
+ *                  passed the glyph-offset gate.
+ *
+ * Both sprites apply the z32 anim offset table UNCONDITIONALLY — there
+ * is no `if (zoom == 0x10)` branch in retail, so at zoom 16 the leaf
+ * still indexes the z32 table.  Likely "subtype 0xe only occurs at
+ * zoom 32" — preserved verbatim and filed as a quirk.
+ *
+ * Centering uses sprite WIDTH on both axes (no +8 Y bonus like
+ * type-6/7), then per-sprite Y bias is applied AFTER.  6×6 dirty
+ * box on each sprite. */
+static void entity_type9_subtype_e_post_call(int id)
 {
     g_middle_entity_type9_sub_count   += 1;
     g_middle_entity_type9_sub_last_id  = id;
+
+    uint8_t *rec = g_entity_base + id * g_entity_stride;
+
+    const uint8_t *blob;
+    memcpy(&blob,
+           rec + ENGINE_BATTLEFIELD_ENTITY_OFFSET_PRIMARY_BLOB,
+           sizeof blob);
+    if (!blob) {
+        return;
+    }
+
+    int entry_x = gfx_glyph_cursor_x();
+    int entry_y = gfx_glyph_cursor_y();
+
+    uint8_t sf = rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_FRAME];
+    int8_t facing = (int8_t)rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_FACING];
+    int8_t af     = (int8_t)rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_ANIM_FRAME];
+
+    /* First sprite: slot = secondary_frame + 0x16. */
+    int slot1 = (int)sf + 0x16;
+    gfx_dispatch_set_last_glyph_index(slot1);
+    gfx_dispatch_stage_sprite_descriptor(blob, slot1);
+
+    int glyph_off = gfx_glyph_glyph_offset();
+    if (glyph_off >= 1 && glyph_off <= 0x4baf0) {
+        int sprite_w = gfx_glyph_glyph_w();
+        int half_w   = sprite_w >> 1;
+
+        /* z32 anim table indexed unconditionally — see leaf doc. */
+        int anim_x = 0, anim_y = 0;
+        if (g_anim_table_z32) {
+            int entry_off =
+                (int)facing * ENGINE_BATTLEFIELD_ANIM_FACING_STRIDE
+              + (int)af     * ENGINE_BATTLEFIELD_ANIM_FRAME_STRIDE;
+            anim_x = read_le32(g_anim_table_z32, entry_off + 0);
+            anim_y = read_le32(g_anim_table_z32, entry_off + 4);
+        }
+
+        int new_x = entry_x + anim_x + (0x10 - half_w);
+        int new_y = entry_y + anim_y - half_w - 0x10;
+        gfx_glyph_set_cursor_x(new_x);
+        gfx_glyph_set_cursor_y(new_y);
+
+        if (g_dirty_state) {
+            engine_dirty_rect_mark_box_tiled(g_dirty_state,
+                                             new_x, new_y, 6, 6, 2);
+        }
+
+        gfx_dispatch_clip_x(g_clip_left, g_clip_right);
+        gfx_dispatch_clip_y(g_clip_top,  g_clip_bottom);
+
+        int y_mode_before = gfx_dispatch_clip_y_mode();
+        gfx_dispatch_dispatch_sprite_rle(blob);
+        if (y_mode_before != 5) {
+            g_middle_entity_type9_sub_blit_count += 1;
+        }
+
+        /* Second sprite: slot = secondary_frame + 0xd, anchored at the
+         * SAVED entry cursor (not the first-sprite-adjusted cursor).
+         * Gated on the SECOND slot's own glyph_offset window. */
+        int slot2 = (int)sf + 0xd;
+        gfx_dispatch_set_last_glyph_index(slot2);
+        gfx_dispatch_stage_sprite_descriptor(blob, slot2);
+
+        int glyph_off2 = gfx_glyph_glyph_offset();
+        if (glyph_off2 >= 1 && glyph_off2 <= 0x4baf0) {
+            int sprite_w2 = gfx_glyph_glyph_w();
+            int half_w2   = sprite_w2 >> 1;
+
+            int anim_x2 = anim_x;     /* same anim offsets, but recomputed */
+            int anim_y2 = anim_y;     /* if facing/frame changed — they */
+            /* didn't, since the body reads from the same entity. */
+
+            int new2_x = entry_x + anim_x2 + (0x10 - half_w2);
+            int new2_y = entry_y + anim_y2 - half_w2 + 0x56;
+            gfx_glyph_set_cursor_x(new2_x);
+            gfx_glyph_set_cursor_y(new2_y);
+
+            if (g_dirty_state) {
+                engine_dirty_rect_mark_box_tiled(g_dirty_state,
+                                                 new2_x, new2_y, 6, 6, 2);
+            }
+
+            gfx_dispatch_clip_x(g_clip_left, g_clip_right);
+            gfx_dispatch_clip_y(g_clip_top,  g_clip_bottom);
+
+            int y_mode_before2 = gfx_dispatch_clip_y_mode();
+            gfx_dispatch_dispatch_sprite_rle(blob);
+            if (y_mode_before2 != 5) {
+                g_middle_entity_type9_sub_blit_count += 1;
+            }
+        }
+    }
+
+    gfx_glyph_set_cursor_x(entry_x);
+    gfx_glyph_set_cursor_y(entry_y);
 }
 
 /* No-blob path stub.  Retail calls FUN_004afab9 (a debug logger) when
@@ -439,16 +735,6 @@ static void entity_no_blob_stub(int id)
 {
     g_middle_entity_no_blob_count   += 1;
     g_middle_entity_no_blob_last_id  = id;
-}
-
-/* Read a 32-bit little-endian int from a byte table at the given byte
- * offset.  memcpy is the strict-aliasing-safe path; on the host x86 it
- * compiles to a single mov. */
-static int read_le32(const uint8_t *base, int byte_offset)
-{
-    int32_t v;
-    memcpy(&v, base + byte_offset, sizeof v);
-    return (int)v;
 }
 
 /* FUN_004bdc31 (1087 B) — per-entity draw (base path).
@@ -501,7 +787,7 @@ static void middle_leaf_draw_entity(int id)
     /* (1) Type-6 PRE-call.  Fires regardless of blob / glyph-offset
      * gates — it's outside both. */
     if (type == 6) {
-        entity_type6_pre_stub(id);
+        entity_type6_pre_call(id);
     }
 
     /* (3) Primary blob lookup.  Read as a host-width pointer from the
@@ -595,11 +881,11 @@ static void middle_leaf_draw_entity(int id)
 
     /* (11)/(12) Type-7 / type-9-subtype-0xe POST-calls. */
     if (type == 7) {
-        entity_type7_post_stub(id);
+        entity_type7_post_call(id);
     }
     if (type == 9
         && rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_SUBTYPE] == 0x0e) {
-        entity_type9_subtype_e_post_stub(id);
+        entity_type9_subtype_e_post_call(id);
     }
 }
 
@@ -1812,6 +2098,19 @@ int engine_battlefield_render_middle_entity_blit_count(void)
     return g_middle_entity_blit_count;
 }
 
+int engine_battlefield_render_middle_entity_type6_blit_count(void)
+{
+    return g_middle_entity_type6_blit_count;
+}
+int engine_battlefield_render_middle_entity_type7_blit_count(void)
+{
+    return g_middle_entity_type7_blit_count;
+}
+int engine_battlefield_render_middle_entity_type9_sub_blit_count(void)
+{
+    return g_middle_entity_type9_sub_blit_count;
+}
+
 int engine_battlefield_render_per_frame_cell_counter(void)
 {
     return g_per_frame_cell_counter;
@@ -1966,4 +2265,9 @@ void engine_battlefield_render_reset_counts(void)
     g_effect_chain_iters               = 0;
     g_effect_chain_blit_count          = 0;
     g_effect_chain_current_id          = 0;
+
+    /* chip 5a.iv state */
+    g_middle_entity_type6_blit_count     = 0;
+    g_middle_entity_type7_blit_count     = 0;
+    g_middle_entity_type9_sub_blit_count = 0;
 }

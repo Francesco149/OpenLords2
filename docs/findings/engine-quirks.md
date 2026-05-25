@@ -3356,6 +3356,85 @@ otherwise read the branch as meaningful.
 
 ---
 
+## 93. Battlefield type-9-subtype-0xe leaf reads z32 anim table even at zoom 16
+
+`FUN_004beab9` (chip 5a.iv, type-9-sub-0xe POST-call) reads its
+animation offset from `DAT_004e4030` (the zoom-32 table) UNCONDITIONALLY:
+
+```c
+DAT_00591524 = DAT_00591524 +
+               *(int *)(&DAT_004e4030 + ...);   // z32 table, no zoom check
+DAT_00591528 = DAT_00591528 +
+               *(int *)(&DAT_004e4034 + ...);
+```
+
+The sister leaves `FUN_004be4df` (type-6) and `FUN_004be7be` (type-7)
+both have proper `if (DAT_004e656c == 0x20) {...z32...} else if (...
+== 0x10) {...z16...}` branches.  Only this leaf skips the check.
+
+Likely two-part explanation:
+1. Subtype 0x0e (the only subtype that triggers this leaf) only ever
+   occurs at zoom 32 in the actual game data, so the missing zoom
+   check is never exercised.
+2. The z16 table sits adjacent in memory at `DAT_004e3bf0`, with
+   identical 0x88-byte-per-facing layout — accidentally indexing
+   into z32 from a z16-intended context would corrupt the offset
+   by reading "the wrong facing's z32 entry" rather than
+   segfaulting.
+
+The port preserves the unconditional z32 read verbatim.  Tests
+verify the behavior by running the leaf at zoom 16 and observing
+that z32-table values (not z16) feed the cursor.
+
+> 📍 `src/engine_battlefield_render.c`
+> (`entity_type9_subtype_e_post_call`),
+> `docs/findings/battlefield-render.md` §5a.iv,
+> Ghidra `FUN_004beab9` lines 23-30 (first sprite),
+> lines 57-62 (second sprite).
+
+---
+
+## 94. Battlefield type-9-sub-0xe second sprite anchored at SAVED entry cursor
+
+`FUN_004beab9` draws TWO sprites per call.  Between the two, the leaf
+RESETS the cursor to the saved entry cursor (`iVar2` / `iVar3`
+captured at function entry) rather than continuing from the first
+sprite's post-adjustment cursor:
+
+```c
+// First sprite ends with cursor at (entry_x + anim_x + ..., entry_y + ...)
+// ... blit ...
+
+// Second sprite restarts from SAVED entry cursor:
+DAT_00591524 = iVar2 + *(int *)(&DAT_004e4030 + ...);   // iVar2 = saved entry_x
+DAT_00591528 = iVar3 + *(int *)(&DAT_004e4034 + ...);   // iVar3 = saved entry_y
+```
+
+If retail had continued from the first sprite's adjusted cursor, the
+second sprite would have inherited the first's anim offset twice over,
+plus the first's `(0x10 - half_w)` X bias and `(- half_w - 0x10)` Y
+bias.  By restarting from entry, both sprites share the same
+"anchor + anim_offset + half-cell centering" base, just with
+different Y biases:
+
+- First sprite Y bias:  `- 0x10` (shifts UP 16 pixels)
+- Second sprite Y bias: `+ 0x56` (shifts DOWN 86 pixels)
+
+Total Y separation between the two sprites: 102 pixels.  This matches
+what you'd expect for a two-tier siege-engine-style entity: top piece
+(catapult arm?) above, bottom piece (catapult base?) below the
+anchor.
+
+The port mirrors this by passing the saved `entry_y` (not the post-
+first-sprite cursor) into the second sprite's cursor computation.
+
+> 📍 `src/engine_battlefield_render.c`
+> (`entity_type9_subtype_e_post_call`),
+> `docs/findings/battlefield-render.md` §5a.iv,
+> Ghidra `FUN_004beab9` lines 57-58 (`DAT_00591524 = iVar2 + ...`).
+
+---
+
 <!--
 Template for new entries:
 

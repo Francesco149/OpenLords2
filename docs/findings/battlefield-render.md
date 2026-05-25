@@ -12,14 +12,14 @@ cluster (`FUN_004050f6` + 3 passes, all in `0x405000..0x408000`),
 but lives in a different address band (`0x4bc000..0x4bf300`) and
 uses a different tile format and storage layout.
 
-**Status**: chips 1, 2, 3, 3.5, 4, 5a.i, 5a.ii.a, 5a.ii.b, 5a.iii, 5b, 6
-ported (sprite primitives + frame driver + both zoom-dispatched
-terrain passes + zoom-32 overlay + middle-pass driver shell +
-sorted-entity infrastructure + per-entity draw base path + three
-per-cell draw leaves + coord helpers).  Chip 5a.iv (three type-special
-leaves consumed by per-entity draw) still stubs.  Late + final passes
-still stubs.  Survey landed 2026-05-25, chips 1–4 + 5b + 6 + 5a.i +
-5a.ii.a + 5a.ii.b + 5a.iii landed 2026-05-25.
+**Status**: chips 1, 2, 3, 3.5, 4, 5a.i, 5a.ii.a, 5a.ii.b, 5a.iii,
+5a.iv, 5b, 6 ported (sprite primitives + frame driver + both zoom-
+dispatched terrain passes + zoom-32 overlay + middle-pass driver
+shell + sorted-entity infrastructure + per-entity draw base path +
+three per-cell draw leaves + three type-special leaves + coord
+helpers).  Late + final passes still stubs.  Survey landed
+2026-05-25, chips 1–4 + 5b + 6 + 5a.i + 5a.ii.a + 5a.ii.b + 5a.iii +
+5a.iv landed 2026-05-25.
 
 ## Entry point
 
@@ -292,6 +292,24 @@ The cluster is too large to port in one chip.  Suggested chip plan:
        unit_key Y-axis re-centering uses sprite WIDTH not height),
        #92 (effect-chain dirty-box branch identical in both sides).
        **LANDED** (2026-05-25).
+
+     - **chip 5a.iv** — type-special leaves consumed by per-entity
+       draw.  Real ports of `FUN_004be4df` (type-6 PRE-call, 735 B —
+       shadow/ground effect drawn beneath the main sprite, uses a
+       separate "secondary" blob bound via the new
+       `bind_entity_type6_blob`), `FUN_004be7be` (type-7 POST-call,
+       763 B — facing-selected blob pair via
+       `bind_entity_type7_blobs(low, high)`, switch at facing < 4 /
+       >= 4), `FUN_004beab9` (type-9-subtype-0xe POST-call, 1051 B —
+       draws TWO sprites per call from the entity's primary blob,
+       slots `secondary_frame + 0x16` and `secondary_frame + 0xd`,
+       anchored at the entry cursor with Y biases -16 and +0x56
+       respectively).  All three use a 6×6 tile dirty box (vs the
+       per-entity main draw's 5×5/9×9 by entity type, and the
+       per-cell leaves' 4×4).  Filed quirks #93 (type-9-sub-0xe
+       reads z32 anim table at zoom 16 too), #94 (type-9-sub-0xe
+       second sprite anchored at SAVED entry cursor, not first
+       sprite's adjusted cursor).  **LANDED** (2026-05-25).
 
    All four sub-helpers consumed by the chip-5a draw leaves —
    `FUN_004527a6` (cell-tiled dirty-rect mark), `FUN_004b4537`

@@ -936,6 +936,18 @@ struct test_case {
     X(engine_battlefield_render_per_entity_type10_y_bonus) \
     X(engine_battlefield_render_per_entity_box_5x5_vs_9x9) \
     \
+    X(engine_battlefield_render_type6_null_blob_no_blit) \
+    X(engine_battlefield_render_type6_blits_and_dirty_box) \
+    X(engine_battlefield_render_type6_glyph_offset_gate) \
+    X(engine_battlefield_render_type7_facing_low_blob) \
+    X(engine_battlefield_render_type7_facing_high_blob) \
+    X(engine_battlefield_render_type7_facing_high_null) \
+    X(engine_battlefield_render_type9_sub_two_blits) \
+    X(engine_battlefield_render_type9_sub_first_gate_aborts) \
+    X(engine_battlefield_render_type9_sub_second_gate_skips) \
+    X(engine_battlefield_render_type9_sub_dirty_boxes) \
+    X(engine_battlefield_render_typespecial_reset_clears) \
+    \
     X(engine_battlefield_render_player_marker_null_blob_no_blit) \
     X(engine_battlefield_render_player_marker_slot_default) \
     X(engine_battlefield_render_player_marker_slot_from_table) \

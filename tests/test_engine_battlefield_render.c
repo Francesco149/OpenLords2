@@ -2701,6 +2701,309 @@ int test_engine_battlefield_render_per_entity_reset_clears_new_state(void)
 }
 
 /* ────────────────────────────────────────────────────────────────
+ * Chip 5a.iv — per-entity type-special leaves (type-6 PRE-call,
+ * type-7 POST-call, type-9-subtype-0xe POST-call).
+ *
+ * These three leaves are dispatched from `middle_leaf_draw_entity`
+ * under specific type/subtype gates.  Each test reuses the `perentity`
+ * scaffold from chip 5a.ii.b (entity at (3, 3), cam (2, 2), zoom 16,
+ * 3×3 grid), plus the new chip-5a.iv blob bindings (type-6 shared
+ * blob, type-7 facing-selected pair).
+ *
+ * Entry cursor for the entity at (3, 3) with cam (2, 2) zoom 16:
+ *   px_x = (3-2)*16 + 0 = 16
+ *   px_y = (3-2)*16 + 0 = 16
+ *
+ * Anim offset (facing=0, frame=0) defaults to (0, 0) in unwritten
+ * anim tables.  Sprite w=h=16 (set by perentity_scaffold's
+ * blob_set_header for slot 1).
+ *
+ * Centering at zoom 16 for type-6/type-7:
+ *   x_off = 0 + (8 - 8) = 0
+ *   y_off = 0 + (4 - 8) = -4
+ * → adjusted cursor (16, 12).  6×6 box → (16, 12)..(112, 108).
+ * ──────────────────────────────────────────────────────────────── */
+
+#define TS_BLOB_SIZE 0x600
+static uint8_t g_type6_blob[TS_BLOB_SIZE];
+static uint8_t g_type7_blob_low[TS_BLOB_SIZE];
+static uint8_t g_type7_blob_high[TS_BLOB_SIZE];
+
+/* Scaffold extension: zero all type-special blobs and bind a fresh
+ * dirty-rect state so each test starts clean. */
+static void typespecial_scaffold(int zoom, engine_dirty_rect_state_t *dirty)
+{
+    perentity_scaffold(zoom);
+
+    memset(g_type6_blob,      0, sizeof g_type6_blob);
+    memset(g_type7_blob_low,  0, sizeof g_type7_blob_low);
+    memset(g_type7_blob_high, 0, sizeof g_type7_blob_high);
+
+    engine_battlefield_render_bind_entity_type6_blob(NULL);
+    engine_battlefield_render_bind_entity_type7_blobs(NULL, NULL);
+
+    if (dirty) {
+        dirty_reset(dirty);
+        engine_battlefield_render_set_dirty_state(dirty);
+    }
+}
+
+/* ─── Type-6 PRE-call tests ───────────────────────────────────── */
+
+/* NULL blob: leaf fires (count bumps) but no blit. */
+int test_engine_battlefield_render_type6_null_blob_no_blit(void)
+{
+    typespecial_scaffold(/*zoom=*/0x10, NULL);
+    entity_set_body(1, /*x=*/3, /*y=*/3, 1, /*type=*/6, /*facing=*/0,
+                    /*anim_frame=*/0, 0, g_entity_blob, /*primary_frame=*/1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type6_count(),      1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type6_blit_count(), 0);
+    return 0;
+}
+
+/* Bound blob with valid src_off + slot → 1 blit; 6×6 dirty box at
+ * adjusted cursor. */
+int test_engine_battlefield_render_type6_blits_and_dirty_box(void)
+{
+    engine_dirty_rect_state_t dirty;
+    typespecial_scaffold(/*zoom=*/0x10, &dirty);
+    /* Secondary-frame slot 7 (matches the entity's primary_frame=1
+     * stored at +0x10, but secondary_frame is at +0x11 — we override
+     * it below). */
+    blob_set_header(g_type6_blob, /*slot=*/7, /*w=*/16, /*h=*/16,
+                    /*src_off=*/0x100);
+    engine_battlefield_render_bind_entity_type6_blob(g_type6_blob);
+
+    entity_set_body(1, /*x=*/3, /*y=*/3, 1, /*type=*/6, /*facing=*/0,
+                    /*anim_frame=*/0, 0, g_entity_blob, /*primary_frame=*/1);
+    /* Set secondary frame index to 7 — the slot we staged above. */
+    g_entity_table[1 * ENT_STRIDE
+                   + ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_FRAME] = 7;
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type6_blit_count(), 1);
+    /* Adjusted cursor (16, 12), 6×6 box: (16, 12)..(112, 108).
+     * The MAIN entity draw (type 6 is not gated out of it) also marks
+     * its own 5×5 box at (16, 12) (type < 7 → 5×5).  Both marks expand
+     * the same dirty state — the larger box wins on xmax/ymax. */
+    T_ASSERT_EQ_I(dirty.dirty_mark, 2);
+    T_ASSERT_EQ_I(dirty.dirty_xmin, 16);
+    T_ASSERT_EQ_I(dirty.dirty_ymin, 12);
+    T_ASSERT_EQ_I(dirty.dirty_xmax, 112);  /* 16 + 6*16 — type-6 6×6 wins */
+    T_ASSERT_EQ_I(dirty.dirty_ymax, 108);
+    return 0;
+}
+
+/* Glyph offset gate: src_off out-of-band → no blit. */
+int test_engine_battlefield_render_type6_glyph_offset_gate(void)
+{
+    typespecial_scaffold(/*zoom=*/0x10, NULL);
+    blob_set_header(g_type6_blob, /*slot=*/7, 16, 16, /*src_off=*/0);
+    engine_battlefield_render_bind_entity_type6_blob(g_type6_blob);
+
+    entity_set_body(1, 3, 3, 1, /*type=*/6, 0, 0, 0, g_entity_blob, 1);
+    g_entity_table[1 * ENT_STRIDE
+                   + ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_FRAME] = 7;
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type6_count(),      1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type6_blit_count(), 0);
+    return 0;
+}
+
+/* ─── Type-7 POST-call tests ──────────────────────────────────── */
+
+/* Facing < 4 → low blob.  Both bound; verify low fires, high doesn't. */
+int test_engine_battlefield_render_type7_facing_low_blob(void)
+{
+    typespecial_scaffold(/*zoom=*/0x10, NULL);
+    blob_set_header(g_type7_blob_low,  /*slot=*/5, 16, 16, /*src_off=*/0x100);
+    blob_set_header(g_type7_blob_high, /*slot=*/5, 16, 16, /*src_off=*/0x100);
+    engine_battlefield_render_bind_entity_type7_blobs(g_type7_blob_low,
+                                                      g_type7_blob_high);
+
+    entity_set_body(1, 3, 3, 1, /*type=*/7, /*facing=*/3, /*anim_frame=*/0,
+                    0, g_entity_blob, 1);
+    g_entity_table[1 * ENT_STRIDE
+                   + ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_FRAME] = 5;
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type7_count(),      1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type7_blit_count(), 1);
+    return 0;
+}
+
+/* Facing >= 4 → high blob.  Only high bound; low NULL.  Verify high
+ * fires; the test would also fire if low were used (asserts that the
+ * facing selection picked HIGH at facing=4). */
+int test_engine_battlefield_render_type7_facing_high_blob(void)
+{
+    typespecial_scaffold(/*zoom=*/0x10, NULL);
+    blob_set_header(g_type7_blob_high, /*slot=*/5, 16, 16, /*src_off=*/0x100);
+    engine_battlefield_render_bind_entity_type7_blobs(NULL, g_type7_blob_high);
+
+    entity_set_body(1, 3, 3, 1, /*type=*/7, /*facing=*/4, 0, 0,
+                    g_entity_blob, 1);
+    g_entity_table[1 * ENT_STRIDE
+                   + ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_FRAME] = 5;
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type7_blit_count(), 1);
+    return 0;
+}
+
+/* Facing >= 4 with high NULL → no blit. */
+int test_engine_battlefield_render_type7_facing_high_null(void)
+{
+    typespecial_scaffold(/*zoom=*/0x10, NULL);
+    blob_set_header(g_type7_blob_low, /*slot=*/5, 16, 16, /*src_off=*/0x100);
+    engine_battlefield_render_bind_entity_type7_blobs(g_type7_blob_low, NULL);
+
+    entity_set_body(1, 3, 3, 1, /*type=*/7, /*facing=*/4, 0, 0,
+                    g_entity_blob, 1);
+    g_entity_table[1 * ENT_STRIDE
+                   + ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_FRAME] = 5;
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type7_count(),      1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type7_blit_count(), 0);
+    return 0;
+}
+
+/* ─── Type-9-sub-0xe POST-call tests ──────────────────────────── */
+
+/* Two-sprite draw.  Entity at (3, 5) for room above and below; both
+ * sprite slots staged with valid src_off → 2 blits per call. */
+int test_engine_battlefield_render_type9_sub_two_blits(void)
+{
+    typespecial_scaffold(/*zoom=*/0x10, NULL);
+    /* Entity primary blob: stage slot 1 (main draw) AND slot 1+0x16=0x17
+     * (type-9 first sprite) AND slot 1+0xd=0xe (type-9 second sprite). */
+    blob_set_header(g_entity_blob, /*slot=*/0x17, 16, 16, /*src_off=*/0x100);
+    blob_set_header(g_entity_blob, /*slot=*/0x0e, 16, 16, /*src_off=*/0x100);
+
+    entity_set_body(1, /*x=*/3, /*y=*/5, 1, /*type=*/9, /*facing=*/0,
+                    /*anim_frame=*/0, /*subtype=*/0x0e,
+                    g_entity_blob, /*primary_frame=*/1);
+    /* secondary_frame default 0 from entity_set_body → slot1 = 0+0x16 = 0x16
+     * (NOT 0x17 we staged).  Override to make slot1=0x17. */
+    g_entity_table[1 * ENT_STRIDE
+                   + ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_FRAME] = 1;
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type9_sub_count(),      1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type9_sub_blit_count(), 2);
+    return 0;
+}
+
+/* First sprite's glyph_offset out-of-band → 0 blits, second NEVER tried
+ * (gated by first's pass). */
+int test_engine_battlefield_render_type9_sub_first_gate_aborts(void)
+{
+    typespecial_scaffold(/*zoom=*/0x10, NULL);
+    /* slot 0x17 has out-of-band src_off (0); slot 0xe has valid src_off
+     * — to prove it's not reached. */
+    blob_set_header(g_entity_blob, /*slot=*/0x17, 16, 16, /*src_off=*/0);
+    blob_set_header(g_entity_blob, /*slot=*/0x0e, 16, 16, /*src_off=*/0x100);
+
+    entity_set_body(1, 3, 5, 1, /*type=*/9, 0, 0, 0x0e, g_entity_blob, 1);
+    g_entity_table[1 * ENT_STRIDE
+                   + ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_FRAME] = 1;
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type9_sub_blit_count(), 0);
+    return 0;
+}
+
+/* Second sprite's glyph_offset out-of-band → first fires but second
+ * doesn't.  blit_count = 1. */
+int test_engine_battlefield_render_type9_sub_second_gate_skips(void)
+{
+    typespecial_scaffold(/*zoom=*/0x10, NULL);
+    blob_set_header(g_entity_blob, /*slot=*/0x17, 16, 16, /*src_off=*/0x100);
+    blob_set_header(g_entity_blob, /*slot=*/0x0e, 16, 16, /*src_off=*/0);
+
+    entity_set_body(1, 3, 5, 1, /*type=*/9, 0, 0, 0x0e, g_entity_blob, 1);
+    g_entity_table[1 * ENT_STRIDE
+                   + ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_FRAME] = 1;
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type9_sub_blit_count(), 1);
+    return 0;
+}
+
+/* Type-9-sub-0xe dirty box: entity at (3, 5), zoom 16:
+ *   entry cursor (16, 48)
+ *   First sprite (sw=16, half=8): cursor (16+8, 48-8-16) = (24, 24)
+ *     box 6×6 (96×96) → (24, 24)..(120, 120)
+ *   Second sprite: cursor (16+8, 48-8+0x56) = (24, 126)
+ *     box 6×6 → (24, 126)..(120, 222)
+ *   Expand union: xmin=24, ymin=24, xmax=120, ymax=222.
+ *   Main entity draw (type 9 < 7? no, 9 >= 7 → 9×9 box) adds its
+ *   own mark at (16, 48+12)=(16, 60) [type 9 Y bonus +12 — see chip
+ *   5a.ii.b].  Actually wait — main draw mark uses the FULLY-ADJUSTED
+ *   cursor.  For type=9 zoom 16 with anim 0,0 and primary_frame slot 1
+ *   sprite_w=16: adj_x = 0 + (8 - 8) = 0; adj_y = 0 + (4 - 8) = -4;
+ *   then type 9 Y bonus +12 → (16, 16-4+12) = (16, 24).  9×9 box
+ *   (144×144) → (16, 24)..(160, 168).  This is wider than the type-9
+ *   sub leaves in X but narrower in Y.
+ *   Union: xmin=16, ymin=24, xmax=160, ymax=222. */
+int test_engine_battlefield_render_type9_sub_dirty_boxes(void)
+{
+    engine_dirty_rect_state_t dirty;
+    typespecial_scaffold(/*zoom=*/0x10, &dirty);
+    blob_set_header(g_entity_blob, 0x17, 16, 16, 0x100);
+    blob_set_header(g_entity_blob, 0x0e, 16, 16, 0x100);
+
+    entity_set_body(1, 3, 5, 1, /*type=*/9, 0, 0, 0x0e, g_entity_blob, 1);
+    g_entity_table[1 * ENT_STRIDE
+                   + ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_FRAME] = 1;
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(dirty.dirty_mark, 2);
+    T_ASSERT_EQ_I(dirty.dirty_xmin, 16);
+    T_ASSERT_EQ_I(dirty.dirty_ymin, 24);
+    T_ASSERT_EQ_I(dirty.dirty_xmax, 160);
+    T_ASSERT_EQ_I(dirty.dirty_ymax, 222);
+    return 0;
+}
+
+/* ─── Reset zeros chip 5a.iv counters ─────────────────────────── */
+
+int test_engine_battlefield_render_typespecial_reset_clears(void)
+{
+    typespecial_scaffold(/*zoom=*/0x10, NULL);
+    blob_set_header(g_type6_blob, 7, 16, 16, 0x100);
+    engine_battlefield_render_bind_entity_type6_blob(g_type6_blob);
+
+    entity_set_body(1, 3, 3, 1, /*type=*/6, 0, 0, 0, g_entity_blob, 1);
+    g_entity_table[1 * ENT_STRIDE
+                   + ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_FRAME] = 7;
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT(engine_battlefield_render_middle_entity_type6_blit_count() > 0);
+
+    engine_battlefield_render_reset_counts();
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type6_blit_count(),      0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type7_blit_count(),      0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type9_sub_blit_count(),  0);
+    return 0;
+}
+
+/* ────────────────────────────────────────────────────────────────
  * Chip 5a.iii — per-cell draw leaves (player_marker / unit_key /
  * effect_chain).
  *

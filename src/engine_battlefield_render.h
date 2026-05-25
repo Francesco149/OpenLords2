@@ -487,6 +487,58 @@ void engine_battlefield_render_bind_effect_chain_anim_table(const uint8_t *table
 void engine_battlefield_render_bind_scroll_pad(int pad);
 
 /* ─────────────────────────────────────────────────────────────────
+ * Per-entity type-special leaves (chip 5a.iv)
+ *
+ * These three leaves are dispatched from `middle_leaf_draw_entity`
+ * (chip 5a.ii.b) under specific type/subtype gates:
+ *
+ *   type == 6              → FUN_004be4df (PRE-call, before main draw)
+ *   type == 7              → FUN_004be7be (POST-call, after main draw)
+ *   type == 9 AND
+ *   subtype == 0x0e         → FUN_004beab9 (POST-call, after main draw)
+ *
+ * All three share the same shape: stage sprite descriptor from a
+ * leaf-specific blob/slot pair, gate on the [1, 0x4baf0] glyph_offset
+ * window, apply zoom-conditional anim offset + centering (with leaf-
+ * specific X/Y biases), mark a 6×6 tile dirty box (force_full=2), set
+ * clip + dispatch RLE blit, restore cursor.
+ *
+ * The 9-sub-0xe leaf is unique in that it draws TWO sprites per call
+ * — slot+0x16 first (with cursor_y -= 16), then slot+0xd (with
+ * cursor_y += 0x56), both anchored at the entity's entry cursor.  Both
+ * are independently gated by the glyph_offset window; the second only
+ * fires if the first passed.
+ * ───────────────────────────────────────────────────────────────── */
+
+/* Bind the shared blob for the type-6 PRE-call (FUN_004be4df).  Retail
+ * reads this from the entity record at +0x04 (the secondary blob
+ * pointer DAT_00554484), but on 64-bit hosts the 8-byte pointer would
+ * overlap the primary blob at +0x00 — see the corresponding note in
+ * the chip 5a.iv bindings docs.  All type-6 entities use this single
+ * bound blob; the slot index still comes from the entity record's
+ * +0x11 (secondary frame).  NULL ⇒ leaf is a no-op (counter still
+ * bumps, but no blit). */
+void engine_battlefield_render_bind_entity_type6_blob(const uint8_t *blob);
+
+/* Bind the two facing-selected blobs for the type-7 POST-call
+ * (FUN_004be7be).  Retail picks between two distinct sprite blobs
+ * based on the entity's facing direction:
+ *
+ *   facing < 4   → use `low`  (retail DAT_00553f6c)
+ *   facing >= 4  → use `high` (retail DAT_00522f78)
+ *
+ * Slot index comes from the entity record's +0x11 (secondary frame).
+ * Either NULL ⇒ leaf is a no-op for the corresponding facing band
+ * (counter still bumps). */
+void engine_battlefield_render_bind_entity_type7_blobs(const uint8_t *low,
+                                                       const uint8_t *high);
+
+/* The type-9-sub-0xe POST-call (FUN_004beab9) reads its blob from the
+ * entity record's +0x00 (primary blob).  No new binding required —
+ * reuses the entity table + primary blob already accessible via
+ * `bind_entity_table`. */
+
+/* ─────────────────────────────────────────────────────────────────
  * Frame render
  * ───────────────────────────────────────────────────────────────── */
 
@@ -702,29 +754,44 @@ int engine_battlefield_render_middle_per_entity_last_id(void);
 int engine_battlefield_render_middle_per_entity_last_px_x(void);
 int engine_battlefield_render_middle_per_entity_last_px_y(void);
 
-/* Per-entity TYPE-SPECIAL stubs (chip 5a.ii.b).  The per-entity draw
- * dispatches three type-special leaves at different points in its
- * body:
+/* Per-entity TYPE-SPECIAL counters (chip 5a.ii.b + 5a.iv).  The
+ * per-entity draw dispatches three type-special leaves at different
+ * points in its body:
  *
  *   type6  — FUN_004be4df, PRE-call before the main draw.  Fires
- *            whenever entity[+0x12] == 6.  Likely a shadow/ground
- *            effect that draws beneath the main sprite.
+ *            whenever entity[+0x12] == 6.  Shadow/ground effect drawn
+ *            beneath the main sprite (uses a separate "secondary"
+ *            sprite blob bound via `bind_entity_type6_blob`).
  *   type7  — FUN_004be7be, POST-call after the main draw.  Fires
  *            whenever entity[+0x12] == 7.  Gated by the same glyph-
- *            offset check that gates the main draw body.
+ *            offset check that gates the main draw body.  Uses one of
+ *            two facing-selected blobs (`bind_entity_type7_blobs`).
  *   type9_sub_e — FUN_004beab9, POST-call after the main draw.  Fires
  *                 when entity[+0x12] == 9 AND entity[+0x31] == 0x0e.
- *                 Same glyph-offset gate.
+ *                 Same glyph-offset gate.  Draws TWO sprites per call
+ *                 from the entity's primary blob (different slot
+ *                 offsets + Y biases).
  *
- * Each stub captures a counter + the last entity id passed.  When chip
- * 5a.iv lands the three real ports, the counters stay as cross-check
- * state. */
+ * Per-call counters (count / last_id) bump once per dispatch,
+ * regardless of whether the leaf body actually blits.  Per-blit
+ * counters (chip 5a.iv) bump only when the dispatcher actually
+ * reaches the RLE blit (after blob bind check + glyph_offset gate
+ * + y_clip_mode != 5).  For type-9-sub-0xe, blit_count can be 0,
+ * 1, or 2 per call (each of the two sprites is independently gated). */
 int engine_battlefield_render_middle_entity_type6_count(void);
 int engine_battlefield_render_middle_entity_type6_last_id(void);
 int engine_battlefield_render_middle_entity_type7_count(void);
 int engine_battlefield_render_middle_entity_type7_last_id(void);
 int engine_battlefield_render_middle_entity_type9_sub_count(void);
 int engine_battlefield_render_middle_entity_type9_sub_last_id(void);
+
+/* Per-blit counters for the three type-special leaves (chip 5a.iv).
+ * See the per-call block above for the relationship between count and
+ * blit_count.  Each bumps when its leaf reaches the RLE blit (post
+ * blob bind + glyph_offset gate + y_clip_mode != 5 gate). */
+int engine_battlefield_render_middle_entity_type6_blit_count(void);
+int engine_battlefield_render_middle_entity_type7_blit_count(void);
+int engine_battlefield_render_middle_entity_type9_sub_blit_count(void);
 
 /* No-primary-blob counter (chip 5a.ii.b).  When an entity's primary
  * sprite blob pointer (+0x00) is NULL, retail logs via FUN_004afab9
