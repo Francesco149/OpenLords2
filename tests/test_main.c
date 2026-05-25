@@ -484,6 +484,17 @@ struct test_case {
     X(font_metrics_buffer_width_bounded_stops_at_terminator) \
     X(font_metrics_buffer_width_bounded_missing_glyph_clears_cache) \
     X(font_metrics_buffer_width_bounded_no_pixel_overflow_side_effect) \
+    X(font_metrics_word_width_basic_printables) \
+    X(font_metrics_word_width_terminates_at_nul) \
+    X(font_metrics_word_width_terminates_at_internal_space) \
+    X(font_metrics_word_width_leading_spaces_count_as_four) \
+    X(font_metrics_word_width_terminates_at_internal_dollar) \
+    X(font_metrics_word_width_leading_dollar_is_skipped) \
+    X(font_metrics_word_width_other_control_bytes_consumed_zero_width) \
+    X(font_metrics_word_width_empty_input_returns_zero) \
+    X(font_metrics_word_width_iteration_cap_at_1999) \
+    X(font_metrics_word_width_uses_char_width_cache) \
+    X(font_metrics_word_width_chars_consumed_reset_per_call) \
     \
     X(localization_offset_decodes_24bit_le) \
     X(localization_offset_index_strides_by_four) \

@@ -321,3 +321,162 @@ int test_font_metrics_buffer_width_bounded_no_pixel_overflow_side_effect(void) {
     T_ASSERT_EQ_I(s.pixel_overflow, 1);   /* unchanged */
     return 0;
 }
+
+/* ──────────────────────────────────────────────────────────────────
+ * word_width — next-word measurer (FUN_004036f9)
+ * ────────────────────────────────────────────────────────────────── */
+
+int test_font_metrics_word_width_basic_printables(void) {
+    /* "AB" — sums to char A (7, glyph 0) + char B (11, glyph 1) = 18. */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+    int w = font_metrics_word_width(&s, (const unsigned char *)"AB", font);
+    T_ASSERT_EQ_I(w, 7 + 11);
+    T_ASSERT_EQ_I(s.chars_consumed, 2);
+    return 0;
+}
+
+int test_font_metrics_word_width_terminates_at_nul(void) {
+    /* "A" → reads 'A' (+7), then NUL breaks out without
+     * consuming the NUL. */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+    int w = font_metrics_word_width(&s, (const unsigned char *)"A", font);
+    T_ASSERT_EQ_I(w, 7);
+    T_ASSERT_EQ_I(s.chars_consumed, 1);
+    return 0;
+}
+
+int test_font_metrics_word_width_terminates_at_internal_space(void) {
+    /* "AB CD" — after A, B come internal space → return.
+     * chars_consumed is 2 (A+B were consumed; the terminating
+     * space was NOT). */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+    int w = font_metrics_word_width(&s, (const unsigned char *)"AB CD", font);
+    T_ASSERT_EQ_I(w, 7 + 11);
+    T_ASSERT_EQ_I(s.chars_consumed, 2);
+    return 0;
+}
+
+int test_font_metrics_word_width_leading_spaces_count_as_four(void) {
+    /* "  A" — two leading spaces (+4 each), then A (+7). */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+    int w = font_metrics_word_width(&s, (const unsigned char *)"  A", font);
+    T_ASSERT_EQ_I(w, 4 + 4 + 7);
+    T_ASSERT_EQ_I(s.chars_consumed, 3);
+    return 0;
+}
+
+int test_font_metrics_word_width_terminates_at_internal_dollar(void) {
+    /* Quirk #24: '$' terminates a word after the first printable.
+     * "A$B" — A printable, then $ terminates.  chars_consumed = 1. */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+    int w = font_metrics_word_width(&s, (const unsigned char *)"A$B", font);
+    T_ASSERT_EQ_I(w, 7);
+    T_ASSERT_EQ_I(s.chars_consumed, 1);
+    return 0;
+}
+
+int test_font_metrics_word_width_leading_dollar_is_skipped(void) {
+    /* Quirk #24: leading '$' is silently consumed (no width, no
+     * boundary).  "$$A" — consumes the two leading '$'s and the
+     * 'A'.  Width = 7 (A's width); chars_consumed = 3. */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+    int w = font_metrics_word_width(&s, (const unsigned char *)"$$A", font);
+    T_ASSERT_EQ_I(w, 7);
+    T_ASSERT_EQ_I(s.chars_consumed, 3);
+    return 0;
+}
+
+int test_font_metrics_word_width_other_control_bytes_consumed_zero_width(void) {
+    /* A control byte 0x01..0x1f matches none of the explicit
+     * branches and falls through to chars_consumed++.  No width
+     * contribution, no flag change.  Sequence "\x01\x02A":
+     *   bytes 0x01, 0x02 each consume one but add zero width;
+     *   'A' adds 7.  chars_consumed = 3. */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+    const unsigned char input[] = { 0x01, 0x02, 'A', 0 };
+    int w = font_metrics_word_width(&s, input, font);
+    T_ASSERT_EQ_I(w, 7);
+    T_ASSERT_EQ_I(s.chars_consumed, 3);
+    return 0;
+}
+
+int test_font_metrics_word_width_empty_input_returns_zero(void) {
+    /* Pure NUL — no consumption, zero width. */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+    int w = font_metrics_word_width(&s, (const unsigned char *)"", font);
+    T_ASSERT_EQ_I(w, 0);
+    T_ASSERT_EQ_I(s.chars_consumed, 0);
+    return 0;
+}
+
+int test_font_metrics_word_width_iteration_cap_at_1999(void) {
+    /* Quirk #25: hard cap of 1999 iterations.  Build a 2100-byte
+     * input of all 'A' bytes (no NUL within the cap).  Should
+     * return after consuming exactly 1999 bytes. */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+
+    unsigned char *big = malloc(2100);
+    memset(big, 'A', 2100);
+    int w = font_metrics_word_width(&s, big, font);
+    int consumed = s.chars_consumed;
+    free(big);
+    /* 1999 A's at width 7 = 13993.  Cap returns BEFORE adding the
+     * 2000th char (when iterations=2000, 1999<iterations → return).
+     * So chars_consumed reflects the bumps from iter 1..1999. */
+    T_ASSERT_EQ_I(consumed, 1999);
+    T_ASSERT_EQ_I(w, 1999 * 7);
+    return 0;
+}
+
+int test_font_metrics_word_width_uses_char_width_cache(void) {
+    /* Word measurement uses font_metrics_char_width internally for
+     * printables — so the last_glyph_index cache should reflect the
+     * last printable seen.  "AB" — last is 'B' (glyph 1). */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+    font_metrics_word_width(&s, (const unsigned char *)"AB", font);
+    T_ASSERT_EQ_I(s.last_glyph_index, 1);   /* B is 0-based glyph 1 */
+    return 0;
+}
+
+int test_font_metrics_word_width_chars_consumed_reset_per_call(void) {
+    /* chars_consumed must start at 0 each call — not accumulate
+     * across calls. */
+    font_metrics_state_t s = {0};
+    unsigned char ctbl[256]; make_char_table(ctbl);
+    unsigned char font[64];  make_font_blob(font);
+    s.char_glyph_index = ctbl;
+    s.chars_consumed = 99;   /* pre-poison */
+    font_metrics_word_width(&s, (const unsigned char *)"A", font);
+    T_ASSERT_EQ_I(s.chars_consumed, 1);
+    return 0;
+}

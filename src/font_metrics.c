@@ -53,6 +53,44 @@ int font_metrics_buffer_width(font_metrics_state_t *s,
     return total;
 }
 
+int font_metrics_word_width(font_metrics_state_t *s,
+                            const unsigned char *buf,
+                            const unsigned char *font)
+{
+    s->chars_consumed = 0;
+    int total      = 0;
+    int iterations = 0;
+    int saw_printable = 0;
+    while (1) {
+        iterations++;
+        if (iterations > 1999) {
+            return total;
+        }
+        unsigned char c = *buf;
+        buf++;
+        if (c == 0) {
+            return total;
+        }
+        if (c == 0x20) {
+            if (saw_printable) {
+                return total;
+            }
+            total += 4;
+        } else if (c == 0x24) {
+            if (saw_printable) {
+                return total;
+            }
+            /* Leading '$' — consumed but no width. */
+        } else if (c > 0x1f) {
+            total += font_metrics_char_width(s, c, font);
+            saw_printable = 1;
+        }
+        /* Else: a non-zero control byte < 0x20.  No width, no flag
+         * change — falls through to the chars_consumed bump below. */
+        s->chars_consumed++;
+    }
+}
+
 int font_metrics_buffer_width_bounded(font_metrics_state_t *s,
                                       const unsigned char *buf,
                                       const unsigned char *font)

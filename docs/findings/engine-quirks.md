@@ -930,6 +930,91 @@ size_t comparison instead of pointer arithmetic.
 
 ---
 
+## 23. Word-width measurer treats leading spaces as word-internal
+
+`FUN_004036f9` (the per-word pixel-width measurer used by the
+word-wrap renderer) categorizes characters into "leading" and
+"internal" via a `saw_printable` flag:
+
+```c
+if (c == ' ') {
+  if (saw_printable) return total;     /* internal space ends word */
+  total += 4;                          /* leading space contributes */
+}
+```
+
+Leading spaces are MEASURED INTO the word's width (each contributes
++4 pixels), but the FIRST internal space terminates the word.  This
+implements the conventional word-wrap rule that whitespace "belongs
+to" the preceding word for line-break purposes — the caller copies
+out `chars_consumed` bytes after the measurement, picking up the
+exact bytes that fit on the current line.
+
+> 📍 `src/font_metrics.c`'s `font_metrics_word_width`,
+> `tests/test_font_metrics.c`'s
+> `font_metrics_word_width_leading_spaces_count_as_four` and
+> `font_metrics_word_width_terminates_at_internal_space`,
+> Ghidra `FUN_004036f9 @ 0x4036f9`.
+
+---
+
+## 24. `$` is a soft word boundary in the word-wrap stream
+
+Same function, parallel branch:
+
+```c
+if (c == '$') {
+  if (saw_printable) return total;     /* internal '$' ends word */
+  /* leading '$' falls through — no width, but counted in
+   * chars_consumed by the unconditional bump at loop end */
+}
+```
+
+A '$' after the first printable character terminates the word with
+no contribution.  But a '$' that appears BEFORE the first printable
+is silently consumed — no width, no boundary, still counted in
+`chars_consumed`.
+
+The engine uses '$' as a sigil for runtime macro expansion ("$P"
+for player name, "$1" for the first arg, etc. — visible in the
+l2_eng.dat strings).  Treating it as a soft word boundary lets the
+word-wrap layer break between fixed text and a macro that will be
+substituted later.  The leading-skip behavior accommodates strings
+that start with a macro: the wrap state machine consumes the sigil
+prefix and continues into the macro body to determine wrap width.
+
+> 📍 `src/font_metrics.c`'s `font_metrics_word_width`,
+> `tests/test_font_metrics.c`'s
+> `font_metrics_word_width_terminates_at_internal_dollar` and
+> `font_metrics_word_width_leading_dollar_is_skipped`,
+> Ghidra `FUN_004036f9 @ 0x4036f9`.
+
+---
+
+## 25. Word-wrap iteration cap is 1999 (not 2000)
+
+The word-width measurer caps its loop at 1999 iterations:
+
+```c
+local_14 = local_14 + 1;
+if (1999 < local_14) return local_10;     /* exits at local_14 == 2000 */
+```
+
+The text-input editor buffer is exactly 2000 bytes (see
+`text_input_state_t.buf`).  The 1999-cap leaves one byte of head-
+room — almost certainly the NUL terminator at `buf[length]`.  In
+practice the measurer would hit the NUL break first for any real
+buffer; the cap exists to catch a buffer that lost its NUL (e.g.
+via the overwrite-mode quirk #18) and avoids an unbounded read
+into adjacent memory.
+
+> 📍 `src/font_metrics.c`'s `font_metrics_word_width`,
+> `tests/test_font_metrics.c`'s
+> `font_metrics_word_width_iteration_cap_at_1999`,
+> Ghidra `FUN_004036f9 @ 0x4036f9`.
+
+---
+
 <!--
 Template for new entries:
 

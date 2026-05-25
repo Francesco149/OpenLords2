@@ -11,6 +11,7 @@
  *   FUN_004015b9 @ 0x4015b9 (173 B) → font_metrics_char_width
  *   FUN_00401f8f @ 0x401f8f (122 B) → font_metrics_buffer_width
  *   FUN_004014f0 @ 0x4014f0 (201 B) → font_metrics_buffer_width_bounded
+ *   FUN_004036f9 @ 0x4036f9 (235 B) → font_metrics_word_width
  *
  * Data model:
  *
@@ -83,6 +84,15 @@ typedef struct {
      * text-input editor's `pixel_overflow` field by callers.  Set
      * to 1 iff total width >= max_pixel_width passed to that call. */
     int pixel_overflow;
+
+    /* Mirror of retail's DAT_005c9a7c.  Set by `word_width` to the
+     * number of source bytes consumed during the most recent word
+     * measurement (leading spaces, leading '$', printables, and
+     * other control bytes all count; the terminating space, '$',
+     * or NUL does NOT count).  Read by the word-wrap renderers
+     * (e.g. FUN_0040328e, FUN_0040352f) to copy those exact bytes
+     * out of the source. */
+    int chars_consumed;
 } font_metrics_state_t;
 
 /* Port of FUN_004015b9.  Width of a single character `c` against
@@ -126,5 +136,36 @@ int font_metrics_buffer_width(font_metrics_state_t *s,
 int font_metrics_buffer_width_bounded(font_metrics_state_t *s,
                                       const unsigned char *buf,
                                       const unsigned char *font);
+
+/* Port of FUN_004036f9.  Measure the pixel width of the next "word"
+ * starting at `buf`, where a word is the run of characters up to but
+ * not including the first internal word boundary.  Returns the
+ * accumulated width.  Side effect: `s->chars_consumed` is set to the
+ * number of source bytes consumed during the walk — callers use this
+ * to extract the same byte range from `buf`.
+ *
+ * Word-boundary semantics:
+ *   - NUL (0x00)     — terminates word, byte NOT consumed.
+ *   - Space (0x20)   — counts as +4 width while in the leading run;
+ *                      after the first printable char is seen, the
+ *                      next space terminates the word (byte NOT
+ *                      consumed).
+ *   - Dollar (0x24)  — silently skipped while leading; after the
+ *                      first printable char, the next '$' terminates
+ *                      the word (byte NOT consumed).  Engine uses '$'
+ *                      as a text-macro sigil — see quirk #24.
+ *   - Printable (>= 0x20, not space/dollar) — adds the char's width
+ *                      from `font_metrics_char_width`, sets the
+ *                      "have-printable" flag.
+ *   - Other control (< 0x20, > 0) — consumed silently (counts toward
+ *                      chars_consumed but adds zero width).  This is
+ *                      where formatting control bytes go in the
+ *                      word-wrap stream.
+ *
+ * Hard iteration cap: 1999.  See quirk #25 — one less than the
+ * 2000-byte editor buffer size; almost certainly a safety margin. */
+int font_metrics_word_width(font_metrics_state_t *s,
+                            const unsigned char *buf,
+                            const unsigned char *font);
 
 #endif /* OPENLORDS2_FONT_METRICS_H */
