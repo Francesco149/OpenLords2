@@ -1965,6 +1965,126 @@ same staging state and the same dispatcher shape.
 
 ---
 
+## 52. Sprite-render wrappers pre-write dst_stride_pad — dead code
+
+All five sibling-of-dispatcher sprite-render wrappers (`FUN_0040a01d`,
+`FUN_0040a21a`, `FUN_0040a682`, `FUN_0040a80e`, `FUN_0040a9b0`)
+pre-write the dst_stride_pad global immediately before invoking the
+horizontal-clip setter:
+
+    _DAT_005cd400 = 0x280 - DAT_005c9258;   /* 640 - sprite_w */
+    FUN_0040464c(0, DAT_004eb274);           /* clip_x — overwrites */
+
+`FUN_0040464c` (the clip_x setter) unconditionally writes
+`_DAT_005cd400 = DAT_004eb274 - DAT_00591514` at the bottom of its
+body — so the pre-write is dead.  If the canvas-width global
+`DAT_004eb274` happens to be 0x280 (the literal in the wrappers) AND
+the sprite is unclipped (so clipped_w == sprite_w), the two values
+agree by coincidence — but the wrapper's pre-write is not load-bearing
+under any branch.
+
+Almost certainly an MSVC inlining artifact from an earlier factoring
+where the dst_pad was computed at the wrapper level before the clip
+helper became reusable.  The 0x280 literal — distinct from the
+`DAT_004eb274` global the clip setter reads — is the tell.
+
+Skipped in our port; both source-level branches (port + retail) end
+up with the same value in `g_dst_stride_pad` after clip_x runs.  Same
+flavor as the label-render `prefix == 0` dead-write quirk: a
+pre-store that the next call overwrites unconditionally.
+
+> 📍 `src/gfx_sprite_render.c`,
+> Ghidra `FUN_0040a01d` / `FUN_0040a21a` / `FUN_0040a682` /
+> `FUN_0040a80e` / `FUN_0040a9b0` vs. `FUN_0040464c`.
+
+---
+
+## 53. Sprite-render descriptor validity gate rejects offset 0
+
+Four of the five sprite-render wrappers gate the staged descriptor's
+`src_offset` against the half-open range `[1, 0x4baf1)` (= [1, 310001)).
+A descriptor with `src_offset == 0` is rejected as "too low":
+
+    if (DAT_0058fe04 < 0x4baf1) {
+      if (DAT_0058fe04 < 1) { /* error */ }
+      else { /* dispatch */ }
+    } else { /* error */ }
+
+The "too high" sentinel of 310000 is plausible — the largest possible
+sprite-blob size the engine allocates (compare to `FUN_004b25b0`).
+But the "too low" floor of 1 is curious: zero is otherwise a valid
+relative offset inside a blob (the dispatcher itself, `FUN_00404442`,
+accepts it).  This wrapper layer specifically rejects it.
+
+Effect: descriptors whose `src_offset` field happens to be zero are
+treated as invalid even when the surrounding blob is well-formed.
+Almost certainly a "no real sprite starts at offset 0" 1996 assumption
+— in a well-formed PL8 file the 8-byte header pushes the first
+descriptor's src_offset to at least 8.  Latent footgun: a stripped
+or malformed sprite blob with zero offsets surfaces here as a flood
+of error-code-4 latches, not silent zero-render.
+
+Preserved verbatim in the port; tests cover both rejection paths.
+
+> 📍 `src/gfx_sprite_render.c`,
+> Ghidra `FUN_0040a21a` / `FUN_0040a682` / `FUN_0040a80e` /
+> `FUN_0040a9b0`.
+
+---
+
+## 54. Raw-buffer sprite render leaks descriptor flags from prior call
+
+`FUN_0040a01d` (the "render a raw caller-supplied buffer" wrapper)
+stages width / height / src_offset / dst_x / dst_y from its own
+parameters — but does NOT touch the descriptor-flag globals
+(`DAT_00591568`, `DAT_0057d3c0`) or the per-glyph advance byte
+(`DAT_005bb478`).  Whatever the previous descriptor-based render
+left in those slots carries over into the next blit.
+
+`DAT_005bb478` is harmless — `FUN_0040477b` (clip_y) overwrites it
+with the post-clip visible row count before the blitter reads it.
+The two flag bytes (`DAT_00591568` / `DAT_0057d3c0`, retail offsets
++0xc and +0xe in a descriptor) have NO current consumer in the
+ported code, so the leak is invisible today.
+
+Latent but worth a witness — once the flag readers land (whatever
+they are), a `FUN_0040a01d` call interleaved between a sprite render
+and a flag-reading caller will surface the wrong flag values.
+
+> 📍 `src/gfx_sprite_render.c`,
+> Ghidra `FUN_0040a01d`.
+
+---
+
+## 55. truncate_bottom subtraction is unconditional
+
+`FUN_0040a80e` (sprite render with bottom-row trim) subtracts the
+caller's `trim_rows` parameter from the staged `height_short`
+unconditionally:
+
+    DAT_005aeb70 = DAT_005aeb70 - param_4;
+
+No clamp against zero, no clamp against the descriptor's natural
+height.  A negative `trim_rows` makes the visible height GROW past
+the descriptor's natural extent — the blitter would then read past
+the end of the source pixel data into whatever follows it in the
+blob.  A `trim_rows` larger than the natural height makes
+`height_short` go negative, which clip_y treats as "off-canvas"
+(skip mode) — silent no-render.
+
+No captured callsite passes a negative or oversized value, and the
+visible-height GROW path is gated downstream by clip_y's bounds
+intersection anyway (a height past canvas_h gets clipped).  But the
+unconditional subtract is the kind of "trust the caller" assumption
+the 1996 codebase scatters everywhere.
+
+Preserved verbatim; documented here so it shows up in audits.
+
+> 📍 `src/gfx_sprite_render.c`,
+> Ghidra `FUN_0040a80e`.
+
+---
+
 <!--
 Template for new entries:
 

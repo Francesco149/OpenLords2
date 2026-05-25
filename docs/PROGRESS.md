@@ -7,6 +7,234 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Sprite-render sibling-of-dispatcher wrappers (1 chip, 5 fns)
+
+Continuation of the same unattended session.  The previous dispatch
+closed out the sprite blit kernels + canvas/rect dispatchers and
+listed three follow-ups, with **higher-level sprite renderers** as
+the first.  Surveying the dispatcher-blitter call topology surfaced
+not "callers of the dispatcher" (as the prior dispatch hypothesized)
+but rather **siblings of the dispatcher** — five small leaf
+wrappers that INLINE the staging + clip + dispatch pipeline rather
+than calling the already-ported `gfx_dispatch_sprite`.  This dispatch
+ports all five.
+
+Discovery: the wrappers and the dispatcher share their entire
+post-staging pipeline.  Five small functions, all ~260–440 B, all at
+0x40a0xx–0x40a9xx, all invoking the same `clip_x`/`clip_y` setters,
+the same `top_skip`+`left_skip` source-offset adjustments, and the
+same three-way `x_clip_mode`-indexed blitter dispatch — just with
+extra bookkeeping that the dispatcher itself omits:
+
+  - Each writes the "current sprite index" global `DAT_005c9288`
+    BEFORE staging the descriptor (the dispatcher leaves this alone).
+  - Four of five gate the descriptor's `src_offset` against
+    `[1, 0x4baf1)` and latch error code 4 + fire a log call on a
+    miss (the dispatcher does no validity check).
+  - Two variants tweak the staged state in between descriptor-stage
+    and clip-setter calls (truncate_bottom / truncate_top — see
+    below).
+
+### Chip landed
+
+**`src/gfx_sprite_render` (NEW, ~165 LOC + 20 tests)** — 5 retail
+leaves, all reusing the dispatcher's now-public `stage_sprite_descriptor`
+and `apply_skip_and_dispatch` helpers:
+
+  - `FUN_0040a01d` → `gfx_sprite_render_raw`                (261 B)
+    Render a raw caller-supplied buffer at (x, y) with explicit
+    width / height.  No descriptor read; source pixels are densely
+    packed at `w` bytes per row.  Early-return on NULL buffer.  No
+    bounds check, no error log.
+  - `FUN_0040a21a` → `gfx_sprite_render_from_blob`          (433 B)
+    Render sprite[index] from a caller-supplied blob.  Three error
+    gates: NULL blob, src_offset < 1, src_offset > 0x4baf0.
+  - `FUN_0040a682` → `gfx_sprite_render`                    (391 B)
+    Same shape but reads the blob from a module-private "current
+    blob" pointer (mirrors retail `DAT_004eabec`, allocated by
+    `FUN_004b25b0` and freed by `FUN_004b25fc`).  Two error gates
+    (no NULL check — caller is responsible for binding).
+  - `FUN_0040a80e` → `gfx_sprite_render_truncate_bottom`    (413 B)
+    Same as `gfx_sprite_render` but subtracts `trim_rows` from the
+    staged `height_short` before clip_y — net effect: skip the
+    bottom N source rows.  Same error gates.
+  - `FUN_0040a9b0` → `gfx_sprite_render_truncate_top`       (439 B)
+    Same as `gfx_sprite_render` but:
+      - shrinks `height_short` by `skip_rows`
+      - advances source offset by `sprite_w * skip_rows`
+      - shifts dst_y down by `skip_rows`
+    Net effect: skip the top N source rows; visible pixels land at
+    the same absolute (x, y + skip_rows) as gfx_sprite_render would
+    have anchored them.  Same error gates.
+
+**`src/gfx_dispatch` (extended, +5 LOC)** — exposed two helpers
+previously kept `static`:
+
+  - `gfx_dispatch_stage_sprite_descriptor(blob, idx)` — extracted
+    from the dispatcher; reads the 16-byte descriptor and stages
+    width / height_short / src_offset / flag_a / flag_b /
+    row_count placeholder into the shared glyph state.
+  - `gfx_dispatch_apply_skip_and_dispatch_sprite(blob)` — extracted
+    apply-top/left-skip + 3-way blitter dispatch.  Gated on
+    `y_clip_mode != 5`.
+
+Also added `gfx_dispatch_set_last_glyph_index(int)` — the
+"current 16-byte-descriptor index" global (`DAT_005c9288`) is shared
+between the glyph dispatcher and the sprite-render wrappers.
+Retail uses one global with several writers; our port now preserves
+that topology by exposing the setter (previously only the glyph
+dispatcher wrote it).
+
+Module state in `gfx_sprite_render.c`:
+  - `g_current_blob` — pointer to the bound "current sprite blob"
+    (mirrors `DAT_004eabec`).  Settable via the public bind API.
+  - `g_last_error` — sticky error-code byte latch (mirrors
+    `DAT_005aeb68` written by `FUN_00408fb0`, a 27-B retail leaf
+    that's effectively just `latch = code`).
+  - `g_log_fn` — NULL-default callback hook for the log call.
+    Tests install one that records (fmt_addr, sprite_index + 1)
+    tuples.  The real retail formatter (`FUN_004afab9`, 897 B) is
+    not yet ported; this hook design lets us validate the error
+    paths without porting it.
+
+The `_DAT_005cd400 = 0x280 - sprite_w` pre-write that every retail
+wrapper performs before `clip_x` is omitted from the port — it's
+dead code (see quirk #52).
+
+### Filed quirks (#52, #53, #54, #55)
+
+Four new entries in `docs/findings/engine-quirks.md`:
+
+  - **#52** — All five wrappers pre-write `dst_stride_pad` to a
+    hard-coded `0x280 - sprite_w` BEFORE invoking `clip_x`, which
+    unconditionally overwrites the same global at the end of its
+    body.  The pre-write is dead.  Almost certainly an MSVC inlining
+    artifact — the `0x280` literal (vs. the runtime canvas-width
+    global `DAT_004eb274` that clip_x reads) is the tell.
+  - **#53** — The descriptor-validity gate rejects
+    `src_offset == 0` as "too low".  Zero is otherwise a valid
+    relative offset inside a blob (the dispatcher itself accepts
+    it).  Almost certainly a "no real sprite starts at offset 0"
+    1996 assumption — well-formed PL8 files push the first
+    descriptor's offset to at least 8 via the file's 8-byte header.
+  - **#54** — `gfx_sprite_render_raw` (`FUN_0040a01d`) doesn't
+    reset the descriptor-flag globals (`DAT_00591568` /
+    `DAT_0057d3c0`).  Whatever the previous descriptor-based
+    render left there carries into the next blit.  Invisible today
+    (no consumer of those flags is ported) but a latent footgun.
+  - **#55** — `gfx_sprite_render_truncate_bottom`'s
+    `trim_rows` subtraction is unconditional.  Negative
+    `trim_rows` makes the visible height GROW past the descriptor's
+    natural extent — the blitter reads past the end of source.
+    No clamp; preserved verbatim.
+
+### Headline numbers
+
+- **631 → 651 host tests** (+20), all green under ASan/UBSan.
+- **5 retail functions ported** (~1.94 KB decompilation —
+  261 + 433 + 391 + 413 + 439).
+- **1 new module** (`src/gfx_sprite_render`) + **1 module
+  extended** (`src/gfx_dispatch`, +1 setter + 2 helpers de-static-d).
+- **4 new engine quirks filed** (#52, #53, #54, #55).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Renderer pipeline state
+
+| layer                                | status     |
+| ------------------------------------ | ---------- |
+| char width                           | ported     |
+| buffer width                         | ported     |
+| bounded buffer width                 | ported     |
+| word width + chars                   | ported     |
+| editor (text_input)                  | ported     |
+| localization blob access             | ported     |
+| dirty-rect tracking                  | ported     |
+| 1-pixel / 2x1 painters               | ported     |
+| clipped pixel / 2x1                  | ported     |
+| glyph blitter (unclipped)            | ported     |
+| glyph blitter (clipped × 2)          | ported     |
+| glyph dispatcher (per-char)          | ported     |
+| clip setters (X + Y)                 | ported     |
+| text renderer (per-line)             | ported     |
+| centered-text wrapper                | ported     |
+| substitution stream                  | ported     |
+| word-wrap renderer (buffer)          | ported     |
+| word-wrap renderer (localized)       | ported     |
+| localization line render             | ported     |
+| localization line centered           | ported     |
+| solid Bresenham line                 | ported     |
+| dotted axis-aligned line             | ported     |
+| solid rect outline                   | ported     |
+| 3D bevel rect (3 palettes)           | ported     |
+| int formatter (dec + hex)            | ported     |
+| label render (dec + hex + centered)  | ported     |
+| label render (signed-color)          | ported     |
+| compound "label + signed value"      | ported     |
+| sprite blit (unclipped)              | ported     |
+| sprite blit (clipped × 2)            | ported     |
+| sprite dispatcher (canvas + rect)    | ported     |
+| **sprite render — raw buffer**       | **ported (this chip)** |
+| **sprite render — from blob**        | **ported (this chip)** |
+| **sprite render — global blob**      | **ported (this chip)** |
+| **sprite render — truncate bottom**  | **ported (this chip)** |
+| **sprite render — truncate top**     | **ported (this chip)** |
+| second sprite-blitter family (0x4b4537/14/8b8) | unanalyzed |
+| sprite descriptor reader (PL8 header)| unanalyzed |
+| map-tile / battlefield iterators (0x408438+) | unanalyzed |
+| error log formatter (`FUN_004afab9`) | unanalyzed |
+
+The sprite-render entry-point family is now end-to-end in `src/`.
+The dispatcher + the 5 wrappers cover every retail callsite that
+uses the first sprite-blitter family (`FUN_004b43b1` /
+`FUN_004b446d` / `FUN_004b44d2`) at the entry-point level.  Engine
+code can now render a sprite from a heap blob, a caller blob, or a
+raw buffer; with bottom-row trim, top-row skip, or no trim; via
+either pure C tests or the cross-compiled binary.
+
+### What's next
+
+The survey turned up several un-ported leaf families that are now
+the obvious frontiers:
+
+1. **Second sprite-blitter family** — `FUN_004b4537` /
+   `FUN_004b4814` / `FUN_004b48b8` is a second 3-blitter set
+   referenced by `FUN_00408438` and `FUN_0040a3d0`.  Same shape as
+   the first family but probably differs on the write mode (the
+   `FUN_00408438` callsite reads from a different descriptor slot
+   layout).  Most likely candidate: a "sprite WITH source stride
+   padding" variant for non-tightly-packed source data.  Small
+   chip (~3 functions × 100-200 B each).
+2. **Sprite-render wrapper for the second family** —
+   `FUN_0040a3d0` (402 B) — the sibling of `gfx_sprite_render_from_blob`
+   that targets the second blitter family.  Companion to #1.
+3. **Map-tile / battlefield iterators** — `FUN_00408438`
+   (2072 B), `FUN_00405487` (379 B), `FUN_00405862` (333 B),
+   `FUN_004059af` (314 B) — a 2D-tile iterator cluster that
+   inlines the sprite blit dispatch (calls the first blitter
+   family directly, not via the dispatcher).  Substantial scope;
+   probably unblocks the map-view rendering.
+4. **PL8 header parser** — small chip: read the 8-byte header
+   to learn descriptor count + decode the descriptor array.
+   Enables tests against real `vendor/original/*.pl8` data.
+5. **Wire gfx.c runtime to the renderer + sprites** — extend the
+   DDraw probe to bind a real canvas, then render a real glyph +
+   sprite during boot.  Visible-pixels milestone earned.  Gated on
+   user-observed Windows-host validation.
+
+Picking #1 keeps autonomous progress moving and unblocks #2 (the
+second-family render wrapper) by exposing the analogous blitter
+trio.  #3 is the largest scope and feeds directly into the
+visible-game-state renderer.  #5 unlocks visual validation but
+requires human verification.
+
+This is a natural `/clear` point — the sprite-render entry-point
+family is closed out and the remaining frontiers (second blitter
+family, map-tile iterators, PL8 parser, runtime wiring) are fresh
+scope worth a fresh conversation.
+
+---
+
 ## 2026-05-25 — Sprite blit kernels + dispatchers (1 chip, 5 fns)
 
 Continuation of the same unattended session.  The previous dispatch
