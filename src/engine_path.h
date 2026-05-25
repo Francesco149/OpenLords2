@@ -142,6 +142,15 @@ typedef struct {
 int engine_path_chebyshev_distance(engine_path_state_t *state,
                                    int x1, int y1, int x2, int y2);
 
+/* Port of FUN_00404ead.  Returns |dx| + |dy| — Manhattan (L1)
+ * distance.  Shares the SAME dx/dy side effect as
+ * chebyshev_distance — both functions write to the same
+ * DAT_00591560 / DAT_0058fea0 retail globals (mirrored on
+ * state->last_dx / last_dy here).  That's why this lives in
+ * engine_path next to its sibling, not in engine_math. */
+int engine_path_manhattan_distance(engine_path_state_t *state,
+                                   int x1, int y1, int x2, int y2);
+
 /* Port of FUN_0046f434.  Returns the 8-way direction code (see
  * header docstring for the encoding) pointing FROM (from_x, from_y)
  * TOWARD (to_x, to_y).  Returns 8 if the two points are equal.

@@ -92,6 +92,37 @@ int test_engine_path_chebyshev_side_effect_preserved(void) {
     return 0;
 }
 
+int test_engine_path_manhattan_basic(void) {
+    /* |dx| + |dy| */
+    engine_path_state_t s; state_zero(&s);
+    int r = engine_path_manhattan_distance(&s, 0, 0, 7, 3);
+    T_ASSERT_EQ_I(r, 10);
+    T_ASSERT_EQ_I(s.last_dx, 7);
+    T_ASSERT_EQ_I(s.last_dy, 3);
+    return 0;
+}
+
+int test_engine_path_manhattan_shares_side_effect_with_chebyshev(void) {
+    /* Both distance helpers write the SAME last_dx/last_dy globals.
+     * A chebyshev call followed by a manhattan call should overwrite. */
+    engine_path_state_t s; state_zero(&s);
+    engine_path_chebyshev_distance(&s, 0, 0, 4, 2);
+    T_ASSERT_EQ_I(s.last_dx, 4);
+    engine_path_manhattan_distance(&s, 0, 0, 1, 1);
+    T_ASSERT_EQ_I(s.last_dx, 1);
+    T_ASSERT_EQ_I(s.last_dy, 1);
+    return 0;
+}
+
+int test_engine_path_manhattan_zero_distance(void) {
+    engine_path_state_t s; state_zero(&s);
+    int r = engine_path_manhattan_distance(&s, 5, 5, 5, 5);
+    T_ASSERT_EQ_I(r, 0);
+    T_ASSERT_EQ_I(s.last_dx, 0);
+    T_ASSERT_EQ_I(s.last_dy, 0);
+    return 0;
+}
+
 /* ──────────────────────────────────────────────────────────────────
  * 8-way direction helper
  * ────────────────────────────────────────────────────────────────── */

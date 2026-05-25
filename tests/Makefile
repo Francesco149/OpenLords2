@@ -35,6 +35,7 @@ SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c \
                    ../src/engine_category_buckets.c \
                    ../src/engine_event_queue.c \
                    ../src/engine_handlers_da.c \
+                   ../src/engine_math.c \
                    ../src/engine_path.c \
                    ../src/save.c
 
@@ -51,6 +52,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_category_buckets.c \
                    test_engine_event_queue.c \
                    test_engine_handlers_da.c \
+                   test_engine_math.c \
                    test_engine_path.c \
                    test_save.c
 

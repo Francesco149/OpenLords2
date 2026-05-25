@@ -26,13 +26,13 @@ static const int k_dir_offset[8] = {
  * Helpers
  * ────────────────────────────────────────────────────────────────── */
 
-int engine_path_chebyshev_distance(engine_path_state_t *s,
-                                   int x1, int y1, int x2, int y2)
+/* Shared dx/dy side-effect computation — both Chebyshev and Manhattan
+ * distance helpers write the same DAT_00591560 / DAT_0058fea0 retail
+ * globals.  Factored out here so the two functions can mirror retail
+ * byte-exactly without duplicating the three-way compare per axis. */
+static void store_unsigned_deltas(engine_path_state_t *s,
+                                  int x1, int y1, int x2, int y2)
 {
-    /* Per-axis unsigned delta, written verbatim to retail globals
-     * DAT_00591560 / DAT_0058fea0 (mapped here to state->last_dx /
-     * last_dy).  Retail uses three branches per axis (a<b, a==b,
-     * b<a) instead of abs(); preserved literally for byte parity. */
     if (x2 < x1)       s->last_dx = x1 - x2;
     else if (x1 < x2)  s->last_dx = x2 - x1;
     else               s->last_dx = 0;
@@ -40,11 +40,24 @@ int engine_path_chebyshev_distance(engine_path_state_t *s,
     if (y2 < y1)       s->last_dy = y1 - y2;
     else if (y1 < y2)  s->last_dy = y2 - y1;
     else               s->last_dy = 0;
+}
+
+int engine_path_chebyshev_distance(engine_path_state_t *s,
+                                   int x1, int y1, int x2, int y2)
+{
+    store_unsigned_deltas(s, x1, y1, x2, y2);
 
     /* Chebyshev = max(|dx|, |dy|). */
     int r = s->last_dx;
     if (s->last_dx < s->last_dy) r = s->last_dy;
     return r;
+}
+
+int engine_path_manhattan_distance(engine_path_state_t *s,
+                                   int x1, int y1, int x2, int y2)
+{
+    store_unsigned_deltas(s, x1, y1, x2, y2);
+    return s->last_dx + s->last_dy;
 }
 
 int engine_path_direction_8way(int from_x, int from_y,

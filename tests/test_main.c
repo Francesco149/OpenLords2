@@ -329,6 +329,9 @@ struct test_case {
     X(engine_path_chebyshev_y_dominant) \
     X(engine_path_chebyshev_negative_args_use_signed_subtraction) \
     X(engine_path_chebyshev_side_effect_preserved) \
+    X(engine_path_manhattan_basic) \
+    X(engine_path_manhattan_shares_side_effect_with_chebyshev) \
+    X(engine_path_manhattan_zero_distance) \
     X(engine_path_direction_equal_is_8) \
     X(engine_path_direction_cardinals) \
     X(engine_path_direction_intercardinals) \
@@ -376,6 +379,20 @@ struct test_case {
     X(engine_category_buckets_refresh_skips_duplicate_initial) \
     X(engine_category_buckets_refresh_probe_caps_at_6) \
     X(engine_category_buckets_refresh_zero_value_flips_to_odd_parity) \
+    \
+    X(engine_math_percent_of_basic) \
+    X(engine_math_percent_of_truncates) \
+    X(engine_math_bp_of_basic) \
+    X(engine_math_percent_div_basic) \
+    X(engine_math_percent_div_divide_by_zero_returns_zero) \
+    X(engine_math_div_ceil_exact) \
+    X(engine_math_div_ceil_remainder) \
+    X(engine_math_div_ceil_divide_by_zero) \
+    X(engine_math_lookup_threshold_first_pair_matches) \
+    X(engine_math_lookup_threshold_walks_to_second_pair) \
+    X(engine_math_lookup_threshold_no_match_returns_fallback) \
+    X(engine_math_lookup_threshold_query_at_exact_key_walks_past) \
+    X(engine_math_lookup_threshold_empty_table_returns_fallback) \
     /* end */
 
 /* Emit extern decls. */
