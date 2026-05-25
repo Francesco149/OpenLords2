@@ -2605,16 +2605,38 @@ flag is zero, none of them advance.  The "distance" computation
 exists only to BIN armies into rate tiers; the actual time-base is
 shared.
 
-This is why fast-moving armies (small cur-prev gap) get the tier-0
-flag (most aggressive), while idle armies (large gap from prior
-frame) end up in tier 3 (slowest).  The driver of the tier flags
-themselves lives elsewhere — probably a frame-rate-throttled
-toggle in the main loop.
+The four tiers map to the 640/320/160/80-ms phase ticks (in that
+order) — small distance gets the slow 640 ms cadence, large
+distance gets the fast 80 ms cadence:
+
+  distance <  10   → tier 0 → `DAT_0058fd08` (640 ms — slowest)
+  distance < 0x19  → tier 1 → `DAT_0057d3c8` (320 ms)
+  distance < 0x32  → tier 2 → `DAT_0057d3ac` (160 ms)
+  distance ≥ 0x32  → tier 3 → `DAT_00591510` ( 80 ms — fastest)
+
+So slow-moving armies (small cur-prev gap) cycle their sprite
+sequence more slowly than fast-moving ones — visually correct
+gait: a marching column at walking pace flickers its frames less
+often than a unit at full speed.
+
+The four "tier" globals are produced by `FUN_004bbc80` (the
+9-flag animation-phase tick generator, ported as
+`engine_compute_phase_ticks` in `src/engine_phase.c`).  The
+Win32-coupled wrapper `engine_tick_phase_step` writes the four
+outputs straight through to
+`engine_overlay_render_set_animation_rate_flags` each main-loop
+iteration — so once the wider main loop runs the army drawer in
+production, no extra wiring is needed.  (Originally filed as
+"the driver lives elsewhere" before we realized the phase-tick
+ports were the same generator.)
 
 > 📍 `src/engine_overlay_render.c`
 > (`engine_overlay_render_set_animation_rate_flags`,
 > `pick_rate_tier`), Ghidra `FUN_004071a0` lines 41-54
-> (and parallels at 80-91, 119-130, 156-167).
+> (and parallels at 80-91, 119-130, 156-167).  Driver:
+> `src/engine_phase.c` (`engine_compute_phase_ticks`),
+> `src/engine.c` (`engine_tick_phase_step`),
+> Ghidra `FUN_004bbc80` @ 0x4bbc80.
 
 ---
 

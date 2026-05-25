@@ -15,6 +15,7 @@
 
 #include "engine.h"
 
+#include "engine_overlay_render.h"
 #include "gfx.h"
 
 #include <mmsystem.h>     /* timeGetTime — gfx.h transitively pulled in
@@ -509,6 +510,27 @@ static void engine_tick_phase_step(void)
     g_phase_counter_16         = out.new_counter_16;
     g_phase_counter_24         = out.new_counter_24;
     g_phase_counter_32         = out.new_counter_32;
+
+    /* Push the four tier-rate flags into the overlay renderer's army
+     * drawer.  Retail keeps these as separate globals
+     * (`DAT_0058fd08`, `DAT_0057d3c8`, `DAT_0057d3ac`, `DAT_00591510`)
+     * but they ARE the 640/320/160/80-ms phase ticks above — same
+     * addresses, same producer (this function).  The army drawer's
+     * `pick_rate_tier` indexes by `(cur - prev)` distance bin and
+     * reads one of these four; the binding contract is:
+     *
+     *   distance <  10  → tier 0 → 640 ms tick (slowest cadence)
+     *   distance < 0x19 → tier 1 → 320 ms tick
+     *   distance < 0x32 → tier 2 → 160 ms tick
+     *   distance ≥ 0x32 → tier 3 →  80 ms tick (fastest cadence)
+     *
+     * Small distance = slow-moving army → slow sprite cycle; large
+     * distance = fast-moving army → fast cycle.  Closes engine
+     * quirk #74's "driver lives elsewhere" follow-up. */
+    engine_overlay_render_set_animation_rate_flags(out.tick_640ms,
+                                                   out.tick_320ms,
+                                                   out.tick_160ms,
+                                                   out.tick_80ms);
 }
 
 /* Stubs of the two helpers retail FUN_004bb978 calls inline.  Both
