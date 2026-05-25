@@ -33,6 +33,7 @@ SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c \
                    ../src/engine_delayed_action.c \
                    ../src/engine_dirty_rect.c \
                    ../src/engine_event_queue.c \
+                   ../src/engine_path.c \
                    ../src/save.c
 
 # Test files — each defines one or more `int test_<name>(void)`
@@ -46,6 +47,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_delayed_action.c \
                    test_engine_dirty_rect.c \
                    test_engine_event_queue.c \
+                   test_engine_path.c \
                    test_save.c
 
 OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o)) \
@@ -62,7 +64,8 @@ DIFF_SRCS := ../src/engine_rng.c ../src/engine_fps.c \
              ../src/engine_phase.c ../src/engine_input.c \
              ../src/engine_rate.c ../src/engine_state_hash.c \
              ../src/engine_tile.c \
-             ../src/engine_delayed_action.c
+             ../src/engine_delayed_action.c \
+             ../src/engine_path.c
 DIFF_OBJS := $(addprefix build/diff_,$(notdir $(DIFF_SRCS:.c=.o)))
 DIFF_OUT  := build/libengine_diff.so
 DIFF_CFLAGS := -std=c11 -O2 -fPIC -Wall -Wextra -Wno-unused-parameter -I../src

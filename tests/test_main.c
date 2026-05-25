@@ -298,6 +298,33 @@ struct test_case {
     X(engine_event_queue_post_pad16_stays_zero_through_publish) \
     X(engine_event_queue_slot_zero_via_consumer_idx_matches) \
     X(engine_event_queue_post_filter_target_populated_each_audience) \
+    \
+    X(engine_path_chebyshev_zero) \
+    X(engine_path_chebyshev_x_dominant) \
+    X(engine_path_chebyshev_y_dominant) \
+    X(engine_path_chebyshev_negative_args_use_signed_subtraction) \
+    X(engine_path_chebyshev_side_effect_preserved) \
+    X(engine_path_direction_equal_is_8) \
+    X(engine_path_direction_cardinals) \
+    X(engine_path_direction_intercardinals) \
+    X(engine_path_greedy_chebyshev_zero_returns_max_steps) \
+    X(engine_path_greedy_adjacent_returns_max_steps) \
+    X(engine_path_greedy_bad_start_cost_zero_returns_zero) \
+    X(engine_path_greedy_bad_start_cost_wall_returns_zero) \
+    X(engine_path_greedy_start_idx_recorded) \
+    X(engine_path_greedy_horizontal_descent) \
+    X(engine_path_greedy_stuck_returns_max_steps) \
+    X(engine_path_greedy_stage_band_blocks_off_band_neighbor) \
+    X(engine_path_greedy_stage_band_accepts_plus_one) \
+    X(engine_path_greedy_tiebreak_prefers_direction_to_dest) \
+    X(engine_path_nearest_finds_immediate_self_cell) \
+    X(engine_path_nearest_skip_point_returns_zero) \
+    X(engine_path_nearest_expands_to_radius_1) \
+    X(engine_path_nearest_stage_mismatch_rejected) \
+    X(engine_path_nearest_clamps_box_at_edges) \
+    X(engine_path_nearest_quirk13_topleft_invisible) \
+    X(engine_path_stash_copies_path_and_flags) \
+    X(engine_path_stash_zero_step_count_only_sets_active) \
     /* end */
 
 /* Emit extern decls. */

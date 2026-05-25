@@ -580,6 +580,48 @@ Preserved verbatim — same byte sequence as retail.
 
 ---
 
+## 13. Nearest-matching picker can't see a hit at linear index 0
+
+`FUN_0047265d` (the expanding-square scanner for "find the cheapest
+tile whose terrain stage matches the start cell's") initializes its
+"best-cost cell index" tracker as:
+
+```c
+local_24 = 0;       // best index
+sVar2 = 900;        // best cost
+```
+
+and after the box scan, checks:
+
+```c
+if (local_24 != 0) {
+    DAT_00569570 = local_24 % 0x50;
+    DAT_00569578 = local_24 / 0x50;
+    return 1;
+}
+```
+
+The "found something" sentinel and the "no match" sentinel are both
+the integer 0.  If the matching cell happens to live at linear index
+0 (col=0, row=0 — the top-left corner of the 80x80 grid), the
+assignment to `local_24` is indistinguishable from "still no match,"
+so the function expands to the next radius and either finds a
+different cell or eventually returns 0.
+
+In practice this is invisible: the outer-ring cells are always
+walls in retail maps (cost 999, skipped before the match check),
+so a match at idx 0 never happens.  But during unit testing with
+hand-crafted cost maps the quirk is observable — the picker silently
+misses corner-0 matches.  Preserved verbatim; the host test suite
+documents the behavior with its own dedicated test case.
+
+> 📍 `src/engine_path.c`'s `engine_path_find_nearest_matching`,
+> `tests/test_engine_path.c`'s
+> `engine_path_nearest_quirk13_topleft_invisible`, Ghidra
+> `FUN_0047265d @ 0x47265d`.
+
+---
+
 <!--
 Template for new entries:
 
