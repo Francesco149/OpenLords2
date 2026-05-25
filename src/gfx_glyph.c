@@ -42,6 +42,11 @@ void gfx_glyph_set_glyph(int glyph_offset, int glyph_w, int glyph_h)
     g_glyph_h      = glyph_h;
 }
 
+void gfx_glyph_set_glyph_h(int glyph_h)
+{
+    g_glyph_h = glyph_h;
+}
+
 void gfx_glyph_set_clip(int clipped_w, int src_stride_pad, int dst_stride_pad)
 {
     g_clipped_w       = clipped_w;
@@ -53,6 +58,11 @@ void gfx_glyph_set_color_modulation(int mode)
 {
     g_color_modulation = mode;
 }
+
+int gfx_glyph_cursor_x(void) { return g_cursor_x; }
+int gfx_glyph_cursor_y(void) { return g_cursor_y; }
+int gfx_glyph_glyph_w(void)  { return g_glyph_w; }
+int gfx_glyph_glyph_h(void)  { return g_glyph_h; }
 
 /* Shared dest-pointer computation: pixels + cursor_x + cursor_y*width.
  * Retail formula at the top of every blitter:

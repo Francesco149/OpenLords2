@@ -86,8 +86,21 @@
 void gfx_glyph_set_color(uint8_t color);
 void gfx_glyph_set_dest(int cursor_x, int cursor_y);
 void gfx_glyph_set_glyph(int glyph_offset, int glyph_w, int glyph_h);
+/* Mutate ONLY the row count.  Used by gfx_dispatch_clip_y to overwrite
+ * the per-glyph advance byte with the visible (post-clip) row count
+ * without disturbing the source offset / column count. */
+void gfx_glyph_set_glyph_h(int glyph_h);
 void gfx_glyph_set_clip(int clipped_w, int src_stride_pad, int dst_stride_pad);
 void gfx_glyph_set_color_modulation(int mode);
+
+/* Read-only accessors so the dispatcher and clip-setters (gfx_dispatch.c)
+ * can consult the same state the blitter reads.  Retail consults the
+ * DAT_* globals directly; in-tree we route reads through these getters
+ * so the static-storage layout of gfx_glyph.c stays private. */
+int gfx_glyph_cursor_x(void);
+int gfx_glyph_cursor_y(void);
+int gfx_glyph_glyph_w(void);
+int gfx_glyph_glyph_h(void);
 
 /* Port of FUN_004b41b7 @ 0x4b41b7.  Unclipped glyph blit.
  *

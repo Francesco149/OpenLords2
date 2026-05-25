@@ -549,6 +549,37 @@ struct test_case {
     X(gfx_glyph_blit_left_clipped_color_modulation_ignored) \
     X(gfx_glyph_blit_left_clipped_zero_src_pad_equals_unclipped) \
     X(gfx_glyph_state_persists_until_set) \
+    \
+    X(gfx_dispatch_clip_x_no_clip_fully_inside) \
+    X(gfx_dispatch_clip_x_zero_width_skips) \
+    X(gfx_dispatch_clip_x_left_clip_shifts_cursor) \
+    X(gfx_dispatch_clip_x_fully_left_offscreen_skips) \
+    X(gfx_dispatch_clip_x_right_clip_narrows_visible) \
+    X(gfx_dispatch_clip_x_fully_right_offscreen_skips) \
+    X(gfx_dispatch_clip_x_alt_clip_rect_used) \
+    X(gfx_dispatch_clip_y_no_clip_fully_inside) \
+    X(gfx_dispatch_clip_y_zero_height_skips) \
+    X(gfx_dispatch_clip_y_top_clip_shifts_cursor) \
+    X(gfx_dispatch_clip_y_bottom_clip_narrows_visible) \
+    X(gfx_dispatch_clip_y_fully_below_skips) \
+    X(gfx_dispatch_clip_y_propagates_x_skip) \
+    X(gfx_dispatch_glyph_missing_char_returns_zero) \
+    X(gfx_dispatch_glyph_null_table_treats_as_missing) \
+    X(gfx_dispatch_glyph_returns_glyph_w_plus_one) \
+    X(gfx_dispatch_glyph_advances_cursor_y_by_advance_byte) \
+    X(gfx_dispatch_glyph_default_font_tweaks_lowercase_range) \
+    X(gfx_dispatch_glyph_default_font_tweaks_skipped_outside_range) \
+    X(gfx_dispatch_glyph_non_default_font_skips_tweaks) \
+    X(gfx_dispatch_glyph_default_font_high_byte_tweak) \
+    X(gfx_dispatch_glyph_paints_pixels_unclipped) \
+    X(gfx_dispatch_glyph_y_off_canvas_suppresses_blit) \
+    X(gfx_dispatch_glyph_x_off_canvas_suppresses_blit) \
+    X(gfx_dispatch_glyph_left_clipped_paints_visible_columns) \
+    X(gfx_dispatch_glyph_top_clipped_paints_visible_rows) \
+    X(gfx_dispatch_glyph_alt_clip_rect_used_when_enabled) \
+    X(gfx_dispatch_glyph_alt_clip_inside_rect_draws) \
+    X(gfx_dispatch_glyph_source_offset_baked_with_skips) \
+    X(gfx_dispatch_glyph_table_zero_at_high_byte) \
     /* end */
 
 /* Emit extern decls. */
