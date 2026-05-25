@@ -7,6 +7,158 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Battlefield chips 5b + 6: zoom-32 overlay + 5 coord helpers (+24 tests, 4 new quirks, 1 bug fix)
+
+Continuation of the same unattended session.  Previous dispatch
+landed chip 4 (zoom-32 terrain).  This dispatch lands chip 5b (zoom-32
+overlay pass) — completing the zoom-32 layer pair — plus chip 6
+(five tiny coordinate helpers that port cleanly as pure functions).
+Also fixes an off-by-one in chip 4 that emerged from cross-checking
+chip 5b's gate constant against the binary.
+
+### Chip 5b: zoom-32 overlay pass `FUN_004bd07f` (436 B)
+
+Replaces the `pass_overlay_zoom32` stub with the real port.  Outer
+shape mirrors chip 4 (terrain-z32) at 32-px cell pitch, but with
+three crucial differences:
+
+**1. Layer bit gate.**  Drawing requires `descriptor[+1] & 4` SET —
+the exact same bit that terrain-z32 uses as its EARLY-SKIP gate, but
+inverted polarity.  Terrain only draws when the bit is CLEAR; overlay
+only draws when the bit is SET.  Net effect: per cell, at most ONE
+of the two passes runs the drawing block per frame, picked by the
+layer bit.  Cells without the bit get terrain; cells with the bit get
+the overlay (a "feature replacement layer").  This is filed as
+**quirk #79** — the bit is overloaded between two opposite-polarity
+sibling passes.
+
+**2. Always primary blob.**  No `(flags & 0x1c)` selector — the
+overlay pass always reads from the primary blob (retail
+DAT_004e5d78).  The alt blob is not consulted.
+
+**3. No boundary marking, no second sprite.**  Straight-line per-cell
+loop.  Same `[1, 0x4baf0]` glyph_offset gate as terrain-z32, but the
+gate sits AFTER the dirty-clear (matching retail), so an out-of-band
+offset still appears "redrawn" to subsequent frames — no recovery
+mechanism re-marks the cell dirty.  Filed as **quirk #81**.
+
+### Chip 4 off-by-one bug fix
+
+While cross-checking chip 5b's glyph_offset gate constant against the
+binary, discovered chip 4's port used `> 310000` for the abort gate
+but the actual retail bytes encode `cmp ..., 0x4baf0` (= 309488),
+confirmed via r2 at 0x4bcd76.  Chip 4 was accepting bad offsets in
+`[309489, 310000]` — a 512-value off-by-one.  Filed as **quirk #80**
+to document the Ghidra display lesson: when the decomp shows a "round"
+decimal literal as a `cmp` immediate, always verify against the
+disassembly — Ghidra normalizes hex to decimal aggressively and the
+rounding direction is not documented.
+
+Updated two chip 4 tests to reflect chained behavior with chip 5b
+active: cells with the layer bit set + dirty had their dirty bit
+ASSERTED to remain set after `engine_battlefield_render_frame` (since
+chip 4 skips them), but with chip 5b now real, the OVERLAY pass picks
+them up and clears the dirty bit.  Tests now assert dirty cleared +
+overlay blit count incremented, matching the full chained behavior.
+
+### Chip 6: five coordinate helpers (FUN_004bc222 / 2a5 / 2c5 / 2e5 / 346)
+
+Five tiny pure functions at the head of the battlefield cluster
+(394 B total) that translate screen pixel coords → hex grid column /
+row.  All share the existing render-pass module statics plus one new
+binding `bind_cell_band_width` for retail DAT_004e5d3c (the cell sub-
+band width — for a 32-px hex tile divided into three bands, this is
+~8 pixels).
+
+  - `screen_in_grid(px, py)`                — 131 B AABB hit-test
+  - `pixel_to_col(px)`                      — 32 B basic divide
+  - `pixel_to_row(py)`                      — 32 B basic divide
+  - `pixel_to_col_right_biased(px)`         — 97 B (right-band → +1)
+  - `pixel_to_col_left_biased(px)`          — 102 B (left-band → -1)
+
+The two biased variants are clamped ASYMMETRICALLY — right-biased
+clamps low (col < 1 → 0) but not high; left-biased clamps high
+(col >= row_stride → row_stride - 1) but not low.  The left-biased
+variant can therefore return NEGATIVE column indices when the input
+is close to the grid's left edge AND falls in the first sub-band.
+Filed as **quirk #82** to warn callers that these aren't safe as
+generic "clip into grid" primitives.
+
+No port-side callers yet — these unblock input handling for the
+combat screen but aren't on the render path.  Landing them here as a
+discrete chip means the next session can focus on either (a) the
+heavy 5a/5c/5d passes, or (b) wiring input + scroll, without needing
+to come back for these primitives.
+
+### Headline numbers
+
+- **797 → 821 host tests** (+24), all green under ASan/UBSan.
+- **2 retail functions ported in chip 5b** (`FUN_004bd07f`, 436 B),
+  **5 retail functions ported in chip 6** (totaling 394 B).
+- **4 new engine quirks** (#79 overloaded layer bit, #80 Ghidra
+  rounding lesson, #81 overlay-z32 silent dirty-clear, #82 asymmetric
+  bias-helper clamps).
+- **1 bug fix** in chip 4 (off-by-512 glyph_offset gate).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Battlefield port state
+
+| chip | function                       | size  | status     |
+| ---- | ------------------------------ | ----: | ---------- |
+| 1    | 16×16 raw blit primitive       |  705 B | ported (3 sessions ago) |
+| 2    | frame driver + zoom-16 no-op   |  154 B | ported (prev session) |
+| 3    | zoom-16 terrain pass           |  725 B | ported (prev session) |
+| 3.5  | 32×32 raw blit primitive       | 2997 B | ported (prev session) |
+| 4    | zoom-32 terrain pass           | 1187 B | ported (prev session, this session: gate fix) |
+| 5a   | middle pass                    |  543 B | stub       |
+| 5b   | zoom-32 overlay pass           |  436 B | **ported (this session)** |
+| 5c   | late pass                      |  290 B | stub       |
+| 5d   | final pass                     |  433 B | stub       |
+| 6    | 5 coord helpers (hit-test + screen↔hex) | 394 B | **ported (this session)** |
+
+Both zoom-32 layers (terrain + overlay) are now real ports — chip 5b
+completes the zoom-32 pair.  Zoom-16 has its terrain pass real and
+its overlay as a faithful no-op port (since retail's overlay-z16 is
+literally `return;`).  The four always-on passes — middle, late,
+final, plus the chip-5 trio — remain as stubs that bump dispatch
+counters.
+
+### What's next
+
+1. **Battlefield chip 5a/5c/5d** — the three remaining stub passes
+   (middle, late, final).  Each pulls in 3–5 unported helpers
+   (middle: FUN_004bd938/da92/db95/d574/d759/beed4 ≈ 2900 B; late:
+   FUN_004be070 + FUN_004be33f ≈ 1135 B + two large unmapped data
+   arrays; final: FUN_00440089 + FUN_00402f64 with the font/text
+   renderer chain).  Each is its own significant porting effort —
+   probably one chip per pass and one session per chip.
+
+2. **Combat-mode input wiring** — chip 6's helpers are now available,
+   so a small input-handling chip could land that resolves click/
+   keyboard → hex column + row.  The scroll/pan family
+   (`FUN_004bc1d1` + `FUN_004bc51a` @ 994 B) still needs survey
+   before a port.
+
+3. **gfx.c runtime wiring** — strategic-mode rendering has been
+   end-to-end for three sessions; visual verification remains gated
+   on user availability.  Battlefield zoom-32 is now end-to-end (both
+   terrain + overlay are real ports), so once the gfx.c stub is
+   wired up the user could verify both screen modes in one go.
+
+Picking **#1 (chip 5a — middle pass)** next: it's the largest
+remaining stub and has the biggest dependency surface, so chipping
+away at its helpers is the right next move.  Suggestion for the
+next session: survey FUN_004bd574 / d759 first (they're called
+directly from the middle-pass driver and look like they're the
+"draw unit" / "draw effect" leaves of the per-cell loop).
+
+This is a natural `/clear` point — two chips landed, six total in
+the battlefield port (chip 5b + chip 6 this session, chips 1+2+3+
+3.5+4 in prior sessions), no incomplete work in-flight.
+
+---
+
 ## 2026-05-25 — Battlefield port chip 4: zoom-32 terrain pass (+20 tests, 2 new quirks)
 
 Continuation of the same unattended session.  Previous dispatch
