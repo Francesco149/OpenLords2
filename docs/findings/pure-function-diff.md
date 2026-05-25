@@ -28,6 +28,7 @@ in our port that would corrupt the engine on boot is caught immediately.
 | `engine_compute_input_state`  | `FUN_004b191e`    | `src/engine_input.c`      | mouse-input resolver (25 in, 30 out; scripted `GetCursorPos`) |
 | `engine_compute_sim_sub_steps` + `engine_compute_scenario_hint` | `FUN_004bb978` + `FUN_0043de70` | `src/engine_rate.c` | sim sub-step rate gate + scenario_hint computer (chained — outer calls inner internally; orchestrator chains both ports host-side and compares against ONE retail RPC) |
 | `engine_compute_state_hash`   | `FUN_00440231`    | `src/engine_state_hash.c` | per-tick MP state hash — 3 strided per-record byte hashes (strategic or combat) + 10-byte bucket vector + 600-byte per-record region.  Source-array payload (125 KB across 6 arrays) installed once per test plan from a shared xorshift32 seed; engine-tick freeze required |
+| `engine_tile_expand_footprint`| `FUN_004917dd`    | `src/engine_tile.c`       | castle-load 3×3 building footprint expander.  __cdecl(int) — one arg is the tile byte offset.  STATEFUL (mutates tiles + scratches + 19-entry list), so each vector re-seeds pre-state in-place from the shared xorshift32 seed (per-call re-fill via chunked 32 KB writes; 70 KB readback per call across 5 globals).  Engine-tick freeze required |
 
 Each has a host-side unit-test file under `tests/test_engine_*.c`; the
 diff test complements those by proving they match retail behavior for

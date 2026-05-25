@@ -29,6 +29,10 @@ Current targets:
                                  (source-array payload installed once
                                   per test plan from a shared seed;
                                   engine-tick freeze required)
+  - engine_tile_expand_footprint (FUN_004917dd) — castle-load 3x3 footprint
+                                 expander (per-vector pre-state re-seed
+                                 of tiles + footprint_list + last_footprint;
+                                 engine-tick freeze required)
 
 The orchestrator runs the agent in "diff_test" mode (no turbo, no input
 replay) so the engine boots, parks, and waits.  Once the per-tick driver
@@ -344,6 +348,21 @@ class EngineStateHashOut(ctypes.Structure):
     ]
 
 
+# Mirrors engine_tile_footprint_state_t in src/engine_tile.h.  Single
+# struct used both as input and output — engine_tile_expand_footprint
+# reads tile_byte_offset + the embedded arrays, mutates them in place.
+# Total size 70560 bytes; ctypes handles the embedded arrays natively.
+class EngineTileExpandState(ctypes.Structure):
+    _fields_ = [
+        ("tile_byte_offset",   ctypes.c_int),
+        ("tiles",              ctypes.c_uint8 * 51200),    # 6400 × 8
+        ("path_scratch",       ctypes.c_uint16 * 6400),    # u16[6400] = 12800 B
+        ("stage_scratch",      ctypes.c_uint8 * 6400),
+        ("footprint_list",     (ctypes.c_int32 * 2) * 19), # 152 B
+        ("last_footprint_tile",ctypes.c_int32),
+    ]
+
+
 def load_port_lib() -> ctypes.CDLL:
     """Load libengine_diff.so + bind the two diff entrypoints.
 
@@ -391,6 +410,10 @@ def load_port_lib() -> ctypes.CDLL:
     lib.engine_compute_state_hash.restype = None
     lib.engine_compute_state_hash.argtypes = [
         ctypes.POINTER(EngineStateHashIn), ctypes.POINTER(EngineStateHashOut)]
+
+    lib.engine_tile_expand_footprint.restype = ctypes.c_int
+    lib.engine_tile_expand_footprint.argtypes = [
+        ctypes.POINTER(EngineTileExpandState)]
 
     return lib
 
@@ -997,6 +1020,10 @@ INPUT_STATE_RACE_RETRIES = 16
 # a high count would mask a real bug in the freeze or the structural
 # raced detector.
 STATE_HASH_RACE_RETRIES = 2
+# Tile-expand also runs under the engine-tick freeze, so the main thread
+# shouldn't race into tiles/path_scratch/stage_scratch during our window.
+# Same low budget as state_hash.
+TILE_EXPAND_RACE_RETRIES = 2
 
 
 def _frame_delta_race_free(vec: dict[str, int], retail: dict) -> bool:
@@ -1938,6 +1965,179 @@ def diff_state_hash(retail: dict, port: dict) -> list[str]:
     return bad
 
 
+# ─── tile_expand (FUN_004917dd — engine_tile_expand_footprint) ─────────
+
+# State surface (must match the constants in tools/frida/openlords2-agent.js):
+# tiles + footprint_list + last_footprint_tile are pre-seeded from the shared
+# test-plan seed (xorshift32, same mixing as state_hash) and re-seeded per
+# call — the function mutates them in place, so vectors must start from a
+# fresh baseline.  path_scratch + stage_scratch are pure outputs (fully
+# recomputed from tiles inside the function); they don't need pre-seeding.
+TILE_EXPAND_TILES_BYTES          = 51200
+TILE_EXPAND_PATH_SCRATCH_BYTES   = 12800       # 6400 × u16
+TILE_EXPAND_STAGE_SCRATCH_BYTES  = 6400
+TILE_EXPAND_FOOTPRINT_LIST_BYTES = 152         # 19 × 2 × i32
+TILE_EXPAND_LAST_FOOTPRINT_BYTES = 4           # 1 × i32
+
+# Anchor chars FUN_004917dd recognises (rest early-return as no-op).
+# Plus a couple of unrecognised chars to exercise the no-op branch.
+TILE_EXPAND_ANCHORS_RECOGNISED   = [ord(c) for c in "@CX["]
+TILE_EXPAND_ANCHORS_UNRECOGNISED = [0x00, ord('A'), ord('Z'), ord('Y'), 0xff]
+
+
+def tile_expand_fill_bytes(seed: int, n: int) -> bytes:
+    """Bit-for-bit mirror of agent JS `tileExpandFillBytes` (xorshift32)."""
+    s = (seed & 0xFFFFFFFF) or 1
+    out = bytearray(n)
+    for i in range(n):
+        s ^= (s << 13) & 0xFFFFFFFF
+        s ^= (s >> 17) & 0xFFFFFFFF
+        s ^= (s << 5)  & 0xFFFFFFFF
+        s &= 0xFFFFFFFF
+        out[i] = s & 0xFF
+    return bytes(out)
+
+
+def gen_tile_expand_pre_state(seed: int) -> dict[str, bytes]:
+    """Re-create the 3 input buffers the agent will write to retail's
+    globals.  Per-array sub-seed (seed + GOLDEN * tag) matches the agent's
+    runRetailTileExpand exactly."""
+    GOLDEN = 0x9e3779b1
+    arrays = [
+        ("tiles",          TILE_EXPAND_TILES_BYTES,          0),
+        ("footprint_list", TILE_EXPAND_FOOTPRINT_LIST_BYTES, 1),
+        ("last_footprint", TILE_EXPAND_LAST_FOOTPRINT_BYTES, 2),
+    ]
+    out = {}
+    for name, sz, tag in arrays:
+        sub_seed = (seed + GOLDEN * tag) & 0xFFFFFFFF
+        out[name] = tile_expand_fill_bytes(sub_seed, sz)
+    return out
+
+
+def _cell_offset(col: int, row: int) -> int:
+    return (row * 80 + col) * 8
+
+
+def gen_tile_expand_vectors(n: int, rng: random.Random) -> list[dict[str, int]]:
+    """Build N tile_expand vectors.  Each vector is the 1-arg input
+    (tile_byte_offset) plus the anchor byte written to tiles[offset+3].
+    Pre-state for tiles/footprint_list/last_footprint is shared across
+    all vectors and seeded once per test plan.
+
+    Coverage:
+      - Every recognized anchor ('@', 'C', 'X', '[') at a safe interior
+        cell (col=10, row=10) — exercises all 4 orient branches.
+      - Each anchor at multiple interior positions — different
+        col/row decoding paths through the 3×3 + neighbor writes.
+      - Unrecognized anchors (early-return branch).
+      - "Edge of map" anchors at the engine's quirky interior bound
+        (col=77/78, row=76/77) — these still fit the 3x3 footprint
+        + per-orientation door cells without OOB.  Picks specifically
+        the corners that interact with the orthogonal-axis quirk in
+        FUN_004921e5 (see engine-quirks.md).
+    """
+    out: list[dict[str, int]] = []
+    safe_positions = [
+        (10, 10), (40, 40), (20, 50), (60, 20),
+        # Interior-ish corners.  col in [1, 77] / row in [1, 76] so the
+        # door-neighbor writes (orient-2 needs col+3, orient-4 needs row+3)
+        # stay in-array.
+        ( 1,  1), (77,  1), ( 1, 76), (77, 76),
+        # Right at the orthogonal-quirk gate boundaries.
+        (78, 50),  # col 78 → col+1 = 79 (boundary < 79 fails)
+        (50, 78),  # row 78 → row+1 = 79
+    ]
+    for (col, row) in safe_positions:
+        for ch in TILE_EXPAND_ANCHORS_RECOGNISED:
+            out.append({
+                "tile_byte_offset": _cell_offset(col, row),
+                "anchor_char":      ch,
+            })
+    # Unrecognised-anchor early-return at one safe spot per char.
+    for ch in TILE_EXPAND_ANCHORS_UNRECOGNISED:
+        out.append({
+            "tile_byte_offset": _cell_offset(15, 15),
+            "anchor_char":      ch,
+        })
+    while len(out) < n:
+        ch = rng.choice(TILE_EXPAND_ANCHORS_RECOGNISED +
+                        TILE_EXPAND_ANCHORS_UNRECOGNISED)
+        col = rng.randint(1, 77)
+        row = rng.randint(1, 76)
+        out.append({
+            "tile_byte_offset": _cell_offset(col, row),
+            "anchor_char":      ch,
+        })
+    return out[:n]
+
+
+def run_port_tile_expand(lib: ctypes.CDLL,
+                         vec: dict[str, int],
+                         pre_state: dict[str, bytes]) -> dict[str, Any]:
+    """Run our engine_tile_expand_footprint port.  Allocates a fresh
+    EngineTileExpandState, fills the 3 input arrays from pre_state,
+    injects the anchor byte at tiles[offset+3], invokes the port, and
+    returns the post-state."""
+    state = EngineTileExpandState()
+    ctypes.memmove(state.tiles,          pre_state["tiles"],          TILE_EXPAND_TILES_BYTES)
+    ctypes.memmove(state.footprint_list, pre_state["footprint_list"], TILE_EXPAND_FOOTPRINT_LIST_BYTES)
+    # last_footprint is i32 — copy 4 bytes through ctypes.memmove to keep
+    # the byte-pattern bit-identical with the agent's writeByteArray.
+    ctypes.memmove(ctypes.byref(state, EngineTileExpandState.last_footprint_tile.offset),
+                   pre_state["last_footprint"], TILE_EXPAND_LAST_FOOTPRINT_BYTES)
+    # path_scratch and stage_scratch are zero-initialised by ctypes' default
+    # struct init; retail's path also leaves them unwritten until the helpers
+    # fire, but FUN_004917dd ALWAYS calls both helpers before returning
+    # (only the unrecognized-anchor early-return skips them — and in that
+    # case neither side has touched the scratches at all, so both stay
+    # zero on the port side / hold their old retail bytes on the retail
+    # side).  This is the one branch where bytewise output diff WOULD
+    # detect a "divergence" that isn't real — we handle it with a check
+    # below: when the anchor was unrecognized, skip path/stage_scratch
+    # from the diff (verified by re-running the port to see return == 0).
+    offset = vec["tile_byte_offset"] | 0
+    anchor = vec["anchor_char"] & 0xff
+    if 0 <= offset + 3 < TILE_EXPAND_TILES_BYTES:
+        state.tiles[offset + 3] = anchor
+    state.tile_byte_offset = offset
+    fired = lib.engine_tile_expand_footprint(ctypes.byref(state))
+    return {
+        "tiles":               list(bytes(state.tiles)),
+        "path_scratch":        list(bytes(state.path_scratch)),
+        "stage_scratch":       list(bytes(state.stage_scratch)),
+        "footprint_list":      list(bytes(state.footprint_list)),
+        "last_footprint_tile": int(state.last_footprint_tile),
+        "fired":               int(fired),
+    }
+
+
+def diff_tile_expand(retail: dict, port: dict, vec: dict) -> list[str]:
+    """Bytewise diff of the 5 output globals.
+
+    For the unrecognised-anchor early-return branch (port returns 0),
+    the function did NOT touch path_scratch or stage_scratch — on the
+    retail side they hold whatever bytes were there pre-call (the agent
+    seeded ONLY tiles/footprint_list/last_footprint), while the port
+    side zero-init'd them.  Skip those two fields when port["fired"] == 0
+    to avoid the false positive.  The other 3 fields (tiles unchanged
+    except for the injected anchor; list/last unchanged) must still match.
+    """
+    bad = []
+    if list(retail.get("tiles") or []) != port["tiles"]:
+        bad.append("tiles")
+    if list(retail.get("footprint_list") or []) != port["footprint_list"]:
+        bad.append("footprint_list")
+    if int(retail.get("last_footprint_tile", 0)) != int(port["last_footprint_tile"]):
+        bad.append("last_footprint_tile")
+    if port["fired"]:
+        if list(retail.get("path_scratch") or []) != port["path_scratch"]:
+            bad.append("path_scratch")
+        if list(retail.get("stage_scratch") or []) != port["stage_scratch"]:
+            bad.append("stage_scratch")
+    return bad
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -2032,6 +2232,9 @@ def run_diff(cfg_args) -> int:
     if "state_hash" in enabled:
         test_plans.append(("state_hash",
                            gen_state_hash_vectors(cfg_args.vectors, rng)))
+    if "tile_expand" in enabled:
+        test_plans.append(("tile_expand",
+                           gen_tile_expand_vectors(cfg_args.vectors, rng)))
     # Pre-generate the rate-gate LUT — one per run, used by all
     # sim_sub_steps vectors so a re-run with the same seed produces
     # the same LUT (and thus the same retail-side gate decisions).
@@ -2045,6 +2248,12 @@ def run_diff(cfg_args) -> int:
     state_hash_seed = (rng.getrandbits(32) or 1) if "state_hash" in enabled else None
     state_hash_payload = gen_state_hash_payload(state_hash_seed) \
         if "state_hash" in enabled else None
+    # Same pattern for tile_expand — one seed per run, shared across every
+    # vector, generates the 3 input-buffer payloads (tiles + footprint_list
+    # + last_footprint_tile) bit-identical to the agent's per-call re-seed.
+    tile_expand_seed = (rng.getrandbits(32) or 1) if "tile_expand" in enabled else None
+    tile_expand_pre_state = gen_tile_expand_pre_state(tile_expand_seed) \
+        if "tile_expand" in enabled else None
     if not test_plans:
         print("[diff] no enabled targets in --functions; nothing to do.")
         return 0
@@ -2150,7 +2359,7 @@ def run_diff(cfg_args) -> int:
         # vectors, uninstall ONCE in the finally block.  The per-target setup
         # below still calls install (which returns already_installed=true);
         # this is a no-op at the agent but keeps the per-target log shape.
-        shared_freeze_targets = {"sim_sub_steps", "state_hash"}
+        shared_freeze_targets = {"sim_sub_steps", "state_hash", "tile_expand"}
         shared_freeze_installed = False
         if shared_freeze_targets & {n for (n, _) in test_plans}:
             fresp = script.exports_sync.install_sim_sub_steps_engine_freeze()
@@ -2207,6 +2416,27 @@ def run_diff(cfg_args) -> int:
                     continue
                 log(f"[diff] state_hash: sources installed (seed=0x{state_hash_seed:08x}, "
                     f"payload_bytes={install_resp.get('payload_bytes')})")
+            # Tile-expand backup install — one-shot snapshot of the 5 globals
+            # so uninstall (in the per-fn cleanup block below) can put retail's
+            # pre-test bytes back.  Per-call pre-state re-seeding happens
+            # INSIDE runRetailTileExpand, not here.  Engine freeze already in
+            # place via shared install — needed because tiles/path/stage are
+            # read by render + pathfinding on the engine main thread.
+            if fn_name == "tile_expand":
+                install_resp = script.exports_sync.install_tile_expand_backup()
+                if isinstance(install_resp, dict) and install_resp.get("error"):
+                    log(f"[diff] tile_expand: backup install failed: "
+                        f"{install_resp['error']}")
+                    results.append(DiffResult(
+                        function=fn_name, total=len(vectors),
+                        fail_count=len(vectors),
+                        failures=[{"idx": -1, "vector": None,
+                                   "retail": install_resp, "port": None,
+                                   "diff": ["backup-install-error"]}]))
+                    continue
+                log(f"[diff] tile_expand: backup installed "
+                    f"(seed=0x{tile_expand_seed:08x}, "
+                    f"snapshot_bytes={install_resp.get('snapshot_bytes')})")
             r = DiffResult(function=fn_name, total=len(vectors))
             for i, vec in enumerate(vectors):
                 if fn_name == "rng_step":
@@ -2503,6 +2733,42 @@ def run_diff(cfg_args) -> int:
                         # a non-dispatch path).  Classify as race-pass.
                         r.race_count += 1
                         bad = []
+                elif fn_name == "tile_expand":
+                    # FUN_004917dd: stateful — re-seeds tiles + footprint_list
+                    # + last_footprint from the shared seed both sides, then
+                    # injects the per-vector anchor at tiles[offset+3].  Port
+                    # mirrors the agent's pre-state exactly so the function's
+                    # output bytes are diffable.  Engine freeze keeps the
+                    # main thread out of tiles/path_scratch/stage_scratch
+                    # during our 70 KB readback.
+                    port = run_port_tile_expand(lib, vec, tile_expand_pre_state)
+                    rpc_in = {
+                        "seed":             int(tile_expand_seed),
+                        "tile_byte_offset": int(vec["tile_byte_offset"]),
+                        "anchor_char":      int(vec["anchor_char"]),
+                    }
+                    retail = None
+                    for attempt in range(TILE_EXPAND_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_tile_expand(rpc_in)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < TILE_EXPAND_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": vec,
+                            "retail": retail, "port": port,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_tile_expand(retail, port, vec)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
                 else:
                     continue
                 if bad:
@@ -2537,6 +2803,17 @@ def run_diff(cfg_args) -> int:
                             f"{uninstall_resp['error']}")
                 except Exception as e:
                     log(f"[diff] state_hash: sources uninstall: agent dead ({e!r}); "
+                        f"skipping (frida cleanup will fire on script.unload)")
+            if fn_name == "tile_expand":
+                # Same best-effort uninstall; restores ~70 KB across the 5
+                # globals so retail's pre-test state survives the run.
+                try:
+                    uninstall_resp = script.exports_sync.uninstall_tile_expand_backup()
+                    if isinstance(uninstall_resp, dict) and uninstall_resp.get("error"):
+                        log(f"[diff] tile_expand: backup uninstall failed: "
+                            f"{uninstall_resp['error']}")
+                except Exception as e:
+                    log(f"[diff] tile_expand: backup uninstall: agent dead ({e!r}); "
                         f"skipping (frida cleanup will fire on script.unload)")
 
         # ─── shared engine-tick freeze release ───
@@ -2604,10 +2881,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand",
                     help="comma-separated subset to test "
                          "(default: rng_step,fps_step,anim_cycle,frame_delta,"
-                         "phase_ticks,input_state,sim_sub_steps,state_hash)")
+                         "phase_ticks,input_state,sim_sub_steps,state_hash,"
+                         "tile_expand)")
     ap.add_argument("--warmup-s", type=float, default=10.0,
                     help="seconds to wait for engine_tick to settle before "
                          "firing RPCs (default 10)")

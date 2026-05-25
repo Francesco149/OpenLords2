@@ -287,6 +287,21 @@ const ADDR = {
     //   at +slot*10, 600-byte hash region at +slot*600.
     var_hash_bucket_base:           0x00569530, //  DAT_00569530 — stride 10
     var_hash_region_base:           0x00565700, //  DAT_00565700 — stride 600
+    // Castle-load footprint expansion (FUN_004917dd — engine_tile_expand_footprint)
+    // plus its four helpers (FUN_004921e5 / FUN_00471c1f / FUN_00471d30 /
+    // FUN_0048ee46).  Five globals it touches; FUN_004917dd is __cdecl(int)
+    // so we pass tile_byte_offset as the lone argument via NativeFunction.
+    // See docs/findings/save-format.md ("Per-record in-memory layout") for
+    // the per-tile struct + scratch-array layouts.  Reuses the shared
+    // engine-tick freeze (installSimSubStepsEngineFreeze) since the engine
+    // main thread also reads from tiles/path_scratch/stage_scratch during
+    // render + pathfinding.
+    fn_engine_tile_expand_footprint:0x004917dd, // FUN_004917dd
+    var_tile_tiles:                 0x005440e0, //  DAT_005440e0 — 6400 × 8 (51200 B)
+    var_tile_path_scratch:          0x00507250, //  DAT_00507250 — 6400 × u16 (12800 B)
+    var_tile_stage_scratch:         0x004f7d80, //  DAT_004f7d80 — 6400 × u8  (6400 B)
+    var_tile_footprint_list:        0x00553c80, //  DAT_00553c80 — 19 × 2 × i32 (152 B)
+    var_tile_last_footprint:        0x00553d18, // _DAT_00553d18 — i32 (4 B)
 };
 
 // Per-slot strides — used inside the runRetailSimSubSteps RPC + the LUT
@@ -322,6 +337,19 @@ const STATE_HASH_PER_BATTLE_AUX_STRIDE  = 0x34;      // 52
 const STATE_HASH_PER_BATTLE_AUX_BYTES   = STATE_HASH_PER_BATTLE_AUX_SLOTS * STATE_HASH_PER_BATTLE_AUX_STRIDE;
 const STATE_HASH_BUCKET_BYTES           = 10;         // per player_slot
 const STATE_HASH_REGION_BYTES           = 600;        // per player_slot
+
+// Castle-load footprint expansion byte-counts (FUN_004917dd state surface).
+// tiles + footprint_list + last_footprint are the read+write inputs (need
+// pre-seeding per call so each vector starts from a known baseline);
+// path_scratch + stage_scratch are pure outputs (fully recomputed from
+// tiles by FUN_00471c1f / FUN_00471d30) so they don't need pre-seeding.
+// Backups for ALL five are snapshotted at install so retail's pre-test
+// memory is restored cleanly at uninstall.  Combined: 70556 bytes.
+const TILE_EXPAND_TILES_BYTES           = 51200;      // 6400 × 8
+const TILE_EXPAND_PATH_SCRATCH_BYTES    = 12800;      // 6400 × u16
+const TILE_EXPAND_STAGE_SCRATCH_BYTES   = 6400;       // 6400 × u8
+const TILE_EXPAND_FOOTPRINT_LIST_BYTES  = 152;        // 19 × 2 × i32
+const TILE_EXPAND_LAST_FOOTPRINT_BYTES  = 4;          // 1 × i32
 
 // ─── runtime state ──────────────────────────────────────────────────────
 
@@ -452,6 +480,7 @@ let g_nf_retail_phase_ticks   = null;
 let g_nf_retail_input_state   = null;
 let g_nf_retail_sim_sub_steps = null;
 let g_nf_retail_state_hash    = null;
+let g_nf_retail_tile_expand   = null;
 
 // Sim sub-step rate-gate LUT install state.  installSimSubStepsRateLut() is
 // a one-shot per test plan: snapshot the original 2400 bytes once, write the
@@ -487,6 +516,17 @@ let g_state_hash_per_territory_backup      = null;
 let g_state_hash_per_battle_hex_backup     = null;
 let g_state_hash_per_combat_unit_backup    = null;
 let g_state_hash_per_battle_aux_backup     = null;
+
+// Tile-expand backup state.  installTileExpandBackup() snapshots the 5
+// globals it touches once (lazy on first install); uninstallTileExpandBackup()
+// flushes them back at end of test plan.  Per-call pre-state seeding goes
+// straight to the live globals — the snapshot only exists to put retail
+// back to a consistent pre-test state when the test plan finishes.
+let g_tile_expand_tiles_backup             = null;
+let g_tile_expand_path_scratch_backup      = null;
+let g_tile_expand_stage_scratch_backup     = null;
+let g_tile_expand_footprint_list_backup    = null;
+let g_tile_expand_last_footprint_backup    = null;
 
 // engine_tick depth tracker — 1 while the engine main thread is executing
 // FUN_004b99c0, 0 otherwise.  Used by per-tick race detection in diff RPCs
@@ -2112,6 +2152,13 @@ function resolveRetailFunctions() {
         rva(ADDR.fn_engine_sim_sub_steps), 'int32', [], 'stdcall');
     g_nf_retail_state_hash = new NativeFunction(
         rva(ADDR.fn_engine_state_hash), 'void', [], 'stdcall');
+    // FUN_004917dd is __cdecl(int param_1) — declare with the cdecl ABI
+    // and one int32 arg.  All the other targets are 'stdcall' / 0 args
+    // because they read inputs from globals; this one takes the
+    // tile_byte_offset on the stack.
+    g_nf_retail_tile_expand = new NativeFunction(
+        rva(ADDR.fn_engine_tile_expand_footprint),
+        'void', ['int32'], 'mscdecl');
     return true;
 }
 
@@ -2404,6 +2451,196 @@ function runRetailStateHash(in_obj) {
             .writeByteArray(snap.bucket.buffer);
         rva(ADDR.var_hash_region_base).add(slot * STATE_HASH_REGION_BYTES)
             .writeByteArray(snap.region.buffer);
+        g_diff_test_caller_tid = -1;
+    }
+    return out;
+}
+
+// ─── castle-load footprint expansion (FUN_004917dd — engine_tile_expand_footprint) ─
+//
+// Stateful function — reads + mutates 5 globals across 70.5 KB.  Each
+// vector regenerates its pre-state in-place from a per-test-plan seed
+// (same xorshift32 the orchestrator uses Python-side), so consecutive
+// calls all start from the SAME deterministic baseline.  Only the
+// per-call inputs that change between vectors are tile_byte_offset (the
+// arg to FUN_004917dd) and the anchor char written to tiles[offset+3].
+//
+// Wire traffic per call:
+//   in:  {seed_only_for_install} +
+//        {tile_byte_offset: i32, anchor_char: u8} per vector
+//   pre-call writes (agent local, no RPC):
+//        tiles (51200), footprint_list (152), last_footprint_tile (4)
+//   pre-call writes from in_obj:
+//        tiles[offset+3] = anchor_char (1 byte)
+//   readback:
+//        tiles + path_scratch + stage_scratch + footprint_list +
+//        last_footprint_tile (70556 bytes, chunked at <=32 KB each)
+//
+// Engine freeze: REQUIRED.  tiles/path_scratch/stage_scratch are read
+// by the engine's render + pathfinding paths every tick.  Re-use the
+// shared install (installSimSubStepsEngineFreeze) — the orchestrator
+// adds 'tile_expand' to its shared_freeze_targets set.
+
+// Same xorshift32 + sub-seed mixing as state_hash, but for the 3
+// input arrays (tiles / footprint_list / last_footprint_tile).  Tag 0
+// is tiles (largest, dominant cost), 1 is footprint_list, 2 is
+// last_footprint_tile.  Python mirror lives in tools/diff_test.py as
+// tile_expand_fill_bytes — both sides MUST stay bit-identical.
+function tileExpandFillBytes(seed, buf, len) {
+    let s = (seed >>> 0) || 1;
+    const u8 = new Uint8Array(buf);
+    for (let i = 0; i < len; i++) {
+        s ^= (s << 13) >>> 0;
+        s ^= (s >>> 17);
+        s ^= (s << 5)  >>> 0;
+        s = s >>> 0;
+        u8[i] = s & 0xff;
+    }
+}
+
+// Snapshot retail's 5 globals (lazy, once per test plan).  Restoration
+// at uninstall puts the engine back to its pre-test state.
+function installTileExpandBackup() {
+    if (g_base === null) {
+        return {error: 'init not completed yet'};
+    }
+    if (g_tile_expand_tiles_backup !== null) {
+        return {ok: true, already_installed: true};
+    }
+    const snap = function (addr, len) {
+        const dst = new Uint8Array(len);
+        dst.set(new Uint8Array(rva(addr).readByteArray(len)));
+        return dst;
+    };
+    g_tile_expand_tiles_backup          = snap(ADDR.var_tile_tiles,          TILE_EXPAND_TILES_BYTES);
+    g_tile_expand_path_scratch_backup   = snap(ADDR.var_tile_path_scratch,   TILE_EXPAND_PATH_SCRATCH_BYTES);
+    g_tile_expand_stage_scratch_backup  = snap(ADDR.var_tile_stage_scratch,  TILE_EXPAND_STAGE_SCRATCH_BYTES);
+    g_tile_expand_footprint_list_backup = snap(ADDR.var_tile_footprint_list, TILE_EXPAND_FOOTPRINT_LIST_BYTES);
+    g_tile_expand_last_footprint_backup = snap(ADDR.var_tile_last_footprint, TILE_EXPAND_LAST_FOOTPRINT_BYTES);
+    return {ok: true, already_installed: false,
+            snapshot_bytes: TILE_EXPAND_TILES_BYTES +
+                            TILE_EXPAND_PATH_SCRATCH_BYTES +
+                            TILE_EXPAND_STAGE_SCRATCH_BYTES +
+                            TILE_EXPAND_FOOTPRINT_LIST_BYTES +
+                            TILE_EXPAND_LAST_FOOTPRINT_BYTES};
+}
+
+function uninstallTileExpandBackup() {
+    if (g_base === null) {
+        return {error: 'init not completed yet'};
+    }
+    if (g_tile_expand_tiles_backup === null) {
+        return {ok: true, restored: false};
+    }
+    // Same chunked-restore pattern as state_hash: keep individual writes
+    // <=32 KB to stay well clear of the Frida buffer threshold (tiles at
+    // 51200 B alone would trip a single writeByteArray).
+    const CHUNK = 32 * 1024;
+    function restoreInChunks(addr, backup) {
+        const total = backup.length;
+        const base = rva(addr);
+        for (let off = 0; off < total; off += CHUNK) {
+            const len = Math.min(CHUNK, total - off);
+            base.add(off).writeByteArray(backup.slice(off, off + len).buffer);
+        }
+    }
+    restoreInChunks(ADDR.var_tile_tiles,          g_tile_expand_tiles_backup);
+    restoreInChunks(ADDR.var_tile_path_scratch,   g_tile_expand_path_scratch_backup);
+    restoreInChunks(ADDR.var_tile_stage_scratch,  g_tile_expand_stage_scratch_backup);
+    restoreInChunks(ADDR.var_tile_footprint_list, g_tile_expand_footprint_list_backup);
+    restoreInChunks(ADDR.var_tile_last_footprint, g_tile_expand_last_footprint_backup);
+    g_tile_expand_tiles_backup          = null;
+    g_tile_expand_path_scratch_backup   = null;
+    g_tile_expand_stage_scratch_backup  = null;
+    g_tile_expand_footprint_list_backup = null;
+    g_tile_expand_last_footprint_backup = null;
+    return {ok: true, restored: true};
+}
+
+// Per-call: re-fill the 3 input arrays from the test-plan seed (each
+// array sub-seeded with the same (seed + 0x9e3779b1 * tag) mixing the
+// orchestrator uses), inject the anchor byte at tiles[offset+3], call
+// FUN_004917dd(offset), read back the 5 globals.  No per-call snapshot/
+// restore — the next call's pre-state seeding overwrites the prior
+// call's output, and uninstall flushes the original retail bytes back
+// at test-plan teardown.
+function runRetailTileExpand(in_obj) {
+    if (!g_diff_test_enabled) {
+        return {error: 'diff_test not enabled at init'};
+    }
+    if (!resolveRetailFunctions()) {
+        return {error: 'NativeFunction resolution failed'};
+    }
+    if (g_tile_expand_tiles_backup === null) {
+        return {error: 'installTileExpandBackup not called'};
+    }
+    if (typeof in_obj.seed !== 'number') {
+        return {error: 'in_obj.seed must be a number'};
+    }
+    const seed   = in_obj.seed >>> 0;
+    const offset = in_obj.tile_byte_offset | 0;
+    const anchor = in_obj.anchor_char & 0xff;
+
+    g_diff_test_caller_tid = Process.getCurrentThreadId();
+    const tick_count_before = g_tick_count;
+    const in_tick_before    = g_engine_in_tick;
+
+    let out;
+    try {
+        // Re-fill tiles (51200) from sub-seed 0.  Chunked at <=32 KB so
+        // writeByteArray stays under Frida's instability threshold.
+        const CHUNK = 32 * 1024;
+        const arrays = [
+            {addr: ADDR.var_tile_tiles,          len: TILE_EXPAND_TILES_BYTES,          tag: 0},
+            {addr: ADDR.var_tile_footprint_list, len: TILE_EXPAND_FOOTPRINT_LIST_BYTES, tag: 1},
+            {addr: ADDR.var_tile_last_footprint, len: TILE_EXPAND_LAST_FOOTPRINT_BYTES, tag: 2},
+        ];
+        for (const a of arrays) {
+            const ab = new ArrayBuffer(a.len);
+            tileExpandFillBytes((seed + 0x9e3779b1 * a.tag) >>> 0, ab, a.len);
+            const u8 = new Uint8Array(ab);
+            const base = rva(a.addr);
+            for (let off = 0; off < a.len; off += CHUNK) {
+                const len = Math.min(CHUNK, a.len - off);
+                base.add(off).writeByteArray(u8.slice(off, off + len).buffer);
+            }
+        }
+        // Inject the per-vector anchor at tiles[offset + 3].  Bounds check
+        // is the orchestrator's responsibility — out-of-range offsets are
+        // legitimate test inputs (the function early-returns if the byte
+        // isn't a recognized anchor, before doing any other reads).
+        if (offset + 3 >= 0 && offset + 3 < TILE_EXPAND_TILES_BYTES) {
+            rva(ADDR.var_tile_tiles).add(offset + 3).writeU8(anchor);
+        }
+
+        // Call retail.  __cdecl(int) — pass tile_byte_offset.
+        g_nf_retail_tile_expand(offset);
+
+        // Read back all 5 globals in chunks of <=32 KB.  Copy each chunk
+        // into a fresh Uint8Array so we don't ship a dangling view of
+        // Frida's internal ArrayBuffer (see installStateHashSources for
+        // the same rationale).
+        function readChunked(addr, len) {
+            const dst = new Uint8Array(len);
+            const base = rva(addr);
+            for (let off = 0; off < len; off += CHUNK) {
+                const sz = Math.min(CHUNK, len - off);
+                dst.set(new Uint8Array(base.add(off).readByteArray(sz)), off);
+            }
+            return Array.from(dst);
+        }
+        out = {
+            tiles:               readChunked(ADDR.var_tile_tiles,          TILE_EXPAND_TILES_BYTES),
+            path_scratch:        readChunked(ADDR.var_tile_path_scratch,   TILE_EXPAND_PATH_SCRATCH_BYTES),
+            stage_scratch:       readChunked(ADDR.var_tile_stage_scratch,  TILE_EXPAND_STAGE_SCRATCH_BYTES),
+            footprint_list:      readChunked(ADDR.var_tile_footprint_list, TILE_EXPAND_FOOTPRINT_LIST_BYTES),
+            last_footprint_tile: rva(ADDR.var_tile_last_footprint).readS32(),
+        };
+        const tick_count_after = g_tick_count;
+        const in_tick_after    = g_engine_in_tick;
+        out.raced = ((tick_count_after !== tick_count_before) ||
+                     in_tick_before !== 0 || in_tick_after !== 0) ? 1 : 0;
+    } finally {
         g_diff_test_caller_tid = -1;
     }
     return out;
@@ -3372,8 +3609,8 @@ rpc.exports = {
         if (g_diff_test_enabled) {
             log('diff_test: armed (runRetailRngStep / runRetailComputeFps / ' +
                 'runRetailAnimCycle / runRetailFrameDelta / runRetailPhaseTicks / ' +
-                'runRetailInputState / runRetailSimSubSteps / runRetailStateHash ' +
-                'RPCs live; orchestrator drives test vectors)');
+                'runRetailInputState / runRetailSimSubSteps / runRetailStateHash / ' +
+                'runRetailTileExpand RPCs live; orchestrator drives test vectors)');
         }
     },
 
@@ -3446,6 +3683,18 @@ rpc.exports = {
 
     runRetailStateHash: function (in_obj) {
         return runRetailStateHash(in_obj);
+    },
+
+    installTileExpandBackup: function () {
+        return installTileExpandBackup();
+    },
+
+    uninstallTileExpandBackup: function () {
+        return uninstallTileExpandBackup();
+    },
+
+    runRetailTileExpand: function (in_obj) {
+        return runRetailTileExpand(in_obj);
     },
 
     // Diagnostic counters for the DDraw → GDI seat.  Reflects everything
