@@ -12,6 +12,7 @@
 #include "gfx_dispatch.h"
 #include "gfx_glyph.h"
 #include "gfx_sprite.h"
+#include "gfx_text_label.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -262,6 +263,17 @@ static int g_late_selection_marker_count;
 static int g_late_selection_marker_blit_count;
 static int g_late_world_dirty_hook_count;
 
+/* ─── Chip 5d — final-pass bindings + counters ────────────────────── */
+
+static int            g_debug_label_enabled;          /* DAT_005bb4a5 */
+static const uint8_t *g_debug_label_font;             /* DAT_005af8f0 */
+static const uint8_t *g_debug_label_char_glyph_table; /* port-split */
+static const char    *g_debug_label_suffix;           /* DAT_004e4520 */
+
+/* Final-pass counters. */
+static int g_final_per_cell_count;
+static int g_final_label_render_count;
+
 /* Per-pass call counters.  See the header for what each one
  * represents.  All seven pass entry points (5 stubs + 1 real no-op
  * + 1 implicitly the frame driver) bump exactly one counter per
@@ -448,6 +460,23 @@ void engine_battlefield_render_bind_world_map_dirty_hook(
     g_world_dirty_hook = hook;
 }
 
+void engine_battlefield_render_bind_debug_label_enabled(int enabled)
+{
+    g_debug_label_enabled = enabled;
+}
+
+void engine_battlefield_render_bind_debug_label_font(
+    const uint8_t *font_base, const uint8_t *char_glyph_table)
+{
+    g_debug_label_font             = font_base;
+    g_debug_label_char_glyph_table = char_glyph_table;
+}
+
+void engine_battlefield_render_bind_debug_label_suffix(const char *suffix)
+{
+    g_debug_label_suffix = suffix;
+}
+
 int engine_battlefield_render_terrain_blit_count(void)
 {
     return g_terrain_blit_count;
@@ -482,8 +511,7 @@ int engine_battlefield_render_overlay_zoom32_blit_count(void)
  * ────────────────────────────────────────────────────────────────── */
 
 static void pass_overlay_zoom16(void)   { g_count_overlay_zoom16 += 1; }
-static void pass_final(void)            { g_count_final += 1; }
-/* pass_late is a real port — defined below alongside its two leaves. */
+/* pass_late and pass_final are real ports — defined below. */
 
 /* ──────────────────────────────────────────────────────────────────
  * Middle-pass leaves.
@@ -2272,6 +2300,123 @@ static void pass_late(void)
 }
 
 /* ──────────────────────────────────────────────────────────────────
+ * Chip 5d — final pass (FUN_004bf1f9).
+ *
+ * Debug-mode overlay drawing a per-creature numeric label on each
+ * visible cell.  Gated entirely on the debug-mode flag (retail
+ * DAT_005bb4a5) — pass is a no-op when zero.
+ *
+ * Per-cell shape:
+ *   1. Skip when entity_id (descriptor[+5]) is 0.
+ *   2. Compute a one-byte sum of the first 0x19e bytes of the entity
+ *      record (port of retail FUN_00440089(0x19e, ...)).  Sign-extend
+ *      the sum (signed char → int).
+ *   3. Three-way bucket:
+ *        sum < 0x65  → value = sum,       pen = 0x3f.
+ *        sum < 0xc9  → value = sum - 100, pen = 0xf9.
+ *        else        → value = sum - 200, pen = 0x20.
+ *   4. Skip render when value == 0 OR value == 999.
+ *   5. Render decimal label at
+ *        (col * zoom + viewport_x + 1, row * zoom + viewport_y + 1)
+ *      with prefix=' ', suffix from `g_debug_label_suffix`, font from
+ *      `g_debug_label_font` + `g_debug_label_char_glyph_table`, color
+ *      from the bucket pen.
+ *
+ * Cell pitch is ZOOM-AWARE (uses `g_zoom`) — unlike the late pass's
+ * hardcoded 0x20.  Same visible-grid extent (rows × cols, no over-
+ * scan). */
+
+/* Sum the first `len` bytes of `base`, returning the low byte cast
+ * to signed char (matches retail FUN_00440089).  Used for the
+ * per-creature record digest the final pass renders. */
+static int final_byte_sum_signed(const uint8_t *base, int len)
+{
+    uint8_t acc = 0;
+    for (int i = 0; i < len; i++) {
+        acc = (uint8_t)(acc + base[i]);
+    }
+    return (int)(int8_t)acc;
+}
+
+static void pass_final(void)
+{
+    g_count_final += 1;
+
+    /* Outer gate — pass is a no-op when debug flag is off.  Even the
+     * per-cell counter does NOT bump (retail's `if` wraps the whole
+     * body). */
+    if (!g_debug_label_enabled) {
+        return;
+    }
+
+    if (!g_desc_base || !g_entity_base) {
+        return;
+    }
+
+    int desc_cursor = (g_camera_row_stride * g_camera_y + g_camera_x)
+                    * g_desc_stride;
+
+    for (int row = 0; row < g_grid_rows; row++) {
+        for (int col = 0; col < g_grid_cols; col++) {
+            g_final_per_cell_count += 1;
+
+            uint8_t entity_byte = g_desc_base[
+                desc_cursor
+                + ENGINE_BATTLEFIELD_DESC_OFFSET_LATE_CREATURE_ID];
+
+            if (entity_byte != 0
+                && entity_byte <= g_entity_max_id) {
+                const uint8_t *rec = g_entity_base
+                                   + entity_byte * g_entity_stride;
+
+                /* Signed-byte sum of first 0x19e bytes of the entity
+                 * record (port of retail FUN_00440089). */
+                int sum = final_byte_sum_signed(rec, 0x19e);
+
+                /* Three-way bucket.  Retail uses signed `<` so negative
+                 * sums (high bit set in the byte) hit the first
+                 * branch unchanged. */
+                int value;
+                uint8_t pen;
+                if (sum < 0xc9) {
+                    if (sum < 0x65) {
+                        value = sum;
+                        pen   = 0x3f;
+                    } else {
+                        value = sum - 100;
+                        pen   = 0xf9;
+                    }
+                } else {
+                    value = sum - 200;
+                    pen   = 0x20;
+                }
+
+                /* Magic-value filter — skip when 0 or 999. */
+                if (value != 0 && value != 999
+                    && g_debug_label_font
+                    && g_debug_label_char_glyph_table) {
+                    int px_x = col * g_zoom + g_viewport_x + 1;
+                    int px_y = row * g_zoom + g_viewport_y + 1;
+                    const char *suffix = g_debug_label_suffix
+                        ? g_debug_label_suffix : "";
+
+                    gfx_text_label_render_dec(
+                        value, ' ', suffix,
+                        px_x, px_y,
+                        g_debug_label_font,
+                        g_debug_label_char_glyph_table,
+                        pen);
+                    g_final_label_render_count += 1;
+                }
+            }
+
+            desc_cursor += g_desc_stride;
+        }
+        desc_cursor += g_grid_row_wrap;
+    }
+}
+
+/* ──────────────────────────────────────────────────────────────────
  * Frame driver — port of FUN_004bc142 @ 0x4bc142 (143 B).
  *
  * Retail decompilation (verbatim shape):
@@ -2474,6 +2619,13 @@ void engine_battlefield_render_run_pass_late_for_test(int camera_x, int camera_y
     pass_late();
 }
 
+void engine_battlefield_render_run_pass_final_for_test(int camera_x, int camera_y)
+{
+    g_camera_x = camera_x;
+    g_camera_y = camera_y;
+    pass_final();
+}
+
 /* ──────────────────────────────────────────────────────────────────
  * Coordinate helpers — ports of FUN_004bc222 / 2a5 / 2c5 / 2e5 / 346.
  *
@@ -2593,6 +2745,17 @@ int engine_battlefield_render_late_world_dirty_hook_count(void)
     return g_late_world_dirty_hook_count;
 }
 
+/* ─── Chip 5d accessors ─────────────────────────────────────────── */
+
+int engine_battlefield_render_final_per_cell_count(void)
+{
+    return g_final_per_cell_count;
+}
+int engine_battlefield_render_final_label_render_count(void)
+{
+    return g_final_label_render_count;
+}
+
 void engine_battlefield_render_reset_counts(void)
 {
     g_count_terrain_zoom16             = 0;
@@ -2656,4 +2819,8 @@ void engine_battlefield_render_reset_counts(void)
     g_late_selection_marker_count        = 0;
     g_late_selection_marker_blit_count   = 0;
     g_late_world_dirty_hook_count        = 0;
+
+    /* chip 5d state */
+    g_final_per_cell_count               = 0;
+    g_final_label_render_count           = 0;
 }

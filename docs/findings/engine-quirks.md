@@ -3535,6 +3535,80 @@ hero/army marker position.
 
 ---
 
+## 98. Battlefield final-pass three-way bucket has unreachable branches
+
+The chip-5d final pass digests each visible creature into a one-byte
+signed-char sum (port of retail `FUN_00440089(0x19e, ...)`), then
+three-way buckets the result:
+
+```c
+if (sum < 0xc9) {
+    if (sum < 0x65) { value = sum;        pen = 0x3f; }
+    else            { value = sum - 100;  pen = 0xf9; }
+} else            { value = sum - 200;  pen = 0x20; }
+```
+
+Then filters: `if (value != 999 && value != 0) render(...)`.
+
+A signed-char sum has range `[-128, 127]`.  So:
+
+  - bucket-low: `sum < 101`              — fires for sums in `[-128, 100]`.
+  - bucket-mid: `101 <= sum < 201`       — UNREACHABLE for signed-char.
+  - bucket-high: `sum >= 201`            — UNREACHABLE for signed-char.
+
+Both bucket-mid and bucket-high are dead code with a signed-char
+sum.  The filter `value == 999` is also unreachable (max value is
+`127 - 0 = 127`).
+
+Likely cause: an older revision used a wider sum type (16-bit?
+32-bit?) where the bucket ranges and 999 filter were meaningful.
+When the sum was narrowed to signed-char, the bucket boundaries
+weren't pruned.
+
+Filed because the port preserves the (dead) branches verbatim — a
+reader naively running through the bucket logic would assume all
+three pens can fire in practice.  The pen-color expectation in
+tests should only target bucket-low.
+
+> 📍 `src/engine_battlefield_render.c` (`pass_final`),
+> `docs/findings/battlefield-render.md` §5d,
+> Ghidra `FUN_004bf1f9` lines 22-34.
+
+---
+
+## 99. Battlefield final-pass cell pitch IS zoom-aware (sibling of quirk #97)
+
+`FUN_004bf1f9` computes its per-cell pixel position inline from
+column/row:
+
+```c
+FUN_00402f64(value, ' ', &DAT_004e4520,
+             local_1c * DAT_004e656c + DAT_004e6558 + 1,  /* zoom-aware */
+             local_c  * DAT_004e656c + DAT_004e6554 + 1,
+             &DAT_005af8f0, pen);
+```
+
+The `DAT_004e656c` (zoom) multiplier on `local_1c` (col) and
+`local_c` (row) means the final pass walks the visible grid at the
+ACTUAL zoom-level cell pitch, NOT the hardcoded `0x20` the late
+pass uses (quirk #97).
+
+Quirk-worth as the **counter-example** to #97: a sibling pass that
+walks the same descriptor table, in the same cluster, with the same
+gates — but does NOT inherit #97's pitch hardcoding.  Reinforces that
+#97 is a localized bug (or zoom-32-only design decision) inside
+`FUN_004bd233 / FUN_004be33f`, not a cluster-wide convention.
+
+Tests verify the final pass renders labels at correct positions at
+both zoom 16 and zoom 32 — neither misaligns the way the late pass
+would at zoom 16.
+
+> 📍 `src/engine_battlefield_render.c` (`pass_final`),
+> `docs/findings/battlefield-render.md` §5d,
+> Ghidra `FUN_004bf1f9` lines 36-37.
+
+---
+
 <!--
 Template for new entries:
 

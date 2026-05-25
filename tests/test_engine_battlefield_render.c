@@ -4517,6 +4517,250 @@ int test_engine_battlefield_render_late_selection_marker_null_blob(void)
     return 0;
 }
 
+/* ────────────────────────────────────────────────────────────────
+ * Chip 5d — final pass debug-label overlay (FUN_004bf1f9).
+ *
+ * The final pass is a debug-only overlay drawing per-creature numeric
+ * labels.  Tests verify:
+ *   - debug-flag gate (off → pass is a no-op).
+ *   - cell iteration without over-scan (same shape as late pass).
+ *   - byte-sum + three-bucket transform (pen + value).
+ *   - magic filters (value == 0 / 999 → skip).
+ *   - zoom-aware pixel pitch (unlike late-pass's hardcoded 0x20).
+ *   - reset clears counters.
+ * ──────────────────────────────────────────────────────────────── */
+
+/* Final-pass scaffold builds on late-pass scaffold: 3×3 visible grid
+ * with row_wrap matching the 8×8 physical descriptor table.  Adds
+ * font + suffix bindings and enables the debug flag by default. */
+
+#define FINAL_FONT_SIZE 0x100
+static uint8_t g_final_font_buf[FINAL_FONT_SIZE];
+static uint8_t g_final_glyph_table[FINAL_FONT_SIZE];
+
+static void final_scaffold(int zoom)
+{
+    late_scaffold(zoom);
+    /* Inherits 3×3 vis grid + row_wrap from late_scaffold. */
+
+    memset(g_final_font_buf,    0, sizeof g_final_font_buf);
+    memset(g_final_glyph_table, 0, sizeof g_final_glyph_table);
+
+    engine_battlefield_render_bind_debug_label_enabled(1);
+    engine_battlefield_render_bind_debug_label_font(g_final_font_buf,
+                                                    g_final_glyph_table);
+    engine_battlefield_render_bind_debug_label_suffix("");
+}
+
+static void run_final_only(int cam_x, int cam_y)
+{
+    engine_battlefield_render_run_pass_final_for_test(cam_x, cam_y);
+}
+
+/* Helper: place an entity record whose first 0x19e bytes sum (as
+ * signed char) to exactly `target_sum`.  Achieved by zeroing the
+ * first 0x19d bytes and writing `target_sum` into byte 0. */
+static void final_set_entity_sum(int id, int target_sum)
+{
+    uint8_t *rec = g_entity_table + id * ENT_STRIDE;
+    memset(rec, 0, 0x19e);
+    rec[0] = (uint8_t)target_sum;
+}
+
+/* Reset entity table to zeros for the (max_id+1) records — avoids
+ * leftover entity bytes from previous tests affecting sum/visibility. */
+static void final_clear_entities(void)
+{
+    memset(g_entity_table, 0, sizeof g_entity_table);
+}
+
+/* ─── Debug-flag gate ────────────────────────────────────────────── */
+
+/* Debug flag OFF → pass is a no-op (per-cell counter does NOT bump). */
+int test_engine_battlefield_render_final_disabled_no_op(void)
+{
+    final_scaffold(/*zoom=*/0x10);
+    engine_battlefield_render_bind_debug_label_enabled(0);
+    /* Stage one entity that WOULD render if the gate passed. */
+    desc_set_late(/*col=*/0, /*row=*/0, DESC_COLS_PHY, /*id=*/2);
+    final_clear_entities();
+    final_set_entity_sum(2, 5);  /* bucket: <0x65, pen 0x3f, value 5 */
+
+    run_final_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_final_per_cell_count(),     0);
+    T_ASSERT_EQ_I(engine_battlefield_render_final_label_render_count(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_count_final(),              1);
+    return 0;
+}
+
+/* Debug flag ON → pass walks all visible cells. */
+int test_engine_battlefield_render_final_visits_visible_grid(void)
+{
+    final_scaffold(/*zoom=*/0x10);
+    run_final_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_final_per_cell_count(), 9);
+    T_ASSERT_EQ_I(engine_battlefield_render_final_label_render_count(), 0);
+    return 0;
+}
+
+/* ─── Cell-iteration tests ───────────────────────────────────────── */
+
+/* Cell with descriptor[+5] == 0 → no render. */
+int test_engine_battlefield_render_final_zero_id_no_render(void)
+{
+    final_scaffold(/*zoom=*/0x10);
+    /* All descriptors zero. */
+    run_final_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_final_label_render_count(), 0);
+    return 0;
+}
+
+/* Cell with descriptor[+5] != 0 AND nonzero sum (bucket 0, value 5) →
+ * label renders. */
+int test_engine_battlefield_render_final_renders_label(void)
+{
+    final_scaffold(/*zoom=*/0x10);
+    desc_set_late(/*col=*/1, /*row=*/1, DESC_COLS_PHY, /*id=*/2);
+    final_clear_entities();
+    final_set_entity_sum(2, /*sum=*/5);
+
+    run_final_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_final_label_render_count(), 1);
+    return 0;
+}
+
+/* ─── Three-way bucket tests ─────────────────────────────────────── */
+
+/* Sum in [0x65, 0xc9) → value = sum - 100, pen = 0xf9.  Use sum=150
+ * → value=50.  Renders (value != 0 / 999). */
+int test_engine_battlefield_render_final_bucket_mid(void)
+{
+    final_scaffold(/*zoom=*/0x10);
+    desc_set_late(0, 0, DESC_COLS_PHY, /*id=*/3);
+    final_clear_entities();
+    final_set_entity_sum(3, /*sum=*/150);
+
+    run_final_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_final_label_render_count(), 1);
+    return 0;
+}
+
+/* Sum >= 0xc9 → value = sum - 200, pen = 0x20.  Use sum=0xc9=201
+ * → value=1. */
+int test_engine_battlefield_render_final_bucket_high(void)
+{
+    final_scaffold(/*zoom=*/0x10);
+    desc_set_late(0, 0, DESC_COLS_PHY, /*id=*/3);
+    final_clear_entities();
+    final_set_entity_sum(3, /*sum=*/0xc9);
+
+    run_final_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_final_label_render_count(), 1);
+    return 0;
+}
+
+/* ─── Bucket-transition + magic-value filter tests ───────────────── */
+
+/* Bucket cutoff is STRICT less-than 0x65 = 101: sum=100 is still
+ * bucket-low (value = 100); sum=101 jumps to bucket-mid (value = 1).
+ * Both render — verifies the boundary is `<`, not `<=`. */
+int test_engine_battlefield_render_final_bucket_low_boundary(void)
+{
+    final_scaffold(/*zoom=*/0x10);
+    desc_set_late(0, 0, DESC_COLS_PHY, /*id=*/2);
+    desc_set_late(1, 0, DESC_COLS_PHY, /*id=*/3);
+    final_clear_entities();
+    final_set_entity_sum(2, /*sum=*/100);  /* bucket-low edge */
+    final_set_entity_sum(3, /*sum=*/101);  /* bucket-mid edge */
+
+    run_final_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_final_label_render_count(), 2);
+    return 0;
+}
+
+/* Sum 0 → bucket-low → value = 0 → SKIP. */
+int test_engine_battlefield_render_final_sum_zero_skipped(void)
+{
+    final_scaffold(/*zoom=*/0x10);
+    desc_set_late(0, 0, DESC_COLS_PHY, /*id=*/3);
+    final_clear_entities();
+    /* Entity record all zeros → sum = 0 → value = 0 → skip. */
+
+    run_final_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_final_label_render_count(), 0);
+    return 0;
+}
+
+/* ─── Font / suffix binding tests ────────────────────────────────── */
+
+/* NULL font → render path skipped silently. */
+int test_engine_battlefield_render_final_null_font_no_render(void)
+{
+    final_scaffold(/*zoom=*/0x10);
+    engine_battlefield_render_bind_debug_label_font(NULL, NULL);
+    desc_set_late(0, 0, DESC_COLS_PHY, /*id=*/2);
+    final_clear_entities();
+    final_set_entity_sum(2, 5);
+
+    run_final_only(0, 0);
+
+    /* Cell visited, but no label rendered. */
+    T_ASSERT_EQ_I(engine_battlefield_render_final_per_cell_count(),     9);
+    T_ASSERT_EQ_I(engine_battlefield_render_final_label_render_count(), 0);
+    return 0;
+}
+
+/* ─── Cell-iteration test: walking through all cells ─────────────── */
+
+/* Multiple entities at different cells → multiple labels rendered.
+ * Each cell with descriptor[+5] != 0 AND nonzero sum AND nonzero
+ * value-after-bucket fires the renderer. */
+int test_engine_battlefield_render_final_multiple_labels(void)
+{
+    final_scaffold(/*zoom=*/0x10);
+    final_clear_entities();
+    desc_set_late(0, 0, DESC_COLS_PHY, /*id=*/2);
+    desc_set_late(1, 1, DESC_COLS_PHY, /*id=*/3);
+    desc_set_late(2, 2, DESC_COLS_PHY, /*id=*/4);
+    final_set_entity_sum(2, /*sum=*/5);    /* bucket-low, value 5 */
+    final_set_entity_sum(3, /*sum=*/150);  /* bucket-mid, value 50 */
+    final_set_entity_sum(4, /*sum=*/210);  /* bucket-high, value 10 */
+
+    run_final_only(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_final_label_render_count(), 3);
+    return 0;
+}
+
+/* ─── Reset clears counters ──────────────────────────────────────── */
+
+int test_engine_battlefield_render_final_reset_clears(void)
+{
+    final_scaffold(/*zoom=*/0x10);
+    desc_set_late(0, 0, DESC_COLS_PHY, /*id=*/2);
+    final_clear_entities();
+    final_set_entity_sum(2, /*sum=*/5);
+
+    run_final_only(0, 0);
+
+    T_ASSERT(engine_battlefield_render_final_per_cell_count()    > 0);
+    T_ASSERT(engine_battlefield_render_final_label_render_count() > 0);
+
+    engine_battlefield_render_reset_counts();
+
+    T_ASSERT_EQ_I(engine_battlefield_render_final_per_cell_count(),     0);
+    T_ASSERT_EQ_I(engine_battlefield_render_final_label_render_count(), 0);
+    return 0;
+}
+
 /* ─── Reset zeros chip 5c counters ───────────────────────────────── */
 
 int test_engine_battlefield_render_late_reset_clears(void)

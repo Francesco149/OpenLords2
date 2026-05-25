@@ -655,6 +655,66 @@ typedef void (*engine_battlefield_world_dirty_hook_t)(int x, int y,
 void engine_battlefield_render_bind_world_map_dirty_hook(
     engine_battlefield_world_dirty_hook_t hook);
 
+/* ─────────────────────────────────────────────────────────────────
+ * Final-pass — per-creature debug label overlay (chip 5d)
+ *
+ * Single function: `FUN_004bf1f9 @ 0x4bf1f9` (433 B).  Iterates the
+ * same visible cells the late pass walks (NO over-scan), gated on a
+ * single debug-mode flag (retail DAT_005bb4a5).  For each cell with
+ * descriptor[+5] != 0:
+ *
+ *   1. Sum the first 0x19e bytes of the entity record at
+ *      `entity_base + entity_id * 0x1b0`.  Cast the sum to signed
+ *      char (sign-extended to int) — high-bit-set sums become
+ *      negative values.
+ *   2. Three-way bucket on the result:
+ *        sum <  0x65        → value = sum,        pen = 0x3f
+ *        sum <  0xc9        → value = sum - 100,  pen = 0xf9
+ *        else               → value = sum - 200,  pen = 0x20
+ *   3. Skip render when value == 0 OR value == 999 (magic filters).
+ *   4. Otherwise render the decimal value at
+ *        px_x = col * zoom + viewport_x + 1
+ *        px_y = row * zoom + viewport_y + 1
+ *      via the shared label dispatcher (prefix=' ', suffix from a
+ *      bound string, font from a bound table pair).
+ *
+ * The pixel pitch IS zoom-aware (uses `g_zoom` directly — UNLIKE the
+ * late pass which hardcodes 0x20 — see quirk #97 absence here).
+ *
+ * The whole pass is a no-op when the debug flag is 0.  Used in retail
+ * during AI-tuning sessions or designer playtests.
+ * ───────────────────────────────────────────────────────────────── */
+
+/* Bind the debug-mode gate (retail DAT_005bb4a5).  Non-zero ⇒ final
+ * pass walks the grid; zero ⇒ pass is a no-op.  Default 0. */
+void engine_battlefield_render_bind_debug_label_enabled(int enabled);
+
+/* Bind the font + char-glyph table used by the final pass for label
+ * rendering.  Retail uses `&DAT_005af8f0` for the font; the port's
+ * `gfx_text_label_render_dec` factors the `char_glyph_table` out
+ * separately (see notes on the renderer split).  Either NULL ⇒
+ * label render is suppressed (the pass still walks cells, just
+ * silently skips the renderer call). */
+void engine_battlefield_render_bind_debug_label_font(
+    const uint8_t *font_base, const uint8_t *char_glyph_table);
+
+/* Bind the suffix string appended to the decimal label (retail
+ * `&DAT_004e4520`).  Defaults to an empty string. */
+void engine_battlefield_render_bind_debug_label_suffix(const char *suffix);
+
+/* Final-pass test counters.  Bumped by the real port (FUN_004bf1f9).
+ *
+ *   per_cell_count   — cells visited (rows * cols).  Bumps once
+ *                      per cell EVEN when the debug flag is off.
+ *                      Wait — actually retail's outer `if (DAT_005bb4a5 != '\0')`
+ *                      gates the WHOLE walk; counter only bumps when
+ *                      the debug pass actually runs.
+ *   label_render_count — labels actually dispatched to the renderer
+ *                        (entity_id != 0 AND value not 0 / 999 AND
+ *                        font bound). */
+int engine_battlefield_render_final_per_cell_count(void);
+int engine_battlefield_render_final_label_render_count(void);
+
 /* Late-pass test counters.  Bumped by the real port (FUN_004bd233 +
  * FUN_004be070 + FUN_004be33f).  Distinct from the per-pass call
  * counter `count_late` — that bumps once per frame; these bump per
@@ -699,7 +759,7 @@ int engine_battlefield_render_late_world_dirty_hook_count(void);
  *        zoom == 0x20 → FUN_004bd07f (stub)
  *   5. Always: late pass (FUN_004bd233, port; per-cell creature draw +
  *      selection marker).
- *   6. Always: final pass (FUN_004bf1f9, stub).
+ *   6. Always: final pass (FUN_004bf1f9, port; debug label overlay).
  *   7. Decrement force-redraw counter if non-zero. */
 void engine_battlefield_render_frame(int camera_x, int camera_y);
 
@@ -1051,5 +1111,10 @@ void engine_battlefield_render_run_pass_middle_for_test(int camera_x, int camera
  * so tests can inspect late-pass counters / dirty-rect / cursor without
  * sibling-pass contamination. */
 void engine_battlefield_render_run_pass_late_for_test(int camera_x, int camera_y);
+
+/* TEST-ONLY: run just the final pass with the given camera.  Bypasses
+ * the frame driver so tests can inspect the debug-label overlay's
+ * counters and render-state effects in isolation. */
+void engine_battlefield_render_run_pass_final_for_test(int camera_x, int camera_y);
 
 #endif /* OPENLORDS2_ENGINE_BATTLEFIELD_RENDER_H */

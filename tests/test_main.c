@@ -1017,6 +1017,18 @@ struct test_case {
     X(engine_battlefield_render_late_selection_marker_dirty_box) \
     X(engine_battlefield_render_late_selection_marker_null_blob) \
     X(engine_battlefield_render_late_reset_clears) \
+    \
+    X(engine_battlefield_render_final_disabled_no_op) \
+    X(engine_battlefield_render_final_visits_visible_grid) \
+    X(engine_battlefield_render_final_zero_id_no_render) \
+    X(engine_battlefield_render_final_renders_label) \
+    X(engine_battlefield_render_final_bucket_mid) \
+    X(engine_battlefield_render_final_bucket_high) \
+    X(engine_battlefield_render_final_bucket_low_boundary) \
+    X(engine_battlefield_render_final_sum_zero_skipped) \
+    X(engine_battlefield_render_final_null_font_no_render) \
+    X(engine_battlefield_render_final_multiple_labels) \
+    X(engine_battlefield_render_final_reset_clears) \
     /* end */
 
 /* Emit extern decls. */

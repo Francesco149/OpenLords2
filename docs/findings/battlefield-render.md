@@ -12,14 +12,16 @@ cluster (`FUN_004050f6` + 3 passes, all in `0x405000..0x408000`),
 but lives in a different address band (`0x4bc000..0x4bf300`) and
 uses a different tile format and storage layout.
 
-**Status**: chips 1, 2, 3, 3.5, 4, 5a.i, 5a.ii.a, 5a.ii.b, 5a.iii,
-5a.iv, 5b, 5c, 6 ported (sprite primitives + frame driver + both zoom-
-dispatched terrain passes + zoom-32 overlay + middle-pass driver
-shell + sorted-entity infrastructure + per-entity draw base path +
-three per-cell draw leaves + three type-special leaves + late-pass
-driver + per-cell creature draw + selection marker + coord helpers).
-Final pass still stubbed.  Survey landed 2026-05-25, chips 1–4 + 5b +
-6 + 5a.i + 5a.ii.a + 5a.ii.b + 5a.iii + 5a.iv + 5c landed 2026-05-25.
+**Status**: ENTIRE CLUSTER LANDED — chips 1, 2, 3, 3.5, 4, 5a.i,
+5a.ii.a, 5a.ii.b, 5a.iii, 5a.iv, 5b, 5c, 5d, 6 ported (sprite
+primitives + frame driver + both zoom-dispatched terrain passes +
+zoom-32 overlay + middle-pass driver shell + sorted-entity
+infrastructure + per-entity draw base path + three per-cell draw
+leaves + three type-special leaves + late-pass driver + per-cell
+creature draw + selection marker + debug-label overlay + coord
+helpers).  Only large remaining work in the address band is the
+scroll/pan family (`FUN_004bc1d1 / 51a` — input layer, not render).
+Survey landed 2026-05-25, all chips landed 2026-05-25.
 
 ## Entry point
 
@@ -356,6 +358,26 @@ The cluster is too large to port in one chip.  Suggested chip plan:
    draw reads z32 anim table at zoom 16 too), #96 (lopsided cursor
    restore on gate fail), #97 (per-cell pitch HARDCODED 0x20
    regardless of zoom).
+
+   **`FUN_004bf1f9`** — chip 5d.  **LANDED** (2026-05-25) as
+   `pass_final` inside `engine_battlefield_render`.  Debug-mode
+   overlay drawing a per-creature numeric label on each visible cell.
+   Whole pass gated on the debug flag (retail `DAT_005bb4a5`); when
+   the flag is 0, the pass is a no-op (even the per-cell counter
+   doesn't bump).  When enabled: walks the same visible cells the
+   late pass walks (no over-scan), for each cell with
+   `descriptor[+5] != 0` computes a signed-byte sum of the first
+   0x19e bytes of the entity record (port of retail `FUN_00440089`),
+   three-way buckets the result (`< 0x65` → pen 0x3f, `< 0xc9` →
+   pen 0xf9 with `value -= 100`, else pen 0x20 with `value -= 200`),
+   filters out `value == 0 || value == 999`, and renders the decimal
+   label via `gfx_text_label_render_dec` at zoom-aware pixel pitch.
+   Adds new bindings: `bind_debug_label_enabled(int)`,
+   `bind_debug_label_font(font_base, char_glyph_table)`,
+   `bind_debug_label_suffix(const char *)`.  Filed quirks #98
+   (bucket-mid and bucket-high are UNREACHABLE for signed-char sum
+   — dead code), #99 (pitch IS zoom-aware here, counter-example to
+   #97's late-pass hardcoding).
 
 6. Helpers — interleaved as required:
    - `FUN_004bc222/2a5/2c5/2e5/346` (hit-test, screen↔hex).
