@@ -7,6 +7,150 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Battlefield port chip 4: zoom-32 terrain pass (+20 tests, 2 new quirks)
+
+Continuation of the same unattended session.  Previous dispatch
+landed chips 2 + 3 + 3.5 (frame driver, zoom-16 terrain pass, 32×32
+raw blit primitive).  This dispatch lands the next chip on the plan:
+the zoom-32 terrain pass `FUN_004bcbdc` (1187 B), which is the
+larger sibling of the zoom-16 pass and the one that pulls in the
+clipped-blit family for the second-sprite-per-cell path.
+
+### Chip 4: zoom-32 terrain pass `FUN_004bcbdc` (1187 B)
+
+Replaces the static `pass_terrain_zoom32` stub in
+`engine_battlefield_render` with the real port.  Two new per-cell
+behaviors over the zoom-16 sibling distinguish this pass:
+
+**1. EARLY-SKIP gate on descriptor[+1] & 4.**  Dirty (or force-
+redrawn) cells with this bit set are silently dropped — NO drawing
+AND NO boundary marking.  Clean cells are NOT affected by the gate:
+they still get boundary marking unconditionally.  This is the first
+zoom-level-specific path in the battlefield renderer that drops
+boundary marking for a dirty cell.
+
+**2. SECOND clipped sprite per cell.**  Gated on `descriptor[+0]
+!= 0` AND `descriptor[+4] ∈ {1, 2, 3}`.  Always pulls from the
+**alt** blob (regardless of which blob the first sprite picked).
+Picks slot `descriptor[+0] + 0x8b`, clamped at `0x9a` when
+`descriptor[+0] >= 0x10`.  Dispatches via the full clipped-blit
+pipeline (clip_x → clip_y → apply_skip_and_dispatch_sprite) against
+a bound clip rect.  This is where the clipped sprite blit family
+(FUN_004b446d / FUN_004b44d2 / FUN_004b43b1 + the two clip setters)
+finally gets called from the battlefield path.
+
+Both sprites share a `[1, 310000]` glyph_offset gate that aborts the
+ENTIRE cell on out-of-band offsets — skips boundary marking AND
+skips the second sprite.  Three abort gates total (out-of-band first-
+sprite offset on primary path, same on alt path, second-sprite mode
+byte == 0 or > 3); each matches retail's `goto LAB_004bcc53` shape
+that bypasses the boundary block.
+
+New binding: `engine_battlefield_render_bind_clip_rect(left, top,
+right, bottom)` mirrors retail's `DAT_004e6564 / 5d54 / 5d48 / 5d6c`
+inline args to FUN_0040464c / FUN_0040477b.  Two new test-only
+counters: per-cell first / second sprite dispatch counts.
+
+### Filed quirks (#77, #78)
+
+  - **#77** — Battlefield zoom-32 cell ABORT skips boundary marking.
+    Three distinct cell-disposal paths in FUN_004bcbdc; only ONE
+    (clean) and one branch of another (dirty + skip-bit clear + no
+    abort gate fired) run boundary marking.  Critical for the
+    "scroll smear" failsafe — corrupted descriptors get dirty-cleared
+    but never get the boundary re-paint mark, so the corruption
+    silently propagates as unredrawn pixels with no recovery on
+    scroll.  Unlike zoom-16 where every cell always got boundary
+    marking, regardless of dirty/clean.
+
+  - **#78** — Zoom-32 second-sprite slot index saturates at slot
+    `0x9a`.  `descriptor[+0]` values in `[1, 0x10)` map to slots
+    `[0x8c, 0x9b)`; `>= 0x10` clamps to `0x9a`.  A saturating clamp
+    (not a wrap) so corrupted high values render the "default
+    overlay" sprite rather than dereferencing past the slot table.
+    Effectively a silent failsafe.
+
+Also confirmed by this port: quirk #76's prediction that the zoom-32
+sibling shares zoom-16's strict `if/else-if` blob-selector chain
+holds — non-{0, 4} `(flags & 0x1c)` values skip the first sprite
+silently.  The second sprite path is independent and STILL runs in
+those cells.
+
+### Test scaffold bug worth recording
+
+The chip-4 test scaffold initially placed its pixel patterns at blob
+offsets `0x400 / 0x800 / 0xc00` and used `memset` over 1024-byte
+regions.  Slot 0x9a's descriptor lives at `0x9a*16+8 = 2472`, which
+overlaps the `0x800..0xc00` pixel-region memset (covers `[2048,
+3072)`).  The 0x88 pattern silently corrupted slot descriptors,
+which then surfaced as garbage `glyph_w` / `glyph_offset` values
+during clip setup — leading to a SEGV in `sprite_blit_clipped`
+(off-canvas dest write).  Fix: bump pixel offsets to >= 4096 so
+they land above the entire slot descriptor table (slots 0..0xff end
+at byte 4087).  No retail bug — this was a pure test-scaffold mistake.
+
+### Headline numbers
+
+- **777 → 797 host tests** (+20), all green under ASan/UBSan.
+- **1 retail function ported**: `FUN_004bcbdc` (1187 B).
+- **2 new engine quirks** (#77 abort skips boundary, #78 second-
+  sprite slot clamp).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Battlefield port state
+
+| chip | function                       | size  | status     |
+| ---- | ------------------------------ | ----: | ---------- |
+| 1    | 16×16 raw blit primitive       |  705 B | ported (2 sessions ago) |
+| 2    | frame driver + zoom-16 no-op   |  154 B | ported (prev session) |
+| 3    | zoom-16 terrain pass           |  725 B | ported (prev session) |
+| 3.5  | 32×32 raw blit primitive       | 2997 B | ported (prev session) |
+| 4    | zoom-32 terrain pass           | 1187 B | **ported (this session)** |
+| 5a   | middle pass                    |  543 B | stub       |
+| 5b   | zoom-32 overlay pass           |  436 B | stub       |
+| 5c   | late pass                      |  290 B | stub       |
+| 5d   | final pass                     |  433 B | stub       |
+
+Both zoom-dispatched first-pass terrain blits are now real ports.
+The remaining four passes are the always-on middle / late / final
++ the zoom-32 overlay — collectively ~1700 B, all stubs that bump
+counters.  Their internals are unsurveyed; substantial discovery
+work needed before porting.
+
+### What's next
+
+1. **Battlefield chip 5** — the four remaining passes.  Need to
+   survey each one (probably each warrants its own findings-doc
+   section).  Suggestion: start with `FUN_004bd355` (middle pass,
+   543 B) as it's the always-on path and zoom-independent — likely
+   draws units/units-state without needing zoom-specific layout
+   logic.  `FUN_004bf1f9` (final pass, 433 B) is also always-on
+   and might be a good second chip if the middle pass is straight-
+   forward.
+
+2. **gfx.c runtime wiring** — still gated on user availability.
+   Strategic-mode primary + overlay are end-to-end since three
+   sessions ago.  Visual verification milestone reachable as soon
+   as the user pops up the game.
+
+3. **Battlefield helpers** — hit-test (`FUN_004bc222`), screen↔hex
+   (`FUN_004bc2a5 / 2c5 / 2e5 / 346`), scroll (`FUN_004bc1d1 /
+   51a`).  Small surface area; would unblock input handling for
+   the combat screen.
+
+Picking **#1** next: chip 5 is the natural continuation of the
+battlefield render port, and at least one of its four passes
+(middle / late / final) is always-on so they get exercised every
+frame regardless of zoom — verifiable in isolation.
+
+This is a natural `/clear` point — chip 4 lands cleanly, the
+battlefield port is now >50% by LOC (5876 B ported of ~12 KB
+cluster), and the remaining work is a discrete four-pass chip
+with no inter-pass coupling discovered yet.
+
+---
+
 ## 2026-05-25 — Battlefield port chips 2, 3, 3.5 (3 chips, +31 tests)
 
 Continuation of the same unattended session.  Previous dispatch
