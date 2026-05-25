@@ -109,8 +109,49 @@ void engine_overlay_render_bind_tile_descriptors(uint8_t *descriptors);
 void engine_overlay_render_bind_overlay_blob(const uint8_t *blob);
 
 /* Bind the per-territory record array (retail `DAT_0052f0b0`, 151 ×
- * 0x1a4 B, slot 0 reserved).  Same memory the primary pass binds. */
+ * 0x1a4 B, slot 0 reserved).  Same memory the primary pass binds.
+ *
+ * The army drawer reads the per-territory record at fields:
+ *
+ *   `record[+0x02]`  → owner index byte (drives the "large army"
+ *                       sprite index in the 0x80-only / bVar2 ≥ 13
+ *                       branch).
+ *   `record[+0x19a]` → linked next-record index byte (army-tag aux
+ *                       header used by FUN_00407f82's label sprite).
+ *   `record[+0x19c]` → label numeric value byte (the integer drawn
+ *                       under the label sprite by FUN_00407f82).
+ *
+ * The army drawer accepts non-const access (it doesn't mutate any
+ * territory field). */
 void engine_overlay_render_bind_territory_records(const uint8_t *records);
+
+/* Bind the per-army record array (retail `DAT_0053f9b0`, 17 × 0x300 B,
+ * slot 0 reserved — same memory `g_per_army_768` covers).
+ *
+ * The army drawer indexes into this by `descriptors[cell + 7]` (the
+ * per-tile descriptor's army-record index byte) and reads pairs of
+ * 32-bit fields as (current, previous) animation drivers plus a
+ * signed-byte "tier flag" per category:
+ *
+ *   chase  : (+0x2a0, +0x2a4) int pair; +0x296 i8 tier flag.
+ *   fight  : (+0x2b8, +0x2bc) int pair; +0x2ae i8 tier flag.
+ *   march  : (+0x2d0, +0x2d4) int pair; +0x2c6 i8 tier flag.
+ *   die    : (+0x2e8, +0x2ec) int pair; +0x2de i8 tier flag.
+ *
+ * The "march" and "chase" labels are tentative — what matters here is
+ * that each category has an independent (cur, prev) integer pair whose
+ * difference picks an animation rate tier.
+ *
+ * The drawer additionally reads:
+ *
+ *   `army[+0x07]`  byte — "fortress slot" index (used by the 0x40
+ *                          path with descriptor[+4]&0xf == 0).
+ *   `army[+0x1ad]` byte — "march-out-of-territory" slot byte (used by
+ *                          the 0x40 path with descriptor[+4]&0xf == 2).
+ *   `army[+0x1bc]` int  — territory-link int (used by the 0x80-only
+ *                          ≥13 branch as the territory index for the
+ *                          large-army sprite lookup). */
+void engine_overlay_render_bind_army_records(const uint8_t *records);
 
 /* Bind the per-cell-size 16-bit short table (retail `DAT_00500c30`).
  * Indexed by `(cell + (cell >> 31 & 7)) >> 3` (i.e. cell/8 with the
@@ -162,6 +203,53 @@ void engine_overlay_render_set_view_mode(int view_mode);
  * which territory's max-size bytes (+0x153 / +0x154) the city drawer
  * uses as its sprite-size cap.  Range [1, 150]. */
 void engine_overlay_render_set_active_territory(int territory_idx);
+
+/* Set the render-mode flag (retail `DAT_0053f264`).  When this is `1`
+ * AND descriptor[+2]&0x20 is clear, the army drawer skips the cell
+ * entirely (this is the "dev-mode foggable-only filter" — armies on
+ * cells without bit 0x20 are suppressed).  Default 0 — production-mode
+ * shows all armies.  Same retail global the primary pass uses. */
+void engine_overlay_render_set_render_mode(int mode);
+
+/* Set the overlay sprite base index (retail `DAT_0057d390`).  The army
+ * drawer uses this as the base for the "large army" sprite picked when
+ * descriptor[+1]&0x40 fires the 0-low-nibble fortress branch and for
+ * the 0x80-only ≥13 territory-color marker (`base + 8*color - 8`).
+ * Same retail global the primary pass binds. */
+void engine_overlay_render_set_overlay_base_index(int base);
+
+/* Set the arrow-marker base sprite index (retail `_DAT_0057d38c`,
+ * 4-byte int, NOT the byte at 0x57d390).  Used by the 0x80-only +
+ * 0x20-flagged "directional arrow" branch:
+ *
+ *   first row (bVar2 in 0x10..0x12): `base + 6*(bVar2-0x10) + 0x67`
+ *   second row (bVar2 in 0x14..0x16): `base + 6*(bVar2-0x14) + 0x55`
+ *
+ * Default 0. */
+void engine_overlay_render_set_arrow_marker_base_index(int base);
+
+/* Set the global animation tick counter (retail `DAT_0053e9a4`).  The
+ * "transition-end" branches (categories 3, 6, 9, 12 and the
+ * descriptor[+1]&0x10 / bVar2==0x13 branch) gate on `tick <= 0xf` and
+ * use `tick + 0x28` as the sprite index.  Range expected [0, 0xf]
+ * (cycle); values > 0xf skip the dispatch. */
+void engine_overlay_render_set_animation_tick(int tick);
+
+/* Set the four animation-rate tier flags (retail `DAT_0058fd08`,
+ * `DAT_0057d3c8`, `DAT_0057d3ac`, `DAT_00591510`).  Selected by the
+ * `(cur - prev)` distance computed from the per-army record pair:
+ *
+ *   distance <  10  → tier 0 flag (`DAT_0058fd08`)
+ *   distance < 0x19 → tier 1 flag (`DAT_0057d3c8`)
+ *   distance < 0x32 → tier 2 flag (`DAT_0057d3ac`)
+ *   distance ≥ 0x32 → tier 3 flag (`DAT_00591510`)
+ *
+ * Non-zero ⇒ animation advances this frame; zero ⇒ frame held.  Each
+ * is an independent retail flag that the per-frame tick logic flips. */
+void engine_overlay_render_set_animation_rate_flags(int tier0,
+                                                    int tier1,
+                                                    int tier2,
+                                                    int tier3);
 
 /* Set the dev-mode debug overlay flags.
  *
@@ -230,11 +318,32 @@ void engine_overlay_render_row_phase1(void);
  * sprite-family blitters. */
 void engine_overlay_render_tile_city(int phase);
 
-/* STUB port of FUN_004071a0 (3179 B army/units drawer).  Real body
- * lands in the next chip.  For now: validates input, bumps a per-
- * call counter so the row iterators can be tested for dispatch
- * fidelity, otherwise no-op.  Same signature the final port will
- * have. */
+/* Port of FUN_004071a0 (3179 B).  Per-tile army / units drawer for
+ * descriptor flag bit 0x80.  Top-level dev filter: skip cell when
+ * `render_mode == 1` AND descriptor[+2]&0x20 is clear.  Then dispatch
+ * branch on `descriptor[+1]` flag bits in priority order:
+ *
+ *   bit 0x40        → fortress / march-out path (gated on
+ *                      descriptor[+4]&0xf == 0 or 2; reads
+ *                      per-army[+0x07] or [+0x1ad]).
+ *   bit 0x10        → animation-end path (gated on
+ *                      descriptor[+0] == 0x13).
+ *   bit 0x20        → directional-arrow path (gated on
+ *                      descriptor[+0] in 0x10..0x16 excl 0x13).
+ *   only bit 0x80   → unit-category path:
+ *                      descriptor[+0] is the category byte:
+ *                        <13 — animated category (chase/fight/march/
+ *                              die — see findings doc); writes the
+ *                              new animation frame back to
+ *                              descriptor[+3].
+ *                        13..0x19 (excl. 0x14) — large-army sprite
+ *                              at a territory; calls the territory-
+ *                              label sub-renderer (FUN_00407f82).
+ *
+ * Common dispatch tail: stages from the overlay blob; validates
+ * src_off < 0x11171 (= 70001) — a TIGHTER bound than the primary
+ * pass's 310001.  If `phase == 1` shifts X anchor by -x_half_step.
+ * Marks dirty rect (32-px for kind=1, 48-px for kind=2). */
 void engine_overlay_render_tile_army(int phase);
 
 /* Port of FUN_00408c50.  Two-mode debug overlay text helper.  Reads

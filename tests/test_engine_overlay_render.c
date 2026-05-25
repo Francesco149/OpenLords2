@@ -97,6 +97,51 @@ static void territory_set_max_size(int slot, int8_t lo, int8_t hi)
     rec[0x154] = (uint8_t)hi;
 }
 
+/* Set per-territory fields the army drawer reads (owner, next-link,
+ * label-numeric). */
+static void territory_set_army_fields(int slot,
+                                      uint8_t owner,
+                                      uint8_t next_link,
+                                      uint8_t label_value)
+{
+    uint8_t *rec = &g_records[slot * 0x1a4];
+    rec[0x02]  = owner;
+    rec[0x19a] = next_link;
+    rec[0x19c] = label_value;
+}
+
+/* Synthetic per-army record array (17 × 0x300 B). */
+#define ARMY_SLOTS   17
+#define ARMY_STRIDE  0x300
+static uint8_t g_army_records[ARMY_SLOTS * ARMY_STRIDE];
+
+static uint8_t *army_record(int slot)
+{
+    return &g_army_records[slot * ARMY_STRIDE];
+}
+
+static void army_set_band(uint8_t *rec, int cur_off, int prev_off, int tier_off,
+                          int32_t cur_val, int32_t prev_val, int8_t tier_val)
+{
+    rec[cur_off + 0]  = (uint8_t)(cur_val & 0xff);
+    rec[cur_off + 1]  = (uint8_t)((cur_val >> 8) & 0xff);
+    rec[cur_off + 2]  = (uint8_t)((cur_val >> 16) & 0xff);
+    rec[cur_off + 3]  = (uint8_t)((cur_val >> 24) & 0xff);
+    rec[prev_off + 0] = (uint8_t)(prev_val & 0xff);
+    rec[prev_off + 1] = (uint8_t)((prev_val >> 8) & 0xff);
+    rec[prev_off + 2] = (uint8_t)((prev_val >> 16) & 0xff);
+    rec[prev_off + 3] = (uint8_t)((prev_val >> 24) & 0xff);
+    rec[tier_off]     = (uint8_t)tier_val;
+}
+
+static void army_set_terr_link(uint8_t *rec, int32_t terr_idx)
+{
+    rec[0x1bc] = (uint8_t)(terr_idx & 0xff);
+    rec[0x1bd] = (uint8_t)((terr_idx >> 8) & 0xff);
+    rec[0x1be] = (uint8_t)((terr_idx >> 16) & 0xff);
+    rec[0x1bf] = (uint8_t)((terr_idx >> 24) & 0xff);
+}
+
 /* Synthetic per-cell-size table (16-bit shorts).  Keyed by
  * (cell / 8). */
 static int16_t g_per_cell_size_table[64];
@@ -171,12 +216,16 @@ static void scaffold_init(void)
     engine_overlay_render_reset_call_counts();
 
     gfx_dispatch_set_alt_clip(0, 0, 0);
+    /* last_glyph_index persists across tests; reset to 0 so tests
+     * checking "no dispatch happened" are not poisoned by prior runs. */
+    gfx_dispatch_set_last_glyph_index(0);
 }
 
 static void bind_default_scene(void)
 {
     scaffold_init();
     memset(g_records, 0, sizeof g_records);
+    memset(g_army_records, 0, sizeof g_army_records);
     memset(g_tile_descriptors, 0, sizeof g_tile_descriptors);
     memset(g_cell_bytes, 0, sizeof g_cell_bytes);
     memset(g_per_cell_size_table, 0, sizeof g_per_cell_size_table);
@@ -189,6 +238,7 @@ static void bind_default_scene(void)
     engine_overlay_render_bind_tile_descriptors(g_tile_descriptors);
     engine_overlay_render_bind_overlay_blob(g_rle_blob);
     engine_overlay_render_bind_territory_records(g_records);
+    engine_overlay_render_bind_army_records(g_army_records);
     engine_overlay_render_bind_per_cell_size_table(g_per_cell_size_table);
     engine_overlay_render_bind_canvas(g_canvas, CANVAS_W, CANVAS_H);
     engine_overlay_render_bind_debug_font(NULL, NULL);
@@ -198,6 +248,12 @@ static void bind_default_scene(void)
      * drawer's cap never kicks in unless tests target it. */
     territory_set_max_size(1, /*lo=*/0, /*hi=*/100);
     engine_overlay_render_set_dev_flags(0, 0);
+
+    engine_overlay_render_set_render_mode(0);
+    engine_overlay_render_set_overlay_base_index(0);
+    engine_overlay_render_set_arrow_marker_base_index(0);
+    engine_overlay_render_set_animation_tick(0);
+    engine_overlay_render_set_animation_rate_flags(0, 0, 0, 0);
 }
 
 /* ────────────────────────────────────────────────────────────────
@@ -625,5 +681,507 @@ int test_engine_overlay_render_error_count_persists_across_frames(void)
     engine_overlay_render_frame();
     int c2 = engine_overlay_render_error_count();
     T_ASSERT(c2 > c1);
+    return 0;
+}
+
+/* ────────────────────────────────────────────────────────────────
+ * Army drawer tests — port of FUN_004071a0 (3179 B).
+ * ──────────────────────────────────────────────────────────────── */
+
+/* Helper: install a tile at (col, row) with cell value `cv`, set
+ * descriptor fields to drive an army-drawer path, and run one frame.
+ *
+ * Touches descriptor offsets +0, +1, +2, +4, +5, +7.  Does NOT touch
+ * +3 (the animation frame byte) — callers that exercise the step /
+ * end-frame categories must seed it explicitly before calling.
+ *
+ * Returns the army_call_count. */
+static int run_army_with_descriptor(int cv,
+                                    uint8_t first_byte, uint8_t raw_flag,
+                                    uint8_t disp_flag, uint8_t descriptor_4)
+{
+    cell_fill_all(EMPTY_CELL);
+    cell_set(1, 1, cv);
+    g_tile_descriptors[cv + 0] = first_byte;
+    g_tile_descriptors[cv + 1] = raw_flag;
+    g_tile_descriptors[cv + 2] = disp_flag;
+    g_tile_descriptors[cv + 4] = descriptor_4;
+    g_tile_descriptors[cv + 5] = 0;
+    g_tile_descriptors[cv + 7] = 1;  /* army index */
+    engine_overlay_render_frame();
+    return engine_overlay_render_army_call_count();
+}
+
+/* Dev-mode filter — when render_mode==1 AND descriptor[+2]&0x20 is
+ * clear, the army drawer skips before any branch.  Counter still
+ * bumps (it's incremented before the gate). */
+int test_engine_overlay_render_army_dev_filter_skips_when_no_0x20(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_render_mode(1);
+    /* descriptor[+2] = 0x80 — bit 0x20 clear → dev filter trips. */
+    run_army_with_descriptor(0x30, /*first=*/0, /*raw=*/0xc0,
+                             /*disp=*/0x80, /*d4=*/0);
+    /* No errors and the dispatch tail was never reached. */
+    T_ASSERT_EQ_I(engine_overlay_render_error_count(), 0);
+    return 0;
+}
+
+int test_engine_overlay_render_army_dev_filter_allows_when_0x20_set(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_render_mode(1);
+    /* descriptor[+2] = 0xa0 = 0x80 | 0x20 → bit 0x20 set, filter allows.
+     * descriptor[+1] = 0 → high-nibble gate trips, no dispatch. */
+    run_army_with_descriptor(0x30, /*first=*/0, /*raw=*/0,
+                             /*disp=*/0xa0, /*d4=*/0);
+    T_ASSERT_EQ_I(engine_overlay_render_error_count(), 0);
+    return 0;
+}
+
+/* High-nibble gate — raw_flag low-nibble-only → skip. */
+int test_engine_overlay_render_army_high_nibble_gate(void)
+{
+    bind_default_scene();
+    /* descriptor[+1] = 0x0f (low nibble only). */
+    run_army_with_descriptor(0x30, 0, 0x0f, 0x80, 0);
+    T_ASSERT_EQ_I(engine_overlay_render_error_count(), 0);
+    return 0;
+}
+
+/* 0x40 / nibble==0 (fortress) — army[+0x7] selects sprite index. */
+int test_engine_overlay_render_army_fortress_dispatches_sprite(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_overlay_base_index(0x10);
+    uint8_t *army = army_record(1);
+    army[0x07] = 3;
+    /* descriptor[+1] = 0x40, descriptor[+2] = 0x80 (army), descriptor[+4]
+     * nibble 0. */
+    run_army_with_descriptor(0x30, /*first=*/0, /*raw=*/0x40,
+                             /*disp=*/0x80, /*d4=*/0x00);
+    /* Sprite idx = 3*8 - 8 + 0x10 = 0x20. */
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x20);
+    return 0;
+}
+
+int test_engine_overlay_render_army_fortress_zero_skips(void)
+{
+    bind_default_scene();
+    /* army[+0x7] left at 0 → branch returns before dispatch. */
+    run_army_with_descriptor(0x30, 0, /*raw=*/0x40, /*disp=*/0x80, /*d4=*/0);
+    T_ASSERT_EQ_I(engine_overlay_render_error_count(), 0);
+    /* No sprite staged → last_glyph_index unchanged from init (0). */
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0);
+    return 0;
+}
+
+/* 0x40 / nibble==2 (march-out) — sprite 0x81 fixed. */
+int test_engine_overlay_render_army_marchout_dispatches_0x81(void)
+{
+    bind_default_scene();
+    uint8_t *army = army_record(1);
+    army[0x1ad] = 5;  /* non-zero gate */
+    run_army_with_descriptor(0x30, 0, /*raw=*/0x40, /*disp=*/0x80, /*d4=*/0x02);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x81);
+    return 0;
+}
+
+int test_engine_overlay_render_army_marchout_zero_skips(void)
+{
+    bind_default_scene();
+    /* army[+0x1ad] left at 0. */
+    run_army_with_descriptor(0x30, 0, /*raw=*/0x40, /*disp=*/0x80, /*d4=*/0x02);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0);
+    return 0;
+}
+
+/* 0x40 / nibble in {1, 3..15} — stale-sprite quirk: dispatch tail
+ * still runs with the dispatcher's existing staged sprite. */
+int test_engine_overlay_render_army_0x40_other_nibble_uses_stale_sprite(void)
+{
+    bind_default_scene();
+    /* Pre-stage a sprite via the city drawer at sprite 0x4e (large). */
+    cell_fill_all(EMPTY_CELL);
+    cell_set(1, 1, 0x40);
+    descriptor_set(0x40, /*first=*/0, /*raw=*/0x10, /*disp=*/0x40, /*head=*/0);
+    engine_overlay_render_frame();
+    int city_dispatched = gfx_dispatch_last_glyph_index();
+    T_ASSERT_EQ_I(city_dispatched, 0x4e);
+
+    /* Now fire an army with raw=0x40, nibble=1 → no branch sets
+     * sprite_idx → tail dispatches whatever was last staged (0x4e). */
+    g_tile_descriptors[0x40 + 2] = 0x80;  /* re-arm army bit (city cleared 0x40) */
+    g_tile_descriptors[0x40 + 1] = 0x40;
+    g_tile_descriptors[0x40 + 4] = 0x01;  /* nibble = 1, NOT in {0, 2} */
+    int errors_before = engine_overlay_render_error_count();
+    engine_overlay_render_frame();
+    /* Stale 0x4e gets re-dispatched.  No new error from this path. */
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x4e);
+    /* (Errors may bump only if the stale sprite has a bad src_off; for
+     * our valid blob it's fine.) */
+    (void)errors_before;
+    return 0;
+}
+
+/* 0x10 (no 0x40) — first_byte == 0x13 required, tick gate. */
+int test_engine_overlay_render_army_0x10_animation_end_dispatches(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_animation_tick(5);
+    run_army_with_descriptor(0x30, /*first=*/0x13, /*raw=*/0x10,
+                             /*disp=*/0x80, /*d4=*/0);
+    /* sprite = tick + 0x28 = 5 + 0x28 = 0x2d. */
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x2d);
+    return 0;
+}
+
+int test_engine_overlay_render_army_0x10_wrong_first_byte_skips(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_animation_tick(5);
+    run_army_with_descriptor(0x30, /*first=*/0x12, /*raw=*/0x10,
+                             /*disp=*/0x80, /*d4=*/0);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0);
+    return 0;
+}
+
+int test_engine_overlay_render_army_0x10_tick_out_of_range_skips(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_animation_tick(0x10);  /* > 0xf */
+    run_army_with_descriptor(0x30, /*first=*/0x13, /*raw=*/0x10,
+                             /*disp=*/0x80, /*d4=*/0);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0);
+    return 0;
+}
+
+int test_engine_overlay_render_army_0x10_view_mode_2_skips(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_view_mode(2);
+    engine_overlay_render_set_animation_tick(5);
+    run_army_with_descriptor(0x30, /*first=*/0x13, /*raw=*/0x10,
+                             /*disp=*/0x80, /*d4=*/0);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0);
+    return 0;
+}
+
+/* 0x20 (no 0x40, 0x10) — directional arrows.  Two index bands:
+ * 0x10..0x12 → low base+0x67, 0x14..0x16 → high base+0x55. */
+int test_engine_overlay_render_army_0x20_arrow_low_band(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_arrow_marker_base_index(0x100);
+    /* first = 0x11 → delta = 1 → sprite = 1*6 + 0x100 + 0x67 = 0x16d. */
+    run_army_with_descriptor(0x30, /*first=*/0x11, /*raw=*/0x20,
+                             /*disp=*/0x80, /*d4=*/0);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x16d);
+    return 0;
+}
+
+int test_engine_overlay_render_army_0x20_arrow_high_band(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_arrow_marker_base_index(0x100);
+    /* first = 0x15 → delta = 1 → sprite = 1*6 + 0x100 + 0x55 = 0x15b. */
+    run_army_with_descriptor(0x30, /*first=*/0x15, /*raw=*/0x20,
+                             /*disp=*/0x80, /*d4=*/0);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x15b);
+    return 0;
+}
+
+int test_engine_overlay_render_army_0x20_arrow_0x13_skips(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_arrow_marker_base_index(0x100);
+    /* first = 0x13 → enters high sub-branch but (0x13-0x14) wraps to
+     * negative → port treats as out-of-range and returns. */
+    run_army_with_descriptor(0x30, /*first=*/0x13, /*raw=*/0x20,
+                             /*disp=*/0x80, /*d4=*/0);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0);
+    return 0;
+}
+
+int test_engine_overlay_render_army_0x20_arrow_out_of_range_skips(void)
+{
+    bind_default_scene();
+    /* first = 0x17 → > 0x16 → return. */
+    run_army_with_descriptor(0x30, /*first=*/0x17, /*raw=*/0x20,
+                             /*disp=*/0x80, /*d4=*/0);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0);
+    return 0;
+}
+
+/* 0x80-only / first_byte < 13: animation step categories. */
+int test_engine_overlay_render_army_cat2_step_writes_frame_back(void)
+{
+    bind_default_scene();
+    /* Tier-0 rate active (distance < 10). */
+    engine_overlay_render_set_animation_rate_flags(1, 0, 0, 0);
+    uint8_t *army = army_record(1);
+    /* band0 cur=7, prev=0 → distance=7 → tier 0 → rate flag != 0. */
+    army_set_band(army, 0x2b8, 0x2bc, 0x2ae, 7, 0, 0);
+    int cv = 0x30;
+    g_tile_descriptors[cv + 3] = 5;  /* initial frame */
+    /* first=2 → step category, raw=0x80, no other bits. */
+    run_army_with_descriptor(cv, /*first=*/2, /*raw=*/0x80,
+                             /*disp=*/0x80, /*d4=*/0);
+    /* Step path: frame=5+1=6, no wrap. */
+    T_ASSERT_EQ_I(g_tile_descriptors[cv + 3], 6);
+    /* Step never dispatches. */
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0);
+    return 0;
+}
+
+int test_engine_overlay_render_army_cat2_step_no_rate_holds_frame(void)
+{
+    bind_default_scene();
+    /* All tier flags 0 → frame held. */
+    engine_overlay_render_set_animation_rate_flags(0, 0, 0, 0);
+    uint8_t *army = army_record(1);
+    army_set_band(army, 0x2b8, 0x2bc, 0x2ae, 7, 0, 0);
+    int cv = 0x30;
+    g_tile_descriptors[cv + 3] = 5;
+    run_army_with_descriptor(cv, 2, 0x80, 0x80, 0);
+    T_ASSERT_EQ_I(g_tile_descriptors[cv + 3], 5);
+    return 0;
+}
+
+int test_engine_overlay_render_army_cat2_step_wraps_at_limit(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_animation_rate_flags(1, 0, 0, 0);
+    uint8_t *army = army_record(1);
+    army_set_band(army, 0x2b8, 0x2bc, 0x2ae, 5, 0, 0);
+    int cv = 0x30;
+    g_tile_descriptors[cv + 3] = 0x2d;  /* at limit */
+    run_army_with_descriptor(cv, 2, 0x80, 0x80, 0);
+    /* ++frame = 0x2e > 0x2d → wrap to 0x1e. */
+    T_ASSERT_EQ_I(g_tile_descriptors[cv + 3], 0x1e);
+    return 0;
+}
+
+int test_engine_overlay_render_army_cat1_returns_without_step(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_animation_rate_flags(1, 0, 0, 0);
+    int cv = 0x30;
+    g_tile_descriptors[cv + 3] = 7;
+    run_army_with_descriptor(cv, /*first=*/1, /*raw=*/0x80, /*disp=*/0x80, 0);
+    T_ASSERT_EQ_I(g_tile_descriptors[cv + 3], 7);  /* unchanged */
+    return 0;
+}
+
+int test_engine_overlay_render_army_cat3_end_frame_commits_then_dispatches(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_animation_tick(7);
+    uint8_t *army = army_record(1);
+    army[0x2ae] = 3;  /* tier byte = threshold */
+    int cv = 0x30;
+    run_army_with_descriptor(cv, /*first=*/3, /*raw=*/0x80, /*disp=*/0x80, 0);
+    /* End-frame committed regardless. */
+    T_ASSERT_EQ_I(g_tile_descriptors[cv + 3], 0x2e);
+    /* tier >= 3 AND tick <= 0xf → dispatch tick + 0x28 = 0x2f. */
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x2f);
+    return 0;
+}
+
+int test_engine_overlay_render_army_cat3_end_frame_committed_even_when_tier_fails(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_animation_tick(7);
+    uint8_t *army = army_record(1);
+    army[0x2ae] = 2;  /* tier byte BELOW threshold */
+    int cv = 0x30;
+    run_army_with_descriptor(cv, 3, 0x80, 0x80, 0);
+    /* Frame still written. */
+    T_ASSERT_EQ_I(g_tile_descriptors[cv + 3], 0x2e);
+    /* No dispatch. */
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0);
+    return 0;
+}
+
+int test_engine_overlay_render_army_cat5_step_uses_band1_pair(void)
+{
+    bind_default_scene();
+    /* Only tier-2 active (distance must be in [0x19, 0x32)). */
+    engine_overlay_render_set_animation_rate_flags(0, 0, 1, 0);
+    uint8_t *army = army_record(1);
+    /* band1 cur=40, prev=0 → distance=40 → in tier 2 range. */
+    army_set_band(army, 0x2e8, 0x2ec, 0x2de, 40, 0, 0);
+    /* band0 distance is 0 → would map to tier 0 (which is OFF). */
+    int cv = 0x30;
+    g_tile_descriptors[cv + 3] = 2;
+    run_army_with_descriptor(cv, /*first=*/5, 0x80, 0x80, 0);
+    T_ASSERT_EQ_I(g_tile_descriptors[cv + 3], 3);  /* ++ via tier 2 */
+    return 0;
+}
+
+int test_engine_overlay_render_army_cat6_end_frame_band1(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_animation_tick(0);
+    uint8_t *army = army_record(1);
+    army[0x2de] = 4;  /* band1 tier ≥ 3 */
+    int cv = 0x30;
+    run_army_with_descriptor(cv, /*first=*/6, 0x80, 0x80, 0);
+    T_ASSERT_EQ_I(g_tile_descriptors[cv + 3], 0x09);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x28);  /* tick=0 */
+    return 0;
+}
+
+int test_engine_overlay_render_army_cat9_end_frame_band2(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_animation_tick(0xf);
+    uint8_t *army = army_record(1);
+    army[0x2c6] = 5;
+    int cv = 0x30;
+    run_army_with_descriptor(cv, /*first=*/9, 0x80, 0x80, 0);
+    T_ASSERT_EQ_I(g_tile_descriptors[cv + 3], 0x13);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x37);  /* 0xf + 0x28 */
+    return 0;
+}
+
+int test_engine_overlay_render_army_cat12_end_frame_band3(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_animation_tick(1);
+    uint8_t *army = army_record(1);
+    army[0x296] = 3;
+    int cv = 0x30;
+    run_army_with_descriptor(cv, /*first=*/12, 0x80, 0x80, 0);
+    T_ASSERT_EQ_I(g_tile_descriptors[cv + 3], 0x1d);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x29);
+    return 0;
+}
+
+/* 0x80-only / first_byte ≥ 13: large-army-at-territory branch. */
+int test_engine_overlay_render_army_large_first_0x14_skips(void)
+{
+    bind_default_scene();
+    uint8_t *army = army_record(1);
+    army_set_terr_link(army, 2);
+    territory_set_army_fields(2, /*owner=*/3, /*next=*/0, /*label=*/0);
+    run_army_with_descriptor(0x30, /*first=*/0x14, /*raw=*/0x80,
+                             /*disp=*/0x80, /*d4=*/0);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0);
+    return 0;
+}
+
+int test_engine_overlay_render_army_large_first_out_of_range_skips(void)
+{
+    bind_default_scene();
+    uint8_t *army = army_record(1);
+    army_set_terr_link(army, 2);
+    territory_set_army_fields(2, 3, 0, 0);
+    run_army_with_descriptor(0x30, /*first=*/0x1a, /*raw=*/0x80,
+                             /*disp=*/0x80, /*d4=*/0);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0);
+    return 0;
+}
+
+int test_engine_overlay_render_army_large_terr_link_zero_skips(void)
+{
+    bind_default_scene();
+    /* army[+0x1bc] left at 0. */
+    run_army_with_descriptor(0x30, /*first=*/0x15, /*raw=*/0x80,
+                             /*disp=*/0x80, /*d4=*/0);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0);
+    return 0;
+}
+
+int test_engine_overlay_render_army_large_dispatches_owner_sprite(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_overlay_base_index(0x100);
+    uint8_t *army = army_record(1);
+    army_set_terr_link(army, 2);
+    /* terr 2: owner=4, next_link=0 → no label. */
+    territory_set_army_fields(2, /*owner=*/4, /*next=*/0, /*label=*/0);
+    run_army_with_descriptor(0x30, /*first=*/0x15, /*raw=*/0x80,
+                             /*disp=*/0x80, /*d4=*/0);
+    /* sprite = owner * 8 - 8 + overlay_base = 4*8 - 8 + 0x100 = 0x118. */
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x118);
+    return 0;
+}
+
+int test_engine_overlay_render_army_label_view_mode_1_no_label(void)
+{
+    bind_default_scene();
+    engine_overlay_render_set_view_mode(1);
+    engine_overlay_render_set_overlay_base_index(0x100);
+    uint8_t *army = army_record(1);
+    army_set_terr_link(army, 2);
+    /* next != 0 → label path would fire if view_mode allowed. */
+    territory_set_army_fields(2, /*owner=*/4, /*next=*/3, /*label=*/0);
+    territory_set_army_fields(3, /*owner=*/0, /*next=*/0, /*label=*/9);
+    run_army_with_descriptor(0x30, 0x15, 0x80, 0x80, 0);
+    /* The owner-sprite still dispatches (view_mode 1: dx=dy=0). */
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x118);
+    return 0;
+}
+
+/* src_off validation in the army dispatch tail (tighter than primary). */
+int test_engine_overlay_render_army_src_offset_above_70000_errors(void)
+{
+    bind_default_scene();
+    /* Set up: 0x10 path with first=0x13, tick=0 → sprite_idx = 0x28.
+     * Overwrite slot 0x28 in the blob with a src_off > 70000 but
+     * < 310000 — passes the city/label gate but trips the army gate. */
+    uint8_t *slot = g_rle_blob + RLE_BLOB_HEADER + 0x28 * 16;
+    /* src_off = 80000 (= 0x13880) — > 70000, < 310000. */
+    slot[4] = 0x80; slot[5] = 0x38; slot[6] = 0x01; slot[7] = 0x00;
+
+    run_army_with_descriptor(0x30, /*first=*/0x13, /*raw=*/0x10,
+                             /*disp=*/0x80, /*d4=*/0);
+    T_ASSERT_EQ_I(engine_overlay_render_error_count(), 1);
+    return 0;
+}
+
+/* Phase 1 X-anchor shift — the dispatch tail subtracts x_half_step
+ * from dx when phase == 1. */
+int test_engine_overlay_render_army_phase1_x_anchor_shifted(void)
+{
+    bind_default_scene();
+    uint8_t *army = army_record(1);
+    army[0x07] = 1;
+    /* Place a tile at (col=0, row=1) — that's the phase-1 row's first
+     * cell, dispatched with phase=1. */
+    cell_fill_all(EMPTY_CELL);
+    cell_set(0, 1, 0x40);
+    g_tile_descriptors[0x40 + 0] = 0;
+    g_tile_descriptors[0x40 + 1] = 0x40;
+    g_tile_descriptors[0x40 + 2] = 0x80;
+    g_tile_descriptors[0x40 + 4] = 0;
+    g_tile_descriptors[0x40 + 7] = 1;
+
+    /* fortress branch: view_mode 0 → dx = 0x1a.  phase 1 → dx -= 16
+     * = 0x0a.  Cursor at start of phase1 row = (x0=64, y_after_top=80).
+     * After dispatch, new_x = 64 + 0x0a = 74, new_y = 80 + (-0x1c) = 52.
+     * tile coords = (4, 3).  48-px box marks [tx*16, tx*16 + 0x2f]
+     * = [64, 111]. */
+    engine_overlay_render_frame();
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 1*8 - 8 + 0);  /* = 0 */
+    /* Hmm — when overlay_base=0 and army[+0x7]=1, sprite_idx = 0.
+     * Re-do with a clearer base. */
+    bind_default_scene();
+    engine_overlay_render_set_overlay_base_index(0x10);
+    army = army_record(1);
+    army[0x07] = 2;
+    cell_fill_all(EMPTY_CELL);
+    cell_set(0, 1, 0x40);
+    g_tile_descriptors[0x40 + 0] = 0;
+    g_tile_descriptors[0x40 + 1] = 0x40;
+    g_tile_descriptors[0x40 + 2] = 0x80;
+    g_tile_descriptors[0x40 + 4] = 0;
+    g_tile_descriptors[0x40 + 7] = 1;
+    engine_overlay_render_frame();
+    /* sprite = 2*8 - 8 + 0x10 = 0x18. */
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x18);
+    /* The dirty rect should have been marked with the phase-1-shifted X. */
+    T_ASSERT(g_dirty.dirty_xmin <= 64);
     return 0;
 }

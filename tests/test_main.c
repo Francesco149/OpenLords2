@@ -777,6 +777,39 @@ struct test_case {
     X(engine_overlay_render_view_mode_0_no_pre_clear) \
     X(engine_overlay_render_city_phase_1_x_anchor_shifted) \
     X(engine_overlay_render_error_count_persists_across_frames) \
+    X(engine_overlay_render_army_dev_filter_skips_when_no_0x20) \
+    X(engine_overlay_render_army_dev_filter_allows_when_0x20_set) \
+    X(engine_overlay_render_army_high_nibble_gate) \
+    X(engine_overlay_render_army_fortress_dispatches_sprite) \
+    X(engine_overlay_render_army_fortress_zero_skips) \
+    X(engine_overlay_render_army_marchout_dispatches_0x81) \
+    X(engine_overlay_render_army_marchout_zero_skips) \
+    X(engine_overlay_render_army_0x40_other_nibble_uses_stale_sprite) \
+    X(engine_overlay_render_army_0x10_animation_end_dispatches) \
+    X(engine_overlay_render_army_0x10_wrong_first_byte_skips) \
+    X(engine_overlay_render_army_0x10_tick_out_of_range_skips) \
+    X(engine_overlay_render_army_0x10_view_mode_2_skips) \
+    X(engine_overlay_render_army_0x20_arrow_low_band) \
+    X(engine_overlay_render_army_0x20_arrow_high_band) \
+    X(engine_overlay_render_army_0x20_arrow_0x13_skips) \
+    X(engine_overlay_render_army_0x20_arrow_out_of_range_skips) \
+    X(engine_overlay_render_army_cat2_step_writes_frame_back) \
+    X(engine_overlay_render_army_cat2_step_no_rate_holds_frame) \
+    X(engine_overlay_render_army_cat2_step_wraps_at_limit) \
+    X(engine_overlay_render_army_cat1_returns_without_step) \
+    X(engine_overlay_render_army_cat3_end_frame_commits_then_dispatches) \
+    X(engine_overlay_render_army_cat3_end_frame_committed_even_when_tier_fails) \
+    X(engine_overlay_render_army_cat5_step_uses_band1_pair) \
+    X(engine_overlay_render_army_cat6_end_frame_band1) \
+    X(engine_overlay_render_army_cat9_end_frame_band2) \
+    X(engine_overlay_render_army_cat12_end_frame_band3) \
+    X(engine_overlay_render_army_large_first_0x14_skips) \
+    X(engine_overlay_render_army_large_first_out_of_range_skips) \
+    X(engine_overlay_render_army_large_terr_link_zero_skips) \
+    X(engine_overlay_render_army_large_dispatches_owner_sprite) \
+    X(engine_overlay_render_army_label_view_mode_1_no_label) \
+    X(engine_overlay_render_army_src_offset_above_70000_errors) \
+    X(engine_overlay_render_army_phase1_x_anchor_shifted) \
     /* end */
 
 /* Emit extern decls. */

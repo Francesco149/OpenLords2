@@ -31,6 +31,9 @@ static uint8_t       *g_tile_descriptors;
 /* Per-territory record array (DAT_0052f0b0, slot 0 reserved). */
 static const uint8_t *g_territory_records;
 
+/* Per-army record array (DAT_0053f9b0, slot 0 reserved). */
+static const uint8_t *g_army_records;
+
 /* Overlay (RLE) sprite blob (DAT_0055ce5c). */
 static const uint8_t *g_overlay_blob;
 
@@ -65,6 +68,17 @@ static int g_view_mode;
 static int g_active_territory;
 static int g_dev_cell_value_mode;        /* DAT_005bb4a4 */
 static int g_dev_descriptor_value_mode;  /* DAT_005bb4a5 */
+
+/* Army-drawer state (DAT_0053f264, DAT_0057d390, _DAT_0057d38c,
+ * DAT_0053e9a4, and 4 rate tier flags). */
+static int g_render_mode;                /* DAT_0053f264 — dev-mode filter */
+static int g_overlay_base_index;         /* DAT_0057d390 */
+static int g_arrow_marker_base_index;    /* _DAT_0057d38c */
+static int g_animation_tick;             /* DAT_0053e9a4 — [0..0xf] cycle */
+static int g_anim_rate_tier_0;           /* DAT_0058fd08 (< 10) */
+static int g_anim_rate_tier_1;           /* DAT_0057d3c8 (< 0x19) */
+static int g_anim_rate_tier_2;           /* DAT_0057d3ac (< 0x32) */
+static int g_anim_rate_tier_3;           /* DAT_00591510 (≥ 0x32) */
 
 /* Dirty-rect singleton binding. */
 static engine_dirty_rect_state_t *g_dirty_state;
@@ -126,6 +140,83 @@ static int g_debug_call_count;
 #define OVERLAY_TERR_MAX_SIZE_LO_OFF      0x153
 #define OVERLAY_TERR_MAX_SIZE_HI_OFF      0x154
 
+/* Army drawer constants — FUN_004071a0.
+ *
+ * src_off gate is TIGHTER than the primary pass's and the city
+ * drawer's.  Retail: `src_off < 0x11171` (= 70001) AND `src_off ≥ 1`.
+ * Sprites past offset 70000 of the overlay blob are flagged as
+ * errors.  The primary pass uses 310000 — see quirk #71. */
+#define OVERLAY_ARMY_SRC_OFFSET_MAX       70000
+#define OVERLAY_ARMY_TICK_MAX             0xf
+#define OVERLAY_ARMY_TICK_BASE_SPRITE     0x28
+#define OVERLAY_ARMY_TIER_THRESHOLD       3   /* tier-byte ≥ 3 → dispatch */
+
+#define OVERLAY_ARMY_REC_STRIDE           0x300
+#define OVERLAY_ARMY_REC_FORTRESS_OFF     0x07
+#define OVERLAY_ARMY_REC_MARCH_OUT_OFF    0x1ad
+#define OVERLAY_ARMY_REC_TERRITORY_LINK_OFF  0x1bc
+
+/* The four "category band" offsets — band B uses (cur,prev,tier). */
+#define OVERLAY_ARMY_BAND0_CUR_OFF        0x2b8
+#define OVERLAY_ARMY_BAND0_PREV_OFF       0x2bc
+#define OVERLAY_ARMY_BAND0_TIER_OFF       0x2ae
+#define OVERLAY_ARMY_BAND1_CUR_OFF        0x2e8
+#define OVERLAY_ARMY_BAND1_PREV_OFF       0x2ec
+#define OVERLAY_ARMY_BAND1_TIER_OFF       0x2de
+#define OVERLAY_ARMY_BAND2_CUR_OFF        0x2d0
+#define OVERLAY_ARMY_BAND2_PREV_OFF       0x2d4
+#define OVERLAY_ARMY_BAND2_TIER_OFF       0x2c6
+#define OVERLAY_ARMY_BAND3_CUR_OFF        0x2a0
+#define OVERLAY_ARMY_BAND3_PREV_OFF       0x2a4
+#define OVERLAY_ARMY_BAND3_TIER_OFF       0x296
+
+/* Per-territory fields the army-label sub-renderer reads. */
+#define OVERLAY_ARMY_TERR_OWNER_OFF       0x02
+#define OVERLAY_ARMY_TERR_NEXT_OFF        0x19a
+#define OVERLAY_ARMY_TERR_LABEL_OFF       0x19c
+
+/* End-frame transition values (cat 3, 6, 9, 12) written to
+ * descriptor[+3] BEFORE the tier+tick gating decides whether to
+ * dispatch.  See quirk: end-frame is committed even when the
+ * dispatch is suppressed. */
+#define OVERLAY_ARMY_END_FRAME_BAND0      0x2e
+#define OVERLAY_ARMY_END_FRAME_BAND1      0x09
+#define OVERLAY_ARMY_END_FRAME_BAND2      0x13
+#define OVERLAY_ARMY_END_FRAME_BAND3      0x1d
+
+/* Step categories' frame-wrap parameters: `if (++frame > LIMIT)
+ * frame = WRAP_TO`.  Note BAND0 covers TWO step categories (0 and 2)
+ * — both wrap with the same limit/target. */
+#define OVERLAY_ARMY_STEP_LIMIT_BAND0     0x2d
+#define OVERLAY_ARMY_STEP_WRAP_BAND0      0x1e
+#define OVERLAY_ARMY_STEP_LIMIT_BAND1     0x04
+#define OVERLAY_ARMY_STEP_WRAP_BAND1      0x01
+#define OVERLAY_ARMY_STEP_LIMIT_BAND2     0x12
+#define OVERLAY_ARMY_STEP_WRAP_BAND2      0x0a
+#define OVERLAY_ARMY_STEP_LIMIT_BAND3     0x1c
+#define OVERLAY_ARMY_STEP_WRAP_BAND3      0x14
+
+/* Arrow-marker branch limits.  bVar2 must be in [0x10, 0x16] AND
+ * either (< 0x13 AND bVar2-0x10 ≤ 2) OR (≥ 0x13 AND bVar2-0x14 ≤ 2)
+ * — together implying bVar2 ∈ {0x10, 0x11, 0x12} ∪ {0x14, 0x15, 0x16}.
+ * Note 0x13 is the explicit split; values 0x13 itself fall into the
+ * upper sub-branch but (0x13 - 0x14) wraps to 0xff > 2 so it skips. */
+#define OVERLAY_ARMY_ARROW_LO_BASE_ADD    0x67
+#define OVERLAY_ARMY_ARROW_HI_BASE_ADD    0x55
+#define OVERLAY_ARMY_ARROW_PER_INDEX_MULT 6
+
+/* Sprite indices used by specific 0x40 path. */
+#define OVERLAY_ARMY_MARCH_OUT_SPRITE     0x81
+
+/* Label sub-renderer (FUN_00407f82) — fixed sprite + (sprite_w-
+ * centered) decimal label.  Only fires in view_mode == 0. */
+#define OVERLAY_ARMY_LABEL_SPRITE         0x82
+#define OVERLAY_ARMY_LABEL_SRC_OFFSET_MAX 310000  /* 0x4baf1 */
+#define OVERLAY_ARMY_LABEL_TEXT_Y_OFFSET  10
+#define OVERLAY_ARMY_LABEL_DIRTY_X_BUMP   4
+#define OVERLAY_ARMY_LABEL_TEXT_COLOR     0xf9
+#define OVERLAY_ARMY_LABEL_TOP_CLIP_Y     0x18
+
 /* Debug-text drawer constants — FUN_00408c50. */
 #define OVERLAY_DEBUG_CELL_X_OFFSET       0x18
 #define OVERLAY_DEBUG_CELL_Y_OFFSET       10
@@ -157,6 +248,11 @@ void engine_overlay_render_bind_overlay_blob(const uint8_t *blob)
 void engine_overlay_render_bind_territory_records(const uint8_t *records)
 {
     g_territory_records = records;
+}
+
+void engine_overlay_render_bind_army_records(const uint8_t *records)
+{
+    g_army_records = records;
 }
 
 void engine_overlay_render_bind_per_cell_size_table(const int16_t *table)
@@ -202,6 +298,18 @@ void engine_overlay_render_set_dev_flags(int cell_v, int desc_v)
 {
     g_dev_cell_value_mode       = cell_v;
     g_dev_descriptor_value_mode = desc_v;
+}
+
+void engine_overlay_render_set_render_mode(int mode)                     { g_render_mode = mode; }
+void engine_overlay_render_set_overlay_base_index(int base)              { g_overlay_base_index = base; }
+void engine_overlay_render_set_arrow_marker_base_index(int base)         { g_arrow_marker_base_index = base; }
+void engine_overlay_render_set_animation_tick(int tick)                  { g_animation_tick = tick; }
+void engine_overlay_render_set_animation_rate_flags(int t0, int t1, int t2, int t3)
+{
+    g_anim_rate_tier_0 = t0;
+    g_anim_rate_tier_1 = t1;
+    g_anim_rate_tier_2 = t2;
+    g_anim_rate_tier_3 = t3;
 }
 
 int  engine_overlay_render_error_count(void)            { return g_error_count; }
@@ -376,17 +484,444 @@ void engine_overlay_render_tile_city(int phase)
 }
 
 /* ──────────────────────────────────────────────────────────────────
- * Army drawer — STUB port of FUN_004071a0 @ 0x4071a0 (3179 B).
+ * Army drawer — port of FUN_004071a0 @ 0x4071a0 (3179 B).
  *
- * The real port lands in the next chip.  This stub bumps a per-call
- * counter so the row iterators can be tested for dispatch fidelity.
- * Signature matches the final port.
+ * Top-level dev filter: skip cell when `render_mode == 1` AND
+ * descriptor[+2]&0x20 is clear.  Then dispatch on `descriptor[+1]`
+ * flag bits in priority order (0x40 > 0x10 > 0x20 > 0x80-only):
+ *
+ *  - 0x40 → fortress/march-out path, gated on descriptor[+4]&0xf
+ *           ∈ {0, 2}.
+ *  - 0x10 → animation-end path (descriptor[+0] == 0x13 required).
+ *  - 0x20 → directional-arrow path (descriptor[+0] ∈ {0x10..0x12,
+ *           0x14..0x16}).
+ *  - 0x80-only → unit-category path on descriptor[+0]:
+ *      0..12  : per-band animation state machine (chase/fight/march/
+ *               die — labels tentative).  Step categories WRITE BACK
+ *               new frame to descriptor[+3] and RETURN; end-frame
+ *               categories conditionally dispatch.
+ *      13..0x19 (excl. 0x14): "large army at territory" sprite plus
+ *               an optional label sub-render (via tile_army_label).
+ *
+ * Common dispatch tail (when any branch sets a sprite_idx and falls
+ * through): stages descriptor, validates src_off ∈ [1, 70000]
+ * (tighter than the primary pass's [1, 310000] — quirk #71), shifts
+ * X anchor by -x_half_step when phase==1, marks dirty rect with the
+ * branch-selected kind (32-px for 1, 48-px for 2), applies the clip,
+ * dispatches via the RLE family.
+ *
+ * Stale-sprite quirk: the 0x40 branch with descriptor[+4]&0xf NOT in
+ * {0,2} sets no sprite_idx, no offsets, but still falls into the
+ * dispatch tail — dispatching whatever sprite the dispatcher last
+ * staged.  See quirk #70.
+ *
+ * Tier-byte "frame committed even when skipped": end-frame categories
+ * (3, 6, 9, 12) and the 0x10 path WRITE the new frame to descriptor
+ * [+3] before checking the tier-byte / tick gates.  A failed gate
+ * still leaves the frame committed.  See quirk #72.
  * ────────────────────────────────────────────────────────────────── */
+
+/* Internal: load 32-bit signed int from per-army record `army_idx`'s
+ * field at offset `field_off`.  Returns 0 when records unbound or
+ * army_idx == 0 (reserved slot). */
+static int32_t army_rec_i32(int army_idx, int field_off)
+{
+    if (g_army_records == NULL || army_idx == 0) return 0;
+    const uint8_t *p = g_army_records + army_idx * OVERLAY_ARMY_REC_STRIDE + field_off;
+    return (int32_t)((uint32_t)p[0]
+                   | ((uint32_t)p[1] << 8)
+                   | ((uint32_t)p[2] << 16)
+                   | ((uint32_t)p[3] << 24));
+}
+
+/* Internal: load byte from per-army record `army_idx`'s field at
+ * offset `field_off`.  Returns 0 when records unbound. */
+static uint8_t army_rec_u8(int army_idx, int field_off)
+{
+    if (g_army_records == NULL) return 0;
+    return g_army_records[army_idx * OVERLAY_ARMY_REC_STRIDE + field_off];
+}
+
+/* Internal: load byte from per-territory record `terr_idx`'s field
+ * at offset `field_off`.  Returns 0 when records unbound. */
+static uint8_t territory_rec_u8(int terr_idx, int field_off)
+{
+    if (g_territory_records == NULL) return 0;
+    return g_territory_records[terr_idx * OVERLAY_TERR_REC_STRIDE + field_off];
+}
+
+/* Pick the animation-rate tier flag matching `distance`.  Mirrors the
+ * if/else-if chain repeated in retail at every step category. */
+static int pick_rate_tier(int distance)
+{
+    if (distance < 10)        return g_anim_rate_tier_0;
+    else if (distance < 0x19) return g_anim_rate_tier_1;
+    else if (distance < 0x32) return g_anim_rate_tier_2;
+    else                      return g_anim_rate_tier_3;
+}
+
+/* Per-band step shape (cat 0/2/5/8/11): read cur/prev pair, pick tier,
+ * step frame, wrap.  Always writes back and returns — never dispatches. */
+static void army_step_band(int army_idx,
+                           int cur_off, int prev_off,
+                           int frame_limit, int frame_wrap_to)
+{
+    int distance = army_rec_i32(army_idx, cur_off)
+                 - army_rec_i32(army_idx, prev_off);
+    int rate     = pick_rate_tier(distance);
+
+    int frame    = g_tile_descriptors[g_current_cell + 3];
+    if (rate != 0) {
+        frame += 1;
+        if (frame > frame_limit) frame = frame_wrap_to;
+    }
+    g_tile_descriptors[g_current_cell + 3] = (uint8_t)frame;
+}
+
+/* Per-band end-frame shape (cat 3/6/9/12): commit end-frame to
+ * descriptor[+3], then return non-zero with sprite_idx if the
+ * tier+tick gates pass (caller falls through to dispatch).  Returns
+ * 0 when gates fail (caller returns without dispatch). */
+static int army_end_frame_band(int army_idx, int end_frame, int tier_off,
+                               int *out_sprite_idx,
+                               int *out_dx, int *out_dy, int *out_kind)
+{
+    /* Commit end-frame regardless of gate outcome (quirk #72). */
+    g_tile_descriptors[g_current_cell + 3] = (uint8_t)end_frame;
+
+    int8_t tier = (int8_t)army_rec_u8(army_idx, tier_off);
+    if (tier < OVERLAY_ARMY_TIER_THRESHOLD)        return 0;
+    if (g_animation_tick > OVERLAY_ARMY_TICK_MAX)  return 0;
+
+    *out_sprite_idx = g_animation_tick + OVERLAY_ARMY_TICK_BASE_SPRITE;
+    *out_dx         = 0xc;
+    *out_dy         = -0xe;
+    *out_kind       = 1;
+    return 1;
+}
+
+/* Label sub-renderer — port of FUN_00407f82 @ 0x407f82 (548 B).
+ *
+ * View-mode-0-only.  Stages sprite 0x82 from the overlay blob,
+ * validates src_off ∈ [1, 310000] (LOOSER than the army drawer's
+ * dispatch tail — quirk #71), dispatches via the RLE family with
+ * the view-0 clip, then draws a centered decimal label below
+ * (using the same font as the debug-text helper).  Marks dirty
+ * rect at (cursor + (dx + 4, dy + 10)) post-render.
+ *
+ * Parameters mirror retail: `label_value` is the integer drawn
+ * below the sprite, `dx` / `dy` are the cursor offsets applied
+ * before staging.  Cursor is saved/restored faithfully. */
+static void army_render_label(int label_value, int dx, int dy)
+{
+    if (g_view_mode != 0)           return;
+    if (g_overlay_blob == NULL)     return;
+
+    int saved_x = gfx_glyph_cursor_x();
+    int saved_y = gfx_glyph_cursor_y();
+    gfx_glyph_set_dest(saved_x + dx, saved_y + dy);
+
+    gfx_dispatch_set_last_glyph_index(OVERLAY_ARMY_LABEL_SPRITE);
+    gfx_dispatch_stage_sprite_descriptor(g_overlay_blob,
+                                         OVERLAY_ARMY_LABEL_SPRITE);
+
+    int src_off = gfx_glyph_glyph_offset();
+    if (src_off >= OVERLAY_ARMY_LABEL_SRC_OFFSET_MAX) {
+        g_error_count += 1;
+        gfx_glyph_set_dest(saved_x, saved_y);
+        return;
+    }
+    if (src_off < 0) {
+        g_error_count += 1;
+        gfx_glyph_set_dest(saved_x, saved_y);
+        return;
+    }
+
+    apply_overlay_clip();
+    gfx_dispatch_dispatch_sprite_rle(g_overlay_blob);
+
+    /* Restore cursor BEFORE the text label render (the label is
+     * positioned absolutely from the saved cursor, not the bumped
+     * one).  Mirrors retail lines 43-44. */
+    gfx_glyph_set_dest(saved_x, saved_y);
+
+    /* Text label — skipped when the label Y is at/above the top
+     * clip (retail line 47: `0x18 < saved_y + dy + 10`). */
+    int label_y = saved_y + dy + OVERLAY_ARMY_LABEL_TEXT_Y_OFFSET;
+    if (label_y > OVERLAY_ARMY_LABEL_TOP_CLIP_Y
+        && g_debug_font != NULL && g_debug_char_glyph_table != NULL) {
+        int sprite_w = gfx_glyph_glyph_w();
+        gfx_text_label_render_dec_centered(label_value,
+                                           ' ',
+                                           (const char *)" ",
+                                           saved_x + dx,
+                                           label_y,
+                                           sprite_w,
+                                           g_debug_font,
+                                           g_debug_char_glyph_table,
+                                           g_debug_char_glyph_table,
+                                           OVERLAY_ARMY_LABEL_TEXT_COLOR);
+    }
+
+    /* Dirty-rect mark — at (cursor + dx + 4, cursor + dy + 10),
+     * even though the cursor is already restored.  Retail line 50
+     * reads DAT_00591524 / DAT_00591528 AFTER restoring (i.e. uses
+     * the saved coords). */
+    engine_dirty_rect_mark_tile_32(g_dirty_state,
+                                   (saved_x + dx + OVERLAY_ARMY_LABEL_DIRTY_X_BUMP) >> 4,
+                                   (saved_y + dy + OVERLAY_ARMY_LABEL_TEXT_Y_OFFSET) >> 4);
+}
+
+/* Apply the army drawer's dispatch tail (shared by every code path
+ * that sets a sprite_idx).  Replicates the retail lines 295-352. */
+static void army_dispatch_tail(int phase, int sprite_idx,
+                               int dx, int dy, int kind)
+{
+    if (phase == 1) dx -= g_cam_x_half_step;
+
+    if (g_overlay_blob == NULL) {
+        g_error_count += 1;
+        return;
+    }
+
+    gfx_dispatch_set_last_glyph_index(sprite_idx);
+    gfx_dispatch_stage_sprite_descriptor(g_overlay_blob, sprite_idx);
+
+    int src_off = gfx_glyph_glyph_offset();
+    if (src_off > OVERLAY_ARMY_SRC_OFFSET_MAX) {
+        g_error_count += 1;
+        return;
+    }
+    if (src_off < 1) {
+        g_error_count += 1;
+        return;
+    }
+
+    int saved_x = gfx_glyph_cursor_x();
+    int saved_y = gfx_glyph_cursor_y();
+    int new_x   = saved_x + dx;
+    int new_y   = saved_y + dy;
+    gfx_glyph_set_dest(new_x, new_y);
+
+    if (kind == 1) {
+        engine_dirty_rect_mark_tile_32(g_dirty_state, new_x >> 4, new_y >> 4);
+    } else if (kind == 2) {
+        engine_dirty_rect_mark_tile_48(g_dirty_state, new_x >> 4, new_y >> 4);
+    }
+
+    apply_overlay_clip();
+    gfx_dispatch_dispatch_sprite_rle(g_overlay_blob);
+
+    gfx_glyph_set_dest(saved_x, saved_y);
+}
 
 void engine_overlay_render_tile_army(int phase)
 {
-    (void)phase;
     g_army_call_count += 1;
+
+    if (g_tile_descriptors == NULL) return;
+    int cell = g_current_cell;
+
+    /* Top-level dev-mode filter (retail line 20). */
+    uint8_t disp_flag = g_tile_descriptors[cell + 2];
+    if (g_render_mode == 1 && (disp_flag & 0x20) == 0) return;
+
+    int dx        = 0;
+    int dy        = 0;
+    int kind      = 0;            /* dirty-rect mark kind: 0/1/2 */
+    int sprite_idx_valid = 0;
+    int sprite_idx       = 0;
+
+    uint8_t raw_flag = g_tile_descriptors[cell + 1];
+    if ((raw_flag & 0xf0) == 0) return;
+
+    uint8_t  first_byte = g_tile_descriptors[cell + 0];
+    uint8_t  army_byte  = g_tile_descriptors[cell + 7];
+    int      army_idx   = army_byte;
+
+    if ((raw_flag & 0x40) == 0) {
+        if ((raw_flag & 0x10) == 0) {
+            if ((raw_flag & 0x20) == 0) {
+                /* ────── bVar1 = 0x80 only ────── */
+                if (first_byte < 13) {
+                    /* Unit-category state machine (cat 0..12). */
+                    if (g_view_mode == 2) return;
+
+                    if (first_byte < 4) {
+                        if (first_byte != 3) {
+                            if (first_byte == 1) return;
+                            /* cat 0 or 2 — step BAND0. */
+                            army_step_band(army_idx,
+                                           OVERLAY_ARMY_BAND0_CUR_OFF,
+                                           OVERLAY_ARMY_BAND0_PREV_OFF,
+                                           OVERLAY_ARMY_STEP_LIMIT_BAND0,
+                                           OVERLAY_ARMY_STEP_WRAP_BAND0);
+                            return;
+                        }
+                        /* cat 3 — end-frame BAND0. */
+                        if (!army_end_frame_band(army_idx,
+                                                 OVERLAY_ARMY_END_FRAME_BAND0,
+                                                 OVERLAY_ARMY_BAND0_TIER_OFF,
+                                                 &sprite_idx, &dx, &dy, &kind)) {
+                            return;
+                        }
+                        sprite_idx_valid = 1;
+                    } else if (first_byte < 7) {
+                        if (first_byte != 6) {
+                            if (first_byte == 4) return;
+                            /* cat 5 — step BAND1. */
+                            army_step_band(army_idx,
+                                           OVERLAY_ARMY_BAND1_CUR_OFF,
+                                           OVERLAY_ARMY_BAND1_PREV_OFF,
+                                           OVERLAY_ARMY_STEP_LIMIT_BAND1,
+                                           OVERLAY_ARMY_STEP_WRAP_BAND1);
+                            return;
+                        }
+                        /* cat 6 — end-frame BAND1. */
+                        if (!army_end_frame_band(army_idx,
+                                                 OVERLAY_ARMY_END_FRAME_BAND1,
+                                                 OVERLAY_ARMY_BAND1_TIER_OFF,
+                                                 &sprite_idx, &dx, &dy, &kind)) {
+                            return;
+                        }
+                        sprite_idx_valid = 1;
+                    } else if (first_byte < 10) {
+                        if (first_byte != 9) {
+                            if (first_byte == 7) return;
+                            /* cat 8 — step BAND2. */
+                            army_step_band(army_idx,
+                                           OVERLAY_ARMY_BAND2_CUR_OFF,
+                                           OVERLAY_ARMY_BAND2_PREV_OFF,
+                                           OVERLAY_ARMY_STEP_LIMIT_BAND2,
+                                           OVERLAY_ARMY_STEP_WRAP_BAND2);
+                            return;
+                        }
+                        /* cat 9 — end-frame BAND2. */
+                        if (!army_end_frame_band(army_idx,
+                                                 OVERLAY_ARMY_END_FRAME_BAND2,
+                                                 OVERLAY_ARMY_BAND2_TIER_OFF,
+                                                 &sprite_idx, &dx, &dy, &kind)) {
+                            return;
+                        }
+                        sprite_idx_valid = 1;
+                    } else {
+                        /* first_byte in {10, 11, 12}. */
+                        if (first_byte != 12) {
+                            if (first_byte == 10) return;
+                            /* cat 11 — step BAND3. */
+                            army_step_band(army_idx,
+                                           OVERLAY_ARMY_BAND3_CUR_OFF,
+                                           OVERLAY_ARMY_BAND3_PREV_OFF,
+                                           OVERLAY_ARMY_STEP_LIMIT_BAND3,
+                                           OVERLAY_ARMY_STEP_WRAP_BAND3);
+                            return;
+                        }
+                        /* cat 12 — end-frame BAND3. */
+                        if (!army_end_frame_band(army_idx,
+                                                 OVERLAY_ARMY_END_FRAME_BAND3,
+                                                 OVERLAY_ARMY_BAND3_TIER_OFF,
+                                                 &sprite_idx, &dx, &dy, &kind)) {
+                            return;
+                        }
+                        sprite_idx_valid = 1;
+                    }
+                } else {
+                    /* first_byte ≥ 13: "large army at territory" branch. */
+                    if (first_byte > 0x19) return;
+                    if (first_byte == 0x14) return;
+                    int terr_idx = army_rec_i32(army_idx,
+                                                OVERLAY_ARMY_REC_TERRITORY_LINK_OFF);
+                    if (terr_idx == 0) return;
+                    int next_byte = (int)territory_rec_u8(terr_idx,
+                                                          OVERLAY_ARMY_TERR_NEXT_OFF);
+                    if (next_byte != 0) {
+                        int label = (int)territory_rec_u8(next_byte,
+                                                          OVERLAY_ARMY_TERR_LABEL_OFF);
+                        if (g_view_mode == 0) {
+                            army_render_label(label, 8, -0x38);
+                        } else if (g_view_mode == 2) {
+                            army_render_label(label, 2, -0x28);
+                        }
+                    }
+                    kind = 2;
+                    if (g_view_mode == 0) {
+                        dx = 0x1a; dy = -0x1c;
+                    } else if (g_view_mode == 2) {
+                        dx = 6;    dy = -0x15;
+                    }
+                    int owner = (int)territory_rec_u8(terr_idx,
+                                                      OVERLAY_ARMY_TERR_OWNER_OFF);
+                    sprite_idx = owner * 8 - 8 + g_overlay_base_index;
+                    sprite_idx_valid = 1;
+                }
+            } else {
+                /* ────── bVar1 = 0x20 (and not 0x10, 0x40) — arrow. ────── */
+                if (g_view_mode == 2) return;
+                if (first_byte < 0xf || first_byte > 0x16) return;
+                kind = 2;
+                if (first_byte < 0x13) {
+                    int delta = first_byte - 0x10;
+                    if (delta < 0 || delta > 2) return;
+                    sprite_idx = delta * OVERLAY_ARMY_ARROW_PER_INDEX_MULT
+                               + g_arrow_marker_base_index
+                               + OVERLAY_ARMY_ARROW_LO_BASE_ADD;
+                } else {
+                    dx = 4; dy = -4;
+                    int delta = first_byte - 0x14;
+                    /* Retail: `if (2 < (byte)(bVar2 - 0x14)) return;` —
+                     * (byte) cast of negative wraps to 0xff which is > 2,
+                     * so 0x13 (delta = -1 ⇒ 0xff) is filtered out here. */
+                    if (delta < 0 || delta > 2) return;
+                    sprite_idx = delta * OVERLAY_ARMY_ARROW_PER_INDEX_MULT
+                               + g_arrow_marker_base_index
+                               + OVERLAY_ARMY_ARROW_HI_BASE_ADD;
+                }
+                sprite_idx_valid = 1;
+            }
+        } else {
+            /* ────── bVar1 = 0x10 (and not 0x40) — animation-end. ────── */
+            if (g_view_mode == 2) return;
+            if (first_byte != 0x13) return;
+            if (g_animation_tick > OVERLAY_ARMY_TICK_MAX) return;
+            sprite_idx = g_animation_tick + OVERLAY_ARMY_TICK_BASE_SPRITE;
+            dx = 0xc; dy = -0xe; kind = 1;
+            sprite_idx_valid = 1;
+        }
+    } else {
+        /* ────── bVar1 = 0x40 — fortress / march-out. ────── */
+        uint8_t disp4 = g_tile_descriptors[cell + 4];
+        uint8_t nibble = (uint8_t)(disp4 & 0xf);
+        if (nibble == 0) {
+            uint8_t fortress = army_rec_u8(army_idx, OVERLAY_ARMY_REC_FORTRESS_OFF);
+            if (fortress == 0) return;
+            kind = 2;
+            if (g_view_mode == 0)      { dx = 0x1a; dy = -0x1c; }
+            else if (g_view_mode == 2) { dx = 6;    dy = -0x15; }
+            sprite_idx = (int)fortress * 8 - 8 + g_overlay_base_index;
+            sprite_idx_valid = 1;
+        } else if (nibble == 2) {
+            uint8_t mout = army_rec_u8(army_idx, OVERLAY_ARMY_REC_MARCH_OUT_OFF);
+            if (mout == 0) return;
+            kind = 0;
+            if (g_view_mode == 0)      { dx = 0x10; dy = -0x12; }
+            else if (g_view_mode == 2) { dx = 6;    dy = -0x15; }
+            sprite_idx = OVERLAY_ARMY_MARCH_OUT_SPRITE;
+            sprite_idx_valid = 1;
+        }
+        /* Other low-nibble values: fall through to the dispatch tail
+         * with no sprite_idx set — uses whatever the dispatcher last
+         * staged.  See quirk #70. */
+    }
+
+    /* Common dispatch tail.  Faithful to retail: the tail runs even
+     * when sprite_idx wasn't set in the bVar1 = 0x40 fall-through —
+     * in that path retail dispatches whatever DAT_005c9288 already
+     * held from the most-recent staging.  See quirk #70 — we pull
+     * the stale index from the dispatcher's `last_glyph_index`. */
+    if (!sprite_idx_valid) {
+        sprite_idx = gfx_dispatch_last_glyph_index();
+    }
+    army_dispatch_tail(phase, sprite_idx, dx, dy, kind);
 }
 
 /* ──────────────────────────────────────────────────────────────────
