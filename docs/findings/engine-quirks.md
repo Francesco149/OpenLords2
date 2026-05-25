@@ -2085,6 +2085,138 @@ Preserved verbatim; documented here so it shows up in audits.
 
 ---
 
+## 56. RLE sprite unclipped opcode 0x0F is folded into the default arm
+
+`FUN_004b4537` (the unclipped RLE sprite blitter) has a 17-arm `switch`
+covering opcodes 0x00..0x0E plus 0x10.  Opcode 0x0F has NO explicit
+case label — it falls through to the `else` arm.  That arm copies 15
+literal bytes and advances src by 16, dst by 15, pixel counter by -15.
+This is the SAME behavior the explicit 0x0F arm would have, so for a
+well-formed RLE stream the fold is invisible.
+
+The fold becomes visible only for opcodes 0x11..0xFF (which retail
+never emits): such an opcode value is also treated as a 15-byte
+literal, so the row's pixel accounting drifts (consumed 15 pixels of
+budget when the source actually encoded e.g. 17 data bytes).  No known
+captured callsite emits a >0x10 opcode, but the misalignment is
+reachable in principle.
+
+This is almost certainly MSVC 4.20 codegen optimization — case 0x0F is
+the *first* case where the byte-by-byte unrolled copy stops being a
+unique pattern (cases 0x05, 0x09, 0x0D end with a single byte after a
+4-byte block, so the compiler emits dedicated arms; case 0x0F ends with
+a single byte after three 4-byte blocks AND a 2-byte word, which is
+the same shape as the default-arm template so the compiler folded
+them).
+
+Preserved verbatim in the port — `gfx_sprite_rle_blit`'s `default:`
+arm handles both 0x0F and any unknown opcode the same way retail does.
+
+> 📍 `src/gfx_sprite_rle.c`,
+> Ghidra `FUN_004b4537`.
+
+---
+
+## 57. RLE left-clip blitter pre-shifts dest pointer LEFT by `left_skip`
+
+`FUN_004b4814` (the left-clipped RLE blitter) computes its per-row
+dest origin as `canvas_origin + cursor - left_skip` — i.e. the dest
+pointer is shifted LEFT by `left_skip` cells BEFORE the per-row RLE
+walk.  The pixel-write gate is then `clip_counter < 1` where
+`clip_counter` starts at `left_skip` and decrements by 1 (or by N for
+a skip-opcode of N) at every advance — so writes are gated off until
+`clip_counter` reaches zero, by which point the dest pointer has
+walked forward by `left_skip` cells and lands at the visible canvas
+column.
+
+The first family handles left-clip differently: the wrapper pre-bakes
+`+ left_skip` into the descriptor's src_offset, then the clipped
+blitter starts reading from the post-skip source position with the
+dest pointer set to the visible column directly.  The RLE family
+can't pre-bake the source position (the byte offset for "skip N
+pixels of decoded output" requires walking the RLE stream — variable-
+sized opcodes), so it walks the stream from the natural row start
+and uses the dest-pointer pre-shift to compensate.
+
+Behaviorally identical to the first family for in-bounds reads, but
+note that the pre-shifted dest pointer (`canvas + cursor - left_skip`)
+can land BEFORE the canvas's left edge if `left_skip` > `cursor`.
+The dispatcher only invokes this blitter when `cursor < canvas_left
+< cursor + sprite_w`, so `cursor < canvas_left` implies `cursor -
+left_skip = cursor - (canvas_left - cursor) < cursor < canvas_left` —
+the pre-shifted pointer can dip below the canvas base, but writes are
+gated off there.  Still a footgun: a sufficiently-permissive
+out-of-frame-buffer `*dst` read (e.g. an OS guard page) would crash,
+but retail's framebuffer is heap-allocated with no guard pages and
+the dest pointer is only DEREFERENCED when the write gate fires (at
+visible-column positions only).
+
+> 📍 `src/gfx_sprite_rle.c`,
+> Ghidra `FUN_004b4814`.
+
+---
+
+## 58. RLE right-clip blitter keeps walking source past visible budget
+
+`FUN_004b48b8` (the right-clipped RLE blitter) tracks two row
+counters: `pixels` (natural row width, drives the per-row loop) and
+`visible_budget` (= clipped_w, gates writes).  Once `visible_budget`
+reaches zero the writes stop, but the source pointer keeps walking
+through the remainder of the row's RLE opcodes (because the next
+row's RLE start needs to land at the natural row boundary).
+
+In the first family the right-clip variant doesn't have this problem:
+the source is densely packed at sprite_w bytes per row, so the row
+boundary is at a known byte offset, and the blitter just iterates
+`clipped_w` reads and adds `src_stride_pad = sprite_w - clipped_w`
+to skip to the next row.  The RLE family can't do that — the byte
+offset to the next row depends on the opcode mix, so the walk must
+continue past the visible budget.
+
+Behaviorally equivalent to first-family right-clip; preserved
+verbatim.  Footgun: an opcode-skip of N decrements `visible_budget`
+by N, which can drive it well below zero (e.g. a skip-32 at
+visible_budget=4 drives it to -28).  The `> 0` gate still correctly
+suppresses writes, so the negative value is harmless.
+
+> 📍 `src/gfx_sprite_rle.c`,
+> Ghidra `FUN_004b48b8`.
+
+---
+
+## 59. RLE wrapper does NOT pre-bake skip offsets into src_offset
+
+`FUN_0040a3d0` (the RLE-family caller-blob render wrapper) is byte-
+for-byte symmetric to `FUN_0040a21a` (the first-family wrapper)
+EXCEPT for a missing two-line skip-baking sequence:
+
+    DAT_0058fe04 = DAT_0058fe04 + DAT_005c9258 * DAT_0058feac;
+    DAT_0058fe04 = DAT_0058fe04 + DAT_0058fd50;
+
+These lines are present in `FUN_0040a21a` immediately after the clip
+setters.  They bake `top_skip * sprite_w` and `left_skip` into the
+descriptor's staged src_offset so the first-family blitters can read
+densely-packed raw pixels starting at the first visible cell.
+
+The RLE family CAN'T bake either skip into a byte offset (RLE
+opcodes are variable-sized, so a "skip N decoded pixels" doesn't
+correspond to a fixed byte advance).  Instead:
+  - `top_skip` is consumed by the private `rle_skip_top_rows` helper
+    (`FUN_004b495a`) which is called from the prologue of all three
+    RLE blitters — it walks the RLE stream past the top rows by
+    decoding opcodes without writing.
+  - `left_skip` is consumed by the left-clipped blitter directly
+    (via the dest pre-shift + write gate described in quirk #57).
+
+Net effect: the two wrappers stage IDENTICAL state for the blitters
+they target; the RLE wrappers' missing two lines are exactly the
+arithmetic the RLE blitters do internally.  Preserved verbatim.
+
+> 📍 `src/gfx_sprite_render.c` (`gfx_sprite_render_rle_from_blob`),
+> Ghidra `FUN_0040a3d0` vs `FUN_0040a21a`.
+
+---
+
 <!--
 Template for new entries:
 

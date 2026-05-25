@@ -7,6 +7,225 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — RLE sprite blitter family + RLE-aware wrapper (1 chip, 4 fns + 1 helper)
+
+Continuation of the same unattended session.  The previous dispatch
+closed out the sprite-render entry-point wrappers and listed the
+second sprite-blitter family (`FUN_004b4537`/`FUN_004b4814`/
+`FUN_004b48b8`) as the next candidate, hypothesizing a "source stride
+padding" variant for non-tightly-packed sources.  That hypothesis
+turned out to be wrong by a wide margin — the second family is an
+**RLE-decoding** sprite blitter, not a stride variant.  This dispatch
+ports the entire RLE family (three blitters + one private row-skip
+helper) and the matching caller-blob wrapper (`FUN_0040a3d0`).
+
+### Discovery: it's RLE, not strided
+
+Survey of `FUN_004b4537` (733 B — much larger than the first family's
+188 B unclipped) revealed a 17-arm `switch` on a per-byte opcode read
+from the source data:
+
+  - `0x00 N` — transparency run: advance dst by N pixels, src by 2.
+  - `0x01..0x0E` — literal-of-N-bytes: dst[i] = src[i+1] for i ∈ [0,N),
+    advance src by N+1, dst by N, pixel counter by N.
+  - `0x10` — literal-of-16-bytes (dedicated arm).
+  - default — same as `0x0F` (literal-of-15-bytes).  Folded for codegen.
+
+Each row terminates when the per-row pixel counter reaches `sprite_w`.
+The source data is a row-major stream of these opcodes with NO
+between-row marker — the natural row boundary IS the byte at which
+the cumulative pixel count hits `sprite_w`.
+
+This explains why the second-family wrapper (`FUN_0040a3d0`, 402 B)
+omits the `src_offset += sprite_w * top_skip + left_skip` step the
+first-family wrapper performs: RLE opcodes are variable-sized, so the
+byte-offset to "the first visible pixel" can't be computed without
+walking the stream.  The blitters internalize the walk instead.
+
+### Chip landed
+
+**`src/gfx_sprite_rle` (NEW, ~340 LOC + 13 tests)** — 3 retail blitter
+leaves plus a private row-skip helper sharing dispatcher state with
+the first family via existing `gfx_glyph_*` / `gfx_dispatch_*` getters:
+
+  - `FUN_004b4537` → `gfx_sprite_rle_blit`               (733 B)
+    Unclipped path.  17-arm opcode switch.  Source pre-walked by the
+    helper to skip top rows; dst pointer persists across rows and
+    advances by `dst_stride_pad` between them (the standard
+    canvas_width - sprite_w gap).
+  - `FUN_004b4814` → `gfx_sprite_rle_blit_left_clipped`  (164 B)
+    Left-clipped path.  Per-row dst origin is pre-shifted LEFT by
+    `left_skip` cells; writes are gated on a per-row `clip_counter`
+    that starts at `left_skip` and decrements on every advance
+    (skip or literal).  Writes fire when `clip_counter < 1`.
+  - `FUN_004b48b8` → `gfx_sprite_rle_blit_right_clipped` (162 B)
+    Right-clipped path.  Per-row `visible_budget` starts at
+    `clipped_w` and decrements on every advance.  Writes fire when
+    `visible_budget > 0`.  Source pointer keeps walking past the
+    visible budget so the next row's RLE start lines up at the
+    natural row boundary.
+
+  - `FUN_004b495a` → static `rle_skip_top_rows`          (93 B)
+    Walks past `top_skip` rows of RLE without writing.  Decrements
+    a per-row pixel counter on each opcode; advances src by the
+    opcode-specific delta.  Returns the pointer to the first
+    un-skipped row.
+
+**`src/gfx_dispatch` (extended, +13 LOC)** — exposed a new dispatch
+helper for the RLE family:
+
+  - `gfx_dispatch_dispatch_sprite_rle(blob)` — routes to one of the
+    three RLE blitters based on `x_clip_mode`, gated on
+    `y_clip_mode != 5`.  Does NOT bake top_skip/left_skip into
+    src_offset (the RLE blitters consume them directly).
+
+**`src/gfx_sprite_render` (extended, +42 LOC)** — added the RLE-aware
+caller-blob wrapper:
+
+  - `FUN_0040a3d0` → `gfx_sprite_render_rle_from_blob`   (402 B)
+    Sibling of `gfx_sprite_render_from_blob`.  Same staging shape
+    (descriptor read, src_offset validity gate, log-hook + error
+    latch), but routes through `gfx_dispatch_dispatch_sprite_rle`
+    instead of the skip-baking variant.
+
+New error format-string IDs added:
+
+  - `GFX_SPRITE_RENDER_ERR_RLE_FROM_BLOB_NULL`           (0x4d2368)
+  - `GFX_SPRITE_RENDER_ERR_RLE_FROM_BLOB_INDEX_TOO_HIGH` (0x4d2384)
+  - `GFX_SPRITE_RENDER_ERR_RLE_FROM_BLOB_INDEX_TOO_LOW`  (0x4d23a4)
+
+The trio's rdata addresses sit exactly 0x54 bytes after the first-
+family triplet — same 0x1c-byte spacing pattern as within each
+triplet.  Verified by reading the third arg of the three
+`FUN_004afab9` calls inside `FUN_0040a3d0`.
+
+### Filed quirks (#56, #57, #58, #59)
+
+Four new entries in `docs/findings/engine-quirks.md`:
+
+  - **#56** — Unclipped RLE blitter opcode 0x0F is folded into the
+    default arm.  Invisible for well-formed streams; for any opcode
+    value 0x11..0xFF (which retail never emits) the per-row pixel
+    accounting drifts because the blitter treats it as a 15-byte
+    literal regardless of the encoded data length.
+  - **#57** — Left-clip RLE blitter pre-shifts its per-row dst origin
+    LEFT by `left_skip` cells.  The walker decrements a counter on
+    every advance and gates writes on "counter exhausted", so the
+    `left_skip` cells worth of dst at negative offsets are skipped
+    rather than written.  Equivalent to first-family's pre-baked
+    src_offset, but the RLE family CAN'T pre-bake — opcodes have
+    variable byte sizes.
+  - **#58** — Right-clip RLE blitter keeps walking the source past
+    visible-budget exhaustion.  Required for next-row alignment
+    (the next row's RLE start is at the byte where the current
+    row's natural pixel count reaches sprite_w, not at the byte
+    where the visible budget ran out).  Opcode-skip overshoot can
+    drive `visible_budget` arbitrarily negative; the `> 0` gate
+    still suppresses writes correctly.
+  - **#59** — The RLE wrapper (`FUN_0040a3d0`) is byte-symmetric to
+    `FUN_0040a21a` EXCEPT for the missing skip-baking lines.  Documents
+    the equivalence between "wrapper bakes skips into src_offset" and
+    "blitter consumes skips intrinsically" — two paths to the same
+    visible output, chosen by source-encoding format.
+
+### Headline numbers
+
+- **651 → 664 host tests** (+13), all green under ASan/UBSan.
+- **4 retail functions ported** (~1.36 KB decompilation —
+  733 + 164 + 162 + 93 + 402 wrapper = 1554 B total) + **1
+  helper** (private static).
+- **1 new module** (`src/gfx_sprite_rle`) + **2 modules extended**
+  (`src/gfx_dispatch` with the no-skip-bake dispatcher, +13 LOC;
+  `src/gfx_sprite_render` with the RLE wrapper, +42 LOC).
+- **4 new engine quirks filed** (#56, #57, #58, #59).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Renderer pipeline state
+
+| layer                                | status     |
+| ------------------------------------ | ---------- |
+| char width                           | ported     |
+| buffer width                         | ported     |
+| bounded buffer width                 | ported     |
+| word width + chars                   | ported     |
+| editor (text_input)                  | ported     |
+| localization blob access             | ported     |
+| dirty-rect tracking                  | ported     |
+| 1-pixel / 2x1 painters               | ported     |
+| clipped pixel / 2x1                  | ported     |
+| glyph blitter (unclipped)            | ported     |
+| glyph blitter (clipped × 2)          | ported     |
+| glyph dispatcher (per-char)          | ported     |
+| clip setters (X + Y)                 | ported     |
+| text renderer (per-line)             | ported     |
+| centered-text wrapper                | ported     |
+| substitution stream                  | ported     |
+| word-wrap renderer (buffer)          | ported     |
+| word-wrap renderer (localized)       | ported     |
+| localization line render             | ported     |
+| localization line centered           | ported     |
+| solid Bresenham line                 | ported     |
+| dotted axis-aligned line             | ported     |
+| solid rect outline                   | ported     |
+| 3D bevel rect (3 palettes)           | ported     |
+| int formatter (dec + hex)            | ported     |
+| label render (dec + hex + centered)  | ported     |
+| label render (signed-color)          | ported     |
+| compound "label + signed value"      | ported     |
+| sprite blit raw (unclipped)          | ported     |
+| sprite blit raw (clipped × 2)        | ported     |
+| sprite dispatcher (canvas + rect)    | ported     |
+| sprite render — raw buffer           | ported     |
+| sprite render — from blob            | ported     |
+| sprite render — global blob          | ported     |
+| sprite render — truncate bottom      | ported     |
+| sprite render — truncate top         | ported     |
+| **sprite blit RLE (unclipped)**      | **ported (this chip)** |
+| **sprite blit RLE (clipped × 2)**    | **ported (this chip)** |
+| **sprite render — RLE from blob**    | **ported (this chip)** |
+| sprite descriptor reader (PL8 header)| unanalyzed |
+| map-tile / battlefield iterators (0x408438+) | unanalyzed |
+| error log formatter (`FUN_004afab9`) | unanalyzed |
+
+Both sprite-blitter families (raw + RLE) are now end-to-end in `src/`.
+Engine code can dispatch raw-pixel OR RLE-encoded sprites from a blob
+to a bound canvas via either the dispatcher API or the higher-level
+caller-blob wrappers.
+
+### What's next
+
+The same three un-ported frontiers from the previous dispatch carry
+forward, now WITHOUT the second-blitter-family blocker:
+
+1. **Map-tile / battlefield iterators** — `FUN_00408438` (2072 B),
+   `FUN_00405487` (379 B), `FUN_00405862` (333 B), `FUN_004059af`
+   (314 B).  A 2D-tile iterator cluster that calls the FIRST sprite
+   family directly (not via the dispatcher).  Now-blocked: the RLE
+   family port lets us recognize at-a-glance which iterator inlines
+   which family.  Substantial scope; probably unblocks the map-view
+   renderer.
+2. **PL8 header parser** — small chip.  Read the 8-byte header,
+   decode the descriptor array, expose a "load sprite blob from
+   file bytes" API.  Enables tests against real `vendor/original/*.pl8`
+   data; required for any visible-pixels milestone with retail assets.
+3. **Wire gfx.c runtime to the renderer + sprites** — extend the
+   DDraw probe to bind a real canvas, then render a real glyph +
+   sprite during boot.  Gated on user-observed Windows-host
+   validation.  Visible-pixels milestone earned.
+
+Picking #1 (map-tile iterators) is the largest scope and feeds
+directly into the visible-game-state renderer.  #2 is a small chip
+that yields format docs more than visible output.  #3 unlocks visual
+validation but requires human verification.
+
+This is a natural `/clear` point — the entire low-level sprite
+pipeline (both families + dispatchers + entry-point wrappers) is
+closed out and the remaining frontiers are fresh subsystems
+worth a fresh conversation.
+
+---
+
 ## 2026-05-25 — Sprite-render sibling-of-dispatcher wrappers (1 chip, 5 fns)
 
 Continuation of the same unattended session.  The previous dispatch
