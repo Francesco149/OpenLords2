@@ -7,6 +7,159 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Battlefield port chips 2, 3, 3.5 (3 chips, +31 tests)
+
+Continuation of the same unattended session.  Previous dispatch
+landed the battlefield 16×16 blit primitive (chip 1) and the
+cluster survey.  This dispatch lands the next three chips of the
+five-chip plan: the frame driver + no-op stub (chip 2), the
+zoom-16 first pass terrain blit (chip 3), and the 32×32 sibling
+blit primitive (chip 3.5 — chip 4 prereq).
+
+### Chip 2: combat frame driver `FUN_004bc142` + zoom-16 no-op stub
+
+New module `engine_battlefield_render` hosts the combat-mode frame
+driver port (143 B) and the 11-byte zoom-16 second-pass no-op
+(`FUN_004bcbd1`).  The five remaining passes (zoom-16/zoom-32
+terrain, middle, zoom-32 overlay, late, final) are wired as
+static call-counter stubs so the driver's dispatch shape
+(zoom-16 vs zoom-32, always-on vs zoom-gated) can be exercised
+in isolation before each pass's body lands.
+
+The retail driver has no fall-through default in either zoom
+if/else-if chain: zoom values that are neither `0x10` nor `0x20`
+silently skip both zoom-dispatched passes (terrain + overlay)
+while the always-on passes still fire.  The force-redraw
+counter (retail `DAT_0053e9ac`) is decremented post-frame when
+non-zero — preserved as a strict-non-zero guard so the value
+never underflows below 0.
+
+14 new tests cover the camera bind, three dispatch-shape cases
+(zoom-16 / zoom-32 / unknown), force-redraw decrement + zero
+floor, counter accumulation/reset, mid-stream zoom switching,
+and the zoom-accessor round-trip.
+
+### Chip 3: zoom-16 first pass `FUN_004bc8fc` (725 B terrain blit)
+
+Replaces the `pass_terrain_zoom16` stub with the real port.  Adds
+six new bindings to the module:
+
+  - `bind_descriptor_table(base, stride)` — retail `DAT_004e6574 /
+    DAT_004e5d50`.  Per-cell descriptor with flag byte at +2 and
+    sprite index at +3.
+  - `bind_grid(cols, rows, row_wrap)` — retail `DAT_004e5d5c /
+    DAT_004e5d4c / DAT_004e5d70`.  Visible grid dims and the
+    descriptor offset added at end of each visible row.
+  - `bind_viewport_offset(x, y)` — retail `DAT_004e6558 /
+    DAT_004e6554`.  Pixel coords of the top-left visible cell.
+  - `bind_camera_row_stride(row_stride)` — retail `DAT_004e6578`.
+    Cells per row in the underlying descriptor table.
+  - `bind_blobs(primary, alt)` — retail `DAT_004e5d78 /
+    DAT_004e6560`.  Per-cell flag bits 2..4 select between them.
+
+Per-cell logic: read flags byte; if force-redraw OR dirty, clear
+dirty bit, pick blob via `(flags & 0x1c)`, stage cursor + sprite
+metadata through `gfx_dispatch_stage_sprite_descriptor`, dispatch
+the 16×16 raw blit.  Boundary cells get bit `0x02` AFTER the
+dirty-gated branch — so even clean edge cells get forced to
+re-paint next frame (handles scroll smear).
+
+Cursor advance: `+0x10` per cell (16 px), `+0x10` per row.
+
+13 new tests covering per-cell dispatch, dirty-skip, force-redraw
+override, dirty-clear-post-draw, boundary marking on edges +
+edges-while-clean, blob selector primary/alt/other, cursor
+advance across cells, NULL descriptor short-circuit, camera Y
+offset, and counter reset.
+
+### Chip 3.5: 32×32 raw blit primitive `FUN_004b5333` (chip 4 prereq)
+
+Sibling of `gfx_sprite_blit_16x16_raw`.  Same hardcoded 640-byte
+dest stride (quirk #75 applies), no transparency check, 1024
+bytes per sprite instead of 256.  Retail body is 32 unrolled
+8-dword row copies (2997 B of decompilation); the port collapses
+to a 32-iteration row loop with `memcpy`.
+
+This is the second sprite primitive the battlefield cluster
+dispatches: 16×16 for zoom-16 passes, 32×32 for zoom-32 passes.
+Now that both primitives are ported, chip 4 (`FUN_004bcbdc`,
+zoom-32 first pass) has all its dependencies in place.
+
+4 new tests covering 1024-byte copy completeness, opaque-zero
+writes, glyph_offset tile selection, and NULL canvas safety.
+
+### Filed quirk (#76)
+
+  - **#76** — Battlefield terrain blob selector is strict
+    `if/else-if` with no default clause.  `(flags & 0x1c)` values
+    outside `{0, 4}` silently skip blit dispatch while STILL
+    clearing the dirty bit and running boundary marking.  Result:
+    cell appears "redrawn" from descriptor state but no pixels
+    change.  Works in retail because level data only ever produces
+    selector values 0 or 4; non-{0,4} indicates data corruption.
+    The strict shape is preserved (no default `else`) so corrupted
+    data produces the same symptom in the port.
+
+### Headline numbers
+
+- **746 → 777 host tests** (+31), all green under ASan/UBSan.
+- **3 retail functions ported**: `FUN_004bc142` (143 B) +
+  `FUN_004bcbd1` (11 B) + `FUN_004bc8fc` (725 B) +
+  `FUN_004b5333` (2997 B) = **3876 B of decompilation**.
+- **1 new engine quirk** (#76 — strict blob selector chain).
+- **1 new module** (`engine_battlefield_render`, ~270 LOC).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Battlefield port state
+
+| chip | function                       | size  | status     |
+| ---- | ------------------------------ | ----: | ---------- |
+| 1    | 16×16 raw blit primitive       |  705 B | ported (prev session) |
+| 2    | frame driver + zoom-16 no-op   |  154 B | **ported (this session)** |
+| 3    | zoom-16 terrain pass           |  725 B | **ported (this session)** |
+| 3.5  | 32×32 raw blit primitive       | 2997 B | **ported (this session)** |
+| 4    | zoom-32 terrain pass           | 1187 B | surveyed   |
+| 5a   | middle pass                    |  543 B | stub       |
+| 5b   | zoom-32 overlay pass           |  436 B | stub       |
+| 5c   | late pass                      |  290 B | stub       |
+| 5d   | final pass                     |  433 B | stub       |
+
+Strategic-mode rendering remains end-to-end (closed two sessions
+ago).  Battlefield rendering now has the frame driver + half of
+the zoom-dispatched leaves landed, with the bigger zoom-32 pass
+next.
+
+### What's next
+
+1. **Battlefield chip 4** — port `FUN_004bcbdc` (zoom-32 first
+   pass, 1187 B).  More complex than chip 3: extra early-skip
+   gate (`descriptor[+1] & 4`), src-offset validation (`<310000`),
+   and a second sprite pass per cell using the clipped sprite
+   blits (FUN_004b446d / FUN_004b44d2 / FUN_004b43b1) plus the
+   FUN_0040464c / FUN_0040477b clip setters.  With the 32×32
+   primitive now ported, the heavy lifting is the per-cell
+   second-sprite path.
+
+2. **gfx.c runtime wiring** — still gated on user availability.
+   Strategic-mode primary + overlay are end-to-end since two
+   sessions ago, so the visual verification milestone is
+   reachable.
+
+3. **Battlefield chip 5** — the four remaining passes (middle,
+   zoom-32 overlay, late, final) collectively ~1700 B.  Their
+   internals are unsurveyed; substantial discovery work needed
+   before porting.
+
+Picking **#1** next: chip 4 is the natural extension of this
+session's work and the 32×32 primitive prereq just landed.
+
+This is a natural `/clear` point — three chips landed, the
+battlefield port is over halfway done by LOC, the next chip is
+discrete (one function with known prereqs).
+
+---
+
 ## 2026-05-25 — Tier-flag wiring + battlefield survey + 16×16 blit primitive (3 chips)
 
 Continuation of the same unattended session.  After army drawer
