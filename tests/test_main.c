@@ -484,6 +484,24 @@ struct test_case {
     X(font_metrics_buffer_width_bounded_stops_at_terminator) \
     X(font_metrics_buffer_width_bounded_missing_glyph_clears_cache) \
     X(font_metrics_buffer_width_bounded_no_pixel_overflow_side_effect) \
+    \
+    X(localization_offset_decodes_24bit_le) \
+    X(localization_offset_index_strides_by_four) \
+    X(localization_offset_fourth_byte_unused) \
+    X(localization_seek_skip_lands_on_offset_byte_when_n_zero) \
+    X(localization_seek_skip_advances_past_control_prefix) \
+    X(localization_seek_skip_walks_n_substrings) \
+    X(localization_seek_skip_accepts_nul_after_nul_boundary) \
+    X(localization_seek_skip_out_of_bounds_suppresses_walk) \
+    X(localization_seek_skip_at_bound_plus_one_still_walks) \
+    X(localization_read_copies_n_bytes) \
+    X(localization_read_skips_substrings_before_copy) \
+    X(localization_read_rejects_nul_after_nul_boundary) \
+    X(localization_read_out_of_bounds_skips_entire_op) \
+    X(localization_read_zero_bytes_no_copy_but_seek_commits) \
+    X(localization_write_uses_secondary_16bit_be_table) \
+    X(localization_write_skips_n_strings_using_strict_boundary) \
+    X(localization_write_zero_bytes_advances_walker) \
     /* end */
 
 /* Emit extern decls. */

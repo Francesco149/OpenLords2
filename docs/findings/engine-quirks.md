@@ -819,6 +819,117 @@ there's no room for digits after it."
 
 ---
 
+## 20. Localization's two boundary detectors disagree on NUL-after-NUL
+
+The localization-blob walker advances past sub-strings by detecting
+a NUL byte preceded by a "boundary-eligible" byte.  But the cluster
+has TWO definitions of "eligible," depending on which entry point
+is in play:
+
+```c
+/* FUN_004018d7 (seek-only): */
+if (*p == 0 && (p[-1] > 0x1f || p[-1] == 0)) { n--; }
+
+/* FUN_004017bf (read) and FUN_004016f3 (write): */
+if (*p == 0 && p[-1] > 0x1f)                  { n--; }
+```
+
+The seek-only path accepts NUL-after-NUL as a valid boundary;
+the read and write paths do not.  In practice this means a blob
+containing an empty sub-string (two consecutive NULs) yields a
+different boundary count between a `seek N` and a `read N` for
+the same N — the read will undershoot by one and copy from the
+wrong location.
+
+Either this is a deliberate optimization (callers that seek but
+never read might want a faster O(n) advance through empty
+sub-strings) or it's a hand-rolled divergence between two
+near-clones of the same routine.  Given the rest of the cluster's
+asymmetries (see quirks #21 and #22), the latter is more likely.
+
+> 📍 `src/localization.c`'s `localization_seek_skip` vs.
+> `localization_read`,
+> `tests/test_localization.c`'s
+> `localization_seek_skip_accepts_nul_after_nul_boundary` and
+> `localization_read_rejects_nul_after_nul_boundary`,
+> Ghidra `FUN_004018d7 @ 0x4018d7`, `FUN_004017bf @ 0x4017bf`.
+
+---
+
+## 21. Localization's write path has a second, asymmetric offset table
+
+`FUN_004017bf` (read) and `FUN_004018d7` (seek) decode section
+offsets out of a primary table at blob offset 8: 4-byte stride,
+**24-bit little-endian**, base anchor is blob[0].
+
+`FUN_004016f3` (write) decodes section offsets out of a different
+table at blob offset 0x1c: 4-byte stride too, but **16-bit
+big-endian**, with the offset bytes at slot positions +2 and +3,
+and the base anchor is blob+0x1c (not blob[0]):
+
+```c
+ptr = blob + 0x1c                                 /* base */
+    + ((byte*)(blob + 0x1e))[i * 4] * 0x100       /* hi (BE!) */
+    + ((byte*)(blob + 0x1f))[i * 4];              /* lo */
+```
+
+The write function has **zero retail callsites** — it's dead code
+that almost certainly never executed in the shipped binary.
+Theories:
+
+1. It's a legacy editor-build path for writing back into a
+   localized blob (separate map-editor functionality dropped from
+   the game build).
+2. It's a hand-rolled clone of `FUN_004017bf` that was written
+   against a different blob layout and never updated.
+
+Either way, the read and write halves of the cluster do NOT
+operate on the same offset table.  Faithful port preserves the
+asymmetry and notes it loudly.
+
+> 📍 `src/localization.c`'s `localization_write` vs.
+> `localization_offset`,
+> `tests/test_localization.c`'s
+> `localization_write_uses_secondary_16bit_be_table`,
+> Ghidra `FUN_004016f3 @ 0x4016f3`, `FUN_004017bf @ 0x4017bf`.
+
+---
+
+## 22. Localization bounds checks are off-by-one or absent
+
+The seek and read paths gate their walk on
+`walker < (byte *)((int)&DAT_005aea40 + 1)`, where `DAT_005aea40`
+is exactly `blob_base + 120000`.  So the check permits the walker
+to land ONE BYTE past the end of the blob (offset 120000 inclusive
+is treated as in-bounds, even though 120000 is the first
+out-of-allocation byte).  The control-byte-skip loop after the
+walk has no bounds check at all and will read forward past the
+end if every byte happens to be < 0x20.
+
+The write path has **no bounds check whatsoever** — it does the
+walk + control-skip + memcpy entirely unguarded.  A caller passing
+an offset that walks the pointer past the buffer end will corrupt
+adjacent .bss.
+
+In retail this is masked by two things: (a) the actual l2_eng.dat
+file is much smaller than 120000 bytes for the English release
+(so the buffer is trailing zeros, not garbage), and (b) the write
+function is never called.  But the off-by-one in the seek/read
+path is observable — a section at the very end of the blob whose
+"section" is just the NUL terminator can advance the walker to
+offset 120000, where the control-skip loop reads `blob[120000]`
+(out of allocation).  Our port mirrors the off-by-one but uses a
+size_t comparison instead of pointer arithmetic.
+
+> 📍 `src/localization.c`'s `walker_in_bounds` and
+> `localization_write`,
+> `tests/test_localization.c`'s
+> `localization_seek_skip_out_of_bounds_suppresses_walk`,
+> Ghidra `FUN_004018d7 @ 0x4018d7`, `FUN_004017bf @ 0x4017bf`,
+> `FUN_004016f3 @ 0x4016f3`.
+
+---
+
 <!--
 Template for new entries:
 
