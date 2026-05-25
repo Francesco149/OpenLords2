@@ -325,6 +325,17 @@ struct test_case {
     X(engine_path_nearest_quirk13_topleft_invisible) \
     X(engine_path_stash_copies_path_and_flags) \
     X(engine_path_stash_zero_step_count_only_sets_active) \
+    \
+    X(engine_handlers_da_install_wires_noop_slots) \
+    X(engine_handlers_da_noop_increments_sentinel) \
+    X(engine_handlers_da_noop_tolerates_null_user) \
+    X(engine_handlers_da_noop_via_dispatcher_at_type_0) \
+    X(engine_handlers_da_noop_via_dispatcher_at_each_type) \
+    X(engine_handlers_da_counter_increments_once) \
+    X(engine_handlers_da_counter_via_dispatcher) \
+    X(engine_handlers_da_counter_ignores_dispatch_args) \
+    X(engine_handlers_da_mixed_records_in_order) \
+    X(engine_handlers_da_other_types_still_treated_as_noop) \
     /* end */
 
 /* Emit extern decls. */
