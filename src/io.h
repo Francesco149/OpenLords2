@@ -14,10 +14,16 @@
  *      "data root" derived from `DAT_0053f200`, retry.
  *
  * For the drop-in bootstrap we lean on `init_exe_dir`'s CWD anchor
- * to put us next to retail's data files in the typical install, so
- * the simple tier-1 lookup suffices.  The retry chain is a TODO —
- * see `docs/findings/ddraw-dsound-bringup.md` "Open questions" for
- * the rationale.
+ * to put us next to retail's data files in the typical (GOG-flat)
+ * install, so tier-1 finds every asset.  Tiers 2/3 are deferred
+ * until a future chip needs the CD-tree subdirectory layout (e.g.
+ * intro Smacker) — see "Asset-load IO helper family" in
+ * `docs/findings/ddraw-dsound-bringup.md` for the extension→subdir
+ * mapping and the rationale.
+ *
+ * The five extension-manipulation helpers that tiers 2/3 share with
+ * other call sites (FUN_004af54a/5ba/62c/675/6c9) are ported in
+ * `src/strutil.c` as the `strutil_ext_*` family.
  */
 
 #ifndef OPENLORDS2_IO_H

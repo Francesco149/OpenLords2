@@ -235,3 +235,88 @@ void strutil_collapse_double_spaces(char *str)
         }
     }
 }
+
+/* ──────────────────────────────────────────────────────────────────
+ * Filename extension helpers — `DAT_004eafa4..a7` scratch.
+ *
+ * The walk-to-first-'.' loop in retail's _save / _apply / _strip
+ * shares the same shape: increment past every byte until '.' is hit
+ * or NUL is hit; the post-loop test branches on the stopping byte.
+ * The `find_first_dot` helper isolates that shape so the per-call
+ * variants only differ in the post-loop action.
+ * ────────────────────────────────────────────────────────────────── */
+
+static char g_ext_scratch[4];
+
+static char *find_first_dot(char *p)
+{
+    char c;
+    char *q = p;
+    do {
+        p = q;
+        c = *p;
+        if (c == '.') break;
+        q = p + 1;
+    } while (c != '\0');
+    return (c == '.') ? p : NULL;
+}
+
+void strutil_ext_save(const char *path)
+{
+    /* Retail takes a non-const char *; we accept const and write to
+     * the scratch only, so the safer signature still matches the
+     * call contract. */
+    char *dot = find_first_dot((char *)path);
+    if (dot == NULL) return;
+    g_ext_scratch[0] = dot[1];
+    g_ext_scratch[1] = dot[2];
+    g_ext_scratch[2] = dot[3];
+    g_ext_scratch[3] = '\0';
+}
+
+void strutil_ext_apply(char *path)
+{
+    char *dot = find_first_dot(path);
+    if (dot == NULL) return;
+    dot[1] = g_ext_scratch[0];
+    dot[2] = g_ext_scratch[1];
+    dot[3] = g_ext_scratch[2];
+    dot[4] = '\0';
+}
+
+void strutil_ext_strip(char *path)
+{
+    char *dot = find_first_dot(path);
+    if (dot == NULL) return;
+    *dot = '\0';
+}
+
+void strutil_ext_append(char *path)
+{
+    /* Walk to the NUL terminator; the retail loop's increment-then-
+     * test shape means `param_1` ends up pointing AT the NUL byte,
+     * which is then overwritten with '.'. */
+    while (*path != '\0') path++;
+    path[0] = '.';
+    path[1] = g_ext_scratch[0];
+    path[2] = g_ext_scratch[1];
+    path[3] = g_ext_scratch[2];
+    path[4] = '\0';
+}
+
+unsigned int strutil_ext_length(const char *path)
+{
+    /* Retail returns `char` — the counter wraps every 256 bytes.
+     * We widen to `unsigned int` because callers always pass short
+     * filenames (well under 128 bytes), so no observable difference;
+     * the wider type keeps the values monotonic if any future caller
+     * walks a longer buffer. */
+    unsigned int n = 0;
+    char c;
+    do {
+        c = *path++;
+        n++;
+        if (c == '.') return n;
+    } while (c != '\0');
+    return n;
+}

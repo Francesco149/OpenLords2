@@ -88,6 +88,25 @@ struct test_case {
     X(strutil_collapse_double_spaces_multiple_runs) \
     X(strutil_collapse_double_spaces_empty_string) \
     \
+    X(strutil_ext_save_basic) \
+    X(strutil_ext_save_three_chars_only) \
+    X(strutil_ext_save_first_dot_wins) \
+    X(strutil_ext_save_no_dot_is_noop) \
+    X(strutil_ext_apply_no_dot_is_noop) \
+    X(strutil_ext_apply_truncates_after_three_chars) \
+    X(strutil_ext_strip_basic) \
+    X(strutil_ext_strip_first_dot_wins) \
+    X(strutil_ext_strip_no_dot_is_noop) \
+    X(strutil_ext_append_basic) \
+    X(strutil_ext_append_empty_string) \
+    X(strutil_ext_append_does_not_replace) \
+    X(strutil_ext_length_basic) \
+    X(strutil_ext_length_no_dot_returns_full_length_with_nul) \
+    X(strutil_ext_length_empty_string) \
+    X(strutil_ext_length_dot_at_start) \
+    X(strutil_ext_length_first_dot_wins) \
+    X(strutil_ext_save_apply_retail_call_pattern) \
+    \
     X(config_defaults_match_retail) \
     X(config_parse_empty_keeps_defaults) \
     X(config_parse_cdrom_drives_letter) \

@@ -159,4 +159,62 @@ int strutil_decimal_atoi(const char *str);
  * preserved.  Leading and trailing spaces collapse to one. */
 void strutil_collapse_double_spaces(char *str);
 
+/* ----- filename extension helpers --------------------------------- */
+/*
+ * The five functions below port retail's filename-extension utility
+ * family at 0x4af54a..0x4af6c9.  They share a single 4-byte scratch
+ * slot (retail's `DAT_004eafa4`) — saved by `strutil_ext_save`, read
+ * by `strutil_ext_apply` and `strutil_ext_append`.  The scratch is
+ * NOT user-visible (no `_get`/_set` accessor) because retail callers
+ * always treat the save/apply pair atomically — extract one
+ * filename's extension, then immediately splice it onto another path.
+ *
+ * Retail uses the scratch indirectly through the IO retry chain
+ * (FUN_004af312 / FUN_004af116) where it routes file lookups by
+ * extension — both helpers upper-case the scratch in place and
+ * strcmp it against "PL8" / "256" / "WAV" / "SMK" to pick a
+ * subdirectory.  Those callers don't ship yet (see io.h), but the
+ * scratch must still be module-static so the save/apply pair remains
+ * coupled exactly the way retail couples them — same hidden state,
+ * same call-site contract.
+ *
+ * Extension is "the three bytes after the FIRST '.' in the string"
+ * — see notes on each helper below.  All five helpers do nothing if
+ * the input has no '.' (or for strip/length helpers, walk the whole
+ * string).  No bounds-checking: the input must be null-terminated.
+ */
+
+/* Port of `FUN_004af54a @ 0x4af54a`.  Walks forward to the FIRST '.'
+ * in `path`; saves the three following bytes (and a trailing NUL)
+ * to the module-static scratch.  No-op if `path` has no '.'.
+ * Scratch survives across calls until the next `_save`. */
+void strutil_ext_save(const char *path);
+
+/* Port of `FUN_004af5ba @ 0x4af5ba`.  Walks forward to the FIRST '.'
+ * in `path`; writes the saved scratch's three bytes into the bytes
+ * AT and AFTER that '.' (i.e. positions [1], [2], [3] relative to
+ * '.'), then null-terminates at [4].  No-op if `path` has no '.'.
+ * Used by retail to splice an extension from one filename onto
+ * another that already has a '.' placeholder. */
+void strutil_ext_apply(char *path);
+
+/* Port of `FUN_004af62c @ 0x4af62c`.  Walks forward to the FIRST '.'
+ * in `path` and replaces it with '\0' — truncating the extension.
+ * No-op if `path` has no '.'. */
+void strutil_ext_strip(char *path);
+
+/* Port of `FUN_004af675 @ 0x4af675`.  Walks to the trailing '\0' of
+ * `path`, then writes '.' + the three scratch bytes + '\0'.  Caller
+ * MUST guarantee at least 5 bytes of trailing slack in the buffer.
+ * Unlike `_apply`, this APPENDS even if no '.' was present. */
+void strutil_ext_append(char *path);
+
+/* Port of `FUN_004af6c9 @ 0x4af6c9`.  Returns the 1-based offset of
+ * the FIRST '.' in `path` (i.e. the length of the stem PLUS one),
+ * or the length-including-NUL if no '.' is found.  Walks until
+ * either '.' or NUL is encountered; the increment-then-check shape
+ * means the return value is *always* one more than the index of the
+ * stopping byte. */
+unsigned int strutil_ext_length(const char *path);
+
 #endif /* OPENLORDS2_STRUTIL_H */

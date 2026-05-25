@@ -237,13 +237,112 @@ makes the window survive alt-tab cleanly.
 2. **`FUN_00425ded`** — DSound post-create init.  What state does it
    set up that's not in the obvious `CreateSoundBuffer` path?
 3. **`FUN_004af8d9(filename, buf, max, off)`** — the universal
-   file-read helper.  Used for palette load (`base01.256`), config
-   read (`l2.ini`), and game-asset loads.  Probably wraps a
-   `CreateFileA` + `ReadFile` + offset, but worth a 5-minute glance
-   to nail the signature before we touch any of those subsystems.
+   file-read helper.  Tier-1 (open / lseek / read / close at the
+   current CWD) is ported as `io_read_file_at` in `src/io.c`;
+   tiers 2 and 3 are the chdir-fallback retry chain documented
+   below.
 4. **`DAT_0053f22c`** is initialised to `w * h` then overwritten with
    bpp under one branch — looks like a Ghidra/MSVC artefact where
    the same stack slot was reused.  Investigate when porting.
+
+## Asset-load IO helper family — `0x4af116..0x4afeed`
+
+A self-contained cluster of file-handling helpers wraps every
+disk-touching call in the engine.  All address-band reads/writes
+go through this family; the tier-1 single-open shape is ported
+(`src/io.c::io_read_file_at` + the extension helpers in
+`src/strutil.c`); the multi-tier retry chain and the file-write /
+existence helpers are deferred until they have a consumer.
+
+```
+FUN_004af116    508 B    tier-3 chdir into ABSOLUTE-path subdir   DEFERRED
+FUN_004af312    496 B    tier-2 chdir into base-relative subdir   DEFERRED
+FUN_004af502     72 B    chdir back to base (DAT_0058fe30)        DEFERRED (no consumer)
+FUN_004af54a    112 B    save first '.' extension to scratch      PORTED  strutil_ext_save
+FUN_004af5ba    114 B    apply scratch into first-'.' slot        PORTED  strutil_ext_apply
+FUN_004af62c     73 B    strip first-'.' extension                PORTED  strutil_ext_strip
+FUN_004af675     84 B    append '.' + scratch + NUL after NUL     PORTED  strutil_ext_append
+FUN_004af6c9     67 B    1-based offset of first '.' (or len)     PORTED  strutil_ext_length
+FUN_004af70c     91 B    file length (uses af502 then __open)     DEFERRED (no consumer)
+FUN_004af767    218 B    file-exists (uses retry chain)           DEFERRED
+FUN_004af841    152 B    file-exists with tier indicator (0/1/2)  DEFERRED
+FUN_004af8d9    381 B    universal read with 3-tier retry         PORTED  io_read_file_at (tier 1)
+FUN_004afa56     99 B    file write (create + truncate + write)   DEFERRED
+FUN_004afab9    897 B    status.txt logger (formats + writes)     DEFERRED
+FUN_004afe3a    179 B    status.txt low-level writer              DEFERRED
+FUN_004afeed   1214 B    .ini parser? (largest sibling)           SURVEY PENDING
+```
+
+### Tier-2 retry — `FUN_004af312` (base-relative chdir)
+
+Extracted extension (uppercased via `strutil_to_upper_inplace`)
+is matched against `{ "PL8", "256", "WAV", "SMK" }`.  If matched,
+the working buffer at `DAT_005cd420` is seeded with the base path
+`DAT_0058fe30` (cwd captured at WinMain), then `FUN_004c2090`
+(MSVC strcat) appends one of:
+
+| Extension | Suffix appended       | RVA of suffix         |
+|-----------|-----------------------|-----------------------|
+| `PL8`     | `\pl8`                | `0x4df46c`            |
+| `256`     | `\pl8`                | `0x4df478`            |
+| `WAV`     | `\wav`                | `0x4df484`            |
+| `SMK`     | `\smk_low`            | `0x4df490` (`DAT_0053f5f4 == 1`) |
+| `SMK`     | `\smk_high`           | `0x4df49c` (otherwise) |
+
+Then `__chdir(&DAT_005cd420)`.  Subsequent file open succeeds if
+the asset lives in `<base>\pl8\` / `<base>\wav\` / `<base>\smk_*\`.
+
+### Tier-3 retry — `FUN_004af116` (absolute-path chdir with drive substitution)
+
+Same extension match (`{ "PL8", "256", "WAV", "SMK" }`).  Zeroes
+40 bytes at `DAT_005cd490`, then `FUN_00401136`
+(`strutil_bounded_copy`) copies 30 bytes of one of these
+placeholder absolute paths:
+
+| Extension | Placeholder path            | RVA of path |
+|-----------|-----------------------------|-------------|
+| `PL8`     | `c:.\pl8`                   | `0x4df3f4`  |
+| `256`     | `c:.\pl8`                   | `0x4df408`  |
+| `WAV`     | `c:.\wav`                   | `0x4df41c`  |
+| `SMK`     | `c:.\smk_high` (default)    | `0x4df430`  |
+| `SMK`     | `c:.\smk_low` (`DAT_0053f5f4 == 1`) | `0x4df444` |
+
+Then `DAT_005cd490 = DAT_0053f200` overwrites the first 4 bytes
+of the buffer.  `DAT_0053f200` is the install drive prefix
+captured at boot (4 bytes — typically something like `"C:"` + the
+drive letter substitution).  So the literal `c:` in the .rdata
+strings is a placeholder pattern that gets rewritten with the
+detected install drive at runtime.
+
+### Why tier-2/3 are deferred
+
+Today's drop-in install layout is FLAT — `vendor/original/` is one
+directory with `Castle.pl8`, `base01.256`, `Intro.smk`, etc. all
+co-located.  `init_exe_dir` chdirs there at startup, so tier-1
+finds every asset on the first try.  The retry chain would only
+fire if assets were partitioned into `pl8/`, `wav/`, `smk_low/`
+etc. subdirs — which retail's CD-install layout did but the GOG
+re-pack does not.
+
+Landing tier-2/tier-3 today would:
+1. Add ~1 KB of subdirectory chdir / extension-routing code
+   that no test exercises (io.c is Win32-only).
+2. Need a producer to populate `DAT_0058fe30` (cwd-at-boot
+   capture) and `DAT_0053f200` (install drive prefix) — both
+   trivial but they have to land somewhere.
+3. Have no observable effect on either of today's GOG install
+   nor any test scenario.
+
+The tier-2/3 helpers land naturally alongside whichever future
+chip first encounters a "file not found at CWD" path — likely the
+intro Smacker subsystem, since `.smk` files in retail's tree-style
+install would otherwise sit one directory away.
+
+> 📍  Sources: `docs/decompiled/all.c` lines 81693 (FUN_004af116),
+> 81765 (FUN_004af312), 81836 (FUN_004af502), 81852-81962
+> (extension helper quintet), 82047 (FUN_004af8d9), 7592
+> (WinMain cwd-capture into `DAT_0058fe30`).  RVA-to-string map
+> verified via `r2 -q -c 'px 192 @ 0x4df3e0' vendor/original/Lords2.exe`.
 
 > 📍  Sources: `docs/decompiled/all.c` lines 83849 (FUN_004b284e),
 > 83895 (FUN_004b2922), 19095 (FUN_0042e5c0), 19273 (FUN_0042ec91),

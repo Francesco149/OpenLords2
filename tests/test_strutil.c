@@ -499,3 +499,192 @@ int test_strutil_collapse_double_spaces_empty_string(void)
     T_ASSERT_EQ_S(s, "");
     return 0;
 }
+
+/* ──────────────────────────────────────────────────────────────────
+ * Filename extension helpers (strutil_ext_save / _apply / _strip /
+ * _append / _length).  Tests use the save+apply pair to verify the
+ * scratch slot's hidden state behaves the same way retail's call
+ * sites use it (extract from one filename, splice onto another).
+ *
+ * Tests run in registration order, so a save in one test leaks
+ * into the next; each test that depends on a specific scratch
+ * value calls `_save` first to pin the state.
+ * ────────────────────────────────────────────────────────────────── */
+
+int test_strutil_ext_save_basic(void)
+{
+    /* Save "pl8" from "Castle.pl8", then apply to a placeholder. */
+    strutil_ext_save("Castle.pl8");
+    char buf[] = "Other.???";
+    strutil_ext_apply(buf);
+    T_ASSERT_EQ_S(buf, "Other.pl8");
+    return 0;
+}
+
+int test_strutil_ext_save_three_chars_only(void)
+{
+    /* Retail saves exactly 3 bytes past the '.', regardless of the
+     * actual extension length.  "Hang.smk" → "smk" + NUL. */
+    strutil_ext_save("Hang.smk");
+    char buf[] = "X.XXX";
+    strutil_ext_apply(buf);
+    T_ASSERT_EQ_S(buf, "X.smk");
+    return 0;
+}
+
+int test_strutil_ext_save_first_dot_wins(void)
+{
+    /* The walk stops at the FIRST '.', so a file with two dots
+     * captures the extension AFTER the first dot — not the last. */
+    strutil_ext_save("a.b.cd");
+    char buf[] = "X.???";
+    strutil_ext_apply(buf);
+    /* First '.' is at index 1; next 3 bytes are 'b','.','c'. */
+    T_ASSERT_EQ_S(buf, "X.b.c");
+    return 0;
+}
+
+int test_strutil_ext_save_no_dot_is_noop(void)
+{
+    /* Pre-seed scratch with a known value, then save() on a
+     * dotless filename — scratch should NOT be cleared. */
+    strutil_ext_save("seed.abc");
+    strutil_ext_save("nodothere");
+    char buf[] = "Y.???";
+    strutil_ext_apply(buf);
+    T_ASSERT_EQ_S(buf, "Y.abc");
+    return 0;
+}
+
+int test_strutil_ext_apply_no_dot_is_noop(void)
+{
+    strutil_ext_save("Foo.bar");
+    char buf[] = "nodotherex";   /* 10 chars, no '.' */
+    strutil_ext_apply(buf);
+    T_ASSERT_EQ_S(buf, "nodotherex");
+    return 0;
+}
+
+int test_strutil_ext_apply_truncates_after_three_chars(void)
+{
+    /* `_apply` writes 3 bytes after the '.' THEN a NUL — so it
+     * truncates any longer pre-existing extension. */
+    strutil_ext_save("X.abc");
+    char buf[] = "File.longext";
+    strutil_ext_apply(buf);
+    T_ASSERT_EQ_S(buf, "File.abc");
+    return 0;
+}
+
+int test_strutil_ext_strip_basic(void)
+{
+    char buf[] = "Castle.pl8";
+    strutil_ext_strip(buf);
+    T_ASSERT_EQ_S(buf, "Castle");
+    return 0;
+}
+
+int test_strutil_ext_strip_first_dot_wins(void)
+{
+    /* Stops at FIRST '.' — same as save/apply. */
+    char buf[] = "a.b.c";
+    strutil_ext_strip(buf);
+    T_ASSERT_EQ_S(buf, "a");
+    return 0;
+}
+
+int test_strutil_ext_strip_no_dot_is_noop(void)
+{
+    char buf[] = "nodothere";
+    strutil_ext_strip(buf);
+    T_ASSERT_EQ_S(buf, "nodothere");
+    return 0;
+}
+
+int test_strutil_ext_append_basic(void)
+{
+    /* Retail call pattern: strip then append re-attaches the saved
+     * extension.  Tests both helpers as a pair. */
+    strutil_ext_save("Source.wav");
+    char buf[16] = "Castle";       /* 6 chars + slack */
+    strutil_ext_append(buf);
+    T_ASSERT_EQ_S(buf, "Castle.wav");
+    return 0;
+}
+
+int test_strutil_ext_append_empty_string(void)
+{
+    /* Walking from index 0; '\0' is the first byte → '.' written
+     * at index 0, scratch at 1..3, NUL at 4. */
+    strutil_ext_save("X.smk");
+    char buf[8] = "";
+    strutil_ext_append(buf);
+    T_ASSERT_EQ_S(buf, ".smk");
+    return 0;
+}
+
+int test_strutil_ext_append_does_not_replace(void)
+{
+    /* Unlike `_apply`, `_append` works on the trailing NUL — even
+     * if there's already a '.' in the path, the new ext is
+     * appended after the whole thing. */
+    strutil_ext_save("X.new");
+    char buf[16] = "File.old";
+    strutil_ext_append(buf);
+    T_ASSERT_EQ_S(buf, "File.old.new");
+    return 0;
+}
+
+int test_strutil_ext_length_basic(void)
+{
+    /* "Castle.pl8" — '.' at index 6, so length returns 7. */
+    T_ASSERT_EQ_I((int)strutil_ext_length("Castle.pl8"), 7);
+    return 0;
+}
+
+int test_strutil_ext_length_no_dot_returns_full_length_with_nul(void)
+{
+    /* "Castle" is 6 bytes + NUL — loop counts all 7. */
+    T_ASSERT_EQ_I((int)strutil_ext_length("Castle"), 7);
+    return 0;
+}
+
+int test_strutil_ext_length_empty_string(void)
+{
+    /* Empty string: counter increments to 1 before the NUL test
+     * exits the loop.  Returns 1, not 0 (retail quirk). */
+    T_ASSERT_EQ_I((int)strutil_ext_length(""), 1);
+    return 0;
+}
+
+int test_strutil_ext_length_dot_at_start(void)
+{
+    /* "." → '.' at index 0 (1-based 1).  Trailing chars ignored. */
+    T_ASSERT_EQ_I((int)strutil_ext_length(".hidden"), 1);
+    return 0;
+}
+
+int test_strutil_ext_length_first_dot_wins(void)
+{
+    /* "a.b.c" — first '.' at index 1, returns 2. */
+    T_ASSERT_EQ_I((int)strutil_ext_length("a.b.c"), 2);
+    return 0;
+}
+
+int test_strutil_ext_save_apply_retail_call_pattern(void)
+{
+    /* Mirrors retail call pattern (e.g. FUN_004af312):
+     *   1. ext_save(filename)
+     *   2. ext_apply(other_buffer_with_placeholder_ext)
+     * Demonstrates the scratch survives between calls. */
+    strutil_ext_save("a2k_arch.pl8");
+    char dest[] = "MyOwn.XYZ";
+    strutil_ext_apply(dest);
+    T_ASSERT_EQ_S(dest, "MyOwn.pl8");
+    /* Subsequent _apply against another buffer uses the same
+     * scratch — no re-save needed. */
+    char dest2[] = "Second.???";
+    strutil_ext_apply(dest2);
+    T_ASSERT_EQ_S(dest2, "Second.pl8");
+    return 0;
+}
