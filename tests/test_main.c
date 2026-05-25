@@ -867,6 +867,19 @@ struct test_case {
     X(engine_battlefield_render_terrain_z32_no_descriptor_short_circuits) \
     X(engine_battlefield_render_terrain_z32_clears_dirty_after_draw) \
     X(engine_battlefield_render_terrain_z32_marks_boundary_cells) \
+    \
+    X(engine_battlefield_render_overlay_z32_draws_on_layer_bit_dirty) \
+    X(engine_battlefield_render_overlay_z32_skips_without_layer_bit) \
+    X(engine_battlefield_render_overlay_z32_skips_clean_with_layer_bit) \
+    X(engine_battlefield_render_overlay_z32_force_redraw_drives_clean) \
+    X(engine_battlefield_render_overlay_z32_always_uses_primary_blob) \
+    X(engine_battlefield_render_overlay_z32_glyph_offset_at_upper_bound_draws) \
+    X(engine_battlefield_render_overlay_z32_glyph_offset_above_aborts) \
+    X(engine_battlefield_render_overlay_z32_glyph_offset_zero_aborts) \
+    X(engine_battlefield_render_overlay_z32_no_boundary_marking) \
+    X(engine_battlefield_render_overlay_z32_cursor_advances_32px) \
+    X(engine_battlefield_render_overlay_z32_no_descriptor_short_circuits) \
+    X(engine_battlefield_render_overlay_z32_blit_count_resets) \
     /* end */
 
 /* Emit extern decls. */

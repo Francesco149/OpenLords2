@@ -12,10 +12,10 @@ cluster (`FUN_004050f6` + 3 passes, all in `0x405000..0x408000`),
 but lives in a different address band (`0x4bc000..0x4bf300`) and
 uses a different tile format and storage layout.
 
-**Status**: chips 1, 2, 3, 3.5, 4 ported (sprite primitives + frame
-driver + both zoom-dispatched first-pass terrain blits); chip 5
-surveyed only.  Survey landed 2026-05-25, chips 1–4 landed
-2026-05-25.
+**Status**: chips 1, 2, 3, 3.5, 4, 5b ported (sprite primitives +
+frame driver + both zoom-dispatched first-pass terrain blits +
+zoom-32 overlay).  Chip 5 middle / late / final still surveyed only.
+Survey landed 2026-05-25, chips 1–4 + 5b landed 2026-05-25.
 
 ## Entry point
 
@@ -224,10 +224,21 @@ The cluster is too large to port in one chip.  Suggested chip plan:
    family (`gfx_sprite.c`) is reused for the second sprite via
    `gfx_dispatch_apply_skip_and_dispatch_sprite`.
 
-5. **`FUN_004bd355`** + **`FUN_004bd233`** + **`FUN_004bd07f`**
-   + **`FUN_004bf1f9`** — chip 5 (or more).  The four passes
-   that draw units/effects on top of terrain.  Each is its own
-   discrete porting effort.
+5. **`FUN_004bd355`** + **`FUN_004bd233`** + **`FUN_004bf1f9`** —
+   chip 5a/c/d.  Middle, late, final passes — units/effects on
+   top of terrain.  Each is its own discrete porting effort with
+   substantial sub-function dependencies (5+ unported helpers
+   each).
+
+   **`FUN_004bd07f`** — chip 5b.  **LANDED** (2026-05-25) as
+   `pass_overlay_zoom32` inside `engine_battlefield_render`.  The
+   second-layer pass that complements terrain-z32: drawing
+   requires descriptor[+1] & 4 SET (the same bit terrain-z32
+   uses as its EARLY-SKIP gate, but the opposite polarity).  Net
+   effect: per cell, at most one of terrain-z32 or overlay-z32
+   draws per frame, picked by the layer bit.  Always uses primary
+   blob; no boundary marking; no second sprite.  Same [1, 0x4baf0]
+   glyph_offset gate as terrain-z32.  Filed quirks #79, #80, #81.
 
 6. Helpers — interleaved as required:
    - `FUN_004bc222/2a5/2c5/2e5/346` (hit-test, screen↔hex) —

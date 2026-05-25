@@ -817,8 +817,11 @@ int test_engine_battlefield_render_terrain_z32_force_redraw_overrides_dirty(void
     return 0;
 }
 
-/* Quirk: descriptor[+1] & 4 set on a DIRTY cell → NO drawing AND NO
- * boundary marking (the entire if/else-if chain short-circuits). */
+/* Quirk: descriptor[+1] & 4 set on a DIRTY cell in the TERRAIN-Z32
+ * pass → NO drawing AND NO boundary marking (the entire if/else-if
+ * chain short-circuits).  The dirty bit is, however, cleared by the
+ * subsequent OVERLAY-Z32 pass (chip 5b), which requires desc[+1] & 4
+ * SET to draw — the layer bit picks which pass owns this cell. */
 int test_engine_battlefield_render_terrain_z32_skip_bit_drops_dirty_cell(void)
 {
     terrain_z32_scaffold(/*cols=*/3, /*rows=*/3);
@@ -830,22 +833,25 @@ int test_engine_battlefield_render_terrain_z32_skip_bit_drops_dirty_cell(void)
 
     engine_battlefield_render_frame(0, 0);
 
-    /* 8 other interior+edge cells blitted (9 - 1 skipped). */
+    /* TERRAIN: 8 other interior+edge cells blitted (9 - 1 skipped). */
     T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(), 8);
+    /* OVERLAY: only the centre cell qualifies (dirty + layer bit). */
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(), 1);
 
-    /* Centre cell: dirty bit STILL set (drawing path never ran). */
-    T_ASSERT_EQ_I(desc_flags(1, 1, DESC_COLS_PHY) & 0x01, 0x01);
-
-    /* Centre cell: boundary bit NOT set (skip-bit short-circuited
-     * boundary marking too — but centre cell is interior so this is
-     * trivially true; the relevant check is the corner case below). */
+    /* Centre cell: dirty bit cleared by OVERLAY (not terrain). */
+    T_ASSERT_EQ_I(desc_flags(1, 1, DESC_COLS_PHY) & 0x01, 0);
+    /* Centre cell: boundary bit NOT set — neither pass touches it
+     * (terrain skipped boundary on the dirty + skip-bit cell; overlay
+     * has no boundary block).  Interior, so it would not have been
+     * a boundary cell anyway. */
     T_ASSERT_EQ_I(desc_flags(1, 1, DESC_COLS_PHY) & 0x02, 0);
     return 0;
 }
 
 /* Quirk corner case: descriptor[+1] & 4 set on a DIRTY EDGE cell —
- * boundary marking should still be skipped (the skip-bit short-
- * circuits BOTH drawing AND boundary marking, unlike on a clean cell). */
+ * terrain skips boundary marking on the cell.  Overlay clears dirty
+ * but adds no boundary bit either, so the corner stays without bit
+ * 0x02 (whereas it would have gotten it on a regular dirty edge cell). */
 int test_engine_battlefield_render_terrain_z32_skip_bit_blocks_boundary_too(void)
 {
     terrain_z32_scaffold(/*cols=*/3, /*rows=*/3);
@@ -857,10 +863,14 @@ int test_engine_battlefield_render_terrain_z32_skip_bit_blocks_boundary_too(void
 
     engine_battlefield_render_frame(0, 0);
 
-    /* Boundary bit NOT set on the cell — skip-bit blocked it. */
+    /* Boundary bit NOT set on the cell — terrain skipped it; overlay
+     * doesn't mark boundary at all. */
     T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x02, 0);
-    /* Dirty bit still set. */
-    T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x01, 0x01);
+    /* Dirty bit cleared by OVERLAY pass. */
+    T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x01, 0);
+    /* Overlay fired on exactly this corner cell (the only one with
+     * the layer bit set). */
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(), 1);
     return 0;
 }
 
@@ -939,14 +949,16 @@ int test_engine_battlefield_render_terrain_z32_blob_selector_other_skips_first(v
     return 0;
 }
 
-/* Quirk: [1, 310000] glyph_offset gate aborts the entire cell. */
+/* Quirk: [1, 0x4baf0] glyph_offset gate aborts the entire cell.  The
+ * upper bound is 309488 (0x4baf0); 309489 is the first value that
+ * aborts.  Retail constant confirmed via r2 at 0x4bcd76. */
 int test_engine_battlefield_render_terrain_z32_src_offset_gate_aborts(void)
 {
     terrain_z32_scaffold(/*cols=*/3, /*rows=*/3);
 
     /* Re-stage slot 1 in primary with an out-of-band src_off.  Use
-     * 310001 (just past the upper bound). */
-    blob_set_slot(g_z32_blob_primary, 1, 32, 32, 310001, 0xab, 32, 0xcd);
+     * 0x4baf1 = 309489 (just past the upper bound). */
+    blob_set_slot(g_z32_blob_primary, 1, 32, 32, 0x4baf1, 0xab, 32, 0xcd);
 
     /* Mark only the centre interior cell as the target.  Other cells
      * use a different sprite (slot 0) so they don't hit the bad slot. */
@@ -1137,5 +1149,280 @@ int test_engine_battlefield_render_terrain_z32_marks_boundary_cells(void)
     T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x02, 0x02);
     T_ASSERT_EQ_I(desc_flags(2, 2, DESC_COLS_PHY) & 0x02, 0x02);
     T_ASSERT_EQ_I(desc_flags(1, 0, DESC_COLS_PHY) & 0x02, 0x02);
+    return 0;
+}
+
+/* ────────────────────────────────────────────────────────────────
+ * Overlay (zoom-32) pass — port of FUN_004bd07f (chip 5b).
+ *
+ * Reuses the terrain_z32 scaffold (same primary blob, descriptor
+ * layout, viewport, etc.) but exercises the SECOND zoom-32 pass that
+ * runs after middle / before late.  Drawing requires BOTH:
+ *
+ *   (a) dirty (desc[+2] & 1) OR force-redraw
+ *   (b) layer bit (desc[+1] & 4)
+ *
+ * Always uses PRIMARY blob.  Same [1, 0x4baf0] glyph_offset gate as
+ * terrain-z32.  No boundary marking, no second sprite.
+ * ──────────────────────────────────────────────────────────────── */
+
+int test_engine_battlefield_render_overlay_z32_draws_on_layer_bit_dirty(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    /* Layer bit + dirty.  Terrain skips this cell (skip-bit logic);
+     * overlay picks it up. */
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0x04,
+                 /*flags=*/0x01, /*sprite=*/1, /*b4=*/0);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(),       1);
+
+    /* Dirty bit cleared by overlay. */
+    T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x01, 0);
+    /* Primary blob pattern 0x42 written at viewport (32, 16). */
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 32], 0x42);
+    return 0;
+}
+
+int test_engine_battlefield_render_overlay_z32_skips_without_layer_bit(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    /* Dirty but layer bit clear — overlay skips, terrain draws. */
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0x00,
+                 /*flags=*/0x01, /*sprite=*/1, /*b4=*/0);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(),       0);
+    return 0;
+}
+
+int test_engine_battlefield_render_overlay_z32_skips_clean_with_layer_bit(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    /* Layer bit set but cell clean — overlay needs dirty/forced. */
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0x04,
+                 /*flags=*/0x00, /*sprite=*/1, /*b4=*/0);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(),       0);
+    /* Canvas untouched. */
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 32], 0xff);
+    return 0;
+}
+
+int test_engine_battlefield_render_overlay_z32_force_redraw_drives_clean(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    /* Clean + layer bit + force-redraw on → overlay should draw. */
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0x04,
+                 /*flags=*/0x00, /*sprite=*/1, /*b4=*/0);
+    engine_battlefield_render_set_force_redraw(1);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(),       1);
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 32], 0x42);
+    return 0;
+}
+
+int test_engine_battlefield_render_overlay_z32_always_uses_primary_blob(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    /* Layer bit + dirty + (flags & 0x1c) == 4 — terrain-z32 would
+     * pick the alt blob for this, but overlay-z32 has no selector
+     * and always uses primary. */
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0x04,
+                 /*flags=*/0x01 | 0x04, /*sprite=*/1, /*b4=*/0);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(), 1);
+    /* Primary pattern is 0x42, alt is 0x77.  Verify primary. */
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 32], 0x42);
+    return 0;
+}
+
+/* Verify the [1, 0x4baf0] glyph_offset gate boundary at 0x4baf0:
+ *   src_off = 0x4baf0 (309488)  — draws (upper bound INCLUSIVE)
+ *   src_off = 0x4baf1 (309489)  — aborts. */
+int test_engine_battlefield_render_overlay_z32_glyph_offset_at_upper_bound_draws(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    /* The blob's primary slot 1 is the one overlay reads from; set
+     * its src_off to exactly 0x4baf0.  Out-of-range for our 8 KB blob
+     * — but the gate accepts the value, so the blit fires and reads
+     * garbage.  We're not checking the canvas content, just that the
+     * dispatch counter ticked.  Use a private blob below to give us a
+     * 310-KB scratch region instead, since the existing scaffold's
+     * blob is too small.  Simpler: bypass the blit by binding a NULL
+     * blob — except then the blit-count test would still fire.
+     *
+     * Cleanest: don't actually have the gate read a real blit.  Just
+     * stage the slot with src_off=0x4baf0 and confirm the blit_count
+     * increments (the 32×32 raw blit will write 32×32 bytes starting
+     * at canvas dest based on cursor + glyph_offset's role inside
+     * blob, but we're only counting). */
+    static uint8_t big_blob[0x4baf0 + 32 * 32 + 32];
+    memset(big_blob, 0, sizeof big_blob);
+    blob_set_slot(big_blob, 1, 32, 32, /*src_off=*/0x4baf0,
+                  0xab, 32, 0xcd);
+    /* Stamp a recognizable byte at the pixel region. */
+    memset(big_blob + 0x4baf0, 0x3c, 32 * 32);
+
+    engine_battlefield_render_bind_blobs(big_blob, big_blob);
+
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0x04,
+                 /*flags=*/0x01, /*sprite=*/1, /*b4=*/0);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(), 1);
+    /* Sample pixel — 0x3c pattern at (32, 16). */
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 32], 0x3c);
+    return 0;
+}
+
+int test_engine_battlefield_render_overlay_z32_glyph_offset_above_aborts(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    /* Stage slot 1 with src_off=0x4baf1 — one past the upper bound. */
+    blob_set_slot(g_z32_blob_primary, 1, 32, 32, /*src_off=*/0x4baf1,
+                  0xab, 32, 0xcd);
+
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0x04,
+                 /*flags=*/0x01, /*sprite=*/1, /*b4=*/0);
+
+    engine_battlefield_render_frame(0, 0);
+
+    /* Blit aborted by gate. */
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(), 0);
+    /* Dirty bit STILL cleared — clearing happens before the gate.
+     * Important behavior: aborted-blit cells still appear "redrawn"
+     * to subsequent frames. */
+    T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x01, 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_overlay_z32_glyph_offset_zero_aborts(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    /* Stage slot 1 with src_off=0 — below lower bound. */
+    blob_set_slot(g_z32_blob_primary, 1, 32, 32, /*src_off=*/0,
+                  0xab, 32, 0xcd);
+
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0x04,
+                 /*flags=*/0x01, /*sprite=*/1, /*b4=*/0);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(), 0);
+    /* Dirty bit cleared (pre-gate). */
+    T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x01, 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_overlay_z32_no_boundary_marking(void)
+{
+    terrain_z32_scaffold(/*cols=*/3, /*rows=*/3);
+
+    /* Make all cells skip-bit + dirty so terrain-z32 leaves all of
+     * them alone (no drawing, no boundary marking).  Overlay-z32
+     * fires on all 9 and clears dirty — but should NOT mark any
+     * boundary bit. */
+    for (int r = 0; r < 3; r++) {
+        for (int c = 0; c < 3; c++) {
+            desc_set_z32(c, r, DESC_COLS_PHY,
+                         /*b0=*/0, /*b1=*/0x04,
+                         /*flags=*/0x01, /*sprite=*/1, /*b4=*/0);
+        }
+    }
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(),       9);
+
+    /* Corner: boundary bit NOT set (overlay has no boundary block;
+     * terrain skipped it). */
+    T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x02, 0);
+    /* All dirty bits cleared by overlay. */
+    T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x01, 0);
+    T_ASSERT_EQ_I(desc_flags(1, 1, DESC_COLS_PHY) & 0x01, 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_overlay_z32_cursor_advances_32px(void)
+{
+    terrain_z32_scaffold(/*cols=*/2, /*rows=*/1);
+
+    /* Both cells get the layer bit + dirty so overlay draws both. */
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0x04, /*flags=*/0x01, /*sprite=*/1, /*b4=*/0);
+    desc_set_z32(1, 0, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0x04, /*flags=*/0x01, /*sprite=*/1, /*b4=*/0);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(), 2);
+    /* Cell 0 at viewport (32, 16) — 0x42 (primary). */
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 32], 0x42);
+    /* Cell 1 at (64, 16) — 32-px pitch. */
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 64], 0x42);
+    return 0;
+}
+
+int test_engine_battlefield_render_overlay_z32_no_descriptor_short_circuits(void)
+{
+    engine_battlefield_render_reset_counts();
+    engine_battlefield_render_set_zoom(0x20);
+    engine_battlefield_render_set_force_redraw(0);
+    engine_battlefield_render_bind_descriptor_table(NULL, 0);
+    engine_battlefield_render_bind_grid(0, 0, 0);
+    engine_battlefield_render_bind_viewport_offset(0, 0);
+    engine_battlefield_render_bind_camera_row_stride(0);
+    engine_battlefield_render_bind_blobs(NULL, NULL);
+
+    engine_battlefield_render_frame(0, 0);
+
+    /* Pass dispatched; blit-count zero. */
+    T_ASSERT_EQ_I(engine_battlefield_render_count_overlay_zoom32(),     1);
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(), 0);
+    return 0;
+}
+
+/* Counter is reset by reset_counts. */
+int test_engine_battlefield_render_overlay_z32_blit_count_resets(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0x04, /*flags=*/0x01, /*sprite=*/1, /*b4=*/0);
+    engine_battlefield_render_frame(0, 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(), 1);
+
+    engine_battlefield_render_reset_counts();
+    T_ASSERT_EQ_I(engine_battlefield_render_overlay_zoom32_blit_count(), 0);
     return 0;
 }

@@ -45,20 +45,40 @@
  *          full clipped-blit dispatcher (clip_x → clip_y →
  *          apply_skip_and_dispatch_sprite).
  *
- *     The first sprite has a `[1, 310000]` src-offset gate — when the
+ *     The first sprite has a `[1, 0x4baf0]` src-offset gate — when the
  *     staged glyph_offset falls outside that band, the cell aborts
  *     immediately (skips boundary marking + skips the second sprite).
  *     Same gate is repeated on the alt-blob first-sprite path; both
  *     are preserved verbatim.
  *
- * The other four passes are NOT ported yet.  Each is wired here as a
+ *   FUN_004bd07f @ 0x4bd07f (436 B) → internal pass_overlay_zoom32
+ *     Zoom-32 second pass (overlay).  Outer shape mirrors the zoom-32
+ *     terrain pass at 32 px cell pitch, but with three key differences:
+ *
+ *       1. Layer gate: drawing REQUIRES descriptor[+1] & 4.  Without
+ *          that bit set, the cell is silently skipped — the
+ *          complementary side of the terrain zoom-32 EARLY-SKIP
+ *          (terrain only draws when the bit is CLEAR).  Net effect:
+ *          per cell, exactly one of terrain-z32 or overlay-z32 may
+ *          draw, picked by descriptor[+1] & 4.  Cells where neither
+ *          draws (skip-bit set but cell is clean) still leave the
+ *          dirty bit alone — both passes only clear it when they
+ *          actually draw.
+ *       2. Always uses the PRIMARY blob (DAT_004e5d78); the alt blob
+ *          is not consulted (no (flags & 0x1c) selector here).
+ *       3. NO boundary marking and NO second sprite — straight-line
+ *          per-cell loop with no descriptor mutation beyond the dirty
+ *          clear.  Same [1, 0x4baf0] glyph_offset gate as terrain-z32;
+ *          out-of-band offsets just skip the blit (the only side-effect
+ *          had already happened: dirty bit was cleared above the gate).
+ *
+ * The other three passes are NOT ported yet.  Each is wired here as a
  * static stub that bumps a per-pass call counter so the driver's
  * dispatch shape (zoom-16 vs zoom-32, always-on vs zoom-gated) can be
  * verified before the bodies land.  Replacing a stub with a real port
  * is a one-line change in `engine_battlefield_render.c`:
  *
  *   FUN_004bd355 @ 0x4bd355 (543 B)  middle pass       [stub]
- *   FUN_004bd07f @ 0x4bd07f (436 B)  zoom-32 overlay   [stub]
  *   FUN_004bd233 @ 0x4bd233 (290 B)  late pass         [stub]
  *   FUN_004bf1f9 @ 0x4bf1f9 (433 B)  final pass        [stub]
  *
@@ -241,5 +261,12 @@ int  engine_battlefield_render_terrain_blit_count(void);
  *            AND descriptor[+4] ∈ {1, 2, 3} AND y_clip_mode != 5). */
 int  engine_battlefield_render_terrain_zoom32_first_blit_count(void);
 int  engine_battlefield_render_terrain_zoom32_second_blit_count(void);
+
+/* Per-blit counter for the zoom-32 overlay pass (FUN_004bd07f).  Bumps
+ * once per cell that actually dispatches a 32×32 raw blit (after the
+ * descriptor[+1] & 4 layer gate, dirty/forced gate, AND the [1, 0x4baf0]
+ * glyph_offset gate).  Distinct from the per-pass `count_overlay_zoom32`
+ * which bumps once per FUN_004bd07f invocation. */
+int  engine_battlefield_render_overlay_zoom32_blit_count(void);
 
 #endif /* OPENLORDS2_ENGINE_BATTLEFIELD_RENDER_H */

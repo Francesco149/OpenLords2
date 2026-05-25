@@ -88,6 +88,9 @@ static int g_terrain_blit_count;
 static int g_terrain_z32_first_blit_count;
 static int g_terrain_z32_second_blit_count;
 
+/* Per-blit dispatch counter for the zoom-32 overlay pass (chip 5b). */
+static int g_overlay_z32_blit_count;
+
 /* Per-pass call counters.  See the header for what each one
  * represents.  All seven pass entry points (5 stubs + 1 real no-op
  * + 1 implicitly the frame driver) bump exactly one counter per
@@ -166,6 +169,11 @@ int engine_battlefield_render_terrain_zoom32_second_blit_count(void)
     return g_terrain_z32_second_blit_count;
 }
 
+int engine_battlefield_render_overlay_zoom32_blit_count(void)
+{
+    return g_overlay_z32_blit_count;
+}
+
 /* ──────────────────────────────────────────────────────────────────
  * Per-pass stubs.
  *
@@ -181,7 +189,6 @@ int engine_battlefield_render_terrain_zoom32_second_blit_count(void)
 
 static void pass_middle(void)           { g_count_middle += 1; }
 static void pass_overlay_zoom16(void)   { g_count_overlay_zoom16 += 1; }
-static void pass_overlay_zoom32(void)   { g_count_overlay_zoom32 += 1; }
 static void pass_late(void)             { g_count_late += 1; }
 static void pass_final(void)            { g_count_final += 1; }
 
@@ -336,7 +343,7 @@ static void pass_terrain_zoom16(void)
  *      0 or > 3 aborts the cell entirely (skips remaining drawing AND
  *      skips boundary marking — matches retail's `goto LAB_004bcc53`).
  *
- * Both sprites also share a `[1, 310000]` glyph_offset gate: if the
+ * Both sprites also share a `[1, 0x4baf0]` glyph_offset gate: if the
  * staged src offset falls outside that band, the cell aborts in the
  * same way (goto LAB_004bcc53 — skips boundary marking AND skips the
  * second sprite path).  This is the retail "bad blob slot" failsafe.
@@ -377,7 +384,7 @@ static void pass_terrain_zoom32(void)
                 /* DIRTY (or forced) cell, skip-bit clear → drawing path.
                  *
                  * Note on control flow: every premature exit inside this
-                 * block (the `[1, 310000]` glyph_offset gate, the second-
+                 * block (the `[1, 0x4baf0]` glyph_offset gate, the second-
                  * sprite mode-byte gate) jumps STRAIGHT to the per-cell
                  * advance, SKIPPING boundary marking.  We mirror that
                  * with an early `continue` after the cell advance below
@@ -409,12 +416,14 @@ static void pass_terrain_zoom32(void)
                     gfx_dispatch_set_last_glyph_index(sprite_idx);
                     gfx_dispatch_stage_sprite_descriptor(first_blob, sprite_idx);
 
-                    /* [1, 310000] glyph_offset gate — see the quirk on
+                    /* [1, 0x4baf0] glyph_offset gate — see the quirk on
                      * the bad-blob-slot failsafe.  An out-of-band offset
                      * aborts the entire cell (skips boundary + second
-                     * sprite). */
+                     * sprite).  Retail constant is 0x4baf0 = 309488; the
+                     * Ghidra display rounds it to 310000 which is wrong
+                     * by 512.  Confirmed via r2 at 0x4bcd76. */
                     int glyph_off = gfx_glyph_glyph_offset();
-                    if (glyph_off > 310000 || glyph_off < 1) {
+                    if (glyph_off > 0x4baf0 || glyph_off < 1) {
                         abort_cell = 1;
                     } else {
                         gfx_sprite_blit_32x32_raw(first_blob);
@@ -480,6 +489,92 @@ static void pass_terrain_zoom32(void)
                     || col == g_grid_cols - 1
                     || row == g_grid_rows - 1) {
                     g_desc_base[g_desc_cursor_offset + 2] |= 0x02;
+                }
+            }
+
+            g_desc_cursor_offset += g_desc_stride;
+            cursor_x             += 0x20;
+        }
+
+        g_desc_cursor_offset += g_grid_row_wrap;
+        cursor_y             += 0x20;
+    }
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Overlay zoom-32 pass — port of FUN_004bd07f @ 0x4bd07f (436 B).
+ *
+ * Second-layer pass that runs after middle pass, before late/final.
+ * Per cell, drawing requires BOTH:
+ *
+ *   (a) (force-redraw != 0) OR (descriptor[+2] & 0x01)  — dirty/forced
+ *   (b) (descriptor[+1] & 0x04)                          — layer bit
+ *
+ * (b) is the SAME bit that terrain zoom-32 uses as its EARLY-SKIP
+ * gate.  Terrain only draws when (b) is CLEAR; overlay only draws when
+ * (b) is SET.  Net effect: per cell, at most ONE of the two passes
+ * runs the descriptor-mutating drawing block per frame.  The dirty bit
+ * is cleared exactly once (by whichever pass actually drew).  A cell
+ * with the layer bit set but currently clean has its dirty bit
+ * untouched by either pass — same fate as a normal clean cell in
+ * terrain-z32.
+ *
+ * Always reads from PRIMARY blob (retail DAT_004e5d78); the alt blob
+ * is not consulted here.  No (flags & 0x1c) selector.
+ *
+ * Same [1, 0x4baf0] glyph_offset gate as terrain-z32.  Behavior on an
+ * out-of-band offset differs in a subtle way from chip 4: here the
+ * gate sits AFTER the dirty-clear but the pass has no boundary marking
+ * or second-sprite path to skip, so the only observable side-effect
+ * of an aborted draw is "dirty cleared but no pixels written".
+ *
+ * No boundary marking.  No per-cell counter analog of zoom-16's
+ * _DAT_004e5d64.  Cell pitch 32 px (cursor_x/y advance by 0x20).
+ * ────────────────────────────────────────────────────────────────── */
+
+static void pass_overlay_zoom32(void)
+{
+    g_count_overlay_zoom32 += 1;
+
+    if (!g_desc_base) {
+        return;
+    }
+
+    g_desc_cursor_offset = (g_camera_x + g_camera_y * g_camera_row_stride)
+                         * g_desc_stride;
+    int cursor_y = g_viewport_y;
+
+    for (int row = 0; row < g_grid_rows; row++) {
+        int cursor_x = g_viewport_x;
+
+        for (int col = 0; col < g_grid_cols; col++) {
+            uint8_t *desc  = &g_desc_base[g_desc_cursor_offset];
+            uint8_t  flags = desc[2];
+
+            int dirty_or_forced = (g_force_redraw != 0) || (flags & 0x01);
+            int layer_bit       = desc[1] & 0x04;
+
+            if (dirty_or_forced && layer_bit) {
+                /* Clear dirty bit. */
+                desc[2] = (uint8_t)(flags & 0xfe);
+
+                int sprite_idx = desc[3];
+
+                if (g_blob_primary) {
+                    gfx_glyph_set_cursor_x(cursor_x);
+                    gfx_glyph_set_cursor_y(cursor_y);
+                    gfx_dispatch_set_last_glyph_index(sprite_idx);
+                    gfx_dispatch_stage_sprite_descriptor(g_blob_primary, sprite_idx);
+
+                    /* [1, 0x4baf0] glyph_offset gate.  Out-of-band offsets
+                     * just skip the blit; the dirty clear above already
+                     * happened (matches retail — the gate sits inside
+                     * the dirty-clearing branch). */
+                    int glyph_off = gfx_glyph_glyph_offset();
+                    if (glyph_off >= 1 && glyph_off <= 0x4baf0) {
+                        gfx_sprite_blit_32x32_raw(g_blob_primary);
+                        g_overlay_z32_blit_count += 1;
+                    }
                 }
             }
 
@@ -577,4 +672,5 @@ void engine_battlefield_render_reset_counts(void)
     g_terrain_blit_count               = 0;
     g_terrain_z32_first_blit_count     = 0;
     g_terrain_z32_second_blit_count    = 0;
+    g_overlay_z32_blit_count           = 0;
 }

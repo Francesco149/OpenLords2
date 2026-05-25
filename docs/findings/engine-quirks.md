@@ -2828,6 +2828,89 @@ table.
 
 ---
 
+## 79. Battlefield zoom-32 layer bit `descriptor[+1] & 4` is the SAME bit used by two opposing passes
+
+The battlefield zoom-32 cluster reads `descriptor[+1] & 0x04` in BOTH
+the terrain pass (`FUN_004bcbdc`) AND the overlay pass (`FUN_004bd07f`)
+to decide whether to draw — but with opposite polarity:
+
+  - Terrain-z32: SKIPS the cell when the bit is set (EARLY-SKIP gate).
+  - Overlay-z32: REQUIRES the bit to draw (layer gate).
+
+Net effect: per cell, at most ONE of the two zoom-32 passes runs the
+drawing block in a given frame, picked by the bit.  Cells flagged
+with the bit are "feature overlays" that replace what would have been
+terrain in that cell.  Cells without the bit get terrain.  Neither
+pass touches the dirty bit unless it actually draws; cells that are
+clean AND have a clear layer bit get neither drawing nor a dirty
+clear from either pass.
+
+This explains the apparent asymmetry of terrain-z32's quirk #77 (cell
+abort skips boundary marking on a dirty+skip-bit cell): the cell ISN'T
+abandoned — overlay-z32 picks it up next.
+
+> 📍 `src/engine_battlefield_render.c` (`pass_terrain_zoom32`,
+> `pass_overlay_zoom32`), Ghidra `FUN_004bcbdc` (line 376 of
+> decomp) and `FUN_004bd07f` (line 16 of decomp).
+
+---
+
+## 80. Battlefield zoom-32 glyph_offset gate constant is 0x4baf0, NOT 310000
+
+Ghidra's decomp shows the `[1, 310000]` glyph_offset gate in
+`FUN_004bcbdc` as a decimal literal, but the underlying retail
+constant is `0x4baf0` = 309488.  Confirmed via r2 at 0x4bcd76:
+
+```
+0x4bcd76      cmp dword [0x58fe04], 0x4baf0
+0x4bcd80      jle 0x4bcd8b           ; offset <= 0x4baf0 → draw
+0x4bcd86      jmp 0x4bcc53           ; abort
+```
+
+The same constant appears in the overlay pass (`FUN_004bd07f` @
+0x4bd1ef) and presumably elsewhere — it's likely the size of the
+largest blob the engine accepts (~302 KB).
+
+OpenLords2's chip-4 port initially used 310000 verbatim from the
+decomp — a 512-value off-by-one that would have accepted bad glyph
+offsets in `[309489, 310000]`.  Fixed in this commit while landing
+chip 5b.  Lesson: when Ghidra shows a "round" decimal literal as a
+cmp immediate, verify against the disassembly — Ghidra normalizes
+hex to decimal aggressively and the rounding direction is not
+documented.
+
+> 📍 `src/engine_battlefield_render.c` (chips 4 + 5b), retail
+> Ghidra `FUN_004bcbdc` + `FUN_004bd07f`, r2 disasm at 0x4bcd76 /
+> 0x4bd1ef.
+
+---
+
+## 81. Battlefield zoom-32 overlay pass clears dirty bit even when blit aborts
+
+`FUN_004bd07f` clears `descriptor[+2] & 1` BEFORE checking the
+`[1, 0x4baf0]` glyph_offset gate.  An out-of-band glyph offset
+therefore leaves the cell with:
+
+  - Dirty bit CLEARED (cell appears "redrawn" to subsequent frames).
+  - No pixels written to the canvas.
+  - No boundary mark (this pass has none).
+
+So a corrupted blob slot for a layer-bit cell silently disappears:
+the cell shows whatever stale pixels were under it, and no recovery
+mechanism re-marks it dirty.  Unlike terrain-z32's analogous gate
+(quirk #77), which also skips boundary marking — overlay-z32 doesn't
+mark boundaries at all so this is a structural rather than
+configurable property.
+
+The terrain-z32 sibling (`FUN_004bcbdc`) also clears dirty before
+the gate; the difference is that terrain has a boundary-marking
+block that gets skipped on abort, whereas overlay has none.
+
+> 📍 `src/engine_battlefield_render.c` (`pass_overlay_zoom32`),
+> Ghidra `FUN_004bd07f` (lines 17-29 of decomp).
+
+---
+
 <!--
 Template for new entries:
 
