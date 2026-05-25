@@ -7,6 +7,126 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Battlefield chip 5d: final-pass debug-label overlay (+11 tests, 2 new quirks) — ENTIRE CLUSTER LANDED
+
+Continuation of the same unattended session.  Previous dispatch
+landed chip 5c (the late pass).  This dispatch lands chip 5d
+(`FUN_004bf1f9`, 433 B), the final pass — and with it, the ENTIRE
+battlefield render cluster is now ported.  All 14 chips of the
+chip plan are real ports; only the scroll/pan input family
+(`FUN_004bc1d1 / 51a` — not part of rendering) remains in the
+address band.
+
+### Chip 5d: final-pass debug-label overlay (`FUN_004bf1f9`)
+
+Replaces the static stub `pass_final` with the real port.  Debug-
+mode overlay drawing a per-creature numeric label on each visible
+cell — used in retail during AI-tuning sessions or designer
+playtests.
+
+Body shape:
+
+  1. Outer gate on retail `DAT_005bb4a5` debug flag.  When zero,
+     pass is a no-op (even the per-cell counter does NOT bump).
+  2. Walks the same visible grid the late pass walks (rows × cols,
+     no over-scan).
+  3. Per cell with `descriptor[+5] != 0`:
+       a. Sum first 0x19e bytes of the entity record (port of
+          retail `FUN_00440089`).  Cast to signed char → int
+          (sign-extended).
+       b. Three-way bucket:
+            sum <  0x65  → value = sum,        pen = 0x3f
+            sum <  0xc9  → value = sum - 100,  pen = 0xf9
+            else         → value = sum - 200,  pen = 0x20
+       c. Skip render when value == 0 OR value == 999.
+       d. Otherwise render at zoom-aware pixel pitch
+          (`col * g_zoom + viewport_x + 1`, etc.) via
+          `gfx_text_label_render_dec`.
+
+The pixel pitch is ZOOM-AWARE — unlike the late-pass quirk #97
+which hardcodes 0x20.  Filed as quirk #99 (counter-example to #97).
+
+### New API surface
+
+  - `bind_debug_label_enabled(int enabled)` — retail `DAT_005bb4a5`.
+  - `bind_debug_label_font(font_base, char_glyph_table)` — retail
+    `&DAT_005af8f0` font (the port's `gfx_text_label_render_dec`
+    factors char_glyph_table out separately, matching the existing
+    debug-text pattern in `engine_overlay_render`).
+  - `bind_debug_label_suffix(const char *suffix)` — retail
+    `&DAT_004e4520` string.
+  - Test-only `run_pass_final_for_test(camera_x, camera_y)` sibling
+    of the late-pass test entry.
+
+New accessors: `final_per_cell_count`, `final_label_render_count`.
+
+### New engine quirks
+
+  - **#98** — three-way bucket has UNREACHABLE branches.  Sum range
+    `[-128, 127]` for signed-char; bucket-mid (`101 <= sum < 201`)
+    and bucket-high (`sum >= 201`) are dead code.  Filter
+    `value != 999` also unreachable (max value is 127).  Likely
+    leftover from an older revision where sum was a wider type.
+  - **#99** — final-pass cell pitch IS zoom-aware (uses `g_zoom`),
+    counter-example to chip 5c's quirk #97 (late-pass pitch
+    hardcoded 0x20).  Same descriptor table, same gates, but
+    different convention — reinforces that #97 is a localized
+    decision inside the late-pass leaves.
+
+### Headline numbers
+
+- **939 → 950 host tests** (+11), all green under ASan/UBSan.
+- **1 retail function ported**: `FUN_004bf1f9` (433 B).
+- **2 new engine quirks** (#98 dead bucket branches, #99
+  zoom-aware pitch counter-example).
+- Cross-compile (mingw32) clean.
+
+### Battlefield port state
+
+| chip   | function                                      | size   | status     |
+| ------ | --------------------------------------------- | -----: | ---------- |
+| 1      | 16×16 raw blit primitive                      |  705 B | ported     |
+| 2      | frame driver + zoom-16 no-op                  |  154 B | ported     |
+| 3      | zoom-16 terrain pass                          |  725 B | ported     |
+| 3.5    | 32×32 raw blit primitive                      | 2997 B | ported     |
+| 4      | zoom-32 terrain pass                          | 1187 B | ported     |
+| 5a.i   | middle-pass driver shell                      |  543 B | ported     |
+| 5a.ii.a | sorted-entity infrastructure (938+da92+db95) |  761 B | ported    |
+| 5a.ii.b | per-entity draw FUN_004bdc31 base path       | 1087 B | ported    |
+| 5a.iii | per-cell draw leaves (574+759+beed4)          | 1769 B | ported    |
+| 5a.iv  | type-special leaves (4df+7be+ab9)             | 2549 B | ported    |
+| 5b     | zoom-32 overlay pass                          |  436 B | ported     |
+| 5c     | late pass driver + creature + marker          | 1425 B | ported     |
+| 5d     | final pass (debug label overlay)              |  433 B | **ported (this session)** |
+| 6      | 5 coord helpers (hit-test + screen↔hex)       |  394 B | ported     |
+
+**Cluster complete.**  ~14 KB across ~21 functions, all real ports.
+
+### What's next
+
+1. **Scroll/pan input family** (`FUN_004bc1d1 / 51a` — possibly
+   994 B for the latter).  Not a render pass — handles keyboard
+   and mouse panning + edge auto-scroll.  Could chunk as a single
+   chip after a survey.
+
+2. **gfx.c runtime wiring** — battlefield rendering is now end-to-
+   end at zoom 16/32 for all 14 chips.  The next visual milestone
+   is "first battlefield frame with units rendered" which still
+   requires standing up the entity table from real savegame data
+   (the larger lift).  Visual verification remains gated on user
+   availability.
+
+3. **Other clusters** — strategic-mode rendering, save format,
+   input replay, etc.  Pick based on top-down RE workflow (see
+   user memory).
+
+This is a natural `/clear` point — chip 5d lands cleanly, entire
+battlefield cluster complete (14/14 chips), 950 tests green, three
+new docs entries (battlefield-render.md status update + 2 quirks
+in engine-quirks.md), no incomplete work in-flight.
+
+---
+
 ## 2026-05-25 — Battlefield chip 5c: late-pass driver + per-cell creature draw + selection marker (+25 tests, 3 new quirks)
 
 Continuation of the same unattended session.  Previous dispatch
