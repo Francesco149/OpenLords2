@@ -89,6 +89,7 @@ int gfx_dispatch_glyph_height_short(void) { return g_glyph_height_short; }
 
 void gfx_dispatch_set_glyph_height_short(int h) { g_glyph_height_short = h; }
 void gfx_dispatch_set_clip_x_mode(int mode)     { g_x_clip_mode = mode; }
+void gfx_dispatch_set_last_glyph_index(int idx) { g_last_glyph_index = idx; }
 
 /* ──────────────────────────────────────────────────────────────────
  * Horizontal clip setter — port of FUN_0040464c
@@ -328,7 +329,8 @@ int gfx_dispatch_glyph(const uint8_t *font_base,
  * and the default-font character-range tweaks.
  * ────────────────────────────────────────────────────────────────── */
 
-static void stage_sprite_descriptor(const uint8_t *sprite_blob, int sprite_index)
+void gfx_dispatch_stage_sprite_descriptor(const uint8_t *sprite_blob,
+                                          int            sprite_index)
 {
     const uint8_t *slot = sprite_blob + sprite_index * 16 + 8;
 
@@ -346,7 +348,7 @@ static void stage_sprite_descriptor(const uint8_t *sprite_blob, int sprite_index
     g_glyph_height_short = h_short;
 }
 
-static void sprite_apply_skip_and_dispatch(const uint8_t *sprite_blob)
+void gfx_dispatch_apply_skip_and_dispatch_sprite(const uint8_t *sprite_blob)
 {
     int sprite_w   = gfx_glyph_glyph_w();
     int src_off    = gfx_glyph_glyph_offset();
@@ -370,13 +372,13 @@ void gfx_dispatch_sprite(const uint8_t *sprite_blob,
                          int            x,
                          int            y)
 {
-    stage_sprite_descriptor(sprite_blob, sprite_index);
+    gfx_dispatch_stage_sprite_descriptor(sprite_blob, sprite_index);
     gfx_glyph_set_dest(x, y);
 
     gfx_dispatch_clip_x(0, gfx_paint_canvas_width());
     gfx_dispatch_clip_y(0, gfx_paint_canvas_height());
 
-    sprite_apply_skip_and_dispatch(sprite_blob);
+    gfx_dispatch_apply_skip_and_dispatch_sprite(sprite_blob);
 }
 
 void gfx_dispatch_sprite_clipped(const uint8_t *sprite_blob,
@@ -388,11 +390,11 @@ void gfx_dispatch_sprite_clipped(const uint8_t *sprite_blob,
                                  int            right,
                                  int            bottom)
 {
-    stage_sprite_descriptor(sprite_blob, sprite_index);
+    gfx_dispatch_stage_sprite_descriptor(sprite_blob, sprite_index);
     gfx_glyph_set_dest(x, y);
 
     gfx_dispatch_clip_x(left, right);
     gfx_dispatch_clip_y(top, bottom);
 
-    sprite_apply_skip_and_dispatch(sprite_blob);
+    gfx_dispatch_apply_skip_and_dispatch_sprite(sprite_blob);
 }

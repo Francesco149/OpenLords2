@@ -598,6 +598,27 @@ struct test_case {
     X(gfx_dispatch_sprite_fully_offscreen_writes_nothing) \
     X(gfx_dispatch_sprite_clipped_uses_supplied_rect) \
     \
+    X(gfx_sprite_render_raw_paints_at_dest) \
+    X(gfx_sprite_render_raw_null_buffer_no_op) \
+    X(gfx_sprite_render_raw_sets_last_index_zero) \
+    X(gfx_sprite_render_from_blob_paints_at_dest) \
+    X(gfx_sprite_render_from_blob_null_logs_and_latches) \
+    X(gfx_sprite_render_from_blob_offset_too_low_logs_and_latches) \
+    X(gfx_sprite_render_from_blob_offset_too_high_logs_and_latches) \
+    X(gfx_sprite_render_from_blob_invalid_still_stages_descriptor) \
+    X(gfx_sprite_render_global_paints_at_dest) \
+    X(gfx_sprite_render_global_bind_round_trip) \
+    X(gfx_sprite_render_global_offset_too_low_logs) \
+    X(gfx_sprite_render_global_offset_too_high_logs) \
+    X(gfx_sprite_render_truncate_bottom_trims_last_row) \
+    X(gfx_sprite_render_truncate_bottom_zero_trim_paints_all) \
+    X(gfx_sprite_render_truncate_bottom_error_gates) \
+    X(gfx_sprite_render_truncate_top_skips_first_row) \
+    X(gfx_sprite_render_truncate_top_zero_skip_paints_all) \
+    X(gfx_sprite_render_truncate_top_error_gates) \
+    X(gfx_sprite_render_error_latch_sticky_until_cleared) \
+    X(gfx_sprite_render_log_hook_null_is_no_op) \
+    \
     X(gfx_text_empty_buffer_pads_acc_by_4) \
     X(gfx_text_plain_renders_single_glyph) \
     X(gfx_text_underscore_renders_as_space) \

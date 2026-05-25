@@ -222,6 +222,42 @@ void gfx_dispatch_set_glyph_height_short(int h);
  * propagation rule. */
 void gfx_dispatch_set_clip_x_mode(int mode);
 
+/* Write the last-glyph-index global (DAT_005c9288).  Retail uses the
+ * SAME global as a generic "most recently staged 16-byte-descriptor
+ * index" — written by the glyph dispatcher, the sprite dispatcher (no,
+ * actually NOT — see below), and the sibling-of-dispatcher sprite
+ * renderers in gfx_sprite_render.c.  The sprite dispatcher leaves the
+ * field alone (it stages width/height/offset but not the index); the
+ * sprite-render wrappers WRITE the index before staging the descriptor.
+ * Exposed so those wrappers can update the same global the dispatcher
+ * owns, preserving retail's one-global-many-writers topology. */
+void gfx_dispatch_set_last_glyph_index(int idx);
+
+/* ────────────────────────────────────────────────────────────────
+ * Sibling-of-dispatcher helpers for gfx_sprite_render.c.
+ *
+ * Both helpers consume and produce the same staged state that
+ * gfx_dispatch_sprite uses internally.  They are exposed so the
+ * sibling sprite-render wrappers (FUN_0040a01d / FUN_0040a21a /
+ * FUN_0040a682 / FUN_0040a80e / FUN_0040a9b0) can share the
+ * dispatcher's descriptor-stage and post-clip dispatch paths
+ * without code duplication.  Tests of those wrappers also call
+ * these directly to verify intermediate state.
+ * ──────────────────────────────────────────────────────────────── */
+
+/* Stage the descriptor at sprite_blob[sprite_index*16+8] into the
+ * glyph-blitter-state slots (width, height_short, src_offset, flag_a,
+ * row_count placeholder, flag_b).  Does NOT touch cursor_x/cursor_y
+ * and does NOT call clip_x/clip_y. */
+void gfx_dispatch_stage_sprite_descriptor(const uint8_t *sprite_blob,
+                                          int sprite_index);
+
+/* Apply the top_skip rows and left_skip cols to the staged src
+ * offset, then dispatch one of the three sprite blitters (unclipped,
+ * left-clipped, right-clipped) based on the current x_clip_mode.
+ * Gated on y_clip_mode != 5. */
+void gfx_dispatch_apply_skip_and_dispatch_sprite(const uint8_t *sprite_blob);
+
 /* ────────────────────────────────────────────────────────────────
  * Sprite dispatchers
  *
