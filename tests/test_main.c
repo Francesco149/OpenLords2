@@ -188,6 +188,14 @@ struct test_case {
     X(engine_rng_retail_seed_produces_nonzero) \
     X(engine_rng_matches_reference) \
     X(engine_rng_multi_call_evolves) \
+    \
+    X(save_schema_table_shape) \
+    X(save_schema_aliasing_preserved) \
+    X(save_round_trip_retail_lastturn) \
+    X(castles_init_blank_makes_zero_file) \
+    X(castles_scenario_round_trip_byte13) \
+    X(castles_scenario_independent_slots) \
+    X(castles_read_fixup_flag_bit1) \
     /* end */
 
 /* Emit extern decls. */
