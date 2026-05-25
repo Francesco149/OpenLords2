@@ -26,6 +26,10 @@ void gfx_paint_bind_canvas(uint8_t *pixels, int width, int height)
     g_height = height;
 }
 
+uint8_t *gfx_paint_canvas_pixels(void) { return g_pixels; }
+int      gfx_paint_canvas_width(void)  { return g_width;  }
+int      gfx_paint_canvas_height(void) { return g_height; }
+
 void gfx_paint_pixel(int x, int y, uint8_t color)
 {
     if (!g_pixels) return;

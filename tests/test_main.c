@@ -536,6 +536,19 @@ struct test_case {
     X(gfx_paint_2x1_clipped_bottom_right_corner_wraps_into_guard) \
     X(gfx_paint_2x1_clipped_y_at_height_drops) \
     X(gfx_paint_bind_then_rebind) \
+    \
+    X(gfx_glyph_blit_color_fill_skips_zeros) \
+    X(gfx_glyph_blit_copy_byte_mode_preserves_per_pixel_color) \
+    X(gfx_glyph_blit_writes_at_offset_glyph) \
+    X(gfx_glyph_blit_preserves_underlying_pixels_under_zeros) \
+    X(gfx_glyph_blit_zero_width_writes_one_pixel_per_row) \
+    X(gfx_glyph_blit_zero_height_writes_one_row) \
+    X(gfx_glyph_blit_null_canvas_no_crash) \
+    X(gfx_glyph_blit_left_clipped_writes_clipped_width) \
+    X(gfx_glyph_blit_right_clipped_byte_identical_behavior) \
+    X(gfx_glyph_blit_left_clipped_color_modulation_ignored) \
+    X(gfx_glyph_blit_left_clipped_zero_src_pad_equals_unclipped) \
+    X(gfx_glyph_state_persists_until_set) \
     /* end */
 
 /* Emit extern decls. */

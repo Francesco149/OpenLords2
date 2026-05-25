@@ -69,6 +69,16 @@
  * mirroring retail). */
 void gfx_paint_bind_canvas(uint8_t *pixels, int width, int height);
 
+/* Accessors so peer drawers (glyph blitter, line drawer, sprite
+ * blitters) can compute their own dest pointer / right-clip bound
+ * without each one re-binding its own private canvas reference.
+ * Retail conflates these into the shared DAT_004ea1a8 / DAT_004eb274 /
+ * DAT_004eac4c globals; the accessors give other modules read-only
+ * access to the same state without duplicating bind plumbing. */
+uint8_t *gfx_paint_canvas_pixels(void);
+int      gfx_paint_canvas_width(void);
+int      gfx_paint_canvas_height(void);
+
 /* Port of `FUN_004b3f54 @ 0x4b3f54`.  Write `color` at (x,y) of the
  * bound canvas.  No bounds check — caller must clip first.
  *
