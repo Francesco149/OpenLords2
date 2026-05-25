@@ -52,6 +52,7 @@ SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c \
                    ../src/gfx_sprite_render.c \
                    ../src/engine_map_render.c \
                    ../src/engine_overlay_render.c \
+                   ../src/engine_battlefield_render.c \
                    ../src/save.c
 
 # Test files — each defines one or more `int test_<name>(void)`
@@ -84,6 +85,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_gfx_sprite_render.c \
                    test_engine_map_render.c \
                    test_engine_overlay_render.c \
+                   test_engine_battlefield_render.c \
                    test_save.c
 
 OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o)) \

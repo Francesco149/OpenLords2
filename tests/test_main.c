@@ -815,6 +815,21 @@ struct test_case {
     X(engine_overlay_render_army_label_view_mode_1_no_label) \
     X(engine_overlay_render_army_src_offset_above_70000_errors) \
     X(engine_overlay_render_army_phase1_x_anchor_shifted) \
+    \
+    X(engine_battlefield_render_frame_stores_camera) \
+    X(engine_battlefield_render_camera_updates_each_frame) \
+    X(engine_battlefield_render_zoom16_dispatches_z16_passes) \
+    X(engine_battlefield_render_zoom16_overlay_pass_is_dispatched) \
+    X(engine_battlefield_render_zoom32_dispatches_z32_passes) \
+    X(engine_battlefield_render_unknown_zoom_skips_zoom_passes) \
+    X(engine_battlefield_render_unknown_zoom_decrements_force_redraw) \
+    X(engine_battlefield_render_force_redraw_decrements) \
+    X(engine_battlefield_render_force_redraw_zero_floor) \
+    X(engine_battlefield_render_force_redraw_one_to_zero) \
+    X(engine_battlefield_render_counters_accumulate_across_frames) \
+    X(engine_battlefield_render_counters_reset_zeroes_all) \
+    X(engine_battlefield_render_switching_zoom_picks_correct_pair) \
+    X(engine_battlefield_render_zoom_round_trip) \
     /* end */
 
 /* Emit extern decls. */

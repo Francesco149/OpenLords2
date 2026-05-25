@@ -12,8 +12,9 @@ cluster (`FUN_004050f6` + 3 passes, all in `0x405000..0x408000`),
 but lives in a different address band (`0x4bc000..0x4bf300`) and
 uses a different tile format and storage layout.
 
-**Status**: surveyed only — not yet ported.  Survey landed
-2026-05-25.
+**Status**: chips 1 + 2 ported (sprite primitive + frame driver
+with stubbed-out passes); chips 3–5 surveyed only.  Survey landed
+2026-05-25, chips 1+2 landed 2026-05-25.
 
 ## Entry point
 
@@ -184,15 +185,14 @@ sprite_render family — only the actual draw primitive
 The cluster is too large to port in one chip.  Suggested chip plan:
 
 1. **`FUN_004b49f7`** (705 B raw 16×16 blit primitive) — chip 1.
-   Smallest, well-bounded, shared with non-battlefield callers
-   so it unblocks more than just this cluster.  Five host tests
-   cover the matrix (pitch variations, source offset, boundary).
+   **LANDED** (2026-05-25) as `gfx_sprite_blit_16x16_raw`.
 
 2. **`FUN_004bc142`** (143 B driver) + zoom-16 stub `FUN_004bcbd1`
-   (11 B) — chip 2.  Entry point + the no-op stub; both pass-1
-   and pass-2 fan-outs left as stubs that bump call-counters,
-   so frame-driver dispatch is testable in isolation before the
-   passes land.
+   (11 B) — chip 2.  **LANDED** (2026-05-25) as
+   `engine_battlefield_render` module.  The driver is fully ported;
+   the zoom-16 second pass (a retail no-op) is ported faithfully;
+   the other five passes are wired as static call-counter stubs
+   that get swapped for real ports in chips 3–5.
 
 3. **`FUN_004bc8fc`** (725 B zoom-16 first pass) — chip 3.
    Simplest of the three passes; reads + dispatches sprite blits
