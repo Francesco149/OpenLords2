@@ -7,6 +7,179 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Battlefield chips 5a.ii.a + 5a.ii.b: sorted-entity infrastructure + per-entity draw (+35 tests, 5 new quirks)
+
+Continuation of the same unattended session.  Previous dispatch
+landed chip 5a.i (middle-pass driver shell with all six leaves
+stubbed).  This dispatch lands the two sub-chips of 5a.ii — both
+sorted-entity infrastructure (build / sort / render loop) AND the
+per-entity draw body — leaving only the three type-special leaves
++ the three per-cell draw leaves stubbed within the middle pass.
+
+### Chip 5a.ii.a: sorted-entity infrastructure (`FUN_004bd938 / da92 / db95`)
+
+Replaces three counter-stubs with real ports.  The middle-pass
+driver shell from chip 5a.i was already calling them, so wiring is
+free; the new bodies populate a shared visible-entity list, sort by
+Y ascending, and walk the list dispatching to the per-entity draw.
+
+**`FUN_004bd938` (346 B) — visible-list build.**  Walks the entity
+table for ids 1..0x50, filters by alive (`+0x2c` byte) and visible
+window (inclusive `[cam_x - 1, cam_x + cols] × [cam_y - 1, cam_y +
+rows]`), writes (id, y) pairs into a static buffer, terminates with
+an in-band sentinel (y=9999, id=0).
+
+**`FUN_004bda92` (259 B) — bubble sort by Y ascending.**  Last-swap
+early termination + 500-iter outer safety cap.  The sentinel acts
+as a guaranteed-max comparand on the right edge of the inner loop.
+Sort is effectively stable for ties (strict `<` swap predicate) —
+matters for entity rendering order on stacked cells.
+
+**`FUN_004bdb95` (156 B) — per-entity render loop.**  For each
+sorted entry, computes `px_x = (entity_x - cam_x) * zoom +
+viewport_x` (and the y analog), stages as cursor via gfx_glyph,
+then dispatches the per-entity draw.
+
+### Chip 5a.ii.b: per-entity draw `FUN_004bdc31` (1087 B base path)
+
+Replaces the state-capturing stub with the real body.  Three
+type-special leaves it dispatches stay as counter-stubs:
+
+  - `FUN_004be4df` — type-6 PRE-call (likely a shadow / ground decal
+    drawn beneath the main sprite).
+  - `FUN_004be7be` — type-7 POST-call.
+  - `FUN_004beab9` — type-9-subtype-0xe POST-call.
+
+Body shape (in retail dispatch order):
+
+  1. Type-6 PRE-call (outside the no-blob gate — see quirk #87).
+  2. Save entry cursor.
+  3. Read primary blob ptr at entity record `+0x00`; NULL ⇒ no-blob
+     counter + early return.
+  4. Stage sprite descriptor via the existing
+     `gfx_dispatch_stage_sprite_descriptor` helper (same 16-byte
+     slot layout as terrain / overlay).
+  5. Glyph-offset gate `[1, 0x4baf0]` — out-of-band aborts the
+     drawing block (skips main draw AND type-7 / type-9 POSTs).
+  6. Anim-offset lookup based on zoom:
+       - zoom 0x20: `z32_table[facing * 0x88 + frame * 8]` with
+         X centering `+ (16 - sprite_w/2)`, Y centering
+         `- sprite_w/2 + 8`.
+       - zoom 0x10: `z16_table[...]` with `+ (8 - sprite_w/2)`,
+         `- sprite_w/2 + 4`.
+  7. Apply offsets; type-9 → cursor_y += 12; type-10 → cursor_y += 8.
+  8. Dirty box: 5×5 tile box for type < 7, 9×9 for type ≥ 7,
+     force-full escalation flag = 2.
+  9. Set clip rect; dispatch RLE blit (gated internally on
+     `y_clip_mode != 5`).
+ 10. Restore entry cursor.
+ 11. Type-7 / type-9-subtype-0xe POST-calls (gated by reaching the
+     blit, i.e. inside the no-blob else AND inside the offset gate).
+
+### New API surface
+
+  - `engine_battlefield_render_bind_entity_table(base, stride, max_id)`
+    — chip 5a.ii.a, the per-entity table binding.  Tests stand up a
+    `(max_id + 1) * stride`-byte buffer and stuff (x, y, alive, type,
+    facing, etc.) into the documented offsets.
+  - `engine_battlefield_render_bind_anim_offset_tables(z16, z32)` —
+    chip 5a.ii.b, the per-(facing, frame) anim offset lookup.  Each
+    table is `facings * 0x88` bytes; 8 facings × 17 frames per facing
+    in retail.
+  - `engine_battlefield_render_set_dirty_state(state)` — chip 5a.ii.b,
+    matches the pattern from engine_map_render / engine_overlay_render.
+  - Visible-list accessors: `visible_entity_count / id(i) / y(i)`,
+    `middle_sort_passes`, `middle_per_entity_count / last_id / last_px_*`.
+  - Type-special stub accessors: `middle_entity_type6_count / last_id`,
+    `middle_entity_type7_count / last_id`, `middle_entity_type9_sub_count /
+    last_id`, `middle_entity_no_blob_count / last_id`,
+    `middle_entity_blit_count`.
+
+### New engine quirks
+
+  - **#85** — visible-entity filter window has INCLUSIVE bounds on
+    both ends.  Matches the cell-loop over-scan extent exactly.
+  - **#86** — visible-entity sort uses an in-band sentinel (id=0,
+    y=9999) as a guaranteed-max right-edge comparand; effectively
+    stable for equal-y ties.
+  - **#87** — type-6 PRE-call fires even when the entity's primary
+    blob is NULL.  Intentional asymmetry: secondary draws (shadows
+    / decals using a separate blob field at `+0x04`) survive
+    primary-asset failures.
+  - **#88** — per-entity body reads uninitialised stack at zoom ≠
+    {0x10, 0x20}.  Unreachable in retail (game never uses other
+    zoom values) but the port initialises to 0 for safety.
+  - **#89** — dirty-rect box size threshold uses entity TYPE
+    (`< 7` vs `≥ 7`), not sprite dimensions.  Hardcoded 5×5 / 9×9
+    cells.  Force-full escalation flag (=2) hardcoded.
+
+### Headline numbers
+
+- **838 → 873 host tests** (+35), all green under ASan/UBSan.
+- **4 retail functions ported**: `FUN_004bd938` (346 B),
+  `FUN_004bda92` (259 B), `FUN_004bdb95` (156 B), `FUN_004bdc31`
+  (1087 B = base path; three type-specials remain stubbed).
+- **5 new engine quirks** (#85 inclusive filter, #86 sort sentinel,
+  #87 type-6 survives no-blob, #88 uninitialised at unsupported
+  zoom, #89 dirty box by entity type).
+- Two commits — `09fea1d` (5a.ii.a) + `e00104d` (5a.ii.b) — each
+  self-contained.
+- Cross-compile (mingw32) clean.
+
+### Battlefield port state
+
+| chip   | function                                | size  | status     |
+| ------ | --------------------------------------- | ----: | ---------- |
+| 1      | 16×16 raw blit primitive                |  705 B | ported (3 sessions ago) |
+| 2      | frame driver + zoom-16 no-op            |  154 B | ported (prev session) |
+| 3      | zoom-16 terrain pass                    |  725 B | ported (prev session) |
+| 3.5    | 32×32 raw blit primitive                | 2997 B | ported (prev session) |
+| 4      | zoom-32 terrain pass                    | 1187 B | ported (prev session) |
+| 5a.i   | middle-pass driver shell                |  543 B | ported (this session) |
+| 5a.ii.a | sorted-entity infrastructure (938+da92+db95) |  761 B | **ported (this session)** |
+| 5a.ii.b | per-entity draw FUN_004bdc31 base path    | 1087 B | **ported (this session)** |
+| 5a.iii | per-cell draw leaves (574+759+beed4)    | ~1769 B | stub |
+| 5a.iv  | type-special leaves (4df+7be+ab9)       | ~2549 B | stub (added this session) |
+| 5b     | zoom-32 overlay pass                    |  436 B | ported (prev session) |
+| 5c     | late pass                               |  290 B | stub       |
+| 5d     | final pass                              |  433 B | stub       |
+| 6      | 5 coord helpers (hit-test + screen↔hex) |  394 B | ported (prev session) |
+
+### What's next
+
+1. **Chip 5a.iii — per-cell draw leaves.**  Port
+   `FUN_004bd574` (player marker, animated 8-frame sprite),
+   `FUN_004bd759` (unit-key sprite, 4-byte map drops unknown
+   keys), `FUN_004beed4` (effect-chain walk, max 10 hops + self-
+   loop detection).  Each uses `gfx_dispatch_dispatch_sprite_rle`
+   + `engine_dirty_rect_mark_box_tiled` — both already wired.
+   No new bindings needed.
+
+2. **Chip 5a.iv — type-special leaves.**  Port
+   `FUN_004be4df` (type-6 PRE-call, 735 B — secondary draw using
+   the entity's secondary blob field at `+0x04`),
+   `FUN_004be7be` (type-7 POST-call, 763 B),
+   `FUN_004beab9` (type-9-subtype-0xe POST-call, 1051 B).  Two
+   of the three likely share similar shapes (Y-sorted siege engine
+   parts maybe?) — survey first.
+
+3. **gfx.c runtime wiring** — strategic-mode rendering has been
+   end-to-end since multiple sessions ago.  Battlefield terrain +
+   overlay are end-to-end at zoom 32; middle pass driver is end-
+   to-end with sorted entities feeding through the real per-entity
+   draw (but type-special POSTs and per-cell extras still stubbed).
+   Visual verification remains gated on user availability.
+
+Picking **#1 (chip 5a.iii)** next likely: smaller surface than
+5a.iv, no new bindings, and the three per-cell leaves are simpler
+shapes (per-cell vs per-entity) than the type-specials.
+
+This is a natural `/clear` point — both sub-chips of 5a.ii land
+cleanly, all 873 tests green, the chip-5a sub-plan is documented in
+`docs/findings/battlefield-render.md`, no incomplete work in-flight.
+
+---
+
 ## 2026-05-25 — Battlefield chip 5a.i: middle-pass driver shell (+17 tests, 2 new quirks, sub-chip plan landed)
 
 Continuation of the same unattended session.  Previous dispatch
