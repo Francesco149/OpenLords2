@@ -619,6 +619,30 @@ struct test_case {
     X(gfx_wrap_localized_out_of_bounds_is_noop) \
     X(gfx_wrap_tall_font_uses_24px_line_height) \
     X(gfx_wrap_non_tall_font_uses_16px_line_height) \
+    \
+    X(gfx_line_horizontal_paints_inclusive_range) \
+    X(gfx_line_horizontal_endpoint_order_invariant) \
+    X(gfx_line_vertical_paints_inclusive_range) \
+    X(gfx_line_vertical_endpoint_order_invariant) \
+    X(gfx_line_diagonal_45deg) \
+    X(gfx_line_diagonal_antidiagonal_endpoint_order_invariant) \
+    X(gfx_line_shallow_golden) \
+    X(gfx_line_shallow_endpoint_order_invariant) \
+    X(gfx_line_steep_golden) \
+    X(gfx_line_steep_endpoint_order_invariant) \
+    X(gfx_line_degenerate_paints_one_pixel) \
+    X(gfx_line_clips_against_canvas) \
+    X(gfx_line_clips_negative_coords) \
+    X(gfx_line_dotted_horizontal) \
+    X(gfx_line_dotted_vertical) \
+    X(gfx_line_dotted_diagonal_is_noop) \
+    X(gfx_line_rect_solid_paints_four_edges) \
+    X(gfx_line_rect_solid_clamps_oversize) \
+    X(gfx_line_rect_bevel_dark_br_corner_overwrite) \
+    X(gfx_line_rect_bevel_palette_b_uses_correct_colors) \
+    X(gfx_line_rect_bevel_dark_tl_inverts_palette) \
+    X(gfx_line_rect_bevel_x_zero_skips_right_clamp_per_quirk_39) \
+    X(gfx_line_rect_solid_x_zero_still_clamps_right) \
     /* end */
 
 /* Emit extern decls. */
