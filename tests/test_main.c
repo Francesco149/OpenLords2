@@ -257,6 +257,27 @@ struct test_case {
     X(engine_delayed_action_dispatch_stops_at_first_empty_sentinel) \
     X(engine_delayed_action_record_padding_is_inert) \
     X(engine_delayed_action_record_size_layout) \
+    \
+    X(engine_dirty_rect_expand_sets_mark_to_1_from_zero) \
+    X(engine_dirty_rect_expand_preserves_mark_at_2) \
+    X(engine_dirty_rect_expand_widens_existing_box) \
+    X(engine_dirty_rect_expand_does_not_shrink_existing_box) \
+    X(engine_dirty_rect_expand_clamps_xmin_to_zero) \
+    X(engine_dirty_rect_expand_clamps_ymin_to_zero) \
+    X(engine_dirty_rect_expand_clamps_xmax_to_639) \
+    X(engine_dirty_rect_quirk_ymax_threshold_uses_x_bound) \
+    X(engine_dirty_rect_right_half_marks_right_half) \
+    X(engine_dirty_rect_full_screen_marks_whole_screen) \
+    X(engine_dirty_rect_below_status_bar_sets_redraw_flag) \
+    X(engine_dirty_rect_below_status_bar_full_overrides_mark_to_2) \
+    X(engine_dirty_rect_tile_32_box) \
+    X(engine_dirty_rect_tile_48_box) \
+    X(engine_dirty_rect_tile_64_box) \
+    X(engine_dirty_rect_tile_80_box) \
+    X(engine_dirty_rect_tile_96_box) \
+    X(engine_dirty_rect_tile_200x160_box) \
+    X(engine_dirty_rect_tile_64_negative_inputs_clamped) \
+    X(engine_dirty_rect_tile_80x48_noclamp_skips_prelude) \
     /* end */
 
 /* Emit extern decls. */

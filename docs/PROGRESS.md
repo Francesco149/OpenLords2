@@ -7,6 +7,84 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Dirty-rect / render-invalidation cluster ported (14 functions)
+
+A whole subsystem in one logical unit.  The dirty-rectangle bookkeeper
+that tracks which screen region needs re-rendering — `FUN_00452306`
+(core) plus 13 trivial wrappers — is a leaf cluster in the call graph
+with no callees, so it ports cleanly without dragging other
+subsystems along.  Counted-as-one because the wrappers are 30-100 B
+each and the cluster's value is the whole API surface.
+
+### Landed code
+
+- **`src/engine_dirty_rect.h/c`** (~140 LOC):
+  - `engine_dirty_rect_state_t` — 6 ints (dirty_mark + 4 bound coords
+    + below_status_redraw flag); all retail-VA cross-referenced.
+  - `engine_dirty_rect_expand(state, x1, y1, x2, y2)` — core bound-
+    widen + clamp.
+  - 4 preset wrappers: full_screen, right_half, below_status_bar,
+    below_status_bar_full (the latter forces dirty_mark = 2 post-
+    expand).
+  - 7 tile-stride wrappers: tile_32 / 48 / 64 / 80 / 96 / 200x160
+    (square + one non-square) plus the special tile_80x48_noclamp
+    (FUN_00452628's codegen lacks the negative-input clamp prelude).
+  - Two retail duplicate-codegen wrappers (FUN_004524dc/4525_2f,
+    FUN_00452582/452660) collapse into single ports each; documented
+    in the header.
+
+- **`tests/test_engine_dirty_rect.c`** (~200 LOC) — 20 unit tests:
+  - expand: 1 → 1 mark transition, 2 → 2 preservation, widen vs
+    inclusion no-op, x/y min clamp-to-zero, x-max clamp-to-639, and
+    the y-max quirk-check (see #11 below).
+  - Each preset and each tile-stride wrapper gets at least one
+    sanity vector; mark_below_status_bar_full has its own override-
+    to-2 test; tile_64 has a negative-clamp test; tile_80x48_noclamp
+    has its lack-of-prelude check.
+
+- **227 tests pass** under ASan + UBSan (was 207).
+
+### Engine quirk #11 — dirty-rect y-max clamp uses the wrong bound
+
+The clamp at the end of `FUN_00452306`:
+
+```c
+if (0x27f < DAT_0050a4c0) DAT_0050a4c0 = 0x1df;
+```
+
+Threshold is the X bound (639), assignment is the Y bound (479).
+Result: dirty_ymax values in `[0x1e0, 0x27f]` slip past unclamped
+— 1..160 pixels of off-screen dirty surface that never gets clipped
+back.  In practice no production caller ever feeds the function a
+y2 that lands in that range; preserved verbatim, with the test
+asserting both the broken and working sides of the threshold.
+
+### What's next
+
+1. **Port the next sub-step body** — `FUN_0049b8b0` (turn-timeout,
+   195 B) is the smallest candidate but uses `timeGetTime` + `Sleep`
+   so it's not pure.  Pure alternative: continue surveying the call
+   graph from `FUN_004486a9` / `FUN_00448819` etc. for the next pure
+   leaf cluster to bag.  The dirty-rect win shows leaf clusters port
+   in one logical unit + 20-line tests.
+
+2. **Port the per-type delayed-action handlers** — carried over.  The
+   no-op + counter-only handlers (7 of 50) port trivially; the rest
+   gate on per-handler-callee porting.
+
+3. **Wire save/load into the drop-in's runtime command surface** —
+   carried over.
+
+4. **Diagnose the Quit-Game freeze + orchestrator-teardown hang** —
+   carried over.
+
+Bias next time: option 1 (next leaf cluster).  The dirty-rect cluster
+proved that wide-surface leaf ports land in one tidy commit when the
+call graph cooperates; next survey pass should look for similar
+groups (UI invalidation helpers around `FUN_00472bc5`, maybe?).
+
+---
+
 ## 2026-05-25 — Castle-load fixup wired into castles_read_scenario
 
 Closed the carry-over from prior dispatches.  `castles_read_scenario`

@@ -31,6 +31,7 @@ SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c \
                    ../src/engine_rng.c ../src/engine_state_hash.c \
                    ../src/engine_tile.c \
                    ../src/engine_delayed_action.c \
+                   ../src/engine_dirty_rect.c \
                    ../src/save.c
 
 # Test files — each defines one or more `int test_<name>(void)`
@@ -42,6 +43,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_rng.c test_engine_state_hash.c \
                    test_engine_tile.c \
                    test_engine_delayed_action.c \
+                   test_engine_dirty_rect.c \
                    test_save.c
 
 OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o)) \

@@ -493,6 +493,44 @@ load-path quirk, not a function-of-FUN_004917dd quirk.
 
 ---
 
+## 11. Dirty-rect y-max clamp checks against the wrong axis's bound
+
+`FUN_00452306` (port: `engine_dirty_rect_expand`) is the running
+"what pixels need re-rendering" bookkeeper.  After widening the
+dirty box to include the new (x1,y1)..(x2,y2), it clamps each
+extreme back to the 640×480 screen bounds:
+
+```c
+if (DAT_0050a4c4 < 0)          DAT_0050a4c4 = 0;      // xmin → 0
+if (DAT_0050a4bc < 0)          DAT_0050a4bc = 0;      // ymin → 0
+if (0x27f < DAT_0050a4c8)      DAT_0050a4c8 = 0x27f;  // xmax → 639
+if (0x27f < DAT_0050a4c0)      DAT_0050a4c0 = 0x1df;  // ymax clamp — BUG
+```
+
+The last line's **condition** uses `0x27f` (639, the X bound) as the
+threshold even though the **assignment** uses `0x1df` (479, the Y
+bound).  So any dirty_ymax in the range [0x1e0, 0x27f] (480..639)
+slips past unclamped — those rows would be 1..160 pixels below the
+visible screen.
+
+In practice this hardly fires.  Callers that compute y2 from in-bound
+inputs land at y2 ≤ 0x1df anyway; the wrappers we ported all pass y2
+≤ 0x1df explicitly.  The only paths that COULD produce an off-screen
+ymax are callers that pass `tile_row * 16 + (some height)` for tile
+rows past row 29 — and the engine uses an 80×80 sub-grid where rows
+go to 79, so e.g. tile_row=29 + height=0x60 = 0x1d0 + 0x60 = 0x230
+which the buggy condition misses.  Whether that ever happens in
+practice is an open question worth checking when the renderer is
+ported, but for now we preserve the bug verbatim — fixing it could
+mask a hypothetical caller that has come to depend on the slack.
+
+> 📍 `src/engine_dirty_rect.c`'s `engine_dirty_rect_expand` (last
+> clamp), `tests/test_engine_dirty_rect.c`'s
+> `engine_dirty_rect_quirk_ymax_threshold_uses_x_bound`, Ghidra
+> `FUN_00452306 @ 0x452306` line 38295 in the decompile.
+
+---
+
 <!--
 Template for new entries:
 
