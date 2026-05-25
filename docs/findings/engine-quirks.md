@@ -1015,6 +1015,45 @@ into adjacent memory.
 
 ---
 
+## 26. Clipped 2x1 painter checks only the left pixel
+
+The bounds-checked variant of the 2-byte horizontal brush
+(`FUN_00403a2c`) tests `(x, y)` against `(width, height)` and then
+calls the unchecked 2x1 painter (`FUN_004b3f7a`).  The unchecked
+painter writes `pixels[x + y*width]` *and* `pixels[x + y*width + 1]`,
+but the wrapper never separately checks the `x+1` pixel.
+
+```c
+if (-1 < x && x < width && -1 < y && y < height) {
+    FUN_004b3f7a(x, y, color);   /* writes [x] and [x+1] */
+}
+```
+
+Consequence: when called with `x == width - 1`, the left pixel
+writes the last column of row `y` and the right pixel writes one
+column past the row end.  In a contiguous canvas (pitch == width,
+which is retail's setup at 640×480×8 with no row padding), that
+"one past the end" lands on the FIRST pixel of row `y+1`.
+
+The corner case (`x = width-1`, `y = height-1`) writes one byte
+PAST the back-buffer entirely — into whatever heap-adjacent memory
+DDraw's `lpSurface` was followed by.  Retail callers (the line
+drawers in `FUN_00403c49` / `FUN_0040437d`) iterate with a step of
+2 and never call the wrapper at exactly the right edge, so the
+quirk is dormant in practice.  We preserve it verbatim — the
+`gfx_paint_2x1_clipped_bottom_right_corner_wraps_into_guard` test
+pins the behavior down by checking that the byte one past the
+canvas does in fact get stomped.
+
+> 📍 `src/gfx_paint.c`'s `gfx_paint_2x1_clipped`,
+> `tests/test_gfx_paint.c`'s
+> `gfx_paint_2x1_clipped_right_edge_wraps_to_next_row` and
+> `_bottom_right_corner_wraps_into_guard`,
+> Ghidra `FUN_00403a2c @ 0x403a2c` (wrapper),
+> `FUN_004b3f7a @ 0x4b3f7a` (unchecked painter).
+
+---
+
 <!--
 Template for new entries:
 

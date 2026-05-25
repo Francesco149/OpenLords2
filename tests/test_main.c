@@ -513,6 +513,29 @@ struct test_case {
     X(localization_write_uses_secondary_16bit_be_table) \
     X(localization_write_skips_n_strings_using_strict_boundary) \
     X(localization_write_zero_bytes_advances_walker) \
+    X(gfx_paint_pixel_basic) \
+    X(gfx_paint_pixel_origin) \
+    X(gfx_paint_pixel_corner) \
+    X(gfx_paint_pixel_null_canvas_no_crash) \
+    X(gfx_paint_2x1_writes_both) \
+    X(gfx_paint_2x1_overwrites_existing) \
+    X(gfx_paint_2x1_under_writes_when_zero) \
+    X(gfx_paint_2x1_under_skips_when_nonzero) \
+    X(gfx_paint_2x1_under_independent_pixel_test) \
+    X(gfx_paint_2x1_under_right_only_set) \
+    X(gfx_paint_pixel_clipped_in_bounds) \
+    X(gfx_paint_pixel_clipped_negative_x) \
+    X(gfx_paint_pixel_clipped_negative_y) \
+    X(gfx_paint_pixel_clipped_x_at_width) \
+    X(gfx_paint_pixel_clipped_y_at_height) \
+    X(gfx_paint_pixel_clipped_x_at_width_minus_one) \
+    X(gfx_paint_2x1_clipped_in_bounds) \
+    X(gfx_paint_2x1_clipped_negative_x_drops) \
+    X(gfx_paint_2x1_clipped_x_at_width_drops) \
+    X(gfx_paint_2x1_clipped_right_edge_wraps_to_next_row) \
+    X(gfx_paint_2x1_clipped_bottom_right_corner_wraps_into_guard) \
+    X(gfx_paint_2x1_clipped_y_at_height_drops) \
+    X(gfx_paint_bind_then_rebind) \
     /* end */
 
 /* Emit extern decls. */
