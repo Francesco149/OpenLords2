@@ -899,6 +899,26 @@ struct test_case {
     X(engine_battlefield_render_middle_reset_clears_state) \
     X(engine_battlefield_render_middle_uses_frame_camera) \
     \
+    X(engine_battlefield_render_visible_list_empty_without_table) \
+    X(engine_battlefield_render_visible_list_filters_dead) \
+    X(engine_battlefield_render_visible_list_filters_viewport) \
+    X(engine_battlefield_render_visible_list_bounds_inclusive) \
+    X(engine_battlefield_render_visible_list_carries_id) \
+    X(engine_battlefield_render_sort_orders_by_y_ascending) \
+    X(engine_battlefield_render_sort_keeps_equal_y_in_insertion_order) \
+    X(engine_battlefield_render_sort_already_sorted_one_pass) \
+    X(engine_battlefield_render_sort_zero_passes_when_trivial) \
+    X(engine_battlefield_render_sort_within_safety_cap) \
+    X(engine_battlefield_render_render_loop_per_entity) \
+    X(engine_battlefield_render_render_loop_cursor_computation) \
+    X(engine_battlefield_render_render_loop_cursor_zoom32) \
+    X(engine_battlefield_render_render_loop_walks_sorted_order) \
+    X(engine_battlefield_render_visible_entity_accessor_out_of_range) \
+    X(engine_battlefield_render_visible_list_rebuilds_per_pass) \
+    X(engine_battlefield_render_per_entity_count_accumulates) \
+    X(engine_battlefield_render_render_loop_noop_without_table) \
+    X(engine_battlefield_render_sort_handles_full_buffer) \
+    \
     X(engine_battlefield_render_screen_in_grid_inside) \
     X(engine_battlefield_render_screen_in_grid_outside) \
     X(engine_battlefield_render_pixel_to_col_basic) \

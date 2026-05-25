@@ -1489,6 +1489,10 @@ static void middle_scaffold(int vis_cols, int vis_rows)
     engine_battlefield_render_bind_camera_row_stride(DESC_COLS_PHY);
     engine_battlefield_render_bind_total_rows(DESC_ROWS_PHY);
     engine_battlefield_render_bind_blobs(NULL, NULL);
+    /* Tear down any entity-table binding inherited from a prior test —
+     * the chip 5a.i tests in this group don't bind one, so the build
+     * helper should emit an empty visible list. */
+    engine_battlefield_render_bind_entity_table(NULL, 0, 0);
 
     /* Reset cursor so per-cell advance assertions start from a known
      * state.  gfx_glyph_set_dest writes both cursor_x and cursor_y. */
@@ -1791,6 +1795,423 @@ int test_engine_battlefield_render_middle_uses_frame_camera(void)
 
     run_middle_only(6, 2);
     T_ASSERT_EQ_I(engine_battlefield_render_per_frame_cell_counter(), 15);
+    return 0;
+}
+
+/* ────────────────────────────────────────────────────────────────
+ * Chip 5a.ii.a — sorted-entity infrastructure.
+ *
+ * The fixture lays out an entity table sized to retail's max_id (0x50),
+ * lets tests set per-entity (x, y, alive) tuples, and then runs the
+ * middle pass to populate the visible-entity list.  The entity table
+ * binding is wired through `middle_scaffold` (which NULLs it by
+ * default); tests that want a populated list call `bind_entities` to
+ * attach the fixture.
+ * ──────────────────────────────────────────────────────────────── */
+
+#define ENT_STRIDE  ENGINE_BATTLEFIELD_ENTITY_STRIDE_RETAIL
+#define ENT_MAX_ID  ENGINE_BATTLEFIELD_ENTITY_MAX_ID_RETAIL
+static uint8_t g_entity_table[(ENT_MAX_ID + 1) * ENT_STRIDE];
+
+static void entity_set(int id, int x, int y, uint8_t alive)
+{
+    uint8_t *rec = g_entity_table + id * ENT_STRIDE;
+    *(int16_t *)(rec + ENGINE_BATTLEFIELD_ENTITY_OFFSET_X)     = (int16_t)x;
+    *(int16_t *)(rec + ENGINE_BATTLEFIELD_ENTITY_OFFSET_Y)     = (int16_t)y;
+    rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_ALIVE] = alive;
+}
+
+static void bind_entities(int max_id)
+{
+    memset(g_entity_table, 0, sizeof g_entity_table);
+    engine_battlefield_render_bind_entity_table(g_entity_table,
+                                                ENT_STRIDE, max_id);
+}
+
+/* Visible-list build — empty when no entity table is bound. */
+int test_engine_battlefield_render_visible_list_empty_without_table(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);  /* unbinds entity table */
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_count(), 0);
+    /* Build helper still bumped — runs unconditionally at head. */
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_build_count(), 1);
+    return 0;
+}
+
+/* Build filters out dead entities (alive byte == 0). */
+int test_engine_battlefield_render_visible_list_filters_dead(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    bind_entities(/*max_id=*/4);
+    entity_set(1, /*x=*/2, /*y=*/2, /*alive=*/1);
+    entity_set(2, /*x=*/2, /*y=*/3, /*alive=*/0);  /* dead, skipped */
+    entity_set(3, /*x=*/3, /*y=*/2, /*alive=*/1);
+    entity_set(4, /*x=*/3, /*y=*/3, /*alive=*/0);  /* dead, skipped */
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_count(), 2);
+    return 0;
+}
+
+/* Build filter window matches the cell-loop over-scan extent:
+ *   ex ∈ [cam_x - 1, cam_x + cols], inclusive both ends
+ *   ey ∈ [cam_y - 1, cam_y + rows], inclusive both ends
+ *
+ * Visible 3×3 grid at cam=(2, 2): x range [1, 5], y range [1, 5]. */
+int test_engine_battlefield_render_visible_list_filters_viewport(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    bind_entities(/*max_id=*/8);
+    entity_set(1, /*x=*/1, /*y=*/1, 1);   /* in (corner) */
+    entity_set(2, /*x=*/5, /*y=*/5, 1);   /* in (corner) */
+    entity_set(3, /*x=*/3, /*y=*/3, 1);   /* in (center) */
+    entity_set(4, /*x=*/0, /*y=*/3, 1);   /* OUT — x < 1 */
+    entity_set(5, /*x=*/6, /*y=*/3, 1);   /* OUT — x > 5 */
+    entity_set(6, /*x=*/3, /*y=*/0, 1);   /* OUT — y < 1 */
+    entity_set(7, /*x=*/3, /*y=*/6, 1);   /* OUT — y > 5 */
+    entity_set(8, /*x=*/3, /*y=*/3, 0);   /* OUT — dead */
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_count(), 3);
+    return 0;
+}
+
+/* Filter bounds are INCLUSIVE on both ends — entities at the
+ * boundary (cam_x - 1, cam_x + cols, cam_y - 1, cam_y + rows) are
+ * INCLUDED.  Filed as quirk #85. */
+int test_engine_battlefield_render_visible_list_bounds_inclusive(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    bind_entities(/*max_id=*/4);
+    entity_set(1, /*x=*/1, /*y=*/3, 1);  /* x lo bound */
+    entity_set(2, /*x=*/5, /*y=*/3, 1);  /* x hi bound */
+    entity_set(3, /*x=*/3, /*y=*/1, 1);  /* y lo bound */
+    entity_set(4, /*x=*/3, /*y=*/5, 1);  /* y hi bound */
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_count(), 4);
+    return 0;
+}
+
+/* Build count carries the entity id (not the slot index). */
+int test_engine_battlefield_render_visible_list_carries_id(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    bind_entities(/*max_id=*/5);
+    /* Only id 3 alive — sparse layout. */
+    entity_set(3, /*x=*/3, /*y=*/3, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_count(), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(0), 3);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_y(0),  3);
+    return 0;
+}
+
+/* Bubble sort orders entries by ascending y. */
+int test_engine_battlefield_render_sort_orders_by_y_ascending(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    bind_entities(/*max_id=*/4);
+    /* Iteration order id=1..4 → input list is (1,5)(2,3)(3,1)(4,4).
+     * After sort by y ascending: (3,1)(2,3)(4,4)(1,5).  */
+    entity_set(1, /*x=*/2, /*y=*/5, 1);
+    entity_set(2, /*x=*/2, /*y=*/3, 1);
+    entity_set(3, /*x=*/2, /*y=*/1, 1);
+    entity_set(4, /*x=*/2, /*y=*/4, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_count(), 4);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(0), 3);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_y(0),  1);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(1), 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_y(1),  3);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(2), 4);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_y(2),  4);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(3), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_y(3),  5);
+    return 0;
+}
+
+/* Sort is STABLE-ish wrt equal y: equal-y entries retain insertion
+ * order because the swap only fires on strict `y[i+1] < y[i]`.  This
+ * is observable behavior of the retail decompilation, not a guarantee
+ * we want to gold-lock, but documents it for now. */
+int test_engine_battlefield_render_sort_keeps_equal_y_in_insertion_order(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    bind_entities(/*max_id=*/3);
+    entity_set(1, /*x=*/2, /*y=*/3, 1);
+    entity_set(2, /*x=*/3, /*y=*/3, 1);
+    entity_set(3, /*x=*/4, /*y=*/3, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_count(), 3);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(0), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(1), 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(2), 3);
+    return 0;
+}
+
+/* When the list is already sorted, the bubble sort terminates after
+ * ONE outer pass (the pass sees no swap → last_swap = 0 → outer loop
+ * exits via `0 < local_1c` predicate). */
+int test_engine_battlefield_render_sort_already_sorted_one_pass(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    bind_entities(/*max_id=*/3);
+    /* Iteration order 1..3 → list is already sorted by y. */
+    entity_set(1, /*x=*/2, /*y=*/1, 1);
+    entity_set(2, /*x=*/3, /*y=*/2, 1);
+    entity_set(3, /*x=*/4, /*y=*/3, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_sort_passes(), 1);
+    return 0;
+}
+
+/* Empty / single-entry list runs ZERO sort passes — the outer
+ * `while` predicate `0 < high` (high = count - 1) is false. */
+int test_engine_battlefield_render_sort_zero_passes_when_trivial(void)
+{
+    /* Single entry. */
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    bind_entities(/*max_id=*/1);
+    entity_set(1, /*x=*/2, /*y=*/2, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_count(), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_sort_passes(),   0);
+    return 0;
+}
+
+/* Sort passes never exceed the safety cap (500) — verified by the
+ * worst-case-ish full-reverse layout with retail max_id. */
+int test_engine_battlefield_render_sort_within_safety_cap(void)
+{
+    /* Use a 21×1 visible window so the over-scan filter doesn't drop
+     * any of the 20 entities we lay down at distinct y. */
+    middle_scaffold(/*cols=*/3, /*rows=*/21);
+    bind_entities(/*max_id=*/20);
+    /* Fully reverse-sorted by y: id=1 has y=20, id=20 has y=1.  After
+     * sort, id=20 should be first. */
+    for (int id = 1; id <= 20; id++) {
+        entity_set(id, /*x=*/2, /*y=*/21 - id, 1);
+    }
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_count(), 20);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(0),  20);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(19),  1);
+    /* Worst-case = 19 outer passes (one less than n).  Well under
+     * the 500 cap. */
+    int passes = engine_battlefield_render_middle_sort_passes();
+    T_ASSERT(passes >  0);
+    T_ASSERT(passes <= 19);
+    return 0;
+}
+
+/* Render loop dispatches the per-entity stub once per visible
+ * entity.  Capture the last id processed. */
+int test_engine_battlefield_render_render_loop_per_entity(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    bind_entities(/*max_id=*/3);
+    entity_set(1, /*x=*/2, /*y=*/5, 1);  /* sorts LAST (largest y) */
+    entity_set(2, /*x=*/2, /*y=*/3, 1);
+    entity_set(3, /*x=*/2, /*y=*/1, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_count(), 3);
+    /* Render loop walks the sorted list — last id processed is id=1
+     * (which sorts to the end because of largest y). */
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_last_id(), 1);
+    return 0;
+}
+
+/* Render loop computes per-entity cursor from
+ *   px_x = (entity_x - cam_x) * zoom + viewport_x
+ *   px_y = (entity_y - cam_y) * zoom + viewport_y
+ *
+ * Scaffold zoom 16, viewport (0, 0), so for entity at (3, 4) with
+ * camera (2, 2) → px = ((3-2)*16, (4-2)*16) = (16, 32).  Last entity
+ * processed has those coords captured. */
+int test_engine_battlefield_render_render_loop_cursor_computation(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    engine_battlefield_render_bind_viewport_offset(100, 50);
+    bind_entities(/*max_id=*/1);
+    entity_set(1, /*x=*/3, /*y=*/4, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_count(),     1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_last_id(),   1);
+    /* px = ((3-2)*16 + 100, (4-2)*16 + 50) = (116, 82). */
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_last_px_x(), 116);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_last_px_y(), 82);
+    return 0;
+}
+
+/* Render loop honors zoom: same hex coords, zoom 32 → twice the
+ * pixel distance from origin. */
+int test_engine_battlefield_render_render_loop_cursor_zoom32(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    engine_battlefield_render_set_zoom(0x20);
+    engine_battlefield_render_bind_viewport_offset(0, 0);
+    bind_entities(/*max_id=*/1);
+    entity_set(1, /*x=*/3, /*y=*/4, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    /* px = ((3-2)*32, (4-2)*32) = (32, 64). */
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_last_px_x(), 32);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_last_px_y(), 64);
+    return 0;
+}
+
+/* The render-loop's per-entity dispatch fires AFTER the sort —
+ * capture-order of last_id is the post-sort tail, not the highest id. */
+int test_engine_battlefield_render_render_loop_walks_sorted_order(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    bind_entities(/*max_id=*/5);
+    /* id=5 has lowest y, id=1 has highest y. */
+    entity_set(1, /*x=*/2, /*y=*/9, 1);
+    entity_set(2, /*x=*/2, /*y=*/7, 1);
+    entity_set(3, /*x=*/2, /*y=*/5, 1);
+    entity_set(4, /*x=*/2, /*y=*/3, 1);
+    entity_set(5, /*x=*/2, /*y=*/1, 1);
+    /* Visible filter excludes those past y=cam_y+rows = 2+3 = 5.
+     * So only id 3 (y=5), id 4 (y=3), id 5 (y=1) are visible.
+     * Sort by y → id=5, id=4, id=3.  Last processed = id 3. */
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_count(), 3);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_count(), 3);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_last_id(), 3);
+    return 0;
+}
+
+/* Visible-entity accessors return 0 for out-of-range indices —
+ * defensive guard not present in retail (which would silently read
+ * past the buffer). */
+int test_engine_battlefield_render_visible_entity_accessor_out_of_range(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    bind_entities(/*max_id=*/1);
+    entity_set(1, /*x=*/2, /*y=*/2, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_count(), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(-1), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(1),  0);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(99), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_y(-1),  0);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_y(1),   0);
+    return 0;
+}
+
+/* Each middle pass invocation rebuilds the list from scratch — count
+ * does not accumulate across consecutive passes. */
+int test_engine_battlefield_render_visible_list_rebuilds_per_pass(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    bind_entities(/*max_id=*/2);
+    entity_set(1, /*x=*/2, /*y=*/2, 1);
+    entity_set(2, /*x=*/3, /*y=*/3, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_count(), 2);
+
+    /* Kill an entity between passes — count should drop to 1. */
+    entity_set(2, /*x=*/3, /*y=*/3, 0);
+    run_middle_only(/*cam=*/2, 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_count(), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(0), 1);
+
+    return 0;
+}
+
+/* The render-loop's per-entity counter accumulates across consecutive
+ * pass invocations (matches the build/sort/render counters, which all
+ * bump per dispatch).  Reset clears it. */
+int test_engine_battlefield_render_per_entity_count_accumulates(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    bind_entities(/*max_id=*/2);
+    entity_set(1, /*x=*/2, /*y=*/2, 1);
+    entity_set(2, /*x=*/3, /*y=*/3, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+    run_middle_only(/*cam=*/2, 2);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_count(), 4);
+
+    engine_battlefield_render_reset_counts();
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_count(),     0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_last_id(),  -1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_last_px_x(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_last_px_y(), 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_sort_passes(),          0);
+    return 0;
+}
+
+/* Render loop is a no-op without an entity table — even if dispatch
+ * fires (build/sort/render counters still bump). */
+int test_engine_battlefield_render_render_loop_noop_without_table(void)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);  /* NULL entity table */
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_build_count(),       1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_sort_count(),        1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_render_count(),      1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_count(),  0);
+    return 0;
+}
+
+/* Sentinel handling: when count = max_id ≤ 80, the in-band sentinel
+ * lives at the buffer slot just past the last valid entry.  We can't
+ * directly observe it (the accessors guard against out-of-range
+ * reads), but we can verify the sort doesn't blow past the count even
+ * when the sentinel is involved — pack the buffer with 0x50 entities
+ * each at distinct y and confirm the sort completes cleanly. */
+int test_engine_battlefield_render_sort_handles_full_buffer(void)
+{
+    /* Visible window large enough to admit 80 entities (set cols/rows
+     * to extreme values so the over-scan filter doesn't drop any). */
+    middle_scaffold(/*cols=*/3, /*rows=*/200);
+    bind_entities(/*max_id=*/ENT_MAX_ID);  /* 0x50 = 80 */
+    for (int id = 1; id <= ENT_MAX_ID; id++) {
+        /* All entities at x=2 (in [1, 5]).  y = id descending so the
+         * sort reverses the input list. */
+        entity_set(id, /*x=*/2, /*y=*/ENT_MAX_ID + 1 - id, 1);
+    }
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_count(), ENT_MAX_ID);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(0),   ENT_MAX_ID);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_y(0),    1);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_id(ENT_MAX_ID - 1), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_visible_entity_y(ENT_MAX_ID - 1),  ENT_MAX_ID);
+    /* Worst case = 79 outer passes, well below the 500 cap. */
+    T_ASSERT(engine_battlefield_render_middle_sort_passes() <= ENT_MAX_ID);
     return 0;
 }
 

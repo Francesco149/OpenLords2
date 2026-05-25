@@ -12,13 +12,14 @@ cluster (`FUN_004050f6` + 3 passes, all in `0x405000..0x408000`),
 but lives in a different address band (`0x4bc000..0x4bf300`) and
 uses a different tile format and storage layout.
 
-**Status**: chips 1, 2, 3, 3.5, 4, 5a.i, 5b, 6 ported (sprite
-primitives + frame driver + both zoom-dispatched terrain passes +
-zoom-32 overlay + middle-pass driver shell + coord helpers).
-Middle-pass LEAVES (chip 5a.ii sorted-entity infrastructure, chip
-5a.iii per-cell draw leaves) still stubs.  Late + final passes still
-stubs.  Survey landed 2026-05-25, chips 1–4 + 5b + 6 + 5a.i landed
-2026-05-25.
+**Status**: chips 1, 2, 3, 3.5, 4, 5a.i, 5a.ii.a, 5b, 6 ported
+(sprite primitives + frame driver + both zoom-dispatched terrain
+passes + zoom-32 overlay + middle-pass driver shell + sorted-entity
+infrastructure + coord helpers).  Chip 5a.ii.b (per-entity draw
+body `FUN_004bdc31`) still a state-capturing stub.  Chip 5a.iii
+per-cell draw leaves still stubs.  Late + final passes still
+stubs.  Survey landed 2026-05-25, chips 1–4 + 5b + 6 + 5a.i + 5a.ii.a
+landed 2026-05-25.
 
 ## Entry point
 
@@ -254,11 +255,23 @@ The cluster is too large to port in one chip.  Suggested chip plan:
        stubs.  Adds one new binding: `bind_total_rows`
        (DAT_004e6570).  Filed quirks #83 (over-scan extension) and
        #84 (asymmetric re-dirty).  **LANDED** (2026-05-25).
-     - **chip 5a.ii** — sorted-entity infrastructure.  Real ports
-       of `FUN_004bd938` (visible-list build) + `FUN_004bda92`
-       (bubble sort, 500-iter safety) + `FUN_004bdb95` (per-entity
-       render loop) + `FUN_004bdc31` (per-entity draw, base path
-       only — the three type-specials stay stubbed).  Future.
+     - **chip 5a.ii.a** — sorted-entity infrastructure (no per-entity
+       draw body).  Real ports of `FUN_004bd938` (visible-list build,
+       346 B), `FUN_004bda92` (bubble sort with 500-iter safety, 259 B),
+       and `FUN_004bdb95` (per-entity render loop, 156 B).  The
+       per-entity draw `FUN_004bdc31` is wired as a state-capturing
+       stub that records (id, px_x, px_y) per call so tests can
+       verify the render loop's cursor computation.  Adds new
+       binding `bind_entity_table` plus visible-list, sort-passes,
+       and per-entity-stub accessors.  Filed quirks #85 (inclusive
+       filter bounds) and #86 (in-band sentinel + stable-ish
+       bubble sort).  **LANDED** (2026-05-25).
+     - **chip 5a.ii.b** — per-entity draw body.  Real port of
+       `FUN_004bdc31` (1087 B base path) with the three type-
+       specials (`FUN_004be4df` / `FUN_004be7be` / `FUN_004beab9`)
+       still stubbed.  Needs new bindings for the anim-offset
+       tables (`DAT_004e3bf0` zoom-16, `DAT_004e4030` zoom-32 —
+       each 0x880 bytes) and the dirty-rect state pointer.  Future.
      - **chip 5a.iii** — per-cell draw leaves.  Real ports of
        `FUN_004bd574` (player marker, animated through 8 frames),
        `FUN_004bd759` (unit-key sprite, 4-byte map silently drops

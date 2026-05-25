@@ -103,9 +103,13 @@ static int g_terrain_z32_second_blit_count;
 /* Per-blit dispatch counter for the zoom-32 overlay pass (chip 5b). */
 static int g_overlay_z32_blit_count;
 
-/* Per-leaf call counters for the middle pass (chip 5a.i).  Each leaf
- * stub bumps its own counter; the driver itself bumps `g_count_middle`
- * (already declared above). */
+/* Per-leaf call counters for the middle pass.  Each leaf (real or
+ * stub) bumps its own counter; the driver itself bumps
+ * `g_count_middle` (already declared above).
+ *
+ * As of chip 5a.ii.a, build/sort/render have real bodies; they still
+ * bump their counters once per dispatch for cross-check instrumentation
+ * (`g_middle_build_count` etc.). */
 static int g_middle_build_count;
 static int g_middle_sort_count;
 static int g_middle_render_count;
@@ -118,6 +122,35 @@ static int g_middle_effect_chain_count;
  * means "no call yet" (matches the reset value). */
 static int g_middle_unit_key_last_arg     = -1;
 static int g_middle_effect_chain_last_arg = -1;
+
+/* Entity table binding (chip 5a.ii.a).  `g_entity_base` points to the
+ * start of entity 0's record; entity[id] is at
+ * `g_entity_base + id * g_entity_stride`.  Retail uses an absolute
+ * address (`0x00554480`) — we accept a runtime pointer so tests can
+ * stand up fixtures.  NULL ⇒ visible list stays empty. */
+static uint8_t *g_entity_base;
+static int      g_entity_stride;
+static int      g_entity_max_id;
+
+/* Visible-entity list (retail DAT_004e5d80 / DAT_004e5d82 / DAT_004e5d38).
+ * In retail the (id, y) pairs are interleaved as 4-byte cells in a
+ * single block; for the port we use two parallel arrays since the
+ * layout isn't observable outside the module.  Capacity is one past the
+ * retail max_id (0x50) to accommodate the in-band sentinel that the
+ * build helper writes at index `count`. */
+#define VISIBLE_ENTITY_CAPACITY 0x52
+static int16_t g_visible_entity_id[VISIBLE_ENTITY_CAPACITY];
+static int16_t g_visible_entity_y [VISIBLE_ENTITY_CAPACITY];
+static int     g_visible_entity_count;          /* DAT_004e5d38 */
+static int     g_middle_sort_passes;            /* _DAT_004e655c */
+
+/* Per-entity draw stub capture (chip 5a.ii.a — replaced in chip 5a.ii.b
+ * with the real FUN_004bdc31 body).  Tracks how many entities the
+ * render-loop dispatched and the last entity's (id, px_x, px_y). */
+static int g_middle_per_entity_count;
+static int g_middle_per_entity_last_id     = -1;
+static int g_middle_per_entity_last_px_x   = 0;
+static int g_middle_per_entity_last_px_y   = 0;
 
 /* Per-pass call counters.  See the header for what each one
  * represents.  All seven pass entry points (5 stubs + 1 real no-op
@@ -192,6 +225,13 @@ void engine_battlefield_render_bind_clip_rect(int left, int top, int right, int 
     g_clip_bottom = bottom;
 }
 
+void engine_battlefield_render_bind_entity_table(uint8_t *base, int stride, int max_id)
+{
+    g_entity_base   = base;
+    g_entity_stride = stride;
+    g_entity_max_id = max_id;
+}
+
 int engine_battlefield_render_terrain_blit_count(void)
 {
     return g_terrain_blit_count;
@@ -230,40 +270,190 @@ static void pass_late(void)             { g_count_late += 1; }
 static void pass_final(void)            { g_count_final += 1; }
 
 /* ──────────────────────────────────────────────────────────────────
- * Middle-pass leaf stubs (chip 5a.i).
+ * Middle-pass leaves.
  *
- * Six retail functions invoked by the middle pass driver, each not
- * yet ported.  Each stub bumps a per-leaf counter (and the two draw
- * leaves with arguments capture the last argument they saw) so tests
- * can verify the driver passes the right byte through.
+ * Six retail functions invoked by the middle pass driver.  As of chip
+ * 5a.ii.a, build/sort/render are real ports; the per-entity draw
+ * (FUN_004bdc31) is wired as a state-capture stub for chip 5a.ii.a
+ * (chip 5a.ii.b ports its body); and the three per-cell draw leaves
+ * (FUN_004bd574 / FUN_004bd759 / FUN_004beed4) remain counter-stubs
+ * for chip 5a.iii.
  *
- * Setup helpers — FUN_004bd938 / FUN_004bda92 / FUN_004bdb95.  Each
- * called once per frame at the head of the middle pass.  They build,
- * sort by Y, and render a list of visible entities; for chip 5a.i
- * they're inert stubs.  Chip 5a.ii ports them as a group, along with
- * the per-entity draw helper FUN_004bdc31.
- *
- * Per-cell draw leaves — FUN_004bd574 (player marker, descriptor[+3]
- * == 0 branch), FUN_004bd759 (unit-key sprite, descriptor[+3] != 0
- * branch), FUN_004beed4 (effect chain, descriptor[+6] != 0).  Each
- * dispatches one of three RLE blits (via gfx_dispatch_dispatch_sprite_rle)
- * for visible cells; for chip 5a.i they're inert stubs.  Chip 5a.iii
- * ports them as a group.
+ * Each real port also bumps its per-leaf counter for cross-check
+ * instrumentation — once per dispatch, regardless of how many entities
+ * the body processes.
  * ────────────────────────────────────────────────────────────────── */
 
+/* Per-entity draw stub (chip 5a.ii.a).  Replaces FUN_004bdc31 — when
+ * chip 5a.ii.b lands, this function is replaced with the real port; the
+ * stub-capture state stays as cross-check instrumentation.
+ *
+ * Captures the entity id and the staged cursor (gfx_glyph cursor_x/y)
+ * at entry, so tests can verify the render loop's cursor computation. */
+static void middle_leaf_draw_entity_stub(int id)
+{
+    g_middle_per_entity_count   += 1;
+    g_middle_per_entity_last_id  = id;
+    g_middle_per_entity_last_px_x = gfx_glyph_cursor_x();
+    g_middle_per_entity_last_px_y = gfx_glyph_cursor_y();
+}
+
+/* FUN_004bd938 (346 B) — visible-entity list build.
+ *
+ * Walks the entity table for ids 1..max_id, including each alive entity
+ * whose hex coords fall in the over-scan window centered on the camera.
+ * Output is written to g_visible_entity_{id,y}[0..count-1]; an in-band
+ * sentinel (id=0, y=9999) is written at index `count`, used by the
+ * sort helper as a guaranteed-max comparand on the right edge of the
+ * sort's inner loop.
+ *
+ * Filter window matches the middle pass's cell-loop over-scan extent:
+ *
+ *   ex ∈ [cam_x - 1, cam_x + cols]   (inclusive both ends)
+ *   ey ∈ [cam_y - 1, cam_y + rows]   (inclusive both ends)
+ *
+ * Retail bounds:
+ *   iVar1 = DAT_004e657c - 1      (cam_x - 1)
+ *   iVar2 = DAT_004e5d5c + DAT_004e657c  (cols + cam_x)
+ *   iVar3 = DAT_004e6580 - 1      (cam_y - 1)
+ *   iVar4 = DAT_004e5d4c + DAT_004e6580  (rows + cam_y)
+ *
+ * The build helper does NOT clamp the over-scan window against the
+ * underlying grid extent (the cell loop does — see chip 5a.i).
+ * Entities outside the grid can't exist in practice, so the missing
+ * clamp is observably equivalent here. */
 static void middle_leaf_build_entity_list(void)
 {
     g_middle_build_count += 1;
+    g_visible_entity_count = 0;
+
+    if (!g_entity_base) {
+        /* Sentinel still gets written so the sort helper's right-edge
+         * read sees a defined comparand. */
+        g_visible_entity_id[0] = 0;
+        g_visible_entity_y [0] = 9999;
+        return;
+    }
+
+    int x_lo = g_camera_x - 1;
+    int x_hi = g_grid_cols + g_camera_x;
+    int y_lo = g_camera_y - 1;
+    int y_hi = g_grid_rows + g_camera_y;
+
+    for (int id = 1; id <= g_entity_max_id; id++) {
+        uint8_t *rec = g_entity_base + id * g_entity_stride;
+
+        if (rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_ALIVE] == 0) {
+            continue;
+        }
+
+        int16_t ex = *(int16_t *)(rec + ENGINE_BATTLEFIELD_ENTITY_OFFSET_X);
+        int16_t ey = *(int16_t *)(rec + ENGINE_BATTLEFIELD_ENTITY_OFFSET_Y);
+
+        if (ex < x_lo || ex > x_hi || ey < y_lo || ey > y_hi) {
+            continue;
+        }
+
+        /* Capacity guard — retail relies on max_id ≤ 0x50 fitting in
+         * the buffer; our VISIBLE_ENTITY_CAPACITY (0x52) accommodates
+         * max_id + sentinel.  Tests with smaller max_id always fit. */
+        if (g_visible_entity_count >= VISIBLE_ENTITY_CAPACITY - 1) {
+            break;
+        }
+
+        g_visible_entity_id[g_visible_entity_count] = (int16_t)id;
+        g_visible_entity_y [g_visible_entity_count] = ey;
+        g_visible_entity_count += 1;
+    }
+
+    g_visible_entity_y [g_visible_entity_count] = 9999;
+    g_visible_entity_id[g_visible_entity_count] = 0;
 }
 
+/* FUN_004bda92 (259 B) — bubble sort by y ascending, with last-swap
+ * early termination and a 500-iter outer safety cap.
+ *
+ * The inner loop reads y[i+1] for i = 0..high-1; on the final pass with
+ * `high = count - 1`, the read at i = count-1 dereferences the sentinel
+ * (y=9999, id=0) — which is always ≥ any real y, so no swap occurs at
+ * the sentinel boundary and the sort behaves identically with or
+ * without it.
+ *
+ * `last-swap early termination`: each outer pass tracks the largest
+ * index where a swap actually happened; the next outer pass only needs
+ * to walk that far.  A pass with no swap leaves `last = 0`, terminating
+ * the loop early via the `0 < local_1c` predicate.
+ *
+ * The 500-iter outer cap is defensive — with max_id ≤ 80 the worst case
+ * is 79 passes, well under the cap.  We preserve the cap verbatim to
+ * match retail's behavior on any future regression. */
 static void middle_leaf_sort_entity_list(void)
 {
     g_middle_sort_count += 1;
+    g_middle_sort_passes = 0;
+
+    int high      = g_visible_entity_count - 1;
+    int safety    = 500;
+
+    while (high > 0 && safety > 0) {
+        safety -= 1;
+        g_middle_sort_passes += 1;
+
+        int last_swap = 0;
+        for (int i = 0; i < high; i++) {
+            if (g_visible_entity_y[i + 1] < g_visible_entity_y[i]) {
+                last_swap = i;
+                int16_t y_tmp  = g_visible_entity_y[i];
+                int16_t id_tmp = g_visible_entity_id[i];
+                g_visible_entity_y [i] = g_visible_entity_y [i + 1];
+                g_visible_entity_id[i] = g_visible_entity_id[i + 1];
+                g_visible_entity_y [i + 1] = y_tmp;
+                g_visible_entity_id[i + 1] = id_tmp;
+            }
+        }
+        high = last_swap;
+    }
 }
 
+/* FUN_004bdb95 (156 B) — per-entity render loop.
+ *
+ * Walks the sorted visible-entity list, computes the per-entity
+ * pixel-space anchor (px_x, px_y) from each entity's hex coords +
+ * camera + viewport + zoom, stages it as the cursor, and dispatches
+ * the per-entity draw (FUN_004bdc31 in retail; the stub in chip
+ * 5a.ii.a).
+ *
+ *   px_x = (entity_x - cam_x) * zoom + viewport_x
+ *   px_y = (entity_y - cam_y) * zoom + viewport_y
+ *
+ * Retail writes DAT_00591524 / DAT_00591528 (cursor_x/y) directly; we
+ * stage through gfx_glyph_set_cursor_*.  The cursor write happens
+ * BEFORE the per-entity draw call, so the stub sees the staged value
+ * via gfx_glyph_cursor_x/y(). */
 static void middle_leaf_render_entity_list(void)
 {
     g_middle_render_count += 1;
+
+    if (!g_entity_base) {
+        /* No entity table bound — sorted list is empty. */
+        return;
+    }
+
+    for (int i = 0; i < g_visible_entity_count; i++) {
+        int id = (int)g_visible_entity_id[i];
+        uint8_t *rec = g_entity_base + id * g_entity_stride;
+
+        int16_t ex = *(int16_t *)(rec + ENGINE_BATTLEFIELD_ENTITY_OFFSET_X);
+        int16_t ey = *(int16_t *)(rec + ENGINE_BATTLEFIELD_ENTITY_OFFSET_Y);
+
+        int px_x = (ex - g_camera_x) * g_zoom + g_viewport_x;
+        int px_y = (ey - g_camera_y) * g_zoom + g_viewport_y;
+
+        gfx_glyph_set_cursor_x(px_x);
+        gfx_glyph_set_cursor_y(px_y);
+
+        middle_leaf_draw_entity_stub(id);
+    }
 }
 
 static void middle_leaf_draw_player_marker(void)
@@ -941,6 +1131,49 @@ int engine_battlefield_render_middle_effect_chain_last_arg(void)
     return g_middle_effect_chain_last_arg;
 }
 
+int engine_battlefield_render_visible_entity_count(void)
+{
+    return g_visible_entity_count;
+}
+
+int engine_battlefield_render_visible_entity_id(int idx)
+{
+    if (idx < 0 || idx >= g_visible_entity_count) {
+        return 0;
+    }
+    return (int)g_visible_entity_id[idx];
+}
+
+int engine_battlefield_render_visible_entity_y(int idx)
+{
+    if (idx < 0 || idx >= g_visible_entity_count) {
+        return 0;
+    }
+    return (int)g_visible_entity_y[idx];
+}
+
+int engine_battlefield_render_middle_sort_passes(void)
+{
+    return g_middle_sort_passes;
+}
+
+int engine_battlefield_render_middle_per_entity_count(void)
+{
+    return g_middle_per_entity_count;
+}
+int engine_battlefield_render_middle_per_entity_last_id(void)
+{
+    return g_middle_per_entity_last_id;
+}
+int engine_battlefield_render_middle_per_entity_last_px_x(void)
+{
+    return g_middle_per_entity_last_px_x;
+}
+int engine_battlefield_render_middle_per_entity_last_px_y(void)
+{
+    return g_middle_per_entity_last_px_y;
+}
+
 int engine_battlefield_render_per_frame_cell_counter(void)
 {
     return g_per_frame_cell_counter;
@@ -1031,4 +1264,11 @@ void engine_battlefield_render_reset_counts(void)
     g_middle_unit_key_last_arg         = -1;
     g_middle_effect_chain_last_arg     = -1;
     g_per_frame_cell_counter           = 0;
+
+    g_visible_entity_count             = 0;
+    g_middle_sort_passes               = 0;
+    g_middle_per_entity_count          = 0;
+    g_middle_per_entity_last_id        = -1;
+    g_middle_per_entity_last_px_x      = 0;
+    g_middle_per_entity_last_px_y      = 0;
 }

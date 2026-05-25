@@ -77,10 +77,13 @@
  *     the terrain/overlay passes:
  *
  *       1. Three setup helpers called once each at the head of the pass
- *          (FUN_004bd938 / FUN_004bda92 / FUN_004bdb95) that build,
- *          sort, and render a Y-ordered list of visible entities.
- *          These stay as counter-stubs for chip 5a.i; chip 5a.ii ports
- *          the sorted-entity infrastructure.
+ *          build, sort, and render a Y-ordered list of visible entities.
+ *
+ *          - chip 5a.ii.a (ported now) — FUN_004bd938 (visible-list
+ *            build), FUN_004bda92 (bubble sort, 500-iter safety cap),
+ *            FUN_004bdb95 (per-entity render loop).  The per-entity
+ *            draw (FUN_004bdc31) stays as a per-entity stub for chip
+ *            5a.ii.a; chip 5a.ii.b ports its body.
  *       2. Iterates an OVER-SCAN extension of the visible grid: starts
  *          one cell west / one cell north of the viewport, ends up to
  *          two cells past the south-east corner, clamped to the total
@@ -235,6 +238,58 @@ void engine_battlefield_render_bind_blobs(const uint8_t *primary,
  * Not consumed by the basic `pixel_to_col` / `pixel_to_row` pair. */
 void engine_battlefield_render_bind_cell_band_width(int band_width);
 
+/* Bind the per-entity table consumed by the middle pass's setup
+ * helpers (chip 5a.ii.a).  Retail layout:
+ *
+ *   base    address of entity[0]'s record (entity ids 1..max_id are
+ *           the iteration range; id 0 is reserved/sentinel and never
+ *           visited).  Each record is `stride` bytes.
+ *   stride  per-entry byte count (retail
+ *           `ENGINE_BATTLEFIELD_ENTITY_STRIDE_RETAIL` = 0x1b0).
+ *   max_id  last valid entity id, inclusive (retail
+ *           `ENGINE_BATTLEFIELD_ENTITY_MAX_ID_RETAIL` = 0x50 = 80).
+ *
+ * Field offsets within each record (consumed by chip 5a.ii.a):
+ *
+ *   +0x20  short  x coord (DAT_005544a0)        — hex column
+ *   +0x22  short  y coord (DAT_005544a2)        — hex row
+ *   +0x2c  byte   alive flag (DAT_005544ac)     — zero ⇒ skipped
+ *
+ * Further fields (consumed by chip 5a.ii.b / FUN_004bdc31 port):
+ *
+ *   +0x00  int    primary sprite blob ptr (DAT_00554480)
+ *   +0x04  int    secondary sprite blob ptr (DAT_00554484)
+ *   +0x10  byte   primary sprite frame (DAT_00554490)
+ *   +0x11  byte   secondary sprite frame (DAT_00554491)
+ *   +0x12  byte   entity type (DAT_00554492)
+ *   +0x18  byte   facing direction (DAT_00554498)
+ *   +0x31  byte   subtype/variant (DAT_005544b1)
+ *   +0x32  byte   animation frame within facing (DAT_005544b2)
+ *
+ * A NULL base pointer disables the build helper — visible-entity
+ * count comes out as 0 and the render loop is a no-op.  Tests that
+ * only exercise the per-cell dispatch (chip 5a.i) can skip this
+ * binding. */
+void engine_battlefield_render_bind_entity_table(uint8_t *base,
+                                                 int stride, int max_id);
+
+/* Retail constants for the entity table.  Exposed so tests can size
+ * fixtures matching the retail layout. */
+#define ENGINE_BATTLEFIELD_ENTITY_STRIDE_RETAIL  0x1b0
+#define ENGINE_BATTLEFIELD_ENTITY_MAX_ID_RETAIL  0x50
+
+#define ENGINE_BATTLEFIELD_ENTITY_OFFSET_PRIMARY_BLOB    0x00
+#define ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_BLOB  0x04
+#define ENGINE_BATTLEFIELD_ENTITY_OFFSET_PRIMARY_FRAME   0x10
+#define ENGINE_BATTLEFIELD_ENTITY_OFFSET_SECONDARY_FRAME 0x11
+#define ENGINE_BATTLEFIELD_ENTITY_OFFSET_TYPE            0x12
+#define ENGINE_BATTLEFIELD_ENTITY_OFFSET_FACING          0x18
+#define ENGINE_BATTLEFIELD_ENTITY_OFFSET_X               0x20
+#define ENGINE_BATTLEFIELD_ENTITY_OFFSET_Y               0x22
+#define ENGINE_BATTLEFIELD_ENTITY_OFFSET_ALIVE           0x2c
+#define ENGINE_BATTLEFIELD_ENTITY_OFFSET_SUBTYPE         0x31
+#define ENGINE_BATTLEFIELD_ENTITY_OFFSET_ANIM_FRAME      0x32
+
 /* Bind the clip rect used by the zoom-32 pass's second-sprite-per-cell
  * path.  Retail passes these inline to FUN_0040464c / FUN_0040477b:
  *
@@ -383,30 +438,82 @@ int  engine_battlefield_render_terrain_zoom32_second_blit_count(void);
  * which bumps once per FUN_004bd07f invocation. */
 int  engine_battlefield_render_overlay_zoom32_blit_count(void);
 
-/* Per-leaf call counters for the middle-pass stubs.  The middle-pass
- * driver (chip 5a.i) is a real port of `FUN_004bd355`, but its six
- * leaves are still stubs — each bumps its counter and returns.  The
- * counters let tests verify the driver's per-cell dispatch shape
- * (which leaf fires on which descriptor bits) without depending on
- * real leaf bodies.  When a leaf is ported (chip 5a.ii / .iii) the
- * counter can stay for cross-checking or be retired.
+/* Per-leaf call counters for the middle-pass.  Three of the six leaves
+ * have real ports as of chip 5a.ii.a (build / sort / render);
+ * the per-entity draw and the three per-cell draw leaves are still
+ * stubs.  Each counter bumps once per dispatch — they let tests verify
+ * the driver's per-cell dispatch shape without depending on real leaf
+ * bodies.
  *
  *   build / sort / render — three setup helpers (FUN_004bd938 /
  *                           FUN_004bda92 / FUN_004bdb95) called once
  *                           each at the head of the middle pass.
+ *                           Chip 5a.ii.a ports their bodies; counters
+ *                           still bump once per pass for cross-checking.
  *   player_marker         — FUN_004bd574, dispatched when descriptor[+2]
  *                           has bit 0x80 set AND descriptor[+3] == 0.
+ *                           Chip 5a.iii ports the body.
  *   unit_key              — FUN_004bd759(descriptor[+3]), dispatched
  *                           when bit 0x80 set AND descriptor[+3] != 0.
+ *                           Chip 5a.iii ports the body.
  *   effect_chain          — FUN_004beed4(descriptor[+6]), dispatched
  *                           per cell whenever descriptor[+6] != 0
- *                           (independent of the bit-0x80 gate). */
+ *                           (independent of the bit-0x80 gate).
+ *                           Chip 5a.iii ports the body. */
 int  engine_battlefield_render_middle_build_count(void);
 int  engine_battlefield_render_middle_sort_count(void);
 int  engine_battlefield_render_middle_render_count(void);
 int  engine_battlefield_render_middle_player_marker_count(void);
 int  engine_battlefield_render_middle_unit_key_count(void);
 int  engine_battlefield_render_middle_effect_chain_count(void);
+
+/* Visible-entity list accessors (chip 5a.ii.a).  Populated by the
+ * build helper (`FUN_004bd938`) at the head of every middle-pass call;
+ * Y-sorted in place by the sort helper (`FUN_004bda92`); walked by the
+ * render-loop helper (`FUN_004bdb95`).  After a frame render (or a
+ * test-only middle-pass call) the list reflects the most recent
+ * dispatch.
+ *
+ *   count       — number of valid entries, EXCLUSIVE of the in-band
+ *                 sentinel.  Retail `DAT_004e5d38`.
+ *   id(idx)     — entity id at sorted position idx ∈ [0, count).
+ *                 Retail `DAT_004e5d80[idx*2]` (short).
+ *   y(idx)      — entity y coord at sorted position idx ∈ [0, count).
+ *                 Retail `DAT_004e5d82[idx*2]` (short).
+ *
+ * Out-of-range indices return 0 (defensive — retail would just
+ * silently read past the buffer).  The sentinel at index `count`
+ * (retail value y=9999, id=0) is NOT exposed; tests can verify it
+ * indirectly by tearing down the binding and watching count reset to
+ * zero. */
+int engine_battlefield_render_visible_entity_count(void);
+int engine_battlefield_render_visible_entity_id(int idx);
+int engine_battlefield_render_visible_entity_y(int idx);
+
+/* The number of outer iterations the bubble sort performed during the
+ * most recent middle-pass dispatch (retail `_DAT_004e655c`, reset to 0
+ * at the head of `FUN_004bda92`).  0 means the list was already sorted
+ * (or contained 0/1 entries); a positive value indicates at least one
+ * pass ran.  Capped at 500 by the safety guard. */
+int engine_battlefield_render_middle_sort_passes(void);
+
+/* Per-entity draw stub state (chip 5a.ii.a).  The per-entity render
+ * loop (`FUN_004bdb95`) computes (px_x, px_y) from each visible entity's
+ * hex coords and then dispatches the per-entity draw (`FUN_004bdc31`).
+ * Chip 5a.ii.a wires that draw as a stub that:
+ *
+ *   - bumps `count` once per call;
+ *   - records the entity id (`last_id`) and the staged cursor at entry
+ *     (`last_px_x`, `last_px_y`).
+ *
+ * Tests use these to verify the render loop's cursor computation and
+ * iteration order without depending on the real per-entity body.  Chip
+ * 5a.ii.b replaces the stub with the real port; the count and last-*
+ * accessors stay as cross-check instrumentation. */
+int engine_battlefield_render_middle_per_entity_count(void);
+int engine_battlefield_render_middle_per_entity_last_id(void);
+int engine_battlefield_render_middle_per_entity_last_px_x(void);
+int engine_battlefield_render_middle_per_entity_last_px_y(void);
 
 /* The unit_key and effect_chain stubs each capture the LAST byte they
  * were called with — descriptor[+3] for unit_key, descriptor[+6] for

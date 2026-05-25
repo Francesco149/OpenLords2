@@ -3042,6 +3042,92 @@ semantics for chip 5a.iii.
 
 ---
 
+## 85. Battlefield visible-entity build filter window is INCLUSIVE on both ends
+
+The visible-entity build helper (`FUN_004bd938`, chip 5a.ii.a) walks
+the entity table for ids 1..0x50 and includes each alive entity whose
+hex coords fall in the window:
+
+```c
+ex ∈ [cam_x - 1, cam_x + cols]    (inclusive both ends)
+ey ∈ [cam_y - 1, cam_y + rows]    (inclusive both ends)
+```
+
+The retail source confirms inclusive bounds on the RIGHT/BOTTOM end:
+
+```c
+if (((((&DAT_005544ac)[id*0x1b0] != 0) &&
+     (iVar1 <= *(short *)(&DAT_005544a0 + id*0x1b0))) &&
+    (*(short *)(&DAT_005544a0 + id*0x1b0) <= iVar2)) &&  // <= (NOT <)
+   ((iVar3 <= *(short *)(&DAT_005544a2 + id*0x1b0) &&
+    (*(short *)(&DAT_005544a2 + id*0x1b0) <= iVar4)))) { // <= (NOT <)
+```
+
+Both `<=` checks are inclusive, so an entity at the EXACT north / south
+or east / west bound coord is part of the visible list.  The terrain /
+overlay passes' cell loop has the same inclusive shape on its
+over-scan extent (`(cam_x - 1) .. (cam_x - 1) + (cols + 2) - 1 =
+cam_x + cols`), so an entity at `cam_x + cols` is reachable by the
+cell loop as well — the two ranges match exactly.
+
+What this means in practice: an entity anchored exactly one cell
+past the visible viewport's east edge IS included in the visible
+list AND iterated by the cell loop.  This is intentional — those
+entities can have sprite pixels reaching back into the visible
+viewport.
+
+The build helper does NOT clamp the filter window against the grid
+extent the way the cell loop does (clamping against `camera_row_stride`
+for cols, `total_rows` for rows).  An entity outside the grid extent
+can't exist in practice (the simulator places entities on cells), so
+the missing clamp is observably equivalent.  Keeping the un-clamped
+form lets the build helper short-circuit a few comparisons per id.
+
+> 📍 `src/engine_battlefield_render.c` (`middle_leaf_build_entity_list`),
+> `docs/findings/battlefield-render.md` §5a.ii.a,
+> Ghidra `FUN_004bd938` lines 13-19.
+
+---
+
+## 86. Battlefield visible-entity sort uses an in-band sentinel as right-edge max
+
+The bubble sort (`FUN_004bda92`, chip 5a.ii.a) walks pairs `(i, i+1)`
+for `i = 0 .. high - 1`.  On the final pass with `high = count - 1`,
+the inner loop reads `y[count]` — which is the IN-BAND SENTINEL that
+the build helper writes at index `count` (id=0, y=9999):
+
+```c
+/* End of FUN_004bd938 */
+(&DAT_004e5d82)[DAT_004e5d38 * 2] = 9999;   // y sentinel
+(&DAT_004e5d80)[DAT_004e5d38 * 2] = 0;      // id sentinel
+```
+
+The sentinel value 9999 is chosen to exceed any realistic y coord
+(the battlefield grid is on the order of tens of cells tall), so the
+comparison `y[count] < y[count-1]` always fires false and no swap
+happens at the sentinel boundary.  Net effect: the sort behaves
+identically with or without the sentinel — its purpose is to keep the
+read at `y[count]` defined for the loop bound `i < high`.
+
+Subtle property: the sort uses STRICT `<` (`y[i+1] < y[i]`) for the
+swap condition, so equal-y entries retain their input order — the
+sort is effectively stable for ties.  The render loop walks the sorted
+list in that order, which matters when two entities share a y coord
+(typically one cell stacked on another) — the rendering order is
+determined by entity id ascending (since the build helper walks ids
+1..0x50 in order).
+
+The 500-iter outer safety cap on the bubble sort is purely defensive:
+with `max_id = 0x50 = 80` the worst case is 79 outer passes, well
+under the cap.
+
+> 📍 `src/engine_battlefield_render.c` (`middle_leaf_build_entity_list`,
+> `middle_leaf_sort_entity_list`),
+> `docs/findings/battlefield-render.md` §5a.ii.a,
+> Ghidra `FUN_004bd938` lines 28-29; `FUN_004bda92` lines 10-21.
+
+---
+
 <!--
 Template for new entries:
 
