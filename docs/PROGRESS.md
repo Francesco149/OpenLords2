@@ -7,6 +7,166 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Six leaf-cluster ports in one unattended session
+
+Continuing the "chip away at leaf clusters" pattern proven by the
+prior dispatches.  Worked unattended; chips landed as separate
+logical-unit commits as they finished.  No regressions; 246 tests
+at session start → **337 tests at end (all green under ASan/UBSan)**.
+
+### Six chips landed
+
+1. **`src/engine_path` (NEW, ~290 LOC + 26 tests)** — army pathfinding
+   cluster.  Closed leaf cluster of 5 retail functions:
+   - `FUN_00404f4c` → `engine_path_chebyshev_distance` (and its sibling
+     `FUN_00404ead` → `engine_path_manhattan_distance` landed later in
+     chip #6 because it shares the same dx/dy side-effect storage)
+   - `FUN_0046f434` → `engine_path_direction_8way`
+   - `FUN_00472392` → `engine_path_search_greedy`
+   - `FUN_0047265d` → `engine_path_find_nearest_matching`
+   - `FUN_00472875` → `engine_path_stash_into_army`
+
+   The greedy descent walks an upstream BFS distance map (still
+   unported) and reconstructs a 150-step max path between two cells.
+   The 8-way direction helper is a straight three-way-per-axis
+   compare; the nearest-match picker scans expanding 30-radius
+   squares for the lowest-cost cell whose terrain stage matches the
+   start cell's.  Per-army stash writes into the 0x1b0-byte per-army
+   slot (which we'll fully model later when more army ports land).
+
+   **Quirk #13 filed**: nearest-matching picker uses linear-index 0
+   as both the "found a match" and "no match" sentinel — a hit at
+   the top-left corner (idx 0) is invisible.  Benign in real maps
+   (outer-ring is always walls in retail data) but exercised by a
+   dedicated test.
+
+2. **`src/engine_handlers_da` (NEW, ~30 LOC + 10 tests)** — trivial
+   delayed-action handlers, 6 of 50 slots in `PTR_FUN_004d5c98`:
+   - types 0/21/45/46/47 → no-op (5 retail fns all `ret`-only)
+   - type 48 → divergence counter increment (`DAT_00554038 += 1`)
+
+   First slice of the per-handler dispatch table.  Type 49 (which
+   calls FUN_00435211 + sets a global) and the remaining ~40 single-
+   callee handlers wait on per-callee porting.  Tests drive both
+   direct calls AND the real `engine_dispatch_delayed_actions()` loop
+   so they double as integration tests of the dispatcher's per-record
+   handler invocation path.
+
+   Pulled the dispatch table layout from the PE directly (file off
+   0xd3e98 in .data) to confirm slot→FUN mapping before porting.
+
+3. **`src/engine_dirty_rect` — extension (+1 fn + 5 tests)** —
+   `engine_dirty_rect_mark_box_tiled` (port of `FUN_004527a6`).
+   Parametric pixel-origin + tile-stride extent wrapper used by 10+
+   UI callers (status panels, popup widgets) that don't fit the
+   fixed-size mark_tile_X wrappers.  Also documented the
+   `FUN_0043cc56` thunk-alias of mark_below_status_bar — same
+   semantics, just a distinct address for function-pointer-table use.
+
+4. **`src/engine_category_buckets` (NEW, ~80 LOC + 14 tests)** —
+   per-category byte-bucket table (6 buckets × 16 slots) + 6-byte
+   "first non-duplicate" digest:
+   - `FUN_004290d0` → `engine_category_buckets_clear`
+   - `FUN_00429153` → `engine_category_buckets_append`
+   - `FUN_0042925e` → `engine_category_buckets_digest_contains`
+   - `FUN_004291b3` → `engine_category_buckets_refresh_digest`
+
+   Used during the l2_maps.dat parse (retail `FUN_00467770`) to
+   collect per-category tile types, then the army-setup pipeline
+   consumes the digest.
+
+   **Quirk #14 filed**: `refresh_digest`'s every-other-byte probe
+   resets to ODD parity when it reads a zero — quirky behavior almost
+   never observed in production (buckets dense top-down from map
+   load) but observable in hermetic test inputs.  Test case preserves
+   it.
+
+5. **`src/strutil` — extension (+8 fns + 21 tests)** — char-case
+   conversion + string mutation leaves:
+   - `FUN_00401176` → `strutil_to_upper_char`
+   - `FUN_004011b0` → `strutil_to_lower_char`
+   - `FUN_004011ea` → `strutil_to_upper_inplace`
+   - `FUN_00401246` → `strutil_to_lower_inplace`
+   - `FUN_00401303` → `strutil_shift_left`
+   - `FUN_00401333` → `strutil_shift_right`
+   - `FUN_00401364` → `strutil_strip_leading_spaces`
+   - `FUN_004013bc` → `strutil_trim_trailing_spaces`
+
+   Two retail quirks documented in-header: the single-char to_upper /
+   to_lower return 0 (not the input!) on out-of-range chars, while
+   the whole-string variants pass through unchanged; trim-trailing
+   reads `str[-1]` on an all-spaces input (decrement-before-test
+   loop).
+
+6. **`src/engine_math` (NEW, ~30 LOC + 13 tests)** — small math leaf
+   helpers + the Manhattan-distance sibling of chebyshev:
+   - `FUN_00404d6b` → `engine_math_percent_of`     ((a*b)/100)
+   - `FUN_00404d96` → `engine_math_bp_of`          ((a*b)/10000)
+   - `FUN_00404dc1` → `engine_math_percent_div`    ((a*100)/b, /0→0)
+   - `FUN_00404e03` → `engine_math_div_ceil`       (ceil(a/b), /0→0)
+   - `FUN_00404e4b` → `engine_math_lookup_threshold`(tiered table walk)
+   - `FUN_00404ead` → `engine_path_manhattan_distance` (lives in
+     engine_path because it shares dx/dy side-effect with chebyshev)
+
+### Headline numbers
+
+- **246 → 337 host tests** (all green, ASan + UBSan).
+- **6 commits**, each a clean logical unit (port + tests + header
+  doc + any required dispatch wiring) per the project's
+  commit-as-you-go convention.
+- **30 retail functions ported** across the 6 chips.
+- **2 new engine quirks filed** (#13, #14) — both with dedicated
+  preserving test cases.
+- **2 new modules** (engine_path, engine_category_buckets, engine_
+  handlers_da, engine_math — that's 4, not 2; sorry).  3 extensions
+  to existing modules (engine_dirty_rect, strutil, engine_path).
+
+### What's next
+
+1. **Port more per-handler delayed-action slots** — the next tier
+   is the single-callee wrappers (types 4..29 and 31..44) where the
+   callee is a small leaf or two-deep chain.  Each handler is 30-150
+   B and most of them call into engine helpers (FUN_0043a23f,
+   FUN_004284ce, etc.) that we'd need to also port.  Pick the
+   handlers whose callees are themselves leaves first (e.g. type 30
+   FUN_0044800e → FUN_0047a76d, which is a clean leaf walking 80
+   per-army slots).
+
+2. **Port the next sub-step body** — `FUN_0049b8b0` (turn-timeout,
+   195 B) is small but uses timeGetTime + Sleep.  `FUN_0045270a` (43
+   B) turned out to already be ported as
+   `engine_dirty_rect_mark_below_status_bar`.  Better candidates
+   from this session's survey: `FUN_004673b8` (378 B army-distance
+   scan, calls our ported chebyshev), `FUN_00472227` (363 B
+   per-army state probe, calls our ported chebyshev).  Both need
+   per-army struct modeling — a fair amount of work but well-scoped.
+
+3. **Port the text-input box cluster** — `FUN_00401cda`,
+   `FUN_00401d26`, `FUN_00401e49`, `FUN_00402009`, etc.  ~11
+   functions managing the 2000-byte text buffer at `DAT_005cd550`
+   with cursor / length / max-length / mode globals.  All small
+   (34..170 B), most are leaves, and the existing strutil
+   `shift_left` / `shift_right` ports already cover the editor's
+   sub-byte primitives.  A natural single dispatch.
+
+4. **Wire the trivial delayed-action handlers into the diff harness**
+   — the current diff harness stamps NULL slots and uses retail's
+   `ret`-stub.  Now that we have real handlers for 6 slots, the
+   diff vectors could exercise them through the dispatcher.  Small
+   harness change; high diagnostic value.
+
+5. **Carry-over items still on deck**:
+   - per-type handlers for the remaining ~40 dispatch slots
+   - save/load wired into the drop-in's runtime command surface
+   - Quit-Game freeze + orchestrator-teardown hang diagnostic
+
+Bias next time: option 1 (more dispatch handlers) — we now have the
+handler-module pattern proven; each new chip adds 1-5 handler slots
+and tests for free.  Option 3 (text input) is a tempting standalone
+unit but doesn't unblock anything on the engine's main port path.
+
+---
+
 ## 2026-05-25 — UI / screen-message event-queue producer cluster (5 functions)
 
 Second leaf cluster of the dispatch.  The producer-side surface of the
