@@ -667,6 +667,158 @@ affects production runs.
 
 ---
 
+## 15. Text-input clear() sets length=1 even on a zeroed buffer
+
+`FUN_004020ae` (the editor "clear") memsets the 2000-byte text buffer
+to zero, then sets `DAT_0058fe94` (`length`) to **1**, not 0.  A
+subsequent recompute (`FUN_00401f49`) would set length=0 — so the
+"1" is a deliberate sentinel between operations.
+
+In the editor's state machine, valid cursor positions are
+`0..length+1`, so `length=1` after clear means "cursor may sit at
+position 0, with the terminator visible at position 1".  Without the
++1, an empty buffer would treat position 0 as past-the-end and the
+clamp helper would bump cursor to length+1=1 anyway — but with
+clamp_state=1.  The "1" sentinel avoids the spurious clamp report.
+
+Init (`FUN_00402009`) doesn't apply the same sentinel — it sets
+length to whatever was copied (0 for empty payload).  Inconsistency,
+but the editor's renderer / cursor logic don't read length=0 in
+practice because init is always called with a non-empty payload.
+
+> 📍 `src/text_input.c`'s `text_input_clear`,
+> `tests/test_text_input.c`'s `text_input_clear_sets_length_one_sentinel`,
+> Ghidra `FUN_004020ae @ 0x4020ae`.
+
+---
+
+## 16. Text-input init's register-reuse off-by-minus-one indexing
+
+`FUN_00402009` (the editor "init with payload") uses a single
+register for both the clearing loop and the payload-copy loop:
+
+```c
+for (local_8 = 1999; -1 < local_8; local_8 = local_8 + -1) {
+  (&DAT_005cd550)[local_8] = 0;       // clears buf[0..1999]
+}
+// local_8 == -1 on exit
+for (; *param_1 != '\0'; param_1 = param_1 + 1) {
+  (&DAT_005cd551)[local_8] = *param_1;  // (&buf[1])[-1] == &buf[0]
+  local_8 = local_8 + 1;
+}
+DAT_0058fe94 = local_8 + 1;            // length = payload_len
+```
+
+It looks like a buffer-overflow bug at first glance — `(&buf[1])[i]`
+with `i=-1` is `buf[0]`, which is technically a one-past-the-start
+read into the *previous* allocation.  But buf is a static `.data`
+global at `0x5cd550`, and `&buf[1] + (-1)` arithmetically resolves
+to `0x5cd550` — exactly buf[0].  No out-of-bounds access.
+
+The compiler picked this shape because both loops can share `local_8`
+in EDX without a reload between them.  The off-by-one in the address
+formula compensates for the off-by-one in the register's exit value.
+
+> 📍 `src/text_input.c`'s `text_input_init`,
+> `tests/test_text_input.c`'s `text_input_init_empty_payload_yields_length_zero`,
+> Ghidra `FUN_00402009 @ 0x402009`.
+
+---
+
+## 17. Text-input cursor clamps past-end to length+1, not length
+
+`FUN_00401984` (the editor's clamp helper) treats `length+1` — not
+`length` — as the past-end cursor position:
+
+```c
+if (DAT_0058fe94 + 1 <= DAT_005bb4a8) {       // length+1 <= cursor
+  DAT_005bb4a8 = DAT_0058fe94 + 1;            // cursor = length+1
+  DAT_005cd408 = 1;                           // clamp_state = 1
+}
+```
+
+So `cursor == length` is fine (sits on the terminator); `cursor ==
+length+1` is also fine (no-op); anything beyond is clamped to
+length+1 with `clamp_state := 1`.  Then a second clamp step pins
+cursor to `max_length` and sets `clamp_state := 2`.
+
+The "+1" matters because the renderer draws an insertion caret
+*after* the terminator when the cursor is at `length+1`, indicating
+"empty position at end ready to receive input".  Distinct visual
+from `cursor == length` (caret on the terminator, indicating "next
+char will overwrite the end").
+
+> 📍 `src/text_input.c`'s `text_input_clamp_cursor`,
+> `tests/test_text_input.c`'s
+> `text_input_clamp_cursor_past_length_bumps_to_length_plus_one`,
+> Ghidra `FUN_00401984 @ 0x401984`.
+
+---
+
+## 18. Text-input "overwrite" mode skips max_length and length update
+
+`FUN_00401d26` (insert_char) has two branches depending on `DAT_005c9280`
+(the insert/overwrite toggle):
+
+```c
+if (DAT_005c9280 == 0) {                         // overwrite branch
+  (&DAT_005cd550)[DAT_005bb4a8] = param_1;       // buf[cursor] = c
+  DAT_005bb4a8 = DAT_005bb4a8 + 1;               // cursor++
+}
+else if (DAT_0058fe94 < DAT_005cd4f4) {          // insert branch
+  FUN_00401333(buf + cursor, buf + 1 + length);  // shift_right
+  buf[cursor] = c;
+  cursor++;
+}
+```
+
+The overwrite branch is unconditional — no `length < max_length`
+guard, no length update.  If the caller types past the end, the new
+char overwrites the terminator and `length` stays stale until the
+next `recompute_length` call.  The clamp helper handles the cursor
+position fine afterward (it pins to `max_length` if needed) but
+`length` lags behind reality.
+
+The insert branch is properly bounded by `length < max_length` and
+uses `shift_right` to make room — but it also doesn't update
+`length`.  Both branches rely on the caller to call recompute when
+they care about the value.
+
+> 📍 `src/text_input.c`'s `text_input_insert_char`,
+> `tests/test_text_input.c`'s `text_input_insert_char_at_end_extends_in_overwrite`,
+> Ghidra `FUN_00401d26 @ 0x401d26`.
+
+---
+
+## 19. Text-input probe special-cases the decimal point past column 8
+
+`FUN_00401e49` (probe_at_cursor) writes `_DAT_00591520` based on the
+character under the cursor.  Normally it's 1 if the cursor sits on
+the terminator, 0 otherwise.  But when `clamp_state == 1` AND the
+character is `'.'` AND the cursor index is `>= 8`, the probe returns
+**2** instead of 1:
+
+```c
+_DAT_00591520 = (uint)(buf[cursor] == '\0');
+if (DAT_005cd408 == 1 && buf[cursor] == '.') {
+  _DAT_00591520 = (cursor < 8) ? 1 : 2;
+}
+```
+
+The "8" is the column threshold that retail's number-entry fields
+treat as "too far right for a normal decimal point" — past column 8
+the field has run out of room for the fractional part and the
+renderer paints a warning indicator instead of a normal caret.
+`clamp_state == 1` (cursor was at past-end) plus a decimal point at
+that position is the engine's way of saying "user typed a '.' but
+there's no room for digits after it."
+
+> 📍 `src/text_input.c`'s `text_input_probe_at_cursor`,
+> `tests/test_text_input.c`'s `text_input_probe_at_cursor_decimal_ge_eight_is_two`,
+> Ghidra `FUN_00401e49 @ 0x401e49`.
+
+---
+
 <!--
 Template for new entries:
 

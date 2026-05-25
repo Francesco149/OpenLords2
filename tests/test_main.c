@@ -393,6 +393,49 @@ struct test_case {
     X(engine_math_lookup_threshold_no_match_returns_fallback) \
     X(engine_math_lookup_threshold_query_at_exact_key_walks_past) \
     X(engine_math_lookup_threshold_empty_table_returns_fallback) \
+    \
+    X(text_input_init_copies_payload_into_buf0) \
+    X(text_input_init_empty_payload_yields_length_zero) \
+    X(text_input_init_zeroes_full_buffer) \
+    X(text_input_init_propagates_initial_mode) \
+    X(text_input_clear_sets_length_one_sentinel) \
+    X(text_input_cursor_left_floor_at_zero) \
+    X(text_input_cursor_right_caps_at_length) \
+    X(text_input_cursor_home_and_end) \
+    X(text_input_clamp_cursor_in_range_no_state) \
+    X(text_input_clamp_cursor_past_length_bumps_to_length_plus_one) \
+    X(text_input_clamp_cursor_at_length_no_clamp) \
+    X(text_input_clamp_cursor_past_max_length_state_two) \
+    X(text_input_clamp_cursor_pixel_overflow_sets_state_two) \
+    X(text_input_clamp_cursor_negative_floored_to_zero) \
+    X(text_input_clamp_cursor_resets_state_each_call) \
+    X(text_input_insert_char_disabled_is_noop) \
+    X(text_input_insert_char_overwrite_mode_replaces_in_place) \
+    X(text_input_insert_char_insert_mode_shifts_right) \
+    X(text_input_insert_char_insert_mode_full_buffer_no_op) \
+    X(text_input_insert_char_clamp_state_two_blocks) \
+    X(text_input_insert_char_at_end_extends_in_overwrite) \
+    X(text_input_delete_char_removes_at_cursor) \
+    X(text_input_delete_char_disabled_is_noop) \
+    X(text_input_backspace_at_zero_is_noop) \
+    X(text_input_backspace_deletes_prev_char) \
+    X(text_input_strip_spaces_single_space) \
+    X(text_input_strip_spaces_adjacent_keeps_one) \
+    X(text_input_strip_spaces_no_spaces_unchanged) \
+    X(text_input_recompute_length_basic) \
+    X(text_input_recompute_length_empty) \
+    X(text_input_toggle_insert_mode_flips) \
+    X(text_input_toggle_insert_mode_xor_bit0) \
+    X(text_input_probe_at_cursor_on_char_zero) \
+    X(text_input_probe_at_cursor_on_terminator_is_one) \
+    X(text_input_probe_at_cursor_decimal_lt_eight_is_one) \
+    X(text_input_probe_at_cursor_decimal_ge_eight_is_two) \
+    X(text_input_probe_at_cursor_decimal_without_clamp_state_one) \
+    X(text_input_copy_out_truncates_at_max_chars) \
+    X(text_input_copy_out_full_string_when_max_large) \
+    X(text_input_copy_out_zero_max_writes_only_terminator) \
+    X(text_input_copy_out_empty_buf_writes_only_terminator) \
+    X(text_input_scenario_type_then_backspace) \
     /* end */
 
 /* Emit extern decls. */

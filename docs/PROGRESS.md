@@ -7,6 +7,124 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Text-input editor cluster (15 fns, 1 chip)
+
+Continuation of the same unattended session that landed the prior
+six chips.  Goal: port the text-input box's editor leaves — the
+2000-byte editable buffer that powers save-name prompts, scenario
+titles, chat lines, etc.  Identified as a clean next chip in the
+previous dispatch.
+
+### Chip landed
+
+**`src/text_input` (NEW, ~290 LOC + 42 tests)** — 15 retail leaves
+modeling the editor's buffer + cursor state machine:
+
+  - `FUN_00401984` → `text_input_clamp_cursor`        (156 B)
+  - `FUN_00401c70` → `text_input_backspace`           (35 B)
+  - `FUN_00401ca3` → `text_input_toggle_insert_mode`  (25 B)
+  - `FUN_00401cbc` → `text_input_cursor_left`         (30 B)
+  - `FUN_00401cda` → `text_input_cursor_right`        (34 B)
+  - `FUN_00401cfc` → `text_input_cursor_home`         (21 B)
+  - `FUN_00401d11` → `text_input_cursor_end`          (21 B)
+  - `FUN_00401d26` → `text_input_insert_char`        (162 B)
+  - `FUN_00401dc8` → `text_input_delete_char`         (64 B)
+  - `FUN_00401e49` → `text_input_probe_at_cursor`    (135 B)
+  - `FUN_00401ed0` → `text_input_strip_spaces`       (121 B)
+  - `FUN_00401f49` → `text_input_recompute_length`    (70 B)
+  - `FUN_004020ae` → `text_input_clear`               (94 B)
+  - `FUN_00402009` → `text_input_init`               (165 B)
+  - `FUN_0040210c` → `text_input_copy_out`            (90 B)
+
+All state lives in an explicit `text_input_state_t` struct (2000-B
+buf + 11 scalar fields).  The cluster's only inter-function call is
+insert/delete/backspace dispatching to clamp_cursor; the rest are
+leaves.
+
+Builds on previously-ported `strutil_shift_left` /
+`strutil_shift_right` (from the prior session) — insert mode uses
+shift_right to make room, delete uses shift_left.
+
+### Filed quirks (#15–#19)
+
+Five new entries in `docs/findings/engine-quirks.md`:
+
+  - **#15** — clear() sets length=1 sentinel even on a zeroed
+    buffer (distinct from recompute, which sets 0).
+  - **#16** — init()'s payload-copy reuses `local_8` across both
+    loops, exiting the clear at -1 and indexing via `&buf[1]+(-1)`
+    to write into buf[0].  Compiler register-reuse optimization.
+  - **#17** — clamp_cursor pins past-end cursor to length+1, not
+    length.  Distinguishes "caret on terminator" from "caret in the
+    fresh slot beyond it".
+  - **#18** — insert_char's overwrite branch (insert_mode==0) skips
+    both the max_length bounds check and the length update.  Caller
+    must recompute_length to refresh the cached count.
+  - **#19** — probe_at_cursor flips to result=2 when clamp_state==1
+    AND buf[cursor]=='.' AND cursor>=8 — the "too far right for a
+    decimal" warning state used by number-entry fields.
+
+Each quirk has a dedicated preserving test case.
+
+### Deferred to follow-up chips
+
+  - **Pixel-width measurer** (`FUN_00401f8f` + `FUN_004015b9`, ~295
+    B) — measures cumulative pixel width of the buffer using a font
+    glyph table.  Sets the `pixel_overflow` flag that clamp_cursor
+    reads.  Needs font-table modeling (256-byte char→glyph-idx
+    table at `DAT_004d71d0`, 16-byte glyph entries pointed to by
+    the active font at `DAT_005af8f0`).  In the meantime,
+    `clamp_cursor` reads `pixel_overflow` from the state struct;
+    tests set it directly to exercise the `clamp_state == 2`
+    pixel-overflow branch.
+  - **Save / load** (`FUN_00402166` + `FUN_0040220f`, ~343 B) —
+    persist/restore buffer to/from a file region.  Needs the file
+    IO helpers `FUN_004af8d9` (read-at) and `FUN_004b0502` (write-
+    at), which are themselves unported.
+  - **Renderer / event dispatch** (`FUN_00402637`, 989 B) — the
+    massive per-frame routine that handles keyboard events, paints
+    the field, manages the cursor anchor, scrolling, repeat-key
+    timers, etc.  Pulls in font subsystem, dirty-rect, palette,
+    keyboard-state globals.  Significantly larger than a normal
+    chip and tightly coupled to subsystems we don't have yet.
+
+### Headline numbers
+
+- **337 → 379 host tests** (all green, ASan + UBSan).
+- **15 retail functions ported** (1.1 KB of decompilation).
+- **1 commit** — single coherent chip per commit-as-you-go.
+- **5 new engine quirks filed** (#15–#19), each with a test.
+- **1 new module** (`src/text_input`).
+- Cross-compile (mingw32) still clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### What's next
+
+The two natural continuations:
+
+1. **Port the pixel-width measurer** — small chip (2 fns, ~295 B
+   decompilation).  Closes the loop on clamp_cursor's
+   `pixel_overflow` driver and prepares for the eventual renderer
+   port.  Needs font glyph table modeling — straightforward but
+   one extra module.
+
+2. **Port more per-handler delayed-action slots** — same as the
+   prior session's "next candidates" list.  Type 30 (`FUN_0044800e`
+   → `FUN_0047a76d` 80-army-slot scan) is the cleanest leaf
+   handler to land next.
+
+3. **Port the text-input save/load** — needs the file IO leaves
+   (`FUN_004af8d9` read-at, `FUN_004b0502` write-at) first.  Those
+   appear in many other clusters too, so they'd be a good general
+   chip to land independently.
+
+Picking #1 next iteration keeps momentum on the text-input
+subsystem — once the measurer is done the cluster is feature-
+complete except for the renderer (which is too large for a single
+chip and will need its own pass).
+
+---
+
 ## 2026-05-25 — Six leaf-cluster ports in one unattended session
 
 Continuing the "chip away at leaf clusters" pattern proven by the
