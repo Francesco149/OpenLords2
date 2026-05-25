@@ -12,14 +12,14 @@ cluster (`FUN_004050f6` + 3 passes, all in `0x405000..0x408000`),
 but lives in a different address band (`0x4bc000..0x4bf300`) and
 uses a different tile format and storage layout.
 
-**Status**: chips 1, 2, 3, 3.5, 4, 5a.i, 5a.ii.a, 5b, 6 ported
-(sprite primitives + frame driver + both zoom-dispatched terrain
-passes + zoom-32 overlay + middle-pass driver shell + sorted-entity
-infrastructure + coord helpers).  Chip 5a.ii.b (per-entity draw
-body `FUN_004bdc31`) still a state-capturing stub.  Chip 5a.iii
-per-cell draw leaves still stubs.  Late + final passes still
-stubs.  Survey landed 2026-05-25, chips 1–4 + 5b + 6 + 5a.i + 5a.ii.a
-landed 2026-05-25.
+**Status**: chips 1, 2, 3, 3.5, 4, 5a.i, 5a.ii.a, 5a.ii.b, 5b, 6
+ported (sprite primitives + frame driver + both zoom-dispatched
+terrain passes + zoom-32 overlay + middle-pass driver shell +
+sorted-entity infrastructure + per-entity draw base path + coord
+helpers).  Chip 5a.iii per-cell draw leaves still stubs.  Chip
+5a.iv (three type-special leaves consumed by per-entity draw) still
+stubs.  Late + final passes still stubs.  Survey landed 2026-05-25,
+chips 1–4 + 5b + 6 + 5a.i + 5a.ii.a + 5a.ii.b landed 2026-05-25.
 
 ## Entry point
 
@@ -268,10 +268,14 @@ The cluster is too large to port in one chip.  Suggested chip plan:
        bubble sort).  **LANDED** (2026-05-25).
      - **chip 5a.ii.b** — per-entity draw body.  Real port of
        `FUN_004bdc31` (1087 B base path) with the three type-
-       specials (`FUN_004be4df` / `FUN_004be7be` / `FUN_004beab9`)
-       still stubbed.  Needs new bindings for the anim-offset
-       tables (`DAT_004e3bf0` zoom-16, `DAT_004e4030` zoom-32 —
-       each 0x880 bytes) and the dirty-rect state pointer.  Future.
+       specials (`FUN_004be4df` / `FUN_004be7be` / `FUN_004beab9`,
+       chip 5a.iv) still stubbed.  Adds new bindings for the
+       anim-offset tables (`DAT_004e3bf0` zoom-16, `DAT_004e4030`
+       zoom-32 — each 0x440 bytes, 8 facings × 17 frames per facing)
+       and the dirty-rect state pointer.  Filed quirks #87 (type-6
+       PRE-call survives no-blob path), #88 (uninitialised locals
+       at unsupported zoom), #89 (dirty box sized by entity type
+       not sprite dims).  **LANDED** (2026-05-25).
      - **chip 5a.iii** — per-cell draw leaves.  Real ports of
        `FUN_004bd574` (player marker, animated through 8 frames),
        `FUN_004bd759` (unit-key sprite, 4-byte map silently drops

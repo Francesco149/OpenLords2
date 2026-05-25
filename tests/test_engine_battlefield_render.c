@@ -2216,6 +2216,491 @@ int test_engine_battlefield_render_sort_handles_full_buffer(void)
 }
 
 /* ────────────────────────────────────────────────────────────────
+ * Chip 5a.ii.b — per-entity draw FUN_004bdc31 base path.
+ *
+ * Per-entity blob fixture: each entity points at a small blob whose
+ * slot N contains a sprite header (width, height, src_off, flags).
+ * The blit itself is fired through gfx_dispatch_dispatch_sprite_rle —
+ * with no canvas bound, the RLE blitter's `if (!dst) return;` prologue
+ * makes it a safe no-op, but the dispatcher's `y_clip_mode != 5` gate
+ * still fires, so the entity-blit counter tracks "would have dispatched"
+ * accurately.  Tests that exercise dispatch suppression set a degenerate
+ * clip rect.
+ *
+ * The anim-offset tables are 0x88-byte-stride per facing.  Tests stage
+ * a single facing's worth of frames and verify the body indexes into
+ * the right (facing, frame) entry.
+ * ──────────────────────────────────────────────────────────────── */
+
+#define ENTITY_BLOB_SIZE 0x200
+static uint8_t g_entity_blob[ENTITY_BLOB_SIZE];
+
+#define ANIM_TABLE_SIZE 0x440
+static uint8_t g_anim_z16[ANIM_TABLE_SIZE];
+static uint8_t g_anim_z32[ANIM_TABLE_SIZE];
+
+static void blob_set_header(uint8_t *blob, int slot,
+                            int w, int h, int src_off)
+{
+    blob_set_slot(blob, slot, w, h, (uint32_t)src_off,
+                  /*flag_a=*/0xab, /*advance=*/h,
+                  /*flag_b=*/0xcd);
+}
+
+static void anim_table_set(uint8_t *table, int facing, int frame,
+                           int32_t x_off, int32_t y_off)
+{
+    uint8_t *entry = table + facing * ENGINE_BATTLEFIELD_ANIM_FACING_STRIDE
+                           + frame  * ENGINE_BATTLEFIELD_ANIM_FRAME_STRIDE;
+    memcpy(entry + 0, &x_off, sizeof x_off);
+    memcpy(entry + 4, &y_off, sizeof y_off);
+}
+
+/* Stuff entity fields needed by the per-entity draw body.  Type,
+ * facing, frame, subtype, primary_blob ptr, primary_frame index. */
+static void entity_set_body(int id, int x, int y, uint8_t alive,
+                            uint8_t type, uint8_t facing, uint8_t anim_frame,
+                            uint8_t subtype,
+                            uint8_t *blob, uint8_t primary_frame)
+{
+    uint8_t *rec = g_entity_table + id * ENT_STRIDE;
+    *(int16_t *)(rec + ENGINE_BATTLEFIELD_ENTITY_OFFSET_X)     = (int16_t)x;
+    *(int16_t *)(rec + ENGINE_BATTLEFIELD_ENTITY_OFFSET_Y)     = (int16_t)y;
+    rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_ALIVE]                = alive;
+    rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_TYPE]                 = type;
+    rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_FACING]               = facing;
+    rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_ANIM_FRAME]           = anim_frame;
+    rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_SUBTYPE]              = subtype;
+    rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_PRIMARY_FRAME]        = primary_frame;
+
+    /* Store blob as a host-width pointer (matches the port's read
+     * shape — see ENGINE_BATTLEFIELD_ENTITY_OFFSET_PRIMARY_BLOB docs). */
+    memcpy(rec + ENGINE_BATTLEFIELD_ENTITY_OFFSET_PRIMARY_BLOB,
+           &blob, sizeof blob);
+}
+
+/* Scaffold for chip 5a.ii.b: one entity at (3, 3), camera (2, 2),
+ * 3×3 visible grid, zoom 16, anim tables bound, generous clip rect.
+ *
+ * Crucial: UNBIND the canvas (gfx_paint_bind_canvas(NULL, ...)) so the
+ * RLE blitter's `if (!dst) return;` prologue makes the actual blit a
+ * no-op.  Without that, the inner blit walks the (zero-initialised)
+ * RLE stream — which would be an infinite read of 0x00 opcodes with
+ * zero skip counts.  We don't want to write a valid RLE stream for
+ * every test, since we're only testing the body's CONTROL FLOW around
+ * the blit (which the blit_count + the dirty-mark coords already
+ * capture without needing real pixel output). */
+static void perentity_scaffold(int zoom)
+{
+    middle_scaffold(/*cols=*/3, /*rows=*/3);
+    engine_battlefield_render_set_zoom(zoom);
+
+    /* Unbind the canvas inherited from terrain-pass tests. */
+    gfx_paint_bind_canvas(NULL, 0, 0);
+
+    /* Zero blob/anim tables; populate one default slot for slot=1. */
+    memset(g_entity_blob, 0, sizeof g_entity_blob);
+    blob_set_header(g_entity_blob, /*slot=*/1,
+                    /*w=*/16, /*h=*/16, /*src_off=*/0x100);
+
+    memset(g_anim_z16, 0, sizeof g_anim_z16);
+    memset(g_anim_z32, 0, sizeof g_anim_z32);
+    engine_battlefield_render_bind_anim_offset_tables(g_anim_z16, g_anim_z32);
+
+    /* Generous clip rect so y_clip_mode resolves to 0 (blit reachable). */
+    engine_battlefield_render_bind_clip_rect(/*left=*/-1000, /*top=*/-1000,
+                                             /*right=*/2000, /*bottom=*/2000);
+
+    /* No dirty state — body skips the dirty mark by default; tests
+     * that observe the mark bind their own state. */
+    engine_battlefield_render_set_dirty_state(NULL);
+
+    bind_entities(/*max_id=*/4);
+}
+
+/* Type-6 entity triggers the PRE-call stub.  Fires regardless of blob
+ * or glyph-offset gates. */
+int test_engine_battlefield_render_per_entity_type6_pre_call(void)
+{
+    perentity_scaffold(/*zoom=*/0x10);
+    entity_set_body(1, /*x=*/3, /*y=*/3, /*alive=*/1,
+                    /*type=*/6, /*facing=*/0, /*anim_frame=*/0,
+                    /*subtype=*/0,
+                    g_entity_blob, /*primary_frame=*/1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_count(),     1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type6_count(),   1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type6_last_id(), 1);
+    return 0;
+}
+
+/* Type-7 entity triggers POST-call stub.  Gated by the same
+ * glyph-offset window as the main draw. */
+int test_engine_battlefield_render_per_entity_type7_post_call(void)
+{
+    perentity_scaffold(/*zoom=*/0x10);
+    entity_set_body(1, 3, 3, 1, /*type=*/7, 0, 0, 0,
+                    g_entity_blob, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type7_count(),   1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type7_last_id(), 1);
+    /* Type-7's box uses 9×9 (type >= 7).  Verified by dirty-rect test. */
+    return 0;
+}
+
+/* Type-9 with subtype 0x0e triggers POST-call stub. */
+int test_engine_battlefield_render_per_entity_type9_sub_e_post_call(void)
+{
+    perentity_scaffold(/*zoom=*/0x10);
+    entity_set_body(1, 3, 3, 1, /*type=*/9, 0, 0, /*subtype=*/0x0e,
+                    g_entity_blob, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type9_sub_count(),   1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type9_sub_last_id(), 1);
+    return 0;
+}
+
+/* Type-9 with subtype != 0x0e does NOT trigger the subtype post-call. */
+int test_engine_battlefield_render_per_entity_type9_other_subtype(void)
+{
+    perentity_scaffold(/*zoom=*/0x10);
+    entity_set_body(1, 3, 3, 1, /*type=*/9, 0, 0, /*subtype=*/0x05,
+                    g_entity_blob, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_count(),       1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type9_sub_count(), 0);
+    return 0;
+}
+
+/* NULL primary blob: type-6 PRE-call STILL fires (it's above the
+ * no-blob check), but the main draw and type-7/9 post-calls are
+ * skipped.  No-blob counter bumps. */
+int test_engine_battlefield_render_per_entity_no_blob_path(void)
+{
+    perentity_scaffold(/*zoom=*/0x10);
+    /* Type 6 + NULL blob.  Pass NULL via blob arg → primary blob
+     * field is 0. */
+    entity_set_body(1, 3, 3, 1, /*type=*/6, 0, 0, 0,
+                    /*blob=*/NULL, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_count(),     1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type6_count(),   1);  /* fires */
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_no_blob_count(), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_no_blob_last_id(), 1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_blit_count(),    0);
+    return 0;
+}
+
+/* NULL blob path also skips type-7 POST-call.  Set type 7 but NULL
+ * blob → type7 stub does NOT fire. */
+int test_engine_battlefield_render_per_entity_no_blob_skips_type7(void)
+{
+    perentity_scaffold(/*zoom=*/0x10);
+    entity_set_body(1, 3, 3, 1, /*type=*/7, 0, 0, 0, NULL, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type7_count(),   0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_no_blob_count(), 1);
+    return 0;
+}
+
+/* Glyph-offset gate: src_off outside [1, 0x4baf0] aborts the drawing
+ * block — main draw doesn't dispatch and type-7/9 post-calls don't
+ * fire.  Type-6 already fired above the gate. */
+int test_engine_battlefield_render_per_entity_glyph_offset_gate_zero(void)
+{
+    perentity_scaffold(/*zoom=*/0x10);
+    /* src_off = 0 → out-of-band (gate is `0 < off && off <= 0x4baf0`). */
+    blob_set_header(g_entity_blob, /*slot=*/1,
+                    16, 16, /*src_off=*/0);
+    entity_set_body(1, 3, 3, 1, /*type=*/7, 0, 0, 0,
+                    g_entity_blob, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_count(),   1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_blit_count(),  0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type7_count(), 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_per_entity_glyph_offset_gate_high(void)
+{
+    perentity_scaffold(/*zoom=*/0x10);
+    /* src_off = 0x4baf1 → just past the upper inclusive bound (0x4baf0). */
+    blob_set_header(g_entity_blob, /*slot=*/1,
+                    16, 16, /*src_off=*/0x4baf1);
+    entity_set_body(1, 3, 3, 1, /*type=*/9, 0, 0, /*subtype=*/0x0e,
+                    g_entity_blob, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_blit_count(),      0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type9_sub_count(), 0);
+    return 0;
+}
+
+/* Helper: initialise a fresh dirty-rect state with extreme bounds so
+ * any input widens them (mirrors the pattern in test_engine_dirty_rect). */
+static void dirty_reset(engine_dirty_rect_state_t *s)
+{
+    s->dirty_mark           = 0;
+    s->dirty_xmin           = 0x7fff;
+    s->dirty_xmax           = -0x7fff;
+    s->dirty_ymin           = 0x7fff;
+    s->dirty_ymax           = -0x7fff;
+    s->below_status_redraw  = 0;
+}
+
+/* Anim-offset application at zoom 16.  Entity (facing=0, frame=0)
+ * with anim offset (10, 20).  Sprite width 16.  Expected adjusted
+ * cursor:
+ *   entry_x + 10 + (8 - 16/2) = entry_x + 10 + 0  = entry_x + 10
+ *   entry_y + 20 - 16/2 + 4   = entry_y + 20 - 4  = entry_y + 16
+ *
+ * Entity at (3, 3), camera (2, 2), zoom 16, viewport (0, 0):
+ *   entry cursor = (16, 16) → adjusted cursor = (26, 32).
+ *
+ * We can't read the cursor back directly (the body restores entry
+ * cursor before returning), but we can verify:
+ *   - dirty_mark widens (some mark happened).
+ *   - blit_count bumped (RLE dispatch reached past the gates). */
+int test_engine_battlefield_render_per_entity_anim_offset_zoom16(void)
+{
+    perentity_scaffold(/*zoom=*/0x10);
+    anim_table_set(g_anim_z16, /*facing=*/0, /*frame=*/0,
+                   /*x_off=*/10, /*y_off=*/20);
+
+    engine_dirty_rect_state_t dirty;
+    dirty_reset(&dirty);
+    engine_battlefield_render_set_dirty_state(&dirty);
+
+    entity_set_body(1, 3, 3, 1, /*type=*/0, /*facing=*/0,
+                    /*anim_frame=*/0, /*subtype=*/0,
+                    g_entity_blob, /*primary_frame=*/1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    /* Dirty box: type < 7 → 5×5 cells (5 tiles each side, 16 px per
+     * tile).  Box top-left = (26, 32) (the adjusted cursor); the
+     * expand call records (x1, y1, x2, y2) where x2 = 26 + 5*16 = 106,
+     * y2 = 32 + 5*16 = 112.  Force-full flag (=2) escalates dirty_mark
+     * past the default 1. */
+    T_ASSERT_EQ_I(dirty.dirty_mark, 2);
+    T_ASSERT_EQ_I(dirty.dirty_xmin, 26);
+    T_ASSERT_EQ_I(dirty.dirty_ymin, 32);
+    T_ASSERT_EQ_I(dirty.dirty_xmax, 106);
+    T_ASSERT_EQ_I(dirty.dirty_ymax, 112);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_blit_count(), 1);
+    return 0;
+}
+
+/* Anim-offset application at zoom 32.  Centering uses 16 (zoom_32 /
+ * 2) and Y bonus 8 (vs 4 for zoom 16). */
+int test_engine_battlefield_render_per_entity_anim_offset_zoom32(void)
+{
+    perentity_scaffold(/*zoom=*/0x20);
+    anim_table_set(g_anim_z32, /*facing=*/0, /*frame=*/0,
+                   /*x_off=*/3, /*y_off=*/5);
+
+    engine_dirty_rect_state_t dirty;
+    dirty_reset(&dirty);
+    engine_battlefield_render_set_dirty_state(&dirty);
+
+    /* Entity at (3, 3), camera (2, 2), zoom 32, viewport (0, 0):
+     *   entry cursor = (32, 32).  Sprite w=16, h=16.
+     *   off_x = 3 + (16 - 16/2) = 3 + 8  = 11
+     *   off_y = 5 - 16/2 + 8   = 5 - 0   = 5
+     * adjusted cursor = (43, 37). */
+    entity_set_body(1, 3, 3, 1, /*type=*/0, /*facing=*/0,
+                    /*anim_frame=*/0, /*subtype=*/0,
+                    g_entity_blob, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(dirty.dirty_mark, 2);
+    T_ASSERT_EQ_I(dirty.dirty_xmin, 43);
+    T_ASSERT_EQ_I(dirty.dirty_ymin, 37);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_blit_count(), 1);
+    return 0;
+}
+
+/* Type-9 +12 Y bonus AFTER anim offset, at zoom 16.  Entity:
+ *   entry cursor = (16, 16).  Anim offset (0, 0) so:
+ *     post-anim: (0 + (8 - 16/2), 0 - 16/2 + 4) = (0, -4).
+ *     cursor after anim = (16, 12).
+ *   Type-9 bonus: cursor_y += 12 → (16, 24). */
+int test_engine_battlefield_render_per_entity_type9_y_bonus(void)
+{
+    perentity_scaffold(/*zoom=*/0x10);
+
+    engine_dirty_rect_state_t dirty;
+    dirty_reset(&dirty);
+    engine_battlefield_render_set_dirty_state(&dirty);
+
+    /* Type 9 with subtype != 0xe so the subtype-e post-call doesn't
+     * fire — keeps test focused on the Y bonus. */
+    entity_set_body(1, 3, 3, 1, /*type=*/9, /*facing=*/0,
+                    /*anim_frame=*/0, /*subtype=*/0,
+                    g_entity_blob, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    /* Dirty x stays at 16 (no X bonus); dirty y picks up +12 → 24. */
+    T_ASSERT_EQ_I(dirty.dirty_xmin, 16);
+    T_ASSERT_EQ_I(dirty.dirty_ymin, 24);
+    /* Type 9 ≥ 7 → 9×9 cell box. xmax = 16 + 9*16 = 160; ymax = 24 + 9*16 = 168. */
+    T_ASSERT_EQ_I(dirty.dirty_xmax, 160);
+    T_ASSERT_EQ_I(dirty.dirty_ymax, 168);
+    return 0;
+}
+
+/* Type-10 +8 Y bonus AFTER anim offset. */
+int test_engine_battlefield_render_per_entity_type10_y_bonus(void)
+{
+    perentity_scaffold(/*zoom=*/0x10);
+
+    engine_dirty_rect_state_t dirty;
+    dirty_reset(&dirty);
+    engine_battlefield_render_set_dirty_state(&dirty);
+
+    entity_set_body(1, 3, 3, 1, /*type=*/10, /*facing=*/0,
+                    /*anim_frame=*/0, /*subtype=*/0,
+                    g_entity_blob, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    /* Same arithmetic as type-9 but +8 instead of +12. */
+    T_ASSERT_EQ_I(dirty.dirty_xmin, 16);
+    T_ASSERT_EQ_I(dirty.dirty_ymin, 20);
+    /* Type 10 ≥ 7 → 9×9 box. */
+    T_ASSERT_EQ_I(dirty.dirty_xmax, 160);
+    T_ASSERT_EQ_I(dirty.dirty_ymax, 164);
+    return 0;
+}
+
+/* Dirty box uses 5×5 cells when entity type < 7, 9×9 when ≥ 7. */
+int test_engine_battlefield_render_per_entity_box_5x5_vs_9x9(void)
+{
+    perentity_scaffold(/*zoom=*/0x10);
+
+    engine_dirty_rect_state_t dirty;
+    dirty_reset(&dirty);
+    engine_battlefield_render_set_dirty_state(&dirty);
+
+    /* type = 0 < 7 → 5×5 box.  Adjusted cursor (zoom 16, anim table
+     * all zeros, sprite w=h=16):
+     *   off_x = 0 + (8 - 16/2) = 0
+     *   off_y = 0 - 16/2 + 4   = -4
+     * → adjusted cursor (16, 12), 5×5 box → (16, 12)..(96, 92). */
+    entity_set_body(1, 3, 3, 1, /*type=*/0, 0, 0, 0,
+                    g_entity_blob, 1);
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(dirty.dirty_xmax, 16 + 5 * 16);  /* 96  */
+    T_ASSERT_EQ_I(dirty.dirty_ymax, 12 + 5 * 16);  /* 92  */
+
+    /* Now type = 8 ≥ 7 → 9×9 box.  No type-9/10 Y bonus, so adjusted
+     * cursor stays at (16, 12); box covers (16, 12)..(160, 156). */
+    engine_battlefield_render_reset_counts();
+    dirty_reset(&dirty);
+    entity_set_body(1, 3, 3, 1, /*type=*/8, 0, 0, 0,
+                    g_entity_blob, 1);
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(dirty.dirty_xmax, 16 + 9 * 16);  /* 160 */
+    T_ASSERT_EQ_I(dirty.dirty_ymax, 12 + 9 * 16);  /* 156 */
+    return 0;
+}
+
+/* Unsupported zoom (not 0x10 / 0x20): per-entity body STILL runs (so
+ * blit_count bumps), but anim offsets stay at 0.  Retail reads
+ * uninitialized locals here; the port initializes to 0 for safety —
+ * the game never exercises this path so the behavior diff is
+ * unobservable in the original. */
+int test_engine_battlefield_render_per_entity_unsupported_zoom(void)
+{
+    perentity_scaffold(/*zoom=*/99);
+    /* Even though the frame driver would skip the terrain/overlay
+     * passes at zoom != 0x10/0x20, the middle pass runs unconditionally
+     * (see chip 5a.i). */
+    entity_set_body(1, 3, 3, 1, /*type=*/0, /*facing=*/0,
+                    /*anim_frame=*/0, /*subtype=*/0,
+                    g_entity_blob, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    /* The cell counter loops at zoom 99 still advance by zoom (=99)
+     * per cell, but they don't crash. */
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_blit_count(), 1);
+    return 0;
+}
+
+/* Cursor restored after the per-entity draw — the next entity in
+ * the sorted list sees the render-loop's staged anchor, not the
+ * previous entity's post-adjust cursor.  Verify with two entities. */
+int test_engine_battlefield_render_per_entity_cursor_restored(void)
+{
+    perentity_scaffold(/*zoom=*/0x10);
+    anim_table_set(g_anim_z16, /*facing=*/0, /*frame=*/0,
+                   /*x_off=*/100, /*y_off=*/100);
+
+    /* Two entities: id=1 at (2, 3), id=2 at (3, 4).  Sort by y →
+     * id=1 first, id=2 second.  Second entity's last_px_x/y is the
+     * render-loop-staged anchor (3-2)*16 + 0 = 16, (4-2)*16 + 0 = 32. */
+    entity_set_body(1, /*x=*/2, /*y=*/3, 1, /*type=*/0, /*facing=*/0,
+                    /*anim_frame=*/0, 0, g_entity_blob, 1);
+    entity_set_body(2, /*x=*/3, /*y=*/4, 1, /*type=*/0, /*facing=*/0,
+                    /*anim_frame=*/0, 0, g_entity_blob, 1);
+
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_count(),    2);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_last_id(),  2);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_last_px_x(), 16);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_per_entity_last_px_y(), 32);
+    return 0;
+}
+
+/* Reset clears the new state too. */
+int test_engine_battlefield_render_per_entity_reset_clears_new_state(void)
+{
+    perentity_scaffold(/*zoom=*/0x10);
+    entity_set_body(1, 3, 3, 1, /*type=*/6, 0, 0, 0,
+                    g_entity_blob, 1);
+    entity_set_body(2, 3, 3, 1, /*type=*/7, 0, 0, 0,
+                    g_entity_blob, 1);
+    run_middle_only(/*cam=*/2, 2);
+
+    T_ASSERT(engine_battlefield_render_middle_entity_type6_count() > 0);
+    T_ASSERT(engine_battlefield_render_middle_entity_type7_count() > 0);
+
+    engine_battlefield_render_reset_counts();
+
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type6_count(),       0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type6_last_id(),    -1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type7_count(),       0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type7_last_id(),    -1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type9_sub_count(),   0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_type9_sub_last_id(),-1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_no_blob_count(),     0);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_no_blob_last_id(),  -1);
+    T_ASSERT_EQ_I(engine_battlefield_render_middle_entity_blit_count(),        0);
+    return 0;
+}
+
+/* ────────────────────────────────────────────────────────────────
  * Coordinate helpers — ports of FUN_004bc222 / 2a5 / 2c5 / 2e5 / 346.
  *
  * Scaffold sets a 10×5 visible grid at viewport (100, 50), zoom 32,

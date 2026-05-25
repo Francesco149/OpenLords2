@@ -3128,6 +3128,126 @@ under the cap.
 
 ---
 
+## 87. Battlefield per-entity draw type-6 PRE-call fires even when blob is NULL
+
+The per-entity draw `FUN_004bdc31` (chip 5a.ii.b) has a strict
+top-to-bottom order:
+
+```c
+if (entity[+0x12] == 6) FUN_004be4df(id);    // pre-call (TYPE-6)
+
+blob = entity[+0x00];
+if (blob == 0) {
+    FUN_004afab9(...);                       // log "no blob"
+    return;                                   // <— skips type-7/9 too
+}
+... main draw, post-calls ...
+```
+
+The type-6 PRE-call is **outside** the no-blob gate.  An entity of
+type 6 with a NULL primary sprite blob still gets `FUN_004be4df`
+called — only the main draw + type-7 + type-9-subtype-0xe post-calls
+are skipped.
+
+Why this matters: `FUN_004be4df` is the SECONDARY draw (likely a
+shadow / ground decal for type-6 units).  It uses a DIFFERENT blob
+field (`entity[+0x04]`, the secondary blob), so even when the primary
+blob is missing the secondary can still render.  Treating the
+PRE-call as part of the main-draw gate would silently lose shadows
+for entities whose primary asset failed to load.
+
+The type-7 / type-9-subtype-0xe POST-calls are different — they sit
+**inside** the glyph-offset gate AND inside the no-blob else branch,
+so an out-of-band glyph offset OR a missing primary blob suppresses
+all three.  The asymmetry between PRE-call (loose gate) and POST-calls
+(strict gates) is consistent: secondary draws survive primary
+failures; type-specific overlays only fire when the primary draw
+succeeded.
+
+> 📍 `src/engine_battlefield_render.c` (`middle_leaf_draw_entity`),
+> `docs/findings/battlefield-render.md` §5a.ii.b,
+> Ghidra `FUN_004bdc31` lines 11-14.
+
+---
+
+## 88. Battlefield per-entity draw reads uninitialised stack at unsupported zoom
+
+`FUN_004bdc31` (chip 5a.ii.b) selects the per-entity animation-offset
+table based on zoom:
+
+```c
+if (DAT_004e656c == 0x20) {
+    local_1c = ...DAT_004e4030[facing*0x88 + frame*8]...;
+    local_24 = ...DAT_004e4034[facing*0x88 + frame*8]...;
+} else if (DAT_004e656c == 0x10) {
+    local_1c = ...DAT_004e3bf0[facing*0x88 + frame*8]...;
+    local_24 = ...DAT_004e3bf4[facing*0x88 + frame*8]...;
+}
+DAT_00591524 = DAT_00591524 + local_1c;   // <— uses local_1c
+DAT_00591528 = DAT_00591528 + local_24;   // <— uses local_24
+```
+
+There is NO else arm — if `DAT_004e656c` is neither `0x10` nor `0x20`,
+both `local_1c` and `local_24` are READ uninitialised on the stack.
+The 1996 MSVC codegen leaves them as whatever the calling convention
+junk happens to be, and the cursor is then shifted by garbage.
+
+Why this is unreachable in retail: the frame driver's terrain /
+overlay pass dispatch ALSO has no else arm on the same zoom check —
+unsupported zooms skip both passes.  The game never sets zoom to
+anything but `0x10` or `0x20`.  But the middle pass dispatches
+unconditionally on zoom, so this gate is technically alive.
+
+The port initialises both offsets to 0 in the missing-else arm.
+Deterministic behaviour at unsupported zoom; observationally
+equivalent in retail because the unsupported-zoom path doesn't
+exist.
+
+> 📍 `src/engine_battlefield_render.c` (`middle_leaf_draw_entity` — the
+> `g_zoom == 0x20 / 0x10` chain), `docs/findings/battlefield-render.md`
+> §5a.ii.b, Ghidra `FUN_004bdc31` lines 21-39.
+
+---
+
+## 89. Battlefield per-entity dirty-rect box size threshold uses entity type, not sprite size
+
+`FUN_004bdc31` (chip 5a.ii.b) marks a dirty box AFTER applying the
+anim-offset + type-9/type-10 Y bonus but BEFORE dispatching the blit.
+Box size is picked by entity TYPE, not sprite dimensions:
+
+```c
+if ((byte)(&DAT_00554492)[id*0x1b0] < 7) {
+    FUN_004527a6(cursor_x, cursor_y, 5, 5, 2);   // 5×5 tile box
+} else {
+    FUN_004527a6(cursor_x, cursor_y, 9, 9, 2);   // 9×9 tile box
+}
+```
+
+The 5×5 box covers 80×80 pixels (5 tiles × 16 px); the 9×9 box
+covers 144×144 pixels.  Types 0..6 (units?) get 5×5; types ≥ 7
+(heroes / siege engines / larger entities) get 9×9.
+
+A few subtle properties:
+
+- The box size is hardcoded.  Sprites of varying actual size all
+  trigger the same dirty extent — over-marking is preferred over
+  under-marking (the blit might write outside the 5×5 box and still
+  be safely re-painted next frame because the box is conservative).
+- The escalation flag is `2` (forces full-repaint behaviour), not
+  the default `1`.  An entity's per-frame mark always escalates
+  `dirty_mark` to 2 — even if the rest of the frame only marked at
+  level 1.
+- The box is anchored at the FULLY-ADJUSTED cursor (anim offset +
+  type-9/10 Y bonus applied), NOT at the entity's hex-aligned
+  anchor.  Off-by-one bugs in anim tables would shift the box
+  accordingly.
+
+> 📍 `src/engine_battlefield_render.c` (`middle_leaf_draw_entity`),
+> `docs/findings/battlefield-render.md` §5a.ii.b,
+> Ghidra `FUN_004bdc31` lines 47-52.
+
+---
+
 <!--
 Template for new entries:
 

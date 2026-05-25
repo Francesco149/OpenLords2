@@ -8,12 +8,14 @@
 
 #include "engine_battlefield_render.h"
 
+#include "engine_dirty_rect.h"
 #include "gfx_dispatch.h"
 #include "gfx_glyph.h"
 #include "gfx_sprite.h"
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 /* ──────────────────────────────────────────────────────────────────
  * Module state — retail globals owned by this cluster.
@@ -144,13 +146,44 @@ static int16_t g_visible_entity_y [VISIBLE_ENTITY_CAPACITY];
 static int     g_visible_entity_count;          /* DAT_004e5d38 */
 static int     g_middle_sort_passes;            /* _DAT_004e655c */
 
-/* Per-entity draw stub capture (chip 5a.ii.a — replaced in chip 5a.ii.b
- * with the real FUN_004bdc31 body).  Tracks how many entities the
- * render-loop dispatched and the last entity's (id, px_x, px_y). */
+/* Per-entity draw capture (chip 5a.ii.a + 5a.ii.b).  After chip
+ * 5a.ii.b the per-entity draw is a real port; these counters stay as
+ * cross-check state.  `last_px_x` / `last_px_y` capture the ENTRY
+ * cursor — i.e. the value the render loop staged, before the per-entity
+ * draw applies any anim-offset / type-9-Y / clip adjustments. */
 static int g_middle_per_entity_count;
 static int g_middle_per_entity_last_id     = -1;
 static int g_middle_per_entity_last_px_x   = 0;
 static int g_middle_per_entity_last_px_y   = 0;
+
+/* Per-entity blit-dispatch counter (chip 5a.ii.b).  Bumped each time
+ * the body actually calls gfx_dispatch_dispatch_sprite_rle (after
+ * the glyph-offset gate + the y_clip_mode != 5 gate). */
+static int g_middle_entity_blit_count;
+
+/* Per-entity TYPE-SPECIAL stubs (chip 5a.ii.b).  Each captures a count
+ * and the last entity id passed.  Chip 5a.iv ports the real bodies. */
+static int g_middle_entity_type6_count;
+static int g_middle_entity_type6_last_id = -1;
+static int g_middle_entity_type7_count;
+static int g_middle_entity_type7_last_id = -1;
+static int g_middle_entity_type9_sub_count;
+static int g_middle_entity_type9_sub_last_id = -1;
+
+/* No-blob counter (chip 5a.ii.b).  Entities with NULL primary sprite
+ * blob skip the main draw body.  Retail logs via FUN_004afab9 — we
+ * count instead. */
+static int g_middle_entity_no_blob_count;
+static int g_middle_entity_no_blob_last_id = -1;
+
+/* Anim-offset tables (chip 5a.ii.b).  Retail DAT_004e3bf0 (z16),
+ * DAT_004e4030 (z32). */
+static const uint8_t *g_anim_table_z16;
+static const uint8_t *g_anim_table_z32;
+
+/* Dirty-rect state (chip 5a.ii.b).  NULL ⇒ skip the per-entity 5×5 /
+ * 9×9 box mark. */
+static engine_dirty_rect_state_t *g_dirty_state;
 
 /* Per-pass call counters.  See the header for what each one
  * represents.  All seven pass entry points (5 stubs + 1 real no-op
@@ -232,6 +265,18 @@ void engine_battlefield_render_bind_entity_table(uint8_t *base, int stride, int 
     g_entity_max_id = max_id;
 }
 
+void engine_battlefield_render_bind_anim_offset_tables(const uint8_t *z16,
+                                                       const uint8_t *z32)
+{
+    g_anim_table_z16 = z16;
+    g_anim_table_z32 = z32;
+}
+
+void engine_battlefield_render_set_dirty_state(engine_dirty_rect_state_t *state)
+{
+    g_dirty_state = state;
+}
+
 int engine_battlefield_render_terrain_blit_count(void)
 {
     return g_terrain_blit_count;
@@ -273,9 +318,11 @@ static void pass_final(void)            { g_count_final += 1; }
  * Middle-pass leaves.
  *
  * Six retail functions invoked by the middle pass driver.  As of chip
- * 5a.ii.a, build/sort/render are real ports; the per-entity draw
- * (FUN_004bdc31) is wired as a state-capture stub for chip 5a.ii.a
- * (chip 5a.ii.b ports its body); and the three per-cell draw leaves
+ * 5a.ii.b, build/sort/render AND the per-entity draw (FUN_004bdc31)
+ * are real ports.  The three TYPE-SPECIAL leaves dispatched FROM
+ * FUN_004bdc31 (FUN_004be4df type-6 pre-call, FUN_004be7be type-7
+ * post-call, FUN_004beab9 type-9-subtype-0xe post-call) remain
+ * counter-stubs for chip 5a.iv.  The three PER-CELL draw leaves
  * (FUN_004bd574 / FUN_004bd759 / FUN_004beed4) remain counter-stubs
  * for chip 5a.iii.
  *
@@ -284,18 +331,196 @@ static void pass_final(void)            { g_count_final += 1; }
  * the body processes.
  * ────────────────────────────────────────────────────────────────── */
 
-/* Per-entity draw stub (chip 5a.ii.a).  Replaces FUN_004bdc31 — when
- * chip 5a.ii.b lands, this function is replaced with the real port; the
- * stub-capture state stays as cross-check instrumentation.
- *
- * Captures the entity id and the staged cursor (gfx_glyph cursor_x/y)
- * at entry, so tests can verify the render loop's cursor computation. */
-static void middle_leaf_draw_entity_stub(int id)
+/* Per-entity TYPE-SPECIAL stubs (chip 5a.iv ports the real bodies). */
+static void entity_type6_pre_stub(int id)
 {
-    g_middle_per_entity_count   += 1;
-    g_middle_per_entity_last_id  = id;
-    g_middle_per_entity_last_px_x = gfx_glyph_cursor_x();
-    g_middle_per_entity_last_px_y = gfx_glyph_cursor_y();
+    g_middle_entity_type6_count   += 1;
+    g_middle_entity_type6_last_id  = id;
+}
+
+static void entity_type7_post_stub(int id)
+{
+    g_middle_entity_type7_count   += 1;
+    g_middle_entity_type7_last_id  = id;
+}
+
+static void entity_type9_subtype_e_post_stub(int id)
+{
+    g_middle_entity_type9_sub_count   += 1;
+    g_middle_entity_type9_sub_last_id  = id;
+}
+
+/* No-blob path stub.  Retail calls FUN_004afab9 (a debug logger) when
+ * an entity's primary blob is NULL; the port counts the call instead.
+ * The string at retail's 0x4e44f0 is presumably "<entity> has no
+ * sprite blob, type %d" or similar — irrelevant for behavioral
+ * fidelity. */
+static void entity_no_blob_stub(int id)
+{
+    g_middle_entity_no_blob_count   += 1;
+    g_middle_entity_no_blob_last_id  = id;
+}
+
+/* Read a 32-bit little-endian int from a byte table at the given byte
+ * offset.  memcpy is the strict-aliasing-safe path; on the host x86 it
+ * compiles to a single mov. */
+static int read_le32(const uint8_t *base, int byte_offset)
+{
+    int32_t v;
+    memcpy(&v, base + byte_offset, sizeof v);
+    return (int)v;
+}
+
+/* FUN_004bdc31 (1087 B) — per-entity draw (base path).
+ *
+ * Top-down shape:
+ *
+ *   1. If entity type == 6: type-6 PRE-call (stub for chip 5a.ii.b).
+ *   2. Save the entry cursor (this is also the value the render loop
+ *      staged + the value captured by g_middle_per_entity_last_px_*).
+ *   3. Read entity's primary sprite blob ptr.  If NULL: no-blob stub
+ *      and RETURN — skips both the main draw and the type-7 / type-9
+ *      post-calls.  Type-6 pre-call ALREADY fired above.
+ *   4. Stage sprite header from blob: (width, h_short, glyph_offset,
+ *      flag_a, row_count, flag_b) — same layout as terrain / overlay
+ *      passes.
+ *   5. Glyph-offset gate: `[1, 0x4baf0]` — out-of-band aborts the
+ *      whole drawing block, skipping the main draw AND the type-7 /
+ *      type-9 post-calls.  The type-6 pre-call still fired.
+ *   6. Anim-offset lookup based on zoom.  Reads (x_off, y_off) from
+ *      the bound anim table at offset `facing * 0x88 + frame * 8`,
+ *      using SIGNED 8-bit facing / frame indices from the entity
+ *      record.  Adds a sprite-width-based centering adjustment.  At
+ *      unsupported zoom levels (anything other than 0x10 / 0x20) the
+ *      offsets stay at 0 (deterministic — retail reads uninitialized
+ *      locals here, but the game never exercises this path).
+ *   7. Apply offsets to cursor.  Then type-9 Y bonus (+12) or type-10
+ *      Y bonus (+8) AFTER the anim offset — both bonuses are
+ *      zoom-independent.
+ *   8. Mark dirty rect: 5×5 cells for type < 7, 9×9 for type ≥ 7,
+ *      at the FULLY-ADJUSTED cursor.  Skipped if no dirty_state bound.
+ *   9. Set clip rect.  Dispatch RLE blit (with y_clip_mode != 5 gate
+ *      applied inside the dispatcher).
+ *  10. Restore the entry cursor (so subsequent entities draw at the
+ *      render-loop-computed anchor, not this entity's adjusted anchor).
+ *  11. Type-7 POST-call: if type == 7 (stub).
+ *  12. Type-9 + subtype-0x0e POST-call: if type == 9 AND
+ *      entity[+0x31] == 0x0e (stub). */
+static void middle_leaf_draw_entity(int id)
+{
+    g_middle_per_entity_count    += 1;
+    g_middle_per_entity_last_id   = id;
+    int entry_x = gfx_glyph_cursor_x();
+    int entry_y = gfx_glyph_cursor_y();
+    g_middle_per_entity_last_px_x = entry_x;
+    g_middle_per_entity_last_px_y = entry_y;
+
+    uint8_t *rec = g_entity_base + id * g_entity_stride;
+    uint8_t type = rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_TYPE];
+
+    /* (1) Type-6 PRE-call.  Fires regardless of blob / glyph-offset
+     * gates — it's outside both. */
+    if (type == 6) {
+        entity_type6_pre_stub(id);
+    }
+
+    /* (3) Primary blob lookup.  Read as a host-width pointer from the
+     * entity record's +0x00 field.  Retail's record is 32-bit and the
+     * field is a 32-bit pointer; on 64-bit hosts (where this code is
+     * tested) the field is 8 bytes — the entity stride (0x1b0) has
+     * plenty of slack for the extra 4 bytes.  NULL ⇒ stub + early
+     * return; the cursor wasn't modified yet so no restore is needed. */
+    const uint8_t *blob;
+    memcpy(&blob,
+           rec + ENGINE_BATTLEFIELD_ENTITY_OFFSET_PRIMARY_BLOB,
+           sizeof blob);
+    if (blob == NULL) {
+        entity_no_blob_stub(id);
+        return;
+    }
+
+    /* (4) Stage sprite header.  Matches the terrain / overlay
+     * dispatcher: 16-byte slot per sprite, header at slot + 8. */
+    uint8_t frame_idx = rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_PRIMARY_FRAME];
+    gfx_dispatch_set_last_glyph_index((int)frame_idx);
+    gfx_dispatch_stage_sprite_descriptor(blob, (int)frame_idx);
+
+    /* (5) Glyph-offset gate.  Both ends inclusive on the [1, 0x4baf0]
+     * band; out-of-band aborts the whole drawing block.  Type-6 fired
+     * above; type-7 / type-9 post-calls do NOT fire on this path. */
+    int glyph_off = gfx_glyph_glyph_offset();
+    if (glyph_off < 1 || glyph_off > 0x4baf0) {
+        return;
+    }
+
+    /* (6) Anim-offset lookup.  Facing and frame are SIGNED 8-bit
+     * values in retail (`(char)` cast in the decompile) — negative
+     * values index BACKWARDS into the anim table.  Preserve verbatim. */
+    int8_t facing = (int8_t)rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_FACING];
+    int8_t af     = (int8_t)rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_ANIM_FRAME];
+    int    sprite_w = gfx_glyph_glyph_w();
+    int    half_w   = sprite_w >> 1;
+
+    int off_x = 0;
+    int off_y = 0;
+    int entry_off = (int)facing * ENGINE_BATTLEFIELD_ANIM_FACING_STRIDE
+                  + (int)af     * ENGINE_BATTLEFIELD_ANIM_FRAME_STRIDE;
+    if (g_zoom == 0x20 && g_anim_table_z32) {
+        off_x = read_le32(g_anim_table_z32, entry_off + 0) + (16 - half_w);
+        off_y = read_le32(g_anim_table_z32, entry_off + 4) - half_w + 8;
+    } else if (g_zoom == 0x10 && g_anim_table_z16) {
+        off_x = read_le32(g_anim_table_z16, entry_off + 0) + (8  - half_w);
+        off_y = read_le32(g_anim_table_z16, entry_off + 4) - half_w + 4;
+    }
+    /* else: unsupported zoom or unbound table — offsets stay at 0. */
+
+    /* (7) Apply anim offsets + type-9 / type-10 Y bonus.  Bonuses
+     * are added AFTER the anim offset and are zoom-independent. */
+    int new_x = entry_x + off_x;
+    int new_y = entry_y + off_y;
+    if (type == 9) {
+        new_y += 0xc;
+    } else if (type == 10) {
+        new_y += 8;
+    }
+    gfx_glyph_set_cursor_x(new_x);
+    gfx_glyph_set_cursor_y(new_y);
+
+    /* (8) Dirty-rect mark: 5×5 for type < 7, 9×9 for type ≥ 7.
+     * Escalation flag = 2 (forces full-repaint behaviour in the dirty
+     * box helper). */
+    if (g_dirty_state) {
+        int box = (type < 7) ? 5 : 9;
+        engine_dirty_rect_mark_box_tiled(g_dirty_state,
+                                         new_x, new_y,
+                                         box, box,
+                                         /*force_full=*/2);
+    }
+
+    /* (9) Set clip + dispatch RLE blit. */
+    gfx_dispatch_clip_x(g_clip_left, g_clip_right);
+    gfx_dispatch_clip_y(g_clip_top,  g_clip_bottom);
+
+    /* Track whether the dispatcher actually blits (gated by
+     * y_clip_mode != 5 inside the helper). */
+    int y_mode_before = gfx_dispatch_clip_y_mode();
+    gfx_dispatch_dispatch_sprite_rle(blob);
+    if (y_mode_before != 5) {
+        g_middle_entity_blit_count += 1;
+    }
+
+    /* (10) Restore entry cursor. */
+    gfx_glyph_set_cursor_x(entry_x);
+    gfx_glyph_set_cursor_y(entry_y);
+
+    /* (11)/(12) Type-7 / type-9-subtype-0xe POST-calls. */
+    if (type == 7) {
+        entity_type7_post_stub(id);
+    }
+    if (type == 9
+        && rec[ENGINE_BATTLEFIELD_ENTITY_OFFSET_SUBTYPE] == 0x0e) {
+        entity_type9_subtype_e_post_stub(id);
+    }
 }
 
 /* FUN_004bd938 (346 B) — visible-entity list build.
@@ -452,7 +677,7 @@ static void middle_leaf_render_entity_list(void)
         gfx_glyph_set_cursor_x(px_x);
         gfx_glyph_set_cursor_y(px_y);
 
-        middle_leaf_draw_entity_stub(id);
+        middle_leaf_draw_entity(id);
     }
 }
 
@@ -1174,6 +1399,45 @@ int engine_battlefield_render_middle_per_entity_last_px_y(void)
     return g_middle_per_entity_last_px_y;
 }
 
+int engine_battlefield_render_middle_entity_type6_count(void)
+{
+    return g_middle_entity_type6_count;
+}
+int engine_battlefield_render_middle_entity_type6_last_id(void)
+{
+    return g_middle_entity_type6_last_id;
+}
+int engine_battlefield_render_middle_entity_type7_count(void)
+{
+    return g_middle_entity_type7_count;
+}
+int engine_battlefield_render_middle_entity_type7_last_id(void)
+{
+    return g_middle_entity_type7_last_id;
+}
+int engine_battlefield_render_middle_entity_type9_sub_count(void)
+{
+    return g_middle_entity_type9_sub_count;
+}
+int engine_battlefield_render_middle_entity_type9_sub_last_id(void)
+{
+    return g_middle_entity_type9_sub_last_id;
+}
+
+int engine_battlefield_render_middle_entity_no_blob_count(void)
+{
+    return g_middle_entity_no_blob_count;
+}
+int engine_battlefield_render_middle_entity_no_blob_last_id(void)
+{
+    return g_middle_entity_no_blob_last_id;
+}
+
+int engine_battlefield_render_middle_entity_blit_count(void)
+{
+    return g_middle_entity_blit_count;
+}
+
 int engine_battlefield_render_per_frame_cell_counter(void)
 {
     return g_per_frame_cell_counter;
@@ -1271,4 +1535,14 @@ void engine_battlefield_render_reset_counts(void)
     g_middle_per_entity_last_id        = -1;
     g_middle_per_entity_last_px_x      = 0;
     g_middle_per_entity_last_px_y      = 0;
+
+    g_middle_entity_blit_count         = 0;
+    g_middle_entity_type6_count        = 0;
+    g_middle_entity_type6_last_id      = -1;
+    g_middle_entity_type7_count        = 0;
+    g_middle_entity_type7_last_id      = -1;
+    g_middle_entity_type9_sub_count    = 0;
+    g_middle_entity_type9_sub_last_id  = -1;
+    g_middle_entity_no_blob_count      = 0;
+    g_middle_entity_no_blob_last_id    = -1;
 }

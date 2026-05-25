@@ -128,6 +128,8 @@
 
 #include <stdint.h>
 
+#include "engine_dirty_rect.h"
+
 /* ─────────────────────────────────────────────────────────────────
  * Bindings — install retail globals into this module's statics
  * ───────────────────────────────────────────────────────────────── */
@@ -257,8 +259,11 @@ void engine_battlefield_render_bind_cell_band_width(int band_width);
  *
  * Further fields (consumed by chip 5a.ii.b / FUN_004bdc31 port):
  *
- *   +0x00  int    primary sprite blob ptr (DAT_00554480)
- *   +0x04  int    secondary sprite blob ptr (DAT_00554484)
+ *   +0x00  void*  primary sprite blob ptr (DAT_00554480, 32-bit in
+ *                 retail; the port reads it as a host-width pointer so
+ *                 64-bit host tests can store real pointers).
+ *   +0x04  int    secondary sprite blob ptr (DAT_00554484; reserved
+ *                 for chip 5a.iv — FUN_004be4df type-6 secondary draw).
  *   +0x10  byte   primary sprite frame (DAT_00554490)
  *   +0x11  byte   secondary sprite frame (DAT_00554491)
  *   +0x12  byte   entity type (DAT_00554492)
@@ -289,6 +294,40 @@ void engine_battlefield_render_bind_entity_table(uint8_t *base,
 #define ENGINE_BATTLEFIELD_ENTITY_OFFSET_ALIVE           0x2c
 #define ENGINE_BATTLEFIELD_ENTITY_OFFSET_SUBTYPE         0x31
 #define ENGINE_BATTLEFIELD_ENTITY_OFFSET_ANIM_FRAME      0x32
+
+/* Bind the per-entity animation-offset lookup tables (chip 5a.ii.b).
+ *
+ *   z16  retail `DAT_004e3bf0`  — used at zoom 0x10.
+ *   z32  retail `DAT_004e4030`  — used at zoom 0x20.
+ *
+ * Both tables share the same layout:
+ *
+ *   entry(facing, frame) = base + facing * 0x88 + frame * 8
+ *
+ * Each entry is a little-endian (int x_off, int y_off) pair (8 bytes).
+ * Facing and frame are read as SIGNED 8-bit values from the entity
+ * record (`+0x18` facing, `+0x32` anim_frame) — negative values index
+ * BACKWARDS into the table (filed as the corresponding quirk on the
+ * 5a.ii.b dispatch).
+ *
+ * Per-facing capacity is 17 frames (0x88 / 8); per-table size is
+ * facings × 0x88.  Retail's tables hold 8 facings each, so 0x440 bytes
+ * per table (the two tables sit adjacent in retail).
+ *
+ * Either pointer may be NULL — entities are then drawn at their
+ * un-adjusted base anchor (no per-frame animation offset).  Tests
+ * that don't care about animation can pass NULL for both. */
+void engine_battlefield_render_bind_anim_offset_tables(const uint8_t *z16,
+                                                       const uint8_t *z32);
+
+/* Per-facing / per-frame strides for the anim-offset tables. */
+#define ENGINE_BATTLEFIELD_ANIM_FACING_STRIDE 0x88
+#define ENGINE_BATTLEFIELD_ANIM_FRAME_STRIDE  8
+
+/* Bind the dirty-rect state used by the per-entity draw (chip 5a.ii.b)
+ * for the per-entity 5×5 / 9×9 box mark (retail `FUN_004527a6` call).
+ * NULL ⇒ skip dirty-rect mark (rendering still happens). */
+void engine_battlefield_render_set_dirty_state(engine_dirty_rect_state_t *state);
 
 /* Bind the clip rect used by the zoom-32 pass's second-sprite-per-cell
  * path.  Retail passes these inline to FUN_0040464c / FUN_0040477b:
@@ -497,23 +536,70 @@ int engine_battlefield_render_visible_entity_y(int idx);
  * pass ran.  Capped at 500 by the safety guard. */
 int engine_battlefield_render_middle_sort_passes(void);
 
-/* Per-entity draw stub state (chip 5a.ii.a).  The per-entity render
- * loop (`FUN_004bdb95`) computes (px_x, px_y) from each visible entity's
- * hex coords and then dispatches the per-entity draw (`FUN_004bdc31`).
- * Chip 5a.ii.a wires that draw as a stub that:
+/* Per-entity draw cross-check instrumentation (chip 5a.ii.a +
+ * 5a.ii.b).  The per-entity render loop (`FUN_004bdb95`) computes
+ * (px_x, px_y) from each visible entity's hex coords and then
+ * dispatches the per-entity draw (`FUN_004bdc31`).  After chip 5a.ii.b,
+ * the per-entity draw is a real port, but the count + last-* capture
+ * stay as cross-check state:
  *
- *   - bumps `count` once per call;
- *   - records the entity id (`last_id`) and the staged cursor at entry
- *     (`last_px_x`, `last_px_y`).
+ *   count       — bumped once per call (once per visible entity per
+ *                 frame, regardless of which gates fire inside).
+ *   last_id     — entity id passed to the draw.
+ *   last_px_x,  — staged cursor at entry (the pre-anim-offset anchor
+ *   last_px_y     computed by the render loop).
  *
- * Tests use these to verify the render loop's cursor computation and
- * iteration order without depending on the real per-entity body.  Chip
- * 5a.ii.b replaces the stub with the real port; the count and last-*
- * accessors stay as cross-check instrumentation. */
+ * NOTE: as of chip 5a.ii.b, the per-entity draw applies an animation
+ * offset to the cursor and may apply a type-9/type-10 Y bonus before
+ * the actual blit.  The last_px_x / last_px_y values here capture the
+ * ENTRY cursor (the render loop's output), NOT the post-anim-offset
+ * value the blit uses.  Tests that want the post-adjust cursor must
+ * compute it themselves from the entity's facing/frame indices and
+ * the bound anim table. */
 int engine_battlefield_render_middle_per_entity_count(void);
 int engine_battlefield_render_middle_per_entity_last_id(void);
 int engine_battlefield_render_middle_per_entity_last_px_x(void);
 int engine_battlefield_render_middle_per_entity_last_px_y(void);
+
+/* Per-entity TYPE-SPECIAL stubs (chip 5a.ii.b).  The per-entity draw
+ * dispatches three type-special leaves at different points in its
+ * body:
+ *
+ *   type6  — FUN_004be4df, PRE-call before the main draw.  Fires
+ *            whenever entity[+0x12] == 6.  Likely a shadow/ground
+ *            effect that draws beneath the main sprite.
+ *   type7  — FUN_004be7be, POST-call after the main draw.  Fires
+ *            whenever entity[+0x12] == 7.  Gated by the same glyph-
+ *            offset check that gates the main draw body.
+ *   type9_sub_e — FUN_004beab9, POST-call after the main draw.  Fires
+ *                 when entity[+0x12] == 9 AND entity[+0x31] == 0x0e.
+ *                 Same glyph-offset gate.
+ *
+ * Each stub captures a counter + the last entity id passed.  When chip
+ * 5a.iv lands the three real ports, the counters stay as cross-check
+ * state. */
+int engine_battlefield_render_middle_entity_type6_count(void);
+int engine_battlefield_render_middle_entity_type6_last_id(void);
+int engine_battlefield_render_middle_entity_type7_count(void);
+int engine_battlefield_render_middle_entity_type7_last_id(void);
+int engine_battlefield_render_middle_entity_type9_sub_count(void);
+int engine_battlefield_render_middle_entity_type9_sub_last_id(void);
+
+/* No-primary-blob counter (chip 5a.ii.b).  When an entity's primary
+ * sprite blob pointer (+0x00) is NULL, retail logs via FUN_004afab9
+ * and skips the main draw (the type-7 / type-9 post-calls are also
+ * skipped, since they sit inside the no-blob else branch — but the
+ * type-6 PRE-call DOES fire before the no-blob check).  The port
+ * counts the no-blob path so tests can verify the gate. */
+int engine_battlefield_render_middle_entity_no_blob_count(void);
+int engine_battlefield_render_middle_entity_no_blob_last_id(void);
+
+/* Per-entity blit dispatch counter (chip 5a.ii.b).  Bumped each time
+ * the per-entity draw actually calls gfx_dispatch_dispatch_sprite_rle
+ * (i.e. after the glyph-offset gate, the y_clip_mode != 5 gate).  Not
+ * to be confused with `count`, which bumps once per entity dispatched
+ * (regardless of whether the blit fires). */
+int engine_battlefield_render_middle_entity_blit_count(void);
 
 /* The unit_key and effect_chain stubs each capture the LAST byte they
  * were called with — descriptor[+3] for unit_key, descriptor[+6] for

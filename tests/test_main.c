@@ -919,6 +919,23 @@ struct test_case {
     X(engine_battlefield_render_render_loop_noop_without_table) \
     X(engine_battlefield_render_sort_handles_full_buffer) \
     \
+    X(engine_battlefield_render_per_entity_type6_pre_call) \
+    X(engine_battlefield_render_per_entity_type7_post_call) \
+    X(engine_battlefield_render_per_entity_type9_sub_e_post_call) \
+    X(engine_battlefield_render_per_entity_type9_other_subtype) \
+    X(engine_battlefield_render_per_entity_no_blob_path) \
+    X(engine_battlefield_render_per_entity_no_blob_skips_type7) \
+    X(engine_battlefield_render_per_entity_glyph_offset_gate_zero) \
+    X(engine_battlefield_render_per_entity_glyph_offset_gate_high) \
+    X(engine_battlefield_render_per_entity_anim_offset_zoom16) \
+    X(engine_battlefield_render_per_entity_anim_offset_zoom32) \
+    X(engine_battlefield_render_per_entity_unsupported_zoom) \
+    X(engine_battlefield_render_per_entity_cursor_restored) \
+    X(engine_battlefield_render_per_entity_reset_clears_new_state) \
+    X(engine_battlefield_render_per_entity_type9_y_bonus) \
+    X(engine_battlefield_render_per_entity_type10_y_bonus) \
+    X(engine_battlefield_render_per_entity_box_5x5_vs_9x9) \
+    \
     X(engine_battlefield_render_screen_in_grid_inside) \
     X(engine_battlefield_render_screen_in_grid_outside) \
     X(engine_battlefield_render_pixel_to_col_basic) \
