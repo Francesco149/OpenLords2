@@ -752,6 +752,31 @@ struct test_case {
     X(engine_map_render_phase0_row_no_left_edge_when_col_start_zero) \
     X(engine_map_render_phase1_row_first_cell_phase_1) \
     X(engine_map_render_error_count_persists_across_frames) \
+    \
+    X(engine_overlay_render_frame_all_empty_no_calls) \
+    X(engine_overlay_render_dispatch_bit_0x40_calls_city) \
+    X(engine_overlay_render_dispatch_bit_0x80_calls_army) \
+    X(engine_overlay_render_dispatch_both_bits_calls_both) \
+    X(engine_overlay_render_dispatch_neither_bit_no_calls) \
+    X(engine_overlay_render_city_clears_bit_0x40_after_dispatch) \
+    X(engine_overlay_render_city_bad_src_offset_bumps_error) \
+    X(engine_overlay_render_city_size_based_sprite_when_no_large_select) \
+    X(engine_overlay_render_city_large_sprite_when_raw_flag_0x10) \
+    X(engine_overlay_render_city_large_sprite_when_raw_flag_0x40) \
+    X(engine_overlay_render_city_large_sprite_when_raw_flag_0x80_and_first_not_0x14) \
+    X(engine_overlay_render_city_size_when_raw_flag_0x80_and_first_is_0x14) \
+    X(engine_overlay_render_city_territory_cap_clamps_size_to_zero) \
+    X(engine_overlay_render_debug_text_mode_1_draws) \
+    X(engine_overlay_render_debug_text_mode_2_wins) \
+    X(engine_overlay_render_debug_text_no_dev_flags_no_call) \
+    X(engine_overlay_render_debug_text_phantom_rows_no_call) \
+    X(engine_overlay_render_debug_text_phase1_first_cell_no_call) \
+    X(engine_overlay_render_phase1_visits_col_count_plus_one_cells) \
+    X(engine_overlay_render_phase0_visits_col_count_cells) \
+    X(engine_overlay_render_view_mode_1_pre_clears_left_strip) \
+    X(engine_overlay_render_view_mode_0_no_pre_clear) \
+    X(engine_overlay_render_city_phase_1_x_anchor_shifted) \
+    X(engine_overlay_render_error_count_persists_across_frames) \
     /* end */
 
 /* Emit extern decls. */
