@@ -451,6 +451,18 @@ struct test_case {
     X(text_input_copy_out_empty_buf_writes_only_terminator) \
     X(text_input_insert_char_and_clamp_runs_post_insert_clamp) \
     X(text_input_insert_char_and_clamp_pixel_overflow_escalates) \
+    X(text_input_filtered_keypress_lowercase_passes) \
+    X(text_input_filtered_keypress_digit_passes) \
+    X(text_input_filtered_keypress_uppercase_passes_in_default_mode) \
+    X(text_input_filtered_keypress_uppercase_lowercased_in_name_mode) \
+    X(text_input_filtered_keypress_punctuation_passes_in_default_mode) \
+    X(text_input_filtered_keypress_punctuation_filtered_in_name_mode) \
+    X(text_input_filtered_keypress_hyphen_always_passes) \
+    X(text_input_filtered_keypress_space_always_passes) \
+    X(text_input_filtered_keypress_extended_byte_passes) \
+    X(text_input_filtered_keypress_e1_special_passes) \
+    X(text_input_filtered_keypress_unknown_byte_filtered) \
+    X(text_input_filtered_keypress_always_calls_clamp) \
     X(text_input_scenario_type_then_backspace) \
     \
     X(font_metrics_char_width_null_char_returns_zero) \

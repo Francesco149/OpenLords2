@@ -120,6 +120,44 @@ void text_input_insert_char_and_clamp(text_input_state_t *s, unsigned char c)
     text_input_clamp_cursor(s);
 }
 
+void text_input_filtered_keypress(text_input_state_t *s, unsigned char c)
+{
+    /* Mirrors retail's nested if/else-if chain.  Order matters only
+     * for the punctuation branches (which gate on init_mode_param). */
+    if (c == 0x20) {
+        text_input_insert_char(s, 0x20);
+    } else if (c == 0x2c && s->init_mode_param == 0) {
+        text_input_insert_char(s, 0x2c);
+    } else if (c == 0x2e && s->init_mode_param == 0) {
+        text_input_insert_char(s, 0x2e);
+    } else if (c == 0x3f && s->init_mode_param == 0) {
+        text_input_insert_char(s, 0x3f);
+    } else if (c == 0x21 && s->init_mode_param == 0) {
+        text_input_insert_char(s, 0x21);
+    } else if (c == 0x2d) {
+        text_input_insert_char(s, 0x2d);
+    } else if (c >= 0x30 && c <= 0x39) {
+        text_input_insert_char(s, c);
+    } else if (c >= 0x61 && c <= 0x7a) {
+        text_input_insert_char(s, c);
+    } else if (c >= 0x41 && c <= 0x5a) {
+        /* Uppercase: lowercase if in case-insensitive mode. */
+        unsigned char to_insert = c;
+        if (s->init_mode_param != 0) {
+            to_insert = (unsigned char)strutil_to_lower_char(c);
+        }
+        text_input_insert_char(s, to_insert);
+    } else if (c >= 0x80 && c <= 0x9a) {
+        text_input_insert_char(s, c);
+    } else if (c >= 0xa0 && c <= 0xa7) {
+        text_input_insert_char(s, c);
+    } else if (c == 0xe1) {
+        text_input_insert_char(s, 0xe1);
+    }
+    /* All other bytes are silently dropped. */
+    text_input_clamp_cursor(s);
+}
+
 void text_input_delete_char(text_input_state_t *s)
 {
     if (!s->enabled) {

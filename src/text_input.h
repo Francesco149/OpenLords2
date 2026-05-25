@@ -23,6 +23,7 @@
  *   FUN_00402009 @ 0x402009 (165 B)  → text_input_init
  *   FUN_0040210c @ 0x40210c  (90 B)  → text_input_copy_out
  *   FUN_00401c3f @ 0x401c3f  (28 B)  → text_input_insert_char_and_clamp
+ *   FUN_00401a20 @ 0x401a20 (543 B)  → text_input_filtered_keypress
  *
  * Thunks / aliases not exported:
  *
@@ -183,6 +184,38 @@ void text_input_insert_char(text_input_state_t *s, unsigned char c);
  * cursor is re-validated.  Used by callers that don't trust the
  * caller-side bookkeeping (e.g. paste-buffer flush). */
 void text_input_insert_char_and_clamp(text_input_state_t *s, unsigned char c);
+
+/* Port of FUN_00401a20 (543 B).  Filtered character dispatcher for
+ * keyboard events.  Classifies `c` and passes it through to
+ * insert_char if it's allowed in the current input mode, then runs
+ * clamp_cursor.
+ *
+ * Permissive set (always passes regardless of init_mode_param):
+ *   - 0x20 (space)
+ *   - 0x2d (hyphen-minus)
+ *   - 0x30..0x39 (ASCII digits)
+ *   - 0x41..0x5a (ASCII uppercase)
+ *   - 0x61..0x7a (ASCII lowercase)
+ *   - 0x80..0x9a (extended Latin / Code-page-437 range)
+ *   - 0xa0..0xa7 (more extended range)
+ *   - 0xe1 (specific extended char — sharp-s? germane to localized
+ *     names)
+ *
+ * Conditional set (passes only when init_mode_param == 0):
+ *   - 0x2c (comma)
+ *   - 0x2e (period)
+ *   - 0x3f (question mark)
+ *   - 0x21 (exclamation)
+ *
+ * Case folding: when init_mode_param != 0 AND c is in 0x41..0x5a
+ * (uppercase ASCII), the char is lowercased before insert
+ * (strutil_to_lower_char).  This implements the "case-insensitive"
+ * input mode used for player/save names — punctuation is
+ * suppressed and letters normalize to lowercase.
+ *
+ * All other bytes are silently filtered out (no insert).  Both
+ * branches end with clamp_cursor. */
+void text_input_filtered_keypress(text_input_state_t *s, unsigned char c);
 
 /* Port of FUN_00401dc8 (delete_char).  Guard: no-op if !enabled.
  * shift_left(buf+cursor, buf+length); then clamp_cursor.  Deletes

@@ -583,6 +583,134 @@ int test_text_input_insert_char_and_clamp_pixel_overflow_escalates(void) {
     return 0;
 }
 
+/* ──────────────────────────────────────────────────────────────────
+ * filtered_keypress — keypress classification & dispatch
+ * ────────────────────────────────────────────────────────────────── */
+
+int test_text_input_filtered_keypress_lowercase_passes(void) {
+    text_input_state_t s;
+    seed(&s, "", 100, 480);
+    s.insert_mode = 0;
+    text_input_filtered_keypress(&s, 'a');
+    T_ASSERT_EQ_I(s.buf[0], 'a');
+    return 0;
+}
+
+int test_text_input_filtered_keypress_digit_passes(void) {
+    text_input_state_t s;
+    seed(&s, "", 100, 480);
+    s.insert_mode = 0;
+    text_input_filtered_keypress(&s, '7');
+    T_ASSERT_EQ_I(s.buf[0], '7');
+    return 0;
+}
+
+int test_text_input_filtered_keypress_uppercase_passes_in_default_mode(void) {
+    /* init_mode_param == 0 (default mode): uppercase passes verbatim. */
+    text_input_state_t s;
+    seed(&s, "", 100, 480);
+    s.insert_mode = 0;
+    s.init_mode_param = 0;
+    text_input_filtered_keypress(&s, 'X');
+    T_ASSERT_EQ_I(s.buf[0], 'X');
+    return 0;
+}
+
+int test_text_input_filtered_keypress_uppercase_lowercased_in_name_mode(void) {
+    /* init_mode_param != 0: uppercase folded to lowercase. */
+    text_input_state_t s;
+    seed(&s, "", 100, 480);
+    s.insert_mode = 0;
+    s.init_mode_param = 1;
+    text_input_filtered_keypress(&s, 'X');
+    T_ASSERT_EQ_I(s.buf[0], 'x');
+    return 0;
+}
+
+int test_text_input_filtered_keypress_punctuation_passes_in_default_mode(void) {
+    /* init_mode_param == 0: comma/period/?/! pass. */
+    text_input_state_t s;
+    seed(&s, "", 100, 480);
+    s.insert_mode = 0;
+    s.init_mode_param = 0;
+    text_input_filtered_keypress(&s, '.');
+    T_ASSERT_EQ_I(s.buf[0], '.');
+    return 0;
+}
+
+int test_text_input_filtered_keypress_punctuation_filtered_in_name_mode(void) {
+    /* init_mode_param != 0: comma/period/?/! are silently dropped. */
+    text_input_state_t s;
+    seed(&s, "", 100, 480);
+    s.insert_mode = 0;
+    s.init_mode_param = 1;
+    text_input_filtered_keypress(&s, '.');
+    /* No insert; buf[0] still 0. */
+    T_ASSERT_EQ_I(s.buf[0], 0);
+    return 0;
+}
+
+int test_text_input_filtered_keypress_hyphen_always_passes(void) {
+    text_input_state_t s;
+    seed(&s, "", 100, 480);
+    s.insert_mode = 0;
+    s.init_mode_param = 1;        /* name mode */
+    text_input_filtered_keypress(&s, '-');
+    T_ASSERT_EQ_I(s.buf[0], '-');
+    return 0;
+}
+
+int test_text_input_filtered_keypress_space_always_passes(void) {
+    text_input_state_t s;
+    seed(&s, "", 100, 480);
+    s.insert_mode = 0;
+    s.init_mode_param = 1;
+    text_input_filtered_keypress(&s, ' ');
+    T_ASSERT_EQ_I(s.buf[0], ' ');
+    return 0;
+}
+
+int test_text_input_filtered_keypress_extended_byte_passes(void) {
+    text_input_state_t s;
+    seed(&s, "", 100, 480);
+    s.insert_mode = 0;
+    /* 0x90 is in the 0x80..0x9a extended range. */
+    text_input_filtered_keypress(&s, 0x90);
+    T_ASSERT_EQ_I((unsigned char)s.buf[0], 0x90);
+    return 0;
+}
+
+int test_text_input_filtered_keypress_e1_special_passes(void) {
+    text_input_state_t s;
+    seed(&s, "", 100, 480);
+    s.insert_mode = 0;
+    text_input_filtered_keypress(&s, 0xe1);
+    T_ASSERT_EQ_I((unsigned char)s.buf[0], 0xe1);
+    return 0;
+}
+
+int test_text_input_filtered_keypress_unknown_byte_filtered(void) {
+    /* Control char outside the allowed sets — silently dropped. */
+    text_input_state_t s;
+    seed(&s, "", 100, 480);
+    s.insert_mode = 0;
+    text_input_filtered_keypress(&s, 0x07);    /* BEL */
+    T_ASSERT_EQ_I(s.buf[0], 0);
+    return 0;
+}
+
+int test_text_input_filtered_keypress_always_calls_clamp(void) {
+    /* Even when no insert happens, the trailing clamp_cursor runs.
+     * Pre-corrupt clamp_state to verify the call. */
+    text_input_state_t s;
+    seed(&s, "abc", 100, 480);
+    s.insert_mode = 0;
+    s.clamp_state = 99;
+    text_input_filtered_keypress(&s, 0x07);    /* filtered */
+    T_ASSERT_EQ_I(s.clamp_state, 0);           /* clamp reset it */
+    return 0;
+}
+
 int test_text_input_scenario_type_then_backspace(void) {
     /* Simulate typing "HELP" with insert mode then backspacing twice. */
     text_input_state_t s;
