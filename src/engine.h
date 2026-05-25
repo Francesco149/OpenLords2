@@ -239,6 +239,108 @@ typedef struct {
 void engine_compute_scenario_hint(const engine_scenario_hint_in_t *in,
                                   engine_scenario_hint_out_t *out);
 
+/* ─── per-tick state hash (port of FUN_00440231) ───────────────────
+ *
+ * Computes a per-player 10-byte rolling "state hash" + a 600-byte
+ * per-record byte-hash region.  Called every engine tick by retail's
+ * per-tick driver as the input to the MP desync detector
+ * (FUN_00440dd2 compares bucket[0] / bucket[9] across players,
+ * setting a divergence latch on mismatch — that's how the engine
+ * notices simulation drift between MP peers).
+ *
+ * Hash kernel = `FUN_0044015a`: sum bytes of a record from a per-array
+ * offset to the end, return the low 8 bits.  The function selects
+ * three source arrays based on game mode (DAT_0057c8fc):
+ *
+ *   - strategic (mode==0): per-army-768 + player-strategic-352 +
+ *     per-territory-420  (slots 1..16, 1..5, 1..150)
+ *   - combat (mode==2):    per-battle-hex-432 + per-combat-unit-76 +
+ *     per-battle-hex-aux-52 (slots 1..80, 1..100, 1..80)
+ *   - any other mode:      neither branch runs (output is the post-
+ *     clear + post-bucket[7]=1 + post-bucket[9] state only)
+ *
+ * Layout of the 600-byte hash region (three 200-byte chunks):
+ *
+ *   [  0..199] — first  loop's per-slot hash bytes (slot N at index N)
+ *   [200..399] — second loop's per-slot hash bytes
+ *   [400..599] — third  loop's per-slot hash bytes
+ *
+ * `bucket[7] = 1` ALWAYS fires after the per-mode loops — so the
+ * combat-mode per_battle_hex_aux hash sum (accumulated in bucket[7]
+ * by the third combat loop) is OVERWRITTEN.  Preserved as a quirk.
+ *
+ * `bucket[0] = sum(bucket[1..8])` and `bucket[9] = (sim_tick_counter
+ * & 0x7f) + 1` fire unconditionally.
+ *
+ * Side-effect surface: combat mode (==2) tail calls FUN_0043f4b7
+ * (a snapshot/swap of three combat byte arrays into a malloc'd
+ * scratch).  Surfaced as `notify_combat_snapshot` flag; the orchestrator
+ * pins the snapshot-target pointer null retail-side so the memcpy
+ * branch stays dormant during diffs.
+ *
+ * Pure function — every input explicit, every state mutation in out.
+ * See engine_state_hash.c for the per-loop commentary and retail
+ * cross-references.
+ */
+typedef struct {
+    /* Game mode discriminator.  retail DAT_0057c8fc.
+     *   0 = strategic overworld
+     *   2 = tactical combat
+     *   any other value = neither hash branch runs
+     */
+    int      mode;
+
+    /* Per-player slot index (0..N) — selects which 10-byte bucket
+     * (at &DAT_00569530[player_slot*10]) and which 600-byte hash
+     * region (at &DAT_00565700[player_slot*600]) gets written.
+     * retail DAT_0057c8cc.  Slot 0 is the unused floor; slots 1..6
+     * carry per-player state in normal play. */
+    int      player_slot;
+
+    /* Sim tick counter — the low byte's low 7 bits +1 lands in
+     * bucket[9].  retail DAT_0057c998 (full u32 passed; the function
+     * truncates internally). */
+    uint32_t sim_tick_counter;
+
+    /* Strategic-mode source arrays (only read when mode == 0).  Each
+     * pointer is to slot 0; the function reads slots 1..N at the
+     * documented strides.  N specified inline below. */
+    const uint8_t *per_army_768;          /* 17 × 768  — slots 1..16  read; offset 5,  hash 763 B/slot */
+    const uint8_t *player_strategic_352;  /*  6 × 352  — slots 1..5   read; offset 6,  hash 346 B/slot */
+    const uint8_t *per_territory_420;     /* 151 × 420 — slots 1..150 read; offset 0,  hash 420 B/slot */
+
+    /* Combat-mode source arrays (only read when mode == 2). */
+    const uint8_t *per_battle_hex_432;    /* 81 × 432  — slots 1..80  read; offset 18, hash 414 B/slot */
+    const uint8_t *per_combat_unit_76;    /* 101 × 76  — slots 1..100 read; offset 4,  hash 72 B/slot  */
+    const uint8_t *per_battle_hex_aux_52; /* 81 × 52   — slots 1..80  read; offset 0,  hash 52 B/slot  */
+} engine_state_hash_in_t;
+
+typedef struct {
+    /* Post-call value of DAT_00569530[player_slot*10..player_slot*10+10].
+     *   [0]    = sum of buckets[1..8]
+     *   [1..3] = per-loop hash sums (strategic) or 0 (combat / other)
+     *   [4]    = always 0 (unused slot)
+     *   [5..6] = per-loop hash sums (combat) or 0 (strategic / other)
+     *   [7]    = always 1 (overwrites combat loop-3 hash sum)
+     *   [8]    = always 0 (unused slot)
+     *   [9]    = (sim_tick_counter & 0x7f) + 1
+     */
+    uint8_t  bucket[10];
+
+    /* Post-call value of DAT_00565700[player_slot*600..player_slot*600+600].
+     * Cleared at entry, then loop N writes hash bytes at indices 1..max_slot
+     * within its 200-byte chunk; other bytes stay 0. */
+    uint8_t  hash_region[600];
+
+    /* 1 iff mode == 2 (retail's combat-mode tail call to FUN_0043f4b7
+     * would have fired).  The combat snapshot itself is NOT performed
+     * by the port — it touches scratch pointers we haven't ported. */
+    int      notify_combat_snapshot;
+} engine_state_hash_out_t;
+
+void engine_compute_state_hash(const engine_state_hash_in_t *in,
+                               engine_state_hash_out_t *out);
+
 /* ─── animation phase ticks (port of FUN_004bbc80) ─────────────────
  *
  * Maintains 9 "did event X fire this call" flags driven by

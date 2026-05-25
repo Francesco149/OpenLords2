@@ -28,7 +28,8 @@ SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c \
                    ../src/engine_rate.c ../src/engine_phase.c \
                    ../src/engine_delta.c ../src/engine_anim_cycle.c \
                    ../src/engine_input.c ../src/engine_fps.c \
-                   ../src/engine_rng.c ../src/save.c
+                   ../src/engine_rng.c ../src/engine_state_hash.c \
+                   ../src/save.c
 
 # Test files — each defines one or more `int test_<name>(void)`
 # functions registered in test_main.c.
@@ -36,7 +37,8 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_rate.c test_engine_phase.c \
                    test_engine_delta.c test_engine_anim_cycle.c \
                    test_engine_input.c test_engine_fps.c \
-                   test_engine_rng.c test_save.c
+                   test_engine_rng.c test_engine_state_hash.c \
+                   test_save.c
 
 OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o)) \
                             $(SRCS_TESTS:.c=.o))
@@ -50,7 +52,7 @@ OUT  := build/run_tests
 DIFF_SRCS := ../src/engine_rng.c ../src/engine_fps.c \
              ../src/engine_anim_cycle.c ../src/engine_delta.c \
              ../src/engine_phase.c ../src/engine_input.c \
-             ../src/engine_rate.c
+             ../src/engine_rate.c ../src/engine_state_hash.c
 DIFF_OBJS := $(addprefix build/diff_,$(notdir $(DIFF_SRCS:.c=.o)))
 DIFF_OUT  := build/libengine_diff.so
 DIFF_CFLAGS := -std=c11 -O2 -fPIC -Wall -Wextra -Wno-unused-parameter -I../src

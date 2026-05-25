@@ -189,6 +189,23 @@ struct test_case {
     X(engine_rng_matches_reference) \
     X(engine_rng_multi_call_evolves) \
     \
+    X(engine_state_hash_zeros_mode_other) \
+    X(engine_state_hash_strategic_zeros) \
+    X(engine_state_hash_strategic_loop1_per_army) \
+    X(engine_state_hash_strategic_loop2_player_strategic) \
+    X(engine_state_hash_strategic_loop3_per_territory_no_offset) \
+    X(engine_state_hash_strategic_hash_offset_skips_per_army_first_5) \
+    X(engine_state_hash_strategic_hash_offset_skips_player_strategic_first_6) \
+    X(engine_state_hash_combat_basic) \
+    X(engine_state_hash_quirk_bucket7_always_one) \
+    X(engine_state_hash_bucket9_formula) \
+    X(engine_state_hash_byte_sum_wraps_at_256) \
+    X(engine_state_hash_bucket_sum_wraps) \
+    X(engine_state_hash_slot_boundaries_per_army) \
+    X(engine_state_hash_player_slot_irrelevant_to_computation) \
+    X(engine_state_hash_output_writes_cover_all_strategic_slots) \
+    X(engine_state_hash_combat_slot_boundaries) \
+    \
     X(save_schema_table_shape) \
     X(save_schema_aliasing_preserved) \
     X(save_round_trip_retail_lastturn) \
