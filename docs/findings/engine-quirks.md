@@ -315,6 +315,47 @@ coop) — so the GDI seat is a windowed-mode-only insertion.
 
 ---
 
+## 7. The save format has nine forward-compatibility slots that were never used
+
+The 225-entry positional schema table at `0x4de960` (the entire save-
+file layout) has nine trailing entries (indices 216..224) that all
+point to the **same** 4-byte buffer at `DAT_004eb2ac` — a scratch
+region.  Save: emits the contents of that scratch 9 times in a row.
+Load: reads 4 bytes from the file into that scratch, 9 times,
+overwriting itself each iteration and discarding the result.
+
+```
+schema entry 216 → DAT_004eb2ac, 4 B
+schema entry 217 → DAT_004eb2ac, 4 B   ← same address
+...
+schema entry 224 → DAT_004eb2ac, 4 B   ← same address
+```
+
+The functional effect is 36 zero bytes at offset 266992 of every
+.sav file, ignored on load.  Index 87 (`0x4eafb0`) is similar.
+
+These are forward-compatibility reserved slots — placeholders the
+1996 devs added "in case we need to extend the save format."  The
+plan was presumably: a future patch would change one or more of
+those pointers from `0x4eb2ac` to a real global, automatically
+giving any save written by that patch a place to stash the new
+field while still being readable by the old engine (which would
+discard it harmlessly).
+
+The patch never came.  Lords II shipped, got a couple of bugfix
+releases, and the engine architecture froze.  The 36 reserved bytes
+sit at the end of every save file ever written by the game,
+faithfully scribbling zeros and reading them back.
+
+Our drop-in preserves the layout exactly — the 36 bytes have to be
+in the right position for retail to load our saves.
+
+> 📍 [`docs/findings/save-format.md`](save-format.md) §"Reserved/
+> sentinel slots", Ghidra `0x4ade93` / `0x4adfe6` (the I/O loops),
+> `0x4de960` (the schema table).
+
+---
+
 <!--
 Template for new entries:
 

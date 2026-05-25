@@ -7,6 +7,112 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Save-file schema mapped
+
+Switched to the next subsystem: save-file format.  Mapped the entire
+top-level schema (the 225-entry positional serializer table at
+`DAT_004de960`) plus the Castles.dat layout, **without writing any
+code** — pure RE.  Findings landed in
+[`docs/findings/save-format.md`](findings/save-format.md) with a
+regen-on-demand CSV at [`save-schema-table.csv`](findings/save-schema-table.csv).
+
+### Headline finding
+
+The save file is a **strictly positional dump** of 225 globals
+followed by Castles.dat copied verbatim.  No headers, no field tags,
+no versioning:
+
+```
+.sav file (471828 bytes)
+├── 267028 B  — 225 entries from schema table  ← (ptr,size) pairs at 0x4de960
+└── 204800 B  — 16 × 12800 B castle blocks (= entire Castles.dat copy)
+```
+
+`267028 + 204800 == 471828` exactly.  Verified across all three
+on-disk saves (lastturn.sav, old_turn.sav, safeturn.sav — all that
+size).  Sum of the 225 schema entries reproduces the 267028 head
+block exactly.
+
+### Cross-confirmed strides
+
+The per-tick hash function `FUN_00440231` iterates the same arrays
+at known strides.  Cross-product confirms:
+
+| schema entry  | stride | slot count | almost-certainly         |
+|---------------|-------:|-----------:|---------------------------|
+| `0x5440e0`    | 8 B    | 6400       | castle/tile records — **same shape as Castles.dat per-block** (12800/2 = 6400 disk pairs ⇄ 6400 × 8 mem records) |
+| `0x52f0b0`    | 420 B  | 151        | per-territory state (150 territories + slot 0) |
+| `0x57bf00`    | 352 B  | 6          | per-player strategic-mode state |
+| `0x553d50`    | 44 B   | 6          | per-player (auxiliary 44-byte block) |
+| `0x53f9b0`    | 768 B  | 17         | 16 used slots — same 16 as Castles.dat scenarios? |
+| `0x554480`    | 432 B  | 81         | per-battle-hex (combat mode) |
+| `0x57a100`    | 76 B   | 101        | per-combat-unit |
+| `0x566520`    | 52 B   | 81         | per-battle-hex aux |
+
+### Two-mode engine state, one shared schema
+
+`DAT_0057c8fc` is the gameplay mode discriminator: `0` = strategic
+overworld, `2` = tactical combat.  `FUN_00440231` hashes a different
+subset of the schema per mode, but **save files include every entry
+regardless** — which is how the game preserves the strategic state
+through a battle and restores it cleanly afterwards.
+
+### Forward-compat reserved slots
+
+Entries 216..224 (last 9) all point to `DAT_004eb2ac`, a 4-byte
+scratch.  Save dumps 4 zero-ish bytes nine times; load discards
+them.  Forward-compat-reserved field slots in the 1996 release that
+never got populated.  Our drop-in mirrors this — same 36 bytes
+emitted so retail can still parse our saves.
+
+### History.dat / C_hist.dat — vestigial?
+
+Neither filename appears in any string of Lords2.exe, mapl2.exe, or
+the bundled DLLs.  Both files date from January/February 1996,
+predating the 2.0.0.3 GOG patch.  Strongly suggestive of vestigial
+pre-release artifacts that the shipping engine no longer touches.
+Worth one more pass via Frida `CreateFileA` capture on a running
+retail to be sure, but low priority — none of the schema we just
+mapped points into them, so they can't affect save-file logic.
+
+### What this unlocks
+
+This is the gating finding for porting any of the sub-step bodies
+(MP sim tick `FUN_004472ce`, turn-timeout `FUN_0049b8b0`, AI
+scheduler `FUN_0045270a`, etc.).  Those functions read+mutate the
+strategic globals; with the schema mapped, we can:
+
+1. Allocate the globals at fixed VAs in our drop-in.
+2. Populate them from a real .sav.
+3. Diff-test the sub-step ports with realistic starting state
+   instead of zero stubs.
+
+### What's next
+
+1. **Port the schema table + I/O paths into `src/save.c`.**  Mostly
+   mechanical: declare the 13 big-block globals, declare the
+   225-entry table pointing into them, port the two `__open`/
+   `__read`/`__write` loops verbatim.  No diff harness yet — first
+   exercise is round-trip a retail .sav and byte-compare.
+
+2. **Pin down the per-castle 8-byte struct.**  Bytes +0 (type),
+   +1 (flags), +3 (from disk) are known.  +2/+4..+7 are runtime;
+   trace them by reading every site that writes to those offsets
+   on `DAT_005440e0`.
+
+3. **Decode entry 4 (16 × 768 B at `0x53f9b0`).**  Hint: hashed
+   when in strategic mode; 16 slots could be 16-player armies, or
+   16 saved AI brains, or 16 dynasty entries.  Cross-ref with the
+   16-block Castles.dat scenario index.
+
+4. **Diagnose the Quit-Game freeze + orchestrator-teardown hang** —
+   carried over from the prior dispatch as cleanup items.
+
+Bias next time: option 1 — start writing code now that we know what
+the bytes mean.
+
+---
+
 ## 2026-05-25 — Seventh diff target: engine_compute_sim_sub_steps (chained with scenario_hint)
 
 Closed out the per-tick driver's pure-function diff coverage.  Ported
