@@ -1819,6 +1819,152 @@ the binary but never triggered.  We preserve them verbatim.
 
 ---
 
+## 48. Sprite blitter's 4-byte partial unroll fires AT MOST ONCE per row
+
+`FUN_004b43b1` (the unclipped sprite blit kernel) starts each row by
+testing `(width & 3) != 0`.  If width is NOT a multiple of 4, the
+entire row goes through a byte-at-a-time tail loop — no unrolling at
+all.  If width IS a multiple of 4, an unrolled 4-byte block fires
+ONCE and then falls into the same byte-at-a-time tail loop for the
+remaining `width - 4` bytes:
+
+    do {  /* per-row outer */
+        if ((glyph_w & 3) != 0) {
+            tail_count = glyph_w;
+            goto tail;
+        }
+        /* one 4-byte unrolled chunk */
+        if (src[0]) dst[0] = src[0];
+        if (src[1]) dst[1] = src[1];
+        if (src[2]) dst[2] = src[2];
+        if (src[3]) dst[3] = src[3];
+        src += 4; dst += 4;
+        tail_count = glyph_w - 4;
+        if (tail_count == 0 || glyph_w <= 3) goto end_of_row;
+    tail:
+        do { copy_one_byte(); } while (...);
+    end_of_row:
+        dst += dst_pad;
+        rows--;
+    } while (rows > 0);
+
+A genuine Duff's device would loop the unrolled block until the
+remaining count drops below the unroll factor.  This one runs the
+unrolled block AT MOST ONCE per row.  For a 16-wide sprite the row
+breaks down as `4 unrolled + 12 byte-at-a-time` — the unroll
+amortizes nothing for any width above 4.
+
+Almost certainly an MSVC 4.20 codegen artifact rather than a hand-
+written optimization.  No callsite is sensitive to the loop shape
+(byte-write order doesn't matter for the silhouette overlay
+semantics), so the executed memory traffic differs from a uniformly-
+unrolled implementation only in instruction count, not in pixels.
+
+Preserved verbatim so cycle counts and instruction-cache behavior
+match retail under emulation / instrumented runs.
+
+> 📍 `src/gfx_sprite.c`'s `gfx_sprite_blit`,
+> Ghidra `FUN_004b43b1 @ 0x4b43b1`.
+
+---
+
+## 49. Zero-width sprite still writes 4 bytes per row
+
+The unrolled-prefix gate in `FUN_004b43b1` is `(glyph_w & 3) != 0`.
+For `glyph_w == 0` this evaluates to `false` (the zero matches the
+"multiple of 4" path), so the unrolled body fires unconditionally:
+
+    if (src[0]) dst[0] = src[0];
+    if (src[1]) dst[1] = src[1];
+    if (src[2]) dst[2] = src[2];
+    if (src[3]) dst[3] = src[3];
+
+Four source bytes are read and written per row, regardless of the
+"zero width" semantic intent.  The post-unroll gate then computes
+`tail_count = -4` (wrapping unsigned) and the tail-loop conditional
+short-circuits to `false` (`glyph_w > 3` is false for `glyph_w == 0`),
+so the byte-at-a-time tail does NOT compound the over-write.
+
+Latent in retail because the dispatcher (`FUN_00404442`) sets
+`y_clip_mode == 5` (skip) before calling — but that gate only fires
+when the CLIP rect knocks the sprite entirely off-canvas, not when
+the descriptor itself encodes a zero width.  No retail sprite blob
+contains a zero-width descriptor, so the path is never exercised.
+Preserved as a witness test in `tests/test_gfx_sprite.c` documenting
+the on-disk behavior.
+
+> 📍 `src/gfx_sprite.c`'s `gfx_sprite_blit`,
+> Ghidra `FUN_004b43b1 @ 0x4b43b1`.
+
+---
+
+## 50. Sprite clipped pair is byte-identical (101 B × 2)
+
+`FUN_004b446d` and `FUN_004b44d2` are 101 bytes each and byte-for-
+byte identical — verified with r2 `pxd 101 @ 0x4b446d` vs.
+`pxd 101 @ 0x4b44d2` (every int matches across all 26 rows).  Same
+pattern as the clipped glyph pair (`FUN_004b425c` / `FUN_004b42c5`),
+documented earlier in this file.
+
+The sprite dispatcher (`FUN_00404442`) selects between them by the
+x_clip_mode tag:
+
+    if (x_clip_mode == 1) call FUN_004b446d;  /* left-clip case */
+    else if (x_clip_mode == 2) call FUN_004b44d2;  /* right-clip */
+
+But since the bodies are identical, the selection has no observable
+effect.  The port mirrors the call topology (separate
+`gfx_sprite_blit_left_clipped` / `..._right_clipped` entry points)
+so retail's call-graph stays recognizable, with both routing to a
+shared `sprite_blit_clipped` static helper.
+
+Most likely an MSVC inlining / template-duplication artifact: the
+clip path was implemented as a single body, the compiler emitted
+one copy for each of two distinct logical entry points (analogous
+to the glyph case), and the linker did not deduplicate.
+
+> 📍 `src/gfx_sprite.c`'s `sprite_blit_clipped`,
+> Ghidra `FUN_004b446d @ 0x4b446d` + `FUN_004b44d2 @ 0x4b44d2`.
+
+---
+
+## 51. Sprite blitter writes source bytes verbatim — no color modulation
+
+The glyph blitter (`FUN_004b41b7`) honors a `color_modulation` flag
+(`DAT_005cd40c`) to choose between two write modes: silhouette fill
+(write the bound `color`) or copy-byte (write the source byte
+verbatim).  The sprite blitters have NO such gate — every non-zero
+source byte is copied verbatim:
+
+    if (*src != 0) *dst = *src;   /* sprite — always copy */
+
+vs. the glyph blitter:
+
+    if (*src != 0) *dst = (color_modulation == 1) ? *src : color;
+
+The implication: sprites are stored pre-colored.  Their on-disk
+bytes ARE the palette indices that land on the canvas, byte for
+byte.  Glyphs, in contrast, are stored as silhouettes (any non-zero
+byte means "lit") with the color chosen at render time.
+
+Note that the GLYPH clipped variants (`FUN_004b425c` / `FUN_004b42c5`)
+ALSO ignore color_modulation — they unconditionally write `color`.
+The sprite clipped variants behave like their unclipped sibling:
+they copy bytes verbatim.  So the two trios diverge on the clipped
+write mode:
+
+   glyph trio:   unclipped honors modulation; clipped always color-fills
+   sprite trio:  all three always copy bytes
+
+Not a quirk in the "bug-like" sense — just a load-bearing semantic
+distinction worth documenting up front, since both trios share the
+same staging state and the same dispatcher shape.
+
+> 📍 `src/gfx_sprite.c` vs. `src/gfx_glyph.c`,
+> Ghidra `FUN_004b43b1` / `FUN_004b446d` / `FUN_004b44d2`.
+
+---
+
 <!--
 Template for new entries:
 

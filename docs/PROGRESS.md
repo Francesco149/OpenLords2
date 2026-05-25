@@ -7,6 +7,204 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Sprite blit kernels + dispatchers (1 chip, 5 fns)
+
+Continuation of the same unattended session.  The previous dispatch
+closed out the text-control entry-point family and listed sprite
+blitters as the "fresh subsystem" candidate (vs. runtime DDraw
+wiring, which is gated on Windows-host validation).  This dispatch
+picks up sprite blitters — opens the next leaf class and lands the
+entire 5-function family in one chip.
+
+Discovery: the sprite blit family shares its ENTIRE staging-state
+pipeline with the already-ported glyph blit family.  Same 16-byte
+descriptor layout (width / height / source-offset / row-count / two
+flag bytes at the same offsets), same `clip_x` / `clip_y` setters,
+same `x_clip_mode`-indexed dispatch between unclipped / left-clipped
+/ right-clipped variants.  The only behavioral split is the WRITE
+mode (sprite copies source byte verbatim; glyph supports both
+copy-byte and silhouette-fill) and the dispatcher's lack of a
+char→glyph indirection (sprite index is direct) and per-font
+kerning tweaks.  Two dispatcher entry points instead of one (canvas-
+clip + caller-supplied-rect) replace the alt-clip toggle flag.
+
+### Chip landed
+
+**`src/gfx_sprite` (NEW, ~165 LOC + 16 tests)** — 3 retail leaves +
+1 private clipped helper sharing state with `gfx_glyph` via new
+read-only accessors:
+
+  - `FUN_004b43b1` → `gfx_sprite_blit`              (188 B)
+    Unclipped path.  Iterates `glyph_h` rows of `glyph_w` cols.
+    Inner loop carries an unusual partial-unroll shape (see quirk
+    #48): the FIRST 4 bytes go through an unrolled block when
+    `glyph_w` is a multiple of 4, then a byte-at-a-time tail
+    handles the rest.  For non-multiple-of-4 widths, the entire
+    row goes through the tail.  Net effect: the unroll fires
+    AT MOST ONCE per row regardless of width — useless past 4
+    pixels.  Almost certainly an MSVC 4.20 codegen artifact.
+  - `FUN_004b446d` → `gfx_sprite_blit_left_clipped` (101 B)
+    Clipped path.  Reads `clipped_w` cols per row with
+    `src_stride_pad` to skip past the trimmed cols.
+  - `FUN_004b44d2` → `gfx_sprite_blit_right_clipped`(101 B)
+    BYTE-IDENTICAL to FUN_004b446d — verified by r2
+    `pxd 101 @ <addr>` against retail (every int matches across
+    26 dump rows).  Same dedup pattern as the clipped glyph pair.
+    Dispatcher selects between them by x_clip_mode tag (1 vs 2);
+    both route to a shared `sprite_blit_clipped` static helper.
+
+**`src/gfx_dispatch` (extended, +75 LOC + 5 tests)** — 2 retail
+leaves extending the existing dispatcher module:
+
+  - `FUN_00404442` → `gfx_dispatch_sprite`          (256 B)
+    Canvas-clipped sprite render: clips against (0, 0,
+    canvas_w, canvas_h).  Reads the 16-byte descriptor at
+    `sprite_blob + sprite_index*16 + 8`, stages state via
+    `gfx_glyph_set_glyph` + dispatcher-private fields, runs
+    `clip_x` / `clip_y`, applies left/top skip to the source
+    offset, dispatches to one of the three sprite blitters.
+  - `FUN_00404547` → `gfx_dispatch_sprite_clipped`  (256 B)
+    Same shape but takes (left, top, right, bottom) as
+    explicit clip-rect parameters.  Retail exposes both
+    entry points instead of gating on a single `g_alt_clip_enabled`
+    flag (the way the glyph dispatcher does); we preserve the
+    two-function split.
+
+No new module state.  `g_flag_a` / `g_flag_b` from the existing
+dispatcher state mirror the same descriptor bytes the glyph
+dispatcher stages — both writers, no readers yet.
+
+New `gfx_glyph_*` getters (`glyph_offset`, `clipped_w`,
+`src_stride_pad`, `dst_stride_pad`) expose the shared staging-state
+fields that the sprite blitter needs to read.  Setters were
+already in place.
+
+### Filed quirks (#48, #49, #50, #51)
+
+Four new entries in `docs/findings/engine-quirks.md`:
+
+  - **#48** — Sprite blitter's 4-byte partial unroll fires AT MOST
+    ONCE per row, regardless of width.  Outer test `(width & 3)
+    != 0` selects between full-tail and partial-unroll-plus-tail;
+    neither shape loops the unrolled block.  For a 16-wide sprite
+    the row is `4 unrolled + 12 byte-at-a-time` — the unroll
+    amortizes nothing past 4 pixels.  Almost certainly an MSVC
+    4.20 codegen artifact, not a hand-written Duff's device.
+  - **#49** — Zero-width sprite writes 4 bytes per row anyway:
+    `(0 & 3) != 0` is FALSE, so the unrolled body fires.  The
+    post-unroll tail-gate then short-circuits to false (via
+    `width > 3`), so the over-write is exactly 4 bytes — no
+    compound.  Latent in retail because no descriptor encodes a
+    zero width and the dispatcher's `y_clip_mode == 5` gate
+    handles fully-off-canvas placement separately.  Preserved as
+    a witness test.
+  - **#50** — Clipped sprite pair (`FUN_004b446d` / `FUN_004b44d2`)
+    is byte-identical — r2 `pxd 101` verifies every byte matches.
+    Same MSVC inlining artifact as the clipped glyph pair; same
+    dedup approach in the port (single `sprite_blit_clipped`
+    helper, two entry points to mirror retail call topology).
+  - **#51** — Sprite blitter writes source bytes verbatim — no
+    color modulation.  Documents the load-bearing semantic
+    distinction: glyphs are stored as silhouettes (color chosen
+    at render time, except in copy-byte mode); sprites are stored
+    pre-colored (every non-zero source byte IS the destination
+    palette index).  Glyph clipped variants always color-fill;
+    sprite clipped variants always copy.
+
+### Headline numbers
+
+- **615 → 631 host tests** (+16), all green under ASan/UBSan.
+- **5 retail functions ported** (~922 B decompilation — 188 +
+  101 + 101 + 256 + 256).  Note: the second 101 (FUN_004b44d2)
+  is byte-identical to the first — but it's a distinct retail
+  entry point, so it counts.
+- **1 new module** (`src/gfx_sprite`) + **1 module extended**
+  (`src/gfx_dispatch`, +2 functions).
+- **4 new engine quirks filed** (#48, #49, #50, #51).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Renderer pipeline state
+
+| layer                                | status     |
+| ------------------------------------ | ---------- |
+| char width                           | ported     |
+| buffer width                         | ported     |
+| bounded buffer width                 | ported     |
+| word width + chars                   | ported     |
+| editor (text_input)                  | ported     |
+| localization blob access             | ported     |
+| dirty-rect tracking                  | ported     |
+| 1-pixel / 2x1 painters               | ported     |
+| clipped pixel / 2x1                  | ported     |
+| glyph blitter (unclipped)            | ported     |
+| glyph blitter (clipped × 2)          | ported     |
+| glyph dispatcher (per-char)          | ported     |
+| clip setters (X + Y)                 | ported     |
+| text renderer (per-line)             | ported     |
+| centered-text wrapper                | ported     |
+| substitution stream                  | ported     |
+| word-wrap renderer (buffer)          | ported     |
+| word-wrap renderer (localized)       | ported     |
+| localization line render             | ported     |
+| localization line centered           | ported     |
+| solid Bresenham line                 | ported     |
+| dotted axis-aligned line             | ported     |
+| solid rect outline                   | ported     |
+| 3D bevel rect (3 palettes)           | ported     |
+| int formatter (dec + hex)            | ported     |
+| label render (dec + hex + centered)  | ported     |
+| label render (signed-color)          | ported     |
+| compound "label + signed value"      | ported     |
+| **sprite blit (unclipped)**          | **ported (this chip)** |
+| **sprite blit (clipped × 2)**        | **ported (this chip)** |
+| **sprite dispatcher (canvas-clip)**  | **ported (this chip)** |
+| **sprite dispatcher (rect-clip)**    | **ported (this chip)** |
+| sprite descriptor reader (PL8 header)| unanalyzed |
+| sprite-class higher-level renderers  | unanalyzed |
+
+The entire low-level blit pipeline is now end-to-end in `src/` for
+both glyphs and sprites.  Engine code can dispatch a sprite from a
+PL8 blob to the bound canvas via the same clip pipeline the glyph
+renderer uses.  The next frontiers are the higher-level sprite
+renderers (the callers of `gfx_dispatch_sprite` — there are at
+least 10 callsites scattered across 0x408xxx-0x40axxx visible in
+the decomp), the PL8 header parser (to load a sprite blob from a
+file), or runtime canvas wiring (the visible-pixels milestone, gated
+on Windows validation).
+
+### What's next
+
+Three natural continuations:
+
+1. **Higher-level sprite renderers** — the 10+ callsites of
+   `gfx_dispatch_sprite` (e.g. `FUN_00405487`, `FUN_00405862`,
+   `FUN_004059af`, `FUN_00408438`, `FUN_00409934`, `FUN_0040a01d`,
+   `FUN_0040a21a`, etc.) wrap the dispatcher with sprite-blob
+   selection (which PL8 to use), animation frame indexing, and
+   per-element placement logic.  Pure autonomous work; opens up
+   the map / battlefield / UI panel renderers.  Substantial scope.
+2. **PL8 header parser** — small chip: read the 8-byte header to
+   get descriptor count + decode the descriptor array.  Enables
+   tests that exercise the dispatcher against real
+   `vendor/original/*.pl8` data.  Modest scope.
+3. **Wire gfx.c runtime to the renderer + sprites** — extend the
+   DDraw probe to bind a real canvas, then render a real glyph +
+   sprite during boot.  Visible-pixels milestone earned.  Gated on
+   user-observed Windows-host validation.
+
+Picking #1 keeps autonomous progress moving and starts unpacking
+the visible game-state rendering.  #2 is a logical companion to #1
+(many of those callsites probably parse PL8 headers).  #3 unlocks
+visible-pixels validation but requires human verification.
+
+This is a natural `/clear` point — the sprite-class blit pipeline
+is closed out and the next frontiers (higher-level sprite
+renderers, PL8 parsing, runtime wiring) are fresh scope worth a
+fresh conversation.
+
+---
+
 ## 2026-05-25 — Compound label+signed-value wrapper (1 chip, 1 fn)
 
 Continuation of the same unattended session.  The previous dispatch
