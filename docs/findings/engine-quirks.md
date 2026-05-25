@@ -397,6 +397,55 @@ saves that depend on the side-effect surface staying constant.
 
 ---
 
+## 9. Delayed-action dispatcher's hard-capped 10-pass shift compaction
+
+`FUN_004472ce`'s MP-relay reorder branch (game_mode == 2, queue_count
+> 1) pulls qualifying records (types 0x21..0x23 from non-local players)
+out of the main compaction queue and into a high-priority stash, leaving
+`QUEUE_EMPTY` (0xffff) sentinels in the queue.  It then runs a hard-coded
+**10 passes** of a single-slot left-shift loop to collapse the holes:
+
+```c
+for (local_14 = 0; local_14 < 10; local_14 = local_14 + 1) {
+    for (local_c = 0; local_c < DAT_00515910; local_c = local_c + 1) {
+        if ((&DAT_00515990)[local_c] == 0xffff) {
+            for (local_10 = local_c; local_10 < DAT_00515910; local_10 = local_10 + 1) {
+                (&DAT_00515990)[local_10] = *(undefined4 *)(&DAT_00515994 + local_10 * 4);
+            }
+        }
+    }
+}
+```
+
+Each pass shifts every slot from a 0xffff position rightward leftward by
+one — one contiguous run of K 0xffff entries collapses by **one slot per
+pass**, so K consecutive holes need K passes.  The 10-pass cap means that
+if **11 or more** consecutive relay records exist, the resulting queue
+still contains 0xffff entries in the middle, and the subsequent
+"find-first-EMPTY + append hipri" loop appends the stash on top of the
+first remaining 0xffff, clobbering whatever valid entries follow it.
+
+In practice this never trips: a per-tick relay batch is at most a
+handful of records, and the bound holds.  But the cap is deliberate (the
+number is hard-coded, not derived from queue capacity), and shipping it
+without a tighter argument suggests either the dev verified the bound
+empirically or shipped a robustness margin and called it done.
+
+The port preserves the 10-pass count and the inner-loop shape verbatim
+in `src/engine_delayed_action.c`'s `engine_dispatch_delayed_actions`
+step 4b.  The same function also has a related quirk: the inner shift
+reads `queue[queue_count]` on its last iteration (one slot past the
+queue tail).  At `queue_count < 100` this lands within the queue array
+(and reads the 0xffff sentinel from the function-entry clear); at
+`queue_count == 100` retail would read `DAT_00515b20`, an unrelated
+adjacent global.  The diff harness pins `queue_count <= 99` in test
+vectors, so the divergent read never fires.
+
+> 📍 `src/engine_delayed_action.c`'s `engine_dispatch_delayed_actions`
+> step 4b, Ghidra `FUN_004472ce @ 0x4472ce`.
+
+---
+
 <!--
 Template for new entries:
 

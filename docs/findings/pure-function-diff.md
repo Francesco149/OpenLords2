@@ -371,15 +371,56 @@ port's return value is 0 (the unrecognised-anchor early-return — in
 that branch the function touches neither scratch, so retail keeps its
 prior bytes while the port has fresh zero-init: not a real divergence).
 
+### Sparse per-call inputs (delayed_action target)
+
+`engine_dispatch_delayed_actions` (FUN_004472ce) has a 22.4 KB record
+table (400 × 0x38) as its primary input but each test vector typically
+sets only a handful of records active.  Sending the full 22.4 KB JSON-
+encoded per call would be wasteful; instead, the per-call input is a
+**sparse record list** (a JSON array of `{idx, active, type, due_tick,
+args[10]}` objects).  The agent zero-fills the records region per call,
+then walks the sparse list applying the fields at `records[idx * 0x38]`.
+
+The agent ALSO seeds queue + hipri_stash + queue_count + hipri_count
+per call, even though the dispatcher clears these at function entry.
+Reason: the `master_switch=0` early-return branch BAILS BEFORE the
+clear, so the pre-call queue/hipri state carries through to the readback
+and contributes to the diff.  Seeding it explicitly makes that branch
+well-defined and lets us treat master_switch=0 as a first-class test
+case rather than a "skip the bytes that retail might have left over"
+exclusion.
+
+### Stubbing per-type dispatch tables (delayed_action target)
+
+The retail dispatcher invokes `(*table[type])()` from `PTR_FUN_004d5c98`
+(50 function pointers in `.rdata`).  Each handler — combat-action
+commits, MP broadcasts, sim-state transitions — touches dozens of
+unrelated globals; running them with our synthetic record state would
+either crash on unmapped pointer reads or mutate state we haven't
+mirrored to the port.
+
+Solution: at test-plan install, `Memory.protect(table, 200, 'rwx')` the
+`.rdata` page and stamp the address of a single no-op `NativeCallback`
+into all 50 slots.  The dispatcher still does its function-pointer call
+per dispatched record, but the call is a 1-cycle `ret`.  The port mirrors
+this with a NULL dispatch table — its branch treats NULL as no-op-and-
+skip, producing the same observable surface (records[active=0] cleared,
+action_counter decremented, dispatch-arg mirrors holding the last
+record's args).
+
+Restore at uninstall puts the original 200 bytes back so retail's real
+handlers survive the test plan — important if anyone leaves the process
+alive after the diff for a follow-up scenario test.
+
 ## Host-side shared library
 
 `tests/Makefile` grew a `diff` target that builds
 `tests/build/libengine_diff.so` from the diff-target sources
 (`src/engine_rng.c`, `src/engine_fps.c`, `src/engine_anim_cycle.c`,
 `src/engine_delta.c`, `src/engine_phase.c`, `src/engine_input.c`,
-`src/engine_rate.c`, `src/engine_state_hash.c`) with `-fPIC`,
-*without* ASan/UBSan (an ASan-instrumented .so can't be `dlopen`'d
-from a non-ASan Python).
+`src/engine_rate.c`, `src/engine_state_hash.c`, `src/engine_tile.c`,
+`src/engine_delayed_action.c`) with `-fPIC`, *without* ASan/UBSan
+(an ASan-instrumented .so can't be `dlopen`'d from a non-ASan Python).
 
 `tools/diff_test.py`'s ctypes bindings mirror `src/engine.h`'s
 `engine_rng_in_t` / `engine_rng_out_t` / `engine_fps_in_t` /

@@ -7,6 +7,132 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Tenth diff target: engine_dispatch_delayed_actions (FUN_004472ce)
+
+First MP sub-step body port unlocked by yesterday's state_hash + tile_
+expand work.  `FUN_004472ce` is retail's per-tick delayed-action
+dispatcher: it sweeps a 400-slot pending-action table, optionally
+reorders MP-relay records to the back of the dispatch queue, and calls
+a per-type handler from a 50-entry function-pointer table.  1046 B
+retail; ~250 LOC port; covers the queue-management body in one slice
+without needing any of the per-type handlers ported yet (the table
+gets stubbed to a no-op for the diff).
+
+**2000/2000 retail diff pass at seed 1** across the full ten-target
+suite, zero races.  Was 1800/1800 across nine prior to this dispatch.
+
+### Landed code
+
+- `src/engine_delayed_action.c` (~220 LOC) + `engine_dispatch_delayed_
+  actions()` in `src/engine_delayed_action.h`:
+  - Pure C; state struct contains the 400-record table, queue / hipri
+    stash, scalar gates, the 10 dispatch-arg mirror globals, and a
+    256-entry dispatch function-pointer table the caller fills.
+  - Two quirks preserved with commentary:
+    1. MP-relay reorder (game_mode==2, queue_count>1): types 0x21..
+       0x23 originated from non-local players get pulled to the back
+       of the dispatch queue via a high-priority stash + 10-pass shift
+       compaction.  Locally-originated copies stay in original order.
+    2. 10-pass shift compaction is hard-coded — caps how many
+       consecutive QUEUE_EMPTY sentinels can collapse.  Logged as
+       quirk #9 in engine-quirks.md.
+  - Per-record 0x38-byte struct preserved verbatim (11 i32 + 10 B
+    padding + active byte + type byte); runtime layout-cross-check
+    test guards against silent layout drift.
+
+- 20 host unit tests covering every branch + both quirks + the type-
+  boundary inclusive/exclusive cases + dispatch-arg mirror ordering +
+  null-handler tolerance + padding inertness.  206 tests total pass
+  under ASan + UBSan (was 186).  Diff-test .so build target also picks
+  up the new module.
+
+### Diff harness wiring
+
+The 10th target needed two new harness tricks worth pinning:
+
+- **Sparse per-call records**: 22.4 KB record table but each vector
+  typically stamps only a handful of slots.  Wire format = JSON array
+  of `{idx, active, type, due_tick, args[10]}`.  Agent zero-fills the
+  region per call, then walks the sparse list applying fields at
+  `records[idx * 0x38]`.  Avoids shipping 22 KB of mostly-zero JSON
+  per call; keeps vector intent readable in the test code.
+
+- **Stub the dispatch table**: `PTR_FUN_004d5c98` is a 50-entry
+  function-pointer table in `.rdata`.  At test-plan install,
+  `Memory.protect(table, 200, 'rwx')` + stamp a single no-op
+  `NativeCallback` into every slot.  The dispatcher still does its
+  `(*table[type])()` call per dispatched record, but the call is a
+  1-cycle `ret`.  Port mirrors with NULL dispatch table (its branch
+  treats NULL as no-op-skip).  Observable surface across both sides
+  is identical: records[active=0] cleared + action_counter decremented
+  + dispatch-arg mirrors holding the last record's args.
+  Documented in `docs/findings/pure-function-diff.md`.
+
+Per-call cost breakdown:
+- Writeback: zero-fill records (22400 B) + sparse rec writes (~120 B
+  for a 3-record vector) + scalars (~50 B) + queue/hipri pre-state
+  (~800 B).
+- Call:     1 NativeFunction invocation (__cdecl + 1 i32 arg).
+- Readback: records (22400 B) + queue (400 B) + hipri (400 B) +
+  scalars + mirrors (~50 B).  All chunks ≤32 KB so a single
+  readByteArray each.
+- Diff:     bytewise on records/queue/hipri + scalar diff on
+  4 counters + per-index diff on 10 dispatch-arg mirrors.
+
+At seed 1, 200 vectors: delayed_action block completed in ~30 s;
+full ten-target suite in ~12 minutes (the new target adds little since
+the wire traffic is dominated by the engine-tick freeze install +
+state_hash sources).
+
+### Engine freeze: reused
+
+The shared install from sim_sub_steps / state_hash / tile_expand
+covers delayed_action too — the engine main thread's own per-tick
+driver dispatches `FUN_004472ce` as part of `FUN_004b99c0`, so the
+freeze is a hard requirement (otherwise our injected records would
+race the engine's natural dispatch and the diff would be flaky).
+
+### Headline number
+
+**2000/2000 pass across all ten targets**, zero races, at seed 1.
+Was 1800/1800 across nine prior to this dispatch.
+
+### What's next
+
+1. **Port the actual per-type handlers** at `FUN_004479de` ..
+   `FUN_00448422` (50 of them).  Each is small (one to a couple
+   hundred bytes) and most are combat-action commits / MP broadcasts.
+   With the dispatcher port verified, each handler can be ported +
+   diff-tested independently using the existing harness pattern.
+   Bigger lift than this dispatch but parallelizable.
+
+2. **Pull the castle-load fixup into `castles_read_scenario`** —
+   carried over from prior dispatches.  No progress this round.
+
+3. **Start porting the next sub-step body** — candidates from prior
+   dispatches: `FUN_0049b8b0` (turn-timeout), `FUN_0045270a` (AI
+   scheduler).  Each is bigger than the queue-management dispatcher
+   we just landed but the harness pattern (seed-shared payload or
+   sparse per-call inputs, shared engine freeze, chunked writes)
+   transfers.
+
+4. **Wire save/load into the drop-in's runtime command surface** —
+   carried over from prior dispatches.
+
+5. **Diagnose the Quit-Game freeze + orchestrator-teardown hang** —
+   carried over.  This session reproduced the trailing
+   `[frida-error] TypeError: not a function @ :` at script.unload
+   time; benign (test summary lands cleanly) but worth chasing once
+   the orchestrator's RPC timeout is in.
+
+Bias next time: option 1 (start the per-type handler ports) — the
+dispatcher being diff-verified means each handler can land with the
+same harness pattern + a stub for the dispatch table's `idx ==
+this_handler` slot.  Even just the 3 MP-relay types (0x21..0x23) being
+real ports would let us drop the dispatch-table stub for those slots.
+
+---
+
 ## 2026-05-25 — Ninth diff target: engine_tile_expand_footprint (FUN_004917dd)
 
 Cashed in yesterday's port by wiring `FUN_004917dd` into the pure-function
