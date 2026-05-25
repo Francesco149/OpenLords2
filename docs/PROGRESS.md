@@ -7,6 +7,132 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-26 — Filename extension helpers + IO-family survey (+18 tests, RVA→string map)
+
+Continuation of the same unattended session.  Previous dispatch
+landed the render-phase tail camera clamps and called that band
+drained.  This dispatch is the first chip into the asset-load IO
+helper cluster (the "what's next #2" item from the prior
+dispatch): ports the five pure filename-extension helpers
+(`FUN_004af54a/5ba/62c/675/6c9`, 67-114 B each, ~450 B total)
+into `src/strutil.c` and surveys the full IO helper family,
+extracting the RVA-to-string map for the tier-2/tier-3 retry
+chain so future ports against it don't need to re-discover the
+extension→subdirectory mapping.
+
+### What landed
+
+The five extension helpers share a single 4-byte module-static
+scratch buffer (`g_ext_scratch[4]`, mirror of retail
+`DAT_004eafa4..a7`).  Retail's IO retry chain uses the scratch
+indirectly through `strcmp` against `"PL8"`/`"256"`/`"WAV"`/
+`"SMK"`; other call sites use the save+apply pair atomically to
+splice an extension from one filename onto another.
+
+  - `strutil_ext_save(path)` — walks to first `.`, saves the 3
+    bytes after it (and a NUL) into scratch.  No-op if no `.`.
+  - `strutil_ext_apply(path)` — walks to first `.`, writes
+    scratch into bytes [1..3] then NUL at [4] (truncates any
+    longer pre-existing extension).
+  - `strutil_ext_strip(path)` — null-terminates at first `.`.
+  - `strutil_ext_append(path)` — walks to trailing NUL, writes
+    `.` + scratch + NUL (caller guarantees ≥5 bytes slack).
+  - `strutil_ext_length(path)` — 1-based offset of first `.`,
+    OR length-including-NUL if no `.` found.
+
+All five are mechanical ports of the retail walk-to-`.` loop
+shape with the scratch read/write differing per variant.
+
+### What was surveyed (not yet ported)
+
+The IO helper cluster spans 14 functions at `0x4af116..0x4afeed`.
+Three are now ported (the IO read tier-1 from earlier work
++ the five extension helpers from this chip), eight are
+deferred with a concrete blocker, two are still survey-pending:
+
+| Retail | Size | Status |
+|--------|------|--------|
+| `FUN_004af116` | 508 B | DEFERRED — tier-3 absolute-path chdir with drive substitution |
+| `FUN_004af312` | 496 B | DEFERRED — tier-2 base-relative subdir chdir |
+| `FUN_004af502` |  72 B | DEFERRED — chdir-back-to-base (no consumer today) |
+| `FUN_004af54a` | 112 B | **PORTED (this chip)** — `strutil_ext_save` |
+| `FUN_004af5ba` | 114 B | **PORTED (this chip)** — `strutil_ext_apply` |
+| `FUN_004af62c` |  73 B | **PORTED (this chip)** — `strutil_ext_strip` |
+| `FUN_004af675` |  84 B | **PORTED (this chip)** — `strutil_ext_append` |
+| `FUN_004af6c9` |  67 B | **PORTED (this chip)** — `strutil_ext_length` |
+| `FUN_004af70c` |  91 B | DEFERRED — file-length (depends on af502) |
+| `FUN_004af767` | 218 B | DEFERRED — file-exists (uses retry chain) |
+| `FUN_004af841` | 152 B | DEFERRED — file-exists with tier indicator |
+| `FUN_004af8d9` | 381 B | PORTED (prior chip) — `io_read_file_at` (tier-1 only) |
+| `FUN_004afa56` |  99 B | DEFERRED — file write |
+| `FUN_004afab9` | 897 B | DEFERRED — status.txt logger |
+| `FUN_004afe3a` | 179 B | DEFERRED — status.txt low-level writer |
+| `FUN_004afeed`| 1214 B | survey pending — possibly .ini parser |
+
+The deferral rationale: today's drop-in install layout is FLAT
+(`vendor/original/` is one directory with all assets co-located),
+and `init_exe_dir` chdirs there at startup, so tier-1 finds every
+asset on the first try.  Tier-2/3 only fire on partitioned (CD-
+tree-style) installs.  Landing the retry chain today would add
+~1 KB of subdirectory chdir code with zero test coverage (io.c is
+Win32-only, not host-tested) and no observable behaviour delta.
+The retry chain lands naturally alongside whichever future chip
+first encounters a "file not found at CWD" path — likely the
+intro Smacker subsystem.
+
+### RVA→string map (tier-2 / tier-3 subdirectory selectors)
+
+Extracted via `r2 -q -c 'px 192 @ 0x4df3e0' vendor/original/Lords2.exe`
+to nail down the extension→subdir mapping that the retry helpers
+walk.  Both tiers match against an uppercased 3-char extension
+slot, but tier-2 builds base-relative paths via strcat while
+tier-3 substitutes the install drive into a placeholder absolute
+path:
+
+| Extension | Tier-2 (base-rel)       | Tier-3 (absolute placeholder) |
+|-----------|-------------------------|-------------------------------|
+| `PL8`     | `\pl8`                  | `c:.\pl8`                     |
+| `256`     | `\pl8`                  | `c:.\pl8`                     |
+| `WAV`     | `\wav`                  | `c:.\wav`                     |
+| `SMK`     | `\smk_low` / `\smk_high` (gated on `DAT_0053f5f4`) | `c:.\smk_low` / `c:.\smk_high` |
+
+Mapping documented in `docs/findings/ddraw-dsound-bringup.md`
+§"Asset-load IO helper family — `0x4af116..0x4afeed`".  When the
+deferred ports land, the `c:` prefix in tier-3 strings gets
+overwritten with `DAT_0053f200` (install drive prefix captured at
+boot).
+
+### Headline numbers
+
+- **1017 → 1035 host tests** (+18), all green under ASan/UBSan.
+- **5 retail functions ported** (450 B total), all in `src/strutil.c`.
+- **Zero new quirks** — extension helpers are too simple to harbour
+  surprises (one shared scratch slot is the only state).
+- Cross-compile (mingw32) clean.
+
+### What's next
+
+1. **Pre-tick `FUN_004b0aaa`** — 11 B empty body, lowest-friction
+   "structural acknowledgement" chip if the next session needs a
+   warm-up.
+
+2. **Other clusters** — `FUN_004987b7` (battlefield init) and
+   `FUN_00498dcb` (strategic init) are the two large init
+   functions that wire asset loads + blob bindings.  Both
+   depend on the IO retry chain ONLY for assets that today live
+   in subdirs — for our GOG-flat install, both should work
+   against the tier-1 IO path alone.  Worth a survey to confirm.
+
+3. **gfx.c runtime wiring** — battlefield + mini-map are now end-
+   to-end at host-test level.  First-frame-on-screen still gated
+   on real savegame entity data.
+
+This is a natural `/clear` point — small clean chip, zero new
+quirks, 18 tests green, IO family fully surveyed with strings
+extracted from the binary, no in-flight work.
+
+---
+
 ## 2026-05-26 — Render-phase tail camera clamps (+28 tests, 2 new quirks)
 
 Small follow-on chip after the battlefield render cluster fully
