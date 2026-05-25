@@ -2139,6 +2139,29 @@ def run_diff(cfg_args) -> int:
         else:
             log("[diff] engine_tick is live; firing RPCs")
 
+        # ─── shared engine-tick freeze ───
+        # Both sim_sub_steps and state_hash need FUN_0040e890 patched to a
+        # no-op for the duration of their vectors.  Cycling install→uninstall
+        # back-to-back on the same Interceptor.replace address triggers an
+        # intermittent Frida-internal TypeError that destroys the script
+        # context — almost-always observed when state_hash followed sim_sub_steps
+        # in the test plan order.  Workaround: install the freeze ONCE here
+        # if ANY target in this run needs it, leave it installed across all
+        # vectors, uninstall ONCE in the finally block.  The per-target setup
+        # below still calls install (which returns already_installed=true);
+        # this is a no-op at the agent but keeps the per-target log shape.
+        shared_freeze_targets = {"sim_sub_steps", "state_hash"}
+        shared_freeze_installed = False
+        if shared_freeze_targets & {n for (n, _) in test_plans}:
+            fresp = script.exports_sync.install_sim_sub_steps_engine_freeze()
+            if isinstance(fresp, dict) and fresp.get("error"):
+                log(f"[diff] WARN: shared engine freeze install failed: "
+                    f"{fresp['error']}")
+            else:
+                shared_freeze_installed = True
+                log("[diff] shared engine_tick freeze installed (held for the "
+                    "whole run)")
+
         # ─── execute test plans ───
         for fn_name, vectors in test_plans:
             log(f"[diff] {fn_name}: {len(vectors)} vectors")
@@ -2160,31 +2183,15 @@ def run_diff(cfg_args) -> int:
                                    "retail": install_resp, "port": None,
                                    "diff": ["lut-install-error"]}]))
                     continue
-                # Freeze the engine main thread's per-tick dispatch.  Diff
-                # vectors inject game_state_phase=3 + MP + active-player
-                # tables; without the freeze the engine main thread's own
-                # FUN_004bb978 fires with our injected state and the
-                # sub-step body crashes accessing unmapped sim state.
-                # See g_sim_engine_freeze_callback in the agent for the
-                # full rationale.
-                freeze_resp = script.exports_sync.install_sim_sub_steps_engine_freeze()
-                if isinstance(freeze_resp, dict) and freeze_resp.get("error"):
-                    log(f"[diff] sim_sub_steps: engine freeze failed: "
-                        f"{freeze_resp['error']}")
-                    # Best-effort: still attempt the vectors (some might pass
-                    # without the freeze if the engine main thread happens
-                    # to stay out of the sub-step body for the run).
-                else:
-                    log(f"[diff] sim_sub_steps: engine_tick frozen "
-                        f"(already_installed={freeze_resp.get('already_installed')})")
-            # State-hash source-array install — one-shot per test plan.
-            # Sends only the SEED (not the 125 KB of bytes); agent
-            # synthesises the same payload host-side as the orchestrator.
-            # Also installs the engine-tick freeze for the same reason
-            # sim_sub_steps does: FUN_00440231 reads game-state arrays
-            # the engine main thread also reads — racing the source
-            # writes against an engine tick would corrupt both sides'
-            # observations.
+            # Engine freeze for sim_sub_steps already in place via the
+            # shared install above — see g_sim_engine_freeze_callback
+            # for the rationale (sub-step body can't run with our injected
+            # game-state-phase=3 because the rest of the ingame state isn't
+            # initialised; engine freeze keeps the main thread out).
+            # State-hash setup — engine freeze already in place via the
+            # shared install above.  Sources install needs to happen
+            # AFTER the freeze (otherwise the 125 KB writeback races the
+            # engine's reads), which is naturally true here.
             if fn_name == "state_hash":
                 install_resp = script.exports_sync.install_state_hash_sources(
                     state_hash_seed)
@@ -2200,13 +2207,6 @@ def run_diff(cfg_args) -> int:
                     continue
                 log(f"[diff] state_hash: sources installed (seed=0x{state_hash_seed:08x}, "
                     f"payload_bytes={install_resp.get('payload_bytes')})")
-                freeze_resp = script.exports_sync.install_sim_sub_steps_engine_freeze()
-                if isinstance(freeze_resp, dict) and freeze_resp.get("error"):
-                    log(f"[diff] state_hash: engine freeze failed: "
-                        f"{freeze_resp['error']}")
-                else:
-                    log(f"[diff] state_hash: engine_tick frozen "
-                        f"(already_installed={freeze_resp.get('already_installed')})")
             r = DiffResult(function=fn_name, total=len(vectors))
             for i, vec in enumerate(vectors):
                 if fn_name == "rng_step":
@@ -2524,23 +2524,35 @@ def run_diff(cfg_args) -> int:
                 if isinstance(uninstall_resp, dict) and uninstall_resp.get("error"):
                     log(f"[diff] sim_sub_steps: LUT uninstall failed: "
                         f"{uninstall_resp['error']}")
-                freeze_resp = script.exports_sync.uninstall_sim_sub_steps_engine_freeze()
-                if isinstance(freeze_resp, dict) and freeze_resp.get("error"):
-                    log(f"[diff] sim_sub_steps: engine freeze uninstall failed: "
-                        f"{freeze_resp['error']}")
-                elif freeze_resp.get("restored"):
-                    log("[diff] sim_sub_steps: engine_tick resumed")
+                # Engine freeze NOT uninstalled here — held for the whole
+                # run by the shared install above, released in finally.
             if fn_name == "state_hash":
-                uninstall_resp = script.exports_sync.uninstall_state_hash_sources()
-                if isinstance(uninstall_resp, dict) and uninstall_resp.get("error"):
-                    log(f"[diff] state_hash: sources uninstall failed: "
-                        f"{uninstall_resp['error']}")
-                freeze_resp = script.exports_sync.uninstall_sim_sub_steps_engine_freeze()
-                if isinstance(freeze_resp, dict) and freeze_resp.get("error"):
-                    log(f"[diff] state_hash: engine freeze uninstall failed: "
-                        f"{freeze_resp['error']}")
-                elif freeze_resp.get("restored"):
-                    log("[diff] state_hash: engine_tick resumed")
+                # State-hash source uninstall — best-effort; if the agent
+                # dies during the 125 KB writeback, the engine is going to
+                # be killed by the harness in the finally clause anyway.
+                try:
+                    uninstall_resp = script.exports_sync.uninstall_state_hash_sources()
+                    if isinstance(uninstall_resp, dict) and uninstall_resp.get("error"):
+                        log(f"[diff] state_hash: sources uninstall failed: "
+                            f"{uninstall_resp['error']}")
+                except Exception as e:
+                    log(f"[diff] state_hash: sources uninstall: agent dead ({e!r}); "
+                        f"skipping (frida cleanup will fire on script.unload)")
+
+        # ─── shared engine-tick freeze release ───
+        # Release after every test plan finished, but BEFORE the script
+        # unload in the finally block — gives the engine a brief window
+        # to drain anything pending before the script context vanishes.
+        if shared_freeze_installed:
+            try:
+                rresp = script.exports_sync.uninstall_sim_sub_steps_engine_freeze()
+                if isinstance(rresp, dict) and rresp.get("error"):
+                    log(f"[diff] WARN: shared engine freeze uninstall: "
+                        f"{rresp['error']}")
+                elif rresp.get("restored"):
+                    log("[diff] shared engine_tick freeze released")
+            except Exception as e:
+                log(f"[diff] WARN: shared freeze uninstall: agent dead ({e!r})")
 
     finally:
         if script is not None:

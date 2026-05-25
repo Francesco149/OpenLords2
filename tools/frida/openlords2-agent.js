@@ -2241,24 +2241,34 @@ function installStateHashSources(seed) {
     }
     // Lazy snapshot — only on first install.  Re-installs (e.g. retries)
     // share the same backup so we always restore the original retail bytes.
+    //
+    // Critical: COPY the bytes into a fresh Uint8Array (with .set()), don't
+    // construct a view directly from readByteArray's return.  Frida's
+    // readByteArray returns an ArrayBuffer that can be reclaimed/freed by
+    // the runtime between RPC calls — a view onto that buffer becomes
+    // dangling and reading from it later (during uninstall) destroys the
+    // script context.  Mirrors the install_sim_sub_steps_rate_lut pattern.
     if (g_state_hash_per_army_backup === null) {
-        g_state_hash_per_army_backup = new Uint8Array(
-            rva(ADDR.var_hash_per_army_768).readByteArray(STATE_HASH_PER_ARMY_BYTES));
-        g_state_hash_player_strategic_backup = new Uint8Array(
-            rva(ADDR.var_hash_player_strategic_352).readByteArray(STATE_HASH_PLAYER_STRATEGIC_BYTES));
-        g_state_hash_per_territory_backup = new Uint8Array(
-            rva(ADDR.var_hash_per_territory_420).readByteArray(STATE_HASH_PER_TERRITORY_BYTES));
-        g_state_hash_per_battle_hex_backup = new Uint8Array(
-            rva(ADDR.var_hash_per_battle_hex_432).readByteArray(STATE_HASH_PER_BATTLE_HEX_BYTES));
-        g_state_hash_per_combat_unit_backup = new Uint8Array(
-            rva(ADDR.var_hash_per_combat_unit_76).readByteArray(STATE_HASH_PER_COMBAT_UNIT_BYTES));
-        g_state_hash_per_battle_aux_backup = new Uint8Array(
-            rva(ADDR.var_hash_per_battle_hex_aux_52).readByteArray(STATE_HASH_PER_BATTLE_AUX_BYTES));
+        const snap = function (addr, len) {
+            const dst = new Uint8Array(len);
+            dst.set(new Uint8Array(rva(addr).readByteArray(len)));
+            return dst;
+        };
+        g_state_hash_per_army_backup         = snap(ADDR.var_hash_per_army_768,          STATE_HASH_PER_ARMY_BYTES);
+        g_state_hash_player_strategic_backup = snap(ADDR.var_hash_player_strategic_352,  STATE_HASH_PLAYER_STRATEGIC_BYTES);
+        g_state_hash_per_territory_backup    = snap(ADDR.var_hash_per_territory_420,     STATE_HASH_PER_TERRITORY_BYTES);
+        g_state_hash_per_battle_hex_backup   = snap(ADDR.var_hash_per_battle_hex_432,    STATE_HASH_PER_BATTLE_HEX_BYTES);
+        g_state_hash_per_combat_unit_backup  = snap(ADDR.var_hash_per_combat_unit_76,    STATE_HASH_PER_COMBAT_UNIT_BYTES);
+        g_state_hash_per_battle_aux_backup   = snap(ADDR.var_hash_per_battle_hex_aux_52, STATE_HASH_PER_BATTLE_AUX_BYTES);
     }
     // Synthesize the deterministic payload from the seed.  Each array
     // gets ITS OWN contiguous slice of the xorshift stream — sub-seed
     // each by mixing the array index into the seed so different arrays
-    // get different bytes even at small offsets.
+    // get different bytes even at small offsets.  Chunk the writes at
+    // <=32 KB to stay under the Frida RPC-buffer threshold that triggers
+    // a script-destroyed error on larger single writeByteArray calls
+    // (per_territory at 63420 B reliably trips it).
+    const CHUNK = 32 * 1024;
     const arrays = [
         {addr: ADDR.var_hash_per_army_768,          len: STATE_HASH_PER_ARMY_BYTES,           tag: 0},
         {addr: ADDR.var_hash_player_strategic_352,  len: STATE_HASH_PLAYER_STRATEGIC_BYTES,   tag: 1},
@@ -2270,7 +2280,12 @@ function installStateHashSources(seed) {
     for (const a of arrays) {
         const ab = new ArrayBuffer(a.len);
         stateHashFillBytes((seed + 0x9e3779b1 * a.tag) >>> 0, ab, a.len);
-        rva(a.addr).writeByteArray(ab);
+        const u8 = new Uint8Array(ab);
+        const base = rva(a.addr);
+        for (let off = 0; off < a.len; off += CHUNK) {
+            const len = Math.min(CHUNK, a.len - off);
+            base.add(off).writeByteArray(u8.slice(off, off + len).buffer);
+        }
     }
     return {ok: true, snapshotted: g_state_hash_per_army_backup !== null,
             payload_bytes: STATE_HASH_PER_ARMY_BYTES + STATE_HASH_PLAYER_STRATEGIC_BYTES +
@@ -2285,12 +2300,29 @@ function uninstallStateHashSources() {
     if (g_state_hash_per_army_backup === null) {
         return {ok: true, restored: false};
     }
-    rva(ADDR.var_hash_per_army_768).writeByteArray(g_state_hash_per_army_backup.buffer);
-    rva(ADDR.var_hash_player_strategic_352).writeByteArray(g_state_hash_player_strategic_backup.buffer);
-    rva(ADDR.var_hash_per_territory_420).writeByteArray(g_state_hash_per_territory_backup.buffer);
-    rva(ADDR.var_hash_per_battle_hex_432).writeByteArray(g_state_hash_per_battle_hex_backup.buffer);
-    rva(ADDR.var_hash_per_combat_unit_76).writeByteArray(g_state_hash_per_combat_unit_backup.buffer);
-    rva(ADDR.var_hash_per_battle_hex_aux_52).writeByteArray(g_state_hash_per_battle_aux_backup.buffer);
+    // Restore each backup back to retail's memory in chunks of <=32 KB.
+    // Direct full-array writeByteArray of buffers approaching 64 KB
+    // (per_territory is 63420 B) reliably destroyed the script context
+    // mid-teardown — narrowing to <=32 KB chunks keeps Frida's RPC
+    // buffer under the threshold that triggers the crash.  See
+    // findings/pure-function-diff.md for the post-mortem.
+    const CHUNK = 32 * 1024;
+    function restoreInChunks(addr, backup) {
+        const total = backup.length;
+        const base = rva(addr);
+        for (let off = 0; off < total; off += CHUNK) {
+            const len = Math.min(CHUNK, total - off);
+            // Subarray gives a view; .slice() forces a fresh ArrayBuffer
+            // for writeByteArray to consume.
+            base.add(off).writeByteArray(backup.slice(off, off + len).buffer);
+        }
+    }
+    restoreInChunks(ADDR.var_hash_per_army_768,          g_state_hash_per_army_backup);
+    restoreInChunks(ADDR.var_hash_player_strategic_352,  g_state_hash_player_strategic_backup);
+    restoreInChunks(ADDR.var_hash_per_territory_420,     g_state_hash_per_territory_backup);
+    restoreInChunks(ADDR.var_hash_per_battle_hex_432,    g_state_hash_per_battle_hex_backup);
+    restoreInChunks(ADDR.var_hash_per_combat_unit_76,    g_state_hash_per_combat_unit_backup);
+    restoreInChunks(ADDR.var_hash_per_battle_hex_aux_52, g_state_hash_per_battle_aux_backup);
     g_state_hash_per_army_backup         = null;
     g_state_hash_player_strategic_backup = null;
     g_state_hash_per_territory_backup    = null;
@@ -2325,16 +2357,22 @@ function runRetailStateHash(in_obj) {
     const slot = in_obj.player_slot | 0;
     // Snapshot the 3 scalar inputs + the destination bucket + region.
     // Mode is u8 in the existing var_sim_game_mode_speed entry.
+    // COPY bytes into fresh Uint8Arrays (see installStateHashSources for
+    // why a view onto readByteArray's buffer is unsafe across RPC calls).
+    const _snap_bucket = new Uint8Array(STATE_HASH_BUCKET_BYTES);
+    _snap_bucket.set(new Uint8Array(
+        rva(ADDR.var_hash_bucket_base).add(slot * STATE_HASH_BUCKET_BYTES)
+            .readByteArray(STATE_HASH_BUCKET_BYTES)));
+    const _snap_region = new Uint8Array(STATE_HASH_REGION_BYTES);
+    _snap_region.set(new Uint8Array(
+        rva(ADDR.var_hash_region_base).add(slot * STATE_HASH_REGION_BYTES)
+            .readByteArray(STATE_HASH_REGION_BYTES)));
     const snap = {
         mode:            rva(ADDR.var_sim_game_mode_speed ).readU8(),
         player_slot:     rva(ADDR.var_sim_local_player_idx).readS32(),
         tick_counter:    rva(ADDR.var_sim_tick_counter    ).readU32(),
-        bucket: new Uint8Array(
-            rva(ADDR.var_hash_bucket_base).add(slot * STATE_HASH_BUCKET_BYTES)
-                .readByteArray(STATE_HASH_BUCKET_BYTES)),
-        region: new Uint8Array(
-            rva(ADDR.var_hash_region_base).add(slot * STATE_HASH_REGION_BYTES)
-                .readByteArray(STATE_HASH_REGION_BYTES)),
+        bucket: _snap_bucket,
+        region: _snap_region,
     };
     let out;
     try {
