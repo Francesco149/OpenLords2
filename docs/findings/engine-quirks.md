@@ -2704,12 +2704,127 @@ or scribble-on-descriptor symptom — the strict chain is effectively a
 silent assertion.  The port preserves the strict shape (no default
 `else`) so the same data corruption produces the same symptom.
 
-The zoom-32 sibling (`FUN_004bcbdc`) almost certainly has the same
-shape; chip 4 will confirm.
+The zoom-32 sibling (`FUN_004bcbdc`) DOES have the same shape —
+confirmed by chip 4 (the zoom-32 port).  Same `if (== 0) { primary }
+else if (== 4) { alt }` with no default; non-{0,4} selectors skip the
+FIRST sprite but the second-sprite path is independent and runs
+regardless.
 
-> 📍 `src/engine_battlefield_render.c` (`pass_terrain_zoom16`),
+> 📍 `src/engine_battlefield_render.c` (`pass_terrain_zoom16`,
+> `pass_terrain_zoom32`),
 > `docs/findings/battlefield-render.md` §"Storage layout",
-> Ghidra `FUN_004bc8fc` @ 0x4bc8fc.
+> Ghidra `FUN_004bc8fc` @ 0x4bc8fc, `FUN_004bcbdc` @ 0x4bcbdc.
+
+---
+
+## 77. Battlefield zoom-32 cell ABORT skips boundary marking too
+
+`FUN_004bcbdc` (zoom-32 terrain pass, ported as `pass_terrain_zoom32`
+inside `engine_battlefield_render`) has THREE distinct cell-disposal
+paths — and only ONE of them runs the boundary-marking step.  This
+differs structurally from the zoom-16 sibling (`FUN_004bc8fc`), where
+boundary marking ran for EVERY cell regardless of dirty/clean.
+
+The three paths (mapped to retail's two if/else-if blocks):
+
+1. **Clean cell** (`force_redraw == 0 && (flags & 1) == 0`) — go
+   straight to the boundary block, then advance.  Boundary marking
+   runs.
+
+2. **Dirty (or forced) cell with skip-bit clear** (`(flags & 1) != 0`
+   OR `force_redraw != 0`, AND `(descriptor[+1] & 4) == 0`) — clear
+   dirty bit, run first-sprite + second-sprite dispatch, THEN go to
+   the boundary block, then advance.  Boundary marking runs UNLESS
+   one of the abort gates fires (see below).
+
+3. **Dirty + skip-bit set** (`(descriptor[+1] & 4) != 0`) — go
+   directly to the advance, SKIPPING the boundary block entirely.
+   Boundary marking does NOT run.
+
+Within path 2, three abort gates each `goto LAB_004bcc53`, jumping
+straight to the advance and SKIPPING boundary marking:
+
+  - First-sprite primary path: `if (310000 < DAT_0058fe04 ||
+    DAT_0058fe04 < 1) goto LAB_004bcc53;` — out-of-band src offset
+    aborts.
+  - First-sprite alt path: same gate.
+  - Second-sprite path: `if (bVar2 == 0 || 3 < bVar2) goto
+    LAB_004bcc53;` — second-sprite mode byte (descriptor[+4]) outside
+    {1, 2, 3} aborts.
+
+The result: a cell whose first-sprite descriptor has a corrupted
+src_offset, OR whose second-sprite mode byte is out of band, will
+NEITHER be drawn NOR get its boundary bit set.  The dirty bit IS
+cleared (that happens BEFORE the gate), so on the next frame the
+cell stays clean — meaning the corruption silently propagates as
+unredrawn pixels, with no boundary-cell re-paint trick to recover it
+on scroll.
+
+```c
+/* retail FUN_004bcbdc shape:                                       */
+if ((force_redraw == 0) && ((flags & 1) == 0)) {
+    /* CLEAN cell                                                   */
+LAB_004bcfa3:
+    /* boundary marking                                             */
+    if (col == 0) flags |= 2; else if (row == 0) flags |= 2; ...
+}
+else if ((desc[+1] & 4) == 0) {
+    /* DIRTY + skip-bit clear                                       */
+    desc[+2] &= 0xfe;
+    /* ... first sprite ... */
+    if (off > 310000 || off < 1) goto LAB_004bcc53;  /* abort       */
+    /* ... second sprite ... */
+    if (mode == 0 || mode > 3) goto LAB_004bcc53;    /* abort       */
+    goto LAB_004bcfa3;                               /* run boundary*/
+}
+/* DIRTY + skip-bit set: fall through (no boundary, no draw)        */
+LAB_004bcc53:
+    /* per-cell advance */
+```
+
+The port mirrors the three-path structure via a local `do_boundary`
+flag rather than goto, but the behavior is byte-equivalent.
+
+> 📍 `src/engine_battlefield_render.c` (`pass_terrain_zoom32`),
+> Ghidra `FUN_004bcbdc` @ 0x4bcbdc.
+
+---
+
+## 78. Battlefield zoom-32 second-sprite index has a clamp at slot 0x9a
+
+`FUN_004bcbdc`'s second-sprite-per-cell path picks its sprite slot
+from `descriptor[+0]` (the byte read into `bVar1` in retail) with a
+strict clamp:
+
+```c
+if (bVar1 < 0x10) {
+    DAT_005c9288 = bVar1 + 0x8b;   /* slot in [0x8c, 0x9b)         */
+}
+else {
+    DAT_005c9288 = 0x9a;           /* clamped sentinel              */
+}
+```
+
+So `descriptor[+0]` values in `[1, 0x10)` (i.e. 1..15) map to slots
+`[0x8c, 0x9b)` (140..154) — fifteen per-byte alternates.  Value 0x0f
+(15) lands on slot 0x9a (154), the SAME slot the `>= 0x10` clamp
+defaults to.  Values 0x10..0xff all also collapse to slot 0x9a.
+
+This means slot 0x9a is the "default overlay" sprite that the engine
+falls back to whenever the per-cell selector byte is either at its
+upper-band boundary or above it.  The fifteen-slot alternate band
+(0x8c..0x99) is exclusively per-byte selection; slot 0x9b and above
+in that range is unused by this dispatch path.
+
+Asymmetry vs. a more obvious `(bVar1 - 1) & 0xf` mask: this is a
+*saturating clamp*, not a wrap.  A descriptor with a corrupted high
+value never indexes outside the slot table; it just always renders
+the same default sprite.  Effectively a silent failsafe — the engine
+keeps rendering *something* rather than dereferencing past the slot
+table.
+
+> 📍 `src/engine_battlefield_render.c` (`pass_terrain_zoom32`),
+> Ghidra `FUN_004bcbdc` @ 0x4bcbdc, lines 72-77 of decompilation.
 
 ---
 

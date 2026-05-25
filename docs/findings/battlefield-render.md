@@ -12,9 +12,10 @@ cluster (`FUN_004050f6` + 3 passes, all in `0x405000..0x408000`),
 but lives in a different address band (`0x4bc000..0x4bf300`) and
 uses a different tile format and storage layout.
 
-**Status**: chips 1, 2, 3 ported (sprite primitive + frame driver +
-zoom-16 first pass terrain blit); chips 4–5 surveyed only.  Survey
-landed 2026-05-25, chips 1–3 landed 2026-05-25.
+**Status**: chips 1, 2, 3, 3.5, 4 ported (sprite primitives + frame
+driver + both zoom-dispatched first-pass terrain blits); chip 5
+surveyed only.  Survey landed 2026-05-25, chips 1–4 landed
+2026-05-25.
 
 ## Entry point
 
@@ -204,8 +205,24 @@ The cluster is too large to port in one chip.  Suggested chip plan:
    (re-paint on next frame).
 
 4. **`FUN_004bcbdc`** (1187 B zoom-32 first pass) — chip 4.
-   The zoom-32 sibling.  Larger because zoom-2 needs more
-   per-cell setup (probably hex-row offset interleaving).
+   **LANDED** (2026-05-25) as `pass_terrain_zoom32` inside
+   `engine_battlefield_render`.  Two new per-cell behaviors over
+   the zoom-16 sibling: (a) `descriptor[+1] & 4` EARLY-SKIP gate
+   that drops dirty cells without drawing OR boundary marking, and
+   (b) a SECOND clipped sprite per cell (gated on `descriptor[+0]
+   != 0` and `descriptor[+4] ∈ {1, 2, 3}`) that always pulls from
+   the alt blob, picks slot `descriptor[+0] + 0x8b` (clamped at
+   `0x9a` when `descriptor[+0] >= 0x10`), and goes through the
+   full clipped-blit dispatcher (clip_x → clip_y →
+   apply_skip_and_dispatch_sprite).  Both the first and second
+   sprite share a `[1, 310000]` glyph_offset gate that aborts the
+   cell entirely on out-of-band offsets (skips boundary marking +
+   skips the second sprite).  Adds one new binding:
+   `bind_clip_rect(left, top, right, bottom)`.  The 32×32 raw blit
+   primitive (`gfx_sprite_blit_32x32_raw` — chip 3.5) is the
+   target for the first sprite; the existing clipped sprite blit
+   family (`gfx_sprite.c`) is reused for the second sprite via
+   `gfx_dispatch_apply_skip_and_dispatch_sprite`.
 
 5. **`FUN_004bd355`** + **`FUN_004bd233`** + **`FUN_004bd07f`**
    + **`FUN_004bf1f9`** — chip 5 (or more).  The four passes

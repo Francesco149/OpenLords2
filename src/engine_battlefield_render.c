@@ -63,6 +63,15 @@ static int g_camera_row_stride;
 static const uint8_t *g_blob_primary;
 static const uint8_t *g_blob_alt;
 
+/* Clip rect for the zoom-32 second-sprite path.  Retail:
+ *   left   = DAT_004e6564   right  = DAT_004e5d54
+ *   top    = DAT_004e5d48   bottom = DAT_004e5d6c
+ */
+static int g_clip_left;
+static int g_clip_top;
+static int g_clip_right;
+static int g_clip_bottom;
+
 /* Per-frame ephemeral state (mirrors retail running statics).
  *   DAT_004e6588  — descriptor cursor byte offset, advanced per cell.
  *   _DAT_004e5d64 — per-cell counter, incremented per cell (purpose
@@ -74,6 +83,10 @@ static int g_per_frame_cell_counter;
 /* Per-blit dispatch counter — bumped each time the terrain pass
  * actually calls `gfx_sprite_blit_16x16_raw`. */
 static int g_terrain_blit_count;
+
+/* Per-blit dispatch counters for the zoom-32 first pass. */
+static int g_terrain_z32_first_blit_count;
+static int g_terrain_z32_second_blit_count;
 
 /* Per-pass call counters.  See the header for what each one
  * represents.  All seven pass entry points (5 stubs + 1 real no-op
@@ -130,9 +143,27 @@ void engine_battlefield_render_bind_blobs(const uint8_t *primary, const uint8_t 
     g_blob_alt     = alt;
 }
 
+void engine_battlefield_render_bind_clip_rect(int left, int top, int right, int bottom)
+{
+    g_clip_left   = left;
+    g_clip_top    = top;
+    g_clip_right  = right;
+    g_clip_bottom = bottom;
+}
+
 int engine_battlefield_render_terrain_blit_count(void)
 {
     return g_terrain_blit_count;
+}
+
+int engine_battlefield_render_terrain_zoom32_first_blit_count(void)
+{
+    return g_terrain_z32_first_blit_count;
+}
+
+int engine_battlefield_render_terrain_zoom32_second_blit_count(void)
+{
+    return g_terrain_z32_second_blit_count;
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -148,7 +179,6 @@ int engine_battlefield_render_terrain_blit_count(void)
  * verification, which is a test-only embellishment over retail.
  * ────────────────────────────────────────────────────────────────── */
 
-static void pass_terrain_zoom32(void)   { g_count_terrain_zoom32 += 1; }
 static void pass_middle(void)           { g_count_middle += 1; }
 static void pass_overlay_zoom16(void)   { g_count_overlay_zoom16 += 1; }
 static void pass_overlay_zoom32(void)   { g_count_overlay_zoom32 += 1; }
@@ -283,6 +313,186 @@ static void pass_terrain_zoom16(void)
 }
 
 /* ──────────────────────────────────────────────────────────────────
+ * Terrain zoom-32 pass — port of FUN_004bcbdc @ 0x4bcbdc (1187 B).
+ *
+ * Sibling of pass_terrain_zoom16 (FUN_004bc8fc) at twice the cell
+ * pitch (0x20 px) and with two additions:
+ *
+ *   1. EARLY-SKIP gate on descriptor[+1] & 4.  A dirty (or forced)
+ *      cell that has this bit set is silently dropped: NO drawing
+ *      AND NO boundary marking — the cell advances without touching
+ *      anything.  Clean cells (not dirty AND not forced) still get
+ *      their boundary marking.  This is a NEW behavior compared to
+ *      zoom-16, where every cell unconditionally got boundary marking.
+ *
+ *   2. SECOND sprite-per-cell, gated on descriptor[+0] != 0.  The
+ *      second sprite uses the CLIPPED blit family — runs through
+ *      gfx_dispatch_clip_x / clip_y / apply_skip_and_dispatch_sprite —
+ *      against the bound clip rect, and always picks from the ALT blob
+ *      (regardless of the per-cell blob selector that picked the FIRST
+ *      sprite).  Sprite index is descriptor[+0] + 0x8b, clamped at
+ *      0x9a when descriptor[+0] >= 0x10.  The mode byte at
+ *      descriptor[+4] gates the dispatch: only values 1..3 are valid;
+ *      0 or > 3 aborts the cell entirely (skips remaining drawing AND
+ *      skips boundary marking — matches retail's `goto LAB_004bcc53`).
+ *
+ * Both sprites also share a `[1, 310000]` glyph_offset gate: if the
+ * staged src offset falls outside that band, the cell aborts in the
+ * same way (goto LAB_004bcc53 — skips boundary marking AND skips the
+ * second sprite path).  This is the retail "bad blob slot" failsafe.
+ *
+ * Per-cell pixel pitch is 0x20 (32 px), so cursor_x / cursor_y advance
+ * by 0x20 per cell / per row, matching the 32×32 sprite size.
+ *
+ * Note: unlike zoom-16, this pass does NOT increment a per-cell
+ * counter analogue (retail's _DAT_004e5d64) — it's just not present
+ * in FUN_004bcbdc.
+ * ────────────────────────────────────────────────────────────────── */
+
+static void pass_terrain_zoom32(void)
+{
+    g_count_terrain_zoom32 += 1;
+
+    if (!g_desc_base) {
+        return;
+    }
+
+    g_desc_cursor_offset = (g_camera_x + g_camera_y * g_camera_row_stride)
+                         * g_desc_stride;
+    int cursor_y = g_viewport_y;
+
+    for (int row = 0; row < g_grid_rows; row++) {
+        int cursor_x = g_viewport_x;
+
+        for (int col = 0; col < g_grid_cols; col++) {
+            uint8_t *desc     = &g_desc_base[g_desc_cursor_offset];
+            uint8_t  flags    = desc[2];
+
+            int do_boundary = 0;
+
+            if (g_force_redraw == 0 && (flags & 0x01) == 0) {
+                /* CLEAN cell — fall straight to boundary marking. */
+                do_boundary = 1;
+            } else if ((desc[1] & 0x04) == 0) {
+                /* DIRTY (or forced) cell, skip-bit clear → drawing path.
+                 *
+                 * Note on control flow: every premature exit inside this
+                 * block (the `[1, 310000]` glyph_offset gate, the second-
+                 * sprite mode-byte gate) jumps STRAIGHT to the per-cell
+                 * advance, SKIPPING boundary marking.  We mirror that
+                 * with an early `continue` after the cell advance below
+                 * — controlled by a local `abort` flag instead of goto. */
+
+                int abort_cell = 0;
+
+                /* Clear dirty bit. */
+                desc[2] = (uint8_t)(flags & 0xfe);
+
+                int sprite_idx = desc[3];
+                uint8_t bVar1  = desc[0];   /* second-sprite chooser */
+                uint8_t blob_sel = (uint8_t)(flags & 0x1c);
+
+                /* First sprite — 32×32 raw blit, picks blob by
+                 * (flags & 0x1c).  No fall-through default (matches
+                 * the zoom-16 sibling's quirk #76). */
+                const uint8_t *first_blob = NULL;
+                if (blob_sel == 0) {
+                    first_blob = g_blob_primary;
+                } else if (blob_sel == 4) {
+                    first_blob = g_blob_alt;
+                }
+
+                if (first_blob) {
+                    /* Stage cursor + sprite metadata for the FIRST blit. */
+                    gfx_glyph_set_cursor_x(cursor_x);
+                    gfx_glyph_set_cursor_y(cursor_y);
+                    gfx_dispatch_set_last_glyph_index(sprite_idx);
+                    gfx_dispatch_stage_sprite_descriptor(first_blob, sprite_idx);
+
+                    /* [1, 310000] glyph_offset gate — see the quirk on
+                     * the bad-blob-slot failsafe.  An out-of-band offset
+                     * aborts the entire cell (skips boundary + second
+                     * sprite). */
+                    int glyph_off = gfx_glyph_glyph_offset();
+                    if (glyph_off > 310000 || glyph_off < 1) {
+                        abort_cell = 1;
+                    } else {
+                        gfx_sprite_blit_32x32_raw(first_blob);
+                        g_terrain_z32_first_blit_count += 1;
+                    }
+                }
+                /* else: no first blob match — STILL run the second-sprite
+                 * path; retail's strict `if/else-if` for the first sprite
+                 * just falls through, and the second-sprite gate is
+                 * independent (`if (bVar1 != 0) ...`). */
+
+                /* Second sprite — clipped blit from the alt blob, gated
+                 * on descriptor[+0] != 0 AND descriptor[+4] ∈ {1, 2, 3}. */
+                if (!abort_cell && bVar1 != 0) {
+                    uint8_t mode = desc[4];
+                    if (mode == 0 || mode > 3) {
+                        abort_cell = 1;
+                    } else {
+                        /* Pick second-sprite slot: bVar1 in [1, 0x10)
+                         * maps to [0x8c, 0x9b); bVar1 >= 0x10 clamps
+                         * to 0x9a.  Slot 0x9a is the "default overlay"
+                         * sprite; the lower band is per-byte alternates. */
+                        int second_idx;
+                        if (bVar1 < 0x10) {
+                            second_idx = (int)bVar1 + 0x8b;
+                        } else {
+                            second_idx = 0x9a;
+                        }
+
+                        gfx_glyph_set_cursor_x(cursor_x);
+                        gfx_glyph_set_cursor_y(cursor_y);
+                        gfx_dispatch_set_last_glyph_index(second_idx);
+                        gfx_dispatch_stage_sprite_descriptor(g_blob_alt, second_idx);
+
+                        /* Set the clip — clip_x sets x-mode tag,
+                         * left_skip + clipped_w; clip_y sets y-mode
+                         * tag, top_skip + row_count.  Both consume
+                         * the staged cursor + width/height. */
+                        gfx_dispatch_clip_x(g_clip_left, g_clip_right);
+                        gfx_dispatch_clip_y(g_clip_top, g_clip_bottom);
+
+                        /* Bake top_skip * width + left_skip into the
+                         * staged glyph_offset, then dispatch one of
+                         * the three sprite blitters based on x_clip_mode.
+                         * Gated on y_clip_mode != 5 (i.e. visible). */
+                        int y_mode_before = gfx_dispatch_clip_y_mode();
+                        gfx_dispatch_apply_skip_and_dispatch_sprite(g_blob_alt);
+                        if (y_mode_before != 5) {
+                            g_terrain_z32_second_blit_count += 1;
+                        }
+                    }
+                }
+
+                if (!abort_cell) {
+                    do_boundary = 1;
+                }
+                /* else: drawing-path abort — skip boundary marking. */
+            }
+            /* else: DIRTY + skip-bit set → no drawing, no boundary. */
+
+            if (do_boundary) {
+                if (col == 0 || row == 0
+                    || col == g_grid_cols - 1
+                    || row == g_grid_rows - 1) {
+                    g_desc_base[g_desc_cursor_offset + 2] |= 0x02;
+                }
+            }
+
+            g_desc_cursor_offset += g_desc_stride;
+            cursor_x             += 0x20;
+        }
+
+        g_desc_cursor_offset += g_grid_row_wrap;
+        cursor_y             += 0x20;
+    }
+}
+
+/* ──────────────────────────────────────────────────────────────────
  * Frame driver — port of FUN_004bc142 @ 0x4bc142 (143 B).
  *
  * Retail decompilation (verbatim shape):
@@ -357,12 +567,14 @@ int engine_battlefield_render_count_final(void)           { return g_count_final
 
 void engine_battlefield_render_reset_counts(void)
 {
-    g_count_terrain_zoom16 = 0;
-    g_count_terrain_zoom32 = 0;
-    g_count_middle         = 0;
-    g_count_overlay_zoom16 = 0;
-    g_count_overlay_zoom32 = 0;
-    g_count_late           = 0;
-    g_count_final          = 0;
-    g_terrain_blit_count   = 0;
+    g_count_terrain_zoom16             = 0;
+    g_count_terrain_zoom32             = 0;
+    g_count_middle                     = 0;
+    g_count_overlay_zoom16             = 0;
+    g_count_overlay_zoom32             = 0;
+    g_count_late                       = 0;
+    g_count_final                      = 0;
+    g_terrain_blit_count               = 0;
+    g_terrain_z32_first_blit_count     = 0;
+    g_terrain_z32_second_blit_count    = 0;
 }

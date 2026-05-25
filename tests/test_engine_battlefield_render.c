@@ -674,3 +674,468 @@ int test_engine_battlefield_render_terrain_per_blit_counter_resets(void)
     T_ASSERT_EQ_I(engine_battlefield_render_terrain_blit_count(), 0);
     return 0;
 }
+
+/* ────────────────────────────────────────────────────────────────
+ * Terrain (zoom-32) pass — port of FUN_004bcbdc.
+ *
+ * Bigger scaffold: 32×32 sprite slot (1024 bytes) in two blobs, plus
+ * a clip rect bound for the second-sprite-per-cell path.  The
+ * descriptor stride is left at 8 so the same DESC_STRIDE constant
+ * survives — it's >= 5 (zoom-32 reads desc[0..4]) so all five fields
+ * fit.
+ * ──────────────────────────────────────────────────────────────── */
+
+/* Set the full 5-byte descriptor zoom-32 reads from. */
+static void desc_set_z32(int col, int row, int phys_cols,
+                         uint8_t b0, uint8_t b1,
+                         uint8_t flags, uint8_t sprite_idx,
+                         uint8_t b4)
+{
+    int off = (col + row * phys_cols) * DESC_STRIDE;
+    g_terrain_desc[off + 0] = b0;
+    g_terrain_desc[off + 1] = b1;
+    g_terrain_desc[off + 2] = flags;
+    g_terrain_desc[off + 3] = sprite_idx;
+    g_terrain_desc[off + 4] = b4;
+}
+
+/* Bigger blob: slots 0..0xff (the highest we touch is 0x9a) live in
+ * [8, 0xff*16+8+0xf] = [8, 4087].  Pixel data must therefore start at
+ * >= 4096 to avoid clobbering descriptors via the memset for pixel
+ * patterns.  Use 8192 so we have room for four distinct 1024-byte
+ * pixel regions at offsets 4096 / 5120 / 6144 / 7168. */
+#define Z32_BLOB_SIZE       8192
+#define Z32_PIX_FIRST_OFF   4096   /* slot 1 primary + alt (1st sprite) */
+#define Z32_PIX_CLAMP_OFF   5120   /* slot 0x9a alt — clamp target */
+#define Z32_PIX_BAND_OFF    6144   /* slots 0x8c..0x99 alt — alternates band */
+static uint8_t g_z32_blob_primary[Z32_BLOB_SIZE];
+static uint8_t g_z32_blob_alt    [Z32_BLOB_SIZE];
+
+/* Scaffold the zoom-32 terrain pass with a vis_cols × vis_rows visible
+ * grid embedded in an 8×8 physical descriptor table.  Defaults:
+ *
+ *   - All cells dirty (flag bit 0x01) with sprite_idx=1, desc[+0]=0
+ *     (no second sprite), desc[+1]=0 (skip-bit clear), desc[+4]=0
+ *     (irrelevant since no second sprite).
+ *   - Both blobs have slot 1 = 32×32, src_off=0x400, advance=32.
+ *   - Slot 0x9a in alt blob is also configured (32×32 at src_off=0x800)
+ *     so the second-sprite path has a valid target.
+ *   - Slots 0x8c..0x9b in alt blob configured (32×32 at src_off=0xc00).
+ *   - Clip rect set wide (0..640 × 0..400) so clip_x / clip_y both
+ *     report "no clip".
+ *   - Viewport at (32, 16); camera at (0, 0); zoom 0x20. */
+static void terrain_z32_scaffold(int vis_cols, int vis_rows)
+{
+    memset(g_terrain_canvas, 0xff, sizeof g_terrain_canvas);
+    gfx_paint_bind_canvas(g_terrain_canvas, CANVAS_W, CANVAS_H);
+
+    memset(g_terrain_desc, 0, sizeof g_terrain_desc);
+    for (int r = 0; r < vis_rows; r++) {
+        for (int c = 0; c < vis_cols; c++) {
+            desc_set_z32(c, r, DESC_COLS_PHY,
+                         /*b0=*/0, /*b1=*/0,
+                         /*flags=*/0x01, /*sprite_idx=*/1, /*b4=*/0);
+        }
+    }
+
+    memset(g_z32_blob_primary, 0, sizeof g_z32_blob_primary);
+    memset(g_z32_blob_alt,     0, sizeof g_z32_blob_alt);
+
+    /* Slot 1 — first-sprite target.  Pixel region at Z32_PIX_FIRST_OFF
+     * (well above the slot descriptor table to avoid clobbering it). */
+    blob_set_slot(g_z32_blob_primary, 1, 32, 32, Z32_PIX_FIRST_OFF, 0xab, 32, 0xcd);
+    blob_set_slot(g_z32_blob_alt,     1, 32, 32, Z32_PIX_FIRST_OFF, 0xab, 32, 0xcd);
+    memset(g_z32_blob_primary + Z32_PIX_FIRST_OFF, /*byte_val=*/0x42, 32 * 32);
+    memset(g_z32_blob_alt     + Z32_PIX_FIRST_OFF, /*byte_val=*/0x77, 32 * 32);
+
+    /* Slots 0x8c..0x99 — second-sprite per-byte alternates (b0=1..14
+     * maps to slot 0x8c..0x99).  All share Z32_PIX_BAND_OFF with
+     * pattern 0x55.  Note: slot 0x9a is configured SEPARATELY below —
+     * both as the b0=15 boundary case AND as the b0>=0x10 clamp target. */
+    for (int s = 0x8c; s <= 0x99; s++) {
+        blob_set_slot(g_z32_blob_alt, s, 32, 32, Z32_PIX_BAND_OFF, 0x11, 32, 0x22);
+    }
+    memset(g_z32_blob_alt + Z32_PIX_BAND_OFF, 0x55, 32 * 32);
+
+    /* Slot 0x9a — second-sprite clamp target.  Pattern 0x88 so it's
+     * distinguishable from the alternates band's 0x55. */
+    blob_set_slot(g_z32_blob_alt, 0x9a, 32, 32, Z32_PIX_CLAMP_OFF, 0x11, 32, 0x22);
+    memset(g_z32_blob_alt + Z32_PIX_CLAMP_OFF, 0x88, 32 * 32);
+
+    engine_battlefield_render_reset_counts();
+    engine_battlefield_render_set_zoom(0x20);
+    engine_battlefield_render_set_force_redraw(0);
+    engine_battlefield_render_bind_descriptor_table(g_terrain_desc, DESC_STRIDE);
+    engine_battlefield_render_bind_grid(vis_cols, vis_rows,
+                                        /*row_wrap=*/(DESC_COLS_PHY - vis_cols) * DESC_STRIDE);
+    engine_battlefield_render_bind_viewport_offset(32, 16);
+    engine_battlefield_render_bind_camera_row_stride(DESC_COLS_PHY);
+    engine_battlefield_render_bind_blobs(g_z32_blob_primary, g_z32_blob_alt);
+    engine_battlefield_render_bind_clip_rect(/*left=*/0, /*top=*/0,
+                                             /*right=*/CANVAS_W, /*bottom=*/CANVAS_H);
+}
+
+int test_engine_battlefield_render_terrain_z32_blits_dirty_cells(void)
+{
+    terrain_z32_scaffold(/*cols=*/3, /*rows=*/2);
+    engine_battlefield_render_frame(0, 0);
+
+    /* 3 × 2 = 6 dirty cells, primary blob, no second sprite. */
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(),  6);
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_second_blit_count(), 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_terrain_z32_skips_clean_cells(void)
+{
+    terrain_z32_scaffold(/*cols=*/3, /*rows=*/2);
+
+    /* Mark one cell clean. */
+    desc_set_z32(1, 0, DESC_COLS_PHY, 0, 0, /*flags=*/0, /*sprite=*/1, 0);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(), 5);
+    return 0;
+}
+
+int test_engine_battlefield_render_terrain_z32_force_redraw_overrides_dirty(void)
+{
+    terrain_z32_scaffold(/*cols=*/3, /*rows=*/2);
+
+    for (int r = 0; r < 2; r++) {
+        for (int c = 0; c < 3; c++) {
+            desc_set_z32(c, r, DESC_COLS_PHY, 0, 0,
+                         /*flags=*/0, /*sprite=*/1, 0);
+        }
+    }
+
+    engine_battlefield_render_set_force_redraw(1);
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(), 6);
+    return 0;
+}
+
+/* Quirk: descriptor[+1] & 4 set on a DIRTY cell → NO drawing AND NO
+ * boundary marking (the entire if/else-if chain short-circuits). */
+int test_engine_battlefield_render_terrain_z32_skip_bit_drops_dirty_cell(void)
+{
+    terrain_z32_scaffold(/*cols=*/3, /*rows=*/3);
+
+    /* Centre cell (1, 1) — interior, dirty, with the skip-bit set. */
+    desc_set_z32(1, 1, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0x04,
+                 /*flags=*/0x01, /*sprite=*/1, /*b4=*/0);
+
+    engine_battlefield_render_frame(0, 0);
+
+    /* 8 other interior+edge cells blitted (9 - 1 skipped). */
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(), 8);
+
+    /* Centre cell: dirty bit STILL set (drawing path never ran). */
+    T_ASSERT_EQ_I(desc_flags(1, 1, DESC_COLS_PHY) & 0x01, 0x01);
+
+    /* Centre cell: boundary bit NOT set (skip-bit short-circuited
+     * boundary marking too — but centre cell is interior so this is
+     * trivially true; the relevant check is the corner case below). */
+    T_ASSERT_EQ_I(desc_flags(1, 1, DESC_COLS_PHY) & 0x02, 0);
+    return 0;
+}
+
+/* Quirk corner case: descriptor[+1] & 4 set on a DIRTY EDGE cell —
+ * boundary marking should still be skipped (the skip-bit short-
+ * circuits BOTH drawing AND boundary marking, unlike on a clean cell). */
+int test_engine_battlefield_render_terrain_z32_skip_bit_blocks_boundary_too(void)
+{
+    terrain_z32_scaffold(/*cols=*/3, /*rows=*/3);
+
+    /* Top-left corner cell (0, 0) — dirty, skip-bit set. */
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0x04,
+                 /*flags=*/0x01, /*sprite=*/1, /*b4=*/0);
+
+    engine_battlefield_render_frame(0, 0);
+
+    /* Boundary bit NOT set on the cell — skip-bit blocked it. */
+    T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x02, 0);
+    /* Dirty bit still set. */
+    T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x01, 0x01);
+    return 0;
+}
+
+/* Counterpart: descriptor[+1] & 4 set on a CLEAN cell — boundary
+ * marking still runs (the skip-bit only gates the dirty path; clean
+ * cells go straight to the boundary block).  Important asymmetry vs.
+ * dirty + skip-bit. */
+int test_engine_battlefield_render_terrain_z32_skip_bit_leaves_clean_boundary(void)
+{
+    terrain_z32_scaffold(/*cols=*/3, /*rows=*/3);
+
+    /* Top-left corner (0, 0) — CLEAN, skip-bit set. */
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0x04,
+                 /*flags=*/0x00, /*sprite=*/1, /*b4=*/0);
+
+    engine_battlefield_render_frame(0, 0);
+
+    /* Boundary bit IS set — clean cells get boundary marking
+     * regardless of the skip-bit. */
+    T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x02, 0x02);
+    return 0;
+}
+
+int test_engine_battlefield_render_terrain_z32_blob_selector_primary(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    /* (flags & 0x1c) == 0 → primary blob */
+    desc_set_z32(0, 0, DESC_COLS_PHY, 0, 0, /*flags=*/0x01, /*sprite=*/1, 0);
+
+    engine_battlefield_render_frame(0, 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(), 1);
+
+    /* Sample pixel at viewport (32, 16) — primary 0x42 pattern. */
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 32], 0x42);
+    return 0;
+}
+
+int test_engine_battlefield_render_terrain_z32_blob_selector_alt(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    desc_set_z32(0, 0, DESC_COLS_PHY, 0, 0,
+                 /*flags=*/0x01 | 0x04, /*sprite=*/1, 0);
+
+    engine_battlefield_render_frame(0, 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(), 1);
+
+    /* Alt pattern is 0x77 — written by 32×32 raw blit. */
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 32], 0x77);
+    return 0;
+}
+
+/* Quirk #76: (flags & 0x1c) values outside {0, 4} skip first-sprite
+ * dispatch.  In zoom-32 the dirty bit still clears AND boundary marking
+ * still runs.  Second-sprite path is independent of blob selector — if
+ * bVar1 != 0 the second sprite ALSO runs. */
+int test_engine_battlefield_render_terrain_z32_blob_selector_other_skips_first(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    desc_set_z32(0, 0, DESC_COLS_PHY, 0, 0,
+                 /*flags=*/0x01 | 0x08, /*sprite=*/1, 0);
+
+    engine_battlefield_render_frame(0, 0);
+
+    /* No first blit. */
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(), 0);
+    /* Dirty bit cleared. */
+    T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x01, 0);
+    /* Boundary bit set (1×1 grid = corner). */
+    T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x02, 0x02);
+    /* No canvas change. */
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 32], 0xff);
+    return 0;
+}
+
+/* Quirk: [1, 310000] glyph_offset gate aborts the entire cell. */
+int test_engine_battlefield_render_terrain_z32_src_offset_gate_aborts(void)
+{
+    terrain_z32_scaffold(/*cols=*/3, /*rows=*/3);
+
+    /* Re-stage slot 1 in primary with an out-of-band src_off.  Use
+     * 310001 (just past the upper bound). */
+    blob_set_slot(g_z32_blob_primary, 1, 32, 32, 310001, 0xab, 32, 0xcd);
+
+    /* Mark only the centre interior cell as the target.  Other cells
+     * use a different sprite (slot 0) so they don't hit the bad slot. */
+    for (int r = 0; r < 3; r++) {
+        for (int c = 0; c < 3; c++) {
+            desc_set_z32(c, r, DESC_COLS_PHY, 0, 0,
+                         /*flags=*/0x01, /*sprite=*/(c == 1 && r == 1) ? 1 : 2, 0);
+        }
+    }
+    /* Slot 2 — valid src_off so the surrounding cells blit normally. */
+    blob_set_slot(g_z32_blob_primary, 2, 32, 32, Z32_PIX_FIRST_OFF, 0xab, 32, 0xcd);
+
+    engine_battlefield_render_frame(0, 0);
+
+    /* 8 cells blit (surrounding 3×3 minus centre). */
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(), 8);
+
+    /* Centre cell: dirty bit cleared (mutation happens BEFORE the gate),
+     * but boundary bit NOT set (centre is interior and gate aborted). */
+    T_ASSERT_EQ_I(desc_flags(1, 1, DESC_COLS_PHY) & 0x01, 0);
+    T_ASSERT_EQ_I(desc_flags(1, 1, DESC_COLS_PHY) & 0x02, 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_terrain_z32_second_sprite_runs_when_b0_nonzero(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    /* desc[+0] = 1 (second sprite chooser), desc[+4] = 1 (valid mode). */
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/1, /*b1=*/0,
+                 /*flags=*/0x01, /*sprite=*/1, /*b4=*/1);
+
+    engine_battlefield_render_frame(0, 0);
+
+    /* Both the first-sprite blit AND the second-sprite blit fire. */
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(),  1);
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_second_blit_count(), 1);
+    return 0;
+}
+
+int test_engine_battlefield_render_terrain_z32_second_sprite_skipped_when_b0_zero(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    /* desc[+0] = 0 → no second sprite even with a valid mode byte. */
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/0, /*b1=*/0,
+                 /*flags=*/0x01, /*sprite=*/1, /*b4=*/1);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(),  1);
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_second_blit_count(), 0);
+    return 0;
+}
+
+/* Quirk: second-sprite mode byte ∈ {1, 2, 3} only.  0 or > 3 aborts
+ * the cell (skips boundary marking + skips second blit). */
+int test_engine_battlefield_render_terrain_z32_second_sprite_mode_zero_aborts(void)
+{
+    terrain_z32_scaffold(/*cols=*/3, /*rows=*/3);
+
+    /* Centre cell: second-sprite enabled (b0=1) but mode=0 → abort. */
+    desc_set_z32(1, 1, DESC_COLS_PHY,
+                 /*b0=*/1, /*b1=*/0,
+                 /*flags=*/0x01, /*sprite=*/1, /*b4=*/0);
+
+    engine_battlefield_render_frame(0, 0);
+
+    /* Centre cell: dirty cleared (pre-gate mutation), boundary NOT set,
+     * second blit NOT dispatched. */
+    T_ASSERT_EQ_I(desc_flags(1, 1, DESC_COLS_PHY) & 0x01, 0);
+    T_ASSERT_EQ_I(desc_flags(1, 1, DESC_COLS_PHY) & 0x02, 0);
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_second_blit_count(), 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_terrain_z32_second_sprite_mode_high_aborts(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/1, /*b1=*/0,
+                 /*flags=*/0x01, /*sprite=*/1, /*b4=*/4);   /* 4 > 3 */
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_second_blit_count(), 0);
+    return 0;
+}
+
+/* Quirk: descriptor[+0] >= 0x10 clamps the second-sprite slot to 0x9a.
+ * Values in [1, 0x10) map to [0x8c, 0x9b).  Verify by reading the
+ * canvas — slot 0x9a has pattern 0x88; slots 0x8c..0x9b have 0x55. */
+int test_engine_battlefield_render_terrain_z32_second_sprite_slot_picks_lower_band(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    /* No first sprite (blob selector 8 → no first blit).  desc[+0]=1
+     * → second slot = 0x8c (pattern 0x55). */
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/1, /*b1=*/0,
+                 /*flags=*/0x01 | 0x08, /*sprite=*/1, /*b4=*/1);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(),  0);
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_second_blit_count(), 1);
+    /* Sample pixel — slot 0x8c pattern 0x55. */
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 32], 0x55);
+    return 0;
+}
+
+int test_engine_battlefield_render_terrain_z32_second_sprite_slot_clamps_at_high(void)
+{
+    terrain_z32_scaffold(/*cols=*/1, /*rows=*/1);
+
+    /* desc[+0] = 0x20 (>= 0x10) → second slot clamps to 0x9a. */
+    desc_set_z32(0, 0, DESC_COLS_PHY,
+                 /*b0=*/0x20, /*b1=*/0,
+                 /*flags=*/0x01 | 0x08, /*sprite=*/1, /*b4=*/1);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_second_blit_count(), 1);
+    /* Slot 0x9a pattern 0x88. */
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 32], 0x88);
+    return 0;
+}
+
+int test_engine_battlefield_render_terrain_z32_cursor_advances_32px_per_cell(void)
+{
+    terrain_z32_scaffold(/*cols=*/2, /*rows=*/1);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(), 2);
+    /* Cell 0 at (32, 16): primary pattern 0x42. */
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 32], 0x42);
+    /* Cell 1 at (32 + 32, 16) = (64, 16): same pattern. */
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 64], 0x42);
+    /* Last byte of cell 0 = column 63: still 0x42 (sprites tile
+     * contiguously at 32-px pitch). */
+    T_ASSERT_EQ_I(g_terrain_canvas[16 * CANVAS_W + 63], 0x42);
+    return 0;
+}
+
+int test_engine_battlefield_render_terrain_z32_no_descriptor_short_circuits(void)
+{
+    engine_battlefield_render_reset_counts();
+    engine_battlefield_render_set_zoom(0x20);
+    engine_battlefield_render_set_force_redraw(0);
+    engine_battlefield_render_bind_descriptor_table(NULL, 0);
+    engine_battlefield_render_bind_grid(0, 0, 0);
+    engine_battlefield_render_bind_viewport_offset(0, 0);
+    engine_battlefield_render_bind_camera_row_stride(0);
+    engine_battlefield_render_bind_blobs(NULL, NULL);
+
+    engine_battlefield_render_frame(0, 0);
+
+    T_ASSERT_EQ_I(engine_battlefield_render_count_terrain_zoom32(),            1);
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_first_blit_count(),  0);
+    T_ASSERT_EQ_I(engine_battlefield_render_terrain_zoom32_second_blit_count(), 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_terrain_z32_clears_dirty_after_draw(void)
+{
+    terrain_z32_scaffold(/*cols=*/3, /*rows=*/2);
+
+    engine_battlefield_render_frame(0, 0);
+
+    /* Interior-ish cell (1, 0) — dirty bit cleared after draw. */
+    T_ASSERT_EQ_I(desc_flags(1, 0, DESC_COLS_PHY) & 0x01, 0);
+    return 0;
+}
+
+int test_engine_battlefield_render_terrain_z32_marks_boundary_cells(void)
+{
+    terrain_z32_scaffold(/*cols=*/3, /*rows=*/3);
+
+    engine_battlefield_render_frame(0, 0);
+
+    /* Centre (1, 1) — interior, no boundary bit. */
+    T_ASSERT_EQ_I(desc_flags(1, 1, DESC_COLS_PHY) & 0x02, 0);
+    /* Corners + edges — boundary bit set. */
+    T_ASSERT_EQ_I(desc_flags(0, 0, DESC_COLS_PHY) & 0x02, 0x02);
+    T_ASSERT_EQ_I(desc_flags(2, 2, DESC_COLS_PHY) & 0x02, 0x02);
+    T_ASSERT_EQ_I(desc_flags(1, 0, DESC_COLS_PHY) & 0x02, 0x02);
+    return 0;
+}

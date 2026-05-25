@@ -7,7 +7,7 @@
  * 0x4bc142` — invoked from the main-loop tick when
  * `DAT_0057c8fc == 2` (game-mode = combat).
  *
- * Chips 2 + 3 of the battlefield port (see
+ * Chips 2 + 3 + 4 of the battlefield port (see
  * docs/findings/battlefield-render.md for the full chip plan):
  *
  *   FUN_004bc142 @ 0x4bc142 (143 B)  → engine_battlefield_render_frame
@@ -29,13 +29,34 @@
  *     cells are tagged with bit 0x02 of their flags byte (so they
  *     get re-painted next frame, handling scroll smear).
  *
+ *   FUN_004bcbdc @ 0x4bcbdc (1187 B) → internal pass_terrain_zoom32
+ *     Zoom-32 first pass — sibling of the zoom-16 terrain pass.  Uses
+ *     the 32×32 raw blit primitive `gfx_sprite_blit_32x32_raw` for
+ *     the first sprite per cell.  Adds two new per-cell behaviors
+ *     absent from the zoom-16 pass:
+ *
+ *       1. A descriptor[+1] & 4 EARLY-SKIP gate: dirty cells with the
+ *          bit set are silently dropped — NO drawing AND NO boundary
+ *          marking.  Clean cells still get boundary marking.
+ *       2. A SECOND sprite per cell, gated on descriptor[+0] != 0 and
+ *          descriptor[+4] ∈ {1, 2, 3}.  The second sprite always uses
+ *          the alt blob, picks slot 0x8b..0x9a by descriptor[+0]
+ *          (clamped at 0x9a for values ≥ 0x10), and goes through the
+ *          full clipped-blit dispatcher (clip_x → clip_y →
+ *          apply_skip_and_dispatch_sprite).
+ *
+ *     The first sprite has a `[1, 310000]` src-offset gate — when the
+ *     staged glyph_offset falls outside that band, the cell aborts
+ *     immediately (skips boundary marking + skips the second sprite).
+ *     Same gate is repeated on the alt-blob first-sprite path; both
+ *     are preserved verbatim.
+ *
  * The other four passes are NOT ported yet.  Each is wired here as a
  * static stub that bumps a per-pass call counter so the driver's
  * dispatch shape (zoom-16 vs zoom-32, always-on vs zoom-gated) can be
  * verified before the bodies land.  Replacing a stub with a real port
  * is a one-line change in `engine_battlefield_render.c`:
  *
- *   FUN_004bcbdc @ 0x4bcbdc (1187 B) zoom-32 terrain   [stub]
  *   FUN_004bd355 @ 0x4bd355 (543 B)  middle pass       [stub]
  *   FUN_004bd07f @ 0x4bd07f (436 B)  zoom-32 overlay   [stub]
  *   FUN_004bd233 @ 0x4bd233 (290 B)  late pass         [stub]
@@ -129,6 +150,9 @@ void engine_battlefield_render_bind_camera_row_stride(int row_stride);
  *
  *   primary  retail `DAT_004e5d78`  — used when (flags & 0x1c) == 0.
  *   alt      retail `DAT_004e6560`  — used when (flags & 0x1c) == 4.
+ *                                     ALSO used unconditionally by the
+ *                                     zoom-32 pass for its second-
+ *                                     sprite-per-cell path.
  *
  * Either pointer may be NULL if the corresponding selector is never
  * exercised; cells that hit a NULL blob have their dispatch suppressed
@@ -136,6 +160,22 @@ void engine_battlefield_render_bind_camera_row_stride(int row_stride);
  * runs — matches retail's strict if/else-if chain with no default). */
 void engine_battlefield_render_bind_blobs(const uint8_t *primary,
                                           const uint8_t *alt);
+
+/* Bind the clip rect used by the zoom-32 pass's second-sprite-per-cell
+ * path.  Retail passes these inline to FUN_0040464c / FUN_0040477b:
+ *
+ *   FUN_0040464c(DAT_004e6564, DAT_004e5d54)   — clip_x bounds
+ *   FUN_0040477b(DAT_004e5d48, DAT_004e5d6c)   — clip_y bounds
+ *
+ *   left    retail `DAT_004e6564`
+ *   right   retail `DAT_004e5d54`
+ *   top     retail `DAT_004e5d48`
+ *   bottom  retail `DAT_004e5d6c`
+ *
+ * Not consumed by the zoom-16 pass (which never goes through the
+ * clipped blitter family). */
+void engine_battlefield_render_bind_clip_rect(int left, int top,
+                                              int right, int bottom);
 
 /* ─────────────────────────────────────────────────────────────────
  * Frame render
@@ -188,5 +228,18 @@ void engine_battlefield_render_reset_counts(void);
  * once per FUN_004bc8fc invocation, this one bumps once per per-cell
  * blit.  Test-only — not part of retail. */
 int  engine_battlefield_render_terrain_blit_count(void);
+
+/* Per-blit counters for the zoom-32 first pass.  Both bump only when
+ * the corresponding blit is actually dispatched (after the src-offset
+ * gate and any blob-selector skip).
+ *
+ *   first  — bumped per cell that successfully dispatches the 32×32
+ *            raw blit (`gfx_sprite_blit_32x32_raw`) for the primary
+ *            sprite.
+ *   second — bumped per cell that successfully dispatches the clipped
+ *            blit for the second sprite (gated on descriptor[+0] != 0
+ *            AND descriptor[+4] ∈ {1, 2, 3} AND y_clip_mode != 5). */
+int  engine_battlefield_render_terrain_zoom32_first_blit_count(void);
+int  engine_battlefield_render_terrain_zoom32_second_blit_count(void);
 
 #endif /* OPENLORDS2_ENGINE_BATTLEFIELD_RENDER_H */

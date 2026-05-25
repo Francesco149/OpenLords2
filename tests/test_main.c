@@ -847,6 +847,26 @@ struct test_case {
     X(engine_battlefield_render_terrain_no_descriptor_short_circuits) \
     X(engine_battlefield_render_terrain_camera_offset_skips_to_correct_row) \
     X(engine_battlefield_render_terrain_per_blit_counter_resets) \
+    X(engine_battlefield_render_terrain_z32_blits_dirty_cells) \
+    X(engine_battlefield_render_terrain_z32_skips_clean_cells) \
+    X(engine_battlefield_render_terrain_z32_force_redraw_overrides_dirty) \
+    X(engine_battlefield_render_terrain_z32_skip_bit_drops_dirty_cell) \
+    X(engine_battlefield_render_terrain_z32_skip_bit_blocks_boundary_too) \
+    X(engine_battlefield_render_terrain_z32_skip_bit_leaves_clean_boundary) \
+    X(engine_battlefield_render_terrain_z32_blob_selector_primary) \
+    X(engine_battlefield_render_terrain_z32_blob_selector_alt) \
+    X(engine_battlefield_render_terrain_z32_blob_selector_other_skips_first) \
+    X(engine_battlefield_render_terrain_z32_src_offset_gate_aborts) \
+    X(engine_battlefield_render_terrain_z32_second_sprite_runs_when_b0_nonzero) \
+    X(engine_battlefield_render_terrain_z32_second_sprite_skipped_when_b0_zero) \
+    X(engine_battlefield_render_terrain_z32_second_sprite_mode_zero_aborts) \
+    X(engine_battlefield_render_terrain_z32_second_sprite_mode_high_aborts) \
+    X(engine_battlefield_render_terrain_z32_second_sprite_slot_picks_lower_band) \
+    X(engine_battlefield_render_terrain_z32_second_sprite_slot_clamps_at_high) \
+    X(engine_battlefield_render_terrain_z32_cursor_advances_32px_per_cell) \
+    X(engine_battlefield_render_terrain_z32_no_descriptor_short_circuits) \
+    X(engine_battlefield_render_terrain_z32_clears_dirty_after_draw) \
+    X(engine_battlefield_render_terrain_z32_marks_boundary_cells) \
     /* end */
 
 /* Emit extern decls. */
