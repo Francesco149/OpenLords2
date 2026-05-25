@@ -2668,6 +2668,51 @@ wide canvas to match retail's deployment.
 
 ---
 
+## 76. Battlefield terrain blob selector is strict `if/else-if` — non-{0,4} silently skips dispatch
+
+`FUN_004bc8fc` (zoom-16 terrain pass, ported as `pass_terrain_zoom16`
+inside `engine_battlefield_render`) picks a sprite blob by masking the
+per-cell flags byte with `0x1c` (= bits 2..4):
+
+```c
+bVar1 = bVar1 & 0x1c;
+if (bVar1 == 0) {           /* primary blob → FUN_004b49f7(DAT_004e5d78) */
+    ... stage descriptor + dispatch ...
+}
+else if (bVar1 == 4) {      /* alt blob → FUN_004b49f7(DAT_004e6560)   */
+    ... stage descriptor + dispatch ...
+}
+/* else: silently fall through; NO blit dispatch */
+```
+
+There is NO `else` clause.  Bits `0x08`, `0x0c`, `0x10`, `0x14`, `0x18`,
+`0x1c` and any combination of bits 2..4 outside the literal values
+`0` and `4` will silently skip the blit while STILL:
+
+  - clearing the dirty bit (descriptor[+2] &= 0xfe),
+  - reading the sprite-index byte (descriptor[+3]),
+  - running boundary marking (descriptor[+2] |= 0x02 on edge cells).
+
+Result: when a cell's flag byte lands in the "no blob" band, the cell
+appears to be "redrawn" from the descriptor's perspective (dirty
+clear + boundary mark) but the screen pixels never change.  Stale
+content from the previous frame persists.
+
+This works in retail because the level data only ever produces flag
+values whose `& 0x1c` is `0` or `4`.  Anything else is a data-corruption
+or scribble-on-descriptor symptom — the strict chain is effectively a
+silent assertion.  The port preserves the strict shape (no default
+`else`) so the same data corruption produces the same symptom.
+
+The zoom-32 sibling (`FUN_004bcbdc`) almost certainly has the same
+shape; chip 4 will confirm.
+
+> 📍 `src/engine_battlefield_render.c` (`pass_terrain_zoom16`),
+> `docs/findings/battlefield-render.md` §"Storage layout",
+> Ghidra `FUN_004bc8fc` @ 0x4bc8fc.
+
+---
+
 <!--
 Template for new entries:
 

@@ -12,9 +12,9 @@ cluster (`FUN_004050f6` + 3 passes, all in `0x405000..0x408000`),
 but lives in a different address band (`0x4bc000..0x4bf300`) and
 uses a different tile format and storage layout.
 
-**Status**: chips 1 + 2 ported (sprite primitive + frame driver
-with stubbed-out passes); chips 3–5 surveyed only.  Survey landed
-2026-05-25, chips 1+2 landed 2026-05-25.
+**Status**: chips 1, 2, 3 ported (sprite primitive + frame driver +
+zoom-16 first pass terrain blit); chips 4–5 surveyed only.  Survey
+landed 2026-05-25, chips 1–3 landed 2026-05-25.
 
 ## Entry point
 
@@ -195,9 +195,13 @@ The cluster is too large to port in one chip.  Suggested chip plan:
    that get swapped for real ports in chips 3–5.
 
 3. **`FUN_004bc8fc`** (725 B zoom-16 first pass) — chip 3.
-   Simplest of the three passes; reads + dispatches sprite blits
-   via `FUN_004b49f7`.  The terrain blit on its own would render
-   a recognisable hex grid at zoom-1.
+   **LANDED** (2026-05-25) as `pass_terrain_zoom16` inside
+   `engine_battlefield_render`.  Adds bindings for the descriptor
+   table, grid dimensions, viewport offset, camera row stride, and
+   primary/alt sprite blobs.  Stages cursor + sprite metadata via
+   the shared `gfx_dispatch_stage_sprite_descriptor`, then calls
+   `gfx_sprite_blit_16x16_raw`.  Boundary cells get bit 0x02
+   (re-paint on next frame).
 
 4. **`FUN_004bcbdc`** (1187 B zoom-32 first pass) — chip 4.
    The zoom-32 sibling.  Larger because zoom-2 needs more

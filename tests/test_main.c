@@ -830,6 +830,19 @@ struct test_case {
     X(engine_battlefield_render_counters_reset_zeroes_all) \
     X(engine_battlefield_render_switching_zoom_picks_correct_pair) \
     X(engine_battlefield_render_zoom_round_trip) \
+    X(engine_battlefield_render_terrain_blits_dirty_cells) \
+    X(engine_battlefield_render_terrain_skips_clean_cells) \
+    X(engine_battlefield_render_terrain_force_redraw_overrides_dirty) \
+    X(engine_battlefield_render_terrain_clears_dirty_after_draw) \
+    X(engine_battlefield_render_terrain_marks_boundary_cells) \
+    X(engine_battlefield_render_terrain_marks_boundary_even_when_clean) \
+    X(engine_battlefield_render_terrain_blob_selector_primary) \
+    X(engine_battlefield_render_terrain_blob_selector_alt) \
+    X(engine_battlefield_render_terrain_blob_selector_other_skips_dispatch) \
+    X(engine_battlefield_render_terrain_advances_cursor_per_cell) \
+    X(engine_battlefield_render_terrain_no_descriptor_short_circuits) \
+    X(engine_battlefield_render_terrain_camera_offset_skips_to_correct_row) \
+    X(engine_battlefield_render_terrain_per_blit_counter_resets) \
     /* end */
 
 /* Emit extern decls. */
