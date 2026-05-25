@@ -581,6 +581,23 @@ struct test_case {
     X(gfx_dispatch_glyph_source_offset_baked_with_skips) \
     X(gfx_dispatch_glyph_table_zero_at_high_byte) \
     \
+    X(gfx_sprite_blit_copies_source_bytes_3x2) \
+    X(gfx_sprite_blit_unroll_only_width_equals_4) \
+    X(gfx_sprite_blit_unroll_plus_tail_width_8) \
+    X(gfx_sprite_blit_preserves_underlying_pixels_under_zeros) \
+    X(gfx_sprite_blit_writes_at_offset) \
+    X(gfx_sprite_blit_zero_width_writes_4_bytes_per_row) \
+    X(gfx_sprite_blit_zero_height_writes_one_row) \
+    X(gfx_sprite_blit_null_canvas_no_crash) \
+    X(gfx_sprite_blit_left_clipped_copies_clipped_width) \
+    X(gfx_sprite_blit_right_clipped_byte_identical_to_left) \
+    X(gfx_sprite_blit_left_clipped_zero_src_pad_equals_unclipped) \
+    X(gfx_dispatch_sprite_paints_at_dest) \
+    X(gfx_dispatch_sprite_left_clip_writes_visible_portion) \
+    X(gfx_dispatch_sprite_right_clip_writes_visible_portion) \
+    X(gfx_dispatch_sprite_fully_offscreen_writes_nothing) \
+    X(gfx_dispatch_sprite_clipped_uses_supplied_rect) \
+    \
     X(gfx_text_empty_buffer_pads_acc_by_4) \
     X(gfx_text_plain_renders_single_glyph) \
     X(gfx_text_underscore_renders_as_space) \

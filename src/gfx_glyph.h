@@ -108,6 +108,15 @@ int gfx_glyph_cursor_y(void);
 int gfx_glyph_glyph_w(void);
 int gfx_glyph_glyph_h(void);
 
+/* Extra getters consumed by gfx_sprite.c — the sprite blitters share
+ * the entire staging-state set with the glyph blitters (cursor +
+ * source offset + width/height + the three clip values).  The sprite
+ * dispatcher (gfx_dispatch_sprite) writes via the same setters above. */
+int gfx_glyph_glyph_offset(void);
+int gfx_glyph_clipped_w(void);
+int gfx_glyph_src_stride_pad(void);
+int gfx_glyph_dst_stride_pad(void);
+
 /* Port of FUN_004b41b7 @ 0x4b41b7.  Unclipped glyph blit.
  *
  * Iterates `glyph_h` rows of `glyph_w` columns each.  For each source

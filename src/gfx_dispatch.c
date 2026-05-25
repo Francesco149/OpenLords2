@@ -13,6 +13,7 @@
 
 #include "gfx_glyph.h"
 #include "gfx_paint.h"
+#include "gfx_sprite.h"
 
 /* Dispatcher-private state.  Variables grouped by which retail DAT_*
  * symbol they shadow; comments call out the offset/size encoded in
@@ -306,4 +307,92 @@ int gfx_dispatch_glyph(const uint8_t *font_base,
     }
 
     return glyph_w + 1;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Sprite dispatchers — port of FUN_00404442 / FUN_00404547
+ *
+ * The two retail leaves differ only in which clip rectangle they
+ * pass to the (shared) clip setters:
+ *
+ *   FUN_00404442 — canvas-clip: (0, 0, canvas_w, canvas_h).
+ *   FUN_00404547 — caller-supplied (left, top, right, bottom).
+ *
+ * Everything else is identical: same 16-byte descriptor layout as
+ * glyphs (read via the same field offsets), same clip-setter calls,
+ * same source-pointer adjustment for top_skip / left_skip, same
+ * dispatch table indexed by x_clip_mode.  The only difference from
+ * the glyph dispatcher is the absence of the char→glyph table
+ * indirection (sprite index is direct), the per-glyph cursor_y
+ * advance step (the dispatcher's caller supplies a final x/y already),
+ * and the default-font character-range tweaks.
+ * ────────────────────────────────────────────────────────────────── */
+
+static void stage_sprite_descriptor(const uint8_t *sprite_blob, int sprite_index)
+{
+    const uint8_t *slot = sprite_blob + sprite_index * 16 + 8;
+
+    int sprite_w  = (int)(uint16_t)(slot[0] | ((uint16_t)slot[1] << 8));
+    int h_short   = (int)(uint16_t)(slot[2] | ((uint16_t)slot[3] << 8));
+    int src_off   = (int)( (uint32_t)slot[4]
+                         | ((uint32_t)slot[5] << 8)
+                         | ((uint32_t)slot[6] << 16)
+                         | ((uint32_t)slot[7] << 24));
+    g_flag_a = slot[0xc];
+    int row_count = slot[0xd];
+    g_flag_b = slot[0xe];
+
+    gfx_glyph_set_glyph(src_off, sprite_w, row_count);
+    g_glyph_height_short = h_short;
+}
+
+static void sprite_apply_skip_and_dispatch(const uint8_t *sprite_blob)
+{
+    int sprite_w   = gfx_glyph_glyph_w();
+    int src_off    = gfx_glyph_glyph_offset();
+    int new_offset = src_off + sprite_w * g_top_skip + g_left_skip;
+    int row_count  = gfx_glyph_glyph_h();
+    gfx_glyph_set_glyph(new_offset, sprite_w, row_count);
+
+    if (g_y_clip_mode != 5) {
+        if (g_x_clip_mode == 1) {
+            gfx_sprite_blit_left_clipped(sprite_blob);
+        } else if (g_x_clip_mode == 2) {
+            gfx_sprite_blit_right_clipped(sprite_blob);
+        } else {
+            gfx_sprite_blit(sprite_blob);
+        }
+    }
+}
+
+void gfx_dispatch_sprite(const uint8_t *sprite_blob,
+                         int            sprite_index,
+                         int            x,
+                         int            y)
+{
+    stage_sprite_descriptor(sprite_blob, sprite_index);
+    gfx_glyph_set_dest(x, y);
+
+    gfx_dispatch_clip_x(0, gfx_paint_canvas_width());
+    gfx_dispatch_clip_y(0, gfx_paint_canvas_height());
+
+    sprite_apply_skip_and_dispatch(sprite_blob);
+}
+
+void gfx_dispatch_sprite_clipped(const uint8_t *sprite_blob,
+                                 int            sprite_index,
+                                 int            x,
+                                 int            y,
+                                 int            left,
+                                 int            top,
+                                 int            right,
+                                 int            bottom)
+{
+    stage_sprite_descriptor(sprite_blob, sprite_index);
+    gfx_glyph_set_dest(x, y);
+
+    gfx_dispatch_clip_x(left, right);
+    gfx_dispatch_clip_y(top, bottom);
+
+    sprite_apply_skip_and_dispatch(sprite_blob);
 }

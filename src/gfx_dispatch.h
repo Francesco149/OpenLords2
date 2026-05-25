@@ -222,4 +222,47 @@ void gfx_dispatch_set_glyph_height_short(int h);
  * propagation rule. */
 void gfx_dispatch_set_clip_x_mode(int mode);
 
+/* ────────────────────────────────────────────────────────────────
+ * Sprite dispatchers
+ *
+ * Counterpart of gfx_dispatch_glyph for the sprite-class blit family
+ * in gfx_sprite.c.  Share the entire clip-state pipeline with the
+ * glyph dispatcher: descriptor layout (same 16-byte slot), clip
+ * setters (clip_x / clip_y), and the x_clip_mode-indexed selection
+ * between unclipped / left-clipped / right-clipped variants.  The
+ * only differences from gfx_dispatch_glyph:
+ *
+ *   - Sprite index is a direct array index — no char→glyph table.
+ *   - cursor_x / cursor_y are taken AS-IS from the caller — no
+ *     per-glyph advance byte, no default-font character-range
+ *     tweaks.
+ *   - Two entry points: one clipping against the canvas, one
+ *     clipping against a caller-supplied rect.  Retail exposes
+ *     these as two distinct functions (FUN_00404442 / FUN_00404547)
+ *     rather than a single function gated by g_alt_clip_enabled.
+ *
+ *   FUN_00404442 @ 0x404442 (256 B) → gfx_dispatch_sprite
+ *                                     Canvas-clipped entry point.
+ *   FUN_00404547 @ 0x404547 (256 B) → gfx_dispatch_sprite_clipped
+ *                                     Caller-supplied clip rect.
+ *
+ * `sprite_blob` is the base of the sprite-blob memory block (PL8
+ * file payload in retail terms); descriptor N lives at
+ * `sprite_blob + N*16 + 8` (the leading 8 bytes are the PL8 header).
+ * Pixel data starts at `sprite_blob + descriptor.src_offset` and is
+ * densely packed at `descriptor.width` bytes per row. */
+void gfx_dispatch_sprite(const uint8_t *sprite_blob,
+                         int            sprite_index,
+                         int            x,
+                         int            y);
+
+void gfx_dispatch_sprite_clipped(const uint8_t *sprite_blob,
+                                 int            sprite_index,
+                                 int            x,
+                                 int            y,
+                                 int            left,
+                                 int            top,
+                                 int            right,
+                                 int            bottom);
+
 #endif /* OPENLORDS2_GFX_DISPATCH_H */

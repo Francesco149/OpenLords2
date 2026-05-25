@@ -1,0 +1,121 @@
+/*
+ * OpenLords2 — sprite blitter (per-sprite pixel emitter).
+ *
+ * Three retail leaves form the sprite-class blit family — the
+ * counterpart of the gfx_glyph trio for non-glyph sprites (UI panels,
+ * icons, building tiles, troop sprites, etc.).  Each consumes the same
+ * staged state the glyph blitters do (cursor + source pointer +
+ * width/height + the three clip outputs), populated by the sprite
+ * dispatcher (gfx_dispatch_sprite).  The only behavioral difference
+ * from the glyph blitters is the WRITE mode: sprites always copy the
+ * source byte verbatim (per-pixel palette index), with the source
+ * byte's zero value reserved as the transparent index — i.e. the
+ * unclipped sprite path is functionally equivalent to the glyph
+ * blitter's color_modulation == 1 branch, but with a different inner-
+ * loop shape (see quirk on the 4-byte partial unroll).  The clipped
+ * sprite path matches the glyph clipped path's loop structure but
+ * copies bytes instead of writing a single color.
+ *
+ * Retail address map:
+ *
+ *   FUN_004b43b1 @ 0x4b43b1 (188 B) → gfx_sprite_blit
+ *                                       Unclipped path.  Iterates
+ *                                       glyph_h rows of glyph_w cols.
+ *                                       Inner loop has an unusual
+ *                                       partial 4-byte unroll: the
+ *                                       FIRST four bytes of a row are
+ *                                       handled by the unrolled body
+ *                                       when glyph_w is a multiple
+ *                                       of 4, then a byte-at-a-time
+ *                                       tail handles the remainder.
+ *                                       For glyph_w not a multiple of
+ *                                       4, the entire row goes through
+ *                                       the byte-at-a-time tail.
+ *                                       Preserved verbatim — see
+ *                                       engine-quirks.md.
+ *   FUN_004b446d @ 0x4b446d (101 B) → gfx_sprite_blit_left_clipped
+ *                                       Clipped path; reads clipped_w
+ *                                       cols per row with src_stride_pad
+ *                                       to skip past the trimmed cols.
+ *   FUN_004b44d2 @ 0x4b44d2 (101 B) → gfx_sprite_blit_right_clipped
+ *                                       BYTE-IDENTICAL to FUN_004b446d
+ *                                       (verified by r2 pxd: same 101
+ *                                       bytes byte-for-byte) — same
+ *                                       dedup pattern as the clipped
+ *                                       glyph pair.  Selected by the
+ *                                       x_clip_mode tag to mirror retail
+ *                                       call topology; shares its
+ *                                       implementation.
+ *
+ * State globals — all reused from gfx_glyph.c via its getter API.
+ * See gfx_glyph.h for the canonical retail DAT_* names.  The sprite
+ * dispatcher (gfx_dispatch_sprite / gfx_dispatch_sprite_clipped) writes
+ * the same set of globals the glyph dispatcher writes; the blitters
+ * here read them back through gfx_glyph_* accessors.
+ *
+ * Canvas binding: same as gfx_glyph — bind once via
+ * gfx_paint_bind_canvas; the sprite blitter computes its dest pointer
+ * from gfx_paint_canvas_pixels() + cursor_x + cursor_y * canvas_width.
+ *
+ * Quirks preserved verbatim — see engine-quirks.md for narratives:
+ *
+ *   - 4-byte partial unroll only handles the FIRST 4 bytes (when
+ *     glyph_w is a multiple of 4), then falls through to the same
+ *     byte-at-a-time loop as the non-aligned path.  A genuine Duff's
+ *     device would loop the unrolled body; this one fires it exactly
+ *     once and then walks the rest byte-at-a-time.  Likely an MSVC
+ *     4.20 codegen artifact rather than a deliberate hand optimization.
+ *
+ *   - 0-width sprite writes 4 bytes per row anyway.  The outer
+ *     while-test `(glyph_w & 3) != 0` is false for glyph_w == 0, so
+ *     the unrolled body fires.  The dispatcher gates this case off
+ *     via the y_clip_mode == 5 (skip) tag, so the call never lands in
+ *     retail.  Latent bug preserved.
+ *
+ *   - Inner loop's post-test guards (the `iVar4 < 1 ? bail : continue`
+ *     pattern) permit one final iteration when row_count starts at 0.
+ *     Same shape as the glyph blitter's inner loop — same quirk.
+ *
+ *   - Clipped variants byte-identical: see the analogous note for the
+ *     clipped glyph pair in engine-quirks.md.  Same dedup pattern, same
+ *     reason.
+ */
+
+#ifndef OPENLORDS2_GFX_SPRITE_H
+#define OPENLORDS2_GFX_SPRITE_H
+
+#include <stdint.h>
+
+/* Port of FUN_004b43b1 @ 0x4b43b1.  Unclipped sprite blit.
+ *
+ * Iterates `glyph_h` rows of `glyph_w` columns each, copying each
+ * non-zero source byte to dest verbatim (zero == transparent).  No
+ * per-row source stride pad — source rows are densely packed at
+ * glyph_w bytes each.  Dest advances by `dst_stride_pad` at end of
+ * row.  No bounds check; the upstream clip setters ensure dest writes
+ * stay in-canvas.
+ *
+ * `sprite_blob` is the base of the sprite-blob memory block — the
+ * dispatcher staged `glyph_offset` relative to this base, and the
+ * blitter computes the absolute source pointer as
+ * `sprite_blob + glyph_offset`. */
+void gfx_sprite_blit(const uint8_t *sprite_blob);
+
+/* Port of FUN_004b446d @ 0x4b446d.  Clipped sprite blit (left-clip case).
+ *
+ * Iterates `glyph_h` rows of `clipped_w` columns each, copying each
+ * non-zero source byte to dest.  Source pointer advances by
+ * `src_stride_pad` at end of row to skip past the trimmed columns;
+ * dest pointer advances by `dst_stride_pad`. */
+void gfx_sprite_blit_left_clipped(const uint8_t *sprite_blob);
+
+/* Port of FUN_004b44d2 @ 0x4b44d2.  Clipped sprite blit (right-clip case).
+ *
+ * BYTE-IDENTICAL retail body to FUN_004b446d — verified by r2 (101
+ * bytes, every byte matches).  Exposed as a separate entry point
+ * only because the dispatcher selects between them by clip-mode tag,
+ * preserving retail's call topology.  Shares the static
+ * implementation with gfx_sprite_blit_left_clipped. */
+void gfx_sprite_blit_right_clipped(const uint8_t *sprite_blob);
+
+#endif /* OPENLORDS2_GFX_SPRITE_H */

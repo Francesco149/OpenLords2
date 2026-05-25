@@ -67,6 +67,14 @@ int gfx_glyph_cursor_y(void) { return g_cursor_y; }
 int gfx_glyph_glyph_w(void)  { return g_glyph_w; }
 int gfx_glyph_glyph_h(void)  { return g_glyph_h; }
 
+/* Read-only accessors used by the sprite blitter (gfx_sprite.c), which
+ * consumes the same staged state but writes via copy-byte instead of
+ * the color/silhouette modes the glyph blitter supports. */
+int gfx_glyph_glyph_offset(void)   { return g_glyph_offset; }
+int gfx_glyph_clipped_w(void)      { return g_clipped_w; }
+int gfx_glyph_src_stride_pad(void) { return g_src_stride_pad; }
+int gfx_glyph_dst_stride_pad(void) { return g_dst_stride_pad; }
+
 /* Shared dest-pointer computation: pixels + cursor_x + cursor_y*width.
  * Retail formula at the top of every blitter:
  *   DAT_004ea1a8 + DAT_00591524 + DAT_00591528 * DAT_004eb274
