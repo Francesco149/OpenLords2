@@ -43,6 +43,7 @@ SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c \
                    ../src/gfx_paint.c \
                    ../src/gfx_glyph.c \
                    ../src/gfx_dispatch.c \
+                   ../src/gfx_text.c \
                    ../src/save.c
 
 # Test files — each defines one or more `int test_<name>(void)`
@@ -66,6 +67,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_gfx_paint.c \
                    test_gfx_glyph.c \
                    test_gfx_dispatch.c \
+                   test_gfx_text.c \
                    test_save.c
 
 OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o)) \

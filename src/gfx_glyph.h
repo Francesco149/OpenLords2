@@ -85,6 +85,12 @@
  * to stage state; the eventual port of FUN_00402a14 will too. */
 void gfx_glyph_set_color(uint8_t color);
 void gfx_glyph_set_dest(int cursor_x, int cursor_y);
+/* Single-axis cursor setters.  Match retail's DAT_00591524 / DAT_00591528
+ * single-store granularity at sites where only one axis changes between
+ * dispatcher calls (e.g. the text renderer's shadow paths bump cursor_y
+ * three times for the same character with cursor_x held fixed). */
+void gfx_glyph_set_cursor_x(int cursor_x);
+void gfx_glyph_set_cursor_y(int cursor_y);
 void gfx_glyph_set_glyph(int glyph_offset, int glyph_w, int glyph_h);
 /* Mutate ONLY the row count.  Used by gfx_dispatch_clip_y to overwrite
  * the per-glyph advance byte with the visible (post-clip) row count

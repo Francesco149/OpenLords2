@@ -144,6 +144,13 @@
  * common path. */
 void gfx_dispatch_set_alt_clip(int enabled, int left, int bottom);
 
+/* Toggle the panel-overlay clip without disturbing the saved left/bottom.
+ * Mirrors retail's text-renderer epilogue (`DAT_005aeb84 = 0;`) which
+ * disables alt-clip after each line render without touching the runtime
+ * rect coordinates — those stay valid for the next caller that re-enables
+ * the clip. */
+void gfx_dispatch_set_alt_clip_enabled(int enabled);
+
 /* Register the font pointer that triggers the per-char-range cursor_y
  * decrements.  Retail's special-case font is `DAT_005af8f0` (one of the
  * Charset3 / Font_C2 blobs depending on language).  Any other font

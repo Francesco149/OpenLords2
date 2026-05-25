@@ -35,6 +35,9 @@ void gfx_glyph_set_dest(int cursor_x, int cursor_y)
     g_cursor_y = cursor_y;
 }
 
+void gfx_glyph_set_cursor_x(int cursor_x) { g_cursor_x = cursor_x; }
+void gfx_glyph_set_cursor_y(int cursor_y) { g_cursor_y = cursor_y; }
+
 void gfx_glyph_set_glyph(int glyph_offset, int glyph_w, int glyph_h)
 {
     g_glyph_offset = glyph_offset;

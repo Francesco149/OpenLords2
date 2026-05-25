@@ -65,6 +65,11 @@ void gfx_dispatch_set_alt_clip(int enabled, int left, int bottom)
     g_alt_clip_bottom  = bottom;
 }
 
+void gfx_dispatch_set_alt_clip_enabled(int enabled)
+{
+    g_alt_clip_enabled = enabled;
+}
+
 void gfx_dispatch_set_default_font(const uint8_t *font_base)
 {
     g_default_font = font_base;

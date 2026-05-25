@@ -580,6 +580,30 @@ struct test_case {
     X(gfx_dispatch_glyph_alt_clip_inside_rect_draws) \
     X(gfx_dispatch_glyph_source_offset_baked_with_skips) \
     X(gfx_dispatch_glyph_table_zero_at_high_byte) \
+    \
+    X(gfx_text_empty_buffer_pads_acc_by_4) \
+    X(gfx_text_plain_renders_single_glyph) \
+    X(gfx_text_underscore_renders_as_space) \
+    X(gfx_text_missing_glyph_advances_4_no_pixels) \
+    X(gfx_text_no_shadow_one_pass) \
+    X(gfx_text_drop_shadow_three_passes) \
+    X(gfx_text_outline_three_passes_hardcoded_colors) \
+    X(gfx_text_tight_shadow_offsets_by_one) \
+    X(gfx_text_language_tag_flips_shadow_colors) \
+    X(gfx_text_uppercase_highlight_forces_color_one) \
+    X(gfx_text_uppercase_highlight_skips_lowercase) \
+    X(gfx_text_substitution_replaces_hash) \
+    X(gfx_text_substitution_off_renders_hash_as_space) \
+    X(gfx_text_substitution_wraps_on_nul) \
+    X(gfx_text_collapse_spaces_rewinds_acc) \
+    X(gfx_text_collapse_active_disables_rewind) \
+    X(gfx_text_first_pos_hook_captures_at_target) \
+    X(gfx_text_first_pos_hook_latch_blocks_resnapshot) \
+    X(gfx_text_clears_substitution_at_end) \
+    X(gfx_text_clears_alt_clip_at_end) \
+    X(gfx_text_advances_running_x_by_dispatcher_width) \
+    X(gfx_text_centered_offsets_x_by_half_remainder) \
+    X(gfx_text_centered_clamps_offset_at_zero_when_overflow) \
     /* end */
 
 /* Emit extern decls. */
