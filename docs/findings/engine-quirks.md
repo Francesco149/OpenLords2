@@ -2217,6 +2217,132 @@ arithmetic the RLE blitters do internally.  Preserved verbatim.
 
 ---
 
+## 60. Map-render uses BYTE offsets into per-tile descriptor table
+
+The per-tile drawer (`FUN_00408438` @ 0x408438) reads two descriptor
+fields by treating the LOADED CELL VALUE (`DAT_00567954`) as a byte
+offset into the table at `0x522f90`:
+
+    local_28 = (byte)(&DAT_00522f95)[DAT_00567954];   // head-of-list
+    flag     = (&DAT_00522f92)[DAT_00567954] & 0x20;  // mode-1 gate
+
+So a cell value of `0x10` reads `desc[0x10 + 5]` and `desc[0x10 + 2]`.
+The cells in the 2D map array (`0x55cea0`) thus encode `tile_id *
+stride` directly, not `tile_id` — the multiplication is baked in at
+map-load time.
+
+Effect: indexing math is "free" inside FUN_00408438, but a malformed
+cell value can read FAR outside the per-tile region (the iterators
+gate `< 0xfff0000` as the only sanity check).  Tile IDs near that
+boundary read uninitialized memory.
+
+> 📍 `src/engine_map_render.c` (`engine_map_render_tile`),
+> `docs/findings/map-render.md` §"Per-tile descriptor table",
+> Ghidra `FUN_00408438` lines 18-19.
+
+---
+
+## 61. Map-render linked-list terminator is self-loop, not zero
+
+The per-tile drawer iterates the linked list of territory records
+using each record's next-link field (offset +0x04, short).  The
+loop's continuation condition is:
+
+    *(short *)(&DAT_0052f0b4 + local_28 * 0x1a4) == local_28
+
+That is, the loop exits when the next-link points back at the
+current record's index — a SELF-LOOP, not a null terminator.
+Records linked through valid maps always have a non-zero next-link;
+the LAST record's next-link is its own index.
+
+Effect: an in-list record with `next == 0` does NOT terminate the
+loop — it advances to slot 0 (the reserved sentinel), which the
+loop continues to process.  Engine code must ensure last-record's
+next-link is set to its own slot index.  We preserve verbatim.
+
+> 📍 `src/engine_map_render.c` (`engine_map_render_tile`),
+> Ghidra `FUN_00408438` line 203.
+
+---
+
+## 62. Map-render invalid descriptor aborts ENTIRE linked-list walk
+
+The per-tile drawer's two validation gates (`src_offset > 310000`
+and `sprite_w < 1`) both `return;` from the function — NOT just the
+current record's iteration:
+
+    if (310000 < DAT_0058fe04) {
+        _DAT_0058fea8 = _DAT_0058fea8 + 1;
+        return;       // <- exits FUN_00408438 entirely
+    }
+
+So a single bad primary OR overlay descriptor in the middle of a
+multi-record tile causes all SUBSEQUENT records in that tile's
+linked list to be skipped — for that frame.  Two distinct error
+counters' worth of bumps are possible per tile (one primary check,
+one overlay check) but the second is unreachable past the early
+return.
+
+Effect: if one of a tile's army/decoration records has a corrupt
+descriptor, the whole tile renders as just its earliest valid
+records — undefined visual outcome for that frame, but no crash.
+
+> 📍 `src/engine_map_render.c` (`engine_map_render_tile`),
+> Ghidra `FUN_00408438` lines 84-87 / 173-176.
+
+---
+
+## 63. Map-render overlay dirty-rect uses POST-clip cursor (1 of 2 marks)
+
+The per-tile drawer fires TWO dirty-rect marks per overlay-bearing
+record:
+
+  1. PRE-clip 32-px mark, using the cursor right after the
+     overlay-anchor computation (line 147 / 163 of FUN_00408438).
+  2. POST-clip-and-dispatch 48-px mark, using whatever cursor the
+     clip-x setter ended up writing back (line 199 of FUN_00408438).
+
+If `gfx_dispatch_clip_x` shifts the cursor right (the left-edge
+straddle branch), the 48-px mark fires at a DIFFERENT tile-coord
+than the 32-px mark.  Both marks expand the running dirty rect, so
+the union is correct, but the two marks visit two different tile-
+coord cells — observable via call-counting against the dirty-rect
+mark helpers.
+
+Equivalent first-sprite (non-overlay) path fires exactly ONE dirty
+mark (pre-clip) — quirk noted because the asymmetric mark count
+between primary-only and primary-plus-overlay records is observable.
+
+> 📍 `src/engine_map_render.c` (`engine_map_render_tile`),
+> Ghidra `FUN_00408438` lines 100-108 (32-px / 48-px / 64-px
+> selector pre-clip) vs lines 199 (48-px post-clip).
+
+---
+
+## 64. Map-render dead 48-px dirty box in non-overlay path
+
+The per-tile drawer's `local_24 == 2` branch dispatches to the 48-px
+dirty-rect helper:
+
+    if (local_24 == 3)      FUN_004524dc(iVar2, iVar1);   // 64-px
+    else if (local_24 == 2) FUN_00452489(iVar2, iVar1);   // 48-px ← dead
+    else                    FUN_00452436(iVar2, iVar1);   // 32-px
+
+But the only writes to `local_24` in FUN_00408438 set it to 0 (default,
+type 0) or 3 (decorated types 1/2/3/4).  Value 2 is never assigned.
+
+So the 48-px mark for the primary sprite is UNREACHABLE.  The 48-px
+helper IS reachable via the overlay path's POST-dispatch mark (line
+199), but that's a different call site with a different cursor.
+
+Preserved verbatim — branch likely a remnant of an earlier version
+or a defensive guard never trimmed by the compiler.
+
+> 📍 `src/engine_map_render.c` (`engine_map_render_tile`),
+> Ghidra `FUN_00408438` lines 100-108.
+
+---
+
 <!--
 Template for new entries:
 

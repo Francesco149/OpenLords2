@@ -7,6 +7,157 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-25 — Strategic-mode map renderer cluster (1 chip, 4 fns)
+
+Continuation of the same unattended session.  The previous dispatch
+closed out the entire low-level sprite pipeline (both families + the
+RLE wrapper) and identified three frontiers, picking **map-tile /
+battlefield iterators** as the largest-scope, highest-value next
+step.  This dispatch ports the four-function strategic-mode map
+renderer cluster.
+
+### Discovery: the 0x1a4-stride is the per-territory record array
+
+Surveying `FUN_00408438`'s field accesses surfaced field offsets
+`+0x02, +0x04, +0x07, +0x08, +0x09, +0x149` from a base of
+`DAT_0052f0b4`.  Cross-referencing `0x52f0b0` against the
+save-format table identified the array as **save schema entry 5**:
+151 × 420 bytes (= `0x1a4`-byte stride) — the per-territory state
+records.  Each cell on the map is associated with a per-tile linked
+list of TERRITORY indices via:
+
+  - per-tile-bytecode descriptor table at `0x522f90` (byte fields
+    at +2 = flag, +5 = head-link)
+  - per-territory record next-link field at offset `+0x04`
+  - self-loop termination (record's next-link == its own index)
+
+This changed the chip's framing.  What I initially thought was a
+"sprite-record table" is the SAME 420-byte struct that holds
+strategic-mode game state (owner, army composition, food/gold).
+The map-render code consumes only seven byte/short fields of it;
+the other 414 bytes are gameplay state we already declared in
+`src/save.h` as `g_per_territory_420`.
+
+### Chip landed
+
+**`src/engine_map_render` (NEW, ~520 LOC + 20 tests)** — four
+retail leaves over one shared module:
+
+  - `FUN_00405487` → `engine_map_render_frame`               (379 B)
+    Outer frame driver.  Drives one top phantom row, then drops into
+    the row-pair loop, then one bottom phantom row.  Camera-aware.
+  - `FUN_00405862` → `engine_map_render_row_phase0`          (333 B)
+    Phase-0 row iterator.  Optional left-edge cell at `(col_start - 1,
+    cur_row)` gated on `col_start > 0`; col_count main cells; optional
+    trailing cell gated on `cur_col < 0x40`.
+  - `FUN_004059af` → `engine_map_render_row_phase1`          (314 B)
+    Phase-1 row iterator.  First tile at phase 1, remaining at phase 0,
+    plus one unconditional trailing cell.
+  - `FUN_00408438` → `engine_map_render_tile`                (2072 B)
+    Per-tile drawer.  Walks per-tile linked list of territory records;
+    per record computes (dx, dy) from view-mode-selected palette tables;
+    applies phase + record-type position adjusts; stages primary
+    descriptor; validates; dispatches first-family blitter via
+    `gfx_dispatch_apply_skip_and_dispatch_sprite`; optionally stages
+    + dispatches overlay sprite from RLE blob via
+    `gfx_dispatch_dispatch_sprite_rle`; restores cursor.
+
+**Six 128-byte palette tables** (`0x4d8108..0x4d8388`) replicated as
+static-const `int8_t[3][2][128]` — exact byte copies verified via
+`r2 pxw 0x80 @ <addr>`.  Indexed by `[view_mode][axis][rotation * 16
++ frame_offset]`.
+
+The module's state-binding surface is large (camera + tile array +
+tile descriptors + territory records + 3 blobs + view mode + render
+mode + rotation offset + overlay base + Y viewport offset + dirty
+state) but each retail global has a distinct setter, mirroring the
+existing `gfx_dispatch` / `engine_dirty_rect` conventions.
+
+### Filed quirks (#60, #61, #62, #63, #64)
+
+Five new entries in `docs/findings/engine-quirks.md`:
+
+  - **#60** — Map-render uses raw BYTE OFFSETS into the per-tile
+    descriptor table.  The cell value loaded from the 2D map array
+    is used as a byte offset (not an index × stride) — meaning the
+    multiplication is baked in at map-load time.  A malformed cell
+    can read far outside the per-tile region.
+  - **#61** — Linked-list terminator is SELF-LOOP, not zero.
+    The loop exits when `record.next_link == record_idx`.  Maps
+    must guarantee last-record self-link; otherwise the loop visits
+    slot 0 (reserved sentinel) and continues.
+  - **#62** — Invalid descriptor aborts the ENTIRE linked-list walk
+    for that tile.  A corrupt record skips ALL subsequent records
+    in the tile's list — undefined visual outcome, no crash.
+  - **#63** — Overlay-bearing records fire TWO dirty-rect marks
+    (32-px pre-clip + 48-px post-dispatch), at potentially DIFFERENT
+    tile coords if clip_x shifted the cursor.  Primary-only records
+    fire ONE mark.  Asymmetry observable.
+  - **#64** — The 48-px dirty box in the non-overlay path is DEAD
+    CODE.  `local_24 == 2` is never assigned; only 0 and 3 reach the
+    selector.  The 48-px helper IS reachable via the overlay's
+    post-dispatch mark.
+
+### Headline numbers
+
+- **664 → 684 host tests** (+20), all green under ASan/UBSan.
+- **4 retail functions ported** (~3098 B decompilation:
+  379 + 333 + 314 + 2072 B = 3098 B total).
+- **1 new module** (`src/engine_map_render`, +520 LOC).
+- **5 new engine quirks filed** (#60, #61, #62, #63, #64).
+- **1 new findings doc** (`docs/findings/map-render.md`, ~190 lines).
+- Cross-compile (mingw32) clean — both `openlords2.exe` and
+  `openlords2-debug.exe` link without warning.
+
+### Renderer pipeline state
+
+| layer                                | status     |
+| ------------------------------------ | ---------- |
+| (text + line + sprite-family layers — see prior dispatch)        | ported     |
+| sprite blit RLE (unclipped)          | ported     |
+| sprite blit RLE (clipped × 2)        | ported     |
+| sprite render — RLE from blob        | ported     |
+| **strategic-mode frame driver**      | **ported (this chip)** |
+| **strategic-mode row iterators × 2** | **ported (this chip)** |
+| **strategic-mode per-tile drawer**   | **ported (this chip)** |
+| sprite descriptor reader (PL8 header)| unanalyzed |
+| error log formatter (`FUN_004afab9`) | unanalyzed |
+| battlefield (combat-mode) iterators  | unanalyzed |
+
+The strategic-mode overworld map is now end-to-end in `src/`.  Engine
+code can render one frame of the campaign map by binding the
+territory record array, per-tile descriptor table, sprite blobs, and
+camera state, then invoking `engine_map_render_frame()`.
+
+### What's next
+
+The three frontiers from the previous dispatch are now reshuffled:
+
+1. **Wire gfx.c runtime to renderer + map** — a Windows-host
+   validation chip.  Bind the DDraw backbuffer as `gfx_paint`
+   canvas, build a synthetic territory table + tile array, render
+   one frame.  Requires user-observed validation.  Bigger scope
+   than just the gfx.c probe — now we can render the actual map.
+2. **Battlefield (combat-mode) renderer cluster** — once the
+   strategic-mode chip lands, the combat-mode equivalent surfaces
+   as the natural next target.  Different record array
+   (`g_per_battle_hex_432`, save entry 7), different stride
+   (0x1b0 vs 0x1a4), but similar shape.  Probably 3-5 functions
+   in the 0x405000..0x408000 range.
+3. **PL8 header parser** — still the smallest chip.  Would
+   enable tests with REAL retail sprite data instead of the
+   synthetic 1×1 fixtures we currently use.  Useful for golden-
+   pixel diff tests but not blocking forward progress.
+
+Picking #1 or #2 next.  #1 requires user verification (gated) so
+it's deferred until the user is back to validate.  #2 is the
+natural extension of this chip's scope and likely 1-2 sessions.
+
+This is a natural `/clear` point — strategic-mode map rendering is
+end-to-end, the next frontier is a fresh subsystem.
+
+---
+
 ## 2026-05-25 — RLE sprite blitter family + RLE-aware wrapper (1 chip, 4 fns + 1 helper)
 
 Continuation of the same unattended session.  The previous dispatch
