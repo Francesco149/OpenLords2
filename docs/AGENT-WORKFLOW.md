@@ -60,10 +60,14 @@ Conventions:
   `git config --local user.email` something else.
 - **Every commit Claude makes must include a co-author trailer**:
 
-      Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+      Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
-  Use a HEREDOC to pass the message so the trailer lands on its own
-  line.
+  The `commit-msg` git hook (`tools/git-hooks/commit-msg`, wired via
+  `core.hooksPath` by `tools/setup.sh`) enforces this: it rewrites
+  any stale `Claude Opus 4.<N>` line to the current model and appends
+  the trailer if missing, so the model version lives in exactly one
+  place.  Use a HEREDOC to pass the message so the trailer lands on
+  its own line.
 - Commit only what was asked.  Never `git add -A` and sweep in
   stray files.
 - Never `git push` unless the user explicitly asks.
@@ -106,6 +110,10 @@ Findings docs are the *durable* output of a session — they
 outlive the conversation context.  If you spend an hour figuring
 out how a subsystem works, the next session shouldn't have to
 re-derive it.
+
+The map of all findings docs is
+[`docs/findings/INDEX.md`](findings/INDEX.md) — add a row there when
+you create a new one.
 
 ## Harness usage
 

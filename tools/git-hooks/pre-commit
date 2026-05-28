@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# pre-commit hook — keeps the derived port ledger current and runs the
+# host regression suite BEFORE a commit lands, converting the project's
+# "agent remembers to run make" convention into an enforced gate.
+#
+#   1. Regenerate the derived port ledger (STATUS.md, port-ledger.{json,md})
+#      and stage it so it always tracks HEAD with zero manual steps.
+#   2. If any C source/header or test changed, build + run the host
+#      ASan/UBSan unit suite and abort the commit on failure.
+#
+# Bypass for an emergency / WIP commit:  git commit --no-verify
+# Installed via core.hooksPath=tools/git-hooks.
+
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+# nix wrapper — python3/make live in the dev shell on this host.
+run() { nix develop --command "$@"; }
+
+# --- 1. Regenerate + stage the derived ledger ----------------------------
+if run python3 tools/gen_port_ledger.py >/tmp/ol2_ledger.log 2>&1; then
+    git add docs/STATUS.md docs/port-ledger.json docs/port-ledger.md 2>/dev/null || true
+else
+    echo "pre-commit: port-ledger generation failed:" >&2
+    tail -20 /tmp/ol2_ledger.log >&2
+    exit 1
+fi
+
+# --- 2. Run the host test suite if code changed --------------------------
+staged="$(git diff --cached --name-only)"
+if echo "$staged" | grep -qE '^(src/|tests/).*\.(c|h)$'; then
+    echo "pre-commit: C sources changed → building + running host suite..."
+    if ! run make -C tests run >/tmp/ol2_tests.log 2>&1; then
+        echo "pre-commit: host test suite FAILED — commit aborted:" >&2
+        tail -30 /tmp/ol2_tests.log >&2
+        echo "(bypass with: git commit --no-verify)" >&2
+        exit 1
+    fi
+    echo "pre-commit: $(grep -oE '[0-9]+ passed' /tmp/ol2_tests.log | tail -1)"
+fi
+
+# --- 3. Remind to eyeball the frame-diff after render edits --------------
+if echo "$staged" | grep -qE '^src/(gfx_|engine_.*_render|engine_overlay|engine_map|engine_battlefield).*\.(c|h)$'; then
+    echo "pre-commit: render files changed — remember to run the DDraw" >&2
+    echo "            frame-diff harness (tools/diff_test.py) and eyeball the overlay." >&2
+fi
+
+exit 0

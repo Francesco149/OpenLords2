@@ -14,8 +14,12 @@ copyrighted content of any kind.  You supply your own copy of the game
 
 ## Status
 
-Bootstrap phase — see [`docs/PLAN.md`](docs/PLAN.md) for the roadmap
-and [`docs/PROGRESS.md`](docs/PROGRESS.md) for the changelog.
+See [`docs/STATUS.md`](docs/STATUS.md) for a 60-second orientation
+(port coverage %, current phase, top blocker — derived, never stale),
+[`docs/PLAN.md`](docs/PLAN.md) for the roadmap,
+[`docs/PROGRESS.md`](docs/PROGRESS.md) for the dated changelog, and
+[`docs/port-ledger.md`](docs/port-ledger.md) for per-function port
+status.
 
 ## Getting started (NixOS / WSL2)
 

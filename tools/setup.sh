@@ -53,6 +53,14 @@ fi
 ln -s "$GAME_DIR" "$ORIGINAL"
 green "  ✓ vendor/original -> $GAME_DIR"
 
+# ─── git hooks ─────────────────────────────────────────────────────────────
+# Point git at the tracked hook dir so the co-author-trailer (commit-msg) and
+# ledger-regen + test-gate (pre-commit) hooks run for everyone, with no
+# per-clone install step.
+git -C "$ROOT" config core.hooksPath tools/git-hooks
+chmod +x "$ROOT"/tools/git-hooks/* "$ROOT"/tools/claude-hooks/*.sh 2>/dev/null || true
+green "  ✓ git hooks:   core.hooksPath → tools/git-hooks"
+
 # ─── hash key files ────────────────────────────────────────────────────────
 bold "[3/3] Hashing key files"
 
