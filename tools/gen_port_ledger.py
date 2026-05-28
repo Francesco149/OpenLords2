@@ -211,6 +211,9 @@ of the actual instruction volume is ported.
 
 - `STATUS.md` (this file) — 60-second orientation.
 - `port-ledger.md` / `.json` — per-function port status (derived).
+- `port-frontier.md` — what to port next: unported fns reachable from ported
+  code, zero-dep leaves ranked (derived; `tools/gen_frontier.py`).
+- `ROADMAP.md` — next chips with subsystem / difficulty / target module.
 - `PROGRESS.md` — dated narrative changelog.
 - `findings/INDEX.md` — map of subsystem RE writeups.
 - `harness-roadmap.md` — verification/tooling phases.

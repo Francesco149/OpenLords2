@@ -7,6 +7,80 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — Project audit + meta-infrastructure (Opus 4.8 cutover); derived port ledger, frontier backlog, enforced hooks
+
+First session under Opus 4.8 (superseding 4.7).  No engine code ported
+this dispatch — the work was an audit of project health and a setup
+pass to make future porting sessions effective, mirroring the
+meta-infrastructure the openrecet sibling grew during its own audit.
+
+### State of the project at audit time
+
+Healthy.  The host suite is green (**1035 tests pass, 0 fail**) inside
+`nix develop`.  The drop-in cross-compiles (`build/openlords2.exe`).
+2447 non-thunk engine functions in the Ghidra universe; **312 touched
+(12.8%), 272 host-tested, 13.6% of code bytes** — deep into Phase 5
+(renderer): battlefield / strategic-map / overlay draw leaves landed,
+asset-load IO helper cluster (0x4af*) in progress.
+
+The gap versus openrecet was **tooling/observability, not code**:
+no at-a-glance status, no machine-derived port map, no enforced
+invariants — port status lived only in the 8825-line PROGRESS log.
+
+### What landed (infrastructure only)
+
+- **`tools/gen_port_ledger.py`** → derives `docs/STATUS.md` (60-second
+  headline), `port-ledger.{md,json}` from `functions.csv` (universe) +
+  `FUN_<va>` provenance refs in `src/` (touched) + `tests/test_<stem>.c`
+  (tested).  Pure derivation, `--check` mode for CI.  Reports a
+  code-byte coverage metric alongside the function count (the truer
+  signal — the engine has a long tail of tiny leaves).
+- **`tools/gen_frontier.py`** → `docs/port-frontier.md`: the **191
+  unported functions already called by ported code**, with the **78
+  zero-dependency leaves** (all callees ported) ranked by ported-caller
+  count.  Derived from the per-function decompile call edges + the
+  ledger — this is the answer to "what do I port next?".
+- **`docs/ROADMAP.md`** — semantic triage of the top 16 frontier leaves,
+  seeded by a bounded read-only survey workflow (`ol2-frontier-triage`,
+  16 Explore agents, survey-only — no porting).  Per-function: subsystem,
+  port difficulty, target src module, globals, gotchas.
+- **`tools/git-hooks/commit-msg`** — enforces the co-author trailer at
+  the current model (**Opus 4.8**) and rewrites stale `4.<N>` lines;
+  single source of truth for the model version.
+- **`tools/git-hooks/pre-commit`** — regenerates+stages the ledger and
+  runs the host suite when C changes; aborts on failure.
+- **`tools/claude-hooks/guard-paths.sh` + `.claude/settings.json`** —
+  PreToolUse hard guard denying Edit/Write under `vendor/` or
+  `ghidra/projects/` (the never-mutate-assets rule was prose-only).
+- **`tools/setup.sh`** wires `core.hooksPath → tools/git-hooks`.
+- **`docs/findings/INDEX.md`** — map of the 14 subsystem writeups.
+- Drift fix: AGENT-WORKFLOW.md / README.md trailer 4.7→4.8, pointers
+  to STATUS / ledger / frontier / roadmap.
+
+### What the frontier survey turned up
+
+- **`0x4af502` (chdir-back-to-base) is the most-wanted leaf (7 ported
+  callers)** — yet the 2026-05-26 dispatch deferred it as "no consumer
+  today".  Worth revisiting the IO-cluster deferral; it only pulls in
+  `FUN_004afab9` (status.txt logger) or a log stub.
+- **Three frontier leaves are pure 11-byte no-op stubs** (`0x41423f`,
+  `0x45242b`, `0x4b1dd5`) — retail call-site hooks for shipped-disabled
+  logic.  Port as matching no-ops for diff-harness call-site fidelity.
+- **`0x4c0580` is a `__free_dbg` wrapper** → port as plain `free()`.
+- Battlefield combat-entity struct (strides `0x1a4`/`0x1b0`/`0x160`)
+  recurs across `0x47f474`/`0x480f8b`; mapping it once unblocks a
+  combat-function cluster.
+
+### Next candidate milestones
+
+1. Knock out the order-1/2 frontier leaves (`0x41423f` no-op,
+   `0x42eaa6` gfx teardown, `0x4360f2`, `0x49bbe8`) — mechanical.
+2. Re-evaluate the IO retry chain now that `0x4af502` has 7 callers.
+3. Map the combat-entity struct to unblock battlefield-state leaves.
+
+(`/clear` is a good idea here — this was a clean infra milestone and the
+next is a fresh porting scope.)
+
 ## 2026-05-26 — Filename extension helpers + IO-family survey (+18 tests, RVA→string map)
 
 Continuation of the same unattended session.  Previous dispatch
