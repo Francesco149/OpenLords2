@@ -1171,6 +1171,13 @@ struct test_case {
     X(title_options_buttons_marks_five_dirty_boxes) \
     X(title_options_renders_title_and_five_buttons) \
     X(title_options_highlights_selected_fifth_button) \
+    X(title_play_now_calls_panel_with_retail_args) \
+    X(title_play_now_buttons_mark_one_dirty_box) \
+    X(title_play_now_draws_two_bevel_rects) \
+    X(title_play_now_renders_title_and_two_buttons) \
+    X(title_play_now_highlights_selected_right_button) \
+    X(title_play_now_no_selection_all_normal) \
+    X(title_scene_page5_routes_to_play_now) \
     X(title_scene_page1_renders_main_menu) \
     X(title_scene_wrong_screen_state_is_noop) \
     X(title_scene_other_page_routes_to_page_hook) \

@@ -146,13 +146,23 @@ void engine_title_render_reset_counters(void)
 /* ─── render ────────────────────────────────────────────────────── */
 
 /* One centered localization line — collapses retail's
- * FUN_00402c5e(0xb, skip, x, y, w, font, color) call shape. */
+ * FUN_00402c5e(entry, skip, x, y, w, font, color) call shape.  The
+ * main-menu / options pages all draw from entry 0xb; later pages (e.g.
+ * the "Play Now!" campaign chooser, page 5) draw from a different entry,
+ * so the entry is a parameter. */
+static void menu_text_entry(int loc_entry, int skip, int x, int y, int width,
+                            const uint8_t *font, uint8_t color)
+{
+    gfx_wrap_localized_line_centered(&g_loc, loc_entry, skip, x, y, width,
+                                     font, g_glyph_table, g_glyph_metrics,
+                                     color);
+}
+
+/* Entry-0xb convenience wrapper (the main-menu / options string table). */
 static void menu_text(int skip, int x, int y, int width,
                       const uint8_t *font, uint8_t color)
 {
-    gfx_wrap_localized_line_centered(&g_loc, 0xb, skip, x, y, width,
-                                     font, g_glyph_table, g_glyph_metrics,
-                                     color);
+    menu_text_entry(0xb, skip, x, y, width, font, color);
 }
 
 /* One menu button row — the shape shared verbatim by every title-page
@@ -261,6 +271,55 @@ void engine_title_render_options(void)
     engine_title_render_options_buttons();
 }
 
+/* Port of FUN_0041f5e8 — the two "Play Now!" campaign-chooser buttons
+ * (page 5).  Unlike the vertically-stacked main-menu/options buttons,
+ * these are two side-by-side boxes: a left button at x=0x6e and a right
+ * button at x=0x16e, each w=0xa4 h=0x18, labels from localization entry
+ * 0x27 (sub 4 "Original campaign" / sub 5 "The new campaign").  The
+ * selected button (DAT_00553114, 1=left / 2=right) draws its label in the
+ * 0xf9 highlight; the rest use 0x3f.  A single dirty-box mark covers the
+ * row.  Bracketed by the no-shadow text mode (DAT_005aea40). */
+void engine_title_render_play_now_buttons(void)
+{
+    gfx_text_set_no_shadow(1);
+
+    /* Left button — "Original campaign" (entry 0x27 sub 4), select id 1. */
+    uint8_t col1 = (g_selected_button == 1) ? 0xf9 : 0x3f;
+    gfx_line_rect_bevel_palette_b(0x6e, 0x74, 0xa4, 0x18);
+    menu_text_entry(0x27, 4, 0x70, 0x7a, 0xa0, g_menu_font, col1);
+
+    /* Right button — "The new campaign" (entry 0x27 sub 5), select id 2. */
+    uint8_t col2 = (g_selected_button == 2) ? 0xf9 : 0x3f;
+    gfx_line_rect_bevel_palette_b(0x16e, 0x74, 0xa4, 0x18);
+    menu_text_entry(0x27, 5, 0x170, 0x7a, 0xa0, g_menu_font, col2);
+
+    /* One dirty-box mark for the whole row (retail FUN_004527a6). */
+    engine_dirty_rect_mark_box_tiled(g_dirty_state, 0x70, 0xd7, 0xe, 3, 1);
+
+    gfx_text_set_no_shadow(0);
+}
+
+/* Port of FUN_0041f592 — the "Play Now!" campaign-chooser page (page 5),
+ * reached from "Your options" → Play Now! when the expansion pack is
+ * installed.  Panel + large-font title ("Expansion pack installed,
+ * choose:-", entry 0x27 sub 0) + the two campaign buttons.  Unlike the
+ * earlier pages the panel is drawn BEFORE the uppercase-highlight mode is
+ * armed (the panel ignores it either way); no subtitle. */
+void engine_title_render_play_now(void)
+{
+    /* Gray stone panel — deferred panel hook.  retail args
+     * (DAT_004eabec, 0x40, 0x32, 0x20, 8). */
+    g_panel_fn(g_panel_asset, 0x40, 0x32, 0x20, 8);
+
+    /* Title — large font, entry 0x27 sub 0, centered in 0x200 at
+     * (0x40, 0x50), uppercase-highlight armed (DAT_0058fe2c=1). */
+    gfx_text_set_uppercase_highlight(1);
+    menu_text_entry(0x27, 0, 0x40, 0x50, 0x200, g_title_font, 0x3f);
+    gfx_text_set_uppercase_highlight(0);
+
+    engine_title_render_play_now_buttons();
+}
+
 /* Port of FUN_0041e7e1. */
 void engine_title_render_scene(int screen_state, int page)
 {
@@ -271,12 +330,15 @@ void engine_title_render_scene(int screen_state, int page)
     /* Background first (deferred — FUN_0041e61d long pole). */
     g_background_fn();
 
-    /* Page dispatch.  Page 1 is the main menu; pages 2..0xd route to the
+    /* Page dispatch.  Page 1 = main menu, page 2 = "Your options", page 5
+     * = "Play Now!" campaign chooser; the remaining 3..0xd route to the
      * (still-unported) page renderers via the page hook. */
     if (page == 1) {
         engine_title_render_main_menu();
     } else if (page == 2) {
         engine_title_render_options();
+    } else if (page == 5) {
+        engine_title_render_play_now();
     } else if (page >= 3 && page <= 0xd) {
         g_page_fn(page);
     }
@@ -297,16 +359,19 @@ void engine_title_render_scene(int screen_state, int page)
  *
  *   page 1 (main menu)      → FUN_0041eaa3 → engine_title_render_buttons
  *   page 2 ("Your options") → FUN_0041ece6 → engine_title_render_options_buttons
+ *   page 5 ("Play Now!")    → FUN_0041f5e8 → engine_title_render_play_now_buttons
  *
- * Pages 3..0xd have their own per-frame refreshers in retail
- * (0x4149ec, 0x41f321, …) — still unported, so the live menu
- * only round-trips between pages 1 and 2 today; other pages just don't
- * get the cheap per-frame repaint until their refreshers land. */
+ * The remaining pages (3, 4, 6..0xd) have their own per-frame refreshers
+ * in retail (0x4149ec, 0x41f321, …) — still unported, so the live menu
+ * only round-trips pages 1, 2 and 5 today; other pages just don't get the
+ * cheap per-frame repaint until their refreshers land. */
 void engine_title_render_refresh_buttons(int page)
 {
     if (page == 1) {
         engine_title_render_buttons();
     } else if (page == 2) {
         engine_title_render_options_buttons();
+    } else if (page == 5) {
+        engine_title_render_play_now_buttons();
     }
 }

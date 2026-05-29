@@ -4,15 +4,15 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 270,
+  "tested": 272,
   "ported": 34,
-  "unported": 2143,
+  "unported": 2141,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 304,
-  "pct_touched": 12.4,
-  "pct_tested": 11.0,
+  "touched": 306,
+  "pct_touched": 12.5,
+  "pct_tested": 11.1,
   "bytes_total": 838629,
-  "bytes_touched": 109799,
+  "bytes_touched": 110108,
   "pct_bytes_touched": 13.1
  },
  "orphan_refs": [
@@ -3127,16 +3127,22 @@
    "name": "FUN_0041f592",
    "size": 86,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_title_render.c",
+    "src/engine_title_render.h"
+   ]
   },
   {
    "va": "0x41f5e8",
    "name": "FUN_0041f5e8",
    "size": 223,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_title_render.c",
+    "src/engine_title_render.h"
+   ]
   },
   {
    "va": "0x41f6c7",
@@ -10303,7 +10309,8 @@
    "status": "tested",
    "src": [
     "src/engine_battlefield_render.h",
-    "src/engine_dirty_rect.h"
+    "src/engine_dirty_rect.h",
+    "src/engine_title_render.c"
    ]
   },
   {

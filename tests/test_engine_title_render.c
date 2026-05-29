@@ -30,9 +30,12 @@
  * Fixtures
  * ────────────────────────────────────────────────────────────────── */
 
-enum { CANVAS_W = 512, CANVAS_H = 256 };
+/* Full 640x480 backbuffer extent — page 5's right button sits at x=0x16e
+ * w=0xa4 (right edge 0x212 = 530), past the old 512-wide canvas, so use the
+ * real render extent to clip exactly as retail does. */
+enum { CANVAS_W = 640, CANVAS_H = 480 };
 
-/* Static so we don't blow the stack with a 128 KB canvas under ASan. */
+/* Static so we don't blow the stack with the 300 KB canvas under ASan. */
 static uint8_t g_canvas[CANVAS_W * CANVAS_H];
 
 static void canvas_init(void)
@@ -46,6 +49,18 @@ static int row_color_count(int y, uint8_t color)
 {
     int n = 0;
     for (int x = 0; x < CANVAS_W; x++) {
+        if (g_canvas[x + y * CANVAS_W] == color) n++;
+    }
+    return n;
+}
+
+/* Count pixels of `color` in row `y` within the half-open x range
+ * [x0, x1).  Used by the page-5 chooser, whose two buttons share a row but
+ * differ in x. */
+static int row_color_count_x(int y, uint8_t color, int x0, int x1)
+{
+    int n = 0;
+    for (int x = x0; x < x1 && x < CANVAS_W; x++) {
         if (g_canvas[x + y * CANVAS_W] == color) n++;
     }
     return n;
@@ -92,11 +107,12 @@ static void table_init(uint8_t *table)
 /* Build a localization blob whose entry `index` is a sequence of
  * NUL-terminated tokens (one per sub-string slot).  `tokens[i]` is the
  * i-th sub-string; empty strings ("") are valid boundary-only slots. */
-static void blob_init_entry(unsigned char *blob, int index,
-                            const char *const *tokens, int n_tokens,
-                            int payload_off)
+/* Write one offset-table entry + its NUL-separated sub-strings at
+ * `payload_off`, WITHOUT clearing the blob (so several entries can coexist). */
+static void blob_add_entry(unsigned char *blob, int index,
+                           const char *const *tokens, int n_tokens,
+                           int payload_off)
 {
-    memset(blob, 0, LOCALIZATION_BLOB_SIZE + 16);
     /* Offset-table entry `index` → 24-bit LE byte offset. */
     blob[8 + index * 4 + 0] = (unsigned char)(payload_off & 0xff);
     blob[8 + index * 4 + 1] = (unsigned char)((payload_off >> 8) & 0xff);
@@ -109,6 +125,14 @@ static void blob_init_entry(unsigned char *blob, int index,
         p += (int)len;
         blob[p++] = 0;   /* sub-string boundary */
     }
+}
+
+static void blob_init_entry(unsigned char *blob, int index,
+                            const char *const *tokens, int n_tokens,
+                            int payload_off)
+{
+    memset(blob, 0, LOCALIZATION_BLOB_SIZE + 16);
+    blob_add_entry(blob, index, tokens, n_tokens, payload_off);
 }
 
 /* Menu localization layout (entry 0xb sub-strings):
@@ -124,6 +148,19 @@ static const char *g_menu_tokens[48] = {
     "", "", "", "", "", "", "", "", "", "",   /* 30..39 */
     "", "", "", "", "", "", "",               /* 40..46 */
     "CC"                                      /* 47 (0x2f) page-1 btn3 */
+};
+
+/* Page-5 ("Play Now!") string table (localization entry 0x27):
+ *   sub 0 = title ("Expansion pack installed, choose:-")
+ *   sub 4 = left button  ("Original campaign")
+ *   sub 5 = right button ("The new campaign")
+ * Title token is uppercase so the uppercase-highlight quirk forces it to
+ * color 1, exactly as the page-1/2 title tokens do. */
+static const char *g_play_now_tokens[6] = {
+    "PT",          /* 0 — title         */
+    "", "", "",    /* 1..3 — unused      */
+    "P4",          /* 4 — left button   */
+    "P5",          /* 5 — right button  */
 };
 
 static uint8_t g_font_title[FONT_BLOB_LEN];
@@ -168,6 +205,7 @@ static void title_reset(void)
     font_blob_init_1x1(g_font_menu);
     table_init(g_table);
     blob_init_entry(g_blob, 0xb, g_menu_tokens, 48, 4096);
+    blob_add_entry(g_blob, 0x27, g_play_now_tokens, 6, 8192);
 
     g_dirty.dirty_mark = 0;
     g_dirty.dirty_xmin = 0x7fff;
@@ -390,6 +428,101 @@ int test_title_options_highlights_selected_fifth_button(void)
 }
 
 /* ──────────────────────────────────────────────────────────────────
+ * "Play Now!" campaign chooser (page 5: FUN_0041f592 / FUN_0041f5e8)
+ * ────────────────────────────────────────────────────────────────── */
+
+int test_title_play_now_calls_panel_with_retail_args(void)
+{
+    title_reset();
+    g_cap_calls = 0;
+    engine_title_render_bind_panel_fn(capture_panel);
+    engine_title_render_play_now();
+
+    /* retail FUN_00409346(DAT_004eabec, 0x40, 0x32, 0x20, 8). */
+    T_ASSERT_EQ_I(g_cap_calls, 1);
+    T_ASSERT_EQ_I(g_cap_p2, 0x40);
+    T_ASSERT_EQ_I(g_cap_p3, 0x32);
+    T_ASSERT_EQ_I(g_cap_p4, 0x20);
+    T_ASSERT_EQ_I(g_cap_p5, 8);
+    return 0;
+}
+
+int test_title_play_now_buttons_mark_one_dirty_box(void)
+{
+    title_reset();
+    engine_title_render_play_now_buttons();
+
+    /* Single mark FUN_004527a6(0x70, 0xd7, 0xe, 3, 1): pixel top-left
+     * (0x70, 0xd7), tile-stride 0xe x 3 → box [0x70, 0x70+0xe*16] x
+     * [0xd7, 0xd7+3*16]. */
+    T_ASSERT_EQ_I(g_dirty.dirty_mark, 1);
+    T_ASSERT_EQ_I(g_dirty.dirty_xmin, 0x70);
+    T_ASSERT_EQ_I(g_dirty.dirty_xmax, 0x70 + 0xe * 16);
+    T_ASSERT_EQ_I(g_dirty.dirty_ymin, 0xd7);
+    T_ASSERT_EQ_I(g_dirty.dirty_ymax, 0xd7 + 3 * 16);
+    return 0;
+}
+
+int test_title_play_now_draws_two_bevel_rects(void)
+{
+    title_reset();
+    engine_title_render_play_now_buttons();
+
+    /* Bevel rect palette colors 0x35 / 0x28; two side-by-side rects → both. */
+    T_ASSERT(canvas_color_count(0x35) > 0);
+    T_ASSERT(canvas_color_count(0x28) > 0);
+    return 0;
+}
+
+int test_title_play_now_renders_title_and_two_buttons(void)
+{
+    title_reset();   /* selected button defaults to 1 (left) */
+    engine_title_render_play_now();
+
+    /* Title "PT" at cursor_y 0x50, uppercase_highlight armed → color 1. */
+    T_ASSERT(row_color_count(0x50, 1) > 0);
+
+    /* Both labels share row 0x7a (= 0x74 button top? no — label y 0x7a).
+     * Left button ("P4") is the default selection → highlight 0xf9 in the
+     * left x-range; right button ("P5") → normal 0x3f in the right x-range. */
+    T_ASSERT(row_color_count_x(0x7a, 0xf9, 0x6e, 0x6e + 0xa4) > 0);   /* left hi */
+    T_ASSERT(row_color_count_x(0x7a, 0x3f, 0x16e, 0x16e + 0xa4) > 0); /* right normal */
+    /* Only one label highlighted overall. */
+    T_ASSERT_EQ_I(canvas_color_count(0xf9),
+                  row_color_count_x(0x7a, 0xf9, 0x6e, 0x6e + 0xa4));
+
+    T_ASSERT_EQ_I(engine_title_render_panel_call_count(), 1);
+    T_ASSERT_EQ_I(g_dirty.dirty_mark, 1);
+    return 0;
+}
+
+int test_title_play_now_highlights_selected_right_button(void)
+{
+    title_reset();
+    engine_title_render_set_selected_button(2);   /* right ("The new campaign") */
+    engine_title_render_play_now_buttons();
+
+    /* Highlight 0xf9 now in the RIGHT x-range; left is normal 0x3f. */
+    T_ASSERT(row_color_count_x(0x7a, 0xf9, 0x16e, 0x16e + 0xa4) > 0);
+    T_ASSERT_EQ_I(row_color_count_x(0x7a, 0xf9, 0x6e, 0x6e + 0xa4), 0);
+    T_ASSERT(row_color_count_x(0x7a, 0x3f, 0x6e, 0x6e + 0xa4) > 0);
+    T_ASSERT_EQ_I(canvas_color_count(0xf9),
+                  row_color_count_x(0x7a, 0xf9, 0x16e, 0x16e + 0xa4));
+    return 0;
+}
+
+int test_title_play_now_no_selection_all_normal(void)
+{
+    title_reset();
+    engine_title_render_set_selected_button(0);   /* neither 1 nor 2 */
+    engine_title_render_play_now_buttons();
+
+    T_ASSERT_EQ_I(canvas_color_count(0xf9), 0);
+    T_ASSERT(canvas_color_count(0x3f) > 0);
+    return 0;
+}
+
+/* ──────────────────────────────────────────────────────────────────
  * Title-scene dispatch (FUN_0041e7e1)
  * ────────────────────────────────────────────────────────────────── */
 
@@ -441,6 +574,19 @@ int test_title_scene_page2_routes_to_options(void)
     engine_title_render_scene(0x1f, /*page=*/2);
     /* Background drawn; options page drawn (panel called once); the generic
      * page hook is NOT invoked for page 2. */
+    T_ASSERT_EQ_I(engine_title_render_background_call_count(), 1);
+    T_ASSERT_EQ_I(engine_title_render_panel_call_count(), 1);
+    T_ASSERT_EQ_I(engine_title_render_last_page(), 0);
+    T_ASSERT_EQ_I(engine_title_render_scene_flag_a(), 1);
+    return 0;
+}
+
+int test_title_scene_page5_routes_to_play_now(void)
+{
+    title_reset();
+    engine_title_render_scene(0x1f, /*page=*/5);
+    /* Background drawn; "Play Now!" page drawn (panel called once); the
+     * generic page hook is NOT invoked for page 5. */
     T_ASSERT_EQ_I(engine_title_render_background_call_count(), 1);
     T_ASSERT_EQ_I(engine_title_render_panel_call_count(), 1);
     T_ASSERT_EQ_I(engine_title_render_last_page(), 0);

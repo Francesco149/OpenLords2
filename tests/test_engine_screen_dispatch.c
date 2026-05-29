@@ -36,16 +36,17 @@ static void disp_reset(void)
     g_other_state = 0; g_other_redraw = 0; g_other_calls = 0;
 }
 
-/* Title screen routes to the scene; we use a non-main-menu page so the
- * scene exercises its page hook (no font/canvas setup needed). */
+/* Title screen routes to the scene; we use a still-unported page (3) so
+ * the scene exercises its page hook (no font/canvas setup needed).  Pages
+ * 1/2/5 are now ported renderers, so they would draw rather than hook. */
 int test_dispatch_title_routes_to_scene(void)
 {
     disp_reset();
-    engine_screen_dispatch(/*screen_state=*/0x1f, /*page=*/5, /*redraw=*/2);
+    engine_screen_dispatch(/*screen_state=*/0x1f, /*page=*/3, /*redraw=*/2);
 
-    /* Scene ran: background drawn, page hook saw page 5, flag_a set. */
+    /* Scene ran: background drawn, page hook saw page 3, flag_a set. */
     T_ASSERT_EQ_I(engine_title_render_background_call_count(), 1);
-    T_ASSERT_EQ_I(engine_title_render_last_page(), 5);
+    T_ASSERT_EQ_I(engine_title_render_last_page(), 3);
     T_ASSERT_EQ_I(engine_title_render_scene_flag_a(), 1);
     /* The other-screen hook was NOT used. */
     T_ASSERT_EQ_I(engine_screen_dispatch_last_other_state(), 0);
@@ -55,7 +56,7 @@ int test_dispatch_title_routes_to_scene(void)
 int test_dispatch_clears_scene_flag_b_after_title(void)
 {
     disp_reset();
-    engine_screen_dispatch(0x1f, 5, 2);
+    engine_screen_dispatch(0x1f, 3, 2);
     /* Scene set flag_b=1; the dispatcher's tail clears it to 0. */
     T_ASSERT_EQ_I(engine_title_render_scene_flag_b(), 0);
     /* flag_a stays set (only flag_b is cleared by the dispatcher). */

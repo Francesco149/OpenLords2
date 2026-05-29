@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **304** (12.4%) — tested 270, ported 34
-- code bytes touched: **13.1%** (109,799 / 838,629 B)
-- unported: **2143**
+- touched: **306** (12.5%) — tested 272, ported 34
+- code bytes touched: **13.1%** (110,108 / 838,629 B)
+- unported: **2141**
 - orphan refs (in src/, not in function table): 4
 
-## tested (270) — ported + host unit suite
+## tested (272) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -137,6 +137,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x41ec8a | FUN_0041ec8a | 92 | engine_title_render.c, engine_title_render.h |
 | 0x41ece6 | FUN_0041ece6 | 604 | engine_title_render.c, engine_title_render.h |
 | 0x41f15a | FUN_0041f15a | 131 | engine_mp_render.c, engine_mp_render.h |
+| 0x41f592 | FUN_0041f592 | 86 | engine_title_render.c, engine_title_render.h |
+| 0x41f5e8 | FUN_0041f5e8 | 223 | engine_title_render.c, engine_title_render.h |
 | 0x42150b | FUN_0042150b | 508 | engine_title_render.h |
 | 0x423b4f | FUN_00423b4f | 85 | engine_mp_render.c, engine_mp_render.h |
 | 0x425d35 | FUN_00425d35 | 184 | main.c |
@@ -185,7 +187,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4526b3 | FUN_004526b3 | 87 | engine_dirty_rect.c, engine_dirty_rect.h |
 | 0x45270a | FUN_0045270a | 43 | engine_dirty_rect.h, save.h |
 | 0x452735 | FUN_00452735 | 53 | engine_dirty_rect.h |
-| 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_dirty_rect.h |
+| 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_dirty_rect.h, engine_title_render.c |
 | 0x4651b9 | FUN_004651b9 | 91 | engine_territory.c, engine_territory.h |
 | 0x46c4a3 | FUN_0046c4a3 | 277 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |

@@ -1,0 +1,24 @@
+# Navigation trace: from the main menu (title page 1), click "Single player"
+# → "Your options" (page 2), then click "Play Now!" → the expansion-pack
+# campaign chooser (page 5: "Original campaign" / "The new campaign"), then
+# park the cursor below the buttons so no hover-highlight taints the
+# groundtruth (page 5 has two side-by-side buttons at y 0x74..0x8c).
+#
+# Reproduce for parity capture:
+#   nix develop -c python3 tools/frida_capture.py --remote <host> \
+#     --skip-intro --input-trace tools/traces/menu_play_now.jsonl \
+#     --frame-capture --frame-capture-warmup-secs 6 --frame-capture-max 4
+#
+# Coords are client/game 640x480 (1:1).  "Single player" center (320,107);
+# "Play Now!" center (320,103); neutral park (320,462).  lParam=(y<<16)|x.
+# See docs/findings/title-menu-screens.md.
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 120, "m": 512, "w": 0, "l": 6750528}
+{"t": 126, "m": 512, "w": 0, "l": 6750528}
+{"t": 130, "m": 513, "w": 1, "l": 6750528}
+{"t": 136, "m": 514, "w": 0, "l": 6750528}
+{"t": 170, "m": 512, "w": 0, "l": 30277952}
+{"t": 200, "m": 512, "w": 0, "l": 30277952}

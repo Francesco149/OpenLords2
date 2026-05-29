@@ -920,6 +920,22 @@ static void bringup_title_nav(const char *dir)
     gfx_capture_backbuffer(path);
     log_line("title-nav: clicked Back → page %d → %s",
              engine_title_render_page(), path);
+
+    /* Step 3 — page 1 → "Single player" (page 2) → "Play Now!" (page 2
+     * button 1) → page 5, the "Play Now!" campaign chooser.  Page 5 has no
+     * ported hover arm yet (engine_menu_title_input only handles pages
+     * 1/2), so the selected-button highlight carries over frozen from the
+     * page-2 click frame.  Retail's neutral page-5 view (cursor off the two
+     * side-by-side buttons) shows no highlight, so park it neutral here to
+     * mirror that groundtruth. */
+    title_nav_click(BTN_CX, row0);                 /* page 1 → 2 */
+    title_nav_click(BTN_CX, row0);                 /* page 2 "Play Now!" → 5 */
+    engine_title_render_set_selected_button(0);    /* neutral (no hover arm) */
+    title_render_current_page();
+    wsprintfA(path, "%s\\nav_03_p%d_playnow.bmp", dir, engine_title_render_page());
+    gfx_capture_backbuffer(path);
+    log_line("title-nav: clicked Single player → Play Now! → page %d → %s",
+             engine_title_render_page(), path);
 }
 
 /* Page-background reload hook (engine → gfx).  The engine_tick title

@@ -185,6 +185,15 @@ void engine_title_render_options(void);
 /* Port of FUN_0041ece6.  Render the five "Your options" buttons. */
 void engine_title_render_options_buttons(void);
 
+/* Port of FUN_0041f592.  Render the "Play Now!" campaign-chooser page
+ * (page 5): panel + large-font title ("Expansion pack installed,
+ * choose:-") + two side-by-side buttons ("Original campaign" / "The new
+ * campaign"). */
+void engine_title_render_play_now(void);
+
+/* Port of FUN_0041f5e8.  Render the two page-5 campaign buttons. */
+void engine_title_render_play_now_buttons(void);
+
 /* Port of the 0x1f arm of FUN_004ba26e — the per-frame button refresh.
  * Re-renders just the current page's buttons (page 1 → buttons, page 2
  * → options_buttons) so the hover highlight follows the mouse without a

@@ -7,6 +7,68 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — NEXT SCREEN: "Play Now!" campaign chooser (title page 5)
+
+The fifth title page — the **"Play Now!" expansion-pack campaign chooser**
+("Expansion pack installed, choose:-" → *Original campaign* / *The new
+campaign*) — now renders in the drop-in.  Reached from "Your options" →
+Play Now! (page 2 button 1).  This is the third title page ported (after
+the main menu and "Your options").
+
+### The port
+
+`FUN_0041f592` (page-5 root) + `FUN_0041f5e8` (the two buttons) landed in
+`engine_title_render.c` as `engine_title_render_play_now` /
+`engine_title_render_play_now_buttons`.  Structurally the same panel +
+large-font title + beveled button-label shapes as pages 1/2, with two
+differences worth noting:
+
+- **Strings come from localization entry 0x27** (not 0xb): title = sub 0,
+  buttons = sub 4 ("Original campaign") / 5 ("The new campaign").  The
+  shared `menu_text` helper grew an entry parameter (`menu_text_entry`).
+- **Two side-by-side buttons** (left x=0x6e / right x=0x16e, both w=0xa4
+  h=0x18 at y=0x74), not the vertical stack — so the page-5 button block is
+  its own function rather than the `render_menu_button` row helper.  One
+  dirty-box mark covers the row.
+
+Scene dispatch + the per-frame button refresh route page 5 → the new
+renderer (pages 3,4,6..0xd still hit the deferred page hook).  Background is
+the same gateway backdrop as pages 1/2, so no new asset path.  All draw
+primitives are the ones already proven bit-identical on pages 1/2.
+
+### Wiring + verification
+
+`--title-nav` grew a step 3 that navigates page 1→2→Play Now→5 and captures
+page 5 (the page has no ported hover arm yet, so the bring-up parks the
+highlight at neutral to mirror retail's cursor-off view).  The drop-in
+render is visually faithful — stone panel, the dark-red drop-cap "E" from
+the uppercase-highlight quirk, the two buttons over the gateway backdrop
+(`runs/title-nav-p5/nav_03_p5_playnow.bmp`).  8 new host tests (1151 → 1158,
+incl. a fixed screen-dispatch probe that had used page 5 as its
+"unported page" case), all green; full drop-in build clean.
+
+### Blocker (harness, pre-existing)
+
+The **retail bit-identical pixel diff is blocked**: the `--input-trace`
+menu-navigation capture no longer drives retail.  Even the known-good
+`menu_single_player.jsonl` trace fails to reach page 2 now — the
+page-transition action `FUN_00432b05` never fires (call-trace confirmed).
+Under the default windowed + gdi-seat capture the engine free-runs at
+~100 000 fps (the render-rate limiter rides on `Sleep`/present, which
+gdi-seat bypasses), so posted button down/up edges get coalesced before the
+engine samples a press edge over the hotspot.  Fix needs deterministic
+per-tick input delivery (or a direct page-global poke) — a harness scope
+separate from this port.  See `findings/title-menu-screens.md`.
+
+### Next
+
+Either (a) fix the input-replay/rate path so menu captures navigate again,
+then take the page-5 groundtruth + 0-diff check; or (b) port page 5's input
+arm (page-5 hotspot table + campaign-select action) and/or the remaining
+title pages (3, 4, 6..0xd) the same way.
+
+---
+
 ## 2026-05-29 — MENU INPUT: title pages navigate (hover + click → page change)
 
 The title menu's **input** half now matches its bit-identical render half:

@@ -22,7 +22,7 @@ Two parallel dispatch ladders run while `DAT_004eac50 == 0x1f`:
 | 2   | `FUN_0041ec8a` | `FUN_0041ece6` | **"Your options"** (single-player) — Play Now! / Load a game / Skirmish! / Custom game / Back |
 | 3   | `FUN_0041ef42` | …            | (sub-screen) |
 | 4   | `FUN_0041ef57` | `FUN_0041f321`+ | (sub-screen) |
-| 5   | `FUN_0041f592` | `FUN_0041f5e8` | (sub-screen) |
+| 5   | `FUN_0041f592` | `FUN_0041f5e8` | **"Play Now!" campaign chooser** — Original campaign / The new campaign (ported) |
 | 6   | `FUN_0041f3e9` | `FUN_0041f4a1` | (sub-screen) |
 | 7   | `FUN_0041f6c7` | `FUN_0041f98b`+ | (sub-screen) |
 | 8   | `FUN_0041f77a` | `FUN_0041f98b`+ | (sub-screen) |
@@ -67,6 +67,65 @@ All primitives already exist from the main-menu port (`gfx_panel`,
 — page 2 is the same shapes with different geometry + strings. In the port
 this lands as the `engine_title_render` page-2 renderer (today the deferred
 `page_fn` stub).
+
+## "Play Now!" campaign chooser (page 5) render — ported
+
+Reached from "Your options" → **Play Now!** (page 2 button 1) when the
+expansion pack (Siege Pack) is installed.  All strings come from
+localization **entry 0x27** (not 0xb like pages 1/2):
+
+- title  = sub 0 — "Expansion pack installed, choose:-"
+- left   = sub 4 — "Original campaign"
+- right  = sub 5 — "The new campaign"
+
+`FUN_0041f592` (draw, 86 B):
+
+```c
+FUN_00409346(DAT_004eabec, 0x40, 0x32, 0x20, 8);            // gray panel
+DAT_0058fe2c = 1;                                          // uppercase-highlight
+FUN_00402c5e(0x27, 0, 0x40, 0x50, 0x200, &DAT_005b2fa0,0x3f);// title (large font)
+DAT_0058fe2c = 0;
+FUN_0041f5e8();                                            // the two buttons
+```
+
+`FUN_0041f5e8` (buttons, 223 B): two **side-by-side** buttons (unlike the
+vertical main-menu/options stacks) — left at x=0x6e, right at x=0x16e, both
+w=0xa4 h=0x18 at y=0x74; labels at y=0x7a w=0xa0 (menu font).  Highlight
+0xf9 when `DAT_00553114` == 1 (left) / 2 (right), else 0x3f.  A **single**
+dirty-box mark (`FUN_004527a6(0x70,0xd7,0xe,3,1)`) covers the whole row,
+bracketed by the no-shadow mode (`DAT_005aea40`).
+
+Background is the same gateway family as pages 1/2 (`FUN_0041e61d` maps
+pages 1..6 → gateway.256/gateway.pl8), so no new asset path.  All draw
+primitives are the ones already proven bit-identical on pages 1/2
+(`gfx_panel_draw`, `gfx_wrap_localized_line_centered`,
+`gfx_line_rect_bevel_palette_b`, the tiled dirty mark) — page 5 is the same
+shapes with page-5 geometry + entry-0x27 strings.  Landed in
+`engine_title_render.c` as `engine_title_render_play_now` /
+`engine_title_render_play_now_buttons`; the scene dispatch routes page 5 to
+it (and the per-frame refresh re-renders its buttons).  Driveable in the
+drop-in via `--title-nav` (step 3 navigates page 1→2→Play Now→5).
+
+> ⚠️ **No ported hover arm yet.** `engine_menu_title_input` handles only
+> pages 1/2; on page 5 the selected-button highlight stays frozen at
+> whatever the page-2 click frame left it.  The `--title-nav` bring-up sets
+> it to 0 (neutral) before capturing page 5, mirroring retail's
+> cursor-off-the-buttons view.  Porting page 5's input arm (a page-5 hotspot
+> table + the campaign-select action) is the natural next chip.
+
+> ⚠️ **Retail capture of page 5 is currently blocked** (2026-05-29).  The
+> `--input-trace` menu-navigation path no longer drives retail: even the
+> known-good `menu_single_player.jsonl` trace fails to reach page 2 — the
+> page-transition action (`FUN_00432b05`) never fires (verified by
+> call-trace).  Under the default windowed + gdi-seat capture the engine
+> free-runs far above 60 Hz (the render-rate limiter rides on `Sleep`/present,
+> which gdi-seat bypasses; `avg_fps≈100 000`), so posted button down/up edges
+> are coalesced before the engine samples a press edge while the cursor is
+> over the hotspot.  This regressed the previously-working menu capture and
+> needs a harness fix (deterministic per-tick input delivery, or a direct
+> page-global poke) before a fresh page-5 groundtruth + 0-diff check can be
+> taken.  The port reuses the page-1/2 primitives verbatim and the drop-in
+> render is visually faithful (`runs/title-nav-p5/nav_03_p5_playnow.bmp`).
 
 ## Input side — hotspot hit-test + page navigation (`engine_menu_input`)
 
