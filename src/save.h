@@ -124,6 +124,12 @@ extern uint8_t g_footprint_storage_160[160];
 int save_write(const char *sav_path, const char *castles_path);
 int save_load (const char *sav_path, const char *castles_path);
 
+/* Rotate the 3-generation turn-save backup chain (lastturn → old_turn →
+ * safeturn, oldest dropped) and write the current turn's lastturn save.
+ * File family selected by the MP flags; rotation gated on the rotation-
+ * hold counter.  Port of retail FUN_0049a453 @ 0x49a453. */
+int save_rotate_and_write(const char *castles_path);
+
 int castles_init_blank    (const char *castles_path);
 int castles_write_scenario(const char *castles_path, int scenario_idx);
 int castles_read_scenario (const char *castles_path, int scenario_idx);

@@ -7,6 +7,71 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — turn-save backup rotation (save family, in-flow chip)
+
+Next clean leaf off the honest frontier, pivoting from the roster/npc
+band into the save family — its only real dependency,
+`FUN_004ade93` / `save_write`, already landed in `save.c`.
+`FUN_0049a453` (302 B, zero-dep leaf) → `src/save.c`
+`save_rotate_and_write`.
+
+### What it does
+
+`save_rotate_and_write(castles_path)` is the wrapper the new-game-setup
+(`0x441649`-ish chain) and turn-end handler (`0x49a3e6`) call to persist
+a turn.  It maintains a **3-generation backup chain** under fixed
+sentinel filenames — `lastturn.*` (newest) → `old_turn.*` →
+`safeturn.*` (oldest) — chosen by session mode: `.sav` (SP), or `.svb`
+/ `.sva` for the two MP variants (`DAT_00553248`).  When the rotation-
+hold counter (`DAT_00553260`) is clear it rotates with three unchecked
+file ops — `remove(safeturn)`, `rename(old_turn→safeturn)`,
+`rename(lastturn→old_turn)` — then writes the new `lastturn`.  When the
+hold is set (only on the MP turn-advance path, `0x49b973`) rotation is
+skipped and `lastturn` is overwritten in place.
+
+### What landed
+
+- **`save.c` / `save.h`** — verbatim port next to the existing
+  `save_write`/`save_load`.  Bare relative filenames as retail builds
+  them (retail `save_write` chdir's to the base dir first via `0x4af502`);
+  best-effort rename/remove (a missing backup on the first save is not an
+  error); returns `save_write`'s status for test observability (retail is
+  void and ignores it).
+- **Two MP runtime globals promoted to shared externs** in `engine.h`
+  (defined in `engine.c`), mirroring the `g_sim_mp_active` precedent:
+  `g_sim_mp_variant` (retail `DAT_00553248`, 57 read sites across the
+  engine — the recurring `mp_active==0 || variant!=0` guard) and
+  `g_sim_save_rotate_hold` (retail `DAT_00553260`).  Both runtime-only,
+  **not** save-schema scalars, always 0 in SP.
+- **5 host tests** — SP rotate-and-write, hold suppresses rotation, MP
+  variant 0 → `.svb`, MP variant 1 → `.sva`, and first-save-no-backups
+  (best-effort renames don't error).  Each runs in a throwaway `mkdtemp`
+  dir and always restores cwd before asserting.  Suite **1058 → 1063**,
+  both builds clean.
+- **Quirk #110** — the rename-chain ring buffer, the suffix-encodes-mode
+  split, and the hold countdown.  Also a `save-format.md` section.
+
+### Ledger-pollution near-miss (again)
+
+First regen jumped touched **274 → 277**: two comments cited the
+unported neighbours `FUN_004af502` and `FUN_0049b973` by token, each of
+which the ledger counts as touched.  Rewrote both as bare hex per
+[[project_ledger_fun_token]]; back to a clean **+1**.
+
+### Disposition
+
+Ledger: **274 → 275 touched** (11.2 %), 245 tested, code-byte 10.3 %.
+Lands ahead of its callers (new-game setup / turn-end handler both
+unported), so dead-but-tested in the drop-in today — same posture as the
+roster/schedule chips.  Natural next chips in this band: the turn-end
+state machine itself (`0x49b762` end-of-turn check — 334 B leaf, touches
+many MP scalars; `0x49b973` turn-advance — 374 B), or back to the roster-
+cluster consumer `0x49bd99`.
+
+(Clean `/clear` point — one self-contained chip.)
+
+---
+
 ## 2026-05-29 — player seat-assign primitive (roster family, in-flow chip)
 
 Next clean chip off the honest frontier, staying in the sim/roster

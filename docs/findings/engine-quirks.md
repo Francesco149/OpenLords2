@@ -3919,6 +3919,47 @@ to stay clean under ASan).
 
 ---
 
+## 110. Turn-save backup is a 3-deep generational rename chain
+
+Every turn-save goes through `FUN_0049a453` (`save_rotate_and_write`),
+which keeps three generations on disk under fixed sentinel names:
+
+```
+lastturn.*   ← the turn being written
+old_turn.*   ← previous turn
+safeturn.*   ← two turns ago (oldest)
+```
+
+The rotation is three unchecked file ops — `remove(safeturn)`,
+`rename(old_turn → safeturn)`, `rename(lastturn → old_turn)` — then the
+new `lastturn` is written.  Nothing checks a return value: on the first
+save of a game the two `rename`s simply fail (no source file) and the
+chain fills in over the next two turns.  It's a poor-man's ring buffer
+built entirely out of `rename`.
+
+Two twists worth noting:
+
+- **The suffix encodes the session mode.**  Single-player uses `.sav`;
+  multiplayer splits into `.sva` / `.svb` selected by `DAT_00553248`
+  (`g_sim_mp_variant`).  So an MP game keeps an entirely separate backup
+  chain from an SP game in the same directory — they never collide.
+- **Rotation can be held off.**  `DAT_00553260` (`g_sim_save_rotate_hold`)
+  is a small countdown bumped to 2 on the MP turn-advance path
+  (`FUN_0049b973`) and decremented elsewhere; while it's ≥ 1 the chain is
+  *not* rotated — `lastturn` is just overwritten in place, preserving the
+  older two generations across a burst of saves.  It's always 0 in SP, so
+  SP rotates on every save.
+
+The filenames are bare relative paths; retail's `save_write`
+(`FUN_004ade93`) `chdir`s to the save base dir first (`FUN_004af502`)
+before opening them.
+
+> 📍 `src/save.c` (`save_rotate_and_write`),
+> Ghidra `FUN_0049a453`; filename templates @ `0x4dc290`–`0x4dc310`;
+> hold counter set by `FUN_0049b973`.
+
+---
+
 <!--
 Template for new entries:
 

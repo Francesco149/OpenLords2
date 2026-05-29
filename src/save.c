@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "engine.h"
 #include "engine_tile.h"
 #include "save.h"
 
@@ -139,6 +140,70 @@ int save_load(const char *sav_path, const char *castles_path)
     fclose(in);
     if (fclose(castles) != 0) return 1;
     return 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Turn-save backup rotation                                         */
+/* ------------------------------------------------------------------ */
+
+/* save_rotate_and_write — retail FUN_0049a453 @ 0x49a453.
+ *
+ * Rotate the 3-generation turn-save backup chain, then write the
+ * current turn's "lastturn" save.  Retail calls this from new-game
+ * setup and the turn-end handler.
+ *
+ * The filename family is chosen by the MP flags (retail's branch on
+ * DAT_00553030 / DAT_00553248):
+ *
+ *   single-player  (g_sim_mp_active == 0)   →  *.sav
+ *   MP, g_sim_mp_variant == 0               →  *.svb
+ *   MP, g_sim_mp_variant != 0               →  *.sva
+ *
+ * Three generations, newest → oldest:
+ *   lastturn.*  — the turn we're about to write
+ *   old_turn.*  — previous turn
+ *   safeturn.*  — two turns ago
+ *
+ * When the rotation-hold counter is clear (g_sim_save_rotate_hold < 1 —
+ * always so in SP), rotate the chain first, dropping the oldest:
+ *   remove(safeturn);  rename(old_turn → safeturn);  rename(lastturn → old_turn);
+ * then always save_write(lastturn).  When the hold counter is set (only
+ * on the MP turn-advance path) rotation is skipped and lastturn is just
+ * overwritten in place.
+ *
+ * The filenames are bare relative paths exactly as retail builds them
+ * (retail save_write chdir's to the base dir first, via 0x4af502);
+ * callers are expected to be in the save directory.  retail ignores
+ * every return value (remove / rename / FUN_004ade93) and is void; the
+ * remove/rename are best-effort — a missing backup (the first save of a
+ * game) is not an error.  We surface save_write's status as the return
+ * for host-test observability; the rotation results stay unchecked, as
+ * in retail.  See docs/findings/save-format.md. */
+int save_rotate_and_write(const char *castles_path)
+{
+    const char *lastturn, *old_turn, *safeturn;
+
+    if (g_sim_mp_active == 0) {
+        lastturn = "lastturn.sav";
+        old_turn = "old_turn.sav";
+        safeturn = "safeturn.sav";
+    } else if (g_sim_mp_variant == 0) {
+        lastturn = "lastturn.svb";
+        old_turn = "old_turn.svb";
+        safeturn = "safeturn.svb";
+    } else {
+        lastturn = "lastturn.sva";
+        old_turn = "old_turn.sva";
+        safeturn = "safeturn.sva";
+    }
+
+    if (g_sim_save_rotate_hold < 1) {
+        remove(safeturn);            /* drop the oldest backup       */
+        rename(old_turn, safeturn);  /* previous turn → oldest        */
+        rename(lastturn, old_turn);  /* last turn     → previous      */
+    }
+
+    return save_write(lastturn, castles_path);
 }
 
 /* ------------------------------------------------------------------ */

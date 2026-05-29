@@ -267,6 +267,11 @@ struct test_case {
     X(castles_scenario_independent_slots) \
     X(castles_read_fixup_flag_bit0) \
     X(castles_read_fixup_flag_bit1) \
+    X(save_rotate_sp_rotates_and_writes) \
+    X(save_rotate_hold_suppresses_rotation) \
+    X(save_rotate_mp_variant0_uses_svb) \
+    X(save_rotate_mp_variant1_uses_sva) \
+    X(save_rotate_first_save_no_backups) \
     \
     X(engine_tile_push_into_empty_list_takes_slot_0) \
     X(engine_tile_push_skips_occupied_slots) \

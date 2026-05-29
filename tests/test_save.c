@@ -12,15 +12,28 @@
  * runs unconditionally — it only inspects the in-binary schema table.
  */
 
+/* mkdtemp / chdir / getcwd / rmdir need a POSIX/BSD feature macro under
+ * -std=c11 (strict ISO hides them). */
+#define _DEFAULT_SOURCE 1
+
 #include "t.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>   /* chdir, getcwd, rmdir */
 
+#include "engine.h"   /* g_sim_mp_active / _mp_variant / _save_rotate_hold */
 #include "engine_tile.h"
 #include "save.h"
+
+/* save.c (under test) reads three runtime sim flags that live in
+ * engine.c, which the host test build does not link.  g_sim_mp_active
+ * is defined in test_engine_npc_schedule.c; define the two save-rotation
+ * flags here so the link resolves. */
+int g_sim_mp_variant;
+int g_sim_save_rotate_hold;
 
 static int read_file(const char *path, uint8_t **out_buf, size_t *out_len)
 {
@@ -403,5 +416,242 @@ int test_castles_read_fixup_flag_bit1(void)
     T_ASSERT_EQ_U(g_castles_state[0 + 2], 0xe7);    /* reshaped */
 
     remove(path);
+    return 0;
+}
+
+/* ─── save_rotate_and_write (FUN_0049a453) ───────────────────────────
+ *
+ * The function builds bare relative filenames (lastturn / old_turn /
+ * safeturn, with the .sav/.svb/.sva suffix chosen by the MP flags) and
+ * rotates the chain in place, so the tests run inside a throwaway temp
+ * directory.  Each test chdir's in, does its work, gathers observations
+ * into locals, then ALWAYS restores cwd before asserting — a chdir left
+ * dangling would leak into later tests in the same process. */
+
+static int write_text_file(const char *path, const char *text)
+{
+    FILE *f = fopen(path, "wb");
+    if (!f) return -1;
+    size_t n = strlen(text);
+    int ok = (fwrite(text, 1, n, f) == n);
+    if (fclose(f) != 0) ok = 0;
+    return ok ? 0 : -1;
+}
+
+/* Read a small file into a NUL-terminated buffer.  Leaves buf == "" if
+ * the file is missing, so a stale-vs-absent distinction is testable. */
+static void read_text_file(const char *path, char *buf, size_t cap)
+{
+    buf[0] = '\0';
+    FILE *f = fopen(path, "rb");
+    if (!f) return;
+    size_t n = fread(buf, 1, cap - 1, f);
+    fclose(f);
+    buf[n] = '\0';
+}
+
+static long file_size(const char *path)
+{
+    struct stat st;
+    if (stat(path, &st) != 0) return -1;
+    return (long)st.st_size;
+}
+
+/* Single-player: chain rotates (safeturn dropped, old_turn → safeturn,
+ * lastturn → old_turn) and a fresh lastturn.sav is written.  No .svb /
+ * .sva files appear. */
+int test_save_rotate_sp_rotates_and_writes(void)
+{
+    char cwd[1024];
+    if (!getcwd(cwd, sizeof cwd)) T_FAIL("getcwd failed");
+    char tmpl[] = "/tmp/ol2_rot_XXXXXX";
+    if (!mkdtemp(tmpl)) T_FAIL("mkdtemp failed");
+    if (chdir(tmpl) != 0) { rmdir(tmpl); T_FAIL("chdir failed"); }
+
+    int setup_ok = (castles_init_blank("castles.dat") == 0)
+                && (write_text_file("lastturn.sav", "LAST") == 0)
+                && (write_text_file("old_turn.sav", "OLD")  == 0)
+                && (write_text_file("safeturn.sav", "SAFE") == 0);
+
+    g_sim_mp_active        = 0;
+    g_sim_mp_variant       = 0;
+    g_sim_save_rotate_hold = 0;
+
+    int rc = setup_ok ? save_rotate_and_write("castles.dat") : -99;
+
+    char safeturn_txt[16], old_turn_txt[16];
+    read_text_file("safeturn.sav", safeturn_txt, sizeof safeturn_txt);
+    read_text_file("old_turn.sav", old_turn_txt, sizeof old_turn_txt);
+    long last_sz   = file_size("lastturn.sav");
+    int  svb_made  = file_exists("lastturn.svb");
+    int  sva_made  = file_exists("lastturn.sva");
+
+    remove("castles.dat"); remove("lastturn.sav");
+    remove("old_turn.sav"); remove("safeturn.sav");
+    if (chdir(cwd) != 0) T_FAIL("chdir back failed");
+    rmdir(tmpl);
+
+    if (!setup_ok) T_FAIL("setup failed");
+    T_ASSERT_EQ_I(rc, 0);
+    T_ASSERT_EQ_S(safeturn_txt, "OLD");    /* old_turn rotated down  */
+    T_ASSERT_EQ_S(old_turn_txt, "LAST");   /* prev lastturn rotated  */
+    T_ASSERT(last_sz == SAVE_FILE_BYTES);  /* fresh full save        */
+    T_ASSERT(!svb_made && !sva_made);      /* SP family only         */
+    return 0;
+}
+
+/* When the rotation-hold counter is set, the chain is NOT rotated:
+ * old_turn / safeturn keep their contents, lastturn is overwritten in
+ * place. */
+int test_save_rotate_hold_suppresses_rotation(void)
+{
+    char cwd[1024];
+    if (!getcwd(cwd, sizeof cwd)) T_FAIL("getcwd failed");
+    char tmpl[] = "/tmp/ol2_rot_XXXXXX";
+    if (!mkdtemp(tmpl)) T_FAIL("mkdtemp failed");
+    if (chdir(tmpl) != 0) { rmdir(tmpl); T_FAIL("chdir failed"); }
+
+    int setup_ok = (castles_init_blank("castles.dat") == 0)
+                && (write_text_file("lastturn.sav", "LAST") == 0)
+                && (write_text_file("old_turn.sav", "OLD")  == 0)
+                && (write_text_file("safeturn.sav", "SAFE") == 0);
+
+    g_sim_mp_active        = 0;
+    g_sim_mp_variant       = 0;
+    g_sim_save_rotate_hold = 1;   /* hold set → rotation skipped */
+
+    int rc = setup_ok ? save_rotate_and_write("castles.dat") : -99;
+
+    char safeturn_txt[16], old_turn_txt[16];
+    read_text_file("safeturn.sav", safeturn_txt, sizeof safeturn_txt);
+    read_text_file("old_turn.sav", old_turn_txt, sizeof old_turn_txt);
+    long last_sz = file_size("lastturn.sav");
+
+    remove("castles.dat"); remove("lastturn.sav");
+    remove("old_turn.sav"); remove("safeturn.sav");
+    if (chdir(cwd) != 0) T_FAIL("chdir back failed");
+    rmdir(tmpl);
+
+    if (!setup_ok) T_FAIL("setup failed");
+    T_ASSERT_EQ_I(rc, 0);
+    T_ASSERT_EQ_S(safeturn_txt, "SAFE");   /* untouched */
+    T_ASSERT_EQ_S(old_turn_txt, "OLD");    /* untouched */
+    T_ASSERT(last_sz == SAVE_FILE_BYTES);  /* still overwritten */
+    return 0;
+}
+
+/* MP with g_sim_mp_variant == 0 selects the .svb family; the .sav and
+ * .sva families are left untouched. */
+int test_save_rotate_mp_variant0_uses_svb(void)
+{
+    char cwd[1024];
+    if (!getcwd(cwd, sizeof cwd)) T_FAIL("getcwd failed");
+    char tmpl[] = "/tmp/ol2_rot_XXXXXX";
+    if (!mkdtemp(tmpl)) T_FAIL("mkdtemp failed");
+    if (chdir(tmpl) != 0) { rmdir(tmpl); T_FAIL("chdir failed"); }
+
+    int setup_ok = (castles_init_blank("castles.dat") == 0)
+                && (write_text_file("lastturn.svb", "LAST") == 0)
+                && (write_text_file("old_turn.svb", "OLD")  == 0)
+                && (write_text_file("safeturn.svb", "SAFE") == 0);
+
+    g_sim_mp_active        = 1;
+    g_sim_mp_variant       = 0;
+    g_sim_save_rotate_hold = 0;
+
+    int rc = setup_ok ? save_rotate_and_write("castles.dat") : -99;
+
+    char safeturn_txt[16], old_turn_txt[16];
+    read_text_file("safeturn.svb", safeturn_txt, sizeof safeturn_txt);
+    read_text_file("old_turn.svb", old_turn_txt, sizeof old_turn_txt);
+    long last_sz  = file_size("lastturn.svb");
+    int  sav_made = file_exists("lastturn.sav");
+    int  sva_made = file_exists("lastturn.sva");
+
+    remove("castles.dat"); remove("lastturn.svb");
+    remove("old_turn.svb"); remove("safeturn.svb");
+    if (chdir(cwd) != 0) T_FAIL("chdir back failed");
+    rmdir(tmpl);
+
+    if (!setup_ok) T_FAIL("setup failed");
+    T_ASSERT_EQ_I(rc, 0);
+    T_ASSERT_EQ_S(safeturn_txt, "OLD");
+    T_ASSERT_EQ_S(old_turn_txt, "LAST");
+    T_ASSERT(last_sz == SAVE_FILE_BYTES);
+    T_ASSERT(!sav_made && !sva_made);      /* .svb family only */
+    return 0;
+}
+
+/* MP with g_sim_mp_variant != 0 selects the .sva family. */
+int test_save_rotate_mp_variant1_uses_sva(void)
+{
+    char cwd[1024];
+    if (!getcwd(cwd, sizeof cwd)) T_FAIL("getcwd failed");
+    char tmpl[] = "/tmp/ol2_rot_XXXXXX";
+    if (!mkdtemp(tmpl)) T_FAIL("mkdtemp failed");
+    if (chdir(tmpl) != 0) { rmdir(tmpl); T_FAIL("chdir failed"); }
+
+    int setup_ok = (castles_init_blank("castles.dat") == 0)
+                && (write_text_file("lastturn.sva", "LAST") == 0)
+                && (write_text_file("old_turn.sva", "OLD")  == 0);
+
+    g_sim_mp_active        = 1;
+    g_sim_mp_variant       = 1;
+    g_sim_save_rotate_hold = 0;
+
+    int rc = setup_ok ? save_rotate_and_write("castles.dat") : -99;
+
+    char safeturn_txt[16], old_turn_txt[16];
+    read_text_file("safeturn.sva", safeturn_txt, sizeof safeturn_txt);
+    read_text_file("old_turn.sva", old_turn_txt, sizeof old_turn_txt);
+    long last_sz  = file_size("lastturn.sva");
+    int  sav_made = file_exists("lastturn.sav");
+    int  svb_made = file_exists("lastturn.svb");
+
+    remove("castles.dat"); remove("lastturn.sva");
+    remove("old_turn.sva"); remove("safeturn.sva");
+    if (chdir(cwd) != 0) T_FAIL("chdir back failed");
+    rmdir(tmpl);
+
+    if (!setup_ok) T_FAIL("setup failed");
+    T_ASSERT_EQ_I(rc, 0);
+    T_ASSERT_EQ_S(safeturn_txt, "OLD");    /* old_turn rotated down */
+    T_ASSERT_EQ_S(old_turn_txt, "LAST");   /* lastturn rotated down */
+    T_ASSERT(last_sz == SAVE_FILE_BYTES);
+    T_ASSERT(!sav_made && !svb_made);      /* .sva family only */
+    return 0;
+}
+
+/* First save of a game: no backup files exist yet, so the rename steps
+ * fail silently (best-effort, as in retail) — the write still succeeds
+ * and no spurious backup files are created. */
+int test_save_rotate_first_save_no_backups(void)
+{
+    char cwd[1024];
+    if (!getcwd(cwd, sizeof cwd)) T_FAIL("getcwd failed");
+    char tmpl[] = "/tmp/ol2_rot_XXXXXX";
+    if (!mkdtemp(tmpl)) T_FAIL("mkdtemp failed");
+    if (chdir(tmpl) != 0) { rmdir(tmpl); T_FAIL("chdir failed"); }
+
+    int setup_ok = (castles_init_blank("castles.dat") == 0);
+
+    g_sim_mp_active        = 0;
+    g_sim_mp_variant       = 0;
+    g_sim_save_rotate_hold = 0;
+
+    int rc = setup_ok ? save_rotate_and_write("castles.dat") : -99;
+
+    long last_sz   = file_size("lastturn.sav");
+    int  old_made  = file_exists("old_turn.sav");
+    int  safe_made = file_exists("safeturn.sav");
+
+    remove("castles.dat"); remove("lastturn.sav");
+    if (chdir(cwd) != 0) T_FAIL("chdir back failed");
+    rmdir(tmpl);
+
+    if (!setup_ok) T_FAIL("setup failed");
+    T_ASSERT_EQ_I(rc, 0);                  /* write still succeeds   */
+    T_ASSERT(last_sz == SAVE_FILE_BYTES);
+    T_ASSERT(!old_made && !safe_made);     /* no backups conjured up */
     return 0;
 }

@@ -335,6 +335,27 @@ state instead of all-zero stubs.
   earlier build; possibly read via a sprintf-built path we haven't
   found.  Low priority until the main schema is fully mapped.
 
+## Turn-save backup rotation (`0x49a453`)
+
+The schema walk above is one half of a save; the other half is *which
+file* it lands in.  `FUN_0049a453` (`save_rotate_and_write`, in
+`src/save.c`) is the wrapper the new-game-setup and turn-end paths call.
+It keeps three generations under fixed names and rotates them with
+`rename` before writing the newest:
+
+| generation | name        | meaning             |
+|------------|-------------|---------------------|
+| newest     | `lastturn.*`| the turn being saved|
+| middle     | `old_turn.*`| previous turn       |
+| oldest     | `safeturn.*`| two turns ago       |
+
+The suffix is `.sav` (single-player), or `.svb` / `.sva` for the two
+multiplayer variants (`g_sim_mp_variant` 0 / non-0).  Rotation is gated
+on `g_sim_save_rotate_hold` (`< 1` → rotate, then write; `≥ 1` →
+overwrite `lastturn` in place).  See engine-quirks #110 for the full
+behavior and the load-side counterpart in `FUN_0049b973`.
+
 📍 Source: `0x4ade93` (save), `0x4adfe6` (load), `0x4ae8a9..0x4aea70`
 (Castles.dat I/O), `0x4de960` (the schema table itself), `0x440231`
-(per-tick hash — confirms strides for entries 1, 3, 4, 5, 7, 8, 9).
+(per-tick hash — confirms strides for entries 1, 3, 4, 5, 7, 8, 9),
+`0x49a453` (backup rotation), `0x4dc290..0x4dc310` (filename templates).

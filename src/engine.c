@@ -56,6 +56,11 @@ static uint32_t g_sim_tick_counter;
  * strategic-layer modules that branch on it — e.g. engine_npc_schedule
  * — read the single canonical flag rather than a private mirror. */
 int g_sim_mp_active;
+/* MP session sub-variant (retail DAT_00553248) and turn-save rotation
+ * hold counter (retail DAT_00553260).  Both runtime-only, 0 in SP.
+ * See engine.h for semantics; consumed by save_rotate_and_write. */
+int g_sim_mp_variant;
+int g_sim_save_rotate_hold;
 /* Game-speed slider (0..100, retail _DAT_0053f230).  Default 100
  * (max speed) until the UI slider lands. */
 static int g_sim_game_speed = 100;

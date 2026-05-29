@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **274** (11.2%) — tested 244, ported 30
-- code bytes touched: **10.3%** (86,195 / 838,629 B)
-- unported: **2173**
+- touched: **275** (11.2%) — tested 245, ported 30
+- code bytes touched: **10.3%** (86,497 / 838,629 B)
+- unported: **2172**
 - orphan refs (in src/, not in function table): 3
 
-## tested (244) — ported + host unit suite
+## tested (245) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -183,6 +183,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x48ee46 | FUN_0048ee46 | 87 | engine_tile.c, engine_tile.h |
 | 0x4917dd | FUN_004917dd | 599 | engine_tile.c, engine_tile.h, save.c |
 | 0x4921e5 | FUN_004921e5 | 451 | engine_tile.c, engine_tile.h |
+| 0x49a453 | FUN_0049a453 | 302 | save.c, save.h |
 | 0x49bae9 | FUN_0049bae9 | 180 | engine_roster.c, engine_roster.h |
 | 0x49bbe8 | FUN_0049bbe8 | 53 | engine_roster.c, engine_roster.h |
 | 0x49bc1d | FUN_0049bc1d | 66 | engine_roster.c, engine_roster.h |

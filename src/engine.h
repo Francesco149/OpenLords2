@@ -72,6 +72,23 @@ extern int g_savepump_request;
  * a runtime flag, NOT a save-schema scalar — it is not persisted. */
 extern int g_sim_mp_active;
 
+/* Multiplayer session sub-variant.  Mirror of retail DAT_00553248 — set
+ * to 1 by the MP message handler (message type 4, retail @0x28294 in
+ * all.c) and reset to 0 on new-game init.  Pairs with g_sim_mp_active
+ * across the engine (the recurring `mp_active == 0 || variant != 0`
+ * guard).  In the turn-save backup chain it selects the file family:
+ * variant != 0 → *.sva, variant == 0 → *.svb (see save_rotate_and_write).
+ * Runtime flag, NOT persisted.  Always 0 in the SP drop-in today. */
+extern int g_sim_mp_variant;
+
+/* Turn-save backup-rotation hold counter.  Mirror of retail DAT_00553260.
+ * Bumped to 2 on the MP turn-advance path (retail 0x49b973) and
+ * counted back down; while >= 1 it suppresses rotation of the .sav
+ * backup chain (see save_rotate_and_write — rotation fires only when
+ * < 1).  Reset to 0 on new-game init, and never bumped in SP, so SP
+ * always rotates.  Runtime flag, NOT persisted. */
+extern int g_sim_save_rotate_hold;
+
 /* Per-tick driver — scaffold of retail FUN_004b99c0.  Public so
  * engine_tick_dispatch can call it without going through the guard. */
 void engine_tick(void);
