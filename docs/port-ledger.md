@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **318** (13.0%) — tested 284, ported 34
-- code bytes touched: **13.6%** (113,713 / 838,629 B)
-- unported: **2129**
+- touched: **320** (13.1%) — tested 286, ported 34
+- code bytes touched: **13.8%** (115,862 / 838,629 B)
+- unported: **2127**
 - orphan refs (in src/, not in function table): 4
 
-## tested (284) — ported + host unit suite
+## tested (286) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -124,8 +124,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40a80e | FUN_0040a80e | 413 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40a9b0 | FUN_0040a9b0 | 439 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40acce | FUN_0040acce | 324 | engine_title_render.c, gfx_caret.c, gfx_caret.h (+2) |
+| 0x40cfd2 | FUN_0040cfd2 | 490 | engine_button.c, engine_button.h, engine_title_render.c (+2) |
 | 0x40da1e | FUN_0040da1e | 869 | engine_delta.c |
-| 0x40e3ee | FUN_0040e3ee | 505 | engine_menu_input.c, engine_menu_input.h |
+| 0x40e3ee | FUN_0040e3ee | 505 | engine_button.h, engine_menu_input.c, engine_menu_input.h |
 | 0x40e5e7 | FUN_0040e5e7 | 153 | engine_menu_input.c, engine_menu_input.h |
 | 0x40e890 | FUN_0040e890 | 43 | engine.c, engine.h, main.c |
 | 0x40e8bb | FUN_0040e8bb | 240 | engine.c, engine.h, main.c |
@@ -197,7 +198,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4526b3 | FUN_004526b3 | 87 | engine_dirty_rect.c, engine_dirty_rect.h |
 | 0x45270a | FUN_0045270a | 43 | engine_dirty_rect.h, save.h |
 | 0x452735 | FUN_00452735 | 53 | engine_dirty_rect.h |
-| 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_dirty_rect.h, engine_title_render.c |
+| 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_button.c, engine_button.h (+2) |
 | 0x4651b9 | FUN_004651b9 | 91 | engine_territory.c, engine_territory.h |
 | 0x46c4a3 | FUN_0046c4a3 | 277 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
@@ -233,7 +234,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4af62c | FUN_004af62c | 73 | strutil.h |
 | 0x4af675 | FUN_004af675 | 84 | strutil.h |
 | 0x4af6c9 | FUN_004af6c9 | 67 | strutil.h |
-| 0x4af8d9 | FUN_004af8d9 | 381 | config.c, gfx.c, io.c (+2) |
+| 0x4af8d9 | FUN_004af8d9 | 381 | config.c, gfx.c, gfx.h (+3) |
 | 0x4afab9 | FUN_004afab9 | 897 | gfx_panel.c |
 | 0x4afeed | FUN_004afeed | 1214 | gfx_text_label.c, gfx_text_label.h |
 | 0x4b191e | FUN_004b191e | 981 | engine.c, engine.h, engine_input.c (+2) |
@@ -264,9 +265,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b495a | FUN_004b495a | 93 | gfx_sprite_rle.c, gfx_sprite_rle.h |
 | 0x4b49b7 | FUN_004b49b7 | 64 | engine_battlefield_render.c, gfx_sprite.c, gfx_sprite.h |
 | 0x4b49f7 | FUN_004b49f7 | 705 | gfx_sprite.c, gfx_sprite.h |
+| 0x4b4cb8 | FUN_004b4cb8 | 1659 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b5333 | FUN_004b5333 | 2997 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+5) |
-| 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_title_render.c, engine_title_render.h (+1) |
+| 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_button.c, engine_button.h (+3) |
 | 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_menu_input.c, engine_menu_input.h |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c |
 | 0x4bb978 | FUN_004bb978 | 614 | engine.c, engine.h, engine_rate.c |
@@ -331,7 +333,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49792e | FUN_0049792e | 262 | engine.c, engine.h |
 | 0x497a34 | FUN_00497a34 | 697 | engine.c, engine.h |
 | 0x498458 | FUN_00498458 | 132 | engine.c |
-| 0x499a1c | FUN_00499a1c | 174 | engine.c |
+| 0x499a1c | FUN_00499a1c | 174 | engine.c, gfx.c, gfx.h |
 | 0x49a010 | FUN_0049a010 | 982 | engine.c |
 | 0x49a3e6 | FUN_0049a3e6 | 109 | engine.c |
 | 0x49b8b0 | FUN_0049b8b0 | 195 | engine.c |

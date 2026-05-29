@@ -192,6 +192,28 @@ void gfx_sprite_blit_16x16_raw(const uint8_t *sprite_blob);
  * least 32×32 = 1024 bytes available from that offset. */
 void gfx_sprite_blit_32x32_raw(const uint8_t *sprite_blob);
 
+/* Port of FUN_004b4cb8 @ 0x4b4cb8.  Fixed-size 24×24 opaque raw blit.
+ *
+ * The middle sibling between the 16×16 and 32×32 raw blits — same
+ * shape, 24×24.  Copies 24 rows × 24 bytes (= 576 bytes total) from
+ * `sprite_blob + glyph_offset` to the dest origin computed from the
+ * canvas binding + cursor.  Source is densely packed at 24 bytes per
+ * row.  Dest row stride is **hardcoded to 640 bytes** (retail dword
+ * indexing `puVar2[0xa0] = puVar1[6]` — see engine-quirks #75).  No
+ * transparency check; every source byte is written, including zeroes.
+ * No width/height staging consulted; the dimensions are baked in.
+ *
+ * Retail body is 24 unrolled 6-dword row copies.  The button-list
+ * renderer (FUN_0040cfd2 → engine_button) dispatches here for sprite
+ * "kinds" 0x11 (misc sheet) and 0x18 (system2 sheet) — the small
+ * scroll-arrow / toggle button sprites.
+ *
+ * `sprite_blob` is the same shape as the other sprite blits — a base
+ * pointer that the dispatcher offsets by `glyph_offset` to reach the
+ * sprite data.  Caller is responsible for ensuring the source has at
+ * least 24×24 = 576 bytes available from that offset. */
+void gfx_sprite_blit_24x24_raw(const uint8_t *sprite_blob);
+
 /* Port of FUN_004b49b7 @ 0x4b49b7 (64 B).  Fixed-size 2×2 opaque raw
  * blit.  The micro-sibling of the 16×16 and 32×32 raw blits — used to
  * paint the strategic-map mini-map / overview where each world cell

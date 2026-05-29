@@ -625,6 +625,10 @@ struct test_case {
     X(gfx_sprite_blit_32x32_raw_writes_zero_bytes_opaque) \
     X(gfx_sprite_blit_32x32_raw_uses_glyph_offset) \
     X(gfx_sprite_blit_32x32_raw_null_canvas_no_crash) \
+    X(gfx_sprite_blit_24x24_raw_copies_all_576_bytes) \
+    X(gfx_sprite_blit_24x24_raw_writes_zero_bytes_opaque) \
+    X(gfx_sprite_blit_24x24_raw_respects_cursor) \
+    X(gfx_sprite_blit_24x24_raw_null_canvas_no_crash) \
     X(gfx_sprite_blit_2x2_raw_copies_4_bytes) \
     X(gfx_sprite_blit_2x2_raw_writes_zero_bytes_opaque) \
     X(gfx_sprite_blit_2x2_raw_respects_cursor) \
@@ -1240,6 +1244,14 @@ struct test_case {
     X(menu_title_input_hover_off_buttons_clears_highlight) \
     X(menu_title_input_click_does_not_refresh_hover) \
     X(menu_title_input_other_page_is_noop) \
+    \
+    X(engine_button_kind20_blits_32x32_at_origin) \
+    X(engine_button_kind18_blits_24x24) \
+    X(engine_button_kind_below_0x18_uses_misc_sheet) \
+    X(engine_button_type4_pressed_picks_next_frame) \
+    X(engine_button_type0_state_picks_next_frame) \
+    X(engine_button_null_sheet_skips) \
+    X(engine_button_marks_dirty_per_button) \
     \
     X(map_query_all_clear_returns_1) \
     X(map_query_rawflag_occupied_returns_0) \

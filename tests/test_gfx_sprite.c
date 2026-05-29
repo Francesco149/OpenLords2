@@ -778,6 +778,109 @@ int test_gfx_sprite_blit_32x32_raw_null_canvas_no_crash(void)
 }
 
 /* ────────────────────────────────────────────────────────────────
+ * gfx_sprite_blit_24x24_raw — FUN_004b4cb8
+ *
+ * The middle sibling — 24×24, same hardcoded 640-byte dest stride,
+ * no transparency, no width/height staging consulted.  Same
+ * BIG_W=640 / BIG_H=32 canvas.
+ * ──────────────────────────────────────────────────────────────── */
+
+static void fill_24x24_tile(uint8_t *out)
+{
+    for (int r = 0; r < 24; r++)
+        for (int c = 0; c < 24; c++)
+            out[r * 24 + c] = (uint8_t)(r * 24 + c + 1);
+}
+
+int test_gfx_sprite_blit_24x24_raw_copies_all_576_bytes(void)
+{
+    big_canvas_t c; big_canvas_init(&c);
+
+    uint8_t blob[8 + 576];
+    for (int i = 0; i < 8; i++) blob[i] = 0xff;     /* filler */
+    fill_24x24_tile(blob + 8);
+
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 24, 24);  /* glyph_offset = 8 → skip filler */
+
+    gfx_sprite_blit_24x24_raw(blob);
+
+    /* Every one of 24×24 = 576 dest bytes matches its source. */
+    for (int r = 0; r < 24; r++)
+        for (int col = 0; col < 24; col++)
+            T_ASSERT_EQ_U(c.pixels[col + r * BIG_W],
+                          (uint8_t)(r * 24 + col + 1));
+    /* Column 24 (just past the footprint) is untouched. */
+    T_ASSERT_EQ_U(c.pixels[24 + 0 * BIG_W], 0x00);
+    T_ASSERT(big_canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_blit_24x24_raw_writes_zero_bytes_opaque(void)
+{
+    /* No transparency check — zeros overwrite the dest. */
+    big_canvas_t c; big_canvas_init(&c);
+    for (int i = 0; i < (int)sizeof c.pixels; i++) c.pixels[i] = 0xa5;
+
+    uint8_t blob[8 + 576] = {0};
+    for (int i = 0; i < 8; i++) blob[i] = 0xff;
+
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 24, 24);
+
+    gfx_sprite_blit_24x24_raw(blob);
+
+    for (int r = 0; r < 24; r++)
+        for (int col = 0; col < 24; col++)
+            T_ASSERT_EQ_U(c.pixels[col + r * BIG_W], 0x00);
+    /* Outside the 24×24 footprint, 0xa5 pre-fill is intact. */
+    T_ASSERT_EQ_U(c.pixels[24 + 0 * BIG_W], 0xa5);
+    T_ASSERT_EQ_U(c.pixels[0 + 24 * BIG_W], 0xa5);
+    T_ASSERT(big_canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_blit_24x24_raw_respects_cursor(void)
+{
+    /* Blit at a non-zero cursor; verify the footprint lands offset by
+     * the cursor and the dest origin uses the dynamic canvas width. */
+    big_canvas_t c; big_canvas_init(&c);
+
+    uint8_t blob[8 + 576];
+    for (int i = 0; i < 8; i++) blob[i] = 0xff;
+    fill_24x24_tile(blob + 8);
+
+    gfx_glyph_set_dest(5, 3);
+    gfx_glyph_set_glyph(8, 24, 24);
+
+    gfx_sprite_blit_24x24_raw(blob);
+
+    /* Top-left of the footprint is at (5, 3); source byte (0,0) = 1. */
+    T_ASSERT_EQ_U(c.pixels[5 + 3 * BIG_W], 0x01);
+    /* Bottom-right corner of the footprint: source byte (23,23). */
+    T_ASSERT_EQ_U(c.pixels[(5 + 23) + (3 + 23) * BIG_W],
+                  (uint8_t)(23 * 24 + 23 + 1));
+    /* The cell just left of the origin is untouched. */
+    T_ASSERT_EQ_U(c.pixels[4 + 3 * BIG_W], 0x00);
+    T_ASSERT(big_canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_blit_24x24_raw_null_canvas_no_crash(void)
+{
+    gfx_paint_bind_canvas(0, 0, 0);
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 24, 24);
+
+    uint8_t blob[8 + 576];
+    for (int i = 0; i < 8; i++) blob[i] = 0xff;
+    fill_24x24_tile(blob + 8);
+
+    gfx_sprite_blit_24x24_raw(blob);   /* no crash, nothing bound */
+    return 0;
+}
+
+/* ────────────────────────────────────────────────────────────────
  * gfx_sprite_blit_2x2_raw — FUN_004b49b7 (chip 7).
  *
  * The 2×2 raw blit hardcodes the same 640-byte dest row stride as

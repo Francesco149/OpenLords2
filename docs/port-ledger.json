@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 284,
+  "tested": 286,
   "ported": 34,
-  "unported": 2129,
+  "unported": 2127,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 318,
-  "pct_touched": 13.0,
-  "pct_tested": 11.6,
+  "touched": 320,
+  "pct_touched": 13.1,
+  "pct_tested": 11.7,
   "bytes_total": 838629,
-  "bytes_touched": 113713,
-  "pct_bytes_touched": 13.6
+  "bytes_touched": 115862,
+  "pct_bytes_touched": 13.8
  },
  "orphan_refs": [
   "0x004148",
@@ -1798,8 +1798,14 @@
    "name": "FUN_0040cfd2",
    "size": 490,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_button.c",
+    "src/engine_button.h",
+    "src/engine_title_render.c",
+    "src/engine_title_render.h",
+    "src/gfx_sprite.h"
+   ]
   },
   {
    "va": "0x40d1bc",
@@ -1946,6 +1952,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_button.h",
     "src/engine_menu_input.c",
     "src/engine_menu_input.h"
    ]
@@ -10360,6 +10367,8 @@
    "status": "tested",
    "src": [
     "src/engine_battlefield_render.h",
+    "src/engine_button.c",
+    "src/engine_button.h",
     "src/engine_dirty_rect.h",
     "src/engine_title_render.c"
    ]
@@ -14602,7 +14611,9 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/gfx.c",
+    "src/gfx.h"
    ]
   },
   {
@@ -16429,6 +16440,7 @@
    "src": [
     "src/config.c",
     "src/gfx.c",
+    "src/gfx.h",
     "src/io.c",
     "src/io.h",
     "src/localization.h"
@@ -17502,8 +17514,11 @@
    "name": "FUN_004b4cb8",
    "size": 1659,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_sprite.c",
+    "src/gfx_sprite.h"
+   ]
   },
   {
    "va": "0x4b5333",
@@ -17973,6 +17988,8 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_button.c",
+    "src/engine_button.h",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
     "src/main.c"

@@ -288,6 +288,28 @@ void gfx_sprite_blit_32x32_raw(const uint8_t *sprite_blob)
     }
 }
 
+/* Port of FUN_004b4cb8 @ 0x4b4cb8.  Fixed 24×24 opaque raw blit.
+ *
+ * The middle sibling of the 16×16 / 32×32 raw blits — retail is 24
+ * rows × 6 dword copies fully unrolled (144 dwords = 576 source
+ * bytes), with the dest stride baked into the literal indices (each
+ * row group's index jumps by 0xa0 dwords = 640 bytes).  Source is
+ * densely packed: 24 bytes per row × 24 rows.
+ *
+ * Hardcoded 640-byte dest stride preserved — same quirk #75. */
+void gfx_sprite_blit_24x24_raw(const uint8_t *sprite_blob)
+{
+    uint8_t *dst = dest_origin();
+    if (!dst) return;
+
+    const uint8_t *src = sprite_blob + gfx_glyph_glyph_offset();
+    for (int row = 0; row < 24; row++) {
+        memcpy(dst, src, 24);
+        src += 24;
+        dst += 640;     /* hardcoded — NOT the dynamic canvas pitch */
+    }
+}
+
 /* Port of FUN_004b49b7 @ 0x4b49b7.  Fixed 2×2 opaque raw blit — the
  * micro-sibling of the 16×16 / 32×32 raw blits.  Used for mini-map
  * tile rendering where each world cell maps to a 2×2-pixel block.
