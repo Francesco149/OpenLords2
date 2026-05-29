@@ -7,6 +7,75 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — ledger integrity: kill the FUN_-token provenance pollution
+
+Triaging the next gameplay chip off `docs/port-frontier.md` surfaced that
+the frontier was **corrupt** — and the root cause turned out to be
+systemic ledger over-counting, not a one-off. Chasing it down became the
+session. Full writeup:
+[`findings/ledger-provenance-audit.md`](findings/ledger-provenance-audit.md).
+
+### How it started
+
+The delayed-action **enqueue** cluster (`0x447136` + helpers
+`0x4470c4/0x4476e4/0x447740/0x447026`) looked like a clean frontier chip —
+the natural complement to the already-ported drain side. But `0x4470c4`,
+flagged a *zero-dep leaf*, actually calls the unported 637 B
+`FUN_0043eda0` (immediate command-dispatch into the `PTR_FUN_004d57f0`
+table). The ledger had `0043eda0` (and the 897 B logger `0x4afab9`, and
+enqueue `0x447136` itself) marked **tested** — because their `FUN_<va>`
+tokens appear only in *src comments* of tested modules. The
+[[project_ledger_fun_token]] gotcha, corrupting the frontier I triage on.
+
+### The gotcha, and why it's not auto-fixable
+
+`gen_port_ledger.py` keys port status on "does `FUN_<va>` appear in src?".
+A ported module's comment that names an *unported* neighbour by token
+(TODO lists, "retail calls FUN_…", call-chain diagrams, size lists)
+silently promotes it to touched/tested. There's no reliable syntactic
+separator: genuine provenance is written ≥6 ways (`Port of`,
+`port of retail`, `from retail`, `Mirror of retail`, `@ 0x<va> → name`,
+section-header-then-code, inlined helpers) and so is pollution. Tightening
+the generator would drop the ~200 ports not using the exact "Port of"
+phrasing. Fix = **convention (bare hex for unported neighbours) + review**.
+
+### What landed
+
+- **Demoted 44 verified false promotions** (token → bare hex). Headline
+  corrected **316 → 272 touched** (12.9 % → 11.1 %), and the truer
+  code-byte signal **13.7 % → 10.1 %** — the single biggest offender was
+  `0x47309e` (10 915 B), named only as an unported callee in
+  `engine_event_queue.h`. Tiers: 3 mixed-callish (`0x43eda0`, `0x4afab9`,
+  `0x447136`), 16 callish-only, 25 `.h`-only-no-provenance (each read to
+  confirm). Three heuristic false-positives **kept** (genuine "port of"
+  ports: `0x404ead`, `0x448411`, `0x4479de`).
+- **Frontier self-corrected** on regen: 191 → 151 functions, 78 → 55
+  leaves. The enqueue cluster receded behind its (unported) scheduling
+  wrappers, where it belongs.
+- **`tools/audit_provenance.py`** — a warn-only auditor that re-derives
+  self-provenance per touched function and reports callish-only (safe to
+  demote) vs review-tier suspects. Re-runnable, wireable into pre-commit.
+- Both builds clean, host suite **1047/1047** (all edits are comments).
+
+### Remaining + next
+
+`audit_provenance.py` still flags ~59 review-tier functions — a dense mix
+of genuine ports (battlefield leaves, `engine_state_hash` inline helpers,
+gfx bring-up) and real pollution (the engine.c `surveyed:`/`unported:`
+survey block, main.c teardown notes, gfx.c surface-build trio). Left for a
+focused follow-up: separating them needs a per-function "is there a body
+in a `.c`?" check, which is judgment, not a regex. The findings doc lists
+the confirmed-pollution VAs ready to demote next.
+
+The actual next *port* chip is still open — pick it off the now-honest
+frontier. The enqueue cluster stays deferred until the command-dispatch
+machinery (`FUN_0043eda0` + the `PTR_FUN_004d57f0` table) is in reach.
+
+(`/clear` is appropriate here — ledger integrity is a clean unit; the next
+session picks a port chip from the corrected frontier.)
+
+---
+
 ## 2026-05-29 — player-roster trio (first gameplay chip past the scalar wall)
 
 The first sim/strategic-gameplay functions land now that the scalar

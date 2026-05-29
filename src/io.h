@@ -7,10 +7,10 @@
  * The retail helper has a three-tier retry chain:
  *
  *   1. Try the file at the current working directory.
- *   2. Failing that, call `FUN_004af312(path)` — chdir into a path
+ *   2. Failing that, call `0x4af312(path)` — chdir into a path
  *      derived from the file's extension (`.smk` → `_smk_low` or
  *      `_smk_high` depending on `DAT_0053f5f4`; etc.), retry.
- *   3. Failing that, call `FUN_004af116(path)` — chdir into the
+ *   3. Failing that, call `0x4af116(path)` — chdir into the
  *      "data root" derived from `DAT_0053f200`, retry.
  *
  * For the drop-in bootstrap we lean on `init_exe_dir`'s CWD anchor

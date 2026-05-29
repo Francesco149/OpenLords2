@@ -1049,7 +1049,7 @@ int engine_battlefield_render_middle_entity_type7_blit_count(void);
 int engine_battlefield_render_middle_entity_type9_sub_blit_count(void);
 
 /* No-primary-blob counter (chip 5a.ii.b).  When an entity's primary
- * sprite blob pointer (+0x00) is NULL, retail logs via FUN_004afab9
+ * sprite blob pointer (+0x00) is NULL, retail logs via 0x4afab9
  * and skips the main draw (the type-7 / type-9 post-calls are also
  * skipped, since they sit inside the no-blob else branch — but the
  * type-6 PRE-call DOES fire before the no-blob check).  The port
@@ -1174,8 +1174,8 @@ void engine_battlefield_render_run_pass_final_for_test(int camera_x, int camera_
  * battlefield terrain passes walk, but draws each cell as a 2×2 pixel
  * block (via `gfx_sprite_blit_2x2_raw`) into a fixed-position 160×160
  * overview area in the right margin.  Shared between strategic mode
- * and battlefield mode — both `FUN_004987b7` (battlefield init) and
- * `FUN_00498dcb` (strategic init) wire it up the same way (80×80 of
+ * and battlefield mode — both `0x4987b7` (battlefield init) and
+ * `0x498dcb` (strategic init) wire it up the same way (80×80 of
  * the world map at 2 px/cell, positioned at x=466 / y=11 + row*2).
  *
  * The renderer is rolling — not redrawn fully every frame.  Each tick,
@@ -1309,7 +1309,7 @@ void engine_battlefield_render_bind_hex_grid_context(
  *   bind_minimap_origin(origin_x, y_offset);
  *   set_minimap_mode_gate(mode_gate);
  *
- * Both `FUN_004987b7` (battlefield init) and `FUN_00498dcb` (strategic
+ * Both `0x4987b7` (battlefield init) and `0x498dcb` (strategic
  * init) call this with `mode_gate = 2`. */
 void engine_battlefield_render_bind_minimap_context(
     const uint8_t *blob_primary,    /* retail param_1 */

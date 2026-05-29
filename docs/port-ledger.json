@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 275,
-  "ported": 41,
-  "unported": 2131,
+  "tested": 242,
+  "ported": 30,
+  "unported": 2175,
   "orphan_refs_not_in_function_table": 3,
-  "touched": 316,
-  "pct_touched": 12.9,
-  "pct_tested": 11.2,
+  "touched": 272,
+  "pct_touched": 11.1,
+  "pct_tested": 9.9,
   "bytes_total": 838629,
-  "bytes_touched": 114837,
-  "pct_bytes_touched": 13.7
+  "bytes_touched": 85080,
+  "pct_bytes_touched": 10.1
  },
  "orphan_refs": [
   "0x40eb4c",
@@ -457,20 +457,16 @@
    "name": "FUN_00402166",
    "size": 169,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/text_input.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x40220f",
    "name": "FUN_0040220f",
    "size": 174,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/text_input.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4022bd",
@@ -3514,10 +3510,8 @@
    "name": "FUN_004262eb",
    "size": 117,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/audio.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x426360",
@@ -3608,10 +3602,8 @@
    "name": "FUN_00427d19",
    "size": 89,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/audio.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x427d72",
@@ -3628,10 +3620,8 @@
    "name": "FUN_00427ed0",
    "size": 311,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_category_buckets.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x428007",
@@ -3892,10 +3882,8 @@
    "name": "FUN_0042ab82",
    "size": 138,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/localization.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x42ac0c",
@@ -4254,10 +4242,8 @@
    "name": "FUN_0042f148",
    "size": 151,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/gfx.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x42f1df",
@@ -5217,10 +5203,8 @@
    "name": "FUN_00435211",
    "size": 61,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_handlers_da.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x43524e",
@@ -5931,10 +5915,8 @@
    "name": "FUN_0043a23f",
    "size": 115,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_handlers_da.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x43a2b2",
@@ -6469,10 +6451,8 @@
    "name": "FUN_0043cc56",
    "size": 16,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_dirty_rect.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x43cc66",
@@ -6780,12 +6760,8 @@
    "name": "FUN_0043eda0",
    "size": 637,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine.c",
-    "src/engine.h",
-    "src/engine_rate.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x43f01d",
@@ -7530,10 +7506,8 @@
    "name": "FUN_00443024",
    "size": 31,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_event_queue.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x443043",
@@ -8700,10 +8674,8 @@
    "name": "FUN_00447136",
    "size": 408,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_delayed_action.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4472ce",
@@ -9158,10 +9130,8 @@
    "name": "FUN_00448422",
    "size": 26,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_handlers_da.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x448440",
@@ -10655,10 +10625,8 @@
    "name": "FUN_004650b0",
    "size": 265,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/engine.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4651b9",
@@ -10841,10 +10809,8 @@
    "name": "FUN_00467770",
    "size": 525,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_category_buckets.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x46797d",
@@ -11997,20 +11963,16 @@
    "name": "FUN_00472e46",
    "size": 595,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_event_queue.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x47309e",
    "name": "FUN_0047309e",
    "size": 10915,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_event_queue.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x475b41",
@@ -12057,10 +12019,8 @@
    "name": "FUN_00476768",
    "size": 245,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_event_queue.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x47685d",
@@ -12195,10 +12155,8 @@
    "name": "FUN_00477dfc",
    "size": 1225,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/engine.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4782c5",
@@ -12247,10 +12205,8 @@
    "name": "FUN_00478952",
    "size": 53,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/engine.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x478987",
@@ -12801,10 +12757,8 @@
    "name": "FUN_004822ed",
    "size": 644,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/engine.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x482571",
@@ -13091,10 +13045,8 @@
    "name": "FUN_004859e5",
    "size": 354,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/engine.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x485b47",
@@ -13109,10 +13061,8 @@
    "name": "FUN_00485bb1",
    "size": 1592,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/engine.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4861e9",
@@ -13295,10 +13245,8 @@
    "name": "FUN_00488dfe",
    "size": 943,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/engine.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4891ad",
@@ -13313,10 +13261,8 @@
    "name": "FUN_00489401",
    "size": 595,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/engine.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x489654",
@@ -14309,10 +14255,8 @@
    "name": "FUN_004976a1",
    "size": 472,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/save.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x497879",
@@ -14410,20 +14354,16 @@
    "name": "FUN_004987b7",
    "size": 1536,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_battlefield_render.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x498dcb",
    "name": "FUN_00498dcb",
    "size": 488,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_battlefield_render.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x498fb3",
@@ -14628,10 +14568,8 @@
    "name": "FUN_0049aa0e",
    "size": 2197,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_handlers_da.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x49b2a3",
@@ -14809,10 +14747,8 @@
    "name": "FUN_0049d1e0",
    "size": 1024,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_handlers_da.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x49d5e0",
@@ -16025,40 +15961,32 @@
    "name": "FUN_004ae1b8",
    "size": 243,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/config.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4ae2ab",
    "name": "FUN_004ae2ab",
    "size": 18,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/config.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4ae2bd",
    "name": "FUN_004ae2bd",
    "size": 83,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/config.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4ae310",
    "name": "FUN_004ae310",
    "size": 553,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/config.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4ae539",
@@ -16242,22 +16170,16 @@
    "name": "FUN_004af116",
    "size": 508,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/io.h",
-    "src/strutil.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4af312",
    "name": "FUN_004af312",
    "size": 496,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/io.h",
-    "src/strutil.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4af502",
@@ -16369,26 +16291,16 @@
    "name": "FUN_004afab9",
    "size": 897,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_battlefield_render.c",
-    "src/engine_battlefield_render.h",
-    "src/gfx.c",
-    "src/gfx_sprite_render.c",
-    "src/gfx_sprite_render.h",
-    "src/gfx_text_label.c",
-    "src/gfx_text_label.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4afe3a",
    "name": "FUN_004afe3a",
    "size": 179,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/gfx_sprite_render.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4afeed",
@@ -16414,10 +16326,8 @@
    "name": "FUN_004b049b",
    "size": 103,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/gfx_sprite_render.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4b0502",
@@ -16906,20 +16816,16 @@
    "name": "FUN_004b25b0",
    "size": 76,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/gfx_sprite_render.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4b25fc",
    "name": "FUN_004b25fc",
    "size": 58,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/gfx_sprite_render.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4b2636",
@@ -17676,10 +17582,8 @@
    "name": "FUN_004b7180",
    "size": 208,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/main.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4b7250",
@@ -18807,10 +18711,8 @@
    "name": "FUN_004c2090",
    "size": 224,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/strutil.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4c2170",

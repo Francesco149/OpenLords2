@@ -172,7 +172,7 @@ static int g_middle_entity_type9_sub_count;
 static int g_middle_entity_type9_sub_last_id = -1;
 
 /* No-blob counter (chip 5a.ii.b).  Entities with NULL primary sprite
- * blob skip the main draw body.  Retail logs via FUN_004afab9 — we
+ * blob skip the main draw body.  Retail logs via 0x4afab9 — we
  * count instead. */
 static int g_middle_entity_no_blob_count;
 static int g_middle_entity_no_blob_last_id = -1;
@@ -862,7 +862,7 @@ static void entity_type9_subtype_e_post_call(int id)
     gfx_glyph_set_cursor_y(entry_y);
 }
 
-/* No-blob path stub.  Retail calls FUN_004afab9 (a debug logger) when
+/* No-blob path stub.  Retail calls 0x4afab9 (a debug logger) when
  * an entity's primary blob is NULL; the port counts the call instead.
  * The string at retail's 0x4e44f0 is presumably "<entity> has no
  * sprite blob, type %d" or similar — irrelevant for behavioral

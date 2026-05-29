@@ -414,7 +414,7 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_DESTROY:
         /* TODO(subsys-teardown): once DSound/DPlay/Smacker are ported,
          * call the equivalents of FUN_0042dfe2, FUN_004b28cd(1),
-         * FUN_00425d35, FUN_004b7180(1) before PostQuitMessage. */
+         * FUN_00425d35, 0x4b7180(1) before PostQuitMessage. */
         PostQuitMessage(0);
         g_shutdown = 1;
         return 0;

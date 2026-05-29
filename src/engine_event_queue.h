@@ -3,7 +3,7 @@
  *
  * Producer-side port of the FUN_00472bc5 cluster — a small ring buffer
  * of 50 fixed-size (24 B) event records that the engine populates from
- * many places (143 call sites in retail) and a consumer (FUN_00472e46
+ * many places (143 call sites in retail) and a consumer (0x472e46
  * — NOT ported in this module) drains during the in-game phase.
  *
  * Each record carries: an audience player id, a target player id, three
@@ -20,7 +20,7 @@
  * Pure C; the only retail dependency was a 24-byte memcpy
  * (FUN_00401136) which we inline with memcpy().  Consumer-side reads
  * from this state remain the responsibility of whoever ports
- * FUN_00472e46 — its callees (FUN_00476768, FUN_0047309e) are still
+ * 0x472e46 — its callees (0x476768, 0x47309e) are still
  * unported subsystems.
  */
 
@@ -110,7 +110,7 @@ void engine_event_queue_init(engine_event_queue_state_t *state);
 void engine_event_queue_init_wrapper(engine_event_queue_state_t *state);
 
 /* Zero a slot's per-field contents.  Used by init() (called for each
- * slot in 0..49) AND by the consumer (FUN_00472e46) to clear a slot
+ * slot in 0..49) AND by the consumer (0x472e46) to clear a slot
  * after draining it.
  *
  * QUIRK (#12): retail's FUN_00472b40 zeros slot[param_1].code (+8) but
@@ -169,7 +169,7 @@ bool engine_event_queue_post(engine_event_queue_state_t *state,
 /* Commit the current scratch record to the ring buffer unconditionally
  * (no filter check).  Retail FUN_00472df5.  Bumps write_idx, sets
  * notify_flag = 1.  Used by the save/load path's "restore a pending
- * scratched-but-not-yet-published event" call (FUN_00443024). */
+ * scratched-but-not-yet-published event" call (0x443024). */
 void engine_event_queue_publish_scratch(engine_event_queue_state_t *state);
 
 #endif /* OPENLORDS2_ENGINE_EVENT_QUEUE_H */

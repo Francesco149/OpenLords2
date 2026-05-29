@@ -25,7 +25,7 @@
  * Two identical-pair wrappers (524dc / 5252f, 52582 / 52660) get one
  * port each; the retail addresses are duplicate codegen.
  *
- * One bare thunk (FUN_0043cc56 — 16 B `call FUN_0045270a; ret`) is
+ * One bare thunk (0x43cc56 — 16 B `call FUN_0045270a; ret`) is
  * an address-distinct alias for engine_dirty_rect_mark_below_status_bar;
  * callers store the thunk's address in function-pointer tables where
  * the call target needs a distinct identity.  No semantic difference

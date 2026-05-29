@@ -685,7 +685,7 @@ static int engine_tick_rate_step(void)
     g_sim_phase               = out.new_phase;
     g_sim_derived_hint        = out.derived_hint;
     if (out.notify_autosave_done) {
-        /* TODO(mp): port FUN_0043eda0(0xf, 0) — the MP "autosave
+        /* TODO(mp): port 0x43eda0(0xf, 0) — the MP "autosave
          * complete" broadcast.  Today MP isn't wired, so the flag
          * never fires (g_sim_mp_active == 0 short-circuits the
          * notification path inside the pure function too). */
@@ -740,7 +740,7 @@ void engine_tick(void)
          * 88749-88803.  In SP mode (which is the only mode our
          * drop-in can produce today) the body collapses substantially:
          * retail's two biggest callees — FUN_004472ce (1046 B "sim
-         * tick") and FUN_0043eda0 (637 B "scheduled events
+         * tick") and 0x43eda0 (637 B "scheduled events
          * dispatcher") — are BOTH gated entirely on DAT_00553030 != 0
          * (MP active) and become no-ops in SP.  The only real per-
          * step work in SP is:
@@ -748,7 +748,7 @@ void engine_tick(void)
          *   - FUN_00404a46 (LFSR advance — ported as engine_rng_step)
          *   - FUN_0049b8b0 (turn-timeout, unported)
          *   - screen-state-specific FUN_0040490d / FUN_0049a010 /
-         *     FUN_004650b0 (sub-state 0) or the sub-state-2 chain
+         *     0x4650b0 (sub-state 0) or the sub-state-2 chain
          *
          * Today sub_steps is always 0 because scenario_hint == 0
          * (engine state != 3), so this body is unreachable until the
@@ -758,14 +758,14 @@ void engine_tick(void)
         g_sim_tick_counter++;
 
         /* 2. Scheduled events — gated on the per-player "human/active"
-         *    flag.  In SP all the FUN_0043eda0 calls are no-ops (gated
+         *    flag.  In SP all the 0x43eda0 calls are no-ops (gated
          *    on DAT_00553030 != 0 inside), so we only mirror the SP
          *    branch's other side effects. */
         if (g_sim_player_human_active != 0) {
             if (g_sim_screen_substate == 2) {
                 /* TODO(sim): MP sub-state 2 path.
-                 *   - tick % 0x82 == 0    → FUN_0043eda0(0xc, 0)  // MP-only, no-op in SP
-                 *   - else tick % 10 == 0 → FUN_0043eda0(10, 0)   // MP-only, no-op in SP
+                 *   - tick % 0x82 == 0    → 0x43eda0(0xc, 0)  // MP-only, no-op in SP
+                 *   - else tick % 10 == 0 → 0x43eda0(10, 0)   // MP-only, no-op in SP
                  *   - else tick % 0x82 == 0x2d → local_c = FUN_00440666()
                  *     (FUN_00440666 is 383 B, unported — manipulates
                  *      the deferred-action selection).  Today the
@@ -775,7 +775,7 @@ void engine_tick(void)
                  *      port requires reworking the rate-step / loop
                  *      contract. */
             } else {
-                /* SP path: FUN_0043eda0(10, 0) is MP-only no-op.
+                /* SP path: 0x43eda0(10, 0) is MP-only no-op.
                  * The real work here is FUN_0049b8b0() (turn-timeout
                  * subsystem — 195 B, gated on DAT_00553fc8 != 0 &&
                  * DAT_00553248 != 0; both are 0 today so the function
@@ -827,12 +827,12 @@ void engine_tick(void)
          *    main-loop-tick.md §"sub-step body screen-state extras". */
         if (g_sim_screen_substate == 0 && sub_steps != 0) {
             /* TODO(sim): FUN_0040490d (313 B), FUN_0049a010 (982 B),
-             * FUN_004650b0 (265 B). */
+             * 0x4650b0 (265 B). */
         } else if (g_sim_screen_substate == 2 && sub_steps != 0) {
-            /* TODO(sim): FUN_00478952 (53 B) + per-screen chain
-             * FUN_00488dfe (943 B), FUN_004822ed (644 B),
-             * FUN_00485bb1 (1592 B), FUN_00489401 (595 B),
-             * FUN_004859e5 (354 B), FUN_00477dfc (1225 B) when
+            /* TODO(sim): 0x478952 (53 B) + per-screen chain
+             * 0x488dfe (943 B), 0x4822ed (644 B),
+             * 0x485bb1 (1592 B), 0x489401 (595 B),
+             * 0x4859e5 (354 B), 0x477dfc (1225 B) when
              * DAT_004eac50 < 0x2b. */
         }
     }

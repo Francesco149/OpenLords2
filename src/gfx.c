@@ -228,9 +228,9 @@ static int gfx_release_surfaces(int release_dd)
     if (release_dd && g_dd) {
         IDirectDraw_Release(g_dd);
         g_dd = NULL;
-        /* retail: FUN_004afab9(0x4d51dc, 0, 0) — the status.txt
+        /* retail: 0x4afab9(0x4d51dc, 0, 0) — the status.txt
          * teardown log line.  Routed through log_line until the
-         * structured status logger (FUN_004afab9) is ported; the exact
+         * structured status logger (0x4afab9) is ported; the exact
          * retail string lives only in the Ghidra DB.  Same disposition
          * as the deferred FUN_004b26b8 log in gfx_restore(). */
         log_line("OK :GFX DirectDraw released.");
@@ -490,7 +490,7 @@ static int do_create_surfaces(void)
     }
 
     /* Offscreen back buffer in system memory — retail's
-     * FUN_0042f148(w, h, 1) — DDSD_CAPS|DDSD_HEIGHT|DDSD_WIDTH with
+     * 0x42f148(w, h, 1) — DDSD_CAPS|DDSD_HEIGHT|DDSD_WIDTH with
      * DDSCAPS_OFFSCREENPLAIN|DDSCAPS_SYSTEMMEMORY.
      *
      * Retail relies on the primary's pixel format (auto-promoted to

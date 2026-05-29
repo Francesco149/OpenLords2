@@ -51,7 +51,7 @@
  *   offset relative to the blob base, valid after any seek/read.
  *
  *   The same `DAT_005c9270` global is also repurposed by other
- *   subsystems (e.g. FUN_0042ab82 redirects it into the per-player
+ *   subsystems (e.g. 0x42ab82 redirects it into the per-player
  *   strategic-state region) — we deliberately don't model that
  *   crossover here; it lives in a sister state struct.
  *

@@ -10,7 +10,7 @@
  *
  * (FUN_004010da, the bounded memcmp consumed by FUN_00401000, is
  * inlined into strutil_find_substr — it has no other call sites
- * worth a separate export.  FUN_004c2090 is the MSVC CRT's optimised
+ * worth a separate export.  0x4c2090 is the MSVC CRT's optimised
  * strcat and not engine code — we use libc strcat where retail
  * called it.)
  *
@@ -170,7 +170,7 @@ void strutil_collapse_double_spaces(char *str);
  * filename's extension, then immediately splice it onto another path.
  *
  * Retail uses the scratch indirectly through the IO retry chain
- * (FUN_004af312 / FUN_004af116) where it routes file lookups by
+ * (0x4af312 / 0x4af116) where it routes file lookups by
  * extension — both helpers upper-case the scratch in place and
  * strcmp it against "PL8" / "256" / "WAV" / "SMK" to pick a
  * subdirectory.  Those callers don't ship yet (see io.h), but the

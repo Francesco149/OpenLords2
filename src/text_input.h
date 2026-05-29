@@ -60,7 +60,7 @@
  *
  * Deferred to follow-up chips:
  *   - Pixel-width measurer (FUN_00401f8f + FUN_004015b9 — font lookup).
- *   - Save / load (FUN_00402166 / FUN_0040220f — file IO).
+ *   - Save / load (0x402166 / 0x40220f — file IO).
  *   - Renderer / dispatcher (FUN_00402637 — 989 B, references font,
  *     dirty-rect, palette, keyboard state, cursor anchor, etc.).
  *

@@ -42,7 +42,7 @@
 
 static const uint8_t            *g_current_blob;   /* DAT_004eabec */
 static uint8_t                   g_last_error;     /* DAT_005aeb68 */
-static gfx_sprite_render_log_fn  g_log_fn;         /* hook → FUN_004afab9 */
+static gfx_sprite_render_log_fn  g_log_fn;         /* hook → 0x4afab9 */
 
 /* The sentinel range for descriptor.src_offset — retail checks
  *   (src_offset < 0x4baf1)  i.e. src_offset <= 0x4baf0
@@ -143,7 +143,7 @@ void gfx_sprite_render_raw(const uint8_t *buffer,
  * `fmt_addr_low` and `fmt_addr_high` are the per-wrapper error
  * message addresses to pass to the log hook for each gate.  The
  * sprite_index_plus_one is `sprite_index + 1` — mirrors what retail
- * sends as FUN_004afab9's third arg.
+ * sends as 0x4afab9's third arg.
  * ────────────────────────────────────────────────────────────────── */
 
 static int descriptor_offset_in_range(int sprite_index_plus_one,

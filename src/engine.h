@@ -130,7 +130,7 @@ typedef struct {
     int      derived_hint;        /* writeback (clamped local_14 — currently
                                    *           write-only in retail too) */
     int      notify_autosave_done;/* 1 if the MP "autosave done" notification
-                                   *  needs to fire (retail FUN_0043eda0(0xf, 0)) */
+                                   *  needs to fire (retail 0x43eda0(0xf, 0)) */
 } engine_rate_out_t;
 
 void engine_compute_sim_sub_steps(const engine_rate_in_t *in,
@@ -161,7 +161,7 @@ void engine_compute_sim_sub_steps(const engine_rate_in_t *in,
  * allies, FUN_0043e330 min_tick_filtered, FUN_0043e50d min_tick_all)
  * are inlined as file-static helpers in engine_rate.c.
  *
- * Side-effect avoidance: retail can call FUN_0043eda0(10, 0) when
+ * Side-effect avoidance: retail can call 0x43eda0(10, 0) when
  * slow_frame_count exceeds 100 (drives an MP broadcast event).  The
  * port surfaces this via `notify_slow_frame`; the diff orchestrator
  * pins `slow_frame_count ≤ 99` in test vectors so the trigger never
@@ -197,7 +197,7 @@ typedef struct {
     int      slow_frame_count;     /* DAT_004d5c90 — consecutive max-bucket
                                     *   hits.  Constrained ≤99 in diff
                                     *   vectors so the 100-trigger
-                                    *   FUN_0043eda0(10,0) never fires. */
+                                    *   0x43eda0(10,0) never fires. */
     int      base_delta;           /* DAT_004d2160 — additive offset on the
                                     *   "I'm ahead" hint return; also a
                                     *   ×3 floor in the alone-in-mode-2 path */
@@ -231,7 +231,7 @@ typedef struct {
     int      new_slow_frame_count;
     int      new_active_count;
     /* 1 iff slow_frame_count would have hit 100 (retail fires
-     * FUN_0043eda0(10, 0)).  Diff vectors are constrained so this
+     * 0x43eda0(10, 0)).  Diff vectors are constrained so this
      * stays 0; tests exercise the flag directly. */
     int      notify_slow_frame;
 } engine_scenario_hint_out_t;

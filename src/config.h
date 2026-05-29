@@ -10,9 +10,9 @@
  *      values that gate audio + video + CD path selection in
  *      various downstream subsystems.
  *
- * `FUN_004ae1b8` (the `lords2.inf` 1128-byte persistence blob load)
- * is deferred — its consumer chain (FUN_004ae2bd, FUN_004ae2ab,
- * FUN_004ae310) hasn't been decoded yet, so loading the bytes
+ * `0x4ae1b8` (the `lords2.inf` 1128-byte persistence blob load)
+ * is deferred — its consumer chain (0x4ae2bd, 0x4ae2ab,
+ * 0x4ae310) hasn't been decoded yet, so loading the bytes
  * without a consumer would be write-only state.
  *
  * Today this slice is *purely preparatory*: no behavioural change

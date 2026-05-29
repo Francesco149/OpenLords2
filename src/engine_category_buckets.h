@@ -27,10 +27,10 @@
  *     per-bucket representative.  Default value when nothing
  *     qualifies is 0.
  *
- * Caller usage (retail): the map loader (FUN_00467770, "l2_maps.dat")
+ * Caller usage (retail): the map loader (0x467770, "l2_maps.dat")
  * scans 64x64 cells; for each cell whose flag-byte has bit 0x40 set,
  * it calls `append(bucket_id_in_1..6, byte_value)`.  After load
- * completes, the army-setup pipeline (around FUN_00427ed0) calls
+ * completes, the army-setup pipeline (around 0x427ed0) calls
  * refresh_digest() then uses the 6-byte digest to seed per-army
  * starting state.
  *

@@ -149,8 +149,8 @@ void audio_shutdown(void)
     if (!g_ds) return;
 
     /* TODO(sfx): call the equivalent of FUN_00426d11 (stream stop,
-     * slots 0..1) and FUN_004262eb (voice stop, slots 1..20) here
-     * once those subsystems exist.  FUN_00427d19 (final cleanup)
+     * slots 0..1) and 0x4262eb (voice stop, slots 1..20) here
+     * once those subsystems exist.  0x427d19 (final cleanup)
      * also belongs here. */
 
     if (g_primary) {

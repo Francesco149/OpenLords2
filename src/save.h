@@ -116,7 +116,7 @@ extern uint8_t g_footprint_storage_160[160];
  * "Castles.dat" in the CWD; callers can supply any path here.
  *
  * Side-effect calls that retail makes after save/load
- * (FUN_004020ae, FUN_0045270a, FUN_004976a1) are NOT invoked — they
+ * (FUN_004020ae, FUN_0045270a, 0x4976a1) are NOT invoked — they
  * touch subsystems we haven't ported yet (AI scheduler, message-bus
  * resets).  Higher-level wrappers will reintroduce them once those
  * subsystems exist. */

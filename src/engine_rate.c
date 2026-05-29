@@ -98,7 +98,7 @@ void engine_compute_sim_sub_steps(const engine_rate_in_t *in,
             }
             out->new_autosave_start_ms = 0;       /* expire the window */
             if (in->mp_active != 0) {
-                out->notify_autosave_done = 1;    /* retail: FUN_0043eda0(0xf, 0) */
+                out->notify_autosave_done = 1;    /* retail: 0x43eda0(0xf, 0) */
             }
         }
 
@@ -491,7 +491,7 @@ void engine_compute_scenario_hint(const engine_scenario_hint_in_t *in,
         /* Not at the 140 ms ceiling — reset the slow-frame run length. */
         out->new_slow_frame_count = 0;
     } else {
-        /* Bumped slow frame.  Retail fires FUN_0043eda0(10, 0) when
+        /* Bumped slow frame.  Retail fires 0x43eda0(10, 0) when
          * the post-bump value exceeds 100 (gate is `100 < value`, so
          * a starting 100 → bumped to 101 → fires).  Diff vectors are
          * constrained `slow_frame_count ≤ 99` so this stays unfired

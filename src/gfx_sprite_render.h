@@ -50,7 +50,7 @@
  *
  *   current_blob       DAT_004eabec — pointer to the "currently active"
  *                                    sprite blob.  Retail allocates it
- *                                    via _malloc (FUN_004b25b0) and
+ *                                    via _malloc (0x4b25b0) and
  *                                    reads from it across many callers.
  *                                    Settable via the bind API below.
  *   last_error         DAT_005aeb68 — error-code byte latch.  Retail
@@ -62,9 +62,9 @@
  *
  * Error log hook:
  *
- *   FUN_004afab9 @ 0x4afab9 (897 B) is the retail "format an error
+ *   0x4afab9 (897 B) is the retail "format an error
  *   message and append it to the in-memory log buffer" function.  Its
- *   formatting depends on FUN_004b049b (timestamp), FUN_004afe3a (log
+ *   formatting depends on 0x4b049b (timestamp), 0x4afe3a (log
  *   write), the per-format-id string literals in rdata at 0x4d2314..,
  *   and a 4KB log-line buffer at &DAT_004eadb0 — none of which are
  *   ported yet.  We surface the call as a NULL-default callback hook
@@ -73,7 +73,7 @@
  *   path was taken without porting the formatter itself.
  *
  *   The `fmt_addr` argument is the retail RVA of the format string
- *   passed as FUN_004afab9's first arg — preserved as an opaque
+ *   passed as 0x4afab9's first arg — preserved as an opaque
  *   uint32_t (we won't dereference it; tests check addresses against
  *   the enum below).
  *
@@ -116,7 +116,7 @@
 #include <stdint.h>
 
 /* Format-string opaque IDs — mirror the retail rdata addresses of the
- * format-string literals passed to FUN_004afab9.  Tests inspect the
+ * format-string literals passed to 0x4afab9.  Tests inspect the
  * value passed to the log hook against one of these. */
 enum {
     GFX_SPRITE_RENDER_ERR_FROM_BLOB_NULL                = 0x4d2314,
@@ -136,7 +136,7 @@ enum {
 /* Hook fired when a descriptor-validation gate trips.  Default is a
  * no-op.  Tests install one that records (fmt_addr, sprite_index + 1)
  * tuples — `sprite_index_plus_one` is the literal value retail passes
- * as FUN_004afab9's third arg (param_2 + 1), so log messages render
+ * as 0x4afab9's third arg (param_2 + 1), so log messages render
  * 1-based indices. */
 typedef void (*gfx_sprite_render_log_fn)(uint32_t fmt_addr,
                                          int      sprite_index_plus_one);
@@ -157,7 +157,7 @@ void    gfx_sprite_render_clear_error(void);
  * _truncate_top) read this pointer; the caller-blob variant
  * (gfx_sprite_render_from_blob) takes the blob as a parameter.
  * Pass NULL to unbind.  Mirrors retail DAT_004eabec — a heap pointer
- * allocated by FUN_004b25b0 and freed by FUN_004b25fc. */
+ * allocated by 0x4b25b0 and freed by 0x4b25fc. */
 void gfx_sprite_render_set_blob(const uint8_t *blob);
 const uint8_t *gfx_sprite_render_blob(void);
 

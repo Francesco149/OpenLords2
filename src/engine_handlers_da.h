@@ -27,13 +27,13 @@
  * NOT covered here (require unported callees, deferred to a later
  * dispatch):
  *
- *   - type 49 FUN_00448422 — calls FUN_00435211 (per-player struct
- *     refresh) and sets DAT_0057d340 = 2.  The FUN_00435211 callee
- *     pulls in FUN_0049aa0e (2197 B per-player summarizer) and
- *     FUN_0049d1e0 (1024 B per-player update) — substantial port.
+ *   - type 49 0x448422 — calls 0x435211 (per-player struct
+ *     refresh) and sets DAT_0057d340 = 2.  The 0x435211 callee
+ *     pulls in 0x49aa0e (2197 B per-player summarizer) and
+ *     0x49d1e0 (1024 B per-player update) — substantial port.
  *
  *   - the remaining ~40 single-callee wrappers — each calls one or
- *     two unported helpers (FUN_0043a23f, FUN_00428xxx etc) that
+ *     two unported helpers (0x43a23f, FUN_00428xxx etc) that
  *     model the actual action semantics.
  *
  * The dispatcher already treats a NULL slot as "no-op" (still

@@ -9,7 +9,7 @@
  *
  * Conceptually a delayed message queue:
  *
- *   - enqueue side (retail FUN_00447136 — `engine_delayed_action_enqueue`):
+ *   - enqueue side (retail 0x447136 — `engine_delayed_action_enqueue`):
  *     find a free slot, stamp it with a type byte, due tick, and up to
  *     10 scalar args.
  *
