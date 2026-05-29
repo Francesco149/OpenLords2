@@ -8,9 +8,12 @@
 
 #include "engine_camera.h"
 
+#include "call_trace.h"
+
 void engine_camera_clamp_scroll(int *col, int *row,
                                  int col_count, int row_count)
 {
+    CALL_TRACE_ENTER(0x00429b1d);
     /* Port of FUN_00429b1d @ 0x429b1d (135 B).  Decompile lines
      * 17006-17024.
      *

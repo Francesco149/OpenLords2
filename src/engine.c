@@ -981,6 +981,7 @@ void engine_tick(void)
 
 void engine_tick_dispatch(void)
 {
+    CALL_TRACE_ENTER(0x0040e890);
     /* Port of retail FUN_0040e890 @ 0x40e890 (43 bytes).  Identical
      * shape: call the per-tick driver, then latch the save-pump
      * request if the engine asked to fast-skip the render. */
@@ -994,6 +995,7 @@ void engine_tick_dispatch(void)
 
 int engine_tick_guard(void)
 {
+    CALL_TRACE_ENTER(0x0040e8bb);
     /* Port of retail FUN_0040e8bb @ 0x40e8bb.  Same control flow,
      * one structural deviation noted inline.
      *

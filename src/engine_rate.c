@@ -63,6 +63,8 @@
 
 #include "engine.h"
 
+#include "call_trace.h"
+
 void engine_compute_sim_sub_steps(const engine_rate_in_t *in,
                                   engine_rate_out_t *out)
 {
@@ -382,6 +384,7 @@ static int alone_ladder(int delta)
 void engine_compute_scenario_hint(const engine_scenario_hint_in_t *in,
                                   engine_scenario_hint_out_t *out)
 {
+    CALL_TRACE_ENTER(0x0043de70);
     /* Default outputs — carry through everything unchanged.  The
      * branches below overwrite selectively to match retail's per-path
      * side effects. */
