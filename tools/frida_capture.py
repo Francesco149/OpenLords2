@@ -191,6 +191,12 @@ class CaptureConfig:
     frame_capture:              bool = False
     frame_capture_max:          int  = 16   # 0 = unlimited
     frame_capture_warmup_secs:  int  = 5    # skip captures for first N cum-secs
+    # Skip the boot intro movie chain (intro.smk → imptitle.smk → credits.smk).
+    # The agent snaps each Smacker movie to its last frame so the engine runs
+    # its own intro→title (state 0x1f) transitions in ~3 frames instead of the
+    # ~23 real-sec turbo fast-forward.  Lets menu/UI capture runs use a tiny
+    # --frame-capture-warmup-secs.  See tools/frida/openlords2-agent.js.
+    skip_intro:                 bool = False
     # Input recording: when set, the WndProc hook emits one JSONL line per
     # dispatched input message to <run_dir>/input_trace.jsonl.
     input_record:      bool = False
@@ -728,6 +734,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "frame_capture":             bool(cfg.frame_capture),
             "frame_capture_max":         int(cfg.frame_capture_max),
             "frame_capture_warmup_secs": int(cfg.frame_capture_warmup_secs),
+            "skip_intro":                bool(cfg.skip_intro),
             "input_record":              bool(cfg.input_record),
             "input_replay":              input_replay_events,
             "call_trace":                bool(cfg.call_trace),
@@ -944,6 +951,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="skip captures for the first N engine "
                          "cumulative-seconds rollovers so the engine has "
                          "time to render a first frame (default 5)")
+    ap.add_argument("--skip-intro", action="store_true",
+                    help="skip the boot intro movie chain (intro/imptitle/"
+                         "credits): the agent snaps each Smacker movie to its "
+                         "last frame so the engine reaches the title menu "
+                         "(state 0x1f) in ~3 frames instead of the ~23 real-sec "
+                         "turbo fast-forward; pair with a small "
+                         "--frame-capture-warmup-secs")
     ap.add_argument("--input-record", action="store_true",
                     help="record every dispatched WM_KEY*/WM_CHAR/WM_MOUSE* "
                          "event to <run_dir>/input_trace.jsonl, stamped with "
@@ -1012,6 +1026,7 @@ def main(argv: list[str] | None = None) -> int:
         frame_capture=args.frame_capture,
         frame_capture_max=args.frame_capture_max,
         frame_capture_warmup_secs=args.frame_capture_warmup_secs,
+        skip_intro=args.skip_intro,
         input_record=args.input_record,
         input_replay_path=(Path(args.input_trace).resolve()
                            if args.input_trace else None),
@@ -1032,6 +1047,7 @@ def main(argv: list[str] | None = None) -> int:
           f"frame_capture={cfg.frame_capture} "
           f"frame_capture_max={cfg.frame_capture_max} "
           f"frame_capture_warmup_secs={cfg.frame_capture_warmup_secs} "
+          f"skip_intro={cfg.skip_intro} "
           f"input_record={cfg.input_record} "
           f"input_replay={cfg.input_replay_path}")
 
@@ -1058,6 +1074,7 @@ def main(argv: list[str] | None = None) -> int:
         "frame_capture":             cfg.frame_capture,
         "frame_capture_max":         cfg.frame_capture_max,
         "frame_capture_warmup_secs": cfg.frame_capture_warmup_secs,
+        "skip_intro":                cfg.skip_intro,
         "frame_count":               result.frame_count,
         "input_record":              cfg.input_record,
         "input_replay_path":         (str(cfg.input_replay_path)

@@ -337,6 +337,30 @@ const ADDR = {
     var_da_disp_a7:                 0x005158c4, // _DAT_005158c4  ← record.arg7
     var_da_disp_a8:                 0x005158c0, // _DAT_005158c0  ← record.arg8
     var_da_disp_a9:                 0x0050d7bc, // _DAT_0050d7bc  ← record.arg9
+    // ── Intro-movie skip (skip_intro flag) ──────────────────────────────
+    // The boot intro chain (intro.smk → imptitle.smk → credits.smk → title
+    // screen 0x1f) is engine-time-paced and dominates every menu/UI capture
+    // run's warmup (~23 real-sec under turbo).  Rather than fast-forwarding
+    // the movies, we force each one to its final frame so the engine runs its
+    // OWN intro→title state transitions exactly as retail intends — the
+    // FUN_0042e060 chaining (intro→imptitle→credits) plus the DAT_005530f0 /
+    // DAT_0057d340 title-state setup — just without waiting hundreds of frames.
+    //   FUN_0042dbc7 — per-frame Smacker stepper.  Its done branch
+    //     (current_frame >= frame_count-1) closes the handle + calls
+    //     FUN_0042e060 to chain the next movie / finish on 0x1f.
+    //   FUN_0042da18 — the Smacker open; it calls FUN_0042dbc7 once at open
+    //     time, BEFORE FUN_0042d91b writes the return-state global
+    //     (_DAT_005169b0).  Forcing done during that nested call corrupts the
+    //     return-state plumbing, so we bracket it with g_smack_in_open and
+    //     skip forcing while inside it.
+    //   DAT_004d4d58 — Smack* handle (0 when no movie open).  Struct fields
+    //     +0x0c = frame count (int), +0x374 = current frame (uint) — both
+    //     confirmed from FUN_0042dbc7's own frame-progress check.
+    //   Gate on engine state == 1 (var_sim_game_state_phase, DAT_0052af94)
+    //     so only the boot intro chain is affected, not in-game cutscenes.
+    fn_smack_step:       0x0042dbc7, // FUN_0042dbc7 — per-frame Smacker stepper
+    fn_smack_open:       0x0042da18, // FUN_0042da18 — Smacker open (steps once at open)
+    var_smack_handle:    0x004d4d58, // DAT_004d4d58 — Smack* handle (0 = none)
 };
 
 // Per-slot strides — used inside the runRetailSimSubSteps RPC + the LUT
@@ -478,6 +502,14 @@ let g_tick_count          = 0;
 // messages get processed before the next engine_tick — matching the
 // recording's timing.
 let g_input_record_enabled = false;
+
+// Intro-movie skip (skip_intro flag).  See the ADDR.fn_smack_step block for
+// the full rationale.  g_smack_in_open brackets the open-time FUN_0042dbc7
+// call so it isn't fast-finished; g_skip_intro_forced counts the movies we've
+// short-circuited (for a bounded log).
+let g_skip_intro_enabled   = false;
+let g_smack_in_open        = 0;       // >0 while inside FUN_0042da18
+let g_skip_intro_forced    = 0;
 
 // Input replay. Holds the trace as an array of {t, m, w, l} objects sorted
 // by t. g_replay_idx advances as events are posted.  The PostMessageA stub
@@ -2412,6 +2444,49 @@ function installCallTraceHooks(vasArray) {
 // so a non-turbo run still benefits from the FPS-sample emission without
 // disturbing wall-clock time.
 
+// ─── intro-movie skip (skip_intro flag) ───────────────────────────────
+// See the ADDR.fn_smack_step block for the rationale.  Attaches (not
+// replaces) two Smacker functions so the engine keeps driving its own
+// intro→title state machine:
+//   FUN_0042da18 (open) — bracketed by g_smack_in_open so the open-time
+//     FUN_0042dbc7 call is left untouched (forcing it done there corrupts
+//     the return-state plumbing: FUN_0042d91b writes _DAT_005169b0 only
+//     AFTER FUN_0042da18 returns).
+//   FUN_0042dbc7 (step) — on each main-loop call (not during open), if a
+//     boot-intro movie is playing (engine state == 1), snap the current
+//     frame to the last frame so the stepper takes its done→chain branch
+//     this iteration.  intro / imptitle / credits then finish one per frame.
+const SMACK_FRAMES_OFF   = 0x0c;   // Smack* + 0x0c  = frame count (int)
+const SMACK_FRAMENUM_OFF = 0x374;  // Smack* + 0x374 = current frame (uint)
+
+function installSkipIntroHook() {
+    Interceptor.attach(rva(ADDR.fn_smack_open), {
+        onEnter: function () { g_smack_in_open++; },
+        onLeave: function () { if (g_smack_in_open > 0) g_smack_in_open--; },
+    });
+    Interceptor.attach(rva(ADDR.fn_smack_step), {
+        onEnter: function () {
+            if (g_smack_in_open > 0) return;     // open-time step — leave alone
+            // Only fast-finish the boot intro chain (engine state == 1); leave
+            // in-game cutscenes (state != 1) to play normally.
+            if (rva(ADDR.var_sim_game_state_phase).readS32() !== 1) return;
+            const handle = rva(ADDR.var_smack_handle).readPointer();
+            if (handle.isNull()) return;
+            const count = handle.add(SMACK_FRAMES_OFF).readS32();
+            if (count <= 1) return;
+            handle.add(SMACK_FRAMENUM_OFF).writeU32((count - 1) >>> 0);
+            g_skip_intro_forced++;
+            if (g_skip_intro_forced <= 8) {
+                log('skip_intro: snapped Smacker movie to final frame ' +
+                    (count - 1) + ' (handle=' + handle + ', #' +
+                    g_skip_intro_forced + ')');
+            }
+        },
+    });
+    log('skip_intro: armed (FUN_0042dbc7 step + FUN_0042da18 open guard; ' +
+        'each boot-intro Smacker movie ends on its next main-loop frame)');
+}
+
 function installEngineTickHook() {
     Interceptor.attach(rva(ADDR.fn_engine_tick), {
         onEnter: function () {
@@ -4187,6 +4262,10 @@ rpc.exports = {
 
         g_diff_test_enabled = !!opts.diff_test;
 
+        g_skip_intro_enabled = !!opts.skip_intro;
+        g_smack_in_open      = 0;
+        g_skip_intro_forced  = 0;
+
         g_input_record_enabled = !!opts.input_record;
         // input_replay arrives as an array of {t, m, w, l} events sorted by
         // t.  Coerce defensively — a malformed entry would otherwise blow
@@ -4310,6 +4389,11 @@ rpc.exports = {
                 ', cadence=1 capture per engine cum-secs rollover)');
         }
 
+        if (g_skip_intro_enabled) {
+            try { installSkipIntroHook(); }
+            catch (e) { err('installSkipIntroHook', e.message); }
+        }
+
         if (g_input_record_enabled) {
             installInputRecordHook();
         }
@@ -4350,6 +4434,7 @@ rpc.exports = {
               frame_capture: g_frame_capture_enabled,
               frame_capture_max: g_frame_capture_max,
               frame_capture_warmup_secs: g_frame_capture_warmup_secs,
+              skip_intro:    g_skip_intro_enabled,
               input_record:  g_input_record_enabled,
               input_replay_count:
                   g_input_replay_events ? g_input_replay_events.length : 0,

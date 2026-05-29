@@ -7,6 +7,52 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — HARNESS: `--skip-intro` reaches the menu in ~200 ms
+
+The retail capture harness can now **skip the boot intro movie chain** outright
+instead of turbo-fast-forwarding it. Every menu/UI parity run previously paid a
+~23 real-sec turbo warmup (`--frame-capture-warmup-secs 1000`) to play through
+`intro.smk → imptitle.smk → credits.smk`; `--skip-intro` collapses that to ~3
+main-loop frames (~200 ms wall).
+
+### The intro chain (RE'd)
+
+WinMain (`FUN_0040e9ab`) line 7611 calls `FUN_004b3571(0)`, which starts
+`intro.smk` (screen state 0x22) and returns — the movie plays during the main
+loop via the state-0x22 dispatch into `FUN_0042dbc7` (per-frame Smacker stepper).
+On a movie's last frame, `FUN_0042dbc7` closes the handle and calls
+`FUN_0042e060`, which — while engine state `DAT_0052af94 == 1` — chains the next
+movie by filename: **intro → imptitle → credits**, each returning to state 0x1f.
+After credits, state is **0x1f** (title) with the deferred-screen cookie
+`DAT_0057d340` set, and the next-frame `FUN_0040f1a0` dispatcher builds the menu
+via `FUN_0041e7e1`. (The natural intro→title path does *not* go through
+`FUN_0042b780` — that's the *re-entry* title producer used from submenus.)
+
+### The skip mechanism
+
+`installSkipIntroHook` (agent) attaches to `FUN_0042dbc7` and, on each main-loop
+step gated on `DAT_0052af94 == 1` (boot chain only — in-game cutscenes untouched),
+snaps the Smacker handle's current frame (`DAT_004d4d58 + 0x374`) to its last
+(`+0x0c` count − 1) so the stepper takes its done→chain branch. The open-time
+`FUN_0042dbc7` call nested inside `FUN_0042da18` is bracketed out via
+`g_smack_in_open` — forcing it done there would run `FUN_0042e060` before
+`FUN_0042d91b` writes the return-state global `_DAT_005169b0`, corrupting the
+chain. All engine transitions stay retail-authentic; only per-movie playback
+duration is cut, so the result is faithful (not a synthetic jump-to-menu).
+
+### Verified
+
+`tools/frida_capture.py --skip-intro` (turbo and non-turbo, warmup 2–3): every
+captured frame is **bit-identical** to `runs/groundtruth/mainmenu-retail.bmp`
+(0 diff px). New CLI flag `--skip-intro`; plumbed through the agent init opts +
+the run-summary JSON.
+
+Files: `tools/frida/openlords2-agent.js` (ADDR `fn_smack_step` / `fn_smack_open`
+/ `var_smack_handle`, `installSkipIntroHook`), `tools/frida_capture.py`,
+`docs/findings/main-menu-parity.md`.
+
+---
+
 ## 2026-05-29 — MENU TEXT RENDERS: font load + glyph-table extract + bind
 
 Committed `7bce81a`.  The main-menu **text** now renders end-to-end in
