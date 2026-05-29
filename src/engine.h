@@ -89,6 +89,12 @@ extern int g_sim_mp_variant;
  * always rotates.  Runtime flag, NOT persisted. */
 extern int g_sim_save_rotate_hold;
 
+/* Request a screen repaint — sets the demand-redraw cookie (retail
+ * DAT_0057d340) the render-phase seam consumes.  `mode` is 1 or 2 (a
+ * redraw-mode hint; the title arm ignores it).  Called by WndProc on
+ * WM_MOVE / WM_ACTIVATEAPP restore, and by state handlers as they land. */
+void engine_set_demand_redraw(int mode);
+
 /* Per-tick driver — scaffold of retail FUN_004b99c0.  Public so
  * engine_tick_dispatch can call it without going through the guard. */
 void engine_tick(void);

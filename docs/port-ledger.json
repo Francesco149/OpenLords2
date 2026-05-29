@@ -2038,6 +2038,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_screen_dispatch.c",
     "src/engine_screen_dispatch.h",
     "src/engine_title_render.h"

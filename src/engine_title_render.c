@@ -30,6 +30,13 @@ static engine_dirty_rect_state_t *g_dirty_state;
 static const uint8_t *g_panel_asset;    /* DAT_004eabec */
 static int g_selected_button = 1;       /* DAT_00553114 */
 
+/* Title/menu page selector (retail DAT_005530f0).  Written by the menu
+ * state tick (0x42ff10, unported) — page 1 = main menu — and read by
+ * the render seam to pass to engine_title_render_scene.  0 until a tick
+ * sets it, so the scene draws nothing visible until the state tick lands
+ * (or a bring-up shortcut forces it). */
+static int g_title_page;
+
 /* ─── deferred panel hook (0x409346) ────────────────────────── */
 
 static int g_panel_calls;
@@ -99,6 +106,9 @@ void engine_title_render_set_selected_button(int index)
 {
     g_selected_button = index;
 }
+
+void engine_title_render_set_page(int page) { g_title_page = page; }
+int  engine_title_render_page(void)         { return g_title_page; }
 
 void engine_title_render_bind_panel_fn(engine_title_render_panel_fn fn)
 {

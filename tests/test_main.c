@@ -1170,6 +1170,7 @@ struct test_case {
     X(title_scene_wrong_screen_state_is_noop) \
     X(title_scene_other_page_routes_to_page_hook) \
     X(title_scene_out_of_range_page_renders_nothing_but_finalizes) \
+    X(title_page_selector_roundtrips) \
     \
     X(map_query_all_clear_returns_1) \
     X(map_query_rawflag_occupied_returns_0) \

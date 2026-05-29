@@ -180,11 +180,6 @@ static int     g_screen_change_cx;
 static int     g_screen_change_cy;
 static uint32_t g_screen_bpp;
 
-/* "Engine wants the next frame redrawn" marker — retail DAT_0057d340
- * is set to 2 after WM_MOVE/WM_SIZE; the render driver consumes it.
- * Mirrored so the port stays mechanical when the driver lands. */
-static int     g_render_dirty;
-
 static LRESULT CALLBACK wndproc(HWND, UINT, WPARAM, LPARAM);
 static int  register_window_class(void);
 static int  create_main_window(void);
@@ -478,7 +473,7 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             ClientToScreen(hwnd, (LPPOINT)&g_client_screen.right);
         }
         log_line("OK :Window moved.");
-        g_render_dirty = 2;
+        engine_set_demand_redraw(2);
         /* TODO(sim): retail re-blits / calls FUN_00451f70 here based
          * on engine state — wire in once the render path exists. */
         return 0;
@@ -518,14 +513,14 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 if (gfx_init(g_hwnd, g_fullscreen)) {
                     g_gfx_active = 1;
                     g_surface_lost = 0;
-                    g_render_dirty = 2;
+                    engine_set_demand_redraw(2);
                 } else {
                     log_line("WM_ACTIVATEAPP: gfx re-init failed "
                              "after Restore failed — DDraw is down");
                 }
             } else {
                 g_surface_lost = 0;
-                g_render_dirty = 2;
+                engine_set_demand_redraw(2);
             }
         }
         return 0;

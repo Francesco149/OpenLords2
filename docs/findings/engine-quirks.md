@@ -4026,6 +4026,31 @@ the wrong string for button 3.
 
 ---
 
+## 114. `DAT_004eac50` (screen-state byte) has two independent port mirrors
+
+Retail's `DAT_004eac50` is a single byte: the current screen-state ID,
+the selector for the `FUN_0040f1a0` render-dispatch switch.  In the port
+it is mirrored **twice, independently**: `g_sim_current_screen` (engine.c,
+the dispatch selector) and `g_language_tag` (gfx_text.c, which renders
+title-screen text in a taller line box — 0x36 vs 0x10 — when the value is
+`0x1f`/`0x1c`; the "language tag" name is a misnomer carried over from an
+early labelling).
+
+Both are `0` today because no producer transitions the screen, so they
+cannot yet desync.  But the boot→title transition (`FUN_0042b780`, sets
+`0x1f`) will write the screen-state byte, and at that point **both mirrors
+must be updated together** or the menu will dispatch the title arm while
+`gfx_text` still measures text with the short box.  The faithful fix is a
+single screen-state setter that fans out to both — to be introduced when
+that transition lands (the first real producer), so it can be tested
+against observable behaviour rather than added as dead infrastructure.
+
+> 📍 `src/engine.c` (`g_sim_current_screen`), `src/gfx_text.c`
+> (`g_language_tag`, line ~163), Ghidra `FUN_0040f1a0` @ `0x40f1a0`
+> (dispatch) / `FUN_00402637` (taller-box special-case).
+
+---
+
 <!--
 Template for new entries:
 

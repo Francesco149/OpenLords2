@@ -18,6 +18,8 @@
 #include "call_trace.h"
 #include "engine_camera.h"
 #include "engine_overlay_render.h"
+#include "engine_screen_dispatch.h"
+#include "engine_title_render.h"
 #include "engine_turn.h"
 #include "gfx.h"
 #include "save.h"                 /* g_player_strategic_352 */
@@ -72,8 +74,25 @@ static int g_sim_game_speed = 100;
  * Today no UI sets it, so always 0. */
 static int g_sim_pause_lock;
 /* Current screen ID.  retail DAT_004eac50 — single byte indexing the
- * per-screen tables.  Today nothing transitions screens, so 0. */
+ * per-screen tables.  Today nothing transitions screens, so 0.
+ *
+ * NOTE: gfx_text.c keeps an independent mirror of this same retail byte
+ * (its `g_language_tag`, used to render title-screen text in a taller
+ * box when the value is 0x1f/0x1c).  Both are 0 today since no producer
+ * transitions screens, so they cannot yet desync — but when the
+ * boot→title transition (0x42b780, sets 0x1f) lands it must update
+ * BOTH.  See docs/findings/engine-quirks.md. */
 static uint8_t g_sim_current_screen;
+
+/* Demand-redraw cookie.  retail DAT_0057d340 — set to 1 or 2 by 50+
+ * input/state handlers (incl. the menu state tick and WndProc on
+ * WM_MOVE/WM_ACTIVATEAPP) whenever the screen must repaint; consumed and
+ * cleared by the render-phase seam below (the menu render seam — see
+ * docs/plans/main-menu-render-chips.md).  The forwarded value is a
+ * redraw-mode hint that the 0x1f title arm ignores.  Owned here (the
+ * render driver is the consumer); WndProc sets it via
+ * engine_set_demand_redraw. */
+static int g_demand_redraw;
 /* Per-screen freeze table.  retail DAT_004e31b0[].  All zeros today;
  * the real bytes need extraction from retail's .data.  TODO. */
 static uint8_t g_sim_screen_freeze_table[256];
@@ -771,6 +790,11 @@ static int engine_tick_rate_step(void)
     return out.sub_steps;
 }
 
+void engine_set_demand_redraw(int mode)
+{
+    g_demand_redraw = mode;
+}
+
 void engine_tick(void)
 {
     /* Scaffold of retail FUN_004b99c0 @ 0x4b99c0.  The retail body
@@ -941,11 +965,27 @@ void engine_tick(void)
      *                 retail). */
     engine_tick_input_step();
 
-    /* TODO(render): screen-dispatch ladder + per-subsystem renders go
-     * here.  Retail dispatches ~30 subsystem renders based on
-     * g_current_screen between the input step and the tail block
-     * below; all blocked on the respective UI / map / sprite
-     * subsystems.  Surveyed in docs/findings/main-loop-tick.md. */
+    /* Demand-redraw seam — retail FUN_004b99c0 @ 0x4b99c0 line 36:
+     *   if (DAT_0057d340 != 0) { FUN_0040f1a0(DAT_0057d340); DAT_0057d340 = 0; }
+     * The screen-state byte (DAT_004eac50 = g_sim_current_screen) selects
+     * the dispatch arm; the title page (DAT_005530f0) selects the title
+     * sub-scene; the redraw-mode cookie is forwarded (the 0x1f title arm
+     * ignores it).  Today no producer sets g_demand_redraw or transitions
+     * the screen to 0x1f, so this is dormant until the menu state tick /
+     * boot→title transition land — but the chain now exists end-to-end.
+     * See docs/plans/main-menu-render-chips.md chip 5. */
+    if (g_demand_redraw != 0) {
+        engine_screen_dispatch(g_sim_current_screen,
+                               engine_title_render_page(),
+                               g_demand_redraw);
+        g_demand_redraw = 0;
+    }
+
+    /* TODO(render): the remaining ~30 per-subsystem renders (the screen-0
+     * in-game path 0x4050c0, the strategic-map / sprite renders, …)
+     * still go between here and the tail block below; all blocked on the
+     * respective UI / map / sprite subsystems.  Surveyed in
+     * docs/findings/main-loop-tick.md. */
 
     /* Render-phase tail — retail gates the whole block on
      * `DAT_005c9274 == 0` (g_savepump_request).  Today's port:

@@ -376,3 +376,15 @@ int test_title_scene_out_of_range_page_renders_nothing_but_finalizes(void)
     T_ASSERT_EQ_I(engine_title_render_scene_flag_b(), 1);
     return 0;
 }
+
+int test_title_page_selector_roundtrips(void)
+{
+    /* DAT_005530f0 — the seam (engine.c) sources the title page from here. */
+    engine_title_render_set_page(1);
+    T_ASSERT_EQ_I(engine_title_render_page(), 1);
+    engine_title_render_set_page(0xc);
+    T_ASSERT_EQ_I(engine_title_render_page(), 0xc);
+    engine_title_render_set_page(0);
+    T_ASSERT_EQ_I(engine_title_render_page(), 0);
+    return 0;
+}
