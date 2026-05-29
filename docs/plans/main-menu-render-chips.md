@@ -99,6 +99,32 @@ nix develop -c python3 tools/compare_frames.py \
     --out runs/compare/mainmenu          # iterate until identical:true
 ```
 
+## Step-1 RE findings (title-scene state machine, 2026-05-29)
+
+The "reach the title state" track is a real state machine, not just a flag:
+
+- **Screen-state transition**: `FUN_0042b780` (119B) sets `DAT_004eac50 = 0x1f`
+  (title), but to page `DAT_005530f0 = 0xc` (SP) / `0xb` (MP) — NOT the main
+  menu (page 1). It also runs title init: `FUN_0042b7f7` (asset/state setup,
+  pulls in `FUN_00499a1c` music + `FUN_0046ead0`/`FUN_00498dcb`), `FUN_0042c5fe`,
+  `FUN_0042bf46` (loads many title globals: `DAT_0051fad0`, `DAT_00521c90`, …).
+- **Main-menu page (`DAT_005530f0 = 1`)** is set by the menu state-tick, not the
+  transition. Key callers that BOTH call `FUN_0042b780` AND set page 1:
+  `FUN_0042ff10` and `FUN_00497a34`. `FUN_0042ff10` is in engine_tick's direct
+  menu callees (fires every menu frame) → it's the **title/menu state tick**
+  (input → page/selection → transitions). Its sibling input/selection state:
+  `DAT_00553114` (highlighted button).
+- So the menu needs a **logic chip** (`FUN_0042ff10` state tick, + the
+  transition `FUN_0042b780` + its init callees) feeding the **render chip**
+  (`FUN_0041e7e1` tree). Render reads what the tick writes.
+
+**Implication for porting order:** the render leaves are cheap, but they draw
+nothing without (a) the title init having loaded the bg/panel/string assets and
+(b) the state tick having set `DAT_004eac50=0x1f`/`DAT_005530f0=1`. Bring-up
+shortcut still recommended: force those globals + manually invoke the asset
+loaders once, port + verify the render leaves, THEN port the state tick +
+transition for faithful behaviour.
+
 ## Notes
 
 - Each render chip is small and rests on ported primitives, so the *render*
