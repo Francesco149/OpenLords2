@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **279** (11.4%) — tested 249, ported 30
-- code bytes touched: **10.5%** (87,762 / 838,629 B)
-- unported: **2168**
+- touched: **280** (11.4%) — tested 250, ported 30
+- code bytes touched: **10.5%** (87,968 / 838,629 B)
+- unported: **2167**
 - orphan refs (in src/, not in function table): 3
 
-## tested (249) — ported + host unit suite
+## tested (250) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -131,6 +131,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4291b3 | FUN_004291b3 | 171 | engine_category_buckets.h |
 | 0x42925e | FUN_0042925e | 81 | engine_category_buckets.c, engine_category_buckets.h |
 | 0x429b1d | FUN_00429b1d | 135 | engine.c, engine_camera.c, engine_camera.h |
+| 0x42a15f | FUN_0042a15f | 206 | engine_camera.c, engine_camera.h |
 | 0x42dfe2 | FUN_0042dfe2 | 126 | main.c |
 | 0x42e3ba | FUN_0042e3ba | 164 | main.c |
 | 0x42ec91 | FUN_0042ec91 | 1207 | gfx.c, gfx.h, gfx_paint.h |

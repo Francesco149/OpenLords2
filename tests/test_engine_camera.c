@@ -296,3 +296,75 @@ int test_engine_camera_scroll_idempotent(void)
     T_ASSERT_EQ_I(row, 0x80 - 32);
     return 0;
 }
+
+/* ── scroll-pixel conversion (FUN_0042a15f) ──────────────────────── */
+
+/* Even row: sx = col_base*x_step - half_step + x_origin; sy = y_step*row + y_origin. */
+int test_engine_camera_scroll_pixels_even_row(void)
+{
+    int sx = -1, sy = -1;
+    /* col_base=2, x_step=10, half_step=3, x_origin=5 → 2*10-3+5 = 22.
+     * row_subpos=4 (even), y_step=7, y_origin=1 → 7*4+1 = 29. */
+    engine_camera_compute_scroll_pixels(1, /*scroll_col*/0, /*scroll_row*/0,
+                                        /*col_base*/2, /*row_subpos*/4,
+                                        /*x_step*/10, /*half_step*/3,
+                                        /*x_origin*/5, /*y_step*/7,
+                                        /*y_origin*/1, &sx, &sy);
+    T_ASSERT_EQ_I(sx, 22);
+    T_ASSERT_EQ_I(sy, 29);
+    return 0;
+}
+
+/* Odd row subtracts an extra half_step from X (staggered rows). */
+int test_engine_camera_scroll_pixels_odd_row_half_step(void)
+{
+    int sx = -1, sy = -1;
+    engine_camera_compute_scroll_pixels(1, 0, 0, 2, /*row_subpos*/5,
+                                        10, 3, 5, 7, 1, &sx, &sy);
+    T_ASSERT_EQ_I(sx, 22 - 3);    /* 19 */
+    T_ASSERT_EQ_I(sy, 7 * 5 + 1); /* 36 */
+    return 0;
+}
+
+/* map_ready == 0 leaves both outputs untouched. */
+int test_engine_camera_scroll_pixels_not_ready_no_write(void)
+{
+    int sx = 111, sy = 222;
+    engine_camera_compute_scroll_pixels(0, 0, 0, 2, 4, 10, 3, 5, 7, 1, &sx, &sy);
+    T_ASSERT_EQ_I(sx, 111);
+    T_ASSERT_EQ_I(sy, 222);
+    return 0;
+}
+
+/* Absolute column off the map (col_base+scroll_col >= 0x41) → no write. */
+int test_engine_camera_scroll_pixels_col_off_map_no_write(void)
+{
+    int sx = 111, sy = 222;
+    engine_camera_compute_scroll_pixels(1, /*scroll_col*/0x40, 0,
+                                        /*col_base*/1, 4, 10, 3, 5, 7, 1, &sx, &sy);
+    T_ASSERT_EQ_I(sx, 111);
+    T_ASSERT_EQ_I(sy, 222);
+    return 0;
+}
+
+/* Absolute row off the map (scroll_row+row_subpos >= 0x81) → no write. */
+int test_engine_camera_scroll_pixels_row_off_map_no_write(void)
+{
+    int sx = 111, sy = 222;
+    engine_camera_compute_scroll_pixels(1, 0, /*scroll_row*/0x80,
+                                        2, /*row_subpos*/1, 10, 3, 5, 7, 1, &sx, &sy);
+    T_ASSERT_EQ_I(sx, 111);
+    T_ASSERT_EQ_I(sy, 222);
+    return 0;
+}
+
+/* Negative absolute cell (col_base+scroll_col < 0) → no write. */
+int test_engine_camera_scroll_pixels_negative_cell_no_write(void)
+{
+    int sx = 111, sy = 222;
+    engine_camera_compute_scroll_pixels(1, /*scroll_col*/-5, 0,
+                                        /*col_base*/2, 4, 10, 3, 5, 7, 1, &sx, &sy);
+    T_ASSERT_EQ_I(sx, 111);
+    T_ASSERT_EQ_I(sy, 222);
+    return 0;
+}

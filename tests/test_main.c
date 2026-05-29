@@ -1108,6 +1108,12 @@ struct test_case {
     X(engine_camera_scroll_oversize_visible_count_pushes_negative) \
     X(engine_camera_scroll_zero_visible_count) \
     X(engine_camera_scroll_idempotent) \
+    X(engine_camera_scroll_pixels_even_row) \
+    X(engine_camera_scroll_pixels_odd_row_half_step) \
+    X(engine_camera_scroll_pixels_not_ready_no_write) \
+    X(engine_camera_scroll_pixels_col_off_map_no_write) \
+    X(engine_camera_scroll_pixels_row_off_map_no_write) \
+    X(engine_camera_scroll_pixels_negative_cell_no_write) \
     X(engine_camera_anchor_zero_unchanged) \
     X(engine_camera_anchor_in_range_unchanged) \
     X(engine_camera_anchor_at_max_x_unchanged) \

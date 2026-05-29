@@ -81,4 +81,34 @@ void engine_camera_clamp_scroll(int *col, int *row,
  */
 void engine_camera_clamp_anchor(int *x, int *y);
 
+/* Strategic-map cell-scroll → back-buffer pixel-origin conversion.
+ * Port of FUN_0042a15f @ 0x42a15f (206 B).
+ *
+ *   Retail global ↔ parameter mapping:
+ *     map_ready    DAT_005533b0  (gate; 0 = no map → leave outputs alone)
+ *     scroll_col   DAT_005651b4  (clamped cell-scroll col; gate only)
+ *     scroll_row   DAT_005651b8  (clamped cell-scroll row; gate only)
+ *     col_base     DAT_00553f04  (cell column used for the X pixel math)
+ *     row_subpos   DAT_005681f4  (cell row; drives Y + the odd-row shift)
+ *     x_step       DAT_00568220  (per-column pixel step)
+ *     half_step    DAT_00567950  (tile half-width; staggered-row offset)
+ *     x_origin     DAT_0052afdc  (X pixel origin)
+ *     y_step       DAT_0053f65c  (per-row pixel step)
+ *     y_origin     DAT_00553244  (Y pixel origin)
+ *   Outputs:
+ *     *out_scroll_x  _DAT_0050a4a8
+ *     *out_scroll_y   DAT_0050a4ac
+ *
+ * Gate: writes the outputs only when map_ready != 0 AND the absolute
+ * cell is on the map ((col_base+scroll_col) ∈ [0,0x40], (scroll_row+
+ * row_subpos) ∈ [0,0x80]).  Odd row_subpos shifts X left by half_step.
+ */
+void engine_camera_compute_scroll_pixels(int map_ready,
+                                         int scroll_col, int scroll_row,
+                                         int col_base, int row_subpos,
+                                         int x_step, int half_step,
+                                         int x_origin,
+                                         int y_step, int y_origin,
+                                         int *out_scroll_x, int *out_scroll_y);
+
 #endif /* OPENLORDS2_ENGINE_CAMERA_H */

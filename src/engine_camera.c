@@ -58,3 +58,39 @@ void engine_camera_clamp_anchor(int *x, int *y)
         *y = 0x42;
     }
 }
+
+void engine_camera_compute_scroll_pixels(int map_ready,
+                                         int scroll_col, int scroll_row,
+                                         int col_base, int row_subpos,
+                                         int x_step, int half_step,
+                                         int x_origin,
+                                         int y_step, int y_origin,
+                                         int *out_scroll_x, int *out_scroll_y)
+{
+    CALL_TRACE_ENTER(0x0042a15f);
+    /* Port of FUN_0042a15f @ 0x42a15f (206 B).  Converts the current
+     * strategic-map cell-scroll position into the back-buffer pixel
+     * origin (_DAT_0050a4a8 / DAT_0050a4ac), gated on the absolute cell
+     * lying within the 64-wide × 128-tall map.
+     *
+     * The gate mixes axes the way retail does: the column bound tests
+     * (col_base + scroll_col), the row bound tests (scroll_row +
+     * row_subpos) — but the pixel math uses col_base / row_subpos only.
+     * When the gate fails, retail leaves both outputs untouched (they
+     * keep last frame's value); mirrored here by not writing.
+     *
+     * The odd-row half-step subtraction is the staggered/isometric map's
+     * brick-laid row offset. */
+    if (map_ready != 0
+        && -1 < scroll_row + row_subpos
+        && scroll_row + row_subpos < 0x81
+        && -1 < col_base + scroll_col
+        && col_base + scroll_col < 0x41) {
+        int sx = (col_base * x_step - half_step) + x_origin;
+        if ((row_subpos & 1) != 0) {
+            sx -= half_step;
+        }
+        *out_scroll_x = sx;
+        *out_scroll_y = y_step * row_subpos + y_origin;
+    }
+}
