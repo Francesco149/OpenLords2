@@ -7,9 +7,11 @@
 #     --skip-intro --input-trace tools/traces/menu_single_player.jsonl \
 #     --frame-capture --frame-capture-warmup-secs 3 --frame-capture-max 4
 #
-# Coords are client/game 640x480 (1:1).  "Single player" label center is
-# (320,107); neutral corner (610,462).  lParam = (y<<16)|x.  See
-# docs/findings/title-menu-screens.md.
+# Coords are authored in GAME space (640x480); the agent rescales mouse
+# coords to the live window-client viewport before posting (resolution-
+# independent — see rescaleMouseLParamToClient in the frida agent).
+# "Single player" label center is (320,107); neutral park (98,462).
+# lParam = (y<<16)|x.  See docs/findings/title-menu-screens.md.
 {"t": 60, "m": 512, "w": 0, "l": 7012672}
 {"t": 66, "m": 512, "w": 0, "l": 7012672}
 {"t": 70, "m": 513, "w": 1, "l": 7012672}

@@ -113,19 +113,27 @@ drop-in via `--title-nav` (step 3 navigates page 1→2→Play Now→5).
 > cursor-off-the-buttons view.  Porting page 5's input arm (a page-5 hotspot
 > table + the campaign-select action) is the natural next chip.
 
-> ⚠️ **Retail capture of page 5 is currently blocked** (2026-05-29).  The
-> `--input-trace` menu-navigation path no longer drives retail: even the
-> known-good `menu_single_player.jsonl` trace fails to reach page 2 — the
-> page-transition action (`FUN_00432b05`) never fires (verified by
-> call-trace).  Under the default windowed + gdi-seat capture the engine
-> free-runs far above 60 Hz (the render-rate limiter rides on `Sleep`/present,
-> which gdi-seat bypasses; `avg_fps≈100 000`), so posted button down/up edges
-> are coalesced before the engine samples a press edge while the cursor is
-> over the hotspot.  This regressed the previously-working menu capture and
-> needs a harness fix (deterministic per-tick input delivery, or a direct
-> page-global poke) before a fresh page-5 groundtruth + 0-diff check can be
-> taken.  The port reuses the page-1/2 primitives verbatim and the drop-in
-> render is visually faithful (`runs/title-nav-p5/nav_03_p5_playnow.bmp`).
+**Bit-identical to retail — verified (2026-05-29).** The drop-in page-5
+render (`runs/title-nav-p5/nav_03_p5_playnow.bmp`, `--title-nav` step 3,
+neutral) is **0 diff px** vs a fresh retail groundtruth
+(`runs/groundtruth/playnow-retail.bmp`, captured by navigating page
+1→2→Play Now→5 via `tools/traces/menu_play_now.jsonl`).  Both neutral (no
+hover), 307200/307200 identical, `max_channel_delta=0`.
+
+> 🔧 **Harness fix that unblocked this — input-replay viewport rescale.**
+> The `--input-trace` menu navigation had stopped driving retail: clicks
+> landed nowhere because the engine maps the WndProc-cached *client* cursor
+> to game coords by `game = cached * game_extent / viewport_screen_extent`
+> (FUN_004b191e), and under the capture's display path the viewport screen
+> rect is the **desktop resolution** (e.g. `[0,0,1920,1080]`), not 640×480.
+> A 640×480-authored trace coord therefore scaled *down* 3× (e.g. (320,107)
+> → game (105,47)) and missed every hotspot — the page-transition action
+> never fired.  Fix (`rescaleMouseLParamToClient` in the frida agent):
+> pre-multiply replayed mouse coords by `viewport/game_extent` so the
+> engine's own divide lands back on the authored game coord, resolution-
+> independently (no-op when the viewport is already 640×480).  Traces stay
+> authored in game space.  This restored both the page-2 and page-5 captures.
+> (Diagnosed via a temp per-post dump of the cursor/extent/page globals.)
 
 ## Input side — hotspot hit-test + page navigation (`engine_menu_input`)
 

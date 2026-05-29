@@ -2118,6 +2118,30 @@ function resolvePostMessageA() {
     return g_nf_post_message_a;
 }
 
+// Rescale a mouse-message lParam from game space (640x480, the authored
+// trace space) to the current window-client space, so the engine's
+// cached→game divide (game = cached * game_extent / viewport_screen_extent,
+// FUN_004b191e) reproduces the authored game coord regardless of the capture
+// display resolution.  lParam packs signed 16-bit client coords: lo=x, hi=y.
+// Returns the input unchanged when any extent is unreadable / non-positive
+// (degrades to the historical 1:1 assumption).
+function rescaleMouseLParamToClient(l) {
+    let vpw, vph, gw, gh;
+    try {
+        vpw = rva(0x4ea188).readS32() - rva(0x4ea180).readS32();  // x1 - x0
+        vph = rva(0x4ea18c).readS32() - rva(0x4ea184).readS32();  // y1 - y0
+        gw  = rva(0x4eb274).readS32();                            // game extent w
+        gh  = rva(0x4eac4c).readS32();                            // game extent h
+    } catch (e) { return l; }
+    if (vpw <= 0 || vph <= 0 || gw <= 0 || gh <= 0) return l;
+    if (vpw === gw && vph === gh) return l;                       // already 1:1
+    let gx = l & 0xffff;          if (gx & 0x8000) gx -= 0x10000;
+    let gy = (l >>> 16) & 0xffff; if (gy & 0x8000) gy -= 0x10000;
+    const cx = Math.round(gx * vpw / gw) & 0xffff;
+    const cy = Math.round(gy * vph / gh) & 0xffff;
+    return ((cy << 16) | cx) >>> 0;
+}
+
 // Drain all replay events whose stamp <= the current tick. Called from
 // engine_tick.onEnter right after g_tick_count is bumped: posted messages
 // land in the main thread's queue and are picked up by the engine's
@@ -2136,8 +2160,23 @@ function drainInputReplayForTick(tick) {
     while (g_replay_idx < g_input_replay_events.length) {
         const ev = g_input_replay_events[g_replay_idx];
         if (ev.t > tick) break;
+        // Mouse-coordinate rescale: trace coords are authored in game space
+        // (640x480, the engine's logical UI extent, DAT_004eb274/DAT_004eac4c).
+        // The engine maps the WndProc-cached *client* cursor to game coords by
+        //   game = cached * game_extent / viewport_screen_extent
+        // (FUN_004b191e; viewport screen rect = DAT_004ea180..18c).  When the
+        // capture runs at the desktop resolution that screen extent is NOT
+        // 640x480 (e.g. 1920x1080), so a 640x480-space lParam scales down and
+        // misses every hotspot.  Pre-multiply mouse-message coords by
+        // viewport/game so the engine's own divide lands back on the authored
+        // game coord, resolution-independently.  Non-mouse messages pass
+        // through untouched.
+        let lp = ev.l >>> 0;
+        if (ev.m >= WM_MOUSEMOVE && ev.m <= WM_RBUTTONDBLCLK) {
+            lp = rescaleMouseLParamToClient(lp);
+        }
         try {
-            post(hwnd, ev.m >>> 0, ev.w >>> 0, ev.l >>> 0);
+            post(hwnd, ev.m >>> 0, ev.w >>> 0, lp >>> 0);
             g_replay_post_count++;
             send({kind: 'input_replay_post',
                   idx: g_replay_idx,

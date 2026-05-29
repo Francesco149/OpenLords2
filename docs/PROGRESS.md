@@ -47,25 +47,37 @@ the uppercase-highlight quirk, the two buttons over the gateway backdrop
 incl. a fixed screen-dispatch probe that had used page 5 as its
 "unported page" case), all green; full drop-in build clean.
 
-### Blocker (harness, pre-existing)
+### Bit-identical — verified (harness fix: input-replay viewport rescale)
 
-The **retail bit-identical pixel diff is blocked**: the `--input-trace`
-menu-navigation capture no longer drives retail.  Even the known-good
-`menu_single_player.jsonl` trace fails to reach page 2 now — the
-page-transition action `FUN_00432b05` never fires (call-trace confirmed).
-Under the default windowed + gdi-seat capture the engine free-runs at
-~100 000 fps (the render-rate limiter rides on `Sleep`/present, which
-gdi-seat bypasses), so posted button down/up edges get coalesced before the
-engine samples a press edge over the hotspot.  Fix needs deterministic
-per-tick input delivery (or a direct page-global poke) — a harness scope
-separate from this port.  See `findings/title-menu-screens.md`.
+The drop-in page-5 render is **0 diff px** vs a fresh retail groundtruth
+(`runs/groundtruth/playnow-retail.bmp`), 307200/307200 identical,
+`max_channel_delta=0`, both neutral.
+
+Getting the retail capture first required fixing a regressed harness path:
+the `--input-trace` menu navigation had stopped driving retail (clicks
+landed nowhere — the page-transition action never fired).  Root cause found
+by dumping the cursor/extent globals per post: the engine maps the cached
+*client* cursor to game coords by `game = cached * game_extent /
+viewport_screen_extent` (FUN_004b191e), and under the capture's display path
+the viewport screen rect is the **desktop resolution** (`[0,0,1920,1080]`),
+not 640×480 — so a 640×480-authored trace coord scaled *down* 3× ((320,107)
+→ game (105,47)) and missed every hotspot.  Fix
+(`rescaleMouseLParamToClient` in `tools/frida/openlords2-agent.js`):
+pre-multiply replayed mouse coords by `viewport/game_extent` so the engine's
+own divide reproduces the authored game coord, resolution-independently
+(no-op when the viewport is already 640×480).  Traces stay authored in game
+space; this restored both the page-2 and page-5 captures.
+
+(Side note: the stale `options-retail.bmp` groundtruth now shows a ~486-px
+scattered palette diff vs a fresh page-2 capture — it predates the
+full-color-palette-default commit and should be re-captured; not a port
+issue.)
 
 ### Next
 
-Either (a) fix the input-replay/rate path so menu captures navigate again,
-then take the page-5 groundtruth + 0-diff check; or (b) port page 5's input
-arm (page-5 hotspot table + campaign-select action) and/or the remaining
-title pages (3, 4, 6..0xd) the same way.
+Port page 5's input arm (page-5 hotspot table + the campaign-select action)
+so the live menu navigates into/out of it, and/or the remaining title pages
+(3, 4, 6..0xd) the same way.
 
 ---
 
