@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **324** (13.2%) — tested 289, ported 35
-- code bytes touched: **14.0%** (117,369 / 838,629 B)
-- unported: **2123**
+- touched: **325** (13.3%) — tested 290, ported 35
+- code bytes touched: **14.0%** (117,643 / 838,629 B)
+- unported: **2122**
 - orphan refs (in src/, not in function table): 4
 
-## tested (289) — ported + host unit suite
+## tested (290) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -240,6 +240,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4af8d9 | FUN_004af8d9 | 381 | config.c, gfx.c, gfx.h (+3) |
 | 0x4afab9 | FUN_004afab9 | 897 | gfx_panel.c |
 | 0x4afeed | FUN_004afeed | 1214 | gfx_text_label.c, gfx_text_label.h |
+| 0x4b13ed | FUN_004b13ed | 274 | gfx_paint.c, gfx_paint.h |
 | 0x4b191e | FUN_004b191e | 981 | engine.c, engine.h, engine_input.c (+2) |
 | 0x4b20ed | FUN_004b20ed | 68 | engine.c, engine.h, engine_delta.c |
 | 0x4b2258 | FUN_004b2258 | 797 | audio.h, engine.c, engine.h (+2) |

@@ -116,4 +116,12 @@ void gfx_paint_pixel_clipped(int x, int y, uint8_t color);
  * See engine-quirks.md #26. */
 void gfx_paint_2x1_clipped(int x, int y, uint8_t color);
 
+/* Port of `FUN_004b13ed @ 0x4b13ed`.  Darken a w×h canvas rect by
+ * remapping each pixel through a luminance-keyed dark-gray ramp built
+ * from `pal_rgb` (retail DAT_004ea1b0[256*3]): remap[c] =
+ * 0x3f - (((R+G+B)/3) >> 3).  Dims disabled-player roster rows on the
+ * game-setup screen.  No bounds check beyond the canvas binding; no-op
+ * if the canvas or palette is unbound. */
+void gfx_paint_darken_rect(const uint8_t *pal_rgb, int x, int y, int w, int h);
+
 #endif /* OPENLORDS2_GFX_PAINT_H */

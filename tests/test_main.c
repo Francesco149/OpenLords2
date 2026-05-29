@@ -559,6 +559,8 @@ struct test_case {
     X(gfx_paint_2x1_clipped_right_edge_wraps_to_next_row) \
     X(gfx_paint_2x1_clipped_bottom_right_corner_wraps_into_guard) \
     X(gfx_paint_2x1_clipped_y_at_height_drops) \
+    X(gfx_paint_darken_rect_remaps_via_palette) \
+    X(gfx_paint_darken_rect_null_palette_no_crash) \
     X(gfx_paint_bind_then_rebind) \
     \
     X(gfx_glyph_blit_color_fill_skips_zeros) \

@@ -324,6 +324,47 @@ int test_gfx_paint_2x1_clipped_y_at_height_drops(void)
 }
 
 /* ──────────────────────────────────────────────────────────────────
+ * darken rect (FUN_004b13ed)
+ * ────────────────────────────────────────────────────────────────── */
+
+int test_gfx_paint_darken_rect_remaps_via_palette(void)
+{
+    canvas_t c; canvas_init(&c);
+    /* Synthetic palette: entry 1 black (avg 0 → remap 0x3f), entry 2
+     * white (avg 255 → 255>>3=31 → remap 0x3f-0x1f=0x20), entry 3 mid
+     * 0x80 (0x80>>3=0x10 → remap 0x3f-0x10=0x2f). */
+    uint8_t pal[256 * 3];
+    for (int i = 0; i < 256 * 3; i++) pal[i] = 0;
+    pal[2*3+0] = pal[2*3+1] = pal[2*3+2] = 0xff;
+    pal[3*3+0] = pal[3*3+1] = pal[3*3+2] = 0x80;
+
+    /* Seed a 2×2 block at (1,1) with source indices 1,2,3,1. */
+    c.pixels[1 + 1 * CANVAS_W] = 1;
+    c.pixels[2 + 1 * CANVAS_W] = 2;
+    c.pixels[1 + 2 * CANVAS_W] = 3;
+    c.pixels[2 + 2 * CANVAS_W] = 1;
+
+    gfx_paint_darken_rect(pal, 1, 1, 2, 2);
+
+    T_ASSERT_EQ_U(c.pixels[1 + 1 * CANVAS_W], 0x3f);   /* 1 → black  */
+    T_ASSERT_EQ_U(c.pixels[2 + 1 * CANVAS_W], 0x20);   /* 2 → white  */
+    T_ASSERT_EQ_U(c.pixels[1 + 2 * CANVAS_W], 0x2f);   /* 3 → gray   */
+    T_ASSERT_EQ_U(c.pixels[2 + 2 * CANVAS_W], 0x3f);   /* 1 → black  */
+    T_ASSERT_EQ_U(c.pixels[0], 0);                     /* outside rect */
+    T_ASSERT(canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_paint_darken_rect_null_palette_no_crash(void)
+{
+    canvas_t c; canvas_init(&c);
+    c.pixels[0] = 5;
+    gfx_paint_darken_rect(NULL, 0, 0, 2, 2);
+    T_ASSERT_EQ_U(c.pixels[0], 5);   /* unchanged */
+    return 0;
+}
+
+/* ──────────────────────────────────────────────────────────────────
  * bind/unbind
  * ────────────────────────────────────────────────────────────────── */
 
