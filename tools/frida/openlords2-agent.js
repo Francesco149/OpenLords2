@@ -2086,6 +2086,38 @@ function drainInputReplayForTick(tick) {
     }
 }
 
+// ─── controller-liveness watchdog (leak-proofing) ───────────────────────
+//
+// Retail is spawned by the elevated frida-server, so if the controller
+// (frida_capture.py) is SIGKILLed — no finally, no controller-side watchdog
+// can run — the elevated process would leak and be unkillable from non-admin
+// WSL.  Defence: the controller sends a heartbeat() RPC every couple seconds;
+// this in-target watchdog self-terminates retail (ExitProcess) if the
+// heartbeats go silent for g_heartbeat_timeout_ms.  The kill logic lives
+// INSIDE the target, so it survives the controller dying by any means.
+let g_heartbeat_timeout_ms = 0;          // 0 = disabled
+let g_last_heartbeat_ms    = 0;
+let g_heartbeat_armed      = false;
+
+function armHeartbeatWatchdog(timeoutMs) {
+    g_heartbeat_timeout_ms = timeoutMs | 0;
+    g_last_heartbeat_ms    = Date.now();
+    if (g_heartbeat_timeout_ms <= 0 || g_heartbeat_armed) return;
+    g_heartbeat_armed = true;
+    setInterval(function () {
+        if (g_heartbeat_timeout_ms <= 0) return;
+        if ((Date.now() - g_last_heartbeat_ms) <= g_heartbeat_timeout_ms) return;
+        // Controller has gone silent — self-terminate so we don't leak.
+        try {
+            const ep = Module.findExportByName('kernel32.dll', 'ExitProcess');
+            if (ep) {
+                new NativeFunction(ep, 'void', ['uint32'])(0);
+            }
+        } catch (e) { /* nothing left to do if even this fails */ }
+    }, 1000);
+    log('heartbeat watchdog armed (timeout ' + g_heartbeat_timeout_ms + 'ms)');
+}
+
 // ─── call tracer (Phase G.3) ────────────────────────────────────────────
 //
 // When call_trace is enabled the agent hooks every Ghidra-VA in
@@ -4006,6 +4038,10 @@ rpc.exports = {
         }
         g_base = mod.base;
 
+        // Leak-proofing: arm the controller-liveness watchdog first thing, so
+        // even if init throws later the target won't outlive a dead controller.
+        armHeartbeatWatchdog(opts.heartbeat_timeout_ms | 0);
+
         // Always-on hooks: HWND tracking, MessageBox capture, engine-tick
         // anchor (publishes fps_sample even without turbo so the harness
         // can plot a baseline curve).
@@ -4118,6 +4154,14 @@ rpc.exports = {
                 'runRetailTileExpand / runRetailDelayedAction RPCs live; ' +
                 'orchestrator drives test vectors)');
         }
+    },
+
+    // Controller liveness ping — resets the in-target watchdog timer.  If
+    // these stop arriving for g_heartbeat_timeout_ms the agent self-terminates
+    // retail so a dead controller can't leak an elevated process.
+    heartbeat: function () {
+        g_last_heartbeat_ms = Date.now();
+        return true;
     },
 
     // Late-install the call tracer after init (e.g. only once a scenario

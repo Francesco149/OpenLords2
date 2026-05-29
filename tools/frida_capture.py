@@ -299,6 +299,69 @@ def _load_input_trace(path: Path) -> list[dict[str, int]]:
     return out
 
 
+# ─── leak-proofing helpers ─────────────────────────────────────────────────
+#
+# Retail is spawned by the UAC-elevated frida-server, so the spawned process
+# runs ELEVATED and only the frida device can kill it (non-admin WSL kill /
+# taskkill.exe are powerless).  The teardown therefore MUST route every kill
+# through `device.kill`, and must do so even when a fragile synchronous frida
+# RPC (get_gdi_seat_stats / unload / detach) hangs.  These helpers + the
+# watchdog/heartbeat in _run_capture_impl make a leak require BOTH the
+# controller being SIGKILLed AND the in-target heartbeat watchdog being
+# disabled — and even then the next run's pre-reap collects the orphan.
+
+# How long past the run deadline the controller-side watchdog waits for a
+# clean teardown before force-killing the target and hard-exiting.
+WATCHDOG_GRACE_S = 12.0
+# Bound for each individual fragile frida call during teardown.
+TEARDOWN_CALL_TIMEOUT_S = 4.0
+# Controller → agent heartbeat cadence; the agent self-terminates if it goes
+# silent for HEARTBEAT_TIMEOUT_MS (covers the controller being SIGKILLed).
+HEARTBEAT_INTERVAL_S  = 2.0
+HEARTBEAT_TIMEOUT_MS  = 12_000
+
+
+def _call_with_timeout(fn, timeout: float, default=None):
+    """Run `fn()` in a daemon thread; return its result, or `default` if it
+    doesn't finish within `timeout`.  A hung frida RPC can't block teardown."""
+    box: dict = {"v": default, "done": False}
+
+    def _run():
+        try:
+            box["v"] = fn()
+        except Exception:  # noqa: BLE001 — teardown is best-effort
+            pass
+        finally:
+            box["done"] = True
+
+    th = threading.Thread(target=_run, daemon=True)
+    th.start()
+    th.join(timeout)
+    return box["v"] if box["done"] else default
+
+
+def _reap_by_name(device, name: str, f_log) -> list[int]:
+    """Kill any pre-existing process named `name` via the frida device, so a
+    prior leaked (elevated) retail can't accumulate across runs."""
+    killed: list[int] = []
+    try:
+        procs = device.enumerate_processes()
+    except Exception as e:  # noqa: BLE001
+        f_log.write(f"[pre-reap] enumerate failed: {e}\n")
+        return killed
+    nl = name.lower()
+    for p in procs:
+        if p.name.lower() == nl:
+            try:
+                device.kill(p.pid)
+                killed.append(p.pid)
+            except Exception as e:  # noqa: BLE001
+                f_log.write(f"[pre-reap] kill {p.pid} failed: {e}\n")
+    if killed:
+        f_log.write(f"[pre-reap] killed stray {name}: {killed}\n")
+    return killed
+
+
 def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
     agent_log = run_dir / "agent.log"
     f_log = agent_log.open("w", buffering=1)
@@ -537,10 +600,58 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
 
     device = frida.get_device_manager().add_remote_device(cfg.remote)
 
+    # Pre-reap any leftover (elevated) retail from a prior crashed run before
+    # spawning a fresh one — so leaks can't accumulate across runs.
+    _reap_by_name(device, cfg.exe.name, f_log)
+
     session = None
     script  = None
     pid     = None
     exit_code = 0
+
+    pidfile = run_dir / "spawned.pid"
+    # Heartbeat file the detached reaper watches; touched by the heartbeat
+    # thread, deleted on clean teardown.  Its staleness = "controller died".
+    heartbeat_file = run_dir / "controller.alive"
+    teardown_done = threading.Event()
+    # Mutable holder so the watchdog/heartbeat threads see the pid once spawned.
+    wd = {"pid": None}
+    reaper_proc = None
+
+    # Controller-side watchdog: if a clean teardown hasn't completed within the
+    # run duration + grace (e.g. a fragile frida RPC wedged the main thread),
+    # force-kill the target through the device and hard-exit.  Guarantees we
+    # neither leak an elevated retail nor hang the shell.
+    def _watchdog():
+        budget = (cfg.duration_ms / 1000.0) + WATCHDOG_GRACE_S
+        if teardown_done.wait(timeout=budget):
+            return  # clean teardown finished in time
+        p = wd["pid"]
+        if p is not None:
+            try: device.kill(p)
+            except Exception: pass  # noqa: BLE001
+        try:
+            f_log.write("[watchdog] teardown exceeded budget "
+                        f"({budget:.0f}s) — emergency kill pid={p} + exit\n")
+            f_log.flush()
+        except Exception: pass  # noqa: BLE001
+        os._exit(124)
+
+    # Controller→agent heartbeat: the in-target watchdog self-terminates retail
+    # if these stop arriving (covers the controller being SIGKILLed, where no
+    # finally and no controller watchdog can run).
+    def _heartbeat():
+        while not teardown_done.is_set():
+            # Touch the file the detached reaper watches (its staleness is how
+            # the reaper detects controller death) AND ping the in-target
+            # agent watchdog.
+            try: heartbeat_file.touch()
+            except Exception: pass  # noqa: BLE001
+            s = script  # captured by closure; may still be None very early
+            if s is not None:
+                try: s.exports_sync.heartbeat()
+                except Exception: pass  # noqa: BLE001
+            teardown_done.wait(timeout=HEARTBEAT_INTERVAL_S)
 
     # Convert SIGTERM/SIGINT into normal Python exits so the finally block
     # runs and we don't leak orphan retail Lords2.exe processes.
@@ -579,9 +690,39 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "call_trace":                bool(cfg.call_trace),
             "call_trace_vas":            [int(v) for v in cfg.call_trace_vas],
             "call_trace_frames":         [int(v) for v in cfg.call_trace_frames],
+            "heartbeat_timeout_ms":      HEARTBEAT_TIMEOUT_MS,
         }
         script.exports_sync.init(init_cfg)
         device.resume(pid)
+
+        # Record the spawned pid + arm the leak-proofing threads now that the
+        # target is running.
+        wd["pid"] = pid
+        try: pidfile.write_text(str(pid))
+        except Exception: pass  # noqa: BLE001
+        try: heartbeat_file.touch()
+        except Exception: pass  # noqa: BLE001
+        threading.Thread(target=_watchdog,  daemon=True).start()
+        threading.Thread(target=_heartbeat, daemon=True).start()
+
+        # Detached reaper — survives even a SIGKILL of this controller (own
+        # session, not our process group) and reaps the elevated retail if our
+        # heartbeat file goes stale.  This is the only layer that covers the
+        # controller dying without running any of its own cleanup.
+        try:
+            reaper_proc = subprocess.Popen(
+                [sys.executable, str(ROOT / "tools" / "reaper.py"),
+                 "--remote", cfg.remote, "--pid", str(pid),
+                 "--name", cfg.exe.name,
+                 "--heartbeat-file", str(heartbeat_file),
+                 "--log", str(run_dir / "reaper.log"),
+                 "--stale-s", "15",
+                 "--max-life-s", str(cfg.duration_ms / 1000.0 + 120.0)],
+                start_new_session=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            f_log.write(f"[reaper] detached reaper spawned pid={reaper_proc.pid}\n")
+        except Exception as e:  # noqa: BLE001
+            f_log.write(f"[reaper] failed to spawn detached reaper: {e}\n")
 
         deadline = t0 + (cfg.duration_ms / 1000.0)
         while not done.is_set() and time.monotonic() < deadline:
@@ -589,30 +730,63 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
 
         elapsed_ms = int((time.monotonic() - t0) * 1000)
     finally:
-        # Pull seat diagnostic counters before tearing the script down.
-        # Best-effort: if the agent has already crashed the RPC may not
-        # answer.
+        # Every fragile frida call here is bounded by a timeout so a wedged
+        # RPC can't prevent the kill (the bug that leaked two elevated retail
+        # processes: an un-timeout'd get_gdi_seat_stats() hung *before* the
+        # kill).  Diagnostics are best-effort; killing the target is not.
+
+        # Diagnostics first (bounded), while the agent is still attached.
         if script is not None and cfg.gdi_seat:
-            try:
-                stats = script.exports_sync.get_gdi_seat_stats()
+            stats = _call_with_timeout(
+                lambda: script.exports_sync.get_gdi_seat_stats(),
+                TEARDOWN_CALL_TIMEOUT_S)
+            if stats is not None:
                 f_log.write(f"[gdi_seat_stats] {stats}\n")
                 counts["gdi_seat_observed_blts"] = int(stats.get("blt_observed", 0))
                 counts["gdi_seat_skipped_fill"]  = int(stats.get("blt_skipped_fill", 0))
                 counts["gdi_seat_skipped_other"] = int(stats.get("blt_skipped_other", 0))
                 counts["gdi_seat_patched"]       = bool(stats.get("patched", False))
-            except Exception as e:
-                f_log.write(f"[gdi_seat_stats] fetch failed: {e}\n")
-        if script is not None:
-            try: script.unload()
-            except Exception as e: f_log.write(f"[shutdown] script unload: {e}\n")
-        if session is not None:
-            try: session.detach()
-            except Exception as e: f_log.write(f"[shutdown] session detach: {e}\n")
+            else:
+                f_log.write("[gdi_seat_stats] fetch timed out/failed\n")
+
+        # KILL — the one step that must always happen.  Bounded; retried via
+        # a fresh enumerate-by-name pass if the direct pid kill doesn't land
+        # (e.g. the pid is mid-respawn).  Routed through the device because
+        # the elevated retail is unkillable from non-admin WSL.
         if pid is not None:
-            try: device.kill(pid)
-            except Exception as e:
-                f_log.write(f"[shutdown] kill pid={pid}: {e}\n")
-                exit_code = 1
+            ok = _call_with_timeout(
+                lambda: (device.kill(pid), True)[1], TEARDOWN_CALL_TIMEOUT_S,
+                default=False)
+            if not ok:
+                f_log.write(f"[shutdown] direct kill pid={pid} timed out; "
+                            f"reaping by name\n")
+                killed = _call_with_timeout(
+                    lambda: _reap_by_name(device, cfg.exe.name, f_log),
+                    TEARDOWN_CALL_TIMEOUT_S, default=[])
+                if not killed:
+                    f_log.write(f"[shutdown] could not confirm kill of "
+                                f"pid={pid}\n")
+                    exit_code = 1
+
+        # Cleanup of the attach plumbing — best-effort, bounded, AFTER the
+        # kill so a hang here can never leak the target.
+        if script is not None:
+            _call_with_timeout(lambda: script.unload(), TEARDOWN_CALL_TIMEOUT_S)
+        if session is not None:
+            _call_with_timeout(lambda: session.detach(), TEARDOWN_CALL_TIMEOUT_S)
+
+        try: pidfile.unlink()
+        except Exception: pass  # noqa: BLE001
+        # Delete the heartbeat file BEFORE signalling threads — its absence
+        # tells the detached reaper this was a clean teardown (don't kill).
+        try: heartbeat_file.unlink()
+        except Exception: pass  # noqa: BLE001
+        # Signal the watchdog + heartbeat threads that teardown is complete.
+        teardown_done.set()
+        # Reaper should self-exit on the missing heartbeat file; nudge it too.
+        if reaper_proc is not None:
+            try: reaper_proc.terminate()
+            except Exception: pass  # noqa: BLE001
         signal.signal(signal.SIGTERM, prev_term)
         signal.signal(signal.SIGINT,  prev_int)
 
