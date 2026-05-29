@@ -195,13 +195,22 @@ int gfx_init(HWND hwnd, int fullscreen)
     return 1;
 }
 
-void gfx_shutdown(void)
+/* Port of retail FUN_0042eaa6 @ 0x42eaa6 — release the DirectDraw
+ * surfaces (clipper, back, primary) and, when `release_dd` is set, the
+ * IDirectDraw instance itself.  Retail keeps the DD instance alive when
+ * release_dd == 0 so a windowed↔fullscreen mode switch (or a
+ * surface-lost recreate) can rebuild only the surfaces without dropping
+ * DirectDraw.  Always returns 1 (retail's unconditional success code).
+ *
+ * Release order matches retail exactly: clipper → back → primary →
+ * reset back-pitch → (optional) DD instance.  The palette release and
+ * the higher-level state resets live one level up in retail's teardown
+ * chain (FUN_004b28cd), so they stay in gfx_shutdown() rather than
+ * here.  No caller passes release_dd == 0 yet — the surface-only path
+ * is dead until the mode-switch / FUN_004b28cd(0) wrapper lands — but
+ * the gate is ported now so that seam is already in place. */
+static int gfx_release_surfaces(int release_dd)
 {
-    /* Reverse order of creation.  Mirrors FUN_004b28cd cleanup. */
-    if (g_palette) {
-        IDirectDrawPalette_Release(g_palette);
-        g_palette = NULL;
-    }
     if (g_clipper) {
         IDirectDrawClipper_Release(g_clipper);
         g_clipper = NULL;
@@ -214,11 +223,31 @@ void gfx_shutdown(void)
         IDirectDrawSurface_Release(g_primary);
         g_primary = NULL;
     }
-    if (g_dd) {
+    g_back_pitch = 0;
+
+    if (release_dd && g_dd) {
         IDirectDraw_Release(g_dd);
         g_dd = NULL;
+        /* retail: FUN_004afab9(0x4d51dc, 0, 0) — the status.txt
+         * teardown log line.  Routed through log_line until the
+         * structured status logger (FUN_004afab9) is ported; the exact
+         * retail string lives only in the Ghidra DB.  Same disposition
+         * as the deferred FUN_004b26b8 log in gfx_restore(). */
+        log_line("OK :GFX DirectDraw released.");
     }
-    g_back_pitch = 0;
+    return 1;
+}
+
+void gfx_shutdown(void)
+{
+    /* Reverse order of creation.  The surface + DD teardown is retail's
+     * FUN_0042eaa6(1); the palette release and the state resets below
+     * are the wrapper work from FUN_004b28cd. */
+    if (g_palette) {
+        IDirectDrawPalette_Release(g_palette);
+        g_palette = NULL;
+    }
+    gfx_release_surfaces(1);
     g_primary_lockable = 0;
     g_hwnd = NULL;
     g_surface_lost_latch = 0;

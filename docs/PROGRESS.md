@@ -7,6 +7,91 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — gfx teardown primitive (FUN_0042eaa6) + the scalar-global ownership wall
+
+Short porting session that landed one clean frontier leaf and then ran
+head-first into the structural blocker gating the rest of the
+gameplay-leaf frontier.  Worth reading the **finding** below before the
+next session picks a target — it explains why the "knock out the
+order-1/2 mechanical leaves" plan from the prior dispatch only yielded
+one chip.
+
+### What landed
+
+- **`FUN_0042eaa6` @ 0x42eaa6 → `src/gfx.c`** (order-2 frontier leaf,
+  214 B).  The retail DirectDraw teardown primitive: release clipper /
+  back / primary, reset back-pitch, and *conditionally* release the
+  IDirectDraw instance (gated on `param_1`).  Ported as a static
+  `gfx_release_surfaces(int release_dd)`; `gfx_shutdown()` now wraps it
+  (palette release + state resets stay in the wrapper, matching retail's
+  one-level-up `FUN_004b28cd`).  The `release_dd == 0` path — surfaces
+  released but DD kept alive for a mode-switch / surface-lost recreate —
+  is faithfully gated but **dead today** (no caller passes 0 until
+  `FUN_004b28cd(0)` / the mode-switch wrapper lands).  The retail
+  status-logger call `FUN_004afab9(0x4d51dc, …)` is routed through
+  `log_line` with a TODO; the exact string lives only in the Ghidra DB.
+  Ledger: **313 touched (12.8%)**.  gfx.c is Win32-only (excluded from
+  the host suite) — verified by clean cross-compile, no host test.
+
+### The finding — why the rest of the order-1/2 leaves are blocked
+
+The prior dispatch nominated four mechanical leaves
+(`0x41423f`, `0x42eaa6`, `0x4360f2`, `0x49bbe8`).  Only `0x42eaa6`
+ported cleanly.  Surveying the other three (and the "most-wanted"
+`0x4af502`, and the `49bbe8` byte-pair cluster) surfaced three distinct
+blockers — but one dominates the whole gameplay layer:
+
+1. **No-op stubs with no live caller** (`0x41423f`, `0x45242b`,
+   `0x4b1dd5`) — their only callers are scaffold-only functions
+   (`engine_tick`).  Porting them standalone wires into nothing; they
+   want to land *with* their caller's body, not before it.
+
+2. **The IO chdir-back `0x4af502`** is part of the tier-2/3 retry chain
+   that STATUS deliberately defers.  Its "7 ported callers" reference it
+   in retail, but our ports only implemented tier-1, so none actually
+   invoke it.  Not premature-to-port-but-dead; just dead.
+
+3. **★ The scalar-global ownership wall.**  `0x4360f2`, the `49bbe8`
+   roster cluster, and most gameplay leaves read/write engine globals
+   that the save system has already modelled — as **202 save-private
+   `static uint32_t s_slot_<va>` mirrors** in the generated
+   `src/save_schema_table.h` (included only by `save.c`).  Example:
+   the roster count `DAT_0053e8a4` *is* save schema entry 141
+   (`s_slot_0053e8a4`).  Porting `FUN_0049bbe8` (which increments that
+   count) would create a *second, competing* storage location — runtime
+   writes would not be what the save system serialises.  Silent
+   save/load desync.  So **any gameplay leaf touching a scalar-tail
+   global is blocked until those scalars get a shared runtime home.**
+
+   Note the asymmetry: the **13 big blocks** (`g_player_strategic_352`,
+   `g_per_army_768`, …) *are* already shared (extern in `save.h`,
+   defined in `save.c`) — which is why the render-phase leaves that read
+   them (battlefield / overlay) ported fine.  It is specifically the
+   202 *scalar* tail entries that are save-private.
+
+This is the dominant Phase-6 (sim / strategic gameplay) blocker and a
+genuine architecture decision — deferred to the user (see the prompt at
+session end).  The openrecet/OpenMare sibling likely already has a
+runtime-vs-save global convention worth mirroring.
+
+### Next candidate milestones
+
+1. **Resolve the scalar-global ownership model** (user decision pending)
+   — promote the 202 `s_slot_<va>` mirrors to shared externs via the
+   generator, vs. a named-global accessor layer, vs. continue deferring.
+   This unblocks the entire gameplay-leaf frontier in one stroke.
+2. Once unblocked, the `49bbe8`/`49bc1d`/`49bc5f` player-roster trio is a
+   clean, testable first chip (6-entry seat→army-id table + count;
+   `49bc5f` reads two `g_player_strategic_352` flags; the 3 KB consumer
+   `FUN_0049bd99` stays deferred).
+3. The no-op stubs (`0x41423f` etc.) land naturally when `engine_tick`'s
+   body ports — don't port them ahead of their callers.
+
+(`/clear` is appropriate after the architecture decision — the next
+scope is fresh.)
+
+---
+
 ## 2026-05-29 — Project audit + meta-infrastructure (Opus 4.8 cutover); derived port ledger, frontier backlog, enforced hooks
 
 First session under Opus 4.8 (superseding 4.7).  No engine code ported

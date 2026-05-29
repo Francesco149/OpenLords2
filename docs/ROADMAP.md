@@ -11,14 +11,22 @@
 struct or several globals · `hard` = jump table / float math / unknown layout.
 **order:** 1 = port first … 5 = defer.
 
+> ⚠️ **Scalar-global wall (2026-05-29):** leaves tagged `[scalar-blocked]`
+> read/write engine globals that exist only as save-private
+> `static s_slot_<va>` mirrors in `src/save_schema_table.h` (202 of them).
+> Porting them now creates storage that desyncs from the save system —
+> see PROGRESS 2026-05-29.  Blocked until the runtime-global ownership
+> model is decided.  Leaves touching only the 13 *shared* big blocks
+> (extern in `save.h`) or gfx.c-owned DAT mirrors are unaffected.
+
 | ord | VA | size | callers | difficulty | subsystem | → target module |
 |:---:|----|-----:|:-------:|------------|-----------|-----------------|
-| 1 | `0x41423f` | 11 | 1 | mechanical | render-quad / blit primitives | `src/gfx.c` |
-| 2 | `0x42eaa6` | 214 | 2 | mechanical | gfx | `src/gfx.c` |
+| 1 | `0x41423f` | 11 | 1 | mechanical | render-quad / blit primitives | `src/gfx.c` — *port with `engine_tick` body* |
+| ✅ | `0x42eaa6` | 214 | 2 | mechanical | gfx | **DONE** → `gfx.c` `gfx_release_surfaces` (2026-05-29) |
 | 2 | `0x49caaa` | 935 | 2 | moderate | npc-schedule | `src/engine_npc_schedule.c` |
-| 2 | `0x4360f2` | 41 | 1 | mechanical | stage/post-load + char tables | `src/engine.c` |
-| 2 | `0x49bbe8` | 53 | 1 | mechanical | castle-army-setup | `src/engine_castle_data.c` |
-| 3 | `0x4af502` | 72 | 7 | mechanical | io-helpers | `src/io.c` |
+| 2 | `0x4360f2` | 41 | 1 | mechanical | stage/post-load + char tables | `src/engine.c` `[scalar-blocked]` |
+| 2 | `0x49bbe8` | 53 | 1 | mechanical | castle-army-setup | `src/engine_castle_data.c` `[scalar-blocked]` (count = entry 141) |
+| 3 | `0x4af502` | 72 | 7 | mechanical | io-helpers | `src/io.c` — *tier-2/3 deferred; dead today* |
 | 3 | `0x4c0580` | 25 | 2 | mechanical | memory-management | `src/io.c` |
 | 3 | `0x42e26f` | 41 | 2 | mechanical | smacker-playback | `src/engine_smacker.c` |
 | 3 | `0x42f58c` | 130 | 2 | moderate | graphics-gfx | `src/gfx.c` |

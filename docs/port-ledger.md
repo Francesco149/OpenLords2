@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **312** (12.8%) — tested 272, ported 40
-- code bytes touched: **13.6%** (114,190 / 838,629 B)
-- unported: **2135**
+- touched: **313** (12.8%) — tested 272, ported 41
+- code bytes touched: **13.6%** (114,404 / 838,629 B)
+- unported: **2134**
 - orphan refs (in src/, not in function table): 3
 
 ## tested (272) — ported + host unit suite
@@ -220,7 +220,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4af675 | FUN_004af675 | 84 | strutil.h |
 | 0x4af6c9 | FUN_004af6c9 | 67 | strutil.h |
 | 0x4af8d9 | FUN_004af8d9 | 381 | config.c, gfx.c, io.c (+2) |
-| 0x4afab9 | FUN_004afab9 | 897 | engine_battlefield_render.c, engine_battlefield_render.h, gfx_sprite_render.c (+3) |
+| 0x4afab9 | FUN_004afab9 | 897 | engine_battlefield_render.c, engine_battlefield_render.h, gfx.c (+4) |
 | 0x4afe3a | FUN_004afe3a | 179 | gfx_sprite_render.h |
 | 0x4afeed | FUN_004afeed | 1214 | gfx_text_label.c, gfx_text_label.h |
 | 0x4b049b | FUN_004b049b | 103 | gfx_sprite_render.h |
@@ -294,7 +294,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4c2090 | FUN_004c2090 | 224 | strutil.h |
 
-## ported (40) — reimplemented, no host test yet
+## ported (41) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -307,6 +307,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x427d19 | FUN_00427d19 | 89 | audio.c |
 | 0x427d72 | FUN_00427d72 | 340 | audio.c |
 | 0x42e5c0 | FUN_0042e5c0 | 1249 | gfx.c, gfx.h |
+| 0x42eaa6 | FUN_0042eaa6 | 214 | gfx.c |
 | 0x42eb7c | FUN_0042eb7c | 277 | gfx.c, gfx.h |
 | 0x42f148 | FUN_0042f148 | 151 | gfx.c |
 | 0x42f306 | FUN_0042f306 | 323 | gfx.c |
@@ -336,6 +337,6 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b0e03 | FUN_004b0e03 | 875 | engine.c |
 | 0x4b12fb | FUN_004b12fb | 21 | engine.c |
 | 0x4b1de0 | FUN_004b1de0 | 11 | engine.c |
-| 0x4b26b8 | FUN_004b26b8 | 64 | engine.c |
+| 0x4b26b8 | FUN_004b26b8 | 64 | engine.c, gfx.c |
 | 0x4b284e | FUN_004b284e | 122 | gfx.h |
 

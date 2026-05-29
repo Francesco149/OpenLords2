@@ -5,14 +5,14 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 272,
-  "ported": 40,
-  "unported": 2135,
+  "ported": 41,
+  "unported": 2134,
   "orphan_refs_not_in_function_table": 3,
-  "touched": 312,
+  "touched": 313,
   "pct_touched": 12.8,
   "pct_tested": 11.1,
   "bytes_total": 838629,
-  "bytes_touched": 114190,
+  "bytes_touched": 114404,
   "pct_bytes_touched": 13.6
  },
  "orphan_refs": [
@@ -4221,8 +4221,10 @@
    "name": "FUN_0042eaa6",
    "size": 214,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gfx.c"
+   ]
   },
   {
    "va": "0x42eb7c",
@@ -16362,6 +16364,7 @@
    "src": [
     "src/engine_battlefield_render.c",
     "src/engine_battlefield_render.h",
+    "src/gfx.c",
     "src/gfx_sprite_render.c",
     "src/gfx_sprite_render.h",
     "src/gfx_text_label.c",
@@ -16929,7 +16932,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/gfx.c"
    ]
   },
   {
