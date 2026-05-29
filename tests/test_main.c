@@ -1182,6 +1182,14 @@ struct test_case {
     X(territory_leaves_other_fields_untouched) \
     X(territory_does_not_touch_record_151) \
     X(territory_unbound_is_noop) \
+    \
+    X(mp_indicator_renders_and_keeps_timer_before_10s) \
+    X(mp_indicator_clears_timer_after_10s_still_renders) \
+    X(mp_indicator_inactive_no_render_no_clear) \
+    X(mp_indicator_zero_timer_no_render) \
+    X(mp_indicator_exactly_10s_not_yet_cleared) \
+    X(mp_status_line_attempts_sprite_render) \
+    X(mp_status_line_no_crash_runs_clean) \
     /* end */
 
 /* Emit extern decls. */

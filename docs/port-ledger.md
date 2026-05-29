@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **281** (11.5%) — tested 251, ported 30
-- code bytes touched: **10.5%** (88,059 / 838,629 B)
-- unported: **2166**
+- touched: **283** (11.6%) — tested 253, ported 30
+- code bytes touched: **10.5%** (88,275 / 838,629 B)
+- unported: **2164**
 - orphan refs (in src/, not in function table): 3
 
-## tested (251) — ported + host unit suite
+## tested (253) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -125,6 +125,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40ecc4 | FUN_0040ecc4 | 1099 | config.c, config.h, strutil.h |
 | 0x41ea14 | FUN_0041ea14 | 143 | engine_title_render.c, engine_title_render.h |
 | 0x41eaa3 | FUN_0041eaa3 | 487 | engine_title_render.c, engine_title_render.h |
+| 0x41f15a | FUN_0041f15a | 131 | engine_mp_render.c, engine_mp_render.h |
+| 0x423b4f | FUN_00423b4f | 85 | engine_mp_render.c, engine_mp_render.h |
 | 0x425d35 | FUN_00425d35 | 184 | main.c |
 | 0x4290d0 | FUN_004290d0 | 131 | engine_category_buckets.c, engine_category_buckets.h |
 | 0x429153 | FUN_00429153 | 96 | engine_category_buckets.h |
@@ -234,7 +236,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b49b7 | FUN_004b49b7 | 64 | engine_battlefield_render.c, gfx_sprite.c, gfx_sprite.h |
 | 0x4b49f7 | FUN_004b49f7 | 705 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b5333 | FUN_004b5333 | 2997 | gfx_sprite.c, gfx_sprite.h |
-| 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+3) |
+| 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+4) |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c |
 | 0x4bb978 | FUN_004bb978 | 614 | engine.c, engine.h, engine_rate.c |
 | 0x4bbc80 | FUN_004bbc80 | 465 | engine.c, engine.h, engine_phase.c |
