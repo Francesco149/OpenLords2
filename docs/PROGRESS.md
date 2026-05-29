@@ -7,6 +7,62 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — main-menu render chain ported end-to-end (10-chip push)
+
+Autonomous session: ported 10 more functions (12 incl. the earlier
+root+buttons), all host-tested, both builds clean throughout.  Coverage
+276 → 293 touched (11.3% → 12.0%), suite 1070 → 1121 (+51 tests).
+
+### Chips landed (each its own commit)
+
+1. `FUN_0046d2a3` → `engine_map_query_region_clear` — 64×64 grid
+   "footprint clear?" predicate (bound descriptor grid).
+2. `FUN_0042a15f` → `engine_camera_compute_scroll_pixels` — cell-scroll →
+   pixel-origin with the staggered odd-row half-step.
+3. `FUN_004651b9` → `engine_territory_clear_size_state` — per-territory
+   +0x14c/+0x153 byte reset (records 1..150).
+4/5. `FUN_0041f15a` / `FUN_00423b4f` → `engine_mp_render` — the two MP
+   render-phase overlays (player-indicator timer + status line).
+6/7/8. `FUN_0040946d` / `FUN_004097c5` / `FUN_00409346` → `gfx_panel` —
+   the tiled stone-panel renderer (9-patch border + interior fill +
+   wrapper).  The low-level PL8 tile blitters were already ported in
+   gfx_sprite.c, so this is pure orchestration over the gfx_glyph/
+   gfx_dispatch sprite+clip state.
+9. `FUN_0041e7e1` → `engine_title_render_scene` — title-scene dispatch
+   (bg hook + page dispatch + finalize + scene flags).
+10. `FUN_0040f1a0` → `engine_screen_dispatch` — top-level screen switch
+   (title arm wired; other ~40 arms hooked).
+
+**The main-menu render chain now exists end-to-end in src:**
+`engine_screen_dispatch(0x1f)` → `engine_title_render_scene` →
+background + `gfx_panel` + title/subtitle text + buttons → finalize.
+
+### What still gates the first visible menu pixel (next session)
+
+1. **Wire the chain into the live render path** — `engine_tick`'s
+   render phase (engine.c) needs the demand-redraw seam:
+   `if (DAT_0057d340 != 0) engine_screen_dispatch(DAT_004eac50,
+   DAT_005530f0, DAT_0057d340)`.  Needs those globals owned/mirrored in
+   engine.c (DAT_0057d340 is currently only referenced in comments —
+   free to own; DAT_004eac50 is gfx_text's language tag).
+2. **The bg + asset long pole** — `FUN_0041e61d` (background blit) +
+   the PL8 loader `FUN_004af8d9` populating `DAT_004eabec` (panel) /
+   `DAT_004ea8a0` (palette).  This is the real remaining work; bind the
+   loaded panel asset into `engine_title_render` + `gfx_panel` and the
+   bg hook into `engine_title_render_scene`.
+3. **Deferred-stub bindings to wire** — `engine_title_render`'s panel
+   hook → `gfx_panel_draw` (signatures match: `(asset,x,y,cols,rows)`);
+   the bg hook → the ported `FUN_0041e61d` once it lands.
+4. **State track** (for faithful behaviour, not just bring-up) — the
+   menu state tick `FUN_0042ff10` (input → page/selection,
+   `DAT_00553114`, sets `DAT_0057d340`) + the boot→title transition
+   `FUN_0042b780`.  See the step-1 RE in the chip plan.
+
+**Deferred to a checkpoint:** visual parity vs
+`runs/groundtruth/mainmenu-retail.bmp` once the chain is wired + assets
+load.  Per-chip ports are host-tested but no pixels render in the exe
+until (1)+(2) land.
+
 ## 2026-05-29 — main-menu composition ported (root + buttons), DDraw panel deferred
 
 Landed the first render chips off the corrected plan: the main-menu
