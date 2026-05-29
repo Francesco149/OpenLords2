@@ -3,8 +3,9 @@
  * call topology and the retail provenance of each piece.
  *
  * Ports: FUN_0040e5e7 (hover), FUN_0040e3ee (click dispatch),
- * FUN_00432b05 (page-1 action), FUN_00432cc8 (page-2 action), and the
- * pages-1/2 arm of FUN_004ba9c8 (per-page input dispatcher).
+ * FUN_00432b05 (page-1 action), FUN_00432cc8 (page-2 action),
+ * FUN_00433461 (page-5 campaign-select action), and the pages-1/2/5 arm of
+ * FUN_004ba9c8 (per-page input dispatcher).
  */
 
 #include <stddef.h>
@@ -159,6 +160,28 @@ static void menu_action_page2(int param)
     }
 }
 
+/* Port of FUN_00433461 — the page-5 ("Play Now!" campaign chooser) click
+ * action.  Both buttons share it; `param` selects the campaign and it
+ * advances to the page-4 setup screen ("Choose your title and your shield"):
+ *   0 = Original campaign  (DAT_0053f258 = 0)
+ *   1 = The new campaign   (DAT_0053f258 = 2)
+ * The chosen campaign is recorded in the shared save-schema scalars
+ * DAT_0053f640 / DAT_0053f258 (read later by the unported game-setup path);
+ * DAT_0055302c = 1 marks the full-game substate. */
+static void menu_action_page5(int param)
+{
+    engine_title_render_set_page(4);          /* DAT_005530f0 = 4 */
+    g_redraw_fn(2);                           /* DAT_0057d340 = 2 */
+    g_loadlist_dir_flag = 1;                  /* DAT_0057d320 = 1 */
+    s_slot_0055302c     = 1;                  /* DAT_0055302c = 1 */
+    s_slot_0053f640     = param;              /* DAT_0053f640 = campaign id */
+    s_slot_0053f258     = (param == 1) ? 2 : 0;   /* DAT_0053f258 */
+    /* TODO(transition/audio): retail also runs the 0x402009 fade, a
+     * camera/scroll reset (0x427d19), the 0x401f49 + _DAT_005533f0=1 setup,
+     * and the s011_02.wav cue (0x427990) — deferred like the page-2
+     * transitions; the page change + campaign scalars are faithful. */
+}
+
 /* ─── hit-test primitives ────────────────────────────────────────── */
 
 /* Half-open box test shared by hover + click (retail inlines the same
@@ -246,6 +269,15 @@ static const engine_menu_hotspot_t k_page2_hotspots[5] = {
     { 0xe0, 0xeb, 0x1a0, 0x103, menu_action_page2, 1, 4 },  /* Back.       */
 };
 
+/* Page 5 ("Play Now!" campaign chooser, retail DAT_004dccf8) — 2 buttons,
+ * both firing menu_action_page5 on the press edge.  Boxes match the
+ * rendered side-by-side buttons (left x∈[0x70,0x110), right x∈[0x170,0x210);
+ * y∈[0x76,0x8e)).  Params: 0 = Original campaign, 1 = The new campaign. */
+static const engine_menu_hotspot_t k_page5_hotspots[2] = {
+    { 0x70,  0x76, 0x110, 0x8e, menu_action_page5, 1, 0 },  /* Original campaign */
+    { 0x170, 0x76, 0x210, 0x8e, menu_action_page5, 1, 1 },  /* The new campaign  */
+};
+
 /* ─── per-page dispatcher (FUN_004ba9c8, 0x1f arm) ───────────────── */
 
 int engine_menu_title_input(const engine_menu_click_in_t *in)
@@ -263,6 +295,12 @@ int engine_menu_title_input(const engine_menu_click_in_t *in)
             return 1;
         engine_title_render_set_selected_button(
             engine_menu_hotspot_hover(0, 0, k_page2_hotspots, 5,
+                                      in->cursor_x, in->cursor_y));
+    } else if (page == 5) {
+        if (engine_menu_hotspot_click(0, 0, k_page5_hotspots, 2, in))
+            return 1;
+        engine_title_render_set_selected_button(
+            engine_menu_hotspot_hover(0, 0, k_page5_hotspots, 2,
                                       in->cursor_x, in->cursor_y));
     }
     return 0;

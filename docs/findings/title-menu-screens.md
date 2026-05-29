@@ -106,12 +106,18 @@ shapes with page-5 geometry + entry-0x27 strings.  Landed in
 it (and the per-frame refresh re-renders its buttons).  Driveable in the
 drop-in via `--title-nav` (step 3 navigates page 1→2→Play Now→5).
 
-> ⚠️ **No ported hover arm yet.** `engine_menu_title_input` handles only
-> pages 1/2; on page 5 the selected-button highlight stays frozen at
-> whatever the page-2 click frame left it.  The `--title-nav` bring-up sets
-> it to 0 (neutral) before capturing page 5, mirroring retail's
-> cursor-off-the-buttons view.  Porting page 5's input arm (a page-5 hotspot
-> table + the campaign-select action) is the natural next chip.
+**Page-5 input arm — ported.** `engine_menu_title_input` now handles page 5
+(retail `FUN_004ba9c8` page-5 arm): the 2-entry hotspot table `DAT_004dccf8`
+(left "Original campaign" box [0x70,0x76]–[0x110,0x8e] param 0 / right "The
+new campaign" box [0x170,0x76]–[0x210,0x8e] param 1, both press-edge) drives
+hover (→ `DAT_00553114`) and the click action `FUN_00433461`
+(`menu_action_page5`).  The action records the campaign in the shared
+save-schema scalars **`DAT_0053f640` = param** and **`DAT_0053f258` = 2 (new)
+/ 0 (original)**, sets `DAT_0055302c = 1` (full-game substate), and advances
+to **page 4** ("Choose your title and your shield").  The fade / camera-reset
+/ `s011_02.wav` cue side-effects are deferred behind TODOs like the page-2
+transitions.  Host-tested; page 4's *render* is still the next chip (today
+the page-4 transition lands on the deferred page hook).
 
 **Bit-identical to retail — verified (2026-05-29).** The drop-in page-5
 render (`runs/title-nav-p5/nav_03_p5_playnow.bmp`, `--title-nav` step 3,
@@ -191,6 +197,7 @@ emits each frame.
 | 2    | Play Now!      | page 5                             |
 | 2    | Load a game    | file-list page 3                   |
 | 2    | Custom / Skirmish | page 4 (substate `DAT_0055302c` 2 / 3) |
+| 5    | Original / New campaign | page 4 (`DAT_0053f640`=0/1, `DAT_0053f258`=0/2, `DAT_0055302c`=1) |
 
 Each transition also sets the demand-redraw cookie `DAT_0057d340 = 2`. The
 click actions' *other* side-effects — MP bring-up (0x4978ad/0x4b7250),

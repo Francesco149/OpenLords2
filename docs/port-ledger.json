@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 272,
+  "tested": 273,
   "ported": 34,
-  "unported": 2141,
+  "unported": 2140,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 306,
+  "touched": 307,
   "pct_touched": 12.5,
-  "pct_tested": 11.1,
+  "pct_tested": 11.2,
   "bytes_total": 838629,
-  "bytes_touched": 110108,
-  "pct_bytes_touched": 13.1
+  "bytes_touched": 110316,
+  "pct_bytes_touched": 13.2
  },
  "orphan_refs": [
   "0x004148",
@@ -4577,8 +4577,10 @@
    "name": "FUN_00433461",
    "size": 208,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_menu_input.c"
+   ]
   },
   {
    "va": "0x433551",

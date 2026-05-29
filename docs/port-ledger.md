@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **306** (12.5%) — tested 272, ported 34
-- code bytes touched: **13.1%** (110,108 / 838,629 B)
-- unported: **2141**
+- touched: **307** (12.5%) — tested 273, ported 34
+- code bytes touched: **13.2%** (110,316 / 838,629 B)
+- unported: **2140**
 - orphan refs (in src/, not in function table): 4
 
-## tested (272) — ported + host unit suite
+## tested (273) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -154,6 +154,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42f1df | FUN_0042f1df | 295 | gfx.c, main.c |
 | 0x432b05 | FUN_00432b05 | 451 | engine_menu_input.c, engine_menu_input.h |
 | 0x432cc8 | FUN_00432cc8 | 526 | engine_menu_input.c |
+| 0x433461 | FUN_00433461 | 208 | engine_menu_input.c |
 | 0x4343f8 | FUN_004343f8 | 36 | main.c |
 | 0x43de70 | FUN_0043de70 | 1211 | engine.c, engine.h, engine_rate.c |
 | 0x43e330 | FUN_0043e330 | 259 | engine.c, engine.h, engine_rate.c (+1) |

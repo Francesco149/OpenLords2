@@ -7,6 +7,32 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — MENU INPUT: page-5 campaign chooser navigates
+
+The page-5 ("Play Now!" campaign chooser) **input** arm now matches its
+render half — the two buttons hit-test and click-dispatch like pages 1/2.
+
+`engine_menu_input.c` grew the page-5 hotspot table (retail `DAT_004dccf8`,
+2 entries: left "Original campaign" param 0 / right "The new campaign" param
+1, both press-edge), the `page == 5` dispatcher arm, and `menu_action_page5`
+(port of `FUN_00433461`): it records the campaign choice in the shared
+save-schema scalars `DAT_0053f640` (= param) / `DAT_0053f258` (= 2 new / 0
+original), sets `DAT_0055302c = 1` (full-game substate), and advances to
+**page 4** ("Choose your title and your shield").  The fade / camera-reset /
+`s011_02.wav` side-effects are deferred behind TODOs, as with the page-2
+transitions.  3 new host tests (1158 → 1161), all green; drop-in build clean.
+The arm rides the existing `engine_tick_menu_input_step` seam, so a real
+mouse navigates into page 5 once the live menu is up (`--title-live`).
+
+### Next
+
+Port page 4's **render** ("Choose your title and your shield" — the
+custom/scenario setup screen, `FUN_0041ef57` + `FUN_0041f321`/`FUN_0041f1dd`),
+so the page-5 → page-4 transition lands on a real screen instead of the
+deferred page hook; then page 3 (load list) and the remaining pages.
+
+---
+
 ## 2026-05-29 — NEXT SCREEN: "Play Now!" campaign chooser (title page 5)
 
 The fifth title page — the **"Play Now!" expansion-pack campaign chooser**

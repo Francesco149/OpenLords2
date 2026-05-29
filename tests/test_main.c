@@ -1200,6 +1200,9 @@ struct test_case {
     X(menu_page2_back_returns_to_page1) \
     X(menu_page2_play_now_goes_to_page5) \
     X(menu_page2_load_goes_to_filelist_page3) \
+    X(menu_page5_original_campaign_goes_to_page4) \
+    X(menu_page5_new_campaign_goes_to_page4) \
+    X(menu_page5_hover_updates_highlight) \
     X(menu_title_input_updates_hover_highlight) \
     X(menu_title_input_hover_off_buttons_clears_highlight) \
     X(menu_title_input_click_does_not_refresh_hover) \

@@ -12,8 +12,13 @@
 #include "t.h"
 #include "engine_menu_input.h"
 #include "engine_title_render.h"
+#include "save_schema_globals.h"   /* s_slot_0053f640 / _0053f258 / _0055302c */
 
 #include <string.h>
+
+/* Page-5 ("Play Now!" campaign chooser) button centres — two side-by-side
+ * boxes (left x∈[0x70,0x110), right x∈[0x170,0x210); y∈[0x76,0x8e)). */
+enum { P5_LEFT_X = 0xc0, P5_RIGHT_X = 0x1d0, P5_Y = 0x82 };
 
 /* Geometry shared by both pages: x in [0xe0, 0x1a0), rows step 0x24
  * starting at y=0x5b (height 0x18 → row N spans [0x5b+N*0x24, +0x18)). */
@@ -230,6 +235,58 @@ int test_menu_page2_load_goes_to_filelist_page3(void)
     in.lmb_newly_pressed = 1;
     T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
     T_ASSERT_EQ_I(engine_title_render_page(), 3);
+    return 0;
+}
+
+/* ── page 5 ("Play Now!" campaign chooser, FUN_00433461) ────────── */
+
+int test_menu_page5_original_campaign_goes_to_page4(void)
+{
+    mi_reset();
+    engine_title_render_set_page(5);
+    s_slot_0053f640 = 0xdead; s_slot_0053f258 = 0xdead; s_slot_0055302c = 0;
+    engine_menu_click_in_t in = at(P5_LEFT_X, P5_Y);   /* "Original campaign" */
+    in.lmb_newly_pressed = 1;
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_page(), 4);       /* → setup screen */
+    T_ASSERT_EQ_I(engine_menu_input_last_redraw_mode(), 2);
+    T_ASSERT_EQ_U(s_slot_0053f640, 0);                  /* campaign 0 */
+    T_ASSERT_EQ_U(s_slot_0053f258, 0);                  /* original */
+    T_ASSERT_EQ_U(s_slot_0055302c, 1);                  /* full-game substate */
+    return 0;
+}
+
+int test_menu_page5_new_campaign_goes_to_page4(void)
+{
+    mi_reset();
+    engine_title_render_set_page(5);
+    s_slot_0053f640 = 0xdead; s_slot_0053f258 = 0xdead;
+    engine_menu_click_in_t in = at(P5_RIGHT_X, P5_Y);   /* "The new campaign" */
+    in.lmb_newly_pressed = 1;
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_page(), 4);
+    T_ASSERT_EQ_U(s_slot_0053f640, 1);                  /* campaign 1 */
+    T_ASSERT_EQ_U(s_slot_0053f258, 2);                  /* new campaign */
+    return 0;
+}
+
+int test_menu_page5_hover_updates_highlight(void)
+{
+    mi_reset();
+    engine_title_render_set_page(5);
+    engine_title_render_set_selected_button(0);
+    /* Hover (no press) over the right button → selection 2. */
+    engine_menu_click_in_t in = at(P5_RIGHT_X, P5_Y);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 0);
+    T_ASSERT_EQ_I(engine_title_render_selected_button(), 2);
+    /* Move to the left button → selection 1. */
+    engine_menu_click_in_t in2 = at(P5_LEFT_X, P5_Y);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in2), 0);
+    T_ASSERT_EQ_I(engine_title_render_selected_button(), 1);
+    /* Off both buttons → cleared. */
+    engine_menu_click_in_t in3 = at(P5_LEFT_X, 0x200);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in3), 0);
+    T_ASSERT_EQ_I(engine_title_render_selected_button(), 0);
     return 0;
 }
 
