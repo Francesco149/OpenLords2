@@ -159,7 +159,7 @@ const save_entry_t g_save_schema[SAVE_SCHEMA_COUNT] = {
     { &s_slot_0056d648           ,      4 }, /* 137  retail 0x0056d648 */
     { s_slot_00567970            ,     96 }, /* 138  retail 0x00567970 */
     { s_slot_00569518            ,      6 }, /* 139  retail 0x00569518 */
-    { s_slot_00568db0            ,      6 }, /* 140  retail 0x00568db0 */
+    { g_player_roster            ,      6 }, /* 140  retail 0x00568db0 */
     { &s_slot_0053e8a4           ,      4 }, /* 141  retail 0x0053e8a4 */
     { &s_slot_00553f38           ,      4 }, /* 142  retail 0x00553f38 */
     { &s_slot_00553fbc           ,      4 }, /* 143  retail 0x00553fbc */

@@ -3779,6 +3779,65 @@ lower-then-upper test order.
 
 ---
 
+## 105. Player roster persists 6 bytes but the runtime uses 12
+
+The player roster at retail `0x568db0` is a table of 6 interleaved
+`{army-id, seat}` byte pairs (12 B), indexed by seat 0..5.  The producer
+`FUN_0049bbe8` writes pair `seat` and the clear `FUN_0049bc1d` zeroes all
+six pairs — so the live structure is unambiguously 12 bytes.
+
+But the save schema (entry 140, retail `DAT_004de960[140]`) records this
+slot with **size 6** — it persists only the leading three pairs.  Loading
+a save therefore restores pairs 0..2 and leaves pairs 3..5 at whatever
+they held (zero after a fresh `player_roster_clear`, or stale from a
+prior scenario).  This is retail behaviour, not a port artifact: the
+retail schema entry is genuinely 6 bytes wide.
+
+In the port this forces the roster storage to be *larger* than its
+persisted slot.  `g_player_roster[12]` is hand-owned in `save.h`/`save.c`
+(not emitted as a generated scalar global), and `gen_save_schema.py`
+points schema row 140 at its first 6 bytes — so the `.sav` byte-stream is
+byte-identical to retail while the runtime gets all six pairs.
+
+> 📍 `src/engine_roster.c`, `src/save.c` (`g_player_roster`),
+> `tools/gen_save_schema.py` (NAMED_BIG_BLOCKS entry 140),
+> Ghidra `FUN_0049bbe8` / `FUN_0049bc1d`.
+
+---
+
+## 106. Roster compaction cannot remove its last slot (non-convergent)
+
+`FUN_0049bc5f` compacts the roster by dropping any pair whose seat index
+exceeds the active-player count, shifting later pairs down:
+
+```c
+for (i = 1; i < 6; i++)
+    if (active < pair[i].seat) {
+        for (j = i; j < 5; j++) pair[j] = pair[j + 1];   /* shift down */
+        changed = 1;
+    }
+```
+
+The shift copies `pair[j+1]` into `pair[j]` for `j = i..4`, so when the
+offending entry is at index 5 the inner loop (`j = 5; j < 5`) runs zero
+times — nothing moves, `pair[5]` is untouched — yet `changed` is still
+set.  The outer pass loop reruns while `changed` is true, re-detects the
+same index-5 entry every pass, and only stops when it hits its hard
+**6-pass cap**.  The out-of-range entry survives as a trailing duplicate.
+
+This is harmless in practice: the consumer (`FUN_0049bd99`, deferred)
+reads only the front `active` entries, so a stale tail is never seen.
+But the surviving bytes are part of the persisted slot, so the port
+reproduces the cap-bounded non-convergence verbatim rather than looping
+to a clean fixpoint.  The `active=0` case is the extreme: every front
+pair collapses to a copy of the stale `pair[5]` over the six passes.
+
+> 📍 `src/engine_roster.c` (`player_roster_compact`),
+> test `roster_compact_non_convergent_tail_survives`,
+> Ghidra `FUN_0049bc5f` lines 74394+.
+
+---
+
 <!--
 Template for new entries:
 

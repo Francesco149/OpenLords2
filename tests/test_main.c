@@ -1116,6 +1116,18 @@ struct test_case {
     X(engine_camera_anchor_both_axes_independent) \
     X(engine_camera_anchor_asymmetric_bounds_pinned) \
     X(engine_camera_anchor_idempotent) \
+    X(roster_add_writes_pair_and_bumps_count) \
+    X(roster_add_seat_zero_does_not_bump_count) \
+    X(roster_add_max_seat_index) \
+    X(roster_add_count_accumulates_over_calls) \
+    X(roster_clear_zeroes_all_pairs_keeps_count) \
+    X(roster_compact_all_in_range_unchanged) \
+    X(roster_compact_empty_roster_unchanged) \
+    X(roster_compact_removes_single_out_of_range_entry) \
+    X(roster_compact_cascade_shift_drops_middle_entry) \
+    X(roster_compact_non_convergent_tail_survives) \
+    X(roster_compact_active_count_uses_bf07_flag) \
+    X(roster_compact_no_active_players_drops_all_nonzero_seats) \
     /* end */
 
 /* Emit extern decls. */

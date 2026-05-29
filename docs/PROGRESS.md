@@ -7,6 +7,70 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — player-roster trio (first gameplay chip past the scalar wall)
+
+The first sim/strategic-gameplay functions land now that the scalar
+wall is down.  The roster trio scoped in the prior dispatch ported
+cleanly, both wrinkles handled as planned.
+
+### What landed
+
+- **`FUN_0049bbe8` / `FUN_0049bc1d` / `FUN_0049bc5f` → `src/engine_roster.c`**
+  (3 funcs, 433 B).  The player roster: a 6-pair `{army-id, seat}` table
+  keyed by seat, a participant counter, and a compactor.
+  - `player_roster_add(id, seat)` — write pair[seat], bump the count when
+    seat != 0.
+  - `player_roster_clear()` — zero all 6 pairs (not the count).
+  - `player_roster_compact()` — drop pairs whose seat index exceeds the
+    active-player count (seats 1..5 with a `g_player_strategic_352`
+    occupancy flag at +5 or +7), shifting later pairs down.
+  Host-tested (12 cases, suite 1035→1047); both builds clean.  Ledger
+  **316 touched (12.9%)**.
+
+### The two scoped wrinkles, resolved
+
+1. **6-vs-12-byte split (quirk #105).**  Runtime structure is 12 B (6
+   pairs); save schema entry 140 persists only the leading 6 B.  Handled
+   by promoting `0x568db0` to a **hand-owned `g_player_roster[12]`** in
+   `save.h`/`save.c` and adding it to the generator's `NAMED_BIG_BLOCKS`
+   with the CSV size 6 — so schema row 140 serialises just the first six
+   bytes (byte-identical `.sav` to retail) while the runtime gets all
+   six pairs.  No generator size-override needed: the 12 lives purely in
+   the hand-written extern; the named-block size stays the CSV's 6 and
+   passes the assert.  This is the one named block declared *larger* than
+   its schema slot.  The count `0x53e8a4` stays a generated scalar,
+   `#define`-aliased as `g_player_roster_count` in the roster header.
+
+2. **Non-convergent compaction (quirk #106).**  The shift cannot remove
+   the index-5 entry (its inner loop runs zero times), so an out-of-range
+   seat-5 pair keeps `changed` true and spins the pass loop to its 6-pass
+   cap, surviving as a trailing duplicate.  Ported verbatim and pinned by
+   `roster_compact_non_convergent_tail_survives` (plus the `active=0`
+   extreme, where the front pairs collapse to copies of `pair[5]`).
+
+### Ledger-honesty note
+
+The generator marks any `FUN_<va>` token in `src/` as touched.  Initial
+comments cited the deferred 3 KB consumer by token (`FUN_0049bd99`),
+which falsely promoted it to "tested" (+3063 B).  Demoted neighbour
+references to bare hex (`0x49bd99`, `0x467770`) — the `FUN_<va>` token is
+now reserved for functions actually ported.  Worth watching for in
+future ports: a passing mention of a deferred callee inflates the ledger.
+
+### Next candidate milestones
+
+1. More gameplay leaves now that the wall is down — survey the
+   call-graph frontier (`docs/port-frontier.md`) for the next clean
+   order-1/2 chip that reads only already-shared globals.
+2. The deferred 3 KB consumer `FUN_0049bd99` (reads the compacted roster)
+   stays deferred until its own frontier triage.
+3. No-op stubs (`0x41423f` etc.) still land with `engine_tick`'s body,
+   not ahead of it.
+
+(`/clear` is appropriate here — fresh scope for the next chip.)
+
+---
+
 ## 2026-05-29 — gfx teardown primitive (FUN_0042eaa6) + the scalar-global ownership wall
 
 Short porting session that landed one clean frontier leaf and then ran

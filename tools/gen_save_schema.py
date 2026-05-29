@@ -66,6 +66,15 @@ NAMED_BIG_BLOCKS = [
     # a single 160 B buffer in save.c; the g_footprint_list /
     # g_last_footprint_tile names are macros over it (see save.h).
     (110, 0x00553c80,   160, "g_footprint_storage_160"),
+    # Player roster (seat -> army-id pairs).  The CSV size below is the
+    # *persisted* size (6 B = first 3 {id,seat} pairs); the runtime
+    # structure is 12 B (6 pairs) — see engine_roster.c.  The hand-owned
+    # extern g_player_roster[12] in save.h is larger than this slot, and
+    # the schema row serialises only its leading 6 bytes (faithful to
+    # retail, whose save table at 0x568db0 also only persists 6 B).  The
+    # tuple's size stays 6 so the CSV-match assert below passes; the 12 B
+    # is purely in the hand-written extern.
+    (140, 0x00568db0,     6, "g_player_roster"),
 ]
 
 def main():

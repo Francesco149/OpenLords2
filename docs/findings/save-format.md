@@ -93,6 +93,28 @@ schema serialises.  Promote a slot to a friendly name via the
 generator's `NAMED_BIG_BLOCKS` list, or `#define`-alias it in the owning
 subsystem's header.
 
+### Player roster (entries 140/141)
+
+Two adjacent trailing slots back the strategic-layer player roster
+(ported as `src/engine_roster.c`):
+
+- **Entry 140** (`0x568db0`, **size 6**) — the roster table.  Runtime it
+  is **12 bytes**: 6 interleaved `{army-id, seat}` pairs indexed by seat
+  0..5.  The schema persists only the leading 6 bytes (first 3 pairs);
+  the rest is runtime-only state — quirk #105.  Because the runtime
+  structure exceeds its persisted slot, the storage is **hand-owned** as
+  `g_player_roster[12]` in `save.h`/`save.c` (a `NAMED_BIG_BLOCKS` entry
+  with the CSV size 6, so the generated row 140 serialises just the first
+  six bytes).  This is the one named block whose declared size is *larger*
+  than its schema slot.
+- **Entry 141** (`0x53e8a4`, size 4, u32) — `g_player_roster_count`, the
+  count of roster entries added with a non-zero seat.  Stays a generated
+  scalar (`s_slot_0053e8a4`); `engine_roster.h` `#define`-aliases it.
+
+The producers (`player_roster_add`, `player_roster_clear`) run during
+scenario/map load; `player_roster_compact` runs once at new-game setup
+and has the non-convergent 6-pass tail of quirk #106.
+
 ### Reserved/sentinel slots (entries 216..224)
 
 The last 9 entries all point to `DAT_004eb2ac` (a 4-byte scratch

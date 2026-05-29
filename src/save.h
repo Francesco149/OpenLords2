@@ -56,6 +56,14 @@ extern uint8_t g_player_strategic_352[2112];    /* entry 3  retail 0x57bf00  (6 
 extern uint8_t g_per_army_768[13056];           /* entry 4  retail 0x53f9b0  (17 × 768 B — 16 used + slot 0) */
 extern uint8_t g_per_territory_420[63420];      /* entry 5  retail 0x52f0b0  (151 × 420 B — 150 territories + slot 0) */
 extern uint8_t g_unit_table_20[260];            /* entry 6  retail 0x568dc0  (13 × 20 B — unit/army types?) */
+/* Player roster — 6 interleaved {army-id, seat} byte pairs (12 B),
+ * indexed by seat 0..5.  RUNTIME size is 12; the save schema (entry 140,
+ * retail 0x568db0) persists only the leading 6 B — i.e. the first 3
+ * pairs — exactly as retail does.  Storage is hand-owned here (not in
+ * the generated scalar globals) because it must exceed its persisted
+ * slot; gen_save_schema.py points schema row 140 at the first 6 bytes.
+ * See engine_roster.c for the producers/compactor. */
+extern uint8_t g_player_roster[12];
 extern uint8_t g_per_battle_hex_432[34992];     /* entry 7  retail 0x554480  (81 × 432 B — 80 battle hexes + slot 0) */
 extern uint8_t g_per_combat_unit_76[7676];      /* entry 8  retail 0x57a100  (101 × 76 B — 100 combat units + slot 0) */
 extern uint8_t g_per_battle_hex_aux_52[4212];   /* entry 9  retail 0x566520  (81 × 52 B — 80 battle hexes + slot 0) */

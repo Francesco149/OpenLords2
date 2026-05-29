@@ -175,7 +175,6 @@ extern uint32_t s_slot_005689a8;         /* entry  50 */
 extern uint32_t s_slot_00568da0;         /* entry 164 */
 extern uint32_t s_slot_00568da4;         /* entry 127 */
 extern uint32_t s_slot_00568da8;         /* entry  67 */
-extern uint8_t  s_slot_00568db0[6];      /* entry 140 */
 extern uint32_t s_slot_00569504;         /* entry 116 */
 extern uint8_t  s_slot_00569518[6];      /* entry 139 */
 extern uint32_t s_slot_00569584;         /* entry  73 */

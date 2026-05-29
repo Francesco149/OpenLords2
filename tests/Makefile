@@ -54,6 +54,7 @@ SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c \
                    ../src/engine_overlay_render.c \
                    ../src/engine_battlefield_render.c \
                    ../src/engine_camera.c \
+                   ../src/engine_roster.c \
                    ../src/save.c \
                    ../src/save_schema_globals.c
 
@@ -89,6 +90,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_overlay_render.c \
                    test_engine_battlefield_render.c \
                    test_engine_camera.c \
+                   test_engine_roster.c \
                    test_save.c
 
 OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o)) \

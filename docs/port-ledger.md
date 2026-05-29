@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **313** (12.8%) — tested 272, ported 41
-- code bytes touched: **13.6%** (114,404 / 838,629 B)
-- unported: **2134**
+- touched: **316** (12.9%) — tested 275, ported 41
+- code bytes touched: **13.7%** (114,837 / 838,629 B)
+- unported: **2131**
 - orphan refs (in src/, not in function table): 3
 
-## tested (272) — ported + host unit suite
+## tested (275) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -202,6 +202,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4987b7 | FUN_004987b7 | 1536 | engine_battlefield_render.h |
 | 0x498dcb | FUN_00498dcb | 488 | engine_battlefield_render.h |
 | 0x49aa0e | FUN_0049aa0e | 2197 | engine_handlers_da.h |
+| 0x49bbe8 | FUN_0049bbe8 | 53 | engine_roster.c, engine_roster.h |
+| 0x49bc1d | FUN_0049bc1d | 66 | engine_roster.c, engine_roster.h |
+| 0x49bc5f | FUN_0049bc5f | 314 | engine_roster.c, engine_roster.h |
 | 0x49d1e0 | FUN_0049d1e0 | 1024 | engine_handlers_da.h |
 | 0x4ade93 | FUN_004ade93 | 339 | save.c, save.h |
 | 0x4adfe6 | FUN_004adfe6 | 377 | save.c, save.h |

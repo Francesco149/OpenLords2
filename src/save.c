@@ -47,6 +47,10 @@ uint8_t  g_stage_scratch         [6400];
  * save.h. */
 uint8_t g_footprint_storage_160  [160];
 
+/* Player roster (schema slot 140 at 0x568db0).  12 B runtime, only the
+ * leading 6 B persisted — see save.h / engine_roster.c. */
+uint8_t g_player_roster          [ 12];
+
 /* Pulls in the scalar-tail storage + the schema table. */
 #include "save_schema_table.h"
 
