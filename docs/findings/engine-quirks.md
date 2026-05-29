@@ -4116,6 +4116,31 @@ captured with `--no-force-windowed`).
 
 ---
 
+## 116. The page-4 name box is no-shadow in the full render but SHADOWED at steady state
+
+`FUN_0041ef57` (the page-4 "Choose your title and your shield" full
+render) brackets the name box + shield row in no-shadow mode
+(`DAT_005aea40 = 1` before `FUN_0041f321`, back to `0` after).  But the
+per-tick title-update ladder also calls `FUN_0041f321` *standalone* every
+frame — outside that bracket — so the name text is re-rendered with
+`DAT_005aea40 == 0` (shadow ON): foreground glyph at `cursor_y`, plus the
+drop-shadow passes at `cursor_y ± 1`.  Any captured retail frame is the
+steady-state refresh, so its name text carries a shadow the one-shot full
+render omits.
+
+Found by diffing the drop-in page-4 render against retail: a 191-px
+residual confined to the name-text rows, where retail had an extra dark
+top row (the `cursor_y-1` shadow pass) the no-shadow port lacked.  The
+fix mirrors retail's ladder: a page-4 refresh
+(`engine_title_render_refresh_choose_title`) re-renders the name box with
+shadow on, applied once after the full render for the parity capture.
+
+> 📍 `src/engine_title_render.c` (`engine_title_render_refresh_choose_title`),
+> `docs/findings/title-menu-screens.md` §"Choose your title…",
+> Ghidra `FUN_0041ef57` / `FUN_0041f321` / `FUN_00402637`.
+
+---
+
 <!--
 Template for new entries:
 

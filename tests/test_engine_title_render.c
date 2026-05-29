@@ -617,3 +617,176 @@ int test_title_page_selector_roundtrips(void)
     T_ASSERT_EQ_I(engine_title_render_page(), 0);
     return 0;
 }
+
+/* ──────────────────────────────────────────────────────────────────
+ * Page 4 — "Choose your title and your shield" (FUN_0041ef57 +
+ * FUN_0041f321 / FUN_0041f1dd / FUN_0041f01f).
+ *
+ * The name-box frame (sprite 0xcc) and the five shields (0xcd/0xcf/…
+ * + ring 0xd7) blit from the bound panel asset, so the page-4 tests
+ * swap in a real sprite blob with valid descriptors for those indices.
+ * Each touched sprite is a 4×4 block of the marker byte 0x77; tests
+ * assert the marker lands at the retail blit positions.
+ * ────────────────────────────────────────────────────────────────── */
+
+#define P4_MARK 0x77
+static uint8_t g_p4_blob[8 + 0xd8 * 16 + 256];
+
+static void p4_blob_init(void)
+{
+    memset(g_p4_blob, 0, sizeof g_p4_blob);
+    const int pix_off = 8 + 0xd8 * 16;
+    for (int i = 0; i < 64; i++) g_p4_blob[pix_off + i] = P4_MARK;
+    /* Touched sprite indices: box 0xcc, shields 0xcd/0xcf/0xd1/0xd3/0xd5,
+     * ring 0xd7.  Give each a valid 4×4 descriptor. */
+    const int idxs[] = {0xcc, 0xcd, 0xcf, 0xd1, 0xd3, 0xd5, 0xd7};
+    for (unsigned k = 0; k < sizeof idxs / sizeof idxs[0]; k++) {
+        uint8_t *slot = g_p4_blob + idxs[k] * 16 + 8;
+        slot[0] = 4;  slot[1] = 0;       /* width  = 4 */
+        slot[2] = 4;  slot[3] = 0;       /* height short = 4 (opaque rows) */
+        slot[4] = (uint8_t)(pix_off & 0xff);
+        slot[5] = (uint8_t)((pix_off >> 8) & 0xff);
+        slot[6] = (uint8_t)((pix_off >> 16) & 0xff);
+        slot[7] = (uint8_t)((pix_off >> 24) & 0xff);
+        slot[0xd] = 4;                   /* row_count = 4 (transparent rows) */
+    }
+}
+
+static text_input_state_t g_p4_test_editor;
+
+static void p4_setup(void)
+{
+    title_reset();
+    p4_blob_init();
+    engine_title_render_bind_panel_asset(g_p4_blob);
+
+    static const unsigned char slots[6] = {0, 1, 0, 0, 0, 0};
+    engine_title_render_set_choose_title_gates(0, 0);
+    engine_title_render_set_choose_title_continue_disabled(0);
+    engine_title_render_set_choose_title_shields(slots, 1, 1, 0);
+
+    static const uint8_t name[] = "aaa";
+    memset(&g_p4_test_editor, 0, sizeof g_p4_test_editor);
+    g_p4_test_editor.buf[0] = 'a';
+    engine_title_render_set_choose_title_name(name);
+    engine_title_render_set_choose_title_editor(&g_p4_test_editor);
+    engine_title_render_bind_caret_metrics_table(&g_table[0]);
+}
+
+static int marker_at(int x, int y) { return g_canvas[x + y * CANVAS_W] == P4_MARK; }
+
+int test_title_choose_title_panel_tall_when_gate_a_zero(void)
+{
+    p4_setup();
+    g_cap_calls = 0;
+    engine_title_render_bind_panel_fn(capture_panel);
+    engine_title_render_choose_title();
+
+    /* FUN_00409346(asset, 0x50, 10, 0x1e, 0x10) — tall layout. */
+    T_ASSERT_EQ_I(g_cap_calls, 1);
+    T_ASSERT_EQ_I(g_cap_p2, 0x50);
+    T_ASSERT_EQ_I(g_cap_p3, 10);
+    T_ASSERT_EQ_I(g_cap_p4, 0x1e);
+    T_ASSERT_EQ_I(g_cap_p5, 0x10);
+    return 0;
+}
+
+int test_title_choose_title_panel_short_when_gated_off(void)
+{
+    p4_setup();
+    engine_title_render_set_choose_title_gates(1, 0);   /* a!=0 && b==0 → short */
+    g_cap_calls = 0;
+    engine_title_render_bind_panel_fn(capture_panel);
+    engine_title_render_choose_title();
+
+    T_ASSERT_EQ_I(g_cap_p5, 0xe);   /* short panel */
+    /* No Back/Continue button row → no bevel-rect palette colors. */
+    T_ASSERT_EQ_I(canvas_color_count(0x35), 0);
+    T_ASSERT_EQ_I(canvas_color_count(0x28), 0);
+    return 0;
+}
+
+int test_title_choose_title_name_box_blits_frame(void)
+{
+    p4_setup();
+    engine_title_render_choose_title();
+    /* Opaque box sprite 0xcc at (0xd0, 0x48), 4×4. */
+    T_ASSERT(marker_at(0xd0, 0x48));
+    T_ASSERT(marker_at(0xd3, 0x4b));
+    return 0;
+}
+
+int test_title_choose_title_shields_blit_five_positions(void)
+{
+    p4_setup();
+    engine_title_render_choose_title();
+    /* Five shields at x = (i-1)*0x58 + 0x70, y = 0x8c. */
+    for (int i = 1; i <= 5; i++) {
+        int x = (i - 1) * 0x58 + 0x70;
+        T_ASSERT(marker_at(x, 0x8c));
+    }
+    /* Selected slot 1 (flash on, timer 0) also blits the ring 0xd7 at
+     * (0x74, 0x70). */
+    T_ASSERT(marker_at(0x74, 0x70));
+    return 0;
+}
+
+int test_title_choose_title_selected_flash_off_skips_ring(void)
+{
+    p4_setup();
+    /* flash_timer != 0 → the selected slot's ring + sprite are skipped. */
+    static const unsigned char slots[6] = {0, 1, 0, 0, 0, 0};
+    engine_title_render_set_choose_title_shields(slots, 1, 1, /*timer=*/5);
+    engine_title_render_choose_title();
+    T_ASSERT(!marker_at(0x74, 0x70));      /* no ring */
+    T_ASSERT(!marker_at(0x70, 0x8c));      /* slot 1 sprite skipped too */
+    /* Other (empty) slots still draw. */
+    T_ASSERT(marker_at(0xc8, 0x8c));
+    return 0;
+}
+
+int test_title_choose_title_buttons_back_highlight(void)
+{
+    p4_setup();
+    engine_title_render_set_selected_button(6);   /* Back is select id 6 */
+    engine_title_render_choose_title();
+    /* Back label highlight 0xf9 in the left button x-range at row 0xdc. */
+    T_ASSERT(row_color_count_x(0xdc, 0xf9, 0x70, 0x70 + 0xc0) > 0);
+    /* Continue not highlighted. */
+    T_ASSERT_EQ_I(row_color_count_x(0xdc, 0xf9, 0x150, 0x150 + 0xc0), 0);
+    return 0;
+}
+
+int test_title_choose_title_continue_dim_when_disabled(void)
+{
+    p4_setup();
+    engine_title_render_set_choose_title_continue_disabled(1);  /* → 0x20 */
+    engine_title_render_set_selected_button(0);                 /* neutral */
+    engine_title_render_choose_title();
+    /* Continue label drawn dim (0x20) in the right button x-range. */
+    T_ASSERT(row_color_count_x(0xdc, 0x20, 0x150, 0x150 + 0xc0) > 0);
+    return 0;
+}
+
+int test_title_choose_title_buttons_two_bevel_rects(void)
+{
+    p4_setup();
+    engine_title_render_choose_title();
+    /* Back + Continue bevel rects → palette-b colors present. */
+    T_ASSERT(canvas_color_count(0x35) > 0);
+    T_ASSERT(canvas_color_count(0x28) > 0);
+    return 0;
+}
+
+int test_title_choose_title_scene_routes_page_4(void)
+{
+    p4_setup();
+    g_cap_calls = 0;
+    engine_title_render_bind_panel_fn(capture_panel);
+    engine_title_render_set_page(4);
+    engine_title_render_scene(0x1f, 4);
+    /* The page-4 renderer ran (panel with the page-4 args). */
+    T_ASSERT_EQ_I(g_cap_calls, 1);
+    T_ASSERT_EQ_I(g_cap_p2, 0x50);
+    return 0;
+}

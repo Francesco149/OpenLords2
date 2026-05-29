@@ -69,6 +69,7 @@
 #include "gfx_dispatch.h"
 #include "gfx_glyph.h"
 #include "gfx_glyph_table.h"
+#include "gfx_caret.h"
 #include "gfx_panel.h"
 #include "gfx_text.h"
 
@@ -934,6 +935,52 @@ static void bringup_title_nav(const char *dir)
     wsprintfA(path, "%s\\nav_03_p%d_playnow.bmp", dir, engine_title_render_page());
     gfx_capture_backbuffer(path);
     log_line("title-nav: clicked Single player → Play Now! → page %d → %s",
+             engine_title_render_page(), path);
+
+    /* Step 4 — page 4, "Choose your title and your shield" (the Custom-
+     * game setup screen).  The page-2 → page-4 transition action and the
+     * name/shield defaults are seeded by save-load / indirect writes the
+     * decompile doesn't spell out, so rather than drive the (unported)
+     * input arm we force the page with the exact retail state captured via
+     * `frida_capture.py --dump-globals` (run gt-p4-state): name "aaaaaa  ",
+     * shield slot 1 selected (flash on, timer 0), gates 0/0 (tall layout +
+     * Back/Continue), Continue enabled, overwrite-mode editor at cursor 0.
+     * The caret is reset so the single static render lands it in the
+     * off-phase, matching the mid-blink-off groundtruth frame. */
+    static const uint8_t k_p4_name[] = "aaaaaa    ";   /* DAT_0053f1e0 */
+    static const unsigned char k_p4_shield_slots[6] = {0, 1, 0, 0, 0, 0};
+    static text_input_state_t k_p4_editor;             /* DAT_005cd550 */
+    for (int i = 0; i < (int)sizeof k_p4_name; i++)
+        k_p4_editor.buf[i] = k_p4_name[i];
+    k_p4_editor.cursor = 0;
+    k_p4_editor.insert_mode = 0;
+
+    engine_title_render_set_choose_title_gates(0, 0);
+    engine_title_render_set_choose_title_continue_disabled(0);
+    engine_title_render_set_choose_title_shields(k_p4_shield_slots,
+                                                 /*selected=*/1,
+                                                 /*flash=*/1,
+                                                 /*flash_timer=*/0);
+    engine_title_render_set_choose_title_name(k_p4_name);
+    engine_title_render_set_choose_title_editor(&k_p4_editor);
+    engine_title_render_bind_caret_metrics_table(gfx_glyph_measure_map());
+    gfx_caret_reset();
+    engine_title_render_set_selected_button(0);    /* neutral capture */
+
+    engine_title_render_set_page(4);
+    title_render_current_page();
+    /* Steady state: the per-frame title-update ladder re-renders the name
+     * box every tick with the text shadow ON (FUN_0041f321 standalone, not
+     * inside FUN_0041ef57's no-shadow bracket).  A captured retail frame
+     * shows that shadowed name box, so reproduce it here before capture. */
+    if (gfx_lock_canvas()) {
+        engine_title_render_refresh_choose_title();
+        gfx_unlock_canvas();
+    }
+    wsprintfA(path, "%s\\nav_04_p%d_choosetitle.bmp", dir,
+              engine_title_render_page());
+    gfx_capture_backbuffer(path);
+    log_line("title-nav: forced page %d (choose title) → %s",
              engine_title_render_page(), path);
 }
 

@@ -21,7 +21,7 @@ Two parallel dispatch ladders run while `DAT_004eac50 == 0x1f`:
 | 1   | `FUN_0041ea14` | `FUN_0041eaa3` | **Main menu** — Single player / Multiple players / Lords of Magic? / Exit game |
 | 2   | `FUN_0041ec8a` | `FUN_0041ece6` | **"Your options"** (single-player) — Play Now! / Load a game / Skirmish! / Custom game / Back |
 | 3   | `FUN_0041ef42` | …            | (sub-screen) |
-| 4   | `FUN_0041ef57` | `FUN_0041f321`+ | (sub-screen) |
+| 4   | `FUN_0041ef57` | `FUN_0041f321`+ | **"Choose your title and your shield"** — name box + 5 shields + Back/Continue (ported) |
 | 5   | `FUN_0041f592` | `FUN_0041f5e8` | **"Play Now!" campaign chooser** — Original campaign / The new campaign (ported) |
 | 6   | `FUN_0041f3e9` | `FUN_0041f4a1` | (sub-screen) |
 | 7   | `FUN_0041f6c7` | `FUN_0041f98b`+ | (sub-screen) |
@@ -140,6 +140,76 @@ hover), 307200/307200 identical, `max_channel_delta=0`.
 > independently (no-op when the viewport is already 640×480).  Traces stay
 > authored in game space.  This restored both the page-2 and page-5 captures.
 > (Diagnosed via a temp per-post dump of the cursor/extent/page globals.)
+
+## "Choose your title and your shield" (page 4) render — ported
+
+Reached from "Your options" → **Custom game** / **Skirmish!** (page-2
+params 3 / 5, `FUN_00432cc8` → page 4, substate 2 / 3) or from the page-5
+campaign chooser (`FUN_00433461`).  This is the player-setup screen: an
+editable name/title box, a five-shield picker, and a Back/Continue row.
+
+`FUN_0041ef57` (root, 200 B):
+
+```c
+DAT_0058fe2c = 1;                                          // uppercase highlight
+FUN_00409346(asset, 0x50, 10, 0x1e, (gate ? 0x10 : 0xe)); // panel (taller in button layout)
+FUN_00402c5e(0xb, 10, 0x50, 0x23, 0x1e0, &DAT_005b2fa0, 0x3f); // title (entry 0xb sub 10)
+DAT_0058fe2c = 0;
+DAT_005aea40 = 1;                                          // no-shadow ON
+FUN_0041f321();                                            // name box
+FUN_0041f1dd();                                            // 5 shields
+DAT_005aea40 = 0;
+if (gate) FUN_0041f01f();                                  // Back/Continue
+```
+
+where `gate = (DAT_00553030 == 0 || DAT_00553248 != 0)`.
+
+- **`FUN_0041f321`** (name box): opaque box-frame sprite (panels2 index
+  `0xcc`) via the new `FUN_0040a567`/`FUN_004b432e` opaque blit, then the
+  name text (`DAT_0053f1e0`) via the editable-field renderer
+  (`FUN_00402637`), then the blink caret (`FUN_0040acce`).  Caret-anchor
+  bookkeeping: clear the first-pos latch, render with the editor cursor as
+  capture target, fall back to the line-end X if not latched, then shift
+  the caret to the box origin (`+0xd6`) and pin Y at `0x52`.
+- **`FUN_0041f1dd`** (shields): 5 shields at `x = (i-1)*0x58 + 0x70`,
+  `y = 0x8c` (sprites `i*2+0xcb` for empty / selected-flashing slots,
+  `i*2+0xcc` otherwise).  The selected slot, while flashing and outside
+  the blink-off window (`DAT_00568984 == 0`), also draws the highlight
+  ring (sprite `0xd7`) at `(..+0x74, 0x70)`.
+- **`FUN_0041f01f`** (buttons): Back (entry 0xb sub 9, select id **6**) at
+  `(0x70, 0xd7)` and Continue (sub `0xb`, id **7**) at `(0x150, 0xd7)`,
+  both `0xc0×0x18` bevel-`b` rects.  Continue dims to `0x20` when
+  `DAT_0057c940 != 0`, else `0x3f`; highlight `0xf9` on hover.
+
+Landed in `engine_title_render.c` as `engine_title_render_choose_title`
+(+ the name-box/shields/buttons helpers); scene dispatch routes page 4 to
+it.  State (gates, shield slots, selected/flash, name, editor) is bound
+via setters and seeded for bring-up from a `--dump-globals` capture.
+
+**Bit-identical to retail — verified (2026-05-29).** The drop-in page-4
+render (`runs/title-nav-p4/nav_04_p4_choosetitle.bmp`, `--title-nav` step
+4, neutral) is **0 diff px** vs a fresh retail groundtruth
+(`runs/groundtruth/choose-title-retail.bmp`).  307200/307200 identical,
+`max_channel_delta=0`.
+
+> 🔧 **Quirk that cost the last 191 px — the steady-state name box is
+> SHADOWED.**  `FUN_0041ef57` brackets the name box in no-shadow mode
+> (`DAT_005aea40 = 1`), but the per-frame title-update ladder calls
+> `FUN_0041f321` *standalone* every tick — outside that bracket, so with
+> `DAT_005aea40 == 0` (shadow ON, `cursor_y` foreground at `param_3` plus
+> shadow passes at `±1`).  A captured retail frame is the steady-state
+> refresh, so its name text carries the drop-shadow the full-render pass
+> omits.  Reproduced via `engine_title_render_refresh_choose_title`
+> (routed through the page-4 refresh + called once after the full render
+> in the bring-up).  Until that landed the glyphs sat 1 px low and the
+> shadow row was missing — the entire 191-px residual.
+
+> **State captured via `--dump-globals`** (run `gt-p4-state`): name
+> `DAT_0053f1e0 = "aaaaaa    "`; shield slot 1 selected
+> (`DAT_0057cb40[1]=1`, `DAT_0057c8cc=1`, flash `DAT_0057d354=1`, timer
+> `DAT_00568984=0`); gates `DAT_00553030=0` / `DAT_00553248=0` (tall
+> layout, buttons shown); Continue enabled (`DAT_0057c940=0`); overwrite
+> editor at cursor 0; `DAT_005530f0=4`.
 
 ## Input side — hotspot hit-test + page navigation (`engine_menu_input`)
 

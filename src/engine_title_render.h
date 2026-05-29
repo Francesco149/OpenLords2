@@ -63,6 +63,7 @@
 #include <stdint.h>
 
 #include "engine_dirty_rect.h"
+#include "text_input.h"
 
 /* ─────────────────────────────────────────────────────────────────
  * Bindings — install retail globals into this module's statics
@@ -193,6 +194,47 @@ void engine_title_render_play_now(void);
 
 /* Port of FUN_0041f5e8.  Render the two page-5 campaign buttons. */
 void engine_title_render_play_now_buttons(void);
+
+/* Port of FUN_0041ef57.  Render the "Choose your title and your shield"
+ * setup page (page 4): panel + large-font title + the editable name box
+ * (FUN_0041f321), the five-shield selector (FUN_0041f1dd), and — in the
+ * tall layout — the Back/Continue button row (FUN_0041f01f).  Reads the
+ * page-4 state bound via the setters below. */
+void engine_title_render_choose_title(void);
+
+/* Page-4 per-frame refresh (FUN_0041f321 standalone) — re-renders the
+ * name box with the text shadow ON (the steady-state appearance, unlike
+ * the full render which brackets it no-shadow).  Also routed via
+ * engine_title_render_refresh_buttons(4). */
+void engine_title_render_refresh_choose_title(void);
+
+/* ─── page-4 ("Choose your title and your shield") state setters ──
+ * Mirror the retail globals the page-4 render reads; bind before
+ * rendering page 4 (e.g. from the bring-up / state-tick seam). */
+
+/* DAT_00553030 / DAT_00553248 — gating.  (gate_a == 0 || gate_b != 0)
+ * selects the tall panel + Back/Continue row. */
+void engine_title_render_set_choose_title_gates(int gate_a, int gate_b);
+
+/* DAT_0057c940 — Continue-button disable (non-zero → dimmed label). */
+void engine_title_render_set_choose_title_continue_disabled(int disabled);
+
+/* DAT_0057cb40[1..5] / DAT_0057c8cc / DAT_0057d354 / DAT_00568984 —
+ * shield slot ids, selected id, flash flag, flash-off timer. */
+void engine_title_render_set_choose_title_shields(const unsigned char slots[6],
+                                                  int selected,
+                                                  int flash,
+                                                  int flash_timer);
+
+/* DAT_0053f1e0 — the name/title text rendered in the box. */
+void engine_title_render_set_choose_title_name(const uint8_t *name);
+
+/* DAT_005cd550 editor (buffer + cursor + insert mode) read by the
+ * caret; NULL → caret skipped (the textbox still renders). */
+void engine_title_render_set_choose_title_editor(const text_input_state_t *editor);
+
+/* Char→glyph metrics table for the caret's cursor-char width measure. */
+void engine_title_render_bind_caret_metrics_table(const uint8_t *table);
 
 /* Port of the 0x1f arm of FUN_004ba26e — the per-frame button refresh.
  * Re-renders just the current page's buttons (page 1 → buttons, page 2

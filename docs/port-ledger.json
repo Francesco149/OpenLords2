@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 278,
+  "tested": 281,
   "ported": 34,
-  "unported": 2135,
+  "unported": 2132,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 312,
-  "pct_touched": 12.8,
-  "pct_tested": 11.4,
+  "touched": 315,
+  "pct_touched": 12.9,
+  "pct_tested": 11.5,
   "bytes_total": 838629,
-  "bytes_touched": 111451,
-  "pct_bytes_touched": 13.3
+  "bytes_touched": 112290,
+  "pct_bytes_touched": 13.4
  },
  "orphan_refs": [
   "0x004148",
@@ -185,6 +185,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_title_render.c",
     "src/font_metrics.c",
     "src/font_metrics.h",
     "src/gfx_caret.h",
@@ -1521,6 +1522,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_title_render.c",
     "src/gfx_caret.c",
     "src/gfx_caret.h",
     "src/gfx_line.c",
@@ -3088,16 +3090,23 @@
    "name": "FUN_0041ef57",
    "size": 200,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_title_render.c",
+    "src/engine_title_render.h",
+    "src/main.c"
+   ]
   },
   {
    "va": "0x41f01f",
    "name": "FUN_0041f01f",
    "size": 315,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_title_render.c",
+    "src/engine_title_render.h"
+   ]
   },
   {
    "va": "0x41f15a",
@@ -3115,8 +3124,11 @@
    "name": "FUN_0041f1dd",
    "size": 324,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_title_render.c",
+    "src/engine_title_render.h"
+   ]
   },
   {
    "va": "0x41f321",
@@ -3125,10 +3137,13 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_title_render.c",
+    "src/engine_title_render.h",
     "src/gfx_caret.h",
     "src/gfx_sprite.c",
     "src/gfx_text.c",
-    "src/gfx_text.h"
+    "src/gfx_text.h",
+    "src/main.c"
    ]
   },
   {

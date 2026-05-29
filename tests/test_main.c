@@ -1201,6 +1201,15 @@ struct test_case {
     X(title_scene_page2_routes_to_options) \
     X(title_scene_out_of_range_page_renders_nothing_but_finalizes) \
     X(title_page_selector_roundtrips) \
+    X(title_choose_title_panel_tall_when_gate_a_zero) \
+    X(title_choose_title_panel_short_when_gated_off) \
+    X(title_choose_title_name_box_blits_frame) \
+    X(title_choose_title_shields_blit_five_positions) \
+    X(title_choose_title_selected_flash_off_skips_ring) \
+    X(title_choose_title_buttons_back_highlight) \
+    X(title_choose_title_continue_dim_when_disabled) \
+    X(title_choose_title_buttons_two_bevel_rects) \
+    X(title_choose_title_scene_routes_page_4) \
     \
     X(menu_hover_returns_1based_index) \
     X(menu_hover_outside_returns_zero) \

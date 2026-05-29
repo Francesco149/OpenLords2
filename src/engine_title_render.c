@@ -15,6 +15,10 @@
 #include "gfx_line.h"
 #include "gfx_text.h"
 #include "gfx_wrap.h"
+#include "gfx_sprite_render.h"
+#include "gfx_caret.h"
+#include "font_metrics.h"
+#include "text_input.h"
 
 /* ─── bound retail globals ──────────────────────────────────────── */
 
@@ -65,6 +69,37 @@ static engine_title_render_page_fn g_page_fn = page_stub;
 static int g_scene_flag_a;
 static int g_scene_flag_b;
 
+/* ─── page-4 ("Choose your title and your shield") bound state ──── */
+
+/* Gating (DAT_00553030 / DAT_00553248).  When (gate_a == 0 || gate_b
+ * != 0) the panel is one tile taller and the Back/Continue button row
+ * is drawn.  For the Custom-game entry both are 0 → condition true. */
+static int g_p4_gate_a;          /* DAT_00553030 */
+static int g_p4_gate_b;          /* DAT_00553248 */
+
+/* Continue-button enable inverse (DAT_0057c940): 0 → label normal
+ * (0x3f), non-zero → dimmed (0x20).  (A valid name leaves it 0.) */
+static int g_p4_continue_disabled;   /* DAT_0057c940 */
+
+/* Shield selector state.  slots[1..5] (DAT_0057cb40) hold per-slot
+ * shield ids (0 = the slot's default design); selected (DAT_0057c8cc)
+ * is the chosen shield id; flash (DAT_0057d354) + flash_timer
+ * (DAT_00568984) drive the selected-slot highlight-ring blink. */
+static unsigned char g_p4_shield_slots[6];   /* DAT_0057cb40 */
+static int g_p4_selected_shield;             /* DAT_0057c8cc */
+static int g_p4_shield_flash;                /* DAT_0057d354 */
+static int g_p4_flash_timer;                 /* DAT_00568984 */
+
+/* The name/title text rendered in the box (DAT_0053f1e0). */
+static const uint8_t *g_p4_name;
+
+/* The live editor (DAT_005cd550 buffer + cursor + insert mode), read
+ * by the caret.  NULL → the caret is skipped (textbox still draws). */
+static const text_input_state_t *g_p4_editor;
+
+/* Font-metrics scratch for the caret's cursor-char width measure. */
+static font_metrics_state_t g_p4_fm;
+
 /* ─── binders ───────────────────────────────────────────────────── */
 
 void engine_title_render_bind_fonts(const uint8_t *title_font,
@@ -111,6 +146,48 @@ int engine_title_render_selected_button(void) { return g_selected_button; }
 
 void engine_title_render_set_page(int page) { g_title_page = page; }
 int  engine_title_render_page(void)         { return g_title_page; }
+
+/* ─── page-4 state binders ──────────────────────────────────────── */
+
+void engine_title_render_set_choose_title_gates(int gate_a, int gate_b)
+{
+    g_p4_gate_a = gate_a;
+    g_p4_gate_b = gate_b;
+}
+
+void engine_title_render_set_choose_title_continue_disabled(int disabled)
+{
+    g_p4_continue_disabled = disabled;
+}
+
+void engine_title_render_set_choose_title_shields(const unsigned char slots[6],
+                                                  int selected,
+                                                  int flash,
+                                                  int flash_timer)
+{
+    for (int i = 0; i < 6; i++) g_p4_shield_slots[i] = slots ? slots[i] : 0;
+    g_p4_selected_shield = selected;
+    g_p4_shield_flash    = flash;
+    g_p4_flash_timer     = flash_timer;
+}
+
+void engine_title_render_set_choose_title_name(const uint8_t *name)
+{
+    g_p4_name = name;
+}
+
+void engine_title_render_set_choose_title_editor(const text_input_state_t *editor)
+{
+    g_p4_editor = editor;
+}
+
+/* Bind the char→glyph metrics table the caret's width measure walks
+ * (retail FUN_004015b9 reads DAT_004d71d0).  Mirrors the table already
+ * bound for the centered-text measurer. */
+void engine_title_render_bind_caret_metrics_table(const uint8_t *table)
+{
+    g_p4_fm.char_glyph_index = table;
+}
 
 void engine_title_render_bind_panel_fn(engine_title_render_panel_fn fn)
 {
@@ -320,6 +397,147 @@ void engine_title_render_play_now(void)
     engine_title_render_play_now_buttons();
 }
 
+/* ─── page 4: "Choose your title and your shield" ───────────────── */
+
+/* Port of FUN_0041f321 — the editable name/title box.  Draws the
+ * opaque box-frame sprite (panels2 index 0xcc), renders the current
+ * name text inside it, then the (blinking) caret, and marks the box
+ * dirty.  The caret-anchor bookkeeping mirrors retail: clear the
+ * first-pos latch, render with the editor cursor as the capture
+ * target, and — if the render never latched (cursor past the text) —
+ * fall back to the line's end X; then shift the caret to the box
+ * origin and pin its Y at 0x52. */
+static void engine_title_render_choose_title_name_box(void)
+{
+    /* Caret-anchor reset (DAT_005aeb64 / DAT_0058fd58 / DAT_0058fd78 /
+     * DAT_005c925a / DAT_005cd404). */
+    gfx_text_clear_first_pos_latch();
+    gfx_text_set_first_pos_x(0);
+    gfx_text_set_char_counter(0);
+    gfx_text_set_collapse_active(1);
+    gfx_text_set_line_x_acc(0);
+    if (g_p4_editor) {
+        gfx_text_set_first_pos_target(g_p4_editor->cursor);
+    }
+
+    /* Box frame — opaque sprite 0xcc at (0xd0, 0x48). */
+    gfx_sprite_render_opaque_from_blob(g_panel_asset, 0xcc, 0xd0, 0x48);
+
+    /* Name text — menu font, color 0x3f, at (0xd6, 0x50). */
+    if (g_p4_name) {
+        gfx_text_render_line(g_p4_name, 0xd6, 0x50, g_menu_font,
+                             g_glyph_table, 0x3f);
+    }
+
+    /* Caret anchor: if the render didn't latch a first-pos, use the
+     * line's end X (DAT_005cd404); then shift to the box origin and
+     * pin Y. */
+    if (gfx_text_first_pos_latched() == 0) {
+        gfx_text_set_first_pos_x(gfx_text_line_x_acc());
+    }
+    gfx_text_set_first_pos_x(gfx_text_first_pos_x() + 0xd6);
+    gfx_text_set_first_pos_y(0x52);
+
+    /* Caret (FUN_0040acce).  Off in a single static render (blink → 1). */
+    if (g_p4_editor) {
+        gfx_caret_render(g_p4_editor, &g_p4_fm, g_menu_font, 0x3f);
+    }
+
+    engine_dirty_rect_mark_box_tiled(g_dirty_state, 0xd0, 0x48, 0x16, 3, 1);
+}
+
+/* Port of FUN_0041f1dd — the five-shield selector row.  Each slot
+ * draws a shield sprite at x = (i-1)*0x58 + 0x70, y = 0x8c.  An empty
+ * slot (id 0) and the selected-flashing slot use the i*2+0xcb sprite;
+ * any other filled slot uses i*2+0xcc.  The selected slot, while
+ * flashing and outside the blink-off window, also gets the highlight
+ * ring (sprite 0xd7) behind it at (..+0x74, 0x70). */
+static void engine_title_render_choose_title_shields(void)
+{
+    for (int i = 1; i < 6; i++) {
+        int x = (i - 1) * 0x58 + 0x70;
+        if (g_p4_shield_slots[i] == 0) {
+            gfx_sprite_render_from_blob(g_panel_asset, i * 2 + 0xcb, x, 0x8c);
+        } else if (g_p4_shield_slots[i] == g_p4_selected_shield
+                   && g_p4_shield_flash != 0) {
+            if (g_p4_flash_timer == 0) {
+                gfx_sprite_render_from_blob(g_panel_asset, 0xd7,
+                                            (i - 1) * 0x58 + 0x74, 0x70);
+                gfx_sprite_render_from_blob(g_panel_asset, i * 2 + 0xcb,
+                                            x, 0x8c);
+            }
+        } else {
+            gfx_sprite_render_from_blob(g_panel_asset, i * 2 + 0xcc, x, 0x8c);
+        }
+    }
+}
+
+/* Port of FUN_0041f01f — the Back / Continue button row, drawn only
+ * when the panel is in its tall layout (gate_a == 0 || gate_b != 0).
+ * Back is select id 6, Continue id 7 (DAT_00553114 highlight).
+ * Continue dims to 0x20 when disabled (DAT_0057c940 != 0), else 0x3f. */
+static void engine_title_render_choose_title_buttons(void)
+{
+    if (!(g_p4_gate_a == 0 || g_p4_gate_b != 0)) {
+        return;
+    }
+
+    gfx_text_set_no_shadow(1);
+
+    /* Back. (entry 0xb sub 9), select id 6. */
+    uint8_t back_col = (g_selected_button == 6) ? 0xf9 : 0x3f;
+    gfx_line_rect_bevel_palette_b(0x70, 0xd7, 0xc0, 0x18);
+    engine_dirty_rect_mark_box_tiled(g_dirty_state, 0x70, 0xd7, 0xe, 3, 1);
+    menu_text(9, 0x70, 0xdc, 0xc0, g_menu_font, back_col);
+
+    /* Continue (entry 0xb sub 0xb), select id 7. */
+    uint8_t cont_col;
+    if (g_selected_button == 7)            cont_col = 0xf9;
+    else if (g_p4_continue_disabled == 0)  cont_col = 0x3f;
+    else                                   cont_col = 0x20;
+    gfx_line_rect_bevel_palette_b(0x150, 0xd7, 0xc0, 0x18);
+    engine_dirty_rect_mark_box_tiled(g_dirty_state, 0x150, 0xd7, 0xe, 3, 1);
+    menu_text(0xb, 0x150, 0xdc, 0xc0, g_menu_font, cont_col);
+
+    gfx_text_set_no_shadow(0);
+}
+
+/* Port of FUN_0041ef57 — the page-4 root.  Panel (one tile taller in
+ * the Back/Continue layout) + large-font title (entry 0xb sub 10,
+ * uppercase-highlight armed) + the name box + shields (both inside the
+ * no-shadow bracket) + the conditional button row. */
+void engine_title_render_choose_title(void)
+{
+    int tall = (g_p4_gate_a == 0 || g_p4_gate_b != 0);
+
+    gfx_text_set_uppercase_highlight(1);
+    g_panel_fn(g_panel_asset, 0x50, 10, 0x1e, tall ? 0x10 : 0xe);
+    menu_text(10, 0x50, 0x23, 0x1e0, g_title_font, 0x3f);
+    gfx_text_set_uppercase_highlight(0);
+
+    gfx_text_set_no_shadow(1);
+    engine_title_render_choose_title_name_box();
+    engine_title_render_choose_title_shields();
+    gfx_text_set_no_shadow(0);
+
+    if (tall) {
+        engine_title_render_choose_title_buttons();
+    }
+}
+
+/* Page-4 per-frame refresh — retail's title-update ladder calls
+ * FUN_0041f321 standalone every tick (NOT inside FUN_0041ef57's
+ * no-shadow bracket), so the steady-state name box is redrawn with the
+ * text shadow ON (DAT_005aea40 == 0).  This is what a captured frame
+ * shows after the page settles — distinct from the full-scene render,
+ * where the name text is bracketed no-shadow.  Re-blits the box frame +
+ * name text (shadowed) + caret over the static panel. */
+void engine_title_render_refresh_choose_title(void)
+{
+    gfx_text_set_no_shadow(0);
+    engine_title_render_choose_title_name_box();
+}
+
 /* Port of FUN_0041e7e1. */
 void engine_title_render_scene(int screen_state, int page)
 {
@@ -337,6 +555,8 @@ void engine_title_render_scene(int screen_state, int page)
         engine_title_render_main_menu();
     } else if (page == 2) {
         engine_title_render_options();
+    } else if (page == 4) {
+        engine_title_render_choose_title();
     } else if (page == 5) {
         engine_title_render_play_now();
     } else if (page >= 3 && page <= 0xd) {
@@ -371,6 +591,8 @@ void engine_title_render_refresh_buttons(int page)
         engine_title_render_buttons();
     } else if (page == 2) {
         engine_title_render_options_buttons();
+    } else if (page == 4) {
+        engine_title_render_refresh_choose_title();
     } else if (page == 5) {
         engine_title_render_play_now_buttons();
     }
