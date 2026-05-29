@@ -15,6 +15,7 @@
 
 #include "engine.h"
 
+#include "call_trace.h"
 #include "engine_camera.h"
 #include "engine_overlay_render.h"
 #include "engine_turn.h"
@@ -792,6 +793,13 @@ void engine_tick(void)
      *      per call regardless of sub-step count. */
 
     g_engine_frame_counter++;
+
+    /* Open this frame's call-trace window (no-op unless --call-trace).
+     * Uses the same per-tick counter the agent stamps on retail, so the
+     * two traces align 1:1.  This probe declares engine_tick == the
+     * FUN_004b99c0 per-tick driver. */
+    call_trace_begin_frame(g_engine_frame_counter);
+    CALL_TRACE_ENTER_STUB(0x004b99c0);   /* engine_tick — scaffold body */
 
     /* Pre-tick block — retail does (in order): FUN_004b0aaa input
      * poll, FUN_00499a1c music (only when ingame), FUN_00498458,

@@ -58,6 +58,7 @@
 #include <stdint.h>
 
 #include "audio.h"
+#include "call_trace.h"
 #include "config.h"
 #include "dev_hooks.h"
 #include "engine.h"
@@ -109,6 +110,12 @@ static int       g_audio_active;
  * are `<DIR>/frame_NNNNN.bmp`, indexed by g_frame_counter. */
 static const char *g_capture_dir;
 static unsigned   g_capture_every = 25;
+/* --call-trace PATH / --call-trace-frames i,j,k : per-frame JSONL of
+ * which annotated port functions ran, for tools/call_trace_diff.py.
+ * Off when PATH is NULL; frames empty = every frame. */
+static const char *g_call_trace_path;
+static unsigned   g_call_trace_frames[64];
+static size_t     g_call_trace_n_frames;
 static int       g_shutdown;
 static HANDLE    g_singleton_mutex;
 
@@ -308,6 +315,28 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
         }
     }
 
+    if (g_call_trace_path) {
+        /* Same Linux-abs → WSL-UNC translation the capture dir uses, so
+         * harness scripts can pass repo-relative "/opt/src/..." paths. */
+        static char call_trace_buf[MAX_PATH];
+        if (g_call_trace_path[0] == '/') {
+            const char *distro = getenv("WSL_DISTRO_NAME");
+            if (distro && distro[0]) {
+                wsprintfA(call_trace_buf, "\\\\wsl.localhost\\%s%s",
+                          distro, g_call_trace_path);
+                for (char *p = call_trace_buf; *p; p++)
+                    if (*p == '/') *p = '\\';
+                g_call_trace_path = call_trace_buf;
+            }
+        }
+        call_trace_init_from_cli(g_call_trace_path,
+                                 g_call_trace_frames, g_call_trace_n_frames);
+        log_line("call-trace → %s (%u frame filter%s)",
+                 g_call_trace_path,
+                 (unsigned)g_call_trace_n_frames,
+                 g_call_trace_n_frames ? "" : ", every frame");
+    }
+
     g_base_time_ms = timeGetTime();
 
     while (!g_shutdown && (g_max_frames == 0 || g_frame_counter < g_max_frames)) {
@@ -345,6 +374,8 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
         gfx_shutdown();
         g_gfx_active = 0;
     }
+
+    call_trace_shutdown();
 
     DestroyWindow(g_hwnd);
     UnregisterClassA(OPENLORDS2_CLASS, g_hInstance);
@@ -743,6 +774,10 @@ static void main_loop_body(void)
         PostMessageA(g_hwnd, WM_CLOSE, 0, 0);
         g_shutdown_request = 0;
     }
+
+    /* Flush this iteration's call-trace rows (no-op unless --call-trace).
+     * Safe even when engine_tick early-returned this frame. */
+    call_trace_end_frame();
 }
 
 static void frame_limiter(void)
@@ -910,6 +945,31 @@ static void parse_cmdline(LPSTR lpCmd)
         } else if (!strncmp(a, "--frames=", 9)) {
             if (!parse_uint(a + 9, &g_max_frames)) {
                 fprintf(stderr, "[openlords2] bad --frames= value\n");
+            }
+        } else if (!strcmp(a, "--call-trace") && i + 1 < ntok) {
+            g_call_trace_path = tokens[++i];
+        } else if (!strncmp(a, "--call-trace=", 13)) {
+            g_call_trace_path = a + 13;
+        } else if ((!strcmp(a, "--call-trace-frames") && i + 1 < ntok)
+                   || !strncmp(a, "--call-trace-frames=", 20)) {
+            /* Comma-separated sim-frame list, e.g. 10,11,12.  Parsed in
+             * place; non-numeric tokens are skipped with a warning. */
+            char *list = (a[19] == '=') ? (char *)(a + 20) : tokens[++i];
+            for (char *t = strtok(list, ","); t; t = strtok(NULL, ",")) {
+                unsigned v;
+                if (g_call_trace_n_frames
+                        >= sizeof(g_call_trace_frames)
+                           / sizeof(g_call_trace_frames[0])) {
+                    fprintf(stderr, "[openlords2] too many "
+                            "--call-trace-frames (max 64)\n");
+                    break;
+                }
+                if (parse_uint(t, &v)) {
+                    g_call_trace_frames[g_call_trace_n_frames++] = v;
+                } else {
+                    fprintf(stderr, "[openlords2] bad "
+                            "--call-trace-frames entry: %s\n", t);
+                }
             }
         } else {
             fprintf(stderr, "[openlords2] unknown arg: %s\n", a);

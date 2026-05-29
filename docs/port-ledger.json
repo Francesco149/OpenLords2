@@ -17802,6 +17802,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/call_trace.h",
     "src/engine.c",
     "src/engine.h",
     "src/engine_fps.c",
