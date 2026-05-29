@@ -509,7 +509,9 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
                     call_trace_fp.write(json.dumps({
                         "va":     int(ev.get("va", 0)),
                         "ret_va": int(ev.get("ret_va", 0)),
-                        "frame":  int(p.get("frame", 0)),
+                        # Per-event frame (stamped at call time by the agent);
+                        # fall back to the batch frame for older traces.
+                        "frame":  int(ev.get("frame", p.get("frame", 0))),
                         "ts":     int(ev.get("ts", 0)),
                     }) + "\n")
             f_log.write(

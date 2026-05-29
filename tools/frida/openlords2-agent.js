@@ -2146,6 +2146,12 @@ function installCallTraceHooks(vasArray) {
                     g_call_trace_buffer.push({
                         va:     va,
                         ret_va: this.returnAddress.sub(g_base).toUInt32(),
+                        // Stamp the frame at call time (g_tick_count now),
+                        // not at flush time — a hooked function can fire
+                        // between ticks (message pump / render outside the
+                        // tick body), and attributing it to the flush frame
+                        // would be off-by-one vs the port's per-call stamp.
+                        frame:  g_tick_count,
                         ts:     nowMs(),
                         thr:    this.threadId,
                     });
