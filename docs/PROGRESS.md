@@ -96,10 +96,24 @@ frontier in one stroke.
 
 ### Next candidate milestones
 
-1. **`49bbe8`/`49bc1d`/`49bc5f` player-roster trio** — now unblocked; a
-   clean, testable first gameplay chip (6-entry seat→army-id table +
-   the `s_slot_0053e8a4` count; `49bc5f` reads two `g_player_strategic_352`
-   flags).  The 3 KB consumer `FUN_0049bd99` stays deferred.
+1. **`49bbe8`/`49bc1d`/`49bc5f` player-roster trio** — now unblocked
+   (count `s_slot_0053e8a4` is shared); the next gameplay chip.  Two
+   wrinkles to handle deliberately, found while scoping it:
+   - **6-vs-12-byte mismatch.**  The roster table `DAT_00568db0` is save
+     entry **140, size 6** (now `s_slot_00568db0[6]`), but the runtime
+     structure is **12 bytes** — 6 interleaved `{id, seat}` pairs
+     (`db0`=even/id, `db1`=odd/seat; `49bc1d` clears all 6 pairs).  So
+     retail persists only the first 3 pairs; the runtime uses all 6.
+     The port needs runtime storage *larger* than its persisted slot —
+     promote `0x568db0` to a 12-byte named global and point schema row
+     140 at its first 6 bytes (the generator's NAMED list asserts
+     size==CSV, so this needs a size-override path or a hand-owned
+     extern that save.c references).
+   - **Non-convergent compaction.**  `49bc5f` can't remove the last
+     slot (seat-5 entry: the shift-down copies nothing), so it spins to
+     its 6-pass cap leaving trailing duplicates; the consumer reads only
+     `active` front entries.  Test exact traces, document the quirk.
+   The 3 KB consumer `FUN_0049bd99` stays deferred.
 2. The no-op stubs (`0x41423f` etc.) land naturally when `engine_tick`'s
    body ports — don't port them ahead of their callers.
 3. `0x4af502` IO chdir-back stays deferred with the tier-2/3 retry chain.
