@@ -89,6 +89,7 @@ static LPDIRECTDRAWCLIPPER  g_clipper;        /* DAT_004ea12c */
 static LPDIRECTDRAWPALETTE  g_palette;        /* DAT_004df288 */
 static uint8_t             *g_panel_sheet;    /* DAT_004eabec — panels2.pl8 blob */
 static uint8_t             *g_system_sheet;    /* DAT_005bb540 — system2.pl8 blob */
+static uint8_t             *g_misc_sheet;      /* DAT_005530c8 — misc_sel.pl8 blob */
 static uint8_t             *g_menu_font;       /* DAT_005af8f0 — fntl2_14.pl8 blob */
 static uint8_t             *g_title_font;      /* DAT_005b2fa0 — fntl2_22.pl8 blob */
 static int                  g_back_pitch;     /* DAT_004ea1a8 */
@@ -274,6 +275,10 @@ void gfx_shutdown(void)
     if (g_system_sheet) {
         free(g_system_sheet);
         g_system_sheet = NULL;
+    }
+    if (g_misc_sheet) {
+        free(g_misc_sheet);
+        g_misc_sheet = NULL;
     }
     if (g_menu_font) {
         free(g_menu_font);
@@ -619,6 +624,32 @@ const uint8_t *gfx_load_system_sheet(void)
     }
     log_line("OK :System sheet loaded (system2.pl8, %d bytes).", n);
     return g_system_sheet;
+}
+
+/* Port of FUN_00499034 — load misc_sel.pl8 into the DAT_005530c8 blob.
+ * The misc sheet is mode-dependent (retail swaps misc_sel/misc_ske/
+ * misc_bat/misc_cty into the same DAT_005530c8 buffer per game mode);
+ * misc_sel.pl8 is the variant the title-screen setup flow (pages
+ * 6..0xd) and their gauntlet buttons read.  Retail mallocs DAT_004daee8
+ * = 0x28488 (165000) bytes; the on-disk file is 160540 and fits.  Like
+ * system2.pl8 the blob is the raw file (FUN_004af8d9 reads it whole from
+ * offset 0), so a raw disk read reproduces DAT_005530c8 bit-for-bit. */
+const uint8_t *gfx_load_misc_sheet(void)
+{
+    if (!g_misc_sheet) {
+        g_misc_sheet = (uint8_t *)malloc(0x28488);
+        if (!g_misc_sheet) {
+            log_line("gfx_load_misc_sheet: OOM");
+            return NULL;
+        }
+    }
+    int n = io_read_file_at("misc_sel.pl8", g_misc_sheet, 0x28488, 0);
+    if (n < 1) {
+        log_line("gfx_load_misc_sheet: read misc_sel.pl8 failed (%d)", n);
+        return NULL;
+    }
+    log_line("OK :Misc sheet loaded (misc_sel.pl8, %d bytes).", n);
+    return g_misc_sheet;
 }
 
 /* ---------------------------------------------------------------- *

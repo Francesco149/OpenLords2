@@ -7,6 +7,59 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — MISC SHEET: bind misc_sel.pl8 (`DAT_005530c8`) — last unbound title asset
+
+The **remaining unbound asset** flagged as "Next" last entry — the
+mode-dependent misc sprite sheet `DAT_005530c8` — is now loaded and bound
+into the title-render path.  This unblocks the "kind < 0x18" gauntlet
+buttons on the setup-flow pages 6..0xd (`engine_button_render_list` already
+took a `misc_sheet` arg; it was NULL until now) and is the same sheet the
+in-game HUD indexes.
+
+The misc sheet is **mode-dependent** — retail swaps several files into the
+one `DAT_005530c8` buffer per game mode:
+
+- `misc_sel.pl8` (160540 B) — the **setup/selection** variant, loaded by
+  `FUN_00499034` when entering the new-game flow (called from the page-2
+  action at 0x4332xx).  This is the one pages 6..0xd read.
+- `misc_ske.PL8`, `Misc_bat.pl8`, `Misc_cty.pl8` — skirmish-editor / battle
+  / city variants, loaded by sibling routines (`FUN_00498dcb` loads
+  `misc_ske`).  Indices ≥ 0x36 (in-game HUD: 0x36/0x39/0x3b…) are valid in
+  those variants, **not** in misc_sel.
+
+Chip:
+
+- **`gfx_load_misc_sheet`** (`gfx.c`, port of `FUN_00499034`) — reads
+  `misc_sel.pl8` whole into a `0x28488`-byte buffer (retail's
+  `DAT_004daee8` malloc size, r2-confirmed; file fits).  Like system2.pl8
+  the blob is the raw file (`FUN_004af8d9` reads from offset 0), so the
+  disk read reproduces `DAT_005530c8` bit-for-bit.  Freed in `gfx_shutdown`.
+- **`engine_title_render_bind_misc_asset`** — the `g_misc_asset` setter,
+  mirror of the system-asset binding.  `main.c`'s title bring-up now loads
+  + binds it alongside system2.pl8.
+
+**Descriptor sanity-checked** (host decode of misc_sel.pl8): the setup-flow
+indices decode to coherent, self-consistent dims — idx 0xc/0xd/0xe = 64×64
+column-header icons (pixel offsets step by exactly 0x1000 = 64×64 B), idx
+**0xf = 320×240** (the page-7 backdrop, `FUN_0040a21a(sheet,0xf,0xa0,0)`),
+idx 0x10 = 130×130.  Both drop-in builds clean; 1204 host tests green
+(plumbing chip — no page renders it yet, so no frame-diff milestone; that
+arrives with the page-7 render).
+
+### Next
+
+**Page 7** (`FUN_0041f6c7`) — the **scenario / player-setup screen**, the
+natural next screen in play-flow: page 4 (Choose title) → *Continue* → page
+7 when `DAT_00553030 == 0` (single-player custom game; transition at
+0x4334xx line ~21506).  A multi-leaf screen: the 320×240 misc backdrop +
+3 column labels (entry 0xb subs 0xc/0xd/0xe), a 5-row scrollable selector
+with a computed scrollbar (`FUN_0041f98b`, 576 B), a per-player roster pass
+(`FUN_0041fbcb` → the already-ported `FUN_0049caaa`), and a 12-entry
+tab/button strip (`FUN_0041f86d`).  Unported leaves: `FUN_00410c71` (76 B),
+`FUN_004b13ed` (274 B), `FUN_004093e0`, `FUN_0041f86d` (286 B).  Needs a
+page-7 nav trace (extend `menu_choose_title.jsonl` with a *Continue* click)
+for the retail groundtruth.
+
 ## 2026-05-29 — BUTTON OVERLAY: page-3 gauntlet buttons + scroll arrows (page 3 now fully bit-identical)
 
 The **per-frame button-overlay subsystem** — flagged as the next chip

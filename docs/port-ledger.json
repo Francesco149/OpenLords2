@@ -5,14 +5,14 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 286,
-  "ported": 34,
-  "unported": 2127,
+  "ported": 35,
+  "unported": 2126,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 320,
+  "touched": 321,
   "pct_touched": 13.1,
   "pct_tested": 11.7,
   "bytes_total": 838629,
-  "bytes_touched": 115862,
+  "bytes_touched": 116059,
   "pct_bytes_touched": 13.8
  },
  "orphan_refs": [
@@ -14529,8 +14529,11 @@
    "name": "FUN_00499034",
    "size": 197,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gfx.c",
+    "src/gfx.h"
+   ]
   },
   {
    "va": "0x4990f9",

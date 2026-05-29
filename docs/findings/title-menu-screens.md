@@ -458,3 +458,34 @@ the decode thread never reported ready, leaving the engine stuck at
 engine state 1, not inside open). Skip-intro now reaches `0x1f` reliably in
 turbo *and* non-turbo. This was the prerequisite for deterministic-tick menu
 navigation.
+
+## Misc sprite sheet (`DAT_005530c8`) — mode-dependent, bound for the setup flow
+
+The setup-flow pages (6..0xd) and their "kind < 0x18" gauntlet buttons read
+the **misc** sprite sheet `DAT_005530c8`, a single buffer retail fills from
+different files per game mode:
+
+| loader | file | mode |
+|--------|------|------|
+| `FUN_00499034` | `misc_sel.pl8` (160540 B) | **setup / selection** (new-game flow; pages 6..0xd) |
+| `FUN_00498dcb` | `misc_ske.PL8` (166336 B) | skirmish editor |
+| (sibling loaders) | `Misc_bat.pl8` / `Misc_cty.pl8` | battle / city HUD |
+
+`FUN_00499034` mallocs `DAT_004daee8` = `0x28488` (165000 B, r2-confirmed)
+and reads the file whole from offset 0 via `FUN_004af8d9` — so the on-disk
+`misc_sel.pl8` equals the live `DAT_005530c8` blob byte-for-byte (same as
+system2.pl8).  Ported as `gfx_load_misc_sheet` (`gfx.c`), bound via
+`engine_title_render_bind_misc_asset`; `main.c`'s title bring-up loads it
+alongside system2.pl8.
+
+Descriptor decode (16-byte records at `blob + idx*0x10 + 8`; `w@0`,
+`height_short@2`, `pixoff@4`, `h@0xd`) of the setup-flow indices:
+
+| idx | w × h | use |
+|----:|-------|-----|
+| 0xc / 0xd / 0xe | 64×64 | column-header icons (pixoff steps 0x1000 = 64×64) |
+| 0xf | 320×240 | page-7 backdrop (`FUN_0040a21a(sheet,0xf,0xa0,0)`) |
+| 0x10 | 130×130 | (page-7) |
+
+Indices ≥ 0x36 (the in-game HUD's `0x36/0x39/0x3b`…) decode to garbage in
+misc_sel — they live in the battle/city variants, not the selection sheet.

@@ -38,6 +38,7 @@ static engine_dirty_rect_state_t *g_dirty_state;
 
 static const uint8_t *g_panel_asset;    /* DAT_004eabec */
 static const uint8_t *g_system_asset;   /* DAT_005bb540 — system2.pl8 */
+static const uint8_t *g_misc_asset;     /* DAT_005530c8 — misc_sel.pl8 */
 static int g_selected_button = 1;       /* DAT_00553114 */
 
 /* Title/menu page selector (retail DAT_005530f0).  Written by the menu
@@ -165,6 +166,11 @@ void engine_title_render_bind_panel_asset(const uint8_t *asset)
 void engine_title_render_bind_system_asset(const uint8_t *asset)
 {
     g_system_asset = asset;
+}
+
+void engine_title_render_bind_misc_asset(const uint8_t *asset)
+{
+    g_misc_asset = asset;
 }
 
 void engine_title_render_set_selected_button(int index)

@@ -105,6 +105,14 @@ const uint8_t *gfx_load_panel_sheet(void);
  * Returns the blob or NULL. */
 const uint8_t *gfx_load_system_sheet(void);
 
+/* Load the mode-dependent misc sprite sheet (misc_sel.pl8 → retail
+ * DAT_005530c8, loaded by FUN_00499034 into a 0x28488-byte buffer).
+ * The setup-flow variant (pages 6..0xd); the button-strip renderer
+ * (engine_button) indexes it for "kind < 0x18" buttons.  Bind it with
+ * engine_title_render_bind_misc_asset.  Cached; freed by gfx_shutdown.
+ * Returns the blob or NULL. */
+const uint8_t *gfx_load_misc_sheet(void);
+
 /* Load the menu/default font (fntl2_14.pl8 → retail DAT_005af8f0) and
  * the large title font (fntl2_22.pl8 → retail DAT_005b2fa0) as raw PL8
  * blobs.  Each is the glyph sprite sheet the text renderer indexes via

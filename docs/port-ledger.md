@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **320** (13.1%) — tested 286, ported 34
-- code bytes touched: **13.8%** (115,862 / 838,629 B)
-- unported: **2127**
+- touched: **321** (13.1%) — tested 286, ported 35
+- code bytes touched: **13.8%** (116,059 / 838,629 B)
+- unported: **2126**
 - orphan refs (in src/, not in function table): 4
 
 ## tested (286) — ported + host unit suite
@@ -308,7 +308,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4beed4 | FUN_004beed4 | 805 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 
-## ported (34) — reimplemented, no host test yet
+## ported (35) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -333,6 +333,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49792e | FUN_0049792e | 262 | engine.c, engine.h |
 | 0x497a34 | FUN_00497a34 | 697 | engine.c, engine.h |
 | 0x498458 | FUN_00498458 | 132 | engine.c |
+| 0x499034 | FUN_00499034 | 197 | gfx.c, gfx.h |
 | 0x499a1c | FUN_00499a1c | 174 | engine.c, gfx.c, gfx.h |
 | 0x49a010 | FUN_0049a010 | 982 | engine.c |
 | 0x49a3e6 | FUN_0049a3e6 | 109 | engine.c |

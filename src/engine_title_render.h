@@ -114,6 +114,11 @@ void engine_title_render_bind_panel_asset(const uint8_t *asset);
  * buttons + scroll arrows (engine_title_render_filelist_buttons). */
 void engine_title_render_bind_system_asset(const uint8_t *asset);
 
+/* Bind the mode-dependent misc sprite sheet (retail `DAT_005530c8`, the
+ * misc_sel.pl8 blob for the setup-flow pages).  Source for pages
+ * 6..0xd's "kind < 0x18" gauntlet buttons (engine_button_render_list). */
+void engine_title_render_bind_misc_asset(const uint8_t *asset);
+
 /* Set the selected-button index (retail `DAT_00553114`, 1..4).  Drives
  * which button label renders in highlight color 0xf9.  Default 1. */
 void engine_title_render_set_selected_button(int index);

@@ -805,6 +805,7 @@ static void title_bind_render_state(void)
     engine_title_render_set_dirty_state(&g_title_dirty);
     engine_title_render_bind_panel_asset(sheet);
     engine_title_render_bind_system_asset(gfx_load_system_sheet());
+    engine_title_render_bind_misc_asset(gfx_load_misc_sheet());
     engine_title_render_bind_panel_fn(gfx_panel_draw);
     /* Background hook stays the default no-op stub — the backdrop is
      * already in the back buffer from gfx_title_background_load. */
