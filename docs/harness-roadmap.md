@@ -100,6 +100,33 @@ implemented.
       capture machinery, exercising entire game-state subsystems
       end-to-end in CI.
 
+## Phase 6 — Structural-parity harness (call-graph diff / mem-watch / scenarios)
+
+Full design: `docs/plans/structural-parity-harness.md` (Phases G/H/I/J).
+Methodically chase structural parity with retail — spot missing/unported
+calls per frame, find writers we can't locate by reading, and drive any
+render path deterministically. Ported from `../openrecet`'s machinery.
+
+- [x] **G — call-graph diff.** Port-side validated end-to-end; retail-side
+      built (pending a live-target run). See `docs/findings/call-graph-diff.md`.
+      - [x] G.1 `src/call_trace.{c,h}` + `--call-trace` wiring.
+      - [x] G.2 `tools/gen_call_trace_probes.py` (worklist + hook-VA set);
+            5/276 functions annotated (engine_tick + map_render seed batch).
+      - [x] G.3 agent `installCallTrace` + `frida_capture.py --call-trace`.
+      - [x] G.4 `tools/call_trace_diff.py`.
+      - [ ] Annotate the remaining ~271 ported functions (incremental, done
+            as the leaf-first loop reaches each — Phase J).
+      - [ ] First live retail↔port diff of a render frame.
+- [ ] **H — memory write/read intercept diff.** `mem_watch.py` +
+      `installMemoryWatch` (MemoryAccessMonitor). Find unported writers of
+      render-feeding regions.
+- [ ] **I — scenario reproduction + state-forcing.** `forceGameState` /
+      `--inject-state` + `scenario-test.py` to drive battlefield/map/overlay
+      render paths deterministically. Prereq: retail DDraw frame-capture hook
+      (Phase 2 above).
+- [ ] **J — iterative parity loop.** drive a render path → diff → port the
+      deepest retail-only leaf (or mem-watch its writer) → re-verify.
+
 ---
 
 The above roughly mirrors the OpenMare harness roadmap.  The
