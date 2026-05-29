@@ -11,6 +11,7 @@
 
 #include "engine_title_render.h"
 #include "engine_dirty_rect.h"
+#include "engine_button.h"
 #include "localization.h"
 #include "gfx_line.h"
 #include "gfx_text.h"
@@ -36,6 +37,7 @@ static localization_state_t g_loc;      /* over DAT_00591580 */
 static engine_dirty_rect_state_t *g_dirty_state;
 
 static const uint8_t *g_panel_asset;    /* DAT_004eabec */
+static const uint8_t *g_system_asset;   /* DAT_005bb540 — system2.pl8 */
 static int g_selected_button = 1;       /* DAT_00553114 */
 
 /* Title/menu page selector (retail DAT_005530f0).  Written by the menu
@@ -158,6 +160,11 @@ void engine_title_render_set_dirty_state(engine_dirty_rect_state_t *state)
 void engine_title_render_bind_panel_asset(const uint8_t *asset)
 {
     g_panel_asset = asset;
+}
+
+void engine_title_render_bind_system_asset(const uint8_t *asset)
+{
+    g_system_asset = asset;
 }
 
 void engine_title_render_set_selected_button(int index)
@@ -666,6 +673,45 @@ void engine_title_render_filelist(int title_sub)
     engine_title_render_filelist_content(999);
 }
 
+/* Page-3 button strip — retail DAT_004ddd78, the table the per-frame
+ * overlay paints with FUN_0040cfd2(0x60, 10, &DAT_004ddd78, 4).  Four
+ * buttons, all edge-type 4 (release-triggered), all reading the static
+ * system2.pl8 sheet (kind >= 0x18):
+ *
+ *   - the two gauntlet action buttons (Load / Cancel), kind 0x20
+ *     (32×32 bevels), sprites 0x1d / 0x1f;
+ *   - the scroll up / down arrows, kind 0x18 (24×24), sprites 0x23 /
+ *     0x25.
+ *
+ * Verbatim from Lords2.exe @ 0x4ddd78 (r2 dump).  The action/param
+ * fields drive the input hit-test, not the render; they are kept for a
+ * faithful layout but ignored by engine_button_render_list. */
+static const engine_button_rec_t k_filelist_buttons[4] = {
+    { 0x130, 0x40, 0x1d, 0x20, 0x004342f3, 0, 0, 0, 4,  0, 0 },
+    { 0x160, 0x40, 0x1f, 0x20, 0x00434308, 0, 0, 0, 4,  0, 0 },
+    { 0x180, 0x90, 0x23, 0x18, 0x00434346, 0, 0, 0, 4, -3, 1 },
+    { 0x180, 0xb0, 0x25, 0x18, 0x00434346, 0, 0, 0, 4,  3, 1 },
+};
+
+/* Port of the page-3 (DAT_005530f0 == 3) arm of the per-frame UI
+ * refresh dispatcher (FUN_004ba26e):
+ *
+ *     FUN_004149ec(DAT_004e65dc, 1);              // list-content refresh
+ *     FUN_0040cfd2(0x60, 10, &DAT_004ddd78, 4);   // button strip
+ *
+ * The list-content refresh repaints the selected-name field + grid the
+ * same way the full-scene draw did (idempotent for a settled frame);
+ * `selected` 999 means no highlight, matching the draw pass.  The
+ * button strip is the part the full-scene draw omits — the gauntlet
+ * buttons + scroll arrows over the action-button bevel.  base = (0x60,
+ * 10). */
+void engine_title_render_filelist_buttons(void)
+{
+    engine_title_render_filelist_content(999);
+    engine_button_render_list(0x60, 10, k_filelist_buttons, 4,
+                              /*misc=*/NULL, g_system_asset, g_dirty_state);
+}
+
 /* Page-4 per-frame refresh — retail's title-update ladder calls
  * FUN_0041f321 standalone every tick (NOT inside FUN_0041ef57's
  * no-shadow bracket), so the steady-state name box is redrawn with the
@@ -734,6 +780,8 @@ void engine_title_render_refresh_buttons(int page)
         engine_title_render_buttons();
     } else if (page == 2) {
         engine_title_render_options_buttons();
+    } else if (page == 3) {
+        engine_title_render_filelist_buttons();
     } else if (page == 4) {
         engine_title_render_refresh_choose_title();
     } else if (page == 5) {

@@ -109,6 +109,11 @@ void engine_title_render_set_dirty_state(engine_dirty_rect_state_t *state);
  * bound panel fn. */
 void engine_title_render_bind_panel_asset(const uint8_t *asset);
 
+/* Bind the static system sprite sheet (retail `DAT_005bb540`, the
+ * system2.pl8 blob).  Source for the page-3 button strip's gauntlet
+ * buttons + scroll arrows (engine_title_render_filelist_buttons). */
+void engine_title_render_bind_system_asset(const uint8_t *asset);
+
 /* Set the selected-button index (retail `DAT_00553114`, 1..4).  Drives
  * which button label renders in highlight color 0xf9.  Default 1. */
 void engine_title_render_set_selected_button(int index);
@@ -207,6 +212,12 @@ void engine_title_render_choose_title(void);
  * sub `title_sub`) + the action-button bevel rect + three box outlines
  * + the file-list content (FUN_004149ec).  Page 3 passes title_sub 5. */
 void engine_title_render_filelist(int title_sub);
+
+/* Page-3 per-frame button strip — the 0x1f/page-3 arm of FUN_004ba26e:
+ * refreshes the list content then paints the gauntlet action buttons +
+ * scroll arrows (FUN_0040cfd2 over DAT_004ddd78).  Requires the system
+ * sheet bound (engine_title_render_bind_system_asset). */
+void engine_title_render_filelist_buttons(void);
 
 /* ─── page-3 file-list state setters ───────────────────────────── */
 

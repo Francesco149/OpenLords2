@@ -5,16 +5,17 @@
 The unported, non-thunk engine functions already **called by ported code** — the natural next chips. A **leaf** has all of its
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
-- frontier functions: **286**
-- of those, zero-dependency **leaves: 89** (recommended order below)
+- frontier functions: **279**
+- of those, zero-dependency **leaves: 101** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
 
 | VA | size | ported callers | band |
 |----|-----:|---------------:|------|
 | 0x4af502 | 72 | 7 | asset-load IO helper cluster (0x4af*) |
-| 0x427d19 | 89 | 4 | strategic-map camera + scroll |
+| 0x427d19 | 89 | 5 | strategic-map camera + scroll |
 | 0x4b1897 | 11 | 3 | battlefield render + wndproc |
+| 0x41a734 | 272 | 3 | render-quad / blit primitives |
 | 0x42e26f | 41 | 2 | strategic-map camera + scroll |
 | 0x4360f2 | 41 | 2 | stage/post-load + char tables |
 | 0x4b049b | 103 | 2 | battlefield render + wndproc |
@@ -26,8 +27,10 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4b1dd5 | 11 | 1 | battlefield render + wndproc |
 | 0x43cc56 | 16 | 1 | stage/post-load + char tables |
 | 0x401c5b | 21 | 1 | early/runtime + low-level helpers |
+| 0x41ef42 | 21 | 1 | render-quad / blit primitives |
 | 0x4c0580 | 25 | 1 | late/tail helpers |
 | 0x433cc1 | 35 | 1 | stage/post-load + char tables |
+| 0x452775 | 49 | 1 | fade / loading / audio-mci |
 | 0x478952 | 53 | 1 | d3d/mesh pool + preload + palette |
 | 0x43fed2 | 54 | 1 | stage/post-load + char tables |
 | 0x43292d | 58 | 1 | stage/post-load + char tables |
@@ -49,19 +52,16 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x42476b | 138 | 1 | strategic-map camera + scroll |
 | 0x40902b | 148 | 1 | early/runtime + low-level helpers |
 | 0x448d7e | 148 | 1 | sim dispatch + records |
-| 0x42f148 | 151 | 1 | strategic-map camera + scroll |
-| 0x472a31 | 152 | 1 | d3d/mesh pool + preload + palette |
-| 0x432893 | 154 | 1 | stage/post-load + char tables |
 
 ## Full frontier by address band
 
-### early/runtime + low-level helpers (19)
+### early/runtime + low-level helpers (18)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
 | 0x4050c0 | 53 | 2 | 1 |  |
 | 0x409397 | 73 | 2 | 2 |  |
-| 0x40f7d3 | 1774 | 2 | 12 |  |
+| 0x40f7d3 | 1774 | 2 | 11 |  |
 | 0x401c5b | 21 | 1 | 0 | ✓ |
 | 0x40c928 | 68 | 1 | 1 |  |
 | 0x40e7e4 | 87 | 1 | 2 |  |
@@ -72,26 +72,24 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x40f10f | 145 | 1 | 1 |  |
 | 0x40902b | 148 | 1 | 0 | ✓ |
 | 0x40deca | 152 | 1 | 3 |  |
-| 0x40d1bc | 181 | 1 | 1 |  |
-| 0x40a567 | 283 | 1 | 1 |  |
+| 0x40d1bc | 181 | 1 | 0 | ✓ |
 | 0x40dd92 | 312 | 1 | 4 |  |
-| 0x40c725 | 428 | 1 | 2 |  |
+| 0x409c93 | 374 | 1 | 0 | ✓ |
+| 0x40c725 | 428 | 1 | 1 |  |
 | 0x40cd58 | 433 | 1 | 3 |  |
-| 0x40cfd2 | 490 | 1 | 2 |  |
 
-### render-quad / blit primitives (70)
+### render-quad / blit primitives (63)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
-| 0x41a734 | 272 | 3 | 1 |  |
-| 0x414e06 | 354 | 2 | 2 |  |
+| 0x41a734 | 272 | 3 | 0 | ✓ |
+| 0x414e06 | 354 | 2 | 1 |  |
 | 0x419c78 | 682 | 2 | 4 |  |
 | 0x412b33 | 824 | 2 | 13 |  |
 | 0x41423f | 11 | 1 | 0 | ✓ |
-| 0x41ef42 | 21 | 1 | 1 |  |
+| 0x41ef42 | 21 | 1 | 0 | ✓ |
 | 0x41e5d0 | 77 | 1 | 1 |  |
 | 0x41b032 | 79 | 1 | 2 |  |
-| 0x41f592 | 86 | 1 | 1 |  |
 | 0x416308 | 87 | 1 | 3 |  |
 | 0x4120e0 | 99 | 1 | 3 |  |
 | 0x413526 | 106 | 1 | 0 | ✓ |
@@ -100,24 +98,19 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x41543f | 171 | 1 | 2 |  |
 | 0x41f6c7 | 179 | 1 | 3 |  |
 | 0x41f3e9 | 184 | 1 | 1 |  |
-| 0x41a844 | 188 | 1 | 1 |  |
+| 0x41a844 | 188 | 1 | 0 | ✓ |
 | 0x41789b | 197 | 1 | 3 |  |
-| 0x41ef57 | 200 | 1 | 3 |  |
-| 0x41f321 | 200 | 1 | 2 |  |
-| 0x414819 | 203 | 1 | 2 |  |
+| 0x414819 | 203 | 1 | 1 |  |
 | 0x415fb7 | 212 | 1 | 2 |  |
-| 0x41f5e8 | 223 | 1 | 0 | ✓ |
 | 0x41f4a1 | 241 | 1 | 0 | ✓ |
 | 0x41f77a | 243 | 1 | 5 |  |
 | 0x4180f6 | 245 | 1 | 4 |  |
 | 0x41a639 | 251 | 1 | 0 | ✓ |
-| 0x411fde | 258 | 1 | 2 |  |
+| 0x411fde | 258 | 1 | 1 |  |
 | 0x418fc5 | 278 | 1 | 1 |  |
-| 0x417bd3 | 284 | 1 | 2 |  |
+| 0x417bd3 | 284 | 1 | 1 |  |
 | 0x41f86d | 286 | 1 | 2 |  |
 | 0x419789 | 289 | 1 | 5 |  |
-| 0x41f01f | 315 | 1 | 0 | ✓ |
-| 0x41f1dd | 324 | 1 | 0 | ✓ |
 | 0x41ad5d | 325 | 1 | 3 |  |
 | 0x4154ea | 340 | 1 | 2 |  |
 | 0x4152ea | 341 | 1 | 2 |  |
@@ -129,13 +122,13 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x41fdd6 | 415 | 1 | 5 |  |
 | 0x41298a | 425 | 1 | 0 | ✓ |
 | 0x41438c | 446 | 1 | 0 | ✓ |
-| 0x410aa9 | 456 | 1 | 2 |  |
+| 0x410aa9 | 456 | 1 | 1 |  |
 | 0x41152f | 460 | 1 | 5 |  |
-| 0x41ff75 | 466 | 1 | 1 |  |
+| 0x41ff75 | 466 | 1 | 0 | ✓ |
 | 0x414f68 | 500 | 1 | 2 |  |
 | 0x412795 | 501 | 1 | 1 |  |
 | 0x4181eb | 571 | 1 | 0 | ✓ |
-| 0x41f98b | 576 | 1 | 2 |  |
+| 0x41f98b | 576 | 1 | 1 |  |
 | 0x412421 | 581 | 1 | 0 | ✓ |
 | 0x417ea7 | 591 | 1 | 6 |  |
 | 0x41a900 | 615 | 1 | 0 | ✓ |
@@ -145,7 +138,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x416925 | 974 | 1 | 3 |  |
 | 0x4198aa | 974 | 1 | 2 |  |
 | 0x41e1dd | 1011 | 1 | 2 |  |
-| 0x4149ec | 1050 | 1 | 3 |  |
 | 0x419354 | 1077 | 1 | 2 |  |
 | 0x411b72 | 1132 | 1 | 4 |  |
 | 0x4116fb | 1143 | 1 | 5 |  |
@@ -158,9 +150,9 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
-| 0x427d19 | 89 | 4 | 0 | ✓ |
+| 0x427d19 | 89 | 5 | 0 | ✓ |
+| 0x427990 | 779 | 4 | 6 |  |
 | 0x4263ad | 255 | 3 | 2 |  |
-| 0x427990 | 779 | 3 | 6 |  |
 | 0x42e26f | 41 | 2 | 0 | ✓ |
 | 0x42b780 | 119 | 2 | 6 |  |
 | 0x42f58c | 130 | 2 | 0 | ✓ |
@@ -171,26 +163,26 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x42d179 | 157 | 1 | 0 | ✓ |
 | 0x425a6a | 158 | 1 | 1 |  |
 | 0x420d40 | 164 | 1 | 0 | ✓ |
-| 0x4247f5 | 174 | 1 | 1 |  |
+| 0x4247f5 | 174 | 1 | 0 | ✓ |
 | 0x42df30 | 178 | 1 | 5 |  |
 | 0x42e50d | 179 | 1 | 0 | ✓ |
 | 0x426216 | 185 | 1 | 0 | ✓ |
 | 0x421231 | 222 | 1 | 2 |  |
 | 0x4248a3 | 239 | 1 | 1 |  |
 | 0x420428 | 244 | 1 | 0 | ✓ |
-| 0x420316 | 274 | 1 | 1 |  |
+| 0x420316 | 274 | 1 | 0 | ✓ |
 | 0x42051c | 276 | 1 | 7 |  |
-| 0x4233f7 | 313 | 1 | 4 |  |
-| 0x425314 | 371 | 1 | 1 |  |
-| 0x423739 | 383 | 1 | 3 |  |
+| 0x4233f7 | 313 | 1 | 3 |  |
+| 0x425314 | 371 | 1 | 0 | ✓ |
+| 0x423739 | 383 | 1 | 2 |  |
 | 0x420630 | 403 | 1 | 9 |  |
-| 0x425487 | 437 | 1 | 1 |  |
+| 0x425487 | 437 | 1 | 0 | ✓ |
 | 0x423241 | 438 | 1 | 4 |  |
-| 0x420147 | 463 | 1 | 2 |  |
+| 0x420147 | 463 | 1 | 0 | ✓ |
 | 0x4207c3 | 510 | 1 | 0 | ✓ |
-| 0x423530 | 521 | 1 | 1 |  |
+| 0x423530 | 521 | 1 | 0 | ✓ |
 | 0x421d09 | 523 | 1 | 0 | ✓ |
-| 0x421005 | 556 | 1 | 3 |  |
+| 0x421005 | 556 | 1 | 2 |  |
 | 0x422ff1 | 592 | 1 | 7 |  |
 | 0x4298c1 | 604 | 1 | 1 |  |
 | 0x429418 | 669 | 1 | 3 |  |
@@ -198,12 +190,12 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x42dbc7 | 868 | 1 | 8 |  |
 | 0x429ba4 | 878 | 1 | 0 | ✓ |
 | 0x4280e9 | 904 | 1 | 4 |  |
-| 0x421f14 | 1491 | 1 | 5 |  |
+| 0x421f14 | 1491 | 1 | 4 |  |
 | 0x42c64f | 1531 | 1 | 3 |  |
 | 0x421707 | 1538 | 1 | 2 |  |
 | 0x42f60e | 2298 | 1 | 0 | ✓ |
-| 0x424992 | 2434 | 1 | 1 |  |
-| 0x423ba4 | 3015 | 1 | 1 |  |
+| 0x424992 | 2434 | 1 | 0 | ✓ |
+| 0x423ba4 | 3015 | 1 | 0 | ✓ |
 
 ### stage/post-load + char tables (56)
 
@@ -276,11 +268,12 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4477e7 | 503 | 1 | 0 | ✓ |
 | 0x44098f | 595 | 1 | 1 |  |
 
-### fade / loading / audio-mci (1)
+### fade / loading / audio-mci (2)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
 | 0x45242b | 11 | 1 | 0 | ✓ |
+| 0x452775 | 49 | 1 | 0 | ✓ |
 
 ### tables (item/char) + populators (5)
 
@@ -302,7 +295,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4788c6 | 140 | 1 | 8 |  |
 | 0x472a31 | 152 | 1 | 0 | ✓ |
 | 0x476768 | 245 | 1 | 3 |  |
-| 0x476e95 | 421 | 1 | 3 |  |
+| 0x476e95 | 421 | 1 | 2 |  |
 | 0x47f76d | 458 | 1 | 0 | ✓ |
 | 0x47685d | 512 | 1 | 3 |  |
 | 0x47ed9b | 590 | 1 | 0 | ✓ |

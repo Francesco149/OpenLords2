@@ -88,6 +88,7 @@ static LPDIRECTDRAWSURFACE  g_back;           /* DAT_004eafac */
 static LPDIRECTDRAWCLIPPER  g_clipper;        /* DAT_004ea12c */
 static LPDIRECTDRAWPALETTE  g_palette;        /* DAT_004df288 */
 static uint8_t             *g_panel_sheet;    /* DAT_004eabec — panels2.pl8 blob */
+static uint8_t             *g_system_sheet;    /* DAT_005bb540 — system2.pl8 blob */
 static uint8_t             *g_menu_font;       /* DAT_005af8f0 — fntl2_14.pl8 blob */
 static uint8_t             *g_title_font;      /* DAT_005b2fa0 — fntl2_22.pl8 blob */
 static int                  g_back_pitch;     /* DAT_004ea1a8 */
@@ -269,6 +270,10 @@ void gfx_shutdown(void)
     if (g_panel_sheet) {
         free(g_panel_sheet);
         g_panel_sheet = NULL;
+    }
+    if (g_system_sheet) {
+        free(g_system_sheet);
+        g_system_sheet = NULL;
     }
     if (g_menu_font) {
         free(g_menu_font);
@@ -591,6 +596,29 @@ const uint8_t *gfx_load_panel_sheet(void)
     }
     log_line("OK :Panel sheet loaded (panels2.pl8, %d bytes).", n);
     return g_panel_sheet;
+}
+
+/* Port of FUN_00499a1c(0) — load system2.pl8 into the DAT_005bb540 blob
+ * (retail allocates 0xdd18 = 56600 bytes; the on-disk file is 56518 and
+ * fits).  The UI button-strip renderer (engine_button) indexes it for
+ * the gauntlet buttons + scroll arrows.  Verified byte-identical to the
+ * live DAT_005bb540 at the page-3 frame. */
+const uint8_t *gfx_load_system_sheet(void)
+{
+    if (!g_system_sheet) {
+        g_system_sheet = (uint8_t *)malloc(0xdd18);
+        if (!g_system_sheet) {
+            log_line("gfx_load_system_sheet: OOM");
+            return NULL;
+        }
+    }
+    int n = io_read_file_at("system2.pl8", g_system_sheet, 0xdd18, 0);
+    if (n < 1) {
+        log_line("gfx_load_system_sheet: read system2.pl8 failed (%d)", n);
+        return NULL;
+    }
+    log_line("OK :System sheet loaded (system2.pl8, %d bytes).", n);
+    return g_system_sheet;
 }
 
 /* ---------------------------------------------------------------- *

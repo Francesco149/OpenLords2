@@ -804,6 +804,7 @@ static void title_bind_render_state(void)
     const uint8_t *sheet = gfx_load_panel_sheet();
     engine_title_render_set_dirty_state(&g_title_dirty);
     engine_title_render_bind_panel_asset(sheet);
+    engine_title_render_bind_system_asset(gfx_load_system_sheet());
     engine_title_render_bind_panel_fn(gfx_panel_draw);
     /* Background hook stays the default no-op stub — the backdrop is
      * already in the back buffer from gfx_title_background_load. */
@@ -1027,6 +1028,14 @@ static void bringup_title_nav(const char *dir)
 
     engine_title_render_set_page(3);
     title_render_current_page();
+    /* Steady state: retail's per-frame UI refresh (FUN_004ba26e, 0x1f /
+     * page-3 arm) repaints the list content + the gauntlet button strip
+     * over the static frame every tick, so a captured frame shows the
+     * buttons.  The full-scene draw above omits them; add the overlay. */
+    if (gfx_lock_canvas()) {
+        engine_title_render_filelist_buttons();
+        gfx_unlock_canvas();
+    }
     wsprintfA(path, "%s\\nav_05_p%d_loadgame.bmp", dir,
               engine_title_render_page());
     gfx_capture_backbuffer(path);

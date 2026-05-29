@@ -97,6 +97,14 @@ int  gfx_title_background_load(int page);
  * gfx_shutdown. */
 const uint8_t *gfx_load_panel_sheet(void);
 
+/* Load the static system sprite sheet (system2.pl8 → retail DAT_005bb540,
+ * loaded by FUN_00499a1c(0) / FUN_004af8d9 into a 0xdd18-byte buffer).
+ * The raw PL8 the UI button-strip renderer (engine_button) indexes for
+ * the gauntlet buttons + scroll arrows.  Bind it with
+ * engine_title_render_bind_system_asset.  Cached; freed by gfx_shutdown.
+ * Returns the blob or NULL. */
+const uint8_t *gfx_load_system_sheet(void);
+
 /* Load the menu/default font (fntl2_14.pl8 → retail DAT_005af8f0) and
  * the large title font (fntl2_22.pl8 → retail DAT_005b2fa0) as raw PL8
  * blobs.  Each is the glyph sprite sheet the text renderer indexes via
