@@ -7,6 +7,41 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — NEXT SCREEN: title page 3 "Loading a game." save/load list (list render bit-identical)
+
+The save/load file-list screen now renders in the drop-in, **0 diff vs
+retail everywhere the page-3 draw path covers**.  Reached from "Your
+options" → Load a game.  Two chips:
+
+1. **Selection-highlight fill** (`FUN_004b414a` → `gfx_sprite_fill_block`)
+   — a solid block fill sized from the staged sprite dims; the one new
+   primitive (everything else was already ported).
+2. **Page-3 render** (`FUN_004148e4` frame + `FUN_004149ec` list content)
+   in `engine_title_render.c`: panel + title (entry 0x28 sub 5) + the
+   selected-name field (tiled inset + name + caret) + the file grid
+   (3 columns, entries at `DAT_004e8790`, 0x41-byte records) + box
+   outlines.  State seeded from a `--dump-globals` capture; `--title-nav`
+   step 5 forces the page.
+
+Verified bit-identical for the panel, title, selected-name field, all
+four files (lastturn / old_turn→"old turn" / safeturn / test), and the
+box outlines.  The remaining **2870 px (all x ≥ 400) are the gauntlet
+action-buttons + scrollbar** — NOT part of the page-3 draw, but the
+per-frame button overlay `FUN_0040cfd2(&DAT_004ddd78, 4)`.
+
+### Next
+
+The **button-overlay subsystem** — `FUN_0040cfd2` (generic button-list
+renderer, keyed off `FUN_004ba26e` per screen state) + the per-screen
+button tables (`DAT_004ddd78` etc.) + the button sprite sheets
+(`DAT_005530c8`, loaded mode-dependently from `misc_*.pl8`; the static
+`DAT_005bb540` array).  It's shared by every screen (the gauntlet
+buttons + scrollbars across the whole UI), so it unlocks more than just
+page 3 — but it needs asset-load research first.  After that, page 3 is
+fully 0-diff and the same overlay closes out pages 6..0xd's buttons.
+
+---
+
 ## 2026-05-29 — NEXT SCREEN: title page 4 "Choose your title and your shield" (bit-identical)
 
 The fourth title page — the **player-setup screen** (editable name/title
