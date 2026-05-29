@@ -604,6 +604,11 @@ let g_engine_in_tick          = 0;
 // ─── helpers ────────────────────────────────────────────────────────────
 
 function rva(va) { return g_base.add(va - IMAGE_BASE.toUInt32()); }
+// Live in-module pointer → Ghidra VA (inverse of rva).  Used by mem_watch to
+// report the faulting instruction / accessed-data addresses as Ghidra VAs.
+function toGhidraVa(p) {
+    return (p.sub(g_base).toUInt32() + IMAGE_BASE.toUInt32()) >>> 0;
+}
 function nowMs()  { return (Date.now() - g_start_real_ms) | 0; }
 function log(msg) { send({kind: 'log',   msg: String(msg)}); }
 function err(where, msg) { send({kind: 'error', where: String(where), msg: String(msg)}); }
@@ -2165,6 +2170,156 @@ function callTraceFlush(frameNumber) {
           events: events});
 }
 
+// ─── memory-access watch (Phase H / D.7) ────────────────────────────────
+//
+// Finds the WRITER of an engine memory region we can't locate by reading the
+// decompile (reached via indirect dispatch, or dropped from Ghidra's output).
+// MemoryAccessMonitor write-protects the region in retail; every access traps
+// with the faulting instruction's address → the owning engine function (via
+// tools/mem_watch.py + the port ledger) → the chip to port.
+//
+// MemoryAccessMonitor semantics (the two hard-won lessons, carried from
+// openrecet's D.7 build log):
+//   1. PAGE-GRANULAR + OP-BLIND. It notifies on the FIRST access of each
+//      monitored 4KiB page then disables that page; it can't tell reads from
+//      writes at arm time. So we capture EVERY trapped op and let the driver
+//      rank by op — dropping reads here risks a read silently consuming the
+//      page's one-shot before the writer we're hunting runs. On a COLD page
+//      (region written at a discrete event, no per-frame neighbour traffic)
+//      this nails the writer; on a READ-HOT page precise-mode's re-arm budget
+//      burns on neighbour reads before the write lands — keep regions tight.
+//   2. HW write watchpoint is byte-granular but CRASHED retail in openrecet —
+//      not implemented here; revisit with single-thread arming + tick-freeze.
+let g_mem_watch_enabled  = false;
+let g_mem_watch_regions  = [];    // [{va, size, label, access}] — Ghidra VAs
+let g_mem_watch_ranges   = [];    // cached [{base: NativePointer, size}] for re-arm
+let g_mem_watch_buffer   = [];    // batched {op, from, addr, region, label}
+let g_mem_watch_n        = 0;     // in-region hits recorded this session
+let g_mem_watch_neighbor = 0;     // page-neighbor traps skipped (precise mode)
+let g_mem_watch_rearm    = 0;     // re-arm count (budget against the cap)
+let g_mem_watch_precise  = true;
+const MEM_WATCH_FLUSH_AT  = 50000;
+const MEM_WATCH_REARM_CAP = 8000;  // max re-arms before giving up on a hot page
+const MEM_WATCH_MAX_HITS  = 64;    // stop re-arming after this many in-region hits
+
+function memWatchFlush(frameNumber) {
+    if (g_mem_watch_buffer.length === 0) return;
+    const events = g_mem_watch_buffer;
+    g_mem_watch_buffer = [];
+    send({kind: 'mem_access_batch',
+          frame: frameNumber,
+          count: events.length,
+          events: events});
+}
+
+// Whether a trapped access landed inside the recorded extent of region `idx`
+// (vs. a page neighbor that merely shares the 4KiB page).
+function memWatchInRegion(idx, addrPtr) {
+    const r = g_mem_watch_regions[idx];
+    if (!r) return false;
+    const base = rva(r.va);
+    return addrPtr.compare(base) >= 0 &&
+           addrPtr.compare(base.add(r.size)) < 0;
+}
+
+// (Re-)arm MemoryAccessMonitor over the cached ranges. Idempotent —
+// MemoryAccessMonitor.enable() replaces any prior monitor, which is exactly
+// the re-arm we want after a page's one-shot fires.
+function memWatchArm() {
+    MemoryAccessMonitor.enable(g_mem_watch_ranges, {onAccess: memWatchOnAccess});
+}
+
+function memWatchOnAccess(details) {
+    const idx = details.rangeIndex | 0;
+    const region = g_mem_watch_regions[idx] || {};
+    const inRegion = memWatchInRegion(idx, details.address);
+
+    if (g_mem_watch_precise && !inRegion) {
+        // Page neighbor consumed this page's one-shot. Re-arm and keep
+        // hunting, unless the page is so hot we've burned the budget.
+        g_mem_watch_neighbor++;
+        if (g_mem_watch_rearm < MEM_WATCH_REARM_CAP) {
+            g_mem_watch_rearm++;
+            try { memWatchArm(); }
+            catch (e) { err('memWatchArm', e.message); }
+        } else if (g_mem_watch_rearm === MEM_WATCH_REARM_CAP) {
+            g_mem_watch_rearm++;   // log-once sentinel
+            log('mem_watch: re-arm budget (' + MEM_WATCH_REARM_CAP +
+                ') exhausted on a hot page for region "' +
+                (region.label || idx) + '" before any in-region write — ' +
+                'consider a narrower region or a HW write breakpoint.');
+        }
+        return;
+    }
+
+    // In-region hit (or non-precise mode: record everything).
+    g_mem_watch_n++;
+    g_mem_watch_buffer.push({
+        op:     details.operation,            // read | write | execute
+        from:   toGhidraVa(details.from),     // faulting insn VA
+        addr:   toGhidraVa(details.address),  // accessed data VA
+        region: idx,
+        label:  region.label || '',
+        ts:     nowMs(),
+    });
+    if (g_mem_watch_buffer.length >= MEM_WATCH_FLUSH_AT) {
+        memWatchFlush(g_tick_count);
+    }
+    // Keep watching so additional distinct writers of the same field surface,
+    // up to a sane cap. (In non-precise mode the one-shot has disabled the
+    // page and we deliberately let it stay disabled.)
+    if (g_mem_watch_precise &&
+        g_mem_watch_n < MEM_WATCH_MAX_HITS &&
+        g_mem_watch_rearm < MEM_WATCH_REARM_CAP) {
+        g_mem_watch_rearm++;
+        try { memWatchArm(); }
+        catch (e) { err('memWatchArm', e.message); }
+    }
+}
+
+function installMemoryWatch(regions, precise) {
+    g_mem_watch_regions = (regions || []).map(function (r) {
+        return {
+            va:     r.va | 0,
+            size:   (r.size | 0) || 16,
+            label:  String(r.label || ('0x' + (r.va >>> 0).toString(16))),
+            access: (r.access === 'rw') ? 'rw' : 'w',
+        };
+    });
+    if (g_mem_watch_regions.length === 0) {
+        err('installMemoryWatch', 'no regions given');
+        return false;
+    }
+    g_mem_watch_precise  = (precise !== false);
+    g_mem_watch_n        = 0;
+    g_mem_watch_neighbor = 0;
+    g_mem_watch_rearm    = 0;
+    g_mem_watch_ranges   = g_mem_watch_regions.map(function (r) {
+        return {base: rva(r.va), size: r.size};
+    });
+
+    try {
+        memWatchArm();
+    } catch (e) {
+        err('installMemoryWatch', e.message + ' ' + (e.stack || ''));
+        return false;
+    }
+
+    g_mem_watch_enabled = true;
+    log('mem_watch: armed ' + g_mem_watch_regions.length + ' region(s) [' +
+        (g_mem_watch_precise ? 'precise' : 'raw') + ']: ' +
+        g_mem_watch_regions.map(function (r) {
+            return r.label + '@0x' + (r.va >>> 0).toString(16) +
+                   '+' + r.size + '(' + r.access + ')';
+        }).join(', '));
+    send({kind: 'mem_watch_ready',
+          precise: g_mem_watch_precise,
+          regions: g_mem_watch_regions.map(function (r) {
+              return {va: r.va, size: r.size, label: r.label, access: r.access};
+          })});
+    return true;
+}
+
 function installCallTraceHooks(vasArray) {
     if (g_call_trace_hooked) return;
     // Each closure captures `va` directly (let-binding per iteration) so
@@ -2279,6 +2434,9 @@ function installEngineTickHook() {
                 // with the current g_tick_count).  No-op unless enabled.
                 if (g_call_trace_enabled) {
                     callTraceFlush(g_tick_count);
+                }
+                if (g_mem_watch_enabled) {
+                    memWatchFlush(g_tick_count);
                 }
                 g_engine_in_tick = 0;
                 // Lazy install of the DDraw → GDI present seat.  The
@@ -4031,6 +4189,13 @@ rpc.exports = {
         g_call_trace_n_ok   = 0;
         g_call_trace_n_fail = 0;
 
+        // Memory-access watch (Phase H).  opts.mem_watch_regions is an array of
+        // {va, size, label, access}; armed pre-resume below so an init-time
+        // writer during scene bootstrap is trapped on its first write.
+        g_mem_watch_enabled = !!opts.mem_watch &&
+                              Array.isArray(opts.mem_watch_regions) &&
+                              opts.mem_watch_regions.length > 0;
+
         const mod = Process.findModuleByName(g_target_module_name);
         if (!mod) {
             err('init', 'target module not loaded: ' + g_target_module_name);
@@ -4126,6 +4291,13 @@ rpc.exports = {
                     : ', every frame') + ')');
         }
 
+        // Arm mem_watch PRE-RESUME so an init-time writer is trapped on its
+        // first write (init runs before the controller calls device.resume).
+        if (g_mem_watch_enabled) {
+            installMemoryWatch(opts.mem_watch_regions,
+                               opts.mem_watch_precise !== false);
+        }
+
         send({kind: 'ready',
               module:        g_target_module_name,
               base:          g_base.toString(),
@@ -4190,6 +4362,26 @@ rpc.exports = {
                 n_fail:  g_call_trace_n_fail,
                 n_vas:   g_call_trace_vas.length,
                 buffered: g_call_trace_buffer.length};
+    },
+
+    // Late-install the memory watch after init (e.g. once a scenario has
+    // driven retail into the scene right before the region is written).
+    installMemoryWatch: function (regions, precise) {
+        const ok = installMemoryWatch(regions, precise);
+        g_mem_watch_enabled = ok;
+        return ok;
+    },
+
+    // Drain the buffer + return counters; the driver calls this at the end of
+    // a run so the last partial batch isn't lost.
+    getMemWatchStatus: function () {
+        memWatchFlush(g_tick_count);
+        return {enabled:  g_mem_watch_enabled,
+                precise:  g_mem_watch_precise,
+                n_hits:   g_mem_watch_n,
+                n_neighbor: g_mem_watch_neighbor,
+                n_rearm:  g_mem_watch_rearm,
+                regions:  g_mem_watch_regions.length};
     },
 
     runRetailRngStep: function (state_a, state_b) {

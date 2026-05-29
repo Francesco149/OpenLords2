@@ -206,6 +206,12 @@ class CaptureConfig:
     call_trace:        bool = False
     call_trace_vas:    list[int] = field(default_factory=list)
     call_trace_frames: list[int] = field(default_factory=list)
+    # Memory-access watch (Phase H): arm MemoryAccessMonitor over these regions
+    # ([{va,size,label,access}], Ghidra VAs) and emit mem_access_batch events →
+    # run_dir/mem_watch.jsonl. tools/mem_watch.py ranks the trapped writers.
+    mem_watch:         bool = False
+    mem_watch_regions: list[dict] = field(default_factory=list)
+    mem_watch_precise: bool = True
     exe_args:          list[str] = field(default_factory=list)
 
 
@@ -395,6 +401,12 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
     if cfg.call_trace:
         call_trace_fp = (run_dir / "call_trace.jsonl").open("w", buffering=1)
     counts["call_trace_calls"] = 0
+
+    # Mem-watch sink — one JSONL row per trapped access.
+    mem_watch_fp = None
+    if cfg.mem_watch:
+        mem_watch_fp = (run_dir / "mem_watch.jsonl").open("w", buffering=1)
+    counts["mem_watch_accesses"] = 0
 
     # Preload the replay events so any parse failure surfaces before we
     # spawn the engine.  The agent expects a JSON array of {t,m,w,l}
@@ -586,6 +598,27 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
                 f"[call_trace] frame={p.get('frame')} "
                 f"calls={len(evs)}\n")
             return
+        if kind == "mem_watch_ready":
+            f_log.write(f"[mem_watch] armed precise={p.get('precise')} "
+                        f"regions={p.get('regions')}\n")
+            return
+        if kind == "mem_access_batch":
+            evs = p.get("events", []) or []
+            counts["mem_watch_accesses"] += len(evs)
+            if mem_watch_fp is not None:
+                for ev in evs:
+                    mem_watch_fp.write(json.dumps({
+                        "op":     ev.get("op", ""),
+                        "from":   int(ev.get("from", 0)),
+                        "addr":   int(ev.get("addr", 0)),
+                        "region": int(ev.get("region", 0)),
+                        "label":  ev.get("label", ""),
+                        "frame":  int(p.get("frame", 0)),
+                        "ts":     int(ev.get("ts", 0)),
+                    }) + "\n")
+            f_log.write(f"[mem_watch] frame={p.get('frame')} "
+                        f"accesses={len(evs)}\n")
+            return
         # unknown kind — log it raw so we can spot agent extensions we
         # haven't wired up yet.
         f_log.write(f"[unknown-event] {json.dumps(p)}\n")
@@ -695,6 +728,9 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "call_trace":                bool(cfg.call_trace),
             "call_trace_vas":            [int(v) for v in cfg.call_trace_vas],
             "call_trace_frames":         [int(v) for v in cfg.call_trace_frames],
+            "mem_watch":                 bool(cfg.mem_watch),
+            "mem_watch_regions":         cfg.mem_watch_regions,
+            "mem_watch_precise":         bool(cfg.mem_watch_precise),
             "heartbeat_timeout_ms":      HEARTBEAT_TIMEOUT_MS,
         }
         script.exports_sync.init(init_cfg)
@@ -739,6 +775,15 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         # RPC can't prevent the kill (the bug that leaked two elevated retail
         # processes: an un-timeout'd get_gdi_seat_stats() hung *before* the
         # kill).  Diagnostics are best-effort; killing the target is not.
+
+        # Drain the mem-watch buffer (final partial batch) before kill,
+        # bounded so a wedged agent can't block teardown.
+        if script is not None and cfg.mem_watch:
+            st = _call_with_timeout(
+                lambda: script.exports_sync.get_mem_watch_status(),
+                TEARDOWN_CALL_TIMEOUT_S)
+            if st is not None:
+                f_log.write(f"[mem_watch_status] {st}\n")
 
         # Diagnostics first (bounded), while the agent is still attached.
         if script is not None and cfg.gdi_seat:
@@ -802,6 +847,8 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         input_trace_fp.close()
     if call_trace_fp is not None:
         call_trace_fp.close()
+    if mem_watch_fp is not None:
+        mem_watch_fp.close()
 
     return CaptureResult(
         exit_code=exit_code,
