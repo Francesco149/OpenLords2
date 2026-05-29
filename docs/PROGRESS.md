@@ -7,6 +7,61 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — FIRST VISIBLE MENU PIXELS: backdrop renders + seam wired
+
+Autonomous continuation of the 10-chip push.  Two committed chips, then a
+bring-up that put the **gateway main-menu backdrop on screen in the
+drop-in** — verified bit-identical to `runs/groundtruth/mainmenu-retail.bmp`
+(user confirmed visually).
+
+### Chips landed
+
+1. **Demand-redraw seam (chip 5)** — `755465d`.  Wired
+   `engine_tick`'s render phase to the screen dispatch, the retail
+   `if (DAT_0057d340) FUN_0040f1a0(DAT_0057d340)` seam.  The main-menu
+   render chain now exists end-to-end in src:
+   `engine_tick → engine_screen_dispatch(0x1f) → engine_title_render_scene
+   → bg + panel + text + buttons → finalize`.
+   - engine.c owns the demand-redraw cookie `DAT_0057d340` (g_demand_redraw);
+     WndProc was writing a dead `g_render_dirty` mirror — now calls
+     `engine_set_demand_redraw(2)` into the single owner.
+   - engine_title_render owns the title page selector `DAT_005530f0`
+     (set_page/page); the seam sources the page from there.
+   - Documented the `DAT_004eac50` two-mirror hazard (g_sim_current_screen
+     vs gfx_text's g_language_tag) as engine-quirk #114 — unify when the
+     boot→title transition (first producer) lands.
+
+2. **Background asset-load (`FUN_0041e61d` / `FUN_00408fcb`)** — `be4e890`.
+   - `gfx_load_background_image()` — raw 8bpp 640×480 read (24-byte PL8
+     header skip) straight into the locked back buffer, pitch-aware.
+     gateway.pl8 = 0x18 + 640*480 = 307224 B (size confirms the model).
+   - `gfx_title_background_load(page)` — `FUN_0041e61d`'s per-page asset
+     pick (gateway / custom / skirmish .256 + .pl8).
+   - `main.c --title-bg` — bring-up shortcut: loads the page-1 backdrop
+     after gfx_init, ahead of the boot→title state producer.
+
+### Verified
+
+Ran from the game dir with `--title-bg --capture-to`; `compare_frames`
+vs retail ground truth: **the entire backdrop matches** (armor / red-cross
+shield / weapons / stone floor pixel-for-pixel).  The 23% delta is exactly
+the panel + title text + buttons rectangle — the composition track.
+
+### Next (the composition track, two sub-tracks)
+
+1. **Panel (cleaner; no extraction)** — port `FUN_004b25b0` (blob
+   allocator), load panels2.pl8 into the blob, bind it + `gfx_panel` as
+   the panel fn.  Needs the lock-render-unlock integration: the sprite
+   renderer draws into the locked back buffer (`DAT_004ea1a8 = g_pixels`),
+   so the whole title scene must render inside one Lock/Unlock around
+   `engine_title_render_scene`, then present.  gfx_panel itself is ported.
+2. **Text (extraction-gated)** — title/subtitle/button labels rest on the
+   ported text primitives, but need the **font + glyph-table bytes
+   extracted from Lords2.exe** (DAT_005b2fa0 title font, DAT_005af8f0 menu
+   font, DAT_004d71f0/d0 char→glyph tables — all static .data, bound via
+   the existing `engine_title_render_bind_fonts/_glyph_tables`).  The loc
+   blob (DAT_00591580) already loads at runtime (config: l2.eng, 100016 B).
+
 ## 2026-05-29 — main-menu render chain ported end-to-end (10-chip push)
 
 Autonomous session: ported 10 more functions (12 incl. the earlier
