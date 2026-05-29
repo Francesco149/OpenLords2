@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **333** (13.6%) — tested 298, ported 35
-- code bytes touched: **14.4%** (121,052 / 838,629 B)
-- unported: **2114**
+- touched: **327** (13.4%) — tested 292, ported 35
+- code bytes touched: **14.1%** (117,970 / 838,629 B)
+- unported: **2120**
 - orphan refs (in src/, not in function table): 4
 
-## tested (298) — ported + host unit suite
+## tested (292) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -117,8 +117,6 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4093e0 | FUN_004093e0 | 73 | gfx_panel.c, gfx_panel.h |
 | 0x40946d | FUN_0040946d | 856 | gfx_panel.c, gfx_panel.h |
 | 0x4097c5 | FUN_004097c5 | 367 | gfx_panel.c, gfx_panel.h |
-| 0x409934 | FUN_00409934 | 863 | gfx.c, gfx_panel.c |
-| 0x409c93 | FUN_00409c93 | 374 | gfx.c, gfx_panel.c |
 | 0x40a01d | FUN_0040a01d | 261 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40a21a | FUN_0040a21a | 433 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h (+1) |
 | 0x40a3d0 | FUN_0040a3d0 | 402 | gfx_sprite_render.c, gfx_sprite_render.h, gfx_sprite_rle.h |
@@ -137,8 +135,6 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40ecc4 | FUN_0040ecc4 | 1099 | config.c, config.h, strutil.h |
 | 0x40f1a0 | FUN_0040f1a0 | 1117 | engine.c, engine_screen_dispatch.c, engine_screen_dispatch.h (+1) |
 | 0x40f5fd | FUN_0040f5fd | 470 | engine_screen_dispatch.c |
-| 0x410c71 | FUN_00410c71 | 76 | engine_title_render.c |
-| 0x410cbd | FUN_00410cbd | 654 | engine_title_render.c |
 | 0x4148e4 | FUN_004148e4 | 264 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x4149ec | FUN_004149ec | 1050 | engine_title_render.c, engine_title_render.h, gfx_sprite.c (+1) |
 | 0x41e61d | FUN_0041e61d | 452 | engine_title_render.c, engine_title_render.h, gfx.c (+2) |
@@ -174,7 +170,6 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x432b05 | FUN_00432b05 | 451 | engine_menu_input.c, engine_menu_input.h |
 | 0x432cc8 | FUN_00432cc8 | 526 | engine_menu_input.c |
 | 0x433461 | FUN_00433461 | 208 | engine_menu_input.c |
-| 0x433a70 | FUN_00433a70 | 251 | engine_title_render.c, engine_title_render.h |
 | 0x4343f8 | FUN_004343f8 | 36 | main.c |
 | 0x43de70 | FUN_0043de70 | 1211 | engine.c, engine.h, engine_rate.c |
 | 0x43e330 | FUN_0043e330 | 259 | engine.c, engine.h, engine_rate.c (+1) |
@@ -193,7 +188,6 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4483fb | FUN_004483fb | 11 | engine_handlers_da.h |
 | 0x448406 | FUN_00448406 | 11 | engine_handlers_da.h |
 | 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h |
-| 0x451bba | FUN_00451bba | 864 | engine_title_render.c |
 | 0x451f1a | FUN_00451f1a | 81 | engine.c, engine.h, engine_anim_cycle.c |
 | 0x451f70 | FUN_00451f70 | 26 | gfx.c, main.c |
 | 0x452160 | FUN_00452160 | 422 | engine.c, gfx.c, gfx.h (+1) |

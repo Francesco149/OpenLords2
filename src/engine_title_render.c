@@ -57,7 +57,7 @@ static int g_p7_country_sel;                /* DAT_0057cacc */
 static int g_p7_country_count;              /* DAT_00554018 */
 static const uint8_t *g_p7_preview;         /* DAT_00569590 */
 
-/* Option-tab selected values, in tab order 0..11 (FUN_00433a70 output —
+/* Option-tab selected values, in tab order 0..11 (0x433a70 output —
  * retail reads 12 permuted scalars at 0x53f288..0x53f2b4; we bind the
  * resolved values in tab order so the permutation lives in the caller). */
 static int g_p7_tab_values[12];
@@ -828,10 +828,10 @@ void engine_title_render_set_players(const engine_title_setup_player_t players[6
  * frame (misc sprite 0x10), the 128×128 preview buffer top-right, five
  * value rows (selected row inverted), and the computed scrollbar.
  *
- * The preview blit is FUN_00410c71(0, …): at param 0 the shield
- * compositor (FUN_00410cbd) skips its entire per-pixel loop — only a
+ * The preview blit is 0x410c71(0, …): at param 0 the shield
+ * compositor (0x410cbd) skips its entire per-pixel loop — only a
  * base raw blit of DAT_00569590 + a non-visual title/rank state
- * recompute (FUN_00451bba) remain — so the page-7 coat-of-arms/map
+ * recompute (0x451bba) remain — so the page-7 coat-of-arms/map
  * preview is exactly gfx_sprite_render_raw of the bound buffer.  The
  * recompute is deferred (no pixels, and its lord-record inputs are not
  * yet modelled). */
@@ -840,7 +840,7 @@ void engine_title_render_setup_country_list(void)
     /* Parchment frame for the selector + preview (misc sprite 0x10). */
     gfx_sprite_render_from_blob(g_misc_asset, 0x10, 0x1f0, 9);
 
-    /* Map / coat-of-arms preview (FUN_00410c71(0, 0x1f0, 9) → raw blit
+    /* Map / coat-of-arms preview (0x410c71(0, 0x1f0, 9) → raw blit
      * inset by (-2, +3)). */
     if (g_p7_preview) {
         gfx_sprite_render_raw(g_p7_preview, 0x1f0 - 2, 9 + 3, 0x80, 0x80);

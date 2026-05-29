@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 298,
+  "tested": 292,
   "ported": 35,
-  "unported": 2114,
+  "unported": 2120,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 333,
-  "pct_touched": 13.6,
-  "pct_tested": 12.2,
+  "touched": 327,
+  "pct_touched": 13.4,
+  "pct_tested": 11.9,
   "bytes_total": 838629,
-  "bytes_touched": 121052,
-  "pct_bytes_touched": 14.4
+  "bytes_touched": 117970,
+  "pct_bytes_touched": 14.1
  },
  "orphan_refs": [
   "0x004148",
@@ -1373,22 +1373,16 @@
    "name": "FUN_00409934",
    "size": 863,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/gfx.c",
-    "src/gfx_panel.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x409c93",
    "name": "FUN_00409c93",
    "size": 374,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/gfx.c",
-    "src/gfx_panel.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x409e09",
@@ -2206,20 +2200,16 @@
    "name": "FUN_00410c71",
    "size": 76,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_title_render.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x410cbd",
    "name": "FUN_00410cbd",
    "size": 654,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_title_render.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x410f4b",
@@ -4718,11 +4708,8 @@
    "name": "FUN_00433a70",
    "size": 251,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_title_render.c",
-    "src/engine_title_render.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x433ba2",
@@ -10156,10 +10143,8 @@
    "name": "FUN_00451bba",
    "size": 864,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_title_render.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x451f1a",

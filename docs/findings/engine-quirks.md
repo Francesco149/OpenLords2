@@ -4141,6 +4141,54 @@ shadow on, applied once after the full render for the parity capture.
 
 ---
 
+## 117. The chrome bevel renderer is the stone-panel renderer with a hardcoded sheet
+
+`FUN_00409934` (bevel border) and `FUN_00409c93` (bevel interior) are
+**byte-for-byte twins** of the stone-panel builders `FUN_0040946d` /
+`FUN_004097c5` — identical 9-patch index logic, identical descriptor
+staging, identical blit dispatch — differing only in that the sprite
+sheet is hardcoded to the chrome blob `0x57d3d0` (panels.pl8) instead of
+taken as a parameter, and the panel *mode* is the first arg rather than
+the second.  `FUN_004093e0` (the raised button/tab frame) is then just
+`border(mode 1) + inset interior`, and mode 1 is what adds +0xcc to every
+border index to select the sheet's second (chrome) style block.
+
+Consequence for the port: nothing new to write — `gfx_panel_draw_bevel`
+calls the existing `gfx_panel_draw_border(sheet, 1, …)` +
+`gfx_panel_fill_interior` with the chrome sheet.  Only the asset
+(panels.pl8, distinct from the stone panels2.pl8) needed loading.  The
+two builders' only other difference, the diagnostic-string addresses on
+the bad-offset abort, is immaterial — the port elides the error latch.
+
+> 📍 `src/gfx_panel.c` (`gfx_panel_draw_bevel`), `src/gfx.c`
+> (`gfx_load_chrome_sheet`), Ghidra `0x409934` / `0x409c93` / `FUN_004093e0`
+> vs `FUN_0040946d` / `FUN_004097c5`.
+
+---
+
+## 118. The page-7 coat-of-arms preview is a plain blit — the compositor is dead at param 0
+
+The game-setup screen's top-right preview is drawn by `0x410c71(0, …)`,
+which blits the 128×128 buffer `0x569590` and then calls the shield
+compositor `0x410cbd` with **param 0**.  That compositor's entire
+per-pixel remap loop is guarded by `if (param_1 != 0)`, so at param 0 it
+does **nothing visible** — only an unconditional title/rank state
+recompute (`0x451bba`, which writes lord-record fields read by the
+compositor's *non-zero* paths) runs.  So the page-7 preview is exactly a
+raw blit of whatever the scenario-load path rendered into `0x569590` (the
+selected map thumbnail), and porting the 654-byte shield compositor is
+unnecessary for this screen.
+
+The render port therefore models the preview as a bound buffer
+(`engine_title_render_set_preview`) and defers `0x410cbd` / `0x451bba`
+until an in-game screen exercises the non-zero compositor paths (which
+need the lord-record structures that nothing ported yet reads).
+
+> 📍 `src/engine_title_render.c` (`engine_title_render_setup_country_list`),
+> Ghidra `0x410c71` / `0x410cbd` / `0x451bba`, called from `FUN_0041f98b`.
+
+---
+
 <!--
 Template for new entries:
 

@@ -659,7 +659,7 @@ const uint8_t *gfx_load_misc_sheet(void)
 
 /* Load panels.pl8 into the DAT_0057d3d0 blob — the "chrome" sprite sheet
  * the raised bevel-frame renderer (gfx_panel_draw_bevel, retail
- * FUN_00409934/FUN_00409c93) indexes for button caps + the page-7 option
+ * 0x409934/0x409c93) indexes for button caps + the page-7 option
  * tabs.  Distinct from panels2.pl8 (the gray stone-panel sheet at
  * DAT_004eabec).  Index 10 of the 13-asset master table (0x4d9f48): the
  * +0x10 size field is 0x128e0 (75968); the on-disk file is 75640 and

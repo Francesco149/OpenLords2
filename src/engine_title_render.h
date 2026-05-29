@@ -314,7 +314,7 @@ void engine_title_render_set_country_list(const uint8_t *values, int scroll,
 void engine_title_render_set_preview(const uint8_t *buf);
 
 /* The 12 option-tab selected values in tab order (retail's permuted
- * scalars at 0x53f288..0x53f2b4, resolved by FUN_00433a70), plus the
+ * scalars at 0x53f288..0x53f2b4, resolved by 0x433a70), plus the
  * tab currently being edited (-1 = none; that tab shows no bevel). */
 void engine_title_render_set_tab_values(const int values[12], int active_tab);
 

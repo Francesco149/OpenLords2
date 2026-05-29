@@ -169,7 +169,7 @@ void gfx_panel_draw(const uint8_t *asset, int x, int y, int cols, int rows)
  * Identical composition to gfx_panel_draw except the border is mode 1 —
  * which shifts every sprite index by +0xcc, selecting the second
  * (raised/chrome) style block in the sheet.  Retail hardcodes the chrome
- * sheet 0x57d3d0 (FUN_00409934/FUN_00409c93 are the 0040946d/004097c5
+ * sheet 0x57d3d0 (0x409934/0x409c93 are the 0040946d/004097c5
  * twins with that asset baked in); the caller passes the bound blob. */
 void gfx_panel_draw_bevel(const uint8_t *asset, int x, int y, int cols, int rows)
 {

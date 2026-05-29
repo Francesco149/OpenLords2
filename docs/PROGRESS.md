@@ -7,6 +7,71 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — PAGE 7: the custom-game **setup screen** render (`FUN_0041f6c7` + subs)
+
+The natural next play-flow screen (page 4 *Continue* → page 7) is now
+ported and host-tested.  Groundtruth (`runs/groundtruth/scenario-setup-retail.bmp`,
+captured last entry) is the **custom-game setup** screen: a central
+carved-stone panel (misc sprite 0xf) with *Cancel / Start / Defaults*
+carved into it, a player roster down the left edge (the human "aaaaaa" +
+four AI — Knight / Baron / Bishop / Countess — each a shield + portrait +
+name), a country/map selector top-right (a parchment frame + the rendered
+Britain map + a 5-row country list + scrollbar), and a 4×3 grid of option
+tabs (Advanced Farming / Armies Eat / … each a wrapped header over a
+beveled value cap).
+
+Landed in **three chips**:
+
+1. **Chrome bevel-frame renderer** (`gfx_panel_draw_bevel`, port of
+   `FUN_004093e0`).  Discovery: `FUN_00409934` / `FUN_00409c93` (the
+   bevel border + interior builders) are **byte-for-byte twins** of the
+   already-ported stone-panel builders `FUN_0040946d` / `FUN_004097c5`,
+   with the sprite sheet hardcoded to the chrome blob `0x57d3d0`
+   (**panels.pl8**, distinct from panels2.pl8) and the mode passed as the
+   first arg.  `FUN_004093e0` = border(mode 1) + inset interior; mode 1
+   shifts every border index by +0xcc into the sheet's chrome style
+   block.  So the renderer was already done — only the new asset needed
+   loading (`gfx_load_chrome_sheet`, panels.pl8 → 0x57d3d0, buffer
+   0x128e0 per the master-table size field).
+2. **Palette-darken rect** (`gfx_paint_darken_rect`, port of
+   `FUN_004b13ed`).  Dims disabled roster seats via a luminance-keyed
+   dark-gray ramp `0x3f - (((R+G+B)/3) >> 3)` over the active palette.
+   Not exercised on the groundtruth (all five seats active) but part of
+   the roster pass; host-tested against a synthetic palette.
+3. **The page-7 render** (`FUN_0041f6c7` root + `FUN_0041f98b` country
+   list / `FUN_0041fbcb` roster / `FUN_0041f86d` option tabs).  The
+   coat-of-arms/map preview is `0x410c71(0,…)`: at **param 0** the shield
+   compositor `0x410cbd` skips its entire per-pixel loop, so the preview
+   is exactly a raw blit of the bound `0x569590` buffer — the non-visual
+   title/rank recompute `0x451bba` and the AI-seat assignment
+   `FUN_0049caaa` are modelled as **bound state**, not recomputed at
+   render time.  Tab geometry (`DAT_004d3098` 4×3 grid) + value-string
+   bases (`DAT_004d3128`) are embedded; the runtime state (country list,
+   roster records, tab scalars, preview buffer) is bound via setters for
+   the groundtruth capture.
+
+Background for page 7 is **custom.256 / custom.pl8** (already routed in
+`gfx_title_background_load`).  Scene dispatch routes page 7 →
+`engine_title_render_setup_screen`; `main.c` loads + binds the chrome
+sheet + palette in `title_bind_render_state`.
+
+Coverage 321 → 327 touched (12.2% host-tested, 14.1% of code bytes).
+5 new page-7 host tests + bevel + darken tests → **1212 green**; both
+drop-in builds clean.
+
+### Next
+
+**Page-7 groundtruth diff** (verification milestone — needs a harness
+run).  The runtime state (country-list bytes `DAT_0050a460`, scroll/sel/
+count, the 5 roster records at `DAT_0057bf05`+i·0x160, names at
+`DAT_00553d54`+i·0x2c, enabled `DAT_005530e0`, the 12 tab scalars at
+`0x53f288..0x53f2b4`, the 128×128 preview buffer `DAT_00569590`) must be
+captured live from retail via `frida_capture.py --dump-globals` (buffers
+supported), bound into a `--title-page 7` drop-in path, rendered over
+custom.pl8, and diffed against `scenario-setup-retail.bmp` to bit-identical.
+The render code is complete + unit-tested; this step is the pixel-parity
+verification.
+
 ## 2026-05-29 — MISC SHEET: bind misc_sel.pl8 (`DAT_005530c8`) — last unbound title asset
 
 The **remaining unbound asset** flagged as "Next" last entry — the
