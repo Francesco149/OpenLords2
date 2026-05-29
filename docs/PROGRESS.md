@@ -48,17 +48,41 @@ arrives with the page-7 render).
 
 ### Next
 
-**Page 7** (`FUN_0041f6c7`) — the **scenario / player-setup screen**, the
-natural next screen in play-flow: page 4 (Choose title) → *Continue* → page
-7 when `DAT_00553030 == 0` (single-player custom game; transition at
-0x4334xx line ~21506).  A multi-leaf screen: the 320×240 misc backdrop +
-3 column labels (entry 0xb subs 0xc/0xd/0xe), a 5-row scrollable selector
-with a computed scrollbar (`FUN_0041f98b`, 576 B), a per-player roster pass
-(`FUN_0041fbcb` → the already-ported `FUN_0049caaa`), and a 12-entry
-tab/button strip (`FUN_0041f86d`).  Unported leaves: `FUN_00410c71` (76 B),
-`FUN_004b13ed` (274 B), `FUN_004093e0`, `FUN_0041f86d` (286 B).  Needs a
-page-7 nav trace (extend `menu_choose_title.jsonl` with a *Continue* click)
-for the retail groundtruth.
+**Page 7** (`FUN_0041f6c7`) — the **game-setup screen** (groundtruth now
+captured + confirmed, see below), the natural next screen in play-flow:
+page 4 (Choose title) → *Continue* → page 7 when `DAT_00553030 == 0`
+(single-player custom game; page-4 hotspot `DAT_004dcc20` entry 7
+"Continue" param 2 → `FUN_00435531` → transition at 0x4334xx line ~21506).
+
+**Groundtruth captured (2026-05-29).**  `tools/traces/menu_scenario_setup.jsonl`
+(choose-title path + a Continue click at game (432,227)) drives retail to
+page 7; `--dump-globals 0x5530f0` read back **0x07** (confirmed page 7).
+4 full-color frames in `runs/capture/gt-p7/`; canonical groundtruth saved to
+`runs/groundtruth/scenario-setup-retail.bmp` (gitignored).  The screen: a
+coat-of-arms preview top-left, the AI-opponent roster down the left edge
+("The Baron / Bishop / Witch / Knight / Countess" + shields), three carved
+64×64 column headers (misc sprites 0xc/0xd/0xe), the 320×240 stone backdrop
+(misc sprite 0xf), a center options grid (the 12-entry tab strip), and a
+right-edge scrollbar.
+
+**Render decomposition** (the arc — state-heavy, like page 4 but more so):
+- the 320×240 misc backdrop + 3 column labels (entry 0xb subs 0xc/0xd/0xe);
+- the 5-row scrollable selector + computed scrollbar (`FUN_0041f98b`, 576 B)
+  — needs `DAT_0053e90c` (scroll), `DAT_0057cacc` (sel), `DAT_00554018`
+  (count), the `DAT_0050a460` value list, scrollbar math `FUN_00404dc1/d6b`
+  (ported);
+- the coat-of-arms preview (`FUN_00410c71` → `FUN_0040a01d` + `FUN_00410cbd`,
+  the 654 B palette-remap shield compositor; page-7 calls it with param 0,
+  the simple base-blit path);
+- the per-player roster pass (`FUN_0041fbcb` → already-ported `FUN_0049caaa`;
+  reads the roster at `DAT_0057bf05`+i·0x160, names at `DAT_00553d54`+i·0x2c);
+- the 12-entry option-tab strip (`FUN_0041f86d`, 286 B → `FUN_004093e0`).
+
+Unported leaves to chip first (mechanical, host-testable): `FUN_00410c71`
+(+`FUN_0040a01d`/`FUN_00410cbd`), `FUN_004b13ed` (274 B), `FUN_004093e0`,
+`FUN_0041f86d` (286 B).  Then the page-7 render + state seeding from a
+`--dump-globals` capture, scene-dispatch routing + per-frame refresh, and a
+`--title-nav` step — verified 0-diff vs `scenario-setup-retail.bmp`.
 
 ## 2026-05-29 — BUTTON OVERLAY: page-3 gauntlet buttons + scroll arrows (page 3 now fully bit-identical)
 

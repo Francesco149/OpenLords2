@@ -1,0 +1,33 @@
+# Navigation trace: main menu (page 1) → "Single player" → "Your options"
+# (page 2) → "Custom game" → "Choose your title and your shield" (page 4)
+# → "Continue" → the scenario/player-setup screen (page 7).
+#
+# Extends menu_choose_title.jsonl with a page-4 Continue click.  Page-4
+# hotspot table DAT_004dcc20 entry 7 = "Continue" box (336,215)-(528,240),
+# action param 2, press-edge (FUN_00435531).  With DAT_00553030 == 0
+# (single-player custom game) the action sets DAT_005530f0 = 7
+# (transition at 0x4334xx line ~21506).
+#
+# Reproduce for parity capture:
+#   nix develop -c python3 tools/frida_capture.py --remote <host> \
+#     --skip-intro --input-trace tools/traces/menu_scenario_setup.jsonl \
+#     --frame-capture --frame-capture-warmup-secs 11 --frame-capture-max 4
+#
+# Coords are authored in GAME space (640x480); the agent rescales to the
+# live window-client viewport.  "Single player" (320,107); "Custom game"
+# page-2 button 4 (320,211); "Continue" page-4 button 7 center (432,227);
+# neutral park (320,462).  lParam=(y<<16)|x.
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 13828416}
+{"t": 206, "m": 512, "w": 0, "l": 13828416}
+{"t": 210, "m": 513, "w": 1, "l": 13828416}
+{"t": 216, "m": 514, "w": 0, "l": 13828416}
+{"t": 400, "m": 512, "w": 0, "l": 14877104}
+{"t": 406, "m": 512, "w": 0, "l": 14877104}
+{"t": 410, "m": 513, "w": 1, "l": 14877104}
+{"t": 416, "m": 514, "w": 0, "l": 14877104}
+{"t": 560, "m": 512, "w": 0, "l": 30277952}
+{"t": 600, "m": 512, "w": 0, "l": 30277952}
