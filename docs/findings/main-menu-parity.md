@@ -58,6 +58,14 @@ there would run `FUN_0042e060` before `FUN_0042d91b` has written the return-stat
 global `_DAT_005169b0`. All engine state transitions stay retail-authentic; only
 the per-movie playback duration is cut.
 
+The snap also force-returns `_SmackWait` (smackw32 Ordinal_32) to 0 ("ready")
+during the boot chain — under silent-audio + non-turbo the decode thread never
+reports ready, which otherwise left the engine stuck at `screen=0x22` with the
+menu drawn but non-interactive. With the fix, skip-intro reaches the title menu
+(`0x1f`) reliably in both turbo and non-turbo. See
+[`title-menu-screens.md`](title-menu-screens.md) for the title page state
+machine and the menu-navigation capture workflow built on top of this.
+
 ### Fallback: turbo fast-forward (no skip)
 
 The frame-capture cadence is one shot per engine cumulative-second rollover

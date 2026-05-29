@@ -29,6 +29,8 @@ session — they outlive the conversation context.
 | [map-render.md](map-render.md) | Strategic map-tile renderer — territory-sprite walk |
 | [overlay-render.md](overlay-render.md) | Strategic-mode overlay renderer — units + cities pass |
 | [battlefield-render.md](battlefield-render.md) | Combat-mode (battlefield) renderer — full draw-leaf survey |
+| [main-menu-parity.md](main-menu-parity.md) | Main-menu render parity — capture (`--skip-intro`), reach, compare |
+| [title-menu-screens.md](title-menu-screens.md) | Title page state machine (`DAT_005530f0`) + menu-navigation capture workflow |
 
 ## Game state & save format (PLAN §4)
 

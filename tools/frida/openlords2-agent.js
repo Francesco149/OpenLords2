@@ -361,6 +361,13 @@ const ADDR = {
     fn_smack_step:       0x0042dbc7, // FUN_0042dbc7 — per-frame Smacker stepper
     fn_smack_open:       0x0042da18, // FUN_0042da18 — Smacker open (steps once at open)
     var_smack_handle:    0x004d4d58, // DAT_004d4d58 — Smack* handle (0 = none)
+    // _SmackWait import (smackw32 Ordinal_32) IAT slot.  Returns 0 = "frame
+    // ready", nonzero = "not ready" (FUN_0042dbc7 returns early on nonzero,
+    // never reaching its done→chain branch).  Under silent-audio / non-turbo
+    // the decode thread never reports ready, so the frame-snap alone leaves the
+    // movie stuck at screen 0x22.  We force this to 0 during skip so the
+    // stepper always reaches the (snapped) last-frame done branch.
+    var_smack_wait_iat:  0x005cf5d8, // IAT slot → smackw32 _SmackWait
 };
 
 // Per-slot strides — used inside the runRetailSimSubSteps RPC + the LUT
@@ -2483,6 +2490,26 @@ function installSkipIntroHook() {
             }
         },
     });
+    // Force _SmackWait → 0 ("ready") during a step-time boot-intro snap so the
+    // stepper always reaches its done→chain branch even when the decode thread
+    // never reports ready (silent-audio / non-turbo).  The same gate as the
+    // snap (skip on, engine state 1, not inside open) so the open-time first
+    // frame decodes normally and in-game movies are untouched.
+    const waitFn = rva(ADDR.var_smack_wait_iat).readPointer();
+    if (!waitFn.isNull()) {
+        Interceptor.attach(waitFn, {
+            onLeave: function (retval) {
+                if (g_smack_in_open > 0) return;
+                if (rva(ADDR.var_sim_game_state_phase).readS32() !== 1) return;
+                if (rva(ADDR.var_smack_handle).readPointer().isNull()) return;
+                retval.replace(ptr(0));          // report "frame ready"
+            },
+        });
+        log('skip_intro: _SmackWait force-ready armed @ ' + waitFn);
+    } else {
+        log('skip_intro: WARNING _SmackWait IAT slot empty (smackw32 not ' +
+            'resolved yet); frame-snap only');
+    }
     log('skip_intro: armed (FUN_0042dbc7 step + FUN_0042da18 open guard; ' +
         'each boot-intro Smacker movie ends on its next main-loop frame)');
 }

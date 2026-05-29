@@ -1,0 +1,17 @@
+# Navigation trace: from the main menu (title page 1), click "Single player"
+# to reach the single-player "Your options" screen (title page 2), then move
+# the cursor to a neutral corner so no button hover-highlights the groundtruth.
+#
+# Reproduce the screen for parity capture:
+#   nix develop -c python3 tools/frida_capture.py --remote <host> \
+#     --skip-intro --input-trace tools/traces/menu_single_player.jsonl \
+#     --frame-capture --frame-capture-warmup-secs 3 --frame-capture-max 4
+#
+# Coords are client/game 640x480 (1:1).  "Single player" label center is
+# (320,107); neutral corner (610,462).  lParam = (y<<16)|x.  See
+# docs/findings/title-menu-screens.md.
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 110, "m": 512, "w": 0, "l": 30277730}

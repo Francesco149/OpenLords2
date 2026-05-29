@@ -1,0 +1,98 @@
+# Title-screen menu sub-state machine + navigation
+
+> 2026-05-29. The title screen (`DAT_004eac50 == 0x1f`) is itself a small
+> state machine: a *page* selector `DAT_005530f0` chooses which menu the
+> player sees. This documents the page map, the per-page draw/update
+> dispatch, and the harness workflow for driving + capturing each page for
+> render parity.
+
+## Title page selector (`DAT_005530f0`)
+
+Two parallel dispatch ladders run while `DAT_004eac50 == 0x1f`:
+
+- **Draw** — `FUN_0041e7e1` (the deferred-screen dispatcher's 0x1f arm,
+  reached via `FUN_0040f1a0`). Calls `FUN_0041e61d` (background) then a
+  per-page draw fn.
+- **Update** — the per-tick title handler at `0x4b99c0`+ (line ~88901).
+  Per-page update fn.
+
+| page (`DAT_005530f0`) | draw fn      | update fn     | screen |
+|----------------------:|--------------|---------------|--------|
+| 1   | `FUN_0041ea14` | `FUN_0041eaa3` | **Main menu** — Single player / Multiple players / Lords of Magic? / Exit game |
+| 2   | `FUN_0041ec8a` | `FUN_0041ece6` | **"Your options"** (single-player) — Play Now! / Load a game / Skirmish! / Custom game / Back |
+| 3   | `FUN_0041ef42` | …            | (sub-screen) |
+| 4   | `FUN_0041ef57` | `FUN_0041f321`+ | (sub-screen) |
+| 5   | `FUN_0041f592` | `FUN_0041f5e8` | (sub-screen) |
+| 6   | `FUN_0041f3e9` | `FUN_0041f4a1` | (sub-screen) |
+| 7   | `FUN_0041f6c7` | `FUN_0041f98b`+ | (sub-screen) |
+| 8   | `FUN_0041f77a` | `FUN_0041f98b`+ | (sub-screen) |
+| 9   | `FUN_0041fdd6` | …            | (sub-screen) |
+| 10  | `FUN_00420428` | …            | (sub-screen) |
+| 0xb | `FUN_00420630` | …            | (sub-screen) |
+| 0xc | `FUN_0042051c` | …            | save/load list (scrollbar — `FUN_00421005`) |
+| 0xd | `FUN_0042150b` | …            | (sub-screen) |
+
+> Note: the boot path (intro chain → 0x1f) lands on **page 1**, not page
+> 0xc. The earlier assumption that the four-button menu was page 0xc was
+> wrong — page 0xc is a list screen. Confirmed empirically: skip-intro
+> lands on `screen=0x1f substate=0x1`, and clicking "Single player"
+> transitions to `substate=0x2`.
+
+## "Your options" (page 2) render — port target
+
+`FUN_0041ec8a` (draw, 92 B):
+
+```c
+FUN_00409346(DAT_004eabec, 0xb0, 10, 0x12, 0x12);          // gray panel
+FUN_00402c5e(0xb, 5, 0xb0, 0x2d, 0x120, &DAT_005b2fa0,0x3f);// "Your options" (large font, str 5)
+FUN_0041ece6();                                            // the 5 buttons
+```
+
+`FUN_0041ece6` (buttons, 604 B): five buttons, each at x=0xe0 w=0xc0 h=0x18,
+24 px apart (y = 0x5b, 0x7f, 0xa3, 0xc7, 0xeb):
+
+```c
+FUN_00403ee4(0xe0, y, 0xc0, 0x18);                         // button fill rect
+FUN_004527a6(0xe0, y, 0xe, 3, 1);                          // bevel/border
+FUN_00402c5e(0xb, str, 0xe0, y+5, 0xc0, &DAT_005af8f0, col);// label (menu font)
+// col = 0xf9 (highlight) if DAT_00553114 == button_index, else 0x3f
+```
+
+Label string ids (localization entry 0xb, sub-string index): button 1 = 6
+("Play Now!"), 2 = 7 ("Load a game"), 3 = 0x13 ("Skirmish!"), 4 = 8
+("Custom game"), 5 = 9 ("Back."). Title = str 5 ("Your options").
+
+All primitives already exist from the main-menu port (`gfx_panel`,
+`gfx_text`, the bevel-rect + dirty-mark used by `engine_title_render_buttons`)
+— page 2 is the same shapes with different geometry + strings. In the port
+this lands as the `engine_title_render` page-2 renderer (today the deferred
+`page_fn` stub).
+
+## Harness workflow: drive + capture a menu page
+
+1. **Reach the menu fast** with `--skip-intro` (see
+   [`main-menu-parity.md`](main-menu-parity.md)).
+2. **Navigate** with a synthetic input trace (`--input-trace`). Cursor
+   coords are client/game 640×480 (1:1); `lParam = (y<<16)|x`; events are
+   `engine_tick`-stamped. Non-turbo gives predictable ~60 Hz ticks, so a
+   click at tick 70 lands ~1.2 s in (after the menu is up at ~tick 10).
+   Reusable trace: `tools/traces/menu_single_player.jsonl`.
+3. **Capture + compare** the resulting frame against the page's groundtruth.
+
+Verified 2026-05-29: skip-intro → click (320,107) "Single player" →
+`screen=0x1f substate 0x1→0x2`; captured "Your options" frame is stable +
+matches the real screen. Cursor read-back confirmed our posted
+`WM_MOUSEMOVE` reaches the engine (`game_x=320`, cache disabled).
+
+### `_SmackWait` robustness (skip-intro)
+
+The first skip-intro cut depended on `_SmackWait` (smackw32 Ordinal_32, IAT
+`0x5cf5d8`) eventually reporting "ready" (return 0) so the frame-snap could
+reach `FUN_0042dbc7`'s done→chain branch. Under **silent-audio + non-turbo**
+the decode thread never reported ready, leaving the engine stuck at
+`screen=0x22` (movie state) with the menu drawn but **non-interactive**
+(menu input is gated on `screen==0x1f`). Fix: the agent now also forces
+`_SmackWait → 0` during a step-time boot-intro snap (same gate: skip on,
+engine state 1, not inside open). Skip-intro now reaches `0x1f` reliably in
+turbo *and* non-turbo. This was the prerequisite for deterministic-tick menu
+navigation.
