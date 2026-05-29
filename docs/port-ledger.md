@@ -306,8 +306,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42e5c0 | FUN_0042e5c0 | 1249 | gfx.c, gfx.h |
 | 0x42eaa6 | FUN_0042eaa6 | 214 | gfx.c |
 | 0x42eb7c | FUN_0042eb7c | 277 | gfx.c, gfx.h |
-| 0x42f306 | FUN_0042f306 | 323 | gfx.c |
-| 0x42f449 | FUN_0042f449 | 323 | gfx.c |
+| 0x42f306 | FUN_0042f306 | 323 | gfx.c, gfx.h |
+| 0x42f449 | FUN_0042f449 | 323 | gfx.c, gfx.h |
 | 0x42ff10 | FUN_0042ff10 | 8140 | engine.c |
 | 0x440666 | FUN_00440666 | 383 | engine.c |
 | 0x4782c5 | FUN_004782c5 | 340 | engine.c |

@@ -4328,7 +4328,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/gfx.c"
+    "src/gfx.c",
+    "src/gfx.h"
    ]
   },
   {
@@ -4338,7 +4339,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/gfx.c"
+    "src/gfx.c",
+    "src/gfx.h"
    ]
   },
   {

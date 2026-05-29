@@ -107,6 +107,20 @@ static int                  g_surface_lost_latch;
  * eventually share. */
 static uint8_t g_palette_rgb[256 * 3];
 
+/* Which retail palette builder gfx_load_palette emulates.  1 (default) =
+ * FUN_0042f306, the full-color-desktop / fullscreen-exclusive path a real
+ * player hits on any modern machine (loads the .256 into idx 1..254, so
+ * the dark-red title caps and bright-red hover highlight render).  0 =
+ * FUN_0042f449, the 8bpp-desktop / --force-windowed blackout path (idx
+ * 0..9 + 246..255 black) — retained for bit-identical regression against
+ * the old windowed retail groundtruths.  See gfx_set_palette_full_range. */
+static int g_palette_full_range = 1;
+
+void gfx_set_palette_full_range(int enable)
+{
+    g_palette_full_range = enable ? 1 : 0;
+}
+
 /* Rate-limiter + dirty-rect state — port of retail's globals around
  * FUN_00452160 / FUN_00452306.  See docs/findings/render-rate-limiter.md.
  *
@@ -321,16 +335,16 @@ int gfx_surface_lost(void)
  *  `FUN_0042f1df`/`FUN_0042f449`/`FUN_0042f306` (build              *
  *  PALETTEENTRY[256] + CreatePalette + SetPalette).                 *
  *                                                                    *
- *  Simplifications relative to retail:                              *
- *                                                                    *
- *  - Reserved palette slots (0..9, 246..255) are forced black, and  *
- *    only 10..245 take the .256 file's colors — a faithful port of  *
- *    retail's FUN_0042f449 (the PALETTEENTRY builder behind every    *
- *    image-palette upload).  Retail keeps those 20 slots at their    *
- *    BSS-zero init forever; the menu's UI/text color indices that    *
- *    land there (1, 0xf9) must render black, confirmed by a live     *
- *    windowed retail capture.  See engine-quirks #115.               *
- *  - No SetSystemPaletteUse — only matters in windowed 8bpp.        *
+ *  Two retail palette builders, dispatched by FUN_0042f1df on the      *
+ *  desktop color depth (DAT_0053f228).  We default to FUN_0042f306,    *
+ *  the full-color-desktop / fullscreen-exclusive path a real player    *
+ *  hits on any modern machine (.256 into idx 1..254; idx 0 black, 255  *
+ *  white) — so the dark-red caps + bright-red hover highlight render.  *
+ *  gfx_set_palette_full_range(0) switches to the FUN_0042f449 8bpp /   *
+ *  --force-windowed blackout path.  See engine-quirks #115 and the     *
+ *  gfx_set_palette_full_range header doc.                              *
+ *                                                                      *
+ *  Simplification: no SetSystemPaletteUse (only matters in 8bpp).      *
  * ---------------------------------------------------------------- */
 int gfx_load_palette(const char *path)
 {
@@ -351,30 +365,54 @@ int gfx_load_palette(const char *path)
      * (range 0..63), so we shift left by 2 to get 8-bit RGB. */
     for (int i = 0; i < 256 * 3; i++) g_palette_rgb[i] = rgb[i] << 2;
 
-    /* Reserved-range blackout — port of FUN_0042f449's three-segment
-     * build.  Retail only loads an image palette into indices 10..245
-     * (peFlags PC_NOCOLLAPSE); indices 0..9 and 246..255 keep their
-     * BSS-zero value (DAT_00515d90, never written by an image load) —
-     * i.e. permanently black — with peFlags 0.  These 20 entries are the
-     * Windows system-reserved slots; retail blacks them so the UI/text
-     * color indices that fall there (e.g. 1 = uppercase highlight,
-     * 0xf9 = selected-button highlight) render black, not the VGA colors
-     * the .256 file happens to carry there.  Verified against a live
-     * windowed retail capture: indices 1..9 and 246..255 read back
-     * (0,0,0).  Matching this is what makes the menu text color-correct
-     * (red caps / red selection were the all-256 divergence's tell). */
-    for (int i = 0; i < 10; i++)
-        g_palette_rgb[i*3+0] = g_palette_rgb[i*3+1] = g_palette_rgb[i*3+2] = 0x00;
-    for (int i = 246; i < 256; i++)
-        g_palette_rgb[i*3+0] = g_palette_rgb[i*3+1] = g_palette_rgb[i*3+2] = 0x00;
+    /* Retail has TWO palette builders, dispatched by FUN_0042f1df on
+     * DAT_0053f228 (set from the *desktop* color depth at boot):
+     *
+     *   - desktop == 8bpp           → FUN_0042f449 → builds DAT_00515d90,
+     *     forcing the Windows-reserved slots 0..9 and 246..255 black
+     *     (they keep their never-written BSS value).
+     *   - desktop != 8bpp ("full    → FUN_0042f306 → builds DAT_005165b0,
+     *     color", i.e. every modern    loading the .256 into idx 1..254
+     *     desktop → fullscreen-         (PC_NOCOLLAPSE) and hard-coding
+     *     exclusive)                    idx 0 = black, idx 255 = white.
+     *
+     * On any modern full-color desktop retail takes the *second* path, so
+     * a real player sees the asset's intended UI colors: dark-red title
+     * caps (idx 1 = (128,0,0)) and the bright-red selected/hovered menu-
+     * button highlight (idx 0xf9 = (252,0,0)).  Empirically confirmed
+     * against a live fullscreen-exclusive retail capture — palette
+     * GetEntries returned idx 0xf9 = (252,0,0) peFlags 4, and the red
+     * hover was visually confirmed on screen.
+     *
+     * The drop-in targets modern full-color desktops, so FUN_0042f306 is
+     * the *faithful* default (g_palette_full_range = 1).  The old blackout
+     * was matching FUN_0042f449 — which only runs under our own
+     * --force-windowed harness (it forces DAT_0053f228 = 0) or on a true
+     * 8bpp desktop; it is reachable via gfx_set_palette_full_range(0) for
+     * bit-identical regression against the old windowed groundtruths.
+     * See engine-quirks #115. */
+    if (g_palette_full_range) {
+        /* FUN_0042f306: idx 0 black, idx 255 white, 1..254 from .256. */
+        g_palette_rgb[0] = g_palette_rgb[1] = g_palette_rgb[2] = 0x00;
+        g_palette_rgb[255*3+0] = g_palette_rgb[255*3+1] = g_palette_rgb[255*3+2] = 0xff;
+    } else {
+        /* FUN_0042f449: reserved ranges 0..9 and 246..255 forced black. */
+        for (int i = 0; i < 10; i++)
+            g_palette_rgb[i*3+0] = g_palette_rgb[i*3+1] = g_palette_rgb[i*3+2] = 0x00;
+        for (int i = 246; i < 256; i++)
+            g_palette_rgb[i*3+0] = g_palette_rgb[i*3+1] = g_palette_rgb[i*3+2] = 0x00;
+    }
 
     PALETTEENTRY entries[256];
     for (int i = 0; i < 256; i++) {
         entries[i].peRed   = g_palette_rgb[i*3+0];
         entries[i].peGreen = g_palette_rgb[i*3+1];
         entries[i].peBlue  = g_palette_rgb[i*3+2];
-        /* Retail: 10..245 → PC_NOCOLLAPSE (4); reserved ranges → 0. */
-        entries[i].peFlags = (i >= 10 && i < 246) ? PC_NOCOLLAPSE : 0;
+        /* FUN_0042f306: 1..254 → PC_NOCOLLAPSE, idx 0 + 255 → 0.
+         * FUN_0042f449: 10..245 → PC_NOCOLLAPSE, reserved ranges → 0. */
+        entries[i].peFlags = g_palette_full_range
+            ? ((i >= 1 && i < 255)  ? PC_NOCOLLAPSE : 0)
+            : ((i >= 10 && i < 246) ? PC_NOCOLLAPSE : 0);
     }
 
     /* Replace any prior palette in-place (retail Releases first). */

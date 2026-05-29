@@ -533,6 +533,20 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             out = frames_dir / f"frame_{fi:05d}.bmp"
             try:
                 _write_paletted_bmp(out, w, h, palette_bytes, pixels)
+                # Sidecar: raw 1024-byte palette (256 × PALETTEENTRY) +
+                # a human-readable dump of the UI/highlight indices so we
+                # can settle windowed-vs-fullscreen reserved-range behavior
+                # (idx 1 = title caps, 0xf9 = selected-button highlight).
+                (frames_dir / f"frame_{fi:05d}.pal").write_bytes(palette_bytes)
+                def _pe(i):
+                    o = i * 4
+                    return (palette_bytes[o], palette_bytes[o+1],
+                            palette_bytes[o+2], palette_bytes[o+3])
+                f_log.write(f"[palette] #{fi} "
+                            f"idx0x01(R,G,B,fl)={_pe(0x01)} "
+                            f"idx0x3f={_pe(0x3f)} "
+                            f"idx0xf9={_pe(0xf9)} "
+                            f"idx0xff={_pe(0xff)}\n")
                 counts["frame"] += 1
                 f_log.write(f"[frame] #{fi} {w}x{h} -> {out.name} "
                             f"virt_ms={p.get('virtual_now_ms')} "

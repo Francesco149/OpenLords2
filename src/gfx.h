@@ -57,6 +57,27 @@ void gfx_shutdown(void);
  * "base01.256" — additional palette swaps land via direct call. */
 int  gfx_load_palette(const char *path);
 
+/* Select which of retail's two palette builders gfx_load_palette
+ * emulates (takes effect on the next call):
+ *
+ *   enable = 1 (default) → FUN_0042f306, the path retail runs on a
+ *     full-color (non-8bpp) desktop, i.e. fullscreen-exclusive on every
+ *     modern machine.  Loads the .256 into idx 1..254 (PC_NOCOLLAPSE),
+ *     hard-codes idx 0 = black and idx 255 = white.  The asset's UI
+ *     colors render as intended: dark-red title caps (idx 1) and the
+ *     bright-red selected/hovered menu-button highlight (idx 0xf9).  This
+ *     is what a real player sees — confirmed against a live fullscreen
+ *     retail capture (idx 0xf9 = (252,0,0)) and on screen.
+ *
+ *   enable = 0 → FUN_0042f449, the 8bpp-desktop path that also runs under
+ *     our --force-windowed harness (it forces DAT_0053f228 = 0): the
+ *     Windows-reserved slots 0..9 and 246..255 are forced black, so the
+ *     hover highlight is invisible.  Retained only for bit-identical
+ *     regression against the old windowed retail groundtruths.
+ *
+ * See engine-quirks #115 and title-menu-screens.md. */
+void gfx_set_palette_full_range(int enable);
+
 /* Load a raw full-screen 640×480×8 background image (24-byte PL8
  * header + raw indexed pixels) straight into the back buffer.  Port
  * of the platform side of retail's FUN_00408fcb.  Returns 1 on

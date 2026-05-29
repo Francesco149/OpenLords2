@@ -172,16 +172,24 @@ Verified: page-1 menu renders **bit-identical** to `mainmenu-retail.bmp`
 `--title-nav` still bit-identical on all three pages.  Human-confirmed a real
 mouse navigates (Single player → Your options → Back).
 
-**Windowed-mode highlight quirk.** There is no *visible* hover highlight in
-windowed mode, and that is **retail-faithful**, not a wiring gap.  The
-selected button's label re-renders every frame in palette index **0xf9**
-(confirmed: the 0xf9 dispatch follows the hovered button), but 0xf9 is in the
-system-reserved range (246..255) that retail forces black in `gfx_load_palette`
-(port of `FUN_0042f449`) — see engine-quirks "reserved-range blackout".  So
-the highlight maps to black and the output stays bit-identical to the retail
-groundtruth.  The hover *is* tracked; it just isn't visible under the windowed
-palette.  (A deliberate windowed-mode deviation that un-blacks 0xf9 would make
-it visible but break the bit-identical match — not taken.)
+**Hover highlight — bright red, and faithful (corrected 2026-05-29).** The
+selected button's label re-renders every frame in palette index **0xf9**, and
+on any full-color desktop retail renders that as **bright red** `(252,0,0)`.
+We *briefly* believed there was no visible highlight and that the blackout was
+faithful — but that was an artifact of our own `--force-windowed` hook (it
+forces `DAT_0053f228 = 0`, putting retail on the 8bpp `FUN_0042f449` palette
+builder, which blacks the reserved range).  **Real retail on a full-color
+desktop runs fullscreen-exclusive → `FUN_0042f306`, which loads idx 1..254
+from the `.256`, so the highlight (and the dark-red title caps at idx 1) show.**
+
+Confirmed empirically (2026-05-29): a live fullscreen-exclusive retail capture
+(`--no-force-windowed --no-gdi-seat`) read idx 0xf9 = `(252,0,0)` and the red
+hover was visible on screen; the drop-in now defaults to the `FUN_0042f306`
+build (`gfx_set_palette_full_range(1)`) and its windowed `--title-nav` "Single
+player"-hovered main menu is **bit-identical (0 diff px)** to the real
+fullscreen retail frame with the same button hovered (445 bright-red highlight
+px + 362 dark-red caps px in both).  See engine-quirks #115.  `--title-nav` /
+`--title-live` therefore now show the red hover highlight.
 
 ## Harness workflow: drive + capture a menu page
 

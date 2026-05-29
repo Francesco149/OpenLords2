@@ -4051,40 +4051,68 @@ against observable behaviour rather than added as dead infrastructure.
 
 ---
 
-## 115. Image palettes only fill indices 10..245; 0..9 + 246..255 stay black
+## 115. Two palette builders by desktop depth — fullscreen shows the red highlight, 8bpp/windowed blacks it
 
-Every image-palette upload runs through `FUN_0042f449`, which builds the
-`DAT_00515d90` PALETTEENTRY array in three segments:
+Every image-palette upload runs through the dispatcher `FUN_0042f1df`,
+which picks one of **two** PALETTEENTRY builders based on `DAT_0053f228`
+(set once at boot in `FUN_0042e5c0` from the *desktop* color depth):
 
-- **0..9**   — RGB left at `DAT_00515d90`'s existing value (BSS-zero =
-  black, never written by an image load), peFlags 0.
-- **10..245** — RGB copied from the loaded `.256` working buffer,
-  peFlags 4 (`PC_NOCOLLAPSE`).
-- **246..255** — same as 0..9: black, peFlags 0.
+- **`DAT_0053f228 == 0`** — desktop is 8bpp → **`FUN_0042f449`**, builds
+  `DAT_00515d90`: 10..245 from the `.256` (peFlags 4 / `PC_NOCOLLAPSE`);
+  0..9 and 246..255 keep their never-written BSS value (**black**),
+  peFlags 0.  Also does a `SetSystemPaletteUse(NOSTATIC)`/`(STATIC)` dance.
+- **`DAT_0053f228 != 0`** — desktop is "full color" (any modern 16/32bpp
+  desktop) → **`FUN_0042f306`**, builds `DAT_005165b0`: **1..254 from the
+  `.256`** (peFlags 4), idx 0 hard-coded black `(0,0,0)` and idx 255 hard-
+  coded white `(255,255,255)`, both peFlags 0.
 
-So the 20 Windows system-reserved slots are **permanently black** — an
-image's `.256` colors there are discarded.  This matters because the
-menu's UI/text color indices land in that range: the uppercase-highlight
-color is **1** (`FUN_0041ea14` arms `DAT_0058fe2c`, `FUN_00402637` sets
-the foreground to 1 for A..Z) and the selected-button highlight is
-**0xf9** (`FUN_0041eaa3`).  gateway.256 carries VGA colors there (idx 1 =
-dark red, idx 0xf9 = bright red), so a naive all-256 palette load renders
-the title capitals and the selected button **red** — but retail blacks
-them, so they read as the same dark as the body text.
+The menu's UI/text indices land where the two builders differ: the
+uppercase-highlight color is **1** (`FUN_0041ea14` arms `DAT_0058fe2c`,
+`FUN_00402637` sets foreground 1 for A..Z) and the selected/hovered-button
+highlight is **0xf9** (`FUN_0041eaa3`).  gateway.256 carries idx 1 =
+`(128,0,0)` dark red and idx 0xf9 = `(252,0,0)` bright red.
 
-Confirmed against a live *windowed* retail capture (`frida_capture.py
---frame-capture`, palette dumped via GetEntries): indices 1..9 and
-246..255 read back `(0,0,0)`, all others match gateway.256.  Fullscreen
-retail would show the VGA colors (hence the "red caps" you may remember),
-but the drop-in defaults to windowed and matches the windowed capture.
+So the visible result depends on the desktop, *not* on fullscreen-vs-
+windowed per se:
 
-The port replicates this in `gfx_load_palette` (was previously a
-deliberate all-256 divergence — that was the bug).  With it, the whole
-main menu is **bit-identical** to retail.
+- On a **full-color desktop** (every modern machine), retail runs
+  `FUN_0042f306`, the `.256` colors at 1 and 0xf9 survive, and the menu
+  shows **dark-red title caps** and a **bright-red hover highlight**.
+  This is what a real player sees.
+- On a true **8bpp desktop**, `FUN_0042f449` blacks the reserved range and
+  the highlight is invisible.
 
-> 📍 `src/gfx.c` (`gfx_load_palette`), Ghidra `FUN_0042f449` @ `0x42f449`
-> (builder) / `FUN_0042f58c` (SetEntries) / `FUN_004b0ab5` (×4 working
-> buffer) / `FUN_0041ea14` + `FUN_00402637` (color-1 caps).
+**Empirically confirmed (2026-05-29), both ways.**  A live
+fullscreen-exclusive retail capture (`frida_capture.py --no-force-windowed
+--no-gdi-seat`, palette dumped via GetEntries) read back **idx 0xf9 =
+`(252,0,0)` peFlags 4**, idx 1 = `(128,0,0)`, idx 0xff = `(255,255,255)`;
+and the red hover was **visually confirmed on screen**.  The matching
+windowed capture (default `--force-windowed`) read idx 0xf9 = `(0,0,0)`.
+
+> **Earlier mistake, corrected.**  This entry once claimed the blackout was
+> retail-faithful, and a first "correction" then claimed fullscreen was *also*
+> black (reasoning only from `FUN_0042f449` + a NULL-handle `GetPaletteEntries`
+> seed, having missed `FUN_0042f306` entirely).  Both were wrong.  The blackout
+> our windowed capture showed is a **self-inflicted artifact**: the
+> `--force-windowed` harness hook sets `DAT_0053f228 = 0` inside
+> `SetCooperativeLevel`, which fires *before* the menu's `gateway.256` upload,
+> so `FUN_0042f1df` takes the 8bpp `FUN_0042f449` branch.  Real retail on the
+> same box never does this — it stays on `FUN_0042f306` and renders red.
+
+**Port:** `gfx_load_palette` now defaults to the `FUN_0042f306` build
+(`g_palette_full_range = 1`) — the faithful path for the drop-in's
+full-color-desktop target, so the red hover highlight + dark-red caps
+render.  `gfx_set_palette_full_range(0)` selects the `FUN_0042f449`
+blackout build for bit-identical regression against the *old* windowed
+groundtruths (which were captured under `--force-windowed` and are
+therefore black-reserved-range; new full-color groundtruths should be
+captured with `--no-force-windowed`).
+
+> 📍 `src/gfx.c` (`gfx_load_palette`, `gfx_set_palette_full_range`); Ghidra
+> `FUN_0042f1df` @ `0x42f1df` (dispatcher) / `FUN_0042f306` @ `0x42f306`
+> (full-color builder, `DAT_005165b0`) / `FUN_0042f449` @ `0x42f449` (8bpp
+> builder, `DAT_00515d90`) / `FUN_0042f58c` (SetEntries) / `FUN_004b0ab5`
+> (×4 working buffer) / `FUN_0041ea14` + `FUN_00402637` (color-1 caps).
 
 ---
 
