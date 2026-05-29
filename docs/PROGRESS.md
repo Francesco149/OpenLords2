@@ -47,20 +47,34 @@ vs retail ground truth: **the entire backdrop matches** (armor / red-cross
 shield / weapons / stone floor pixel-for-pixel).  The 23% delta is exactly
 the panel + title text + buttons rectangle — the composition track.
 
-### Next (the composition track, two sub-tracks)
+### Panel landed — `08695ca`
 
-1. **Panel (cleaner; no extraction)** — port `FUN_004b25b0` (blob
-   allocator), load panels2.pl8 into the blob, bind it + `gfx_panel` as
-   the panel fn.  Needs the lock-render-unlock integration: the sprite
-   renderer draws into the locked back buffer (`DAT_004ea1a8 = g_pixels`),
-   so the whole title scene must render inside one Lock/Unlock around
-   `engine_title_render_scene`, then present.  gfx_panel itself is ported.
-2. **Text (extraction-gated)** — title/subtitle/button labels rest on the
-   ported text primitives, but need the **font + glyph-table bytes
-   extracted from Lords2.exe** (DAT_005b2fa0 title font, DAT_005af8f0 menu
-   font, DAT_004d71f0/d0 char→glyph tables — all static .data, bound via
-   the existing `engine_title_render_bind_fonts/_glyph_tables`).  The loc
-   blob (DAT_00591580) already loads at runtime (config: l2.eng, 100016 B).
+Backdrop + stone panel now match retail pixel-for-pixel (diff 23.3% →
+1.58%; the 1.58% is exactly the font-gated text).  User-confirmed.
+
+- `gfx_load_panel_sheet()` — port of `FUN_004b25b0` alloc + panels2.pl8
+  read (raw PL8: 8-byte header + 16-byte descriptors + pixels).
+- `gfx_lock_canvas()` / `gfx_unlock_canvas()` — bind the locked
+  back-buffer base as the gfx_paint canvas; verified pitch == 640 so the
+  width-as-stride assumption holds (bails otherwise).
+- `--title-menu` renders `engine_title_render_scene(0x1f, 1)` inside one
+  back-buffer lock.
+- `seek_localized` now guards an unbound loc blob (NULL) → no-op (the
+  text path deref'd NULL before the l2.eng blob is bound); root-caused
+  with a host ASan repro of the full scene against the real panels2.pl8.
+
+### Next — text (font-glyph extraction)
+
+The only remaining visible delta.  The title/subtitle/button labels rest
+on the ported text primitives but need the **font + glyph-table bytes
+extracted from Lords2.exe**: DAT_005b2fa0 (title font), DAT_005af8f0
+(menu/default font), DAT_004d71f0 / DAT_004d71d0 (char→glyph tables — all
+static .data/.rdata).  Bind via the existing
+`engine_title_render_bind_fonts` / `_glyph_tables` + bind the loc blob
+(DAT_00591580, already loaded at runtime by config: l2.eng, 100016 B).
+gfx_glyph (the renderer) already knows the font blob layout, so the work
+is: determine each blob's extent, extract the bytes (embed or data file),
+bind, verify text renders vs ground truth.
 
 ## 2026-05-29 — main-menu render chain ported end-to-end (10-chip push)
 
