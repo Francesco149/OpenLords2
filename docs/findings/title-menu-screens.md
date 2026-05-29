@@ -142,12 +142,46 @@ each resulting page: verified main menu → "Single player" → Your options →
 "Back." → main menu, every frame **bit-identical** to the page groundtruths
 (0 diff px), round-trip clean.
 
-**Still deferred (next chip): live interactive menu.** Needs (a) the
-demand-redraw seam to lock the canvas around `engine_screen_dispatch`, (b)
-the per-frame button refresh (`FUN_004ba26e` 0x1f arm → button render) so
-the hover highlight repaints without a full-scene redraw, and (c) a startup
-producer that sets `g_sim_current_screen = 0x1f` + initial page/redraw.
-With those, a real mouse navigates the menu in the running drop-in.
+**Live interactive menu — DONE (`--title-live`, 2026-05-29).** The three
+pieces that were deferred all landed:
+
+- **(a) canvas-locked demand-redraw seam.** `engine_tick_title_render_step`
+  (engine.c) wraps `engine_screen_dispatch` in one `gfx_lock_canvas`.  The
+  page background reload (own DD lock) runs *before* the canvas lock — the
+  drop-in's `gfx_title_background_load` can't nest inside it — bound via the
+  new `engine_bind_title_bg_reload_fn` hook (→ `gfx_title_background_load`).
+- **(b) per-frame button refresh** = `engine_title_render_refresh_buttons`,
+  the port of `FUN_004ba26e`'s 0x1f arm.  Retail calls `FUN_004ba26e`
+  unconditionally every frame (engine_tick / FUN_004b99c0 line 99); its 0x1f
+  arm re-renders just the current page's buttons (page 1 → `buttons`, page 2
+  → `options_buttons`).  Runs each frame inside its own short canvas lock so
+  the selected-button highlight (`DAT_00553114`, set by the input dispatcher
+  with no demand-redraw) repaints without a full-scene redraw.  Pages 3..0xd
+  have their own refreshers (0x4149ec, 0x41f321, …) — unported, so the live
+  menu round-trips pages 1↔2 only today.
+- **(c) startup producer** = `engine_set_current_screen(0x1f)` +
+  `engine_title_render_set_page(1)` + `engine_set_viewport_game_extents(640,
+  480)` (so `engine_compute_input_state` maps the WM_MOUSEMOVE-cached cursor
+  1:1 on the menu) + an initial `engine_set_demand_redraw(2)`.  `--title-live`
+  binds the render state + bg hook and drives these, then the normal main
+  loop ticks the engine — input resolver → menu hover/click → locked title
+  render step.  Stands in for the unported boot→title transition (0x42b780).
+
+Verified: page-1 menu renders **bit-identical** to `mainmenu-retail.bmp`
+(0 diff px) and stays identical across 120 frames of per-frame refresh;
+`--title-nav` still bit-identical on all three pages.  Human-confirmed a real
+mouse navigates (Single player → Your options → Back).
+
+**Windowed-mode highlight quirk.** There is no *visible* hover highlight in
+windowed mode, and that is **retail-faithful**, not a wiring gap.  The
+selected button's label re-renders every frame in palette index **0xf9**
+(confirmed: the 0xf9 dispatch follows the hovered button), but 0xf9 is in the
+system-reserved range (246..255) that retail forces black in `gfx_load_palette`
+(port of `FUN_0042f449`) — see engine-quirks "reserved-range blackout".  So
+the highlight maps to black and the output stays bit-identical to the retail
+groundtruth.  The hover *is* tracked; it just isn't visible under the windowed
+palette.  (A deliberate windowed-mode deviation that un-blacks 0xf9 would make
+it visible but break the bit-identical match — not taken.)
 
 ## Harness workflow: drive + capture a menu page
 
