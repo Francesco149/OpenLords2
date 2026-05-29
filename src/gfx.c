@@ -323,14 +323,13 @@ int gfx_surface_lost(void)
  *                                                                    *
  *  Simplifications relative to retail:                              *
  *                                                                    *
- *  - We don't preserve OS-reserved palette slots (0..9, 246..255).  *
- *    Retail does this to play nice with the desktop palette         *
- *    manager when running 8bpp on an 8bpp desktop.  In windowed     *
- *    mode on a 32bpp host (our typical drop-in scenario) DDraw      *
- *    handles the format conversion, so we're free to take all 256  *
- *    entries.  Entry 0 stays (0,0,0) and entry 255 stays            *
- *    (0xff,0xff,0xff) to match retail's "Windows reserved"          *
- *    boundary contract (the read at 0x4d50f0 / 0x4d512b matches).   *
+ *  - Reserved palette slots (0..9, 246..255) are forced black, and  *
+ *    only 10..245 take the .256 file's colors — a faithful port of  *
+ *    retail's FUN_0042f449 (the PALETTEENTRY builder behind every    *
+ *    image-palette upload).  Retail keeps those 20 slots at their    *
+ *    BSS-zero init forever; the menu's UI/text color indices that    *
+ *    land there (1, 0xf9) must render black, confirmed by a live     *
+ *    windowed retail capture.  See engine-quirks #115.               *
  *  - No SetSystemPaletteUse — only matters in windowed 8bpp.        *
  * ---------------------------------------------------------------- */
 int gfx_load_palette(const char *path)
@@ -351,16 +350,31 @@ int gfx_load_palette(const char *path)
     /* ×4 expansion — retail palettes are stored as 6-bit VGA values
      * (range 0..63), so we shift left by 2 to get 8-bit RGB. */
     for (int i = 0; i < 256 * 3; i++) g_palette_rgb[i] = rgb[i] << 2;
-    /* Boundary entries — match retail's reads. */
-    g_palette_rgb[0] = g_palette_rgb[1] = g_palette_rgb[2] = 0x00;
-    g_palette_rgb[255*3+0] = g_palette_rgb[255*3+1] = g_palette_rgb[255*3+2] = 0xff;
+
+    /* Reserved-range blackout — port of FUN_0042f449's three-segment
+     * build.  Retail only loads an image palette into indices 10..245
+     * (peFlags PC_NOCOLLAPSE); indices 0..9 and 246..255 keep their
+     * BSS-zero value (DAT_00515d90, never written by an image load) —
+     * i.e. permanently black — with peFlags 0.  These 20 entries are the
+     * Windows system-reserved slots; retail blacks them so the UI/text
+     * color indices that fall there (e.g. 1 = uppercase highlight,
+     * 0xf9 = selected-button highlight) render black, not the VGA colors
+     * the .256 file happens to carry there.  Verified against a live
+     * windowed retail capture: indices 1..9 and 246..255 read back
+     * (0,0,0).  Matching this is what makes the menu text color-correct
+     * (red caps / red selection were the all-256 divergence's tell). */
+    for (int i = 0; i < 10; i++)
+        g_palette_rgb[i*3+0] = g_palette_rgb[i*3+1] = g_palette_rgb[i*3+2] = 0x00;
+    for (int i = 246; i < 256; i++)
+        g_palette_rgb[i*3+0] = g_palette_rgb[i*3+1] = g_palette_rgb[i*3+2] = 0x00;
 
     PALETTEENTRY entries[256];
     for (int i = 0; i < 256; i++) {
         entries[i].peRed   = g_palette_rgb[i*3+0];
         entries[i].peGreen = g_palette_rgb[i*3+1];
         entries[i].peBlue  = g_palette_rgb[i*3+2];
-        entries[i].peFlags = (i == 0 || i == 255) ? 0 : PC_RESERVED;
+        /* Retail: 10..245 → PC_NOCOLLAPSE (4); reserved ranges → 0. */
+        entries[i].peFlags = (i >= 10 && i < 246) ? PC_NOCOLLAPSE : 0;
     }
 
     /* Replace any prior palette in-place (retail Releases first). */

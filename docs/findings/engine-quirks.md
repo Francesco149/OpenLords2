@@ -4051,6 +4051,43 @@ against observable behaviour rather than added as dead infrastructure.
 
 ---
 
+## 115. Image palettes only fill indices 10..245; 0..9 + 246..255 stay black
+
+Every image-palette upload runs through `FUN_0042f449`, which builds the
+`DAT_00515d90` PALETTEENTRY array in three segments:
+
+- **0..9**   — RGB left at `DAT_00515d90`'s existing value (BSS-zero =
+  black, never written by an image load), peFlags 0.
+- **10..245** — RGB copied from the loaded `.256` working buffer,
+  peFlags 4 (`PC_NOCOLLAPSE`).
+- **246..255** — same as 0..9: black, peFlags 0.
+
+So the 20 Windows system-reserved slots are **permanently black** — an
+image's `.256` colors there are discarded.  This matters because the
+menu's UI/text color indices land in that range: the uppercase-highlight
+color is **1** (`FUN_0041ea14` arms `DAT_0058fe2c`, `FUN_00402637` sets
+the foreground to 1 for A..Z) and the selected-button highlight is
+**0xf9** (`FUN_0041eaa3`).  gateway.256 carries VGA colors there (idx 1 =
+dark red, idx 0xf9 = bright red), so a naive all-256 palette load renders
+the title capitals and the selected button **red** — but retail blacks
+them, so they read as the same dark as the body text.
+
+Confirmed against a live *windowed* retail capture (`frida_capture.py
+--frame-capture`, palette dumped via GetEntries): indices 1..9 and
+246..255 read back `(0,0,0)`, all others match gateway.256.  Fullscreen
+retail would show the VGA colors (hence the "red caps" you may remember),
+but the drop-in defaults to windowed and matches the windowed capture.
+
+The port replicates this in `gfx_load_palette` (was previously a
+deliberate all-256 divergence — that was the bug).  With it, the whole
+main menu is **bit-identical** to retail.
+
+> 📍 `src/gfx.c` (`gfx_load_palette`), Ghidra `FUN_0042f449` @ `0x42f449`
+> (builder) / `FUN_0042f58c` (SetEntries) / `FUN_004b0ab5` (×4 working
+> buffer) / `FUN_0041ea14` + `FUN_00402637` (color-1 caps).
+
+---
+
 <!--
 Template for new entries:
 

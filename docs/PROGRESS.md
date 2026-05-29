@@ -50,25 +50,30 @@ runtime — it IS the exe).
   colorful (0x10/0x1f) — quirk #114's mirror, fixed the title/button
   shadow delta (1879 → 1125 diff px).
 
-### Open residual (0.37%, ~1125 px) — two highlight-color items
+### Then: palette reserved-range blackout → BIT-IDENTICAL menu
 
-Both are colorful-in-port / black-in-retail, against the **same**
-gateway.256 palette (idx 1 = dark-red 128,0,0; idx 0xf9 = red 252,0,0):
+The text-track residual (0.37%) was a single root cause: the colorful
+title caps + selected-button highlight.  Both render through palette
+indices in the Windows system-reserved ranges — uppercase highlight =
+**1**, selected-button = **0xf9** — which gateway.256 fills with VGA
+colors (red).  Settled it by capturing a **live windowed retail palette**
+(`frida_capture.py`, GetEntries dump): indices **1..9 and 246..255 read
+back (0,0,0)**; all others match gateway.256.
 
-1. **Title uppercase caps** (L, R) render color 1 (dark red) in the port.
-   Retail ground truth shows them pure black.  Retail's `FUN_0041ea14`
-   *does* arm the uppercase highlight (`DAT_0058fe2c = 1`) and the blit
-   writes the color index directly — so by the decompile the caps *should*
-   be dark red.  Yet the captured retail frame is black there.  Unresolved
-   from static analysis: needs the live retail palette/state at idx 1.
-2. **Selected button** ("Single player") renders 0xf9 (red) because the
-   bring-up forces `g_selected_button = 1`; the retail capture has no
-   selection (all four labels black).  Bring-up artifact, not a render bug.
+Root cause: every retail image-palette upload runs `FUN_0042f449`, which
+only writes indices **10..245** from the `.256` file and keeps 0..9 +
+246..255 at their BSS-zero (black) init.  The port's `gfx_load_palette`
+was deliberately loading all 256 — that was the bug.  Ported the
+three-segment build (engine-quirk #115).
 
-Plus ~300 px scattered gray→black in the lower screen (glyph-edge / bevel
-AA, unconfirmed).  **Awaiting human verification** of whether retail's
-live menu shows the red caps / selection highlight (resting vs hover
-state) before deciding the faithful fix.
+**Result: the main menu is now bit-identical to retail** —
+`compare_frames` reports `identical: true`, 0 diff pixels, against both
+the committed ground truth and a fresh live capture.  Backdrop + panel +
+title + subtitle + all four button labels + colors all match.
+
+(The "red caps" you may recall are the *fullscreen* look — fullscreen
+retail controls all 256 so idx 1 = gateway red.  The drop-in defaults to
+windowed and matches the windowed capture, where those slots are black.)
 
 ## 2026-05-29 — FIRST VISIBLE MENU PIXELS: backdrop renders + seam wired
 
