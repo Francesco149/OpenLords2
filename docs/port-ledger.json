@@ -187,6 +187,7 @@
    "src": [
     "src/font_metrics.c",
     "src/font_metrics.h",
+    "src/gfx_glyph_table.h",
     "src/text_input.h"
    ]
   },
@@ -526,7 +527,8 @@
    "src": [
     "src/gfx_dispatch.c",
     "src/gfx_dispatch.h",
-    "src/gfx_glyph.h"
+    "src/gfx_glyph.h",
+    "src/gfx_glyph_table.h"
    ]
   },
   {

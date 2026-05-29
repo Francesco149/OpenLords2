@@ -76,6 +76,14 @@ int  gfx_title_background_load(int page);
  * gfx_shutdown. */
 const uint8_t *gfx_load_panel_sheet(void);
 
+/* Load the menu/default font (fntl2_14.pl8 → retail DAT_005af8f0) and
+ * the large title font (fntl2_22.pl8 → retail DAT_005b2fa0) as raw PL8
+ * blobs.  Each is the glyph sprite sheet the text renderer indexes via
+ * blob+idx*16+8.  Bind them with engine_title_render_bind_fonts.
+ * Cached; freed by gfx_shutdown.  Return the blob or NULL. */
+const uint8_t *gfx_load_menu_font(void);
+const uint8_t *gfx_load_title_font(void);
+
 /* Bind the locked back-buffer base pointer as the gfx_paint canvas so
  * the pure-C renderers (sprite / glyph / line / panel) paint into it.
  * Returns 1 on success (back buffer locked, pitch == 640), 0 otherwise.

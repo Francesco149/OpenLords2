@@ -36,7 +36,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4013bc | FUN_004013bc | 89 | strutil.h |
 | 0x401415 | FUN_00401415 | 219 | strutil.h |
 | 0x4014f0 | FUN_004014f0 | 201 | font_metrics.h, gfx_text.c |
-| 0x4015b9 | FUN_004015b9 | 173 | font_metrics.c, font_metrics.h, text_input.h |
+| 0x4015b9 | FUN_004015b9 | 173 | font_metrics.c, font_metrics.h, gfx_glyph_table.h (+1) |
 | 0x401666 | FUN_00401666 | 141 | strutil.h |
 | 0x4016f3 | FUN_004016f3 | 204 | localization.c, localization.h |
 | 0x4017bf | FUN_004017bf | 187 | localization.c, localization.h |
@@ -65,7 +65,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x402447 | FUN_00402447 | 400 | gfx_text_label.c, gfx_text_label.h |
 | 0x4025d7 | FUN_004025d7 | 96 | gfx_text.c, gfx_text.h |
 | 0x402637 | FUN_00402637 | 989 | gfx_text.c, gfx_text.h, gfx_wrap.c (+1) |
-| 0x402a14 | FUN_00402a14 | 514 | gfx_dispatch.c, gfx_dispatch.h, gfx_glyph.h |
+| 0x402a14 | FUN_00402a14 | 514 | gfx_dispatch.c, gfx_dispatch.h, gfx_glyph.h (+1) |
 | 0x402c16 | FUN_00402c16 | 72 | gfx_text.c, gfx_text.h |
 | 0x402c5e | FUN_00402c5e | 217 | engine_title_render.c, gfx_wrap.c, gfx_wrap.h |
 | 0x402d37 | FUN_00402d37 | 213 | gfx_wrap.c, gfx_wrap.h |

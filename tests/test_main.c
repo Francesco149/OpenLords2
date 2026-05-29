@@ -1210,6 +1210,11 @@ struct test_case {
     X(panel_fill_interior_atlas_indices) \
     X(panel_draw_border_plus_inset_fill) \
     X(panel_bad_offset_aborts) \
+    \
+    X(glyph_table_render_is_measure_plus_0x20) \
+    X(glyph_table_letters) \
+    X(glyph_table_digits_and_punct) \
+    X(glyph_table_space_and_unmapped_are_zero) \
     /* end */
 
 /* Emit extern decls. */

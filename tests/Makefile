@@ -42,6 +42,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/localization.c \
                    ../src/gfx_paint.c \
                    ../src/gfx_glyph.c \
+                   ../src/gfx_glyph_table.c \
                    ../src/gfx_sprite.c \
                    ../src/gfx_sprite_rle.c \
                    ../src/gfx_dispatch.c \
@@ -86,6 +87,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_localization.c \
                    test_gfx_paint.c \
                    test_gfx_glyph.c \
+                   test_gfx_glyph_table.c \
                    test_gfx_sprite.c \
                    test_gfx_sprite_rle.c \
                    test_gfx_dispatch.c \

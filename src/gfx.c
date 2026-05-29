@@ -88,6 +88,8 @@ static LPDIRECTDRAWSURFACE  g_back;           /* DAT_004eafac */
 static LPDIRECTDRAWCLIPPER  g_clipper;        /* DAT_004ea12c */
 static LPDIRECTDRAWPALETTE  g_palette;        /* DAT_004df288 */
 static uint8_t             *g_panel_sheet;    /* DAT_004eabec — panels2.pl8 blob */
+static uint8_t             *g_menu_font;       /* DAT_005af8f0 — fntl2_14.pl8 blob */
+static uint8_t             *g_title_font;      /* DAT_005b2fa0 — fntl2_22.pl8 blob */
 static int                  g_back_pitch;     /* DAT_004ea1a8 */
 static int                  g_primary_lockable; /* DAT_004df28c */
 static int                  g_fullscreen;
@@ -253,6 +255,14 @@ void gfx_shutdown(void)
     if (g_panel_sheet) {
         free(g_panel_sheet);
         g_panel_sheet = NULL;
+    }
+    if (g_menu_font) {
+        free(g_menu_font);
+        g_menu_font = NULL;
+    }
+    if (g_title_font) {
+        free(g_title_font);
+        g_title_font = NULL;
     }
     g_primary_lockable = 0;
     g_hwnd = NULL;
@@ -529,6 +539,49 @@ const uint8_t *gfx_load_panel_sheet(void)
     }
     log_line("OK :Panel sheet loaded (panels2.pl8, %d bytes).", n);
     return g_panel_sheet;
+}
+
+/* ---------------------------------------------------------------- *
+ *  Font PL8 loaders — port of the entries 6/7 of the master asset   *
+ *  table consumed by FUN_00498... (the 13-asset init loop).  Each    *
+ *  font is a raw PL8 (8-byte header + 16-byte glyph descriptors at   *
+ *  blob+idx*16+8 + pixel data) read whole from offset 0 into a       *
+ *  fixed-size buffer.  Retail's buffer sizes come from the table's   *
+ *  +0x10 size field; the on-disk files are smaller and fit.          *
+ *                                                                    *
+ *    idx 6 → DAT_005af8f0 ← fntl2_14.pl8  (buf 0x36b0)  menu/default *
+ *    idx 7 → DAT_005b2fa0 ← fntl2_22.pl8  (buf 0x84d0)  large title  *
+ *                                                                    *
+ *  Returns the blob (cached; freed by gfx_shutdown), or NULL.        *
+ * ---------------------------------------------------------------- */
+static const uint8_t *load_font_blob(uint8_t **slot, const char *path,
+                                     size_t buf_size)
+{
+    if (!*slot) {
+        *slot = (uint8_t *)malloc(buf_size);
+        if (!*slot) {
+            log_line("load_font_blob: OOM (%s, %u bytes)", path,
+                     (unsigned)buf_size);
+            return NULL;
+        }
+    }
+    int n = io_read_file_at(path, *slot, (unsigned)buf_size, 0);
+    if (n < 1) {
+        log_line("load_font_blob: read %s failed (%d)", path, n);
+        return NULL;
+    }
+    log_line("OK :Font loaded (%s, %d bytes).", path, n);
+    return *slot;
+}
+
+const uint8_t *gfx_load_menu_font(void)
+{
+    return load_font_blob(&g_menu_font, "fntl2_14.pl8", 0x36b0);
+}
+
+const uint8_t *gfx_load_title_font(void)
+{
+    return load_font_blob(&g_title_font, "fntl2_22.pl8", 0x84d0);
 }
 
 /* ---------------------------------------------------------------- *

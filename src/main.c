@@ -67,7 +67,9 @@
 #include "gfx.h"
 #include "gfx_dispatch.h"
 #include "gfx_glyph.h"
+#include "gfx_glyph_table.h"
 #include "gfx_panel.h"
+#include "gfx_text.h"
 
 /* Class name matches retail FUN_004b2258's `s_WinLords2Class_004df5b0`
  * so FindWindowA from external tools resolves to us identically.
@@ -773,6 +775,27 @@ static void bringup_title_menu(int with_panel)
     engine_title_render_bind_panel_fn(gfx_panel_draw);
     /* Background hook stays the default no-op stub — the backdrop is
      * already in the back buffer from gfx_title_background_load. */
+
+    /* Text inputs: the two fonts (menu/default + large title), the
+     * embedded char→glyph tables, and the localization blob (l2.eng,
+     * loaded by config_init).  With all three bound the ported title
+     * chain renders the "Lords of the Realm 2" title, subtitle, and
+     * button labels — no further wiring. */
+    engine_title_render_bind_fonts(gfx_load_title_font(),
+                                   gfx_load_menu_font());
+    engine_title_render_bind_glyph_tables(gfx_glyph_render_map(),
+                                          gfx_glyph_measure_map());
+    size_t loc_size = 0;
+    const uint8_t *loc = config_localization_data(&loc_size);
+    engine_title_render_bind_localization((unsigned char *)loc);
+
+    /* Screen-state byte (retail DAT_004eac50) — 0x1f on the title screen.
+     * gfx_text reads it as the shadow-color discriminator: on the title
+     * screen the text shadow pair is the gray (0x36, 0x2c) rather than the
+     * default colorful (0x10, 0x1f).  The boot→title state producer
+     * (FUN_0042b780, unported) is the real writer; set it here for the
+     * bring-up so the menu text shadows match retail.  See quirk #114. */
+    gfx_text_set_language_tag(0x1f);
 
     /* Init the shared gfx render state to its retail BSS-zero values
      * (the panel renderer assumes these, same as the panel unit test). */
