@@ -122,9 +122,11 @@ render path deterministically. Ported from `../openrecet`'s machinery.
             (40e890/40e8bb/43de70/429b1d).
       - [ ] Live diff of a *render* frame (battlefield/map) — needs Phase I
             to drive retail + port into the same scene deterministically.
-- [ ] **H — memory write/read intercept diff.** `mem_watch.py` +
-      `installMemoryWatch` (MemoryAccessMonitor). Find unported writers of
-      render-feeding regions.
+- [x] **H — memory write/read intercept diff.** `tools/mem_watch.py` +
+      agent `installMemoryWatch` (MemoryAccessMonitor). Validated live (raw
+      trap → owner FUN_ + port status; precise-mode read-hot limit reproduced).
+      See `docs/findings/mem-watch.md`. Writer-hunt for a specific render gap
+      is Phase J.
 - [ ] **I — scenario reproduction + state-forcing.** `forceGameState` /
       `--inject-state` + `scenario-test.py` to drive battlefield/map/overlay
       render paths deterministically. Prereq: retail DDraw frame-capture hook
