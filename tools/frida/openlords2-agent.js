@@ -2086,6 +2086,91 @@ function drainInputReplayForTick(tick) {
     }
 }
 
+// ─── call tracer (Phase G.3) ────────────────────────────────────────────
+//
+// When call_trace is enabled the agent hooks every Ghidra-VA in
+// g_call_trace_vas and emits one event per invocation into a per-tick
+// buffer, flushed once per engine_tick (in engine_tick.onLeave) as a
+// `call_trace_batch`.  tools/call_trace_diff.py diffs the resulting
+// retail trace against the port's --call-trace JSONL to surface
+// unported (retail-only) and divergent (port-only) calls per frame.
+//
+// Schema per event: {va, ret_va, frame, ts, thr}.  `va` is the Ghidra
+// VA hooked; `ret_va` is module-relative (add IMAGE_BASE for a Ghidra
+// VA) — identical convention to src/call_trace.c.  `frame` is
+// g_tick_count, which is bumped in engine_tick.onEnter at the same
+// FUN_004b99c0 boundary the port's g_engine_frame_counter uses, so the
+// two traces align 1:1.
+let g_call_trace_enabled = false;
+let g_call_trace_frames  = null;    // Set<int> or null (null = every frame)
+let g_call_trace_vas     = [];      // [int] Ghidra-VAs to hook
+let g_call_trace_hooked  = false;
+let g_call_trace_buffer  = [];
+let g_call_trace_n_ok    = 0;
+let g_call_trace_n_fail  = 0;
+
+// Per-batch event cap.  The pre-bring-up startup window (CRT init with
+// hundreds of hooks firing) can dump huge bursts into one batch; GLib's
+// DBus transport tops out at 128MiB per blob and frida-server kills the
+// channel (target dies with no diagnostic) if exceeded.  Force a flush
+// whenever the buffer crosses this many events so each send() stays
+// bounded.
+const CALL_TRACE_FLUSH_AT = 20000;
+
+function callTraceShouldEmit() {
+    if (!g_call_trace_enabled) return false;
+    if (g_call_trace_frames === null) return true;
+    return g_call_trace_frames.has(g_tick_count);
+}
+
+function callTraceFlush(frameNumber) {
+    if (g_call_trace_buffer.length === 0) return;
+    const events = g_call_trace_buffer;
+    g_call_trace_buffer = [];
+    send({kind:  'call_trace_batch',
+          frame: frameNumber,
+          count: events.length,
+          events: events});
+}
+
+function installCallTraceHooks(vasArray) {
+    if (g_call_trace_hooked) return;
+    // Each closure captures `va` directly (let-binding per iteration) so
+    // each hook reports its own address without reading a register.
+    for (let i = 0; i < vasArray.length; i++) {
+        const va = vasArray[i] | 0;
+        try {
+            Interceptor.attach(rva(va), {
+                onEnter: function () {
+                    if (!callTraceShouldEmit()) return;
+                    g_call_trace_buffer.push({
+                        va:     va,
+                        ret_va: this.returnAddress.sub(g_base).toUInt32(),
+                        ts:     nowMs(),
+                        thr:    this.threadId,
+                    });
+                    if (g_call_trace_buffer.length >= CALL_TRACE_FLUSH_AT) {
+                        callTraceFlush(g_tick_count);
+                    }
+                },
+            });
+            g_call_trace_n_ok++;
+        } catch (e) {
+            // Frida couldn't trampoline this VA (unsupported prefix, a
+            // prior hook on the same byte, etc.).  Counted so the driver
+            // can spot a degraded run.
+            g_call_trace_n_fail++;
+        }
+    }
+    g_call_trace_hooked = true;
+    log('call_trace: hooked ' + g_call_trace_n_ok + ' VAs (' +
+        g_call_trace_n_fail + ' failed) of ' + vasArray.length);
+    send({kind:   'call_trace_hooked',
+          n_ok:   g_call_trace_n_ok,
+          n_fail: g_call_trace_n_fail,
+          n_req:  vasArray.length});
+}
+
 // Per-tick anchor — `FUN_004b99c0` is called once per main-loop iteration.
 // We use its onEnter as:
 //   1. main-thread-id capture (first entry only) for the virtual-clock gate.
@@ -2151,6 +2236,12 @@ function installEngineTickHook() {
             } catch (e) {
                 err('engine_tick.onLeave', e.message);
             } finally {
+                // Flush this tick's call-trace buffer (events were pushed
+                // by the hooked leaf functions during the tick, stamped
+                // with the current g_tick_count).  No-op unless enabled.
+                if (g_call_trace_enabled) {
+                    callTraceFlush(g_tick_count);
+                }
                 g_engine_in_tick = 0;
                 // Lazy install of the DDraw → GDI present seat.  The
                 // primary surface pointer doesn't exist until retail's
@@ -3883,6 +3974,25 @@ rpc.exports = {
         g_replay_idx           = 0;
         g_replay_post_count    = 0;
 
+        // Call tracer (Phase G.3).  opts.call_trace_vas is an array of
+        // Ghidra VAs to hook; opts.call_trace_frames (optional) restricts
+        // emission to the listed sim frames (g_tick_count values).
+        g_call_trace_enabled = !!opts.call_trace &&
+                               Array.isArray(opts.call_trace_vas) &&
+                               opts.call_trace_vas.length > 0;
+        g_call_trace_vas = g_call_trace_enabled
+            ? opts.call_trace_vas.map(function (v) { return v | 0; })
+            : [];
+        g_call_trace_frames =
+            (Array.isArray(opts.call_trace_frames) &&
+             opts.call_trace_frames.length > 0)
+                ? new Set(opts.call_trace_frames.map(function (v) { return v | 0; }))
+                : null;
+        g_call_trace_hooked = false;
+        g_call_trace_buffer = [];
+        g_call_trace_n_ok   = 0;
+        g_call_trace_n_fail = 0;
+
         const mod = Process.findModuleByName(g_target_module_name);
         if (!mod) {
             err('init', 'target module not loaded: ' + g_target_module_name);
@@ -3965,6 +4075,15 @@ rpc.exports = {
                 g_input_replay_events[g_input_replay_events.length - 1].t + ')');
         }
 
+        if (g_call_trace_enabled) {
+            try { installCallTraceHooks(g_call_trace_vas); }
+            catch (e) { err('installCallTraceHooks', e.message); }
+            log('call_trace: armed (' + g_call_trace_vas.length + ' VAs' +
+                (g_call_trace_frames
+                    ? ', frames=' + Array.from(g_call_trace_frames).join(',')
+                    : ', every frame') + ')');
+        }
+
         send({kind: 'ready',
               module:        g_target_module_name,
               base:          g_base.toString(),
@@ -3982,6 +4101,8 @@ rpc.exports = {
               input_record:  g_input_record_enabled,
               input_replay_count:
                   g_input_replay_events ? g_input_replay_events.length : 0,
+              call_trace:    g_call_trace_enabled,
+              call_trace_vas: g_call_trace_vas.length,
               diff_test:     g_diff_test_enabled});
 
         if (g_diff_test_enabled) {
@@ -3991,6 +4112,34 @@ rpc.exports = {
                 'runRetailTileExpand / runRetailDelayedAction RPCs live; ' +
                 'orchestrator drives test vectors)');
         }
+    },
+
+    // Late-install the call tracer after init (e.g. only once a scenario
+    // has driven retail into the target scene, to avoid hooking through
+    // the noisy CRT/bring-up window).  vas: [Ghidra-VA]; frames: optional
+    // [sim-frame] filter.
+    installCallTrace: function (vas, frames) {
+        g_call_trace_enabled = Array.isArray(vas) && vas.length > 0;
+        g_call_trace_vas = g_call_trace_enabled
+            ? vas.map(function (v) { return v | 0; }) : [];
+        g_call_trace_frames =
+            (Array.isArray(frames) && frames.length > 0)
+                ? new Set(frames.map(function (v) { return v | 0; })) : null;
+        g_call_trace_buffer = [];
+        g_call_trace_n_ok = 0;
+        g_call_trace_n_fail = 0;
+        if (!g_call_trace_enabled) return false;
+        try { installCallTraceHooks(g_call_trace_vas); return true; }
+        catch (e) { err('installCallTrace', e.message); return false; }
+    },
+
+    getCallTraceStatus: function () {
+        return {enabled: g_call_trace_enabled,
+                hooked:  g_call_trace_hooked,
+                n_ok:    g_call_trace_n_ok,
+                n_fail:  g_call_trace_n_fail,
+                n_vas:   g_call_trace_vas.length,
+                buffered: g_call_trace_buffer.length};
     },
 
     runRetailRngStep: function (state_a, state_b) {

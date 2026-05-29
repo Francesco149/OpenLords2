@@ -193,6 +193,14 @@ class CaptureConfig:
     # eagerly and shipped to the agent inline via init opts (the Windows-side
     # agent has no access to WSL filesystem paths).
     input_replay_path: Path | None = None
+    # Call tracer (Phase G.3): hook each Ghidra-VA in call_trace_vas on
+    # retail and emit per-tick call_trace_batch events → run_dir/call_trace.jsonl
+    # (one row per call, schema {va, ret_va, frame}).  call_trace_frames
+    # (optional) restricts emission to the listed sim frames.  Diff the
+    # result against the port's --call-trace JSONL with call_trace_diff.py.
+    call_trace:        bool = False
+    call_trace_vas:    list[int] = field(default_factory=list)
+    call_trace_frames: list[int] = field(default_factory=list)
     exe_args:          list[str] = field(default_factory=list)
 
 
@@ -213,6 +221,7 @@ class CaptureResult:
     input_event_count: int = 0
     input_replay_post_count: int = 0
     gdi_seat_present_count: int = 0
+    call_trace_calls: int = 0
 
 
 # ─── BMP writer ───────────────────────────────────────────────────────────
@@ -311,6 +320,13 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
     input_trace_fp = None
     if cfg.input_record:
         input_trace_fp = (run_dir / "input_trace.jsonl").open("w", buffering=1)
+
+    # Call-trace sink — one JSONL row per call, written as call_trace_batch
+    # events arrive (batched per tick by the agent).
+    call_trace_fp = None
+    if cfg.call_trace:
+        call_trace_fp = (run_dir / "call_trace.jsonl").open("w", buffering=1)
+    counts["call_trace_calls"] = 0
 
     # Preload the replay events so any parse failure surfaces before we
     # spawn the engine.  The agent expects a JSON array of {t,m,w,l}
@@ -477,6 +493,29 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
                 f"[show_window] hwnd={p.get('hwnd')} "
                 f"after_ms={p.get('after_ms')} t_ms={p.get('t_ms')}\n")
             return
+        if kind == "call_trace_hooked":
+            f_log.write(
+                f"[call_trace] hooked n_ok={p.get('n_ok')} "
+                f"n_fail={p.get('n_fail')} of {p.get('n_req')} VAs\n")
+            return
+        if kind == "call_trace_batch":
+            # Flatten the agent's per-tick batch into one JSONL row per
+            # call, matching src/call_trace.c's schema so call_trace_diff.py
+            # reads both sides identically.
+            evs = p.get("events", []) or []
+            counts["call_trace_calls"] += len(evs)
+            if call_trace_fp is not None:
+                for ev in evs:
+                    call_trace_fp.write(json.dumps({
+                        "va":     int(ev.get("va", 0)),
+                        "ret_va": int(ev.get("ret_va", 0)),
+                        "frame":  int(p.get("frame", 0)),
+                        "ts":     int(ev.get("ts", 0)),
+                    }) + "\n")
+            f_log.write(
+                f"[call_trace] frame={p.get('frame')} "
+                f"calls={len(evs)}\n")
+            return
         # unknown kind — log it raw so we can spot agent extensions we
         # haven't wired up yet.
         f_log.write(f"[unknown-event] {json.dumps(p)}\n")
@@ -535,6 +574,9 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "frame_capture_warmup_secs": int(cfg.frame_capture_warmup_secs),
             "input_record":              bool(cfg.input_record),
             "input_replay":              input_replay_events,
+            "call_trace":                bool(cfg.call_trace),
+            "call_trace_vas":            [int(v) for v in cfg.call_trace_vas],
+            "call_trace_frames":         [int(v) for v in cfg.call_trace_frames],
         }
         script.exports_sync.init(init_cfg)
         device.resume(pid)
@@ -577,6 +619,8 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
     f_log.close()
     if input_trace_fp is not None:
         input_trace_fp.close()
+    if call_trace_fp is not None:
+        call_trace_fp.close()
 
     return CaptureResult(
         exit_code=exit_code,
@@ -594,6 +638,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         input_event_count=counts["input_event"],
         input_replay_post_count=counts["input_replay_post"],
         gdi_seat_present_count=counts["gdi_seat_present"],
+        call_trace_calls=counts.get("call_trace_calls", 0),
     )
 
 
@@ -674,9 +719,34 @@ def main(argv: list[str] | None = None) -> int:
                          "--input-record: PostMessageA each event to the "
                          "engine's main HWND when its recorded tick stamp "
                          "is reached")
+    ap.add_argument("--call-trace", action="store_true",
+                    help="hook the VAs in --call-trace-vas on retail and emit "
+                         "per-tick call_trace_batch events to "
+                         "<run_dir>/call_trace.jsonl (diff with call_trace_diff.py)")
+    ap.add_argument("--call-trace-vas", default=None,
+                    help="comma-separated Ghidra VAs to hook (hex 0x.. or "
+                         "decimal), OR @PATH to a JSON file containing a list "
+                         "of VAs (e.g. from gen_call_trace_probes.py)")
+    ap.add_argument("--call-trace-frames", default=None,
+                    help="comma-separated sim-frame (g_tick_count) filter; "
+                         "omit to emit every frame")
     ap.add_argument("--exe-arg", action="append", default=[],
                     help="argument to pass to the spawned exe (repeatable)")
     args = ap.parse_args(argv)
+
+    def _parse_va_list(spec: str | None) -> list[int]:
+        if not spec:
+            return []
+        if spec.startswith("@"):
+            data = json.loads(Path(spec[1:]).read_text())
+            # Accept either a bare list of VAs or {"vas":[...]}.
+            items = data["vas"] if isinstance(data, dict) else data
+            return [int(v, 0) if isinstance(v, str) else int(v) for v in items]
+        return [int(t, 0) for t in spec.split(",") if t.strip()]
+
+    call_trace_vas    = _parse_va_list(args.call_trace_vas)
+    call_trace_frames = ([int(t) for t in args.call_trace_frames.split(",")
+                          if t.strip()] if args.call_trace_frames else [])
 
     run_id = args.run_id or dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = ROOT / "runs" / "capture" / run_id
@@ -704,6 +774,9 @@ def main(argv: list[str] | None = None) -> int:
         input_record=args.input_record,
         input_replay_path=(Path(args.input_trace).resolve()
                            if args.input_trace else None),
+        call_trace=args.call_trace,
+        call_trace_vas=call_trace_vas,
+        call_trace_frames=call_trace_frames,
         exe_args=list(args.exe_arg),
     )
     print(f"[capture] run_dir = {run_dir}")
@@ -748,6 +821,9 @@ def main(argv: list[str] | None = None) -> int:
                                       if cfg.input_replay_path else None),
         "input_event_count":         result.input_event_count,
         "input_replay_post_count":   result.input_replay_post_count,
+        "call_trace":                cfg.call_trace,
+        "call_trace_vas":            len(cfg.call_trace_vas),
+        "call_trace_calls":          result.call_trace_calls,
     }
     (run_dir / "run.json").write_text(json.dumps(meta, indent=2))
     print(json.dumps(meta, indent=2))
