@@ -24,7 +24,7 @@ LDFLAGS := $(SAN)
 # Pure-C source under test.  As more portable modules land
 # (e.g. localization-blob decoder, sprite-format reader), add them
 # here.
-SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c \
+SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_rate.c ../src/engine_phase.c \
                    ../src/engine_delta.c ../src/engine_anim_cycle.c \
                    ../src/engine_input.c ../src/engine_fps.c \

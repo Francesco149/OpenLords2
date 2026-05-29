@@ -7,6 +7,7 @@
 
 #include "engine_map_render.h"
 
+#include "call_trace.h"
 #include "engine_dirty_rect.h"
 #include "gfx_dispatch.h"
 #include "gfx_glyph.h"
@@ -267,6 +268,7 @@ void engine_map_render_set_y_viewport_offset(int y_off)    { g_y_viewport_offset
 
 void engine_map_render_tile(int phase)
 {
+    CALL_TRACE_ENTER(0x00408438);
     g_call_count += 1;
 
     /* Retail line 18 — head of linked list, indexed by the current
@@ -499,6 +501,7 @@ void engine_map_render_tile(int phase)
 
 void engine_map_render_row_phase0(void)
 {
+    CALL_TRACE_ENTER(0x00405862);
     if (g_cam_col_start > 0) {
         /* Extra left cell — retail reads from `&DAT_0055ce9c` (= base
          * - 4), effectively cell at col = col_start - 1. */
@@ -552,6 +555,7 @@ void engine_map_render_row_phase0(void)
 
 void engine_map_render_row_phase1(void)
 {
+    CALL_TRACE_ENTER(0x004059af);
     gfx_glyph_set_cursor_x(g_cam_x0);
     g_current_cell = *(const int32_t *)((const uint8_t *)g_tile_cells
                               + g_cam_col_start * 4
@@ -598,6 +602,7 @@ void engine_map_render_row_phase1(void)
 
 void engine_map_render_frame(void)
 {
+    CALL_TRACE_ENTER(0x00405487);
     gfx_glyph_set_cursor_y(g_cam_y0);
     gfx_glyph_set_cursor_x(g_cam_x0);
     g_cur_row     = g_cam_row_start;
