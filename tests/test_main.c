@@ -1151,6 +1151,15 @@ struct test_case {
     X(turn_end_mp_single_active_advances) \
     X(turn_end_mp_handshake_arms_then_finalises) \
     X(turn_end_mp_state1_waits) \
+    \
+    X(title_buttons_marks_four_dirty_boxes) \
+    X(title_buttons_draws_bevel_rects) \
+    X(title_buttons_highlights_selected) \
+    X(title_buttons_no_selection_all_normal) \
+    X(title_buttons_each_label_on_its_own_row) \
+    X(title_main_menu_calls_panel_once_with_retail_args) \
+    X(title_main_menu_default_panel_stub_counts) \
+    X(title_main_menu_renders_title_subtitle_and_buttons) \
     /* end */
 
 /* Emit extern decls. */

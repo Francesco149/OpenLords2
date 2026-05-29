@@ -4003,6 +4003,29 @@ It's a one-line way to say "fire on the next tick, then settle into the
 
 ---
 
+## 113. Main-menu button 3's label lives at localization sub-string 0x2f, not 4
+
+The main-menu renderer (`FUN_0041eaa3`, ported as
+`engine_title_render_buttons`) draws four buttons whose labels are all
+sub-strings of localization-blob entry `0xb`.  Three of the four use the
+obvious contiguous indices — button 1 = sub-string 2, button 2 = 3,
+button 4 = 4 — but **button 3 = sub-string 0x2f (47)**, jumping 43 slots
+ahead in the same entry.
+
+Almost certainly the label text was added late: rather than renumber the
+existing strings (other screens also index into entry `0xb`), the "new"
+third option's text was appended near the end of the section and
+addressed by its tail index.  The 42 intervening sub-strings (5..46) are
+unrelated entries the seek simply walks past.  Faithful ports must keep
+the literal `0x2f` skip count — a "tidy" 2/3/4/5 sequence would render
+the wrong string for button 3.
+
+> 📍 `src/engine_title_render.c` (`engine_title_render_buttons`, the
+> `label_skip` table), Ghidra `FUN_0041eaa3` @ `0x41eaa3`
+> (`FUN_00402c5e(0xb, 0x2f, …)` for the third button).
+
+---
+
 <!--
 Template for new entries:
 

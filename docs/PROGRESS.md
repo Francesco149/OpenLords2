@@ -7,6 +7,46 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — main-menu composition ported (root + buttons), DDraw panel deferred
+
+Landed the first render chips off the corrected plan: the main-menu
+composition that rests on already-ported gfx primitives.
+
+### What landed
+
+- **`src/engine_title_render.c` / `.h`** — new module, following the
+  `engine_overlay_render` template (injected font/glyph/dirty/loc/asset
+  pointers via binders; pure C, no Win32):
+  - `engine_title_render_buttons` ← `FUN_0041eaa3` (487 B): four buttons,
+    each a beveled rect (`gfx_line_rect_bevel_palette_b`) + dirty-rect
+    mark (`engine_dirty_rect_mark_box_tiled`) + centered label
+    (`gfx_wrap_localized_line_centered`).  Selected button
+    (`DAT_00553114`) draws its label in highlight color `0xf9` vs `0x3f`.
+  - `engine_title_render_main_menu` ← `FUN_0041ea14` (143 B): panel +
+    title text (uppercase-highlight mode) + subtitle (no-shadow) +
+    buttons.  Brackets the text-mode flags exactly as retail toggles
+    `DAT_0058fe2c` / `DAT_005aea40`.
+- **DDraw panel deferred** — `FUN_00409346` (gray stone panel) bottoms
+  out in the PL8 tile-blit family + `panels2.pl8` asset load (the long
+  pole).  Exposed as a bound function pointer
+  (`engine_title_render_bind_panel_fn`) defaulting to a no-op-plus-counter
+  stub, mirroring overlay-render's deferred army drawer.  Lets the
+  composition land + be tested before the tile blitter exists.
+- **8 host tests** (suite 1070 → 1078, both builds clean): four-dirty-box
+  marking, bevel rects present, selected-button highlight isolation,
+  no-selection-all-normal, all-four-labels-render (incl. the 0x2f
+  button-3 sub-string), panel-hook arg fidelity (`asset, 0xa0, 10, 0x14,
+  0xf`), default-stub counter, full main-menu composition.
+- **Quirk #113** — button 3's label is localization sub-string `0x2f`
+  (47), not the contiguous `4` the other buttons would suggest; a
+  late-added string addressed by its tail index.
+
+No caller in the drop-in yet — these are leaf-first ports (same cadence
+as the turn-driver chips).  Wiring them into `engine_tick`'s render phase
+(the `DAT_0057d340` demand-redraw seam) + porting the long pole
+(`FUN_0041e61d` bg/asset, `FUN_00409346` panel tile-blit) is the path to
+the first visible menu pixel vs `runs/groundtruth/mainmenu-retail.bmp`.
+
 ## 2026-05-29 — main-menu render-chip plan corrected (decompile re-derivation)
 
 Started the main-menu render milestone by validating the chip plan from the

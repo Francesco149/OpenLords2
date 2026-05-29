@@ -4,15 +4,15 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 246,
+  "tested": 248,
   "ported": 30,
-  "unported": 2171,
+  "unported": 2169,
   "orphan_refs_not_in_function_table": 3,
-  "touched": 276,
-  "pct_touched": 11.3,
+  "touched": 278,
+  "pct_touched": 11.4,
   "pct_tested": 10.1,
   "bytes_total": 838629,
-  "bytes_touched": 86831,
+  "bytes_touched": 87461,
   "pct_bytes_touched": 10.4
  },
  "orphan_refs": [
@@ -546,6 +546,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_title_render.c",
     "src/gfx_wrap.c",
     "src/gfx_wrap.h"
    ]
@@ -2976,16 +2977,22 @@
    "name": "FUN_0041ea14",
    "size": 143,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_title_render.c",
+    "src/engine_title_render.h"
+   ]
   },
   {
    "va": "0x41eaa3",
    "name": "FUN_0041eaa3",
    "size": 487,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_title_render.c",
+    "src/engine_title_render.h"
+   ]
   },
   {
    "va": "0x41ec8a",
@@ -10083,6 +10090,7 @@
    "status": "tested",
    "src": [
     "src/engine_dirty_rect.h",
+    "src/engine_title_render.h",
     "src/gfx.c",
     "src/gfx.h",
     "src/main.c"
@@ -17806,6 +17814,7 @@
     "src/engine.c",
     "src/engine.h",
     "src/engine_fps.c",
+    "src/engine_title_render.h",
     "src/main.c"
    ]
   },

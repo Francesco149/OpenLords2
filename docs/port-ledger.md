@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **276** (11.3%) — tested 246, ported 30
-- code bytes touched: **10.4%** (86,831 / 838,629 B)
-- unported: **2171**
+- touched: **278** (11.4%) — tested 248, ported 30
+- code bytes touched: **10.4%** (87,461 / 838,629 B)
+- unported: **2169**
 - orphan refs (in src/, not in function table): 3
 
-## tested (246) — ported + host unit suite
+## tested (248) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -67,7 +67,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x402637 | FUN_00402637 | 989 | gfx_text.c, gfx_text.h, gfx_wrap.c (+1) |
 | 0x402a14 | FUN_00402a14 | 514 | gfx_dispatch.c, gfx_dispatch.h, gfx_glyph.h |
 | 0x402c16 | FUN_00402c16 | 72 | gfx_text.c, gfx_text.h |
-| 0x402c5e | FUN_00402c5e | 217 | gfx_wrap.c, gfx_wrap.h |
+| 0x402c5e | FUN_00402c5e | 217 | engine_title_render.c, gfx_wrap.c, gfx_wrap.h |
 | 0x402d37 | FUN_00402d37 | 213 | gfx_wrap.c, gfx_wrap.h |
 | 0x402e0c | FUN_00402e0c | 344 | gfx_text_label.c, gfx_text_label.h |
 | 0x402f64 | FUN_00402f64 | 177 | gfx_text_label.c, gfx_text_label.h |
@@ -123,6 +123,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40e8bb | FUN_0040e8bb | 240 | engine.c, engine.h, main.c |
 | 0x40e9ab | FUN_0040e9ab | 641 | config.h, main.c |
 | 0x40ecc4 | FUN_0040ecc4 | 1099 | config.c, config.h, strutil.h |
+| 0x41ea14 | FUN_0041ea14 | 143 | engine_title_render.c, engine_title_render.h |
+| 0x41eaa3 | FUN_0041eaa3 | 487 | engine_title_render.c, engine_title_render.h |
 | 0x425d35 | FUN_00425d35 | 184 | main.c |
 | 0x4290d0 | FUN_004290d0 | 131 | engine_category_buckets.c, engine_category_buckets.h |
 | 0x429153 | FUN_00429153 | 96 | engine_category_buckets.h |
@@ -156,7 +158,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x452160 | FUN_00452160 | 422 | engine.c, gfx.c, gfx.h (+1) |
 | 0x452306 | FUN_00452306 | 224 | engine_dirty_rect.c, engine_dirty_rect.h, gfx.c (+1) |
 | 0x4523e6 | FUN_004523e6 | 36 | engine_dirty_rect.h |
-| 0x45240a | FUN_0045240a | 33 | engine_dirty_rect.h, gfx.c, gfx.h (+1) |
+| 0x45240a | FUN_0045240a | 33 | engine_dirty_rect.h, engine_title_render.h, gfx.c (+2) |
 | 0x452436 | FUN_00452436 | 83 | engine_dirty_rect.h |
 | 0x452489 | FUN_00452489 | 83 | engine_dirty_rect.h |
 | 0x4524dc | FUN_004524dc | 83 | engine_dirty_rect.h |
@@ -229,7 +231,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b49b7 | FUN_004b49b7 | 64 | engine_battlefield_render.c, gfx_sprite.c, gfx_sprite.h |
 | 0x4b49f7 | FUN_004b49f7 | 705 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b5333 | FUN_004b5333 | 2997 | gfx_sprite.c, gfx_sprite.h |
-| 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+2) |
+| 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+3) |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c |
 | 0x4bb978 | FUN_004bb978 | 614 | engine.c, engine.h, engine_rate.c |
 | 0x4bbc80 | FUN_004bbc80 | 465 | engine.c, engine.h, engine_phase.c |
