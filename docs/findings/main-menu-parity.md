@@ -33,8 +33,12 @@ nix develop -c python3 tools/frida_capture.py \
     --remote cutestation.soy:27042 --run-id retail-mm \
     --turbo --skip-intro --frame-capture --frame-capture-warmup-secs 3 \
     --frame-capture-max 4 --duration-ms 15000
-# every captured frame is BIT-IDENTICAL to runs/groundtruth/mainmenu-retail.bmp
-# (verified 2026-05-29, both with and without --turbo).
+# Captures the menu in retail's full-color palette (red caps + red hover) —
+# the default since the palette fix; bit-identical to a true fullscreen-
+# exclusive capture (runs/groundtruth/mainmenu-retail-fullcolor.bmp).
+# Add --force-8bpp-palette to instead match the OLD 8bpp blackout
+# groundtruth runs/groundtruth/mainmenu-retail.bmp (no red).  See below +
+# engine-quirks #115.
 ```
 
 **The intro chain.** WinMain (`FUN_0040e9ab`) line 7611 calls `FUN_004b3571(0)`,
@@ -66,25 +70,27 @@ menu drawn but non-interactive. With the fix, skip-intro reaches the title menu
 [`title-menu-screens.md`](title-menu-screens.md) for the title page state
 machine and the menu-navigation capture workflow built on top of this.
 
-### Capturing retail's *full-color* rendering (no fullscreen) — `--keep-retail-palette`
+### Palette: full-color by default; `--force-8bpp-palette` for the old blackout
 
-By default `--force-windowed` also forces `DAT_0053f228 = 0`, which puts
-retail on its 8bpp palette builder (`FUN_0042f449`) — blacking the
-Windows-reserved slots, so the menu's dark-red title caps (idx 1) and the
-bright-red selected-button hover highlight (idx 0xf9) render black.  That is
-**not** what a real player sees: on a full-color desktop retail runs
-fullscreen-exclusive → `FUN_0042f306`, which loads the full `.256` into idx
-1..254 and shows the reds.
+`--force-windowed` rewrites the cooperative level to windowed but **no longer**
+forces `DAT_0053f228 = 0` by default.  That override would put retail on its
+8bpp palette builder (`FUN_0042f449`), blacking the Windows-reserved slots so
+the dark-red title caps (idx 1) and bright-red selected-button hover highlight
+(idx 0xf9) render black — **not** what a real player sees.  On a full-color
+desktop retail runs `FUN_0042f306`, loading the full `.256` into idx 1..254 and
+showing the reds.
 
-`--keep-retail-palette` keeps the windowed cooperative-level rewrite but skips
-the `DAT_0053f228` override, so retail builds the full-color palette while
-still rendering to the windowed back surface we capture — **no fullscreen
-screen-hog**.  The window degrades to a desktop-res popup (cosmetic; we read
-the back surface, not the window).  Verified 2026-05-29: a
-`--keep-retail-palette` windowed capture of the main menu is **bit-identical
-(0 diff px)** to a true fullscreen-exclusive capture of the same frame
-(palette idx 0xf9 = `(252,0,0)`).  Use this to capture full-color groundtruths
-for any scene.  See engine-quirks #115.
+So the **default** keeps `DAT_0053f228 = 1`: retail builds the full-color
+palette while still rendering to the windowed back surface we capture — real
+retail rendering, **no fullscreen screen-hog**.  (The window degrades to a
+desktop-res popup; cosmetic only — `--show-window` resizes it to 640×480 and we
+read the back surface anyway.)  Verified 2026-05-29: a default windowed capture
+of the main menu is **bit-identical (0 diff px)** to a true fullscreen-exclusive
+capture of the same frame (palette idx 0xf9 = `(252,0,0)`).
+
+`--force-8bpp-palette` restores the old override (8bpp blackout) — only useful
+to regress against the old windowed groundtruth `mainmenu-retail.bmp`.  See
+engine-quirks #115.
 
 ### Fallback: turbo fast-forward (no skip)
 
