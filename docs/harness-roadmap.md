@@ -107,16 +107,21 @@ Methodically chase structural parity with retail — spot missing/unported
 calls per frame, find writers we can't locate by reading, and drive any
 render path deterministically. Ported from `../openrecet`'s machinery.
 
-- [x] **G — call-graph diff.** Port-side validated end-to-end; retail-side
-      built (pending a live-target run). See `docs/findings/call-graph-diff.md`.
+- [x] **G — call-graph diff.** Validated end-to-end against live retail
+      (boot-frame diff: 424/424 VAs hooked, 59 named gaps). See
+      `docs/findings/call-graph-diff.md`.
       - [x] G.1 `src/call_trace.{c,h}` + `--call-trace` wiring.
       - [x] G.2 `tools/gen_call_trace_probes.py` (worklist + hook-VA set);
             5/276 functions annotated (engine_tick + map_render seed batch).
       - [x] G.3 agent `installCallTrace` + `frida_capture.py --call-trace`.
       - [x] G.4 `tools/call_trace_diff.py`.
+      - [x] First live retail↔port diff (boot frame, 2026-05-29).
       - [ ] Annotate the remaining ~271 ported functions (incremental, done
-            as the leaf-first loop reaches each — Phase J).
-      - [ ] First live retail↔port diff of a render frame.
+            as the leaf-first loop reaches each — Phase J). The boot-frame
+            diff already names 4 ported-but-unannotated quick wins
+            (40e890/40e8bb/43de70/429b1d).
+      - [ ] Live diff of a *render* frame (battlefield/map) — needs Phase I
+            to drive retail + port into the same scene deterministically.
 - [ ] **H — memory write/read intercept diff.** `mem_watch.py` +
       `installMemoryWatch` (MemoryAccessMonitor). Find unported writers of
       render-feeding regions.
