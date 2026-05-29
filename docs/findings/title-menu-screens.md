@@ -395,9 +395,11 @@ pieces that were deferred all landed:
   arm re-renders just the current page's buttons (page 1 → `buttons`, page 2
   → `options_buttons`).  Runs each frame inside its own short canvas lock so
   the selected-button highlight (`DAT_00553114`, set by the input dispatcher
-  with no demand-redraw) repaints without a full-scene redraw.  Pages 3..0xd
-  have their own refreshers (0x4149ec, 0x41f321, …) — unported, so the live
-  menu round-trips pages 1↔2 only today.
+  with no demand-redraw) repaints without a full-scene redraw.  Pages 1, 2,
+  3, 4, 5 and **7** now have their refreshers ported (page 7 = the dirty-
+  gated country-list + option-tabs refresh, `engine_title_render_refresh_setup`;
+  see PROGRESS 2026-05-30 + engine-quirks #119); pages 6, 8..0xd still don't,
+  so the live menu round-trips 1..5 and 7 today.
 - **(c) startup producer** = `engine_set_current_screen(0x1f)` +
   `engine_title_render_set_page(1)` + `engine_set_viewport_game_extents(640,
   480)` (so `engine_compute_input_state` maps the WM_MOUSEMOVE-cached cursor

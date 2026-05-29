@@ -4,7 +4,9 @@
  *
  * Ports: FUN_0040e5e7 (hover), FUN_0040e3ee (click dispatch),
  * FUN_00432b05 (page-1 action), FUN_00432cc8 (page-2 action),
- * FUN_00433461 (page-5 campaign-select action), and the pages-1/2/5 arm of
+ * FUN_00433461 (page-5 campaign-select action), FUN_004335f0 / FUN_004337b4
+ * / FUN_00433905 / FUN_00433998 (the page-7 setup-screen button / scrollbar
+ * / country-row / option-tab actions), and the pages-1/2/5/7 arm of
  * FUN_004ba9c8 (per-page input dispatcher).
  */
 
@@ -182,6 +184,82 @@ static void menu_action_page5(int param)
      * transitions; the page change + campaign scalars are faithful. */
 }
 
+/* ─── page-7 ("game setup") click actions ────────────────────────── */
+
+/* Port of FUN_004337b4 — the country-selector scrollbar (the two arrow
+ * hotspots, type-2 auto-repeat).  `param` is -1 (up) or +1 (down); the
+ * scroll + selected-country recompute + dirty marking live in
+ * engine_title_render (the state owner).  Retail raises DAT_0057d340 = 2
+ * only when the scroll actually moves, which the return value gates. */
+static void menu_action_p7_scroll(int param)
+{
+    if (engine_title_render_country_scroll(param)) {
+        g_redraw_fn(2);             /* DAT_0057d340 = 2 */
+    }
+}
+
+/* Port of FUN_00433905 — a country-list row click (`param` 1..5 → visible
+ * row 0..4). */
+static void menu_action_p7_country(int param)
+{
+    engine_title_render_country_select(param - 1);
+    g_redraw_fn(2);                 /* DAT_0057d340 = 2 */
+}
+
+/* Port of FUN_004335f0 — the carved Cancel / Start / Defaults buttons.
+ *   1 = Cancel   → back to the main menu (page 1)
+ *   2 = Start    → launch the game (deferred — game-start subsystem)
+ *   3 = Defaults → reset the option tabs to defaults (deferred) */
+static void menu_action_p7_button(int param)
+{
+    g_last_selected_ack = -1;       /* DAT_0053f648 = -1 */
+
+    if (param == 1) {
+        /* Cancel — return to the main menu.  Retail also reloads the
+         * misc-sel sheet (0x499034, already ported as gfx_load_misc_sheet)
+         * and runs the new-game-state reset 0x499a1c(0); for a multiplayer
+         * setup (DAT_00553030 != 0) it tears the session down first
+         * (0x4b743b / 0x43e8f4).  Those are deferred — the page change is
+         * the faithful, observable part. */
+        engine_title_render_set_page(1);
+        g_redraw_fn(2);
+        /* TODO(setup-exit): 0x499a1c(0) reset; MP teardown 0x4b743b/0x43e8f4. */
+    } else if (param == 2) {
+        /* Start — finalize the roster (0x499dc3), load the opening stage
+         * (0x4329ec) and drop into the strategic map (DAT_0052afa4 = 1),
+         * gated on DAT_00553f98 <= DAT_0053e8a4.  The game-start subsystem
+         * is unported; deferred. */
+        g_redraw_fn(2);
+        /* TODO(game-start): 0x499dc3 + 0x4329ec; DAT_0052afa4 = 1. */
+    } else if (param == 3) {
+        /* Defaults — re-apply the default option values (0x4ae539) and
+         * recompute the AI roster / preview (0x4ae5e2 / 0x433cc1), then
+         * mark the tab strip dirty.  The recompute is deferred; marking the
+         * tabs dirty re-renders them (unchanged values) which is harmless. */
+        engine_title_render_setup_mark_tabs_dirty();   /* DAT_0055ce94 = 1 */
+        g_redraw_fn(2);
+        /* TODO(defaults): 0x4ae539 default-options apply + 0x4ae5e2/0x433cc1. */
+    }
+}
+
+/* Port of FUN_00433998 — an option-tab click (`param` 1..12).  Opens the
+ * per-option detail screen (page 9), bookmarking the page to return to. */
+static void menu_action_p7_tab(int param)
+{
+    (void)param;
+    g_last_selected_ack = -1;       /* DAT_0053f648 = -1 */
+
+    if (engine_title_render_page() != 9) {
+        g_filelist_return_page = engine_title_render_page();  /* DAT_00553e5c */
+        engine_title_render_set_page(9);                      /* DAT_005530f0 = 9 */
+    }
+    g_redraw_fn(2);                 /* DAT_0057d340 = 2 */
+    /* TODO(page-9): the detail state (DAT_0055306c = selected tab,
+     * DAT_00553fb4 = value count from DAT_004d5560[tab], _DAT_00553530 = 0)
+     * and the page-9 option-detail render are deferred; only the navigation
+     * (and its return bookmark) is faithful here. */
+}
+
 /* ─── hit-test primitives ────────────────────────────────────────── */
 
 /* Half-open box test shared by hover + click (retail inlines the same
@@ -278,6 +356,50 @@ static const engine_menu_hotspot_t k_page5_hotspots[2] = {
     { 0x170, 0x76, 0x210, 0x8e, menu_action_page5, 1, 1 },  /* The new campaign  */
 };
 
+/* Page 7 ("game setup") — three retail tables dispatched in order:
+ *
+ *   DAT_004dcd28 (3) — the carved Cancel / Start / Defaults buttons,
+ *                      press-triggered, params 1/2/3.
+ *   DAT_004dcd88 (7) — the country selector: two type-2 (auto-repeat)
+ *                      scrollbar arrows (params -1/+1) then five
+ *                      press-triggered country rows (params 1..5).
+ *   DAT_004dce30 (12)— the option-tab grid (4 cols × 3 rows, column-major),
+ *                      press-triggered, params 1..0xc.
+ *
+ * Boxes are the verbatim short[] from the binary.  Page 7 has no
+ * hover-highlight pass (FUN_004ba9c8's page-7 arm omits the FUN_0040e5e7
+ * call), so there is no k_page7 hover lookup. */
+static const engine_menu_hotspot_t k_page7_buttons[3] = {
+    { 165, 181, 241, 236, menu_action_p7_button, 1, 1 },  /* Cancel   */
+    { 243, 181, 319, 236, menu_action_p7_button, 1, 2 },  /* Start    */
+    { 321, 181, 397, 236, menu_action_p7_button, 1, 3 },  /* Defaults */
+};
+
+static const engine_menu_hotspot_t k_page7_country[7] = {
+    { 603, 140, 624, 160, menu_action_p7_scroll,  2, -1 },  /* scroll up   */
+    { 603, 209, 624, 229, menu_action_p7_scroll,  2,  1 },  /* scroll down */
+    { 496, 141, 601, 157, menu_action_p7_country, 1,  1 },  /* row 0 */
+    { 496, 157, 601, 173, menu_action_p7_country, 1,  2 },  /* row 1 */
+    { 496, 173, 601, 189, menu_action_p7_country, 1,  3 },  /* row 2 */
+    { 496, 189, 601, 205, menu_action_p7_country, 1,  4 },  /* row 3 */
+    { 496, 205, 601, 221, menu_action_p7_country, 1,  5 },  /* row 4 */
+};
+
+static const engine_menu_hotspot_t k_page7_tabs[12] = {
+    { 170, 280, 266, 328, menu_action_p7_tab, 1, 1 },   /* col 0, row 0 */
+    { 170, 353, 266, 401, menu_action_p7_tab, 1, 2 },   /* col 0, row 1 */
+    { 170, 426, 266, 474, menu_action_p7_tab, 1, 3 },   /* col 0, row 2 */
+    { 290, 280, 386, 328, menu_action_p7_tab, 1, 4 },   /* col 1, row 0 */
+    { 290, 353, 386, 401, menu_action_p7_tab, 1, 5 },   /* col 1, row 1 */
+    { 290, 426, 386, 474, menu_action_p7_tab, 1, 6 },   /* col 1, row 2 */
+    { 410, 280, 506, 328, menu_action_p7_tab, 1, 7 },   /* col 2, row 0 */
+    { 410, 353, 506, 401, menu_action_p7_tab, 1, 8 },   /* col 2, row 1 */
+    { 410, 426, 506, 474, menu_action_p7_tab, 1, 9 },   /* col 2, row 2 */
+    { 530, 280, 626, 328, menu_action_p7_tab, 1, 10 },  /* col 3, row 0 */
+    { 530, 353, 626, 401, menu_action_p7_tab, 1, 11 },  /* col 3, row 1 */
+    { 530, 426, 626, 474, menu_action_p7_tab, 1, 12 },  /* col 3, row 2 */
+};
+
 /* ─── per-page dispatcher (FUN_004ba9c8, 0x1f arm) ───────────────── */
 
 int engine_menu_title_input(const engine_menu_click_in_t *in)
@@ -302,6 +424,16 @@ int engine_menu_title_input(const engine_menu_click_in_t *in)
         engine_title_render_set_selected_button(
             engine_menu_hotspot_hover(0, 0, k_page5_hotspots, 2,
                                       in->cursor_x, in->cursor_y));
+    } else if (page == 7) {
+        /* Three tables dispatched in order (buttons → country → tabs);
+         * the first hotspot whose edge fires consumes the click.  No hover
+         * pass for this page (retail omits FUN_0040e5e7). */
+        if (engine_menu_hotspot_click(0, 0, k_page7_buttons, 3, in))
+            return 1;
+        if (engine_menu_hotspot_click(0, 0, k_page7_country, 7, in))
+            return 1;
+        if (engine_menu_hotspot_click(0, 0, k_page7_tabs, 12, in))
+            return 1;
     }
     return 0;
 }

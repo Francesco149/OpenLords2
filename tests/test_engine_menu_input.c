@@ -332,10 +332,95 @@ int test_menu_title_input_click_does_not_refresh_hover(void)
 int test_menu_title_input_other_page_is_noop(void)
 {
     mi_reset();
-    engine_title_render_set_page(7);   /* not 1 or 2 */
+    engine_title_render_set_page(6);   /* page with no dispatch arm yet */
     engine_menu_click_in_t in = at(BTN_X, row_y(0));
     in.lmb_newly_pressed = 1;
     T_ASSERT_EQ_I(engine_menu_title_input(&in), 0);
-    T_ASSERT_EQ_I(engine_title_render_page(), 7);   /* unchanged */
+    T_ASSERT_EQ_I(engine_title_render_page(), 6);   /* unchanged */
+    return 0;
+}
+
+/* ── page-7 ("game setup") input dispatch (FUN_004ba9c8 arm) ─────── */
+
+/* A clean press at (x,y). */
+static engine_menu_click_in_t press_at(int x, int y)
+{
+    engine_menu_click_in_t in = at(x, y);
+    in.lmb_newly_pressed = 1;
+    return in;
+}
+
+int test_menu_page7_cancel_returns_to_main_menu(void)
+{
+    mi_reset();
+    engine_title_render_set_page(7);
+    /* Cancel box (165,181)-(241,236) → centre (203, 208). */
+    engine_menu_click_in_t in = press_at(203, 208);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_page(), 1);
+    return 0;
+}
+
+int test_menu_page7_start_is_deferred_but_consumes(void)
+{
+    mi_reset();
+    engine_title_render_set_page(7);
+    /* Start box (243,181)-(319,236) → centre (281, 208). */
+    engine_menu_click_in_t in = press_at(281, 208);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);     /* click consumed */
+    T_ASSERT_EQ_I(engine_title_render_page(), 7);       /* still page 7 (deferred) */
+    T_ASSERT_EQ_I(engine_menu_input_last_redraw_mode(), 2);
+    return 0;
+}
+
+int test_menu_page7_country_row_selects_and_sets_id(void)
+{
+    mi_reset();
+    engine_title_render_set_page(7);
+    static const uint8_t ids[8] = { 10, 20, 30, 40, 50, 60, 70, 80 };
+    engine_title_render_set_country_list(ids, 0, 0, 8);
+    s_slot_0053f034 = 0xbeef;
+    /* Row 2 box (496,173)-(601,189) → centre (548, 181); param 3 → row 2. */
+    engine_menu_click_in_t in = press_at(548, 181);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_U(s_slot_0053f034, 30);                 /* ids[0 + 2] */
+    T_ASSERT_EQ_I(engine_menu_input_last_redraw_mode(), 2);
+    return 0;
+}
+
+int test_menu_page7_scrollbar_down_scrolls(void)
+{
+    mi_reset();
+    engine_title_render_set_page(7);
+    static const uint8_t ids[8] = { 10, 20, 30, 40, 50, 60, 70, 80 };
+    engine_title_render_set_country_list(ids, 0, 0, 8);
+    s_slot_0053f034 = 0xbeef;
+    /* Down arrow (603,209)-(624,229) → centre (613, 219); type-2 fires on
+     * the press edge.  scroll 0→1 → id = ids[1 + 0] = 20. */
+    engine_menu_click_in_t in = press_at(613, 219);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_U(s_slot_0053f034, 20);
+    return 0;
+}
+
+int test_menu_page7_option_tab_opens_page9(void)
+{
+    mi_reset();
+    engine_title_render_set_page(7);
+    /* Tab 0 box (170,280)-(266,328) → centre (218, 304). */
+    engine_menu_click_in_t in = press_at(218, 304);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_page(), 9);       /* option-detail page */
+    return 0;
+}
+
+int test_menu_page7_click_outside_hotspots_noop(void)
+{
+    mi_reset();
+    engine_title_render_set_page(7);
+    /* (10,10) is outside every page-7 box. */
+    engine_menu_click_in_t in = press_at(10, 10);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 0);
+    T_ASSERT_EQ_I(engine_title_render_page(), 7);
     return 0;
 }

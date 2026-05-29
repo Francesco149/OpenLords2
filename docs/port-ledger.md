@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **327** (13.4%) — tested 292, ported 35
-- code bytes touched: **14.1%** (117,970 / 838,629 B)
-- unported: **2120**
+- touched: **338** (13.8%) — tested 303, ported 35
+- code bytes touched: **14.5%** (121,610 / 838,629 B)
+- unported: **2109**
 - orphan refs (in src/, not in function table): 4
 
-## tested (292) — ported + host unit suite
+## tested (303) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -154,6 +154,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x41f86d | FUN_0041f86d | 286 | engine_title_render.c, engine_title_render.h |
 | 0x41f98b | FUN_0041f98b | 576 | engine_title_render.c, engine_title_render.h |
 | 0x41fbcb | FUN_0041fbcb | 523 | engine_title_render.c, engine_title_render.h |
+| 0x41ff75 | FUN_0041ff75 | 466 | engine_title_render.c |
 | 0x42150b | FUN_0042150b | 508 | engine_title_render.h |
 | 0x423b4f | FUN_00423b4f | 85 | engine_mp_render.c, engine_mp_render.h |
 | 0x425d35 | FUN_00425d35 | 184 | main.c |
@@ -161,6 +162,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x429153 | FUN_00429153 | 96 | engine_category_buckets.h |
 | 0x4291b3 | FUN_004291b3 | 171 | engine_category_buckets.h |
 | 0x42925e | FUN_0042925e | 81 | engine_category_buckets.c, engine_category_buckets.h |
+| 0x4298c1 | FUN_004298c1 | 604 | engine_title_render.c |
 | 0x429b1d | FUN_00429b1d | 135 | engine.c, engine_camera.c, engine_camera.h |
 | 0x42a15f | FUN_0042a15f | 206 | engine_camera.c, engine_camera.h |
 | 0x42dfe2 | FUN_0042dfe2 | 126 | main.c |
@@ -170,11 +172,17 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x432b05 | FUN_00432b05 | 451 | engine_menu_input.c, engine_menu_input.h |
 | 0x432cc8 | FUN_00432cc8 | 526 | engine_menu_input.c |
 | 0x433461 | FUN_00433461 | 208 | engine_menu_input.c |
+| 0x4335f0 | FUN_004335f0 | 452 | engine_menu_input.c |
+| 0x4337b4 | FUN_004337b4 | 337 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
+| 0x433905 | FUN_00433905 | 147 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
+| 0x433998 | FUN_00433998 | 139 | engine_menu_input.c |
+| 0x433cc1 | FUN_00433cc1 | 35 | engine_title_render.c |
 | 0x4343f8 | FUN_004343f8 | 36 | main.c |
 | 0x43de70 | FUN_0043de70 | 1211 | engine.c, engine.h, engine_rate.c |
 | 0x43e330 | FUN_0043e330 | 259 | engine.c, engine.h, engine_rate.c (+1) |
 | 0x43e433 | FUN_0043e433 | 218 | engine.h, engine_rate.c |
 | 0x43e50d | FUN_0043e50d | 180 | engine.h, engine_rate.c |
+| 0x43eda0 | FUN_0043eda0 | 637 | engine_title_render.c |
 | 0x43f4b7 | FUN_0043f4b7 | 270 | engine.h, engine_state_hash.c |
 | 0x43ffc3 | FUN_0043ffc3 | 117 | engine_state_hash.c |
 | 0x440089 | FUN_00440089 | 81 | engine_battlefield_render.c |
@@ -205,6 +213,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x452735 | FUN_00452735 | 53 | engine_dirty_rect.h |
 | 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_button.c, engine_button.h (+2) |
 | 0x4651b9 | FUN_004651b9 | 91 | engine_territory.c, engine_territory.h |
+| 0x467770 | FUN_00467770 | 525 | engine_title_render.c |
+| 0x46a037 | FUN_0046a037 | 202 | engine_title_render.c |
 | 0x46c4a3 | FUN_0046c4a3 | 277 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
 | 0x46f434 | FUN_0046f434 | 216 | engine_path.c, engine_path.h |
@@ -231,6 +241,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49caaa | FUN_0049caaa | 935 | engine_npc_schedule.c, engine_npc_schedule.h, engine_title_render.c |
 | 0x4ade93 | FUN_004ade93 | 339 | save.c, save.h |
 | 0x4adfe6 | FUN_004adfe6 | 377 | save.c, save.h |
+| 0x4ae5e2 | FUN_004ae5e2 | 96 | engine_title_render.c |
 | 0x4ae8a9 | FUN_004ae8a9 | 191 | save.c, save.h |
 | 0x4ae968 | FUN_004ae968 | 264 | save.c, save.h |
 | 0x4aea70 | FUN_004aea70 | 506 | save.c, save.h |

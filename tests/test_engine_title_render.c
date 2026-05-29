@@ -23,6 +23,7 @@
 #include "localization.h"
 #include "engine_dirty_rect.h"
 #include "engine_title_render.h"
+#include "save_schema_globals.h"   /* s_slot_0053f034 (selected-country id) */
 
 #include <string.h>
 
@@ -1046,5 +1047,76 @@ int test_title_setup_scene_routes_page_7(void)
     T_ASSERT_EQ_I(engine_title_render_last_page(), 0);
     /* And the country-list fills landed on the canvas. */
     T_ASSERT(canvas_color_count(0x20) > 0);
+    return 0;
+}
+
+/* ── page-7 country-selector input (FUN_004337b4 / FUN_00433905) ── */
+
+/* Scroll clamps at both ends and, on a move, recomputes the selected-
+ * country id (s_slot_0053f034 = country_values[scroll + sel]). */
+int test_title_country_scroll_clamps_and_recomputes_id(void)
+{
+    p7_setup();
+    /* 8 distinct ids; window of 5 → scroll range [0, 3].  scroll 0, sel 0. */
+    static const uint8_t ids[8] = { 10, 20, 30, 40, 50, 60, 70, 80 };
+    engine_title_render_set_country_list(ids, 0, 0, 8);
+    s_slot_0053f034 = 0xdead;
+
+    /* Up at the top is a no-op (returns 0, id untouched). */
+    T_ASSERT_EQ_I(engine_title_render_country_scroll(-1), 0);
+    T_ASSERT_EQ_U(s_slot_0053f034, 0xdead);
+
+    /* Down moves 0→1; id = ids[1 + 0] = 20. */
+    T_ASSERT_EQ_I(engine_title_render_country_scroll(1), 1);
+    T_ASSERT_EQ_U(s_slot_0053f034, 20);
+    /* 1→2→3 (id 30, 40). */
+    T_ASSERT_EQ_I(engine_title_render_country_scroll(1), 1);
+    T_ASSERT_EQ_I(engine_title_render_country_scroll(1), 1);
+    T_ASSERT_EQ_U(s_slot_0053f034, 40);
+    /* At scroll == count-5 (3) the down edge clamps (returns 0). */
+    T_ASSERT_EQ_I(engine_title_render_country_scroll(1), 0);
+    T_ASSERT_EQ_U(s_slot_0053f034, 40);
+    return 0;
+}
+
+/* Selecting a visible row sets the row and the id = values[scroll + row];
+ * a later scroll proves the selected row persisted. */
+int test_title_country_select_sets_row_and_id(void)
+{
+    p7_setup();
+    static const uint8_t ids[8] = { 10, 20, 30, 40, 50, 60, 70, 80 };
+    engine_title_render_set_country_list(ids, 0, 0, 8);
+
+    engine_title_render_country_select(2);          /* row 2, scroll 0 */
+    T_ASSERT_EQ_U(s_slot_0053f034, 30);             /* ids[0 + 2] */
+
+    /* Scroll down once with the row still 2 → id = ids[1 + 2] = 40. */
+    T_ASSERT_EQ_I(engine_title_render_country_scroll(1), 1);
+    T_ASSERT_EQ_U(s_slot_0053f034, 40);
+    return 0;
+}
+
+/* The per-frame refresh re-renders the country list only when it has been
+ * dirtied by an input action; a clean refresh draws nothing. */
+int test_title_refresh_setup_gated_by_dirty(void)
+{
+    p7_setup();
+    engine_title_render_set_country_list((const uint8_t *)"\0\1\2\3\4\5\6\7",
+                                         0, 0, 8);
+    /* A full render draws everything and clears the dirty flags. */
+    engine_title_render_setup_screen();
+
+    /* Clean → refresh paints no country-row fills. */
+    canvas_init();
+    engine_title_render_refresh_setup();
+    T_ASSERT_EQ_I(row_color_count_x(0x8d, 0x20, 0x1f0, 0x1f0 + 0x69), 0);
+    T_ASSERT_EQ_I(row_color_count_x(0x8d, 0x3f, 0x1f0, 0x1f0 + 0x69), 0);
+
+    /* Select row 2 → country list dirty; refresh now re-renders it. */
+    engine_title_render_country_select(2);
+    canvas_init();
+    engine_title_render_refresh_setup();
+    T_ASSERT(row_color_count_x(0xad, 0x3f, 0x1f0, 0x1f0 + 0x69) > 0);  /* sel row */
+    T_ASSERT(row_color_count_x(0x8d, 0x20, 0x1f0, 0x1f0 + 0x69) > 0);  /* row 0  */
     return 0;
 }

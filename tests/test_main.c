@@ -1228,6 +1228,9 @@ struct test_case {
     X(title_setup_roster_draws_occupied_skips_empty) \
     X(title_setup_tabs_value_label_skips_active) \
     X(title_setup_scene_routes_page_7) \
+    X(title_country_scroll_clamps_and_recomputes_id) \
+    X(title_country_select_sets_row_and_id) \
+    X(title_refresh_setup_gated_by_dirty) \
     \
     X(menu_hover_returns_1based_index) \
     X(menu_hover_outside_returns_zero) \
@@ -1251,6 +1254,12 @@ struct test_case {
     X(menu_title_input_hover_off_buttons_clears_highlight) \
     X(menu_title_input_click_does_not_refresh_hover) \
     X(menu_title_input_other_page_is_noop) \
+    X(menu_page7_cancel_returns_to_main_menu) \
+    X(menu_page7_start_is_deferred_but_consumes) \
+    X(menu_page7_country_row_selects_and_sets_id) \
+    X(menu_page7_scrollbar_down_scrolls) \
+    X(menu_page7_option_tab_opens_page9) \
+    X(menu_page7_click_outside_hotspots_noop) \
     \
     X(engine_button_kind20_blits_32x32_at_origin) \
     X(engine_button_kind18_blits_24x24) \

@@ -1132,11 +1132,19 @@ static void bringup_title_live(void)
     title_bind_render_state();
     engine_bind_title_bg_reload_fn(title_bg_reload);
     engine_set_viewport_game_extents(640, 480);   /* DAT_004eb274/DAT_004eac4c */
-    engine_title_render_set_page(1);
+    /* Start on the requested page (--title-page N, default 1).  Page 7 (the
+     * game-setup screen) needs its runtime state seeded — the same snapshot
+     * the static page-7 bring-up uses — so its country list / roster / tabs
+     * have content to interact with. */
+    engine_title_render_set_page(g_title_page_num);
+    if (g_title_page_num == 7) {
+        seed_page7_state();
+    }
     engine_set_current_screen(0x1f);               /* DAT_004eac50 */
     engine_set_demand_redraw(2);                   /* first frame = full scene */
-    log_line("title-live: engine in title state (screen 0x1f, page 1) — "
-             "move the mouse over the menu buttons; click to navigate.");
+    log_line("title-live: engine in title state (screen 0x1f, page %d) — "
+             "move the mouse over the menu; click to navigate.",
+             g_title_page_num);
 }
 
 static void main_loop_body(void)

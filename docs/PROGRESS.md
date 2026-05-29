@@ -7,6 +7,86 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — PAGE 7: the setup screen goes **live** (input dispatch + per-frame refresh)
+
+Last entry's page-7 render was static — every piece of runtime state bound
+via setters for a groundtruth capture.  This entry makes the **custom-game
+setup screen interactive**, the way pages 1/2/5 are: the country selector
+now scrolls and selects under the mouse, and the screen gets the cheap
+per-frame repaint instead of needing a full-scene redraw.
+
+Two arms of the title input/render loop landed:
+
+1. **Input dispatch** — the page-7 arm of `FUN_004ba9c8`, three hotspot
+   tables dispatched in order (no hover pass — retail omits `FUN_0040e5e7`
+   for this page).  All four action functions ported:
+   - **`FUN_004337b4`** (country scrollbar, the two type-2 auto-repeat
+     arrows, params -1/+1) and **`FUN_00433905`** (the five country rows,
+     params 1..5) → `engine_title_render_country_scroll/select`.  These are
+     **fully functional**: the scroll clamps to `[0, count-5]`, the selected
+     visible row tracks the click, and the selected-country id
+     (`s_slot_0053f034 = country_values[scroll + sel]`) recomputes — so the
+     list visibly scrolls and the highlight moves.  The per-country **stage
+     reload + map/preview recompute** (`0x43eda0`/`0x46a037`/`0x467770`/
+     `0x4298c1`/`0x4ae5e2`/`0x43cc1`) is deferred (those subsystems are
+     unported); the scroll/select state + dirty flags are faithful.
+   - **`FUN_004335f0`** (Cancel/Start/Defaults, params 1/2/3): Cancel → page
+     1 (works — main menu is rendered); Start → game-start (`0x499dc3` +
+     `0x4329ec`) deferred; Defaults → option-reset (`0x4ae539`) deferred.
+   - **`FUN_00433998`** (the 12 option tabs, a 4-col×3-row grid, params
+     1..0xc): navigates to the page-9 option-detail screen + return
+     bookmark; the page-9 detail state + render are deferred.
+   The three hotspot tables (`DAT_004dcd28` / `_004dcd88` / `_004dce30`) were
+   read verbatim from the binary with r2 (24-byte `{x0,y0,x1,y1, action@8,
+   type@0xf, param@0x10}` entries).
+
+2. **Per-frame refresh** — the page-7 arm of `FUN_004ba26e`:
+   `FUN_0041f98b` (country list) + `FUN_0041f86d(999)` (tabs) +
+   `FUN_0041ff75(0)`.  The first two are **dirty-gated** inside their
+   sub-renderers (`DAT_0057c948` / `DAT_0055ce94`); the port hoists the gate
+   to the refresh caller (`engine_title_render_refresh_setup`) since our
+   sub-renderers must draw unconditionally on the full-scene path, and the
+   full render now clears both flags at its tail.  `FUN_0041ff75` is the
+   **multiplayer chat ticker** — a no-op in single-player (`DAT_00553030 ==
+   0`) — so it's elided.  Wired into `engine_title_render_refresh_buttons`
+   (page 7) → reachable every frame from `engine_tick_title_render_step`.
+   See engine-quirks #119.
+
+Harness: `--title-live` now honors `--title-page N` (starts the live loop on
+that page, seeding page-7 state when N==7), so the setup screen can be driven
+interactively for verification.
+
+Coverage 327 → **338 touched** (12.4% host-tested, 14.5% of code bytes).
+9 new host tests (country scroll clamp + id recompute, row select, dirty-
+gated refresh, + 6 page-7 dispatch cases) → **1221 green**; both drop-in
+builds clean.
+
+**Human-confirmed** (`--title-live --title-page 7`, 2026-05-30): clicking a
+nation row moves the selection highlight, the up/down scroll arrows page the
+44-country list, and the scrollbar *track* is inert (faithful — retail's
+`DAT_004dcd88` has only the two arrow hotspots + five rows, no thumb-drag
+control).  Clicking an option tab navigates to page 9, which renders blank
+(the page-9 detail screen is deferred).  The top-right map preview stays
+fixed across selections (the per-country reload is deferred).  `--title-live`
+now honors `--title-page N` (seeds page-7 state for N==7) to enable this.
+*Side-by-side against live retail wasn't possible*: the frida capture harness
+feeds synthetic input and doesn't pass a real mouse to retail's WndProc, so
+retail can't be driven interactively — the port was confirmed standalone
+against the known-good static render + the verbatim-from-binary hotspot/action
+ports.
+
+### Next
+
+- **Page 8** (the multiplayer setup screen) shares this input/refresh arm
+  (`FUN_004ba9c8`/`FUN_004ba26e` add `FUN_00420147` + the MP chat box), so
+  it's the closest neighbour once MP state exists.
+- **Page 9** (the option-detail picker reached by clicking a tab) is the
+  genuine single-player continuation — its render + the deferred tab-detail
+  state (`DAT_0055306c` / `DAT_00553fb4` / `DAT_004d5560`) are the next chip
+  to make the tabs do something on click.
+- The deep **Start** destination (game-start `0x4329ec` → strategic map) is
+  the big play-flow milestone behind this screen.
+
 ## 2026-05-29 — PAGE 7: the custom-game **setup screen** render (`FUN_0041f6c7` + subs)
 
 The natural next play-flow screen (page 4 *Continue* → page 7) is now

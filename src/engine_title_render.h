@@ -310,6 +310,26 @@ void engine_title_render_bind_palette(const uint8_t *pal_rgb);
 void engine_title_render_set_country_list(const uint8_t *values, int scroll,
                                           int selected_row, int count);
 
+/* Country-selector input (ports of FUN_004337b4 / FUN_00433905, driven by
+ * the page-7 hotspot tables).  _scroll moves the visible window by `dir`
+ * (<0 up / >=0 down), clamped to [0, count-5], returning 1 iff it moved;
+ * _select sets the selected visible row (0..4).  Both recompute the
+ * selected-country id (s_slot_0053f034) and mark the country + tab sub-
+ * passes dirty for the per-frame refresh.  The per-country map/preview
+ * reload is deferred (see the .c). */
+int  engine_title_render_country_scroll(int dir);
+void engine_title_render_country_select(int row);
+
+/* Mark a page-7 sub-pass dirty so the next refresh re-renders it
+ * (DAT_0057c948 country list / DAT_0055ce94 option tabs). */
+void engine_title_render_setup_mark_country_dirty(void);
+void engine_title_render_setup_mark_tabs_dirty(void);
+
+/* Port of the page-7 arm of FUN_004ba26e: re-render the country list and
+ * option tabs when dirtied, then clear the flags.  Routed from
+ * engine_title_render_refresh_buttons(7). */
+void engine_title_render_refresh_setup(void);
+
 /* The 128×128 preview buffer shown top-right (retail DAT_00569590). */
 void engine_title_render_set_preview(const uint8_t *buf);
 

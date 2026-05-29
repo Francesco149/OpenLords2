@@ -4189,6 +4189,44 @@ need the lord-record structures that nothing ported yet reads).
 
 ---
 
+## 119. The page-7 per-frame refresh is dirty-gated inside its sub-renderers, and one of its three calls is multiplayer-only
+
+`FUN_004ba26e`'s page-7 arm (`DAT_005530f0 == 7`) re-runs three calls every
+frame: `FUN_0041f98b()` (country list), `FUN_0041f86d(999)` (option tabs,
+`999` ⇒ no tab is "active" so all keep their bevel), and `FUN_0041ff75(0)`.
+Two non-obvious facts:
+
+- **The gate lives inside the sub-renderer, not the caller.**  `FUN_0041f98b`
+  is wrapped in `if (0 < DAT_0057c948) { DAT_0057c948 = 0; … }` and
+  `FUN_0041f86d` in `if (0 < DAT_0055ce94) { … }`.  So the per-frame arm is
+  cheap — it paints nothing unless an input action set the flag.  The
+  full-scene root `FUN_0041f6c7` sets *both* flags to 1 before calling the
+  same subs, so a full redraw always draws and ends with both back at 0.
+  The drop-in's `setup_country_list` / `setup_tabs` render *unconditionally*
+  (the full-scene path needs that), so the port **hoists the gate to the
+  refresh caller** (`engine_title_render_refresh_setup`) and has the full
+  render clear both flags at its tail — same observable behavior.
+
+- **`FUN_0041ff75(0)` is the multiplayer chat-line ticker and a no-op in
+  single-player.**  Its whole body is guarded by `if (DAT_00553030 != 0 …)`;
+  page 7 is the single-player setup screen (`DAT_00553030 == 0`), so the
+  call does nothing.  The drop-in elides it.  (The multiplayer setup screen
+  is page 8, which shares this arm but adds `FUN_00420147`.)
+
+A third subtlety: the country scroll/select actions (`FUN_004337b4` /
+`FUN_00433905`) set the demand-redraw `DAT_0057d340 = 2` **and** both sub-
+dirty flags.  In the drop-in `DAT_0057d340 = 2` triggers a full-scene redraw
+next frame (which redraws the scrolled list and clears the flags), so the
+dirty-gated refresh is the faithful per-frame path but the full redraw is
+what's observed after an action.
+
+> 📍 `src/engine_title_render.c` (`engine_title_render_refresh_setup`,
+> `engine_title_render_country_scroll/select`), `src/engine_menu_input.c`
+> (page-7 arm), Ghidra `FUN_004ba26e` / `FUN_0041f98b` / `FUN_0041f86d` /
+> `FUN_0041ff75` / `FUN_004337b4` / `FUN_00433905`.
+
+---
+
 <!--
 Template for new entries:
 

@@ -11,6 +11,7 @@
 
 #include "engine_title_render.h"
 #include "engine_dirty_rect.h"
+#include "save_schema_globals.h"   /* s_slot_0053f034 (selected-country id) */
 #include "engine_button.h"
 #include "localization.h"
 #include "gfx_line.h"
@@ -56,6 +57,14 @@ static int g_p7_country_scroll;             /* DAT_0053e90c */
 static int g_p7_country_sel;                /* DAT_0057cacc */
 static int g_p7_country_count;              /* DAT_00554018 */
 static const uint8_t *g_p7_preview;         /* DAT_00569590 */
+
+/* The two page-7 sub-pass dirty flags (DAT_0057c948 = country list,
+ * DAT_0055ce94 = option tabs).  On the full-scene render the subs draw
+ * unconditionally (setup_screen clears these to 0 afterward); these gate
+ * only the per-frame refresh (engine_title_render_refresh_setup), which
+ * re-renders just the sub a page-7 input action dirtied. */
+static int g_p7_country_dirty;              /* DAT_0057c948 */
+static int g_p7_tabs_dirty;                 /* DAT_0055ce94 */
 
 /* Option-tab selected values, in tab order 0..11 (0x433a70 output —
  * retail reads 12 permuted scalars at 0x53f288..0x53f2b4; we bind the
@@ -798,6 +807,59 @@ void engine_title_render_set_country_list(const uint8_t *values, int scroll,
     g_p7_country_count  = count;
 }
 
+void engine_title_render_setup_mark_country_dirty(void) { g_p7_country_dirty = 1; }
+void engine_title_render_setup_mark_tabs_dirty(void)    { g_p7_tabs_dirty = 1; }
+
+/* Port of FUN_004337b4 — the country-selector scrollbar.  `dir` < 0 scrolls
+ * up (toward 0, the up-arrow's DAT_0059154c = -1), `dir` >= 0 scrolls down
+ * (toward count-5, the down-arrow's param = +1).  Retail clamps the new
+ * scroll to [0, count-5] and, on a move, recomputes the selected-country id
+ * (s_slot_0053f034 = country_values[scroll + sel]) and marks both sub-passes
+ * dirty.  Returns 1 iff the scroll actually moved (the caller raises the
+ * demand-redraw flag only then, mirroring retail's per-branch DAT_0057d340).
+ *
+ * The per-country reload it also runs — stage load 0x4c (FUN_0043eda0),
+ * country-data binds (FUN_0046a037 / FUN_00467770), camera reset
+ * (FUN_004298c1), and the AI-roster/preview recompute (FUN_004ae5e2 /
+ * FUN_00433cc1) — is deferred until those subsystems land; the scroll
+ * offset, selected id, and dirty flags are faithful, so the visible list
+ * scroll + scrollbar thumb track exactly. */
+int engine_title_render_country_scroll(int dir)
+{
+    if (dir < 0) {
+        if (g_p7_country_scroll <= 0) {
+            return 0;
+        }
+        g_p7_country_scroll--;
+    } else {
+        if (g_p7_country_scroll >= g_p7_country_count - 5) {
+            return 0;
+        }
+        g_p7_country_scroll++;
+    }
+    if (g_p7_country_values) {
+        s_slot_0053f034 =
+            g_p7_country_values[g_p7_country_scroll + g_p7_country_sel];
+    }
+    g_p7_country_dirty = 1;
+    g_p7_tabs_dirty    = 1;
+    return 1;
+}
+
+/* Port of FUN_00433905 — select the visible country row (0..4, the clicked
+ * row's DAT_0059154c minus 1).  Sets the selected visible row, recomputes
+ * the selected-country id (country_values[scroll + row]), and marks both
+ * sub-passes dirty.  The per-country reload is deferred (see above). */
+void engine_title_render_country_select(int row)
+{
+    g_p7_country_sel = row;
+    if (g_p7_country_values) {
+        s_slot_0053f034 = g_p7_country_values[g_p7_country_scroll + row];
+    }
+    g_p7_country_dirty = 1;
+    g_p7_tabs_dirty    = 1;
+}
+
 void engine_title_render_set_preview(const uint8_t *buf)
 {
     g_p7_preview = buf;
@@ -972,6 +1034,36 @@ void engine_title_render_setup_screen(void)
     engine_title_render_setup_country_list();
     engine_title_render_setup_roster();
     engine_title_render_setup_tabs();
+
+    /* Retail FUN_0041f6c7 sets DAT_0057c948 / DAT_0055ce94 to 1, then the
+     * subs (FUN_0041f98b / FUN_0041f86d) draw and clear them — so after a
+     * full render both land at 0.  Our subs draw unconditionally; mirror the
+     * end-state so the per-frame refresh has nothing pending until an input
+     * action dirties a sub. */
+    g_p7_country_dirty = 0;
+    g_p7_tabs_dirty    = 0;
+}
+
+/* Port of the page-7 arm of FUN_004ba26e (the per-frame UI-refresh
+ * dispatcher): re-render the country list (FUN_0041f98b) and option tabs
+ * (FUN_0041f86d(999) → active = 999 so every tab keeps its bevel) only when
+ * their dirty flag is set, then clear it.  The third call in retail's arm,
+ * FUN_0041ff75(0), is the multiplayer chat-line ticker; it early-returns
+ * when DAT_00553030 == 0 (single-player), so it is elided here.
+ *
+ * In retail the gate lives inside FUN_0041f98b / FUN_0041f86d themselves;
+ * our setup_country_list / setup_tabs render unconditionally (the full-scene
+ * path needs that), so the gate is hoisted to this caller instead. */
+void engine_title_render_refresh_setup(void)
+{
+    if (g_p7_country_dirty > 0) {
+        g_p7_country_dirty = 0;
+        engine_title_render_setup_country_list();
+    }
+    if (g_p7_tabs_dirty > 0) {
+        g_p7_tabs_dirty = 0;
+        engine_title_render_setup_tabs();
+    }
 }
 
 /* Port of FUN_0041e7e1. */
@@ -1019,12 +1111,16 @@ void engine_title_render_scene(int screen_state, int page)
  *
  *   page 1 (main menu)      → FUN_0041eaa3 → engine_title_render_buttons
  *   page 2 ("Your options") → FUN_0041ece6 → engine_title_render_options_buttons
+ *   page 3 (file list)      → FUN_004149ec → engine_title_render_filelist_buttons
+ *   page 4 (choose title)   → FUN_0041f321 → engine_title_render_refresh_choose_title
  *   page 5 ("Play Now!")    → FUN_0041f5e8 → engine_title_render_play_now_buttons
+ *   page 7 (game setup)     → FUN_0041f98b + FUN_0041f86d(999) + FUN_0041ff75(0)
+ *                             → engine_title_render_refresh_setup
  *
- * The remaining pages (3, 4, 6..0xd) have their own per-frame refreshers
- * in retail (0x4149ec, 0x41f321, …) — still unported, so the live menu
- * only round-trips pages 1, 2 and 5 today; other pages just don't get the
- * cheap per-frame repaint until their refreshers land. */
+ * The remaining setup-flow pages (6, 8..0xd) have their own per-frame
+ * refreshers in retail — still unported, so the live menu round-trips
+ * pages 1..5 and 7 today; the others don't get the cheap per-frame repaint
+ * until their refreshers land. */
 void engine_title_render_refresh_buttons(int page)
 {
     if (page == 1) {
@@ -1037,5 +1133,7 @@ void engine_title_render_refresh_buttons(int page)
         engine_title_render_refresh_choose_title();
     } else if (page == 5) {
         engine_title_render_play_now_buttons();
+    } else if (page == 7) {
+        engine_title_render_refresh_setup();
     }
 }
