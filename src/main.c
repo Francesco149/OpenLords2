@@ -66,6 +66,7 @@
 #include "engine_title_render.h"
 #include "engine_menu_input.h"
 #include "gfx.h"
+#include "io.h"
 #include "gfx_dispatch.h"
 #include "gfx_glyph.h"
 #include "gfx_glyph_table.h"
@@ -866,6 +867,62 @@ static int title_render_current_page(void)
     return 1;
 }
 
+/* Seed the page-7 (custom-game setup) runtime state for the bring-up,
+ * with the exact retail values captured via `frida_capture.py
+ * --dump-globals` (run gt-p7-state).  The page-7 state is produced by the
+ * scenario-setup flow (unported), so rather than drive it we force the
+ * captured snapshot — same approach as the page-3/4 bring-ups.
+ *
+ *   country list  DAT_0050a460 = [0,1,2,…]  count 0x2c, scroll 0, sel 0
+ *   tab values    (resolved 0x53f288.. via 0x433a70's permutation)
+ *   roster        seats 1..5: the human "aaaaaa" (type 1) + 4 AI
+ *   enabled       DAT_005530e0 all 0 → the human seat is dimmed
+ *   preview       DAT_00569590 — the 128×128 map thumbnail, loaded from
+ *                 the game dir if present (p7preview.bin), else left blank
+ */
+static void seed_page7_state(void)
+{
+    static const uint8_t k_country[64] = {
+        0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf,
+        0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,
+        0x28,0x29,0x2a,0x2b,0x2c,0x2d,0x2e,0x2f,
+        0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x39,0x3a,0x3b,
+    };
+    engine_title_render_set_country_list(k_country, /*scroll=*/0,
+                                         /*sel=*/0, /*count=*/0x2c);
+
+    static const int k_tabs[12] = { 0, 0, 3, 0, 0, 0, 3, 2, 2, 1, 6, 1 };
+    engine_title_render_set_tab_values(k_tabs, /*active=*/-1);
+
+    static const engine_title_setup_player_t k_players[6] = {
+        { 0, 0, 0,    0, 0 },                 /* seat 0 — unused */
+        { 1, 0, 0x0e, 1, 0 },                 /* seat 1 — human "aaaaaa" */
+        { 0, 1, 0xfb, 2, 0 },                 /* seat 2 — The Knight */
+        { 0, 2, 0x3a, 3, 0 },                 /* seat 3 — The Baron */
+        { 0, 4, 0x05, 4, 0 },                 /* seat 4 — The Bishop */
+        { 0, 3, 0x04, 5, 0 },                 /* seat 5 — The Countess */
+    };
+    static uint8_t k_names[6 * 0x2c];
+    memset(k_names, 0, sizeof k_names);
+    memcpy(k_names + 1 * 0x2c, "aaaaaa    ", 10);
+    memcpy(k_names + 2 * 0x2c, "The Knight", 10);
+    memcpy(k_names + 3 * 0x2c, "The Baron", 9);
+    memcpy(k_names + 4 * 0x2c, "The Bishop", 10);
+    memcpy(k_names + 5 * 0x2c, "The Countess", 12);
+    engine_title_render_set_players(k_players, k_names);
+
+    /* The 128×128 map preview (DAT_00569590) is rendered by the
+     * scenario-load path; load the captured snapshot from the game dir if
+     * it was placed there (dev convenience), else leave the panel blank. */
+    static uint8_t k_preview[0x4000];
+    if (io_read_file_at("p7preview.bin", k_preview, sizeof k_preview, 0)
+            == (int)sizeof k_preview) {
+        engine_title_render_set_preview(k_preview);
+    } else {
+        engine_title_render_set_preview(NULL);
+    }
+}
+
 static void bringup_title_menu(int with_panel)
 {
     engine_title_render_set_page(g_title_page_num);
@@ -878,6 +935,9 @@ static void bringup_title_menu(int with_panel)
     }
 
     title_bind_render_state();
+    if (g_title_page_num == 7) {
+        seed_page7_state();
+    }
     title_render_current_page();
 }
 

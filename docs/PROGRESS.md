@@ -59,18 +59,32 @@ Coverage 321 → 327 touched (12.2% host-tested, 14.1% of code bytes).
 5 new page-7 host tests + bevel + darken tests → **1212 green**; both
 drop-in builds clean.
 
+**Groundtruth diff — bit-identical (0 diff px / 307200).**  The page-7
+runtime state was captured live from retail via `frida_capture.py
+--dump-globals` (run `gt-p7-state`): country-list bytes `DAT_0050a460`
+(=[0,1,2,…], count 0x2c, scroll 0, sel 0), the 5 roster records at
+`DAT_0057bf05`+i·0x160 (the human "aaaaaa" type 1 + four AI — Knight /
+Baron / Bishop / Countess), names at `DAT_00553d54`+i·0x2c, enabled
+`DAT_005530e0` (**all 0** → the human seat is dimmed via the darken pass,
+which is what makes its portrait the dark silhouette + its shield gray in
+the groundtruth), the 12 tab scalars at `0x53f288..0x53f2b4` (resolved via
+0x433a70's permutation → off/no/keep/medium / off/easy/some/no-limit /
+five/no-army/1000/all), and the 128×128 preview buffer `DAT_00569590` (the
+Britain map thumbnail).  These are seeded into the `--title-page 7`
+bring-up (`seed_page7_state`, the small state hardcoded à la pages 3/4; the
+preview loaded from `p7preview.bin` in the game dir if present).  Rendered
+over custom.pl8 and diffed against `scenario-setup-retail.bmp`: **0
+differing pixels** — the darken-ramp 8-bit-palette model and every sprite/
+text/bevel/scrollbar landed exactly.  Page 7 is **done**.
+
 ### Next
 
-**Page-7 groundtruth diff** (verification milestone — needs a harness
-run).  The runtime state (country-list bytes `DAT_0050a460`, scroll/sel/
-count, the 5 roster records at `DAT_0057bf05`+i·0x160, names at
-`DAT_00553d54`+i·0x2c, enabled `DAT_005530e0`, the 12 tab scalars at
-`0x53f288..0x53f2b4`, the 128×128 preview buffer `DAT_00569590`) must be
-captured live from retail via `frida_capture.py --dump-globals` (buffers
-supported), bound into a `--title-page 7` drop-in path, rendered over
-custom.pl8, and diffed against `scenario-setup-retail.bmp` to bit-identical.
-The render code is complete + unit-tested; this step is the pixel-parity
-verification.
+**Page-7 input arm + per-frame refresh** (the live interactive screen):
+port the page-7 input dispatch (tab/country/roster hit-tests → the
+`0057c948`/`0055ce94` dirty flags + the per-frame `FUN_004ba26e` page-7
+refresh arm), mirroring the page-5 input + page-3/4 refresh work.  Or
+continue the setup-flow render sweep (pages 8..0xd) — page 8 shares the
+page-7 update fn (`FUN_0041f98b`+), so it is the closest neighbour.
 
 ## 2026-05-29 — MISC SHEET: bind misc_sel.pl8 (`DAT_005530c8`) — last unbound title asset
 
