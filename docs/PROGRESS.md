@@ -7,6 +7,47 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — main-menu render-chip plan corrected (decompile re-derivation)
+
+Started the main-menu render milestone by validating the chip plan from the
+prior two commits (cc3b13d / e9f2165) against the static decompile before
+porting.  The call-trace-derived render tree had **two attribution errors**:
+
+- `FUN_0049a010` was labeled "[ported] screen-state-0 render dispatch".  It is
+  neither: it's the **unported in-game state-machine driver** (sub-step body of
+  `engine_tick`, switch on `DAT_00569584`; its in-game arm calls the
+  just-ported turn-end check `FUN_0049b762`).  It draws nothing.
+- `FUN_0043ac23`/`FUN_0043ad25` *do* call `FUN_0040f1a0`, but `FUN_0043ad25`
+  sets `DAT_004eac50 = 0` first, so that path renders **screen 0**, not the
+  title.  They're teardown handlers, off the menu path.
+
+The real menu-render seam is the **demand-redraw** in `engine_tick`'s render
+phase (line 36): `if (DAT_0057d340 != 0) FUN_0040f1a0(DAT_0057d340)`, taken
+every frame while `DAT_004eac50 == 0x1f`.  `DAT_0057d340` is a redraw-request
+flag (mode 1|2) set by 50+ input/state handlers.  Corrected tree:
+`engine_tick → FUN_0040f1a0 (0x1f arm) → FUN_0041e7e1 → FUN_0041e61d (bg+assets)
++ FUN_0041ea14 (panel + 2 texts + FUN_0041eaa3 buttons) → FUN_0045240a`.
+
+Also fully resolved the **text-leaf font globals** (the folded args that made
+`FUN_00402c5e`'s 7-arg call sites look incompatible with the 10-arg port
+`gfx_wrap_localized_line_centered`): `&DAT_005b2fa0`/`&DAT_005af8f0` are **fonts**
+(title / default — the latter already `g_default_font` in `gfx_dispatch.c`), not
+string tables; the menu strings are sub-strings of localization-blob entry `0xb`
+(`DAT_00591580`, loaded by config); the glyph maps are the fixed static globals
+`&DAT_004d71f0` (render) / `&DAT_004d71d0` (measure).  Verified via
+`FUN_004025d7`/`FUN_00402637`/`FUN_004014f0`.
+
+Net: render composition (`FUN_0041eaa3` buttons + text leaves) rests on
+already-ported primitives and is now portable; the **long pole** is the panel/
+background **DDraw tile-blit family** (`FUN_004b446d`/`44d2`/`43b1`/`49f7`) plus
+the **PL8 asset load** (`FUN_004af8d9` → `DAT_004eabec`/`DAT_004ea8a0`) and the
+boot→title **state track** — those gate the first visible pixel.
+
+No code changed yet — `docs/plans/main-menu-render-chips.md` rewritten with the
+corrected tree, chip table, and full data-dependency resolution.  Next: port the
+button/text composition leaves (host-testable now), then tackle the long pole
+for visual parity vs `runs/groundtruth/mainmenu-retail.bmp`.
+
 ## 2026-05-29 — end-of-turn readiness check (turn family, in-flow chip)
 
 The prior session's nominated next chip: `FUN_0049b762` (334 B) →
