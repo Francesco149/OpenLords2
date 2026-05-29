@@ -558,6 +558,70 @@ static void engine_tick_menu_input_step(void)
     engine_menu_title_input(&in);
 }
 
+/* Page-background reload hook — the drop-in's gfx background load takes
+ * its own DirectDraw lock, so it cannot run nested inside the canvas
+ * lock the full-scene composite uses.  The title render step calls this
+ * hook (bound by main.c to gfx_title_background_load) BEFORE locking the
+ * canvas, on every demand-redraw frame.  Default no-op so engine.c stays
+ * unit-testable without gfx. */
+static void title_bg_reload_stub(int page) { (void)page; }
+static engine_title_bg_reload_fn g_title_bg_reload_fn = title_bg_reload_stub;
+
+/* ─── title-screen render step (demand-redraw seam + per-frame refresh) ─
+ *
+ * Retail runs two distinct repaints in the render phase of FUN_004b99c0:
+ *
+ *   line 36:  if (DAT_0057d340) { FUN_0040f1a0(DAT_0057d340); ...=0; }
+ *             — the demand-redraw seam: a FULL screen-dispatch (the title
+ *               arm composites background + panel + text + buttons) only
+ *               when a state handler asked for a repaint.
+ *   line 99:  FUN_004ba26e();
+ *             — the per-frame UI refresh, run UNCONDITIONALLY every frame.
+ *               Its 0x1f arm re-renders just the current page's buttons,
+ *               so the hover highlight (set by the input dispatcher with
+ *               NO demand-redraw request) follows the mouse smoothly.
+ *
+ * Both paint into the locked back buffer.  In the drop-in the page
+ * background load takes its own DirectDraw lock, so on a full redraw we
+ * reload the background BEFORE taking the canvas lock, then composite the
+ * rest inside one lock; the per-frame button refresh takes its own short
+ * lock.  Non-title screens keep the plain (unlocked) demand-redraw seam —
+ * their per-screen renderers are unported stubs that draw nothing. */
+static void engine_tick_title_render_step(void)
+{
+    if (g_sim_current_screen != 0x1f) {
+        /* Other screens: generic demand-redraw seam.  The renderers are
+         * stubs (engine_screen_dispatch's other-fn hook), so no canvas
+         * lock is needed yet. */
+        if (g_demand_redraw != 0) {
+            engine_screen_dispatch(g_sim_current_screen,
+                                   engine_title_render_page(),
+                                   g_demand_redraw);
+            g_demand_redraw = 0;
+        }
+        return;
+    }
+
+    int page = engine_title_render_page();
+
+    /* Full-scene redraw requested (page transition, window move, surface
+     * restore).  Reload the page background outside the canvas lock, then
+     * composite panel + text + buttons inside it. */
+    int full = (g_demand_redraw != 0);
+    if (full) {
+        g_title_bg_reload_fn(page);
+        g_demand_redraw = 0;
+    }
+
+    if (gfx_lock_canvas()) {
+        if (full)
+            engine_screen_dispatch(0x1f, page, 2);
+        else
+            engine_title_render_refresh_buttons(page);
+        gfx_unlock_canvas();
+    }
+}
+
 /* Wrappers around engine_camera_clamp_scroll / engine_camera_clamp_anchor.
  * Both run in the render-phase tail before the FPS counter — same
  * order as retail (decompile lines 88725-88726).  Bundle the file-
@@ -834,6 +898,35 @@ void engine_set_demand_redraw(int mode)
     g_demand_redraw = mode;
 }
 
+/* ─── live title-screen producer hooks ──────────────────────────────
+ *
+ * The boot→title state transition (retail 0x42b780) is unported, so
+ * these small setters let a bring-up producer put the engine into the
+ * live title-screen state the render seam expects: screen byte 0x1f, a
+ * page, the viewport game-coord extents (so engine_compute_input_state
+ * maps the cursor 1:1 on the 640×480 menu), and an initial demand-redraw
+ * so the first frame paints the full scene. */
+void engine_set_current_screen(int screen)
+{
+    g_sim_current_screen = (uint8_t)screen;
+}
+
+int engine_current_screen(void)
+{
+    return g_sim_current_screen;
+}
+
+void engine_set_viewport_game_extents(int w, int h)
+{
+    g_input_viewport_game_w = w;   /* retail DAT_004eb274 (0x280) */
+    g_input_viewport_game_h = h;   /* retail DAT_004eac4c (0x1e0) */
+}
+
+void engine_bind_title_bg_reload_fn(engine_title_bg_reload_fn fn)
+{
+    g_title_bg_reload_fn = fn ? fn : title_bg_reload_stub;
+}
+
 void engine_tick(void)
 {
     /* Scaffold of retail FUN_004b99c0 @ 0x4b99c0.  The retail body
@@ -1011,21 +1104,17 @@ void engine_tick(void)
      * the demand-redraw cookie the seam below consumes. */
     engine_tick_menu_input_step();
 
-    /* Demand-redraw seam — retail FUN_004b99c0 @ 0x4b99c0 line 36:
-     *   if (DAT_0057d340 != 0) { FUN_0040f1a0(DAT_0057d340); DAT_0057d340 = 0; }
-     * The screen-state byte (DAT_004eac50 = g_sim_current_screen) selects
-     * the dispatch arm; the title page (DAT_005530f0) selects the title
-     * sub-scene; the redraw-mode cookie is forwarded (the 0x1f title arm
-     * ignores it).  Today no producer sets g_demand_redraw or transitions
-     * the screen to 0x1f, so this is dormant until the menu state tick /
-     * boot→title transition land — but the chain now exists end-to-end.
-     * See docs/plans/main-menu-render-chips.md chip 5. */
-    if (g_demand_redraw != 0) {
-        engine_screen_dispatch(g_sim_current_screen,
-                               engine_title_render_page(),
-                               g_demand_redraw);
-        g_demand_redraw = 0;
-    }
+    /* Title-screen render step — the demand-redraw seam (retail
+     * FUN_004b99c0 line 36) plus the per-frame button refresh (line 99,
+     * FUN_004ba26e 0x1f arm), both painting into the locked back buffer.
+     * On the title screen a full redraw fires on demand (page transition,
+     * window move, surface restore) while the buttons repaint every frame
+     * so the hover highlight tracks the mouse.  Dormant on every other
+     * screen until a producer sets g_sim_current_screen = 0x1f (the
+     * --title-live bring-up does, ahead of the unported boot→title
+     * transition 0x42b780).  See docs/plans/main-menu-render-chips.md
+     * chip 5 + docs/findings/title-menu-screens.md. */
+    engine_tick_title_render_step();
 
     /* TODO(render): the remaining ~30 per-subsystem renders (the screen-0
      * in-game path 0x4050c0, the strategic-map / sprite renders, …)

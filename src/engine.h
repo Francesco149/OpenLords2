@@ -95,6 +95,23 @@ extern int g_sim_save_rotate_hold;
  * WM_MOVE / WM_ACTIVATEAPP restore, and by state handlers as they land. */
 void engine_set_demand_redraw(int mode);
 
+/* Live title-screen producer hooks (the boot→title transition
+ * 0x42b780 is unported; these let a bring-up drive the engine into
+ * the live title state the render seam expects).
+ *
+ *   engine_set_current_screen(0x1f)            — screen byte DAT_004eac50
+ *   engine_set_viewport_game_extents(640,480)  — DAT_004eb274/DAT_004eac4c,
+ *       so engine_compute_input_state maps the cursor 1:1 on the menu
+ *   engine_bind_title_bg_reload_fn(fn)         — page-background loader
+ *       called (before the canvas lock) on each full title redraw; the
+ *       drop-in binds it to gfx_title_background_load. */
+void engine_set_current_screen(int screen);
+int  engine_current_screen(void);
+void engine_set_viewport_game_extents(int w, int h);
+
+typedef void (*engine_title_bg_reload_fn)(int page);
+void engine_bind_title_bg_reload_fn(engine_title_bg_reload_fn fn);
+
 /* Per-tick driver — scaffold of retail FUN_004b99c0.  Public so
  * engine_tick_dispatch can call it without going through the guard. */
 void engine_tick(void);

@@ -286,3 +286,27 @@ void engine_title_render_scene(int screen_state, int page)
     g_scene_flag_a = 1;   /* DAT_005651ac */
     g_scene_flag_b = 1;   /* DAT_004eb260 */
 }
+
+/* Port of the 0x1f arm of FUN_004ba26e (the per-frame UI refresh
+ * dispatcher, called unconditionally every frame from engine_tick's
+ * render phase — decompile FUN_004b99c0 line 99).  For the title
+ * screen it re-renders just the current page's buttons over the static
+ * panel, so the hover highlight (DAT_00553114, updated by the input
+ * dispatcher without a demand-redraw request) repaints every frame
+ * without a full-scene redraw.
+ *
+ *   page 1 (main menu)      → FUN_0041eaa3 → engine_title_render_buttons
+ *   page 2 ("Your options") → FUN_0041ece6 → engine_title_render_options_buttons
+ *
+ * Pages 3..0xd have their own per-frame refreshers in retail
+ * (0x4149ec, 0x41f321, …) — still unported, so the live menu
+ * only round-trips between pages 1 and 2 today; other pages just don't
+ * get the cheap per-frame repaint until their refreshers land. */
+void engine_title_render_refresh_buttons(int page)
+{
+    if (page == 1) {
+        engine_title_render_buttons();
+    } else if (page == 2) {
+        engine_title_render_options_buttons();
+    }
+}

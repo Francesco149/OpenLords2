@@ -185,6 +185,14 @@ void engine_title_render_options(void);
 /* Port of FUN_0041ece6.  Render the five "Your options" buttons. */
 void engine_title_render_options_buttons(void);
 
+/* Port of the 0x1f arm of FUN_004ba26e — the per-frame button refresh.
+ * Re-renders just the current page's buttons (page 1 → buttons, page 2
+ * → options_buttons) so the hover highlight follows the mouse without a
+ * full-scene redraw.  Called every frame from the engine_tick render
+ * phase while the title screen is up.  No-op for pages whose per-frame
+ * refresher is not yet ported. */
+void engine_title_render_refresh_buttons(int page);
+
 /* Port of FUN_0041e7e1.  Title-scene dispatch: when `screen_state` is
  * 0x1f (the title screen), render the background, then the page named by
  * `page` (1 = main menu → engine_title_render_main_menu; 2 = "Your

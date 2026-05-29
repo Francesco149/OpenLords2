@@ -126,6 +126,14 @@ static int       g_title_page_num = 1;
  * hover/click → page-transition → render chain end-to-end without the
  * live present loop.  Implies --title-menu + --gfx-init. */
 static const char *g_title_nav_dir;
+/* --title-live: drive the engine into the live title-screen state
+ * (g_sim_current_screen = 0x1f, page 1) ahead of the unported boot→title
+ * transition (0x42b780), then let the normal main loop run.  A real
+ * mouse navigates the menu: the per-frame button refresh (FUN_004ba26e
+ * 0x1f arm) tracks the hover highlight; clicks fire page transitions that
+ * full-redraw via the demand-redraw seam.  Implies --gfx-init +
+ * --show-window. */
+static int       g_title_live;
 /* --audio-init: call audio_init() after window creation.  Off by
  * default — SetCooperativeLevel(PRIORITY) modifies process audio
  * state and the headless smoke harness has no way to validate
@@ -222,6 +230,7 @@ static void frame_limiter(void);
 static void main_loop_body(void);
 static void bringup_title_menu(int with_panel);
 static void bringup_title_nav(const char *dir);
+static void bringup_title_live(void);
 void log_line(const char *fmt, ...);   /* non-static — gfx.c links to this */
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdShow)
@@ -289,7 +298,12 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
              * menu rather than the background-erase fill.  Exercises the
              * FUN_0041e61d / FUN_0041e7e1 render chain ahead of the
              * boot→title state producer. */
-            if (g_title_nav_dir) {
+            if (g_title_live) {
+                /* Live interactive menu — drive the engine into the
+                 * title state, then let the main loop tick it so a real
+                 * mouse navigates the menu. */
+                bringup_title_live();
+            } else if (g_title_nav_dir) {
                 /* Scripted navigation demo — drives the real ported input
                  * dispatch with synthetic clicks, capturing each page. */
                 CreateDirectoryA(g_title_nav_dir, NULL);
@@ -761,7 +775,7 @@ static int create_main_window(void)
 }
 
 /* Bring-up: render the page-1 main menu directly, ahead of the
- * boot→title state producer (FUN_0042b780) and the menu state tick.
+ * boot→title state producer (0x42b780) and the menu state tick.
  * Loads the gateway backdrop (palette + full-screen image) into the
  * back buffer, then — if with_panel — composes the stone panel + the
  * button bevels on top via the ported title-render chain inside one
@@ -806,7 +820,7 @@ static void title_bind_render_state(void)
      * gfx_text reads it as the shadow-color discriminator: on the title
      * screen the text shadow pair is the gray (0x36, 0x2c) rather than the
      * default colorful (0x10, 0x1f).  The boot→title state producer
-     * (FUN_0042b780, unported) is the real writer; set it here for the
+     * (0x42b780, unported) is the real writer; set it here for the
      * bring-up so the menu text shadows match retail.  See quirk #114. */
     gfx_text_set_language_tag(0x1f);
 
@@ -906,6 +920,37 @@ static void bringup_title_nav(const char *dir)
     gfx_capture_backbuffer(path);
     log_line("title-nav: clicked Back → page %d → %s",
              engine_title_render_page(), path);
+}
+
+/* Page-background reload hook (engine → gfx).  The engine_tick title
+ * render step calls this before the canvas lock on each full redraw; the
+ * engine hook is `void(*)(int)` but gfx_title_background_load returns int,
+ * so wrap it.  Routes the .256 palette + .pl8 backdrop for `page` into
+ * the back buffer (gateway / custom / skirmish family). */
+static void title_bg_reload(int page)
+{
+    if (!gfx_title_background_load(page))
+        log_line("title_bg_reload: background load failed (page %d)", page);
+}
+
+/* Live interactive title menu (--title-live).  Binds the page-independent
+ * render state + the background-reload hook, sets the viewport game-coord
+ * extents so the cursor maps 1:1 on the 640×480 menu, and puts the engine
+ * into the title-screen state (screen 0x1f, page 1) with an initial
+ * full-redraw request.  From here the normal main loop ticks the engine:
+ * WndProc feeds mouse state, engine_tick resolves input → menu hover/click
+ * → the locked title render step paints.  Stands in for the unported
+ * boot→title transition (0x42b780). */
+static void bringup_title_live(void)
+{
+    title_bind_render_state();
+    engine_bind_title_bg_reload_fn(title_bg_reload);
+    engine_set_viewport_game_extents(640, 480);   /* DAT_004eb274/DAT_004eac4c */
+    engine_title_render_set_page(1);
+    engine_set_current_screen(0x1f);               /* DAT_004eac50 */
+    engine_set_demand_redraw(2);                   /* first frame = full scene */
+    log_line("title-live: engine in title state (screen 0x1f, page 1) — "
+             "move the mouse over the menu buttons; click to navigate.");
 }
 
 static void main_loop_body(void)
@@ -1130,6 +1175,11 @@ static void parse_cmdline(LPSTR lpCmd)
             g_title_nav_dir = tokens[++i];
             g_title_menu = 1;   /* reuse the page-render bring-up setup */
             g_gfx_init   = 1;
+        }
+        else if (!strcmp(a, "--title-live")) {   /* live interactive menu */
+            g_title_live  = 1;
+            g_gfx_init    = 1;   /* needs DDraw */
+            g_show_window = 1;   /* interactive — must be visible */
         }
         else if (!strcmp(a, "--audio-init"))     g_audio_init  = 1;
         else if (!strcmp(a, "--capture-to") && i + 1 < ntok) {

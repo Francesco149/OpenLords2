@@ -13,7 +13,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
 - touched: **304** (12.4%) — tested 270, ported 34
-- code bytes touched: **12.9%** (108,036 / 838,629 B)
+- code bytes touched: **13.1%** (109,799 / 838,629 B)
 - unported: **2143**
 - orphan refs (in src/, not in function table): 4
 
@@ -146,7 +146,6 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42925e | FUN_0042925e | 81 | engine_category_buckets.c, engine_category_buckets.h |
 | 0x429b1d | FUN_00429b1d | 135 | engine.c, engine_camera.c, engine_camera.h |
 | 0x42a15f | FUN_0042a15f | 206 | engine_camera.c, engine_camera.h |
-| 0x42b780 | FUN_0042b780 | 119 | main.c |
 | 0x42dfe2 | FUN_0042dfe2 | 126 | main.c |
 | 0x42e3ba | FUN_0042e3ba | 164 | main.c |
 | 0x42ec91 | FUN_0042ec91 | 1207 | gfx.c, gfx.h, gfx_paint.h |
@@ -252,7 +251,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b49b7 | FUN_004b49b7 | 64 | engine_battlefield_render.c, gfx_sprite.c, gfx_sprite.h |
 | 0x4b49f7 | FUN_004b49f7 | 705 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b5333 | FUN_004b5333 | 2997 | gfx_sprite.c, gfx_sprite.h |
-| 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+4) |
+| 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+5) |
+| 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_title_render.c, engine_title_render.h (+1) |
 | 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_menu_input.c, engine_menu_input.h |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c |
 | 0x4bb978 | FUN_004bb978 | 614 | engine.c, engine.h, engine_rate.c |
