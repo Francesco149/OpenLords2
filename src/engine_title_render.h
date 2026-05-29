@@ -112,6 +112,11 @@ void engine_title_render_bind_panel_asset(const uint8_t *asset);
  * which button label renders in highlight color 0xf9.  Default 1. */
 void engine_title_render_set_selected_button(int index);
 
+/* Current selected-button index (retail `DAT_00553114`).  The menu-input
+ * hover hit-test writes it via the setter; exposed for the renderer's
+ * highlight check and for tests. */
+int  engine_title_render_selected_button(void);
+
 /* Title/menu page selector (retail `DAT_005530f0`).  Page 1 = main menu;
  * pages 2..0xd route to the deferred page hook.  Written by the menu
  * state tick; read by the render seam (engine.c) to source the page it

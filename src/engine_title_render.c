@@ -107,6 +107,8 @@ void engine_title_render_set_selected_button(int index)
     g_selected_button = index;
 }
 
+int engine_title_render_selected_button(void) { return g_selected_button; }
+
 void engine_title_render_set_page(int page) { g_title_page = page; }
 int  engine_title_render_page(void)         { return g_title_page; }
 

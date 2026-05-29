@@ -1178,6 +1178,26 @@ struct test_case {
     X(title_scene_out_of_range_page_renders_nothing_but_finalizes) \
     X(title_page_selector_roundtrips) \
     \
+    X(menu_hover_returns_1based_index) \
+    X(menu_hover_outside_returns_zero) \
+    X(menu_hover_box_is_half_open) \
+    X(menu_hover_applies_offset) \
+    X(menu_click_type1_fires_on_press) \
+    X(menu_click_type1_no_fire_without_press) \
+    X(menu_click_outside_no_fire) \
+    X(menu_click_type3_needs_release_not_press) \
+    X(menu_page1_single_player_goes_to_page2) \
+    X(menu_page1_single_player_sp_unavailable_goes_to_page10) \
+    X(menu_page1_exit_requests_quit) \
+    X(menu_page1_lords_of_magic_is_release_triggered) \
+    X(menu_page2_back_returns_to_page1) \
+    X(menu_page2_play_now_goes_to_page5) \
+    X(menu_page2_load_goes_to_filelist_page3) \
+    X(menu_title_input_updates_hover_highlight) \
+    X(menu_title_input_hover_off_buttons_clears_highlight) \
+    X(menu_title_input_click_does_not_refresh_hover) \
+    X(menu_title_input_other_page_is_noop) \
+    \
     X(map_query_all_clear_returns_1) \
     X(map_query_rawflag_occupied_returns_0) \
     X(map_query_headlink_occupied_returns_0) \
