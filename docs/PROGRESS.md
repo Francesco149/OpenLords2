@@ -7,6 +7,48 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — NEXT SCREEN: title page 4 "Choose your title and your shield" (bit-identical)
+
+The fourth title page — the **player-setup screen** (editable name/title
+box + five-shield picker + Back/Continue) — now renders in the drop-in,
+**0 diff px** vs retail.  Reached from "Your options" → Custom game /
+Skirmish (or the page-5 campaign chooser).  This is the most entangled
+title page so far; it landed as four chips:
+
+1. **Opaque sprite blit** (`FUN_004b432e`/`FUN_0040a567`) — the copy-all
+   (no-transparency) blit + staging wrapper for the solid name-box frame.
+2. **Text caret** (`FUN_0040acce`) + **filled rect** (`FUN_0040437d`) —
+   new `gfx_caret` module bridging gfx_text (anchor), text_input (cursor),
+   font_metrics (width), gfx_line (fill).  Blink counter; off in a single
+   static render (matches the mid-blink-off groundtruth).
+3. **Page-4 render** (`FUN_0041ef57` + `FUN_0041f321`/`FUN_0041f1dd`/
+   `FUN_0041f01f`) in `engine_title_render.c` — panel/title/name box/
+   shields/buttons, state bound via setters and seeded from a
+   `--dump-globals` capture of retail.
+4. Two harness features — **`--dump-globals`** (read retail state at the
+   capture frame; seeds the port) and **`--poke-globals`** + drop-in
+   **`--title-name`** (force the name buffer for a glyph sweep).
+
+**The last 191 px** were the text shadow: the steady-state name box is
+re-rendered every tick by `FUN_0041f321` *standalone* (shadow ON), not
+through `FUN_0041ef57`'s no-shadow bracket — so a captured frame shows a
+shadowed name (engine-quirk #116).  Reproduced via a page-4 refresh.
+
+**Full-glyph sweep:** the name box was driven across the whole printable
+set (retail name-buffer poked, drop-in `--title-name`) — **0 glyph-shape
+diffs** for `A–Z`, `a–z`, `0–9`, `.,!?:;-+=()&%`; the only residual is the
+caret's non-deterministic blink phase.  Human-confirmed the font looks
+perfect.  29 host tests (1158 → 1186 over the four chips); both drop-in
+builds clean.
+
+### Next
+
+Page 3 (the **load-a-game / save list** screen, `FUN_0041ef42` + the
+scrollbar `FUN_00421005`) and the remaining sub-screens (6..0xd).  The
+sprite/caret/text-field primitives are now all in place.
+
+---
+
 ## 2026-05-29 — MENU INPUT: page-5 campaign chooser navigates
 
 The page-5 ("Play Now!" campaign chooser) **input** arm now matches its
