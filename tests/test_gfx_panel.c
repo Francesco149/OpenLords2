@@ -161,6 +161,23 @@ int test_panel_draw_border_plus_inset_fill(void)
     return 0;
 }
 
+/* ── bevel frame (FUN_004093e0) ──────────────────────────────────── */
+
+int test_panel_draw_bevel_mode1_shifts_indices(void)
+{
+    panel_reset();
+    /* 4×4 bevel: border mode 1 over 4×4 at (0,0); interior fill 2×2 at
+     * (0x10,0x10).  Mode 1 adds +0xcc to every border index. */
+    gfx_panel_draw_bevel(g_atlas, 0, 0, 4, 4);
+    /* top-left corner = sprite 0 + 0xcc */
+    T_ASSERT_EQ_I(cell(0,0, 0,0), 0 + 0xcc + 1);
+    /* top-right corner = sprite 1 + 0xcc */
+    T_ASSERT_EQ_I(cell(0,0, 3,0), 1 + 0xcc + 1);
+    /* interior fill is NOT shifted (fill_interior ignores mode): 0x34 */
+    T_ASSERT_EQ_I(cell(0x10, 0x10, 0, 0), 0x34 + 1);
+    return 0;
+}
+
 int test_panel_bad_offset_aborts(void)
 {
     panel_reset();

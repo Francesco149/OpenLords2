@@ -90,6 +90,7 @@ static LPDIRECTDRAWPALETTE  g_palette;        /* DAT_004df288 */
 static uint8_t             *g_panel_sheet;    /* DAT_004eabec — panels2.pl8 blob */
 static uint8_t             *g_system_sheet;    /* DAT_005bb540 — system2.pl8 blob */
 static uint8_t             *g_misc_sheet;      /* DAT_005530c8 — misc_sel.pl8 blob */
+static uint8_t             *g_chrome_sheet;    /* DAT_0057d3d0 — panels.pl8 blob */
 static uint8_t             *g_menu_font;       /* DAT_005af8f0 — fntl2_14.pl8 blob */
 static uint8_t             *g_title_font;      /* DAT_005b2fa0 — fntl2_22.pl8 blob */
 static int                  g_back_pitch;     /* DAT_004ea1a8 */
@@ -279,6 +280,10 @@ void gfx_shutdown(void)
     if (g_misc_sheet) {
         free(g_misc_sheet);
         g_misc_sheet = NULL;
+    }
+    if (g_chrome_sheet) {
+        free(g_chrome_sheet);
+        g_chrome_sheet = NULL;
     }
     if (g_menu_font) {
         free(g_menu_font);
@@ -650,6 +655,32 @@ const uint8_t *gfx_load_misc_sheet(void)
     }
     log_line("OK :Misc sheet loaded (misc_sel.pl8, %d bytes).", n);
     return g_misc_sheet;
+}
+
+/* Load panels.pl8 into the DAT_0057d3d0 blob — the "chrome" sprite sheet
+ * the raised bevel-frame renderer (gfx_panel_draw_bevel, retail
+ * FUN_00409934/FUN_00409c93) indexes for button caps + the page-7 option
+ * tabs.  Distinct from panels2.pl8 (the gray stone-panel sheet at
+ * DAT_004eabec).  Index 10 of the 13-asset master table (0x4d9f48): the
+ * +0x10 size field is 0x128e0 (75968); the on-disk file is 75640 and
+ * fits.  The blob is the raw PL8 read whole from offset 0, so a disk read
+ * reproduces DAT_0057d3d0 bit-for-bit. */
+const uint8_t *gfx_load_chrome_sheet(void)
+{
+    if (!g_chrome_sheet) {
+        g_chrome_sheet = (uint8_t *)malloc(0x128e0);
+        if (!g_chrome_sheet) {
+            log_line("gfx_load_chrome_sheet: OOM");
+            return NULL;
+        }
+    }
+    int n = io_read_file_at("panels.pl8", g_chrome_sheet, 0x128e0, 0);
+    if (n < 1) {
+        log_line("gfx_load_chrome_sheet: read panels.pl8 failed (%d)", n);
+        return NULL;
+    }
+    log_line("OK :Chrome sheet loaded (panels.pl8, %d bytes).", n);
+    return g_chrome_sheet;
 }
 
 /* ---------------------------------------------------------------- *

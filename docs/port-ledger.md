@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **321** (13.1%) — tested 286, ported 35
-- code bytes touched: **13.8%** (116,059 / 838,629 B)
-- unported: **2126**
+- touched: **324** (13.2%) — tested 289, ported 35
+- code bytes touched: **14.0%** (117,369 / 838,629 B)
+- unported: **2123**
 - orphan refs (in src/, not in function table): 4
 
-## tested (286) — ported + host unit suite
+## tested (289) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -114,8 +114,11 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x408c50 | FUN_00408c50 | 390 | engine_overlay_render.c, engine_overlay_render.h |
 | 0x408fb0 | FUN_00408fb0 | 27 | gfx_panel.c, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x409346 | FUN_00409346 | 81 | gfx_panel.c, gfx_panel.h |
+| 0x4093e0 | FUN_004093e0 | 73 | gfx_panel.c, gfx_panel.h |
 | 0x40946d | FUN_0040946d | 856 | gfx_panel.c, gfx_panel.h |
 | 0x4097c5 | FUN_004097c5 | 367 | gfx_panel.c, gfx_panel.h |
+| 0x409934 | FUN_00409934 | 863 | gfx.c, gfx_panel.c |
+| 0x409c93 | FUN_00409c93 | 374 | gfx.c, gfx_panel.c |
 | 0x40a01d | FUN_0040a01d | 261 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40a21a | FUN_0040a21a | 433 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h (+1) |
 | 0x40a3d0 | FUN_0040a3d0 | 402 | gfx_sprite_render.c, gfx_sprite_render.h, gfx_sprite_rle.h |

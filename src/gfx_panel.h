@@ -30,4 +30,9 @@ void gfx_panel_fill_interior(const uint8_t *asset, int x, int y,
  * one tile in and two tiles smaller. */
 void gfx_panel_draw(const uint8_t *asset, int x, int y, int cols, int rows);
 
+/* Raised "bevel" frame (FUN_004093e0): like gfx_panel_draw but the
+ * border is mode 1 (+0xcc index shift → the chrome style block).  Used
+ * with the panels.pl8 chrome sheet for button caps + option tabs. */
+void gfx_panel_draw_bevel(const uint8_t *asset, int x, int y, int cols, int rows);
+
 #endif /* OPENLORDS2_GFX_PANEL_H */

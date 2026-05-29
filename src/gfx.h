@@ -113,6 +113,14 @@ const uint8_t *gfx_load_system_sheet(void);
  * Returns the blob or NULL. */
 const uint8_t *gfx_load_misc_sheet(void);
 
+/* Load the chrome sprite sheet (panels.pl8 → retail DAT_0057d3d0, index
+ * 10 of the master asset table, a 0x128e0-byte buffer).  The raised
+ * bevel-frame renderer (gfx_panel_draw_bevel) indexes it for button caps
+ * + the page-7 option tabs.  Distinct from panels2.pl8 (the gray
+ * stone-panel sheet).  Cached; freed by gfx_shutdown.  Returns the blob
+ * or NULL. */
+const uint8_t *gfx_load_chrome_sheet(void);
+
 /* Load the menu/default font (fntl2_14.pl8 → retail DAT_005af8f0) and
  * the large title font (fntl2_22.pl8 → retail DAT_005b2fa0) as raw PL8
  * blobs.  Each is the glyph sprite sheet the text renderer indexes via
