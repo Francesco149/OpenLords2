@@ -1190,6 +1190,15 @@ struct test_case {
     X(mp_indicator_exactly_10s_not_yet_cleared) \
     X(mp_status_line_attempts_sprite_render) \
     X(mp_status_line_no_crash_runs_clean) \
+    \
+    X(panel_border_3x3_corner_and_edge_indices) \
+    X(panel_border_skips_interior) \
+    X(panel_border_mode2_swaps_top_corners) \
+    X(panel_border_long_edge_tiles_mod12) \
+    X(panel_border_anchored_offset) \
+    X(panel_fill_interior_atlas_indices) \
+    X(panel_draw_border_plus_inset_fill) \
+    X(panel_bad_offset_aborts) \
     /* end */
 
 /* Emit extern decls. */

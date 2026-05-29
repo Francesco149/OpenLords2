@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 253,
+  "tested": 257,
   "ported": 30,
-  "unported": 2164,
+  "unported": 2160,
   "orphan_refs_not_in_function_table": 3,
-  "touched": 283,
-  "pct_touched": 11.6,
-  "pct_tested": 10.3,
+  "touched": 287,
+  "pct_touched": 11.7,
+  "pct_tested": 10.5,
   "bytes_total": 838629,
-  "bytes_touched": 88275,
-  "pct_bytes_touched": 10.5
+  "bytes_touched": 90476,
+  "pct_bytes_touched": 10.8
  },
  "orphan_refs": [
   "0x40eb4c",
@@ -1246,6 +1246,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/gfx_panel.c",
     "src/gfx_sprite_render.c",
     "src/gfx_sprite_render.h"
    ]
@@ -1295,8 +1296,11 @@
    "name": "FUN_00409346",
    "size": 81,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_panel.c",
+    "src/gfx_panel.h"
+   ]
   },
   {
    "va": "0x409397",
@@ -1327,16 +1331,22 @@
    "name": "FUN_0040946d",
    "size": 856,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_panel.c",
+    "src/gfx_panel.h"
+   ]
   },
   {
    "va": "0x4097c5",
    "name": "FUN_004097c5",
    "size": 367,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_panel.c",
+    "src/gfx_panel.h"
+   ]
   },
   {
    "va": "0x409934",
@@ -16332,8 +16342,10 @@
    "name": "FUN_004afab9",
    "size": 897,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_panel.c"
+   ]
   },
   {
    "va": "0x4afe3a",

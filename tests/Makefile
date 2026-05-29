@@ -48,6 +48,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/gfx_text.c \
                    ../src/gfx_wrap.c \
                    ../src/gfx_line.c \
+                   ../src/gfx_panel.c \
                    ../src/gfx_text_label.c \
                    ../src/gfx_sprite_render.c \
                    ../src/engine_map_render.c \
@@ -90,6 +91,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_gfx_text.c \
                    test_gfx_wrap.c \
                    test_gfx_line.c \
+                   test_gfx_panel.c \
                    test_gfx_text_label.c \
                    test_gfx_sprite_render.c \
                    test_engine_map_render.c \

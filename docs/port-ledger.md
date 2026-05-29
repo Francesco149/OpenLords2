@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **283** (11.6%) — tested 253, ported 30
-- code bytes touched: **10.5%** (88,275 / 838,629 B)
-- unported: **2164**
+- touched: **287** (11.7%) — tested 257, ported 30
+- code bytes touched: **10.8%** (90,476 / 838,629 B)
+- unported: **2160**
 - orphan refs (in src/, not in function table): 3
 
-## tested (253) — ported + host unit suite
+## tested (257) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -111,7 +111,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4081a6 | FUN_004081a6 | 658 | engine_overlay_render.c, engine_overlay_render.h |
 | 0x408438 | FUN_00408438 | 2072 | engine_map_render.c, engine_map_render.h |
 | 0x408c50 | FUN_00408c50 | 390 | engine_overlay_render.c, engine_overlay_render.h |
-| 0x408fb0 | FUN_00408fb0 | 27 | gfx_sprite_render.c, gfx_sprite_render.h |
+| 0x408fb0 | FUN_00408fb0 | 27 | gfx_panel.c, gfx_sprite_render.c, gfx_sprite_render.h |
+| 0x409346 | FUN_00409346 | 81 | gfx_panel.c, gfx_panel.h |
+| 0x40946d | FUN_0040946d | 856 | gfx_panel.c, gfx_panel.h |
+| 0x4097c5 | FUN_004097c5 | 367 | gfx_panel.c, gfx_panel.h |
 | 0x40a01d | FUN_0040a01d | 261 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40a21a | FUN_0040a21a | 433 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h (+1) |
 | 0x40a3d0 | FUN_0040a3d0 | 402 | gfx_sprite_render.c, gfx_sprite_render.h, gfx_sprite_rle.h |
@@ -208,6 +211,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4af675 | FUN_004af675 | 84 | strutil.h |
 | 0x4af6c9 | FUN_004af6c9 | 67 | strutil.h |
 | 0x4af8d9 | FUN_004af8d9 | 381 | config.c, gfx.c, io.c (+2) |
+| 0x4afab9 | FUN_004afab9 | 897 | gfx_panel.c |
 | 0x4afeed | FUN_004afeed | 1214 | gfx_text_label.c, gfx_text_label.h |
 | 0x4b191e | FUN_004b191e | 981 | engine.c, engine.h, engine_input.c (+1) |
 | 0x4b20ed | FUN_004b20ed | 68 | engine.c, engine.h, engine_delta.c |
