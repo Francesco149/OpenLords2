@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **338** (13.8%) — tested 303, ported 35
-- code bytes touched: **14.5%** (121,610 / 838,629 B)
-- unported: **2109**
+- touched: **340** (13.9%) — tested 305, ported 35
+- code bytes touched: **14.6%** (122,268 / 838,629 B)
+- unported: **2107**
 - orphan refs (in src/, not in function table): 4
 
-## tested (303) — ported + host unit suite
+## tested (305) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -151,9 +151,11 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x41f592 | FUN_0041f592 | 86 | engine_title_render.c, engine_title_render.h |
 | 0x41f5e8 | FUN_0041f5e8 | 223 | engine_title_render.c, engine_title_render.h |
 | 0x41f6c7 | FUN_0041f6c7 | 179 | engine_title_render.c, engine_title_render.h |
+| 0x41f77a | FUN_0041f77a | 243 | engine_title_render.c |
 | 0x41f86d | FUN_0041f86d | 286 | engine_title_render.c, engine_title_render.h |
 | 0x41f98b | FUN_0041f98b | 576 | engine_title_render.c, engine_title_render.h |
 | 0x41fbcb | FUN_0041fbcb | 523 | engine_title_render.c, engine_title_render.h |
+| 0x41fdd6 | FUN_0041fdd6 | 415 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x41ff75 | FUN_0041ff75 | 466 | engine_title_render.c |
 | 0x42150b | FUN_0042150b | 508 | engine_title_render.h |
 | 0x423b4f | FUN_00423b4f | 85 | engine_mp_render.c, engine_mp_render.h |
@@ -175,7 +177,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4335f0 | FUN_004335f0 | 452 | engine_menu_input.c |
 | 0x4337b4 | FUN_004337b4 | 337 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x433905 | FUN_00433905 | 147 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
-| 0x433998 | FUN_00433998 | 139 | engine_menu_input.c |
+| 0x433998 | FUN_00433998 | 139 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
 | 0x433cc1 | FUN_00433cc1 | 35 | engine_title_render.c |
 | 0x4343f8 | FUN_004343f8 | 36 | main.c |
 | 0x43de70 | FUN_0043de70 | 1211 | engine.c, engine.h, engine_rate.c |

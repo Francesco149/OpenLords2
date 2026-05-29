@@ -5,7 +5,7 @@
 The unported, non-thunk engine functions already **called by ported code** — the natural next chips. A **leaf** has all of its
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
-- frontier functions: **279**
+- frontier functions: **277**
 - of those, zero-dependency **leaves: 108** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
@@ -21,6 +21,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4b049b | 103 | 2 | battlefield render + wndproc |
 | 0x42f58c | 130 | 2 | strategic-map camera + scroll |
 | 0x409c93 | 374 | 2 | early/runtime + low-level helpers |
+| 0x420147 | 463 | 2 | strategic-map camera + scroll |
 | 0x4af116 | 508 | 2 | asset-load IO helper cluster (0x4af*) |
 | 0x480f8b | 1200 | 2 | equip / starter-items |
 | 0x41423f | 11 | 1 | render-quad / blit primitives |
@@ -51,7 +52,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4bbea7 | 110 | 1 | battlefield render + wndproc |
 | 0x4b3d5d | 112 | 1 | battlefield render + wndproc |
 | 0x4bbf15 | 116 | 1 | battlefield render + wndproc |
-| 0x4262eb | 117 | 1 | strategic-map camera + scroll |
 
 ## Full frontier by address band
 
@@ -79,7 +79,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x40cd58 | 433 | 1 | 3 |  |
 | 0x409934 | 863 | 1 | 0 | ✓ |
 
-### render-quad / blit primitives (60)
+### render-quad / blit primitives (58)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
@@ -104,7 +104,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x414819 | 203 | 1 | 1 |  |
 | 0x415fb7 | 212 | 1 | 2 |  |
 | 0x41f4a1 | 241 | 1 | 0 | ✓ |
-| 0x41f77a | 243 | 1 | 1 |  |
 | 0x4180f6 | 245 | 1 | 4 |  |
 | 0x41a639 | 251 | 1 | 0 | ✓ |
 | 0x411fde | 258 | 1 | 1 |  |
@@ -119,7 +118,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x41aea2 | 369 | 1 | 1 |  |
 | 0x41515c | 398 | 1 | 1 |  |
 | 0x418e2d | 408 | 1 | 2 |  |
-| 0x41fdd6 | 415 | 1 | 3 |  |
 | 0x41298a | 425 | 1 | 0 | ✓ |
 | 0x41438c | 446 | 1 | 0 | ✓ |
 | 0x410aa9 | 456 | 1 | 1 |  |
@@ -154,6 +152,9 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x42e26f | 41 | 2 | 0 | ✓ |
 | 0x42b780 | 119 | 2 | 5 |  |
 | 0x42f58c | 130 | 2 | 0 | ✓ |
+| 0x42051c | 276 | 2 | 7 |  |
+| 0x420630 | 403 | 2 | 8 |  |
+| 0x420147 | 463 | 2 | 0 | ✓ |
 | 0x42d91b | 83 | 1 | 1 |  |
 | 0x4262eb | 117 | 1 | 0 | ✓ |
 | 0x42476b | 138 | 1 | 0 | ✓ |
@@ -169,14 +170,11 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4248a3 | 239 | 1 | 1 |  |
 | 0x420428 | 244 | 1 | 0 | ✓ |
 | 0x420316 | 274 | 1 | 0 | ✓ |
-| 0x42051c | 276 | 1 | 7 |  |
 | 0x4233f7 | 313 | 1 | 3 |  |
 | 0x425314 | 371 | 1 | 0 | ✓ |
 | 0x423739 | 383 | 1 | 2 |  |
-| 0x420630 | 403 | 1 | 8 |  |
 | 0x425487 | 437 | 1 | 0 | ✓ |
 | 0x423241 | 438 | 1 | 3 |  |
-| 0x420147 | 463 | 1 | 0 | ✓ |
 | 0x4207c3 | 510 | 1 | 0 | ✓ |
 | 0x423530 | 521 | 1 | 0 | ✓ |
 | 0x421d09 | 523 | 1 | 0 | ✓ |

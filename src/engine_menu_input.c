@@ -242,22 +242,38 @@ static void menu_action_p7_button(int param)
     }
 }
 
+/* Per-tab option value counts (retail DAT_004d5560), read by the option-tab
+ * click to size the page-9 dropdown. */
+static const int k_p7_tab_value_count[12] = {
+    2, 2, 4, 2, 4, 4, 6, 4, 5, 3, 7, 2,
+};
+
 /* Port of FUN_00433998 — an option-tab click (`param` 1..12).  Opens the
- * per-option detail screen (page 9), bookmarking the page to return to. */
+ * per-option detail screen (page 9), bookmarking the page to return to and
+ * publishing the dropdown state (edited tab + its value count) for the
+ * page-9 render. */
 static void menu_action_p7_tab(int param)
 {
-    (void)param;
     g_last_selected_ack = -1;       /* DAT_0053f648 = -1 */
 
     if (engine_title_render_page() != 9) {
         g_filelist_return_page = engine_title_render_page();  /* DAT_00553e5c */
         engine_title_render_set_page(9);                      /* DAT_005530f0 = 9 */
     }
+
+    /* Detail state (retail DAT_0055306c / DAT_00553fb4): the edited tab
+     * (param 1..12 → 0..11) and its value count, with tab 2 (the player-
+     * count option) clamped to one below the live roster size.  retail also
+     * zeroes _DAT_00553530 (the dropdown's scroll origin) here; that scroll
+     * is part of the still-deferred page-9 input arm, so it isn't modeled. */
+    int tab = param - 1;                            /* DAT_0055306c */
+    int count = k_p7_tab_value_count[tab];          /* DAT_004d5560[tab] */
+    if (tab == 2 && (int)s_slot_0053e8a4 < 5) {
+        count = (int)s_slot_0053e8a4 - 1;
+    }
+    engine_title_render_set_option_detail(tab, count, g_filelist_return_page);
+
     g_redraw_fn(2);                 /* DAT_0057d340 = 2 */
-    /* TODO(page-9): the detail state (DAT_0055306c = selected tab,
-     * DAT_00553fb4 = value count from DAT_004d5560[tab], _DAT_00553530 = 0)
-     * and the page-9 option-detail render are deferred; only the navigation
-     * (and its return bookmark) is faithful here. */
 }
 
 /* ─── hit-test primitives ────────────────────────────────────────── */

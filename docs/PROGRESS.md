@@ -7,6 +7,65 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — PAGE 9: the per-option detail dropdown render (`FUN_0041fdd6`)
+
+The genuine single-player continuation behind the page-7 setup screen: clicking
+an option tab now opens **page 9**, the little chrome dropdown of that option's
+values.  Ported and host-tested; **human-confirmed** standalone against the
+known-good page-7 backdrop.
+
+`FUN_0041fdd6` (415 B) had all four of its callees already ported
+(`FUN_0041f6c7` page-7 render, `FUN_004093e0` chrome bevel, `FUN_00402c5e`
+text, `FUN_004527a6` dirty box), so it landed as a leaf:
+
+1. **Backdrop redraw.**  The dropdown isn't a cheap overlay — it re-renders the
+   *entire* page it came from first (bookmark `DAT_00553e5c` → `FUN_0041f6c7(tab)`
+   for page 7), passing the edited tab so that tab's value cap is suppressed
+   under the panel, then stamps the value list on top.  Port:
+   `engine_title_render_option_detail` brackets the page-7 render with a
+   save/restore of `g_p7_active_tab` to reproduce `FUN_0041f6c7(tab)` without
+   churning the public setup-screen API.  Only the page-7 bookmark is ported;
+   the page-8 (MP) / 0xb / 0xc backdrops are deferred with their pages.
+
+2. **The value list.**  Chrome bevel anchored from `DAT_004d3158[tab]`, `count`
+   centered text rows (entry `0x67` sub `DAT_004d3128[tab]+i`), the current
+   value (`DAT_00553114`) highlighted red `0xf9`.  The two per-tab tables
+   (`DAT_004d5560` counts, `DAT_004d3128` sub bases) were read verbatim from
+   the binary with `r2 pxw`.
+
+The deferred page-7 tab-click state (`FUN_00433998`) is now completed:
+`menu_action_p7_tab` publishes `DAT_0055306c` (edited tab) + `DAT_00553fb4`
+(value count, clamped to `roster−1` for tab 2 when < 5 seats) via a new
+`engine_title_render_set_option_detail` setter, so clicking a tab actually
+opens a rendered dropdown.  The page-9 *input* arm (hover to highlight, click to
+pick a value + close) and the dropdown's own scroll origin (`_DAT_00553530`)
+remain deferred — the values show but aren't yet selectable.
+
+Three engine oddities documented (engine-quirks #121): the full-scene redraw
+per popup frame; **tab 2 (player count) grows *upward*** (`y += (count-1)·-16`)
+because it's on the bottom grid row; and `DAT_004d3158`'s baked third column
+(`count+2`) is dead data the renderer recomputes.
+
+Coverage 338 → **340 touched** (12.5% host-tested, 14.6% of code bytes).  6 new
+host tests (page-9 rows + highlight tracking + tab-2 upward growth + scene
+routing + bookmark-7 backdrop, + the tab-2 roster clamp on the menu side) →
+**1227 green**; both drop-in builds clean.
+
+**Human-confirmed** (`--title-nav` step 6 → `nav_06_p9_optiondetail.bmp`,
+2026-05-30): the "Advanced Farming" tab dropdown opens over the setup screen
+showing **off** (current, red) / **on**, the edited tab's cap correctly hidden,
+all other tabs' caps intact.
+
+### Next
+
+- **Page 9 input** — the hover/click arm (page-9 arm of `FUN_004ba9c8` +
+  `FUN_0040e5e7`) to make the values selectable: pick a value, write it back to
+  the tab, close the dropdown.  This is what makes the options actually editable.
+- **Page 8** (MP setup) shares the page-7 input/refresh arm + is the other
+  page-9 backdrop; closest neighbour once MP state exists.
+- The deep **Start** destination (game-start `0x4329ec` → strategic map) is the
+  big play-flow milestone behind this whole setup flow.
+
 ## 2026-05-30 — HARNESS: a live real-mouse retail seat (`--interactive`)
 
 Added a `frida_capture.py --interactive` mode that brings up **retail** as a

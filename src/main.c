@@ -937,6 +937,15 @@ static void bringup_title_menu(int with_panel)
     title_bind_render_state();
     if (g_title_page_num == 7) {
         seed_page7_state();
+    } else if (g_title_page_num == 9) {
+        /* Page-9 dropdown over the page-7 setup screen (its backdrop).
+         * Open the first option tab (tab 0, 2 values) with its current
+         * value (k_tabs[0] = 0) highlighted — the state FUN_00433998
+         * publishes on a tab click. */
+        seed_page7_state();
+        engine_title_render_set_option_detail(/*tab=*/0, /*count=*/2,
+                                              /*bookmark=*/7);
+        engine_title_render_set_selected_button(1);
     }
     title_render_current_page();
 }
@@ -1105,6 +1114,23 @@ static void bringup_title_nav(const char *dir)
               engine_title_render_page());
     gfx_capture_backbuffer(path);
     log_line("title-nav: forced page %d (load game) → %s",
+             engine_title_render_page(), path);
+
+    /* Step 6 — page 9, the per-option detail dropdown (FUN_0041fdd6).
+     * Reached from page 7 by clicking an option tab; the dropdown overlays
+     * the page-7 setup screen (its backdrop) with the edited tab suppressed.
+     * Force page 9 with the state FUN_00433998 publishes for tab 0 (2
+     * values), its current value (k_tabs[0] = 0) highlighted. */
+    seed_page7_state();
+    engine_title_render_set_option_detail(/*tab=*/0, /*count=*/2,
+                                          /*bookmark=*/7);
+    engine_title_render_set_selected_button(1);
+    engine_title_render_set_page(9);
+    title_render_current_page();
+    wsprintfA(path, "%s\\nav_06_p%d_optiondetail.bmp", dir,
+              engine_title_render_page());
+    gfx_capture_backbuffer(path);
+    log_line("title-nav: forced page %d (option detail) → %s",
              engine_title_render_page(), path);
 }
 

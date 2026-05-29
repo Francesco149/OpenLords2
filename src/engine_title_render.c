@@ -94,6 +94,25 @@ static const int g_p7_tab_value_base[12] = {
     0, 2, 5, 9, 0xb, 0xf, 0x13, 0x19, 0x1d, 0x22, 0x25, 0x2c,
 };
 
+/* Page-9 dropdown-panel anchor (retail DAT_004d3158, 12×{x, y, rows}).
+ * The third column is the precomputed row count (value_count + 2), which
+ * FUN_0041fdd6 recomputes from the live count, so only x/y are kept. */
+static const int g_p9_panel_geom[12][2] = {
+    { 0xaa,  0x118 }, { 0xaa,  0x161 }, { 0xaa,  0x1aa },
+    { 0x122, 0x118 }, { 0x122, 0x151 }, { 0x122, 0x17a },
+    { 0x19a, 0x118 }, { 0x19a, 0x151 }, { 0x19a, 0x16a },
+    { 0x212, 0x118 }, { 0x212, 0x131 }, { 0x212, 0x1aa },
+};
+
+/* Page-9 (per-option detail dropdown) state.  Set by the page-7 option-tab
+ * click (FUN_00433998 → menu_action_p7_tab); read by the page-9 render.
+ *   g_p9_tab         retail DAT_0055306c — the tab being edited (0..11)
+ *   g_p9_value_count retail DAT_00553fb4 — its number of value rows
+ *   g_p9_bookmark    retail DAT_00553e5c — the page to redraw underneath */
+static int g_p9_tab         = 0;
+static int g_p9_value_count = 0;
+static int g_p9_bookmark    = 7;
+
 /* Title/menu page selector (retail DAT_005530f0).  Written by the menu
  * state tick (0x42ff10, unported) — page 1 = main menu — and read by
  * the render seam to pass to engine_title_render_scene.  0 until a tick
@@ -873,6 +892,21 @@ void engine_title_render_set_tab_values(const int values[12], int active_tab)
     g_p7_active_tab = active_tab;
 }
 
+/* Set the page-9 option-detail state (retail DAT_0055306c / DAT_00553fb4 /
+ * DAT_00553e5c, written by FUN_00433998).  `tab` is the option being
+ * edited (0..11), `value_count` its number of selectable values, and
+ * `bookmark` the page the dropdown overlays (7 = the page-7 setup screen). */
+void engine_title_render_set_option_detail(int tab, int value_count,
+                                           int bookmark)
+{
+    g_p9_tab         = tab;
+    g_p9_value_count = value_count;
+    g_p9_bookmark    = bookmark;
+}
+
+int engine_title_render_option_detail_tab(void)   { return g_p9_tab; }
+int engine_title_render_option_detail_count(void) { return g_p9_value_count; }
+
 void engine_title_render_set_players(const engine_title_setup_player_t players[6],
                                      const uint8_t *names)
 {
@@ -1066,6 +1100,60 @@ void engine_title_render_refresh_setup(void)
     }
 }
 
+/* Render the page-7 setup screen as the page-9 backdrop, with `active_tab`
+ * suppressed (its bevel + value label hidden, since the dropdown panel
+ * covers it).  Retail FUN_0041fdd6 calls FUN_0041f6c7(DAT_0055306c), which
+ * forwards the active tab to the tab-strip sub-renderer (FUN_0041f86d); our
+ * setup screen reads it from g_p7_active_tab, so override-and-restore. */
+static void render_setup_backdrop(int active_tab)
+{
+    int saved = g_p7_active_tab;
+    g_p7_active_tab = active_tab;
+    engine_title_render_setup_screen();
+    g_p7_active_tab = saved;
+}
+
+/* Port of FUN_0041fdd6 — the page-9 per-option detail dropdown.  Reached by
+ * clicking an option tab on the page-7 setup screen: it redraws the
+ * bookmarked page underneath (the edited tab suppressed), then a chrome
+ * bevel panel anchored at that tab holding `value_count` text rows (entry
+ * 0x67 sub base+i), the highlighted row (DAT_00553114) in red 0xf9, the
+ * rest in 0x3f.  Tab 2 (the player-count option) grows upward instead of
+ * down — its anchor shifts up by (count-1)·16 so the panel's bottom stays
+ * pinned at the tab. */
+void engine_title_render_option_detail(void)
+{
+    int tab   = g_p9_tab;
+    int count = g_p9_value_count;
+
+    /* Backdrop: redraw the page we came from, with the edited tab hidden.
+     * Only bookmark 7 (the page-7 setup screen) is ported; the page-8 MP
+     * setup (FUN_0041f77a) and the 0xb/0xc flows are deferred. */
+    if (g_p9_bookmark == 7) {
+        render_setup_backdrop(tab);
+    }
+
+    int x = g_p9_panel_geom[tab][0];
+    int y = g_p9_panel_geom[tab][1];
+    if (tab == 2) {
+        y += (count - 1) * -0x10;
+    }
+    int rows = count + 2;
+
+    gfx_text_set_no_shadow(1);
+    gfx_panel_draw_bevel(g_chrome_asset, x, y, 6, rows);
+    for (int i = 0; i < count; i++) {
+        uint8_t color = (i + 1 == g_selected_button) ? 0xf9 : 0x3f;
+        gfx_wrap_localized_line_centered(&g_loc, 0x67,
+                                         g_p7_tab_value_base[tab] + i, x + 1,
+                                         i * 0x10 + y + 0x10, 0x60, g_menu_font,
+                                         g_glyph_table, g_glyph_metrics, color);
+    }
+    gfx_text_set_no_shadow(0);
+
+    engine_dirty_rect_mark_box_tiled(g_dirty_state, x, y, 6, rows, 1);
+}
+
 /* Port of FUN_0041e7e1. */
 void engine_title_render_scene(int screen_state, int page)
 {
@@ -1091,6 +1179,8 @@ void engine_title_render_scene(int screen_state, int page)
         engine_title_render_play_now();
     } else if (page == 7) {
         engine_title_render_setup_screen();
+    } else if (page == 9) {
+        engine_title_render_option_detail();
     } else if (page >= 3 && page <= 0xd) {
         g_page_fn(page);
     }

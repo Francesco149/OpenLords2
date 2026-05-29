@@ -4267,6 +4267,43 @@ The interactive seat neutralises all three by poking, every tick:
 
 ---
 
+## 121. The page-9 option dropdown redraws the whole page underneath every frame, and one tab grows *upward*
+
+Clicking an option tab on the custom-game setup screen (page 7) opens a
+little chrome dropdown of that option's values — page 9.  Rather than draw
+the dropdown as a cheap overlay on the existing frame, `FUN_0041fdd6`
+*re-renders the entire page it came from* first — `FUN_0041f6c7(tab)` redraws
+the full page-7 setup screen (panel, roster, country list, all 12 tabs) — and
+only then stamps the value list on top.  The redraw passes the edited tab as
+the "active" arg so that one tab's value cap is suppressed (the dropdown
+covers it); every other tab keeps its single-value cap.  It's a full-scene
+redraw per frame just to show a 2–7 row popup.
+
+Two further oddities in the same 415-byte function:
+
+- **Tab 2 (the player-count option) grows upward.**  Every other tab's
+  dropdown drops *down* from its anchor in `DAT_004d3158`, but tab 2 sits on
+  the bottom row of the grid, so its panel would run off-screen.  The fix is
+  a single special-case: `y += (count-1) * -0x10`, pinning the panel's
+  *bottom* at the tab and letting it extend up.  Tab 2 is also the only tab
+  whose value count is dynamic — clamped to `roster_count - 1` when the
+  roster has fewer than 5 seats (you can't pick "5 players" in a 3-player
+  game), where every other tab reads a fixed count from `DAT_004d5560`.
+
+- **A precomputed column the renderer ignores.**  `DAT_004d3158` is a 12×3
+  table `{x, y, rows}` where the third column is exactly `value_count + 2`
+  (the panel height in tile-rows).  `FUN_0041fdd6` reads only `x`/`y` and
+  recomputes the height as `DAT_00553fb4 + 2` from the live count — so the
+  baked third column is dead data, presumably a leftover from when the count
+  wasn't yet dynamic (see the tab-2 clamp above, which would desync it).
+
+> 📍 `src/engine_title_render.c` (`engine_title_render_option_detail`),
+> `src/engine_menu_input.c` (`menu_action_p7_tab`),
+> `docs/findings/title-menu-screens.md` §"Page 9", Ghidra `FUN_0041fdd6` /
+> `FUN_00433998`, `DAT_004d3158` / `DAT_004d5560` / `DAT_0053e8a4`.
+
+---
+
 <!--
 Template for new entries:
 

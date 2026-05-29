@@ -346,6 +346,21 @@ void engine_title_render_set_players(const engine_title_setup_player_t players[6
 /* Port of FUN_0041f6c7.  Render the whole page-7 setup screen. */
 void engine_title_render_setup_screen(void);
 
+/* Set the page-9 option-detail dropdown state (retail DAT_0055306c /
+ * DAT_00553fb4 / DAT_00553e5c, written by the page-7 option-tab click
+ * FUN_00433998).  `tab` 0..11, `value_count` rows, `bookmark` underlay page. */
+void engine_title_render_set_option_detail(int tab, int value_count,
+                                           int bookmark);
+
+/* The current page-9 dropdown tab / value count (for tests + the page-9
+ * input arm). */
+int engine_title_render_option_detail_tab(void);
+int engine_title_render_option_detail_count(void);
+
+/* Port of FUN_0041fdd6.  Render the page-9 per-option detail dropdown over
+ * the bookmarked page (routed from page 9 by engine_title_render_scene). */
+void engine_title_render_option_detail(void);
+
 /* Port of FUN_0041f98b / FUN_0041fbcb / FUN_0041f86d — the three setup
  * sub-passes (country list + scrollbar + preview / roster / option-tab
  * grid).  Exposed for the per-frame refresh + tests. */

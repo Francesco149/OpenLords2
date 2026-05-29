@@ -26,7 +26,7 @@ Two parallel dispatch ladders run while `DAT_004eac50 == 0x1f`:
 | 6   | `FUN_0041f3e9` | `FUN_0041f4a1` | (sub-screen) |
 | 7   | `FUN_0041f6c7` | `FUN_0041f98b`+ | (sub-screen) |
 | 8   | `FUN_0041f77a` | `FUN_0041f98b`+ | (sub-screen) |
-| 9   | `FUN_0041fdd6` | …            | (sub-screen) |
+| 9   | `FUN_0041fdd6` | …            | **per-option detail dropdown** (over page 7/8) — render ported |
 | 10  | `FUN_00420428` | …            | (sub-screen) |
 | 0xb | `FUN_00420630` | …            | (sub-screen) |
 | 0xc | `FUN_0042051c` | …            | save/load list (scrollbar — `FUN_00421005`) |
@@ -305,6 +305,61 @@ just needs its `DAT_004dd***` button table + the right sheet bound).
 > records, name + "sav"); top field `DAT_004ea130` = "lastturn";
 > first-visible 0; count 4; `DAT_0057d3c4 = 0` (no bottom status);
 > `DAT_005530f0 = 3`.
+
+## Page 9 — per-option detail dropdown (`FUN_0041fdd6`) — ported
+
+Clicking an option tab on the page-7 setup screen opens **page 9**, a small
+chrome dropdown listing that option's selectable values.  The render
+(`FUN_0041fdd6`, 415 B) is two parts:
+
+1. **Backdrop redraw.**  It re-renders the page it came from in full — the
+   bookmark `DAT_00553e5c` routes to `FUN_0041f6c7(tab)` (page 7),
+   `FUN_0041f77a(tab)` (page 8 MP), `FUN_0042051c` (0xc) or `FUN_00420630`
+   (0xb).  Passing the edited `tab` suppresses *that* tab's value cap in the
+   strip, since the dropdown covers it.  Only the page-7 backdrop is ported;
+   the other three are deferred with their pages.
+
+2. **The value list.**  A chrome bevel (`FUN_004093e0`, mode-1 bevel) anchored
+   from `DAT_004d3158[tab]` `{x, y}`, sized `count + 2` rows, then `count`
+   centered text rows (entry `0x67` sub `DAT_004d3128[tab] + i`).  Row `i` is
+   highlighted red `0xf9` when `i+1 == DAT_00553114` (the hover/selection
+   index, shared with the menu-button highlight), else `0x3f`.  A
+   `FUN_004527a6` box mark closes it.
+
+```c
+// FUN_0041fdd6, condensed
+if (bookmark == 7) FUN_0041f6c7(tab);              // backdrop, edited tab hidden
+x = DAT_004d3158[tab].x;  y = DAT_004d3158[tab].y;
+if (tab == 2) y += (count-1) * -0x10;              // tab 2 grows UP (engine-quirks #121)
+rows = count + 2;
+FUN_004093e0(x, y, 6, rows);                       // chrome bevel
+for (i = 0; i < count; i++)
+    FUN_00402c5e(0x67, DAT_004d3128[tab]+i, x+1, i*0x10+y+0x10, 0x60, font,
+                 (i+1 == DAT_00553114) ? 0xf9 : 0x3f);
+FUN_004527a6(x, y, 6, rows, 1);
+```
+
+**State** is published by the tab click `FUN_00433998` (port:
+`menu_action_p7_tab`): `DAT_0055306c = tab` (clicked param − 1),
+`DAT_00553fb4 = DAT_004d5560[tab]` (the value count), with tab 2 clamped to
+`roster_count − 1` (`DAT_0053e8a4`) when the roster is < 5 seats, and the
+return bookmark `DAT_00553e5c`.  The dropdown's own scroll origin
+(`_DAT_00553530 = 0`) and the page-9 hover/click input arm are **deferred**
+(the values list is shown but not yet selectable in the drop-in).
+
+Per-tab value tables read verbatim from the binary (`r2 pxw`):
+
+| field | symbol | values (tabs 0..11) |
+|-------|--------|---------------------|
+| value count | `DAT_004d5560` | 2 2 4 2 4 4 6 4 5 3 7 2 |
+| `0x67` sub base | `DAT_004d3128` | 0 2 5 9 0xb 0xf 0x13 0x19 0x1d 0x22 0x25 0x2c |
+
+Port: `engine_title_render_option_detail` + `engine_title_render_set_option_detail`
+in `src/engine_title_render.c`; `menu_action_p7_tab` in `src/engine_menu_input.c`.
+Bring-up render: `--title-nav` step 6 (`nav_06_p9_optiondetail.bmp`) — the
+"Advanced Farming" tab (0) dropdown shows **off**/**on** with the current
+value (off) highlighted.  See engine-quirks #121 for the full-scene-redraw,
+grow-upward, and dead-table-column oddities.
 
 ## Input side — hotspot hit-test + page navigation (`engine_menu_input`)
 

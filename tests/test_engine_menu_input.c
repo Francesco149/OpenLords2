@@ -411,6 +411,32 @@ int test_menu_page7_option_tab_opens_page9(void)
     engine_menu_click_in_t in = press_at(218, 304);
     T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
     T_ASSERT_EQ_I(engine_title_render_page(), 9);       /* option-detail page */
+    /* Detail state published for the page-9 render: tab 0, 2 values. */
+    T_ASSERT_EQ_I(engine_title_render_option_detail_tab(), 0);
+    T_ASSERT_EQ_I(engine_title_render_option_detail_count(), 2);
+    return 0;
+}
+
+/* Tab 2 (the player-count option) clamps its value count to one below the
+ * live roster size when the roster has fewer than 5 seats. */
+int test_menu_page7_tab2_count_clamps_to_roster(void)
+{
+    mi_reset();
+    engine_title_render_set_page(7);
+    s_slot_0053e8a4 = 3;        /* DAT_0053e8a4 — 3-seat roster (< 5) */
+    /* Tab 2 box (170,426)-(266,474) → centre (218, 450); param 3 → tab 2. */
+    engine_menu_click_in_t in = press_at(218, 450);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_option_detail_tab(), 2);
+    T_ASSERT_EQ_I(engine_title_render_option_detail_count(), 2);   /* roster-1 */
+
+    /* With a full (>=5) roster the table count (4) stands. */
+    mi_reset();
+    engine_title_render_set_page(7);
+    s_slot_0053e8a4 = 5;
+    in = press_at(218, 450);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_option_detail_count(), 4);
     return 0;
 }
 

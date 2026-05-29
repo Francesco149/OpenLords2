@@ -1050,6 +1050,94 @@ int test_title_setup_scene_routes_page_7(void)
     return 0;
 }
 
+/* ── page-9 option-detail dropdown render (FUN_0041fdd6) ────────── */
+
+/* The dropdown draws `count` text value-rows under a chrome bevel anchored
+ * at the tab; the highlighted row (DAT_00553114) is red 0xf9, the rest
+ * 0x3f.  Bookmark 8 (page-8 MP, deferred) skips the backdrop so the
+ * dropdown stands alone. */
+int test_title_option_detail_rows_and_highlight(void)
+{
+    p7_setup();
+    engine_title_render_set_option_detail(/*tab=*/0, /*count=*/2, /*bookmark=*/8);
+    engine_title_render_set_selected_button(1);             /* highlight row 0 */
+    engine_title_render_option_detail();
+
+    /* Tab 0 anchor (0xaa, 0x118); rows at y=0x128 (0) and y=0x138 (1),
+     * value text in x ∈ [0xaa, 0xaa+0x60). */
+    T_ASSERT(row_color_count_x(0x128, 0xf9, 0xaa, 0xaa + 0x60) > 0);  /* row 0 hi */
+    T_ASSERT(row_color_count_x(0x138, 0x3f, 0xaa, 0xaa + 0x60) > 0);  /* row 1 normal */
+    T_ASSERT_EQ_I(row_color_count_x(0x138, 0xf9, 0xaa, 0xaa + 0x60), 0); /* row 1 not hi */
+    return 0;
+}
+
+/* The highlight follows DAT_00553114 (selected button) to the matching row. */
+int test_title_option_detail_highlight_tracks_selected(void)
+{
+    p7_setup();
+    engine_title_render_set_option_detail(0, 2, 8);
+    engine_title_render_set_selected_button(2);             /* highlight row 1 */
+    engine_title_render_option_detail();
+
+    T_ASSERT_EQ_I(row_color_count_x(0x128, 0xf9, 0xaa, 0xaa + 0x60), 0); /* row 0 not hi */
+    T_ASSERT(row_color_count_x(0x128, 0x3f, 0xaa, 0xaa + 0x60) > 0);     /* row 0 normal */
+    T_ASSERT(row_color_count_x(0x138, 0xf9, 0xaa, 0xaa + 0x60) > 0);     /* row 1 hi */
+    return 0;
+}
+
+/* Tab 2 (player count) grows upward: its anchor shifts up by (count-1)·16,
+ * putting the first value row well above the un-shifted anchor. */
+int test_title_option_detail_tab2_grows_upward(void)
+{
+    p7_setup();
+    /* Tab 2 anchor (0xaa, 0x1aa), count 4 → y shifts to 0x17a; first value
+     * row at 0x17a+0x10 = 0x18a (a row exists there only because of the
+     * upward growth — the un-shifted panel would start at 0x1ba). */
+    engine_title_render_set_option_detail(2, 4, 8);
+    engine_title_render_set_selected_button(0);             /* no highlight */
+    engine_title_render_option_detail();
+
+    T_ASSERT(row_color_count_x(0x18a, 0x3f, 0xaa, 0xaa + 0x60) > 0);
+    return 0;
+}
+
+/* Scene dispatch routes page 9 to the option-detail renderer, NOT the page
+ * hook. */
+int test_title_option_detail_scene_routes_page_9(void)
+{
+    p7_setup();
+    engine_title_render_set_option_detail(0, 2, 8);         /* backdrop skipped */
+    engine_title_render_set_selected_button(1);
+    engine_title_render_reset_counters();                   /* clears last_page */
+    engine_title_render_scene(0x1f, 9);
+    T_ASSERT_EQ_I(engine_title_render_last_page(), 0);      /* hook not invoked */
+    T_ASSERT(row_color_count_x(0x128, 0xf9, 0xaa, 0xaa + 0x60) > 0);
+    return 0;
+}
+
+/* Bookmark 7 redraws the page-7 setup screen as the backdrop (edited tab
+ * suppressed) before stamping the dropdown over it. */
+int test_title_option_detail_bookmark7_draws_backdrop(void)
+{
+    p7_setup();
+    engine_title_render_set_country_list((const uint8_t *)"\0\1\2\3\4\5\6\7",
+                                         0, 0, 8);
+    engine_title_render_set_players(g_p7_seats, g_p7_names_blob);
+    int vals[12] = { 0 };
+    engine_title_render_set_tab_values(vals, -1);
+    engine_title_render_set_option_detail(/*tab=*/0, /*count=*/2, /*bookmark=*/7);
+    engine_title_render_set_selected_button(1);
+    engine_title_render_option_detail();
+
+    /* Backdrop drew the country-list fills (0x20). */
+    T_ASSERT(canvas_color_count(0x20) > 0);
+    /* The dropdown's highlighted row 0 is on top at y=0x128 (tab 0's own
+     * backdrop value label is suppressed at that x, so this 0xf9 is the
+     * dropdown row). */
+    T_ASSERT(row_color_count_x(0x128, 0xf9, 0xaa, 0xaa + 0x60) > 0);
+    return 0;
+}
+
 /* ── page-7 country-selector input (FUN_004337b4 / FUN_00433905) ── */
 
 /* Scroll clamps at both ends and, on a move, recomputes the selected-
