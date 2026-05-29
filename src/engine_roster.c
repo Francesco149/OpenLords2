@@ -12,6 +12,49 @@
 
 #include "engine_roster.h"
 
+#include "engine.h"     /* g_sim_mp_active (retail DAT_00553030) */
+#include "save.h"       /* g_player_aux_44 (retail 0x553d50) */
+#include "strutil.h"    /* strutil_bounded_copy (FUN_00401136) */
+
+void player_seat_assign(int player_id, int seat, const void *name)
+{
+    /* Port of FUN_0049bae9 @ 0x49bae9 (180 B).  Seats a player: marks the
+     * strategic slot occupied, flags the aux record, copies the 31-byte
+     * name, optionally stamps the id, and (single-player only) mirrors the
+     * assigned job-slot id into the aux fixed-job field.  Decompile:
+     *
+     *   (&DAT_0057bf05)[param_2 * 0x160] = 1;             // player_has_data
+     *   (&DAT_00553d77)[param_2 * 0x2c]  = 1;             // aux in-use flag
+     *   FUN_00401136(param_3, param_2*0x2c + 0x553d54, 0x1f);  // 31-byte name
+     *   if (param_1 != 999) *(int*)(&DAT_00553d50 + param_2*0x2c) = param_1;
+     *   if (DAT_00553030 == 0)
+     *       (&DAT_00553d75)[param_2*0x2c] = (&DAT_0057bf0a)[param_2*0x160];
+     *
+     * Callers: single-player setup (0x4410bd, name buffer 0x53f1e0) and
+     * the network join handlers (0x4412cc / 0x44121a), which read
+     * `player_id` and the name out of the join packet.  `player_id == 999`
+     * is the sentinel meaning "leave the existing id untouched".  No bounds
+     * check on `seat`; retail has none (callers pass 1..6). */
+
+    g_player_strategic_352[seat * 0x160 + 0x05] = 1;   /* player_has_data */
+    g_player_aux_44[seat * 0x2c + 0x27]         = 1;   /* aux in-use flag */
+
+    /* Bounded copy (no NUL), dst/src swapped vs retail's (src, dst, n). */
+    strutil_bounded_copy(&g_player_aux_44[seat * 0x2c + 0x04], name, 0x1f);
+
+    if (player_id != 999) {
+        /* aux+0: player id/army field (4-byte store), retail DAT_00553d50. */
+        *(int32_t *)&g_player_aux_44[seat * 0x2c] = player_id;
+    }
+
+    if (g_sim_mp_active == 0) {
+        /* Single-player: aux fixed-job-slot id (0x25) ← strategic assigned
+         * job-slot id (0x0a).  In multiplayer this is left as-is. */
+        g_player_aux_44[seat * 0x2c + 0x25] =
+            g_player_strategic_352[seat * 0x160 + 0x0a];
+    }
+}
+
 void player_roster_add(uint8_t army_id, int seat)
 {
     /* Port of FUN_0049bbe8 @ 0x49bbe8 (53 B).  Decompile:

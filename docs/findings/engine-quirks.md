@@ -3893,6 +3893,32 @@ blind.
 
 ---
 
+## 109. Seat-assign uses 999 as an in-band "keep the existing id" sentinel
+
+`FUN_0049bae9` (`player_seat_assign`) always writes the seat's
+occupancy flag and 31-byte name, but stamps the aux id field only when
+`player_id != 999`.  The single-player reload path (`FUN_004412cc`'s
+second call, `FUN_0044121a`) passes literal `999` to re-seat the local
+player by name **without** disturbing an id that was already set up
+elsewhere; the join paths pass the real id read from the packet.
+
+So `999` is a magic value carried through the same `int` argument as
+real ids — there is no separate "set id?" flag.  Any future caller that
+legitimately needed id 999 would silently no-op the write; in practice
+ids are small (army/color indices), so the collision never bites.
+
+The 31-byte name copy (`strutil_bounded_copy`, no NUL terminator) also
+assumes the source is a full ≥31-byte field — retail always hands it
+the 0x53f1e0 config buffer or a fixed packet slot.  Passing a short C
+string reads past it (the host tests use 32-byte zero-padded buffers
+to stay clean under ASan).
+
+> 📍 `src/engine_roster.c` (`player_seat_assign`),
+> Ghidra `FUN_0049bae9`; callers `FUN_004410bd` / `FUN_0044121a` /
+> `FUN_004412cc`.
+
+---
+
 <!--
 Template for new entries:
 

@@ -7,6 +7,63 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — player seat-assign primitive (roster family, in-flow chip)
+
+Next clean chip off the honest frontier, staying in the sim/roster
+family the prior two sessions opened.  `FUN_0049bae9` (180 B, a
+zero-dependency leaf with a real ported caller) →
+`src/engine_roster.c` `player_seat_assign`.
+
+### What it does
+
+`player_seat_assign(player_id, seat, name)` seats a player into a
+strategic slot: marks `g_player_strategic_352[seat][+5]` occupied,
+flags the `g_player_aux_44[seat][+0x27]` in-use byte, copies the
+31-byte name into the aux record (`+0x04`, via `strutil_bounded_copy`,
+no NUL), stamps the aux id field (`+0x00`) unless `player_id == 999`
+(the "keep existing id" sentinel), and — single-player only
+(`g_sim_mp_active == 0`) — mirrors the strategic assigned-job-slot id
+(`+0x0a`) into the aux fixed-job field (`+0x25`).
+
+Real callers: single-player setup (`0x4410bd`, name buffer 0x53f1e0)
+and the two network join handlers (`0x4412cc`, `0x44121a`) which read
+`player_id` + name out of the join packet.
+
+### What landed
+
+- **`engine_roster.c` / `.h`** — verbatim port alongside the existing
+  roster trio (`0x49bbe8/0x49bc1d/0x49bc5f`); same player arrays
+  (shared externs `g_player_strategic_352` 0x57bf00 stride 0x160,
+  `g_player_aux_44` 0x553d50 stride 0x2c) and `g_sim_mp_active`.
+  Reuses `strutil_bounded_copy` (the already-ported `FUN_00401136`).
+- **4 host tests** — single-player full path (occupancy/name/id/job
+  mirror), the 999 keep-id sentinel, MP skips the job mirror, and the
+  bounded 31-byte no-NUL name copy.  Suite **1054 → 1058**, both
+  builds clean.
+- **Quirk #109** — the 999 in-band sentinel (no separate "set id?"
+  flag) and the ≥31-byte source-field assumption of the name copy.
+
+### Ledger-pollution near-miss
+
+First regen jumped touched 273 → **277** (+4 for a single port): the
+provenance comment cited the three unported callers by `FUN_<va>`
+token, each of which the ledger counts as touched.  Rewrote them as
+bare hex per [[project_ledger_fun_token]]; back to a clean **+1**.
+Caller citations in `src/` stay bare-hex until actually ported.
+
+### Disposition
+
+Ledger: **273 → 274 touched** (11.2 %), 244 tested, code-byte 10.3 %.
+Lands ahead of its callers (setup/join handlers unported), so dead-
+but-tested in the drop-in today — same posture as the roster trio and
+schedule init.  The roster-cluster consumer `0x49bd99` (3 KB, 4
+callees) and the npc-schedule leaves `0x49a453`/`0x49b762` remain the
+natural next chips in this band.
+
+(Clean `/clear` point — one self-contained chip.)
+
+---
+
 ## 2026-05-29 — NPC worker-schedule init (first sim chip off the honest frontier)
 
 First port chip picked off the corrected frontier from the prior

@@ -5,8 +5,8 @@
 The unported, non-thunk engine functions already **called by ported code** — the natural next chips. A **leaf** has all of its
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
-- frontier functions: **151**
-- of those, zero-dependency **leaves: 55** (recommended order below)
+- frontier functions: **149**
+- of those, zero-dependency **leaves: 54** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
 
@@ -15,13 +15,13 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x42e26f | 41 | 2 | strategic-map camera + scroll |
 | 0x42f58c | 130 | 2 | strategic-map camera + scroll |
 | 0x4af116 | 508 | 2 | asset-load IO helper cluster (0x4af*) |
-| 0x49caaa | 935 | 2 | npc schedule + worker walk |
 | 0x480f8b | 1200 | 2 | equip / starter-items |
 | 0x41423f | 11 | 1 | render-quad / blit primitives |
 | 0x45242b | 11 | 1 | fade / loading / audio-mci |
 | 0x4b1dd5 | 11 | 1 | battlefield render + wndproc |
 | 0x401c5b | 21 | 1 | early/runtime + low-level helpers |
 | 0x4c0580 | 25 | 1 | late/tail helpers |
+| 0x433cc1 | 35 | 1 | stage/post-load + char tables |
 | 0x4360f2 | 41 | 1 | stage/post-load + char tables |
 | 0x478952 | 53 | 1 | d3d/mesh pool + preload + palette |
 | 0x43fed2 | 54 | 1 | stage/post-load + char tables |
@@ -42,7 +42,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x42d179 | 157 | 1 | strategic-map camera + scroll |
 | 0x4a4f5b | 168 | 1 | asset-load IO helper cluster (0x4af*) |
 | 0x42e50d | 179 | 1 | strategic-map camera + scroll |
-| 0x49bae9 | 180 | 1 | npc schedule + worker walk |
 | 0x426216 | 185 | 1 | strategic-map camera + scroll |
 | 0x42a15f | 206 | 1 | strategic-map camera + scroll |
 | 0x4c2090 | 224 | 1 | late/tail helpers |
@@ -52,6 +51,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x49a453 | 302 | 1 | npc schedule + worker walk |
 | 0x49b762 | 334 | 1 | npc schedule + worker walk |
 | 0x43fd2a | 413 | 1 | stage/post-load + char tables |
+| 0x41298a | 425 | 1 | render-quad / blit primitives |
 
 ## Full frontier by address band
 
@@ -125,7 +125,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
 | 0x43eda0 | 637 | 7 | 4 |  |
-| 0x433cc1 | 35 | 1 | 1 |  |
+| 0x433cc1 | 35 | 1 | 0 | ✓ |
 | 0x4360f2 | 41 | 1 | 0 | ✓ |
 | 0x43fed2 | 54 | 1 | 0 | ✓ |
 | 0x43f8ff | 58 | 1 | 0 | ✓ |
@@ -196,20 +196,18 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x488dfe | 943 | 1 | 0 | ✓ |
 | 0x485bb1 | 1592 | 1 | 5 |  |
 
-### npc schedule + worker walk (22)
+### npc schedule + worker walk (20)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
 | 0x4984dc | 731 | 3 | 7 |  |
 | 0x499034 | 197 | 2 | 5 |  |
-| 0x49caaa | 935 | 2 | 0 | ✓ |
 | 0x4987b7 | 1536 | 2 | 7 |  |
 | 0x49767d | 36 | 1 | 5 |  |
 | 0x49ce51 | 109 | 1 | 1 |  |
 | 0x49964c | 124 | 1 | 2 |  |
 | 0x49c995 | 157 | 1 | 3 |  |
 | 0x4975d3 | 170 | 1 | 3 |  |
-| 0x49bae9 | 180 | 1 | 0 | ✓ |
 | 0x497500 | 211 | 1 | 8 |  |
 | 0x49915e | 259 | 1 | 2 |  |
 | 0x49a453 | 302 | 1 | 0 | ✓ |

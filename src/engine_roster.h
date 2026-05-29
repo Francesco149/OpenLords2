@@ -9,6 +9,11 @@
  *   FUN_0049bc1d @ 0x49bc1d ( 66 B) → player_roster_clear
  *   FUN_0049bc5f @ 0x49bc5f (314 B) → player_roster_compact
  *
+ * Plus a sibling seat-assignment primitive from the same address band,
+ * used by single-player setup and the network join handlers:
+ *
+ *   FUN_0049bae9 @ 0x49bae9 (180 B) → player_seat_assign
+ *
  * The producers run during scenario / map load: the map loader at
  * 0x467770 walks the 64×64 strategic-tile grid, clears the table with
  * player_roster_clear, then calls player_roster_add for every garrisoned
@@ -58,6 +63,15 @@
  * count when seat != 0 (seat 0 is the reserved front slot).  Port of
  * FUN_0049bbe8.  Callers pass seat ∈ 0..5 (the strategic-tile owner
  * byte); no bounds check, matching retail. */
+/* Seat a player into `seat`: mark the strategic slot occupied
+ * (player_has_data = 1), flag the aux record, copy the 31-byte `name`
+ * (no NUL terminator), stamp `player_id` into the aux id field unless it
+ * is the 999 "keep existing" sentinel, and — single-player only — mirror
+ * the strategic assigned job-slot id (+0x0a) into the aux fixed-job field
+ * (+0x25).  Port of FUN_0049bae9.  Used by single-player setup and the
+ * network join handlers; no bounds check on `seat` (callers pass 1..6). */
+void player_seat_assign(int player_id, int seat, const void *name);
+
 void player_roster_add(uint8_t army_id, int seat);
 
 /* Zero all 6 roster pairs.  Does NOT touch the count.  Port of

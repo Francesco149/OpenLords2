@@ -18,6 +18,7 @@
 
 #include "t.h"
 #include "engine_roster.h"
+#include "engine.h"        /* g_sim_mp_active */
 
 /* Zero the roster + count.  (Does not touch g_player_strategic_352;
  * compaction tests reset that explicitly.) */
@@ -216,5 +217,85 @@ int test_roster_compact_no_active_players_drops_all_nonzero_seats(void)
      * and pair[5] keeps its stale value. */
     const uint8_t exp[12] = { 0,0, 50,5, 50,5, 50,5, 50,5, 50,5 };
     T_ASSERT_MEM_EQ(g_player_roster, exp, 12);
+    return 0;
+}
+
+/* ─── player_seat_assign (FUN_0049bae9) ────────────────────────────── */
+
+/* Aux record stride 0x2c (g_player_aux_44), strategic stride 0x160
+ * (g_player_strategic_352).  Helpers index a seat's records. */
+#define AUX(seat)   (&g_player_aux_44[(seat) * 0x2c])
+#define STRAT(seat) (&g_player_strategic_352[(seat) * 0x160])
+
+static void seat_reset(void)
+{
+    memset(g_player_aux_44, 0, sizeof g_player_aux_44);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    g_sim_mp_active = 0;
+}
+
+/* Retail always hands a ≥31-byte name buffer (0x53f1e0 / a join packet
+ * field), never a short C string — strutil_bounded_copy reads exactly
+ * 0x1f bytes, so the source must be that wide.  This 32-byte zero-padded
+ * field stands in for one. */
+static void name_field(char dst[32], const char *s)
+{
+    memset(dst, 0, 32);
+    memcpy(dst, s, strlen(s));
+}
+
+int test_seat_assign_single_player_full(void)
+{
+    seat_reset();
+    STRAT(2)[0x0a] = 0x37;                 /* assigned job-slot id */
+    char nm[32]; name_field(nm, "Edward");
+    player_seat_assign(5, 2, nm);
+
+    T_ASSERT_EQ_I(STRAT(2)[0x05], 1);      /* player_has_data */
+    T_ASSERT_EQ_I(AUX(2)[0x27], 1);        /* aux in-use flag */
+    T_ASSERT_EQ_S((const char *)&AUX(2)[0x04], "Edward");  /* name copied */
+    T_ASSERT_EQ_I(*(int32_t *)AUX(2), 5);  /* id stamped */
+    T_ASSERT_EQ_I(AUX(2)[0x25], 0x37);     /* single-player job-slot mirror */
+    return 0;
+}
+
+int test_seat_assign_id_999_keeps_existing(void)
+{
+    seat_reset();
+    *(int32_t *)AUX(3) = 0x1234;           /* pre-existing id */
+    char nm[32]; name_field(nm, "x");
+    player_seat_assign(999, 3, nm);
+    /* 999 sentinel: id field untouched, but occupancy/name still written. */
+    T_ASSERT_EQ_I(*(int32_t *)AUX(3), 0x1234);
+    T_ASSERT_EQ_I(STRAT(3)[0x05], 1);
+    T_ASSERT_EQ_I(AUX(3)[0x27], 1);
+    return 0;
+}
+
+int test_seat_assign_multiplayer_skips_job_mirror(void)
+{
+    seat_reset();
+    g_sim_mp_active = 1;
+    STRAT(4)[0x0a] = 0x55;                 /* would mirror in single-player */
+    AUX(4)[0x25]   = 0xaa;                 /* sentinel: must stay untouched */
+    char nm[32]; name_field(nm, "y");
+    player_seat_assign(7, 4, nm);
+    T_ASSERT_EQ_I(AUX(4)[0x25], 0xaa);     /* multiplayer leaves it alone */
+    T_ASSERT_EQ_I(*(int32_t *)AUX(4), 7);  /* id still stamped */
+    return 0;
+}
+
+int test_seat_assign_name_copy_is_bounded_31(void)
+{
+    seat_reset();
+    /* 31-byte src copied with NO NUL terminator; byte 31 of dst stays. */
+    AUX(1)[0x04 + 0x1f] = 0x7e;            /* sentinel just past the field */
+    char src[32];
+    memset(src, 'A', sizeof src);          /* 32 'A's, no NUL */
+    player_seat_assign(0, 1, src);
+    for (int i = 0; i < 0x1f; i++) {
+        T_ASSERT_EQ_I(AUX(1)[0x04 + i], 'A');
+    }
+    T_ASSERT_EQ_I(AUX(1)[0x04 + 0x1f], 0x7e);  /* not overwritten */
     return 0;
 }
