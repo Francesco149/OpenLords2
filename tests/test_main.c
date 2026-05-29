@@ -1195,6 +1195,11 @@ struct test_case {
     X(mp_status_line_attempts_sprite_render) \
     X(mp_status_line_no_crash_runs_clean) \
     \
+    X(dispatch_title_routes_to_scene) \
+    X(dispatch_clears_scene_flag_b_after_title) \
+    X(dispatch_other_screen_routes_to_hook) \
+    X(dispatch_other_screen_still_clears_flag_b) \
+    \
     X(panel_border_3x3_corner_and_edge_indices) \
     X(panel_border_skips_interior) \
     X(panel_border_mode2_swaps_top_corners) \

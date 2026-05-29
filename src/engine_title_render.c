@@ -120,6 +120,7 @@ int  engine_title_render_background_call_count(void) { return g_background_calls
 int  engine_title_render_last_page(void)             { return g_last_page; }
 int  engine_title_render_scene_flag_a(void)          { return g_scene_flag_a; }
 int  engine_title_render_scene_flag_b(void)          { return g_scene_flag_b; }
+void engine_title_render_set_scene_flag_b(int v)     { g_scene_flag_b = v; }
 
 void engine_title_render_reset_counters(void)
 {

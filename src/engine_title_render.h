@@ -150,6 +150,10 @@ void engine_title_render_reset_counters(void);
 int  engine_title_render_scene_flag_a(void);   /* DAT_005651ac */
 int  engine_title_render_scene_flag_b(void);   /* DAT_004eb260 */
 
+/* DAT_004eb260 is a shared screen-render flag owned here; the screen
+ * dispatcher (FUN_0040f1a0) clears it to 0 after every dispatch. */
+void engine_title_render_set_scene_flag_b(int v);
+
 /* ─────────────────────────────────────────────────────────────────
  * Render functions
  * ───────────────────────────────────────────────────────────────── */

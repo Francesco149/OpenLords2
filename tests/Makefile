@@ -57,6 +57,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_map_query.c \
                    ../src/engine_territory.c \
                    ../src/engine_mp_render.c \
+                   ../src/engine_screen_dispatch.c \
                    ../src/engine_battlefield_render.c \
                    ../src/engine_camera.c \
                    ../src/engine_roster.c \
@@ -100,6 +101,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_map_query.c \
                    test_engine_territory.c \
                    test_engine_mp_render.c \
+                   test_engine_screen_dispatch.c \
                    test_engine_battlefield_render.c \
                    test_engine_camera.c \
                    test_engine_roster.c \

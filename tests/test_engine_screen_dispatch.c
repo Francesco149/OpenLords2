@@ -1,0 +1,88 @@
+/*
+ * Unit tests for engine_screen_dispatch — the top-level screen-state
+ * render dispatch (partial port of FUN_0040f1a0: title arm + hook).
+ */
+
+#include "t.h"
+#include "engine_dirty_rect.h"
+#include "engine_title_render.h"
+#include "engine_screen_dispatch.h"
+
+static engine_dirty_rect_state_t g_dirty;
+
+static int g_other_state, g_other_redraw, g_other_calls;
+static void other_capture(int state, int redraw)
+{
+    g_other_state = state; g_other_redraw = redraw; g_other_calls++;
+}
+
+static void disp_reset(void)
+{
+    engine_screen_dispatch_reset();
+    engine_title_render_reset_counters();
+
+    /* The title scene's finalize marks this dirty state full-screen. */
+    g_dirty.dirty_mark = 0;
+    g_dirty.dirty_xmin = 0x7fff; g_dirty.dirty_xmax = -0x7fff;
+    g_dirty.dirty_ymin = 0x7fff; g_dirty.dirty_ymax = -0x7fff;
+    g_dirty.below_status_redraw = 0;
+    engine_title_render_set_dirty_state(&g_dirty);
+
+    /* Default no-op hooks (background / page / other). */
+    engine_title_render_bind_background_fn(0);
+    engine_title_render_bind_page_fn(0);
+    engine_screen_dispatch_bind_other_fn(0);
+
+    g_other_state = 0; g_other_redraw = 0; g_other_calls = 0;
+}
+
+/* Title screen routes to the scene; we use a non-main-menu page so the
+ * scene exercises its page hook (no font/canvas setup needed). */
+int test_dispatch_title_routes_to_scene(void)
+{
+    disp_reset();
+    engine_screen_dispatch(/*screen_state=*/0x1f, /*page=*/5, /*redraw=*/2);
+
+    /* Scene ran: background drawn, page hook saw page 5, flag_a set. */
+    T_ASSERT_EQ_I(engine_title_render_background_call_count(), 1);
+    T_ASSERT_EQ_I(engine_title_render_last_page(), 5);
+    T_ASSERT_EQ_I(engine_title_render_scene_flag_a(), 1);
+    /* The other-screen hook was NOT used. */
+    T_ASSERT_EQ_I(engine_screen_dispatch_last_other_state(), 0);
+    return 0;
+}
+
+int test_dispatch_clears_scene_flag_b_after_title(void)
+{
+    disp_reset();
+    engine_screen_dispatch(0x1f, 5, 2);
+    /* Scene set flag_b=1; the dispatcher's tail clears it to 0. */
+    T_ASSERT_EQ_I(engine_title_render_scene_flag_b(), 0);
+    /* flag_a stays set (only flag_b is cleared by the dispatcher). */
+    T_ASSERT_EQ_I(engine_title_render_scene_flag_a(), 1);
+    return 0;
+}
+
+int test_dispatch_other_screen_routes_to_hook(void)
+{
+    disp_reset();
+    engine_screen_dispatch_bind_other_fn(other_capture);
+    engine_screen_dispatch(/*screen_state=*/0x10, /*page=*/1, /*redraw=*/3);
+
+    /* Hook got the screen-state + redraw-mode; the title scene did NOT run. */
+    T_ASSERT_EQ_I(g_other_calls, 1);
+    T_ASSERT_EQ_I(g_other_state, 0x10);
+    T_ASSERT_EQ_I(g_other_redraw, 3);
+    T_ASSERT_EQ_I(engine_title_render_background_call_count(), 0);
+    return 0;
+}
+
+int test_dispatch_other_screen_still_clears_flag_b(void)
+{
+    disp_reset();
+    /* Pre-set flag_b to confirm the unconditional tail clear. */
+    engine_title_render_set_scene_flag_b(1);
+    engine_screen_dispatch(0x10, 1, 0);
+    T_ASSERT_EQ_I(engine_title_render_scene_flag_b(), 0);
+    return 0;
+}
