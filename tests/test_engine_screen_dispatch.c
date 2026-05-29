@@ -42,11 +42,11 @@ static void disp_reset(void)
 int test_dispatch_title_routes_to_scene(void)
 {
     disp_reset();
-    engine_screen_dispatch(/*screen_state=*/0x1f, /*page=*/3, /*redraw=*/2);
+    engine_screen_dispatch(/*screen_state=*/0x1f, /*page=*/6, /*redraw=*/2);
 
-    /* Scene ran: background drawn, page hook saw page 3, flag_a set. */
+    /* Scene ran: background drawn, page hook saw page 6, flag_a set. */
     T_ASSERT_EQ_I(engine_title_render_background_call_count(), 1);
-    T_ASSERT_EQ_I(engine_title_render_last_page(), 3);
+    T_ASSERT_EQ_I(engine_title_render_last_page(), 6);
     T_ASSERT_EQ_I(engine_title_render_scene_flag_a(), 1);
     /* The other-screen hook was NOT used. */
     T_ASSERT_EQ_I(engine_screen_dispatch_last_other_state(), 0);
@@ -56,7 +56,7 @@ int test_dispatch_title_routes_to_scene(void)
 int test_dispatch_clears_scene_flag_b_after_title(void)
 {
     disp_reset();
-    engine_screen_dispatch(0x1f, 3, 2);
+    engine_screen_dispatch(0x1f, 6, 2);   /* page 6 → hook (no real render) */
     /* Scene set flag_b=1; the dispatcher's tail clears it to 0. */
     T_ASSERT_EQ_I(engine_title_render_scene_flag_b(), 0);
     /* flag_a stays set (only flag_b is cleared by the dispatcher). */

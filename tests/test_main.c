@@ -1213,6 +1213,10 @@ struct test_case {
     X(title_choose_title_continue_dim_when_disabled) \
     X(title_choose_title_buttons_two_bevel_rects) \
     X(title_choose_title_scene_routes_page_4) \
+    X(title_filelist_panel_and_title) \
+    X(title_filelist_renders_grid_text) \
+    X(title_filelist_empty_no_grid_text) \
+    X(title_filelist_scene_routes_page_3) \
     \
     X(menu_hover_returns_1based_index) \
     X(menu_hover_outside_returns_zero) \

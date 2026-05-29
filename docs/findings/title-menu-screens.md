@@ -20,7 +20,7 @@ Two parallel dispatch ladders run while `DAT_004eac50 == 0x1f`:
 |----------------------:|--------------|---------------|--------|
 | 1   | `FUN_0041ea14` | `FUN_0041eaa3` | **Main menu** — Single player / Multiple players / Lords of Magic? / Exit game |
 | 2   | `FUN_0041ec8a` | `FUN_0041ece6` | **"Your options"** (single-player) — Play Now! / Load a game / Skirmish! / Custom game / Back |
-| 3   | `FUN_0041ef42` | …            | (sub-screen) |
+| 3   | `FUN_0041ef42` | `FUN_004149ec` | **"Loading a game." save/load list** — file grid + scrollbar (list render ported; button overlay pending) |
 | 4   | `FUN_0041ef57` | `FUN_0041f321`+ | **"Choose your title and your shield"** — name box + 5 shields + Back/Continue (ported) |
 | 5   | `FUN_0041f592` | `FUN_0041f5e8` | **"Play Now!" campaign chooser** — Original campaign / The new campaign (ported) |
 | 6   | `FUN_0041f3e9` | `FUN_0041f4a1` | (sub-screen) |
@@ -224,6 +224,55 @@ render (`runs/title-nav-p4/nav_04_p4_choosetitle.bmp`, `--title-nav` step
 > that row gives 0 across every batch.  (Combined with the menu/options
 > pages, which already exercise mixed-case + punctuation 0-diff, the menu
 > font is fully validated.)
+
+## "Loading a game." (page 3) save/load list — list render ported
+
+Reached from "Your options" → **Load a game** (page-2 param 2,
+`FUN_00432cc8` → page 3; scans `*.sav` via `FUN_004aecf0` into the entry
+table).  The page-3 draw is `FUN_0041ef42` → **`FUN_004148e4(5)`** (frame)
+→ **`FUN_004149ec(999, 1)`** (list content).
+
+`FUN_004148e4` (frame): outer panel (`0x60,10,0x1c,0x15`) + clip-reset +
+large-font title (entry **0x28** sub 5 = "Loading a game.") + the
+action-button bevel rect (`0x70,0x42,400,0x100`) + three box outlines
+(top selected-name field `0x78,0x4a,0xc0,0x20`; the list box
+`0x78,0x72,0x160,0xa4`; a bottom box `0x78,0x11e,0x180,0x1c`).
+
+`FUN_004149ec` (mode 1 — content): the selected-name field (tiled inset
+via `FUN_004097c5`/`gfx_panel_fill_interior` + the name text `DAT_004ea130`
++ caret), then the **file grid** — entries at `&DAT_004e8790 + i*0x41`
+(null-terminated name then ext) laid out **3 columns** (x step `0x78`)
+× rows (y step `0x10`) starting at `(0x80, 0x76)`, walking
+`DAT_004ea1a0`..`DAT_004eb25c`.  The selected entry (index == the call's
+`param_1`; the draw pass passes **999** = none) gets a 96×16 highlight
+bar (`FUN_004b414a`, glyph_w 6 / height_short 0x10) and text color `0x20`.
+A bottom status line (`FUN_00402d37`) draws only when `DAT_0057d3c4 != 0`.
+
+All primitives were already ported (`gfx_panel_*`, `gfx_line_*`,
+`gfx_text_render_line`, the caret, `gfx_wrap_localized_line`) except the
+selection-highlight fill `FUN_004b414a` (`gfx_sprite_fill_block`).
+Landed in `engine_title_render.c` as `engine_title_render_filelist` +
+`..._filelist_content`; scene dispatch routes page 3 to it; state bound
+via setters and seeded from a `--dump-globals` capture.
+
+**List render verified — 0 diff outside the button overlay.** The
+drop-in (`runs/title-nav-p3/nav_05_p3_loadgame.bmp`, `--title-nav` step
+5) matches retail (`runs/groundtruth/loadgame-retail.bmp`) **everywhere
+the page-3 draw path covers** — panel, title, selected-name field, all
+four files (`lastturn` / `old_turn`→"old turn" / `safeturn` / `test`),
+and the box outlines.  The remaining 2870 px (all at x ≥ 400) are the
+**gauntlet action-buttons + scrollbar**, which are NOT part of the page-3
+draw — they're the per-frame button overlay
+`FUN_0040cfd2(0x60,10,&DAT_004ddd78,4)` (the generic button-list renderer,
+keyed off `FUN_004ba26e`'s 0x1f / page-3 arm), drawing sprites from the
+button sheets `DAT_005530c8` / `DAT_005bb540`.  That overlay subsystem —
+shared by every screen — is the next chip.
+
+> **State captured via `--dump-globals`** (run `gt-p3-state`): 4 entries
+> in scan order (lastturn / old_turn / safeturn / test, 0x41-byte
+> records, name + "sav"); top field `DAT_004ea130` = "lastturn";
+> first-visible 0; count 4; `DAT_0057d3c4 = 0` (no bottom status);
+> `DAT_005530f0 = 3`.
 
 ## Input side — hotspot hit-test + page navigation (`engine_menu_input`)
 

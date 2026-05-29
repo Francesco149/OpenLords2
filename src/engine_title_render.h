@@ -202,6 +202,25 @@ void engine_title_render_play_now_buttons(void);
  * page-4 state bound via the setters below. */
 void engine_title_render_choose_title(void);
 
+/* Port of FUN_004148e4 (title-screen variant) — the "Loading a game."
+ * save/load-list frame (page 3): panel + large-font title (entry 0x28
+ * sub `title_sub`) + the action-button bevel rect + three box outlines
+ * + the file-list content (FUN_004149ec).  Page 3 passes title_sub 5. */
+void engine_title_render_filelist(int title_sub);
+
+/* ─── page-3 file-list state setters ───────────────────────────── */
+
+/* DAT_004e8790 entries (stride 0x41, null-terminated name then ext),
+ * DAT_004eb25c count, DAT_004ea1a0 first-visible index. */
+void engine_title_render_set_filelist(const uint8_t *entries, int entry_stride,
+                                      int count, int first_visible);
+/* DAT_004ea130 — the selected-name field above the grid. */
+void engine_title_render_set_filelist_topname(const uint8_t *name);
+/* DAT_005cd550 editor behind the top field (caret); NULL → skipped. */
+void engine_title_render_set_filelist_editor(const text_input_state_t *editor);
+/* DAT_0057d3c4 — bottom status-line gate (0 → no status line). */
+void engine_title_render_set_filelist_show_status(int show);
+
 /* Page-4 per-frame refresh (FUN_0041f321 standalone) — re-renders the
  * name box with the text shadow ON (the steady-state appearance, unlike
  * the full render which brackets it no-shadow).  Also routed via

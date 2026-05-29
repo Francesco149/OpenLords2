@@ -557,11 +557,11 @@ int test_title_scene_wrong_screen_state_is_noop(void)
 int test_title_scene_other_page_routes_to_page_hook(void)
 {
     title_reset();
-    engine_title_render_scene(0x1f, /*page=*/3);
-    /* Background drawn; page hook invoked with 3 (still-unported page);
+    engine_title_render_scene(0x1f, /*page=*/6);
+    /* Background drawn; page hook invoked with 6 (still-unported page);
      * neither the main menu nor the options page drawn. */
     T_ASSERT_EQ_I(engine_title_render_background_call_count(), 1);
-    T_ASSERT_EQ_I(engine_title_render_last_page(), 3);
+    T_ASSERT_EQ_I(engine_title_render_last_page(), 6);
     T_ASSERT_EQ_I(engine_title_render_panel_call_count(), 0);
     /* Still finalizes + sets flags. */
     T_ASSERT_EQ_I(engine_title_render_scene_flag_a(), 1);
@@ -788,5 +788,109 @@ int test_title_choose_title_scene_routes_page_4(void)
     /* The page-4 renderer ran (panel with the page-4 args). */
     T_ASSERT_EQ_I(g_cap_calls, 1);
     T_ASSERT_EQ_I(g_cap_p2, 0x50);
+    return 0;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Page 3 — "Loading a game." save/load list (FUN_004148e4 +
+ * FUN_004149ec, title variant).  The frame draws via gfx_panel_draw /
+ * gfx_panel_fill_interior, which read 16×16 tile descriptors from the
+ * bound asset — so use a blob with EVERY sprite index valid (a 4×4
+ * tile pointing at one pixel block).  Entry names render with the 1×1
+ * test font.
+ * ────────────────────────────────────────────────────────────────── */
+
+static uint8_t g_fl_blob[8 + 0x100 * 16 + 256];
+
+static void fl_blob_init(void)
+{
+    memset(g_fl_blob, 0, sizeof g_fl_blob);
+    const int pix_off = 8 + 0x100 * 16;
+    for (int i = 0; i < 64; i++) g_fl_blob[pix_off + i] = 0x44;
+    for (int idx = 0; idx < 0x100; idx++) {
+        uint8_t *slot = g_fl_blob + idx * 16 + 8;
+        slot[0] = 4; slot[2] = 4;                 /* w=4, h_short=4 */
+        slot[4] = (uint8_t)(pix_off & 0xff);
+        slot[5] = (uint8_t)((pix_off >> 8) & 0xff);
+        slot[6] = (uint8_t)((pix_off >> 16) & 0xff);
+        slot[0xd] = 4;                             /* row_count */
+    }
+}
+
+static const char *g_fl_test_names[4] = {"lastturn", "old_turn", "safeturn", "test"};
+static uint8_t g_fl_test_entries[4 * 0x41];
+static const uint8_t g_fl_test_top[] = "lastturn";
+
+static void fl_setup(void)
+{
+    title_reset();
+    fl_blob_init();
+    engine_title_render_bind_panel_asset(g_fl_blob);
+    memset(g_fl_test_entries, 0, sizeof g_fl_test_entries);
+    for (int e = 0; e < 4; e++) {
+        int j = 0;
+        for (; g_fl_test_names[e][j]; j++)
+            g_fl_test_entries[e * 0x41 + j] = (uint8_t)g_fl_test_names[e][j];
+    }
+    engine_title_render_set_filelist(g_fl_test_entries, 0x41, 4, 0);
+    engine_title_render_set_filelist_topname(g_fl_test_top);
+    engine_title_render_set_filelist_editor(0);
+    engine_title_render_set_filelist_show_status(0);
+}
+
+int test_title_filelist_panel_and_title(void)
+{
+    fl_setup();
+    g_cap_calls = 0;
+    engine_title_render_bind_panel_fn(capture_panel);
+    engine_title_render_filelist(5);
+
+    /* FUN_00409346(asset, 0x60, 10, 0x1c, 0x15). */
+    T_ASSERT_EQ_I(g_cap_calls, 1);
+    T_ASSERT_EQ_I(g_cap_p2, 0x60);
+    T_ASSERT_EQ_I(g_cap_p3, 10);
+    T_ASSERT_EQ_I(g_cap_p4, 0x1c);
+    T_ASSERT_EQ_I(g_cap_p5, 0x15);
+    /* Action-button bevel rect (palette-b colors) present. */
+    T_ASSERT(canvas_color_count(0x35) > 0);
+    T_ASSERT(canvas_color_count(0x28) > 0);
+    return 0;
+}
+
+int test_title_filelist_renders_grid_text(void)
+{
+    fl_setup();
+    engine_title_render_filelist(5);
+    /* Row 0 of the grid is at y = 0x76; the 1×1 font renders the entry
+     * names there in color 0x3f.  Count only within the grid interior
+     * [0x80, 0x1d0) so the 0x3f box outline edges (x 0x78 / 0x1d8) don't
+     * confound the result. */
+    T_ASSERT(row_color_count_x(0x76, 0x3f, 0x80, 0x1d0) > 0);
+    /* Row 1 (y = 0x86) carries the 4th entry ("test"). */
+    T_ASSERT(row_color_count_x(0x86, 0x3f, 0x80, 0x1d0) > 0);
+    return 0;
+}
+
+int test_title_filelist_empty_no_grid_text(void)
+{
+    fl_setup();
+    engine_title_render_set_filelist(g_fl_test_entries, 0x41, 0, 0);  /* count 0 */
+    engine_title_render_filelist(5);
+    /* No entries → no filename glyphs in the grid interior (box-outline
+     * edges at x 0x78 / 0x1d8 are excluded by the x range). */
+    T_ASSERT_EQ_I(row_color_count_x(0x76, 0x3f, 0x80, 0x1d0), 0);
+    T_ASSERT_EQ_I(row_color_count_x(0x86, 0x3f, 0x80, 0x1d0), 0);
+    return 0;
+}
+
+int test_title_filelist_scene_routes_page_3(void)
+{
+    fl_setup();
+    g_cap_calls = 0;
+    engine_title_render_bind_panel_fn(capture_panel);
+    engine_title_render_set_page(3);
+    engine_title_render_scene(0x1f, 3);
+    T_ASSERT_EQ_I(g_cap_calls, 1);
+    T_ASSERT_EQ_I(g_cap_p2, 0x60);   /* page-3 panel args */
     return 0;
 }

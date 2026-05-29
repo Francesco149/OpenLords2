@@ -16,6 +16,10 @@
 #include "gfx_text.h"
 #include "gfx_wrap.h"
 #include "gfx_sprite_render.h"
+#include "gfx_sprite.h"
+#include "gfx_panel.h"
+#include "gfx_glyph.h"
+#include "gfx_dispatch.h"
 #include "gfx_caret.h"
 #include "font_metrics.h"
 #include "text_input.h"
@@ -99,6 +103,25 @@ static const text_input_state_t *g_p4_editor;
 
 /* Font-metrics scratch for the caret's cursor-char width measure. */
 static font_metrics_state_t g_p4_fm;
+
+/* ─── page-3 ("Loading a game." save/load list) bound state ─────── */
+
+/* File-list entries (retail DAT_004e8790, 0x41-byte records — a
+ * null-terminated name then the extension); count (DAT_004eb25c) and
+ * first-visible index (DAT_004ea1a0).  Names render in a 3-column grid. */
+static const uint8_t *g_fl_entries;
+static int            g_fl_entry_stride = 0x41;
+static int            g_fl_count;
+static int            g_fl_first_visible;
+
+/* The selected-name field shown above the grid (DAT_004ea130). */
+static const uint8_t *g_fl_topname;
+
+/* The editor behind the top field (caret); NULL → caret skipped. */
+static const text_input_state_t *g_fl_editor;
+
+/* Bottom status-line gate (DAT_0057d3c4): 0 → no status line drawn. */
+static int g_fl_show_status;
 
 /* ─── binders ───────────────────────────────────────────────────── */
 
@@ -187,6 +210,32 @@ void engine_title_render_set_choose_title_editor(const text_input_state_t *edito
 void engine_title_render_bind_caret_metrics_table(const uint8_t *table)
 {
     g_p4_fm.char_glyph_index = table;
+}
+
+/* ─── page-3 file-list state binders ────────────────────────────── */
+
+void engine_title_render_set_filelist(const uint8_t *entries, int entry_stride,
+                                      int count, int first_visible)
+{
+    g_fl_entries       = entries;
+    g_fl_entry_stride  = entry_stride ? entry_stride : 0x41;
+    g_fl_count         = count;
+    g_fl_first_visible = first_visible;
+}
+
+void engine_title_render_set_filelist_topname(const uint8_t *name)
+{
+    g_fl_topname = name;
+}
+
+void engine_title_render_set_filelist_editor(const text_input_state_t *editor)
+{
+    g_fl_editor = editor;
+}
+
+void engine_title_render_set_filelist_show_status(int show)
+{
+    g_fl_show_status = show;
 }
 
 void engine_title_render_bind_panel_fn(engine_title_render_panel_fn fn)
@@ -525,6 +574,98 @@ void engine_title_render_choose_title(void)
     }
 }
 
+/* ─── page 3: "Loading a game." save/load list ──────────────────── */
+
+/* Port of FUN_004149ec (mode 1 — the title-screen variant called by
+ * FUN_004148e4).  Draws: the selected-name field (tiled inset + name
+ * text + caret), the file-list grid (3 columns, 0x10-row step, the
+ * selected entry on a 96×16 highlight bar), and the bottom box inset.
+ * `selected` is the entry index to highlight (999 = none, matching the
+ * draw-pass call).  base = (0x60, 10). */
+static void engine_title_render_filelist_content(int selected)
+{
+    const int bx = 0x60, by = 10;   /* retail local_1c / local_20 */
+
+    /* Top-field caret-anchor reset. */
+    gfx_text_clear_first_pos_latch();
+    gfx_text_set_first_pos_x(0);
+    gfx_text_set_char_counter(0);
+    gfx_text_set_first_pos_y(by + 0x48);
+    gfx_text_set_collapse_active(1);
+    gfx_text_set_line_x_acc(0);
+
+    /* Two tiled-border strips lining the selected-name field. */
+    gfx_panel_fill_interior(g_panel_asset, bx + 0x1c, by + 0x42, 10, 1);
+    gfx_panel_fill_interior(g_panel_asset, bx + 0x1c, by + 0x4c, 10, 1);
+
+    /* Selected-name text. */
+    if (g_fl_topname) {
+        gfx_text_render_line(g_fl_topname, bx + 0x20, by + 0x48, g_menu_font,
+                             g_glyph_table, 0x3f);
+    }
+    if (gfx_text_first_pos_latched() == 0) {
+        gfx_text_set_first_pos_x(gfx_text_line_x_acc());
+    }
+    gfx_text_set_first_pos_x(gfx_text_first_pos_x() + bx + 0x20);
+    gfx_text_set_first_pos_y(by + 0x48);
+    if (g_fl_editor) {
+        gfx_caret_render(g_fl_editor, &g_p4_fm, g_menu_font, 0x3f);
+    }
+    engine_dirty_rect_mark_box_tiled(g_dirty_state, bx + 0x18, by + 0x40, 0xb, 3, 1);
+
+    /* The list-box tiled border. */
+    gfx_panel_fill_interior(g_panel_asset, bx + 0x1e, by + 0x6a, 0x15, 10);
+    engine_dirty_rect_mark_box_tiled(g_dirty_state, bx + 0x1c, by + 0x68, 0x16, 0xb, 1);
+
+    /* File-list grid — 3 columns (step 0x78), rows step 0x10. */
+    int lx = bx + 0x20;
+    int ly = by + 0x6c;
+    int col = 0, shown = 0;
+    for (int i = g_fl_first_visible; i < g_fl_count; i++) {
+        const uint8_t *name = g_fl_entries
+            ? g_fl_entries + i * g_fl_entry_stride : 0;
+        if (i == selected) {
+            /* Highlight bar: 6 column-groups (96 px) × 0x10 rows. */
+            gfx_glyph_set_glyph(0, 6, 0);
+            gfx_dispatch_set_glyph_height_short(0x10);
+            gfx_sprite_fill_block(lx - 2, ly - 1, 0x3f);
+            if (name) gfx_text_render_line(name, lx, ly, g_menu_font,
+                                           g_glyph_table, 0x20);
+        } else if (name) {
+            gfx_text_render_line(name, lx, ly, g_menu_font, g_glyph_table, 0x3f);
+        }
+        if (col == 2) { lx = bx + 0x20; ly += 0x10; col = -1; }
+        else          { lx += 0x78; }
+        if (0x1c < shown) break;
+        col++; shown++;
+    }
+
+    /* Bottom-box tiled border. */
+    gfx_panel_fill_interior(g_panel_asset, bx + 0x20, by + 0x118, 0x15, 1);
+    gfx_text_set_line_x_acc(0);
+
+    /* Bottom status line — only when armed (retail DAT_0057d3c4 != 0). */
+    if (g_fl_show_status) {
+        gfx_wrap_localized_line(&g_loc, 0x28, 2, bx + 0x20, by + 0x11a,
+                                g_menu_font, g_glyph_table, 0x3f);
+    }
+}
+
+/* Port of FUN_004148e4 (the save/load-list frame, mode-1 / title
+ * variant).  Panel + clip-reset + large-font title (entry 0x28 sub
+ * `title_sub`) + the action-button bevel rect + three box outlines +
+ * the list content.  Page 3 ("Loading a game.") passes title_sub 5. */
+void engine_title_render_filelist(int title_sub)
+{
+    g_panel_fn(g_panel_asset, 0x60, 10, 0x1c, 0x15);
+    menu_text_entry(0x28, title_sub, 0x60, 0x22, 0x1c0, g_title_font, 0x3f);
+    gfx_line_rect_bevel_palette_b(0x70, 0x42, 400, 0x100);
+    gfx_line_rect(0x78, 0x4a, 0xc0, 0x20, 0x3f);
+    gfx_line_rect(0x78, 0x72, 0x160, 0xa4, 0x3f);
+    gfx_line_rect(0x78, 0x11e, 0x180, 0x1c, 0x3f);
+    engine_title_render_filelist_content(999);
+}
+
 /* Page-4 per-frame refresh — retail's title-update ladder calls
  * FUN_0041f321 standalone every tick (NOT inside FUN_0041ef57's
  * no-shadow bracket), so the steady-state name box is redrawn with the
@@ -555,6 +696,8 @@ void engine_title_render_scene(int screen_state, int page)
         engine_title_render_main_menu();
     } else if (page == 2) {
         engine_title_render_options();
+    } else if (page == 3) {
+        engine_title_render_filelist(5);
     } else if (page == 4) {
         engine_title_render_choose_title();
     } else if (page == 5) {

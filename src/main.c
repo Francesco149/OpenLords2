@@ -992,6 +992,46 @@ static void bringup_title_nav(const char *dir)
     gfx_capture_backbuffer(path);
     log_line("title-nav: forced page %d (choose title) → %s",
              engine_title_render_page(), path);
+
+    /* Step 5 — page 3, "Loading a game." (the save/load file list).
+     * Seeded from a --dump-globals capture (run gt-p3-state): 4 entries
+     * (lastturn / old_turn→"old turn" / safeturn / test) in scan order,
+     * top field "lastturn", first-visible 0, no selection highlight
+     * (param 999), bottom status off (DAT_0057d3c4 == 0).  The gauntlet
+     * action buttons are a separate per-frame overlay, not part of the
+     * page-3 draw path (FUN_004148e4 → FUN_004149ec) ported here. */
+    static const char *k_fl_names[4] = {
+        "lastturn", "old_turn", "safeturn", "test",
+    };
+    static uint8_t k_fl_entries[4 * 0x41];
+    for (int e = 0; e < 4; e++) {
+        int j = 0;
+        for (; k_fl_names[e][j]; j++) k_fl_entries[e * 0x41 + j] = k_fl_names[e][j];
+        k_fl_entries[e * 0x41 + j] = 0;
+    }
+    static const uint8_t k_fl_topname[] = "lastturn";
+    static text_input_state_t k_fl_editor;
+    {
+        int j = 0;
+        for (; k_fl_topname[j]; j++) k_fl_editor.buf[j] = k_fl_topname[j];
+        k_fl_editor.buf[j] = 0;
+    }
+    k_fl_editor.cursor = 0;
+    k_fl_editor.insert_mode = 0;
+
+    engine_title_render_set_filelist(k_fl_entries, 0x41, 4, 0);
+    engine_title_render_set_filelist_topname(k_fl_topname);
+    engine_title_render_set_filelist_editor(&k_fl_editor);
+    engine_title_render_set_filelist_show_status(0);
+    gfx_caret_reset();
+
+    engine_title_render_set_page(3);
+    title_render_current_page();
+    wsprintfA(path, "%s\\nav_05_p%d_loadgame.bmp", dir,
+              engine_title_render_page());
+    gfx_capture_backbuffer(path);
+    log_line("title-nav: forced page %d (load game) → %s",
+             engine_title_render_page(), path);
 }
 
 /* Page-background reload hook (engine → gfx).  The engine_tick title
