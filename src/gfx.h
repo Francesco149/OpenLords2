@@ -57,6 +57,18 @@ void gfx_shutdown(void);
  * "base01.256" — additional palette swaps land via direct call. */
 int  gfx_load_palette(const char *path);
 
+/* Load a raw full-screen 640×480×8 background image (24-byte PL8
+ * header + raw indexed pixels) straight into the back buffer.  Port
+ * of the platform side of retail's FUN_00408fcb.  Returns 1 on
+ * success, 0 on any failure (no back buffer, file read, Lock). */
+int  gfx_load_background_image(const char *pl8_path);
+
+/* Load the title/menu background (palette + full-screen backdrop) for
+ * the given menu page (retail DAT_005530f0).  Port of FUN_0041e61d's
+ * per-page asset selection; leaves the backdrop in the back buffer for
+ * the caller to present.  Returns 1 if both palette and image loaded. */
+int  gfx_title_background_load(int page);
+
 /* Present the back buffer to the primary surface.  In windowed
  * mode the back is Blt'd into the on-screen client rectangle (the
  * clipper trims).  In fullscreen mode the back is BltFast'd to

@@ -62,6 +62,7 @@
 #include "config.h"
 #include "dev_hooks.h"
 #include "engine.h"
+#include "engine_title_render.h"
 #include "gfx.h"
 
 /* Class name matches retail FUN_004b2258's `s_WinLords2Class_004df5b0`
@@ -95,6 +96,12 @@ static int       g_show_msgbox;     /* --show-msgbox: skip MessageBox→stderr h
  * case: `tools/run-openlords2.sh --gfx-init --show-window`. */
 static int       g_gfx_init;
 static int       g_gfx_active;
+/* --title-bg: after gfx_init, load the page-1 menu backdrop (palette +
+ * gateway.pl8) into the back buffer and present.  Bring-up shortcut for
+ * the main-menu render chain before the boot→title state producer lands
+ * — exercises the FUN_0041e61d asset-load path so the backdrop can be
+ * captured/eyeballed.  Implies --gfx-init. */
+static int       g_title_bg;
 /* --audio-init: call audio_init() after window creation.  Off by
  * default — SetCooperativeLevel(PRIORITY) modifies process audio
  * state and the headless smoke harness has no way to validate
@@ -251,6 +258,16 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
     if (g_gfx_init) {
         if (gfx_init(g_hwnd, g_fullscreen)) {
             g_gfx_active = 1;
+            /* Bring-up: load the page-1 menu backdrop into the back
+             * buffer before the first present, so frame 0 shows the
+             * gateway photo rather than the background-erase fill.
+             * Exercises the FUN_0041e61d asset-load path ahead of the
+             * boot→title state producer. */
+            if (g_title_bg) {
+                engine_title_render_set_page(1);
+                if (!gfx_title_background_load(engine_title_render_page()))
+                    log_line("--title-bg: background load failed");
+            }
             /* Bring-up tail — force the first present immediately so
              * frame 0 captures and the visible window show the
              * initial back-buffer state rather than the
@@ -918,6 +935,10 @@ static void parse_cmdline(LPSTR lpCmd)
         else if (!strcmp(a, "--allow-multi"))    g_allow_multi = 1;
         else if (!strcmp(a, "--show-msgbox"))    g_show_msgbox = 1;
         else if (!strcmp(a, "--gfx-init"))       g_gfx_init    = 1;
+        else if (!strcmp(a, "--title-bg")) {     /* bring-up: load the menu backdrop */
+            g_title_bg = 1;
+            g_gfx_init = 1;     /* needs DDraw */
+        }
         else if (!strcmp(a, "--audio-init"))     g_audio_init  = 1;
         else if (!strcmp(a, "--capture-to") && i + 1 < ntok) {
             g_capture_dir = tokens[++i];

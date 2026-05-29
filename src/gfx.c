@@ -390,6 +390,116 @@ int gfx_load_palette(const char *path)
 }
 
 /* ---------------------------------------------------------------- *
+ *  Full-screen raw background load — the platform primitive behind  *
+ *  retail's `FUN_00408fcb`.  The menu/skirmish backgrounds are       *
+ *  stored as raw 8bpp 640×480 framebuffers behind a 24-byte PL8      *
+ *  header (so `gateway.pl8` = 0x18 + 640*480 = 307224 bytes).  Retail*
+ *  reads them straight into the locked back-buffer base pointer      *
+ *  (DAT_004ea1a8) with length `DAT_004eb274 * 0x1e0` from offset     *
+ *  0x18.  We do the same, but stage through a heap buffer and copy   *
+ *  row-by-row so a back-buffer pitch wider than 640 (DDraw is free   *
+ *  to over-align the lock) is handled correctly.                     *
+ * ---------------------------------------------------------------- */
+int gfx_load_background_image(const char *pl8_path)
+{
+    if (!g_back || !pl8_path) {
+        log_line("gfx_load_background_image: gfx not initialised");
+        return 0;
+    }
+
+    const size_t img_bytes = (size_t)GFX_RENDER_W * GFX_RENDER_H;
+    uint8_t *staging = (uint8_t *)malloc(img_bytes);
+    if (!staging) {
+        log_line("gfx_load_background_image: OOM (%u bytes)",
+                 (unsigned)img_bytes);
+        return 0;
+    }
+
+    /* PL8 header is 0x18 bytes; the raw indexed pixels follow. */
+    int n = io_read_file_at(pl8_path, staging, img_bytes, 0x18);
+    if (n != (int)img_bytes) {
+        log_line("gfx_load_background_image: read %s got %d/%u",
+                 pl8_path, n, (unsigned)img_bytes);
+        free(staging);
+        return 0;
+    }
+
+    DDSURFACEDESC desc;
+    ZeroMemory(&desc, sizeof(desc));
+    desc.dwSize = sizeof(desc);
+    HRESULT hr = IDirectDrawSurface_Lock(g_back, NULL, &desc,
+                                         DDLOCK_WAIT | DDLOCK_WRITEONLY,
+                                         NULL);
+    if (FAILED(hr) || !desc.lpSurface) {
+        log_line("gfx_load_background_image: Lock failed 0x%08lx",
+                 (unsigned long)hr);
+        free(staging);
+        return 0;
+    }
+
+    const int w     = (int)desc.dwWidth  < GFX_RENDER_W ? (int)desc.dwWidth  : GFX_RENDER_W;
+    const int h     = (int)desc.dwHeight < GFX_RENDER_H ? (int)desc.dwHeight : GFX_RENDER_H;
+    const int pitch = (int)desc.lPitch;
+    uint8_t *base   = (uint8_t *)desc.lpSurface;
+    for (int y = 0; y < h; y++) {
+        memcpy(base + (size_t)y * pitch, staging + (size_t)y * GFX_RENDER_W, (size_t)w);
+    }
+
+    IDirectDrawSurface_Unlock(g_back, NULL);
+    free(staging);
+
+    /* Whole back buffer changed → next present must paint. */
+    gfx_mark_all_dirty();
+    log_line("OK :Background loaded (%s).", pl8_path);
+    return 1;
+}
+
+/* ---------------------------------------------------------------- *
+ *  Title/menu background orchestration — port of `FUN_0041e61d`'s    *
+ *  per-page asset selection.  Picks the palette (`*.256`) + the      *
+ *  full-screen background (`*.pl8`) for the given menu page          *
+ *  (retail DAT_005530f0), loads both, and leaves the back buffer     *
+ *  holding the backdrop.  The caller presents.                       *
+ *                                                                    *
+ *  Retail page→asset map (from FUN_0041e61d):                        *
+ *    page  1..6   → gateway.256 + gateway.pl8  (+ panels2.pl8 blob)  *
+ *    page  7..9   → custom.256  + custom.pl8                          *
+ *    page  10     → gateway.256 + gateway.pl8  (+ panels2.pl8 blob)  *
+ *    page >= 0xb  → skirmish.256 + skirmish.pl8 / skircust.pl8        *
+ *                                                                    *
+ *  DEFERRED to the panel-composition chip: the panel sprite-sheet    *
+ *  load (`panels2.pl8` → 0x4b25b0 alloc → DAT_004eabec) that the     *
+ *  gray stone panel renders from, and the page-1 extras              *
+ *  (FUN_004b11ce: a second palette upload + FUN_00451f70).  This      *
+ *  function only establishes the photographic backdrop + its palette.*
+ * ---------------------------------------------------------------- */
+int gfx_title_background_load(int page)
+{
+    const char *pal_path;
+    const char *bg_path;
+
+    if (page >= 0xb) {
+        pal_path = "skirmish.256";
+        bg_path  = "skirmish.pl8";
+    } else if (page >= 7 && page <= 9) {
+        pal_path = "custom.256";
+        bg_path  = "custom.pl8";
+    } else {
+        /* pages 1..6 and 10 — the gateway (main-menu family). */
+        pal_path = "gateway.256";
+        bg_path  = "gateway.pl8";
+    }
+
+    /* Retail loads the palette into a buffer and uploads it at the tail
+     * (FUN_004b0ab5); gfx_load_palette folds read + ×4 expand + create +
+     * attach into one call.  Same presented result — the palette is
+     * applied during the back→primary format-convert blit either way. */
+    int ok_pal = gfx_load_palette(pal_path);
+    int ok_bg  = gfx_load_background_image(bg_path);
+    return ok_pal && ok_bg;
+}
+
+/* ---------------------------------------------------------------- *
  *  Step 1 — `FUN_0042e5c0`                                           *
  *           DirectDrawCreate + SetCooperativeLevel                  *
  *           + (fullscreen: SetDisplayMode | windowed: style fixup)  *

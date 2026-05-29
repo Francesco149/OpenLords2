@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **293** (12.0%) — tested 263, ported 30
-- code bytes touched: **11.1%** (93,500 / 838,629 B)
-- unported: **2154**
+- touched: **295** (12.1%) — tested 263, ported 32
+- code bytes touched: **11.2%** (93,630 / 838,629 B)
+- unported: **2152**
 - orphan refs (in src/, not in function table): 4
 
 ## tested (263) — ported + host unit suite
@@ -128,7 +128,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40ecc4 | FUN_0040ecc4 | 1099 | config.c, config.h, strutil.h |
 | 0x40f1a0 | FUN_0040f1a0 | 1117 | engine.c, engine_screen_dispatch.c, engine_screen_dispatch.h (+1) |
 | 0x40f5fd | FUN_0040f5fd | 470 | engine_screen_dispatch.c |
-| 0x41e61d | FUN_0041e61d | 452 | engine_title_render.c, engine_title_render.h |
+| 0x41e61d | FUN_0041e61d | 452 | engine_title_render.c, engine_title_render.h, gfx.c (+2) |
 | 0x41e7e1 | FUN_0041e7e1 | 385 | engine_title_render.c, engine_title_render.h |
 | 0x41ea14 | FUN_0041ea14 | 143 | engine_title_render.c, engine_title_render.h |
 | 0x41eaa3 | FUN_0041eaa3 | 487 | engine_title_render.c, engine_title_render.h |
@@ -166,7 +166,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x448406 | FUN_00448406 | 11 | engine_handlers_da.h |
 | 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h |
 | 0x451f1a | FUN_00451f1a | 81 | engine.c, engine.h, engine_anim_cycle.c |
-| 0x451f70 | FUN_00451f70 | 26 | main.c |
+| 0x451f70 | FUN_00451f70 | 26 | gfx.c, main.c |
 | 0x452160 | FUN_00452160 | 422 | engine.c, gfx.c, gfx.h (+1) |
 | 0x452306 | FUN_00452306 | 224 | engine_dirty_rect.c, engine_dirty_rect.h, gfx.c (+1) |
 | 0x4523e6 | FUN_004523e6 | 36 | engine_dirty_rect.h |
@@ -285,11 +285,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4beed4 | FUN_004beed4 | 805 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 
-## ported (30) — reimplemented, no host test yet
+## ported (32) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
 | 0x40490d | FUN_0040490d | 313 | engine.c |
+| 0x408fcb | FUN_00408fcb | 96 | gfx.c, gfx.h |
 | 0x425b10 | FUN_00425b10 | 549 | audio.c, audio.h |
 | 0x425ded | FUN_00425ded | 94 | audio.c, audio.h |
 | 0x426529 | FUN_00426529 | 11 | engine.c |
@@ -315,6 +316,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b0aaa | FUN_004b0aaa | 11 | engine.c |
 | 0x4b0ab5 | FUN_004b0ab5 | 212 | gfx.c, gfx.h |
 | 0x4b0e03 | FUN_004b0e03 | 875 | engine.c |
+| 0x4b11ce | FUN_004b11ce | 34 | gfx.c |
 | 0x4b12fb | FUN_004b12fb | 21 | engine.c |
 | 0x4b1de0 | FUN_004b1de0 | 11 | engine.c |
 | 0x4b26b8 | FUN_004b26b8 | 64 | engine.c, gfx.c |
