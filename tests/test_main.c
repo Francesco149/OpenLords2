@@ -1160,6 +1160,16 @@ struct test_case {
     X(title_main_menu_calls_panel_once_with_retail_args) \
     X(title_main_menu_default_panel_stub_counts) \
     X(title_main_menu_renders_title_subtitle_and_buttons) \
+    \
+    X(map_query_all_clear_returns_1) \
+    X(map_query_rawflag_occupied_returns_0) \
+    X(map_query_headlink_occupied_returns_0) \
+    X(map_query_occupied_just_outside_region_is_clear) \
+    X(map_query_negative_anchor_returns_0) \
+    X(map_query_overruns_grid_returns_0) \
+    X(map_query_row_stride_isolation) \
+    X(map_query_size_one_single_cell) \
+    X(map_query_unbound_grid_returns_0) \
     /* end */
 
 /* Emit extern decls. */

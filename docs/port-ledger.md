@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **278** (11.4%) — tested 248, ported 30
-- code bytes touched: **10.4%** (87,461 / 838,629 B)
-- unported: **2169**
+- touched: **279** (11.4%) — tested 249, ported 30
+- code bytes touched: **10.5%** (87,762 / 838,629 B)
+- unported: **2168**
 - orphan refs (in src/, not in function table): 3
 
-## tested (248) — ported + host unit suite
+## tested (249) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -170,6 +170,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x452735 | FUN_00452735 | 53 | engine_dirty_rect.h |
 | 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_dirty_rect.h |
 | 0x46c4a3 | FUN_0046c4a3 | 277 | engine_battlefield_render.c, engine_battlefield_render.h |
+| 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
 | 0x46f434 | FUN_0046f434 | 216 | engine_path.c, engine_path.h |
 | 0x471c1f | FUN_00471c1f | 273 | engine_tile.c, engine_tile.h |
 | 0x471d30 | FUN_00471d30 | 118 | engine_tile.c, engine_tile.h |
