@@ -70,25 +70,41 @@ blockers — but one dominates the whole gameplay layer:
    202 *scalar* tail entries that are save-private.
 
 This is the dominant Phase-6 (sim / strategic gameplay) blocker and a
-genuine architecture decision — deferred to the user (see the prompt at
-session end).  The openrecet/OpenMare sibling likely already has a
-runtime-vs-save global convention worth mirroring.
+genuine architecture decision — put to the user mid-session.
+
+### Resolution — scalar mirrors promoted to shared externs (same session)
+
+User chose **promote mirrors to externs**.  Reworked
+`tools/gen_save_schema.py` to emit three files instead of one:
+
+- **`src/save_schema_globals.h`** — `extern` decls for all 202 unique
+  scalar tail VAs (`s_slot_<va>`), includable by any gameplay TU.
+- **`src/save_schema_globals.c`** — the storage *definitions* (BSS,
+  zero-init).  Auto-picked-up by `src/Makefile`'s `$(wildcard *.c)`;
+  added to `tests/Makefile` `SRCS_UNDER_TEST`.
+- **`src/save_schema_table.h`** — unchanged role (the 225-entry
+  `g_save_schema[]`), now `#include`s the globals header instead of
+  emitting `static` storage.
+
+The storage is the same bytes the save schema serialises, so a gameplay
+port reads/writes the canonical copy — no desync.  Both builds clean,
+**host suite still 1035/1035**.  A slot is renamed to a friendly name by
+promoting it into the generator's `NAMED_BIG_BLOCKS` (→ extern in
+`save.h`, def in `save.c`) or aliased with a `#define` in the owning
+subsystem's header.  The wall is gone for the whole gameplay-leaf
+frontier in one stroke.
 
 ### Next candidate milestones
 
-1. **Resolve the scalar-global ownership model** (user decision pending)
-   — promote the 202 `s_slot_<va>` mirrors to shared externs via the
-   generator, vs. a named-global accessor layer, vs. continue deferring.
-   This unblocks the entire gameplay-leaf frontier in one stroke.
-2. Once unblocked, the `49bbe8`/`49bc1d`/`49bc5f` player-roster trio is a
-   clean, testable first chip (6-entry seat→army-id table + count;
-   `49bc5f` reads two `g_player_strategic_352` flags; the 3 KB consumer
-   `FUN_0049bd99` stays deferred).
-3. The no-op stubs (`0x41423f` etc.) land naturally when `engine_tick`'s
+1. **`49bbe8`/`49bc1d`/`49bc5f` player-roster trio** — now unblocked; a
+   clean, testable first gameplay chip (6-entry seat→army-id table +
+   the `s_slot_0053e8a4` count; `49bc5f` reads two `g_player_strategic_352`
+   flags).  The 3 KB consumer `FUN_0049bd99` stays deferred.
+2. The no-op stubs (`0x41423f` etc.) land naturally when `engine_tick`'s
    body ports — don't port them ahead of their callers.
+3. `0x4af502` IO chdir-back stays deferred with the tier-2/3 retry chain.
 
-(`/clear` is appropriate after the architecture decision — the next
-scope is fresh.)
+(`/clear` is appropriate after the next gameplay chip — fresh scope.)
 
 ---
 

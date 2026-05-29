@@ -81,6 +81,18 @@ cursor position, RNG state, etc.  A handful of 192/240/640-byte
 medium tables sprinkled in.  Full table dump in `docs/findings/save-
 schema-table.csv` (regenerable; see "Reproduction" below).
 
+**Shared runtime storage (2026-05-29):** these 202 unique scalar VAs
+are emitted as **shared `extern` globals** — declared in
+`src/save_schema_globals.h`, defined in `src/save_schema_globals.c`.
+Originally they were `static` file-locals inside `save_schema_table.h`
+(save-private), which blocked porting any gameplay function that
+reads/writes one (it would have created a second, desynced copy — the
+"scalar-global wall", PROGRESS 2026-05-29).  Now a gameplay TU includes
+`save_schema_globals.h` and touches the canonical `s_slot_<va>` the save
+schema serialises.  Promote a slot to a friendly name via the
+generator's `NAMED_BIG_BLOCKS` list, or `#define`-alias it in the owning
+subsystem's header.
+
 ### Reserved/sentinel slots (entries 216..224)
 
 The last 9 entries all point to `DAT_004eb2ac` (a 4-byte scratch

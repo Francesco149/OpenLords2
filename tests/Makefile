@@ -54,7 +54,8 @@ SRCS_UNDER_TEST := ../src/strutil.c ../src/config.c \
                    ../src/engine_overlay_render.c \
                    ../src/engine_battlefield_render.c \
                    ../src/engine_camera.c \
-                   ../src/save.c
+                   ../src/save.c \
+                   ../src/save_schema_globals.c
 
 # Test files — each defines one or more `int test_<name>(void)`
 # functions registered in test_main.c.
