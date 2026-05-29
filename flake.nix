@@ -125,10 +125,13 @@
             export MINGW_STRIP=i686-w64-mingw32-strip
 
             # Same Frida instance the OpenMare / openrecet siblings use.
-            # The Windows-side frida-server.exe binds 0.0.0.0:27042 and we
-            # talk to it through the WSL NAT. Override if you run a
-            # separate instance for OpenLords2 specifically.
-            export OPENLORDS2_FRIDA_REMOTE="''${OPENLORDS2_FRIDA_REMOTE:-127.0.0.1:27042}"
+            # The Windows-side frida-server.exe binds 0.0.0.0:27042, but WSL2's
+            # Hyper-V firewall blocks the 127.0.0.1 loopback path to it — reach
+            # it by hostname (cutestation.soy) instead. A 127.0.0.1 default also
+            # makes the harness attempt a spurious elevated frida-server launch
+            # (UAC) on connect timeout. See memory reference_frida_remote.
+            # Override if you run a separate instance for OpenLords2.
+            export OPENLORDS2_FRIDA_REMOTE="''${OPENLORDS2_FRIDA_REMOTE:-cutestation.soy:27042}"
 
             echo "openlords2 dev shell ready"
             echo "  game dir:    $OPENLORDS2_GAME_DIR"
