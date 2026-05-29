@@ -188,6 +188,13 @@ class CaptureConfig:
     # show_window_after_ms to un-hide the window post-init.
     agent_present:               bool = False
     agent_present_every_ticks:   int  = 100
+    # Interactive real-mouse seat.  Pokes the main-loop present gate
+    # (var_app_active=1 / var_surface_lost=0) every tick so the engine
+    # runs full-speed and services input even though a frida-spawned
+    # window never wins foreground/WM_ACTIVATEAPP (without this the loop
+    # Sleep(200)s and the window feels frozen).  Pairs with agent_present
+    # (shows the frames) + show_window_after_ms.  See --interactive.
+    force_active:                bool = False
     # When > 0, the agent calls ShowWindow(hwnd, SW_SHOW) on the engine's
     # main HWND once this many real-ms have elapsed since init.  Lets
     # hide_window survive engine bring-up (which dies under --no-hide
@@ -781,6 +788,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "turbo_step_ms":             int(cfg.turbo_step_ms),
             "gdi_seat":                  bool(cfg.gdi_seat),
             "agent_present":             bool(cfg.agent_present),
+            "force_active":              bool(cfg.force_active),
             "agent_present_every_ticks": int(cfg.agent_present_every_ticks),
             "show_window_after_ms":      int(cfg.show_window_after_ms),
             "show_window_client_w":      int(cfg.show_window_client_w),
@@ -986,6 +994,21 @@ def main(argv: list[str] | None = None) -> int:
                     help="when --agent-present is set, drive a present "
                          "every N engine_ticks (default 100 ≈ 20 Hz at "
                          "default turbo step)")
+    ap.add_argument("--force-active", action="store_true",
+                    help="poke the main-loop present gate "
+                         "(var_app_active=1 / var_surface_lost=0) every "
+                         "tick so the engine runs full-speed + services "
+                         "input even though a frida-spawned window never "
+                         "wins foreground (else it Sleep(200)s and feels "
+                         "frozen).  Implied by --interactive.")
+    ap.add_argument("--interactive", action="store_true",
+                    help="convenience for a live, real-mouse retail seat: "
+                         "turns on --agent-present + --force-active, shows "
+                         "the window after 2 s (if --show-window-after-ms "
+                         "is 0), and keeps the session alive for 5 min (if "
+                         "--duration-ms is left at its default).  Combine "
+                         "with --skip-intro and an --input-trace to auto-"
+                         "navigate to a screen, then drive it by hand.")
     ap.add_argument("--show-window-after-ms", type=int, default=0,
                     help="programmatically ShowWindow(SW_SHOW) on the "
                          "engine's main window once this many real-ms "
@@ -1119,8 +1142,26 @@ def main(argv: list[str] | None = None) -> int:
     run_dir = ROOT / "runs" / "capture" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    # --interactive: a live real-mouse seat.  Turn on the present + active
+    # seats, show the window early (unless explicitly set), and keep the
+    # session alive long enough to play (unless --duration-ms was set).
+    eff_agent_present     = args.agent_present
+    eff_force_active      = args.force_active
+    eff_show_window_after = args.show_window_after_ms
+    eff_duration_ms       = args.duration_ms
+    eff_present_every     = args.agent_present_every_ticks
+    if args.interactive:
+        eff_agent_present = True
+        eff_force_active  = True
+        if eff_show_window_after <= 0:
+            eff_show_window_after = 2000
+        if eff_duration_ms == 10_000:       # argparse default → bump
+            eff_duration_ms = 300_000
+        if eff_present_every == 100:        # argparse default → tighten
+            eff_present_every = 3           # smooth GDI present at full tick rate
+
     cfg = CaptureConfig(
-        duration_ms=args.duration_ms,
+        duration_ms=eff_duration_ms,
         remote=args.remote,
         exe=Path(args.exe).resolve(),
         cwd=Path(args.cwd).resolve(),
@@ -1129,9 +1170,10 @@ def main(argv: list[str] | None = None) -> int:
         force_windowed=not args.no_force_windowed,
         keep_retail_palette=not args.force_8bpp_palette,
         gdi_seat=not args.no_gdi_seat,
-        agent_present=args.agent_present,
-        agent_present_every_ticks=args.agent_present_every_ticks,
-        show_window_after_ms=args.show_window_after_ms,
+        agent_present=eff_agent_present,
+        force_active=eff_force_active,
+        agent_present_every_ticks=eff_present_every,
+        show_window_after_ms=eff_show_window_after,
         show_window_client_w=args.show_window_client_w,
         show_window_client_h=args.show_window_client_h,
         turbo=args.turbo,

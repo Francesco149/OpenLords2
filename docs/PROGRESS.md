@@ -7,6 +7,41 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — HARNESS: a live real-mouse retail seat (`--interactive`)
+
+Added a `frida_capture.py --interactive` mode that brings up **retail** as a
+live, mouse-drivable window — so a ported screen can be tested side-by-side
+against the real game.  Used it to confirm the page-7 country selector
+(below) behaves identically to retail.  Three distinct blockers had to fall,
+each found by instrumenting the WndProc + dumping the engine's live input
+state (see engine-quirks #120):
+
+1. **Frozen at ~5 Hz.**  The main loop (`FUN_0040e9ab`) only runs its present
+   branch while `DAT_004e65a8 != 0` (app-active, set by `WM_ACTIVATEAPP` when
+   the window is foreground); else it `Sleep(200)`s.  A frida-spawned,
+   created-hidden window never wins foreground, so it crawled.  Fix:
+   `force_active` pokes `DAT_004e65a8=1` / `DAT_004e65d0=0` every tick.
+2. **Cursor mapped to the wrong place.**  With the cursor cache enabled
+   (`DAT_0057cac4 != 0`), `FUN_004b191e` overwrites the cached cursor with
+   raw **GetCursorPos screen** coords — correct only in fullscreen.  Fix:
+   force `DAT_0057cac4=0` so the engine uses the WndProc's WM_MOUSEMOVE
+   **client** coords.
+3. **Clicks landed ÷3 off (the real bug).**  The engine scales cursor→game
+   from `DAT_004ea180..18c`, which the WndProc fills with the **fullscreen**
+   `GetSystemMetrics` rect whenever `DAT_0053f228 != 0` (retail's default) —
+   even though the GDI seat stretches the 640×480 backbuffer into the
+   **actual** 640×480 window.  So a click on the visible country list got
+   divided by 3 into the roster.  Fix: overwrite those four globals with the
+   real `GetClientRect` size each tick.  Verified live:
+   `client=(474,313) → game=(474,313)` 1:1, page 7↔9 transitions fire.
+
+`--interactive` bundles `force_active` + `--agent-present` (GDI seat, every
+3 ticks for smoothness) + window-show-after-2s + a 5-min session.  Combine
+with `--skip-intro --input-trace <nav>.jsonl` to auto-navigate to a screen
+(now at full tick rate, so the tick-stamped trace plays in ~seconds), then
+drive it by hand.  **Human-confirmed:** retail page 7 driven by real mouse,
+country selector matches the port exactly.
+
 ## 2026-05-30 — PAGE 7: the setup screen goes **live** (input dispatch + per-frame refresh)
 
 Last entry's page-7 render was static — every piece of runtime state bound

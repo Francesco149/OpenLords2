@@ -4227,6 +4227,46 @@ what's observed after an action.
 
 ---
 
+## 120. Retail's mouse input assumes a fullscreen window — three globals fight a windowed seat
+
+Driving retail interactively in a *windowed* (non-fullscreen) window exposes
+three input/timing assumptions baked in for its native 640×480-fullscreen
+mode.  All three were found while building the `frida_capture.py
+--interactive` seat (PROGRESS 2026-05-30):
+
+- **App-active gate (`DAT_004e65a8`).**  The main loop `FUN_0040e9ab` runs its
+  present + full-rate tick only while `DAT_004e65d0 == 0 && DAT_004e65a8 != 0`,
+  else `Sleep(200)`.  `DAT_004e65a8` is set to 1 by the WndProc on
+  `WM_ACTIVATEAPP` (0x1c) *only when the window is the foreground window* and
+  not iconic.  A background window crawls at ~5 Hz.
+
+- **Cursor cache (`DAT_0057cac4`).**  `FUN_004b191e` (the per-tick input read)
+  calls `GetCursorPos` (screen coords) and, *iff* `DAT_0057cac4 != 0`,
+  overwrites the WndProc's WM_MOUSEMOVE-cached cursor (`DAT_004eabbe/c0`,
+  client coords) with those screen coords.  Correct only when client == screen
+  (fullscreen at origin); in a window it feeds screen coords into a
+  client-coord mapping.  It's set to 1 in in-game screens (`FUN_0043278b`),
+  0 elsewhere.
+
+- **Client rect (`DAT_004ea180..18c`) = fullscreen when `DAT_0053f228 != 0`.**
+  The WndProc fills the cursor→game mapping rect from `GetClientRect` only when
+  `DAT_0053f228 == 0`; otherwise (`!= 0`, retail's default) it uses
+  `SetRect(0,0,GetSystemMetrics(0/1))` — the whole desktop.  `FUN_004b191e`
+  then maps `game = cached_cursor * 640 / (rect width)`.  So in a 640×480
+  window on a 1920-wide desktop, every click is scaled by 640/1920 (÷3) into
+  the wrong game position, even though the on-screen image (GDI-seat
+  StretchDIBits to the *actual* client) looks right.
+
+The interactive seat neutralises all three by poking, every tick:
+`DAT_004e65a8=1`, `DAT_004e65d0=0`, `DAT_0057cac4=0`, and
+`DAT_004ea180..18c = (0,0, GetClientRect.w, GetClientRect.h)`.
+
+> 📍 `tools/frida/openlords2-agent.js` (`tryForceAppActive`), Ghidra
+> `FUN_0040e9ab` / `FUN_004b191e` / `FUN_004b29be` (WndProc),
+> `DAT_004e65a8` / `DAT_0057cac4` / `DAT_0053f228` / `DAT_004ea180`.
+
+---
+
 <!--
 Template for new entries:
 

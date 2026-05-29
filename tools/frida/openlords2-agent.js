@@ -95,6 +95,13 @@ const ADDR = {
     // Alt-X) that we don't want to round-trip.
     fn_wndproc:        0x004b29be,  // FUN_004b29be — class wndproc
     var_main_hwnd:     0x004e5a00,  // DAT_004e5a00 — cached main HWND
+    // Main-loop present gate (FUN_0040e9ab): the per-iteration present
+    // (FUN_0040e8bb) runs only while (surface_lost == 0 && app_active != 0),
+    // else the loop Sleep(200)s — so a frida-spawned, created-hidden window
+    // that never wins WM_ACTIVATEAPP=TRUE stays at ~5 Hz with no present and
+    // looks frozen.  The interactive seat pokes these every tick.
+    var_app_active:    0x004e65a8,  // DAT_004e65a8 — s32 (WM_ACTIVATEAPP)
+    var_surface_lost:  0x004e65d0,  // DAT_004e65d0 — s32 (DDraw surface lost)
     // ── Pure-function differential targets (Phase 4 of harness-roadmap).
     // Two retail functions whose pure-C ports live under src/engine_*.c:
     //   FUN_00404a46  — double-LFSR step (engine_rng_step / src/engine_rng.c)
@@ -469,6 +476,18 @@ let g_show_window_client_h     = 480;      // native render res, 1:1 pixel-perfe
 let g_show_window_done         = false;
 let g_show_window_latch        = false;    // one-shot bypass for hide hooks
 let g_nf_show_window           = null;
+
+// Interactive seat (real-mouse play).  When enabled, engine_tick.onLeave
+// forces the main-loop present gate open (var_app_active=1,
+// var_surface_lost=0) every tick so the engine runs full-speed and
+// processes input regardless of whether the frida-spawned window ever won
+// foreground/WM_ACTIVATEAPP — without this it Sleep(200)s and feels frozen.
+// Pairs with g_agent_present_enabled (GDI seat shows the frames) and
+// g_show_window_after_ms (window made visible).
+let g_force_active             = false;
+let g_nf_set_foreground        = null;
+let g_nf_get_client_rect_fa    = null;     // GetClientRect for the scale fix
+let g_fa_rect_buf              = null;     // scratch RECT for the scale fix
 
 // Turbo v2 — virtualised winmm!timeGetTime, gated to the engine main thread.
 // `g_virtual_now_ms` is bumped by `g_turbo_step_ms` on every per-tick driver
@@ -1924,6 +1943,56 @@ function tryAgentDrivenPresent() {
     presentBackToWindowViaGdi(back, palette, hwnd);
 }
 
+// Force the main-loop present gate open so the engine runs at full speed
+// and services input every iteration (see var_app_active note in ADDR).
+// A frida-spawned window rarely wins foreground, so WM_ACTIVATEAPP=TRUE
+// never sets var_app_active; we just write it directly each tick.  Cheap
+// (two s32 stores), idempotent, and harmless if retail also sets them.
+function tryForceAppActive() {
+    if (!g_force_active) return;
+    rva(ADDR.var_app_active).writeS32(1);
+    rva(ADDR.var_surface_lost).writeS32(0);
+    // Windowed-input fix: with the cursor cache ENABLED, FUN_004b191e
+    // overwrites the cached cursor with raw GetCursorPos *screen* coords and
+    // maps them as if the client were at screen (0,0) — only true in
+    // fullscreen.  Disabling it makes the engine use the WndProc's
+    // WM_MOUSEMOVE-delivered *client* coords (lParam), which map correctly
+    // for a windowed window at any position — so the real mouse lands where
+    // the user points.
+    rva(ADDR.var_input_cursor_cache_enabled).writeS32(0);
+
+    // Scale fix: the engine maps cursor→game using DAT_004ea180..18c, which
+    // the WndProc fills with the *fullscreen* GetSystemMetrics rect whenever
+    // DAT_0053f228 != 0 (retail's default) — so input is scaled by
+    // game/desktop even though the GDI seat stretches the 640×480 backbuffer
+    // into the *actual* window client (GetClientRect).  Overwrite the four
+    // globals with the real client size each tick so the input scale matches
+    // the on-screen image; then a click lands on what the user sees.
+    try {
+        if (!g_nf_get_client_rect_fa) {
+            const u32 = Process.findModuleByName('user32.dll');
+            const fn = u32 && u32.findExportByName('GetClientRect');
+            if (fn) {
+                g_nf_get_client_rect_fa = new NativeFunction(fn, 'int32',
+                    ['pointer', 'pointer'], 'stdcall');
+            }
+        }
+        const hwnd = rva(ADDR.var_main_hwnd).readPointer();
+        if (g_nf_get_client_rect_fa && !hwnd.isNull()) {
+            if (!g_fa_rect_buf) g_fa_rect_buf = Memory.alloc(16);
+            g_nf_get_client_rect_fa(hwnd, g_fa_rect_buf);
+            const w = g_fa_rect_buf.add(8).readS32();
+            const h = g_fa_rect_buf.add(12).readS32();
+            if (w > 0 && h > 0) {
+                rva(0x004ea180).writeS32(0);   // client rect, screen-relative;
+                rva(0x004ea184).writeS32(0);   // only the w/h deltas are read
+                rva(0x004ea188).writeS32(w);
+                rva(0x004ea18c).writeS32(h);
+            }
+        }
+    } catch (e) { /* best-effort; leave the rect alone on error */ }
+}
+
 // Programmatically show the engine's main window once enough time
 // has elapsed since spawn.  Latch-protected so our hide hook lets the
 // SW_SHOW through.  One-shot: clears g_show_window_done.
@@ -1958,6 +2027,29 @@ function tryShowEngineWindow() {
     g_show_window_done = true;
     log('agent: ShowWindow(SW_SHOWNORMAL) called after ' +
         g_show_window_after_ms + ' ms warmup');
+
+    // Interactive: try to foreground/activate so real mouse + keyboard land
+    // naturally and the window is on top.  Best-effort — Windows often
+    // refuses focus-steal to a non-foreground process; tryForceAppActive
+    // keeps the engine ticking regardless, so this is just a nicety.
+    if (g_force_active) {
+        try {
+            if (!g_nf_set_foreground) {
+                const sfw = u32.findExportByName('SetForegroundWindow');
+                if (sfw) {
+                    g_nf_set_foreground = new NativeFunction(sfw, 'int32',
+                        ['pointer'], 'stdcall');
+                }
+            }
+            if (g_nf_set_foreground) g_nf_set_foreground(hwnd);
+            const btt = u32.findExportByName('BringWindowToTop');
+            if (btt) {
+                new NativeFunction(btt, 'int32', ['pointer'], 'stdcall')(hwnd);
+            }
+        } catch (e) {
+            err('tryShowEngineWindow.foreground', e.message);
+        }
+    }
 
     // Resize client area to 800×600.  AdjustWindowRect computes the
     // outer size needed to wrap that client size under the current
@@ -2682,6 +2774,7 @@ function installEngineTickHook() {
                 // Interactive verification path — drive a continuous
                 // GDI present + auto-show the engine's main window.
                 // Both early-return when their gating flags are off.
+                tryForceAppActive();
                 tryShowEngineWindow();
                 tryAgentDrivenPresent();
             }
@@ -4365,6 +4458,7 @@ rpc.exports = {
         g_turbo_enabled      = !!opts.turbo;
         g_gdi_seat_enabled   = !!opts.gdi_seat;
         g_agent_present_enabled = !!opts.agent_present;
+        g_force_active       = !!opts.force_active;
         const apEvery        = (opts.agent_present_every_ticks | 0);
         g_agent_present_every_ticks = apEvery > 0 ? apEvery : 100;
         g_show_window_after_ms = (opts.show_window_after_ms | 0);
@@ -4488,6 +4582,11 @@ rpc.exports = {
             log('agent_present: armed (every ' +
                 g_agent_present_every_ticks + ' engine_ticks, ' +
                 'via presentBackToWindowViaGdi — interactive only)');
+        }
+        if (g_force_active) {
+            log('force_active: armed (poking var_app_active=1 / '
+                + 'var_surface_lost=0 each tick so the main loop never '
+                + 'Sleep(200)s — interactive real-mouse seat)');
         }
         if (g_show_window_after_ms > 0) {
             log('show_window_after_ms: ' + g_show_window_after_ms +
