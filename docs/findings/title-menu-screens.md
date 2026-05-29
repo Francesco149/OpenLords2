@@ -211,6 +211,20 @@ render (`runs/title-nav-p4/nav_04_p4_choosetitle.bmp`, `--title-nav` step
 > layout, buttons shown); Continue enabled (`DAT_0057c940=0`); overwrite
 > editor at cursor 0; `DAT_005530f0=4`.
 
+> **Full-glyph sweep — every menu-font glyph is bit-identical.**  Beyond
+> the default "aaaaaa", the name box was swept across the whole printable
+> set in ≤16-char batches: retail's name buffer (`DAT_0053f1e0`) forced
+> with `frida_capture.py --poke-globals 0x53f1e0:<hex>` (writes the string
+> every tick so it survives the engine's writes), the drop-in rendering
+> the same via `--title-nav --title-name <str>`.  **0 glyph-shape diffs**
+> across `A–Z`, `a–z`, `0–9`, and `.,!?:;-+=()&%`.  The only residual is
+> the blinking caret (`FUN_0040acce`): its phase is non-deterministic, so
+> a batch whose retail frame catches the caret ON shows ~10–34 px in the
+> caret row (y 96–97) that the drop-in's off-phase frame lacks — masking
+> that row gives 0 across every batch.  (Combined with the menu/options
+> pages, which already exercise mixed-case + punctuation 0-diff, the menu
+> font is fully validated.)
+
 ## Input side — hotspot hit-test + page navigation (`engine_menu_input`)
 
 > 2026-05-29. The *render* half above is matched by the *input* half: the

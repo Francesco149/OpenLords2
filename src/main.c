@@ -127,6 +127,10 @@ static int       g_title_page_num = 1;
  * hover/click → page-transition → render chain end-to-end without the
  * live present loop.  Implies --title-menu + --gfx-init. */
 static const char *g_title_nav_dir;
+/* --title-name STR: override the page-4 name-box text for the --title-nav
+ * step-4 capture (default "aaaaaa    ", retail's Custom-game default).
+ * Lets a glyph-coverage sweep render arbitrary strings in the textbox. */
+static const char *g_title_name;
 /* --title-live: drive the engine into the live title-screen state
  * (g_sim_current_screen = 0x1f, page 1) ahead of the unported boot→title
  * transition (0x42b780), then let the normal main loop run.  A real
@@ -947,11 +951,17 @@ static void bringup_title_nav(const char *dir)
      * Back/Continue), Continue enabled, overwrite-mode editor at cursor 0.
      * The caret is reset so the single static render lands it in the
      * off-phase, matching the mid-blink-off groundtruth frame. */
-    static const uint8_t k_p4_name[] = "aaaaaa    ";   /* DAT_0053f1e0 */
+    static const uint8_t k_p4_name_default[] = "aaaaaa    ";  /* DAT_0053f1e0 */
+    const uint8_t *k_p4_name = g_title_name
+        ? (const uint8_t *)g_title_name : k_p4_name_default;
     static const unsigned char k_p4_shield_slots[6] = {0, 1, 0, 0, 0, 0};
     static text_input_state_t k_p4_editor;             /* DAT_005cd550 */
-    for (int i = 0; i < (int)sizeof k_p4_name; i++)
-        k_p4_editor.buf[i] = k_p4_name[i];
+    {
+        int i = 0;
+        for (; k_p4_name[i] && i < (int)sizeof k_p4_editor.buf - 1; i++)
+            k_p4_editor.buf[i] = k_p4_name[i];
+        k_p4_editor.buf[i] = 0;
+    }
     k_p4_editor.cursor = 0;
     k_p4_editor.insert_mode = 0;
 
@@ -1237,6 +1247,9 @@ static void parse_cmdline(LPSTR lpCmd)
             g_title_nav_dir = tokens[++i];
             g_title_menu = 1;   /* reuse the page-render bring-up setup */
             g_gfx_init   = 1;
+        }
+        else if (!strcmp(a, "--title-name") && i + 1 < ntok) {
+            g_title_name = tokens[++i];   /* page-4 name-box text override */
         }
         else if (!strcmp(a, "--title-live")) {   /* live interactive menu */
             g_title_live  = 1;

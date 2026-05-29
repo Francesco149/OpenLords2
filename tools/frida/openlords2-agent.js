@@ -504,6 +504,10 @@ let g_frame_capture_warmup_secs = 0;
 // first captured frame and emitted as a `globals_dump` message.
 let g_dump_globals             = [];
 let g_globals_dumped           = false;
+// Globals poke — list of {va, bytes}; written into engine memory at the
+// top of every tick so the value survives the engine's own writes (used
+// to force scenario state, e.g. a name-box string, before a capture).
+let g_poke_globals             = [];
 let g_nf_surface_lock        = null;
 let g_nf_surface_unlock      = null;
 let g_nf_palette_get_entries = null;
@@ -2617,6 +2621,13 @@ function installEngineTickHook() {
             if (g_input_replay_events) {
                 drainInputReplayForTick(g_tick_count);
             }
+            // Poke forced-state regions every tick so they survive the
+            // engine's own per-frame writes (e.g. hold a name-box string).
+            for (let i = 0; i < g_poke_globals.length; i++) {
+                try {
+                    rva(g_poke_globals[i].va).writeByteArray(g_poke_globals[i].bytes);
+                } catch (e) { /* region not mapped yet — retry next tick */ }
+            }
         },
         onLeave: function () {
             try {
@@ -4380,6 +4391,14 @@ rpc.exports = {
               })
             : [];
         g_globals_dumped = false;
+
+        g_poke_globals = Array.isArray(opts.poke_globals)
+            ? opts.poke_globals.map(function (s) {
+                  return {va: (s.va >>> 0),
+                          bytes: (s.bytes || []).map(function (b) {
+                              return b & 0xff; })};
+              })
+            : [];
 
         g_diff_test_enabled = !!opts.diff_test;
 

@@ -209,6 +209,10 @@ class CaptureConfig:
     # first captured frame; written to <run_dir>/globals_dump.json.  Used
     # to seed a parity port's state from retail's exact values.
     dump_globals:      list[dict[str, Any]] | None = None
+    # Globals poke: list of {va, bytes}.  Written into engine memory at the
+    # top of every tick (survives the engine's own writes) to force
+    # scenario state — e.g. a name-box string — before a capture.
+    poke_globals:      list[dict[str, Any]] | None = None
     # Skip the boot intro movie chain (intro.smk → imptitle.smk → credits.smk).
     # The agent snaps each Smacker movie to its last frame so the engine runs
     # its own intro→title (state 0x1f) transitions in ~3 frames instead of the
@@ -785,6 +789,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "frame_capture_max":         int(cfg.frame_capture_max),
             "frame_capture_warmup_secs": int(cfg.frame_capture_warmup_secs),
             "dump_globals":              cfg.dump_globals or [],
+            "poke_globals":              cfg.poke_globals or [],
             "skip_intro":                bool(cfg.skip_intro),
             "input_record":              bool(cfg.input_record),
             "input_replay":              input_replay_events,
@@ -1018,6 +1023,11 @@ def main(argv: list[str] | None = None) -> int:
                          "once at the first captured frame; written to "
                          "<run_dir>/globals_dump.json.  Seeds a parity port's "
                          "state from retail's exact values.")
+    ap.add_argument("--poke-globals", default=None,
+                    help="comma-separated list of VA:HEXBYTES specs (VA is a "
+                         "Ghidra VA, HEXBYTES is a hex string like 41424300) "
+                         "written into engine memory every tick to force "
+                         "scenario state before capture.")
     ap.add_argument("--skip-intro", action="store_true",
                     help="skip the boot intro movie chain (intro/imptitle/"
                          "credits): the agent snaps each Smacker movie to its "
@@ -1088,6 +1098,23 @@ def main(argv: list[str] | None = None) -> int:
 
     dump_globals = _parse_dump_globals(args.dump_globals)
 
+    def _parse_poke_globals(spec: str | None) -> list[dict[str, Any]]:
+        """VA:HEXBYTES,...  → [{va, bytes}].  HEXBYTES is a hex string."""
+        out: list[dict[str, Any]] = []
+        if not spec:
+            return out
+        for tok in spec.split(","):
+            tok = tok.strip()
+            if not tok:
+                continue
+            va_s, _, hex_s = tok.partition(":")
+            va = int(va_s, 0)
+            hx = hex_s.strip()
+            out.append({"va": va, "bytes": list(bytes.fromhex(hx))})
+        return out
+
+    poke_globals = _parse_poke_globals(args.poke_globals)
+
     run_id = args.run_id or dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = ROOT / "runs" / "capture" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -1113,6 +1140,7 @@ def main(argv: list[str] | None = None) -> int:
         frame_capture_max=args.frame_capture_max,
         frame_capture_warmup_secs=args.frame_capture_warmup_secs,
         dump_globals=dump_globals,
+        poke_globals=poke_globals,
         skip_intro=args.skip_intro,
         input_record=args.input_record,
         input_replay_path=(Path(args.input_trace).resolve()
