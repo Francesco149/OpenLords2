@@ -1,8 +1,10 @@
 # Call-graph diff — port↔retail structural parity per frame
 
 > Landed 2026-05-29 (Phase G of `docs/plans/structural-parity-harness.md`).
-> Port-side validated end-to-end; retail-side built + syntax-clean, pending a
-> live-target run (needs frida-server reachable at `cutestation.soy:27042`).
+> **Validated end-to-end against live retail** (frida-server
+> `cutestation.soy:27042`): 424/424 VAs hooked, a boot-frame retail↔port diff
+> ran clean — retail 60 unique VAs/tick vs the port's scaffold 1 (engine_tick),
+> 59 named retail-only gap candidates.
 
 ## What it does
 
@@ -65,7 +67,10 @@ nix develop -c python3 tools/gen_call_trace_probes.py --hook-vas runs/hookvas.js
 
 # 2. Capture retail's trace for the target frames (drive to the scene via
 #    --input-trace; pick frames inside the render path you care about).
+#    NB: --remote cutestation.soy:27042 is REQUIRED — WSL2's Hyper-V firewall
+#    blocks the 127.0.0.1 default (see memory reference_frida_remote).
 nix develop -c python3 tools/frida_capture.py \
+    --remote cutestation.soy:27042 \
     --run-id calltrace-retail --turbo \
     --input-trace tests/scenarios/<scene>/trace.jsonl \
     --call-trace --call-trace-vas @runs/hookvas.json \
@@ -97,8 +102,13 @@ That's the Phase J leaf-first loop.
   `0x404a46`. ✓
 - Probe-gen: worklist 5/276 annotated; hook-VA set 424 (276 ported + 148
   callee-only). ✓
-- Retail emitter: agent + frida_capture byte-compile clean; **live retail run
-  not yet exercised** — needs frida-server reachable.
+- Retail emitter: **live retail run validated** — 424/424 VAs hooked (0 failed),
+  frames 100/101/102 = 71/76/71 calls (per-event frame stamp, no straggler
+  frame). ✓
+- Full pipeline: boot-frame retail↔port diff named 59 retail-only gaps,
+  including 4 already-ported-but-unannotated (40e890 engine_tick_dispatch,
+  40e8bb engine_tick_guard, 43de70 scenario_hint, 429b1d camera_clamp_scroll)
+  — exactly the "annotate these" + "port these" split the tool is for. ✓
 
 ## Gotchas (carried from openrecet's scars)
 
