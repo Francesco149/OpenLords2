@@ -1176,6 +1176,12 @@ struct test_case {
     X(map_query_row_stride_isolation) \
     X(map_query_size_one_single_cell) \
     X(map_query_unbound_grid_returns_0) \
+    \
+    X(territory_clears_size_bytes_1_to_150) \
+    X(territory_skips_record_0) \
+    X(territory_leaves_other_fields_untouched) \
+    X(territory_does_not_touch_record_151) \
+    X(territory_unbound_is_noop) \
     /* end */
 
 /* Emit extern decls. */
