@@ -64,6 +64,7 @@
 #include "engine.h"
 #include "engine_dirty_rect.h"
 #include "engine_title_render.h"
+#include "engine_menu_input.h"
 #include "gfx.h"
 #include "gfx_dispatch.h"
 #include "gfx_glyph.h"
@@ -117,6 +118,14 @@ static int       g_title_menu;
  * 1 = main menu (default), 2 = single-player "Your options".  Implies
  * --title-menu (backdrop + panel + the page composition). */
 static int       g_title_page_num = 1;
+/* --title-nav DIR: scripted title-menu navigation demo.  Renders the
+ * main menu, then drives the *real* ported input dispatch
+ * (engine_menu_title_input) with synthetic clicks — "Single player"
+ * (→ page 2), then "Back." (→ page 1) — re-rendering + capturing each
+ * resulting page into DIR as nav_NN_pPAGE.bmp.  Exercises the
+ * hover/click → page-transition → render chain end-to-end without the
+ * live present loop.  Implies --title-menu + --gfx-init. */
+static const char *g_title_nav_dir;
 /* --audio-init: call audio_init() after window creation.  Off by
  * default — SetCooperativeLevel(PRIORITY) modifies process audio
  * state and the headless smoke harness has no way to validate
@@ -212,6 +221,7 @@ static void release_singleton(void);
 static void frame_limiter(void);
 static void main_loop_body(void);
 static void bringup_title_menu(int with_panel);
+static void bringup_title_nav(const char *dir);
 void log_line(const char *fmt, ...);   /* non-static — gfx.c links to this */
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdShow)
@@ -279,7 +289,12 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
              * menu rather than the background-erase fill.  Exercises the
              * FUN_0041e61d / FUN_0041e7e1 render chain ahead of the
              * boot→title state producer. */
-            if (g_title_bg || g_title_menu) {
+            if (g_title_nav_dir) {
+                /* Scripted navigation demo — drives the real ported input
+                 * dispatch with synthetic clicks, capturing each page. */
+                CreateDirectoryA(g_title_nav_dir, NULL);
+                bringup_title_nav(g_title_nav_dir);
+            } else if (g_title_bg || g_title_menu) {
                 bringup_title_menu(g_title_menu);
             }
             /* Bring-up tail — force the first present immediately so
@@ -755,27 +770,20 @@ static int create_main_window(void)
  * binary in Lords2.exe and not yet extracted/bound, so the localized
  * line seek returns nothing and draws nothing.  Once the fonts are
  * bound the same chain renders the text with no further wiring. */
-static void bringup_title_menu(int with_panel)
+/* Bookkeeping dirty-rect state the title chain marks into.  No visual
+ * effect (gfx owns the present-side dirty rect) — just keeps the marks
+ * from dereferencing NULL.  File-static so the static bring-up and the
+ * scripted-nav demo share one. */
+static engine_dirty_rect_state_t g_title_dirty;
+
+/* Bind the page-independent title render state: panel sheet, fonts,
+ * char→glyph tables, localization blob, screen-state tag, and the
+ * shared gfx render-state defaults.  Idempotent; safe to call once
+ * before rendering any title page. */
+static void title_bind_render_state(void)
 {
-    /* Bookkeeping dirty-rect state the title chain marks into.  No
-     * visual effect (gfx owns the present-side dirty rect) — just keeps
-     * the marks from dereferencing NULL. */
-    static engine_dirty_rect_state_t title_dirty;
-
-    engine_title_render_set_page(g_title_page_num);
-
-    /* Backdrop: palette + page-appropriate .pl8 raw into the back buffer
-     * (page 1/2 both use gateway; gfx_title_background_load routes by page). */
-    if (!gfx_title_background_load(engine_title_render_page())) {
-        log_line("bringup_title_menu: background load failed");
-        return;
-    }
-    if (!with_panel)
-        return;
-
-    /* Panel sprite sheet + render-chain bindings. */
     const uint8_t *sheet = gfx_load_panel_sheet();
-    engine_title_render_set_dirty_state(&title_dirty);
+    engine_title_render_set_dirty_state(&g_title_dirty);
     engine_title_render_bind_panel_asset(sheet);
     engine_title_render_bind_panel_fn(gfx_panel_draw);
     /* Background hook stays the default no-op stub — the backdrop is
@@ -810,13 +818,94 @@ static void bringup_title_menu(int with_panel)
     gfx_glyph_set_dest(0, 0);
     gfx_glyph_set_glyph(0, 0, 0);
     gfx_glyph_set_color_modulation(0);
+}
 
-    /* Render the title scene into the locked back buffer (panel + button
-     * bevels composite over the backdrop). */
+/* Load the backdrop for the current page (engine_title_render_page) and
+ * render the full title scene into the locked back buffer.  Assumes
+ * title_bind_render_state has been called.  Returns 0 if the backdrop
+ * load failed. */
+static int title_render_current_page(void)
+{
+    int page = engine_title_render_page();
+    /* Backdrop: palette + page-appropriate .pl8 raw into the back buffer
+     * (page 1/2 both use gateway; gfx_title_background_load routes by page). */
+    if (!gfx_title_background_load(page)) {
+        log_line("title_render_current_page: background load failed (page %d)",
+                 page);
+        return 0;
+    }
     if (gfx_lock_canvas()) {
-        engine_title_render_scene(0x1f, g_title_page_num);
+        engine_title_render_scene(0x1f, page);
         gfx_unlock_canvas();
     }
+    return 1;
+}
+
+static void bringup_title_menu(int with_panel)
+{
+    engine_title_render_set_page(g_title_page_num);
+
+    if (!with_panel) {
+        /* --title-bg: backdrop only, no panel/text composition. */
+        if (!gfx_title_background_load(engine_title_render_page()))
+            log_line("bringup_title_menu: background load failed");
+        return;
+    }
+
+    title_bind_render_state();
+    title_render_current_page();
+}
+
+/* Scripted title-menu navigation demo (--title-nav DIR).  Drives the
+ * real ported input dispatch with synthetic clicks and captures each
+ * resulting page, proving the hover/click → page-transition → render
+ * chain end-to-end.  A "click" is one engine_menu_title_input call with
+ * the cursor parked on the target button and the LMB press edge set —
+ * exactly what engine_compute_input_state produces for a real click. */
+static void title_nav_click(int x, int y)
+{
+    engine_menu_click_in_t in = {0};
+    in.cursor_x = x;
+    in.cursor_y = y;
+    in.lmb_newly_pressed = 1;   /* DAT_004eafb4 — the click edge */
+    engine_menu_title_input(&in);
+}
+
+static void bringup_title_nav(const char *dir)
+{
+    /* Button x-centre + per-row y-centres match the rendered geometry
+     * (x=0xe0, w=0xc0 → centre 0x140; rows at 0x5b/0x7f/.../0xeb,
+     * h=0x18 → +0xc for the centre). */
+    enum { BTN_CX = 0x140 };
+    const int row0 = 0x5b + 0xc;   /* button 1 centre */
+    const int row4 = 0xeb + 0xc;   /* button 5 centre ("Back." on page 2) */
+
+    char path[MAX_PATH];
+
+    title_bind_render_state();
+
+    /* Step 0 — main menu (page 1). */
+    engine_title_render_set_page(1);
+    title_render_current_page();
+    wsprintfA(path, "%s\\nav_00_p1_mainmenu.bmp", dir);
+    gfx_capture_backbuffer(path);
+    log_line("title-nav: page %d → %s", engine_title_render_page(), path);
+
+    /* Step 1 — click "Single player" (page 1 button 1) → page 2. */
+    title_nav_click(BTN_CX, row0);
+    title_render_current_page();
+    wsprintfA(path, "%s\\nav_01_p%d_options.bmp", dir, engine_title_render_page());
+    gfx_capture_backbuffer(path);
+    log_line("title-nav: clicked Single player → page %d → %s",
+             engine_title_render_page(), path);
+
+    /* Step 2 — click "Back." (page 2 button 5) → page 1. */
+    title_nav_click(BTN_CX, row4);
+    title_render_current_page();
+    wsprintfA(path, "%s\\nav_02_p%d_mainmenu.bmp", dir, engine_title_render_page());
+    gfx_capture_backbuffer(path);
+    log_line("title-nav: clicked Back → page %d → %s",
+             engine_title_render_page(), path);
 }
 
 static void main_loop_body(void)
@@ -1035,6 +1124,11 @@ static void parse_cmdline(LPSTR lpCmd)
             uint32_t p = 0;
             if (parse_uint(tokens[++i], &p) && p >= 1) g_title_page_num = (int)p;
             g_title_menu = 1;   /* implies the full page composition */
+            g_gfx_init   = 1;
+        }
+        else if (!strcmp(a, "--title-nav") && i + 1 < ntok) {
+            g_title_nav_dir = tokens[++i];
+            g_title_menu = 1;   /* reuse the page-render bring-up setup */
             g_gfx_init   = 1;
         }
         else if (!strcmp(a, "--audio-init"))     g_audio_init  = 1;

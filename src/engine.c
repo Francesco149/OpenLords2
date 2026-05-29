@@ -20,6 +20,7 @@
 #include "engine_overlay_render.h"
 #include "engine_screen_dispatch.h"
 #include "engine_title_render.h"
+#include "engine_menu_input.h"
 #include "engine_turn.h"
 #include "gfx.h"
 #include "save.h"                 /* g_player_strategic_352 */
@@ -519,6 +520,44 @@ static void engine_tick_input_step(void)
     g_mouse_dblclk = 0;
 }
 
+/* ─── title-menu input dispatch (FUN_004ba9c8 0x1f arm) ────────────
+ *
+ * Bridges the resolved input state (above) into engine_menu_input.
+ * Retail runs the whole UI input dispatcher (FUN_004ba9c8) from inside
+ * FUN_0042ff10 every frame; in the drop-in's scaffold tick we run just
+ * the title-screen (0x1f) arm — the only screen whose render half is
+ * ported — right after the input resolver, so a hover/click resolved
+ * this frame updates the highlight + may transition the page (the
+ * demand-redraw seam below repaints when it does).
+ *
+ * The module's engine-side hooks (demand-redraw cookie, quit latch) are
+ * bound once here so the module stays unit-testable in isolation. */
+static void menu_quit_hook(void) { g_shutdown_request = 1; }  /* DAT_005aeb68 = 1 */
+
+static void engine_tick_menu_input_step(void)
+{
+    if (g_sim_current_screen != 0x1f)
+        return;
+
+    static int hooks_bound;
+    if (!hooks_bound) {
+        engine_menu_input_bind_redraw_fn(engine_set_demand_redraw);
+        engine_menu_input_bind_quit_fn(menu_quit_hook);
+        hooks_bound = 1;
+    }
+
+    engine_menu_click_in_t in;
+    in.cursor_x          = g_input_game_x;            /* DAT_004e65fc */
+    in.cursor_y          = g_input_game_y;            /* DAT_004e65f4 */
+    in.lmb_newly_pressed = g_input_lmb_newly_pressed; /* DAT_004eafb4 */
+    in.lmb_newly_released= g_input_lmb_newly_released; /* DAT_004e65d8 */
+    in.lmb_held          = g_input_lmb;               /* DAT_004e65cc */
+    in.lmb_dblclk        = g_input_lmb_dblclk;        /* DAT_004eabc5 */
+    in.tick_320ms        = g_phase_tick_320ms;        /* DAT_0057d3c8 */
+
+    engine_menu_title_input(&in);
+}
+
 /* Wrappers around engine_camera_clamp_scroll / engine_camera_clamp_anchor.
  * Both run in the render-phase tail before the FPS counter — same
  * order as retail (decompile lines 88725-88726).  Bundle the file-
@@ -964,6 +1003,13 @@ void engine_tick(void)
      *                 drop-in yet (the UI dispatcher reads them in
      *                 retail). */
     engine_tick_input_step();
+
+    /* Title-menu input dispatch — resolves the hover/click just computed
+     * into a selected-button highlight + page transition while the title
+     * screen is up.  No-op on every other screen (and dormant until a
+     * producer sets g_sim_current_screen = 0x1f).  A transition here sets
+     * the demand-redraw cookie the seam below consumes. */
+    engine_tick_menu_input_step();
 
     /* Demand-redraw seam — retail FUN_004b99c0 @ 0x4b99c0 line 36:
      *   if (DAT_0057d340 != 0) { FUN_0040f1a0(DAT_0057d340); DAT_0057d340 = 0; }

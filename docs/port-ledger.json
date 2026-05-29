@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 275,
-  "ported": 32,
-  "unported": 2140,
+  "tested": 270,
+  "ported": 34,
+  "unported": 2143,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 307,
-  "pct_touched": 12.5,
-  "pct_tested": 11.2,
+  "touched": 304,
+  "pct_touched": 12.4,
+  "pct_tested": 11.0,
   "bytes_total": 838629,
-  "bytes_touched": 108944,
-  "pct_bytes_touched": 13.0
+  "bytes_touched": 108036,
+  "pct_bytes_touched": 12.9
  },
  "orphan_refs": [
   "0x004148",
@@ -432,7 +432,6 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_menu_input.c",
     "src/text_input.h"
    ]
   },
@@ -4142,10 +4141,8 @@
    "name": "FUN_0042d91b",
    "size": 83,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_menu_input.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x42d96e",
@@ -4367,9 +4364,9 @@
    "name": "FUN_0042ff10",
    "size": 8140,
    "is_thunk": false,
-   "status": "tested",
+   "status": "ported",
    "src": [
-    "src/engine_menu_input.c"
+    "src/engine.c"
    ]
   },
   {
@@ -14358,11 +14355,10 @@
    "name": "FUN_004978ad",
    "size": 129,
    "is_thunk": false,
-   "status": "tested",
+   "status": "ported",
    "src": [
     "src/engine.c",
-    "src/engine.h",
-    "src/engine_menu_input.c"
+    "src/engine.h"
    ]
   },
   {
@@ -14732,7 +14728,6 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_menu_input.c",
     "src/engine_roster.c",
     "src/engine_roster.h"
    ]
@@ -16249,10 +16244,8 @@
    "name": "FUN_004aecf0",
    "size": 334,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_menu_input.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4aee3e",
@@ -17703,10 +17696,8 @@
    "name": "FUN_004b7250",
    "size": 491,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_menu_input.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4b743b",
@@ -17923,6 +17914,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_menu_input.c",
     "src/engine_menu_input.h"
    ]

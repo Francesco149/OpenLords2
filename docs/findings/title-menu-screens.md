@@ -68,6 +68,87 @@ All primitives already exist from the main-menu port (`gfx_panel`,
 this lands as the `engine_title_render` page-2 renderer (today the deferred
 `page_fn` stub).
 
+## Input side — hotspot hit-test + page navigation (`engine_menu_input`)
+
+> 2026-05-29. The *render* half above is matched by the *input* half: the
+> per-page hotspot hit-test that resolves hover + clicks into the
+> selected-button highlight and page transitions. Ported in
+> `src/engine_menu_input.{c,h}` (pages 1 & 2); host-tested; driveable in
+> the drop-in via `--title-nav`.
+
+The retail input chain, per frame, while `DAT_004eac50 == 0x1f`:
+
+```
+FUN_004b99c0 (per-tick driver)
+  → FUN_0042ff10 (game state machine)        [0x42ff10, NOT ported — outer]
+      → FUN_004ba9c8 (UI input dispatcher)    [0x1f arm ported]
+          → FUN_0040e3ee  click hit-test + dispatch
+          → FUN_0040e5e7  hover hit-test → DAT_00553114
+          → FUN_00432b05  page-1 click action  (the transitions)
+          → FUN_00432cc8  page-2 click action
+```
+
+**Hotspot table entry** (24 B, retail `DAT_004dcb48` page 1 / `DAT_004dcba8`
+page 2; dumped via r2):
+
+| off  | field        | meaning                                       |
+|-----:|--------------|-----------------------------------------------|
+| 0x00 | short x0,y0  | box top-left                                  |
+| 0x04 | short x1,y1  | box bottom-right (half-open: `x0<=cx<x1`)     |
+| 0x08 | code*        | click action (reads `DAT_0059154c` = +0x10)   |
+| 0x0d | byte         | per-entry "clicked" latch (unused by menu)    |
+| 0x0f | byte         | button-edge type: **1**=press, **3**=release, **2**=held/repeat |
+| 0x10 | int          | action param → `DAT_0059154c`                 |
+| 0x14 | int          | second param → `DAT_00591550` (0 for menu)    |
+
+**Page-1 hotspots** (all at x∈[0xe0,0x1a0); rows step 0x24): Single player
+(type 1, param 1), Multiple players (1, 2), Lords of Magic? (**type 3**,
+param 4), Exit game (1, 3). **Page-2 hotspots** (one extra row to 0xeb):
+Play Now! (1, 1), Load a game (1, 2), Skirmish! (1, 5), Custom game (1, 3),
+Back. (1, 4).
+
+**Click-edge gate** (`FUN_0040e3ee`): type 1 fires on `DAT_004eafb4`
+(LMB press edge), type 3 on `DAT_004e65d8` (release edge), type 2 on
+press/dblclk or the `DAT_0057d3c8` 320 ms repeat tick while held. The
+edge flags + game-coord cursor (`DAT_004e65fc/f4`) are exactly what the
+already-ported input resolver (`FUN_004b191e` / `engine_compute_input_state`)
+emits each frame.
+
+**Navigation transitions** (`DAT_005530f0` = page):
+
+| page | button         | →                                  |
+|-----:|----------------|------------------------------------|
+| 1    | Single player  | page 2 (or deferred page 10 if `DAT_005c9a74` ∉ [1,2]) |
+| 1    | Exit game      | quit latch `DAT_005aeb68 = 1`      |
+| 2    | Back.          | page 1                             |
+| 2    | Play Now!      | page 5                             |
+| 2    | Load a game    | file-list page 3                   |
+| 2    | Custom / Skirmish | page 4 (substate `DAT_0055302c` 2 / 3) |
+
+Each transition also sets the demand-redraw cookie `DAT_0057d340 = 2`. The
+click actions' *other* side-effects — MP bring-up (0x4978ad/0x4b7250),
+save-list enumeration (0x4aecf0), promo movie (0x42d91b), profile scan
+(0x49bae9), sound/fade cues — are deferred behind TODOs; the page
+transitions are faithful.
+
+### Wiring + bring-up
+
+`engine_tick` runs `engine_tick_menu_input_step` right after the input
+resolver, gated on `g_sim_current_screen == 0x1f` — so once a producer
+sets the title screen live, the menu navigates on its own. Until then the
+scripted `--title-nav DIR` bring-up drives the real dispatch with
+synthetic clicks (cursor parked on a button + LMB press edge) and captures
+each resulting page: verified main menu → "Single player" → Your options →
+"Back." → main menu, every frame **bit-identical** to the page groundtruths
+(0 diff px), round-trip clean.
+
+**Still deferred (next chip): live interactive menu.** Needs (a) the
+demand-redraw seam to lock the canvas around `engine_screen_dispatch`, (b)
+the per-frame button refresh (`FUN_004ba26e` 0x1f arm → button render) so
+the hover highlight repaints without a full-scene redraw, and (c) a startup
+producer that sets `g_sim_current_screen = 0x1f` + initial page/redraw.
+With those, a real mouse navigates the menu in the running drop-in.
+
 ## Harness workflow: drive + capture a menu page
 
 1. **Reach the menu fast** with `--skip-intro` (see

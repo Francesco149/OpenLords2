@@ -31,7 +31,7 @@ static int g_sp_available = 1;
  * port matches retail's writes without inventing engine-wide globals.
  *
  *   DAT_0053f648  last-acknowledged selected button (debounce snapshot,
- *                 read by FUN_0042ff10's 0x1f confirm arm — deferred)
+ *                 read by 0x42ff10's 0x1f confirm arm — deferred)
  *   DAT_0055302c  → s_slot_0055302c (shared save-schema scalar)
  *   DAT_0058fe10  multiplayer-init result flag (MP path deferred)
  *   DAT_0057d320  load-list "selected slot is dir" flag (load path deferred)
@@ -82,13 +82,13 @@ static void menu_action_page1(int param)
         /* Exit game — retail DAT_005aeb68 = 1 (deferred-shutdown latch). */
         g_quit_fn();
     } else if (param == 2) {
-        /* Multiple players — MP session bring-up (FUN_004978ad save-pump,
-         * FUN_004b7250 session probe, page 4 lobby vs page 10 fallback).
+        /* Multiple players — MP session bring-up (0x4978ad save-pump,
+         * 0x4b7250 session probe, page 4 lobby vs page 10 fallback).
          * The MP subsystem is unported; the page transition depends on
          * its result so we defer the whole branch.  Faithful behavior is
          * restored when MP lands. */
         g_redraw_fn(2);
-        /* TODO(mp): FUN_004978ad / FUN_004b7250 → page 4 (lobby) or
+        /* TODO(mp): 0x4978ad / 0x4b7250 → page 4 (lobby) or
          * page 10 (no-session), + s011_02.wav cue. */
     } else if (param == 1) {
         /* Single player — go to "Your options" (page 2).  Retail routes
@@ -100,15 +100,15 @@ static void menu_action_page1(int param)
         } else {
             engine_title_render_set_page(2);
         }
-        /* TODO(saves): FUN_0049bae9(0, player, &DAT_0053f1e0) — profile /
+        /* TODO(saves): 0x49bae9(0, player, &DAT_0053f1e0) — profile /
          * save-slot scan that backs the page-2 list affordances.  Page 2
          * renders without it (static buttons); deferred. */
     } else if (param == 4) {
         /* Lords of Magic? — plays lom.smk (Smacker promo).  Movie
-         * playback chain (FUN_0042d91b) is wired for the boot intro but
+         * playback chain (0x42d91b) is wired for the boot intro but
          * the menu-triggered cutscene path isn't ported yet. */
         g_redraw_fn(2);
-        /* TODO(movie): FUN_0042d91b("lom.smk", …) promo cutscene. */
+        /* TODO(movie): 0x42d91b("lom.smk", …) promo cutscene. */
     }
 }
 
@@ -133,29 +133,29 @@ static void menu_action_page2(int param)
         g_redraw_fn(2);
     } else if (param == 2) {
         /* Load a game — populate the save-list then open file-list page 3.
-         * The list-populate (FUN_004aecf0 over the .sav/.svb/.sva set) + fade
-         * (FUN_00402009) are deferred; the page transition + return-page
+         * The list-populate (0x4aecf0 over the .sav/.svb/.sva set) + fade
+         * (0x402009) are deferred; the page transition + return-page
          * bookmark are faithful. */
         g_filelist_return_page = engine_title_render_page();  /* DAT_00553e5c */
         g_loadlist_dir_flag    = 1;                           /* DAT_0057d320 = 1 */
         engine_title_render_set_page(3);
         g_redraw_fn(2);
-        /* TODO(saves): FUN_004aecf0(<pattern>,0) save enumeration +
-         * FUN_00402009 fade-in; DAT_0057d3c4 / DAT_00591548 list state. */
+        /* TODO(saves): 0x4aecf0(<pattern>,0) save enumeration +
+         * 0x402009 fade-in; DAT_0057d3c4 / DAT_00591548 list state. */
     } else if (param == 3) {
         /* Custom game — page 4. */
         engine_title_render_set_page(4);
         s_slot_0055302c = 2;        /* DAT_0055302c = 2 */
         g_redraw_fn(2);
         g_loadlist_dir_flag = 0;
-        /* TODO(audio/transition): FUN_00402009 fade + s011_02.wav cue. */
+        /* TODO(audio/transition): 0x402009 fade + s011_02.wav cue. */
     } else if (param == 5) {
         /* Skirmish! — page 4, substate 3. */
         engine_title_render_set_page(4);
         s_slot_0055302c = 3;        /* DAT_0055302c = 3 */
         g_redraw_fn(2);
         g_loadlist_dir_flag = 0;
-        /* TODO(audio/transition): FUN_00402009 fade + s011_02.wav cue. */
+        /* TODO(audio/transition): 0x402009 fade + s011_02.wav cue. */
     }
 }
 

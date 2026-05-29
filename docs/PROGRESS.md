@@ -7,6 +7,51 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — MENU INPUT: title pages navigate (hover + click → page change)
+
+The title menu's **input** half now matches its bit-identical render half:
+hover updates the selected-button highlight, and clicks transition pages.
+Verified end-to-end in the drop-in — main menu → "Single player" → "Your
+options" → "Back." → main menu — every frame **bit-identical** to the page
+groundtruths (0 diff px), round-trip clean. User-confirmed visually.
+
+### The port
+
+New module `engine_menu_input.{c,h}` ports the title-screen hotspot chain
+(the `DAT_004eac50 == 0x1f` arm of the UI input dispatcher `FUN_004ba9c8`):
+
+- `FUN_0040e5e7` hover hit-test → 1-based hovered index → `DAT_00553114`.
+- `FUN_0040e3ee` click dispatch with the three button-edge types (1=press,
+  3=release, 2=held/repeat) → invokes the hotspot action.
+- `FUN_00432b05` / `FUN_00432cc8` page-1/2 click actions — the page
+  transitions (Single player→2, Back→1, Play Now→5, Load→3,
+  Custom/Skirmish→4, Exit→quit). Unported side-effects (MP, save-list,
+  movie, sound/fade) deferred behind TODOs.
+
+Page-1/2 hotspot geometry + action params lifted from retail tables
+`DAT_004dcb48` / `DAT_004dcba8` (24-byte entries, dumped via r2). The
+input edge flags + game-coord cursor consumed are exactly what the
+already-ported `FUN_004b191e` resolver emits. See
+[`title-menu-screens.md`](findings/title-menu-screens.md) for the full
+table layout + transition map.
+
+### Wiring + verification
+
+`engine_tick` runs the new `engine_tick_menu_input_step` right after the
+input resolver, gated on `g_sim_current_screen == 0x1f` — so the menu
+navigates on its own once the live title screen has a producer. Until then
+the scripted `--title-nav DIR` bring-up drives the *real* ported dispatch
+with synthetic clicks and captures each page. 19 host tests (1132 → 1151).
+
+### Next
+
+Live interactive menu: lock the canvas around the demand-redraw seam, wire
+the per-frame button refresh (`FUN_004ba26e` 0x1f arm) for hover repaint,
+and add a startup producer that sets screen 0x1f — then a real mouse
+navigates the running drop-in. Then port the remaining title pages (3..0xd).
+
+---
+
 ## 2026-05-29 — NEXT SCREEN: "Your options" (title page 2) BIT-IDENTICAL
 
 The single-player **"Your options"** screen (Play Now! / Load a game /
