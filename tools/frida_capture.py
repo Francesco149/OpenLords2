@@ -205,6 +205,10 @@ class CaptureConfig:
     frame_capture:              bool = False
     frame_capture_max:          int  = 16   # 0 = unlimited
     frame_capture_warmup_secs:  int  = 5    # skip captures for first N cum-secs
+    # One-shot globals dump: list of {va, size, label}.  Read once at the
+    # first captured frame; written to <run_dir>/globals_dump.json.  Used
+    # to seed a parity port's state from retail's exact values.
+    dump_globals:      list[dict[str, Any]] | None = None
     # Skip the boot intro movie chain (intro.smk → imptitle.smk → credits.smk).
     # The agent snaps each Smacker movie to its last frame so the engine runs
     # its own intro→title (state 0x1f) transitions in ~3 frames instead of the
@@ -568,6 +572,23 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             except Exception as e:
                 f_log.write(f"[frame] write failed {out}: {e}\n")
             return
+        if kind == "globals_dump":
+            regions = p.get("regions") or []
+            rows = []
+            for r in regions:
+                bts = r.get("bytes")
+                hexs = "".join(f"{b & 0xff:02x}" for b in bts) if bts else None
+                rows.append({"va": r.get("va"), "size": r.get("size"),
+                             "label": r.get("label"), "hex": hexs})
+                f_log.write(f"[globals] {r.get('label')} "
+                            f"@0x{(r.get('va') or 0):x} ({r.get('size')}B) = "
+                            f"{hexs}\n")
+            try:
+                (run_dir / "globals_dump.json").write_text(
+                    json.dumps(rows, indent=2))
+            except Exception as e:
+                f_log.write(f"[globals] write failed: {e}\n")
+            return
         if kind == "fps_sample":
             counts["fps_sample"] += 1
             fps_last["current_fps"] = int(p.get("current_fps", 0))
@@ -763,6 +784,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "frame_capture":             bool(cfg.frame_capture),
             "frame_capture_max":         int(cfg.frame_capture_max),
             "frame_capture_warmup_secs": int(cfg.frame_capture_warmup_secs),
+            "dump_globals":              cfg.dump_globals or [],
             "skip_intro":                bool(cfg.skip_intro),
             "input_record":              bool(cfg.input_record),
             "input_replay":              input_replay_events,
@@ -990,6 +1012,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="skip captures for the first N engine "
                          "cumulative-seconds rollovers so the engine has "
                          "time to render a first frame (default 5)")
+    ap.add_argument("--dump-globals", default=None,
+                    help="comma-separated list of VA:SIZE[:LABEL] specs "
+                         "(VA is a Ghidra VA, ImageBase 0x00400000) to read "
+                         "once at the first captured frame; written to "
+                         "<run_dir>/globals_dump.json.  Seeds a parity port's "
+                         "state from retail's exact values.")
     ap.add_argument("--skip-intro", action="store_true",
                     help="skip the boot intro movie chain (intro/imptitle/"
                          "credits): the agent snaps each Smacker movie to its "
@@ -1042,6 +1070,24 @@ def main(argv: list[str] | None = None) -> int:
     call_trace_frames = ([int(t) for t in args.call_trace_frames.split(",")
                           if t.strip()] if args.call_trace_frames else [])
 
+    def _parse_dump_globals(spec: str | None) -> list[dict[str, Any]]:
+        """VA:SIZE[:LABEL],...  → [{va, size, label}].  VA accepts 0x hex."""
+        out: list[dict[str, Any]] = []
+        if not spec:
+            return out
+        for tok in spec.split(","):
+            tok = tok.strip()
+            if not tok:
+                continue
+            parts = tok.split(":")
+            va = int(parts[0], 0)
+            size = int(parts[1], 0) if len(parts) > 1 else 1
+            label = parts[2] if len(parts) > 2 else f"0x{va:x}"
+            out.append({"va": va, "size": size, "label": label})
+        return out
+
+    dump_globals = _parse_dump_globals(args.dump_globals)
+
     run_id = args.run_id or dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = ROOT / "runs" / "capture" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -1066,6 +1112,7 @@ def main(argv: list[str] | None = None) -> int:
         frame_capture=args.frame_capture,
         frame_capture_max=args.frame_capture_max,
         frame_capture_warmup_secs=args.frame_capture_warmup_secs,
+        dump_globals=dump_globals,
         skip_intro=args.skip_intro,
         input_record=args.input_record,
         input_replay_path=(Path(args.input_trace).resolve()

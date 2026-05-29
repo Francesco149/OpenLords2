@@ -500,6 +500,10 @@ let g_frame_capture_enabled    = false;
 let g_frame_capture_max        = 0;   // 0 = unlimited
 let g_frame_capture_count      = 0;
 let g_frame_capture_warmup_secs = 0;
+// One-shot globals dump — list of {va, size, label}; read once at the
+// first captured frame and emitted as a `globals_dump` message.
+let g_dump_globals             = [];
+let g_globals_dumped           = false;
 let g_nf_surface_lock        = null;
 let g_nf_surface_unlock      = null;
 let g_nf_palette_get_entries = null;
@@ -1646,6 +1650,25 @@ function captureFrameOnce() {
               pitch:    pitch,
               virtual_now_ms: g_virtual_now_ms,
               t_ms:     nowMs()}, ab);
+
+        // One-shot globals dump — read the configured engine regions at
+        // the first captured frame so a parity port can seed its state
+        // from retail's exact values (name buffers, selection slots,
+        // gating flags).  Memory reads are independent of the DDraw lock.
+        if (!g_globals_dumped && g_dump_globals.length > 0) {
+            g_globals_dumped = true;
+            const regions = g_dump_globals.map(function (s) {
+                let bytes = null;
+                try {
+                    bytes = Array.from(new Uint8Array(
+                        rva(s.va).readByteArray(s.size)));
+                } catch (e) { bytes = null; }
+                return {va: s.va, size: s.size, label: s.label, bytes: bytes};
+            });
+            send({kind: 'globals_dump',
+                  frame_idx: g_frame_capture_count - 1,
+                  regions: regions});
+        }
     } catch (e) {
         err('captureFrameOnce', e.message);
     } finally {
@@ -4349,6 +4372,14 @@ rpc.exports = {
         g_frame_capture_max         = (opts.frame_capture_max | 0);
         g_frame_capture_warmup_secs = (opts.frame_capture_warmup_secs | 0);
         g_frame_capture_count       = 0;
+
+        g_dump_globals = Array.isArray(opts.dump_globals)
+            ? opts.dump_globals.map(function (s) {
+                  return {va: (s.va >>> 0), size: (s.size | 0),
+                          label: String(s.label || '')};
+              })
+            : [];
+        g_globals_dumped = false;
 
         g_diff_test_enabled = !!opts.diff_test;
 
