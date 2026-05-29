@@ -440,6 +440,17 @@ let g_owned_hwnds         = {};   // key = hwnd hex, val = {source}
 
 let g_silent_audio_enabled = false;
 let g_force_windowed       = false;
+// When force_windowed is on, we normally also force DAT_0053f228 = 0 so the
+// engine takes its windowed-style branch.  But that flag ALSO selects retail's
+// 8bpp palette builder (FUN_0042f449, reserved-range blackout) over the
+// full-color one (FUN_0042f306, which loads the .256 into idx 1..254 — the
+// dark-red caps + bright-red hover highlight a real player sees).  Set this to
+// capture retail's *full-color* rendering while staying windowed (no fullscreen
+// screen-hog): we keep the cooperative-level rewrite but skip the flag
+// override, so retail renders the FUN_0042f306 palette into the windowed back
+// surface we grab.  The window becomes a desktop-res popup (cosmetic) but the
+// captured back-surface pixels are palette-correct.  See engine-quirks #115.
+let g_keep_retail_palette  = false;
 let g_turbo_enabled        = false;
 let g_gdi_seat_enabled     = false;
 
@@ -1041,8 +1052,20 @@ function patchDDrawVtable(ifacePtr, ifaceName) {
                 // the global set to 1 and our window ends up as a
                 // borderless popup squashed to desktop res.  See
                 // engine-quirks.md #1 / ddraw-dsound-bringup.md.
-                try { rva(ADDR.var_fullscreen_flag).writeU32(0); }
-                catch (e) { err('force_windowed.flag_override', e.message); }
+                //
+                // ...unless keep_retail_palette is set: then we leave the flag
+                // at 1 so the engine builds the full-color palette
+                // (FUN_0042f306, red caps + red hover highlight) instead of the
+                // 8bpp blackout (FUN_0042f449).  The window degrades to a
+                // desktop-res popup, but the back-surface pixels we capture are
+                // palette-correct.  See engine-quirks #115.
+                if (!g_keep_retail_palette) {
+                    try { rva(ADDR.var_fullscreen_flag).writeU32(0); }
+                    catch (e) { err('force_windowed.flag_override', e.message); }
+                } else {
+                    log('force_windowed: keep_retail_palette on — leaving '
+                        + 'DAT_0053f228 = 1 (full-color FUN_0042f306 palette)');
+                }
                 send({kind: 'ddraw_cooplevel_rewrite',
                       iface: ifaceName,
                       hwnd:  hwnd.toString(),
@@ -4265,6 +4288,7 @@ rpc.exports = {
         g_hide_window        = !!opts.hide_window;
         g_silent_audio_enabled = !!opts.silent_audio;
         g_force_windowed     = !!opts.force_windowed;
+        g_keep_retail_palette = !!opts.keep_retail_palette;
         g_turbo_enabled      = !!opts.turbo;
         g_gdi_seat_enabled   = !!opts.gdi_seat;
         g_agent_present_enabled = !!opts.agent_present;

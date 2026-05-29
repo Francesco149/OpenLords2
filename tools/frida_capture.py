@@ -157,6 +157,14 @@ class CaptureConfig:
     hide_window:       bool = True
     silent_audio:      bool = True
     force_windowed:    bool = True
+    # With force_windowed, also skip the DAT_0053f228=0 override so retail
+    # builds its full-color palette (FUN_0042f306 — dark-red caps + bright-red
+    # hover highlight) instead of the 8bpp blackout (FUN_0042f449).  Lets us
+    # capture retail's *real* (full-color desktop) rendering while staying
+    # windowed — no fullscreen screen-hog.  The window degrades to a desktop-res
+    # popup, but the captured back surface is palette-correct.  See
+    # engine-quirks #115.
+    keep_retail_palette: bool = False
     turbo:             bool = False
     turbo_step_ms:     int  = 17        # virtual-ms per per-tick driver iteration
     # GDI present seat — intercept retail's IDirectDrawSurface::Blt to
@@ -737,6 +745,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "hide_window":               bool(cfg.hide_window),
             "silent_audio":              bool(cfg.silent_audio),
             "force_windowed":            bool(cfg.force_windowed),
+            "keep_retail_palette":       bool(cfg.keep_retail_palette),
             "turbo":                     bool(cfg.turbo),
             "turbo_step_ms":             int(cfg.turbo_step_ms),
             "gdi_seat":                  bool(cfg.gdi_seat),
@@ -920,6 +929,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-hide", action="store_true")
     ap.add_argument("--no-silent-audio", action="store_true")
     ap.add_argument("--no-force-windowed", action="store_true")
+    ap.add_argument("--keep-retail-palette", action="store_true",
+                    help="keep force-windowed but skip the DAT_0053f228=0 "
+                         "override, so retail builds its full-color palette "
+                         "(FUN_0042f306: red title caps + red hover highlight) "
+                         "instead of the 8bpp blackout.  Captures retail's real "
+                         "full-color-desktop rendering without a fullscreen "
+                         "screen-hog (window degrades to a desktop-res popup, "
+                         "but the captured back surface is palette-correct).")
     ap.add_argument("--no-gdi-seat", action="store_true",
                     help="don't reroute retail's primary-surface Blt "
                          "through GDI StretchDIBits.  Disables visual "
@@ -1029,6 +1046,7 @@ def main(argv: list[str] | None = None) -> int:
         hide_window=not args.no_hide,
         silent_audio=not args.no_silent_audio,
         force_windowed=not args.no_force_windowed,
+        keep_retail_palette=args.keep_retail_palette,
         gdi_seat=not args.no_gdi_seat,
         agent_present=args.agent_present,
         agent_present_every_ticks=args.agent_present_every_ticks,
