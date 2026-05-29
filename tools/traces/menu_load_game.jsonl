@@ -1,0 +1,23 @@
+# Navigation trace: main menu (page 1) → "Single player" → "Your options"
+# (page 2) → "Load a game" → the save-file list (page 3), then park the
+# cursor neutral.  "Load a game" is page-2 button 2 (param 2, FUN_00432cc8
+# → page 3, scans *.sav via FUN_004aecf0).
+#
+# Reproduce:
+#   nix develop -c python3 tools/frida_capture.py --remote <host> \
+#     --skip-intro --input-trace tools/traces/menu_load_game.jsonl \
+#     --frame-capture --frame-capture-warmup-secs 8 --frame-capture-max 2
+#
+# Coords authored in GAME space (640x480).  "Single player" (320,107);
+# "Load a game" page-2 button 2 center (320,139) — x=0xe0 w=0xc0, y=0x7f
+# h=0x18; neutral park (320,462).  lParam=(y<<16)|x.
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 400, "m": 512, "w": 0, "l": 30277952}
+{"t": 440, "m": 512, "w": 0, "l": 30277952}

@@ -634,6 +634,9 @@ struct test_case {
     X(gfx_sprite_blit_opaque_width_multiple_of_4) \
     X(gfx_sprite_blit_opaque_uses_height_short_not_byte_height) \
     X(gfx_sprite_blit_opaque_null_canvas_no_crash) \
+    X(gfx_sprite_fill_block_fills_staged_dims) \
+    X(gfx_sprite_fill_block_respects_x_offset) \
+    X(gfx_sprite_fill_block_null_canvas_no_crash) \
     X(gfx_dispatch_sprite_paints_at_dest) \
     X(gfx_dispatch_sprite_left_clip_writes_visible_portion) \
     X(gfx_dispatch_sprite_right_clip_writes_visible_portion) \

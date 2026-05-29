@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **315** (12.9%) — tested 281, ported 34
-- code bytes touched: **13.4%** (112,290 / 838,629 B)
-- unported: **2132**
+- touched: **317** (13.0%) — tested 283, ported 34
+- code bytes touched: **13.5%** (113,449 / 838,629 B)
+- unported: **2130**
 - orphan refs (in src/, not in function table): 4
 
-## tested (281) — ported + host unit suite
+## tested (283) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -133,6 +133,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40ecc4 | FUN_0040ecc4 | 1099 | config.c, config.h, strutil.h |
 | 0x40f1a0 | FUN_0040f1a0 | 1117 | engine.c, engine_screen_dispatch.c, engine_screen_dispatch.h (+1) |
 | 0x40f5fd | FUN_0040f5fd | 470 | engine_screen_dispatch.c |
+| 0x4149ec | FUN_004149ec | 1050 | gfx_sprite.c |
 | 0x41e61d | FUN_0041e61d | 452 | engine_title_render.c, engine_title_render.h, gfx.c (+2) |
 | 0x41e7e1 | FUN_0041e7e1 | 385 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x41ea14 | FUN_0041ea14 | 143 | engine_title_render.c, engine_title_render.h |
@@ -248,6 +249,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b3f7a | FUN_004b3f7a | 41 | gfx_paint.h |
 | 0x4b3fa3 | FUN_004b3fa3 | 61 | gfx_paint.h |
 | 0x4b4056 | FUN_004b4056 | 47 | engine_overlay_render.c |
+| 0x4b414a | FUN_004b414a | 109 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b41b7 | FUN_004b41b7 | 165 | gfx_glyph.h |
 | 0x4b425c | FUN_004b425c | 105 | gfx_glyph.c, gfx_glyph.h |
 | 0x4b42c5 | FUN_004b42c5 | 105 | gfx_glyph.c, gfx_glyph.h |

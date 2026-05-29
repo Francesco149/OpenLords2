@@ -115,6 +115,12 @@
  * `sprite_blob + glyph_offset`. */
 void gfx_sprite_blit(const uint8_t *sprite_blob);
 
+/* Port of FUN_004b414a @ 0x4b414a.  Solid-color block fill at an
+ * explicit (x, y), sized from the staged sprite dims: glyph_w 16-px
+ * column groups wide, glyph_height_short rows tall.  Used for the
+ * save/load list selection highlight. */
+void gfx_sprite_fill_block(int x, int y, uint8_t color);
+
 /* Port of FUN_004b432e @ 0x4b432e.  Unclipped OPAQUE blit — sibling of
  * gfx_sprite_blit that copies every source byte verbatim (no
  * transparency test).  Row count is the descriptor's +2 short height

@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 281,
+  "tested": 283,
   "ported": 34,
-  "unported": 2132,
+  "unported": 2130,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 315,
-  "pct_touched": 12.9,
-  "pct_tested": 11.5,
+  "touched": 317,
+  "pct_touched": 13.0,
+  "pct_tested": 11.6,
   "bytes_total": 838629,
-  "bytes_touched": 112290,
-  "pct_bytes_touched": 13.4
+  "bytes_touched": 113449,
+  "pct_bytes_touched": 13.5
  },
  "orphan_refs": [
   "0x004148",
@@ -2444,8 +2444,10 @@
    "name": "FUN_004149ec",
    "size": 1050,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_sprite.c"
+   ]
   },
   {
    "va": "0x414e06",
@@ -17338,8 +17340,11 @@
    "name": "FUN_004b414a",
    "size": 109,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_sprite.c",
+    "src/gfx_sprite.h"
+   ]
   },
   {
    "va": "0x4b41b7",

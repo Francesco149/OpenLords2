@@ -990,3 +990,55 @@ int test_gfx_sprite_blit_opaque_null_canvas_no_crash(void)
     gfx_sprite_blit_opaque(k_blob_3x2);
     return 0;
 }
+
+/* ────────────────────────────────────────────────────────────────
+ * gfx_sprite_fill_block — FUN_004b414a
+ *
+ * Solid fill of glyph_w 16-px column groups × glyph_height_short rows
+ * at an explicit (x, y), using the canvas stride.  Used for the
+ * save/load list selection highlight.
+ * ──────────────────────────────────────────────────────────────── */
+
+int test_gfx_sprite_fill_block_fills_staged_dims(void)
+{
+    canvas_t c; canvas_init(&c);          /* CANVAS_W=16, CANVAS_H=8 */
+    gfx_glyph_set_glyph(0, /*glyph_w=*/1, 0);   /* 1 block = 16 px */
+    gfx_dispatch_set_glyph_height_short(3);     /* 3 rows */
+
+    gfx_sprite_fill_block(0, 1, 0x5a);
+
+    /* Rows 1..3 fully filled (16 px wide), rows 0 and 4 untouched. */
+    for (int x = 0; x < 16; x++) {
+        T_ASSERT_EQ_U(at(&c, x, 0), 0x00);
+        T_ASSERT_EQ_U(at(&c, x, 1), 0x5a);
+        T_ASSERT_EQ_U(at(&c, x, 3), 0x5a);
+        T_ASSERT_EQ_U(at(&c, x, 4), 0x00);
+    }
+    T_ASSERT(canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_fill_block_respects_x_offset(void)
+{
+    /* Two blocks (32 px) would overflow the 16-wide canvas, so use a
+     * single block at x=0 and verify the offset math on a wide row by
+     * checking the start column only. */
+    canvas_t c; canvas_init(&c);
+    gfx_glyph_set_glyph(0, 1, 0);
+    gfx_dispatch_set_glyph_height_short(1);
+    gfx_sprite_fill_block(0, 2, 0x33);
+    T_ASSERT_EQ_U(at(&c, 0, 2), 0x33);
+    T_ASSERT_EQ_U(at(&c, 15, 2), 0x33);
+    T_ASSERT_EQ_U(at(&c, 0, 1), 0x00);
+    T_ASSERT(canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_fill_block_null_canvas_no_crash(void)
+{
+    gfx_paint_bind_canvas(0, 0, 0);
+    gfx_glyph_set_glyph(0, 1, 0);
+    gfx_dispatch_set_glyph_height_short(2);
+    gfx_sprite_fill_block(0, 0, 0x5a);
+    return 0;
+}

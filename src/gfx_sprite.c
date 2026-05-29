@@ -120,6 +120,41 @@ void gfx_sprite_blit(const uint8_t *sprite_blob)
     } while (1);
 }
 
+/* Port of FUN_004b414a @ 0x4b414a (109 B).  Solid-color block fill at
+ * an explicit (x, y), sized from the staged sprite dims: glyph_w
+ * (gfx_glyph_glyph_w) 16-px-wide column groups across, and
+ * glyph_height_short (gfx_dispatch_glyph_height_short) rows tall.  Used
+ * for the save/load list's selection highlight (FUN_004149ec stages
+ * glyph_w = 6, height_short = 0x10 → a 96×16 bar behind the selected
+ * filename).
+ *
+ * Retail writes 4 dwords (16 bytes) per inner iteration and advances
+ * the dest by the canvas stride (DAT_004eb274) per row — a solid fill,
+ * byte-for-byte equivalent to memset of glyph_w*16 bytes per row.  The
+ * post-test loop guards (one iteration even at a zero count) are
+ * preserved. */
+void gfx_sprite_fill_block(int x, int y, uint8_t color)
+{
+    uint8_t *pixels = gfx_paint_canvas_pixels();
+    if (!pixels) return;
+
+    int stride  = gfx_paint_canvas_width();          /* DAT_004eb274 */
+    int blocks  = gfx_glyph_glyph_w();               /* DAT_005c9258 */
+    int rows    = gfx_dispatch_glyph_height_short(); /* DAT_005aeb70 */
+    int row_bytes = blocks * 16;                      /* 4 dwords × blocks */
+
+    uint8_t *row = pixels + x + y * stride;
+    int r = rows;
+    do {
+        memset(row, color, (size_t)row_bytes);
+        row += stride;
+        int next = r - 1;
+        int gt   = (0 < r);
+        r = next;
+        if (!(next != 0 && gt)) return;
+    } while (1);
+}
+
 /* Port of FUN_004b432e @ 0x4b432e (131 B).  Unclipped *opaque* blit —
  * the sibling of gfx_sprite_blit (FUN_004b43b1) that copies every
  * source byte verbatim INCLUDING zeros (no transparency test).  Used
