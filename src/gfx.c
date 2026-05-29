@@ -70,6 +70,7 @@
 #include <string.h>
 
 #include "gfx.h"
+#include "gfx_paint.h"
 #include "io.h"
 
 /* Logger lives in main.c — declared here as a weak local prototype
@@ -86,6 +87,7 @@ static LPDIRECTDRAWSURFACE  g_primary;        /* DAT_004eabd0 */
 static LPDIRECTDRAWSURFACE  g_back;           /* DAT_004eafac */
 static LPDIRECTDRAWCLIPPER  g_clipper;        /* DAT_004ea12c */
 static LPDIRECTDRAWPALETTE  g_palette;        /* DAT_004df288 */
+static uint8_t             *g_panel_sheet;    /* DAT_004eabec — panels2.pl8 blob */
 static int                  g_back_pitch;     /* DAT_004ea1a8 */
 static int                  g_primary_lockable; /* DAT_004df28c */
 static int                  g_fullscreen;
@@ -248,6 +250,10 @@ void gfx_shutdown(void)
         g_palette = NULL;
     }
     gfx_release_surfaces(1);
+    if (g_panel_sheet) {
+        free(g_panel_sheet);
+        g_panel_sheet = NULL;
+    }
     g_primary_lockable = 0;
     g_hwnd = NULL;
     g_surface_lost_latch = 0;
@@ -497,6 +503,72 @@ int gfx_title_background_load(int page)
     int ok_pal = gfx_load_palette(pal_path);
     int ok_bg  = gfx_load_background_image(bg_path);
     return ok_pal && ok_bg;
+}
+
+/* ---------------------------------------------------------------- *
+ *  Panel sprite-sheet load — port of retail's `FUN_004b25b0`        *
+ *  (allocate the DAT_004eabec blob) + the `panels2.pl8` read.       *
+ *  Retail allocs 220000 bytes then reads up to 160000 from offset 0 *
+ *  (the file is ~105 KB).  The blob is the raw PL8 (8-byte header +  *
+ *  16-byte sprite descriptors + pixel data) the panel renderer       *
+ *  indexes via `blob + idx*16 + 8`.  Returns the blob, or NULL.      *
+ * ---------------------------------------------------------------- */
+const uint8_t *gfx_load_panel_sheet(void)
+{
+    if (!g_panel_sheet) {
+        g_panel_sheet = (uint8_t *)malloc(220000);
+        if (!g_panel_sheet) {
+            log_line("gfx_load_panel_sheet: OOM");
+            return NULL;
+        }
+    }
+    int n = io_read_file_at("panels2.pl8", g_panel_sheet, 160000, 0);
+    if (n < 1) {
+        log_line("gfx_load_panel_sheet: read panels2.pl8 failed (%d)", n);
+        return NULL;
+    }
+    log_line("OK :Panel sheet loaded (panels2.pl8, %d bytes).", n);
+    return g_panel_sheet;
+}
+
+/* ---------------------------------------------------------------- *
+ *  Canvas lock/unlock — bind the locked back-buffer base pointer    *
+ *  as the gfx_paint canvas so the pure-C sprite/glyph/line/panel    *
+ *  renderers paint into it (retail's DAT_004ea1a8).  Retail keeps    *
+ *  the back buffer locked across a whole render pass; the renderers  *
+ *  assume pitch == width == 640 (DAT_004eb274 is both the row stride *
+ *  and the right-clip bound — verified true for our 8bpp back).      *
+ * ---------------------------------------------------------------- */
+int gfx_lock_canvas(void)
+{
+    if (!g_back) return 0;
+
+    DDSURFACEDESC desc;
+    ZeroMemory(&desc, sizeof(desc));
+    desc.dwSize = sizeof(desc);
+    HRESULT hr = IDirectDrawSurface_Lock(g_back, NULL, &desc,
+                                         DDLOCK_WAIT, NULL);
+    if (FAILED(hr) || !desc.lpSurface) {
+        log_line("gfx_lock_canvas: Lock failed 0x%08lx", (unsigned long)hr);
+        return 0;
+    }
+    if ((int)desc.lPitch != GFX_RENDER_W) {
+        /* The pure-C renderers index with width-as-stride; a wider pitch
+         * would corrupt every row.  Bail rather than render garbage. */
+        log_line("gfx_lock_canvas: unexpected pitch %ld (need %d) — abort",
+                 (long)desc.lPitch, GFX_RENDER_W);
+        IDirectDrawSurface_Unlock(g_back, NULL);
+        return 0;
+    }
+    gfx_paint_bind_canvas((uint8_t *)desc.lpSurface, GFX_RENDER_W, GFX_RENDER_H);
+    return 1;
+}
+
+void gfx_unlock_canvas(void)
+{
+    if (g_back) IDirectDrawSurface_Unlock(g_back, NULL);
+    gfx_paint_bind_canvas(NULL, 0, 0);
+    gfx_mark_all_dirty();
 }
 
 /* ---------------------------------------------------------------- *

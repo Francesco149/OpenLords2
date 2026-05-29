@@ -62,8 +62,12 @@
 #include "config.h"
 #include "dev_hooks.h"
 #include "engine.h"
+#include "engine_dirty_rect.h"
 #include "engine_title_render.h"
 #include "gfx.h"
+#include "gfx_dispatch.h"
+#include "gfx_glyph.h"
+#include "gfx_panel.h"
 
 /* Class name matches retail FUN_004b2258's `s_WinLords2Class_004df5b0`
  * so FindWindowA from external tools resolves to us identically.
@@ -102,6 +106,11 @@ static int       g_gfx_active;
  * — exercises the FUN_0041e61d asset-load path so the backdrop can be
  * captured/eyeballed.  Implies --gfx-init. */
 static int       g_title_bg;
+/* --title-menu: like --title-bg, but also render the stone panel on top
+ * of the backdrop (the page-1 main-menu composition: bg + panel; the
+ * title/button text no-ops until the font glyph data is extracted +
+ * bound).  Implies --gfx-init. */
+static int       g_title_menu;
 /* --audio-init: call audio_init() after window creation.  Off by
  * default — SetCooperativeLevel(PRIORITY) modifies process audio
  * state and the headless smoke harness has no way to validate
@@ -196,6 +205,7 @@ static int  acquire_singleton(void);
 static void release_singleton(void);
 static void frame_limiter(void);
 static void main_loop_body(void);
+static void bringup_title_menu(int with_panel);
 void log_line(const char *fmt, ...);   /* non-static — gfx.c links to this */
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdShow)
@@ -258,15 +268,13 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
     if (g_gfx_init) {
         if (gfx_init(g_hwnd, g_fullscreen)) {
             g_gfx_active = 1;
-            /* Bring-up: load the page-1 menu backdrop into the back
+            /* Bring-up: render the page-1 main menu into the back
              * buffer before the first present, so frame 0 shows the
-             * gateway photo rather than the background-erase fill.
-             * Exercises the FUN_0041e61d asset-load path ahead of the
+             * menu rather than the background-erase fill.  Exercises the
+             * FUN_0041e61d / FUN_0041e7e1 render chain ahead of the
              * boot→title state producer. */
-            if (g_title_bg) {
-                engine_title_render_set_page(1);
-                if (!gfx_title_background_load(engine_title_render_page()))
-                    log_line("--title-bg: background load failed");
+            if (g_title_bg || g_title_menu) {
+                bringup_title_menu(g_title_menu);
             }
             /* Bring-up tail — force the first present immediately so
              * frame 0 captures and the visible window show the
@@ -731,6 +739,58 @@ static int create_main_window(void)
     return 1;
 }
 
+/* Bring-up: render the page-1 main menu directly, ahead of the
+ * boot→title state producer (FUN_0042b780) and the menu state tick.
+ * Loads the gateway backdrop (palette + full-screen image) into the
+ * back buffer, then — if with_panel — composes the stone panel + the
+ * button bevels on top via the ported title-render chain inside one
+ * back-buffer lock.  The title/button label TEXT no-ops here: it rests
+ * on the font glyph data (DAT_005b2fa0 / DAT_005af8f0) which is static
+ * binary in Lords2.exe and not yet extracted/bound, so the localized
+ * line seek returns nothing and draws nothing.  Once the fonts are
+ * bound the same chain renders the text with no further wiring. */
+static void bringup_title_menu(int with_panel)
+{
+    /* Bookkeeping dirty-rect state the title chain marks into.  No
+     * visual effect (gfx owns the present-side dirty rect) — just keeps
+     * the marks from dereferencing NULL. */
+    static engine_dirty_rect_state_t title_dirty;
+
+    engine_title_render_set_page(1);
+
+    /* Backdrop: palette + gateway.pl8 raw into the back buffer. */
+    if (!gfx_title_background_load(engine_title_render_page())) {
+        log_line("bringup_title_menu: background load failed");
+        return;
+    }
+    if (!with_panel)
+        return;
+
+    /* Panel sprite sheet + render-chain bindings. */
+    const uint8_t *sheet = gfx_load_panel_sheet();
+    engine_title_render_set_dirty_state(&title_dirty);
+    engine_title_render_bind_panel_asset(sheet);
+    engine_title_render_bind_panel_fn(gfx_panel_draw);
+    /* Background hook stays the default no-op stub — the backdrop is
+     * already in the back buffer from gfx_title_background_load. */
+
+    /* Init the shared gfx render state to its retail BSS-zero values
+     * (the panel renderer assumes these, same as the panel unit test). */
+    gfx_dispatch_set_clip_x_mode(0);
+    gfx_dispatch_set_glyph_height_short(0);
+    gfx_glyph_set_clip(0, 0, 0);
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(0, 0, 0);
+    gfx_glyph_set_color_modulation(0);
+
+    /* Render the title scene into the locked back buffer (panel + button
+     * bevels composite over the backdrop). */
+    if (gfx_lock_canvas()) {
+        engine_title_render_scene(0x1f, 1);
+        gfx_unlock_canvas();
+    }
+}
+
 static void main_loop_body(void)
 {
     MSG msg;
@@ -938,6 +998,10 @@ static void parse_cmdline(LPSTR lpCmd)
         else if (!strcmp(a, "--title-bg")) {     /* bring-up: load the menu backdrop */
             g_title_bg = 1;
             g_gfx_init = 1;     /* needs DDraw */
+        }
+        else if (!strcmp(a, "--title-menu")) {   /* bring-up: backdrop + panel */
+            g_title_menu = 1;
+            g_gfx_init   = 1;   /* needs DDraw */
         }
         else if (!strcmp(a, "--audio-init"))     g_audio_init  = 1;
         else if (!strcmp(a, "--capture-to") && i + 1 < ntok) {

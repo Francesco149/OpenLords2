@@ -69,6 +69,21 @@ int  gfx_load_background_image(const char *pl8_path);
  * the caller to present.  Returns 1 if both palette and image loaded. */
 int  gfx_title_background_load(int page);
 
+/* Load the panel sprite sheet (panels2.pl8) into a persistent blob and
+ * return it (or NULL on failure).  Port of retail's FUN_004b25b0 alloc +
+ * the panels2.pl8 read.  The blob is the raw PL8 the panel renderer
+ * indexes; bind it as engine_title_render's panel asset.  Freed by
+ * gfx_shutdown. */
+const uint8_t *gfx_load_panel_sheet(void);
+
+/* Bind the locked back-buffer base pointer as the gfx_paint canvas so
+ * the pure-C renderers (sprite / glyph / line / panel) paint into it.
+ * Returns 1 on success (back buffer locked, pitch == 640), 0 otherwise.
+ * Pair with gfx_unlock_canvas after the render pass; the caller then
+ * presents (gfx_tick_present). */
+int  gfx_lock_canvas(void);
+void gfx_unlock_canvas(void);
+
 /* Present the back buffer to the primary surface.  In windowed
  * mode the back is Blt'd into the on-screen client rectangle (the
  * clipper trims).  In fullscreen mode the back is BltFast'd to

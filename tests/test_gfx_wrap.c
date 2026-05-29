@@ -252,6 +252,31 @@ int test_gfx_wrap_localized_line_out_of_bounds_is_noop(void)
     return 0;
 }
 
+int test_gfx_wrap_localized_line_unbound_blob_is_noop(void)
+{
+    /* Unbound localization (blob == NULL) — must no-op, not deref NULL.
+     * Exercised by the title render chain during bring-up before the
+     * l2.eng blob is bound. */
+    canvas_t c; canvas_init(&c);
+    wrap_reset();
+    gfx_text_set_no_shadow(1);
+
+    uint8_t font[FONT_BLOB_LEN];
+    font_blob_init_1x1(font, 0xff);
+    uint8_t table[256];
+    table_init_all_glyph1_except_space(table);
+
+    localization_state_t loc = { .blob = 0 };
+
+    /* Both the single-line and the centered entry points must survive. */
+    gfx_wrap_localized_line(&loc, 0xb, 0, 5, 5, font, &table[0x20], 7);
+    gfx_wrap_localized_line_centered(&loc, 0xb, 0, 0, 0, 0x180,
+                                     font, &table[0x20], &table[0], 7);
+
+    T_ASSERT_EQ_I(count_pixels(&c, 7), 0);
+    return 0;
+}
+
 int test_gfx_wrap_localized_line_clears_alt_clip(void)
 {
     canvas_t c; canvas_init(&c);

@@ -99,6 +99,15 @@ static const uint8_t *seek_localized(localization_state_t *loc,
                                      int loc_index,
                                      int skip_strings)
 {
+    /* Unbound localization (blob not yet loaded) — no string.  Retail
+     * never reaches this (the l2.eng blob is loaded at boot before any
+     * localized text renders), but the drop-in can invoke the render
+     * chain during bring-up before the blob is bound; guard it the same
+     * defensive way gfx_paint guards an unbound canvas. */
+    if (loc->blob == 0) {
+        return 0;
+    }
+
     /* `localization_seek_skip` already implements the seek + skip +
      * leading-control-skip path with the NUL-after-NUL boundary
      * mode (quirk #20).  When the initial offset is out of bounds

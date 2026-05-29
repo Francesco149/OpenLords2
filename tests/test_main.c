@@ -697,6 +697,7 @@ struct test_case {
     X(gfx_wrap_localized_line_loads_and_renders) \
     X(gfx_wrap_localized_line_skip_strings_advances_walker) \
     X(gfx_wrap_localized_line_out_of_bounds_is_noop) \
+    X(gfx_wrap_localized_line_unbound_blob_is_noop) \
     X(gfx_wrap_localized_line_clears_alt_clip) \
     X(gfx_wrap_localized_line_centered_offsets_x) \
     X(gfx_wrap_buffer_wraps_at_pixel_budget) \
