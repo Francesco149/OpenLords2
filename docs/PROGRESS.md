@@ -7,6 +7,74 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — end-of-turn readiness check (turn family, in-flow chip)
+
+The prior session's nominated next chip: `FUN_0049b762` (334 B) →
+`src/engine_turn.c` `engine_turn_end_check` + `engine.c`
+`engine_sim_turn_resolved`.  The predicate the strategic-turn driver
+(`0x49a010`, unported) polls each pass to decide whether the turn may
+advance.
+
+### What it does
+
+Two folded behaviours: (1) a **readiness scan** of roster slots 1..5 —
+counts players still active and below the `999` "turn done" sentinel,
+landing the count in the save-schema scalar `s_slot_00554004`; (2) when
+everyone's done, an **advance decision** — SP and MP-alone advance
+immediately, otherwise a three-state MP turn-sync handshake on
+`g_sim_turn_progress` (`DAT_00553fc8`): arm (state 0→1, clear the 10
+per-player ready flags, snapshot the timeout flag, back-date the sync
+timer) → wait (1) → finalise (2→0, advance).
+
+### What landed
+
+- **`engine_turn.c` / `engine_turn.h`** — the pure core (every input
+  explicit, all mutation in the out struct), mirroring the
+  rate-controller / phase-ticker split.  The Win32 wrapper in
+  `engine.c` captures `timeGetTime` + the live globals and writes back.
+- **Five runtime-only global mirrors** added to `engine.c` (static,
+  all 0 in SP, none persisted): `g_sim_active_player_count`
+  (`DAT_0053f068`), `g_sim_turn_timeout_reached` (`DAT_00553018`),
+  `g_sim_saved_turn_timeout` (`DAT_0055ce88`),
+  `g_sim_turn_sync_baseline_ms` (`_DAT_0056d658`),
+  `g_sim_turn_ready_flags[10]` (`DAT_00515d60`).  `g_sim_turn_progress`
+  and the `s_slot_00554004` scalar already existed.
+- **7 host tests** — SP-all-done-advances, someone-mid-turn-waits,
+  active-and-below-999 counting, slots-1..5-only scan, MP-single-active,
+  MP-handshake arm→finalise, MP-state-1-waits.  Suite **1063 → 1070**,
+  both builds clean.
+- **Quirks #111 / #112** — the 1..5-vs-1..6 roster-slot disagreement
+  between this function and the rate-controller walker `FUN_0043e330`
+  (the latter reads one record past the array), and the "arm the sync
+  timer 10 s in the past so it fires on the next tick" trick.  Plus a
+  `main-loop-tick.md` §`FUN_0049b762` section.
+
+### Frontier honesty note
+
+The camera-band leaves at the top of the derived frontier
+(`0x42f58c` + its callees) are **false leaves**: the ledger marks
+`FUN_0042f449` / `FUN_0042f306` (the 323 B palette-table builders
+`0x42f58c` calls) "ported" only because they're name-dropped in a
+`gfx.c` comment — `gfx_load_palette` is a from-scratch reimpl that
+never ported them individually.  Left as-is this session (out of
+scope); flagged for a future pollution sweep.  This chip's own
+neighbour citations (`0x49a010`, `0x49b8b0`, `0x49ce51`) were written
+as bare hex per [[project_ledger_fun_token]] to keep the promotion a
+clean **+1**.
+
+### Disposition
+
+Ledger: **275 → 276 touched** (11.3 %), 246 tested.  Dead-but-tested —
+the sole caller `0x49a010` is unported and nothing drives the handshake
+state past 0, so the live SP path always advances via the
+`mp_active == 0` branch.  Same posture as the roster/schedule/save
+chips.  Natural next chips: the MP turn-advance `0x49b973` (374 B), or
+back to the roster-cluster consumer `0x49bd99`.
+
+(Clean `/clear` point — one self-contained chip.)
+
+---
+
 ## 2026-05-29 — turn-save backup rotation (save family, in-flow chip)
 
 Next clean leaf off the honest frontier, pivoting from the roster/npc

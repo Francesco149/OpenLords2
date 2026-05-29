@@ -17,7 +17,10 @@
 
 #include "engine_camera.h"
 #include "engine_overlay_render.h"
+#include "engine_turn.h"
 #include "gfx.h"
+#include "save.h"                 /* g_player_strategic_352 */
+#include "save_schema_globals.h"  /* s_slot_00554004 */
 
 #include <mmsystem.h>     /* timeGetTime — gfx.h transitively pulled in
                            * windows.h, but not mmsystem.h */
@@ -112,8 +115,35 @@ static int g_sim_turn_end_pending;             /* DAT_0056d6a4 */
 /* "Turn progress" flag.  Retail DAT_00553fc8.  Cleared when turn ends.
  * The sub-step body checks this when consuming the turn-end pending
  * latch: if turn-progress is also 0, the pending latch is cleared.
- * Today no producer; defaults to 0. */
+ * Also the three-state handshake variable for the end-of-turn check
+ * (engine_sim_turn_resolved / FUN_0049b762).  Today no producer
+ * drives it past 0; defaults to 0. */
 static int g_sim_turn_progress;                /* DAT_00553fc8 */
+
+/* ─── End-of-turn readiness mirrors (FUN_0049b762 state) ───────────
+ *
+ * Runtime-only globals consumed/written by engine_sim_turn_resolved.
+ * None have a producer in the drop-in yet (the turn driver 0x49a010
+ * and the timeout subsystem 0x49b8b0 are unported), so they sit at 0
+ * and the SP path (mp_active == 0) is the only one exercised live.
+ * NOT save-schema scalars — none are persisted. */
+static int      g_sim_active_player_count;     /* DAT_0053f068 — # active
+                                                *   players; retail's writer
+                                                *   FUN_0043e330 computes this
+                                                *   into the rate-controller
+                                                *   hint snapshot, not a global,
+                                                *   so this mirror stays 0 */
+static int      g_sim_turn_timeout_reached;    /* DAT_00553018 — set by the
+                                                *   2500 ms turn timer in the
+                                                *   turn driver (retail 0x49a010) */
+static int      g_sim_saved_turn_timeout;      /* DAT_0055ce88 — snapshot of the
+                                                *   above taken when the sync
+                                                *   handshake arms */
+static uint32_t g_sim_turn_sync_baseline_ms;   /* _DAT_0056d658 — last turn-sync
+                                                *   broadcast time (10 s gate) */
+static int      g_sim_turn_ready_flags[10];    /* DAT_00515d60[10] — per-player
+                                                *   turn-ack flags, cleared when
+                                                *   the handshake arms */
 
 /* ─── Double-LFSR RNG mirrors (FUN_00404a46 state) ──────────────────
  *
@@ -343,6 +373,45 @@ static void engine_tick_anim_cycle_step(void)
     engine_compute_anim_cycle(&in, &out);
 
     g_anim_cycle_counter = out.new_counter;
+}
+
+/* Win32 wrapper around engine_turn_end_check — the end-of-turn
+ * readiness predicate (port of FUN_0049b762 @ 0x49b762).  Captures
+ * timeGetTime + the live turn-state globals, runs the pure check,
+ * writes the readiness count + handshake state back, and zeroes the
+ * per-player ready flags when the handshake arms.  Returns 1 when the
+ * turn may advance.
+ *
+ * No caller in the drop-in yet — retail's turn driver 0x49a010
+ * (982 B, unported) is the sole caller (`if (resolved) 0x49ce51()`).
+ * Dead-but-tested today: the pure core is exercised by the host suite. */
+int engine_sim_turn_resolved(void)
+{
+    engine_turn_end_in_t  in  = {0};
+    engine_turn_end_out_t out = {0};
+
+    in.now_ms           = timeGetTime();
+    in.mp_active        = g_sim_mp_active;
+    in.active_count     = g_sim_active_player_count;
+    in.turn_progress    = g_sim_turn_progress;
+    in.timeout_reached  = g_sim_turn_timeout_reached;
+    in.saved_timeout    = g_sim_saved_turn_timeout;
+    in.sync_baseline_ms = g_sim_turn_sync_baseline_ms;
+    in.players          = g_player_strategic_352;
+
+    engine_turn_end_check(&in, &out);
+
+    s_slot_00554004             = (uint32_t)out.not_ready_count;
+    g_sim_turn_progress         = out.new_turn_progress;
+    g_sim_turn_timeout_reached  = out.new_timeout_reached;
+    g_sim_saved_turn_timeout    = out.saved_timeout;
+    g_sim_turn_sync_baseline_ms = out.new_sync_baseline_ms;
+    if (out.clear_ready_flags) {
+        for (int i = 0; i < 10; i++)
+            g_sim_turn_ready_flags[i] = 0;
+    }
+
+    return out.advance;
 }
 
 /* Win32 wrapper around engine_compute_input_state — reads

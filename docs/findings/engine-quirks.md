@@ -3960,6 +3960,49 @@ before opening them.
 
 ---
 
+## 111. Two readers of the player roster disagree on how many slots there are
+
+The end-of-turn readiness check (`FUN_0049b762`) walks player slots
+`1..5` — its loop is `for (i = 1; i < 6; ...)`.  The sibling min-tick
+walker (`FUN_0043e330`), reading the *same* 2112-byte roster array
+(`0x57bf00`, 6 records × 352 B), walks `1..6` — `for (i = 1; i < 7;
+...)`.  Slot 6 sits at byte offset `6 * 0x160 = 2112`, exactly one
+record *past* the end of the array, so `FUN_0043e330` reads four bytes
+of whatever `.data` follows on every active-player count.
+
+In retail this is benign-by-layout: the bytes after the array happen to
+be a zeroed/inactive region, so the `has_data && active && !disconnected`
+gate fails for the phantom slot 6 and it never contributes.  Our port
+of `FUN_0043e330` (the rate-controller min-tick walker in
+`engine_rate.c`) collapses the strided layout into 7-entry arrays,
+sidestepping the OOB read — but it's a reminder that the engine's notion
+of "how many player slots" is not consistent across functions.
+`FUN_0049b762`'s 1..5 stays safely in bounds either way.
+
+> 📍 `src/engine_turn.c` (`engine_turn_end_check`), Ghidra
+> `FUN_0049b762` (1..5) vs `FUN_0043e330` (1..6); roster array
+> `0x57bf00`.
+
+---
+
+## 112. Turn-sync timer is armed 10 seconds in the past so it fires immediately
+
+When the MP turn-sync handshake arms (`FUN_0049b762` state 0→1), it
+seeds the periodic-broadcast baseline with `timeGetTime() - 10000`
+rather than the current time.  The downstream gate (`FUN_0049b8b0`)
+fires its broadcast when `9999 < now - baseline`.  By back-dating the
+baseline a full 10 s, the engine guarantees the very next poll sees
+`~10000 < now - baseline` true and broadcasts the turn-sync message
+immediately, instead of waiting a real 10 s after the handshake opens.
+It's a one-line way to say "fire on the next tick, then settle into the
+10 s cadence" without a separate first-time flag.
+
+> 📍 `src/engine_turn.c` (`engine_turn_end_check`, `new_sync_baseline_ms
+> = now_ms - 10000`), Ghidra `FUN_0049b762` @ `0x49b762`; gate in
+> `FUN_0049b8b0`.
+
+---
+
 <!--
 Template for new entries:
 

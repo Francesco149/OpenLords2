@@ -438,6 +438,49 @@ sub-steps, the skeleton wires the master-tick counter, LFSR, and
 state-machine breaks; everything else stays a TODO until the
 respective subsystem ports.
 
+### `FUN_0049b762` — end-of-turn readiness check (ported 2026-05-29)
+
+The predicate the turn driver `FUN_0049a010` (deferred, sub-state-0
+extra above) polls each pass: `iVar1 = FUN_0049b762(); if (iVar1)
+FUN_0049ce51();`.  Ported as the pure `engine_turn_end_check`
+(`src/engine_turn.c`) + a Win32 wrapper `engine_sim_turn_resolved`
+(`engine.c`) that captures `timeGetTime` and the live turn-state
+globals — same pure/wrapper split as the rate controller and phase
+ticker.
+
+Two behaviours:
+
+1. **Readiness scan.**  Counts roster slots `1..5` (retail `i < 6`)
+   that are active (`+4` byte) and still below the `999` "turn done"
+   sentinel (`int @ +0`).  The count lands in `s_slot_00554004`
+   (retail `DAT_00554004`, a save-schema scalar).  Non-zero → at least
+   one player still mid-turn → don't advance.  (See quirk #111 for the
+   1..5-vs-1..6 disagreement with the rate-controller walker.)
+
+2. **All done (count == 0).**  SP (`mp_active == 0`) advances
+   immediately; MP-with-one-active-peer (`active_count == 1`) likewise.
+   Otherwise a three-state handshake on `DAT_00553fc8`
+   (`g_sim_turn_progress`):
+
+   | state | action | return |
+   |-------|--------|--------|
+   | 0 | arm: zero the 10 per-player ready flags (`DAT_00515d60[10]`), snapshot `DAT_00553018`→`DAT_0055ce88`, clear `DAT_00553018`, set state 1, back-date the sync timer (`_DAT_0056d658 = now − 10000`, quirk #112) | 0 (wait) |
+   | 1 | still waiting | 0 (wait) |
+   | 2 | peers acked → reset to 0 | 1 (advance) |
+
+**Globals introduced (runtime-only mirrors in `engine.c`, all 0 in the
+SP drop-in — none persisted):** `g_sim_active_player_count`
+(`DAT_0053f068` — retail's writer `FUN_0043e330` computes this into the
+rate-controller hint snapshot, not a persistent global, so our mirror
+stays 0), `g_sim_turn_timeout_reached` (`DAT_00553018`),
+`g_sim_saved_turn_timeout` (`DAT_0055ce88`), `g_sim_turn_sync_baseline_ms`
+(`_DAT_0056d658`), `g_sim_turn_ready_flags[10]` (`DAT_00515d60`).
+
+**Disposition:** dead-but-tested.  The sole caller `FUN_0049a010` is
+unported, and no producer drives `g_sim_turn_progress` past 0, so the
+live SP path always takes the `mp_active == 0` → advance branch.  The
+host suite exercises every branch directly via the pure core.
+
 ### Render-phase tail — camera clamps + FPS counter ported (2026-05-24 / 26)
 
 Six functions run at the tail of the render phase, after the screen-

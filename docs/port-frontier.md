@@ -5,8 +5,8 @@
 The unported, non-thunk engine functions already **called by ported code** — the natural next chips. A **leaf** has all of its
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
-- frontier functions: **148**
-- of those, zero-dependency **leaves: 53** (recommended order below)
+- frontier functions: **147**
+- of those, zero-dependency **leaves: 52** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
 
@@ -48,10 +48,10 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4b1cf3 | 226 | 1 | battlefield render + wndproc |
 | 0x41a639 | 251 | 1 | render-quad / blit primitives |
 | 0x46d2a3 | 301 | 1 | tables (item/char) + populators |
-| 0x49b762 | 334 | 1 | npc schedule + worker walk |
 | 0x43fd2a | 413 | 1 | stage/post-load + char tables |
 | 0x41298a | 425 | 1 | render-quad / blit primitives |
 | 0x47f76d | 458 | 1 | d3d/mesh pool + preload + palette |
+| 0x4477e7 | 503 | 1 | sim dispatch + records |
 
 ## Full frontier by address band
 
@@ -196,7 +196,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x488dfe | 943 | 1 | 0 | ✓ |
 | 0x485bb1 | 1592 | 1 | 5 |  |
 
-### npc schedule + worker walk (19)
+### npc schedule + worker walk (18)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
@@ -211,7 +211,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x497500 | 211 | 1 | 8 |  |
 | 0x49915e | 259 | 1 | 2 |  |
 | 0x498270 | 327 | 1 | 4 |  |
-| 0x49b762 | 334 | 1 | 0 | ✓ |
 | 0x49b973 | 374 | 1 | 2 |  |
 | 0x4976a1 | 472 | 1 | 18 |  |
 | 0x49dfc6 | 505 | 1 | 4 |  |

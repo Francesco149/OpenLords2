@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 245,
+  "tested": 246,
   "ported": 30,
-  "unported": 2172,
+  "unported": 2171,
   "orphan_refs_not_in_function_table": 3,
-  "touched": 275,
-  "pct_touched": 11.2,
-  "pct_tested": 10.0,
+  "touched": 276,
+  "pct_touched": 11.3,
+  "pct_tested": 10.1,
   "bytes_total": 838629,
-  "bytes_touched": 86497,
-  "pct_bytes_touched": 10.3
+  "bytes_touched": 86831,
+  "pct_bytes_touched": 10.4
  },
  "orphan_refs": [
   "0x40eb4c",
@@ -6675,8 +6675,10 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine.h",
-    "src/engine_rate.c"
+    "src/engine_rate.c",
+    "src/engine_turn.c"
    ]
   },
   {
@@ -14613,8 +14615,13 @@
    "name": "FUN_0049b762",
    "size": 334,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine.c",
+    "src/engine.h",
+    "src/engine_turn.c",
+    "src/engine_turn.h"
+   ]
   },
   {
    "va": "0x49b8b0",

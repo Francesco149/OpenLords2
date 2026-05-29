@@ -1144,6 +1144,13 @@ struct test_case {
     X(npc_difficulty_variant_table) \
     X(npc_mp_active_uses_variant0) \
     X(npc_copies_localized_name) \
+    X(turn_end_sp_all_done_advances) \
+    X(turn_end_someone_mid_turn_waits) \
+    X(turn_end_counts_only_active_below_999) \
+    X(turn_end_scans_slots_1_to_5_only) \
+    X(turn_end_mp_single_active_advances) \
+    X(turn_end_mp_handshake_arms_then_finalises) \
+    X(turn_end_mp_state1_waits) \
     /* end */
 
 /* Emit extern decls. */

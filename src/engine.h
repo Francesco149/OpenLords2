@@ -160,6 +160,12 @@ typedef struct {
 void engine_compute_sim_sub_steps(const engine_rate_in_t *in,
                                   engine_rate_out_t *out);
 
+/* End-of-turn readiness predicate — Win32 wrapper around the pure
+ * engine_turn_end_check (port of FUN_0049b762).  Returns 1 when the
+ * strategic turn may advance.  Defined in engine.c; the pure core
+ * lives in engine_turn.c.  No caller in the drop-in yet. */
+int engine_sim_turn_resolved(void);
+
 /* ─── scenario-rate hint (port of FUN_0043de70) ────────────────────
  *
  * Computes the `scenario_hint` value that engine_compute_sim_sub_steps

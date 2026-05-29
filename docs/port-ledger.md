@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **275** (11.2%) — tested 245, ported 30
-- code bytes touched: **10.3%** (86,497 / 838,629 B)
-- unported: **2172**
+- touched: **276** (11.3%) — tested 246, ported 30
+- code bytes touched: **10.4%** (86,831 / 838,629 B)
+- unported: **2171**
 - orphan refs (in src/, not in function table): 3
 
-## tested (245) — ported + host unit suite
+## tested (246) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -135,7 +135,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42f1df | FUN_0042f1df | 295 | gfx.c, main.c |
 | 0x4343f8 | FUN_004343f8 | 36 | main.c |
 | 0x43de70 | FUN_0043de70 | 1211 | engine.c, engine.h, engine_rate.c |
-| 0x43e330 | FUN_0043e330 | 259 | engine.h, engine_rate.c |
+| 0x43e330 | FUN_0043e330 | 259 | engine.c, engine.h, engine_rate.c (+1) |
 | 0x43e433 | FUN_0043e433 | 218 | engine.h, engine_rate.c |
 | 0x43e50d | FUN_0043e50d | 180 | engine.h, engine_rate.c |
 | 0x43f4b7 | FUN_0043f4b7 | 270 | engine.h, engine_state_hash.c |
@@ -184,6 +184,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4917dd | FUN_004917dd | 599 | engine_tile.c, engine_tile.h, save.c |
 | 0x4921e5 | FUN_004921e5 | 451 | engine_tile.c, engine_tile.h |
 | 0x49a453 | FUN_0049a453 | 302 | save.c, save.h |
+| 0x49b762 | FUN_0049b762 | 334 | engine.c, engine.h, engine_turn.c (+1) |
 | 0x49bae9 | FUN_0049bae9 | 180 | engine_roster.c, engine_roster.h |
 | 0x49bbe8 | FUN_0049bbe8 | 53 | engine_roster.c, engine_roster.h |
 | 0x49bc1d | FUN_0049bc1d | 66 | engine_roster.c, engine_roster.h |
