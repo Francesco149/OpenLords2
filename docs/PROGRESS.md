@@ -7,6 +7,69 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — MENU TEXT RENDERS: font load + glyph-table extract + bind
+
+Committed `7bce81a`.  The main-menu **text** now renders end-to-end in
+the drop-in — title, subtitle, and all four button labels.  Diff vs
+`runs/groundtruth/mainmenu-retail.bmp` dropped **1.58% → 0.37%**; the
+text matches retail in glyph shape, position, and shadow.
+
+### How the assets were located (the asset-source mystery)
+
+The font buffers `DAT_005af8f0` / `DAT_005b2fa0` are in BSS, never
+written by a `FUN_004af8d9(..., &DAT_..., ...)` call, and the font
+filenames aren't symbolised — so neither showed up in a naive grep.
+They are loaded by a **table-driven master asset-init loop** (the 13-asset
+loop ending `FUN_004afab9(0x4dbf68,...)`): a 13-entry table at **0x4d9f48**
+(20-byte entries — 16-byte filename + 4-byte buffer size at +0x10),
+indexed 0..0xc, each loaded into a fixed BSS buffer:
+
+  - idx 6 → `DAT_005af8f0` ← **fntl2_14.pl8** (buf 0x36b0)  menu/default
+  - idx 7 → `DAT_005b2fa0` ← **fntl2_22.pl8** (buf 0x84d0)  large title
+
+(`Font_c2.pl8` / `Font3c2.pl8` in the game dir are **unused leftovers** —
+not referenced anywhere in the binary.)
+
+The char→glyph index table is the single 256-byte map at **0x4d71d0**
+(file-backed .data).  Retail reaches it via two pointers 0x20 apart:
+the measure map (`DAT_004d71d0`, indexed by raw char — `FUN_004015b9`) and
+the render map (`DAT_004d71f0` == base+0x20, indexed by `c-0x20` —
+`FUN_00402a14`).  Both blit-side and measure-side index by the same
+effective byte, so `render[c-0x20] == measure[c]`.  Extracted once and
+embedded in `gfx_glyph_table.c` (a drop-in can't read it from the exe at
+runtime — it IS the exe).
+
+### What landed
+
+- `gfx_glyph_table.c/.h` + 5 tests (suite 1122 → 1127).
+- `gfx_load_menu_font` / `gfx_load_title_font` in gfx.c (raw PL8 read,
+  same shape as the panel sheet; freed in gfx_shutdown).
+- `main.c` bring-up: bind fonts + glyph tables + l2.eng blob into the
+  title chain; set screen-state byte `DAT_004eac50 = 0x1f` so gfx_text
+  uses the title-screen **gray** shadow pair (0x36/0x2c) over the default
+  colorful (0x10/0x1f) — quirk #114's mirror, fixed the title/button
+  shadow delta (1879 → 1125 diff px).
+
+### Open residual (0.37%, ~1125 px) — two highlight-color items
+
+Both are colorful-in-port / black-in-retail, against the **same**
+gateway.256 palette (idx 1 = dark-red 128,0,0; idx 0xf9 = red 252,0,0):
+
+1. **Title uppercase caps** (L, R) render color 1 (dark red) in the port.
+   Retail ground truth shows them pure black.  Retail's `FUN_0041ea14`
+   *does* arm the uppercase highlight (`DAT_0058fe2c = 1`) and the blit
+   writes the color index directly — so by the decompile the caps *should*
+   be dark red.  Yet the captured retail frame is black there.  Unresolved
+   from static analysis: needs the live retail palette/state at idx 1.
+2. **Selected button** ("Single player") renders 0xf9 (red) because the
+   bring-up forces `g_selected_button = 1`; the retail capture has no
+   selection (all four labels black).  Bring-up artifact, not a render bug.
+
+Plus ~300 px scattered gray→black in the lower screen (glyph-edge / bevel
+AA, unconfirmed).  **Awaiting human verification** of whether retail's
+live menu shows the red caps / selection highlight (resting vs hover
+state) before deciding the faithful fix.
+
 ## 2026-05-29 — FIRST VISIBLE MENU PIXELS: backdrop renders + seam wired
 
 Autonomous continuation of the 10-chip push.  Two committed chips, then a
