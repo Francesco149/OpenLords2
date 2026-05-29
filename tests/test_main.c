@@ -742,6 +742,15 @@ struct test_case {
     X(gfx_line_rect_bevel_dark_tl_inverts_palette) \
     X(gfx_line_rect_bevel_x_zero_skips_right_clamp_per_quirk_39) \
     X(gfx_line_rect_solid_x_zero_still_clamps_right) \
+    X(gfx_line_fill_rect_fills_interior) \
+    X(gfx_line_fill_rect_zero_or_negative_size_is_noop) \
+    X(gfx_line_fill_rect_clamps_oversize) \
+    \
+    X(gfx_caret_off_phase_draws_nothing) \
+    X(gfx_caret_anchor_y_zero_skips_measure_and_draw) \
+    X(gfx_caret_visible_phase_draws_underscore) \
+    X(gfx_caret_blink_wraps_past_0x10) \
+    X(gfx_caret_insert_mode_draws_box_outline) \
     \
     X(gfx_text_label_format_dec_zero) \
     X(gfx_text_label_format_dec_single_digit) \

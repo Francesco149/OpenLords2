@@ -287,6 +287,23 @@ void gfx_line_rect(int x, int y, int w, int h, uint8_t color)
     draw_rect_4lines(x, y, w, h, color, color);
 }
 
+/* Port of FUN_0040437d @ 0x40437d (197 B).  Solid FILLED axis-aligned
+ * rectangle — `h` stacked horizontal lines, one per row, each drawn
+ * via gfx_line_draw (FUN_00403a8f) from (x,row) to (x+w-1,row).
+ *
+ * Retail guards the whole body on `w > 0 && h > 0`, then applies the
+ * same solid-rect clamp the outline rect uses (negative x/y → 0;
+ * right/bottom extents clamped to the canvas).  Used for the text-
+ * input caret (FUN_0040acce). */
+void gfx_line_fill_rect(int x, int y, int w, int h, uint8_t color)
+{
+    if (w > 0 && h > 0) {
+        clamp_solid(&x, &w, &y, &h);
+        for (int row = y; row < h + y; row++)
+            gfx_line_draw(x, row, w - 1 + x, row, color);
+    }
+}
+
 /* ──────────────────────────────────────────────────────────────────
  * Port of FUN_00403deb — 3D bevel rect (dark BR, bright TR/TL)
  *

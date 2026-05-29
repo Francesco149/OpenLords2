@@ -249,6 +249,9 @@ void gfx_text_clear_first_pos_latch(void);
 int  gfx_text_first_pos_latched(void);   /* DAT_005aeb64 */
 int  gfx_text_first_pos_x(void);          /* DAT_0058fd58 */
 int  gfx_text_first_pos_y(void);          /* DAT_0058fd54 */
+/* Direct anchor writes (text-input field renderer FUN_0041f321). */
+void gfx_text_set_first_pos_x(int x);
+void gfx_text_set_first_pos_y(int y);
 
 /* ──────────────────────────────────────────────────────────────────
  * Running accumulators (caller-owned, renderer-mutated)

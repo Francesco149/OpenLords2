@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 276,
+  "tested": 278,
   "ported": 34,
-  "unported": 2137,
+  "unported": 2135,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 310,
-  "pct_touched": 12.7,
-  "pct_tested": 11.3,
+  "touched": 312,
+  "pct_touched": 12.8,
+  "pct_tested": 11.4,
   "bytes_total": 838629,
-  "bytes_touched": 110930,
-  "pct_bytes_touched": 13.2
+  "bytes_touched": 111451,
+  "pct_bytes_touched": 13.3
  },
  "orphan_refs": [
   "0x004148",
@@ -187,6 +187,7 @@
    "src": [
     "src/font_metrics.c",
     "src/font_metrics.h",
+    "src/gfx_caret.h",
     "src/gfx_glyph_table.h",
     "src/text_input.h"
    ]
@@ -800,8 +801,13 @@
    "name": "FUN_0040437d",
    "size": 197,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_caret.c",
+    "src/gfx_caret.h",
+    "src/gfx_line.c",
+    "src/gfx_line.h"
+   ]
   },
   {
    "va": "0x404442",
@@ -1513,8 +1519,13 @@
    "name": "FUN_0040acce",
    "size": 324,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_caret.c",
+    "src/gfx_caret.h",
+    "src/gfx_line.c",
+    "src/gfx_line.h"
+   ]
   },
   {
    "va": "0x40ae12",
@@ -3114,7 +3125,10 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/gfx_sprite.c"
+    "src/gfx_caret.h",
+    "src/gfx_sprite.c",
+    "src/gfx_text.c",
+    "src/gfx_text.h"
    ]
   },
   {

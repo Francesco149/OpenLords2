@@ -93,6 +93,11 @@ void gfx_text_clear_first_pos_latch(void)                 { g_first_pos_latch = 
 int  gfx_text_first_pos_latched(void)                     { return g_first_pos_latch; }
 int  gfx_text_first_pos_x(void)                           { return g_first_pos_x; }
 int  gfx_text_first_pos_y(void)                           { return g_first_pos_y; }
+/* Direct anchor writes — the text-input field renderer (FUN_0041f321)
+ * pokes DAT_0058fd58 / DAT_0058fd54 explicitly after the line render
+ * (caret x = first_pos_x + box offset; caret y = fixed 0x52). */
+void gfx_text_set_first_pos_x(int x)                      { g_first_pos_x = x; }
+void gfx_text_set_first_pos_y(int y)                      { g_first_pos_y = y; }
 
 /* ──────────────────────────────────────────────────────────────────
  * Running accumulators

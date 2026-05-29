@@ -494,3 +494,44 @@ int test_gfx_line_rect_solid_x_zero_still_clamps_right(void)
     for (int y = 0; y <= 15; y++) T_ASSERT_EQ_U(at(&c, 15, y), 8);
     return 0;
 }
+
+/* ── gfx_line_fill_rect (FUN_0040437d) ──────────────────────────── */
+
+int test_gfx_line_fill_rect_fills_interior(void)
+{
+    canvas_t c; canvas_init(&c);
+    gfx_line_fill_rect(2, 3, 4, 2, 9);
+    /* 4×2 = 8 solid pixels filled (unlike the 4-edge outline). */
+    T_ASSERT_EQ_I(count_color(&c, 9), 8);
+    for (int y = 3; y <= 4; y++)
+        for (int x = 2; x <= 5; x++)
+            T_ASSERT_EQ_U(at(&c, x, y), 9);
+    /* Border neighbours untouched. */
+    T_ASSERT_EQ_U(at(&c, 1, 3), 0);
+    T_ASSERT_EQ_U(at(&c, 6, 3), 0);
+    T_ASSERT_EQ_U(at(&c, 2, 2), 0);
+    T_ASSERT_EQ_U(at(&c, 2, 5), 0);
+    return 0;
+}
+
+int test_gfx_line_fill_rect_zero_or_negative_size_is_noop(void)
+{
+    canvas_t c; canvas_init(&c);
+    gfx_line_fill_rect(2, 3, 0, 4, 9);    /* w == 0 */
+    gfx_line_fill_rect(2, 3, 4, 0, 9);    /* h == 0 */
+    gfx_line_fill_rect(2, 3, -5, 4, 9);   /* w < 0 */
+    T_ASSERT_EQ_I(count_color(&c, 9), 0);
+    return 0;
+}
+
+int test_gfx_line_fill_rect_clamps_oversize(void)
+{
+    canvas_t c; canvas_init(&c);
+    /* Extends past the 16×16 canvas — clamps to fit. */
+    gfx_line_fill_rect(14, 14, 8, 8, 7);
+    /* x clamps to width 16-14 = 2 cols (14,15), y to 2 rows (14,15). */
+    T_ASSERT_EQ_U(at(&c, 14, 14), 7);
+    T_ASSERT_EQ_U(at(&c, 15, 15), 7);
+    T_ASSERT_EQ_I(count_color(&c, 7), 4);
+    return 0;
+}

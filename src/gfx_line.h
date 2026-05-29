@@ -115,6 +115,12 @@ void gfx_line_draw_dotted(int x1, int y1, int x2, int y2, uint8_t color);
  * extents clamped to canvas dimensions). */
 void gfx_line_rect(int x, int y, int w, int h, uint8_t color);
 
+/* Port of FUN_0040437d.  Solid FILLED axis-aligned rectangle — `h`
+ * stacked horizontal lines.  Guarded on w>0 && h>0, then clamped
+ * against the bound canvas like gfx_line_rect.  Used for the
+ * text-input caret (FUN_0040acce). */
+void gfx_line_fill_rect(int x, int y, int w, int h, uint8_t color);
+
 /* Port of FUN_00403deb.  3D bevel rectangle with light source from
  * the upper-right corner: top + right edges at color 0x10, bottom +
  * left edges at color 0x1f.  Position+size semantics match
