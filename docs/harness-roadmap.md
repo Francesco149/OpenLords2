@@ -36,14 +36,19 @@ implemented.
       teardown.  Now also exercises the turbo path via
       `--turbo` / `--turbo-step-ms N`.
 
-## Phase 2 — Frame capture
+## Phase 2 — Frame capture  ✅ (landed; validated 2026-05-29)
 
-- [ ] Hook `IDirectDraw{,7}::Lock` / `IDirectDrawSurface::Lock`
-      to grab the back-buffer at every Flip/Blt.
-- [ ] Serialize captured frames as top-down BGRA BMP under
-      `runs/<scenario>/<ts>/frames/frame_NNNNN.bmp`.
-- [ ] Differential frame-diff path: red-tint pixels that
-      disagree between retail and our re-impl.
+- [x] Hook `IDirectDrawSurface::Lock` (back surface, vtable[25]) to grab
+      the back-buffer — agent `captureFrameOnce`, rides the cum-secs
+      heartbeat. Reads 256-entry palette + 8-bpp pixels.
+- [x] Serialize captured frames as top-down 24-bpp BMP under
+      `runs/capture/<run>/frames/frame_NNNNN.bmp` (`_write_paletted_bmp`).
+- [x] Differential frame-diff path: `tools/compare_frames.py` — red-tint
+      diff overlay + side-by-side + stats between port and retail.
+- Validated: captured the retail main menu (turbo blows through the
+      engine-time-paced intro; warmup ~1000 cum-secs lands on it). First
+      port↔retail baseline: port renders a red back-surface fill, retail the
+      full menu. See `docs/findings/main-menu-parity.md`.
 
 ## Phase 3 — Input replay
 
@@ -127,10 +132,14 @@ render path deterministically. Ported from `../openrecet`'s machinery.
       trap → owner FUN_ + port status; precise-mode read-hot limit reproduced).
       See `docs/findings/mem-watch.md`. Writer-hunt for a specific render gap
       is Phase J.
-- [ ] **I — scenario reproduction + state-forcing.** `forceGameState` /
-      `--inject-state` + `scenario-test.py` to drive battlefield/map/overlay
-      render paths deterministically. Prereq: retail DDraw frame-capture hook
-      (Phase 2 above).
+- [~] **I — scenario reproduction + state-forcing.** Frame-capture (Phase 2)
+      + `tools/compare_frames.py` landed. Approach (per user): chase parity
+      scene-by-scene starting at the **main menu** (baseline established:
+      port=red fill, retail=menu — `docs/findings/main-menu-parity.md`), then
+      deterministic input traces to start a game + a few actions, then
+      state-forcing (much via crafted save files). `forceGameState` /
+      `--inject-state` + a full `scenario-test.py` still to build.
+      - [ ] Port the title/menu scene-dispatch + render chain → menu parity.
 - [ ] **J — iterative parity loop.** drive a render path → diff → port the
       deepest retail-only leaf (or mem-watch its writer) → re-verify.
 
