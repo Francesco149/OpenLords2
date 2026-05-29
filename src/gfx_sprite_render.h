@@ -130,7 +130,10 @@ enum {
     GFX_SPRITE_RENDER_ERR_TRUNCATE_BOTTOM_INDEX_TOO_HIGH= 0x4d2450,
     GFX_SPRITE_RENDER_ERR_TRUNCATE_BOTTOM_INDEX_TOO_LOW = 0x4d2470,
     GFX_SPRITE_RENDER_ERR_TRUNCATE_TOP_INDEX_TOO_HIGH   = 0x4d2490,
-    GFX_SPRITE_RENDER_ERR_TRUNCATE_TOP_INDEX_TOO_LOW    = 0x4d24b0
+    GFX_SPRITE_RENDER_ERR_TRUNCATE_TOP_INDEX_TOO_LOW    = 0x4d24b0,
+    GFX_SPRITE_RENDER_ERR_OPAQUE_FROM_BLOB_NULL         = 0x4d23c4,
+    GFX_SPRITE_RENDER_ERR_OPAQUE_FROM_BLOB_INDEX_TOO_HIGH = 0x4d23e0,
+    GFX_SPRITE_RENDER_ERR_OPAQUE_FROM_BLOB_INDEX_TOO_LOW  = 0x4d23fc
 };
 
 /* Hook fired when a descriptor-validation gate trips.  Default is a
@@ -209,6 +212,17 @@ void gfx_sprite_render_rle_from_blob(const uint8_t *blob,
 void gfx_sprite_render_from_blob(const uint8_t *blob,
                                  int sprite_index,
                                  int x, int y);
+
+/* Port of FUN_0040a567.  OPAQUE sibling of gfx_sprite_render_from_blob:
+ * renders sprite[index] from a caller blob with the unclipped opaque
+ * blit (gfx_sprite_blit_opaque), copying every source byte including
+ * zeros.  Used for solid sprite frames (the title-screen name-entry
+ * box).  Same three descriptor gates as the transparent wrapper,
+ * using the OPAQUE_FROM_BLOB_* error addresses; writes the dest stride
+ * pad directly as 0x280 - sprite_width (fixed-640 quirk #75). */
+void gfx_sprite_render_opaque_from_blob(const uint8_t *blob,
+                                        int sprite_index,
+                                        int x, int y);
 
 /* Port of FUN_0040a682.  Render sprite[index] from the bound global
  * blob at (x, y).  No NULL check on the blob (retail dereferences

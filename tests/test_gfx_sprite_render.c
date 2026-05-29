@@ -478,3 +478,86 @@ int test_gfx_sprite_render_log_hook_null_is_no_op(void)
     T_ASSERT_EQ_U(gfx_sprite_render_last_error(), 4);
     return 0;
 }
+
+/* ────────────────────────────────────────────────────────────────
+ * gfx_sprite_render_opaque_from_blob — FUN_0040a567
+ *
+ * Opaque sibling of gfx_sprite_render_from_blob.  Copies every source
+ * byte (zeros included) and bakes dst_stride_pad = 0x280 - width, so
+ * the dest row stride is a hardcoded 640 regardless of canvas pitch —
+ * paint tests therefore run on a 640-wide canvas.  Same three
+ * descriptor gates, using the OPAQUE_FROM_BLOB_* error addresses.
+ * ──────────────────────────────────────────────────────────────── */
+
+enum { OPQ_W = 640, OPQ_H = 4 };
+
+int test_gfx_sprite_render_opaque_from_blob_paints_zeros_at_dest(void)
+{
+    static uint8_t px[OPQ_W * OPQ_H];
+    for (int i = 0; i < OPQ_W * OPQ_H; i++) px[i] = 0x99;   /* background */
+    gfx_paint_bind_canvas(px, OPQ_W, OPQ_H);
+    reset_log_and_error();
+
+    gfx_sprite_render_opaque_from_blob(k_blob_one_3x2, /*idx=*/0, /*x=*/2, /*y=*/1);
+
+    /* row 0: a1 00 a3 — the zero overwrites the 0x99 background
+     * (transparent variant would leave it 0x99). */
+    T_ASSERT_EQ_U(px[2 + 1 * OPQ_W], 0xa1);
+    T_ASSERT_EQ_U(px[3 + 1 * OPQ_W], 0x00);
+    T_ASSERT_EQ_U(px[4 + 1 * OPQ_W], 0xa3);
+    /* row 1: 00 b2 00 — landed 640 bytes (one row) down. */
+    T_ASSERT_EQ_U(px[2 + 2 * OPQ_W], 0x00);
+    T_ASSERT_EQ_U(px[3 + 2 * OPQ_W], 0xb2);
+    T_ASSERT_EQ_U(px[4 + 2 * OPQ_W], 0x00);
+    /* Untouched neighbor keeps the background. */
+    T_ASSERT_EQ_U(px[1 + 1 * OPQ_W], 0x99);
+    T_ASSERT_EQ_U(px[5 + 1 * OPQ_W], 0x99);
+    T_ASSERT_EQ_U(gfx_sprite_render_last_error(), 0);
+    T_ASSERT_EQ_I(g_log_n, 0);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0);
+    return 0;
+}
+
+int test_gfx_sprite_render_opaque_from_blob_null_logs_and_latches(void)
+{
+    canvas_t c; canvas_init(&c);
+    reset_log_and_error();
+    gfx_sprite_render_opaque_from_blob(/*blob=*/0, /*idx=*/2, 0, 0);
+
+    T_ASSERT_EQ_U(at(&c, 0, 0), 0x00);
+    T_ASSERT_EQ_I(g_log_n, 1);
+    T_ASSERT_EQ_U(g_log[0].fmt_addr,
+                  (uint32_t)GFX_SPRITE_RENDER_ERR_OPAQUE_FROM_BLOB_NULL);
+    T_ASSERT_EQ_I(g_log[0].idx_plus_one, 3);
+    T_ASSERT_EQ_U(gfx_sprite_render_last_error(), 4);
+    return 0;
+}
+
+int test_gfx_sprite_render_opaque_from_blob_offset_too_low_logs(void)
+{
+    canvas_t c; canvas_init(&c);
+    reset_log_and_error();
+    gfx_sprite_render_opaque_from_blob(k_blob_two_invalid, 0, 4, 2);
+
+    T_ASSERT_EQ_I(g_log_n, 1);
+    T_ASSERT_EQ_U(g_log[0].fmt_addr,
+                  (uint32_t)GFX_SPRITE_RENDER_ERR_OPAQUE_FROM_BLOB_INDEX_TOO_LOW);
+    T_ASSERT_EQ_U(gfx_sprite_render_last_error(), 4);
+    for (int y = 0; y < CANVAS_H; y++)
+        for (int x = 0; x < CANVAS_W; x++)
+            T_ASSERT_EQ_U(c.pixels[x + y * CANVAS_W], 0);
+    return 0;
+}
+
+int test_gfx_sprite_render_opaque_from_blob_offset_too_high_logs(void)
+{
+    canvas_t c; canvas_init(&c);
+    reset_log_and_error();
+    gfx_sprite_render_opaque_from_blob(k_blob_two_invalid, 1, 4, 2);
+
+    T_ASSERT_EQ_I(g_log_n, 1);
+    T_ASSERT_EQ_U(g_log[0].fmt_addr,
+                  (uint32_t)GFX_SPRITE_RENDER_ERR_OPAQUE_FROM_BLOB_INDEX_TOO_HIGH);
+    T_ASSERT_EQ_U(gfx_sprite_render_last_error(), 4);
+    return 0;
+}

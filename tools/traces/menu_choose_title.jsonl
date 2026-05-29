@@ -1,0 +1,25 @@
+# Navigation trace: main menu (page 1) → "Single player" → "Your options"
+# (page 2) → "Custom game" → "Choose your title and your shield" (page 4),
+# then park the cursor below the buttons so no hover-highlight taints the
+# groundtruth.  "Custom game" (page-2 hotspot param 3) jumps straight to
+# page 4 (FUN_00432cc8, DAT_0055302c=2) — no page-5 campaign-chooser detour.
+#
+# Reproduce for parity capture:
+#   nix develop -c python3 tools/frida_capture.py --remote <host> \
+#     --skip-intro --input-trace tools/traces/menu_choose_title.jsonl \
+#     --frame-capture --frame-capture-warmup-secs 8 --frame-capture-max 4
+#
+# Coords are authored in GAME space (640x480); the agent rescales to the
+# live window-client viewport.  "Single player" (320,107); "Custom game"
+# page-2 button 4 center (320,211) — x=0xe0 w=0xc0, y=0xc7 h=0x18; neutral
+# park (320,462).  lParam=(y<<16)|x.  See docs/findings/title-menu-screens.md.
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 13828416}
+{"t": 206, "m": 512, "w": 0, "l": 13828416}
+{"t": 210, "m": 513, "w": 1, "l": 13828416}
+{"t": 216, "m": 514, "w": 0, "l": 13828416}
+{"t": 400, "m": 512, "w": 0, "l": 30277952}
+{"t": 440, "m": 512, "w": 0, "l": 30277952}

@@ -34,6 +34,7 @@
 
 #include "gfx_dispatch.h"
 #include "gfx_glyph.h"
+#include "gfx_sprite.h"
 #include "gfx_paint.h"
 
 /* ──────────────────────────────────────────────────────────────────
@@ -220,6 +221,49 @@ void gfx_sprite_render_rle_from_blob(const uint8_t *blob,
 
     gfx_glyph_set_dest(x, y);
     canvas_clip_and_dispatch_rle(blob);
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Port of FUN_0040a567 — caller-blob OPAQUE render
+ *
+ * Sibling of FUN_0040a21a (gfx_sprite_render_from_blob) but routes to
+ * the opaque, unclipped blit (gfx_sprite_blit_opaque / FUN_004b432e)
+ * for solid sprite frames such as the title-screen name-entry box.
+ * Two differences from the transparent wrapper:
+ *
+ *   - No canvas-clip pair (FUN_0040464c/FUN_0040477b).  Retail writes
+ *     the dest stride pad directly: `_DAT_005cd400 = 0x280 - width`
+ *     (640 minus the sprite width; 0x280 is a hardcoded literal, NOT
+ *     the dynamic canvas pitch — same fixed-640 quirk as the raw
+ *     blits, engine-quirks #75).
+ *   - Dispatches straight to the opaque blit; no x_clip_mode branch.
+ *
+ * Same three descriptor gates (NULL blob, src_offset < 1, src_offset
+ * > 0x4baf0) with the opaque wrapper's own error-format addresses.
+ * ────────────────────────────────────────────────────────────────── */
+
+void gfx_sprite_render_opaque_from_blob(const uint8_t *blob,
+                                        int sprite_index,
+                                        int x, int y)
+{
+    if (blob == 0) {
+        log_error(GFX_SPRITE_RENDER_ERR_OPAQUE_FROM_BLOB_NULL, sprite_index + 1);
+        latch_error(4);
+        return;
+    }
+
+    gfx_dispatch_set_last_glyph_index(sprite_index);
+    gfx_dispatch_stage_sprite_descriptor(blob, sprite_index);
+
+    if (!descriptor_offset_in_range(sprite_index + 1,
+                                    GFX_SPRITE_RENDER_ERR_OPAQUE_FROM_BLOB_INDEX_TOO_LOW,
+                                    GFX_SPRITE_RENDER_ERR_OPAQUE_FROM_BLOB_INDEX_TOO_HIGH)) {
+        return;
+    }
+
+    gfx_glyph_set_dest(x, y);
+    gfx_glyph_set_dst_stride_pad(0x280 - gfx_glyph_glyph_w());
+    gfx_sprite_blit_opaque(blob);
 }
 
 /* ──────────────────────────────────────────────────────────────────

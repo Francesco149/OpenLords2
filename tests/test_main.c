@@ -630,6 +630,10 @@ struct test_case {
     X(gfx_sprite_blit_2x2_raw_respects_cursor) \
     X(gfx_sprite_blit_2x2_raw_uses_glyph_offset) \
     X(gfx_sprite_blit_2x2_raw_null_canvas_no_crash) \
+    X(gfx_sprite_blit_opaque_copies_zeros_over_background) \
+    X(gfx_sprite_blit_opaque_width_multiple_of_4) \
+    X(gfx_sprite_blit_opaque_uses_height_short_not_byte_height) \
+    X(gfx_sprite_blit_opaque_null_canvas_no_crash) \
     X(gfx_dispatch_sprite_paints_at_dest) \
     X(gfx_dispatch_sprite_left_clip_writes_visible_portion) \
     X(gfx_dispatch_sprite_right_clip_writes_visible_portion) \
@@ -644,6 +648,10 @@ struct test_case {
     X(gfx_sprite_render_from_blob_offset_too_low_logs_and_latches) \
     X(gfx_sprite_render_from_blob_offset_too_high_logs_and_latches) \
     X(gfx_sprite_render_from_blob_invalid_still_stages_descriptor) \
+    X(gfx_sprite_render_opaque_from_blob_paints_zeros_at_dest) \
+    X(gfx_sprite_render_opaque_from_blob_null_logs_and_latches) \
+    X(gfx_sprite_render_opaque_from_blob_offset_too_low_logs) \
+    X(gfx_sprite_render_opaque_from_blob_offset_too_high_logs) \
     X(gfx_sprite_render_global_paints_at_dest) \
     X(gfx_sprite_render_global_bind_round_trip) \
     X(gfx_sprite_render_global_offset_too_low_logs) \

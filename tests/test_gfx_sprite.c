@@ -887,3 +887,106 @@ int test_gfx_sprite_blit_2x2_raw_null_canvas_no_crash(void)
     gfx_sprite_blit_2x2_raw(blob);
     return 0;
 }
+
+/* ────────────────────────────────────────────────────────────────
+ * gfx_sprite_blit_opaque — FUN_004b432e
+ *
+ * The opaque sibling of gfx_sprite_blit: copies EVERY source byte,
+ * including zeros (no transparency test).  Row count is the
+ * descriptor's +2 short height (gfx_dispatch_glyph_height_short),
+ * not the +0xd byte height (gfx_glyph_set_glyph's third arg) that
+ * the transparent leaf reads.  Dest row stride = glyph_w +
+ * dst_stride_pad (configurable here; the FUN_0040a567 wrapper bakes
+ * 0x280 - glyph_w).
+ * ──────────────────────────────────────────────────────────────── */
+
+int test_gfx_sprite_blit_opaque_copies_zeros_over_background(void)
+{
+    /* Pre-fill the target region with 0x99 so we can prove the zero
+     * source byte overwrites it (transparent blit would leave 0x99). */
+    canvas_t c; canvas_init(&c);
+    for (int i = 0; i < CANVAS_W * CANVAS_H; i++) c.pixels[i] = 0x99;
+
+    gfx_glyph_set_dest(2, 1);
+    gfx_glyph_set_glyph(8, 3, /*byte-height (unused by opaque)=*/0);
+    gfx_dispatch_set_glyph_height_short(2);
+    gfx_glyph_set_dst_stride_pad(CANVAS_W - 3);
+
+    gfx_sprite_blit_opaque(k_blob_3x2);
+
+    /* row 0: src = 01 00 07 → ALL copied, including the 0x00. */
+    T_ASSERT_EQ_U(at(&c, 2, 1), 0x01);
+    T_ASSERT_EQ_U(at(&c, 3, 1), 0x00);   /* zero overwrote 0x99 */
+    T_ASSERT_EQ_U(at(&c, 4, 1), 0x07);
+    /* row 1: src = 00 02 00 → all copied. */
+    T_ASSERT_EQ_U(at(&c, 2, 2), 0x00);
+    T_ASSERT_EQ_U(at(&c, 3, 2), 0x02);
+    T_ASSERT_EQ_U(at(&c, 4, 2), 0x00);
+    /* Pixels outside the blit rect keep the 0x99 background. */
+    T_ASSERT_EQ_U(at(&c, 1, 1), 0x99);
+    T_ASSERT_EQ_U(at(&c, 5, 1), 0x99);
+    T_ASSERT(canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_blit_opaque_width_multiple_of_4(void)
+{
+    /* width == 4 (multiple of 4): retail copies one dword per row;
+     * byte-for-byte identical to copying 4 bytes.  Opaque → the
+     * embedded zeros land. */
+    canvas_t c; canvas_init(&c);
+    for (int i = 0; i < CANVAS_W * CANVAS_H; i++) c.pixels[i] = 0x99;
+
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 4, 0);
+    gfx_dispatch_set_glyph_height_short(2);
+    gfx_glyph_set_dst_stride_pad(CANVAS_W - 4);
+
+    gfx_sprite_blit_opaque(k_blob_4x2);
+
+    /* row 0: 11 00 22 33  (all copied) */
+    T_ASSERT_EQ_U(at(&c, 0, 0), 0x11);
+    T_ASSERT_EQ_U(at(&c, 1, 0), 0x00);
+    T_ASSERT_EQ_U(at(&c, 2, 0), 0x22);
+    T_ASSERT_EQ_U(at(&c, 3, 0), 0x33);
+    /* row 1: 00 44 00 55 */
+    T_ASSERT_EQ_U(at(&c, 0, 1), 0x00);
+    T_ASSERT_EQ_U(at(&c, 1, 1), 0x44);
+    T_ASSERT_EQ_U(at(&c, 2, 1), 0x00);
+    T_ASSERT_EQ_U(at(&c, 3, 1), 0x55);
+    T_ASSERT(canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_blit_opaque_uses_height_short_not_byte_height(void)
+{
+    /* Stage byte-height (set_glyph arg 3) = 5 but height_short = 1.
+     * The opaque blit must honor height_short and write ONE row. */
+    canvas_t c; canvas_init(&c);
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 3, /*byte-height=*/5);
+    gfx_dispatch_set_glyph_height_short(1);
+    gfx_glyph_set_dst_stride_pad(CANVAS_W - 3);
+
+    gfx_sprite_blit_opaque(k_blob_3x2);
+
+    /* row 0 written... */
+    T_ASSERT_EQ_U(at(&c, 0, 0), 0x01);
+    T_ASSERT_EQ_U(at(&c, 2, 0), 0x07);
+    /* ...row 1 NOT written (height_short==1). */
+    T_ASSERT_EQ_U(at(&c, 0, 1), 0x00);
+    T_ASSERT_EQ_U(at(&c, 1, 1), 0x00);
+    T_ASSERT(canvas_guards_intact(&c));
+    return 0;
+}
+
+int test_gfx_sprite_blit_opaque_null_canvas_no_crash(void)
+{
+    gfx_paint_bind_canvas(0, 0, 0);
+    gfx_glyph_set_dest(0, 0);
+    gfx_glyph_set_glyph(8, 3, 0);
+    gfx_dispatch_set_glyph_height_short(2);
+    gfx_glyph_set_dst_stride_pad(0);
+    gfx_sprite_blit_opaque(k_blob_3x2);
+    return 0;
+}

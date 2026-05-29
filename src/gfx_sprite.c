@@ -24,6 +24,7 @@
 
 #include "gfx_sprite.h"
 #include "gfx_glyph.h"
+#include "gfx_dispatch.h"
 #include "gfx_paint.h"
 
 #include <string.h>
@@ -112,6 +113,48 @@ void gfx_sprite_blit(const uint8_t *sprite_blob)
         }
 
         dst += dst_pad;
+        int next = rows - 1;
+        int gt   = (0 < rows);
+        rows = next;
+        if (!(next != 0 && gt)) return;
+    } while (1);
+}
+
+/* Port of FUN_004b432e @ 0x4b432e (131 B).  Unclipped *opaque* blit —
+ * the sibling of gfx_sprite_blit (FUN_004b43b1) that copies every
+ * source byte verbatim INCLUDING zeros (no transparency test).  Used
+ * for solid sprite frames such as the title-screen name-entry box
+ * background (FUN_0041f321 → FUN_0040a567).
+ *
+ * Two structural differences from the transparent leaf:
+ *
+ *   - Row count is the descriptor's +2 SHORT height (DAT_005aeb70,
+ *     gfx_dispatch_glyph_height_short), NOT the +0xd byte height
+ *     (DAT_005bb478) the transparent/clipped leaves use.  The staging
+ *     wrapper (gfx_sprite_render_opaque_from_blob) reads both off the
+ *     16-byte descriptor; for the box sprite they coincide, but the
+ *     opaque blit dereferences the short — preserved verbatim.
+ *
+ *   - When glyph_w is a multiple of 4 the row is copied as
+ *     `glyph_w / 4` aligned dwords; otherwise byte-at-a-time.  Both
+ *     are plain copies (memcpy of glyph_w bytes is byte-for-byte
+ *     equivalent and is what the dword path amounts to).  Retail's
+ *     post-test row-counter guard (one iteration even at height 0) is
+ *     preserved; the wrapper gates height >= 1 before calling. */
+void gfx_sprite_blit_opaque(const uint8_t *sprite_blob)
+{
+    uint8_t *dst = dest_origin();
+    if (!dst) return;
+
+    const uint8_t *src     = sprite_blob + gfx_glyph_glyph_offset();
+    int            width   = gfx_glyph_glyph_w();
+    int            dst_pad  = gfx_glyph_dst_stride_pad();
+    int            rows    = gfx_dispatch_glyph_height_short();
+
+    do {
+        memcpy(dst, src, (size_t)width);
+        src += width;
+        dst += width + dst_pad;
         int next = rows - 1;
         int gt   = (0 < rows);
         rows = next;

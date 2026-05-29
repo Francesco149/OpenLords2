@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **307** (12.5%) — tested 273, ported 34
-- code bytes touched: **13.2%** (110,316 / 838,629 B)
-- unported: **2140**
+- touched: **310** (12.7%) — tested 276, ported 34
+- code bytes touched: **13.2%** (110,930 / 838,629 B)
+- unported: **2137**
 - orphan refs (in src/, not in function table): 4
 
-## tested (273) — ported + host unit suite
+## tested (276) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -89,8 +89,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x403fdd | FUN_00403fdd | 249 | gfx_line.c, gfx_line.h |
 | 0x404442 | FUN_00404442 | 256 | gfx_dispatch.c, gfx_dispatch.h |
 | 0x404547 | FUN_00404547 | 256 | gfx_dispatch.c, gfx_dispatch.h |
-| 0x40464c | FUN_0040464c | 303 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h (+1) |
-| 0x40477b | FUN_0040477b | 291 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h |
+| 0x40464c | FUN_0040464c | 303 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h (+2) |
+| 0x40477b | FUN_0040477b | 291 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h (+1) |
 | 0x404a46 | FUN_00404a46 | 230 | engine.c, engine.h, engine_rng.c |
 | 0x404b99 | FUN_00404b99 | 466 | engine.c, engine.h, engine_rng.c |
 | 0x404d6b | FUN_00404d6b | 43 | engine_input.c, engine_math.c, engine_math.h |
@@ -118,6 +118,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40a01d | FUN_0040a01d | 261 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40a21a | FUN_0040a21a | 433 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h (+1) |
 | 0x40a3d0 | FUN_0040a3d0 | 402 | gfx_sprite_render.c, gfx_sprite_render.h, gfx_sprite_rle.h |
+| 0x40a567 | FUN_0040a567 | 283 | gfx_glyph.c, gfx_glyph.h, gfx_sprite.c (+3) |
 | 0x40a682 | FUN_0040a682 | 391 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40a80e | FUN_0040a80e | 413 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40a9b0 | FUN_0040a9b0 | 439 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
@@ -137,6 +138,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x41ec8a | FUN_0041ec8a | 92 | engine_title_render.c, engine_title_render.h |
 | 0x41ece6 | FUN_0041ece6 | 604 | engine_title_render.c, engine_title_render.h |
 | 0x41f15a | FUN_0041f15a | 131 | engine_mp_render.c, engine_mp_render.h |
+| 0x41f321 | FUN_0041f321 | 200 | gfx_sprite.c |
 | 0x41f592 | FUN_0041f592 | 86 | engine_title_render.c, engine_title_render.h |
 | 0x41f5e8 | FUN_0041f5e8 | 223 | engine_title_render.c, engine_title_render.h |
 | 0x42150b | FUN_0042150b | 508 | engine_title_render.h |
@@ -244,6 +246,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b41b7 | FUN_004b41b7 | 165 | gfx_glyph.h |
 | 0x4b425c | FUN_004b425c | 105 | gfx_glyph.c, gfx_glyph.h |
 | 0x4b42c5 | FUN_004b42c5 | 105 | gfx_glyph.c, gfx_glyph.h |
+| 0x4b432e | FUN_004b432e | 131 | gfx_sprite.c, gfx_sprite.h, gfx_sprite_render.c |
 | 0x4b43b1 | FUN_004b43b1 | 188 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b446d | FUN_004b446d | 101 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b44d2 | FUN_004b44d2 | 101 | gfx_sprite.c, gfx_sprite.h |

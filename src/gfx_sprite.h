@@ -115,6 +115,14 @@
  * `sprite_blob + glyph_offset`. */
 void gfx_sprite_blit(const uint8_t *sprite_blob);
 
+/* Port of FUN_004b432e @ 0x4b432e.  Unclipped OPAQUE blit — sibling of
+ * gfx_sprite_blit that copies every source byte verbatim (no
+ * transparency test).  Row count is the descriptor's +2 short height
+ * (gfx_dispatch_glyph_height_short), not the +0xd byte height the
+ * transparent leaf uses.  Used for solid sprite frames (e.g. the
+ * title-screen name-entry box, FUN_0040a567). */
+void gfx_sprite_blit_opaque(const uint8_t *sprite_blob);
+
 /* Port of FUN_004b446d @ 0x4b446d.  Clipped sprite blit (left-clip case).
  *
  * Iterates `glyph_h` rows of `clipped_w` columns each, copying each

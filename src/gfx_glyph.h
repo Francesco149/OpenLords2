@@ -97,6 +97,8 @@ void gfx_glyph_set_glyph(int glyph_offset, int glyph_w, int glyph_h);
  * without disturbing the source offset / column count. */
 void gfx_glyph_set_glyph_h(int glyph_h);
 void gfx_glyph_set_clip(int clipped_w, int src_stride_pad, int dst_stride_pad);
+/* Single-field dst_stride_pad write (opaque-blit wrapper FUN_0040a567). */
+void gfx_glyph_set_dst_stride_pad(int dst_stride_pad);
 void gfx_glyph_set_color_modulation(int mode);
 
 /* Read-only accessors so the dispatcher and clip-setters (gfx_dispatch.c)

@@ -57,6 +57,14 @@ void gfx_glyph_set_clip(int clipped_w, int src_stride_pad, int dst_stride_pad)
     g_dst_stride_pad  = dst_stride_pad;
 }
 
+/* Standalone dst_stride_pad write — mirrors the opaque-blit wrapper
+ * FUN_0040a567's single `_DAT_005cd400 = 0x280 - width` store, which
+ * touches neither clipped_w nor src_stride_pad. */
+void gfx_glyph_set_dst_stride_pad(int dst_stride_pad)
+{
+    g_dst_stride_pad = dst_stride_pad;
+}
+
 void gfx_glyph_set_color_modulation(int mode)
 {
     g_color_modulation = mode;

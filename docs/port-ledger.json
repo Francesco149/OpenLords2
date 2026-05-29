@@ -4,15 +4,15 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 273,
+  "tested": 276,
   "ported": 34,
-  "unported": 2140,
+  "unported": 2137,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 307,
-  "pct_touched": 12.5,
-  "pct_tested": 11.2,
+  "touched": 310,
+  "pct_touched": 12.7,
+  "pct_tested": 11.3,
   "bytes_total": 838629,
-  "bytes_touched": 110316,
+  "bytes_touched": 110930,
   "pct_bytes_touched": 13.2
  },
  "orphan_refs": [
@@ -835,7 +835,8 @@
     "src/engine_battlefield_render.h",
     "src/gfx_dispatch.c",
     "src/gfx_dispatch.h",
-    "src/gfx_glyph.h"
+    "src/gfx_glyph.h",
+    "src/gfx_sprite_render.c"
    ]
   },
   {
@@ -847,7 +848,8 @@
    "src": [
     "src/engine_battlefield_render.h",
     "src/gfx_dispatch.c",
-    "src/gfx_dispatch.h"
+    "src/gfx_dispatch.h",
+    "src/gfx_sprite_render.c"
    ]
   },
   {
@@ -1444,8 +1446,15 @@
    "name": "FUN_0040a567",
    "size": 283,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_glyph.c",
+    "src/gfx_glyph.h",
+    "src/gfx_sprite.c",
+    "src/gfx_sprite.h",
+    "src/gfx_sprite_render.c",
+    "src/gfx_sprite_render.h"
+   ]
   },
   {
    "va": "0x40a682",
@@ -3103,8 +3112,10 @@
    "name": "FUN_0041f321",
    "size": 200,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_sprite.c"
+   ]
   },
   {
    "va": "0x41f3e9",
@@ -17338,8 +17349,12 @@
    "name": "FUN_004b432e",
    "size": 131,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_sprite.c",
+    "src/gfx_sprite.h",
+    "src/gfx_sprite_render.c"
+   ]
   },
   {
    "va": "0x4b43b1",
