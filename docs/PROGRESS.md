@@ -7,6 +7,51 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — BUTTON OVERLAY: page-3 gauntlet buttons + scroll arrows (page 3 now fully bit-identical)
+
+The **per-frame button-overlay subsystem** — flagged as the next chip
+last entry — landed, closing the last 2870 px of page 3 ("Loading a
+game.").  The drop-in now renders the save/load screen **0 diff px vs
+retail**, gauntlet action buttons and scroll arrows included
+(`compare_frames` → `identical: true`).  It's the generic renderer every
+screen shares, so it also unblocks pages 6..0xd's buttons/scrollbars.
+
+Four chips:
+
+1. **`gfx_sprite_blit_24x24_raw`** (`FUN_004b4cb8`) — the one missing
+   primitive: the 24×24 middle sibling of the 16×16/32×32 opaque raw
+   blits (kinds 0x11 / 0x18; same hardcoded 640-byte dst stride, quirk
+   #75).
+2. **`engine_button.c`** (`FUN_0040cfd2` → `engine_button_render_list`) —
+   the generic button-strip renderer.  Walks an `engine_button_rec_t`
+   table, stages each button's 16-byte descriptor, dispatches a
+   fixed-size raw blit by `kind` (sheet select `< 0x18` → misc /
+   `>= 0x18` → system2), frame select by pressed/hover.  Sheet-agnostic
+   + a NULL dirty hook → reusable by every screen.
+3. **`gfx_load_system_sheet`** loads system2.pl8 (the `DAT_005bb540`
+   blob), bound via `engine_title_render_bind_system_asset`.  A live
+   `--dump-globals` confirmed `DAT_004dbbf0 == 0` (system2, not system)
+   on page 3, and the on-disk file equals the live blob byte-for-byte.
+4. **Page-3 wiring** — the `DAT_004ddd78` button table (r2 dump: 2
+   gauntlet buttons kind 0x20 / 2 scroll arrows kind 0x18, all reading
+   system2.pl8) as `k_filelist_buttons`, painted by
+   `engine_title_render_filelist_buttons` from the page-3 arm of
+   `..._refresh_buttons` and from `--title-nav` step 5 (post full-scene).
+
+11 new host tests (4 blit + 7 renderer); 1193 → 1204.  Both drop-in
+builds clean.  Human-viewable: the full screen renders correctly
+(title + selected-name field + file grid + buttons + arrows).
+
+### Next
+
+The overlay generalizes: pages 6..0xd each just need their
+`DAT_004dd***` button table transcribed + the right sheet bound (the
+misc_*.pl8 sheet `DAT_005530c8` is the remaining unbound asset — needed
+by kinds `< 0x18`, i.e. screens whose buttons live in the
+mode-dependent misc sheet rather than system2).
+
+---
+
 ## 2026-05-29 — NEXT SCREEN: title page 3 "Loading a game." save/load list (list render bit-identical)
 
 The save/load file-list screen now renders in the drop-in, **0 diff vs

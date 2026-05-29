@@ -255,18 +255,50 @@ Landed in `engine_title_render.c` as `engine_title_render_filelist` +
 `..._filelist_content`; scene dispatch routes page 3 to it; state bound
 via setters and seeded from a `--dump-globals` capture.
 
-**List render verified — 0 diff outside the button overlay.** The
-drop-in (`runs/title-nav-p3/nav_05_p3_loadgame.bmp`, `--title-nav` step
-5) matches retail (`runs/groundtruth/loadgame-retail.bmp`) **everywhere
-the page-3 draw path covers** — panel, title, selected-name field, all
-four files (`lastturn` / `old_turn`→"old turn" / `safeturn` / `test`),
-and the box outlines.  The remaining 2870 px (all at x ≥ 400) are the
-**gauntlet action-buttons + scrollbar**, which are NOT part of the page-3
-draw — they're the per-frame button overlay
-`FUN_0040cfd2(0x60,10,&DAT_004ddd78,4)` (the generic button-list renderer,
-keyed off `FUN_004ba26e`'s 0x1f / page-3 arm), drawing sprites from the
-button sheets `DAT_005530c8` / `DAT_005bb540`.  That overlay subsystem —
-shared by every screen — is the next chip.
+**Page 3 fully bit-identical — 0 diff px (incl. the button overlay).**
+The drop-in (`nav_05_p3_loadgame.bmp`, `--title-nav` step 5) now matches
+retail (`runs/groundtruth/loadgame-retail.bmp`) **everywhere** — panel,
+title, selected-name field, all four files, box outlines, AND the
+formerly-missing 2870 px (all x ≥ 400): the **gauntlet action buttons +
+scroll arrows**.  `compare_frames` → `identical: true`.
+
+Those buttons are the per-frame button overlay
+`FUN_0040cfd2(0x60,10,&DAT_004ddd78,4)` — the generic button-list
+renderer, keyed off `FUN_004ba26e`'s 0x1f / page-3 arm.  Now ported:
+
+- **`engine_button.c`** (`FUN_0040cfd2` → `engine_button_render_list`) —
+  walks a `engine_button_rec_t` table (the 0x18-byte per-button struct,
+  shared with the input hit-test), stages each button's 16-byte sprite
+  descriptor and dispatches a fixed-size opaque raw blit.  Sheet select
+  by `kind`: `< 0x18` → the mode-dependent misc sheet (`DAT_005530c8`,
+  misc_*.pl8); `>= 0x18` → the static system sheet (`DAT_005bb540`,
+  system2.pl8).  Frame select by pressed/hover state.  No clip (buttons
+  never straddle the canvas edge).
+- **`gfx_sprite_blit_24x24_raw`** (`FUN_004b4cb8`) — the one new blit,
+  the 24×24 middle sibling of the 16×16/32×32 raw blits (kinds 0x11 /
+  0x18; same hardcoded 640-byte dst stride, quirk #75).
+- **`gfx_load_system_sheet`** loads system2.pl8 (verified byte-identical
+  to the live `DAT_005bb540` at the page-3 frame), bound via
+  `engine_title_render_bind_system_asset`.
+
+The **page-3 button table** `DAT_004ddd78` (r2 dump @ 0x4ddd78, 4
+records, all edge-type 4, all reading system2.pl8): the two gauntlet
+action buttons (Load / Cancel) at sprites 0x1d / 0x1f, kind 0x20 (32×32);
+the scroll up / down arrows at sprites 0x23 / 0x25, kind 0x18 (24×24).
+Lives as `k_filelist_buttons` in `engine_title_render.c`; the page-3 arm
+of `engine_title_render_refresh_buttons` (and `--title-nav` step 5, post
+full-scene) paints it via `engine_title_render_filelist_buttons`.
+
+> **Which system sheet?** Both `system2.pl8` (index 0) and `system.pl8`
+> (index 1) load into the same `DAT_005bb540` buffer; the active one is
+> `DAT_004dbbf0`.  Live `--dump-globals` at the page-3 frame: index **0**
+> → system2.pl8.  The on-disk file (56518 B) equals the live blob's
+> leading bytes exactly, and the idx 0x1d/0x1f/0x23/0x25 descriptors
+> match (32×32 / 24×24), so a raw disk read reproduces it bit-for-bit.
+
+The same overlay subsystem — shared by every screen — now also unblocks
+the gauntlet buttons + scrollbars on pages 6..0xd as they land (each
+just needs its `DAT_004dd***` button table + the right sheet bound).
 
 > **State captured via `--dump-globals`** (run `gt-p3-state`): 4 entries
 > in scan order (lastturn / old_turn / safeturn / test, 0x41-byte
