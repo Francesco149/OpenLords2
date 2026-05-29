@@ -22,6 +22,8 @@
 #include "gfx_glyph.h"
 #include "gfx_dispatch.h"
 #include "gfx_caret.h"
+#include "gfx_paint.h"
+#include "engine_math.h"
 #include "font_metrics.h"
 #include "text_input.h"
 
@@ -40,6 +42,48 @@ static const uint8_t *g_panel_asset;    /* DAT_004eabec */
 static const uint8_t *g_system_asset;   /* DAT_005bb540 — system2.pl8 */
 static const uint8_t *g_misc_asset;     /* DAT_005530c8 — misc_sel.pl8 */
 static int g_selected_button = 1;       /* DAT_00553114 */
+
+/* ─── page-7 (game-setup) state ─────────────────────────────────── */
+
+static const uint8_t *g_chrome_asset;       /* DAT_0057d3d0 — panels.pl8 */
+static const uint8_t *g_palette_rgb;        /* DAT_004ea1b0 — for darken */
+
+/* Country/map selector (FUN_0041f98b): a value-byte list + scroll +
+ * selected visible row (0..4) + total count, plus the 128×128 preview
+ * buffer (DAT_00569590) shown top-right. */
+static const uint8_t *g_p7_country_values;  /* DAT_0050a460 */
+static int g_p7_country_scroll;             /* DAT_0053e90c */
+static int g_p7_country_sel;                /* DAT_0057cacc */
+static int g_p7_country_count;              /* DAT_00554018 */
+static const uint8_t *g_p7_preview;         /* DAT_00569590 */
+
+/* Option-tab selected values, in tab order 0..11 (FUN_00433a70 output —
+ * retail reads 12 permuted scalars at 0x53f288..0x53f2b4; we bind the
+ * resolved values in tab order so the permutation lives in the caller). */
+static int g_p7_tab_values[12];
+static int g_p7_active_tab = -1;            /* the tab being edited; -1 none */
+
+/* Roster (FUN_0041fbcb): per-seat fields the render reads from the
+ * 0x160-stride player record at DAT_0057bf05.  Seats 1..5 (index 0
+ * unused).  `enabled` is retail's separate DAT_005530e0[seat]. */
+static engine_title_setup_player_t g_p7_players[6];
+static const uint8_t *g_p7_names;           /* DAT_00553d54 (seat·0x2c) */
+
+/* Option-tab geometry (retail DAT_004d3098, 12×{x, bevel_y, header_y}):
+ * a 4-column × 3-row grid.  Header text at (x, header_y); the bevel
+ * frame + value label at (x, bevel_y). */
+static const int g_p7_tab_geom[12][3] = {
+    { 0xaa, 0x118, 0x0f6 }, { 0xaa, 0x161, 0x151 }, { 0xaa, 0x1aa, 0x19a },
+    { 0x122, 0x118, 0x0f6 }, { 0x122, 0x161, 0x151 }, { 0x122, 0x1aa, 0x19a },
+    { 0x19a, 0x118, 0x0f6 }, { 0x19a, 0x161, 0x151 }, { 0x19a, 0x1aa, 0x19a },
+    { 0x212, 0x118, 0x0f6 }, { 0x212, 0x161, 0x151 }, { 0x212, 0x1aa, 0x19a },
+};
+
+/* Per-tab entry-0x67 value sub-string base (retail DAT_004d3128): the
+ * displayed value is sub-string [base + selected_value]. */
+static const int g_p7_tab_value_base[12] = {
+    0, 2, 5, 9, 0xb, 0xf, 0x13, 0x19, 0x1d, 0x22, 0x25, 0x2c,
+};
 
 /* Title/menu page selector (retail DAT_005530f0).  Written by the menu
  * state tick (0x42ff10, unported) — page 1 = main menu — and read by
@@ -731,6 +775,205 @@ void engine_title_render_refresh_choose_title(void)
     engine_title_render_choose_title_name_box();
 }
 
+/* ─────────────────────────────────────────────────────────────────
+ * Page 7 — the custom-game setup screen
+ * ───────────────────────────────────────────────────────────────── */
+
+void engine_title_render_bind_chrome_asset(const uint8_t *asset)
+{
+    g_chrome_asset = asset;
+}
+
+void engine_title_render_bind_palette(const uint8_t *pal_rgb)
+{
+    g_palette_rgb = pal_rgb;
+}
+
+void engine_title_render_set_country_list(const uint8_t *values, int scroll,
+                                          int selected_row, int count)
+{
+    g_p7_country_values = values;
+    g_p7_country_scroll = scroll;
+    g_p7_country_sel    = selected_row;
+    g_p7_country_count  = count;
+}
+
+void engine_title_render_set_preview(const uint8_t *buf)
+{
+    g_p7_preview = buf;
+}
+
+void engine_title_render_set_tab_values(const int values[12], int active_tab)
+{
+    for (int i = 0; i < 12; i++) {
+        g_p7_tab_values[i] = values ? values[i] : 0;
+    }
+    g_p7_active_tab = active_tab;
+}
+
+void engine_title_render_set_players(const engine_title_setup_player_t players[6],
+                                     const uint8_t *names)
+{
+    for (int i = 0; i < 6; i++) {
+        if (players) {
+            g_p7_players[i] = players[i];
+        } else {
+            g_p7_players[i] = (engine_title_setup_player_t){ 0, 0, 0, 0, 0 };
+        }
+    }
+    g_p7_names = names;
+}
+
+/* Port of FUN_0041f98b — the country/map selector list: the parchment
+ * frame (misc sprite 0x10), the 128×128 preview buffer top-right, five
+ * value rows (selected row inverted), and the computed scrollbar.
+ *
+ * The preview blit is FUN_00410c71(0, …): at param 0 the shield
+ * compositor (FUN_00410cbd) skips its entire per-pixel loop — only a
+ * base raw blit of DAT_00569590 + a non-visual title/rank state
+ * recompute (FUN_00451bba) remain — so the page-7 coat-of-arms/map
+ * preview is exactly gfx_sprite_render_raw of the bound buffer.  The
+ * recompute is deferred (no pixels, and its lord-record inputs are not
+ * yet modelled). */
+void engine_title_render_setup_country_list(void)
+{
+    /* Parchment frame for the selector + preview (misc sprite 0x10). */
+    gfx_sprite_render_from_blob(g_misc_asset, 0x10, 0x1f0, 9);
+
+    /* Map / coat-of-arms preview (FUN_00410c71(0, 0x1f0, 9) → raw blit
+     * inset by (-2, +3)). */
+    if (g_p7_preview) {
+        gfx_sprite_render_raw(g_p7_preview, 0x1f0 - 2, 9 + 3, 0x80, 0x80);
+    }
+
+    gfx_text_set_no_shadow(1);
+    for (int row = 0; row < 5; row++) {
+        unsigned v = g_p7_country_values
+                   ? g_p7_country_values[g_p7_country_scroll + row] : 0;
+        uint8_t color;
+        if (row == g_p7_country_sel) {
+            color = 0x20;                       /* dark text on bright fill */
+            gfx_line_fill_rect(0x1f0, row * 0x10 + 0x8d, 0x69, 0x10, 0x3f);
+        } else {
+            color = 0x3f;                       /* bright text on dark fill */
+            gfx_line_fill_rect(0x1f0, row * 0x10 + 0x8d, 0x69, 0x10, 0x20);
+        }
+        gfx_wrap_localized_line(&g_loc, 0x65, (int)v, 0x1f2,
+                                row * 0x10 + 0x8e, g_menu_font,
+                                g_glyph_table, color);
+    }
+    gfx_text_set_no_shadow(0);
+
+    engine_dirty_rect_mark_box_tiled(g_dirty_state, 0x1e0, 0, 10, 0xf, 1);
+
+    /* Scrollbar: a 0x2c-px track split into top filler / thumb / bottom
+     * filler, sized by the visible window's position in the full list
+     * (retail FUN_00404dc1 = percent_div, FUN_00404d6b = percent_of). */
+    int top = engine_math_percent_of(0x2c,
+                  engine_math_percent_div(g_p7_country_scroll, g_p7_country_count));
+    int mid = engine_math_percent_of(0x2c,
+                  engine_math_percent_div(5, g_p7_country_count));
+    int bot = engine_math_percent_of(0x2c,
+                  engine_math_percent_div(g_p7_country_count - g_p7_country_scroll - 5,
+                                          g_p7_country_count));
+    mid = mid + (((0x2c - top) - mid) - bot);
+    if (top != 0) gfx_line_fill_rect(0x25c, 0xa3, 0x14, top, 0x20);
+    if (mid != 0) gfx_line_fill_rect(0x25c, top + 0xa3, 0x14, mid, 0x3f);
+    if (bot != 0) gfx_line_fill_rect(0x25c, mid + top + 0xa3, 0x14, bot, 0x20);
+}
+
+/* Port of FUN_0041fbcb — the player roster down the left edge: per
+ * occupied seat a shield (misc sprite seat·shield), a portrait, and the
+ * centered seat name, with disabled seats dimmed.  FUN_0049caaa (the AI
+ * name/seat assignment) is a non-visual state setup — the render reads
+ * its result, which we bind via engine_title_render_set_players, rather
+ * than recomputing it here. */
+void engine_title_render_setup_roster(void)
+{
+    int row = 0;
+    for (int seat = 1; seat <= 5; seat++) {
+        const engine_title_setup_player_t *p = &g_p7_players[seat];
+
+        int portrait_idx;
+        if (p->type == 0) {
+            if (p->portrait_sel == 0) {
+                continue;                       /* empty seat → skip */
+            }
+            portrait_idx = p->portrait_sel + 9;
+        } else {
+            portrait_idx = 0xe;
+        }
+
+        /* Skip a seat-1+ human-controlled (type 1) slot's draw, but still
+         * skip the row advance (retail's LAB_0041fc67 gate). */
+        if (seat >= 2 && p->type == 1) {
+            continue;
+        }
+
+        int ry = row * 0x5e;
+        gfx_sprite_render_from_blob(g_misc_asset, p->shield * 2 - 2, 10, ry + 6);
+        gfx_sprite_render_from_blob(g_misc_asset, portrait_idx, 0x54, ry + 10);
+        const uint8_t *name = g_p7_names ? g_p7_names + seat * 0x2c : NULL;
+        gfx_text_render_line_centered(name, 0, ry + 0x50, 0xa0, g_menu_font,
+                                      g_glyph_table, g_glyph_metrics,
+                                      p->name_color);
+        if (p->type != 0 && p->enabled != 1) {
+            gfx_paint_darken_rect(g_palette_rgb, 8, ry + 6, 0x91, 0x5a);
+        }
+        row++;
+    }
+    engine_dirty_rect_mark_box_tiled(g_dirty_state, 0, 0, 10, 0x1e, 1);
+}
+
+/* Port of FUN_0041f86d — the 12-entry option-tab strip.  Each tab gets
+ * a wrapped header (entry 0x66 sub `tab`); every tab except the one
+ * being edited (`active`) also gets a raised bevel frame and a centered
+ * red value label (entry 0x67 sub base+selected). */
+void engine_title_render_setup_tabs(void)
+{
+    gfx_text_set_no_shadow(1);
+    for (int t = 0; t < 12; t++) {
+        int x  = g_p7_tab_geom[t][0];
+        int by = g_p7_tab_geom[t][1];
+        int hy = g_p7_tab_geom[t][2];
+
+        gfx_wrap_localized(&g_loc, 0x66, t, x, hy, 100, 100, 0, 0,
+                           g_menu_font, g_glyph_table, g_glyph_metrics, 0x3f);
+
+        if (g_p7_active_tab != t) {
+            gfx_panel_draw_bevel(g_chrome_asset, x, by, 6, 3);
+            int sub = g_p7_tab_value_base[t] + g_p7_tab_values[t];
+            gfx_wrap_localized_line_centered(&g_loc, 0x67, sub, x + 1,
+                                             by + 0x10, 0x60, g_menu_font,
+                                             g_glyph_table, g_glyph_metrics,
+                                             0xf9);
+        }
+    }
+    gfx_text_set_no_shadow(0);
+}
+
+/* Port of FUN_0041f6c7 — the page-7 root: the central carved panel
+ * (misc sprite 0xf) with the Cancel / Start / Defaults labels carved
+ * into it, then the country list, the roster, and the option tabs.
+ * Retail sets the two sub-pass dirty flags (DAT_0057c948 / DAT_0055ce94)
+ * to 1 here, which the subs check-and-clear; on the full-render path the
+ * flags are always freshly set so the subs always draw (the flags only
+ * gate the not-yet-wired per-frame refresh). */
+void engine_title_render_setup_screen(void)
+{
+    gfx_sprite_render_from_blob(g_misc_asset, 0xf, 0xa0, 0);
+
+    gfx_text_set_no_shadow(1);
+    menu_text_entry(0xb, 0xc, 0xa5, 0xc6, 0x4c, g_menu_font, 0x3f);  /* Cancel   */
+    menu_text_entry(0xb, 0xd, 0xf3, 0xc6, 0x4c, g_menu_font, 0x3f);  /* Start    */
+    menu_text_entry(0xb, 0xe, 0x141, 0xc6, 0x4c, g_menu_font, 0x3f); /* Defaults */
+    /* no-shadow stays armed; setup_country_list re-arms then clears it. */
+
+    engine_title_render_setup_country_list();
+    engine_title_render_setup_roster();
+    engine_title_render_setup_tabs();
+}
+
 /* Port of FUN_0041e7e1. */
 void engine_title_render_scene(int screen_state, int page)
 {
@@ -754,6 +997,8 @@ void engine_title_render_scene(int screen_state, int page)
         engine_title_render_choose_title();
     } else if (page == 5) {
         engine_title_render_play_now();
+    } else if (page == 7) {
+        engine_title_render_setup_screen();
     } else if (page >= 3 && page <= 0xd) {
         g_page_fn(page);
     }

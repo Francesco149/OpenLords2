@@ -65,6 +65,17 @@
 #include "engine_dirty_rect.h"
 #include "text_input.h"
 
+/* Per-seat fields the page-7 roster pass reads from the 0x160-stride
+ * player record at retail DAT_0057bf05 (plus the separate enabled flag
+ * DAT_005530e0).  Bound for seats 1..5 (index 0 unused). */
+typedef struct {
+    uint8_t type;          /* +0  DAT_0057bf05: 0 = open, else controller */
+    uint8_t portrait_sel;  /* +2  DAT_0057bf07: portrait variant (type 0)  */
+    uint8_t name_color;    /* +3  DAT_0057bf08: name text color            */
+    uint8_t shield;        /* +5  DAT_0057bf0a: shield sprite group        */
+    uint8_t enabled;       /* DAT_005530e0[seat]: 1 = active (else dimmed) */
+} engine_title_setup_player_t;
+
 /* ─────────────────────────────────────────────────────────────────
  * Bindings — install retail globals into this module's statics
  * ───────────────────────────────────────────────────────────────── */
@@ -278,6 +289,49 @@ void engine_title_render_bind_caret_metrics_table(const uint8_t *table);
  * phase while the title screen is up.  No-op for pages whose per-frame
  * refresher is not yet ported. */
 void engine_title_render_refresh_buttons(int page);
+
+/* ─── page-7 ("game setup") ──────────────────────────────────────
+ * The custom-game setup screen: central carved panel + Cancel/Start/
+ * Defaults, the country/map selector + scrollbar + preview, the player
+ * roster, and the 12-entry option-tab grid.  Bind the state below, then
+ * render via engine_title_render_setup_screen (routed from page 7). */
+
+/* Bind the chrome sprite sheet (retail DAT_0057d3d0, panels.pl8) the
+ * option-tab bevel frames draw from (gfx_load_chrome_sheet). */
+void engine_title_render_bind_chrome_asset(const uint8_t *asset);
+
+/* Bind the active palette mirror (retail DAT_004ea1b0 = gfx.c's
+ * g_palette_rgb) used to dim disabled roster seats.  NULL → no dim. */
+void engine_title_render_bind_palette(const uint8_t *pal_rgb);
+
+/* Country/map selector state: the value-byte list (DAT_0050a460), the
+ * scroll offset (DAT_0053e90c), the selected visible row 0..4
+ * (DAT_0057cacc), and the total entry count (DAT_00554018). */
+void engine_title_render_set_country_list(const uint8_t *values, int scroll,
+                                          int selected_row, int count);
+
+/* The 128×128 preview buffer shown top-right (retail DAT_00569590). */
+void engine_title_render_set_preview(const uint8_t *buf);
+
+/* The 12 option-tab selected values in tab order (retail's permuted
+ * scalars at 0x53f288..0x53f2b4, resolved by FUN_00433a70), plus the
+ * tab currently being edited (-1 = none; that tab shows no bevel). */
+void engine_title_render_set_tab_values(const int values[12], int active_tab);
+
+/* The roster seats (index 1..5; index 0 unused) and the seat-name blob
+ * base (retail DAT_00553d54; seat name = base + seat*0x2c). */
+void engine_title_render_set_players(const engine_title_setup_player_t players[6],
+                                     const uint8_t *names);
+
+/* Port of FUN_0041f6c7.  Render the whole page-7 setup screen. */
+void engine_title_render_setup_screen(void);
+
+/* Port of FUN_0041f98b / FUN_0041fbcb / FUN_0041f86d — the three setup
+ * sub-passes (country list + scrollbar + preview / roster / option-tab
+ * grid).  Exposed for the per-frame refresh + tests. */
+void engine_title_render_setup_country_list(void);
+void engine_title_render_setup_roster(void);
+void engine_title_render_setup_tabs(void);
 
 /* Port of FUN_0041e7e1.  Title-scene dispatch: when `screen_state` is
  * 0x1f (the title screen), render the background, then the page named by

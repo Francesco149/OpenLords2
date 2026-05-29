@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **325** (13.3%) — tested 290, ported 35
-- code bytes touched: **14.0%** (117,643 / 838,629 B)
-- unported: **2122**
+- touched: **333** (13.6%) — tested 298, ported 35
+- code bytes touched: **14.4%** (121,052 / 838,629 B)
+- unported: **2114**
 - orphan refs (in src/, not in function table): 4
 
-## tested (290) — ported + host unit suite
+## tested (298) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -94,9 +94,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40477b | FUN_0040477b | 291 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h (+1) |
 | 0x404a46 | FUN_00404a46 | 230 | engine.c, engine.h, engine_rng.c |
 | 0x404b99 | FUN_00404b99 | 466 | engine.c, engine.h, engine_rng.c |
-| 0x404d6b | FUN_00404d6b | 43 | engine_input.c, engine_math.c, engine_math.h |
+| 0x404d6b | FUN_00404d6b | 43 | engine_input.c, engine_math.c, engine_math.h (+1) |
 | 0x404d96 | FUN_00404d96 | 43 | engine_math.h |
-| 0x404dc1 | FUN_00404dc1 | 66 | engine_input.c, engine_math.h |
+| 0x404dc1 | FUN_00404dc1 | 66 | engine_input.c, engine_math.h, engine_title_render.c |
 | 0x404e03 | FUN_00404e03 | 72 | engine_math.h |
 | 0x404e4b | FUN_00404e4b | 98 | engine_math.h |
 | 0x404ead | FUN_00404ead | 159 | engine_math.h, engine_path.h |
@@ -137,6 +137,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40ecc4 | FUN_0040ecc4 | 1099 | config.c, config.h, strutil.h |
 | 0x40f1a0 | FUN_0040f1a0 | 1117 | engine.c, engine_screen_dispatch.c, engine_screen_dispatch.h (+1) |
 | 0x40f5fd | FUN_0040f5fd | 470 | engine_screen_dispatch.c |
+| 0x410c71 | FUN_00410c71 | 76 | engine_title_render.c |
+| 0x410cbd | FUN_00410cbd | 654 | engine_title_render.c |
 | 0x4148e4 | FUN_004148e4 | 264 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x4149ec | FUN_004149ec | 1050 | engine_title_render.c, engine_title_render.h, gfx_sprite.c (+1) |
 | 0x41e61d | FUN_0041e61d | 452 | engine_title_render.c, engine_title_render.h, gfx.c (+2) |
@@ -152,6 +154,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x41f321 | FUN_0041f321 | 200 | engine_title_render.c, engine_title_render.h, gfx_caret.h (+4) |
 | 0x41f592 | FUN_0041f592 | 86 | engine_title_render.c, engine_title_render.h |
 | 0x41f5e8 | FUN_0041f5e8 | 223 | engine_title_render.c, engine_title_render.h |
+| 0x41f6c7 | FUN_0041f6c7 | 179 | engine_title_render.c, engine_title_render.h |
+| 0x41f86d | FUN_0041f86d | 286 | engine_title_render.c, engine_title_render.h |
+| 0x41f98b | FUN_0041f98b | 576 | engine_title_render.c, engine_title_render.h |
+| 0x41fbcb | FUN_0041fbcb | 523 | engine_title_render.c, engine_title_render.h |
 | 0x42150b | FUN_0042150b | 508 | engine_title_render.h |
 | 0x423b4f | FUN_00423b4f | 85 | engine_mp_render.c, engine_mp_render.h |
 | 0x425d35 | FUN_00425d35 | 184 | main.c |
@@ -168,6 +174,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x432b05 | FUN_00432b05 | 451 | engine_menu_input.c, engine_menu_input.h |
 | 0x432cc8 | FUN_00432cc8 | 526 | engine_menu_input.c |
 | 0x433461 | FUN_00433461 | 208 | engine_menu_input.c |
+| 0x433a70 | FUN_00433a70 | 251 | engine_title_render.c, engine_title_render.h |
 | 0x4343f8 | FUN_004343f8 | 36 | main.c |
 | 0x43de70 | FUN_0043de70 | 1211 | engine.c, engine.h, engine_rate.c |
 | 0x43e330 | FUN_0043e330 | 259 | engine.c, engine.h, engine_rate.c (+1) |
@@ -186,6 +193,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4483fb | FUN_004483fb | 11 | engine_handlers_da.h |
 | 0x448406 | FUN_00448406 | 11 | engine_handlers_da.h |
 | 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h |
+| 0x451bba | FUN_00451bba | 864 | engine_title_render.c |
 | 0x451f1a | FUN_00451f1a | 81 | engine.c, engine.h, engine_anim_cycle.c |
 | 0x451f70 | FUN_00451f70 | 26 | gfx.c, main.c |
 | 0x452160 | FUN_00452160 | 422 | engine.c, gfx.c, gfx.h (+1) |
@@ -226,7 +234,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49bbe8 | FUN_0049bbe8 | 53 | engine_roster.c, engine_roster.h |
 | 0x49bc1d | FUN_0049bc1d | 66 | engine_roster.c, engine_roster.h |
 | 0x49bc5f | FUN_0049bc5f | 314 | engine_roster.c, engine_roster.h |
-| 0x49caaa | FUN_0049caaa | 935 | engine_npc_schedule.c, engine_npc_schedule.h |
+| 0x49caaa | FUN_0049caaa | 935 | engine_npc_schedule.c, engine_npc_schedule.h, engine_title_render.c |
 | 0x4ade93 | FUN_004ade93 | 339 | save.c, save.h |
 | 0x4adfe6 | FUN_004adfe6 | 377 | save.c, save.h |
 | 0x4ae8a9 | FUN_004ae8a9 | 191 | save.c, save.h |

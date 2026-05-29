@@ -806,6 +806,10 @@ static void title_bind_render_state(void)
     engine_title_render_bind_panel_asset(sheet);
     engine_title_render_bind_system_asset(gfx_load_system_sheet());
     engine_title_render_bind_misc_asset(gfx_load_misc_sheet());
+    /* Chrome sheet (panels.pl8) + active palette — the page-7 option-tab
+     * bevels + the roster dim.  Page-independent; load once here. */
+    engine_title_render_bind_chrome_asset(gfx_load_chrome_sheet());
+    engine_title_render_bind_palette(gfx_palette_rgb());
     engine_title_render_bind_panel_fn(gfx_panel_draw);
     /* Background hook stays the default no-op stub — the backdrop is
      * already in the back buffer from gfx_title_background_load. */

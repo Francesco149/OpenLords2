@@ -894,3 +894,157 @@ int test_title_filelist_scene_routes_page_3(void)
     T_ASSERT_EQ_I(g_cap_p2, 0x60);   /* page-3 panel args */
     return 0;
 }
+
+/* ──────────────────────────────────────────────────────────────────
+ * Page 7 — game-setup screen (FUN_0041f6c7 + subs)
+ * ────────────────────────────────────────────────────────────────── */
+
+/* A minimal valid chrome PL8 atlas (mirrors test_gfx_panel's atlas):
+ * indices 0..0xf4 each a 16×16 tile of marker (i+1).  Big enough for the
+ * mode-1 bevel (+0xcc shift) the option tabs draw. */
+enum { P7_MAX_IDX = 0xf5 };
+static uint8_t g_p7_chrome[8 + (P7_MAX_IDX + 1) * 0x10 + (P7_MAX_IDX + 1) * 256];
+
+static void p7_chrome_build(void)
+{
+    memset(g_p7_chrome, 0, sizeof g_p7_chrome);
+    int pix_base = 8 + (P7_MAX_IDX + 1) * 0x10;
+    for (int i = 0; i <= P7_MAX_IDX; i++) {
+        uint8_t *d = g_p7_chrome + 8 + i * 0x10;
+        int off = pix_base + i * 256;
+        d[0] = 0x10; d[2] = 0x10;
+        d[4] = off & 0xff; d[5] = (off >> 8) & 0xff;
+        d[6] = (off >> 16) & 0xff; d[7] = (off >> 24) & 0xff;
+        d[0xd] = 0x10;
+        memset(g_p7_chrome + off, (uint8_t)(i + 1), 256);
+    }
+}
+
+/* Page-7 localization: entry 0x65 country names, 0x66 tab headers,
+ * 0x67 tab values — all single printable token "C"/"H"/"V" per slot so
+ * the 1×1 font emits one pixel of the call's color per sub-string. */
+static const char *g_p7_e65[8] = { "C","C","C","C","C","C","C","C" };
+static const char *g_p7_e66[12] = {
+    "H","H","H","H","H","H","H","H","H","H","H","H" };
+static const char *g_p7_e67[64];
+static engine_title_setup_player_t g_p7_seats[6];
+static uint8_t g_p7_names_blob[6 * 0x2c];
+
+static void p7_setup(void)
+{
+    title_reset();
+    for (int i = 0; i < 64; i++) g_p7_e67[i] = "V";
+    blob_add_entry(g_blob, 0x65, g_p7_e65, 8, 9000);
+    blob_add_entry(g_blob, 0x66, g_p7_e66, 12, 9200);
+    blob_add_entry(g_blob, 0x67, g_p7_e67, 64, 9600);
+    p7_chrome_build();
+    engine_title_render_bind_chrome_asset(g_p7_chrome);
+    engine_title_render_bind_palette(NULL);
+    engine_title_render_set_preview(NULL);
+}
+
+/* Country list: five row-fill rects at x=0x1f0 w=0x69; the selected row
+ * is bright (0x3f) fill, the rest dark (0x20).  Plus the dirty mark. */
+int test_title_setup_country_list_fills_and_selection(void)
+{
+    p7_setup();
+    /* count 8, scroll 0, select visible row 2. */
+    engine_title_render_set_country_list((const uint8_t *)"\0\1\2\3\4\5\6\7",
+                                         0, 2, 8);
+    engine_title_render_setup_country_list();
+
+    /* Row 2 (y = 2*0x10 + 0x8d = 0xad) interior is the bright fill 0x3f. */
+    T_ASSERT(row_color_count_x(0xad, 0x3f, 0x1f0, 0x1f0 + 0x69) > 0);
+    /* Row 0 (y = 0x8d) is the dark fill 0x20. */
+    T_ASSERT(row_color_count_x(0x8d, 0x20, 0x1f0, 0x1f0 + 0x69) > 0);
+    /* The list dirty box is marked at (0x1e0, 0). */
+    T_ASSERT_EQ_I(g_dirty.dirty_mark, 1);
+    T_ASSERT_EQ_I(g_dirty.dirty_xmin, 0x1e0);
+    return 0;
+}
+
+/* Scrollbar: with scroll 0 the top filler is empty and the thumb sits at
+ * the track top (y = 0xa3); scrolled down, a top filler appears above it. */
+int test_title_setup_country_list_scrollbar_tracks_scroll(void)
+{
+    p7_setup();
+    engine_title_render_set_country_list((const uint8_t *)"\0\1\2\3\4\5\6\7",
+                                         0, 0, 8);
+    engine_title_render_setup_country_list();
+    /* scroll 0 → no top filler (0x20) above the thumb start row 0xa3. */
+    int top0 = 0;
+    for (int y = 0xa3; y < 0xa3 + 0x2c; y++)
+        top0 += row_color_count_x(y, 0x3f, 0x25c, 0x25c + 0x14);
+    T_ASSERT(top0 > 0);   /* thumb (0x3f) present */
+
+    p7_setup();
+    engine_title_render_set_country_list((const uint8_t *)"\0\1\2\3\4\5\6\7",
+                                         3, 0, 8);  /* scrolled to 3/8 */
+    engine_title_render_setup_country_list();
+    /* scroll 3/8 of 0x2c ≈ 16 px of 0x20 top filler at the track top. */
+    T_ASSERT(row_color_count_x(0xa3, 0x20, 0x25c, 0x25c + 0x14) > 0);
+    return 0;
+}
+
+/* Roster: an open seat with no portrait is skipped (no name pixels at its
+ * row), an occupied seat draws its centered name. */
+int test_title_setup_roster_draws_occupied_skips_empty(void)
+{
+    p7_setup();
+    memset(g_p7_seats, 0, sizeof g_p7_seats);
+    memset(g_p7_names_blob, 0, sizeof g_p7_names_blob);
+    /* Seat 1: human (type 0, portrait_sel != 0 → drawn). Name "NN". */
+    g_p7_seats[1] = (engine_title_setup_player_t){ 0, 1, 0x3f, 1, 1 };
+    memcpy(g_p7_names_blob + 1 * 0x2c, "NN", 2);
+    /* Seat 2: open, no portrait → skipped (no row). */
+    g_p7_seats[2] = (engine_title_setup_player_t){ 0, 0, 0x3f, 1, 1 };
+    /* Seat 3: AI (type 2) → drawn as the SECOND visible row. */
+    g_p7_seats[3] = (engine_title_setup_player_t){ 2, 0, 0x3f, 2, 1 };
+    memcpy(g_p7_names_blob + 3 * 0x2c, "AA", 2);
+
+    engine_title_render_set_players(g_p7_seats, g_p7_names_blob);
+    engine_title_render_setup_roster();
+
+    /* Row 0 name baseline y = 0x50; row 1 (next drawn seat) y = 0x5e+0x50. */
+    T_ASSERT(row_color_count_x(0x50, 0x3f, 0, 0xa0) > 0);          /* seat 1 */
+    T_ASSERT(row_color_count_x(0x5e + 0x50, 0x3f, 0, 0xa0) > 0);   /* seat 3 */
+    /* A third drawn row would be at 2*0x5e+0x50 = 0xfc — none (seat 2
+     * skipped, only two seats drew). */
+    T_ASSERT_EQ_I(row_color_count_x(2 * 0x5e + 0x50, 0x3f, 0, 0xa0), 0);
+    return 0;
+}
+
+/* Option tabs: every non-active tab draws its red (0xf9) value label; the
+ * active tab draws no value label. */
+int test_title_setup_tabs_value_label_skips_active(void)
+{
+    p7_setup();
+    int vals[12] = { 0 };
+    engine_title_render_set_tab_values(vals, /*active=*/4);
+    engine_title_render_setup_tabs();
+
+    /* Tab 4 geometry: x=0x122, value label at y = 0x161 + 0x10 = 0x171.
+     * No 0xf9 pixels there (active tab → value label skipped). */
+    T_ASSERT_EQ_I(row_color_count_x(0x171, 0xf9, 0x122, 0x122 + 0x60), 0);
+    /* Tab 0 (non-active): value label at y = 0x118 + 0x10 = 0x128. */
+    T_ASSERT(row_color_count_x(0x128, 0xf9, 0xaa, 0xaa + 0x60) > 0);
+    return 0;
+}
+
+/* Scene dispatch routes page 7 to the setup renderer, NOT the page hook. */
+int test_title_setup_scene_routes_page_7(void)
+{
+    p7_setup();
+    engine_title_render_set_country_list((const uint8_t *)"\0\1\2\3\4\5\6\7",
+                                         0, 0, 8);
+    engine_title_render_set_players(g_p7_seats, g_p7_names_blob);
+    int vals[12] = { 0 };
+    engine_title_render_set_tab_values(vals, -1);
+    engine_title_render_reset_counters();        /* clears last_page */
+    engine_title_render_scene(0x1f, 7);
+    /* Page hook NOT invoked (last_page stays 0) → routed to setup_screen. */
+    T_ASSERT_EQ_I(engine_title_render_last_page(), 0);
+    /* And the country-list fills landed on the canvas. */
+    T_ASSERT(canvas_color_count(0x20) > 0);
+    return 0;
+}

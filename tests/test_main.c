@@ -1223,6 +1223,11 @@ struct test_case {
     X(title_filelist_renders_grid_text) \
     X(title_filelist_empty_no_grid_text) \
     X(title_filelist_scene_routes_page_3) \
+    X(title_setup_country_list_fills_and_selection) \
+    X(title_setup_country_list_scrollbar_tracks_scroll) \
+    X(title_setup_roster_draws_occupied_skips_empty) \
+    X(title_setup_tabs_value_label_skips_active) \
+    X(title_setup_scene_routes_page_7) \
     \
     X(menu_hover_returns_1based_index) \
     X(menu_hover_outside_returns_zero) \

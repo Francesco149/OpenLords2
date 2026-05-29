@@ -683,6 +683,11 @@ const uint8_t *gfx_load_chrome_sheet(void)
     return g_chrome_sheet;
 }
 
+const uint8_t *gfx_palette_rgb(void)
+{
+    return g_palette_rgb;
+}
+
 /* ---------------------------------------------------------------- *
  *  Font PL8 loaders — port of the entries 6/7 of the master asset   *
  *  table consumed by FUN_00498... (the 13-asset init loop).  Each    *

@@ -121,6 +121,12 @@ const uint8_t *gfx_load_misc_sheet(void);
  * or NULL. */
 const uint8_t *gfx_load_chrome_sheet(void);
 
+/* The active 8-bit RGB palette mirror (retail DAT_004ea1b0[256*3]) the
+ * page-7 roster dim (gfx_paint_darken_rect) keys off.  Valid after
+ * gfx_load_palette / gfx_init.  Returns a pointer to the 768-byte
+ * table (never NULL once gfx is initialised). */
+const uint8_t *gfx_palette_rgb(void);
+
 /* Load the menu/default font (fntl2_14.pl8 → retail DAT_005af8f0) and
  * the large title font (fntl2_22.pl8 → retail DAT_005b2fa0) as raw PL8
  * blobs.  Each is the glyph sprite sheet the text renderer indexes via
