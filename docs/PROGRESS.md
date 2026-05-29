@@ -63,18 +63,32 @@ Backdrop + stone panel now match retail pixel-for-pixel (diff 23.3% →
   text path deref'd NULL before the l2.eng blob is bound); root-caused
   with a host ASan repro of the full scene against the real panels2.pl8.
 
-### Next — text (font-glyph extraction)
+### Next — text (font loading + glyph-table extraction)
 
-The only remaining visible delta.  The title/subtitle/button labels rest
-on the ported text primitives but need the **font + glyph-table bytes
-extracted from Lords2.exe**: DAT_005b2fa0 (title font), DAT_005af8f0
-(menu/default font), DAT_004d71f0 / DAT_004d71d0 (char→glyph tables — all
-static .data/.rdata).  Bind via the existing
-`engine_title_render_bind_fonts` / `_glyph_tables` + bind the loc blob
-(DAT_00591580, already loaded at runtime by config: l2.eng, 100016 B).
-gfx_glyph (the renderer) already knows the font blob layout, so the work
-is: determine each blob's extent, extract the bytes (embed or data file),
-bind, verify text renders vs ground truth.
+The only remaining visible delta.  **Corrected asset-source analysis**
+(from the PE section map): `.data` is file-backed only up to VA
+**0x4e5a00** — beyond that is BSS (zero at load, filled at runtime).
+
+- **Fonts are runtime-loaded from disk, NOT embedded.**  DAT_005af8f0
+  (menu/default) and DAT_005b2fa0 (title) are at 0x5af8f0 / 0x5b2fa0 —
+  both in BSS.  The game dir has the font files: `Font_c2.pl8`,
+  `Font3c2.pl8`, `Font_10.pl8`, `Fnt_8.pl8`, `Fntl2_{9,14,22}.pl8`, …
+  So this mirrors the bg/panel track: find which font `.pl8` loads into
+  each buffer (search the decompile for the load into &DAT_005af8f0 /
+  &DAT_005b2fa0 — NOT a direct FUN_004af8d9 call, so trace the font-load
+  routine), load at runtime via `gfx_load_*`, bind via
+  `engine_title_render_bind_fonts`.
+- **Glyph tables ARE embedded** (extract from the exe): DAT_004d71f0 /
+  DAT_004d71d0 are at 0x4d71f0 / 0x4d71d0 — inside initialized .data
+  (0x4d2000..0x4e5a00).  256-byte char→glyph maps (the renderer subtracts
+  0x20 before indexing 0x4d71f0, so 0x4d71f0[c-0x20] == 0x4d71d0[c]).
+  Extract once, bind via `engine_title_render_bind_glyph_tables`.
+- The loc blob (DAT_00591580) already loads at runtime (config: l2.eng,
+  100016 B) — bind it via `engine_title_render_bind_localization`.
+
+gfx_glyph (the renderer) already knows the font blob layout (16-byte
+glyph descriptors at blob+idx*16+8, same as sprites/panels), so once all
+three are bound the ported chain renders the text with no new wiring.
 
 ## 2026-05-29 — main-menu render chain ported end-to-end (10-chip push)
 
