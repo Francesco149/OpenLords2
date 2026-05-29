@@ -3838,6 +3838,61 @@ pair collapses to a copy of the stale `pair[5]` over the six passes.
 
 ---
 
+## 107. NPC schedule reads the global localization walker mid-routine
+
+The NPC worker-schedule initialiser (`FUN_0049caaa`) hands each AI
+player a job, then copies that job's localized 16-byte name out of
+L2.ENG by reading the **global walker pointer** `DAT_005c9270`
+*directly* — right after seeking it — rather than via a self-contained
+read accessor:
+
+```c
+FUN_004018d7(7, work_location);              // seek walker into section 7
+FUN_00401136(DAT_005c9270, &aux[+4], 0x10);  // copy 16 B FROM the walker
+```
+
+This is the one caller that motivated surfacing the walker offset in
+the localization port (see `localization.h` §"Walker pointer").  Our
+port runs the seek with a *local* `localization_state_t` over an
+injected blob and copies from `blob + walker_offset`, deliberately not
+modelling the cross-subsystem global walker (other functions, e.g.
+`0x42ab82`, repurpose `DAT_005c9270` for unrelated regions).
+
+**Drop-in divergence:** retail copies unconditionally — L2.ENG is
+always resident, loaded by WinMain before any strategic setup.  Our
+port skips the copy when no blob has been wired
+(`engine_npc_schedule_set_localization(NULL, …)`), so the routine is
+safe to run before localization load.  Once a strategic caller lands,
+the bring-up wires `config_localization_data()` and the copy fires.
+
+> 📍 `src/engine_npc_schedule.c` (`engine_npc_schedule_init`),
+> test `npc_copies_localized_name`, Ghidra `FUN_0049caaa` line 74720.
+
+---
+
+## 108. NPC schedule indexes fixed-size tables with no bounds check
+
+`FUN_0049caaa` has two unchecked indexings that the port reproduces
+verbatim, both safe only because the live data stays in range:
+
+- The fixed-job pre-reservation marks `job_taken[aux[+0x25]]` into an
+  8-byte stack array; a corrupt fixed-job id ≥ 8 would smash the stack
+  (retail has the same latent overflow).
+- The finalize pass reads the per-job work-position table by **every**
+  seat's `[+0x0a]` job id — including owned or limit-skipped seats
+  whose job byte was never assigned this run (it stays whatever it
+  was, typically 0 → position `(4,2)`).  A job id past the table tail
+  would read adjacent `.rdata`.
+
+Valid play keeps job ids in `0..5`, so neither fires; the host tests
+stay in range to avoid tripping ASan on the same reads retail makes
+blind.
+
+> 📍 `src/engine_npc_schedule.c` (`engine_npc_schedule_init`),
+> Ghidra `FUN_0049caaa` lines 74681 (pre-mark), 74780+ (finalize).
+
+---
+
 <!--
 Template for new entries:
 

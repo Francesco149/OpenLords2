@@ -52,8 +52,10 @@ static uint32_t g_sim_autosave_start_ms;
  * 0. */
 static uint32_t g_sim_tick_counter;
 /* Multiplayer-session active flag.  retail DAT_00553030.  SP only
- * today, so always 0. */
-static int g_sim_mp_active;
+ * today, so always 0.  Shared (declared extern in engine.h) so the
+ * strategic-layer modules that branch on it — e.g. engine_npc_schedule
+ * — read the single canonical flag rather than a private mirror. */
+int g_sim_mp_active;
 /* Game-speed slider (0..100, retail _DAT_0053f230).  Default 100
  * (max speed) until the UI slider lands. */
 static int g_sim_game_speed = 100;

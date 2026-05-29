@@ -7,6 +7,63 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — NPC worker-schedule init (first sim chip off the honest frontier)
+
+First port chip picked off the corrected frontier from the prior
+session.  `FUN_0049caaa` (935 B, the single largest npc-schedule leaf)
+→ `src/engine_npc_schedule.c` `engine_npc_schedule_init`.
+
+### What it does
+
+Once per strategic / new-game setup, it schedules the five AI players
+(seats 1..5).  For each unassigned seat under the worker-count limit it:
+hands out a free job slot (1..5, skipping any a fixed-job player has
+reserved), picks that job's first un-taken work-location from a per-job
+candidate table, and copies the job's localized 16-byte name from
+L2.ENG section 7 into the player's aux record.  A finalize pass then
+writes every seat's per-job work-position `(x,y)` and two
+schedule-valid flags.
+
+### What landed
+
+- **`engine_npc_schedule.c` / `.h`** — verbatim port.  Reads the now-
+  shared `g_player_strategic_352` (stride 0x160) and `g_player_aux_44`
+  (stride 0x2c) save arrays, the three difficulty/limit scalars
+  (`s_slot_0053f268` worker limit, `s_slot_0055302c` variant select,
+  `s_slot_0053f034` difficulty), and the MP master switch.
+- **`s_job_table[96]`** — the retail `.rdata` candidate/position table
+  at `0x4dc17c`, dumped byte-exact via r2 and indexed by absolute
+  offset so one blob serves both the per-job candidate lookup
+  (4 variants × 5 jobs × 4 candidates) and the work-position pairs.
+- **`g_sim_mp_active` promoted to a shared extern** (`engine.h`).  It
+  was a private `static` in `engine.c` (retail `DAT_00553030`); the
+  schedule branches on it (MP degrades the candidate table to variant
+  0).  Runtime flag, **not** a save-schema scalar — not persisted.
+- **7 host tests** — job/loc/position assignment, worker-count limit,
+  fixed-job pre-reservation, owned-seat skip, difficulty-variant table,
+  MP-forces-variant-0, and the localized-name copy (crafted L2.ENG
+  blob).  Suite **1047 → 1054**, both builds clean.
+- **Quirks #107/#108** — the global-walker read (and our local-state +
+  NULL-guard divergence) and the two unchecked fixed-size-table
+  indexings, documented at port time.
+
+### Disposition
+
+Lands **ahead of its callers** — same as the roster trio.  All 13
+retail call sites (strategic-setup / new-game / load: `0x441649`,
+`0x4427d1`, `0x4978ad`, …) are unported, so the routine is dead-but-
+tested in the drop-in today (the frontier's "2 ported callers" was the
+just-fixed comment-token pollution).  No `main.c` wiring; the
+localization setter gets called when a strategic caller lands.
+
+Ledger: **272 → 273 touched** (11.1 → 11.2 %), 243 tested, code-byte
+**10.1 → 10.3 %**.
+
+(Clean `/clear` point — one self-contained chip, frontier still has the
+roster-cluster consumer `0x49bd99` and the other order-2/3 leaves.)
+
+---
+
 ## 2026-05-29 — ledger integrity: kill the FUN_-token provenance pollution
 
 Triaging the next gameplay chip off `docs/port-frontier.md` surfaced that

@@ -65,6 +65,13 @@ extern int g_shutdown_request;
  * actually transition above 8, which today it can't. */
 extern int g_savepump_request;
 
+/* Multiplayer-session active flag.  Mirror of retail DAT_00553030 —
+ * the SP/MP master switch.  Always 0 in the drop-in today (SP only).
+ * Defined in engine.c; declared here so strategic-layer modules
+ * (engine_npc_schedule) read the single canonical flag.  Note: this is
+ * a runtime flag, NOT a save-schema scalar — it is not persisted. */
+extern int g_sim_mp_active;
+
 /* Per-tick driver — scaffold of retail FUN_004b99c0.  Public so
  * engine_tick_dispatch can call it without going through the guard. */
 void engine_tick(void);

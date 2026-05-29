@@ -12,19 +12,19 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **272** (11.1%) — tested 242, ported 30
-- code bytes touched: **10.1%** (85,080 / 838,629 B)
-- unported: **2175**
+- touched: **273** (11.2%) — tested 243, ported 30
+- code bytes touched: **10.3%** (86,015 / 838,629 B)
+- unported: **2174**
 - orphan refs (in src/, not in function table): 3
 
-## tested (242) — ported + host unit suite
+## tested (243) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
 | 0x401000 | FUN_00401000 | 133 | strutil.h |
 | 0x401085 | FUN_00401085 | 85 | strutil.h |
 | 0x4010da | FUN_004010da | 92 | strutil.c, strutil.h |
-| 0x401136 | FUN_00401136 | 64 | engine_event_queue.c, engine_event_queue.h, strutil.h |
+| 0x401136 | FUN_00401136 | 64 | engine_event_queue.c, engine_event_queue.h, engine_npc_schedule.c (+1) |
 | 0x401176 | FUN_00401176 | 58 | strutil.h |
 | 0x4011b0 | FUN_004011b0 | 58 | strutil.h |
 | 0x4011ea | FUN_004011ea | 92 | strutil.h |
@@ -186,6 +186,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49bbe8 | FUN_0049bbe8 | 53 | engine_roster.c, engine_roster.h |
 | 0x49bc1d | FUN_0049bc1d | 66 | engine_roster.c, engine_roster.h |
 | 0x49bc5f | FUN_0049bc5f | 314 | engine_roster.c, engine_roster.h |
+| 0x49caaa | FUN_0049caaa | 935 | engine_npc_schedule.c, engine_npc_schedule.h |
 | 0x4ade93 | FUN_004ade93 | 339 | save.c, save.h |
 | 0x4adfe6 | FUN_004adfe6 | 377 | save.c, save.h |
 | 0x4ae8a9 | FUN_004ae8a9 | 191 | save.c, save.h |

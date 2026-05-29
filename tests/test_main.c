@@ -1128,6 +1128,13 @@ struct test_case {
     X(roster_compact_non_convergent_tail_survives) \
     X(roster_compact_active_count_uses_bf07_flag) \
     X(roster_compact_no_active_players_drops_all_nonzero_seats) \
+    X(npc_assigns_jobs_locs_and_positions) \
+    X(npc_worker_limit_stops_assignment) \
+    X(npc_prereserved_job_is_skipped) \
+    X(npc_owned_seat_skipped) \
+    X(npc_difficulty_variant_table) \
+    X(npc_mp_active_uses_variant0) \
+    X(npc_copies_localized_name) \
     /* end */
 
 /* Emit extern decls. */

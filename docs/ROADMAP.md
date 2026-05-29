@@ -23,7 +23,7 @@ struct or several globals · `hard` = jump table / float math / unknown layout.
 |:---:|----|-----:|:-------:|------------|-----------|-----------------|
 | 1 | `0x41423f` | 11 | 1 | mechanical | render-quad / blit primitives | `src/gfx.c` — *port with `engine_tick` body* |
 | ✅ | `0x42eaa6` | 214 | 2 | mechanical | gfx | **DONE** → `gfx.c` `gfx_release_surfaces` (2026-05-29) |
-| 2 | `0x49caaa` | 935 | 2 | moderate | npc-schedule | `src/engine_npc_schedule.c` |
+| ✅ | `0x49caaa` | 935 | 2 | moderate | npc-schedule | **DONE** → `engine_npc_schedule.c` `engine_npc_schedule_init` (2026-05-29) |
 | 2 | `0x4360f2` | 41 | 1 | mechanical | stage/post-load + char tables | `src/engine.c` `[scalar-blocked]` |
 | 2 | `0x49bbe8` | 53 | 1 | mechanical | castle-army-setup | `src/engine_castle_data.c` `[scalar-blocked]` (count = entry 141) |
 | 3 | `0x4af502` | 72 | 7 | mechanical | io-helpers | `src/io.c` — *tier-2/3 deferred; dead today* |
