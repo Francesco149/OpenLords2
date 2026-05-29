@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **297** (12.1%) — tested 264, ported 33
-- code bytes touched: **11.2%** (93,825 / 838,629 B)
-- unported: **2150**
+- touched: **298** (12.2%) — tested 265, ported 33
+- code bytes touched: **11.3%** (94,429 / 838,629 B)
+- unported: **2149**
 - orphan refs (in src/, not in function table): 4
 
-## tested (264) — ported + host unit suite
+## tested (265) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -133,6 +133,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x41ea14 | FUN_0041ea14 | 143 | engine_title_render.c, engine_title_render.h |
 | 0x41eaa3 | FUN_0041eaa3 | 487 | engine_title_render.c, engine_title_render.h |
 | 0x41ec8a | FUN_0041ec8a | 92 | engine_title_render.c, engine_title_render.h |
+| 0x41ece6 | FUN_0041ece6 | 604 | engine_title_render.c, engine_title_render.h |
 | 0x41f15a | FUN_0041f15a | 131 | engine_mp_render.c, engine_mp_render.h |
 | 0x42150b | FUN_0042150b | 508 | engine_title_render.h |
 | 0x423b4f | FUN_00423b4f | 85 | engine_mp_render.c, engine_mp_render.h |

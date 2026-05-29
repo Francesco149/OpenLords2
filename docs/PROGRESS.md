@@ -7,6 +7,48 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-29 — NEXT SCREEN: "Your options" (title page 2) BIT-IDENTICAL
+
+The single-player **"Your options"** screen (Play Now! / Load a game /
+Skirmish! / Custom game / Back.) now renders in the drop-in **bit-identical**
+to retail (0 diff px vs `runs/groundtruth/options-retail.bmp`). This is the
+first UI screen beyond the main menu — reached by clicking "Single player".
+
+### How it was reached + captured
+
+The title screen (`DAT_004eac50 == 0x1f`) is a page state machine
+(`DAT_005530f0`): page 1 = main menu, **page 2 = "Your options"**. With the
+robust `--skip-intro` (prior entry) the menu is reachable in ~200 ms, so a
+synthetic `--input-trace` click on "Single player" (320,107) drives page 1→2
+deterministically. The settled page-2 frame (cursor parked off the buttons)
+was saved as the groundtruth. See
+[`title-menu-screens.md`](findings/title-menu-screens.md).
+
+### The port
+
+`FUN_0041ec8a` (page-2 root) + `FUN_0041ece6` (5 buttons) are structurally
+identical to the already-ported main menu (`FUN_0041ea14`/`FUN_0041eaa3`) —
+same panel + large-font title + bevel-rect/dirty-mark/label buttons, just one
+extra row and different geometry/strings. Landed in `engine_title_render.c`:
+
+- `engine_title_render_options` / `engine_title_render_options_buttons`, with
+  a shared `render_menu_button` helper factored out of the main-menu path.
+- Scene dispatch routes page 2 → options (page 1 → main menu; 3..0xd → the
+  still-deferred page hook).
+- Panel args `(0xb0,10,0x12,0x12)` (vs page 1's `0xa0,10,0x14,0xf`); title
+  str 5 centered in 0x120 at (0xb0,0x2d); buttons str {6,7,0x13,8,9} at
+  y {0x5b,0x7f,0xa3,0xc7,0xeb}. No subtitle (unlike page 1).
+- Bring-up: `--title-page N` (implies `--title-menu`) renders the chosen page.
+- 5 new host tests (suite 1127 → 1132), all green; full drop-in build clean.
+
+### Next
+
+Wire the page state machine + menu input (the `DAT_005530f0` transitions, the
+hotspot dispatch) so the drop-in navigates menu↔options on its own, then port
+the remaining title pages (3..0xd) the same way.
+
+---
+
 ## 2026-05-29 — HARNESS: `--skip-intro` reaches the menu in ~200 ms
 
 The retail capture harness can now **skip the boot intro movie chain** outright

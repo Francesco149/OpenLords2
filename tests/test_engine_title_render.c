@@ -111,17 +111,19 @@ static void blob_init_entry(unsigned char *blob, int index,
     }
 }
 
-/* Menu localization layout: title=0, subtitle=1, btn1=2, btn2=3,
- * btn4=4, btn3=0x2f (47).  Slots 5..46 are empty. */
+/* Menu localization layout (entry 0xb sub-strings):
+ *   page 1 (main menu): title=0, subtitle=1, btn1=2, btn2=3, btn4=4, btn3=0x2f.
+ *   page 2 ("Your options"): title=5, btn1=6, btn2=7, btn4=8, btn5=9, btn3=0x13.
+ * Remaining slots are empty boundary-only. */
 static const char *g_menu_tokens[48] = {
-    "TT", "SS", "AA", "BB", "DD",         /* 0..4 */
-    /* 5..46 — 42 empty boundary-only slots */
-    "", "", "", "", "", "", "", "", "", "",   /* 5..14  */
-    "", "", "", "", "", "", "", "", "", "",   /* 15..24 */
-    "", "", "", "", "", "", "", "", "", "",   /* 25..34 */
-    "", "", "", "", "", "", "", "", "", "",   /* 35..44 */
-    "", "",                                   /* 45..46 */
-    "CC"                                      /* index 47 */
+    "TT", "SS", "AA", "BB", "DD",             /* 0..4  (page-1) */
+    "OO", "O1", "O2", "O4", "O5",             /* 5..9  (page-2 title + btns) */
+    "", "", "", "", "", "", "", "", "",       /* 10..18 */
+    "O3",                                     /* 19 (0x13) page-2 btn3 */
+    "", "", "", "", "", "", "", "", "", "",   /* 20..29 */
+    "", "", "", "", "", "", "", "", "", "",   /* 30..39 */
+    "", "", "", "", "", "", "",               /* 40..46 */
+    "CC"                                      /* 47 (0x2f) page-1 btn3 */
 };
 
 static uint8_t g_font_title[FONT_BLOB_LEN];
@@ -321,6 +323,73 @@ int test_title_main_menu_renders_title_subtitle_and_buttons(void)
 }
 
 /* ──────────────────────────────────────────────────────────────────
+ * "Your options" page (FUN_0041ec8a / FUN_0041ece6)
+ * ────────────────────────────────────────────────────────────────── */
+
+int test_title_options_calls_panel_with_retail_args(void)
+{
+    title_reset();
+    g_cap_calls = 0;
+    engine_title_render_bind_panel_fn(capture_panel);
+    engine_title_render_options();
+
+    /* retail FUN_00409346(DAT_004eabec, 0xb0, 10, 0x12, 0x12). */
+    T_ASSERT_EQ_I(g_cap_calls, 1);
+    T_ASSERT_EQ_I(g_cap_p2, 0xb0);
+    T_ASSERT_EQ_I(g_cap_p3, 10);
+    T_ASSERT_EQ_I(g_cap_p4, 0x12);
+    T_ASSERT_EQ_I(g_cap_p5, 0x12);
+    return 0;
+}
+
+int test_title_options_buttons_marks_five_dirty_boxes(void)
+{
+    title_reset();
+    engine_title_render_options_buttons();
+
+    /* Five boxes share x = 0xe0, w = 0xe tiles → x range [224, 448].  Y
+     * spans button 1 top (0x5b) to button 5 bottom (0xeb + 3*16 = 283). */
+    T_ASSERT_EQ_I(g_dirty.dirty_mark, 1);
+    T_ASSERT_EQ_I(g_dirty.dirty_xmin, 0xe0);
+    T_ASSERT_EQ_I(g_dirty.dirty_xmax, 0xe0 + 0xe * 16);
+    T_ASSERT_EQ_I(g_dirty.dirty_ymin, 0x5b);
+    T_ASSERT_EQ_I(g_dirty.dirty_ymax, 0xeb + 3 * 16);
+    return 0;
+}
+
+int test_title_options_renders_title_and_five_buttons(void)
+{
+    title_reset();   /* selected button defaults to 1 */
+    engine_title_render_options();
+
+    /* Title "OO" at cursor_y 0x2d, uppercase_highlight armed → color 1. */
+    T_ASSERT(row_color_count(0x2d, 1) > 0);
+    /* Five button labels at button_y + 5: 0x60, 0x84, 0xa8, 0xcc, 0xf0. */
+    T_ASSERT(row_color_count(0x60, 0xf9) > 0);   /* btn1 selected → highlight */
+    T_ASSERT(row_color_count(0x84, 0x3f) > 0);   /* btn2 "O2" */
+    T_ASSERT(row_color_count(0xa8, 0x3f) > 0);   /* btn3 "O3" (skip 0x13) */
+    T_ASSERT(row_color_count(0xcc, 0x3f) > 0);   /* btn4 "O4" */
+    T_ASSERT(row_color_count(0xf0, 0x3f) > 0);   /* btn5 "O5" */
+    T_ASSERT_EQ_I(engine_title_render_panel_call_count(), 1);
+    T_ASSERT_EQ_I(g_dirty.dirty_mark, 1);
+    return 0;
+}
+
+int test_title_options_highlights_selected_fifth_button(void)
+{
+    title_reset();
+    engine_title_render_set_selected_button(5);   /* "Back." */
+    engine_title_render_options_buttons();
+
+    /* Only button 5's label row (0xeb + 5 = 0xf0) uses highlight 0xf9. */
+    T_ASSERT(row_color_count(0xf0, 0xf9) > 0);
+    T_ASSERT_EQ_I(row_color_count(0x60, 0xf9), 0);   /* btn1 not highlighted */
+    T_ASSERT(row_color_count(0x60, 0x3f) > 0);
+    T_ASSERT_EQ_I(canvas_color_count(0xf9), row_color_count(0xf0, 0xf9));
+    return 0;
+}
+
+/* ──────────────────────────────────────────────────────────────────
  * Title-scene dispatch (FUN_0041e7e1)
  * ────────────────────────────────────────────────────────────────── */
 
@@ -355,12 +424,26 @@ int test_title_scene_wrong_screen_state_is_noop(void)
 int test_title_scene_other_page_routes_to_page_hook(void)
 {
     title_reset();
-    engine_title_render_scene(0x1f, /*page=*/2);
-    /* Background drawn; page hook invoked with 2; main menu NOT drawn. */
+    engine_title_render_scene(0x1f, /*page=*/3);
+    /* Background drawn; page hook invoked with 3 (still-unported page);
+     * neither the main menu nor the options page drawn. */
     T_ASSERT_EQ_I(engine_title_render_background_call_count(), 1);
-    T_ASSERT_EQ_I(engine_title_render_last_page(), 2);
+    T_ASSERT_EQ_I(engine_title_render_last_page(), 3);
     T_ASSERT_EQ_I(engine_title_render_panel_call_count(), 0);
     /* Still finalizes + sets flags. */
+    T_ASSERT_EQ_I(engine_title_render_scene_flag_a(), 1);
+    return 0;
+}
+
+int test_title_scene_page2_routes_to_options(void)
+{
+    title_reset();
+    engine_title_render_scene(0x1f, /*page=*/2);
+    /* Background drawn; options page drawn (panel called once); the generic
+     * page hook is NOT invoked for page 2. */
+    T_ASSERT_EQ_I(engine_title_render_background_call_count(), 1);
+    T_ASSERT_EQ_I(engine_title_render_panel_call_count(), 1);
+    T_ASSERT_EQ_I(engine_title_render_last_page(), 0);
     T_ASSERT_EQ_I(engine_title_render_scene_flag_a(), 1);
     return 0;
 }

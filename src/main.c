@@ -113,6 +113,10 @@ static int       g_title_bg;
  * title/button text no-ops until the font glyph data is extracted +
  * bound).  Implies --gfx-init. */
 static int       g_title_menu;
+/* --title-page N: which title page (DAT_005530f0) the bring-up renders.
+ * 1 = main menu (default), 2 = single-player "Your options".  Implies
+ * --title-menu (backdrop + panel + the page composition). */
+static int       g_title_page_num = 1;
 /* --audio-init: call audio_init() after window creation.  Off by
  * default — SetCooperativeLevel(PRIORITY) modifies process audio
  * state and the headless smoke harness has no way to validate
@@ -758,9 +762,10 @@ static void bringup_title_menu(int with_panel)
      * the marks from dereferencing NULL. */
     static engine_dirty_rect_state_t title_dirty;
 
-    engine_title_render_set_page(1);
+    engine_title_render_set_page(g_title_page_num);
 
-    /* Backdrop: palette + gateway.pl8 raw into the back buffer. */
+    /* Backdrop: palette + page-appropriate .pl8 raw into the back buffer
+     * (page 1/2 both use gateway; gfx_title_background_load routes by page). */
     if (!gfx_title_background_load(engine_title_render_page())) {
         log_line("bringup_title_menu: background load failed");
         return;
@@ -809,7 +814,7 @@ static void bringup_title_menu(int with_panel)
     /* Render the title scene into the locked back buffer (panel + button
      * bevels composite over the backdrop). */
     if (gfx_lock_canvas()) {
-        engine_title_render_scene(0x1f, 1);
+        engine_title_render_scene(0x1f, g_title_page_num);
         gfx_unlock_canvas();
     }
 }
@@ -1025,6 +1030,12 @@ static void parse_cmdline(LPSTR lpCmd)
         else if (!strcmp(a, "--title-menu")) {   /* bring-up: backdrop + panel */
             g_title_menu = 1;
             g_gfx_init   = 1;   /* needs DDraw */
+        }
+        else if (!strcmp(a, "--title-page") && i + 1 < ntok) {
+            uint32_t p = 0;
+            if (parse_uint(tokens[++i], &p) && p >= 1) g_title_page_num = (int)p;
+            g_title_menu = 1;   /* implies the full page composition */
+            g_gfx_init   = 1;
         }
         else if (!strcmp(a, "--audio-init"))     g_audio_init  = 1;
         else if (!strcmp(a, "--capture-to") && i + 1 < ntok) {

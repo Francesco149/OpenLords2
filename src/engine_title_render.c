@@ -153,6 +153,20 @@ static void menu_text(int skip, int x, int y, int width,
                                      color);
 }
 
+/* One menu button row — the shape shared verbatim by every title-page
+ * button block (FUN_0041eaa3, FUN_0041ece6, …): a beveled fill rect at
+ * the fixed x=0xe0 w=0xc0 h=0x18, a dirty-box mark (0xe tiles × 3), and a
+ * centered label whose color is the highlight 0xf9 when this row is the
+ * selected button (DAT_00553114), else 0x3f.  retail bracketing
+ * (DAT_005aea40 no-shadow) is the caller's responsibility. */
+static void render_menu_button(int y, int label_skip, int select_id)
+{
+    uint8_t color = (g_selected_button == select_id) ? 0xf9 : 0x3f;
+    gfx_line_rect_bevel_palette_b(0xe0, y, 0xc0, 0x18);
+    engine_dirty_rect_mark_box_tiled(g_dirty_state, 0xe0, y, 0xe, 3, 1);
+    menu_text(label_skip, 0xe0, y + 5, 0xc0, g_menu_font, color);
+}
+
 /* Port of FUN_0041eaa3. */
 void engine_title_render_buttons(void)
 {
@@ -161,30 +175,39 @@ void engine_title_render_buttons(void)
     gfx_text_set_no_shadow(1);
 
     /* Four buttons.  retail layout: fixed x=0xe0, w=0xc0, h=0x18; the
-     * rows step by 0x24 (0x5b, 0x7f, 0xa3, 0xc7).  The dirty box is
-     * (0xe0, row, 0xe tiles, 3 tiles, force).  The label sits at
-     * (0xe0, row+5, width 0xc0) and uses sub-string {2,3,0x2f,4}.  The
-     * selected button (DAT_00553114) gets highlight color 0xf9. */
-    static const struct {
-        int y;          /* rect / dirty top */
-        int label_skip; /* localization sub-string index */
-        int select_id;  /* DAT_00553114 value that highlights this one */
-    } buttons[4] = {
+     * rows step by 0x24 (0x5b, 0x7f, 0xa3, 0xc7).  The label uses
+     * sub-string {2,3,0x2f,4}.  The selected button (DAT_00553114) gets
+     * highlight color 0xf9. */
+    static const struct { int y, label_skip, select_id; } buttons[4] = {
         { 0x5b, 2,    1 },
         { 0x7f, 3,    2 },
         { 0xa3, 0x2f, 3 },
         { 0xc7, 4,    4 },
     };
+    for (int i = 0; i < 4; i++)
+        render_menu_button(buttons[i].y, buttons[i].label_skip,
+                           buttons[i].select_id);
 
-    for (int i = 0; i < 4; i++) {
-        uint8_t color = (g_selected_button == buttons[i].select_id)
-                            ? 0xf9 : 0x3f;
-        gfx_line_rect_bevel_palette_b(0xe0, buttons[i].y, 0xc0, 0x18);
-        engine_dirty_rect_mark_box_tiled(g_dirty_state,
-                                         0xe0, buttons[i].y, 0xe, 3, 1);
-        menu_text(buttons[i].label_skip, 0xe0, buttons[i].y + 5, 0xc0,
-                  g_menu_font, color);
-    }
+    gfx_text_set_no_shadow(0);
+}
+
+/* Port of FUN_0041ece6 — the five "Your options" (page 2) buttons.  Same
+ * shape as the main-menu block, one extra row (5 buttons, y step 0x24:
+ * 0x5b/0x7f/0xa3/0xc7/0xeb), labels sub-string {6,7,0x13,8,9}. */
+void engine_title_render_options_buttons(void)
+{
+    gfx_text_set_no_shadow(1);
+
+    static const struct { int y, label_skip, select_id; } buttons[5] = {
+        { 0x5b, 6,    1 },   /* "Play Now!"   */
+        { 0x7f, 7,    2 },   /* "Load a game" */
+        { 0xa3, 0x13, 3 },   /* "Skirmish!"   */
+        { 0xc7, 8,    4 },   /* "Custom game" */
+        { 0xeb, 9,    5 },   /* "Back."       */
+    };
+    for (int i = 0; i < 5; i++)
+        render_menu_button(buttons[i].y, buttons[i].label_skip,
+                           buttons[i].select_id);
 
     gfx_text_set_no_shadow(0);
 }
@@ -214,6 +237,28 @@ void engine_title_render_main_menu(void)
     engine_title_render_buttons();
 }
 
+/* Port of FUN_0041ec8a — the single-player "Your options" page (page 2).
+ * Same composition as the main menu minus the subtitle: panel + large-font
+ * title ("Your options", sub-string 5), then the five option buttons.  The
+ * panel geometry differs from page 1 (0xb0,10,0x12,0x12 vs 0xa0,10,0x14,0xf)
+ * — narrower + taller for the extra button row. */
+void engine_title_render_options(void)
+{
+    /* Title renders with uppercase-highlight armed (DAT_0058fe2c=1),
+     * shadow on; cleared after the title.  retail arms it before the
+     * panel (the panel ignores it). */
+    gfx_text_set_uppercase_highlight(1);
+
+    g_panel_fn(g_panel_asset, 0xb0, 10, 0x12, 0x12);
+
+    /* Title — large font, sub-string 5, centered in 0x120 at (0xb0, 0x2d). */
+    menu_text(5, 0xb0, 0x2d, 0x120, g_title_font, 0x3f);
+
+    gfx_text_set_uppercase_highlight(0);
+
+    engine_title_render_options_buttons();
+}
+
 /* Port of FUN_0041e7e1. */
 void engine_title_render_scene(int screen_state, int page)
 {
@@ -228,7 +273,9 @@ void engine_title_render_scene(int screen_state, int page)
      * (still-unported) page renderers via the page hook. */
     if (page == 1) {
         engine_title_render_main_menu();
-    } else if (page >= 2 && page <= 0xd) {
+    } else if (page == 2) {
+        engine_title_render_options();
+    } else if (page >= 3 && page <= 0xd) {
         g_page_fn(page);
     }
 

@@ -173,11 +173,19 @@ void engine_title_render_main_menu(void);
  * dirty mark + highlighted label). */
 void engine_title_render_buttons(void);
 
+/* Port of FUN_0041ec8a.  Render the single-player "Your options" page
+ * (page 2): panel + large-font title ("Your options") + five buttons. */
+void engine_title_render_options(void);
+
+/* Port of FUN_0041ece6.  Render the five "Your options" buttons. */
+void engine_title_render_options_buttons(void);
+
 /* Port of FUN_0041e7e1.  Title-scene dispatch: when `screen_state` is
  * 0x1f (the title screen), render the background, then the page named by
- * `page` (1 = main menu → engine_title_render_main_menu; 2..0xd → the
- * page hook), then the full-screen dirty finalize, and set the two scene
- * flags.  A no-op when `screen_state != 0x1f`. */
+ * `page` (1 = main menu → engine_title_render_main_menu; 2 = "Your
+ * options" → engine_title_render_options; 3..0xd → the page hook), then
+ * the full-screen dirty finalize, and set the two scene flags.  A no-op
+ * when `screen_state != 0x1f`. */
 void engine_title_render_scene(int screen_state, int page);
 
 #endif /* OPENLORDS2_ENGINE_TITLE_RENDER_H */
