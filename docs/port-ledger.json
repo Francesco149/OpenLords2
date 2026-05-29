@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 257,
+  "tested": 261,
   "ported": 30,
-  "unported": 2160,
+  "unported": 2156,
   "orphan_refs_not_in_function_table": 3,
-  "touched": 287,
-  "pct_touched": 11.7,
-  "pct_tested": 10.5,
+  "touched": 291,
+  "pct_touched": 11.9,
+  "pct_tested": 10.7,
   "bytes_total": 838629,
-  "bytes_touched": 90476,
-  "pct_bytes_touched": 10.8
+  "bytes_touched": 91913,
+  "pct_bytes_touched": 11.0
  },
  "orphan_refs": [
   "0x40eb4c",
@@ -2963,16 +2963,22 @@
    "name": "FUN_0041e61d",
    "size": 452,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_title_render.c",
+    "src/engine_title_render.h"
+   ]
   },
   {
    "va": "0x41e7e1",
    "name": "FUN_0041e7e1",
    "size": 385,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_title_render.c",
+    "src/engine_title_render.h"
+   ]
   },
   {
    "va": "0x41e962",
@@ -3009,8 +3015,11 @@
    "name": "FUN_0041ec8a",
    "size": 92,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_title_render.c",
+    "src/engine_title_render.h"
+   ]
   },
   {
    "va": "0x41ece6",
@@ -3260,8 +3269,10 @@
    "name": "FUN_0042150b",
    "size": 508,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_title_render.h"
+   ]
   },
   {
    "va": "0x421707",

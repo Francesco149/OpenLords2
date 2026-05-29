@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **287** (11.7%) — tested 257, ported 30
-- code bytes touched: **10.8%** (90,476 / 838,629 B)
-- unported: **2160**
+- touched: **291** (11.9%) — tested 261, ported 30
+- code bytes touched: **11.0%** (91,913 / 838,629 B)
+- unported: **2156**
 - orphan refs (in src/, not in function table): 3
 
-## tested (257) — ported + host unit suite
+## tested (261) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -126,9 +126,13 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40e8bb | FUN_0040e8bb | 240 | engine.c, engine.h, main.c |
 | 0x40e9ab | FUN_0040e9ab | 641 | config.h, main.c |
 | 0x40ecc4 | FUN_0040ecc4 | 1099 | config.c, config.h, strutil.h |
+| 0x41e61d | FUN_0041e61d | 452 | engine_title_render.c, engine_title_render.h |
+| 0x41e7e1 | FUN_0041e7e1 | 385 | engine_title_render.c, engine_title_render.h |
 | 0x41ea14 | FUN_0041ea14 | 143 | engine_title_render.c, engine_title_render.h |
 | 0x41eaa3 | FUN_0041eaa3 | 487 | engine_title_render.c, engine_title_render.h |
+| 0x41ec8a | FUN_0041ec8a | 92 | engine_title_render.c, engine_title_render.h |
 | 0x41f15a | FUN_0041f15a | 131 | engine_mp_render.c, engine_mp_render.h |
+| 0x42150b | FUN_0042150b | 508 | engine_title_render.h |
 | 0x423b4f | FUN_00423b4f | 85 | engine_mp_render.c, engine_mp_render.h |
 | 0x425d35 | FUN_00425d35 | 184 | main.c |
 | 0x4290d0 | FUN_004290d0 | 131 | engine_category_buckets.c, engine_category_buckets.h |

@@ -42,6 +42,22 @@ static void panel_stub(const uint8_t *asset, int p2, int p3, int p4, int p5)
 
 static engine_title_render_panel_fn g_panel_fn = panel_stub;
 
+/* ─── deferred background hook (FUN_0041e61d) ───────────────────── */
+
+static int g_background_calls;
+static void background_stub(void) { g_background_calls++; }
+static engine_title_render_background_fn g_background_fn = background_stub;
+
+/* ─── deferred non-main-menu page hook (FUN_0041ec8a … 0042150b) ── */
+
+static int g_last_page;
+static void page_stub(int page) { g_last_page = page; }
+static engine_title_render_page_fn g_page_fn = page_stub;
+
+/* Scene flags set after a 0x1f render (DAT_005651ac / DAT_004eb260). */
+static int g_scene_flag_a;
+static int g_scene_flag_b;
+
 /* ─── binders ───────────────────────────────────────────────────── */
 
 void engine_title_render_bind_fonts(const uint8_t *title_font,
@@ -89,8 +105,30 @@ void engine_title_render_bind_panel_fn(engine_title_render_panel_fn fn)
     g_panel_fn = fn ? fn : panel_stub;
 }
 
-int  engine_title_render_panel_call_count(void) { return g_panel_calls; }
-void engine_title_render_reset_counters(void)   { g_panel_calls = 0; }
+void engine_title_render_bind_background_fn(engine_title_render_background_fn fn)
+{
+    g_background_fn = fn ? fn : background_stub;
+}
+
+void engine_title_render_bind_page_fn(engine_title_render_page_fn fn)
+{
+    g_page_fn = fn ? fn : page_stub;
+}
+
+int  engine_title_render_panel_call_count(void)      { return g_panel_calls; }
+int  engine_title_render_background_call_count(void) { return g_background_calls; }
+int  engine_title_render_last_page(void)             { return g_last_page; }
+int  engine_title_render_scene_flag_a(void)          { return g_scene_flag_a; }
+int  engine_title_render_scene_flag_b(void)          { return g_scene_flag_b; }
+
+void engine_title_render_reset_counters(void)
+{
+    g_panel_calls = 0;
+    g_background_calls = 0;
+    g_last_page = 0;
+    g_scene_flag_a = 0;
+    g_scene_flag_b = 0;
+}
 
 /* ─── render ────────────────────────────────────────────────────── */
 
@@ -163,4 +201,28 @@ void engine_title_render_main_menu(void)
     gfx_text_set_no_shadow(0);
 
     engine_title_render_buttons();
+}
+
+/* Port of FUN_0041e7e1. */
+void engine_title_render_scene(int screen_state, int page)
+{
+    if (screen_state != 0x1f) {
+        return;
+    }
+
+    /* Background first (deferred — FUN_0041e61d long pole). */
+    g_background_fn();
+
+    /* Page dispatch.  Page 1 is the main menu; pages 2..0xd route to the
+     * (still-unported) page renderers via the page hook. */
+    if (page == 1) {
+        engine_title_render_main_menu();
+    } else if (page >= 2 && page <= 0xd) {
+        g_page_fn(page);
+    }
+
+    /* Full-screen dirty finalize + the two "scene rendered" flags. */
+    engine_dirty_rect_mark_full_screen(g_dirty_state);
+    g_scene_flag_a = 1;   /* DAT_005651ac */
+    g_scene_flag_b = 1;   /* DAT_004eb260 */
 }

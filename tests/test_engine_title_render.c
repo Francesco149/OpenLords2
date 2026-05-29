@@ -319,3 +319,60 @@ int test_title_main_menu_renders_title_subtitle_and_buttons(void)
     T_ASSERT_EQ_I(g_dirty.dirty_mark, 1);
     return 0;
 }
+
+/* ──────────────────────────────────────────────────────────────────
+ * Title-scene dispatch (FUN_0041e7e1)
+ * ────────────────────────────────────────────────────────────────── */
+
+int test_title_scene_page1_renders_main_menu(void)
+{
+    title_reset();
+    engine_title_render_scene(/*screen_state=*/0x1f, /*page=*/1);
+    /* Background drawn, main menu (→ panel) drawn, page hook NOT used. */
+    T_ASSERT_EQ_I(engine_title_render_background_call_count(), 1);
+    T_ASSERT_EQ_I(engine_title_render_panel_call_count(), 1);
+    T_ASSERT_EQ_I(engine_title_render_last_page(), 0);
+    /* Finalize expanded the dirty rect to the full screen. */
+    T_ASSERT_EQ_I(g_dirty.dirty_mark, 1);
+    T_ASSERT_EQ_I(g_dirty.dirty_xmax, 0x27f);
+    T_ASSERT_EQ_I(g_dirty.dirty_ymax, 0x1df);
+    T_ASSERT_EQ_I(engine_title_render_scene_flag_a(), 1);
+    T_ASSERT_EQ_I(engine_title_render_scene_flag_b(), 1);
+    return 0;
+}
+
+int test_title_scene_wrong_screen_state_is_noop(void)
+{
+    title_reset();
+    engine_title_render_scene(/*screen_state=*/0x10, /*page=*/1);
+    T_ASSERT_EQ_I(engine_title_render_background_call_count(), 0);
+    T_ASSERT_EQ_I(engine_title_render_panel_call_count(), 0);
+    T_ASSERT_EQ_I(engine_title_render_scene_flag_a(), 0);
+    T_ASSERT_EQ_I(g_dirty.dirty_mark, 0);
+    return 0;
+}
+
+int test_title_scene_other_page_routes_to_page_hook(void)
+{
+    title_reset();
+    engine_title_render_scene(0x1f, /*page=*/2);
+    /* Background drawn; page hook invoked with 2; main menu NOT drawn. */
+    T_ASSERT_EQ_I(engine_title_render_background_call_count(), 1);
+    T_ASSERT_EQ_I(engine_title_render_last_page(), 2);
+    T_ASSERT_EQ_I(engine_title_render_panel_call_count(), 0);
+    /* Still finalizes + sets flags. */
+    T_ASSERT_EQ_I(engine_title_render_scene_flag_a(), 1);
+    return 0;
+}
+
+int test_title_scene_out_of_range_page_renders_nothing_but_finalizes(void)
+{
+    title_reset();
+    engine_title_render_scene(0x1f, /*page=*/0xe);   /* > 0xd */
+    T_ASSERT_EQ_I(engine_title_render_background_call_count(), 1);
+    T_ASSERT_EQ_I(engine_title_render_panel_call_count(), 0);
+    T_ASSERT_EQ_I(engine_title_render_last_page(), 0);
+    /* Finalize still runs (retail sets the flags unconditionally in 0x1f). */
+    T_ASSERT_EQ_I(engine_title_render_scene_flag_b(), 1);
+    return 0;
+}

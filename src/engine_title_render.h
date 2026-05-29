@@ -119,6 +119,20 @@ typedef void (*engine_title_render_panel_fn)(const uint8_t *asset,
                                              int p2, int p3, int p4, int p5);
 void engine_title_render_bind_panel_fn(engine_title_render_panel_fn fn);
 
+/* Background hook — the deferred FUN_0041e61d (photographic background +
+ * PL8 asset load, the long pole).  Default is a no-op-plus-counter stub.
+ * Called first by the title-scene dispatch. */
+typedef void (*engine_title_render_background_fn)(void);
+void engine_title_render_bind_background_fn(engine_title_render_background_fn fn);
+
+/* Page-renderer hook for the menu pages OTHER than the main menu
+ * (page 1, which routes to engine_title_render_main_menu).  The unported
+ * page renderers (FUN_0041ec8a … FUN_0042150b for pages 2..0xd) are
+ * funnelled through this single hook, which receives the page number.
+ * Default is a no-op-plus-counter stub. */
+typedef void (*engine_title_render_page_fn)(int page);
+void engine_title_render_bind_page_fn(engine_title_render_page_fn fn);
+
 /* ─────────────────────────────────────────────────────────────────
  * Instrumentation (test-only; not retail globals)
  * ───────────────────────────────────────────────────────────────── */
@@ -126,7 +140,15 @@ void engine_title_render_bind_panel_fn(engine_title_render_panel_fn fn);
 /* Number of times the bound panel fn was invoked.  Reset to 0 by
  * engine_title_render_reset_counters(). */
 int  engine_title_render_panel_call_count(void);
+int  engine_title_render_background_call_count(void);
+/* Page number the page hook was last invoked with, or 0 if never. */
+int  engine_title_render_last_page(void);
 void engine_title_render_reset_counters(void);
+
+/* Flags the title-scene dispatch sets after a successful 0x1f render
+ * (retail DAT_005651ac / DAT_004eb260).  0 until a scene render runs. */
+int  engine_title_render_scene_flag_a(void);   /* DAT_005651ac */
+int  engine_title_render_scene_flag_b(void);   /* DAT_004eb260 */
 
 /* ─────────────────────────────────────────────────────────────────
  * Render functions
@@ -139,5 +161,12 @@ void engine_title_render_main_menu(void);
 /* Port of FUN_0041eaa3.  Render the four menu buttons (bevel rect +
  * dirty mark + highlighted label). */
 void engine_title_render_buttons(void);
+
+/* Port of FUN_0041e7e1.  Title-scene dispatch: when `screen_state` is
+ * 0x1f (the title screen), render the background, then the page named by
+ * `page` (1 = main menu → engine_title_render_main_menu; 2..0xd → the
+ * page hook), then the full-screen dirty finalize, and set the two scene
+ * flags.  A no-op when `screen_state != 0x1f`. */
+void engine_title_render_scene(int screen_state, int page);
 
 #endif /* OPENLORDS2_ENGINE_TITLE_RENDER_H */

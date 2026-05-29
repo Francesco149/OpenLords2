@@ -1166,6 +1166,10 @@ struct test_case {
     X(title_main_menu_calls_panel_once_with_retail_args) \
     X(title_main_menu_default_panel_stub_counts) \
     X(title_main_menu_renders_title_subtitle_and_buttons) \
+    X(title_scene_page1_renders_main_menu) \
+    X(title_scene_wrong_screen_state_is_noop) \
+    X(title_scene_other_page_routes_to_page_hook) \
+    X(title_scene_out_of_range_page_renders_nothing_but_finalizes) \
     \
     X(map_query_all_clear_returns_1) \
     X(map_query_rawflag_occupied_returns_0) \
