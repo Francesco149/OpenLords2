@@ -2145,6 +2145,15 @@ let g_call_trace_hooked  = false;
 let g_call_trace_buffer  = [];
 let g_call_trace_n_ok    = 0;
 let g_call_trace_n_fail  = 0;
+// Cum-sec-gated window mode: start emitting once the engine's cumulative-
+// seconds counter reaches g_call_trace_min_cum_secs (i.e. we've reached the
+// target scene — same "reach a scene" knob frame-capture warmup uses), then
+// emit for g_call_trace_max_frames ticks and stop.  Lets us trace a specific
+// scene reached under turbo without knowing its (unpredictable) tick number.
+let g_call_trace_min_cum_secs = 0;  // 0 = disabled (use frame filter instead)
+let g_call_trace_max_frames   = 8;
+let g_call_trace_window_open  = false;
+let g_call_trace_window_end   = 0;
 
 // Per-batch event cap.  The pre-bring-up startup window (CRT init with
 // hundreds of hooks firing) can dump huge bursts into one batch; GLib's
@@ -2156,8 +2165,30 @@ const CALL_TRACE_FLUSH_AT = 20000;
 
 function callTraceShouldEmit() {
     if (!g_call_trace_enabled) return false;
+    if (g_call_trace_min_cum_secs > 0) return g_call_trace_window_open;
     if (g_call_trace_frames === null) return true;
     return g_call_trace_frames.has(g_tick_count);
+}
+
+// Once per tick: open the cum-sec-gated emit window when the engine reaches
+// the target scene, and close it after max_frames ticks.  Called from
+// engine_tick.onEnter (g_tick_count already bumped).
+function callTraceWindowTick() {
+    if (!g_call_trace_enabled || g_call_trace_min_cum_secs <= 0) return;
+    if (!g_call_trace_window_open) {
+        const cs = rva(ADDR.var_fps_cum_secs).readU32();
+        if (cs >= g_call_trace_min_cum_secs) {
+            g_call_trace_window_open = true;
+            g_call_trace_window_end  = g_tick_count + g_call_trace_max_frames;
+            send({kind: 'call_trace_window_open',
+                  cum_secs: cs, tick: g_tick_count,
+                  until_tick: g_call_trace_window_end});
+        }
+    } else if (g_tick_count >= g_call_trace_window_end) {
+        g_call_trace_window_open = false;
+        g_call_trace_enabled     = false;   // window done — stop emitting
+        send({kind: 'call_trace_window_done', tick: g_tick_count});
+    }
 }
 
 function callTraceFlush(frameNumber) {
@@ -2393,6 +2424,9 @@ function installEngineTickHook() {
             }
             g_tick_count = (g_tick_count + 1) >>> 0;
             g_engine_in_tick = 1;
+            if (g_call_trace_enabled && g_call_trace_min_cum_secs > 0) {
+                callTraceWindowTick();
+            }
             if (g_input_replay_events) {
                 drainInputReplayForTick(g_tick_count);
             }
@@ -4184,6 +4218,10 @@ rpc.exports = {
              opts.call_trace_frames.length > 0)
                 ? new Set(opts.call_trace_frames.map(function (v) { return v | 0; }))
                 : null;
+        g_call_trace_min_cum_secs = (opts.call_trace_min_cum_secs | 0);
+        g_call_trace_max_frames   = (opts.call_trace_max_frames | 0) || 8;
+        g_call_trace_window_open  = false;
+        g_call_trace_window_end   = 0;
         g_call_trace_hooked = false;
         g_call_trace_buffer = [];
         g_call_trace_n_ok   = 0;

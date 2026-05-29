@@ -206,6 +206,11 @@ class CaptureConfig:
     call_trace:        bool = False
     call_trace_vas:    list[int] = field(default_factory=list)
     call_trace_frames: list[int] = field(default_factory=list)
+    # Cum-sec-gated window: start emitting call-trace once the engine reaches
+    # this cumulative-second (i.e. the target scene, reached under turbo), then
+    # emit for call_trace_max_frames ticks. 0 = use the tick frame-filter.
+    call_trace_min_cum_secs: int = 0
+    call_trace_max_frames:   int = 8
     # Memory-access watch (Phase H): arm MemoryAccessMonitor over these regions
     # ([{va,size,label,access}], Ghidra VAs) and emit mem_access_batch events →
     # run_dir/mem_watch.jsonl. tools/mem_watch.py ranks the trapped writers.
@@ -728,6 +733,8 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "call_trace":                bool(cfg.call_trace),
             "call_trace_vas":            [int(v) for v in cfg.call_trace_vas],
             "call_trace_frames":         [int(v) for v in cfg.call_trace_frames],
+            "call_trace_min_cum_secs":   int(cfg.call_trace_min_cum_secs),
+            "call_trace_max_frames":     int(cfg.call_trace_max_frames),
             "mem_watch":                 bool(cfg.mem_watch),
             "mem_watch_regions":         cfg.mem_watch_regions,
             "mem_watch_precise":         bool(cfg.mem_watch_precise),
@@ -958,6 +965,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--call-trace-frames", default=None,
                     help="comma-separated sim-frame (g_tick_count) filter; "
                          "omit to emit every frame")
+    ap.add_argument("--call-trace-min-cum-secs", type=int, default=0,
+                    help="emit call-trace once the engine reaches this "
+                         "cumulative-second (the target scene under turbo), "
+                         "for --call-trace-max-frames ticks (0 = tick filter)")
+    ap.add_argument("--call-trace-max-frames", type=int, default=8,
+                    help="number of ticks to emit in cum-sec window mode")
     ap.add_argument("--exe-arg", action="append", default=[],
                     help="argument to pass to the spawned exe (repeatable)")
     args = ap.parse_args(argv)
@@ -1005,6 +1018,8 @@ def main(argv: list[str] | None = None) -> int:
         call_trace=args.call_trace,
         call_trace_vas=call_trace_vas,
         call_trace_frames=call_trace_frames,
+        call_trace_min_cum_secs=args.call_trace_min_cum_secs,
+        call_trace_max_frames=args.call_trace_max_frames,
         exe_args=list(args.exe_arg),
     )
     print(f"[capture] run_dir = {run_dir}")
