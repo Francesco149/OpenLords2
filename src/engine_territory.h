@@ -115,4 +115,15 @@ int engine_territory_pick_feature(const int32_t mask[8],
  * tests use it to seat a deterministic starting state. */
 void engine_territory_reset_feature_counters(void);
 
+/* Port of FUN_0046dbf5.  New-game terrain auto-tiling pass (sibling of
+ * engine_territory_randomise_special_tiles): sweep the bound terrain grid and
+ * rewrite every feature-border cell (a real cell with flags bit 0x4 set, or a
+ * non-sentinel special tile) with the transition tile its 8-neighbour
+ * adjacency selects from the pattern table — real cells into the cell's +3
+ * byte, special cells into the tile itself; isolated tiles (type 0x16) take a
+ * random variant from the single-LFSR RNG (threaded through *rng).  Mutates
+ * the grid in place in row-major order.  No-op if the grid or rng is
+ * unbound/NULL. */
+void engine_territory_classify_feature_tiles(engine_rng_single_in_t *rng);
+
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

@@ -768,3 +768,101 @@ int test_territory_feature_consumes_neighbour_mask(void)
     T_ASSERT_EQ_I(out.type, 0x4e);
     return 0;
 }
+
+/* ── Terrain auto-tiling sweep (engine_territory_classify_feature_tiles,
+ *    port of FUN_0046dbf5) ─────────────────────────────────────────────── */
+
+/* A single real border cell (flags bit 0x4 set) with all-eligible neighbours
+ * (a sentinel background) → entry 0 (type 0x4e, cap-2 variant 1).  The result
+ * lands in the cell's +3 byte = (0x4e + 1) & 0xff; the tile grid and RNG are
+ * untouched (type != 0x16). */
+int test_territory_classify_real_border_cell(void)
+{
+    elig_setup((uint32_t)0xfff0006u);              /* all sentinel → all neighbours eligible */
+    engine_territory_reset_feature_counters();
+    int off = cell_off(8, 0);                       /* a real cell's byte-offset = 64 */
+    g_cells[off + 1] = 0x04;                        /* bit 0x4 set → this cell is a border */
+    *tile_at(4, 10) = off;                          /* tile (col=10,row=4) = real-cell pointer */
+
+    engine_rng_single_in_t rng = { .state = 0x34518632u };
+    engine_territory_classify_feature_tiles(&rng);
+
+    T_ASSERT_EQ_I(g_cells[off + 3], (uint8_t)(0x4e + 1));   /* type+variant → +3 */
+    T_ASSERT_EQ_U((uint32_t)*tile_at(4, 10), (uint32_t)off);/* real tile not rewritten */
+    T_ASSERT_EQ_U(rng.state, 0x34518632u);                 /* no RNG draw */
+    return 0;
+}
+
+/* A single special non-sentinel border tile with all-eligible neighbours →
+ * entry 0 (type 0x4e, variant 1) → the tile is rewritten to
+ * 0xfff0000 + type + variant.  RNG untouched. */
+int test_territory_classify_special_border_tile(void)
+{
+    elig_setup((uint32_t)0xfff0006u);
+    engine_territory_reset_feature_counters();
+    *tile_at(4, 10) = (int32_t)0xfff0010u;          /* special, != sentinel → border */
+
+    engine_rng_single_in_t rng = { .state = 0x999u };
+    engine_territory_classify_feature_tiles(&rng);
+
+    T_ASSERT_EQ_U((uint32_t)*tile_at(4, 10), 0xfff0000u + 0x4e + 1);   /* 0xfff004f */
+    T_ASSERT_EQ_U(rng.state, 0x999u);
+    return 0;
+}
+
+/* An all-sentinel grid has no border cells: the sweep touches nothing and
+ * draws no RNG. */
+int test_territory_classify_skips_eligible_cells(void)
+{
+    elig_setup((uint32_t)0xfff0006u);
+    engine_rng_single_in_t rng = { .state = 0x7u };
+    engine_territory_classify_feature_tiles(&rng);
+    T_ASSERT_EQ_U((uint32_t)*tile_at(0, 0), 0xfff0006u);
+    T_ASSERT_EQ_U((uint32_t)*tile_at(64, 32), 0xfff0006u);
+    T_ASSERT_EQ_U(rng.state, 0x7u);                 /* no draw */
+    return 0;
+}
+
+/* The isolated catch-all (type 0x16) re-rolls its variant from the RNG.  Make
+ * the corner cell (0,0) — the first cell swept — a special border whose four
+ * in-grid neighbours are all ineligible (the other four are off-grid), so it
+ * matches entry 46.  (0,0) consumes the FIRST RNG draw, so its variant is
+ * predictable even though later border cells draw more. */
+int test_territory_classify_isolated_uses_rng(void)
+{
+    elig_setup((uint32_t)0xfff0006u);
+    engine_territory_reset_feature_counters();
+    *tile_at(0, 0) = (int32_t)0xfff0010u;           /* corner special border, swept first */
+    /* (0,0)'s in-grid even-row neighbours: (col1,row0)=tile_at(0,1),
+     * (col1,row1)=tile_at(1,1), (col0,row2)=tile_at(2,0), (col0,row1)=tile_at(1,0) */
+    *tile_at(0, 1) = (int32_t)0xfff0000u;
+    *tile_at(1, 1) = (int32_t)0xfff0000u;
+    *tile_at(2, 0) = (int32_t)0xfff0000u;
+    *tile_at(1, 0) = (int32_t)0xfff0000u;
+
+    const uint32_t seed = 0x34518632u;
+    engine_rng_single_in_t rng = { .state = seed };
+    engine_territory_classify_feature_tiles(&rng);
+
+    uint32_t st = seed;
+    uint32_t variant = ref_single_mirror(&st) & 7u;            /* the FIRST draw */
+    T_ASSERT_EQ_U((uint32_t)*tile_at(0, 0), 0xfff0000u + 0x16 + variant);
+    T_ASSERT(rng.state != seed);                                /* RNG advanced */
+    return 0;
+}
+
+/* Unbound grid → no-op (no RNG draw); NULL rng → no-op even with a border
+ * cell present (no write). */
+int test_territory_classify_unbound_is_noop(void)
+{
+    engine_territory_bind_terrain_tiles(NULL);
+    engine_rng_single_in_t rng = { .state = 0x7u };
+    engine_territory_classify_feature_tiles(&rng);
+    T_ASSERT_EQ_U(rng.state, 0x7u);
+
+    elig_setup((uint32_t)0xfff0006u);
+    *tile_at(4, 10) = (int32_t)0xfff0010u;          /* a real border tile */
+    engine_territory_classify_feature_tiles(NULL);  /* NULL rng → no-op */
+    T_ASSERT_EQ_U((uint32_t)*tile_at(4, 10), 0xfff0010u);   /* untouched */
+    return 0;
+}

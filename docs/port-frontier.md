@@ -287,7 +287,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x478952 | 53 | 1 | 0 | ✓ |
 | 0x476a5d | 74 | 1 | 0 | ✓ |
 | 0x47703a | 126 | 1 | 2 |  |
-| 0x4788c6 | 140 | 1 | 6 |  |
+| 0x4788c6 | 140 | 1 | 5 |  |
 | 0x472a31 | 152 | 1 | 0 | ✓ |
 | 0x476768 | 245 | 1 | 2 |  |
 | 0x476e95 | 421 | 1 | 2 |  |
@@ -329,7 +329,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x498270 | 327 | 1 | 1 |  |
 | 0x49b973 | 374 | 1 | 2 |  |
 | 0x499e5d | 421 | 1 | 0 | ✓ |
-| 0x4976a1 | 472 | 1 | 12 |  |
+| 0x4976a1 | 472 | 1 | 11 |  |
 | 0x49dfc6 | 505 | 1 | 4 |  |
 | 0x49a581 | 1039 | 1 | 16 |  |
 | 0x49d638 | 1737 | 1 | 0 | ✓ |

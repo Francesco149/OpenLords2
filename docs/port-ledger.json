@@ -4,15 +4,15 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 349,
+  "tested": 350,
   "ported": 36,
-  "unported": 2062,
+  "unported": 2061,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 385,
-  "pct_touched": 15.7,
+  "touched": 386,
+  "pct_touched": 15.8,
   "pct_tested": 14.3,
   "bytes_total": 838629,
-  "bytes_touched": 134942,
+  "bytes_touched": 135261,
   "pct_bytes_touched": 16.1
  },
  "orphan_refs": [
@@ -11715,8 +11715,11 @@
    "name": "FUN_0046dbf5",
    "size": 319,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_territory.c",
+    "src/engine_territory.h"
+   ]
   },
   {
    "va": "0x46dd34",

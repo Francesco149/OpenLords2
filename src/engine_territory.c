@@ -522,3 +522,65 @@ int engine_territory_pick_feature(const int32_t mask[8],
     }
     return 0;
 }
+
+/* The "isolated tile" feature type (table entry 46, the all-ineligible
+ * catch-all): when the classifier returns it, the variant is re-rolled from
+ * the single-LFSR RNG instead of the entry's rotating counter. */
+#define FEATURE_TYPE_ISOLATED 0x16
+
+/* Port of FUN_0046dbf5 (319 B) — the new-game terrain auto-tiling pass, the
+ * sibling of engine_territory_randomise_special_tiles (FUN_0046dd34).  Sweep
+ * the 129×65 terrain-index grid (DAT_0055cea0) in row-major order; for every
+ * "feature-border" cell — a real cell (tile < 0xfff0000) whose flags byte (+1)
+ * has bit 0x4 SET, or a special tile that is NOT the sentinel 0xfff0006 —
+ * classify it by its 8 hex neighbours and write the chosen transition tile:
+ *
+ *   mask            = engine_territory_compute_neighbour_mask(col, row)
+ *   (type, variant) = engine_territory_pick_feature(mask)
+ *   if (type == 0x16) variant = rng_single_7bit & 7;   // isolated → random
+ *   real cell : g_cells[tile + 3] = (uint8_t)(type + variant)   // byte +3
+ *   special   : tile = 0xfff0000 + type + variant
+ *
+ * Eligible cells (real flag-clear, or the sentinel) are skipped untouched.
+ * The grid is mutated IN PLACE in row-major order, exactly as retail: a
+ * rewritten special tile IS visible to later cells' neighbour masks, while
+ * real-cell writes land in the cell's +3 byte and never perturb the tile grid
+ * — so the result is order-dependent and must not be computed off a snapshot.
+ *
+ * The single-LFSR state is threaded through *rng (the live 0x4676e0
+ * orchestrator owns it and threads it through this, randomise_special_tiles,
+ * and the sibling seeders in sequence).  One write-only scratch global is
+ * dropped: the per-cell progress counter DAT_0053e974 (never read). */
+void engine_territory_classify_feature_tiles(engine_rng_single_in_t *rng)
+{
+    if (g_terrain_tiles == NULL || rng == NULL) return;
+
+    for (int row = 0; row < TERRAIN_GRID_ROWS; row++) {
+        for (int col = 0; col < TERRAIN_GRID_COLS; col++) {
+            int32_t *cell = &g_terrain_tiles[row * TERRAIN_GRID_COLS + col];
+            uint32_t v = (uint32_t)*cell;
+
+            int is_border;
+            if (v < TERRAIN_TILE_SPECIAL_BASE)
+                is_border = g_cells != NULL && (g_cells[v + 1] & 0x4) != 0;
+            else
+                is_border = v != TERRAIN_TILE_RANDOMISE_SENTINEL;
+            if (!is_border) continue;
+
+            int32_t mask[8];
+            engine_territory_compute_neighbour_mask(col, row, mask);
+            engine_territory_feature_pick_t pick = {0};
+            engine_territory_pick_feature(mask, &pick);
+
+            int variant = pick.variant;
+            if (pick.type == FEATURE_TYPE_ISOLATED)
+                variant = (int)(rng_next_single_7bit(rng) & 7u);
+
+            if (v < TERRAIN_TILE_SPECIAL_BASE)
+                g_cells[v + 3] = (uint8_t)(pick.type + variant);
+            else
+                *cell = (int32_t)(TERRAIN_TILE_SPECIAL_BASE +
+                                  (uint32_t)(pick.type + variant));
+        }
+    }
+}

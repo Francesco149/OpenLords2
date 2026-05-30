@@ -1393,6 +1393,11 @@ struct test_case {
     X(territory_feature_counter_rotates) \
     X(territory_feature_cap1_variant_always_zero) \
     X(territory_feature_consumes_neighbour_mask) \
+    X(territory_classify_real_border_cell) \
+    X(territory_classify_special_border_tile) \
+    X(territory_classify_skips_eligible_cells) \
+    X(territory_classify_isolated_uses_rng) \
+    X(territory_classify_unbound_is_noop) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \

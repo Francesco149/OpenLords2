@@ -7,6 +7,54 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — GAME-START chip: terrain auto-tiling sweep (FUN_0046dbf5) — randomiser pair complete
+
+Ported `FUN_0046dbf5` (319 B) → `engine_territory_classify_feature_tiles` in
+`engine_territory.c`, the second of the two **FUN_004676e0 grid randomiser
+passes** and the sibling of `FUN_0046dd34` (already ported).  With it landed,
+the whole randomiser cluster on the new-game thread is complete:
+`FUN_0046de94`/`de05` (neighbour mask) + `FUN_0046c2de` (classifier) +
+`FUN_00404b2c` (single-LFSR RNG) + the two sweeps.
+
+**What it does.**  Sweep the 129×65 terrain-index grid (`DAT_0055cea0`) in
+row-major order.  A cell is a **feature-border** cell — and gets reclassified
+— iff it is a real cell (tile < `0xfff0000`) whose flags byte (+1) has bit 0x4
+**set**, or a special tile that is **not** the sentinel `0xfff0006`.  (This is
+the exact complement of the neighbour-eligibility predicate: the cells that
+predicate as *ineligible* are the ones swept.)  For each border cell it builds
+the 8-neighbour mask, classifies it through the pattern table, and writes the
+transition tile two ways: real cells into the descriptor's +3 byte
+(`(uint8_t)(type+variant)`), special tiles into the tile word itself
+(`0xfff0000 + type + variant`).  When the classifier returns the isolated
+catch-all type `0x16`, the variant is overridden with a fresh single-LFSR roll
+(`rng & 7`) — so isolated tiles get random visual variety while bordered tiles
+rotate deterministically.  r2 @0x46dbf5 confirmed both write paths, the
+`type==0x16` override, and the `de05(row, col)` argument order.
+
+**In-place, order-dependent.**  The sweep mutates the grid *in place* in
+row-major order, exactly as retail: a rewritten special tile is visible to
+later cells' neighbour masks, whereas real-cell writes land in the +3 byte and
+never perturb the tile grid.  The port preserves this (no snapshot) so it is
+bit-identical to retail's evaluation order.  The single-LFSR state is threaded
+through `*rng`, as with the sibling randomiser; the live 0x4676e0 orchestrator
+will own the seeded state and thread it through both sweeps in sequence.  One
+write-only scratch global dropped: the per-cell progress counter
+`DAT_0053e974` (never read).
+
+5 host tests: a real border cell (flag 0x4 set, sentinel neighbours → entry 0)
+writes `0x4f` into +3 with no RNG draw; a special border tile rewrites to
+`0xfff004f`; an all-sentinel grid is a no-op with no draw; the corner cell
+(0,0) — swept first, four neighbours off-grid and four forced ineligible →
+type 0x16 — takes the **first** RNG draw, pinned via the test's independent
+single-LFSR reference; unbound-grid and NULL-rng no-ops.  1379/1379 pass under
+ASan/UBSan; both mingw `.exe` build clean under `-Wall -Wextra`;
+`_engine_territory_classify_feature_tiles` present in the PE.  Ledger: 386
+touched / 350 tested.
+
+Next on this thread: the remaining FUN_004676e0 callees `FUN_00467ca6` /
+`FUN_00468d4f` / `FUN_00467a36` (each 1–5 deps deep), or stepping back up to
+seat the live 0x4676e0 orchestrator now that its randomiser cluster is whole.
+
 ## 2026-05-31 — GAME-START chip: hex auto-tile feature classifier (FUN_0046c2de)
 
 Ported `FUN_0046c2de` (292 B) → `engine_territory_pick_feature` (+

@@ -169,7 +169,7 @@ flip lands until the world is populated enough for the map arm.
      FUN_004676e0 leaf — rebuilds the per-key cell roster (save entry 12)
      from the grid, capping 20 cells/key + evicting overflow.  See below.
 
-### FUN_004676e0 — overworld-grid setup sequence (4/8 leaves ported)
+### FUN_004676e0 — overworld-grid setup sequence (5/8 callees ported)
 
 A 144-B 0x497ced callee that stands up the overworld cell grid + its
 terrain index tables, by calling a fixed sequence of 0x46c*/0x46d* grid
@@ -321,11 +321,33 @@ mark, unbound no-op).
   46/0x16, first-match-wins via only-pos0→entry 15, cap-2 rotation 1·0·1·0 +
   cap-8 wrap 1…7·0, cap-1 always-0, and end-to-end from compute_neighbour_mask).
 
-With c2de landed, **`FUN_0046dbf5` (the sibling randomiser) is now fully
-unblocked** — its remaining callees (`FUN_0046de05`, `FUN_0046c2de`, the
-single-LFSR RNG `FUN_00404b2c`) are all ported.  Remaining unported
-FUN_004676e0 callees: `FUN_0046dbf5` (portable now) / `FUN_00467ca6` /
-`FUN_00468d4f` / `FUN_00467a36` (the last three each still 1–5 deps deep).
+- **FUN_0046dbf5** → `engine_territory_classify_feature_tiles(rng)`
+  (`engine_territory.c`, landed 2026-05-31).  The **terrain auto-tiling pass**,
+  sibling of the special-tile randomiser `FUN_0046dd34`.  Sweep the 129×65
+  terrain-index grid in row-major order; for every **feature-border** cell — a
+  real cell (tile < `0xfff0000`) whose flags byte (+1) has bit 0x4 **set**, or
+  a special tile that is **not** the sentinel `0xfff0006` — build the
+  8-neighbour mask (`compute_neighbour_mask`), classify it (`pick_feature`),
+  and write the chosen transition tile: real cells into the descriptor's +3
+  byte (`(uint8_t)(type+variant)`), special tiles into the tile itself
+  (`0xfff0000 + type + variant`).  Isolated tiles (classifier type `0x16`)
+  override the table variant with a fresh single-LFSR roll (`rng & 7`).  Note
+  the border test is the *complement* of the neighbour predicate: cells that
+  predicate as ineligible are exactly the ones swept.  r2 @0x46dbf5 confirmed
+  the dual write paths, the `type==0x16` RNG override, and the `de05(row,col)`
+  arg order.  The grid is mutated **in place** in row-major order (rewritten
+  special tiles feed later masks; real-cell writes touch only +3 and never
+  perturb the grid), so the result is order-dependent and snapshot-free; the
+  RNG is threaded through `*rng` like the other seeders.  5 host tests (real
+  border → +3 byte, special border → tile rewrite, all-sentinel no-op + no
+  draw, the corner-cell type-0x16 RNG override pinned to the first draw,
+  unbound/NULL no-ops).
+
+The two FUN_004676e0 grid **randomiser passes** (`FUN_0046dd34` special-tile
+re-roll + `FUN_0046dbf5` auto-tile classify) and their full support cluster
+(`FUN_0046de94`/`de05` mask, `FUN_0046c2de` classifier, `FUN_00404b2c` RNG)
+are now ported.  Remaining unported FUN_004676e0 callees: `FUN_00467ca6` /
+`FUN_00468d4f` / `FUN_00467a36` (each still 1–5 deps deep).
 
 ### FUN_0046ff43 — strategic movement-cost grid builder
 
