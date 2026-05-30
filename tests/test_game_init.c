@@ -706,3 +706,45 @@ int test_game_init_reset_subtables_slot0_and_cursor(void)
     T_ASSERT_EQ_U(s_slot_00553fbc, 2);                          /* cursor recomputed */
     return 0;
 }
+
+/* ── engine_game_init_clear_castle_shadow (FUN_004ae74d) ───────────────
+ *
+ * g_castles_shadow (entry 10) is 6400 8-byte castle records.  The clear
+ * zeroes each record's +0 dword and +4 byte, preserving +5..+7.  We
+ * dirty the whole block with 0xAB so the preserved tail is observable
+ * and a no-op clear would fail.  ASan guards against the 1-based-column
+ * arithmetic running past the 51200-byte array. */
+int test_game_init_clear_castle_shadow_transient(void)
+{
+    memset(g_castles_shadow, 0xAB, sizeof g_castles_shadow);
+
+    engine_game_init_clear_castle_shadow();
+
+    for (int i = 0; i < 6400; i++) {
+        const uint8_t *rec = g_castles_shadow + i * 8;
+        for (int b = 0; b < 5; b++)
+            if (rec[b] != 0)
+                T_FAIL("record %d byte +%d not cleared (got 0x%02x)",
+                       i, b, rec[b]);
+        for (int b = 5; b < 8; b++)
+            if (rec[b] != 0xAB)
+                T_FAIL("record %d byte +%d clobbered (got 0x%02x)",
+                       i, b, rec[b]);
+    }
+    return 0;
+}
+
+int test_game_init_clear_castle_shadow_scalars(void)
+{
+    memset(g_castles_shadow, 0, sizeof g_castles_shadow);
+    s_slot_0055300c = 0x1111;   /* entry 66 */
+    s_slot_00568da8 = 0x2222;   /* entry 67 */
+    s_slot_00553f30 = 0x3333;   /* entry 68 */
+
+    engine_game_init_clear_castle_shadow();
+
+    T_ASSERT_EQ_U(s_slot_0055300c, 0);
+    T_ASSERT_EQ_U(s_slot_00568da8, 0);
+    T_ASSERT_EQ_U(s_slot_00553f30, 0);
+    return 0;
+}

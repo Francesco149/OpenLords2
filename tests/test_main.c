@@ -1385,6 +1385,8 @@ struct test_case {
     X(game_init_reset_subtables_clears_grid) \
     X(game_init_reset_subtables_lead_byte) \
     X(game_init_reset_subtables_slot0_and_cursor) \
+    X(game_init_clear_castle_shadow_transient) \
+    X(game_init_clear_castle_shadow_scalars) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

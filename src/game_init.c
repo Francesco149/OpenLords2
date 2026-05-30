@@ -432,3 +432,27 @@ void engine_game_init_reset_player_subtables(void)
         }
     }
 }
+
+/* Init-only seeder FUN_004ae74d — reset the castle-shadow table at
+ * new-game.  g_castles_shadow (save entry 10, retail 0x56d8c0) is 6400
+ * 8-byte castle records; retail's producer addresses it as 400 rows of
+ * 16 records (row stride 0x80, record stride 8 — its base pointer is
+ * entry10-8 with a 1-based column, so col 1..16 maps to record offsets
+ * 0..0x78).  For every record it zeroes the +0 dword and the +4 byte,
+ * leaving +5..+7 — where +5 is the per-castle-slot back-pointer (see
+ * save-format.md) — intact.  Then three world scalars are zeroed.
+ * Sole caller is the orchestrator 0x497ced (init-only). */
+void engine_game_init_clear_castle_shadow(void)
+{
+    for (int row = 0; row < 400; row++) {
+        for (int col = 1; col < 0x11; col++) {    /* 1..16 (retail 1-based) */
+            /* retail: mov dword [row*0x80 + col*8 + (entry10-8)], 0
+             *         mov byte  [row*0x80 + col*8 + (entry10-4)], 0 */
+            uint8_t *rec = g_castles_shadow + row * 0x80 + (col - 1) * 8;
+            memset(rec, 0, 5);   /* +0 dword + +4 byte; +5..+7 preserved */
+        }
+    }
+    s_slot_0055300c = 0;                          /* entry 66 */
+    s_slot_00568da8 = 0;                          /* entry 67 */
+    s_slot_00553f30 = 0;                          /* entry 68 */
+}

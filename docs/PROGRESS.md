@@ -7,6 +7,44 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — GAME-START chip 9: FUN_004ae74d (clear castle-shadow table)
+
+A direct orchestrator (`0x497ced`) callee that had become a zero-dep
+leaf — and one that an earlier pass had **deferred** over an
+aliasing/overrun worry.  r2 re-analysis (0x4ae78b/0x4ae791) resolved it:
+the producer's 400×16 double loop writes a dword at
+`[row*0x80 + col*8 + 0x56d8b8]` and a byte at `+0x56d8bc`, with row
+0..399 and **col 1..16**.  The base `0x56d8b8` is entry10 − 8, so the
+1-based column lands the first write exactly at `g_castles_shadow` (save
+entry 10, `0x56d8c0`, 6400 × 8 B — already homed) and the last at
+entry10+51192: every 8-B record, fully in-bounds, **no tail overrun**
+(the prior note miscounted).  The col-1 start also means the 8 bytes
+before entry 10 are never touched — those are two *unrelated* aliased
+runtime globals (a scalar cursor at `0x56d8b8`, a freeable pointer at
+`0x56d8bc`), which is exactly the desync the deferral feared; the
+function deliberately steps over them.
+
+`FUN_004ae74d` → `engine_game_init_clear_castle_shadow` (`src/game_init.c`).
+Per 8-B record it zeroes the +0 dword and the +4 byte, preserving
++5..+7 (the per-castle-slot back-pointer is at +5, per save-format.md);
+then it zeroes three world scalars — entries 66/67/68
+(`s_slot_0055300c` / `s_slot_00568da8` / `s_slot_00553f30`, all homed).
+Ported byte-exact (memset of the 5 cleared bytes per record).
+
+Two host tests pin the per-record clear/preserve split (dirty the whole
+51200-B block with 0xAB → every record's +0..+4 zeroed, +5..+7 kept;
+ASan guards the 1-based arithmetic against running past the array) and
+the three-scalar reset.  1307/1307 pass; mingw drop-in build clean.
+
+Remaining direct `0x497ced` callees: FUN_00499aca, FUN_00427ed0,
+FUN_004676e0, FUN_004984dc, FUN_00451150, FUN_00448440, FUN_0049bd99,
+FUN_00499d7d (audio), plus the Win32 `PostMessageA(WM_MOUSEMOVE)` poke
+FUN_004b18f8 (deferred to a Win32 module).  No pure-sim leaves left
+among them — the next chips walk down each callee's chain (the IO/chdir
+cluster under 0x499aca, the table scans under 0x427ed0).
+
+---
+
 ## 2026-05-30 — IO chip: FUN_004af502 (revert cwd to asset base dir)
 
 Triaging the remaining new-game orchestrator (`0x497ced`) callees showed

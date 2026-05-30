@@ -4,15 +4,15 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 333,
+  "tested": 334,
   "ported": 34,
-  "unported": 2080,
+  "unported": 2079,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 367,
+  "touched": 368,
   "pct_touched": 15.0,
   "pct_tested": 13.6,
   "bytes_total": 838629,
-  "bytes_touched": 129977,
+  "bytes_touched": 130121,
   "pct_bytes_touched": 15.5
  },
  "orphan_refs": [
@@ -16365,8 +16365,11 @@
    "name": "FUN_004ae74d",
    "size": 144,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c",
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x4ae7dd",

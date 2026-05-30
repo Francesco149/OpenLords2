@@ -142,15 +142,23 @@ flip lands until the world is populated enough for the map arm.
      (`src/game_init.c`, landed 2026-05-30).  Config-driven unit/
      opponent-type table seeder — see below; clears the block then fills
      `count` rows from six retail .rdata columns.
-   - ⏸ **FUN_004ae74d** — **deferred.**  Clears the `DAT_0056d8b8`
-     region (r2: outer stride 0x80, dword+byte per 8-B element, els
-     1..6400 with a deliberate 8-B tail overrun).  The region is
-     aliased across unported code three ways: a scalar cursor
-     (`=10`/wrap-63 in 0x46a295), a freeable pointer at +4
-     (`DAT_0056d8bc`, freed in 0x49915e / set 0x4990f9), and the
-     payload array (0x4156a7 / 0x4ae7dd).  Its size + element struct
-     can't be homed without desync risk until a reader subsystem lands;
-     defer until then.
+   - ✅ **FUN_004ae74d** → `engine_game_init_clear_castle_shadow`
+     (`src/game_init.c`, landed 2026-05-30).  Earlier deferred over an
+     aliasing/overrun worry; r2 re-analysis (0x4ae791) **resolved it**.
+     The producer's base pointer is `0x56d8b8` with a **1-based** column
+     (col 1..16, row 0..399; row stride 0x80, record stride 8), so its
+     first write lands at `0x56d8b8 + 1*8 = 0x56d8c0` — exactly
+     `g_castles_shadow` (save entry 10, already homed, 6400 × 8 B) — and
+     its last at entry10+51192, fully in-bounds (no tail overrun; the
+     prior note miscounted).  Crucially, starting at col 1 means the 8
+     bytes *before* entry 10 are never touched: those are precisely the
+     two aliased pre-entry globals the deferral worried about — the
+     scalar cursor at `0x56d8b8` (`=10`/wrap-63 in 0x46a295) and the
+     freeable pointer at `0x56d8bc` (freed in 0x49915e / set 0x4990f9).
+     The function deliberately skips them.  Per 8-B record it zeroes the
+     +0 dword and the +4 byte, leaving +5..+7 (the per-castle-slot
+     back-pointer lives at +5 — see save-format.md).  Then three world
+     scalars (entries 66/67/68) are zeroed.  See below.
 
 ### FUN_0046ff43 — strategic movement-cost grid builder
 
@@ -234,6 +242,34 @@ parallel retail `.rdata` columns.
 Homed in `game_init.c` (a 0x497ced callee); the six columns are embedded
 as `static const` arrays mirroring the retail `.rdata`, extracted
 byte-for-byte from the PE.
+
+### FUN_004ae74d — clear castle-shadow table (+ 3 world scalars)
+
+A 144-B init-only callee (sole caller 0x497ced) and a direct
+orchestrator leaf.  It resets the **castle-shadow** table —
+`g_castles_shadow`, save entry 10 (retail `0x56d8c0`), 6400 records of
+8 B, a parallel of the live castle table (entry 1).  r2 (0x4ae78b) shows
+a 400×16 double loop: the dword write is `[row*0x80 + col*8 + 0x56d8b8]`
+and the byte write `[row*0x80 + col*8 + 0x56d8bc]`, with **row 0..399**
+and **col 1..16**.  Because the base is `0x56d8b8` (= entry10 − 8) and
+col is 1-based, the writes cover entry10 offsets `{row*128 + (col-1)*8}`
+= every 8-B record start from 0 to 51192 — all 6400 records, exactly
+in-bounds, no overrun.  Per record it zeroes the +0 dword and the +4
+byte; +5..+7 are preserved (the per-castle-slot back-pointer is at +5,
+per save-format.md).
+
+The col-1 start is not incidental: it makes the loop **skip** the 8
+bytes immediately before entry 10 (`0x56d8b8`/`0x56d8bc`), which are two
+unrelated runtime globals aliased into that gap — a scalar cursor
+(`0x56d8b8`) and a freeable pointer (`0x56d8bc`).  This is why an earlier
+pass deferred the chip; the resolved reading is that those globals are
+untouched by this function and belong to other subsystems.
+
+After the table sweep it zeroes three world scalars: `s_slot_0055300c`
+(entry 66), `s_slot_00568da8` (entry 67), `s_slot_00553f30` (entry 68) —
+all already homed.  Ported byte-exact to `game_init.c`; two host tests
+pin the per-record clear/preserve split (every record's +0..+4 zeroed,
++5..+7 kept) and the scalar reset.
 
 ### FUN_004a1c53 — reset per-player sub-tables (+ FUN_004a2584 grid clear)
 

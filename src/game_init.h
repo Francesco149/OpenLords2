@@ -115,4 +115,12 @@ void engine_game_init_purge_inactive_records(void);
  * each player slot 1..5 — AI players seed each element's lead byte to 5. */
 void engine_game_init_reset_player_subtables(void);
 
+/* Init-only seeder FUN_004ae74d — reset the castle-shadow table (save
+ * entry 10, g_castles_shadow, 6400 × 8-B records) at new-game: for every
+ * record zero the +0 dword and the +4 byte (leaving +5..+7, where +5 is
+ * the per-castle-slot back-pointer, intact), then zero the three world
+ * scalars at entries 66/67/68.  A direct callee of the 0x497ced
+ * orchestrator. */
+void engine_game_init_clear_castle_shadow(void);
+
 #endif /* OPENLORDS2_GAME_INIT_H */
