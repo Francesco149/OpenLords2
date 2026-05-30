@@ -7,6 +7,45 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — GAME-START chip 3b: leaf seeder FUN_0046ff43 (strategic movement-cost grid)
+
+The second new-game leaf seeder lands as its own module:
+`FUN_0046ff43` → `engine_strat_cost_rebuild`
+(`src/engine_strat_cost.c` + `.h`).  It rebuilds the **64×64 strategic
+movement-cost grid** `g_strat_move_cost` (retail `DAT_004f4080`, 4096 ×
+i16, row stride 64) from the overworld terrain descriptors
+`g_overworld_map` (`DAT_00522f90`, save entry 0 — 8 B per cell).
+
+Per cell it reads three descriptor bytes — +0 type, +1 flags, +7 a
+level/count — and maps them to a cost word through a fixed branch
+ladder whose **test order is load-bearing** (water/blocked flag 0xc →
+0; the +7≥0x11 gate → 0; bit0 road → 1; bit5 → 3/6/3 by type; bit6 →
+100; bit7 → 0x14→3, {3,6,9,0xc}→0, else 100; bit4 → type 0x10→100 else
+0; default → 3).  Ported verbatim from the decompile, preserving the
+priority cascade.
+
+**Why a new module, not game_init.c.** This is a *separate* pathfinder
+from `engine_path` — that one is the 80×80 army router over the BFS
+cost map at 0x504030; this is the 64×64 strategic grid.  The cost grid
+is read by the still-unported strategic flood-fill (0x46f700) and
+path-trace (0x4701ac) at directional neighbour offsets, so it gets its
+own home (`engine_strat_cost`) those ports will share when they land —
+rather than being parked inside the game-start initialiser (even though
+FUN_0046ff43 is one of 0x497ced's leaf seeders).
+
+The function takes the source map as a pointer (pure, host-testable);
+the canonical `g_strat_move_cost` global is the DAT_004f4080 home.
+
+Coverage **357 → 358 touched** (FUN_0046ff43).  10 new host tests —
+one per ladder branch, plus predicate-ordering (road beats bits 5/6/7;
+the +7 gate beats road), whole-grid coverage (all 4096 written, sentinel
+pre-dirtied), and the (col,row)→row*64+col indexing → **1271 green**;
+both drop-in builds clean.
+
+This leaves **FUN_004ae74d deferred** as the only un-landed step-3 leaf
+(aliased `DAT_0056d8b8` region — see chip 3a entry + game-start.md).
+Step 3 is otherwise complete; next is the heavy seeders (step 4).
+
 ## 2026-05-30 — GAME-START chip 3a: leaf seeder FUN_0042847c (value-table reset)
 
 The first of the new-game **leaf seeders** (step 3 of the game-start

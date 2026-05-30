@@ -1312,6 +1312,17 @@ struct test_case {
     X(map_query_size_one_single_cell) \
     X(map_query_unbound_grid_returns_0) \
     \
+    X(strat_cost_water_blocked) \
+    X(strat_cost_level_gate) \
+    X(strat_cost_road) \
+    X(strat_cost_bit5_terrain) \
+    X(strat_cost_bit6) \
+    X(strat_cost_bit7_by_type) \
+    X(strat_cost_bit4) \
+    X(strat_cost_default) \
+    X(strat_cost_writes_every_cell) \
+    X(strat_cost_cell_indexing) \
+    \
     X(territory_clears_size_bytes_1_to_150) \
     X(territory_skips_record_0) \
     X(territory_leaves_other_fields_untouched) \

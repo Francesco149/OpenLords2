@@ -59,6 +59,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_button.c \
                    ../src/engine_menu_input.c \
                    ../src/engine_map_query.c \
+                   ../src/engine_strat_cost.c \
                    ../src/engine_territory.c \
                    ../src/engine_mp_render.c \
                    ../src/engine_screen_dispatch.c \
@@ -108,6 +109,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_button.c \
                    test_engine_menu_input.c \
                    test_engine_map_query.c \
+                   test_engine_strat_cost.c \
                    test_engine_territory.c \
                    test_engine_mp_render.c \
                    test_engine_screen_dispatch.c \

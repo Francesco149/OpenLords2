@@ -135,8 +135,9 @@ flip lands until the world is populated enough for the map arm.
      (`src/game_init.c`, landed 2026-05-30).  Resets the 16-record
      value table at save entry 82 (`s_slot_005532a0`) from the retail
      `DAT_004d8910` const table; dest already homed.
-   - **FUN_0046ff43** → strategic movement-cost grid builder (see
-     below); separate module, chip 3b.
+   - ✅ **FUN_0046ff43** → `engine_strat_cost_rebuild`
+     (`src/engine_strat_cost.c`, landed 2026-05-30).  Strategic
+     movement-cost grid builder — see below; lives in its own module.
    - ⏸ **FUN_004ae74d** — **deferred.**  Clears the `DAT_0056d8b8`
      region (r2: outer stride 0x80, dword+byte per 8-B element, els
      1..6400 with a deliberate 8-B tail overrun).  The region is

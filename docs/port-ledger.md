@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **357** (14.6%) — tested 323, ported 34
-- code bytes touched: **14.9%** (124,698 / 838,629 B)
-- unported: **2090**
+- touched: **358** (14.6%) — tested 324, ported 34
+- code bytes touched: **14.9%** (125,315 / 838,629 B)
+- unported: **2089**
 - orphan refs (in src/, not in function table): 4
 
-## tested (323) — ported + host unit suite
+## tested (324) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -236,6 +236,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h |
 | 0x46f3cd | FUN_0046f3cd | 78 | game_init.c, game_init.h |
 | 0x46f434 | FUN_0046f434 | 216 | engine_path.c, engine_path.h |
+| 0x46ff43 | FUN_0046ff43 | 617 | engine_strat_cost.c, engine_strat_cost.h |
 | 0x471c1f | FUN_00471c1f | 273 | engine_tile.c, engine_tile.h |
 | 0x471d30 | FUN_00471d30 | 118 | engine_tile.c, engine_tile.h |
 | 0x472392 | FUN_00472392 | 715 | engine_path.c, engine_path.h |
