@@ -7,6 +7,64 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — GAME-START chip: hex-neighbour eligibility mask (FUN_0046de94 + FUN_0046de05)
+
+Landed the neighbour-adjacency pair on the **FUN_004676e0** overworld-setup
+thread — the machinery the sibling seeder `FUN_0046dbf5` (and the feature
+classifier `FUN_0046c2de`) build on.  `FUN_0046de94` (189 B) →
+`engine_territory_tile_eligible(col,row)`; `FUN_0046de05` (143 B) →
+`engine_territory_compute_neighbour_mask(col,row,mask[8])`.  Both homed in
+`engine_territory.c`; they read the same two grids the family already binds
+(the 129×65 terrain-index tiles `DAT_0055cea0` and the 64×64×8 cell grid
+`DAT_00522f90`).
+
+**The predicate (FUN_0046de94).**  Read the terrain-index tile at (col,row)
+and report eligibility: a **real cell** (tile value < `0xfff0000`, which *is*
+the cell's byte-offset into `g_overworld_map`) is eligible iff its flags byte
+(+1) lacks bit 0x4; the un-rolled special sentinel `0xfff0006` is eligible;
+everything else — including all other special values and any off-grid
+coordinate — is not.  The signed bounds ladder (`-1 < col/row`, `col < 0x41`,
+`row < 0x81`) is **load-bearing**, not defensive: the sweep below pushes
+neighbours past the edge for border tiles and relies on those reading as
+ineligible.  r2 @0x46de94 confirmed the `row*0x104 + col*4` index math
+(`shl 6`+`add`), the `< 0xfff0000` real/special split, the `test cl,4` flag
+gate (jump-if-set → return 0), and the exact `== 0xfff0006` sentinel arm.
+
+**The sweep (FUN_0046de05).**  The strategic map is a **doubled-row hex
+grid**, so the 8 neighbour offsets differ by row parity.  Retail selects one
+of two `{i32 dx, i32 dy}×8` tables on `row & 1` — `DAT_004d6c28` (even) /
+`DAT_004d6be8` (odd) — which I dumped from the binary and transcribed
+verbatim (even: (1,-1)(1,0)(1,1)(0,2)(0,1)(-1,0)(0,-1)(0,-2); odd:
+(0,-1)(1,0)(0,1)(0,2)(-1,1)(-1,0)(-1,-1)(0,-2)).  For each it stores the
+predicate result into the shared scratch global `DAT_00543fe0[8]`.
+
+That global is **read by 9 functions** (`FUN_0046c2de`/`46aec4`/`46b2e7`/
+`46b6da`/`46bbc5`/`46c445`/`47d816`/`47da54` + the writer here) — but as a
+produce-then-consume register, each pass writing it fresh before its
+consumer reads, never carrying state between independent feature passes.  So
+the port **threads it explicitly** through the caller's `mask[8]` (the idiom
+the module already uses for the single-LFSR RNG state) rather than keeping a
+mutable module global; when `FUN_0046c2de` + `FUN_0046dbf5` land, the seeder
+will pass a local `mask[8]` from the sweep straight into the classifier.
+
+Chip boundary: `FUN_0046de94`'s only caller is `FUN_0046de05`, whose only
+caller is `FUN_0046dbf5` — a tight unit, so the pair is the natural commit.
+This **unblocks `FUN_0046dbf5`** down to its last dep, `FUN_0046c2de` (the
+feature-variant picker that reads the mask).
+
+6 host tests (real-cell flag gate incl. the 0xfb/0xff bit-mix cases,
+special-value discrimination 0xfff0000/05/06/07, off-grid bounds + the
+inclusive (64,128) extreme, even-row mask all-1 + single-neighbour flip,
+odd-row parity discriminator — lighting an even-table-only neighbour leaves
+the odd mask all-0, corner off-grid clamping to `{0,1,1,1,1,0,0,0}`).
+1368/1368 pass under ASan/UBSan; both mingw `.exe` build clean under
+`-Wall -Wextra`; `_engine_territory_tile_eligible` + `_…compute_neighbour_mask`
+present in the PE.  Ledger: 384 touched / 348 tested.
+
+Next on this thread: `FUN_0046c2de` (the feature-variant picker — reads the
+neighbour mask + a 0xc-stride pattern table, writes `DAT_0057c8a4`/
+`DAT_0053e9c0`/`DAT_00568200`), the last blocker under `FUN_0046dbf5`.
+
 ## 2026-05-31 — GAME-START chip: terrain-tile randomiser (FUN_0046dd34) + ledger provenance fix
 
 Two units this session.

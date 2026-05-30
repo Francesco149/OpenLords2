@@ -560,3 +560,118 @@ int test_territory_tiles_unbound_is_noop(void)
     T_ASSERT_EQ_U((uint32_t)g_tiles[0], (uint32_t)TILE_SENTINEL);
     return 0;
 }
+
+/* ── Neighbour eligibility predicate + mask (engine_territory_tile_eligible
+ *    / _compute_neighbour_mask, ports of FUN_0046de94 / FUN_0046de05) ──── */
+
+enum { TILE_SPECIAL_BASE = 0xfff0000 };
+
+/* Bind both grids: the 129×65 terrain tiles filled with `tile_fill` and a
+ * zeroed 64×64×8 cell grid (the predicate reads cell flags for real-cell
+ * tile values). */
+static void elig_setup(uint32_t tile_fill)
+{
+    for (int i = 0; i < TILE_CELLS; i++) g_tiles[i] = (int32_t)tile_fill;
+    memset(g_cells, 0, sizeof g_cells);
+    engine_territory_bind_terrain_tiles(g_tiles);
+    engine_territory_bind_cells(g_cells);
+}
+
+/* A real-cell tile (value < 0xfff0000 = the cell's byte-offset) is eligible
+ * iff its flags byte (+1) lacks bit 0x4. */
+int test_territory_elig_real_cell_flag_gate(void)
+{
+    elig_setup(TILE_SPECIAL_BASE);                 /* background: special, not sentinel → 0 */
+    int off = cell_off(5, 0);                       /* a real cell's byte-offset = 5*8 = 40 */
+    *tile_at(20, 10) = off;                         /* tile (col=10,row=20) points at it    */
+
+    g_cells[off + 1] = 0x00;                        /* no bit 0x4 → eligible */
+    T_ASSERT_EQ_I(engine_territory_tile_eligible(10, 20), 1);
+    g_cells[off + 1] = 0xfb;                        /* every bit but 0x4 → still eligible */
+    T_ASSERT_EQ_I(engine_territory_tile_eligible(10, 20), 1);
+    g_cells[off + 1] = 0x04;                        /* bit 0x4 set → blocked */
+    T_ASSERT_EQ_I(engine_territory_tile_eligible(10, 20), 0);
+    g_cells[off + 1] = 0xff;                        /* bit 0x4 among others → blocked */
+    T_ASSERT_EQ_I(engine_territory_tile_eligible(10, 20), 0);
+    return 0;
+}
+
+/* Among special values (>= 0xfff0000) only the exact sentinel 0xfff0006 is
+ * eligible; the base and the adjacent variants are not. */
+int test_territory_elig_special_values(void)
+{
+    elig_setup(0);
+    *tile_at(0, 0) = (int32_t)0xfff0006u;  T_ASSERT_EQ_I(engine_territory_tile_eligible(0, 0), 1);
+    *tile_at(0, 0) = (int32_t)0xfff0000u;  T_ASSERT_EQ_I(engine_territory_tile_eligible(0, 0), 0);
+    *tile_at(0, 0) = (int32_t)0xfff0005u;  T_ASSERT_EQ_I(engine_territory_tile_eligible(0, 0), 0);
+    *tile_at(0, 0) = (int32_t)0xfff0007u;  T_ASSERT_EQ_I(engine_territory_tile_eligible(0, 0), 0);
+    return 0;
+}
+
+/* Off-grid coordinates (col∉[0,65) or row∉[0,129)) are ineligible; the
+ * inclusive in-bounds extremes (0,0) and (64,128) are accepted. */
+int test_territory_elig_off_grid_bounds(void)
+{
+    elig_setup((uint32_t)0xfff0006u);              /* every in-grid tile eligible */
+    T_ASSERT_EQ_I(engine_territory_tile_eligible(-1, 0), 0);
+    T_ASSERT_EQ_I(engine_territory_tile_eligible(TILE_COLS, 0), 0);     /* col 65 */
+    T_ASSERT_EQ_I(engine_territory_tile_eligible(0, -1), 0);
+    T_ASSERT_EQ_I(engine_territory_tile_eligible(0, TILE_ROWS), 0);     /* row 129 */
+    T_ASSERT_EQ_I(engine_territory_tile_eligible(0, 0), 1);
+    T_ASSERT_EQ_I(engine_territory_tile_eligible(TILE_COLS - 1, TILE_ROWS - 1), 1);
+    return 0;
+}
+
+/* Even-row (row & 1 == 0) neighbour set: the 8 offsets
+ * {1,-1}{1,0}{1,1}{0,2}{0,1}{-1,0}{0,-1}{0,-2}.  All eligible → mask all 1;
+ * clearing the i3 neighbour (col+0,row+2) flips exactly that entry. */
+int test_territory_mask_even_row(void)
+{
+    elig_setup((uint32_t)0xfff0006u);              /* everything eligible */
+    int32_t mask[8];
+    engine_territory_compute_neighbour_mask(10, 4, mask);   /* row 4 = even */
+    for (int i = 0; i < 8; i++) T_ASSERT_EQ_I(mask[i], 1);
+
+    *tile_at(6, 10) = (int32_t)0xfff0000u;         /* (col=10,row=6) = i3 offset {0,+2} */
+    engine_territory_compute_neighbour_mask(10, 4, mask);
+    int32_t want[8] = { 1, 1, 1, 0, 1, 1, 1, 1 };
+    for (int i = 0; i < 8; i++) T_ASSERT_EQ_I(mask[i], want[i]);
+    return 0;
+}
+
+/* Odd-row parity selects the *other* offset table.  The odd neighbour set of
+ * (10,5) is {0,-1}{1,0}{0,1}{0,2}{-1,1}{-1,0}{-1,-1}{0,-2}; lighting only
+ * those gives mask all 1.  Lighting (11,4) — an even-table-only neighbour
+ * that the odd table never reads — leaves the mask all 0, proving parity. */
+int test_territory_mask_odd_row_uses_parity_table(void)
+{
+    const int oc[8][2] = { {0,-1},{1,0},{0,1},{0,2},{-1,1},{-1,0},{-1,-1},{0,-2} };
+    int32_t mask[8];
+
+    /* Background 0xfff0000 is special-but-not-sentinel → ineligible, and (unlike
+     * tile value 0, a real cell at offset 0) needs no cell-grid setup. */
+    elig_setup((uint32_t)0xfff0000u);
+    for (int i = 0; i < 8; i++) *tile_at(5 + oc[i][1], 10 + oc[i][0]) = (int32_t)0xfff0006u;
+    engine_territory_compute_neighbour_mask(10, 5, mask);    /* row 5 = odd */
+    for (int i = 0; i < 8; i++) T_ASSERT_EQ_I(mask[i], 1);
+
+    elig_setup((uint32_t)0xfff0000u);
+    *tile_at(4, 11) = (int32_t)0xfff0006u;         /* (col=11,row=4): even i0, not odd */
+    engine_territory_compute_neighbour_mask(10, 5, mask);
+    for (int i = 0; i < 8; i++) T_ASSERT_EQ_I(mask[i], 0);
+    return 0;
+}
+
+/* At the (0,0) corner the offset table pushes four neighbours off-grid; those
+ * read as ineligible (0) while the in-grid neighbours stay 1. */
+int test_territory_mask_clamps_off_grid(void)
+{
+    elig_setup((uint32_t)0xfff0006u);              /* every in-grid tile eligible */
+    int32_t mask[8];
+    engine_territory_compute_neighbour_mask(0, 0, mask);     /* even-row corner */
+    /* offsets {1,-1}{1,0}{1,1}{0,2}{0,1}{-1,0}{0,-1}{0,-2} from (0,0):
+     * off-grid at i0 (1,-1), i5 (-1,0), i6 (0,-1), i7 (0,-2). */
+    int32_t want[8] = { 0, 1, 1, 1, 1, 0, 0, 0 };
+    for (int i = 0; i < 8; i++) T_ASSERT_EQ_I(mask[i], want[i]);
+    return 0;
+}

@@ -72,9 +72,14 @@ static int32_t *g_terrain_tiles;
 #define TERRAIN_GRID_ROWS 0x81     /* 129 rows (retail outer bound) */
 #define TERRAIN_GRID_COLS 0x41     /* 65  cols (retail inner bound, = i32 stride) */
 
-/* Special-tile sentinel the randomiser re-rolls: retail's empty/special
- * base 0xfff0000 (ENGINE_MAP_RENDER_CELL_EMPTY) + 6.  A matching cell is
- * replaced with base+6 + (rng & 0xf) → one of 0xfff0006..0xfff0015. */
+/* Retail's empty/special tile base 0xfff0000 (ENGINE_MAP_RENDER_CELL_EMPTY):
+ * a tile word below this is a *real* cell, holding the byte-offset of its
+ * descriptor in the cell grid (cell index × 8); at or above it the low
+ * nibble is a special-tile variant. */
+#define TERRAIN_TILE_SPECIAL_BASE       0xfff0000u
+
+/* Special-tile sentinel the randomiser re-rolls: the special base + 6.  A
+ * matching cell is replaced with base+6 + (rng & 0xf) → 0xfff0006..0xfff0015. */
 #define TERRAIN_TILE_RANDOMISE_SENTINEL 0xfff0006u
 
 /* DAT_0052afe0 — the "current entity slot" register the placer leaves
@@ -347,5 +352,66 @@ void engine_territory_randomise_special_tiles(engine_rng_single_in_t *rng)
                 *cell = (int32_t)((mirror & 0xfu) + TERRAIN_TILE_RANDOMISE_SENTINEL);
             }
         }
+    }
+}
+
+/* Port of FUN_0046de94 (189 B) — the per-neighbour terrain eligibility
+ * predicate underpinning the new-game feature-spread (seeder 0x46dbf5 →
+ * classifier 0x46c2de).  Reads the terrain-index tile at (col, row) of the
+ * bound 129×65 grid (DAT_0055cea0) and reports whether it is "eligible":
+ *
+ *   - off-grid (col<0 || col>=65 || row<0 || row>=129)        → 0
+ *   - a real cell (tile value < 0xfff0000, the byte-offset of its
+ *     descriptor in the cell grid) → 1 iff its flags byte (+1) lacks bit 0x4
+ *   - the un-rolled special sentinel 0xfff0006                → 1
+ *   - any other special value (>= 0xfff0000)                  → 0
+ *
+ * The bounds guard is load-bearing: the neighbour offset table below pushes
+ * (col, row) off the edge for border cells, and those off-grid reads must
+ * count as ineligible rather than index out of bounds.  Retail has no
+ * unbound-grid guard (the grids are always populated when it runs); the
+ * g_terrain_tiles / g_cells NULL checks are host-safety only. */
+int engine_territory_tile_eligible(int col, int row)
+{
+    if (g_terrain_tiles == NULL) return 0;
+    if (col < 0 || row < 0 || col >= TERRAIN_GRID_COLS || row >= TERRAIN_GRID_ROWS)
+        return 0;
+
+    uint32_t v = (uint32_t)g_terrain_tiles[row * TERRAIN_GRID_COLS + col];
+    if (v < TERRAIN_TILE_SPECIAL_BASE)                       /* real cell */
+        return (g_cells != NULL && (g_cells[v + 1] & 0x4) == 0) ? 1 : 0;
+    return v == TERRAIN_TILE_RANDOMISE_SENTINEL ? 1 : 0;     /* only the sentinel */
+}
+
+/* Hex-grid neighbour offsets (retail DAT_004d6c28 / DAT_004d6be8), in
+ * offset coordinates {dx, dy} added to (col, row).  The strategic map is a
+ * doubled-row hex grid, so even and odd rows have distinct neighbour sets;
+ * retail selects the table by row parity (`row & 1`). */
+static const int8_t NEIGHBOUR_OFFSETS[2][8][2] = {
+    /* even row (row & 1 == 0) — retail DAT_004d6c28 */
+    { {1,-1}, {1,0}, {1,1}, {0,2}, {0,1}, {-1,0}, {0,-1}, {0,-2} },
+    /* odd  row (row & 1 == 1) — retail DAT_004d6be8 */
+    { {0,-1}, {1,0}, {0,1}, {0,2}, {-1,1}, {-1,0}, {-1,-1}, {0,-2} },
+};
+
+/* Port of FUN_0046de05 (143 B) — compute the 8-neighbour eligibility mask
+ * for overworld tile (col, row) into mask[8].  For each of the 8 hex
+ * neighbours (offset table chosen by row parity) it stores
+ * engine_territory_tile_eligible(col + dx, row + dy) as 0/1.
+ *
+ * Retail writes the mask into the shared scratch global DAT_00543fe0, which
+ * the feature classifier 0x46c2de (the next call in seeder 0x46dbf5) reads
+ * back.  DAT_00543fe0 is reused across several independent feature passes as
+ * a produce-then-consume register, never carrying state between them, so the
+ * port threads it explicitly through the caller's mask[8] — the same idiom
+ * the module uses for the single-LFSR RNG — rather than keeping a mutable
+ * module global. */
+void engine_territory_compute_neighbour_mask(int col, int row, int32_t mask[8])
+{
+    const int parity = row & 1;
+    for (int i = 0; i < 8; i++) {
+        int dx = NEIGHBOUR_OFFSETS[parity][i][0];
+        int dy = NEIGHBOUR_OFFSETS[parity][i][1];
+        mask[i] = engine_territory_tile_eligible(col + dx, row + dy);
     }
 }

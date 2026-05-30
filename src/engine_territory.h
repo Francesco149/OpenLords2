@@ -79,4 +79,18 @@ void engine_territory_rebuild_cell_roster(int reset_score_table);
  * No-op if the grid or rng is unbound/NULL. */
 void engine_territory_randomise_special_tiles(engine_rng_single_in_t *rng);
 
+/* Port of FUN_0046de94.  Per-neighbour terrain eligibility predicate over
+ * the bound terrain-tile grid (engine_territory_bind_terrain_tiles) and cell
+ * grid (engine_territory_bind_cells): returns 1 if tile (col, row) is a real
+ * cell whose flags byte lacks bit 0x4, or the special sentinel 0xfff0006;
+ * 0 if off-grid (col∉[0,65) || row∉[0,129)) or any other value. */
+int engine_territory_tile_eligible(int col, int row);
+
+/* Port of FUN_0046de05.  Fill mask[8] with the eligibility (0/1) of the 8
+ * hex neighbours of tile (col, row) — the neighbour offsets are chosen by
+ * row parity (the strategic map is a doubled-row hex grid).  This is the
+ * adjacency mask the (still-unported) feature classifier 0x46c2de consumes;
+ * retail passes it through the shared scratch global DAT_00543fe0. */
+void engine_territory_compute_neighbour_mask(int col, int row, int32_t mask[8]);
+
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

@@ -268,10 +268,37 @@ mark, unbound no-op).
   full-grid value range + per-cell advance count, last-cell reach / stride,
   unbound + NULL-rng no-ops).
 
+- **FUN_0046de94 + FUN_0046de05** → `engine_territory_tile_eligible(col,row)`
+  / `engine_territory_compute_neighbour_mask(col,row,mask[8])`
+  (`engine_territory.c`, landed 2026-05-31).  The neighbour-adjacency
+  machinery the sibling seeder 0x46dbf5 (and the feature classifier 0x46c2de)
+  drive.  `FUN_0046de94` is the per-tile eligibility predicate: read the
+  terrain-index tile at (col,row) of the 129×65 grid `DAT_0055cea0` and return
+  1 iff it is a **real cell** (value < `0xfff0000` = the cell's byte-offset
+  into `g_overworld_map`) whose flags byte (+1, `DAT_00522f91`) lacks bit 0x4,
+  **or** the un-rolled special sentinel `0xfff0006`; 0 if off-grid
+  (col∉[0,65) ∥ row∉[0,129)) or any other special value.  The signed bounds
+  ladder (`-1 < col/row`, `< 0x41`/`< 0x81`) is load-bearing — `FUN_0046de05`
+  pushes neighbours off the edge for border tiles, and those must read as
+  ineligible (r2 @0x46de94 confirmed the `row*0x104 + col*4` index, the
+  `< 0xfff0000` real/special split, the `flags & 4` test, and the
+  `== 0xfff0006` sentinel arm).  `FUN_0046de05` is the 8-neighbour sweep:
+  the strategic map is a **doubled-row hex grid**, so it picks one of two
+  offset tables by row parity (`row & 1`) — retail `DAT_004d6c28` (even) /
+  `DAT_004d6be8` (odd), each 8×{i32 dx, i32 dy}, dumped + transcribed
+  verbatim — and stores the predicate result for each into the shared scratch
+  global `DAT_00543fe0[8]` (read by 9 functions, a produce-then-consume
+  register never carrying cross-pass state).  The port threads it explicitly
+  through the caller's `mask[8]` rather than a mutable global, the same idiom
+  the RNG uses.  6 host tests (real-cell flag gate, special-value
+  discrimination, off-grid bounds incl. the inclusive (64,128) extreme,
+  even-row mask + single-neighbour flip, odd-row parity discriminator,
+  corner off-grid clamping).
+
 Remaining 4 unported FUN_004676e0 callees: `FUN_0046dbf5` (the sibling
-randomiser — now only blocked by `FUN_0046de05`→`FUN_0046de94` and
-`FUN_0046c2de`) / `FUN_00467ca6` / `FUN_00468d4f` / `FUN_00467a36` (each
-still has 1–5 unported deps).
+randomiser — now blocked only by `FUN_0046c2de`, the feature-variant picker
+that reads the neighbour mask the pair above builds) / `FUN_00467ca6` /
+`FUN_00468d4f` / `FUN_00467a36` (each still has 1–5 unported deps).
 
 ### FUN_0046ff43 — strategic movement-cost grid builder
 

@@ -1381,6 +1381,12 @@ struct test_case {
     X(territory_tiles_value_range_and_full_grid) \
     X(territory_tiles_reaches_last_cell) \
     X(territory_tiles_unbound_is_noop) \
+    X(territory_elig_real_cell_flag_gate) \
+    X(territory_elig_special_values) \
+    X(territory_elig_off_grid_bounds) \
+    X(territory_mask_even_row) \
+    X(territory_mask_odd_row_uses_parity_table) \
+    X(territory_mask_clamps_off_grid) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \

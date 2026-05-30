@@ -4635,6 +4635,38 @@ never an active feature.
 
 ---
 
+## 133. The overworld neighbour predicate's bounds check is load-bearing, not defensive — and the strategic map is a doubled-row hex grid
+
+`FUN_0046de94` (the per-tile eligibility predicate behind the new-game
+feature-spread) opens with a four-way signed bounds ladder —
+`-1 < col && -1 < row && col < 0x41 && row < 0x81` — and returns 0
+(ineligible) for anything off-grid.  That guard looks like ordinary
+defensive coding, but it is **functional**: its caller `FUN_0046de05`
+adds a neighbour offset to (col,row) *before* the call, and for tiles on
+the map border those offsets land off the edge (e.g. col `-1`, row `-2`).
+Retail relies on the predicate quietly reporting "ineligible" there, so a
+port that drops the bounds check as redundant (the grid read would still
+be in-bounds for most coordinates) would silently corrupt feature
+generation along the map edges — exactly the cells hardest to eyeball.
+
+The reason the offsets reach off-grid at all is the second half of the
+quirk: the strategic map is a **doubled-row hex grid**, so `FUN_0046de05`
+picks one of *two* 8-entry `{dx,dy}` offset tables by **row parity**
+(`row & 1`) — retail `DAT_004d6c28` (even) / `DAT_004d6be8` (odd).  The
+two sets are genuinely different (even includes `(1,-1)(1,1)`; odd
+includes `(-1,1)(-1,-1)`), the hallmark of offset-coordinate hex
+neighbours.  Both tables carry a `(0,±2)` pair — the doubled-row vertical
+step.  Any future strategic-map adjacency code (pathfinding, fog, feature
+spread) must consult the parity-correct table, not a single 8-neighbour
+set.
+
+> 📍 `src/engine_territory.c` (`engine_territory_tile_eligible` /
+> `engine_territory_compute_neighbour_mask`),
+> `docs/findings/game-start.md` §"FUN_004676e0", Ghidra `FUN_0046de94`
+> @ 0x46de94 / `FUN_0046de05` @ 0x46de05.
+
+---
+
 <!--
 Template for new entries:
 
