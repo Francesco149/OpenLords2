@@ -4304,6 +4304,46 @@ Two further oddities in the same 415-byte function:
 
 ---
 
+## 122. The page-9 dropdown's value rows sit *inside* its own tab's hotspot box, so dispatch order decides which wins
+
+The page-9 input arm (`FUN_004ba9c8`, `DAT_005530f0 == 9`) dispatches three
+things per frame, and their geometry overlaps in a way that only works
+because of the **order**:
+
+1. the dropdown's own value rows (hover `FUN_00433ce4`, pick `FUN_00433a23`),
+2. the page-7 option-tab grid (`DAT_004dce30`, 12 entries),
+3. a catch-all "any remaining press closes the dropdown".
+
+The catch is that a tab's hotspot box and the dropdown it opens **occupy the
+same screen pixels**.  Tab 0's box is `(170,280)-(266,328)`; its dropdown
+anchors at `(0xaa=170, 0x118=280)` with value rows at y `296–328` — fully
+inside the tab box.  So a click at, say, `(218, 320)` is simultaneously "on
+the tab" and "on value row 2".  Retail resolves it by running the hover→pick
+check (step 1) **before** the tab dispatch (step 2): the value pick wins, and
+the tab is never re-triggered.  Get the order wrong and clicking a value would
+just re-open (or flicker) the dropdown instead of selecting.
+
+A second consequence of step 3: while a dropdown is open, a press on *anything
+else* — the country list, the Cancel/Start buttons, empty parchment — doesn't
+activate that control.  It only **dismisses the dropdown** (back to the
+bookmark page).  Page 9 never dispatches the page-7 button/country tables at
+all; the next click does.  So the dropdown is strictly mode-modal: one click
+to commit-or-cancel, then you're back on page 7.
+
+The pick also has no hover-to-current-value step: when the dropdown first
+opens (`FUN_00433998`) `DAT_00553114` is left at its stale page-7 value, so
+the *first* live frame highlights nothing on the values unless the cursor
+already happens to be over a row.  The highlight is purely cursor-driven from
+then on — retail does **not** pre-select the current value.
+
+> 📍 `src/engine_menu_input.c` (`engine_menu_title_input` page-9 arm,
+> `menu_action_p9_pick`), `src/engine_title_render.c`
+> (`engine_title_render_option_detail_hover` / `_pick`),
+> `docs/findings/title-menu-screens.md` §"Page 9 input", Ghidra
+> `FUN_004ba9c8` (`DAT_005530f0 == 9` arm) / `FUN_00433ce4` / `FUN_00433a23`.
+
+---
+
 <!--
 Template for new entries:
 

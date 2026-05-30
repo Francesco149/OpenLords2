@@ -352,10 +352,26 @@ void engine_title_render_setup_screen(void);
 void engine_title_render_set_option_detail(int tab, int value_count,
                                            int bookmark);
 
-/* The current page-9 dropdown tab / value count (for tests + the page-9
- * input arm). */
+/* The current page-9 dropdown tab / value count / underlay-page bookmark
+ * (for tests + the page-9 input arm). */
 int engine_title_render_option_detail_tab(void);
 int engine_title_render_option_detail_count(void);
+int engine_title_render_option_detail_bookmark(void);
+
+/* The selected value for option tab 0..11 (retail's permuted option
+ * scalars, held in tab order).  For tests + the page-9 pick writeback. */
+int engine_title_render_tab_value(int tab);
+
+/* Port of FUN_00433ce4 — page-9 dropdown hover hit-test.  Returns the
+ * 1-based index of the value row under the game-space cursor (cx, cy), or
+ * 0 if none.  The page-9 input arm publishes this as the highlight
+ * (DAT_00553114), so the hovered row draws red. */
+int engine_title_render_option_detail_hover(int cx, int cy);
+
+/* Port of FUN_00433ba2 — write `value` (0-based) back to the currently
+ * open option tab.  The roster/preview recompute (FUN_00433cc1) is
+ * deferred; the page-7 value cap reflects the pick immediately. */
+void engine_title_render_option_detail_pick(int value);
 
 /* Port of FUN_0041fdd6.  Render the page-9 per-option detail dropdown over
  * the bookmarked page (routed from page 9 by engine_title_render_scene). */

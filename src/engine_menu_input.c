@@ -6,8 +6,9 @@
  * FUN_00432b05 (page-1 action), FUN_00432cc8 (page-2 action),
  * FUN_00433461 (page-5 campaign-select action), FUN_004335f0 / FUN_004337b4
  * / FUN_00433905 / FUN_00433998 (the page-7 setup-screen button / scrollbar
- * / country-row / option-tab actions), and the pages-1/2/5/7 arm of
- * FUN_004ba9c8 (per-page input dispatcher).
+ * / country-row / option-tab actions), FUN_00433ce4 / FUN_00433a23 (the
+ * page-9 dropdown hover hit-test + value pick), and the pages-1/2/5/7/9 arm
+ * of FUN_004ba9c8 (per-page input dispatcher).
  */
 
 #include <stddef.h>
@@ -276,6 +277,23 @@ static void menu_action_p7_tab(int param)
     g_redraw_fn(2);                 /* DAT_0057d340 = 2 */
 }
 
+/* Port of FUN_00433a23 — pick a value from the open page-9 dropdown.
+ * `hover` is the 1-based highlighted row (FUN_00433ce4's result), so the
+ * stored value is `hover - 1`.  Writes the value back to the edited option,
+ * then closes the dropdown by returning to the bookmarked page. */
+static void menu_action_p9_pick(int hover)
+{
+    engine_title_render_option_detail_pick(hover - 1);   /* FUN_00433ba2 */
+
+    /* TODO(mp): retail plays sound cue 9 (0x43eda0(9, 0)) on the pick when
+     * a multiplayer session is active (DAT_00553030 != 0); single-player is
+     * silent, and the MP/audio path isn't ported. */
+
+    /* Close: DAT_005530f0 = DAT_00553e5c (the bookmarked underlay page). */
+    engine_title_render_set_page(engine_title_render_option_detail_bookmark());
+    g_redraw_fn(2);                 /* DAT_0057d340 = 2 */
+}
+
 /* ─── hit-test primitives ────────────────────────────────────────── */
 
 /* Half-open box test shared by hover + click (retail inlines the same
@@ -450,6 +468,33 @@ int engine_menu_title_input(const engine_menu_click_in_t *in)
             return 1;
         if (engine_menu_hotspot_click(0, 0, k_page7_tabs, 12, in))
             return 1;
+    } else if (page == 9) {
+        /* Page-9 arm of FUN_004ba9c8: the open option dropdown.
+         *
+         *   1. Hover hit-test (FUN_00433ce4) → highlight (DAT_00553114).
+         *   2. A press-edge click on a highlighted value row picks it
+         *      (FUN_00433a23: write back + close).
+         *   3. Else dispatch the page-7 option-tab grid — clicking another
+         *      tab re-targets the dropdown (menu_action_p7_tab re-publishes
+         *      the detail state without re-bookmarking, since page == 9).
+         *   4. Else any press edge closes the dropdown, returning to the
+         *      bookmarked underlay page. */
+        int hover = engine_title_render_option_detail_hover(in->cursor_x,
+                                                            in->cursor_y);
+        engine_title_render_set_selected_button(hover);   /* DAT_00553114 */
+
+        if (in->lmb_newly_pressed && hover != 0) {
+            menu_action_p9_pick(hover);
+            return 1;
+        }
+        if (engine_menu_hotspot_click(0, 0, k_page7_tabs, 12, in))
+            return 1;
+        if (in->lmb_newly_pressed) {
+            engine_title_render_set_page(
+                engine_title_render_option_detail_bookmark());
+            g_redraw_fn(2);             /* DAT_0057d340 = 2 */
+            return 1;
+        }
     }
     return 0;
 }

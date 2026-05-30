@@ -1132,6 +1132,36 @@ static void bringup_title_nav(const char *dir)
     gfx_capture_backbuffer(path);
     log_line("title-nav: forced page %d (option detail) → %s",
              engine_title_render_page(), path);
+
+    /* Step 7 — the page-9 input arm end-to-end: open tab 0's dropdown from
+     * page 7 by clicking the tab, then pick the *second* value row, which
+     * writes that value back to the option and closes the dropdown to page
+     * 7.  Tab 0 ("Advanced Farming") seeds value 0 ("off"); picking row 2
+     * sets value 1 ("on"), so the captured page-7 setup screen shows tab
+     * 0's value cap flipped off→on — the visible proof the dropdown values
+     * are now selectable (FUN_00433ce4 hover + FUN_00433a23 pick). */
+    seed_page7_state();
+    engine_title_render_set_page(7);
+
+    /* Click option tab 0 (box (170,280)-(266,328) → centre (218,304)). */
+    title_nav_click(218, 304);
+    log_line("title-nav: clicked tab 0 → page %d (tab %d, %d values)",
+             engine_title_render_page(),
+             engine_title_render_option_detail_tab(),
+             engine_title_render_option_detail_count());
+
+    /* Click value row 2 (tab-0 panel (0xaa,0x118), row 1 box y∈[312,328)
+     * → (218,320)).  Pick writes value 1 and returns to the bookmark. */
+    title_nav_click(218, 320);
+    log_line("title-nav: picked row 2 → page %d, tab 0 value = %d",
+             engine_title_render_page(), engine_title_render_tab_value(0));
+
+    title_render_current_page();
+    wsprintfA(path, "%s\\nav_07_p%d_optionpicked.bmp", dir,
+              engine_title_render_page());
+    gfx_capture_backbuffer(path);
+    log_line("title-nav: page %d (option picked: tab 0 = on) → %s",
+             engine_title_render_page(), path);
 }
 
 /* Page-background reload hook (engine → gfx).  The engine_tick title

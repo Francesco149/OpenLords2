@@ -7,6 +7,62 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — PAGE 9 INPUT: the dropdown values go live (`FUN_004ba9c8` page-9 arm)
+
+Last entry rendered the page-9 option dropdown but left it inert — the values
+showed but weren't selectable.  This entry ports the **page-9 input arm**, so
+clicking a value actually picks it: the custom-game options are now editable.
+
+Three small functions and the dispatcher arm landed (all leaves):
+
+1. **`FUN_00433ce4`** (hover, 217 B) → `engine_title_render_option_detail_hover`.
+   Walks the open tab's value rows and returns the 1-based row under the
+   game-space cursor as the highlight `DAT_00553114`, reproducing the
+   dropdown's exact row geometry — including tab 2's grow-upward shift
+   (quirks #121).
+2. **`FUN_00433a23`** (pick) + **`FUN_00433ba2`** (writeback, 287 B) →
+   `menu_action_p9_pick` + `engine_title_render_option_detail_pick`.  A
+   press-edge click on a highlighted row writes the value back to that
+   option's scalar and closes the dropdown to the bookmarked page; the
+   page-7 value cap then shows the new pick.
+3. The **page-9 arm of `FUN_004ba9c8`**: hover → (press+highlight ⇒ pick) →
+   tab-grid dispatch (re-target the dropdown to another tab) → else any press
+   dismisses.
+
+The 12 permuted option scalars (`DAT_0053f288..0053f2b4`) are modeled in tab
+order as `g_p7_tab_values`, so the writeback is a direct store and the cap
+flips immediately.  Deferred with the still-unported MP/roster subsystem:
+`FUN_00433ba2`'s recompute tail (`0x433cc1` → `0x49caaa` AI-seat/preview
+rebuild) and the MP-only pick sound (`0x43eda0`).  So picking a value updates
+the visible cap but a player-count change does not yet re-seat the roster.
+
+One engine oddity documented (engine-quirks #122): a tab's hotspot box and the
+dropdown it opens **share the same pixels**, so the hover→pick check must run
+*before* the tab dispatch for a value click to select rather than re-open; and
+while open, a press on any other control merely dismisses the popup (page 9 is
+strictly modal).  Also noted: retail does *not* pre-highlight the current
+value — the highlight is purely cursor-driven from the first live frame.
+
+Coverage 340 → **343 touched** (308 host-tested, 14.6% of code bytes).  5 new
+host tests (page-9 hover-highlight + pick-writes-value-and-closes + tab
+re-target + click-outside-dismiss + tab-2 grow-up hover) → **1232 green**;
+both drop-in builds clean.
+
+**Human-confirmed** (`--title-nav` step 7 → `nav_07_p7_optionpicked.bmp`,
+2026-05-30): the new step drives the *real* dispatch — clicks option tab 0,
+picks value row 2 ("on"), and captures the page-7 setup screen with "Advanced
+Farming" flipped **off → on**, every other tab's cap intact.
+
+### Next
+
+- **Page 8** (MP setup) shares the page-7 input/refresh arm and is the other
+  page-9 backdrop; closest neighbour once MP state exists.
+- The **roster recompute** behind a player-count pick (`0x433cc1` → `0x49caaa`,
+  935 B) — re-seats the AI players + rebuilds the map preview; the first real
+  chip of the setup-screen roster subsystem.
+- The deep **Start** destination (game-start `0x4329ec` → strategic map) is the
+  big play-flow milestone behind this whole setup flow.
+
 ## 2026-05-30 — PAGE 9: the per-option detail dropdown render (`FUN_0041fdd6`)
 
 The genuine single-player continuation behind the page-7 setup screen: clicking

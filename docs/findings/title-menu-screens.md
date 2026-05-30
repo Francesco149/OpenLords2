@@ -26,7 +26,7 @@ Two parallel dispatch ladders run while `DAT_004eac50 == 0x1f`:
 | 6   | `FUN_0041f3e9` | `FUN_0041f4a1` | (sub-screen) |
 | 7   | `FUN_0041f6c7` | `FUN_0041f98b`+ | (sub-screen) |
 | 8   | `FUN_0041f77a` | `FUN_0041f98b`+ | (sub-screen) |
-| 9   | `FUN_0041fdd6` | …            | **per-option detail dropdown** (over page 7/8) — render ported |
+| 9   | `FUN_0041fdd6` | …            | **per-option detail dropdown** (over page 7/8) — render + input ported (values selectable) |
 | 10  | `FUN_00420428` | …            | (sub-screen) |
 | 0xb | `FUN_00420630` | …            | (sub-screen) |
 | 0xc | `FUN_0042051c` | …            | save/load list (scrollbar — `FUN_00421005`) |
@@ -344,8 +344,9 @@ FUN_004527a6(x, y, 6, rows, 1);
 `DAT_00553fb4 = DAT_004d5560[tab]` (the value count), with tab 2 clamped to
 `roster_count − 1` (`DAT_0053e8a4`) when the roster is < 5 seats, and the
 return bookmark `DAT_00553e5c`.  The dropdown's own scroll origin
-(`_DAT_00553530 = 0`) and the page-9 hover/click input arm are **deferred**
-(the values list is shown but not yet selectable in the drop-in).
+(`_DAT_00553530 = 0`) is **deferred** (none of the 12 options has more rows
+than fit, so it never scrolls).  The page-9 **input arm is ported** — see
+"Page 9 input" below; the values list is now selectable.
 
 Per-tab value tables read verbatim from the binary (`r2 pxw`):
 
@@ -360,6 +361,47 @@ Bring-up render: `--title-nav` step 6 (`nav_06_p9_optiondetail.bmp`) — the
 "Advanced Farming" tab (0) dropdown shows **off**/**on** with the current
 value (off) highlighted.  See engine-quirks #121 for the full-scene-redraw,
 grow-upward, and dead-table-column oddities.
+
+### Page 9 input — selectable values (`FUN_004ba9c8` page-9 arm) — ported
+
+The page-9 arm of the dispatcher (`FUN_004ba9c8`, `DAT_005530f0 == 9`) makes
+the dropdown values pickable.  Per frame, in order:
+
+1. **Hover** (`FUN_00433ce4`) — walk the `DAT_00553fb4` value rows of the
+   open tab's panel; the row under the game-space cursor
+   (`DAT_004e65fc`/`DAT_004e65f4`) becomes the highlight `DAT_00553114`, or 0.
+   The row boxes are exactly the dropdown's rendered text rows: column
+   `[x, x+0x60)`, each 16px tall at `panel_y + i·16 + 16`, with tab 2 shifted
+   up by `(count-1)·16` (the grow-upward quirk #121).
+2. **Pick** (`FUN_00433a23`) — on the LMB press edge (`DAT_004eafb4`) with a
+   live highlight, `FUN_00433ba2(tab, DAT_00553114-1)` writes the value back
+   to that option's scalar (one of the 12 permuted `DAT_0053f288..0053f2b4`),
+   then the dropdown closes: `DAT_005530f0 = DAT_00553e5c` (the bookmark),
+   `DAT_0057d340 = 2`.
+3. **Re-target** — else the page-7 option-tab grid (`DAT_004dce30`, 0xc) is
+   dispatched; clicking *another* tab re-opens the dropdown on it
+   (`FUN_00433998` skips the re-bookmark since the page is already 9).
+4. **Dismiss** — else any remaining press edge closes the dropdown back to
+   the bookmark.  (A press on the country list or buttons just dismisses;
+   page 9 doesn't dispatch them.)
+
+Because the tab's hotspot box overlaps its own dropdown value rows, the
+hover→pick check (step 1–2) runs **before** the tab dispatch (step 3), so a
+click on an overlapping value row picks the value rather than re-opening the
+tab.
+
+Deferred with the MP/roster subsystem: `FUN_00433ba2`'s recompute tail
+(`0x433cc1` → `DAT_0053f268`, then the `0x49caaa` AI-seat/preview rebuild) and
+the MP pick sound (`0x43eda0(9,0)`, gated on `DAT_00553030`).  The value cap
+updates immediately; the roster does not yet re-seat on a player-count change.
+
+Port: `engine_title_render_option_detail_hover` / `_pick` / `_bookmark` /
+`_tab_value` in `src/engine_title_render.c`; `menu_action_p9_pick` + the
+page-9 arm in `src/engine_menu_input.c`.  Bring-up: `--title-nav` step 7
+(`nav_07_p7_optionpicked.bmp`) drives the real dispatch — clicks tab 0, picks
+row 2 ("on"), and captures the page-7 setup screen with "Advanced Farming"
+flipped **off → on**.  5 host tests (hover/pick/re-target/dismiss + tab-2
+grow-up).
 
 ## Input side — hotspot hit-test + page navigation (`engine_menu_input`)
 

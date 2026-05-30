@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **340** (13.9%) — tested 305, ported 35
-- code bytes touched: **14.6%** (122,268 / 838,629 B)
-- unported: **2107**
+- touched: **343** (14.0%) — tested 308, ported 35
+- code bytes touched: **14.6%** (122,849 / 838,629 B)
+- unported: **2104**
 - orphan refs (in src/, not in function table): 4
 
-## tested (305) — ported + host unit suite
+## tested (308) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -178,7 +178,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4337b4 | FUN_004337b4 | 337 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x433905 | FUN_00433905 | 147 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x433998 | FUN_00433998 | 139 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
-| 0x433cc1 | FUN_00433cc1 | 35 | engine_title_render.c |
+| 0x433a23 | FUN_00433a23 | 77 | engine_menu_input.c, main.c |
+| 0x433ba2 | FUN_00433ba2 | 287 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
+| 0x433cc1 | FUN_00433cc1 | 35 | engine_title_render.c, engine_title_render.h |
+| 0x433ce4 | FUN_00433ce4 | 217 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
 | 0x4343f8 | FUN_004343f8 | 36 | main.c |
 | 0x43de70 | FUN_0043de70 | 1211 | engine.c, engine.h, engine_rate.c |
 | 0x43e330 | FUN_0043e330 | 259 | engine.c, engine.h, engine_rate.c (+1) |

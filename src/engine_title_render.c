@@ -906,6 +906,58 @@ void engine_title_render_set_option_detail(int tab, int value_count,
 
 int engine_title_render_option_detail_tab(void)   { return g_p9_tab; }
 int engine_title_render_option_detail_count(void) { return g_p9_value_count; }
+int engine_title_render_option_detail_bookmark(void) { return g_p9_bookmark; }
+
+int engine_title_render_tab_value(int tab)
+{
+    return (tab >= 0 && tab < 12) ? g_p7_tab_values[tab] : 0;
+}
+
+/* Port of FUN_00433ce4 — the page-9 dropdown hover hit-test.  Walks the
+ * `value_count` rows of the open tab's panel and returns the 1-based index
+ * of the row under (cx, cy), or 0 if none.  The row boxes are exactly the
+ * text-row geometry the dropdown render stamps: column [x, x+0x60), each
+ * row 16px tall starting at panel_y + i·16 + 16, with tab 2 (player count)
+ * shifted up by (count-1)·16 because its panel grows upward (quirks #121).
+ * Cursor coords are the game-space cursor (retail DAT_004e65fc/DAT_004e65f4),
+ * the same space the panel geometry is expressed in. */
+int engine_title_render_option_detail_hover(int cx, int cy)
+{
+    int tab   = g_p9_tab;
+    int count = g_p9_value_count;
+    int x     = g_p9_panel_geom[tab][0];
+
+    for (int i = 0; i < count; i++) {
+        int ry = g_p9_panel_geom[tab][1] + i * 0x10 + 0x10;
+        if (tab == 2) {
+            ry += (count - 1) * -0x10;
+        }
+        if (x <= cx && cx < x + 0x60 && ry <= cy && cy < ry + 0x10) {
+            return i + 1;
+        }
+    }
+    return 0;
+}
+
+/* Port of FUN_00433ba2 (+ the 0x433cc1 tail) — write the picked value back
+ * to the open tab's option.  Retail keeps the 12 option values as permuted
+ * scalars (DAT_0053f288..0053f2b4); the drop-in holds them in tab order in
+ * g_p7_tab_values, so the writeback is a direct index store — the page-7
+ * value cap (sub-string base[tab] + value) then shows the new pick once the
+ * dropdown closes.
+ *
+ * Deferred: retail's recompute tail (0x433cc1) also recomputes DAT_0053f268
+ * from the tab-2 player count and rebuilds the AI seat roster + map preview
+ * (0x49caaa, 935 B); that roster subsystem isn't ported, so picking a value
+ * updates the visible cap but does not yet re-seat the roster. */
+void engine_title_render_option_detail_pick(int value)
+{
+    if (g_p9_tab >= 0 && g_p9_tab < 12) {
+        g_p7_tab_values[g_p9_tab] = value;
+    }
+    /* TODO(roster): 0x433cc1 → DAT_0053f268 recompute + 0x49caaa
+     * roster/preview rebuild (deferred with the MP/roster subsystem). */
+}
 
 void engine_title_render_set_players(const engine_title_setup_player_t players[6],
                                      const uint8_t *names)

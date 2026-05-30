@@ -1266,6 +1266,11 @@ struct test_case {
     X(menu_page7_option_tab_opens_page9) \
     X(menu_page7_tab2_count_clamps_to_roster) \
     X(menu_page7_click_outside_hotspots_noop) \
+    X(menu_page9_hover_highlights_row) \
+    X(menu_page9_pick_writes_value_and_closes) \
+    X(menu_page9_tab_click_retargets) \
+    X(menu_page9_click_outside_closes) \
+    X(menu_page9_tab2_grows_upward) \
     \
     X(engine_button_kind20_blits_32x32_at_origin) \
     X(engine_button_kind18_blits_24x24) \

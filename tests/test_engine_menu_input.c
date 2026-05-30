@@ -450,3 +450,103 @@ int test_menu_page7_click_outside_hotspots_noop(void)
     T_ASSERT_EQ_I(engine_title_render_page(), 7);
     return 0;
 }
+
+/* ── page 9 (option-detail dropdown) input arm (FUN_004ba9c8 / 00433ce4 /
+ *    00433a23) ─────────────────────────────────────────────────────── */
+
+/* Open the tab-0 dropdown from page 7 (its panel anchors at (0xaa, 0x118)
+ * with 2 value rows: row i box x∈[170,266), y∈[296+i·16, +16)). */
+static void open_tab0_dropdown(void)
+{
+    mi_reset();
+    engine_title_render_set_page(7);
+    engine_menu_click_in_t in = press_at(218, 304);   /* tab-0 box centre */
+    (void)engine_menu_title_input(&in);
+    /* now on page 9, tab 0, 2 values */
+}
+
+/* Hovering a dropdown value row (no click) publishes its 1-based index as
+ * the highlight and consumes nothing; hovering off clears it to 0. */
+int test_menu_page9_hover_highlights_row(void)
+{
+    open_tab0_dropdown();
+    /* Row 1 (i=1) box y∈[312,328); x∈[170,266) → (218, 320). */
+    engine_menu_click_in_t in = at(218, 320);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 0);          /* no click */
+    T_ASSERT_EQ_I(engine_title_render_selected_button(), 2); /* row 1 → 2 */
+    T_ASSERT_EQ_I(engine_title_render_page(), 9);            /* still open */
+
+    /* Off every row → highlight 0. */
+    in = at(10, 10);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 0);
+    T_ASSERT_EQ_I(engine_title_render_selected_button(), 0);
+    return 0;
+}
+
+/* A press on a highlighted value row writes that value back to the edited
+ * tab and closes the dropdown to the bookmarked page (7). */
+int test_menu_page9_pick_writes_value_and_closes(void)
+{
+    open_tab0_dropdown();
+    engine_menu_input_reset_counters();
+    /* Press on row 1 (value index 1). */
+    engine_menu_click_in_t in = press_at(218, 320);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);          /* consumed */
+    T_ASSERT_EQ_I(engine_title_render_tab_value(0), 1);      /* hover-1 */
+    T_ASSERT_EQ_I(engine_title_render_page(), 7);            /* closed → bookmark */
+    T_ASSERT_EQ_I(engine_menu_input_last_redraw_mode(), 2);
+    return 0;
+}
+
+/* Clicking a *different* tab while the dropdown is open re-targets it
+ * (re-publishes the detail state) without leaving page 9. */
+int test_menu_page9_tab_click_retargets(void)
+{
+    open_tab0_dropdown();
+    /* Tab 3 box (290,280)-(386,328) → centre (338,304); outside tab-0's
+     * panel column [170,266), so the hover hit-test misses and the tab
+     * table claims the click. */
+    engine_menu_click_in_t in = press_at(338, 304);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_page(), 9);            /* still open */
+    T_ASSERT_EQ_I(engine_title_render_option_detail_tab(), 3);
+    return 0;
+}
+
+/* A press anywhere outside the value rows + tabs closes the dropdown. */
+int test_menu_page9_click_outside_closes(void)
+{
+    open_tab0_dropdown();
+    engine_menu_input_reset_counters();
+    engine_menu_click_in_t in = press_at(10, 10);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_page(), 7);            /* back to bookmark */
+    T_ASSERT_EQ_I(engine_menu_input_last_redraw_mode(), 2);
+    return 0;
+}
+
+/* Tab 2 (player count) grows *upward*: with 4 rows its panel anchors at
+ * (0xaa, 0x1aa) but shifts up by (4-1)·16, so row 0 sits at the top and
+ * the bottom row (3) abuts the tab.  The hover hit-test must agree. */
+int test_menu_page9_tab2_grows_upward(void)
+{
+    mi_reset();
+    engine_title_render_set_page(7);
+    s_slot_0053e8a4 = 5;                          /* full roster → count 4 */
+    engine_menu_click_in_t in = press_at(218, 450);  /* tab-2 box centre */
+    (void)engine_menu_title_input(&in);
+    T_ASSERT_EQ_I(engine_title_render_option_detail_tab(), 2);
+    T_ASSERT_EQ_I(engine_title_render_option_detail_count(), 4);
+
+    /* Row 0 top: ry = 0x1aa + 0*16 + 16 + (4-1)*-16 = 426+16-48 = 394 →
+     * box [394,410) → (218, 400). */
+    in = at(218, 400);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 0);
+    T_ASSERT_EQ_I(engine_title_render_selected_button(), 1);
+
+    /* Bottom row 3: ry = 394 + 3*16 = 442 → box [442,458) → (218, 450). */
+    in = at(218, 450);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 0);
+    T_ASSERT_EQ_I(engine_title_render_selected_button(), 4);
+    return 0;
+}

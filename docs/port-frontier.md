@@ -5,8 +5,8 @@
 The unported, non-thunk engine functions already **called by ported code** — the natural next chips. A **leaf** has all of its
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
-- frontier functions: **277**
-- of those, zero-dependency **leaves: 108** (recommended order below)
+- frontier functions: **275**
+- of those, zero-dependency **leaves: 107** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
 
@@ -192,7 +192,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x424992 | 2434 | 1 | 0 | ✓ |
 | 0x423ba4 | 3015 | 1 | 0 | ✓ |
 
-### stage/post-load + char tables (57)
+### stage/post-load + char tables (55)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
@@ -208,7 +208,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4329a4 | 61 | 1 | 0 | ✓ |
 | 0x4323fe | 64 | 1 | 2 |  |
 | 0x439541 | 73 | 1 | 1 |  |
-| 0x433a23 | 77 | 1 | 1 |  |
 | 0x43b622 | 95 | 1 | 2 |  |
 | 0x43f7e3 | 114 | 1 | 4 |  |
 | 0x4357a6 | 132 | 1 | 1 |  |
@@ -224,7 +223,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x43f24b | 185 | 1 | 0 | ✓ |
 | 0x43b4cb | 200 | 1 | 0 | ✓ |
 | 0x4369bd | 203 | 1 | 1 |  |
-| 0x433ce4 | 217 | 1 | 0 | ✓ |
 | 0x43600c | 230 | 1 | 0 | ✓ |
 | 0x4350a1 | 232 | 1 | 3 |  |
 | 0x439df0 | 235 | 1 | 2 |  |
