@@ -4573,6 +4573,34 @@ at the matched cell.
 
 ---
 
+## 131. The all-cells grid clearer is unrolled 8 cells wide and steers itself with the nearest-cell result globals
+
+`FUN_0046c5b8` zeroes one byte of every overworld cell (4096 cells, 8 B
+each), and a one-line C loop would do it — but retail hand-unrolls the
+sweep **8 cells per inner iteration** (eight `mov byte [...], 0` at cell
+offsets +0, +8, … +0x38) and runs the two enclosing loops on
+`DAT_00569578` (0..0x40) and `DAT_00569570` (0..8), advancing a byte
+cursor `DAT_0053e8b8 += 0x40` each step.
+
+The charming part: `DAT_00569570` / `DAT_00569578` are the *same two
+globals* `engine_path` uses to report its nearest-found cell (quirk
+#130).  A grid-wipe has no "result," so here they're pure loop counters —
+the function just grabbed two convenient zero-page dwords.  After it
+returns they hold (8, 0x40), meaningless leftovers.  Like the box scans,
+our port (`engine_territory_clear_cell_field`) uses locals and leaves
+engine_path's result globals alone; the byte cursor `DAT_0053e8b8` and
+the sibling `DAT_0053e974` (in `FUN_0046df51`) are likewise write-only
+scratch reset at entry, never read across calls, so they collapse to the
+loop variable.  r2 (`pdf @ 0x46c5b8`) was needed to see the stores are
+byte-sized and the parameter is the low-byte field offset — Ghidra's
+unrolled render hid both.
+
+> 📍 `src/engine_territory.c` (`engine_territory_clear_cell_field`,
+> `engine_territory_clear_cell_render_flags`),
+> Ghidra `FUN_0046c5b8` @ 0x46c5b8, `FUN_0046df51` @ 0x46df51.
+
+---
+
 <!--
 Template for new entries:
 

@@ -7,6 +7,42 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — GAME-START chip: overworld-grid reset leaves (FUN_0046c5b8 + FUN_0046df51)
+
+Descended into **FUN_004676e0** — the overworld-grid setup
+sub-orchestrator, one of `FUN_00497ced`'s 25 new-game callees — and
+landed its two cleanest leaf callees.  Both bulk-clear the 64×64×8
+overworld cell grid (`g_overworld_map`, save entry 0), so they joined the
+entity placer in `engine_territory.c`, the module that already binds that
+grid mutably.
+
+  - **FUN_0046c5b8** → `engine_territory_clear_cell_field(field)`.  Zeroes
+    byte `field` of all 4096 cells.  Shared with the reset path
+    `FUN_0046d3da`; both callers sweep fields 0..5, so cell bytes 0..5 are
+    wiped and +6/+7 left.  r2 (0x46c5b8) confirmed byte-sized stores and
+    that the param is the low-byte field offset (Ghidra's 8-way unroll
+    obscures it).  Retail drives the sweep with three write-only scratch
+    globals — `DAT_0053e8b8` plus engine_path's nearest-result pair
+    `DAT_00569570/78` reused as loop counters — so the port uses a plain
+    4096-cell loop and leaves engine_path's result globals untouched, the
+    same call the map_query box scans already make.
+
+  - **FUN_0046df51** → `engine_territory_clear_cell_render_flags()`.
+    Clears bit 0x20 of byte +2 of every cell, then marks the full screen
+    dirty.  Byte +2 bit 0x20 is a per-cell "draw via the alternate path"
+    flag (set by 0x46e067/0x469370, read by the strategic draw helpers
+    0x408438/0x4063c1/0x4071a0/0x406673/0x406bba gated on
+    `DAT_0053f264 == 1`); new-game wipes it and forces a repaint.  The
+    repaint routes through an optional bound dirty state
+    (`engine_territory_set_dirty_state`, NULL-safe for host/headless) —
+    the same `g_dirty_state` pattern the render modules use, the only
+    outward coupling this otherwise-pure module gains.
+
+7 host tests (4 field-clear + 3 render-flag, incl. unbound no-ops and the
+full-screen mark).  1343/1343 pass; mingw drop-in build clean.  This
+clears 2 of FUN_004676e0's 8 unported callees; the remaining leaf is
+`FUN_0046da4b` (a 16×20 terrain index table over `DAT_0053ea00`).
+
 ## 2026-05-30 — GAME-START chip: army start-marker placement (FUN_00427ed0 + entity placer FUN_0046e1b0)
 
 The caller the prior chip flagged as a trap (quirk #130).  `FUN_00427ed0`

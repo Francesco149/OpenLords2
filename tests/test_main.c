@@ -1355,6 +1355,13 @@ struct test_case {
     X(territory_place_rejects_off_grid) \
     X(territory_place_table_full_returns_0) \
     X(territory_place_unbound_returns_0) \
+    X(territory_clear_cell_field_zeroes_one_byte_all_cells) \
+    X(territory_clear_cell_field_sweep_0_to_5) \
+    X(territory_clear_cell_field_reaches_last_cell) \
+    X(territory_clear_cell_field_unbound_is_noop) \
+    X(territory_clear_cell_render_flags_clears_bit20_byte2) \
+    X(territory_clear_cell_render_flags_marks_full_screen) \
+    X(territory_clear_cell_render_flags_unbound_is_noop) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \

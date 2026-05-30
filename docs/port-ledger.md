@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **375** (15.3%) — tested 341, ported 34
-- code bytes touched: **15.8%** (132,316 / 838,629 B)
-- unported: **2072**
+- touched: **381** (15.6%) — tested 347, ported 34
+- code bytes touched: **15.9%** (133,426 / 838,629 B)
+- unported: **2066**
 - orphan refs (in src/, not in function table): 4
 
-## tested (341) — ported + host unit suite
+## tested (347) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -216,7 +216,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x452160 | FUN_00452160 | 422 | engine.c, gfx.c, gfx.h (+1) |
 | 0x452306 | FUN_00452306 | 224 | engine_dirty_rect.c, engine_dirty_rect.h, gfx.c (+1) |
 | 0x4523e6 | FUN_004523e6 | 36 | engine_dirty_rect.h |
-| 0x45240a | FUN_0045240a | 33 | engine_dirty_rect.h, engine_title_render.h, gfx.c (+2) |
+| 0x45240a | FUN_0045240a | 33 | engine_dirty_rect.h, engine_territory.c, engine_title_render.h (+3) |
 | 0x452436 | FUN_00452436 | 83 | engine_dirty_rect.h |
 | 0x452489 | FUN_00452489 | 83 | engine_dirty_rect.h |
 | 0x4524dc | FUN_004524dc | 83 | engine_dirty_rect.h |
@@ -229,12 +229,18 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_button.c, engine_button.h (+2) |
 | 0x4651b9 | FUN_004651b9 | 91 | engine_territory.c, engine_territory.h |
 | 0x46733c | FUN_0046733c | 124 | engine_map_query.c, engine_map_query.h |
+| 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c |
 | 0x467770 | FUN_00467770 | 525 | engine_title_render.c |
+| 0x469370 | FUN_00469370 | 188 | engine_territory.c |
 | 0x46a037 | FUN_0046a037 | 202 | engine_title_render.c |
 | 0x46c4a3 | FUN_0046c4a3 | 277 | engine_battlefield_render.c, engine_battlefield_render.h |
+| 0x46c5b8 | FUN_0046c5b8 | 258 | engine_territory.c, engine_territory.h |
 | 0x46cfbd | FUN_0046cfbd | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |
 | 0x46d130 | FUN_0046d130 | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |
 | 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
+| 0x46d3da | FUN_0046d3da | 71 | engine_territory.c |
+| 0x46df51 | FUN_0046df51 | 132 | engine_territory.c, engine_territory.h |
+| 0x46e067 | FUN_0046e067 | 317 | engine_territory.c |
 | 0x46e1b0 | FUN_0046e1b0 | 792 | engine_territory.c, engine_territory.h, game_init.c |
 | 0x46ea28 | FUN_0046ea28 | 57 | game_init.c, game_init.h |
 | 0x46ea61 | FUN_0046ea61 | 57 | game_init.c |

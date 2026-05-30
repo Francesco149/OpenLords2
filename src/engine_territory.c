@@ -1,18 +1,25 @@
 /*
- * OpenLords2 — per-territory record helpers.
+ * OpenLords2 — per-territory record helpers + overworld cell-grid resets.
  *
  * Operates on the per-territory record array (retail `DAT_0052f0b0`,
  * 151 records × 0x1a4 bytes, slot 0 reserved) — the same memory the
- * strategic-map overlay/primary passes bind.  Bound here once via
- * engine_territory_bind_records.  Pure C; no Win32, no save state.
+ * strategic-map overlay/primary passes bind — and on the 64×64×8
+ * overworld cell-descriptor grid (retail `DAT_00522f90`), which it both
+ * claims (the entity placer) and bulk-clears at new-game (the two cell
+ * resets below).  Records are bound via engine_territory_bind_records,
+ * the cell grid via engine_territory_bind_cells.  Pure C; the only
+ * outward coupling is the optional dirty-rect state the cell reset marks.
  *
- *   FUN_004651b9 @ 0x4651b9 (91 B) → engine_territory_clear_size_state
+ *   FUN_004651b9 @ 0x4651b9 (91 B)  → engine_territory_clear_size_state
+ *   FUN_0046c5b8 @ 0x46c5b8 (258 B) → engine_territory_clear_cell_field
+ *   FUN_0046df51 @ 0x46df51 (132 B) → engine_territory_clear_cell_render_flags
  */
 
 #include <stddef.h>
 #include <string.h>
 
 #include "engine_territory.h"
+#include "engine_dirty_rect.h"
 
 #define TERRITORY_RECORD_STRIDE 0x1a4
 #define TERRITORY_RECORD_COUNT  0x97   /* iterate 1..0x96 (1..150) */
@@ -25,6 +32,17 @@
 
 static uint8_t *g_records;   /* DAT_0052f0b0 — record array base */
 static uint8_t *g_cells;     /* DAT_00522f90 — 64×64×8 cell descriptor grid */
+
+/* Optional render-invalidation sink, bound by the new-game orchestrator
+ * so engine_territory_clear_cell_render_flags can request a full repaint
+ * (retail's FUN_0046df51 → FUN_0045240a).  NULL in headless/unit
+ * contexts — the mark is then simply skipped.  Same pattern the render
+ * modules (engine_overlay_render / engine_battlefield_render) use. */
+static engine_dirty_rect_state_t *g_dirty_state;
+
+/* Overworld cell grid geometry (retail DAT_00522f90). */
+#define CELL_GRID_CELLS   0x1000   /* 64×64 = 4096 cells */
+#define CELL_STRIDE       8        /* bytes per cell descriptor */
 
 /* DAT_0052afe0 — the "current entity slot" register the placer leaves
  * pointing at the record it just allocated.  Transient (not a save
@@ -41,6 +59,52 @@ void engine_territory_bind_records(uint8_t *records)
 void engine_territory_bind_cells(uint8_t *cells)
 {
     g_cells = cells;
+}
+
+void engine_territory_set_dirty_state(engine_dirty_rect_state_t *state)
+{
+    g_dirty_state = state;
+}
+
+/* Port of FUN_0046c5b8.  Zero byte `field` of every overworld cell
+ * descriptor (all 4096 cells of the 64×64×8 grid).  Retail unrolls the
+ * sweep 8 cells at a time and drives it with three scratch globals
+ * (DAT_0053e8b8 byte cursor + the engine_path nearest-result pair
+ * DAT_00569570/78 reused as the 8× / 64 loop counters); all three are
+ * write-only scratch reset at entry and never read afterwards, so we use
+ * a plain cell loop and leave engine_path's result globals alone — same
+ * choice the map_query box scans make (see engine_map_query.c).
+ *
+ * The two callers (FUN_004676e0 new-game init, FUN_0046d3da reset) sweep
+ * fields 0..5 in turn; `field` is the byte offset within the 8-byte cell.
+ * No bounds check on `field` — retail trusts its 0..5 call sites. */
+void engine_territory_clear_cell_field(uint8_t field)
+{
+    if (g_cells == NULL) return;
+
+    for (int i = 0; i < CELL_GRID_CELLS; i++)
+        g_cells[i * CELL_STRIDE + field] = 0;
+}
+
+/* Port of FUN_0046df51.  Clear bit 5 (0x20) of byte +2 of every
+ * overworld cell, then request a full-screen repaint.  Byte +2 is a
+ * per-cell render-flag byte; bit 0x20 is set elsewhere (FUN_0046e067 /
+ * FUN_00469370) and consumed by the strategic draw helpers
+ * (0x408438 / 0x4063c1 / 0x4071a0 / 0x406673 / 0x406bba, all gated on
+ * DAT_0053f264 == 1) — a per-cell "marked for the alternate draw path"
+ * flag the engine wipes at new-game.  Retail also resets a scratch
+ * progress counter (DAT_0053e974, write-only here) and calls
+ * FUN_0045240a (mark full screen); we skip the counter (locals) and
+ * route the repaint through the bound dirty state if any. */
+void engine_territory_clear_cell_render_flags(void)
+{
+    if (g_cells != NULL) {
+        for (int i = 0; i < CELL_GRID_CELLS; i++)
+            g_cells[i * CELL_STRIDE + 2] &= 0xdf;
+    }
+
+    if (g_dirty_state != NULL)
+        engine_dirty_rect_mark_full_screen(g_dirty_state);
 }
 
 int engine_territory_current_slot(void)

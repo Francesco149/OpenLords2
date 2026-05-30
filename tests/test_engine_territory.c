@@ -186,3 +186,108 @@ int test_territory_place_unbound_returns_0(void)
     T_ASSERT_EQ_I(engine_territory_place_entity(3, 1, 1, 6), 0);
     return 0;
 }
+
+/* ── Overworld cell-grid resets ────────────────────────────────────── */
+/* (reuse g_cells from the placer block; CELL_GRID×CELL_GRID cells) */
+
+#include "engine_dirty_rect.h"
+
+enum { N_CELLS = CELL_GRID * CELL_GRID };
+
+static void cells_fill(uint8_t v)
+{
+    memset(g_cells, v, sizeof g_cells);
+    engine_territory_bind_cells(g_cells);
+}
+
+/* clear_cell_field zeroes byte `field` of every cell, nothing else. */
+int test_territory_clear_cell_field_zeroes_one_byte_all_cells(void)
+{
+    cells_fill(0xaa);
+    engine_territory_clear_cell_field(3);
+    for (int i = 0; i < N_CELLS; i++) {
+        T_ASSERT_EQ_I(g_cells[i * CELL_STRIDE + 3], 0);
+        /* every other byte in the cell survives */
+        for (int b = 0; b < CELL_STRIDE; b++)
+            if (b != 3)
+                T_ASSERT_EQ_I(g_cells[i * CELL_STRIDE + b], 0xaa);
+    }
+    return 0;
+}
+
+/* Sweeping fields 0..5 (the call-site set) clears exactly those bytes
+ * and leaves +6 / +7 untouched. */
+int test_territory_clear_cell_field_sweep_0_to_5(void)
+{
+    cells_fill(0xaa);
+    for (uint8_t f = 0; f <= 5; f++)
+        engine_territory_clear_cell_field(f);
+    for (int i = 0; i < N_CELLS; i++) {
+        for (int b = 0; b <= 5; b++)
+            T_ASSERT_EQ_I(g_cells[i * CELL_STRIDE + b], 0);
+        T_ASSERT_EQ_I(g_cells[i * CELL_STRIDE + 6], 0xaa);
+        T_ASSERT_EQ_I(g_cells[i * CELL_STRIDE + 7], 0xaa);
+    }
+    return 0;
+}
+
+/* Touches the last cell too (no off-by-one short of 4096). */
+int test_territory_clear_cell_field_reaches_last_cell(void)
+{
+    cells_fill(0xff);
+    engine_territory_clear_cell_field(0);
+    T_ASSERT_EQ_I(g_cells[(N_CELLS - 1) * CELL_STRIDE + 0], 0);
+    return 0;
+}
+
+int test_territory_clear_cell_field_unbound_is_noop(void)
+{
+    engine_territory_bind_cells(NULL);
+    engine_territory_clear_cell_field(0);   /* must not crash */
+    return 0;
+}
+
+/* clear_cell_render_flags clears only bit 0x20 of byte +2; other bits of
+ * +2 and all other bytes are preserved. */
+int test_territory_clear_cell_render_flags_clears_bit20_byte2(void)
+{
+    cells_fill(0xff);
+    engine_territory_set_dirty_state(NULL);
+    engine_territory_clear_cell_render_flags();
+    for (int i = 0; i < N_CELLS; i++) {
+        T_ASSERT_EQ_I(g_cells[i * CELL_STRIDE + 2], 0xdf);   /* 0xff & ~0x20 */
+        for (int b = 0; b < CELL_STRIDE; b++)
+            if (b != 2)
+                T_ASSERT_EQ_I(g_cells[i * CELL_STRIDE + b], 0xff);
+    }
+    return 0;
+}
+
+/* When a dirty state is bound, a full-screen repaint is requested. */
+int test_territory_clear_cell_render_flags_marks_full_screen(void)
+{
+    cells_fill(0x00);
+    engine_dirty_rect_state_t s = {
+        .dirty_mark = 0, .dirty_xmin = 0x7fff, .dirty_xmax = -0x7fff,
+        .dirty_ymin = 0x7fff, .dirty_ymax = -0x7fff, .below_status_redraw = 0,
+    };
+    engine_territory_set_dirty_state(&s);
+    engine_territory_clear_cell_render_flags();
+    /* full screen = (0,0)..(639,479), mark = 1 */
+    T_ASSERT_EQ_I(s.dirty_mark, 1);
+    T_ASSERT_EQ_I(s.dirty_xmin, 0);
+    T_ASSERT_EQ_I(s.dirty_ymin, 0);
+    T_ASSERT_EQ_I(s.dirty_xmax, 0x27f);
+    T_ASSERT_EQ_I(s.dirty_ymax, 0x1df);
+    engine_territory_set_dirty_state(NULL);   /* don't leak into later tests */
+    return 0;
+}
+
+/* Unbound dirty state + unbound cells: still safe. */
+int test_territory_clear_cell_render_flags_unbound_is_noop(void)
+{
+    engine_territory_bind_cells(NULL);
+    engine_territory_set_dirty_state(NULL);
+    engine_territory_clear_cell_render_flags();   /* must not crash */
+    return 0;
+}

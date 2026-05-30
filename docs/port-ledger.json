@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 341,
+  "tested": 347,
   "ported": 34,
-  "unported": 2072,
+  "unported": 2066,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 375,
-  "pct_touched": 15.3,
-  "pct_tested": 13.9,
+  "touched": 381,
+  "pct_touched": 15.6,
+  "pct_tested": 14.2,
   "bytes_total": 838629,
-  "bytes_touched": 132316,
-  "pct_bytes_touched": 15.8
+  "bytes_touched": 133426,
+  "pct_bytes_touched": 15.9
  },
  "orphan_refs": [
   "0x004148",
@@ -10335,6 +10335,7 @@
    "status": "tested",
    "src": [
     "src/engine_dirty_rect.h",
+    "src/engine_territory.c",
     "src/engine_title_render.h",
     "src/gfx.c",
     "src/gfx.h",
@@ -11067,8 +11068,10 @@
    "name": "FUN_004676e0",
    "size": 144,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_territory.c"
+   ]
   },
   {
    "va": "0x467770",
@@ -11253,8 +11256,10 @@
    "name": "FUN_00469370",
    "size": 188,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_territory.c"
+   ]
   },
   {
    "va": "0x46942c",
@@ -11538,8 +11543,11 @@
    "name": "FUN_0046c5b8",
    "size": 258,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_territory.c",
+    "src/engine_territory.h"
+   ]
   },
   {
    "va": "0x46c6ba",
@@ -11639,8 +11647,10 @@
    "name": "FUN_0046d3da",
    "size": 71,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_territory.c"
+   ]
   },
   {
    "va": "0x46d421",
@@ -11727,8 +11737,11 @@
    "name": "FUN_0046df51",
    "size": 132,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_territory.c",
+    "src/engine_territory.h"
+   ]
   },
   {
    "va": "0x46dfd5",
@@ -11743,8 +11756,10 @@
    "name": "FUN_0046e067",
    "size": 317,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_territory.c"
+   ]
   },
   {
    "va": "0x46e1b0",

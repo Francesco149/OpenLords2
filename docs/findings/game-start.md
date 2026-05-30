@@ -68,7 +68,7 @@ live sim:
 | FUN_0042847c | 82 | 0 | copy DAT_004d8910 table → DAT_005532a0 strided |
 | FUN_00448440 | 261 | 29 | (unsurveyed — large fan-out) |
 | FUN_00451150 | 936 | 7 | (unsurveyed) |
-| FUN_004676e0 | 144 | 11 | (unsurveyed) |
+| FUN_004676e0 | 144 | 11 | overworld-grid setup sequence — 2 leaf callees ported (see below); 6 callees remain |
 | FUN_0046f1dc/2ae/3cd | — | — | (the trio above) |
 | FUN_0046ff43 | 617 | 0 | leaf seeder (unsurveyed) |
 | FUN_00472ad0 | 16 | 1 | **tested** (already ported) |
@@ -159,6 +159,50 @@ flip lands until the world is populated enough for the map arm.
      +0 dword and the +4 byte, leaving +5..+7 (the per-castle-slot
      back-pointer lives at +5 — see save-format.md).  Then three world
      scalars (entries 66/67/68) are zeroed.  See below.
+   - ✅ **FUN_0046c5b8 + FUN_0046df51** → `engine_territory_clear_cell_field`
+     / `engine_territory_clear_cell_render_flags` (`src/engine_territory.c`,
+     landed 2026-05-30).  The first two leaf callees of **FUN_004676e0**
+     (the overworld-grid setup sub-orchestrator, itself a 0x497ced callee).
+     Both bulk-clear the 64×64×8 overworld cell grid — see below.
+
+### FUN_004676e0 — overworld-grid setup sequence (2/8 leaves ported)
+
+A 144-B 0x497ced callee that stands up the overworld cell grid + its
+terrain index tables, by calling a fixed sequence of 0x46c*/0x46d* grid
+helpers (`FUN_0046c5b8`×6, `FUN_0046df51`, `FUN_0046dbf5`, `FUN_0046dd34`,
+`FUN_0046da4b`, `FUN_00467ca6`, `FUN_00468d4f`, `FUN_00467a36`) plus the
+already-ported `FUN_00467770` / `FUN_0046a037` / `FUN_004291b3`.  Two of
+its leaf callees landed this chip:
+
+- **FUN_0046c5b8** → `engine_territory_clear_cell_field(field)`.  Zeroes
+  byte `field` of every overworld cell (all 4096).  Shared (also called
+  by the reset path `FUN_0046d3da`); both callers sweep fields 0..5 in
+  turn, so cell bytes 0..5 are wiped and +6/+7 preserved.  r2 (0x46c5b8)
+  confirms byte stores and that the param is the low-byte field offset;
+  retail's 8-way-unrolled sweep drives three scratch globals
+  (`DAT_0053e8b8` cursor + engine_path's nearest-result pair
+  `DAT_00569570/78` reused as loop counters) — all write-only here, so
+  the port uses a plain 4096-cell loop and leaves engine_path's result
+  globals alone (same call the box scans make).
+- **FUN_0046df51** → `engine_territory_clear_cell_render_flags()`.  Clears
+  bit 0x20 of byte +2 of every cell, then calls `FUN_0045240a`
+  (`engine_dirty_rect_mark_full_screen`).  Byte +2 is a per-cell
+  render-flag byte; bit 0x20 is set by `FUN_0046e067`/`FUN_00469370` and
+  read by the strategic draw helpers (0x408438 / 0x4063c1 / 0x4071a0 /
+  0x406673 / 0x406bba, all gated on `DAT_0053f264 == 1`) — i.e. a "draw
+  this cell via the alternate path" mark, wiped at new-game with a full
+  repaint.  The repaint is routed through an optional bound dirty state
+  (`engine_territory_set_dirty_state`, NULL-safe for host/headless), the
+  same pattern the render modules use.  Homed alongside the placer in
+  `engine_territory.c` because both functions mutate the same cell grid
+  the placer already binds mutably (`engine_territory_bind_cells`).
+
+7 host tests (4 field-clear: one-byte isolation, 0..5 sweep, last-cell
+reach, unbound no-op; 3 render-flag: bit-0x20 isolation, full-screen
+mark, unbound no-op).  Remaining 6 unported FUN_004676e0 callees:
+`FUN_0046da4b` (a leaf — 16×20 terrain index table) plus
+`FUN_0046dbf5` / `FUN_0046dd34` / `FUN_00467ca6` / `FUN_00468d4f` /
+`FUN_00467a36` (each still has 1–5 unported deps).
 
 ### FUN_0046ff43 — strategic movement-cost grid builder
 
