@@ -142,6 +142,11 @@ static const char *g_title_name;
  * full-redraw via the demand-redraw seam.  Implies --gfx-init +
  * --show-window. */
 static int       g_title_live;
+/* --title-type STR: in the live loop, post one WM_CHAR per frame for each
+ * character of STR (starting at frame 8), exercising the real WndProc
+ * keystroke route → text editor → page-4 name box.  A scripted stand-in
+ * for a human at the keyboard, so the typing path can be frame-captured. */
+static const char *g_title_type;
 /* --audio-init: call audio_init() after window creation.  Off by
  * default — SetCooperativeLevel(PRIORITY) modifies process audio
  * state and the headless smoke harness has no way to validate
@@ -1360,6 +1365,19 @@ static void bringup_title_live(void)
 
 static void main_loop_body(void)
 {
+    /* Scripted WM_CHAR typing demo (--title-type STR): post one character
+     * per frame into the real WndProc, starting at frame 8, so the captured
+     * frames show the name box filling in through the genuine keystroke
+     * route.  Overwrite mode replaces from the cursor, so a 6-char STR fully
+     * replaces the "aaaaaa" seed. */
+    if (g_title_type && g_hwnd && g_frame_counter >= 8) {
+        unsigned idx = g_frame_counter - 8;
+        if (idx < strlen(g_title_type)) {
+            PostMessageA(g_hwnd, WM_CHAR,
+                         (WPARAM)(unsigned char)g_title_type[idx], 0);
+        }
+    }
+
     MSG msg;
     while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE)) {
         if (msg.message == WM_QUIT) {
@@ -1588,6 +1606,9 @@ static void parse_cmdline(LPSTR lpCmd)
             g_title_live  = 1;
             g_gfx_init    = 1;   /* needs DDraw */
             g_show_window = 1;   /* interactive — must be visible */
+        }
+        else if (!strcmp(a, "--title-type") && i + 1 < ntok) {
+            g_title_type = tokens[++i];   /* scripted WM_CHAR typing demo */
         }
         else if (!strcmp(a, "--audio-init"))     g_audio_init  = 1;
         else if (!strcmp(a, "--capture-to") && i + 1 < ntok) {

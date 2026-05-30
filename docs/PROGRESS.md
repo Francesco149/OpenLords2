@@ -59,9 +59,14 @@ into a live data path, not porting new leaves.  3 new host tests (arm
 enables editor + copies buffer to name; typed char reaches the name box;
 editor disabled off-page) → **1245 green**; both drop-in builds clean.
 
-**Awaiting human confirmation** — `--title-live --title-page 4`: type into
-the name box and confirm the letters appear / backspace deletes / the caret
-follows.
+**Verified** (`runs/title-type-p4/`, 2026-05-30) — a new `--title-type STR`
+harness flag posts one real `WM_CHAR` per frame into the live page-4 window
+(a scripted stand-in for the keyboard, exercising the genuine WndProc
+route).  `--title-live --title-page 4 --title-type Caesar` captures the name
+box filling from the "aaaaaa" seed to **"Caesar"** through the full route
+(`frame_00000` seed → `frame_00016` typed).  Open to a human keyboard pass
+too (`--title-live --title-page 4`, then type) for real-hardware
+confirmation.
 
 ### Next
 
