@@ -4,15 +4,15 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 332,
+  "tested": 333,
   "ported": 34,
-  "unported": 2081,
+  "unported": 2080,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 366,
+  "touched": 367,
   "pct_touched": 15.0,
   "pct_tested": 13.6,
   "bytes_total": 838629,
-  "bytes_touched": 129905,
+  "bytes_touched": 129977,
   "pct_bytes_touched": 15.5
  },
  "orphan_refs": [
@@ -16526,8 +16526,11 @@
    "name": "FUN_004af502",
    "size": 72,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/io_path.c",
+    "src/io_path.h"
+   ]
   },
   {
    "va": "0x4af54a",

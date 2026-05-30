@@ -1396,6 +1396,10 @@ struct test_case {
     X(engine_ranking_victory_rot_wrap) \
     X(engine_ranking_victory_event_human) \
     X(engine_ranking_no_event_multiplayer) \
+    X(io_path_chdir_base_roundtrip) \
+    X(io_path_set_base_seam) \
+    X(io_path_chdir_base_failure) \
+    X(io_path_set_base_truncate_and_clear) \
     /* end */
 
 /* Emit extern decls. */

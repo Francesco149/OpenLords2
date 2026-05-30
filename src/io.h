@@ -19,7 +19,10 @@
  * until a future chip needs the CD-tree subdirectory layout (e.g.
  * intro Smacker) — see "Asset-load IO helper family" in
  * `docs/findings/ddraw-dsound-bringup.md` for the extension→subdir
- * mapping and the rationale.
+ * mapping and the rationale.  The base directory those tiers pivot
+ * around (retail `DAT_0058fe30`) and the revert-to-base after a
+ * subdir descent (`0x4af502`) are ported in `src/io_path.c`
+ * (`io_path.h`); tiers 2/3 will read it via `io_path_base()`.
  *
  * The five extension-manipulation helpers that tiers 2/3 share with
  * other call sites (FUN_004af54a/5ba/62c/675/6c9) are ported in

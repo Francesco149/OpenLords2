@@ -257,7 +257,7 @@ existence helpers are deferred until they have a consumer.
 ```
 FUN_004af116    508 B    tier-3 chdir into ABSOLUTE-path subdir   DEFERRED
 FUN_004af312    496 B    tier-2 chdir into base-relative subdir   DEFERRED
-FUN_004af502     72 B    chdir back to base (DAT_0058fe30)        DEFERRED (no consumer)
+FUN_004af502     72 B    chdir back to base (DAT_0058fe30)        PORTED  io_path_chdir_base
 FUN_004af54a    112 B    save first '.' extension to scratch      PORTED  strutil_ext_save
 FUN_004af5ba    114 B    apply scratch into first-'.' slot        PORTED  strutil_ext_apply
 FUN_004af62c     73 B    strip first-'.' extension                PORTED  strutil_ext_strip
@@ -272,6 +272,36 @@ FUN_004afab9    897 B    status.txt logger (formats + writes)     DEFERRED
 FUN_004afe3a    179 B    status.txt low-level writer              DEFERRED
 FUN_004afeed   1214 B    .ini parser? (largest sibling)           SURVEY PENDING
 ```
+
+### Base-dir capture + revert — `FUN_004af502` (PORTED)
+
+The base directory the whole family pivots around is `DAT_0058fe30`,
+a 100-byte global captured **once** at the top of the WinMain owner
+`0x40e9ab` with `__getcwd(&DAT_0058fe30, 100)`, just before the first
+asset load.  Tiers 2/3 (`0x4af312` / `0x4af116`) `__chdir` *into*
+subdirectories built off that base; `FUN_004af502` is the matching
+revert — `__chdir(&DAT_0058fe30)`, and on failure it formats
+`"ERR:CHD  not reserted is now <cwd>"` (string sic) into `status.txt`
+via the unported logger `0x4afab9`.
+
+Ported as `src/io_path.c::io_path_chdir_base`, with the base capture
+exposed as `io_path_capture_base` (wired into WinMain right after
+`init_exe_dir`, completing the getcwd the `0x40e9ab` port had elided)
+and a `io_path_set_base` host-test seam.  retail's `__chdir`/`__getcwd`
+are the MSVCRT `_chdir`/`_getcwd` wrappers (→ Set/GetCurrentDirectoryA),
+so the module uses the same CRT calls — `_chdir`/`_getcwd` on Windows,
+POSIX `chdir`/`getcwd` on the host — and is therefore host-testable
+(unlike the Win32-API `io.c`).  Two deviations from retail, both
+documented in-source: the `status.txt` writer is elided (the diagnostic
+routes through the drop-in dev log, per the `gfx.c` convention), and
+the `void` retail signature gains an `int` chdir-result return for
+host-test observability (same pattern as `save_rotate_and_write`).
+
+This is the first member of the chdir cluster to land; it is a
+direct callee of `FUN_004af841` (the file-exists probe, itself a
+dependency of the new-game orchestrator's `0x499aca` callee), so it
+unblocks that game-start sub-chain and the deferred tiers 2/3 which
+share the `io_path_base()` anchor.
 
 ### Tier-2 retry — `FUN_004af312` (base-relative chdir)
 

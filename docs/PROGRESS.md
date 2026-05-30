@@ -7,6 +7,45 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — IO chip: FUN_004af502 (revert cwd to asset base dir)
+
+Triaging the remaining new-game orchestrator (`0x497ced`) callees showed
+their next dependencies are no longer pure sim chips but the **chdir /
+asset-IO cluster**: the near-leaf callee `0x499aca` reaches the file-exists
+probe `FUN_004af841`, which calls both `0x4af312` (tier-2 subdir descent)
+and `FUN_004af502` (revert-to-base).  `FUN_004af502` is also the
+single highest-fan-in leaf in the whole frontier (8 ported callers).
+
+Ported as `src/io_path.c::io_path_chdir_base` — a **new portable module**.
+The key realisation: retail's `__chdir`/`__getcwd` are the MSVCRT
+`_chdir`/`_getcwd` wrappers (r2-confirmed → Set/GetCurrentDirectoryA),
+*not* Win32 API, so the cluster can use the same CRT calls (`_chdir`/
+`_getcwd` on Windows, POSIX `chdir`/`getcwd` on the host) and stays
+host-testable — unlike the `windows.h`-bound `io.c`.  The module owns
+the base-dir buffer (retail `DAT_0058fe30`), a `io_path_capture_base`
+(the `__getcwd(&DAT_0058fe30,100)` the WinMain owner `0x40e9ab` does —
+now wired into WinMain right after `init_exe_dir`, completing the capture
+the `0x40e9ab` port had elided), an `io_path_set_base` test seam, and
+the revert itself.
+
+Two documented deviations: the `status.txt` failure logger (`0x4afab9`,
+unported) is elided — the `"ERR:CHD  not reserted is now <cwd>"`
+diagnostic (string sic) routes through the drop-in dev log, per the
+`gfx.c` convention — and the retail `void` signature gains an `int`
+chdir-result return for host observability (the `save_rotate_and_write`
+precedent).  r2-verified the `chdir`/`getcwd(,100)` shape and the
+nonzero-return error branch at 0x4af515.
+
+Four host tests pin: the capture→wander→revert round-trip, the
+`set_base` seam, the failure path (bogus base → nonzero return, cwd
+unmoved), and the 100-byte truncation + NULL-clear.  1305/1305 pass;
+mingw drop-in build clean.  First member of the chdir cluster to land —
+unblocks the `0x499aca` game-start sub-chain and the deferred asset
+tiers 2/3 (`0x4af312` / `0x4af116`), which now share the
+`io_path_base()` anchor.
+
+---
+
 ## 2026-05-30 — GAME-START chip 8: FUN_004a1c53 (reset per-player sub-tables)
 
 The direct 0x497ced callee whose query sub-callee chip 7 prepared.

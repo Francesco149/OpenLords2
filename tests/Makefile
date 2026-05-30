@@ -71,7 +71,8 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/game_init.c \
                    ../src/engine_turn.c \
                    ../src/save.c \
-                   ../src/save_schema_globals.c
+                   ../src/save_schema_globals.c \
+                   ../src/io_path.c
 
 # Test files — each defines one or more `int test_<name>(void)`
 # functions registered in test_main.c.
@@ -121,7 +122,8 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_npc_schedule.c \
                    test_game_init.c \
                    test_engine_turn.c \
-                   test_save.c
+                   test_save.c \
+                   test_io_path.c
 
 OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o)) \
                             $(SRCS_TESTS:.c=.o))

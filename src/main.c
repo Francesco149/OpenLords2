@@ -68,6 +68,7 @@
 #include "text_input.h"
 #include "gfx.h"
 #include "io.h"
+#include "io_path.h"
 #include "gfx_dispatch.h"
 #include "gfx_glyph.h"
 #include "gfx_glyph_table.h"
@@ -273,6 +274,12 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
      * drop-in's location (which, in a real drop-in scenario, IS the
      * retail game directory). */
     if (!g_skip_cd) init_exe_dir();
+
+    /* Remember the anchored cwd as the asset base directory — retail's
+     * FUN_0040e9ab captures it here with __getcwd(&DAT_0058fe30, 100),
+     * just before the first asset load.  The asset-load retry chain
+     * reverts to it via io_path_chdir_base (0x4af502). */
+    io_path_capture_base();
 
     log_line("OpenLords2 starting (show_window=%d, max_frames=%u)",
              g_show_window, g_max_frames);

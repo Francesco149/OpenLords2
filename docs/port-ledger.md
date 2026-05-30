@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **366** (15.0%) — tested 332, ported 34
-- code bytes touched: **15.5%** (129,905 / 838,629 B)
-- unported: **2081**
+- touched: **367** (15.0%) — tested 333, ported 34
+- code bytes touched: **15.5%** (129,977 / 838,629 B)
+- unported: **2080**
 - orphan refs (in src/, not in function table): 4
 
-## tested (332) — ported + host unit suite
+## tested (333) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -274,6 +274,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4ae8a9 | FUN_004ae8a9 | 191 | save.c, save.h |
 | 0x4ae968 | FUN_004ae968 | 264 | save.c, save.h |
 | 0x4aea70 | FUN_004aea70 | 506 | save.c, save.h |
+| 0x4af502 | FUN_004af502 | 72 | io_path.c, io_path.h |
 | 0x4af54a | FUN_004af54a | 112 | io.h, strutil.h |
 | 0x4af5ba | FUN_004af5ba | 114 | strutil.h |
 | 0x4af62c | FUN_004af62c | 73 | strutil.h |
