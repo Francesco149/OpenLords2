@@ -1281,6 +1281,9 @@ struct test_case {
     X(menu_page4_shield_click_moves_selection) \
     X(menu_page4_hover_highlights_continue) \
     X(menu_page4_hidden_buttons_skip_button_clicks) \
+    X(menu_page4_arm_enables_editor_and_copies_name) \
+    X(menu_page4_typed_char_reaches_name_box) \
+    X(menu_page4_editor_disabled_off_page) \
     \
     X(engine_button_kind20_blits_32x32_at_origin) \
     X(engine_button_kind18_blits_24x24) \

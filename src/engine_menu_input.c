@@ -549,6 +549,13 @@ int engine_menu_title_input(const engine_menu_click_in_t *in)
 {
     int page = engine_title_render_page();
 
+    /* FUN_004ba9c8 line 9: DAT_005aeb78 = 0 — reset the text editor's
+     * enable gate each frame (the input-suppress timer DAT_0057a0cc is a
+     * deferred MP/scroll nicety; in the drop-in input is never suppressed).
+     * Each editable page arm sets it back to 1 via its name-tail, so the
+     * WM_CHAR route only edits while a live field is on screen. */
+    engine_title_render_title_editor_disable();
+
     if (page == 1) {
         if (engine_menu_hotspot_click(0, 0, k_page1_hotspots, 4, in))
             return 1;
@@ -578,10 +585,6 @@ int engine_menu_title_input(const engine_menu_click_in_t *in)
          *   - FUN_00404a46 (the per-frame double-LFSR advance, ported as
          *     engine_rng_step) perturbs only global RNG state the title
          *     screen never reads;
-         *   - the name-editor tail (DAT_005aeb78 = 1; FUN_00401f49;
-         *     FUN_0040210c(&DAT_0053f1e0, 0x1f)) needs the global title text
-         *     editor + the WM_CHAR keystroke route wired to the menu — the
-         *     title text-edit subsystem;
          *   - 0x4bbe51 enables Continue (DAT_0057c940 = 1) once the 6 s
          *     join window elapses, multiplayer-only (DAT_00553030 != 0). */
         int n = engine_title_render_choose_title_buttons_shown() ? 7 : 5;
@@ -590,6 +593,13 @@ int engine_menu_title_input(const engine_menu_click_in_t *in)
         engine_title_render_set_selected_button(
             engine_menu_hotspot_hover(0, 0, k_choose_title_buttons, 7,
                                       in->cursor_x, in->cursor_y));
+        /* Name-editor tail (DAT_005aeb78 = 1; FUN_00401f49;
+         * FUN_0040210c(&DAT_0053f1e0, 0x1f)): enable the editor, recompute
+         * its length, and stream its text into the name box so live
+         * keystrokes (routed by the host WndProc) show up.  The 0x404a46
+         * RNG prologue and the 0x4bbe51 MP join-timer are still deferred
+         * (no page-4 render consumer in the drop-in). */
+        engine_title_render_choose_title_name_tail();
     } else if (page == 7) {
         /* Three tables dispatched in order (buttons → country → tabs);
          * the first hotspot whose edge fires consumes the click.  No hover

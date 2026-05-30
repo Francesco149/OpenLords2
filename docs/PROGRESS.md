@@ -7,6 +7,73 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — PAGE 4 NAME EDITING: the name box is typeable live (text-edit subsystem wired to the menu)
+
+The page-4 "Choose your title and your shield" screen rendered and navigated
+already, but its name box was a static seed — the last page-4 leaf.  This
+entry wires the **global title text editor** (the already-ported
+`text_input` cluster) into the live menu: real keystrokes now type into the
+name box, with backspace/delete/arrows/Home/End/Insert all live.
+
+Three seams landed, all over the already-ported `text_input` module
+(`FUN_00401984` family) which held the editor logic but was unwired:
+
+1. **The page-4 editor tail** (`FUN_004ba9c8` page-4 arm:
+   `DAT_005aeb78 = 1; FUN_00401f49(); FUN_0040210c(&DAT_0053f1e0, 0x1f)`).
+   `engine_menu_title_input`'s page-4 arm now, every frame, enables the
+   editor, recomputes its length, and streams its buffer into the rendered
+   name box (`engine_title_render_choose_title_name_tail`).  The dispatcher
+   head resets the enable gate first (`FUN_004ba9c8` line 9
+   `DAT_005aeb78 = 0`) so the keystroke route is gated off on every screen
+   but the live field — each editable page sets it back to 1.
+
+2. **The `WM_CHAR` / edit-key route** (`FUN_004b29be` keyboard arm).  The
+   host WndProc feeds `WM_CHAR` to `text_input_filtered_keypress`
+   (`FUN_00401a20` — the allowed-char filter) and routes VK_BACK / DELETE /
+   LEFT / RIGHT / HOME / END / INSERT to the matching cursor/edit leaves
+   (`FUN_00401c70` / `_c93` / `_cbc` / `_cda` / `_cfc` / `_d11` / `_ca3`),
+   exactly the retail VK→FUN map.  Inserts gate internally on the editor's
+   `enabled` flag, so off-page keystrokes are dropped.
+
+3. **Proper editor init.**  The page-4 editor is seeded the way retail's
+   page-2→4 transition does it (`FUN_00432cc8`:
+   `FUN_00402009(&DAT_0053f1e0, 0x10, 0xc0, 0)`) — max 16 chars, soft
+   pixel cap 0xc0, mode 0 (punctuation allowed, no case-fold).  The prior
+   seed left `max_length = 0`, which would have clamped every insert off;
+   `--title-live --title-page 4` now seeds + binds the editor on arrival.
+
+The name field (`DAT_0053f1e0`) became a renderer-owned mutable buffer so
+the per-frame copy-out has a destination; `set_choose_title_name` copies a
+seed in, the page-4 refresh (`FUN_0041f321`) repaints it shadowed each tick,
+and the caret already tracked `editor->cursor`, so it follows the typing.
+
+The deferred page-4 arm leaves are unchanged (the `FUN_00404a46` RNG
+prologue, the `FUN_004bbe51` MP join-timer); the `WM_KEYDOWN` Enter commit
+(`FUN_00401c5b` + `FUN_0043600c`) and the roster name-commit
+(`FUN_0049bae9`) stay deferred — Enter doesn't navigate off page 4 yet.
+
+Coverage holds at **347 touched** — this is a pure *wiring* chip: every
+function it uses (the `text_input` cluster, `FUN_004ba9c8`, the WndProc
+`FUN_004b29be`) was already ported and counted; the work was connecting them
+into a live data path, not porting new leaves.  3 new host tests (arm
+enables editor + copies buffer to name; typed char reaches the name box;
+editor disabled off-page) → **1245 green**; both drop-in builds clean.
+
+**Awaiting human confirmation** — `--title-live --title-page 4`: type into
+the name box and confirm the letters appear / backspace deletes / the caret
+follows.
+
+### Next
+
+- **Page-4 Enter commit** — `WM_KEYDOWN` VK_RETURN (`FUN_00401c5b` arm-timer
+  + `FUN_0043600c`) and the roster name-commit `FUN_0049bae9(999, …)`; today
+  Enter is inert on page 4.
+- **Page-3 save-name field** — the same editor drives the load/save filename
+  box (`FUN_004ba9c8` page-3 arm copies to `DAT_004ea130`); wiring it is the
+  next text-field reuse of this route.
+- **Start / game-start** (`FUN_004329ec` → `FUN_00497ced`) remains the deep
+  play-flow milestone behind page 7's Start and page 4's Play-Now Continue.
+
 ## 2026-05-30 — PAGE 4 INPUT: the choose-title screen goes live (`FUN_004ba9c8` page-4 arm)
 
 The page-4 screen ("Choose your title and your shield") rendered bit-identical

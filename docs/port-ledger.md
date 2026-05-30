@@ -43,24 +43,24 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40187a | FUN_0040187a | 93 | localization.c, localization.h |
 | 0x4018d7 | FUN_004018d7 | 173 | localization.c, localization.h |
 | 0x401984 | FUN_00401984 | 156 | text_input.c, text_input.h |
-| 0x401a20 | FUN_00401a20 | 543 | text_input.h |
+| 0x401a20 | FUN_00401a20 | 543 | main.c, text_input.h |
 | 0x401c3f | FUN_00401c3f | 28 | text_input.h |
-| 0x401c70 | FUN_00401c70 | 35 | text_input.h |
-| 0x401c93 | FUN_00401c93 | 16 | text_input.h |
-| 0x401ca3 | FUN_00401ca3 | 25 | text_input.h |
-| 0x401cbc | FUN_00401cbc | 30 | text_input.h |
-| 0x401cda | FUN_00401cda | 34 | text_input.h |
-| 0x401cfc | FUN_00401cfc | 21 | text_input.h |
-| 0x401d11 | FUN_00401d11 | 21 | text_input.h |
+| 0x401c70 | FUN_00401c70 | 35 | main.c, text_input.h |
+| 0x401c93 | FUN_00401c93 | 16 | main.c, text_input.h |
+| 0x401ca3 | FUN_00401ca3 | 25 | main.c, text_input.h |
+| 0x401cbc | FUN_00401cbc | 30 | main.c, text_input.h |
+| 0x401cda | FUN_00401cda | 34 | main.c, text_input.h |
+| 0x401cfc | FUN_00401cfc | 21 | main.c, text_input.h |
+| 0x401d11 | FUN_00401d11 | 21 | main.c, text_input.h |
 | 0x401d26 | FUN_00401d26 | 162 | text_input.h |
-| 0x401dc8 | FUN_00401dc8 | 64 | text_input.h |
+| 0x401dc8 | FUN_00401dc8 | 64 | main.c, text_input.h |
 | 0x401e49 | FUN_00401e49 | 135 | text_input.h |
 | 0x401ed0 | FUN_00401ed0 | 121 | text_input.h |
-| 0x401f49 | FUN_00401f49 | 70 | engine_menu_input.c, text_input.h |
+| 0x401f49 | FUN_00401f49 | 70 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
 | 0x401f8f | FUN_00401f8f | 122 | font_metrics.c, font_metrics.h, text_input.c (+1) |
-| 0x402009 | FUN_00402009 | 165 | text_input.h |
+| 0x402009 | FUN_00402009 | 165 | main.c, text_input.h |
 | 0x4020ae | FUN_004020ae | 94 | save.h, text_input.h |
-| 0x40210c | FUN_0040210c | 90 | engine_menu_input.c, text_input.h |
+| 0x40210c | FUN_0040210c | 90 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
 | 0x4022bd | FUN_004022bd | 394 | gfx_text_label.c, gfx_text_label.h |
 | 0x402447 | FUN_00402447 | 400 | gfx_text_label.c, gfx_text_label.h |
 | 0x4025d7 | FUN_004025d7 | 96 | gfx_text.c, gfx_text.h |
@@ -172,7 +172,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42ec91 | FUN_0042ec91 | 1207 | gfx.c, gfx.h, gfx_paint.h |
 | 0x42f1df | FUN_0042f1df | 295 | gfx.c, main.c |
 | 0x432b05 | FUN_00432b05 | 451 | engine_menu_input.c, engine_menu_input.h |
-| 0x432cc8 | FUN_00432cc8 | 526 | engine_menu_input.c |
+| 0x432cc8 | FUN_00432cc8 | 526 | engine_menu_input.c, main.c |
 | 0x432ee6 | FUN_00432ee6 | 197 | engine_menu_input.c |
 | 0x432fab | FUN_00432fab | 191 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x433155 | FUN_00433155 | 569 | engine_menu_input.c |
@@ -296,7 +296,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b5333 | FUN_004b5333 | 2997 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+5) |
 | 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_button.c, engine_button.h (+3) |
-| 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_menu_input.c, engine_menu_input.h (+1) |
+| 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_menu_input.c, engine_menu_input.h (+3) |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c |
 | 0x4bb978 | FUN_004bb978 | 614 | engine.c, engine.h, engine_rate.c |
 | 0x4bbc80 | FUN_004bbc80 | 465 | engine.c, engine.h, engine_phase.c |

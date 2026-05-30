@@ -4344,6 +4344,62 @@ then on — retail does **not** pre-select the current value.
 
 ---
 
+## 123. The text editor's enable flag is reset to 0 every frame, so the WM_CHAR route is gated by the *render* arm, not the keyboard
+
+The one global title text editor (`DAT_005cd550` buffer + state scalars) is
+fed by `WM_CHAR`/`WM_KEYDOWN` in the WndProc (`FUN_004b29be`), but every
+insert leaf (`FUN_00401d26`) first checks `DAT_005aeb78 != 0`.  That enable
+flag is **not** owned by the keyboard path — it's owned by the per-frame UI
+input dispatcher `FUN_004ba9c8`, which sets `DAT_005aeb78 = 0` at its very
+top (line 9, gated on the input-suppress timer `DAT_0057a0cc < 1`) and then
+each page arm that has a live text field raises it back to 1 (page 4 →
+name box, page 3/8/0xb → save-name, page 5/6 → MP name).  Pages with no
+field leave it 0.
+
+So a keystroke that arrives while you're on, say, page 7 is filtered and
+then **dropped** — `FUN_00401a20` runs, but the insert no-ops because the
+last dispatch frame cleared the gate and page 7 never re-raised it.  The
+editor only accepts input on the exact frame-after-frame a text-field page
+is on screen.  This is why the editor can be a single global shared across
+every screen: it's mode-gated by whichever render arm is running, not by
+focus tracking.
+
+Corollary for the drop-in: the gate must be reset at the *top of the menu
+input dispatch* (before the page switch) and re-raised in the page arm —
+not in the WndProc.  Putting the reset in the keyboard handler would mean a
+key with no intervening frame keeps the stale enable.
+
+> 📍 `src/engine_menu_input.c` (`engine_menu_title_input` head reset +
+> page-4 arm tail), `src/engine_title_render.c`
+> (`engine_title_render_title_editor_disable` /
+> `engine_title_render_choose_title_name_tail`), `src/main.c` (WM_CHAR /
+> WM_KEYDOWN route), Ghidra `FUN_004ba9c8` line 9 + page arms,
+> `FUN_00401d26`, `FUN_004b29be`.
+
+---
+
+## 124. The page-4 name editor is capped at 16 chars but copied out at 31 — the cap lives in the *init*, not the field
+
+`FUN_00432cc8` (page-2 → page-4) inits the editor with
+`FUN_00402009(&DAT_0053f1e0, 0x10, 0xc0, 0)` — `max_length = 0x10` (16).
+But the per-frame copy-out that streams the editor into the visible name
+field is `FUN_0040210c(&DAT_0053f1e0, 0x1f)` — **31** chars.  The 31 is just
+the destination's safety bound; the editor never grows past 16 because
+`text_input_clamp_cursor` raises `clamp_state = 2` (which makes
+`FUN_00401d26` refuse the insert) as soon as `cursor >= max_length`.
+
+The trap for a re-implementation: if you seed the editor struct field-by-
+field and forget `max_length`, it defaults to 0, and `cursor (0) >=
+max_length (0)` clamps **every** insert off — the box looks dead even though
+the WM_CHAR route is wired correctly.  The cap is carried by the init call,
+not by any property of the name field itself.
+
+> 📍 `src/main.c` (`seed_page4_state` → `text_input_init(.., 0x10, 0xc0, 0)`),
+> `src/text_input.c` (`text_input_clamp_cursor` / `_insert_char`), Ghidra
+> `FUN_00432cc8` / `FUN_00402009` / `FUN_0040210c`.
+
+---
+
 <!--
 Template for new entries:
 

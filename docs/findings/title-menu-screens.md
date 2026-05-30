@@ -472,14 +472,14 @@ short MP layout, then a hover pass (`FUN_0040e5e7`) always over **7** →
   (Custom game) → page 7**, the live path.  The Continue tail `FUN_004330c6`
   (shield colour) + `FUN_0043eda0(3,0)` sound are deferred.
 
-Deferred from the arm itself, none with a page-4 render consumer in the
-drop-in: the prologue RNG advance `FUN_00404a46` (`engine_rng_step` — only
-perturbs global RNG the title screen never reads); the name-editor tail
-(`DAT_005aeb78 = 1; FUN_00401f49; FUN_0040210c(&DAT_0053f1e0, 0x1f)`), which
-needs the global title text editor + the `WM_CHAR` keystroke route wired to
-the menu (the title text-edit subsystem); and the MP Continue-enable timer
-`FUN_004bbe51` (multiplayer-only).  The name commit `FUN_0049bae9(999, …)` in
-the action prologue is deferred with the roster.
+The **name-editor tail** (`DAT_005aeb78 = 1; FUN_00401f49;
+FUN_0040210c(&DAT_0053f1e0, 0x1f)`) is now **live** — see "Page-4 name
+editing" below.  Still deferred from the arm, none with a page-4 render
+consumer in the drop-in: the prologue RNG advance `FUN_00404a46`
+(`engine_rng_step` — only perturbs global RNG the title screen never reads);
+and the MP Continue-enable timer `FUN_004bbe51` (multiplayer-only).  The name
+commit `FUN_0049bae9(999, …)` in the action prologue is deferred with the
+roster.
 
 Port: `menu_action_p4_shield` / `menu_action_p4_button` + the page-4 arm in
 `src/engine_menu_input.c`; `engine_title_render_choose_title_assign_shield` /
@@ -488,6 +488,46 @@ Port: `menu_action_p4_shield` / `menu_action_p4_button` + the page-4 arm in
 button gate).  `--title-nav` steps 10/11 drive the real arm: from page 4
 (reached via page-2 "Custom game") click shield 3 (the flashing shield jumps
 slot 1 → slot 3), then click Continue → the page-7 setup screen.
+
+### Page-4 name editing (text-edit subsystem → live menu)
+
+> 2026-05-30. The name box is typeable live: the global title text editor
+> (the `text_input` cluster, `FUN_00401984` family) is wired into the menu
+> input arm + the host `WM_CHAR` route.
+
+Retail's single global editor is `DAT_005cd550` (2000-byte buffer) with
+state scalars (`DAT_005bb4a8` cursor, `DAT_0058fe94` length, `DAT_005c9280`
+insert-mode, `DAT_005aeb78` enable).  Each screen with a text field copies
+the editor out to its own field every frame and feeds keystrokes in:
+
+- **Init** — `FUN_00432cc8` (page-2 → page-4 transition) calls
+  `FUN_00402009(&DAT_0053f1e0, 0x10, 0xc0, 0)`: seed the editor from the
+  name field, **max 0x10 chars**, soft pixel cap 0xc0, mode 0 (punctuation
+  allowed, no case-fold — `init_mode_param`).  *The drop-in must seed
+  `max_length`; a zero cap clamps every insert off (`text_input_clamp_cursor`
+  sets `clamp_state = 2` when `cursor >= max_length`).*
+- **Per-frame tail** — `FUN_004ba9c8` page-4 arm: `DAT_005aeb78 = 1`
+  (enable), `FUN_00401f49` (recompute length), then (gated `DAT_0053e910 ==
+  0 && DAT_0055cd78 == 0`, both 0 in the SP custom flow)
+  `FUN_0040210c(&DAT_0053f1e0, 0x1f)` copies the editor buffer → name field.
+  The dispatcher head resets `DAT_005aeb78 = 0` (line 9) so the gate is
+  per-frame; only editable pages re-raise it.
+- **Keystroke route** — `FUN_004b29be` (WndProc): `WM_CHAR` (0x102) →
+  `FUN_00401a20` (filter + insert), `WM_KEYDOWN` (0x100) → VK_BACK
+  `FUN_00401c70` / VK_DELETE `FUN_00401c93` / VK_LEFT `FUN_00401cbc` /
+  VK_RIGHT `FUN_00401cda` / VK_HOME `FUN_00401cfc` / VK_END `FUN_00401d11` /
+  VK_INSERT `FUN_00401ca3`.  (VK_RETURN `FUN_00401c5b`+`FUN_0043600c` commit
+  is deferred — Enter is inert on page 4 today.)
+
+Port: the name-tail + the top-of-dispatch reset
+(`engine_title_render_choose_title_name_tail` /
+`engine_title_render_title_editor_disable`) called from
+`engine_menu_title_input`'s page-4 arm; the name field is a renderer-owned
+mutable buffer (`set_choose_title_name` copies a seed in,
+`engine_title_render_choose_title_name` reads it back); the host
+`WM_CHAR` / `WM_KEYDOWN` route in `src/main.c` over `text_input_*`.
+Host-tested (arm enables + copies; typed char reaches the name box; editor
+disabled off-page).  Driveable: `--title-live --title-page 4`.
 
 ## Input side — hotspot hit-test + page navigation (`engine_menu_input`)
 

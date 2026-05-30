@@ -170,12 +170,17 @@ static int g_p4_selected_shield;             /* DAT_0057c8cc */
 static int g_p4_shield_flash;                /* DAT_0057d354 */
 static int g_p4_flash_timer;                 /* DAT_00568984 */
 
-/* The name/title text rendered in the box (DAT_0053f1e0). */
-static const uint8_t *g_p4_name;
+/* The name/title text rendered in the box (DAT_0053f1e0).  Owned here
+ * as a mutable buffer so the page-4 input arm's per-frame copy-out
+ * (FUN_0040210c, &DAT_0053f1e0, 0x1f) can stream the live editor text
+ * into it; set_choose_title_name copies a seed in.  32 bytes covers
+ * the 0x1f-char copy-out plus its terminator. */
+static uint8_t g_p4_name_buf[32];
 
 /* The live editor (DAT_005cd550 buffer + cursor + insert mode), read
- * by the caret.  NULL → the caret is skipped (textbox still draws). */
-static const text_input_state_t *g_p4_editor;
+ * by the caret and driven by the WM_CHAR route.  NULL → the caret is
+ * skipped (textbox still draws) and the name-tail is a no-op. */
+static text_input_state_t *g_p4_editor;
 
 /* Font-metrics scratch for the caret's cursor-char width measure. */
 static font_metrics_state_t g_p4_fm;
@@ -282,12 +287,54 @@ void engine_title_render_set_choose_title_shields(const unsigned char slots[6],
 
 void engine_title_render_set_choose_title_name(const uint8_t *name)
 {
-    g_p4_name = name;
+    size_t i = 0;
+    if (name) {
+        for (; name[i] && i < sizeof g_p4_name_buf - 1; i++)
+            g_p4_name_buf[i] = name[i];
+    }
+    g_p4_name_buf[i] = 0;
 }
 
-void engine_title_render_set_choose_title_editor(const text_input_state_t *editor)
+const uint8_t *engine_title_render_choose_title_name(void)
+{
+    return g_p4_name_buf;
+}
+
+void engine_title_render_set_choose_title_editor(text_input_state_t *editor)
 {
     g_p4_editor = editor;
+}
+
+text_input_state_t *engine_title_render_choose_title_editor(void)
+{
+    return g_p4_editor;
+}
+
+/* Per-frame editor tail of FUN_004ba9c8's page-4 arm:
+ *   DAT_005aeb78 = 1;                       // enable the editor
+ *   FUN_00401f49();                         // recompute editor length
+ *   FUN_0040210c(&DAT_0053f1e0, 0x1f);      // copy editor text → name field
+ * Streams whatever the WM_CHAR route typed into the editor out to the
+ * rendered name box.  The retail gate (DAT_0053e910 == 0 &&
+ * DAT_0055cd78 == 0) selects an MP sub-state we don't model — both are
+ * 0 in the single-player Custom-game flow, so the copy always runs. */
+void engine_title_render_choose_title_name_tail(void)
+{
+    if (!g_p4_editor)
+        return;
+    g_p4_editor->enabled = 1;
+    text_input_recompute_length(g_p4_editor);
+    text_input_copy_out(g_p4_editor, (char *)g_p4_name_buf, 0x1f);
+}
+
+/* Top-of-dispatch reset — FUN_004ba9c8 line 9 `DAT_005aeb78 = 0` (run
+ * each frame when input isn't suppressed).  Each editable page arm
+ * sets it back to 1; pages without a text field leave it 0, so the
+ * WM_CHAR route's insert is gated off everywhere but the live field. */
+void engine_title_render_title_editor_disable(void)
+{
+    if (g_p4_editor)
+        g_p4_editor->enabled = 0;
 }
 
 /* Port of FUN_00432fab — assign a shield slot to the current player.
@@ -601,10 +648,8 @@ static void engine_title_render_choose_title_name_box(void)
     gfx_sprite_render_opaque_from_blob(g_panel_asset, 0xcc, 0xd0, 0x48);
 
     /* Name text — menu font, color 0x3f, at (0xd6, 0x50). */
-    if (g_p4_name) {
-        gfx_text_render_line(g_p4_name, 0xd6, 0x50, g_menu_font,
-                             g_glyph_table, 0x3f);
-    }
+    gfx_text_render_line(g_p4_name_buf, 0xd6, 0x50, g_menu_font,
+                         g_glyph_table, 0x3f);
 
     /* Caret anchor: if the render didn't latch a first-pos, use the
      * line's end X (DAT_005cd404); then shift to the box origin and

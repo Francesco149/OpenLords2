@@ -272,12 +272,34 @@ void engine_title_render_set_choose_title_shields(const unsigned char slots[6],
                                                   int flash,
                                                   int flash_timer);
 
-/* DAT_0053f1e0 — the name/title text rendered in the box. */
+/* DAT_0053f1e0 — the name/title text rendered in the box.  Copies the
+ * seed into an owned mutable buffer (the page-4 input arm streams the
+ * live editor text into it each frame). */
 void engine_title_render_set_choose_title_name(const uint8_t *name);
 
+/* The current name-box text (owned buffer); used by tests and the
+ * input arm's copy-out destination. */
+const uint8_t *engine_title_render_choose_title_name(void);
+
 /* DAT_005cd550 editor (buffer + cursor + insert mode) read by the
- * caret; NULL → caret skipped (the textbox still renders). */
-void engine_title_render_set_choose_title_editor(const text_input_state_t *editor);
+ * caret and driven by the WM_CHAR keystroke route; NULL → caret
+ * skipped (the textbox still renders) and the name-tail is a no-op. */
+void engine_title_render_set_choose_title_editor(text_input_state_t *editor);
+
+/* The bound page-4 editor (NULL if none); the host WndProc routes
+ * WM_CHAR / edit-key events here. */
+text_input_state_t *engine_title_render_choose_title_editor(void);
+
+/* Per-frame tail of FUN_004ba9c8's page-4 arm: enable the editor
+ * (DAT_005aeb78 = 1), recompute its length (FUN_00401f49), and copy
+ * its text into the name box (FUN_0040210c, 0x1f chars).  Called from
+ * engine_menu_title_input's page-4 arm. */
+void engine_title_render_choose_title_name_tail(void);
+
+/* Top-of-dispatch editor reset (FUN_004ba9c8 `DAT_005aeb78 = 0`):
+ * disables the bound editor so the WM_CHAR route is gated off on every
+ * screen but the live text field, which re-enables it via the tail. */
+void engine_title_render_title_editor_disable(void);
 
 /* Assign shield `slot` (1..5) to the current player — port of FUN_00432fab's
  * render-visible slot-ownership move (the strategic colour write is deferred

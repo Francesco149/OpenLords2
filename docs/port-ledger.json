@@ -265,6 +265,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/main.c",
     "src/text_input.h"
    ]
   },
@@ -293,6 +294,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/main.c",
     "src/text_input.h"
    ]
   },
@@ -303,6 +305,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/main.c",
     "src/text_input.h"
    ]
   },
@@ -313,6 +316,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/main.c",
     "src/text_input.h"
    ]
   },
@@ -323,6 +327,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/main.c",
     "src/text_input.h"
    ]
   },
@@ -333,6 +338,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/main.c",
     "src/text_input.h"
    ]
   },
@@ -343,6 +349,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/main.c",
     "src/text_input.h"
    ]
   },
@@ -353,6 +360,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/main.c",
     "src/text_input.h"
    ]
   },
@@ -373,6 +381,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/main.c",
     "src/text_input.h"
    ]
   },
@@ -412,6 +421,8 @@
    "status": "tested",
    "src": [
     "src/engine_menu_input.c",
+    "src/engine_title_render.c",
+    "src/engine_title_render.h",
     "src/text_input.h"
    ]
   },
@@ -435,6 +446,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/main.c",
     "src/text_input.h"
    ]
   },
@@ -457,6 +469,8 @@
    "status": "tested",
    "src": [
     "src/engine_menu_input.c",
+    "src/engine_title_render.c",
+    "src/engine_title_render.h",
     "src/text_input.h"
    ]
   },
@@ -4607,7 +4621,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_menu_input.c"
+    "src/engine_menu_input.c",
+    "src/main.c"
    ]
   },
   {
@@ -18100,6 +18115,8 @@
     "src/engine.c",
     "src/engine_menu_input.c",
     "src/engine_menu_input.h",
+    "src/engine_title_render.c",
+    "src/engine_title_render.h",
     "src/main.c"
    ]
   },

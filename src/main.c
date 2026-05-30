@@ -65,6 +65,7 @@
 #include "engine_dirty_rect.h"
 #include "engine_title_render.h"
 #include "engine_menu_input.h"
+#include "text_input.h"
 #include "gfx.h"
 #include "io.h"
 #include "gfx_dispatch.h"
@@ -643,11 +644,38 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                              SWP_NOZORDER | SWP_NOACTIVATE);
             }
             break;
+        /* --- Text-editor edit keys (retail WM_KEYDOWN arm of
+         * FUN_004b29be).  Route to the bound title editor — the only
+         * editable field wired so far is the page-4 name box.  Backspace
+         * and delete gate internally on the editor's `enabled` flag
+         * (set per-frame only on page 4); the cursor moves and the
+         * insert-mode toggle mutate the bound editor unconditionally, as
+         * retail does (harmless off-page — the editor isn't rendered). */
+        case VK_BACK:    /* 0x08 → FUN_00401c70 */
+        case VK_DELETE:  /* 0x2e → FUN_00401c93 → FUN_00401dc8 */
+        case VK_LEFT:    /* 0x25 → FUN_00401cbc */
+        case VK_RIGHT:   /* 0x27 → FUN_00401cda */
+        case VK_HOME:    /* 0x24 → FUN_00401cfc */
+        case VK_END:     /* 0x23 → FUN_00401d11 */
+        case VK_INSERT: {/* 0x2d → FUN_00401ca3 */
+            text_input_state_t *ed = engine_title_render_choose_title_editor();
+            if (ed) {
+                switch (wp) {
+                case VK_BACK:   text_input_backspace(ed);          break;
+                case VK_DELETE: text_input_delete_char(ed);        break;
+                case VK_LEFT:   text_input_cursor_left(ed);        break;
+                case VK_RIGHT:  text_input_cursor_right(ed);       break;
+                case VK_HOME:   text_input_cursor_home(ed);        break;
+                case VK_END:    text_input_cursor_end(ed);         break;
+                case VK_INSERT: text_input_toggle_insert_mode(ed); break;
+                }
+            }
+            break;
+        }
         default:
-            /* TODO(input): VK_BACK/RETURN/HOME/END/arrows/INS/DEL/
-             * digits/F2..F12 all map to game-state functions in
-             * retail.  See docs/findings/wndproc.md for the full
-             * VK→FUN_xxxxx mapping. */
+            /* TODO(input): VK_RETURN (commit), digits/F2..F12 and the
+             * Alt-1..5 chords map to game-state functions in retail.
+             * See docs/findings/wndproc.md for the full VK→FUN_xxxxx map. */
             break;
         }
         return 0;
@@ -657,12 +685,25 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (wp == VK_CONTROL) g_ctrl_down = 0;
         return 0;
 
-    /* --- WM_CHAR (0x102), WM_SYSCHAR (0x105) ----------------------
-     * Retail dispatches to game-state code.  Stubbed. */
-    case WM_CHAR:
+    /* --- WM_CHAR (0x102) -------------------------------------------
+     * Retail's WM_CHAR arm (FUN_004b29be case 0x102) feeds the typed
+     * character to FUN_00401a20 (text_input_filtered_keypress), which
+     * filters it against the field's allowed set and inserts it into
+     * the global editor.  The insert is gated internally on the
+     * editor's `enabled` flag — set per-frame only on pages with a live
+     * text field (page 4 today), so keystrokes elsewhere are dropped. */
+    case WM_CHAR: {
+        text_input_state_t *ed = engine_title_render_choose_title_editor();
+        if (ed) {
+            text_input_filtered_keypress(ed, (unsigned char)wp);
+        }
+        return 0;
+    }
+
+    /* --- WM_SYSCHAR (0x105) — Alt-key chords, not text. ----------- */
     case WM_SYSCHAR:
-        /* TODO(input): port the per-screen H/V hotkeys and the
-         * Alt-1..5 / Alt-X mappings from FUN_004b29be. */
+        /* TODO(input): port the Alt-1..5 / Alt-X mappings from
+         * FUN_004b29be (WM_SYSKEYDOWN/SYSCHAR arm). */
         return 0;
 
     /* --- Mouse cache ------------------------------------------------ */
@@ -932,27 +973,30 @@ static void seed_page7_state(void)
 /* Seed the page-4 ("Choose your title and your shield") render state for a
  * live-input demo: the tall layout (gates 0/0 → Back/Continue shown),
  * Continue enabled, player 1 owning shield slot 1 (flashing), the default
- * name, and an overwrite editor.  Mirrors the inline seed the static step-4
- * capture uses. */
+ * name, and the live text editor.  The editor is initialised exactly as
+ * retail's page-2→4 transition does it (FUN_00432cc8:
+ * FUN_00402009(&DAT_0053f1e0, 0x10, 0xc0, 0)): max 0x10 chars, soft pixel
+ * cap 0xc0, mode 0 (punctuation allowed, no case folding).  The host
+ * WndProc routes WM_CHAR / edit keys into this editor and the page-4 input
+ * arm streams it into the name box each frame. */
 static void seed_page4_state(void)
 {
     static const uint8_t k_p4_name[] = "aaaaaa    ";   /* DAT_0053f1e0 */
     static const unsigned char k_p4_slots[6] = { 0, 1, 0, 0, 0, 0 };
     static text_input_state_t k_p4_editor;             /* DAT_005cd550 */
-    {
-        int i = 0;
-        for (; k_p4_name[i] && i < (int)sizeof k_p4_editor.buf - 1; i++)
-            k_p4_editor.buf[i] = k_p4_name[i];
-        k_p4_editor.buf[i] = 0;
-    }
-    k_p4_editor.cursor = 0;
-    k_p4_editor.insert_mode = 0;
+
+    const uint8_t *name = g_title_name
+        ? (const uint8_t *)g_title_name : k_p4_name;
+    text_input_init(&k_p4_editor, (const char *)name,
+                    /*max_length=*/0x10, /*max_pixel_width=*/0xc0,
+                    /*initial_mode=*/0);
+    k_p4_editor.insert_mode = 0;   /* DAT_005c9280 — overwrite (separate global) */
 
     engine_title_render_set_choose_title_gates(0, 0);
     engine_title_render_set_choose_title_continue_disabled(0);
     engine_title_render_set_choose_title_shields(k_p4_slots, /*selected=*/1,
                                                  /*flash=*/1, /*flash_timer=*/0);
-    engine_title_render_set_choose_title_name(k_p4_name);
+    engine_title_render_set_choose_title_name(name);
     engine_title_render_set_choose_title_editor(&k_p4_editor);
     engine_title_render_bind_caret_metrics_table(gfx_glyph_measure_map());
 }
@@ -1300,6 +1344,12 @@ static void bringup_title_live(void)
     engine_title_render_set_page(g_title_page_num);
     if (g_title_page_num == 7) {
         seed_page7_state();
+    } else if (g_title_page_num == 4) {
+        /* Page-4 choose-title screen: seed shields + name + the live
+         * editor so the name box is typeable on arrival (the boot→title
+         * transition that normally seeds this is unported). */
+        seed_page4_state();
+        gfx_caret_reset();
     }
     engine_set_current_screen(0x1f);               /* DAT_004eac50 */
     engine_set_demand_redraw(2);                   /* first frame = full scene */

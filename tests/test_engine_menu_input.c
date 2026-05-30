@@ -14,6 +14,7 @@
 #include "engine_title_render.h"
 #include "engine.h"                /* g_sim_mp_active (retail DAT_00553030) */
 #include "save_schema_globals.h"   /* s_slot_0053f640 / _0053f258 / _0055302c */
+#include "text_input.h"            /* page-4 name editor */
 
 #include <string.h>
 
@@ -44,6 +45,7 @@ static void mi_reset(void)
     engine_menu_input_reset_counters();
     engine_title_render_set_page(1);
     engine_title_render_set_selected_button(1);
+    engine_title_render_set_choose_title_editor(0);   /* unbind page-4 editor */
 }
 
 /* ── hover hit-test (FUN_0040e5e7) ──────────────────────────────── */
@@ -693,5 +695,80 @@ int test_menu_page4_hidden_buttons_skip_button_clicks(void)
     engine_menu_click_in_t s = press_at(0x140, 0xaf);        /* shield 3 */
     T_ASSERT_EQ_I(engine_menu_title_input(&s), 1);
     T_ASSERT_EQ_I(engine_title_render_choose_title_slot_owner(3), 1);
+    return 0;
+}
+
+/* ── page-4 name editor: the per-frame tail enables the editor and
+ *    streams its buffer into the rendered name box (the live link for
+ *    the WM_CHAR keystroke route) ── */
+
+/* Seed a page-4 editor the way retail's page-2→4 init does
+ * (FUN_00402009(&name, 0x10, 0xc0, 0)) and put us on page 4 with the
+ * Back/Continue layout. */
+static text_input_state_t g_test_p4_ed;
+static void bind_page4_editor(const char *seed)
+{
+    text_input_init(&g_test_p4_ed, seed, 0x10, 0xc0, 0);
+    g_test_p4_ed.insert_mode = 0;            /* overwrite */
+    engine_title_render_set_page(4);
+    engine_title_render_set_choose_title_gates(0, 0);
+    engine_title_render_set_choose_title_editor(&g_test_p4_ed);
+}
+
+int test_menu_page4_arm_enables_editor_and_copies_name(void)
+{
+    mi_reset();
+    bind_page4_editor("ab");
+
+    /* A hover frame (no click) runs the page-4 arm's editor tail:
+     * enable → recompute → copy editor buffer into the name box. */
+    engine_menu_click_in_t in = at(0, 0);       /* off every hotspot */
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 0);
+    T_ASSERT_EQ_I(g_test_p4_ed.enabled, 1);     /* DAT_005aeb78 = 1 */
+    T_ASSERT_EQ_I(g_test_p4_ed.length, 2);
+    T_ASSERT(strcmp((const char *)engine_title_render_choose_title_name(),
+                    "ab") == 0);
+    return 0;
+}
+
+int test_menu_page4_typed_char_reaches_name_box(void)
+{
+    mi_reset();
+    bind_page4_editor("ab");
+
+    /* Frame 1 enables the editor (the WM_CHAR insert gate). */
+    engine_menu_click_in_t in = at(0, 0);
+    (void)engine_menu_title_input(&in);
+
+    /* The WndProc route would call this on a keystroke; in overwrite
+     * mode at cursor 0 it replaces 'a' with 'Z' (mode 0 → no case fold). */
+    text_input_filtered_keypress(&g_test_p4_ed, 'Z');
+
+    /* Frame 2's tail streams the edited buffer into the name box. */
+    (void)engine_menu_title_input(&in);
+    T_ASSERT(strcmp((const char *)engine_title_render_choose_title_name(),
+                    "Zb") == 0);
+    return 0;
+}
+
+int test_menu_page4_editor_disabled_off_page(void)
+{
+    mi_reset();
+    bind_page4_editor("ab");
+
+    /* Run the page-4 arm once to enable, then navigate to a non-editable
+     * page: the top-of-dispatch reset clears the enable gate and the
+     * page-1 arm never sets it back, so WM_CHAR inserts are dropped. */
+    engine_menu_click_in_t in = at(0, 0);
+    (void)engine_menu_title_input(&in);
+    T_ASSERT_EQ_I(g_test_p4_ed.enabled, 1);
+
+    engine_title_render_set_page(1);
+    (void)engine_menu_title_input(&in);
+    T_ASSERT_EQ_I(g_test_p4_ed.enabled, 0);     /* DAT_005aeb78 reset, not re-set */
+
+    /* A keystroke now no-ops (insert_char gates on enabled). */
+    text_input_filtered_keypress(&g_test_p4_ed, 'Z');
+    T_ASSERT(strcmp((const char *)g_test_p4_ed.buf, "ab") == 0);
     return 0;
 }
