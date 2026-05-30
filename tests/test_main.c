@@ -1372,6 +1372,17 @@ struct test_case {
     X(game_init_seat_shuffle_value_ladder_replay) \
     X(game_init_seat_shuffle_draw_count) \
     X(game_init_seat_shuffle_deterministic) \
+    \
+    X(engine_ranking_leaders_and_ties) \
+    X(engine_ranking_active_count_excludes_local) \
+    X(engine_ranking_score_weights) \
+    X(engine_ranking_score_band_dead_arms) \
+    X(engine_ranking_sort_ranks_winner) \
+    X(engine_ranking_inactive_cleared) \
+    X(engine_ranking_victory_event_ai) \
+    X(engine_ranking_victory_rot_wrap) \
+    X(engine_ranking_victory_event_human) \
+    X(engine_ranking_no_event_multiplayer) \
     /* end */
 
 /* Emit extern decls. */

@@ -7,6 +7,58 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — GAME-START chip 4b: heavy seeder FUN_0049aa0e (player standings recompute)
+
+The second heavy seeder lands in its **own module**: `FUN_0049aa0e` →
+`engine_ranking_recompute` (`src/engine_ranking.c` + `.h`).  Triage of
+the five remaining step-4 heavy seeders found this one is the clean next
+chip — its sole callee (`engine_event_queue_post`, FUN_00472bc5) is
+already ported, so it is effectively a leaf; the other four still carry
+5–28 unported callees.  It also turned out to have **5 callers** (the
+new-game init 0x497ced plus the turn/event paths 0x49b42b / 0x49cebe /
+0x49a010 / 0x435211), so it is *not* init-only and gets its own module
+rather than living in `game_init.c` (same call as `engine_strat_cost`).
+
+It recomputes the whole-game **standings** from the 6 per-player
+strategic records (`g_player_strategic_352`, stride 0x160) in one
+six-phase pass: clear 19 result scalars → per-metric max + holder (8
+metrics) + active count → per-player composite score → 5-entry
+`{slot, score}` board + descending bubble sort → 1-based ranks →
+winner/last detection → victory-event post when one player survives.
+
+**Homing was a non-event** — all 20 result scalars are existing
+save-schema slots (entries 124, 151–168), the leaderboard board is
+`s_slot_00565410` (entry 150, 6×8 with a trailing zero sentinel), and
+the per-player table was already homed.  Nothing new to home.
+
+**The score band is dead past its first arm** (r2-confirmed at
+0x49aed1): the `< 2001` guard makes the decompile's `+100` / `+200`
+bands unreachable, so only `>= 2001 → +50` ever fires.  Ported verbatim
+including the dead arms; a test pins all four band cases (2000→0,
+2001/8000/20000→50) so the dead arms can never silently come alive.
+
+**First wiring of the event-queue producer.**  `engine_event_queue_post`
+had no callers yet; phase G is the first.  The producer takes a
+`player_has_data[7]` filter + `local_player` explicitly, so the port
+rebuilds the filter from the table — slot 6 (which would overrun the
+6-slot array) stays 0 and is never read here, since the only targeted
+post uses `target ∈ 1..5`.  The event-queue state is threaded in as a
+pointer (the function's only side effect outside the save globals).
+
+r2-verified: the 11·32 = 0x160 record stride, the metric offsets, the
+score multipliers (×10/×2/×2/×50) and divisors (÷10/÷5), and the band.
+
+Coverage **359 → 360 touched** (FUN_0049aa0e).  +10 host tests (metric
+leaders + strict-`<` tie-break, local-excluded active count, score
+weights, the four band cases, sort/ranks/winner, inactive→rank-0, both
+victory-event arms + rot wrap, no-event multiplayer) → **1288 green**;
+both drop-in builds clean.
+
+Next heavy seeders all still gated on unported callees: FUN_0049bd99
+(3 KB, 9), FUN_004984dc (5), FUN_00451150 (7), FUN_00448440 (28).
+
+---
+
 ## 2026-05-30 — GAME-START chip 4a: heavy seeder FUN_00497e65 (new-game randomiser)
 
 The first **heavy seeder** (step 4 of the game-start plan) lands:

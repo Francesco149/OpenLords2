@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 325,
+  "tested": 326,
   "ported": 34,
-  "unported": 2088,
+  "unported": 2087,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 359,
+  "touched": 360,
   "pct_touched": 14.7,
   "pct_tested": 13.3,
   "bytes_total": 838629,
-  "bytes_touched": 126340,
-  "pct_bytes_touched": 15.1
+  "bytes_touched": 128537,
+  "pct_bytes_touched": 15.3
  },
  "orphan_refs": [
   "0x004148",
@@ -12224,7 +12224,8 @@
    "status": "tested",
    "src": [
     "src/engine_event_queue.c",
-    "src/engine_event_queue.h"
+    "src/engine_event_queue.h",
+    "src/engine_ranking.h"
    ]
   },
   {
@@ -14860,8 +14861,11 @@
    "name": "FUN_0049aa0e",
    "size": 2197,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ranking.c",
+    "src/engine_ranking.h"
+   ]
   },
   {
    "va": "0x49b2a3",

@@ -170,8 +170,12 @@ land.
    - ✅ **FUN_00497e65** → `engine_game_init_seat_shuffle`
      (`src/game_init.c`, landed 2026-05-30).  New-game randomiser — see
      below.
-   - remaining: FUN_0049bd99, FUN_0049aa0e, FUN_004984dc, FUN_00451150,
-     FUN_00448440.
+   - ✅ **FUN_0049aa0e** → `engine_ranking_recompute`
+     (`src/engine_ranking.c`, landed 2026-05-30).  Player standings /
+     scoring / victory recompute — its own module (5 callers, not
+     init-only).  See below.
+   - remaining: FUN_0049bd99 (3 KB, largest), FUN_004984dc, FUN_00451150,
+     FUN_00448440 (each still has 5–28 unported callees — not yet leaves).
 
 ### FUN_00497e65 — new-game randomiser (RNG seats + two 48-tables)
 
@@ -208,6 +212,44 @@ Homed in `game_init.c` (a 0x497ced callee).  Ported verbatim, r2-verified
 cap, the value ladder `eax·5+6`).  The RNG is threaded in/out via an
 `engine_rng_in_t *` so the live orchestrator (step 5) can continue the
 draw sequence from the prior seeders; tests pass a fixed seed.
+
+### FUN_0049aa0e — player standings / ranking recompute
+
+A 2197-B routine (5 callers: new-game 0x497ced, plus the turn/event
+paths 0x49b42b / 0x49cebe / 0x49a010 / 0x435211) that recomputes the
+whole-game standings from the 6 per-player strategic records
+(`g_player_strategic_352`, stride 0x160).  Because it is **not
+init-only**, it lives in its own module `engine_ranking.c` rather than
+`game_init.c`.  One pass, six phases:
+
+- **A** clears 19 leaderboard result scalars (save entries 124, 151–168).
+- **B** finds, for each of 8 strategic metrics, the max value + holding
+  slot, plus an active-player count that excludes the local player.
+- **C** writes each active player's composite score to record +0x50: a
+  weighted sum (`+0x60·10`, `+0x10÷10`, `+0x0c·2`, `+0x58·2`, `+0x54÷5`,
+  `+0x4c·50`) plus a band on the i32 metric +0x118.  **The band is dead
+  past the first arm** — the `< 2001` guard makes the `+100` / `+200`
+  arms unreachable, so only `>= 2001 → +50` ever fires.  r2-confirmed at
+  0x49aed1; ported verbatim including the dead arms.
+- **D** builds a 5-entry `{slot, score}` board (`s_slot_00565410`, entry
+  150, 6×8 with a trailing zero sentinel) and bubble-sorts it descending.
+- **E** stamps the 1-based finishing rank into record +0x2b; inactive
+  slots get rank 0 and drop out.
+- **F** records winner (first ranked, entry 151) and last (entry 152).
+- **G** when only one ranked player survives (winner == last), latches
+  the per-player victory flag (+0xed) and posts a victory / notification
+  event via the ported producer `engine_event_queue_post` (FUN_00472bc5)
+  — the AI arm (code 0xc3, payload from the rotating +0x159 counter and
+  the opponent-type +0x07) or the human/already-latched arm (code 0xe1,
+  targeted at the local player).  This is the function's only side
+  effect outside the save globals, so the event-queue state is threaded
+  in as a pointer; the `player_has_data[7]` filter is rebuilt from the
+  table (slot 6 — which would overrun the 6-slot array — stays 0, and is
+  never read here since `target ∈ 1..5`).
+
+At new-game with multiple players, winner != last, so phase G does not
+fire; it fires later when the field narrows to one survivor.
+
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
    callees are real; then `FUN_00499dc3` + `FUN_004329ec` spine + the
    `DAT_0052af94=3` flip.

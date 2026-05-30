@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **359** (14.7%) — tested 325, ported 34
-- code bytes touched: **15.1%** (126,340 / 838,629 B)
-- unported: **2088**
+- touched: **360** (14.7%) — tested 326, ported 34
+- code bytes touched: **15.3%** (128,537 / 838,629 B)
+- unported: **2087**
 - orphan refs (in src/, not in function table): 4
 
-## tested (325) — ported + host unit suite
+## tested (326) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -245,7 +245,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x472ad0 | FUN_00472ad0 | 16 | engine_event_queue.c, engine_event_queue.h |
 | 0x472ae0 | FUN_00472ae0 | 96 | engine_event_queue.c, engine_event_queue.h |
 | 0x472b40 | FUN_00472b40 | 133 | engine_event_queue.c, engine_event_queue.h |
-| 0x472bc5 | FUN_00472bc5 | 560 | engine_event_queue.c, engine_event_queue.h |
+| 0x472bc5 | FUN_00472bc5 | 560 | engine_event_queue.c, engine_event_queue.h, engine_ranking.h |
 | 0x472df5 | FUN_00472df5 | 81 | engine_event_queue.c, engine_event_queue.h |
 | 0x47ed34 | FUN_0047ed34 | 103 | engine.c, engine_camera.c, engine_camera.h |
 | 0x48ee46 | FUN_0048ee46 | 87 | engine_tile.c, engine_tile.h |
@@ -254,6 +254,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x497e65 | FUN_00497e65 | 1025 | game_init.c, game_init.h |
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h |
 | 0x49a453 | FUN_0049a453 | 302 | save.c, save.h |
+| 0x49aa0e | FUN_0049aa0e | 2197 | engine_ranking.c, engine_ranking.h |
 | 0x49b762 | FUN_0049b762 | 334 | engine.c, engine.h, engine_turn.c (+1) |
 | 0x49bae9 | FUN_0049bae9 | 180 | engine_menu_input.c, engine_roster.c, engine_roster.h |
 | 0x49bbe8 | FUN_0049bbe8 | 53 | engine_roster.c, engine_roster.h |
