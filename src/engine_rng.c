@@ -85,10 +85,11 @@ void engine_rng_step(const engine_rng_in_t *in, engine_rng_out_t *out)
  *
  * Retail call shape:  FUN_00404b2c(); v = DAT_005c9a84 & 7;
  * — i.e. the advance is invoked for its side effect on the 7-bit
- * mirror, which callers mask further.  Six call sites, all unported:
- * the new-game overworld-grid seeders 0x46dd34 / 0x46dbf5
- * (siblings inside the 0x4676e0 setup sequence) and the strategic
- * samplers at 0x47*.
+ * mirror, which callers mask further.  Six call sites: the new-game
+ * overworld-grid seeders 0x46dd34 (ported — see
+ * engine_territory_randomise_special_tiles) and 0x46dbf5 (its still-unported
+ * sibling, both inside the 0x4676e0 setup sequence), plus the strategic
+ * samplers at 0x47* (unported).
  *
  * Same engine quirk as the double LFSR: the feedback target is bit 30
  * (mask 0x40000000), not bit 31, so combined with the unsigned `>>1`
@@ -96,8 +97,10 @@ void engine_rng_step(const engine_rng_in_t *in, engine_rng_out_t *out)
  * is effectively 31-bit.  Preserved verbatim for byte-shape parity.
  *
  * Pure: input state explicit, new state + 7-bit mirror returned in
- * out.  The Win32 wrapper holding the state mirror + DAT_005c9a84
- * lands with the first ported consumer.
+ * out.  Consumers thread the state word through a pointer (see
+ * engine_territory_randomise_special_tiles, the first one); a stateful
+ * Win32 wrapper holding the live mirror lands only when a tick/sampler
+ * consumer needs the state without an orchestrator to thread it.
  *
  * Retail seed (FUN_004b2258 / InitInstance @ line 83637): 0x34518632.
  */

@@ -6,19 +6,24 @@
  * strategic-map overlay/primary passes bind — and on the 64×64×8
  * overworld cell-descriptor grid (retail `DAT_00522f90`), which it both
  * claims (the entity placer) and bulk-clears at new-game (the two cell
- * resets below).  Records are bound via engine_territory_bind_records,
- * the cell grid via engine_territory_bind_cells.  Pure C; the only
- * outward coupling is the optional dirty-rect state the cell reset marks.
+ * resets below).  It also randomises the separate terrain-index *render*
+ * tile grid (retail `DAT_0055cea0`, the array the map-render row helpers
+ * iterate) at new-game.  Records are bound via engine_territory_bind_records,
+ * the cell grid via engine_territory_bind_cells, the tile grid via
+ * engine_territory_bind_terrain_tiles.  Pure C; the only outward coupling
+ * is the optional dirty-rect state the cell reset marks.
  *
  *   FUN_004651b9 @ 0x4651b9 (91 B)  → engine_territory_clear_size_state
  *   FUN_0046c5b8 @ 0x46c5b8 (258 B) → engine_territory_clear_cell_field
  *   FUN_0046df51 @ 0x46df51 (132 B) → engine_territory_clear_cell_render_flags
  *   FUN_0046da4b @ 0x46da4b (293 B) → engine_territory_rebuild_cell_roster
+ *   FUN_0046dd34 @ 0x46dd34 (209 B) → engine_territory_randomise_special_tiles
  */
 
 #include <stddef.h>
 #include <string.h>
 
+#include "engine.h"            /* engine_rng_step_single, engine_rng_single_* */
 #include "engine_territory.h"
 #include "engine_dirty_rect.h"
 
@@ -57,6 +62,21 @@ static engine_dirty_rect_state_t *g_dirty_state;
 #define CELL_GRID_CELLS   0x1000   /* 64×64 = 4096 cells */
 #define CELL_STRIDE       8        /* bytes per cell descriptor */
 
+/* DAT_0055cea0 — the terrain-index render tile grid (the same array the
+ * map-render row helpers iterate, engine_map_render_bind_tile_array).
+ * 129 rows × 65 cols of i32, row stride 0x104 B (= 65 i32, contiguous),
+ * so the i32 index is row*65 + col.  Optional + NULL-safe.  Bound mutably
+ * here only for the new-game randomiser below; the render modules bind the
+ * same memory read-only. */
+static int32_t *g_terrain_tiles;
+#define TERRAIN_GRID_ROWS 0x81     /* 129 rows (retail outer bound) */
+#define TERRAIN_GRID_COLS 0x41     /* 65  cols (retail inner bound, = i32 stride) */
+
+/* Special-tile sentinel the randomiser re-rolls: retail's empty/special
+ * base 0xfff0000 (ENGINE_MAP_RENDER_CELL_EMPTY) + 6.  A matching cell is
+ * replaced with base+6 + (rng & 0xf) → one of 0xfff0006..0xfff0015. */
+#define TERRAIN_TILE_RANDOMISE_SENTINEL 0xfff0006u
+
 /* DAT_0052afe0 — the "current entity slot" register the placer leaves
  * pointing at the record it just allocated.  Transient (not a save
  * field); several callers (FUN_00427ed0 and the 0x4a0015 / 0x4a551b /
@@ -87,6 +107,11 @@ void engine_territory_bind_cell_roster(int32_t *roster)
 void engine_territory_bind_cell_score_table(int16_t *scores)
 {
     g_cell_score = scores;
+}
+
+void engine_territory_bind_terrain_tiles(int32_t *tiles)
+{
+    g_terrain_tiles = tiles;
 }
 
 /* Port of FUN_0046c5b8.  Zero byte `field` of every overworld cell
@@ -269,6 +294,58 @@ void engine_territory_rebuild_cell_roster(int reset_score_table)
             g_cells[off + 3] = 6;               /* DAT_00522f93                */
             g_cells[off + 1] = 0;               /* DAT_00522f91  flags         */
             g_cells[off + 2] &= 0xe3;           /* DAT_00522f92  clear bits 2-4*/
+        }
+    }
+}
+
+/* Advance the single-LFSR RNG (retail FUN_00404b2c), threading its state
+ * word through *rng and returning the 7-bit mirror (retail DAT_005c9a84).
+ * Mirrors game_init.c's rng_next_7b for the double LFSR. */
+static uint32_t rng_next_single_7bit(engine_rng_single_in_t *rng)
+{
+    engine_rng_single_out_t out = {0};
+    engine_rng_step_single(rng, &out);   /* FUN_00404b2c */
+    rng->state = out.new_state;          /* DAT_00591564 writeback */
+    return out.rng_7bit;                 /* DAT_005c9a84 */
+}
+
+/* Port of FUN_0046dd34 (209 B) — the new-game terrain-tile randomiser.
+ * Sweeps the bound terrain-index render grid (DAT_0055cea0, 129×65 i32) in
+ * row-major order and, for every cell holding exactly the special sentinel
+ * 0xfff0006, re-rolls it to 0xfff0006 + (rng & 0xf) using the single-LFSR
+ * RNG (engine_rng_step_single, threaded through *rng).
+ *
+ * Retail reaches the match through a two-step signed ladder
+ * (`value >= 0xfff0000` then `== 0xfff0006`) shared with the terrain
+ * classifier at 0x46de94/0x46dbf5; the outer arm is redundant given the
+ * exact-equality inner arm, so the operative test below is just the
+ * sentinel compare.
+ *
+ * Two write-only scratch globals are dropped (same choice the cell-field
+ * sweep makes for its scratch cursors — see engine_territory_clear_cell_field):
+ *  - DAT_0053e974, a per-cell progress counter reset at entry and bumped
+ *    once per visited cell (8385 total); never read here.
+ *  - DAT_00568200 = (mirror & 7), rewritten on every sentinel cell.  It is
+ *    a cross-function scratch register, but no consumer observes the residue
+ *    0x46dd34 leaves: its readers (the sibling seeder 0x46dbf5 and the
+ *    feature picker 0x46c2de, both unported) run earlier in the 0x4676e0
+ *    setup sequence and re-derive it before use, and no ported code reads it.
+ *
+ * The live 0x4676e0 orchestrator will own the single-LFSR state word
+ * (retail's DAT_00591564, seeded 0x34518632 at InitInstance) and thread it
+ * through here and the sibling seeders, exactly as game_init threads the
+ * double-LFSR state through the new-game seeders. */
+void engine_territory_randomise_special_tiles(engine_rng_single_in_t *rng)
+{
+    if (g_terrain_tiles == NULL || rng == NULL) return;
+
+    for (int row = 0; row < TERRAIN_GRID_ROWS; row++) {
+        for (int col = 0; col < TERRAIN_GRID_COLS; col++) {
+            int32_t *cell = &g_terrain_tiles[row * TERRAIN_GRID_COLS + col];
+            if ((uint32_t)*cell == TERRAIN_TILE_RANDOMISE_SENTINEL) {
+                uint32_t mirror = rng_next_single_7bit(rng);
+                *cell = (int32_t)((mirror & 0xfu) + TERRAIN_TILE_RANDOMISE_SENTINEL);
+            }
         }
     }
 }

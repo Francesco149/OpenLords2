@@ -720,12 +720,14 @@ void engine_rng_step(const engine_rng_in_t *in, engine_rng_out_t *out);
  *
  * Retail call shape is `FUN_00404b2c(); v = DAT_005c9a84 & 7;` — the
  * advance writes the 7-bit mirror DAT_005c9a84, and callers mask it
- * further (game-start grid seeders 0x46dd34 / 0x46dbf5, the
- * strategic samplers 0x47*).  None of those callers are ported
- * yet, so this primitive has no live drop-in consumer; the stateful
- * Win32 wrapper (state mirror + DAT_005c9a84) lands with the first
- * one, mirroring how engine.c only holds the double-LFSR mirrors
- * because the tick already drives them.
+ * further.  The first ported consumer is the new-game terrain-tile
+ * randomiser (engine_territory_randomise_special_tiles, retail 0x46dd34);
+ * like the double-LFSR new-game seeders in game_init.c, it threads this
+ * state word through a pointer rather than reading a global, so no stateful
+ * Win32 wrapper exists yet.  One lands in engine.c only once a consumer
+ * needs the state to persist across calls without an orchestrator to thread
+ * it (e.g. the strategic samplers at 0x47*) — the live 0x4676e0 then
+ * owns the seeded state and threads it through the grid seeders in order.
  *
  * Same effectively-31-bit quirk as the double LFSR (bit 31 always 0
  * after the first advance — feedback targets bit 30, unsigned >>1

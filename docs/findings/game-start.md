@@ -169,7 +169,7 @@ flip lands until the world is populated enough for the map arm.
      FUN_004676e0 leaf — rebuilds the per-key cell roster (save entry 12)
      from the grid, capping 20 cells/key + evicting overflow.  See below.
 
-### FUN_004676e0 — overworld-grid setup sequence (2/8 leaves ported)
+### FUN_004676e0 — overworld-grid setup sequence (4/8 leaves ported)
 
 A 144-B 0x497ced callee that stands up the overworld cell grid + its
 terrain index tables, by calling a fixed sequence of 0x46c*/0x46d* grid
@@ -241,8 +241,36 @@ mark, unbound no-op).
   20-cap + eviction field map, rows-1..16 clear isolation, score-clear
   reset gating, unbound no-ops).
 
-Remaining 5 unported FUN_004676e0 callees: `FUN_0046dbf5` /
-`FUN_0046dd34` / `FUN_00467ca6` / `FUN_00468d4f` / `FUN_00467a36` (each
+- **FUN_0046dd34** → `engine_territory_randomise_special_tiles(rng)`.
+  The fourth leaf, landed 2026-05-31 — the first ported consumer of the
+  single-LFSR RNG (`engine_rng_step_single`) that the prior chip unblocked.
+  Sweeps the 129×65 terrain-index render grid `DAT_0055cea0` (i32, row
+  stride 0x104 = 65 i32 contiguous) in row-major order and re-rolls every
+  cell holding exactly the special sentinel `0xfff0006` to
+  `0xfff0006 + (rng & 0xf)` ∈ {0xfff0006..0xfff0015}, advancing the RNG
+  once per match.  r2-verified (the `row*65+col` index via `shl 6`+`add`,
+  the signed `>= 0xfff0000` / `== 0xfff0006` guard ladder — outer arm
+  redundant given the equality, the `& 0xf` payload mask, the `& 7` write
+  to scratch `DAT_00568200`).  The RNG state is **threaded through a
+  pointer** (`engine_rng_single_in_t *`), exactly as game_init threads the
+  double LFSR through its new-game seeders — so no stateful Win32 RNG
+  wrapper exists yet; the live 0x4676e0 orchestrator will own the seeded
+  single-LFSR state (`DAT_00591564` = 0x34518632) and thread it through
+  here and the sibling seeders in sequence.  Two write-only scratch
+  globals dropped: the per-cell progress counter `DAT_0053e974` and the
+  cross-function mirror residue `DAT_00568200` (no consumer observes what
+  0x46dd34 leaves — its readers run earlier and re-derive it).  Homed in
+  `engine_territory.c` (the FUN_004676e0 setup family) with a new optional
+  tile-grid binding `engine_territory_bind_terrain_tiles` (NULL-safe; the
+  render modules bind the same memory read-only).
+  6 host tests (row-major reroll order + RNG threading, pinned retail-seed
+  value 0xfff0007, non-sentinel/boundary filter with no draw consumed,
+  full-grid value range + per-cell advance count, last-cell reach / stride,
+  unbound + NULL-rng no-ops).
+
+Remaining 4 unported FUN_004676e0 callees: `FUN_0046dbf5` (the sibling
+randomiser — now only blocked by `FUN_0046de05`→`FUN_0046de94` and
+`FUN_0046c2de`) / `FUN_00467ca6` / `FUN_00468d4f` / `FUN_00467a36` (each
 still has 1–5 unported deps).
 
 ### FUN_0046ff43 — strategic movement-cost grid builder

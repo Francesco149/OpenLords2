@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 
+#include "engine.h"            /* engine_rng_single_in_t */
 #include "engine_dirty_rect.h"
 
 /* Bind the per-territory record array (retail `DAT_0052f0b0`, 151
@@ -34,6 +35,12 @@ void engine_territory_bind_cell_roster(int32_t *roster);
  * i16 per row) the rebuild zeroes on the new-game path.  Optional — NULL
  * skips that secondary clear. */
 void engine_territory_bind_cell_score_table(int16_t *scores);
+
+/* Bind the terrain-index render tile grid (retail `DAT_0055cea0`, 129×65
+ * i32, row stride 0x104 B = 65 i32 contiguous) that the new-game tile
+ * randomiser re-rolls.  Optional — NULL → randomiser is a no-op.  The same
+ * memory the map-render modules bind read-only. */
+void engine_territory_bind_terrain_tiles(int32_t *tiles);
 
 /* Port of FUN_004651b9.  Zero the +0x14c and +0x153 bytes of every
  * territory record 1..150.  Used during new-game/scenario init. */
@@ -64,5 +71,12 @@ void engine_territory_clear_cell_render_flags(void);
  * capped at 20 per key; cells beyond the cap are evicted.  Pass 1 to also
  * zero the AI score table (new-game), 0 to leave it (mid-game recompute). */
 void engine_territory_rebuild_cell_roster(int reset_score_table);
+
+/* Port of FUN_0046dd34.  New-game terrain-tile randomiser: sweep the bound
+ * terrain-index grid (engine_territory_bind_terrain_tiles) and re-roll every
+ * cell holding the special sentinel 0xfff0006 to 0xfff0006 + (rng & 0xf),
+ * advancing the single-LFSR RNG (threaded through *rng) once per match.
+ * No-op if the grid or rng is unbound/NULL. */
+void engine_territory_randomise_special_tiles(engine_rng_single_in_t *rng);
 
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

@@ -1375,6 +1375,12 @@ struct test_case {
     X(territory_roster_clears_rows_1_to_16_only) \
     X(territory_roster_score_clear_gated_on_reset_flag) \
     X(territory_roster_unbound_is_noop) \
+    X(territory_tiles_rerolls_sentinels_in_order) \
+    X(territory_tiles_pinned_retail_seed) \
+    X(territory_tiles_leaves_non_sentinels) \
+    X(territory_tiles_value_range_and_full_grid) \
+    X(territory_tiles_reaches_last_cell) \
+    X(territory_tiles_unbound_is_noop) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \

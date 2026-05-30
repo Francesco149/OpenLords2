@@ -434,3 +434,129 @@ int test_territory_roster_unbound_is_noop(void)
     T_ASSERT_EQ_I(g_roster[0], 7);                            /* row 0 kept     */
     return 0;
 }
+
+/* ── Terrain-tile randomiser (engine_territory_randomise_special_tiles,
+ *    port of FUN_0046dd34) ─────────────────────────────────────────── */
+enum { TILE_ROWS = 0x81, TILE_COLS = 0x41, TILE_CELLS = TILE_ROWS * TILE_COLS };
+enum { TILE_SENTINEL = 0xfff0006 };
+static int32_t g_tiles[TILE_CELLS];
+
+static void tiles_setup(uint32_t fill)
+{
+    for (int i = 0; i < TILE_CELLS; i++) g_tiles[i] = (int32_t)fill;
+    engine_territory_bind_terrain_tiles(g_tiles);
+}
+static int32_t *tile_at(int row, int col) { return &g_tiles[row * TILE_COLS + col]; }
+
+/* Independent reference: thread the single-LFSR state one advance and
+ * return the 7-bit mirror — mirrors the production rng_next_single_7bit. */
+static uint32_t ref_single_mirror(uint32_t *state)
+{
+    engine_rng_single_in_t  in  = { .state = *state };
+    engine_rng_single_out_t out = {0};
+    engine_rng_step_single(&in, &out);
+    *state = out.new_state;
+    return out.rng_7bit;
+}
+
+/* Sentinel cells are re-rolled in row-major scan order, each consuming one
+ * RNG draw; the final threaded state matches that many advances. */
+int test_territory_tiles_rerolls_sentinels_in_order(void)
+{
+    tiles_setup(0x12345);                       /* non-sentinel background */
+    *tile_at(0, 5)  = TILE_SENTINEL;            /* visited 1st */
+    *tile_at(2, 0)  = TILE_SENTINEL;            /* visited 2nd */
+    *tile_at(2, 10) = TILE_SENTINEL;            /* visited 3rd */
+
+    const uint32_t seed = 0x34518632u;
+    engine_rng_single_in_t rng = { .state = seed };
+    engine_territory_randomise_special_tiles(&rng);
+
+    uint32_t st = seed;
+    int32_t e0 = (int32_t)((ref_single_mirror(&st) & 0xfu) + TILE_SENTINEL);
+    int32_t e1 = (int32_t)((ref_single_mirror(&st) & 0xfu) + TILE_SENTINEL);
+    int32_t e2 = (int32_t)((ref_single_mirror(&st) & 0xfu) + TILE_SENTINEL);
+
+    T_ASSERT_EQ_U((uint32_t)*tile_at(0, 5),  (uint32_t)e0);
+    T_ASSERT_EQ_U((uint32_t)*tile_at(2, 0),  (uint32_t)e1);
+    T_ASSERT_EQ_U((uint32_t)*tile_at(2, 10), (uint32_t)e2);
+    T_ASSERT_EQ_U(rng.state, st);               /* threaded 3 advances */
+    return 0;
+}
+
+/* Concrete pinned value: retail seed 0x34518632, first match → mirror 0x51,
+ * & 0xf = 1 → 0xfff0006 + 1 = 0xfff0007. */
+int test_territory_tiles_pinned_retail_seed(void)
+{
+    tiles_setup(0);                             /* 0 is non-sentinel */
+    *tile_at(0, 0) = TILE_SENTINEL;             /* first cell visited */
+    engine_rng_single_in_t rng = { .state = 0x34518632u };
+    engine_territory_randomise_special_tiles(&rng);
+    T_ASSERT_EQ_U((uint32_t)*tile_at(0, 0), 0xfff0007u);
+    return 0;
+}
+
+/* Only the exact sentinel 0xfff0006 matches: the EMPTY base, the neighbours
+ * 0xfff0005/0xfff0007, and a normal descriptor index are all left alone, and
+ * with no match the RNG must not advance. */
+int test_territory_tiles_leaves_non_sentinels(void)
+{
+    tiles_setup(0x111);
+    *tile_at(1, 1) = (int32_t)0xfff0000u;       /* EMPTY base */
+    *tile_at(1, 2) = (int32_t)0xfff0005u;       /* sentinel - 1 */
+    *tile_at(1, 3) = (int32_t)0xfff0007u;       /* sentinel + 1 */
+    *tile_at(1, 4) = (int32_t)0x0000abcdu;      /* normal index */
+    engine_rng_single_in_t rng = { .state = 0x999u };
+    engine_territory_randomise_special_tiles(&rng);
+    T_ASSERT_EQ_U((uint32_t)*tile_at(1, 1), 0xfff0000u);
+    T_ASSERT_EQ_U((uint32_t)*tile_at(1, 2), 0xfff0005u);
+    T_ASSERT_EQ_U((uint32_t)*tile_at(1, 3), 0xfff0007u);
+    T_ASSERT_EQ_U((uint32_t)*tile_at(1, 4), 0x0000abcdu);
+    T_ASSERT_EQ_U(rng.state, 0x999u);           /* no draw consumed */
+    return 0;
+}
+
+/* A whole grid of sentinels: every cell is re-rolled into [0xfff0006,
+ * 0xfff0015] and the RNG advances exactly once per cell (8385 total). */
+int test_territory_tiles_value_range_and_full_grid(void)
+{
+    tiles_setup((uint32_t)TILE_SENTINEL);
+    engine_rng_single_in_t rng = { .state = 0x1u };
+    engine_territory_randomise_special_tiles(&rng);
+    for (int i = 0; i < TILE_CELLS; i++) {
+        uint32_t v = (uint32_t)g_tiles[i];
+        T_ASSERT(v >= 0xfff0006u && v <= 0xfff0015u);
+    }
+    uint32_t st = 0x1u;
+    for (int i = 0; i < TILE_CELLS; i++) (void)ref_single_mirror(&st);
+    T_ASSERT_EQ_U(rng.state, st);
+    return 0;
+}
+
+/* The last cell (row 128, col 64 → i32 index 8384) is reached and processed,
+ * confirming the 65-i32 row stride and inclusive bounds. */
+int test_territory_tiles_reaches_last_cell(void)
+{
+    tiles_setup(0x55);
+    *tile_at(TILE_ROWS - 1, TILE_COLS - 1) = TILE_SENTINEL;
+    engine_rng_single_in_t rng = { .state = 0x34518632u };
+    engine_territory_randomise_special_tiles(&rng);
+    T_ASSERT_EQ_U((uint32_t)*tile_at(TILE_ROWS - 1, TILE_COLS - 1), 0xfff0007u);
+    T_ASSERT_EQ_U((uint32_t)*tile_at(0, 0), 0x55u);   /* others untouched */
+    return 0;
+}
+
+/* Unbound grid → no-op (no crash, no draw); rng NULL → no-op even with a
+ * grid full of sentinels. */
+int test_territory_tiles_unbound_is_noop(void)
+{
+    engine_territory_bind_terrain_tiles(NULL);
+    engine_rng_single_in_t rng = { .state = 0x7u };
+    engine_territory_randomise_special_tiles(&rng);
+    T_ASSERT_EQ_U(rng.state, 0x7u);
+
+    tiles_setup((uint32_t)TILE_SENTINEL);
+    engine_territory_randomise_special_tiles(NULL);
+    T_ASSERT_EQ_U((uint32_t)g_tiles[0], (uint32_t)TILE_SENTINEL);
+    return 0;
+}

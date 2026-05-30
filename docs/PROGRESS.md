@@ -7,6 +7,61 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — GAME-START chip: terrain-tile randomiser (FUN_0046dd34) + ledger provenance fix
+
+Two units this session.
+
+**1. Ledger provenance regression fixed.**  The recent RNG and
+territory chips named still-unported neighbour functions by their
+`FUN_<va>` *token* in `src/` comments — the recurring gotcha
+(`docs/findings/ledger-provenance-audit.md`): the ledger generator reads
+any `FUN_<va>` token in a tested module as provenance and silently
+promotes the neighbour to *tested*.  Demoted **6** verified-unimplemented
+neighbours to bare hex (`0x46dbf5`, `0x46dd34`, `0x4676e0`, `0x469370`,
+`0x46e067`, `0x46d3da`; 1248 code-bytes), correcting the headline from
+387→381 touched.  Two over-eager demotions were reverted: `0x45240a`
+(`engine_dirty_rect_mark_full_screen`, header-map provenance) and
+`0x46ead0` (inlined as `clear_record`) are genuinely ported and stay
+cited *by* token.  Lesson recorded: a `grep "Port of"` miss does **not**
+prove unimplemented — also check the header-map and inlined-helper
+provenance forms.
+
+**2. FUN_0046dd34 → `engine_territory_randomise_special_tiles`.**  The
+fourth leaf of the `FUN_004676e0` overworld-setup sequence, and the
+**first ported consumer of the single-LFSR RNG** the prior chip landed.
+A 209-B sweep of the 129×65 terrain-index *render* grid `DAT_0055cea0`
+(i32, row stride 0x104 = 65 i32 contiguous): in row-major order, every
+cell holding exactly the special sentinel `0xfff0006` is re-rolled to
+`0xfff0006 + (rng & 0xf)` ∈ {0xfff0006..0xfff0015}, advancing the RNG
+once per match.  r2-verified the `row*65+col` address math (`shl 6`+`add`),
+the signed `>= 0xfff0000` / `== 0xfff0006` guard ladder (the outer arm is
+redundant given the equality — shared with the terrain classifier
+0x46de94/0x46dbf5), the `& 0xf` payload mask, and the `& 7` scratch write.
+
+The RNG state is **threaded through a pointer** (`engine_rng_single_in_t *`),
+exactly as `game_init.c` threads the double LFSR through its new-game
+seeders — so still no stateful Win32 single-LFSR wrapper: the live
+0x4676e0 orchestrator will own the seeded state (`DAT_00591564` =
+0x34518632) and thread it through this and the sibling seeders in order.
+Two write-only scratch globals are dropped (same choice the cell-field
+sweep makes): the per-cell progress counter `DAT_0053e974`, and the
+cross-function mirror residue `DAT_00568200` — no consumer observes what
+0x46dd34 leaves (its readers, the unported sibling 0x46dbf5 and feature
+picker 0x46c2de, run earlier and re-derive it; no ported code reads it).
+
+Homed in `engine_territory.c` (the FUN_004676e0 family) behind a new
+optional tile-grid binding `engine_territory_bind_terrain_tiles` (NULL-safe;
+the render modules bind the same memory read-only).  6 host tests
+(row-major reroll order + RNG threading, pinned retail-seed value
+0xfff0007, non-sentinel/boundary filter with no draw consumed, full-grid
+value range + per-cell advance count, last-cell reach / stride, unbound +
+NULL-rng no-ops).  1362/1362 pass under ASan/UBSan; both mingw `.exe`
+build clean; `_engine_territory_randomise_special_tiles` present in the
+PE.  Ledger: 382 touched / 346 tested.
+
+Next on this thread: `FUN_0046dbf5` (the sibling randomiser) once its
+deps `FUN_0046de05`→`FUN_0046de94` and `FUN_0046c2de` land.
+
 ## 2026-05-31 — RNG chip: single-LFSR advance (FUN_00404b2c)
 
 Ported the engine's **third** RNG — retail `FUN_00404b2c` @ 0x404b2c
