@@ -929,6 +929,34 @@ static void seed_page7_state(void)
     }
 }
 
+/* Seed the page-4 ("Choose your title and your shield") render state for a
+ * live-input demo: the tall layout (gates 0/0 → Back/Continue shown),
+ * Continue enabled, player 1 owning shield slot 1 (flashing), the default
+ * name, and an overwrite editor.  Mirrors the inline seed the static step-4
+ * capture uses. */
+static void seed_page4_state(void)
+{
+    static const uint8_t k_p4_name[] = "aaaaaa    ";   /* DAT_0053f1e0 */
+    static const unsigned char k_p4_slots[6] = { 0, 1, 0, 0, 0, 0 };
+    static text_input_state_t k_p4_editor;             /* DAT_005cd550 */
+    {
+        int i = 0;
+        for (; k_p4_name[i] && i < (int)sizeof k_p4_editor.buf - 1; i++)
+            k_p4_editor.buf[i] = k_p4_name[i];
+        k_p4_editor.buf[i] = 0;
+    }
+    k_p4_editor.cursor = 0;
+    k_p4_editor.insert_mode = 0;
+
+    engine_title_render_set_choose_title_gates(0, 0);
+    engine_title_render_set_choose_title_continue_disabled(0);
+    engine_title_render_set_choose_title_shields(k_p4_slots, /*selected=*/1,
+                                                 /*flash=*/1, /*flash_timer=*/0);
+    engine_title_render_set_choose_title_name(k_p4_name);
+    engine_title_render_set_choose_title_editor(&k_p4_editor);
+    engine_title_render_bind_caret_metrics_table(gfx_glyph_measure_map());
+}
+
 static void bringup_title_menu(int with_panel)
 {
     engine_title_render_set_page(g_title_page_num);
@@ -1200,6 +1228,45 @@ static void bringup_title_nav(const char *dir)
              engine_title_render_tab_value(2),
              engine_title_render_tab_value(8),
              engine_title_render_tab_value(10), path);
+
+    /* Step 10 — the page-4 input arm end-to-end (FUN_004ba9c8 page-4 arm).
+     * Reach page 4 the real way — page 2 → "Custom game" — so the load-dir
+     * flag (DAT_0057d320) = 0 and the substate (DAT_0055302c) = 2, the
+     * single-player Continue → page-7 path.  Then drive two real clicks:
+     *   (a) click shield 3 — the flashing shield jumps slot 1 → slot 3;
+     *   (b) click Continue — advances to the page-7 game-setup screen.
+     * Captures the page-4 frame with shield 3 selected, then the page-7
+     * frame Continue lands on, proving the choose-title buttons are live. */
+    engine_title_render_set_page(2);
+    title_nav_click(BTN_CX, 0xc7 + 0xc);           /* "Custom game" (row 3) → page 4 */
+    seed_page4_state();                            /* render state for the screen */
+    engine_title_render_set_selected_button(0);    /* neutral capture */
+
+    /* Click shield 3 (box (0x120,0x8c)-(0x160,0xd2) → centre (0x140,0xaf)). */
+    title_nav_click(0x140, 0xaf);
+    gfx_caret_reset();
+    if (gfx_lock_canvas()) {
+        engine_title_render_refresh_choose_title();
+        gfx_unlock_canvas();
+    }
+    title_render_current_page();
+    wsprintfA(path, "%s\\nav_10_p%d_shieldpick.bmp", dir,
+              engine_title_render_page());
+    gfx_capture_backbuffer(path);
+    log_line("title-nav: page %d, clicked shield 3 (slot1=%d slot3=%d) → %s",
+             engine_title_render_page(),
+             engine_title_render_choose_title_slot_owner(1),
+             engine_title_render_choose_title_slot_owner(3), path);
+
+    /* Click Continue (box (0x150,0xd7)-(0x210,0xf0) → centre (0x1b0,0xe3)). */
+    seed_page7_state();                            /* page-7 backdrop content */
+    title_nav_click(0x1b0, 0xe3);
+    title_render_current_page();
+    wsprintfA(path, "%s\\nav_11_p%d_continue.bmp", dir,
+              engine_title_render_page());
+    gfx_capture_backbuffer(path);
+    log_line("title-nav: clicked Continue → page %d (game setup) → %s",
+             engine_title_render_page(), path);
 }
 
 /* Page-background reload hook (engine → gfx).  The engine_tick title

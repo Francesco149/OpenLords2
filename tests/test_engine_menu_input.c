@@ -576,3 +576,122 @@ int test_menu_page9_tab2_grows_upward(void)
     T_ASSERT_EQ_I(engine_title_render_selected_button(), 4);
     return 0;
 }
+
+/* ── page 4 ("Choose your title and your shield") input (FUN_004ba9c8
+ *    page-4 arm + FUN_00432ee6 shields + FUN_00433155 Back/Continue) ── */
+
+/* Continue box (0x150,0xd7)-(0x210,0xf0) → centre (0x1b0, 0xe3). */
+enum { P4_CONTINUE_X = 0x1b0, P4_CONTINUE_Y = 0xe3,
+       P4_BACK_X = 0xd0, P4_BACK_Y = 0xe3 };
+
+/* Reach page 4 the real way — page 2 → "Custom game" — so DAT_0057d320
+ * (load-dir flag) = 0 and DAT_0055302c = 2 (custom, not skirmish/play-now),
+ * the single-player Continue → page-7 path. */
+static void reach_page4_custom(void)
+{
+    engine_title_render_set_page(2);
+    engine_menu_click_in_t in = press_at(BTN_X, row_y(3));   /* Custom game */
+    (void)engine_menu_title_input(&in);
+    engine_title_render_set_choose_title_gates(0, 0);        /* buttons shown */
+}
+
+int test_menu_page4_continue_goes_to_page7(void)
+{
+    mi_reset();
+    g_sim_mp_active = 0;
+    reach_page4_custom();
+    T_ASSERT_EQ_I(engine_title_render_page(), 4);
+
+    engine_menu_click_in_t in = press_at(P4_CONTINUE_X, P4_CONTINUE_Y);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_page(), 7);            /* → setup screen */
+    T_ASSERT_EQ_I(engine_menu_input_last_redraw_mode(), 2);
+    return 0;
+}
+
+int test_menu_page4_back_returns_to_page1(void)
+{
+    mi_reset();
+    g_sim_mp_active = 0;
+    reach_page4_custom();
+
+    engine_menu_click_in_t in = press_at(P4_BACK_X, P4_BACK_Y);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_page(), 1);            /* → main menu */
+    return 0;
+}
+
+int test_menu_page4_skirmish_continue_deferred(void)
+{
+    mi_reset();
+    g_sim_mp_active = 0;
+    /* Reach page 4 via "Skirmish!" (page-2 param 5 → DAT_0055302c = 3). */
+    engine_title_render_set_page(2);
+    engine_menu_click_in_t sk = press_at(BTN_X, row_y(2));   /* Skirmish! */
+    (void)engine_menu_title_input(&sk);
+    T_ASSERT_EQ_I(engine_title_render_page(), 4);
+    engine_title_render_set_choose_title_gates(0, 0);
+
+    /* Continue is consumed but stays on page 4 — the skirmish page-0xc
+     * subsystem is deferred. */
+    engine_menu_click_in_t in = press_at(P4_CONTINUE_X, P4_CONTINUE_Y);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_page(), 4);
+    return 0;
+}
+
+int test_menu_page4_shield_click_moves_selection(void)
+{
+    mi_reset();
+    engine_title_render_set_page(4);
+    engine_title_render_set_choose_title_gates(0, 0);
+    /* Player 1 owns slot 1 (the seeded page-4 layout). */
+    static const unsigned char slots[6] = { 0, 1, 0, 0, 0, 0 };
+    engine_title_render_set_choose_title_shields(slots, /*selected=*/1,
+                                                 /*flash=*/1, /*flash_timer=*/0);
+
+    /* Shield 3 box (0x120,0x8c)-(0x160,0xd2) → centre (0x140, 0xaf). */
+    engine_menu_click_in_t in = press_at(0x140, 0xaf);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_choose_title_slot_owner(1), 0);  /* released */
+    T_ASSERT_EQ_I(engine_title_render_choose_title_slot_owner(3), 1);  /* claimed  */
+    T_ASSERT_EQ_I(engine_menu_input_last_redraw_mode(), 2);
+    return 0;
+}
+
+int test_menu_page4_hover_highlights_continue(void)
+{
+    mi_reset();
+    engine_title_render_set_page(4);
+    engine_title_render_set_choose_title_gates(0, 0);
+    engine_title_render_set_selected_button(0);
+    /* Hover (no press) over Continue → 1-based index 7. */
+    engine_menu_click_in_t in = at(P4_CONTINUE_X, P4_CONTINUE_Y);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 0);
+    T_ASSERT_EQ_I(engine_title_render_selected_button(), 7);
+    return 0;
+}
+
+int test_menu_page4_hidden_buttons_skip_button_clicks(void)
+{
+    mi_reset();
+    g_sim_mp_active = 0;
+    engine_title_render_set_page(4);
+    /* Short MP layout: gate_a != 0 and gate_b == 0 → buttons hidden, so the
+     * click pass tests only the 5 shields.  A click where Continue would be
+     * hits nothing and the page is unchanged. */
+    engine_title_render_set_choose_title_gates(1, 0);
+    T_ASSERT_EQ_I(engine_title_render_choose_title_buttons_shown(), 0);
+
+    engine_menu_click_in_t in = press_at(P4_CONTINUE_X, P4_CONTINUE_Y);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 0);
+    T_ASSERT_EQ_I(engine_title_render_page(), 4);            /* unchanged */
+
+    /* Shields still hit-test in the short layout. */
+    static const unsigned char slots[6] = { 0, 1, 0, 0, 0, 0 };
+    engine_title_render_set_choose_title_shields(slots, 1, 1, 0);
+    engine_menu_click_in_t s = press_at(0x140, 0xaf);        /* shield 3 */
+    T_ASSERT_EQ_I(engine_menu_title_input(&s), 1);
+    T_ASSERT_EQ_I(engine_title_render_choose_title_slot_owner(3), 1);
+    return 0;
+}

@@ -279,6 +279,19 @@ void engine_title_render_set_choose_title_name(const uint8_t *name);
  * caret; NULL → caret skipped (the textbox still renders). */
 void engine_title_render_set_choose_title_editor(const text_input_state_t *editor);
 
+/* Assign shield `slot` (1..5) to the current player — port of FUN_00432fab's
+ * render-visible slot-ownership move (the strategic colour write is deferred
+ * with the roster).  The flashing shield jumps to the clicked design; an
+ * already-owned slot is a no-op. */
+void engine_title_render_choose_title_assign_shield(int slot);
+
+/* Owner of shield `slot` (0 == unowned). */
+int engine_title_render_choose_title_slot_owner(int slot);
+
+/* Whether the Back/Continue row is shown (gate_a == 0 || gate_b != 0) — the
+ * input arm hit-tests 7 hotspots when true, else the 5 shields only. */
+int engine_title_render_choose_title_buttons_shown(void);
+
 /* Char→glyph metrics table for the caret's cursor-char width measure. */
 void engine_title_render_bind_caret_metrics_table(const uint8_t *table);
 

@@ -7,6 +7,64 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — PAGE 4 INPUT: the choose-title screen goes live (`FUN_004ba9c8` page-4 arm)
+
+The page-4 screen ("Choose your title and your shield") rendered bit-identical
+already but its buttons were inert — reachable only by `--title-nav`'s forced
+page jump.  This entry ports the **page-4 input arm**, so the shields select
+and Back/Continue navigate with real clicks: the live link from the player-
+setup screen into the (already-live) page-7 game-setup screen.
+
+Three pieces landed, all riding the already-ported hit-test / hover /
+text-editor infrastructure:
+
+1. **`menu_action_p4_shield`** (`FUN_00432ee6` SP branch → `FUN_00432fab`).
+   Clicking a shield claims that slot for the current player and releases the
+   one it held — the single flashing shield jumps to the clicked design.  The
+   visible slot-ownership move is `engine_title_render_choose_title_assign_shield`;
+   the strategic colour-table write + the `FUN_0049caaa` AI re-seat are
+   deferred with the roster (the page-4 render reads neither — same deferral
+   as the page-9 pick / page-7 defaults).
+2. **`menu_action_p4_button`** (`FUN_00433155` SP branch).  Back → page 1;
+   Continue → a destination ladder that lands on **page 7** for the single-
+   player Custom-game flow (`DAT_0057d320 != 1`, `DAT_0055302c != 3`).  The
+   Play-Now quick-start (game-start subsystem), Skirmish (page 0xc) and MP
+   (pages 6/8/0xb) branches are gated off in that flow and deferred behind
+   TODOs, exactly like the page-2/5 transitions; the sound cue, shield-colour
+   refresh and the `FUN_0049bae9` name commit follow the roster.
+3. **The page-4 arm of `FUN_004ba9c8`** — the 7-or-5 hotspot click pass (the
+   Back/Continue row is hidden in the short MP layout) plus the always-7 hover
+   pass.  The arm's RNG-advance prologue (`FUN_00404a46`), the name-editor
+   tail and the MP Continue-enable timer (`FUN_004bbe51`) are deferred: none
+   has a page-4 render consumer in the drop-in (the title text-editor wiring
+   is its own subsystem).
+
+The page-4 hotspot table `DAT_004dcc20` (r2-dumped): shields at
+`((i-1)·0x58+0x70, 0x8c)`, action `FUN_00432ee6` param i; Back `(0x70,0xd7)`
+→ `FUN_00433155(1)`; Continue `(0x150,0xd7)` → `FUN_00433155(2)` — verbatim
+matching the rendered geometry.
+
+Coverage 344 → **347 touched** (`FUN_00432ee6` / `FUN_00432fab` /
+`FUN_00433155` provenance now referenced; `FUN_004bbe51` documented-deferred
+in the arm).  6 new host tests (Continue→7, Back→1, skirmish-Continue
+deferred-but-consumes, shield-move releases-and-claims, hover→7, hidden-button
+gate) → **1242 green**; both drop-in builds clean.
+
+**Verification pending (Windows host).**  `--title-nav` steps 10/11 drive the
+real arm (page-2 "Custom game" → page 4 → click shield 3 → click Continue →
+page 7) and capture `nav_10_p?_shieldpick.bmp` / `nav_11_p?_continue.bmp`.
+The host-side capture run is the next confirmation step (see the harness note
+on launching the drop-in's self-driving bring-ups).
+
+### Next
+
+- **Page-4 name editing** — wire the global title text editor + the `WM_CHAR`
+  keystroke route to the menu so the name box is typeable live (today the name
+  is a static seed); the per-frame copy-out (`FUN_0040210c`) is the last
+  page-4 leaf.
+- **Start / game-start** (`FUN_004329ec` → `FUN_00497ced`) remains the deep
+  play-flow milestone behind both page 7's Start and page 4's Play-Now Continue.
+
 ## 2026-05-30 — PAGE 7: the **Defaults** button resets the options (`FUN_004ae539` + `FUN_004ae5e2`)
 
 The page-7 setup screen's button row was Cancel (done) / Start (deep, deferred)

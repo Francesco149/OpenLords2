@@ -290,6 +290,48 @@ void engine_title_render_set_choose_title_editor(const text_input_state_t *edito
     g_p4_editor = editor;
 }
 
+/* Port of FUN_00432fab — assign a shield slot to the current player.
+ * `slot` is 1..5 (the clicked shield).  If that slot is still unowned,
+ * release whatever slot the current player (g_p4_selected_shield, retail
+ * DAT_0057c8cc) already holds and claim `slot`, so the single flashing
+ * shield jumps to the clicked design.  An already-owned slot is a no-op
+ * (you cannot steal another player's shield in this screen).
+ *
+ * Deferred — the strategic colour tables: retail also writes the per-
+ * player shield colour DAT_00553d75[player·0x2c] / DAT_0057bf0a[player·0x160]
+ * from DAT_004d5548[slot·4].  Those are strategic-roster state the page-4
+ * render never reads (same deferral as the page-9 pick / page-7 defaults),
+ * so the slot ownership — the visible part — lands and the colour write
+ * follows the roster subsystem. */
+void engine_title_render_choose_title_assign_shield(int slot)
+{
+    if (slot < 1 || slot > 5) return;
+    if (g_p4_shield_slots[slot] != 0) return;   /* already owned */
+
+    for (int i = 1; i < 6; i++) {
+        if (g_p4_shield_slots[i] == g_p4_selected_shield)
+            g_p4_shield_slots[i] = 0;
+    }
+    g_p4_shield_slots[slot] = (unsigned char)g_p4_selected_shield;
+}
+
+/* The shield slot's owner (g_p4_shield_slots[slot]); 0 == unowned.
+ * For the input arm's tests + any live consumer. */
+int engine_title_render_choose_title_slot_owner(int slot)
+{
+    if (slot < 0 || slot > 5) return 0;
+    return g_p4_shield_slots[slot];
+}
+
+/* Whether the Back/Continue button row is shown — the same gate the
+ * page-4 render uses (g_p4_gate_a == 0 || g_p4_gate_b != 0).  The input
+ * arm hit-tests 7 hotspots (5 shields + 2 buttons) when true, else just
+ * the 5 shields. */
+int engine_title_render_choose_title_buttons_shown(void)
+{
+    return g_p4_gate_a == 0 || g_p4_gate_b != 0;
+}
+
 /* Bind the char→glyph metrics table the caret's width measure walks
  * (retail FUN_004015b9 reads DAT_004d71d0).  Mirrors the table already
  * bound for the centered-text measurer. */

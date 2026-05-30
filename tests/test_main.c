@@ -1275,6 +1275,12 @@ struct test_case {
     X(menu_page9_tab_click_retargets) \
     X(menu_page9_click_outside_closes) \
     X(menu_page9_tab2_grows_upward) \
+    X(menu_page4_continue_goes_to_page7) \
+    X(menu_page4_back_returns_to_page1) \
+    X(menu_page4_skirmish_continue_deferred) \
+    X(menu_page4_shield_click_moves_selection) \
+    X(menu_page4_hover_highlights_continue) \
+    X(menu_page4_hidden_buttons_skip_button_clicks) \
     \
     X(engine_button_kind20_blits_32x32_at_origin) \
     X(engine_button_kind18_blits_24x24) \

@@ -432,6 +432,63 @@ off-default, then click Defaults and capture the whole grid snapped back to the
 canonical defaults.  4 host tests (apply SP/MP + clamp ladder + the
 through-the-dispatcher reset).
 
+### Page-4 input arm (`FUN_004ba9c8` page-4 arm) — the choose-title screen goes live
+
+> 2026-05-30.  The page-4 *render* (above) is now matched by its *input* arm,
+> so the shields select and the Back/Continue buttons navigate with real
+> clicks — the live link from "Choose your title and your shield" into the
+> page-7 game-setup screen.
+
+The page-4 hotspot table (retail `DAT_004dcc20`, r2-dumped, 7 × 24-byte
+entries) is five shield slots then Back / Continue:
+
+| entry | box (x0,y0)-(x1,y1) | action | param |
+|------:|---------------------|--------|------:|
+| 1..5  | shield i: `((i-1)·0x58+0x70, 0x8c)`–`(+0x40, 0xd2)` | `FUN_00432ee6` | i |
+| 6     | Back `(0x70,0xd7)-(0x130,0xf0)`     | `FUN_00433155` | 1 |
+| 7     | Continue `(0x150,0xd7)-(0x210,0xf0)` | `FUN_00433155` | 2 |
+
+The arm runs, per frame: a click pass (`FUN_0040e3ee`) over **7** hotspots
+when the Back/Continue row is shown (`DAT_00553030 == 0 || DAT_00553248 != 0`
+— the same gate as the render's button row) or **5** (shields only) in the
+short MP layout, then a hover pass (`FUN_0040e5e7`) always over **7** →
+`DAT_00553114`.
+
+- **Shield click** (`FUN_00432ee6` → `FUN_00432fab`, SP branch): claims the
+  clicked slot for the current player (`DAT_0057c8cc`), releasing the slot it
+  already held — the single flashing shield jumps to the clicked design.
+  Ported as `engine_title_render_choose_title_assign_shield`; the visible
+  slot-ownership move lands, the strategic colour write (`DAT_00553d75` /
+  `DAT_0057bf0a` from `DAT_004d5548`) + the `FUN_0049caaa` AI re-seat are
+  **deferred** with the roster (same deferral as the page-9 pick / page-7
+  defaults — the page-4 render reads neither).
+- **Back** (`FUN_00433155` param 1) → page 1.  Retail also reloads the
+  misc-sel sheet + runs the new-game reset `FUN_00499a1c(0)` (and the MP
+  teardown when `DAT_00553030 != 0`); deferred like the page-7 Cancel.
+- **Continue** (`FUN_00433155` param 2, SP — gated `DAT_00553030 == 0`): a
+  destination ladder — `DAT_0057d320 == 1` (Play Now! quick-start) → the
+  game-start subsystem (`FUN_00499e5d`/`FUN_004329ec`, deferred);
+  `DAT_0055302c == 3` (Skirmish!) → the page-0xc list (deferred); **else
+  (Custom game) → page 7**, the live path.  The Continue tail `FUN_004330c6`
+  (shield colour) + `FUN_0043eda0(3,0)` sound are deferred.
+
+Deferred from the arm itself, none with a page-4 render consumer in the
+drop-in: the prologue RNG advance `FUN_00404a46` (`engine_rng_step` — only
+perturbs global RNG the title screen never reads); the name-editor tail
+(`DAT_005aeb78 = 1; FUN_00401f49; FUN_0040210c(&DAT_0053f1e0, 0x1f)`), which
+needs the global title text editor + the `WM_CHAR` keystroke route wired to
+the menu (the title text-edit subsystem); and the MP Continue-enable timer
+`FUN_004bbe51` (multiplayer-only).  The name commit `FUN_0049bae9(999, …)` in
+the action prologue is deferred with the roster.
+
+Port: `menu_action_p4_shield` / `menu_action_p4_button` + the page-4 arm in
+`src/engine_menu_input.c`; `engine_title_render_choose_title_assign_shield` /
+`_slot_owner` / `_buttons_shown` in `src/engine_title_render.c`.  Host-tested
+(Continue→7, Back→1, skirmish-Continue deferred, shield-move, hover, hidden-
+button gate).  `--title-nav` steps 10/11 drive the real arm: from page 4
+(reached via page-2 "Custom game") click shield 3 (the flashing shield jumps
+slot 1 → slot 3), then click Continue → the page-7 setup screen.
+
 ## Input side — hotspot hit-test + page navigation (`engine_menu_input`)
 
 > 2026-05-29. The *render* half above is matched by the *input* half: the

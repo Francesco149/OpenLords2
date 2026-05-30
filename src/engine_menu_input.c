@@ -15,6 +15,7 @@
 
 #include "engine_menu_input.h"
 #include "engine_title_render.h"
+#include "engine.h"                /* g_sim_mp_active (DAT_00553030) */
 #include "save_schema_globals.h"   /* s_slot_0055302c (DAT_0055302c) */
 
 /* ─── engine-side-effect hooks + modeled scalars ─────────────────── */
@@ -183,6 +184,89 @@ static void menu_action_page5(int param)
      * camera/scroll reset (0x427d19), the 0x401f49 + _DAT_005533f0=1 setup,
      * and the s011_02.wav cue (0x427990) — deferred like the page-2
      * transitions; the page change + campaign scalars are faithful. */
+}
+
+/* ─── page-4 ("Choose your title and your shield") click actions ──── */
+
+/* Port of FUN_00432ee6 — a shield click (`param` 1..5), single-player
+ * branch (DAT_00553030 == 0).  Claims that shield for the current player
+ * (the flashing slot jumps to it) and asks for a redraw.
+ *
+ * Deferred — the roster recompute: retail also runs FUN_0049caaa
+ * (engine_npc_schedule_init) to re-seat the AI players from the new
+ * shield assignment, and the strategic colour-table write inside
+ * FUN_00432fab; both are strategic-roster state the page-4 render does
+ * not read (same deferral as the page-9 pick + page-7 defaults).  The
+ * multiplayer branches (DAT_00553030 != 0) gate the claim on a flash
+ * timer and play sound cues 5/7/3 — not ported (no MP). */
+static void menu_action_p4_shield(int param)
+{
+    engine_title_render_choose_title_assign_shield(param);   /* FUN_00432fab */
+    g_redraw_fn(2);                 /* DAT_0057d340 = 2 */
+    /* TODO(roster): FUN_0049caaa AI re-seat + FUN_00432fab colour table. */
+}
+
+/* Port of FUN_00433155 — the page-4 Back / Continue buttons, single-player
+ * branch.  `param` is 1 (Back) or 2 (Continue).
+ *
+ * Retail prologue (both buttons): DAT_0053f648 = -1 (re-arm the click
+ * debounce) and FUN_0049bae9(999, DAT_0057c8cc, &DAT_0053f1e0) — commit the
+ * typed name into the current player's seat (player_seat_assign, ported).
+ * The name commit writes strategic-roster state the page-4 / page-7 render
+ * reads from the synthetic seed, so it is deferred with the roster like the
+ * page-1 profile scan.
+ *
+ * Continue is gated in retail on (DAT_00553030 == 0 || DAT_0057c940 != 0):
+ * single-player always passes; the multiplayer path needs the Continue-
+ * enable timer (0x4bbe51).  We handle the single-player ladder:
+ *   - DAT_0057d320 == 1 (Play Now! quick-start) → finalize roster + load the
+ *     opening stage (0x499e5d / 0x4329ec) and drop into the strategic
+ *     map (DAT_0052afa4 = 1) — the game-start subsystem, deferred.
+ *   - DAT_0055302c == 3 (Skirmish!) → the skirmish save/load page 0xc, its
+ *     subsystem (0x4263ad / 0x42b919 …) deferred.
+ *   - else (Custom game) → the page-7 game-setup screen.  This is the live
+ *     path.
+ * Continue's tail 0x4330c6 (shield-colour refresh, strategic) and the
+ * 0x43eda0(3,0) sound cue are deferred. */
+static void menu_action_p4_button(int param)
+{
+    g_last_selected_ack = -1;       /* DAT_0053f648 = -1 */
+    /* TODO(roster): FUN_0049bae9(999, DAT_0057c8cc, &DAT_0053f1e0) name commit. */
+
+    if (param == 1) {
+        /* Back → main menu (page 1).  Retail also clears DAT_0057a0f0 /
+         * DAT_0057c8fc, reloads the misc-sel sheet (FUN_00499034, ported as
+         * gfx_load_misc_sheet) and runs the new-game reset 0x499a1c(0)
+         * [+ MP teardown 0x4b743b / 0x43e8f4 when DAT_00553030 != 0];
+         * those match the page-7 Cancel deferral. */
+        engine_title_render_set_page(1);
+        g_redraw_fn(2);             /* DAT_0057d340 = 2 */
+        /* TODO(setup-exit): FUN_00499034 misc reload + 0x499a1c(0) reset. */
+        return;
+    }
+
+    if (param == 2 && g_sim_mp_active == 0) {
+        if (g_loadlist_dir_flag == 1) {
+            /* Play Now! quick-start — game-start subsystem (deferred). */
+            g_redraw_fn(2);
+            /* TODO(game-start): 0x499e5d + 0x4329ec; DAT_0052afa4 = 1. */
+            return;
+        }
+        if (s_slot_0055302c == 3) {
+            /* Skirmish! — the page-0xc save/load list (deferred). */
+            g_redraw_fn(2);
+            /* TODO(skirmish): page-0xc bring-up. */
+            return;
+        }
+        /* Custom game — the page-7 game-setup screen. */
+        engine_title_render_set_page(7);
+        g_redraw_fn(2);             /* DAT_0057d340 = 2 */
+        /* TODO(roster/audio): 0x4330c6 shield-colour refresh +
+         * 0x43eda0(3, 0) sound cue. */
+        return;
+    }
+    /* Continue in a multiplayer setup (DAT_00553030 != 0) is gated on the
+     * Continue-enable timer and routes to pages 6/8/0xb — deferred with MP. */
 }
 
 /* ─── page-7 ("game setup") click actions ────────────────────────── */
@@ -394,6 +478,27 @@ static const engine_menu_hotspot_t k_page5_hotspots[2] = {
     { 0x170, 0x76, 0x210, 0x8e, menu_action_page5, 1, 1 },  /* The new campaign  */
 };
 
+/* Page 4 ("Choose your title and your shield", retail DAT_004dcc20) — 7
+ * press-triggered hotspots: five shield slots then Back / Continue.  Boxes
+ * are the verbatim short[] from the binary; shield params 1..5 (→ the
+ * clicked design), Back param 1, Continue param 2.  The shield boxes sit at
+ * x = (i-1)·0x58 + 0x70 (64 wide) over y∈[0x8c,0xd2); the two buttons match
+ * the rendered 0xc0×0x18 bevel rects at (0x70,0xd7) / (0x150,0xd7).
+ *
+ * When the Back/Continue row is hidden (the short MP layout,
+ * engine_title_render_choose_title_buttons_shown() == 0) the click pass
+ * tests only the first 5 entries; the hover pass always tests all 7
+ * (retail FUN_0040e5e7(…,7)). */
+static const engine_menu_hotspot_t k_choose_title_buttons[7] = {
+    { 0x070, 0x8c, 0x0b0, 0xd2, menu_action_p4_shield, 1, 1 },  /* shield 1 */
+    { 0x0c8, 0x8c, 0x108, 0xd2, menu_action_p4_shield, 1, 2 },  /* shield 2 */
+    { 0x120, 0x8c, 0x160, 0xd2, menu_action_p4_shield, 1, 3 },  /* shield 3 */
+    { 0x178, 0x8c, 0x1b8, 0xd2, menu_action_p4_shield, 1, 4 },  /* shield 4 */
+    { 0x1d0, 0x8c, 0x210, 0xd2, menu_action_p4_shield, 1, 5 },  /* shield 5 */
+    { 0x070, 0xd7, 0x130, 0xf0, menu_action_p4_button, 1, 1 },  /* Back     */
+    { 0x150, 0xd7, 0x210, 0xf0, menu_action_p4_button, 1, 2 },  /* Continue */
+};
+
 /* Page 7 ("game setup") — three retail tables dispatched in order:
  *
  *   DAT_004dcd28 (3) — the carved Cancel / Start / Defaults buttons,
@@ -461,6 +566,29 @@ int engine_menu_title_input(const engine_menu_click_in_t *in)
             return 1;
         engine_title_render_set_selected_button(
             engine_menu_hotspot_hover(0, 0, k_page5_hotspots, 2,
+                                      in->cursor_x, in->cursor_y));
+    } else if (page == 4) {
+        /* Page-4 arm of FUN_004ba9c8 ("Choose your title and your shield").
+         * The click pass tests 5 or 7 hotspots depending on whether the
+         * Back/Continue row is shown; the hover pass always tests all 7
+         * (retail FUN_0040e5e7(…,7)).
+         *
+         * Deferred from retail's arm — none has a page-4 render consumer in
+         * the drop-in:
+         *   - FUN_00404a46 (the per-frame double-LFSR advance, ported as
+         *     engine_rng_step) perturbs only global RNG state the title
+         *     screen never reads;
+         *   - the name-editor tail (DAT_005aeb78 = 1; FUN_00401f49;
+         *     FUN_0040210c(&DAT_0053f1e0, 0x1f)) needs the global title text
+         *     editor + the WM_CHAR keystroke route wired to the menu — the
+         *     title text-edit subsystem;
+         *   - 0x4bbe51 enables Continue (DAT_0057c940 = 1) once the 6 s
+         *     join window elapses, multiplayer-only (DAT_00553030 != 0). */
+        int n = engine_title_render_choose_title_buttons_shown() ? 7 : 5;
+        if (engine_menu_hotspot_click(0, 0, k_choose_title_buttons, n, in))
+            return 1;
+        engine_title_render_set_selected_button(
+            engine_menu_hotspot_hover(0, 0, k_choose_title_buttons, 7,
                                       in->cursor_x, in->cursor_y));
     } else if (page == 7) {
         /* Three tables dispatched in order (buttons → country → tabs);

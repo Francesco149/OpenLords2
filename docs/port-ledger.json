@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 309,
-  "ported": 35,
-  "unported": 2103,
+  "tested": 313,
+  "ported": 34,
+  "unported": 2100,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 344,
-  "pct_touched": 14.1,
-  "pct_tested": 12.6,
+  "touched": 347,
+  "pct_touched": 14.2,
+  "pct_tested": 12.8,
   "bytes_total": 838629,
-  "bytes_touched": 123018,
-  "pct_bytes_touched": 14.7
+  "bytes_touched": 123975,
+  "pct_bytes_touched": 14.8
  },
  "orphan_refs": [
   "0x004148",
@@ -411,6 +411,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_menu_input.c",
     "src/text_input.h"
    ]
   },
@@ -455,6 +456,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_menu_input.c",
     "src/text_input.h"
    ]
   },
@@ -886,6 +888,7 @@
    "src": [
     "src/engine.c",
     "src/engine.h",
+    "src/engine_menu_input.c",
     "src/engine_rng.c"
    ]
   },
@@ -4612,16 +4615,22 @@
    "name": "FUN_00432ee6",
    "size": 197,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_menu_input.c"
+   ]
   },
   {
    "va": "0x432fab",
    "name": "FUN_00432fab",
    "size": 191,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_menu_input.c",
+    "src/engine_title_render.c",
+    "src/engine_title_render.h"
+   ]
   },
   {
    "va": "0x43306a",
@@ -4644,8 +4653,10 @@
    "name": "FUN_00433155",
    "size": 569,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_menu_input.c"
+   ]
   },
   {
    "va": "0x43338e",
@@ -14593,8 +14604,9 @@
    "name": "FUN_00499034",
    "size": 197,
    "is_thunk": false,
-   "status": "ported",
+   "status": "tested",
    "src": [
+    "src/engine_menu_input.c",
     "src/gfx.c",
     "src/gfx.h"
    ]
@@ -14864,6 +14876,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_menu_input.c",
     "src/engine_roster.c",
     "src/engine_roster.h"
    ]
@@ -14948,6 +14961,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_menu_input.c",
     "src/engine_npc_schedule.c",
     "src/engine_npc_schedule.h",
     "src/engine_title_render.c"
@@ -18085,7 +18099,8 @@
    "src": [
     "src/engine.c",
     "src/engine_menu_input.c",
-    "src/engine_menu_input.h"
+    "src/engine_menu_input.h",
+    "src/main.c"
    ]
   },
   {
