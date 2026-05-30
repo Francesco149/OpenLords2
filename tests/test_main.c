@@ -1325,6 +1325,12 @@ struct test_case {
     X(map_query_box_clamps_negative_anchor) \
     X(map_query_box_radius0_single_cell) \
     X(map_query_box_unbound_returns_0) \
+    X(map_query_ring_empty_grid_returns_1) \
+    X(map_query_ring_no_feature_returns_0) \
+    X(map_query_ring_bit0_uses_radius_plus_1) \
+    X(map_query_ring_only_bit1_uses_radius_d) \
+    X(map_query_ring_bit0_distance_4_returns_3) \
+    X(map_query_ring_out_of_range_returns_0) \
     \
     X(strat_cost_water_blocked) \
     X(strat_cost_level_gate) \
@@ -1397,6 +1403,9 @@ struct test_case {
     X(game_init_reset_subtables_slot0_and_cursor) \
     X(game_init_clear_castle_shadow_transient) \
     X(game_init_clear_castle_shadow_scalars) \
+    X(game_init_army_bit0_within_radius3) \
+    X(game_init_army_only_bit1_within_radius3) \
+    X(game_init_army_coord_stride_is_3) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

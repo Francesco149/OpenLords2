@@ -112,3 +112,30 @@ int engine_map_query_box_any_rawflag_only_bit1(int col, int row, int radius)
 {
     return box_scan(col, row, radius, 0xfd, 0x00);
 }
+
+/* Port of FUN_0046733c.  Ring-distance probe centred at (col, row):
+ * returns the smallest radius d in 1..5 at which a feature is found,
+ * else 0.  At each d it tests the two box predicates with an
+ * ASYMMETRIC radius — the bit0 box uses radius d+1, the only-bit1 box
+ * uses radius d — and returns d at the first hit (bit0 tested first).
+ *
+ * Caveat for future callers: like the box scans it delegates to, the
+ * retail body uses engine_path's nearest-result globals
+ * (DAT_00569570 / DAT_00569578) as its loop counters, so on a hit
+ * those globals hold the matching cell's (col, row).  This port
+ * returns only the ring distance and does NOT expose the matched cell
+ * (matching the box_scan port's locals-not-globals choice).  Any
+ * caller that needs the found position — e.g. 0x427ed0, which
+ * reads DAT_00569570/78 right after this probe family returns truthy —
+ * must first give box_scan a position out-param.  See
+ * docs/findings/engine-quirks.md. */
+int engine_map_query_nearest_feature_ring(int col, int row)
+{
+    for (int d = 1; d <= 5; d++) {
+        if (engine_map_query_box_any_rawflag_bit0(col, row, d + 1))
+            return d;
+        if (engine_map_query_box_any_rawflag_only_bit1(col, row, d))
+            return d;
+    }
+    return 0;
+}

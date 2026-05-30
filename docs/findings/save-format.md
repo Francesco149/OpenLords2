@@ -43,7 +43,7 @@ element size and the gameplay-mode they belong to.
 | 1 | `0x5440e0`  | 51200  | 8      | 6400  | **castles state** — current scenario block of Castles.dat |
 | 2 | `0x553d50`  |   264  | 44     | 6     | per-player state (44 B × 6 players) |
 | 3 | `0x57bf00`  |  2112  | 352    | 6     | per-player state (352 B × 6 players); strategic mode |
-| 4 | `0x53f9b0`  | 13056  | 768    | 17    | per-army? per-scenario-cache?  (16 used slots + slot 0) |
+| 4 | `0x53f9b0`  | 13056  | 768    | 17    | per-army? per-scenario-cache?  (16 used slots + slot 0).  NOT flat: carries internal sub-tables — e.g. a 3-byte-stride army-coord array `{col,row,?}` at +0x6c (0x53fa1c), see quirk #129 |
 | 5 | `0x52f0b0`  | 63420  | 420    | 151   | **per-territory** state (150 used + slot 0); field +0 = owner |
 | 6 | `0x568dc0`  |   260  | 20     | 13    | 13 × 20 B records (unknown — possibly unit/army types) |
 | 7 | `0x554480`  | 34992  | 432    | 81    | per-battle-hex state (80 used + slot 0); **combat mode** |

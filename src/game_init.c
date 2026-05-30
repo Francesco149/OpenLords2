@@ -12,6 +12,7 @@
 #include "save_schema_globals.h"  /* s_slot_<va> — the 17 calendar/world scalars */
 #include "engine_turn.h"          /* g_sim_turn_progress, g_sim_turn_sync_baseline_ms */
 #include "engine_roster.h"        /* player_first_active_nonlocal (FUN_004a1e6c) */
+#include "engine_map_query.h"     /* box predicates for the army-coord probes */
 
 /* Fixed-length record zeroer — retail FUN_0046ea28 (len 0x300),
  * FUN_0046eb09 (len 0x14), FUN_0046ead0 (len 0x1a4) and FUN_0046ea61
@@ -455,4 +456,46 @@ void engine_game_init_clear_castle_shadow(void)
     s_slot_0055300c = 0;                          /* entry 66 */
     s_slot_00568da8 = 0;                          /* entry 67 */
     s_slot_00553f30 = 0;                          /* entry 68 */
+}
+
+/* Per-army map-coordinate sub-table: a 3-byte-stride array living at
+ * offset 0x6c of save entry 4 (g_per_army_768, retail base 0x53fa1c),
+ * indexed by player/army id — {col @ +0, row @ +1, ? @ +2} per id.
+ *
+ * NOTE the stride: Ghidra renders the access as `(&DAT_0053fa1c)[id *
+ * 0x300]`, but r2 shows `byte [eax + eax*2 + 0x53fa1c]` — i.e. id*3, a
+ * 3-byte record.  The 0x300 is a decompiler misread; the real table is
+ * a packed coord array, not the 768-B per-army record stride.  This
+ * also means save entry 4 is not a flat 17×768 block but carries
+ * internal sub-tables.  See engine-quirks.md. */
+#define ARMY_COORD_OFF      0x6c
+#define ARMY_COORD_STRIDE   3
+
+/* Shared body for FUN_00428007 / FUN_00428078: look up army `id`'s map
+ * coordinate, then probe Chebyshev radii 1..3 around it, returning 1 at
+ * the first radius where the given box predicate matches, else 0.  The
+ * coords are read as unsigned bytes (retail `(uint)(byte)`); an out-of-
+ * range coord simply yields an empty clamped box (→ 0). */
+static int army_near(int id, int (*probe)(int, int, int))
+{
+    int col = g_per_army_768[ARMY_COORD_OFF + id * ARMY_COORD_STRIDE];
+    int row = g_per_army_768[ARMY_COORD_OFF + id * ARMY_COORD_STRIDE + 1];
+    for (int r = 1; r <= 3; r++)
+        if (probe(col, row, r))
+            return 1;
+    return 0;
+}
+
+/* Port of FUN_00428007 — 1 iff a rawflag-bit0 cell lies within Chebyshev
+ * radius 3 of army `id` (via FUN_0046cfbd). */
+int engine_game_init_army_near_rawflag_bit0(int id)
+{
+    return army_near(id, engine_map_query_box_any_rawflag_bit0);
+}
+
+/* Port of FUN_00428078 — 1 iff a rawflag-only-bit1 cell (flag 0 or 2)
+ * lies within Chebyshev radius 3 of army `id` (via FUN_0046d130). */
+int engine_game_init_army_near_rawflag_only_bit1(int id)
+{
+    return army_near(id, engine_map_query_box_any_rawflag_only_bit1);
 }

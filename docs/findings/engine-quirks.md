@@ -4479,6 +4479,85 @@ actually advances the season past winter; at new-game it never fires.
 
 ---
 
+## 129. The army-coord probes index a 3-byte table that Ghidra renders as a 0x300 stride
+
+The new-game / AI-setup army-neighbourhood probes `FUN_00428007` and
+`FUN_00428078` look up an army's map coordinate before scanning the cells
+around it.  Ghidra decompiles the lookup as
+
+```c
+FUN_0046cfbd((uint)(byte)(&DAT_0053fa1c)[param_1 * 0x300],   // col
+             (uint)(byte)(&DAT_0053fa1d)[param_1 * 0x300],   // row
+             radius);
+```
+
+i.e. a stride of **0x300** — which lines up suspiciously well with the
+768-byte per-army record stride of the block that table lives in (save
+entry 4, `g_per_army_768`).  It's a lie.  The actual instruction is
+
+```
+mov cl, byte [eax + eax*2 + 0x53fa1c]   ; eax = param_1  →  base + param_1*3
+```
+
+`eax + eax*2` is `param_1 * 3`.  The coordinate table is a **packed
+3-byte-stride** array — `{col, row, ?}` per army id — sitting at offset
+0x6c of entry 4, *not* one field sampled once per 768-B record.  The
+decompiler appears to have mis-folded the `lea`-style `base + idx*3`
+into a scaled array index and picked the wrong scale.  This is a
+standing reminder that Ghidra's array-stride rendering is not byte-truth;
+`r2 pdf` is.
+
+A corollary: save entry 4 is therefore **not** a flat 17×768 block — it
+carries internal sub-tables (this coord array among them).  Our
+`engine_game_init_clear_tables` still clears it correctly (17×0x300 ==
+the whole 13056-byte block), but the "17 per-army records" framing is a
+clear-shape convenience, not a faithful layout.
+
+> 📍 `src/game_init.c` (`engine_game_init_army_near_rawflag_bit0` /
+> `_only_bit1`), Ghidra `FUN_00428007`/`FUN_00428078`,
+> r2 `pdf @ 0x428007` (`@ 0x428035` / `0x428045` show the `eax*2`).
+
+---
+
+## 130. The box-scan loop counters double as the engine's nearest-cell result globals — a port trap for FUN_00427ed0
+
+The strategic-map box scans `FUN_0046cfbd` / `FUN_0046d130` (and the
+ring-distance finder `FUN_0046733c` over them) use the globals
+`DAT_00569570` (inner/col) and `DAT_00569578` (outer/row) as their loop
+counters — the very same globals `engine_path` fills with its
+nearest-cell result.  On the return-1 path the counters happen to hold
+the **matching cell's (col, row)**:
+
+```
+0x46d0ae  mov [0x569570], eax   ; col = clamped start, then inc per cell
+0x46d083  mov [0x569578], eax   ; row = clamped start, then inc per row
+0x46d110  mov eax, 1            ; match → return, counters frozen at the hit
+```
+
+Our port of all three predicates deliberately uses **locals**, because
+their three direct callers (`0x46733c` / `0x428007` / `0x428078`) read
+only the 0/1 (or ring-distance) return value — never the globals.  That
+is faithful *for those callers*.
+
+But `FUN_00427ed0` (a direct `0x497ced` new-game callee) calls the army
+probes and then immediately does
+
+```c
+if (FUN_00428007(id) || FUN_00428078(id))
+    FUN_0046e1b0(3, DAT_00569570, DAT_00569578, 6);   // place something AT the found cell
+```
+
+— reading the globals the probe's box scan left behind.  When
+`FUN_00427ed0` is ported, the box scan **must** expose the matched
+(col, row) (an out-param, or by actually writing the globals), or the
+placement will silently target the wrong cell.  Flagged here and in
+`engine_map_query.c` so the trap is seen before, not after.
+
+> 📍 `src/engine_map_query.c` (`box_scan`, `engine_map_query_nearest_feature_ring`),
+> Ghidra `FUN_0046cfbd` @ 0x46d083/0x46d0ae, `FUN_00427ed0` @ 0x427f0a.
+
+---
+
 <!--
 Template for new entries:
 

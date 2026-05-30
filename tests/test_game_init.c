@@ -24,6 +24,7 @@
 #include "save.h"
 #include "save_schema_globals.h"  /* s_slot_<va> — seeded calendar scalars */
 #include "engine_turn.h"          /* turn-handshake globals reset by the seed */
+#include "engine_map_query.h"     /* cell-grid binding for the army probes */
 
 /* The save blocks under test live in save.c (linked into the suite). */
 
@@ -746,5 +747,87 @@ int test_game_init_clear_castle_shadow_scalars(void)
     T_ASSERT_EQ_U(s_slot_0055300c, 0);
     T_ASSERT_EQ_U(s_slot_00568da8, 0);
     T_ASSERT_EQ_U(s_slot_00553f30, 0);
+    return 0;
+}
+
+/* ── Army-neighbourhood probes (FUN_00428007 / FUN_00428078) ─────────── */
+
+enum { ARMY_GRID = 0x40, ARMY_STRIDE = 8, ARMY_COORD_OFF = 0x6c };
+static uint8_t g_army_cells[ARMY_GRID * ARMY_GRID * ARMY_STRIDE];
+
+/* Set every cell's raw-flag byte (+1) to v; head-link bytes stay 0. */
+static void army_fill_rawflag(uint8_t v)
+{
+    for (int i = 0; i < ARMY_GRID * ARMY_GRID; i++)
+        g_army_cells[i * ARMY_STRIDE + 1] = v;
+}
+
+/* Reset the cell grid + per-army block, bind the grid, and seat army
+ * `id`'s map coordinate into the 3-byte-stride sub-table at +0x6c. */
+static void army_setup(int id, int col, int row, uint8_t fill)
+{
+    memset(g_army_cells, 0, sizeof g_army_cells);
+    if (fill) army_fill_rawflag(fill);
+    engine_map_query_bind_cell_descriptors(g_army_cells);
+
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    g_per_army_768[ARMY_COORD_OFF + id * 3]     = (uint8_t)col;
+    g_per_army_768[ARMY_COORD_OFF + id * 3 + 1] = (uint8_t)row;
+}
+
+static void army_set_rawflag(int col, int row, uint8_t v)
+{
+    g_army_cells[(row * ARMY_GRID + col) * ARMY_STRIDE + 1] = v;
+}
+
+/* bit0 probe: a rawflag-bit0 cell at Chebyshev distance 3 is inside the
+ * radius-3 box; one at distance 4 is not. */
+int test_game_init_army_bit0_within_radius3(void)
+{
+    army_setup(1, 20, 20, 4 /* surround with "neither" flag */);
+    army_set_rawflag(23, 20, 0x01);     /* distance 3 */
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1), 1);
+
+    army_setup(1, 20, 20, 4);
+    army_set_rawflag(24, 20, 0x01);     /* distance 4 — out of reach */
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1), 0);
+    return 0;
+}
+
+/* only_bit1 probe: matches a flag∈{0,2} cell within radius 3.  With the
+ * grid filled with flag 4 (neither 0 nor 2), only the carved cell hits. */
+int test_game_init_army_only_bit1_within_radius3(void)
+{
+    army_setup(1, 20, 20, 4);
+    army_set_rawflag(22, 22, 0x02);     /* flag 2 → only_bit1 match, dist 2 */
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_only_bit1(1), 1);
+    /* bit0 probe must NOT see a flag-2 cell. */
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1), 0);
+
+    army_setup(1, 20, 20, 4);           /* no flag∈{0,2} anywhere */
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_only_bit1(1), 0);
+    return 0;
+}
+
+/* The coordinate sub-table is 3-byte-stride (r2 `id*3`), NOT the 0x300
+ * per-army-record stride Ghidra rendered.  Seat two armies one record
+ * apart and confirm each probe reads its own (col,row): army 1 sits on a
+ * matching cell, army 2 three bytes further sits far away. */
+int test_game_init_army_coord_stride_is_3(void)
+{
+    memset(g_army_cells, 0, sizeof g_army_cells);
+    army_fill_rawflag(4);
+    engine_map_query_bind_cell_descriptors(g_army_cells);
+
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    g_per_army_768[ARMY_COORD_OFF + 1 * 3]     = 10;  /* army 1 col */
+    g_per_army_768[ARMY_COORD_OFF + 1 * 3 + 1] = 10;  /* army 1 row */
+    g_per_army_768[ARMY_COORD_OFF + 2 * 3]     = 50;  /* army 2 col */
+    g_per_army_768[ARMY_COORD_OFF + 2 * 3 + 1] = 50;  /* army 2 row */
+
+    army_set_rawflag(10, 10, 0x01);     /* feature on army 1 only */
+
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1), 1);
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(2), 0);
     return 0;
 }

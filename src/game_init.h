@@ -123,4 +123,18 @@ void engine_game_init_reset_player_subtables(void);
  * orchestrator. */
 void engine_game_init_clear_castle_shadow(void);
 
+/* Army-neighbourhood probes FUN_00428007 / FUN_00428078 — shared
+ * new-game / AI-setup utilities (callees of the 0x497ced → 0x427ed0
+ * chain plus three other setup paths: 0x4ac185 / 0x4292af / 0x4a9a9a).
+ * Each looks up army `id`'s map coordinate from the 3-byte-stride
+ * sub-table at offset 0x6c of save entry 4 (g_per_army_768) and reports
+ * whether a matching map cell lies within Chebyshev radius 1..3, using
+ * the two engine_map_query box predicates:
+ *
+ *   _bit0       → rawflag bit 0 set   (FUN_00428007 → FUN_0046cfbd)
+ *   _only_bit1  → rawflag is 0 or 2   (FUN_00428078 → FUN_0046d130)
+ */
+int engine_game_init_army_near_rawflag_bit0(int id);
+int engine_game_init_army_near_rawflag_only_bit1(int id);
+
 #endif /* OPENLORDS2_GAME_INIT_H */

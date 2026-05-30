@@ -186,7 +186,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x422d22 | 719 | 1 | 3 |  |
 | 0x42dbc7 | 868 | 1 | 7 |  |
 | 0x429ba4 | 878 | 1 | 0 | ✓ |
-| 0x4280e9 | 904 | 1 | 4 |  |
+| 0x4280e9 | 904 | 1 | 3 |  |
 | 0x421f14 | 1491 | 1 | 2 |  |
 | 0x42c64f | 1531 | 1 | 3 |  |
 | 0x421707 | 1538 | 1 | 2 |  |

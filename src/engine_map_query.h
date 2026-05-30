@@ -30,4 +30,11 @@ int engine_map_query_region_clear(int col, int row, int size);
 int engine_map_query_box_any_rawflag_bit0(int col, int row, int radius);
 int engine_map_query_box_any_rawflag_only_bit1(int col, int row, int radius);
 
+/* Port of FUN_0046733c.  Ring-distance probe at (col, row): returns the
+ * smallest radius d in 1..5 at which the bit0 box (radius d+1) or the
+ * only-bit1 box (radius d) matches, else 0.  bit0 is tested first at
+ * each d.  Returns only the distance — see the .c for the caveat about
+ * the matched cell position. */
+int engine_map_query_nearest_feature_ring(int col, int row);
+
 #endif /* OPENLORDS2_ENGINE_MAP_QUERY_H */

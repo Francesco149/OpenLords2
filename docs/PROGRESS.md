@@ -7,6 +7,56 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — MAP-QUERY chip: the three box-scan callers (FUN_00428007 / FUN_00428078 / FUN_0046733c)
+
+The natural follow-on to yesterday's box-scan pair: the three direct
+callers it just turned into leaves, all part of the new-game chain
+(`0x497ced` → `FUN_00427ed0` → these probes).  Tiny (113/113/124 B),
+they only return a 0/1 (or a ring distance) and read nothing else, so
+they land byte-faithfully on the existing locals-based box scans.
+
+  - **FUN_0046733c** → `engine_map_query_nearest_feature_ring(col,row)`
+    (engine_map_query.c).  Pure (col,row) ring-distance probe: for
+    d in 1..5 it tests the bit0 box at radius **d+1** then the
+    only-bit1 box at radius **d**, returning d at the first hit, else 0.
+    The +1 asymmetry between the two predicates is the only subtlety —
+    pinned by two tests (bit0-at-distance-2 → ring 1; only-bit1-at-
+    distance-2 → ring 2).
+
+  - **FUN_00428007 / FUN_00428078** → `engine_game_init_army_near_rawflag_bit0`
+    / `_only_bit1(id)` (game_init.c).  Look up army `id`'s map
+    coordinate, probe Chebyshev radius 1..3 with the matching box
+    predicate, return 0/1.
+
+**r2 caught a Ghidra lie.**  Ghidra renders the army-coordinate lookup
+as `(&DAT_0053fa1c)[id * 0x300]` — a stride that conveniently matches
+the 768-B per-army record of the block it lives in (save entry 4,
+`g_per_army_768`).  `r2 pdf` shows `mov cl, byte [eax + eax*2 +
+0x53fa1c]` = `id*3`: a packed **3-byte-stride** coord array `{col,row,?}`
+at offset 0x6c of entry 4, not one field per 768-B record.  The
+decompiler mis-scaled a `base + idx*3`.  A `stride_is_3` regression test
+seats two armies one 3-byte record apart and confirms each probe reads
+its own (col,row).  Logged as engine-quirks #129; entry 4's save-format
+row now flags that it carries internal sub-tables.
+
+**A trap noted for the next chip.**  `FUN_00427ed0` (a direct `0x497ced`
+callee, the orchestrator above these probes) does
+`if (probe(id)) FUN_0046e1b0(3, DAT_00569570, DAT_00569578, 6)` —
+reading the box-scan loop-counter globals, which on a hit hold the
+matched cell's (col,row).  Our box-scan port uses locals, faithful for
+the three callers here (they read only 0/1) but **not** for `0x427ed0`:
+when it's ported the box scan must expose the matched cell (out-param or
+real globals), or the placement targets the wrong tile.  Flagged in
+engine-quirks #130 and in a pointed comment at
+`engine_map_query_nearest_feature_ring`.
+
+Nine host tests (6 ring-distance + 3 army-probe) pin the predicates, the
+radius asymmetry, the empty/blanketed-grid behaviour, the out-of-range
+return-0, and the 3-byte stride.  1326/1326 pass; mingw drop-in build
+clean.
+
+---
+
 ## 2026-05-30 — MAP-QUERY chip: FUN_0046cfbd + FUN_0046d130 (box-scan pair)
 
 Walking down the new-game orchestrator's `FUN_00427ed0` callee chain

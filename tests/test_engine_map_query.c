@@ -23,6 +23,15 @@ static void occupy(int col, int row, int which, uint8_t v)
     g_grid[(row * GRID + col) * STRIDE + which] = v;
 }
 
+/* Set every cell's raw-flag byte (+1) to v (head-link bytes stay 0).
+ * Used to blanket the grid with a "neither predicate" flag (4) so a
+ * single carved cell drives the ring-distance probe. */
+static void grid_fill_rawflag(uint8_t v)
+{
+    for (int i = 0; i < GRID * GRID; i++)
+        g_grid[i * STRIDE + 1] = v;
+}
+
 int test_map_query_all_clear_returns_1(void)
 {
     grid_reset();
@@ -206,5 +215,69 @@ int test_map_query_box_unbound_returns_0(void)
     engine_map_query_bind_cell_descriptors(NULL);
     T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(10, 10, 2), 0);
     T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_only_bit1(10, 10, 2), 0);
+    return 0;
+}
+
+/* ── Ring-distance probe (FUN_0046733c) ─────────────────────────────── */
+
+/* An empty grid is full of flag-0 cells, so the only_bit1 box matches at
+ * radius 1 → ring distance 1. */
+int test_map_query_ring_empty_grid_returns_1(void)
+{
+    grid_reset();
+    T_ASSERT_EQ_I(engine_map_query_nearest_feature_ring(20, 20), 1);
+    return 0;
+}
+
+/* Grid blanketed with flag 4 (neither predicate matches anywhere) → 0. */
+int test_map_query_ring_no_feature_returns_0(void)
+{
+    grid_reset();
+    grid_fill_rawflag(4);
+    T_ASSERT_EQ_I(engine_map_query_nearest_feature_ring(20, 20), 0);
+    return 0;
+}
+
+/* bit0 box uses radius d+1: a bit0 cell at Chebyshev distance 2 is found
+ * at d=1 (box radius 2), so the ring distance is 1 — NOT 2.  This pins
+ * the +1 asymmetry; a port using radius d for bit0 would return 2. */
+int test_map_query_ring_bit0_uses_radius_plus_1(void)
+{
+    grid_reset();
+    grid_fill_rawflag(4);
+    occupy(22, 20, 1, 0x01);     /* distance 2 */
+    T_ASSERT_EQ_I(engine_map_query_nearest_feature_ring(20, 20), 1);
+    return 0;
+}
+
+/* only_bit1 box uses radius d (no +1): a lone flag-2 cell at distance 2
+ * is first seen at d=2.  Pins that only_bit1 does NOT get the +1. */
+int test_map_query_ring_only_bit1_uses_radius_d(void)
+{
+    grid_reset();
+    grid_fill_rawflag(4);
+    occupy(22, 20, 1, 0x02);     /* flag 2, distance 2 */
+    T_ASSERT_EQ_I(engine_map_query_nearest_feature_ring(20, 20), 2);
+    return 0;
+}
+
+/* A bit0 cell at distance 4 is reached at d=3 (box radius 4). */
+int test_map_query_ring_bit0_distance_4_returns_3(void)
+{
+    grid_reset();
+    grid_fill_rawflag(4);
+    occupy(24, 20, 1, 0x01);     /* distance 4 */
+    T_ASSERT_EQ_I(engine_map_query_nearest_feature_ring(20, 20), 3);
+    return 0;
+}
+
+/* A bit0 cell at distance 7 is beyond every tested radius (max box
+ * radius is 6 at d=5) → ring distance 0. */
+int test_map_query_ring_out_of_range_returns_0(void)
+{
+    grid_reset();
+    grid_fill_rawflag(4);
+    occupy(27, 20, 1, 0x01);     /* distance 7 */
+    T_ASSERT_EQ_I(engine_map_query_nearest_feature_ring(20, 20), 0);
     return 0;
 }

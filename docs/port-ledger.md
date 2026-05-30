@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **370** (15.1%) — tested 336, ported 34
-- code bytes touched: **15.6%** (130,863 / 838,629 B)
-- unported: **2077**
+- touched: **373** (15.2%) — tested 339, ported 34
+- code bytes touched: **15.6%** (131,213 / 838,629 B)
+- unported: **2074**
 - orphan refs (in src/, not in function table): 4
 
-## tested (336) — ported + host unit suite
+## tested (339) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -160,6 +160,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42150b | FUN_0042150b | 508 | engine_title_render.h |
 | 0x423b4f | FUN_00423b4f | 85 | engine_mp_render.c, engine_mp_render.h |
 | 0x425d35 | FUN_00425d35 | 184 | main.c |
+| 0x428007 | FUN_00428007 | 113 | game_init.c, game_init.h |
+| 0x428078 | FUN_00428078 | 113 | game_init.c, game_init.h |
 | 0x42847c | FUN_0042847c | 82 | game_init.c, game_init.h |
 | 0x4290d0 | FUN_004290d0 | 131 | engine_category_buckets.c, engine_category_buckets.h |
 | 0x429153 | FUN_00429153 | 96 | engine_category_buckets.h |
@@ -225,11 +227,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x452735 | FUN_00452735 | 53 | engine_dirty_rect.h |
 | 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_button.c, engine_button.h (+2) |
 | 0x4651b9 | FUN_004651b9 | 91 | engine_territory.c, engine_territory.h |
+| 0x46733c | FUN_0046733c | 124 | engine_map_query.c, engine_map_query.h |
 | 0x467770 | FUN_00467770 | 525 | engine_title_render.c |
 | 0x46a037 | FUN_0046a037 | 202 | engine_title_render.c |
 | 0x46c4a3 | FUN_0046c4a3 | 277 | engine_battlefield_render.c, engine_battlefield_render.h |
-| 0x46cfbd | FUN_0046cfbd | 371 | engine_map_query.c, engine_map_query.h |
-| 0x46d130 | FUN_0046d130 | 371 | engine_map_query.c, engine_map_query.h |
+| 0x46cfbd | FUN_0046cfbd | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |
+| 0x46d130 | FUN_0046d130 | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |
 | 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
 | 0x46ea28 | FUN_0046ea28 | 57 | game_init.c, game_init.h |
 | 0x46ea61 | FUN_0046ea61 | 57 | game_init.c |
