@@ -7,6 +7,59 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — GAME-START chip: hex auto-tile feature classifier (FUN_0046c2de)
+
+Ported `FUN_0046c2de` (292 B) → `engine_territory_pick_feature` (+
+`engine_territory_reset_feature_counters`) in `engine_territory.c` — the
+**feature-variant classifier** that consumes the 8-neighbour eligibility mask
+the prior chip's sweep builds.  This was the **last blocker under
+`FUN_0046dbf5`** on the FUN_004676e0 thread: with it landed, dbf5 (the sibling
+new-game grid randomiser) is now fully unblocked.
+
+**What it does.**  Match the neighbour mask against retail's 48-entry hex
+**auto-tile pattern table** (`DAT_004d7310`, the count `0x30` dbf5 passes) and
+emit the first matching row's feature.  Each 12-byte row: `pattern[0..7]` over
+the 8 hex neighbours (0 = must be ineligible, 1 = must be eligible, 2 =
+wildcard), then `type(+8)`, `aux(+9)`, the variant `cap(+0xa)`, and a per-entry
+rotating variant `counter(+0xb)`.  The per-byte match is a three-way OR
+(`pat==2 ∥ (pat≠0 ∧ mask≠0) ∥ (pat==0 ∧ mask==0)`); the first row matching all
+8 wins.  On a match it writes the row's `type` → `DAT_0057c8a4`, advances the
+counter (`++`, wrap when `cap <= counter`), and writes it → `DAT_00568200`,
+returning the row index + 1.  r2 @0x46c2de confirmed the match logic, the `jg`
+over the counter reset (so the wrap is `cap <= counter → 0`), and the
+byte-8/9/0xb global writes.
+
+**The table.**  Dumped all 576 bytes from the binary and transcribed verbatim
+(machine-generated initializer, not by eye).  It is **complete** — all 256
+neighbour configs match some row, so retail never returns 0 from this call:
+entry 0 (`1·2·1·2·1·2·1·2`, the four primary directions eligible) → type 0x4e;
+entry 46 (all-zero pattern) is the isolated-tile catch-all, type 0x16, `cap 8`;
+entry 47 (also all-zero) is an unreachable terminator.  The `type` codes span
+0x16…0x7a — the tile-variant base dbf5 combines with the variant to compute the
+final cell value (`DAT_00568200 + DAT_0057c8a4`); note dbf5 *overrides* the
+variant with a fresh RNG roll specifically when `type == 0x16`.
+
+**Shape.**  c2de is shared by **6 callers** (0x46dbf5 + five 0x47* strategic
+seeders), each reading the type/variant globals immediately after — a
+produce-then-consume contract.  The port threads the result through an
+`engine_territory_feature_pick_t` out-struct (`{type, aux, variant}`), the
+module's established idiom, keeping only the per-entry rotating counters as
+module state.  Retail never resets those (process-lifetime `.data`); the reset
+helper exists for harness/test determinism.
+
+6 host tests, all **pinned against the embedded table** (so they validate the
+576-byte transcription too): all-eligible → entry 0/0x4e/variant 1;
+all-ineligible → entry 46/0x16; first-match-wins (only-pos0 → entry 15/0x26,
+not shadowed by entry 0); cap-2 rotation 1·0·1·0 + cap-8 wrap 1…7·0·1·2; cap-1
+entry emits variant 0 forever; and end-to-end feeding a real
+`compute_neighbour_mask` result.  1374/1374 pass under ASan/UBSan; both mingw
+`.exe` build clean under `-Wall -Wextra`; `_engine_territory_pick_feature` +
+`_…reset_feature_counters` present in the PE.  Ledger: 385 touched / 349 tested.
+
+Next on this thread: **`FUN_0046dbf5`** itself (the sibling randomiser, now
+fully unblocked) — the second of the two FUN_004676e0 grid randomisers, the
+companion to `FUN_0046dd34` already ported.
+
 ## 2026-05-31 — GAME-START chip: hex-neighbour eligibility mask (FUN_0046de94 + FUN_0046de05)
 
 Landed the neighbour-adjacency pair on the **FUN_004676e0** overworld-setup

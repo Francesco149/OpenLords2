@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **384** (15.7%) — tested 348, ported 36
-- code bytes touched: **16.1%** (134,650 / 838,629 B)
-- unported: **2063**
+- touched: **385** (15.7%) — tested 349, ported 36
+- code bytes touched: **16.1%** (134,942 / 838,629 B)
+- unported: **2062**
 - orphan refs (in src/, not in function table): 4
 
-## tested (348) — ported + host unit suite
+## tested (349) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -232,6 +232,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46733c | FUN_0046733c | 124 | engine_map_query.c, engine_map_query.h |
 | 0x467770 | FUN_00467770 | 525 | engine_title_render.c |
 | 0x46a037 | FUN_0046a037 | 202 | engine_title_render.c |
+| 0x46c2de | FUN_0046c2de | 292 | engine_territory.c, engine_territory.h |
 | 0x46c4a3 | FUN_0046c4a3 | 277 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x46c5b8 | FUN_0046c5b8 | 258 | engine_territory.c, engine_territory.h |
 | 0x46cfbd | FUN_0046cfbd | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |

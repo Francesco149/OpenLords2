@@ -93,4 +93,26 @@ int engine_territory_tile_eligible(int col, int row);
  * retail passes it through the shared scratch global DAT_00543fe0. */
 void engine_territory_compute_neighbour_mask(int col, int row, int32_t mask[8]);
 
+/* Feature/tile the classifier emits for a neighbour mask (retail globals
+ * DAT_0057c8a4 / DAT_0053e9c0 / DAT_00568200). */
+typedef struct {
+    int type;     /* DAT_0057c8a4 — matched entry +8: the tile/feature variant code */
+    int aux;      /* DAT_0053e9c0 — matched entry +9 (0 throughout the retail table) */
+    int variant;  /* DAT_00568200 — the entry's post-rotation variant counter (+0xb) */
+} engine_territory_feature_pick_t;
+
+/* Port of FUN_0046c2de.  Match the 8-neighbour eligibility mask (from
+ * engine_territory_compute_neighbour_mask) against retail's 48-entry hex
+ * auto-tile pattern table, write the first matching entry's feature into
+ * *out, and advance that entry's rotating variant counter.  Returns the
+ * matched entry index + 1, or 0 if nothing matched (*out left untouched —
+ * unreachable with the shipped table, which covers all 256 masks). */
+int engine_territory_pick_feature(const int32_t mask[8],
+                                  engine_territory_feature_pick_t *out);
+
+/* Reset every pattern-table entry's rotating variant counter to 0.  Retail
+ * never resets these (the table is process-lifetime .data); the harness and
+ * tests use it to seat a deterministic starting state. */
+void engine_territory_reset_feature_counters(void);
+
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

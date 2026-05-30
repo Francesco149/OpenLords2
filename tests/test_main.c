@@ -1387,6 +1387,12 @@ struct test_case {
     X(territory_mask_even_row) \
     X(territory_mask_odd_row_uses_parity_table) \
     X(territory_mask_clamps_off_grid) \
+    X(territory_feature_all_eligible) \
+    X(territory_feature_all_ineligible) \
+    X(territory_feature_first_match_wins) \
+    X(territory_feature_counter_rotates) \
+    X(territory_feature_cap1_variant_always_zero) \
+    X(territory_feature_consumes_neighbour_mask) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \

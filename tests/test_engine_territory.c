@@ -675,3 +675,96 @@ int test_territory_mask_clamps_off_grid(void)
     for (int i = 0; i < 8; i++) T_ASSERT_EQ_I(mask[i], want[i]);
     return 0;
 }
+
+/* ── Feature-variant classifier (engine_territory_pick_feature, port of
+ *    FUN_0046c2de) — tested against the embedded retail pattern table ──── */
+
+/* All-eligible neighbours match entry 0 (pattern 1·2·1·2·1·2·1·2 → the four
+ * primary directions eligible).  type 0x4e; cap 2 → first variant 1. */
+int test_territory_feature_all_eligible(void)
+{
+    engine_territory_reset_feature_counters();
+    int32_t mask[8] = { 1, 1, 1, 1, 1, 1, 1, 1 };
+    engine_territory_feature_pick_t out = {0};
+    T_ASSERT_EQ_I(engine_territory_pick_feature(mask, &out), 1);   /* entry 0 +1 */
+    T_ASSERT_EQ_I(out.type, 0x4e);
+    T_ASSERT_EQ_I(out.aux, 0);
+    T_ASSERT_EQ_I(out.variant, 1);
+    return 0;
+}
+
+/* All-ineligible neighbours fall through to the catch-all entry 46 (all-zero
+ * pattern, the isolated tile).  type 0x16; cap 8 → first variant 1. */
+int test_territory_feature_all_ineligible(void)
+{
+    engine_territory_reset_feature_counters();
+    int32_t mask[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    engine_territory_feature_pick_t out = {0};
+    T_ASSERT_EQ_I(engine_territory_pick_feature(mask, &out), 47);  /* entry 46 +1 */
+    T_ASSERT_EQ_I(out.type, 0x16);
+    T_ASSERT_EQ_I(out.variant, 1);
+    return 0;
+}
+
+/* The first matching row wins: only-pos0 eligible skips the pos0-requiring
+ * entry 0 (which also needs pos2/4/6) and lands on entry 15 (type 0x26). */
+int test_territory_feature_first_match_wins(void)
+{
+    engine_territory_reset_feature_counters();
+    int32_t mask[8] = { 1, 0, 0, 0, 0, 0, 0, 0 };
+    engine_territory_feature_pick_t out = {0};
+    T_ASSERT_EQ_I(engine_territory_pick_feature(mask, &out), 16);  /* entry 15 +1 */
+    T_ASSERT_EQ_I(out.type, 0x26);
+    return 0;
+}
+
+/* The per-entry variant counter rotates (++ then wrap at FT_CAP) and persists
+ * across calls.  Entry 0 (cap 2) → 1,0,1,0; entry 46 (cap 8) → 1,2,…,7,0,1. */
+int test_territory_feature_counter_rotates(void)
+{
+    engine_territory_reset_feature_counters();
+    int32_t elig[8]   = { 1, 1, 1, 1, 1, 1, 1, 1 };  /* entry 0, cap 2 */
+    int32_t inelig[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };  /* entry 46, cap 8 */
+    engine_territory_feature_pick_t out = {0};
+
+    const int want0[4] = { 1, 0, 1, 0 };
+    for (int i = 0; i < 4; i++) {
+        T_ASSERT_EQ_I(engine_territory_pick_feature(elig, &out), 1);
+        T_ASSERT_EQ_I(out.variant, want0[i]);
+    }
+    const int want46[10] = { 1, 2, 3, 4, 5, 6, 7, 0, 1, 2 };
+    for (int i = 0; i < 10; i++) {
+        T_ASSERT_EQ_I(engine_territory_pick_feature(inelig, &out), 47);
+        T_ASSERT_EQ_I(out.variant, want46[i]);
+    }
+    return 0;
+}
+
+/* A cap-1 entry (entry 1, type 0x4b) emits variant 0 on every match: the
+ * counter increments to 1, then 1 >= cap(1) wraps it straight back to 0. */
+int test_territory_feature_cap1_variant_always_zero(void)
+{
+    engine_territory_reset_feature_counters();
+    int32_t mask[8] = { 1, 0, 1, 0, 1, 0, 0, 0 };  /* pos0/2/4 elig, pos6 inelig → entry 1 */
+    engine_territory_feature_pick_t out = {0};
+    for (int i = 0; i < 3; i++) {
+        T_ASSERT_EQ_I(engine_territory_pick_feature(mask, &out), 2);   /* entry 1 +1 */
+        T_ASSERT_EQ_I(out.type, 0x4b);
+        T_ASSERT_EQ_I(out.variant, 0);
+    }
+    return 0;
+}
+
+/* The mask the neighbour sweep produces feeds straight into the classifier:
+ * an interior all-eligible grid → compute_neighbour_mask → entry 0. */
+int test_territory_feature_consumes_neighbour_mask(void)
+{
+    elig_setup((uint32_t)0xfff0006u);              /* every in-grid tile eligible */
+    engine_territory_reset_feature_counters();
+    int32_t mask[8];
+    engine_territory_compute_neighbour_mask(10, 4, mask);   /* interior, all neighbours elig */
+    engine_territory_feature_pick_t out = {0};
+    T_ASSERT_EQ_I(engine_territory_pick_feature(mask, &out), 1);
+    T_ASSERT_EQ_I(out.type, 0x4e);
+    return 0;
+}
