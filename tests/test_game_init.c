@@ -587,3 +587,122 @@ int test_game_init_purge_preserves_active_and_slot0(void)
     T_ASSERT_MEM_EQ(snap4, PREC(4), PURGE_STRIDE);
     return 0;
 }
+
+/* ============================================================== *
+ *  engine_game_init_reset_player_subtables (FUN_004a1c53 + FUN_004a2584)
+ * ============================================================== */
+
+/* Element (slot, sub) of the per-player sub-table: five 0x10-B elements
+ * at record offset 0x94 (= 0x84 + sub*0x10), sub = 1..5. */
+#define SUB_ELEM(slot, sub)  (&g_player_strategic_352[(slot) * 0x160 + 0x84 + (sub) * 0x10])
+
+/* Assert one sub-element matches the reset post-condition for the given
+ * expected lead byte (5 for AI, else 0).  Bytes +0x6/+0x7 are expected to
+ * be the 0xAB pre-dirty sentinel (untouched). */
+static int check_sub_elem(int slot, int sub, uint8_t lead)
+{
+    const uint8_t *e = SUB_ELEM(slot, sub);
+    uint32_t d8; uint16_t we;
+    memcpy(&d8, e + 8,   4);
+    memcpy(&we, e + 0xe, 2);
+
+    T_ASSERT_EQ_U(e[0x0], lead);
+    T_ASSERT_EQ_U(e[0x1], 0);
+    T_ASSERT_EQ_U(e[0x2], 0);
+    T_ASSERT_EQ_U(e[0x3], 0);
+    T_ASSERT_EQ_U(e[0x4], 0);
+    T_ASSERT_EQ_U(e[0x5], 0);
+    T_ASSERT_EQ_U(e[0x6], 0xAB);          /* untouched */
+    T_ASSERT_EQ_U(e[0x7], 0xAB);          /* untouched */
+    T_ASSERT_EQ_U(d8, 0);
+    T_ASSERT_EQ_U(e[0xc], 0);
+    T_ASSERT_EQ_U(e[0xd], 1);
+    T_ASSERT_EQ_U(we, 0);
+    return 0;
+}
+
+/* The entry-146 grid clear (FUN_004a2584): each of the 6×5 8-B elements
+ * has +0/+1/+2 and the dword +4 zeroed, byte +3 left alone; plus the
+ * entry-144 scalar reset to 0. */
+int test_game_init_reset_subtables_clears_grid(void)
+{
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(s_slot_0053f0f0, 0xAB, sizeof s_slot_0053f0f0);
+    s_slot_0057a0f8 = 0x7777;
+
+    engine_game_init_reset_player_subtables();
+
+    T_ASSERT_EQ_U(s_slot_0057a0f8, 0);
+    for (int row = 0; row < 6; row++)
+        for (int col = 0; col < 5; col++) {
+            const uint8_t *g = &s_slot_0053f0f0[row * 0x28 + col * 8];
+            uint32_t d4; memcpy(&d4, g + 4, 4);
+            T_ASSERT_EQ_U(g[0], 0);
+            T_ASSERT_EQ_U(g[1], 0);
+            T_ASSERT_EQ_U(g[2], 0);
+            T_ASSERT_EQ_U(g[3], 0xAB);    /* byte +3 untouched */
+            T_ASSERT_EQ_U(d4, 0);
+        }
+    return 0;
+}
+
+/* The per-player sub-table reset: AI players (active, no human data) seed
+ * the lead byte to 5; human and inactive players seed it to 0.  Element
+ * fields and the two standalone bytes (+0x81/+0xeb) are reset; +0x6/+0x7
+ * of each element survive. */
+int test_game_init_reset_subtables_lead_byte(void)
+{
+    memset(g_player_strategic_352, 0xAB, sizeof g_player_strategic_352);
+
+    /* slot 1 = AI (active, no data); slot 2 = human (active + data);
+     * slot 3 = inactive. */
+    g_player_strategic_352[1 * 0x160 + PURGE_ACTIVE]  = 1;
+    g_player_strategic_352[1 * 0x160 + PURGE_HASDATA] = 0;
+    g_player_strategic_352[2 * 0x160 + PURGE_ACTIVE]  = 1;
+    g_player_strategic_352[2 * 0x160 + PURGE_HASDATA] = 1;
+    g_player_strategic_352[3 * 0x160 + PURGE_ACTIVE]  = 0;
+    g_player_strategic_352[4 * 0x160 + PURGE_ACTIVE]  = 0;
+    g_player_strategic_352[5 * 0x160 + PURGE_ACTIVE]  = 0;
+    s_slot_0057c8cc = 9;                  /* local = none here */
+
+    engine_game_init_reset_player_subtables();
+
+    for (int sub = 1; sub <= 5; sub++) {
+        if (check_sub_elem(1, sub, 5)) return 1;   /* AI → 5 */
+        if (check_sub_elem(2, sub, 0)) return 1;   /* human → 0 */
+        if (check_sub_elem(3, sub, 0)) return 1;   /* inactive → 0 */
+    }
+
+    /* Standalone bytes zeroed for every slot 1..5. */
+    for (int slot = 1; slot <= 5; slot++) {
+        T_ASSERT_EQ_U(g_player_strategic_352[slot * 0x160 + 0x81], 0);
+        T_ASSERT_EQ_U(g_player_strategic_352[slot * 0x160 + 0xeb], 0);
+    }
+    return 0;
+}
+
+/* Slot 0 (reserved front slot) is never visited, and the parent recomputes
+ * the first-active-non-local cursor (s_slot_00553fbc). */
+int test_game_init_reset_subtables_slot0_and_cursor(void)
+{
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(s_slot_0053f0f0, 0, sizeof s_slot_0053f0f0);
+
+    /* Slot 0 carries sentinels that the reset must not touch. */
+    memset(&g_player_strategic_352[0], 0x5A, 0x160);
+
+    /* Slots 1,2 active; local = 1 → cursor should pick slot 2. */
+    g_player_strategic_352[1 * 0x160 + PURGE_ACTIVE] = 1;
+    g_player_strategic_352[2 * 0x160 + PURGE_ACTIVE] = 1;
+    s_slot_0057c8cc = 1;
+    s_slot_00553fbc = 0x77;
+
+    uint8_t snap0[0x160];
+    memcpy(snap0, &g_player_strategic_352[0], 0x160);
+
+    engine_game_init_reset_player_subtables();
+
+    T_ASSERT_MEM_EQ(snap0, &g_player_strategic_352[0], 0x160);  /* slot 0 untouched */
+    T_ASSERT_EQ_U(s_slot_00553fbc, 2);                          /* cursor recomputed */
+    return 0;
+}

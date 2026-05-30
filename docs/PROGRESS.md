@@ -7,6 +7,37 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — GAME-START chip 8: FUN_004a1c53 (reset per-player sub-tables)
+
+The direct 0x497ced callee whose query sub-callee chip 7 prepared.
+`FUN_004a1c53` → `engine_game_init_reset_player_subtables`
+(`src/game_init.c`), folding in its other sub-callee `FUN_004a2584` as a
+static grid-clear helper.  Both are init-only (callers inside 0x497ced /
+0x4a1c53).
+
+Three steps: zero entry 144; selectively clear the entry-146 6×5 grid of
+8-B elements (zeroing +0/+1/+2 and the dword +4, leaving byte +3);
+recompute the first-active-non-local cursor via chip 7's
+`player_first_active_nonlocal`.  Then for each player slot 1..5 it resets
+a 5-entry sub-table of 0x10-B elements at record offset 0x94 plus two
+standalone bytes — each element's lead byte seeded to 5 for AI players
+(F_ACTIVE set, F_HAS_DATA clear), 0 otherwise; +0xd → 1; other written
+fields zeroed; element bytes +0x6/+0x7 left untouched.  All offsets and
+the lead-byte branch r2-confirmed (0x4a1c5c…0x4a1e3a); field semantics
+provisional (computed-pointer consumers).  Homing a non-event (entries
+144/146 already homed).
+
+Three host tests pin the grid clear (+ entry-144 reset), the lead-byte
+AI/human/inactive split with element fields and standalone bytes, and
+slot-0 untouched + cursor recomputed.  1301/1301 pass.
+
+Remaining direct 0x497ced callees: FUN_00499aca, FUN_00427ed0,
+FUN_004676e0, FUN_004984dc, FUN_00451150, FUN_00448440, FUN_0049bd99,
+plus FUN_00499d7d (audio).  No leaves among them yet — the next chips
+walk further down each one's callee chain.
+
+---
+
 ## 2026-05-30 — GAME-START chip 7: FUN_004a1e6c (first-active-non-local-player query)
 
 Prep for the next 0x497ced callee (`FUN_004a1c53`, the per-player record

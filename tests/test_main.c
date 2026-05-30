@@ -1382,6 +1382,9 @@ struct test_case {
     X(game_init_seed_unit_table_count_selection) \
     X(game_init_purge_zeroes_inactive) \
     X(game_init_purge_preserves_active_and_slot0) \
+    X(game_init_reset_subtables_clears_grid) \
+    X(game_init_reset_subtables_lead_byte) \
+    X(game_init_reset_subtables_slot0_and_cursor) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

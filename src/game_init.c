@@ -11,6 +11,7 @@
 #include "save.h"
 #include "save_schema_globals.h"  /* s_slot_<va> — the 17 calendar/world scalars */
 #include "engine_turn.h"          /* g_sim_turn_progress, g_sim_turn_sync_baseline_ms */
+#include "engine_roster.h"        /* player_first_active_nonlocal (FUN_004a1e6c) */
 
 /* Fixed-length record zeroer — retail FUN_0046ea28 (len 0x300),
  * FUN_0046eb09 (len 0x14), FUN_0046ead0 (len 0x1a4) and FUN_0046ea61
@@ -356,5 +357,78 @@ void engine_game_init_purge_inactive_records(void)
             clear_record(rec, 0x160);                       /* FUN_0046ea61 */
         else if (rec[STRAT_HAS_DATA] == 0 && rec[STRAT_OPP_TYPE] == 0)
             clear_record(rec, 0x160);                       /* FUN_0046ea61 */
+    }
+}
+
+/*
+ * FUN_004a2584 (157 B) — selective clear of the 6×5 grid of 8-B elements
+ * at save entry 146 (s_slot_0053f0f0, 240 B).  Per element it zeroes
+ * bytes +0/+1/+2 and the dword at +4, leaving byte +3 untouched.  Sole
+ * caller is the per-player reset below; kept as a static helper. */
+static void clear_grid_53f0f0(void)
+{
+    for (int row = 0; row < 6; row++) {
+        for (int col = 0; col < 5; col++) {
+            uint8_t *e = &s_slot_0053f0f0[row * 0x28 + col * 8];
+            e[0] = 0;
+            e[1] = 0;
+            e[2] = 0;                         /* byte +3 left untouched */
+            *(uint32_t *)(e + 4) = 0;
+        }
+    }
+}
+
+/*
+ * Init-only seeder FUN_004a1c53 @ 0x4a1c53 (537 B) — reset the per-player
+ * sub-tables before the new game starts.  Sole caller 0x497ced.
+ *
+ * Three steps:
+ *   1. s_slot_0057a0f8 (entry 144) = 0.
+ *   2. clear the entry-146 grid (FUN_004a2584) and recompute the
+ *      first-active-non-local-player cursor (FUN_004a1e6c, now the shared
+ *      roster helper player_first_active_nonlocal).
+ *   3. for each player slot 1..5 of g_player_strategic_352 (stride 0x160;
+ *      slot 0 skipped), reset a 5-entry sub-table at record offset 0x94
+ *      (five 0x10-B elements, sub = 1..5) plus two standalone bytes
+ *      (+0x81, +0xeb).
+ *
+ * Each sub-element's lead byte (+0x0) is seeded to 5 for an AI player
+ * (occupied with the F_ACTIVE flag AND no human-data flag) and 0
+ * otherwise; +0xd is set to 1; the remaining written fields (+0x1..+0x5,
+ * the dword +0x8, +0xc, and the word +0xe) are zeroed.  Bytes +0x6/+0x7
+ * of every element are left as they were.  Field semantics are
+ * provisional — consumers index the sub-table through a computed pointer
+ * (no static field xrefs) — so it is ported byte-exact from the
+ * r2-confirmed write set rather than named.
+ */
+void engine_game_init_reset_player_subtables(void)
+{
+    s_slot_0057a0f8 = 0;                          /* entry 144 */
+    clear_grid_53f0f0();                          /* FUN_004a2584 */
+    player_first_active_nonlocal();               /* FUN_004a1e6c */
+
+    for (int slot = 1; slot < 6; slot++) {
+        uint8_t *rec = STRAT_REC(slot);
+
+        /* AI players (active, no human data) seed the lead byte to 5. */
+        uint8_t lead = (rec[STRAT_ACTIVE] == 0 || rec[STRAT_HAS_DATA] != 0)
+                           ? 0 : 5;
+
+        rec[0xeb] = 0;
+        rec[0x81] = 0;
+
+        for (int sub = 1; sub < 6; sub++) {
+            uint8_t *e = rec + 0x84 + sub * 0x10; /* element base (rec+0x94..) */
+            e[0x0]               = lead;          /* AI → 5, else 0 */
+            *(uint32_t *)(e + 8) = 0;
+            e[0xd]               = 1;
+            e[0x4]               = 0;
+            e[0x1]               = 0;
+            e[0x3]               = 0;
+            e[0x2]               = 0;
+            e[0x5]               = 0;
+            e[0xc]               = 0;
+            *(uint16_t *)(e + 0xe) = 0;           /* bytes +0x6/+0x7 untouched */
+        }
     }
 }

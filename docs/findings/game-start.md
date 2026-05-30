@@ -81,7 +81,7 @@ live sim:
 | FUN_0049b35e | 205 | 1 | ✅ **tested** — purge inactive players' strategic records |
 | FUN_0049bc5f | 314 | 0 | **tested** (already ported) |
 | FUN_0049bd99 | 3063 | 9 | (unsurveyed — largest) |
-| FUN_004a1c53 | 537 | 2 | (unsurveyed) |
+| FUN_004a1c53 | 537 | 2 | ✅ **tested** — reset per-player sub-tables (entry 146 grid + 5-entry per-player sub-table) |
 | FUN_004ac904 | 295 | 1 | ✅ **tested** — unit/opponent-type table seeder |
 | FUN_004ae74d | 144 | 0 | clear DAT_0056d8b8 array (400×0x20) + 3 scalars |
 | FUN_004ae8a9 | 191 | 1 | **tested** (already ported) |
@@ -234,6 +234,25 @@ parallel retail `.rdata` columns.
 Homed in `game_init.c` (a 0x497ced callee); the six columns are embedded
 as `static const` arrays mirroring the retail `.rdata`, extracted
 byte-for-byte from the PE.
+
+### FUN_004a1c53 — reset per-player sub-tables (+ FUN_004a2584 grid clear)
+
+A 537-B init-only callee (sole caller 0x497ced) that resets the
+per-player sub-tables ahead of the heavy seeders.  Three steps: zero
+`s_slot_0057a0f8` (entry 144); selectively clear the entry-146 6×5 grid
+of 8-B elements (`FUN_004a2584`, a static helper — zeroes each element's
++0/+1/+2 and the dword +4, leaving byte +3); recompute the
+first-active-non-local-player cursor (`FUN_004a1e6c`, the shared roster
+helper landed in chip 7).  Then, for each player slot 1..5 of
+`g_player_strategic_352` (stride 0x160; slot 0 skipped), it resets a
+**5-entry sub-table** of 0x10-B elements at record offset 0x94 (sub =
+1..5) plus two standalone bytes (+0x81, +0xeb).  Each element's lead byte
+(+0x0) is seeded to **5 for an AI player** (`F_ACTIVE` set AND
+`F_HAS_DATA` clear) and 0 for human/inactive; +0xd is set to 1; the other
+written fields are zeroed; element bytes +0x6/+0x7 are left untouched.
+r2-confirmed write set (0x4a1d32…0x4a1e3a); field semantics provisional
+(consumers reach the sub-table through a computed pointer).  Homed in
+`game_init.c`.
 
 ### FUN_0049b35e — purge inactive players' strategic records
 

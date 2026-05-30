@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 330,
+  "tested": 332,
   "ported": 34,
-  "unported": 2083,
+  "unported": 2081,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 364,
-  "pct_touched": 14.9,
-  "pct_tested": 13.5,
+  "touched": 366,
+  "pct_touched": 15.0,
+  "pct_tested": 13.6,
   "bytes_total": 838629,
-  "bytes_touched": 129211,
-  "pct_bytes_touched": 15.4
+  "bytes_touched": 129905,
+  "pct_bytes_touched": 15.5
  },
  "orphan_refs": [
   "0x004148",
@@ -15360,8 +15360,11 @@
    "name": "FUN_004a1c53",
    "size": 537,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c",
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x4a1e6c",
@@ -15371,7 +15374,8 @@
    "status": "tested",
    "src": [
     "src/engine_roster.c",
-    "src/engine_roster.h"
+    "src/engine_roster.h",
+    "src/game_init.c"
    ]
   },
   {
@@ -15395,8 +15399,11 @@
    "name": "FUN_004a2584",
    "size": 157,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c",
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x4a2621",

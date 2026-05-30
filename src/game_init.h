@@ -107,4 +107,12 @@ void engine_game_init_seed_unit_table(void);
  * +0x7 both clear).  Scrubs leftover/garbage player state at new-game. */
 void engine_game_init_purge_inactive_records(void);
 
+/* Init-only seeder FUN_004a1c53 — reset the per-player sub-tables at
+ * new-game: zero entry 144, selectively clear the entry-146 6×5 grid
+ * (FUN_004a2584), recompute the first-active-non-local-player cursor
+ * (player_first_active_nonlocal), then reset a 5-entry sub-table (five
+ * 0x10-B elements at record offset 0x94) plus two standalone bytes for
+ * each player slot 1..5 — AI players seed each element's lead byte to 5. */
+void engine_game_init_reset_player_subtables(void);
+
 #endif /* OPENLORDS2_GAME_INIT_H */
