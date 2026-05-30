@@ -25,6 +25,16 @@ void engine_territory_bind_cells(uint8_t *cells);
  * request is skipped (host/headless). */
 void engine_territory_set_dirty_state(engine_dirty_rect_state_t *state);
 
+/* Bind the per-key cell roster (retail `DAT_0053ea00` = save entry 12,
+ * g_misc_1360 — 17 rows × 20 i32) that engine_territory_rebuild_cell_roster
+ * fills.  Required for the rebuild (NULL → no-op). */
+void engine_territory_bind_cell_roster(int32_t *roster);
+
+/* Bind the parallel per-key AI score table (retail `DAT_0053fa40`, 384
+ * i16 per row) the rebuild zeroes on the new-game path.  Optional — NULL
+ * skips that secondary clear. */
+void engine_territory_bind_cell_score_table(int16_t *scores);
+
 /* Port of FUN_004651b9.  Zero the +0x14c and +0x153 bytes of every
  * territory record 1..150.  Used during new-game/scenario init. */
 void engine_territory_clear_size_state(void);
@@ -47,5 +57,12 @@ void engine_territory_clear_cell_field(uint8_t field);
 /* Port of FUN_0046df51.  Clear bit 0x20 of byte +2 of every overworld
  * cell, then mark the full screen dirty (if a dirty state is bound). */
 void engine_territory_clear_cell_render_flags(void);
+
+/* Port of FUN_0046da4b.  Rebuild the per-key cell roster (bound via
+ * engine_territory_bind_cell_roster) from the overworld grid: index every
+ * active feature-cell (+7 key 1..16, +1 bit 0x20 set) into its key row,
+ * capped at 20 per key; cells beyond the cap are evicted.  Pass 1 to also
+ * zero the AI score table (new-game), 0 to leave it (mid-game recompute). */
+void engine_territory_rebuild_cell_roster(int reset_score_table);
 
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

@@ -1362,6 +1362,12 @@ struct test_case {
     X(territory_clear_cell_render_flags_clears_bit20_byte2) \
     X(territory_clear_cell_render_flags_marks_full_screen) \
     X(territory_clear_cell_render_flags_unbound_is_noop) \
+    X(territory_roster_indexes_active_cells_by_key) \
+    X(territory_roster_filters_inactive_cells) \
+    X(territory_roster_caps_at_20_and_evicts_overflow) \
+    X(territory_roster_clears_rows_1_to_16_only) \
+    X(territory_roster_score_clear_gated_on_reset_flag) \
+    X(territory_roster_unbound_is_noop) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \

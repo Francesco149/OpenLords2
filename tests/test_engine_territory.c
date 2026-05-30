@@ -291,3 +291,146 @@ int test_territory_clear_cell_render_flags_unbound_is_noop(void)
     engine_territory_clear_cell_render_flags();   /* must not crash */
     return 0;
 }
+
+/* ── Per-key cell roster rebuild (port of FUN_0046da4b) ─────────────── */
+
+enum { ROSTER_ROWS = 17, ROSTER_NCOL = 20, SCORE_STRIDE = 0x180 };
+static int32_t g_roster[ROSTER_ROWS * ROSTER_NCOL];   /* 340 i32 = g_misc_1360 */
+static int16_t g_score[ROSTER_ROWS * SCORE_STRIDE];   /* 17 × 384 i16 = DAT_0053fa40 */
+
+/* Mark cell (col,row) as an active feature of group-key `key`: +7 = key,
+ * +1 bit 0x20 set. */
+static void cell_feature(int col, int row, uint8_t key)
+{
+    int o = cell_off(col, row);
+    g_cells[o + 7] = key;
+    g_cells[o + 1] |= 0x20;
+}
+
+static void roster_setup(void)
+{
+    memset(g_cells, 0, sizeof g_cells);
+    memset(g_roster, 0, sizeof g_roster);
+    memset(g_score, 0, sizeof g_score);
+    engine_territory_bind_cells(g_cells);
+    engine_territory_bind_cell_roster(g_roster);
+    engine_territory_bind_cell_score_table(g_score);
+}
+
+static int32_t ros(int key, int col) { return g_roster[key * ROSTER_NCOL + col]; }
+
+/* Active cells are appended to their key's row in cell byte-offset order. */
+int test_territory_roster_indexes_active_cells_by_key(void)
+{
+    roster_setup();
+    cell_feature(2, 0, 5);    /* off 16   */
+    cell_feature(10, 0, 9);   /* off 80   */
+    cell_feature(1, 1, 5);    /* off 520  */
+    cell_feature(0, 2, 5);    /* off 1024 */
+    cell_feature(5, 3, 9);    /* off 1576 */
+
+    engine_territory_rebuild_cell_roster(0);
+
+    T_ASSERT_EQ_I(ros(5, 0), cell_off(2, 0));
+    T_ASSERT_EQ_I(ros(5, 1), cell_off(1, 1));
+    T_ASSERT_EQ_I(ros(5, 2), cell_off(0, 2));
+    T_ASSERT_EQ_I(ros(5, 3), 0);              /* row not over-filled */
+    T_ASSERT_EQ_I(ros(9, 0), cell_off(10, 0));
+    T_ASSERT_EQ_I(ros(9, 1), cell_off(5, 3));
+    return 0;
+}
+
+/* key 0, key >= 0x12, and cells without the +1 0x20 flag are all skipped. */
+int test_territory_roster_filters_inactive_cells(void)
+{
+    roster_setup();
+    int o;
+    o = cell_off(3, 0); g_cells[o + 7] = 0;  g_cells[o + 1] |= 0x20;  /* key 0   */
+    o = cell_off(4, 0); g_cells[o + 7] = 18; g_cells[o + 1] |= 0x20;  /* key 18  */
+    o = cell_off(5, 0); g_cells[o + 7] = 7;                           /* no flag */
+    cell_feature(6, 0, 7);                                            /* counted */
+
+    engine_territory_rebuild_cell_roster(0);
+
+    T_ASSERT_EQ_I(ros(7, 0), cell_off(6, 0));
+    T_ASSERT_EQ_I(ros(7, 1), 0);
+    return 0;
+}
+
+/* Each key holds at most 20 cells; the 21st finds no free column and is
+ * evicted: +0 → 0, +3 → 6, +1 → 0, +2 &= 0xe3. */
+int test_territory_roster_caps_at_20_and_evicts_overflow(void)
+{
+    roster_setup();
+    for (int c = 1; c <= 21; c++)
+        cell_feature(c, 0, 4);
+    int e = cell_off(21, 0);
+    g_cells[e + 0] = 0x99;       /* type, must be cleared */
+    g_cells[e + 2] = 0xff;       /* must become 0xe3      */
+
+    engine_territory_rebuild_cell_roster(0);
+
+    for (int i = 0; i < 20; i++)
+        T_ASSERT_EQ_I(ros(4, i), cell_off(i + 1, 0));
+
+    T_ASSERT_EQ_I(g_cells[e + 0], 0);
+    T_ASSERT_EQ_I(g_cells[e + 3], 6);
+    T_ASSERT_EQ_I(g_cells[e + 1], 0);
+    T_ASSERT_EQ_I(g_cells[e + 2], 0xe3);
+    return 0;
+}
+
+/* Step 1 clears roster rows 1..16 only; row 0 is left intact (and the
+ * 340-i32 buffer has no row 17 — the <0x12 guard's would-be OOB row). */
+int test_territory_roster_clears_rows_1_to_16_only(void)
+{
+    roster_setup();
+    for (int i = 0; i < ROSTER_ROWS * ROSTER_NCOL; i++)
+        g_roster[i] = 0x1234;
+
+    engine_territory_rebuild_cell_roster(0);   /* no active cells → clear only */
+
+    for (int c = 0; c < ROSTER_NCOL; c++)
+        T_ASSERT_EQ_I(g_roster[0 * ROSTER_NCOL + c], 0x1234);   /* row 0 kept */
+    for (int r = 1; r <= 16; r++)
+        for (int c = 0; c < ROSTER_NCOL; c++)
+            T_ASSERT_EQ_I(g_roster[r * ROSTER_NCOL + c], 0);
+    return 0;
+}
+
+/* The score-table clear runs only for reset_score_table == 1, and only on
+ * columns 0..19 of rows 1..16 (row 0 and column 20+ survive). */
+int test_territory_roster_score_clear_gated_on_reset_flag(void)
+{
+    roster_setup();
+    for (int i = 0; i < ROSTER_ROWS * SCORE_STRIDE; i++)
+        g_score[i] = 0x55;
+
+    engine_territory_rebuild_cell_roster(0);                  /* untouched */
+    T_ASSERT_EQ_I(g_score[1 * SCORE_STRIDE + 0], 0x55);
+
+    engine_territory_rebuild_cell_roster(1);
+    T_ASSERT_EQ_I(g_score[0 * SCORE_STRIDE + 0], 0x55);       /* row 0 kept   */
+    for (int r = 1; r <= 16; r++)
+        for (int c = 0; c < 20; c++)
+            T_ASSERT_EQ_I(g_score[r * SCORE_STRIDE + c], 0);
+    T_ASSERT_EQ_I(g_score[1 * SCORE_STRIDE + 20], 0x55);      /* col 20 kept  */
+    return 0;
+}
+
+/* No roster bound → whole rebuild is a no-op.  Score unbound + reset=1 →
+ * the roster clear still runs (the secondary score clear is just skipped). */
+int test_territory_roster_unbound_is_noop(void)
+{
+    roster_setup();
+    engine_territory_bind_cell_roster(NULL);
+    engine_territory_rebuild_cell_roster(1);                  /* must not crash */
+
+    engine_territory_bind_cell_roster(g_roster);
+    engine_territory_bind_cell_score_table(NULL);
+    for (int i = 0; i < ROSTER_ROWS * ROSTER_NCOL; i++) g_roster[i] = 7;
+    engine_territory_rebuild_cell_roster(1);                  /* score skip, no crash */
+    T_ASSERT_EQ_I(g_roster[1 * ROSTER_NCOL], 0);              /* roster cleared */
+    T_ASSERT_EQ_I(g_roster[0], 7);                            /* row 0 kept     */
+    return 0;
+}

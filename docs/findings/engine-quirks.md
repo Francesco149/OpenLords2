@@ -4601,6 +4601,40 @@ unrolled render hid both.
 
 ---
 
+## 132. The per-key cell roster's overflow guard allows a key (17) the destination table can't hold — a latent 1-int OOB defused only by the producers' tighter gate
+
+`FUN_0046da4b` rebuilds a per-key roster (retail `DAT_0053ea00` = save
+entry 12, `g_misc_1360`) that groups active overworld cells by their +7
+"group-key" byte: row *k* lists up to 20 cell byte-offsets whose key ==
+*k*.  The destination is exactly **1360 bytes = 17 rows × 20 × 4** — rows
+0..16.  But the scan's accept guard is `key != 0 && key < 0x12`, i.e. it
+admits keys **1..17**, and a key of 17 indexes `roster[17*20 + c]` =
+i32 index 340.. = the first int *past* `g_misc_1360`.
+
+The clear half is narrower still: it zeroes rows **1..16 only**
+(`for (k = 1; k < 0x11; …)`), so even row 0 and the would-be row 17 are
+left untouched at entry.  The write never actually lands out of bounds in
+practice because the +7 field is produced clamped to **1..16** — every
+other reader gates it `< 0x11` (see `engine_strat_cost.h`, "+7 a
+level/count, gated `< 0x11`").  So `< 0x12` here is just one-too-loose;
+17 is unreachable.  The port preserves the `< 0x12` guard verbatim (a
+faithful drop-in keeps retail's latent bug) and documents it rather than
+silently clamping; the host tests stay within keys 1..16, and a 340-i32
+roster buffer + ASan would catch any regression that fed a 17 through.
+
+Second, smaller blind spot in the same function: the "free column"
+sentinel is the value **0**, which is also cell (0,0)'s own byte-offset.
+A feature at cell (0,0) would store 0 — indistinguishable from "empty" —
+so it could never register distinctly and a later same-key cell would
+overwrite its slot.  Harmless because cell (0,0) is map-border terrain,
+never an active feature.
+
+> 📍 `src/engine_territory.c` (`engine_territory_rebuild_cell_roster`),
+> `docs/findings/game-start.md` §"FUN_004676e0", Ghidra `FUN_0046da4b`
+> @ 0x46da4b.
+
+---
+
 <!--
 Template for new entries:
 

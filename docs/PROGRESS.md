@@ -7,6 +7,51 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — GAME-START chip: per-key cell roster rebuild (FUN_0046da4b)
+
+Landed the third (and cleanest remaining) leaf of **FUN_004676e0**, the
+overworld-grid setup sub-orchestrator the prior two chips descended into.
+`FUN_0046da4b` @ 0x46da4b (293 B) → `engine_territory_rebuild_cell_roster`.
+
+It rebuilds the per-key cell roster `DAT_0053ea00` — which turned out to
+be **save entry 12** (`g_misc_1360`, 1360 B = exactly 17 rows × 20 ×
+i32).  Walk all 4096 overworld cells in byte order; each "active feature"
+cell (group-key byte +7 in 1..16 **and** raw-flag byte +1 bit 0x20 set)
+is appended to the first free (== 0) column of its key's roster row,
+capped at 20.  A cell whose key already holds 20 finds no free column and
+is **evicted** — type +0 → 0, +3 → 6, flags +1 → 0, +2 `&= 0xe3`.  A
+preliminary pass zeroes roster rows 1..16 and, only on the new-game path
+(`reset_score_table == 1`), the same rows × first 20 columns of the
+parallel AI score table `DAT_0053fa40` (384-i16 rows, consumed by the
+unported strategic demand/price scorer).  Both tables bind through new
+NULL-safe setters (`engine_territory_bind_cell_roster` /
+`_bind_cell_score_table`), matching the module's existing optional-bind
+pattern; homed in `engine_territory.c` since it scans + mutates the same
+cell grid the placer binds.
+
+Two quirks captured (**engine-quirks #132**): the accept guard `< 0x12`
+admits a key (17) the 17-row table can't hold — a latent 1-int OOB kept
+unreachable only because the +7 field's producers gate it `< 0x11`;
+preserved verbatim rather than clamped (faithful drop-in).  And the
+free-column sentinel (0) collides with cell (0,0)'s own offset, so a
+feature there could never register — harmless since (0,0) is map border.
+
+6 host tests (key grouping in scan order, inactive-cell filter, 20-cap +
+eviction field map, rows-1..16 clear isolation, score-clear reset gating,
+unbound no-ops).  1349/1349 pass under ASan/UBSan; both mingw `.exe`
+builds clean (`-Wall -Wextra`), `_engine_territory_rebuild_cell_roster`
+present in the PE.  This leaves FUN_004676e0 at 3/8 leaves ported; the 5
+remaining callees (`FUN_0046dbf5` / `FUN_0046dd34` / `FUN_00467ca6` /
+`FUN_00468d4f` / `FUN_00467a36`) each still carry 1–5 unported deps.
+
+Frontier note: the prior top leaves (`FUN_004b1897` 11-B no-op,
+`FUN_0041a734` HUD redraw, `FUN_0042f58c` palette-apply) were skipped —
+each is either a verified stripped no-op with **zero live ported caller**
+(its 3 "callers" are a comment-mention + two deferred branches), gated
+behind a still-scaffolded caller, or already logic-absorbed into gfx.c.
+The "ported caller" frontier metric overcounts via comment tokens and
+scaffolds; this chip instead continued the live new-game thread.
+
 ## 2026-05-30 — AUDIO chip: one-shot cue-buffer teardown (FUN_00427d19)
 
 Landed the top `port-frontier.md` leaf (5 ported callers) — retail

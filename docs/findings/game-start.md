@@ -68,7 +68,7 @@ live sim:
 | FUN_0042847c | 82 | 0 | copy DAT_004d8910 table → DAT_005532a0 strided |
 | FUN_00448440 | 261 | 29 | (unsurveyed — large fan-out) |
 | FUN_00451150 | 936 | 7 | (unsurveyed) |
-| FUN_004676e0 | 144 | 11 | overworld-grid setup sequence — 2 leaf callees ported (see below); 6 callees remain |
+| FUN_004676e0 | 144 | 11 | overworld-grid setup sequence — 3 leaf callees ported (see below); 5 callees remain |
 | FUN_0046f1dc/2ae/3cd | — | — | (the trio above) |
 | FUN_0046ff43 | 617 | 0 | leaf seeder (unsurveyed) |
 | FUN_00472ad0 | 16 | 1 | **tested** (already ported) |
@@ -164,6 +164,10 @@ flip lands until the world is populated enough for the map arm.
      landed 2026-05-30).  The first two leaf callees of **FUN_004676e0**
      (the overworld-grid setup sub-orchestrator, itself a 0x497ced callee).
      Both bulk-clear the 64×64×8 overworld cell grid — see below.
+   - ✅ **FUN_0046da4b** → `engine_territory_rebuild_cell_roster`
+     (`src/engine_territory.c`, landed 2026-05-31).  The third
+     FUN_004676e0 leaf — rebuilds the per-key cell roster (save entry 12)
+     from the grid, capping 20 cells/key + evicting overflow.  See below.
 
 ### FUN_004676e0 — overworld-grid setup sequence (2/8 leaves ported)
 
@@ -199,10 +203,35 @@ its leaf callees landed this chip:
 
 7 host tests (4 field-clear: one-byte isolation, 0..5 sweep, last-cell
 reach, unbound no-op; 3 render-flag: bit-0x20 isolation, full-screen
-mark, unbound no-op).  Remaining 6 unported FUN_004676e0 callees:
-`FUN_0046da4b` (a leaf — 16×20 terrain index table) plus
-`FUN_0046dbf5` / `FUN_0046dd34` / `FUN_00467ca6` / `FUN_00468d4f` /
-`FUN_00467a36` (each still has 1–5 unported deps).
+mark, unbound no-op).
+
+- **FUN_0046da4b** → `engine_territory_rebuild_cell_roster(reset_score_table)`.
+  The third leaf, landed 2026-05-31.  Called near the tail of the
+  sequence (with `1`) and from the mid-game recompute `FUN_004976a1`
+  (with `0`).  It rebuilds the per-key cell roster `DAT_0053ea00` (= save
+  entry 12, `g_misc_1360`, **17 rows × 20 i32**): walk all 4096 cells in
+  byte order, and for each "active feature" cell — group-key byte +7 in
+  1..16 *and* raw-flag byte +1 bit 0x20 set — append its byte-offset to
+  the first free (== 0) column of its key's row, capped at 20.  A cell
+  whose key already has 20 members finds no free column and is **evicted**:
+  type +0 → 0, +3 → 6, flags +1 → 0, +2 `&= 0xe3` (clears bits 2..4).
+  Step 1 first zeroes roster rows **1..16** (not 0, not 17) and — only on
+  the `reset_score_table == 1` path — the same rows × first 20 columns of
+  the parallel AI score table `DAT_0053fa40` (384-i16 rows; the
+  strategic demand/price scorer consumes it, unported).  Both tables are
+  bound via new optional setters (`engine_territory_bind_cell_roster` /
+  `_bind_cell_score_table`, NULL-safe); homed in `engine_territory.c`
+  because it scans + mutates the same cell grid the placer binds.  Note
+  the `< 0x12` accept guard admits a key (17) the 17-row table can't hold
+  — a latent 1-int OOB the +7 producers' tighter `< 0x11` gate keeps
+  unreachable; preserved verbatim and documented as **quirk #132**.
+  6 host tests (key grouping in scan order, inactive-cell filter,
+  20-cap + eviction field map, rows-1..16 clear isolation, score-clear
+  reset gating, unbound no-ops).
+
+Remaining 5 unported FUN_004676e0 callees: `FUN_0046dbf5` /
+`FUN_0046dd34` / `FUN_00467ca6` / `FUN_00468d4f` / `FUN_00467a36` (each
+still has 1–5 unported deps).
 
 ### FUN_0046ff43 — strategic movement-cost grid builder
 
