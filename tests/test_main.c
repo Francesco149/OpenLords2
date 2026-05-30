@@ -241,6 +241,13 @@ struct test_case {
     X(engine_rng_retail_seed_produces_nonzero) \
     X(engine_rng_matches_reference) \
     X(engine_rng_multi_call_evolves) \
+    X(engine_rng_single_zero_state_stays_zero) \
+    X(engine_rng_single_retail_seed_pinned) \
+    X(engine_rng_single_bit_31_always_cleared) \
+    X(engine_rng_single_7bit_masks_state) \
+    X(engine_rng_single_matches_double_lane) \
+    X(engine_rng_single_reproducibility) \
+    X(engine_rng_single_multi_call_evolves) \
     \
     X(engine_state_hash_zeros_mode_other) \
     X(engine_state_hash_strategic_zeros) \

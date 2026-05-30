@@ -708,6 +708,40 @@ typedef struct {
 
 void engine_rng_step(const engine_rng_in_t *in, engine_rng_out_t *out);
 
+/* ─── Single-LFSR RNG advance (port of FUN_00404b2c) ───────────────
+ *
+ * A third, independent 31-bit Galois LFSR — structurally one half of
+ * engine_rng_step above (same taps at bits 0/4, same bit-30 feedback
+ * target, same 31 iterations), but on its own state word and with a
+ * single 7-bit output mirror instead of six.
+ *
+ * Retail seed (FUN_004b2258 / InitInstance @ line 83637, the third
+ * RNG seed set right after the double-LFSR pair): state = 0x34518632.
+ *
+ * Retail call shape is `FUN_00404b2c(); v = DAT_005c9a84 & 7;` — the
+ * advance writes the 7-bit mirror DAT_005c9a84, and callers mask it
+ * further (game-start grid seeders FUN_0046dd34 / FUN_0046dbf5, the
+ * strategic samplers FUN_0047*).  None of those callers are ported
+ * yet, so this primitive has no live drop-in consumer; the stateful
+ * Win32 wrapper (state mirror + DAT_005c9a84) lands with the first
+ * one, mirroring how engine.c only holds the double-LFSR mirrors
+ * because the tick already drives them.
+ *
+ * Same effectively-31-bit quirk as the double LFSR (bit 31 always 0
+ * after the first advance — feedback targets bit 30, unsigned >>1
+ * clears bit 31). */
+typedef struct {
+    uint32_t state;          /* DAT_00591564 */
+} engine_rng_single_in_t;
+
+typedef struct {
+    uint32_t new_state;      /* DAT_00591564 writeback */
+    uint32_t rng_7bit;       /* DAT_005c9a84 (new_state & 0x7f) */
+} engine_rng_single_out_t;
+
+void engine_rng_step_single(const engine_rng_single_in_t *in,
+                            engine_rng_single_out_t *out);
+
 /* Read-only accessors for the FPS counter + frame counter mirrors.
  * Used by main.c at shutdown to print a smoke summary — the values
  * confirm that the per-tick driver is actually ticking and the FPS

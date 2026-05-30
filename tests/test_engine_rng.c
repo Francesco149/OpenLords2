@@ -213,3 +213,133 @@ int test_engine_rng_multi_call_evolves(void)
     T_ASSERT(mix15 > 0xffu);
     return 0;
 }
+
+/* ── Single-LFSR advance (engine_rng_step_single / FUN_00404b2c) ──
+ *
+ * The third RNG: structurally one lane of the double LFSR above, on
+ * its own state word with a single 7-bit output.  ref_advance() is a
+ * faithful independent model of one lane, so it doubles as the
+ * reference for the single LFSR too. */
+
+int test_engine_rng_single_zero_state_stays_zero(void)
+{
+    engine_rng_single_in_t  in  = { .state = 0 };
+    engine_rng_single_out_t out;
+    memset(&out, 0xff, sizeof(out));
+
+    engine_rng_step_single(&in, &out);
+
+    T_ASSERT_EQ_U(out.new_state, 0u);
+    T_ASSERT_EQ_U(out.rng_7bit, 0u);
+    return 0;
+}
+
+int test_engine_rng_single_retail_seed_pinned(void)
+{
+    /* Retail seed (FUN_004b2258 @ line 83637) is 0x34518632.  The
+     * post-advance state + 7-bit mirror are pinned from an
+     * independent C model (tools/-ad-hoc), NOT from the port:
+     *   0x34518632 → 0x3f149e51, low 7 bits = 0x51. */
+    engine_rng_single_in_t  in  = { .state = 0x34518632u };
+    engine_rng_single_out_t out;
+
+    engine_rng_step_single(&in, &out);
+
+    T_ASSERT_EQ_U(out.new_state, 0x3f149e51u);
+    T_ASSERT_EQ_U(out.rng_7bit,  0x51u);
+    return 0;
+}
+
+int test_engine_rng_single_bit_31_always_cleared(void)
+{
+    /* Same effectively-31-bit quirk as the double LFSR. */
+    engine_rng_single_in_t  in  = { .state = 0xffffffffu };
+    engine_rng_single_out_t out;
+
+    engine_rng_step_single(&in, &out);
+
+    T_ASSERT_EQ_U(out.new_state & 0x80000000u, 0u);
+    return 0;
+}
+
+int test_engine_rng_single_7bit_masks_state(void)
+{
+    /* The lone output mirror is just (new_state & 0x7f). */
+    engine_rng_single_in_t  in  = { .state = 0x34518632u };
+    engine_rng_single_out_t out;
+
+    engine_rng_step_single(&in, &out);
+
+    T_ASSERT_EQ_U(out.rng_7bit, out.new_state & 0x7fu);
+    return 0;
+}
+
+int test_engine_rng_single_matches_double_lane(void)
+{
+    /* Equivalence: the single LFSR is bit-for-bit identical to lane A
+     * of the double LFSR.  Drive both with the same seed and confirm
+     * the advanced state + 7-bit field agree — a cross-check that the
+     * two ports share the exact same polynomial.  Also checked against
+     * the independent ref_advance() model. */
+    const uint32_t seeds[] = {
+        0x34518632u, 0x54657687u, 0xdeadbeefu, 0x00000010u, 0xffffff80u,
+    };
+    for (size_t i = 0; i < sizeof(seeds) / sizeof(seeds[0]); i++) {
+        engine_rng_single_in_t  sin = { .state = seeds[i] };
+        engine_rng_single_out_t sout;
+        engine_rng_step_single(&sin, &sout);
+
+        engine_rng_in_t  din = { .state_a = seeds[i], .state_b = 0 };
+        engine_rng_out_t dout;
+        engine_rng_step(&din, &dout);
+
+        T_ASSERT_EQ_U(sout.new_state, ref_advance(seeds[i]));
+        T_ASSERT_EQ_U(sout.new_state, dout.new_state_a);
+        T_ASSERT_EQ_U(sout.rng_7bit,  dout.rng_7bit_a);
+    }
+    return 0;
+}
+
+int test_engine_rng_single_reproducibility(void)
+{
+    engine_rng_single_in_t  in  = { .state = 0x12345678u };
+    engine_rng_single_out_t out_a, out_b;
+
+    engine_rng_step_single(&in, &out_a);
+    engine_rng_step_single(&in, &out_b);
+
+    T_ASSERT_EQ_U(out_a.new_state, out_b.new_state);
+    T_ASSERT_EQ_U(out_a.rng_7bit,  out_b.rng_7bit);
+    return 0;
+}
+
+int test_engine_rng_single_multi_call_evolves(void)
+{
+    /* Feed the state back for 10 calls from the retail seed; state
+     * keeps changing and the 7-bit output isn't stuck on one value.
+     * First two steps pinned from the independent model (0x51, 0x34). */
+    engine_rng_single_in_t  in  = { .state = 0x34518632u };
+    engine_rng_single_out_t out;
+
+    uint32_t prev = in.state;
+    uint32_t seen = 0;
+
+    engine_rng_step_single(&in, &out);
+    T_ASSERT_EQ_U(out.rng_7bit, 0x51u);
+    in.state = out.new_state;
+    engine_rng_step_single(&in, &out);
+    T_ASSERT_EQ_U(out.rng_7bit, 0x34u);
+
+    in.state = prev;
+    for (int i = 0; i < 10; i++) {
+        engine_rng_step_single(&in, &out);
+        T_ASSERT(out.new_state != prev);
+        prev = out.new_state;
+        seen |= 1u << (out.rng_7bit & 31u);
+        in.state = out.new_state;
+    }
+    /* Distinct low bits seen across 10 calls — not stuck on a fixed
+     * point. */
+    T_ASSERT((seen & (seen - 1)) != 0);   /* >1 bit set */
+    return 0;
+}

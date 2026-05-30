@@ -73,3 +73,45 @@ void engine_rng_step(const engine_rng_in_t *in, engine_rng_out_t *out)
     out->rng_7bit_b  = b & 0x7fu;
     out->rng_3bit_b  = b & 0x7u;
 }
+
+/*
+ * engine_rng_step_single — pure-C port of retail FUN_00404b2c @
+ * 0x404b2c (109 B).  A single 31-bit Galois LFSR, structurally
+ * identical to one lane of engine_rng_step (the FUN_00404a46 double
+ * LFSR) above: same taps (bits 0 and 4), same bit-30 feedback inject,
+ * same 31 iterations per call.  It runs on its own state word
+ * (DAT_00591564) and produces a single 7-bit output mirror
+ * (DAT_005c9a84 = new_state & 0x7f) rather than the double LFSR's six.
+ *
+ * Retail call shape:  FUN_00404b2c(); v = DAT_005c9a84 & 7;
+ * — i.e. the advance is invoked for its side effect on the 7-bit
+ * mirror, which callers mask further.  Six call sites, all unported:
+ * the new-game overworld-grid seeders FUN_0046dd34 / FUN_0046dbf5
+ * (siblings inside the FUN_004676e0 setup sequence) and the strategic
+ * samplers at 0x47*.
+ *
+ * Same engine quirk as the double LFSR: the feedback target is bit 30
+ * (mask 0x40000000), not bit 31, so combined with the unsigned `>>1`
+ * the high bit of state is always 0 after the first call — the LFSR
+ * is effectively 31-bit.  Preserved verbatim for byte-shape parity.
+ *
+ * Pure: input state explicit, new state + 7-bit mirror returned in
+ * out.  The Win32 wrapper holding the state mirror + DAT_005c9a84
+ * lands with the first ported consumer.
+ *
+ * Retail seed (FUN_004b2258 / InitInstance @ line 83637): 0x34518632.
+ */
+void engine_rng_step_single(const engine_rng_single_in_t *in,
+                            engine_rng_single_out_t *out)
+{
+    uint32_t s = in->state;
+
+    for (int i = 0; i < 31; i++) {
+        uint32_t f = ((s >> 4) & 1u) ^ (s & 1u);
+        s >>= 1;
+        if (f) s |= 0x40000000u;   /* bit 30 — retail's literal */
+    }
+
+    out->new_state = s;
+    out->rng_7bit  = s & 0x7fu;
+}

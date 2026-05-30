@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **384** (15.7%) — tested 348, ported 36
-- code bytes touched: **16.1%** (134,720 / 838,629 B)
-- unported: **2063**
+- touched: **387** (15.8%) — tested 351, ported 36
+- code bytes touched: **16.1%** (135,357 / 838,629 B)
+- unported: **2060**
 - orphan refs (in src/, not in function table): 4
 
-## tested (348) — ported + host unit suite
+## tested (351) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -93,6 +93,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40464c | FUN_0040464c | 303 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h (+2) |
 | 0x40477b | FUN_0040477b | 291 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h (+1) |
 | 0x404a46 | FUN_00404a46 | 230 | engine.c, engine.h, engine_menu_input.c (+2) |
+| 0x404b2c | FUN_00404b2c | 109 | engine.h, engine_rng.c |
 | 0x404b99 | FUN_00404b99 | 466 | engine.c, engine.h, engine_rng.c |
 | 0x404d6b | FUN_00404d6b | 43 | engine_input.c, engine_math.c, engine_math.h (+1) |
 | 0x404d96 | FUN_00404d96 | 43 | engine_math.h |
@@ -229,7 +230,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_button.c, engine_button.h (+2) |
 | 0x4651b9 | FUN_004651b9 | 91 | engine_territory.c, engine_territory.h |
 | 0x46733c | FUN_0046733c | 124 | engine_map_query.c, engine_map_query.h |
-| 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c |
+| 0x4676e0 | FUN_004676e0 | 144 | engine_rng.c, engine_territory.c |
 | 0x467770 | FUN_00467770 | 525 | engine_title_render.c |
 | 0x469370 | FUN_00469370 | 188 | engine_territory.c |
 | 0x46a037 | FUN_0046a037 | 202 | engine_title_render.c |
@@ -240,6 +241,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
 | 0x46d3da | FUN_0046d3da | 71 | engine_territory.c |
 | 0x46da4b | FUN_0046da4b | 426 | engine_territory.c, engine_territory.h |
+| 0x46dbf5 | FUN_0046dbf5 | 319 | engine.h, engine_rng.c |
+| 0x46dd34 | FUN_0046dd34 | 209 | engine.h, engine_rng.c |
 | 0x46df51 | FUN_0046df51 | 132 | engine_territory.c, engine_territory.h |
 | 0x46e067 | FUN_0046e067 | 317 | engine_territory.c |
 | 0x46e1b0 | FUN_0046e1b0 | 792 | engine_territory.c, engine_territory.h, game_init.c |

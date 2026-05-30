@@ -178,6 +178,18 @@ helpers (`FUN_0046c5b8`×6, `FUN_0046df51`, `FUN_0046dbf5`, `FUN_0046dd34`,
 already-ported `FUN_00467770` / `FUN_0046a037` / `FUN_004291b3`.  Two of
 its leaf callees landed this chip:
 
+> **Shared dep unblocked (2026-05-31):** two of the still-unported
+> callees, `FUN_0046dd34` and `FUN_0046dbf5` (the new-game grid
+> *randomiser* passes that fill the 129×65 terrain-index table
+> `DAT_0055cea0` with rolled values), both call the engine's
+> single-LFSR RNG `FUN_00404b2c`.  That RNG is now ported as
+> `engine_rng_step_single` (a third LFSR alongside the double-LFSR
+> `engine_rng_step` — same polynomial, own state `DAT_00591564`, seed
+> `0x34518632`, single 7-bit output `DAT_005c9a84`).  See
+> `engine_rng.c`.  The two seeders still carry their own grid-mutation
+> deps (`FUN_0046de05` / `FUN_0046c2de` / `FUN_0046c080`) before they
+> can land, but the shared RNG leaf is no longer in their way.
+
 - **FUN_0046c5b8** → `engine_territory_clear_cell_field(field)`.  Zeroes
   byte `field` of every overworld cell (all 4096).  Shared (also called
   by the reset path `FUN_0046d3da`); both callers sweep fields 0..5 in

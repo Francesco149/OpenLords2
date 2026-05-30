@@ -7,6 +7,46 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — RNG chip: single-LFSR advance (FUN_00404b2c)
+
+Ported the engine's **third** RNG — retail `FUN_00404b2c` @ 0x404b2c
+(109 B) → `engine_rng_step_single` in `src/engine_rng.c`, the module
+that already holds the double-LFSR `engine_rng_step` (FUN_00404a46).
+It's structurally one lane of that double LFSR: same Galois taps
+(bits 0 and 4), same bit-30 feedback inject, same 31 iterations — but
+on its own state word `DAT_00591564` (retail seed `0x34518632`, set in
+the bootstrap `FUN_004b2258` right after the double-LFSR pair, decompile
+line 83637) with a single 7-bit output mirror `DAT_005c9a84` instead of
+the double LFSR's six masked fields.  Retail call shape is
+`FUN_00404b2c(); v = DAT_005c9a84 & 7;` — invoked for its side effect on
+the mirror, which callers mask further.
+
+Why this leaf now: it's the shared dependency under the next two
+**FUN_004676e0** callees on the new-game thread.  `FUN_0046dd34` and
+`FUN_0046dbf5` are the grid *randomiser* passes — they sweep the 129×65
+terrain-index table `DAT_0055cea0` and roll fresh values via this RNG.
+Of FUN_00404b2c's six call sites (all unported), two are those seeders;
+the other four are strategic samplers at 0x47*.  None are ported yet, so
+this primitive has **no live drop-in consumer today** — by the module's
+established split (engine_rng.c = pure primitives, engine.c = the Win32
+state wrapper) the stateful mirror + `DAT_005c9a84` accessor lands with
+the first ported consumer, exactly as the double LFSR's wrapper exists
+in engine.c only because the tick already drives it.  Adding a dead
+state mirror now would trip `-Wall -Wextra`; the pure function captures
+100% of FUN_00404b2c's logic and is fully testable on its own.
+
+Same effectively-31-bit quirk as the double LFSR (feedback targets bit
+30, unsigned `>>1` clears bit 31 → high bit always 0 after the first
+call) — already documented; no new quirk.
+
+7 host tests: zero-state fixed point, retail-seed pinned
+(`0x34518632 → 0x3f149e51`, 7-bit `0x51` — pinned from an independent C
+model, not the port), bit-31 clear, 7-bit mask, **double-lane
+equivalence** (single LFSR is bit-for-bit lane A of the double LFSR),
+reproducibility, multi-call evolution.  1356/1356 pass under ASan/UBSan;
+both mingw `.exe` builds clean; `_engine_rng_step_single` present in the
+PE.  Ledger: 387 touched / 351 tested.
+
 ## 2026-05-31 — GAME-START chip: per-key cell roster rebuild (FUN_0046da4b)
 
 Landed the third (and cleanest remaining) leaf of **FUN_004676e0**, the
