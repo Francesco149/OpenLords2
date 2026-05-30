@@ -50,11 +50,12 @@ in the arm).  6 new host tests (Continue→7, Back→1, skirmish-Continue
 deferred-but-consumes, shield-move releases-and-claims, hover→7, hidden-button
 gate) → **1242 green**; both drop-in builds clean.
 
-**Verification pending (Windows host).**  `--title-nav` steps 10/11 drive the
-real arm (page-2 "Custom game" → page 4 → click shield 3 → click Continue →
-page 7) and capture `nav_10_p?_shieldpick.bmp` / `nav_11_p?_continue.bmp`.
-The host-side capture run is the next confirmation step (see the harness note
-on launching the drop-in's self-driving bring-ups).
+**Human-confirmed** (`--title-nav` steps 10/11, 2026-05-30,
+`runs/title-nav-p4live/`): from the real flow page-2 "Custom game" → page 4,
+clicking shield 3 moves the flashing selection slot 1 → slot 3
+(`nav_10_p4_shieldpick.bmp`), then clicking Continue lands on the page-7
+game-setup screen (`nav_11_p7_continue.bmp`) — the choose-title buttons drive
+the real dispatch end-to-end.
 
 ### Next
 
