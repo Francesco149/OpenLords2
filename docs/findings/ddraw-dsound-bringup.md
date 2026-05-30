@@ -377,3 +377,35 @@ install would otherwise sit one directory away.
 > 📍  Sources: `docs/decompiled/all.c` lines 83849 (FUN_004b284e),
 > 83895 (FUN_004b2922), 19095 (FUN_0042e5c0), 19273 (FUN_0042ec91),
 > 19238 (FUN_0042eb7c), 15217 (FUN_00425b10).
+
+## Cue-buffer teardown — `FUN_00427d19`  (ported 2026-05-30)
+
+`FUN_00427d19` (89 B) stops and releases the single reusable one-shot
+WAV-cue *secondary* buffer (`DAT_00522aec`) and nulls the pointer:
+
+```c
+if (g_ds && g_cue_buf) {        /* DAT_004d4760 && DAT_00522aec */
+    IDirectSoundBuffer_Stop(g_cue_buf);     /* vtable +0x48 */
+    IDirectSoundBuffer_Release(g_cue_buf);  /* vtable +0x08 */
+    g_cue_buf = NULL;
+}
+```
+
+It is the simplest leaf of the one-shot cue cluster (rest still deferred):
+
+| VA        | role                                       | key vtable offsets |
+|-----------|--------------------------------------------|--------------------|
+| `0x427990`| load `.wav` + CreateSoundBuffer + Lock/Play | CreateSoundBuffer `IDirectSound+0x0c`, Lock `+0x2c`, Unlock `+0x4c`, Play `+0x30` |
+| `0x427c9b`| "is the cue still playing?"                | GetStatus `+0x24` (status `== 1` → playing) |
+| `0x427d19`| stop + release the cue buffer              | Stop `+0x48`, Release `+0x08` |
+
+`0x427990` calls `0x427d19` at its head to tear down the previous cue
+before starting a new one — so the engine reuses *one* secondary buffer
+for every one-shot cue rather than caching a buffer per sound.
+
+Ported into `src/audio.c` as `audio_cue_release()` (declared in
+`audio.h`).  The guard mirrors retail exactly — both the IDirectSound
+interface and the cue buffer must be live — so until the `0x427990`
+create/load path lands (it pulls the `.wav` loader `FUN_004b984f` and
+the tier-2/3 IO retry chain `0x4af312`/`0x4af116`), `g_cue_buf` is never
+assigned and `audio_cue_release()` is a faithful runtime no-op.

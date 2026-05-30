@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **381** (15.6%) — tested 347, ported 34
-- code bytes touched: **15.9%** (133,426 / 838,629 B)
-- unported: **2066**
+- touched: **383** (15.7%) — tested 347, ported 36
+- code bytes touched: **16.0%** (134,294 / 838,629 B)
+- unported: **2064**
 - orphan refs (in src/, not in function table): 4
 
 ## tested (347) — ported + host unit suite
@@ -159,7 +159,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x41ff75 | FUN_0041ff75 | 466 | engine_title_render.c |
 | 0x42150b | FUN_0042150b | 508 | engine_title_render.h |
 | 0x423b4f | FUN_00423b4f | 85 | engine_mp_render.c, engine_mp_render.h |
-| 0x425d35 | FUN_00425d35 | 184 | main.c |
+| 0x425d35 | FUN_00425d35 | 184 | audio.c, main.c |
 | 0x427ed0 | FUN_00427ed0 | 311 | engine_map_query.c, engine_territory.c, game_init.c (+1) |
 | 0x428007 | FUN_00428007 | 113 | game_init.c, game_init.h |
 | 0x428078 | FUN_00428078 | 113 | game_init.c, game_init.h |
@@ -369,7 +369,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4beed4 | FUN_004beed4 | 805 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 
-## ported (34) — reimplemented, no host test yet
+## ported (36) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -379,6 +379,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x425ded | FUN_00425ded | 94 | audio.c, audio.h |
 | 0x426529 | FUN_00426529 | 11 | engine.c |
 | 0x426d11 | FUN_00426d11 | 196 | audio.c |
+| 0x427990 | FUN_00427990 | 779 | audio.h |
+| 0x427d19 | FUN_00427d19 | 89 | audio.c, audio.h |
 | 0x427d72 | FUN_00427d72 | 340 | audio.c |
 | 0x42e5c0 | FUN_0042e5c0 | 1249 | gfx.c, gfx.h |
 | 0x42eaa6 | FUN_0042eaa6 | 214 | gfx.c |

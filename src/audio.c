@@ -71,6 +71,9 @@ extern void log_line(const char *fmt, ...);
 
 static LPDIRECTSOUND       g_ds;        /* DAT_004d4760 */
 static LPDIRECTSOUNDBUFFER g_primary;   /* DAT_00522af0 */
+static LPDIRECTSOUNDBUFFER g_cue_buf;   /* DAT_00522aec — single reusable
+                                         * one-shot WAV-cue secondary buffer,
+                                         * created by 0x427990 (deferred) */
 
 int audio_init(HWND hwnd)
 {
@@ -150,8 +153,12 @@ void audio_shutdown(void)
 
     /* TODO(sfx): call the equivalent of FUN_00426d11 (stream stop,
      * slots 0..1) and 0x4262eb (voice stop, slots 1..20) here
-     * once those subsystems exist.  0x427d19 (final cleanup)
-     * also belongs here. */
+     * once those subsystems exist.  The one-shot cue buffer
+     * (FUN_00427d19, ported below as audio_cue_release) is torn down
+     * by the gameplay cue path, NOT from shutdown — retail's own
+     * FUN_00425d35 does not call it.  Once the cue-create path lands,
+     * releasing any still-live cue buffer here would be the
+     * belt-and-braces leak guard. */
 
     if (g_primary) {
         IDirectSoundBuffer_Release(g_primary);
@@ -160,4 +167,34 @@ void audio_shutdown(void)
     IDirectSound_Release(g_ds);
     g_ds = NULL;
     log_line("OK :DS Released.");
+}
+
+/*
+ * audio_cue_release — port of retail FUN_00427d19 @ 0x427d19 (89 bytes).
+ *
+ * Stops and releases the single reusable one-shot WAV-cue secondary
+ * buffer (DAT_00522aec), then nulls the pointer.  Retail calls this at
+ * the head of 0x427990 (cue playback) to silence/free the previous
+ * cue before starting a new one, and from ~16 game-state transition
+ * sites that want any in-flight cue cut off.
+ *
+ * The guard mirrors retail exactly: BOTH the IDirectSound interface
+ * (g_ds / DAT_004d4760) and the cue buffer (g_cue_buf / DAT_00522aec)
+ * must be live.  Until the cue-playback path 0x427990 lands,
+ * g_cue_buf is never assigned, so this is a runtime no-op — which is
+ * precisely what retail's own null-guard yields in that state.
+ *
+ * Vtable offsets decoded from the retail call sites (IDirectSoundBuffer):
+ *   *(buf + 0x48) = IDirectSoundBuffer::Stop
+ *   *(buf + 0x08) = IUnknown::Release
+ * (cross-checked against 0x427c9b's GetStatus at +0x24 and
+ *  0x427990's Lock/Play/Unlock at +0x2c/+0x30/+0x4c).
+ */
+void audio_cue_release(void)
+{
+    if (g_ds && g_cue_buf) {
+        IDirectSoundBuffer_Stop(g_cue_buf);
+        IDirectSoundBuffer_Release(g_cue_buf);
+        g_cue_buf = NULL;
+    }
 }
