@@ -130,7 +130,41 @@ flip lands until the world is populated enough for the map arm.
    parked in `game_init.c`); calendar block recorded as engine-quirk
    #128.
 3. **Leaf seeders** — FUN_0042847c, FUN_004ae74d, FUN_0046ff43, the
-   FUN_0046f* sibling clearers, etc.
+   FUN_0046f* sibling clearers, etc.  Progress:
+   - ✅ **FUN_0042847c** → `engine_game_init_seed_value_table`
+     (`src/game_init.c`, landed 2026-05-30).  Resets the 16-record
+     value table at save entry 82 (`s_slot_005532a0`) from the retail
+     `DAT_004d8910` const table; dest already homed.
+   - **FUN_0046ff43** → strategic movement-cost grid builder (see
+     below); separate module, chip 3b.
+   - ⏸ **FUN_004ae74d** — **deferred.**  Clears the `DAT_0056d8b8`
+     region (r2: outer stride 0x80, dword+byte per 8-B element, els
+     1..6400 with a deliberate 8-B tail overrun).  The region is
+     aliased across unported code three ways: a scalar cursor
+     (`=10`/wrap-63 in 0x46a295), a freeable pointer at +4
+     (`DAT_0056d8bc`, freed in 0x49915e / set 0x4990f9), and the
+     payload array (0x4156a7 / 0x4ae7dd).  Its size + element struct
+     can't be homed without desync risk until a reader subsystem lands;
+     defer until then.
+
+### FUN_0046ff43 — strategic movement-cost grid builder
+
+A 617-B terrain classifier (a callee of 0x497ced) that fills the 64×64
+**strategic** movement-cost grid `DAT_004f4080` (4096 cells × i16) from
+the overworld terrain descriptors `g_overworld_map` (`DAT_00522f90`,
+save entry 0 — 8 B per cell).  Per cell it reads byte +0 (terrain type),
+byte +1 (flags), byte +7 (a level/count, gated `< 0x11`) and maps them
+to a cost word via a fixed branch ladder (flags 0xc → impassable 0;
+bit0 road → 1; bit5 → 3/6/3 by type; bit6 → 100; bit7 → mostly 0/100;
+bit4 → 100/0; else 3).
+
+This is a **distinct pathfinder from `engine_path`** (the 80×80 army
+router on the cost map at 0x504030).  Its grid is consumed by the
+still-unported strategic flood-fill `FUN_0046f700` and path-trace
+`FUN_004701ac`, which read it at directional neighbour offsets
+(±2 = ±1 col, ±0x80 = ±1 row).  Homed in its own module
+(`engine_strat_cost.c`) so those ports can share the grid when they
+land.
 4. **Heavy seeders** — FUN_00497e65 (RNG seats), FUN_0049bd99,
    FUN_0049aa0e, FUN_004984dc, FUN_00451150, FUN_00448440 (surveyed
    one at a time).

@@ -15,6 +15,7 @@
  * would pass a zero-init baseline).
  */
 
+#include <stdint.h>
 #include <string.h>
 
 #include "t.h"
@@ -141,5 +142,56 @@ int test_game_init_seed_scalars_fixed_values(void)
     T_ASSERT(g_sim_turn_progress         == 0);  /* DAT_00553fc8 */
     T_ASSERT(g_sim_turn_sync_baseline_ms == 0u); /* _DAT_0056d658 */
     T_ASSERT(g_anim_gate_53f0c4          == 0);  /* DAT_0053f0c4 */
+    return 0;
+}
+
+/* ── Value-table seed (engine_game_init_seed_value_table) ────────────
+ *
+ * FUN_0042847c fills save entry 82 (s_slot_005532a0, 16 records × 16 B)
+ * with record[i] = { defaults[i], 0 } and leaves +8..+15 of each record
+ * alone.  The defaults are the retail DAT_004d8910 table.
+ */
+
+/* DAT_004d8910 — verified byte-for-byte from the PE .rdata. */
+static const uint32_t k_expect_value_defaults[16] = {
+    0x00, 0x02, 0x0c, 0x00,  0x01, 0x00, 0x01, 0x02,
+    0x01, 0x0d, 0x10, 0x0a,  0x18, 0x17, 0x2c, 0x00,
+};
+
+int test_game_init_seed_value_table_defaults(void)
+{
+    /* Pre-dirty the whole 256-B block with a sentinel distinct from
+     * every default (and from 0), so a no-op can't pass. */
+    memset(s_slot_005532a0, 0xAB, sizeof s_slot_005532a0);
+
+    engine_game_init_seed_value_table();
+
+    for (int i = 0; i < 16; i++) {
+        const uint8_t *rec = &s_slot_005532a0[i * 0x10];
+        uint32_t v0, v4;
+        memcpy(&v0, rec + 0, 4);
+        memcpy(&v4, rec + 4, 4);
+        if (v0 != k_expect_value_defaults[i])
+            T_FAIL("record %d dword+0 = %u, want %u", i, v0,
+                   k_expect_value_defaults[i]);
+        if (v4 != 0)
+            T_FAIL("record %d dword+4 = %u, want 0", i, v4);
+    }
+    return 0;
+}
+
+/* The seeder must touch ONLY the first 8 B of each 16-B record; the
+ * trailing 8 B (+8..+15) stay as they were. */
+int test_game_init_seed_value_table_leaves_tail_untouched(void)
+{
+    memset(s_slot_005532a0, 0x5C, sizeof s_slot_005532a0);
+
+    engine_game_init_seed_value_table();
+
+    for (int i = 0; i < 16; i++)
+        for (int b = 8; b < 16; b++)
+            if (s_slot_005532a0[i * 0x10 + b] != 0x5C)
+                T_FAIL("record %d byte+%d = %u, want 0x5C (untouched)",
+                       i, b, s_slot_005532a0[i * 0x10 + b]);
     return 0;
 }

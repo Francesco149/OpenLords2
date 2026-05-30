@@ -54,4 +54,11 @@ extern int g_anim_gate_53f0c4;
  * each with prev/next mirrors) and zeroes the rest. */
 void engine_game_init_seed_scalars(void);
 
+/* Leaf seeder FUN_0042847c — reset the 16-entry value table at save
+ * entry 82 (s_slot_005532a0, 16 records × 16 B) to its defaults: each
+ * record's first dword from the retail DAT_004d8910 table, second dword
+ * (+4) zeroed, the remaining 8 B per record untouched.  Reused by the
+ * new-game init and three other reset paths (0x43723a/0x49a010/0x4a98fe). */
+void engine_game_init_seed_value_table(void);
+
 #endif /* OPENLORDS2_GAME_INIT_H */

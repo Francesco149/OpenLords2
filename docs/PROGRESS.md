@@ -7,6 +7,55 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — GAME-START chip 3a: leaf seeder FUN_0042847c (value-table reset)
+
+The first of the new-game **leaf seeders** (step 3 of the game-start
+plan) lands: `FUN_0042847c` → `engine_game_init_seed_value_table`
+(`src/game_init.c`).  It resets the 16-entry value table at **save
+entry 82** (`s_slot_005532a0[256]`, laid out as 16 records × 16 B) to
+defaults: each record's first dword from the retail `DAT_004d8910`
+const table, the second dword (+4) zeroed, the trailing 8 B of every
+record left untouched.
+
+**The dest was already homed** — entry 82 is `s_slot_005532a0[256]` in
+the shared save-schema globals, so the seeder just writes into it (same
+model as the scalar-seed phase).  The 16-dword source table was
+extracted byte-for-byte from the PE `.rdata` (`{0,2,0xc,0, 1,0,1,2,
+1,0xd,0x10,0xa, 0x18,0x17,0x2c,0}`) and embedded as a `static const`.
+
+Unlike the scalar-seed phase, this seeder has **four retail callers**
+(0x497ced new-game + 0x43723a / 0x49a010 / 0x4a98fe), so it is a
+reusable "reset table-82 to defaults" entry point, not a one-shot;
+the neighbours are cited as bare hex so the ledger doesn't miscount
+them.  Record `i`'s first dword is later read by the cursor
+`DAT_0056d8ac` (render 0x41608b/0x428daf, getters 0x4a4a3f/4b12/4c41).
+
+Coverage **356 → 357 touched** (FUN_0042847c).  2 new host tests
+(defaults match; trailing 8 B per record untouched — each pre-dirtied
+so a no-op can't pass) → **1261 green**; both drop-in builds clean.
+
+### The other two "leaf" seeders — one portable, one deferred
+
+- **FUN_0046ff43** (617 B) — builds the **64×64 strategic
+  movement-cost grid** (`DAT_004f4080`, 4096 × i16) from the overworld
+  terrain descriptors (`g_overworld_map`, save entry 0).  A separate
+  pathfinder from `engine_path`'s 80×80 army router (which uses the
+  cost map at 0x504030); its grid is read by the still-unported
+  strategic flood-fill (0x46f700) and path-trace (0x4701ac).  Portable
+  as a pure terrain classifier — chip 3b, below.
+- **FUN_004ae74d** (144 B) — **deferred.**  It clears the
+  `DAT_0056d8b8` region, but r2 shows the real addressing is
+  `base + rec*0x80 + e*8` (outer stride **0x80**, not the 0x20 Ghidra
+  prints), writing a dword + a byte per 8-B element for elements
+  1..6400 (element 0 skipped, element 6400 a deliberate 8-B overrun).
+  That region is **aliased across a web of unported code** — used as a
+  scalar cursor (`=10`, wrap-at-63 in 0x46a295), as a freeable pointer
+  at +4 (`DAT_0056d8bc` freed in 0x49915e, set in 0x4990f9), and as the
+  payload array (0x4156a7/0x4ae7dd).  Homing it now (size, element
+  struct, which uses share storage) would be speculative; it waits
+  until one of its reader subsystems lands to fix the shape.  Recorded
+  in [`findings/game-start.md`](findings/game-start.md).
+
 ## 2026-05-30 — GAME-START chip 2: the new-game scalar-seed phase (calendar + handshake + free DATs)
 
 The second chip of the new-game initialiser (`FUN_00497ced`) ports its

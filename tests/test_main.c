@@ -1352,6 +1352,8 @@ struct test_case {
     X(game_init_clear_tables_all_three_independent) \
     X(game_init_seed_scalars_calendar_block) \
     X(game_init_seed_scalars_fixed_values) \
+    X(game_init_seed_value_table_defaults) \
+    X(game_init_seed_value_table_leaves_tail_untouched) \
     /* end */
 
 /* Emit extern decls. */

@@ -3,6 +3,7 @@
  * See game_init.h for the phase plan.
  */
 
+#include <stdint.h>
 #include <string.h>
 
 #include "game_init.h"
@@ -115,4 +116,37 @@ void engine_game_init_seed_scalars(void)
     s_slot_0053e920 = 0;                        /* entry 176 */
     s_slot_0056d5e0 = 0;                        /* entry 177 */
     s_slot_0055ce7c = 6;                        /* entry 190 */
+}
+
+/*
+ * Leaf seeder FUN_0042847c — seed the 16-entry value table that lives at
+ * save entry 82 (s_slot_005532a0[256], laid out as 16 records of 16 B).
+ *
+ * For each record i: dword at +0 ← k_value_table_defaults[i], dword at
+ * +4 ← 0.  Bytes +8..+15 of every record are left untouched — retail
+ * writes only the two dwords (the table-clear phase or the prior save
+ * state owns the rest).
+ *
+ * Record `i` is later consumed via its first dword, indexed by the
+ * current-selection cursor DAT_0056d8ac (render reader 0x41608b /
+ * 0x428daf, getters 0x4a4a3f / 0x4a4b12 / 0x4a4c41).  The defaults come
+ * from the retail .rdata table at DAT_004d8910 (16 dwords), extracted
+ * byte-for-byte from the PE.
+ *
+ * Unlike the scalar-seed phase, this seeder has four retail callers
+ * (0x497ced new-game, plus 0x43723a / 0x49a010 / 0x4a98fe), so it is a
+ * reusable "reset table-82 to defaults" rather than a one-shot.
+ */
+static const uint32_t k_value_table_defaults[16] = {
+    0x00, 0x02, 0x0c, 0x00,  0x01, 0x00, 0x01, 0x02,
+    0x01, 0x0d, 0x10, 0x0a,  0x18, 0x17, 0x2c, 0x00,
+};
+
+void engine_game_init_seed_value_table(void)
+{
+    for (int i = 0; i < 0x10; i++) {            /* 16 records, stride 0x10 */
+        uint8_t *rec = &s_slot_005532a0[i * 0x10];
+        *(uint32_t *)(rec + 0) = k_value_table_defaults[i];  /* DAT_004d8910[i] */
+        *(uint32_t *)(rec + 4) = 0;
+    }
 }
