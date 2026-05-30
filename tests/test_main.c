@@ -1285,6 +1285,15 @@ struct test_case {
     X(menu_page4_typed_char_reaches_name_box) \
     X(menu_page4_editor_disabled_off_page) \
     \
+    X(menu_page3_load_sets_request) \
+    X(menu_page3_cancel_returns_to_bookmark) \
+    X(menu_page3_scroll_down_advances_first_visible) \
+    X(menu_page3_scroll_up_clamps_at_zero) \
+    X(menu_page3_scroll_forced_zero_with_few_entries) \
+    X(menu_page3_click_flashes_then_settles) \
+    X(menu_page3_scroll_autorepeat_gated_by_delay) \
+    X(menu_page3_editor_streams_into_filename) \
+    \
     X(engine_button_kind20_blits_32x32_at_origin) \
     X(engine_button_kind18_blits_24x24) \
     X(engine_button_kind_below_0x18_uses_misc_sheet) \

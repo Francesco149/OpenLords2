@@ -529,6 +529,65 @@ mutable buffer (`set_choose_title_name` copies a seed in,
 Host-tested (arm enables + copies; typed char reaches the name box; editor
 disabled off-page).  Driveable: `--title-live --title-page 4`.
 
+### Page-3 input arm — the file list goes live (`FUN_004ba9c8` page-3 arm)
+
+> 2026-05-30.  The page-3 "Loading a game." *render* (above) is now matched by
+> its *input* arm: the gauntlet Load/Cancel buttons + scroll arrows dispatch,
+> and the filename field is typeable.
+
+The page-3 arm is structurally different from pages 1/2/4/5: it does **not**
+use the short[] hotspot tables (`FUN_0040e3ee` / `FUN_0040e5e7`).  It runs the
+**button-record** hit-test `FUN_0040da1e` over the same 24-byte
+`engine_button_rec_t` strip (`DAT_004ddd78`) the renderer paints with
+`FUN_0040cfd2`.  Retail's arm, in order:
+
+```c
+DAT_005aeb78 = 1;                          // enable the shared editor
+FUN_00401f49();                            // recompute its length
+FUN_0040210c(&DAT_004ea130, 0x40);         // stream editor → filename field
+FUN_004ad9f0();                            // load-confirm pump   [DEFERRED]
+if (FUN_0040da1e(0x60, 10, &DAT_004ddd78, 4)) return 1;   // button strip
+```
+
+No hover pass (retail omits `FUN_0040e5e7`).  `0x4ad9f0` is the deferred deep
+load → game-start pump; it only acts once the `DAT_0057d3c4` confirm timer is
+armed, so dropping it leaves the buttons + field fully live.
+
+**`engine_menu_button_dispatch`** (port of `FUN_0040da1e`) is the second
+hit-test family in this module.  Each call: (1) runs a per-button press-frame
+animation countdown (a clicked button latches `pressed = 3` / `state = 1` and
+un-presses three frames later, so it visibly depresses); (2) hit-tests a
+*square* box whose side is the record's `kind` byte (quirk #125); (3)
+dispatches by edge type — type 4 = press-or-hold-auto-repeat (the accel-gate
+table, quirk #126), type 2 = toggle, type 5 = fire-on-release-animation-end.
+It dispatches by the record's retail action code (`0x4342f3` / `0x434308` /
+`0x434346`), mirroring retail's call-through-function-pointer.
+
+The three page-3 actions:
+
+| code | button | behavior |
+|------|--------|----------|
+| `0x4342f3` | Load   | sets the load latch `DAT_005cd41c = 100` (deferred pump consumes it) |
+| `0x434308` | Cancel | returns to the bookmarked page `DAT_005530f0 = DAT_00553e5c` |
+| `0x434346` | scroll | advances first-visible `DAT_004ea1a0` by ±3, mode-1 clamp |
+
+**Editor unification.**  Retail has exactly one text editor (the
+`DAT_005cd550` global); page 4's title name and page 3's filename both drive
+it, each streaming it to its own field buffer.  The drop-in now mirrors that
+with a single shared `g_title_editor` the `WM_CHAR` route always targets;
+`set_choose_title_editor` / `set_filelist_editor` bind the same slot, and each
+page's name-tail copies it out (page 4 → `DAT_0053f1e0` width 0x1f, page 3 →
+`DAT_004ea130` width 0x40, capped at 8 — quirk #127).
+
+Port: `menu_action_p3_load` / `_cancel` / `_scroll` + `filelist_button_dispatch`
++ `engine_menu_button_dispatch` (`engine_menu_input.c`); the page-3 name-tail,
+scroll, and the shared button-table getter (`engine_title_render.c`).
+Host-tested (8 cases: load latch, cancel→bookmark, scroll up/down/clamp/
+forced-zero, click-flash-then-settle, auto-repeat-gated, editor-streams-to-
+filename).  Driveable + verified: `--title-live --title-page 3` (and
+`--title-type war` typed "lastturn" → "wartturn" through the live WndProc;
+`runs/title-type-p3/`, 2026-05-30).
+
 ## Input side — hotspot hit-test + page navigation (`engine_menu_input`)
 
 > 2026-05-29. The *render* half above is matched by the *input* half: the

@@ -4400,6 +4400,56 @@ not by any property of the name field itself.
 
 ---
 
+## 125. The button-record hit-test reuses the sprite `kind` field as the hitbox side length
+
+The screen button strips (`FUN_0040cfd2` renderer / `FUN_0040da1e` hit-test,
+e.g. the page-3 file list's gauntlet + scroll buttons) store one 24-byte
+record per button.  Field +0x06 is the *sprite kind* — a sheet+blitter
+selector: `0x18` reads a 24×24 `system2.pl8` sprite, `0x20` a 32×32 one.  The
+hit-test then computes the clickable box as `[x, x + kind)` square — i.e. it
+uses the **same byte** as both the sprite selector *and* the pixel side
+length.  It works only because the two system-sheet kinds happen to equal
+their own sprite dimensions (0x18 = 24, 0x20 = 32).  A new kind whose numeric
+value didn't match its sprite size would silently get the wrong hitbox.
+
+> 📍 `src/engine_menu_input.c` (`button_rec_contains`), `src/engine_button.h`
+> (the `kind` field), Ghidra `FUN_0040da1e` @ 0x40da1e.
+
+## 126. The scroll-arrow auto-repeat is driven by a 0x30-byte sparse "gate" table that thins toward fire-every-frame
+
+Holding a type-4 button (the file-list scroll arrows) doesn't fire on a fixed
+interval.  `FUN_0040da1e` keeps a per-button repeat counter (the record's
++0x0e byte) that increments once per input frame while held, and fires the
+action only when `DAT_004d2748[counter]` is non-zero.  Counters < 8 never fire
+(the initial hold delay); from 8 the table is sparse — `1,0,0,0,0,0,1,0,…` —
+so it fires every ~6th frame, then every ~4th, every ~2nd, and once the
+counter saturates at `0x2f` it fires *every* frame.  The effect is a scroll
+that starts slow and accelerates the longer you hold, with the curve baked
+into a hand-tuned lookup table rather than computed.  The frame cadence itself
+is gated by `DAT_004ea128` = `FUN_004b20ed()`, a `timeGetTime` delta that
+returns 0 (no counter advance) if < 30 ms elapsed since the last poll.
+
+> 📍 `src/engine_menu_input.c` (`k_button_repeat_gate`, the type-4 arm of
+> `engine_menu_button_dispatch`), Ghidra `FUN_0040da1e` / `FUN_004b20ed`,
+> table dumped from `0x4d2748`.
+
+## 127. Save filenames are still DOS 8.3 — the page-3 editor caps at 8 chars even though it streams to a 64-byte field
+
+The page-3 "Loading a game." filename editor is seeded with
+`FUN_00402009(&DAT_004ea130, 8, 0xa0, 1)` — `max_length = 8`.  The per-frame
+copy-out streams it with width `0x40` (`FUN_0040210c(&DAT_004ea130, 0x40)`),
+but the editor refuses inserts past 8 chars (quirk #124's clamp).  Eight is the
+DOS 8.3 base name: the engine still writes `*.sav`-style files and won't let
+you name a save longer than the filesystem of 1996 allowed.  Typing "war" over
+the seed "lastturn" yields "wartturn" — overwrite-from-cursor, then truncated
+at 8.  (Mode 1, vs page 4's mode 0, changes the allowed-character filter, not
+the case — the captured frame stays lowercase.)
+
+> 📍 `src/main.c` (`seed_page3_state` → `text_input_init(.., 8, 0xa0, 1)`),
+> Ghidra `FUN_00402009(&DAT_004ea130, 8, 0xa0, 1)` (5 call sites).
+
+---
+
 <!--
 Template for new entries:
 

@@ -554,6 +554,13 @@ static void engine_tick_menu_input_step(void)
     in.lmb_held          = g_input_lmb;               /* DAT_004e65cc */
     in.lmb_dblclk        = g_input_lmb_dblclk;        /* DAT_004eabc5 */
     in.tick_320ms        = g_phase_tick_320ms;        /* DAT_0057d3c8 */
+    in.repeat_tick       = 1;                         /* DAT_004ea128 != 0 —
+                                                       * each title frame is a
+                                                       * real input frame; the
+                                                       * render rate-limiter
+                                                       * caps the cadence the
+                                                       * scroll auto-repeat
+                                                       * advances at. */
 
     engine_menu_title_input(&in);
 }

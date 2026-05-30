@@ -58,6 +58,10 @@ typedef struct engine_menu_click_in {
     int lmb_held;            /* DAT_004e65cc — LMB held (type 2) */
     int lmb_dblclk;          /* DAT_004eabc5 — LMB double-click (type 2) */
     int tick_320ms;          /* DAT_0057d3c8 — 320 ms tick (type 2 repeat) */
+    int repeat_tick;         /* DAT_004ea128 != 0 — per-frame auto-repeat
+                              * gate (retail's ≥30 ms frame delta); 1 on a
+                              * real input frame, 0 for a one-shot synthetic
+                              * click.  Gates the type-4 hold auto-repeat. */
 } engine_menu_click_in_t;
 
 /* ── hit-test primitives ──────────────────────────────────────────── */
@@ -76,6 +80,28 @@ int engine_menu_hotspot_hover(int ox, int oy,
 int engine_menu_hotspot_click(int ox, int oy,
                               const engine_menu_hotspot_t *table, int count,
                               const engine_menu_click_in_t *in);
+
+/* Button-record hit-test + dispatch — port of FUN_0040da1e, the other
+ * hit-test family (the one paired with the FUN_0040cfd2 button renderer,
+ * over the 0x18-byte engine_button_rec_t tables).  Unlike the short[]
+ * hotspot path it (a) runs a per-button press-frame animation countdown
+ * every call (so a clicked button un-presses after its flash), (b) hit-
+ * tests a square box whose side is the record's `kind` field (0x18 = 24,
+ * 0x20 = 32 px), and (c) supports type-4 press + hold-to-auto-repeat
+ * (the scroll arrows) and type-5 fire-on-release-animation-end.
+ *
+ * `dispatch` is invoked with the fired record's action code + its two
+ * params (retail stores them to DAT_0059154c / DAT_00591550 first, then
+ * calls the action through the record's function pointer).  Mutates the
+ * records' state/pressed/repeat fields in place.  Returns the 1-based
+ * index of the record that fired, else 0. */
+struct engine_button_rec;
+typedef void (*engine_menu_button_action_fn)(uint32_t action,
+                                             int param0, int param1);
+int engine_menu_button_dispatch(int ox, int oy,
+                                struct engine_button_rec *recs, int count,
+                                const engine_menu_click_in_t *in,
+                                engine_menu_button_action_fn dispatch);
 
 /* ── per-page dispatcher ──────────────────────────────────────────── */
 
@@ -110,5 +136,9 @@ void engine_menu_input_set_sp_available(int value);
 int  engine_menu_input_last_redraw_mode(void);
 int  engine_menu_input_quit_count(void);
 void engine_menu_input_reset_counters(void);
+
+/* DAT_005cd41c — the page-3 "Load" request latch (FUN_004342f3 writes
+ * 100).  Exposed for tests; the deferred load-confirm pump consumes it. */
+int  engine_menu_input_filelist_load_request(void);
 
 #endif /* OPENLORDS2_ENGINE_MENU_INPUT_H */

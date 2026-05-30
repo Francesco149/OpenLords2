@@ -1006,6 +1006,38 @@ static void seed_page4_state(void)
     engine_title_render_bind_caret_metrics_table(gfx_glyph_measure_map());
 }
 
+/* Seed the page-3 ("Loading a game." file list) live state: a few demo
+ * save entries, the selected-name field, and the one shared title editor
+ * behind it.  Retail seeds this editor at the page-2→3 transition with
+ * FUN_00402009(&DAT_004ea130, 8, 0xa0, 1): max 8 chars (the DOS 8.3 save
+ * name), soft pixel cap 0xa0, mode 1.  The WndProc routes WM_CHAR / edit
+ * keys into this editor (the same route page 4 uses — there is one
+ * editor) and the page-3 input arm streams it into the filename field +
+ * runs the Load/Cancel/scroll button strip. */
+static void seed_page3_state(void)
+{
+    static const char *k_names[4] = { "lastturn", "old_turn", "safeturn", "test" };
+    static uint8_t k_entries[4 * 0x41];
+    static text_input_state_t k_p3_editor;          /* DAT_005cd550 */
+    static const char k_seed[] = "lastturn";
+
+    for (int e = 0; e < 4; e++) {
+        int j = 0;
+        for (; k_names[e][j]; j++) k_entries[e * 0x41 + j] = (uint8_t)k_names[e][j];
+        k_entries[e * 0x41 + j] = 0;
+    }
+
+    text_input_init(&k_p3_editor, k_seed, /*max_length=*/8,
+                    /*max_pixel_width=*/0xa0, /*initial_mode=*/1);
+    k_p3_editor.insert_mode = 0;
+
+    engine_title_render_set_filelist(k_entries, 0x41, 4, 0);
+    engine_title_render_set_filelist_topname((const uint8_t *)k_seed);
+    engine_title_render_set_filelist_editor(&k_p3_editor);
+    engine_title_render_set_filelist_show_status(0);
+    engine_title_render_bind_caret_metrics_table(gfx_glyph_measure_map());
+}
+
 static void bringup_title_menu(int with_panel)
 {
     engine_title_render_set_page(g_title_page_num);
@@ -1354,6 +1386,12 @@ static void bringup_title_live(void)
          * editor so the name box is typeable on arrival (the boot→title
          * transition that normally seeds this is unported). */
         seed_page4_state();
+        gfx_caret_reset();
+    } else if (g_title_page_num == 3) {
+        /* Page-3 file list: seed the save entries + filename editor so the
+         * Load/Cancel/scroll buttons and the typeable filename field are
+         * live on arrival (the page-2→3 transition is unported). */
+        seed_page3_state();
         gfx_caret_reset();
     }
     engine_set_current_screen(0x1f);               /* DAT_004eac50 */

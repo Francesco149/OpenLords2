@@ -7,6 +7,78 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — PAGE 3 GOES LIVE: the load-game file list is navigable + its filename is typeable (`FUN_0040da1e` button hit-test + page-3 arm)
+
+The page-3 "Loading a game." screen rendered already but was inert — reachable
+only by `--title-nav`'s forced jump.  This entry ports its **input arm**, so
+the gauntlet Load/Cancel buttons and scroll arrows dispatch with real clicks
+and the filename field types live.  The new foundational piece is the engine's
+**second** hit-test family — the button-record hit-test paired with the
+`FUN_0040cfd2` button renderer — which every gameplay screen's button strips
+also use.
+
+Four pieces landed:
+
+1. **`engine_menu_button_dispatch`** (port of `FUN_0040da1e`, the 869-byte
+   button-record interaction handler).  Unlike the short[] hotspot path
+   (`FUN_0040e3ee`) it (a) runs a per-button press-frame animation countdown
+   every call — a clicked button latches `pressed = 3` / `state = 1` and
+   un-presses three frames later, so it visibly depresses; (b) hit-tests a
+   *square* box whose side is the record's `kind` byte (0x18 = 24 px, 0x20 =
+   32 px — the same byte that selects the sprite, quirk #125); (c) dispatches
+   type 4 (press + hold-to-auto-repeat), type 2 (toggle), type 5 (fire on
+   release-animation-end).  The scroll auto-repeat rides a 0x30-byte sparse
+   accel-gate table (`DAT_004d2748`, r2-dumped) that thins from "every 6th
+   frame" toward fire-every-frame the longer you hold (quirk #126).
+
+2. **The page-3 arm of `FUN_004ba9c8`** — enable + stream the editor into the
+   filename field, then run the 4-button strip hit-test.  No hover pass.  The
+   load-confirm pump `0x4ad9f0` (deep load → game-start) is deferred: it only
+   acts once the `DAT_0057d3c4` confirm timer is armed.
+
+3. **The three actions** — Load (`FUN_004342f3`: latch `DAT_005cd41c = 100`),
+   Cancel (`FUN_00434308`: return to the bookmarked page `DAT_00553e5c`),
+   scroll (`FUN_00434346`: advance first-visible `DAT_004ea1a0` by ±3 with the
+   mode-1 clamp).  Dispatched by the record's retail action code, mirroring
+   retail's call-through-pointer.
+
+4. **Editor unification.**  Retail has exactly *one* text editor (the
+   `DAT_005cd550` global); page 4's title name and page 3's filename both drive
+   it, each streaming it to its own field.  The drop-in had split it into two
+   pointers; this collapses them into a single shared `g_title_editor` the
+   `WM_CHAR` route always targets.  `set_choose_title_editor` /
+   `set_filelist_editor` bind the same slot; each page's name-tail copies it
+   out (page 4 → `DAT_0053f1e0` width 0x1f; page 3 → `DAT_004ea130` width 0x40,
+   capped at 8 — DOS 8.3, quirk #127).  The page-3 filename field became a
+   renderer-owned mutable buffer (like the page-4 name) so the copy-out has a
+   destination, and the page-3 button table is now shared mutable state so the
+   hit-test's press-animation writes show on the next repaint.
+
+Coverage 347 → **351 touched** (`FUN_0040da1e` + the 3 actions; the editor
+unification and arm are pure wiring over already-counted functions).  8 new
+host tests (load latch, cancel→bookmark, scroll up/down/clamp/forced-zero,
+click-flash-then-settle, auto-repeat-gated-by-delay, editor-streams-to-
+filename) → **1253 green**; both drop-in builds clean.
+
+**Verified** (`runs/title-type-p3/`, 2026-05-30): `--title-live --title-page 3`
+renders the file list live, the per-frame refresh paints the gauntlet
+Load/Cancel + scroll arrows, and `--title-type war` posts real `WM_CHAR` into
+the live WndProc — the filename field fills from the "lastturn" seed to
+**"wartturn"** through the genuine keystroke route (frame_00000 seed →
+frame_00016 typed + buttons).  Open to a human keyboard/click pass too.
+
+### Next
+
+- **Page-3 Cancel / Load human pass** — `--title-nav` already exercises the
+  page-2 → page-3 hop; extend it to click Cancel (→ page 2) and a scroll arrow
+  for a clicked-button parity capture, or drive it live by hand.
+- **Page-4 Enter commit** — `WM_KEYDOWN` VK_RETURN (`FUN_00401c5b` arm-timer +
+  `FUN_0043600c`) and the roster name-commit `FUN_0049bae9(999, …)`; Enter is
+  still inert on page 4.
+- **Start / game-start** (`FUN_004329ec` → `FUN_00497ced`) — the deep play-flow
+  milestone behind page-7's Start, page-4's Play-Now Continue, and now page-3's
+  Load (the deferred `0x4ad9f0` confirm pump lands here).
+
 ## 2026-05-30 — PAGE 4 NAME EDITING: the name box is typeable live (text-edit subsystem wired to the menu)
 
 The page-4 "Choose your title and your shield" screen rendered and navigated

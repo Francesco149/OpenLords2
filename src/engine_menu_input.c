@@ -15,6 +15,7 @@
 
 #include "engine_menu_input.h"
 #include "engine_title_render.h"
+#include "engine_button.h"         /* engine_button_rec_t (page-3 strip) */
 #include "engine.h"                /* g_sim_mp_active (DAT_00553030) */
 #include "save_schema_globals.h"   /* s_slot_0055302c (DAT_0055302c) */
 
@@ -46,6 +47,15 @@ static int g_last_selected_ack;   /* DAT_0053f648 */
 static int g_mp_init_flag;         /* DAT_0058fe10 */
 static int g_loadlist_dir_flag;    /* DAT_0057d320 */
 static int g_filelist_return_page; /* DAT_00553e5c */
+
+/* DAT_005cd41c — the page-3 "Load" request latch.  FUN_004342f3 writes
+ * 100; the deferred load-confirm pump (0x4ad9f0, deep load →
+ * game-start path) consumes it.  Modeled here so the Load button's
+ * faithful write is observable to tests; nothing in the drop-in acts on
+ * it yet. */
+static int g_filelist_load_request; /* DAT_005cd41c */
+
+int engine_menu_input_filelist_load_request(void) { return g_filelist_load_request; }
 
 void engine_menu_input_bind_redraw_fn(engine_menu_redraw_fn fn)
 {
@@ -446,6 +456,170 @@ int engine_menu_hotspot_click(int ox, int oy,
     return 0;
 }
 
+/* ─── page-3 ("Loading a game." file list) click actions ─────────── */
+
+/* Port of FUN_004342f3 — the "Load" gauntlet button.  Sets the load
+ * request latch (DAT_005cd41c = 100); the actual list-entry load +
+ * game-start runs off the deferred confirm pump (0x4ad9f0), so here
+ * the faithful write is all that lands. */
+static void menu_action_p3_load(void)
+{
+    g_filelist_load_request = 100;        /* DAT_005cd41c = 100 */
+}
+
+/* Port of FUN_00434308 — the "Cancel" gauntlet button.  On the title
+ * menu (DAT_004eac50 == 0x1f) this returns to the page that opened the
+ * file list (DAT_005530f0 = DAT_00553e5c).  Retail's else-branch handles
+ * the in-game save/load dialog (DAT_004eac50 = DAT_0057c90c) — a
+ * different screen state the drop-in doesn't drive here. */
+static void menu_action_p3_cancel(void)
+{
+    engine_title_render_set_page(g_filelist_return_page);  /* DAT_005530f0 */
+    g_redraw_fn(2);                                        /* DAT_0057d340 = 2 */
+}
+
+/* Port of FUN_00434346 — the scroll up/down arrows.  `param0` is the
+ * step (±3), `param1` the layout mode (1 for the page-3 grid). */
+static void menu_action_p3_scroll(int param0, int param1)
+{
+    engine_title_render_filelist_scroll(param0, param1);
+    g_redraw_fn(2);                                        /* DAT_0057d340 = 2 */
+}
+
+/* Action dispatcher for the page-3 button strip — maps the record's
+ * retail action code (the address baked into DAT_004ddd78) to the ported
+ * handler, mirroring retail's dispatch through the record's function
+ * pointer. */
+static void filelist_button_dispatch(uint32_t action, int param0, int param1)
+{
+    switch (action) {
+    case 0x004342f3: menu_action_p3_load();                break;  /* Load   */
+    case 0x00434308: menu_action_p3_cancel();              break;  /* Cancel */
+    case 0x00434346: menu_action_p3_scroll(param0, param1); break; /* scroll */
+    default: break;
+    }
+}
+
+/* ─── button-record hit-test (FUN_0040da1e) ──────────────────────── */
+
+/* Auto-repeat acceleration gate — retail DAT_004d2748, dumped from the
+ * binary (px @ 0x4d2748).  While a type-4 button is held, its repeat
+ * counter (the record's `pad_e` byte) increments once per input frame;
+ * the action fires only when this table's entry for the counter is
+ * non-zero.  Counters < 8 never fire (the initial hold delay); from 8
+ * the gate thins from "every 6th frame" toward "every 2nd", and once
+ * the counter saturates at 0x2f it fires every frame (max scroll speed).
+ * Indices 0..7 are never consulted (the < 8 early-out); kept for a
+ * verbatim 0x30-entry table. */
+static const uint8_t k_button_repeat_gate[0x30] = {
+    /* 0x00 */ 0,0,0,0,0,0,0,0,
+    /* 0x08 */ 1,0,0,0,0,0,1,0,
+    /* 0x10 */ 0,0,0,1,0,0,0,1,
+    /* 0x18 */ 0,0,1,0,0,1,0,0,
+    /* 0x20 */ 1,0,1,0,1,0,0,1,
+    /* 0x28 */ 1,1,1,1,1,1,1,0,
+};
+
+/* Half-open square box test: the record's `kind` field doubles as the
+ * sprite side length (0x18 = 24, 0x20 = 32), so the hitbox is
+ * [x+ox, x+kind+ox) × [y+oy, y+kind+oy) — retail FUN_0040da1e's four
+ * inlined comparisons. */
+static int button_rec_contains(const engine_button_rec_t *r, int ox, int oy,
+                               int cx, int cy)
+{
+    return r->x + ox <= cx && cx < r->x + r->kind + ox &&
+           r->y + oy <= cy && cy < r->y + r->kind + oy;
+}
+
+int engine_menu_button_dispatch(int ox, int oy,
+                                engine_button_rec_t *recs, int count,
+                                const engine_menu_click_in_t *in,
+                                engine_menu_button_action_fn dispatch)
+{
+    /* Pass 1 — per-button press-frame animation countdown (runs for
+     * every record every frame, cursor-independent).  A pressed button
+     * counts its `pressed` timer down; on reaching 0 it returns to the
+     * released frame (state = 1) and a type-5 button fires its action
+     * then.  Type-3 records hold state cleared. */
+    for (int i = 0; i < count; i++) {
+        engine_button_rec_t *r = &recs[i];
+        if (r->pressed == 0) {
+            r->pad_e = 0;                       /* reset repeat counter */
+        } else {
+            r->pressed--;
+            if (r->pressed == 0) {
+                r->state = 1;
+                r->pad_e = 0;
+                if (r->type == 5 && dispatch)
+                    dispatch(r->action, r->param0, r->param1);
+            }
+        }
+        if (r->type == 3)
+            r->state = 0;
+    }
+
+    /* Pass 2 — hit-test the cursor against each record and dispatch by
+     * edge type; the first record under the cursor that fires wins. */
+    for (int i = 0; i < count; i++) {
+        engine_button_rec_t *r = &recs[i];
+        if (!button_rec_contains(r, ox, oy, in->cursor_x, in->cursor_y))
+            continue;
+
+        if (r->type == 4) {
+            /* Press / double-click → fire immediately with the click
+             * flash (retail also plays 0x426216(1); the menu-click
+             * cue is deferred project-wide). */
+            if (in->lmb_newly_pressed || in->lmb_dblclk) {
+                r->pressed = 3;
+                r->pad_e   = 0;
+                r->state   = 1;
+                if (dispatch)
+                    dispatch(r->action, r->param0, r->param1);
+                return i + 1;
+            }
+            /* Held → auto-repeat, gated by the accel table. */
+            if (!in->lmb_held)
+                return 0;
+            r->pressed = 3;
+            if (in->repeat_tick) {
+                r->pad_e++;
+                if (r->pad_e < 0x30) {
+                    if (r->pad_e < 8)
+                        return 0;
+                    if (k_button_repeat_gate[r->pad_e] == 0)
+                        return 0;
+                } else {
+                    r->pad_e = 0x2f;
+                }
+                if (dispatch)
+                    dispatch(r->action, r->param0, r->param1);
+                return i + 1;
+            }
+            return 0;
+        }
+        if (r->type == 2) {
+            /* Toggle on the first contact of a press-hold (pad_e 0). */
+            r->pressed = 1;
+            if (r->pad_e == 0) {
+                r->state ^= 1;
+                if (dispatch)
+                    dispatch(r->action, r->param0, r->param1);
+            }
+            return i + 1;
+        }
+        if (r->type == 5) {
+            /* Arm the long press-flash; the action fires when the
+             * countdown ends in pass 1 (not here). */
+            if (!in->lmb_newly_pressed && !in->lmb_dblclk)
+                return 0;
+            r->pressed = 0x14;
+            r->state   = 1;
+            return i + 1;
+        }
+    }
+    return 0;
+}
+
 /* ─── page hotspot tables (retail DAT_004dcb48 / DAT_004dcba8) ─────── */
 
 /* Page 1 (main menu) — 4 buttons.  Boxes match the rendered rows
@@ -574,6 +748,23 @@ int engine_menu_title_input(const engine_menu_click_in_t *in)
         engine_title_render_set_selected_button(
             engine_menu_hotspot_hover(0, 0, k_page5_hotspots, 2,
                                       in->cursor_x, in->cursor_y));
+    } else if (page == 3) {
+        /* Page-3 arm of FUN_004ba9c8 ("Loading a game." file list).  In
+         * retail order: enable + stream the shared editor into the
+         * filename field, then run the button-record hit-test over the
+         * gauntlet Load/Cancel + scroll-arrow strip.  No hover pass
+         * (retail omits FUN_0040e5e7 here).
+         *
+         * Deferred: 0x4ad9f0 (the load-confirm pump retail calls
+         * between the two) — it only acts once the DAT_0057d3c4 confirm
+         * timer is armed, on the deep load → game-start path. */
+        engine_title_render_filelist_name_tail();
+        int n = 0;
+        engine_button_rec_t *recs =
+            engine_title_render_filelist_button_table(&n);
+        if (engine_menu_button_dispatch(0x60, 10, recs, n, in,
+                                        filelist_button_dispatch))
+            return 1;
     } else if (page == 4) {
         /* Page-4 arm of FUN_004ba9c8 ("Choose your title and your shield").
          * The click pass tests 5 or 7 hotspots depending on whether the

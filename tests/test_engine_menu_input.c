@@ -15,6 +15,7 @@
 #include "engine.h"                /* g_sim_mp_active (retail DAT_00553030) */
 #include "save_schema_globals.h"   /* s_slot_0053f640 / _0053f258 / _0055302c */
 #include "text_input.h"            /* page-4 name editor */
+#include "engine_button.h"         /* page-3 button-record table */
 
 #include <string.h>
 
@@ -770,5 +771,175 @@ int test_menu_page4_editor_disabled_off_page(void)
     /* A keystroke now no-ops (insert_char gates on enabled). */
     text_input_filtered_keypress(&g_test_p4_ed, 'Z');
     T_ASSERT(strcmp((const char *)g_test_p4_ed.buf, "ab") == 0);
+    return 0;
+}
+
+/* ── page 3 ("Loading a game." file list) — the button-record hit-test
+ *    (FUN_0040da1e) over the Load / Cancel / scroll strip, plus the
+ *    shared editor streaming into the filename field ── */
+
+/* Centres of the four page-3 buttons at the strip origin (0x60, 10).  A
+ * record's `kind` is its square side (Load/Cancel kind 0x20 = 32 px;
+ * arrows kind 0x18 = 24 px), so the box is [x+ox, x+kind+ox). */
+enum {
+    P3_LOAD_X   = 0x1a0, P3_LOAD_Y     = 0x5a,
+    P3_CANCEL_X = 0x1d0, P3_CANCEL_Y   = 0x5a,
+    P3_ARROW_X  = 0x1ec, P3_SCRUP_Y    = 0xa6, P3_SCRDN_Y = 0xc6,
+};
+
+static void reset_filelist_buttons(void)
+{
+    int n = 0;
+    engine_button_rec_t *r = engine_title_render_filelist_button_table(&n);
+    for (int i = 0; i < n; i++) { r[i].pressed = 0; r[i].state = 0; r[i].pad_e = 0; }
+}
+
+int test_menu_page3_load_sets_request(void)
+{
+    mi_reset();
+    reset_filelist_buttons();
+    engine_title_render_set_page(3);
+
+    engine_menu_click_in_t in = press_at(P3_LOAD_X, P3_LOAD_Y);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_menu_input_filelist_load_request(), 100);  /* DAT_005cd41c */
+    return 0;
+}
+
+int test_menu_page3_cancel_returns_to_bookmark(void)
+{
+    mi_reset();
+    reset_filelist_buttons();
+    /* Reach page 3 the real way (page-2 "Load a game") so the return-page
+     * bookmark (DAT_00553e5c) is set to 2. */
+    engine_title_render_set_page(2);
+    engine_menu_click_in_t load = press_at(BTN_X, row_y(1));
+    (void)engine_menu_title_input(&load);
+    T_ASSERT_EQ_I(engine_title_render_page(), 3);
+
+    engine_menu_click_in_t in = press_at(P3_CANCEL_X, P3_CANCEL_Y);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_page(), 2);                  /* bookmark */
+    T_ASSERT_EQ_I(engine_menu_input_last_redraw_mode(), 2);       /* DAT_0057d340 */
+    return 0;
+}
+
+int test_menu_page3_scroll_down_advances_first_visible(void)
+{
+    mi_reset();
+    reset_filelist_buttons();
+    engine_title_render_set_page(3);
+    engine_title_render_set_filelist(0, 0x41, 40, 0);   /* ≥30 entries → scrolls */
+
+    engine_menu_click_in_t in = press_at(P3_ARROW_X, P3_SCRDN_Y);  /* +3 */
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_filelist_first_visible(), 3);
+    return 0;
+}
+
+int test_menu_page3_scroll_up_clamps_at_zero(void)
+{
+    mi_reset();
+    reset_filelist_buttons();
+    engine_title_render_set_page(3);
+    engine_title_render_set_filelist(0, 0x41, 40, 0);
+
+    engine_menu_click_in_t in = press_at(P3_ARROW_X, P3_SCRUP_Y);  /* -3 */
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_filelist_first_visible(), 0);
+    return 0;
+}
+
+int test_menu_page3_scroll_forced_zero_with_few_entries(void)
+{
+    mi_reset();
+    reset_filelist_buttons();
+    engine_title_render_set_page(3);
+    engine_title_render_set_filelist(0, 0x41, 4, 0);    /* <30 → mode-1 forces 0 */
+
+    engine_menu_click_in_t in = press_at(P3_ARROW_X, P3_SCRDN_Y);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);
+    T_ASSERT_EQ_I(engine_title_render_filelist_first_visible(), 0);
+    return 0;
+}
+
+/* The click flash: a pressed type-4 button latches pressed=3 / state=1,
+ * and the per-frame countdown un-presses it three frames later. */
+int test_menu_page3_click_flashes_then_settles(void)
+{
+    mi_reset();
+    reset_filelist_buttons();
+    engine_title_render_set_page(3);
+
+    int n = 0;
+    engine_button_rec_t *recs = engine_title_render_filelist_button_table(&n);
+
+    engine_menu_click_in_t click = press_at(P3_LOAD_X, P3_LOAD_Y);
+    (void)engine_menu_title_input(&click);
+    T_ASSERT_EQ_I(recs[0].pressed, 3);   /* Load latched pressed */
+    T_ASSERT_EQ_I(recs[0].state, 1);
+
+    /* Three idle frames count the timer down to 0 (un-pressed). */
+    engine_menu_click_in_t idle = at(0, 0);
+    (void)engine_menu_title_input(&idle);   /* 3 → 2 */
+    (void)engine_menu_title_input(&idle);   /* 2 → 1 */
+    (void)engine_menu_title_input(&idle);   /* 1 → 0 */
+    T_ASSERT_EQ_I(recs[0].pressed, 0);
+    T_ASSERT_EQ_I(recs[0].state, 1);        /* settles on the released frame */
+    return 0;
+}
+
+/* Holding a scroll arrow auto-repeats, gated by the accel table: the
+ * first 7 held frames are the initial delay (no fire); the 8th fires. */
+int test_menu_page3_scroll_autorepeat_gated_by_delay(void)
+{
+    mi_reset();
+    reset_filelist_buttons();
+    engine_title_render_set_page(3);
+    engine_title_render_set_filelist(0, 0x41, 40, 0);
+
+    engine_menu_click_in_t hold = at(P3_ARROW_X, P3_SCRDN_Y);
+    hold.lmb_held    = 1;
+    hold.repeat_tick = 1;     /* a real input frame */
+
+    /* Frames 1..7 — counter < 8, no fire. */
+    for (int f = 0; f < 7; f++) {
+        (void)engine_menu_title_input(&hold);
+        T_ASSERT_EQ_I(engine_title_render_filelist_first_visible(), 0);
+    }
+    /* Frame 8 — counter == 8, accel gate open → one +3 step fires. */
+    (void)engine_menu_title_input(&hold);
+    T_ASSERT_EQ_I(engine_title_render_filelist_first_visible(), 3);
+    return 0;
+}
+
+/* The shared title editor streams into the page-3 filename field, and a
+ * typed character flows through on the next frame — the page-3 twin of
+ * the page-4 name-box route, proving the single-editor unification. */
+static text_input_state_t g_test_fl_ed;
+int test_menu_page3_editor_streams_into_filename(void)
+{
+    mi_reset();
+    reset_filelist_buttons();
+    text_input_init(&g_test_fl_ed, "save1", 0x40, 0xc0, 0);
+    g_test_fl_ed.insert_mode = 0;                       /* overwrite */
+    engine_title_render_set_page(3);
+    engine_title_render_set_filelist_topname((const uint8_t *)"xxxxx");
+    engine_title_render_set_filelist_editor(&g_test_fl_ed);
+
+    /* Frame 1: the page-3 arm enables the editor and copies it out,
+     * overwriting the seeded "xxxxx" field with the editor text. */
+    engine_menu_click_in_t in = at(0, 0);              /* off every button */
+    (void)engine_menu_title_input(&in);
+    T_ASSERT_EQ_I(g_test_fl_ed.enabled, 1);            /* DAT_005aeb78 = 1 */
+    T_ASSERT(strcmp((const char *)engine_title_render_filelist_name(),
+                    "save1") == 0);
+
+    /* A keystroke (overwrite at cursor 0: 'S' replaces 's') then frame 2
+     * streams the edit into the filename field. */
+    text_input_filtered_keypress(&g_test_fl_ed, 'S');
+    (void)engine_menu_title_input(&in);
+    T_ASSERT(strcmp((const char *)engine_title_render_filelist_name(),
+                    "Save1") == 0);
     return 0;
 }

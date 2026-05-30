@@ -235,18 +235,39 @@ void engine_title_render_filelist(int title_sub);
  * sheet bound (engine_title_render_bind_system_asset). */
 void engine_title_render_filelist_buttons(void);
 
+/* The shared page-3 button-record table (DAT_004ddd78) — the same
+ * 4-entry strip the renderer paints, handed to the input arm so the
+ * hit-test's press-animation writes land on the next repaint.  *count
+ * receives the entry count. */
+struct engine_button_rec;
+struct engine_button_rec *engine_title_render_filelist_button_table(int *count);
+
 /* ─── page-3 file-list state setters ───────────────────────────── */
 
 /* DAT_004e8790 entries (stride 0x41, null-terminated name then ext),
  * DAT_004eb25c count, DAT_004ea1a0 first-visible index. */
 void engine_title_render_set_filelist(const uint8_t *entries, int entry_stride,
                                       int count, int first_visible);
-/* DAT_004ea130 — the selected-name field above the grid. */
+/* DAT_004ea130 — the selected-name field above the grid (seeded into a
+ * renderer-owned mutable buffer the editor tail streams into). */
 void engine_title_render_set_filelist_topname(const uint8_t *name);
-/* DAT_005cd550 editor behind the top field (caret); NULL → skipped. */
-void engine_title_render_set_filelist_editor(const text_input_state_t *editor);
+/* DAT_005cd550 editor behind the top field — the one shared title
+ * editor; the WM_CHAR route targets it on page 3.  NULL → caret skipped. */
+void engine_title_render_set_filelist_editor(text_input_state_t *editor);
 /* DAT_0057d3c4 — bottom status-line gate (0 → no status line). */
 void engine_title_render_set_filelist_show_status(int show);
+/* DAT_004ea1a0 — the file-list first-visible index. */
+int  engine_title_render_filelist_first_visible(void);
+/* DAT_004ea130 — the current filename field text (the editor's stream-out
+ * target). */
+const uint8_t *engine_title_render_filelist_name(void);
+/* Per-frame page-3 editor tail (FUN_004ba9c8 page-3 arm): enable the
+ * shared editor, recompute its length, and stream it into the filename
+ * field (FUN_0040210c, &DAT_004ea130, 0x40). */
+void engine_title_render_filelist_name_tail(void);
+/* Port of FUN_00434346 — scroll-arrow action: advance the first-visible
+ * index by `delta` (±3) with the `mode` (param1) clamp. */
+void engine_title_render_filelist_scroll(int delta, int mode);
 
 /* Page-4 per-frame refresh (FUN_0041f321 standalone) — re-renders the
  * name box with the text shadow ON (the steady-state appearance, unlike

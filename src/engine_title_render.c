@@ -179,8 +179,15 @@ static uint8_t g_p4_name_buf[32];
 
 /* The live editor (DAT_005cd550 buffer + cursor + insert mode), read
  * by the caret and driven by the WM_CHAR route.  NULL → the caret is
- * skipped (textbox still draws) and the name-tail is a no-op. */
-static text_input_state_t *g_p4_editor;
+ * skipped (textbox still draws) and the name-tail is a no-op.
+ *
+ * Retail has exactly one of these (the global at DAT_005cd550): every
+ * editable title page — page 4's title name, page 3's save/load
+ * filename, … — drives the same editor, streaming it to that page's
+ * own field buffer.  The drop-in mirrors that with a single shared
+ * pointer the WM_CHAR route always targets; each page's name-tail
+ * copies it out to the right field. */
+static text_input_state_t *g_title_editor;
 
 /* Font-metrics scratch for the caret's cursor-char width measure. */
 static font_metrics_state_t g_p4_fm;
@@ -195,11 +202,15 @@ static int            g_fl_entry_stride = 0x41;
 static int            g_fl_count;
 static int            g_fl_first_visible;
 
-/* The selected-name field shown above the grid (DAT_004ea130). */
-static const uint8_t *g_fl_topname;
+/* The selected-name field shown above the grid (DAT_004ea130).  A
+ * renderer-owned mutable buffer (like g_p4_name_buf) so the page-3
+ * editor tail's per-frame copy-out (FUN_0040210c, &DAT_004ea130, 0x40)
+ * can stream the live editor text into it; set_filelist_topname seeds
+ * it.  0x42 bytes covers the 0x40-char copy-out plus its terminator. */
+static uint8_t g_fl_name_buf[0x42];
 
-/* The editor behind the top field (caret); NULL → caret skipped. */
-static const text_input_state_t *g_fl_editor;
+/* The page-3 filename field shares the one title editor (g_title_editor);
+ * there is no separate file-list editor — see the g_title_editor note. */
 
 /* Bottom status-line gate (DAT_0057d3c4): 0 → no status line drawn. */
 static int g_fl_show_status;
@@ -302,12 +313,12 @@ const uint8_t *engine_title_render_choose_title_name(void)
 
 void engine_title_render_set_choose_title_editor(text_input_state_t *editor)
 {
-    g_p4_editor = editor;
+    g_title_editor = editor;
 }
 
 text_input_state_t *engine_title_render_choose_title_editor(void)
 {
-    return g_p4_editor;
+    return g_title_editor;
 }
 
 /* Per-frame editor tail of FUN_004ba9c8's page-4 arm:
@@ -320,11 +331,11 @@ text_input_state_t *engine_title_render_choose_title_editor(void)
  * 0 in the single-player Custom-game flow, so the copy always runs. */
 void engine_title_render_choose_title_name_tail(void)
 {
-    if (!g_p4_editor)
+    if (!g_title_editor)
         return;
-    g_p4_editor->enabled = 1;
-    text_input_recompute_length(g_p4_editor);
-    text_input_copy_out(g_p4_editor, (char *)g_p4_name_buf, 0x1f);
+    g_title_editor->enabled = 1;
+    text_input_recompute_length(g_title_editor);
+    text_input_copy_out(g_title_editor, (char *)g_p4_name_buf, 0x1f);
 }
 
 /* Top-of-dispatch reset — FUN_004ba9c8 line 9 `DAT_005aeb78 = 0` (run
@@ -333,8 +344,8 @@ void engine_title_render_choose_title_name_tail(void)
  * WM_CHAR route's insert is gated off everywhere but the live field. */
 void engine_title_render_title_editor_disable(void)
 {
-    if (g_p4_editor)
-        g_p4_editor->enabled = 0;
+    if (g_title_editor)
+        g_title_editor->enabled = 0;
 }
 
 /* Port of FUN_00432fab — assign a shield slot to the current player.
@@ -400,17 +411,77 @@ void engine_title_render_set_filelist(const uint8_t *entries, int entry_stride,
 
 void engine_title_render_set_filelist_topname(const uint8_t *name)
 {
-    g_fl_topname = name;
+    size_t i = 0;
+    if (name) {
+        for (; name[i] && i < sizeof g_fl_name_buf - 1; i++)
+            g_fl_name_buf[i] = name[i];
+    }
+    g_fl_name_buf[i] = 0;
 }
 
-void engine_title_render_set_filelist_editor(const text_input_state_t *editor)
+void engine_title_render_set_filelist_editor(text_input_state_t *editor)
 {
-    g_fl_editor = editor;
+    g_title_editor = editor;
+}
+
+/* Per-frame editor tail of FUN_004ba9c8's page-3 arm:
+ *   DAT_005aeb78 = 1;                       // enable the editor
+ *   FUN_00401f49();                         // recompute editor length
+ *   FUN_0040210c(&DAT_004ea130,0x40);       // copy editor text → filename
+ * The page-3 twin of choose_title_name_tail: streams the one shared
+ * title editor (whatever the WM_CHAR route typed) out to the file-list
+ * filename field, width 0x40.  (Retail's arm also calls 0x4ad9f0 —
+ * the load-confirm pump — which is deferred: it only acts once the
+ * DAT_0057d3c4 confirm timer is armed, on the deep load → game-start
+ * path.) */
+void engine_title_render_filelist_name_tail(void)
+{
+    if (!g_title_editor)
+        return;
+    g_title_editor->enabled = 1;
+    text_input_recompute_length(g_title_editor);
+    text_input_copy_out(g_title_editor, (char *)g_fl_name_buf, 0x40);
 }
 
 void engine_title_render_set_filelist_show_status(int show)
 {
     g_fl_show_status = show;
+}
+
+int engine_title_render_filelist_first_visible(void)
+{
+    return g_fl_first_visible;
+}
+
+const uint8_t *engine_title_render_filelist_name(void)
+{
+    return g_fl_name_buf;
+}
+
+/* Port of FUN_00434346 — the scroll-arrow action.  Advances the
+ * first-visible index (DAT_004ea1a0) by `delta` (the arrow's param0:
+ * -3 = up, +3 = down) and clamps it.  `mode` is the arrow's param1
+ * (DAT_00591550): mode 1 is the page-3 3-column grid (15 rows visible
+ * → snap the last page so the bottom three rows don't over-scroll, and
+ * force 0 when fewer than 30 entries fit); mode 2 is the 1-column
+ * variant.  The redraw cookie (DAT_0057d340 = 2) is raised by the
+ * dispatcher, not here. */
+void engine_title_render_filelist_scroll(int delta, int mode)
+{
+    g_fl_first_visible += delta;
+    if (g_fl_first_visible < 0)
+        g_fl_first_visible = 0;
+    if (mode == 1) {
+        if (g_fl_count - 0xf < g_fl_first_visible)
+            g_fl_first_visible -= 3;
+        if (g_fl_count < 0x1e)
+            g_fl_first_visible = 0;
+    } else if (mode == 2) {
+        if (g_fl_count - 5 < g_fl_first_visible)
+            g_fl_first_visible -= 1;
+        if (g_fl_count < 10)
+            g_fl_first_visible = 0;
+    }
 }
 
 void engine_title_render_bind_panel_fn(engine_title_render_panel_fn fn)
@@ -640,8 +711,8 @@ static void engine_title_render_choose_title_name_box(void)
     gfx_text_set_char_counter(0);
     gfx_text_set_collapse_active(1);
     gfx_text_set_line_x_acc(0);
-    if (g_p4_editor) {
-        gfx_text_set_first_pos_target(g_p4_editor->cursor);
+    if (g_title_editor) {
+        gfx_text_set_first_pos_target(g_title_editor->cursor);
     }
 
     /* Box frame — opaque sprite 0xcc at (0xd0, 0x48). */
@@ -661,8 +732,8 @@ static void engine_title_render_choose_title_name_box(void)
     gfx_text_set_first_pos_y(0x52);
 
     /* Caret (FUN_0040acce).  Off in a single static render (blink → 1). */
-    if (g_p4_editor) {
-        gfx_caret_render(g_p4_editor, &g_p4_fm, g_menu_font, 0x3f);
+    if (g_title_editor) {
+        gfx_caret_render(g_title_editor, &g_p4_fm, g_menu_font, 0x3f);
     }
 
     engine_dirty_rect_mark_box_tiled(g_dirty_state, 0xd0, 0x48, 0x16, 3, 1);
@@ -759,21 +830,29 @@ static void engine_title_render_filelist_content(int selected)
 {
     const int bx = 0x60, by = 10;   /* retail local_1c / local_20 */
 
-    /* Top-field caret-anchor reset. */
+    /* Top-field caret-anchor reset (retail DAT_005aeb64 / DAT_0058fd58 /
+     * DAT_0058fd78 / DAT_005c925a / DAT_005cd404). */
     gfx_text_clear_first_pos_latch();
     gfx_text_set_first_pos_x(0);
     gfx_text_set_char_counter(0);
     gfx_text_set_first_pos_y(by + 0x48);
     gfx_text_set_collapse_active(1);
     gfx_text_set_line_x_acc(0);
+    /* Latch the caret x at the editor's cursor char (retail's full editor
+     * renderer FUN_00402637 does this internally; the port splits it into
+     * a text-line render + a caret render, so seed the target here as the
+     * page-4 name box does). */
+    if (g_title_editor) {
+        gfx_text_set_first_pos_target(g_title_editor->cursor);
+    }
 
     /* Two tiled-border strips lining the selected-name field. */
     gfx_panel_fill_interior(g_panel_asset, bx + 0x1c, by + 0x42, 10, 1);
     gfx_panel_fill_interior(g_panel_asset, bx + 0x1c, by + 0x4c, 10, 1);
 
     /* Selected-name text. */
-    if (g_fl_topname) {
-        gfx_text_render_line(g_fl_topname, bx + 0x20, by + 0x48, g_menu_font,
+    if (g_fl_name_buf[0]) {
+        gfx_text_render_line(g_fl_name_buf, bx + 0x20, by + 0x48, g_menu_font,
                              g_glyph_table, 0x3f);
     }
     if (gfx_text_first_pos_latched() == 0) {
@@ -781,8 +860,8 @@ static void engine_title_render_filelist_content(int selected)
     }
     gfx_text_set_first_pos_x(gfx_text_first_pos_x() + bx + 0x20);
     gfx_text_set_first_pos_y(by + 0x48);
-    if (g_fl_editor) {
-        gfx_caret_render(g_fl_editor, &g_p4_fm, g_menu_font, 0x3f);
+    if (g_title_editor) {
+        gfx_caret_render(g_title_editor, &g_p4_fm, g_menu_font, 0x3f);
     }
     engine_dirty_rect_mark_box_tiled(g_dirty_state, bx + 0x18, by + 0x40, 0xb, 3, 1);
 
@@ -852,12 +931,27 @@ void engine_title_render_filelist(int title_sub)
  * Verbatim from Lords2.exe @ 0x4ddd78 (r2 dump).  The action/param
  * fields drive the input hit-test, not the render; they are kept for a
  * faithful layout but ignored by engine_button_render_list. */
-static const engine_button_rec_t k_filelist_buttons[4] = {
+/* Non-const: the input hit-test (engine_menu_button_dispatch, port of
+ * FUN_0040da1e) mutates the per-button `pressed`/`state`/`pad_e`
+ * animation + auto-repeat fields in place, exactly as retail writes
+ * back into DAT_004ddd78; the renderer reads the same `pressed`/`state`
+ * the click set, so a clicked button visibly depresses.  Shared via
+ * engine_title_render_filelist_button_table(). */
+static engine_button_rec_t g_filelist_buttons[4] = {
     { 0x130, 0x40, 0x1d, 0x20, 0x004342f3, 0, 0, 0, 4,  0, 0 },
     { 0x160, 0x40, 0x1f, 0x20, 0x00434308, 0, 0, 0, 4,  0, 0 },
     { 0x180, 0x90, 0x23, 0x18, 0x00434346, 0, 0, 0, 4, -3, 1 },
     { 0x180, 0xb0, 0x25, 0x18, 0x00434346, 0, 0, 0, 4,  3, 1 },
 };
+
+/* Shared accessor for the input arm (engine_menu_input.c) — the same
+ * table the renderer paints, so the hit-test's press-animation writes
+ * show on the next repaint. */
+engine_button_rec_t *engine_title_render_filelist_button_table(int *count)
+{
+    if (count) *count = 4;
+    return g_filelist_buttons;
+}
 
 /* Port of the page-3 (DAT_005530f0 == 3) arm of the per-frame UI
  * refresh dispatcher (FUN_004ba26e):
@@ -874,7 +968,7 @@ static const engine_button_rec_t k_filelist_buttons[4] = {
 void engine_title_render_filelist_buttons(void)
 {
     engine_title_render_filelist_content(999);
-    engine_button_render_list(0x60, 10, k_filelist_buttons, 4,
+    engine_button_render_list(0x60, 10, g_filelist_buttons, 4,
                               /*misc=*/NULL, g_system_asset, g_dirty_state);
 }
 
