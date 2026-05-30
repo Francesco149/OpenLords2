@@ -18,4 +18,16 @@ void engine_map_query_bind_cell_descriptors(const uint8_t *cells);
  * and fits within the 0..63 grid; 0 otherwise. */
 int engine_map_query_region_clear(int col, int row, int size);
 
+/* Box-scan predicates over a (2*radius+1)-square centred at (col, row),
+ * CLAMPED to the 0..63 grid (the box shrinks at the edges rather than
+ * being rejected).  Each returns 1 at the first matching cell, else 0.
+ * Both require the cell's head-link byte (+5) to be zero; they differ
+ * only in the raw-flag byte (+1) test:
+ *
+ *   _bit0       — (flag & 0x01) == 0x01  (bit 0 set)        ← FUN_0046cfbd
+ *   _only_bit1  — (flag & 0xfd) == 0      (flag is 0 or 2)  ← FUN_0046d130
+ */
+int engine_map_query_box_any_rawflag_bit0(int col, int row, int radius);
+int engine_map_query_box_any_rawflag_only_bit1(int col, int row, int radius);
+
 #endif /* OPENLORDS2_ENGINE_MAP_QUERY_H */

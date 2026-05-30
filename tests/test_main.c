@@ -1315,6 +1315,16 @@ struct test_case {
     X(map_query_row_stride_isolation) \
     X(map_query_size_one_single_cell) \
     X(map_query_unbound_grid_returns_0) \
+    X(map_query_box_bit0_finds_set_cell) \
+    X(map_query_box_bit0_requires_headlink_zero) \
+    X(map_query_box_bit0_mask) \
+    X(map_query_box_only_bit1_empty_matches) \
+    X(map_query_box_only_bit1_predicate) \
+    X(map_query_box_only_bit1_headlink) \
+    X(map_query_box_clamps_at_right_edge) \
+    X(map_query_box_clamps_negative_anchor) \
+    X(map_query_box_radius0_single_cell) \
+    X(map_query_box_unbound_returns_0) \
     \
     X(strat_cost_water_blocked) \
     X(strat_cost_level_gate) \

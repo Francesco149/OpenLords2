@@ -7,6 +7,45 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — MAP-QUERY chip: FUN_0046cfbd + FUN_0046d130 (box-scan pair)
+
+Walking down the new-game orchestrator's `FUN_00427ed0` callee chain
+reached a sibling leaf pair: two near-identical 371-B box scans over the
+64×64 overworld cell grid (`g_overworld_map`, save entry 0, 8 B/cell).
+Both land together in `engine_map_query.c`, joining the existing
+`region_clear` (FUN_0046d2a3) port.
+
+Each scans the `(2*radius+1)`-square box centred at (col,row), **clamped**
+to the 0..63 grid (the box shrinks at the edges — unlike `region_clear`,
+which rejects out-of-range), row-major, and returns 1 at the first cell
+whose head-link byte (+5) is zero and whose raw-flag byte (+1) matches a
+predicate.  The pair differs only in that predicate (r2-confirmed at the
+single differing instruction — `and cl, 1` @ 0x46d0df vs `and cl, 0xfd`
+@ 0x46d252):
+
+  - FUN_0046cfbd → `engine_map_query_box_any_rawflag_bit0`:  `(flag & 1) != 0`.
+  - FUN_0046d130 → `engine_map_query_box_any_rawflag_only_bit1`: `(flag & 0xfd) == 0`.
+
+Both retail bodies reuse the find-nearest scratch globals
+`DAT_00569570` / `DAT_00569578` as loop counters (the same codegen
+artifact `region_clear` has); the three callers (0x46733c / 0x428007 /
+0x428078) read only the 0/1 result, so — as with `region_clear` — the
+port uses locals rather than clobber `engine_path`'s nearest-result
+globals.  Ported byte-exact via one shared `box_scan(mask, expect)`
+helper plus two thin wrappers.
+
+Ten host tests pin both predicates, the head-link gate, the bit masks,
+the empty-grid behaviour (`only_bit1` matches an all-zero cell), the
+edge clamping (right edge and negative anchor — the distinguishing
+behaviour from `region_clear`), and the radius-0 single-cell case.
+1317/1317 pass; mingw drop-in build clean.
+
+Landing this pair makes their callers `FUN_00428007` / `FUN_00428078`
+(per-army neighbourhood probes) and `FUN_0046733c` (ring-distance
+finder) into leaves, advancing the `0x427ed0` sub-chain.
+
+---
+
 ## 2026-05-30 — GAME-START chip 9: FUN_004ae74d (clear castle-shadow table)
 
 A direct orchestrator (`0x497ced`) callee that had become a zero-dep
