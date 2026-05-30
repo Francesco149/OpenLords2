@@ -7,6 +7,79 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — GAME-START MILESTONE OPENED: survey + first chip (new-game table-clear phase)
+
+The title-menu input subsystem is effectively complete (pages 1–9
+navigable; pages 3 & 4 editable), so this session turns to the next
+fresh scope — **game-start**, the path from the menu into a live game.
+Two outcomes: a survey that de-risks the milestone, and the first
+landed chip.
+
+**The listed "page-4 Enter commit" next-item was a non-chip.** Traced
+the retail VK_RETURN handler (`FUN_004b29be` case `0x0d` →
+`FUN_00401c5b()` + `FUN_0043600c()`): `FUN_00401c5b` only sets
+`DAT_005cd41c = 100` (the load-game request latch, consumed solely by
+the load pump `FUN_004ad9f0` on the load screen, already modeled in src
+as `g_filelist_load_request`); `FUN_0043600c` only acts when the
+screen-id `DAT_004eac50` is `0` or `41` (the attract screens) — a
+**no-op on page 4**.  Enter on page 4 produces no commit/navigation in
+retail, so the PROGRESS hint mislabeled it.  Subsystem closed.
+
+**Survey** (→ new [`findings/game-start.md`](findings/game-start.md)):
+the page-7 Start path is `FUN_004335f0` (Start arm) → `FUN_00499dc3`
+(roster finalize) + `FUN_004329ec` (dispatch) + `DAT_0052afa4 = 1`; the
+SP dispatch runs `FUN_00497ced` (the 376-B new-game world initialiser),
+sets screen-id 0 and flips engine state to ingame (`DAT_0052af94 = 3`).
+Two findings shaped the plan:
+
+- **The closure is the whole engine.** BFS from the Start roots reaches
+  1217 functions / 533 KB (933 unported).  So game-start is *not* a
+  single unit — the tractable target is the **init itself**
+  (`FUN_00497ced`'s 25 direct callees, 20 unported, mostly run-once
+  seeders), built bottom-up and host-validated per chip.  And a visible
+  in-game map needs a *second* unported half: the strategic-map screen
+  arm of `FUN_0040f1a0` (the screen-dispatch keyed on `DAT_004eac50`;
+  only the `0x1f` title arm is ported today).  Flipping the state alone
+  renders nothing.
+- **The scalar-global wall is already down for this work.** Init writes
+  ~20 world-state globals; 17 are save fields, but every one has a
+  shared `s_slot_<va>` home in `save_schema_globals.h` — the
+  runtime-global ownership model the 2026-05-29 wall waited on has
+  shipped and is in use (`engine_npc_schedule.c` seeds `s_slot_`
+  directly).  Game-init seeds them the same way; no save desync.
+
+**First chip — the table-clear phase** (new `src/game_init.c`).
+`engine_game_init_clear_tables` ports `FUN_00497ced`'s first three
+calls — `FUN_0046f3cd` / `FUN_0046f2ae` / `FUN_0046f1dc`, each looping
+its record count and zeroing one record per iteration via the
+fixed-length leaves `FUN_0046ea28` / `FUN_0046eb09` / `FUN_0046ead0`
+(all `memset(p, 0, len)`).  The loop bound × stride covers the full
+named block in each case, so the three clears wipe `g_per_territory_420`
+(151×420), `g_unit_table_20` (13×20) and `g_per_army_768` (17×768) —
+the big per-record save blocks every later seeder writes into.  The
+per-record structure is kept for provenance and retail call-shape
+parity.  Safe (no mode flip, no live-behaviour change) and self-
+contained (only depends on the `save.h` blocks).
+
+Coverage 350 → **356 touched** (the 3 clearers + 3 zeroer leaves, all
+host-tested).  4 new host tests (each block dirtied then asserted
+fully zero; full-phase independence) → **1257 green**; both drop-in
+builds clean.  The in-progress parent (`0x497ced`) and the Start spine
+(`0x4335f0` / `0x4329ec`) are cited as bare hex, not `FUN_` tokens, so
+the ledger doesn't count them touched until they're actually ported.
+
+### Next
+
+- **Scalar-seed phase** — `FUN_00497ced`'s ~20 `s_slot_`/free-DAT body
+  writes.  Needs a home for the ~3 non-save "free" runtime DATs
+  (`DAT_0053f0c4`, `DAT_00553fc8`, `DAT_0056d658`).
+- **Leaf seeders** — `FUN_0042847c` (table copy), `FUN_004ae74d`
+  (array clear + 3 scalars), `FUN_0046ff43`, the `FUN_0046f*` sibling
+  clearers.
+- Then the heavy seeders, the `engine_game_init` assembly + state flip,
+  and finally the strategic-map screen arm of `FUN_0040f1a0` — only
+  then does Start show a live map.  Full plan in `findings/game-start.md`.
+
 ## 2026-05-30 — PAGE 3 GOES LIVE: the load-game file list is navigable + its filename is typeable (`FUN_0040da1e` button hit-test + page-3 arm)
 
 The page-3 "Loading a game." screen rendered already but was inert — reachable

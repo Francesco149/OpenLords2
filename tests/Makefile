@@ -66,6 +66,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_camera.c \
                    ../src/engine_roster.c \
                    ../src/engine_npc_schedule.c \
+                   ../src/game_init.c \
                    ../src/engine_turn.c \
                    ../src/save.c \
                    ../src/save_schema_globals.c
@@ -114,6 +115,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_camera.c \
                    test_engine_roster.c \
                    test_engine_npc_schedule.c \
+                   test_game_init.c \
                    test_engine_turn.c \
                    test_save.c
 

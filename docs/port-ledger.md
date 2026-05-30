@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **350** (14.3%) — tested 316, ported 34
-- code bytes touched: **14.8%** (124,236 / 838,629 B)
-- unported: **2097**
+- touched: **356** (14.5%) — tested 322, ported 34
+- code bytes touched: **14.9%** (124,616 / 838,629 B)
+- unported: **2091**
 - orphan refs (in src/, not in function table): 4
 
-## tested (316) — ported + host unit suite
+## tested (322) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -228,6 +228,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46a037 | FUN_0046a037 | 202 | engine_title_render.c |
 | 0x46c4a3 | FUN_0046c4a3 | 277 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
+| 0x46ea28 | FUN_0046ea28 | 57 | game_init.c, game_init.h |
+| 0x46ead0 | FUN_0046ead0 | 57 | game_init.c, game_init.h |
+| 0x46eb09 | FUN_0046eb09 | 54 | game_init.c, game_init.h |
+| 0x46f1dc | FUN_0046f1dc | 67 | game_init.c, game_init.h |
+| 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h |
+| 0x46f3cd | FUN_0046f3cd | 78 | game_init.c, game_init.h |
 | 0x46f434 | FUN_0046f434 | 216 | engine_path.c, engine_path.h |
 | 0x471c1f | FUN_00471c1f | 273 | engine_tile.c, engine_tile.h |
 | 0x471d30 | FUN_00471d30 | 118 | engine_tile.c, engine_tile.h |
@@ -250,7 +256,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49bbe8 | FUN_0049bbe8 | 53 | engine_roster.c, engine_roster.h |
 | 0x49bc1d | FUN_0049bc1d | 66 | engine_roster.c, engine_roster.h |
 | 0x49bc5f | FUN_0049bc5f | 314 | engine_roster.c, engine_roster.h |
-| 0x49caaa | FUN_0049caaa | 935 | engine_menu_input.c, engine_npc_schedule.c, engine_npc_schedule.h (+1) |
+| 0x49caaa | FUN_0049caaa | 935 | engine_menu_input.c, engine_npc_schedule.c, engine_npc_schedule.h (+2) |
 | 0x4ade93 | FUN_004ade93 | 339 | save.c, save.h |
 | 0x4adfe6 | FUN_004adfe6 | 377 | save.c, save.h |
 | 0x4ae539 | FUN_004ae539 | 169 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |

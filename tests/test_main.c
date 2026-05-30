@@ -1345,6 +1345,11 @@ struct test_case {
     X(glyph_table_letters) \
     X(glyph_table_digits_and_punct) \
     X(glyph_table_space_and_unmapped_are_zero) \
+    \
+    X(game_init_clear_tables_zeroes_per_army) \
+    X(game_init_clear_tables_zeroes_unit_table) \
+    X(game_init_clear_tables_zeroes_territories) \
+    X(game_init_clear_tables_all_three_independent) \
     /* end */
 
 /* Emit extern decls. */

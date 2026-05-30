@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 316,
+  "tested": 322,
   "ported": 34,
-  "unported": 2097,
+  "unported": 2091,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 350,
-  "pct_touched": 14.3,
-  "pct_tested": 12.9,
+  "touched": 356,
+  "pct_touched": 14.5,
+  "pct_tested": 13.2,
   "bytes_total": 838629,
-  "bytes_touched": 124236,
-  "pct_bytes_touched": 14.8
+  "bytes_touched": 124616,
+  "pct_bytes_touched": 14.9
  },
  "orphan_refs": [
   "0x004148",
@@ -11763,8 +11763,11 @@
    "name": "FUN_0046ea28",
    "size": 57,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c",
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x46ea61",
@@ -11787,16 +11790,22 @@
    "name": "FUN_0046ead0",
    "size": 57,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c",
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x46eb09",
    "name": "FUN_0046eb09",
    "size": 54,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c",
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x46eb3f",
@@ -11899,8 +11908,11 @@
    "name": "FUN_0046f1dc",
    "size": 67,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c",
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x46f21f",
@@ -11923,8 +11935,11 @@
    "name": "FUN_0046f2ae",
    "size": 67,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c",
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x46f2f1",
@@ -11939,8 +11954,11 @@
    "name": "FUN_0046f3cd",
    "size": 78,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c",
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x46f41b",
@@ -14993,7 +15011,8 @@
     "src/engine_menu_input.c",
     "src/engine_npc_schedule.c",
     "src/engine_npc_schedule.h",
-    "src/engine_title_render.c"
+    "src/engine_title_render.c",
+    "src/game_init.h"
    ]
   },
   {
