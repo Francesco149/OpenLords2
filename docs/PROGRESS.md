@@ -7,6 +7,41 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — AUDIO chip: one-shot cue-buffer teardown (FUN_00427d19)
+
+Landed the top `port-frontier.md` leaf (5 ported callers) — retail
+`FUN_00427d19` @ 0x427d19 (89 B).  The frontier's address-band label
+("strategic-map camera + scroll") is a heuristic artifact: 0x427d19 is
+**DirectSound**.  It stops + releases the single reusable one-shot
+WAV-cue *secondary* buffer (`DAT_00522aec`) and nulls it, guarded on
+both the IDirectSound interface (`DAT_004d4760` / `g_ds`) and the buffer
+being live:
+
+    if (g_ds && g_cue_buf) {
+        IDirectSoundBuffer_Stop(g_cue_buf);     /* vtable +0x48 */
+        IDirectSoundBuffer_Release(g_cue_buf);  /* vtable +0x08 */
+        g_cue_buf = NULL;
+    }
+
+Ported into `src/audio.c` as `audio_cue_release()` (decl in `audio.h`).
+It is the simplest leaf of the one-shot cue cluster (`0x427990`
+load+create+play, `0x427c9b` is-playing), which stays deferred — that
+create path pulls the `.wav` loader `FUN_004b984f` and the tier-2/3 IO
+retry chain.  Since nothing assigns `g_cue_buf` yet, the function is a
+faithful runtime no-op — exactly what retail's own null-guard yields in
+that state.  `0x427990` calls `0x427d19` at its head to free the
+previous cue before starting a new one, so the engine reuses ONE
+secondary buffer for every cue rather than caching per-sound.
+
+Vtable offsets decoded + cross-checked across the cluster: Stop +0x48,
+Release +0x08, GetStatus +0x24 (`0x427c9b`), Lock/Play/Unlock
++0x2c/+0x30/+0x4c (`0x427990`).  Not host-tested — `audio.c` is
+Windows-only (dsound.h); mingw drop-in build clean (both `.exe`,
+`-Wall -Wextra`), `_audio_cue_release` present in the PE symbol table.
+Deferred neighbours cited as bare hex per the ledger-token convention.
+Findings: `docs/findings/ddraw-dsound-bringup.md` (new "Cue-buffer
+teardown" section).
+
 ## 2026-05-30 — GAME-START chip: overworld-grid reset leaves (FUN_0046c5b8 + FUN_0046df51)
 
 Descended into **FUN_004676e0** — the overworld-grid setup
