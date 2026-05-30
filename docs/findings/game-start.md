@@ -64,7 +64,7 @@ live sim:
 | FUN_0046f2ae | 67 | 1 | clear unit-table block (13×20) ✅ |
 | FUN_0046f1dc | 67 | 1 | clear per-army block (17×768) ✅ |
 | FUN_0049caaa | 935 | 2 | NPC schedule seed — **already ported** |
-| FUN_00427ed0 | 311 | 3 | (unsurveyed) |
+| FUN_00427ed0 | 311 | 3 | ✅ army start-marker placement (→ entity placer FUN_0046e1b0) |
 | FUN_0042847c | 82 | 0 | copy DAT_004d8910 table → DAT_005532a0 strided |
 | FUN_00448440 | 261 | 29 | (unsurveyed — large fan-out) |
 | FUN_00451150 | 936 | 7 | (unsurveyed) |
@@ -270,6 +270,42 @@ After the table sweep it zeroes three world scalars: `s_slot_0055300c`
 all already homed.  Ported byte-exact to `game_init.c`; two host tests
 pin the per-record clear/preserve split (every record's +0..+4 zeroed,
 +5..+7 kept) and the scalar reset.
+
+### FUN_00427ed0 — army start-marker placement (+ entity placer FUN_0046e1b0)
+
+A 311-B init-only callee (one of three callers, but the new-game path is
+0x497ced) that drops each starting army's marker onto the strategic map.
+It walks the army-id list at **save entry 139** (`s_slot_00569518`, up to
+6 ids, terminated by a zero), and for each id:
+
+1. Probes the map for a nearby feature via the two army-coord predicates
+   (`FUN_00428007` bit0, then `FUN_00428078` flag∈{0,2}, both within
+   Chebyshev radius 1..3 of the army's coord — the box-scan callers from
+   the prior chip).  The probes now return the **matched cell** through
+   out-params (resolving the quirk #130 trap).
+2. On a hit, allocates a **type-6 entity** (kind 3) at that cell via the
+   shared placer **FUN_0046e1b0**, then stamps army-specific fields into
+   the freshly allocated record (addressed by the placer's current-slot
+   cursor, retail `DAT_0052afe0`): `+0x150 = 1`, `+0x10 = id`,
+   `+0x166 = 100`, `+0x167 = id`, `+0x164 = 1`, `+0x14f = loop index`.
+3. Bumps the placed-army counter at **save entry 78** (`s_slot_005530b4`).
+
+**FUN_0046e1b0** (792 B, *not* init-only — also reached by the
+0x4a0015 / 0x4a551b / 0x4ac185 setup paths) is the engine's map-entity
+allocator over the 151×420 record table (`g_per_territory_420`, retail
+`DAT_0052f0b0`).  It validates (col,row), requires the target cell free
+(head-link +5 == 0 and raw-flag +1 & 0xfc == 0), scans records 1..149 for
+the first free slot (type byte +0 == 0), zeroes it (`FUN_0046ead0`,
+memset 0x1a4), writes the position/type field map (see
+`engine_territory.c`), and claims the map cell (cell +5 ← slot, +2 |= 1).
+Because it is shared sim, it lives in `engine_territory.c`
+(`engine_territory_place_entity`), not `game_init.c`; FUN_00427ed0 itself
+is homed in `game_init.c` as `engine_game_init_place_army_starts`.  10
+host tests (7 placer + 3 army-start loop incl. the matched-cell report).
+
+> The placer needs the map-cell grid bound mutably
+> (`engine_territory_bind_cells`) in addition to the record array; the
+> live orchestrator (game-start step 5) wires both when assembled.
 
 ### FUN_004a1c53 — reset per-player sub-tables (+ FUN_004a2584 grid clear)
 

@@ -118,9 +118,9 @@ int test_map_query_unbound_grid_returns_0(void)
 int test_map_query_box_bit0_finds_set_cell(void)
 {
     grid_reset();
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(10, 10, 2), 0);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(10, 10, 2, NULL, NULL), 0);
     occupy(11, 11, 1, 0x01);   /* bit0 set, head-link 0 → match */
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(10, 10, 2), 1);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(10, 10, 2, NULL, NULL), 1);
     return 0;
 }
 
@@ -129,7 +129,7 @@ int test_map_query_box_bit0_requires_headlink_zero(void)
     grid_reset();
     occupy(11, 11, 1, 0x01);   /* bit0 set ... */
     occupy(11, 11, 5, 0x07);   /* ... but head-link nonzero → no match */
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(10, 10, 2), 0);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(10, 10, 2, NULL, NULL), 0);
     return 0;
 }
 
@@ -137,9 +137,9 @@ int test_map_query_box_bit0_mask(void)
 {
     grid_reset();
     occupy(11, 11, 1, 0x02);   /* bit1 only → bit0 clear → no match */
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(10, 10, 2), 0);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(10, 10, 2, NULL, NULL), 0);
     occupy(11, 11, 1, 0x03);   /* bit0 now set → match */
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(10, 10, 2), 1);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(10, 10, 2, NULL, NULL), 1);
     return 0;
 }
 
@@ -147,7 +147,7 @@ int test_map_query_box_only_bit1_empty_matches(void)
 {
     grid_reset();
     /* All-zero cells satisfy (0 & 0xfd) == 0 → the first cell matches. */
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_only_bit1(10, 10, 2), 1);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_only_bit1(10, 10, 2, NULL, NULL), 1);
     return 0;
 }
 
@@ -159,9 +159,9 @@ int test_map_query_box_only_bit1_predicate(void)
     for (int r = 8; r <= 12; r++)
         for (int c = 8; c <= 12; c++)
             occupy(c, r, 1, 0x04);
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_only_bit1(10, 10, 2), 0);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_only_bit1(10, 10, 2, NULL, NULL), 0);
     occupy(10, 10, 1, 0x02);   /* flag == 2 (only bit1), head-link 0 → match */
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_only_bit1(10, 10, 2), 1);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_only_bit1(10, 10, 2, NULL, NULL), 1);
     return 0;
 }
 
@@ -173,7 +173,7 @@ int test_map_query_box_only_bit1_headlink(void)
             occupy(c, r, 1, 0x04);   /* all flag-disqualified */
     occupy(10, 10, 1, 0x02);         /* qualifies by flag ... */
     occupy(10, 10, 5, 0x01);         /* ... but head-link nonzero → no */
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_only_bit1(10, 10, 2), 0);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_only_bit1(10, 10, 2, NULL, NULL), 0);
     return 0;
 }
 
@@ -183,7 +183,7 @@ int test_map_query_box_clamps_at_right_edge(void)
     /* region_clear rejects col+side>0x40; the box scan CLAMPS instead.
      * Centre (62,10) r3 → box cols 59..63 (clamped from 59..65). */
     occupy(63, 10, 1, 0x01);
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(62, 10, 3), 1);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(62, 10, 3, NULL, NULL), 1);
     return 0;
 }
 
@@ -192,12 +192,12 @@ int test_map_query_box_clamps_negative_anchor(void)
     grid_reset();
     /* Centre (1,1) r3 → box [-2..4]² clamps to [0..4]². */
     occupy(4, 4, 1, 0x01);
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(1, 1, 3), 1);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(1, 1, 3, NULL, NULL), 1);
 
     /* A bit0 cell just outside the clamped box (col 5) is not seen. */
     grid_reset();
     occupy(5, 0, 1, 0x01);
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(1, 1, 3), 0);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(1, 1, 3, NULL, NULL), 0);
     return 0;
 }
 
@@ -205,16 +205,16 @@ int test_map_query_box_radius0_single_cell(void)
 {
     grid_reset();
     occupy(20, 20, 1, 0x01);
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(20, 20, 0), 1);
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(21, 20, 0), 0);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(20, 20, 0, NULL, NULL), 1);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(21, 20, 0, NULL, NULL), 0);
     return 0;
 }
 
 int test_map_query_box_unbound_returns_0(void)
 {
     engine_map_query_bind_cell_descriptors(NULL);
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(10, 10, 2), 0);
-    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_only_bit1(10, 10, 2), 0);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_bit0(10, 10, 2, NULL, NULL), 0);
+    T_ASSERT_EQ_I(engine_map_query_box_any_rawflag_only_bit1(10, 10, 2, NULL, NULL), 0);
     return 0;
 }
 

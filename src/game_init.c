@@ -13,6 +13,7 @@
 #include "engine_turn.h"          /* g_sim_turn_progress, g_sim_turn_sync_baseline_ms */
 #include "engine_roster.h"        /* player_first_active_nonlocal (FUN_004a1e6c) */
 #include "engine_map_query.h"     /* box predicates for the army-coord probes */
+#include "engine_territory.h"     /* entity placer FUN_0046e1b0 (army starts) */
 
 /* Fixed-length record zeroer — retail FUN_0046ea28 (len 0x300),
  * FUN_0046eb09 (len 0x14), FUN_0046ead0 (len 0x1a4) and FUN_0046ea61
@@ -475,27 +476,89 @@ void engine_game_init_clear_castle_shadow(void)
  * coordinate, then probe Chebyshev radii 1..3 around it, returning 1 at
  * the first radius where the given box predicate matches, else 0.  The
  * coords are read as unsigned bytes (retail `(uint)(byte)`); an out-of-
- * range coord simply yields an empty clamped box (→ 0). */
-static int army_near(int id, int (*probe)(int, int, int))
+ * range coord simply yields an empty clamped box (→ 0).
+ *
+ * On a match the found cell is reported via *out_col / *out_row (when
+ * non-NULL) — the box scan leaves it there, and FUN_00427ed0 needs it to
+ * place the army's start marker AT the matched cell (quirk #130). */
+static int army_near(int id, int (*probe)(int, int, int, int *, int *),
+                     int *out_col, int *out_row)
 {
     int col = g_per_army_768[ARMY_COORD_OFF + id * ARMY_COORD_STRIDE];
     int row = g_per_army_768[ARMY_COORD_OFF + id * ARMY_COORD_STRIDE + 1];
     for (int r = 1; r <= 3; r++)
-        if (probe(col, row, r))
+        if (probe(col, row, r, out_col, out_row))
             return 1;
     return 0;
 }
 
 /* Port of FUN_00428007 — 1 iff a rawflag-bit0 cell lies within Chebyshev
- * radius 3 of army `id` (via FUN_0046cfbd). */
-int engine_game_init_army_near_rawflag_bit0(int id)
+ * radius 3 of army `id` (via FUN_0046cfbd); the matched cell is reported
+ * via *out_col / *out_row (pass NULL to ignore). */
+int engine_game_init_army_near_rawflag_bit0(int id, int *out_col, int *out_row)
 {
-    return army_near(id, engine_map_query_box_any_rawflag_bit0);
+    return army_near(id, engine_map_query_box_any_rawflag_bit0,
+                     out_col, out_row);
 }
 
 /* Port of FUN_00428078 — 1 iff a rawflag-only-bit1 cell (flag 0 or 2)
- * lies within Chebyshev radius 3 of army `id` (via FUN_0046d130). */
-int engine_game_init_army_near_rawflag_only_bit1(int id)
+ * lies within Chebyshev radius 3 of army `id` (via FUN_0046d130); the
+ * matched cell is reported via *out_col / *out_row (pass NULL). */
+int engine_game_init_army_near_rawflag_only_bit1(int id,
+                                                 int *out_col, int *out_row)
 {
-    return army_near(id, engine_map_query_box_any_rawflag_only_bit1);
+    return army_near(id, engine_map_query_box_any_rawflag_only_bit1,
+                     out_col, out_row);
+}
+
+/*
+ * Port of FUN_00427ed0 (311 B) — place each army's strategic-map start
+ * marker.  A direct 0x497ced new-game callee.
+ *
+ * Walks the army-id list at save entry 139 (s_slot_00569518, up to 6
+ * entries, terminated by a zero id).  For each army it probes the map
+ * for a nearby feature — first a rawflag-bit0 cell, then a flag∈{0,2}
+ * cell, both within Chebyshev radius 3 of the army's coord — and on a
+ * hit allocates a type-6 entity (kind 3) at the matched cell via the
+ * shared placer (FUN_0046e1b0), then stamps army-specific fields into
+ * the freshly allocated record (addressed by the placer's current-slot
+ * cursor, retail DAT_0052afe0):
+ *
+ *   +0x150 = 1     +0x10  = army id   +0x166 = 100
+ *   +0x167 = id    +0x164 = 1         +0x14f = loop index (0-based)
+ *
+ * and bumps the placed-army counter at save entry 78 (s_slot_005530b4).
+ *
+ * Faithful note: retail ignores the placer's return value and always
+ * stamps record[DAT_0052afe0].  We mirror that — if the placer fails
+ * (the matched cell turns out blocked, or the table is full) it still
+ * leaves the cursor set, and we stamp whatever record it points at, as
+ * retail does.  In practice the box scan only matches free cells, so a
+ * post-probe placement failure does not arise at new-game.  Sole caller
+ * 0x497ced (init-only). */
+void engine_game_init_place_army_starts(void)
+{
+    s_slot_005530b4 = 0;                          /* entry 78 — count */
+
+    for (int i = 0; i < 6; i++) {
+        uint8_t id = s_slot_00569518[i];          /* entry 139 — id list */
+        if (id == 0) break;
+
+        int col = 0, row = 0;
+        if (engine_game_init_army_near_rawflag_bit0(id, &col, &row) ||
+            engine_game_init_army_near_rawflag_only_bit1(id, &col, &row)) {
+            engine_territory_place_entity(3, col, row, 6);   /* FUN_0046e1b0 */
+
+            uint8_t *rec = g_per_territory_420 +
+                           engine_territory_current_slot() * 0x1a4;
+            rec[0x150] = 1;
+            rec[0x10]  = id;
+            rec[0x166] = 100;
+            rec[0x167] = id;
+            rec[0x164] = 1;
+            rec[0x14f] = (uint8_t)i;
+
+            s_slot_005530b4++;
+        }
+    }
 }

@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **373** (15.2%) — tested 339, ported 34
-- code bytes touched: **15.6%** (131,213 / 838,629 B)
-- unported: **2074**
+- touched: **375** (15.3%) — tested 341, ported 34
+- code bytes touched: **15.8%** (132,316 / 838,629 B)
+- unported: **2072**
 - orphan refs (in src/, not in function table): 4
 
-## tested (339) — ported + host unit suite
+## tested (341) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -160,6 +160,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42150b | FUN_0042150b | 508 | engine_title_render.h |
 | 0x423b4f | FUN_00423b4f | 85 | engine_mp_render.c, engine_mp_render.h |
 | 0x425d35 | FUN_00425d35 | 184 | main.c |
+| 0x427ed0 | FUN_00427ed0 | 311 | engine_map_query.c, engine_territory.c, game_init.c (+1) |
 | 0x428007 | FUN_00428007 | 113 | game_init.c, game_init.h |
 | 0x428078 | FUN_00428078 | 113 | game_init.c, game_init.h |
 | 0x42847c | FUN_0042847c | 82 | game_init.c, game_init.h |
@@ -234,9 +235,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46cfbd | FUN_0046cfbd | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |
 | 0x46d130 | FUN_0046d130 | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |
 | 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
+| 0x46e1b0 | FUN_0046e1b0 | 792 | engine_territory.c, engine_territory.h, game_init.c |
 | 0x46ea28 | FUN_0046ea28 | 57 | game_init.c, game_init.h |
 | 0x46ea61 | FUN_0046ea61 | 57 | game_init.c |
-| 0x46ead0 | FUN_0046ead0 | 57 | game_init.c, game_init.h |
+| 0x46ead0 | FUN_0046ead0 | 57 | engine_territory.c, game_init.c, game_init.h |
 | 0x46eb09 | FUN_0046eb09 | 54 | game_init.c, game_init.h |
 | 0x46f1dc | FUN_0046f1dc | 67 | game_init.c, game_init.h |
 | 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h |

@@ -1348,6 +1348,13 @@ struct test_case {
     X(territory_leaves_other_fields_untouched) \
     X(territory_does_not_touch_record_151) \
     X(territory_unbound_is_noop) \
+    X(territory_place_fills_record_and_claims_cell) \
+    X(territory_place_takes_first_free_slot) \
+    X(territory_place_rejects_occupied_cell) \
+    X(territory_place_rejects_blocked_rawflag) \
+    X(territory_place_rejects_off_grid) \
+    X(territory_place_table_full_returns_0) \
+    X(territory_place_unbound_returns_0) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \
@@ -1406,6 +1413,9 @@ struct test_case {
     X(game_init_army_bit0_within_radius3) \
     X(game_init_army_only_bit1_within_radius3) \
     X(game_init_army_coord_stride_is_3) \
+    X(game_init_army_probe_reports_matched_cell) \
+    X(game_init_place_army_starts_places_two) \
+    X(game_init_place_army_starts_skips_and_terminates) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

@@ -25,6 +25,7 @@
 #include "save_schema_globals.h"  /* s_slot_<va> — seeded calendar scalars */
 #include "engine_turn.h"          /* turn-handshake globals reset by the seed */
 #include "engine_map_query.h"     /* cell-grid binding for the army probes */
+#include "engine_territory.h"     /* entity placer + record/cell binding */
 
 /* The save blocks under test live in save.c (linked into the suite). */
 
@@ -786,11 +787,11 @@ int test_game_init_army_bit0_within_radius3(void)
 {
     army_setup(1, 20, 20, 4 /* surround with "neither" flag */);
     army_set_rawflag(23, 20, 0x01);     /* distance 3 */
-    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1), 1);
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1, NULL, NULL), 1);
 
     army_setup(1, 20, 20, 4);
     army_set_rawflag(24, 20, 0x01);     /* distance 4 — out of reach */
-    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1), 0);
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1, NULL, NULL), 0);
     return 0;
 }
 
@@ -800,12 +801,12 @@ int test_game_init_army_only_bit1_within_radius3(void)
 {
     army_setup(1, 20, 20, 4);
     army_set_rawflag(22, 22, 0x02);     /* flag 2 → only_bit1 match, dist 2 */
-    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_only_bit1(1), 1);
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_only_bit1(1, NULL, NULL), 1);
     /* bit0 probe must NOT see a flag-2 cell. */
-    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1), 0);
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1, NULL, NULL), 0);
 
     army_setup(1, 20, 20, 4);           /* no flag∈{0,2} anywhere */
-    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_only_bit1(1), 0);
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_only_bit1(1, NULL, NULL), 0);
     return 0;
 }
 
@@ -827,7 +828,111 @@ int test_game_init_army_coord_stride_is_3(void)
 
     army_set_rawflag(10, 10, 0x01);     /* feature on army 1 only */
 
-    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1), 1);
-    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(2), 0);
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1, NULL, NULL), 1);
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(2, NULL, NULL), 0);
+    return 0;
+}
+
+/* The probes report the matched cell via the out-params (quirk #130). */
+int test_game_init_army_probe_reports_matched_cell(void)
+{
+    army_setup(1, 20, 20, 4);
+    army_set_rawflag(22, 21, 0x01);     /* a bit0 feature within radius 3 */
+
+    int col = -1, row = -1;
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1, &col, &row), 1);
+    T_ASSERT_EQ_I(col, 22);
+    T_ASSERT_EQ_I(row, 21);
+    return 0;
+}
+
+/* ── Army start-marker placement (FUN_00427ed0) ──────────────────────── */
+
+#define TREC(slot, off) g_per_territory_420[(slot) * 0x1a4 + (off)]
+
+/* Bind the shared cell grid to both the read (query) and write
+ * (territory) seats, and reset the real entity table. */
+static void army_starts_setup(void)
+{
+    memset(g_army_cells, 0, sizeof g_army_cells);
+    engine_map_query_bind_cell_descriptors(g_army_cells);
+    engine_territory_bind_cells(g_army_cells);
+
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    engine_territory_bind_records(g_per_territory_420);
+
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(s_slot_00569518, 0, sizeof s_slot_00569518);
+    s_slot_005530b4 = 0xdead;
+}
+
+static void army_seat(int id, int col, int row)
+{
+    g_per_army_768[ARMY_COORD_OFF + id * 3]     = (uint8_t)col;
+    g_per_army_768[ARMY_COORD_OFF + id * 3 + 1] = (uint8_t)row;
+}
+
+/* Two seated armies, each with a feature on its own cell, are placed:
+ * the counter reaches 2 and each marker lands AT the matched cell with
+ * the army id/index stamped in. */
+int test_game_init_place_army_starts_places_two(void)
+{
+    army_starts_setup();
+    army_seat(7, 10, 10);
+    army_seat(4, 40, 40);
+    army_set_rawflag(10, 10, 0x01);
+    army_set_rawflag(40, 40, 0x01);
+    s_slot_00569518[0] = 7;
+    s_slot_00569518[1] = 4;             /* [2] = 0 → terminator */
+
+    engine_game_init_place_army_starts();
+
+    T_ASSERT_EQ_U(s_slot_005530b4, 2);
+
+    /* slot 1 ← army 7 at (10,10), loop index 0 */
+    T_ASSERT_EQ_I(TREC(1, 0x00), 6);    /* placer type   */
+    T_ASSERT_EQ_I(TREC(1, 0x08), 3);    /* placer kind   */
+    T_ASSERT_EQ_I(TREC(1, 0x0a), 10);   /* matched col   */
+    T_ASSERT_EQ_I(TREC(1, 0x0b), 10);   /* matched row   */
+    T_ASSERT_EQ_I(TREC(1, 0x10), 7);    /* army id       */
+    T_ASSERT_EQ_I(TREC(1, 0x150), 1);
+    T_ASSERT_EQ_I(TREC(1, 0x166), 100);
+    T_ASSERT_EQ_I(TREC(1, 0x167), 7);
+    T_ASSERT_EQ_I(TREC(1, 0x164), 1);
+    T_ASSERT_EQ_I(TREC(1, 0x14f), 0);   /* loop index    */
+
+    /* slot 2 ← army 4 at (40,40), loop index 1 */
+    T_ASSERT_EQ_I(TREC(2, 0x0a), 40);
+    T_ASSERT_EQ_I(TREC(2, 0x10), 4);
+    T_ASSERT_EQ_I(TREC(2, 0x167), 4);
+    T_ASSERT_EQ_I(TREC(2, 0x14f), 1);
+    return 0;
+}
+
+/* A zero id terminates the walk; an army with no nearby feature is
+ * skipped (counter not bumped) but the walk continues. */
+int test_game_init_place_army_starts_skips_and_terminates(void)
+{
+    army_starts_setup();
+    army_fill_rawflag(4);               /* default: matches neither probe */
+
+    army_seat(3, 20, 20);
+    army_seat(5, 50, 50);
+    army_seat(9, 30, 30);
+    army_set_rawflag(20, 20, 0x01);     /* feature for army 3 only */
+    army_set_rawflag(30, 30, 0x01);     /* feature for army 9 (must be unreached) */
+
+    s_slot_00569518[0] = 3;             /* placed   */
+    s_slot_00569518[1] = 5;             /* skipped  */
+    s_slot_00569518[2] = 0;             /* terminator */
+    s_slot_00569518[3] = 9;             /* must NOT be processed */
+
+    engine_game_init_place_army_starts();
+
+    T_ASSERT_EQ_U(s_slot_005530b4, 1);  /* only army 3 placed */
+    T_ASSERT_EQ_I(TREC(1, 0x10), 3);    /* slot 1 = army 3 */
+    T_ASSERT_EQ_I(TREC(2, 0x00), 0);    /* no second record */
+    /* army 9's cell was never claimed */
+    T_ASSERT_EQ_I(g_army_cells[(30 * 0x40 + 30) * 8 + 5], 0);
     return 0;
 }

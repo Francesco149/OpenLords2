@@ -7,6 +7,48 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — GAME-START chip: army start-marker placement (FUN_00427ed0 + entity placer FUN_0046e1b0)
+
+The caller the prior chip flagged as a trap (quirk #130).  `FUN_00427ed0`
+(a 0x497ced new-game callee) drops each starting army's marker onto the
+strategic map: it walks the army-id list at save entry 139
+(`s_slot_00569518`, ≤6 ids, zero-terminated), probes for a nearby map
+feature, and on a hit allocates a **type-6 entity** at the matched cell,
+then stamps the army id/index into the new record and bumps the placed
+count at entry 78 (`s_slot_005530b4`).
+
+**Quirk #130 resolved — the matched cell now flows out via out-params.**
+Retail's box scans leave the hit cell in `engine_path`'s nearest-result
+globals `DAT_00569570/78` (they reuse them as loop counters), and
+`FUN_00427ed0` reads those right after the probe returns truthy.  Our
+ports deliberately used locals, so the prior chip flagged that the cell
+must be surfaced before this caller could land.  Took the out-param
+route: `box_scan` + the two box predicates gained `int *out_col,
+*out_row`, threaded through `army_near` to the public army probes;
+`engine_game_init_place_army_starts` reads them with retail's `||`
+short-circuit and hands the cell to the placer.  No global clobber, no
+clash with the (separately ported) `engine_path` nearest-result.  The
+ring finder / region_clear pass NULL.
+
+**FUN_0046e1b0 — the map-entity allocator — landed in `engine_territory.c`.**
+792 B, *not* init-only (also reached by 0x4a0015 / 0x4a551b / 0x4ac185),
+so it lives in the shared territory module rather than `game_init.c`.  It
+allocates the first free record (slots 1..149) of the 151×420 table
+(`g_per_territory_420`, retail `DAT_0052f0b0`) for a free map cell
+(head-link +5 == 0 AND raw-flag +1 & 0xfc == 0), zeroes it
+(`FUN_0046ead0` = memset 0x1a4), writes the position/type field map, and
+claims the cell (cell +5 ← slot, +2 |= 1).  The slot it parks at is
+retail `DAT_0052afe0` (a transient, *not* a save field), exposed via
+`engine_territory_current_slot` so the caller can stamp extra fields —
+exactly how `FUN_00427ed0` and the three other callers use it.
+
+10 host tests (7 placer: field map, first-free-slot, occupied-cell /
+blocked-rawflag / off-grid rejection, table-full, unbound; 3 army-start:
+matched-cell report, two-army placement, skip+terminate).  1336/1336
+pass; mingw build clean.  The placer needs the map-cell grid bound
+mutably (`engine_territory_bind_cells`) in addition to the record array —
+the live orchestrator (game-start step 5) will wire both when assembled.
+
 ## 2026-05-30 — MAP-QUERY chip: the three box-scan callers (FUN_00428007 / FUN_00428078 / FUN_0046733c)
 
 The natural follow-on to yesterday's box-scan pair: the three direct

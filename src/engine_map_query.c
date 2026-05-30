@@ -60,13 +60,19 @@ int engine_map_query_region_clear(int col, int row, int size)
  * (+5) is zero AND whose raw-flag byte (+1) satisfies
  * (flag & mask) == expect, else 0.
  *
- * Retail reuses the find-nearest scratch globals DAT_00569570 /
- * DAT_00569578 as the loop counters (a codegen artifact); no caller
- * reads them after these scans (0x46733c / 0x428007 / 0x428078 use
- * only the 0/1 result), so we use locals rather than clobber
- * engine_path's nearest-result globals — same call as region_clear. */
+ * On a hit the matching cell's (col, row) is written to *out_col /
+ * *out_row when those pointers are non-NULL.  Retail does not need an
+ * out-param: it reuses engine_path's find-nearest scratch globals
+ * DAT_00569570 (col) / DAT_00569578 (row) as the loop counters (a
+ * codegen artifact), so on the return-1 path those globals already
+ * hold the matched cell.  We surface the cell explicitly instead of
+ * clobbering engine_path's result globals; callers that ignore the
+ * position (the ring finder, region_clear) pass NULL.  This is what
+ * lets FUN_00427ed0 place an entity AT the found cell — see
+ * docs/findings/engine-quirks.md quirk #130. */
 static int box_scan(int col, int row, int radius,
-                    unsigned mask, unsigned expect)
+                    unsigned mask, unsigned expect,
+                    int *out_col, int *out_row)
 {
     if (g_cells == NULL) return 0;
 
@@ -87,8 +93,11 @@ static int box_scan(int col, int row, int radius,
     for (int r = y; r < y + yext; r++) {
         for (int c = x; c < x + xext; c++) {
             if (g_cells[idx + 5] == 0 &&
-                ((unsigned)g_cells[idx + 1] & mask) == expect)
+                ((unsigned)g_cells[idx + 1] & mask) == expect) {
+                if (out_col) *out_col = c;
+                if (out_row) *out_row = r;
                 return 1;
+            }
             idx += 8;
         }
         idx += (0x40 - xext) * 8;   /* skip to next row's box start */
@@ -98,19 +107,23 @@ static int box_scan(int col, int row, int radius,
 
 /* Port of FUN_0046cfbd.  1 iff the clamped (2*radius+1)-box at
  * (col, row) contains an unlinked cell (head-link +5 == 0) whose
- * raw-flag byte (+1) has bit 0 set; 0 otherwise. */
-int engine_map_query_box_any_rawflag_bit0(int col, int row, int radius)
+ * raw-flag byte (+1) has bit 0 set; 0 otherwise.  On a hit the cell is
+ * reported via *out_col / *out_row (pass NULL to ignore). */
+int engine_map_query_box_any_rawflag_bit0(int col, int row, int radius,
+                                          int *out_col, int *out_row)
 {
-    return box_scan(col, row, radius, 0x01, 0x01);
+    return box_scan(col, row, radius, 0x01, 0x01, out_col, out_row);
 }
 
 /* Port of FUN_0046d130.  1 iff the clamped (2*radius+1)-box at
  * (col, row) contains an unlinked cell (head-link +5 == 0) whose
  * raw-flag byte (+1) has no bits set other than bit 1 (i.e. the
- * value is 0 or 2 — (flag & 0xfd) == 0); 0 otherwise. */
-int engine_map_query_box_any_rawflag_only_bit1(int col, int row, int radius)
+ * value is 0 or 2 — (flag & 0xfd) == 0); 0 otherwise.  On a hit the
+ * cell is reported via *out_col / *out_row (pass NULL to ignore). */
+int engine_map_query_box_any_rawflag_only_bit1(int col, int row, int radius,
+                                               int *out_col, int *out_row)
 {
-    return box_scan(col, row, radius, 0xfd, 0x00);
+    return box_scan(col, row, radius, 0xfd, 0x00, out_col, out_row);
 }
 
 /* Port of FUN_0046733c.  Ring-distance probe centred at (col, row):
@@ -122,19 +135,17 @@ int engine_map_query_box_any_rawflag_only_bit1(int col, int row, int radius)
  * Caveat for future callers: like the box scans it delegates to, the
  * retail body uses engine_path's nearest-result globals
  * (DAT_00569570 / DAT_00569578) as its loop counters, so on a hit
- * those globals hold the matching cell's (col, row).  This port
- * returns only the ring distance and does NOT expose the matched cell
- * (matching the box_scan port's locals-not-globals choice).  Any
- * caller that needs the found position — e.g. 0x427ed0, which
- * reads DAT_00569570/78 right after this probe family returns truthy —
- * must first give box_scan a position out-param.  See
- * docs/findings/engine-quirks.md. */
+ * those globals hold the matching cell's (col, row).  This finder
+ * returns only the ring distance, so it passes NULL for the box scans'
+ * position out-params (the matched cell is surfaced where a caller
+ * needs it — the army-coord probes in game_init.c thread it through to
+ * the entity placer).  See docs/findings/engine-quirks.md quirk #130. */
 int engine_map_query_nearest_feature_ring(int col, int row)
 {
     for (int d = 1; d <= 5; d++) {
-        if (engine_map_query_box_any_rawflag_bit0(col, row, d + 1))
+        if (engine_map_query_box_any_rawflag_bit0(col, row, d + 1, NULL, NULL))
             return d;
-        if (engine_map_query_box_any_rawflag_only_bit1(col, row, d))
+        if (engine_map_query_box_any_rawflag_only_bit1(col, row, d, NULL, NULL))
             return d;
     }
     return 0;

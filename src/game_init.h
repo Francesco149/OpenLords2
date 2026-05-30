@@ -133,8 +133,21 @@ void engine_game_init_clear_castle_shadow(void);
  *
  *   _bit0       → rawflag bit 0 set   (FUN_00428007 → FUN_0046cfbd)
  *   _only_bit1  → rawflag is 0 or 2   (FUN_00428078 → FUN_0046d130)
+ *
+ * On a match the found cell is reported via *out_col / *out_row (pass
+ * NULL to ignore); FUN_00427ed0 uses it to place the army's start
+ * marker AT that cell.
  */
-int engine_game_init_army_near_rawflag_bit0(int id);
-int engine_game_init_army_near_rawflag_only_bit1(int id);
+int engine_game_init_army_near_rawflag_bit0(int id, int *out_col, int *out_row);
+int engine_game_init_army_near_rawflag_only_bit1(int id,
+                                                 int *out_col, int *out_row);
+
+/* Init-only seeder FUN_00427ed0 — place each army's strategic-map start
+ * marker.  For every army id in save entry 139 (s_slot_00569518, up to 6,
+ * zero-terminated) it probes for a nearby map feature and, on a hit,
+ * allocates a type-6 entity at the matched cell (engine_territory_place_entity)
+ * and stamps the army's id/index into the new record; bumps the placed
+ * count at entry 78.  A direct 0x497ced new-game callee. */
+void engine_game_init_place_army_starts(void);
 
 #endif /* OPENLORDS2_GAME_INIT_H */

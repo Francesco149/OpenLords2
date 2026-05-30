@@ -4519,7 +4519,7 @@ clear-shape convenience, not a faithful layout.
 
 ---
 
-## 130. The box-scan loop counters double as the engine's nearest-cell result globals — a port trap for FUN_00427ed0
+## 130. The box-scan loop counters double as the engine's nearest-cell result globals — a port trap for FUN_00427ed0  ✅ RESOLVED
 
 The strategic-map box scans `FUN_0046cfbd` / `FUN_0046d130` (and the
 ring-distance finder `FUN_0046733c` over them) use the globals
@@ -4553,7 +4553,22 @@ if (FUN_00428007(id) || FUN_00428078(id))
 placement will silently target the wrong cell.  Flagged here and in
 `engine_map_query.c` so the trap is seen before, not after.
 
-> 📍 `src/engine_map_query.c` (`box_scan`, `engine_map_query_nearest_feature_ring`),
+**Resolution (FUN_00427ed0 chip).**  Took the out-param route: `box_scan`
+and the two box predicates gained `int *out_col, int *out_row`, written
+on the return-1 path and passed through `army_near` up to the public army
+probes (`engine_game_init_army_near_rawflag_bit0/_only_bit1`).
+`engine_game_init_place_army_starts` reads them with the same `||`
+short-circuit retail uses, so the cell handed to the placer
+(`engine_territory_place_entity`) is the one the winning probe matched —
+no global clobber, no clash with `engine_path`'s nearest-cell result.
+Callers that ignore the position (the ring finder, region_clear) pass
+NULL.  A host test (`game_init_army_probe_reports_matched_cell`) pins the
+reported cell; the two `place_army_starts` tests confirm the marker lands
+at the matched cell.
+
+> 📍 `src/engine_map_query.c` (`box_scan` + predicates, out-params),
+> `src/game_init.c` (`engine_game_init_place_army_starts`),
+> `src/engine_territory.c` (`engine_territory_place_entity` = FUN_0046e1b0),
 > Ghidra `FUN_0046cfbd` @ 0x46d083/0x46d0ae, `FUN_00427ed0` @ 0x427f0a.
 
 ---

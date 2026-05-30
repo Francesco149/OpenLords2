@@ -26,9 +26,14 @@ int engine_map_query_region_clear(int col, int row, int size);
  *
  *   _bit0       — (flag & 0x01) == 0x01  (bit 0 set)        ← FUN_0046cfbd
  *   _only_bit1  — (flag & 0xfd) == 0      (flag is 0 or 2)  ← FUN_0046d130
- */
-int engine_map_query_box_any_rawflag_bit0(int col, int row, int radius);
-int engine_map_query_box_any_rawflag_only_bit1(int col, int row, int radius);
+ *
+ * On a hit the matching cell's (col, row) is written to *out_col /
+ * *out_row; pass NULL for either to ignore it.  (Retail leaves the cell
+ * in engine_path's scratch globals DAT_00569570/78 — see the .c.) */
+int engine_map_query_box_any_rawflag_bit0(int col, int row, int radius,
+                                          int *out_col, int *out_row);
+int engine_map_query_box_any_rawflag_only_bit1(int col, int row, int radius,
+                                               int *out_col, int *out_row);
 
 /* Port of FUN_0046733c.  Ring-distance probe at (col, row): returns the
  * smallest radius d in 1..5 at which the bit0 box (radius d+1) or the
