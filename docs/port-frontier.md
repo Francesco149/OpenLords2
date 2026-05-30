@@ -5,8 +5,8 @@
 The unported, non-thunk engine functions already **called by ported code** — the natural next chips. A **leaf** has all of its
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
-- frontier functions: **280**
-- of those, zero-dependency **leaves: 108** (recommended order below)
+- frontier functions: **275**
+- of those, zero-dependency **leaves: 107** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
 
@@ -272,18 +272,13 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x45242b | 11 | 1 | 0 | ✓ |
 | 0x452775 | 49 | 1 | 0 | ✓ |
 
-### tables (item/char) + populators (8)
+### tables (item/char) + populators (3)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
-| 0x46de05 | 143 | 1 | 1 |  |
 | 0x46a101 | 165 | 1 | 1 |  |
 | 0x46797d | 185 | 1 | 0 | ✓ |
 | 0x4650b0 | 265 | 1 | 1 |  |
-| 0x468d4f | 274 | 1 | 5 |  |
-| 0x46c2de | 292 | 1 | 0 | ✓ |
-| 0x467ca6 | 385 | 1 | 1 |  |
-| 0x467a36 | 624 | 1 | 1 |  |
 
 ### d3d/mesh pool + preload + palette (15)
 
@@ -292,7 +287,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x478952 | 53 | 1 | 0 | ✓ |
 | 0x476a5d | 74 | 1 | 0 | ✓ |
 | 0x47703a | 126 | 1 | 2 |  |
-| 0x4788c6 | 140 | 1 | 5 |  |
+| 0x4788c6 | 140 | 1 | 7 |  |
 | 0x472a31 | 152 | 1 | 0 | ✓ |
 | 0x476768 | 245 | 1 | 2 |  |
 | 0x476e95 | 421 | 1 | 2 |  |
@@ -334,7 +329,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x498270 | 327 | 1 | 1 |  |
 | 0x49b973 | 374 | 1 | 2 |  |
 | 0x499e5d | 421 | 1 | 0 | ✓ |
-| 0x4976a1 | 472 | 1 | 11 |  |
+| 0x4976a1 | 472 | 1 | 13 |  |
 | 0x49dfc6 | 505 | 1 | 4 |  |
 | 0x49a581 | 1039 | 1 | 16 |  |
 | 0x49d638 | 1737 | 1 | 0 | ✓ |

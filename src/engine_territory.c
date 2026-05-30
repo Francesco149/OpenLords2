@@ -98,7 +98,7 @@ void engine_territory_bind_cell_score_table(int16_t *scores)
  * a plain cell loop and leave engine_path's result globals alone — same
  * choice the map_query box scans make (see engine_map_query.c).
  *
- * The two callers (FUN_004676e0 new-game init, FUN_0046d3da reset) sweep
+ * The two callers (0x4676e0 new-game init, 0x46d3da reset) sweep
  * fields 0..5 in turn; `field` is the byte offset within the 8-byte cell.
  * No bounds check on `field` — retail trusts its 0..5 call sites. */
 void engine_territory_clear_cell_field(uint8_t field)
@@ -111,8 +111,8 @@ void engine_territory_clear_cell_field(uint8_t field)
 
 /* Port of FUN_0046df51.  Clear bit 5 (0x20) of byte +2 of every
  * overworld cell, then request a full-screen repaint.  Byte +2 is a
- * per-cell render-flag byte; bit 0x20 is set elsewhere (FUN_0046e067 /
- * FUN_00469370) and consumed by the strategic draw helpers
+ * per-cell render-flag byte; bit 0x20 is set elsewhere (0x46e067 /
+ * 0x469370) and consumed by the strategic draw helpers
  * (0x408438 / 0x4063c1 / 0x4071a0 / 0x406673 / 0x406bba, all gated on
  * DAT_0053f264 == 1) — a per-cell "marked for the alternate draw path"
  * flag the engine wipes at new-game.  Retail also resets a scratch
@@ -214,7 +214,7 @@ int engine_territory_place_entity(int kind, int col, int row, int type)
 
 /* Port of FUN_0046da4b (293 B) — rebuild the per-key cell roster from the
  * overworld grid.  Called near the tail of the new-game overworld setup
- * (FUN_004676e0, with reset_score_table=1) and from the mid-game recompute
+ * (0x4676e0, with reset_score_table=1) and from the mid-game recompute
  * at 0x4976a1 (with 0).
  *
  * Step 1: zero rows 1..16 of the roster (NOT row 0, NOT row 17) — and, on

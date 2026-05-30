@@ -105,6 +105,30 @@ Three heuristic false-positives were **kept** (genuine ports whose
 provenance my first regex missed): `0x404ead` ("Port of FUN_00404ead.
 Manhattan"), `0x448411` / `0x4479de` ("… port of FUN_… et al.").
 
+## What was corrected (2026-05-31)
+
+Demoted **6** verified false promotions introduced by the recent
+game-start / RNG chips (token → bare hex), dropping the headline from
+**387 touched (15.8 %)** to **381 (15.6 %)**, 351 → 345 tested, 1248
+code-bytes off the touched total:
+
+- **RNG chip** named two unported sibling seeders by token in
+  `engine_rng.c` and `engine.h`: `0x46dbf5` (319 B), `0x46dd34` (209 B),
+  plus their still-unported parent orchestrator `0x4676e0` (144 B).
+- **territory chips** named three unported neighbours by token in
+  `engine_territory.c`: `0x469370` (188 B) and `0x46e067` (317 B) — the
+  two producers that *set* the render-flag bit `0x46df51` clears — and
+  the reset-path caller `0x46d3da` (71 B).
+
+Two tokens in `engine_territory.c` were initially over-demoted then
+**reverted** — both are genuinely ported and so are correctly cited *by*
+token: `0x45240a` (`engine_dirty_rect_mark_full_screen`, header-map
+provenance in `engine_dirty_rect.h`) and `0x46ead0` (realized inline as
+`clear_record` in `game_init.c`, inline-token annotation). Lesson: a
+`grep "Port of"` miss does **not** prove unimplemented — confirm via the
+header-map (`FUN_… @ 0x… → name`) and inlined-helper provenance forms
+before demoting.
+
 ## Remaining work
 
 `audit_provenance.py` still flags **~59 review-tier** functions — a dense

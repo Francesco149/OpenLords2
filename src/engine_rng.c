@@ -86,8 +86,8 @@ void engine_rng_step(const engine_rng_in_t *in, engine_rng_out_t *out)
  * Retail call shape:  FUN_00404b2c(); v = DAT_005c9a84 & 7;
  * — i.e. the advance is invoked for its side effect on the 7-bit
  * mirror, which callers mask further.  Six call sites, all unported:
- * the new-game overworld-grid seeders FUN_0046dd34 / FUN_0046dbf5
- * (siblings inside the FUN_004676e0 setup sequence) and the strategic
+ * the new-game overworld-grid seeders 0x46dd34 / 0x46dbf5
+ * (siblings inside the 0x4676e0 setup sequence) and the strategic
  * samplers at 0x47*.
  *
  * Same engine quirk as the double LFSR: the feedback target is bit 30

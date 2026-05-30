@@ -720,8 +720,8 @@ void engine_rng_step(const engine_rng_in_t *in, engine_rng_out_t *out);
  *
  * Retail call shape is `FUN_00404b2c(); v = DAT_005c9a84 & 7;` — the
  * advance writes the 7-bit mirror DAT_005c9a84, and callers mask it
- * further (game-start grid seeders FUN_0046dd34 / FUN_0046dbf5, the
- * strategic samplers FUN_0047*).  None of those callers are ported
+ * further (game-start grid seeders 0x46dd34 / 0x46dbf5, the
+ * strategic samplers 0x47*).  None of those callers are ported
  * yet, so this primitive has no live drop-in consumer; the stateful
  * Win32 wrapper (state mirror + DAT_005c9a84) lands with the first
  * one, mirroring how engine.c only holds the double-LFSR mirrors
