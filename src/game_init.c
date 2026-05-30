@@ -13,9 +13,10 @@
 #include "engine_turn.h"          /* g_sim_turn_progress, g_sim_turn_sync_baseline_ms */
 
 /* Fixed-length record zeroer — retail FUN_0046ea28 (len 0x300),
- * FUN_0046eb09 (len 0x14) and FUN_0046ead0 (len 0x1a4) are three
- * instances of this same `memset(base, 0, len)` leaf, one per block
- * stride.  Each retail clearer below calls its matching length. */
+ * FUN_0046eb09 (len 0x14), FUN_0046ead0 (len 0x1a4) and FUN_0046ea61
+ * (len 0x160) are four instances of this same `memset(base, 0, len)`
+ * leaf, one per block stride.  Each retail clearer below calls its
+ * matching length. */
 static void clear_record(void *base, size_t len)
 {
     memset(base, 0, len);
@@ -320,5 +321,40 @@ void engine_game_init_seed_unit_table(void)
         rec[0x7]                  = k_unit_col_c[i];  /* dup of +0x6 */
         *(uint32_t *)(rec + 0xc)  = k_unit_col_e[i];
         *(uint32_t *)(rec + 0x10) = k_unit_col_f[i];
+    }
+}
+
+/*
+ * Init-only seeder FUN_0049b35e @ 0x49b35e (205 B) — purge the strategic
+ * record of any player slot that is unoccupied or only half-initialised.
+ *
+ * Walks player slots 1..5 of g_player_strategic_352 (save entry 3, stride
+ * 0x160; slot 0 — the reserved front slot — is skipped) and zeroes the
+ * whole 0x160-byte record (retail FUN_0046ea61, the len-0x160 instance of
+ * the fixed-length zeroer) when either:
+ *
+ *   - the slot-occupied flag (+0x4) is clear, OR
+ *   - the slot is occupied but neither the human-data flag (+0x5) nor the
+ *     AI opponent-type code (+0x7) is set.
+ *
+ * The three field offsets are the same ones engine_ranking.c names
+ * F_ACTIVE / F_HAS_DATA / F_OPP_TYPE; re-stated locally here to keep this
+ * module self-contained (they are private byte offsets, not a shared
+ * symbol).  Runs once at new-game (sole caller 0x497ced) to scrub any
+ * leftover/garbage player state ahead of the heavy seeders.
+ */
+#define STRAT_REC(slot)   (&g_player_strategic_352[(slot) * 0x160])
+#define STRAT_ACTIVE      0x04   /* slot-occupied flag */
+#define STRAT_HAS_DATA    0x05   /* human player_has_data flag */
+#define STRAT_OPP_TYPE    0x07   /* AI opponent-type code */
+
+void engine_game_init_purge_inactive_records(void)
+{
+    for (int slot = 1; slot < 6; slot++) {
+        uint8_t *rec = STRAT_REC(slot);
+        if (rec[STRAT_ACTIVE] == 0)
+            clear_record(rec, 0x160);                       /* FUN_0046ea61 */
+        else if (rec[STRAT_HAS_DATA] == 0 && rec[STRAT_OPP_TYPE] == 0)
+            clear_record(rec, 0x160);                       /* FUN_0046ea61 */
     }
 }

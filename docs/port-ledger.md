@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **361** (14.8%) — tested 327, ported 34
-- code bytes touched: **15.4%** (128,832 / 838,629 B)
-- unported: **2086**
+- touched: **363** (14.8%) — tested 329, ported 34
+- code bytes touched: **15.4%** (129,094 / 838,629 B)
+- unported: **2084**
 - orphan refs (in src/, not in function table): 4
 
-## tested (327) — ported + host unit suite
+## tested (329) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -230,6 +230,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46c4a3 | FUN_0046c4a3 | 277 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
 | 0x46ea28 | FUN_0046ea28 | 57 | game_init.c, game_init.h |
+| 0x46ea61 | FUN_0046ea61 | 57 | game_init.c |
 | 0x46ead0 | FUN_0046ead0 | 57 | game_init.c, game_init.h |
 | 0x46eb09 | FUN_0046eb09 | 54 | game_init.c, game_init.h |
 | 0x46f1dc | FUN_0046f1dc | 67 | game_init.c, game_init.h |
@@ -255,6 +256,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h |
 | 0x49a453 | FUN_0049a453 | 302 | save.c, save.h |
 | 0x49aa0e | FUN_0049aa0e | 2197 | engine_ranking.c, engine_ranking.h |
+| 0x49b35e | FUN_0049b35e | 205 | game_init.c, game_init.h |
 | 0x49b762 | FUN_0049b762 | 334 | engine.c, engine.h, engine_turn.c (+1) |
 | 0x49bae9 | FUN_0049bae9 | 180 | engine_menu_input.c, engine_roster.c, engine_roster.h |
 | 0x49bbe8 | FUN_0049bbe8 | 53 | engine_roster.c, engine_roster.h |

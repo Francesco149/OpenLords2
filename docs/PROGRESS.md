@@ -7,6 +7,34 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — GAME-START chip 6: FUN_0049b35e (purge inactive strategic records)
+
+Another direct 0x497ced callee lands — and a two-step chain in one chip.
+`FUN_0049b35e` → `engine_game_init_purge_inactive_records`
+(`src/game_init.c`); its sole unported callee `FUN_0046ea61` is just the
+len-0x160 instance of the fixed-length record zeroer (a fourth sibling of
+FUN_0046ea28/eb09/ead0), so it folds into the existing `clear_record`
+helper and the whole chain lands together.
+
+The seeder walks player slots 1..5 of `g_player_strategic_352` (save
+entry 3, stride 0x160; slot 0 skipped) and zeroes the whole record when
+the slot is unoccupied (`+0x4 == 0`) or occupied-but-uninitialised
+(`+0x5 == 0 AND +0x7 == 0`) — the same F_ACTIVE / F_HAS_DATA / F_OPP_TYPE
+fields `engine_ranking.c` already names.  Init-only (sole caller is the
+new-game initialiser, the call site 0x497e5b sits inside 0x497ced's
+range), so it belongs in `game_init.c`.
+
+**Homing was a non-event** — the base is the already-homed entry-3 table.
+Two host tests pin the zeroing (the OR and the AND branches) and the
+preservation (active slots survive; a set opp-type alone keeps a record;
+slot 0 is never visited).  1294/1294 pass.
+
+Three direct 0x497ced callees now remain near-leaves (FUN_0049d7d audio,
+FUN_00499aca, FUN_004a1c53 each 1–2 unported callees); the rest still
+carry deep fan-out (FUN_00448440 = 28, FUN_0049bd99 = 9).
+
+---
+
 ## 2026-05-30 — GAME-START chip 5: leaf seeder FUN_004ac904 (unit/opponent-type table)
 
 A clean leaf seeder of the new-game init (`0x497ced`): `FUN_004ac904` →

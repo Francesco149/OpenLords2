@@ -4,15 +4,15 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 327,
+  "tested": 329,
   "ported": 34,
-  "unported": 2086,
+  "unported": 2084,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 361,
+  "touched": 363,
   "pct_touched": 14.8,
   "pct_tested": 13.4,
   "bytes_total": 838629,
-  "bytes_touched": 128832,
+  "bytes_touched": 129094,
   "pct_bytes_touched": 15.4
  },
  "orphan_refs": [
@@ -11778,8 +11778,10 @@
    "name": "FUN_0046ea61",
    "size": 57,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c"
+   ]
   },
   {
    "va": "0x46ea9a",
@@ -14880,8 +14882,11 @@
    "name": "FUN_0049b35e",
    "size": 205,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c",
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x49b42b",

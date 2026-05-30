@@ -78,7 +78,7 @@ live sim:
 | FUN_00499d7d | 26 | 1 | play click3.wav (audio) |
 | FUN_0049a453 | 302 | 2 | **tested** (already ported) |
 | FUN_0049aa0e | 2197 | 1 | (unsurveyed — large) |
-| FUN_0049b35e | 205 | 1 | (unsurveyed) |
+| FUN_0049b35e | 205 | 1 | ✅ **tested** — purge inactive players' strategic records |
 | FUN_0049bc5f | 314 | 0 | **tested** (already ported) |
 | FUN_0049bd99 | 3063 | 9 | (unsurveyed — largest) |
 | FUN_004a1c53 | 537 | 2 | (unsurveyed) |
@@ -234,6 +234,21 @@ parallel retail `.rdata` columns.
 Homed in `game_init.c` (a 0x497ced callee); the six columns are embedded
 as `static const` arrays mirroring the retail `.rdata`, extracted
 byte-for-byte from the PE.
+
+### FUN_0049b35e — purge inactive players' strategic records
+
+A 205-B init-only callee (sole caller 0x497ced) that scrubs leftover /
+garbage player state before the heavy seeders run.  Walks player slots
+1..5 of `g_player_strategic_352` (save entry 3, stride 0x160; slot 0 —
+the reserved front slot — is skipped) and zeroes the whole 0x160-byte
+record (via `FUN_0046ea61`, the len-0x160 instance of the fixed-length
+zeroer — a fourth sibling of FUN_0046ea28/eb09/ead0) when the slot is
+either **unoccupied** (`+0x4 == 0`) or **occupied-but-uninitialised**
+(`+0x5 == 0 AND +0x7 == 0`).  The three fields are the same
+`F_ACTIVE` / `F_HAS_DATA` / `F_OPP_TYPE` offsets `engine_ranking.c`
+names; the half-init exemption needs *both* the human-data flag and the
+AI opponent-type code clear, so a record with either set survives.
+Homed in `game_init.c`.
 
 ### FUN_00497e65 — new-game randomiser (RNG seats + two 48-tables)
 

@@ -101,4 +101,10 @@ void engine_game_init_seat_shuffle(engine_rng_in_t *rng);
  * 1..count; record 0 and the untouched per-record bytes stay cleared. */
 void engine_game_init_seed_unit_table(void);
 
+/* Init-only seeder FUN_0049b35e — purge (memset 0x160) the strategic
+ * record of any player slot 1..5 (g_player_strategic_352, entry 3) that
+ * is unoccupied (+0x4 clear) or occupied but uninitialised (+0x5 and
+ * +0x7 both clear).  Scrubs leftover/garbage player state at new-game. */
+void engine_game_init_purge_inactive_records(void);
+
 #endif /* OPENLORDS2_GAME_INIT_H */

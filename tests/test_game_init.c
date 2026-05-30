@@ -508,3 +508,82 @@ int test_game_init_seed_unit_table_count_selection(void)
     }
     return 0;
 }
+
+/* ============================================================== *
+ *  engine_game_init_purge_inactive_records (FUN_0049b35e)
+ * ============================================================== */
+
+#define PURGE_STRIDE   0x160
+#define PURGE_ACTIVE   0x04
+#define PURGE_HASDATA  0x05
+#define PURGE_OPPTYPE  0x07
+#define PREC(s)        (&g_player_strategic_352[(s) * PURGE_STRIDE])
+
+/* Set the three decision flags of a slot's record. */
+static void set_slot_flags(int slot, uint8_t active, uint8_t has_data,
+                           uint8_t opp_type)
+{
+    uint8_t *r = PREC(slot);
+    r[PURGE_ACTIVE]  = active;
+    r[PURGE_HASDATA] = has_data;
+    r[PURGE_OPPTYPE] = opp_type;
+}
+
+static int slot_all_zero(int slot)
+{
+    const uint8_t *r = PREC(slot);
+    for (int b = 0; b < PURGE_STRIDE; b++)
+        if (r[b] != 0) return 0;
+    return 1;
+}
+
+/* Slots that are unoccupied (+0x4 == 0) or occupied-but-uninitialised
+ * (+0x5 == 0 AND +0x7 == 0) get their whole record zeroed. */
+int test_game_init_purge_zeroes_inactive(void)
+{
+    memset(g_player_strategic_352, 0xAB, sizeof g_player_strategic_352);
+
+    set_slot_flags(1, 0,    0xAB, 0xAB);   /* unoccupied            → zero */
+    set_slot_flags(2, 0x01, 0,    0);      /* occupied, no data/opp → zero */
+    set_slot_flags(5, 0,    0,    0);      /* unoccupied            → zero */
+
+    /* Keep slots 3,4 active so they survive and can't mask a bug. */
+    set_slot_flags(3, 0x01, 0x01, 0);
+    set_slot_flags(4, 0x01, 0,    0x02);
+
+    engine_game_init_purge_inactive_records();
+
+    T_ASSERT(slot_all_zero(1));
+    T_ASSERT(slot_all_zero(2));
+    T_ASSERT(slot_all_zero(5));
+    return 0;
+}
+
+/* Active slots are preserved byte-for-byte; the half-init exemption
+ * needs BOTH +0x5 and +0x7 clear, so a set opp-type alone keeps the
+ * record.  Slot 0 (reserved front slot) is never visited even when it
+ * looks inactive. */
+int test_game_init_purge_preserves_active_and_slot0(void)
+{
+    memset(g_player_strategic_352, 0xAB, sizeof g_player_strategic_352);
+
+    /* Slot 0 looks unoccupied (+0x4 == 0) but must be skipped entirely. */
+    set_slot_flags(0, 0, 0, 0);
+    /* Slot 3: occupied + has_data → keep. */
+    set_slot_flags(3, 0x01, 0x01, 0);
+    /* Slot 4: occupied, no has_data but opp_type set → keep (AND fails). */
+    set_slot_flags(4, 0x01, 0, 0x02);
+
+    /* Snapshot the records we expect to survive. */
+    uint8_t snap0[PURGE_STRIDE], snap3[PURGE_STRIDE], snap4[PURGE_STRIDE];
+    memcpy(snap0, PREC(0), PURGE_STRIDE);
+    memcpy(snap3, PREC(3), PURGE_STRIDE);
+    memcpy(snap4, PREC(4), PURGE_STRIDE);
+
+    engine_game_init_purge_inactive_records();
+
+    T_ASSERT_MEM_EQ(snap0, PREC(0), PURGE_STRIDE);   /* slot 0 untouched */
+    T_ASSERT_MEM_EQ(snap3, PREC(3), PURGE_STRIDE);
+    T_ASSERT_MEM_EQ(snap4, PREC(4), PURGE_STRIDE);
+    return 0;
+}
