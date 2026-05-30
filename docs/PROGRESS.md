@@ -7,6 +7,27 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — GAME-START chip 7: FUN_004a1e6c (first-active-non-local-player query)
+
+Prep for the next 0x497ced callee (`FUN_004a1c53`, the per-player record
+init): its sub-callee `FUN_004a1e6c` has a **second, external caller**
+(0x416cf3, a render/UI path), so it is *not* init-only and lands in the
+shared roster module rather than `game_init.c`.
+
+`FUN_004a1e6c` → `player_first_active_nonlocal` (`src/engine_roster.c`):
+scans player slots 1..5 of `g_player_strategic_352` for the first that is
+occupied (the +0x4 flag) and not the local player (`s_slot_0057c8cc`,
+entry 72 — the established `local_player` cursor), storing that slot in
+`s_slot_00553fbc` (entry 143), or 0 if none.  Both scalars already homed;
+slot 0 (reserved front slot) is never considered.
+
+Four host tests pin: skips the local player, picks the lowest occupied
+non-local slot, yields 0 when only the local player is active, and
+ignores slot 0.  1298/1298 pass.  Next chip wires this into the
+`FUN_004a1c53` per-player init.
+
+---
+
 ## 2026-05-30 — GAME-START chip 6: FUN_0049b35e (purge inactive strategic records)
 
 Another direct 0x497ced callee lands — and a two-step chain in one chip.

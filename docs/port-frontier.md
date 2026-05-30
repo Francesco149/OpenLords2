@@ -138,7 +138,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x411b72 | 1132 | 1 | 4 |  |
 | 0x4116fb | 1143 | 1 | 5 |  |
 | 0x4110b1 | 1150 | 1 | 5 |  |
-| 0x416cf3 | 1275 | 1 | 4 |  |
+| 0x416cf3 | 1275 | 1 | 3 |  |
 | 0x41635f | 1478 | 1 | 4 |  |
 | 0x418653 | 2010 | 1 | 3 |  |
 

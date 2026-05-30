@@ -86,4 +86,10 @@ void player_roster_clear(void);
  * consumer reads only the front `active` entries. */
 void player_roster_compact(void);
 
+/* Find the first occupied player slot (1..5) that is not the local player
+ * and store it in s_slot_00553fbc (entry 143); 0 if none.  Reads the
+ * strategic-record +0x4 occupied flag and the local-player slot
+ * (s_slot_0057c8cc, entry 72).  Port of FUN_004a1e6c. */
+void player_first_active_nonlocal(void);
+
 #endif /* OPENLORDS2_ENGINE_ROSTER_H */

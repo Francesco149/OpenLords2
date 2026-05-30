@@ -1170,6 +1170,10 @@ struct test_case {
     X(seat_assign_id_999_keeps_existing) \
     X(seat_assign_multiplayer_skips_job_mirror) \
     X(seat_assign_name_copy_is_bounded_31) \
+    X(first_active_nonlocal_skips_local) \
+    X(first_active_nonlocal_lowest_occupied) \
+    X(first_active_nonlocal_none_yields_zero) \
+    X(first_active_nonlocal_ignores_slot0) \
     X(npc_assigns_jobs_locs_and_positions) \
     X(npc_worker_limit_stops_assignment) \
     X(npc_prereserved_job_is_skipped) \

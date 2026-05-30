@@ -14,6 +14,7 @@
 
 #include "engine.h"     /* g_sim_mp_active (retail DAT_00553030) */
 #include "save.h"       /* g_player_aux_44 (retail 0x553d50) */
+#include "save_schema_globals.h" /* s_slot_0057c8cc / s_slot_00553fbc */
 #include "strutil.h"    /* strutil_bounded_copy (FUN_00401136) */
 
 void player_seat_assign(int player_id, int seat, const void *name)
@@ -130,4 +131,30 @@ void player_roster_compact(void)
             }
         }
     }
+}
+
+void player_first_active_nonlocal(void)
+{
+    /* Port of FUN_004a1e6c @ 0x4a1e6c (117 B).  Scans player slots 1..5
+     * of g_player_strategic_352 (stride 0x160) for the first that is both
+     * occupied (the +0x4 F_ACTIVE flag set) and not the local player
+     * (s_slot_0057c8cc, entry 72), and stores that slot in s_slot_00553fbc
+     * (entry 143).  If no such slot exists the result is 0.
+     *
+     *   for (slot = 1; slot <= 5; slot++)
+     *       if (active[slot] && local != slot) { result = slot; return; }
+     *   result = 0;
+     *
+     * Two callers: the new-game per-player record init (0x4a1c53, via
+     * game_init) and a render/UI path (0x416cf3) — hence a shared roster
+     * helper rather than living in game_init.  Verbatim: slot 0 (the
+     * reserved front slot) is never considered. */
+    for (int slot = 1; slot < 6; slot++) {
+        if (g_player_strategic_352[slot * 0x160 + 0x04] != 0 &&
+            (int)s_slot_0057c8cc != slot) {
+            s_slot_00553fbc = (uint32_t)slot;
+            return;
+        }
+    }
+    s_slot_00553fbc = 0;
 }

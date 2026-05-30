@@ -19,6 +19,8 @@
 #include "t.h"
 #include "engine_roster.h"
 #include "engine.h"        /* g_sim_mp_active */
+#include "save.h"          /* g_player_strategic_352 */
+#include "save_schema_globals.h" /* s_slot_0057c8cc / s_slot_00553fbc */
 
 /* Zero the roster + count.  (Does not touch g_player_strategic_352;
  * compaction tests reset that explicitly.) */
@@ -297,5 +299,72 @@ int test_seat_assign_name_copy_is_bounded_31(void)
         T_ASSERT_EQ_I(AUX(1)[0x04 + i], 'A');
     }
     T_ASSERT_EQ_I(AUX(1)[0x04 + 0x1f], 0x7e);  /* not overwritten */
+    return 0;
+}
+
+/* ── player_first_active_nonlocal (FUN_004a1e6c) ──────────────────── */
+
+/* Flag the given slots (1..5) occupied via the strategic +0x4 flag;
+ * clears the whole strategic block first. */
+static void set_active_slots(const int *slots, int n)
+{
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    for (int i = 0; i < n; i++)
+        g_player_strategic_352[slots[i] * 0x160 + 0x04] = 1;
+}
+
+/* Picks the lowest occupied slot that isn't the local player. */
+int test_first_active_nonlocal_skips_local(void)
+{
+    int slots[] = { 1, 2, 3 };
+    set_active_slots(slots, 3);
+    s_slot_0057c8cc = 1;                 /* local = slot 1 */
+    s_slot_00553fbc = 0x77;              /* clobber result */
+
+    player_first_active_nonlocal();
+
+    T_ASSERT_EQ_U(s_slot_00553fbc, 2);   /* slot 1 is local → first is 2 */
+    return 0;
+}
+
+/* Lowest occupied slot wins when the local player isn't among them. */
+int test_first_active_nonlocal_lowest_occupied(void)
+{
+    int slots[] = { 3, 5 };
+    set_active_slots(slots, 2);
+    s_slot_0057c8cc = 1;                 /* local not occupied */
+
+    player_first_active_nonlocal();
+
+    T_ASSERT_EQ_U(s_slot_00553fbc, 3);
+    return 0;
+}
+
+/* No occupied non-local slot → result 0.  (Only the local player is
+ * occupied.) */
+int test_first_active_nonlocal_none_yields_zero(void)
+{
+    int slots[] = { 4 };
+    set_active_slots(slots, 1);
+    s_slot_0057c8cc = 4;                 /* the only active slot is local */
+    s_slot_00553fbc = 0x77;
+
+    player_first_active_nonlocal();
+
+    T_ASSERT_EQ_U(s_slot_00553fbc, 0);
+    return 0;
+}
+
+/* Slot 0 is never considered even if its +0x4 flag is set. */
+int test_first_active_nonlocal_ignores_slot0(void)
+{
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    g_player_strategic_352[0 * 0x160 + 0x04] = 1;   /* slot 0 occupied */
+    s_slot_0057c8cc = 9;                 /* local = none of these */
+    s_slot_00553fbc = 0x77;
+
+    player_first_active_nonlocal();
+
+    T_ASSERT_EQ_U(s_slot_00553fbc, 0);   /* slot 0 ignored, none else → 0 */
     return 0;
 }
