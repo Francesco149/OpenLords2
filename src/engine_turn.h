@@ -66,4 +66,18 @@ typedef struct {
 void engine_turn_end_check(const engine_turn_end_in_t *in,
                            engine_turn_end_out_t *out);
 
+/* ─── Turn-handshake runtime state (canonical storage) ──────────────
+ *
+ * Retail DAT_00553fc8 / _DAT_0056d658.  NOT save-schema scalars — pure
+ * runtime handshake state, defaulting to 0 at .bss-init and re-zeroed
+ * at new-game by the scalar-seed phase of the initialiser
+ * (engine_game_init_seed_scalars).  engine.c is the live reader/writer:
+ * it marshals them into engine_turn_end_in_t each tick and writes the
+ * result back.  Storage lives here, in the turn module, so both
+ * engine.c and game_init.c reach them without either depending on the
+ * other's translation unit.  No live producer drives them past 0 yet
+ * (see the three-state handshake notes above). */
+extern int      g_sim_turn_progress;         /* DAT_00553fc8 */
+extern uint32_t g_sim_turn_sync_baseline_ms; /* _DAT_0056d658 */
+
 #endif /* OPENLORDS2_ENGINE_TURN_H */

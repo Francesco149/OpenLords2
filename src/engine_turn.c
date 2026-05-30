@@ -16,6 +16,14 @@
 #define PLAYER_STRIDE      0x160   /* 352 B per strategic record */
 #define READY_DONE         999     /* ready-value sentinel: turn finished */
 
+/* Canonical storage for the turn-handshake runtime globals declared in
+ * engine_turn.h.  Default 0 at .bss-init; re-zeroed at new-game by the
+ * scalar-seed phase.  The pure check function below operates on
+ * snapshots, not these globals — engine.c does the per-tick marshalling
+ * (it owns the live read/write; the storage just lives in this module). */
+int      g_sim_turn_progress;          /* DAT_00553fc8 */
+uint32_t g_sim_turn_sync_baseline_ms;  /* _DAT_0056d658 */
+
 void engine_turn_end_check(const engine_turn_end_in_t *in,
                            engine_turn_end_out_t *out)
 {

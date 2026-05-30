@@ -171,7 +171,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4248a3 | 239 | 1 | 1 |  |
 | 0x420428 | 244 | 1 | 0 | ✓ |
 | 0x420316 | 274 | 1 | 0 | ✓ |
-| 0x42b7f7 | 290 | 1 | 7 |  |
+| 0x42b7f7 | 290 | 1 | 6 |  |
 | 0x4233f7 | 313 | 1 | 3 |  |
 | 0x425314 | 371 | 1 | 0 | ✓ |
 | 0x423739 | 383 | 1 | 2 |  |
@@ -279,7 +279,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 |----|-----:|---------------:|--------------:|:----:|
 | 0x46a101 | 165 | 1 | 1 |  |
 | 0x46797d | 185 | 1 | 0 | ✓ |
-| 0x4650b0 | 265 | 1 | 2 |  |
+| 0x4650b0 | 265 | 1 | 1 |  |
 | 0x46ff43 | 617 | 1 | 0 | ✓ |
 
 ### d3d/mesh pool + preload + palette (15)
@@ -328,7 +328,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x49c995 | 157 | 1 | 3 |  |
 | 0x4975d3 | 170 | 1 | 3 |  |
 | 0x497500 | 211 | 1 | 8 |  |
-| 0x498270 | 327 | 1 | 2 |  |
+| 0x498270 | 327 | 1 | 1 |  |
 | 0x49b973 | 374 | 1 | 2 |  |
 | 0x499e5d | 421 | 1 | 0 | ✓ |
 | 0x4976a1 | 472 | 1 | 15 |  |

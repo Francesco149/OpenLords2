@@ -133,13 +133,12 @@ static uint8_t g_sim_player_human_active;      /* DAT_0057bf04[curp] */
  * producer in our port today. */
 static int g_sim_turn_end_pending;             /* DAT_0056d6a4 */
 
-/* "Turn progress" flag.  Retail DAT_00553fc8.  Cleared when turn ends.
- * The sub-step body checks this when consuming the turn-end pending
- * latch: if turn-progress is also 0, the pending latch is cleared.
- * Also the three-state handshake variable for the end-of-turn check
- * (engine_sim_turn_resolved / FUN_0049b762).  Today no producer
- * drives it past 0; defaults to 0. */
-static int g_sim_turn_progress;                /* DAT_00553fc8 */
+/* The "turn progress" flag (DAT_00553fc8) and the turn-sync baseline
+ * (_DAT_0056d658) now live in engine_turn.c (the turn module) so the
+ * new-game scalar seeder can reach them; engine.c still owns the live
+ * read/write, marshalling them through the engine_turn snapshot each
+ * tick — see engine_turn.h.  The other end-of-turn mirrors below stay
+ * engine.c-local (no cross-TU reader). */
 
 /* ─── End-of-turn readiness mirrors (FUN_0049b762 state) ───────────
  *
@@ -160,8 +159,7 @@ static int      g_sim_turn_timeout_reached;    /* DAT_00553018 — set by the
 static int      g_sim_saved_turn_timeout;      /* DAT_0055ce88 — snapshot of the
                                                 *   above taken when the sync
                                                 *   handshake arms */
-static uint32_t g_sim_turn_sync_baseline_ms;   /* _DAT_0056d658 — last turn-sync
-                                                *   broadcast time (10 s gate) */
+/* g_sim_turn_sync_baseline_ms (_DAT_0056d658) relocated to engine_turn.c. */
 static int      g_sim_turn_ready_flags[10];    /* DAT_00515d60[10] — per-player
                                                 *   turn-ack flags, cleared when
                                                 *   the handshake arms */

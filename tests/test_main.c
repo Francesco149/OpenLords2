@@ -1350,6 +1350,8 @@ struct test_case {
     X(game_init_clear_tables_zeroes_unit_table) \
     X(game_init_clear_tables_zeroes_territories) \
     X(game_init_clear_tables_all_three_independent) \
+    X(game_init_seed_scalars_calendar_block) \
+    X(game_init_seed_scalars_fixed_values) \
     /* end */
 
 /* Emit extern decls. */

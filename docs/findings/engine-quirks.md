@@ -4450,6 +4450,35 @@ the case — the captured frame stays lowercase.)
 
 ---
 
+## 128. The new-game calendar is seeded as six redundant scalars — year and season each stored alongside their own ±1 neighbours and a verbatim copy
+
+The new-game initialiser (`FUN_00497ced`) doesn't store the start date as
+two numbers (year, season).  It writes **six** save scalars laid out as two
+parallel "triple + copy" groups, derived in the asm from a single base via
+`inc`/`dec` rather than as independent constants:
+
+```
+year   base 0x4f3 (1267)   prev 0x4f2 (entry 21)   next 0x4f4 (entry 22)   copy 0x4f3 (entry 28)
+season base 3              prev 2    (entry 24)    next 4    (entry 25)    copy 3    (entry 29)
+```
+
+The bases live in save entries 20 (year) and 23 (season); entries 21–29 are
+the contiguous block that holds their neighbours and copies.  The pre-computed
+prev/next mirrors are why the strategic-map header can render adjacent
+years/seasons without arithmetic at draw time — entry 20 is read straight into
+the year glyph by the map arm `FUN_0040f5fd` → `FUN_0041a900`.
+
+The season-next write (`entry 25 = base+1`) is followed in retail by a wrap
+clamp `if (next > 4) next = 1` — the 1..4 seasonal cycle — but it is **dead**
+at the seeded value 4 (`4 > 4` is false), so the decompiler folds the block
+away ("Removing unreachable block").  The clamp only bites once a turn
+actually advances the season past winter; at new-game it never fires.
+
+> 📍 `src/game_init.c` (`engine_game_init_seed_scalars`),
+> Ghidra `FUN_00497ced` @ 0x497d2f–0x497d97, r2 `pdf @ 0x497ced`.
+
+---
+
 <!--
 Template for new entries:
 

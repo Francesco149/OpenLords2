@@ -7,6 +7,66 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — GAME-START chip 2: the new-game scalar-seed phase (calendar + handshake + free DATs)
+
+The second chip of the new-game initialiser (`FUN_00497ced`) ports its
+**scalar-seed phase** — the 20 dword world-state globals written between
+the NPC-schedule seed and the first heavy seeder — into a new
+`engine_game_init_seed_scalars` (`src/game_init.c`).  The phase wipes the
+turn-handshake state and seeds the start calendar, the table the
+strategic-map header reads.
+
+**The home decision the previous entry flagged is resolved.** The 20
+writes split three ways:
+
+- **17 save-schema scalars** → their shared `s_slot_<va>` homes, seeded
+  the same way `engine_npc_schedule.c` already does.  No new storage.
+- **2 turn-handshake runtime globals** (`DAT_00553fc8`,
+  `_DAT_0056d658`) — these turned out to be *already homed*, as
+  `engine.c` file-statics (`g_sim_turn_progress` /
+  `g_sim_turn_sync_baseline_ms`), just unreachable: `engine.c` is kept
+  out of the host test suite (it pulls in `mmsystem.h`/`gfx.h`/the main
+  loop), and a second copy in `game_init.c` would be a desync trap.
+  **Relocated their storage to `engine_turn.c`** (the turn module —
+  already test-linked, light deps) behind a fresh `engine_turn.h`
+  extern; `engine.c` keeps the live per-tick read/write and reaches
+  them through the header it already includes.  Pure mechanical move,
+  no behaviour change.
+- **1 genuinely-unhomed free DAT** (`DAT_0053f0c4`, a render/anim gate
+  counter; sole reader `0x41e1dd`, unported) → parked in `game_init.c`
+  as `g_anim_gate_53f0c4` until its render subsystem lands.
+
+**What the asm taught the port** (→ new engine-quirk **#128**): the
+start date isn't two numbers.  The init writes **six** redundant calendar
+scalars as two "triple + copy" groups — `year` 0x4f3 (1267) with its
+`±1` neighbours (1266/1268) and a verbatim copy, and `season` 3 with its
+`±1` neighbours (2/4) and a copy — derived in the asm from a single base
+via `inc`/`dec`.  The pre-computed neighbours are why the map header can
+show adjacent years/seasons with no draw-time arithmetic (entry 20 →
+`FUN_0040f5fd`/`FUN_0041a900`).  The season-next write carries a retail
+`if (>4) →1` seasonal wrap that is **dead** at the seeded 4 (the
+decompiler folds it); preserved as a comment, not reproduced.  The port
+keeps the base→±1 relationships as expressions, not magic constants, and
+issues all 20 writes in retail order.
+
+Coverage holds at **356 touched** — the phase ports no new *functions*
+(the writes were inline in the still-unported `0x497ced`), so the
+function-touch count is unchanged by design; the unported parent and the
+next seeder `0x4676e0` are cited as bare hex, not `FUN_` tokens, so the
+ledger doesn't miscount them.  2 new host tests (calendar block;
+fixed-value/zero/handshake post-conditions, each pre-dirtied so a no-op
+can't pass) → **1259 green**; test suite + both drop-in builds clean.
+
+### Next
+
+- **Leaf seeders** — `FUN_0042847c` (table copy `DAT_004d8910` →
+  `DAT_005532a0` strided), `FUN_004ae74d` (array clear + 3 scalars),
+  `FUN_0046ff43` (617-B leaf), the `FUN_0046f*` siblings.  All
+  zero-dependency.
+- Then the heavy seeders, the `engine_game_init` assembly + state flip,
+  and the strategic-map screen arm of `FUN_0040f1a0`.  Full plan in
+  [`findings/game-start.md`](findings/game-start.md).
+
 ## 2026-05-30 — GAME-START MILESTONE OPENED: survey + first chip (new-game table-clear phase)
 
 The title-menu input subsystem is effectively complete (pages 1–9

@@ -40,4 +40,18 @@
  * scalar-seed and per-subsystem seed phases. */
 void engine_game_init_clear_tables(void);
 
+/* Render/anim gate counter — retail DAT_0053f0c4.  NOT a save scalar;
+ * the scalar-seed phase resets it to 0 at new-game.  Its only reader in
+ * retail is the unported strategic-map render/anim path (0x41e1dd, which
+ * gates a draw on `== 10`), so it is parked here, owned by game_init,
+ * until that subsystem lands and claims it. */
+extern int g_anim_gate_53f0c4;
+
+/* Scalar-seed phase of 0x497ced — the 20 dword world-state globals
+ * written between the NPC-schedule seed and the first heavy seeder
+ * (17 save-schema scalars + the 2 turn-handshake runtime globals + the
+ * anim-gate counter above).  Seeds the calendar block (year + season,
+ * each with prev/next mirrors) and zeroes the rest. */
+void engine_game_init_seed_scalars(void);
+
 #endif /* OPENLORDS2_GAME_INIT_H */

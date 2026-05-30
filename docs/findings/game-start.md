@@ -101,6 +101,21 @@ them exactly like `engine_npc_schedule.c` already seeds
 header, write the slot.  No desync, no second copy.  (Verified
 2026-05-30: all 17 present as `s_slot_<full-va>` externs.)
 
+### The 3 non-save "free" DATs — home decision resolved (2026-05-30)
+
+Two of the three were **already homed** (just unreachable): `DAT_00553fc8`
+and `_DAT_0056d658` were `engine.c` file-statics (`g_sim_turn_progress` /
+`g_sim_turn_sync_baseline_ms`).  Since `engine.c` is deliberately out of the
+host test suite (it drags in `mmsystem.h`/`gfx.h`/the main loop), routing
+game-init through it would break testability — and re-declaring them in
+`game_init.c` would be a second copy (a desync risk, the same trap the save
+scalars avoid).  Resolution: **relocate their storage into `engine_turn.c`**
+(the turn module — already test-linked, light deps; `engine.c` still owns the
+live per-tick read/write and reaches them via the `engine_turn.h` extern it
+already includes).  The third, `DAT_0053f0c4`, is genuinely unhomed (a
+render/anim gate counter, sole reader `0x41e1dd`); it is parked in
+`game_init.c` as `g_anim_gate_53f0c4` until its render subsystem lands.
+
 ## Port plan (incremental, bottom-up + validated per chip)
 
 Each chip is host-tested against the documented post-condition; no mode
@@ -108,9 +123,12 @@ flip lands until the world is populated enough for the map arm.
 
 1. **Table-clear phase** — FUN_0046f1dc/2ae/3cd → `engine_game_init_clear_tables`.
    ✅ landed 2026-05-30 (`src/game_init.c`).
-2. **Scalar-seed phase** — the ~20 `s_slot_`/free-DAT writes in
-   `FUN_00497ced`'s body.  Needs a home decision for the ~3 non-save
-   "free" runtime DATs (DAT_0053f0c4, DAT_00553fc8, DAT_0056d658).
+2. **Scalar-seed phase** — the 20 `s_slot_`/free-DAT writes in
+   `FUN_00497ced`'s body → `engine_game_init_seed_scalars`.
+   ✅ landed 2026-05-30 (`src/game_init.c`).  Home decision for the 3
+   non-save DATs resolved above (2 relocated to `engine_turn.c`, 1
+   parked in `game_init.c`); calendar block recorded as engine-quirk
+   #128.
 3. **Leaf seeders** — FUN_0042847c, FUN_004ae74d, FUN_0046ff43, the
    FUN_0046f* sibling clearers, etc.
 4. **Heavy seeders** — FUN_00497e65 (RNG seats), FUN_0049bd99,

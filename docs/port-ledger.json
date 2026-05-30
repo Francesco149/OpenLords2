@@ -15012,6 +15012,7 @@
     "src/engine_npc_schedule.c",
     "src/engine_npc_schedule.h",
     "src/engine_title_render.c",
+    "src/game_init.c",
     "src/game_init.h"
    ]
   },
