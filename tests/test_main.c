@@ -1372,6 +1372,10 @@ struct test_case {
     X(game_init_seat_shuffle_value_ladder_replay) \
     X(game_init_seat_shuffle_draw_count) \
     X(game_init_seat_shuffle_deterministic) \
+    X(game_init_seed_unit_table_full) \
+    X(game_init_seed_unit_table_record0_cleared) \
+    X(game_init_seed_unit_table_partial_count) \
+    X(game_init_seed_unit_table_count_selection) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

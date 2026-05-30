@@ -247,3 +247,78 @@ void engine_game_init_seat_shuffle(engine_rng_in_t *rng)
             s_slot_00553080[i] = (uint8_t)(r * 5 + 6);  /* lea eax,[eax+eax*4]; add 6 */
     }
 }
+
+/*
+ * Leaf seeder FUN_004ac904 @ 0x4ac904 (295 B) — seed the unit/opponent-
+ * type table (save entry 6, g_unit_table_20, 13 records × 20 B) from a
+ * bank of retail .rdata const columns.
+ *
+ * The row count is config-driven: the scenario/config selector
+ * s_slot_0056d5dc (save entry 77) indexes k_unit_count_by_config; the
+ * looked-up count is clamped to 1..12 and persisted to s_slot_00554030
+ * (save entry 122 — this function is its sole writer).  The clamp
+ * (`>12 → 1`, `<0 → 1`) is dead for any valid scenario index 0..19 (the
+ * table caps at 12); it is retail's defence against an out-of-range
+ * selector reading past the table, ported verbatim.
+ *
+ * After clearing the whole block (retail re-issues FUN_0046f2ae here,
+ * the same unit-table clearer the table-clear phase runs), record i
+ * (1..count) is filled from six parallel const columns.  The retail
+ * .rdata lays the columns out so each one's entry[0] aliases the
+ * previous column's entry[12] (col_e[12] and col_f[0] are the literal
+ * same dword at 0x4de7ec); only entries 1..count are ever read, so the
+ * entry-0 slots below hold the real overlap bytes purely for a faithful
+ * copy.  Record 0 stays cleared (the loop is 1-based).
+ *
+ * Two columns are each written to two adjacent record fields (col_a →
+ * +0x2 and +0x4; col_c → +0x6 and +0x7) — retail duplicates the source
+ * byte; preserved.  Bytes +0x0/+0x1/+0x3 of every record are left
+ * cleared (retail writes only the eight fields below).  All columns
+ * extracted byte-for-byte from the PE .rdata.
+ */
+static const int32_t k_unit_count_by_config[20] = {   /* DAT_004de820 */
+    0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 12, 12, 12, 12, 12,
+};
+/* entry[0] = the real overlap byte/dword; rows used are [1..count]. */
+static const uint8_t  k_unit_col_a[13] = {            /* DAT_004de79f → +0x2,+0x4 */
+    0x00, 0x01, 0x02, 0x04, 0x05, 0x07, 0x08, 0x0a, 0x0b, 0x0d, 0x0e, 0x10, 0x11,
+};
+static const uint8_t  k_unit_col_b[13] = {            /* DAT_004de78f → +0x5 */
+    0x00, 0x04, 0x04, 0x05, 0x05, 0x03, 0x03, 0x01, 0x01, 0x02, 0x02, 0x06, 0x06,
+};
+static const uint8_t  k_unit_col_c[13] = {            /* DAT_004de7af → +0x6,+0x7 */
+    0x00, 0x05, 0x03, 0x06, 0x04, 0x02, 0x07, 0x05, 0x02, 0x01, 0x03, 0x06, 0x07,
+};
+static const uint32_t k_unit_col_d[13] = {            /* DAT_004de75c → +0x8 */
+    0x62, 0x64, 0xc8, 0x96, 0xc8, 0xc8, 0x64, 0x64, 0xc8, 0x96, 0xfa, 0x32, 0x64,
+};
+static const uint32_t k_unit_col_e[13] = {            /* DAT_004de7bc → +0xc */
+    0x0000, 0x0708, 0x0dac, 0x0bb8, 0x0fa0, 0x157c, 0x0a8c,
+    0x0bb8, 0x1770, 0x076c, 0x0c1c, 0x0a8c, 0x157c,
+};
+static const uint32_t k_unit_col_f[13] = {            /* DAT_004de7ec → +0x10 */
+    0x157c, 0x00b4, 0x015e, 0x012c, 0x0190, 0x0226, 0x010e,
+    0x012c, 0x0258, 0x00be, 0x0136, 0x010e, 0x0226,
+};
+
+void engine_game_init_seed_unit_table(void)
+{
+    int count = k_unit_count_by_config[s_slot_0056d5dc];
+    if (count > 0xc) count = 1;                  /* dead for valid selector */
+    if (count < 0)   count = 1;                  /*   "    "    "      "     */
+    s_slot_00554030 = (uint32_t)count;           /* persist (entry 122) */
+
+    clear_unit_table();                          /* FUN_0046f2ae */
+
+    for (int i = 1; i <= count; i++) {
+        uint8_t *rec = &g_unit_table_20[i * 0x14];   /* stride 0x14 */
+        *(uint32_t *)(rec + 0x8)  = k_unit_col_d[i];
+        rec[0x5]                  = k_unit_col_b[i];
+        rec[0x2]                  = k_unit_col_a[i];
+        rec[0x4]                  = k_unit_col_a[i];  /* dup of +0x2 */
+        rec[0x6]                  = k_unit_col_c[i];
+        rec[0x7]                  = k_unit_col_c[i];  /* dup of +0x6 */
+        *(uint32_t *)(rec + 0xc)  = k_unit_col_e[i];
+        *(uint32_t *)(rec + 0x10) = k_unit_col_f[i];
+    }
+}

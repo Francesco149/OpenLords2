@@ -92,4 +92,13 @@ void engine_game_init_seed_value_table(void);
  * the prior seeders; tests pass a fixed seed for determinism. */
 void engine_game_init_seat_shuffle(engine_rng_in_t *rng);
 
+/* Leaf seeder FUN_004ac904 — seed the unit/opponent-type table (save
+ * entry 6, g_unit_table_20, 13 records × 20 B) from six retail .rdata
+ * const columns.  The row count comes from the scenario/config selector
+ * s_slot_0056d5dc (entry 77) via a lookup table, clamped 1..12 and
+ * persisted to s_slot_00554030 (entry 122).  Clears the block first
+ * (re-issuing the FUN_0046f2ae unit-table clearer), then fills records
+ * 1..count; record 0 and the untouched per-record bytes stay cleared. */
+void engine_game_init_seed_unit_table(void);
+
 #endif /* OPENLORDS2_GAME_INIT_H */

@@ -82,7 +82,7 @@ live sim:
 | FUN_0049bc5f | 314 | 0 | **tested** (already ported) |
 | FUN_0049bd99 | 3063 | 9 | (unsurveyed — largest) |
 | FUN_004a1c53 | 537 | 2 | (unsurveyed) |
-| FUN_004ac904 | 295 | 1 | (unsurveyed) |
+| FUN_004ac904 | 295 | 1 | ✅ **tested** — unit/opponent-type table seeder |
 | FUN_004ae74d | 144 | 0 | clear DAT_0056d8b8 array (400×0x20) + 3 scalars |
 | FUN_004ae8a9 | 191 | 1 | **tested** (already ported) |
 | FUN_004b18f8 | 38 | 0 | PostMessage(WM_MOUSEMOVE) self-poke |
@@ -138,6 +138,10 @@ flip lands until the world is populated enough for the map arm.
    - ✅ **FUN_0046ff43** → `engine_strat_cost_rebuild`
      (`src/engine_strat_cost.c`, landed 2026-05-30).  Strategic
      movement-cost grid builder — see below; lives in its own module.
+   - ✅ **FUN_004ac904** → `engine_game_init_seed_unit_table`
+     (`src/game_init.c`, landed 2026-05-30).  Config-driven unit/
+     opponent-type table seeder — see below; clears the block then fills
+     `count` rows from six retail .rdata columns.
    - ⏸ **FUN_004ae74d** — **deferred.**  Clears the `DAT_0056d8b8`
      region (r2: outer stride 0x80, dword+byte per 8-B element, els
      1..6400 with a deliberate 8-B tail overrun).  The region is
@@ -176,6 +180,60 @@ land.
      init-only).  See below.
    - remaining: FUN_0049bd99 (3 KB, largest), FUN_004984dc, FUN_00451150,
      FUN_00448440 (each still has 5–28 unported callees — not yet leaves).
+
+### FUN_004ac904 — unit/opponent-type table seeder (config-driven)
+
+A 295-B leaf seeder (sole caller 0x497ced) that fills the unit/opponent-
+type table `g_unit_table_20` (save entry 6, 13 records × 0x14 B, retail
+0x568dc0) with a **scenario-selected number of rows** drawn from six
+parallel retail `.rdata` columns.
+
+- **Row count.**  The config/scenario selector `s_slot_0056d5dc` (save
+  entry 77, a heavily-read global) indexes a 20-entry lookup table
+  (`DAT_004de820`, values ramping `0,1,2,2,3,4,…,12` then flat at 12;
+  bounded in `.rdata` by the `"ff_batl.wav"` string at 0x4de870).  The
+  looked-up count is clamped (`>12 → 1`, `<0 → 1`) and **persisted to
+  `s_slot_00554030`** (save entry 122 — this function is its *sole*
+  writer).  The clamp is **dead for any valid selector 0..19** (the table
+  never exceeds 12 and is non-negative); it is retail's defence against
+  an out-of-range selector reading past the table.  Note a table value of
+  **0** (selector 0) is *not* clamped to 1 — it persists as 0 and the
+  1-based fill loop runs zero times.
+
+- **Clear-then-fill.**  Re-issues the unit-table clearer `FUN_0046f2ae`
+  (the same one the table-clear phase runs), then for record `i` in
+  `1..count` copies eight fields from six columns:
+
+  | rec off | src column (`.rdata`) | type | note |
+  |--------:|-----------------------|------|------|
+  | +0x2    | `DAT_004de79f` (col A) | byte | also written to +0x4 |
+  | +0x4    | `DAT_004de79f` (col A) | byte | dup of +0x2 |
+  | +0x5    | `DAT_004de78f` (col B) | byte | |
+  | +0x6    | `DAT_004de7af` (col C) | byte | also written to +0x7 |
+  | +0x7    | `DAT_004de7af` (col C) | byte | dup of +0x6 |
+  | +0x8    | `DAT_004de75c` (col D) | dword | |
+  | +0xc    | `DAT_004de7bc` (col E) | dword | |
+  | +0x10   | `DAT_004de7ec` (col F) | dword | |
+
+  Bytes +0x0/+0x1/+0x3 are left cleared.  Record 0 stays cleared (loop is
+  1-based).
+
+- **`.rdata` packing quirk.**  The six columns are laid out so each
+  column's entry[0] *aliases the previous column's entry[12]* — e.g.
+  col_e[12] and col_f[0] are the literal same dword at 0x4de7ec.  Since
+  only entries `1..count` are read, the overlap is harmless; the port
+  stores the real entry-0 bytes for a faithful copy.
+
+- **Field semantics are provisional.**  The 12 meaningful rows pair up
+  by col B (`4,4,5,5,3,3,1,1,2,2,6,6` → six 2-variant classes) and col A
+  (`1,2 / 4,5 / 7,8 / …`); cols D/E/F are stat dwords (D∈50..250,
+  E∈1800..6000, F∈180..600).  Consumers index `g_unit_table_20` through a
+  computed base pointer (no static field xrefs), so the exact meaning is
+  left for when a reader subsystem lands.  Ported byte-exact regardless.
+
+Homed in `game_init.c` (a 0x497ced callee); the six columns are embedded
+as `static const` arrays mirroring the retail `.rdata`, extracted
+byte-for-byte from the PE.
 
 ### FUN_00497e65 — new-game randomiser (RNG seats + two 48-tables)
 

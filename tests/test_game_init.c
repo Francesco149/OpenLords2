@@ -384,3 +384,127 @@ int test_game_init_seat_shuffle_deterministic(void)
     T_ASSERT_EQ_U(r1.state_b, r2.state_b);
     return 0;
 }
+
+/* ============================================================== *
+ *  engine_game_init_seed_unit_table (leaf seeder FUN_004ac904)
+ * ============================================================== */
+
+/* Independent mirrors of the six retail .rdata columns (verified
+ * byte-for-byte from the PE) and the config→count lookup table.  Entry
+ * [0] of each column is the real overlap byte/dword and is never read
+ * (rows are 1-based). */
+static const int32_t  exp_count_by_config[20] = {     /* DAT_004de820 */
+    0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 12, 12, 12, 12, 12,
+};
+static const uint8_t  exp_col_a[13] =                 /* DAT_004de79f → +0x2,+0x4 */
+    { 0x00,0x01,0x02,0x04,0x05,0x07,0x08,0x0a,0x0b,0x0d,0x0e,0x10,0x11 };
+static const uint8_t  exp_col_b[13] =                 /* DAT_004de78f → +0x5 */
+    { 0x00,0x04,0x04,0x05,0x05,0x03,0x03,0x01,0x01,0x02,0x02,0x06,0x06 };
+static const uint8_t  exp_col_c[13] =                 /* DAT_004de7af → +0x6,+0x7 */
+    { 0x00,0x05,0x03,0x06,0x04,0x02,0x07,0x05,0x02,0x01,0x03,0x06,0x07 };
+static const uint32_t exp_col_d[13] =                 /* DAT_004de75c → +0x8 */
+    { 0x62,0x64,0xc8,0x96,0xc8,0xc8,0x64,0x64,0xc8,0x96,0xfa,0x32,0x64 };
+static const uint32_t exp_col_e[13] =                 /* DAT_004de7bc → +0xc */
+    { 0x0000,0x0708,0x0dac,0x0bb8,0x0fa0,0x157c,0x0a8c,
+      0x0bb8,0x1770,0x076c,0x0c1c,0x0a8c,0x157c };
+static const uint32_t exp_col_f[13] =                 /* DAT_004de7ec → +0x10 */
+    { 0x157c,0x00b4,0x015e,0x012c,0x0190,0x0226,0x010e,
+      0x012c,0x0258,0x00be,0x0136,0x010e,0x0226 };
+
+/* Assert record i (1-based) matches the column mirrors field-for-field,
+ * and that its three retail-untouched bytes (+0/+1/+3) are zero.  Returns
+ * 0 on success, non-zero on the first failed assertion (the T_* macros
+ * `return 1`), so callers propagate with `if (check_unit_record(i)) ...`. */
+static int check_unit_record(int i)
+{
+    const uint8_t *rec = &g_unit_table_20[i * 0x14];
+    uint32_t d, e, f;
+    memcpy(&d, rec + 0x8, 4);
+    memcpy(&e, rec + 0xc, 4);
+    memcpy(&f, rec + 0x10, 4);
+
+    T_ASSERT_EQ_U(rec[0x2], exp_col_a[i]);
+    T_ASSERT_EQ_U(rec[0x4], exp_col_a[i]);    /* dup of +0x2 */
+    T_ASSERT_EQ_U(rec[0x5], exp_col_b[i]);
+    T_ASSERT_EQ_U(rec[0x6], exp_col_c[i]);
+    T_ASSERT_EQ_U(rec[0x7], exp_col_c[i]);    /* dup of +0x6 */
+    T_ASSERT_EQ_U(d, exp_col_d[i]);
+    T_ASSERT_EQ_U(e, exp_col_e[i]);
+    T_ASSERT_EQ_U(f, exp_col_f[i]);
+
+    T_ASSERT_EQ_U(rec[0x0], 0);               /* retail never writes these */
+    T_ASSERT_EQ_U(rec[0x1], 0);
+    T_ASSERT_EQ_U(rec[0x3], 0);
+    return 0;
+}
+
+/* Full table: config index 13 selects the max count (12), so every
+ * record 1..12 is populated; field-for-field against the column
+ * mirrors.  Pre-dirty the block so the internal clear must run. */
+int test_game_init_seed_unit_table_full(void)
+{
+    memset(g_unit_table_20, 0xEE, sizeof g_unit_table_20);
+    s_slot_0056d5dc = 13;                     /* → count 12 */
+    s_slot_00554030 = 0x7777;                 /* clobber the persisted count */
+
+    engine_game_init_seed_unit_table();
+
+    T_ASSERT_EQ_U(s_slot_00554030, 12);       /* count persisted */
+    for (int i = 1; i <= 12; i++)
+        if (check_unit_record(i)) return 1;
+    return 0;
+}
+
+/* Record 0 is never written by the 1-based loop — it stays cleared even
+ * though the block was dirtied beforehand. */
+int test_game_init_seed_unit_table_record0_cleared(void)
+{
+    memset(g_unit_table_20, 0x5A, sizeof g_unit_table_20);
+    s_slot_0056d5dc = 13;                     /* → count 12 */
+
+    engine_game_init_seed_unit_table();
+
+    for (int b = 0; b < 0x14; b++)
+        if (g_unit_table_20[b] != 0)
+            T_FAIL("record 0 byte+%d = %u, want 0", b, g_unit_table_20[b]);
+    return 0;
+}
+
+/* A partial count: config index 4 → count 3.  Records 1..3 populated;
+ * records 4..12 left cleared (the clear ran, the loop stopped early). */
+int test_game_init_seed_unit_table_partial_count(void)
+{
+    memset(g_unit_table_20, 0xCD, sizeof g_unit_table_20);
+    s_slot_0056d5dc = 4;                      /* exp_count_by_config[4] == 3 */
+
+    engine_game_init_seed_unit_table();
+
+    T_ASSERT_EQ_U(s_slot_00554030, 3);
+    T_ASSERT_EQ_U(exp_count_by_config[4], 3); /* lock the expectation source */
+
+    for (int i = 1; i <= 3; i++)
+        if (check_unit_record(i)) return 1;
+
+    for (int i = 4; i <= 12; i++)
+        for (int b = 0; b < 0x14; b++)
+            if (g_unit_table_20[i * 0x14 + b] != 0)
+                T_FAIL("record %d byte+%d = %u, want 0 (beyond count)",
+                       i, b, g_unit_table_20[i * 0x14 + b]);
+    return 0;
+}
+
+/* The config→count selection matches the lookup table across its full
+ * 0..19 domain, and is persisted to entry 122 each call. */
+int test_game_init_seed_unit_table_count_selection(void)
+{
+    for (int sel = 0; sel < 20; sel++) {
+        s_slot_0056d5dc = (uint32_t)sel;
+        s_slot_00554030 = 0x7777;
+        engine_game_init_seed_unit_table();
+
+        /* The clamp only catches >12 / <0, so a table value of 0
+         * (selector 0) is persisted as-is, not bumped to 1. */
+        T_ASSERT_EQ_U(s_slot_00554030, (uint32_t)exp_count_by_config[sel]);
+    }
+    return 0;
+}

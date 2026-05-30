@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **360** (14.7%) — tested 326, ported 34
-- code bytes touched: **15.3%** (128,537 / 838,629 B)
-- unported: **2087**
+- touched: **361** (14.8%) — tested 327, ported 34
+- code bytes touched: **15.4%** (128,832 / 838,629 B)
+- unported: **2086**
 - orphan refs (in src/, not in function table): 4
 
-## tested (326) — ported + host unit suite
+## tested (327) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -261,6 +261,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49bc1d | FUN_0049bc1d | 66 | engine_roster.c, engine_roster.h |
 | 0x49bc5f | FUN_0049bc5f | 314 | engine_roster.c, engine_roster.h |
 | 0x49caaa | FUN_0049caaa | 935 | engine_menu_input.c, engine_npc_schedule.c, engine_npc_schedule.h (+3) |
+| 0x4ac904 | FUN_004ac904 | 295 | game_init.c, game_init.h |
 | 0x4ade93 | FUN_004ade93 | 339 | save.c, save.h |
 | 0x4adfe6 | FUN_004adfe6 | 377 | save.c, save.h |
 | 0x4ae539 | FUN_004ae539 | 169 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |

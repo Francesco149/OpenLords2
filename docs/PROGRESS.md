@@ -7,6 +7,48 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — GAME-START chip 5: leaf seeder FUN_004ac904 (unit/opponent-type table)
+
+A clean leaf seeder of the new-game init (`0x497ced`): `FUN_004ac904` →
+`engine_game_init_seed_unit_table` (`src/game_init.c`).  Triage of the
+remaining 0x497ced callees found this the next zero-dependency chip — its
+sole callee (`FUN_0046f2ae`, the unit-table clearer) is already ported,
+so it lands today with no new deps; the heavier remaining seeders
+(FUN_0049bd99 / FUN_004984dc / FUN_00451150 / FUN_00448440) still carry
+5–28 unported callees.
+
+It fills the unit/opponent-type table `g_unit_table_20` (save entry 6,
+13 records × 0x14 B) with a **scenario-selected row count**: the config
+selector `s_slot_0056d5dc` (entry 77) indexes a 20-entry `.rdata` lookup
+table (ramp `0..12` then flat), the count is clamped `1..12` and
+**persisted to `s_slot_00554030`** (entry 122 — this is its sole writer),
+then records `1..count` are filled from six parallel `.rdata` columns.
+
+**Homing was a non-event** — both scalars (entries 77, 122) and the dest
+block (entry 6) were already homed; the six const columns are embedded as
+`static const` arrays extracted byte-for-byte from the PE.
+
+**Three quirks worth noting** (all ported verbatim): (1) the count clamp
+is *dead* for any valid selector 0..19 — the table never exceeds 12 — but
+a table value of **0** (selector 0) is *not* bumped to 1, so the fill
+loop runs zero times; (2) two columns are each written to **two adjacent
+record fields** (col A → +0x2 and +0x4; col C → +0x6 and +0x7); (3) the
+six `.rdata` columns are packed so each one's entry[0] **aliases the
+previous column's entry[12]** (col_e[12] ≡ col_f[0] at 0x4de7ec) — only
+entries `1..count` are read, so the overlap is harmless.
+
+Field semantics stay provisional: rows pair up by class (col B =
+`4,4,5,5,3,3,1,1,2,2,6,6`) with three stat dwords, but consumers reach
+the table through a computed base pointer (no static field xrefs), so the
+meaning waits for a reader subsystem.  Four host tests pin the full
+12-row fill field-for-field, the partial-count case (records past `count`
+stay cleared), record-0 stays cleared, and the count selection across the
+whole 0..19 selector domain.  1292/1292 pass.
+
+See `docs/findings/game-start.md` for the column table and details.
+
+---
+
 ## 2026-05-30 — GAME-START chip 4b: heavy seeder FUN_0049aa0e (player standings recompute)
 
 The second heavy seeder lands in its **own module**: `FUN_0049aa0e` →
