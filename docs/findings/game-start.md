@@ -166,9 +166,48 @@ still-unported strategic flood-fill `FUN_0046f700` and path-trace
 (±2 = ±1 col, ±0x80 = ±1 row).  Homed in its own module
 (`engine_strat_cost.c`) so those ports can share the grid when they
 land.
-4. **Heavy seeders** — FUN_00497e65 (RNG seats), FUN_0049bd99,
-   FUN_0049aa0e, FUN_004984dc, FUN_00451150, FUN_00448440 (surveyed
-   one at a time).
+4. **Heavy seeders** — surveyed one at a time.  Progress:
+   - ✅ **FUN_00497e65** → `engine_game_init_seat_shuffle`
+     (`src/game_init.c`, landed 2026-05-30).  New-game randomiser — see
+     below.
+   - remaining: FUN_0049bd99, FUN_0049aa0e, FUN_004984dc, FUN_00451150,
+     FUN_00448440.
+
+### FUN_00497e65 — new-game randomiser (RNG seats + two 48-tables)
+
+A 1025-B seeder (sole caller 0x497ced) that consumes one contiguous run
+of the double-LFSR RNG (`FUN_00404a46`, ported as `engine_rng_step`;
+each draw reads `DAT_0058fd60` = the 7-bit-b mirror) and produces three
+randomised pieces of new-game state, in a fixed order whose draw count
+is part of the persisted result:
+
+1. **Roster shuffle.**  Re-seats the `active` occupied roster pairs
+   (`g_player_roster`, seats 1..5; seat 0 — the reserved front slot — is
+   excluded from both the count and the shuffle) into random array
+   positions, carrying each pair's `{army-id, seat-id}` payload together.
+   Assumes the roster has been compacted (`player_roster_compact` runs
+   earlier in setup) so the occupied pairs are contiguous at 1..active.
+   Snapshots all 6 pairs, clears only the id bytes, then forward-probes
+   (wrap 1..active) for an empty slot per pair.  Consumes `active` draws
+   (`& 3` target bias).
+
+2. **48-entry permutation table** (save entry 178, `s_slot_0057cae0`):
+   identity values 0..47 each dropped into a random empty slot (never
+   its own index), forward-probing with a 0x32-attempt cap and 0x30 wrap
+   (`& 0x1f` bias).  48 draws.  In-game it is indexed by the shared
+   cursor `DAT_005653f8` → `DAT_00553528` (readers 0x47aaa3 / 0x444a2f).
+
+3. **48-entry value/threshold table** (save entry 191, `s_slot_00553080`):
+   each cell a categorical roll `(rng & 7)` → 0 (roll 5), 100 (roll 6),
+   else `roll·5+6` ∈ {6,11,16,21,26,41}.  48 draws.  Read as an AI
+   threshold (compared against `DAT_00553f28` at 0x48acd2 / 0x48b02b,
+   same cursor).
+
+Homed in `game_init.c` (a 0x497ced callee).  Ported verbatim, r2-verified
+(masks 3 / 0x1f / 7, the `+1` target bias, the 0x30 wrap, the 0x32 probe
+cap, the value ladder `eax·5+6`).  The RNG is threaded in/out via an
+`engine_rng_in_t *` so the live orchestrator (step 5) can continue the
+draw sequence from the prior seeders; tests pass a fixed seed.
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
    callees are real; then `FUN_00499dc3` + `FUN_004329ec` spine + the
    `DAT_0052af94=3` flip.

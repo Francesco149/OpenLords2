@@ -7,6 +7,56 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — GAME-START chip 4a: heavy seeder FUN_00497e65 (new-game randomiser)
+
+The first **heavy seeder** (step 4 of the game-start plan) lands:
+`FUN_00497e65` → `engine_game_init_seat_shuffle` (`src/game_init.c`).
+It is the new-game **randomiser** — one retail unit (1025 B, sole caller
+0x497ced) that consumes a single contiguous run of double-LFSR draws
+(`FUN_00404a46`, already ported as `engine_rng_step`; each draw reads
+the 7-bit-b mirror `DAT_0058fd60`) and produces three pieces of
+randomised state whose **draw ordering is part of the persisted
+result**, so they stay one C function:
+
+1. **Roster shuffle** — re-seats the `active` occupied roster pairs
+   (`g_player_roster`, seats 1..5; seat 0 = reserved front slot,
+   excluded) into random array positions, each pair's `{army-id,
+   seat-id}` payload travelling together.  Assumes the roster was
+   compacted (`player_roster_compact`) so occupied pairs are contiguous.
+   `active` draws.
+2. **48-entry permutation table** (save entry 178, `s_slot_0057cae0`) —
+   identity 0..47 dropped into random empty slots (0x32 probe cap, 0x30
+   wrap, never its own index).  48 draws.
+3. **48-entry value/threshold table** (save entry 191, `s_slot_00553080`)
+   — each cell `(rng & 7)` → 0 / 100 / `roll·5+6` {6,11,16,21,26,41}.
+   48 draws.
+
+Both 48-tables are indexed in-game by the shared cursor `DAT_005653f8`
+(permutation → `DAT_00553528`, readers 0x47aaa3 / 0x444a2f; value table
+compared as an AI threshold at 0x48acd2 / 0x48b02b).
+
+**RNG seam.**  The function takes the threaded LFSR state by pointer
+(`engine_rng_in_t *`) and advances it through `engine_rng_step` — pure
+and host-testable given a seed, and ready for the step-5 orchestrator to
+continue the draw sequence from the prior seeders.  This is the first
+game-init seeder to consume RNG; the existing pure `engine_rng_step` +
+the engine.c state-mirror model dropped straight in.
+
+Ported verbatim, **r2-verified**: masks 3 / 0x1f / 7, the `+1` target
+bias (`inc eax`), the 0x30 permutation wrap, the 0x32 probe cap, and the
+value ladder `lea eax,[eax+eax*4]; add 6`.
+
+Coverage **358 → 359 touched** (FUN_00497e65).  +7 host tests (payload
+preservation, active==0, permutation uniqueness, value-ladder range, a
+full RNG-replay locking the ladder + the active+48 draw position, exact
+total draw count active+96, determinism) → **1278 green**; both drop-in
+builds clean.
+
+Next heavy seeders: FUN_0049bd99 (3 KB, largest), FUN_0049aa0e,
+FUN_004984dc, FUN_00451150, FUN_00448440.
+
+---
+
 ## 2026-05-30 — GAME-START chip 3b: leaf seeder FUN_0046ff43 (strategic movement-cost grid)
 
 The second new-game leaf seeder lands as its own module:

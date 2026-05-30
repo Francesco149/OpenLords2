@@ -20,6 +20,7 @@
 
 #include "t.h"
 #include "game_init.h"
+#include "engine.h"               /* engine_rng_step / engine_rng_in_t (seat shuffle) */
 #include "save.h"
 #include "save_schema_globals.h"  /* s_slot_<va> — seeded calendar scalars */
 #include "engine_turn.h"          /* turn-handshake globals reset by the seed */
@@ -193,5 +194,193 @@ int test_game_init_seed_value_table_leaves_tail_untouched(void)
             if (s_slot_005532a0[i * 0x10 + b] != 0x5C)
                 T_FAIL("record %d byte+%d = %u, want 0x5C (untouched)",
                        i, b, s_slot_005532a0[i * 0x10 + b]);
+    return 0;
+}
+
+/* ============================================================== *
+ *  engine_game_init_seat_shuffle (heavy seeder FUN_00497e65)
+ * ============================================================== */
+
+/* Retail RNG seeds (InitInstance FUN_004b2258 lines 83635-83636). */
+#define RNG_SEED_A 0x54657687u
+#define RNG_SEED_B 0x72641663u
+
+/* Test-side mirror of game_init.c's rng_next_7b: one engine_rng_step,
+ * thread the state, return the 7-bit-b mirror.  Lets the tests replay
+ * the exact draw sequence the seeder consumes. */
+static uint32_t t_rng_next_7b(engine_rng_in_t *rng)
+{
+    engine_rng_out_t out = {0};
+    engine_rng_step(rng, &out);
+    rng->state_a = out.new_state_a;
+    rng->state_b = out.new_state_b;
+    return out.rng_7bit_b;
+}
+
+/* Lay down a compacted 3-player roster (seats 1..3 occupied) plus a
+ * seat-0 reserved payload; seats 4,5 empty.  Seat byte == index so the
+ * test can prove id↔seat payloads travel together through the shuffle. */
+static void seed_roster_3players(void)
+{
+    static const uint8_t ids[6] = { 0x09, 0x11, 0x22, 0x33, 0x00, 0x00 };
+    for (int i = 0; i < 6; i++) {
+        g_player_roster[i * 2]     = ids[i];
+        g_player_roster[i * 2 + 1] = (uint8_t)i;   /* seat byte = index */
+    }
+}
+
+/* Phase 1: the shuffle is a permutation of array slots — every occupied
+ * payload survives exactly once, seat 0 is cleared, empty tail stays 0,
+ * and each id keeps its own seat byte. */
+int test_game_init_seat_shuffle_preserves_payloads(void)
+{
+    seed_roster_3players();
+    engine_rng_in_t rng = { RNG_SEED_A, RNG_SEED_B };
+
+    engine_game_init_seat_shuffle(&rng);
+
+    /* Seat 0 id cleared; its seat byte left intact (retail clears only
+     * the id bytes). */
+    T_ASSERT_EQ_U(g_player_roster[0], 0);
+    T_ASSERT_EQ_U(g_player_roster[1], 0);
+
+    /* Seats 4,5 were empty and out of the 1..active probe range. */
+    for (int i = 4; i < 6; i++) {
+        T_ASSERT_EQ_U(g_player_roster[i * 2], 0);
+        T_ASSERT_EQ_U(g_player_roster[i * 2 + 1], (uint8_t)i);
+    }
+
+    /* The three occupied ids each appear exactly once among seats 1..3,
+     * paired with their original seat byte (0x11↔1, 0x22↔2, 0x33↔3). */
+    int seen11 = 0, seen22 = 0, seen33 = 0;
+    for (int i = 1; i <= 3; i++) {
+        uint8_t id = g_player_roster[i * 2];
+        uint8_t st = g_player_roster[i * 2 + 1];
+        if (id == 0x11) { seen11++; T_ASSERT_EQ_U(st, 1); }
+        else if (id == 0x22) { seen22++; T_ASSERT_EQ_U(st, 2); }
+        else if (id == 0x33) { seen33++; T_ASSERT_EQ_U(st, 3); }
+        else T_FAIL("seat %d holds unexpected id 0x%02x", i, id);
+    }
+    if (seen11 != 1 || seen22 != 1 || seen33 != 1)
+        T_FAIL("payload lost: counts 0x11=%d 0x22=%d 0x33=%d",
+               seen11, seen22, seen33);
+    return 0;
+}
+
+/* active == 0 (only seat 0 occupied): phase 1 consumes no draws and the
+ * id bytes are all cleared. */
+int test_game_init_seat_shuffle_active_zero(void)
+{
+    for (int i = 0; i < 12; i++) g_player_roster[i] = 0;
+    g_player_roster[0] = 0x09;          /* seat 0 only */
+    engine_rng_in_t rng = { RNG_SEED_A, RNG_SEED_B };
+
+    engine_game_init_seat_shuffle(&rng);
+
+    for (int i = 0; i < 6; i++)
+        T_ASSERT_EQ_U(g_player_roster[i * 2], 0);
+    return 0;
+}
+
+/* Phase 2: the permutation table holds only values 0..47, and every
+ * non-zero value 1..47 appears at most once (slot value 0 aliases empty,
+ * so it is exempt from the uniqueness check). */
+int test_game_init_seat_shuffle_perm_unique(void)
+{
+    seed_roster_3players();
+    engine_rng_in_t rng = { RNG_SEED_A, RNG_SEED_B };
+
+    engine_game_init_seat_shuffle(&rng);
+
+    int count[48] = {0};
+    for (int i = 0; i < 48; i++) {
+        uint8_t v = s_slot_0057cae0[i];
+        if (v > 47) T_FAIL("perm[%d] = %u out of range 0..47", i, v);
+        if (v != 0 && ++count[v] > 1)
+            T_FAIL("perm value %u appears more than once", v);
+    }
+    return 0;
+}
+
+/* Phase 3: every value-table cell is one of the ladder outputs. */
+int test_game_init_seat_shuffle_value_in_range(void)
+{
+    seed_roster_3players();
+    engine_rng_in_t rng = { RNG_SEED_A, RNG_SEED_B };
+
+    engine_game_init_seat_shuffle(&rng);
+
+    for (int i = 0; i < 48; i++) {
+        uint8_t v = s_slot_00553080[i];
+        if (v != 0 && v != 6 && v != 11 && v != 16 &&
+            v != 21 && v != 26 && v != 41 && v != 100)
+            T_FAIL("value[%d] = %u not in ladder set", i, v);
+    }
+    return 0;
+}
+
+/* Phase 3 + draw position: replay the RNG independently — skip the
+ * phase-1 (active) and phase-2 (48) draws, then recompute the value
+ * ladder and compare cell-for-cell.  Locks both the ladder mapping and
+ * that phases 1+2 consumed exactly active+48 draws. */
+int test_game_init_seat_shuffle_value_ladder_replay(void)
+{
+    seed_roster_3players();
+    const int active = 3;               /* matches seed_roster_3players */
+
+    engine_rng_in_t live = { RNG_SEED_A, RNG_SEED_B };
+    engine_game_init_seat_shuffle(&live);
+
+    engine_rng_in_t rep = { RNG_SEED_A, RNG_SEED_B };
+    for (int i = 0; i < active + 48; i++) /* skip phase 1 + phase 2 */
+        (void)t_rng_next_7b(&rep);
+    for (int i = 0; i < 48; i++) {
+        uint32_t r = t_rng_next_7b(&rep) & 7;
+        uint8_t want = (r == 5) ? 0 : (r == 6) ? 100 : (uint8_t)(r * 5 + 6);
+        T_ASSERT_EQ_U(s_slot_00553080[i], want);
+    }
+    return 0;
+}
+
+/* Total draw count is exactly active + 48 + 48: the live state after the
+ * seeder equals active+96 independent advances from the same seed. */
+int test_game_init_seat_shuffle_draw_count(void)
+{
+    seed_roster_3players();
+    const int active = 3;
+
+    engine_rng_in_t live = { RNG_SEED_A, RNG_SEED_B };
+    engine_game_init_seat_shuffle(&live);
+
+    engine_rng_in_t rep = { RNG_SEED_A, RNG_SEED_B };
+    for (int i = 0; i < active + 48 + 48; i++)
+        (void)t_rng_next_7b(&rep);
+
+    T_ASSERT_EQ_U(live.state_a, rep.state_a);
+    T_ASSERT_EQ_U(live.state_b, rep.state_b);
+    return 0;
+}
+
+/* Same seed → identical roster + both tables (pure given rng). */
+int test_game_init_seat_shuffle_deterministic(void)
+{
+    uint8_t roster1[12], perm1[48], val1[48];
+
+    seed_roster_3players();
+    engine_rng_in_t r1 = { RNG_SEED_A, RNG_SEED_B };
+    engine_game_init_seat_shuffle(&r1);
+    memcpy(roster1, g_player_roster,  12);
+    memcpy(perm1,   s_slot_0057cae0,  48);
+    memcpy(val1,    s_slot_00553080,  48);
+
+    seed_roster_3players();
+    engine_rng_in_t r2 = { RNG_SEED_A, RNG_SEED_B };
+    engine_game_init_seat_shuffle(&r2);
+
+    T_ASSERT_MEM_EQ(roster1, g_player_roster, 12);
+    T_ASSERT_MEM_EQ(perm1,   s_slot_0057cae0, 48);
+    T_ASSERT_MEM_EQ(val1,    s_slot_00553080, 48);
+    T_ASSERT_EQ_U(r1.state_a, r2.state_a);
+    T_ASSERT_EQ_U(r1.state_b, r2.state_b);
     return 0;
 }

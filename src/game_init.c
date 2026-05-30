@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "game_init.h"
+#include "engine.h"               /* engine_rng_step, engine_rng_in/out_t */
 #include "save.h"
 #include "save_schema_globals.h"  /* s_slot_<va> — the 17 calendar/world scalars */
 #include "engine_turn.h"          /* g_sim_turn_progress, g_sim_turn_sync_baseline_ms */
@@ -148,5 +149,101 @@ void engine_game_init_seed_value_table(void)
         uint8_t *rec = &s_slot_005532a0[i * 0x10];
         *(uint32_t *)(rec + 0) = k_value_table_defaults[i];  /* DAT_004d8910[i] */
         *(uint32_t *)(rec + 4) = 0;
+    }
+}
+
+/*
+ * RNG draw helper — one retail FUN_00404a46 advance, threading the live
+ * LFSR state through `rng`, returning the 7-bit-b mirror (retail reads
+ * DAT_0058fd60 after each advance — the only field FUN_00497e65 samples).
+ * Sub-masking that 7-bit value by 3 / 0x1f / 7 below is identical to
+ * masking the raw state, since every mask is a subset of 0x7f.
+ */
+static uint32_t rng_next_7b(engine_rng_in_t *rng)
+{
+    engine_rng_out_t out = {0};
+    engine_rng_step(rng, &out);          /* FUN_00404a46 */
+    rng->state_a = out.new_state_a;
+    rng->state_b = out.new_state_b;
+    return out.rng_7bit_b;               /* DAT_0058fd60 */
+}
+
+/*
+ * Heavy seeder FUN_00497e65 @ 0x497e65 (1025 B) — new-game randomiser.
+ * See game_init.h for the three-output overview.  Ported verbatim from
+ * the decompile (r2-verified: masks 3 / 0x1f / 7, the `+1` target bias,
+ * the 0x30 wrap, the 0x32 probe cap, and the value ladder eax·5+6).
+ *
+ * The single retail function is kept as a single C function because the
+ * three phases share one RNG stream and their draw ordering is part of
+ * the persisted result: phase 1 consumes `active` draws, phase 2 another
+ * 48, phase 3 a final 48.
+ */
+void engine_game_init_seat_shuffle(engine_rng_in_t *rng)
+{
+    uint8_t saved_id[6];
+    uint8_t saved_seat[6];
+
+    /* --- Phase 1: roster shuffle ---------------------------------- */
+
+    /* Count occupied pairs among seats 1..5 (seat 0 excluded). */
+    int active = 0;
+    for (int i = 1; i < 6; i++)
+        if (g_player_roster[i * 2] != 0)
+            active++;
+
+    /* Snapshot all 6 pairs, then clear only the id bytes (the seat
+     * bytes are left in place — retail clears DAT_00568db0 only). */
+    for (int i = 0; i < 6; i++) {
+        saved_id[i]   = g_player_roster[i * 2];
+        saved_seat[i] = g_player_roster[i * 2 + 1];
+    }
+    for (int i = 0; i < 6; i++)
+        g_player_roster[i * 2] = 0;
+
+    /* Re-seat each originally-occupied pair (1..active) into a random
+     * empty slot, probing forward with a 1..active wrap. */
+    for (int i = 1; i <= active; i++) {
+        int t = (int)(rng_next_7b(rng) & 3) + 1 + i;
+        if (t > active) t = 1;
+        for (int probe = 0; probe < active; probe++) {
+            if (g_player_roster[t * 2] == 0) {
+                g_player_roster[t * 2]     = saved_id[i];
+                g_player_roster[t * 2 + 1] = saved_seat[i];
+                break;
+            }
+            if (++t > active) t = 1;
+        }
+    }
+
+    /* --- Phase 2: 48-entry permutation table (entry 178) ---------- */
+
+    /* Retail fills an identity scratch [0..47] then clears the table;
+     * the identity value is just the index, inlined as `i` below. */
+    for (int i = 0; i < 0x30; i++)
+        s_slot_0057cae0[i] = 0;
+
+    for (int i = 0; i < 0x30; i++) {
+        int t = (int)(rng_next_7b(rng) & 0x1f) + 1 + i;
+        if (t > 0x2f) t -= 0x30;
+        for (int probe = 0; probe < 0x32; probe++) {   /* 50-attempt cap */
+            if (t != i && s_slot_0057cae0[t] == 0) {
+                s_slot_0057cae0[t] = (uint8_t)i;        /* identity value */
+                break;
+            }
+            if (++t > 0x2f) t = 0;
+        }
+    }
+
+    /* --- Phase 3: 48-entry value/threshold table (entry 191) ------ */
+
+    for (int i = 0; i < 0x30; i++) {
+        uint32_t r = rng_next_7b(rng) & 7;
+        if (r == 5)
+            s_slot_00553080[i] = 0;
+        else if (r == 6)
+            s_slot_00553080[i] = 100;
+        else
+            s_slot_00553080[i] = (uint8_t)(r * 5 + 6);  /* lea eax,[eax+eax*4]; add 6 */
     }
 }

@@ -35,6 +35,8 @@
 #ifndef OPENLORDS2_GAME_INIT_H
 #define OPENLORDS2_GAME_INIT_H
 
+#include "engine.h"   /* engine_rng_in_t — the threaded LFSR state (RNG seam) */
+
 /* Table-clear phase of 0x497ced — zero the per-army, unit-type and
  * per-territory save blocks.  Runs once at new-game start, ahead of the
  * scalar-seed and per-subsystem seed phases. */
@@ -60,5 +62,34 @@ void engine_game_init_seed_scalars(void);
  * (+4) zeroed, the remaining 8 B per record untouched.  Reused by the
  * new-game init and three other reset paths (0x43723a/0x49a010/0x4a98fe). */
 void engine_game_init_seed_value_table(void);
+
+/* Heavy seeder FUN_00497e65 — new-game randomiser.  One retail unit that
+ * consumes a contiguous run of RNG draws (so `rng` is threaded in/out)
+ * and produces three pieces of randomised new-game state, in this order:
+ *
+ *   1. Player roster shuffle.  Re-seats the `active` occupied roster
+ *      pairs (g_player_roster, seats 1..5; seat 0 — the reserved front
+ *      slot — is excluded from both the count and the shuffle) into
+ *      random array positions, carrying each pair's {army-id, seat-id}
+ *      payload together.  Assumes the roster has already been compacted
+ *      (player_roster_compact runs earlier in setup), so the occupied
+ *      pairs are contiguous at indices 1..active.
+ *
+ *   2. 48-entry permutation table (save entry 178, s_slot_0057cae0):
+ *      a near-random placement of the identity values 0..47, each
+ *      dropped into a random empty slot (never its own index).
+ *
+ *   3. 48-entry value/threshold table (save entry 191, s_slot_00553080):
+ *      each cell a categorical roll of (rng & 7) → 0 (roll 5), 100
+ *      (roll 6), else roll·5+6 {6,11,16,21,26,41}.
+ *
+ * Both 48-tables are indexed in-game by the shared cursor DAT_005653f8
+ * (the permutation feeds DAT_00553528; the value table is compared as a
+ * threshold by the AI handlers at 0x48acd2 / 0x48b02b).
+ *
+ * Pure given `rng`: the live orchestrator (0x497ced, step 5) passes
+ * the engine's threaded LFSR state so the draw sequence continues from
+ * the prior seeders; tests pass a fixed seed for determinism. */
+void engine_game_init_seat_shuffle(engine_rng_in_t *rng);
 
 #endif /* OPENLORDS2_GAME_INIT_H */

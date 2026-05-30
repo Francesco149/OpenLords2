@@ -1365,6 +1365,13 @@ struct test_case {
     X(game_init_seed_scalars_fixed_values) \
     X(game_init_seed_value_table_defaults) \
     X(game_init_seed_value_table_leaves_tail_untouched) \
+    X(game_init_seat_shuffle_preserves_payloads) \
+    X(game_init_seat_shuffle_active_zero) \
+    X(game_init_seat_shuffle_perm_unique) \
+    X(game_init_seat_shuffle_value_in_range) \
+    X(game_init_seat_shuffle_value_ladder_replay) \
+    X(game_init_seat_shuffle_draw_count) \
+    X(game_init_seat_shuffle_deterministic) \
     /* end */
 
 /* Emit extern decls. */
