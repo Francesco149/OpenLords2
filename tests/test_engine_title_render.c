@@ -23,6 +23,7 @@
 #include "localization.h"
 #include "engine_dirty_rect.h"
 #include "engine_title_render.h"
+#include "engine.h"                /* g_sim_mp_active (retail DAT_00553030) */
 #include "save_schema_globals.h"   /* s_slot_0053f034 (selected-country id) */
 
 #include <string.h>
@@ -1206,5 +1207,62 @@ int test_title_refresh_setup_gated_by_dirty(void)
     engine_title_render_refresh_setup();
     T_ASSERT(row_color_count_x(0xad, 0x3f, 0x1f0, 0x1f0 + 0x69) > 0);  /* sel row */
     T_ASSERT(row_color_count_x(0x8d, 0x20, 0x1f0, 0x1f0 + 0x69) > 0);  /* row 0  */
+    return 0;
+}
+
+/* ── page-7 Defaults button (FUN_004ae539 / FUN_004ae5e2) ───────── */
+
+/* Apply-defaults (single player) resets all 12 tabs to the retail SP
+ * default vector, regardless of their prior values. */
+int test_title_setup_apply_defaults_sp(void)
+{
+    int vals[12] = { 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9 };   /* all non-default */
+    engine_title_render_set_tab_values(vals, -1);
+    g_sim_mp_active = 0;
+
+    engine_title_render_setup_apply_defaults();
+
+    static const int def_sp[12] = { 0, 0, 3, 0, 0, 0, 3, 2, 2, 1, 6, 1 };
+    for (int t = 0; t < 12; t++) {
+        T_ASSERT_EQ_I(engine_title_render_tab_value(t), def_sp[t]);
+    }
+    return 0;
+}
+
+/* The multiplayer variant differs only on tab 10 (6→3) and tab 11 (1→0). */
+int test_title_setup_apply_defaults_mp(void)
+{
+    int vals[12] = { 0 };
+    engine_title_render_set_tab_values(vals, -1);
+    g_sim_mp_active = 1;
+
+    engine_title_render_setup_apply_defaults();
+
+    T_ASSERT_EQ_I(engine_title_render_tab_value(10), 3);
+    T_ASSERT_EQ_I(engine_title_render_tab_value(11), 0);
+    T_ASSERT_EQ_I(engine_title_render_tab_value(2), 3);   /* unchanged vs SP */
+    T_ASSERT_EQ_I(engine_title_render_tab_value(7), 2);   /* unchanged vs SP */
+
+    g_sim_mp_active = 0;   /* restore for the rest of the suite */
+    return 0;
+}
+
+/* The player-count clamp (FUN_004ae5e2) caps tab 2 to the roster size. */
+int test_title_setup_clamp_player_count(void)
+{
+    int vals[12] = { 0 };
+    vals[2] = 3;
+    engine_title_render_set_tab_values(vals, -1);
+
+    engine_title_render_setup_clamp_player_count(2);   /* < 3 → 0 */
+    T_ASSERT_EQ_I(engine_title_render_tab_value(2), 0);
+    engine_title_render_setup_clamp_player_count(3);   /* < 4 → 1 */
+    T_ASSERT_EQ_I(engine_title_render_tab_value(2), 1);
+    engine_title_render_setup_clamp_player_count(4);   /* < 5 → 2 */
+    T_ASSERT_EQ_I(engine_title_render_tab_value(2), 2);
+    engine_title_render_setup_clamp_player_count(5);   /* ≥ 5 → 3 */
+    T_ASSERT_EQ_I(engine_title_render_tab_value(2), 3);
+    engine_title_render_setup_clamp_player_count(99);  /* still 3 */
+    T_ASSERT_EQ_I(engine_title_render_tab_value(2), 3);
     return 0;
 }

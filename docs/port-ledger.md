@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **343** (14.0%) — tested 308, ported 35
-- code bytes touched: **14.6%** (122,849 / 838,629 B)
-- unported: **2104**
+- touched: **344** (14.1%) — tested 309, ported 35
+- code bytes touched: **14.7%** (123,018 / 838,629 B)
+- unported: **2103**
 - orphan refs (in src/, not in function table): 4
 
-## tested (308) — ported + host unit suite
+## tested (309) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -180,7 +180,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x433998 | FUN_00433998 | 139 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
 | 0x433a23 | FUN_00433a23 | 77 | engine_menu_input.c, main.c |
 | 0x433ba2 | FUN_00433ba2 | 287 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
-| 0x433cc1 | FUN_00433cc1 | 35 | engine_title_render.c, engine_title_render.h |
+| 0x433cc1 | FUN_00433cc1 | 35 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x433ce4 | FUN_00433ce4 | 217 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
 | 0x4343f8 | FUN_004343f8 | 36 | main.c |
 | 0x43de70 | FUN_0043de70 | 1211 | engine.c, engine.h, engine_rate.c |
@@ -246,7 +246,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49caaa | FUN_0049caaa | 935 | engine_npc_schedule.c, engine_npc_schedule.h, engine_title_render.c |
 | 0x4ade93 | FUN_004ade93 | 339 | save.c, save.h |
 | 0x4adfe6 | FUN_004adfe6 | 377 | save.c, save.h |
-| 0x4ae5e2 | FUN_004ae5e2 | 96 | engine_title_render.c |
+| 0x4ae539 | FUN_004ae539 | 169 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
+| 0x4ae5e2 | FUN_004ae5e2 | 96 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
 | 0x4ae8a9 | FUN_004ae8a9 | 191 | save.c, save.h |
 | 0x4ae968 | FUN_004ae968 | 264 | save.c, save.h |
 | 0x4aea70 | FUN_004aea70 | 506 | save.c, save.h |

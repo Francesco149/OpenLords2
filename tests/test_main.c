@@ -1236,6 +1236,9 @@ struct test_case {
     X(title_country_scroll_clamps_and_recomputes_id) \
     X(title_country_select_sets_row_and_id) \
     X(title_refresh_setup_gated_by_dirty) \
+    X(title_setup_apply_defaults_sp) \
+    X(title_setup_apply_defaults_mp) \
+    X(title_setup_clamp_player_count) \
     \
     X(menu_hover_returns_1based_index) \
     X(menu_hover_outside_returns_zero) \
@@ -1266,6 +1269,7 @@ struct test_case {
     X(menu_page7_option_tab_opens_page9) \
     X(menu_page7_tab2_count_clamps_to_roster) \
     X(menu_page7_click_outside_hotspots_noop) \
+    X(menu_page7_defaults_resets_option_values) \
     X(menu_page9_hover_highlights_row) \
     X(menu_page9_pick_writes_value_and_closes) \
     X(menu_page9_tab_click_retargets) \

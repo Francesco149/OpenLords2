@@ -233,13 +233,17 @@ static void menu_action_p7_button(int param)
         g_redraw_fn(2);
         /* TODO(game-start): 0x499dc3 + 0x4329ec; DAT_0052afa4 = 1. */
     } else if (param == 3) {
-        /* Defaults — re-apply the default option values (0x4ae539) and
-         * recompute the AI roster / preview (0x4ae5e2 / 0x433cc1), then
-         * mark the tab strip dirty.  The recompute is deferred; marking the
-         * tabs dirty re-renders them (unchanged values) which is harmless. */
-        engine_title_render_setup_mark_tabs_dirty();   /* DAT_0055ce94 = 1 */
+        /* Defaults — re-apply the default option values (FUN_004ae539) and
+         * clamp the player count to the live roster size (FUN_004ae5e2),
+         * then mark the tab strip dirty so the refresh repaints the new
+         * value caps.  Retail's roster/preview recompute tail (FUN_00433cc1
+         * → DAT_0053f268 + 0x49caaa) is deferred with the roster subsystem;
+         * the multiplayer-only sound cue (0x43eda0) is likewise deferred. */
+        engine_title_render_setup_apply_defaults();        /* FUN_004ae539 */
+        engine_title_render_setup_clamp_player_count((int)s_slot_0053e8a4); /* FUN_004ae5e2 */
+        engine_title_render_setup_mark_tabs_dirty();       /* DAT_0055ce94 = 1 */
         g_redraw_fn(2);
-        /* TODO(defaults): 0x4ae539 default-options apply + 0x4ae5e2/0x433cc1. */
+        /* TODO(roster): FUN_00433cc1 recompute (DAT_0053f268 + 0x49caaa). */
     }
 }
 

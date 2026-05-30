@@ -403,6 +403,35 @@ row 2 ("on"), and captures the page-7 setup screen with "Advanced Farming"
 flipped **off → on**.  5 host tests (hover/pick/re-target/dismiss + tab-2
 grow-up).
 
+### Page-7 Defaults button (`FUN_004ae539` + `FUN_004ae5e2`)
+
+> 2026-05-30. The third carved button on the setup screen (Cancel / Start /
+> **Defaults**) resets every option tab to its new-custom-game default.
+
+`FUN_004335f0` param 3 runs: apply-defaults (`FUN_004ae539`) → clamp the
+player count to the live roster size (`FUN_004ae5e2(DAT_0053e8a4)`) → recompute
+the roster (`FUN_00433cc1`, deferred) → mark the tab strip dirty.  Retail keeps
+the twelve values in the permuted scalars `DAT_0053f288..0053f2b4`; the port
+holds them in tab order, so the default vector (mapped through `FUN_00433ba2`'s
+permutation) is the single-player `{0,0,3,0,0,0,3,2,2,1,6,1}` (tabs 10/11 take
+an MP-specific default off `DAT_00553030`).  The clamp caps the player-count
+tab: roster `<3→0, <4→1, <5→2, else 3`.
+
+The clamp's input `DAT_0053e8a4` (roster size) was unseeded in the page-7
+bring-up (0 → it forced the player count to 0); `seed_page7_state` now sets it
+to 5 (the seeded five-seat roster).  Deferred: the recompute tail re-seats the
+AI roster (`0x49caaa`) but writes strategic globals the synthetic page-7 roster
+render doesn't read, so the left-edge shields don't yet change on a player-count
+reset; the MP-only sound `0x43eda0` is likewise deferred.
+
+Port: `engine_title_render_setup_apply_defaults` / `_clamp_player_count` in
+`src/engine_title_render.c`; the Defaults arm of `menu_action_p7_button` in
+`src/engine_menu_input.c`.  Bring-up: `--title-nav` steps 8/9
+(`nav_08_p7_scrambled.bmp` → `nav_09_p7_defaults.bmp`) scramble all twelve caps
+off-default, then click Defaults and capture the whole grid snapped back to the
+canonical defaults.  4 host tests (apply SP/MP + clamp ladder + the
+through-the-dispatcher reset).
+
 ## Input side — hotspot hit-test + page navigation (`engine_menu_input`)
 
 > 2026-05-29. The *render* half above is matched by the *input* half: the

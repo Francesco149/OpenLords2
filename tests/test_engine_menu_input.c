@@ -12,6 +12,7 @@
 #include "t.h"
 #include "engine_menu_input.h"
 #include "engine_title_render.h"
+#include "engine.h"                /* g_sim_mp_active (retail DAT_00553030) */
 #include "save_schema_globals.h"   /* s_slot_0053f640 / _0053f258 / _0055302c */
 
 #include <string.h>
@@ -448,6 +449,31 @@ int test_menu_page7_click_outside_hotspots_noop(void)
     engine_menu_click_in_t in = press_at(10, 10);
     T_ASSERT_EQ_I(engine_menu_title_input(&in), 0);
     T_ASSERT_EQ_I(engine_title_render_page(), 7);
+    return 0;
+}
+
+/* Defaults button (box (321,181)-(397,236) → centre (359,208)) resets the
+ * edited option tabs back to the SP defaults and stays on page 7. */
+int test_menu_page7_defaults_resets_option_values(void)
+{
+    mi_reset();
+    engine_title_render_set_page(7);
+    g_sim_mp_active = 0;
+    s_slot_0053e8a4 = 5;                 /* full roster → tab-2 default 3 stands */
+
+    /* Scramble every tab away from its default first. */
+    int vals[12] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+    engine_title_render_set_tab_values(vals, -1);
+
+    engine_menu_click_in_t in = press_at(359, 208);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);          /* consumed */
+    T_ASSERT_EQ_I(engine_title_render_page(), 7);            /* still page 7 */
+    T_ASSERT_EQ_I(engine_menu_input_last_redraw_mode(), 2);
+
+    static const int def_sp[12] = { 0, 0, 3, 0, 0, 0, 3, 2, 2, 1, 6, 1 };
+    for (int t = 0; t < 12; t++) {
+        T_ASSERT_EQ_I(engine_title_render_tab_value(t), def_sp[t]);
+    }
     return 0;
 }
 

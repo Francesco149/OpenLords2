@@ -73,6 +73,7 @@
 #include "gfx_caret.h"
 #include "gfx_panel.h"
 #include "gfx_text.h"
+#include "save_schema_globals.h"   /* s_slot_0053e8a4 (roster size) */
 
 /* Class name matches retail FUN_004b2258's `s_WinLords2Class_004df5b0`
  * so FindWindowA from external tools resolves to us identically.
@@ -894,6 +895,11 @@ static void seed_page7_state(void)
     static const int k_tabs[12] = { 0, 0, 3, 0, 0, 0, 3, 2, 2, 1, 6, 1 };
     engine_title_render_set_tab_values(k_tabs, /*active=*/-1);
 
+    /* Roster size (retail DAT_0053e8a4) — the seeded snapshot has 5 AI seats
+     * available, so the tab-2 (player count) dropdown shows all options and
+     * the Defaults clamp (FUN_004ae5e2) leaves the default "3" intact. */
+    s_slot_0053e8a4 = 5;
+
     static const engine_title_setup_player_t k_players[6] = {
         { 0, 0, 0,    0, 0 },                 /* seat 0 — unused */
         { 1, 0, 0x0e, 1, 0 },                 /* seat 1 — human "aaaaaa" */
@@ -1162,6 +1168,38 @@ static void bringup_title_nav(const char *dir)
     gfx_capture_backbuffer(path);
     log_line("title-nav: page %d (option picked: tab 0 = on) → %s",
              engine_title_render_page(), path);
+
+    /* Step 8 — the Defaults button (FUN_004ae539 + FUN_004ae5e2).  Scramble
+     * every option tab away from its default and capture the "before", then
+     * click Defaults (box (321,181)-(397,236) → centre (359,208)) and capture
+     * the "after": every value cap snaps back to the single-player defaults
+     * {0,0,3,0,0,0,3,2,2,1,6,1}, with the player count clamped to the live
+     * 5-seat roster (so tab 2 stays 3).  The two frames differ on all twelve
+     * caps — the visible proof the Defaults dispatch resets the options. */
+    seed_page7_state();
+    engine_title_render_set_page(7);
+    static const int k_scrambled[12] = { 1, 1, 0, 1, 3, 3, 0, 0, 4, 2, 0, 0 };
+    engine_title_render_set_tab_values(k_scrambled, -1);
+    title_render_current_page();
+    wsprintfA(path, "%s\\nav_08_p%d_scrambled.bmp", dir,
+              engine_title_render_page());
+    gfx_capture_backbuffer(path);
+    log_line("title-nav: scrambled page-7 options (all 12 off-default) → %s",
+             path);
+
+    /* Click Defaults → apply_defaults + clamp(player count). */
+    title_nav_click(359, 208);
+    title_render_current_page();
+    wsprintfA(path, "%s\\nav_09_p%d_defaults.bmp", dir,
+              engine_title_render_page());
+    gfx_capture_backbuffer(path);
+    log_line("title-nav: clicked Defaults → page %d "
+             "(tab0=%d tab2=%d tab8=%d tab10=%d) → %s",
+             engine_title_render_page(),
+             engine_title_render_tab_value(0),
+             engine_title_render_tab_value(2),
+             engine_title_render_tab_value(8),
+             engine_title_render_tab_value(10), path);
 }
 
 /* Page-background reload hook (engine → gfx).  The engine_tick title

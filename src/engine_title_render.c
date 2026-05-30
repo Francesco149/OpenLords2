@@ -11,6 +11,7 @@
 
 #include "engine_title_render.h"
 #include "engine_dirty_rect.h"
+#include "engine.h"                /* g_sim_mp_active (retail DAT_00553030) */
 #include "save_schema_globals.h"   /* s_slot_0053f034 (selected-country id) */
 #include "engine_button.h"
 #include "localization.h"
@@ -957,6 +958,50 @@ void engine_title_render_option_detail_pick(int value)
     }
     /* TODO(roster): 0x433cc1 → DAT_0053f268 recompute + 0x49caaa
      * roster/preview rebuild (deferred with the MP/roster subsystem). */
+}
+
+/* Port of FUN_004ae539 — reset the 12 option tabs to their default values
+ * (the Defaults button).  Retail writes the permuted scalars
+ * DAT_0053f288..0053f2b4; the drop-in holds the values in tab order in
+ * g_p7_tab_values, so the defaults are mapped through FUN_00433ba2's
+ * tab→scalar permutation:
+ *
+ *   tab  0→53f29c  1→53f2a4  2→53f288  3→53f2a0  4→53f290  5→53f298
+ *        6→53f2b0  7→53f294  8→53f2a8  9→53f2ac 10→53f28c 11→53f2b4
+ *
+ * Tab 10 (game length) and tab 11 (a single-player-only toggle) take a
+ * different default in a multiplayer setup (retail keys both off
+ * DAT_00553030 == 0).  The resulting tab-order vector for single player is
+ * {0,0,3,0,0,0,3,2,2,1,6,1} — identical to the captured page-7 seed in
+ * main.c, confirming this is the setup screen's defaults source. */
+void engine_title_render_setup_apply_defaults(void)
+{
+    g_p7_tab_values[0]  = 0;   /* DAT_0053f29c */
+    g_p7_tab_values[1]  = 0;   /* DAT_0053f2a4 */
+    g_p7_tab_values[2]  = 3;   /* DAT_0053f288 — player count */
+    g_p7_tab_values[3]  = 0;   /* DAT_0053f2a0 */
+    g_p7_tab_values[4]  = 0;   /* DAT_0053f290 */
+    g_p7_tab_values[5]  = 0;   /* DAT_0053f298 */
+    g_p7_tab_values[6]  = 3;   /* DAT_0053f2b0 */
+    g_p7_tab_values[7]  = 2;   /* DAT_0053f294 */
+    g_p7_tab_values[8]  = 2;   /* DAT_0053f2a8 */
+    g_p7_tab_values[9]  = 1;   /* DAT_0053f2ac */
+    g_p7_tab_values[10] = (g_sim_mp_active == 0) ? 6 : 3;  /* DAT_0053f28c */
+    g_p7_tab_values[11] = (g_sim_mp_active == 0) ? 1 : 0;  /* DAT_0053f2b4 */
+}
+
+/* Port of FUN_004ae5e2 — clamp the player-count tab (tab 2 / DAT_0053f288)
+ * down to fit the available roster size.  Retail calls this right after the
+ * defaults reset with DAT_0053e8a4 (the live roster size); the value caps at
+ * one of 0..3 so the default "3" never exceeds a small custom roster. */
+void engine_title_render_setup_clamp_player_count(int roster_size)
+{
+    int v;
+    if (roster_size < 3)      v = 0;
+    else if (roster_size < 4) v = 1;
+    else if (roster_size < 5) v = 2;
+    else                      v = 3;
+    g_p7_tab_values[2] = v;
 }
 
 void engine_title_render_set_players(const engine_title_setup_player_t players[6],

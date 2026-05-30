@@ -7,6 +7,66 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-30 — PAGE 7: the **Defaults** button resets the options (`FUN_004ae539` + `FUN_004ae5e2`)
+
+The page-7 setup screen's button row was Cancel (done) / Start (deep, deferred)
+/ **Defaults (stubbed)**.  This entry ports the Defaults action, so clicking it
+snaps all twelve option tabs back to the new-custom-game defaults — the last
+self-contained chip on the setup screen before the big game-start milestone.
+
+Two small leaves landed, both reachable from the already-ported button
+dispatch (`FUN_004335f0` param 3):
+
+1. **`FUN_004ae539`** (169 B) → `engine_title_render_setup_apply_defaults`.
+   Retail writes the twelve permuted option scalars (`DAT_0053f288..0053f2b4`);
+   the drop-in holds the values in *tab order* (`g_p7_tab_values`), so the
+   defaults are mapped through `FUN_00433ba2`'s tab→scalar permutation to the
+   single-player vector `{0,0,3,0,0,0,3,2,2,1,6,1}` — byte-identical to the
+   captured page-7 seed in `main.c`, confirming this is the screen's defaults
+   source.  Tabs 10 (game length) and 11 (an SP-only toggle) take a different
+   default in a multiplayer setup (both key off `g_sim_mp_active`).
+2. **`FUN_004ae5e2`** (96 B) → `engine_title_render_setup_clamp_player_count`.
+   Retail calls this right after the reset with `DAT_0053e8a4` (the live roster
+   size) to cap the player-count tab so the default "3" never exceeds a small
+   custom roster: `<3→0, <4→1, <5→2, else 3`.
+
+The Defaults arm of `menu_action_p7_button` now runs apply-defaults →
+clamp(`s_slot_0053e8a4`) → mark-tabs-dirty, matching retail's order.  Deferred
+with the roster subsystem: the recompute tail (`FUN_00433cc1` → `DAT_0053f268`
++ `0x49caaa`) that re-seats the AI roster, and the MP-only pick sound
+(`0x43eda0`).  So the option caps reset live, but the left-edge roster shields
+are not yet re-seated by a player-count change.
+
+Caught at bring-up time: the clamp reads the roster-size global `DAT_0053e8a4`,
+which the page-7 seed never populated (it was 0 → the clamp forced the player
+count to 0).  The seeded snapshot has five AI seats, so `seed_page7_state` now
+sets `s_slot_0053e8a4 = 5` — the same value a real scenario setup would leave —
+and the default "3" stands.
+
+Coverage 343 → **344 touched** (309 host-tested, 14.7% of code bytes).  4 new
+host tests (apply-defaults SP vector + MP tab-10/11 variant + the player-count
+clamp ladder + the end-to-end Defaults-click-resets-all-twelve through the menu
+dispatcher) → **1236 green**; both drop-in builds clean.
+
+**Human-confirmed** (`--title-nav` step 8/9 → `nav_08_p7_scrambled.bmp` /
+`nav_09_p7_defaults.bmp`, 2026-05-30): with every option scrambled off-default,
+clicking Defaults snaps the whole grid back to the canonical custom-game
+defaults (Advanced Farming off, Starting Castle keep, Difficulty easy, Crowns
+1000, Army Size no army, Time limit no limit, …), the England country
+selection left intact — matching retail's param-3 path exactly.
+
+### Next
+
+- **Start** (`FUN_004329ec` → `FUN_00497ced` game-state init, a ~25-call tree)
+  is the deep play-flow milestone behind this screen — the strategic-map
+  bring-up.  Multi-session; the natural big next push.
+- **Page 8** (MP setup) shares the page-7 input/refresh arm and is the other
+  page-9 backdrop; closest neighbour once MP state exists.
+- The **roster recompute** behind a player-count pick (`FUN_00433cc1` →
+  `0x49caaa`) re-seats the AI players — the first chip of the roster subsystem,
+  but it writes strategic globals the synthetic page-7 roster render doesn't yet
+  read, so it stays deferred until that render is ported.
+
 ## 2026-05-30 — PAGE 9 INPUT: the dropdown values go live (`FUN_004ba9c8` page-9 arm)
 
 Last entry rendered the page-9 option dropdown but left it inert — the values

@@ -373,6 +373,15 @@ int engine_title_render_option_detail_hover(int cx, int cy);
  * deferred; the page-7 value cap reflects the pick immediately. */
 void engine_title_render_option_detail_pick(int value);
 
+/* Port of FUN_004ae539 — reset all 12 option tabs to their defaults (the
+ * page-7 Defaults button).  Tabs 10/11 take a multiplayer-specific default
+ * keyed off g_sim_mp_active. */
+void engine_title_render_setup_apply_defaults(void);
+
+/* Port of FUN_004ae5e2 — clamp the player-count tab (tab 2) down to fit
+ * `roster_size` (retail DAT_0053e8a4): <3→0, <4→1, <5→2, else 3. */
+void engine_title_render_setup_clamp_player_count(int roster_size);
+
 /* Port of FUN_0041fdd6.  Render the page-9 per-option detail dropdown over
  * the bookmarked page (routed from page 9 by engine_title_render_scene). */
 void engine_title_render_option_detail(void);
