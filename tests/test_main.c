@@ -1427,6 +1427,9 @@ struct test_case {
     X(territory_place_capital_under_four_returns_zero) \
     X(territory_place_capital_filters) \
     X(territory_place_capital_unbound_returns_zero) \
+    X(territory_collect_keyed_appends_and_resets) \
+    X(territory_collect_keyed_filters) \
+    X(territory_collect_keyed_unbound_is_noop) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \

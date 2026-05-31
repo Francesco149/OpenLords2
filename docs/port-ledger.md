@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **393** (16.1%) — tested 357, ported 36
-- code bytes touched: **16.4%** (137,733 / 838,629 B)
-- unported: **2054**
+- touched: **394** (16.1%) — tested 358, ported 36
+- code bytes touched: **16.5%** (138,003 / 838,629 B)
+- unported: **2053**
 - orphan refs (in src/, not in function table): 4
 
-## tested (357) — ported + host unit suite
+## tested (358) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -234,6 +234,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x467a36 | FUN_00467a36 | 624 | engine_territory.c, engine_territory.h |
 | 0x467ca6 | FUN_00467ca6 | 385 | engine_territory.c, engine_territory.h |
 | 0x467fd1 | FUN_00467fd1 | 336 | engine_territory.c, engine_territory.h |
+| 0x468c41 | FUN_00468c41 | 270 | engine_territory.c, engine_territory.h |
 | 0x46a037 | FUN_0046a037 | 202 | engine_title_render.c |
 | 0x46ac22 | FUN_0046ac22 | 329 | engine_territory.c, engine_territory.h |
 | 0x46c080 | FUN_0046c080 | 199 | engine_territory.c, engine_territory.h |

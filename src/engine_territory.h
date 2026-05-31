@@ -199,4 +199,10 @@ void engine_territory_stamp_block(int base, int size, int off,
  * fewer than 4 eligible cells exist or the grid is unbound. */
 int engine_territory_place_capital(unsigned key);
 
+/* Port of FUN_00468c41.  Collect army `key`'s claimed cells (+1 bit 0x10,
+ * +7 == key) into its record row's i32 cell-list at +0x80, copying each
+ * cell's +3 descriptor to +6 and clearing its +0 type.  No-op if the cell
+ * grid or army-record block is unbound. */
+void engine_territory_collect_keyed_cells(unsigned key);
+
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

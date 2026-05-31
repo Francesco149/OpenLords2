@@ -963,3 +963,41 @@ int engine_territory_place_capital(unsigned key)
     }
     return 0;
 }
+
+/* Per-army record field offsets the capital-region passes write (retail
+ * DAT_0053f9b0 + the army's 0x300 row).  The cell-list is a run of i32
+ * cell byte-offsets; the orchestrator's own fields are added with Unit 6. */
+#define ARMY_CELL_LIST  0x80   /* DAT_0053fa30 — i32 list of collected cells */
+
+/* Port of FUN_00468c41 (270 B) — collect army `key`'s claimed cells into its
+ * record's cell-list.  Row-major scan for cells flagged claimed (+1 bit 0x10)
+ * and owned by `key` (+7 == key); each match's byte-offset is appended (as an
+ * i32) to the army row's +0x80 list, the cell's +6 byte is set to its +3
+ * descriptor, and its +0 type byte is cleared.
+ *
+ * Retail caps nothing: the running index just keeps incrementing, trusting
+ * the count of bit-0x10 cells to stay within the list region (≤ (0x300-0x80)/4
+ * = 136 before it would spill into the next army row).  Faithful here; the
+ * producers of the 0x10 flag keep capital regions small.  No terminator is
+ * written — the consumer relies on the pre-zeroed list (a 0 offset is the
+ * implicit end, the same cell-(0,0) blind spot the roster has).
+ *
+ * No-op if the cell grid or the army-record block is unbound. */
+void engine_territory_collect_keyed_cells(unsigned key)
+{
+    if (g_cells == NULL || g_army_records == NULL) return;
+
+    int32_t *list = (int32_t *)(g_army_records + key * ARMY_ROW_STRIDE + ARMY_CELL_LIST);
+    int n = 0;
+    for (int row = 0; row < 0x40; row++) {
+        for (int col = 0; col < 0x40; col++) {
+            int off = (row * 0x40 + col) * CELL_STRIDE;
+            if ((g_cells[off + 1] & 0x10) == 0)   continue;   /* DAT_00522f91 */
+            if (g_cells[off + 7] != (uint8_t)key) continue;   /* DAT_00522f97 */
+
+            list[n++] = off;
+            g_cells[off + 6] = g_cells[off + 3];              /* +6 ← +3 descriptor */
+            g_cells[off + 0] = 0;                             /* +0 ← 0  (type)     */
+        }
+    }
+}

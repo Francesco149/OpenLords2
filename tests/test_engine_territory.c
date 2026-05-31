@@ -1056,7 +1056,9 @@ int test_territory_classify_unbound_is_noop(void)
 /* ── Per-army territory adjacency (ports of FUN_0046c080 + FUN_00467ca6) ── */
 
 enum { ARMY_ROWS = 17, ARMY_STRIDE = 0x300, ADJ_COUNT = 0x5a, ADJ_LIST = 0x5c };
-static uint8_t g_army[ARMY_ROWS * ARMY_STRIDE];   /* DAT_0053f9b0, g_per_army_768 */
+/* 4-aligned: the capital-region passes write i32 fields into this block (the
+ * real save block is 4-aligned). */
+_Alignas(int32_t) static uint8_t g_army[ARMY_ROWS * ARMY_STRIDE];   /* DAT_0053f9b0, g_per_army_768 */
 
 static void adj_setup(void)
 {
@@ -1468,5 +1470,69 @@ int test_territory_place_capital_unbound_returns_zero(void)
 {
     engine_territory_bind_cells(NULL);
     T_ASSERT_EQ_I(engine_territory_place_capital(3), 0);
+    return 0;
+}
+
+/* ── Capital-region: collect claimed cells (port of FUN_00468c41) ──── */
+
+enum { ARMY_CELL_LIST = 0x80 };
+static int32_t army_list(int key, int n)
+{
+    int32_t v;
+    memcpy(&v, &g_army[key * ARMY_STRIDE + ARMY_CELL_LIST + n * 4], 4);
+    return v;
+}
+
+/* Cells flagged claimed (+1 bit 0x10) for the key are appended to the army's
+ * +0x80 i32 list in scan order; each gets +6 ← +3 and +0 ← 0. */
+int test_territory_collect_keyed_appends_and_resets(void)
+{
+    adj_setup();
+    int o;
+    o = cell_off(3, 0); g_cells[o + 7] = 5; g_cells[o + 1] |= 0x10; g_cells[o + 3] = 0x77; g_cells[o + 0] = 0x42;
+    o = cell_off(9, 0); g_cells[o + 7] = 5; g_cells[o + 1] |= 0x10; g_cells[o + 3] = 0x88; g_cells[o + 0] = 0x43;
+    o = cell_off(1, 1); g_cells[o + 7] = 5; g_cells[o + 1] |= 0x10; g_cells[o + 3] = 0x99; g_cells[o + 0] = 0x44;
+
+    engine_territory_collect_keyed_cells(5);
+
+    T_ASSERT_EQ_I(army_list(5, 0), cell_off(3, 0));
+    T_ASSERT_EQ_I(army_list(5, 1), cell_off(9, 0));
+    T_ASSERT_EQ_I(army_list(5, 2), cell_off(1, 1));
+    /* +6 ← +3, +0 ← 0 on each collected cell */
+    T_ASSERT_EQ_I(g_cells[cell_off(3, 0) + 6], 0x77);
+    T_ASSERT_EQ_I(g_cells[cell_off(3, 0) + 0], 0);
+    T_ASSERT_EQ_I(g_cells[cell_off(9, 0) + 6], 0x88);
+    T_ASSERT_EQ_I(g_cells[cell_off(1, 1) + 0], 0);
+    return 0;
+}
+
+/* Only cells with BOTH the 0x10 flag and the matching key are collected. */
+int test_territory_collect_keyed_filters(void)
+{
+    adj_setup();
+    int o;
+    o = cell_off(2, 0); g_cells[o + 7] = 5; g_cells[o + 1] |= 0x10;   /* good (1st) */
+    o = cell_off(3, 0); g_cells[o + 7] = 9; g_cells[o + 1] |= 0x10;   /* wrong key  */
+    o = cell_off(4, 0); g_cells[o + 7] = 5;                            /* no flag    */
+    o = cell_off(5, 0); g_cells[o + 7] = 5; g_cells[o + 1] |= 0x10;   /* good (2nd) */
+
+    engine_territory_collect_keyed_cells(5);
+
+    T_ASSERT_EQ_I(army_list(5, 0), cell_off(2, 0));
+    T_ASSERT_EQ_I(army_list(5, 1), cell_off(5, 0));
+    T_ASSERT_EQ_I(army_list(5, 2), 0);              /* list ends (pre-zeroed) */
+    /* the wrong-key cell stays untouched (still owned by 9, type unset) */
+    T_ASSERT_EQ_I(g_cells[cell_off(3, 0) + 0], 0);  /* never written a type → 0 */
+    return 0;
+}
+
+int test_territory_collect_keyed_unbound_is_noop(void)
+{
+    adj_setup();
+    engine_territory_bind_cells(NULL);
+    engine_territory_collect_keyed_cells(5);        /* must not crash */
+    adj_setup();
+    engine_territory_bind_army_records(NULL);
+    engine_territory_collect_keyed_cells(5);        /* must not crash */
     return 0;
 }
