@@ -13,6 +13,7 @@
 
 #include "t.h"
 #include "engine_realm.h"
+#include "engine_army_economy.h"   /* NULL the provision bind to isolate copies */
 #include "save.h"
 #include "save_schema_globals.h"
 
@@ -139,5 +140,28 @@ int test_engine_realm_rating_average_over_turns(void)
 
     T_ASSERT_EQ_I(AI32(r, 0x1c), 346); /* 300 + 46 */
     T_ASSERT_EQ_I(r[0x18], 86);        /* 346 / 4 = 86 (trunc) */
+    return 0;
+}
+
+/* engine_realm_settle_provisions (FUN_0044bf04): with the economy provision
+ * callee NULL-bound (no-op), the per-realm history snapshots still copy
+ * +0x178 → +0x18c and +0x17c → +0x190 for every realm. */
+int test_engine_realm_settle_provisions_snapshots(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 2;
+    s_slot_00554470 = 2;                       /* phase arg (unused — bind NULL) */
+    engine_army_economy_bind_army_records(NULL);   /* provision → no-op */
+
+    AI32(AREC(1), 0x178) = 111; AI32(AREC(1), 0x17c) = 222;
+    AI32(AREC(2), 0x178) = 333; AI32(AREC(2), 0x17c) = 444;
+    AI32(AREC(1), 0x18c) = 0x7777; AI32(AREC(1), 0x190) = 0x7777;  /* dirty */
+
+    engine_realm_settle_provisions();
+
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x18c), 111);
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x190), 222);
+    T_ASSERT_EQ_I(AI32(AREC(2), 0x18c), 333);
+    T_ASSERT_EQ_I(AI32(AREC(2), 0x190), 444);
     return 0;
 }

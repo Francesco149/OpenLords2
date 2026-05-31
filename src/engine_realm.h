@@ -36,4 +36,13 @@
  * r2-verified for the signed arithmetic and the divide. */
 void engine_realm_advance_rating(void);
 
+/* Port of FUN_0044bf04 @ 0x44bf04 (118 B, __stdcall void) — the per-realm
+ * provisioning settle pass (another 0x448440 turn-engine pass).  For every
+ * realm 1..s_slot_0056d5dc it re-runs engine_army_economy_provision at the
+ * season-prev phase (s_slot_00554470), then snapshots the settled economy
+ * fields +0x178 → +0x18c and +0x17c → +0x190 (the per-realm history mirrors).
+ * No-ops on its economy callee when the army-record block is unbound; the two
+ * field copies operate on g_per_army_768 directly. */
+void engine_realm_settle_provisions(void);
+
 #endif /* OPENLORDS2_ENGINE_REALM_H */
