@@ -29,6 +29,8 @@ in our port that would corrupt the engine on boot is caught immediately.
 | `engine_compute_sim_sub_steps` + `engine_compute_scenario_hint` | `FUN_004bb978` + `FUN_0043de70` | `src/engine_rate.c` | sim sub-step rate gate + scenario_hint computer (chained — outer calls inner internally; orchestrator chains both ports host-side and compares against ONE retail RPC) |
 | `engine_compute_state_hash`   | `FUN_00440231`    | `src/engine_state_hash.c` | per-tick MP state hash — 3 strided per-record byte hashes (strategic or combat) + 10-byte bucket vector + 600-byte per-record region.  Source-array payload (125 KB across 6 arrays) installed once per test plan from a shared xorshift32 seed; engine-tick freeze required |
 | `engine_tile_expand_footprint`| `FUN_004917dd`    | `src/engine_tile.c`       | castle-load 3×3 building footprint expander.  __cdecl(int) — one arg is the tile byte offset.  STATEFUL (mutates tiles + scratches + 19-entry list), so each vector re-seeds pre-state in-place from the shared xorshift32 seed (per-call re-fill via chunked 32 KB writes; 70 KB readback per call across 5 globals).  Engine-tick freeze required |
+| `tax_approval`                | `FUN_0044bd9f`    | `src/engine_realm.c`      | per-realm tax-policy → approval-modifier turn pass.  __stdcall void() — no args; injects g_per_army_768 + g_player_strategic_352 + realm count, diffs the mutated per-army block.  Engine-tick freeze required |
+| `dev_spread`                  | `FUN_0044bf7a`    | `src/engine_realm.c`      | per-realm development-spread turn pass (+ subtree c093/c278/c5fc/c53b/bfd5).  __stdcall void(); injects per-army + g_misc_1360 + g_overworld_map + count/standings/season, diffs the per-army block AND the overworld map (cell-type stamps).  Port binds its territory cell grid to its overworld copy so the c093→c278 type feedback matches retail.  Engine-tick freeze required.  CAUGHT a real port bug: the developable-cell predicate was inverted (< 0x19 vs >= 0x19) — the host unit tests shared the wrong model and passed; the retail diff did not |
 
 Each has a host-side unit-test file under `tests/test_engine_*.c`; the
 diff test complements those by proving they match retail behavior for
@@ -51,9 +53,23 @@ Knobs (full list in `--help`):
   - `--warmup-s N` — how long to wait for engine_tick to start ticking
     before firing RPCs (default 10)
 
-Latest verified run: **1800/1800 pass across all nine functions**
-(2026-05-25, retail build via cutestation.soy, seed 1, 200 vectors
-each).  Zero races across the run — every target landed clean.
+Latest verified run: **288/288 pass across all twelve functions**
+(2026-06-01, retail via cutestation.soy, 24 vectors each — quick regression
+after adding tax_approval + dev_spread and enabling turbo).  Earlier deep run:
+1800/1800 across the first nine (2026-05-25, 200 vectors each).
+
+The per-realm passes (tax_approval, dev_spread) share a single generic agent
+RPC `runRetailRealmPass(fn_va, regions)` — snapshot/inject/call/read-back/
+restore arbitrary memory regions for the __stdcall void() passes — rather than
+a bespoke RPC each.  Diff runs now spawn retail with `turbo: True` (fast boot/
+warmup); the clock-sensitive targets still script `timeGetTime` per-thread, so
+turbo doesn't perturb them (verified: fps_step et al. still pass under turbo).
+
+NOTE (2026-06-01): `libengine_diff.so` links the full host-clean source set
+(`DIFF_SRCS = SRCS_UNDER_TEST`) so stateful targets touching the shared save
+globals resolve their whole dependency graph, plus `tests/diff_stubs.c` for the
+Win32-only globals the test binary stubs (g_sim_*, log_line, io_read_file_at)
+and `call_trace.c` (engine_rate.c references `call_trace_enter`).
 
 Three targets — `sim_sub_steps`, `state_hash`, and `tile_expand` —
 run under a shared **engine-tick freeze** installed ONCE at run start
