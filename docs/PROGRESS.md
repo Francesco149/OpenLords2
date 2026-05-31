@@ -7,6 +7,53 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — TURN-ENGINE chip: per-realm emigration pass (FUN_0044a6ba)
+
+Ported `FUN_0044a6ba` (903 B) → `engine_realm_migrate_population`, the
+**popularity-driven emigration pass** and another per-realm pass of the
+turn-advance engine `FUN_00448440` (joining the rating roll-forward
+`FUN_0044baea` and the provisioning settle `FUN_0044bf04` already in
+`engine_realm.c`).  Each turn, population drifts off a realm toward whichever of
+its neighbours carries the highest approval rating (+0x0c).  Three passes over
+realms `1..s_slot_0056d5dc`:
+
+1. **Clear** the per-realm migration scratch (outflow +0x3c, inflow total +0x40,
+   top-contributor amount +0x44, the 16-slot donor list +0x48..+0x57, chosen
+   destination +0x58, top-contributor key +0x59).
+2. **Compute** emigration: find the highest-rated neighbour (list at +0x5c,
+   count +0x5a); if it out-rates this realm, the emigrant count is
+   `percent_of(population +0x24, percent_of(rating_gap, (100−rating)/3))`,
+   capped at 100 and **halved for an unowned realm** (owner byte +0x05 == 0).
+   A positive amount is stamped as our outflow, added to the destination's
+   inflow, the destination recorded in +0x58, and our key registered in the
+   destination's donor list.
+3. **Attribute**: for each recipient, record its single largest contributor's
+   amount/key (+0x44 / +0x59).
+
+**A leaf with zero new globals.**  Every field is a per-realm offset into the
+already-bound shared block `g_per_army_768` (entry 4, retail 0x53f9b0); the only
+callee is the already-ported percentage helper `engine_math_percent_of`
+(`FUN_00404d6b`).  No scalar-wall exposure.  r2 @0x44a6ba confirmed the field
+offsets, the signed `(100−rating)/3` divide, the cap-then-halve order, and the
+two `percent_of` arg orders.
+
+Documented the donor-list fill loop's missing `break` as **engine-quirks #145**:
+the first realm to feed a destination fills *all 16* slots with its own key, so
+later feeders are never recorded and pass 3's "top contributor" is always the
+*first* donor (the inflow total stays correct — only the attribution is
+affected).  A dedicated host test pins this with two donors whose order would
+flip the result if a break were added.
+
+4 host tests (basic flow + fill-all; cap-then-unowned-halve; no-higher-neighbour
+no-op; the no-break quirk).  **1607/1607** pass under ASan/UBSan; mingw `.exe`
+clean under `-Wall -Wextra`; `_engine_realm_migrate_population` in the PE.
+
+**Next.**  More `FUN_00448440` per-realm passes are now portable leaves —
+`FUN_0044f699`/`FUN_00469b51` (thin dispatchers over already-ported per-realm
+leaves), plus the larger leaves `FUN_004ad6c0` and `FUN_0044ae7dd`.
+The deferred sibling `FUN_0044bd9f` (tax/approval band, 2D-table aliasing like
+quirk #144) still wants careful table extraction.
+
 ## 2026-05-31 — GAME-START chip: secondary-settlement stamp (FUN_0046826c) — 2nd leaf of FUN_0049bd99
 
 Ported `FUN_0046826c` (221 B) → `engine_territory_stamp_secondary_keep` — a

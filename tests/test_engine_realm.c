@@ -165,3 +165,103 @@ int test_engine_realm_settle_provisions_snapshots(void)
     T_ASSERT_EQ_I(AI32(AREC(2), 0x190), 444);
     return 0;
 }
+
+/* --- engine_realm_migrate_population (FUN_0044a6ba) ------------------------ */
+
+/* Basic emigration: realm 1 (rating 10, pop 100, owned) has one neighbour,
+ * realm 2 (rating 40), which out-rates it.  Emigrant count =
+ * percent_of(100, percent_of(40-10, (100-10)/3)) = percent_of(100, 9) = 9.
+ * The amount is our outflow (+0x3c) and the destination's inflow (+0x40); our
+ * key fills every slot of the destination's source list; pass 3 records us as
+ * its top contributor (+0x44 amount, +0x59 key). */
+int test_engine_realm_migrate_basic(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 2;
+    uint8_t *r1 = AREC(1), *r2 = AREC(2);
+
+    r1[0x0c] = 10; r1[0x05] = 1; AI32(r1, 0x24) = 100;
+    r1[0x5a] = 1; r1[0x5c] = 2;          /* one neighbour: realm 2 */
+    r2[0x0c] = 40; r2[0x05] = 1;         /* receiver; no neighbours → won't emigrate */
+
+    engine_realm_migrate_population();
+
+    T_ASSERT_EQ_I(AI32(r1, 0x3c), 9);    /* our outflow */
+    T_ASSERT_EQ_I(r1[0x58], 2);          /* destination = realm 2 */
+    T_ASSERT_EQ_I(AI32(r1, 0x40), 0);    /* we received nothing */
+    T_ASSERT_EQ_I(AI32(r2, 0x40), 9);    /* dest inflow total */
+    T_ASSERT_EQ_I(r2[0x48], 1);          /* source list slot 0 = us */
+    T_ASSERT_EQ_I(r2[0x57], 1);          /* ...and the last slot too (fill-all) */
+    T_ASSERT_EQ_I(AI32(r2, 0x44), 9);    /* top-contributor amount */
+    T_ASSERT_EQ_I(r2[0x59], 1);          /* top-contributor key */
+    return 0;
+}
+
+/* The emigrant count caps at 100 and is then halved for an unowned realm.
+ * realm 1 (rating 10, pop 1000, owner 0) → percent_of(1000, 18) = 180,
+ * capped to 100, halved to 50. */
+int test_engine_realm_migrate_cap_and_unowned(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 2;
+    uint8_t *r1 = AREC(1), *r2 = AREC(2);
+
+    r1[0x0c] = 10; r1[0x05] = 0; AI32(r1, 0x24) = 1000;   /* unowned */
+    r1[0x5a] = 1; r1[0x5c] = 2;
+    r2[0x0c] = 70; r2[0x05] = 1;
+
+    engine_realm_migrate_population();
+
+    T_ASSERT_EQ_I(AI32(r1, 0x3c), 50);   /* 180 → cap 100 → halved 50 */
+    T_ASSERT_EQ_I(AI32(r2, 0x40), 50);
+    return 0;
+}
+
+/* No neighbour out-rates this realm → no emigration, all scratch stays clear. */
+int test_engine_realm_migrate_no_higher_neighbour(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 2;
+    uint8_t *r1 = AREC(1), *r2 = AREC(2);
+
+    r1[0x0c] = 80; r1[0x05] = 1; AI32(r1, 0x24) = 100;
+    r1[0x5a] = 1; r1[0x5c] = 2;
+    r2[0x0c] = 30; r2[0x05] = 1;         /* lower-rated; no neighbours */
+
+    engine_realm_migrate_population();
+
+    T_ASSERT_EQ_I(AI32(r1, 0x3c), 0);
+    T_ASSERT_EQ_I(r1[0x58], 0);
+    T_ASSERT_EQ_I(AI32(r2, 0x40), 0);
+    return 0;
+}
+
+/* The pass-2 source-list registration has no loop break, so the FIRST realm to
+ * feed a destination claims all 16 slots and later feeders are never recorded.
+ * realms 1 (amount 10) and 3 (amount 42) both emigrate to realm 2; both
+ * amounts sum into the inflow total, but realm 3 is absent from the source
+ * list, so pass 3 reports realm 1 (10) as the top contributor — NOT realm 3
+ * (42) which it would be without the quirk. */
+int test_engine_realm_migrate_source_list_no_break(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 3;
+    uint8_t *r1 = AREC(1), *r2 = AREC(2), *r3 = AREC(3);
+
+    r1[0x0c] = 10; r1[0x05] = 1; AI32(r1, 0x24) = 50;     /* → 10 emigrants */
+    r1[0x5a] = 1; r1[0x5c] = 2;
+    r2[0x0c] = 80; r2[0x05] = 1;                          /* receiver */
+    r3[0x0c] = 10; r3[0x05] = 1; AI32(r3, 0x24) = 200;    /* → 42 emigrants */
+    r3[0x5a] = 1; r3[0x5c] = 2;
+
+    engine_realm_migrate_population();
+
+    T_ASSERT_EQ_I(AI32(r1, 0x3c), 10);
+    T_ASSERT_EQ_I(AI32(r3, 0x3c), 42);
+    T_ASSERT_EQ_I(AI32(r2, 0x40), 52);   /* both contributions sum into inflow */
+    T_ASSERT_EQ_I(r2[0x48], 1);          /* realm 1 filled the whole list */
+    T_ASSERT_EQ_I(r2[0x57], 1);
+    T_ASSERT_EQ_I(AI32(r2, 0x44), 10);   /* quirk: realm 1, not realm 3 (42) */
+    T_ASSERT_EQ_I(r2[0x59], 1);
+    return 0;
+}

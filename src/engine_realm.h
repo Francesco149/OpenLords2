@@ -45,4 +45,36 @@ void engine_realm_advance_rating(void);
  * field copies operate on g_per_army_768 directly. */
 void engine_realm_settle_provisions(void);
 
+/* Port of FUN_0044a6ba @ 0x44a6ba (903 B, __stdcall void) — the per-realm
+ * emigration / popularity-migration pass (another 0x448440 turn-engine pass).
+ * Population drifts away from a realm toward whichever of its neighbours has
+ * the highest approval rating (+0x0c).  Three passes over realms 1..count:
+ *
+ *   1. Clear this turn's migration scratch for every realm: the outflow
+ *      amount (+0x3c), the inflow total (+0x40), the top-contributor amount
+ *      (+0x44), the 16-slot source-realm list (+0x48..+0x57), the chosen
+ *      destination (+0x58) and the top-contributor key (+0x59).
+ *
+ *   2. For each realm, scan its neighbour list (+0x5c.., count at +0x5a) for
+ *      the highest-rated neighbour.  If one out-rates this realm, the number
+ *      of emigrants is
+ *          rate   = percent_of(rating_gap, (100 - rating) / 3)
+ *          amount = percent_of(population (+0x24), rate),  capped at 100,
+ *      and HALVED for an unowned realm (owner byte +0x05 == 0).  When the
+ *      amount is positive it is recorded as our outflow (+0x3c), added to the
+ *      destination's inflow total (+0x40), the destination is stamped in
+ *      +0x58, and our key is registered in the destination's source list.
+ *
+ *   3. For each realm that received emigrants (+0x40 > 0), record the single
+ *      largest contributor's amount (+0x44) and key (+0x59).
+ *
+ * Operates on g_per_army_768 only (all fields are per-realm record offsets);
+ * the sole callee is the ported percentage helper engine_math_percent_of.
+ * Field semantics (rating / population / neighbour list) are provisional but
+ * the arithmetic is byte-exact, r2-verified.  NOTE the pass-2 source-list
+ * registration has NO loop break (engine-quirks): the first realm to feed a
+ * destination fills all 16 slots with its own key, so later feeders find none
+ * free and pass 3 only ever sees that first contributor. */
+void engine_realm_migrate_population(void);
+
 #endif /* OPENLORDS2_ENGINE_REALM_H */

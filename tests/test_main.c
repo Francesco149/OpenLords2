@@ -1685,6 +1685,10 @@ struct test_case {
     X(engine_realm_rating_signed_clamp) \
     X(engine_realm_rating_average_over_turns) \
     X(engine_realm_settle_provisions_snapshots) \
+    X(engine_realm_migrate_basic) \
+    X(engine_realm_migrate_cap_and_unowned) \
+    X(engine_realm_migrate_no_higher_neighbour) \
+    X(engine_realm_migrate_source_list_no_break) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

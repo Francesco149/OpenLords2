@@ -8,6 +8,7 @@
 #include "save.h"                  /* g_per_army_768, g_player_strategic_352 */
 #include "save_schema_globals.h"   /* s_slot_0056d5dc, s_slot_00553240 */
 #include "engine_army_economy.h"   /* engine_army_economy_provision */
+#include "engine_math.h"           /* engine_math_percent_of */
 
 #define ARMY_REC(key)   (&g_per_army_768[(key) * 0x300])
 #define STRAT_REC(slot) (&g_player_strategic_352[(slot) * 0x160])
@@ -74,5 +75,84 @@ void engine_realm_settle_provisions(void)
         engine_army_economy_provision(key, (int)s_slot_00554470);  /* FUN_0044df5f */
         *(int32_t *)(r + 0x18c) = *(int32_t *)(r + 0x178);
         *(int32_t *)(r + 0x190) = *(int32_t *)(r + 0x17c);
+    }
+}
+
+/* Port of FUN_0044a6ba — see engine_realm.h for the field overview. */
+void engine_realm_migrate_population(void)
+{
+    int count = (int)s_slot_0056d5dc;
+
+    /* Pass 1 — clear this turn's migration scratch for every realm. */
+    for (int key = 1; key <= count; key++) {
+        uint8_t *r = ARMY_REC(key);
+        *(int32_t *)(r + 0x44) = 0;     /* top-contributor amount */
+        *(int32_t *)(r + 0x40) = 0;     /* inflow total */
+        *(int32_t *)(r + 0x3c) = 0;     /* outflow amount */
+        for (int i = 0; i < 0x10; i++)
+            r[0x48 + i] = 0;            /* source-realm list */
+        r[0x58] = 0;                    /* chosen destination */
+        r[0x59] = 0;                    /* top-contributor key */
+    }
+
+    /* Pass 2 — each realm sheds emigrants toward its most-popular neighbour. */
+    for (int key = 1; key <= count; key++) {
+        uint8_t *r = ARMY_REC(key);
+
+        /* Highest-rated neighbour (baseline = this realm's own rating). */
+        int best_rating = (int8_t)r[0x0c];
+        int dest = 0;
+        for (int i = 0; i < (int)r[0x5a]; i++) {
+            int nb = r[0x5c + i];
+            int nr = (int8_t)ARMY_REC(nb)[0x0c];
+            if (best_rating < nr) {
+                best_rating = nr;
+                dest = nb;
+            }
+        }
+
+        int amount;
+        if ((int8_t)r[0x0c] < best_rating) {
+            int gap    = best_rating - (int8_t)r[0x0c];
+            int factor = (100 - (int8_t)r[0x0c]) / 3;
+            int rate   = engine_math_percent_of(gap, factor);
+            amount = engine_math_percent_of(*(int32_t *)(r + 0x24), rate);
+            if (amount > 100)  amount = 100;
+            if (r[0x05] == 0)  amount /= 2;     /* unowned realm: halve */
+        } else {
+            amount = 0;
+        }
+
+        if (amount > 0) {
+            uint8_t *d = ARMY_REC(dest);
+            *(int32_t *)(r + 0x3c) = amount;        /* our outflow */
+            *(int32_t *)(d + 0x40) += amount;       /* dest inflow total */
+            r[0x58] = (uint8_t)dest;                /* our destination */
+            /* Register us as a source in dest's 16-slot list.  NB: retail has
+             * NO break here, so the first feeder fills every empty slot. */
+            for (int i = 0; i < 0x10; i++) {
+                if (d[0x48 + i] == 0)
+                    d[0x48 + i] = (uint8_t)key;
+            }
+        }
+    }
+
+    /* Pass 3 — record each recipient's single largest contributor. */
+    for (int key = 1; key <= count; key++) {
+        uint8_t *r = ARMY_REC(key);
+        if (*(int32_t *)(r + 0x40) <= 0)
+            continue;
+        int best = 0;
+        for (int i = 0; i < 0x10; i++) {
+            uint8_t src = r[0x48 + i];
+            if (src == 0)
+                break;
+            int contrib = *(int32_t *)(ARMY_REC(src) + 0x3c);
+            if (best < contrib) {
+                best = contrib;
+                *(int32_t *)(r + 0x44) = contrib;
+                r[0x59] = src;
+            }
+        }
     }
 }

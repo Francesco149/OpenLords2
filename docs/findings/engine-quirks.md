@@ -5045,3 +5045,40 @@ the recruitment UI and the deferred battlefield spawn (`0x4a9a9a`) consume.
 > `FUN_0049bd99` @ 0x49bd99; preset tables `DAT_004dc070`/`DAT_004dc0d0`/
 > `DAT_004dc110` @ 0x4dc070; r2 `pdf @ 0x49bd99` confirms the byte/dword field
 > widths, the `+0x80` no-index loop, and the post-plan `0x32` overwrite.
+
+## 145. The emigration pass's source-list fill has no break — the first feeder claims all 16 slots
+
+The per-realm emigration pass `FUN_0044a6ba`
+(`engine_realm_migrate_population`) moves population from a realm toward its
+most-popular neighbour, and bookkeeps the flow both ways: each donor stamps its
+chosen destination in its own record (+0x58), and each destination keeps a
+16-slot list of the donor realms feeding it (+0x48..+0x57).  The list is filled
+by walking it for an empty slot:
+
+```c
+for (i = 0; i < 0x10; i++)
+    if (dest[0x48 + i] == 0)
+        dest[0x48 + i] = (byte)donor_key;   /* <-- no break */
+```
+
+There is no `break` after the write (r2 @0x44a91e — the slot-set falls straight
+through to the loop increment, not to the loop exit).  So the *first* realm to
+feed a given destination does not occupy one slot — it occupies **all sixteen**,
+because every slot it sees is still zero.  Every later donor to the same
+destination then finds the list completely full and is never recorded, even
+though its contribution *is* still added to the destination's inflow total
+(+0x40).  The third pass, which scans the list to find the destination's single
+largest contributor (recording it in +0x44 / +0x59), therefore only ever sees
+the first feeder — so +0x44/+0x59 report the *first* donor, not necessarily the
+*largest*.  The inflow total stays correct; only the "top contributor"
+attribution is affected.
+
+Retail tolerates this because the attribution is cosmetic (it surfaces in an
+event/notification, not in the population maths), and most destinations have a
+single dominant feeder anyway.  The port keeps the loop break-less, byte-exact;
+a host test (`engine_realm_migrate_source_list_no_break`) pins the behaviour
+with two donors whose order would flip the answer if a break were added.
+
+> 📍 `src/engine_realm.c` (`engine_realm_migrate_population`).  Ghidra
+> `FUN_0044a6ba` @ 0x44a6ba; r2 `pdf @ 0x44a6ba` confirms the missing break in
+> the +0x48 fill loop and the pass-3 max-contributor scan over the same list.
