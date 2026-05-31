@@ -32,11 +32,15 @@
 
 #include <stddef.h>   /* NULL */
 
+#include "save_schema_globals.h"   /* s_slot_0053f25c — saved mode flag */
+
 /* Per-army record row geometry (shared with engine_territory). */
-#define ARMY_ROW_STRIDE  0x300
-#define ARMY_STOCK_A     0x250   /* DAT_0053fc00 */
-#define ARMY_STOCK_B     0x184   /* DAT_0053fb34 */
-#define ARMY_STOCK_C     0x180   /* DAT_0053fb30 */
+#define ARMY_ROW_STRIDE   0x300
+#define ARMY_STOCK_A      0x250   /* DAT_0053fc00 */
+#define ARMY_STOCK_B      0x184   /* DAT_0053fb34 */
+#define ARMY_STOCK_C      0x180   /* DAT_0053fb30 */
+#define ARMY_PROD_RATE    0x201   /* DAT_0053fbb1 — census TYPE-0x02..0x0e count */
+#define ARMY_PROD_FALLBACK 0x1a7  /* DAT_0053fb57 — fallback latch (engine_territory's retype flag) */
 
 static uint8_t *g_army_records;
 
@@ -45,6 +49,14 @@ static uint8_t *g_army_records;
 static int g_price_a = 5;
 static int g_price_b = 10;
 static int g_price_c = 6;
+
+/* Retail 0x4983b7 production-solver tuning: scale=12 (DAT_0057c8e0),
+ * max_level=10 (DAT_00552ffc), divisor_lo=2 (DAT_0057d34c),
+ * divisor_hi=5 (DAT_005533bc). */
+static int g_prod_scale      = 12;
+static int g_prod_max_level  = 10;
+static int g_prod_divisor_lo = 2;
+static int g_prod_divisor_hi = 5;
 
 void engine_army_economy_bind_army_records(uint8_t *records)
 {
@@ -111,4 +123,62 @@ int engine_army_economy_units_c(int key, int cost)
 {
     (void)key;
     return units_for_cost(cost, g_price_c);
+}
+
+void engine_army_economy_set_production_tuning(int scale, int max_level,
+                                               int divisor_lo, int divisor_hi)
+{
+    g_prod_scale      = scale;
+    g_prod_max_level  = max_level;
+    g_prod_divisor_lo = divisor_lo;
+    g_prod_divisor_hi = divisor_hi;
+}
+
+/* FUN_0044cfe1 */
+int engine_army_economy_production_output(int key, int limit_scaled,
+                                          int limit_raw)
+{
+    /* Retail bails before touching the record when either cap is non-positive. */
+    if (limit_raw < 1 || limit_scaled < 1) return 0;
+    if (g_army_records == NULL)            return 0;
+
+    uint8_t *rowbase = g_army_records + key * ARMY_ROW_STRIDE;
+    int divisor = (s_slot_0053f25c == 0) ? g_prod_divisor_lo : g_prod_divisor_hi;
+    unsigned rate = rowbase[ARMY_PROD_RATE];        /* read as unsigned byte */
+
+    rowbase[ARMY_PROD_FALLBACK] = 0;
+
+    /* Scan levels max_level..1 for the highest whose rate-scaled output fits
+     * both caps.  `count` bounds the scan to max_level steps in lock-step with
+     * the descending level, exactly mirroring the retail two-cursor loop. */
+    int output = 0;
+    int level  = g_prod_max_level;
+    for (int count = 0;
+         count < g_prod_max_level &&
+             (output = (int)(rate * (unsigned)level),
+              limit_raw < output ||
+              limit_scaled < (g_prod_scale * output) / divisor);
+         level--) {
+        count++;
+    }
+
+    if (level < 1) {
+        /* Rate-scaled output overflowed even at level 1: fall back to the
+         * highest flat level (output == level) that fits both caps. */
+        rowbase[ARMY_PROD_FALLBACK] = 1;
+        level = g_prod_max_level;
+        for (int count = 0; count < g_prod_max_level; count++) {
+            output = level;
+            if (level <= limit_raw &&
+                (g_prod_scale * level) / divisor <= limit_scaled)
+                break;
+            level--;
+        }
+        if (level < 1) {
+            rowbase[ARMY_PROD_FALLBACK] = 0;
+            output = 0;
+        }
+    }
+
+    return output;
 }

@@ -4839,3 +4839,25 @@ Two incidental notes from the same pair of functions:
 > `engine_territory_recenter_on_capital`), Ghidra `FUN_0043278b` @ 0x43278b
 > and `FUN_00432746` @ 0x432746.  First producer of the scroll save globals
 > (entries 16/17) — see the camera-mirror note in `src/engine.c`.
+
+## 138. One per-army byte (+0x1a7) is shared between the production-level fallback and the cell-retype flag
+
+The production-level solver `FUN_0044cfe1` (`engine_army_economy_production_output`)
+writes a per-army boolean at record **+0x1a7**: it sets the byte to 1 when the
+army cannot afford its rate-scaled output and falls back to a flat production
+level, and clears it (to 0) both on entry and when nothing fits at all.
+
+That same byte is what `FUN_00469d21`
+(`engine_territory_retype_army_band`, `ARMY_RETYPE_FLAG = 0x1a7`) reads to decide
+whether a band-retype should collapse every match after the first to type 2.  So
+a flag the *economy* sets as "this realm fell back on production this turn" is
+later consumed by the *terrain/cell-retype* pass — two unrelated-sounding
+subsystems sharing one byte of the 0x300 per-army record.  Whether this is
+deliberate signalling or just a reused scratch slot is unclear from the two
+functions alone, but the coupling is real: both modules name the same offset, so
+a faithful port must treat +0x1a7 as live cross-subsystem state, not a private
+scratch byte of either.
+
+> 📍 `src/engine_army_economy.c` (`ARMY_PROD_FALLBACK`, `engine_army_economy_production_output`)
+> writes it; `src/engine_territory.c` (`ARMY_RETYPE_FLAG`, `engine_territory_retype_army_band`)
+> reads it.  Ghidra `FUN_0044cfe1` @ 0x44cfe1 and `FUN_00469d21` @ 0x469d21.

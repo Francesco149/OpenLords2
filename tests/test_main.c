@@ -1545,6 +1545,16 @@ struct test_case {
     X(army_economy_units_ignore_key_arg) \
     X(army_economy_units_track_price_override) \
     X(army_economy_value_tracks_price_override) \
+    X(army_economy_production_picks_highest_fitting_level) \
+    X(army_economy_production_raw_cap_binds) \
+    X(army_economy_production_scaled_cap_binds) \
+    X(army_economy_production_falls_back_to_flat_level) \
+    X(army_economy_production_nothing_fits_returns_zero) \
+    X(army_economy_production_zero_rate_returns_zero) \
+    X(army_economy_production_nonpositive_cap_leaves_record) \
+    X(army_economy_production_unbound_is_zero) \
+    X(army_economy_production_mode_flag_selects_divisor) \
+    X(army_economy_production_tuning_override) \
     \
     X(game_init_clear_tables_zeroes_per_army) \
     X(game_init_clear_tables_zeroes_unit_table) \

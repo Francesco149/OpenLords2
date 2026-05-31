@@ -1015,11 +1015,39 @@ The direct consumers beyond `FUN_0044df5f` are the AI economy passes
 `FUN_004ace5e` (build/upgrade decision: `e7b4` value vs the territory-record
 treasury at +0x218) and `FUN_004a0aaa`.
 
-**Remaining `FUN_0049bd99` leaves** (bottom-up): the two cap-tuning passes
-interleaved with the allocator — `FUN_0044df5f` (now leaf-closer: its four
-valuation/units callees above are ported; still blocked on the budget-split
-`0x44cfe1`) and `0x4485a5`.  With those, every per-realm callee of
-`FUN_0049bd99` is ported and the setup pass itself can be assembled.
+### FUN_0044cfe1 — production-level solver ✅ ported
+
+The last unported callee of `FUN_0044df5f` (also called by `0x44c8ae` /
+`0x44d374`).  Solves how much an army can produce under two budget caps:
+its per-resource-cell rate (record **+0x201**, the census TYPE-0x02..0x0e bucket
+the terrain census fills) times a candidate level (`max_level` 10 down to 1) is
+the output `q`; the solver walks the level ladder down and returns the first `q`
+that fits both `q ≤ limit_raw` and `(scale·q)/divisor ≤ limit_scaled`.  Ported
+as `engine_army_economy_production_output` (10 host tests).
+
+Three things worth recording:
+
+- **Two-loop fallback.**  When even level 1's rate-scaled output overflows, a
+  second loop returns the highest *flat* level (output == level, not
+  rate-scaled) that fits — and latches the **fallback byte at record +0x1a7** to
+  1.  That is the **same byte** `engine_territory_retype_army_band` reads as its
+  "retype flag" (`ARMY_RETYPE_FLAG`): the production fallback and the cell
+  retype share one per-army boolean.  When nothing fits at all the byte is
+  cleared and the solver returns 0.
+- **More config scalars from `FUN_004983b7`.**  `scale` (12, `DAT_0057c8e0`),
+  `max_level` (10, `DAT_00552ffc`), `divisor_lo` (2, `DAT_0057d34c`) and
+  `divisor_hi` (5, `DAT_005533bc`) are the same non-save defaults-init family as
+  the prices; the module owns them as statics + `set_production_tuning`.
+- **The divisor is difficulty-gated** by the saved mode flag `s_slot_0053f25c`
+  (save entry 170): 0 → `divisor_lo`, else `divisor_hi`.  This is the first
+  consumer of that slot in ported code.
+
+**With `FUN_0044cfe1` ported, `FUN_0044df5f` is itself a leaf.**
+
+**Remaining `FUN_0049bd99` leaves** (bottom-up): the allocator's own subtree —
+`FUN_0044df5f` (the 1628-B provisioning decision, now a full leaf) and
+`0x4485a5` (163 B, still has its own deps).  With those, every per-realm callee
+of `FUN_0049bd99` is ported and the setup pass itself can be assembled.
 
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
    callees are real; then `FUN_00499dc3` + `FUN_004329ec` spine + the

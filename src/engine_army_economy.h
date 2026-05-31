@@ -53,4 +53,30 @@ int engine_army_economy_units_b(int key, int cost);
  * commodity C: ceil(cost / priceC).  `key` is likewise ignored. */
 int engine_army_economy_units_c(int key, int cost);
 
+/* Override the production-level solver's tuning constants (retail config
+ * scalars set once by the defaults init 0x4983b7 — the values baked in as this
+ * module's defaults):
+ *   scale       DAT_0057c8e0 = 12  (gold weight applied to a candidate output)
+ *   max_level   DAT_00552ffc = 10  (top of the level ladder / loop bound)
+ *   divisor_lo  DAT_0057d34c = 2   (used when the mode flag s_slot_0053f25c==0)
+ *   divisor_hi  DAT_005533bc = 5   (used when the mode flag != 0)
+ * Same single-source-of-truth rationale as engine_army_economy_set_prices. */
+void engine_army_economy_set_production_tuning(int scale, int max_level,
+                                               int divisor_lo, int divisor_hi);
+
+/* Port of FUN_0044cfe1 (377 B).  Solve army `key`'s sustainable production
+ * output under two budget caps.  The army's per-resource-cell rate (record
+ * +0x201, the census TYPE-0x02..0x0e bucket) times a candidate level (max_level
+ * down to 1) is the output; the solver picks the highest level whose output
+ * `q` satisfies both q <= limit_raw and (scale*q)/divisor <= limit_scaled, and
+ * returns that output.  When even level 1 overflows, it falls back to returning
+ * the highest flat level (not rate-scaled) that fits, latching the fallback
+ * byte (record +0x1a7 — the same byte engine_territory reads as its retype
+ * flag) to 1; if nothing fits at all it returns 0 and clears that byte.  The
+ * divisor is divisor_lo or divisor_hi by the saved mode flag s_slot_0053f25c.
+ * Returns 0 (no record touched) when either cap is < 1, or if the army-record
+ * block is unbound. */
+int engine_army_economy_production_output(int key, int limit_scaled,
+                                          int limit_raw);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_ECONOMY_H */

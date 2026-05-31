@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **411** (16.8%) — tested 375, ported 36
-- code bytes touched: **17.1%** (143,592 / 838,629 B)
-- unported: **2036**
+- touched: **412** (16.8%) — tested 376, ported 36
+- code bytes touched: **17.2%** (143,969 / 838,629 B)
+- unported: **2035**
 - orphan refs (in src/, not in function table): 4
 
-## tested (375) — ported + host unit suite
+## tested (376) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -212,6 +212,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4483fb | FUN_004483fb | 11 | engine_handlers_da.h |
 | 0x448406 | FUN_00448406 | 11 | engine_handlers_da.h |
 | 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h |
+| 0x44cfe1 | FUN_0044cfe1 | 377 | engine_army_economy.c, engine_army_economy.h |
 | 0x44d913 | FUN_0044d913 | 390 | engine_territory.c, engine_territory.h |
 | 0x44e5bb | FUN_0044e5bb | 72 | engine_army_economy.c, engine_army_economy.h |
 | 0x44e603 | FUN_0044e603 | 80 | engine_army_economy.c, engine_army_economy.h |
