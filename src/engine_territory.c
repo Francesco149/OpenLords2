@@ -1059,3 +1059,108 @@ void engine_territory_mark_capital_features(unsigned key)
         }
     }
 }
+
+/* Port of FUN_0046c147 (407 B) — classify one orthogonal neighbour of the
+ * cell at byte-offset `off` (whose grid position is (col, row)) for the
+ * coastal-port placer.  `dir` is the retail direction code 0/2/4/6 = N/E/S/W.
+ * Reads the neighbour's +1 flag byte and its +2 bits 2..4, then:
+ *   result = (neighbour +1) & 0xfd                       // drop bit 1
+ *   if result == 8    and (nbr +2 & 0x1c) != 4 → result = 0x10
+ *   if result == 0x10 and (nbr +2 & 0x1c) != 8 → result = 0
+ * An off-grid neighbour (north of row 0, east of col 0x3f, south of row 0x3f,
+ * west of col 0) reads as all-zero → result 0.  The caller keeps a neighbour
+ * iff (result & 0x20) survives, i.e. it carries the bit-0x20 "coast" flag.
+ *
+ * Retail reads the neighbour's +2 byte even at the grid edge (where +1 is
+ * forced to 0); since that read is dead whenever +1 == 0, the port reads both
+ * bytes only when in-bounds — identical result, no out-of-bounds access.
+ * No-op (returns 0) if the cell grid is unbound. */
+uint8_t engine_territory_classify_border_neighbour(int dir, int col, int row, int off)
+{
+    if (g_cells == NULL) return 0;
+
+    uint8_t flags = 0;   /* bVar1 — neighbour's +1 byte (0 past the edge)   */
+    uint8_t bits  = 0;   /* local_c — neighbour's +2 & 0x1c (dead if flags 0)*/
+
+    if (dir == 0) {                 /* North */
+        if (row != 0)    { int n = off - CELL_ROW_BYTES; flags = g_cells[n + 1]; bits = g_cells[n + 2] & 0x1c; }
+    } else if (dir == 2) {          /* East  */
+        if (col != 0x3f) { int n = off + CELL_STRIDE;     flags = g_cells[n + 1]; bits = g_cells[n + 2] & 0x1c; }
+    } else if (dir == 4) {          /* South */
+        if (row != 0x3f) { int n = off + CELL_ROW_BYTES;  flags = g_cells[n + 1]; bits = g_cells[n + 2] & 0x1c; }
+    } else if (dir == 6) {          /* West  */
+        if (col != 0)    { int n = off - CELL_STRIDE;     flags = g_cells[n + 1]; bits = g_cells[n + 2] & 0x1c; }
+    }
+
+    uint8_t r = 0;
+    if (flags != 0) {
+        r = flags & 0xfd;
+        if (r == 8    && bits != 4) r = 0x10;
+        if (r == 0x10 && bits != 8) r = 0;
+    }
+    return r;
+}
+
+/* max(|x1-x2|, |y1-y2|) — retail's Chebyshev distance FUN_00404f4c
+ * (engine_path_chebyshev_distance), inlined here without its per-axis dx/dy
+ * global side effects (DAT_00591560 / DAT_0058fea0), which no consumer in this
+ * subtree reads — the same write-only-scratch drop the rest of the module makes. */
+static int cheb_dist(int x1, int y1, int x2, int y2)
+{
+    int dx = x1 > x2 ? x1 - x2 : x2 - x1;
+    int dy = y1 > y2 ? y1 - y2 : y2 - y1;
+    return dx > dy ? dx : dy;
+}
+
+/* Per-army coastal-port slot the 0x46902a pass fills. */
+#define ARMY_PORT_FLAG 0x2c5   /* DAT_0053fc75 */
+#define ARMY_PORT_OFF  0x2c8   /* DAT_0053fc78 */
+
+/* Port of FUN_0046902a (499 B) — place army `key`'s coastal port.  Scan all
+ * empty cells owned by `key` (+7 == key, +1 == 0); a cell qualifies if any of
+ * its four orthogonal neighbours (a) is itself owned by `key` AND (b) passes
+ * engine_territory_classify_border_neighbour with the 0x20 ("coast") bit set.
+ * Among qualifying cells, pick the one with the smallest Chebyshev distance to
+ * the cursor origin (g_cursor_col/row, left by the capital finder) and < 64.
+ *
+ * The winning cell becomes the port: record it in the army row (+0x2c5 flag,
+ * +0x2c8 offset), set its +1 bit 0x80, +0 type ← 7, +2 = (… &0xe3 |0xc |0x80),
+ * +3 descriptor ← 0x0a.  If nothing qualifies (best offset stays 0 — also the
+ * cell-(0,0) blind spot) or the chosen cell is no longer empty, nothing is
+ * placed.  No-op if the cell grid or army-record block is unbound. */
+void engine_territory_place_capital_port(unsigned key)
+{
+    if (g_cells == NULL || g_army_records == NULL) return;
+
+    int best_dist = 0x40;   /* local_18 — must beat 64 */
+    int best_off  = 0;      /* local_14 */
+    int off = 0;
+    for (int row = 0; row < 0x40; row++) {
+        for (int col = 0; col < 0x40; col++, off += CELL_STRIDE) {
+            if (g_cells[off + 7] != (uint8_t)key) continue;   /* DAT_00522f97 */
+            if (g_cells[off + 1] != 0)            continue;   /* DAT_00522f91 empty */
+
+            int32_t nb[4];   /* N, E, S, W neighbour keys */
+            engine_territory_load_neighbour_keys(col, row, off, nb);   /* FUN_0046c080 */
+            for (int i = 0; i < 4; i++) {
+                if ((unsigned)nb[i] != key) continue;
+                if ((engine_territory_classify_border_neighbour(i * 2, col, row, off) & 0x20) == 0)
+                    continue;
+                int d = cheb_dist(g_cursor_col, g_cursor_row, col, row);   /* FUN_00404f4c */
+                if (d < best_dist) { best_off = off; best_dist = d; }
+            }
+        }
+    }
+
+    if (best_off != 0 && g_cells[best_off + 1] == 0) {
+        uint8_t *rowbase = g_army_records + key * ARMY_ROW_STRIDE;
+        rowbase[ARMY_PORT_FLAG] = 1;
+        *(int32_t *)(rowbase + ARMY_PORT_OFF) = best_off;
+        g_cells[best_off + 1] |= 0x80;          /* DAT_00522f91 */
+        g_cells[best_off + 0] = 7;              /* DAT_00522f90 */
+        g_cells[best_off + 2] &= 0xe3;          /* DAT_00522f92 clear bits 2..4 */
+        g_cells[best_off + 2] |= 0xc;
+        g_cells[best_off + 2] |= 0x80;
+        g_cells[best_off + 3] = 0x0a;           /* DAT_00522f93 */
+    }
+}

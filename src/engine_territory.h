@@ -213,4 +213,19 @@ void engine_territory_collect_keyed_cells(unsigned key);
  * army-record block is unbound. */
 void engine_territory_mark_capital_features(unsigned key);
 
+/* Port of FUN_0046c147.  Classify the orthogonal neighbour (dir 0/2/4/6 =
+ * N/E/S/W) of the cell at (col, row) / byte-offset `off` for the coastal-port
+ * placer: returns (neighbour +1 & 0xfd), remapped 8→0x10 / 0x10→0 by the
+ * neighbour's +2 bits, or 0 off-grid or if the cell grid is unbound.  The
+ * caller keeps neighbours whose result has bit 0x20 set. */
+uint8_t engine_territory_classify_border_neighbour(int dir, int col, int row, int off);
+
+/* Port of FUN_0046902a.  Place army `key`'s coastal port: among empty cells
+ * owned by `key` (+1 == 0) that border a same-key coast neighbour (per
+ * engine_territory_classify_border_neighbour), pick the one closest
+ * (Chebyshev) to the capital cursor and stamp it as a port (+0 ← 7, +3 ← 0x0a,
+ * +1 bit 0x80, +2 = …&0xe3|0xc|0x80), recording it in the army row at +0x2c5/
+ * +0x2c8.  No-op if the cell grid or army-record block is unbound. */
+void engine_territory_place_capital_port(unsigned key);
+
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

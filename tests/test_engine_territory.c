@@ -1627,3 +1627,135 @@ int test_territory_mark_features_unbound_is_noop(void)
     engine_territory_mark_capital_features(4);
     return 0;
 }
+
+/* ── Capital-region: classify neighbour + coastal port ──────────────
+ * (ports of FUN_0046c147 / FUN_0046902a). */
+
+enum { PORT_FLAG = 0x2c5, PORT_OFF = 0x2c8 };
+
+/* A neighbour whose +1 carries bit 0x20 classifies as 0x20 (coast); bit 1 is
+ * always dropped. */
+int test_territory_classify_coast_neighbour(void)
+{
+    adj_setup();
+    int c = cell_off(5, 5);
+    int n = cell_off(5, 4);                  /* north neighbour */
+    g_cells[n + 1] = 0x22;                   /* coast bit + bit1 (dropped) */
+    T_ASSERT_EQ_I(engine_territory_classify_border_neighbour(0, 5, 5, c), 0x20);
+    return 0;
+}
+
+/* The 8↔0x10 remap keyed on the neighbour's +2 bits 2..4. */
+int test_territory_classify_8_and_10_remap(void)
+{
+    adj_setup();
+    int c = cell_off(5, 5);
+    int e = cell_off(6, 5);                  /* east neighbour */
+
+    g_cells[e + 1] = 8; g_cells[e + 2] = 0;          /* 8, bits!=4 → 0x10, then bits!=8 → 0 */
+    T_ASSERT_EQ_I(engine_territory_classify_border_neighbour(2, 5, 5, c), 0);
+
+    g_cells[e + 1] = 8; g_cells[e + 2] = 4;          /* 8, bits==4 → stays 8 */
+    T_ASSERT_EQ_I(engine_territory_classify_border_neighbour(2, 5, 5, c), 8);
+
+    g_cells[e + 1] = 0x10; g_cells[e + 2] = 8;       /* 0x10, bits==8 → stays 0x10 */
+    T_ASSERT_EQ_I(engine_territory_classify_border_neighbour(2, 5, 5, c), 0x10);
+
+    g_cells[e + 1] = 0x10; g_cells[e + 2] = 0;       /* 0x10, bits!=8 → 0 */
+    T_ASSERT_EQ_I(engine_territory_classify_border_neighbour(2, 5, 5, c), 0);
+    return 0;
+}
+
+/* Off-grid neighbours read as 0 (no out-of-bounds access). */
+int test_territory_classify_edges_are_zero(void)
+{
+    adj_setup();
+    /* poke a coast flag everywhere so a missing guard would surface */
+    memset(g_cells, 0x20, sizeof g_cells);
+    engine_territory_bind_cells(g_cells);
+    T_ASSERT_EQ_I(engine_territory_classify_border_neighbour(0, 0, 0, cell_off(0, 0)), 0);     /* N of row 0 */
+    T_ASSERT_EQ_I(engine_territory_classify_border_neighbour(6, 0, 0, cell_off(0, 0)), 0);     /* W of col 0 */
+    T_ASSERT_EQ_I(engine_territory_classify_border_neighbour(2, 0x3f, 0, cell_off(0x3f, 0)), 0); /* E of col 63 */
+    T_ASSERT_EQ_I(engine_territory_classify_border_neighbour(4, 0, 0x3f, cell_off(0, 0x3f)), 0); /* S of row 63 */
+    return 0;
+}
+
+/* Set up an empty key-owned cell with a same-key coast neighbour to its east. */
+static void port_candidate(int col, int row, uint8_t key)
+{
+    int o = cell_off(col, row);
+    g_cells[o + 7] = key;
+    g_cells[o + 1] = 0;
+    int e = cell_off(col + 1, row);          /* east coast neighbour */
+    g_cells[e + 7] = key;
+    g_cells[e + 1] = 0x20;
+}
+
+/* A single qualifying empty cell becomes the port (type 7, descriptor 0x0a,
+ * +1 bit 0x80, +2 = 0xc|0x80) and is recorded in the army row. */
+int test_territory_port_places_single_candidate(void)
+{
+    adj_setup();
+    port_candidate(10, 10, 4);
+    engine_territory_place_capital_port(4);
+
+    int o = cell_off(10, 10);
+    T_ASSERT_EQ_I(g_cells[o + 0], 7);
+    T_ASSERT_EQ_I(g_cells[o + 3], 0x0a);
+    T_ASSERT_EQ_I(g_cells[o + 1] & 0x80, 0x80);
+    T_ASSERT_EQ_I(g_cells[o + 2] & 0x1c, 0xc);
+    T_ASSERT_EQ_I(g_cells[o + 2] & 0x80, 0x80);
+    T_ASSERT_EQ_I(g_army[4 * ARMY_STRIDE + PORT_FLAG], 1);
+    T_ASSERT_EQ_I(army_i32(4, PORT_OFF), o);
+    return 0;
+}
+
+/* The candidate nearest (Chebyshev) to the capital cursor wins.  Seed the
+ * cursor by running place_capital (its 4th eligible cell → cursor). */
+int test_territory_port_picks_nearest_to_cursor(void)
+{
+    adj_setup();
+    /* 4 capital-eligible cells → cursor parks at the 4th, (23,0) */
+    for (int col = 20; col <= 23; col++) {
+        int o = cell_off(col, 0);
+        g_cells[o + 7] = 4; g_cells[o + 1] |= 0x40; g_cells[o + 0] = 0;
+    }
+    T_ASSERT_EQ_I(engine_territory_place_capital(4), cell_off(20, 0));
+    T_ASSERT_EQ_I(engine_territory_cursor_col(), 23);
+    T_ASSERT_EQ_I(engine_territory_cursor_row(), 0);
+
+    port_candidate(30, 5, 4);    /* dist to (23,0) = max(7,5)  = 7  */
+    port_candidate(10, 30, 4);   /* dist to (23,0) = max(13,30)= 30 */
+
+    engine_territory_place_capital_port(4);
+
+    T_ASSERT_EQ_I(g_cells[cell_off(30, 5) + 0], 7);    /* near → port */
+    T_ASSERT_EQ_I(g_cells[cell_off(10, 30) + 0], 0);   /* far → untouched */
+    T_ASSERT_EQ_I(army_i32(4, PORT_OFF), cell_off(30, 5));
+    return 0;
+}
+
+/* No qualifying cell (neighbour not same-key, or not coast) → nothing placed. */
+int test_territory_port_no_candidate_noop(void)
+{
+    adj_setup();
+    /* empty key cell, but its east neighbour is a different key */
+    int o = cell_off(10, 10); g_cells[o + 7] = 4; g_cells[o + 1] = 0;
+    int e = cell_off(11, 10); g_cells[e + 7] = 9; g_cells[e + 1] = 0x20;
+
+    engine_territory_place_capital_port(4);
+    T_ASSERT_EQ_I(g_cells[o + 0], 0);
+    T_ASSERT_EQ_I(g_army[4 * ARMY_STRIDE + PORT_FLAG], 0);
+    return 0;
+}
+
+int test_territory_port_unbound_is_noop(void)
+{
+    adj_setup();
+    engine_territory_bind_cells(NULL);
+    engine_territory_place_capital_port(4);
+    adj_setup();
+    engine_territory_bind_army_records(NULL);
+    engine_territory_place_capital_port(4);
+    return 0;
+}

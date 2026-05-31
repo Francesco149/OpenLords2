@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **395** (16.1%) — tested 359, ported 36
-- code bytes touched: **16.5%** (138,460 / 838,629 B)
-- unported: **2052**
+- touched: **397** (16.2%) — tested 361, ported 36
+- code bytes touched: **16.6%** (139,366 / 838,629 B)
+- unported: **2050**
 - orphan refs (in src/, not in function table): 4
 
-## tested (359) — ported + host unit suite
+## tested (361) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -101,7 +101,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404e03 | FUN_00404e03 | 72 | engine_math.h |
 | 0x404e4b | FUN_00404e4b | 98 | engine_math.h |
 | 0x404ead | FUN_00404ead | 159 | engine_math.h, engine_path.h |
-| 0x404f4c | FUN_00404f4c | 180 | engine_path.h |
+| 0x404f4c | FUN_00404f4c | 180 | engine_path.h, engine_territory.c |
 | 0x405487 | FUN_00405487 | 379 | engine_map_render.c, engine_map_render.h, engine_overlay_render.h |
 | 0x405602 | FUN_00405602 | 608 | engine_overlay_render.c, engine_overlay_render.h |
 | 0x405862 | FUN_00405862 | 333 | engine_map_render.c, engine_map_render.h |
@@ -236,9 +236,11 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x467fd1 | FUN_00467fd1 | 336 | engine_territory.c, engine_territory.h |
 | 0x468c41 | FUN_00468c41 | 270 | engine_territory.c, engine_territory.h |
 | 0x468e61 | FUN_00468e61 | 457 | engine_territory.c, engine_territory.h |
+| 0x46902a | FUN_0046902a | 499 | engine_territory.c, engine_territory.h |
 | 0x46a037 | FUN_0046a037 | 202 | engine_title_render.c |
 | 0x46ac22 | FUN_0046ac22 | 329 | engine_territory.c, engine_territory.h |
 | 0x46c080 | FUN_0046c080 | 199 | engine_territory.c, engine_territory.h |
+| 0x46c147 | FUN_0046c147 | 407 | engine_territory.c, engine_territory.h |
 | 0x46c2de | FUN_0046c2de | 292 | engine_territory.c, engine_territory.h |
 | 0x46c4a3 | FUN_0046c4a3 | 277 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x46c5b8 | FUN_0046c5b8 | 258 | engine_territory.c, engine_territory.h |

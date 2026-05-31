@@ -1434,6 +1434,13 @@ struct test_case {
     X(territory_mark_features_type0_gated_by_slotA) \
     X(territory_mark_features_filters) \
     X(territory_mark_features_unbound_is_noop) \
+    X(territory_classify_coast_neighbour) \
+    X(territory_classify_8_and_10_remap) \
+    X(territory_classify_edges_are_zero) \
+    X(territory_port_places_single_candidate) \
+    X(territory_port_picks_nearest_to_cursor) \
+    X(territory_port_no_candidate_noop) \
+    X(territory_port_unbound_is_noop) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \
