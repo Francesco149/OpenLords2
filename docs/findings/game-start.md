@@ -169,7 +169,7 @@ flip lands until the world is populated enough for the map arm.
      FUN_004676e0 leaf — rebuilds the per-key cell roster (save entry 12)
      from the grid, capping 20 cells/key + evicting overflow.  See below.
 
-### FUN_004676e0 — overworld-grid setup sequence (5/8 callees ported)
+### FUN_004676e0 — overworld-grid setup sequence (6/8 callees ported)
 
 A 144-B 0x497ced callee that stands up the overworld cell grid + its
 terrain index tables, by calling a fixed sequence of 0x46c*/0x46d* grid
@@ -346,8 +346,40 @@ mark, unbound no-op).
 The two FUN_004676e0 grid **randomiser passes** (`FUN_0046dd34` special-tile
 re-roll + `FUN_0046dbf5` auto-tile classify) and their full support cluster
 (`FUN_0046de94`/`de05` mask, `FUN_0046c2de` classifier, `FUN_00404b2c` RNG)
-are now ported.  Remaining unported FUN_004676e0 callees: `FUN_00467ca6` /
-`FUN_00468d4f` / `FUN_00467a36` (each still 1–5 deps deep).
+are now ported.
+
+- **FUN_0046c080 + FUN_00467ca6** → `engine_territory_load_neighbour_keys`
+  / `engine_territory_build_army_adjacency` (`engine_territory.c`, landed
+  2026-05-31).  The **per-army territory-adjacency builder** and its
+  orthogonal-neighbour key loader.  `FUN_0046c080` (199 B, shared — also
+  called by the castle-border subtree `FUN_0046902a` under `FUN_00468d4f`)
+  reads the owning-army key (cell byte +7) of the **four orthogonal**
+  neighbours (N/E/S/W) of the cursor cell, clamping an off-grid edge
+  neighbour to 0; retail scatters them to `DAT_00553280/88/90/98`
+  (stride-8 slots, only the even ones used), the port returns a compacted
+  `out[4]`.  `FUN_00467ca6` (385 B) sweeps all 4096 overworld cells in
+  byte order and, for every cell whose key is in 1..17, records each
+  *distinct* in-range neighbour key (≠ the cell's own key, ≠ 0) into that
+  army's row of the per-army record block (retail `DAT_0053f9b0` = save
+  entry 4, `g_per_army_768`, 17 rows × 0x300): a 16-entry list at +0x5c
+  with a count at +0x5a.  r2-verified both (the `key*0x300` row index via
+  `shl 8`+`lea eax+eax*2`, the +0x5a/+0x5c field offsets, the dedup-then-
+  first-free insert with the `< 0x10` cap, the four neighbour deltas
+  ±0x200/±8 and their edge guards).  The score table the rebuild zeroes
+  (`g_cell_score` = `DAT_0053fa40`) is the **same block** at +0x90 — a
+  different field of the same rows.  The 16-cap silent-drop arm is dead in
+  valid data: with keys gated 1..16 an army borders at most 15 distinct
+  others (key 17 can't be a swept centre — see below), so the list never
+  fills.  **Quirk #132** extended: 467ca6 shares the rebuild's loose
+  `<= 0x11` accept guard against the 17-row block (a key-17 centre is a
+  1-row OOB write), defused identically by the +7 producers' 1..16 clamp.
+  6 host tests (N/E/S/W interior order, corner edge-zeros both extremes,
+  distinct-neighbour record + symmetry, cross-cell dedup, 15-key near-cap
+  fill + scan order, unbound/NULL no-ops).
+
+Remaining unported FUN_004676e0 callees: `FUN_00468d4f` / `FUN_00467a36`
+(each still 1–5 deps deep; 468d4f's subtree shares the now-ported
+`FUN_0046c080`).
 
 ### FUN_0046ff43 — strategic movement-cost grid builder
 

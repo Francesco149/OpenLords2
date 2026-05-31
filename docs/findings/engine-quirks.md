@@ -4629,9 +4629,21 @@ so it could never register distinctly and a later same-key cell would
 overwrite its slot.  Harmless because cell (0,0) is map-border terrain,
 never an active feature.
 
-> 📍 `src/engine_territory.c` (`engine_territory_rebuild_cell_roster`),
+The **per-army adjacency builder `FUN_00467ca6`** shares this exact loose
+guard against a 17-row block: it accepts a cell's owning-army key with
+`key != 0 && key <= 0x11` (1..17) and indexes the per-army record block
+(retail `DAT_0053f9b0` = save entry 4, **17 rows × 0x300 B**) at
+`base + key*0x300`, so a centre cell with key 17 would write its
+neighbour-count (`+0x5a`) and list (`+0x5c`) one 0x300-row *past* the
+block.  Same defuse — the +7 producers clamp to 1..16, so a key-17 *centre*
+never occurs — and the same verbatim preservation (`engine_territory_build_army_adjacency`).
+Note a neighbour key of 17 is harmless: it is only stored as a list *byte*,
+never used to index the block; the OOB needs key 17 as the swept centre.
+
+> 📍 `src/engine_territory.c` (`engine_territory_rebuild_cell_roster`,
+> `engine_territory_build_army_adjacency`),
 > `docs/findings/game-start.md` §"FUN_004676e0", Ghidra `FUN_0046da4b`
-> @ 0x46da4b.
+> @ 0x46da4b, `FUN_00467ca6` @ 0x467ca6.
 
 ---
 

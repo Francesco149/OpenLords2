@@ -18,6 +18,8 @@
  *   FUN_0046df51 @ 0x46df51 (132 B) → engine_territory_clear_cell_render_flags
  *   FUN_0046da4b @ 0x46da4b (293 B) → engine_territory_rebuild_cell_roster
  *   FUN_0046dd34 @ 0x46dd34 (209 B) → engine_territory_randomise_special_tiles
+ *   FUN_0046c080 @ 0x46c080 (199 B) → engine_territory_load_neighbour_keys
+ *   FUN_00467ca6 @ 0x467ca6 (385 B) → engine_territory_build_army_adjacency
  */
 
 #include <stddef.h>
@@ -61,6 +63,15 @@ static engine_dirty_rect_state_t *g_dirty_state;
 /* Overworld cell grid geometry (retail DAT_00522f90). */
 #define CELL_GRID_CELLS   0x1000   /* 64×64 = 4096 cells */
 #define CELL_STRIDE       8        /* bytes per cell descriptor */
+
+/* DAT_0053f9b0 — save entry 4, the per-army record block (g_per_army_768,
+ * 17 rows × 0x300 B, slot 0 reserved).  The army-adjacency builder below
+ * writes two header fields of each army's row: a neighbour-count byte
+ * (+0x5a) and a 16-byte list of bordering army keys (+0x5c).  The AI score
+ * region g_cell_score binds (DAT_0053fa40 = this block + 0x90) is the same
+ * memory, a different field of the same rows.  Optional + NULL-safe.  Same
+ * name engine_overlay_render binds it under (read-only there). */
+static uint8_t *g_army_records;
 
 /* DAT_0055cea0 — the terrain-index render tile grid (the same array the
  * map-render row helpers iterate, engine_map_render_bind_tile_array).
@@ -117,6 +128,11 @@ void engine_territory_bind_cell_score_table(int16_t *scores)
 void engine_territory_bind_terrain_tiles(int32_t *tiles)
 {
     g_terrain_tiles = tiles;
+}
+
+void engine_territory_bind_army_records(uint8_t *records)
+{
+    g_army_records = records;
 }
 
 /* Port of FUN_0046c5b8.  Zero byte `field` of every overworld cell
@@ -581,6 +597,88 @@ void engine_territory_classify_feature_tiles(engine_rng_single_in_t *rng)
             else
                 *cell = (int32_t)(TERRAIN_TILE_SPECIAL_BASE +
                                   (uint32_t)(pick.type + variant));
+        }
+    }
+}
+
+/* Per-army record geometry (retail DAT_0053f9b0, 17 × 0x300).  The
+ * adjacency builder touches two header fields of each army's row:
+ *   +0x5a (DAT_0053fa0a)  neighbour count byte
+ *   +0x5c (DAT_0053fa0c)  16-byte list of distinct bordering army keys */
+#define ARMY_ROW_STRIDE   0x300
+#define ARMY_ADJ_COUNT    0x5a
+#define ARMY_ADJ_LIST     0x5c
+#define ARMY_ADJ_MAX      0x10   /* list capacity (16) */
+
+/* Byte offset between the cell grid's NESW orthogonal neighbours: one row
+ * is 64 cells × 8 B = 0x200, one column is 8 B. */
+#define CELL_ROW_BYTES    (0x40 * CELL_STRIDE)   /* 0x200 */
+
+/* Port of FUN_0046c080 (199 B) — load the group-key (cell byte +7) of the
+ * four orthogonal neighbours of the cell at byte-offset `cursor_off`
+ * (= (row*64 + col)*8) into out[] in N, E, S, W order; an edge neighbour
+ * (north of row 0, east of col 0x3f, south of row 0x3f, west of col 0)
+ * reads 0.  Retail scatters these to DAT_00553280/88/90/98 (stride-8
+ * slots, only the even ones used); the port returns them compacted.
+ * Shared: also called by the 0x468d4f castle-border subtree (0x46902a).
+ * No-op (zeroed out[]) if the cell grid is unbound. */
+void engine_territory_load_neighbour_keys(int col, int row, int cursor_off,
+                                          int32_t out[4])
+{
+    if (g_cells == NULL) {
+        out[0] = out[1] = out[2] = out[3] = 0;
+        return;
+    }
+    out[0] = (row == 0)    ? 0 : g_cells[cursor_off - CELL_ROW_BYTES + 7]; /* N: DAT_00522d97 */
+    out[1] = (col == 0x3f) ? 0 : g_cells[cursor_off + CELL_STRIDE   + 7];  /* E: DAT_00522f9f */
+    out[2] = (row == 0x3f) ? 0 : g_cells[cursor_off + CELL_ROW_BYTES + 7]; /* S: DAT_00523197 */
+    out[3] = (col == 0)    ? 0 : g_cells[cursor_off - CELL_STRIDE   + 7];  /* W: DAT_00522f8f */
+}
+
+/* Port of FUN_00467ca6 (385 B) — build the per-army territory-adjacency
+ * lists.  Walk all 4096 overworld cells in byte order; for each cell whose
+ * owning-army key (byte +7) is in 1..17, fetch its four orthogonal
+ * neighbours' keys (engine_territory_load_neighbour_keys) and, for every
+ * neighbour key that is itself in 1..17 and differs from the cell's own
+ * key, append it (once) to that cell-key's army row: scan the +0x5c list of
+ * up to 16 entries, skip if the neighbour key is already present, else drop
+ * it in the first free (== 0) slot and bump the +0x5a count.  A full list
+ * (16 distinct neighbours) silently drops further keys.
+ *
+ * QUIRK (#132, preserved verbatim): the accept guard is `<= 0x11` (admits
+ * key 17), but the block has only 17 rows (0..16) — a key of 17 indexes one
+ * 0x300-row past g_per_army_768.  Unreachable in practice: the +7 producers
+ * gate the field to 1..16.  Tests stay within 1..16.
+ *
+ * No-op if the cell grid or the army-record block is unbound. */
+void engine_territory_build_army_adjacency(void)
+{
+    if (g_cells == NULL || g_army_records == NULL) return;
+
+    int cursor_off = 0;
+    for (int row = 0; row < 0x40; row++) {
+        for (int col = 0; col < 0x40; col++, cursor_off += CELL_STRIDE) {
+            unsigned key = g_cells[cursor_off + 7];        /* DAT_00522f97 */
+            if (key == 0 || key > 0x11) continue;          /* 1..17 (quirk #132) */
+
+            int32_t nb[4];
+            engine_territory_load_neighbour_keys(col, row, cursor_off, nb);
+
+            uint8_t *rowbase = g_army_records + key * ARMY_ROW_STRIDE;
+            uint8_t *list    = rowbase + ARMY_ADJ_LIST;
+            for (int i = 0; i < 4; i++) {
+                unsigned other = (unsigned)nb[i];
+                if (other == 0 || other > 0x11 || other == key) continue;
+
+                for (int slot = 0; slot < ARMY_ADJ_MAX; slot++) {
+                    if (list[slot] == (uint8_t)other) break;   /* already listed */
+                    if (list[slot] == 0) {                     /* first free → add */
+                        list[slot] = (uint8_t)other;
+                        rowbase[ARMY_ADJ_COUNT]++;
+                        break;
+                    }
+                }
+            }
         }
     }
 }

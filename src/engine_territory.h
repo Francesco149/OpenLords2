@@ -36,6 +36,14 @@ void engine_territory_bind_cell_roster(int32_t *roster);
  * skips that secondary clear. */
 void engine_territory_bind_cell_score_table(int16_t *scores);
 
+/* Bind the per-army record block (retail `DAT_0053f9b0` = save entry 4,
+ * g_per_army_768 — 17 rows × 0x300 B, slot 0 reserved) that
+ * engine_territory_build_army_adjacency writes the adjacency header of.
+ * Required for the adjacency build (NULL → no-op).  The AI score table
+ * (engine_territory_bind_cell_score_table) is a sub-view of this same
+ * block at +0x90. */
+void engine_territory_bind_army_records(uint8_t *records);
+
 /* Bind the terrain-index render tile grid (retail `DAT_0055cea0`, 129×65
  * i32, row stride 0x104 B = 65 i32 contiguous) that the new-game tile
  * randomiser re-rolls.  Optional — NULL → randomiser is a no-op.  The same
@@ -125,5 +133,20 @@ void engine_territory_reset_feature_counters(void);
  * the grid in place in row-major order.  No-op if the grid or rng is
  * unbound/NULL. */
 void engine_territory_classify_feature_tiles(engine_rng_single_in_t *rng);
+
+/* Port of FUN_0046c080.  Load the group-key (cell byte +7) of the four
+ * orthogonal neighbours of the cell at byte-offset cursor_off (= (row*64 +
+ * col)*8) of the bound cell grid into out[] in N, E, S, W order; an
+ * off-grid edge neighbour reads 0.  Shared with the castle-border subtree
+ * (0x468d4f → 0x46902a).  Zeroes out[] if the cell grid is unbound. */
+void engine_territory_load_neighbour_keys(int col, int row, int cursor_off,
+                                          int32_t out[4]);
+
+/* Port of FUN_00467ca6.  Build the per-army territory-adjacency lists in
+ * the bound army-record block (engine_territory_bind_army_records): for
+ * every cell whose owning-army key (+7) is in 1..17, record each distinct
+ * neighbouring army key into that army's row — a 16-entry list at +0x5c
+ * with a count at +0x5a.  No-op if the cell grid or army block is unbound. */
+void engine_territory_build_army_adjacency(void);
 
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

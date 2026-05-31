@@ -1398,6 +1398,12 @@ struct test_case {
     X(territory_classify_skips_eligible_cells) \
     X(territory_classify_isolated_uses_rng) \
     X(territory_classify_unbound_is_noop) \
+    X(territory_neighbour_keys_interior_order) \
+    X(territory_neighbour_keys_edges_zero) \
+    X(territory_adjacency_records_distinct_neighbours) \
+    X(territory_adjacency_dedups) \
+    X(territory_adjacency_fills_list) \
+    X(territory_adjacency_unbound_is_noop) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \

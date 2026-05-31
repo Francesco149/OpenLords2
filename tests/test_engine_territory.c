@@ -866,3 +866,149 @@ int test_territory_classify_unbound_is_noop(void)
     T_ASSERT_EQ_U((uint32_t)*tile_at(4, 10), 0xfff0010u);   /* untouched */
     return 0;
 }
+
+/* ── Per-army territory adjacency (ports of FUN_0046c080 + FUN_00467ca6) ── */
+
+enum { ARMY_ROWS = 17, ARMY_STRIDE = 0x300, ADJ_COUNT = 0x5a, ADJ_LIST = 0x5c };
+static uint8_t g_army[ARMY_ROWS * ARMY_STRIDE];   /* DAT_0053f9b0, g_per_army_768 */
+
+static void adj_setup(void)
+{
+    memset(g_cells, 0, sizeof g_cells);
+    memset(g_army, 0, sizeof g_army);
+    engine_territory_bind_cells(g_cells);
+    engine_territory_bind_army_records(g_army);
+}
+
+/* Set the owning-army key (cell byte +7) of cell (col,row). */
+static void cell_key(int col, int row, uint8_t key) { g_cells[cell_off(col, row) + 7] = key; }
+
+static int  adj_count(int key)          { return g_army[key * ARMY_STRIDE + ADJ_COUNT]; }
+static int  adj_list(int key, int slot) { return g_army[key * ARMY_STRIDE + ADJ_LIST + slot]; }
+
+/* FUN_0046c080: the four orthogonal neighbour keys come back in N,E,S,W
+ * order from an interior cell. */
+int test_territory_neighbour_keys_interior_order(void)
+{
+    adj_setup();
+    cell_key(10,  9, 1);   /* N */
+    cell_key(11, 10, 2);   /* E */
+    cell_key(10, 11, 3);   /* S */
+    cell_key( 9, 10, 4);   /* W */
+    int32_t out[4];
+    engine_territory_load_neighbour_keys(10, 10, cell_off(10, 10), out);
+    T_ASSERT_EQ_I(out[0], 1);
+    T_ASSERT_EQ_I(out[1], 2);
+    T_ASSERT_EQ_I(out[2], 3);
+    T_ASSERT_EQ_I(out[3], 4);
+    return 0;
+}
+
+/* FUN_0046c080: edge neighbours read 0 and the off-grid slot is never
+ * sourced from a wrapped row/column. */
+int test_territory_neighbour_keys_edges_zero(void)
+{
+    adj_setup();
+    /* Top-left corner: N (row 0) and W (col 0) are off-grid → 0. */
+    cell_key(1, 0, 5);     /* E of (0,0) */
+    cell_key(0, 1, 6);     /* S of (0,0) */
+    int32_t out[4];
+    engine_territory_load_neighbour_keys(0, 0, cell_off(0, 0), out);
+    T_ASSERT_EQ_I(out[0], 0);   /* N off-grid */
+    T_ASSERT_EQ_I(out[1], 5);   /* E */
+    T_ASSERT_EQ_I(out[2], 6);   /* S */
+    T_ASSERT_EQ_I(out[3], 0);   /* W off-grid */
+
+    /* Bottom-right corner: E (col 0x3f) and S (row 0x3f) off-grid → 0. */
+    cell_key(0x3f, 0x3e, 7);    /* N of (0x3f,0x3f) */
+    cell_key(0x3e, 0x3f, 8);    /* W of (0x3f,0x3f) */
+    engine_territory_load_neighbour_keys(0x3f, 0x3f, cell_off(0x3f, 0x3f), out);
+    T_ASSERT_EQ_I(out[0], 7);   /* N */
+    T_ASSERT_EQ_I(out[1], 0);   /* E off-grid */
+    T_ASSERT_EQ_I(out[2], 0);   /* S off-grid */
+    T_ASSERT_EQ_I(out[3], 8);   /* W */
+    return 0;
+}
+
+/* FUN_00467ca6: a cell's distinct in-range neighbour keys are recorded in
+ * its own army row, in N,E,S,W scan order; same-key and 0 neighbours are
+ * skipped. */
+int test_territory_adjacency_records_distinct_neighbours(void)
+{
+    adj_setup();
+    cell_key(10, 10, 5);   /* centre army */
+    cell_key(10,  9, 3);   /* N → recorded */
+    cell_key(11, 10, 9);   /* E → recorded */
+    cell_key(10, 11, 5);   /* S → same key, skipped */
+    /* W (9,10) left 0 → skipped */
+
+    engine_territory_build_army_adjacency();
+
+    T_ASSERT_EQ_I(adj_count(5), 2);
+    T_ASSERT_EQ_I(adj_list(5, 0), 3);   /* N before E */
+    T_ASSERT_EQ_I(adj_list(5, 1), 9);
+    T_ASSERT_EQ_I(adj_list(5, 2), 0);
+    /* Adjacency is symmetric: 3 and 9 each list 5 once. */
+    T_ASSERT_EQ_I(adj_count(3), 1);
+    T_ASSERT_EQ_I(adj_list(3, 0), 5);
+    T_ASSERT_EQ_I(adj_count(9), 1);
+    T_ASSERT_EQ_I(adj_list(9, 0), 5);
+    return 0;
+}
+
+/* FUN_00467ca6: a neighbour key already in the list is not duplicated, even
+ * across several bordering cells. */
+int test_territory_adjacency_dedups(void)
+{
+    adj_setup();
+    cell_key(20, 20, 7);  cell_key(21, 20, 8);   /* 7 borders 8 (E) */
+    cell_key(20, 22, 7);  cell_key(21, 22, 8);   /* 7 borders 8 again (E) */
+
+    engine_territory_build_army_adjacency();
+
+    T_ASSERT_EQ_I(adj_count(7), 1);
+    T_ASSERT_EQ_I(adj_list(7, 0), 8);
+    T_ASSERT_EQ_I(adj_list(7, 1), 0);
+    return 0;
+}
+
+/* FUN_00467ca6: an army bordering every other in-range key fills the list.
+ * With the +7 field gated to 1..16 (key 17 can never be a swept centre —
+ * quirk #132), the most distinct OTHER keys any army can have is 15, so the
+ * 16-entry cap's silent-drop arm is never reached in valid data. */
+int test_territory_adjacency_fills_list(void)
+{
+    adj_setup();
+    /* A vertical strip of army 8; each cell's east neighbour is a distinct
+     * other key drawn from {1..16}\{8} (15 keys), in scan (row) order. */
+    for (int r = 0; r < 15; r++) {
+        cell_key(10, r, 8);
+        cell_key(11, r, (uint8_t)(r < 7 ? r + 1 : r + 2));   /* 1..7, 9..16 */
+    }
+
+    engine_territory_build_army_adjacency();
+
+    T_ASSERT_EQ_I(adj_count(8), 15);
+    for (int r = 0; r < 15; r++)
+        T_ASSERT_EQ_I(adj_list(8, r), (r < 7 ? r + 1 : r + 2));
+    T_ASSERT_EQ_I(adj_list(8, 15), 0);   /* 16th slot never filled */
+    return 0;
+}
+
+/* Both ports no-op when their backing memory is unbound. */
+int test_territory_adjacency_unbound_is_noop(void)
+{
+    int32_t out[4] = { 9, 9, 9, 9 };
+    engine_territory_bind_cells(NULL);
+    engine_territory_load_neighbour_keys(10, 10, cell_off(10, 10), out);
+    T_ASSERT_EQ_I(out[0], 0);
+    T_ASSERT_EQ_I(out[3], 0);
+    engine_territory_build_army_adjacency();   /* cells unbound → no crash */
+
+    adj_setup();
+    engine_territory_bind_army_records(NULL);
+    cell_key(10, 10, 5);
+    cell_key(11, 10, 6);
+    engine_territory_build_army_adjacency();   /* army block unbound → no-op */
+    return 0;
+}

@@ -7,6 +7,59 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — GAME-START chip: per-army adjacency builder (FUN_00467ca6 + FUN_0046c080)
+
+Ported the **per-army territory-adjacency builder** `FUN_00467ca6` (385 B)
+and its orthogonal-neighbour key loader `FUN_0046c080` (199 B) into
+`engine_territory.c` — the 6th of `FUN_004676e0`'s eight tracked callees
+(remaining: `FUN_00468d4f` / `FUN_00467a36`).
+
+**What it does.**  `FUN_0046c080` → `engine_territory_load_neighbour_keys`:
+read the owning-army key (cell byte +7) of the four **orthogonal** neighbours
+(N/E/S/W) of a cursor cell in the 64×64×8 overworld grid, clamping any
+off-grid edge neighbour to 0.  The four edge guards (row 0 / row 0x3f / col 0
+/ col 0x3f) are load-bearing — they're the only thing stopping the linear
+±0x200/±8 byte deltas from wrapping a row or running off the grid.  Retail
+scatters the results to `DAT_00553280/88/90/98` (stride-8 slots, only the
+even four used); the port returns a compacted `out[4]`.  It's **shared** —
+the castle-border subtree `0x46902a` (under `FUN_00468d4f`, still unported)
+calls it too — so it landed as a standalone reusable helper.
+
+`FUN_00467ca6` → `engine_territory_build_army_adjacency`: sweep all 4096
+cells in byte order; for each cell whose army key is in 1..17, fetch its four
+neighbour keys and record each *distinct* in-range key (≠ own key, ≠ 0) into
+that army's row of the per-army record block (retail `DAT_0053f9b0` = save
+entry 4, `g_per_army_768`, 17 rows × 0x300 B) — a 16-entry list at +0x5c with
+a count at +0x5a.  Insert is dedup-then-first-free; a full list silently
+drops.  r2 @0x467ca6 / @0x46c080 confirmed the `key*0x300` row stride
+(`shl 8`+`lea eax+eax*2`), the +0x5a/+0x5c field offsets, the `< 0x10` cap,
+and the four neighbour deltas + edge guards.
+
+**Same block, three views.**  The AI score table the cell-roster rebuild
+zeroes (`g_cell_score` = `DAT_0053fa40`) is *this same* per-army block at
++0x90 — a different field of the same rows.  Bound separately
+(`engine_territory_bind_army_records`) to keep the landed rebuild code
+untouched; in tests both point into one buffer.
+
+**Quirk #132 extended.**  467ca6 shares the rebuild's loose `<= 0x11` accept
+guard (admits key 17) against a 17-row block — a key-17 *centre* cell is a
+1-row OOB write, defused identically by the +7 producers' 1..16 clamp.  A
+neighbour key of 17 is harmless (stored as a list byte, never an index).  A
+consequence: with centres gated 1..16, an army borders at most **15** distinct
+others, so the 16-cap silent-drop arm is dead in valid data.
+
+6 host tests: N/E/S/W interior order; both-corner edge-zeros (proves no
+row/col wrap); distinct-neighbour record + symmetry; cross-cell dedup; a
+15-key near-cap fill in scan order with the 16th slot left 0; unbound/NULL
+no-ops.  1385/1385 pass under ASan/UBSan; both mingw `.exe` build clean under
+`-Wall -Wextra`; `_engine_territory_build_army_adjacency` /
+`_engine_territory_load_neighbour_keys` present in the PE.  Ledger: 388
+touched / 352 tested.
+
+Next on this thread: `FUN_00468d4f` (now one helper lighter — its `0x46902a`
+subtree shares the ported `FUN_0046c080`) and `FUN_00467a36`, or seating the
+live 0x4676e0 orchestrator.
+
 ## 2026-05-31 — GAME-START chip: terrain auto-tiling sweep (FUN_0046dbf5) — randomiser pair complete
 
 Ported `FUN_0046dbf5` (319 B) → `engine_territory_classify_feature_tiles` in
