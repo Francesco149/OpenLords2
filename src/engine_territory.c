@@ -28,6 +28,7 @@
 #include "engine.h"            /* engine_rng_step_single, engine_rng_single_* */
 #include "engine_territory.h"
 #include "engine_dirty_rect.h"
+#include "save_schema_globals.h"  /* s_slot_0053f23c — feature-density setting */
 
 #define TERRITORY_RECORD_STRIDE 0x1a4
 #define TERRITORY_RECORD_COUNT  0x97   /* iterate 1..0x96 (1..150) */
@@ -761,6 +762,89 @@ void engine_territory_build_army_adjacency(void)
                     }
                 }
             }
+        }
+    }
+}
+
+/* Per-army active-cell tally byte: row offset +0x205 (retail DAT_0053fbb5
+ * = g_per_army_768 + 0x205). */
+#define ARMY_ACTIVE_COUNT 0x205
+
+/* Port of FUN_00467a36 (624 B) — new-game per-army **feature seeding** pass,
+ * the second still-unported direct callee of the overworld-grid setup
+ * orchestrator at 0x4676e0 (unported).  For every active feature-cell (key +7 in
+ * 1..17, flags byte +1 bit 0x20 set), it assigns a feature terrain type
+ * based on how many of that army's active cells have been seen so far and
+ * the global feature-density setting DAT_0053f23c (s_slot_0053f23c, save
+ * entry 13).  The first few cells of each army get the "rich" type 0x14
+ * (descriptor base 'h' = 0x68), the next tier type 1 ('T' = 0x54), the rest
+ * type 0 ('P' = 0x50) — the per-density cutoffs:
+ *
+ *   density 3 : idx<4 → 0x14 ; else → 0
+ *   density 2 : idx<4 → 0x14 ; idx<6 → 1 ; else → 0
+ *   density 1 : idx<6 → 0x14 ; idx<8 → 1 ; else → 0
+ *   else (0)  : idx<8 → 0x14 ; else → 1
+ *
+ * For each chosen cell it pre-writes the +3 descriptor (keeping the old
+ * low 2 bits, via the same -0x50≡+0xb0 (mod 4) correction) and the +0 type,
+ * then calls engine_territory_set_cell_type (FUN_0046d7f4) to finalize the
+ * flag byte and re-derive the descriptor.  The pre-write of +0 is
+ * load-bearing: it makes the setter see the *new* type as its "old type",
+ * so the setter's 0x17/0x18 correction never fires here (the new type is
+ * always 0x14/1/0).  It also keeps a per-army tally at row +0x205, bumped
+ * once per active cell.
+ *
+ * QUIRK (#132, preserved verbatim): the key accept guard is `< 0x12`
+ * (admits 17); the per-army block has only 17 rows (0..16), so a key of 17
+ * would index a row past g_per_army_768 at +0x205.  Unreachable — the +7
+ * producers gate the field to 1..16.  Tests stay within 1..16.
+ *
+ * No-op if the cell grid or the army-record block is unbound. */
+void engine_territory_seed_army_features(void)
+{
+    if (g_cells == NULL || g_army_records == NULL) return;
+
+    for (int key = 1; key < 0x11; key++)                       /* rows 1..16 */
+        g_army_records[key * ARMY_ROW_STRIDE + ARMY_ACTIVE_COUNT] = 0;
+
+    int seen[32] = {0};      /* per-key running active-cell index (retail stack) */
+
+    int cursor_off = 0;
+    for (int row = 0; row < 0x40; row++) {
+        for (int col = 0; col < 0x40; col++, cursor_off += CELL_STRIDE) {
+            uint8_t flags = g_cells[cursor_off + 1];           /* DAT_00522f91 */
+            unsigned key  = g_cells[cursor_off + 7];           /* DAT_00522f97 */
+            uint8_t desc3 = g_cells[cursor_off + 3];           /* DAT_00522f93 */
+
+            if (key == 0 || key >= 0x12)  continue;            /* 1..17 (quirk #132) */
+            if ((flags & 0x20) == 0)      continue;
+
+            g_army_records[key * ARMY_ROW_STRIDE + ARMY_ACTIVE_COUNT]++;
+            int idx = seen[key]++;
+
+            uint8_t new_type;
+            char    base;
+            uint32_t density = s_slot_0053f23c;                /* DAT_0053f23c */
+            if (density == 3) {
+                if (idx < 4)      { new_type = 0x14; base = 'h'; }
+                else              { new_type = 0;    base = 'P'; }
+            } else if (density == 2) {
+                if (idx < 4)      { new_type = 0x14; base = 'h'; }
+                else if (idx < 6) { new_type = 1;    base = 'T'; }
+                else              { new_type = 0;    base = 'P'; }
+            } else if (density == 1) {
+                if (idx < 6)      { new_type = 0x14; base = 'h'; }
+                else if (idx < 8) { new_type = 1;    base = 'T'; }
+                else              { new_type = 0;    base = 'P'; }
+            } else {
+                if (idx < 8)      { new_type = 0x14; base = 'h'; }
+                else              { new_type = 1;    base = 'T'; }
+            }
+
+            uint8_t lo = (uint8_t)((desc3 + 0xb0) & 3);
+            g_cells[cursor_off + 3] = (uint8_t)(lo + base);
+            g_cells[cursor_off + 0] = new_type;
+            engine_territory_set_cell_type(cursor_off, new_type, 0);  /* FUN_0046d7f4 */
         }
     }
 }

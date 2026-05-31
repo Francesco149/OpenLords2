@@ -4640,10 +4640,18 @@ never occurs — and the same verbatim preservation (`engine_territory_build_arm
 Note a neighbour key of 17 is harmless: it is only stored as a list *byte*,
 never used to index the block; the OOB needs key 17 as the swept centre.
 
+The **per-army feature-seeding pass `FUN_00467a36`** is a third instance of
+the same loose guard against the **same** 17-row per-army block: it accepts a
+cell's owning-army key with `key != 0 && key < 0x12` (1..17) and bumps that
+army's active-cell tally at `base + key*0x300 + 0x205`, so a key-17 centre
+would write its tally one 0x300-row past the block.  Identical defuse (the +7
+producers clamp to 1..16) and verbatim preservation
+(`engine_territory_seed_army_features`).
+
 > 📍 `src/engine_territory.c` (`engine_territory_rebuild_cell_roster`,
-> `engine_territory_build_army_adjacency`),
+> `engine_territory_build_army_adjacency`, `engine_territory_seed_army_features`),
 > `docs/findings/game-start.md` §"FUN_004676e0", Ghidra `FUN_0046da4b`
-> @ 0x46da4b, `FUN_00467ca6` @ 0x467ca6.
+> @ 0x46da4b, `FUN_00467ca6` @ 0x467ca6, `FUN_00467a36` @ 0x467a36.
 
 ---
 

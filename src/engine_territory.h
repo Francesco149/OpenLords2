@@ -166,4 +166,12 @@ void engine_territory_load_neighbour_keys(int col, int row, int cursor_off,
  * with a count at +0x5a.  No-op if the cell grid or army block is unbound. */
 void engine_territory_build_army_adjacency(void);
 
+/* Port of FUN_00467a36.  New-game per-army feature-seeding pass: for every
+ * active feature-cell (+7 key 1..17, +1 bit 0x20 set), assign a feature
+ * terrain type (0x14 / 1 / 0) by the army's running active-cell index and
+ * the global density setting (s_slot_0053f23c), finalising via
+ * engine_territory_set_cell_type; also tallies active cells per army at row
+ * +0x205.  Needs the cell grid and army-record block bound. */
+void engine_territory_seed_army_features(void);
+
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

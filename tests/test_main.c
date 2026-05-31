@@ -1414,6 +1414,12 @@ struct test_case {
     X(territory_adjacency_dedups) \
     X(territory_adjacency_fills_list) \
     X(territory_adjacency_unbound_is_noop) \
+    X(territory_seed_density2_tiers) \
+    X(territory_seed_density1_and_3_cutoffs) \
+    X(territory_seed_default_density) \
+    X(territory_seed_filters_inactive) \
+    X(territory_seed_per_key_independent_and_resets_tally) \
+    X(territory_seed_unbound_is_noop) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \

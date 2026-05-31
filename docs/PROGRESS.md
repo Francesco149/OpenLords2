@@ -7,6 +7,53 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — GAME-START chip: per-army feature seeding (FUN_00467a36) — 7/8 of FUN_004676e0
+
+Ported `FUN_00467a36` (624 B) → `engine_territory_seed_army_features` in
+`engine_territory.c` — the new-game **per-army feature-seeding pass** and the
+**7th of `FUN_004676e0`'s eight direct callees** (only `FUN_00468d4f` left).
+It is the top of the subtree the last two chips built from the bottom up
+(`467a36` → `46d7f4` → `46d9da`).
+
+**What it does.**  Sweep all 4096 overworld cells; for every active
+feature-cell (key +7 in 1..17, flags +1 bit 0x20) assign a feature terrain
+type by the army's *running* active-cell index and the global feature-density
+setting `DAT_0053f23c` (= `s_slot_0053f23c`, save entry 13).  The first few
+cells of each army get the rich type `0x14` (descriptor base `'h'`), then
+type `1`, then type `0` — cutoffs scale with density (3 → only `0x14`/`0`;
+2 → `0x14`/`1`/`0` at 4/6; 1 → at 6/8; default → `0x14` up to 8 then `1`,
+never `0`).  Each chosen cell is finalised through the ported
+`engine_territory_set_cell_type` (`FUN_0046d7f4`), and a per-army active-cell
+tally is kept at army row `+0x205`.
+
+**One load-bearing subtlety.**  Retail pre-writes the cell's +0 type byte
+*before* calling the setter, so the setter reads the **new** type as its
+"old type" — which is why the setter's 0x17/0x18 +3-correction branch never
+fires from this path (the new type is always 0x14/1/0).  Dropping the
+pre-write would change the +3 low-bit math for cells whose real old type was
+a 0x17/0x18 special, so both pre-writes are replicated verbatim.
+
+r2 @0x467a36 confirmed the `key<<8`+`lea[eax+eax*2]` = `key*0x300` row index,
+the `+0x205` tally byte, the `(desc3+0xb0)&3` low-bit preserve, the three
+`DAT_0053f23c` compares and the `idx<4/6/8` cutoffs.  Quirk #132 extended a
+third time (the loose `< 0x12` key guard vs the 17-row per-army block, here at
+the `+0x205` tally).
+
+6 host tests: density-2 tiers + the setter-derived +3/+2 bytes for a 0x14
+cell; density-1 and density-3 cutoffs; the default-density arm (no flatten to
+0); inactive-cell filtering (key 0 / 18 / unflagged ignored + not tallied);
+per-key-independent running indices + step-1 tally reset; unbound no-ops.
+1401/1401 pass under ASan/UBSan; mingw `.exe` clean under `-Wall -Wextra`;
+`_engine_territory_seed_army_features` in the PE.  Ledger: 391 touched / 355
+tested.
+
+**Milestone in sight.**  `FUN_004676e0` (the overworld-grid setup
+orchestrator, a direct `FUN_00497ced` game-init callee) now has 7/8 callees
+ported.  The last is `FUN_00468d4f` (274 B): its castle-border arm
+`FUN_0046902a` wants `FUN_0046c147` (407 B); its leaves `FUN_00468c41` /
+`FUN_00468e61` / `FUN_00468121` and the `FUN_00467fd1` → `FUN_0046ac22` pair
+are unported.  Landing those seats the whole overworld-grid setup.
+
 ## 2026-05-31 — GAME-START chip: cell terrain-type setter (FUN_0046d7f4)
 
 Ported `FUN_0046d7f4` (486 B) → `engine_territory_set_cell_type` in

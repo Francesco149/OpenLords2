@@ -5,6 +5,7 @@
 
 #include "t.h"
 #include "engine_territory.h"
+#include "save_schema_globals.h"   /* s_slot_0053f23c — feature-density setting */
 
 #include <string.h>
 
@@ -1195,5 +1196,141 @@ int test_territory_adjacency_unbound_is_noop(void)
     cell_key(10, 10, 5);
     cell_key(11, 10, 6);
     engine_territory_build_army_adjacency();   /* army block unbound → no-op */
+    return 0;
+}
+
+/* ── Per-army feature seeding (engine_territory_seed_army_features,
+ *    port of FUN_00467a36) ─────────────────────────────────────────── */
+
+#define ARMY_ACTIVE 0x205   /* per-army active-cell tally byte */
+
+static void seed_setup(uint32_t density)
+{
+    memset(g_cells, 0, sizeof g_cells);
+    memset(g_army, 0, sizeof g_army);
+    engine_territory_bind_cells(g_cells);
+    engine_territory_bind_army_records(g_army);
+    engine_territory_bind_cell_roster(NULL);       /* type-0 score clear → no-op */
+    engine_territory_bind_cell_score_table(NULL);
+    s_slot_0053f23c = density;
+}
+
+static int seed_type(int col, int row) { return g_cells[cell_off(col, row) + 0]; }
+static int army_active(int key)        { return g_army[key * ARMY_STRIDE + ARMY_ACTIVE]; }
+
+/* Density 2: the army's first 4 active cells (scan order) get the rich type
+ * 0x14, the next 2 get type 1, the rest type 0; the tally counts them all.
+ * Also checks the derived +3/+2 bytes the setter produces for a 0x14 cell. */
+int test_territory_seed_density2_tiers(void)
+{
+    seed_setup(2);
+    for (int c = 1; c <= 7; c++)        /* row 0 cols 1..7 → ascending offsets */
+        cell_feature(c, 0, 3);
+
+    engine_territory_seed_army_features();
+
+    for (int c = 1; c <= 4; c++) T_ASSERT_EQ_I(seed_type(c, 0), 0x14);   /* idx 0..3 */
+    T_ASSERT_EQ_I(seed_type(5, 0), 1);                                   /* idx 4    */
+    T_ASSERT_EQ_I(seed_type(6, 0), 1);                                   /* idx 5    */
+    T_ASSERT_EQ_I(seed_type(7, 0), 0);                                   /* idx 6    */
+    T_ASSERT_EQ_I(army_active(3), 7);
+
+    /* A 0x14 cell's setter-derived bytes: +3 base 'h'=0x68, +2 = 1|8|0x80
+     * (type 0x14 is in the bit7 band 15..22). */
+    T_ASSERT_EQ_I(g_cells[cell_off(1, 0) + 3], 0x68);
+    T_ASSERT_EQ_I(g_cells[cell_off(1, 0) + 2], 0x89);
+    return 0;
+}
+
+/* Density 1 cutoffs (idx<6 → 0x14, idx<8 → 1, else 0) and density 3 (idx<4
+ * → 0x14, else 0 — no type-1 tier at all). */
+int test_territory_seed_density1_and_3_cutoffs(void)
+{
+    seed_setup(1);
+    for (int c = 1; c <= 9; c++) cell_feature(c, 0, 2);
+    engine_territory_seed_army_features();
+    for (int c = 1; c <= 6; c++) T_ASSERT_EQ_I(seed_type(c, 0), 0x14);   /* idx 0..5 */
+    T_ASSERT_EQ_I(seed_type(7, 0), 1);                                   /* idx 6    */
+    T_ASSERT_EQ_I(seed_type(8, 0), 1);                                   /* idx 7    */
+    T_ASSERT_EQ_I(seed_type(9, 0), 0);                                   /* idx 8    */
+
+    seed_setup(3);
+    for (int c = 1; c <= 6; c++) cell_feature(c, 0, 2);
+    engine_territory_seed_army_features();
+    for (int c = 1; c <= 4; c++) T_ASSERT_EQ_I(seed_type(c, 0), 0x14);   /* idx 0..3 */
+    T_ASSERT_EQ_I(seed_type(5, 0), 0);                                   /* idx 4 → 0 (no tier-1) */
+    T_ASSERT_EQ_I(seed_type(6, 0), 0);                                   /* idx 5    */
+    return 0;
+}
+
+/* The default arm (density not 1/2/3, here 0): idx<8 → 0x14, else → 1 — no
+ * cell is ever flattened to type 0. */
+int test_territory_seed_default_density(void)
+{
+    seed_setup(0);
+    for (int c = 1; c <= 10; c++) cell_feature(c, 0, 4);
+    engine_territory_seed_army_features();
+    for (int c = 1; c <= 8; c++) T_ASSERT_EQ_I(seed_type(c, 0), 0x14);   /* idx 0..7 */
+    T_ASSERT_EQ_I(seed_type(9, 0), 1);                                   /* idx 8    */
+    T_ASSERT_EQ_I(seed_type(10, 0), 1);                                  /* idx 9    */
+    return 0;
+}
+
+/* Only active feature-cells (key 1..17 AND +1 bit 0x20) are seeded; key-0,
+ * out-of-range, and unflagged cells are ignored and keep their type. */
+int test_territory_seed_filters_inactive(void)
+{
+    seed_setup(2);
+    cell_feature(1, 0, 5);                          /* active → seeded */
+    int o;
+    o = cell_off(2, 0); g_cells[o + 7] = 0;  g_cells[o + 1] |= 0x20; g_cells[o + 0] = 0x42; /* key 0 */
+    o = cell_off(3, 0); g_cells[o + 7] = 18; g_cells[o + 1] |= 0x20; g_cells[o + 0] = 0x43; /* key 18 */
+    o = cell_off(4, 0); g_cells[o + 7] = 5;                          g_cells[o + 0] = 0x44; /* no flag */
+
+    engine_territory_seed_army_features();
+
+    T_ASSERT_EQ_I(seed_type(1, 0), 0x14);           /* the lone active cell */
+    T_ASSERT_EQ_I(seed_type(2, 0), 0x42);           /* untouched */
+    T_ASSERT_EQ_I(seed_type(3, 0), 0x43);
+    T_ASSERT_EQ_I(seed_type(4, 0), 0x44);
+    T_ASSERT_EQ_I(army_active(5), 1);               /* only the active one tallied */
+    return 0;
+}
+
+/* Each army gets its own running index (both start at the rich type), and
+ * step 1 zeroes the +0x205 tally of rows 1..16 before counting. */
+int test_territory_seed_per_key_independent_and_resets_tally(void)
+{
+    seed_setup(3);
+    for (int k = 1; k <= 16; k++)
+        g_army[k * ARMY_STRIDE + ARMY_ACTIVE] = 0x55;   /* stale → must be reset */
+
+    cell_feature(1, 0, 6);    /* key 6, idx 0 → 0x14 */
+    cell_feature(2, 0, 9);    /* key 9, idx 0 → 0x14 (independent of key 6) */
+    cell_feature(3, 0, 6);    /* key 6, idx 1 → 0x14 */
+
+    engine_territory_seed_army_features();
+
+    T_ASSERT_EQ_I(seed_type(1, 0), 0x14);
+    T_ASSERT_EQ_I(seed_type(2, 0), 0x14);
+    T_ASSERT_EQ_I(seed_type(3, 0), 0x14);
+    T_ASSERT_EQ_I(army_active(6), 2);
+    T_ASSERT_EQ_I(army_active(9), 1);
+    T_ASSERT_EQ_I(army_active(7), 0);               /* reset, no cells */
+    return 0;
+}
+
+/* No-op when the cell grid or the army block is unbound. */
+int test_territory_seed_unbound_is_noop(void)
+{
+    seed_setup(2);
+    engine_territory_bind_cells(NULL);
+    engine_territory_seed_army_features();           /* cells unbound → no crash */
+
+    seed_setup(2);
+    cell_feature(1, 0, 3);
+    engine_territory_bind_army_records(NULL);
+    engine_territory_seed_army_features();           /* army unbound → no-op */
+    T_ASSERT_EQ_I(seed_type(1, 0), 0);               /* type unchanged (cell_feature left +0 at 0) */
     return 0;
 }

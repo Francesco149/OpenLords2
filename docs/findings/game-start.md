@@ -419,11 +419,35 @@ are now ported.
   no-op).
 
 With `FUN_0046d7f4` ported, `FUN_00467a36`'s subtree is **leaf-complete**
-(`467a36` → `46d7f4` → `46d9da`, both below it now landed); `FUN_00467a36`
-itself (624 B) is the next chip on that arm.  Remaining unported
-`FUN_004676e0` callees: `FUN_00468d4f` / `FUN_00467a36`.  `FUN_00468d4f`'s
-castle-border arm `FUN_0046902a` still wants `FUN_0046c147` (407 B); its two
-other leaves `FUN_00468c41`/`FUN_00468e61`/`FUN_00468121` are unported.
+(`467a36` → `46d7f4` → `46d9da`, both below it now landed).
+
+- **FUN_00467a36** → `engine_territory_seed_army_features` (`engine_territory.c`,
+  landed 2026-05-31).  The new-game **per-army feature-seeding pass** — the
+  7th of `FUN_004676e0`'s eight direct callees.  For every active feature-cell
+  (key +7 in 1..17, flags +1 bit 0x20) it assigns a feature terrain type by
+  the army's *running* active-cell index and the global feature-density
+  setting `DAT_0053f23c` (= `s_slot_0053f23c`, save entry 13): the first few
+  cells of each army get the rich type `0x14` (descriptor base `'h'`), then
+  type `1` (`'T'`), then type `0` (`'P'`), per-density cutoffs —
+  density 3: `<4→0x14, else 0`; 2: `<4→0x14, <6→1, else 0`; 1: `<6→0x14,
+  <8→1, else 0`; default(0): `<8→0x14, else 1`.  Each cell is finalised by
+  pre-writing +3/+0 then calling the ported `engine_territory_set_cell_type`
+  (`FUN_0046d7f4`); the **+0 pre-write is load-bearing** — it makes the setter
+  read the *new* type as its "old type", so the setter's 0x17/0x18 +3
+  correction never fires here (new type is always 0x14/1/0).  A per-army
+  active-cell tally is kept at row `+0x205`.  r2 @0x467a36 confirmed the
+  `key<<8`+`lea[eax+eax*2]` = `key*0x300` row index, the `+0x205` tally byte,
+  the `(desc3+0xb0)&3` low-bit preserve, the three `DAT_0053f23c` compares,
+  and the `idx<4/6/8` cutoffs.  **Quirk #132** extended a third time (the
+  `< 0x12` key guard vs the 17-row block at the `+0x205` tally).  6 host
+  tests (density-2 tiers + setter-derived +3/+2 bytes, density-1 & density-3
+  cutoffs, default-density arm, inactive-cell filtering, per-key-independent
+  indices + step-1 tally reset, unbound no-ops).
+
+Remaining unported `FUN_004676e0` callee: **`FUN_00468d4f`** (274 B) — the
+last of the eight.  Its castle-border arm `FUN_0046902a` still wants
+`FUN_0046c147` (407 B); its leaves `FUN_00468c41` / `FUN_00468e61` /
+`FUN_00468121` (and `FUN_00467fd1` → `FUN_0046ac22`) are unported.
 
 ### FUN_0046ff43 — strategic movement-cost grid builder
 
