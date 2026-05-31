@@ -1420,6 +1420,11 @@ struct test_case {
     X(territory_seed_filters_inactive) \
     X(territory_seed_per_key_independent_and_resets_tally) \
     X(territory_seed_unbound_is_noop) \
+    X(territory_census_buckets_by_type) \
+    X(territory_census_band_boundaries) \
+    X(territory_census_skips_empty_and_other_rows) \
+    X(territory_census_clears_stale_counters) \
+    X(territory_census_unbound) \
     X(territory_stamp_block_2x2_gradient) \
     X(territory_stamp_block_is_square_not_strip) \
     X(territory_stamp_block_unbound_is_noop) \

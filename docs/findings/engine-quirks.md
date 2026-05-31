@@ -4734,3 +4734,30 @@ castle-candidate cell, not the capital itself.
 
 > 📍 `src/engine_territory.c` (`engine_territory_setup_capitals`),
 > Ghidra `FUN_00468d4f` @ 0x468d4f.
+
+## 135. The per-army terrain census zeroes its five counters with a daisy-chain of copies, not five stores
+
+`FUN_00469b8d` (the new-game per-realm terrain census) starts by clearing
+its five tally bytes in the realm record.  A normal compiler would emit five
+`mov byte [addr], 0`.  Retail instead writes a **chain of copies**:
+
+```
+army[+0x200] = 0;            // DAT_0053fbb0
+army[+0x201] = army[+0x200]; // DAT_0053fbb1 = fbb0
+army[+0x1ff] = army[+0x201]; // DAT_0053fbaf = fbb1
+army[+0x204] = army[+0x1ff]; // DAT_0053fbb4 = fbaf
+army[+0x203] = army[+0x204]; // DAT_0053fbb3 = fbb4
+```
+
+Each field is set from the *previous* field, which is only 0 because the
+head of the chain was just literal-zeroed.  The result is identical to five
+zero-stores — it's a no-difference idiom (the C source was almost certainly
+`a = b = c = d = e = 0;` with the fields enumerated in a scrambled order, and
+the compiler kept the right-to-left assignment evaluation literally).  The
+scramble also quietly reveals the field *grouping*: the five touched offsets
+are `0x1ff,0x200,0x201,0x203,0x204` — note `0x202` is skipped, confirming it
+belongs to a different field, not this census run.  The port just zeroes all
+five directly.
+
+> 📍 `src/engine_territory.c` (`engine_territory_census_army_terrain`),
+> Ghidra `FUN_00469b8d` @ 0x469b8d.

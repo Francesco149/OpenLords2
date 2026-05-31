@@ -832,6 +832,44 @@ init-only**, it lives in its own module `engine_ranking.c` rather than
 At new-game with multiple players, winner != last, so phase G does not
 fire; it fires later when the field narrows to one survivor.
 
+### FUN_00469b8d — per-army terrain census (first leaf of FUN_0049bd99) ✅ ported
+
+The first per-army callee inside the still-unported army/country setup pass
+`FUN_0049bd99` (3 KB, the largest remaining init callee).  `FUN_0049bd99`
+loops the realm keys 1..realm-count, seeds each realm's `g_per_army_768`
+record, and calls `FUN_00469b8d(key)` to **census the realm's terrain**.
+
+The census walks the realm's per-key cell roster (`g_cell_roster` =
+`DAT_0053ea00` / save entry 12, 20 i32 per row — the same table
+`engine_territory_rebuild_cell_roster` fills) and, for each non-zero column
+(a cell byte-offset), reads that cell's +0 TYPE byte from the overworld grid
+(`g_cells` = `DAT_00522f90`) and bumps one of five counters in the realm's
+record (`g_per_army_768` row + 0x1ff..0x204):
+
+| record byte | retail DAT | counts TYPE |
+|-------------|-----------|-------------|
+| +0x1ff | 0x53fbaf | `== 1` |
+| +0x200 | 0x53fbb0 | `0x0f..0x16` |
+| +0x201 | 0x53fbb1 | `0x02..0x0e` |
+| +0x203 | 0x53fbb3 | `0 / 0x17 / 0x18` |
+| +0x204 | 0x53fbb4 | `>= 0x19` |
+
+`+0x202` (`DAT_0053fbb2`) sits inside the run but is **not** a bucket and is
+never touched — a separate field.  All three tables are already-externed
+shared save blocks (no new globals), so the port slots straight into
+`engine_territory.c` reusing its existing `g_cells` / `g_cell_roster` /
+`g_army_records` binds.  Verified against r2 @0x469b8d (the type ladder and
+the `key*0x300` / `key*0x50` strides).  See engine-quirks #135 for the
+daisy-chain counter init.  Ported as `engine_territory_census_army_terrain`;
+5 host tests (bucket split, band boundaries 1/2/0xe/0xf/0x16/0x17/0x18/0x19,
+empty-slot + other-row isolation, stale-counter clear with +0x202 preserved,
+unbound NULL-safety).
+
+**Remaining `FUN_0049bd99` leaves** (its other zero-dep callees, bottom-up):
+`FUN_0046826c` (221 B, capital banner via the ported `FUN_0046ac22`) and the
+2 KB `FUN_0044f6e7`; then the 1-dep helpers `FUN_0044d913` / `FUN_00432746`
+/ `FUN_0046dfd5`.
+
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
    callees are real; then `FUN_00499dc3` + `FUN_004329ec` spine + the
    `DAT_0052af94=3` flip.

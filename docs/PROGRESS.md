@@ -7,6 +7,40 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — GAME-START chip: per-army terrain census (FUN_00469b8d) — first leaf of FUN_0049bd99
+
+Ported `FUN_00469b8d` (404 B) → `engine_territory_census_army_terrain` in
+`engine_territory.c` — the **per-realm terrain census** and the first per-army
+callee of the army/country setup pass `FUN_0049bd99` (3 KB, the largest
+remaining unported callee of the new-game init `FUN_00497ced`).
+
+For realm `key`, it walks the realm's per-key cell roster (`g_cell_roster` =
+`DAT_0053ea00`, save entry 12, 20 i32/row — the table
+`engine_territory_rebuild_cell_roster` fills) and, for each non-zero column (a
+cell byte-offset), reads that cell's +0 TYPE byte from the overworld grid
+(`g_cells` = `DAT_00522f90`) and bumps one of five counters in the realm's
+record (`g_per_army_768` + 0x1ff..0x204): TYPE 1 → +0x1ff; 0x0f..0x16 → +0x200;
+0x02..0x0e → +0x201; 0/0x17/0x18 → +0x203; ≥0x19 → +0x204.  `+0x202` sits in the
+run but is a *separate* field, never touched.
+
+**Zero new globals.**  All three tables are already-externed shared save blocks
+(`g_per_army_768`, `g_misc_1360`, `g_overworld_map`) and all three are already
+bound in `engine_territory.c` (army_records / cell_roster / cells) — so the port
+is a pure addition reusing existing binds, no scalar-wall exposure.  r2 @0x469b8d
+confirmed the type ladder and the `key*0x300` / `key*0x50` strides.  Documented
+the daisy-chain counter-init idiom as engine-quirks #135.
+
+5 host tests (bucket split; band boundaries 1/2/0xe/0xf/0x16/0x17/0x18/0x19;
+empty-slot + other-realm-row isolation; stale-counter clear with +0x202
+preserved; unbound NULL-safety).  1442/1442 pass under ASan/UBSan; mingw `.exe`
+clean under `-Wall -Wextra`; `_engine_territory_census_army_terrain` in the PE.
+
+**Next.**  Continue `FUN_0049bd99` bottom-up: its other zero-dep leaves
+`FUN_0046826c` (221 B — capital banner, via the already-ported `FUN_0046ac22`)
+and `FUN_0044f6e7` (2 KB), then the 1-dep helpers `FUN_0044d913` / `FUN_00432746`
+/ `FUN_0046dfd5`.  (Audio callees `FUN_00499aca`/`d7d` deferred — they need
+audible verification, which an autonomous host-test run can't provide.)
+
 ## 2026-05-31 — GAME-START milestone: overworld-grid setup sequence complete (FUN_004676e0)
 
 Landed the **strategic-map loader** then the **orchestrator** that seats it,

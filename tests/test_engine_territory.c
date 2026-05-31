@@ -1337,6 +1337,144 @@ int test_territory_seed_unbound_is_noop(void)
     return 0;
 }
 
+/* ── Per-army terrain census (port of FUN_00469b8d) ─────────────────
+ * Reuse g_cells / g_roster / g_army.  A "tile of TYPE t in army K's
+ * roster column c" = a cell whose +0 byte is t, with that cell's
+ * byte-offset stored in g_roster[K][c]. */
+
+enum { CEN_TYPE1 = 0x1ff, CEN_HIGH = 0x200, CEN_MID = 0x201,
+       CEN_HOLE = 0x202, CEN_SPECIAL = 0x203, CEN_OVER = 0x204 };
+
+static void census_setup(void)
+{
+    memset(g_cells, 0, sizeof g_cells);
+    memset(g_roster, 0, sizeof g_roster);
+    memset(g_army, 0, sizeof g_army);
+    engine_territory_bind_cells(g_cells);
+    engine_territory_bind_cell_roster(g_roster);
+    engine_territory_bind_army_records(g_army);
+}
+
+/* Put a tile of TYPE `t` into army `key`'s roster column `col`, backed by a
+ * distinct cell (one per (key,col) so offsets never collide and 0 is never
+ * a real offset — cell (0,0) is avoided by starting at index 1). */
+static void census_tile(int key, int col, uint8_t t)
+{
+    int cell = key * ROSTER_NCOL + col + 1;   /* >= 1 → offset != 0 */
+    int off  = cell * CELL_STRIDE;
+    g_cells[off] = t;
+    g_roster[key * ROSTER_NCOL + col] = off;
+}
+
+static int census(int key, int off) { return g_army[key * ARMY_STRIDE + off]; }
+
+/* Each TYPE band lands in its own counter, and TYPE 0 / 0x17 / 0x18 all
+ * share the +0x203 bucket. */
+int test_territory_census_buckets_by_type(void)
+{
+    census_setup();
+    census_tile(5, 0, 1);       /* +0x1ff */
+    census_tile(5, 1, 0x10);    /* 0x0f..0x16 → +0x200 */
+    census_tile(5, 2, 0x05);    /* 0x02..0x0e → +0x201 */
+    census_tile(5, 3, 0);       /* special   → +0x203 */
+    census_tile(5, 4, 0x17);    /* special   → +0x203 */
+    census_tile(5, 5, 0x18);    /* special   → +0x203 */
+    census_tile(5, 6, 0x19);    /* >= 0x19   → +0x204 */
+    census_tile(5, 7, 0xff);    /* >= 0x19   → +0x204 */
+
+    engine_territory_census_army_terrain(5);
+
+    T_ASSERT_EQ_I(census(5, CEN_TYPE1),   1);
+    T_ASSERT_EQ_I(census(5, CEN_HIGH),    1);
+    T_ASSERT_EQ_I(census(5, CEN_MID),     1);
+    T_ASSERT_EQ_I(census(5, CEN_SPECIAL), 3);
+    T_ASSERT_EQ_I(census(5, CEN_OVER),    2);
+    T_ASSERT_EQ_I(census(5, CEN_HOLE),    0);   /* +0x202 never touched */
+    return 0;
+}
+
+/* Band boundaries: 1|2|0xe|0xf|0x16|0x17|0x18|0x19 land exactly where the
+ * retail ladder puts them. */
+int test_territory_census_band_boundaries(void)
+{
+    census_setup();
+    census_tile(3, 0, 1);       /* TYPE1 */
+    census_tile(3, 1, 2);       /* MID lower edge */
+    census_tile(3, 2, 0x0e);    /* MID upper edge */
+    census_tile(3, 3, 0x0f);    /* HIGH lower edge */
+    census_tile(3, 4, 0x16);    /* HIGH upper edge */
+    census_tile(3, 5, 0x17);    /* SPECIAL */
+    census_tile(3, 6, 0x18);    /* SPECIAL */
+    census_tile(3, 7, 0x19);    /* OVER lower edge */
+
+    engine_territory_census_army_terrain(3);
+
+    T_ASSERT_EQ_I(census(3, CEN_TYPE1),   1);
+    T_ASSERT_EQ_I(census(3, CEN_MID),     2);
+    T_ASSERT_EQ_I(census(3, CEN_HIGH),    2);
+    T_ASSERT_EQ_I(census(3, CEN_SPECIAL), 2);
+    T_ASSERT_EQ_I(census(3, CEN_OVER),    1);
+    return 0;
+}
+
+/* Empty roster columns (offset 0) are skipped; only the army's own row is
+ * tallied. */
+int test_territory_census_skips_empty_and_other_rows(void)
+{
+    census_setup();
+    census_tile(4, 0, 5);       /* MID */
+    census_tile(4, 5, 5);       /* MID — gap of empty columns 1..4 between */
+    census_tile(7, 0, 5);       /* a different army's tile — must not count */
+
+    engine_territory_census_army_terrain(4);
+
+    T_ASSERT_EQ_I(census(4, CEN_MID), 2);
+    /* Army 7 untouched (we never censused it). */
+    T_ASSERT_EQ_I(census(7, CEN_MID), 0);
+    return 0;
+}
+
+/* The five counters are reset at entry, even with no roster cells. */
+int test_territory_census_clears_stale_counters(void)
+{
+    census_setup();
+    g_army[6 * ARMY_STRIDE + CEN_TYPE1]   = 0x42;
+    g_army[6 * ARMY_STRIDE + CEN_HIGH]    = 0x42;
+    g_army[6 * ARMY_STRIDE + CEN_MID]     = 0x42;
+    g_army[6 * ARMY_STRIDE + CEN_SPECIAL] = 0x42;
+    g_army[6 * ARMY_STRIDE + CEN_OVER]    = 0x42;
+    g_army[6 * ARMY_STRIDE + CEN_HOLE]    = 0x42;   /* +0x202 must survive */
+
+    engine_territory_census_army_terrain(6);        /* empty roster row */
+
+    T_ASSERT_EQ_I(census(6, CEN_TYPE1),   0);
+    T_ASSERT_EQ_I(census(6, CEN_HIGH),    0);
+    T_ASSERT_EQ_I(census(6, CEN_MID),     0);
+    T_ASSERT_EQ_I(census(6, CEN_SPECIAL), 0);
+    T_ASSERT_EQ_I(census(6, CEN_OVER),    0);
+    T_ASSERT_EQ_I(census(6, CEN_HOLE),    0x42);    /* untouched */
+    return 0;
+}
+
+/* No-op when the army block is unbound; counters merely cleared when the
+ * roster or cell grid is unbound. */
+int test_territory_census_unbound(void)
+{
+    census_setup();
+    census_tile(2, 0, 5);
+    engine_territory_bind_army_records(NULL);
+    engine_territory_census_army_terrain(2);        /* army unbound → no crash, no write */
+    T_ASSERT_EQ_I(g_army[2 * ARMY_STRIDE + CEN_MID], 0);
+
+    census_setup();
+    g_army[2 * ARMY_STRIDE + CEN_MID] = 0x42;
+    census_tile(2, 0, 5);
+    engine_territory_bind_cell_roster(NULL);
+    engine_territory_census_army_terrain(2);        /* roster unbound → counters cleared only */
+    T_ASSERT_EQ_I(census(2, CEN_MID), 0);
+    return 0;
+}
+
 /* ── Capital-region setup: block stamp + capital placement ──────────
  * (port of FUN_0046ac22 / FUN_00467fd1, the leaves of the 0x468d4f
  * castle-setup subtree).  Reuse the module-level g_cells + cell_off. */

@@ -784,6 +784,82 @@ void engine_territory_build_army_adjacency(void)
     }
 }
 
+/* Per-army terrain-type census counters — five bytes in the army record
+ * (g_per_army_768 row + these offsets) that FUN_00469b8d tallies the
+ * army's active tiles into, bucketed by each tile's cell +0 TYPE byte.
+ *
+ *   +0x1ff  TYPE == 1                 (retail DAT_0053fbaf)
+ *   +0x200  TYPE 0x0f..0x16           (retail DAT_0053fbb0)
+ *   +0x201  TYPE 0x02..0x0e           (retail DAT_0053fbb1)
+ *   +0x203  TYPE 0 / 0x17 / 0x18      (retail DAT_0053fbb3)
+ *   +0x204  TYPE >= 0x19              (retail DAT_0053fbb4)
+ *
+ * Offset +0x202 (DAT_0053fbb2) sits inside this run but is intentionally
+ * NOT a bucket and is never touched here — a separate field. */
+#define ARMY_CENSUS_TYPE1    0x1ff
+#define ARMY_CENSUS_HIGH     0x200
+#define ARMY_CENSUS_MID      0x201
+#define ARMY_CENSUS_SPECIAL  0x203
+#define ARMY_CENSUS_OVER     0x204
+
+/* Port of FUN_00469b8d (404 B) — the new-game per-army **terrain census**.
+ * The first per-army callee of the army/country setup pass 0x49bd99 (still
+ * unported), run once per realm key (1..realm-count) right after the realm's
+ * record is seeded.
+ *
+ * It tallies how many of the army's active feature cells fall into each
+ * terrain-TYPE band, into the five record bytes above.  The army's active
+ * cells are listed in the per-key cell roster (g_cell_roster / DAT_0053ea00,
+ * 20 i32 per row — the same table engine_territory_rebuild_cell_roster
+ * fills): each non-zero column holds a cell's byte-offset, so the cell's
+ * +0 TYPE byte is `g_cells[offset]` (offset is already cell_index*8 = the
+ * type-byte position).  A zero column is an empty slot and is skipped.
+ *
+ * The type→bucket mapping is retail's exact if/else ladder (see r2
+ * @0x469b8d): TYPE 0, 0x17 and 0x18 share the +0x203 bucket; 1 → +0x1ff;
+ * 2..0xe → +0x201; 0xf..0x16 → +0x200; >=0x19 → +0x204.
+ *
+ * QUIRK: retail zeroes the five counters with a daisy-chain of copies
+ * (`fbb0=0; fbb1=fbb0; fbaf=fbb1; fbb4=fbaf; fbb3=fbb4;`) rather than five
+ * literal stores — a no-difference idiom that always lands 0 in all five.
+ * We zero them directly.
+ *
+ * No bounds check on `key`: retail trusts its 1..realm-count call site
+ * (realm-count <= 16, so the row stays inside g_per_army_768).  No-op if
+ * the army-record block is unbound; the counting loop additionally needs
+ * the roster and cell grid bound (else the army's counters are just
+ * cleared, matching retail when its roster row is empty). */
+void engine_territory_census_army_terrain(int key)
+{
+    if (g_army_records == NULL) return;
+
+    uint8_t *rowbase = g_army_records + key * ARMY_ROW_STRIDE;
+    rowbase[ARMY_CENSUS_TYPE1]   = 0;
+    rowbase[ARMY_CENSUS_HIGH]    = 0;
+    rowbase[ARMY_CENSUS_MID]     = 0;
+    rowbase[ARMY_CENSUS_SPECIAL] = 0;
+    rowbase[ARMY_CENSUS_OVER]    = 0;
+
+    if (g_cell_roster == NULL || g_cells == NULL) return;
+
+    const int32_t *roster_row = g_cell_roster + key * ROSTER_ROW_I32;
+    for (int col = 0; col < ROSTER_COLS; col++) {
+        int32_t off = roster_row[col];
+        if (off == 0) continue;                 /* empty roster slot */
+
+        unsigned type = g_cells[(unsigned)off]; /* cell +0 TYPE byte */
+        if (type == 0 || type == 0x17 || type == 0x18) {
+            rowbase[ARMY_CENSUS_SPECIAL]++;
+        } else if (type < 0x19) {
+            if (type < 2)         rowbase[ARMY_CENSUS_TYPE1]++;  /* type == 1 */
+            else if (type < 0xf)  rowbase[ARMY_CENSUS_MID]++;    /* 0x02..0x0e */
+            else if (type < 0x17) rowbase[ARMY_CENSUS_HIGH]++;   /* 0x0f..0x16 */
+        } else {
+            rowbase[ARMY_CENSUS_OVER]++;                         /* >= 0x19 */
+        }
+    }
+}
+
 /* Per-army active-cell tally byte: row offset +0x205 (retail DAT_0053fbb5
  * = g_per_army_768 + 0x205). */
 #define ARMY_ACTIVE_COUNT 0x205

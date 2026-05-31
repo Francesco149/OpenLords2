@@ -167,6 +167,15 @@ void engine_territory_load_neighbour_keys(int col, int row, int cursor_off,
  * with a count at +0x5a.  No-op if the cell grid or army block is unbound. */
 void engine_territory_build_army_adjacency(void);
 
+/* Port of FUN_00469b8d.  New-game per-army terrain census: tally the army's
+ * active feature cells (listed in the bound cell roster) into five
+ * terrain-TYPE buckets in the army record — +0x1ff (TYPE 1), +0x200 (TYPE
+ * 0x0f..0x16), +0x201 (TYPE 0x02..0x0e), +0x203 (TYPE 0/0x17/0x18) and
+ * +0x204 (TYPE >= 0x19).  The first per-army callee of the army/country
+ * setup pass 0x49bd99.  No-op if the army-record block is unbound; the
+ * counters are merely cleared if the roster or cell grid is unbound. */
+void engine_territory_census_army_terrain(int key);
+
 /* Port of FUN_00467a36.  New-game per-army feature-seeding pass: for every
  * active feature-cell (+7 key 1..17, +1 bit 0x20 set), assign a feature
  * terrain type (0x14 / 1 / 0) by the army's running active-cell index and
