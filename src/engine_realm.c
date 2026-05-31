@@ -553,3 +553,35 @@ void engine_realm_accrue_income(void)
         }
     }
 }
+
+/* Port of FUN_00451061 — the per-realm army recount pass (a turn-advance pass
+ * of 0x448440).  Resets each realm's army-count scratch, then walks the
+ * territory-record block counting every placed army (record kind +0x08 == 3,
+ * the kind engine_territory_place_entity stamps for the army-start path) into
+ * its owning realm (record +0x10).  See engine_realm.h.
+ *
+ * QUIRK (#148): the byte count +0x1a4 is reset (pass 1) then recounted, but the
+ * i32 count +0x1a0 is incremented in lockstep WITHOUT being reset, so it
+ * accumulates across turns while the byte holds the live count. */
+void engine_realm_recount_armies(void)
+{
+    /* Pass 1 — clear each realm's army-count scratch (and the unrelated +0x15c
+     * flag retail piggybacks onto this reset). */
+    for (int key = 1; key <= (int)s_slot_0056d5dc; key++) {
+        uint8_t *r = ARMY_REC(key);
+        r[0x1a4] = 0;       /* live army count (byte)          */
+        r[0x15c] = 0;       /* unrelated per-realm flag         */
+        r[0x1a5] = 0;       /* last counted army's record index */
+    }
+
+    /* Pass 2 — tally each kind-3 territory record into its owner realm. */
+    for (int t = 1; t < 0x97; t++) {
+        uint8_t *terr = TERR_REC(t);
+        if (terr[0x08] == 3) {
+            uint8_t *r = ARMY_REC(terr[0x10]);
+            r[0x1a4] = (uint8_t)(r[0x1a4] + 1);
+            *(int32_t *)(r + 0x1a0) += 1;
+            r[0x1a5] = (uint8_t)t;
+        }
+    }
+}

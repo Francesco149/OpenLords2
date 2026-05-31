@@ -214,4 +214,23 @@ void engine_realm_recompute_owner_tally(int player);
  * provisional; offsets r2-verified against the 0x300 / 0x160 strides. */
 void engine_realm_accrue_income(void);
 
+/* Port of FUN_00451061 @ 0x451061 (239 B, void) — the per-realm army recount
+ * pass, a turn-advance pass of 0x448440.  Two passes over the save state:
+ *
+ *   1. For realms 1..s_slot_0056d5dc, clear the live army-count byte +0x1a4,
+ *      the last-army-index byte +0x1a5, and an unrelated per-realm flag +0x15c.
+ *
+ *   2. For territory records 1..150 in g_per_territory_420, every record whose
+ *      kind byte +0x08 == 3 (a placed army — the kind the army-start path
+ *      stamps via engine_territory_place_entity) is tallied into its owning
+ *      realm (record +0x10): bump the realm's byte count +0x1a4 and i32 count
+ *      +0x1a0, and record the army's record index in +0x1a5.
+ *
+ * QUIRK #148: pass 1 resets the byte count +0x1a4 but NOT the i32 +0x1a0, yet
+ * pass 2 increments both — so +0x1a4 holds the live per-turn count while +0x1a0
+ * accumulates monotonically across turns.  Touches only g_per_army_768 and
+ * g_per_territory_420; no callees, no new globals.  Field semantics provisional;
+ * offsets r2-verified against the 0x300 / 0x1a4 strides. */
+void engine_realm_recount_armies(void);
+
 #endif /* OPENLORDS2_ENGINE_REALM_H */

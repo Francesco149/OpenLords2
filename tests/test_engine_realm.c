@@ -926,3 +926,53 @@ int test_engine_realm_accrue_income_band_cap(void)
     T_ASSERT_EQ_I(AI32(r, 0xbc), 8000);          /* percent_of(1000,800) */
     return 0;
 }
+
+/* ─── engine_realm_recount_armies (FUN_00451061) ────────────────────────── */
+
+/* Kind-3 territory records (placed armies) are tallied into their owning
+ * realm; other kinds are ignored; the prior scratch is reset first. */
+int test_engine_realm_recount_armies_basic(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    s_slot_0056d5dc = 2;
+
+    TREC(5)[0x08]  = 3; TREC(5)[0x10]  = 1;    /* army → realm 1 */
+    TREC(9)[0x08]  = 3; TREC(9)[0x10]  = 1;    /* army → realm 1 */
+    TREC(12)[0x08] = 3; TREC(12)[0x10] = 2;    /* army → realm 2 */
+    TREC(20)[0x08] = 2; TREC(20)[0x10] = 1;    /* kind 2 → ignored */
+
+    /* dirty scratch that must be reset by pass 1 */
+    AREC(1)[0x1a4] = 0x77; AREC(1)[0x1a5] = 0x77; AREC(1)[0x15c] = 0x77;
+
+    engine_realm_recount_armies();
+
+    T_ASSERT_EQ_U(AREC(1)[0x1a4], 2);          /* two armies        */
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x1a0), 2);
+    T_ASSERT_EQ_U(AREC(1)[0x1a5], 9);          /* last army's index */
+    T_ASSERT_EQ_U(AREC(1)[0x15c], 0);          /* flag cleared      */
+    T_ASSERT_EQ_U(AREC(2)[0x1a4], 1);
+    T_ASSERT_EQ_I(AI32(AREC(2), 0x1a0), 1);
+    T_ASSERT_EQ_U(AREC(2)[0x1a5], 12);
+    return 0;
+}
+
+/* Quirk #148: across two recounts the byte +0x1a4 stays the live count while
+ * the i32 +0x1a0 accumulates (reset of +0x1a4 only, never +0x1a0). */
+int test_engine_realm_recount_armies_i32_accumulates(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    s_slot_0056d5dc = 1;
+    TREC(3)[0x08] = 3; TREC(3)[0x10] = 1;
+    TREC(4)[0x08] = 3; TREC(4)[0x10] = 1;
+
+    engine_realm_recount_armies();
+    T_ASSERT_EQ_U(AREC(1)[0x1a4], 2);
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x1a0), 2);
+
+    engine_realm_recount_armies();
+    T_ASSERT_EQ_U(AREC(1)[0x1a4], 2);          /* byte recounted = 2 */
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x1a0), 4);    /* i32 accumulated = 4 */
+    return 0;
+}

@@ -5175,3 +5175,42 @@ with a comment.
 > Ghidra `FUN_00449889` @ 0x449889 (helpers 0x449d6e / 0x46942c / 0x469a9c);
 > r2 `pdf @ 0x449889` confirms the per-mode base delta (`BASE − rng_b/8`), the
 > demote-before-check ordering, and the duplicate `cmp …, 4` in 0x449d6e.
+
+## 148. A realm's army count is reset every turn — but the i32 beside it just keeps growing
+
+The per-realm army recount pass `FUN_00451061`
+(`engine_realm_recount_armies`) rebuilds each realm's count of placed armies
+(territory records whose kind byte `+0x08` is 3).  It does this in two passes:
+pass 1 zeroes the per-realm scratch, pass 2 walks all 150 territory records and
+bumps the owning realm's counters for each army.  The catch is that the two
+counters it bumps are reset asymmetrically:
+
+```c
+for (realm = 1; realm <= count; realm++) {
+    army[realm].count_b   /* +0x1a4, byte */ = 0;   /* reset */
+    army[realm].flag      /* +0x15c        */ = 0;
+    army[realm].last_idx  /* +0x1a5        */ = 0;
+    /* NOTE: +0x1a0 (i32) is NOT cleared here */
+}
+for (t = 1; t < 0x97; t++)
+    if (terr[t].kind == 3) {
+        realm = terr[t].owner;              /* +0x10 */
+        army[realm].count_b += 1;           /* +0x1a4 — live count   */
+        army[realm].count_i32 += 1;         /* +0x1a0 — accumulates! */
+        army[realm].last_idx = t;           /* +0x1a5                */
+    }
+```
+
+So after every turn the byte at `+0x1a4` holds the realm's *current* army count
+(reset-then-recounted), while the i32 at `+0x1a0` holds a *running total* — it
+is only ever incremented, never cleared by this pass, so it climbs by the army
+count each turn without bound.  Two adjacent fields, fed from the same loop,
+with opposite lifetimes.  Whether `+0x1a0` is a deliberate lifetime accumulator
+cleared elsewhere (new-game init) or a latent non-reset is unknown; the drop-in
+reproduces the asymmetry verbatim
+(`test_engine_realm_recount_armies_i32_accumulates` pins the byte at the live
+count and the i32 climbing across two recounts).
+
+> 📍 `src/engine_realm.c` (`engine_realm_recount_armies`).  Ghidra
+> `FUN_00451061` @ 0x451061; the kind-3 = placed-army mapping comes from
+> `engine_territory_place_entity`'s army-start caller (kind=3, type=6).

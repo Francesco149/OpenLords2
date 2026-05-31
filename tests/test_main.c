@@ -1718,6 +1718,8 @@ struct test_case {
     X(engine_realm_accrue_income_unowned) \
     X(engine_realm_accrue_income_scratch_zeroes) \
     X(engine_realm_accrue_income_band_cap) \
+    X(engine_realm_recount_armies_basic) \
+    X(engine_realm_recount_armies_i32_accumulates) \
     \
     X(engine_events_scratch_and_gates) \
     X(engine_events_commit_resource) \
