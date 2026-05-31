@@ -1374,6 +1374,12 @@ struct test_case {
     X(territory_mark_draw_box_clamps_at_corner) \
     X(territory_mark_draw_box_clamps_at_far_edge) \
     X(territory_mark_draw_box_unbound_is_noop) \
+    X(territory_highlight_key_stamps_3x3_per_match) \
+    X(territory_highlight_key_no_match_is_clean) \
+    X(territory_highlight_key_clamps_at_edge) \
+    X(territory_highlight_key_zero_matches_all) \
+    X(territory_highlight_key_marks_full_screen) \
+    X(territory_highlight_key_unbound_is_noop) \
     X(territory_roster_indexes_active_cells_by_key) \
     X(territory_roster_filters_inactive_cells) \
     X(territory_roster_caps_at_20_and_evicts_overflow) \

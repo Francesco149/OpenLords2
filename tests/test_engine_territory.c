@@ -365,6 +365,97 @@ int test_territory_mark_draw_box_unbound_is_noop(void)
     return 0;
 }
 
+/* ── Highlight-key sweep (port of FUN_0046dfd5) ────────────────────── */
+
+/* Two cells carry key 5; each gets a 3×3 box. A cell with a different
+ * key is ignored. Far-apart cells produce two disjoint 3×3 blocks. */
+int test_territory_highlight_key_stamps_3x3_per_match(void)
+{
+    cells_fill(0x00);
+    g_cells[cell_off(10, 10) + 7] = 5;
+    g_cells[cell_off(40, 40) + 7] = 5;
+    g_cells[cell_off(20, 20) + 7] = 6;   /* other key — must be skipped */
+    engine_territory_set_dirty_state(NULL);
+
+    engine_territory_highlight_key_cells(5);
+
+    for (int r = 0; r < CELL_GRID; r++)
+        for (int c = 0; c < CELL_GRID; c++) {
+            int near10 = (c >= 9 && c <= 11 && r >= 9 && r <= 11);
+            int near40 = (c >= 39 && c <= 41 && r >= 39 && r <= 41);
+            T_ASSERT_EQ_I(box_marked(c, r), near10 || near40);
+        }
+    return 0;
+}
+
+/* No cell matches → no flag set anywhere. */
+int test_territory_highlight_key_no_match_is_clean(void)
+{
+    cells_fill(0x00);
+    g_cells[cell_off(10, 10) + 7] = 5;
+    engine_territory_set_dirty_state(NULL);
+
+    engine_territory_highlight_key_cells(7);   /* key 7 absent */
+
+    for (int i = 0; i < N_CELLS; i++)
+        T_ASSERT_EQ_I(g_cells[i * CELL_STRIDE + 2] & 0x20, 0);
+    return 0;
+}
+
+/* A match at a corner clamps its box (no overrun) and still works. */
+int test_territory_highlight_key_clamps_at_edge(void)
+{
+    cells_fill(0x00);
+    g_cells[cell_off(0, 0) + 7] = 3;
+    engine_territory_set_dirty_state(NULL);
+
+    engine_territory_highlight_key_cells(3);
+
+    for (int r = 0; r < CELL_GRID; r++)
+        for (int c = 0; c < CELL_GRID; c++)
+            T_ASSERT_EQ_I(box_marked(c, r), (c <= 1 && r <= 1));
+    return 0;
+}
+
+/* Key 0 matches the default-zero +7 byte of every cell, so the whole
+ * grid ends up flagged — a faithful (if degenerate) consequence. */
+int test_territory_highlight_key_zero_matches_all(void)
+{
+    cells_fill(0x00);
+    engine_territory_set_dirty_state(NULL);
+
+    engine_territory_highlight_key_cells(0);
+
+    for (int i = 0; i < N_CELLS; i++)
+        T_ASSERT_EQ_I((g_cells[i * CELL_STRIDE + 2] & 0x20) != 0, 1);
+    return 0;
+}
+
+/* With a dirty state bound the sweep ends in a full-screen repaint. */
+int test_territory_highlight_key_marks_full_screen(void)
+{
+    cells_fill(0x00);
+    engine_dirty_rect_state_t s = {
+        .dirty_mark = 0, .dirty_xmin = 0x7fff, .dirty_xmax = -0x7fff,
+        .dirty_ymin = 0x7fff, .dirty_ymax = -0x7fff, .below_status_redraw = 0,
+    };
+    engine_territory_set_dirty_state(&s);
+    engine_territory_highlight_key_cells(9);   /* no match needed */
+    T_ASSERT_EQ_I(s.dirty_mark, 1);
+    T_ASSERT_EQ_I(s.dirty_xmax, 0x27f);
+    T_ASSERT_EQ_I(s.dirty_ymax, 0x1df);
+    engine_territory_set_dirty_state(NULL);
+    return 0;
+}
+
+int test_territory_highlight_key_unbound_is_noop(void)
+{
+    engine_territory_bind_cells(NULL);
+    engine_territory_set_dirty_state(NULL);
+    engine_territory_highlight_key_cells(5);   /* must not crash */
+    return 0;
+}
+
 /* ── Per-key cell roster rebuild (port of FUN_0046da4b) ─────────────── */
 
 enum { ROSTER_ROWS = 17, ROSTER_NCOL = 20, SCORE_STRIDE = 0x180 };

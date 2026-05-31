@@ -260,7 +260,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46de05 | FUN_0046de05 | 143 | engine_territory.c, engine_territory.h |
 | 0x46de94 | FUN_0046de94 | 189 | engine_territory.c, engine_territory.h |
 | 0x46df51 | FUN_0046df51 | 132 | engine_territory.c, engine_territory.h |
-| 0x46dfd5 | FUN_0046dfd5 | 146 | engine_territory.c |
+| 0x46dfd5 | FUN_0046dfd5 | 146 | engine_territory.c, engine_territory.h |
 | 0x46e067 | FUN_0046e067 | 317 | engine_territory.c, engine_territory.h |
 | 0x46e1b0 | FUN_0046e1b0 | 792 | engine_territory.c, engine_territory.h, game_init.c |
 | 0x46ea28 | FUN_0046ea28 | 57 | game_init.c, game_init.h |

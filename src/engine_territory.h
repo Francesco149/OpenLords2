@@ -81,6 +81,14 @@ void engine_territory_clear_cell_render_flags(void);
  * dirty mark — callers repaint once after a batch of stamps. */
 void engine_territory_mark_draw_box(int col, int row, int radius);
 
+/* Port of FUN_0046dfd5.  Highlight group-key `key` on the strategic map:
+ * scan the whole 64×64 grid and, for every cell whose group-key byte (+7)
+ * equals `key`, stamp a radius-1 alternate-draw box (its 3×3
+ * neighbourhood) via engine_territory_mark_draw_box; then mark the full
+ * screen dirty (if a dirty state is bound).  Pairs with
+ * engine_territory_clear_cell_render_flags, which wipes the same flag. */
+void engine_territory_highlight_key_cells(unsigned key);
+
 /* Port of FUN_0046da4b.  Rebuild the per-key cell roster (bound via
  * engine_territory_bind_cell_roster) from the overworld grid: index every
  * active feature-cell (+7 key 1..16, +1 bit 0x20 set) into its key row,

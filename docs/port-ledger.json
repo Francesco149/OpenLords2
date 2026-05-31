@@ -11830,7 +11830,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_territory.c"
+    "src/engine_territory.c",
+    "src/engine_territory.h"
    ]
   },
   {

@@ -237,6 +237,36 @@ void engine_territory_mark_draw_box(int col, int row, int radius)
     }
 }
 
+/* Port of FUN_0046dfd5.  Highlight one group-key on the strategic map.
+ * Sweep the whole 64×64 grid in row-major order; for every cell whose
+ * group-key byte (+7, DAT_00522f97) equals `key`, stamp a radius-1
+ * alternate-draw box (the cell plus its 3×3 neighbourhood) via
+ * engine_territory_mark_draw_box.  After the sweep, request a
+ * full-screen repaint (retail FUN_0045240a) through the bound dirty
+ * state.
+ *
+ * Retail also walks a write-only scratch progress counter
+ * (DAT_0053e974, incremented once per cell, never read) — dropped here
+ * for a plain index, the same way clear_cell_render_flags drops its
+ * counter.  Comparison matches retail's: the +7 byte is zero-extended
+ * to unsigned and compared against the full `key` word, so a key above
+ * 255 never matches (the byte can only hold 0..255). */
+void engine_territory_highlight_key_cells(unsigned key)
+{
+    if (g_cells != NULL) {
+        for (int row = 0; row < 0x40; row++) {
+            for (int col = 0; col < 0x40; col++) {
+                int off = (row * 0x40 + col) * CELL_STRIDE;
+                if ((unsigned)g_cells[off + 7] == key)   /* DAT_00522f97 */
+                    engine_territory_mark_draw_box(col, row, 1);
+            }
+        }
+    }
+
+    if (g_dirty_state != NULL)
+        engine_dirty_rect_mark_full_screen(g_dirty_state);
+}
+
 int engine_territory_current_slot(void)
 {
     return g_current_slot;
