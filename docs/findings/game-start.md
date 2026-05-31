@@ -1080,9 +1080,63 @@ The shape, top to bottom:
 
 See engine-quirks #139 for the level-6 table over-read.
 
-**With `FUN_0044df5f` ported, the only remaining `FUN_0049bd99` leaf is**
-`0x4485a5` (163 B, still has its own deps).  Once it lands, every per-realm
-callee of `FUN_0049bd99` is ported and the setup pass itself can be assembled.
+### FUN_004485a5 — per-realm economy pass (subtree in progress)
+
+`FUN_0044df5f`'s usual partner is `FUN_004485a5` (163 B), the per-realm AI
+economy planner.  It is a thin orchestrator — census (`FUN_00469b8d`, ported)
+then five sub-passes over the same per-army record block:
+
+| sub-pass | size | role (provisional) |
+|----------|-----:|--------------------|
+| `0x44c278` | 707 | storage/supply distribution over the 20 settlement-cell slots (argmax + spill) |
+| `0x44d374` | 665 | **production-level planner** (ported below) |
+| `0x44dd4d` | 530 | mix optimiser scanning `0x44da99` outputs for a target balance |
+| `0x44f318` ×4 | 897 | per-commodity (indices 1/3/0/2) production/price passes |
+| `0x450e46` | 366 | final ratio/round-off pass |
+
+The whole subtree is 16 functions, all reading/writing the `0x300`-strided
+per-army row `DAT_0053f9b0` (save entry 4).  Being chewed bottom-up.
+
+### FUN_0044d374 — production-level planner ✅ ported
+
+The `0x44c278`-sibling production-level planner, called by `0x4485a5`,
+`0x44c8ae`, and the AI economy pass `0x4ad6c0`.  Ported as
+`engine_army_economy_plan_production(key, phase)` (8 host tests) with its two
+yield evaluators `engine_army_economy_yield_standard` (FUN_0044d15a) /
+`_yield_phase4` (FUN_0044d1e5) and the two static helpers FUN_0044d281 /
+FUN_0044d303.
+
+Shape:
+
+- **Three per-level output evaluators, one selector.**  Each evaluator answers
+  *"how much output can this army achieve at intensity level L, under a cap"*.
+  The planner sweeps a candidate L over `[0, +0x24)` (the feed/mouths count),
+  evaluating with the evaluator the `phase` selects — `production_output`
+  (FUN_0044cfe1) for phase 1, `_yield_phase4` for phase 4, `_yield_standard`
+  for phase 2/3/anything else — and records the best L at **+0xc8 / +0xcc**.
+- **`_yield_standard` (d15a)** = `level·divisor` capped by the army's
+  capacity-scaled `cap`, then scaled up by a halved yield-bonus %, floored at 0.
+  **`_yield_phase4` (d1e5)** is the same skeleton but floors the cap at 0 first,
+  halves `level` on the mode-flag path, binds the cap with `<=` (vs d15a's `<`),
+  and skips the bonus.  Both pick `divisor_lo` (`DAT_0057d34c`=2) when
+  `s_slot_0053f25c==0`, else a variant-specific divisor (`DAT_00553538`=10 /
+  `DAT_00553218`=3).
+- **Two static scaling helpers.**  `FUN_0044d281` scales a value down to the
+  army's `+0x201 / +0x202` resource-cell ratio (only when num < den);
+  `FUN_0044d303` scales it up by `(+0x208 yield-bonus)/2` percent.
+- **Outputs.**  After the sweep it stores `production_output` at the reference
+  level `+0xc4` into **+0x230** (always), the matching phase-4 / phase-2-3 yield
+  into **+0x248 / +0x2fc**, and a net-balance figure into **+0x22c**, signed by
+  phase (`−out − buy_c` for phase 1, `+0x248 − buy_c` for phase 4, `−buy_c`
+  otherwise).  **+0x22c is cleared up front**, so an ungated army (gate byte
+  `+0xb8 == 0`) reads a clean 0 and nothing else is touched.
+
+See engine-quirks #140 for d303's flattened no-op clamp.
+
+**Remaining `FUN_004485a5` leaves** after this branch: `0x44c278` (+ its leaves
+`0x44c53b` / `0x44c5fc`), `0x44dd4d` (+ `0x44da99`), `0x44f318` (+ `0x44ef4e` /
+`0x44f15b` / `0x44f248`), `0x450e46` (+ `0x450fb4`).  Once all land, `0x4485a5`
+and then the last `FUN_0049bd99` leaf `0x4a9a9a` unblock the setup pass.
 
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
    callees are real; then `FUN_00499dc3` + `FUN_004329ec` spine + the

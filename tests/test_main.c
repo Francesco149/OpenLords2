@@ -1562,6 +1562,25 @@ struct test_case {
     X(army_economy_provision_overhead_flag) \
     X(army_economy_provision_keyed_by_row) \
     X(army_economy_provision_unbound_noop) \
+    X(army_economy_yield_standard_base) \
+    X(army_economy_yield_standard_cap_binds) \
+    X(army_economy_yield_standard_capacity_ratio) \
+    X(army_economy_yield_standard_bonus) \
+    X(army_economy_yield_standard_mode_divisor) \
+    X(army_economy_yield_standard_unbound_is_zero) \
+    X(army_economy_yield_phase4_base) \
+    X(army_economy_yield_phase4_cap_binds) \
+    X(army_economy_yield_phase4_mode_halves_level) \
+    X(army_economy_yield_phase4_negative_cap_floored) \
+    X(army_economy_yield_phase4_unbound_is_zero) \
+    X(army_economy_plan_default_phase) \
+    X(army_economy_plan_phase1) \
+    X(army_economy_plan_phase4) \
+    X(army_economy_plan_phase2_stores_std) \
+    X(army_economy_plan_no_level_beats_threshold) \
+    X(army_economy_plan_gate_off_clears_net_only) \
+    X(army_economy_plan_keyed_by_row) \
+    X(army_economy_plan_unbound_noop) \
     \
     X(game_init_clear_tables_zeroes_per_army) \
     X(game_init_clear_tables_zeroes_unit_table) \

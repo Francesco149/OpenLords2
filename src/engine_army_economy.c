@@ -61,6 +61,19 @@
 #define ARMY_OVERHEAD_LO     0x19c  /* DAT_0053fb4c — overhead term 2 */
 #define ARMY_PROVISION_RAW   0x224  /* DAT_0053fbd4 — production limit_raw / C-need base */
 
+/* Fields the production-level planner FUN_0044d374 (+ its evaluators) read/write. */
+#define ARMY_PLAN_GATE       0xb8   /* DAT_0053fa68 — byte: army plans production only if set */
+#define ARMY_PLAN_REF_LEVEL  0xc4   /* DAT_0053fa74 — stored reference level (== ARMY_PROVISION_SCALED) */
+#define ARMY_PLAN_BEST       0xc8   /* DAT_0053fa78 — best candidate level index (-1 if none) */
+#define ARMY_PLAN_BEST2      0xcc   /* DAT_0053fa7c — best level index, 0-seeded variant */
+#define ARMY_PROD_RATE_DENOM 0x202  /* DAT_0053fbb2 — capacity-ratio denominator (vs +0x201) */
+#define ARMY_YIELD_BONUS     0x208  /* DAT_0053fbb8 — yield-bonus percentage (applied halved) */
+#define ARMY_PLAN_NET        0x22c  /* DAT_0053fbdc — net-balance result (signed by phase) */
+#define ARMY_PLAN_OUT        0x230  /* DAT_0053fbe0 — production_output at the reference level */
+#define ARMY_PLAN_CAP        0x244  /* DAT_0053fbf4 — resource cap fed to the yield evaluators */
+#define ARMY_PLAN_OUT_P4     0x248  /* DAT_0053fbf8 — phase-4 yield at the reference level */
+#define ARMY_PLAN_OUT_STD    0x2fc  /* DAT_0053fcac — phase-2/3 yield at the reference level */
+
 static uint8_t *g_army_records;
 
 /* Retail 0x4983b7 defaults: A=5 (DAT_00553f60), B=10 (DAT_00567594),
@@ -76,6 +89,11 @@ static int g_prod_scale      = 12;
 static int g_prod_max_level  = 10;
 static int g_prod_divisor_lo = 2;
 static int g_prod_divisor_hi = 5;
+
+/* Retail 0x4983b7 yield-evaluator divisors (mode-flag-set path):
+ * divisor_std=10 (DAT_00553538), divisor_phase4=3 (DAT_00553218). */
+static int g_yield_divisor_std    = 10;
+static int g_yield_divisor_phase4 = 3;
 
 void engine_army_economy_bind_army_records(uint8_t *records)
 {
@@ -329,4 +347,136 @@ void engine_army_economy_provision(int key, int phase)
     *(int32_t *)(row + ARMY_VAL_C) = *(int32_t *)(row + ARMY_BUY_C)   * g_price_c;
     *(int32_t *)(row + ARMY_VAL_B) = *(int32_t *)(row + ARMY_BUY_B)   * g_price_b;
     *(int8_t  *)(row + ARMY_DISPLAY_IDX) = (int8_t)(*level * 3 - 8);
+}
+
+/* --------------------------------------------------------------------- *
+ *  Per-army production-level planner — the 0x44d374 branch of 0x4485a5.
+ *
+ *  Three per-level output evaluators (production_output above, plus the two
+ *  yield variants below) feed one selector.  Each evaluator answers "how much
+ *  output can this army achieve at intensity level L, under a cap"; the
+ *  selector sweeps L and records the best.
+ * --------------------------------------------------------------------- */
+
+void engine_army_economy_set_yield_divisors(int divisor_std, int divisor_phase4)
+{
+    g_yield_divisor_std    = divisor_std;
+    g_yield_divisor_phase4 = divisor_phase4;
+}
+
+/* FUN_0044d281.  Scale a candidate value down to the army's resource-cell
+ * capacity ratio: when the +0x201 numerator is below the +0x202 denominator,
+ * multiply by (num/den) as a percentage; otherwise leave it.  Both fields are
+ * unsigned bytes, so num < den implies den > 0 (percent_div's /0 guard is never
+ * reached on this path). */
+static int prod_capacity_clamp(int key, int value)
+{
+    const uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+    unsigned num = row[ARMY_PROD_RATE];
+    unsigned den = row[ARMY_PROD_RATE_DENOM];
+
+    if (num < den) {
+        int pct = engine_math_percent_div((int)num, (int)den);
+        value = engine_math_percent_of(value, pct);
+    }
+    return value;
+}
+
+/* FUN_0044d303.  Scale a value up by the army's +0x208 yield-bonus percentage,
+ * halved: returns value + value*(bonus/2)/100.  (Retail computes the bonus
+ * through a `field < 1 ? field : field` branch whose two arms are identical —
+ * a decompiler-flattened no-op clamp; we read the field directly.) */
+static int prod_yield_bonus(int key, int value)
+{
+    int bonus = *(const int32_t *)(g_army_records + key * ARMY_ROW_STRIDE + ARMY_YIELD_BONUS);
+    bonus /= 2;
+    return engine_math_percent_of(value, bonus) + value;
+}
+
+/* FUN_0044d15a */
+int engine_army_economy_yield_standard(int key, int level, int cap)
+{
+    if (g_army_records == NULL) return 0;
+
+    int divisor = (s_slot_0053f25c == 0) ? g_prod_divisor_lo : g_yield_divisor_std;
+    int capped  = prod_capacity_clamp(key, cap);
+
+    int out = level * divisor;
+    if (capped < out) out = capped;       /* strict < (cf. yield_phase4's <=) */
+    out = prod_yield_bonus(key, out);
+    if (out < 0) out = 0;
+    return out;
+}
+
+/* FUN_0044d1e5 */
+int engine_army_economy_yield_phase4(int key, int level, int cap)
+{
+    if (g_army_records == NULL) return 0;
+
+    int divisor = (s_slot_0053f25c == 0) ? g_prod_divisor_lo : g_yield_divisor_phase4;
+    int capped  = prod_capacity_clamp(key, cap);
+    if (capped < 0) capped = 0;
+    if (s_slot_0053f25c != 0) level /= 2;
+
+    int out = level * divisor;
+    if (capped <= out) out = capped;      /* <= (cf. yield_standard's <) */
+    return out;
+}
+
+/* FUN_0044d374 */
+void engine_army_economy_plan_production(int key, int phase)
+{
+    /* Retail dereferences the record block unconditionally; mirror the module's
+     * no-op-when-unbound convention. */
+    if (g_army_records == NULL) return;
+
+    uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+
+    *(int32_t *)(row + ARMY_PLAN_NET) = 0;       /* cleared even for an ungated army */
+    int count = *(int32_t *)(row + ARMY_FEED_COUNT);
+
+    if (row[ARMY_PLAN_GATE] == 0) return;
+
+    int buy_c = *(int32_t *)(row + ARMY_BUY_C);
+
+    /* Sweep candidate intensity levels 0..count-1 for the one giving the most
+     * output under the phase-selected evaluator.  best/best2 differ only when no
+     * level beats the initial threshold (best stays -1, best2 stays 0). */
+    int best_out = 1;
+    int best = -1, best2 = 0;
+    for (int level = 0; level < count; level++) {
+        int out;
+        if (phase == 1)
+            out = engine_army_economy_production_output(
+                      key, level, *(int32_t *)(row + ARMY_PROVISION_RAW) - buy_c);
+        else if (phase == 4)
+            out = engine_army_economy_yield_phase4(key, level, *(int32_t *)(row + ARMY_PLAN_CAP));
+        else
+            out = engine_army_economy_yield_standard(key, level, *(int32_t *)(row + ARMY_PLAN_CAP));
+
+        if (best_out < out) { best2 = level; best = level; best_out = out; }
+    }
+
+    /* Evaluate the output at the army's stored reference level and stash it. */
+    int ref = *(int32_t *)(row + ARMY_PLAN_REF_LEVEL);
+    *(int32_t *)(row + ARMY_PLAN_OUT) =
+        engine_army_economy_production_output(key, ref, *(int32_t *)(row + ARMY_PROVISION_RAW));
+    if (phase == 4)
+        *(int32_t *)(row + ARMY_PLAN_OUT_P4) =
+            engine_army_economy_yield_phase4(key, ref, *(int32_t *)(row + ARMY_PLAN_CAP));
+    if (phase == 2 || phase == 3)
+        *(int32_t *)(row + ARMY_PLAN_OUT_STD) =
+            engine_army_economy_yield_standard(key, ref, *(int32_t *)(row + ARMY_PLAN_CAP));
+
+    /* Net balance: phase 1 nets the production output against the C-buy order,
+     * phase 4 the phase-4 yield against it, every other phase just -buy_c. */
+    if (phase == 1)
+        *(int32_t *)(row + ARMY_PLAN_NET) = -*(int32_t *)(row + ARMY_PLAN_OUT) - buy_c;
+    else if (phase == 4)
+        *(int32_t *)(row + ARMY_PLAN_NET) = *(int32_t *)(row + ARMY_PLAN_OUT_P4) - buy_c;
+    else
+        *(int32_t *)(row + ARMY_PLAN_NET) = -buy_c;
+
+    *(int32_t *)(row + ARMY_PLAN_BEST)  = best;
+    *(int32_t *)(row + ARMY_PLAN_BEST2) = best2;
 }

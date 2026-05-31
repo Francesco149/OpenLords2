@@ -91,4 +91,54 @@ int engine_army_economy_production_output(int key, int limit_scaled,
  * when the army-record block is unbound. */
 void engine_army_economy_provision(int key, int phase);
 
+/* ──────────────────────────────────────────────────────────────────
+ * Per-army production-level planner — the 0x44d374 branch of the
+ * per-realm economy pass 0x4485a5 (itself reached from 0x49bd99).
+ *
+ * Three per-"intensity-level" output evaluators feed one selector.  The
+ * selector sweeps a candidate level L over [0, feed-count) for the army,
+ * evaluates the achievable output at each L with the evaluator chosen by
+ * `phase`, and records the best L and the output at the army's stored
+ * reference level (+0xc4) into the record row, finishing with a net-balance
+ * figure at +0x22c.  The three evaluators are:
+ *   phase == 1            → engine_army_economy_production_output (cfe1)
+ *   phase == 4            → engine_army_economy_yield_phase4      (d1e5)
+ *   phase == 2/3/anything → engine_army_economy_yield_standard   (d15a)
+ * ────────────────────────────────────────────────────────────────── */
+
+/* Override the two extra production divisors the yield evaluators use on the
+ * mode-flag-set path (retail config scalars set once by the defaults init
+ * 0x4983b7 — the values baked in as this module's defaults):
+ *   divisor_std    DAT_00553538 = 10  (engine_army_economy_yield_standard, s_slot_0053f25c != 0)
+ *   divisor_phase4 DAT_00553218 = 3   (engine_army_economy_yield_phase4,    s_slot_0053f25c != 0)
+ * The mode-flag-clear path of both uses the shared divisor_lo (DAT_0057d34c =
+ * 2) from engine_army_economy_set_production_tuning.  Same single-source-of-
+ * truth rationale as engine_army_economy_set_prices. */
+void engine_army_economy_set_yield_divisors(int divisor_std, int divisor_phase4);
+
+/* Port of FUN_0044d15a (139 B).  Output achievable at intensity `level` under a
+ * resource `cap`, the phase-2/3/default evaluator: `level * divisor` (divisor =
+ * divisor_lo or divisor_std by the saved mode flag s_slot_0053f25c), capped by
+ * the army's capacity-scaled `cap` (record +0x201/+0x202 ratio), then scaled up
+ * by the army's +0x208 yield-bonus percentage (halved), and floored at 0.  0 if
+ * the army-record block is unbound. */
+int engine_army_economy_yield_standard(int key, int level, int cap);
+
+/* Port of FUN_0044d1e5 (156 B).  As yield_standard but the phase-4 evaluator:
+ * divisor is divisor_lo or divisor_phase4; the capacity-scaled `cap` is floored
+ * at 0 first; when the mode flag is set `level` is halved before scaling; and
+ * the cap binds with `<=` (vs yield_standard's `<`).  No yield-bonus pass.  0 if
+ * the army-record block is unbound. */
+int engine_army_economy_yield_phase4(int key, int level, int cap);
+
+/* Port of FUN_0044d374 (665 B).  Plan army `key`'s production level for the
+ * given `phase`: gated on record byte +0xb8, sweep candidate intensity levels
+ * 0..(+0x24 feed-count) with the phase-selected evaluator to find the best, then
+ * write the output at the stored reference level (+0xc4) to +0x230 (and, for
+ * phase 4 / phase 2-3, the matching yield to +0x248 / +0x2fc), the best/worst
+ * level indices to +0xc8 / +0xcc, and a net-balance figure to +0x22c (signed by
+ * phase).  +0x22c is cleared up front so an ungated army reads 0.  No-ops when
+ * the army-record block is unbound. */
+void engine_army_economy_plan_production(int key, int phase);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_ECONOMY_H */

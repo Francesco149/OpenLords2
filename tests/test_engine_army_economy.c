@@ -33,6 +33,18 @@ enum {
     OVERHEAD_HI     = 0x198,
     OVERHEAD_LO     = 0x19c,
     PROVISION_RAW   = 0x224,
+    /* production-level planner fields (FUN_0044d374 + evaluators) */
+    PLAN_GATE       = 0xb8,
+    PLAN_REF_LEVEL  = 0xc4,   /* == PROVISION_SCALED */
+    PLAN_BEST       = 0xc8,
+    PLAN_BEST2      = 0xcc,
+    PROD_RATE_DENOM = 0x202,
+    YIELD_BONUS     = 0x208,
+    PLAN_NET        = 0x22c,
+    PLAN_OUT        = 0x230,
+    PLAN_CAP        = 0x244,
+    PLAN_OUT_P4     = 0x248,
+    PLAN_OUT_STD    = 0x2fc,
 };
 
 _Alignas(int32_t) static uint8_t g_army[ARMY_ROWS * ARMY_STRIDE];
@@ -43,6 +55,7 @@ static void army_reset(void)
     engine_army_economy_bind_army_records(g_army);
     engine_army_economy_set_prices(5, 10, 6);   /* retail FUN_004983b7 defaults */
     engine_army_economy_set_production_tuning(12, 10, 2, 5);
+    engine_army_economy_set_yield_divisors(10, 3);  /* retail FUN_004983b7 defaults */
     s_slot_0053f25c = 0;                          /* divisor_lo path */
     s_slot_0053f260 = 0;                          /* no flat overhead */
 }
@@ -449,5 +462,252 @@ int test_army_economy_provision_unbound_noop(void)
 {
     engine_army_economy_bind_army_records(NULL);
     engine_army_economy_provision(2, 4);
+    return 0;
+}
+
+/* ── yield evaluators (FUN_0044d15a / d1e5) ──────────────────────────── */
+/* defaults: divisor_lo 2 (mode 0), divisor_std 10, divisor_phase4 3.  With
+ * +0x201/+0x202/+0x208 all zero, the capacity clamp and yield bonus are no-ops,
+ * so the base value is level*divisor capped by `cap`. */
+
+int test_army_economy_yield_standard_base(void)
+{
+    army_reset();
+    /* level 4 × divisor_lo 2 = 8, cap 1000 doesn't bind, no bonus → 8. */
+    T_ASSERT_EQ_I(engine_army_economy_yield_standard(2, 4, 1000), 8);
+    return 0;
+}
+
+int test_army_economy_yield_standard_cap_binds(void)
+{
+    army_reset();
+    /* level 10 × 2 = 20, cap 15 < 20 → 15. */
+    T_ASSERT_EQ_I(engine_army_economy_yield_standard(2, 10, 15), 15);
+    return 0;
+}
+
+int test_army_economy_yield_standard_capacity_ratio(void)
+{
+    army_reset();
+    set_byte(2, PROD_RATE, 2);                  /* numerator */
+    set_byte(2, PROD_RATE_DENOM, 4);            /* denominator → ratio 50% */
+    /* cap 100 scaled by 2/4 = 50; level 40 × 2 = 80 > 50 → 50. */
+    T_ASSERT_EQ_I(engine_army_economy_yield_standard(2, 40, 100), 50);
+    return 0;
+}
+
+int test_army_economy_yield_standard_bonus(void)
+{
+    army_reset();
+    set_stock(2, YIELD_BONUS, 40);              /* bonus 40 → halved 20% */
+    /* base level 10 × 2 = 20; +20% = 20 + 4 = 24. */
+    T_ASSERT_EQ_I(engine_army_economy_yield_standard(2, 10, 1000), 24);
+    return 0;
+}
+
+int test_army_economy_yield_standard_mode_divisor(void)
+{
+    army_reset();
+    s_slot_0053f25c = 0;                        /* divisor_lo 2 */
+    T_ASSERT_EQ_I(engine_army_economy_yield_standard(2, 3, 1000), 6);
+    s_slot_0053f25c = 1;                        /* divisor_std 10 */
+    T_ASSERT_EQ_I(engine_army_economy_yield_standard(2, 3, 1000), 30);
+    return 0;
+}
+
+int test_army_economy_yield_standard_unbound_is_zero(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    T_ASSERT_EQ_I(engine_army_economy_yield_standard(2, 4, 1000), 0);
+    return 0;
+}
+
+int test_army_economy_yield_phase4_base(void)
+{
+    army_reset();
+    /* level 5 × divisor_lo 2 = 10, cap 100 doesn't bind → 10. */
+    T_ASSERT_EQ_I(engine_army_economy_yield_phase4(2, 5, 100), 10);
+    return 0;
+}
+
+int test_army_economy_yield_phase4_cap_binds(void)
+{
+    army_reset();
+    /* level 5 × 2 = 10, cap 8 <= 10 → 8. */
+    T_ASSERT_EQ_I(engine_army_economy_yield_phase4(2, 5, 8), 8);
+    return 0;
+}
+
+int test_army_economy_yield_phase4_mode_halves_level(void)
+{
+    army_reset();
+    s_slot_0053f25c = 1;                        /* divisor_phase4 3, level halved */
+    /* level 6 → /2 = 3, × 3 = 9, cap large → 9. */
+    T_ASSERT_EQ_I(engine_army_economy_yield_phase4(2, 6, 1000), 9);
+    return 0;
+}
+
+int test_army_economy_yield_phase4_negative_cap_floored(void)
+{
+    army_reset();
+    /* cap -5 floors to 0; 0 <= level*2 → 0. */
+    T_ASSERT_EQ_I(engine_army_economy_yield_phase4(2, 5, -5), 0);
+    return 0;
+}
+
+int test_army_economy_yield_phase4_unbound_is_zero(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    T_ASSERT_EQ_I(engine_army_economy_yield_phase4(2, 5, 100), 0);
+    return 0;
+}
+
+/* ── production-level planner (FUN_0044d374) ─────────────────────────── */
+
+/* Default phase (evaluator = yield_standard).  count 5 → sweep levels 0..4,
+ * yield = level*2 (no caps/bonus), best at level 4.  Reference level fed to
+ * production_output gives 30 (rate 3, big caps); PLAN_NET = -buy_c. */
+int test_army_economy_plan_default_phase(void)
+{
+    army_reset();
+    set_byte(2, PLAN_GATE, 1);
+    set_stock(2, FEED_COUNT, 5);
+    set_stock(2, BUY_C, 7);
+    set_stock(2, PLAN_CAP, 1000);
+    set_stock(2, PLAN_REF_LEVEL, 1000);
+    set_stock(2, PROVISION_RAW, 1000);
+    set_byte(2, PROD_RATE, 3);
+
+    engine_army_economy_plan_production(2, 0);
+
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_BEST), 4);
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_BEST2), 4);
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_OUT), 30);         /* production_output(ref) */
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_NET), -7);         /* -buy_c */
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_OUT_STD), 0);      /* not phase 2/3 */
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_OUT_P4), 0);       /* not phase 4 */
+    return 0;
+}
+
+/* Phase 1 (evaluator = production_output).  rate 1, raw 10 → sweep output grows
+ * stepwise with the scaled cap = level: levels >=6 admit output 1, >=12 admit 2,
+ * so over levels 0..12 the best is level 12.  Reference (scaled 60, raw 10)
+ * gives 10; PLAN_NET = -PLAN_OUT - buy_c. */
+int test_army_economy_plan_phase1(void)
+{
+    army_reset();
+    set_byte(2, PLAN_GATE, 1);
+    set_stock(2, FEED_COUNT, 13);             /* sweep levels 0..12 */
+    set_stock(2, BUY_C, 0);
+    set_stock(2, PROVISION_RAW, 10);
+    set_stock(2, PLAN_REF_LEVEL, 60);
+    set_byte(2, PROD_RATE, 1);
+
+    engine_army_economy_plan_production(2, 1);
+
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_BEST), 12);
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_OUT), 10);
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_NET), -10);        /* -PLAN_OUT - buy_c */
+    return 0;
+}
+
+/* Phase 4 (evaluator = yield_phase4, stores PLAN_OUT_P4, nets it).  rate 0 so
+ * production_output (PLAN_OUT) is 0; yields are level*2.  Reference level 3 →
+ * yield_phase4 = 6; PLAN_NET = 6 - buy_c. */
+int test_army_economy_plan_phase4(void)
+{
+    army_reset();
+    set_byte(2, PLAN_GATE, 1);
+    set_stock(2, FEED_COUNT, 5);              /* sweep 0..4, best level 4 */
+    set_stock(2, BUY_C, 2);
+    set_stock(2, PLAN_CAP, 1000);
+    set_stock(2, PLAN_REF_LEVEL, 3);
+    set_byte(2, PROD_RATE, 0);                /* PLAN_OUT → 0 */
+
+    engine_army_economy_plan_production(2, 4);
+
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_BEST), 4);
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_OUT), 0);
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_OUT_P4), 6);
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_NET), 4);          /* PLAN_OUT_P4 - buy_c */
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_OUT_STD), 0);
+    return 0;
+}
+
+/* Phase 2 writes PLAN_OUT_STD (yield_standard at the reference level) and nets
+ * just -buy_c. */
+int test_army_economy_plan_phase2_stores_std(void)
+{
+    army_reset();
+    set_byte(2, PLAN_GATE, 1);
+    set_stock(2, FEED_COUNT, 5);
+    set_stock(2, BUY_C, 7);
+    set_stock(2, PLAN_CAP, 1000);
+    set_stock(2, PLAN_REF_LEVEL, 3);
+    set_byte(2, PROD_RATE, 0);
+
+    engine_army_economy_plan_production(2, 2);
+
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_OUT_STD), 6);      /* yield_standard(ref=3) = 6 */
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_NET), -7);
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_OUT_P4), 0);
+    return 0;
+}
+
+/* When no swept level beats the initial threshold (here count 1 → only level 0,
+ * yielding 0), best stays -1 and best2 stays 0. */
+int test_army_economy_plan_no_level_beats_threshold(void)
+{
+    army_reset();
+    set_byte(2, PLAN_GATE, 1);
+    set_stock(2, FEED_COUNT, 1);              /* only level 0 → yield 0 */
+    set_stock(2, PLAN_CAP, 1000);
+
+    engine_army_economy_plan_production(2, 0);
+
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_BEST), -1);
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_BEST2), 0);
+    return 0;
+}
+
+/* Gate byte +0xb8 clear → only PLAN_NET is cleared; the result slots are left
+ * untouched. */
+int test_army_economy_plan_gate_off_clears_net_only(void)
+{
+    army_reset();
+    set_byte(2, PLAN_GATE, 0);
+    set_stock(2, PLAN_NET, 1234);
+    set_stock(2, PLAN_BEST, 55);
+    set_stock(2, PLAN_OUT, 66);
+
+    engine_army_economy_plan_production(2, 0);
+
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_NET), 0);          /* cleared */
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_BEST), 55);        /* untouched */
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_OUT), 66);         /* untouched */
+    return 0;
+}
+
+/* Writes confined to the keyed row. */
+int test_army_economy_plan_keyed_by_row(void)
+{
+    army_reset();
+    set_byte(4, PLAN_GATE, 1);
+    set_stock(4, FEED_COUNT, 5);
+    set_stock(4, PLAN_CAP, 1000);
+    set_stock(4, PLAN_REF_LEVEL, 3);
+
+    engine_army_economy_plan_production(4, 0);
+
+    T_ASSERT_EQ_I(rec_i32(4, PLAN_BEST), 4);
+    T_ASSERT_EQ_I(rec_i32(3, PLAN_BEST), 0);         /* neighbour rows untouched */
+    T_ASSERT_EQ_I(rec_i32(5, PLAN_BEST), 0);
+    return 0;
+}
+
+int test_army_economy_plan_unbound_noop(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    engine_army_economy_plan_production(2, 0);
     return 0;
 }

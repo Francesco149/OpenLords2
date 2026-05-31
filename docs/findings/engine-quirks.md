@@ -4891,3 +4891,29 @@ clamped index range `[0,6]` matches retail's memory reads bit-for-bit.
 > 📍 `src/engine_army_economy.c` (`k_supply_table`, `supply_cost`,
 > `clamp_supply_level`).  Ghidra `FUN_0044df5f` @ 0x44df5f; table at
 > `0x4d6738`, percentage table it bleeds into at `0x4d6768`.
+
+## 140. A yield-bonus helper guards a field with a branch whose two arms are identical
+
+The production-yield helper `FUN_0044d303` (a static in the production-level
+planner, `engine_army_economy.c`) reads one record field, `+0x208`, halves it,
+and uses it as a percentage bonus.  But Ghidra decompiles the read as:
+
+```c
+if (*(int *)(&DAT_0053fbb8 + param_1 * 0x300) < 1) {
+    local_c = *(int *)(&DAT_0053fbb8 + param_1 * 0x300);
+} else {
+    local_c = *(int *)(&DAT_0053fbb8 + param_1 * 0x300);
+}
+```
+
+— a `field < 1 ? field : field`, where both arms load the *same* field.  The
+compare sets flags that are never consumed; the two stores are byte-identical.
+It's almost certainly a `MAX(field, field)`-style macro or a clamp idiom that
+collapsed once the second operand turned out to be the same expression — the
+sort of thing a `#define LO(x) ((x) < 1 ? (x) : (x))` template emits when
+instantiated with a degenerate bound.  The net effect is a plain
+`local_c = field`, so the port reads the field directly and notes the vestigial
+branch in a comment rather than reproducing a no-op `if`.
+
+> 📍 `src/engine_army_economy.c` (`prod_yield_bonus`).  Ghidra `FUN_0044d303`
+> @ 0x44d303; field `DAT_0053fbb8` = per-army row `+0x208`.
