@@ -80,6 +80,14 @@ void engine_territory_clear_cell_render_flags(void);
  * zero the AI score table (new-game), 0 to leave it (mid-game recompute). */
 void engine_territory_rebuild_cell_roster(int reset_score_table);
 
+/* Port of FUN_0046d9da.  Clear the AI-score entry for a single cell: scan
+ * the cell's key row (key = its +7 byte) of the roster (bound via
+ * engine_territory_bind_cell_roster) for the column holding cell_off, and
+ * zero the matching i16 in the AI score table (engine_territory_bind_cell_
+ * score_table).  No-op if the cell is not in its roster row, or if either
+ * table is unbound.  cell_off is the cell's byte-offset into the grid. */
+void engine_territory_clear_cell_score(int cell_off);
+
 /* Port of FUN_0046dd34.  New-game terrain-tile randomiser: sweep the bound
  * terrain-index grid (engine_territory_bind_terrain_tiles) and re-roll every
  * cell holding the special sentinel 0xfff0006 to 0xfff0006 + (rng & 0xf),

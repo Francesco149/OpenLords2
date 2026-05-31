@@ -435,6 +435,87 @@ int test_territory_roster_unbound_is_noop(void)
     return 0;
 }
 
+/* ── Single-cell score clear (engine_territory_clear_cell_score,
+ *    port of FUN_0046d9da) ─────────────────────────────────────────── */
+
+/* The cell's slot in its key's roster row drives which score column is
+ * zeroed; only that column is touched. */
+int test_territory_clear_cell_score_zeroes_matching_slot(void)
+{
+    roster_setup();
+    int off = cell_off(7, 3);
+    g_cells[off + 7] = 5;                       /* key 5 */
+    g_roster[5 * ROSTER_NCOL + 2] = off;        /* cell lives in column 2 */
+    for (int c = 0; c < 20; c++)
+        g_score[5 * SCORE_STRIDE + c] = 0x77;
+
+    engine_territory_clear_cell_score(off);
+
+    T_ASSERT_EQ_I(g_score[5 * SCORE_STRIDE + 2], 0);     /* matched col cleared */
+    T_ASSERT_EQ_I(g_score[5 * SCORE_STRIDE + 1], 0x77);  /* neighbours kept     */
+    T_ASSERT_EQ_I(g_score[5 * SCORE_STRIDE + 3], 0x77);
+    return 0;
+}
+
+/* A cell absent from its key's roster row clears nothing (loop falls
+ * through all 20 columns without a hit). */
+int test_territory_clear_cell_score_absent_cell_is_noop(void)
+{
+    roster_setup();
+    int off = cell_off(9, 1);
+    g_cells[off + 7] = 4;                        /* key 4, but not in the row */
+    for (int c = 0; c < 20; c++) {
+        g_roster[4 * ROSTER_NCOL + c] = off + 8; /* some other offset */
+        g_score[4 * SCORE_STRIDE + c] = 0x33;
+    }
+
+    engine_territory_clear_cell_score(off);
+
+    for (int c = 0; c < 20; c++)
+        T_ASSERT_EQ_I(g_score[4 * SCORE_STRIDE + c], 0x33);
+    return 0;
+}
+
+/* The key is taken from the cell's own +7 byte, so the score row used is
+ * the cell's key row — a slot with the same offset under a different key
+ * is left alone. */
+int test_territory_clear_cell_score_uses_cell_key_row(void)
+{
+    roster_setup();
+    int off = cell_off(2, 2);
+    g_cells[off + 7] = 9;                        /* key 9 */
+    g_roster[9 * ROSTER_NCOL + 0] = off;         /* present in key 9 col 0 */
+    g_roster[3 * ROSTER_NCOL + 0] = off;         /* decoy: same offset, key 3 */
+    g_score[9 * SCORE_STRIDE + 0] = 0x11;
+    g_score[3 * SCORE_STRIDE + 0] = 0x11;
+
+    engine_territory_clear_cell_score(off);
+
+    T_ASSERT_EQ_I(g_score[9 * SCORE_STRIDE + 0], 0);     /* cell's own key row */
+    T_ASSERT_EQ_I(g_score[3 * SCORE_STRIDE + 0], 0x11);  /* decoy row untouched */
+    return 0;
+}
+
+/* Unbound roster or score table → no-op, no crash. */
+int test_territory_clear_cell_score_unbound_is_noop(void)
+{
+    roster_setup();
+    int off = cell_off(1, 0);
+    g_cells[off + 7] = 5;
+    g_roster[5 * ROSTER_NCOL + 0] = off;
+    g_score[5 * SCORE_STRIDE + 0] = 0x44;
+
+    engine_territory_bind_cell_score_table(NULL);
+    engine_territory_clear_cell_score(off);              /* must not crash */
+    engine_territory_bind_cell_score_table(g_score);
+    T_ASSERT_EQ_I(g_score[5 * SCORE_STRIDE + 0], 0x44);  /* still untouched */
+
+    engine_territory_bind_cell_roster(NULL);
+    engine_territory_clear_cell_score(off);              /* must not crash */
+    T_ASSERT_EQ_I(g_score[5 * SCORE_STRIDE + 0], 0x44);
+    return 0;
+}
+
 /* ── Terrain-tile randomiser (engine_territory_randomise_special_tiles,
  *    port of FUN_0046dd34) ─────────────────────────────────────────── */
 enum { TILE_ROWS = 0x81, TILE_COLS = 0x41, TILE_CELLS = TILE_ROWS * TILE_COLS };

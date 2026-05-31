@@ -13,10 +13,10 @@
 
 | status      | count | what it means                                          |
 |-------------|------:|--------------------------------------------------------|
-| tested      |   352 | ported + module covered by the host unit suite       |
+| tested      |   353 | ported + module covered by the host unit suite       |
 | ported      |    36 | reimplemented in src/, no host test for that module  |
-| **touched** | **388** | tested + ported (FUN_ provenance ref in src/)    |
-| unported    |  2059 | exists in engine, never referenced from src/         |
+| **touched** | **389** | tested + ported (FUN_ provenance ref in src/)    |
+| unported    |  2058 | exists in engine, never referenced from src/         |
 | **total**   | **2447** | non-thunk engine functions (of 2452 incl. thunks) |
 
 Code-byte coverage (16.2%) is the truer progress signal: the engine

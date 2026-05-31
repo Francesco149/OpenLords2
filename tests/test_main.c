@@ -1375,6 +1375,10 @@ struct test_case {
     X(territory_roster_clears_rows_1_to_16_only) \
     X(territory_roster_score_clear_gated_on_reset_flag) \
     X(territory_roster_unbound_is_noop) \
+    X(territory_clear_cell_score_zeroes_matching_slot) \
+    X(territory_clear_cell_score_absent_cell_is_noop) \
+    X(territory_clear_cell_score_uses_cell_key_row) \
+    X(territory_clear_cell_score_unbound_is_noop) \
     X(territory_tiles_rerolls_sentinels_in_order) \
     X(territory_tiles_pinned_retail_seed) \
     X(territory_tiles_leaves_non_sentinels) \

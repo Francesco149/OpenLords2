@@ -7,6 +7,43 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — GAME-START chip: single-cell score clear (FUN_0046d9da)
+
+Ported `FUN_0046d9da` (113 B) → `engine_territory_clear_cell_score` in
+`engine_territory.c` — the deepest **leaf** of the `FUN_00467a36` subtree
+(`467a36` → `FUN_0046d7f4` → this), one of the two `FUN_004676e0` callees
+still standing.
+
+**What it does.**  Given a cell byte-offset, look up that cell's army/group
+key (its +7 byte, `DAT_00522f97`), scan that key's row of the per-key roster
+`DAT_0053ea00` (20 i32/row) for the column whose entry equals the offset, and
+zero the parallel i16 in the AI score table `DAT_0053fa40` (`key*0x300 +
+col*2`).  Only that one score slot is touched; the roster entry stays.  These
+are the exact two tables the cell-roster rebuild `FUN_0046da4b` owns — so this
+is the **per-cell** score invalidation (the rebuild does the bulk reset; this
+clears a single slot) that the cell-mutation helper `FUN_0046d7f4` fires when
+one cell's feature changes.  A cell absent from its key row (all 20 columns
+miss) clears nothing — retail falls straight through the loop.
+
+**No new quirk.**  Unlike its rebuild sibling there's no `< 0x12` accept
+guard here — the key is read straight from memory and used as a row index —
+but it addresses the same 17-row tables, kept in-bounds by the +7 producers'
+1..16 clamp (quirk #132's invariant).  r2 @0x46d9da confirmed the
+`key*0x50 + col*4` roster index (`lea ecx,[ecx+ecx*4]; shl 4`), the equality
+test on the offset argument, the `key*0x300 + col*2` score write, and the
+col 0..19 (`cmp 0x14; jge`) loop bound.
+
+4 host tests: matched-slot isolation (neighbour columns kept); absent-cell
+no-op; cell's-own-key-row selection vs a same-offset decoy planted in another
+key's row; unbound roster/score no-ops.  1389/1389 pass under ASan/UBSan; the
+mingw `.exe` builds clean under `-Wall -Wextra`;
+`_engine_territory_clear_cell_score` present in the PE.  Ledger: 389 touched
+/ 353 tested.
+
+Next on this thread: the subtree's mid-tier mutator `FUN_0046d7f4` (486 B,
+now leaf-complete below it), then `FUN_00467a36` itself; and `FUN_00468d4f`'s
+castle-border arm `FUN_0046902a` still wants `FUN_0046c147` (407 B).
+
 ## 2026-05-31 — GAME-START chip: per-army adjacency builder (FUN_00467ca6 + FUN_0046c080)
 
 Ported the **per-army territory-adjacency builder** `FUN_00467ca6` (385 B)

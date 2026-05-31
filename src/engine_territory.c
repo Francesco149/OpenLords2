@@ -319,6 +319,29 @@ void engine_territory_rebuild_cell_roster(int reset_score_table)
     }
 }
 
+/* Port of FUN_0046d9da (113 B) — clear the AI score for one cell's roster
+ * slot.  Called by the cell-mutation helper at 0x46d7f4 (unported) when a cell's
+ * feature changes: locate cell_off's column in its key's roster row
+ * (key = the cell's +7 byte, DAT_00522f97) and zero the parallel i16 in
+ * the AI score table.  The roster stores cell byte-offsets, so the match
+ * is an exact equality on cell_off.  If the cell is absent from its row
+ * (all 20 columns scanned without a hit), nothing is cleared — retail
+ * falls through the loop and returns.  Only the score is touched; the
+ * roster entry itself is left intact. */
+void engine_territory_clear_cell_score(int cell_off)
+{
+    if (g_cells == NULL || g_cell_roster == NULL || g_cell_score == NULL)
+        return;
+
+    unsigned key = g_cells[cell_off + 7];               /* DAT_00522f97 */
+    for (int col = 0; col < ROSTER_COLS; col++) {
+        if (g_cell_roster[key * ROSTER_ROW_I32 + col] == cell_off) {
+            g_cell_score[key * SCORE_ROW_I16 + col] = 0;
+            return;
+        }
+    }
+}
+
 /* Advance the single-LFSR RNG (retail FUN_00404b2c), threading its state
  * word through *rng and returning the 7-bit mirror (retail DAT_005c9a84).
  * Mirrors game_init.c's rng_next_7b for the double LFSR. */

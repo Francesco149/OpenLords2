@@ -377,9 +377,32 @@ are now ported.
   distinct-neighbour record + symmetry, cross-cell dedup, 15-key near-cap
   fill + scan order, unbound/NULL no-ops).
 
+- **FUN_0046d9da** → `engine_territory_clear_cell_score` (`engine_territory.c`,
+  landed 2026-05-31).  A 113-B **leaf** at the bottom of the `FUN_00467a36`
+  subtree (`467a36` → `FUN_0046d7f4` → this).  Given a cell byte-offset, it
+  scans that cell's key row (key = its +7 byte, `DAT_00522f97`) of the per-key
+  roster `DAT_0053ea00` for the column holding the offset, and zeroes the
+  parallel i16 in the AI score table `DAT_0053fa40` (`key*0x300 + col*2`) —
+  the same two tables the roster rebuild (`FUN_0046da4b`) owns.  It is the
+  per-cell score-invalidation the cell-mutation helper `FUN_0046d7f4` fires
+  when a cell's feature changes (the rebuild does the bulk reset; this clears
+  one slot).  Only the score is touched; the roster entry stays.  A cell
+  absent from its row (all 20 columns miss) clears nothing — retail falls
+  through the loop.  r2 @0x46d9da confirmed the `key*0x50 + col*4` roster
+  index (`lea ecx,[ecx+ecx*4]; shl 4`), the equality on the offset arg, the
+  `key*0x300 + col*2` score write, and the col 0..19 (`< 0x14`) bound.  No
+  new quirk: unlike its rebuild sibling, the key here is a memory read with
+  no `< 0x12` accept guard, but it indexes the same 17-row tables and the +7
+  producers' 1..16 clamp keeps it in-bounds.  4 host tests (matched-slot
+  isolation, absent-cell no-op, cell's-own-key-row selection vs a same-offset
+  decoy in another row, unbound roster/score no-ops).
+
 Remaining unported FUN_004676e0 callees: `FUN_00468d4f` / `FUN_00467a36`
 (each still 1–5 deps deep; 468d4f's subtree shares the now-ported
-`FUN_0046c080`).
+`FUN_0046c080`).  Subtree progress: `FUN_00467a36`'s deepest leaf
+`FUN_0046d9da` is ported (above), leaving its mid-tier mutator
+`FUN_0046d7f4` (486 B); `FUN_00468d4f`'s castle-border arm `FUN_0046902a`
+still wants `FUN_0046c147` (407 B).
 
 ### FUN_0046ff43 — strategic movement-cost grid builder
 
