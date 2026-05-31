@@ -204,6 +204,15 @@ void engine_territory_allocate_realm_workforce(int key);
 void engine_territory_retype_army_band(int key, int type, char variant,
                                        int lo, int hi);
 
+/* Port of FUN_0044d913.  Grade the realm's feature cells by population density
+ * = load(+0x250) / census-HIGH-count(+0x200): the density picks a feature-TYPE
+ * tier (0x13..0x16) applied to the realm's band-[0x13,0x16] cells via
+ * engine_territory_retype_army_band, and a parallel ladder writes a derived
+ * value to +0x25c (0x28 when the realm has no high-terrain cell).  A per-realm
+ * callee of the army/country setup pass 0x49bd99.  No-op if the cell grid or
+ * army-record block is unbound. */
+void engine_territory_grade_feature_cells(int key);
+
 /* Port of FUN_00467a36.  New-game per-army feature-seeding pass: for every
  * active feature-cell (+7 key 1..17, +1 bit 0x20 set), assign a feature
  * terrain type (0x14 / 1 / 0) by the army's running active-cell index and

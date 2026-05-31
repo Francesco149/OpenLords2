@@ -1814,6 +1814,90 @@ int test_territory_retype_band_unbound_is_noop(void)
     return 0;
 }
 
+/* ── Population-density grader (port of FUN_0044d913) ───────────────
+ * Reuse census_setup.  Set the realm's load (+0x250) and census HIGH count
+ * (+0x200), place a band-[0x13,0x16] feature cell, grade, then read the tier
+ * applied to the cell and the value stored at +0x25c. */
+
+enum { GRADE_LOAD = 0x250, GRADE_HIGH = 0x200, GRADE_VALUE = 0x25c };
+
+static void grade_set(int key, int load, int high)
+{
+    *(int32_t *)&g_army[key * ARMY_STRIDE + GRADE_LOAD] = load;
+    g_army[key * ARMY_STRIDE + GRADE_HIGH] = (uint8_t)high;
+}
+static int grade_value(int key)
+{
+    return *(int32_t *)&g_army[key * ARMY_STRIDE + GRADE_VALUE];
+}
+
+/* No load → tier 0x13 applied to the realm's band cells, value 10. */
+int test_territory_grade_no_load(void)
+{
+    census_setup();
+    grade_set(3, 0, 5);                /* load 0 → density 0 */
+    band_cell(0, 3, 3, 0x15);          /* a band cell to receive the tier */
+
+    engine_territory_grade_feature_cells(3);
+
+    T_ASSERT_EQ_I(g_cells[cell_off(0, 3) + 0], 0x13);
+    T_ASSERT_EQ_I(grade_value(3), 10);
+    return 0;
+}
+
+/* The density quotient (load / HIGH-count) selects the tier and value on two
+ * parallel ladders. */
+int test_territory_grade_density_tiers(void)
+{
+    census_setup();
+    grade_set(3, 10, 5);  band_cell(0, 3, 3, 0x14);   /* density 2  → tier 0x14 */
+    grade_set(4, 80, 5);  band_cell(0, 4, 4, 0x14);   /* density 16 → tier 0x15 */
+    grade_set(5, 120, 5); band_cell(0, 5, 5, 0x14);   /* density 24 → tier 0x16 */
+    grade_set(6, 200, 5); band_cell(0, 6, 6, 0x14);   /* density 40 → tier 0x16 */
+
+    engine_territory_grade_feature_cells(3);
+    engine_territory_grade_feature_cells(4);
+    engine_territory_grade_feature_cells(5);
+    engine_territory_grade_feature_cells(6);
+
+    T_ASSERT_EQ_I(g_cells[cell_off(0, 3) + 0], 0x14);
+    T_ASSERT_EQ_I(grade_value(3), 10);
+    T_ASSERT_EQ_I(g_cells[cell_off(0, 4) + 0], 0x15);
+    T_ASSERT_EQ_I(grade_value(4), 0x14);
+    T_ASSERT_EQ_I(g_cells[cell_off(0, 5) + 0], 0x16);
+    T_ASSERT_EQ_I(grade_value(5), 0x1e);           /* density 24 → value 0x1e */
+    T_ASSERT_EQ_I(g_cells[cell_off(0, 6) + 0], 0x16);
+    T_ASSERT_EQ_I(grade_value(6), 0x28);           /* density 40 → value 0x28 */
+    return 0;
+}
+
+/* Load present but no high-terrain cell → saturated density 1000 (tier 0x16),
+ * and the value is forced to 0x28. */
+int test_territory_grade_saturated_no_high(void)
+{
+    census_setup();
+    grade_set(2, 50, 0);               /* high == 0 */
+    band_cell(0, 2, 2, 0x14);
+
+    engine_territory_grade_feature_cells(2);
+
+    T_ASSERT_EQ_I(g_cells[cell_off(0, 2) + 0], 0x16);
+    T_ASSERT_EQ_I(grade_value(2), 0x28);
+    return 0;
+}
+
+/* No-op when the army-record block is unbound. */
+int test_territory_grade_unbound_is_noop(void)
+{
+    census_setup();
+    grade_set(2, 50, 5);
+    band_cell(0, 2, 2, 0x14);
+    engine_territory_bind_army_records(NULL);
+    engine_territory_grade_feature_cells(2);       /* must not crash */
+    T_ASSERT_EQ_I(g_cells[cell_off(0, 2) + 0], 0x14);   /* untouched */
+    return 0;
+}
+
 /* ── Capital-region setup: block stamp + capital placement ──────────
  * (port of FUN_0046ac22 / FUN_00467fd1, the leaves of the 0x468d4f
  * castle-setup subtree).  Reuse the module-level g_cells + cell_off. */

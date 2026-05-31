@@ -932,11 +932,25 @@ new-game path; the `0x44c8ae` caller passes `lo == 2` and drives it.  Ported as
 lo==2 collapse, lo==2 with the flag clear keeping all, unbound no-op).  No new
 globals.
 
-**Remaining `FUN_0049bd99` leaves** (bottom-up): `FUN_0044d913` is now a leaf
-(its dep `FUN_00469d21` above is ported) — it derives a population-density tier
-from the realm's census and calls the band-retype; then the other 1-dep helpers
+### FUN_0044d913 — grade feature cells by population density ✅ ported
+
+The per-realm callee in `FUN_0049bd99`'s first loop, run right after the
+terrain census seeds +0x200.  Now a leaf (its only callee `FUN_00469d21` above
+is ported).  It computes a density = load(+0x250) per high-terrain cell (the
+census HIGH count at +0x200, = `ARMY_CENSUS_HIGH`): 0 when there is no load, a
+saturated 1000 when there is load but no high cell to divide by, else the
+integer quotient.  That density picks a feature-TYPE tier (no load → 0x13,
+density <0xb → 0x14, <0x15 → 0x15, else 0x16), applied to the realm's
+band-[0x13,0x16] cells via `engine_territory_retype_army_band`; a parallel
+ladder writes a derived value to +0x25c (<0xb → 10, <0x15 → 0x14, <0x1f → 0x1e,
+else 0x28, forced to 0x28 when there is no high cell).  Ported as
+`engine_territory_grade_feature_cells`; 4 host tests (no-load tier, the density
+tier/value ladders, the saturated no-high case, unbound no-op).  No new globals.
+
+**Remaining `FUN_0049bd99` leaves** (bottom-up): the 1-dep helpers
 `FUN_00432746` / `FUN_0046dfd5`, plus the two cap-tuning passes interleaved with
-the allocator (`FUN_0044df5f` / `FUN_004485a5`).
+the allocator (`FUN_0044df5f` / `FUN_004485a5`).  With those, every per-realm
+callee of `FUN_0049bd99` is ported and the setup pass itself can be assembled.
 
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
    callees are real; then `FUN_00499dc3` + `FUN_004329ec` spine + the

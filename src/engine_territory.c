@@ -1120,6 +1120,61 @@ void engine_territory_retype_army_band(int key, int type, char variant,
     }
 }
 
+/* Realm-record fields the density grader reads/writes (g_per_army_768 row):
+ *   +0x250  load numerator (i32, retail DAT_0053fc00)
+ *   +0x25c  graded value out (i32, retail DAT_0053fc0c)
+ * The divisor is the census HIGH bucket +0x200 (ARMY_CENSUS_HIGH), the count
+ * of the realm's TYPE 0x0f..0x16 cells the census tallied. */
+#define ARMY_DENSITY_LOAD  0x250
+#define ARMY_DENSITY_VALUE 0x25c
+
+/* Port of FUN_0044d913 (390 B) — grade the realm's feature cells by population
+ * density, a per-realm callee of the army/country setup pass 0x49bd99 (run in
+ * its first loop, right after the terrain census seeds +0x200).
+ *
+ * The density is load(+0x250) per high-terrain cell (the census HIGH count at
+ * +0x200): 0 when there is no load, the "saturated" 1000 when there is load but
+ * no high-terrain cell to divide by, else the integer quotient.  That density
+ * picks a feature-TYPE tier — no load → 0x13, density <0xb → 0x14, <0x15 →
+ * 0x15, else 0x16 — which is applied to every one of the realm's feature cells
+ * in band [0x13, 0x16] via engine_territory_retype_army_band (FUN_00469d21).
+ *
+ * It also records a derived value at +0x25c on a parallel density ladder
+ * (<0xb → 10, <0x15 → 0x14, <0x1f → 0x1e, else 0x28), overridden to 0x28 when
+ * the realm has no high-terrain cell at all.  No new globals; touches only the
+ * realm's record (and, through the retype, its owned cells).  No-op if the cell
+ * grid or army-record block is unbound. */
+void engine_territory_grade_feature_cells(int key)
+{
+    if (g_army_records == NULL) return;
+
+    uint8_t *rowbase = g_army_records + key * ARMY_ROW_STRIDE;
+    int load = *(const int32_t *)(rowbase + ARMY_DENSITY_LOAD);
+    int high = rowbase[ARMY_CENSUS_HIGH];           /* +0x200 census bucket */
+
+    int density;
+    if (load < 1)        density = 0;
+    else if (high == 0)  density = 1000;
+    else                 density = load / high;
+
+    int tier;
+    if (load < 1)            tier = 0x13;
+    else if (density < 0xb)  tier = 0x14;
+    else if (density < 0x15) tier = 0x15;
+    else                     tier = 0x16;
+
+    engine_territory_retype_army_band(key, tier, 0, 0x13, 0x16);
+
+    int value;
+    if (density < 0xb)       value = 10;
+    else if (density < 0x15) value = 0x14;
+    else if (density < 0x1f) value = 0x1e;
+    else                     value = 0x28;
+    if (high == 0)           value = 0x28;
+
+    *(int32_t *)(rowbase + ARMY_DENSITY_VALUE) = value;
+}
+
 /* Per-army active-cell tally byte: row offset +0x205 (retail DAT_0053fbb5
  * = g_per_army_768 + 0x205). */
 #define ARMY_ACTIVE_COUNT 0x205

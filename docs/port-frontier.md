@@ -271,7 +271,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 |----|-----:|---------------:|--------------:|:----:|
 | 0x45242b | 11 | 1 | 0 | ✓ |
 | 0x452775 | 49 | 1 | 0 | ✓ |
-| 0x451150 | 936 | 1 | 5 |  |
+| 0x451150 | 936 | 1 | 4 |  |
 
 ### tables (item/char) + populators (3)
 
@@ -336,7 +336,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x49dfc6 | 505 | 1 | 3 |  |
 | 0x49a581 | 1039 | 1 | 16 |  |
 | 0x49d638 | 1737 | 1 | 0 | ✓ |
-| 0x49bd99 | 3063 | 1 | 6 |  |
+| 0x49bd99 | 3063 | 1 | 5 |  |
 
 ### asset-load IO helper cluster (0x4af*) (20)
 
