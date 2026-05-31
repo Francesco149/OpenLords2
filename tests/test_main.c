@@ -1430,6 +1430,10 @@ struct test_case {
     X(territory_collect_keyed_appends_and_resets) \
     X(territory_collect_keyed_filters) \
     X(territory_collect_keyed_unbound_is_noop) \
+    X(territory_mark_features_routes_by_descriptor) \
+    X(territory_mark_features_type0_gated_by_slotA) \
+    X(territory_mark_features_filters) \
+    X(territory_mark_features_unbound_is_noop) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \

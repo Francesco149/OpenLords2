@@ -1001,3 +1001,61 @@ void engine_territory_collect_keyed_cells(unsigned key)
         }
     }
 }
+
+/* Per-army "special feature cell" slots the 0x468e61 pass fills: a present-flag
+ * byte + an i32 cell byte-offset, one pair per feature kind (retail
+ * DAT_0053fc5d/60, fc8d/90, fc45/48 = g_per_army_768 + these offsets). */
+#define ARMY_FEAT_A_FLAG 0x2ad   /* DAT_0053fc5d — descriptor 0x1e present */
+#define ARMY_FEAT_A_OFF  0x2b0   /* DAT_0053fc60 */
+#define ARMY_FEAT_B_FLAG 0x2dd   /* DAT_0053fc8d — descriptor 0 present    */
+#define ARMY_FEAT_B_OFF  0x2e0   /* DAT_0053fc90 */
+#define ARMY_FEAT_C_FLAG 0x295   /* DAT_0053fc45 — descriptor 0x14 present */
+#define ARMY_FEAT_C_OFF  0x298   /* DAT_0053fc48 */
+
+/* Port of FUN_00468e61 (457 B) — mark army `key`'s special feature cells.
+ * Row-major scan for cells owned by `key` (+7 == key) and inside the capital
+ * region (+2 bits 2..4 == 0xc, the flag the capital footprint sets); the
+ * cell's +3 descriptor selects which per-army feature slot to record into,
+ * sets its +0 type and +2 bit 0x80:
+ *   desc 0x1e → slot A (+0x2ad flag, +0x2b0 off), type +0 ← 1
+ *   desc 0    → slot B (+0x2dd flag, +0x2e0 off), type +0 ← 4  — ONLY if slot
+ *               A's flag is still clear (a 0x1e cell seen earlier this scan
+ *               suppresses the type-0 slot)
+ *   desc 0x14 → slot C (+0x295 flag, +0x298 off), type +0 ← 0x0a
+ * Each slot is overwritten by the LAST matching cell in scan order (retail
+ * does not break).  The three retail loop globals (DAT_005533cc cursor +
+ * DAT_00569570/78 col/row) are pure scratch — only the byte cursor is read,
+ * so a plain linear offset loop suffices.
+ *
+ * No-op if the cell grid or the army-record block is unbound. */
+void engine_territory_mark_capital_features(unsigned key)
+{
+    if (g_cells == NULL || g_army_records == NULL) return;
+
+    uint8_t *rowbase = g_army_records + key * ARMY_ROW_STRIDE;
+    int off = 0;
+    for (int i = 0; i < CELL_GRID_CELLS; i++, off += CELL_STRIDE) {
+        if (g_cells[off + 7] != (uint8_t)key)   continue;   /* DAT_00522f97 */
+        if ((g_cells[off + 2] & 0x1c) != 0xc)   continue;   /* DAT_00522f92 */
+
+        uint8_t desc = g_cells[off + 3];                    /* DAT_00522f93 */
+        if (desc == 0x1e) {
+            rowbase[ARMY_FEAT_A_FLAG] = 1;
+            *(int32_t *)(rowbase + ARMY_FEAT_A_OFF) = off;
+            g_cells[off + 0] = 1;
+            g_cells[off + 2] |= 0x80;
+        }
+        if (desc == 0 && rowbase[ARMY_FEAT_A_FLAG] == 0) {
+            rowbase[ARMY_FEAT_B_FLAG] = 1;
+            *(int32_t *)(rowbase + ARMY_FEAT_B_OFF) = off;
+            g_cells[off + 0] = 4;
+            g_cells[off + 2] |= 0x80;
+        }
+        if (desc == 0x14) {
+            rowbase[ARMY_FEAT_C_FLAG] = 1;
+            *(int32_t *)(rowbase + ARMY_FEAT_C_OFF) = off;
+            g_cells[off + 0] = 0x0a;
+            g_cells[off + 2] |= 0x80;
+        }
+    }
+}

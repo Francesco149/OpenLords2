@@ -1536,3 +1536,94 @@ int test_territory_collect_keyed_unbound_is_noop(void)
     engine_territory_collect_keyed_cells(5);        /* must not crash */
     return 0;
 }
+
+/* ── Capital-region: mark feature cells (port of FUN_00468e61) ──────── */
+
+enum { FEAT_A_FLAG = 0x2ad, FEAT_A_OFF = 0x2b0,
+       FEAT_B_FLAG = 0x2dd, FEAT_B_OFF = 0x2e0,
+       FEAT_C_FLAG = 0x295, FEAT_C_OFF = 0x298 };
+static int32_t army_i32(int key, int field)
+{
+    int32_t v;
+    memcpy(&v, &g_army[key * ARMY_STRIDE + field], 4);
+    return v;
+}
+
+/* Mark cell (col,row) as an in-capital cell of `key` with descriptor `desc`:
+ * +7 = key, +2 = 0xc (bits 2,3 set / bit4 clear), +3 = desc. */
+static void feat_cell(int col, int row, uint8_t key, uint8_t desc)
+{
+    int o = cell_off(col, row);
+    g_cells[o + 7] = key;
+    g_cells[o + 2] = 0xc;
+    g_cells[o + 3] = desc;
+}
+
+/* Each descriptor routes to its slot, stamping the slot flag+offset, the
+ * cell's +0 type, and +2 bit 0x80. */
+int test_territory_mark_features_routes_by_descriptor(void)
+{
+    adj_setup();
+    feat_cell(2, 0, 4, 0x1e);   /* → slot A */
+    feat_cell(5, 0, 4, 0x14);   /* → slot C */
+
+    engine_territory_mark_capital_features(4);
+
+    T_ASSERT_EQ_I(g_army[4 * ARMY_STRIDE + FEAT_A_FLAG], 1);
+    T_ASSERT_EQ_I(army_i32(4, FEAT_A_OFF), cell_off(2, 0));
+    T_ASSERT_EQ_I(g_cells[cell_off(2, 0) + 0], 1);
+    T_ASSERT_EQ_I(g_cells[cell_off(2, 0) + 2] & 0x80, 0x80);
+
+    T_ASSERT_EQ_I(g_army[4 * ARMY_STRIDE + FEAT_C_FLAG], 1);
+    T_ASSERT_EQ_I(army_i32(4, FEAT_C_OFF), cell_off(5, 0));
+    T_ASSERT_EQ_I(g_cells[cell_off(5, 0) + 0], 0x0a);
+    return 0;
+}
+
+/* A type-0 (descriptor 0) cell fills slot B — but only while slot A is unset.
+ * A 0x1e cell earlier in scan order suppresses the type-0 slot. */
+int test_territory_mark_features_type0_gated_by_slotA(void)
+{
+    /* case 1: no 0x1e — the descriptor-0 cell takes slot B */
+    adj_setup();
+    feat_cell(3, 0, 6, 0);
+    engine_territory_mark_capital_features(6);
+    T_ASSERT_EQ_I(g_army[6 * ARMY_STRIDE + FEAT_B_FLAG], 1);
+    T_ASSERT_EQ_I(army_i32(6, FEAT_B_OFF), cell_off(3, 0));
+    T_ASSERT_EQ_I(g_cells[cell_off(3, 0) + 0], 4);
+
+    /* case 2: a 0x1e cell precedes the type-0 cell → slot B suppressed */
+    adj_setup();
+    feat_cell(1, 0, 6, 0x1e);   /* lower offset → seen first, sets slot A */
+    feat_cell(8, 0, 6, 0);      /* gated off */
+    engine_territory_mark_capital_features(6);
+    T_ASSERT_EQ_I(g_army[6 * ARMY_STRIDE + FEAT_A_FLAG], 1);
+    T_ASSERT_EQ_I(g_army[6 * ARMY_STRIDE + FEAT_B_FLAG], 0);   /* never set */
+    T_ASSERT_EQ_I(g_cells[cell_off(8, 0) + 0], 0);            /* type untouched */
+    return 0;
+}
+
+/* Cells outside the capital region (+2 != 0xc) or of the wrong key are
+ * skipped. */
+int test_territory_mark_features_filters(void)
+{
+    adj_setup();
+    int o;
+    o = cell_off(2, 0); g_cells[o + 7] = 4; g_cells[o + 2] = 0x08; g_cells[o + 3] = 0x1e; /* bits != 0xc */
+    o = cell_off(3, 0); g_cells[o + 7] = 9; g_cells[o + 2] = 0x0c; g_cells[o + 3] = 0x1e; /* wrong key */
+
+    engine_territory_mark_capital_features(4);
+    T_ASSERT_EQ_I(g_army[4 * ARMY_STRIDE + FEAT_A_FLAG], 0);   /* nothing marked */
+    return 0;
+}
+
+int test_territory_mark_features_unbound_is_noop(void)
+{
+    adj_setup();
+    engine_territory_bind_cells(NULL);
+    engine_territory_mark_capital_features(4);
+    adj_setup();
+    engine_territory_bind_army_records(NULL);
+    engine_territory_mark_capital_features(4);
+    return 0;
+}

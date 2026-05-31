@@ -205,4 +205,12 @@ int engine_territory_place_capital(unsigned key);
  * grid or army-record block is unbound. */
 void engine_territory_collect_keyed_cells(unsigned key);
 
+/* Port of FUN_00468e61.  Mark army `key`'s special feature cells: for each
+ * owned cell (+7 == key) inside the capital region (+2 bits 2..4 == 0xc),
+ * record it into one of three per-army feature slots by its +3 descriptor
+ * (0x1e → slot A, 0 → slot B but only if A is unset, 0x14 → slot C), stamping
+ * the cell's +0 type (1/4/0x0a) and +2 bit 0x80.  No-op if the cell grid or
+ * army-record block is unbound. */
+void engine_territory_mark_capital_features(unsigned key);
+
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */
