@@ -1164,3 +1164,41 @@ void engine_territory_place_capital_port(unsigned key)
         g_cells[best_off + 3] = 0x0a;           /* DAT_00522f93 */
     }
 }
+
+/* Port of FUN_00468121 (331 B) — claim army `key`'s secondary cell cluster.
+ * Row-major scan for cells owned by `key` (+7 == key) flagged 0x80 in +1 and
+ * still empty (+0 == 0); each of the first four matches gets its +6 byte set
+ * to its +3 descriptor and its +0 type set to 0x14.  The 1st match also gets
+ * +2 bit 0x80 and seats the cursor col/row (DAT_0057c8d0 / DAT_0056846c) at
+ * its own cell — note this is the FIRST match, unlike the capital finder
+ * (0x467fd1) which seats the cursor on its 4th.  Returns the 1st match's
+ * byte-offset once a 4th match is reached, else 0 (with any 1..3 matches
+ * still mutated and the cursor still seated on the 1st).  No-op (returns 0)
+ * if the cell grid is unbound. */
+int engine_territory_place_secondary(unsigned key)
+{
+    if (g_cells == NULL) return 0;
+
+    int found = 0;      /* local_1c */
+    int first_off = 0;  /* local_c  */
+    for (int row = 0; row < 0x40; row++) {
+        for (int col = 0; col < 0x40; col++) {
+            int off = (row * 0x40 + col) * CELL_STRIDE;
+            if (g_cells[off + 7] != (uint8_t)key) continue;   /* DAT_00522f97 */
+            if ((g_cells[off + 1] & 0x80) == 0)   continue;   /* DAT_00522f91 */
+            if (g_cells[off + 0] != 0)            continue;   /* DAT_00522f90 */
+
+            if (found == 0) {
+                first_off = off;
+                g_cells[off + 2] |= 0x80;       /* DAT_00522f92 */
+                g_cursor_col = col;             /* DAT_0057c8d0 */
+                g_cursor_row = row;             /* DAT_0056846c */
+            }
+            g_cells[off + 6] = g_cells[off + 3];    /* +6 ← +3 descriptor */
+            g_cells[off + 0] = 0x14;                /* +0 ← 0x14 (type)   */
+            if (found == 3) return first_off;
+            found++;
+        }
+    }
+    return 0;
+}

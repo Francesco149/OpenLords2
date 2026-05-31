@@ -1759,3 +1759,83 @@ int test_territory_port_unbound_is_noop(void)
     engine_territory_place_capital_port(4);
     return 0;
 }
+
+/* ── Capital-region: secondary cluster (port of FUN_00468121) ───────── */
+
+/* Mark cell (col,row) as a secondary candidate of `key`: +7=key, +1 bit 0x80,
+ * +0 = 0, +3 = a distinct descriptor to verify the +6 copy. */
+static void sec_cell(int col, int row, uint8_t key, uint8_t desc)
+{
+    int o = cell_off(col, row);
+    g_cells[o + 7] = key;
+    g_cells[o + 1] |= 0x80;
+    g_cells[o + 0] = 0;
+    g_cells[o + 3] = desc;
+}
+
+/* With ≥4 candidates: the first four get +0 ← 0x14 and +6 ← +3; the 1st gets
+ * +2 bit 0x80 and seats the cursor; the 5th (past the 4th return) is left
+ * untouched; the return value is the 1st match's offset. */
+int test_territory_secondary_marks_first_four(void)
+{
+    cap_setup();
+    sec_cell(1, 0, 7, 0xa1);
+    sec_cell(2, 0, 7, 0xa2);
+    sec_cell(3, 0, 7, 0xa3);
+    sec_cell(4, 0, 7, 0xa4);
+    sec_cell(5, 0, 7, 0xa5);   /* 5th — never reached */
+
+    int ret = engine_territory_place_secondary(7);
+
+    T_ASSERT_EQ_I(ret, cell_off(1, 0));
+    for (int c = 1; c <= 4; c++) {
+        T_ASSERT_EQ_I(g_cells[cell_off(c, 0) + 0], 0x14);
+        T_ASSERT_EQ_I(g_cells[cell_off(c, 0) + 6], 0xa0 + c);   /* +6 ← +3 */
+    }
+    T_ASSERT_EQ_I(g_cells[cell_off(1, 0) + 2] & 0x80, 0x80);    /* 1st only */
+    T_ASSERT_EQ_I(g_cells[cell_off(2, 0) + 2] & 0x80, 0);
+    T_ASSERT_EQ_I(g_cells[cell_off(5, 0) + 0], 0);              /* untouched */
+    /* cursor on the 1st match */
+    T_ASSERT_EQ_I(engine_territory_cursor_col(), 1);
+    T_ASSERT_EQ_I(engine_territory_cursor_row(), 0);
+    return 0;
+}
+
+/* Fewer than four → returns 0, but found cells are still marked and the
+ * cursor is seated on the 1st. */
+int test_territory_secondary_under_four_marks_partial(void)
+{
+    cap_setup();
+    sec_cell(8, 2, 7, 0xb0);
+    sec_cell(9, 2, 7, 0xb1);
+
+    int ret = engine_territory_place_secondary(7);
+    T_ASSERT_EQ_I(ret, 0);
+    T_ASSERT_EQ_I(g_cells[cell_off(8, 2) + 0], 0x14);
+    T_ASSERT_EQ_I(g_cells[cell_off(9, 2) + 0], 0x14);
+    T_ASSERT_EQ_I(engine_territory_cursor_col(), 8);
+    T_ASSERT_EQ_I(engine_territory_cursor_row(), 2);
+    return 0;
+}
+
+/* All three predicates required (key, +1 bit 0x80, +0 == 0). */
+int test_territory_secondary_filters(void)
+{
+    cap_setup();
+    int o;
+    o = cell_off(1, 0); g_cells[o + 7] = 9; g_cells[o + 1] |= 0x80;   /* wrong key */
+    o = cell_off(2, 0); g_cells[o + 7] = 7;                            /* no 0x80   */
+    o = cell_off(3, 0); g_cells[o + 7] = 7; g_cells[o + 1] |= 0x80; g_cells[o + 0] = 4; /* +0 != 0 */
+
+    int ret = engine_territory_place_secondary(7);
+    T_ASSERT_EQ_I(ret, 0);
+    T_ASSERT_EQ_I(g_cells[cell_off(3, 0) + 0], 4);   /* unchanged */
+    return 0;
+}
+
+int test_territory_secondary_unbound_returns_zero(void)
+{
+    engine_territory_bind_cells(NULL);
+    T_ASSERT_EQ_I(engine_territory_place_secondary(7), 0);
+    return 0;
+}

@@ -228,4 +228,11 @@ uint8_t engine_territory_classify_border_neighbour(int dir, int col, int row, in
  * +0x2c8.  No-op if the cell grid or army-record block is unbound. */
 void engine_territory_place_capital_port(unsigned key);
 
+/* Port of FUN_00468121.  Claim army `key`'s secondary cell cluster: the first
+ * four cells owned by `key` (+7 == key) with +1 bit 0x80 and +0 == 0 get
+ * +6 ← +3 and +0 ← 0x14; the 1st also gets +2 bit 0x80 and seats the cursor
+ * col/row on itself.  Returns the 1st match's byte-offset once a 4th match is
+ * found, else 0.  No-op if the cell grid is unbound. */
+int engine_territory_place_secondary(unsigned key);
+
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

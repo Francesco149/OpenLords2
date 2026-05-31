@@ -1441,6 +1441,10 @@ struct test_case {
     X(territory_port_picks_nearest_to_cursor) \
     X(territory_port_no_candidate_noop) \
     X(territory_port_unbound_is_noop) \
+    X(territory_secondary_marks_first_four) \
+    X(territory_secondary_under_four_marks_partial) \
+    X(territory_secondary_filters) \
+    X(territory_secondary_unbound_returns_zero) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \
