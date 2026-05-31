@@ -7,6 +7,46 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — TURN-ENGINE chip: per-realm territory-income + economy re-plan (FUN_004ad6c0)
+
+Ported `FUN_004ad6c0` (524 B) → `engine_realm_collect_territory_income`, the
+fourth per-realm pass of the turn-advance engine `FUN_00448440` to land in
+`engine_realm.c`.  Two halves: it aggregates each territory's value into its
+owning realm's income accumulators, then re-runs the full per-realm economy
+plan.  Three passes with **fixed bounds** (16 realms, 150 territories — not the
+live realm count, unlike the rating/emigration passes):
+
+1. Clear both per-realm income accumulators (+0x198 / +0x19c) for realms 1..16.
+2. Scan territories 1..150 in `g_per_territory_420` (save entry 5, retail
+   0x52f0b0, 0x1a4 stride).  A territory counts only if its status (+0x08) is 1
+   or 2 and its gate flag (+0x198) is clear; its value (+0x168) is folded into
+   the owning realm's (key +0x10) accumulator — the **own/allied** slot +0x198
+   when the realm owner (+0x05) equals the territory owner (+0x00) or is named
+   by that owner's strategic +0x81, else the **foreign** slot +0x19c.
+3. Re-run the economy plan for realms 1..16 at the current season
+   (`s_slot_0057c92c`): `engine_army_economy_provision` → `_plan_production` →
+   `_select_candidate` (all three already ported).
+
+**A leaf with zero new globals.**  The 0x52f0b0 / 0x1a4 table turned out to be
+the already-externed shared block `g_per_territory_420`; the army accumulators
+(+0x198/+0x19c) and owner byte (+0x05) live in `g_per_army_768`, the alliance
+lookup in `g_player_strategic_352`, and the three callees are ported — no
+binding, no scalar-wall exposure.  r2 @0x4ad6c0 confirmed the three strides
+(0x1a4 / 0x300 / 0x160), every field offset, the status∈{1,2} + flag==0 gate,
+and the fixed 0x11 / 0x97 loop bounds.
+
+6 host tests: own / allied / foreign+accumulate routing, the two exclusion
+gates, the fixed-bound clear (realms 1..16 cleared, realm 0 and territory 0
+both untouched), and a pass-3 wiring check (economy block bound → the planners'
+up-front field clears land for realms 1..16 only).  **1613/1613** pass under
+ASan/UBSan; mingw `.exe` clean; `_engine_realm_collect_territory_income` in PE.
+
+**Next.**  Remaining `FUN_00448440` leaves: the thin per-realm dispatchers
+`FUN_00469b51` (terrain census) / `FUN_0044f699` (workforce alloc) over
+already-ported leaves, and `FUN_0044ae7dd`.  The deferred sibling
+`FUN_0044bd9f` (tax/approval band, 2D-table aliasing) still wants careful table
+extraction.
+
 ## 2026-05-31 — TURN-ENGINE chip: per-realm emigration pass (FUN_0044a6ba)
 
 Ported `FUN_0044a6ba` (903 B) → `engine_realm_migrate_population`, the

@@ -259,7 +259,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
-| 0x448440 | 261 | 2 | 24 |  |
+| 0x448440 | 261 | 2 | 23 |  |
 | 0x448d7e | 148 | 1 | 0 | ✓ |
 | 0x4407e5 | 426 | 1 | 1 |  |
 | 0x4477e7 | 503 | 1 | 0 | ✓ |
@@ -357,7 +357,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4a8aab | 753 | 1 | 5 |  |
 | 0x4ad9f0 | 774 | 1 | 4 |  |
 | 0x4a8e0b | 943 | 1 | 5 |  |
-| 0x4a9a9a | 1047 | 1 | 7 |  |
+| 0x4a9a9a | 1047 | 1 | 6 |  |
 | 0x4ab383 | 1751 | 1 | 10 |  |
 
 ### battlefield render + wndproc (24)

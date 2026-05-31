@@ -77,4 +77,32 @@ void engine_realm_settle_provisions(void);
  * free and pass 3 only ever sees that first contributor. */
 void engine_realm_migrate_population(void);
 
+/* Port of FUN_004ad6c0 @ 0x4ad6c0 (524 B, __stdcall void) — the per-realm
+ * territory-income aggregation + economy re-plan pass (another 0x448440
+ * turn-engine pass).  Three passes with FIXED bounds (16 realms, 150
+ * territories — not the live realm count):
+ *
+ *   1. Clear both per-realm income accumulators (+0x198, +0x19c) for realms
+ *      1..16.
+ *
+ *   2. Scan territories 1..150 in g_per_territory_420 (save entry 5, retail
+ *      0x52f0b0, 0x1a4 stride).  A territory counts only if its status byte
+ *      (+0x08) is 1 or 2 AND its gate flag (+0x198) is zero.  Its value
+ *      (+0x168) is added to the owning realm's (key at +0x10) accumulator —
+ *      +0x198 when the realm's owner (+0x05) matches the territory's owner
+ *      (+0x00) OR is named by that owner's strategic +0x81 ("own / allied"),
+ *      otherwise +0x19c ("foreign").
+ *
+ *   3. Re-run the per-realm economy plan for realms 1..16 at the current
+ *      season s_slot_0057c92c (entry 25): engine_army_economy_provision →
+ *      _plan_production → _select_candidate.
+ *
+ * Touches only the shared save blocks (g_per_territory_420, g_per_army_768,
+ * g_player_strategic_352) and the three already-ported economy callees — no
+ * new globals.  Field semantics (territory status / owner / value) are
+ * provisional; offsets and the fixed bounds are r2-verified.  The economy
+ * callees no-op when their army-record block is unbound, so passes 1-2 can be
+ * exercised in isolation. */
+void engine_realm_collect_territory_income(void);
+
 #endif /* OPENLORDS2_ENGINE_REALM_H */

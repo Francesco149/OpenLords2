@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **439** (17.9%) — tested 403, ported 36
-- code bytes touched: **18.9%** (158,900 / 838,629 B)
-- unported: **2008**
+- touched: **440** (18.0%) — tested 404, ported 36
+- code bytes touched: **19.0%** (159,424 / 838,629 B)
+- unported: **2007**
 - orphan refs (in src/, not in function table): 4
 
-## tested (403) — ported + host unit suite
+## tested (404) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -224,11 +224,11 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x44d1e5 | FUN_0044d1e5 | 156 | engine_army_economy.c, engine_army_economy.h |
 | 0x44d281 | FUN_0044d281 | 130 | engine_army_economy.c |
 | 0x44d303 | FUN_0044d303 | 113 | engine_army_economy.c |
-| 0x44d374 | FUN_0044d374 | 665 | engine_army_economy.c, engine_army_economy.h |
+| 0x44d374 | FUN_0044d374 | 665 | engine_army_economy.c, engine_army_economy.h, engine_realm.c |
 | 0x44d60d | FUN_0044d60d | 774 | engine_army_economy.c, engine_army_economy.h |
 | 0x44d913 | FUN_0044d913 | 390 | engine_territory.c, engine_territory.h, game_init.c |
 | 0x44da99 | FUN_0044da99 | 692 | engine_army_economy.c, engine_army_economy.h |
-| 0x44dd4d | FUN_0044dd4d | 530 | engine_army_economy.c, engine_army_economy.h |
+| 0x44dd4d | FUN_0044dd4d | 530 | engine_army_economy.c, engine_army_economy.h, engine_realm.c |
 | 0x44df5f | FUN_0044df5f | 1628 | engine_army_economy.c, engine_army_economy.h, engine_realm.c |
 | 0x44e5bb | FUN_0044e5bb | 72 | engine_army_economy.c, engine_army_economy.h |
 | 0x44e603 | FUN_0044e603 | 80 | engine_army_economy.c, engine_army_economy.h |
@@ -336,6 +336,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a1e6c | FUN_004a1e6c | 117 | engine_roster.c, engine_roster.h, game_init.c |
 | 0x4a2584 | FUN_004a2584 | 157 | game_init.c, game_init.h |
 | 0x4ac904 | FUN_004ac904 | 295 | game_init.c, game_init.h |
+| 0x4ad6c0 | FUN_004ad6c0 | 524 | engine_realm.c, engine_realm.h |
 | 0x4ade93 | FUN_004ade93 | 339 | save.c, save.h |
 | 0x4adfe6 | FUN_004adfe6 | 377 | save.c, save.h |
 | 0x4ae539 | FUN_004ae539 | 169 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |

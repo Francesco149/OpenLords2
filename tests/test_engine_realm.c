@@ -265,3 +265,147 @@ int test_engine_realm_migrate_source_list_no_break(void)
     T_ASSERT_EQ_I(r2[0x59], 1);
     return 0;
 }
+
+/* --- engine_realm_collect_territory_income (FUN_004ad6c0) ------------------ */
+
+#define TREC(i)  (&g_per_territory_420[(i) * 0x1a4])
+
+/* Clean per-army / per-territory / per-player state with the economy callees
+ * NULL-bound, so pass 3 (the per-realm re-plan) no-ops and the two income
+ * accumulators reflect only passes 1-2. */
+static void income_reset(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0057c92c = 1;
+    engine_army_economy_bind_army_records(NULL);   /* re-plan → no-op */
+}
+
+/* Set up territory `t` as a counted record: status (+0x08), owner (+0x00),
+ * owning-realm key (+0x10), value (+0x168), gate flag (+0x198) clear. */
+static void terr_set(int t, uint8_t status, int8_t owner, uint8_t realm,
+                     int32_t value)
+{
+    uint8_t *p = TREC(t);
+    p[0x08] = status;
+    p[0x00] = (uint8_t)owner;
+    p[0x10] = realm;
+    *(int32_t *)(p + 0x168) = value;
+    p[0x198] = 0;
+}
+
+/* Own-owned territory (realm owner == territory owner) → +0x198 accumulator. */
+int test_engine_realm_income_own(void)
+{
+    income_reset();
+    AREC(1)[0x05] = 5;                 /* realm 1 owned by player 5 */
+    terr_set(1, 1, 5, 1, 100);         /* territory of player 5, in realm 1 */
+
+    engine_realm_collect_territory_income();
+
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x198), 100);
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x19c), 0);
+    return 0;
+}
+
+/* Allied territory (territory owner's strategic +0x81 names the realm owner)
+ * → still the +0x198 accumulator. */
+int test_engine_realm_income_allied(void)
+{
+    income_reset();
+    AREC(1)[0x05] = 7;                 /* realm 1 owned by player 7 */
+    PREC(5)[0x81] = 7;                 /* player 5 is allied to player 7 */
+    terr_set(1, 2, 5, 1, 60);          /* status 2 also counts */
+
+    engine_realm_collect_territory_income();
+
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x198), 60);
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x19c), 0);
+    return 0;
+}
+
+/* Foreign territory (neither own nor allied) → +0x19c accumulator; values from
+ * several territories accumulate. */
+int test_engine_realm_income_foreign_and_accumulate(void)
+{
+    income_reset();
+    AREC(1)[0x05] = 7;
+    PREC(5)[0x81] = 9;                 /* player 5 allied to 9, not 7 */
+    terr_set(1, 1, 5, 1, 40);          /* foreign → +0x19c */
+    terr_set(2, 1, 7, 1, 25);          /* own (owner 7) → +0x198 */
+    terr_set(3, 1, 5, 1, 10);          /* foreign → +0x19c (accumulate) */
+
+    engine_realm_collect_territory_income();
+
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x198), 25);
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x19c), 50);
+    return 0;
+}
+
+/* Gates: a non-{1,2} status and a set gate flag (+0x198) both exclude the
+ * territory entirely. */
+int test_engine_realm_income_gates(void)
+{
+    income_reset();
+    AREC(1)[0x05] = 5;
+    terr_set(1, 3, 5, 1, 100);         /* status 3 → excluded */
+    terr_set(2, 1, 5, 1, 200);
+    TREC(2)[0x198] = 1;                /* gate flag set → excluded */
+
+    engine_realm_collect_territory_income();
+
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x198), 0);
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x19c), 0);
+    return 0;
+}
+
+/* Pass 1 clears realms 1..16 (fixed bound, not the live count); realm 0 is
+ * left alone, and the territory scan starts at index 1 (index 0 is skipped). */
+int test_engine_realm_income_clears_fixed_bounds(void)
+{
+    income_reset();
+    AI32(AREC(0), 0x198) = 0x1111; AI32(AREC(0), 0x19c) = 0x2222;  /* untouched */
+    AI32(AREC(1), 0x198) = 0x3333;
+    AI32(AREC(16), 0x19c) = 0x4444;
+    /* Territory at index 0 must be ignored even though it is "counted". */
+    terr_set(0, 1, 3, 2, 500);
+    AREC(2)[0x05] = 3;                 /* would match if index 0 were scanned */
+
+    engine_realm_collect_territory_income();
+
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x198), 0);       /* cleared */
+    T_ASSERT_EQ_I(AI32(AREC(16), 0x19c), 0);      /* cleared (bound reaches 16) */
+    T_ASSERT_EQ_I(AI32(AREC(2), 0x198), 0);       /* territory 0 not scanned */
+    T_ASSERT_EQ_I(AI32(AREC(0), 0x198), 0x1111);  /* realm 0 untouched */
+    T_ASSERT_EQ_I(AI32(AREC(0), 0x19c), 0x2222);
+    return 0;
+}
+
+/* Pass 3 wiring: with the economy block bound, the re-plan runs for realms
+ * 1..16 — each callee clears a field up front (plan +0x22c, select +0x258),
+ * so those land 0 for visited realms while realm 0 (never visited) stays
+ * dirty.  +0xb8 left 0 → plan/select take the gated-off path (clear only). */
+int test_engine_realm_income_replan_wiring(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0057c92c = 1;
+    engine_army_economy_bind_army_records(g_per_army_768);
+
+    AI32(AREC(0), 0x22c) = 0x55;   AI32(AREC(0), 0x258) = 0x55;   /* not visited */
+    AI32(AREC(1), 0x22c) = 0x66;   AI32(AREC(1), 0x258) = 0x66;
+    AI32(AREC(16), 0x22c) = 0x77;  AI32(AREC(16), 0x258) = 0x77;
+
+    engine_realm_collect_territory_income();
+
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x22c), 0);    /* plan_production cleared it */
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x258), 0);    /* select_candidate cleared it */
+    T_ASSERT_EQ_I(AI32(AREC(16), 0x22c), 0);
+    T_ASSERT_EQ_I(AI32(AREC(16), 0x258), 0);
+    T_ASSERT_EQ_I(AI32(AREC(0), 0x22c), 0x55); /* realm 0 untouched */
+
+    engine_army_economy_bind_army_records(NULL);
+    return 0;
+}

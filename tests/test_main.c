@@ -1689,6 +1689,12 @@ struct test_case {
     X(engine_realm_migrate_cap_and_unowned) \
     X(engine_realm_migrate_no_higher_neighbour) \
     X(engine_realm_migrate_source_list_no_break) \
+    X(engine_realm_income_own) \
+    X(engine_realm_income_allied) \
+    X(engine_realm_income_foreign_and_accumulate) \
+    X(engine_realm_income_gates) \
+    X(engine_realm_income_clears_fixed_bounds) \
+    X(engine_realm_income_replan_wiring) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

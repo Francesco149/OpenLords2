@@ -5,13 +5,17 @@
 #include <stdint.h>
 
 #include "engine_realm.h"
-#include "save.h"                  /* g_per_army_768, g_player_strategic_352 */
-#include "save_schema_globals.h"   /* s_slot_0056d5dc, s_slot_00553240 */
-#include "engine_army_economy.h"   /* engine_army_economy_provision */
+#include "save.h"                  /* g_per_army_768, g_player_strategic_352,
+                                      g_per_territory_420 */
+#include "save_schema_globals.h"   /* s_slot_0056d5dc, s_slot_00553240,
+                                      s_slot_0057c92c */
+#include "engine_army_economy.h"   /* engine_army_economy_provision / _plan_production
+                                      / _select_candidate */
 #include "engine_math.h"           /* engine_math_percent_of */
 
 #define ARMY_REC(key)   (&g_per_army_768[(key) * 0x300])
 #define STRAT_REC(slot) (&g_player_strategic_352[(slot) * 0x160])
+#define TERR_REC(idx)   (&g_per_territory_420[(idx) * 0x1a4])
 
 /* Port of FUN_0044baea — see engine_realm.h for the field overview. */
 void engine_realm_advance_rating(void)
@@ -154,5 +158,50 @@ void engine_realm_migrate_population(void)
                 r[0x59] = src;
             }
         }
+    }
+}
+
+/* Port of FUN_004ad6c0 — see engine_realm.h for the field overview. */
+void engine_realm_collect_territory_income(void)
+{
+    /* Pass 1 — clear both per-realm income accumulators (realms 1..16). */
+    for (int key = 1; key < 0x11; key++) {
+        uint8_t *r = ARMY_REC(key);
+        *(int32_t *)(r + 0x198) = 0;
+        *(int32_t *)(r + 0x19c) = 0;
+    }
+
+    /* Pass 2 — fold each eligible territory's value (+0x168) into its owning
+     * realm's "own/allied" (+0x198) or "foreign" (+0x19c) accumulator. */
+    for (int t = 1; t < 0x97; t++) {
+        uint8_t *terr = TERR_REC(t);
+
+        uint8_t status = terr[0x08];
+        if ((status != 1 && status != 2) || terr[0x198] != 0)
+            continue;                       /* not a counted territory */
+
+        int      owner_realm = terr[0x10];          /* owning realm key */
+        int      terr_owner  = (int8_t)terr[0x00];  /* territory's owner field */
+        int32_t  value       = *(int32_t *)(terr + 0x168);
+
+        uint8_t *r = ARMY_REC(owner_realm);
+        int      realm_owner = r[0x05];
+
+        /* Own (realm's owner == territory's) or allied (territory owner's
+         * strategic +0x81 names the realm's owner) → +0x198, else +0x19c. */
+        if (realm_owner == terr_owner ||
+            STRAT_REC(terr_owner)[0x81] == realm_owner)
+            *(int32_t *)(r + 0x198) += value;
+        else
+            *(int32_t *)(r + 0x19c) += value;
+    }
+
+    /* Pass 3 — re-run the per-realm economy plan (provision → production →
+     * candidate) for every realm 1..16 at the current season (s_slot_0057c92c). */
+    int phase = (int)s_slot_0057c92c;
+    for (int key = 1; key < 0x11; key++) {
+        engine_army_economy_provision(key, phase);         /* FUN_0044df5f */
+        engine_army_economy_plan_production(key, phase);   /* FUN_0044d374 */
+        engine_army_economy_select_candidate(key, phase);  /* FUN_0044dd4d */
     }
 }
