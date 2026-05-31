@@ -654,9 +654,11 @@ void engine_realm_apply_tax_approval(void)
  * g_misc_1360 roster row (MISC_ROW); the per-realm word array at +0x90 holds
  * each cell's development VALUE (0..800), and +0xdc is the surplus "pool" to be
  * spread across them this turn.  An overworld cell is developable only when it
- * is non-empty and its terrain-type byte (g_overworld_map[cell]) is < 0x19 —
- * types 0x19..0x1c and 0x01 are the five development-stage tiles this pass
- * stamps as a cell's value climbs.  Field semantics (the +0x90 values, the
+ * is non-empty and its terrain-type byte (g_overworld_map[cell]) is >= 0x19 —
+ * i.e. it is already one of the development-stage tiles (0x19..0x1c).  As a
+ * cell's value climbs the pass restamps it 0x19/0x1a/0x1b/0x1c, and a maxed
+ * cell (value >= 800) is stamped 0x01 — which drops it BELOW 0x19, so a fully
+ * developed cell stops qualifying on later turns.  Field semantics (the +0x90 values, the
  * +0xdc pool, the +0x1ff/+0x201/+0x208 accumulator and the projection outputs)
  * are provisional; all offsets and the band cut-offs are r2-verified against
  * the 0x300 record stride. */
@@ -676,7 +678,7 @@ static int realm_dev_best_cell(int realm, int default_idx)
     int result = default_idx;
     for (int i = 0; i < 0x14; i++) {
         int32_t cell = row[i];
-        if (cell == 0 || g_overworld_map[cell] >= 0x19)
+        if (cell == 0 || g_overworld_map[cell] < 0x19)
             continue;
         if (vals[i] > best) {
             best   = vals[i];
@@ -732,7 +734,7 @@ static void realm_dev_spread_pool(int realm)
 
     for (int n = 0; n < 0x14; n++) {
         int32_t cell = row[slot];
-        if (cell != 0 && g_overworld_map[cell] < 0x19) {
+        if (cell != 0 && g_overworld_map[cell] >= 0x19) {
             int v = vals[slot];
             if (pool > 0xc8) { v += 0xc8; pool -= 0xc8; }
             else             { v += pool;  pool  = 0;   }
@@ -781,7 +783,7 @@ static void realm_dev_project_pool(int realm)
     int capacity = 0;
     for (int i = 0; i < 0x14; i++) {
         int32_t cell = row[i];
-        if (cell == 0 || g_overworld_map[cell] >= 0x19)
+        if (cell == 0 || g_overworld_map[cell] < 0x19)
             continue;
         int head = 0x320 - vals[i];
         if (head > 0xc8)
@@ -802,7 +804,7 @@ static void realm_dev_project_pool(int realm)
     int slot = *(int32_t *)(a + 0x210);
     for (int n = 0; n < 0x14; n++) {
         int32_t cell = row[slot];
-        if (cell != 0 && g_overworld_map[cell] < 0x19) {
+        if (cell != 0 && g_overworld_map[cell] >= 0x19) {
             int v = vals[slot];
             if (pool > 0xc8) { v += 0xc8; pool -= 0xc8; }
             else             { v += pool;  pool  = 0;   }

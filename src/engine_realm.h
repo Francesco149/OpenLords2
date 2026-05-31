@@ -276,7 +276,8 @@ void engine_realm_apply_tax_approval(void);
  *      (+0x90 word) and stamp the cell's overworld terrain type to the matching
  *      development stage (0x19/0x1a/0x1b/0x1c/0x01), stopping when the pool runs
  *      out.  A cell is developable only when non-empty and its terrain type is
- *      < 0x19.
+ *      >= 0x19 (already a development-stage tile); a maxed cell is stamped 0x01,
+ *      which is < 0x19 and so stops qualifying on later turns.
  *   3. FUN_0044c278 — project that distribution without mutating the cells,
  *      leaving four planning metrics: +0xe4 total fill capacity, +0x20c count
  *      of cells that would reach the 800 cap, +0x214 turns to fill the best

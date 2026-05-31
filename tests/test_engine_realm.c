@@ -1169,48 +1169,54 @@ int test_engine_realm_dev_accumulator_clamp(void)
     return 0;
 }
 
-/* Spread + projection: the pool (+0xdc) is distributed from the highest-value
- * cell, ≤200 per cell; the touched cell's value and overworld type are updated;
- * the development push moves that cell out of "developable" range so the
- * projection (FUN_0044c278) only counts the untouched cell.  pool 50: argmax
- * slot1 (200) takes the full 50 → 250 (type 0x1a); slot0 (100) is left alone.
- * Projection then sees only slot0: capacity = min(800-100,200) = 200, and
- * turns-to-fill = ceil((800-100)/50) = 14. */
+/* Spread + projection.  A cell is developable when its overworld type is
+ * >= 0x19 (already a dev-stage tile).  The pool (+0xdc) is distributed from the
+ * highest-value cell, ≤200 per cell.  Three cells (vals 100/50/300, all type
+ * 0x19), pool 50: argmax is slot2 (300) → 300+50 = 350, restamped 0x1a (still
+ * >= 0x19, so still developable for the projection).  Projection then sees all
+ * three cells: capacity = 3 × min(800−v, 200) = 200+200+200 = 600; turns to
+ * fill the best cell = ceil((800−350)/50) = 9.  Verified byte-exact against
+ * retail via tools/diff_test.py --functions dev_spread. */
 int test_engine_realm_dev_spread_and_project(void)
 {
     uint8_t *r = dev_reset();
     engine_territory_bind_cells(g_overworld_map);
 
-    MISC_ROW(1)[0] = 100;  g_overworld_map[100] = 0x10;   /* developable */
-    MISC_ROW(1)[1] = 200;  g_overworld_map[200] = 0x10;
+    MISC_ROW(1)[0] = 100;  g_overworld_map[100] = 0x19;   /* developable (>= 0x19) */
+    MISC_ROW(1)[1] = 200;  g_overworld_map[200] = 0x19;
+    MISC_ROW(1)[2] = 300;  g_overworld_map[300] = 0x19;
     AW16(r, 0x90 + 0) = 100;
-    AW16(r, 0x90 + 2) = 200;
+    AW16(r, 0x90 + 2) = 50;
+    AW16(r, 0x90 + 4) = 300;
     AI32(r, 0xdc) = 50;                  /* pool */
 
     engine_realm_spread_development();
 
-    T_ASSERT_EQ_I(AW16(r, 0x90 + 0), 100);   /* slot0 untouched      */
-    T_ASSERT_EQ_I(AW16(r, 0x90 + 2), 250);   /* slot1 += full pool   */
-    T_ASSERT_EQ_U(g_overworld_map[200], 0x1a); /* 250 → stage 0x1a   */
-    T_ASSERT_EQ_U(g_overworld_map[100], 0x10); /* untouched          */
-    T_ASSERT_EQ_I(AI32(r, 0xe4), 200);       /* capacity (slot0 only) */
-    T_ASSERT_EQ_I(AI32(r, 0x20c), 0);        /* none reached the cap  */
-    T_ASSERT_EQ_I(AI32(r, 0x214), 14);       /* ceil(700/50)          */
+    T_ASSERT_EQ_I(AW16(r, 0x90 + 0), 100);   /* slot0 untouched         */
+    T_ASSERT_EQ_I(AW16(r, 0x90 + 2), 50);    /* slot1 untouched         */
+    T_ASSERT_EQ_I(AW16(r, 0x90 + 4), 350);   /* argmax slot2 += pool 50 */
+    T_ASSERT_EQ_U(g_overworld_map[300], 0x1a); /* 350 → stage 0x1a      */
+    T_ASSERT_EQ_U(g_overworld_map[100], 0x19); /* untouched             */
+    T_ASSERT_EQ_I(AI32(r, 0xe4), 600);       /* capacity over all 3 cells */
+    T_ASSERT_EQ_I(AI32(r, 0x20c), 0);        /* none reached the cap      */
+    T_ASSERT_EQ_I(AI32(r, 0x214), 9);        /* ceil(450/50)              */
 
     engine_territory_bind_cells(NULL);
     return 0;
 }
 
 /* Value above 800 spills the excess back into the pool (without lowering the
- * cell), the maxed cell is stamped type 1, and the projection counts it.
- * slot0 (700) + 200 = 900 → spill 100 back; pool flows on to slot1 (0) → 200. */
+ * cell) and stamps the maxed cell type 1 — which is < 0x19, so it drops out of
+ * "developable" for the projection.  slot0 (700) + 200 = 900 → spill 100 back;
+ * pool flows on to slot1 (0) → 200 (stamped 0x1a).  Projection then sees only
+ * slot1: capacity = min(800−200,200) = 200.  Verified against retail. */
 int test_engine_realm_dev_spread_overflow(void)
 {
     uint8_t *r = dev_reset();
     engine_territory_bind_cells(g_overworld_map);
 
-    MISC_ROW(1)[0] = 100;  g_overworld_map[100] = 0x10;
-    MISC_ROW(1)[1] = 200;  g_overworld_map[200] = 0x10;
+    MISC_ROW(1)[0] = 100;  g_overworld_map[100] = 0x19;
+    MISC_ROW(1)[1] = 200;  g_overworld_map[200] = 0x19;
     AW16(r, 0x90 + 0) = 700;
     AW16(r, 0x90 + 2) = 0;
     AI32(r, 0xdc) = 300;
@@ -1220,8 +1226,9 @@ int test_engine_realm_dev_spread_overflow(void)
     T_ASSERT_EQ_I(AW16(r, 0x90 + 0), 900);   /* +200, spill not subtracted */
     T_ASSERT_EQ_I(AW16(r, 0x90 + 2), 200);   /* received the carried pool  */
     T_ASSERT_EQ_U(g_overworld_map[100], 1);  /* maxed → stage 1            */
-    T_ASSERT_EQ_I(AI32(r, 0x20c), 1);        /* one cell hit the 800 cap   */
-    T_ASSERT_EQ_I(AI32(r, 0xe4), -100);      /* over-max headroom is negative */
+    T_ASSERT_EQ_U(g_overworld_map[200], 0x1a);
+    T_ASSERT_EQ_I(AI32(r, 0x20c), 0);        /* dry-run: maxed cell already type 1, excluded */
+    T_ASSERT_EQ_I(AI32(r, 0xe4), 200);       /* only slot1 still developable */
 
     engine_territory_bind_cells(NULL);
     return 0;
@@ -1238,9 +1245,9 @@ int test_engine_realm_dev_multi_realm(void)
     s_slot_0053f25c = 1;
     engine_territory_bind_cells(g_overworld_map);
 
-    MISC_ROW(1)[0] = 100; g_overworld_map[100] = 0x10; AW16(AREC(1), 0x90) = 10;
+    MISC_ROW(1)[0] = 100; g_overworld_map[100] = 0x19; AW16(AREC(1), 0x90) = 10;
     AI32(AREC(1), 0xdc) = 50;
-    MISC_ROW(2)[0] = 300; g_overworld_map[300] = 0x10; AW16(AREC(2), 0x90) = 20;
+    MISC_ROW(2)[0] = 300; g_overworld_map[300] = 0x19; AW16(AREC(2), 0x90) = 20;
     AI32(AREC(2), 0xdc) = 50;
 
     engine_realm_spread_development();
