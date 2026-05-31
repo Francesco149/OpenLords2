@@ -101,6 +101,20 @@ static int32_t *g_terrain_tiles;
  * to stamp extra fields into the fresh record. */
 static int g_current_slot;
 
+/* DAT_0057c8d0 / DAT_0056846c — the "current cell" col/row scratch registers
+ * the capital-region setup subtree (0x468d4f) threads between its passes.
+ * The capital / secondary finders (0x467fd1 / 0x468121) leave them pointing
+ * at their 4th matching cell; the orchestrator both stashes them into the
+ * per-army record and feeds them (as the distance origin) to the coastal-port
+ * placer (0x46902a).  Transient — not save fields.  Retail reads them only
+ * from within this subtree, so they stay module-private; the accessors below
+ * exist for the unit tests. */
+static int g_cursor_col;    /* DAT_0057c8d0 */
+static int g_cursor_row;    /* DAT_0056846c */
+
+int engine_territory_cursor_col(void) { return g_cursor_col; }
+int engine_territory_cursor_row(void) { return g_cursor_row; }
+
 void engine_territory_bind_records(uint8_t *records)
 {
     g_records = records;
@@ -847,4 +861,105 @@ void engine_territory_seed_army_features(void)
             engine_territory_set_cell_type(cursor_off, new_type, 0);  /* FUN_0046d7f4 */
         }
     }
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Per-army capital-region setup (the 0x468d4f subtree)
+ *
+ * The new-game overworld setup (0x4676e0) runs this once per army to stand
+ * up each army's home region on the overworld grid: a 2×2 capital, the
+ * bordering cells of its claim, a handful of special feature cells, a
+ * coastal port, and a secondary cell cluster.  All passes operate on the
+ * 64×64×8 cell grid (g_cells) and write results into the per-army record
+ * block (g_army_records, 0x300-byte rows).
+ * ────────────────────────────────────────────────────────────────── */
+
+/* Retail's N×N block fill-order tables (DAT_004d80e0 / e8 / f8), transcribed
+ * from Lords2.exe (r2 @0x4d80e0).  Each lists, for an N×N descriptor-stamp
+ * block filled in row-major order (col fastest), the gradient offset added to
+ * the base descriptor char at each successive cell — a diagonal/spiral ramp.
+ * Every reachable call site passes size 2, so only the 2×2 table is live; the
+ * 3×3 / 4×4 tables are kept for fidelity but are currently dead. */
+static const uint8_t BLOCK_FILL_2[4]  = { 0, 2, 1, 3 };
+static const uint8_t BLOCK_FILL_3[9]  = { 0, 2, 5, 1, 4, 7, 3, 6, 8 };
+static const uint8_t BLOCK_FILL_4[16] = { 0, 2, 5, 9, 1, 4, 8, 0xc,
+                                          3, 7, 0xb, 0xe, 6, 0xa, 0xd, 0xf };
+
+/* Port of FUN_0046ac22 (329 B) — stamp a `size`×`size` block of cells onto
+ * the grid starting at byte-offset `off`.  For each cell, in row-major order:
+ *   +2 |= 1; +2 &= 0xe3 (clear bits 2..4); +3 ← fill[k] + base (descriptor
+ *   gradient, see tables above; for size 1 just `base`, no table); +2 |= flag;
+ *   +0 ← type.
+ * The block is a contiguous size×size sub-square of the 64-wide grid, so the
+ * cursor advances +8 per column and skips (64 - size) cells at each row end.
+ *
+ * Shared (not init-only): also called by the AI/event castle placers
+ * (0x4685.. and the 0x46902a region); lives here with the other cell-grid
+ * mutators.  No bounds check on `off`/`size` — retail trusts its call sites
+ * (every one passes size 2 onto an in-bounds capital cell).  No-op if the
+ * cell grid is unbound. */
+void engine_territory_stamp_block(int base, int size, int off,
+                                  uint8_t flag_bits, uint8_t type)
+{
+    if (g_cells == NULL) return;
+
+    int k = 0;
+    for (int r = 0; r < size; r++) {
+        for (int c = 0; c < size; c++) {
+            g_cells[off + 2] |= 1;
+            g_cells[off + 2] &= 0xe3;
+            if (size == 1)      g_cells[off + 3] = (uint8_t)base;
+            else if (size == 2) g_cells[off + 3] = (uint8_t)(BLOCK_FILL_2[k] + base);
+            else if (size == 3) g_cells[off + 3] = (uint8_t)(BLOCK_FILL_3[k] + base);
+            else if (size == 4) g_cells[off + 3] = (uint8_t)(BLOCK_FILL_4[k] + base);
+            g_cells[off + 2] |= flag_bits;
+            g_cells[off + 0] = type;
+            off += CELL_STRIDE;
+            k++;
+        }
+        off += (0x40 - size) * CELL_STRIDE;
+    }
+}
+
+/* Port of FUN_00467fd1 (336 B) — locate an army's capital cell and stamp it.
+ * Scans the grid in row-major order for cells owned by `key` (+7 == key) that
+ * are castle-eligible (+1 bit 0x40 set) and still empty (+0 == 0), counting
+ * matches:
+ *   1st match: record its offset, set +2 bit 0x80, and stamp a 2×2 capital
+ *              footprint (engine_territory_stamp_block('/', 2, off, 0xc, 0)).
+ *   3rd match: set +2 bit 0x80.
+ *   4th match: leave g_cursor_col/row (DAT_0057c8d0 / DAT_0056846c) at this
+ *              cell's (col, row) and RETURN the 1st match's offset.
+ * If fewer than 4 eligible cells exist, returns 0 (and the cursor is left
+ * unchanged from a prior pass — faithful to retail, which only writes it on
+ * the 4th hit).  No-op (returns 0) if the cell grid is unbound. */
+int engine_territory_place_capital(unsigned key)
+{
+    if (g_cells == NULL) return 0;
+
+    int found = 0;      /* local_18 — running match count */
+    int first_off = 0;  /* local_c  — offset of the 1st match (the capital)  */
+    for (int row = 0; row < 0x40; row++) {
+        for (int col = 0; col < 0x40; col++) {
+            int off = (row * 0x40 + col) * CELL_STRIDE;
+            if (g_cells[off + 7] != (uint8_t)key)   continue;   /* DAT_00522f97 */
+            if ((g_cells[off + 1] & 0x40) == 0)     continue;   /* DAT_00522f91 */
+            if (g_cells[off + 0] != 0)              continue;   /* DAT_00522f90 */
+
+            if (found == 0) {
+                first_off = off;
+                g_cells[off + 2] |= 0x80;                       /* DAT_00522f92 */
+                engine_territory_stamp_block('/', 2, off, 0xc, 0);
+            }
+            if (found == 2)
+                g_cells[off + 2] |= 0x80;
+            if (found == 3) {
+                g_cursor_row = row;     /* DAT_0056846c */
+                g_cursor_col = col;     /* DAT_0057c8d0 */
+                return first_off;
+            }
+            found++;
+        }
+    }
+    return 0;
 }

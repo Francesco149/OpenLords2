@@ -444,10 +444,47 @@ With `FUN_0046d7f4` ported, `FUN_00467a36`'s subtree is **leaf-complete**
   cutoffs, default-density arm, inactive-cell filtering, per-key-independent
   indices + step-1 tally reset, unbound no-ops).
 
-Remaining unported `FUN_004676e0` callee: **`FUN_00468d4f`** (274 B) — the
-last of the eight.  Its castle-border arm `FUN_0046902a` still wants
-`FUN_0046c147` (407 B); its leaves `FUN_00468c41` / `FUN_00468e61` /
-`FUN_00468121` (and `FUN_00467fd1` → `FUN_0046ac22`) are unported.
+### FUN_00468d4f — per-army capital-region setup (subtree, in progress)
+
+The **last** unported `FUN_004676e0` callee (274 B): a loop over armies
+`1..DAT_0056d5dc` (= `s_slot_0056d5dc`, save entry 77, the player/army
+count) that, for each army, stands up its home region on the overworld
+cell grid and stashes the result into the per-army record row
+(`g_army_records`, retail base `DAT_0053f9b0` + the army's `0x300` row):
+
+```
+cap = FUN_00467fd1(k);   row[+0x70] = cap;   // capital cell offset
+if (cap != 0) {
+    row[+0x6c] = col;  row[+0x6d] = row;     // stash cursor around 0x468c41
+    FUN_00468c41(k);                         // collect bordering cells
+    col = row[+0x6c]; row = row[+0x6d];       // restore cursor
+    FUN_00468e61(k);                         // mark special feature cells
+    FUN_0046902a(k);                         // place coastal port (nearest to cursor)
+    row[+0x78] = FUN_00468121(k);            // secondary cluster
+    row[+0x74] = col;  row[+0x75] = row;     // stash secondary cursor
+}
+```
+
+The cursor col/row are retail scratch globals `DAT_0057c8d0` / `DAT_0056846c`
+(modelled as `engine_territory.c` module statics `g_cursor_col` / `g_cursor_row`,
+read back into the army record and fed to the port placer as a distance
+origin).  Subtree port progress (all in `engine_territory.c`, the shared
+cell-grid module):
+
+- ✅ **FUN_0046ac22** → `engine_territory_stamp_block` (2026-05-31).  Stamps a
+  `size`×`size` descriptor-gradient block onto the grid: per cell `+2 |= 1`,
+  clear `+2` bits 2..4, `+3 ← base + fill[k]`, `+2 |= flag`, `+0 ← type`.  The
+  N×N fill-order tables are retail `DAT_004d80e0`/`e8`/`f8` (r2-verified;
+  2×2 = `{0,2,1,3}`).  Every reachable call site passes size 2, so the 3×3 /
+  4×4 tables are transcribed-but-dead.  Shared (also the AI/event castle
+  placers at 0x4685../0x46902a call it), hence homed here not in game_init.
+- ✅ **FUN_00467fd1** → `engine_territory_place_capital` (2026-05-31).  Row-major
+  scan for army `key`'s capital-eligible cells (`+7 == key`, `+1 bit 0x40`,
+  `+0 == 0`); 1st match gets the 2×2 capital stamp + `+2 bit 0x80` and is the
+  return value, the 3rd also gets `+2 bit 0x80`, the 4th seats the cursor
+  col/row.  Fewer than 4 eligible cells → returns 0 (cursor untouched).
+- remaining: `FUN_00468c41`, `FUN_00468e61`, `FUN_0046c147` + `FUN_0046902a`,
+  `FUN_00468121`, then the `FUN_00468d4f` orchestrator itself.
 
 ### FUN_0046ff43 — strategic movement-cost grid builder
 

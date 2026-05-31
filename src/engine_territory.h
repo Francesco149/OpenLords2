@@ -174,4 +174,29 @@ void engine_territory_build_army_adjacency(void);
  * +0x205.  Needs the cell grid and army-record block bound. */
 void engine_territory_seed_army_features(void);
 
+/* ──────────────────────────────────────────────────────────────────
+ * Per-army capital-region setup (the 0x468d4f subtree)
+ * ────────────────────────────────────────────────────────────────── */
+
+/* The "current cell" col/row scratch registers (retail DAT_0057c8d0 /
+ * DAT_0056846c) the capital-region passes leave behind.  Exposed for tests;
+ * production code in this module reads the statics directly. */
+int engine_territory_cursor_col(void);   /* DAT_0057c8d0 */
+int engine_territory_cursor_row(void);   /* DAT_0056846c */
+
+/* Port of FUN_0046ac22.  Stamp a `size`×`size` block of grid cells starting
+ * at byte-offset `off`: per cell set +2 |= 1, clear +2 bits 2..4, write the
+ * +3 descriptor as base + a per-cell gradient offset (retail's N×N fill-order
+ * tables; size 1 writes just base), OR in `flag_bits` to +2, and write `type`
+ * to +0.  Shared cell-grid mutator; no-op if the cell grid is unbound. */
+void engine_territory_stamp_block(int base, int size, int off,
+                                  uint8_t flag_bits, uint8_t type);
+
+/* Port of FUN_00467fd1.  Find army `key`'s capital cell (+7 == key, +1 bit
+ * 0x40 set, +0 == 0) by row-major scan; on the 1st such cell stamp a 2×2
+ * capital footprint and return its byte-offset (after also touching the 3rd
+ * and 4th matches and leaving the cursor col/row at the 4th).  Returns 0 if
+ * fewer than 4 eligible cells exist or the grid is unbound. */
+int engine_territory_place_capital(unsigned key);
+
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

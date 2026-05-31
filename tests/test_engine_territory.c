@@ -1334,3 +1334,139 @@ int test_territory_seed_unbound_is_noop(void)
     T_ASSERT_EQ_I(seed_type(1, 0), 0);               /* type unchanged (cell_feature left +0 at 0) */
     return 0;
 }
+
+/* ── Capital-region setup: block stamp + capital placement ──────────
+ * (port of FUN_0046ac22 / FUN_00467fd1, the leaves of the 0x468d4f
+ * castle-setup subtree).  Reuse the module-level g_cells + cell_off. */
+
+static void cap_setup(void)
+{
+    memset(g_cells, 0, sizeof g_cells);
+    engine_territory_bind_cells(g_cells);
+}
+
+/* stamp_block lays a 2×2 descriptor gradient (base + {0,2,1,3}), sets +0 to
+ * the type, and rewrites +2: bit0 set, bits 2..4 cleared then OR'd with the
+ * flag argument. */
+int test_territory_stamp_block_2x2_gradient(void)
+{
+    cap_setup();
+    int o = cell_off(5, 5);
+    /* pre-dirty +2 of the top-left cell to prove the |1 / &0xe3 path */
+    g_cells[o + 2] = 0xff;
+
+    engine_territory_stamp_block('A', 2, o, 0x10, 0x07);
+
+    /* descriptors: base 'A'=0x41 + gradient {0,2,1,3} over (5,5)(6,5)(5,6)(6,6) */
+    T_ASSERT_EQ_I(g_cells[cell_off(5, 5) + 3], 0x41);
+    T_ASSERT_EQ_I(g_cells[cell_off(6, 5) + 3], 0x43);
+    T_ASSERT_EQ_I(g_cells[cell_off(5, 6) + 3], 0x42);
+    T_ASSERT_EQ_I(g_cells[cell_off(6, 6) + 3], 0x44);
+    /* +0 type and +2 flags on every block cell */
+    int cells[4] = { cell_off(5,5), cell_off(6,5), cell_off(5,6), cell_off(6,6) };
+    for (int i = 0; i < 4; i++) {
+        T_ASSERT_EQ_I(g_cells[cells[i] + 0], 0x07);
+        T_ASSERT_EQ_I(g_cells[cells[i] + 2] & 1, 1);          /* bit0 set     */
+        T_ASSERT_EQ_I(g_cells[cells[i] + 2] & 0x1c, 0x10);    /* flag 0x10 -> bit4 only */
+    }
+    /* top-left's +2: 0xff |1 = 0xff, &0xe3 = 0xe3, |0x10 = 0xf3 */
+    T_ASSERT_EQ_I(g_cells[cell_off(5, 5) + 2], 0xf3);
+    return 0;
+}
+
+/* The block stays a contiguous 2×2 square — cells outside it are untouched. */
+int test_territory_stamp_block_is_square_not_strip(void)
+{
+    cap_setup();
+    engine_territory_stamp_block('A', 2, cell_off(5, 5), 0xc, 0);
+    /* (7,5) and (5,7) are just outside the 2×2 footprint */
+    T_ASSERT_EQ_I(g_cells[cell_off(7, 5) + 3], 0);
+    T_ASSERT_EQ_I(g_cells[cell_off(5, 7) + 3], 0);
+    T_ASSERT_EQ_I(g_cells[cell_off(7, 5) + 2], 0);
+    return 0;
+}
+
+int test_territory_stamp_block_unbound_is_noop(void)
+{
+    engine_territory_bind_cells(NULL);
+    engine_territory_stamp_block('A', 2, 0, 0xc, 0);   /* must not crash */
+    return 0;
+}
+
+/* Mark a cell as capital-eligible for `key`: +7 = key, +1 bit 0x40, +0 = 0. */
+static void cap_cell(int col, int row, uint8_t key)
+{
+    int o = cell_off(col, row);
+    g_cells[o + 7] = key;
+    g_cells[o + 1] |= 0x40;
+    g_cells[o + 0] = 0;
+}
+
+/* With ≥4 eligible cells, place_capital stamps the 2×2 capital on the 1st,
+ * sets +2 bit0x80 on the 1st and 3rd, returns the 1st's offset, and leaves
+ * the cursor at the 4th cell's (col,row). */
+int test_territory_place_capital_stamps_first_returns_first(void)
+{
+    cap_setup();
+    cap_cell(10, 0, 3);   /* 1st — offset 80 */
+    cap_cell(20, 0, 3);   /* 2nd */
+    cap_cell(30, 0, 3);   /* 3rd */
+    cap_cell(40, 0, 3);   /* 4th */
+
+    int ret = engine_territory_place_capital(3);
+
+    T_ASSERT_EQ_I(ret, cell_off(10, 0));               /* 1st match's offset */
+    /* capital stamped: 2×2 gradient from '/'=0x2f, +2 bits set, +0 = 0 */
+    T_ASSERT_EQ_I(g_cells[cell_off(10, 0) + 3], 0x2f); /* '/'+0 */
+    T_ASSERT_EQ_I(g_cells[cell_off(11, 0) + 3], 0x31); /* '/'+2 */
+    T_ASSERT_EQ_I(g_cells[cell_off(10, 1) + 3], 0x30); /* '/'+1 */
+    /* +2 bit0x80 on 1st and 3rd (the 2nd/4th are not OR'd 0x80 by the finder) */
+    T_ASSERT_EQ_I(g_cells[cell_off(10, 0) + 2] & 0x80, 0x80);
+    T_ASSERT_EQ_I(g_cells[cell_off(30, 0) + 2] & 0x80, 0x80);
+    T_ASSERT_EQ_I(g_cells[cell_off(20, 0) + 2] & 0x80, 0);
+    T_ASSERT_EQ_I(g_cells[cell_off(40, 0) + 2] & 0x80, 0);
+    /* cursor parked at the 4th cell */
+    T_ASSERT_EQ_I(engine_territory_cursor_col(), 40);
+    T_ASSERT_EQ_I(engine_territory_cursor_row(), 0);
+    return 0;
+}
+
+/* Fewer than 4 eligible cells → returns 0, cursor untouched. */
+int test_territory_place_capital_under_four_returns_zero(void)
+{
+    cap_setup();
+    cap_cell(10, 0, 3);
+    cap_cell(20, 0, 3);
+    cap_cell(30, 0, 3);            /* only 3 */
+
+    int ret = engine_territory_place_capital(3);
+    T_ASSERT_EQ_I(ret, 0);
+    return 0;
+}
+
+/* Only cells matching all three predicates (key, +1 bit0x40, +0 == 0) count;
+ * wrong key / missing flag / nonzero type are skipped. */
+int test_territory_place_capital_filters(void)
+{
+    cap_setup();
+    cap_cell(10, 0, 3);                                   /* good */
+    int o;
+    o = cell_off(11, 0); g_cells[o + 7] = 9; g_cells[o + 1] |= 0x40;  /* wrong key */
+    o = cell_off(12, 0); g_cells[o + 7] = 3;                          /* no 0x40 flag */
+    o = cell_off(13, 0); g_cells[o + 7] = 3; g_cells[o + 1] |= 0x40; g_cells[o + 0] = 5; /* +0 nonzero */
+    cap_cell(14, 0, 3);                                   /* good (2nd) */
+    cap_cell(15, 0, 3);                                   /* good (3rd) */
+    cap_cell(16, 0, 3);                                   /* good (4th) */
+
+    int ret = engine_territory_place_capital(3);
+    T_ASSERT_EQ_I(ret, cell_off(10, 0));
+    T_ASSERT_EQ_I(engine_territory_cursor_col(), 16);     /* 4th valid = col 16 */
+    return 0;
+}
+
+int test_territory_place_capital_unbound_returns_zero(void)
+{
+    engine_territory_bind_cells(NULL);
+    T_ASSERT_EQ_I(engine_territory_place_capital(3), 0);
+    return 0;
+}
