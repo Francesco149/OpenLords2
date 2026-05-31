@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+#
+# tools/feed — thin, persistent wrapper around llm-feed's feed.py so pushing a
+# visual to the feed (http://localhost:8777) is one short command, with no
+# python/nix incantation to remember and no risk of pushing a huge raw BMP.
+#
+# What it does for you:
+#   1. Ensures the feed server is running (starts it backgrounded if not).
+#   2. For `image`: losslessly converts a BMP (or any non-PNG raster) to PNG
+#      before pushing — the engine renders BMPs, and feed.py copies the file
+#      as-is, so without this the feed fills with multi-MB bitmaps.  PNG keeps
+#      it lossless so pixel-diff parity checks stay exact.
+#   3. For `montage --glob`: converts matched BMP frames to PNG in a temp dir
+#      and montages those, for the same reason.
+#   4. Forwards every other subcommand (comparison/list/get/clear) verbatim.
+#
+# Usage (same surface as feed.py):
+#   tools/feed image shot.bmp --title "title screen" --note "frame 30"
+#   tools/feed montage --frames-dir run/ --glob 'frame_*.bmp' --title "walk"
+#   tools/feed comparison --spec spec.json --title "port|retail"
+#   tools/feed list | get <id> | clear
+#
+set -euo pipefail
+
+FEED_PY=/opt/src/llm-feed/feed.py
+PORT=8777
+HEALTH="http://localhost:${PORT}/healthz"
+
+# Repo root (this script lives in <repo>/tools/) — used to enter the dev shell,
+# which provides python3 + Pillow for the lossless BMP→PNG conversion.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(dirname "$SCRIPT_DIR")"
+
+feed_py() { nix run nixpkgs#python3 -- "$FEED_PY" "$@"; }
+
+# Convert $1 → $2 as a lossless, optimised PNG using the dev-shell Pillow.
+png_convert() {
+    nix develop "$REPO" -c python3 -c '
+import sys
+from PIL import Image
+Image.open(sys.argv[1]).save(sys.argv[2], "PNG", optimize=True)
+' "$1" "$2" >&2
+}
+
+ensure_server() {
+    if curl -sf "$HEALTH" >/dev/null 2>&1; then return; fi
+    echo "[feed] server down — starting it backgrounded" >&2
+    ( cd /opt/src/llm-feed \
+      && nohup nix run nixpkgs#python3 -- "$FEED_PY" serve >/tmp/llm-feed.log 2>&1 & )
+    for _ in $(seq 1 30); do
+        sleep 0.5
+        curl -sf "$HEALTH" >/dev/null 2>&1 && return
+    done
+    echo "[feed] WARNING: server did not come up within 15s (see /tmp/llm-feed.log)" >&2
+}
+
+# Losslessly convert $1 to a PNG, echoing the PNG path.  Already-PNG passes
+# through unchanged.  Uses Pillow (PNG is lossless; optimize shrinks it).
+to_png() {
+    local src="$1"
+    case "${src,,}" in
+        *.png) printf '%s\n' "$src"; return;;
+    esac
+    local out; out="$(mktemp --suffix=.png "${TMPDIR:-/tmp}/feed-XXXXXX")"
+    png_convert "$src" "$out"
+    printf '%s\n' "$out"
+}
+
+ensure_server
+
+cmd="${1:-list}"; shift || true
+case "$cmd" in
+    image)
+        [ $# -ge 1 ] || { echo "usage: feed image PATH [--title T] [--note N]" >&2; exit 2; }
+        path="$1"; shift
+        feed_py image "$(to_png "$path")" "$@"
+        ;;
+    montage)
+        # If a BMP glob is given, convert matched frames to PNG in a temp dir
+        # and montage those; otherwise forward verbatim.
+        dir="" glob="" rest=()
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --frames-dir) dir="$2"; shift 2;;
+                --glob)       glob="$2"; shift 2;;
+                *)            rest+=("$1"); shift;;
+            esac
+        done
+        if [ -n "$dir" ] && [ -n "$glob" ] && [[ "${glob,,}" == *.bmp ]]; then
+            tmp="$(mktemp -d "${TMPDIR:-/tmp}/feed-montage-XXXXXX")"
+            n=0
+            shopt -s nullglob
+            for f in "$dir"/$glob; do
+                out="$tmp/$(printf 'frame_%04d.png' "$n")"
+                png_convert "$f" "$out"
+                n=$((n+1))
+            done
+            shopt -u nullglob
+            [ "$n" -gt 0 ] || { echo "[feed] montage: no frames matched $dir/$glob" >&2; exit 2; }
+            feed_py montage --frames-dir "$tmp" --glob 'frame_*.png' "${rest[@]}"
+        else
+            feed_py montage ${dir:+--frames-dir "$dir"} ${glob:+--glob "$glob"} "${rest[@]}"
+        fi
+        ;;
+    *)
+        feed_py "$cmd" "$@"
+        ;;
+esac
