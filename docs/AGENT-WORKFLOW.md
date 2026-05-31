@@ -132,6 +132,30 @@ Before any retail-binary probing:
    All three are disruptive in a dev-loop context.
 3. Capture artifacts under `runs/<scenario>/<timestamp>/`.
 
+## Verify ported functions against retail (don't skip this)
+
+Host unit tests only prove the port is internally consistent with the mental
+model you wrote them from — a wrong model passes its own tests.  The byte-exact
+check is the **pure-function diff vs retail**:
+
+```fish
+nix develop -c python3 tools/diff_test.py --functions <name> \
+    --vectors 64 --remote cutestation.soy:27042
+```
+
+It snapshots→injects→calls retail's `FUN_*`→reads-back→restores and diffs
+against `tests/build/libengine_diff.so` (the port).  Runs in turbo (fast).  This
+caught an inverted predicate in the dev-spread port that the unit tests shared
+and passed.  Add a target for each meaningfully stateful gameplay function you
+port — for the `__stdcall void()` per-realm passes it's cheap (reuse the generic
+`runRetailRealmPass` RPC).  See `docs/findings/pure-function-diff.md`.
+
+The toolset (call-graph diff `tools/call_trace_diff.py`, mem-watch
+`tools/mem_watch.py`, frame diff `tools/compare_frames.py`, the
+`tools/frida_capture.py` driver, the `tools/feed` llm-feed push wrapper) is
+current and documented in `docs/harness-roadmap.md` — reach for it rather than
+deferring anything that "needs the game running."
+
 ## When to use Ghidra vs r2
 
 - **Ghidra** for primary decompilation.  Headless export via
