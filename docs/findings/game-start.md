@@ -947,10 +947,34 @@ else 0x28, forced to 0x28 when there is no high cell).  Ported as
 `engine_territory_grade_feature_cells`; 4 host tests (no-load tier, the density
 tier/value ladders, the saturated no-high case, unbound no-op).  No new globals.
 
-**Remaining `FUN_0049bd99` leaves** (bottom-up): the 1-dep helpers
-`FUN_00432746` / `FUN_0046dfd5`, plus the two cap-tuning passes interleaved with
-the allocator (`FUN_0044df5f` / `FUN_004485a5`).  With those, every per-realm
-callee of `FUN_0049bd99` is ported and the setup pass itself can be assembled.
+### FUN_0046e067 / FUN_0046dfd5 — human-player initial view (highlight + recenter) ✅ ported
+
+The two view-setup helpers at the **tail** of `FUN_0049bd99`, run once after
+the per-realm loop for the human player's key
+(`(byte)(&DAT_00568db0)[DAT_0057c8cc * 2]`):
+
+- `FUN_0046dfd5` **highlights** the key's cells — sweeps the 64×64 grid and,
+  for every cell whose group-key (+7) matches, stamps a radius-1
+  alternate-draw box (bit 0x20 of cell byte +2) via the radius-stamp
+  `FUN_0046e067`, then full-screen repaints.  Ported as
+  `engine_territory_highlight_key_cells` + `engine_territory_mark_draw_box`
+  (the set-side counterpart of `clear_cell_render_flags` / `FUN_0046df51`).
+  5 + 6 host tests.
+
+- `FUN_00432746` → `FUN_0043278b` **recenters** the camera on the human's
+  capital: reads the capital cell byte-offset from the army record (+0x70),
+  finds that offset in the terrain-index tile grid, and sets the scroll save
+  globals (entries 16/17) to centre on it, clamped via
+  `engine_camera_clamp_scroll`.  This is the **first producer** of the scroll
+  globals (the camera-mirror note in `engine.c` anticipated it).  Ported as
+  `engine_territory_recenter_on_capital` / `engine_territory_recenter_on_tile`;
+  10 host tests; see engine-quirks #137 for the unconditional-clamp /
+  scratch-global notes.
+
+**Remaining `FUN_0049bd99` leaves** (bottom-up): the two cap-tuning passes
+interleaved with the allocator (`FUN_0044df5f` / `FUN_004485a5`), each a small
+subtree of its own.  With those, every per-realm callee of `FUN_0049bd99` is
+ported and the setup pass itself can be assembled.
 
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
    callees are real; then `FUN_00499dc3` + `FUN_004329ec` spine + the

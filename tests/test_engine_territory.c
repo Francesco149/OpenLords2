@@ -2867,3 +2867,164 @@ int test_setup_overworld_all_unbound_is_noop(void)
     T_ASSERT_EQ_U(s_slot_0056d5dc, 0u);
     return 0;
 }
+
+/* ── Recenter-on-tile / -on-capital (ports of FUN_0043278b / 00432746) ── */
+
+static engine_dirty_rect_state_t g_recenter_dirty;
+static int g_recenter_cursor_flag;
+
+/* Fresh tile grid (all `fill`), normal view mode, scroll cleared, redraw
+ * sinks bound and zeroed. */
+static void recenter_setup(uint32_t fill)
+{
+    tiles_setup(fill);
+    s_slot_0057cb18 = 0;          /* normal view mode      */
+    s_slot_005651b4 = 0;          /* scroll col            */
+    s_slot_005651b8 = 0;          /* scroll row            */
+    s_slot_0057c93c = 0;          /* selected army         */
+    g_recenter_dirty = (engine_dirty_rect_state_t){0};
+    g_recenter_cursor_flag = 0;
+    engine_territory_set_dirty_state(&g_recenter_dirty);
+    engine_territory_bind_cursor_cache_flag(&g_recenter_cursor_flag);
+}
+
+static void recenter_teardown(void)
+{
+    engine_territory_set_dirty_state(NULL);
+    engine_territory_bind_cursor_cache_flag(NULL);
+}
+
+/* A hit centres the scroll on (col-4, evenrow-12), latches both redraw
+ * flags, and returns 2. */
+int test_territory_recenter_hit_sets_scroll_and_flags(void)
+{
+    recenter_setup(0);
+    *tile_at(40, 30) = 0x12345;
+
+    T_ASSERT_EQ_I(engine_territory_recenter_on_tile(0x12345), 2);
+    T_ASSERT_EQ_U(s_slot_005651b4, 26u);          /* 30 - 4            */
+    T_ASSERT_EQ_U(s_slot_005651b8, 28u);          /* (40 & ~1) - 12    */
+    T_ASSERT_EQ_I(g_recenter_dirty.below_status_redraw, 1);
+    T_ASSERT_EQ_I(g_recenter_cursor_flag, 1);
+    recenter_teardown();
+    return 0;
+}
+
+/* The row is floored to even before the -12: an odd row lands on the same
+ * scroll as its even predecessor. */
+int test_territory_recenter_floors_odd_row(void)
+{
+    recenter_setup(0);
+    *tile_at(41, 30) = 0x12345;
+    T_ASSERT_EQ_I(engine_territory_recenter_on_tile(0x12345), 2);
+    T_ASSERT_EQ_U(s_slot_005651b8, 28u);          /* (41 & ~1) - 12 = 28 */
+    recenter_teardown();
+    return 0;
+}
+
+/* Negative scroll targets are clamped up to 0 (the count-independent
+ * lower clamp). */
+int test_territory_recenter_clamps_negative_to_zero(void)
+{
+    recenter_setup(0);
+    *tile_at(2, 1) = 0x12345;     /* col-4 = -3, row-12 = -10 */
+    T_ASSERT_EQ_I(engine_territory_recenter_on_tile(0x12345), 2);
+    T_ASSERT_EQ_U(s_slot_005651b4, 0u);
+    T_ASSERT_EQ_U(s_slot_005651b8, 0u);
+    recenter_teardown();
+    return 0;
+}
+
+/* When the view mode is not normal the scroll assignment is gated off,
+ * but the clamp still runs and the flags still latch (return 2). */
+int test_territory_recenter_view_mode_gates_scroll_only(void)
+{
+    recenter_setup(0);
+    s_slot_0057cb18 = 1;          /* non-normal view */
+    s_slot_005651b4 = 7;          /* pre-existing scroll preserved */
+    s_slot_005651b8 = 9;
+    *tile_at(40, 30) = 0x12345;
+
+    T_ASSERT_EQ_I(engine_territory_recenter_on_tile(0x12345), 2);
+    T_ASSERT_EQ_U(s_slot_005651b4, 7u);           /* unchanged */
+    T_ASSERT_EQ_U(s_slot_005651b8, 9u);
+    T_ASSERT_EQ_I(g_recenter_dirty.below_status_redraw, 1);
+    T_ASSERT_EQ_I(g_recenter_cursor_flag, 1);
+    recenter_teardown();
+    return 0;
+}
+
+/* Row-major scan: the first matching cell (lowest row, then lowest col)
+ * wins when the value appears twice. */
+int test_territory_recenter_takes_first_match(void)
+{
+    recenter_setup(0);
+    *tile_at(50, 50) = 0x12345;
+    *tile_at(20, 30) = 0x12345;   /* earlier in row-major order */
+    T_ASSERT_EQ_I(engine_territory_recenter_on_tile(0x12345), 2);
+    T_ASSERT_EQ_U(s_slot_005651b4, 26u);          /* col 30 - 4 */
+    T_ASSERT_EQ_U(s_slot_005651b8, 8u);           /* row 20 - 12 */
+    recenter_teardown();
+    return 0;
+}
+
+/* No match → 0, nothing written. */
+int test_territory_recenter_miss_returns_zero(void)
+{
+    recenter_setup(0x999);        /* fill non-matching */
+    T_ASSERT_EQ_I(engine_territory_recenter_on_tile(0x12345), 0);
+    T_ASSERT_EQ_U(s_slot_005651b4, 0u);
+    T_ASSERT_EQ_U(s_slot_005651b8, 0u);
+    T_ASSERT_EQ_I(g_recenter_dirty.below_status_redraw, 0);
+    T_ASSERT_EQ_I(g_recenter_cursor_flag, 0);
+    recenter_teardown();
+    return 0;
+}
+
+int test_territory_recenter_unbound_tiles_returns_zero(void)
+{
+    engine_territory_bind_terrain_tiles(NULL);
+    T_ASSERT_EQ_I(engine_territory_recenter_on_tile(0x12345), 0);   /* no crash */
+    return 0;
+}
+
+/* recenter_on_capital reads army record +0x70, recenters on that tile
+ * value, and latches the selected-army global. */
+int test_territory_recenter_capital_centres_and_selects(void)
+{
+    recenter_setup(0);
+    memset(g_army, 0, sizeof g_army);
+    engine_territory_bind_army_records(g_army);
+    int32_t cap = 0xABCDE;
+    memcpy(&g_army[1 * ARMY_STRIDE + CAP_OFF], &cap, 4);   /* +0x70 */
+    *tile_at(40, 30) = cap;
+
+    engine_territory_recenter_on_capital(1);
+    T_ASSERT_EQ_U(s_slot_005651b4, 26u);
+    T_ASSERT_EQ_U(s_slot_005651b8, 28u);
+    T_ASSERT_EQ_U(s_slot_0057c93c, 1u);           /* selected army */
+    recenter_teardown();
+    return 0;
+}
+
+/* A zero capital offset → no recenter, no selection. */
+int test_territory_recenter_capital_zero_offset_is_noop(void)
+{
+    recenter_setup(0);
+    memset(g_army, 0, sizeof g_army);
+    engine_territory_bind_army_records(g_army);   /* +0x70 stays 0 */
+    s_slot_0057c93c = 0x55;                        /* sentinel must survive */
+
+    engine_territory_recenter_on_capital(1);
+    T_ASSERT_EQ_U(s_slot_005651b4, 0u);
+    T_ASSERT_EQ_U(s_slot_0057c93c, 0x55u);        /* unchanged */
+    recenter_teardown();
+    return 0;
+}
+
+int test_territory_recenter_capital_unbound_is_noop(void)
+{
+    engine_territory_bind_army_records(NULL);
+    engine_territory_recenter_on_capital(1);      /* must not crash */
+    return 0;
+}

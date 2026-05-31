@@ -1491,6 +1491,16 @@ struct test_case {
     X(setup_overworld_end_to_end) \
     X(setup_overworld_threads_rng) \
     X(setup_overworld_all_unbound_is_noop) \
+    X(territory_recenter_hit_sets_scroll_and_flags) \
+    X(territory_recenter_floors_odd_row) \
+    X(territory_recenter_clamps_negative_to_zero) \
+    X(territory_recenter_view_mode_gates_scroll_only) \
+    X(territory_recenter_takes_first_match) \
+    X(territory_recenter_miss_returns_zero) \
+    X(territory_recenter_unbound_tiles_returns_zero) \
+    X(territory_recenter_capital_centres_and_selects) \
+    X(territory_recenter_capital_zero_offset_is_noop) \
+    X(territory_recenter_capital_unbound_is_noop) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \

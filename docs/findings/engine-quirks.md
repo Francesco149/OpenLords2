@@ -4793,3 +4793,49 @@ the ungated path.
 
 > 📍 `src/engine_territory.c` (`engine_territory_allocate_realm_workforce`),
 > Ghidra `FUN_0044f6e7` @ 0x44f6e7.
+
+## 137. The strategic-map recenter clamps the scroll even when it refused to move it
+
+`FUN_0043278b` (recenter-on-tile) scans the terrain-index grid for a tile
+value and, on a hit, sets the scroll position to centre on it — but **only
+when the view-mode global `DAT_0057cb18` is 0** (the normal map view).  The
+clamp that follows, however, is called **unconditionally**, outside that
+gate:
+
+```c
+if (DAT_0057cb18 == 0) {
+    DAT_005651b4 = col - 4;
+    DAT_005651b8 = (row & 0xfffe) - 0xc;
+}
+FUN_00429b1d();          /* clamp DAT_005651b4/b8 in place — always */
+DAT_0053e9ac = 1;        /* below-status redraw    */
+DAT_0057cac4 = 1;        /* cursor-cache enable    */
+return 2;
+```
+
+So calling the recenter while in a non-normal view mode still (a) re-clamps
+whatever scroll position was already there — which can *move* it if a prior
+state left it out of range — and (b) latches the two redraw flags and
+returns the same "found" code 2.  The hit is reported and the screen is
+flagged dirty regardless of whether the view actually scrolled.  The port
+mirrors this: the clamp + flag latches live after the view-mode `if`, not
+inside it.
+
+Two incidental notes from the same pair of functions:
+
+- The centring offsets are asymmetric — column is `−4`, row is
+  `(row & ~1) − 12` — and the row is floored to even first.  That `& 0xfffe`
+  is the doubled-row hex grid showing through (quirk #133): a logical map
+  row spans two grid rows, so the camera anchors on the even one.
+
+- The caller `FUN_00432746` stages the capital's cell offset through the
+  global `DAT_0053f0dc` purely as a write-then-read temporary
+  (`DAT_0053f0dc = record[+0x70]; if (DAT_0053f0dc != 0) recenter(DAT_0053f0dc)`).
+  All three call sites that drive the recenter do the identical
+  write-then-read; nothing ever reads `DAT_0053f0dc` across a call boundary,
+  so it is scratch, not state — the port uses a local.
+
+> 📍 `src/engine_territory.c` (`engine_territory_recenter_on_tile` /
+> `engine_territory_recenter_on_capital`), Ghidra `FUN_0043278b` @ 0x43278b
+> and `FUN_00432746` @ 0x432746.  First producer of the scroll save globals
+> (entries 16/17) — see the camera-mirror note in `src/engine.c`.

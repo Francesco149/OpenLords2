@@ -89,6 +89,26 @@ void engine_territory_mark_draw_box(int col, int row, int radius);
  * engine_territory_clear_cell_render_flags, which wipes the same flag. */
 void engine_territory_highlight_key_cells(unsigned key);
 
+/* Bind the optional cursor-cache mode flag (retail DAT_0057cac4) the
+ * recenter navigator latches to 1 on a hit.  NULL → the latch is
+ * skipped.  Same optional-sink pattern as the dirty state. */
+void engine_territory_bind_cursor_cache_flag(int *flag);
+
+/* Port of FUN_0043278b.  Scan the bound terrain-index tile grid for the
+ * first cell holding `tile_value`; on a hit, recenter the strategic-map
+ * scroll on it — set the scroll save globals (entries 16/17) to
+ * (col-4, evenrow-12) when the view mode is normal (entry 15 == 0),
+ * clamp them via engine_camera_clamp_scroll, and latch the below-status
+ * redraw flag (dirty state) plus the cursor-cache flag — then return 2.
+ * Returns 0 if the value is absent.  Requires the terrain tiles bound. */
+int engine_territory_recenter_on_tile(int tile_value);
+
+/* Port of FUN_00432746.  Read army `key`'s capital cell byte-offset
+ * (record +0x70) and, when non-zero, recenter on it via
+ * engine_territory_recenter_on_tile and latch the selected-army global
+ * (entry 71).  Requires the army records bound (NULL → no-op). */
+void engine_territory_recenter_on_capital(int key);
+
 /* Port of FUN_0046da4b.  Rebuild the per-key cell roster (bound via
  * engine_territory_bind_cell_roster) from the overworld grid: index every
  * active feature-cell (+7 key 1..16, +1 bit 0x20 set) into its key row,

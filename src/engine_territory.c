@@ -31,6 +31,7 @@
 #include "engine_category_buckets.h"  /* clear / append (FUN_004290d0/429153) */
 #include "engine_roster.h"            /* player_roster_clear/add + count alias */
 #include "engine_map_render.h"        /* set_rotation_offset (DAT_00522f7c=0) */
+#include "engine_camera.h"            /* engine_camera_clamp_scroll (FUN_00429b1d) */
 #include "save_schema_globals.h"  /* s_slot_0053f23c — feature-density setting;
                                      s_slot_0056d5dc — player/army count */
 #include "engine_math.h"          /* engine_math_percent_of (FUN_00404d6b) */
@@ -65,6 +66,13 @@ static int16_t *g_cell_score;
  * contexts — the mark is then simply skipped.  Same pattern the render
  * modules (engine_overlay_render / engine_battlefield_render) use. */
 static engine_dirty_rect_state_t *g_dirty_state;
+
+/* Optional sink for the per-frame cursor-cache mode flag (retail
+ * DAT_0057cac4 = engine.c's g_input_cursor_cache_enabled).  The
+ * recenter-on-tile navigator below latches it to 1 on a hit, the way
+ * retail does; bound by the orchestrator that owns the input mirror,
+ * NULL elsewhere (the latch is then skipped). */
+static int *g_cursor_cache_flag;
 
 /* Overworld cell grid geometry (retail DAT_00522f90). */
 #define CELL_GRID_CELLS   0x1000   /* 64×64 = 4096 cells */
@@ -133,6 +141,11 @@ void engine_territory_bind_cells(uint8_t *cells)
 void engine_territory_set_dirty_state(engine_dirty_rect_state_t *state)
 {
     g_dirty_state = state;
+}
+
+void engine_territory_bind_cursor_cache_flag(int *flag)
+{
+    g_cursor_cache_flag = flag;
 }
 
 void engine_territory_bind_cell_roster(int32_t *roster)
@@ -265,6 +278,97 @@ void engine_territory_highlight_key_cells(unsigned key)
 
     if (g_dirty_state != NULL)
         engine_dirty_rect_mark_full_screen(g_dirty_state);
+}
+
+/* Visible-cell counts the recenter clamp bounds against (retail
+ * DAT_0053e8ac col / DAT_0056d67c row — engine.c's g_cam_visible_cols /
+ * g_cam_visible_rows).  These are per-frame render state with no producer
+ * in the port yet (engine.c keeps them 0, "no writer today"), and the
+ * sole caller of the recenter is game-init, before any frame has set
+ * them.  At 0 the clamp's UPPER bound never fires for a valid recenter
+ * target — scroll col ∈ [-4, 60] < 0x41, scroll row ∈ [-12, 116] < 0x81 —
+ * so only the lower clamp-to-0 is active, which is count-independent.  We
+ * pass 0/0 to match retail's value on this path; the strategic-render
+ * orchestrator (roadmap item 6) is where live counts will arrive. */
+#define RECENTER_VISIBLE_COLS 0
+#define RECENTER_VISIBLE_ROWS 0
+
+/* Port of FUN_0043278b.  Scan the bound terrain-index tile grid
+ * (g_terrain_tiles = DAT_0055cea0, 129 rows × 65 cols of i32) in
+ * row-major order for the first cell holding `tile_value`; on a hit,
+ * recenter the strategic-map scroll on it and flag a redraw, returning 2
+ * (retail's hit code).  Returns 0 if the value is absent.
+ *
+ * On a hit, when the view-mode global is normal (s_slot_0057cb18 == 0,
+ * DAT_0057cb18) the scroll target is set to (col-4, evenrow-12): the
+ * column left-shifted by 4 and the row floored to even (& ~1) then up by
+ * 12, centring the found cell in the viewport.  The scroll pair is then
+ * clamped in place by engine_camera_clamp_scroll (FUN_00429b1d) —
+ * UNCONDITIONALLY, outside the view-mode gate, exactly as retail calls it
+ * after the assignment.  Finally the below-status redraw flag
+ * (DAT_0053e9ac, the dirty-state field) and the cursor-cache flag
+ * (DAT_0057cac4, optional bind) are latched to 1.
+ *
+ * The scroll pair are the canonical save globals (entries 16/17,
+ * s_slot_005651b4 / s_slot_005651b8); this is their first producer in the
+ * port — see engine.c's camera-mirror note, which anticipated exactly
+ * this "castle-table-driven re-centering" writer.  Retail materialises
+ * the matched value through a scratch global (DAT_0053f0dc), write-then-
+ * read within the caller; we use the argument directly. */
+int engine_territory_recenter_on_tile(int tile_value)
+{
+    if (g_terrain_tiles == NULL) return 0;
+
+    for (int row = 0; row <= 0x80; row++) {            /* 0..128 inclusive */
+        for (int col = 0; col < 0x41; col++) {         /* 0..64           */
+            if (g_terrain_tiles[row * TERRAIN_GRID_COLS + col] != tile_value)
+                continue;
+
+            if (s_slot_0057cb18 == 0) {                /* DAT_0057cb18: normal view */
+                s_slot_005651b4 = (uint32_t)(col - 4);            /* DAT_005651b4 */
+                s_slot_005651b8 = (uint32_t)((row & ~1) - 0xc);   /* DAT_005651b8 */
+            }
+
+            /* Clamp the (possibly-updated) scroll pair in place — retail
+             * calls FUN_00429b1d here regardless of the view-mode gate. */
+            int sc = (int)s_slot_005651b4;
+            int sr = (int)s_slot_005651b8;
+            engine_camera_clamp_scroll(&sc, &sr,
+                                       RECENTER_VISIBLE_COLS, RECENTER_VISIBLE_ROWS);
+            s_slot_005651b4 = (uint32_t)sc;
+            s_slot_005651b8 = (uint32_t)sr;
+
+            if (g_dirty_state != NULL)
+                g_dirty_state->below_status_redraw = 1;   /* DAT_0053e9ac */
+            if (g_cursor_cache_flag != NULL)
+                *g_cursor_cache_flag = 1;                  /* DAT_0057cac4 */
+            return 2;
+        }
+    }
+    return 0;
+}
+
+/* Port of FUN_00432746.  Recenter the strategic map on army `key`'s
+ * capital: read the capital cell byte-offset from the army record
+ * (g_army_records row + ARMY_CAP_OFF = +0x70, the value
+ * engine_territory_build_army_adjacency stores there) and, when non-zero,
+ * recenter on it via engine_territory_recenter_on_tile and latch the
+ * selected-army global (DAT_0057c93c = save entry 71, s_slot_0057c93c).
+ *
+ * Retail stages the offset through the scratch global DAT_0053f0dc
+ * (write-then-read); we use a local. */
+void engine_territory_recenter_on_capital(int key)
+{
+    if (g_army_records == NULL) return;
+
+    /* row stride 0x300 (ARMY_ROW_STRIDE), capital offset +0x70
+     * (ARMY_CAP_OFF) — both #defined later in the file, per its
+     * per-section convention; the literals match. */
+    int32_t cap = *(int32_t *)(g_army_records + key * 0x300 + 0x70);
+    if (cap != 0) {
+        engine_territory_recenter_on_tile(cap);
+        s_slot_0057c93c = (uint32_t)key;        /* DAT_0057c93c — selected army */
+    }
 }
 
 int engine_territory_current_slot(void)
