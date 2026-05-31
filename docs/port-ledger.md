@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **418** (17.1%) — tested 382, ported 36
-- code bytes touched: **17.5%** (146,800 / 838,629 B)
-- unported: **2029**
+- touched: **420** (17.2%) — tested 384, ported 36
+- code bytes touched: **17.6%** (147,339 / 838,629 B)
+- unported: **2027**
 - orphan refs (in src/, not in function table): 4
 
-## tested (382) — ported + host unit suite
+## tested (384) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -225,6 +225,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x44e653 | FUN_0044e653 | 80 | engine_army_economy.c, engine_army_economy.h |
 | 0x44e7b4 | FUN_0044e7b4 | 158 | engine_army_economy.c, engine_army_economy.h |
 | 0x44f6e7 | FUN_0044f6e7 | 2147 | engine_territory.c, engine_territory.h |
+| 0x450e46 | FUN_00450e46 | 366 | engine_army_economy.c, engine_army_economy.h |
+| 0x450fb4 | FUN_00450fb4 | 173 | engine_army_economy.c, engine_army_economy.h |
 | 0x451f1a | FUN_00451f1a | 81 | engine.c, engine.h, engine_anim_cycle.c |
 | 0x451f70 | FUN_00451f70 | 26 | gfx.c, main.c |
 | 0x452160 | FUN_00452160 | 422 | engine.c, gfx.c, gfx.h (+1) |

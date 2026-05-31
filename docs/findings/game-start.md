@@ -1133,10 +1133,27 @@ Shape:
 
 See engine-quirks #140 for d303's flattened no-op clamp.
 
-**Remaining `FUN_004485a5` leaves** after this branch: `0x44c278` (+ its leaves
-`0x44c53b` / `0x44c5fc`), `0x44dd4d` (+ `0x44da99`), `0x44f318` (+ `0x44ef4e` /
-`0x44f15b` / `0x44f248`), `0x450e46` (+ `0x450fb4`).  Once all land, `0x4485a5`
-and then the last `FUN_0049bd99` leaf `0x4a9a9a` unblock the setup pass.
+### FUN_00450e46 — secondary-settlement reserve pass ✅ ported
+
+The `0x4485a5` branch that works the realm's **secondary settlement** (gated on
+`+0x1c3`, the same flag `engine_territory_stamp_secondary_keep` reads).  Ported
+as `engine_army_economy_plan_secondary(key)` + its helper
+`engine_army_economy_secondary_headroom(key)` (FUN_00450fb4), 11 host tests.
+
+The settlement holds three `(value, capacity)` reserve pairs at `+0x1cc..` /
+`+0x1d8..`.  `secondary_headroom` returns the **minimum remaining capacity %**
+across pairs 1 and 2 (`min(100 − fill₁, 100 − fill₂)`).  `plan_secondary` then:
+clears a selection sentinel `+0xec` (always −1) and surplus `+0xf0` (0); and
+when a secondary settlement exists, sets `+0xf0` to pair-0's value **only if the
+reserves are full** (headroom == 100, else 0), and a turns counter `+0x1a6` to
+`ceil(pair0 / per-turn-rate +0xe8)` — or a flat 100 when not full or the rate is
+< 1.  Pair→commodity mapping is provisional.  See engine-quirks #141 for the
+dead pair-0 ratio it computes and discards.
+
+**Remaining `FUN_004485a5` leaves**: `0x44c278` (+ `0x44c53b` / `0x44c5fc`),
+`0x44dd4d` (+ `0x44da99`), `0x44f318` (+ `0x44ef4e` / `0x44f15b` / `0x44f248`).
+Once all land, `0x4485a5` and then the last `FUN_0049bd99` leaf `0x4a9a9a`
+unblock the setup pass.
 
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
    callees are real; then `FUN_00499dc3` + `FUN_004329ec` spine + the

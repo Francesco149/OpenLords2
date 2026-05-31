@@ -1581,6 +1581,17 @@ struct test_case {
     X(army_economy_plan_gate_off_clears_net_only) \
     X(army_economy_plan_keyed_by_row) \
     X(army_economy_plan_unbound_noop) \
+    X(army_economy_secondary_headroom_min_of_two) \
+    X(army_economy_secondary_headroom_gate_off_zero) \
+    X(army_economy_secondary_headroom_zero_capacity) \
+    X(army_economy_secondary_headroom_unbound_zero) \
+    X(army_economy_plan_secondary_full_reserves) \
+    X(army_economy_plan_secondary_turns_ceil) \
+    X(army_economy_plan_secondary_partial) \
+    X(army_economy_plan_secondary_zero_rate) \
+    X(army_economy_plan_secondary_gate_off) \
+    X(army_economy_plan_secondary_keyed_by_row) \
+    X(army_economy_plan_secondary_unbound_noop) \
     \
     X(game_init_clear_tables_zeroes_per_army) \
     X(game_init_clear_tables_zeroes_unit_table) \

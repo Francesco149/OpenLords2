@@ -141,4 +141,27 @@ int engine_army_economy_yield_phase4(int key, int level, int cap);
  * the army-record block is unbound. */
 void engine_army_economy_plan_production(int key, int phase);
 
+/* ──────────────────────────────────────────────────────────────────
+ * Secondary-settlement reserve pass — the 0x450e46 branch of 0x4485a5.
+ * Both functions are gated on the realm's secondary-settlement flag (+0x1c3,
+ * the byte engine_territory_stamp_secondary_keep also reads) and work three
+ * (value, capacity) reserve pairs at +0x1cc.. / +0x1d8...  Pair→commodity
+ * mapping is provisional.
+ * ────────────────────────────────────────────────────────────────── */
+
+/* Port of FUN_00450fb4 (173 B).  The minimum remaining-capacity percentage
+ * across the secondary settlement's reserve pairs 1 and 2: min(100 −
+ * fill%(+0x1d0/+0x1dc), 100 − fill%(+0x1d4/+0x1e0)), where fill% is value*100/
+ * capacity (0 if the capacity is 0).  Returns 0 when the realm has no secondary
+ * settlement, or the army-record block is unbound. */
+int engine_army_economy_secondary_headroom(int key);
+
+/* Port of FUN_00450e46 (366 B).  Plan the secondary settlement's reserve: clear
+ * the selection sentinel +0xec (always -1) and surplus +0xf0 (0), and — when the
+ * realm has a secondary settlement — set +0xf0 to pair-0's value (+0x1cc) if the
+ * reserves are full (headroom == 100) else 0, and the turns counter +0x1a6 to
+ * ceil(pair-0 / per-turn-rate +0xe8), or a flat 100 when the reserves are not
+ * full or the rate is < 1.  No-op when the army-record block is unbound. */
+void engine_army_economy_plan_secondary(int key);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_ECONOMY_H */

@@ -4917,3 +4917,30 @@ branch in a comment rather than reproducing a no-op `if`.
 
 > 📍 `src/engine_army_economy.c` (`prod_yield_bonus`).  Ghidra `FUN_0044d303`
 > @ 0x44d303; field `DAT_0053fbb8` = per-army row `+0x208`.
+
+## 141. The secondary-settlement reserve pass computes a ratio it immediately throws away
+
+The secondary-settlement reserve pass `FUN_00450e46`
+(`engine_army_economy_plan_secondary`) opens its gated body with:
+
+```c
+FUN_00404dc1(*(int *)(&DAT_0053fb7c + param_1 * 0x300),   /* value  +0x1cc */
+             *(int *)(&DAT_0053fb88 + param_1 * 0x300));  /* cap    +0x1d8 */
+iVar1 = FUN_00450fb4(param_1);
+```
+
+The first call is `percent_div(pair0_value, pair0_capacity)` — the fill
+percentage of reserve pair 0 — but its return value is never assigned, stored,
+or branched on.  The very next line recomputes a *different* headroom figure
+(`FUN_00450fb4`, over pairs 1 and 2) and uses that instead.
+
+`FUN_00404dc1` is a pure function (it reads no globals and guards its divisor
+against zero), so the dead call has no observable effect whatsoever — it is
+genuinely vestigial, most likely a pair-0 headroom check that an edit later
+replaced with the pair-1/2 version at `0x450fb4` without deleting the original.
+The port drops it and notes it here.  (Pair 0's value *is* still used further
+down — as the surplus figure and the turns-counter dividend — just not as a
+fill ratio.)
+
+> 📍 `src/engine_army_economy.c` (`engine_army_economy_plan_secondary`).  Ghidra
+> `FUN_00450e46` @ 0x450e46; dead call to `FUN_00404dc1` @ 0x404dc1.

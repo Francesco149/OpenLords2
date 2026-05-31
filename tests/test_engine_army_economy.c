@@ -45,6 +45,18 @@ enum {
     PLAN_CAP        = 0x244,
     PLAN_OUT_P4     = 0x248,
     PLAN_OUT_STD    = 0x2fc,
+    /* secondary-settlement reserve pass (FUN_00450e46 / 0fb4) */
+    SEC_RATE        = 0xe8,
+    SEC_SEL         = 0xec,
+    SEC_SURPLUS     = 0xf0,
+    SEC_TURNS       = 0x1a6,
+    SEC_FLAG        = 0x1c3,
+    SEC_VAL0        = 0x1cc,
+    SEC_VAL1        = 0x1d0,
+    SEC_VAL2        = 0x1d4,
+    SEC_CAP0        = 0x1d8,
+    SEC_CAP1        = 0x1dc,
+    SEC_CAP2        = 0x1e0,
 };
 
 _Alignas(int32_t) static uint8_t g_army[ARMY_ROWS * ARMY_STRIDE];
@@ -709,5 +721,131 @@ int test_army_economy_plan_unbound_noop(void)
 {
     engine_army_economy_bind_army_records(NULL);
     engine_army_economy_plan_production(2, 0);
+    return 0;
+}
+
+/* ── secondary-settlement reserve pass (FUN_00450e46 / 0fb4) ─────────── */
+
+/* headroom = min(100 - fill%(pair1), 100 - fill%(pair2)).  pair1 50/100 → 50%
+ * fill → 50 headroom; pair2 60/100 → 40 headroom → min = 40. */
+int test_army_economy_secondary_headroom_min_of_two(void)
+{
+    army_reset();
+    set_byte(2, SEC_FLAG, 1);
+    set_stock(2, SEC_VAL1, 50);  set_stock(2, SEC_CAP1, 100);
+    set_stock(2, SEC_VAL2, 60);  set_stock(2, SEC_CAP2, 100);
+    T_ASSERT_EQ_I(engine_army_economy_secondary_headroom(2), 40);
+    return 0;
+}
+
+int test_army_economy_secondary_headroom_gate_off_zero(void)
+{
+    army_reset();
+    set_byte(2, SEC_FLAG, 0);
+    set_stock(2, SEC_VAL1, 50);  set_stock(2, SEC_CAP1, 100);
+    T_ASSERT_EQ_I(engine_army_economy_secondary_headroom(2), 0);
+    return 0;
+}
+
+/* Zero capacity → percent_div guards to 0 → full headroom 100. */
+int test_army_economy_secondary_headroom_zero_capacity(void)
+{
+    army_reset();
+    set_byte(2, SEC_FLAG, 1);     /* all caps 0 → both fills 0 → 100 */
+    T_ASSERT_EQ_I(engine_army_economy_secondary_headroom(2), 100);
+    return 0;
+}
+
+int test_army_economy_secondary_headroom_unbound_zero(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    T_ASSERT_EQ_I(engine_army_economy_secondary_headroom(2), 0);
+    return 0;
+}
+
+/* Full reserves (headroom 100): surplus = pair-0 value, turns = ceil(val0/rate). */
+int test_army_economy_plan_secondary_full_reserves(void)
+{
+    army_reset();
+    set_byte(2, SEC_FLAG, 1);     /* caps 0 → headroom 100 */
+    set_stock(2, SEC_VAL0, 50);
+    set_stock(2, SEC_RATE, 10);
+    engine_army_economy_plan_secondary(2);
+    T_ASSERT_EQ_I(rec_i32(2, SEC_SEL), -1);
+    T_ASSERT_EQ_I(rec_i32(2, SEC_SURPLUS), 50);
+    T_ASSERT_EQ_I(rec_byte(2, SEC_TURNS), 5);   /* 50/10 exact */
+    return 0;
+}
+
+/* ceil rounding: 55/10 → 6 turns. */
+int test_army_economy_plan_secondary_turns_ceil(void)
+{
+    army_reset();
+    set_byte(2, SEC_FLAG, 1);
+    set_stock(2, SEC_VAL0, 55);
+    set_stock(2, SEC_RATE, 10);
+    engine_army_economy_plan_secondary(2);
+    T_ASSERT_EQ_I(rec_byte(2, SEC_TURNS), 6);
+    return 0;
+}
+
+/* Not full (headroom < 100): surplus forced to 0, turns flat 100. */
+int test_army_economy_plan_secondary_partial(void)
+{
+    army_reset();
+    set_byte(2, SEC_FLAG, 1);
+    set_stock(2, SEC_VAL1, 50);  set_stock(2, SEC_CAP1, 100);   /* fill 50 → headroom 50 */
+    set_stock(2, SEC_VAL0, 50);
+    set_stock(2, SEC_RATE, 10);
+    engine_army_economy_plan_secondary(2);
+    T_ASSERT_EQ_I(rec_i32(2, SEC_SURPLUS), 0);
+    T_ASSERT_EQ_I(rec_byte(2, SEC_TURNS), 100);
+    return 0;
+}
+
+/* Full but rate < 1 → turns flat 100, surplus still set. */
+int test_army_economy_plan_secondary_zero_rate(void)
+{
+    army_reset();
+    set_byte(2, SEC_FLAG, 1);
+    set_stock(2, SEC_VAL0, 50);
+    set_stock(2, SEC_RATE, 0);
+    engine_army_economy_plan_secondary(2);
+    T_ASSERT_EQ_I(rec_i32(2, SEC_SURPLUS), 50);
+    T_ASSERT_EQ_I(rec_byte(2, SEC_TURNS), 100);
+    return 0;
+}
+
+/* Gate off: only sentinel +0xec and surplus +0xf0 are cleared; turns untouched. */
+int test_army_economy_plan_secondary_gate_off(void)
+{
+    army_reset();
+    set_byte(2, SEC_FLAG, 0);
+    set_byte(2, SEC_TURNS, 0x55);
+    set_stock(2, SEC_SURPLUS, 999);
+    engine_army_economy_plan_secondary(2);
+    T_ASSERT_EQ_I(rec_i32(2, SEC_SEL), -1);
+    T_ASSERT_EQ_I(rec_i32(2, SEC_SURPLUS), 0);
+    T_ASSERT_EQ_I(rec_byte(2, SEC_TURNS), 0x55);   /* untouched */
+    return 0;
+}
+
+int test_army_economy_plan_secondary_keyed_by_row(void)
+{
+    army_reset();
+    set_byte(4, SEC_FLAG, 1);
+    set_stock(4, SEC_VAL0, 30);
+    set_stock(4, SEC_RATE, 10);
+    engine_army_economy_plan_secondary(4);
+    T_ASSERT_EQ_I(rec_i32(4, SEC_SURPLUS), 30);
+    T_ASSERT_EQ_I(rec_i32(3, SEC_SURPLUS), 0);     /* neighbour rows untouched */
+    T_ASSERT_EQ_I(rec_i32(5, SEC_SURPLUS), 0);
+    return 0;
+}
+
+int test_army_economy_plan_secondary_unbound_noop(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    engine_army_economy_plan_secondary(2);
     return 0;
 }

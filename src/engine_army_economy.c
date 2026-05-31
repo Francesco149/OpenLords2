@@ -480,3 +480,78 @@ void engine_army_economy_plan_production(int key, int phase)
     *(int32_t *)(row + ARMY_PLAN_BEST)  = best;
     *(int32_t *)(row + ARMY_PLAN_BEST2) = best2;
 }
+
+/* --------------------------------------------------------------------- *
+ *  Secondary-settlement reserve pass — the 0x450e46 branch of 0x4485a5.
+ *
+ *  Gated on the realm's secondary-settlement flag (+0x1c3, the same byte
+ *  engine_territory_stamp_secondary_keep reads).  Works the secondary
+ *  settlement's three (value, capacity) reserve pairs:
+ *    pair 0  value +0x1cc / capacity +0x1d8
+ *    pair 1  value +0x1d0 / capacity +0x1dc
+ *    pair 2  value +0x1d4 / capacity +0x1e0
+ *  Field semantics (which commodity each pair is) are provisional.
+ * --------------------------------------------------------------------- */
+
+#define ARMY_SEC_FLAG      0x1c3   /* DAT_0053fb73 — realm has a secondary settlement */
+#define ARMY_SEC_VAL0      0x1cc   /* DAT_0053fb7c — reserve pair 0 value */
+#define ARMY_SEC_VAL1      0x1d0   /* DAT_0053fb80 — reserve pair 1 value */
+#define ARMY_SEC_VAL2      0x1d4   /* DAT_0053fb84 — reserve pair 2 value */
+#define ARMY_SEC_CAP0      0x1d8   /* DAT_0053fb88 — reserve pair 0 capacity */
+#define ARMY_SEC_CAP1      0x1dc   /* DAT_0053fb8c — reserve pair 1 capacity */
+#define ARMY_SEC_CAP2      0x1e0   /* DAT_0053fb90 — reserve pair 2 capacity */
+#define ARMY_SEC_RATE      0xe8    /* DAT_0053fa98 — per-turn drain rate (turns divisor) */
+#define ARMY_SEC_SEL       0xec    /* DAT_0053fa9c — selection sentinel, always -1 here */
+#define ARMY_SEC_SURPLUS   0xf0    /* DAT_0053faa0 — pair-0 value when full, else 0 */
+#define ARMY_SEC_TURNS     0x1a6   /* DAT_0053fb56 — ceil(pair0 / rate), or 100 */
+
+/* FUN_00450fb4 */
+int engine_army_economy_secondary_headroom(int key)
+{
+    if (g_army_records == NULL) return 0;
+
+    const uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+    if (row[ARMY_SEC_FLAG] == 0) return 0;
+
+    /* Minimum remaining-capacity percentage across pairs 1 and 2.  Retail
+     * computes pair-2's fill first, then pair-1's headroom, then keeps the
+     * smaller of the two headrooms. */
+    int fill2 = engine_math_percent_div(*(const int32_t *)(row + ARMY_SEC_VAL2),
+                                        *(const int32_t *)(row + ARMY_SEC_CAP2));
+    int head  = 100 - engine_math_percent_div(*(const int32_t *)(row + ARMY_SEC_VAL1),
+                                              *(const int32_t *)(row + ARMY_SEC_CAP1));
+    if (100 - fill2 < head) head = 100 - fill2;
+    return head;
+}
+
+/* FUN_00450e46 */
+void engine_army_economy_plan_secondary(int key)
+{
+    if (g_army_records == NULL) return;
+
+    uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+
+    *(int32_t *)(row + ARMY_SEC_SEL)     = -1;
+    *(int32_t *)(row + ARMY_SEC_SURPLUS) = 0;
+    if (row[ARMY_SEC_FLAG] == 0) return;
+
+    /* Retail recomputes pair-0's fill here and discards it — a dead
+     * percent_div whose result is never stored or branched on (see
+     * engine-quirks).  percent_div is side-effect-free, so we drop it. */
+
+    int head = engine_army_economy_secondary_headroom(key);
+    int surplus = (head < 100) ? 0 : *(int32_t *)(row + ARMY_SEC_VAL0);
+
+    *(int32_t *)(row + ARMY_SEC_SEL)     = -1;     /* second write, faithful to retail */
+    *(int32_t *)(row + ARMY_SEC_SURPLUS) = surplus;
+
+    int rate = *(int32_t *)(row + ARMY_SEC_RATE);
+    if (head < 100 || rate < 1) {
+        row[ARMY_SEC_TURNS] = 100;
+    } else {
+        int val0 = *(int32_t *)(row + ARMY_SEC_VAL0);
+        int turns = val0 / rate;
+        if (val0 % rate != 0) turns++;
+        row[ARMY_SEC_TURNS] = (uint8_t)(int8_t)turns;   /* retail narrows to signed char */
+    }
+}
