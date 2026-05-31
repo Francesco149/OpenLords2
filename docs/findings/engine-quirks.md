@@ -5265,3 +5265,39 @@ Maxing out tax-approval quietly costs you a band
 > 📍 `src/engine_realm.c` (`engine_realm_apply_tax_approval`, `k_tax_approval_tbl`).
 > Ghidra `FUN_0044bd9f` @ 0x44bd9f; tables r2-dumped from 0x4d64a8 (2D), 0x4d6520
 > (thresholds) and 0x4d6548 (band modifiers).
+
+## 150. The development-spread pass finds the best cell twice in a row, throwing the first answer away
+
+The per-realm territory-development spread pass `FUN_0044bf7a`
+(`engine_realm_spread_development`) distributes each realm's surplus pool across
+its developable overworld cells, starting from the cell with the highest
+current development value.  Finding that cell is delegated to a tiny helper that
+scans the realm's 20-slot roster, skips empty cells and cells whose terrain type
+is already ≥ 0x19, and records the slot with the maximum `+0x90` value into
+`+0x210`.  Retail ships the helper as **two** near-identical copies that differ
+only in what they leave in `+0x210` when *no* cell qualifies: `FUN_0044c5fc`
+writes the sentinel 99, `FUN_0044c53b` writes 0.
+
+The distributor `FUN_0044c093` opens by calling **both**, back to back:
+
+```c
+realm_dev_best_cell(realm, 99);            /* FUN_0044c5fc → +0x210 */
+int pool = army[realm].pool;               /* +0xdc — unrelated read */
+int slot = realm_dev_best_cell(realm, 0);  /* FUN_0044c53b → +0x210 (overwrites) */
+```
+
+The only thing `FUN_0044c5fc` does is write `+0x210`, and `FUN_0044c53b`
+overwrites `+0x210` before it is ever read — so the first call is pure dead
+work.  The two are not interchangeable in general (their no-cell defaults differ,
+and `FUN_0044c278` genuinely relies on the 99 sentinel to detect "no developable
+cell"), but *here* the sentinel result is discarded.  The drop-in keeps the
+redundant call so the write sequence to `+0x210` matches retail exactly.
+
+Most likely the distributor was cloned from the projector `FUN_0044c278` — which
+legitimately calls the default-99 variant first (to set the sentinel) and the
+default-0 variant later (to pick a start cell) — and the now-pointless first call
+came along for the ride.
+
+> 📍 `src/engine_realm.c` (`realm_dev_spread_pool`, `realm_dev_best_cell`).
+> Ghidra `FUN_0044c093` @ 0x44c093; the two argmax variants are `FUN_0044c5fc`
+> @ 0x44c5fc (default 99) and `FUN_0044c53b` @ 0x44c53b (default 0).

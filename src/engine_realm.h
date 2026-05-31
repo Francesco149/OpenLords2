@@ -261,4 +261,38 @@ void engine_realm_recount_armies(void);
  * Field semantics provisional; offsets and tables r2-verified. */
 void engine_realm_apply_tax_approval(void);
 
+/* Port of FUN_0044bf7a @ 0x44bf7a (91 B, __stdcall void) — the per-realm
+ * territory-development spread pass of the turn-advance engine (0x448440).  For
+ * every realm 1..s_slot_0056d5dc it runs three sub-passes (the retail dispatcher
+ * also threads the season into the third, which never reads it):
+ *
+ *   1. FUN_0044bfd5 — roll the standing accumulator +0x208 forward by
+ *      6·(+0x1ff) − 3·(+0x201), clamp to [-100, 100], force to 0 while
+ *      standings are disabled (s_slot_0053f25c == 0).
+ *   2. FUN_0044c093 — distribute the surplus pool +0xdc across the realm's
+ *      developable overworld cells (its g_misc_1360 roster row), starting from
+ *      the highest-value cell and walking the 20-slot roster circularly: up to
+ *      200 per cell, spill back anything over 800, update the per-cell value
+ *      (+0x90 word) and stamp the cell's overworld terrain type to the matching
+ *      development stage (0x19/0x1a/0x1b/0x1c/0x01), stopping when the pool runs
+ *      out.  A cell is developable only when non-empty and its terrain type is
+ *      < 0x19.
+ *   3. FUN_0044c278 — project that distribution without mutating the cells,
+ *      leaving four planning metrics: +0xe4 total fill capacity, +0x20c count
+ *      of cells that would reach the 800 cap, +0x214 turns to fill the best
+ *      cell, and +0xe0 reset to −1.  Bails early (leaving the metrics cleared)
+ *      when the realm has no developable cell.
+ *
+ * The shared highest-value-cell helper (retail FUN_0044c5fc / FUN_0044c53b)
+ * writes the winning slot index to +0x210; its two retail variants differ only
+ * in the no-cell default (99 sentinel vs 0).  QUIRK #150: FUN_0044c093 invokes
+ * both back-to-back, so the first (sentinel) result is overwritten unused.
+ * Touches g_per_army_768, the realm roster rows g_misc_1360, and the overworld
+ * cells (g_overworld_map, via engine_territory_set_cell_type); reads the realm
+ * count and the standings gate.  Field semantics provisional; offsets and band
+ * cut-offs r2-verified.  The cell-type stamps update overworld graphics and so
+ * want eventual visual verification, but the arithmetic is deterministic and
+ * unit-tested in isolation (set_cell_type no-ops when the cell grid is unbound). */
+void engine_realm_spread_development(void);
+
 #endif /* OPENLORDS2_ENGINE_REALM_H */

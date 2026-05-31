@@ -22,6 +22,7 @@
 #define AREC(key)   (&g_per_army_768[(key) * 0x300])
 #define PREC(slot)  (&g_player_strategic_352[(slot) * 0x160])
 #define AI32(p, o)  (*(int32_t *)((p) + (o)))
+#define AW16(p, o)  (*(int16_t *)((p) + (o)))
 #define MISC_ROW(realm) ((int32_t *)&g_misc_1360[(realm) * 0x50])
 
 /* One realm, owned by a human, turn 1; clean per-army + per-player state. */
@@ -1105,5 +1106,148 @@ int test_engine_realm_tax_multi_realm(void)
 
     T_ASSERT_EQ_U(r1[0x09], 4);
     T_ASSERT_EQ_U(r2[0x09], 0);
+    return 0;
+}
+
+/* ─── engine_realm_spread_development (FUN_0044bf7a) ─────────────────────── */
+
+/* Clean per-realm + roster + overworld state; one realm, standings enabled. */
+static uint8_t *dev_reset(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_misc_1360,    0, sizeof g_misc_1360);
+    memset(g_overworld_map, 0, sizeof g_overworld_map);
+    s_slot_0056d5dc = 1;       /* one realm            */
+    s_slot_0053f25c = 1;       /* standings enabled    */
+    return AREC(1);
+}
+
+/* The standing accumulator (+0x208) rolls forward by 6·(+0x1ff) − 3·(+0x201).
+ * With no developable cells the spread/projection sub-passes leave the
+ * projection metrics cleared (+0xe0 = −1, capacity 0). */
+int test_engine_realm_dev_accumulator(void)
+{
+    uint8_t *r = dev_reset();
+    r[0x1ff] = 10;  r[0x201] = 4;        /* 6*10 - 3*4 = 48 */
+
+    engine_realm_spread_development();
+
+    T_ASSERT_EQ_I(AI32(r, 0x208), 48);
+    T_ASSERT_EQ_I(AI32(r, 0xe0), -1);    /* projection reset marker */
+    T_ASSERT_EQ_I(AI32(r, 0xe4), 0);     /* no developable cells    */
+    return 0;
+}
+
+/* Standings disabled (s_slot_0053f25c == 0) forces the accumulator to 0. */
+int test_engine_realm_dev_accumulator_standings_off(void)
+{
+    uint8_t *r = dev_reset();
+    s_slot_0053f25c = 0;
+    r[0x1ff] = 10;  r[0x201] = 4;
+
+    engine_realm_spread_development();
+
+    T_ASSERT_EQ_I(AI32(r, 0x208), 0);
+    return 0;
+}
+
+/* The accumulator clamps to [-100, 100]. */
+int test_engine_realm_dev_accumulator_clamp(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_misc_1360,    0, sizeof g_misc_1360);
+    s_slot_0056d5dc = 2;
+    s_slot_0053f25c = 1;
+
+    AREC(1)[0x1ff] = 50;                 /* 6*50 = 300 → clamp 100  */
+    AREC(2)[0x201] = 50;                 /* -3*50 = -150 → clamp -100 */
+
+    engine_realm_spread_development();
+
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x208), 100);
+    T_ASSERT_EQ_I(AI32(AREC(2), 0x208), -100);
+    return 0;
+}
+
+/* Spread + projection: the pool (+0xdc) is distributed from the highest-value
+ * cell, ≤200 per cell; the touched cell's value and overworld type are updated;
+ * the development push moves that cell out of "developable" range so the
+ * projection (FUN_0044c278) only counts the untouched cell.  pool 50: argmax
+ * slot1 (200) takes the full 50 → 250 (type 0x1a); slot0 (100) is left alone.
+ * Projection then sees only slot0: capacity = min(800-100,200) = 200, and
+ * turns-to-fill = ceil((800-100)/50) = 14. */
+int test_engine_realm_dev_spread_and_project(void)
+{
+    uint8_t *r = dev_reset();
+    engine_territory_bind_cells(g_overworld_map);
+
+    MISC_ROW(1)[0] = 100;  g_overworld_map[100] = 0x10;   /* developable */
+    MISC_ROW(1)[1] = 200;  g_overworld_map[200] = 0x10;
+    AW16(r, 0x90 + 0) = 100;
+    AW16(r, 0x90 + 2) = 200;
+    AI32(r, 0xdc) = 50;                  /* pool */
+
+    engine_realm_spread_development();
+
+    T_ASSERT_EQ_I(AW16(r, 0x90 + 0), 100);   /* slot0 untouched      */
+    T_ASSERT_EQ_I(AW16(r, 0x90 + 2), 250);   /* slot1 += full pool   */
+    T_ASSERT_EQ_U(g_overworld_map[200], 0x1a); /* 250 → stage 0x1a   */
+    T_ASSERT_EQ_U(g_overworld_map[100], 0x10); /* untouched          */
+    T_ASSERT_EQ_I(AI32(r, 0xe4), 200);       /* capacity (slot0 only) */
+    T_ASSERT_EQ_I(AI32(r, 0x20c), 0);        /* none reached the cap  */
+    T_ASSERT_EQ_I(AI32(r, 0x214), 14);       /* ceil(700/50)          */
+
+    engine_territory_bind_cells(NULL);
+    return 0;
+}
+
+/* Value above 800 spills the excess back into the pool (without lowering the
+ * cell), the maxed cell is stamped type 1, and the projection counts it.
+ * slot0 (700) + 200 = 900 → spill 100 back; pool flows on to slot1 (0) → 200. */
+int test_engine_realm_dev_spread_overflow(void)
+{
+    uint8_t *r = dev_reset();
+    engine_territory_bind_cells(g_overworld_map);
+
+    MISC_ROW(1)[0] = 100;  g_overworld_map[100] = 0x10;
+    MISC_ROW(1)[1] = 200;  g_overworld_map[200] = 0x10;
+    AW16(r, 0x90 + 0) = 700;
+    AW16(r, 0x90 + 2) = 0;
+    AI32(r, 0xdc) = 300;
+
+    engine_realm_spread_development();
+
+    T_ASSERT_EQ_I(AW16(r, 0x90 + 0), 900);   /* +200, spill not subtracted */
+    T_ASSERT_EQ_I(AW16(r, 0x90 + 2), 200);   /* received the carried pool  */
+    T_ASSERT_EQ_U(g_overworld_map[100], 1);  /* maxed → stage 1            */
+    T_ASSERT_EQ_I(AI32(r, 0x20c), 1);        /* one cell hit the 800 cap   */
+    T_ASSERT_EQ_I(AI32(r, 0xe4), -100);      /* over-max headroom is negative */
+
+    engine_territory_bind_cells(NULL);
+    return 0;
+}
+
+/* Two realms are developed independently; the pool of each lands in its own
+ * highest-value cell. */
+int test_engine_realm_dev_multi_realm(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_misc_1360,    0, sizeof g_misc_1360);
+    memset(g_overworld_map, 0, sizeof g_overworld_map);
+    s_slot_0056d5dc = 2;
+    s_slot_0053f25c = 1;
+    engine_territory_bind_cells(g_overworld_map);
+
+    MISC_ROW(1)[0] = 100; g_overworld_map[100] = 0x10; AW16(AREC(1), 0x90) = 10;
+    AI32(AREC(1), 0xdc) = 50;
+    MISC_ROW(2)[0] = 300; g_overworld_map[300] = 0x10; AW16(AREC(2), 0x90) = 20;
+    AI32(AREC(2), 0xdc) = 50;
+
+    engine_realm_spread_development();
+
+    T_ASSERT_EQ_I(AW16(AREC(1), 0x90), 60);   /* 10 + 50 */
+    T_ASSERT_EQ_I(AW16(AREC(2), 0x90), 70);   /* 20 + 50 */
+
+    engine_territory_bind_cells(NULL);
     return 0;
 }

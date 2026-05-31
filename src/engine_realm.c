@@ -647,3 +647,195 @@ void engine_realm_apply_tax_approval(void)
         r[0x10] = (uint8_t)k_tax_band_modifier[new_band];
     }
 }
+
+/* ─── the per-realm territory-development spread pass (FUN_0044bf7a) ──────────
+ * The turn-advance engine's per-realm "growth distribution" pass.  Each realm
+ * owns up to 20 developable overworld cells, listed as cell offsets in its
+ * g_misc_1360 roster row (MISC_ROW); the per-realm word array at +0x90 holds
+ * each cell's development VALUE (0..800), and +0xdc is the surplus "pool" to be
+ * spread across them this turn.  An overworld cell is developable only when it
+ * is non-empty and its terrain-type byte (g_overworld_map[cell]) is < 0x19 —
+ * types 0x19..0x1c and 0x01 are the five development-stage tiles this pass
+ * stamps as a cell's value climbs.  Field semantics (the +0x90 values, the
+ * +0xdc pool, the +0x1ff/+0x201/+0x208 accumulator and the projection outputs)
+ * are provisional; all offsets and the band cut-offs are r2-verified against
+ * the 0x300 record stride. */
+
+/* Ports of FUN_0044c5fc / FUN_0044c53b — find the developable roster cell with
+ * the highest development value (+0x90 word), write its slot index to +0x210,
+ * and return it.  The two retail variants differ ONLY in the value used when no
+ * cell qualifies: 0x44c5fc defaults to 99 (a "no cell" sentinel FUN_0044c278
+ * tests for), 0x44c53b defaults to 0.  Unified here behind a default param. */
+static int realm_dev_best_cell(int realm, int default_idx)
+{
+    uint8_t       *a    = ARMY_REC(realm);
+    const int32_t *row  = MISC_ROW(realm);
+    const int16_t *vals = (const int16_t *)(a + 0x90);
+
+    int best   = -1;
+    int result = default_idx;
+    for (int i = 0; i < 0x14; i++) {
+        int32_t cell = row[i];
+        if (cell == 0 || g_overworld_map[cell] >= 0x19)
+            continue;
+        if (vals[i] > best) {
+            best   = vals[i];
+            result = i;
+        }
+    }
+    *(int32_t *)(a + 0x210) = result;
+    return result;
+}
+
+/* Port of FUN_0044bfd5 — roll a realm's standing accumulator (+0x208) forward
+ * by 6·(+0x1ff) − 3·(+0x201) (both unsigned-byte inputs), clamp it to
+ * [-100, 100], and force it to 0 while standings are disabled (s_slot_0053f25c
+ * == 0, the same gate the mood machine honours). */
+static void realm_dev_roll_accumulator(int realm)
+{
+    uint8_t *a   = ARMY_REC(realm);
+    int32_t *acc = (int32_t *)(a + 0x208);
+
+    *acc += 6 * a[0x1ff];
+    *acc -= 3 * a[0x201];
+
+    if (*acc < -100) *acc = -100;
+    if (*acc > 100)  *acc = 100;
+
+    if (s_slot_0053f25c == 0)
+        *acc = 0;
+}
+
+/* Port of FUN_0044c093 — distribute the realm's pool (+0xdc) across its
+ * developable cells, starting from the highest-value cell and walking the
+ * 20-slot roster circularly.  Each visited cell takes up to 200 from the pool;
+ * any value above 800 spills back into the pool; the cell's stored value (+0x90
+ * word) is updated and its overworld terrain type is stamped to the matching
+ * development stage (<200 → 0x19, <400 → 0x1a, <600 → 0x1b, <800 → 0x1c, else
+ * 0x01).  Stops once the pool is exhausted (or after 20 visits).
+ *
+ * QUIRK #150: retail calls the default-99 argmax (FUN_0044c5fc) first and then
+ * immediately the default-0 argmax (FUN_0044c53b), overwriting +0x210 before
+ * the first result is ever read — so the first call is dead work here.  The
+ * port keeps it to match the writes to +0x210. */
+static void realm_dev_spread_pool(int realm)
+{
+    uint8_t       *a    = ARMY_REC(realm);
+    const int32_t *row  = MISC_ROW(realm);
+    int16_t       *vals = (int16_t *)(a + 0x90);
+
+    realm_dev_best_cell(realm, 99);             /* FUN_0044c5fc — result unused */
+    int pool = *(int32_t *)(a + 0xdc);
+    int slot = realm_dev_best_cell(realm, 0);   /* FUN_0044c53b — start cell    */
+    if (slot >= 0x14)
+        return;
+
+    for (int n = 0; n < 0x14; n++) {
+        int32_t cell = row[slot];
+        if (cell != 0 && g_overworld_map[cell] < 0x19) {
+            int v = vals[slot];
+            if (pool > 0xc8) { v += 0xc8; pool -= 0xc8; }
+            else             { v += pool;  pool  = 0;   }
+            if (v > 0x320)
+                pool += v - 0x320;              /* overflow above 800 spills back */
+
+            int type;
+            if      (v < 0xc8)  type = 0x19;
+            else if (v < 0x190) type = 0x1a;
+            else if (v < 0x258) type = 0x1b;
+            else if (v < 0x320) type = 0x1c;
+            else                type = 0x01;
+            engine_territory_set_cell_type(cell, type, 0);
+
+            vals[slot] = (int16_t)v;
+            if (pool <= 0)
+                return;
+        }
+        if (++slot >= 0x14)
+            slot = 0;
+    }
+}
+
+/* Port of FUN_0044c278 — project (without mutating the cell values) how the
+ * realm's pool would spread, leaving four planning metrics in the record.
+ * (The retail caller also passes the season, which this pass never reads.)
+ *
+ *   1. +0xe4  total fill capacity: Σ over developable cells of min(800−value,
+ *             200); also resets +0xe0 to −1 and clears +0x20c / +0x214.
+ *   2. Bail if no developable cell exists (+0x210 still the default-99 sentinel
+ *      from FUN_0044c5fc).
+ *   3. +0x20c  count of cells that would reach the 800 cap, by dry-running the
+ *      same circular distribution FUN_0044c093 performs (pool unchanged on the
+ *      record; the spill-back is tracked only in a local).
+ *   4. +0x214  turns to fill the best cell: ceil((800 − best-cell value) /
+ *      min(pool, 200)); left 0 when the pool is non-positive. */
+static void realm_dev_project_pool(int realm)
+{
+    uint8_t       *a    = ARMY_REC(realm);
+    const int32_t *row  = MISC_ROW(realm);
+    const int16_t *vals = (const int16_t *)(a + 0x90);
+
+    realm_dev_best_cell(realm, 99);             /* FUN_0044c5fc — sets the +0x210 sentinel */
+
+    /* 1. Total fill capacity (headroom to 800, capped at 200/cell). */
+    int capacity = 0;
+    for (int i = 0; i < 0x14; i++) {
+        int32_t cell = row[i];
+        if (cell == 0 || g_overworld_map[cell] >= 0x19)
+            continue;
+        int head = 0x320 - vals[i];
+        if (head > 0xc8)
+            head = 0xc8;
+        capacity += head;
+    }
+    *(int32_t *)(a + 0xe0)  = -1;
+    *(int32_t *)(a + 0xe4)  = capacity;
+    *(int32_t *)(a + 0x20c) = 0;
+    *(int32_t *)(a + 0x214) = 0;
+
+    if (*(int32_t *)(a + 0x210) >= 0x63)        /* no developable cell → done */
+        return;
+
+    /* 2-3. Dry-run distribution, counting cells that would hit the 800 cap. */
+    realm_dev_best_cell(realm, 0);              /* FUN_0044c53b — start cell */
+    int pool = *(int32_t *)(a + 0xdc);
+    int slot = *(int32_t *)(a + 0x210);
+    for (int n = 0; n < 0x14; n++) {
+        int32_t cell = row[slot];
+        if (cell != 0 && g_overworld_map[cell] < 0x19) {
+            int v = vals[slot];
+            if (pool > 0xc8) { v += 0xc8; pool -= 0xc8; }
+            else             { v += pool;  pool  = 0;   }
+            if (v >= 0x320) {
+                pool += v - 0x320;
+                *(int32_t *)(a + 0x20c) += 1;
+            }
+            if (pool <= 0)
+                break;
+        }
+        if (++slot >= 0x14)
+            slot = 0;
+    }
+
+    /* 4. Turns to fill the best cell with the (per-turn-capped) pool. */
+    pool = *(int32_t *)(a + 0xdc);
+    slot = *(int32_t *)(a + 0x210);
+    int head = 0x320 - vals[slot];
+    if (pool <= 0)
+        return;
+    if (pool > 0xc8)
+        pool = 0xc8;
+    *(int32_t *)(a + 0x214) = head / pool;
+    if (head % pool != 0)
+        *(int32_t *)(a + 0x214) += 1;
+}
+
+/* Port of FUN_0044bf7a — see engine_realm.h for the overview. */
+void engine_realm_spread_development(void)
+{
+    for (int key = 1; key <= (int)s_slot_0056d5dc; key++) {
+        realm_dev_roll_accumulator(key);   /* FUN_0044bfd5 */
+        realm_dev_spread_pool(key);        /* FUN_0044c093 */
+        realm_dev_project_pool(key);       /* FUN_0044c278 */
+    }
+}

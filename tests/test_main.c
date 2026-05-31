@@ -1727,6 +1727,12 @@ struct test_case {
     X(engine_realm_tax_zero_pop_human_kept) \
     X(engine_realm_tax_policy6_aliasing) \
     X(engine_realm_tax_multi_realm) \
+    X(engine_realm_dev_accumulator) \
+    X(engine_realm_dev_accumulator_standings_off) \
+    X(engine_realm_dev_accumulator_clamp) \
+    X(engine_realm_dev_spread_and_project) \
+    X(engine_realm_dev_spread_overflow) \
+    X(engine_realm_dev_multi_realm) \
     \
     X(engine_events_scratch_and_gates) \
     X(engine_events_commit_resource) \
