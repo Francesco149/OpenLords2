@@ -342,6 +342,65 @@ void engine_territory_clear_cell_score(int cell_off)
     }
 }
 
+/* Port of FUN_0046d7f4 (486 B) — set an overworld cell's terrain type and
+ * re-derive its render/flag bytes.  This is the engine's cell-type mutator:
+ * many strategic-map edits route through it.
+ *
+ *   cell_off : the cell's byte-offset into the grid
+ *   type     : new terrain type (written to +0, DAT_00522f90)
+ *   variant  : a render-variant tier; ×4 into the +3 descriptor byte
+ *              (retail call sites all pass 0)
+ *
+ * Per type it picks a +3 descriptor base and the +2 flag bits to layer in;
+ * when the cell becomes empty (type 0) it also clears the cell's AI score
+ * via engine_territory_clear_cell_score (FUN_0046d9da).  The +3 byte keeps
+ * its low 2 bits (corrected for an old 0x17/0x18 special) and rebuilds the
+ * rest as base + variant*4.  The +2 byte gets bit0 set, bits 2..4 replaced
+ * by this type's contribution (bit3 for ordinary types, nothing for the
+ * 0x17/0x18 specials), bit7 cleared, then bit7 re-set only for the type
+ * band 15..22 (0xe < type < 0x17).
+ *
+ * NOTE (decompiler vs bytes): Ghidra renders the +3 low-bit correction
+ * constant as 0 (default) / 0x82 (old type 0x17|0x18); r2 @0x46d8e6 shows
+ * the real default is 0x50.  It is masked with &3 and 0x50 ≡ 0 (mod 4), so
+ * the two agree — the real bytes are used here. */
+void engine_territory_set_cell_type(int cell_off, int type, char variant)
+{
+    if (g_cells == NULL) return;
+
+    uint8_t old_type = g_cells[cell_off + 0];           /* DAT_00522f90 */
+    g_cells[cell_off + 0] = (uint8_t)type;
+
+    uint8_t base;            /* local_18 — +3 descriptor base for this type */
+    uint8_t lowbits = 8;     /* local_8  — +2 bits 2..4 contribution (bit3)  */
+    if      (type == 0)    base = 0x50;
+    else if (type == 0x17) { base = 0x82; lowbits = 0; }
+    else if (type == 0x18) { base = 0x86; lowbits = 0; }
+    else if (type == 1)    base = 0x54;
+    else if (type == 0x19) base = 0x6c;
+    else if (type == 0x1a) base = 0x70;
+    else if (type == 0x1b) base = 0x74;
+    else if (type == 0x1c) base = 0x78;
+    else if (type < 0x13)  base = 0x58;
+    else                   base = 0x68;
+
+    if (type == 0)
+        engine_territory_clear_cell_score(cell_off);    /* FUN_0046d9da */
+
+    uint8_t corr = 0x50;
+    if (old_type == 0x17 || old_type == 0x18) corr = 0x82;
+    uint8_t lo = (uint8_t)((g_cells[cell_off + 3] - corr) & 3);  /* DAT_00522f93 */
+    g_cells[cell_off + 3] = (uint8_t)(lo + base + variant * 4);
+
+    uint8_t f = g_cells[cell_off + 2];                  /* DAT_00522f92 */
+    f |= 1;
+    f &= 0xe3;
+    f |= lowbits;
+    f &= 0x7f;
+    if (type > 0xe && type < 0x17) f |= 0x80;
+    g_cells[cell_off + 2] = f;
+}
+
 /* Advance the single-LFSR RNG (retail FUN_00404b2c), threading its state
  * word through *rng and returning the 7-bit mirror (retail DAT_005c9a84).
  * Mirrors game_init.c's rng_next_7b for the double LFSR. */

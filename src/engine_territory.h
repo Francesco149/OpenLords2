@@ -88,6 +88,15 @@ void engine_territory_rebuild_cell_roster(int reset_score_table);
  * table is unbound.  cell_off is the cell's byte-offset into the grid. */
 void engine_territory_clear_cell_score(int cell_off);
 
+/* Port of FUN_0046d7f4.  Set an overworld cell's terrain type (byte +0) and
+ * re-derive its +3 render-descriptor byte (type base + variant*4, keeping
+ * the low 2 bits) and +2 flag byte (bit0 set; bits 2..4 = this type's
+ * contribution; bit7 set only for the type band 15..22).  When type is 0
+ * the cell's AI score is also cleared (engine_territory_clear_cell_score).
+ * Requires the cell grid bound (engine_territory_bind_cells); variant is the
+ * render tier (retail call sites pass 0). */
+void engine_territory_set_cell_type(int cell_off, int type, char variant);
+
 /* Port of FUN_0046dd34.  New-game terrain-tile randomiser: sweep the bound
  * terrain-index grid (engine_territory_bind_terrain_tiles) and re-roll every
  * cell holding the special sentinel 0xfff0006 to 0xfff0006 + (rng & 0xf),

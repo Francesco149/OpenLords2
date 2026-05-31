@@ -516,6 +516,110 @@ int test_territory_clear_cell_score_unbound_is_noop(void)
     return 0;
 }
 
+/* ── Cell terrain-type setter (engine_territory_set_cell_type,
+ *    port of FUN_0046d7f4) ─────────────────────────────────────────── */
+
+/* An ordinary type (< 0x13, not a named special): +0 = type, +3 = base
+ * 0x58 (low 2 bits rebuilt to 0), +2 = bit0|bit3, no bit7.  Type != 0 so
+ * the AI score is NOT cleared. */
+int test_territory_set_cell_type_ordinary(void)
+{
+    roster_setup();
+    int off = cell_off(4, 4);
+    g_cells[off + 7] = 6;
+    g_roster[6 * ROSTER_NCOL + 0] = off;
+    g_score[6 * SCORE_STRIDE + 0] = 0x77;
+
+    engine_territory_set_cell_type(off, 5, 0);
+
+    T_ASSERT_EQ_I(g_cells[off + 0], 5);
+    T_ASSERT_EQ_I(g_cells[off + 3], 0x58);
+    T_ASSERT_EQ_I(g_cells[off + 2], 0x09);          /* 1 | 8 */
+    T_ASSERT_EQ_I(g_score[6 * SCORE_STRIDE + 0], 0x77);  /* not cleared */
+    return 0;
+}
+
+/* Type 0 empties the cell: base 0x50, and the AI score for the cell's
+ * roster slot is cleared (the FUN_0046d9da call). */
+int test_territory_set_cell_type_zero_clears_score(void)
+{
+    roster_setup();
+    int off = cell_off(2, 1);
+    g_cells[off + 0] = 5;            /* old type (not special) */
+    g_cells[off + 3] = 0x03;         /* low bits 3 to preserve */
+    g_cells[off + 2] = 0xff;
+    g_cells[off + 7] = 4;
+    g_roster[4 * ROSTER_NCOL + 0] = off;
+    g_score[4 * SCORE_STRIDE + 0] = 0x77;
+
+    engine_territory_set_cell_type(off, 0, 0);
+
+    T_ASSERT_EQ_I(g_cells[off + 0], 0);
+    /* lo = (0x03 - 0x50) & 3 = 3; +3 = 3 + 0x50 = 0x53 */
+    T_ASSERT_EQ_I(g_cells[off + 3], 0x53);
+    /* +2: 0xff|1=0xff &0xe3=0xe3 |8=0xeb &0x7f=0x6b */
+    T_ASSERT_EQ_I(g_cells[off + 2], 0x6b);
+    T_ASSERT_EQ_I(g_score[4 * SCORE_STRIDE + 0], 0);     /* cleared */
+    return 0;
+}
+
+/* Type band 15..22 (0xe < type < 0x17) sets the +2 bit7 flag. */
+int test_territory_set_cell_type_band_sets_bit7(void)
+{
+    roster_setup();
+    int off = cell_off(6, 6);
+
+    engine_territory_set_cell_type(off, 16, 0);     /* 16 < 0x13 → base 0x58 */
+
+    T_ASSERT_EQ_I(g_cells[off + 0], 16);
+    T_ASSERT_EQ_I(g_cells[off + 3], 0x58);
+    T_ASSERT_EQ_I(g_cells[off + 2], 0x89);          /* 1 | 8 | 0x80 */
+    return 0;
+}
+
+/* The 0x17/0x18 specials use bases 0x82/0x86 and contribute NO +2 low bits
+ * (bits 2..4 stay clear); 0x17 is not in the bit7 band. */
+int test_territory_set_cell_type_special_no_lowbits(void)
+{
+    roster_setup();
+    int off = cell_off(3, 3);
+    g_cells[off + 2] = 0xff;
+
+    engine_territory_set_cell_type(off, 0x17, 0);
+
+    T_ASSERT_EQ_I(g_cells[off + 0], 0x17);
+    T_ASSERT_EQ_I(g_cells[off + 3], 0x82);
+    /* +2: 0xff|1=0xff &0xe3=0xe3 |0=0xe3 &0x7f=0x63, no bit7 (0x17 !< 0x17) */
+    T_ASSERT_EQ_I(g_cells[off + 2], 0x63);
+    return 0;
+}
+
+/* An old type of 0x17/0x18 shifts the +3 low-bit correction constant to
+ * 0x82 (≡ 2 mod 4); the variant tier adds variant*4 to the descriptor. */
+int test_territory_set_cell_type_old_special_correction_and_variant(void)
+{
+    roster_setup();
+    int off = cell_off(5, 5);
+    g_cells[off + 0] = 0x18;         /* old special → corr = 0x82 */
+    g_cells[off + 3] = 0x07;
+
+    engine_territory_set_cell_type(off, 1, 2);       /* base 0x54, variant 2 */
+
+    T_ASSERT_EQ_I(g_cells[off + 0], 1);
+    /* lo = (0x07 - 0x82) & 3 = 0x85 & 3 = 1; +3 = 1 + 0x54 + 2*4 = 0x5d */
+    T_ASSERT_EQ_I(g_cells[off + 3], 0x5d);
+    return 0;
+}
+
+/* Unbound cell grid → no-op, no crash. */
+int test_territory_set_cell_type_unbound_is_noop(void)
+{
+    roster_setup();
+    engine_territory_bind_cells(NULL);
+    engine_territory_set_cell_type(0, 5, 0);         /* must not crash */
+    return 0;
+}
+
 /* ── Terrain-tile randomiser (engine_territory_randomise_special_tiles,
  *    port of FUN_0046dd34) ─────────────────────────────────────────── */
 enum { TILE_ROWS = 0x81, TILE_COLS = 0x41, TILE_CELLS = TILE_ROWS * TILE_COLS };

@@ -397,12 +397,33 @@ are now ported.
   isolation, absent-cell no-op, cell's-own-key-row selection vs a same-offset
   decoy in another row, unbound roster/score no-ops).
 
-Remaining unported FUN_004676e0 callees: `FUN_00468d4f` / `FUN_00467a36`
-(each still 1–5 deps deep; 468d4f's subtree shares the now-ported
-`FUN_0046c080`).  Subtree progress: `FUN_00467a36`'s deepest leaf
-`FUN_0046d9da` is ported (above), leaving its mid-tier mutator
-`FUN_0046d7f4` (486 B); `FUN_00468d4f`'s castle-border arm `FUN_0046902a`
-still wants `FUN_0046c147` (407 B).
+- **FUN_0046d7f4** → `engine_territory_set_cell_type` (`engine_territory.c`,
+  landed 2026-05-31).  The engine's **overworld cell terrain-type mutator** —
+  the mid-tier of the `FUN_00467a36` subtree and the sole caller of the leaf
+  above.  Given `(cell_off, type, variant)` it writes the type byte (+0),
+  then per type derives a +3 render-descriptor base and the +2 flag-bit
+  contribution: type 0 → base 0x50 (+ clears the cell's AI score via
+  `FUN_0046d9da`); 0x17/0x18 → 0x82/0x86 with **no** +2 low bits; 1 → 0x54;
+  0x19..0x1c → 0x6c/0x70/0x74/0x78; type < 0x13 → 0x58; else 0x68.  The +3
+  byte keeps its low 2 bits (corrected for an old 0x17/0x18 special) and
+  rebuilds the rest as `base + variant*4`.  The +2 byte gets bit0 set, bits
+  2..4 replaced (bit3 for ordinary types, nothing for the specials), bit7
+  cleared then re-set only for the type band 15..22 (`0xe < type < 0x17`).
+  r2 @0x46d7f4 caught a **Ghidra error**: the decompiler renders the +3
+  low-bit correction constant as 0 (default) / 0x82, but the real default is
+  **0x50** (`mov byte [var_ch], 0x50` @0x46d8e6) — it survives only through a
+  `& 3`, and 0x50 ≡ 0 (mod 4), so the two are equivalent (documented in the
+  port comment).  6 host tests (ordinary type's base+flags + no score clear,
+  type-0 base 0x50 + score clear + low-bit preserve, band bit7, special
+  no-low-bits + no bit7, old-special correction + variant tier, unbound
+  no-op).
+
+With `FUN_0046d7f4` ported, `FUN_00467a36`'s subtree is **leaf-complete**
+(`467a36` → `46d7f4` → `46d9da`, both below it now landed); `FUN_00467a36`
+itself (624 B) is the next chip on that arm.  Remaining unported
+`FUN_004676e0` callees: `FUN_00468d4f` / `FUN_00467a36`.  `FUN_00468d4f`'s
+castle-border arm `FUN_0046902a` still wants `FUN_0046c147` (407 B); its two
+other leaves `FUN_00468c41`/`FUN_00468e61`/`FUN_00468121` are unported.
 
 ### FUN_0046ff43 — strategic movement-cost grid builder
 

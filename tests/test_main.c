@@ -1379,6 +1379,12 @@ struct test_case {
     X(territory_clear_cell_score_absent_cell_is_noop) \
     X(territory_clear_cell_score_uses_cell_key_row) \
     X(territory_clear_cell_score_unbound_is_noop) \
+    X(territory_set_cell_type_ordinary) \
+    X(territory_set_cell_type_zero_clears_score) \
+    X(territory_set_cell_type_band_sets_bit7) \
+    X(territory_set_cell_type_special_no_lowbits) \
+    X(territory_set_cell_type_old_special_correction_and_variant) \
+    X(territory_set_cell_type_unbound_is_noop) \
     X(territory_tiles_rerolls_sentinels_in_order) \
     X(territory_tiles_pinned_retail_seed) \
     X(territory_tiles_leaves_non_sentinels) \

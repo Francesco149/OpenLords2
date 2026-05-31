@@ -7,6 +7,46 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — GAME-START chip: cell terrain-type setter (FUN_0046d7f4)
+
+Ported `FUN_0046d7f4` (486 B) → `engine_territory_set_cell_type` in
+`engine_territory.c` — the engine's **overworld cell terrain-type mutator**
+and the mid-tier of the `FUN_00467a36` subtree (it is the sole caller of the
+score-clear leaf landed in the prior chip).
+
+**What it does.**  `set_cell_type(cell_off, type, variant)` writes the cell's
+type byte (+0, `DAT_00522f90`), then per type derives a +3 render-descriptor
+base and a +2 flag-bit contribution: type 0 → base 0x50 (and clears the
+cell's AI score via the just-ported `FUN_0046d9da`); the 0x17/0x18 specials →
+0x82/0x86 with **no** +2 low bits; 1 → 0x54; 0x19..0x1c → 0x6c/70/74/78;
+type < 0x13 → 0x58; else 0x68.  The +3 byte (`DAT_00522f93`) keeps its low 2
+bits — corrected when the *old* type was a 0x17/0x18 special — and rebuilds
+the rest as `base + variant*4`.  The +2 byte (`DAT_00522f92`) gets bit0 set,
+bits 2..4 replaced (bit3 for ordinary types, clear for the specials), bit7
+cleared, then bit7 re-set only for the type band 15..22 (`0xe < type < 0x17`).
+
+**Ghidra error caught by r2.**  The decompiler renders the +3 low-bit
+correction constant as 0 (default) / 0x82 (old type 0x17|0x18); r2 @0x46d8e6
+shows the real default is **0x50**, not 0.  It only survives a `& 3`, and
+0x50 ≡ 0 (mod 4), so the masked result is identical — but the port uses the
+real bytes (0x50 / 0x82) and notes the equivalence in the comment.  This is
+the kind of literal-level fact the decompiler quietly normalises; verified at
+the byte level rather than trusted.
+
+6 host tests: ordinary type's base 0x58 + bit0|bit3 flags with the score
+left intact (type != 0); type-0 base 0x50 + score-slot clear + low-bit
+preservation; band bit7 (type 16); 0x17 special's 0x82 base with no +2 low
+bits and no bit7; old-special +3 correction (corr 0x82) combined with a
+variant tier; unbound no-op.  1395/1395 pass under ASan/UBSan; mingw `.exe`
+clean under `-Wall -Wextra`; `_engine_territory_set_cell_type` in the PE.
+Ledger: 390 touched / 354 tested.
+
+With this and `FUN_0046d9da` landed, the **`FUN_00467a36` subtree is
+leaf-complete** (467a36 → 46d7f4 → 46d9da).  Next on this thread: `FUN_00467a36`
+itself (624 B), then `FUN_00468d4f`'s arm (its castle-border subtree
+`FUN_0046902a` wants `FUN_0046c147` (407 B); leaves `FUN_00468c41` /
+`FUN_00468e61` / `FUN_00468121` unported).
+
 ## 2026-05-31 — GAME-START chip: single-cell score clear (FUN_0046d9da)
 
 Ported `FUN_0046d9da` (113 B) → `engine_territory_clear_cell_score` in
