@@ -196,6 +196,47 @@ void engine_territory_clear_cell_render_flags(void)
         engine_dirty_rect_mark_full_screen(g_dirty_state);
 }
 
+/* Port of FUN_0046e067.  The set-side counterpart of
+ * clear_cell_render_flags: OR bit 0x20 into byte +2 of every cell of
+ * the (2*radius+1)-square box centred at (col, row), clamped to the
+ * 0..63 grid (the box shrinks at the edges, never rejects).  The clamp
+ * arithmetic is identical to engine_map_query's box_scan; the only
+ * difference is this writes rather than reads, and touches byte +2
+ * (the alternate-draw flag) rather than the +1/+5 predicate bytes.
+ *
+ * Retail drives the two loops with the engine_path nearest-result
+ * globals (DAT_00569570 col / DAT_00569578 row) as write-only loop
+ * counters — never read afterwards — so we use plain locals and leave
+ * those globals alone, the same choice the box scans and the cell-field
+ * clears make.  No repaint here; the sole caller (FUN_0046dfd5) stamps
+ * a whole key's worth of cells, then marks the screen once. */
+void engine_territory_mark_draw_box(int col, int row, int radius)
+{
+    if (g_cells == NULL) return;
+
+    int side = radius * 2 + 1;
+    int x = col - radius;
+    int y = row - radius;
+
+    /* Clamp the box to [0, 0x40) per axis, shrinking the extent. */
+    int xext, yext;
+    if (x < 0)                  { xext = side + x; x = 0; }
+    else if (x + side > 0x40)   { xext = 0x40 - x; }
+    else                        { xext = side; }
+    if (y < 0)                  { yext = side + y; y = 0; }
+    else if (y + side > 0x40)   { yext = 0x40 - y; }
+    else                        { yext = side; }
+
+    int idx = (y * 0x40 + x) * CELL_STRIDE;
+    for (int r = y; r < y + yext; r++) {
+        for (int c = x; c < x + xext; c++) {
+            g_cells[idx + 2] |= 0x20;       /* DAT_00522f92 */
+            idx += CELL_STRIDE;
+        }
+        idx += (0x40 - xext) * CELL_STRIDE; /* skip to next row's box start */
+    }
+}
+
 int engine_territory_current_slot(void)
 {
     return g_current_slot;

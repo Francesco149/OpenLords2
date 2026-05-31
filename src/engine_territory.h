@@ -74,6 +74,13 @@ void engine_territory_clear_cell_field(uint8_t field);
  * cell, then mark the full screen dirty (if a dirty state is bound). */
 void engine_territory_clear_cell_render_flags(void);
 
+/* Port of FUN_0046e067.  Set bit 0x20 of byte +2 (the alternate-draw
+ * flag clear_cell_render_flags wipes) on every cell of the
+ * (2*radius+1)-square box centred at (col, row), CLAMPED to the 0..63
+ * grid (the box shrinks at the edges rather than being rejected).  No
+ * dirty mark — callers repaint once after a batch of stamps. */
+void engine_territory_mark_draw_box(int col, int row, int radius);
+
 /* Port of FUN_0046da4b.  Rebuild the per-key cell roster (bound via
  * engine_territory_bind_cell_roster) from the overworld grid: index every
  * active feature-cell (+7 key 1..16, +1 bit 0x20 set) into its key row,

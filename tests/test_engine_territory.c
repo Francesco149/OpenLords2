@@ -293,6 +293,78 @@ int test_territory_clear_cell_render_flags_unbound_is_noop(void)
     return 0;
 }
 
+/* ── Alternate-draw box stamp (port of FUN_0046e067) ───────────────── */
+
+/* 1 iff cell (col,row) has bit 0x20 set on byte +2. */
+static int box_marked(int col, int row)
+{
+    return (g_cells[cell_off(col, row) + 2] & 0x20) != 0;
+}
+
+/* A radius-1 box at an interior cell marks exactly the 3×3 neighbourhood
+ * and nothing else; only bit 0x20 of byte +2 is touched. */
+int test_territory_mark_draw_box_interior_3x3(void)
+{
+    cells_fill(0x00);
+    engine_territory_mark_draw_box(20, 30, 1);
+    for (int r = 0; r < CELL_GRID; r++)
+        for (int c = 0; c < CELL_GRID; c++) {
+            int want = (c >= 19 && c <= 21 && r >= 29 && r <= 31);
+            T_ASSERT_EQ_I(box_marked(c, r), want);
+        }
+    return 0;
+}
+
+/* Only bit 0x20 is OR'd in; the rest of byte +2 and every other byte of
+ * each touched cell survives. */
+int test_territory_mark_draw_box_preserves_other_bits(void)
+{
+    cells_fill(0xdf);          /* every bit but 0x20 already set */
+    engine_territory_mark_draw_box(10, 10, 0);   /* radius 0 → single cell */
+    int off = cell_off(10, 10);
+    T_ASSERT_EQ_I(g_cells[off + 2], 0xff);       /* 0xdf | 0x20 */
+    for (int b = 0; b < CELL_STRIDE; b++)
+        if (b != 2)
+            T_ASSERT_EQ_I(g_cells[off + b], 0xdf);
+    return 0;
+}
+
+/* At a corner the box is clamped, not rejected: a radius-2 box at (0,0)
+ * marks only the in-grid quadrant (0..2 × 0..2). */
+int test_territory_mark_draw_box_clamps_at_corner(void)
+{
+    cells_fill(0x00);
+    engine_territory_mark_draw_box(0, 0, 2);
+    for (int r = 0; r < CELL_GRID; r++)
+        for (int c = 0; c < CELL_GRID; c++) {
+            int want = (c <= 2 && r <= 2);
+            T_ASSERT_EQ_I(box_marked(c, r), want);
+        }
+    return 0;
+}
+
+/* At the far edge the box shrinks against the high bound and never writes
+ * past the last column/row (cell 4095 reachable, no overrun). */
+int test_territory_mark_draw_box_clamps_at_far_edge(void)
+{
+    cells_fill(0x00);
+    engine_territory_mark_draw_box(63, 63, 1);
+    for (int r = 0; r < CELL_GRID; r++)
+        for (int c = 0; c < CELL_GRID; c++) {
+            int want = (c >= 62 && r >= 62);
+            T_ASSERT_EQ_I(box_marked(c, r), want);
+        }
+    T_ASSERT_EQ_I(box_marked(63, 63), 1);   /* last cell stamped */
+    return 0;
+}
+
+int test_territory_mark_draw_box_unbound_is_noop(void)
+{
+    engine_territory_bind_cells(NULL);
+    engine_territory_mark_draw_box(10, 10, 3);   /* must not crash */
+    return 0;
+}
+
 /* ── Per-key cell roster rebuild (port of FUN_0046da4b) ─────────────── */
 
 enum { ROSTER_ROWS = 17, ROSTER_NCOL = 20, SCORE_STRIDE = 0x180 };

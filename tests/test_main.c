@@ -1369,6 +1369,11 @@ struct test_case {
     X(territory_clear_cell_render_flags_clears_bit20_byte2) \
     X(territory_clear_cell_render_flags_marks_full_screen) \
     X(territory_clear_cell_render_flags_unbound_is_noop) \
+    X(territory_mark_draw_box_interior_3x3) \
+    X(territory_mark_draw_box_preserves_other_bits) \
+    X(territory_mark_draw_box_clamps_at_corner) \
+    X(territory_mark_draw_box_clamps_at_far_edge) \
+    X(territory_mark_draw_box_unbound_is_noop) \
     X(territory_roster_indexes_active_cells_by_key) \
     X(territory_roster_filters_inactive_cells) \
     X(territory_roster_caps_at_20_and_evicts_overflow) \
