@@ -1019,9 +1019,9 @@ void engine_title_render_setup_mark_tabs_dirty(void)    { g_p7_tabs_dirty = 1; }
  * dirty.  Returns 1 iff the scroll actually moved (the caller raises the
  * demand-redraw flag only then, mirroring retail's per-branch DAT_0057d340).
  *
- * The per-country reload it also runs — stage load 0x4c (FUN_0043eda0),
- * country-data binds (FUN_0046a037 / FUN_00467770), camera reset
- * (FUN_004298c1), and the AI-roster/preview recompute (FUN_004ae5e2 /
+ * The per-country reload it also runs — stage load 0x4c (0x43eda0),
+ * country-data binds (0x46a037 / FUN_00467770), camera reset
+ * (0x4298c1), and the AI-roster/preview recompute (FUN_004ae5e2 /
  * FUN_00433cc1) — is deferred until those subsystems land; the scroll
  * offset, selected id, and dirty flags are faithful, so the visible list
  * scroll + scrollbar thumb track exactly. */

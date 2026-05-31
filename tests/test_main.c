@@ -1453,6 +1453,9 @@ struct test_case {
     X(strat_map_seeds_buckets_and_roster) \
     X(strat_map_clears_counts_and_tables) \
     X(strat_map_unbound_is_noop) \
+    X(setup_overworld_end_to_end) \
+    X(setup_overworld_threads_rng) \
+    X(setup_overworld_all_unbound_is_noop) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \

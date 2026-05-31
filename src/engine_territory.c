@@ -1361,3 +1361,56 @@ void engine_territory_load_strat_map(void)
         }
     }
 }
+
+/* Port of FUN_004676e0 (144 B) — the overworld-grid setup sequence (a direct
+ * FUN_00497ced new-game callee).  Retail body, verbatim order (r2 @0x4676e0):
+ *
+ *   FUN_0046c5b8(1); (2); (4); (0); (5); (3);   // clear cell bytes 0..5
+ *   FUN_00467770(DAT_0053f034);                  // load strategic-map record
+ *   FUN_0046df51();                              // clear render flags
+ *   FUN_0046dbf5();                              // classify feature-border tiles
+ *   FUN_0046dd34();                              // randomise special tiles
+ *   0x46a037(DAT_0053f034);                  // per-country data bind  ← deferred
+ *   FUN_00467ca6();                              // build per-army adjacency
+ *   FUN_00468d4f();                              // set up capital regions
+ *   FUN_00467a36();                              // seed per-army features
+ *   FUN_0046da4b(1);                             // rebuild per-key cell roster
+ *   FUN_004291b3();                              // refresh category-bucket digest
+ *
+ * The six clear_cell_field passes wipe cell bytes 0..5 (note +6/+7 survive),
+ * then load_strat_map writes +1..+4 and +7 — so the cleared-then-loaded order
+ * is what leaves +0/+5/+6 zero around the loaded planes.  The two RNG grid
+ * passes (0x46dbf5/0x46dd34) share retail's global single-LFSR `DAT_00591564`;
+ * the ported pair thread it through `rng` instead, so this orchestrator owns
+ * the seeded state and passes it to both (NULL → both no-op).
+ *
+ * 0x46a037 (the per-country data bind that loads the in-game country map grid
+ * 0x52aff0 + the 128×128 preview 0x569590 from map01.pl8) is **deferred**: it
+ * is pure file IO with no ported consumer yet — the in-game strategic-map arm
+ * that reads 0x52aff0 is unported, and the preview is filled by the separate
+ * page-7 reload path.  The file read is the deferred Win32 seam (io.h); the
+ * load lands when the strategic-map arm forces it.  See game-start.md. */
+void engine_territory_setup_overworld(engine_rng_single_in_t *rng)
+{
+    engine_territory_clear_cell_field(1);
+    engine_territory_clear_cell_field(2);
+    engine_territory_clear_cell_field(4);
+    engine_territory_clear_cell_field(0);
+    engine_territory_clear_cell_field(5);
+    engine_territory_clear_cell_field(3);
+
+    engine_territory_load_strat_map();              /* FUN_00467770(s_slot_0053f034) */
+    engine_territory_clear_cell_render_flags();     /* FUN_0046df51 */
+    engine_territory_classify_feature_tiles(rng);   /* FUN_0046dbf5 */
+    engine_territory_randomise_special_tiles(rng);  /* FUN_0046dd34 */
+
+    /* 0x46a037(s_slot_0053f034) — deferred (see the header comment). */
+
+    engine_territory_build_army_adjacency();        /* FUN_00467ca6 */
+    engine_territory_setup_capitals();              /* FUN_00468d4f */
+    engine_territory_seed_army_features();          /* FUN_00467a36 */
+    engine_territory_rebuild_cell_roster(1);        /* FUN_0046da4b(1) */
+
+    if (g_strat_buckets != NULL)
+        engine_category_buckets_refresh_digest(g_strat_buckets);  /* FUN_004291b3 */
+}

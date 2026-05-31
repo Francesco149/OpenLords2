@@ -2070,3 +2070,76 @@ int test_strat_map_unbound_is_noop(void)
     T_ASSERT_EQ_I(g_cells[cell_off(6, 0) + 7], 0x07);   /* unpack still ran */
     return 0;
 }
+
+/* ─── overworld-grid setup orchestrator (FUN_004676e0) ────────────────── */
+
+/* End-to-end with only the cell grid + record + buckets bound (the army /
+ * terrain / roster passes self-skip): the six clear passes wipe cell bytes
+ * 0..5 (but not +6/+7), load_strat_map then writes +1..+4/+7 and the player
+ * count, and the digest is refreshed from the seeded buckets.  rng = NULL so
+ * the two grid-randomiser passes no-op. */
+int test_setup_overworld_end_to_end(void)
+{
+    map_setup();                       /* cells zeroed + bound, record zeroed, buckets bound */
+    memset(g_cells, 0xff, sizeof g_cells);   /* poison every cell byte */
+    engine_territory_bind_cells(g_cells);
+
+    int lin = 10;                      /* cell (col=10,row=0): a bucket-route feature */
+    rec_plane(lin, 0, 0x40);
+    rec_plane(lin, 4, 0x02);           /* bucket index 2 */
+    rec_plane(lin, 5, 0x07);           /* value 7, also the in-band count */
+
+    engine_territory_setup_overworld(NULL);
+
+    int o = cell_off(10, 0);
+    T_ASSERT_EQ_I(g_cells[o + 0], 0x00);   /* byte 0 cleared by clear_cell_field(0) */
+    T_ASSERT_EQ_I(g_cells[o + 5], 0x00);   /* byte 5 cleared */
+    T_ASSERT_EQ_I(g_cells[o + 6], 0xff);   /* byte 6 never cleared → survives poison */
+    T_ASSERT_EQ_I(g_cells[o + 1], 0x40);   /* plane0 loaded */
+    T_ASSERT_EQ_I(g_cells[o + 7], 0x07);   /* plane5 loaded */
+    T_ASSERT_EQ_U(s_slot_0056d5dc, 7u);    /* player count = max in-band plane5 */
+    T_ASSERT_EQ_I(g_mapbuckets.buckets[1][0], 0x07);   /* bucket 2 seeded by the load */
+    T_ASSERT_EQ_I(g_mapbuckets.digest[1], 0x07);       /* digest refreshed (FUN_004291b3) */
+    return 0;
+}
+
+/* The single-LFSR rng is threaded to the grid passes: with a sentinel tile
+ * and a non-NULL rng the randomiser re-rolls it and advances the state; with
+ * NULL the pass is skipped and the sentinel survives. */
+int test_setup_overworld_threads_rng(void)
+{
+    map_setup();
+    tiles_setup(0x12345);                  /* background the grid passes ignore */
+    *tile_at(3, 3) = TILE_SENTINEL;        /* the one re-rollable tile          */
+
+    const uint32_t seed = 0x34518632u;
+    engine_rng_single_in_t rng = { .state = seed };
+    engine_territory_setup_overworld(&rng);
+    T_ASSERT((uint32_t)*tile_at(3, 3) != (uint32_t)TILE_SENTINEL);   /* re-rolled */
+    T_ASSERT(rng.state != seed);                                     /* advanced  */
+
+    /* NULL rng → randomiser pass skipped, sentinel survives. */
+    tiles_setup(0x12345);
+    *tile_at(3, 3) = TILE_SENTINEL;
+    map_setup();
+    tiles_setup(0x12345);
+    *tile_at(3, 3) = TILE_SENTINEL;
+    engine_territory_setup_overworld(NULL);
+    T_ASSERT_EQ_U((uint32_t)*tile_at(3, 3), (uint32_t)TILE_SENTINEL);
+    return 0;
+}
+
+/* Nothing bound → every pass self-skips, no crash, and the counts the loader
+ * resets are still zeroed. */
+int test_setup_overworld_all_unbound_is_noop(void)
+{
+    engine_territory_bind_cells(NULL);
+    engine_territory_bind_strat_map_record(NULL);
+    engine_territory_bind_category_buckets(NULL);
+    engine_territory_bind_terrain_tiles(NULL);
+    engine_territory_bind_army_records(NULL);
+    s_slot_0056d5dc = 0x33;
+    engine_territory_setup_overworld(NULL);
+    T_ASSERT_EQ_U(s_slot_0056d5dc, 0u);
+    return 0;
+}

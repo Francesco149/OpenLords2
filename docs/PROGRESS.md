@@ -7,6 +7,70 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — GAME-START milestone: overworld-grid setup sequence complete (FUN_004676e0)
+
+Landed the **strategic-map loader** then the **orchestrator** that seats it,
+completing `FUN_004676e0` — the overworld-grid setup sequence and a direct
+callee of the new-game initialiser `FUN_00497ced`.
+
+**`engine_territory_load_strat_map` (FUN_00467770, 525 B).**  The strategic-map
+record → cell-grid unpacker.  Walks all 64×64 cells of a loaded l2_maps.dat
+record, copying its six 0x1000-byte cell-linear planes into cell bytes +1..+4
+(planes 0–3) and +7 (plane 5); recomputes the player/army count
+`s_slot_0056d5dc` as the max plane-5 value in the 0..0x10 player band; and where
+plane 4 is non-zero seeds either a category bucket (plane-0 bit 0x40) or the
+player roster (bit 0x80) — **0x40 wins** when both bits are set.  Up front it
+resets the render rotation offset and both counts, and clears the bucket table +
+roster.  The file read (`io_read_file_at`, offset `map_index*0x80C1` into the
+shared scratch buffer `DAT_004eabec`) is the deferred live Win32 seam — engine
+modules never touch the filesystem (io.h); the host binds a synthetic record, so
+the index-independent unpack is fully tested.  `DAT_004eabec` turns out to be the
+engine's **shared ~200 KB asset scratch buffer** (also vill/smithy/iconvill
+loads, and the global `engine_mp_render` binds as a "menu sprite asset" — same
+reused buffer, not a distinct global).  r2 @0x467770 confirmed the plane strides,
+the cell-byte targets, the `plane5<=0x10 && count<plane5` count rule, and both
+seed calls' cdecl arg order.
+
+**`engine_territory_setup_overworld` (FUN_004676e0, 144 B).**  Sequences the
+eleven callees in retail's exact order (r2 @0x4676e0): six `clear_cell_field`
+passes (1,2,4,0,5,3), `load_strat_map`, `clear_cell_render_flags`,
+`classify_feature_tiles`, `randomise_special_tiles`, **[0x46a037 deferred]**,
+`build_army_adjacency`, `setup_capitals`, `seed_army_features`,
+`rebuild_cell_roster(1)`, `refresh_digest`.  The clear-then-load order is what
+leaves cell bytes +0/+5/+6 zero around the loaded planes.  The orchestrator owns
+the persistent single-LFSR `rng` (retail `DAT_00591564`, seeded 0x34518632 at
+InitInstance) and threads it through the two grid-randomiser passes — exactly the
+hand-off the engine.h single-LFSR note anticipated.  Every pass is NULL-safe on
+its own bound tables.
+
+**One callee deferred, with a reason.**  `FUN_0046a037` (the per-country data
+bind: loads the in-game country map grid `0x52aff0` + the 128×128 preview
+`0x569590` from map01.pl8 via the IO open-probe `FUN_004af767`) is pure file IO
+with **no ported consumer yet** — the in-game strategic-map arm that reads
+`0x52aff0` is unported, and the preview is filled by the separate page-7 reload
+path.  Deferred at its call site (bare-hex `0x46a037`), to land when the
+strategic-map arm forces it — same discipline as the rest of the asset-IO chain.
+
+**Provenance correction.**  `FUN_00467770` and `FUN_0046a037` had been
+false-counted as touched because both tokens sat in a deferred-bind *comment* in
+`engine_title_render.c` (the FUN_-token ledger gotcha).  `FUN_00467770` is now
+genuinely ported; `FUN_0046a037` (and the comment's other two comment-only
+neighbours `0x43eda0` / `0x4298c1`) were debared to bare hex.  Net: the ledger is
+honest again — 398 touched / 362 tested, with `FUN_004676e0` and `FUN_00467770`
+real and the deferred IO trio correctly `unported`.
+
+8 host tests (5 loader: plane→cell copy, in-band-max count, bucket+roster + the
+0x40-wins tie-break, up-front clears, unbound/NULL-bucket no-ops; 3 orchestrator:
+end-to-end clear+load+count+digest, rng threading on/off, all-unbound no-op).
+1437/1437 pass under ASan/UBSan; mingw `.exe` clean under `-Wall -Wextra`;
+`_engine_territory_load_strat_map` + `_engine_territory_setup_overworld` in the
+PE.
+
+**Next.**  `FUN_004676e0` is one of `FUN_00497ced`'s 25 game-init callees; with
+it ported, the unsurveyed/large siblings (`FUN_0049bd99` 3063 B, `FUN_0049aa0e`
+2197 B, `FUN_00451150` 936 B, `FUN_004984dc` 731 B, `FUN_00448440` 261 B) are the
+remaining bulk before the init itself can be assembled.
+
 ## 2026-05-31 — GAME-START chip: per-army feature seeding (FUN_00467a36) — 7/8 of FUN_004676e0
 
 Ported `FUN_00467a36` (624 B) → `engine_territory_seed_army_features` in

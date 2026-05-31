@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **400** (16.3%) — tested 364, ported 36
-- code bytes touched: **16.7%** (140,115 / 838,629 B)
-- unported: **2047**
+- touched: **398** (16.3%) — tested 362, ported 36
+- code bytes touched: **16.6%** (139,048 / 838,629 B)
+- unported: **2049**
 - orphan refs (in src/, not in function table): 4
 
-## tested (364) — ported + host unit suite
+## tested (362) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -167,9 +167,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42847c | FUN_0042847c | 82 | game_init.c, game_init.h |
 | 0x4290d0 | FUN_004290d0 | 131 | engine_category_buckets.c, engine_category_buckets.h, engine_territory.c |
 | 0x429153 | FUN_00429153 | 96 | engine_category_buckets.h, engine_territory.c |
-| 0x4291b3 | FUN_004291b3 | 171 | engine_category_buckets.h |
+| 0x4291b3 | FUN_004291b3 | 171 | engine_category_buckets.h, engine_territory.c |
 | 0x42925e | FUN_0042925e | 81 | engine_category_buckets.c, engine_category_buckets.h |
-| 0x4298c1 | FUN_004298c1 | 604 | engine_title_render.c |
 | 0x429b1d | FUN_00429b1d | 135 | engine.c, engine_camera.c, engine_camera.h |
 | 0x42a15f | FUN_0042a15f | 206 | engine_camera.c, engine_camera.h |
 | 0x42dfe2 | FUN_0042dfe2 | 126 | main.c |
@@ -198,7 +197,6 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43e330 | FUN_0043e330 | 259 | engine.c, engine.h, engine_rate.c (+1) |
 | 0x43e433 | FUN_0043e433 | 218 | engine.h, engine_rate.c |
 | 0x43e50d | FUN_0043e50d | 180 | engine.h, engine_rate.c |
-| 0x43eda0 | FUN_0043eda0 | 637 | engine_title_render.c |
 | 0x43f4b7 | FUN_0043f4b7 | 270 | engine.h, engine_state_hash.c |
 | 0x43ffc3 | FUN_0043ffc3 | 117 | engine_state_hash.c |
 | 0x440089 | FUN_00440089 | 81 | engine_battlefield_render.c |
@@ -240,7 +238,6 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x468d4f | FUN_00468d4f | 274 | engine_territory.c, engine_territory.h |
 | 0x468e61 | FUN_00468e61 | 457 | engine_territory.c, engine_territory.h |
 | 0x46902a | FUN_0046902a | 499 | engine_territory.c, engine_territory.h |
-| 0x46a037 | FUN_0046a037 | 202 | engine_title_render.c |
 | 0x46ac22 | FUN_0046ac22 | 329 | engine_territory.c, engine_territory.h |
 | 0x46c080 | FUN_0046c080 | 199 | engine_territory.c, engine_territory.h |
 | 0x46c147 | FUN_0046c147 | 407 | engine_territory.c, engine_territory.h |
@@ -282,6 +279,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x48ee46 | FUN_0048ee46 | 87 | engine_tile.c, engine_tile.h |
 | 0x4917dd | FUN_004917dd | 599 | engine_tile.c, engine_tile.h, save.c |
 | 0x4921e5 | FUN_004921e5 | 451 | engine_tile.c, engine_tile.h |
+| 0x497ced | FUN_00497ced | 376 | engine_territory.c, engine_territory.h |
 | 0x497e65 | FUN_00497e65 | 1025 | game_init.c, game_init.h |
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h |
 | 0x49a453 | FUN_0049a453 | 302 | save.c, save.h |

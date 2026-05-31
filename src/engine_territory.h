@@ -269,4 +269,25 @@ void engine_territory_bind_category_buckets(engine_category_buckets_state_t *buc
  * bind is optional.  See the .c for the deferred file-read seam. */
 void engine_territory_load_strat_map(void);
 
+/* Port of FUN_004676e0 (144 B) — the overworld-grid setup sequence and a
+ * direct callee of the new-game initialiser FUN_00497ced.  Runs the fixed
+ * new-game pipeline that stands up the overworld cell grid + its terrain
+ * index tables: clear cell bytes 0..5 (six clear_cell_field passes in
+ * retail's 1,2,4,0,5,3 order), load the strategic-map record, clear the
+ * render flags, classify feature-border tiles + randomise the special
+ * tiles (both threading the single-LFSR `rng`), then build the per-army
+ * adjacency, set up capital regions, seed army features, rebuild the cell
+ * roster, and refresh the category-bucket digest.  Each pass is NULL-safe
+ * on its own bound tables, so a partially-bound world simply runs the
+ * passes whose inputs are present.
+ *
+ * `rng` is retail's persistent single-LFSR state `DAT_00591564` (seeded
+ * 0x34518632 at InitInstance, never reset here); the live owner threads
+ * the seeded state through, host tests pass a local.  NULL → the two
+ * RNG-driven grid passes no-op.
+ *
+ * The per-country data bind 0x46a037(`s_slot_0053f034`) is **deferred**
+ * at its call site — see the .c. */
+void engine_territory_setup_overworld(engine_rng_single_in_t *rng);
+
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

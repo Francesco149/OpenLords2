@@ -68,7 +68,7 @@ live sim:
 | FUN_0042847c | 82 | 0 | copy DAT_004d8910 table → DAT_005532a0 strided |
 | FUN_00448440 | 261 | 29 | (unsurveyed — large fan-out) |
 | FUN_00451150 | 936 | 7 | (unsurveyed) |
-| FUN_004676e0 | 144 | 11 | overworld-grid setup sequence — 10/11 callees ported (see below); only FUN_0046a037 (country-data bind) remains |
+| FUN_004676e0 | 144 | 11 | ✅ **ported** — overworld-grid setup sequence (`engine_territory_setup_overworld`); 10/11 callees real, the 11th (0x46a037 country-data bind) deferred at its call site |
 | FUN_0046f1dc/2ae/3cd | — | — | (the trio above) |
 | FUN_0046ff43 | 617 | 0 | leaf seeder (unsurveyed) |
 | FUN_00472ad0 | 16 | 1 | **tested** (already ported) |
@@ -169,7 +169,28 @@ flip lands until the world is populated enough for the map arm.
      FUN_004676e0 leaf — rebuilds the per-key cell roster (save entry 12)
      from the grid, capping 20 cells/key + evicting overflow.  See below.
 
-### FUN_004676e0 — overworld-grid setup sequence (10/11 callees ported)
+### FUN_004676e0 — overworld-grid setup sequence ✅ ported
+
+> **Orchestrator landed (2026-05-31):** `engine_territory_setup_overworld`
+> (`engine_territory.c`) sequences the eleven callees in retail's exact
+> order (r2 @0x4676e0): six `clear_cell_field` passes (1,2,4,0,5,3 — wipe
+> cell bytes 0..5, leaving +6/+7), `load_strat_map`, `clear_cell_render_
+> flags`, `classify_feature_tiles`, `randomise_special_tiles`, **[0x46a037
+> deferred]**, `build_army_adjacency`, `setup_capitals`, `seed_army_
+> features`, `rebuild_cell_roster(1)`, `refresh_digest`.  It owns the
+> persistent single-LFSR `rng` (retail `DAT_00591564`, seeded 0x34518632 at
+> InitInstance) and threads it through the two grid-randomiser passes — the
+> moment the [engine.h note](../../src/engine.h) anticipated ("the live
+> 0x4676e0 then owns the seeded state").  Each pass is NULL-safe on its own
+> tables, so a partially-bound world runs only the passes whose inputs are
+> present.  3 host tests (end-to-end clear+load+count+digest, rng threading
+> on/off, all-unbound no-op).  The one deferred callee, **0x46a037** (the
+> per-country bind that loads the in-game country map grid `0x52aff0` + the
+> 128×128 preview `0x569590` from map01.pl8 via the IO open-probe
+> `0x4af767`), is pure file IO with **no ported consumer yet** — the in-game
+> strategic-map arm that reads `0x52aff0` is unported, and the preview is
+> filled by the separate page-7 reload path — so it (and `0x4af767`) stay
+> deferred until the strategic-map arm forces them.
 
 A 144-B 0x497ced callee that stands up the overworld cell grid + its
 terrain index tables, by calling a fixed sequence of 0x46c*/0x46d* grid
