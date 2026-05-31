@@ -5082,3 +5082,48 @@ with two donors whose order would flip the answer if a break were added.
 > 📍 `src/engine_realm.c` (`engine_realm_migrate_population`).  Ghidra
 > `FUN_0044a6ba` @ 0x44a6ba; r2 `pdf @ 0x44a6ba` confirms the missing break in
 > the +0x48 fill loop and the pass-3 max-contributor scan over the same list.
+
+## 146. Random events aren't independently random per realm — one RNG draw seeds a deterministic walk through a fixed, weighted deck
+
+The per-realm event-onset pass `FUN_00448819`
+(`engine_realm_roll_events`) decides which "random" event, if any, befalls each
+realm this turn.  The mechanism is not a per-realm dice roll.  A single cursor
+is seeded **once** at entry from the cached 7-bit RNG byte (`DAT_0058fd60 * 2`,
+range 0..254) and then walked **one slot forward per realm** through a fixed
+256-entry deck (const table `DAT_004d6108`):
+
+```c
+cursor = rng_7bit * 2;
+for (realm = 1; realm <= count; realm++) {
+    cursor++; if (cursor > 0xff) cursor = 0;
+    if (gates_open && DECK[cursor] != 0) roll DECK[cursor] for this realm;
+}
+```
+
+Two consequences fall straight out of this:
+
+1. **Adjacent realms are correlated, not independent.**  Realm *r* reads deck
+   slot `(2·rng + r) mod 256`.  The entire turn's event assignment is fully
+   determined by one 7-bit number; reordering the realm list would reshuffle
+   who gets what.  Only one RNG value is consumed for the whole pass, no matter
+   how many realms exist.
+
+2. **The deck is sparse and weighted by duplication.**  Of the 256 slots only
+   **26** are non-zero (all at the same +7/+15 column within each 16-byte row),
+   so most cursor positions roll nothing — events are rare by construction.
+   The non-zero slots are not distinct: id `0x8b` appears twice (deck[55],
+   deck[87]) and `0x8a` twice (deck[39], deck[159]), so those events are
+   twice as likely to land as the singletons.  The deck *is* the probability
+   table; there is no separate weighting logic.
+
+The gate that lets any of this fire at all is the era counter
+`DAT_00553edc > 0x4f4` (plus the owner's per-player events-enabled flag), so
+events only begin well into a game.  The drop-in reproduces the deck byte-exact
+and the single-draw walk; a host test
+(`engine_events_scratch_and_gates`) pins the cursor arithmetic by landing a
+chosen realm on a chosen deck slot via the seed.
+
+> 📍 `src/engine_realm_events.c` (`engine_realm_roll_events` + `EVENT_DECK`).
+> Ghidra `FUN_00448819` @ 0x448819; r2 `pdf @ 0x448819` confirms the
+> `mov eax,[0x58fd60]; add eax,eax` cursor seed and the per-realm `inc`/`cmp
+> 0x100` walk; deck dumped via `p8 512 @ 0x4d6108`.

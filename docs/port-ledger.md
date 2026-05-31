@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **447** (18.3%) — tested 411, ported 36
-- code bytes touched: **19.1%** (160,499 / 838,629 B)
-- unported: **2000**
+- touched: **474** (19.4%) — tested 438, ported 36
+- code bytes touched: **19.6%** (164,753 / 838,629 B)
+- unported: **1973**
 - orphan refs (in src/, not in function table): 4
 
-## tested (411) — ported + host unit suite
+## tested (438) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -216,13 +216,40 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4485a5 | FUN_004485a5 | 163 | engine_army_economy.c, engine_army_economy.h |
 | 0x4486a9 | FUN_004486a9 | 256 | engine_ranking.c, engine_ranking.h |
 | 0x4487a9 | FUN_004487a9 | 112 | engine_ranking.c, engine_ranking.h |
+| 0x448819 | FUN_00448819 | 1277 | engine_realm_events.c, engine_realm_events.h |
 | 0x448d16 | FUN_00448d16 | 104 | engine_realm.c, engine_realm.h |
+| 0x448e12 | FUN_00448e12 | 189 | engine_realm_events.c |
+| 0x448ecf | FUN_00448ecf | 80 | engine_realm_events.c |
+| 0x448f1f | FUN_00448f1f | 80 | engine_realm_events.c |
+| 0x448f6f | FUN_00448f6f | 292 | engine_realm_events.c |
+| 0x449093 | FUN_00449093 | 189 | engine_realm_events.c |
+| 0x449150 | FUN_00449150 | 80 | engine_realm_events.c |
+| 0x4491a0 | FUN_004491a0 | 80 | engine_realm_events.c |
+| 0x4491f0 | FUN_004491f0 | 247 | engine_realm_events.c |
+| 0x4492e7 | FUN_004492e7 | 99 | engine_realm_events.c |
+| 0x44934a | FUN_0044934a | 66 | engine_realm_events.c |
+| 0x44938c | FUN_0044938c | 60 | engine_realm_events.c |
+| 0x4493c8 | FUN_004493c8 | 56 | engine_realm_events.c |
+| 0x449400 | FUN_00449400 | 56 | engine_realm_events.c |
+| 0x449438 | FUN_00449438 | 99 | engine_realm_events.c |
+| 0x44949b | FUN_0044949b | 99 | engine_realm_events.c |
+| 0x4494fe | FUN_004494fe | 53 | engine_realm_events.c |
+| 0x449533 | FUN_00449533 | 66 | engine_realm_events.c |
+| 0x449575 | FUN_00449575 | 154 | engine_realm_events.c |
+| 0x44960f | FUN_0044960f | 121 | engine_realm_events.c |
+| 0x449688 | FUN_00449688 | 133 | engine_realm_events.c |
+| 0x44970d | FUN_0044970d | 80 | engine_realm_events.c |
+| 0x44975d | FUN_0044975d | 80 | engine_realm_events.c |
+| 0x4497ad | FUN_004497ad | 121 | engine_realm_events.c |
+| 0x449826 | FUN_00449826 | 99 | engine_realm_events.c |
 | 0x44a6ba | FUN_0044a6ba | 903 | engine_realm.c, engine_realm.h |
 | 0x44baea | FUN_0044baea | 693 | engine_realm.c, engine_realm.h |
 | 0x44bf04 | FUN_0044bf04 | 118 | engine_realm.c, engine_realm.h |
 | 0x44c278 | FUN_0044c278 | 707 | engine_army_economy.c, engine_army_economy.h, game_init.c |
 | 0x44c53b | FUN_0044c53b | 193 | engine_army_economy.c, engine_army_economy.h |
 | 0x44c5fc | FUN_0044c5fc | 200 | engine_army_economy.c, engine_army_economy.h |
+| 0x44c77a | FUN_0044c77a | 139 | engine_realm_events.c |
+| 0x44c80a | FUN_0044c80a | 159 | engine_realm_events.c |
 | 0x44cfe1 | FUN_0044cfe1 | 377 | engine_army_economy.c, engine_army_economy.h |
 | 0x44d15a | FUN_0044d15a | 139 | engine_army_economy.c, engine_army_economy.h |
 | 0x44d1e5 | FUN_0044d1e5 | 156 | engine_army_economy.c, engine_army_economy.h |
@@ -289,7 +316,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46cfbd | FUN_0046cfbd | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |
 | 0x46d130 | FUN_0046d130 | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |
 | 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
-| 0x46d7f4 | FUN_0046d7f4 | 486 | engine_territory.c, engine_territory.h |
+| 0x46d7f4 | FUN_0046d7f4 | 486 | engine_realm_events.h, engine_territory.c, engine_territory.h |
 | 0x46d9da | FUN_0046d9da | 113 | engine_territory.c, engine_territory.h |
 | 0x46da4b | FUN_0046da4b | 426 | engine_territory.c, engine_territory.h |
 | 0x46dbf5 | FUN_0046dbf5 | 319 | engine_territory.c, engine_territory.h |

@@ -1703,6 +1703,12 @@ struct test_case {
     X(engine_realm_history_page_wraps) \
     X(engine_realm_clear_turn_scratch) \
     \
+    X(engine_events_scratch_and_gates) \
+    X(engine_events_commit_resource) \
+    X(engine_events_cancel_and_mode) \
+    X(engine_events_pop_gate_and_clamp) \
+    X(engine_events_territory_claim) \
+    \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \
     X(engine_ranking_score_weights) \

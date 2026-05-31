@@ -7,6 +7,60 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — TURN-ENGINE chip: per-realm random-event ONSET pass (FUN_00448819 + 24 handlers + 2 territory probes) — new engine_realm_events module
+
+Ported the turn-START **random-event onset** pass `FUN_00448819` (1277 B) →
+`engine_realm_roll_events`, plus its **24 per-event handlers** (ids 0x87..0x8e,
+0x12e..0x13d) and **2 territory-probe helpers** (`FUN_0044c77a` /
+`FUN_0044c80a`), as a new module `engine_realm_events.c`.  This is the **first
+sim pass** the turn-advance engine `FUN_00448440` runs after the standings
+snapshot, and the second-largest remaining direct callee.
+
+**Mechanism.**  For every realm `1..s_slot_0056d5dc` the pass (1) unconditionally
+clears four turn-scratch bytes (+0x1fb/+0x1fc/+0x1fd/+0x1a8 — the superset the
+mid-turn reset `FUN_00448d16` re-zeroes later), then (2) walks a cursor through
+a fixed 256-entry event "deck" (const table `DAT_004d6108`, baked verbatim from
+`Lords2.exe`).  An event rolls for a realm only when three gates pass: the
+realm's OWNER has events enabled (`g_player_strategic_352[owner]+0x05`), the era
+counter `s_slot_00553edc` is past 0x4f4, and the deck slot is non-zero.  On a
+hit it marks the realm active (+0x00), stamps the event id (+0x1aa) and runs the
+handler, which either **commits** (a per-realm colour/scratch byte and/or a
+credit/debit to the owner's resource accounts at +0x118/+0x128/+0x130/+0x140,
+optionally a signed morale-stat nudge with clamps) or **cancels** when a
+precondition fails.  Two ids (0x12f/0x136) instead probe the realm's territory
+roster (`g_misc_1360`, 0x50-byte rows of 20 i32 cell offsets) for an eligible
+overworld cell and flip it via the already-ported
+`engine_territory_set_cell_type` (`FUN_0046d7f4`).
+
+**All dependencies were already in place** — the territory-flip routine and its
+score-clear helper were ported in the territory slice, the gate scalars are
+shared save externs (`s_slot_*`), and the realm/player/map/roster blocks are the
+canonical save globals.  The one runtime input — the cached 7-bit RNG byte
+(`DAT_0058fd60`, a file-static in the Win32-only `engine.c`) — is passed in as a
+parameter rather than read directly, since the host test TU doesn't link
+`engine.c`; the `·2`-and-walk cursor logic stays in the port and the orchestrator
+will pass the live value when `0x448440` lands.
+
+**The "random" event is barely random** — see engine-quirks #146.  One RNG draw
+seeds a deterministic per-realm walk through a sparse (26/256 non-zero),
+duplicate-weighted deck, so adjacent realms are correlated and the whole turn's
+assignment is fixed by a single 7-bit number.
+
+5 host tests cover the scratch-clear + both gates + empty-slot no-fire, a
+no-precondition resource commit, the set-then-cancel path (dispatcher stamps the
+id, handler clears it), the population gate + per-mode magnitude + signed
+[0,0x19] clamp (both clamp arms), and the territory-claim commit/cancel against
+a bound cell grid.  **1628/1628** pass under ASan/UBSan; mingw `.exe` clean;
+`_engine_realm_roll_events` in the PE.  r2 @0x448819 confirmed the cursor seed
+(`mov eax,[0x58fd60]; add eax,eax`), the realm `*0x300` stride, the four scratch
+offsets, the owner `*0x160` stride and the `+0x05` events gate byte-for-byte.
+
+**Next.**  Remaining unported direct callees of `FUN_00448440`, in sequence:
+`FUN_00449889` (1253 B, the per-realm mood/standing machine — next), then
+`FUN_0044b59b` (624 B), `FUN_004acbd4`, `FUN_0044bf7a`, `FUN_0044aa41`,
+`FUN_0044ae3c`, `FUN_0044c8ae`, `FUN_0044e852`, and the deferred `FUN_0044bd9f`
+(tax/approval band, wants the 2D-table extraction).
+
 ## 2026-05-31 — TURN-ENGINE chip: per-realm mid-turn scratch reset (FUN_00448d16)
 
 Ported `FUN_00448d16` (104 B) → `engine_realm_clear_turn_scratch` in
