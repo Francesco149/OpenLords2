@@ -971,10 +971,55 @@ the per-realm loop for the human player's key
   10 host tests; see engine-quirks #137 for the unconditional-clamp /
   scratch-global notes.
 
+### FUN_0044e5bb / e7b4 / e603 / e653 — per-army stockpile valuation + budget→units ✅ ported
+
+The bottom of the `FUN_0044df5f` cap-tuning subtree: four tiny pure-arithmetic
+helpers the AI economy uses to value an army/realm's commodity stockpiles and
+convert a gold budget back into purchasable unit counts.  Ported as the new
+module `engine_army_economy.c` (15 host tests), the seed of the economy
+subsystem that `FUN_0044df5f` and its siblings (`0x44e6a3` / `0x44e741`, the
+unported two-commodity variants) will join.
+
+The per-army record row (retail `DAT_0053f9b0`, 0x300 stride) carries three i32
+stock fields the helpers read:
+
+| field | retail DAT | unit price (retail DAT) | default |
+|-------|-----------|-------------------------|--------:|
+| +0x250 | `DAT_0053fc00` (the "load numerator" the density grader also reads) | `DAT_00553f60` | 5 |
+| +0x184 | `DAT_0053fb34` | `DAT_00567594` | 10 |
+| +0x180 | `DAT_0053fb30` | `DAT_0057cb30` | 6 |
+
+- `FUN_0044e5bb` → `engine_army_economy_stock_a_value` — value of stock A
+  (+0x250 × priceA), or 0 if the field is ≤ 0.
+- `FUN_0044e7b4` → `engine_army_economy_stockpile_value` — combined value of all
+  three (each term gated on its field > 0).  Retail **inlines** the stock-A
+  term rather than calling `e5bb`; the port keeps them independent to match.
+- `FUN_0044e603` / `FUN_0044e653` → `engine_army_economy_units_b` / `_c` —
+  `ceil(cost / priceB|C)`, or 0 when `cost ≤ 0`.
+
+Two non-obvious facts worth recording:
+
+- **The three unit prices are not save-schema globals.**  They live in plain
+  `.data` and are set once by the defaults init `FUN_004983b7` (to 5 / 10 / 6 —
+  alongside a dozen other economy tuning scalars).  Since no ported code owns
+  them yet and `FUN_004983b7` is unported, the module owns them as statics
+  seeded with the retail defaults, overridable via
+  `engine_army_economy_set_prices` so the eventual config-init port keeps a
+  single source of truth.
+- **`e603`/`e653` ignore their first (army-key) argument** — retail takes it
+  (the call ABI in `FUN_0044df5f` pushes the key) but never reads it; the
+  divisor is the global price, not a per-army value.  The port keeps the param
+  for 1:1 call-site fidelity and marks it unused.
+
+The direct consumers beyond `FUN_0044df5f` are the AI economy passes
+`FUN_004ace5e` (build/upgrade decision: `e7b4` value vs the territory-record
+treasury at +0x218) and `FUN_004a0aaa`.
+
 **Remaining `FUN_0049bd99` leaves** (bottom-up): the two cap-tuning passes
-interleaved with the allocator (`FUN_0044df5f` / `FUN_004485a5`), each a small
-subtree of its own.  With those, every per-realm callee of `FUN_0049bd99` is
-ported and the setup pass itself can be assembled.
+interleaved with the allocator — `FUN_0044df5f` (now leaf-closer: its four
+valuation/units callees above are ported; still blocked on the budget-split
+`0x44cfe1`) and `0x4485a5`.  With those, every per-realm callee of
+`FUN_0049bd99` is ported and the setup pass itself can be assembled.
 
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
    callees are real; then `FUN_00499dc3` + `FUN_004329ec` spine + the

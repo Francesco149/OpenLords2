@@ -1530,6 +1530,22 @@ struct test_case {
     X(glyph_table_digits_and_punct) \
     X(glyph_table_space_and_unmapped_are_zero) \
     \
+    X(army_economy_stock_a_value_multiplies_by_price) \
+    X(army_economy_stock_a_value_zero_when_nonpositive) \
+    X(army_economy_stock_a_value_ignores_other_fields) \
+    X(army_economy_stock_a_value_keyed_by_row) \
+    X(army_economy_stock_a_value_unbound_is_zero) \
+    X(army_economy_stockpile_value_sums_three_terms) \
+    X(army_economy_stockpile_value_skips_nonpositive_terms) \
+    X(army_economy_stockpile_value_matches_stock_a_when_bc_zero) \
+    X(army_economy_stockpile_value_unbound_is_zero) \
+    X(army_economy_units_b_ceil_divides_by_price) \
+    X(army_economy_units_c_ceil_divides_by_price) \
+    X(army_economy_units_zero_when_cost_nonpositive) \
+    X(army_economy_units_ignore_key_arg) \
+    X(army_economy_units_track_price_override) \
+    X(army_economy_value_tracks_price_override) \
+    \
     X(game_init_clear_tables_zeroes_per_army) \
     X(game_init_clear_tables_zeroes_unit_table) \
     X(game_init_clear_tables_zeroes_territories) \
