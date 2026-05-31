@@ -1679,6 +1679,12 @@ struct test_case {
     X(game_init_seed_army_baseline_fields) \
     X(game_init_seed_army_baseline_tiers_and_parity) \
     \
+    X(engine_realm_rating_rollforward) \
+    X(engine_realm_rating_zero_pop_reset) \
+    X(engine_realm_rating_unowned_nudge_boundary) \
+    X(engine_realm_rating_signed_clamp) \
+    X(engine_realm_rating_average_over_turns) \
+    \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \
     X(engine_ranking_score_weights) \
