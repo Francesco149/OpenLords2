@@ -1445,6 +1445,9 @@ struct test_case {
     X(territory_secondary_under_four_marks_partial) \
     X(territory_secondary_filters) \
     X(territory_secondary_unbound_returns_zero) \
+    X(territory_setup_capitals_end_to_end) \
+    X(territory_setup_capitals_cursor_handoff) \
+    X(territory_setup_capitals_unbound_is_noop) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \

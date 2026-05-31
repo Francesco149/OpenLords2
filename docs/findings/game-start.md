@@ -444,7 +444,7 @@ With `FUN_0046d7f4` ported, `FUN_00467a36`'s subtree is **leaf-complete**
   cutoffs, default-density arm, inactive-cell filtering, per-key-independent
   indices + step-1 tally reset, unbound no-ops).
 
-### FUN_00468d4f — per-army capital-region setup (subtree, in progress)
+### FUN_00468d4f — per-army capital-region setup (subtree complete)
 
 The **last** unported `FUN_004676e0` callee (274 B): a loop over armies
 `1..DAT_0056d5dc` (= `s_slot_0056d5dc`, save entry 77, the player/army
@@ -483,8 +483,39 @@ cell-grid module):
   `+0 == 0`); 1st match gets the 2×2 capital stamp + `+2 bit 0x80` and is the
   return value, the 3rd also gets `+2 bit 0x80`, the 4th seats the cursor
   col/row.  Fewer than 4 eligible cells → returns 0 (cursor untouched).
-- remaining: `FUN_00468c41`, `FUN_00468e61`, `FUN_0046c147` + `FUN_0046902a`,
-  `FUN_00468121`, then the `FUN_00468d4f` orchestrator itself.
+- ✅ **FUN_00468c41** → `engine_territory_collect_keyed_cells` (2026-05-31).
+  Collect the army's claimed cells (`+1 bit 0x10`, `+7 == key`) into the
+  record's `+0x80` i32 cell-list (uncapped, terminator-free — relies on the
+  pre-zeroed region; cell-(0,0) blind spot), copying `+3 → +6` and clearing
+  `+0`.
+- ✅ **FUN_00468e61** → `engine_territory_mark_capital_features` (2026-05-31).
+  For in-capital cells (`+7 == key`, `+2 bits 2..4 == 0xc`), route by the `+3`
+  descriptor into one of three per-army feature slots (`0x1e → +0x2ad`,
+  `0 → +0x2dd` gated on slot-A unset, `0x14 → +0x295`), stamping `+0` type
+  (1/4/0x0a) and `+2 bit 0x80`.
+- ✅ **FUN_0046c147** → `engine_territory_classify_border_neighbour` (2026-05-31).
+  Classify an N/E/S/W neighbour for the port placer: `(nbr +1 & 0xfd)` with
+  an `8↔0x10` remap keyed on the neighbour's `+2` bits; 0 off-grid.  Retail's
+  dead edge read of the neighbour's `+2` dropped → no OOB.
+- ✅ **FUN_0046902a** → `engine_territory_place_capital_port` (2026-05-31).
+  Among empty key cells bordering a same-key coast neighbour, stamp a port
+  (`+0 ← 7`, `+3 ← 0x0a`, `+1 bit 0x80`, `+2 = …&0xe3|0xc|0x80`) at the one
+  closest (Chebyshev) to the capital cursor; record at `+0x2c5/+0x2c8`.
+  Chebyshev = `FUN_00404f4c` inlined, dx/dy globals dropped (no consumer).
+- ✅ **FUN_00468121** → `engine_territory_place_secondary` (2026-05-31).  First
+  four cells (`+7 == key`, `+1 bit 0x80`, `+0 == 0`) get `+6 ← +3` and
+  `+0 ← 0x14`; 1st also `+2 bit 0x80` and seats the cursor on **itself**
+  (vs the capital finder's 4th cell — see quirk #134).
+- ✅ **FUN_00468d4f** → `engine_territory_setup_capitals` (2026-05-31).  The
+  orchestrator above; loops `1..s_slot_0056d5dc` and wires the six passes,
+  stashing capital/secondary offsets + cursor col/rows into `+0x6c..+0x78`.
+  Retail's cursor save/restore around the collect pass is a vestigial
+  identity round-trip (quirk #134) — the port keeps the stash, drops the
+  read-back.
+
+**With this, `FUN_004676e0`'s 11 direct callees are all ported** — the
+overworld-grid setup orchestrator is now itself leaf-complete and is the
+next chip (assemble `FUN_004676e0`, then its caller `FUN_00497ced`).
 
 ### FUN_0046ff43 — strategic movement-cost grid builder
 

@@ -1839,3 +1839,89 @@ int test_territory_secondary_unbound_returns_zero(void)
     T_ASSERT_EQ_I(engine_territory_place_secondary(7), 0);
     return 0;
 }
+
+/* ── Capital-region orchestrator (port of FUN_00468d4f) ─────────────── */
+
+enum { CAP_COL = 0x6c, CAP_ROW = 0x6d, CAP_OFF = 0x70,
+       SEC_COL = 0x74, SEC_ROW = 0x75, SEC_OFF = 0x78 };
+
+/* End-to-end: army 1 gets a capital (4 eligible cells) and a secondary
+ * cluster; the orchestrator stashes both offsets + cursor col/rows into the
+ * army-1 record.  Army 2 has no eligible cells → only +0x70 (=0) is written
+ * and the rest of its row is left alone.  The loop stops at s_slot_0056d5dc,
+ * so army 3 is never touched. */
+int test_territory_setup_capitals_end_to_end(void)
+{
+    adj_setup();
+
+    /* army 1 capital: 4 eligible cells at row 5, cols 5..8 → 4th seats cursor */
+    for (int col = 5; col <= 8; col++) {
+        int o = cell_off(col, 5);
+        g_cells[o + 7] = 1; g_cells[o + 1] |= 0x40; g_cells[o + 0] = 0;
+    }
+    /* army 1 secondary: 4 cells (+1 bit 0x80, +0 == 0) at row 10, cols 10..13 */
+    for (int col = 10; col <= 13; col++) {
+        int o = cell_off(col, 10);
+        g_cells[o + 7] = 1; g_cells[o + 1] |= 0x80; g_cells[o + 0] = 0;
+    }
+    /* sentinel in army 3's capital-offset field — must survive (loop stops at 2) */
+    int32_t sentinel = 0x0badf00d;
+    memcpy(&g_army[3 * ARMY_STRIDE + CAP_OFF], &sentinel, 4);
+
+    s_slot_0056d5dc = 2;
+    engine_territory_setup_capitals();
+
+    /* army 1: capital offset + cursor (the 4th eligible cell, (8,5)) */
+    T_ASSERT_EQ_I(army_i32(1, CAP_OFF), cell_off(5, 5));
+    T_ASSERT_EQ_I(g_army[1 * ARMY_STRIDE + CAP_COL], 8);
+    T_ASSERT_EQ_I(g_army[1 * ARMY_STRIDE + CAP_ROW], 5);
+    /* army 1: secondary offset + cursor (the 1st secondary cell, (10,10)) */
+    T_ASSERT_EQ_I(army_i32(1, SEC_OFF), cell_off(10, 10));
+    T_ASSERT_EQ_I(g_army[1 * ARMY_STRIDE + SEC_COL], 10);
+    T_ASSERT_EQ_I(g_army[1 * ARMY_STRIDE + SEC_ROW], 10);
+
+    /* army 2: no capital → +0x70 == 0, secondary fields untouched (0) */
+    T_ASSERT_EQ_I(army_i32(2, CAP_OFF), 0);
+    T_ASSERT_EQ_I(army_i32(2, SEC_OFF), 0);
+    T_ASSERT_EQ_I(g_army[2 * ARMY_STRIDE + CAP_COL], 0);
+
+    /* army 3: never processed → sentinel intact */
+    T_ASSERT_EQ_U((uint32_t)army_i32(3, CAP_OFF), 0x0badf00d);
+    return 0;
+}
+
+/* The capital cursor (capital finder's 4th cell) survives through the collect/
+ * mark/port passes unchanged, then place_secondary overwrites it — so +0x6c/6d
+ * (capital cursor) and +0x74/75 (secondary cursor) differ. */
+int test_territory_setup_capitals_cursor_handoff(void)
+{
+    adj_setup();
+    for (int col = 5; col <= 8; col++) {       /* capital → cursor (8,5) */
+        int o = cell_off(col, 5);
+        g_cells[o + 7] = 1; g_cells[o + 1] |= 0x40;
+    }
+    int o = cell_off(20, 20);                  /* a single secondary cell → cursor (20,20) */
+    g_cells[o + 7] = 1; g_cells[o + 1] |= 0x80;
+
+    s_slot_0056d5dc = 1;
+    engine_territory_setup_capitals();
+
+    T_ASSERT_EQ_I(g_army[1 * ARMY_STRIDE + CAP_COL], 8);    /* capital cursor */
+    T_ASSERT_EQ_I(g_army[1 * ARMY_STRIDE + CAP_ROW], 5);
+    T_ASSERT_EQ_I(g_army[1 * ARMY_STRIDE + SEC_COL], 20);   /* secondary cursor */
+    T_ASSERT_EQ_I(g_army[1 * ARMY_STRIDE + SEC_ROW], 20);
+    T_ASSERT_EQ_I(army_i32(1, SEC_OFF), 0);                 /* <4 secondary → 0 */
+    return 0;
+}
+
+int test_territory_setup_capitals_unbound_is_noop(void)
+{
+    adj_setup();
+    s_slot_0056d5dc = 1;
+    engine_territory_bind_cells(NULL);
+    engine_territory_setup_capitals();
+    adj_setup();
+    engine_territory_bind_army_records(NULL);
+    engine_territory_setup_capitals();
+    return 0;
+}

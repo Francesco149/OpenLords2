@@ -4700,3 +4700,37 @@ short code snippet.
 
 ---
 -->
+
+## 134. The capital-region orchestrator stashes-then-restores a cursor across a pass that never touches it — a vestigial round-trip
+
+`FUN_00468d4f` (the per-army capital-region setup, the last callee of the
+overworld-grid setup sequence) seats two scratch globals — `DAT_0057c8d0`
+(col) / `DAT_0056846c` (row) — from the capital finder `FUN_00467fd1`,
+then does this dance around the cell-collect pass `FUN_00468c41`:
+
+```
+army[+0x6c] = DAT_0057c8d0;  army[+0x6d] = DAT_0056846c;   // save
+FUN_00468c41(key);                                          // collect
+DAT_0057c8d0 = army[+0x6c];   DAT_0056846c = army[+0x6d];   // restore
+```
+
+But `FUN_00468c41` never writes either cursor global — it touches only
+the army cell-list and per-cell bytes.  So the restore reloads exactly
+the values just saved: a **no-op round-trip**.  It reads like defensive
+programming against a clobber that can't happen (perhaps `FUN_00468c41`
+*used* to use the cursor, or the author wasn't sure).  The save half is
+*not* dead, though — `+0x6c`/`+0x6d` are real record fields the strategic
+AI reads later, so the port keeps the stash write and drops only the
+identity read-back.
+
+A second charm in the same function: the capital cursor it preserves is
+the capital finder's **4th** matching cell, while the sibling secondary
+finder `FUN_00468121` seats the cursor on its **1st** match — the two
+finders disagree on which cell "the cursor" means, and the orchestrator
+faithfully records both (`+0x6c/6d` vs `+0x74/75`).  The capital cursor's
+only live consumer is the port placer `FUN_0046902a`, which uses it as a
+Chebyshev distance origin — so a coastal port is sited nearest the 4th
+castle-candidate cell, not the capital itself.
+
+> 📍 `src/engine_territory.c` (`engine_territory_setup_capitals`),
+> Ghidra `FUN_00468d4f` @ 0x468d4f.

@@ -235,4 +235,13 @@ void engine_territory_place_capital_port(unsigned key);
  * found, else 0.  No-op if the cell grid is unbound. */
 int engine_territory_place_secondary(unsigned key);
 
+/* Port of FUN_00468d4f — the per-army capital-region setup orchestrator (the
+ * last callee of the overworld-grid setup sequence FUN_004676e0).  For each
+ * army 1..s_slot_0056d5dc it places the capital, and (if one was found)
+ * collects the army's cells, marks its feature cells, places its coastal port,
+ * and claims its secondary cluster — stashing the capital/secondary cell
+ * offsets and cursor col/row into the army record row (+0x6c..+0x78).  Needs
+ * the cell grid and army-record block bound. */
+void engine_territory_setup_capitals(void);
+
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

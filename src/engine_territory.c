@@ -1202,3 +1202,61 @@ int engine_territory_place_secondary(unsigned key)
     }
     return 0;
 }
+
+/* Per-army result fields the 0x468d4f orchestrator writes (retail DAT_0053fa1c
+ * … fa28 = g_per_army_768 + these offsets). */
+#define ARMY_CAP_COL  0x6c   /* DAT_0053fa1c — capital cursor col (byte)     */
+#define ARMY_CAP_ROW  0x6d   /* DAT_0053fa1d — capital cursor row (byte)     */
+#define ARMY_CAP_OFF  0x70   /* DAT_0053fa20 — capital cell byte-offset (i32)*/
+#define ARMY_SEC_COL  0x74   /* DAT_0053fa24 — secondary cursor col (byte)   */
+#define ARMY_SEC_ROW  0x75   /* DAT_0053fa25 — secondary cursor row (byte)   */
+#define ARMY_SEC_OFF  0x78   /* DAT_0053fa28 — secondary cell byte-offset(i32)*/
+
+/* Port of FUN_00468d4f (274 B) — the per-army capital-region setup
+ * orchestrator, and the last unported callee of the overworld-grid setup
+ * sequence FUN_004676e0.  For each army 1..s_slot_0056d5dc (retail
+ * DAT_0056d5dc, save entry 77 — the player/army count):
+ *
+ *   cap = place_capital(key);  row[+0x70] = cap;       // FUN_00467fd1
+ *   if (cap != 0) {
+ *       row[+0x6c] = cursor_col;  row[+0x6d] = cursor_row;   // capital cursor
+ *       collect_keyed_cells(key);                            // FUN_00468c41
+ *       mark_capital_features(key);                          // FUN_00468e61
+ *       place_capital_port(key);                             // FUN_0046902a
+ *       row[+0x78] = place_secondary(key);                   // FUN_00468121
+ *       row[+0x74] = cursor_col;  row[+0x75] = cursor_row;   // secondary cursor
+ *   }
+ *
+ * Retail re-reads the capital cursor back out of +0x6c/+0x6d into the cursor
+ * globals right after collect_keyed_cells; since collect leaves the cursor
+ * untouched (it never writes DAT_0057c8d0/0056846c), that restore is an
+ * identity, so the port keeps the stash write and drops the no-op read-back.
+ * The capital cursor (the capital finder's 4th cell) thus survives as the
+ * port placer's distance origin, exactly as in retail.
+ *
+ * No-op if the cell grid or the army-record block is unbound. */
+void engine_territory_setup_capitals(void)
+{
+    if (g_cells == NULL || g_army_records == NULL) return;
+
+    int count = (int)s_slot_0056d5dc;
+    for (int key = 1; key <= count; key++) {
+        uint8_t *rowbase = g_army_records + (unsigned)key * ARMY_ROW_STRIDE;
+
+        int cap_off = engine_territory_place_capital((unsigned)key);   /* FUN_00467fd1 */
+        *(int32_t *)(rowbase + ARMY_CAP_OFF) = cap_off;
+        if (cap_off == 0) continue;
+
+        rowbase[ARMY_CAP_COL] = (uint8_t)g_cursor_col;   /* DAT_0057c8d0 */
+        rowbase[ARMY_CAP_ROW] = (uint8_t)g_cursor_row;   /* DAT_0056846c */
+
+        engine_territory_collect_keyed_cells((unsigned)key);     /* FUN_00468c41 */
+        engine_territory_mark_capital_features((unsigned)key);   /* FUN_00468e61 */
+        engine_territory_place_capital_port((unsigned)key);      /* FUN_0046902a */
+
+        int sec_off = engine_territory_place_secondary((unsigned)key);   /* FUN_00468121 */
+        *(int32_t *)(rowbase + ARMY_SEC_OFF) = sec_off;
+        rowbase[ARMY_SEC_COL] = (uint8_t)g_cursor_col;
+        rowbase[ARMY_SEC_ROW] = (uint8_t)g_cursor_row;
+    }
+}
