@@ -1088,7 +1088,7 @@ then five sub-passes over the same per-army record block:
 
 | sub-pass | size | role (provisional) |
 |----------|-----:|--------------------|
-| `0x44c278` | 707 | storage/supply distribution over the 20 settlement-cell slots (argmax + spill) |
+| `0x44c278` | 707 | **storage/supply distribution** over the 20 settlement-cell slots (argmax + spill) (ported below) |
 | `0x44d374` | 665 | **production-level planner** (ported below) |
 | `0x44dd4d` | 530 | mix optimiser scanning `0x44da99` outputs for a target balance |
 | `0x44f318` ×4 | 897 | per-commodity (indices 1/3/0/2) production/price passes |
@@ -1178,10 +1178,44 @@ feed-count and picks an intensity level by profitability.  Ported as
 Commodity/category semantics are provisional; the arithmetic is ported verbatim
 (every expected test value was cross-checked against a Python transcription).
 
-**Remaining `FUN_004485a5` leaves**: `0x44c278` (+ `0x44c53b` / `0x44c5fc`) and
-the four `0x44f318` commodity passes (+ `0x44ef4e` / `0x44f15b` / `0x44f248`).
-Once both land, `0x4485a5` and then the last `FUN_0049bd99` leaf `0x4a9a9a`
-unblock the setup pass.
+### FUN_0044c278 — storage/supply distribution ✅ ported
+
+The `0x4485a5` branch that spreads a realm's per-turn supply budget (record
+`+0xdc`) across its **developed feature-cells**, working from the fullest.
+Ported as `engine_army_economy_distribute_stock(key)` + its two argmax helpers
+`engine_army_economy_seed_fullest_cell` (FUN_0044c5fc) /
+`engine_army_economy_pick_fullest_cell` (FUN_0044c53b), 10 host tests.
+
+A cell is **developed** iff its per-key roster entry (retail `DAT_0053ea00`, the
+roster `engine_territory_rebuild_cell_roster` fills) is non-zero **and** the
+cell-grid type byte (`DAT_00522f90`) it points at is `> 0x18` (settlement-tier).
+Each developed cell's current fill 0..800 lives in the per-army record's i16 AI
+score sub-view at `+0x90` (`DAT_0053fa40`).  The two new globals are bound via
+`engine_army_economy_bind_cell_roster` / `_bind_cells` (read-only here).
+
+Shape:
+
+- **`seed_fullest_cell` (c5fc)** writes the argmax-fill developed slot into
+  `+0x210`, defaulting to **99** when the realm has no developed cell — the
+  sentinel that gates the rest of `distribute_stock`.
+- **`distribute_stock` (c278)** sums each developed cell's capped headroom
+  `min(800 − fill, 200)` into `+0xe4`, clears a selection sentinel `+0xe0` to −1
+  and the overflow/turns fields, then — only if a developed cell exists — re-finds
+  the fullest via **`pick_fullest_cell` (c53b)** (default **0**; a redundant
+  recompute, see below), greedily walks the cell ring from the fullest depositing
+  the budget ≤200 per cell, and counts how many cells **top out at the 800 cap**
+  into `+0x20c` (their overflow is carried back into the running budget; the fills
+  are never written back — only the count is produced).  Finally it stores a
+  fill-time estimate `ceil(headroom_top / min(budget, 200))` into `+0x214`.
+- **Return value** is a tangle of `key*0x100` / `headroom_top` / the turns
+  quotient that the lone caller `0x4485a5` discards; ported faithfully anyway.
+
+See engine-quirks #142 for the redundant c5fc→c53b recompute and the discarded
+return value.
+
+**Remaining `FUN_004485a5` leaves**: the four `0x44f318` commodity passes (+
+`0x44ef4e` / `0x44f15b` / `0x44f248`).  Once they land, `0x4485a5` and then the
+last `FUN_0049bd99` leaf `0x4a9a9a` unblock the setup pass.
 
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
    callees are real; then `FUN_00499dc3` + `FUN_004329ec` spine + the

@@ -1605,6 +1605,16 @@ struct test_case {
     X(army_economy_select_gate_off) \
     X(army_economy_select_keyed_by_row) \
     X(army_economy_select_unbound_noop) \
+    X(army_economy_seed_fullest_cell_argmax) \
+    X(army_economy_seed_fullest_cell_default_99) \
+    X(army_economy_pick_fullest_cell_default_0) \
+    X(army_economy_distribute_no_developed_cells) \
+    X(army_economy_distribute_basic) \
+    X(army_economy_distribute_single_cell_ceil) \
+    X(army_economy_distribute_overflow_count) \
+    X(army_economy_distribute_zero_budget) \
+    X(army_economy_distribute_keyed_by_row) \
+    X(army_economy_distribute_unbound_noop) \
     \
     X(game_init_clear_tables_zeroes_per_army) \
     X(game_init_clear_tables_zeroes_unit_table) \

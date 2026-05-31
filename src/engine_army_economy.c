@@ -84,7 +84,20 @@
 #define ARMY_EVAL_REVENUE    0x268  /* DAT_0053fc18 — final revenue */
 #define ARMY_EVAL_COST       0x26c  /* DAT_0053fc1c — final cost */
 
+/* Fields the storage/supply distribution FUN_0044c278 (+ FUN_0044c53b/c5fc) use.
+ * The fill levels live in the i16 AI score sub-view at +0x90 (DAT_0053fa40). */
+#define ARMY_SCORE_TABLE     0x90   /* DAT_0053fa40 — i16[20] developed-cell fill 0..800 */
+#define ARMY_DIST_BUDGET     0xdc   /* DAT_0053fa8c — supply budget to distribute */
+#define ARMY_DIST_SEL        0xe0   /* DAT_0053fa90 — selection sentinel, always -1 here */
+#define ARMY_DIST_HEADROOM   0xe4   /* DAT_0053fa94 — summed capped headroom */
+#define ARMY_DIST_OVERFLOW   0x20c  /* DAT_0053fbbc — count of cells topped out at 800 */
+#define ARMY_DIST_TOPIDX     0x210  /* DAT_0053fbc0 — fullest developed-cell slot index */
+#define ARMY_DIST_TURNS      0x214  /* DAT_0053fbc4 — turns to fill the fullest cell */
+#define ROSTER_ROW_I32       20     /* DAT_0053ea00 row stride (0x50 B / 4) */
+
 static uint8_t *g_army_records;
+static const int32_t *g_cell_roster;   /* DAT_0053ea00 — 17 rows × 20 i32 */
+static const uint8_t *g_cells;         /* DAT_00522f90 — cell descriptor grid */
 
 /* Retail 0x4983b7 defaults: A=5 (DAT_00553f60), B=10 (DAT_00567594),
  * C=6 (DAT_0057cb30). */
@@ -690,4 +703,142 @@ void engine_army_economy_select_candidate(int key, int phase)
     *(int32_t *)(row + ARMY_EVAL_NET)     = (g_eval_revenue - g_eval_cost) - buy_b;
     *(int32_t *)(row + ARMY_EVAL_SEL)     = selected;
     *(int32_t *)(row + ARMY_EVAL_MAXLVL)  = max_level;
+}
+
+/* --------------------------------------------------------------------- *
+ *  Storage/supply distribution — the 0x44c278 branch of 0x4485a5.
+ *
+ *  Spreads a realm's per-turn supply budget (+0xdc) across its developed
+ *  feature-cells, working outward from the fullest.  A cell is "developed" iff
+ *  its roster entry (DAT_0053ea00) is non-zero AND the cell-grid type byte it
+ *  indexes (DAT_00522f90) is > 0x18; its current fill 0..800 is the i16 in the
+ *  AI score sub-view at +0x90 (DAT_0053fa40).  The pass does not mutate the
+ *  fills — it only derives the headroom sum, overflow count, and fill-time
+ *  estimate the rest of the economy planner reads.  Commodity semantics of the
+ *  budget/fill are provisional.
+ * --------------------------------------------------------------------- */
+
+void engine_army_economy_bind_cell_roster(const int32_t *roster)
+{
+    g_cell_roster = roster;
+}
+
+void engine_army_economy_bind_cells(const uint8_t *cells)
+{
+    g_cells = cells;
+}
+
+/* A realm slot is a developed feature-cell iff its roster offset is non-zero and
+ * the cell-grid type byte at that offset exceeds 0x18 (settlement-tier). */
+static int dist_developed(int key, int slot)
+{
+    int32_t off = g_cell_roster[key * ROSTER_ROW_I32 + slot];
+    return off != 0 && g_cells[off] > 0x18;
+}
+
+/* Current fill 0..800 of a slot, read from the per-army i16 score sub-view. */
+static int dist_fill(const uint8_t *row, int slot)
+{
+    return *(const int16_t *)(row + ARMY_SCORE_TABLE + slot * 2);
+}
+
+/* FUN_0044c5fc — fullest developed slot, default 99 (the no-cell gate sentinel). */
+void engine_army_economy_seed_fullest_cell(int key)
+{
+    if (g_army_records == NULL || g_cell_roster == NULL || g_cells == NULL) return;
+
+    uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+
+    int best = -1, sel = 99;
+    for (int slot = 0; slot < 20; slot++) {
+        if (!dist_developed(key, slot)) continue;
+        int fill = dist_fill(row, slot);
+        if (best < fill) { best = fill; sel = slot; }
+    }
+    *(int32_t *)(row + ARMY_DIST_TOPIDX) = sel;
+}
+
+/* FUN_0044c53b — fullest developed slot, default 0 (written up front, then the
+ * argmax overwrites it incrementally). */
+void engine_army_economy_pick_fullest_cell(int key)
+{
+    if (g_army_records == NULL || g_cell_roster == NULL || g_cells == NULL) return;
+
+    uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+
+    *(int32_t *)(row + ARMY_DIST_TOPIDX) = 0;
+    int best = -1;
+    for (int slot = 0; slot < 20; slot++) {
+        if (!dist_developed(key, slot)) continue;
+        int fill = dist_fill(row, slot);
+        if (best < fill) { best = fill; *(int32_t *)(row + ARMY_DIST_TOPIDX) = slot; }
+    }
+}
+
+/* FUN_0044c278 — the distribution pass.  Return value is discarded by the lone
+ * caller (0x4485a5); ported faithfully regardless. */
+int engine_army_economy_distribute_stock(int key)
+{
+    if (g_army_records == NULL || g_cell_roster == NULL || g_cells == NULL) return 0;
+
+    uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+
+    engine_army_economy_seed_fullest_cell(key);
+
+    /* Summed headroom across developed cells, each capped at 200/turn. */
+    int headroom_sum = 0;
+    for (int slot = 0; slot < 20; slot++) {
+        if (!dist_developed(key, slot)) continue;
+        int h = 800 - dist_fill(row, slot);
+        if (h > 200) h = 200;
+        headroom_sum += h;
+    }
+
+    *(int32_t *)(row + ARMY_DIST_SEL)      = -1;
+    *(int32_t *)(row + ARMY_DIST_HEADROOM) = headroom_sum;
+    *(int32_t *)(row + ARMY_DIST_OVERFLOW) = 0;
+    *(int32_t *)(row + ARMY_DIST_TURNS)    = 0;
+
+    int ret = key * 0x100;
+
+    if (*(int32_t *)(row + ARMY_DIST_TOPIDX) < 99) {
+        engine_army_economy_pick_fullest_cell(key);
+
+        /* Greedily deposit the budget ≤200 at a time around the cell ring from
+         * the fullest, counting how many cells top out at the 800 cap (their
+         * overflow is carried back into the running budget).  Fills are NOT
+         * written back — only the overflow count is produced. */
+        int remaining = *(int32_t *)(row + ARMY_DIST_BUDGET);
+        int idx = *(int32_t *)(row + ARMY_DIST_TOPIDX);
+        for (int step = 0; step < 20; step++) {
+            if (dist_developed(key, idx)) {
+                int deposited;
+                if (remaining < 0xc9) { deposited = dist_fill(row, idx) + remaining; remaining = 0; }
+                else                  { deposited = dist_fill(row, idx) + 200; remaining -= 200; }
+                if (deposited > 799) {
+                    remaining += deposited - 800;
+                    *(int32_t *)(row + ARMY_DIST_OVERFLOW) += 1;
+                }
+                if (remaining < 1) break;
+            }
+            idx++;
+            if (idx > 0x13) idx = 0;
+        }
+
+        /* Turns to fill the fullest cell at ≤200/turn from the full budget. */
+        remaining = *(int32_t *)(row + ARMY_DIST_BUDGET);
+        int headroom_top = 800 - dist_fill(row, *(int32_t *)(row + ARMY_DIST_TOPIDX));
+        ret = headroom_top;
+        if (remaining > 0) {
+            if (remaining > 200) remaining = 200;
+            *(int32_t *)(row + ARMY_DIST_TURNS) = headroom_top / remaining;
+            int rem = headroom_top % remaining;
+            ret = headroom_top / remaining;
+            if (rem != 0) {
+                ret = key * 0x100;
+                *(int32_t *)(row + ARMY_DIST_TURNS) += 1;
+            }
+        }
+    }
+    return ret;
 }

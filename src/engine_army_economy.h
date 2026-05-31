@@ -200,4 +200,51 @@ void engine_army_economy_eval_candidate(int key, int budget, int level,
  * army-record block is unbound. */
 void engine_army_economy_select_candidate(int key, int phase);
 
+/* ──────────────────────────────────────────────────────────────────
+ * Storage/supply distribution — the 0x44c278 branch of 0x4485a5.
+ *
+ * Distributes a realm's per-turn supply budget (record +0xdc) across its up-to-
+ * 20 developed feature-cells, working from the fullest.  A cell is "developed"
+ * iff its roster entry (retail DAT_0053ea00, the same per-key cell roster
+ * engine_territory_rebuild_cell_roster fills) is non-zero AND the cell-grid type
+ * byte it points at (retail DAT_00522f90) is > 0x18.  Each cell's current fill
+ * 0..800 lives in the per-army record's i16 score sub-view at +0x90 (retail
+ * DAT_0053fa40, the AI score table).
+ *
+ * These three need the cell roster and cell grid bound in addition to the army
+ * records (bind below).  Commodity semantics of the budget/fill are provisional.
+ * ────────────────────────────────────────────────────────────────── */
+
+/* Bind the per-key cell roster (retail DAT_0053ea00 = save entry 12, 17 rows ×
+ * 20 i32) and the 64×64×8 cell descriptor grid (retail DAT_00522f90).  The same
+ * memory engine_territory binds; this module reads both read-only to test the
+ * "developed feature-cell" predicate.  NULL on either → the three functions
+ * below are no-ops. */
+void engine_army_economy_bind_cell_roster(const int32_t *roster);
+void engine_army_economy_bind_cells(const uint8_t *cells);
+
+/* Port of FUN_0044c5fc (200 B).  Record the realm's fullest developed-cell slot
+ * index (argmax of the +0x90 fill) into +0x210, or 99 when the realm has no
+ * developed cell.  The 99 sentinel is what gates the distribution in
+ * engine_army_economy_distribute_stock.  No-op when the army records / roster /
+ * cell grid are unbound. */
+void engine_army_economy_seed_fullest_cell(int key);
+
+/* Port of FUN_0044c53b (193 B).  As engine_army_economy_seed_fullest_cell but
+ * the no-developed-cell default is 0, not 99.  Re-run inside distribute_stock
+ * once the 99-gate has already proven a developed cell exists (so the default
+ * never bites) — a faithful redundant recompute; see engine-quirks. */
+void engine_army_economy_pick_fullest_cell(int key);
+
+/* Port of FUN_0044c278 (707 B).  Plan the realm's supply distribution: seed the
+ * fullest developed cell (+0x210), sum each developed cell's capped headroom
+ * min(800 − fill, 200) into +0xe4, then — when a developed cell exists — greedily
+ * walk the cells from the fullest, depositing the budget (+0xdc) ≤ 200 per cell
+ * and counting how many top out at the 800 cap into +0x20c, and finally store a
+ * turns-to-fill-the-fullest estimate ceil(headroom_top / min(budget, 200)) into
+ * +0x214.  Also clears a selection sentinel +0xe0 to −1.  Returns an int the
+ * lone caller (0x4485a5) discards; ported faithfully anyway.  No-op (returns 0)
+ * when the army records / roster / cell grid are unbound. */
+int engine_army_economy_distribute_stock(int key);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_ECONOMY_H */

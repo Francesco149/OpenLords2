@@ -4944,3 +4944,30 @@ fill ratio.)
 
 > 📍 `src/engine_army_economy.c` (`engine_army_economy_plan_secondary`).  Ghidra
 > `FUN_00450e46` @ 0x450e46; dead call to `FUN_00404dc1` @ 0x404dc1.
+
+## 142. The supply-distribution pass finds the same fullest cell twice, and returns a value nobody reads
+
+The storage/supply distribution `FUN_0044c278`
+(`engine_army_economy_distribute_stock`) opens by calling `FUN_0044c5fc`
+(`seed_fullest_cell`), which writes the argmax-fill developed-cell slot into the
+record's `+0x210`, defaulting to **99** when the realm has no developed cell.
+The `99` is then used as the gate: `if (*(+0x210) < 99)`.  Inside that gate the
+pass immediately calls `FUN_0044c53b` (`pick_fullest_cell`), which does the
+**exact same argmax scan** over the same cells and the same `+0x90` fills, the
+only difference being its no-developed-cell default of **0** instead of 99.  But
+the gate has already proven a developed cell exists, so that default can never
+bite — the second scan provably reproduces the first.  The two functions are
+otherwise byte-for-byte the same loop; they exist as a separate gate-default vs
+body-default pair purely so the `99` sentinel can do double duty as "no cells".
+The port keeps both calls (the recompute is free and faithful).
+
+On top of that, `FUN_0044c278` builds an `int` return value through three
+branches — `key*0x100`, the fullest cell's headroom, or the turns quotient —
+and its only caller `FUN_004485a5` discards it (the call is a bare statement).
+So the function's entire return path is dead; only its record-field side effects
+(`+0xe0/+0xe4/+0x20c/+0x210/+0x214`) matter.  Ported verbatim regardless.
+
+> 📍 `src/engine_army_economy.c` (`engine_army_economy_distribute_stock` /
+> `_seed_fullest_cell` / `_pick_fullest_cell`).  Ghidra `FUN_0044c278` @
+> 0x44c278, `FUN_0044c5fc` @ 0x44c5fc, `FUN_0044c53b` @ 0x44c53b; caller
+> `FUN_004485a5` @ 0x4485a5.

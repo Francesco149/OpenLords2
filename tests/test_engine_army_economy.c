@@ -1039,3 +1039,179 @@ int test_army_economy_select_unbound_noop(void)
     engine_army_economy_select_candidate(2, 0);
     return 0;
 }
+
+/* --------------------------------------------------------------------- *
+ *  Storage/supply distribution — FUN_0044c278 / c53b / c5fc.
+ *  Expected values cross-checked against a Python transcription of the
+ *  decompile (truncating C division throughout).
+ * --------------------------------------------------------------------- */
+
+enum {
+    SCORE_TABLE   = 0x90,
+    DIST_BUDGET   = 0xdc,
+    DIST_SEL      = 0xe0,
+    DIST_HEADROOM = 0xe4,
+    DIST_OVERFLOW = 0x20c,
+    DIST_TOPIDX   = 0x210,
+    DIST_TURNS    = 0x214,
+};
+
+static int32_t g_roster[17 * 20];
+static uint8_t g_cellgrid[64 * 64 * 8];
+
+static void dist_reset(void)
+{
+    army_reset();
+    memset(g_roster, 0, sizeof g_roster);
+    memset(g_cellgrid, 0, sizeof g_cellgrid);
+    engine_army_economy_bind_cell_roster(g_roster);
+    engine_army_economy_bind_cells(g_cellgrid);
+}
+
+/* Place a cell in realm `key`'s roster slot.  `developed` picks a cell-grid
+ * type byte above (25) or below (5) the 0x18 settlement-tier threshold; `fill`
+ * is written into the i16 score sub-view.  The roster offset is unique and
+ * non-zero so empty slots (offset 0) stay distinct. */
+static void set_cell(int key, int slot, int developed, int fill)
+{
+    int off = (key * 20 + slot + 1) * 8;
+    g_roster[key * 20 + slot] = off;
+    g_cellgrid[off] = developed ? 25 : 5;
+    *(int16_t *)(g_army + key * ARMY_STRIDE + SCORE_TABLE + slot * 2) = (int16_t)fill;
+}
+
+int test_army_economy_seed_fullest_cell_argmax(void)
+{
+    dist_reset();
+    set_cell(2, 2, 1, 100);
+    set_cell(2, 5, 1, 600);
+    set_cell(2, 9, 1, 300);
+    engine_army_economy_seed_fullest_cell(2);
+    T_ASSERT_EQ_I(rec_i32(2, DIST_TOPIDX), 5);
+    return 0;
+}
+
+int test_army_economy_seed_fullest_cell_default_99(void)
+{
+    dist_reset();
+    set_cell(2, 3, 0, 700);   /* present but undeveloped → ignored */
+    engine_army_economy_seed_fullest_cell(2);
+    T_ASSERT_EQ_I(rec_i32(2, DIST_TOPIDX), 99);
+    return 0;
+}
+
+int test_army_economy_pick_fullest_cell_default_0(void)
+{
+    dist_reset();
+    set_cell(2, 3, 0, 700);   /* undeveloped */
+    set_byte(2, 0, 0);
+    *(int32_t *)(g_army + 2 * ARMY_STRIDE + DIST_TOPIDX) = 17;  /* dirty */
+    engine_army_economy_pick_fullest_cell(2);
+    T_ASSERT_EQ_I(rec_i32(2, DIST_TOPIDX), 0);
+    return 0;
+}
+
+int test_army_economy_distribute_no_developed_cells(void)
+{
+    dist_reset();
+    set_stock(2, DIST_BUDGET, 500);
+    int ret = engine_army_economy_distribute_stock(2);
+
+    T_ASSERT_EQ_I(rec_i32(2, DIST_TOPIDX), 99);
+    T_ASSERT_EQ_I(rec_i32(2, DIST_HEADROOM), 0);
+    T_ASSERT_EQ_I(rec_i32(2, DIST_OVERFLOW), 0);
+    T_ASSERT_EQ_I(rec_i32(2, DIST_TURNS), 0);
+    T_ASSERT_EQ_I(rec_i32(2, DIST_SEL), -1);
+    T_ASSERT_EQ_I(ret, 2 * 0x100);    /* key*0x100 */
+    return 0;
+}
+
+int test_army_economy_distribute_basic(void)
+{
+    dist_reset();
+    set_cell(2, 2, 1, 100);
+    set_cell(2, 5, 1, 600);
+    set_cell(2, 9, 1, 300);
+    set_stock(2, DIST_BUDGET, 500);
+    int ret = engine_army_economy_distribute_stock(2);
+
+    T_ASSERT_EQ_I(rec_i32(2, DIST_TOPIDX), 5);
+    T_ASSERT_EQ_I(rec_i32(2, DIST_HEADROOM), 600);  /* 200+200+200 */
+    T_ASSERT_EQ_I(rec_i32(2, DIST_OVERFLOW), 1);
+    T_ASSERT_EQ_I(rec_i32(2, DIST_TURNS), 1);
+    T_ASSERT_EQ_I(rec_i32(2, DIST_SEL), -1);
+    T_ASSERT_EQ_I(ret, 1);
+    return 0;
+}
+
+int test_army_economy_distribute_single_cell_ceil(void)
+{
+    dist_reset();
+    set_cell(2, 4, 1, 700);
+    set_stock(2, DIST_BUDGET, 50);
+    int ret = engine_army_economy_distribute_stock(2);
+
+    T_ASSERT_EQ_I(rec_i32(2, DIST_TOPIDX), 4);
+    T_ASSERT_EQ_I(rec_i32(2, DIST_HEADROOM), 100);  /* 800-700 */
+    T_ASSERT_EQ_I(rec_i32(2, DIST_TURNS), 2);       /* ceil(100/50) */
+    T_ASSERT_EQ_I(ret, 2);
+    return 0;
+}
+
+int test_army_economy_distribute_overflow_count(void)
+{
+    dist_reset();
+    set_cell(2, 0, 1, 750);
+    set_cell(2, 1, 1, 790);
+    set_cell(2, 2, 1, 760);
+    set_stock(2, DIST_BUDGET, 1000);
+    int ret = engine_army_economy_distribute_stock(2);
+
+    T_ASSERT_EQ_I(rec_i32(2, DIST_TOPIDX), 1);       /* fill 790 fullest */
+    T_ASSERT_EQ_I(rec_i32(2, DIST_OVERFLOW), 3);     /* all three top out */
+    T_ASSERT_EQ_I(rec_i32(2, DIST_TURNS), 1);        /* ceil((800-790)/200)=1 */
+    T_ASSERT_EQ_I(ret, 2 * 0x100);                   /* remainder != 0 → key*0x100 */
+    return 0;
+}
+
+int test_army_economy_distribute_zero_budget(void)
+{
+    dist_reset();
+    set_cell(2, 3, 1, 200);
+    set_stock(2, DIST_BUDGET, 0);
+    int ret = engine_army_economy_distribute_stock(2);
+
+    T_ASSERT_EQ_I(rec_i32(2, DIST_TOPIDX), 3);
+    T_ASSERT_EQ_I(rec_i32(2, DIST_HEADROOM), 200);
+    T_ASSERT_EQ_I(rec_i32(2, DIST_TURNS), 0);        /* budget 0 → turns untouched */
+    T_ASSERT_EQ_I(ret, 600);                          /* headroom_top = 800-200 */
+    return 0;
+}
+
+int test_army_economy_distribute_keyed_by_row(void)
+{
+    dist_reset();
+    set_cell(4, 5, 1, 600);
+    set_stock(4, DIST_BUDGET, 500);
+    engine_army_economy_distribute_stock(4);
+
+    T_ASSERT_EQ_I(rec_i32(4, DIST_TOPIDX), 5);
+    T_ASSERT_EQ_I(rec_i32(3, DIST_HEADROOM), 0);   /* neighbour rows untouched */
+    T_ASSERT_EQ_I(rec_i32(5, DIST_HEADROOM), 0);
+    return 0;
+}
+
+int test_army_economy_distribute_unbound_noop(void)
+{
+    dist_reset();
+    engine_army_economy_bind_cell_roster(NULL);
+    T_ASSERT_EQ_I(engine_army_economy_distribute_stock(2), 0);
+
+    dist_reset();
+    engine_army_economy_bind_cells(NULL);
+    T_ASSERT_EQ_I(engine_army_economy_distribute_stock(2), 0);
+
+    engine_army_economy_bind_army_records(NULL);
+    T_ASSERT_EQ_I(engine_army_economy_distribute_stock(2), 0);
+    return 0;
+}
