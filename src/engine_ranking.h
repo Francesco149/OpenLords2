@@ -53,4 +53,17 @@
  * pure given those globals + `evq`. */
 void engine_ranking_recompute(engine_event_queue_state_t *evq);
 
+/* Recompute one player's cashflow total (strategic record +0x138) as the
+ * sum of its six i32 category sub-accounts (+0x140..+0x154).  Shared by
+ * the per-turn snapshot below and the income/upkeep accumulators.
+ *   FUN_004487a9 @ 0x4487a9. */
+void engine_ranking_recompute_player_total(int player);
+
+/* Per-turn pass (first in the turn-advance sequence): for player slots
+ * 1..5, roll five summary metrics into their previous-turn companions
+ * (+0x04) for the standings/graph trend display, then resync each
+ * player's cashflow total from its category breakdown.
+ *   FUN_004486a9 @ 0x4486a9. */
+void engine_ranking_snapshot_player_metrics(void);
+
 #endif /* OPENLORDS2_ENGINE_RANKING_H */

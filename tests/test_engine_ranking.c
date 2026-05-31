@@ -38,6 +38,13 @@
 #define F_VICTORY  0xed
 #define F_M_118    0x118
 #define F_VICT_ROT 0x159
+/* per-turn summary metrics (current; previous-turn companion = current+4) */
+#define F_M_120    0x120
+#define F_M_128    0x128
+#define F_M_130    0x130
+#define F_TOTAL    0x138
+#define F_CAT0     0x140
+#define F_PREV     0x04
 
 static void clear_world(void)
 {
@@ -261,5 +268,63 @@ int test_engine_ranking_no_event_multiplayer(void)
 
     T_ASSERT_EQ_I(evq.write_idx, 0);
     T_ASSERT_EQ_I(evq.notify_flag, 0);
+    return 0;
+}
+
+/* --- FUN_004487a9: total = Σ of the six category sub-accounts, the
+ * stale prior total is overwritten. */
+int test_engine_ranking_recompute_player_total(void)
+{
+    clear_world();
+    for (int j = 0; j < 6; j++)
+        REC_I32(2, F_CAT0 + j * 4) = (j + 1) * 100;   /* 100+...+600 = 2100 */
+    REC_I32(2, F_TOTAL) = 999999;                     /* stale, must be replaced */
+
+    engine_ranking_recompute_player_total(2);
+
+    T_ASSERT_EQ_I(REC_I32(2, F_TOTAL), 2100);
+    return 0;
+}
+
+/* --- FUN_004486a9: each summary metric rolls into its +4 companion and
+ * the total resyncs from categories.  The +0x138→+0x13c copy precedes
+ * the recompute, so the companion holds last turn's total (555), not the
+ * fresh category sum (60). */
+int test_engine_ranking_snapshot_player_metrics(void)
+{
+    clear_world();
+    REC_I32(3, F_M_118) = 11;
+    REC_I32(3, F_M_120) = 22;
+    REC_I32(3, F_M_128) = 33;
+    REC_I32(3, F_M_130) = 44;
+    REC_I32(3, F_TOTAL) = 555;                       /* old total */
+    for (int j = 0; j < 6; j++) REC_I32(3, F_CAT0 + j * 4) = 10;  /* sum 60 */
+
+    engine_ranking_snapshot_player_metrics();
+
+    T_ASSERT_EQ_I(REC_I32(3, F_M_118 + F_PREV), 11);
+    T_ASSERT_EQ_I(REC_I32(3, F_M_120 + F_PREV), 22);
+    T_ASSERT_EQ_I(REC_I32(3, F_M_128 + F_PREV), 33);
+    T_ASSERT_EQ_I(REC_I32(3, F_M_130 + F_PREV), 44);
+    T_ASSERT_EQ_I(REC_I32(3, F_TOTAL + F_PREV), 555);   /* old total, not 60 */
+    T_ASSERT_EQ_I(REC_I32(3, F_TOTAL), 60);             /* resynced from categories */
+    T_ASSERT_EQ_I(REC_I32(3, F_M_118), 11);             /* current itself unchanged */
+    return 0;
+}
+
+/* --- FUN_004486a9 has no active-slot filter: all of slots 1..5 roll
+ * unconditionally, and slot 0 (loop starts at 1) is left untouched. */
+int test_engine_ranking_snapshot_all_slots_no_filter(void)
+{
+    clear_world();
+    for (int p = 0; p <= 5; p++)
+        for (int j = 0; j < 6; j++) REC_I32(p, F_CAT0 + j * 4) = 1;  /* sum 6 */
+    REC_I32(0, F_TOTAL) = 12345;                     /* slot 0 sentinel */
+
+    engine_ranking_snapshot_player_metrics();
+
+    for (int p = 1; p <= 5; p++)
+        T_ASSERT_EQ_I(REC_I32(p, F_TOTAL), 6);       /* every slot rolled, no filter */
+    T_ASSERT_EQ_I(REC_I32(0, F_TOTAL), 12345);       /* slot 0 untouched */
     return 0;
 }

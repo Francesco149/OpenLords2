@@ -5,7 +5,7 @@
 The unported, non-thunk engine functions already **called by ported code** — the natural next chips. A **leaf** has all of its
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
-- frontier functions: **294**
+- frontier functions: **293**
 - of those, zero-dependency **leaves: 105** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
@@ -256,7 +256,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x43bf07 | 827 | 1 | 3 |  |
 | 0x43ce1a | 1263 | 1 | 10 |  |
 
-### sim dispatch + records (17)
+### sim dispatch + records (16)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
@@ -265,7 +265,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x448545 | 96 | 1 | 1 |  |
 | 0x448d16 | 104 | 1 | 0 | ✓ |
 | 0x448d7e | 148 | 1 | 0 | ✓ |
-| 0x4486a9 | 256 | 1 | 1 |  |
 | 0x44bd9f | 357 | 1 | 0 | ✓ |
 | 0x4407e5 | 426 | 1 | 1 |  |
 | 0x4477e7 | 503 | 1 | 0 | ✓ |

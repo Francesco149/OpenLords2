@@ -7,6 +7,46 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — TURN-ENGINE chip: per-player summary-metric snapshot (FUN_004486a9 + shared total helper FUN_004487a9)
+
+Ported the **first** sim pass of the turn-advance engine `FUN_00448440`:
+`FUN_004486a9` (256 B) → `engine_ranking_snapshot_player_metrics`, plus its
+callee `FUN_004487a9` (112 B) → `engine_ranking_recompute_player_total`, both in
+`engine_ranking.c` (the module that already maps the `g_player_strategic_352`
+record, stride 0x160, including the `F_M_118` ranking metric).
+
+Per turn, over player slots **1..5 (no active-slot filter)**, the pass rolls
+five i32 summary metrics into their previous-turn companion at `+0x04`
+(`0x118→0x11c`, `0x138→0x13c`, `0x120→0x124`, `0x128→0x12c`, `0x130→0x134`) —
+the last-turn values the standings / graph screens plot as trend — then resyncs
+each player's **cashflow total** (`+0x138`) from its six i32 category
+sub-accounts (`+0x140..+0x154`).  Order matters and is preserved verbatim: the
+`+0x138 → +0x13c` copy runs *before* the recompute, so the companion keeps last
+turn's total, not this turn's fresh category sum.
+
+**`FUN_004487a9` is a shared helper, not a private inline.**  `axt`/grep show
+**four** callers: the snapshot here, the per-category income-credit accumulator
+(retail 0x448…, `param_3 == 0xb/0xc/0xd/0xe` → add to `+0x144/0x140/0x148/0x154`),
+the upkeep-deduction pass (`FUN_004a9eb1`, subtracts then resyncs), and one more
+econ site (0x44…).  So it landed as a public, named function the other three can
+reference when ported, with a comment recording the cashflow-breakdown role of
+the `+0x140` array.  r2 @0x4486a9 confirmed the `11·32 = 0x160` stride index math
+and that Ghidra's decompile is byte-faithful.
+
+3 host tests: the total-helper sum (stale prior total overwritten), the snapshot
+roll (each metric → companion, and the `+0x13c` companion holds the *old* total
+555 not the fresh 60 — pins the copy-before-recompute order), and the
+no-filter/slot-0-untouched boundary (all of 1..5 roll regardless of active flag;
+slot 0 left alone).  **1622/1622** pass under ASan/UBSan; mingw `.exe` clean;
+both `_engine_ranking_snapshot_player_metrics` and
+`_engine_ranking_recompute_player_total` in the PE.
+
+**Next.**  Remaining unported direct callees of `FUN_00448440`, in sequence:
+`FUN_00448819` (1277 B), `FUN_00449889` (1253 B), `FUN_0044b59b` (624 B),
+`FUN_004acbd4`, `FUN_0044bf7a`, `FUN_0044aa41`, `FUN_0044ae3c`, `FUN_0044c8ae`,
+`FUN_0044e852`, and the deferred `FUN_0044bd9f` (tax/approval band, wants the
+2D-table extraction).
+
 ## 2026-05-31 — TURN-ENGINE chip: realm stat-history recorder (FUN_004ae7dd) + entry-10 identity resolved
 
 Ported `FUN_004ae7dd` (204 B) → `engine_realm_record_history` in

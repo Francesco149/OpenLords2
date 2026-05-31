@@ -4,15 +4,15 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 408,
+  "tested": 410,
   "ported": 36,
-  "unported": 2003,
+  "unported": 2001,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 444,
-  "pct_touched": 18.1,
-  "pct_tested": 16.7,
+  "touched": 446,
+  "pct_touched": 18.2,
+  "pct_tested": 16.8,
   "bytes_total": 838629,
-  "bytes_touched": 160027,
+  "bytes_touched": 160395,
   "pct_bytes_touched": 19.1
  },
  "orphan_refs": [
@@ -9450,16 +9450,22 @@
    "name": "FUN_004486a9",
    "size": 256,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ranking.c",
+    "src/engine_ranking.h"
+   ]
   },
   {
    "va": "0x4487a9",
    "name": "FUN_004487a9",
    "size": 112,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ranking.c",
+    "src/engine_ranking.h"
+   ]
   },
   {
    "va": "0x448819",

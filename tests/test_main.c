@@ -1712,6 +1712,9 @@ struct test_case {
     X(engine_ranking_victory_rot_wrap) \
     X(engine_ranking_victory_event_human) \
     X(engine_ranking_no_event_multiplayer) \
+    X(engine_ranking_recompute_player_total) \
+    X(engine_ranking_snapshot_player_metrics) \
+    X(engine_ranking_snapshot_all_slots_no_filter) \
     X(io_path_chdir_base_roundtrip) \
     X(io_path_set_base_seam) \
     X(io_path_chdir_base_failure) \

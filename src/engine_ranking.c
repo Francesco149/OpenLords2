@@ -40,12 +40,66 @@
 #define F_M_118       0x118  /* metric (i32):  leader→0053e97c, score band */
 #define F_VICT_ROT    0x159  /* rotating 0..3 counter for the victory msg  */
 
+/* --- per-turn economic-summary metrics (same record) -----------------
+ * Five i32 summary stats, each kept with a previous-turn companion at
+ * +0x04 for the standings/graph trend display, plus the player's
+ * cashflow total (+0x138 = sum of the six category sub-accounts at
+ * +0x140..+0x154).  Maintained by the snapshot pass below; the total is
+ * also resynced by the income/upkeep accumulators (see the helper). */
+#define F_M_120       0x120  /* summary metric (i32),  prev at +0x124     */
+#define F_M_128       0x128  /* summary metric (i32),  prev at +0x12c     */
+#define F_M_130       0x130  /* summary metric (i32),  prev at +0x134     */
+#define F_TOTAL       0x138  /* cashflow total (i32) = Σ F_CAT0[0..5]     */
+#define F_CAT0        0x140  /* first of six i32 category sub-accounts    */
+#define F_PREV        0x04   /* previous-turn companion = current + 4     */
+
 /* Leaderboard board s_slot_00565410[48] = 6 × {i32 slot, i32 score}. */
 #define BOARD_SLOT(i)   (*(int32_t *)&s_slot_00565410[(i) * 8 + 0])
 #define BOARD_SCORE(i)  (*(int32_t *)&s_slot_00565410[(i) * 8 + 4])
 
 static int32_t  rec_i32(int p, int off) { return *(int32_t *)&REC(p)[off]; }
 static void     rec_set_i32(int p, int off, int32_t v) { *(int32_t *)&REC(p)[off] = v; }
+
+/* Recompute one player's cashflow total (record +0x138) as the sum of
+ * its six i32 category sub-accounts (record +0x140..+0x154).
+ *
+ *   FUN_004487a9 @ 0x4487a9 (112 B)
+ *
+ * Shared helper: besides the per-turn snapshot below, the per-category
+ * income-credit accumulator (retail 0x448...) and the upkeep-deduction
+ * pass (retail 0x4a9eb1) call it to resync the total after touching
+ * a sub-account. */
+void engine_ranking_recompute_player_total(int player)
+{
+    int32_t total = 0;
+    for (int j = 0; j < 6; j++)
+        total += rec_i32(player, F_CAT0 + j * 4);
+    rec_set_i32(player, F_TOTAL, total);
+}
+
+/* Per-turn maintenance over player slots 1..5: roll each of five summary
+ * metrics into its previous-turn companion (+0x04) for the standings /
+ * graph trend display, then resync the cashflow total from its category
+ * breakdown.
+ *
+ *   FUN_004486a9 @ 0x4486a9 (256 B)
+ *
+ * Runs first in the turn-advance sequence (retail 0x448440), before
+ * the per-realm economy passes repopulate the category sub-accounts.  No
+ * active-slot filter — all five slots roll unconditionally.  The
+ * +0x138 → +0x13c copy must precede the recompute so the companion keeps
+ * last turn's total, not this turn's fresh sum. */
+void engine_ranking_snapshot_player_metrics(void)
+{
+    for (int p = 1; p < 6; p++) {
+        rec_set_i32(p, F_M_118 + F_PREV, rec_i32(p, F_M_118));
+        rec_set_i32(p, F_TOTAL + F_PREV, rec_i32(p, F_TOTAL));
+        rec_set_i32(p, F_M_120 + F_PREV, rec_i32(p, F_M_120));
+        rec_set_i32(p, F_M_128 + F_PREV, rec_i32(p, F_M_128));
+        rec_set_i32(p, F_M_130 + F_PREV, rec_i32(p, F_M_130));
+        engine_ranking_recompute_player_total(p);
+    }
+}
 
 void engine_ranking_recompute(engine_event_queue_state_t *evq)
 {
