@@ -805,3 +805,124 @@ int test_engine_realm_mood_standings_disabled(void)
     T_ASSERT_EQ_U(AREC(3)[0x21b], 3);
     return 0;
 }
+
+/* ─── engine_realm_accrue_income (FUN_0044b59b) + owner tally (FUN_0044b99a) ─ */
+
+/* The owner tally sums each owned realm's +0x16 byte into the player's
+ * strategic +0x28, clearing it first and ignoring realms owned by others. */
+int test_engine_realm_owner_tally(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0056d5dc = 3;
+    AREC(1)[0x05] = 1; AREC(1)[0x16] = 10;
+    AREC(2)[0x05] = 2; AREC(2)[0x16] = 99;   /* other owner → ignored */
+    AREC(3)[0x05] = 1; AREC(3)[0x16] = 7;
+    PREC(1)[0x28] = 0x55;                    /* dirty: must be cleared first */
+
+    engine_realm_recompute_owner_tally(1);
+
+    T_ASSERT_EQ_U(PREC(1)[0x28], 17);        /* 10 + 7 */
+    return 0;
+}
+
+/* Income for an owned realm: rate by band, scaled by population then the tax
+ * setting (+0xb9), stored in +0xbc and credited to the owner's three accounts.
+ * pop 1000, band 3 (rate 640) → percent_of(1000,640)=6400; tax 50 →
+ * percent_of(6400,50)=3200. */
+int test_engine_realm_accrue_income_owned(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0056d5dc = 1;
+    uint8_t *r = AREC(1);
+    r[0x05] = 1;                 /* owned by player 1 */
+    AI32(r, 0x24) = 1000;        /* population        */
+    r[0x1c0] = 3;                /* standing band 3   */
+    r[0xb9]  = 50;               /* tax setting 50%   */
+
+    engine_realm_accrue_income();
+
+    T_ASSERT_EQ_I(AI32(r, 0xbc), 3200);          /* computed income */
+    T_ASSERT_EQ_I(AI32(PREC(1), 0x118), 3200);   /* treasury  */
+    T_ASSERT_EQ_I(AI32(PREC(1), 0xf4), 3200);    /* cashflow  */
+    T_ASSERT_EQ_I(AI32(PREC(1), 0xf8), 3200);
+    /* rate-adjust byte: (5 - 50) + tally(0) = -45 */
+    T_ASSERT_EQ_I((int8_t)r[0x0e], -45);
+    return 0;
+}
+
+/* An unowned realm (owner 0) accrues into its own pool +0x1f4 instead of any
+ * player treasury, and its rate-adjust byte folds in player 0's tally. */
+int test_engine_realm_accrue_income_unowned(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0056d5dc = 1;
+    uint8_t *r = AREC(1);
+    r[0x05] = 0;                 /* unowned */
+    AI32(r, 0x24) = 1000;
+    r[0x1c0] = 5;                /* band 5 → rate 800 */
+    r[0xb9]  = 100;              /* 100% tax setting   */
+    AI32(r, 0x1f4) = 200;        /* pre-existing pool  */
+
+    engine_realm_accrue_income();
+
+    /* percent_of(1000,800)=8000; percent_of(8000,100)=8000 */
+    T_ASSERT_EQ_I(AI32(r, 0xbc), 8000);
+    T_ASSERT_EQ_I(AI32(r, 0x1f4), 8200);   /* 200 + 8000 */
+    return 0;
+}
+
+/* The +0x1a8 turn-scratch flag (set e.g. by event 0x13b) forces this turn's
+ * rate — and therefore the income — to zero regardless of band/population. */
+int test_engine_realm_accrue_income_scratch_zeroes(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0056d5dc = 1;
+    uint8_t *r = AREC(1);
+    r[0x05] = 1; AI32(r, 0x24) = 1000; r[0x1c0] = 3; r[0xb9] = 50;
+    r[0x1a8] = 100;              /* income suppressed */
+
+    engine_realm_accrue_income();
+
+    T_ASSERT_EQ_I(AI32(r, 0xbc), 0);
+    T_ASSERT_EQ_I(AI32(PREC(1), 0x118), 0);
+    return 0;
+}
+
+/* The effective band is capped by +0x1c1 only when the +0x1c3 gate is set:
+ * gate set + cap 1 < band 5 → rate uses band 1 (480) not band 5 (800);
+ * gate set + cap 0 → band forced to 0 (rate 320). */
+int test_engine_realm_accrue_income_band_cap(void)
+{
+    /* gate set, cap 1 caps band 5 → band 1, rate 480 */
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0056d5dc = 1;
+    uint8_t *r = AREC(1);
+    r[0x05] = 1; AI32(r, 0x24) = 1000; r[0xb9] = 100;
+    r[0x1c0] = 5; r[0x1c1] = 1; r[0x1c3] = 1;
+    engine_realm_accrue_income();
+    T_ASSERT_EQ_I(AI32(r, 0xbc), 4800);          /* percent_of(1000,480) */
+
+    /* gate set, cap 0 → band 0, rate 320 */
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    r = AREC(1);
+    r[0x05] = 1; AI32(r, 0x24) = 1000; r[0xb9] = 100;
+    r[0x1c0] = 5; r[0x1c1] = 0; r[0x1c3] = 1;
+    engine_realm_accrue_income();
+    T_ASSERT_EQ_I(AI32(r, 0xbc), 3200);          /* percent_of(1000,320) */
+
+    /* gate clear → cap ignored, band 5 stands (rate 800) */
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    r = AREC(1);
+    r[0x05] = 1; AI32(r, 0x24) = 1000; r[0xb9] = 100;
+    r[0x1c0] = 5; r[0x1c1] = 1; r[0x1c3] = 0;
+    engine_realm_accrue_income();
+    T_ASSERT_EQ_I(AI32(r, 0xbc), 8000);          /* percent_of(1000,800) */
+    return 0;
+}

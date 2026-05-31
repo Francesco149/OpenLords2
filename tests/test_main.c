@@ -1713,6 +1713,11 @@ struct test_case {
     X(engine_realm_mood_marker_without_notify) \
     X(engine_realm_mood_clears_old_markers) \
     X(engine_realm_mood_standings_disabled) \
+    X(engine_realm_owner_tally) \
+    X(engine_realm_accrue_income_owned) \
+    X(engine_realm_accrue_income_unowned) \
+    X(engine_realm_accrue_income_scratch_zeroes) \
+    X(engine_realm_accrue_income_band_cap) \
     \
     X(engine_events_scratch_and_gates) \
     X(engine_events_commit_resource) \

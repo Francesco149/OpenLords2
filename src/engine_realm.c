@@ -476,3 +476,80 @@ void engine_realm_update_mood(uint32_t rng_7bit_b, uint32_t rng_7bit_a,
             ARMY_REC(key)[0x21b] = 3;
     }
 }
+
+/* Port of FUN_0044b99a — recompute a player's owned-realm tally.  Clears the
+ * player's strategic +0x28 byte, then sums every realm's +0x16 byte over the
+ * realms that player owns (army +0x05 == player).  The byte tally feeds the
+ * per-realm tax-rate adjustment in engine_realm_accrue_income.  Shared with
+ * the (unported) sibling 0x44b80b.  Field semantics (+0x16 / +0x28)
+ * provisional; widths (both bytes) match the decompile. */
+void engine_realm_recompute_owner_tally(int player)
+{
+    uint8_t *s = STRAT_REC(player);
+    s[0x28] = 0;
+    for (int key = 1; key <= (int)s_slot_0056d5dc; key++) {
+        uint8_t *r = ARMY_REC(key);
+        if (r[0x05] == (uint8_t)player)
+            s[0x28] = (uint8_t)(s[0x28] + r[0x16]);
+    }
+}
+
+/* Port of FUN_0044b59b — the per-realm tax-income pass (a turn-advance pass of
+ * 0x448440, run right after the mood machine).  For every realm 1..count it
+ * recomputes the owner's realm tally, derives a per-capita tax rate from the
+ * realm's standing band, scales it by population and the realm's tax setting,
+ * and credits the resulting income to the owner's treasury accounts (or, for
+ * an unowned realm, to a per-realm pool).  See engine_realm.h for the field
+ * overview. */
+void engine_realm_accrue_income(void)
+{
+    for (int key = 1; key <= (int)s_slot_0056d5dc; key++) {
+        uint8_t *r = ARMY_REC(key);
+        int owner = r[0x05];
+
+        engine_realm_recompute_owner_tally(owner);
+
+        /* Effective standing band (+0x1c0), optionally capped by +0x1c1 when
+         * the +0x1c3 gate is set. */
+        uint8_t band = r[0x1c0];
+        uint8_t cap  = r[0x1c1];
+        if (r[0x1c3] != 0) {
+            if (cap == 0)        band = 0;
+            else if (cap < band) band = cap;
+        }
+
+        /* Per-capita tax rate by band — unless the realm's +0x1a8 turn-scratch
+         * is set (e.g. by event 0x13b), which zeroes income this turn. */
+        int rate;
+        if (r[0x1a8] == 0) {
+            switch (band) {
+            case 1:  rate = 0x1e0; break;   /* 480 */
+            case 2:  rate = 0x230; break;   /* 560 */
+            case 3:  rate = 0x280; break;   /* 640 */
+            case 4:  rate = 0x2d0; break;   /* 720 */
+            case 5:  rate = 800;   break;
+            default: rate = 0x140; break;   /* 320 (band 0 / out of range) */
+            }
+        } else {
+            rate = 0;
+        }
+
+        /* income = pop · rate% · taxsetting%  (two percent_of stages). */
+        int income = engine_math_percent_of(*(int32_t *)(r + 0x24), rate);
+        income = engine_math_percent_of(income, r[0xb9]);
+        *(int32_t *)(r + 0xbc) = income;
+
+        /* Per-realm rate adjustment byte: (5 − taxsetting) + owner tally. */
+        r[0x0e] = (uint8_t)(5 - (int8_t)r[0xb9]);
+        r[0x0e] = (uint8_t)((int8_t)STRAT_REC(owner)[0x28] + (int8_t)r[0x0e]);
+
+        if (owner == 0) {
+            *(int32_t *)(r + 0x1f4) += income;
+        } else {
+            uint8_t *s = STRAT_REC(owner);
+            *(int32_t *)(s + 0x118) += income;
+            *(int32_t *)(s + 0x0f4) += income;
+            *(int32_t *)(s + 0x0f8) += income;
+        }
+    }
+}

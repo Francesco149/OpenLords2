@@ -173,4 +173,45 @@ void engine_realm_clear_turn_scratch(void);
 void engine_realm_update_mood(uint32_t rng_7bit_b, uint32_t rng_7bit_a,
                               engine_event_queue_state_t *evq);
 
+/* Port of FUN_0044b99a @ 0x44b99a (155 B, __cdecl void) — recompute a player's
+ * owned-realm tally.  Clears the player's strategic +0x28 byte, then sums every
+ * realm's +0x16 byte over the realms owned by that player (army +0x05).  The
+ * tally feeds the per-realm tax-rate adjustment in engine_realm_accrue_income;
+ * it is also called by the (unported) sibling 0x44b80b, so it is exposed rather
+ * than kept static.  Touches only g_player_strategic_352 / g_per_army_768;
+ * field semantics (+0x16 source, +0x28 target) are provisional, byte widths
+ * match the decompile. */
+void engine_realm_recompute_owner_tally(int player);
+
+/* Port of FUN_0044b59b @ 0x44b59b (624 B, __cdecl void) — the per-realm
+ * tax-income pass, a turn-advance pass of 0x448440 run right after the mood
+ * machine (FUN_00449889).  For every realm 1..s_slot_0056d5dc:
+ *
+ *   1. Recompute the owning player's realm tally (engine_realm_recompute_owner_
+ *      tally, FUN_0044b99a).
+ *
+ *   2. Pick the effective standing band: army +0x1c0, but when the +0x1c3 gate
+ *      is set it is capped by +0x1c1 (→ 0 if that cap is 0, else min(band, cap)).
+ *
+ *   3. Map the band to a per-capita tax rate (1→480, 2→560, 3→640, 4→720,
+ *      5→800, else 320 basis points) — unless the realm's +0x1a8 turn-scratch
+ *      byte is set (an event such as 0x13b sets it), which forces the rate to 0
+ *      and so zeroes the realm's income this turn.
+ *
+ *   4. income = percent_of(population +0x24, rate) then percent_of(that, the
+ *      realm's tax setting +0xb9); store it in +0xbc.
+ *
+ *   5. Write the per-realm rate-adjustment byte +0x0e = (5 − taxsetting) +
+ *      the owner's tally (+0x28), as signed-byte arithmetic.
+ *
+ *   6. Credit the income: an unowned realm (owner 0) accrues into its own pool
+ *      +0x1f4; an owned realm credits the owner's three treasury/cashflow
+ *      accounts +0x118, +0xf4 and +0xf8.
+ *
+ * Touches only the shared save blocks (g_per_army_768, g_player_strategic_352)
+ * and the army count; uses engine_math_percent_of (0x404d6b).  No new globals.
+ * Field semantics (standing band / tax setting / treasury accounts) are
+ * provisional; offsets r2-verified against the 0x300 / 0x160 strides. */
+void engine_realm_accrue_income(void);
+
 #endif /* OPENLORDS2_ENGINE_REALM_H */

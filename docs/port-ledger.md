@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **478** (19.5%) — tested 442, ported 36
-- code bytes touched: **19.9%** (166,683 / 838,629 B)
-- unported: **1969**
+- touched: **480** (19.6%) — tested 444, ported 36
+- code bytes touched: **20.0%** (167,462 / 838,629 B)
+- unported: **1967**
 - orphan refs (in src/, not in function table): 4
 
-## tested (442) — ported + host unit suite
+## tested (444) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -245,6 +245,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x449889 | FUN_00449889 | 1253 | engine_realm.c, engine_realm.h |
 | 0x449d6e | FUN_00449d6e | 354 | engine_realm.c, engine_realm.h |
 | 0x44a6ba | FUN_0044a6ba | 903 | engine_realm.c, engine_realm.h |
+| 0x44b59b | FUN_0044b59b | 624 | engine_realm.c, engine_realm.h |
+| 0x44b99a | FUN_0044b99a | 155 | engine_realm.c, engine_realm.h |
 | 0x44baea | FUN_0044baea | 693 | engine_realm.c, engine_realm.h |
 | 0x44bf04 | FUN_0044bf04 | 118 | engine_realm.c, engine_realm.h |
 | 0x44c278 | FUN_0044c278 | 707 | engine_army_economy.c, engine_army_economy.h, game_init.c |
