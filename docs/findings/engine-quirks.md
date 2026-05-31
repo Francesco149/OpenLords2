@@ -4861,3 +4861,33 @@ scratch byte of either.
 > 📍 `src/engine_army_economy.c` (`ARMY_PROD_FALLBACK`, `engine_army_economy_production_output`)
 > writes it; `src/engine_territory.c` (`ARMY_RETYPE_FLAG`, `engine_territory_retype_army_band`)
 > reads it.  Ghidra `FUN_0044cfe1` @ 0x44cfe1 and `FUN_00469d21` @ 0x469d21.
+
+## 139. The provisioning decision's level clamp reads one entry past its supply-cost table
+
+The per-army provisioning decision `FUN_0044df5f`
+(`engine_army_economy_provision`) prices a ration "supply level" L by indexing a
+table of `(divisor, mult)` pairs at `DAT_004d6738`, stride 8.  The real ladder
+is six levels, 0..5:
+
+```
+L0 (1,0)  L1 (4,1)  L2 (2,1)  L3 (1,1)  L4 (1,2)  L5 (1,3)
+```
+
+— monotonically rising cost `mult·ceil(feed/divisor)`: 0, ~feed/4, ~feed/2,
+feed, 2·feed, 3·feed.  But the two level-ratchet loops clamp the index with
+`if (6 < level) level = 6`, i.e. they permit **level 6**, one past the table.
+At offset `0x4d6738 + 6·8 = 0x4d6768` sits not a 7th supply tier but the first
+entry of the *adjacent* reciprocal-percentage table (`100, 50, 33, 25, 20, …` =
+⌊100/n⌋).  So "level 6" silently means `(divisor, mult) = (100, 50)` → cost
+`ceil(feed/100)·50 ≈ feed/2`, which is *cheaper* than levels 3–5 and breaks the
+otherwise-monotone ladder.
+
+Whether the original authors intended a 7-level ladder and got lucky with
+adjacent data, or the clamp bound is simply off by one, the observable behavior
+is a real over-read with a real (if odd) cost.  The port reproduces it exactly:
+`k_supply_table` is seven entries, the 7th hard-coded to `{100, 50}`, so the
+clamped index range `[0,6]` matches retail's memory reads bit-for-bit.
+
+> 📍 `src/engine_army_economy.c` (`k_supply_table`, `supply_cost`,
+> `clamp_supply_level`).  Ghidra `FUN_0044df5f` @ 0x44df5f; table at
+> `0x4d6738`, percentage table it bleeds into at `0x4d6768`.

@@ -1044,10 +1044,45 @@ Three things worth recording:
 
 **With `FUN_0044cfe1` ported, `FUN_0044df5f` is itself a leaf.**
 
-**Remaining `FUN_0049bd99` leaves** (bottom-up): the allocator's own subtree —
-`FUN_0044df5f` (the 1628-B provisioning decision, now a full leaf) and
-`0x4485a5` (163 B, still has its own deps).  With those, every per-realm callee
-of `FUN_0049bd99` is ported and the setup pass itself can be assembled.
+### FUN_0044df5f — per-army provisioning decision ✅ ported
+
+The 1628-B provisioning decision, reached from `FUN_0049bd99` and ~25 other
+sites (almost always paired with `FUN_004485a5`).  For one army it settles a
+ration **supply level** the army can afford, then turns the residual gold cost
+into clamped **buy orders** for commodities B and C.  Ported as
+`engine_army_economy_provision(key, phase)` (7 host tests).
+
+The shape, top to bottom:
+
+- **Home production (mode 4 only).**  When `phase` (the saved game-mode code
+  `s_slot_0057c934`) equals 4, it calls `engine_army_economy_production_output`
+  with the record's `+0xc4` / `+0x224` caps and subtracts the result from the
+  commodity-C need.  The output is also stashed at **+0x188**.  Every other
+  `phase` value skips production entirely.
+- **Two scratch fields double as holding caps.**  Up front it writes
+  `STOCK_C (+0x180) = raw_need(+0x224) − production` and `STOCK_B (+0x184) =
+  STOCK_A(+0x250)`.  These are the same two fields the valuation helper
+  `FUN_0044e7b4` prices, *and* they cap the B/C buy orders below — one field,
+  two roles within the same call.
+- **Supply-cost ladder.**  Cost at level L is `mult(L)·ceil(feed/divisor(L))`
+  from the 7-entry table at `DAT_004d6738` (feed = mouths at **+0x24**), plus a
+  flat overhead (`+0x198 + +0x19c`) when the saved flag `s_slot_0053f260` (save
+  entry 171) is 1.  The level starts one above last turn's (`+0x15e + 1`) and
+  ratchets down — **twice**: pass 1 against the army's whole stockpile value,
+  pass 2 against the gold the pass-1 buy orders actually cost (plus stock A).
+  The two passes decrement at opposite ends of their loop (head vs tail), a
+  faithfully-preserved asymmetry.
+- **B/C split.**  The settled net cost (cost − stock-A value, floored at 0) is
+  split `+0x15f` percent to commodity B (`engine_army_economy_units_b`), the
+  rest to C (`units_c`); each unit count is capped by the STOCK_B / STOCK_C
+  fields written up front.  Final gold valuations land at +0x16c/+0x170/+0x174,
+  and a derived display byte `level·3 − 8` at **+0x11**.
+
+See engine-quirks #139 for the level-6 table over-read.
+
+**With `FUN_0044df5f` ported, the only remaining `FUN_0049bd99` leaf is**
+`0x4485a5` (163 B, still has its own deps).  Once it lands, every per-realm
+callee of `FUN_0049bd99` is ported and the setup pass itself can be assembled.
 
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
    callees are real; then `FUN_00499dc3` + `FUN_004329ec` spine + the

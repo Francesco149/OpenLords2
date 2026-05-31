@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **412** (16.8%) — tested 376, ported 36
-- code bytes touched: **17.2%** (143,969 / 838,629 B)
-- unported: **2035**
+- touched: **413** (16.9%) — tested 377, ported 36
+- code bytes touched: **17.4%** (145,597 / 838,629 B)
+- unported: **2034**
 - orphan refs (in src/, not in function table): 4
 
-## tested (376) — ported + host unit suite
+## tested (377) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -98,7 +98,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404d6b | FUN_00404d6b | 43 | engine_input.c, engine_math.c, engine_math.h (+2) |
 | 0x404d96 | FUN_00404d96 | 43 | engine_math.h |
 | 0x404dc1 | FUN_00404dc1 | 66 | engine_input.c, engine_math.h, engine_title_render.c |
-| 0x404e03 | FUN_00404e03 | 72 | engine_math.h |
+| 0x404e03 | FUN_00404e03 | 72 | engine_army_economy.c, engine_math.h |
 | 0x404e4b | FUN_00404e4b | 98 | engine_math.h |
 | 0x404ead | FUN_00404ead | 159 | engine_math.h, engine_path.h |
 | 0x404f4c | FUN_00404f4c | 180 | engine_path.h, engine_territory.c |
@@ -214,6 +214,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h |
 | 0x44cfe1 | FUN_0044cfe1 | 377 | engine_army_economy.c, engine_army_economy.h |
 | 0x44d913 | FUN_0044d913 | 390 | engine_territory.c, engine_territory.h |
+| 0x44df5f | FUN_0044df5f | 1628 | engine_army_economy.c, engine_army_economy.h |
 | 0x44e5bb | FUN_0044e5bb | 72 | engine_army_economy.c, engine_army_economy.h |
 | 0x44e603 | FUN_0044e603 | 80 | engine_army_economy.c, engine_army_economy.h |
 | 0x44e653 | FUN_0044e653 | 80 | engine_army_economy.c, engine_army_economy.h |

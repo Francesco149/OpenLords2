@@ -1555,6 +1555,13 @@ struct test_case {
     X(army_economy_production_unbound_is_zero) \
     X(army_economy_production_mode_flag_selects_divisor) \
     X(army_economy_production_tuning_override) \
+    X(army_economy_provision_full_two_pass) \
+    X(army_economy_provision_mode4_folds_production) \
+    X(army_economy_provision_non_mode4_skips_production) \
+    X(army_economy_provision_level_six_over_read) \
+    X(army_economy_provision_overhead_flag) \
+    X(army_economy_provision_keyed_by_row) \
+    X(army_economy_provision_unbound_noop) \
     \
     X(game_init_clear_tables_zeroes_per_army) \
     X(game_init_clear_tables_zeroes_unit_table) \

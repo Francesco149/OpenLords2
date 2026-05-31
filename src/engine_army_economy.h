@@ -79,4 +79,16 @@ void engine_army_economy_set_production_tuning(int scale, int max_level,
 int engine_army_economy_production_output(int key, int limit_scaled,
                                           int limit_raw);
 
+/* Port of FUN_0044df5f (1628 B).  The per-army provisioning decision reached
+ * from the army/country setup pass 0x49bd99 (and ~25 other sites, almost always
+ * paired with 0x4485a5).  For army `key` it settles a ration "supply level"
+ * the army can afford out of its stockpile value, then splits the residual gold
+ * cost between commodities B and C and writes clamped buy orders.  Reads/writes
+ * many fields of the keyed record row; see engine_army_economy.c for the full
+ * field map.  `phase` is the saved game-mode code (retail s_slot_0057c934) —
+ * only the value 4 changes behavior, folding this army's home production
+ * (engine_army_economy_production_output) into the commodity-C need.  No-ops
+ * when the army-record block is unbound. */
+void engine_army_economy_provision(int key, int phase);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_ECONOMY_H */
