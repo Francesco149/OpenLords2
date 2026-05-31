@@ -1429,6 +1429,13 @@ struct test_case {
     X(territory_secondary_tier_small) \
     X(territory_secondary_tier_large_and_level_cap) \
     X(territory_secondary_unbound_is_noop) \
+    X(territory_workforce_phase1_greedy) \
+    X(territory_workforce_pool_split) \
+    X(territory_workforce_building_gate) \
+    X(territory_workforce_round_robin_weights) \
+    X(territory_workforce_small_remainder_fold) \
+    X(territory_workforce_unlimited_sentinel_cap) \
+    X(territory_workforce_unbound_is_noop) \
     X(territory_stamp_block_2x2_gradient) \
     X(territory_stamp_block_is_square_not_strip) \
     X(territory_stamp_block_unbound_is_noop) \

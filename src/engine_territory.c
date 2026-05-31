@@ -33,6 +33,7 @@
 #include "engine_map_render.h"        /* set_rotation_offset (DAT_00522f7c=0) */
 #include "save_schema_globals.h"  /* s_slot_0053f23c — feature-density setting;
                                      s_slot_0056d5dc — player/army count */
+#include "engine_math.h"          /* engine_math_percent_of (FUN_00404d6b) */
 
 #define TERRITORY_RECORD_STRIDE 0x1a4
 #define TERRITORY_RECORD_COUNT  0x97   /* iterate 1..0x96 (1..150) */
@@ -908,6 +909,175 @@ void engine_territory_stamp_secondary_keep(int key, int level)
      * that macro is defined further down with the capital-region block. */
     int off = *(const int32_t *)(rowbase + 0x78);
     engine_territory_stamp_block(base, 2, off, 0x10, type);
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Per-realm population → job-slot allocator (FUN_0044f6e7)
+ * ──────────────────────────────────────────────────────────────────
+ *
+ * Field offsets within the realm's g_per_army_768 row.  The eight job
+ * counters and their caps form a regular run of 0xc-byte triples starting
+ * at +0xc4: counter i is at +0xc4 + 0xc*i, and its cap at +0xcc + 0xc*i
+ * (= counter + 8).  The ninth 0xc-slot at +0x124 (i == 8) is not a job
+ * counter but the unallocated **leftover** and has no cap.  The eight
+ * per-bucket target ratios are a separate contiguous i32 run at +0x130
+ * (ratio i at +0x130 + 4*i, paired with counter i). */
+#define WF_TOTAL       0x24    /* DAT_0053f9d4 — realm population total (i32)   */
+#define WF_SPLIT_PCT   0x08    /* DAT_0053f9b8 — pool-1 share, signed-byte %    */
+#define WF_FOLD_THRESH 0xb8    /* DAT_0053fa68 — small-leftover fold gate (u8)  */
+#define WF_COUNTER(i)  (0xc4 + 0xc * (i))
+#define WF_CAP(i)      (0xcc + 0xc * (i))   /* == WF_COUNTER(i) + 8 */
+#define WF_RATIO(i)    (0x130 + 4 * (i))
+#define WF_LEFTOVER    0x124   /* DAT_0053fad4 — counter slot 8: the remainder  */
+
+/* "Building present" flags, one per phase-2 job bucket (i32 caps zeroed when
+ * the flag is clear).  The first three are the stride-0x18 settlement flags
+ * the setup pass at 0x49bd99 lights (+0x297/+0x2af/+0x2c7/+0x2df pairs); the
+ * mapping to buckets is the retail (non-sequential) order. */
+#define WF_GATE_C6     0x297   /* DAT_0053fc47 → cap6 (+0x114) */
+#define WF_GATE_C4     0x2af   /* DAT_0053fc5f → cap4 (+0xfc)  */
+#define WF_GATE_C7     0x2c7   /* DAT_0053fc77 → cap7 (+0x120) */
+#define WF_GATE_C5     0x2df   /* DAT_0053fc8f → cap5 (+0x108) */
+#define WF_GATE_C3A    0x1c3   /* DAT_0053fb73 (== ARMY_SETTLE_FLAG) → cap3 */
+#define WF_GATE_C3B    0x1b0   /* DAT_0053fb60                        → cap3 */
+
+/* Read a job-bucket cap field, mapping retail's 999999 "unlimited" sentinel
+ * to 0 (the same value an absent bucket carries, so a sentinel cap fills
+ * nothing — retail's behaviour). */
+static int realm_workforce_cap(const uint8_t *row, int off)
+{
+    int v = *(const int32_t *)(row + off);
+    return (v == 999999) ? 0 : v;
+}
+
+/* Port of FUN_0044f6e7 (2147 B) — the new-game per-realm **population/job-slot
+ * allocator**, a per-realm callee of the army/country setup pass 0x49bd99 (run
+ * twice per realm there, with the intervening 0x44df5f / 0x4485a5 passes
+ * re-tuning the caps between the two distributions).
+ *
+ * The realm's total population (record +0x24) is split by the signed-byte
+ * percentage at +0x08 into two pools — pool1 = total*pct/100, pool2 = the
+ * remainder — which are then distributed across eight job-slot counters, each
+ * capped by a per-bucket maximum and steered toward a per-bucket target ratio:
+ *
+ *   pool2 (remainder)  → counters 0,1,2  (ungated baseline buckets)
+ *   pool1 (the share)  → counters 3..7   (settlement/building buckets, each
+ *                                         capped to 0 unless its flag is set)
+ *
+ * Each pool is distributed in two steps: first a greedy pre-fill that pushes
+ * each bucket toward `percent_of(pool, ratio_i)` (bounded by its cap), then a
+ * weighted round-robin that deals the still-unspent pool one head at a time
+ * across the buckets that still have room.  Phase-1's round-robin weights the
+ * first three buckets 2 : 3 : 1; phase-2 deals buckets 6,5,4,7 once each per
+ * pass with bucket 3 as the catch-all.  Between the two phases a small pool-2
+ * remainder (< the +0xb8 threshold byte) is folded back into pool1.  Whatever
+ * is left of both pools after the round-robins lands in the +0x124 leftover
+ * slot.  Caps carrying retail's 999999 "unlimited" sentinel count as 0 (the
+ * greedy/round-robin `counter < cap` test then never fires for them — the same
+ * no-fill the engine relies on).
+ *
+ * The only callee is engine_math_percent_of (FUN_00404d6b).  Touches nothing
+ * but the realm's own record row, so no cell grid is needed.  No bounds check
+ * on `key`: retail trusts its 1..realm-count call site.  No-op if the
+ * army-record block is unbound. */
+void engine_territory_allocate_realm_workforce(int key)
+{
+    if (g_army_records == NULL) return;
+
+    uint8_t *rowbase = g_army_records + key * ARMY_ROW_STRIDE;
+
+    int total = *(const int32_t *)(rowbase + WF_TOTAL);
+    int pct   = (int8_t)rowbase[WF_SPLIT_PCT];
+    int pool1 = engine_math_percent_of(total, pct);  /* retail local_20 */
+    int pool2 = total - pool1;                        /* retail local_14 */
+
+    /* Per-bucket caps (999999 → 0), then the phase-2 building gates. */
+    int cap0 = realm_workforce_cap(rowbase, WF_CAP(0));
+    int cap1 = realm_workforce_cap(rowbase, WF_CAP(1));
+    int cap2 = realm_workforce_cap(rowbase, WF_CAP(2));
+    int cap6 = realm_workforce_cap(rowbase, WF_CAP(6));
+    if (rowbase[WF_GATE_C6] == 0) cap6 = 0;
+    int cap5 = realm_workforce_cap(rowbase, WF_CAP(5));
+    if (rowbase[WF_GATE_C5] == 0) cap5 = 0;
+    int cap4 = realm_workforce_cap(rowbase, WF_CAP(4));
+    if (rowbase[WF_GATE_C4] == 0) cap4 = 0;
+    int cap7 = realm_workforce_cap(rowbase, WF_CAP(7));
+    if (rowbase[WF_GATE_C7] == 0) cap7 = 0;
+    int cap3 = realm_workforce_cap(rowbase, WF_CAP(3));
+    if (rowbase[WF_GATE_C3A] == 0) cap3 = 0;
+    if (rowbase[WF_GATE_C3B] == 0) cap3 = 0;
+
+    /* All eight counters (and the leftover slot) start at 0 — retail clears
+     * the nine 0xc-slots up front; we accumulate in locals and store finals. */
+    int c0 = 0, c1 = 0, c2 = 0, c3 = 0, c4 = 0, c5 = 0, c6 = 0, c7 = 0;
+    int progressed;
+
+    /* ── Phase 1: distribute pool2 across buckets 0,1,2 ───────────────── */
+    int g1 = engine_math_percent_of(pool2, *(const int32_t *)(rowbase + WF_RATIO(1)));
+    int g0 = engine_math_percent_of(pool2, *(const int32_t *)(rowbase + WF_RATIO(0)));
+    int g2 = engine_math_percent_of(pool2, *(const int32_t *)(rowbase + WF_RATIO(2)));
+    while (g1 > 0 && c1 < cap1) { c1++; g1--; pool2--; }
+    while (g0 > 0 && c0 < cap0) { c0++; g0--; pool2--; }
+    while (g2 > 0 && c2 < cap2) { c2++; g2--; pool2--; }
+
+    progressed = (pool2 >= 1);
+    for (;;) {
+        for (;;) {
+            if (!progressed) goto phase1_done;
+            progressed = 0;
+            if (c0 < cap0) { c0++; progressed = 1; if (--pool2 < 1) goto phase1_done; }
+            if (c0 < cap0) { c0++; progressed = 1; if (--pool2 < 1) goto phase1_done; }
+            if (c1 < cap1) { c1++; progressed = 1; if (--pool2 < 1) goto phase1_done; }
+            if (c1 < cap1) { c1++; progressed = 1; if (--pool2 < 1) goto phase1_done; }
+            if (c1 < cap1) { c1++; progressed = 1; if (--pool2 < 1) goto phase1_done; }
+            if (c2 < cap2) break;   /* retail inner-loop guard: repeat while c2 full */
+        }
+        c2++; progressed = 1; pool2--;
+        if (pool2 <= 0) goto phase1_done;
+    }
+phase1_done:
+
+    /* Fold a small pool-2 remainder back into pool1 before phase 2. */
+    if (pool2 < (int)rowbase[WF_FOLD_THRESH]) { pool1 += pool2; pool2 = 0; }
+
+    /* ── Phase 2: distribute pool1 across buckets 3..7 ────────────────── */
+    int g6 = engine_math_percent_of(pool1, *(const int32_t *)(rowbase + WF_RATIO(6)));
+    int g5 = engine_math_percent_of(pool1, *(const int32_t *)(rowbase + WF_RATIO(5)));
+    int g4 = engine_math_percent_of(pool1, *(const int32_t *)(rowbase + WF_RATIO(4)));
+    int g7 = engine_math_percent_of(pool1, *(const int32_t *)(rowbase + WF_RATIO(7)));
+    int g3 = engine_math_percent_of(pool1, *(const int32_t *)(rowbase + WF_RATIO(3)));
+    while (g6 > 0 && c6 < cap6) { c6++; g6--; pool1--; }
+    while (g5 > 0 && c5 < cap5) { c5++; g5--; pool1--; }
+    while (g4 > 0 && c4 < cap4) { c4++; g4--; pool1--; }
+    while (g7 > 0 && c7 < cap7) { c7++; g7--; pool1--; }
+    while (g3 > 0 && c3 < cap3) { c3++; g3--; pool1--; }
+
+    progressed = (pool1 >= 1);
+    for (;;) {
+        for (;;) {
+            if (!progressed) goto phase2_done;
+            progressed = 0;
+            if (c6 < cap6) { c6++; progressed = 1; if (--pool1 < 1) goto phase2_done; }
+            if (c5 < cap5) { c5++; progressed = 1; if (--pool1 < 1) goto phase2_done; }
+            if (c4 < cap4) { c4++; progressed = 1; if (--pool1 < 1) goto phase2_done; }
+            if (c7 < cap7) { c7++; progressed = 1; if (--pool1 < 1) goto phase2_done; }
+            if (c3 < cap3) break;   /* retail inner-loop guard: repeat while c3 full */
+        }
+        c3++; progressed = 1; pool1--;
+        if (pool1 <= 0) goto phase2_done;
+    }
+phase2_done:
+
+    /* Store the eight job counters and the leftover (= both pools' residue). */
+    *(int32_t *)(rowbase + WF_COUNTER(0)) = c0;
+    *(int32_t *)(rowbase + WF_COUNTER(1)) = c1;
+    *(int32_t *)(rowbase + WF_COUNTER(2)) = c2;
+    *(int32_t *)(rowbase + WF_COUNTER(3)) = c3;
+    *(int32_t *)(rowbase + WF_COUNTER(4)) = c4;
+    *(int32_t *)(rowbase + WF_COUNTER(5)) = c5;
+    *(int32_t *)(rowbase + WF_COUNTER(6)) = c6;
+    *(int32_t *)(rowbase + WF_COUNTER(7)) = c7;
+    *(int32_t *)(rowbase + WF_LEFTOVER)   = pool2 + pool1;
 }
 
 /* Per-army active-cell tally byte: row offset +0x205 (retail DAT_0053fbb5

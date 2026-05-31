@@ -184,6 +184,16 @@ void engine_territory_census_army_terrain(int key);
  * 0x49bd99.  No-op if the army-record block (or cell grid) is unbound. */
 void engine_territory_stamp_secondary_keep(int key, int level);
 
+/* Port of FUN_0044f6e7.  New-game per-realm population/job-slot allocator: split
+ * the realm's total population (record +0x24) by the +0x08 percentage into two
+ * pools and distribute them across eight capped job-slot counters (+0xc4 .. +0x118,
+ * 0xc-strided) toward per-bucket target ratios (+0x130 run), leaving the unspent
+ * remainder at +0x124.  Pool 2 fills the three ungated buckets (weighted 2:3:1),
+ * pool 1 the five settlement/building buckets (each gated by a "present" flag).  A
+ * per-realm callee of the army/country setup pass 0x49bd99.  No-op if the
+ * army-record block is unbound. */
+void engine_territory_allocate_realm_workforce(int key);
+
 /* Port of FUN_00467a36.  New-game per-army feature-seeding pass: for every
  * active feature-cell (+7 key 1..17, +1 bit 0x20 set), assign a feature
  * terrain type (0x14 / 1 / 0) by the army's running active-cell index and

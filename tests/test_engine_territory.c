@@ -1556,6 +1556,173 @@ int test_territory_secondary_unbound_is_noop(void)
     return 0;
 }
 
+/* ── Per-realm population/job-slot allocator (port of FUN_0044f6e7) ──
+ * Reuse census_setup (binds g_army, zeroed).  Set the realm's total (+0x24),
+ * split percentage (+0x08), bucket caps/ratios and building gates, run the
+ * allocator, then read the eight counters and the +0x124 leftover. */
+
+enum {
+    WF_TOTAL = 0x24, WF_PCT = 0x08, WF_FOLD = 0xb8,
+    WF_C0 = 0xc4, WF_C1 = 0xd0, WF_C2 = 0xdc, WF_C3 = 0xe8, WF_C4 = 0xf4,
+    WF_C5 = 0x100, WF_C6 = 0x10c, WF_C7 = 0x118, WF_LEFT = 0x124,
+    WF_CAP0 = 0xcc, WF_CAP1 = 0xd8, WF_CAP2 = 0xe4, WF_CAP3 = 0xf0,
+    WF_CAP4 = 0xfc, WF_CAP5 = 0x108, WF_CAP6 = 0x114, WF_CAP7 = 0x120,
+    WF_R0 = 0x130, WF_R1 = 0x134, WF_R2 = 0x138, WF_R3 = 0x13c,
+    WF_R4 = 0x140, WF_R5 = 0x144, WF_R6 = 0x148, WF_R7 = 0x14c,
+    WF_G6 = 0x297, WF_G4 = 0x2af, WF_G7 = 0x2c7, WF_G5 = 0x2df,
+    WF_G3A = 0x1c3, WF_G3B = 0x1b0,
+};
+
+static void wf_set(int key, int off, int32_t v)
+{
+    *(int32_t *)&g_army[key * ARMY_STRIDE + off] = v;
+}
+static int32_t wf_get(int key, int off)
+{
+    return *(int32_t *)&g_army[key * ARMY_STRIDE + off];
+}
+
+/* Phase 1: pool2 (= total when pct 0) is pre-filled toward percent_of(pool2,
+ * ratio_i) for the three ungated buckets; with ample caps and ratios summing
+ * to 100, the greedy step consumes pool2 exactly and nothing spills. */
+int test_territory_workforce_phase1_greedy(void)
+{
+    census_setup();
+    wf_set(5, WF_TOTAL, 100);
+    g_army[5 * ARMY_STRIDE + WF_PCT] = 0;          /* pool1 = 0, pool2 = 100 */
+    wf_set(5, WF_R0, 20); wf_set(5, WF_R1, 30); wf_set(5, WF_R2, 50);
+    wf_set(5, WF_CAP0, 1000); wf_set(5, WF_CAP1, 1000); wf_set(5, WF_CAP2, 1000);
+
+    engine_territory_allocate_realm_workforce(5);
+
+    T_ASSERT_EQ_I(wf_get(5, WF_C0), 20);
+    T_ASSERT_EQ_I(wf_get(5, WF_C1), 30);
+    T_ASSERT_EQ_I(wf_get(5, WF_C2), 50);
+    T_ASSERT_EQ_I(wf_get(5, WF_C6), 0);            /* pool1 empty → phase 2 idle */
+    T_ASSERT_EQ_I(wf_get(5, WF_LEFT), 0);
+    return 0;
+}
+
+/* The +0x08 percentage splits total into pool1 (→ phase-2 building buckets)
+ * and pool2 (→ phase-1 buckets); each phase greedily fills to its ratios. */
+int test_territory_workforce_pool_split(void)
+{
+    census_setup();
+    wf_set(3, WF_TOTAL, 200);
+    g_army[3 * ARMY_STRIDE + WF_PCT] = 50;         /* pool1 = 100, pool2 = 100 */
+    wf_set(3, WF_R0, 50); wf_set(3, WF_R1, 50);
+    wf_set(3, WF_CAP0, 1000); wf_set(3, WF_CAP1, 1000);
+    /* phase-2 buckets 6 and 4, each gated present, ratios 50/50 of pool1 */
+    wf_set(3, WF_R6, 50); wf_set(3, WF_R4, 50);
+    wf_set(3, WF_CAP6, 1000); wf_set(3, WF_CAP4, 1000);
+    g_army[3 * ARMY_STRIDE + WF_G6] = 1;
+    g_army[3 * ARMY_STRIDE + WF_G4] = 1;
+
+    engine_territory_allocate_realm_workforce(3);
+
+    T_ASSERT_EQ_I(wf_get(3, WF_C0), 50);
+    T_ASSERT_EQ_I(wf_get(3, WF_C1), 50);
+    T_ASSERT_EQ_I(wf_get(3, WF_C6), 50);
+    T_ASSERT_EQ_I(wf_get(3, WF_C4), 50);
+    T_ASSERT_EQ_I(wf_get(3, WF_LEFT), 0);
+    return 0;
+}
+
+/* A phase-2 bucket whose "present" flag is clear has its cap forced to 0, so
+ * it accepts nothing even with a non-zero ratio — that share lands in the
+ * +0x124 leftover instead. */
+int test_territory_workforce_building_gate(void)
+{
+    census_setup();
+    wf_set(4, WF_TOTAL, 100);
+    g_army[4 * ARMY_STRIDE + WF_PCT] = 100;        /* all of total → pool1 */
+    wf_set(4, WF_R6, 50); wf_set(4, WF_R5, 50);
+    wf_set(4, WF_CAP6, 50);                        /* exactly the greedy target */
+    wf_set(4, WF_CAP5, 1000);
+    g_army[4 * ARMY_STRIDE + WF_G6] = 1;           /* bucket 6 present  */
+    g_army[4 * ARMY_STRIDE + WF_G5] = 0;           /* bucket 5 absent → cap 0 */
+
+    engine_territory_allocate_realm_workforce(4);
+
+    T_ASSERT_EQ_I(wf_get(4, WF_C6), 50);
+    T_ASSERT_EQ_I(wf_get(4, WF_C5), 0);            /* gated off despite ratio 50 */
+    T_ASSERT_EQ_I(wf_get(4, WF_LEFT), 50);         /* bucket-5 share spills here */
+    return 0;
+}
+
+/* Phase-1 round-robin deals the unspent pool in a 2 : 3 : 1 weighting across
+ * buckets 0,1,2.  With zero ratios (no greedy pre-fill) and ample caps, the
+ * whole pool flows through the round-robin: 8 → 4 : 3 : 1. */
+int test_territory_workforce_round_robin_weights(void)
+{
+    census_setup();
+    wf_set(6, WF_TOTAL, 8);
+    g_army[6 * ARMY_STRIDE + WF_PCT] = 0;
+    wf_set(6, WF_CAP0, 100); wf_set(6, WF_CAP1, 100); wf_set(6, WF_CAP2, 100);
+
+    engine_territory_allocate_realm_workforce(6);
+
+    T_ASSERT_EQ_I(wf_get(6, WF_C0), 4);            /* 2 per pass + the partial pass */
+    T_ASSERT_EQ_I(wf_get(6, WF_C1), 3);
+    T_ASSERT_EQ_I(wf_get(6, WF_C2), 1);
+    T_ASSERT_EQ_I(wf_get(6, WF_LEFT), 0);
+    return 0;
+}
+
+/* A small phase-1 remainder (< the +0xb8 threshold byte) is folded into pool1
+ * before phase 2, so it can still feed the building buckets.  Here phase 1
+ * caps out at 30 (3 × 10), leaving 70 < threshold 100 → folded into pool1,
+ * which bucket 6 then absorbs (without the fold it would be stranded). */
+int test_territory_workforce_small_remainder_fold(void)
+{
+    census_setup();
+    wf_set(2, WF_TOTAL, 100);
+    g_army[2 * ARMY_STRIDE + WF_PCT] = 0;          /* pool2 = 100, pool1 = 0 */
+    wf_set(2, WF_CAP0, 10); wf_set(2, WF_CAP1, 10); wf_set(2, WF_CAP2, 10);
+    g_army[2 * ARMY_STRIDE + WF_FOLD] = 100;       /* 70 < 100 → fold */
+    wf_set(2, WF_R6, 100); wf_set(2, WF_CAP6, 1000);
+    g_army[2 * ARMY_STRIDE + WF_G6] = 1;
+
+    engine_territory_allocate_realm_workforce(2);
+
+    T_ASSERT_EQ_I(wf_get(2, WF_C0), 10);
+    T_ASSERT_EQ_I(wf_get(2, WF_C1), 10);
+    T_ASSERT_EQ_I(wf_get(2, WF_C2), 10);
+    T_ASSERT_EQ_I(wf_get(2, WF_C6), 70);           /* the folded remainder */
+    T_ASSERT_EQ_I(wf_get(2, WF_LEFT), 0);
+    return 0;
+}
+
+/* A cap carrying retail's 999999 "unlimited" sentinel is treated as 0, so its
+ * bucket never fills and the would-be allocation lands in the leftover. */
+int test_territory_workforce_unlimited_sentinel_cap(void)
+{
+    census_setup();
+    wf_set(7, WF_TOTAL, 100);
+    g_army[7 * ARMY_STRIDE + WF_PCT] = 0;
+    wf_set(7, WF_R0, 100);
+    wf_set(7, WF_CAP0, 999999);                    /* sentinel → 0 */
+
+    engine_territory_allocate_realm_workforce(7);
+
+    T_ASSERT_EQ_I(wf_get(7, WF_C0), 0);
+    T_ASSERT_EQ_I(wf_get(7, WF_LEFT), 100);
+    return 0;
+}
+
+/* No-op when the army-record block is unbound (no crash, record untouched). */
+int test_territory_workforce_unbound_is_noop(void)
+{
+    census_setup();
+    wf_set(2, WF_LEFT, 0x42);
+    wf_set(2, WF_TOTAL, 100);
+    engine_territory_bind_army_records(NULL);
+    engine_territory_allocate_realm_workforce(2);  /* must not crash */
+    engine_territory_bind_army_records(g_army);
+    T_ASSERT_EQ_I(wf_get(2, WF_LEFT), 0x42);       /* untouched */
+    return 0;
+}
+
 /* ── Capital-region setup: block stamp + capital placement ──────────
  * (port of FUN_0046ac22 / FUN_00467fd1, the leaves of the 0x468d4f
  * castle-setup subtree).  Reuse the module-level g_cells + cell_off. */

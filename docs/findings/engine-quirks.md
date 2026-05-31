@@ -4761,3 +4761,35 @@ five directly.
 
 > 📍 `src/engine_territory.c` (`engine_territory_census_army_terrain`),
 > Ghidra `FUN_00469b8d` @ 0x469b8d.
+
+## 136. The population allocator reads a 999999 cap as "fill nothing," not "no limit"
+
+`FUN_0044f6e7` (the new-game per-realm population / job-slot allocator)
+distributes each population pool into capped buckets with a greedy `while
+(counter < cap)` fill plus a round-robin that also tests `counter < cap`.
+Before any of that it normalises every cap field:
+
+```
+cap = army[+0xcc + 0xc*i];
+if (cap == 999999) cap = 0;
+```
+
+`999999` is the engine's "unlimited" sentinel elsewhere, so the natural
+reading is "this bucket has no ceiling."  Here it does the **opposite**: a
+sentinel cap becomes `0`, and `counter < 0` is never true, so the bucket
+accepts nothing and its target share spills into the +0x124 leftover.  A
+bucket that wants to be unbounded must instead carry a large concrete cap.
+
+The likely intent is that `999999` marks a bucket that is *absent/disabled*
+for this realm (the same value an uninitialised cap field would never
+legitimately hold as a real ceiling), so mapping it to a no-fill `0` is how
+the allocator skips it.  Either way the port preserves the literal compare —
+mapping `999999 → 0` and leaving every other value as the cap — because the
+greedy and round-robin passes both depend on it to leave sentinel buckets
+empty.  The same realm record's phase-2 buckets are *also* gated to `0` by
+their per-building "present" flags (+0x297/+0x2af/+0x2c7/+0x2df and the
+settlement flag +0x1c3 ∧ +0x1b0); a 999999 cap is the parallel mechanism for
+the ungated path.
+
+> 📍 `src/engine_territory.c` (`engine_territory_allocate_realm_workforce`),
+> Ghidra `FUN_0044f6e7` @ 0x44f6e7.

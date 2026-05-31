@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **400** (16.3%) — tested 364, ported 36
-- code bytes touched: **16.7%** (139,673 / 838,629 B)
-- unported: **2047**
+- touched: **401** (16.4%) — tested 365, ported 36
+- code bytes touched: **16.9%** (141,820 / 838,629 B)
+- unported: **2046**
 - orphan refs (in src/, not in function table): 4
 
-## tested (364) — ported + host unit suite
+## tested (365) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -95,7 +95,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404a46 | FUN_00404a46 | 230 | engine.c, engine.h, engine_menu_input.c (+2) |
 | 0x404b2c | FUN_00404b2c | 109 | engine.h, engine_rng.c, engine_territory.c |
 | 0x404b99 | FUN_00404b99 | 466 | engine.c, engine.h, engine_rng.c |
-| 0x404d6b | FUN_00404d6b | 43 | engine_input.c, engine_math.c, engine_math.h (+1) |
+| 0x404d6b | FUN_00404d6b | 43 | engine_input.c, engine_math.c, engine_math.h (+2) |
 | 0x404d96 | FUN_00404d96 | 43 | engine_math.h |
 | 0x404dc1 | FUN_00404dc1 | 66 | engine_input.c, engine_math.h, engine_title_render.c |
 | 0x404e03 | FUN_00404e03 | 72 | engine_math.h |
@@ -210,6 +210,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4483fb | FUN_004483fb | 11 | engine_handlers_da.h |
 | 0x448406 | FUN_00448406 | 11 | engine_handlers_da.h |
 | 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h |
+| 0x44f6e7 | FUN_0044f6e7 | 2147 | engine_territory.c, engine_territory.h |
 | 0x451f1a | FUN_00451f1a | 81 | engine.c, engine.h, engine_anim_cycle.c |
 | 0x451f70 | FUN_00451f70 | 26 | gfx.c, main.c |
 | 0x452160 | FUN_00452160 | 422 | engine.c, gfx.c, gfx.h (+1) |

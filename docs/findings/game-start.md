@@ -880,9 +880,45 @@ is `0x15 + min(level, 4)`.  Ported as `engine_territory_stamp_secondary_keep`;
 No new globals — the two tier fields and the secondary offset all live in the
 already-bound `g_per_army_768`.
 
-**Remaining `FUN_0049bd99` leaves** (its other zero-dep callees, bottom-up):
-the 2 KB `FUN_0044f6e7`; then the 1-dep helpers `FUN_0044d913` /
-`FUN_00432746` / `FUN_0046dfd5`.
+### FUN_0044f6e7 — per-realm population / job-slot allocator ✅ ported
+
+The 2 KB zero-dep leaf of `FUN_0049bd99` (called **twice** per realm there,
+with the intervening 0x44df5f / 0x4485a5 passes re-tuning the caps between the
+two distributions).  It allocates the realm's population across eight capped
+job-slot counters in `g_per_army_768`.
+
+The realm's total population (record +0x24) is split by the signed-byte
+percentage at +0x08 into two pools — `pool1 = total*pct/100` and `pool2 = the
+remainder` — distributed in two phases.  The eight counters and their caps are
+a regular run of 0xc-byte triples at +0xc4 (counter `i` at +0xc4+0xc*i, its cap
+at +0xcc+0xc*i = counter+8); the ninth 0xc-slot at +0x124 is the **leftover**
+(no cap).  The eight target ratios are a separate i32 run at +0x130 (ratio `i`
+at +0x130+4*i, paired with counter `i`).
+
+  - **pool2 → buckets 0,1,2** (ungated baseline jobs).  Greedy pre-fill toward
+    `percent_of(pool2, ratio_i)`, then a round-robin weighted **2 : 3 : 1**.
+  - **pool1 → buckets 3..7** (settlement/building jobs).  Each bucket's cap is
+    forced to 0 unless its "present" flag is set: buckets 6/4/7/5 by the
+    stride-0x18 settlement flags at +0x297/+0x2af/+0x2c7/+0x2df (the same flags
+    `FUN_0049bd99` lights at lines setting +0x297+c*0x18), and bucket 3 by
+    `ARMY_SETTLE_FLAG` (+0x1c3) **and** +0x1b0.  Greedy pre-fill, then a
+    round-robin dealing 6,5,4,7 once each with bucket 3 as the catch-all.
+
+Between the phases a small pool-2 remainder (`< the +0xb8 threshold byte`) is
+folded back into pool1 so it can still feed the building buckets.  Whatever is
+left of both pools lands in +0x124.  Caps carrying retail's `999999`
+"unlimited" sentinel are read as 0 (so the `counter < cap` test never fires —
+the same no-fill the engine relies on).  The only callee is
+`engine_math_percent_of` (FUN_00404d6b); it touches nothing but the realm's own
+record row.  Ported as `engine_territory_allocate_realm_workforce`; 7 host
+tests (phase-1 greedy split, pct pool-split feeding both phases, building-gate
+spilling to leftover, the 2:3:1 round-robin weights, the small-remainder fold,
+the 999999 sentinel cap, unbound no-op).  No new globals.
+
+**Remaining `FUN_0049bd99` leaves** (its other zero-dep / 1-dep callees,
+bottom-up): the 1-dep helpers `FUN_0044d913` / `FUN_00432746` / `FUN_0046dfd5`,
+plus the two cap-tuning passes interleaved with the allocator above
+(`FUN_0044df5f` / `FUN_004485a5`).
 
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
    callees are real; then `FUN_00499dc3` + `FUN_004329ec` spine + the
