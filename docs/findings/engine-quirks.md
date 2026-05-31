@@ -5127,3 +5127,51 @@ chosen realm on a chosen deck slot via the seed.
 > Ghidra `FUN_00448819` @ 0x448819; r2 `pdf @ 0x448819` confirms the
 > `mov eax,[0x58fd60]; add eax,eax` cursor seed and the per-realm `inc`/`cmp
 > 0x100` walk; deck dumped via `p8 512 @ 0x4d6108`.
+
+## 147. In spring and winter a realm can collapse without the player ever being told
+
+The per-realm mood/standing machine `FUN_00449889`
+(`engine_realm_update_mood`) recomputes each realm's "standing" band (army
+`+0x21b`, 1=collapsed .. 5=peak) from a mood accumulator, then runs side
+effects: a band-1 collapse posts notification code `0x8f` to the local player
+and stamps an unrest marker (overworld cell type `0x18`); a band-5 peak posts
+`0x90` and stamps type `0x17`.  But in event-modes 1 and 4 (two of the four
+seasons) the pass first **demotes** the two best bands toward zero — band 1
+always becomes band 0, and band 2 becomes 0 when the accumulator still exceeds
+74 — and *then* checks the band for the notify/marker step:
+
+```c
+band = classify(acc);
+if (mode == 4 || mode == 1) {        /* demotion runs FIRST */
+    if (band == 1) band = 0;
+    else if (band == 2 && acc > 74) band = 0;
+}
+clear_old_markers(realm);
+if (band == 1) { notify(0x8f); mark(0x18); }   /* reads the DEMOTED band */
+if (band == 5) { notify(0x90); mark(0x17); }
+```
+
+Because the marker/notify checks read the post-demotion band, a realm that
+genuinely hit band 1 in mode 1 or 4 is already band 0 by the time the `== 1`
+check runs, so it gets **neither the collapse notification nor the unrest
+marker** — only peaks (band 5, never demoted) still fire in those modes.  The
+collapse marker/notice is effectively a mode-2/3-only event for the bottom
+band.  Whether this is intentional (collapses are "absorbed" silently in those
+seasons) or an ordering oversight is unknown, but the drop-in reproduces it
+verbatim (`test_engine_realm_mood_mode1_demotion` pins the band-0 outcome; the
+notify/marker tests run in mode 3 to keep band 1 alive).
+
+A smaller companion quirk lives in the helper `FUN_00449d6e`
+(`realm_mood_delta`), which maps a realm's disposition byte (`+0x21e`) to a
+mood adjustment under the same event-mode.  Its mode-2 arm has a **dead
+duplicate**: it tests `disp == 4` twice in a row, so the first arm returns −12
+and the second (which would return −24) is unreachable; mode 2 also never
+handles `disp == 3` (falls through to 0).  Ghidra renders both `disp == 4`
+comparisons faithfully; the port keeps the first and drops the dead second arm
+with a comment.
+
+> 📍 `src/engine_realm.c` (`engine_realm_update_mood` + static helpers
+> `realm_mood_delta` / `realm_clear_marker_cells` / `realm_mark_next_cell`).
+> Ghidra `FUN_00449889` @ 0x449889 (helpers 0x449d6e / 0x46942c / 0x469a9c);
+> r2 `pdf @ 0x449889` confirms the per-mode base delta (`BASE − rng_b/8`), the
+> demote-before-check ordering, and the duplicate `cmp …, 4` in 0x449d6e.

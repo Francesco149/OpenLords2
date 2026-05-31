@@ -14,12 +14,15 @@
 #include "t.h"
 #include "engine_realm.h"
 #include "engine_army_economy.h"   /* NULL the provision bind to isolate copies */
+#include "engine_territory.h"      /* engine_territory_bind_cells */
+#include "engine_event_queue.h"    /* engine_event_queue_init / state */
 #include "save.h"
 #include "save_schema_globals.h"
 
 #define AREC(key)   (&g_per_army_768[(key) * 0x300])
 #define PREC(slot)  (&g_player_strategic_352[(slot) * 0x160])
 #define AI32(p, o)  (*(int32_t *)((p) + (o)))
+#define MISC_ROW(realm) ((int32_t *)&g_misc_1360[(realm) * 0x50])
 
 /* One realm, owned by a human, turn 1; clean per-army + per-player state. */
 static uint8_t *realm_reset(void)
@@ -522,5 +525,283 @@ int test_engine_realm_clear_turn_scratch(void)
     uint8_t *r3 = AREC(3);              /* realm 3 > count → untouched */
     T_ASSERT_EQ_U(r3[0x1fb], 0xCD);
     T_ASSERT_EQ_U(r3[0x1a8], 0xCD);
+    return 0;
+}
+
+/* ─── engine_realm_update_mood (FUN_00449889) ───────────────────────────── */
+
+/* Clean slate for the mood machine: one realm, event-mode 3 (no band-1/2
+ * demotion and no event-mode mood delta), local player 7 (no realm owned by
+ * it by default → no notifications), standings enabled.  Cell grid unbound so
+ * marker flips are no-ops. */
+static void mood_reset(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(g_overworld_map, 0, sizeof g_overworld_map);
+    memset(g_misc_1360, 0, sizeof g_misc_1360);
+    engine_territory_bind_cells(NULL);
+    s_slot_0056d5dc = 1;        /* realm count       */
+    s_slot_0057c934 = 3;        /* event-mode        */
+    s_slot_0057c8cc = 7;        /* local player      */
+    s_slot_00554020 = 0;        /* previous focus    */
+    s_slot_0053f25c = 1;        /* standings enabled */
+}
+
+/* The five accumulator bands and the two that also reset the accumulator;
+ * mode 3 + rng_b = 96 makes the base delta exactly 0 (12 − 96/8) so the
+ * accumulators stay as set, and mode 3 neither demotes nor adds a mood delta.
+ * The previous-level snapshot (+0x21c ← +0x21b) is taken before reclassify. */
+int test_engine_realm_mood_band_classify(void)
+{
+    mood_reset();
+    s_slot_0056d5dc = 5;
+    AREC(1)[0x21d] = 4;     AREC(1)[0x21b] = 2;   /* <5   → 5, acc→30 */
+    AREC(2)[0x21d] = 19;    AREC(2)[0x21b] = 1;   /* <20  → 4         */
+    AREC(3)[0x21d] = 69;    AREC(3)[0x21b] = 9;   /* <70  → 3         */
+    AREC(4)[0x21d] = 94;    AREC(4)[0x21b] = 0;   /* <95  → 2         */
+    AREC(5)[0x21d] = 95;    AREC(5)[0x21b] = 4;   /* >=95 → 1, acc→70 */
+
+    engine_realm_update_mood(96, 0, NULL);
+
+    T_ASSERT_EQ_U(AREC(1)[0x21b], 5);   T_ASSERT_EQ_U(AREC(1)[0x21d], 0x1e);
+    T_ASSERT_EQ_U(AREC(2)[0x21b], 4);   T_ASSERT_EQ_U(AREC(2)[0x21d], 19);
+    T_ASSERT_EQ_U(AREC(3)[0x21b], 3);   T_ASSERT_EQ_U(AREC(3)[0x21d], 69);
+    T_ASSERT_EQ_U(AREC(4)[0x21b], 2);   T_ASSERT_EQ_U(AREC(4)[0x21d], 94);
+    T_ASSERT_EQ_U(AREC(5)[0x21b], 1);   T_ASSERT_EQ_U(AREC(5)[0x21d], 0x46);
+
+    /* previous-level snapshots = the pre-pass +0x21b values */
+    T_ASSERT_EQ_U(AREC(1)[0x21c], 2);
+    T_ASSERT_EQ_U(AREC(3)[0x21c], 9);
+    T_ASSERT_EQ_U(AREC(5)[0x21c], 4);
+    return 0;
+}
+
+/* Base mood delta per event-mode: BASE − rng_b/8 (signed truncating div),
+ * applied once to every realm.  Realm 1 is kept off the focus (focus = realm
+ * 2 via rng_a = 2) so it takes only the base dose; its accumulator is preset
+ * to 50 so each result lands in a non-resetting band and is read back raw. */
+int test_engine_realm_mood_base_delta_per_mode(void)
+{
+    struct { int mode; uint32_t rng_b; int expect; } cases[] = {
+        { 1, 0,  58 },   /* 50 + (8 − 0)        */
+        { 1, 80, 48 },   /* 50 + (8 − 10) = −2  */
+        { 2, 0,  74 },   /* 50 + 24             */
+        { 3, 0,  62 },   /* 50 + 12             */
+        { 4, 0,  38 },   /* 50 + (−12)          */
+        { 4, 24, 35 },   /* 50 + (−12 − 3)      */
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        mood_reset();
+        s_slot_0056d5dc = 2;
+        s_slot_0057c934 = cases[i].mode;
+        AREC(1)[0x21d] = 50;
+        engine_realm_update_mood(cases[i].rng_b, 2, NULL);
+        T_ASSERT_EQ_I((int8_t)AREC(1)[0x21d], cases[i].expect);
+    }
+    return 0;
+}
+
+/* Focus realm takes a SECOND base dose; its neighbours (list at +0x5c,
+ * count +0x5a) take a half-dose; the chosen focus is latched in
+ * s_slot_00554020.  Mode 3, rng_b = 0 → base delta 12, half = 6, mood delta 0. */
+int test_engine_realm_mood_focus_and_neighbours(void)
+{
+    mood_reset();
+    s_slot_0056d5dc = 4;
+    AREC(2)[0x5a] = 2;          /* focus realm 2 has two neighbours */
+    AREC(2)[0x5c] = 3;
+    AREC(2)[0x5d] = 4;
+
+    engine_realm_update_mood(0, 2, NULL);   /* rng_a low nibble 2 → focus 2 */
+
+    T_ASSERT_EQ_U(s_slot_00554020, 2);      /* focus latched */
+    T_ASSERT_EQ_I((int8_t)AREC(1)[0x21d], 12);   /* base only        */
+    T_ASSERT_EQ_I((int8_t)AREC(2)[0x21d], 24);   /* base + focus     */
+    T_ASSERT_EQ_I((int8_t)AREC(3)[0x21d], 18);   /* base + half      */
+    T_ASSERT_EQ_I((int8_t)AREC(4)[0x21d], 18);   /* base + half      */
+    return 0;
+}
+
+/* Focus selection fallback chain: an out-of-range nibble falls back to
+ * previous-focus + 1, then to realm 1, all clamped into 1..count. */
+int test_engine_realm_mood_focus_fallback(void)
+{
+    /* nibble 5 > count 3 → previous(1)+1 = 2 */
+    mood_reset();
+    s_slot_0056d5dc = 3;
+    s_slot_00554020 = 1;
+    engine_realm_update_mood(0, 5, NULL);
+    T_ASSERT_EQ_U(s_slot_00554020, 2);
+
+    /* nibble 5 > count 3, previous(3)+1 = 4 > count → realm 1 */
+    mood_reset();
+    s_slot_0056d5dc = 3;
+    s_slot_00554020 = 3;
+    engine_realm_update_mood(0, 5, NULL);
+    T_ASSERT_EQ_U(s_slot_00554020, 1);
+
+    /* in-range nibble used directly */
+    mood_reset();
+    s_slot_0056d5dc = 3;
+    engine_realm_update_mood(0, 2, NULL);
+    T_ASSERT_EQ_U(s_slot_00554020, 2);
+    return 0;
+}
+
+/* The event-mode mood delta (FUN_00449d6e) folded into the focus realm:
+ * mode 2 keys disposition 0→+4, 1→+2, 2→−8, 4→−12 (disposition 3 unhandled
+ * → 0), and the second disp==4 arm is dead (−12, not −24).  Focus realm 2
+ * accumulator = 0 + 24(base) + 24(focus base) + delta. */
+int test_engine_realm_mood_delta_mode2(void)
+{
+    struct { uint8_t disp; int delta; } cases[] = {
+        { 0, 4 }, { 1, 2 }, { 2, -8 }, { 3, 0 }, { 4, -12 },
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        mood_reset();
+        s_slot_0056d5dc = 2;
+        s_slot_0057c934 = 2;            /* mode 2: base 24 */
+        AREC(2)[0x21e] = cases[i].disp;
+        engine_realm_update_mood(0, 2, NULL);   /* focus realm 2 */
+        T_ASSERT_EQ_I((int8_t)AREC(2)[0x21d], 48 + cases[i].delta);
+    }
+    return 0;
+}
+
+/* Mode 4 mood delta: disposition 1→−2, 2→−4, 3→−6, 4→−10 (0/other → 0).
+ * Focus realm 2 acc = 80 + (−12) + (−12) + delta = 56 + delta. */
+int test_engine_realm_mood_delta_mode4(void)
+{
+    struct { uint8_t disp; int delta; } cases[] = {
+        { 0, 0 }, { 1, -2 }, { 2, -4 }, { 3, -6 }, { 4, -10 },
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        mood_reset();
+        s_slot_0056d5dc = 2;
+        s_slot_0057c934 = 4;            /* mode 4: base −12 */
+        AREC(2)[0x21d] = 80;
+        AREC(2)[0x21e] = cases[i].disp;
+        engine_realm_update_mood(0, 2, NULL);
+        T_ASSERT_EQ_I((int8_t)AREC(2)[0x21d], 56 + cases[i].delta);
+    }
+    return 0;
+}
+
+/* In modes 1 and 4 the two best bands are demoted toward collapse: band 1
+ * always → 0, band 2 → 0 only when the accumulator still exceeds 74.  Mode 1
+ * + rng_b = 64 makes the base delta 0 so the preset accumulators are kept. */
+int test_engine_realm_mood_mode1_demotion(void)
+{
+    mood_reset();
+    s_slot_0056d5dc = 3;
+    s_slot_0057c934 = 1;
+    AREC(1)[0x21d] = 95;        /* band 1            → 0 */
+    AREC(2)[0x21d] = 80;        /* band 2, >74       → 0 */
+    AREC(3)[0x21d] = 72;        /* band 2, not >74   → 2 */
+
+    engine_realm_update_mood(64, 1, NULL);
+
+    T_ASSERT_EQ_U(AREC(1)[0x21b], 0);
+    T_ASSERT_EQ_U(AREC(2)[0x21b], 0);
+    T_ASSERT_EQ_U(AREC(3)[0x21b], 2);
+    return 0;
+}
+
+/* A collapsed (band 1) and a peaked (band 5) realm owned by the local player
+ * each post a notification (codes 0x8f / 0x90) and stamp one roster cell with
+ * a standing marker (0x18 / 0x17).  Mode 3 keeps the bands (no demotion) and
+ * the base delta is 0 (rng_b = 96).  Cell grid bound to the overworld map so
+ * the flips are observable. */
+int test_engine_realm_mood_notify_and_markers(void)
+{
+    mood_reset();
+    engine_territory_bind_cells(g_overworld_map);
+    s_slot_0056d5dc = 2;
+    s_slot_0057c8cc = 1;            /* local player owns both realms */
+    AREC(1)[0x05] = 1;  AREC(1)[0x21d] = 95;   /* band 1 (collapse) */
+    AREC(2)[0x05] = 1;  AREC(2)[0x21d] = 4;    /* band 5 (peak)     */
+
+    /* Each realm's roster points its first slot at a distinct overworld cell;
+     * cursor wrap = 1 keeps the round-robin pinned on slot 0. */
+    AREC(1)[0x205] = 1;  MISC_ROW(1)[0] = 500;
+    AREC(2)[0x205] = 1;  MISC_ROW(2)[0] = 600;
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_realm_update_mood(96, 0, &evq);
+
+    /* realm 1 processed first → ring[0] = 0x8f, realm 2 → ring[1] = 0x90 */
+    T_ASSERT_EQ_I(evq.notify_flag, 1);
+    T_ASSERT_EQ_I(evq.write_idx, 2);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0x8f);
+    T_ASSERT_EQ_I(evq.ring[0].audience, 1);
+    T_ASSERT_EQ_I(evq.ring[1].code, 0x90);
+
+    T_ASSERT_EQ_U(g_overworld_map[500], 0x18);   /* collapse marker */
+    T_ASSERT_EQ_U(g_overworld_map[600], 0x17);   /* peak marker     */
+
+    engine_territory_bind_cells(NULL);            /* restore global state */
+    return 0;
+}
+
+/* A collapsed realm whose owner is NOT the local player posts nothing but
+ * still stamps the collapse marker. */
+int test_engine_realm_mood_marker_without_notify(void)
+{
+    mood_reset();
+    engine_territory_bind_cells(g_overworld_map);
+    s_slot_0057c8cc = 7;                    /* local player owns nothing */
+    AREC(1)[0x05] = 1;  AREC(1)[0x21d] = 95;   /* band 1, owned by player 1 */
+    AREC(1)[0x205] = 1; MISC_ROW(1)[0] = 700;
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_realm_update_mood(96, 0, &evq);
+
+    T_ASSERT_EQ_I(evq.notify_flag, 0);          /* no post */
+    T_ASSERT_EQ_I(evq.write_idx, 0);
+    T_ASSERT_EQ_U(g_overworld_map[700], 0x18);  /* marker still stamped */
+
+    engine_territory_bind_cells(NULL);
+    return 0;
+}
+
+/* The standing-marker clear (FUN_0046942c) resets any roster cell already of
+ * type 0x17/0x18 back to 0 before re-marking.  A band-3 realm (no re-mark)
+ * with a pre-existing 0x17 cell ends with that cell cleared. */
+int test_engine_realm_mood_clears_old_markers(void)
+{
+    mood_reset();
+    engine_territory_bind_cells(g_overworld_map);
+    s_slot_0056d5dc = 1;
+    AREC(1)[0x21d] = 40;                /* band 3 → no new marker */
+    MISC_ROW(1)[0] = 800;
+    g_overworld_map[800] = 0x17;        /* stale peak marker */
+
+    engine_realm_update_mood(96, 0, NULL);
+
+    T_ASSERT_EQ_U(g_overworld_map[800], 0);    /* cleared back to 0 */
+    T_ASSERT_EQ_U(AREC(1)[0x21b], 3);
+    engine_territory_bind_cells(NULL);
+    return 0;
+}
+
+/* Standings disabled (s_slot_0053f25c == 0) forces every realm to the neutral
+ * middle band (3) regardless of its accumulator. */
+int test_engine_realm_mood_standings_disabled(void)
+{
+    mood_reset();
+    s_slot_0056d5dc = 3;
+    s_slot_0053f25c = 0;
+    AREC(1)[0x21d] = 95;       /* would be band 1 */
+    AREC(2)[0x21d] = 4;        /* would be band 5 */
+    AREC(3)[0x21d] = 40;       /* band 3          */
+
+    engine_realm_update_mood(96, 0, NULL);
+
+    T_ASSERT_EQ_U(AREC(1)[0x21b], 3);
+    T_ASSERT_EQ_U(AREC(2)[0x21b], 3);
+    T_ASSERT_EQ_U(AREC(3)[0x21b], 3);
     return 0;
 }

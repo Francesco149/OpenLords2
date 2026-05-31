@@ -1702,6 +1702,17 @@ struct test_case {
     X(engine_realm_history_cursor_wrap) \
     X(engine_realm_history_page_wraps) \
     X(engine_realm_clear_turn_scratch) \
+    X(engine_realm_mood_band_classify) \
+    X(engine_realm_mood_base_delta_per_mode) \
+    X(engine_realm_mood_focus_and_neighbours) \
+    X(engine_realm_mood_focus_fallback) \
+    X(engine_realm_mood_delta_mode2) \
+    X(engine_realm_mood_delta_mode4) \
+    X(engine_realm_mood_mode1_demotion) \
+    X(engine_realm_mood_notify_and_markers) \
+    X(engine_realm_mood_marker_without_notify) \
+    X(engine_realm_mood_clears_old_markers) \
+    X(engine_realm_mood_standings_disabled) \
     \
     X(engine_events_scratch_and_gates) \
     X(engine_events_commit_resource) \

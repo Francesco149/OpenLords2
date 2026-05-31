@@ -12,6 +12,10 @@
 #ifndef OPENLORDS2_ENGINE_REALM_H
 #define OPENLORDS2_ENGINE_REALM_H
 
+#include <stdint.h>
+
+#include "engine_event_queue.h"    /* engine_event_queue_state_t */
+
 /* Port of FUN_0044baea @ 0x44baea (693 B, __stdcall void) — the per-realm
  * approval-rating roll-forward, one of the per-turn passes the turn-advance
  * orchestrator (0x448440) runs.  For every realm 1..s_slot_0056d5dc:
@@ -120,5 +124,53 @@ void engine_realm_record_history(void);
  * (+0x1fb/+0x1fc/+0x1fd/+0x1a8) in each army record so they start clean for the
  * second workforce-allocation dispatch.  Touches only g_per_army_768. */
 void engine_realm_clear_turn_scratch(void);
+
+/* Port of FUN_00449889 @ 0x449889 (1253 B, void) — the per-realm mood /
+ * standing machine, a turn-advance pass of 0x448440 (run right after the
+ * random-event onset roll).  It maintains each realm's "standing" band — the
+ * popularity/order level that drives the unrest-marker overworld cells and the
+ * collapse / triumph notifications.  Over realms 1..s_slot_0056d5dc:
+ *
+ *   1. Snapshot each realm's current standing level (army +0x21b) into its
+ *      previous-level field (+0x21c).
+ *
+ *   2. Derive this turn's base mood delta from the cached 7-bit RNG byte and
+ *      the event-mode (s_slot_0057c934, the season 1..4): a per-mode constant
+ *      (8 / 24 / 12 / −12) minus rng_b/8.  Apply it to every realm's mood
+ *      accumulator (+0x21d, a signed byte with 8-bit wrap).
+ *
+ *   3. Pick a "focus" realm — rng_a's low nibble, else the previous focus
+ *      (s_slot_00554020) + 1, else realm 1, clamped to 1..count — and give it
+ *      an extra base dose plus its neighbours (list at +0x5c, count +0x5a)
+ *      half-doses; each also folds in its event-mode mood delta (FUN_00449d6e,
+ *      keyed on the realm's disposition byte +0x21e).
+ *
+ *   4. Classify each accumulator into a 5-band standing level (+0x21b): <5 → 5
+ *      (and reset the accumulator to 30), <20 → 4, <70 → 3, <95 → 2, else 1
+ *      (and reset to 70).  In modes 1 and 4 the two best bands are demoted to
+ *      0: band 1 always, band 2 when the accumulator still exceeds 74.
+ *
+ *   5. Per realm: clear its standing-marker overworld cells (FUN_0046942c,
+ *      types 0x17/0x18 → 0); if it collapsed (band 1) notify the local player
+ *      with event code 0x8f and stamp one roster cell as a 0x18 marker; if it
+ *      peaked (band 5) notify with 0x90 and stamp a 0x17 marker
+ *      (FUN_00469a9c).  Notifications fire only for the local player's own
+ *      realm and route through engine_event_queue_post.
+ *
+ *   6. If standings are disabled (s_slot_0053f25c == 0), force every realm to
+ *      the neutral middle band (3).
+ *
+ * Two runtime inputs are passed in rather than read from their Win32-only
+ * engine.c file-statics (which the host test build does not link): the cached
+ * 7-bit RNG bytes rng_7bit_b (retail DAT_0058fd60) and rng_7bit_a (DAT_0058fd7c).
+ * The event-queue state `evq` receives the collapse/triumph notifications; it
+ * is only dereferenced on the local player's own realm reaching an extreme, so
+ * tests that avoid that case may pass NULL.  Field semantics (standing band /
+ * mood accumulator / disposition) are provisional; offsets r2-verified against
+ * the 0x300 stride.  Touches g_per_army_768, the overworld cells (g_misc_1360 /
+ * g_overworld_map, via the territory module) and the focus scalar
+ * s_slot_00554020; reads s_slot_0056d5dc / 0057c934 / 0057c8cc / 0053f25c. */
+void engine_realm_update_mood(uint32_t rng_7bit_b, uint32_t rng_7bit_a,
+                              engine_event_queue_state_t *evq);
 
 #endif /* OPENLORDS2_ENGINE_REALM_H */

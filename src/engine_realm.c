@@ -6,16 +6,24 @@
 
 #include "engine_realm.h"
 #include "save.h"                  /* g_per_army_768, g_player_strategic_352,
-                                      g_per_territory_420 */
+                                      g_per_territory_420, g_misc_1360,
+                                      g_overworld_map */
 #include "save_schema_globals.h"   /* s_slot_0056d5dc, s_slot_00553240,
-                                      s_slot_0057c92c */
+                                      s_slot_0057c92c, s_slot_0057c934,
+                                      s_slot_0057c8cc, s_slot_00554020,
+                                      s_slot_0053f25c */
 #include "engine_army_economy.h"   /* engine_army_economy_provision / _plan_production
                                       / _select_candidate */
 #include "engine_math.h"           /* engine_math_percent_of */
+#include "engine_territory.h"      /* engine_territory_set_cell_type (0x46d7f4) */
+#include "engine_event_queue.h"    /* engine_event_queue_post (0x472bc5) */
 
 #define ARMY_REC(key)   (&g_per_army_768[(key) * 0x300])
 #define STRAT_REC(slot) (&g_player_strategic_352[(slot) * 0x160])
 #define TERR_REC(idx)   (&g_per_territory_420[(idx) * 0x1a4])
+/* Per-realm overworld-cell roster: 0x50-byte rows of 20 i32 cell offsets,
+ * shared with engine_realm_events.c (retail 0x53ea00 = g_misc_1360). */
+#define MISC_ROW(realm) ((int32_t *)&g_misc_1360[(realm) * 0x50])
 
 /* Port of FUN_0044baea — see engine_realm.h for the field overview. */
 void engine_realm_advance_rating(void)
@@ -267,5 +275,204 @@ void engine_realm_clear_turn_scratch(void)
         r[0x1fc] = 0;
         r[0x1fd] = 0;
         r[0x1a8] = 0;
+    }
+}
+
+/* ─── the per-realm mood / standing machine (FUN_00449889) ───────────────
+ * Three private helpers, then the pass.  All operate on the per-army record
+ * block; the standing fields used here are:
+ *   +0x05  owner (player slot)        +0x21b  standing level (band 0..5)
+ *   +0x5a  neighbour count            +0x21c  previous standing level
+ *   +0x5c  neighbour list (bytes)     +0x21d  mood accumulator (i8)
+ *   +0x15b roster cursor (u8)         +0x21e  disposition byte (i8)
+ *   +0x205 roster cursor wrap (u8)
+ */
+
+/* Port of FUN_00449d6e — the per-realm mood delta keyed on the turn's
+ * event-mode (s_slot_0057c934, season 1..4) and the realm's disposition byte
+ * (army +0x21e).  Only modes 2 and 4 contribute; everything else (and any
+ * unhandled disposition value) returns 0.  Faithful quirks (#147): mode 2
+ * never handles disposition 3 and has a dead duplicate `disp == 4` arm whose
+ * −24 return is unreachable (the first `disp == 4` arm returns −12). */
+static int realm_mood_delta(int realm)
+{
+    uint8_t disp = ARMY_REC(realm)[0x21e];
+    int mode = (int)s_slot_0057c934;
+
+    if (mode == 2) {
+        if (disp == 0) return 4;
+        if (disp == 1) return 2;
+        if (disp == 2) return -8;
+        if (disp == 4) return -12;
+        /* retail's second `disp == 4 → -24` arm is dead code */
+    } else if (mode == 4) {
+        if (disp == 1) return -2;
+        if (disp == 2) return -4;
+        if (disp == 3) return -6;
+        if (disp == 4) return -10;
+    }
+    return 0;
+}
+
+/* Port of FUN_0046942c — clear any of the realm's 20 roster cells whose
+ * overworld type is one of the two standing markers (0x17 / 0x18) back to
+ * type 0, via the territory module (a no-op when the cell grid is unbound). */
+static void realm_clear_marker_cells(int realm)
+{
+    const int32_t *row = MISC_ROW(realm);
+    for (int i = 0; i < 0x14; i++) {
+        int32_t cell = row[i];
+        if (cell != 0) {
+            uint8_t type = g_overworld_map[cell];
+            if (type == 0x17 || type == 0x18)
+                engine_territory_set_cell_type(cell, 0, 0);
+        }
+    }
+}
+
+/* Port of FUN_00469a9c — advance the realm's round-robin roster cursor
+ * (army +0x15b, wrapping once it reaches the per-realm limit +0x205) to the
+ * next non-empty roster cell, probing at most 20 slots, and set that cell's
+ * overworld type to `type` (a standing marker).  If all 20 probes land on an
+ * empty slot, nothing is flipped.  The cursor is an unsigned byte and wraps
+ * at the realm's roster count, so it never indexes past the realm's row. */
+static void realm_mark_next_cell(int realm, int type)
+{
+    uint8_t       *a   = ARMY_REC(realm);
+    const int32_t *row = MISC_ROW(realm);
+
+    for (int i = 0; i < 0x14; i++) {
+        a[0x15b]++;
+        if (a[0x205] <= a[0x15b])
+            a[0x15b] = 0;
+        if (row[a[0x15b]] != 0) {
+            engine_territory_set_cell_type(row[a[0x15b]], type, 0);
+            return;
+        }
+    }
+}
+
+/* Add a signed byte delta into a realm's mood accumulator (+0x21d) with the
+ * 8-bit wraparound retail gets from storing the char back each time. */
+static void mood_add(uint8_t *a, int delta)
+{
+    a[0x21d] = (uint8_t)((int8_t)a[0x21d] + (int8_t)delta);
+}
+
+/* Notify the local player of a realm hitting a standing extreme.  Mirrors
+ * retail's FUN_00472bc5(0, local_player, code, 0,0,0,0,0): target 0, audience
+ * the local player (so the audience==local filter always publishes).  The
+ * player_has_data[7] filter table is rebuilt from each player's strategic
+ * +0x05 the same way the ranking producer does. */
+static void mood_notify(engine_event_queue_state_t *evq, int code)
+{
+    uint8_t has_data[7];
+    for (int i = 0; i < 6; i++)
+        has_data[i] = STRAT_REC(i)[0x05];
+    has_data[6] = 0;
+    engine_event_queue_post(evq, 0, (int)s_slot_0057c8cc, code, 0,
+                            0, 0, 0, 0, has_data, (int)s_slot_0057c8cc);
+}
+
+/* Port of FUN_00449889 — see engine_realm.h for the full overview. */
+void engine_realm_update_mood(uint32_t rng_7bit_b, uint32_t rng_7bit_a,
+                              engine_event_queue_state_t *evq)
+{
+    int count = (int)s_slot_0056d5dc;
+    int mode  = (int)s_slot_0057c934;
+
+    /* 1. Snapshot each realm's current standing level into "previous". */
+    for (int key = 1; key <= count; key++)
+        ARMY_REC(key)[0x21c] = ARMY_REC(key)[0x21b];
+
+    /* 2. This turn's base mood delta: a per-mode constant minus rng_b/8
+     *    (signed division, truncating toward zero — rng_b is a 7-bit value).
+     *    Retail leaves the delta uninitialised for mode ∉ {1,2,3,4}; the
+     *    orchestrator only ever feeds modes 1..4, so we treat the impossible
+     *    case as 0. */
+    int delta;
+    if      (mode == 1) delta = 8     - (int)rng_7bit_b / 8;
+    else if (mode == 2) delta = 0x18  - (int)rng_7bit_b / 8;
+    else if (mode == 3) delta = 0xc   - (int)rng_7bit_b / 8;
+    else if (mode == 4) delta = -0xc  - (int)rng_7bit_b / 8;
+    else                delta = 0;
+
+    /* 3. Apply the base delta to every realm's mood accumulator. */
+    for (int key = 1; key <= count; key++)
+        mood_add(ARMY_REC(key), delta);
+
+    /* 4. Pick a "focus" realm from rng_a (low nibble), falling back to the
+     *    last focus + 1 then realm 1, and clamp into 1..count.  It takes an
+     *    extra base dose; its neighbours take half-doses.  Each also folds in
+     *    its event-mode mood delta. */
+    int sel = (int)(rng_7bit_a & 0xf);
+    if (count < sel) sel = (int)s_slot_00554020 + 1;
+    if (count < sel) sel = 1;
+    if (sel < 1)     sel = 1;
+    s_slot_00554020 = (uint32_t)sel;
+
+    {
+        uint8_t *a = ARMY_REC(sel);
+        mood_add(a, delta);
+        mood_add(a, realm_mood_delta(sel));
+
+        int n = a[0x5a];
+        for (int i = 0; i < n; i++) {
+            int nb = a[0x5c + i];
+            if (nb == 0)
+                break;
+            uint8_t *na = ARMY_REC(nb);
+            mood_add(na, delta / 2);
+            mood_add(na, realm_mood_delta(nb));
+        }
+    }
+
+    /* 5. Classify each realm's accumulator into a 5-band standing level, run
+     *    the per-band side effects, and (in modes 1 and 4) demote the two
+     *    best bands toward collapse. */
+    for (int key = 1; key <= count; key++) {
+        uint8_t *a = ARMY_REC(key);
+        int8_t mood = (int8_t)a[0x21d];
+
+        if (mood < 5) {
+            a[0x21b] = 5;
+            a[0x21d] = 0x1e;
+        } else if (mood < 0x14) {
+            a[0x21b] = 4;
+        } else if (mood < 0x46) {
+            a[0x21b] = 3;
+        } else if (mood < 0x5f) {
+            a[0x21b] = 2;
+        } else {
+            a[0x21b] = 1;
+            a[0x21d] = 0x46;
+        }
+
+        if (mode == 4 || mode == 1) {
+            if (a[0x21b] == 1)
+                a[0x21b] = 0;
+            else if (a[0x21b] == 2 && (int8_t)a[0x21d] > 0x4a)
+                a[0x21b] = 0;
+        }
+
+        realm_clear_marker_cells(key);
+
+        if (a[0x21b] == 1) {
+            if ((uint32_t)a[0x05] == s_slot_0057c8cc)
+                mood_notify(evq, 0x8f);
+            realm_mark_next_cell(key, 0x18);
+        }
+        if (a[0x21b] == 5) {
+            if ((uint32_t)a[0x05] == s_slot_0057c8cc)
+                mood_notify(evq, 0x90);
+            realm_mark_next_cell(key, 0x17);
+        }
+    }
+
+    /* 6. Standings disabled (s_slot_0053f25c == 0) → force every realm to the
+     *    neutral middle band. */
+    if (s_slot_0053f25c == 0) {
+        for (int key = 1; key <= count; key++)
+            ARMY_REC(key)[0x21b] = 3;
     }
 }

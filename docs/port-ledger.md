@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **474** (19.4%) — tested 438, ported 36
-- code bytes touched: **19.6%** (164,753 / 838,629 B)
-- unported: **1973**
+- touched: **478** (19.5%) — tested 442, ported 36
+- code bytes touched: **19.9%** (166,683 / 838,629 B)
+- unported: **1969**
 - orphan refs (in src/, not in function table): 4
 
-## tested (438) — ported + host unit suite
+## tested (442) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -242,6 +242,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x44975d | FUN_0044975d | 80 | engine_realm_events.c |
 | 0x4497ad | FUN_004497ad | 121 | engine_realm_events.c |
 | 0x449826 | FUN_00449826 | 99 | engine_realm_events.c |
+| 0x449889 | FUN_00449889 | 1253 | engine_realm.c, engine_realm.h |
+| 0x449d6e | FUN_00449d6e | 354 | engine_realm.c, engine_realm.h |
 | 0x44a6ba | FUN_0044a6ba | 903 | engine_realm.c, engine_realm.h |
 | 0x44baea | FUN_0044baea | 693 | engine_realm.c, engine_realm.h |
 | 0x44bf04 | FUN_0044bf04 | 118 | engine_realm.c, engine_realm.h |
@@ -304,6 +306,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x468d4f | FUN_00468d4f | 274 | engine_territory.c, engine_territory.h |
 | 0x468e61 | FUN_00468e61 | 457 | engine_territory.c, engine_territory.h |
 | 0x46902a | FUN_0046902a | 499 | engine_territory.c, engine_territory.h |
+| 0x46942c | FUN_0046942c | 147 | engine_realm.c, engine_realm.h |
+| 0x469a9c | FUN_00469a9c | 176 | engine_realm.c, engine_realm.h |
 | 0x469b51 | FUN_00469b51 | 60 | engine_territory.c, engine_territory.h |
 | 0x469b8d | FUN_00469b8d | 404 | engine_army_economy.c, engine_territory.c, engine_territory.h (+1) |
 | 0x469d21 | FUN_00469d21 | 237 | engine_territory.c, engine_territory.h |
@@ -344,7 +348,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x472ad0 | FUN_00472ad0 | 16 | engine_event_queue.c, engine_event_queue.h |
 | 0x472ae0 | FUN_00472ae0 | 96 | engine_event_queue.c, engine_event_queue.h |
 | 0x472b40 | FUN_00472b40 | 133 | engine_event_queue.c, engine_event_queue.h |
-| 0x472bc5 | FUN_00472bc5 | 560 | engine_event_queue.c, engine_event_queue.h, engine_ranking.h |
+| 0x472bc5 | FUN_00472bc5 | 560 | engine_event_queue.c, engine_event_queue.h, engine_ranking.h (+1) |
 | 0x472df5 | FUN_00472df5 | 81 | engine_event_queue.c, engine_event_queue.h |
 | 0x47ed34 | FUN_0047ed34 | 103 | engine.c, engine_camera.c, engine_camera.h |
 | 0x48ee46 | FUN_0048ee46 | 87 | engine_tile.c, engine_tile.h |
