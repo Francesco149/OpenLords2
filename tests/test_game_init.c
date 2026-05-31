@@ -1121,3 +1121,87 @@ int test_game_init_setup_realms_roster_mapping(void)
     T_ASSERT_EQ_I(AI32(AREC(2), 0x224), 0x0a);
     return 0;
 }
+
+/* ── engine_game_init_seed_army_baseline (FUN_00451150) ──────────────
+ * The per-army default seed run before the country-setup pass.  Callees
+ * are NULLed (realms_reset) so we test only its own field writes. */
+
+/* Every default field on a single army, plus the workforce target ratios
+ * (FUN_004514f8) and the armies-initialised flag. */
+int test_game_init_seed_army_baseline_fields(void)
+{
+    realms_reset();
+    s_slot_0056d5dc = 1;
+
+    engine_game_init_seed_army_baseline();
+
+    T_ASSERT_EQ_U(s_slot_00554020, 1);            /* armies-initialised flag */
+
+    uint8_t *r = AREC(1);
+    T_ASSERT_EQ_I(AI32(r, 0x224), 100);           /* gold (both copies) */
+    T_ASSERT_EQ_I(AI32(r, 0x228), 100);
+    T_ASSERT_EQ_I(AI32(r, 0x250), 0x28);          /* stock */
+    T_ASSERT_EQ_I(AI32(r, 0x254), 0x28);
+    T_ASSERT_EQ_I(AI32(r, 0x024), 0x96);          /* population */
+    T_ASSERT_EQ_I(AI32(r, 0x028), 0x96);
+    T_ASSERT_EQ_I(r[0xb8], (0x96 - 1) / 25 + 1);  /* derived rank = 6 */
+    T_ASSERT_EQ_I(r[0x21b], 3);
+    T_ASSERT_EQ_I(r[0x21d], 0x32);
+    T_ASSERT_EQ_I(r[0x21e], 0);                   /* tier: army 1 < 4 */
+    T_ASSERT_EQ_I(r[0x05], 0);
+    T_ASSERT_EQ_I(r[0x15e], 3);
+    T_ASSERT_EQ_I(r[0x15f], 100);
+    T_ASSERT_EQ_I(r[0x0a], 2);
+    T_ASSERT_EQ_I(r[0x09], 2);
+    T_ASSERT_EQ_I(r[0x0b], 0x32);
+    T_ASSERT_EQ_I(r[0x0d], 0x32);
+    T_ASSERT_EQ_I(r[0x0c], 0x32);
+    T_ASSERT_EQ_I(r[0x290], 4);
+    T_ASSERT_EQ_I(r[0x08], 0x19);
+    T_ASSERT_EQ_I(r[0x1fe], 1);                   /* army 1 is odd */
+
+    /* Workforce target ratios (FUN_004514f8). */
+    T_ASSERT_EQ_I(AI32(r, 0x130), 0x21);
+    T_ASSERT_EQ_I(AI32(r, 0x134), 0x32);
+    T_ASSERT_EQ_I(AI32(r, 0x138), 0x11);
+    T_ASSERT_EQ_I(AI32(r, 0x148), 100);
+    T_ASSERT_EQ_I(AI32(r, 0x13c), 0);
+    T_ASSERT_EQ_I(AI32(r, 0x140), 0);
+    T_ASSERT_EQ_I(AI32(r, 0x144), 0);
+    T_ASSERT_EQ_I(AI32(r, 0x14c), 0);
+    return 0;
+}
+
+/* Tier bucketing by army index, even/odd parity, and the job-slot record
+ * clear (+0xc4 run, stride 0xc, nine records) over a full 12-army board. */
+int test_game_init_seed_army_baseline_tiers_and_parity(void)
+{
+    realms_reset();
+    s_slot_0056d5dc = 12;
+    memset(g_per_army_768, 0xFF, sizeof g_per_army_768);  /* dirty to prove clears */
+
+    engine_game_init_seed_army_baseline();
+
+    /* Tier buckets: <4→0, <6→1, <10→2, <12→3, else→4. */
+    T_ASSERT_EQ_I(AREC(3)[0x21e], 0);
+    T_ASSERT_EQ_I(AREC(5)[0x21e], 1);
+    T_ASSERT_EQ_I(AREC(6)[0x21e], 2);
+    T_ASSERT_EQ_I(AREC(10)[0x21e], 3);
+    T_ASSERT_EQ_I(AREC(12)[0x21e], 4);
+
+    /* Parity byte +0x1fe: odd→1, even→0. */
+    T_ASSERT_EQ_I(AREC(5)[0x1fe], 1);
+    T_ASSERT_EQ_I(AREC(6)[0x1fe], 0);
+
+    /* Nine job-slot records (+0xc4, stride 0xc): +0/+4/+8 all cleared. */
+    uint8_t *r = AREC(7);
+    for (int i = 0; i < 9; i++) {
+        T_ASSERT_EQ_I(AI32(r, 0xc4 + i * 0xc + 0x0), 0);
+        T_ASSERT_EQ_I(AI32(r, 0xc4 + i * 0xc + 0x4), 0);
+        T_ASSERT_EQ_I(AI32(r, 0xc4 + i * 0xc + 0x8), 0);
+    }
+    /* Four model-gate output flags (+0x297, stride 0x18). */
+    for (int i = 0; i < 4; i++)
+        T_ASSERT_EQ_I(r[0x297 + i * 0x18], 0);
+    return 0;
+}

@@ -828,3 +828,78 @@ void engine_game_init_setup_realms(void)
     engine_territory_recenter_on_capital(local_army);   /* FUN_00432746 */
     engine_territory_highlight_key_cells(local_army);   /* FUN_0046dfd5 */
 }
+
+/* Port of FUN_004514f8 (147 B) — seed army `key`'s workforce target-ratio run
+ * (record +0x130..+0x14c, the eight dwords engine_territory_allocate_realm_
+ * workforce reads as per-bucket targets): +0x130 = 0x21, +0x134 = 0x32,
+ * +0x138 = 0x11, +0x148 = 100, the rest (+0x13c/+0x140/+0x144/+0x14c) zero.
+ * The sole caller is the baseline seed below. */
+static void seed_workforce_ratios(int key)
+{
+    uint8_t *r = ARMY_REC(key);
+    *(int32_t *)(r + 0x130) = 0x21;
+    *(int32_t *)(r + 0x134) = 0x32;
+    *(int32_t *)(r + 0x138) = 0x11;
+    *(int32_t *)(r + 0x148) = 100;
+    *(int32_t *)(r + 0x144) = 0;
+    *(int32_t *)(r + 0x140) = 0;
+    *(int32_t *)(r + 0x14c) = 0;
+    *(int32_t *)(r + 0x13c) = 0;
+}
+
+/* Port of FUN_00451150 — see game_init.h for the field overview. */
+void engine_game_init_seed_army_baseline(void)
+{
+    s_slot_00554020 = 1;                          /* armies-initialised flag */
+
+    const int armies = (int)s_slot_0056d5dc;
+    for (int key = 1; key <= armies; key++) {
+        uint8_t *r = ARMY_REC(key);
+
+        r[0x21b] = 3;
+        r[0x21d] = 0x32;
+        /* Difficulty tier bucketed by army index. */
+        r[0x21e] = (key < 4)  ? 0 :
+                   (key < 6)  ? 1 :
+                   (key < 10) ? 2 :
+                   (key < 12) ? 3 : 4;
+        r[0x05] = 0;
+        *(int32_t *)(r + 0x28) = 0x96;            /* population */
+        *(int32_t *)(r + 0x24) = *(int32_t *)(r + 0x28);
+        r[0xb8] = (uint8_t)((*(int32_t *)(r + 0x24) - 1) / 0x19 + 1); /* rank */
+        r[0x15e] = 3;
+        r[0x15f] = 100;
+        r[0x0a] = 2;
+        r[0x09] = r[0x0a];
+        r[0x0b] = 0x32;
+        r[0x0d] = 0x32;
+        r[0x0c] = r[0x0d];
+        r[0x18] = 0;
+        *(int32_t *)(r + 0x1c) = 0;
+        *(int32_t *)(r + 0x208) = 0;
+        r[0x1fe] = (key & 1) ? 1 : 0;             /* even/odd parity */
+        r[0x290] = 4;
+        r[0x08] = 0x19;
+        *(int32_t *)(r + 0x254) = 0x28;           /* stock */
+        *(int32_t *)(r + 0x250) = *(int32_t *)(r + 0x254);
+        *(int32_t *)(r + 0x228) = 100;            /* gold */
+        *(int32_t *)(r + 0x224) = *(int32_t *)(r + 0x228);
+
+        seed_workforce_ratios(key);               /* FUN_004514f8 */
+
+        for (int i = 0; i < 4; i++)               /* model-gate output flags */
+            r[0x297 + i * 0x18] = 0;
+        for (int i = 0; i < 9; i++) {             /* workforce job-slot records */
+            *(int32_t *)(r + 0xc4 + i * 0xc + 0x08) = 0;
+            *(int32_t *)(r + 0xc4 + i * 0xc + 0x04) = *(int32_t *)(r + 0xc4 + i * 0xc + 0x08);
+            *(int32_t *)(r + 0xc4 + i * 0xc + 0x00) = *(int32_t *)(r + 0xc4 + i * 0xc + 0x04);
+        }
+
+        engine_territory_census_army_terrain(key);            /* FUN_00469b8d */
+        engine_territory_grade_feature_cells(key);            /* FUN_0044d913 */
+        engine_army_economy_select_candidate(key, (int)s_slot_0057c92c); /* 0x44dd4d */
+        engine_army_economy_distribute_stock(key);            /* FUN_0044c278 */
+        engine_territory_allocate_realm_workforce(key);       /* FUN_0044f6e7 */
+        engine_army_economy_provision(key, (int)s_slot_0057c934); /* 0x44df5f */
+    }
+}

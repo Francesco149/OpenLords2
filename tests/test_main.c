@@ -1676,6 +1676,8 @@ struct test_case {
     X(game_init_setup_realms_player_human) \
     X(game_init_setup_realms_ai_density_and_empty) \
     X(game_init_setup_realms_roster_mapping) \
+    X(game_init_seed_army_baseline_fields) \
+    X(game_init_seed_army_baseline_tiers_and_parity) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

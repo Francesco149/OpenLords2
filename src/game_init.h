@@ -226,4 +226,24 @@ uint8_t *engine_game_init_troop_pool_row(int player);
  * engine_game_init_bind_troop_spawn. */
 void engine_game_init_setup_realms(void);
 
+/* Port of FUN_00451150 @ 0x451150 (936 B, __stdcall void) — the per-army
+ * baseline seed; a direct 0x497ced new-game callee that runs right after the
+ * overworld-grid setup (0x4676e0) and well before the per-realm/country pass
+ * (engine_game_init_setup_realms), establishing the default economy/state row
+ * for EVERY army 1..s_slot_0056d5dc (player-owned realms are later refined by
+ * setup_realms).
+ *
+ * Sets the world "armies initialised" flag (s_slot_00554020 = 1), then for
+ * each army seeds a fixed default record — gold 100 (+0x224/+0x228), stock
+ * 0x28 (+0x250/+0x254), population 0x96 (+0x24/+0x28) and a derived rank
+ * +0xb8 = (pop-1)/25 + 1, a difficulty tier +0x21e bucketed by army index, an
+ * even/odd parity byte +0x1fe, plus a dozen other flag/counter defaults —
+ * clears the four model-gate output flags (+0x297, stride 0x18) and the nine
+ * workforce job-slot records (+0xc4, stride 0xc), seeds the workforce target
+ * ratios (FUN_004514f8), then runs the per-army census, feature grading,
+ * candidate selection, stock distribution, workforce allocation and
+ * provisioning passes.  Requires the per-army block bound for the economy /
+ * territory callees (each is individually NULL-safe). */
+void engine_game_init_seed_army_baseline(void);
+
 #endif /* OPENLORDS2_GAME_INIT_H */

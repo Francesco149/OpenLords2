@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 398,
+  "tested": 400,
   "ported": 36,
-  "unported": 2013,
+  "unported": 2011,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 434,
-  "pct_touched": 17.7,
+  "touched": 436,
+  "pct_touched": 17.8,
   "pct_tested": 16.3,
   "bytes_total": 838629,
-  "bytes_touched": 156103,
-  "pct_bytes_touched": 18.6
+  "bytes_touched": 157186,
+  "pct_bytes_touched": 18.7
  },
  "orphan_refs": [
   "0x004148",
@@ -9851,7 +9851,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_economy.c",
-    "src/engine_army_economy.h"
+    "src/engine_army_economy.h",
+    "src/game_init.c"
    ]
   },
   {
@@ -10269,16 +10270,22 @@
    "name": "FUN_00451150",
    "size": 936,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c",
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x4514f8",
    "name": "FUN_004514f8",
    "size": 147,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c",
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x45158b",
