@@ -860,6 +860,56 @@ void engine_territory_census_army_terrain(int key)
     }
 }
 
+/* Realm-record fields the secondary-settlement stamp reads to pick its
+ * descriptor tier (both inside g_per_army_768 row `key`). */
+#define ARMY_SETTLE_FLAG  0x1c3   /* DAT_0053fb73 — secondary settlement present  */
+#define ARMY_SETTLE_SIZE  0x1c4   /* DAT_0053fb74 — its size/strength byte        */
+
+/* Port of FUN_0046826c (221 B) — stamp the realm's **secondary settlement**
+ * 2×2 footprint, a per-realm callee of the army/country setup pass 0x49bd99
+ * (called once per realm whose banner-level field +0x1c0 is non-zero, with
+ * `level` = that field − 1).  The parallel of the capital placer
+ * FUN_00467fd1, which stamps the *capital* 2×2 block; this one stamps at the
+ * realm's already-chosen **secondary** cell (record +0x78, ARMY_SEC_OFF).
+ *
+ * The descriptor base is one of three sprite tiers chosen by the realm's
+ * settlement fields, plus a per-level `level*4` stride within the tier:
+ *
+ *   no secondary settlement (+0x1c3 == 0) → base 'P' (0x50)
+ *   small settlement (+0x1c4 < 0x32)      → base '(' (0x28)
+ *   large settlement (+0x1c4 >= 0x32)     → base '<' (0x3c)
+ *
+ * and the +0 TYPE byte is 0x15 + min(level, 4) (0x15..0x19).  The actual
+ * cell writes (the 2×2 descriptor gradient, the +2 flag bits 0x10, the +0
+ * type) are the shared engine_territory_stamp_block, so this is a thin
+ * tier-select wrapper.  No-op if the army-record block is unbound (and
+ * stamp_block itself no-ops if the cell grid is unbound). */
+void engine_territory_stamp_secondary_keep(int key, int level)
+{
+    if (g_army_records == NULL) return;
+
+    const uint8_t *rowbase = g_army_records + key * ARMY_ROW_STRIDE;
+
+    int base;
+    if (rowbase[ARMY_SETTLE_FLAG] == 0)        base = level * 4 + 0x50;  /* 'P' */
+    else if (rowbase[ARMY_SETTLE_SIZE] < 0x32) base = level * 4 + 0x28;  /* '(' */
+    else                                       base = level * 4 + 0x3c;  /* '<' */
+
+    uint8_t type;
+    switch (level) {
+        case 0:  type = 0x15; break;
+        case 1:  type = 0x16; break;
+        case 2:  type = 0x17; break;
+        case 3:  type = 0x18; break;
+        default: type = 0x19; break;           /* level >= 4 */
+    }
+
+    /* +0x78 = ARMY_SEC_OFF (DAT_0053fa28, the secondary cell byte-offset);
+     * that macro is defined further down with the capital-region block. */
+    int off = *(const int32_t *)(rowbase + 0x78);
+    engine_territory_stamp_block(base, 2, off, 0x10, type);
+}
+
 /* Per-army active-cell tally byte: row offset +0x205 (retail DAT_0053fbb5
  * = g_per_army_768 + 0x205). */
 #define ARMY_ACTIVE_COUNT 0x205

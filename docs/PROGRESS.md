@@ -7,6 +7,27 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — GAME-START chip: secondary-settlement stamp (FUN_0046826c) — 2nd leaf of FUN_0049bd99
+
+Ported `FUN_0046826c` (221 B) → `engine_territory_stamp_secondary_keep` — a
+second per-realm leaf of the army/country setup pass `FUN_0049bd99`, landed
+straight after the terrain census (same warm context).  Called once per realm
+whose banner-level field +0x1c0 is non-zero (`level` = field − 1); it's the
+parallel of the capital placer `FUN_00467fd1`, stamping a 2×2 footprint at the
+realm's **secondary** cell (record +0x78) instead of the capital.
+
+A thin tier-selector over the already-ported `engine_territory_stamp_block`:
+descriptor base `'P'`/`'('`/`'<'` chosen by the realm's settlement fields
+(+0x1c3 present-flag, +0x1c4 size `< 0x32`) plus a `level*4` stride, and the +0
+TYPE byte is `0x15 + min(level, 4)`.  Zero new globals (both tier fields + the
+secondary offset live in the already-bound `g_per_army_768`).  4 host tests
+(the three descriptor tiers, the type cap at 0x19 for level ≥ 4, unbound
+no-op).  1446/1446 pass under ASan/UBSan; mingw `.exe` clean;
+`_engine_territory_stamp_secondary_keep` in the PE.
+
+**Next.**  `FUN_0049bd99`'s remaining bottom-up leaves: the 2 KB `FUN_0044f6e7`,
+then the 1-dep helpers `FUN_0044d913` / `FUN_00432746` / `FUN_0046dfd5`.
+
 ## 2026-05-31 — GAME-START chip: per-army terrain census (FUN_00469b8d) — first leaf of FUN_0049bd99
 
 Ported `FUN_00469b8d` (404 B) → `engine_territory_census_army_terrain` in

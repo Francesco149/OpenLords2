@@ -176,6 +176,14 @@ void engine_territory_build_army_adjacency(void);
  * counters are merely cleared if the roster or cell grid is unbound. */
 void engine_territory_census_army_terrain(int key);
 
+/* Port of FUN_0046826c.  Stamp the realm's secondary-settlement 2×2 footprint
+ * at its secondary cell (record +0x78), via engine_territory_stamp_block.  The
+ * descriptor base is one of three tiers ('P'/'('/'<') picked by the realm's
+ * settlement fields (+0x1c3 / +0x1c4) plus a `level*4` stride, and the +0 TYPE
+ * is 0x15 + min(level, 4).  A per-realm callee of the army/country setup pass
+ * 0x49bd99.  No-op if the army-record block (or cell grid) is unbound. */
+void engine_territory_stamp_secondary_keep(int key, int level);
+
 /* Port of FUN_00467a36.  New-game per-army feature-seeding pass: for every
  * active feature-cell (+7 key 1..17, +1 bit 0x20 set), assign a feature
  * terrain type (0x14 / 1 / 0) by the army's running active-cell index and

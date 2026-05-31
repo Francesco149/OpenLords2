@@ -865,10 +865,24 @@ daisy-chain counter init.  Ported as `engine_territory_census_army_terrain`;
 empty-slot + other-row isolation, stale-counter clear with +0x202 preserved,
 unbound NULL-safety).
 
+### FUN_0046826c — secondary-settlement 2×2 stamp ✅ ported
+
+Another per-realm leaf of `FUN_0049bd99` (called once per realm whose
+banner-level field +0x1c0 is non-zero, with `level` = that field − 1).  The
+parallel of the capital placer `FUN_00467fd1`: where that stamps the capital
+2×2 block, this stamps the realm's **secondary** cell (record +0x78,
+`ARMY_SEC_OFF`).  It's a thin tier-selector over the shared
+`engine_territory_stamp_block`: descriptor base is `'P'`(0x50) /
+`'('`(0x28) / `'<'`(0x3c) chosen by the realm's settlement fields (+0x1c3
+present-flag, +0x1c4 size `< 0x32`) plus a `level*4` stride, and the +0 TYPE
+is `0x15 + min(level, 4)`.  Ported as `engine_territory_stamp_secondary_keep`;
+4 host tests (the three tiers, the level cap at type 0x19, unbound no-op).
+No new globals — the two tier fields and the secondary offset all live in the
+already-bound `g_per_army_768`.
+
 **Remaining `FUN_0049bd99` leaves** (its other zero-dep callees, bottom-up):
-`FUN_0046826c` (221 B, capital banner via the ported `FUN_0046ac22`) and the
-2 KB `FUN_0044f6e7`; then the 1-dep helpers `FUN_0044d913` / `FUN_00432746`
-/ `FUN_0046dfd5`.
+the 2 KB `FUN_0044f6e7`; then the 1-dep helpers `FUN_0044d913` /
+`FUN_00432746` / `FUN_0046dfd5`.
 
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
    callees are real; then `FUN_00499dc3` + `FUN_004329ec` spine + the

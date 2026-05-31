@@ -1475,6 +1475,87 @@ int test_territory_census_unbound(void)
     return 0;
 }
 
+/* ── Secondary-settlement stamp (port of FUN_0046826c) ──────────────
+ * Reuse census_setup (binds g_cells + g_army).  Set the realm's secondary
+ * cell offset (+0x78) and the two tier fields (+0x1c3 / +0x1c4), stamp,
+ * then read the 2×2 block the shared stamp_block laid down. */
+
+enum { SETTLE_FLAG = 0x1c3, SETTLE_SIZE = 0x1c4, SETTLE_OFF = 0x78 };
+
+static void sec_setup(int key, int col, int row)
+{
+    census_setup();
+    *(int32_t *)&g_army[key * ARMY_STRIDE + SETTLE_OFF] = cell_off(col, row);
+}
+
+/* Descriptor (+3) of the block cell at (col,row). */
+static int desc(int col, int row) { return g_cells[cell_off(col, row) + 3]; }
+static int ctype(int col, int row) { return g_cells[cell_off(col, row) + 0]; }
+
+/* Tier 'P' (no secondary settlement, +0x1c3 == 0), level 0: base 0x50,
+ * type 0x15, 2×2 gradient {0,2,1,3}. */
+int test_territory_secondary_tier_none(void)
+{
+    sec_setup(5, 20, 20);
+    /* +0x1c3 left 0 → 'P' tier */
+    engine_territory_stamp_secondary_keep(5, 0);
+
+    T_ASSERT_EQ_I(desc(20, 20), 0x50);
+    T_ASSERT_EQ_I(desc(21, 20), 0x52);
+    T_ASSERT_EQ_I(desc(20, 21), 0x51);
+    T_ASSERT_EQ_I(desc(21, 21), 0x53);
+    T_ASSERT_EQ_I(ctype(20, 20), 0x15);
+    T_ASSERT_EQ_I(ctype(21, 21), 0x15);
+    return 0;
+}
+
+/* Tier '(' (settlement present, size < 0x32), level 1: base 0x28 + 4 = 0x2c,
+ * type 0x16. */
+int test_territory_secondary_tier_small(void)
+{
+    sec_setup(3, 8, 8);
+    g_army[3 * ARMY_STRIDE + SETTLE_FLAG] = 1;     /* present  */
+    g_army[3 * ARMY_STRIDE + SETTLE_SIZE] = 0x31;  /* < 0x32   */
+    engine_territory_stamp_secondary_keep(3, 1);
+
+    T_ASSERT_EQ_I(desc(8, 8), 0x2c);
+    T_ASSERT_EQ_I(desc(9, 9), 0x2c + 3);
+    T_ASSERT_EQ_I(ctype(8, 8), 0x16);
+    return 0;
+}
+
+/* Tier '<' (settlement present, size >= 0x32), level 4: base 0x3c + 16 = 0x4c,
+ * type 0x19 (the level cap). */
+int test_territory_secondary_tier_large_and_level_cap(void)
+{
+    sec_setup(2, 30, 12);
+    g_army[2 * ARMY_STRIDE + SETTLE_FLAG] = 1;
+    g_army[2 * ARMY_STRIDE + SETTLE_SIZE] = 0x32;  /* >= 0x32 → large */
+    engine_territory_stamp_secondary_keep(2, 4);
+
+    T_ASSERT_EQ_I(desc(30, 12), 0x4c);
+    T_ASSERT_EQ_I(ctype(30, 12), 0x19);
+
+    /* level 5 still caps the TYPE at 0x19 (base keeps climbing: 0x3c+20). */
+    sec_setup(2, 30, 12);
+    g_army[2 * ARMY_STRIDE + SETTLE_FLAG] = 1;
+    g_army[2 * ARMY_STRIDE + SETTLE_SIZE] = 0x40;
+    engine_territory_stamp_secondary_keep(2, 5);
+    T_ASSERT_EQ_I(ctype(30, 12), 0x19);
+    T_ASSERT_EQ_I(desc(30, 12), 0x3c + 20);
+    return 0;
+}
+
+/* No-op when the army block is unbound (no crash, no cell write). */
+int test_territory_secondary_unbound_is_noop(void)
+{
+    sec_setup(4, 16, 16);
+    engine_territory_bind_army_records(NULL);
+    engine_territory_stamp_secondary_keep(4, 0);
+    T_ASSERT_EQ_I(g_cells[cell_off(16, 16) + 3], 0);   /* untouched */
+    return 0;
+}
+
 /* ── Capital-region setup: block stamp + capital placement ──────────
  * (port of FUN_0046ac22 / FUN_00467fd1, the leaves of the 0x468d4f
  * castle-setup subtree).  Reuse the module-level g_cells + cell_off. */

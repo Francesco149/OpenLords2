@@ -8,18 +8,18 @@
 ## Port coverage (non-thunk engine functions)
 
 ```
-███░░░░░░░░░░░░░░░░░  16.3% touched   (14.8% host-tested, 16.6% of code bytes)
+███░░░░░░░░░░░░░░░░░  16.3% touched   (14.9% host-tested, 16.7% of code bytes)
 ```
 
 | status      | count | what it means                                          |
 |-------------|------:|--------------------------------------------------------|
-| tested      |   363 | ported + module covered by the host unit suite       |
+| tested      |   364 | ported + module covered by the host unit suite       |
 | ported      |    36 | reimplemented in src/, no host test for that module  |
-| **touched** | **399** | tested + ported (FUN_ provenance ref in src/)    |
-| unported    |  2048 | exists in engine, never referenced from src/         |
+| **touched** | **400** | tested + ported (FUN_ provenance ref in src/)    |
+| unported    |  2047 | exists in engine, never referenced from src/         |
 | **total**   | **2447** | non-thunk engine functions (of 2452 incl. thunks) |
 
-Code-byte coverage (16.6%) is the truer progress signal: the engine
+Code-byte coverage (16.7%) is the truer progress signal: the engine
 has a long tail of tiny leaf helpers, so function count understates how much
 of the actual instruction volume is ported.
 

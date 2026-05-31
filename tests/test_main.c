@@ -1425,6 +1425,10 @@ struct test_case {
     X(territory_census_skips_empty_and_other_rows) \
     X(territory_census_clears_stale_counters) \
     X(territory_census_unbound) \
+    X(territory_secondary_tier_none) \
+    X(territory_secondary_tier_small) \
+    X(territory_secondary_tier_large_and_level_cap) \
+    X(territory_secondary_unbound_is_noop) \
     X(territory_stamp_block_2x2_gradient) \
     X(territory_stamp_block_is_square_not_strip) \
     X(territory_stamp_block_unbound_is_noop) \
