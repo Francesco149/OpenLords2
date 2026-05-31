@@ -2533,6 +2533,7 @@ VA_SLOT_STAND   = 0x53f25c       # s_slot_0053f25c — standings-enabled flag
 VA_SLOT_SEASON  = 0x57c92c       # s_slot_0057c92c — season (dev reads, unused)
 FN_TAX_APPROVAL = 0x44bd9f
 FN_DEV_SPREAD   = 0x44bf7a
+FN_REALM_INCOME = 0x44b80b       # FUN_0044b80b — __cdecl(int realm)
 
 REALM_RACE_RETRIES = 8
 
@@ -2562,6 +2563,8 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
         lib.engine_realm_apply_tax_approval.argtypes = []
         lib.engine_realm_spread_development.restype = None
         lib.engine_realm_spread_development.argtypes = []
+        lib.engine_realm_recompute_realm_income.restype = None
+        lib.engine_realm_recompute_realm_income.argtypes = [ctypes.c_int]
         lib.engine_territory_bind_cells.restype = None
         lib.engine_territory_bind_cells.argtypes = [ctypes.c_void_p]
     return _realm_globals_cache
@@ -2774,6 +2777,89 @@ def diff_dev_spread(retail: dict, port: dict) -> list[str]:
     return bad
 
 
+# ── projected-income recompute (FUN_0044b80b — engine_realm_recompute_realm_income) ──
+#
+# Unlike the void() passes this takes an argument (the realm index), so the
+# generic RPC is driven with args=[realm] + cc='mscdecl'.  The pass mutates the
+# called realm's projection fields (+0xc0/+0x0f/+0x16) AND, via the owner-tally
+# recompute (FUN_0044b99a) + per-player income refresh (FUN_0044ba35), the whole
+# strategic block's +0x28 / +0x15c — so both blocks are read back and diffed.
+
+def _build_income_vec(count: int, realm: int, realms: list[tuple],
+                      players: list[tuple]) -> dict:
+    army  = bytearray(REALM_ARMY_BYTES)
+    strat = bytearray(REALM_STRAT_BYTES)
+    for (slot, owner, band, cap, gate, tax, pop) in realms:
+        b = slot * REALM_ARMY_STRIDE
+        army[b + 0x05]  = owner & 0xff
+        army[b + 0x1c0] = band  & 0xff
+        army[b + 0x1c1] = cap   & 0xff
+        army[b + 0x1c3] = gate  & 0xff
+        army[b + 0xb9]  = tax   & 0xff
+        struct.pack_into("<i", army, b + 0x24, pop)
+    for (player, val) in players:
+        struct.pack_into("<i", strat, player * REALM_STRAT_STRIDE + 0x15c, val)
+    return {"count": count, "realm": realm, "army": bytes(army), "strat": bytes(strat)}
+
+
+def gen_realm_income_vectors(n: int, rng: random.Random) -> list[dict]:
+    # Fixed edge cases mirroring the host unit tests (tax bounded 0..50 — its
+    # live engine range, since the .data tally table is sized for 0..50).
+    edge = [
+        (1, 1, [(1, 1, 3, 0, 0, 50, 1000)],                 [(1, 0x999)]),  # basic
+        (1, 1, [(1, 1, 5, 1, 1, 50, 1000)],                 [(1, 0)]),      # band cap → band 1
+        (1, 1, [(1, 1, 5, 0, 1, 50, 1000)],                 [(1, 0)]),      # cap 0 → band 0
+        (1, 1, [(1, 1, 5, 0, 0, 10, 1000)],                 [(1, 0)]),      # low tax → +0x16 = 0
+        (3, 2, [(1, 1, 3, 0, 0, 50, 1000),
+                (2, 1, 3, 0, 0, 50, 1000),
+                (3, 0, 3, 0, 0, 50, 1000)],                 [(1, 0x999)]),  # unowned excluded
+    ]
+    vecs = [_build_income_vec(*e) for e in edge]
+    while len(vecs) < n:
+        count  = rng.randint(1, 16)
+        realm  = rng.randint(1, count)
+        realms = []
+        for slot in range(1, count + 1):
+            realms.append((
+                slot,
+                rng.randint(0, 5),                          # owner
+                rng.randint(0, 6),                          # standing band
+                rng.randint(0, 6),                          # band cap
+                rng.randint(0, 1),                          # cap gate
+                rng.randint(0, 50),                         # tax setting (live range)
+                rng.choice([0, 0, rng.randint(1, 5000)]),   # population
+            ))
+        players = [(p, rng.randint(-5000, 5000)) for p in range(6)]
+        vecs.append(_build_income_vec(count, realm, realms, players))
+    return vecs
+
+
+def run_port_realm_income(lib: ctypes.CDLL, vec: dict) -> dict:
+    g = realm_port_globals(lib)
+    ctypes.memmove(g["army"],  vec["army"],  REALM_ARMY_BYTES)
+    ctypes.memmove(g["strat"], vec["strat"], REALM_STRAT_BYTES)
+    g["count"].value = vec["count"]
+    lib.engine_realm_recompute_realm_income(vec["realm"])
+    return {"army": list(bytes(g["army"])), "strat": list(bytes(g["strat"]))}
+
+
+def realm_income_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_REALM_INCOME, "cc": "mscdecl", "args": [vec["realm"]],
+            "regions": [
+        {"va": VA_PER_ARMY,   "len": REALM_ARMY_BYTES,  "inject": list(vec["army"]),  "read": True},
+        {"va": VA_STRATEGIC,  "len": REALM_STRAT_BYTES, "inject": list(vec["strat"]), "read": True},
+        {"va": VA_SLOT_COUNT, "len": 4, "inject": list(_u32le(vec["count"])), "read": False},
+    ]}
+
+
+def diff_realm_income(retail: dict, port: dict) -> list[str]:
+    bad = _diff_realm_region(retail, port["army"], VA_PER_ARMY,
+                             REALM_ARMY_STRIDE, 17, "army")
+    bad += _diff_realm_region(retail, port["strat"], VA_STRATEGIC,
+                              REALM_STRAT_STRIDE, 6, "strat")
+    return bad
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -2880,6 +2966,9 @@ def run_diff(cfg_args) -> int:
     if "dev_spread" in enabled:
         test_plans.append(("dev_spread",
                            gen_dev_spread_vectors(cfg_args.vectors, rng)))
+    if "realm_income" in enabled:
+        test_plans.append(("realm_income",
+                           gen_realm_income_vectors(cfg_args.vectors, rng)))
     # Pre-generate the rate-gate LUT — one per run, used by all
     # sim_sub_steps vectors so a re-run with the same seed produces
     # the same LUT (and thus the same retail-side gate decisions).
@@ -3007,7 +3096,8 @@ def run_diff(cfg_args) -> int:
         # below still calls install (which returns already_installed=true);
         # this is a no-op at the agent but keeps the per-target log shape.
         shared_freeze_targets = {"sim_sub_steps", "state_hash", "tile_expand",
-                                 "delayed_action", "tax_approval", "dev_spread"}
+                                 "delayed_action", "tax_approval", "dev_spread",
+                                 "realm_income"}
         shared_freeze_installed = False
         if shared_freeze_targets & {n for (n, _) in test_plans}:
             fresp = script.exports_sync.install_sim_sub_steps_engine_freeze()
@@ -3538,6 +3628,42 @@ def run_diff(cfg_args) -> int:
                                   "note": "region readback elided"}
                         port = {"note": "region readback elided"}
                         vec = {"count": vec["count"], "standings": vec["standings"]}
+                elif fn_name == "realm_income":
+                    # FUN_0044b80b(int realm): per-realm projected-income recompute.
+                    # Inject g_per_army_768 + g_player_strategic_352 + realm count;
+                    # call with args=[realm] (cc=mscdecl); read back BOTH blocks
+                    # (the called realm's projection fields + the tally/income
+                    # totals it refreshes across the strategic block).
+                    port = run_port_realm_income(lib, vec)
+                    plan = realm_income_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"count": vec["count"],
+                                                 "realm": vec["realm"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_realm_income(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"count": vec["count"], "realm": vec["realm"]}
                 else:
                     continue
                 if bad:
@@ -3663,7 +3789,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income",
                     help="comma-separated subset to test "
                          "(default: rng_step,fps_step,anim_cycle,frame_delta,"
                          "phase_ticks,input_state,sim_sub_steps,state_hash,"

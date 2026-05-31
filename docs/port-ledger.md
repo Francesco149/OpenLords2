@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **485** (19.8%) — tested 449, ported 36
-- code bytes touched: **20.1%** (168,824 / 838,629 B)
-- unported: **1962**
+- touched: **488** (19.9%) — tested 452, ported 36
+- code bytes touched: **20.2%** (169,500 / 838,629 B)
+- unported: **1959**
 - orphan refs (in src/, not in function table): 4
 
-## tested (449) — ported + host unit suite
+## tested (452) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -213,7 +213,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x448406 | FUN_00448406 | 11 | engine_handlers_da.h |
 | 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h |
 | 0x448440 | FUN_00448440 | 261 | engine_realm.c |
-| 0x4485a5 | FUN_004485a5 | 163 | engine_army_economy.c, engine_army_economy.h |
+| 0x448545 | FUN_00448545 | 96 | engine_realm.c, engine_realm.h |
+| 0x4485a5 | FUN_004485a5 | 163 | engine_army_economy.c, engine_army_economy.h, engine_realm.c (+1) |
 | 0x4486a9 | FUN_004486a9 | 256 | engine_ranking.c, engine_ranking.h |
 | 0x4487a9 | FUN_004487a9 | 112 | engine_ranking.c, engine_ranking.h |
 | 0x448819 | FUN_00448819 | 1277 | engine_realm_events.c, engine_realm_events.h |
@@ -246,7 +247,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x449d6e | FUN_00449d6e | 354 | engine_realm.c, engine_realm.h |
 | 0x44a6ba | FUN_0044a6ba | 903 | engine_realm.c, engine_realm.h |
 | 0x44b59b | FUN_0044b59b | 624 | engine_realm.c, engine_realm.h |
+| 0x44b80b | FUN_0044b80b | 399 | engine_realm.c, engine_realm.h |
 | 0x44b99a | FUN_0044b99a | 155 | engine_realm.c, engine_realm.h |
+| 0x44ba35 | FUN_0044ba35 | 181 | engine_realm.c, engine_realm.h |
 | 0x44baea | FUN_0044baea | 693 | engine_realm.c, engine_realm.h |
 | 0x44bd9f | FUN_0044bd9f | 357 | engine_realm.c, engine_realm.h |
 | 0x44bf04 | FUN_0044bf04 | 118 | engine_realm.c, engine_realm.h |
@@ -268,7 +271,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x44d913 | FUN_0044d913 | 390 | engine_territory.c, engine_territory.h, game_init.c |
 | 0x44da99 | FUN_0044da99 | 692 | engine_army_economy.c, engine_army_economy.h |
 | 0x44dd4d | FUN_0044dd4d | 530 | engine_army_economy.c, engine_army_economy.h, engine_realm.c |
-| 0x44df5f | FUN_0044df5f | 1628 | engine_army_economy.c, engine_army_economy.h, engine_realm.c |
+| 0x44df5f | FUN_0044df5f | 1628 | engine_army_economy.c, engine_army_economy.h, engine_realm.c (+1) |
 | 0x44e5bb | FUN_0044e5bb | 72 | engine_army_economy.c, engine_army_economy.h |
 | 0x44e603 | FUN_0044e603 | 80 | engine_army_economy.c, engine_army_economy.h |
 | 0x44e653 | FUN_0044e653 | 80 | engine_army_economy.c, engine_army_economy.h |

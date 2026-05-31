@@ -3390,8 +3390,14 @@ function runRetailRealmPass(in_obj) {
                 writeChunked(base, Uint8Array.from(reg.inject), reg.len);
             }
         }
-        // Invoke retail — __stdcall void(), no args.
-        new NativeFunction(rva(in_obj.fn_va), 'void', [], 'stdcall')();
+        // Invoke retail.  Defaults to __stdcall void() with no args (the
+        // per-realm void() passes); pass in_obj.args (list of ints) + optional
+        // in_obj.cc ('mscdecl' for __cdecl) for passes that take an argument,
+        // e.g. FUN_0044b80b(int realm).
+        const argvals  = Array.isArray(in_obj.args) ? in_obj.args : [];
+        const argtypes = argvals.map(function () { return 'int'; });
+        const cc       = in_obj.cc || 'stdcall';
+        new NativeFunction(rva(in_obj.fn_va), 'void', argtypes, cc).apply(null, argvals);
         // Read back the requested regions BEFORE restoring.
         for (const reg of in_obj.regions) {
             if (reg.read) {

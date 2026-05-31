@@ -31,6 +31,7 @@ in our port that would corrupt the engine on boot is caught immediately.
 | `engine_tile_expand_footprint`| `FUN_004917dd`    | `src/engine_tile.c`       | castle-load 3×3 building footprint expander.  __cdecl(int) — one arg is the tile byte offset.  STATEFUL (mutates tiles + scratches + 19-entry list), so each vector re-seeds pre-state in-place from the shared xorshift32 seed (per-call re-fill via chunked 32 KB writes; 70 KB readback per call across 5 globals).  Engine-tick freeze required |
 | `tax_approval`                | `FUN_0044bd9f`    | `src/engine_realm.c`      | per-realm tax-policy → approval-modifier turn pass.  __stdcall void() — no args; injects g_per_army_768 + g_player_strategic_352 + realm count, diffs the mutated per-army block.  Engine-tick freeze required |
 | `dev_spread`                  | `FUN_0044bf7a`    | `src/engine_realm.c`      | per-realm development-spread turn pass (+ subtree c093/c278/c5fc/c53b/bfd5).  __stdcall void(); injects per-army + g_misc_1360 + g_overworld_map + count/standings/season, diffs the per-army block AND the overworld map (cell-type stamps).  Port binds its territory cell grid to its overworld copy so the c093→c278 type feedback matches retail.  Engine-tick freeze required.  CAUGHT a real port bug: the developable-cell predicate was inverted (< 0x19 vs >= 0x19) — the host unit tests shared the wrong model and passed; the retail diff did not |
+| `realm_income`                | `FUN_0044b80b`    | `src/engine_realm.c`      | per-realm PROJECTED tax-income recompute (live tax-slider path; also the FUN_00448545 turn pass).  **__cdecl(int realm)** — the FIRST diff target that takes an argument, so the generic RPC is driven with `args:[realm]` + `cc:'mscdecl'` (added to runRetailRealmPass).  Injects g_per_army_768 + g_player_strategic_352 + realm count; reads back BOTH blocks (the called realm's projection fields +0xc0/+0x0f/+0x16 AND the owner-tally +0x28 / per-player income totals +0x15c it refreshes).  Engine-tick freeze required |
 
 Each has a host-side unit-test file under `tests/test_engine_*.c`; the
 diff test complements those by proving they match retail behavior for
@@ -53,15 +54,18 @@ Knobs (full list in `--help`):
   - `--warmup-s N` — how long to wait for engine_tick to start ticking
     before firing RPCs (default 10)
 
-Latest verified run: **288/288 pass across all twelve functions**
-(2026-06-01, retail via cutestation.soy, 24 vectors each — quick regression
-after adding tax_approval + dev_spread and enabling turbo).  Earlier deep run:
-1800/1800 across the first nine (2026-05-25, 200 vectors each).
+Latest verified run: **realm_income 24/24 pass** (2026-06-01, retail via
+cutestation.soy) on top of the prior **288/288 across twelve functions** (24
+vectors each).  Earlier deep run: 1800/1800 across the first nine (2026-05-25,
+200 vectors each).
 
-The per-realm passes (tax_approval, dev_spread) share a single generic agent
-RPC `runRetailRealmPass(fn_va, regions)` — snapshot/inject/call/read-back/
-restore arbitrary memory regions for the __stdcall void() passes — rather than
-a bespoke RPC each.  Diff runs now spawn retail with `turbo: True` (fast boot/
+The per-realm passes (tax_approval, dev_spread, realm_income) share a single
+generic agent RPC `runRetailRealmPass(fn_va, regions)` — snapshot/inject/call/
+read-back/restore arbitrary memory regions — rather than a bespoke RPC each.
+It defaults to invoking the target as `__stdcall void()`; `realm_income`
+(FUN_0044b80b) is the first target that takes an argument, so the RPC grew an
+optional `args:[…]` (list of ints) + `cc:'mscdecl'` so the per-realm index can
+be passed for a `__cdecl(int)` pass.  Diff runs now spawn retail with `turbo: True` (fast boot/
 warmup); the clock-sensitive targets still script `timeGetTime` per-thread, so
 turbo doesn't perturb them (verified: fps_step et al. still pass under turbo).
 

@@ -214,6 +214,34 @@ void engine_realm_recompute_owner_tally(int player);
  * provisional; offsets r2-verified against the 0x300 / 0x160 strides. */
 void engine_realm_accrue_income(void);
 
+/* Port of FUN_0044b80b @ 0x44b80b (399 B, __cdecl) — recompute ONE realm's
+ * PROJECTED tax income and refresh the per-player income totals.  This is the
+ * live "recompute the economy" path: it runs both inside the per-turn re-plan
+ * pass (engine_realm_replan_economies, FUN_00448545) and directly from the
+ * management UI / strategic events whenever a realm's tax setting changes (six
+ * retail call sites).  It is the sibling of engine_realm_accrue_income but
+ * deliberately differs: it does NOT honour the +0x1a8 event-scratch gate and
+ * credits NO treasury — it only fills the projection fields.  For realm `realm`:
+ *
+ *   1. Effective standing band: army +0x1c0, capped by +0x1c1 when the +0x1c3
+ *      gate is set (→ 0 if the cap is 0, else min(band, cap)) — the same rule
+ *      as the accrual pass.
+ *   2. Map the band to a per-capita rate (1→480, 2→560, 3→640, 4→720, 5→800,
+ *      else 320) and compute income = percent_of(population +0x24, rate) then
+ *      percent_of(that, tax setting +0xb9); store it in the PROJECTED field
+ *      +0xc0 (distinct from the accrual field +0xbc).
+ *   3. +0x0f = 5 − taxsetting (signed byte); +0x16 = the tax-setting tally
+ *      modifier (low byte of a baked .data table indexed by the tax setting) —
+ *      the byte engine_realm_recompute_owner_tally sums into the owner's +0x28.
+ *   4. Recompute the owning player's tally (engine_realm_recompute_owner_tally,
+ *      FUN_0044b99a), then refresh all players' projected-income totals
+ *      (FUN_0044ba35: clear +0x15c for players 1..5, re-sum each realm's +0xc0).
+ *
+ * Touches only g_per_army_768 / g_player_strategic_352 and the realm count; uses
+ * engine_math_percent_of.  Field semantics provisional; offsets and the rate /
+ * tally tables r2-verified against the 0x300 / 0x160 strides. */
+void engine_realm_recompute_realm_income(int realm);
+
 /* Port of FUN_00451061 @ 0x451061 (239 B, void) — the per-realm army recount
  * pass, a turn-advance pass of 0x448440.  Two passes over the save state:
  *
@@ -295,5 +323,16 @@ void engine_realm_apply_tax_approval(void);
  * want eventual visual verification, but the arithmetic is deterministic and
  * unit-tested in isolation (set_cell_type no-ops when the cell grid is unbound). */
 void engine_realm_spread_development(void);
+
+/* Port of FUN_00448545 @ 0x448545 (96 B, __stdcall void) — the per-turn economy
+ * re-plan pass of the turn-advance engine (0x448440).  For every realm
+ * 1..s_slot_0056d5dc it re-runs the provisioning decision (engine_army_economy_
+ * provision, FUN_0044df5f) at the current event-mode season (s_slot_0057c934),
+ * re-plans the realm's resource production (engine_army_economy_plan_realm,
+ * FUN_004485a5) at the map season (s_slot_0057c92c), then recomputes its
+ * projected tax income (engine_realm_recompute_realm_income, FUN_0044b80b).  No
+ * new globals; the two economy callees no-op when the army-record block is
+ * unbound. */
+void engine_realm_replan_economies(void);
 
 #endif /* OPENLORDS2_ENGINE_REALM_H */

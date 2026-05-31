@@ -584,6 +584,86 @@ void engine_realm_accrue_income(void)
     }
 }
 
+/* Per-tax-setting income-tally modifier (retail .data 0x4d63d8, indexed by the
+ * realm's tax setting +0xb9 × 4 — the read takes the low byte of each i32
+ * entry).  Indices 0..19 are zero; from index 20 (a 50%/maxed-out tax) the
+ * modifier ramps negative, so a punishingly high tax rate subtracts from the
+ * owning player's order tally.  The tax setting is incremented only while
+ * < 0x32, so 0..50 is its live range; baked for exactly that range, r2-verified.
+ * It lives in writable .data but nothing in the binary ever writes it, so it is
+ * effectively a const lookup. */
+static const int32_t k_taxsetting_tally_modifier[51] = {
+      0,  0,  0,  0,  0,  0,  0,  0,  0,  0,   /*  0.. 9 */
+      0,  0,  0,  0,  0,  0,  0,  0,  0,  0,   /* 10..19 */
+     -1, -1, -1, -1,                          /* 20..23 */
+     -2, -2, -2, -2,                          /* 24..27 */
+     -3, -3, -3, -3,                          /* 28..31 */
+     -4, -4, -4,                              /* 32..34 */
+     -5, -5, -5,                              /* 35..37 */
+     -6, -6,                                  /* 38..39 */
+     -7, -7,                                  /* 40..41 */
+     -8, -8,                                  /* 42..43 */
+     -9, -10, -11, -12, -13, -14, -15,        /* 44..50 */
+};
+
+/* Port of FUN_0044ba35 (181 B) — refresh every player's projected-income total.
+ * Clears the income-summary field +0x15c for players 1..5, then folds each
+ * realm's projected income (+0xc0) into its owning player's total (owner byte
+ * +0x05 != 0).  Exclusive to engine_realm_recompute_realm_income. */
+static void realm_refresh_player_income_totals(void)
+{
+    for (int p = 1; p < 6; p++)
+        *(int32_t *)(STRAT_REC(p) + 0x15c) = 0;
+    for (int key = 1; key <= (int)s_slot_0056d5dc; key++) {
+        uint8_t *r     = ARMY_REC(key);
+        int      owner = r[0x05];
+        if (owner != 0)
+            *(int32_t *)(STRAT_REC(owner) + 0x15c) += *(int32_t *)(r + 0xc0);
+    }
+}
+
+/* Port of FUN_0044b80b — see engine_realm.h for the field overview. */
+void engine_realm_recompute_realm_income(int realm)
+{
+    uint8_t *r = ARMY_REC(realm);
+
+    /* Effective standing band (+0x1c0), optionally capped by +0x1c1 when the
+     * +0x1c3 gate is set — identical rule to engine_realm_accrue_income. */
+    uint8_t band = r[0x1c0];
+    uint8_t cap  = r[0x1c1];
+    if (r[0x1c3] != 0) {
+        if (cap == 0)        band = 0;
+        else if (cap < band) band = cap;
+    }
+
+    /* Per-capita tax rate by band.  Note: unlike the accrual pass this has NO
+     * +0x1a8 event-scratch gate — the projection is always computed. */
+    int rate;
+    switch (band) {
+    case 1:  rate = 0x1e0; break;   /* 480 */
+    case 2:  rate = 0x230; break;   /* 560 */
+    case 3:  rate = 0x280; break;   /* 640 */
+    case 4:  rate = 0x2d0; break;   /* 720 */
+    case 5:  rate = 800;   break;
+    default: rate = 0x140; break;   /* 320 (band 0 / out of range) */
+    }
+
+    /* income = pop · rate% · taxsetting%, stored to the PROJECTED field +0xc0
+     * (distinct from the accrual field +0xbc). */
+    uint8_t tax    = r[0xb9];
+    int     income = engine_math_percent_of(*(int32_t *)(r + 0x24), rate);
+    income = engine_math_percent_of(income, tax);
+    *(int32_t *)(r + 0xc0) = income;
+
+    /* +0x0f = 5 − taxsetting (signed byte); +0x16 = the tax-setting tally
+     * modifier the owner-tally pass sums into the owner's +0x28. */
+    r[0x0f] = (uint8_t)(5 - (int8_t)tax);
+    r[0x16] = (uint8_t)k_taxsetting_tally_modifier[tax];
+
+    engine_realm_recompute_owner_tally(r[0x05]);
+    realm_refresh_player_income_totals();
+}
+
 /* Port of FUN_00451061 — the per-realm army recount pass (a turn-advance pass
  * of 0x448440).  Resets each realm's army-count scratch, then walks the
  * territory-record block counting every placed army (record kind +0x08 == 3,
@@ -839,5 +919,15 @@ void engine_realm_spread_development(void)
         realm_dev_roll_accumulator(key);   /* FUN_0044bfd5 */
         realm_dev_spread_pool(key);        /* FUN_0044c093 */
         realm_dev_project_pool(key);       /* FUN_0044c278 */
+    }
+}
+
+/* Port of FUN_00448545 — see engine_realm.h for the overview. */
+void engine_realm_replan_economies(void)
+{
+    for (int key = 1; key <= (int)s_slot_0056d5dc; key++) {
+        engine_army_economy_provision(key, (int)s_slot_0057c934);  /* FUN_0044df5f */
+        engine_army_economy_plan_realm(key, (int)s_slot_0057c92c); /* FUN_004485a5 */
+        engine_realm_recompute_realm_income(key);                  /* FUN_0044b80b */
     }
 }

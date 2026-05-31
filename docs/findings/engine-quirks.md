@@ -5301,3 +5301,56 @@ came along for the ride.
 > 📍 `src/engine_realm.c` (`realm_dev_spread_pool`, `realm_dev_best_cell`).
 > Ghidra `FUN_0044c093` @ 0x44c093; the two argmax variants are `FUN_0044c5fc`
 > @ 0x44c5fc (default 99) and `FUN_0044c53b` @ 0x44c53b (default 0).
+
+## 151. A realm's displayed tax income and its actually-collected tax income are two different numbers — and only one of them can be suppressed
+
+Two near-identical passes compute a realm's tax income from the same inputs but
+write to two different per-realm fields:
+
+  - `FUN_0044b59b` (`engine_realm_accrue_income`) — the per-turn **accrual**
+    pass.  Writes the collected income to `+0xbc` and credits it to the owner's
+    treasury.
+  - `FUN_0044b80b` (`engine_realm_recompute_realm_income`) — the live
+    **projection** recompute, run both from the per-turn re-plan pass
+    `FUN_00448545` and directly from the management UI / strategic events
+    whenever a tax setting changes (six call sites).  Writes to `+0xc0` and
+    credits no treasury; instead it refreshes the per-player projected-income
+    total `+0x15c` (via `FUN_0044ba35`).
+
+The band→rate→`percent_of(pop,rate)`→`percent_of(·,taxsetting)` arithmetic is
+byte-for-byte identical between the two — with one deliberate omission.  The
+accrual pass gates on the per-realm turn-scratch byte `+0x1a8` (set by events
+such as `0x13b`), forcing the rate (and therefore the collected income `+0xbc`)
+to zero that turn:
+
+```c
+/* accrual (FUN_0044b59b) */            /* projection (FUN_0044b80b) */
+if (army[r].scratch_1a8 == 0)           /* NO +0x1a8 check at all —      */
+    rate = rate_for_band(band);         /*   rate is always computed     */
+else
+    rate = 0;
+```
+
+The projection pass has no such check.  So when an event suppresses a realm's
+income for the turn, the treasury is correctly credited **0**, but the figure
+the recompute leaves in `+0xc0` / the player total `+0x15c` is the *full*
+un-suppressed amount.  The two numbers diverge precisely on the turns where a
+strike/blockade-style event bites — the displayed projection keeps promising
+income the realm will not actually collect.
+
+A third sibling difference: the projection pass writes its rate-adjustment to
+`+0x0f` and a tax-level tally byte to `+0x16` (looked up from a `.data` table at
+`0x4d63d8`), whereas the accrual pass writes its adjustment to the *adjacent*
+`+0x0e`.  The `0x4d63d8` table is sized for exactly the tax setting's live range
+(0..50, the cap its incrementer enforces): indices 0..19 are zero and 20..50
+ramp `-1 … -15`, and entry 51 is the last zero before the *tax-approval* table
+(`0x4d64a8`, quirk #149) begins — so a tax setting above 50 would read straight
+into that neighbouring table, the same off-the-end hazard as #149 / #139, kept
+latent only by the 0..50 clamp.
+
+> 📍 `src/engine_realm.c` (`engine_realm_recompute_realm_income`,
+> `realm_refresh_player_income_totals`, `k_taxsetting_tally_modifier`).
+> Ghidra `FUN_0044b80b` @ 0x44b80b, `FUN_0044ba35` @ 0x44ba35; tally table
+> r2-dumped from 0x4d63d8.  Field semantics (+0xc0 displayed vs +0xbc collected)
+> provisional but the suppression-gate asymmetry is exact.  Verified byte-exact
+> vs retail (`tools/diff_test.py --functions realm_income`, 24/24).

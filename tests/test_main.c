@@ -1733,6 +1733,11 @@ struct test_case {
     X(engine_realm_dev_spread_and_project) \
     X(engine_realm_dev_spread_overflow) \
     X(engine_realm_dev_multi_realm) \
+    X(engine_realm_recompute_income_basic) \
+    X(engine_realm_recompute_income_no_scratch_gate) \
+    X(engine_realm_recompute_income_band_cap) \
+    X(engine_realm_recompute_income_player_summary) \
+    X(engine_realm_replan_economies_dispatches) \
     \
     X(engine_events_scratch_and_gates) \
     X(engine_events_commit_resource) \

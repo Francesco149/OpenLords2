@@ -1258,3 +1258,124 @@ int test_engine_realm_dev_multi_realm(void)
     engine_territory_bind_cells(NULL);
     return 0;
 }
+
+/* ─── engine_realm_recompute_realm_income (FUN_0044b80b) ─────────────────── */
+
+/* The projected-income recompute: same band→rate→income arithmetic as the
+ * accrual pass but written to the PROJECTED field +0xc0, plus +0x0f = 5−tax,
+ * the tax tally byte +0x16, the owner tally +0x28, and the player income
+ * summary +0x15c.  pop 1000, band 3 (rate 640) → percent_of(1000,640)=6400;
+ * tax 50 → percent_of(6400,50)=3200.  Tax 50 → +0x16 = -15 (low byte of the
+ * tally-modifier table at its maxed-out index). */
+int test_engine_realm_recompute_income_basic(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0056d5dc = 1;
+    uint8_t *r = AREC(1);
+    r[0x05] = 1;                 /* owned by player 1 */
+    AI32(r, 0x24) = 1000;        /* population        */
+    r[0x1c0] = 3;                /* standing band 3   */
+    r[0xb9]  = 50;               /* tax setting 50 (the max)  */
+    AI32(r, 0xbc) = 0x7777;      /* accrual field must NOT be touched */
+
+    engine_realm_recompute_realm_income(1);
+
+    T_ASSERT_EQ_I(AI32(r, 0xc0), 3200);          /* projected income */
+    T_ASSERT_EQ_I(AI32(r, 0xbc), 0x7777);        /* accrual field untouched */
+    T_ASSERT_EQ_I((int8_t)r[0x0f], -45);         /* 5 - 50 */
+    T_ASSERT_EQ_I((int8_t)r[0x16], -15);         /* tally modifier @ tax 50 */
+    T_ASSERT_EQ_U(PREC(1)[0x28], (uint8_t)-15);  /* owner tally = sum of +0x16 */
+    T_ASSERT_EQ_I(AI32(PREC(1), 0x15c), 3200);   /* player income summary */
+    return 0;
+}
+
+/* No event-scratch gate: unlike the accrual pass, +0x1a8 does NOT suppress the
+ * projection.  Low tax (≤19) leaves the tally byte +0x16 at zero. */
+int test_engine_realm_recompute_income_no_scratch_gate(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0056d5dc = 1;
+    uint8_t *r = AREC(1);
+    r[0x05] = 1; AI32(r, 0x24) = 1000; r[0x1c0] = 5; r[0xb9] = 10;
+    r[0x1a8] = 100;              /* would suppress in the accrual pass — ignored here */
+
+    engine_realm_recompute_realm_income(1);
+
+    /* band 5 → rate 800; percent_of(1000,800)=8000; percent_of(8000,10)=800 */
+    T_ASSERT_EQ_I(AI32(r, 0xc0), 800);
+    T_ASSERT_EQ_I((int8_t)r[0x16], 0);           /* tax 10 → modifier 0 */
+    T_ASSERT_EQ_I(AI32(PREC(1), 0x15c), 800);
+    return 0;
+}
+
+/* The same band-cap rule as the accrual pass: +0x1c1 caps +0x1c0 only when the
+ * +0x1c3 gate is set. */
+int test_engine_realm_recompute_income_band_cap(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0056d5dc = 1;
+    uint8_t *r = AREC(1);
+    r[0x05] = 1; AI32(r, 0x24) = 1000; r[0xb9] = 50;
+    r[0x1c0] = 5; r[0x1c1] = 1; r[0x1c3] = 1;    /* cap 1 < band 5 → band 1 */
+    engine_realm_recompute_realm_income(1);
+    T_ASSERT_EQ_I(AI32(r, 0xc0), 2400);          /* percent_of(1000,480)=4800; ·50%=2400 */
+
+    r[0x1c1] = 0;                                /* cap 0 → band 0 (rate 320) */
+    engine_realm_recompute_realm_income(1);
+    T_ASSERT_EQ_I(AI32(r, 0xc0), 1600);          /* percent_of(1000,320)=3200; ·50%=1600 */
+    return 0;
+}
+
+/* Player income summary aggregates only owned realms across the realm count;
+ * unowned realms (owner 0) are excluded; the summary is cleared each call. */
+int test_engine_realm_recompute_income_player_summary(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0056d5dc = 3;
+    AREC(1)[0x05] = 1; AI32(AREC(1), 0x24) = 1000; AREC(1)[0x1c0] = 3; AREC(1)[0xb9] = 50;
+    AREC(2)[0x05] = 1; AI32(AREC(2), 0x24) = 1000; AREC(2)[0x1c0] = 3; AREC(2)[0xb9] = 50;
+    AREC(3)[0x05] = 0; AI32(AREC(3), 0x24) = 1000; AREC(3)[0x1c0] = 3; AREC(3)[0xb9] = 50;
+    AI32(PREC(1), 0x15c) = 0x999;                /* dirty: must be cleared */
+
+    /* Recompute all three; the last call's refresh re-sums every realm's +0xc0. */
+    engine_realm_recompute_realm_income(1);
+    engine_realm_recompute_realm_income(2);
+    engine_realm_recompute_realm_income(3);
+
+    /* realms 1+2 owned by player 1 (3200 each), realm 3 unowned → excluded. */
+    T_ASSERT_EQ_I(AI32(PREC(1), 0x15c), 6400);
+    return 0;
+}
+
+/* ─── engine_realm_replan_economies (FUN_00448545) ──────────────────────── */
+
+/* The per-turn dispatcher loops realms 1..count running provision + plan_realm
+ * (both no-op with the army records unbound) + the income recompute.  With the
+ * economy callees neutralised, the observable effect is each realm's projected
+ * income field +0xc0 and the player summary +0x15c. */
+int test_engine_realm_replan_economies_dispatches(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0056d5dc = 2;
+    s_slot_0057c934 = 1;
+    s_slot_0057c92c = 1;
+    engine_army_economy_bind_army_records(NULL);   /* provision + plan → no-op */
+
+    AREC(1)[0x05] = 1; AI32(AREC(1), 0x24) = 1000; AREC(1)[0x1c0] = 3; AREC(1)[0xb9] = 50;
+    AREC(2)[0x05] = 2; AI32(AREC(2), 0x24) = 500;  AREC(2)[0x1c0] = 5; AREC(2)[0xb9] = 40;
+
+    engine_realm_replan_economies();
+
+    T_ASSERT_EQ_I(AI32(AREC(1), 0xc0), 3200);      /* 1000·640%·50% */
+    T_ASSERT_EQ_I(AI32(AREC(2), 0xc0), 1600);      /* 500·800%·40% = 4000·40% */
+    T_ASSERT_EQ_I(AI32(PREC(1), 0x15c), 3200);
+    T_ASSERT_EQ_I(AI32(PREC(2), 0x15c), 1600);
+
+    engine_army_economy_bind_army_records(g_per_army_768);   /* restore */
+    return 0;
+}
