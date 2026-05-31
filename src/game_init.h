@@ -150,4 +150,80 @@ int engine_game_init_army_near_rawflag_only_bit1(int id,
  * count at entry 78.  A direct 0x497ced new-game callee. */
 void engine_game_init_place_army_starts(void);
 
+/* ──────────────────────────────────────────────────────────────────
+ * New-game per-realm / country setup pass (FUN_0049bd99)
+ * ────────────────────────────────────────────────────────────────── */
+
+/* The five new-game "preset selection" inputs the config-screen apply
+ * functions (retail FUN_00499dc3 / FUN_00499e5d, both unported) latch from
+ * the player's scenario/race/handicap choices.  They are NOT save-schema
+ * scalars (they are recomputed each new-game), and 0x49bd99 is their sole
+ * consumer, so this module owns them.  Set them before
+ * engine_game_init_setup_realms; the live owner wires them to the config
+ * apply, host tests call this directly.
+ *
+ *   economy_preset  (DAT_0053f27c) — row index into the per-army economy
+ *                                    seed table (gold/stock/population +
+ *                                    two bytes), applied to EVERY army.
+ *   resource_preset (DAT_0053f270) — row index into the per-player
+ *                                    resource-pool table (6 i32 → +0x140).
+ *   troop_preset    (DAT_0053f274) — row index into the per-player troop
+ *                                    table (7 i32); 0 disables the troop /
+ *                                    starting-army block entirely.
+ *   gold_base       (DAT_0053f278) — flat starting-gold base added to each
+ *                                    player record +0x118.
+ *   keep_level      (DAT_0053f280) — secondary-settlement tier byte stamped
+ *                                    into each realm (+0x1c0); 0 = none. */
+void engine_game_init_set_realm_presets(int economy_preset, int resource_preset,
+                                        int troop_preset, int gold_base,
+                                        int keep_level);
+
+/* Optional battlefield-spawn seam — retail 0x4a9a9a(player, army, 0, 0),
+ * the troop-muster → battlefield unit spawn (with its placement SFX).  The
+ * spawn pulls in the unported 0x4a9xx/0x4acxx subtree and needs audible human
+ * verification, so it is deferred: bind it to wire the real spawn, NULL skips
+ * it.  Retail also relies on this call advancing the entity placer's
+ * current-slot cursor (DAT_0052afe0), which the next line reads for the
+ * player's starting-gold bonus — with the hook unbound that read uses
+ * whatever slot the prior placement left (documented seam). */
+void engine_game_init_bind_troop_spawn(void (*fn)(int player, int army));
+
+/* The per-player troop muster pool (retail DAT_0053f6a0, 6 rows × 0x80 B,
+ * runtime-only — NOT persisted).  Row `player` (1..5) holds seven unit-type
+ * counts at +0x00,+0x10,…,+0x60 and their running total at +0x70.
+ * engine_game_init_setup_realms is its producer (the recruitment/muster UI,
+ * still unported, is the other reader).  Exposed for tests + the future UI;
+ * returns the base of row `player`. */
+uint8_t *engine_game_init_troop_pool_row(int player);
+
+/* Port of FUN_0049bd99 @ 0x49bd99 (3063 B, __stdcall void) — the new-game
+ * per-realm/country setup pass; a direct 0x497ced new-game callee, run right
+ * after the roster compaction (0x49bc5f) and before the per-player subtable
+ * reset (0x4a1c53).
+ *
+ * Two phases plus a finalise:
+ *   1. Army seed — for every army 1..s_slot_0056d5dc, copy one economy preset
+ *      row (economy_preset index, retail DAT_0053f9b0 fields +0x224/+0x228 gold,
+ *      +0x250/+0x254 stock, +0x24/+0x28 population, bytes +0xb/+0xc/+0xd) into
+ *      its record, then run the terrain census (engine_territory_census_army_
+ *      terrain) and feature grading (engine_territory_grade_feature_cells).
+ *   2. Player init — for each player slot 1..5 of g_player_strategic_352 that
+ *      is active (human +0x5 set, or AI +0x7 set), zero its 0x160 record's
+ *      working fields and seat defaults, map it to its army via g_player_roster,
+ *      seed starting gold (+0x118), troops (troop_preset → the muster pool +
+ *      army population, then the deferred spawn), the resource pool defaults
+ *      (+0x120/+0x128/+0x130 = 0x32, +0x140.. from resource_preset), run the
+ *      per-realm economy passes (allocate_realm_workforce, provision, plan_realm
+ *      — each twice), and stamp the secondary keep (keep_level → engine_territory_
+ *      stamp_secondary_keep).
+ *   3. Finalise — give every army with no human/AI owner a +100 gold/stock
+ *      bonus, then recenter + highlight the strategic map on the local player's
+ *      army (engine_territory_recenter_on_capital / _highlight_key_cells).
+ *
+ * Requires the per-army block (engine_*_bind_army_records) and the world tables
+ * bound; the economy/territory callees are individually NULL-safe.  Presets
+ * come from engine_game_init_set_realm_presets; the troop spawn from
+ * engine_game_init_bind_troop_spawn. */
+void engine_game_init_setup_realms(void);
+
 #endif /* OPENLORDS2_GAME_INIT_H */

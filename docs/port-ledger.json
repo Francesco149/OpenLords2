@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 395,
+  "tested": 398,
   "ported": 36,
-  "unported": 2016,
+  "unported": 2013,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 431,
-  "pct_touched": 17.6,
-  "pct_tested": 16.1,
+  "touched": 434,
+  "pct_touched": 17.7,
+  "pct_tested": 16.3,
   "bytes_total": 838629,
-  "bytes_touched": 152465,
-  "pct_bytes_touched": 18.2
+  "bytes_touched": 156103,
+  "pct_bytes_touched": 18.6
  },
  "orphan_refs": [
   "0x004148",
@@ -4566,7 +4566,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/game_init.c"
    ]
   },
   {
@@ -9998,7 +9999,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/game_init.c"
    ]
   },
   {
@@ -10180,7 +10182,8 @@
     "src/engine_army_economy.c",
     "src/engine_army_economy.h",
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/game_init.c"
    ]
   },
   {
@@ -11467,7 +11470,8 @@
    "src": [
     "src/engine_army_economy.c",
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/game_init.c"
    ]
   },
   {
@@ -11912,7 +11916,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/game_init.c"
    ]
   },
   {
@@ -15012,16 +15017,20 @@
    "name": "FUN_00499dc3",
    "size": 154,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x499e5d",
    "name": "FUN_00499e5d",
    "size": 421,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x49a010",
@@ -15207,8 +15216,11 @@
    "name": "FUN_0049bd99",
    "size": 3063,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c",
+    "src/game_init.h"
+   ]
   },
   {
    "va": "0x49c995",

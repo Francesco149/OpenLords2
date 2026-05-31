@@ -1672,6 +1672,10 @@ struct test_case {
     X(game_init_army_probe_reports_matched_cell) \
     X(game_init_place_army_starts_places_two) \
     X(game_init_place_army_starts_skips_and_terminates) \
+    X(game_init_setup_realms_army_seed) \
+    X(game_init_setup_realms_player_human) \
+    X(game_init_setup_realms_ai_density_and_empty) \
+    X(game_init_setup_realms_roster_mapping) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

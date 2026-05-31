@@ -14,6 +14,7 @@
 #include "engine_roster.h"        /* player_first_active_nonlocal (FUN_004a1e6c) */
 #include "engine_map_query.h"     /* box predicates for the army-coord probes */
 #include "engine_territory.h"     /* entity placer FUN_0046e1b0 (army starts) */
+#include "engine_army_economy.h"  /* provision / plan_realm (per-realm economy) */
 
 /* Fixed-length record zeroer — retail FUN_0046ea28 (len 0x300),
  * FUN_0046eb09 (len 0x14), FUN_0046ead0 (len 0x1a4) and FUN_0046ea61
@@ -561,4 +562,269 @@ void engine_game_init_place_army_starts(void)
             s_slot_005530b4++;
         }
     }
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * New-game per-realm / country setup pass — port of FUN_0049bd99
+ * ────────────────────────────────────────────────────────────────── */
+
+/* Per-army record block (g_per_army_768, stride 0x300) — local accessor. */
+#define ARMY_REC(key)   (&g_per_army_768[(key) * 0x300])
+
+/* The five preset-selection inputs (see game_init.h).  Owned here; latched
+ * by the config-screen apply (unported) via the setter below. */
+static int g_economy_preset;    /* DAT_0053f27c */
+static int g_resource_preset;   /* DAT_0053f270 */
+static int g_troop_preset;      /* DAT_0053f274 */
+static int g_gold_base;         /* DAT_0053f278 */
+static int g_keep_level;        /* DAT_0053f280 (read as a byte) */
+
+void engine_game_init_set_realm_presets(int economy_preset, int resource_preset,
+                                        int troop_preset, int gold_base,
+                                        int keep_level)
+{
+    g_economy_preset  = economy_preset;
+    g_resource_preset = resource_preset;
+    g_troop_preset    = troop_preset;
+    g_gold_base       = gold_base;
+    g_keep_level      = keep_level;
+}
+
+/* Optional battlefield-spawn seam (retail 0x4a9a9a). */
+static void (*g_troop_spawn)(int player, int army);
+
+void engine_game_init_bind_troop_spawn(void (*fn)(int player, int army))
+{
+    g_troop_spawn = fn;
+}
+
+/* Per-player troop muster pool (retail DAT_0053f6a0, 6 rows × 0x80 B). */
+static uint8_t g_troop_pool[6 * 0x80];
+
+uint8_t *engine_game_init_troop_pool_row(int player)
+{
+    return &g_troop_pool[player * 0x80];
+}
+
+/*
+ * Retail's three new-game preset tables share one contiguous .data region
+ * (0x4dc070..0x4dc180, 68 dwords); each is read with its own base offset and
+ * stride, and the strides do not tile, so the three views overlap in address
+ * space — only an in-range index (which retail guarantees from the bounded
+ * config-screen selection) reads its own table's rows.  Baked dword-for-dword
+ * from the PE and read through the byte-offset accessors below (host + target
+ * are both little-endian, so the byte columns of the economy table read
+ * correctly off this dword array).
+ */
+static const uint32_t k_preset_words[68] = {           /* base = retail 0x4dc070 */
+    /* +0x00 */ 0,     0,     0,      0,
+    /* +0x10 */ 0,     0,     0,      0,
+    /* +0x20 */ 0x19,  0,     0x19,   0,
+    /* +0x30 */ 0,     0,     0x32,   0x32,
+    /* +0x40 */ 0x32,  0,     0x64,   0x64,
+    /* +0x50 */ 0x64,  0x64,  0x64,   0,
+    /* +0x60 */ 0x0a,  0x28,  0xa7,   0x2d,    /* economy table row 0 begins @ +0x60 */
+    /* +0x70 */ 0x29,  0,     0x5f,   0x1a1,
+    /* +0x80 */ 0x41,  0x41,  0x1f4,  0x14a,
+    /* +0x90 */ 0x49d, 0x55,  0x55,   0,
+    /* +0xa0 */ 0,     0,     0,      0,        /* troop table row 0 begins @ +0xa0 */
+    /* +0xb0 */ 0,     0,     0,      0,
+    /* +0xc0 */ 0,     0,     0x19,   0,
+    /* +0xd0 */ 0x19,  0,     0,      0,
+    /* +0xe0 */ 0,     0x32,  0x32,   0x32,
+    /* +0xf0 */ 0,     0,     0,      0,
+    /* +0x100*/ 0x64,  0x64,  0x64,   0,
+};
+
+#define PRESET_ECON_OFF    0x60   /* economy table base, stride 0x14 */
+#define PRESET_RES_OFF     0x00   /* resource table base, stride 0x18 */
+#define PRESET_TROOP_OFF   0xa0   /* troop table base, stride 0x1c */
+
+static const uint8_t *preset_bytes(void)
+{
+    return (const uint8_t *)k_preset_words;
+}
+
+/*
+ * Phase 2 helper — the sparse field-zero block at the head of each active
+ * player's record (retail LAB_0049bf5e).  Retail does NOT memset the whole
+ * 0x160 record; it clears a specific working-field set and seats two defaults
+ * (+0x29 = +0x2a = 1), leaving the rest of the record (the identity fields
+ * +0x4..+0x7, +0xa, etc.) intact.  Reproduced field-exact for bit-parity.
+ *
+ * Retail loops `for (i=0; i<4; i++)` over the +0x80 dword write without using
+ * the index (a redundant 4× zero of +0x80); folded to one write here.  The
+ * +0x140 loop DOES index (six dwords +0x140..+0x154), kept as a loop.
+ */
+static void init_player_record(uint8_t *p)
+{
+    *(uint32_t *)(p + 0x00) = 0;
+    p[0x0c] = 0;
+    *(uint32_t *)(p + 0x10) = 0;
+    *(uint32_t *)(p + 0x14) = 0;
+    *(uint32_t *)(p + 0x18) = 0;
+    p[0x1c] = 0;  p[0x1d] = 0;  p[0x1e] = 0;
+    *(uint32_t *)(p + 0x20) = 0;
+    *(uint32_t *)(p + 0x24) = 0;
+    p[0x28] = 0;
+    p[0x29] = 1;  p[0x2a] = 1;          /* two seated defaults */
+    p[0x2b] = 0;  p[0x2c] = 0;
+    p[0x45] = 0;  p[0x46] = 0;  p[0x47] = 0;
+    p[0x48] = 0;  p[0x49] = 0;  p[0x4a] = 0;
+    p[0x4b] = 0;  p[0x4c] = 0;  p[0x4d] = 0;
+    *(uint32_t *)(p + 0x50) = 0;
+    *(uint32_t *)(p + 0x54) = 0;
+    p[0x58] = 0;
+    *(uint32_t *)(p + 0x5c) = 0;
+    p[0x60] = 0;  p[0x61] = 0;
+    *(uint32_t *)(p + 0x64) = 0;
+    *(uint32_t *)(p + 0x68) = 0;
+    *(uint32_t *)(p + 0x6c) = 0;
+    *(uint32_t *)(p + 0x80) = 0;        /* retail's 4× redundant loop, folded */
+    p[0x80] = 0;  p[0x81] = 0;
+    p[0xe7] = 0;
+    p[0xe8] = 0;  p[0xe9] = 0;  p[0xea] = 0;  p[0xeb] = 0;
+    p[0xec] = 0;  p[0xed] = 0;
+    p[0xef] = 0;  p[0xf0] = 0;
+    *(uint32_t *)(p + 0xf4) = 0;
+    *(uint32_t *)(p + 0xf8) = 0;
+    *(uint32_t *)(p + 0xfc) = 0;
+    for (int off = 0x100; off <= 0x13c; off += 4)   /* +0x100..+0x13c dwords */
+        *(uint32_t *)(p + off) = 0;
+    for (int i = 0; i < 6; i++)                      /* +0x140..+0x154 (indexed) */
+        *(uint32_t *)(p + 0x140 + i * 4) = 0;
+    p[0x158] = 0;  p[0x159] = 0;
+}
+
+void engine_game_init_setup_realms(void)
+{
+    const uint8_t *preset = preset_bytes();
+    const int armies = (int)s_slot_0056d5dc;
+
+    /* --- Phase 1: per-army economy seed -------------------------------- */
+    {
+        const uint8_t *econ = preset + PRESET_ECON_OFF + g_economy_preset * 0x14;
+        const int32_t gold  = *(const int32_t *)(econ + 0x00);
+        const int32_t stock = *(const int32_t *)(econ + 0x04);
+        const int32_t pop   = *(const int32_t *)(econ + 0x08);
+        const uint8_t b_b   = econ[0x0c];
+        const uint8_t b_d   = econ[0x10];
+
+        for (int key = 1; key <= armies; key++) {
+            uint8_t *rec = ARMY_REC(key);
+            *(int32_t *)(rec + 0x228) = gold;
+            *(int32_t *)(rec + 0x224) = gold;     /* copy of +0x228 */
+            *(int32_t *)(rec + 0x254) = stock;
+            *(int32_t *)(rec + 0x250) = stock;    /* copy of +0x254 */
+            *(int32_t *)(rec + 0x028) = pop;
+            *(int32_t *)(rec + 0x024) = pop;      /* copy of +0x28 */
+            rec[0x0b] = b_b;
+            rec[0x0d] = b_d;
+            rec[0x0c] = b_d;                      /* copy of +0xd */
+
+            engine_territory_census_army_terrain(key);   /* FUN_00469b8d */
+            engine_territory_grade_feature_cells(key);   /* FUN_0044d913 */
+        }
+    }
+
+    /* --- Phase 2: per-player record init ------------------------------- */
+    for (int slot = 1; slot < 6; slot++) {
+        uint8_t *p = STRAT_REC(slot);
+
+        /* Active iff: human (HAS_DATA set) OR AI (HAS_DATA clear, OPP_TYPE
+         * set).  An empty slot (both clear) is skipped.  Either way an active
+         * slot latches the ACTIVE flag first. */
+        if (p[STRAT_HAS_DATA] == 0) {
+            if (p[STRAT_OPP_TYPE] == 0)
+                continue;                         /* empty slot */
+            p[STRAT_ACTIVE] = 1;
+        } else {
+            p[STRAT_ACTIVE] = 1;
+        }
+
+        init_player_record(p);
+
+        /* Map this player to its army (g_player_roster pair, id byte @ *2). */
+        int army = (uint8_t)g_player_roster[slot * 2];
+        uint8_t *arec = ARMY_REC(army);
+        arec[0x05] = (uint8_t)slot;               /* army → owning player */
+        arec[0x07] = p[0x0a];                     /* army +0x07 ← player +0x0a */
+
+        if (army > armies)
+            continue;                             /* unmapped / out-of-range */
+
+        p[0xe4] = (uint8_t)army;                  /* player → army id */
+        *(int32_t *)(p + 0x118) = g_gold_base;    /* starting gold base */
+
+        if (g_troop_preset != 0) {
+            const uint8_t *tr = preset + PRESET_TROOP_OFF + g_troop_preset * 0x1c;
+            uint8_t *pool = engine_game_init_troop_pool_row(slot);
+            *(int32_t *)(pool + 0x70) = 0;
+            for (int i = 0; i < 7; i++) {
+                int32_t n = *(const int32_t *)(tr + i * 4);
+                *(int32_t *)(pool + i * 0x10) = n;
+                *(int32_t *)(pool + 0x70)        += n;   /* muster total */
+                *(int32_t *)(arec + 0x24)        += n;   /* army population */
+            }
+            if (g_troop_spawn)
+                g_troop_spawn(slot, army);        /* 0x4a9a9a (deferred) */
+            *(int32_t *)(arec + 0x2f4) = 0;
+            /* Retail adds the freshly placed entity's territory yield (record
+             * +0x15c at the placer's current slot) — exact once the spawn
+             * hook above runs; with it unbound the slot cursor is stale. */
+            *(int32_t *)(p + 0x118) +=
+                *(const int32_t *)(g_per_territory_420 +
+                                   engine_territory_current_slot() * 0x1a4 + 0x15c);
+        }
+
+        /* Per-realm economy passes — each issued twice, in retail order. */
+        for (int pass = 0; pass < 2; pass++) {
+            engine_territory_allocate_realm_workforce(army);     /* FUN_0044f6e7 */
+            engine_army_economy_provision(army, (int)s_slot_0057c934); /* 0x44df5f */
+            engine_army_economy_plan_realm(army, (int)s_slot_0057c92c); /* 0x4485a5 */
+        }
+
+        /* Secondary-settlement keep tier (byte → realm +0x1c0). */
+        arec[0x1c0] = (uint8_t)g_keep_level;
+        if (arec[0x1c0] != 0)
+            engine_territory_stamp_secondary_keep(army, arec[0x1c0] - 1); /* 0x46826c */
+
+        /* Resource-pool defaults + the per-race resource preset. */
+        *(int32_t *)(p + 0x120) = 0x32;
+        *(int32_t *)(p + 0x130) = 0x32;
+        *(int32_t *)(p + 0x128) = 0x32;
+        {
+            const uint8_t *res = preset + PRESET_RES_OFF + g_resource_preset * 0x18;
+            for (int i = 0; i < 6; i++)
+                *(int32_t *)(p + 0x140 + i * 4) = *(const int32_t *)(res + i * 4);
+        }
+        if (p[STRAT_HAS_DATA] == 0)               /* AI realm: density gold bonus */
+            *(int32_t *)(p + 0x150) += (int)s_slot_0053f23c * 0x14;
+
+        /* Latch the first present economic-model gate (slot records @ +0x294,
+         * stride 0x18; skip slot 2; gate flag +1, output flag +3). */
+        for (int i = 0; i < 4; i++) {
+            if (i != 2 && arec[0x294 + i * 0x18 + 1] != 0) {
+                arec[0x294 + i * 0x18 + 3] = 1;
+                break;
+            }
+        }
+        arec[0x1b0] = 1;                          /* realm setup-complete flag */
+    }
+
+    /* --- Phase 3: finalise --------------------------------------------- */
+
+    /* Unowned (no human/AI) armies get a +100 gold/stock head-start. */
+    for (int key = 1; key <= armies; key++) {
+        uint8_t *rec = ARMY_REC(key);
+        if (rec[0x05] == 0) {
+            *(int32_t *)(rec + 0x224) += 100;
+            *(int32_t *)(rec + 0x228) += 100;
+        }
+    }
+
+    /* Recenter + highlight the strategic map on the local player's army. */
+    int local_army = (uint8_t)g_player_roster[s_slot_0057c8cc * 2];
+    engine_territory_recenter_on_capital(local_army);   /* FUN_00432746 */
+    engine_territory_highlight_key_cells(local_army);   /* FUN_0046dfd5 */
 }

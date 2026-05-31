@@ -5003,3 +5003,45 @@ six-entry `.data` table — one `(poolA, poolB)` pair per nationality —
 > `_sum_supply_pools`).  Ghidra `FUN_0044f318` @ 0x44f318, `FUN_0044f15b` @
 > 0x44f15b, `FUN_0044f6e7` @ 0x44f6e7 (ported as `engine_territory`'s
 > WF_COUNTER); race table `DAT_004d8990`/`DAT_004d8994` @ 0x4d8990.
+
+## 144. Three new-game preset tables share one block of bytes, and a realm's resource defaults overwrite the economy it just planned
+
+The per-realm/country setup pass `FUN_0049bd99`
+(`engine_game_init_setup_realms`) draws its starting values from three baked
+`.data` tables — the per-army economy seed `DAT_004dc0d0` (stride `0x14`), the
+per-player resource pool `DAT_004dc070` (stride `0x18`), and the per-player
+troop counts `DAT_004dc110` (stride `0x1c`).  They look like three separate
+arrays, but they are one contiguous 0x110-byte region (`0x4dc070..0x4dc180`)
+read three ways: the bases are `+0x00`, `+0x60` and `+0xa0` into the same
+bytes, and because the strides do not tile, a high enough index into one table
+walks straight into another's rows.  Retail never trips this — each index comes
+from the bounded config-screen selection (a handful of rows each) — but the
+overlap is real, so the port bakes the single backing region and exposes the
+three views by base-offset + stride rather than as three independent arrays.
+
+Two ordering oddities inside the per-player init:
+
+- The economic passes run, *then* the defaults clobber them.  For each active
+  player the function calls `allocate_realm_workforce` → `provision` →
+  `plan_realm` (twice), all of which write the realm's resource fields — and
+  only *after* that does it slam `+0x120`/`+0x128`/`+0x130` to a flat `0x32`
+  and reload `+0x140..` from the resource preset.  So whatever the planner
+  computed for those three pool fields at setup is immediately discarded; the
+  first real values come from the next turn's planner.
+
+- A four-iteration loop that ignores its own counter.  Retail clears player
+  record `+0x80` inside `for (i = 0; i < 4; i++)` but the body never indexes
+  `i`, so it writes the same dword four times — a redundant zero, folded to a
+  single write in the port.  (The neighbouring `+0x140` loop *does* index `i`,
+  so the two are not the same pattern misread.)
+
+The pass is also the **producer** of the per-player strategic block
+(`g_player_strategic_352`, retail `0x57bf00`) whose `+0x120` sub-view the
+per-turn economy planner later reads as its resource-demand pool, and of the
+runtime-only troop muster pool (`DAT_0053f6a0`, 6 × 0x80, not persisted) that
+the recruitment UI and the deferred battlefield spawn (`0x4a9a9a`) consume.
+
+> 📍 `src/game_init.c` (`engine_game_init_setup_realms`).  Ghidra
+> `FUN_0049bd99` @ 0x49bd99; preset tables `DAT_004dc070`/`DAT_004dc0d0`/
+> `DAT_004dc110` @ 0x4dc070; r2 `pdf @ 0x49bd99` confirms the byte/dword field
+> widths, the `+0x80` no-index loop, and the post-plan `0x32` overwrite.

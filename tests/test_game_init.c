@@ -26,6 +26,7 @@
 #include "engine_turn.h"          /* turn-handshake globals reset by the seed */
 #include "engine_map_query.h"     /* cell-grid binding for the army probes */
 #include "engine_territory.h"     /* entity placer + record/cell binding */
+#include "engine_army_economy.h"  /* army-record bind (NULLed to isolate setup_realms) */
 
 /* The save blocks under test live in save.c (linked into the suite). */
 
@@ -934,5 +935,189 @@ int test_game_init_place_army_starts_skips_and_terminates(void)
     T_ASSERT_EQ_I(TREC(2, 0x00), 0);    /* no second record */
     /* army 9's cell was never claimed */
     T_ASSERT_EQ_I(g_army_cells[(30 * 0x40 + 30) * 8 + 5], 0);
+    return 0;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * engine_game_init_setup_realms (FUN_0049bd99) — new-game per-realm /
+ * country setup pass.
+ *
+ * The function writes the per-army (g_per_army_768) and per-player
+ * (g_player_strategic_352) save blocks directly; all of its economy /
+ * territory callees route through their module binds.  We NULL every one
+ * of those binds so the callees no-op, isolating setup_realms's own field
+ * writes for verification.
+ * ────────────────────────────────────────────────────────────────── */
+
+#define AREC(key)   (&g_per_army_768[(key) * 0x300])
+#define PREC(slot)  (&g_player_strategic_352[(slot) * 0x160])
+#define AI32(p, o)  (*(int32_t *)((p) + (o)))
+
+/* Player-record flag offsets (private to game_init.c; restated locally). */
+#define STRAT_HAS_DATA   0x05    /* human player_has_data flag */
+#define STRAT_OPP_TYPE   0x07    /* AI opponent-type code */
+
+static void realms_reset(void)
+{
+    memset(g_per_army_768,         0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(g_player_roster,        0, sizeof g_player_roster);
+    memset(g_per_territory_420,    0, sizeof g_per_territory_420);
+
+    /* Force every callee to no-op (test only setup_realms's own writes). */
+    engine_territory_bind_army_records(NULL);
+    engine_territory_bind_cells(NULL);
+    engine_territory_bind_cell_roster(NULL);
+    engine_army_economy_bind_army_records(NULL);
+    engine_army_economy_bind_cells(NULL);
+    engine_army_economy_bind_cell_roster(NULL);
+    engine_army_economy_bind_resource_pool(NULL);
+    engine_game_init_bind_troop_spawn(NULL);
+
+    /* Clear the troop muster pool via a benign run-then-reset is not
+     * possible, so zero it through the accessor. */
+    for (int slot = 0; slot < 6; slot++)
+        memset(engine_game_init_troop_pool_row(slot), 0, 0x80);
+
+    s_slot_0056d5dc = 0;     /* army count   */
+    s_slot_0057c8cc = 0;     /* local player */
+    s_slot_0057c934 = 0;     /* season (phase arg) */
+    s_slot_0057c92c = 0;     /* season-next (phase arg) */
+    s_slot_0053f23c = 0;     /* density      */
+}
+
+/* Phase 1 — every army gets the economy preset row; with no player owning
+ * any army the finalise pass adds the +100 gold head-start to each. */
+int test_game_init_setup_realms_army_seed(void)
+{
+    realms_reset();
+    engine_game_init_set_realm_presets(0, 0, 0, 0, 0);   /* economy preset 0 */
+    s_slot_0056d5dc = 3;
+
+    engine_game_init_setup_realms();
+
+    for (int key = 1; key <= 3; key++) {
+        uint8_t *r = AREC(key);
+        /* gold 0x0a + 100 unowned bonus on both copies (+0x224/+0x228) */
+        T_ASSERT_EQ_I(AI32(r, 0x224), 0x0a + 100);
+        T_ASSERT_EQ_I(AI32(r, 0x228), 0x0a + 100);
+        /* stock 0x28, population 0xa7 (no finalise bonus) */
+        T_ASSERT_EQ_I(AI32(r, 0x250), 0x28);
+        T_ASSERT_EQ_I(AI32(r, 0x254), 0x28);
+        T_ASSERT_EQ_I(AI32(r, 0x024), 0xa7);
+        T_ASSERT_EQ_I(AI32(r, 0x028), 0xa7);
+        T_ASSERT_EQ_I(r[0x0b], 0x2d);
+        T_ASSERT_EQ_I(r[0x0d], 0x29);
+        T_ASSERT_EQ_I(r[0x0c], 0x29);             /* copy of +0xd */
+    }
+    /* Army 4 is past the count — untouched. */
+    for (int o = 0; o < 0x300; o++)
+        T_ASSERT_EQ_I(AREC(4)[o], 0);
+    return 0;
+}
+
+/* Phase 2 — a human player mapped to an army: record defaults, gold base,
+ * troop muster (preset 2 → row [.,.,.,0x32,0x32,0x32,.]), resource pool, the
+ * economic-model gate latch, and the owned-army "complete" flag. */
+int test_game_init_setup_realms_player_human(void)
+{
+    realms_reset();
+    engine_game_init_set_realm_presets(0, 2, 2, 500, 0);
+    s_slot_0056d5dc = 1;
+
+    PREC(1)[STRAT_HAS_DATA] = 1;       /* human */
+    PREC(1)[0x0a]           = 0x55;    /* identity byte copied to army +0x07 */
+    g_player_roster[1 * 2]  = 1;       /* player 1 → army 1 */
+    AREC(1)[0x295]          = 7;       /* pre-set model gate flag (slot 0, +1) */
+
+    engine_game_init_setup_realms();
+
+    uint8_t *p = PREC(1);
+    T_ASSERT_EQ_I(p[0x04], 1);              /* ACTIVE latched */
+    T_ASSERT_EQ_I(p[0x29], 1);              /* seated defaults */
+    T_ASSERT_EQ_I(p[0x2a], 1);
+    T_ASSERT_EQ_I(p[0xe4], 1);              /* player → army id */
+    T_ASSERT_EQ_I(AI32(p, 0x118), 500);    /* gold base (no territory bonus) */
+
+    /* Resource pool: three 0x32 defaults + preset row 2. */
+    T_ASSERT_EQ_I(AI32(p, 0x120), 0x32);
+    T_ASSERT_EQ_I(AI32(p, 0x128), 0x32);
+    T_ASSERT_EQ_I(AI32(p, 0x130), 0x32);
+    T_ASSERT_EQ_I(AI32(p, 0x140), 0);
+    T_ASSERT_EQ_I(AI32(p, 0x148), 0x32);
+    T_ASSERT_EQ_I(AI32(p, 0x14c), 0x32);
+    T_ASSERT_EQ_I(AI32(p, 0x150), 0x32);   /* human → NO density bonus */
+    T_ASSERT_EQ_I(AI32(p, 0x154), 0);
+
+    /* Troop muster row 1: row-2 preset = 7 i32 [0,0,0,0x32,0x32,0x32,0]. */
+    uint8_t *pool = engine_game_init_troop_pool_row(1);
+    T_ASSERT_EQ_I(AI32(pool, 0x00), 0);
+    T_ASSERT_EQ_I(AI32(pool, 0x30), 0x32);
+    T_ASSERT_EQ_I(AI32(pool, 0x40), 0x32);
+    T_ASSERT_EQ_I(AI32(pool, 0x50), 0x32);
+    T_ASSERT_EQ_I(AI32(pool, 0x60), 0);
+    T_ASSERT_EQ_I(AI32(pool, 0x70), 0x32 * 3);   /* muster total */
+
+    uint8_t *a = AREC(1);
+    T_ASSERT_EQ_I(AI32(a, 0x24), 0xa7 + 0x32 * 3);  /* pop seed + troops */
+    T_ASSERT_EQ_I(a[0x05], 1);              /* owning player */
+    T_ASSERT_EQ_I(a[0x07], 0x55);           /* ← player +0x0a */
+    T_ASSERT_EQ_I(a[0x1b0], 1);             /* setup-complete flag */
+    T_ASSERT_EQ_I(a[0x297], 1);             /* model gate latched (+0x294+3) */
+    /* owned army → no +100 finalise bonus on gold */
+    T_ASSERT_EQ_I(AI32(a, 0x224), 0x0a);
+    return 0;
+}
+
+/* An AI realm (OPP_TYPE set, HAS_DATA clear) takes the density gold bonus on
+ * resource slot +0x150; an empty slot (both clear) is left untouched. */
+int test_game_init_setup_realms_ai_density_and_empty(void)
+{
+    realms_reset();
+    engine_game_init_set_realm_presets(0, 2, 0, 0, 0);   /* troop preset 0 → skip */
+    s_slot_0056d5dc = 2;
+    s_slot_0053f23c = 4;               /* density */
+
+    PREC(1)[STRAT_OPP_TYPE] = 2;       /* AI (no human data) */
+    g_player_roster[1 * 2]  = 1;       /* player 1 → army 1 */
+    /* slot 2 left all-zero → empty, must be skipped */
+
+    engine_game_init_setup_realms();
+
+    uint8_t *p1 = PREC(1);
+    T_ASSERT_EQ_I(p1[0x04], 1);                       /* AI slot activated */
+    T_ASSERT_EQ_I(AI32(p1, 0x150), 0x32 + 4 * 0x14);  /* density bonus */
+
+    /* troop preset 0 → muster pool untouched */
+    uint8_t *pool = engine_game_init_troop_pool_row(1);
+    for (int o = 0; o < 0x80; o++)
+        T_ASSERT_EQ_I(pool[o], 0);
+
+    /* empty slot 2 never activated */
+    T_ASSERT_EQ_I(PREC(2)[0x04], 0);
+    return 0;
+}
+
+/* The player→army mapping (roster id byte) drives both army fields and the
+ * troop-skip path; a roster id different from the slot index proves it. */
+int test_game_init_setup_realms_roster_mapping(void)
+{
+    realms_reset();
+    engine_game_init_set_realm_presets(0, 0, 0, 0, 0);
+    s_slot_0056d5dc = 2;
+
+    PREC(1)[STRAT_HAS_DATA] = 1;       /* human in slot 1 */
+    PREC(1)[0x0a]           = 0x33;
+    g_player_roster[1 * 2]  = 2;       /* player 1 → army 2 (not 1) */
+
+    engine_game_init_setup_realms();
+
+    T_ASSERT_EQ_I(PREC(1)[0xe4], 2);   /* player records its army id */
+    T_ASSERT_EQ_I(AREC(2)[0x05], 1);   /* army 2 → owning player 1 */
+    T_ASSERT_EQ_I(AREC(2)[0x07], 0x33);
+    T_ASSERT_EQ_I(AREC(2)[0x1b0], 1);
+    /* army 1 unowned → finalise +100 bonus, army 2 owned → none */
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x224), 0x0a + 100);
+    T_ASSERT_EQ_I(AI32(AREC(2), 0x224), 0x0a);
     return 0;
 }
