@@ -496,3 +496,31 @@ int test_engine_realm_history_page_wraps(void)
     T_ASSERT_EQ_U(s_slot_0055300c, 11);   /* write index advanced */
     return 0;
 }
+
+/* clear_turn_scratch (FUN_00448d16): the four target bytes
+ * (+0x1fb/+0x1fc/+0x1fd/+0x1a8) zero for realms 1..count; their immediate
+ * neighbours are preserved, and a realm past the count is left untouched. */
+int test_engine_realm_clear_turn_scratch(void)
+{
+    memset(g_per_army_768, 0xCD, sizeof g_per_army_768);  /* dirty all rows */
+    s_slot_0056d5dc = 2;        /* realms 1..2 in scope */
+
+    engine_realm_clear_turn_scratch();
+
+    for (int key = 1; key <= 2; key++) {
+        uint8_t *r = AREC(key);
+        T_ASSERT_EQ_U(r[0x1fb], 0);     /* cleared */
+        T_ASSERT_EQ_U(r[0x1fc], 0);
+        T_ASSERT_EQ_U(r[0x1fd], 0);
+        T_ASSERT_EQ_U(r[0x1a8], 0);
+        T_ASSERT_EQ_U(r[0x1fa], 0xCD);  /* neighbours preserved */
+        T_ASSERT_EQ_U(r[0x1fe], 0xCD);
+        T_ASSERT_EQ_U(r[0x1a7], 0xCD);
+        T_ASSERT_EQ_U(r[0x1a9], 0xCD);
+    }
+
+    uint8_t *r3 = AREC(3);              /* realm 3 > count → untouched */
+    T_ASSERT_EQ_U(r3[0x1fb], 0xCD);
+    T_ASSERT_EQ_U(r3[0x1a8], 0xCD);
+    return 0;
+}

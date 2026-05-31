@@ -115,4 +115,10 @@ void engine_realm_collect_territory_income(void);
  * cursor scalars (entries 66/67/68). */
 void engine_realm_record_history(void);
 
+/* Port of FUN_00448d16.  Per-realm mid-turn scratch reset (a turn-advance pass
+ * of 0x448440): for realms 1..s_slot_0056d5dc, zero four turn-accumulator bytes
+ * (+0x1fb/+0x1fc/+0x1fd/+0x1a8) in each army record so they start clean for the
+ * second workforce-allocation dispatch.  Touches only g_per_army_768. */
+void engine_realm_clear_turn_scratch(void);
+
 #endif /* OPENLORDS2_ENGINE_REALM_H */

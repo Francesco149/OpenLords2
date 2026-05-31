@@ -250,3 +250,22 @@ void engine_realm_record_history(void)
     if (++s_slot_0055300c >= 400)                      /* write index wraps at 400 */
         s_slot_0055300c = 0;
 }
+
+/* Port of FUN_00448d16 (104 B).  Per-realm mid-turn scratch reset: for
+ * realms 1..s_slot_0056d5dc, zero four turn-accumulator bytes in each
+ * army record — the three consecutive +0x1fb/+0x1fc/+0x1fd and the lone
+ * +0x1a8.  These are a subset of the per-realm bytes the turn-start pass
+ * (retail 0x448819) clears; the turn-advance engine (retail 0x448440)
+ * re-zeroes them here, after the territory-income/economy re-plan and
+ * just before the second workforce-allocation dispatch, so the counters
+ * start clean for that pass.  Touches only g_per_army_768. */
+void engine_realm_clear_turn_scratch(void)
+{
+    for (int key = 1; key <= (int)s_slot_0056d5dc; key++) {
+        uint8_t *r = ARMY_REC(key);
+        r[0x1fb] = 0;
+        r[0x1fc] = 0;
+        r[0x1fd] = 0;
+        r[0x1a8] = 0;
+    }
+}

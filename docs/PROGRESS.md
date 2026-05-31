@@ -7,6 +7,24 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — TURN-ENGINE chip: per-realm mid-turn scratch reset (FUN_00448d16)
+
+Ported `FUN_00448d16` (104 B) → `engine_realm_clear_turn_scratch` in
+`engine_realm.c` — a thin per-realm pass the turn-advance engine `FUN_00448440`
+runs **late** in its sequence, after the territory-income/economy re-plan
+(`FUN_004ad6c0`) and just before the **second** workforce-allocation dispatch
+(`FUN_0044f699`).  For realms `1..s_slot_0056d5dc` it zeroes four
+turn-accumulator bytes in each army record — the three consecutive
+`+0x1fb/+0x1fc/+0x1fd` and the lone `+0x1a8` — so those counters start clean for
+the second workforce pass.  They are a **subset** of the larger per-realm byte
+block the turn-start pass (retail 0x448819, still unported) clears; r2 @0x448d16
+confirmed the four offsets and the `key*0x300` row stride.
+
+1 host test: the four targets zero for realms 1..count, their immediate
+neighbours (`+0x1fa/+0x1fe/+0x1a7/+0x1a9`) are preserved, and a realm past the
+count is left untouched.  **1623/1623** pass under ASan/UBSan; mingw `.exe`
+clean; `_engine_realm_clear_turn_scratch` in the PE.
+
 ## 2026-05-31 — TURN-ENGINE chip: per-player summary-metric snapshot (FUN_004486a9 + shared total helper FUN_004487a9)
 
 Ported the **first** sim pass of the turn-advance engine `FUN_00448440`:

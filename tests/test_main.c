@@ -1701,6 +1701,7 @@ struct test_case {
     X(engine_realm_history_count_boundary) \
     X(engine_realm_history_cursor_wrap) \
     X(engine_realm_history_page_wraps) \
+    X(engine_realm_clear_turn_scratch) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

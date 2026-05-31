@@ -5,8 +5,8 @@
 The unported, non-thunk engine functions already **called by ported code** — the natural next chips. A **leaf** has all of its
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
-- frontier functions: **293**
-- of those, zero-dependency **leaves: 105** (recommended order below)
+- frontier functions: **292**
+- of those, zero-dependency **leaves: 104** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
 
@@ -45,13 +45,13 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4b97f9 | 86 | 1 | battlefield render + wndproc |
 | 0x4bbe51 | 86 | 1 | battlefield render + wndproc |
 | 0x40ccfa | 94 | 1 | early/runtime + low-level helpers |
-| 0x448d16 | 104 | 1 | sim dispatch + records |
 | 0x413526 | 106 | 1 | render-quad / blit primitives |
 | 0x40df62 | 107 | 1 | early/runtime + low-level helpers |
 | 0x419243 | 110 | 1 | render-quad / blit primitives |
 | 0x4bbea7 | 110 | 1 | battlefield render + wndproc |
 | 0x4b3d5d | 112 | 1 | battlefield render + wndproc |
 | 0x4bbf15 | 116 | 1 | battlefield render + wndproc |
+| 0x4262eb | 117 | 1 | strategic-map camera + scroll |
 
 ## Full frontier by address band
 
@@ -256,14 +256,13 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x43bf07 | 827 | 1 | 3 |  |
 | 0x43ce1a | 1263 | 1 | 10 |  |
 
-### sim dispatch + records (16)
+### sim dispatch + records (15)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
 | 0x44ae3c | 21 | 1 | 2 |  |
 | 0x44bf7a | 91 | 1 | 2 |  |
 | 0x448545 | 96 | 1 | 1 |  |
-| 0x448d16 | 104 | 1 | 0 | ✓ |
 | 0x448d7e | 148 | 1 | 0 | ✓ |
 | 0x44bd9f | 357 | 1 | 0 | ✓ |
 | 0x4407e5 | 426 | 1 | 1 |  |
