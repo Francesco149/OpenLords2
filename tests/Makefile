@@ -146,7 +146,8 @@ DIFF_SRCS := ../src/engine_rng.c ../src/engine_fps.c \
              ../src/engine_rate.c ../src/engine_state_hash.c \
              ../src/engine_tile.c \
              ../src/engine_delayed_action.c \
-             ../src/engine_path.c
+             ../src/engine_path.c \
+             ../src/call_trace.c
 DIFF_OBJS := $(addprefix build/diff_,$(notdir $(DIFF_SRCS:.c=.o)))
 DIFF_OUT  := build/libengine_diff.so
 DIFF_CFLAGS := -std=c11 -O2 -fPIC -Wall -Wextra -Wno-unused-parameter -I../src
