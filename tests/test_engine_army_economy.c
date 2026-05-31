@@ -57,6 +57,15 @@ enum {
     SEC_CAP0        = 0x1d8,
     SEC_CAP1        = 0x1dc,
     SEC_CAP2        = 0x1e0,
+    /* candidate evaluator/selector (FUN_0044da99 / dd4d) */
+    CENSUS_HIGH     = 0x200,
+    EVAL_REF        = 0xd0,
+    EVAL_SEL        = 0xd4,
+    EVAL_MAXLVL     = 0xd8,
+    EVAL_NET        = 0x258,
+    EVAL_CATEGORY   = 0x25c,
+    EVAL_REVENUE    = 0x268,
+    EVAL_COST       = 0x26c,
 };
 
 _Alignas(int32_t) static uint8_t g_army[ARMY_ROWS * ARMY_STRIDE];
@@ -847,5 +856,186 @@ int test_army_economy_plan_secondary_unbound_noop(void)
 {
     engine_army_economy_bind_army_records(NULL);
     engine_army_economy_plan_secondary(2);
+    return 0;
+}
+
+/* ── candidate evaluator (FUN_0044da99) ─────────────────────────────── */
+/* All expected values cross-checked against a Python transcription of the
+ * decompile (truncating C division throughout). */
+
+/* census +0x200 == 0 → flat cost (budget, or budget/2 for budget>=6), no revenue. */
+int test_army_economy_eval_simple_cost(void)
+{
+    army_reset();
+    engine_army_economy_eval_candidate(2, 4, 0, 10, 0);   /* budget 4 < 6 */
+    T_ASSERT_EQ_I(engine_army_economy_eval_cost(), 4);
+    T_ASSERT_EQ_I(engine_army_economy_eval_revenue(), 0);
+    engine_army_economy_eval_candidate(2, 10, 0, 10, 0);  /* budget 10 → /2 */
+    T_ASSERT_EQ_I(engine_army_economy_eval_cost(), 5);
+    return 0;
+}
+
+int test_army_economy_eval_zero_budget(void)
+{
+    army_reset();
+    set_byte(2, CENSUS_HIGH, 1);
+    engine_army_economy_eval_candidate(2, 0, 5, 10, 0);
+    T_ASSERT_EQ_I(engine_army_economy_eval_cost(), 0);
+    T_ASSERT_EQ_I(engine_army_economy_eval_revenue(), 0);
+    return 0;
+}
+
+/* model path (census +0x200 != 0), category 10, budget 4. */
+int test_army_economy_eval_model_low_level(void)
+{
+    army_reset();
+    set_byte(2, CENSUS_HIGH, 1);
+    engine_army_economy_eval_candidate(2, 4, 0, 10, 0);   /* fill 0 → cost 1, rev 0 */
+    T_ASSERT_EQ_I(engine_army_economy_eval_cost(), 1);
+    T_ASSERT_EQ_I(engine_army_economy_eval_revenue(), 0);
+    return 0;
+}
+
+int test_army_economy_eval_model_full_fill(void)
+{
+    army_reset();
+    set_byte(2, CENSUS_HIGH, 1);
+    /* level 12, budget 4 → fill 100, over-fill bonus → rev 4, cost 0. */
+    engine_army_economy_eval_candidate(2, 4, 12, 10, 0);
+    T_ASSERT_EQ_I(engine_army_economy_eval_cost(), 0);
+    T_ASSERT_EQ_I(engine_army_economy_eval_revenue(), 4);
+    return 0;
+}
+
+int test_army_economy_eval_phase1_boosts_revenue(void)
+{
+    army_reset();
+    set_byte(2, CENSUS_HIGH, 1);
+    /* same as full-fill but phase 1 → revenue ×3/2 = 6. */
+    engine_army_economy_eval_candidate(2, 4, 12, 10, 1);
+    T_ASSERT_EQ_I(engine_army_economy_eval_revenue(), 6);
+    return 0;
+}
+
+int test_army_economy_eval_rounds_revenue_up_to_one(void)
+{
+    army_reset();
+    set_byte(2, CENSUS_HIGH, 1);
+    /* level 1, budget 4 → tiny base but non-zero → revenue floored up to 1. */
+    engine_army_economy_eval_candidate(2, 4, 1, 10, 0);
+    T_ASSERT_EQ_I(engine_army_economy_eval_cost(), 1);
+    T_ASSERT_EQ_I(engine_army_economy_eval_revenue(), 1);
+    return 0;
+}
+
+int test_army_economy_eval_unbound_zero(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    engine_army_economy_eval_candidate(2, 4, 12, 10, 0);
+    T_ASSERT_EQ_I(engine_army_economy_eval_cost(), 0);
+    T_ASSERT_EQ_I(engine_army_economy_eval_revenue(), 0);
+    return 0;
+}
+
+/* ── candidate selector (FUN_0044dd4d) ──────────────────────────────── */
+
+/* Simple-cost path: revenue 0, cost constant across levels → every net equal
+ * and negative, so the selector lands on level 0 (least-negative == first). */
+int test_army_economy_select_simple_path(void)
+{
+    army_reset();
+    set_byte(2, PLAN_GATE, 1);
+    set_stock(2, FEED_COUNT, 3);
+    set_stock(2, STOCK_A, 10);
+    set_stock(2, BUY_B, 2);                 /* budget 8 → cost 4 */
+    /* CENSUS_HIGH 0 (default) → simple path; EVAL_REF 0 */
+
+    engine_army_economy_select_candidate(2, 0);
+
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_REVENUE), 0);
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_COST), 4);
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_NET), -6);    /* (0-4) - buy_b 2 */
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_SEL), 0);
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_MAXLVL), 0);
+    return 0;
+}
+
+/* Empty sweep (count 0): no level evaluated → selected stays -1, max stays the
+ * 999999 sentinel; the reference re-eval still fills the figures. */
+int test_army_economy_select_empty_sweep(void)
+{
+    army_reset();
+    set_byte(2, PLAN_GATE, 1);
+    set_stock(2, FEED_COUNT, 0);
+    set_stock(2, STOCK_A, 10);
+    set_stock(2, BUY_B, 2);
+
+    engine_army_economy_select_candidate(2, 0);
+
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_SEL), -1);
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_MAXLVL), 999999);
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_COST), 4);
+    return 0;
+}
+
+/* Model path with a varying net: nets over levels 0..12 are
+ * [-1,0,0,0,1,1,1,1,1,1,1,1,4] → first break-even at level 1 (selected),
+ * max net at level 12.  Reference level 12 → revenue 4, cost 0. */
+int test_army_economy_select_model_picks_first_breakeven(void)
+{
+    army_reset();
+    set_byte(2, PLAN_GATE, 1);
+    set_byte(2, CENSUS_HIGH, 1);
+    set_stock(2, FEED_COUNT, 13);
+    set_stock(2, STOCK_A, 4);
+    set_stock(2, BUY_B, 0);                 /* budget 4 */
+    set_stock(2, EVAL_CATEGORY, 10);
+    set_stock(2, EVAL_REF, 12);
+
+    engine_army_economy_select_candidate(2, 0);
+
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_SEL), 1);         /* first net >= 0 */
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_MAXLVL), 12);     /* argmax net */
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_REVENUE), 4);
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_COST), 0);
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_NET), 4);         /* (4-0) - buy_b 0 */
+    return 0;
+}
+
+/* Gate off → only EVAL_NET is cleared; the selection slots are untouched. */
+int test_army_economy_select_gate_off(void)
+{
+    army_reset();
+    set_byte(2, PLAN_GATE, 0);
+    set_stock(2, EVAL_NET, 1234);
+    set_stock(2, EVAL_SEL, 77);
+
+    engine_army_economy_select_candidate(2, 0);
+
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_NET), 0);
+    T_ASSERT_EQ_I(rec_i32(2, EVAL_SEL), 77);
+    return 0;
+}
+
+int test_army_economy_select_keyed_by_row(void)
+{
+    army_reset();
+    set_byte(4, PLAN_GATE, 1);
+    set_stock(4, FEED_COUNT, 3);
+    set_stock(4, STOCK_A, 10);
+    set_stock(4, BUY_B, 2);
+
+    engine_army_economy_select_candidate(4, 0);
+
+    T_ASSERT_EQ_I(rec_i32(4, EVAL_COST), 4);
+    T_ASSERT_EQ_I(rec_i32(3, EVAL_COST), 0);    /* neighbour rows untouched */
+    T_ASSERT_EQ_I(rec_i32(5, EVAL_COST), 0);
+    return 0;
+}
+
+int test_army_economy_select_unbound_noop(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    engine_army_economy_select_candidate(2, 0);
     return 0;
 }

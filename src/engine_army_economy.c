@@ -74,6 +74,16 @@
 #define ARMY_PLAN_OUT_P4     0x248  /* DAT_0053fbf8 — phase-4 yield at the reference level */
 #define ARMY_PLAN_OUT_STD    0x2fc  /* DAT_0053fcac — phase-2/3 yield at the reference level */
 
+/* Fields the candidate selector FUN_0044dd4d (+ evaluator FUN_0044da99) use. */
+#define ARMY_CENSUS_HIGH     0x200  /* DAT_0053fbb0 — census TYPE 0x0f..0x16 count (model gate) */
+#define ARMY_EVAL_REF        0xd0   /* DAT_0053fa80 — reference level for the final re-eval */
+#define ARMY_EVAL_SEL        0xd4   /* DAT_0053fa84 — selected level */
+#define ARMY_EVAL_MAXLVL     0xd8   /* DAT_0053fa88 — max-net level */
+#define ARMY_EVAL_NET        0x258  /* DAT_0053fc08 — final net (revenue − cost − buy_b) */
+#define ARMY_EVAL_CATEGORY   0x25c  /* DAT_0053fc0c — category code (10/0x14/0x1e/else) */
+#define ARMY_EVAL_REVENUE    0x268  /* DAT_0053fc18 — final revenue */
+#define ARMY_EVAL_COST       0x26c  /* DAT_0053fc1c — final cost */
+
 static uint8_t *g_army_records;
 
 /* Retail 0x4983b7 defaults: A=5 (DAT_00553f60), B=10 (DAT_00567594),
@@ -94,6 +104,13 @@ static int g_prod_divisor_hi = 5;
  * divisor_std=10 (DAT_00553538), divisor_phase4=3 (DAT_00553218). */
 static int g_yield_divisor_std    = 10;
 static int g_yield_divisor_phase4 = 3;
+
+/* The candidate-evaluator scratch pair (retail globals DAT_0055cd6c /
+ * DAT_005656f0).  FUN_0044da99 writes them; FUN_0044dd4d reads them right back;
+ * the still-unported FUN_0044d60d is the third sharer.  Module-scope statics —
+ * not save state — so they faithfully model the retail global handoff. */
+static int g_eval_cost;       /* DAT_0055cd6c — the candidate's upkeep/cost */
+static int g_eval_revenue;    /* DAT_005656f0 — the candidate's output/revenue */
 
 void engine_army_economy_bind_army_records(uint8_t *records)
 {
@@ -554,4 +571,123 @@ void engine_army_economy_plan_secondary(int key)
         if (val0 % rate != 0) turns++;
         row[ARMY_SEC_TURNS] = (uint8_t)(int8_t)turns;   /* retail narrows to signed char */
     }
+}
+
+/* --------------------------------------------------------------------- *
+ *  Candidate cost/revenue evaluator + selector — the 0x44dd4d branch of
+ *  0x4485a5.
+ *
+ *  FUN_0044da99 values one candidate at a given budget/intensity, writing a
+ *  (cost, revenue) pair into the shared scratch globals; FUN_0044dd4d sweeps
+ *  the candidate intensity over the army's feed-count, reads the pair back each
+ *  step, and selects a level by the sign of the net (revenue − cost).  The
+ *  per-category constants (weights 1/3/5/7, revenue bases 1400/900/500/200) are
+ *  a designer table; the precise commodity semantics are provisional.
+ * --------------------------------------------------------------------- */
+
+int engine_army_economy_eval_cost(void)    { return g_eval_cost; }
+int engine_army_economy_eval_revenue(void) { return g_eval_revenue; }
+
+/* FUN_0044da99 */
+void engine_army_economy_eval_candidate(int key, int budget, int level,
+                                        int category, int phase)
+{
+    g_eval_cost    = 0;
+    g_eval_revenue = 0;
+    if (g_army_records == NULL) return;   /* guard: the model path reads a row byte */
+    if (budget == 0) return;
+
+    const uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+
+    /* No settlement-tier (census +0x200) cells → a trivial flat cost, no revenue. */
+    if (row[ARMY_CENSUS_HIGH] == 0) {
+        g_eval_cost = (budget < 6) ? budget : budget / 2;
+        return;
+    }
+
+    /* `fill` is the candidate's level expressed as a percent of 3× the budget,
+     * capped at 200. */
+    int fill = engine_math_percent_div(level, budget * 3);
+    if (fill > 199) fill = 200;
+
+    int weight;                            /* per-category cost weight */
+    if      (category == 10)   weight = 1;
+    else if (category == 0x14) weight = 3;
+    else if (category == 0x1e) weight = 5;
+    else                       weight = 7;
+
+    /* Below a full fill, a falling curve adds to the cost weight (max +33 at
+     * fill 0); the C truncating division on the negative dividend is preserved. */
+    int curve = (fill < 100) ? -((fill - 100) / 3) : 0;
+
+    int base;                              /* per-category revenue base */
+    if      (category == 10)   base = 0x578;   /* 1400 */
+    else if (category == 0x14) base = 900;
+    else if (category == 0x1e) base = 500;
+    else                       base = 200;
+
+    base = engine_math_percent_of(base, fill);
+    if (fill > 99) {                       /* small-budget over-fill bonus */
+        if      (budget < 5)  base += 10000;
+        else if (budget < 10) base += 5000;
+        else if (budget < 25) base += 2000;
+    }
+
+    g_eval_cost = engine_math_bp_of(budget * 100, weight + curve);
+    if (phase == 4) g_eval_cost = (g_eval_cost * 3) / 2;
+
+    g_eval_revenue = engine_math_bp_of(budget, base);
+    if (phase == 1) g_eval_revenue = (g_eval_revenue * 3) / 2;
+
+    /* Round a non-zero potential up to at least 1 unit; if there is no revenue
+     * potential at all but a cost weight remains, charge a token 1 cost. */
+    if (g_eval_revenue == 0) {
+        if (base == 0) {
+            if (g_eval_cost == 0 && (weight + curve) != 0) g_eval_cost = 1;
+        } else {
+            g_eval_revenue = 1;
+        }
+    }
+
+    if (budget < g_eval_cost) g_eval_cost = budget;   /* cost never exceeds the budget */
+}
+
+/* FUN_0044dd4d */
+void engine_army_economy_select_candidate(int key, int phase)
+{
+    if (g_army_records == NULL) return;
+
+    uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+
+    *(int32_t *)(row + ARMY_EVAL_NET) = 0;          /* cleared even for an ungated army */
+    int count = *(int32_t *)(row + ARMY_FEED_COUNT);
+
+    if (row[ARMY_PLAN_GATE] == 0) return;
+
+    int buy_b    = *(int32_t *)(row + ARMY_BUY_B);
+    int budget   = *(int32_t *)(row + ARMY_STOCK_A) - buy_b;
+    int category = *(int32_t *)(row + ARMY_EVAL_CATEGORY);
+
+    int neg_level = -1, nonneg_level = -1, max_level = 999999;
+    int best_neg = -1000000, first_nonneg = -100000, best_net = -1000000;
+
+    for (int level = 0; level < count; level++) {
+        engine_army_economy_eval_candidate(key, budget, level, category, phase);
+        int net = g_eval_revenue - g_eval_cost;
+        if (net < 0 && best_neg < net)              { neg_level = level; best_neg = net; }
+        if (net >= 0 && first_nonneg == -100000)    { nonneg_level = level; first_nonneg = net; }
+        if (best_net < net)                         { max_level = level; best_net = net; }
+    }
+
+    /* Prefer the first level that breaks even; otherwise the least-negative one. */
+    int selected = (nonneg_level < 0) ? neg_level : nonneg_level;
+
+    /* Re-evaluate at the army's stored reference level for the recorded figures. */
+    engine_army_economy_eval_candidate(key, budget,
+                                       *(int32_t *)(row + ARMY_EVAL_REF), category, phase);
+    *(int32_t *)(row + ARMY_EVAL_REVENUE) = g_eval_revenue;
+    *(int32_t *)(row + ARMY_EVAL_COST)    = g_eval_cost;
+    *(int32_t *)(row + ARMY_EVAL_NET)     = (g_eval_revenue - g_eval_cost) - buy_b;
+    *(int32_t *)(row + ARMY_EVAL_SEL)     = selected;
+    *(int32_t *)(row + ARMY_EVAL_MAXLVL)  = max_level;
 }

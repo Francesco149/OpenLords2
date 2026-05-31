@@ -164,4 +164,40 @@ int engine_army_economy_secondary_headroom(int key);
  * full or the rate is < 1.  No-op when the army-record block is unbound. */
 void engine_army_economy_plan_secondary(int key);
 
+/* ──────────────────────────────────────────────────────────────────
+ * Candidate cost/revenue evaluator + selector — the 0x44dd4d branch of
+ * 0x4485a5.  The evaluator writes a (cost, revenue) pair into a shared scratch
+ * pair (retail globals DAT_0055cd6c / DAT_005656f0); the selector sweeps the
+ * candidate intensity and picks a level by the net (revenue − cost).
+ * ────────────────────────────────────────────────────────────────── */
+
+/* The scratch pair the evaluator last wrote (retail DAT_0055cd6c /
+ * DAT_005656f0).  Exposed for tests and for the eventual FUN_0044d60d port,
+ * which is the third sharer of the same two globals. */
+int engine_army_economy_eval_cost(void);
+int engine_army_economy_eval_revenue(void);
+
+/* Port of FUN_0044da99 (692 B).  Value a candidate for army `key` at a gold
+ * `budget` and intensity `level`, writing its cost/revenue into the scratch
+ * pair above.  With no settlement-tier cells (census +0x200 == 0) the cost is a
+ * flat `budget` (or `budget/2` for budget >= 6) and revenue 0; otherwise a
+ * per-`category` model (codes 10/0x14/0x1e/else select weight 1/3/5/7 and
+ * revenue base 1400/900/500/200) scales both by the level's fill ratio, with a
+ * small-budget over-fill bonus, phase-1/4 ×1.5 tweaks, a round-up-to-1 rule, and
+ * a cap of the cost at the budget.  Both outputs are 0 when budget == 0 or the
+ * army-record block is unbound. */
+void engine_army_economy_eval_candidate(int key, int budget, int level,
+                                        int category, int phase);
+
+/* Port of FUN_0044dd4d (530 B).  Sweep candidate intensities 0..(+0x24
+ * feed-count) for army `key`, evaluating each with engine_army_economy_eval_
+ * candidate at budget = stock-A(+0x250) − buy-B(+0x17c) and the army's category
+ * (+0x25c), and select a level: the first that breaks even (net = revenue −
+ * cost >= 0), else the least-negative one.  Records the selected level (+0xd4),
+ * the max-net level (+0xd8), and — from a re-eval at the stored reference level
+ * (+0xd0) — the final revenue (+0x268), cost (+0x26c) and net (+0x258, less
+ * buy-B).  Gated on byte +0xb8; +0x258 is cleared up front.  No-op when the
+ * army-record block is unbound. */
+void engine_army_economy_select_candidate(int key, int phase);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_ECONOMY_H */

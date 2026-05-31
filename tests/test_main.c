@@ -1592,6 +1592,19 @@ struct test_case {
     X(army_economy_plan_secondary_gate_off) \
     X(army_economy_plan_secondary_keyed_by_row) \
     X(army_economy_plan_secondary_unbound_noop) \
+    X(army_economy_eval_simple_cost) \
+    X(army_economy_eval_zero_budget) \
+    X(army_economy_eval_model_low_level) \
+    X(army_economy_eval_model_full_fill) \
+    X(army_economy_eval_phase1_boosts_revenue) \
+    X(army_economy_eval_rounds_revenue_up_to_one) \
+    X(army_economy_eval_unbound_zero) \
+    X(army_economy_select_simple_path) \
+    X(army_economy_select_empty_sweep) \
+    X(army_economy_select_model_picks_first_breakeven) \
+    X(army_economy_select_gate_off) \
+    X(army_economy_select_keyed_by_row) \
+    X(army_economy_select_unbound_noop) \
     \
     X(game_init_clear_tables_zeroes_per_army) \
     X(game_init_clear_tables_zeroes_unit_table) \

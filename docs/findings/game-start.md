@@ -1150,9 +1150,37 @@ reserves are full** (headroom == 100, else 0), and a turns counter `+0x1a6` to
 < 1.  Pair→commodity mapping is provisional.  See engine-quirks #141 for the
 dead pair-0 ratio it computes and discards.
 
-**Remaining `FUN_004485a5` leaves**: `0x44c278` (+ `0x44c53b` / `0x44c5fc`),
-`0x44dd4d` (+ `0x44da99`), `0x44f318` (+ `0x44ef4e` / `0x44f15b` / `0x44f248`).
-Once all land, `0x4485a5` and then the last `FUN_0049bd99` leaf `0x4a9a9a`
+### FUN_0044dd4d — candidate cost/revenue selector ✅ ported
+
+The `0x4485a5` branch that sweeps a production/trade candidate over the army's
+feed-count and picks an intensity level by profitability.  Ported as
+`engine_army_economy_select_candidate(key, phase)` + its evaluator
+`engine_army_economy_eval_candidate` (FUN_0044da99) and the `_eval_cost` /
+`_eval_revenue` accessors, 13 host tests.
+
+- **The evaluator (`0044da99`)** values one candidate at a gold `budget` and
+  `level`, writing a `(cost, revenue)` pair into a shared scratch pair (retail
+  globals `DAT_0055cd6c` / `DAT_005656f0`, modelled as module statics — the
+  still-unported `0x44d60d` is the third sharer).  With no settlement-tier cells
+  (census `+0x200` == 0) it is a flat cost (`budget`, or `budget/2` ≥ 6) and no
+  revenue; otherwise a per-`category` designer model — codes 10 / 0x14 / 0x1e /
+  else select cost weight 1/3/5/7 and revenue base 1400/900/500/200 — scales
+  both by the level's *fill ratio* (`level·100 / 3·budget`, capped 200), adds a
+  small-budget over-fill bonus, applies phase-1/4 ×3⁄2 tweaks, rounds a non-zero
+  potential up to 1, and caps the cost at the budget.
+- **The selector (`0044dd4d`)** runs the evaluator across levels `0..+0x24`,
+  reads the scratch pair back each step, and selects the **first break-even**
+  level (net = revenue − cost ≥ 0) or, failing that, the **least-negative** one.
+  It records the selected level (`+0xd4`), the max-net level (`+0xd8`), and —
+  from a re-eval at the stored reference level (`+0xd0`) — the final revenue
+  (`+0x268`), cost (`+0x26c`) and net (`+0x258`, less buy-B).
+
+Commodity/category semantics are provisional; the arithmetic is ported verbatim
+(every expected test value was cross-checked against a Python transcription).
+
+**Remaining `FUN_004485a5` leaves**: `0x44c278` (+ `0x44c53b` / `0x44c5fc`) and
+the four `0x44f318` commodity passes (+ `0x44ef4e` / `0x44f15b` / `0x44f248`).
+Once both land, `0x4485a5` and then the last `FUN_0049bd99` leaf `0x4a9a9a`
 unblock the setup pass.
 
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
