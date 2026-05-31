@@ -976,3 +976,134 @@ int test_engine_realm_recount_armies_i32_accumulates(void)
     T_ASSERT_EQ_I(AI32(AREC(1), 0x1a0), 4);    /* i32 accumulated = 4 */
     return 0;
 }
+
+/* ─── engine_realm_apply_tax_approval (FUN_0044bd9f) ─────────────────────── */
+
+/* One owned, populated, human realm; clean per-army + per-player state. */
+static uint8_t *tax_reset(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0056d5dc = 1;
+    uint8_t *r = AREC(1);
+    r[0x05] = 1;                 /* owned by player 1 */
+    PREC(1)[0x05] = 1;           /* player 1 is human */
+    AI32(r, 0x24) = 1000;        /* non-zero population */
+    return r;
+}
+
+/* Basic: policy/band adjustment folds into +0x0b, reclassifies the band, and
+ * emits the per-band modifier.  policy 5, band 0 → +20; 75+20 = 95 → band 4. */
+int test_engine_realm_tax_basic(void)
+{
+    uint8_t *r = tax_reset();
+    r[0x0b] = 75;
+    r[0x15d] = 5;                /* tax policy 5 */
+    r[0x09] = 0;                 /* prior band column 0 → table[25] = +20 */
+
+    engine_realm_apply_tax_approval();
+
+    T_ASSERT_EQ_I((int8_t)r[0x0b], 95);
+    T_ASSERT_EQ_U(r[0x09], 4);   /* lookup(95) → band 4 */
+    T_ASSERT_EQ_U(r[0x10], 2);   /* modifier[4] = 2     */
+    return 0;
+}
+
+/* High clamp: 100+20 → clamp 100.  Doubles as the band-100 quirk: a realm at
+ * exactly 100 lands in band 3 (fallback), not the top band 4. */
+int test_engine_realm_tax_clamp_high_and_100_quirk(void)
+{
+    uint8_t *r = tax_reset();
+    r[0x0b] = 100;
+    r[0x15d] = 5;  r[0x09] = 0;  /* +20 → 120 → clamp 100 */
+
+    engine_realm_apply_tax_approval();
+
+    T_ASSERT_EQ_I((int8_t)r[0x0b], 100);
+    T_ASSERT_EQ_U(r[0x09], 3);   /* lookup(100) falls through to fallback 3 */
+    T_ASSERT_EQ_U(r[0x10], 1);   /* modifier[3] = 1 */
+    return 0;
+}
+
+/* Low clamp: 5 + (policy 0, band 0 = -8) → -3 → clamp 0 → band 0, mod -10. */
+int test_engine_realm_tax_clamp_low(void)
+{
+    uint8_t *r = tax_reset();
+    r[0x0b] = 5;
+    r[0x15d] = 0;  r[0x09] = 0;  /* table[0] = -8 */
+
+    engine_realm_apply_tax_approval();
+
+    T_ASSERT_EQ_I((int8_t)r[0x0b], 0);
+    T_ASSERT_EQ_U(r[0x09], 0);            /* lookup(0) → band 0      */
+    T_ASSERT_EQ_U(r[0x10], (uint8_t)-10); /* modifier[0] = -10 (0xf6) */
+    return 0;
+}
+
+/* Zero-population, non-human owner → reset to 50 (overriding the adjustment). */
+int test_engine_realm_tax_zero_pop_reset(void)
+{
+    uint8_t *r = tax_reset();
+    r[0x05] = 2;  PREC(2)[0x05] = 0;      /* owner 2, non-human */
+    AI32(r, 0x24) = 0;                     /* zero population    */
+    r[0x0b] = 20;
+    r[0x15d] = 3;  r[0x09] = 0;            /* +8 → 28, then overridden to 50 */
+
+    engine_realm_apply_tax_approval();
+
+    T_ASSERT_EQ_I((int8_t)r[0x0b], 50);
+    T_ASSERT_EQ_U(r[0x09], 2);            /* lookup(50) → band 2 */
+    T_ASSERT_EQ_U(r[0x10], 0);            /* modifier[2] = 0     */
+    return 0;
+}
+
+/* Zero population but a HUMAN owner is NOT reset — the adjustment stands. */
+int test_engine_realm_tax_zero_pop_human_kept(void)
+{
+    uint8_t *r = tax_reset();
+    AI32(r, 0x24) = 0;                     /* zero population, owner 1 human */
+    r[0x0b] = 20;
+    r[0x15d] = 3;  r[0x09] = 0;            /* +8 → 28 */
+
+    engine_realm_apply_tax_approval();
+
+    T_ASSERT_EQ_I((int8_t)r[0x0b], 28);
+    T_ASSERT_EQ_U(r[0x09], 1);            /* lookup(28) → band 1 */
+    T_ASSERT_EQ_U(r[0x10], (uint8_t)-5);  /* modifier[1] = -5 (0xfb) */
+    return 0;
+}
+
+/* Quirk #149: tax policy 6 has no table row and aliases into the threshold
+ * table — policy 6 / band 2 reads the (cutoff 35) entry, adding 35 not a
+ * coherent tax penalty. */
+int test_engine_realm_tax_policy6_aliasing(void)
+{
+    uint8_t *r = tax_reset();
+    r[0x0b] = 0;
+    r[0x15d] = 6;  r[0x09] = 2;           /* table[6*5+2] = table[32] = 35 */
+
+    engine_realm_apply_tax_approval();
+
+    T_ASSERT_EQ_I((int8_t)r[0x0b], 35);   /* the aliased threshold cutoff */
+    return 0;
+}
+
+/* The whole live realm count is processed, each from its own state. */
+int test_engine_realm_tax_multi_realm(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0056d5dc = 2;
+
+    uint8_t *r1 = AREC(1), *r2 = AREC(2);
+    r1[0x05] = 1; PREC(1)[0x05] = 1; AI32(r1, 0x24) = 100;
+    r2[0x05] = 1;                    AI32(r2, 0x24) = 100;
+    r1[0x0b] = 75; r1[0x15d] = 5; r1[0x09] = 0;   /* → 95, band 4 */
+    r2[0x0b] = 5;  r2[0x15d] = 0; r2[0x09] = 0;   /* → 0,  band 0 */
+
+    engine_realm_apply_tax_approval();
+
+    T_ASSERT_EQ_U(r1[0x09], 4);
+    T_ASSERT_EQ_U(r2[0x09], 0);
+    return 0;
+}

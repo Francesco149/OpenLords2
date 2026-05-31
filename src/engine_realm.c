@@ -14,7 +14,7 @@
                                       s_slot_0053f25c */
 #include "engine_army_economy.h"   /* engine_army_economy_provision / _plan_production
                                       / _select_candidate */
-#include "engine_math.h"           /* engine_math_percent_of */
+#include "engine_math.h"           /* engine_math_percent_of / _lookup_threshold */
 #include "engine_territory.h"      /* engine_territory_set_cell_type (0x46d7f4) */
 #include "engine_event_queue.h"    /* engine_event_queue_post (0x472bc5) */
 
@@ -24,6 +24,36 @@
 /* Per-realm overworld-cell roster: 0x50-byte rows of 20 i32 cell offsets,
  * shared with engine_realm_events.c (retail 0x53ea00 = g_misc_1360). */
 #define MISC_ROW(realm) ((int32_t *)&g_misc_1360[(realm) * 0x50])
+
+/* Tax-policy → approval-modifier tables, baked from the retail .rdata region
+ * 0x4d64a8..0x4d6548 (r2-verified).  Two logically-distinct tables that sit
+ * back-to-back in memory, baked as ONE contiguous array because the producer
+ * (engine_realm_apply_tax_approval) reads ACROSS the boundary (see quirk #149):
+ *
+ *   [0..29]  — the 2D tax-approval adjustment table (retail 0x4d64a8): 6
+ *              tax-policy rows (stride 5 i32) × 5 standing-band columns, added
+ *              to the realm's tax-approval value (+0x0b).
+ *   [30..39] — the band-threshold table (retail 0x4d6520): five (cutoff, band)
+ *              i32 pairs fed to engine_math_lookup_threshold.
+ *
+ * Retail's tax-policy 6 has NO row of its own; it indexes 6*5 = 30 entries in,
+ * landing squarely in the threshold pairs (quirk #149), which is only faithful
+ * if the two tables are one array. */
+static const int32_t k_tax_approval_tbl[40] = {
+    /* policy 0 */  -8, -10, -13, -16, -20,
+    /* policy 1 */  -4,  -6,  -9, -12, -15,
+    /* policy 2 */  -2,  -4,  -6,  -8, -12,
+    /* policy 3 */   8,   4,   2,   1,  -1,
+    /* policy 4 */  12,   8,   4,   2,   0,
+    /* policy 5 */  20,  12,   6,   3,   1,
+    /* threshold (cutoff, band) ×5 */
+       10, 0,   35, 1,   65, 2,   90, 3,   100, 4,
+};
+#define K_TAX_THRESHOLD (&k_tax_approval_tbl[30])
+
+/* Per-band approval modifier (retail 0x4d6548), indexed by the band 0..4 the
+ * threshold lookup yields.  Retail byte-reads the low byte of each i32 entry. */
+static const int8_t k_tax_band_modifier[5] = { -10, -5, 0, 1, 2 };
 
 /* Port of FUN_0044baea — see engine_realm.h for the field overview. */
 void engine_realm_advance_rating(void)
@@ -583,5 +613,37 @@ void engine_realm_recount_armies(void)
             *(int32_t *)(r + 0x1a0) += 1;
             r[0x1a5] = (uint8_t)t;
         }
+    }
+}
+
+/* Port of FUN_0044bd9f — see engine_realm.h for the field overview. */
+void engine_realm_apply_tax_approval(void)
+{
+    for (int key = 1; key <= (int)s_slot_0056d5dc; key++) {
+        uint8_t *r     = ARMY_REC(key);
+        int      owner = r[0x05];
+
+        int policy = (int8_t)r[0x15d];      /* tax policy (0..6)               */
+        int band   = (int8_t)r[0x09];       /* column = last turn's band       */
+
+        /* Fold the policy/band adjustment into the tax-approval value (+0x0b),
+         * truncating to a signed byte as retail stores AL back. */
+        r[0x0b] = (uint8_t)((int8_t)r[0x0b] + k_tax_approval_tbl[policy * 5 + band]);
+
+        /* Clamp 0..100 (signed). */
+        if ((int8_t)r[0x0b] < 0)    r[0x0b] = 0;
+        if ((int8_t)r[0x0b] > 0x64) r[0x0b] = 100;
+
+        /* Zero-population realm with a non-human owner → reset to 50. */
+        if (*(int32_t *)(r + 0x24) <= 0 && STRAT_REC(owner)[0x05] == 0)
+            r[0x0b] = 0x32;
+
+        /* Reclassify into a 5-band level and emit the per-band modifier the
+         * approval roll-forward (engine_realm_advance_rating) folds into the
+         * main rating via its +0x10 adjustment source. */
+        int new_band = engine_math_lookup_threshold((int8_t)r[0x0b],
+                                                    K_TAX_THRESHOLD, 5, 3);
+        r[0x09] = (uint8_t)new_band;
+        r[0x10] = (uint8_t)k_tax_band_modifier[new_band];
     }
 }

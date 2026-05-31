@@ -5214,3 +5214,54 @@ count and the i32 climbing across two recounts).
 > 📍 `src/engine_realm.c` (`engine_realm_recount_armies`).  Ghidra
 > `FUN_00451061` @ 0x451061; the kind-3 = placed-army mapping comes from
 > `engine_territory_place_entity`'s army-start caller (kind=3, type=6).
+
+## 149. The tax-approval pass has six policy rows for a seven-value policy — the seventh reads off the end into the next table
+
+The per-realm tax-policy → approval-modifier pass `FUN_0044bd9f`
+(`engine_realm_apply_tax_approval`) turns a realm's tax-rate policy (`+0x15d`,
+clamped 0..6 by its writer at 0x36435) into the approval modifier the
+roll-forward (`engine_realm_advance_rating`) later folds into the main rating.
+The core is a 2D lookup: a signed adjustment indexed by `[policy] × [band]`,
+added to the realm's tax-approval value.
+
+```c
+adj = tbl_0x4d64a8[policy * 5 + band];   /* policy 0..6, band 0..4 */
+```
+
+The table at `0x4d64a8` has **six** rows (one per policy 0..5), `5 × i32`
+each — 0x78 bytes, ending at `0x4d6520`.  But the policy is clamped to **0..6**,
+not 0..5.  Policy 6 indexes `6 * 5 = 30` entries in, which lands exactly at
+`0x4d6520` — the start of the *band-threshold table* that immediately follows in
+`.rdata` (and which this very pass also reads, via
+`engine_math_lookup_threshold`, to classify the result).  So for a 100%-tax
+realm the "adjustment" isn't a happiness penalty at all; it's the threshold
+table's `(cutoff, band)` pairs reinterpreted as adjustments:
+
+| policy 6, band | reads | value |
+|---|---|---|
+| 0 | cutoff[0] | 10 |
+| 1 | band[0]   | 0  |
+| 2 | cutoff[1] | 35 |
+| 3 | band[1]   | 1  |
+| 4 | cutoff[2] | 65 |
+
+Adding +10/+35/+65 to *approval* for the highest tax bracket is plainly not the
+intent — the row is simply missing and the read falls through into the next
+table.  Because the two tables are read across this boundary, the drop-in bakes
+them as one contiguous `k_tax_approval_tbl[40]` so the aliasing reproduces
+exactly (`test_engine_realm_tax_policy6_aliasing` pins the +35 read for policy 6
+band 2).  This is the same "one block of bytes, two tables" hazard as quirk
+#144, but here the overlap is read accidentally rather than by design.
+
+A smaller sibling oddity lives in the classification step.  The threshold table
+is `(10,0) (35,1) (65,2) (90,3) (100,4)` with fallback band 3, and
+`engine_math_lookup_threshold` returns the first band whose cutoff is *strictly
+greater* than the value.  The pass clamps tax-approval to a maximum of 100 — but
+`100 < 100` is false, so a realm pinned at exactly 100 falls through to the
+**fallback band 3**, one band *below* a realm sitting at 99 (which gets band 4).
+Maxing out tax-approval quietly costs you a band
+(`test_engine_realm_tax_clamp_high_and_100_quirk`).
+
+> 📍 `src/engine_realm.c` (`engine_realm_apply_tax_approval`, `k_tax_approval_tbl`).
+> Ghidra `FUN_0044bd9f` @ 0x44bd9f; tables r2-dumped from 0x4d64a8 (2D), 0x4d6520
+> (thresholds) and 0x4d6548 (band modifiers).

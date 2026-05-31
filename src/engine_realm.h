@@ -233,4 +233,32 @@ void engine_realm_accrue_income(void);
  * offsets r2-verified against the 0x300 / 0x1a4 strides. */
 void engine_realm_recount_armies(void);
 
+/* Port of FUN_0044bd9f @ 0x44bd9f (357 B, __stdcall void) — the per-realm
+ * tax-policy → approval-modifier pass, a turn-advance pass of 0x448440.  It
+ * turns the realm's tax-rate policy into the approval modifier that the
+ * approval roll-forward (engine_realm_advance_rating) folds into the main
+ * rating.  For every realm 1..s_slot_0056d5dc:
+ *
+ *   1. Look up a signed adjustment in a 2D table keyed by [tax policy +0x15d]
+ *      (0..6) × [the realm's current standing band +0x09], and add it to the
+ *      tax-approval value (+0x0b) as signed-byte arithmetic.
+ *   2. Clamp +0x0b to 0..100.
+ *   3. A zero-population realm with a non-human owner (strategic +0x05 == 0)
+ *      resets to 50.
+ *   4. Reclassify +0x0b into a band 0..4 via engine_math_lookup_threshold
+ *      (cutoffs 10/35/65/90/100, fallback band 3) and store it back to +0x09;
+ *      then emit the per-band modifier (+0x10 ← {-10,-5,0,1,2}[band]) the
+ *      approval roll-forward reads as its +0x10 adjustment source.
+ *
+ * The +0x09 column is the PREVIOUS turn's band (read before the rewrite), so
+ * this turn's classification becomes next turn's lookup column.
+ *
+ * QUIRK #149: tax policy 6 has no row in the 2D table and aliases into the
+ * adjacent band-threshold table (the two are baked as one contiguous array to
+ * reproduce this), and the threshold lookup's fallback means a realm at exactly
+ * 100 tax-approval lands in band 3 — one band below a realm at 99.  Touches
+ * only g_per_army_768 / g_player_strategic_352; uses engine_math_lookup_threshold.
+ * Field semantics provisional; offsets and tables r2-verified. */
+void engine_realm_apply_tax_approval(void);
+
 #endif /* OPENLORDS2_ENGINE_REALM_H */
