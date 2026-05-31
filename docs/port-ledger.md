@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **426** (17.4%) — tested 390, ported 36
-- code bytes touched: **17.9%** (150,435 / 838,629 B)
-- unported: **2021**
+- touched: **431** (17.6%) — tested 395, ported 36
+- code bytes touched: **18.2%** (152,465 / 838,629 B)
+- unported: **2016**
 - orphan refs (in src/, not in function table): 4
 
-## tested (390) — ported + host unit suite
+## tested (395) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -212,6 +212,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4483fb | FUN_004483fb | 11 | engine_handlers_da.h |
 | 0x448406 | FUN_00448406 | 11 | engine_handlers_da.h |
 | 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h |
+| 0x4485a5 | FUN_004485a5 | 163 | engine_army_economy.c, engine_army_economy.h |
 | 0x44c278 | FUN_0044c278 | 707 | engine_army_economy.c, engine_army_economy.h |
 | 0x44c53b | FUN_0044c53b | 193 | engine_army_economy.c, engine_army_economy.h |
 | 0x44c5fc | FUN_0044c5fc | 200 | engine_army_economy.c, engine_army_economy.h |
@@ -230,7 +231,11 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x44e603 | FUN_0044e603 | 80 | engine_army_economy.c, engine_army_economy.h |
 | 0x44e653 | FUN_0044e653 | 80 | engine_army_economy.c, engine_army_economy.h |
 | 0x44e7b4 | FUN_0044e7b4 | 158 | engine_army_economy.c, engine_army_economy.h |
-| 0x44f6e7 | FUN_0044f6e7 | 2147 | engine_territory.c, engine_territory.h |
+| 0x44ef4e | FUN_0044ef4e | 525 | engine_army_economy.c, engine_army_economy.h |
+| 0x44f15b | FUN_0044f15b | 237 | engine_army_economy.c, engine_army_economy.h |
+| 0x44f248 | FUN_0044f248 | 208 | engine_army_economy.c, engine_army_economy.h |
+| 0x44f318 | FUN_0044f318 | 897 | engine_army_economy.c, engine_army_economy.h |
+| 0x44f6e7 | FUN_0044f6e7 | 2147 | engine_army_economy.c, engine_army_economy.h, engine_territory.c (+1) |
 | 0x450e46 | FUN_00450e46 | 366 | engine_army_economy.c, engine_army_economy.h |
 | 0x450fb4 | FUN_00450fb4 | 173 | engine_army_economy.c, engine_army_economy.h |
 | 0x451f1a | FUN_00451f1a | 81 | engine.c, engine.h, engine_anim_cycle.c |
@@ -262,7 +267,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x468d4f | FUN_00468d4f | 274 | engine_territory.c, engine_territory.h |
 | 0x468e61 | FUN_00468e61 | 457 | engine_territory.c, engine_territory.h |
 | 0x46902a | FUN_0046902a | 499 | engine_territory.c, engine_territory.h |
-| 0x469b8d | FUN_00469b8d | 404 | engine_territory.c, engine_territory.h |
+| 0x469b8d | FUN_00469b8d | 404 | engine_army_economy.c, engine_territory.c, engine_territory.h |
 | 0x469d21 | FUN_00469d21 | 237 | engine_territory.c, engine_territory.h |
 | 0x46ac22 | FUN_0046ac22 | 329 | engine_territory.c, engine_territory.h |
 | 0x46c080 | FUN_0046c080 | 199 | engine_territory.c, engine_territory.h |

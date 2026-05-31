@@ -247,4 +247,92 @@ void engine_army_economy_pick_fullest_cell(int key);
  * when the army records / roster / cell grid are unbound. */
 int engine_army_economy_distribute_stock(int key);
 
+/* ──────────────────────────────────────────────────────────────────
+ * Per-realm resource-production planner — the FUN_004485a5 orchestrator
+ * (called per-realm from the army/country setup pass 0x49bd99, the new-game
+ * country build 0x43a997, and ~40 other per-turn sites) and its 0x44f318
+ * branch with the two leaves it rests on.
+ *
+ * Each realm has four "resource slots" (0..3) — a 4-entry array of 0x18-byte
+ * records at record +0x294 (retail DAT_0053fc44).  Within a slot record:
+ *   +0x00 byte   target_pct  (DAT_0053fc44)  plan_resource writes the supply
+ *                                            target; +0x01/+0x02/+0x03 are the
+ *   +0x01 byte   flag_a      (DAT_0053fc45)  three model gate flags resource_
+ *   +0x02 byte   flag_b      (DAT_0053fc46)  quota reads
+ *   +0x03 byte   flag_c      (DAT_0053fc47)  (also the top gate)
+ *   +0x08 sbyte  base_pct    (DAT_0053fc4c)  supply_target's additive base
+ *   +0x0a i16    cap         (DAT_0053fc4e)  supply_target's reference cap
+ *   +0x14 i32    quota       (DAT_0053fc58)  plan_resource's OUTPUT
+ * The four slots are planned by 0x4485a5 with (slot, rec_idx, target, divisor)
+ * = (1,4,0xf,1), (3,5,0xf,2), (0,6,0x14,1), (2,7,0xf,4); `rec_idx` selects one
+ * of the eight 0xc-byte job-slot records at +0xc4 (retail DAT_0053fa74 — the
+ * same array engine_territory's FUN_0044f6e7 fills, WF_COUNTER) whose +0x00
+ * assigned-count is the production level fed to supply_target.
+ * ────────────────────────────────────────────────────────────────── */
+
+/* Bind the per-group resource-demand pool table (retail DAT_0057c020 — a
+ * runtime, zero-initialised .data table of 0x160-byte records indexed by the
+ * realm's +0x05 group id).  resource_quota's slot-2 path reads four i32 demand
+ * fields out of the keyed record: +0x00/+0x04 (commodity-B demand, flag 0 / !=0)
+ * and +0x10/+0x14 (commodity-A demand).  NULL → the slot-2 path treats every
+ * demand as 0 (so the quota collapses to 0); the other slots never touch it. */
+void engine_army_economy_bind_resource_pool(const uint8_t *pool);
+
+/* The supply-pool totals resource_quota's slot-2 path last summed (retail
+ * scalars DAT_0057c904 / DAT_0056d628).  Recomputed by every slot-2
+ * resource_quota call via engine_army_economy_sum_supply_pools; exposed for
+ * tests.  Each is floored at 1. */
+int engine_army_economy_supply_pool_a(void);
+int engine_army_economy_supply_pool_b(void);
+
+/* Port of FUN_0044f15b (237 B).  Sum the two per-race production multipliers
+ * (the baked 6-entry race table, retail DAT_004d8990 / DAT_004d8994) across
+ * every other army (index 1..s_slot_0056d5dc) that shares `group` (record +0x05),
+ * has its resource-slot-2 active flag set (record +0x2c7) and a positive slot-2
+ * job count (record +0x118 = job-slot record 7's count), into the two supply-pool
+ * totals above (each floored at 1).  No-op (leaves both pools at 1) when the
+ * army-record block is unbound. */
+void engine_army_economy_sum_supply_pools(int group);
+
+/* Port of FUN_0044ef4e (525 B).  The per-army resource quota for resource `slot`
+ * of `key`, gated on the slot's flag_c.  For slot 2 it sums the realm's supply
+ * pools (sum_supply_pools(`group`)) and returns this army's race-weighted share
+ * of the group demand pool (`flag` picks the 0 / !=0 demand column), the min of
+ * the A- and B-commodity shares.  For other slots it returns 999 when the slot's
+ * flag_a is set and flag_b clear, else 0.  Returns 0 when the army-record block
+ * is unbound. */
+int engine_army_economy_resource_quota(int key, int slot, int group, int flag);
+
+/* Port of FUN_0044f248 (208 B).  The supply target percentage for resource
+ * `slot` of `key` at production `amount`, starting from `base_pct`: returns a
+ * flat 80 when the mode flag s_slot_0053f25c is clear, 0 when `amount` is 0,
+ * otherwise the slot's stored base byte (+0x08, signed) plus `base_pct` (scaled
+ * down by cap/amount when the slot cap +0x0a is below `amount`), clamped to
+ * [base_pct, 100].  0 when the army-record block is unbound. */
+int engine_army_economy_supply_target(int key, int slot, int amount, int base_pct);
+
+/* Port of FUN_0044f318 (897 B).  Plan resource `slot` of realm `key`: clear the
+ * slot's quota and the two slot-2 production scratch fields (+0x280/+0x284), seed
+ * the secondary-settlement carry for slot 0/3 (+0x288/+0x28c), reset job-slot
+ * record `rec_idx`, then — when the realm's group (+0x05) is set, its slot quota
+ * is positive and it has job slots (gate byte +0xb8, which doubles as the sweep
+ * step) — sweep production levels 0..feed (record +0x24) to find the one whose
+ * `supply_target × percent(level/divisor)` is highest (capped by the quota),
+ * store that slot's target byte and final quota, and for slot 2 also the
+ * race-weighted production amounts (+0x280/+0x284) and the best level.  `target`
+ * and `divisor` are the per-slot constants from the 0x4485a5 call table.  No-op
+ * when the army-record block is unbound. */
+void engine_army_economy_plan_resource(int key, int slot, int rec_idx,
+                                       int target, int divisor);
+
+/* Port of FUN_004485a5 (163 B).  The per-realm economy orchestrator: run the
+ * terrain census (engine_territory_census_army_terrain), the storage/supply
+ * distribution (distribute_stock), the production-level planner (plan_production)
+ * and candidate selector (select_candidate) for `phase`, the four resource-slot
+ * plans (plan_resource) with the fixed (slot, rec_idx, target, divisor) table,
+ * and the secondary-settlement reserve pass (plan_secondary).  `phase` is the
+ * saved game-mode code (retail DAT_0057c92c).  No-op when the army-record block
+ * is unbound (each callee guards itself). */
+void engine_army_economy_plan_realm(int key, int phase);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_ECONOMY_H */

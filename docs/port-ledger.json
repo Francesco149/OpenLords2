@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 390,
+  "tested": 395,
   "ported": 36,
-  "unported": 2021,
+  "unported": 2016,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 426,
-  "pct_touched": 17.4,
-  "pct_tested": 15.9,
+  "touched": 431,
+  "pct_touched": 17.6,
+  "pct_tested": 16.1,
   "bytes_total": 838629,
-  "bytes_touched": 150435,
-  "pct_bytes_touched": 17.9
+  "bytes_touched": 152465,
+  "pct_bytes_touched": 18.2
  },
  "orphan_refs": [
   "0x004148",
@@ -9428,8 +9428,11 @@
    "name": "FUN_004485a5",
    "size": 163,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_economy.c",
+    "src/engine_army_economy.h"
+   ]
   },
   {
    "va": "0x448648",
@@ -10120,32 +10123,44 @@
    "name": "FUN_0044ef4e",
    "size": 525,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_economy.c",
+    "src/engine_army_economy.h"
+   ]
   },
   {
    "va": "0x44f15b",
    "name": "FUN_0044f15b",
    "size": 237,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_economy.c",
+    "src/engine_army_economy.h"
+   ]
   },
   {
    "va": "0x44f248",
    "name": "FUN_0044f248",
    "size": 208,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_economy.c",
+    "src/engine_army_economy.h"
+   ]
   },
   {
    "va": "0x44f318",
    "name": "FUN_0044f318",
    "size": 897,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_economy.c",
+    "src/engine_army_economy.h"
+   ]
   },
   {
    "va": "0x44f699",
@@ -10162,6 +10177,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_economy.c",
+    "src/engine_army_economy.h",
     "src/engine_territory.c",
     "src/engine_territory.h"
    ]
@@ -11448,6 +11465,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_economy.c",
     "src/engine_territory.c",
     "src/engine_territory.h"
    ]

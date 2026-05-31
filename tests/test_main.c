@@ -1615,6 +1615,30 @@ struct test_case {
     X(army_economy_distribute_zero_budget) \
     X(army_economy_distribute_keyed_by_row) \
     X(army_economy_distribute_unbound_noop) \
+    X(army_economy_supply_target_mode_flag_flat) \
+    X(army_economy_supply_target_zero_amount) \
+    X(army_economy_supply_target_base_plus_byte) \
+    X(army_economy_supply_target_cap_scales_then_floors) \
+    X(army_economy_supply_target_clamps_to_100) \
+    X(army_economy_supply_target_unbound_is_zero) \
+    X(army_economy_sum_pools_adds_race_columns) \
+    X(army_economy_sum_pools_filters_non_members) \
+    X(army_economy_sum_pools_floor_at_one) \
+    X(army_economy_sum_pools_unbound_floors) \
+    X(army_economy_quota_gate_off) \
+    X(army_economy_quota_nonpool_flag_combo) \
+    X(army_economy_quota_slot2_pool_share) \
+    X(army_economy_quota_slot2_zero_race_column) \
+    X(army_economy_quota_slot2_pool_unbound) \
+    X(army_economy_quota_unbound_is_zero) \
+    X(army_economy_plan_resource_nonpool) \
+    X(army_economy_plan_resource_group_zero_clears) \
+    X(army_economy_plan_resource_quota_nonpositive_bails) \
+    X(army_economy_plan_resource_slot0_secondary_carry) \
+    X(army_economy_plan_resource_slot2_pool) \
+    X(army_economy_plan_resource_unbound_noop) \
+    X(army_economy_plan_realm_dispatches_all_branches) \
+    X(army_economy_plan_realm_unbound_noop) \
     \
     X(game_init_clear_tables_zeroes_per_army) \
     X(game_init_clear_tables_zeroes_unit_table) \

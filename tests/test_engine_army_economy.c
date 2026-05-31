@@ -1215,3 +1215,370 @@ int test_army_economy_distribute_unbound_noop(void)
     T_ASSERT_EQ_I(engine_army_economy_distribute_stock(2), 0);
     return 0;
 }
+
+/* --------------------------------------------------------------------- *
+ *  Per-realm resource-production planner — FUN_004485a5 / f318 / ef4e /
+ *  f248 / f15b.  Expected values hand-traced against the decompile.
+ * --------------------------------------------------------------------- */
+
+enum {
+    GROUP          = 0x05,
+    RACE           = 0x290,
+    PLAN_GATE_B    = 0xb8,        /* gate byte (== PLAN_GATE), doubles as sweep step */
+    RES_PROD_A     = 0x280,
+    RES_PROD_B     = 0x284,
+    RES_CARRY0     = 0x288,
+    RES_CARRY3     = 0x28c,
+    SLOT2_JOBCOUNT = 0x118,       /* == job-slot record 7's count (0xc4 + 7*0xc) */
+    RES_ACTIVE2    = 0x2c7,       /* == res-slot 2's flag_c */
+    /* resource-slot record field offsets (within the 0x18-byte record) */
+    RSF_TARGET     = 0x00,
+    RSF_FLAG_A     = 0x01,
+    RSF_FLAG_B     = 0x02,
+    RSF_FLAG_C     = 0x03,
+    RSF_BASE_PCT   = 0x08,
+    RSF_CAP        = 0x0a,
+    RSF_QUOTA      = 0x14,
+    /* job-slot record field offsets (within the 0xc-byte record) */
+    JSF_COUNT      = 0x00,
+    JSF_SEL        = 0x04,
+    JSF_CAP        = 0x08,
+    /* per-group resource-pool record field offsets (within the 0x160 record) */
+    RP_B_FLAG0     = 0x00,
+    RP_A_FLAG0     = 0x10,
+    RP_STRIDE      = 0x160,
+};
+
+static int res_off(int slot, int f) { return 0x294 + slot * 0x18 + f; }
+static int job_off(int rec, int f)  { return 0xc4 + rec * 0xc + f; }
+
+static void set_i16(int key, int off, int16_t v)
+{
+    *(int16_t *)(g_army + key * ARMY_STRIDE + off) = v;
+}
+
+static uint8_t g_respool[4 * 0x160];
+
+/* Bind a clean army block + resource-pool table; set the army count. */
+static void resq_reset(void)
+{
+    army_reset();
+    memset(g_respool, 0, sizeof g_respool);
+    engine_army_economy_bind_resource_pool(g_respool);
+    s_slot_0053f25c = 1;        /* default to the "real" supply-target path */
+    s_slot_0056d5dc = 4;        /* army count (rows 1..4) */
+}
+
+static void set_respool(int group, int off, int32_t v)
+{
+    *(int32_t *)(g_respool + group * RP_STRIDE + off) = v;
+}
+
+/* ── supply target (FUN_0044f248) ───────────────────────────────────── */
+
+int test_army_economy_supply_target_mode_flag_flat(void)
+{
+    resq_reset();
+    s_slot_0053f25c = 0;                       /* mode flag clear → flat 80 */
+    T_ASSERT_EQ_I(engine_army_economy_supply_target(3, 1, 5, 30), 0x50);
+    T_ASSERT_EQ_I(engine_army_economy_supply_target(3, 1, 0, 30), 0x50);  /* even amount 0 */
+    return 0;
+}
+
+int test_army_economy_supply_target_zero_amount(void)
+{
+    resq_reset();                              /* f25c = 1 */
+    T_ASSERT_EQ_I(engine_army_economy_supply_target(3, 1, 0, 30), 0);
+    return 0;
+}
+
+int test_army_economy_supply_target_base_plus_byte(void)
+{
+    resq_reset();
+    set_byte(3, res_off(1, RSF_BASE_PCT), 10);  /* base byte */
+    set_i16(3, res_off(1, RSF_CAP), 100);       /* cap >= amount → no scaling */
+    /* 10 + 20 = 30, within [20,100] */
+    T_ASSERT_EQ_I(engine_army_economy_supply_target(3, 1, 5, 20), 30);
+    return 0;
+}
+
+int test_army_economy_supply_target_cap_scales_then_floors(void)
+{
+    resq_reset();
+    set_byte(3, res_off(1, RSF_BASE_PCT), 10);
+    set_i16(3, res_off(1, RSF_CAP), 2);         /* cap 2 < amount 5 → scale */
+    /* pct = (2*100)/5 = 40; base = (20*40)/100 = 8; target = 10+8 = 18;
+     * clamp to floor (original base_pct 20) → 20 */
+    T_ASSERT_EQ_I(engine_army_economy_supply_target(3, 1, 5, 20), 20);
+    return 0;
+}
+
+int test_army_economy_supply_target_clamps_to_100(void)
+{
+    resq_reset();
+    set_byte(3, res_off(1, RSF_BASE_PCT), 100);
+    set_i16(3, res_off(1, RSF_CAP), 100);
+    T_ASSERT_EQ_I(engine_army_economy_supply_target(3, 1, 5, 20), 100);  /* 120 → 100 */
+    return 0;
+}
+
+int test_army_economy_supply_target_unbound_is_zero(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    T_ASSERT_EQ_I(engine_army_economy_supply_target(3, 1, 5, 20), 0);
+    return 0;
+}
+
+/* ── supply pools (FUN_0044f15b) ────────────────────────────────────── */
+
+/* Make army `key` qualify for group `group`'s slot-2 pool with race `race`. */
+static void make_pool_member(int key, int group, int race)
+{
+    set_byte(key, GROUP, (uint8_t)group);
+    set_byte(key, RES_ACTIVE2, 1);
+    set_stock(key, SLOT2_JOBCOUNT, 5);          /* > 0 */
+    set_byte(key, RACE, (uint8_t)race);
+}
+
+int test_army_economy_sum_pools_adds_race_columns(void)
+{
+    resq_reset();
+    make_pool_member(1, 1, 0);                  /* race 0 → (6,10) */
+    make_pool_member(2, 1, 2);                  /* race 2 → (3,10) */
+    engine_army_economy_sum_supply_pools(1);
+    T_ASSERT_EQ_I(engine_army_economy_supply_pool_a(), 6 + 3);
+    T_ASSERT_EQ_I(engine_army_economy_supply_pool_b(), 10 + 10);
+    return 0;
+}
+
+int test_army_economy_sum_pools_filters_non_members(void)
+{
+    resq_reset();
+    make_pool_member(1, 1, 0);                  /* counts: (6,10) */
+    make_pool_member(2, 2, 0);                  /* wrong group → excluded */
+    make_pool_member(3, 1, 0);
+    set_byte(3, RES_ACTIVE2, 0);                /* inactive → excluded */
+    make_pool_member(4, 1, 0);
+    set_stock(4, SLOT2_JOBCOUNT, 0);            /* no job count → excluded */
+    engine_army_economy_sum_supply_pools(1);
+    T_ASSERT_EQ_I(engine_army_economy_supply_pool_a(), 6);
+    T_ASSERT_EQ_I(engine_army_economy_supply_pool_b(), 10);
+    return 0;
+}
+
+int test_army_economy_sum_pools_floor_at_one(void)
+{
+    resq_reset();                               /* no members at all */
+    engine_army_economy_sum_supply_pools(1);
+    T_ASSERT_EQ_I(engine_army_economy_supply_pool_a(), 1);
+    T_ASSERT_EQ_I(engine_army_economy_supply_pool_b(), 1);
+
+    make_pool_member(1, 1, 4);                  /* race 4 → (13,0): B sum 0 floored */
+    engine_army_economy_sum_supply_pools(1);
+    T_ASSERT_EQ_I(engine_army_economy_supply_pool_a(), 13);
+    T_ASSERT_EQ_I(engine_army_economy_supply_pool_b(), 1);
+    return 0;
+}
+
+int test_army_economy_sum_pools_unbound_floors(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    engine_army_economy_sum_supply_pools(1);
+    T_ASSERT_EQ_I(engine_army_economy_supply_pool_a(), 1);
+    T_ASSERT_EQ_I(engine_army_economy_supply_pool_b(), 1);
+    return 0;
+}
+
+/* ── resource quota (FUN_0044ef4e) ──────────────────────────────────── */
+
+int test_army_economy_quota_gate_off(void)
+{
+    resq_reset();
+    /* slot 1 flag_c clear → 0 */
+    T_ASSERT_EQ_I(engine_army_economy_resource_quota(3, 1, 1, 0), 0);
+    return 0;
+}
+
+int test_army_economy_quota_nonpool_flag_combo(void)
+{
+    resq_reset();
+    set_byte(3, res_off(1, RSF_FLAG_C), 1);
+    set_byte(3, res_off(1, RSF_FLAG_A), 1);
+    set_byte(3, res_off(1, RSF_FLAG_B), 0);     /* a set, b clear → 999 */
+    T_ASSERT_EQ_I(engine_army_economy_resource_quota(3, 1, 1, 0), 999);
+
+    set_byte(3, res_off(1, RSF_FLAG_B), 1);     /* b set → 0 */
+    T_ASSERT_EQ_I(engine_army_economy_resource_quota(3, 1, 1, 0), 0);
+
+    set_byte(3, res_off(1, RSF_FLAG_A), 0);     /* a clear → 0 */
+    set_byte(3, res_off(1, RSF_FLAG_B), 0);
+    T_ASSERT_EQ_I(engine_army_economy_resource_quota(3, 1, 1, 0), 0);
+    return 0;
+}
+
+int test_army_economy_quota_slot2_pool_share(void)
+{
+    resq_reset();
+    set_byte(3, GROUP, 1);
+    make_pool_member(3, 1, 0);                  /* sole member, race 0 → (6,10) */
+    set_byte(3, RES_ACTIVE2, 1);               /* == res-slot-2 flag_c (top gate) */
+    set_respool(1, RP_A_FLAG0, 100);
+    set_respool(1, RP_B_FLAG0, 200);
+    /* share_a = (100*6/6)/6 = 16; share_b = (200*10/10)/10 = 20; min = 16 */
+    T_ASSERT_EQ_I(engine_army_economy_resource_quota(3, 2, 1, 0), 16);
+    T_ASSERT_EQ_I(engine_army_economy_supply_pool_a(), 6);
+    T_ASSERT_EQ_I(engine_army_economy_supply_pool_b(), 10);
+    return 0;
+}
+
+int test_army_economy_quota_slot2_zero_race_column(void)
+{
+    resq_reset();
+    make_pool_member(3, 1, 4);                  /* race 4 → (13,0): B column 0 */
+    set_byte(3, RES_ACTIVE2, 1);
+    set_respool(1, RP_A_FLAG0, 130);
+    set_respool(1, RP_B_FLAG0, 999);            /* ignored: race_b == 0 → share_b stays 999 */
+    /* share_a = (130*13/13)/13 = 10; share_b = 999; min = 10 */
+    T_ASSERT_EQ_I(engine_army_economy_resource_quota(3, 2, 1, 0), 10);
+    return 0;
+}
+
+int test_army_economy_quota_slot2_pool_unbound(void)
+{
+    resq_reset();
+    make_pool_member(3, 1, 0);
+    set_byte(3, RES_ACTIVE2, 1);
+    engine_army_economy_bind_resource_pool(NULL);   /* demands read as 0 → share 0 */
+    T_ASSERT_EQ_I(engine_army_economy_resource_quota(3, 2, 1, 0), 0);
+    return 0;
+}
+
+int test_army_economy_quota_unbound_is_zero(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    T_ASSERT_EQ_I(engine_army_economy_resource_quota(3, 1, 1, 0), 0);
+    return 0;
+}
+
+/* ── plan resource (FUN_0044f318) ───────────────────────────────────── */
+
+int test_army_economy_plan_resource_nonpool(void)
+{
+    resq_reset();
+    s_slot_0053f25c = 0;                        /* supply_target → flat 80 */
+    set_byte(3, GROUP, 1);
+    set_byte(3, PLAN_GATE_B, 1);                /* gate set, step 1 */
+    set_stock(3, FEED_COUNT, 3);
+    set_stock(3, job_off(4, JSF_COUNT), 2);     /* stored level */
+    set_byte(3, res_off(1, RSF_FLAG_C), 1);     /* slot-1 quota → 999 */
+    set_byte(3, res_off(1, RSF_FLAG_A), 1);
+
+    engine_army_economy_plan_resource(3, 1, 4, 0x0f, 1);
+
+    /* target byte = supply_target(.,.,stored,.) = 80; quota = percent_of(2/1,80)=1 */
+    T_ASSERT_EQ_I(rec_byte(3, res_off(1, RSF_TARGET)), 80);
+    T_ASSERT_EQ_I(rec_i32(3, res_off(1, RSF_QUOTA)), 1);
+    T_ASSERT_EQ_I(rec_i32(3, job_off(4, JSF_SEL)), -1);
+    T_ASSERT_EQ_I(rec_i32(3, job_off(4, JSF_CAP)), 100000);  /* non-slot-2 sentinel */
+    T_ASSERT_EQ_I(rec_i32(3, RES_PROD_A), 0);                /* slot-2-only, untouched */
+    return 0;
+}
+
+int test_army_economy_plan_resource_group_zero_clears(void)
+{
+    resq_reset();
+    set_stock(3, res_off(1, RSF_QUOTA), 777);   /* pre-existing junk */
+    /* group (+0x05) stays 0 → clears and bails before the sweep */
+    engine_army_economy_plan_resource(3, 1, 4, 0x0f, 1);
+    T_ASSERT_EQ_I(rec_i32(3, res_off(1, RSF_QUOTA)), 0);
+    T_ASSERT_EQ_I(rec_i32(3, job_off(4, JSF_SEL)), -1);  /* up-front reset still runs */
+    T_ASSERT_EQ_I(rec_i32(3, job_off(4, JSF_CAP)), 0);
+    T_ASSERT_EQ_I(rec_byte(3, res_off(1, RSF_TARGET)), 0);  /* sweep skipped */
+    return 0;
+}
+
+int test_army_economy_plan_resource_quota_nonpositive_bails(void)
+{
+    resq_reset();
+    set_byte(3, GROUP, 1);
+    set_byte(3, PLAN_GATE_B, 1);
+    /* slot-1 flags: flag_c set, flag_a clear → quota 0 → bail after clears */
+    set_byte(3, res_off(1, RSF_FLAG_C), 1);
+    engine_army_economy_plan_resource(3, 1, 4, 0x0f, 1);
+    T_ASSERT_EQ_I(rec_i32(3, res_off(1, RSF_QUOTA)), 0);
+    T_ASSERT_EQ_I(rec_i32(3, job_off(4, JSF_SEL)), -1);
+    T_ASSERT_EQ_I(rec_byte(3, res_off(1, RSF_TARGET)), 0);
+    return 0;
+}
+
+int test_army_economy_plan_resource_slot0_secondary_carry(void)
+{
+    resq_reset();
+    set_byte(3, SEC_FLAG, 1);
+    set_stock(3, SEC_VAL2, 555);                /* slot 0 carries SEC_VAL2 */
+    engine_army_economy_plan_resource(3, 0, 6, 0x14, 1);   /* group 0 → bails, but carry runs first */
+    T_ASSERT_EQ_I(rec_i32(3, RES_CARRY0), 555);
+    return 0;
+}
+
+int test_army_economy_plan_resource_slot2_pool(void)
+{
+    resq_reset();
+    s_slot_0053f25c = 0;                        /* supply_target → flat 80 */
+    set_byte(3, GROUP, 1);
+    set_byte(3, PLAN_GATE_B, 1);
+    set_stock(3, FEED_COUNT, 2);
+    make_pool_member(3, 1, 0);                  /* sole member, race 0 → (6,10) */
+    set_stock(3, SLOT2_JOBCOUNT, 50);           /* stored level (== job-slot 7 count) */
+    set_byte(3, RES_ACTIVE2, 1);               /* slot-2 flag_c */
+    set_respool(1, RP_A_FLAG0, 100);            /* quota = 16 (> 0) */
+    set_respool(1, RP_B_FLAG0, 200);
+
+    engine_army_economy_plan_resource(3, 2, 7, 0x0f, 4);
+
+    /* quota = percent_of(50/4, 80) = percent_of(12,80) = 9, capped at 16 → 9 */
+    T_ASSERT_EQ_I(rec_i32(3, res_off(2, RSF_QUOTA)), 9);
+    T_ASSERT_EQ_I(rec_byte(3, res_off(2, RSF_TARGET)), 80);
+    T_ASSERT_EQ_I(rec_i32(3, RES_PROD_A), 6 * 9);   /* race col A × quota */
+    T_ASSERT_EQ_I(rec_i32(3, RES_PROD_B), 10 * 9);  /* race col B × quota */
+    T_ASSERT_EQ_I(rec_i32(3, job_off(7, JSF_CAP)), 0);  /* best level (sweep gave 0) */
+    return 0;
+}
+
+int test_army_economy_plan_resource_unbound_noop(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    engine_army_economy_plan_resource(3, 1, 4, 0x0f, 1);   /* no crash */
+    return 0;
+}
+
+/* ── orchestrator (FUN_004485a5) ────────────────────────────────────── */
+
+int test_army_economy_plan_realm_dispatches_all_branches(void)
+{
+    dist_reset();                               /* binds army + roster + cells */
+    engine_army_economy_bind_resource_pool(g_respool);
+    memset(g_respool, 0, sizeof g_respool);
+    s_slot_0056d5dc = 4;
+    /* group 0 everywhere → each plan_resource clears and bails, but the four
+     * job-slot resets and every always-run clear still prove the dispatch. */
+
+    engine_army_economy_plan_realm(3, 1);
+
+    T_ASSERT_EQ_I(rec_i32(3, PLAN_NET), 0);          /* plan_production ran */
+    T_ASSERT_EQ_I(rec_i32(3, EVAL_NET), 0);          /* select_candidate ran */
+    T_ASSERT_EQ_I(rec_i32(3, DIST_SEL), -1);         /* distribute_stock ran */
+    T_ASSERT_EQ_I(rec_i32(3, SEC_SEL), -1);          /* plan_secondary ran */
+    T_ASSERT_EQ_I(rec_i32(3, job_off(4, JSF_SEL)), -1);  /* plan_resource slot 1 */
+    T_ASSERT_EQ_I(rec_i32(3, job_off(5, JSF_SEL)), -1);  /* slot 3 */
+    T_ASSERT_EQ_I(rec_i32(3, job_off(6, JSF_SEL)), -1);  /* slot 0 */
+    T_ASSERT_EQ_I(rec_i32(3, job_off(7, JSF_SEL)), -1);  /* slot 2 */
+    return 0;
+}
+
+int test_army_economy_plan_realm_unbound_noop(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    engine_army_economy_plan_realm(3, 1);            /* no crash */
+    return 0;
+}

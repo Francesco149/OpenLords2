@@ -34,7 +34,8 @@
 #include <stdint.h>
 
 #include "engine_math.h"           /* div_ceil / percent_of (FUN_00404e03/d6b) */
-#include "save_schema_globals.h"   /* s_slot_0053f25c / s_slot_0053f260 */
+#include "engine_territory.h"      /* engine_territory_census_army_terrain (469b8d) */
+#include "save_schema_globals.h"   /* s_slot_0053f25c / s_slot_0053f260 / s_slot_0056d5dc */
 
 /* Per-army record row geometry (shared with engine_territory). */
 #define ARMY_ROW_STRIDE   0x300
@@ -841,4 +842,256 @@ int engine_army_economy_distribute_stock(int key)
         }
     }
     return ret;
+}
+
+/* --------------------------------------------------------------------- *
+ *  Per-realm resource-production planner — the FUN_004485a5 orchestrator
+ *  and its 0x44f318 branch (with leaves 0x44f15b / 0x44ef4e / 0x44f248).
+ *
+ *  A realm has four "resource slots" (0..3), a 4-entry array of 0x18-byte
+ *  records at +0x294; plan_resource computes each slot's production quota and
+ *  supply target.  The slot-2 path additionally rations the realm's share of a
+ *  per-group demand pool, weighted by a baked per-race multiplier table.
+ * --------------------------------------------------------------------- */
+
+/* Resource-slot record array (retail DAT_0053fc44, 0x18-byte stride). */
+#define ARMY_RES_BASE       0x294   /* slot 0 record base */
+#define RES_STRIDE          0x18
+#define RES_TARGET_PCT      0x00    /* DAT_0053fc44 — byte, plan_resource writes */
+#define RES_FLAG_A          0x01    /* DAT_0053fc45 — byte gate */
+#define RES_FLAG_B          0x02    /* DAT_0053fc46 — byte gate */
+#define RES_FLAG_C          0x03    /* DAT_0053fc47 — byte gate (top gate) */
+#define RES_BASE_PCT        0x08    /* DAT_0053fc4c — signed byte, supply_target base */
+#define RES_CAP             0x0a    /* DAT_0053fc4e — i16, supply_target cap */
+#define RES_QUOTA           0x14    /* DAT_0053fc58 — i32, plan_resource OUTPUT */
+
+/* Eight 0xc-byte job-slot records at +0xc4 (retail DAT_0053fa74 — engine_
+ * territory's WF_COUNTER, filled by FUN_0044f6e7).  plan_resource indexes by
+ * rec_idx; the +0x00 assigned-count is the production level fed to supply_target,
+ * +0x08 (the cap field in the setup phase) is reused as the best-level scratch. */
+#define ARMY_JOBSLOT_BASE   0xc4
+#define JOBSLOT_STRIDE      0xc
+#define JOBSLOT_COUNT       0x00    /* DAT_0053fa74 — assigned count / production level */
+#define JOBSLOT_SEL         0x04    /* DAT_0053fa78 — plan_resource sets -1 */
+#define JOBSLOT_CAP         0x08    /* DAT_0053fa7c — best level (slot 2) / 100000 sentinel */
+
+#define ARMY_GROUP          0x05    /* DAT_0053f9b5 — realm group id (resource-pool index) */
+#define ARMY_RACE           0x290   /* DAT_0053fc40 — race id (race-table index) */
+#define ARMY_RES_PROD_A     0x280   /* DAT_0053fc30 — slot-2 race-weighted output A */
+#define ARMY_RES_PROD_B     0x284   /* DAT_0053fc34 — slot-2 race-weighted output B */
+#define ARMY_RES_CARRY0     0x288   /* DAT_0053fc38 — slot-0 secondary carry (from SEC_VAL2) */
+#define ARMY_RES_CARRY3     0x28c   /* DAT_0053fc3c — slot-3 secondary carry (from SEC_VAL1) */
+#define ARMY_SLOT2_JOBCOUNT 0x118   /* DAT_0053fac8 — job-slot record 7's count (== +0xc4 + 7*0xc) */
+#define ARMY_RES_ACTIVE2    0x2c7   /* DAT_0053fc77 — resource-slot-2 active flag (== res(2).flag_c) */
+
+/* Per-group resource-demand pool (retail DAT_0057c020, 0x160-byte stride). */
+#define RESPOOL_STRIDE      0x160
+#define RESPOOL_B_FLAG0     0x00    /* DAT_0057c020 — commodity-B demand, flag 0 */
+#define RESPOOL_B_FLAG1     0x04    /* DAT_0057c024 — commodity-B demand, flag !=0 */
+#define RESPOOL_A_FLAG0     0x10    /* DAT_0057c030 — commodity-A demand, flag 0 */
+#define RESPOOL_A_FLAG1     0x14    /* DAT_0057c034 — commodity-A demand, flag !=0 */
+
+/* Baked per-race production multipliers (retail DAT_0057c020's siblings
+ * DAT_004d8990 / DAT_004d8994 — a 6-entry initialised-.data table, 8-byte
+ * stride: column A at +0, column B at +4).  Column A pairs with supply pool A,
+ * column B with pool B. */
+static const int k_race_pool_a[6] = { 6, 4, 3, 6, 13, 4 };
+static const int k_race_pool_b[6] = { 10, 4, 10, 3, 0, 18 };
+
+static const uint8_t *g_resource_pool;   /* DAT_0057c020 — per-group demand table */
+
+static int g_supply_pool_a;   /* DAT_0057c904 — sum of race column A over the group */
+static int g_supply_pool_b;   /* DAT_0056d628 — sum of race column B over the group */
+
+void engine_army_economy_bind_resource_pool(const uint8_t *pool)
+{
+    g_resource_pool = pool;
+}
+
+int engine_army_economy_supply_pool_a(void) { return g_supply_pool_a; }
+int engine_army_economy_supply_pool_b(void) { return g_supply_pool_b; }
+
+/* FUN_0044f15b */
+void engine_army_economy_sum_supply_pools(int group)
+{
+    g_supply_pool_a = 0;
+    g_supply_pool_b = 0;
+
+    if (g_army_records != NULL) {
+        for (int i = 1; i <= (int)s_slot_0056d5dc; i++) {
+            const uint8_t *r = g_army_records + i * ARMY_ROW_STRIDE;
+            if (r[ARMY_GROUP] == (unsigned)group &&
+                r[ARMY_RES_ACTIVE2] != 0 &&
+                *(const int32_t *)(r + ARMY_SLOT2_JOBCOUNT) > 0) {
+                unsigned race = r[ARMY_RACE];
+                g_supply_pool_a += k_race_pool_a[race];
+                g_supply_pool_b += k_race_pool_b[race];
+            }
+        }
+    }
+
+    if (g_supply_pool_a < 1) g_supply_pool_a = 1;
+    if (g_supply_pool_b < 1) g_supply_pool_b = 1;
+}
+
+/* The keyed resource-slot record. */
+static uint8_t *res_slot(uint8_t *row, int slot)
+{
+    return row + ARMY_RES_BASE + slot * RES_STRIDE;
+}
+
+/* A per-group demand field, or 0 when the pool table is unbound. */
+static int respool_demand(int group, int off)
+{
+    if (g_resource_pool == NULL) return 0;
+    return *(const int32_t *)(g_resource_pool + group * RESPOOL_STRIDE + off);
+}
+
+/* FUN_0044ef4e */
+int engine_army_economy_resource_quota(int key, int slot, int group, int flag)
+{
+    if (g_army_records == NULL) return 0;
+
+    uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+    uint8_t *rs  = res_slot(row, slot);
+
+    if (rs[RES_FLAG_C] == 0) return 0;
+
+    if (slot == 2) {
+        /* This army's race-weighted share of the group's demand pool, the
+         * smaller of the A- and B-commodity shares (each 999 if its race
+         * multiplier is 0, i.e. the army does not draw that commodity). */
+        engine_army_economy_sum_supply_pools(group);
+
+        unsigned race = row[ARMY_RACE];
+        int race_a = k_race_pool_a[race];
+        int race_b = k_race_pool_b[race];
+
+        int share_a = 999, share_b = 999;
+        if (race_a != 0) {
+            int demand = flag == 0 ? respool_demand(group, RESPOOL_A_FLAG0)
+                                   : respool_demand(group, RESPOOL_A_FLAG1);
+            share_a = (demand * race_a / g_supply_pool_a) / race_a;
+        }
+        if (race_b != 0) {
+            int demand = flag == 0 ? respool_demand(group, RESPOOL_B_FLAG0)
+                                   : respool_demand(group, RESPOOL_B_FLAG1);
+            share_b = (demand * race_b / g_supply_pool_b) / race_b;
+        }
+        return share_b < share_a ? share_b : share_a;
+    }
+
+    /* Non-pool slots: a flat 999 only when flag_a is set and flag_b clear.
+     * (Retail re-checks flag_c here — dead, since the top gate proved it set.) */
+    if (rs[RES_FLAG_A] == 0) return 0;
+    return rs[RES_FLAG_B] == 0 ? 999 : 0;
+}
+
+/* FUN_0044f248 */
+int engine_army_economy_supply_target(int key, int slot, int amount, int base_pct)
+{
+    if (g_army_records == NULL) return 0;
+
+    if (s_slot_0053f25c == 0) return 0x50;   /* mode flag clear → flat 80 */
+    if (amount == 0)          return 0;
+
+    uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+    uint8_t *rs  = res_slot(row, slot);
+
+    int base_floor = base_pct;
+    int cap        = *(const int16_t *)(rs + RES_CAP);
+    if (cap < amount) {
+        int pct = engine_math_percent_div(cap, amount);   /* cap/amount as percent */
+        base_pct = engine_math_percent_of(base_pct, pct); /* scale base toward it */
+    }
+
+    int target = *(const int8_t *)(rs + RES_BASE_PCT) + base_pct;
+    if (target > 100)        target = 100;
+    if (target < base_floor) target = base_floor;
+    return target;
+}
+
+/* The keyed job-slot record (8× 0xc-byte, retail WF_COUNTER). */
+static uint8_t *job_slot(uint8_t *row, int rec_idx)
+{
+    return row + ARMY_JOBSLOT_BASE + rec_idx * JOBSLOT_STRIDE;
+}
+
+/* FUN_0044f318 */
+void engine_army_economy_plan_resource(int key, int slot, int rec_idx,
+                                       int target, int divisor)
+{
+    if (g_army_records == NULL) return;
+
+    uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+    uint8_t *rs  = res_slot(row, slot);
+    uint8_t *job = job_slot(row, rec_idx);
+
+    *(int32_t *)(rs + RES_QUOTA)        = 0;
+    *(int32_t *)(row + ARMY_RES_PROD_A) = 0;
+    *(int32_t *)(row + ARMY_RES_PROD_B) = 0;
+
+    /* Slot 0 / slot 3 carry one of the secondary settlement's reserve values
+     * (0 when the realm has no secondary settlement). */
+    if (slot == 0)
+        *(int32_t *)(row + ARMY_RES_CARRY0) =
+            row[ARMY_SEC_FLAG] == 0 ? 0 : *(int32_t *)(row + ARMY_SEC_VAL2);
+    if (slot == 3)
+        *(int32_t *)(row + ARMY_RES_CARRY3) =
+            row[ARMY_SEC_FLAG] == 0 ? 0 : *(int32_t *)(row + ARMY_SEC_VAL1);
+
+    *(int32_t *)(job + JOBSLOT_SEL) = -1;
+    *(int32_t *)(job + JOBSLOT_CAP) = 0;
+
+    int group = row[ARMY_GROUP];
+    if (group == 0) return;
+
+    int quota = engine_army_economy_resource_quota(key, slot, group, 0);
+    if (quota <= 0 || row[ARMY_PLAN_GATE] == 0) return;
+
+    int step = row[ARMY_PLAN_GATE];                 /* gate byte doubles as the sweep step */
+    int feed = *(int32_t *)(row + ARMY_FEED_COUNT);
+
+    /* Sweep production levels 0, step, 2·step … (each clamped to feed) for the
+     * one whose capped supply value is highest. */
+    int best_pct = -1, best_level = 0;
+    int base_at_top = 0;                            /* supply_target at the final level */
+    for (int level = 0; level < feed + step; level += step) {
+        int clamped = level > feed ? feed : level;
+        base_at_top = engine_army_economy_supply_target(key, slot, clamped, target);
+        int pct = engine_math_percent_of(clamped / divisor, base_at_top);
+        if (pct > quota) pct = quota;
+        if (pct > best_pct) { best_pct = pct; best_level = clamped; }
+    }
+
+    /* Final quota: the supply value at this slot's stored job-slot count. */
+    int stored = *(int32_t *)(job + JOBSLOT_COUNT);
+    rs[RES_TARGET_PCT] = (uint8_t)(int8_t)engine_army_economy_supply_target(key, slot, stored, target);
+
+    int pct = engine_math_percent_of(stored / divisor, base_at_top);
+    if (pct > quota) pct = quota;
+    *(int32_t *)(rs + RES_QUOTA) = pct;
+
+    if (slot == 2) {
+        unsigned race = row[ARMY_RACE];
+        *(int32_t *)(row + ARMY_RES_PROD_A) = k_race_pool_a[race] * pct;
+        *(int32_t *)(row + ARMY_RES_PROD_B) = k_race_pool_b[race] * pct;
+        *(int32_t *)(job + JOBSLOT_CAP) = best_level;
+    } else {
+        *(int32_t *)(job + JOBSLOT_CAP) = 100000;
+    }
+}
+
+/* FUN_004485a5 */
+void engine_army_economy_plan_realm(int key, int phase)
+{
+    engine_territory_census_army_terrain(key);       /* FUN_00469b8d */
+    engine_army_economy_distribute_stock(key);       /* FUN_0044c278 */
+    engine_army_economy_plan_production(key, phase);  /* FUN_0044d374 */
+    engine_army_economy_select_candidate(key, phase); /* FUN_0044dd4d */
+    engine_army_economy_plan_resource(key, 1, 4, 0x0f, 1);   /* FUN_0044f318 */
+    engine_army_economy_plan_resource(key, 3, 5, 0x0f, 2);
+    engine_army_economy_plan_resource(key, 0, 6, 0x14, 1);
+    engine_army_economy_plan_resource(key, 2, 7, 0x0f, 4);
+    engine_army_economy_plan_secondary(key);         /* FUN_00450e46 */
 }

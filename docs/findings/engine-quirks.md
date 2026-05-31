@@ -4971,3 +4971,35 @@ So the function's entire return path is dead; only its record-field side effects
 > `_seed_fullest_cell` / `_pick_fullest_cell`).  Ghidra `FUN_0044c278` @
 > 0x44c278, `FUN_0044c5fc` @ 0x44c5fc, `FUN_0044c53b` @ 0x44c53b; caller
 > `FUN_004485a5` @ 0x4485a5.
+
+## 143. One eight-slot record array, two unrelated lives — and a field that gates its own producer
+
+The per-realm economy plumbing reuses the same eight 0xc-byte records at record
+`+0xc4` (retail `DAT_0053fa74`) for two completely different jobs in two
+different game phases.  At new-game setup, `FUN_0044f6e7`
+(`engine_territory_allocate_realm_workforce`, the WF_COUNTER array) fills each record as a
+*job-slot bucket*: `+0x00` the assigned worker count, `+0x08` that bucket's
+population cap.  Per turn, the resource planner `FUN_0044f318`
+(`engine_army_economy_plan_resource`) walks the *same* records by `rec_idx`
+(4..7, one per resource slot) and reads `+0x00` as the **production level** to
+feed the supply-target solver — then overwrites `+0x08` (the bucket cap) with
+either the sweep's best level (resource slot 2) or a flat `100000` sentinel
+(every other slot).  Nothing reconciles the two readings; they simply never run
+in the same phase, so the cap field leads a double life as "max workers" and
+"best production level / unbounded sentinel".
+
+The aliasing has a second twist: `FUN_0044f15b`
+(`engine_army_economy_sum_supply_pools`), the leaf that totals a realm group's
+race-weighted supply pool, gates each army on `*(int *)(record + 0x118) > 0` —
+and `+0x118` is exactly job-slot record **7**'s `+0x00` count (`0xc4 + 7*0xc`),
+i.e. the slot-2 production level that `FUN_0044f318(…,2,7,…)` itself writes.  So
+the pool-summation reads the very field its sibling planner produces, one record
+index hard-coded into an offset that looks unrelated until you do the
+arithmetic.  The race weights themselves (`DAT_004d8990`/`94`) are a baked
+six-entry `.data` table — one `(poolA, poolB)` pair per nationality —
+`{(6,10),(4,4),(3,10),(6,3),(13,0),(4,18)}`.
+
+> 📍 `src/engine_army_economy.c` (`engine_army_economy_plan_resource` /
+> `_sum_supply_pools`).  Ghidra `FUN_0044f318` @ 0x44f318, `FUN_0044f15b` @
+> 0x44f15b, `FUN_0044f6e7` @ 0x44f6e7 (ported as `engine_territory`'s
+> WF_COUNTER); race table `DAT_004d8990`/`DAT_004d8994` @ 0x4d8990.
