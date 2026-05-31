@@ -1906,6 +1906,30 @@ int test_territory_workforce_unbound_is_noop(void)
     return 0;
 }
 
+/* The all-realms dispatcher allocates for realms 1..s_slot_0056d5dc inclusive:
+ * with the count at 2, realms 1 and 2 are processed (a phase-1 greedy fill
+ * lands the ratio in counter 0) but realm 3's pre-dirtied counter is never
+ * visited. */
+int test_territory_workforce_all_realms_bound(void)
+{
+    census_setup();
+    for (int k = 1; k <= 3; k++) {
+        wf_set(k, WF_TOTAL, 100);
+        g_army[k * ARMY_STRIDE + WF_PCT] = 0;      /* pool2 = 100 */
+        wf_set(k, WF_R0, 100);
+        wf_set(k, WF_CAP0, 1000);
+    }
+    wf_set(3, WF_C0, 0x42);                        /* must survive if unvisited */
+    s_slot_0056d5dc = 2;
+
+    engine_territory_allocate_all_workforce();
+
+    T_ASSERT_EQ_I(wf_get(1, WF_C0), 100);
+    T_ASSERT_EQ_I(wf_get(2, WF_C0), 100);
+    T_ASSERT_EQ_I(wf_get(3, WF_C0), 0x42);         /* realm 3 > count → untouched */
+    return 0;
+}
+
 /* ── Band retype of an army's feature cells (port of FUN_00469d21) ──
  * Reuse census_setup (binds g_cells + g_army).  A "feature cell" for the
  * retype carries owner key at +7, the active flag (bit 0x20) at +1, and a

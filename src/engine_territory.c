@@ -1267,6 +1267,22 @@ phase2_done:
     *(int32_t *)(rowbase + WF_LEFTOVER)   = pool2 + pool1;
 }
 
+/* Port of FUN_0044f699 (78 B) — the per-realm workforce-allocation dispatcher.
+ * Runs engine_territory_allocate_realm_workforce for every realm
+ * 1..s_slot_0056d5dc (the live realm count).  One of the per-turn passes the
+ * turn-advance engine (0x448440) sequences — it appears there twice, once each
+ * side of the territory-income/economy re-plan.  The retail loop also reads a
+ * per-realm byte (g_per_army_768 row + 0x53f9b5 base) into a scratch local that
+ * it never consumes; Ghidra and the host port both elide that dead load.  No
+ * state of its own beyond the dispatch — see the per-realm allocator for bind
+ * safety. */
+void engine_territory_allocate_all_workforce(void)
+{
+    int count = (int)s_slot_0056d5dc;
+    for (int key = 1; key <= count; key++)
+        engine_territory_allocate_realm_workforce(key);
+}
+
 /* Realm-record flag the band-retype consults for its lo==2 special case
  * (g_per_army_768 row + 0x1a7, retail DAT_0053fb57). */
 #define ARMY_RETYPE_FLAG 0x1a7

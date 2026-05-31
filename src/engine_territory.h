@@ -235,6 +235,12 @@ void engine_territory_stamp_secondary_keep(int key, int level);
  * army-record block is unbound. */
 void engine_territory_allocate_realm_workforce(int key);
 
+/* Port of FUN_0044f699.  Per-realm workforce-allocation dispatcher: run
+ * engine_territory_allocate_realm_workforce for every realm 1..s_slot_0056d5dc.
+ * Sequenced twice by the turn-advance engine (0x448440), either side of the
+ * territory-income/economy re-plan. */
+void engine_territory_allocate_all_workforce(void);
+
 /* Port of FUN_00469d21.  Retype an army's active feature cells (owner +7 == key,
  * +1 bit 0x20 set) whose TYPE byte (+0) lies in [lo, hi] via
  * engine_territory_set_cell_type.  The first match takes (type, variant); when

@@ -7,6 +7,34 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — TURN-ENGINE chip: workforce-alloc dispatcher (FUN_0044f699)
+
+Ported `FUN_0044f699` (78 B) → `engine_territory_allocate_all_workforce` in
+`engine_territory.c` — the sibling of yesterday's terrain-census dispatcher: a
+thin per-realm loop running the already-ported workforce allocator
+(`engine_territory_allocate_realm_workforce`, port of FUN_0044f6e7) for every
+realm `1..s_slot_0056d5dc`.  The turn-advance engine `FUN_00448440` sequences it
+**twice**, once each side of the territory-income/economy re-plan
+(`FUN_004ad6c0`).  Placed beside its callee in `engine_territory.c` to avoid a
+territory→realm cross-module edge.
+
+**r2 caught a Ghidra elision worth noting.**  The decompile shows a bare
+`for (i=1; i<=count; i++) FUN_0044f6e7(i)`, but `pdf @0x44f699` reveals the loop
+body also reads a per-realm byte (`[i*768 + 0x53f9b5]`, i.e. the g_per_army_768
+row) into a stack scratch that is **never consumed** — only the index `i` is
+pushed to the callee.  Ghidra correctly dropped the dead load; the port does the
+same and the inline comment records it so a future reader doesn't hunt for the
+missing table read.
+
+1 host test pinning the inclusive bound (count 2 → realms 1-2 allocated via a
+phase-1 greedy fill, realm 3's pre-dirtied counter left untouched).
+**1615/1615** pass under ASan/UBSan; mingw `.exe` clean;
+`_engine_territory_allocate_all_workforce` in the PE.
+
+**Next.**  The larger turn-advance leaf `FUN_004ae7dd` (the pass that follows the
+second workforce dispatch in `FUN_00448440`), and the still-deferred
+`FUN_0044bd9f` (tax/approval band, wants the 2D-table extraction).
+
 ## 2026-05-31 — TURN-ENGINE chip: terrain-census dispatcher (FUN_00469b51)
 
 Ported `FUN_00469b51` (60 B) → `engine_territory_census_all_realms` in
