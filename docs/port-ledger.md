@@ -165,8 +165,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x428007 | FUN_00428007 | 113 | game_init.c, game_init.h |
 | 0x428078 | FUN_00428078 | 113 | game_init.c, game_init.h |
 | 0x42847c | FUN_0042847c | 82 | game_init.c, game_init.h |
-| 0x4290d0 | FUN_004290d0 | 131 | engine_category_buckets.c, engine_category_buckets.h |
-| 0x429153 | FUN_00429153 | 96 | engine_category_buckets.h |
+| 0x4290d0 | FUN_004290d0 | 131 | engine_category_buckets.c, engine_category_buckets.h, engine_territory.c |
+| 0x429153 | FUN_00429153 | 96 | engine_category_buckets.h, engine_territory.c |
 | 0x4291b3 | FUN_004291b3 | 171 | engine_category_buckets.h |
 | 0x42925e | FUN_0042925e | 81 | engine_category_buckets.c, engine_category_buckets.h |
 | 0x4298c1 | FUN_004298c1 | 604 | engine_title_render.c |
@@ -231,7 +231,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4651b9 | FUN_004651b9 | 91 | engine_territory.c, engine_territory.h |
 | 0x46733c | FUN_0046733c | 124 | engine_map_query.c, engine_map_query.h |
 | 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c, engine_territory.h |
-| 0x467770 | FUN_00467770 | 525 | engine_title_render.c |
+| 0x467770 | FUN_00467770 | 525 | engine_territory.c, engine_territory.h, engine_title_render.c |
 | 0x467a36 | FUN_00467a36 | 624 | engine_territory.c, engine_territory.h |
 | 0x467ca6 | FUN_00467ca6 | 385 | engine_territory.c, engine_territory.h |
 | 0x467fd1 | FUN_00467fd1 | 336 | engine_territory.c, engine_territory.h |
@@ -289,8 +289,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49b35e | FUN_0049b35e | 205 | game_init.c, game_init.h |
 | 0x49b762 | FUN_0049b762 | 334 | engine.c, engine.h, engine_turn.c (+1) |
 | 0x49bae9 | FUN_0049bae9 | 180 | engine_menu_input.c, engine_roster.c, engine_roster.h |
-| 0x49bbe8 | FUN_0049bbe8 | 53 | engine_roster.c, engine_roster.h |
-| 0x49bc1d | FUN_0049bc1d | 66 | engine_roster.c, engine_roster.h |
+| 0x49bbe8 | FUN_0049bbe8 | 53 | engine_roster.c, engine_roster.h, engine_territory.c |
+| 0x49bc1d | FUN_0049bc1d | 66 | engine_roster.c, engine_roster.h, engine_territory.c |
 | 0x49bc5f | FUN_0049bc5f | 314 | engine_roster.c, engine_roster.h |
 | 0x49caaa | FUN_0049caaa | 935 | engine_menu_input.c, engine_npc_schedule.c, engine_npc_schedule.h (+3) |
 | 0x4a1c53 | FUN_004a1c53 | 537 | game_init.c, game_init.h |

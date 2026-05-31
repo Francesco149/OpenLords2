@@ -3892,7 +3892,8 @@
    "status": "tested",
    "src": [
     "src/engine_category_buckets.c",
-    "src/engine_category_buckets.h"
+    "src/engine_category_buckets.h",
+    "src/engine_territory.c"
    ]
   },
   {
@@ -3902,7 +3903,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_category_buckets.h"
+    "src/engine_category_buckets.h",
+    "src/engine_territory.c"
    ]
   },
   {
@@ -11092,6 +11094,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_territory.c",
+    "src/engine_territory.h",
     "src/engine_title_render.c"
    ]
   },
@@ -15070,7 +15074,8 @@
    "status": "tested",
    "src": [
     "src/engine_roster.c",
-    "src/engine_roster.h"
+    "src/engine_roster.h",
+    "src/engine_territory.c"
    ]
   },
   {
@@ -15081,7 +15086,8 @@
    "status": "tested",
    "src": [
     "src/engine_roster.c",
-    "src/engine_roster.h"
+    "src/engine_roster.h",
+    "src/engine_territory.c"
    ]
   },
   {

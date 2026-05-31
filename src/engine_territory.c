@@ -28,7 +28,11 @@
 #include "engine.h"            /* engine_rng_step_single, engine_rng_single_* */
 #include "engine_territory.h"
 #include "engine_dirty_rect.h"
-#include "save_schema_globals.h"  /* s_slot_0053f23c — feature-density setting */
+#include "engine_category_buckets.h"  /* clear / append (FUN_004290d0/429153) */
+#include "engine_roster.h"            /* player_roster_clear/add + count alias */
+#include "engine_map_render.h"        /* set_rotation_offset (DAT_00522f7c=0) */
+#include "save_schema_globals.h"  /* s_slot_0053f23c — feature-density setting;
+                                     s_slot_0056d5dc — player/army count */
 
 #define TERRITORY_RECORD_STRIDE 0x1a4
 #define TERRITORY_RECORD_COUNT  0x97   /* iterate 1..0x96 (1..150) */
@@ -1258,5 +1262,102 @@ void engine_territory_setup_capitals(void)
         *(int32_t *)(rowbase + ARMY_SEC_OFF) = sec_off;
         rowbase[ARMY_SEC_COL] = (uint8_t)g_cursor_col;
         rowbase[ARMY_SEC_ROW] = (uint8_t)g_cursor_row;
+    }
+}
+
+/* DAT_004eabec — scratch buffer the l2_maps.dat record is loaded into. */
+static const uint8_t *g_strat_map_record;
+/* DAT_00567970/569518 — category-bucket table seeded during map load. */
+static engine_category_buckets_state_t *g_strat_buckets;
+
+void engine_territory_bind_strat_map_record(const uint8_t *record)
+{
+    g_strat_map_record = record;
+}
+
+void engine_territory_bind_category_buckets(engine_category_buckets_state_t *buckets)
+{
+    g_strat_buckets = buckets;
+}
+
+/* Stride between the six per-cell byte planes inside an l2_maps.dat record:
+ * each plane is 64×64 = 0x1000 cell-linear bytes (row*0x40 + col). */
+#define STRAT_MAP_PLANE_STRIDE 0x1000
+
+/* Port of FUN_00467770 (525 B) — strategic-map record → cell-grid unpacker.
+ *
+ * Retail body:
+ *
+ *   DAT_00522f7c = 0;                                    // render rotation
+ *   io_read_file_at("l2_maps.dat", DAT_004eabec,
+ *                   0x80C1, map_index * 0x80C1);          // <- live seam
+ *   DAT_0053e974 = 0;                                    // running offset
+ *   DAT_0056d5dc = 0;  DAT_0053e8a4 = 0;                 // player/roster counts
+ *   FUN_004290d0();  FUN_0049bc1d();                     // clear buckets+roster
+ *   for (row=0; row<0x40; row++)
+ *     for (col=0; col<0x40; col++, DAT_0053e974++) { ...unpack one cell... }
+ *   return 1;
+ *
+ * The `map_index` argument selects which 0x80C1-byte record is read from
+ * l2_maps.dat (the orchestrator FUN_004676e0 passes `s_slot_0053f034`).
+ * That file read is the deferred live Win32 seam — like every asset load
+ * (see io.h), the engine modules never touch the filesystem: the live
+ * build reads the selected record into the bound buffer; the host binds a
+ * synthetic record.  The unpack proper is index-independent (it reads the
+ * record from offset 0), so this entry point takes no argument.
+ *
+ * `DAT_0053e974` is a file-scope scratch running offset reused as a loop
+ * counter across several loaders (always reset to 0 on entry, never read
+ * across calls); modelled here as a local, not homed as a shared global. */
+void engine_territory_load_strat_map(void)
+{
+    engine_map_render_set_rotation_offset(0);   /* DAT_00522f7c = 0 */
+
+    s_slot_0056d5dc = 0;          /* DAT_0056d5dc — player/army count (recomputed) */
+    g_player_roster_count = 0;    /* DAT_0053e8a4 — roster participant count       */
+
+    if (g_strat_buckets != NULL)
+        engine_category_buckets_clear(g_strat_buckets);   /* FUN_004290d0 */
+    player_roster_clear();                                /* FUN_0049bc1d */
+
+    if (g_cells == NULL || g_strat_map_record == NULL) return;
+
+    const uint8_t *rec = g_strat_map_record;
+    int lin = 0;   /* DAT_0053e974 — cell-linear offset, row*0x40 + col */
+    for (int row = 0; row < 0x40; row++) {
+        for (int col = 0; col < 0x40; col++, lin++) {
+            uint8_t p0 = rec[lin];                              /* +0x0000 */
+            uint8_t p1 = rec[lin + 1 * STRAT_MAP_PLANE_STRIDE]; /* +0x1000 */
+            uint8_t p2 = rec[lin + 2 * STRAT_MAP_PLANE_STRIDE]; /* +0x2000 */
+            uint8_t p3 = rec[lin + 3 * STRAT_MAP_PLANE_STRIDE]; /* +0x3000 */
+            uint8_t p4 = rec[lin + 4 * STRAT_MAP_PLANE_STRIDE]; /* +0x4000 */
+            uint8_t p5 = rec[lin + 5 * STRAT_MAP_PLANE_STRIDE]; /* +0x5000 */
+
+            /* Player/army count = the highest plane-5 owner id present that
+             * is still in the 0..0x10 player band (cells with p5 > 0x10 are
+             * non-player markers and never raise the count). */
+            if (p5 <= 0x10 && (int)s_slot_0056d5dc < (int)p5)
+                s_slot_0056d5dc = p5;
+
+            uint8_t *cell = g_cells + (size_t)lin * CELL_STRIDE;
+            cell[1] = p0;   /* DAT_00522f91 */
+            cell[2] = p1;   /* DAT_00522f92 */
+            cell[3] = p2;   /* DAT_00522f93 */
+            cell[4] = p3;   /* DAT_00522f94 */
+            cell[7] = p5;   /* DAT_00522f97 */
+
+            /* Plane 4 non-zero → the cell carries a categorised marker:
+             * plane-0 bit 0x40 routes it to a category bucket, bit 0x80 to
+             * the player roster.  Retail order: 0x40 wins over 0x80. */
+            if (p4 != 0) {
+                if (p0 & 0x40) {
+                    if (g_strat_buckets != NULL)
+                        engine_category_buckets_append(g_strat_buckets,
+                                                       p5, p4);   /* FUN_00429153 */
+                } else if (p0 & 0x80) {
+                    player_roster_add(p5, p4);                    /* FUN_0049bbe8 */
+                }
+            }
+        }
     }
 }

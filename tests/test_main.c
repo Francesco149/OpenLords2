@@ -1448,6 +1448,11 @@ struct test_case {
     X(territory_setup_capitals_end_to_end) \
     X(territory_setup_capitals_cursor_handoff) \
     X(territory_setup_capitals_unbound_is_noop) \
+    X(strat_map_unpacks_planes_into_cells) \
+    X(strat_map_player_count_is_max_plane5_in_band) \
+    X(strat_map_seeds_buckets_and_roster) \
+    X(strat_map_clears_counts_and_tables) \
+    X(strat_map_unbound_is_noop) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \

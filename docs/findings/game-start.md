@@ -68,7 +68,7 @@ live sim:
 | FUN_0042847c | 82 | 0 | copy DAT_004d8910 table → DAT_005532a0 strided |
 | FUN_00448440 | 261 | 29 | (unsurveyed — large fan-out) |
 | FUN_00451150 | 936 | 7 | (unsurveyed) |
-| FUN_004676e0 | 144 | 11 | overworld-grid setup sequence — 3 leaf callees ported (see below); 5 callees remain |
+| FUN_004676e0 | 144 | 11 | overworld-grid setup sequence — 10/11 callees ported (see below); only FUN_0046a037 (country-data bind) remains |
 | FUN_0046f1dc/2ae/3cd | — | — | (the trio above) |
 | FUN_0046ff43 | 617 | 0 | leaf seeder (unsurveyed) |
 | FUN_00472ad0 | 16 | 1 | **tested** (already ported) |
@@ -169,14 +169,26 @@ flip lands until the world is populated enough for the map arm.
      FUN_004676e0 leaf — rebuilds the per-key cell roster (save entry 12)
      from the grid, capping 20 cells/key + evicting overflow.  See below.
 
-### FUN_004676e0 — overworld-grid setup sequence (6/8 callees ported)
+### FUN_004676e0 — overworld-grid setup sequence (10/11 callees ported)
 
 A 144-B 0x497ced callee that stands up the overworld cell grid + its
 terrain index tables, by calling a fixed sequence of 0x46c*/0x46d* grid
 helpers (`FUN_0046c5b8`×6, `FUN_0046df51`, `FUN_0046dbf5`, `FUN_0046dd34`,
-`FUN_0046da4b`, `FUN_00467ca6`, `FUN_00468d4f`, `FUN_00467a36`) plus the
-already-ported `FUN_00467770` / `FUN_0046a037` / `FUN_004291b3`.  Two of
-its leaf callees landed this chip:
+`FUN_0046da4b`, `FUN_00467ca6`, `FUN_00468d4f`, `FUN_00467a36`), the
+strategic-map loader `FUN_00467770`, the digest rebuild `FUN_004291b3`,
+and the country-data bind `FUN_0046a037`.
+
+> **Provenance correction (2026-05-31):** earlier revisions of this note
+> listed `FUN_00467770` *and* `FUN_0046a037` as "already-ported".  Neither
+> was: both tokens only appeared in a deferred-bind **comment** in
+> `engine_title_render.c` (`FUN_004337b4`'s per-country reload), which the
+> ledger's FUN_-token scan counted as touched — the same false-positive
+> the [ledger-provenance audit](ledger-provenance-audit.md) guards against.
+> `FUN_00467770` is genuinely ported as of this chip (below);
+> `FUN_0046a037` (202 B, loads the per-country 0x4000 blocks via the IO
+> open-probe `FUN_004af767`) is the **one remaining** callee.
+
+Callees landed across recent chips:
 
 > **Shared dep unblocked (2026-05-31):** two of the still-unported
 > callees, `FUN_0046dd34` and `FUN_0046dbf5` (the new-game grid
@@ -443,6 +455,34 @@ With `FUN_0046d7f4` ported, `FUN_00467a36`'s subtree is **leaf-complete**
   tests (density-2 tiers + setter-derived +3/+2 bytes, density-1 & density-3
   cutoffs, default-density arm, inactive-cell filtering, per-key-independent
   indices + step-1 tally reset, unbound no-ops).
+- **FUN_00467770** → `engine_territory_load_strat_map` (`engine_territory.c`,
+  landed 2026-05-31).  The **strategic-map record → cell-grid unpacker** and
+  the first `FUN_004676e0` callee (it reads the world before the grid passes
+  refine it).  Retail reads the selected 0x80C1-byte record from
+  `l2_maps.dat` (`io_read_file_at`, offset `map_index*0x80C1`) into the
+  shared asset scratch buffer `DAT_004eabec`, then walks all 64×64 cells:
+  the record's first six 0x1000-byte cell-linear planes map to cell bytes
+  +1,+2,+3,+4 (planes 0–3) and +7 (plane 5); the **player/army count**
+  `s_slot_0056d5dc` is recomputed as the max plane-5 value in the 0..0x10
+  player band (cells with plane5 > 0x10 are non-player markers); and where
+  **plane 4 is non-zero** the cell seeds either a category bucket (plane-0
+  bit 0x40, via `FUN_00429153`) or the player roster (bit 0x80, via
+  `FUN_0049bbe8`) — **0x40 wins** when both bits are set.  Up front it resets
+  the render rotation offset `DAT_00522f7c`, zeroes both counts, and clears
+  the bucket table + roster (`FUN_004290d0` / `FUN_0049bc1d`).  r2 @0x467770
+  confirmed the plane strides, the `plane5 <= 0x10 && count < plane5` count
+  rule, the cell-byte targets (`522f91/92/93/94/97` at stride 8), and the
+  cdecl arg order of both seed calls.  The **file read is the deferred live
+  Win32 seam** (engine modules never touch the filesystem — io.h): the host
+  binds a synthetic record, so the index-independent unpack is fully tested
+  (5 host tests: plane→cell copy, in-band-max count, bucket+roster seeding +
+  the 0x40-wins tie-break, up-front clears, unbound/NULL-bucket no-ops).
+  `DAT_004eabec` is the engine's **shared ~200 KB asset scratch buffer**
+  (also loaded with vill.pl8/smithy.pl8/iconvill.pl8/… elsewhere, and bound
+  by `engine_mp_render` as a "menu sprite asset" — same reused buffer, not a
+  distinct global).  `DAT_0053e974`, the running cell offset, is a scratch
+  loop-counter global reused by several loaders (reset to 0 on entry, never
+  read across calls) → modelled as a local.
 
 ### FUN_00468d4f — per-army capital-region setup (subtree complete)
 

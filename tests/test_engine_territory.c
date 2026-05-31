@@ -1925,3 +1925,148 @@ int test_territory_setup_capitals_unbound_is_noop(void)
     engine_territory_setup_capitals();
     return 0;
 }
+
+/* ─── strategic-map record loader (FUN_00467770) ──────────────────────── */
+
+#include "engine_roster.h"          /* g_player_roster, g_player_roster_count */
+
+#define MAP_REC_BYTES 0x6000         /* six 0x1000-byte cell-linear planes      */
+_Alignas(int32_t) static uint8_t g_maprec[MAP_REC_BYTES];
+static engine_category_buckets_state_t g_mapbuckets;
+
+/* Cell-linear index (row*0x40 + col) — the loader's running offset. */
+static int cell_off_lin(int col, int row) { return row * CELL_GRID + col; }
+
+/* Write plane `p` (0..5) of cell-linear index `lin` in the record buffer. */
+static void rec_plane(int lin, int p, uint8_t v) { g_maprec[lin + p * 0x1000] = v; }
+
+/* Bind a zeroed grid + record + buckets and poison everything the loader is
+ * supposed to clear (counts, roster, bucket table) so the clears are
+ * observable. */
+static void map_setup(void)
+{
+    memset(g_cells,   0, sizeof g_cells);
+    memset(g_maprec,  0, sizeof g_maprec);
+    memset(&g_mapbuckets, 0xaa, sizeof g_mapbuckets);
+    memset(g_player_roster, 0xaa, sizeof g_player_roster);
+    engine_territory_bind_cells(g_cells);
+    engine_territory_bind_strat_map_record(g_maprec);
+    engine_territory_bind_category_buckets(&g_mapbuckets);
+    s_slot_0056d5dc       = 0x55;
+    g_player_roster_count = 0x55;
+}
+
+/* Plain (plane-4 == 0) cells copy planes 0,1,2,3,5 into cell bytes +1,+2,
+ * +3,+4,+7 and write nothing to bucket/roster. */
+int test_strat_map_unpacks_planes_into_cells(void)
+{
+    map_setup();
+    int lin = 5;                              /* cell (col=5,row=0) */
+    rec_plane(lin, 0, 0x11);
+    rec_plane(lin, 1, 0x22);
+    rec_plane(lin, 2, 0x33);
+    rec_plane(lin, 3, 0x44);
+    rec_plane(lin, 4, 0x00);                  /* plane4 == 0 → no marker */
+    rec_plane(lin, 5, 0x03);
+    engine_territory_load_strat_map();
+
+    int o = cell_off(5, 0);
+    T_ASSERT_EQ_I(g_cells[o + 1], 0x11);
+    T_ASSERT_EQ_I(g_cells[o + 2], 0x22);
+    T_ASSERT_EQ_I(g_cells[o + 3], 0x33);
+    T_ASSERT_EQ_I(g_cells[o + 4], 0x44);
+    T_ASSERT_EQ_I(g_cells[o + 7], 0x03);
+    /* +0, +5, +6 untouched by the loader */
+    T_ASSERT_EQ_I(g_cells[o + 0], 0);
+    T_ASSERT_EQ_I(g_cells[o + 5], 0);
+    /* plane4 == 0 → bucket row 0 + roster stay clear/empty */
+    T_ASSERT_EQ_I(g_mapbuckets.buckets[0][0], 0);
+    T_ASSERT_EQ_U(g_player_roster_count, 0u);
+    return 0;
+}
+
+/* Player/army count = max plane-5 value across cells, but only counting the
+ * 0..0x10 player band (plane5 > 0x10 markers never raise it). */
+int test_strat_map_player_count_is_max_plane5_in_band(void)
+{
+    map_setup();
+    rec_plane(cell_off_lin(1, 0), 5, 0x03);
+    rec_plane(cell_off_lin(2, 0), 5, 0x09);   /* the in-band max          */
+    rec_plane(cell_off_lin(3, 0), 5, 0x05);
+    rec_plane(cell_off_lin(4, 0), 5, 0x12);   /* > 0x10 → must NOT count   */
+    engine_territory_load_strat_map();
+
+    T_ASSERT_EQ_U(s_slot_0056d5dc, 9u);
+    T_ASSERT_EQ_I(g_cells[cell_off(4, 0) + 7], 0x12);  /* still stored on the cell */
+    return 0;
+}
+
+/* plane4 != 0 routes the cell to a category bucket (plane0 bit 0x40) or the
+ * player roster (plane0 bit 0x80); 0x40 wins when both are set. */
+int test_strat_map_seeds_buckets_and_roster(void)
+{
+    map_setup();
+    /* bucket: value=plane5=7, bucket=plane4=2 (→ row 1) */
+    rec_plane(cell_off_lin(6, 0), 0, 0x40);
+    rec_plane(cell_off_lin(6, 0), 4, 0x02);
+    rec_plane(cell_off_lin(6, 0), 5, 0x07);
+    /* roster: army_id=plane5=5, seat=plane4=3 */
+    rec_plane(cell_off_lin(7, 0), 0, 0x80);
+    rec_plane(cell_off_lin(7, 0), 4, 0x03);
+    rec_plane(cell_off_lin(7, 0), 5, 0x05);
+    /* both bits set → 0x40 wins → bucket (value=9, bucket=4 → row 3), NOT roster */
+    rec_plane(cell_off_lin(9, 0), 0, 0xC0);
+    rec_plane(cell_off_lin(9, 0), 4, 0x04);
+    rec_plane(cell_off_lin(9, 0), 5, 0x09);
+    engine_territory_load_strat_map();
+
+    T_ASSERT_EQ_I(g_mapbuckets.buckets[1][0], 0x07);   /* bucket 2 */
+    T_ASSERT_EQ_I(g_mapbuckets.buckets[3][0], 0x09);   /* bucket 4 (the 0x40-wins cell) */
+    T_ASSERT_EQ_I(g_player_roster[3 * 2 + 0], 0x05);   /* roster pair 3 = {army_id, seat} */
+    T_ASSERT_EQ_I(g_player_roster[3 * 2 + 1], 0x03);
+    T_ASSERT_EQ_U(g_player_roster_count, 1u);           /* only the 0x80 cell seated */
+    return 0;
+}
+
+/* The loader resets the counts and clears the bucket table + roster up front
+ * (poisoned 0x55/0xaa state must be gone), independent of any cell data. */
+int test_strat_map_clears_counts_and_tables(void)
+{
+    map_setup();                              /* counts poisoned to 0x55 */
+    engine_territory_load_strat_map();        /* record is all-zero      */
+
+    T_ASSERT_EQ_U(s_slot_0056d5dc, 0u);
+    T_ASSERT_EQ_U(g_player_roster_count, 0u);
+    T_ASSERT_EQ_I(g_mapbuckets.buckets[2][5], 0);   /* a poisoned slot, now cleared */
+    T_ASSERT_EQ_I(g_mapbuckets.digest[4], 0);
+    T_ASSERT_EQ_I(g_player_roster[5 * 2], 0);       /* a poisoned pair, now cleared */
+    return 0;
+}
+
+/* Unbound grid or record skips the unpack loop but still performs the
+ * up-front clears; an unbound bucket table must not crash the append path. */
+int test_strat_map_unbound_is_noop(void)
+{
+    /* cells NULL → loop skipped, clears still run */
+    map_setup();
+    engine_territory_bind_cells(NULL);
+    engine_territory_load_strat_map();
+    T_ASSERT_EQ_U(s_slot_0056d5dc, 0u);
+    T_ASSERT_EQ_U(g_player_roster_count, 0u);
+
+    /* record NULL → same */
+    map_setup();
+    engine_territory_bind_strat_map_record(NULL);
+    engine_territory_load_strat_map();
+    T_ASSERT_EQ_U(s_slot_0056d5dc, 0u);
+
+    /* buckets NULL → the 0x40 append branch must be a no-op, not a crash */
+    map_setup();
+    engine_territory_bind_category_buckets(NULL);
+    rec_plane(cell_off_lin(6, 0), 0, 0x40);
+    rec_plane(cell_off_lin(6, 0), 4, 0x02);
+    rec_plane(cell_off_lin(6, 0), 5, 0x07);
+    engine_territory_load_strat_map();
+    T_ASSERT_EQ_I(g_cells[cell_off(6, 0) + 7], 0x07);   /* unpack still ran */
+    return 0;
+}

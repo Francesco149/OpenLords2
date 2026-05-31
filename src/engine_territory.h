@@ -10,6 +10,7 @@
 
 #include "engine.h"            /* engine_rng_single_in_t */
 #include "engine_dirty_rect.h"
+#include "engine_category_buckets.h"  /* engine_category_buckets_state_t */
 
 /* Bind the per-territory record array (retail `DAT_0052f0b0`, 151
  * records × 0x1a4 bytes, slot 0 reserved). */
@@ -243,5 +244,29 @@ int engine_territory_place_secondary(unsigned key);
  * offsets and cursor col/row into the army record row (+0x6c..+0x78).  Needs
  * the cell grid and army-record block bound. */
 void engine_territory_setup_capitals(void);
+
+/* Bind the scratch buffer the strategic-map record is loaded into (retail
+ * `DAT_004eabec`) — the source `engine_territory_load_strat_map` unpacks.
+ * The buffer holds one l2_maps.dat record (0x80C1 bytes, six 0x1000-byte
+ * cell-linear planes first).  The file read that fills it is the deferred
+ * live Win32 seam (see the .c); NULL → the unpack loop is skipped. */
+void engine_territory_bind_strat_map_record(const uint8_t *record);
+
+/* Bind the per-category byte-bucket table (retail `DAT_00567970`/`569518`)
+ * that the map loader clears and seeds.  Optional — NULL skips the clear
+ * and the per-cell append. */
+void engine_territory_bind_category_buckets(engine_category_buckets_state_t *buckets);
+
+/* Port of FUN_00467770 (525 B) — the strategic-map record → cell-grid
+ * unpacker (the 1st `FUN_004676e0` callee that loads l2_maps.dat).  Resets
+ * the render rotation offset and the player/roster counts, clears the
+ * category buckets + player roster, then walks all 64×64 cells: it copies
+ * planes 0..3 into cell bytes +1..+4 and plane 5 into +7, tracks the
+ * player/army count `s_slot_0056d5dc` as the max plane-5 value ≤ 0x10, and
+ * — where plane 4 is non-zero — appends to a category bucket (plane-0 bit
+ * 0x40) or seats a roster entry (plane-0 bit 0x80).  Needs the cell grid
+ * (engine_territory_bind_cells) and the record buffer bound; the buckets
+ * bind is optional.  See the .c for the deferred file-read seam. */
+void engine_territory_load_strat_map(void);
 
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */
