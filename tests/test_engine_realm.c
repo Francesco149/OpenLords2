@@ -409,3 +409,90 @@ int test_engine_realm_income_replan_wiring(void)
     engine_army_economy_bind_army_records(NULL);
     return 0;
 }
+
+/* ── Per-turn realm stat-history recorder (FUN_004ae7dd) ──────────────
+ * Writes each realm's population (army +0x24) and approval (army +0x0c) into
+ * the current slot of the history ring g_realm_history, then advances the three
+ * ring cursors.  Record for (slot, realm key) sits at slot*0x80 + (key-1)*8;
+ * +0 dword = population, +4 byte = approval, +5..+7 untouched. */
+
+#define HREC(slot, key)  (g_realm_history + (slot) * 0x80 + ((key) - 1) * 8)
+
+/* Realms 1 and 16 land in the right records of the chosen slot; the +5..+7
+ * tail is preserved, and the count / write-index cursors each advance once
+ * (page untouched while the ring is not yet full). */
+int test_engine_realm_history_records_slot(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_realm_history, 0xCD, sizeof g_realm_history);  /* dirty → tail visible */
+    s_slot_0055300c = 2;        /* write slot 2  */
+    s_slot_00553f30 = 0;        /* count         */
+    s_slot_00568da8 = 0;        /* oldest page   */
+
+    AI32(AREC(1),  0x24) = 0x11223344;  AREC(1)[0x0c]  = 0x55;
+    AI32(AREC(16), 0x24) = 0x0a0b0c0d;  AREC(16)[0x0c] = 0x77;
+
+    engine_realm_record_history();
+
+    uint8_t *r1 = HREC(2, 1);
+    T_ASSERT_EQ_I(*(int32_t *)(r1 + 0), 0x11223344);   /* population */
+    T_ASSERT_EQ_U(r1[4], 0x55);                         /* approval   */
+    T_ASSERT_EQ_U(r1[5], 0xCD);                         /* +5 tail preserved */
+
+    uint8_t *r16 = HREC(2, 16);
+    T_ASSERT_EQ_I(*(int32_t *)(r16 + 0), 0x0a0b0c0d);
+    T_ASSERT_EQ_U(r16[4], 0x77);
+
+    T_ASSERT_EQ_U(s_slot_00553f30, 1);   /* count 0 → 1            */
+    T_ASSERT_EQ_U(s_slot_0055300c, 3);   /* write index 2 → 3      */
+    T_ASSERT_EQ_U(s_slot_00568da8, 0);   /* page unchanged (not full) */
+    return 0;
+}
+
+/* Count reaching exactly 400 does NOT advance the page — the engine clamps
+ * only when count would *exceed* 400 (the `> 400` boundary, not `>=`). */
+int test_engine_realm_history_count_boundary(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0055300c = 0;
+    s_slot_00553f30 = 399;
+    s_slot_00568da8 = 7;
+
+    engine_realm_record_history();
+
+    T_ASSERT_EQ_U(s_slot_00553f30, 400);  /* 399 → 400 exactly */
+    T_ASSERT_EQ_U(s_slot_00568da8, 7);    /* page NOT advanced  */
+    return 0;
+}
+
+/* Once the ring is full (count already 400), each turn clamps count, walks the
+ * oldest page forward, and wraps the write index from 399 back to 0. */
+int test_engine_realm_history_cursor_wrap(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0055300c = 399;      /* last slot → wraps    */
+    s_slot_00553f30 = 400;      /* already saturated    */
+    s_slot_00568da8 = 5;        /* oldest page advances */
+
+    engine_realm_record_history();
+
+    T_ASSERT_EQ_U(s_slot_00553f30, 400);  /* clamped              */
+    T_ASSERT_EQ_U(s_slot_00568da8, 6);    /* page 5 → 6           */
+    T_ASSERT_EQ_U(s_slot_0055300c, 0);    /* write index wrapped  */
+    return 0;
+}
+
+/* The oldest-page pointer wraps at 400 too (399 → 0). */
+int test_engine_realm_history_page_wraps(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0055300c = 10;
+    s_slot_00553f30 = 400;      /* saturated → page walks */
+    s_slot_00568da8 = 399;      /* last page → wraps      */
+
+    engine_realm_record_history();
+
+    T_ASSERT_EQ_U(s_slot_00568da8, 0);    /* page wrapped         */
+    T_ASSERT_EQ_U(s_slot_0055300c, 11);   /* write index advanced */
+    return 0;
+}

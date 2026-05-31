@@ -33,7 +33,7 @@ uint8_t g_unit_table_20         [  260];
 uint8_t g_per_battle_hex_432    [34992];
 uint8_t g_per_combat_unit_76    [ 7676];
 uint8_t g_per_battle_hex_aux_52 [ 4212];
-uint8_t g_castles_shadow        [51200];
+uint8_t g_realm_history        [51200];
 uint8_t g_misc_128              [  128];
 uint8_t g_misc_1360             [ 1360];
 

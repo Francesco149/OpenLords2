@@ -115,13 +115,12 @@ void engine_game_init_purge_inactive_records(void);
  * each player slot 1..5 — AI players seed each element's lead byte to 5. */
 void engine_game_init_reset_player_subtables(void);
 
-/* Init-only seeder FUN_004ae74d — reset the castle-shadow table (save
- * entry 10, g_castles_shadow, 6400 × 8-B records) at new-game: for every
- * record zero the +0 dword and the +4 byte (leaving +5..+7, where +5 is
- * the per-castle-slot back-pointer, intact), then zero the three world
- * scalars at entries 66/67/68.  A direct callee of the 0x497ced
- * orchestrator. */
-void engine_game_init_clear_castle_shadow(void);
+/* Init-only seeder FUN_004ae74d — reset the per-realm stat-history ring (save
+ * entry 10, g_realm_history, a 400-turn × 16-realm grid of 8-B records) at
+ * new-game: for every record zero the +0 dword and the +4 byte (leaving +5..+7
+ * intact), then zero the three ring cursors at entries 66/67/68.  A direct
+ * callee of the 0x497ced orchestrator; the per-turn producer is FUN_004ae7dd. */
+void engine_game_init_clear_realm_history(void);
 
 /* Army-neighbourhood probes FUN_00428007 / FUN_00428078 — shared
  * new-game / AI-setup utilities (callees of the 0x497ced → 0x427ed0

@@ -1666,8 +1666,8 @@ struct test_case {
     X(game_init_reset_subtables_clears_grid) \
     X(game_init_reset_subtables_lead_byte) \
     X(game_init_reset_subtables_slot0_and_cursor) \
-    X(game_init_clear_castle_shadow_transient) \
-    X(game_init_clear_castle_shadow_scalars) \
+    X(game_init_clear_realm_history_transient) \
+    X(game_init_clear_realm_history_scalars) \
     X(game_init_army_bit0_within_radius3) \
     X(game_init_army_only_bit1_within_radius3) \
     X(game_init_army_coord_stride_is_3) \
@@ -1697,6 +1697,10 @@ struct test_case {
     X(engine_realm_income_gates) \
     X(engine_realm_income_clears_fixed_bounds) \
     X(engine_realm_income_replan_wiring) \
+    X(engine_realm_history_records_slot) \
+    X(engine_realm_history_count_boundary) \
+    X(engine_realm_history_cursor_wrap) \
+    X(engine_realm_history_page_wraps) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

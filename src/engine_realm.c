@@ -205,3 +205,48 @@ void engine_realm_collect_territory_income(void)
         engine_army_economy_select_candidate(key, phase);  /* FUN_0044dd4d */
     }
 }
+
+/* Port of FUN_004ae7dd (204 B) — the per-turn realm stat-history recorder, a
+ * pass of the turn-advance engine 0x448440 (FUN_00448440 calls it last, right
+ * after the second workforce dispatch).  Once per turn it snapshots every
+ * realm's population and approval into the history ring g_realm_history (save
+ * entry 10) at the current write slot, then advances the ring cursors.  The
+ * recorded data is what the in-game population / popularity history graphs plot.
+ *
+ * The ring is a 400-turn × 16-realm grid of 8-byte records.  The write slot is
+ * s_slot_0055300c (0..399); within it realm `key` (1..16) owns the record at
+ * g_realm_history + slot*0x80 + (key-1)*8 — equivalently record index
+ * slot*16 + (key-1).  (Retail addresses it off base − 8 with a 1-based key, so
+ * key*8 lands the same offset; we index the array directly to stay in-bounds.)
+ * Each record takes the realm's population (army row +0x24, dword) at +0 and
+ * its approval rating (army row +0x0c, byte) at +4; +5..+7 are left untouched —
+ * the init seeder (engine_game_init_clear_realm_history) clears them, the
+ * producer never writes them.
+ *
+ * After recording, three cursors advance: the entry count s_slot_00553f30
+ * saturates at 400; once it would exceed 400 the oldest-page pointer
+ * s_slot_00568da8 walks forward, wrapping at 400; the write index
+ * s_slot_0055300c advances and wraps at 400.  r2 @0x4ae7dd confirms the slot
+ * stride (0x80 = 16×8), the {dword,byte} record fields, the army source
+ * offsets (+0x24 / +0x0c off the 0x53f9b0 / 0x300 block), and the three 0x190
+ * (400) bound checks.  Touches only the shared save block g_realm_history, the
+ * army records g_per_army_768, and the three ring-cursor scalars — no new
+ * globals. */
+void engine_realm_record_history(void)
+{
+    int slot = (int)s_slot_0055300c;
+    for (int key = 1; key < 0x11; key++) {              /* realms 1..16 */
+        const uint8_t *r = ARMY_REC(key);
+        uint8_t *rec = g_realm_history + slot * 0x80 + (key - 1) * 8;
+        *(int32_t *)(rec + 0) = *(const int32_t *)(r + 0x24);  /* population */
+        rec[4]                = r[0x0c];                        /* approval   */
+    }
+
+    if (++s_slot_00553f30 > 400) {                     /* count saturates at 400 */
+        s_slot_00553f30 = 400;
+        if (++s_slot_00568da8 >= 400)                  /* oldest page wraps at 400 */
+            s_slot_00568da8 = 0;
+    }
+    if (++s_slot_0055300c >= 400)                      /* write index wraps at 400 */
+        s_slot_0055300c = 0;
+}

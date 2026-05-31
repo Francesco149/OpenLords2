@@ -7,6 +7,53 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — TURN-ENGINE chip: realm stat-history recorder (FUN_004ae7dd) + entry-10 identity resolved
+
+Ported `FUN_004ae7dd` (204 B) → `engine_realm_record_history` in
+`engine_realm.c` — the **per-turn realm stat-history recorder**, the last pass
+the turn-advance engine `FUN_00448440` runs (right after the second workforce
+dispatch).  Each turn it snapshots every realm's **population** (army row +0x24,
+dword) and **approval** (army row +0x0c, byte) into the current slot of a
+400-turn × 16-realm ring (save entry 10), then advances three cursors: the entry
+count saturates at 400; once full the oldest-page pointer walks forward (wrap
+400) and the write index wraps (400).  This is the data the in-game
+population/popularity **history graphs** plot.
+
+**The producer resolved a long-standing save-entry mystery.**  Save entry 10
+(retail `0x56d8c0`, 6400 × 8 B) had been a working-theory blank — "parallel to
+entry 1, possibly previous-turn or AI shadow state" — and was externed as
+`g_castles_shadow`, with its init-only seeder `FUN_004ae74d` carrying a
+"castle-shadow / +5 per-castle back-pointer" framing inherited from entry 1.
+RE'ing the producer settles it: the inner loop is `col 1..16` reading
+**g_per_army_768 row col** fields +0x24 / +0x0c, and the outer index is the
+turn-ring write cursor (`s_slot_0055300c`, wrap 400) — unmistakably
+`[turn][realm]`, not per-castle.  The numeric 6400 = 400×16 collision with the
+castle count was a coincidence.  Renamed `g_castles_shadow` → **`g_realm_history`**
+and `engine_game_init_clear_castle_shadow` → `engine_game_init_clear_realm_history`
+across `save.{c,h}`, `save_schema_table.h`, `game_init.{c,h}`, the tests, and the
+`save-format.md` / `game-start.md` findings; comments now describe the ring's
+real semantics (population/approval per realm per turn).
+
+**r2 @0x4ae7dd** pinned the layout: slot stride `0x80` (= 16×8), record fields
+`{dword @+0, byte @+4}` (+5..+7 untouched), the `entry10 − 8` 1-based-col
+addressing (we index `g_realm_history + slot*0x80 + (key-1)*8` directly to stay
+in-bounds rather than form the out-of-array base pointer), and the three `0x190`
+(400) bound checks — notably the count clamp fires on **`> 400`** (the page only
+advances once count would *exceed* 400, not at `== 400`).
+
+4 host tests: record placement + tail preserve + non-full cursor advance, the
+`== 400` count boundary (page must NOT advance), the full-ring wrap (count
+clamps, page walks, write index 399 → 0), and the page wrap (399 → 0).
+**1619/1619** pass under ASan/UBSan; mingw `.exe` clean; both
+`_engine_realm_record_history` and the renamed
+`_engine_game_init_clear_realm_history` in the PE.
+
+**Next.**  With FUN_004ae7dd done, the only remaining unported direct leaves of
+`FUN_00448440` are the deferred `FUN_0044bd9f` (tax/approval band, wants the
+2D-table extraction) and a handful of mid-size passes (`FUN_004486a9`,
+`FUN_00448819`, `FUN_00449889`, `FUN_0044b59b`, …) that still carry their own
+unported callees.
+
 ## 2026-05-31 — TURN-ENGINE chip: workforce-alloc dispatcher (FUN_0044f699)
 
 Ported `FUN_0044f699` (78 B) → `engine_territory_allocate_all_workforce` in

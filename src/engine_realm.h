@@ -105,4 +105,14 @@ void engine_realm_migrate_population(void);
  * exercised in isolation. */
 void engine_realm_collect_territory_income(void);
 
+/* Port of FUN_004ae7dd.  Per-turn realm stat-history recorder (a turn-advance
+ * pass of 0x448440): snapshot every realm's population (army +0x24) and approval
+ * (army +0x0c) into the current slot of the history ring g_realm_history (save
+ * entry 10, a 400-turn × 16-realm grid of 8-B records), then advance the three
+ * ring cursors — count (saturates at 400), oldest page (wraps at 400) and write
+ * index (wraps at 400).  This is the data the population/popularity history
+ * graphs plot.  Touches only g_realm_history, g_per_army_768 and the three
+ * cursor scalars (entries 66/67/68). */
+void engine_realm_record_history(void);
+
 #endif /* OPENLORDS2_ENGINE_REALM_H */

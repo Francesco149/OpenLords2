@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 406,
+  "tested": 408,
   "ported": 36,
-  "unported": 2005,
+  "unported": 2003,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 442,
+  "touched": 444,
   "pct_touched": 18.1,
-  "pct_tested": 16.6,
+  "pct_tested": 16.7,
   "bytes_total": 838629,
-  "bytes_touched": 159562,
-  "pct_bytes_touched": 19.0
+  "bytes_touched": 160027,
+  "pct_bytes_touched": 19.1
  },
  "orphan_refs": [
   "0x004148",
@@ -9413,8 +9413,10 @@
    "name": "FUN_00448440",
    "size": 261,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm.c"
+   ]
   },
   {
    "va": "0x448545",
@@ -16630,8 +16632,14 @@
    "name": "FUN_004ae7dd",
    "size": 204,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm.c",
+    "src/engine_realm.h",
+    "src/game_init.c",
+    "src/game_init.h",
+    "src/save.h"
+   ]
   },
   {
    "va": "0x4ae8a9",

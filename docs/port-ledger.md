@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **442** (18.1%) — tested 406, ported 36
-- code bytes touched: **19.0%** (159,562 / 838,629 B)
-- unported: **2005**
+- touched: **444** (18.1%) — tested 408, ported 36
+- code bytes touched: **19.1%** (160,027 / 838,629 B)
+- unported: **2003**
 - orphan refs (in src/, not in function table): 4
 
-## tested (406) — ported + host unit suite
+## tested (408) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -212,6 +212,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4483fb | FUN_004483fb | 11 | engine_handlers_da.h |
 | 0x448406 | FUN_00448406 | 11 | engine_handlers_da.h |
 | 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h |
+| 0x448440 | FUN_00448440 | 261 | engine_realm.c |
 | 0x4485a5 | FUN_004485a5 | 163 | engine_army_economy.c, engine_army_economy.h |
 | 0x44a6ba | FUN_0044a6ba | 903 | engine_realm.c, engine_realm.h |
 | 0x44baea | FUN_0044baea | 693 | engine_realm.c, engine_realm.h |
@@ -344,6 +345,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4ae539 | FUN_004ae539 | 169 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
 | 0x4ae5e2 | FUN_004ae5e2 | 96 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
 | 0x4ae74d | FUN_004ae74d | 144 | game_init.c, game_init.h |
+| 0x4ae7dd | FUN_004ae7dd | 204 | engine_realm.c, engine_realm.h, game_init.c (+2) |
 | 0x4ae8a9 | FUN_004ae8a9 | 191 | save.c, save.h |
 | 0x4ae968 | FUN_004ae968 | 264 | save.c, save.h |
 | 0x4aea70 | FUN_004aea70 | 506 | save.c, save.h |

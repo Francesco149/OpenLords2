@@ -710,21 +710,21 @@ int test_game_init_reset_subtables_slot0_and_cursor(void)
     return 0;
 }
 
-/* ── engine_game_init_clear_castle_shadow (FUN_004ae74d) ───────────────
+/* ── engine_game_init_clear_realm_history (FUN_004ae74d) ───────────────
  *
- * g_castles_shadow (entry 10) is 6400 8-byte castle records.  The clear
+ * g_realm_history (entry 10) is 6400 8-byte stat-history records.  The clear
  * zeroes each record's +0 dword and +4 byte, preserving +5..+7.  We
  * dirty the whole block with 0xAB so the preserved tail is observable
  * and a no-op clear would fail.  ASan guards against the 1-based-column
  * arithmetic running past the 51200-byte array. */
-int test_game_init_clear_castle_shadow_transient(void)
+int test_game_init_clear_realm_history_transient(void)
 {
-    memset(g_castles_shadow, 0xAB, sizeof g_castles_shadow);
+    memset(g_realm_history, 0xAB, sizeof g_realm_history);
 
-    engine_game_init_clear_castle_shadow();
+    engine_game_init_clear_realm_history();
 
     for (int i = 0; i < 6400; i++) {
-        const uint8_t *rec = g_castles_shadow + i * 8;
+        const uint8_t *rec = g_realm_history + i * 8;
         for (int b = 0; b < 5; b++)
             if (rec[b] != 0)
                 T_FAIL("record %d byte +%d not cleared (got 0x%02x)",
@@ -737,14 +737,14 @@ int test_game_init_clear_castle_shadow_transient(void)
     return 0;
 }
 
-int test_game_init_clear_castle_shadow_scalars(void)
+int test_game_init_clear_realm_history_scalars(void)
 {
-    memset(g_castles_shadow, 0, sizeof g_castles_shadow);
+    memset(g_realm_history, 0, sizeof g_realm_history);
     s_slot_0055300c = 0x1111;   /* entry 66 */
     s_slot_00568da8 = 0x2222;   /* entry 67 */
     s_slot_00553f30 = 0x3333;   /* entry 68 */
 
-    engine_game_init_clear_castle_shadow();
+    engine_game_init_clear_realm_history();
 
     T_ASSERT_EQ_U(s_slot_0055300c, 0);
     T_ASSERT_EQ_U(s_slot_00568da8, 0);

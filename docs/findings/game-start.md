@@ -148,7 +148,7 @@ flip lands until the world is populated enough for the map arm.
      The producer's base pointer is `0x56d8b8` with a **1-based** column
      (col 1..16, row 0..399; row stride 0x80, record stride 8), so its
      first write lands at `0x56d8b8 + 1*8 = 0x56d8c0` — exactly
-     `g_castles_shadow` (save entry 10, already homed, 6400 × 8 B) — and
+     `g_realm_history` (save entry 10, already homed, 6400 × 8 B) — and
      its last at entry10+51192, fully in-bounds (no tail overrun; the
      prior note miscounted).  Crucially, starting at col 1 means the 8
      bytes *before* entry 10 are never touched: those are precisely the
@@ -661,20 +661,21 @@ Homed in `game_init.c` (a 0x497ced callee); the six columns are embedded
 as `static const` arrays mirroring the retail `.rdata`, extracted
 byte-for-byte from the PE.
 
-### FUN_004ae74d — clear castle-shadow table (+ 3 world scalars)
+### FUN_004ae74d — clear realm stat-history ring (+ 3 ring cursors)
 
 A 144-B init-only callee (sole caller 0x497ced) and a direct
-orchestrator leaf.  It resets the **castle-shadow** table —
-`g_castles_shadow`, save entry 10 (retail `0x56d8c0`), 6400 records of
-8 B, a parallel of the live castle table (entry 1).  r2 (0x4ae78b) shows
-a 400×16 double loop: the dword write is `[row*0x80 + col*8 + 0x56d8b8]`
-and the byte write `[row*0x80 + col*8 + 0x56d8bc]`, with **row 0..399**
-and **col 1..16**.  Because the base is `0x56d8b8` (= entry10 − 8) and
-col is 1-based, the writes cover entry10 offsets `{row*128 + (col-1)*8}`
-= every 8-B record start from 0 to 51192 — all 6400 records, exactly
-in-bounds, no overrun.  Per record it zeroes the +0 dword and the +4
-byte; +5..+7 are preserved (the per-castle-slot back-pointer is at +5,
-per save-format.md).
+orchestrator leaf.  It resets the **per-realm stat-history ring** —
+`g_realm_history`, save entry 10 (retail `0x56d8c0`), 6400 records of
+8 B.  (The block was earlier guessed to be a "castle shadow" parallel to
+entry 1; its per-turn producer FUN_004ae7dd — see below — settles it as a
+400-turn × 16-realm history ring, so it was renamed.)  r2 (0x4ae78b)
+shows a 400×16 double loop: the dword write is `[row*0x80 + col*8 +
+0x56d8b8]` and the byte write `[row*0x80 + col*8 + 0x56d8bc]`, with
+**row 0..399** (turn-slot) and **col 1..16** (realm).  Because the base
+is `0x56d8b8` (= entry10 − 8) and col is 1-based, the writes cover entry10
+offsets `{row*128 + (col-1)*8}` = every 8-B record start from 0 to 51192
+— all 6400 records, exactly in-bounds, no overrun.  Per record it zeroes
+the +0 dword and the +4 byte; +5..+7 are preserved.
 
 The col-1 start is not incidental: it makes the loop **skip** the 8
 bytes immediately before entry 10 (`0x56d8b8`/`0x56d8bc`), which are two
@@ -683,11 +684,23 @@ unrelated runtime globals aliased into that gap — a scalar cursor
 pass deferred the chip; the resolved reading is that those globals are
 untouched by this function and belong to other subsystems.
 
-After the table sweep it zeroes three world scalars: `s_slot_0055300c`
-(entry 66), `s_slot_00568da8` (entry 67), `s_slot_00553f30` (entry 68) —
-all already homed.  Ported byte-exact to `game_init.c`; two host tests
-pin the per-record clear/preserve split (every record's +0..+4 zeroed,
-+5..+7 kept) and the scalar reset.
+After the table sweep it zeroes the ring's three cursor scalars:
+`s_slot_0055300c` (entry 66, write index), `s_slot_00568da8` (entry 67,
+oldest page), `s_slot_00553f30` (entry 68, count) — all already homed.
+Ported byte-exact to `game_init.c` as
+`engine_game_init_clear_realm_history`; two host tests pin the per-record
+clear/preserve split (every record's +0..+4 zeroed, +5..+7 kept) and the
+cursor reset.
+
+The per-turn **producer** is **FUN_004ae7dd**
+(`engine_realm_record_history`, in `engine_realm.c`), a pass of the
+turn-advance engine 0x448440: each turn it snapshots every realm's
+population (army +0x24, dword) and approval (army +0x0c, byte) into the
+record at the current write slot, then advances the three cursors — the
+count saturates at 400, and once full the oldest-page pointer walks
+forward (wrap 400) and the write index wraps (400).  Same `entry10 − 8`,
+1-based-col addressing as the seeder.  This is the data the in-game
+population/popularity history graphs plot.
 
 ### FUN_00427ed0 — army start-marker placement (+ entity placer FUN_0046e1b0)
 

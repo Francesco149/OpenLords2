@@ -29,7 +29,7 @@ const save_entry_t g_save_schema[SAVE_SCHEMA_COUNT] = {
     { g_per_battle_hex_432       ,  34992 }, /*   7  retail 0x00554480 */
     { g_per_combat_unit_76       ,   7676 }, /*   8  retail 0x0057a100 */
     { g_per_battle_hex_aux_52    ,   4212 }, /*   9  retail 0x00566520 */
-    { g_castles_shadow           ,  51200 }, /*  10  retail 0x0056d8c0 */
+    { g_realm_history           ,  51200 }, /*  10  retail 0x0056d8c0 */
     { g_misc_128                 ,    128 }, /*  11  retail 0x00568480 */
     { g_misc_1360                ,   1360 }, /*  12  retail 0x0053ea00 */
     { &s_slot_0053f23c           ,      4 }, /*  13  retail 0x0053f23c */

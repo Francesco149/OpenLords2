@@ -49,7 +49,7 @@ element size and the gameplay-mode they belong to.
 | 7 | `0x554480`  | 34992  | 432    | 81    | per-battle-hex state (80 used + slot 0); **combat mode** |
 | 8 | `0x57a100`  |  7676  | 76     | 101   | per-combat-unit (100 used + slot 0); **combat mode** |
 | 9 | `0x566520`  |  4212  | 52     | 81    | per-battle-hex aux (80 used + slot 0); **combat mode** |
-|10 | `0x56d8c0`  | 51200  | 8      | 6400  | parallel to entry 1 — possibly previous-turn or AI shadow state |
+|10 | `0x56d8c0`  | 51200  | 8      | 6400  | **per-realm stat-history ring** (`g_realm_history`): 400 turn-slots × 16 realms; rec +0 = population (army +0x24), +4 = approval (army +0x0c).  Producer FUN_004ae7dd, seeder FUN_004ae74d — the data behind the population/popularity history graphs |
 |11 | `0x568480`  |   128  | -      | -     | small fixed buffer (unknown) |
 |12 | `0x53ea00`  |  1360  | -      | -     | small fixed buffer (unknown) |
 
