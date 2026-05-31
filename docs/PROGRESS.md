@@ -7,6 +7,23 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-05-31 — TURN-ENGINE chip: terrain-census dispatcher (FUN_00469b51)
+
+Ported `FUN_00469b51` (60 B) → `engine_territory_census_all_realms` in
+`engine_territory.c` — the thin per-realm dispatcher that runs the already-ported
+terrain census (`engine_territory_census_army_terrain`) for every realm
+1..s_slot_0056d5dc.  A per-turn pass of the turn-advance engine `FUN_00448440`
+(and the whole-map census wrapper used at new-game).  Placed next to its callee
+rather than in `engine_realm.c` to avoid a territory→realm cross-module edge.
+
+1 host test pinning the inclusive loop bound (count 2 → realms 1-2 censused,
+realm 3 left untouched).  **1614/1614** pass under ASan/UBSan; mingw `.exe`
+clean; `_engine_territory_census_all_realms` in the PE.
+
+**Next.**  Sibling dispatcher `FUN_0044f699` (workforce alloc) and the larger
+leaf `FUN_0044ae7dd`; the deferred `FUN_0044bd9f` (tax/approval band) still wants
+the 2D-table extraction.
+
 ## 2026-05-31 — TURN-ENGINE chip: per-realm territory-income + economy re-plan (FUN_004ad6c0)
 
 Ported `FUN_004ad6c0` (524 B) → `engine_realm_collect_territory_income`, the

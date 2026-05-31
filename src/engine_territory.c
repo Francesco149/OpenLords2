@@ -1036,6 +1036,18 @@ void engine_territory_census_army_terrain(int key)
     }
 }
 
+/* Port of FUN_00469b51 (60 B) — the per-realm terrain-census dispatcher.  Runs
+ * engine_territory_census_army_terrain for every realm 1..s_slot_0056d5dc (the
+ * live realm count).  One of the per-turn passes the turn-advance engine
+ * (0x448440) sequences; also the wrapper the new-game setup uses to census the
+ * whole map.  No state of its own — see the per-realm census for bind safety. */
+void engine_territory_census_all_realms(void)
+{
+    int count = (int)s_slot_0056d5dc;
+    for (int key = 1; key <= count; key++)
+        engine_territory_census_army_terrain(key);
+}
+
 /* Realm-record fields the secondary-settlement stamp reads to pick its
  * descriptor tier (both inside g_per_army_768 row `key`). */
 #define ARMY_SETTLE_FLAG  0x1c3   /* DAT_0053fb73 — secondary settlement present  */

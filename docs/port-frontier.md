@@ -259,7 +259,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
-| 0x448440 | 261 | 2 | 23 |  |
+| 0x448440 | 261 | 2 | 22 |  |
 | 0x448d7e | 148 | 1 | 0 | ✓ |
 | 0x4407e5 | 426 | 1 | 1 |  |
 | 0x4477e7 | 503 | 1 | 0 | ✓ |

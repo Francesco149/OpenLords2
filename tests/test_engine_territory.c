@@ -1638,6 +1638,26 @@ int test_territory_census_unbound(void)
     return 0;
 }
 
+/* The all-realms dispatcher censuses realms 1..s_slot_0056d5dc inclusive: with
+ * the count at 2, realms 1 and 2 are tallied but realm 3 (a tile waiting in its
+ * roster, its counter pre-dirtied) is never visited. */
+int test_territory_census_all_realms_bound(void)
+{
+    census_setup();
+    census_tile(1, 0, 1);       /* TYPE1 → +0x1ff */
+    census_tile(2, 0, 1);
+    census_tile(3, 0, 1);
+    g_army[3 * ARMY_STRIDE + CEN_TYPE1] = 0x42;   /* must survive if unvisited */
+    s_slot_0056d5dc = 2;
+
+    engine_territory_census_all_realms();
+
+    T_ASSERT_EQ_I(census(1, CEN_TYPE1), 1);
+    T_ASSERT_EQ_I(census(2, CEN_TYPE1), 1);
+    T_ASSERT_EQ_I(census(3, CEN_TYPE1), 0x42);    /* realm 3 > count → not censused */
+    return 0;
+}
+
 /* ── Secondary-settlement stamp (port of FUN_0046826c) ──────────────
  * Reuse census_setup (binds g_cells + g_army).  Set the realm's secondary
  * cell offset (+0x78) and the two tier fields (+0x1c3 / +0x1c4), stamp,

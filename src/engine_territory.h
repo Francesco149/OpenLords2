@@ -211,6 +211,12 @@ void engine_territory_build_army_adjacency(void);
  * counters are merely cleared if the roster or cell grid is unbound. */
 void engine_territory_census_army_terrain(int key);
 
+/* Port of FUN_00469b51.  Per-realm terrain-census dispatcher: run
+ * engine_territory_census_army_terrain for every realm 1..s_slot_0056d5dc.  A
+ * per-turn pass of the turn-advance engine (0x448440); also the new-game
+ * whole-map census wrapper. */
+void engine_territory_census_all_realms(void);
+
 /* Port of FUN_0046826c.  Stamp the realm's secondary-settlement 2×2 footprint
  * at its secondary cell (record +0x78), via engine_territory_stamp_block.  The
  * descriptor base is one of three tiers ('P'/'('/'<') picked by the realm's
