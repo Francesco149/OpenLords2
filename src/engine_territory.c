@@ -1080,6 +1080,46 @@ phase2_done:
     *(int32_t *)(rowbase + WF_LEFTOVER)   = pool2 + pool1;
 }
 
+/* Realm-record flag the band-retype consults for its lo==2 special case
+ * (g_per_army_768 row + 0x1a7, retail DAT_0053fb57). */
+#define ARMY_RETYPE_FLAG 0x1a7
+
+/* Port of FUN_00469d21 (237 B) — retype an army's active feature cells whose
+ * TYPE falls in a band.  Walk all 4096 overworld cells in byte order; for each
+ * cell owned by `key` (byte +7), flagged active (byte +1 bit 0x20), with its
+ * TYPE byte (+0) in [lo, hi] inclusive, set its terrain type via
+ * engine_territory_set_cell_type (FUN_0046d7f4).
+ *
+ * The first matching cell always becomes (type, variant).  For every *later*
+ * match, when the band's low bound is 2 and the realm's +0x1a7 flag is set, the
+ * cell is forced to type 2 / variant 0 instead — the band's first cell keeps
+ * the requested type and the remainder collapse to base type 2.  (The
+ * 0x49bd99 → 0x44d913 caller passes lo == 0x13, so that special case never
+ * fires on the new-game path; the 0x44c8ae caller passes lo == 2 and exercises
+ * it.)
+ *
+ * No-op (no cells touched) if the cell grid or army-record block is unbound. */
+void engine_territory_retype_army_band(int key, int type, char variant,
+                                       int lo, int hi)
+{
+    if (g_cells == NULL || g_army_records == NULL) return;
+
+    int seen = 0;
+    for (int off = 0; off < CELL_GRID_CELLS * CELL_STRIDE; off += CELL_STRIDE) {
+        if (g_cells[off + 7] != key)        continue;   /* +7 owner key   */
+        if ((g_cells[off + 1] & 0x20) == 0) continue;   /* +1 active flag */
+        int t = g_cells[off + 0];                       /* +0 TYPE byte   */
+        if (t < lo || t > hi)               continue;
+
+        if (lo == 2 && seen &&
+            g_army_records[key * ARMY_ROW_STRIDE + ARMY_RETYPE_FLAG] != 0)
+            engine_territory_set_cell_type(off, 2, 0);
+        else
+            engine_territory_set_cell_type(off, type, variant);
+        seen = 1;
+    }
+}
+
 /* Per-army active-cell tally byte: row offset +0x205 (retail DAT_0053fbb5
  * = g_per_army_768 + 0x205). */
 #define ARMY_ACTIVE_COUNT 0x205

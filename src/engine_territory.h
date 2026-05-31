@@ -194,6 +194,16 @@ void engine_territory_stamp_secondary_keep(int key, int level);
  * army-record block is unbound. */
 void engine_territory_allocate_realm_workforce(int key);
 
+/* Port of FUN_00469d21.  Retype an army's active feature cells (owner +7 == key,
+ * +1 bit 0x20 set) whose TYPE byte (+0) lies in [lo, hi] via
+ * engine_territory_set_cell_type.  The first match takes (type, variant); when
+ * lo == 2 and the realm's +0x1a7 flag is set, every later match collapses to
+ * type 2 / variant 0 instead.  A helper of the 0x49bd99 → 0x44d913 setup path
+ * (and the 0x44c8ae caller).  No-op if the cell grid or army-record block is
+ * unbound. */
+void engine_territory_retype_army_band(int key, int type, char variant,
+                                       int lo, int hi);
+
 /* Port of FUN_00467a36.  New-game per-army feature-seeding pass: for every
  * active feature-cell (+7 key 1..17, +1 bit 0x20 set), assign a feature
  * terrain type (0x14 / 1 / 0) by the army's running active-cell index and

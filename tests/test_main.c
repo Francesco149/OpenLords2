@@ -1436,6 +1436,10 @@ struct test_case {
     X(territory_workforce_small_remainder_fold) \
     X(territory_workforce_unlimited_sentinel_cap) \
     X(territory_workforce_unbound_is_noop) \
+    X(territory_retype_band_filters) \
+    X(territory_retype_band_lo2_collapses_rest) \
+    X(territory_retype_band_lo2_no_flag_keeps_all) \
+    X(territory_retype_band_unbound_is_noop) \
     X(territory_stamp_block_2x2_gradient) \
     X(territory_stamp_block_is_square_not_strip) \
     X(territory_stamp_block_unbound_is_noop) \

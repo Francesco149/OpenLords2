@@ -1723,6 +1723,97 @@ int test_territory_workforce_unbound_is_noop(void)
     return 0;
 }
 
+/* ── Band retype of an army's feature cells (port of FUN_00469d21) ──
+ * Reuse census_setup (binds g_cells + g_army).  A "feature cell" for the
+ * retype carries owner key at +7, the active flag (bit 0x20) at +1, and a
+ * TYPE byte at +0.  engine_territory_set_cell_type rewrites +0/+2/+3; the
+ * tests assert the +0 TYPE byte (the observable the retype steers). */
+
+enum { BAND_RETYPE_FLAG = 0x1a7 };
+
+static void band_cell(int col, int row, uint8_t key, uint8_t type)
+{
+    int o = cell_off(col, row);
+    g_cells[o + 7] = key;
+    g_cells[o + 1] |= 0x20;
+    g_cells[o + 0] = type;
+}
+
+/* Only cells matching all three predicates (owner key, +1 bit 0x20, TYPE in
+ * [lo,hi]) are retyped; everything else is left alone. */
+int test_territory_retype_band_filters(void)
+{
+    census_setup();
+    band_cell(5, 5, 3, 0x13);          /* in band, owned, flagged → retyped */
+    band_cell(6, 5, 3, 0x15);          /* in band                  → retyped */
+    band_cell(7, 5, 3, 0x12);          /* TYPE below band          → skipped */
+    band_cell(8, 5, 4, 0x14);          /* different owner          → skipped */
+    int o = cell_off(9, 5);            /* right owner+type but unflagged      */
+    g_cells[o + 7] = 3; g_cells[o + 0] = 0x14;   /* no bit 0x20 → skipped */
+
+    engine_territory_retype_army_band(3, 0x16, 0, 0x13, 0x16);
+
+    T_ASSERT_EQ_I(g_cells[cell_off(5, 5) + 0], 0x16);
+    T_ASSERT_EQ_I(g_cells[cell_off(6, 5) + 0], 0x16);
+    T_ASSERT_EQ_I(g_cells[cell_off(7, 5) + 0], 0x12);   /* untouched */
+    T_ASSERT_EQ_I(g_cells[cell_off(8, 5) + 0], 0x14);   /* untouched */
+    T_ASSERT_EQ_I(g_cells[cell_off(9, 5) + 0], 0x14);   /* untouched */
+    return 0;
+}
+
+/* lo == 2 with the realm's +0x1a7 flag set: the first match keeps the
+ * requested type, every later match collapses to base type 2. */
+int test_territory_retype_band_lo2_collapses_rest(void)
+{
+    census_setup();
+    g_army[3 * ARMY_STRIDE + BAND_RETYPE_FLAG] = 1;
+    band_cell(5, 5, 3, 3);             /* first match (lowest offset) */
+    band_cell(6, 5, 3, 4);             /* later → collapses to 2      */
+    band_cell(7, 5, 3, 5);             /* later → collapses to 2      */
+
+    engine_territory_retype_army_band(3, 5, 0, 2, 0xe);
+
+    T_ASSERT_EQ_I(g_cells[cell_off(5, 5) + 0], 5);      /* first keeps type arg */
+    T_ASSERT_EQ_I(g_cells[cell_off(6, 5) + 0], 2);
+    T_ASSERT_EQ_I(g_cells[cell_off(7, 5) + 0], 2);
+    return 0;
+}
+
+/* lo == 2 but the +0x1a7 flag clear: no collapse — every match takes the
+ * requested type. */
+int test_territory_retype_band_lo2_no_flag_keeps_all(void)
+{
+    census_setup();
+    /* +0x1a7 left 0 */
+    band_cell(5, 5, 3, 3);
+    band_cell(6, 5, 3, 4);
+    band_cell(7, 5, 3, 5);
+
+    engine_territory_retype_army_band(3, 5, 0, 2, 0xe);
+
+    T_ASSERT_EQ_I(g_cells[cell_off(5, 5) + 0], 5);
+    T_ASSERT_EQ_I(g_cells[cell_off(6, 5) + 0], 5);
+    T_ASSERT_EQ_I(g_cells[cell_off(7, 5) + 0], 5);
+    return 0;
+}
+
+/* No-op when the cell grid or army-record block is unbound. */
+int test_territory_retype_band_unbound_is_noop(void)
+{
+    census_setup();
+    band_cell(5, 5, 3, 0x14);
+    engine_territory_bind_army_records(NULL);
+    engine_territory_retype_army_band(3, 0x16, 0, 0x13, 0x16);  /* must not crash */
+    T_ASSERT_EQ_I(g_cells[cell_off(5, 5) + 0], 0x14);           /* untouched */
+
+    census_setup();
+    band_cell(5, 5, 3, 0x14);
+    engine_territory_bind_cells(NULL);
+    engine_territory_retype_army_band(3, 0x16, 0, 0x13, 0x16);
+    T_ASSERT_EQ_I(g_cells[cell_off(5, 5) + 0], 0x14);
+    return 0;
+}
+
 /* ── Capital-region setup: block stamp + capital placement ──────────
  * (port of FUN_0046ac22 / FUN_00467fd1, the leaves of the 0x468d4f
  * castle-setup subtree).  Reuse the module-level g_cells + cell_off. */

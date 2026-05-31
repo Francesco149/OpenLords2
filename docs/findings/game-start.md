@@ -915,10 +915,28 @@ tests (phase-1 greedy split, pct pool-split feeding both phases, building-gate
 spilling to leftover, the 2:3:1 round-robin weights, the small-remainder fold,
 the 999999 sentinel cap, unbound no-op).  No new globals.
 
-**Remaining `FUN_0049bd99` leaves** (its other zero-dep / 1-dep callees,
-bottom-up): the 1-dep helpers `FUN_0044d913` / `FUN_00432746` / `FUN_0046dfd5`,
-plus the two cap-tuning passes interleaved with the allocator above
-(`FUN_0044df5f` / `FUN_004485a5`).
+### FUN_00469d21 — band-retype an army's feature cells ✅ ported
+
+The single callee of `FUN_0044d913` (and of the unrelated `FUN_0044c8ae`), now
+a leaf because its own callee `FUN_0046d7f4` (the cell terrain-type setter) is
+ported.  It walks all 4096 overworld cells and, for each cell owned by `key`
+(byte +7), flagged active (byte +1 bit 0x20), with its TYPE byte (+0) in a
+band [lo, hi], rewrites the cell's terrain type via
+`engine_territory_set_cell_type`.  The **first** match always becomes
+`(type, variant)`; for every later match, when `lo == 2` and the realm's +0x1a7
+flag is set, the cell collapses to base type 2 / variant 0 instead — so a
+band's first feature cell keeps the requested type and the rest revert.  The
+`0x44d913` caller passes `lo == 0x13`, so the special case is dormant on the
+new-game path; the `0x44c8ae` caller passes `lo == 2` and drives it.  Ported as
+`engine_territory_retype_army_band`; 4 host tests (predicate filtering, the
+lo==2 collapse, lo==2 with the flag clear keeping all, unbound no-op).  No new
+globals.
+
+**Remaining `FUN_0049bd99` leaves** (bottom-up): `FUN_0044d913` is now a leaf
+(its dep `FUN_00469d21` above is ported) — it derives a population-density tier
+from the realm's census and calls the band-retype; then the other 1-dep helpers
+`FUN_00432746` / `FUN_0046dfd5`, plus the two cap-tuning passes interleaved with
+the allocator (`FUN_0044df5f` / `FUN_004485a5`).
 
 5. **Assemble `engine_game_init`** (FUN_00497ced orchestrator) once its
    callees are real; then `FUN_00499dc3` + `FUN_004329ec` spine + the
