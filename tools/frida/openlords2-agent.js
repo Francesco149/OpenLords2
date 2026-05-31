@@ -3328,6 +3328,89 @@ function runRetailTileExpand(in_obj) {
     return out;
 }
 
+// ─── generic per-realm turn-pass differ ──────────────────────────────────
+//
+// The turn-advance engine's per-realm passes (FUN_0044bd9f tax-approval,
+// FUN_0044bf7a development-spread, …) are __stdcall void() functions that take
+// NO arguments — they loop over the live realm count and mutate the shared save
+// globals (g_per_army_768, g_player_strategic_352, g_misc_1360, g_overworld_map)
+// plus a couple of scalar settings.  Rather than a bespoke RPC per pass, this
+// one generic differ takes a plan describing the memory regions to snapshot /
+// inject / read back and the function VA to invoke:
+//
+//   in_obj = {
+//     fn_va: <retail VA of the pass, e.g. 0x44bd9f>,
+//     regions: [ {va, len, inject:[bytes]|null, read:bool}, … ],
+//   }
+//
+// It snapshots every region (so the engine sees no perturbation), writes the
+// injected bytes, calls retail, reads back the regions flagged `read`, then
+// restores the snapshots in a finally block.  Returns
+//   { regions: { "<va>": [bytes], … }, raced: 0|1 }.
+//
+// Engine freeze REQUIRED (shared installSimSubStepsEngineFreeze): the passes
+// read s_slot_0056d5dc and walk g_per_army_768, which the engine main thread
+// also touches once a game is live; freezing the per-tick driver keeps our
+// injected state stable across the call.
+function runRetailRealmPass(in_obj) {
+    if (!g_diff_test_enabled) {
+        return {error: 'diff_test not enabled at init'};
+    }
+    if (typeof in_obj.fn_va !== 'number' || !Array.isArray(in_obj.regions)) {
+        return {error: 'in_obj must be {fn_va:number, regions:[…]}'};
+    }
+    const CHUNK = 32 * 1024;
+
+    function writeChunked(base, u8, len) {
+        for (let off = 0; off < len; off += CHUNK) {
+            const sz = Math.min(CHUNK, len - off);
+            base.add(off).writeByteArray(u8.slice(off, off + sz).buffer);
+        }
+    }
+    function readChunked(base, len) {
+        const dst = new Uint8Array(len);
+        for (let off = 0; off < len; off += CHUNK) {
+            const sz = Math.min(CHUNK, len - off);
+            dst.set(new Uint8Array(base.add(off).readByteArray(sz)), off);
+        }
+        return dst;
+    }
+
+    g_diff_test_caller_tid = Process.getCurrentThreadId();
+    const tc0 = g_tick_count;
+    const it0 = g_engine_in_tick;
+    const snaps = [];
+    const out = {regions: {}};
+    try {
+        // Snapshot (COPY) + inject every region.
+        for (const reg of in_obj.regions) {
+            const base = rva(reg.va);
+            snaps.push({base, len: reg.len, snap: readChunked(base, reg.len)});
+            if (reg.inject) {
+                writeChunked(base, Uint8Array.from(reg.inject), reg.len);
+            }
+        }
+        // Invoke retail — __stdcall void(), no args.
+        new NativeFunction(rva(in_obj.fn_va), 'void', [], 'stdcall')();
+        // Read back the requested regions BEFORE restoring.
+        for (const reg of in_obj.regions) {
+            if (reg.read) {
+                out.regions[String(reg.va)] =
+                    Array.from(readChunked(rva(reg.va), reg.len));
+            }
+        }
+        out.raced = ((g_tick_count !== tc0) ||
+                     it0 !== 0 || g_engine_in_tick !== 0) ? 1 : 0;
+    } finally {
+        // Restore snapshots in reverse so the engine sees no perturbation.
+        for (let i = snaps.length - 1; i >= 0; i--) {
+            writeChunked(snaps[i].base, snaps[i].snap, snaps[i].len);
+        }
+        g_diff_test_caller_tid = -1;
+    }
+    return out;
+}
+
 // ─── delayed-action dispatcher (FUN_004472ce — engine_dispatch_delayed_actions) ─
 //
 // Drains the 400-slot pending-action table; dispatches each due record by
@@ -4839,6 +4922,10 @@ rpc.exports = {
 
     runRetailDelayedAction: function (in_obj) {
         return runRetailDelayedAction(in_obj);
+    },
+
+    runRetailRealmPass: function (in_obj) {
+        return runRetailRealmPass(in_obj);
     },
 
     // Diagnostic counters for the DDraw → GDI seat.  Reflects everything

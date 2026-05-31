@@ -140,15 +140,14 @@ OUT  := build/run_tests
 # tools/diff_test.py.  Same source as $(SRCS_UNDER_TEST) for the diff
 # targets currently wired in, but compiled WITHOUT sanitizers (ASan-
 # instrumented .so can't be dlopen'd from a non-ASan Python).
-DIFF_SRCS := ../src/engine_rng.c ../src/engine_fps.c \
-             ../src/engine_anim_cycle.c ../src/engine_delta.c \
-             ../src/engine_phase.c ../src/engine_input.c \
-             ../src/engine_rate.c ../src/engine_state_hash.c \
-             ../src/engine_tile.c \
-             ../src/engine_delayed_action.c \
-             ../src/engine_path.c \
-             ../src/call_trace.c
-DIFF_OBJS := $(addprefix build/diff_,$(notdir $(DIFF_SRCS:.c=.o)))
+# The diff lib links the full host-clean source set (the same closure the test
+# binary links) so stateful diff targets that touch the shared save globals —
+# engine_realm passes, etc. — resolve their whole dependency graph (engine_realm
+# → engine_army_economy → engine_territory → map_render/camera/…).  Built -fPIC,
+# ASan-free, so it can be dlopen'd from a non-ASan Python (load_port_lib).
+DIFF_SRCS := $(SRCS_UNDER_TEST)
+DIFF_OBJS := $(addprefix build/diff_,$(notdir $(DIFF_SRCS:.c=.o))) \
+             build/diff_diff_stubs.o
 DIFF_OUT  := build/libengine_diff.so
 DIFF_CFLAGS := -std=c11 -O2 -fPIC -Wall -Wextra -Wno-unused-parameter -I../src
 
@@ -167,6 +166,9 @@ build/%.o: %.c | build
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 build/diff_%.o: ../src/%.c | build
+	$(CC) $(DIFF_CFLAGS) -c -o $@ $<
+
+build/diff_diff_stubs.o: diff_stubs.c | build
 	$(CC) $(DIFF_CFLAGS) -c -o $@ $<
 
 $(OUT): $(OBJS)

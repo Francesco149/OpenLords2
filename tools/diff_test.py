@@ -2506,6 +2506,274 @@ def diff_delayed_action(retail: dict, port: dict) -> list[str]:
     return bad
 
 
+# ─── per-realm turn-pass diff targets (engine_realm) ─────────────────────
+#
+# The turn-advance engine's per-realm passes are __stdcall void() functions
+# that loop over the live realm count and mutate the shared save globals.  The
+# agent's generic runRetailRealmPass snapshots/injects/reads-back arbitrary
+# memory regions and calls the pass by VA; the port side pokes the same bytes
+# into libengine_diff.so's own copies of those globals and calls the exported
+# port.  Both start from byte-identical injected state, so a faithful port
+# yields byte-identical post-state.
+
+REALM_ARMY_BYTES   = 13056      # g_per_army_768          (17 × 0x300)
+REALM_STRAT_BYTES  = 2112       # g_player_strategic_352  (6 × 0x160)
+REALM_MISC_BYTES   = 1360       # g_misc_1360             (17 × 0x50)
+REALM_OVER_BYTES   = 32768      # g_overworld_map
+REALM_ARMY_STRIDE  = 0x300
+REALM_STRAT_STRIDE = 0x160
+REALM_MISC_STRIDE  = 0x50
+
+VA_PER_ARMY     = 0x53f9b0
+VA_STRATEGIC    = 0x57bf00
+VA_MISC_1360    = 0x53ea00
+VA_OVERWORLD    = 0x522f90
+VA_SLOT_COUNT   = 0x56d5dc       # s_slot_0056d5dc — realm count
+VA_SLOT_STAND   = 0x53f25c       # s_slot_0053f25c — standings-enabled flag
+VA_SLOT_SEASON  = 0x57c92c       # s_slot_0057c92c — season (dev reads, unused)
+FN_TAX_APPROVAL = 0x44bd9f
+FN_DEV_SPREAD   = 0x44bf7a
+
+REALM_RACE_RETRIES = 8
+
+
+def _u32le(v: int) -> bytes:
+    return int(v & 0xffffffff).to_bytes(4, "little")
+
+
+_realm_globals_cache: dict | None = None
+
+
+def realm_port_globals(lib: ctypes.CDLL) -> dict:
+    """Bind ctypes views onto the diff lib's save globals + realm-pass entry
+    points (lazily, once)."""
+    global _realm_globals_cache
+    if _realm_globals_cache is None:
+        _realm_globals_cache = {
+            "army":   (ctypes.c_uint8 * REALM_ARMY_BYTES ).in_dll(lib, "g_per_army_768"),
+            "strat":  (ctypes.c_uint8 * REALM_STRAT_BYTES).in_dll(lib, "g_player_strategic_352"),
+            "misc":   (ctypes.c_uint8 * REALM_MISC_BYTES ).in_dll(lib, "g_misc_1360"),
+            "over":   (ctypes.c_uint8 * REALM_OVER_BYTES ).in_dll(lib, "g_overworld_map"),
+            "count":  ctypes.c_uint32.in_dll(lib, "s_slot_0056d5dc"),
+            "stand":  ctypes.c_uint32.in_dll(lib, "s_slot_0053f25c"),
+            "season": ctypes.c_uint32.in_dll(lib, "s_slot_0057c92c"),
+        }
+        lib.engine_realm_apply_tax_approval.restype = None
+        lib.engine_realm_apply_tax_approval.argtypes = []
+        lib.engine_realm_spread_development.restype = None
+        lib.engine_realm_spread_development.argtypes = []
+        lib.engine_territory_bind_cells.restype = None
+        lib.engine_territory_bind_cells.argtypes = [ctypes.c_void_p]
+    return _realm_globals_cache
+
+
+def _diff_realm_region(retail: dict, port_bytes: list[int],
+                       va: int, stride: int, n_records: int,
+                       label: str) -> list[str]:
+    """Per-record bytewise diff of a readback region; reports the diverging
+    records and (up to 8) byte offsets within each."""
+    r = retail.get("regions", {}).get(str(va))
+    if r is None:
+        return [f"{label}:no-readback"]
+    r = list(r)
+    p = list(port_bytes)
+    if r == p:
+        return []
+    bad = []
+    for rec in range(n_records):
+        b = rec * stride
+        rr = r[b:b + stride]
+        pp = p[b:b + stride]
+        if rr != pp:
+            offs = [hex(o) for o in range(stride) if rr[o] != pp[o]]
+            bad.append(f"{label}[{rec}]:{','.join(offs[:8])}")
+    return bad or [f"{label}:bytes"]
+
+
+# ── tax-approval (FUN_0044bd9f — engine_realm_apply_tax_approval) ──
+
+def _build_tax_vec(count: int, realms: list[tuple], players: list[tuple]) -> dict:
+    army  = bytearray(REALM_ARMY_BYTES)
+    strat = bytearray(REALM_STRAT_BYTES)
+    for (slot, owner, band, rating, policy, pop) in realms:
+        b = slot * REALM_ARMY_STRIDE
+        army[b + 0x05]  = owner  & 0xff
+        army[b + 0x09]  = band   & 0xff
+        army[b + 0x0b]  = rating & 0xff
+        army[b + 0x15d] = policy & 0xff
+        struct.pack_into("<i", army, b + 0x24, pop)
+    for (player, human) in players:
+        strat[player * REALM_STRAT_STRIDE + 0x05] = human & 0xff
+    return {"count": count, "army": bytes(army), "strat": bytes(strat)}
+
+
+def gen_tax_approval_vectors(n: int, rng: random.Random) -> list[dict]:
+    # Fixed edge cases first (mirror the host unit tests + quirk #149).
+    edge = [
+        (1, [(1, 1, 0, 75,  5, 1000)], [(1, 1)]),   # → band 4
+        (1, [(1, 1, 0, 100, 5, 1000)], [(1, 1)]),   # rating 100 → fallback band 3
+        (1, [(1, 1, 0, 5,   0, 1000)], [(1, 1)]),   # policy 0 → clamp low
+        (1, [(1, 2, 2, 20,  6, 500)],  [(2, 0)]),   # policy 6 aliasing
+        (1, [(1, 2, 0, 20,  3, 0)],    [(2, 0)]),   # zero-pop non-human → 50
+        (1, [(1, 1, 0, 20,  3, 0)],    [(1, 1)]),   # zero-pop human → kept
+    ]
+    vecs = [_build_tax_vec(*e) for e in edge]
+    while len(vecs) < n:
+        count = rng.randint(1, 16)
+        realms = []
+        for slot in range(1, count + 1):
+            realms.append((
+                slot,
+                rng.randint(0, 6),                  # owner
+                rng.randint(0, 4),                  # band (table column)
+                rng.randint(-20, 120),              # rating (pre-clamp)
+                rng.randint(0, 6),                  # tax policy
+                rng.choice([0, 0, rng.randint(1, 5000)]),  # population
+            ))
+        players = [(p, rng.randint(0, 1)) for p in range(6)]
+        vecs.append(_build_tax_vec(count, realms, players))
+    return vecs
+
+
+def run_port_tax_approval(lib: ctypes.CDLL, vec: dict) -> dict:
+    g = realm_port_globals(lib)
+    ctypes.memmove(g["army"],  vec["army"],  REALM_ARMY_BYTES)
+    ctypes.memmove(g["strat"], vec["strat"], REALM_STRAT_BYTES)
+    g["count"].value = vec["count"]
+    lib.engine_realm_apply_tax_approval()
+    return {"army": list(bytes(g["army"]))}
+
+
+def tax_approval_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_TAX_APPROVAL, "regions": [
+        {"va": VA_PER_ARMY,   "len": REALM_ARMY_BYTES,  "inject": list(vec["army"]),  "read": True},
+        {"va": VA_STRATEGIC,  "len": REALM_STRAT_BYTES, "inject": list(vec["strat"]), "read": False},
+        {"va": VA_SLOT_COUNT, "len": 4, "inject": list(_u32le(vec["count"])), "read": False},
+    ]}
+
+
+def diff_tax_approval(retail: dict, port: dict) -> list[str]:
+    return _diff_realm_region(retail, port["army"], VA_PER_ARMY,
+                              REALM_ARMY_STRIDE, 17, "army")
+
+
+# ── development-spread (FUN_0044bf7a — engine_realm_spread_development) ──
+
+def _diff_realm_flat(retail: dict, port_bytes: list[int], va: int,
+                     label: str, max_report: int = 12) -> list[str]:
+    r = retail.get("regions", {}).get(str(va))
+    if r is None:
+        return [f"{label}:no-readback"]
+    r = list(r)
+    p = list(port_bytes)
+    if r == p:
+        return []
+    offs = [hex(o) for o in range(min(len(r), len(p))) if r[o] != p[o]]
+    return [f"{label}:{','.join(offs[:max_report])}"]
+
+
+def _build_dev_vec(count: int, standings: int, realms: list[dict]) -> dict:
+    army = bytearray(REALM_ARMY_BYTES)
+    misc = bytearray(REALM_MISC_BYTES)
+    over = bytearray(REALM_OVER_BYTES)
+    for rd in realms:
+        slot = rd["slot"]
+        b = slot * REALM_ARMY_STRIDE
+        army[b + 0x05]  = rd.get("owner", 1) & 0xff
+        army[b + 0x1ff] = rd.get("acc_a", 0) & 0xff
+        army[b + 0x201] = rd.get("acc_b", 0) & 0xff
+        struct.pack_into("<i", army, b + 0x208, rd.get("acc208", 0))
+        struct.pack_into("<i", army, b + 0xdc,  rd.get("pool", 0))
+        for (idx, value) in rd.get("vals", []):
+            struct.pack_into("<h", army, b + 0x90 + idx * 2, value)
+        for (ridx, cell_off, dev_type) in rd.get("cells", []):
+            struct.pack_into("<i", misc, slot * REALM_MISC_STRIDE + ridx * 4, cell_off)
+            over[cell_off] = dev_type & 0xff
+    return {"count": count, "standings": standings,
+            "army": bytes(army), "misc": bytes(misc), "over": bytes(over)}
+
+
+def gen_dev_spread_vectors(n: int, rng: random.Random) -> list[dict]:
+    # Cell offsets: 8-aligned, unique per (realm, roster slot), so the
+    # descriptor-byte writes never overlap.  Developable type < 0x19.
+    def cell(slot, ridx):
+        return (slot * 32 + ridx) * 8 + 8
+
+    edge = [
+        # one realm, three developable cells, modest pool → partial spread.
+        # Developable means terrain type >= 0x19 (already a dev-stage tile).
+        dict(count=1, standings=1, realms=[dict(slot=1, pool=50,
+             vals=[(0, 100), (1, 50), (2, 300)],
+             cells=[(0, cell(1, 0), 0x19), (1, cell(1, 1), 0x1a),
+                    (2, cell(1, 2), 0x1b)])]),
+        # overflow: a cell crosses 800 → spill back, type 1
+        dict(count=1, standings=1, realms=[dict(slot=1, pool=300,
+             vals=[(0, 700), (1, 0)],
+             cells=[(0, cell(1, 0), 0x1c), (1, cell(1, 1), 0x19)])]),
+        # standings disabled → accumulator forced to 0
+        dict(count=1, standings=0, realms=[dict(slot=1, acc_a=10, acc_b=4,
+             acc208=20, pool=0, cells=[])]),
+        # no developable cells → projection metrics cleared, no spread
+        dict(count=1, standings=1, realms=[dict(slot=1, acc_a=10, acc_b=4,
+             pool=500, cells=[])]),
+    ]
+    vecs = [_build_dev_vec(e["count"], e["standings"], e["realms"]) for e in edge]
+    while len(vecs) < n:
+        count = rng.randint(1, 8)
+        realms = []
+        for slot in range(1, count + 1):
+            ncells = rng.randint(0, 5)
+            cells, vals = [], []
+            for ridx in range(ncells):
+                cells.append((ridx, cell(slot, ridx),
+                              rng.choice([0x19, 0x1a, 0x1b, 0x1c])))  # all >= 0x19 (developable)
+                vals.append((ridx, rng.randint(0, 900)))
+            realms.append(dict(
+                slot=slot, owner=rng.randint(0, 6),
+                acc_a=rng.randint(0, 40), acc_b=rng.randint(0, 40),
+                acc208=rng.randint(-50, 50),
+                pool=rng.choice([0, rng.randint(1, 2000)]),
+                vals=vals, cells=cells))
+        realms_standings = rng.randint(0, 1)
+        vecs.append(_build_dev_vec(count, realms_standings, realms))
+    return vecs
+
+
+def run_port_dev_spread(lib: ctypes.CDLL, vec: dict) -> dict:
+    g = realm_port_globals(lib)
+    ctypes.memmove(g["army"], vec["army"], REALM_ARMY_BYTES)
+    ctypes.memmove(g["misc"], vec["misc"], REALM_MISC_BYTES)
+    ctypes.memmove(g["over"], vec["over"], REALM_OVER_BYTES)
+    g["count"].value  = vec["count"]
+    g["stand"].value  = vec["standings"]
+    g["season"].value = 1
+    # Bind the territory cell grid to our overworld copy so set_cell_type's
+    # type writes feed the c093→c278 developable checks, exactly as retail's
+    # shared 0x522f90 region does.
+    lib.engine_territory_bind_cells(ctypes.addressof(g["over"]))
+    lib.engine_realm_spread_development()
+    lib.engine_territory_bind_cells(None)
+    return {"army": list(bytes(g["army"])), "over": list(bytes(g["over"]))}
+
+
+def dev_spread_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_DEV_SPREAD, "regions": [
+        {"va": VA_PER_ARMY,   "len": REALM_ARMY_BYTES, "inject": list(vec["army"]), "read": True},
+        {"va": VA_MISC_1360,  "len": REALM_MISC_BYTES, "inject": list(vec["misc"]), "read": False},
+        {"va": VA_OVERWORLD,  "len": REALM_OVER_BYTES, "inject": list(vec["over"]), "read": True},
+        {"va": VA_SLOT_COUNT, "len": 4, "inject": list(_u32le(vec["count"])),     "read": False},
+        {"va": VA_SLOT_STAND, "len": 4, "inject": list(_u32le(vec["standings"])), "read": False},
+        {"va": VA_SLOT_SEASON,"len": 4, "inject": list(_u32le(1)),                "read": False},
+    ]}
+
+
+def diff_dev_spread(retail: dict, port: dict) -> list[str]:
+    bad = _diff_realm_region(retail, port["army"], VA_PER_ARMY,
+                             REALM_ARMY_STRIDE, 17, "army")
+    bad += _diff_realm_flat(retail, port["over"], VA_OVERWORLD, "over")
+    return bad
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -2606,6 +2874,12 @@ def run_diff(cfg_args) -> int:
     if "delayed_action" in enabled:
         test_plans.append(("delayed_action",
                            gen_delayed_action_vectors(cfg_args.vectors, rng)))
+    if "tax_approval" in enabled:
+        test_plans.append(("tax_approval",
+                           gen_tax_approval_vectors(cfg_args.vectors, rng)))
+    if "dev_spread" in enabled:
+        test_plans.append(("dev_spread",
+                           gen_dev_spread_vectors(cfg_args.vectors, rng)))
     # Pre-generate the rate-gate LUT — one per run, used by all
     # sim_sub_steps vectors so a re-run with the same seed produces
     # the same LUT (and thus the same retail-side gate decisions).
@@ -2704,7 +2978,9 @@ def run_diff(cfg_args) -> int:
             "hide_window":    True,
             "silent_audio":   True,
             "force_windowed": True,
-            "turbo":          False,        # no turbo — diff RPCs control time
+            "turbo":          True,         # turbo — fast boot/warmup; diff RPCs
+                                            # still script timeGetTime per-thread
+                                            # for the clock-sensitive targets
             "diff_test":      True,
         })
         device.resume(pid)
@@ -2731,7 +3007,7 @@ def run_diff(cfg_args) -> int:
         # below still calls install (which returns already_installed=true);
         # this is a no-op at the agent but keeps the per-target log shape.
         shared_freeze_targets = {"sim_sub_steps", "state_hash", "tile_expand",
-                                 "delayed_action"}
+                                 "delayed_action", "tax_approval", "dev_spread"}
         shared_freeze_installed = False
         if shared_freeze_targets & {n for (n, _) in test_plans}:
             fresp = script.exports_sync.install_sim_sub_steps_engine_freeze()
@@ -3192,6 +3468,76 @@ def run_diff(cfg_args) -> int:
                     if bad and int(retail.get("raced", 0)) != 0:
                         r.race_count += 1
                         bad = []
+                elif fn_name == "tax_approval":
+                    # FUN_0044bd9f: per-realm tax-policy → approval-modifier
+                    # pass.  Inject g_per_army_768 + g_player_strategic_352 +
+                    # the realm count; read back the mutated per-army block.
+                    # Engine freeze keeps the main thread out of the globals.
+                    port = run_port_tax_approval(lib, vec)
+                    plan = tax_approval_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"count": vec["count"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_tax_approval(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        # Compact the multi-KB region dumps; `bad` already
+                        # pinpoints the diverging realm record + byte offsets.
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"count": vec["count"]}
+                elif fn_name == "dev_spread":
+                    # FUN_0044bf7a: per-realm development-spread pass.  Inject
+                    # g_per_army_768 + g_misc_1360 + g_overworld_map + the realm
+                    # count / standings / season scalars; read back the mutated
+                    # per-army block + overworld map (the cell-type stamps).
+                    port = run_port_dev_spread(lib, vec)
+                    plan = dev_spread_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"count": vec["count"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_dev_spread(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"count": vec["count"], "standings": vec["standings"]}
                 else:
                     continue
                 if bad:
@@ -3317,7 +3663,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread",
                     help="comma-separated subset to test "
                          "(default: rng_step,fps_step,anim_cycle,frame_delta,"
                          "phase_ticks,input_state,sim_sub_steps,state_hash,"
