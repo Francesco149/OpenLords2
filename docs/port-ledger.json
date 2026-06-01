@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 516,
+  "tested": 518,
   "ported": 45,
-  "unported": 1886,
+  "unported": 1884,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 561,
-  "pct_touched": 22.9,
-  "pct_tested": 21.1,
+  "touched": 563,
+  "pct_touched": 23.0,
+  "pct_tested": 21.2,
   "bytes_total": 838629,
-  "bytes_touched": 228291,
-  "pct_bytes_touched": 27.2
+  "bytes_touched": 229121,
+  "pct_bytes_touched": 27.3
  },
  "orphan_refs": [
   "0x004148",
@@ -581,6 +581,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_hud_menubar.c",
+    "src/engine_hud_menubar.h",
     "src/gfx_wrap.c",
     "src/gfx_wrap.h"
    ]
@@ -837,6 +839,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_hud_menubar.c",
     "src/gfx_dispatch.c",
     "src/gfx_dispatch.h"
    ]
@@ -1499,6 +1502,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_hud_menubar.c",
+    "src/engine_hud_menubar.h",
     "src/gfx_dispatch.h",
     "src/gfx_sprite_render.c",
     "src/gfx_sprite_render.h",
@@ -2951,16 +2956,22 @@
    "name": "FUN_0041a900",
    "size": 615,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_menubar.c",
+    "src/engine_hud_menubar.h"
+   ]
   },
   {
    "va": "0x41ab67",
    "name": "FUN_0041ab67",
    "size": 215,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_menubar.c",
+    "src/engine_hud_menubar.h"
+   ]
   },
   {
    "va": "0x41ac3e",

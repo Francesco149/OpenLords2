@@ -13,6 +13,7 @@
 #include "gfx_sprite.h"
 #include "gfx_line.h"
 #include "gfx_text.h"
+#include "gfx_text_label.h"
 #include "gfx_wrap.h"
 #include "font_metrics.h"
 
@@ -132,6 +133,92 @@ void engine_hud_menubar_render_chrome(const uint8_t *chrome_sheet,
     /* The File/Options/Help labels (no item hovered in the static frame). */
     engine_hud_menubar_labels(menu_table, 3, 0,
                               menu_font, glyph_table, glyph_metrics, loc, 0x3f);
+}
+
+/* Per-realm record layout inside g_player_strategic_352 (retail
+ * DAT_0057bf00), stride 0x160 — only the fields FUN_00419c78's status
+ * tail reads. */
+#define HUD_REALM_STRIDE   0x160
+#define HUD_REALM_FILTER   0x00    /* int32; flag drawn only when < 999 */
+#define HUD_REALM_ACTIVE   0x04    /* byte;  nonzero ⇒ realm in play     */
+#define HUD_REALM_FLAGID   0x0a    /* byte;  +0x55 = flag sprite index   */
+#define HUD_REALM_GOLD     0x118   /* int32; crowns (retail DAT_0057c018) */
+
+void engine_hud_menubar_render_status(const engine_hud_menubar_status_t *st,
+                                      const uint8_t *flag_sheet,
+                                      const uint8_t *font,
+                                      const uint8_t *glyph_table,
+                                      localization_state_t *loc)
+{
+    const uint8_t *block = st->realm_block;
+    if (!block) {
+        return;
+    }
+
+    /* FUN_00419c78: the per-realm flag shields (gated on DAT_0057c8fc==0).
+     * Realms 1..5; draw a 16-px-wide flag for every active realm whose +0
+     * field is < 999, packed left-to-right from x=0x10e (270), y=4. */
+    if (st->hud_gate == 0 && flag_sheet) {
+        int drawn = 0;
+        for (int realm = 1; realm < 6; realm++) {
+            const uint8_t *r = block + realm * HUD_REALM_STRIDE;
+            int32_t filter = (int32_t)rd32(r + HUD_REALM_FILTER);
+            if (r[HUD_REALM_ACTIVE] != 0 && filter < 999) {
+                int idx = r[HUD_REALM_FLAGID] + 0x55;
+                /* FUN_0040a21a(misc_cty, idx, x, 4): its success arm is
+                 * byte-identical to gfx_dispatch_sprite (FUN_00404442) —
+                 * the bounds-check / error-log arms never fire for a valid
+                 * sheet + sprite index, so the dispatcher stands in 1:1. */
+                gfx_dispatch_sprite(flag_sheet, idx, drawn * 0x10 + 0x10e, 4);
+                drawn++;
+            }
+        }
+    }
+
+    /* Year + season (gated on DAT_0057c8fc==0). */
+    if (st->hud_gate == 0) {
+        /* FUN_0041a900(year, 0x168, 6, 3) — mode 3 renders the (signed)
+         * number with a leading-space prefix and a single-space suffix
+         * (DAT_004d41ec / DAT_004d41f0 are both " ").  Retail zeroes the
+         * line-x accumulator (DAT_005cd404) at 41a900 entry so it measures
+         * just this number's advance for the season's relative x. */
+        gfx_text_set_line_x_acc(0);
+        if (st->year < 0) {
+            gfx_text_label_render_dec(-st->year, ' ', " ", 0x168, 6,
+                                      font, glyph_table, 0x3f);
+        } else {
+            gfx_text_label_render_dec(st->year, ' ', " ", 0x168, 6,
+                                      font, glyph_table, 0x3f);
+        }
+        /* FUN_00402d37(0x1d, season, DAT_005cd404 + 0x16c, 6, font, 0x3f):
+         * the season name (loc group 0x1d, sub = season index) follows the
+         * year at +0x16c past the year's measured advance. */
+        int year_adv = gfx_text_line_x_acc();
+        gfx_wrap_localized_line(loc, 0x1d, st->season, year_adv + 0x16c, 6,
+                                font, glyph_table, 0x3f);
+    }
+
+    /* Gold "N Crowns." — ALWAYS drawn (not gated in retail).
+     * FUN_0041ab67(gold, 0, 500, 6, font, 0x3f): the number with a blank
+     * '@' sign placeholder and an empty suffix (DAT_004d41f4 = ""), then
+     * loc group 8 — sub 0 ("Crown.") for ±1, sub 1 ("Crowns.") otherwise —
+     * at x = 500 + the number's advance.  (41ab67's save/restore of
+     * DAT_005cd404 has no consumer here, so it is elided.) */
+    {
+        int gold = (int)rd32(block + st->current_realm * HUD_REALM_STRIDE
+                             + HUD_REALM_GOLD);
+        gfx_text_set_line_x_acc(0);
+        gfx_text_label_render_dec(gold, '@', "", 500, 6,
+                                  font, glyph_table, 0x3f);
+        int gold_adv = gfx_text_line_x_acc();
+        int sub = (gold == 1 || gold == -1) ? 0 : 1;
+        gfx_wrap_localized_line(loc, 8, sub, 500 + gold_adv, 6,
+                                font, glyph_table, 0x3f);
+    }
+
+    /* FUN_004527a6(0xeb, 0, 0x1a, 2, 1) — a dirty-rect mark for the status
+     * strip; the offscreen compose path tracks dirty regions at the shim
+     * level, so it is elided (same as the labels' 4527a6 tail). */
 }
 
 int16_t *engine_hud_menubar_default_table(int16_t buf[24])

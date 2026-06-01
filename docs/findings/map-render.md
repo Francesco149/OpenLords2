@@ -693,6 +693,62 @@ flag loop are left unported (cited as bare hex) until that state lands.  5 host
 tests (tile cycling/origin/abort/null + table layout); File/Options/Help label
 rendering is validated by the render-parity harness, not re-stubbed.
 
+## Strategic-map menu bar — REALM-STATUS TAIL PORTED 2026-06-01
+
+The data-dependent tail of `FUN_00419c78` (deferred above for lack of game
+state) is now ported and **rendered from the natively-loaded save** in
+`--strat-load`.  The save-load path populates exactly the globals it reads:
+`g_player_strategic_352` (entry 3, the 6×0x160 per-player block), `s_slot_00553edc`
+(year, entry 20), `s_slot_0057c934` (season, entry 23), `s_slot_0057c8cc`
+(current realm, entry 72), `s_slot_0057c8fc` (HUD gate, entry 14).
+
+**Port** = `engine_hud_menubar_render_status` (engine_hud_menubar.c), composing
+already-ported leaves — no new blitter/text primitives were needed:
+
+| retail piece                         | port leaf used                              |
+|--------------------------------------|---------------------------------------------|
+| flag draw `FUN_0040a21a`             | `gfx_dispatch_sprite` (= FUN_00404442)      |
+| year/gold number `FUN_0041a900` m3 / `FUN_0041ab67` | `gfx_text_label_render_dec` (FUN_00402f64) |
+| season + " Crowns." `FUN_00402d37`   | `gfx_wrap_localized_line`                   |
+
+Key facts pinned during the port:
+- **`FUN_0040a21a` ≡ `gfx_dispatch_sprite` (FUN_00404442) + bounds-check
+  logging.**  The success arm of 40a21a is byte-identical to 404442 (same
+  descriptor staging, clip setup `FUN_0040464c/477b`, source-offset adjust
+  `+= width*DAT_0058feac + DAT_0058fd50`, then `FUN_004b446d/44d2/43b1`); the
+  error arms only fire on a NULL sheet / out-of-range offset, which a valid
+  misc_cty.pl8 + sprite index never trips.  Flag sprite = `realm[+0x0a] + 0x55`
+  off the misc_cty sheet (`DAT_005530c8` → `engine_pl8_misc_cty()`).
+- **Flag-loop filter:** realms 1..5, drawn when `realm[+0x04] != 0` (active) &&
+  `*(int*)realm[+0x00] < 999`, packed L→R from x=0x10e (270), y=4.
+- **Format strings `DAT_004d41d4..f0` are all the single space `" "`**
+  (r2-dumped); the gold number suffix `DAT_004d41f4` is empty — " Crowns."
+  comes from loc group 8 (sub 0 "Crown." for ±1, sub 1 "Crowns." otherwise).
+- **`line_x_acc` (`DAT_005cd404`) is a relative advance accumulator** —
+  `gfx_text_render_line` draws at the passed `cursor_x` but adds each glyph's
+  width to `line_x_acc` (plus a trailing `+4`).  41a900/41ab67 zero it, render
+  the number, then place the following string at `base + line_x_acc`.  Gold
+  field = `realm[current_realm].+0x118` (retail `DAT_0057c018`).
+
+**Validation — PIXEL-PERFECT (0 px) vs the immediate-load retail frame.**
+`--strat-load` logs `status — realm=1 gate=0 year=1268 season=4 gold=1000`,
+matching retail byte-for-byte, and the rendered status region (x260-640, y0-24:
+5 flag shields red/gold/black/magenta/blue + "1268" + "Winter" + "1000 Crowns.")
+diffs **0/9120 px** against `runs/capture/load_clean_dump/frames/frame_00000.bmp`.
+
+**GROUND-TRUTH NOTE — use an IMMEDIATE-load frame, not the deep warmup.**  The
+flag *count* is a timing tell, the same warmup caveat as the +7 region→owner
+remap: an immediate-load capture (`load_clean_dump`, `load_at_30`) shows all
+**5** realm shields (the 5-realm game at turn start), whereas the deeper-warmup
+`load_clean_32` (~32 s of turbo) has collapsed to **1** shield even though its
+year/gold are unchanged.  The port renders the immediate-load state, so validate
+against `load_clean_dump` (5 shields), not `load_clean_32` (1).  The retail
+`.pal` files are NOT interchangeable for the shields — palette-applying a
+mismatched capture's `.pal` to the port's 8bpp raw recolours the shields
+(blue↔red etc.); compare the port's own presented `port_strat.bmp` against the
+matching capture instead.  The "5000 Crowns" in the older menu-bar note was a
+new-game spray value; `lastturn.sav` is 1000 Crowns / year 1268 / Winter.
+
 ## Native data path (load route) — FOUNDATION + the descriptor-finalize gap (2026-06-01)
 
 Goal: make the drop-in produce the strategic-map render arrays itself

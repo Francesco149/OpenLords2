@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **561** (22.9%) — tested 516, ported 45
-- code bytes touched: **27.2%** (228,291 / 838,629 B)
-- unported: **1886**
+- touched: **563** (23.0%) — tested 518, ported 45
+- code bytes touched: **27.3%** (229,121 / 838,629 B)
+- unported: **1884**
 - orphan refs (in src/, not in function table): 4
 
-## tested (516) — ported + host unit suite
+## tested (518) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -68,7 +68,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x402a14 | FUN_00402a14 | 514 | gfx_dispatch.c, gfx_dispatch.h, gfx_glyph.h (+1) |
 | 0x402c16 | FUN_00402c16 | 72 | gfx_text.c, gfx_text.h |
 | 0x402c5e | FUN_00402c5e | 217 | engine_title_render.c, gfx_wrap.c, gfx_wrap.h |
-| 0x402d37 | FUN_00402d37 | 213 | gfx_wrap.c, gfx_wrap.h |
+| 0x402d37 | FUN_00402d37 | 213 | engine_hud_menubar.c, engine_hud_menubar.h, gfx_wrap.c (+1) |
 | 0x402e0c | FUN_00402e0c | 344 | gfx_text_label.c, gfx_text_label.h |
 | 0x402f64 | FUN_00402f64 | 177 | gfx_text_label.c, gfx_text_label.h |
 | 0x403015 | FUN_00403015 | 177 | gfx_text_label.c, gfx_text_label.h |
@@ -88,7 +88,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x403ee4 | FUN_00403ee4 | 249 | gfx_line.c, gfx_line.h |
 | 0x403fdd | FUN_00403fdd | 249 | engine_hud_menubar.c, engine_hud_menubar.h, gfx_line.c (+1) |
 | 0x40437d | FUN_0040437d | 197 | gfx_caret.c, gfx_caret.h, gfx_line.c (+1) |
-| 0x404442 | FUN_00404442 | 256 | gfx_dispatch.c, gfx_dispatch.h |
+| 0x404442 | FUN_00404442 | 256 | engine_hud_menubar.c, gfx_dispatch.c, gfx_dispatch.h |
 | 0x404547 | FUN_00404547 | 256 | gfx_dispatch.c, gfx_dispatch.h |
 | 0x40464c | FUN_0040464c | 303 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h (+2) |
 | 0x40477b | FUN_0040477b | 291 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h (+1) |
@@ -125,7 +125,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4097c5 | FUN_004097c5 | 367 | gfx_panel.c, gfx_panel.h |
 | 0x409e09 | FUN_00409e09 | 368 | engine_hud_menubar.c, engine_hud_menubar.h |
 | 0x40a01d | FUN_0040a01d | 261 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
-| 0x40a21a | FUN_0040a21a | 433 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h (+1) |
+| 0x40a21a | FUN_0040a21a | 433 | engine_hud_menubar.c, engine_hud_menubar.h, gfx_dispatch.h (+3) |
 | 0x40a3d0 | FUN_0040a3d0 | 402 | gfx_sprite_render.c, gfx_sprite_render.h, gfx_sprite_rle.h |
 | 0x40a567 | FUN_0040a567 | 283 | gfx_glyph.c, gfx_glyph.h, gfx_sprite.c (+3) |
 | 0x40a682 | FUN_0040a682 | 391 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
@@ -146,6 +146,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4148e4 | FUN_004148e4 | 264 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x4149ec | FUN_004149ec | 1050 | engine_title_render.c, engine_title_render.h, gfx_sprite.c (+1) |
 | 0x419c78 | FUN_00419c78 | 682 | engine_hud_menubar.c, engine_hud_menubar.h, main.c |
+| 0x41a900 | FUN_0041a900 | 615 | engine_hud_menubar.c, engine_hud_menubar.h |
+| 0x41ab67 | FUN_0041ab67 | 215 | engine_hud_menubar.c, engine_hud_menubar.h |
 | 0x41e61d | FUN_0041e61d | 452 | engine_title_render.c, engine_title_render.h, gfx.c (+2) |
 | 0x41e7e1 | FUN_0041e7e1 | 385 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x41ea14 | FUN_0041ea14 | 143 | engine_title_render.c, engine_title_render.h |

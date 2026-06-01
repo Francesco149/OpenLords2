@@ -1823,8 +1823,10 @@ static void bringup_strat_load(const char *dir)
              engine_map_terrain_oob_copies(),
              engine_map_terrain_error_count());
 
-    /* Menu-bar chrome (state-free; the data-dependent tail is still
-     * deferred — see engine_hud_menubar.h). */
+    /* Menu-bar chrome + the data-dependent realm-status tail (flags / year
+     * / season / gold).  The status values come from the natively-loaded
+     * save (g_player_strategic_352 + the season/year/realm slot globals) —
+     * the load path now populates exactly the state FUN_00419c78 reads. */
     {
         const uint8_t *chrome = gfx_load_chrome_sheet();
         const uint8_t *font   = gfx_load_menu_font();
@@ -1840,6 +1842,22 @@ static void bringup_strat_load(const char *dir)
             engine_hud_menubar_render_chrome(
                 chrome, font, gfx_glyph_render_map(), gfx_glyph_measure_map(),
                 &loc, engine_hud_menubar_default_table(menu_tbl));
+
+            engine_hud_menubar_status_t status;
+            status.realm_block   = g_player_strategic_352;
+            status.current_realm = (int)s_slot_0057c8cc;
+            status.hud_gate      = (int)s_slot_0057c8fc;
+            status.year          = (int)s_slot_00553edc;
+            status.season        = (int)s_slot_0057c934;
+            int gold = (int)( g_player_strategic_352[status.current_realm * 0x160 + 0x118]
+                            | g_player_strategic_352[status.current_realm * 0x160 + 0x119] << 8
+                            | g_player_strategic_352[status.current_realm * 0x160 + 0x11a] << 16
+                            | g_player_strategic_352[status.current_realm * 0x160 + 0x11b] << 24);
+            log_line("strat-load: status — realm=%d gate=%d year=%d season=%d gold=%d",
+                     status.current_realm, status.hud_gate, status.year,
+                     status.season, gold);
+            engine_hud_menubar_render_status(&status, engine_pl8_misc_cty(),
+                                             font, gfx_glyph_render_map(), &loc);
         }
     }
 
