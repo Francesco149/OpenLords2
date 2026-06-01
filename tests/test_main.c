@@ -1790,6 +1790,14 @@ struct test_case {
     X(engine_upkeep_pay_escalation_and_disband) \
     X(engine_upkeep_morale_sweep) \
     \
+    X(army_ai_seed_workforce_ratios) \
+    X(army_ai_advance_tier_nonpositive_noop) \
+    X(army_ai_advance_tier_step_by_multiple) \
+    X(army_ai_advance_tier_clamps_to_five) \
+    X(army_ai_advance_tier_approval_caps_at_100) \
+    X(army_ai_consume_build_demand) \
+    X(army_ai_consume_build_demand_gates) \
+    \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \
     X(engine_ranking_score_weights) \

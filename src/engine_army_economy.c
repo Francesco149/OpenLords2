@@ -168,6 +168,25 @@ int engine_army_economy_stockpile_value(int key)
     return value;
 }
 
+/* FUN_0044e6a3 (158 B).  The "appraisal" valuation the AI tax-rate sweep
+ * (FUN_004a4782) weighs a realm's gold needs against: stock A (+0x250) valued at
+ * BOTH price A and price B, plus the provision-raw field (+0x224) valued at
+ * price C — each term added only when its field is > 0.  Distinct from
+ * engine_army_economy_stockpile_value (which prices the +0x250/+0x184/+0x180
+ * stockpiles).  0 when the army-record block is unbound. */
+int engine_army_economy_appraisal_value(int key)
+{
+    if (g_army_records == NULL) return 0;
+
+    int value = 0;
+    int a = stock(key, ARMY_STOCK_A);
+    if (a > 0) value  = a * g_price_a;
+    if (a > 0) value += a * g_price_b;
+    int p = stock(key, ARMY_PROVISION_RAW);
+    if (p > 0) value += p * g_price_c;
+    return value;
+}
+
 /* Ceil-divide a positive gold budget into unit count at `price`; retail checks
  * cost < 1 first so the divisor is only hit for cost >= 1 (price always > 0
  * under the shipped config). */

@@ -43,6 +43,12 @@ int engine_army_economy_stock_a_value(int key);
  * inlines it rather than calling, and so do we. */
 int engine_army_economy_stockpile_value(int key);
 
+/* Port of FUN_0044e6a3 (158 B).  The "appraisal" valuation the AI tax-rate
+ * sweep (FUN_004a4782) uses: stock A (+0x250) valued at BOTH price A and
+ * price B, plus provision-raw (+0x224) valued at price C — each term added
+ * only when its field is > 0.  0 if the army-record block is unbound. */
+int engine_army_economy_appraisal_value(int key);
+
 /* Port of FUN_0044e603 (80 B).  Number of commodity-B units a gold budget
  * `cost` buys: ceil(cost / priceB), or 0 when cost <= 0.  `key` is accepted to
  * mirror the retail 2-arg call ABI but is ignored (the divisor is the global
