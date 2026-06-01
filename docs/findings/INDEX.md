@@ -18,6 +18,7 @@ session — they outlive the conversation context.
 | [winmain-and-bootstrap.md](winmain-and-bootstrap.md) | WinMain & bootstrap chain — window creation, class registration |
 | [wndproc.md](wndproc.md) | WndProc message handler (`FUN_004b29be`) |
 | [main-loop-tick.md](main-loop-tick.md) | Main loop & per-tick dispatch |
+| [per-realm-ai.md](per-realm-ai.md) | Per-realm AI economic-management subsystem (turn driver's first call, `FUN_0049a990`) |
 | [render-rate-limiter.md](render-rate-limiter.md) | Render rate-limiter + dirty-rect tracker |
 
 ## Graphics / DDraw (PLAN §3, §5)
