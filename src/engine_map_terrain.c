@@ -24,6 +24,13 @@
  * docs/findings/map-render.md "drawer B". */
 #include "gen/drawb_table_453e71.h"
 
+/* Drawer-B kind-3/kind-4/edge-phase siblings (branch-B flat strip, param_5=0).
+ * Pyramid branch A is dead (param_4=col_y_accum >> count); the flat strip is
+ * the live path.  See tools/extract_drawb_stripB.py + map-render.md "drawer B". */
+#include "gen/drawb_stripb_455f04.h"   /* kind 2, phase 3 (left edge) */
+#include "gen/drawb_stripb_4580a9.h"   /* kind 3, phase 0/1 (aligned) */
+#include "gen/drawb_stripb_459258.h"   /* kind 4, phase 0/1 (aligned) */
+
 /* ──────────────────────────────────────────────────────────────────
  * Bound state — retail DAT_* globals this cluster touches.
  * ────────────────────────────────────────────────────────────────── */
@@ -281,6 +288,39 @@ static void drawb_strip(const drawb_copy_t *tbl, int n,
     }
 }
 
+/* Flat branch-B strip replay for the kind-3/4 + edge-phase siblings of
+ * 453e71 (FUN_00455f04 / 004580a9 / 00459258).  Each draws a flat single-row
+ * strip per row with the dst pointer decremented one scanline FIRST (so row r
+ * → base - (r+1)*pitch) and the src base advanced `stride` per row; the table
+ * already folds in init_off + pcVar4 aliasing.  No depth gating — the diamond
+ * shape comes from the dst_off spread + zero-skip transparency.  Same dead-
+ * pyramid reasoning as drawb_strip: the loop runs `count` rows while row<col_y
+ * (always, since col_y ≈ 105-300 ≫ count). */
+static void drawb_strip_flat(const drawb_flat_t *tbl, int n, int stride,
+                             const uint8_t *blob, int blob_len,
+                             int src_off2, int count, int col_y)
+{
+    uint8_t *canvas = gfx_paint_canvas_pixels();
+    int pitch = gfx_paint_canvas_width();
+    long canvas_len = (long)pitch * gfx_paint_canvas_height();
+    if (!canvas || !blob) return;
+    long base = (long)gfx_glyph_cursor_x() + (long)gfx_glyph_cursor_y() * pitch;
+
+    for (int row = 0; row < count; row++) {
+        if (row >= col_y) break;            /* corrected guard (never bites) */
+        long src_row = (long)src_off2 + (long)row * stride;
+        long dst_row = base - (long)(row + 1) * pitch;
+        for (int i = 0; i < n; i++) {
+            long s = src_row + tbl[i].src_idx;
+            long d = dst_row + tbl[i].dst_off;
+            if (s < 0 || (blob_len > 0 && s >= blob_len)) { g_n_oob++; continue; }
+            if (d < 0 || d >= canvas_len) { g_n_oob++; continue; }
+            uint8_t v = blob[s];
+            if (v != 0) canvas[d] = v;       /* zero-skip transparency */
+        }
+    }
+}
+
 /* Read drawer-B sprite-directory fields (retail FUN_00406673 staging):
  * src_off @ entry+0xc, kind @ entry+0x14, count @ entry+0x15. */
 static void drawb_dir(const uint8_t *blob, int idx,
@@ -327,13 +367,35 @@ static void drawer_b(int phase)
 
     int src_off2 = src_off + 900;            /* view-mode-0 overhang offset */
 
-    /* phase 3 → left-edge variant; phase 4 → right-edge; else aligned. */
-    if (kind == 2 && (phase == 0 || phase == 1)) {
+    /* Dispatch mirrors retail FUN_00406673 (view-mode 0).  Phase 0/1 = aligned
+     * (param_5=0); phase 3 = left edge, phase 4 = right edge.  Ported variants:
+     *   kind 2 phase 0/1 → 453e71 (pyramid replay), phase 3 → 455f04
+     *   kind 3 phase 0/1 → 4580a9 (param_5=0)
+     *   kind 4 phase 0/1 → 459258 (param_5=0)
+     * Edge-phase kind-3/4 (param_5=2) + kind-2 phase-4 (456fd8) are not yet
+     * ported — counted as skipped (don't appear in the strat-terrain1 frame). */
+    int aligned = (phase == 0 || phase == 1);
+    if (kind == 2 && aligned) {
         drawb_strip(k_drawb_453e71, k_drawb_453e71_n, blob, g_blob_len[bi],
                     src_off2, count, g_col_y_accum);
         g_n_drawb++;
+    } else if (kind == 2 && phase == 3) {
+        drawb_strip_flat(k_drawb_stripb_455f04, k_drawb_stripb_455f04_n,
+                         k_drawb_stripb_455f04_stride, blob, g_blob_len[bi],
+                         src_off2, count, g_col_y_accum);
+        g_n_drawb++;
+    } else if (kind == 3 && aligned) {
+        drawb_strip_flat(k_drawb_stripb_4580a9, k_drawb_stripb_4580a9_n,
+                         k_drawb_stripb_4580a9_stride, blob, g_blob_len[bi],
+                         src_off2, count, g_col_y_accum);
+        g_n_drawb++;
+    } else if (kind == 4 && aligned) {
+        drawb_strip_flat(k_drawb_stripb_459258, k_drawb_stripb_459258_n,
+                         k_drawb_stripb_459258_stride, blob, g_blob_len[bi],
+                         src_off2, count, g_col_y_accum);
+        g_n_drawb++;
     } else {
-        g_n_drawb_skipped++;   /* kind 3/4 or edge phase — not yet ported */
+        g_n_drawb_skipped++;   /* edge-phase kind 3/4 / kind-2 phase-4 — TODO */
     }
 }
 

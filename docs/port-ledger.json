@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 500,
-  "ported": 46,
-  "unported": 1901,
+  "ported": 49,
+  "unported": 1898,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 546,
-  "pct_touched": 22.3,
+  "touched": 549,
+  "pct_touched": 22.4,
   "pct_tested": 20.4,
   "bytes_total": 838629,
-  "bytes_touched": 210459,
-  "pct_bytes_touched": 25.1
+  "bytes_touched": 223671,
+  "pct_bytes_touched": 26.7
  },
  "orphan_refs": [
   "0x004148",
@@ -10846,8 +10846,11 @@
    "name": "FUN_00455f04",
    "size": 4308,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_stripb_455f04.h"
+   ]
   },
   {
    "va": "0x456fd8",
@@ -10862,16 +10865,20 @@
    "name": "FUN_004580a9",
    "size": 4527,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gen/drawb_stripb_4580a9.h"
+   ]
   },
   {
    "va": "0x459258",
    "name": "FUN_00459258",
    "size": 4377,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gen/drawb_stripb_459258.h"
+   ]
   },
   {
    "va": "0x45a371",

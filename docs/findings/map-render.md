@@ -432,3 +432,53 @@ the residual is features + pass-2 overlay, i.e. the *other two clusters*, not
 pass 1. **Corrected next step: compose all three clusters (pass-1 base ✓ +
 pass-2 overlay + the ported feature walker) and diff — that should leave only
 HUD chrome (menu bar + right realm panel) as the gap.**
+
+### DRAWER-B OVERHANG COMPLETE (2026-06-01) — kind-3/4 + kind-2 phase-3 ported, drawB_skip → 0
+
+Supersedes the "draws NOTHING" CORRECTION above (that was a pixel-sample
+artefact; zoom-diff later showed drawer B *does* draw the tall-sprite overhang —
+see the r2-corrected-guard finding). The full drawer-B family is now ported:
+
+* **kind 2, phase 0/1** → `FUN_00453e71` (pyramid branch-A table replay,
+  `extract_drawb_table.py` → `drawb_table_453e71.h`). Landed earlier.
+* **kind 2, phase 3** → `FUN_00455f04`
+* **kind 3, phase 0/1** → `FUN_004580a9` (param_5=0)
+* **kind 4, phase 0/1** → `FUN_00459258` (param_5=0)
+
+**Key RE finding — the PYRAMID (branch A) is dead; the flat STRIP (branch B) is
+the live path.** Every drawer-B blitter has the shape
+`do { if (param_4 <= iVar) { <pyramid>; break; } dst -= pitch; <flat strip>;
+src += stride; iVar++; } while (iVar < count);`. r2-verified the guard on all
+four (`vendor/original/Lords2.exe`): `cmp ebx,ecx; jle <pyramid>` with
+ebx=param_4=`DAT_0056957c` (col_y_accum, 105-300) and ecx=iVar (0..count,
+count<0xc9 but 3-17 in practice). Since `param_4 >> count`, `jle` never fires →
+the pyramid never runs → the **flat strip runs exactly `count` times**. So
+porting branch B is faithful to the live path (and far simpler than branch A's
+multi-pointer / horizontal-step pyramid that the earlier session-notes feared).
+
+**Branch-B replay** (`drawb_strip_flat` in `engine_map_terrain.c`): the dst
+pointer is decremented one scanline *before* the first copy, so row r writes at
+`base - (r+1)*pitch`; src base advances `stride` per row (455f04: 0x3a; 4580a9 /
+459258: 0x1e). No depth gating — each row draws the full strip; the diamond
+shape comes from the dst_off spread + zero-skip transparency. The dispatcher
+`FUN_00406673` selects blitter by (kind=`DAT_00591568`, phase=param_3,
+view-mode=`DAT_0057cb18`) and the `param_5` left-edge shift (2 for edge phases
+3/4, 0 for aligned 0/1).
+
+**Table extraction:** `tools/extract_drawb_stripB.py` parses branch B (from the
+unique `dst = dst + -DAT_004eb274;` line to `} while`) into flat
+`{src_idx, dst_off}` tables, folding `init_off` (459258's `+0x1c`) and the
+`pcVar4 = pcVar3 + 2` aliasing into dst_off for the param_5=0 variant →
+`src/gen/drawb_stripb_{455f04,4580a9,459258}.h`. Regenerate with
+`nix develop -c python3 tools/extract_drawb_stripB.py 455f04 4580a9 459258`.
+
+**Validated** (`tools/scene_render_parity.py` vs clean truth
+`strat-spray1/frame_00009.bmp`): `drawB=29 drawB_skip=0 oob=0 err=0`,
+**99.37% excl menu bar** (was 99.19% with the 6 cells skipped). User confirmed
+the **town centre / lumberjack overhang is now 1:1**. Residual diff is the
+known sparse ~1px cattle-edge speckle (a separate issue — see memory
+`feedback_zoom_dont_sample` lead #1) plus the unported menu bar / realm panel.
+
+**Still unported** (don't appear in the strat-terrain1 frame, counted as
+drawB_skip if hit): edge-phase kind-3/4 (param_5=2 variants of 4580a9/459258)
+and kind-2 phase-4 `FUN_00456fd8`, plus all view-mode 1/2 arms.

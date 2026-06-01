@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **546** (22.3%) — tested 500, ported 46
-- code bytes touched: **25.1%** (210,459 / 838,629 B)
-- unported: **1901**
+- touched: **549** (22.4%) — tested 500, ported 49
+- code bytes touched: **26.7%** (223,671 / 838,629 B)
+- unported: **1898**
 - orphan refs (in src/, not in function table): 4
 
 ## tested (500) — ported + host unit suite
@@ -522,7 +522,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4beed4 | FUN_004beed4 | 805 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 
-## ported (46) — reimplemented, no host test yet
+## ported (49) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -552,6 +552,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x45337b | FUN_0045337b | 1403 | engine_map_terrain.c, engine_map_terrain.h, blit_table_45337b.h |
 | 0x4538f6 | FUN_004538f6 | 1403 | engine_map_terrain.c, engine_map_terrain.h, blit_table_4538f6.h |
 | 0x453e71 | FUN_00453e71 | 8339 | engine_map_terrain.c, drawb_table_453e71.h |
+| 0x455f04 | FUN_00455f04 | 4308 | engine_map_terrain.c, drawb_stripb_455f04.h |
+| 0x4580a9 | FUN_004580a9 | 4527 | drawb_stripb_4580a9.h |
+| 0x459258 | FUN_00459258 | 4377 | drawb_stripb_459258.h |
 | 0x4782c5 | FUN_004782c5 | 340 | engine.c |
 | 0x481b9a | FUN_00481b9a | 1399 | engine.c |
 | 0x482111 | FUN_00482111 | 476 | engine.c |
