@@ -34,6 +34,14 @@
 #include "gen/pl8_table.h"
 #include "save_schema_globals.h"
 
+#include "engine_dirty_rect.h"
+#include "engine_map_render.h"
+#include "engine_map_scene.h"
+#include "engine_map_terrain.h"
+#include "engine_overlay_render.h"
+#include "gfx_dispatch.h"
+#include "gfx_paint.h"
+
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -71,6 +79,13 @@ int io_read_file_at(const char *path, void *buf, size_t len, long offset)
     }
     OS_CLOSE(fd);
     return got;
+}
+
+static const char *path_in(const char *dir, const char *name)
+{
+    static char buf[1280];
+    snprintf(buf, sizeof buf, "%s/%s", dir, name);
+    return buf;
 }
 
 static uint8_t *slurp(const char *path, size_t *len_out)
@@ -161,6 +176,202 @@ int test_engine_pl8_banks_match_captured_blobs(void)
     }
 
     engine_pl8_free_strategic_banks();
+    return rc;
+}
+
+/* ── End-to-end integration: native-loaded banks render the same frame ──
+ *
+ * The byte-match test proves the loaded bank BYTES equal retail's; this
+ * proves the loaded banks, fed to the actual renderer with the loader's
+ * `bytes-read` blob lengths (tighter than the capture's heap over-read
+ * lengths the scene harness uses), produce a PIXEL-IDENTICAL strategic-
+ * map frame.  The terrain blitter gates each copy on the blob length
+ * (`s + sz > blob_len` → skip), so a too-short length would silently
+ * drop sprites — this asserts it does not (no real sprite data lives
+ * past the .pl8 file end).
+ *
+ * Renders the composed 3-cluster scene (engine_map_scene_render_body,
+ * FUN_004050f6) into a canvas with the captured strat-terrain1 scalars,
+ * once with the dump blobs + dump lengths and once with the engine_pl8
+ * banks + bytes-read lengths, and compares the two canvases.
+ */
+enum { SCENE_W = 0x280, SCENE_H = 0x1e0 };   /* 640 x 480 */
+
+/* Captured strat-terrain1 scalars (globals_dump.json). */
+static const int SC_cam_x0 = 0,  SC_cam_y0 = 9,   SC_col_start = 31;
+static const int SC_row_start = 78, SC_col_count = 8, SC_row_count = 30;
+static const int SC_x_step = 60, SC_y_step = 15,  SC_x_half = 30;
+static const int SC_view = 0,    SC_render = 0,    SC_rot = 0;
+static const int SC_overlay_base = 0, SC_y_viewport = 30, SC_arrow_base = 0;
+
+/* Full 3-cluster scene render (mirror of tests/scene_render_harness.c)
+ * into `canvas`, using the supplied terrain blobs + lengths and feature
+ * blobs.  Returns the four draw-count stats packed for comparison. */
+static void render_scene(uint8_t *canvas,
+                         const uint8_t *b[5], const int blen[5],
+                         const uint8_t *prim, const uint8_t *alt,
+                         const uint8_t *ovl,
+                         const uint8_t *cells, const uint8_t *descr,
+                         const uint8_t *terr,  const uint8_t *army,
+                         int counts[5])
+{
+    memset(canvas, 0, (size_t)SCENE_W * SCENE_H);
+    gfx_paint_bind_canvas(canvas, SCENE_W, SCENE_H);
+
+    engine_map_terrain_bind_tile_array((const int32_t *)cells, 0x104);
+    engine_map_terrain_bind_descriptors(descr);
+    engine_map_terrain_bind_blobs(b[0], b[1], b[2], b[3], b[4]);
+    engine_map_terrain_set_blob_lengths(blen[0], blen[1], blen[2],
+                                        blen[3], blen[4]);
+    engine_map_terrain_bind_camera(SC_cam_x0, SC_cam_y0, SC_col_start,
+                                   SC_row_start, SC_col_count, SC_row_count,
+                                   SC_x_step, SC_y_step, SC_x_half);
+    engine_map_terrain_set_view_mode(SC_view);
+    engine_map_terrain_set_render_mode(SC_render);
+    engine_map_terrain_set_sky_gate_flag(0);
+    engine_map_terrain_set_error_count(0);
+    engine_map_terrain_reset_stats();
+
+    engine_dirty_rect_state_t dirty = {
+        .dirty_mark = 0,
+        .dirty_xmin = SCENE_W - 1, .dirty_xmax = 0,
+        .dirty_ymin = SCENE_H - 1, .dirty_ymax = 0,
+        .below_status_redraw = 0,
+    };
+    gfx_dispatch_set_alt_clip(0, 0, 0);
+
+    engine_overlay_render_bind_tile_array((const int32_t *)cells, 0x104);
+    engine_overlay_render_bind_tile_descriptors((uint8_t *)(uintptr_t)descr);
+    engine_overlay_render_bind_overlay_blob(ovl);
+    engine_overlay_render_bind_territory_records(terr);
+    engine_overlay_render_bind_army_records(army);
+    engine_overlay_render_bind_camera(SC_cam_x0, SC_cam_y0, SC_col_start,
+                                      SC_row_start, SC_col_count, SC_row_count,
+                                      SC_x_step, SC_y_step, SC_x_half);
+    engine_overlay_render_bind_canvas(canvas, SCENE_W, SCENE_H);
+    engine_overlay_render_set_dirty_state(&dirty);
+    engine_overlay_render_set_view_mode(SC_view);
+    engine_overlay_render_set_render_mode(SC_render);
+    engine_overlay_render_set_animation_tick(0);
+    engine_overlay_render_set_active_territory(0);
+    engine_overlay_render_set_dev_flags(0, 0);
+    engine_overlay_render_set_error_count(0);
+    engine_overlay_render_reset_call_counts();
+
+    engine_map_render_set_dirty_state(&dirty);
+    engine_map_render_bind_tile_array((const int32_t *)cells, 0x104);
+    engine_map_render_bind_tile_descriptors(descr);
+    engine_map_render_bind_territory_records(terr);
+    engine_map_render_bind_blobs(prim, alt, ovl);
+    engine_map_render_bind_camera(SC_cam_x0, SC_cam_y0, SC_col_start,
+                                  SC_row_start, SC_col_count, SC_row_count,
+                                  SC_x_step, SC_y_step, SC_x_half);
+    engine_map_render_set_view_mode(SC_view);
+    engine_map_render_set_render_mode(SC_render);
+    engine_map_render_set_rotation_offset(SC_rot);
+    engine_map_render_set_y_viewport_offset(SC_y_viewport);
+    engine_map_render_set_error_count(0);
+    engine_map_render_reset_call_count();
+
+    engine_map_scene_set_anim_counters(SC_overlay_base << 4,
+                                       SC_arrow_base << 4);
+    engine_map_scene_render_body();
+
+    counts[0] = engine_map_terrain_drawa_count();
+    counts[1] = engine_map_terrain_drawb_count();
+    counts[2] = engine_map_terrain_sky_count();
+    counts[3] = engine_overlay_render_army_call_count();
+    counts[4] = engine_map_render_call_count();
+}
+
+int test_engine_pl8_native_load_renders_identical_frame(void)
+{
+    const char *gamedir = getenv("OPENLORDS2_GAME_DIR");
+    if (!gamedir || !gamedir[0])
+        T_SKIP("OPENLORDS2_GAME_DIR unset (need retail .pl8 files)");
+
+    char dumpdir[1024];
+    snprintf(dumpdir, sizeof dumpdir,
+             "%s/runs/capture/strat-terrain1/dump", OPENLORDS2_ROOT);
+    struct stat st;
+    char probe[1280];
+    snprintf(probe, sizeof probe, "%s/terr_blob0.bin", dumpdir);
+    if (stat(probe, &st) != 0)
+        T_SKIP("capture dump missing (%s)", dumpdir);
+
+    /* Shared game state (NOT from .pl8 — these are the live map arrays). */
+    size_t cl, dl, tl, aml;
+    uint8_t *cells = slurp(path_in(dumpdir, "tile_cells.bin"), &cl);
+    uint8_t *descr = slurp(path_in(dumpdir, "descriptors.bin"), &dl);
+    uint8_t *terr  = slurp(path_in(dumpdir, "territory_records.bin"), &tl);
+    uint8_t *army  = slurp(path_in(dumpdir, "army_records.bin"), &aml);
+    if (!cells || !descr || !terr || !army)
+        T_FAIL("could not read captured game-state arrays");
+
+    /* Dump blobs (the scene harness's reference inputs) + over-read lens. */
+    size_t b0l, b1l, b2l, b3l, b4l, pl, al, ol;
+    uint8_t *d0 = slurp(path_in(dumpdir, "terr_blob0.bin"), &b0l);
+    uint8_t *d1 = slurp(path_in(dumpdir, "terr_blob1.bin"), &b1l);
+    uint8_t *d2 = slurp(path_in(dumpdir, "terr_blob2.bin"), &b2l);
+    uint8_t *d3 = slurp(path_in(dumpdir, "terr_blob3.bin"), &b3l);
+    uint8_t *d4 = slurp(path_in(dumpdir, "terr_blob4.bin"), &b4l);
+    uint8_t *dp = slurp(path_in(dumpdir, "blob_primary.bin"), &pl);
+    uint8_t *da = slurp(path_in(dumpdir, "blob_alt.bin"), &al);
+    uint8_t *doo = slurp(path_in(dumpdir, "blob_overlay.bin"), &ol);
+
+    /* Native load (season 1d / view 0, the captured frame's state). */
+    s_slot_0057c934 = 4;
+    s_slot_0057cb18 = 0;
+    if (!engine_pl8_load_strategic_banks(gamedir)) {
+        engine_pl8_free_strategic_banks();
+        T_FAIL("engine_pl8_load_strategic_banks failed");
+    }
+
+    static uint8_t canvas_dump[SCENE_W * SCENE_H];
+    static uint8_t canvas_pl8[SCENE_W * SCENE_H];
+    int counts_dump[5], counts_pl8[5];
+
+    const uint8_t *db[5] = { d0, d1, d2, d3, d4 };
+    int dlen[5] = { (int)b0l, (int)b1l, (int)b2l, (int)b3l, (int)b4l };
+    render_scene(canvas_dump, db, dlen, dp, da, doo,
+                 cells, descr, terr, army, counts_dump);
+
+    const uint8_t *nb[5];
+    int nlen[5];
+    for (int i = 0; i < 5; i++) {
+        nb[i] = engine_pl8_bank(i);
+        nlen[i] = (int)engine_pl8_bank_size(i);
+    }
+    render_scene(canvas_pl8, nb, nlen,
+                 engine_pl8_bank(5), engine_pl8_bank(6), engine_pl8_bank(7),
+                 cells, descr, terr, army, counts_pl8);
+
+    int rc = 0;
+    if (memcmp(canvas_dump, canvas_pl8, sizeof canvas_dump) != 0) {
+        size_t n = 0;
+        for (size_t k = 0; k < sizeof canvas_dump; k++)
+            if (canvas_dump[k] != canvas_pl8[k]) n++;
+        fprintf(stderr, "  fail: %zu/%zu pixels differ between dump-bound "
+                "and native-pl8-loaded renders\n", n, sizeof canvas_dump);
+        rc = 1;
+    }
+    for (int i = 0; i < 5; i++) {
+        if (counts_dump[i] != counts_pl8[i]) {
+            fprintf(stderr, "  fail: draw-count[%d] dump=%d pl8=%d\n",
+                    i, counts_dump[i], counts_pl8[i]);
+            rc = 1;
+        }
+    }
+    if (rc == 0)
+        fprintf(stderr, "  ok: native-loaded banks render byte-identical "
+                "(drawA=%d drawB=%d sky=%d army=%d feat=%d)\n",
+                counts_pl8[0], counts_pl8[1], counts_pl8[2],
+                counts_pl8[3], counts_pl8[4]);
+
+    engine_pl8_free_strategic_banks();
+    free(cells); free(descr); free(terr); free(army);
+    free(d0); free(d1); free(d2); free(d3); free(d4);
+    free(dp); free(da); free(doo);
     return rc;
 }
 

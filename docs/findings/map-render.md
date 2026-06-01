@@ -595,6 +595,15 @@ file-content length** (128248 / 28670 / 147332 / 89040 / 121390 / 288296 /
 season/view offset arithmetic, and the bank→slot ladder all reproduce retail's
 sprite data exactly.
 
+A second test (`..._native_load_renders_identical_frame`) renders the composed
+3-cluster scene (`engine_map_scene_render_body`) twice — once with the dump
+blobs + the capture's heap over-read lengths, once with the native-loaded banks
++ their `bytes-read` lengths — and asserts the two 640×480 canvases are
+**byte-identical** (drawA=263 drawB=29 sky=0 army=14 feat=291, matching the
+scene harness).  This proves the loader→renderer integration end-to-end and that
+the tighter content length drops no draws (the terrain blitter gates each copy
+on `s + sz > blob_len`).
+
 **Malloc-slack caveat:** the table size over-allocates the buffer by a few
 dozen bytes vs the actual file (e.g. base1d table=128300, file=128248).  That
 tail is never read by the blitters and is uninitialized in retail too (the

@@ -1853,6 +1853,7 @@ struct test_case {
     X(io_path_set_base_truncate_and_clear) \
     X(engine_pl8_season_offset) \
     X(engine_pl8_banks_match_captured_blobs) \
+    X(engine_pl8_native_load_renders_identical_frame) \
     /* end */
 
 /* Emit extern decls. */
