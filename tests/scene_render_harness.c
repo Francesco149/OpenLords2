@@ -175,10 +175,12 @@ int main(int argc, char **argv)
     }
     fclose(o);
 
-    printf("terrain: drawA=%d sky=%d oob=%d err=%d | "
+    printf("terrain: drawA=%d drawB=%d drawB_skip=%d sky=%d oob=%d err=%d | "
            "overlay: army=%d city=%d err=%d | "
            "features: err=%d call=%d\n",
            engine_map_terrain_drawa_count(),
+           engine_map_terrain_drawb_count(),
+           engine_map_terrain_drawb_skipped(),
            engine_map_terrain_sky_count(),
            engine_map_terrain_oob_copies(),
            engine_map_terrain_error_count(),

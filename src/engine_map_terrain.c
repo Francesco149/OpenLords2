@@ -19,6 +19,11 @@
 #include "gen/blit_table_45337b.h"
 #include "gen/blit_table_4538f6.h"
 
+/* Drawer-B (tall-sprite overhang) strip-blitter tables.  Replayed with the
+ * r2-corrected guard `iVar1 < col_y_accum` (Ghidra inverted it).  See
+ * docs/findings/map-render.md "drawer B". */
+#include "gen/drawb_table_453e71.h"
+
 /* ──────────────────────────────────────────────────────────────────
  * Bound state — retail DAT_* globals this cluster touches.
  * ────────────────────────────────────────────────────────────────── */
@@ -50,7 +55,7 @@ static int g_sprite_index;
 static int g_error_count;                /* _DAT_0058fea8 */
 
 /* Stats. */
-static int g_n_drawa, g_n_sky, g_n_drawb_skipped, g_n_oob;
+static int g_n_drawa, g_n_sky, g_n_drawb, g_n_drawb_skipped, g_n_oob;
 
 /* Retail src_off validation upper bound (FUN_004063c1 line "< 0x4baf1"). */
 #define TERRAIN_SRC_OFFSET_MAX  0x4baf1
@@ -104,11 +109,12 @@ void engine_map_terrain_set_error_count(int n)  { g_error_count = n; }
 
 int  engine_map_terrain_drawa_count(void)       { return g_n_drawa; }
 int  engine_map_terrain_sky_count(void)         { return g_n_sky; }
+int  engine_map_terrain_drawb_count(void)       { return g_n_drawb; }
 int  engine_map_terrain_drawb_skipped(void)     { return g_n_drawb_skipped; }
 int  engine_map_terrain_oob_copies(void)        { return g_n_oob; }
 void engine_map_terrain_reset_stats(void)
 {
-    g_n_drawa = g_n_sky = g_n_drawb_skipped = g_n_oob = 0;
+    g_n_drawa = g_n_sky = g_n_drawb = g_n_drawb_skipped = g_n_oob = 0;
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -240,14 +246,95 @@ static void drawer_a(int phase)
     g_n_drawa++;
 }
 
-/* Terrain drawer B (decoration layer) — STUB for retail 0x406673.
- * The decoration blitter family (0x455f04 / 459258 / 453e71 /
- * 4580a9 / …) is not yet ported.  We count the cells it would visit so
- * the parity stats expose how much of the frame is still missing. */
+/* Drawer-B overhang strip-blitter replay (one blitter table).  Faithful to
+ * the retail do/while with the r2-CORRECTED guard: draw outer row `iVar1`
+ * only while `iVar1 < col_y_accum` (Ghidra decompiled this as the inverse
+ * `col_y_accum <= iVar1`; the asm at 0x453ea4 is `cmp ebx,ecx; jle`, i.e.
+ * draw when iVar1 < col_y).  Each table entry's src_off/dst_off already
+ * bake in the per-row shear; depth_k gates the `iVar1 + k < count` window.
+ *   src  = blob + src_off2  (= sprite src_off + 900, view-mode 0)
+ *   dst  = canvas + cursor + (dst_off - iVar1*pitch)
+ * Per-copy zero-skip transparency; out-of-canvas writes are clipped. */
+static void drawb_strip(const drawb_copy_t *tbl, int n,
+                        const uint8_t *blob, int blob_len,
+                        int src_off2, int count, int col_y)
+{
+    uint8_t *canvas = gfx_paint_canvas_pixels();
+    int pitch = gfx_paint_canvas_width();
+    long canvas_len = (long)pitch * gfx_paint_canvas_height();
+    if (!canvas || !blob) return;
+    long base = (long)gfx_glyph_cursor_x() + (long)gfx_glyph_cursor_y() * pitch;
+
+    for (int row = 0; row < count; row++) {
+        if (row >= col_y) break;            /* corrected guard */
+        long src_row = (long)src_off2 + (long)row * 0x3a;
+        long dst_row = base - (long)row * pitch;
+        for (int i = 0; i < n; i++) {
+            if (row + tbl[i].depth_k >= count) continue;
+            long s = src_row + tbl[i].src_off;
+            long d = dst_row + tbl[i].dst_off;
+            if (s < 0 || (blob_len > 0 && s >= blob_len)) { g_n_oob++; continue; }
+            if (d < 0 || d >= canvas_len) { g_n_oob++; continue; }
+            uint8_t v = blob[s];
+            if (v != 0) canvas[d] = v;       /* zero-skip transparency */
+        }
+    }
+}
+
+/* Read drawer-B sprite-directory fields (retail FUN_00406673 staging):
+ * src_off @ entry+0xc, kind @ entry+0x14, count @ entry+0x15. */
+static void drawb_dir(const uint8_t *blob, int idx,
+                      int *src_off, int *kind, int *count)
+{
+    const uint8_t *e = blob + idx * 0x10;
+    *src_off = (int)((uint32_t)e[0xc] | ((uint32_t)e[0xd] << 8)
+                   | ((uint32_t)e[0xe] << 16) | ((uint32_t)e[0xf] << 24));
+    *kind  = e[0x14];
+    *count = e[0x15];
+}
+
+/* Terrain drawer B — port of FUN_00406673 (tall-sprite overhang layer).
+ * Draws the part of mountains / improvements / livestock that rises above
+ * the base diamond and bleeds into neighbouring cells.  View-mode 0 only.
+ *
+ * Currently ported blitter: kind 2 phase 0/1 (FUN_00453e71).  Kinds 3/4 and
+ * the phase-3/4 edge variants (455f04/456fd8/4580a9/459258) are counted in
+ * g_n_drawb_skipped pending their tables. */
 static void drawer_b(int phase)
 {
-    (void)phase;
-    g_n_drawb_skipped++;
+    if (phase == 2) return;                  /* dispatcher skips phase 2 */
+
+    int cell = g_current_cell;
+    int d2  = g_desc[cell + 2];
+    int sel = d2 & 0x1c;
+    int idx = g_desc[cell + 3];
+    if (g_render_mode == 1 && (d2 & 0x20) == 0) { sel = 0; idx = 0; }
+
+    int bi;
+    switch (sel) {
+    case 0x00: bi = 0; break; case 0x04: bi = 1; break; case 0x08: bi = 2; break;
+    case 0x0c: bi = 3; break; case 0x10: bi = 4; break;
+    default: return;
+    }
+    const uint8_t *blob = g_blob[bi];
+    if (!blob) return;
+    if (g_view_mode != 0) return;
+
+    int src_off, kind, count;
+    drawb_dir(blob, idx, &src_off, &kind, &count);
+    if (src_off < 0 || src_off >= TERRAIN_SRC_OFFSET_MAX) { g_error_count++; return; }
+    if (count <= 0 || count >= 0xc9) return;
+
+    int src_off2 = src_off + 900;            /* view-mode-0 overhang offset */
+
+    /* phase 3 → left-edge variant; phase 4 → right-edge; else aligned. */
+    if (kind == 2 && (phase == 0 || phase == 1)) {
+        drawb_strip(k_drawb_453e71, k_drawb_453e71_n, blob, g_blob_len[bi],
+                    src_off2, count, g_col_y_accum);
+        g_n_drawb++;
+    } else {
+        g_n_drawb_skipped++;   /* kind 3/4 or edge phase — not yet ported */
+    }
 }
 
 /* Sky / empty-cell drawer — port of FUN_0042a7f1.  Always blob 0 at the

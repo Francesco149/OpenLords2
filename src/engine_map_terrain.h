@@ -78,6 +78,7 @@ void engine_map_terrain_set_error_count(int n);
 /* Stats (test-only, not retail globals). */
 int  engine_map_terrain_drawa_count(void);
 int  engine_map_terrain_sky_count(void);
+int  engine_map_terrain_drawb_count(void);
 int  engine_map_terrain_drawb_skipped(void);
 int  engine_map_terrain_oob_copies(void);
 void engine_map_terrain_reset_stats(void);
