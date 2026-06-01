@@ -134,6 +134,10 @@ const uint8_t *gfx_palette_rgb(void);
  * Cached; freed by gfx_shutdown.  Return the blob or NULL. */
 const uint8_t *gfx_load_menu_font(void);
 const uint8_t *gfx_load_title_font(void);
+/* Territory-info panel fonts: fntl2_9.pl8 (name/number, DAT_005c9a90)
+ * and font_10.pl8 (resource readouts, DAT_005aeba0). */
+const uint8_t *gfx_load_panel_name_font(void);
+const uint8_t *gfx_load_panel_resource_font(void);
 
 /* Bind the locked back-buffer base pointer as the gfx_paint canvas so
  * the pure-C renderers (sprite / glyph / line / panel) paint into it.

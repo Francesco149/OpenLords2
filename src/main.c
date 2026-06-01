@@ -70,6 +70,7 @@
 #include "engine_map_scene.h"
 #include "engine_map_terrain.h"
 #include "engine_minimap.h"
+#include "engine_hud_panel.h"
 #include "engine_overlay_render.h"
 #include "engine_pl8.h"
 #include "engine_title_render.h"
@@ -1890,6 +1891,46 @@ static void bringup_strat_load(const char *dir)
                  map_id, (int)s_slot_0057c93c, (int)s_slot_0057c8cc);
     } else {
         log_line("strat-load: minimap grid load failed (map_id=%d)", map_id);
+    }
+
+    /* Right-panel territory-info panel (FUN_0040f7d3(1) via the
+     * screen-id-0 arm): the selected territory's name / population /
+     * tax / ration / resources, below the minimap.  Reads the loaded
+     * per-territory record (g_per_army_768) + realm block; validated
+     * byte-exact (44388/44388 drawn px) against load_clean_dump — see
+     * tools/panel_parity.py / test_hud_panel_render_owned. */
+    {
+        const uint8_t *font_name = gfx_load_panel_name_font();
+        const uint8_t *font_res  = gfx_load_panel_resource_font();
+        const uint8_t *font_menu = gfx_load_menu_font();
+        size_t loc_size = 0;
+        const uint8_t *locblob = config_localization_data(&loc_size);
+        if (font_name && font_res && font_menu && locblob) {
+            gfx_dispatch_set_alt_clip(0, 0, 0);
+            gfx_dispatch_set_default_font(font_menu);  /* menu-font kerning gate */
+            localization_state_t loc;
+            loc.blob = (unsigned char *)locblob;
+            loc.walker_offset = 0;
+
+            engine_hud_panel_state_t pst;
+            pst.army_block       = g_per_army_768;
+            pst.realm_block      = g_player_strategic_352;
+            pst.realm_names      = NULL;       /* not-owned branch only (unbound) */
+            pst.current_territory = (int)s_slot_0057c93c;
+            pst.current_realm     = (int)s_slot_0057c8cc;
+            pst.map_id            = map_id;
+
+            engine_hud_panel_render(&pst, engine_pl8_misc_cty(),
+                                    font_name, font_res, font_menu,
+                                    gfx_glyph_render_map(), gfx_glyph_measure_map(),
+                                    &loc);
+            log_line("strat-load: rendered territory panel (terr=%d owner=%d realm=%d)",
+                     (int)s_slot_0057c93c,
+                     g_per_army_768[(int)s_slot_0057c93c * 0x300 + 5],
+                     (int)s_slot_0057c8cc);
+        } else {
+            log_line("strat-load: panel fonts/loc unavailable — panel skipped");
+        }
     }
 
     if (canvas) {

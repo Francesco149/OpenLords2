@@ -1335,6 +1335,7 @@ struct test_case {
     X(map_init_strategic_sets_default_scroll) \
     X(map_finalize_load_path_diagnostic) \
     X(minimap_render_political) \
+    X(hud_panel_render_owned) \
     \
     X(map_query_all_clear_returns_1) \
     X(map_query_rawflag_occupied_returns_0) \

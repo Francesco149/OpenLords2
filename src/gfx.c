@@ -93,6 +93,8 @@ static uint8_t             *g_misc_sheet;      /* DAT_005530c8 — misc_sel.pl8 
 static uint8_t             *g_chrome_sheet;    /* DAT_0057d3d0 — panels.pl8 blob */
 static uint8_t             *g_menu_font;       /* DAT_005af8f0 — fntl2_14.pl8 blob */
 static uint8_t             *g_title_font;      /* DAT_005b2fa0 — fntl2_22.pl8 blob */
+static uint8_t             *g_panel_name_font; /* DAT_005c9a90 — fntl2_9.pl8 blob */
+static uint8_t             *g_panel_res_font;  /* DAT_005aeba0 — font_10.pl8 blob */
 static int                  g_back_pitch;     /* DAT_004ea1a8 */
 static int                  g_primary_lockable; /* DAT_004df28c */
 static int                  g_fullscreen;
@@ -292,6 +294,14 @@ void gfx_shutdown(void)
     if (g_title_font) {
         free(g_title_font);
         g_title_font = NULL;
+    }
+    if (g_panel_name_font) {
+        free(g_panel_name_font);
+        g_panel_name_font = NULL;
+    }
+    if (g_panel_res_font) {
+        free(g_panel_res_font);
+        g_panel_res_font = NULL;
     }
     g_primary_lockable = 0;
     g_hwnd = NULL;
@@ -729,6 +739,20 @@ const uint8_t *gfx_load_menu_font(void)
 const uint8_t *gfx_load_title_font(void)
 {
     return load_font_blob(&g_title_font, "fntl2_22.pl8", 0x84d0);
+}
+
+/* The two extra fonts the territory-info panel uses (FUN_00499859
+ * asset-table indices 4 / 5; buf sizes from the +0x10 size field at
+ * 0x4d9fa8 / 0x4d9fbc).  fntl2_9 = panel name/number font (retail
+ * DAT_005c9a90); font_10 = resource-readout font (DAT_005aeba0). */
+const uint8_t *gfx_load_panel_name_font(void)
+{
+    return load_font_blob(&g_panel_name_font, "fntl2_9.pl8", 0x251c);
+}
+
+const uint8_t *gfx_load_panel_resource_font(void)
+{
+    return load_font_blob(&g_panel_res_font, "font_10.pl8", 0x0d48);
 }
 
 /* ---------------------------------------------------------------- *

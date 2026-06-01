@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 523,
-  "ported": 45,
-  "unported": 1879,
+  "tested": 534,
+  "ported": 46,
+  "unported": 1867,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 568,
-  "pct_touched": 23.2,
-  "pct_tested": 21.4,
+  "touched": 580,
+  "pct_touched": 23.7,
+  "pct_tested": 21.8,
   "bytes_total": 838629,
-  "bytes_touched": 231508,
-  "pct_bytes_touched": 27.6
+  "bytes_touched": 236792,
+  "pct_bytes_touched": 28.2
  },
  "orphan_refs": [
   "0x004148",
@@ -2174,6 +2174,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_hud_panel.h",
     "src/engine_map_scene.h",
     "src/engine_minimap.h",
     "src/engine_pl8.h",
@@ -2186,80 +2187,105 @@
    "name": "FUN_0040f7d3",
    "size": 1774,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_panel.c",
+    "src/engine_hud_panel.h",
+    "src/main.c"
+   ]
   },
   {
    "va": "0x40fec1",
    "name": "FUN_0040fec1",
    "size": 494,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_panel.c",
+    "src/engine_hud_panel.h"
+   ]
   },
   {
    "va": "0x4100af",
    "name": "FUN_004100af",
    "size": 395,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_panel.c",
+    "src/engine_hud_panel.h"
+   ]
   },
   {
    "va": "0x41023a",
    "name": "FUN_0041023a",
    "size": 395,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_panel.c"
+   ]
   },
   {
    "va": "0x4103c5",
    "name": "FUN_004103c5",
    "size": 317,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_panel.c"
+   ]
   },
   {
    "va": "0x410502",
    "name": "FUN_00410502",
    "size": 150,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_panel.c",
+    "src/engine_hud_panel.h"
+   ]
   },
   {
    "va": "0x410598",
    "name": "FUN_00410598",
    "size": 150,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_panel.c"
+   ]
   },
   {
    "va": "0x41062e",
    "name": "FUN_0041062e",
    "size": 150,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_panel.c"
+   ]
   },
   {
    "va": "0x4106c4",
    "name": "FUN_004106c4",
    "size": 269,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_panel.c"
+   ]
   },
   {
    "va": "0x4107d1",
    "name": "FUN_004107d1",
    "size": 652,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_panel.c"
+   ]
   },
   {
    "va": "0x410a5d",
@@ -2988,8 +3014,10 @@
    "name": "FUN_0041ac3e",
    "size": 87,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_panel.c"
+   ]
   },
   {
    "va": "0x41ac95",
@@ -15303,8 +15331,10 @@
    "name": "FUN_00499859",
    "size": 451,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gfx.c"
+   ]
   },
   {
    "va": "0x499a1c",

@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **568** (23.2%) — tested 523, ported 45
-- code bytes touched: **27.6%** (231,508 / 838,629 B)
-- unported: **1879**
+- touched: **580** (23.7%) — tested 534, ported 46
+- code bytes touched: **28.2%** (236,792 / 838,629 B)
+- unported: **1867**
 - orphan refs (in src/, not in function table): 4
 
-## tested (523) — ported + host unit suite
+## tested (534) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -142,7 +142,17 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40e9ab | FUN_0040e9ab | 641 | config.h, main.c |
 | 0x40ecc4 | FUN_0040ecc4 | 1099 | config.c, config.h, strutil.h |
 | 0x40f1a0 | FUN_0040f1a0 | 1117 | engine.c, engine_screen_dispatch.c, engine_screen_dispatch.h (+1) |
-| 0x40f5fd | FUN_0040f5fd | 470 | engine_map_scene.h, engine_minimap.h, engine_pl8.h (+2) |
+| 0x40f5fd | FUN_0040f5fd | 470 | engine_hud_panel.h, engine_map_scene.h, engine_minimap.h (+3) |
+| 0x40f7d3 | FUN_0040f7d3 | 1774 | engine_hud_panel.c, engine_hud_panel.h, main.c |
+| 0x40fec1 | FUN_0040fec1 | 494 | engine_hud_panel.c, engine_hud_panel.h |
+| 0x4100af | FUN_004100af | 395 | engine_hud_panel.c, engine_hud_panel.h |
+| 0x41023a | FUN_0041023a | 395 | engine_hud_panel.c |
+| 0x4103c5 | FUN_004103c5 | 317 | engine_hud_panel.c |
+| 0x410502 | FUN_00410502 | 150 | engine_hud_panel.c, engine_hud_panel.h |
+| 0x410598 | FUN_00410598 | 150 | engine_hud_panel.c |
+| 0x41062e | FUN_0041062e | 150 | engine_hud_panel.c |
+| 0x4106c4 | FUN_004106c4 | 269 | engine_hud_panel.c |
+| 0x4107d1 | FUN_004107d1 | 652 | engine_hud_panel.c |
 | 0x410aa9 | FUN_00410aa9 | 456 | engine_minimap.c, engine_minimap.h, main.c |
 | 0x410cbd | FUN_00410cbd | 654 | engine_minimap.c, engine_minimap.h |
 | 0x4148e4 | FUN_004148e4 | 264 | engine_title_render.c, engine_title_render.h, main.c |
@@ -150,6 +160,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x419c78 | FUN_00419c78 | 682 | engine_hud_menubar.c, engine_hud_menubar.h, main.c |
 | 0x41a900 | FUN_0041a900 | 615 | engine_hud_menubar.c, engine_hud_menubar.h |
 | 0x41ab67 | FUN_0041ab67 | 215 | engine_hud_menubar.c, engine_hud_menubar.h |
+| 0x41ac3e | FUN_0041ac3e | 87 | engine_hud_panel.c |
 | 0x41e61d | FUN_0041e61d | 452 | engine_title_render.c, engine_title_render.h, gfx.c (+2) |
 | 0x41e7e1 | FUN_0041e7e1 | 385 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x41ea14 | FUN_0041ea14 | 143 | engine_title_render.c, engine_title_render.h |
@@ -545,7 +556,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine_map_scene.c, engine_map_scene.h |
 
-## ported (45) — reimplemented, no host test yet
+## ported (46) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -582,6 +593,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49792e | FUN_0049792e | 262 | engine.c, engine.h |
 | 0x497a34 | FUN_00497a34 | 697 | engine.c, engine.h |
 | 0x498458 | FUN_00498458 | 132 | engine.c |
+| 0x499859 | FUN_00499859 | 451 | gfx.c |
 | 0x499a1c | FUN_00499a1c | 174 | engine.c, gfx.c, gfx.h |
 | 0x49a010 | FUN_0049a010 | 982 | engine.c |
 | 0x49a3e6 | FUN_0049a3e6 | 109 | engine.c |
