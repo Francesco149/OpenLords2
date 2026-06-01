@@ -1,0 +1,28 @@
+# Navigation trace: main menu → Single player → Your options → Load a game →
+# page-3 save list → click the **Load** gauntlet (button[0], action 0x4342f3)
+# on the pre-selected "lastturn" save → loads lastturn.sav → strategic map.
+#
+# Extends menu_load_game.jsonl with the Load click.  Load button screen rect =
+# base(0x60,10)+(x=0x130,y=0x40,w=0x1d,h=0x20) = (400,74) 29x32 → center
+# (414,90).  lParam=(y<<16)|x → (90<<16)|414 = 5898654.
+#
+# Reproduce (turbo, so the load + first map frames render well before the
+# wall-clock warmup elapses):
+#   nix develop -c python3 tools/frida_capture.py --remote <host> --skip-intro \
+#     --turbo --input-trace tools/traces/load_into_map.jsonl \
+#     --frame-capture --frame-capture-warmup-secs 14 --frame-capture-max 6
+#
+# Coords authored in GAME space (640x480).  lParam=(y<<16)|x.
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 400, "m": 512, "w": 0, "l": 5898654}
+{"t": 406, "m": 512, "w": 0, "l": 5898654}
+{"t": 410, "m": 513, "w": 1, "l": 5898654}
+{"t": 416, "m": 514, "w": 0, "l": 5898654}
+{"t": 600, "m": 512, "w": 0, "l": 30277952}
