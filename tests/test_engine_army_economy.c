@@ -57,6 +57,15 @@ enum {
     SEC_CAP0        = 0x1d8,
     SEC_CAP1        = 0x1dc,
     SEC_CAP2        = 0x1e0,
+    /* seasonal production turn pass (FUN_0044c8ae) */
+    PROVISION_RAW_PREV = 0x228,
+    PROVISION_DRAW     = 0x18c,
+    PROVISION_INTEREST = 0x278,
+    PROVISION_RATE_PCT = 0x1fc,
+    SEASON_OUT         = 0x240,
+    SEASON_TYPE        = 0x21b,
+    SEASON_DELTA       = 0x24c,
+    RATE_CLASS_DENOM   = 0x206,
     /* candidate evaluator/selector (FUN_0044da99 / dd4d) */
     CENSUS_HIGH     = 0x200,
     EVAL_REF        = 0xd0,
@@ -1580,5 +1589,203 @@ int test_army_economy_plan_realm_unbound_noop(void)
 {
     engine_army_economy_bind_army_records(NULL);
     engine_army_economy_plan_realm(3, 1);            /* no crash */
+    return 0;
+}
+
+/* ── seasonal production turn pass (FUN_0044c8ae) ───────────────────── */
+
+/* rate_class (FUN_0044cf6f) — the q/denom → 2/3/7/0xb classifier. */
+int test_army_economy_rate_class_boundaries(void)
+{
+    army_reset();
+    /* non-positive inputs → 2 */
+    T_ASSERT_EQ_I(engine_army_economy_rate_class(0, 10), 2);
+    T_ASSERT_EQ_I(engine_army_economy_rate_class(-5, 10), 2);
+    T_ASSERT_EQ_I(engine_army_economy_rate_class(100, 0), 2);
+    T_ASSERT_EQ_I(engine_army_economy_rate_class(100, -1), 2);
+    /* q/denom in [0,0x29) → 3 */
+    T_ASSERT_EQ_I(engine_army_economy_rate_class(40, 1), 3);      /* 40 < 0x29 */
+    T_ASSERT_EQ_I(engine_army_economy_rate_class(0x28, 1), 3);    /* 40 == 0x28 */
+    /* q/denom in [0x29,0x51) → 7 */
+    T_ASSERT_EQ_I(engine_army_economy_rate_class(0x29, 1), 7);    /* 41 */
+    T_ASSERT_EQ_I(engine_army_economy_rate_class(0x50, 1), 7);    /* 80 */
+    /* q/denom >= 0x51 → 0xb */
+    T_ASSERT_EQ_I(engine_army_economy_rate_class(0x51, 1), 0xb);  /* 81 */
+    T_ASSERT_EQ_I(engine_army_economy_rate_class(1000, 1), 0xb);
+    /* integer division: 0x52/2 = 0x29 → 7 */
+    T_ASSERT_EQ_I(engine_army_economy_rate_class(0x52, 2), 7);
+    return 0;
+}
+
+/* Season 1 with the evaluator gated to 0 (ref level 0): isolates the
+ * front-half (snapshot / drawdown / clamp) and the fallback-denom branch. */
+int test_army_economy_season1_fronthalf_fallback_clear(void)
+{
+    army_reset();
+    set_stock(2, PROVISION_RAW, 1000);
+    set_stock(2, PROVISION_DRAW, 150);
+    set_byte(2, PROVISION_RATE_PCT, 0);          /* no interest */
+    set_byte(2, PLAN_REF_LEVEL, 0);              /* production_output → 0 */
+    set_byte(2, PROD_FALLBACK, 0);               /* denom = PROD_RATE */
+    set_byte(2, PROD_RATE, 7);
+    set_byte(2, SEASON_TYPE, 3);                 /* no model adjustment */
+
+    engine_army_economy_season_update(2, 1, 2);
+
+    T_ASSERT_EQ_I(rec_i32(2, PROVISION_RAW_PREV), 1000);   /* snapshot of old +0x224 */
+    T_ASSERT_EQ_I(rec_i32(2, PROVISION_INTEREST), 0);
+    T_ASSERT_EQ_I(rec_i32(2, SEASON_OUT), 0);              /* gated evaluator */
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_CAP), 0);               /* 0 * scale */
+    T_ASSERT_EQ_I(rec_i32(2, SEASON_DELTA), 0);
+    T_ASSERT_EQ_I(rec_i32(2, PROVISION_RAW), 850);        /* 1000 - 150 drawdown - 0 */
+    T_ASSERT_EQ_I(rec_byte(2, PROD_RATE_DENOM), 7);       /* fallback clear → PROD_RATE */
+    T_ASSERT_EQ_I(rec_byte(2, RATE_CLASS_DENOM), 7);
+    return 0;
+}
+
+int test_army_economy_season1_fallback_set_forces_denom_one(void)
+{
+    army_reset();
+    set_stock(2, PROVISION_RAW, 500);
+    set_byte(2, PLAN_REF_LEVEL, 0);
+    set_byte(2, PROD_FALLBACK, 1);               /* denom forced to 1 */
+    set_byte(2, PROD_RATE, 9);
+
+    engine_army_economy_season_update(2, 1, 2);
+
+    T_ASSERT_EQ_I(rec_byte(2, PROD_RATE_DENOM), 1);
+    T_ASSERT_EQ_I(rec_byte(2, RATE_CLASS_DENOM), 1);
+    return 0;
+}
+
+/* Positive interest grows the running figure; the amount is stored at +0x278. */
+int test_army_economy_season_interest_positive(void)
+{
+    army_reset();
+    set_stock(2, PROVISION_RAW, 1000);
+    set_stock(2, PROVISION_DRAW, 0);
+    set_byte(2, PROVISION_RATE_PCT, 10);         /* +10% */
+    set_byte(2, PLAN_REF_LEVEL, 0);              /* season-4 evaluator → 0 */
+
+    engine_army_economy_season_update(2, 4, 2);  /* season 4: RAW += OUT_P4 (0) */
+
+    T_ASSERT_EQ_I(rec_i32(2, PROVISION_INTEREST), 100);   /* 10% of 1000 */
+    T_ASSERT_EQ_I(rec_i32(2, PROVISION_RAW), 1100);       /* grown, +0 production */
+    return 0;
+}
+
+/* Negative interest draws down; a draw past 0 clamps the figure to 0. */
+int test_army_economy_season_interest_negative_and_clamp(void)
+{
+    army_reset();
+    set_stock(2, PROVISION_RAW, 80);
+    set_stock(2, PROVISION_DRAW, 100);           /* 80 - 100 = -20 → clamp 0 before interest */
+    set_byte(2, PROVISION_RATE_PCT, (uint8_t)(int8_t)-50);
+    set_byte(2, PLAN_REF_LEVEL, 0);
+
+    engine_army_economy_season_update(2, 4, 2);
+
+    /* 80 - 100 = -20; interest computed on -20 → percent_of(-20,50) = -10,
+     * stored, RAW -= (-10) → -10; then clamp(<0) → 0; + OUT_P4(0). */
+    T_ASSERT_EQ_I(rec_i32(2, PROVISION_INTEREST), -10);
+    T_ASSERT_EQ_I(rec_i32(2, PROVISION_RAW), 0);
+    return 0;
+}
+
+/* Season 4 dispatches yield_phase4 and ADDS the result to the running figure.
+ * Twin row proves the dispatched evaluator output without re-deriving it. */
+int test_army_economy_season4_dispatch_adds(void)
+{
+    army_reset();
+    /* test row 2 */
+    set_stock(2, PROVISION_RAW, 2000);
+    set_stock(2, PROVISION_DRAW, 0);
+    set_byte(2, PROVISION_RATE_PCT, 0);
+    set_byte(2, PLAN_REF_LEVEL, 50);
+    set_stock(2, PLAN_CAP, 500);
+    set_byte(2, PROD_RATE, 4);
+    set_byte(2, PROD_RATE_DENOM, 4);
+    set_stock(2, YIELD_BONUS, 0);
+    set_byte(2, SEASON_TYPE, 3);                 /* no adjustment → OUT_P4 == yield */
+    /* twin row 5 = identical pre-state */
+    memcpy(g_army + 5 * ARMY_STRIDE, g_army + 2 * ARMY_STRIDE, ARMY_STRIDE);
+    int expected = engine_army_economy_yield_phase4(5, 50, 500);
+
+    engine_army_economy_season_update(2, 4, 2);
+
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_OUT_P4), expected);
+    T_ASSERT_EQ_I(rec_i32(2, SEASON_DELTA), 0);              /* type 3 → no change */
+    T_ASSERT_EQ_I(rec_i32(2, PROVISION_RAW), 2000 + expected);
+    return 0;
+}
+
+/* Season 2/3 dispatches yield_standard; model-type 2 scales the cap ×3/2. */
+int test_army_economy_season2_type2_scales_cap(void)
+{
+    army_reset();
+    set_byte(2, PLAN_REF_LEVEL, 50);
+    set_stock(2, PLAN_CAP, 600);
+    set_byte(2, PROD_RATE, 5);
+    set_byte(2, PROD_RATE_DENOM, 5);
+    set_stock(2, YIELD_BONUS, 0);
+    set_byte(2, SEASON_TYPE, 2);                 /* *3/2 */
+    memcpy(g_army + 5 * ARMY_STRIDE, g_army + 2 * ARMY_STRIDE, ARMY_STRIDE);
+    int raw = engine_army_economy_yield_standard(5, 50, 600);
+
+    engine_army_economy_season_update(2, 3, 2);
+
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_CAP), (raw * 3) / 2);
+    T_ASSERT_EQ_I(rec_i32(2, SEASON_DELTA), (raw * 3) / 2 - raw);
+    return 0;
+}
+
+/* Season 1 dispatches production_output; result × scale lands in PLAN_CAP and
+ * the figure is drawn down by the output. */
+int test_army_economy_season1_dispatch(void)
+{
+    army_reset();
+    set_stock(2, PROVISION_RAW, 5000);
+    set_stock(2, PROVISION_DRAW, 0);
+    set_byte(2, PROVISION_RATE_PCT, 0);
+    set_byte(2, PLAN_REF_LEVEL, 8);
+    set_byte(2, PROD_RATE, 3);
+    set_byte(2, SEASON_TYPE, 3);                 /* no adjustment */
+    memcpy(g_army + 5 * ARMY_STRIDE, g_army + 2 * ARMY_STRIDE, ARMY_STRIDE);
+    int out = engine_army_economy_production_output(5, 8, 5000);
+
+    engine_army_economy_season_update(2, 1, 2);
+
+    T_ASSERT_EQ_I(rec_i32(2, SEASON_OUT), out);
+    T_ASSERT_EQ_I(rec_i32(2, PLAN_CAP), out * 12);          /* g_prod_scale default */
+    T_ASSERT_EQ_I(rec_i32(2, PROVISION_RAW), 5000 - out);
+    return 0;
+}
+
+/* The loop wrapper runs every realm 1..count with the saved season pair. */
+int test_army_economy_season_pass_loops_count(void)
+{
+    army_reset();
+    s_slot_0056d5dc = 3;
+    s_slot_0057c934 = 1;     /* just-ended season */
+    s_slot_0057c92c = 2;     /* next season */
+    for (int k = 1; k <= 3; k++) {
+        set_stock(k, PROVISION_RAW, 100 * k);
+        set_byte(k, PLAN_REF_LEVEL, 0);
+    }
+    set_stock(4, PROVISION_RAW, 999);            /* beyond count — untouched */
+
+    engine_army_economy_apply_season_pass();
+
+    for (int k = 1; k <= 3; k++)
+        T_ASSERT_EQ_I(rec_i32(k, PROVISION_RAW_PREV), 100 * k);   /* each snapshotted */
+    T_ASSERT_EQ_I(rec_i32(4, PROVISION_RAW_PREV), 0);             /* not run */
+    return 0;
+}
+
+int test_army_economy_season_update_unbound_noop(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    engine_army_economy_season_update(2, 1, 2);   /* no crash */
+    engine_army_economy_apply_season_pass();      /* count may be stale; no crash */
     return 0;
 }

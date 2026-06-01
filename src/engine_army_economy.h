@@ -142,6 +142,39 @@ int engine_army_economy_yield_phase4(int key, int level, int cap);
 void engine_army_economy_plan_production(int key, int phase);
 
 /* ──────────────────────────────────────────────────────────────────
+ * Per-army seasonal production turn pass — FUN_0044c8ae, the per-army loop
+ * the turn-advance driver 0x448440 runs between the dev-spread pass (0x44bf7a)
+ * and the army recount (0x44d60d).  Reuses the three yield evaluators and the
+ * production planner above.
+ * ────────────────────────────────────────────────────────────────── */
+
+/* Port of FUN_0044cf6f (114 B).  Classify a scaled production figure `q`
+ * against a per-army denominator `denom` into a 4-level rating: 2 when either
+ * is < 1, else 3 / 7 / 0xb as q/denom falls in [0,0x29) / [0x29,0x51) /
+ * [0x51,∞).  The lone caller is the seasonal pass below. */
+int engine_army_economy_rate_class(int q, int denom);
+
+/* Port of FUN_0044c8ae's per-army step.  For army `key` and the just-ended
+ * `season` (1..4): snapshot the running provision figure (+0x224 → +0x228),
+ * draw down the per-turn consumption (+0x18c) and apply the signed interest
+ * rate (+0x1fc %, stored to +0x278), then add this season's production —
+ * production_output for season 1, yield_standard for 2/3, yield_phase4 for 4 —
+ * adjusted by the model-type byte +0x21b, recording the season output (+0x240/
+ * +0x244/+0x248), its delta vs the unadjusted yield (+0x24c) and, on season 1,
+ * the capacity-ratio pair (+0x202/+0x206) from the fallback latch +0x1a7.
+ * Finally classify the result (engine_army_economy_rate_class), retype the
+ * realm's band-[2,0xe] cells to that rating via engine_territory_retype_army_
+ * band, and plan next season's production (engine_army_economy_plan_production,
+ * `next_season`).  No-op when the army-record block is unbound. */
+void engine_army_economy_season_update(int key, int season, int next_season);
+
+/* Port of FUN_0044c8ae (1729 B).  The turn-pass loop wrapper: run
+ * engine_army_economy_season_update over armies 1..s_slot_0056d5dc with the
+ * saved season pair (just-ended s_slot_0057c934, next s_slot_0057c92c).  The
+ * diff-harness entry point. */
+void engine_army_economy_apply_season_pass(void);
+
+/* ──────────────────────────────────────────────────────────────────
  * Secondary-settlement reserve pass — the 0x450e46 branch of 0x4485a5.
  * Both functions are gated on the realm's secondary-settlement flag (+0x1c3,
  * the byte engine_territory_stamp_secondary_keep also reads) and work three

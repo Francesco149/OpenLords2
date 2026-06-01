@@ -1641,6 +1641,16 @@ struct test_case {
     X(army_economy_plan_resource_unbound_noop) \
     X(army_economy_plan_realm_dispatches_all_branches) \
     X(army_economy_plan_realm_unbound_noop) \
+    X(army_economy_rate_class_boundaries) \
+    X(army_economy_season1_fronthalf_fallback_clear) \
+    X(army_economy_season1_fallback_set_forces_denom_one) \
+    X(army_economy_season_interest_positive) \
+    X(army_economy_season_interest_negative_and_clamp) \
+    X(army_economy_season4_dispatch_adds) \
+    X(army_economy_season2_type2_scales_cap) \
+    X(army_economy_season1_dispatch) \
+    X(army_economy_season_pass_loops_count) \
+    X(army_economy_season_update_unbound_noop) \
     \
     X(game_init_clear_tables_zeroes_per_army) \
     X(game_init_clear_tables_zeroes_unit_table) \

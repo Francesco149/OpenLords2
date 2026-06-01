@@ -513,6 +513,131 @@ void engine_army_economy_plan_production(int key, int phase)
 }
 
 /* --------------------------------------------------------------------- *
+ *  Per-army seasonal production turn pass — FUN_0044c8ae.
+ *
+ *  The turn-advance driver 0x448440 runs this between the dev-spread pass and
+ *  the army recount.  Per army it advances the running "provision" figure
+ *  (+0x224): snapshot, draw down a per-turn consumption (+0x18c), apply a
+ *  signed interest rate (+0x1fc %), then fold in this season's production via
+ *  the same three yield evaluators the planner above uses, adjust by the
+ *  model-type byte (+0x21b), classify the scaled result and retype the realm's
+ *  feature cells to that rating, and plan next season.  Field semantics beyond
+ *  the running figure are provisional (the names track what each slot holds in
+ *  this pass).  Reuses g_prod_scale (DAT_0057c8e0). */
+
+#define ARMY_PROVISION_RAW_PREV  0x228  /* DAT_0053fbd8 — prior-turn +0x224 snapshot */
+#define ARMY_PROVISION_DRAW      0x18c  /* DAT_0053fb3c — per-turn consumption drawn off +0x224 */
+#define ARMY_SEASON_SCRATCH      0x234  /* DAT_0053fbe4 — cleared each turn, unread here */
+#define ARMY_PROVISION_INTEREST  0x278  /* DAT_0053fc28 — interest amount applied to +0x224 */
+#define ARMY_PROVISION_RATE_PCT  0x1fc  /* DAT_0053fbac — signed interest rate %, per turn */
+#define ARMY_SEASON_OUT          0x240  /* DAT_0053fbf0 — season-1 production output */
+#define ARMY_SEASON_TYPE         0x21b  /* DAT_0053fbcb — model-type byte (0/1/2/4/5 cases) */
+#define ARMY_SEASON_DELTA        0x24c  /* DAT_0053fbfc — adjusted output − unadjusted yield */
+#define ARMY_RATE_CLASS_DENOM    0x206  /* DAT_0053fbb6 — denominator fed to rate_class */
+
+/* FUN_0044cf6f */
+int engine_army_economy_rate_class(int q, int denom)
+{
+    if (q < 1)            return 2;
+    if (denom < 1)        return 2;
+    if (q / denom < 0x29) return 3;
+    if (q / denom < 0x51) return 7;
+    return 0xb;
+}
+
+/* FUN_0044c8ae per-army step. */
+void engine_army_economy_season_update(int key, int season, int next_season)
+{
+    if (g_army_records == NULL) return;
+
+    uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+
+    /* Carry last turn's running figure, then draw down the per-turn consume. */
+    *(int32_t *)(row + ARMY_PROVISION_RAW_PREV) = *(int32_t *)(row + ARMY_PROVISION_RAW);
+    *(int32_t *)(row + ARMY_PROVISION_RAW) -= *(int32_t *)(row + ARMY_PROVISION_DRAW);
+    *(int32_t *)(row + ARMY_PLAN_OUT_P4)        = 0;
+    *(int32_t *)(row + ARMY_SEASON_SCRATCH)     = 0;
+    *(int32_t *)(row + ARMY_PROVISION_INTEREST) = 0;
+
+    /* Signed interest rate: negative draws further down, positive grows. */
+    signed char rate = (signed char)row[ARMY_PROVISION_RATE_PCT];
+    if (rate < 0) {
+        int amt = engine_math_percent_of(*(int32_t *)(row + ARMY_PROVISION_RAW), -rate);
+        *(int32_t *)(row + ARMY_PROVISION_INTEREST) = amt;
+        *(int32_t *)(row + ARMY_PROVISION_RAW) -= amt;
+    } else if (rate > 0) {
+        int amt = engine_math_percent_of(*(int32_t *)(row + ARMY_PROVISION_RAW), rate);
+        *(int32_t *)(row + ARMY_PROVISION_INTEREST) = amt;
+        *(int32_t *)(row + ARMY_PROVISION_RAW) += amt;
+    }
+    if (*(int32_t *)(row + ARMY_PROVISION_RAW) < 0)
+        *(int32_t *)(row + ARMY_PROVISION_RAW) = 0;
+
+    int ref  = *(int32_t *)(row + ARMY_PLAN_REF_LEVEL);
+    int type = row[ARMY_SEASON_TYPE];
+    int rating = 0;
+
+    if (season == 1) {
+        int raw = engine_army_economy_production_output(
+                      key, ref, *(int32_t *)(row + ARMY_PROVISION_RAW));
+        *(int32_t *)(row + ARMY_SEASON_OUT) = raw;
+        if (type == 5) *(int32_t *)(row + ARMY_SEASON_OUT) /= 4;
+        if (type == 0) *(int32_t *)(row + ARMY_SEASON_OUT) /= 2;
+        if (type == 4) *(int32_t *)(row + ARMY_SEASON_OUT) /= 2;
+        *(int32_t *)(row + ARMY_SEASON_DELTA) = *(int32_t *)(row + ARMY_SEASON_OUT) - raw;
+        *(int32_t *)(row + ARMY_PLAN_CAP) = *(int32_t *)(row + ARMY_SEASON_OUT) * g_prod_scale;
+        if (row[ARMY_PROD_FALLBACK] == 0) {
+            row[ARMY_PROD_RATE_DENOM]  = row[ARMY_PROD_RATE];
+            row[ARMY_RATE_CLASS_DENOM] = row[ARMY_PROD_RATE];
+        } else {
+            row[ARMY_PROD_RATE_DENOM]  = 1;
+            row[ARMY_RATE_CLASS_DENOM] = 1;
+        }
+        *(int32_t *)(row + ARMY_PROVISION_RAW) -= *(int32_t *)(row + ARMY_SEASON_OUT);
+        rating = engine_army_economy_rate_class(
+                     *(int32_t *)(row + ARMY_PLAN_CAP), row[ARMY_RATE_CLASS_DENOM]);
+    } else if (season == 2 || season == 3) {
+        int raw = engine_army_economy_yield_standard(
+                      key, ref, *(int32_t *)(row + ARMY_PLAN_CAP));
+        *(int32_t *)(row + ARMY_PLAN_CAP) = raw;
+        if (type == 5) *(int32_t *)(row + ARMY_PLAN_CAP) /= 2;
+        if (type == 1) *(int32_t *)(row + ARMY_PLAN_CAP) /= 2;
+        if (type == 2) *(int32_t *)(row + ARMY_PLAN_CAP) = (*(int32_t *)(row + ARMY_PLAN_CAP) * 3) / 2;
+        *(int32_t *)(row + ARMY_SEASON_DELTA) = *(int32_t *)(row + ARMY_PLAN_CAP) - raw;
+        rating = engine_army_economy_rate_class(
+                     *(int32_t *)(row + ARMY_PLAN_CAP), row[ARMY_RATE_CLASS_DENOM]);
+    } else if (season == 4) {
+        int raw = engine_army_economy_yield_phase4(
+                      key, ref, *(int32_t *)(row + ARMY_PLAN_CAP));
+        *(int32_t *)(row + ARMY_PLAN_OUT_P4) = raw;
+        /* The model-type adjustments here scale the CAP (+0x244), not the
+         * yield result — a faithful retail quirk. */
+        int cap = *(int32_t *)(row + ARMY_PLAN_CAP);
+        if (type == 5) *(int32_t *)(row + ARMY_PLAN_OUT_P4) = cap / 4;
+        if (type == 4) *(int32_t *)(row + ARMY_PLAN_OUT_P4) = cap / 2;
+        if (type == 0) *(int32_t *)(row + ARMY_PLAN_OUT_P4) = cap / 2;
+        if (type == 2) *(int32_t *)(row + ARMY_PLAN_OUT_P4) = (cap * 3) / 2;
+        *(int32_t *)(row + ARMY_SEASON_DELTA) = *(int32_t *)(row + ARMY_PLAN_OUT_P4) - raw;
+        *(int32_t *)(row + ARMY_PROVISION_RAW) += *(int32_t *)(row + ARMY_PLAN_OUT_P4);
+        rating = engine_army_economy_rate_class(
+                     *(int32_t *)(row + ARMY_PLAN_OUT_P4), row[ARMY_RATE_CLASS_DENOM]);
+    }
+
+    /* Rating → a 0..3 tier byte, then retype this realm's [2,0xe] feature
+     * cells, and plan next season's production. */
+    char tier = (rating < 3) ? (char)0 : (char)((rating - 3) / 4 + 1);
+    engine_territory_retype_army_band(key, rating, tier, 2, 0xe);
+    engine_army_economy_plan_production(key, next_season);
+}
+
+/* FUN_0044c8ae loop wrapper — the diff-harness entry point. */
+void engine_army_economy_apply_season_pass(void)
+{
+    for (int key = 1; key <= (int)s_slot_0056d5dc; key++)
+        engine_army_economy_season_update(key, (int)s_slot_0057c934, (int)s_slot_0057c92c);
+}
+
+/* --------------------------------------------------------------------- *
  *  Secondary-settlement reserve pass — the 0x450e46 branch of 0x4485a5.
  *
  *  Gated on the realm's secondary-settlement flag (+0x1c3, the same byte

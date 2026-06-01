@@ -2546,6 +2546,10 @@ VA_SLOT_MORALE   = 0x53f260       # s_slot_0053f260 — morale-sweep gate
 VA_SLOT_LOCAL    = 0x57c8cc       # s_slot_0057c8cc — local player slot
 FN_PAY_UPKEEP    = 0x4acbd4       # FUN_004acbd4 — __stdcall void()
 
+# seasonal production pass (FUN_0044c8ae) extra scalar
+VA_SLOT_SEASON_PREV = 0x57c934    # s_slot_0057c934 — just-ended season (branch selector)
+FN_SEASON_PASS      = 0x44c8ae    # FUN_0044c8ae — __stdcall void()
+
 REALM_RACE_RETRIES = 8
 
 
@@ -2574,6 +2578,7 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
             "diff":   ctypes.c_uint32.in_dll(lib, "s_slot_0053f23c"),
             "morale": ctypes.c_uint32.in_dll(lib, "s_slot_0053f260"),
             "local":  ctypes.c_uint32.in_dll(lib, "s_slot_0057c8cc"),
+            "season_prev": ctypes.c_uint32.in_dll(lib, "s_slot_0057c934"),
         }
         lib.engine_realm_apply_tax_approval.restype = None
         lib.engine_realm_apply_tax_approval.argtypes = []
@@ -2587,6 +2592,12 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
         lib.engine_realm_pay_upkeep.argtypes = [ctypes.c_void_p]
         lib.engine_event_queue_init.restype = None
         lib.engine_event_queue_init.argtypes = [ctypes.c_void_p]
+        lib.engine_army_economy_apply_season_pass.restype = None
+        lib.engine_army_economy_apply_season_pass.argtypes = []
+        lib.engine_army_economy_bind_army_records.restype = None
+        lib.engine_army_economy_bind_army_records.argtypes = [ctypes.c_void_p]
+        lib.engine_territory_bind_army_records.restype = None
+        lib.engine_territory_bind_army_records.argtypes = [ctypes.c_void_p]
     return _realm_globals_cache
 
 
@@ -2988,6 +2999,150 @@ def diff_upkeep(retail: dict, port: dict) -> list[str]:
     return bad
 
 
+# ── seasonal production pass (FUN_0044c8ae — engine_army_economy_apply_season_pass) ──
+#
+# Per-army loop that advances the running "provision" figure (+0x224), folds in
+# the season's production via the three yield evaluators + plan_production, and
+# retypes each realm's [2,0xe] feature cells.  Mutates g_per_army_768 AND the
+# cell grid g_overworld_map (via the retype).  Reads the realm count, the two
+# season slots (just-ended 0x57c934 selects the branch; next 0x57c92c is fed to
+# plan_production), and the mode flag 0x53f25c (evaluator divisor).  Because
+# both sides start from byte-identical injected per-army + cell state, the
+# injected record fields need only avoid the engine's own div-by-zero (the
+# +0x201/+0x202 capacity ratio) — everything else is free.
+
+# Per-army record offsets the pass + its callees read (port-side and as
+# documentation of what each vector seeds).
+_SEAS_FEED      = 0x24    # plan_production sweep bound
+_SEAS_GATE      = 0xb8    # plan_production gate byte
+_SEAS_REF       = 0xc4    # reference production level
+_SEAS_BUY_C     = 0x178   # commodity-C buy order (plan_production phase-1 net)
+_SEAS_DRAW      = 0x18c   # per-turn consumption
+_SEAS_FALLBACK  = 0x1a7   # production_output fallback latch / retype collapse flag
+_SEAS_RATE_PCT  = 0x1fc   # signed interest rate %
+_SEAS_PROD_RATE = 0x201   # per-cell production rate (capacity ratio numerator)
+_SEAS_PROD_DEN  = 0x202   # capacity ratio denominator (MUST be >= 1)
+_SEAS_CLASSDEN  = 0x206   # rate_class denominator
+_SEAS_BONUS     = 0x208   # yield-bonus % (i32)
+_SEAS_TYPE      = 0x21b   # model-type byte (0/1/2/4/5 cases)
+_SEAS_RAW       = 0x224   # running provision figure (i32)
+_SEAS_CAP       = 0x244   # resource cap fed to the yield evaluators (i32)
+
+
+def _build_season_vec(count: int, standings: int, season: int,
+                      next_season: int, realms: list[dict]) -> dict:
+    army = bytearray(REALM_ARMY_BYTES)
+    over = bytearray(REALM_OVER_BYTES)
+    for rd in realms:
+        slot = rd["slot"]
+        b = slot * REALM_ARMY_STRIDE
+        army[b + _SEAS_FEED]      = rd.get("feed", 0) & 0xff
+        army[b + _SEAS_GATE]      = rd.get("gate", 0) & 0xff
+        army[b + _SEAS_REF]       = rd.get("ref", 0) & 0xff
+        army[b + _SEAS_FALLBACK]  = rd.get("fallback", 0) & 0xff
+        army[b + _SEAS_RATE_PCT]  = rd.get("rate_pct", 0) & 0xff
+        army[b + _SEAS_PROD_RATE] = rd.get("prod_rate", 0) & 0xff
+        army[b + _SEAS_PROD_DEN]  = rd.get("prod_den", 1) & 0xff
+        army[b + _SEAS_CLASSDEN]  = rd.get("class_den", 1) & 0xff
+        army[b + _SEAS_TYPE]      = rd.get("type", 0) & 0xff
+        struct.pack_into("<i", army, b + _SEAS_BUY_C, rd.get("buy_c", 0))
+        struct.pack_into("<i", army, b + _SEAS_DRAW,  rd.get("draw", 0))
+        struct.pack_into("<i", army, b + _SEAS_BONUS, rd.get("bonus", 0))
+        struct.pack_into("<i", army, b + _SEAS_RAW,   rd.get("raw", 0))
+        struct.pack_into("<i", army, b + _SEAS_CAP,   rd.get("cap", 0))
+        for (cell_off, ctype) in rd.get("cells", []):
+            over[cell_off + 0] = ctype & 0xff
+            over[cell_off + 1] = 0x20              # active flag
+            over[cell_off + 7] = slot & 0xff       # owner key
+    return {"count": count, "standings": standings, "season": season,
+            "next_season": next_season, "army": bytes(army), "over": bytes(over)}
+
+
+def gen_season_economy_vectors(n: int, rng: random.Random) -> list[dict]:
+    # Cell offsets: 8-aligned, unique per (realm, slot) so writes never overlap.
+    def cell(slot, idx):
+        return (slot * 48 + idx) * 8 + 8
+
+    def realm(slot, rng):
+        ncells = rng.randint(0, 4)
+        cells = [(cell(slot, i),
+                  rng.choice([2, 5, 9, 0xe, 0x13]))   # mix in-band + out-of-band
+                 for i in range(ncells)]
+        return dict(
+            slot=slot, feed=rng.randint(0, 12), gate=rng.randint(0, 1),
+            ref=rng.randint(0, 40), fallback=rng.randint(0, 1),
+            rate_pct=rng.randint(-60, 60), prod_rate=rng.randint(0, 15),
+            prod_den=rng.randint(1, 15), class_den=rng.randint(0, 15),
+            bonus=rng.randint(-50, 120), type=rng.choice([0, 1, 2, 3, 4, 5, 6]),
+            buy_c=rng.randint(0, 200), draw=rng.randint(0, 400),
+            raw=rng.choice([0, rng.randint(1, 6000)]),
+            cap=rng.choice([0, rng.randint(1, 2500)]), cells=cells)
+
+    edge = []
+    # one realm per season, a couple in-band cells, both standings settings.
+    for season in (1, 2, 3, 4):
+        nxt = season % 4 + 1
+        edge.append(_build_season_vec(1, 1, season, nxt, [dict(
+            slot=1, feed=6, gate=1, ref=20, fallback=0, rate_pct=10,
+            prod_rate=4, prod_den=4, class_den=5, bonus=0, type=2,
+            buy_c=10, draw=100, raw=2000, cap=600,
+            cells=[(cell(1, 0), 5), (cell(1, 1), 0xe)])]))
+    # season 1 with the production_output fallback latch already set.
+    edge.append(_build_season_vec(1, 0, 1, 2, [dict(
+        slot=1, feed=3, gate=1, ref=8, fallback=1, rate_pct=-40,
+        prod_rate=3, prod_den=2, class_den=1, bonus=20, type=4,
+        buy_c=0, draw=50, raw=50, cap=100,
+        cells=[(cell(1, 0), 2), (cell(1, 1), 2), (cell(1, 2), 9)])]))
+
+    vecs = list(edge)
+    while len(vecs) < n:
+        count = rng.randint(1, 6)
+        season = rng.randint(1, 4)
+        nxt = season % 4 + 1
+        realms = [realm(slot, rng) for slot in range(1, count + 1)]
+        vecs.append(_build_season_vec(count, rng.randint(0, 1), season, nxt, realms))
+    return vecs
+
+
+def run_port_season_economy(lib: ctypes.CDLL, vec: dict) -> dict:
+    g = realm_port_globals(lib)
+    ctypes.memmove(g["army"], vec["army"], REALM_ARMY_BYTES)
+    ctypes.memmove(g["over"], vec["over"], REALM_OVER_BYTES)
+    g["count"].value       = vec["count"]
+    g["stand"].value       = vec["standings"]
+    g["season_prev"].value = vec["season"]        # 0x57c934 — branch selector
+    g["season"].value      = vec["next_season"]   # 0x57c92c — fed to plan_production
+    # The evaluators + plan_production reach the records through the economy
+    # module's pointer; the retype reaches records + the cell grid through the
+    # territory module's pointers.  Bind all three to the injected globals.
+    lib.engine_army_economy_bind_army_records(ctypes.addressof(g["army"]))
+    lib.engine_territory_bind_army_records(ctypes.addressof(g["army"]))
+    lib.engine_territory_bind_cells(ctypes.addressof(g["over"]))
+    lib.engine_army_economy_apply_season_pass()
+    lib.engine_territory_bind_cells(None)
+    lib.engine_territory_bind_army_records(None)
+    lib.engine_army_economy_bind_army_records(None)
+    return {"army": list(bytes(g["army"])), "over": list(bytes(g["over"]))}
+
+
+def season_economy_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_SEASON_PASS, "regions": [
+        {"va": VA_PER_ARMY,        "len": REALM_ARMY_BYTES, "inject": list(vec["army"]), "read": True},
+        {"va": VA_OVERWORLD,       "len": REALM_OVER_BYTES, "inject": list(vec["over"]), "read": True},
+        {"va": VA_SLOT_COUNT,      "len": 4, "inject": list(_u32le(vec["count"])),       "read": False},
+        {"va": VA_SLOT_STAND,      "len": 4, "inject": list(_u32le(vec["standings"])),   "read": False},
+        {"va": VA_SLOT_SEASON_PREV,"len": 4, "inject": list(_u32le(vec["season"])),      "read": False},
+        {"va": VA_SLOT_SEASON,     "len": 4, "inject": list(_u32le(vec["next_season"])), "read": False},
+    ]}
+
+
+def diff_season_economy(retail: dict, port: dict) -> list[str]:
+    bad = _diff_realm_region(retail, port["army"], VA_PER_ARMY,
+                             REALM_ARMY_STRIDE, 17, "army")
+    bad += _diff_realm_flat(retail, port["over"], VA_OVERWORLD, "over")
+    return bad
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -3100,6 +3255,9 @@ def run_diff(cfg_args) -> int:
     if "upkeep" in enabled:
         test_plans.append(("upkeep",
                            gen_upkeep_vectors(cfg_args.vectors, rng)))
+    if "season_economy" in enabled:
+        test_plans.append(("season_economy",
+                           gen_season_economy_vectors(cfg_args.vectors, rng)))
     # Pre-generate the rate-gate LUT — one per run, used by all
     # sim_sub_steps vectors so a re-run with the same seed produces
     # the same LUT (and thus the same retail-side gate decisions).
@@ -3228,7 +3386,7 @@ def run_diff(cfg_args) -> int:
         # this is a no-op at the agent but keeps the per-target log shape.
         shared_freeze_targets = {"sim_sub_steps", "state_hash", "tile_expand",
                                  "delayed_action", "tax_approval", "dev_spread",
-                                 "realm_income", "upkeep"}
+                                 "realm_income", "upkeep", "season_economy"}
         shared_freeze_installed = False
         if shared_freeze_targets & {n for (n, _) in test_plans}:
             fresp = script.exports_sync.install_sim_sub_steps_engine_freeze()
@@ -3831,6 +3989,42 @@ def run_diff(cfg_args) -> int:
                                   "note": "region readback elided"}
                         port = {"note": "region readback elided"}
                         vec = {"diff": vec["diff"], "local": vec["local"]}
+                elif fn_name == "season_economy":
+                    # FUN_0044c8ae(): per-army seasonal production pass.  Inject
+                    # g_per_army_768 + g_overworld_map (cell grid) + realm count +
+                    # the mode flag and the two season slots; read back the army
+                    # block and the cell grid (the retype's type stamps).  Same
+                    # race-retry handling as the other realm passes.
+                    port = run_port_season_economy(lib, vec)
+                    plan = season_economy_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"count": vec["count"],
+                                                 "season": vec["season"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_season_economy(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"count": vec["count"], "season": vec["season"]}
                 else:
                     continue
                 if bad:
@@ -3956,7 +4150,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep,season_economy",
                     help="comma-separated subset to test "
                          "(default: rng_step,fps_step,anim_cycle,frame_delta,"
                          "phase_ticks,input_state,sim_sub_steps,state_hash,"

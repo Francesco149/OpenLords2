@@ -5388,3 +5388,39 @@ multiple subsystems.
 > `engine_unit_total_wage`).  Ghidra/r2 `FUN_004ad52b` @ 0x4ad52b,
 > `FUN_004ad495` @ 0x4ad495.  Verified byte-exact vs retail
 > (`tools/diff_test.py --functions upkeep`, 64/64).
+
+## 153. The winter-season production adjustment scales the wrong number — the cap, not the yield it just computed
+
+The seasonal production pass `FUN_0044c8ae` computes a season's output, then
+applies a model-type "fudge" to it before storing.  For three of the four
+seasons the fudge scales the value it just computed.  But the **season-4
+(winter)** branch scales a *different* field:
+
+```c
+out = yield_phase4(key, ref, cap);   /* cap = record +0x244 */
+record[+0x248] = out;
+/* model-type adjustment — note it reads +0x244 (the CAP), not `out`: */
+if (type == 5) record[+0x248] = cap / 4;     /* not out/4 */
+if (type == 4) record[+0x248] = cap / 2;     /* not out/2 */
+if (type == 0) record[+0x248] = cap / 2;
+if (type == 2) record[+0x248] = cap * 3 / 2;
+```
+
+The other three seasons (`type`-gated by the same byte `+0x21b`) adjust the
+freshly-computed output in place.  Winter alone, whenever the realm's model
+type is one of {0,2,4,5}, throws away the `yield_phase4` result entirely and
+substitutes a fraction of the **input cap** — so the army's stored winter
+output bears no relation to what the yield evaluator returned, and the
+`+0x24c` delta field (stored output − raw yield) records the full difference.
+Only a model type *not* in {0,2,4,5} (e.g. type 1/3/6) leaves the genuine
+yield in place for winter.
+
+Whether this is a deliberate "winter caps production at a fraction of capacity"
+rule or a copy-paste slip from the season-1 branch (which legitimately reads
+its own `+0x240` output) is impossible to tell from the binary — but it is
+load-bearing: it runs every winter turn for every army and is reproduced
+exactly by the port.
+
+> 📍 `src/engine_army_economy.c` (`engine_army_economy_season_update`).
+> Ghidra/r2 `FUN_0044c8ae` @ 0x44c8ae.  Verified byte-exact vs retail
+> (`tools/diff_test.py --functions season_economy`, 128/128 across seeds).
