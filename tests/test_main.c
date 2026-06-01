@@ -825,6 +825,16 @@ struct test_case {
     X(engine_map_render_phase1_row_first_cell_phase_1) \
     X(engine_map_render_error_count_persists_across_frames) \
     \
+    X(engine_map_scene_reset_zeroes_counters_and_phases) \
+    X(engine_map_scene_set_counters_derives_subphases) \
+    X(engine_map_scene_render_body_wraps_counter_378_at_0x80) \
+    X(engine_map_scene_render_body_wraps_counter_388_at_0x60) \
+    X(engine_map_scene_subphases_shift_by_1_to_4) \
+    X(engine_map_scene_tick_first_call_bumps_both_counters) \
+    X(engine_map_scene_tick_within_16ms_holds_counters) \
+    X(engine_map_scene_tick_after_16ms_bumps_counters) \
+    X(engine_map_scene_redraw_phase_cycles_0_to_3) \
+    \
     X(engine_overlay_render_frame_all_empty_no_calls) \
     X(engine_overlay_render_dispatch_bit_0x40_calls_city) \
     X(engine_overlay_render_dispatch_bit_0x80_calls_army) \

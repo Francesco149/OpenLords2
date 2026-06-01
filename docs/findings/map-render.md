@@ -482,3 +482,65 @@ known sparse ~1px cattle-edge speckle (a separate issue — see memory
 **Still unported** (don't appear in the strat-terrain1 frame, counted as
 drawB_skip if hit): edge-phase kind-3/4 (param_5=2 variants of 4580a9/459258)
 and kind-2 phase-4 `FUN_00456fd8`, plus all view-mode 1/2 arms.
+
+### MAP-BODY COMPOSITION DRIVER PORTED (2026-06-01) — engine_map_scene
+
+The three cluster modules (engine_map_terrain pass-1, engine_overlay_render
+pass-2, engine_map_render features) were previously composed only by the
+Python scene harness.  The retail composition wrapper that screen-dispatch
+arm 0 (`FUN_0040f5fd`) calls to paint the map body is now ported as
+`src/engine_map_scene.{c,h}`:
+
+```
+FUN_004050c0 (53 B)  → engine_map_scene_tick (anim-phase tick + render)
+  FUN_004cfb08 (64 B) → GetTickCount 16 ms rate gate, folded into the tick
+    FUN_004050f6 (376 B) → engine_map_scene_render_body
+       ├ FUN_0040526e → engine_map_terrain_frame    (pass 1 base terrain)
+       ├ FUN_00405602 → engine_overlay_render_frame  (pass 2 overlay)
+       └ FUN_00405487 → engine_map_render_frame      (pass 3 features)
+```
+
+**The actual call chain is `FUN_004050c0 → FUN_004cfb08 → FUN_004050f6`** —
+earlier notes called `FUN_004050c0` "the map-draw wrapper", but it only bumps
+the 0..3 redraw-phase counter `DAT_0057d380` then calls the rate-limiter
+`FUN_004cfb08`, which 16 ms-gates two free-running frame counters
+(`DAT_0057d378`, `DAT_0057d388`) before calling the real walker `FUN_004050f6`.
+`FUN_004050f6` is what runs the three clusters, in order **pass1 → pass2 →
+features** (matching the scene harness).
+
+**KEY RE FINDING — `overlay_base` and `arrow_marker_base` are ANIMATION
+sub-phases, not static config.**  `FUN_004050f6` derives eight sub-phases by
+right-shifting the two frame counters:
+
+| counter (wrap)        | >>1        | >>2        | >>3        | >>4 (consumed)            |
+|-----------------------|------------|------------|------------|---------------------------|
+| `DAT_0057d378` (0x80) | `0057d3a8` | `0057d394` | `0057d39c` | `0057d390` = overlay_base  |
+| `DAT_0057d388` (0x60) | `0057d3a4` | `0057d3a0` | `0057d398` | `0057d38c` = arrow_marker   |
+
+Only the two `>>4` sub-phases are read by ported code: `DAT_0057d390` (the
+"overlay base index" read by BOTH engine_overlay_render and engine_map_render)
+and `_DAT_0057d38c` (the "arrow-marker base index" read by
+engine_overlay_render).  The scene harness used to feed these the captured
+scalar (0); they are in fact `counter>>4` and cycle (overlay_base 0..7 since
+the counter wraps at 0x80; arrow_marker 0..5 since its counter wraps at 0x60).
+This is the mechanism behind the documented residual anim-phase skew — the
+map's small sprites step as these counters advance.  The harness now pins the
+counters (`overlay_base<<4`, `arrow_marker_base<<4`) so the phase matches the
+captured frame **exactly** (byte-identical output: drawA=263 drawB=29 sky=0
+army=14 features=291, **99.37% excl menu bar**), and can sweep phases.
+
+**DEFERRED (next-frame-only, no effect on the rendered frame):** the
+column-height accumulator `DAT_0052f020[0..0x20]` and the camera-follow-row
+update `DAT_0057c93c` that bracket the cluster calls in `FUN_004050f6`.  The
+accumulator is filled by the pass-1 row iterators `FUN_00405ae9` /
+`FUN_00405c2f`, which the ported pass-1 collapses, so the follow-row result is
+inert; it is computed AFTER the clusters draw and only steers the NEXT frame's
+camera centring.  Also the sky-gate decay (`if (DAT_0053e9ac) DAT_0053e9ac--`)
+is ported faithfully (via a new `engine_map_terrain_sky_gate_flag` getter) but
+only affects the next frame.
+
+Unit-tested in `tests/test_engine_map_scene.c` (9 tests: sub-phase derivation,
+counter wraps, 16 ms rate gate, redraw-phase cycle).  **NEXT toward native:**
+wire screen-dispatch arm 0 (`FUN_0040f5fd`) to call `engine_map_scene_tick` —
+still gated on the PL8 sprite-blob loaders (`FUN_004984dc` season loader +
+`FUN_004af8d9` file read) and the HUD chrome fns (menu bar, right realm panel).

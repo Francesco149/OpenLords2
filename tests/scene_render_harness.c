@@ -1,20 +1,23 @@
 /*
  * tests/scene_render_harness.c — strategic-map COMPOSED scene parity harness.
  *
- * Composes the two already-ported map clusters into ONE offscreen 8bpp
- * canvas, in retail draw order, against the captured live map state
- * (runs/capture/strat-terrain1, via tools/scene_render_parity.py):
+ * Composes the three already-ported map clusters into ONE offscreen 8bpp
+ * canvas via the ported map-body driver engine_map_scene_render_body()
+ * (FUN_004050f6), which runs them in retail draw order against the captured
+ * live map state (runs/capture/strat-terrain1, via
+ * tools/scene_render_parity.py):
  *
- *   1. pass-1 base terrain   engine_map_terrain_frame()   (FUN_0040526e)
- *   2. feature walker        engine_map_render_frame()     (FUN_00405487)
+ *   1. pass-1 base terrain   engine_map_terrain_frame()    (FUN_0040526e)
+ *   2. pass-2 overlay        engine_overlay_render_frame()  (FUN_00405602)
+ *   3. feature walker        engine_map_render_frame()      (FUN_00405487)
  *
- * Pass 2 (the overlay cluster FUN_00405602) is not ported yet; the HUD
- * chrome (menu bar, right realm panel) is drawn by separate functions.
- * The composed buffer is written raw for a palette-applied diff against the
- * captured clean retail frame.  This is the next milestone after pass-1
- * was validated standalone (terrain_render_harness): it shows base terrain
- * + map features (cattle/wagons/units) together, leaving overlay + HUD as
- * the only remaining gap.
+ * The driver also derives the overlay / arrow-marker animation sub-phases
+ * from the two frame counters (DAT_0057d378/388 >>4) and pushes them into
+ * the clusters; the harness pins the counters so the phase matches the
+ * captured frame.  The HUD chrome (menu bar, right realm panel) is drawn by
+ * separate functions and remains the only gap.  The composed buffer is
+ * written raw for a palette-applied diff against the captured clean retail
+ * frame.
  *
  * Inputs (positional, supplied by tools/scene_render_parity.py from the
  * capture's globals_dump.json) — same 14 scalars as map_render_harness:
@@ -28,6 +31,7 @@
 
 #include "engine_dirty_rect.h"
 #include "engine_map_render.h"
+#include "engine_map_scene.h"
 #include "engine_map_terrain.h"
 #include "engine_overlay_render.h"
 #include "gfx_dispatch.h"
@@ -116,7 +120,6 @@ int main(int argc, char **argv)
     engine_map_terrain_set_sky_gate_flag(0);
     engine_map_terrain_set_error_count(0);
     engine_map_terrain_reset_stats();
-    engine_map_terrain_frame();
 
     /* Shared dirty-rect scratch + clip (overlay + feature walker). */
     engine_dirty_rect_state_t dirty = {
@@ -140,14 +143,13 @@ int main(int argc, char **argv)
     engine_overlay_render_set_dirty_state(&dirty);
     engine_overlay_render_set_view_mode(view_mode);
     engine_overlay_render_set_render_mode(render_mode);
-    engine_overlay_render_set_overlay_base_index(overlay_base);
-    engine_overlay_render_set_arrow_marker_base_index(arrow_marker_base);
+    /* overlay_base / arrow_marker base indices are set by the scene driver
+     * (they are animation sub-phases — see engine_map_scene). */
     engine_overlay_render_set_animation_tick(0);
     engine_overlay_render_set_active_territory(0);
     engine_overlay_render_set_dev_flags(0, 0);
     engine_overlay_render_set_error_count(0);
     engine_overlay_render_reset_call_counts();
-    engine_overlay_render_frame();
 
     /* ---- Cluster 3: feature walker (drawn over terrain + overlay) ---- */
     engine_map_render_set_dirty_state(&dirty);
@@ -162,11 +164,17 @@ int main(int argc, char **argv)
     engine_map_render_set_view_mode(view_mode);
     engine_map_render_set_render_mode(render_mode);
     engine_map_render_set_rotation_offset(rotation);
-    engine_map_render_set_overlay_base_index(overlay_base);
+    /* overlay_base set by the scene driver (animation sub-phase). */
     engine_map_render_set_y_viewport_offset(y_viewport);
     engine_map_render_set_error_count(0);
     engine_map_render_reset_call_count();
-    engine_map_render_frame();
+
+    /* ---- Compose: the ported map-body driver (FUN_004050f6) runs the
+     * three clusters in retail order and derives the overlay / arrow-marker
+     * animation sub-phases from the frame counters.  Pin the counters so
+     * counter>>4 reproduces the captured frame's phase exactly. ---- */
+    engine_map_scene_set_anim_counters(overlay_base << 4, arrow_marker_base << 4);
+    engine_map_scene_render_body();
 
     FILE *o = fopen(out_raw, "wb");
     if (!o) { fprintf(stderr, "open %s: failed\n", out_raw); return 2; }

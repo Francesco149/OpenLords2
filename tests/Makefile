@@ -55,6 +55,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/gfx_sprite_render.c \
                    ../src/engine_map_render.c \
                    ../src/engine_map_terrain.c \
+                   ../src/engine_map_scene.c \
                    ../src/engine_overlay_render.c \
                    ../src/engine_title_render.c \
                    ../src/engine_button.c \
@@ -113,6 +114,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_gfx_text_label.c \
                    test_gfx_sprite_render.c \
                    test_engine_map_render.c \
+                   test_engine_map_scene.c \
                    test_engine_overlay_render.c \
                    test_engine_title_render.c \
                    test_engine_button.c \

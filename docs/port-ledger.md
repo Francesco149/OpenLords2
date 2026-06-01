@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **549** (22.4%) — tested 500, ported 49
-- code bytes touched: **26.7%** (223,671 / 838,629 B)
-- unported: **1898**
+- touched: **552** (22.6%) — tested 506, ported 46
+- code bytes touched: **26.7%** (224,164 / 838,629 B)
+- unported: **1895**
 - orphan refs (in src/, not in function table): 4
 
-## tested (500) — ported + host unit suite
+## tested (506) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -102,10 +102,15 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404e4b | FUN_00404e4b | 98 | engine_math.h |
 | 0x404ead | FUN_00404ead | 159 | engine_math.h, engine_path.h |
 | 0x404f4c | FUN_00404f4c | 180 | engine_path.h, engine_territory.c |
-| 0x405487 | FUN_00405487 | 379 | engine_map_render.c, engine_map_render.h, engine_map_terrain.h (+1) |
-| 0x405602 | FUN_00405602 | 608 | engine_overlay_render.c, engine_overlay_render.h |
+| 0x4050c0 | FUN_004050c0 | 53 | engine_map_scene.c, engine_map_scene.h |
+| 0x4050f6 | FUN_004050f6 | 376 | engine_map_scene.c, engine_map_scene.h |
+| 0x40526e | FUN_0040526e | 537 | engine_map_scene.c, engine_map_scene.h, engine_map_terrain.c (+1) |
+| 0x405487 | FUN_00405487 | 379 | engine_map_render.c, engine_map_render.h, engine_map_scene.c (+3) |
+| 0x405602 | FUN_00405602 | 608 | engine_map_scene.c, engine_map_scene.h, engine_overlay_render.c (+1) |
 | 0x405862 | FUN_00405862 | 333 | engine_map_render.c, engine_map_render.h |
 | 0x4059af | FUN_004059af | 314 | engine_map_render.c, engine_map_render.h |
+| 0x405ae9 | FUN_00405ae9 | 326 | engine_map_scene.h, engine_map_terrain.c, engine_map_terrain.h |
+| 0x405c2f | FUN_00405c2f | 646 | engine_map_scene.h, engine_map_terrain.c, engine_map_terrain.h |
 | 0x405eb5 | FUN_00405eb5 | 247 | engine_overlay_render.c, engine_overlay_render.h |
 | 0x405fac | FUN_00405fac | 497 | engine_overlay_render.c, engine_overlay_render.h |
 | 0x4071a0 | FUN_004071a0 | 3179 | engine.c, engine_anim_cycle.c, engine_overlay_render.c (+1) |
@@ -135,7 +140,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40e9ab | FUN_0040e9ab | 641 | config.h, main.c |
 | 0x40ecc4 | FUN_0040ecc4 | 1099 | config.c, config.h, strutil.h |
 | 0x40f1a0 | FUN_0040f1a0 | 1117 | engine.c, engine_screen_dispatch.c, engine_screen_dispatch.h (+1) |
-| 0x40f5fd | FUN_0040f5fd | 470 | engine_screen_dispatch.c |
+| 0x40f5fd | FUN_0040f5fd | 470 | engine_map_scene.h, engine_screen_dispatch.c |
 | 0x4148e4 | FUN_004148e4 | 264 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x4149ec | FUN_004149ec | 1050 | engine_title_render.c, engine_title_render.h, gfx_sprite.c (+1) |
 | 0x41e61d | FUN_0041e61d | 452 | engine_title_render.c, engine_title_render.h, gfx.c (+2) |
@@ -521,15 +526,13 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4beab9 | FUN_004beab9 | 1051 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4beed4 | FUN_004beed4 | 805 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
+| 0x4cfb08 | FUN_004cfb08 | 64 | engine_map_scene.c, engine_map_scene.h |
 
-## ported (49) — reimplemented, no host test yet
+## ported (46) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
 | 0x40490d | FUN_0040490d | 313 | engine.c |
-| 0x40526e | FUN_0040526e | 537 | engine_map_terrain.c, engine_map_terrain.h |
-| 0x405ae9 | FUN_00405ae9 | 326 | engine_map_terrain.c, engine_map_terrain.h |
-| 0x405c2f | FUN_00405c2f | 646 | engine_map_terrain.c, engine_map_terrain.h |
 | 0x4063c1 | FUN_004063c1 | 690 | engine_map_terrain.c, engine_map_terrain.h |
 | 0x406673 | FUN_00406673 | 1351 | engine_map_terrain.c |
 | 0x408fcb | FUN_00408fcb | 96 | gfx.c, gfx.h |

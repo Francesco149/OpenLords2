@@ -110,6 +110,7 @@ void engine_map_terrain_bind_camera(int x0, int y0,
 void engine_map_terrain_set_view_mode(int v)   { g_view_mode = v; }
 void engine_map_terrain_set_render_mode(int m)  { g_render_mode = m; }
 void engine_map_terrain_set_sky_gate_flag(int f){ g_sky_gate = f; }
+int  engine_map_terrain_sky_gate_flag(void)      { return g_sky_gate; }
 
 int  engine_map_terrain_error_count(void)       { return g_error_count; }
 void engine_map_terrain_set_error_count(int n)  { g_error_count = n; }

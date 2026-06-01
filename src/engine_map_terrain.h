@@ -71,6 +71,7 @@ void engine_map_terrain_set_render_mode(int mode);        /* DAT_0053f264 */
  * iterators draw a sky tile only for empty cells whose sprite index
  * exceeds 6; the phantom rows always draw.  Default 0. */
 void engine_map_terrain_set_sky_gate_flag(int flag);
+int  engine_map_terrain_sky_gate_flag(void);
 
 int  engine_map_terrain_error_count(void);                /* _DAT_0058fea8 */
 void engine_map_terrain_set_error_count(int n);
