@@ -1329,6 +1329,11 @@ struct test_case {
     X(hud_menubar_tile_strip_aborts_on_bad_offset) \
     X(hud_menubar_default_table_layout) \
     \
+    X(map_init_projection_matches_retail_samples) \
+    X(map_init_inactive_cells_stay_empty) \
+    X(map_init_camera_view0) \
+    X(map_init_strategic_sets_default_scroll) \
+    \
     X(map_query_all_clear_returns_1) \
     X(map_query_rawflag_occupied_returns_0) \
     X(map_query_headlink_occupied_returns_0) \

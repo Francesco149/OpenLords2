@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 511,
+  "tested": 515,
   "ported": 45,
-  "unported": 1891,
+  "unported": 1887,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 556,
-  "pct_touched": 22.7,
-  "pct_tested": 20.9,
+  "touched": 560,
+  "pct_touched": 22.9,
+  "pct_tested": 21.0,
   "bytes_total": 838629,
-  "bytes_touched": 226318,
-  "pct_bytes_touched": 27.0
+  "bytes_touched": 227819,
+  "pct_bytes_touched": 27.2
  },
  "orphan_refs": [
   "0x004148",
@@ -4025,8 +4025,11 @@
    "name": "FUN_004298c1",
    "size": 604,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_map_init.c",
+    "src/engine_map_init.h"
+   ]
   },
   {
    "va": "0x429b1d",
@@ -10609,8 +10612,12 @@
    "name": "FUN_00451fcc",
    "size": 385,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_map_init.c",
+    "src/engine_map_init.h",
+    "src/main.c"
+   ]
   },
   {
    "va": "0x45214d",
@@ -11443,8 +11450,11 @@
    "name": "FUN_0046797d",
    "size": 185,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_map_init.c",
+    "src/engine_map_init.h"
+   ]
   },
   {
    "va": "0x467a36",
@@ -12291,6 +12301,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_map_init.c",
     "src/engine_realm_upkeep.c",
     "src/engine_territory.c",
     "src/game_init.c",
@@ -12463,6 +12474,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_map_init.c",
     "src/game_init.c",
     "src/game_init.h"
    ]
@@ -15113,8 +15125,11 @@
    "name": "FUN_00498270",
    "size": 327,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_map_init.c",
+    "src/engine_map_init.h"
+   ]
   },
   {
    "va": "0x4983b7",

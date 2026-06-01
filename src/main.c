@@ -64,6 +64,7 @@
 #include "engine.h"
 #include "engine_dirty_rect.h"
 #include "engine_hud_menubar.h"
+#include "engine_map_init.h"
 #include "engine_map_render.h"
 #include "engine_map_scene.h"
 #include "engine_map_terrain.h"
@@ -82,6 +83,7 @@
 #include "gfx_caret.h"
 #include "gfx_panel.h"
 #include "gfx_text.h"
+#include "save.h"
 #include "save_schema_globals.h"   /* s_slot_0053e8a4 (roster size) */
 
 /* Class name matches retail FUN_004b2258's `s_WinLords2Class_004df5b0`
@@ -168,6 +170,7 @@ static const char *g_title_type;
  * Implies --gfx-init.  DIR is auto-translated Linux→WSL-UNC like
  * --capture-to. */
 static const char *g_strat_map_dir;
+static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 /* --audio-init: call audio_init() after window creation.  Off by
  * default — SetCooperativeLevel(PRIORITY) modifies process audio
  * state and the headless smoke harness has no way to validate
@@ -266,6 +269,7 @@ static void bringup_title_menu(int with_panel);
 static void bringup_title_nav(const char *dir);
 static void bringup_title_live(void);
 static void bringup_strat_map(const char *dir);
+static void bringup_strat_load(const char *dir);
 static const char *translate_wsl_path(const char *p, char *buf, size_t cap);
 void log_line(const char *fmt, ...);   /* non-static — gfx.c links to this */
 
@@ -348,6 +352,15 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
                                                      strat_buf,
                                                      sizeof strat_buf);
                 bringup_strat_map(g_strat_map_dir);
+            } else if (g_strat_load_dir) {
+                /* Native data path: load lastturn.sav + build the render
+                 * arrays ourselves (no captured dumps), validate vs the
+                 * dumps in DIR, then render. */
+                static char strat_load_buf[MAX_PATH];
+                g_strat_load_dir = translate_wsl_path(g_strat_load_dir,
+                                                      strat_load_buf,
+                                                      sizeof strat_load_buf);
+                bringup_strat_load(g_strat_load_dir);
             } else if (g_title_live) {
                 /* Live interactive menu — drive the engine into the
                  * title state, then let the main loop tick it so a real
@@ -1619,6 +1632,223 @@ static void bringup_strat_map(const char *dir)
     }
 }
 
+/* Compare a natively-produced array against the captured retail dump
+ * (<dir>/<name>) over the first `len` bytes.  Logs MATCH or the first
+ * differing byte offset.  Missing dump → logged + skipped (returns 1). */
+static int strat_check_dump(const char *dir, const char *name,
+                            const uint8_t *native, int len)
+{
+    char path[MAX_PATH];
+    wsprintfA(path, "%s\\%s", dir, name);
+    HANDLE h = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL,
+                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) {
+        log_line("strat-load: dump %s absent — skipping check", name);
+        return 1;
+    }
+    static uint8_t buf[0x12710];
+    int n = (len < (int)sizeof buf) ? len : (int)sizeof buf;
+    DWORD got = 0;
+    ReadFile(h, buf, (DWORD)n, &got, NULL);
+    CloseHandle(h);
+    if ((int)got < n) {
+        log_line("strat-load: dump %s short (%lu/%d) — partial check", name,
+                 got, n);
+        n = (int)got;
+    }
+    int first = -1;
+    for (int i = 0; i < n; i++) {
+        if (native[i] != buf[i]) { first = i; break; }
+    }
+    if (first < 0) {
+        log_line("strat-load: %-22s NATIVE == retail dump (%d bytes) OK", name, n);
+        return 1;
+    }
+    log_line("strat-load: %-22s MISMATCH at byte %d (native=0x%02x dump=0x%02x)",
+             name, first, native[first], buf[first]);
+    return 0;
+}
+
+/* Native strategic-map data path (--strat-load DIR).  Loads lastturn.sav +
+ * builds the render arrays natively (engine_map_init), replacing the
+ * --strat-map shim's captured-dump seeds, validates the native arrays
+ * byte-exact against the dumps in DIR, then renders the body + menu bar.
+ * DIR supplies only the retail dumps used for the self-check; all rendered
+ * data is produced from the loaded save + L2_maps.dat. */
+static void bringup_strat_load(const char *dir)
+{
+    /* 1. Load the real save into the schema globals (descriptors / territory
+     * / realm structs / scalars incl. season + map id). */
+    char castles_path[MAX_PATH];
+    wsprintfA(castles_path, "%s\\_load_castles.dat", dir);
+    if (save_load("lastturn.sav", castles_path) != 0) {
+        log_line("strat-load: save_load(lastturn.sav) failed — aborting");
+        return;
+    }
+    int map_id = (int)s_slot_0053f034;
+    int season = (int)s_slot_0057c934;
+    s_slot_0057cb18 = 0;                       /* view-mode normal */
+    log_line("strat-load: loaded lastturn.sav (map_id=%d season=%d)",
+             map_id, season);
+
+    /* 2. Native sprite banks for the loaded season. */
+    if (!engine_pl8_load_strategic_banks(NULL)) {
+        log_line("strat-load: engine_pl8 load failed — aborting");
+        return;
+    }
+
+    /* 3. Build the derived render arrays (tile_cells) + camera natively. */
+    engine_map_init_strategic(NULL, map_id);
+    int32_t *cells = engine_map_init_tile_cells();
+
+    /* 4. Self-check: the native arrays must byte-match the captured dumps. */
+    int all_ok = 1;
+    all_ok &= strat_check_dump(dir, "tile_cells.bin",
+                               (const uint8_t *)cells, 32768);
+    all_ok &= strat_check_dump(dir, "descriptors.bin", g_overworld_map, 32768);
+    all_ok &= strat_check_dump(dir, "territory_records.bin",
+                               g_per_territory_420, 63420);
+    all_ok &= strat_check_dump(dir, "army_records.bin", g_per_army_768, 13056);
+    log_line("strat-load: native-vs-dump check %s", all_ok ? "PASSED" : "FAILED");
+
+    /* 5. Render — same cluster wiring as --strat-map but bound to the native
+     * arrays.  Camera: the view-mode-0 scalars come from the ported
+     * FUN_00451fcc; col/row start are overridden to the captured scroll
+     * (31/78) so the frame matches strat-spray1 (the native default is the
+     * pre-scroll 20/74). */
+    const int CAM_X0 = engine_map_init_cam_x0();
+    const int CAM_Y0 = engine_map_init_cam_y0();
+    const int COL_START = 31, ROW_START = 78;   /* captured scroll position */
+    const int COL_COUNT = engine_map_init_col_count();
+    const int ROW_COUNT = engine_map_init_row_count();
+    const int X_STEP = engine_map_init_x_step();
+    const int Y_STEP = engine_map_init_y_step();
+    const int X_HALF = engine_map_init_x_half_step();
+    const int Y_VIEWPORT = engine_map_init_y_viewport();
+    enum { VIEW = 0, RENDER = 0, ROT = 0 };
+
+    if (!gfx_lock_canvas()) {
+        log_line("strat-load: gfx_lock_canvas failed");
+        return;
+    }
+    int cw = gfx_paint_canvas_width();
+    int ch = gfx_paint_canvas_height();
+    uint8_t *canvas = gfx_paint_canvas_pixels();
+    if (canvas) memset(canvas, 0, (size_t)cw * ch);
+
+    engine_map_terrain_bind_tile_array(cells, 0x104);
+    engine_map_terrain_bind_descriptors(g_overworld_map);
+    engine_map_terrain_bind_blobs(engine_pl8_bank(0), engine_pl8_bank(1),
+                                  engine_pl8_bank(2), engine_pl8_bank(3),
+                                  engine_pl8_bank(4));
+    engine_map_terrain_set_blob_lengths((int)engine_pl8_bank_size(0),
+                                        (int)engine_pl8_bank_size(1),
+                                        (int)engine_pl8_bank_size(2),
+                                        (int)engine_pl8_bank_size(3),
+                                        (int)engine_pl8_bank_size(4));
+    engine_map_terrain_bind_camera(CAM_X0, CAM_Y0, COL_START, ROW_START,
+                                   COL_COUNT, ROW_COUNT, X_STEP, Y_STEP, X_HALF);
+    engine_map_terrain_set_view_mode(VIEW);
+    engine_map_terrain_set_render_mode(RENDER);
+    engine_map_terrain_set_sky_gate_flag(0);
+    engine_map_terrain_set_error_count(0);
+    engine_map_terrain_reset_stats();
+
+    static engine_dirty_rect_state_t dirty;
+    dirty.dirty_mark = 0;
+    dirty.dirty_xmin = cw - 1; dirty.dirty_xmax = 0;
+    dirty.dirty_ymin = ch - 1; dirty.dirty_ymax = 0;
+    dirty.below_status_redraw = 0;
+    gfx_dispatch_set_alt_clip(0, 0, 0);
+
+    engine_overlay_render_bind_tile_array(cells, 0x104);
+    engine_overlay_render_bind_tile_descriptors(g_overworld_map);
+    engine_overlay_render_bind_overlay_blob(engine_pl8_bank(7));
+    engine_overlay_render_bind_territory_records(g_per_territory_420);
+    engine_overlay_render_bind_army_records(g_per_army_768);
+    engine_overlay_render_bind_camera(CAM_X0, CAM_Y0, COL_START, ROW_START,
+                                      COL_COUNT, ROW_COUNT, X_STEP, Y_STEP, X_HALF);
+    engine_overlay_render_bind_canvas(canvas, cw, ch);
+    engine_overlay_render_set_dirty_state(&dirty);
+    engine_overlay_render_set_view_mode(VIEW);
+    engine_overlay_render_set_render_mode(RENDER);
+    engine_overlay_render_set_animation_tick(0);
+    engine_overlay_render_set_active_territory(0);
+    engine_overlay_render_set_dev_flags(0, 0);
+    engine_overlay_render_set_error_count(0);
+    engine_overlay_render_reset_call_counts();
+
+    engine_map_render_set_dirty_state(&dirty);
+    engine_map_render_bind_tile_array(cells, 0x104);
+    engine_map_render_bind_tile_descriptors(g_overworld_map);
+    engine_map_render_bind_territory_records(g_per_territory_420);
+    engine_map_render_bind_blobs(engine_pl8_bank(5), engine_pl8_bank(6),
+                                 engine_pl8_bank(7));
+    engine_map_render_bind_camera(CAM_X0, CAM_Y0, COL_START, ROW_START,
+                                  COL_COUNT, ROW_COUNT, X_STEP, Y_STEP, X_HALF);
+    engine_map_render_set_view_mode(VIEW);
+    engine_map_render_set_render_mode(RENDER);
+    engine_map_render_set_rotation_offset(ROT);
+    engine_map_render_set_y_viewport_offset(Y_VIEWPORT);
+    engine_map_render_set_error_count(0);
+    engine_map_render_reset_call_count();
+
+    engine_map_scene_set_anim_counters(0, 0);
+    engine_map_scene_render_body();
+
+    log_line("strat-load: rendered body — drawA=%d drawB=%d sky=%d "
+             "army=%d feat=%d (oob=%d err=%d)",
+             engine_map_terrain_drawa_count(),
+             engine_map_terrain_drawb_count(),
+             engine_map_terrain_sky_count(),
+             engine_overlay_render_army_call_count(),
+             engine_map_render_call_count(),
+             engine_map_terrain_oob_copies(),
+             engine_map_terrain_error_count());
+
+    /* Menu-bar chrome (state-free; the data-dependent tail is still
+     * deferred — see engine_hud_menubar.h). */
+    {
+        const uint8_t *chrome = gfx_load_chrome_sheet();
+        const uint8_t *font   = gfx_load_menu_font();
+        size_t loc_size = 0;
+        const uint8_t *locblob = config_localization_data(&loc_size);
+        if (chrome && font && locblob) {
+            engine_set_current_screen(0);
+            gfx_dispatch_set_alt_clip(0, 0, 0);
+            localization_state_t loc;
+            loc.blob = (unsigned char *)locblob;
+            loc.walker_offset = 0;
+            int16_t menu_tbl[24];
+            engine_hud_menubar_render_chrome(
+                chrome, font, gfx_glyph_render_map(), gfx_glyph_measure_map(),
+                &loc, engine_hud_menubar_default_table(menu_tbl));
+        }
+    }
+
+    if (canvas) {
+        char path[MAX_PATH];
+        wsprintfA(path, "%s\\port_strat.raw", dir);
+        HANDLE h = CreateFileA(path, GENERIC_WRITE, 0, NULL,
+                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (h != INVALID_HANDLE_VALUE) {
+            DWORD wn = 0;
+            WriteFile(h, canvas, (DWORD)(cw * ch), &wn, NULL);
+            CloseHandle(h);
+            log_line("strat-load: raw canvas → %s (%d bytes)", path, cw * ch);
+        }
+    }
+
+    gfx_unlock_canvas();
+    gfx_tick_present(1);
+    {
+        char path[MAX_PATH];
+        wsprintfA(path, "%s\\port_strat.bmp", dir);
+        gfx_capture_backbuffer(path);
+        log_line("strat-load: backbuffer → %s", path);
+    }
+}
+
 /* Page-background reload hook (engine → gfx).  The engine_tick title
  * render step calls this before the canvas lock on each full redraw; the
  * engine hook is `void(*)(int)` but gfx_title_background_load returns int,
@@ -1919,6 +2149,10 @@ static void parse_cmdline(LPSTR lpCmd)
         }
         else if (!strcmp(a, "--strat-map") && i + 1 < ntok) {
             g_strat_map_dir = tokens[++i];   /* live strategic-map render */
+            g_gfx_init = 1;                  /* needs DDraw */
+        }
+        else if (!strcmp(a, "--strat-load") && i + 1 < ntok) {
+            g_strat_load_dir = tokens[++i];  /* native load→build→render */
             g_gfx_init = 1;                  /* needs DDraw */
         }
         else if (!strcmp(a, "--audio-init"))     g_audio_init  = 1;

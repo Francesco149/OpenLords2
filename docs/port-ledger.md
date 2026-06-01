@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **556** (22.7%) — tested 511, ported 45
-- code bytes touched: **27.0%** (226,318 / 838,629 B)
-- unported: **1891**
+- touched: **560** (22.9%) — tested 515, ported 45
+- code bytes touched: **27.2%** (227,819 / 838,629 B)
+- unported: **1887**
 - orphan refs (in src/, not in function table): 4
 
-## tested (511) — ported + host unit suite
+## tested (515) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -180,6 +180,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x429153 | FUN_00429153 | 96 | engine_category_buckets.h, engine_territory.c |
 | 0x4291b3 | FUN_004291b3 | 171 | engine_category_buckets.h, engine_territory.c |
 | 0x42925e | FUN_0042925e | 81 | engine_category_buckets.c, engine_category_buckets.h |
+| 0x4298c1 | FUN_004298c1 | 604 | engine_map_init.c, engine_map_init.h |
 | 0x429b1d | FUN_00429b1d | 135 | engine.c, engine_camera.c, engine_camera.h (+1) |
 | 0x42a15f | FUN_0042a15f | 206 | engine_camera.c, engine_camera.h |
 | 0x42dfe2 | FUN_0042dfe2 | 126 | main.c |
@@ -310,6 +311,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x45158b | FUN_0045158b | 147 | engine_army_ai.c, engine_army_ai.h |
 | 0x451f1a | FUN_00451f1a | 81 | engine.c, engine.h, engine_anim_cycle.c |
 | 0x451f70 | FUN_00451f70 | 26 | gfx.c, main.c |
+| 0x451fcc | FUN_00451fcc | 385 | engine_map_init.c, engine_map_init.h, main.c |
 | 0x452160 | FUN_00452160 | 422 | engine.c, gfx.c, gfx.h (+1) |
 | 0x452306 | FUN_00452306 | 224 | engine_dirty_rect.c, engine_dirty_rect.h, gfx.c (+1) |
 | 0x4523e6 | FUN_004523e6 | 36 | engine_dirty_rect.h |
@@ -328,6 +330,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46733c | FUN_0046733c | 124 | engine_map_query.c, engine_map_query.h |
 | 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c, engine_territory.h |
 | 0x467770 | FUN_00467770 | 525 | engine_territory.c, engine_territory.h, engine_title_render.c |
+| 0x46797d | FUN_0046797d | 185 | engine_map_init.c, engine_map_init.h |
 | 0x467a36 | FUN_00467a36 | 624 | engine_territory.c, engine_territory.h |
 | 0x467ca6 | FUN_00467ca6 | 385 | engine_territory.c, engine_territory.h |
 | 0x467fd1 | FUN_00467fd1 | 336 | engine_territory.c, engine_territory.h |
@@ -370,13 +373,13 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46e1b0 | FUN_0046e1b0 | 792 | engine_territory.c, engine_territory.h, game_init.c |
 | 0x46ea28 | FUN_0046ea28 | 57 | game_init.c, game_init.h |
 | 0x46ea61 | FUN_0046ea61 | 57 | game_init.c |
-| 0x46ead0 | FUN_0046ead0 | 57 | engine_realm_upkeep.c, engine_territory.c, game_init.c (+1) |
+| 0x46ead0 | FUN_0046ead0 | 57 | engine_map_init.c, engine_realm_upkeep.c, engine_territory.c (+2) |
 | 0x46eb09 | FUN_0046eb09 | 54 | game_init.c, game_init.h |
 | 0x46ec6e | FUN_0046ec6e | 369 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x46f0a9 | FUN_0046f0a9 | 71 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x46f1dc | FUN_0046f1dc | 67 | game_init.c, game_init.h |
 | 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h |
-| 0x46f3cd | FUN_0046f3cd | 78 | game_init.c, game_init.h |
+| 0x46f3cd | FUN_0046f3cd | 78 | engine_map_init.c, game_init.c, game_init.h |
 | 0x46f434 | FUN_0046f434 | 216 | engine_path.c, engine_path.h |
 | 0x46ff43 | FUN_0046ff43 | 617 | engine_strat_cost.c, engine_strat_cost.h |
 | 0x471c1f | FUN_00471c1f | 273 | engine_tile.c, engine_tile.h |
@@ -395,6 +398,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4921e5 | FUN_004921e5 | 451 | engine_tile.c, engine_tile.h |
 | 0x497ced | FUN_00497ced | 376 | engine_territory.c, engine_territory.h |
 | 0x497e65 | FUN_00497e65 | 1025 | game_init.c, game_init.h |
+| 0x498270 | FUN_00498270 | 327 | engine_map_init.c, engine_map_init.h |
 | 0x4984dc | FUN_004984dc | 731 | engine_pl8.c, engine_pl8.h, pl8_table.h (+1) |
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h |
 | 0x499dc3 | FUN_00499dc3 | 154 | game_init.h |

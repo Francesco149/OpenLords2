@@ -692,3 +692,53 @@ new-game/load path does not yet populate — `FUN_0041a900`/`FUN_0041ab67` and t
 flag loop are left unported (cited as bare hex) until that state lands.  5 host
 tests (tile cycling/origin/abort/null + table layout); File/Options/Help label
 rendering is validated by the render-parity harness, not re-stubbed.
+
+## Native data path (load route) — FOUNDATION + the descriptor-finalize gap (2026-06-01)
+
+Goal: make the drop-in produce the strategic-map render arrays itself
+(load a save + build), retiring the `--strat-map` shim's captured-dump
+seeds.  Route chosen: **load** (`save_load` is already ported + tested vs
+the real `lastturn.sav`), not new-game map-gen.
+
+**Ported + validated (`src/engine_map_init.{c,h}`, `--strat-load DIR`):**
+- `FUN_004298c1` + `FUN_0046797d` → `engine_map_init_build_cells`: builds
+  `tile_cells` (0x55cea0) = init 0xfff0000, seed terrain from
+  `L2_maps.dat[map_id]+0x6000`, then the iso territory-index projection
+  `(cols*row+col)*stride`.  **VALIDATED**: the projection matches the
+  captured `tile_cells.bin` 4093/4093 playable cells (off980=0).
+- `FUN_00451fcc` → `engine_map_init_set_camera`: view-mode-0 camera
+  (matches the shim's hardcoded scalars).
+- `FUN_00498270` → `engine_map_init_strategic`: 64×64 dims, stride 8,
+  default scroll origin (col 20 / row 74 — the pre-scroll view).
+- `bringup_strat_load` (main.c): `save_load(lastturn.sav)` →
+  `engine_map_init_strategic` → bind clusters to the native arrays →
+  render.  Byte-exact self-check vs the dumps built in.
+
+**The remaining gap — the in-place terrain FINALIZE pass (`FUN_004676e0`).**
+The save stores the *logical* map at 0x522f90; a map-entry pass rewrites it
+**in place** into display descriptors.  Field-by-field, raw save entry 0 vs
+the captured (post-finalize) `descriptors.bin`:
+
+| field | meaning            | save→dump match |
+|------:|--------------------|----------------:|
+|  +3   | terrain sprite idx |   **4.0%**      |
+|  +1   | edge/flags         |   42.4%         |
+|  +7   | terrain flag bits  |   36.6%         |
+|  +2   | mode gate flag     |   62.6%         |
+|  +5   | **feature head**   |   **99.8%**     |
+|  +0/+4/+6 | (other)        |   92–97%        |
+
+So the **features/territory load correctly** (head +5 = 99.8%, territory
+records = 99.84%) — the map is NOT regenerated — but the **terrain display
+sprite (+3) is ~96% recomputed** by the un-ported finalize, so the terrain
+surface renders wrong and dominates the frame (17.6% vs strat-spray1).
+
+`FUN_004676e0` (144 B) is an orchestrator of **15 sub-passes**: 6×
+`FUN_0046c5b8(type)` (per-terrain autotiling), `FUN_00467770`/`0046a037`
+(map-id keyed), `FUN_0046df51`/`0046dbf5`/`0046dd34` (tile_cells edge
+variants — note: these only touch the *inactive* 0xfff cells; the playable
+projection already matches), `FUN_00467ca6`/`00468d4f`/`00467a36`
+(settlement sprites) / `0046da4b` / `004291b3`.  Porting this cluster is
+the NEXT frontier for the native data path; it makes `--strat-load`
+reproduce strat-spray1 from loaded data and is the same pass new-game would
+need.  `engine_map_init_strategic` leaves a `TODO` seam where it runs.
