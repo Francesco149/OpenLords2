@@ -142,17 +142,31 @@ segments past `TITLE`.
 
 ## Phased implementation
 
-- **P1 — retail anchors + capture.** `anchorTick()` in the agent (read both
-  state globals each tick, emit `{kind:"anchor",anchor,frame}`);
-  `frida_capture.py --anchor-trace` → `anchors.jsonl`. *(active)*
-- **P2 — `--input-segtrace` (retail).** `{wait}`/`{capture}`/`{wait_until}` in
-  the agent drain + driver; anchor-relative capture schedule.
-- **P3 — determinism pins + watch.** `--rng-seed`, `--watch`; characterise
-  new-game determinism (same seed+trace ⇒ bit-identical map frames?).
-- **P4 — author + capture the target.** `tools/traces/new_game_to_map.jsonl`:
-  menu nav → start a new game → `wait` through loads → dismiss the dialogs →
-  `{capture}` the first clean strategic-map frame. Verify bit-identical across
-  two replays; this is the ground truth.
+- **P1 — retail anchors + capture. ✅ DONE (2026-06-01).** `anchorTick()` in the
+  agent emits `{kind:"anchor",anchor,frame}` on engine-state/screen-id edges;
+  `frida_capture.py --anchor-trace` → `anchors.jsonl`. Validated live.
+- **P2 — `--input-segtrace` (retail). ✅ DONE (2026-06-01).**
+  `{wait}`/`{wait_until}`/`{capture}` ops; anchor-relative capture; `wait`
+  resolves against a per-segment floor (`g_seg_wait_floor`) so a fast anchor
+  that fires while prior inputs are still dispatching still satisfies it;
+  `segtrace_done` ends the run deterministically. Validated + bit-identical
+  across replays.
+- **P3 — determinism pins + watch. ✅ DONE (2026-06-01).** `--rng-seed` pins the
+  three LFSR states each pre-ingame tick (the new-game map-gen is synchronous —
+  consumes the seed in the title→ingame tick); `--watch NAME=0xVA:type`
+  edge-emits a state oracle. **Finding:** under turbo the run is already
+  bit-deterministic within a target; `--rng-seed` is needed for port↔retail
+  (the two targets don't seed from the same wall-clock instant). Confirmed it
+  changes the map vs the menu-advanced state, pinning a reproducible one.
+- **P4 — author + capture the target. ✅ DONE (2026-06-01).**
+  `tools/traces/new_game_to_map.jsonl`: 4-click nav → page-7 Start → `wait
+  MAP_FREEROAM` → dismiss the five entry message-scrolls (hand-icon column
+  spray) → `{capture}` the first full clean strategic-map frame
+  (`ad450c26…`, bit-identical across two pinned runs). The new-game ground
+  truth. **Open polish:** the visual message-scroll subsystem's active global
+  (for `{wait_until scroll==0}` to name the exact first-clean frame instead of
+  the round heuristic) is unidentified — the `0x426xxx` "scroll" family is the
+  audio/wave timer subsystem (red herring).
 - **P5 — port anchors.** `src/anchor_trace.{c,h}` wired into the main loop;
   drive the same trace through the drop-in. The anchor stream localises the
   divergence (the port stalls at the new-game transition) — the measured
@@ -160,7 +174,7 @@ segments past `TITLE`.
   advance and its frame converges on the truth.
 - **P6 (later) — `tas_diff.py` + scenario integration.** Anchor-aligned
   port↔retail diff gallery; fold into a `scenario-test.py` once the port
-  renders past `TITLE`.
+  renders past `TITLE`. A comparison run should pin `--rng-seed` by default.
 
 ## Relationship to existing roadmap
 
