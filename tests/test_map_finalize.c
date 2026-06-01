@@ -20,14 +20,28 @@
  *
  * This test loads the real lastturn.sav, runs the ported finalize subset
  * (engine_territory_classify_feature_tiles / _randomise_special_tiles /
- * _rebuild_cell_roster) and measures the per-field descriptor match
- * against the captured descriptors.bin BEFORE and AFTER finalize.  It is
- * SKIPPED unless both the retail data dir and the capture dump are present.
+ * _rebuild_cell_roster) and compares the per-field descriptor table against
+ * retail's own IMMEDIATE post-load dump (runs/capture/load-immediate1, taken
+ * at MAP_FREEROAM+2 before the warmup), captured by driving retail through
+ * load_into_map_seg.jsonl with --dump-regions 0x522f90:32768.  SKIPPED unless
+ * the retail data dir + that dump are present.
  *
- * The single-LFSR RNG (DAT_00591564) is seeded with the retail
- * InitInstance constant 0x34518632; the autotiler only consults it for
- * the isolated/water terrain type (0x16), so the bulk of +3 is
- * deterministic regardless of the live RNG phase.
+ * RESULT: byte-exact — +0/+1/+3/+4/+5/+7 = 100%, +2 = 99.5% (~20-cell residual).
+ * So the ported LOAD data path reproduces retail's load output exactly.
+ *
+ * KEY (was a long-standing confusion): the strat-terrain1 dump that earlier
+ * tests compared against was captured ~32 s into the frame-capture WARMUP, by
+ * which point a turn/territory pass has remapped cell +7 from its per-cell
+ * REGION id (1..0x0e, what the load produces) to the OWNING REALM (1..4) and
+ * recomputed the terrain display.  Against that warmup dump +3 scored only 4%;
+ * against the true immediate-post-load dump it is 100%.  The region->owner
+ * remap is post-load WARMUP processing, a separate (next) target — NOT the
+ * load finalize, which is correct.
+ *
+ * The single-LFSR RNG (DAT_00591564) is seeded with the retail InitInstance
+ * constant 0x34518632; the autotiler consults it only for the isolated/water
+ * type (0x16).  It happens not to matter here because the loaded save already
+ * carries the autotiled +3 (the load re-derives the same bytes).
  */
 
 #include <stdint.h>
@@ -91,7 +105,7 @@ int test_map_finalize_load_path_diagnostic(void)
 
     char desc_path[1200];
     snprintf(desc_path, sizeof desc_path,
-             "%s/runs/capture/strat-terrain1/dump/descriptors.bin",
+             "%s/runs/capture/load-immediate1/dump/descriptors.bin",
              OPENLORDS2_ROOT);
     if (!file_exists(desc_path))
         T_SKIP("captured descriptors.bin not found at %s", desc_path);
@@ -331,28 +345,17 @@ int test_map_finalize_load_path_diagnostic(void)
            pct(post0), pct(post1), pct(post2), pct(post3),
            pct(post4), pct(post5), pct(post7));
 
-    (void)post0; (void)post1; (void)post2; (void)post4; (void)post7;
+    (void)post1; (void)post7;
 
-    /* INVARIANTS this diagnostic guards (see the file header + the finding
-     * recorded in docs/findings/map-render.md "Native data path"):
-     *
-     *  - The save IS the one that produced the captured frame, and save_load
-     *    is faithful: the gameplay field +5 (feature-list head) is preserved
-     *    by the load path and matches the captured dump ~100%.
-     *  - engine_map_init_build_cells reproduces retail's tile_cells for every
-     *    ACTIVE (playable) cell — the projection foundation is correct.
-     *  - The load-path finalize (classify/randomise/roster) runs without
-     *    corrupting that foundation.
-     *
-     * It does NOT assert a +3 byte-match: the captured descriptors.bin +3 is
-     * a render-state snapshot — the terrain display fields +1/+2/+3/+7 are
-     * recomputed AFTER the autotile by load passes that stamp the per-cell
-     * territory owner (+7) and border flag (+1 bit2) from the territory
-     * records, and water +3 is animated per frame (RNG variant on type 0x16).
-     * Byte-exact reproduction is therefore NOT achievable from the finalize
-     * alone, and is the wrong validation target — see the memory note. */
-    T_ASSERT(pct(pre5) > 99.0);            /* right save + faithful save_load */
-    T_ASSERT(post5 >= pre5 - NCELLS/200);  /* load preserves the +5 gameplay field */
+    /* The ported LOAD data path must reproduce retail's immediate post-load
+     * descriptor table byte-for-byte.  +3 (terrain sprite, the field the
+     * renderer reads) and the owner/feature fields are exact; +2 carries a
+     * tiny (~0.5%) residual still under investigation. */
+    T_ASSERT_EQ_I(post0, NCELLS);          /* +0 type          100% */
+    T_ASSERT_EQ_I(post3, NCELLS);          /* +3 terrain sprite 100% */
+    T_ASSERT_EQ_I(post4, NCELLS);          /* +4               100% */
+    T_ASSERT_EQ_I(post5, NCELLS);          /* +5 feature head  100% */
+    T_ASSERT(pct(post2) > 99.0);           /* +2 render flags  ~99.5% (residual) */
 
     return 0;
 }

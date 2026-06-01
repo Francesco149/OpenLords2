@@ -798,3 +798,33 @@ trace (Phase-G `call_trace_diff` / frida, host run) to enumerate exactly which
 functions run, find the `+7` ownership-fill pass, port it, then close the RNG
 phase.  The diagnostic test guards the foundation invariants (save+capture
 consistency, build correctness) and prints the live gap metrics each run.
+
+### RESOLVED (2026-06-01) — the LOAD path is byte-exact; the gap was a wrong ground truth
+
+Drove the structural-parity tools myself over remote frida
+(`cutestation.soy:27042`):
+
+- **Real load path** (call-trace, `--input-segtrace load_into_map_seg.jsonl`):
+  `4ad9f0` (load pump, polled 351×) → **`4adfe6` (save_load)** → **`4976a1`**
+  (map setup: `43e9e2`, `4298c1`, `451fcc`, `46a037`, **`46dbf5` autotile,
+  `46dd34`, `46da4b`**) at frame 566 → `MAP_FREEROAM`@567.  (My earlier
+  `--input-trace` runs never completed the load — the frame-3
+  `497a34`/`467770` they saw was just the BOOT default map.  Use
+  `--input-segtrace` with the anchor `{wait}` gating.)
+- **Immediate post-load dump:** `--dump-regions 0x522f90:32768` at
+  `MAP_FREEROAM+2` (warmup≈0) → `runs/capture/load-immediate1/dump/`.  The
+  ported load (`save_load` + `classify_feature_tiles`/`randomise_special_tiles`/
+  `rebuild_cell_roster`) reproduces it **+0/+1/+3/+4/+5/+7 = 100%, +2 = 99.5%**.
+  THE LOAD DATA PATH IS CORRECT.
+- **The "4% +3" was a wrong ground truth.**  `strat-terrain1` was captured ~32 s
+  into the frame-capture WARMUP.  By then a turn/territory pass has remapped
+  cell `+7` from its per-cell REGION id (`{1..0x0e}`, what the load produces) to
+  the OWNING REALM (`{1..4}`; sea `0x20` 84→497) and recomputed the terrain
+  display.  Immediate post-load `+7` = `{0:2337, 1..14:~115, 32:84}`;
+  warmup `+7` = `{0,1,2,3,4,32}`.
+
+**NEXT:** (a) wire the load finalize into the drop-in `--strat-load` so it
+renders the immediate-post-load map natively; (b) find the WARMUP region→owner
+remap (call-trace frames 567→~3700) to reproduce the settled `strat-terrain1`
+frame; (c) chase the +2 0.5% residual (~20 cells).  `test_map_finalize_load_path_diagnostic`
+now asserts the byte-exact load result.
