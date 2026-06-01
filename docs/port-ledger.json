@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 452,
+  "tested": 466,
   "ported": 36,
-  "unported": 1959,
+  "unported": 1945,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 488,
-  "pct_touched": 19.9,
-  "pct_tested": 18.5,
+  "touched": 502,
+  "pct_touched": 20.5,
+  "pct_tested": 19.0,
   "bytes_total": 838629,
-  "bytes_touched": 169500,
-  "pct_bytes_touched": 20.2
+  "bytes_touched": 173418,
+  "pct_bytes_touched": 20.7
  },
  "orphan_refs": [
   "0x004148",
@@ -9426,7 +9426,8 @@
    "status": "tested",
    "src": [
     "src/engine_realm.c",
-    "src/engine_realm.h"
+    "src/engine_realm.h",
+    "src/engine_realm_upkeep.c"
    ]
   },
   {
@@ -12154,6 +12155,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_realm_upkeep.c",
     "src/engine_territory.c",
     "src/game_init.c",
     "src/game_init.h"
@@ -12207,8 +12209,11 @@
    "name": "FUN_0046ec6e",
    "size": 369,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c",
+    "src/engine_realm_upkeep.h"
+   ]
   },
   {
    "va": "0x46eddf",
@@ -12239,8 +12244,11 @@
    "name": "FUN_0046f0a9",
    "size": 71,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c",
+    "src/engine_realm_upkeep.h"
+   ]
   },
   {
    "va": "0x46f0f0",
@@ -12585,7 +12593,9 @@
     "src/engine_event_queue.c",
     "src/engine_event_queue.h",
     "src/engine_ranking.h",
-    "src/engine_realm.c"
+    "src/engine_realm.c",
+    "src/engine_realm_upkeep.c",
+    "src/engine_realm_upkeep.h"
    ]
   },
   {
@@ -16332,8 +16342,11 @@
    "name": "FUN_004aa039",
    "size": 328,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c",
+    "src/engine_realm_upkeep.h"
+   ]
   },
   {
    "va": "0x4aa181",
@@ -16412,8 +16425,11 @@
    "name": "FUN_004aba5a",
    "size": 220,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c",
+    "src/engine_realm_upkeep.h"
+   ]
   },
   {
    "va": "0x4abb36",
@@ -16476,8 +16492,11 @@
    "name": "FUN_004ac6fe",
    "size": 245,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c",
+    "src/engine_realm_upkeep.h"
+   ]
   },
   {
    "va": "0x4ac7f3",
@@ -16519,56 +16538,73 @@
    "name": "FUN_004acbd4",
    "size": 650,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c",
+    "src/engine_realm_upkeep.h"
+   ]
   },
   {
    "va": "0x4ace5e",
    "name": "FUN_004ace5e",
    "size": 650,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c",
+    "src/engine_realm_upkeep.h"
+   ]
   },
   {
    "va": "0x4ad0e8",
    "name": "FUN_004ad0e8",
    "size": 132,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c"
+   ]
   },
   {
    "va": "0x4ad16c",
    "name": "FUN_004ad16c",
    "size": 196,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c"
+   ]
   },
   {
    "va": "0x4ad230",
    "name": "FUN_004ad230",
    "size": 230,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c"
+   ]
   },
   {
    "va": "0x4ad316",
    "name": "FUN_004ad316",
    "size": 132,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c"
+   ]
   },
   {
    "va": "0x4ad39a",
    "name": "FUN_004ad39a",
    "size": 140,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c",
+    "src/engine_realm_upkeep.h"
+   ]
   },
   {
    "va": "0x4ad426",
@@ -16583,16 +16619,22 @@
    "name": "FUN_004ad495",
    "size": 150,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c",
+    "src/engine_realm_upkeep.h"
+   ]
   },
   {
    "va": "0x4ad52b",
    "name": "FUN_004ad52b",
    "size": 405,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c",
+    "src/engine_realm_upkeep.h"
+   ]
   },
   {
    "va": "0x4ad6c0",
@@ -16602,7 +16644,8 @@
    "status": "tested",
    "src": [
     "src/engine_realm.c",
-    "src/engine_realm.h"
+    "src/engine_realm.h",
+    "src/engine_realm_upkeep.c"
    ]
   },
   {

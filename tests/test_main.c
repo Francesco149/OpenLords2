@@ -1745,6 +1745,16 @@ struct test_case {
     X(engine_events_pop_gate_and_clamp) \
     X(engine_events_territory_claim) \
     \
+    X(engine_upkeep_wage_divisors) \
+    X(engine_upkeep_total_wage_filters) \
+    X(engine_upkeep_clear_contract) \
+    X(engine_upkeep_map_unlink) \
+    X(engine_upkeep_disband_links) \
+    X(engine_upkeep_absorb) \
+    X(engine_upkeep_pay_afford_and_state0) \
+    X(engine_upkeep_pay_escalation_and_disband) \
+    X(engine_upkeep_morale_sweep) \
+    \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \
     X(engine_ranking_score_weights) \

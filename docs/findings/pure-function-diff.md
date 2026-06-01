@@ -32,6 +32,7 @@ in our port that would corrupt the engine on boot is caught immediately.
 | `tax_approval`                | `FUN_0044bd9f`    | `src/engine_realm.c`      | per-realm tax-policy → approval-modifier turn pass.  __stdcall void() — no args; injects g_per_army_768 + g_player_strategic_352 + realm count, diffs the mutated per-army block.  Engine-tick freeze required |
 | `dev_spread`                  | `FUN_0044bf7a`    | `src/engine_realm.c`      | per-realm development-spread turn pass (+ subtree c093/c278/c5fc/c53b/bfd5).  __stdcall void(); injects per-army + g_misc_1360 + g_overworld_map + count/standings/season, diffs the per-army block AND the overworld map (cell-type stamps).  Port binds its territory cell grid to its overworld copy so the c093→c278 type feedback matches retail.  Engine-tick freeze required.  CAUGHT a real port bug: the developable-cell predicate was inverted (< 0x19 vs >= 0x19) — the host unit tests shared the wrong model and passed; the retail diff did not |
 | `realm_income`                | `FUN_0044b80b`    | `src/engine_realm.c`      | per-realm PROJECTED tax-income recompute (live tax-slider path; also the FUN_00448545 turn pass).  **__cdecl(int realm)** — the FIRST diff target that takes an argument, so the generic RPC is driven with `args:[realm]` + `cc:'mscdecl'` (added to runRetailRealmPass).  Injects g_per_army_768 + g_player_strategic_352 + realm count; reads back BOTH blocks (the called realm's projection fields +0xc0/+0x0f/+0x16 AND the owner-tally +0x28 / per-player income totals +0x15c it refreshes).  Engine-tick freeze required |
+| `upkeep`                      | `FUN_004acbd4`    | `src/engine_realm_upkeep.c` | per-realm unit upkeep / wages / desertion turn pass (+ its 13-fn lifecycle cluster).  __stdcall void(); the port also takes an event-queue pointer (retail uses the global ring, which is neither injected nor read back — the warning posts stay out of the diff).  Injects g_per_territory_420 + g_player_strategic_352 + g_unit_table_20 + the difficulty / morale-gate / local-player scalars; reads back those three blocks.  Vectors are CONSTRAINED to the **no-collect region** (unit types <= 0x10, absorb flag 0, escalation state <= 4, contracted values large, morale gate off): the disband/absorb tails call collect_territory_income → the army-economy planners, which read price scalars g_price_a/b/c (fixed 5/10/6 in the diff lib, live/variable in retail), so they can't be matched.  The terminal disband-all path + stockpile-floor check are host-unit-tested instead.  Engine-tick freeze required |
 
 Each has a host-side unit-test file under `tests/test_engine_*.c`; the
 diff test complements those by proving they match retail behavior for
@@ -54,8 +55,9 @@ Knobs (full list in `--help`):
   - `--warmup-s N` — how long to wait for engine_tick to start ticking
     before firing RPCs (default 10)
 
-Latest verified run: **realm_income 24/24 pass** (2026-06-01, retail via
-cutestation.soy) on top of the prior **288/288 across twelve functions** (24
+Latest verified run: **upkeep 64/64 pass** (2026-06-01, retail via
+cutestation.soy — 16 vectors seed 0 + 48 vectors seed 7) on top of
+**realm_income 24/24** and the prior **288/288 across twelve functions** (24
 vectors each).  Earlier deep run: 1800/1800 across the first nine (2026-05-25,
 200 vectors each).
 

@@ -5,8 +5,8 @@
 The unported, non-thunk engine functions already **called by ported code** — the natural next chips. A **leaf** has all of its
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
-- frontier functions: **291**
-- of those, zero-dependency **leaves: 104** (recommended order below)
+- frontier functions: **284**
+- of those, zero-dependency **leaves: 102** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
 
@@ -182,7 +182,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x423530 | 521 | 1 | 0 | ✓ |
 | 0x421d09 | 523 | 1 | 0 | ✓ |
 | 0x421005 | 556 | 1 | 2 |  |
-| 0x422ff1 | 592 | 1 | 5 |  |
+| 0x422ff1 | 592 | 1 | 4 |  |
 | 0x429418 | 669 | 1 | 3 |  |
 | 0x422d22 | 719 | 1 | 3 |  |
 | 0x42dbc7 | 868 | 1 | 7 |  |
@@ -256,32 +256,26 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x43bf07 | 827 | 1 | 3 |  |
 | 0x43ce1a | 1263 | 1 | 10 |  |
 
-### sim dispatch + records (14)
+### sim dispatch + records (9)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
 | 0x44ae3c | 21 | 1 | 2 |  |
-| 0x44bf7a | 91 | 1 | 2 |  |
-| 0x448545 | 96 | 1 | 1 |  |
 | 0x448d7e | 148 | 1 | 0 | ✓ |
-| 0x44bd9f | 357 | 1 | 0 | ✓ |
 | 0x4407e5 | 426 | 1 | 1 |  |
 | 0x4477e7 | 503 | 1 | 0 | ✓ |
 | 0x44e852 | 576 | 1 | 2 |  |
 | 0x44098f | 595 | 1 | 1 |  |
-| 0x44b59b | 624 | 1 | 1 |  |
 | 0x44aa41 | 1019 | 1 | 1 |  |
-| 0x449889 | 1253 | 1 | 3 |  |
 | 0x44c8ae | 1729 | 1 | 1 |  |
 | 0x449ef3 | 1991 | 1 | 1 |  |
 
-### fade / loading / audio-mci (4)
+### fade / loading / audio-mci (3)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
 | 0x45242b | 11 | 1 | 0 | ✓ |
 | 0x452775 | 49 | 1 | 0 | ✓ |
-| 0x451061 | 239 | 1 | 0 | ✓ |
 | 0x4508de | 1007 | 1 | 4 |  |
 
 ### tables (item/char) + populators (3)
@@ -348,7 +342,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x49a581 | 1039 | 1 | 16 |  |
 | 0x49d638 | 1737 | 1 | 0 | ✓ |
 
-### asset-load IO helper cluster (0x4af*) (22)
+### asset-load IO helper cluster (0x4af*) (21)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
@@ -368,12 +362,11 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4a82b9 | 365 | 1 | 1 |  |
 | 0x4aa90a | 374 | 1 | 0 | ✓ |
 | 0x4a1847 | 525 | 1 | 0 | ✓ |
-| 0x4acbd4 | 650 | 1 | 6 |  |
 | 0x4a8aab | 753 | 1 | 5 |  |
 | 0x4ad9f0 | 774 | 1 | 4 |  |
 | 0x4a8e0b | 943 | 1 | 5 |  |
-| 0x4a9a9a | 1047 | 1 | 6 |  |
-| 0x4ab383 | 1751 | 1 | 10 |  |
+| 0x4a9a9a | 1047 | 1 | 4 |  |
+| 0x4ab383 | 1751 | 1 | 8 |  |
 
 ### battlefield render + wndproc (24)
 

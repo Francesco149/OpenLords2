@@ -7,6 +7,74 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-01 — TURN-ENGINE chip: per-realm unit upkeep / wages / desertion pass (FUN_004acbd4 + 13-function lifecycle cluster) — new engine_realm_upkeep module
+
+Ported the turn-advance engine's (retail 0x448440, line 32) per-realm
+**unit-upkeep** pass `FUN_004acbd4` (650 B) → `engine_realm_pay_upkeep`, plus
+its full 13-function helper closure, as a new module `engine_realm_upkeep.c`.
+This is the next unported direct callee in the turn sequence after the
+mood/tax/dev passes already landed.
+
+**Mechanism.**  The pass operates on the per-record occupant block
+`g_per_territory_420` (save entry 5, retail 0x52f0b0, 0x1a4 stride) — in this
+view each occupied record is a standing **unit** with an owner (+0x00), a value
+(+0x168), a per-turn **wage** derived from that value (+0x15c), seven
+sub-stockpiles (+0x16c), and an optional hire **contract** (+0x195/+0x196/+0x197
+→ a slot in `g_unit_table_20`).  The pass runs three sub-passes:
+
+  1. `FUN_004ad39a` — absorb/overflow sweep: for each active unit run its pending
+     **absorb** (`FUN_004aba5a`: fold value into its army's +0x24/+0x38
+     accumulators, then remove), and disband any whose type byte exceeds 0x10.
+  2. `FUN_004ace5e` — per-unit morale/supply sweep (gated on `s_slot_0053f260`):
+     when a unit's value no longer covers its army's stockpile floor
+     (`engine_army_economy_stockpile_value`), escalate a per-record counter
+     (+0x155) — warn at 1, warn+decay at 2..4, warn+**disband** at >=5.
+  3. Per player 1..5: total the player's wages into the strategic record
+     (`g_player_strategic_352` +0xfc), and if the resource account (+0x118)
+     covers it, pay it; otherwise run a per-player escalation state machine
+     (+0x158): settle expiring contracts + warn → warn+decay → warn+decay →
+     **disband ALL** of the player's units.
+
+The **wage formula** (`FUN_004ad52b`) is the one non-obvious bit: human-owned
+units (strategic +0x05 != 0) pay value/4; AI-owned pay value / {3,5,10,10}
+selected by the difficulty scalar `s_slot_0053f23c` — the cheaper AI upkeep is a
+difficulty handicap.  Several of the helpers (`FUN_004aa039` disband,
+`FUN_0046f0a9`/`FUN_0046ec6e` map-occupant-list removal, `FUN_004ac6fe` contract
+clear, `FUN_004ad495` wage total) are **shared engine primitives** called from
+5/4/3/2 other subsystems, so they're exposed in the header for the future army-
+management ports that need them.
+
+**Everything maps to named save blocks** — `g_per_territory_420` (entry 5),
+`g_player_strategic_352` (3), `g_per_army_768` (4), `g_unit_table_20` (6),
+`g_overworld_map`; the only scalar inputs are difficulty (s_slot_0053f23c), the
+morale gate (s_slot_0053f260) and the local-player slot (s_slot_0057c8cc).  No
+scalar-wall: this whole subtree was portable today.  r2 @0x4aa039 confirmed the
+three cross-block index chains byte-for-byte (army `v*0x300+0x1bc`, strategic
+`owner*0x160 + 0x2d + rec[+0x14f]`, the 0x1a4 record stride).
+
+**Verified byte-exact vs retail.**  9 host tests (1673/1673 under ASan/UBSan)
+cover wage divisors + signed human /4, total-wage filtering, contract
+clear/refund, the occupant-list unlink (head / middle-splice / not-found /
+self-loop guard), disband link-A/link-B paths, absorb (3 flag cases), and the
+affordable + every escalation-state transition.  Added a **pure-function-diff
+target `upkeep`** (FUN_004acbd4) and ran it against retail via cutestation.soy:
+**16/16 and 48/48 pass**.  The diff vectors are deliberately constrained to the
+**no-collect region** (unit types <= 0x10, absorb flag 0, escalation state <= 4,
+contracted values large) because the disband/absorb tails call
+`collect_territory_income` → the army-economy planners, which read the price
+scalars `g_price_a/b/c` (fixed 5/10/6 in the diff lib, but live/variable in
+retail) — un-matchable without injecting the live prices.  Staying in the
+no-collect region makes the whole pass a pure function of the injected
+per-territory / strategic / unit-table blocks, which are read back and diffed;
+the terminal disband-all path and the stockpile-floor check are covered by the
+host unit tests instead.
+
+**Next.**  Remaining unported direct callees of `FUN_00448440`, by closure
+size: `FUN_004aef7e` (1 fn, 408 B — era/year rollover, the cleanest), then
+`FUN_0044c8ae` (2 fns), `FUN_0044e852` (3 fns), `FUN_004508de` (18 fns); the
+large shared subsystems `FUN_0044aa41` / `FUN_0049b2a3` (~75–80 fns each) are
+deferred until their dependencies thin out.
+
 ## 2026-05-31 — TURN-ENGINE chip: per-realm random-event ONSET pass (FUN_00448819 + 24 handlers + 2 territory probes) — new engine_realm_events module
 
 Ported the turn-START **random-event onset** pass `FUN_00448819` (1277 B) →

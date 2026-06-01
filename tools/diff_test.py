@@ -2535,6 +2535,17 @@ FN_TAX_APPROVAL = 0x44bd9f
 FN_DEV_SPREAD   = 0x44bf7a
 FN_REALM_INCOME = 0x44b80b       # FUN_0044b80b — __cdecl(int realm)
 
+# upkeep pass (FUN_004acbd4) extra blocks/scalars
+REALM_TERR_BYTES   = 63420       # g_per_territory_420  (151 × 0x1a4)
+REALM_TERR_STRIDE  = 0x1a4
+REALM_UNITTBL_BYTES = 260        # g_unit_table_20      (13 × 0x14)
+VA_PER_TERRITORY = 0x52f0b0
+VA_UNIT_TABLE    = 0x568dc0
+VA_SLOT_DIFF     = 0x53f23c       # s_slot_0053f23c — AI wage divisor / difficulty
+VA_SLOT_MORALE   = 0x53f260       # s_slot_0053f260 — morale-sweep gate
+VA_SLOT_LOCAL    = 0x57c8cc       # s_slot_0057c8cc — local player slot
+FN_PAY_UPKEEP    = 0x4acbd4       # FUN_004acbd4 — __stdcall void()
+
 REALM_RACE_RETRIES = 8
 
 
@@ -2558,6 +2569,11 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
             "count":  ctypes.c_uint32.in_dll(lib, "s_slot_0056d5dc"),
             "stand":  ctypes.c_uint32.in_dll(lib, "s_slot_0053f25c"),
             "season": ctypes.c_uint32.in_dll(lib, "s_slot_0057c92c"),
+            "terr":   (ctypes.c_uint8 * REALM_TERR_BYTES   ).in_dll(lib, "g_per_territory_420"),
+            "unittbl":(ctypes.c_uint8 * REALM_UNITTBL_BYTES).in_dll(lib, "g_unit_table_20"),
+            "diff":   ctypes.c_uint32.in_dll(lib, "s_slot_0053f23c"),
+            "morale": ctypes.c_uint32.in_dll(lib, "s_slot_0053f260"),
+            "local":  ctypes.c_uint32.in_dll(lib, "s_slot_0057c8cc"),
         }
         lib.engine_realm_apply_tax_approval.restype = None
         lib.engine_realm_apply_tax_approval.argtypes = []
@@ -2567,6 +2583,10 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
         lib.engine_realm_recompute_realm_income.argtypes = [ctypes.c_int]
         lib.engine_territory_bind_cells.restype = None
         lib.engine_territory_bind_cells.argtypes = [ctypes.c_void_p]
+        lib.engine_realm_pay_upkeep.restype = None
+        lib.engine_realm_pay_upkeep.argtypes = [ctypes.c_void_p]
+        lib.engine_event_queue_init.restype = None
+        lib.engine_event_queue_init.argtypes = [ctypes.c_void_p]
     return _realm_globals_cache
 
 
@@ -2860,6 +2880,114 @@ def diff_realm_income(retail: dict, port: dict) -> list[str]:
     return bad
 
 
+# ── unit upkeep / wages / desertion pass (FUN_004acbd4 — engine_realm_pay_upkeep) ──
+#
+# __stdcall void(); the port additionally takes an event-queue pointer (retail
+# uses the global ring — which is neither injected nor read back, so the warning
+# posts don't enter the diff).  Vectors are CONSTRAINED so the disband/absorb/
+# remove paths never fire: those tails call collect_territory_income →
+# the army-economy planners, which read the price scalars g_price_a/b/c — fixed
+# (5/10/6) in the diff lib but live/variable in retail, so they cannot be
+# matched here.  Staying in the no-collect region (unit types <= 0x10, absorb
+# flag 0, per-player escalation state <= 4, contracted-unit values large so a
+# refund never zeroes them, morale gate off) keeps the whole pass a pure
+# function of the injected per-territory / strategic / unit-table blocks, which
+# are read back and diffed.  The terminal disband-all path (state >= 5) and the
+# morale stockpile-floor check are covered by the host unit tests instead.
+
+def _build_upkeep_vec(rng: random.Random, n_units: int,
+                      players: list[tuple]) -> dict:
+    terr    = bytearray(REALM_TERR_BYTES)
+    strat   = bytearray(REALM_STRAT_BYTES)
+    unittbl = bytearray(REALM_UNITTBL_BYTES)
+
+    for (slot, human, res, state) in players:
+        b = slot * REALM_STRAT_STRIDE
+        strat[b + 0x05]  = human & 0xff
+        struct.pack_into("<i", strat, b + 0x118, res)
+        strat[b + 0x158] = state & 0xff
+
+    for i in range(1, n_units + 1):
+        b = i * REALM_TERR_STRIDE
+        terr[b + 0x00]  = rng.randint(0, 5) & 0xff       # owner (0=unowned)
+        terr[b + 0x08]  = rng.choice([0, 1, 1, 1])       # active
+        terr[b + 0x10]  = rng.randint(0, 0x10)           # type <= 0x10: no overflow disband
+        terr[b + 0x167] = 0                              # no pending absorb
+        struct.pack_into("<i", terr, b + 0x168, rng.randint(1000, 50000))  # value (large)
+        for j in range(7):
+            struct.pack_into("<h", terr, b + 0x16c + j * 2, rng.randint(0, 2000))
+        terr[b + 0x14f] = rng.randint(0, 20)             # strat-counter index (unused here)
+        terr[b + 0x155] = rng.randint(0, 6)              # per-record morale state (gate off → zeroed)
+        if rng.random() < 0.4:                           # hire contract on some units
+            pool = rng.randint(1, 12)
+            terr[b + 0x197] = pool
+            terr[b + 0x196] = rng.randint(1, 50)         # << value, so refund never zeroes
+            terr[b + 0x195] = rng.randint(0, 255)
+            struct.pack_into("<h", unittbl, pool * 0x14, rng.randint(1, 0x7fff))
+
+    return {"terr": bytes(terr), "strat": bytes(strat), "unittbl": bytes(unittbl),
+            "diff": rng.randint(0, 3), "local": rng.randint(1, 5)}
+
+
+def gen_upkeep_vectors(n: int, rng: random.Random) -> list[dict]:
+    vecs: list[dict] = []
+    # A couple of fixed edge cases: a clearly-affordable player and a clearly
+    # unaffordable one in each escalation entry state.
+    def fixed(n_units, players, diff_=0):
+        v = _build_upkeep_vec(rng, n_units, players)
+        v["diff"] = diff_
+        return v
+    vecs.append(fixed(1, [(1, 0, 1_000_000, 0)] + [(p, 0, 0, 0) for p in (0, 2, 3, 4, 5)]))
+    vecs.append(fixed(2, [(1, 0, 0, 0)] + [(p, 0, 0, 0) for p in (0, 2, 3, 4, 5)]))
+    vecs.append(fixed(3, [(1, 1, 0, 4)] + [(p, 0, 0, 0) for p in (0, 2, 3, 4, 5)]))
+    while len(vecs) < n:
+        n_units = rng.randint(1, 40)
+        players = [(p,
+                    rng.randint(0, 1),                          # human flag
+                    rng.choice([-500, 0, rng.randint(1, 200000)]),  # resource
+                    rng.randint(0, 4))                          # escalation state (<= 4)
+                   for p in range(6)]
+        vecs.append(_build_upkeep_vec(rng, n_units, players))
+    return vecs
+
+
+def run_port_upkeep(lib: ctypes.CDLL, vec: dict) -> dict:
+    g = realm_port_globals(lib)
+    ctypes.memmove(g["terr"],    vec["terr"],    REALM_TERR_BYTES)
+    ctypes.memmove(g["strat"],   vec["strat"],   REALM_STRAT_BYTES)
+    ctypes.memmove(g["unittbl"], vec["unittbl"], REALM_UNITTBL_BYTES)
+    g["diff"].value   = vec["diff"]
+    g["morale"].value = 0
+    g["local"].value  = vec["local"]
+    evq = ctypes.create_string_buffer(2048)   # ring (1200 B) + header; not diffed
+    lib.engine_event_queue_init(evq)
+    lib.engine_realm_pay_upkeep(evq)
+    return {"terr":    list(bytes(g["terr"])),
+            "strat":   list(bytes(g["strat"])),
+            "unittbl": list(bytes(g["unittbl"]))}
+
+
+def upkeep_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_PAY_UPKEEP, "regions": [
+        {"va": VA_PER_TERRITORY, "len": REALM_TERR_BYTES,    "inject": list(vec["terr"]),    "read": True},
+        {"va": VA_STRATEGIC,     "len": REALM_STRAT_BYTES,   "inject": list(vec["strat"]),   "read": True},
+        {"va": VA_UNIT_TABLE,    "len": REALM_UNITTBL_BYTES, "inject": list(vec["unittbl"]), "read": True},
+        {"va": VA_SLOT_DIFF,   "len": 4, "inject": list(_u32le(vec["diff"])),  "read": False},
+        {"va": VA_SLOT_MORALE, "len": 4, "inject": list(_u32le(0)),            "read": False},
+        {"va": VA_SLOT_LOCAL,  "len": 4, "inject": list(_u32le(vec["local"])), "read": False},
+    ]}
+
+
+def diff_upkeep(retail: dict, port: dict) -> list[str]:
+    bad =  _diff_realm_region(retail, port["terr"], VA_PER_TERRITORY,
+                              REALM_TERR_STRIDE, 151, "terr")
+    bad += _diff_realm_region(retail, port["strat"], VA_STRATEGIC,
+                              REALM_STRAT_STRIDE, 6, "strat")
+    bad += _diff_realm_region(retail, port["unittbl"], VA_UNIT_TABLE,
+                              0x14, 13, "unittbl")
+    return bad
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -2969,6 +3097,9 @@ def run_diff(cfg_args) -> int:
     if "realm_income" in enabled:
         test_plans.append(("realm_income",
                            gen_realm_income_vectors(cfg_args.vectors, rng)))
+    if "upkeep" in enabled:
+        test_plans.append(("upkeep",
+                           gen_upkeep_vectors(cfg_args.vectors, rng)))
     # Pre-generate the rate-gate LUT — one per run, used by all
     # sim_sub_steps vectors so a re-run with the same seed produces
     # the same LUT (and thus the same retail-side gate decisions).
@@ -3097,7 +3228,7 @@ def run_diff(cfg_args) -> int:
         # this is a no-op at the agent but keeps the per-target log shape.
         shared_freeze_targets = {"sim_sub_steps", "state_hash", "tile_expand",
                                  "delayed_action", "tax_approval", "dev_spread",
-                                 "realm_income"}
+                                 "realm_income", "upkeep"}
         shared_freeze_installed = False
         if shared_freeze_targets & {n for (n, _) in test_plans}:
             fresp = script.exports_sync.install_sim_sub_steps_engine_freeze()
@@ -3664,6 +3795,42 @@ def run_diff(cfg_args) -> int:
                                   "note": "region readback elided"}
                         port = {"note": "region readback elided"}
                         vec = {"count": vec["count"], "realm": vec["realm"]}
+                elif fn_name == "upkeep":
+                    # FUN_004acbd4(): per-realm unit-upkeep / wages / desertion.
+                    # Inject g_per_territory_420 + g_player_strategic_352 +
+                    # g_unit_table_20 + the difficulty / morale-gate / local-player
+                    # scalars; read back the three blocks the (collect-free) paths
+                    # mutate.  Same race-retry handling as the other realm passes.
+                    port = run_port_upkeep(lib, vec)
+                    plan = upkeep_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"diff": vec["diff"],
+                                                 "local": vec["local"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_upkeep(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"diff": vec["diff"], "local": vec["local"]}
                 else:
                     continue
                 if bad:
@@ -3789,7 +3956,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep",
                     help="comma-separated subset to test "
                          "(default: rng_step,fps_step,anim_cycle,frame_delta,"
                          "phase_ticks,input_state,sim_sub_steps,state_hash,"

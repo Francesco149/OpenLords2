@@ -5354,3 +5354,37 @@ latent only by the 0..50 clamp.
 > r2-dumped from 0x4d63d8.  Field semantics (+0xc0 displayed vs +0xbc collected)
 > provisional but the suppression-gate asymmetry is exact.  Verified byte-exact
 > vs retail (`tools/diff_test.py --functions realm_income`, 24/24).
+
+## 152. The AI pays up to a third of the human's unit upkeep — and the discount is hardcoded to the difficulty
+
+The per-turn unit-wage computation `FUN_004ad52b` (`engine_unit_recompute_wage`)
+derives each standing unit's wage from its value (`+0x168`) — but the divisor
+depends on **who owns it**:
+
+```c
+if (strategic[owner] + 0x05 == 0)            /* AI-controlled owner */
+    wage = value / {3, 5, 10, 10}[difficulty];   /* s_slot_0053f23c */
+else                                         /* human owner */
+    wage = value / 4;                            /* signed, toward zero */
+```
+
+A human always pays `value/4`.  An AI pays `value/3` on the easiest setting
+(difficulty 0) — *more* than the human — but `value/10` on the two hardest
+settings, i.e. **2.5× cheaper upkeep than the human for the identical unit**.
+The fourth difficulty slot aliases the third (both `/10`), so the table is
+really three distinct rates for four difficulties.  Because the wage is summed
+per player (`FUN_004ad495`) and compared against the owner's resource account to
+decide whether units must be disbanded, this single divisor is a quiet but
+large AI economic handicap: at high difficulty the AI can sustain ~2.5× the
+army the human can on the same income.
+
+There is no corresponding human discount anywhere — the `value/4` arm is
+unconditional once the owner's `+0x05` flag is set.  The same `+0x05` byte is
+the "events-enabled" gate read by the random-event pass (quirk #146), so a
+single per-player flag doubles as "is a real (human/active) player" across
+multiple subsystems.
+
+> 📍 `src/engine_realm_upkeep.c` (`engine_unit_recompute_wage`,
+> `engine_unit_total_wage`).  Ghidra/r2 `FUN_004ad52b` @ 0x4ad52b,
+> `FUN_004ad495` @ 0x4ad495.  Verified byte-exact vs retail
+> (`tools/diff_test.py --functions upkeep`, 64/64).

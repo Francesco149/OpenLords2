@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **488** (19.9%) — tested 452, ported 36
-- code bytes touched: **20.2%** (169,500 / 838,629 B)
-- unported: **1959**
+- touched: **502** (20.5%) — tested 466, ported 36
+- code bytes touched: **20.7%** (173,418 / 838,629 B)
+- unported: **1945**
 - orphan refs (in src/, not in function table): 4
 
-## tested (452) — ported + host unit suite
+## tested (466) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -213,7 +213,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x448406 | FUN_00448406 | 11 | engine_handlers_da.h |
 | 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h |
 | 0x448440 | FUN_00448440 | 261 | engine_realm.c |
-| 0x448545 | FUN_00448545 | 96 | engine_realm.c, engine_realm.h |
+| 0x448545 | FUN_00448545 | 96 | engine_realm.c, engine_realm.h, engine_realm_upkeep.c |
 | 0x4485a5 | FUN_004485a5 | 163 | engine_army_economy.c, engine_army_economy.h, engine_realm.c (+1) |
 | 0x4486a9 | FUN_004486a9 | 256 | engine_ranking.c, engine_ranking.h |
 | 0x4487a9 | FUN_004487a9 | 112 | engine_ranking.c, engine_ranking.h |
@@ -343,8 +343,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46e1b0 | FUN_0046e1b0 | 792 | engine_territory.c, engine_territory.h, game_init.c |
 | 0x46ea28 | FUN_0046ea28 | 57 | game_init.c, game_init.h |
 | 0x46ea61 | FUN_0046ea61 | 57 | game_init.c |
-| 0x46ead0 | FUN_0046ead0 | 57 | engine_territory.c, game_init.c, game_init.h |
+| 0x46ead0 | FUN_0046ead0 | 57 | engine_realm_upkeep.c, engine_territory.c, game_init.c (+1) |
 | 0x46eb09 | FUN_0046eb09 | 54 | game_init.c, game_init.h |
+| 0x46ec6e | FUN_0046ec6e | 369 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x46f0a9 | FUN_0046f0a9 | 71 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x46f1dc | FUN_0046f1dc | 67 | game_init.c, game_init.h |
 | 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h |
 | 0x46f3cd | FUN_0046f3cd | 78 | game_init.c, game_init.h |
@@ -358,7 +360,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x472ad0 | FUN_00472ad0 | 16 | engine_event_queue.c, engine_event_queue.h |
 | 0x472ae0 | FUN_00472ae0 | 96 | engine_event_queue.c, engine_event_queue.h |
 | 0x472b40 | FUN_00472b40 | 133 | engine_event_queue.c, engine_event_queue.h |
-| 0x472bc5 | FUN_00472bc5 | 560 | engine_event_queue.c, engine_event_queue.h, engine_ranking.h (+1) |
+| 0x472bc5 | FUN_00472bc5 | 560 | engine_event_queue.c, engine_event_queue.h, engine_ranking.h (+3) |
 | 0x472df5 | FUN_00472df5 | 81 | engine_event_queue.c, engine_event_queue.h |
 | 0x47ed34 | FUN_0047ed34 | 103 | engine.c, engine_camera.c, engine_camera.h |
 | 0x48ee46 | FUN_0048ee46 | 87 | engine_tile.c, engine_tile.h |
@@ -382,8 +384,20 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a1c53 | FUN_004a1c53 | 537 | game_init.c, game_init.h |
 | 0x4a1e6c | FUN_004a1e6c | 117 | engine_roster.c, engine_roster.h, game_init.c |
 | 0x4a2584 | FUN_004a2584 | 157 | game_init.c, game_init.h |
+| 0x4aa039 | FUN_004aa039 | 328 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x4aba5a | FUN_004aba5a | 220 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x4ac6fe | FUN_004ac6fe | 245 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4ac904 | FUN_004ac904 | 295 | game_init.c, game_init.h |
-| 0x4ad6c0 | FUN_004ad6c0 | 524 | engine_realm.c, engine_realm.h |
+| 0x4acbd4 | FUN_004acbd4 | 650 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x4ace5e | FUN_004ace5e | 650 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x4ad0e8 | FUN_004ad0e8 | 132 | engine_realm_upkeep.c |
+| 0x4ad16c | FUN_004ad16c | 196 | engine_realm_upkeep.c |
+| 0x4ad230 | FUN_004ad230 | 230 | engine_realm_upkeep.c |
+| 0x4ad316 | FUN_004ad316 | 132 | engine_realm_upkeep.c |
+| 0x4ad39a | FUN_004ad39a | 140 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x4ad495 | FUN_004ad495 | 150 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x4ad52b | FUN_004ad52b | 405 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x4ad6c0 | FUN_004ad6c0 | 524 | engine_realm.c, engine_realm.h, engine_realm_upkeep.c |
 | 0x4ade93 | FUN_004ade93 | 339 | save.c, save.h |
 | 0x4adfe6 | FUN_004adfe6 | 377 | save.c, save.h |
 | 0x4ae539 | FUN_004ae539 | 169 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
