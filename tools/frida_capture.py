@@ -257,6 +257,10 @@ class CaptureConfig:
     mem_watch:         bool = False
     mem_watch_regions: list[dict] = field(default_factory=list)
     mem_watch_precise: bool = True
+    # Deterministic anchors (TAS framework): emit {anchor,frame} on engine-state
+    # / screen-id transitions → run_dir/anchors.jsonl, keyed on the per-tick
+    # counter.  See docs/plans/tas-framework.md.
+    anchor_trace:      bool = False
     exe_args:          list[str] = field(default_factory=list)
 
 
@@ -278,6 +282,8 @@ class CaptureResult:
     input_replay_post_count: int = 0
     gdi_seat_present_count: int = 0
     call_trace_calls: int = 0
+    anchor_count:     int = 0
+    anchors:          list[dict[str, int | str]] = field(default_factory=list)
 
 
 # ─── BMP writer ───────────────────────────────────────────────────────────
@@ -452,6 +458,15 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
     if cfg.mem_watch:
         mem_watch_fp = (run_dir / "mem_watch.jsonl").open("w", buffering=1)
     counts["mem_watch_accesses"] = 0
+
+    # Anchor sink — one JSONL row per emitted {anchor,frame} (TAS framework).
+    # Also kept in-memory (anchors_seen) so callers can align captures by
+    # event and assert determinism across replays.
+    anchor_trace_fp = None
+    if cfg.anchor_trace:
+        anchor_trace_fp = (run_dir / "anchors.jsonl").open("w", buffering=1)
+    counts["anchor"] = 0
+    anchors_seen: list[dict[str, int | str]] = []
 
     # Preload the replay events so any parse failure surfaces before we
     # spawn the engine.  The agent expects a JSON array of {t,m,w,l}
@@ -660,6 +675,16 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
                 f"w=0x{int(p.get('w', 0)):x} "
                 f"l=0x{int(p.get('l', 0)):x}\n")
             return
+        if kind == "anchor":
+            counts["anchor"] += 1
+            name = str(p.get("anchor", "?"))
+            frame = int(p.get("frame", 0))
+            rec = {"anchor": name, "frame": frame}
+            anchors_seen.append(rec)
+            if anchor_trace_fp is not None:
+                anchor_trace_fp.write(json.dumps(rec) + "\n")
+            f_log.write(f"[anchor] {name} @ frame {frame}\n")
+            return
         if kind == "gdi_seat_present":
             counts["gdi_seat_present"] += 1
             f_log.write(
@@ -836,6 +861,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "mem_watch":                 bool(cfg.mem_watch),
             "mem_watch_regions":         cfg.mem_watch_regions,
             "mem_watch_precise":         bool(cfg.mem_watch_precise),
+            "anchor_trace":              bool(cfg.anchor_trace),
             "heartbeat_timeout_ms":      HEARTBEAT_TIMEOUT_MS,
         }
         script.exports_sync.init(init_cfg)
@@ -954,6 +980,8 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         call_trace_fp.close()
     if mem_watch_fp is not None:
         mem_watch_fp.close()
+    if anchor_trace_fp is not None:
+        anchor_trace_fp.close()
 
     return CaptureResult(
         exit_code=exit_code,
@@ -972,6 +1000,8 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         input_replay_post_count=counts["input_replay_post"],
         gdi_seat_present_count=counts["gdi_seat_present"],
         call_trace_calls=counts.get("call_trace_calls", 0),
+        anchor_count=counts.get("anchor", 0),
+        anchors=anchors_seen,
     )
 
 
@@ -1120,6 +1150,11 @@ def main(argv: list[str] | None = None) -> int:
                          "for --call-trace-max-frames ticks (0 = tick filter)")
     ap.add_argument("--call-trace-max-frames", type=int, default=8,
                     help="number of ticks to emit in cum-sec window mode")
+    ap.add_argument("--anchor-trace", action="store_true",
+                    help="emit deterministic anchors ({anchor,frame} on "
+                         "engine-state / screen-id transitions) to "
+                         "<run_dir>/anchors.jsonl (TAS framework; see "
+                         "docs/plans/tas-framework.md)")
     ap.add_argument("--exe-arg", action="append", default=[],
                     help="argument to pass to the spawned exe (repeatable)")
     args = ap.parse_args(argv)
@@ -1251,6 +1286,7 @@ def main(argv: list[str] | None = None) -> int:
         call_trace_frames=call_trace_frames,
         call_trace_min_cum_secs=args.call_trace_min_cum_secs,
         call_trace_max_frames=args.call_trace_max_frames,
+        anchor_trace=args.anchor_trace,
         exe_args=list(args.exe_arg),
     )
     print(f"[capture] run_dir = {run_dir}")

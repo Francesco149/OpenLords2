@@ -545,6 +545,21 @@ let g_capture_scratch        = null;   // pre-allocated payload buffer
 // recorded input events and as the schedule index for replaying them.
 let g_tick_count          = 0;
 
+// ─── deterministic anchors (TAS framework P1) ───────────────────────────
+// Emit a named event whenever an observable engine state transition occurs,
+// keyed on g_tick_count (== the port's g_frame_counter at the same
+// FUN_004b99c0 boundary).  The anchor stream lets the harness align port and
+// retail by *event* instead of absolute frame, and localises the first
+// divergence.  See docs/plans/tas-framework.md.
+//   engine_state = DAT_0052af94 (var_sim_game_state_phase): 1 boot-intro,
+//                  3 INGAME, 0xa saving, 0xb loading.
+//   screen_id    = DAT_004eac50 (var_sim_current_screen):   0x1f title,
+//                  0 strategic-map/menu, 0x28..0x2a loading.
+let g_anchor_enabled     = false;
+let g_anchor_booted      = false;
+let g_anchor_prev_state  = -1;
+let g_anchor_prev_screen = -1;
+
 // Input recording. When armed, the WndProc hook emits one `input_event`
 // per dispatched input message (WM_KEY*/WM_CHAR/WM_MOUSE*), stamped with
 // g_tick_count at moment of dispatch.  The dispatch happens *between*
@@ -2321,6 +2336,45 @@ function rescaleMouseLParamToClient(l) {
     return ((cy << 16) | cx) >>> 0;
 }
 
+// Emit a `{kind:"anchor",anchor,frame}` event on each observable engine-state
+// transition (TAS framework P1).  Called from engine_tick.onEnter every tick
+// right after g_tick_count is bumped, so `frame` is this tick's id.  Anchors
+// are edge-triggered and may fire more than once over a run (e.g. MAP_FREEROAM
+// after each load); the segtrace `wait` consumes the next firing.
+function emitAnchor(name, frame) {
+    send({kind: 'anchor', anchor: name, frame: frame >>> 0});
+}
+
+function anchorTick(frame) {
+    if (!g_anchor_enabled) return;
+    let state, screen;
+    try {
+        state  = rva(ADDR.var_sim_game_state_phase).readS32();
+        screen = rva(ADDR.var_sim_current_screen).readU8();
+    } catch (e) { return; }     // globals not mapped yet — try next tick
+
+    if (!g_anchor_booted) { g_anchor_booted = true; emitAnchor('BOOT', frame); }
+
+    // Screen-id edges.
+    if (screen !== g_anchor_prev_screen && screen === 0x1f) {
+        emitAnchor('TITLE', frame);
+    }
+    // Engine-state edges.
+    if (state !== g_anchor_prev_state) {
+        if (state === 0xb) emitAnchor('LOADING_START', frame);
+        if (g_anchor_prev_state === 0xb) emitAnchor('LOADING_END', frame);
+        if (state === 3 && g_anchor_prev_state !== 3) emitAnchor('NEW_GAME', frame);
+    }
+    // Compound: strategic map live (ingame, map screen).  Fire on entry to the
+    // (state==3 && screen==0) condition.
+    const map_now  = (state === 3 && screen === 0);
+    const map_prev = (g_anchor_prev_state === 3 && g_anchor_prev_screen === 0);
+    if (map_now && !map_prev) emitAnchor('MAP_FREEROAM', frame);
+
+    g_anchor_prev_state  = state;
+    g_anchor_prev_screen = screen;
+}
+
 // Drain all replay events whose stamp <= the current tick. Called from
 // engine_tick.onEnter right after g_tick_count is bumped: posted messages
 // land in the main thread's queue and are picked up by the engine's
@@ -2767,6 +2821,7 @@ function installEngineTickHook() {
             }
             g_tick_count = (g_tick_count + 1) >>> 0;
             g_engine_in_tick = 1;
+            anchorTick(g_tick_count);
             if (g_call_trace_enabled && g_call_trace_min_cum_secs > 0) {
                 callTraceWindowTick();
             }
@@ -4653,6 +4708,12 @@ rpc.exports = {
 
         g_diff_test_enabled = !!opts.diff_test;
 
+        // Deterministic anchors (TAS framework P1).
+        g_anchor_enabled     = !!opts.anchor_trace;
+        g_anchor_booted      = false;
+        g_anchor_prev_state  = -1;
+        g_anchor_prev_screen = -1;
+
         g_skip_intro_enabled = !!opts.skip_intro;
         g_smack_in_open      = 0;
         g_skip_intro_forced  = 0;
@@ -4776,6 +4837,11 @@ rpc.exports = {
             // Idempotent; only installs once.
             try { installGetCursorPosHook(); }
             catch (e) { err('installGetCursorPosHook', e.message); }
+        }
+
+        if (g_anchor_enabled) {
+            log('anchor_trace: armed (emits {anchor,frame} on engine-state / ' +
+                'screen-id transitions: BOOT/TITLE/NEW_GAME/LOADING_*/MAP_FREEROAM)');
         }
 
         if (g_frame_capture_enabled) {
