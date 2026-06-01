@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **528** (21.6%) — tested 492, ported 36
-- code bytes touched: **22.3%** (186,904 / 838,629 B)
-- unported: **1919**
+- touched: **531** (21.7%) — tested 495, ported 36
+- code bytes touched: **22.5%** (188,843 / 838,629 B)
+- unported: **1916**
 - orphan refs (in src/, not in function table): 4
 
-## tested (492) — ported + host unit suite
+## tested (495) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -401,10 +401,13 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49bd99 | FUN_0049bd99 | 3063 | game_init.c, game_init.h |
 | 0x49caaa | FUN_0049caaa | 935 | engine_menu_input.c, engine_npc_schedule.c, engine_npc_schedule.h (+3) |
 | 0x49dd01 | FUN_0049dd01 | 583 | engine_army_ai.c, engine_army_ai.h, engine_territory.c (+1) |
+| 0x49e39b | FUN_0049e39b | 994 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a1c53 | FUN_004a1c53 | 537 | game_init.c, game_init.h |
 | 0x4a1e6c | FUN_004a1e6c | 117 | engine_roster.c, engine_roster.h, game_init.c |
 | 0x4a2584 | FUN_004a2584 | 157 | game_init.c, game_init.h |
-| 0x4a4052 | FUN_004a4052 | 657 | engine_army_ai.c |
+| 0x4a4052 | FUN_004a4052 | 657 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a42e3 | FUN_004a42e3 | 300 | engine_army_ai.c |
+| 0x4a440f | FUN_004a440f | 645 | engine_army_ai.c |
 | 0x4a4694 | FUN_004a4694 | 238 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a4782 | FUN_004a4782 | 701 | engine_army_ai.c, engine_army_ai.h, engine_army_economy.c (+1) |
 | 0x4a4a3f | FUN_004a4a3f | 211 | engine_army_ai.c, engine_army_ai.h |

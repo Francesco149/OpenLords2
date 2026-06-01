@@ -1810,6 +1810,10 @@ struct test_case {
     X(army_ai_orders_gated) \
     X(army_ai_balance_high_cells_sheds) \
     X(army_ai_tax_sweep_band_and_fixed_rate) \
+    X(army_ai_reconcile_sells_surplus) \
+    X(army_ai_reconcile_trade_lock_gates) \
+    X(army_ai_run_player_dispatch_expansionist) \
+    X(army_ai_run_turn_active_gate) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

@@ -393,6 +393,89 @@ int test_army_ai_balance_high_cells_sheds(void)
     return 0;
 }
 
+/* ── Resource orchestrator + dispatch/run bodies (FUN_0049e39b / 4a40xx /
+ *    0049dd01 / 0049a990) ──────────────────────────────────────────
+ * Personality 1 (table row 0) targets: commodity-8 stock 250, cash floor 1000.
+ * The order/executor tail no-ops with econ/territory unbound. */
+
+static void ai_turn_setup(void)
+{
+    order_setup();                  /* NULLs econ/territory, prices, gate on realm 4 */
+    s_slot_0057c934 = 1;            /* not autumn (skip the season-4 rebuild) */
+    s_slot_0057c92c = 1;
+    s_slot_0053f25c = 1;
+}
+
+/* reconcile_resources: with no queued buy request, sell the slot-8 surplus over
+ * the personality target (400 - 250 = 150) at the base price (4 → +600 cash). */
+int test_army_ai_reconcile_sells_surplus(void)
+{
+    ai_turn_setup();
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;                   /* personality 1 → target_8 = 250 */
+    AI32(s, 0x130) = 400;           /* slot-8 pool over target */
+    AI32(s, 0x118) = 50;            /* cash below the 1000 discretionary floor */
+
+    engine_army_ai_reconcile_resources(2, 4);
+
+    T_ASSERT_EQ_I(AI32(s, 0x130), 250);   /* sold the 150 surplus */
+    T_ASSERT_EQ_I(AI32(s, 0x118), 650);   /* 50 + 150*4 */
+    return 0;
+}
+
+/* reconcile_resources: the player's trade lock (+0x158) suppresses everything. */
+int test_army_ai_reconcile_trade_lock_gates(void)
+{
+    ai_turn_setup();
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;
+    AI32(s, 0x130) = 400;
+    AI32(s, 0x118) = 50;
+    s[0x158] = 1;                   /* trade lock set */
+
+    engine_army_ai_reconcile_resources(2, 4);
+
+    T_ASSERT_EQ_I(AI32(s, 0x130), 400);   /* untouched */
+    T_ASSERT_EQ_I(AI32(s, 0x118), 50);
+    return 0;
+}
+
+/* run_player: latches the personality dispatch code (+0x1fe) and the dispatcher
+ * tags the strategy field (+0x8).  Personality 4 → code 9 → expansionist → 0x28. */
+int test_army_ai_run_player_dispatch_expansionist(void)
+{
+    ai_turn_setup();
+    s_slot_0056d5dc = 5;            /* realm count */
+    PREC(2)[0x007] = 4;             /* personality 4 → dispatch code 9 */
+    AREC(5)[0x005] = 2;             /* realm 5 owned by player 2 */
+
+    engine_army_ai_run_player(2);
+
+    T_ASSERT_EQ_I(AREC(5)[0x1fe], 9);   /* dispatch code latched */
+    T_ASSERT_EQ_I(AREC(5)[0x008], 0x28);/* expansionist strategy tag */
+    return 0;
+}
+
+/* run_turn: process in-game players (active +0x4, not eliminated +0x5), skip the
+ * rest.  Player 3 (personality 2 → code 1 → compact → tag 0x14) owns realm 5;
+ * eliminated player 4 is skipped. */
+int test_army_ai_run_turn_active_gate(void)
+{
+    ai_turn_setup();
+    s_slot_0056d5dc = 5;
+    uint8_t *p3 = PREC(3);
+    p3[0x004] = 1; p3[0x005] = 0; p3[0x007] = 2;   /* active, personality 2 */
+    uint8_t *p4 = PREC(4);
+    p4[0x004] = 1; p4[0x005] = 1;                  /* eliminated → skipped */
+    AREC(5)[0x005] = 3;                            /* realm 5 owned by player 3 */
+
+    engine_army_ai_run_turn();
+
+    T_ASSERT_EQ_I(AREC(5)[0x1fe], 1);    /* compact dispatch code */
+    T_ASSERT_EQ_I(AREC(5)[0x008], 0x14); /* compact strategy tag */
+    return 0;
+}
+
 /* ── Tax-rate sweep (FUN_004a4782) ──────────────────────────────────
  * Exercise the strength-band classifier + the fixed-rate path with the economy
  * appraisal bound (so appraisal_value / stock_a_value are real). */

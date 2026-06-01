@@ -70,4 +70,27 @@ void engine_army_ai_balance_high_cells(int realm, int high_target);
  * fix at `sweep`.  Leaves the best rate set with a final provision run. */
 void engine_army_ai_tax_sweep(int realm, int sweep);
 
+/* Port of FUN_0049e39b.  Reconcile a realm's three pooled commodities (8/6/7)
+ * toward the owning `player`'s personality targets (buy a queued request, else
+ * sell the surplus), then fund one discretionary buy when cash clears the
+ * personality threshold.  No-op unless the realm's trade gate (+0x1a4) is set
+ * and the player's trade lock (+0x158) is clear. */
+void engine_army_ai_reconcile_resources(int player, int realm);
+
+/* Ports of FUN_004a4052 / 004a42e3 / 004a440f — the three AI personality
+ * dispatchers (codes 0 / 1 / 9): each reconciles resources, tops up stock, seeds
+ * the workforce, sweeps tax, reshapes the cell footprint, and re-plans. */
+void engine_army_ai_dispatch_balanced(int realm);
+void engine_army_ai_dispatch_compact(int realm);
+void engine_army_ai_dispatch_expansionist(int realm);
+
+/* Port of FUN_0049dd01.  Run the per-realm AI for every realm owned by `player`:
+ * develop empty cells toward a population-scaled target, latch the personality
+ * dispatch code (+0x1fe), run the matching dispatcher, re-allocate workforce. */
+void engine_army_ai_run_player(int player);
+
+/* Port of FUN_0049a990.  The turn driver's first call: run the per-realm AI for
+ * every player slot 1..5 still in the game (strategic +0x4 set, +0x5 clear). */
+void engine_army_ai_run_turn(void);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_AI_H */
