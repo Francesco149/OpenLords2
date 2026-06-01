@@ -123,6 +123,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_button.c \
                    test_engine_hud_menubar.c \
                    test_engine_map_init.c \
+                   test_map_finalize.c \
                    test_engine_menu_input.c \
                    test_engine_map_query.c \
                    test_engine_strat_cost.c \

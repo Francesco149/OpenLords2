@@ -742,3 +742,59 @@ projection already matches), `FUN_00467ca6`/`00468d4f`/`00467a36`
 the NEXT frontier for the native data path; it makes `--strat-load`
 reproduce strat-spray1 from loaded data and is the same pass new-game would
 need.  `engine_map_init_strategic` leaves a `TODO` seam where it runs.
+
+### CORRECTION (2026-06-01): the finalize is already ported — the gap is a load-path OWNER-STAMP + RNG phase
+
+A host diagnostic (`tests/test_map_finalize.c`,
+`test_map_finalize_load_path_diagnostic`; SKIPs without the retail dir +
+`runs/capture/strat-terrain1/dump`) loads the real `lastturn.sav`, runs the
+ported load-finalize, and measures the per-field descriptor match vs the
+captured `descriptors.bin`.  Findings overturn the framing above:
+
+- **`FUN_004676e0` and every sub-pass are ALREADY ported** in
+  `engine_territory.c` — the autotiler `FUN_0046dbf5`
+  (`engine_territory_classify_feature_tiles`), `46dd34`, `46da4b`,
+  `46c5b8`, `467770`, etc.  The earlier "task #11 = port the finalize" was
+  stale.
+- **The LOAD path is `FUN_004adfe6` (the save-load core = ported `save_load`)
+  → `FUN_004976a1`** (map setup): `4298c1` build_cells → `451fcc` camera →
+  `46a037` overlay (deferred) → **`46dbf5` autotile → `46dd34` randomise →
+  `46da4b(0)` roster**.  It does NOT run the new-game `46c5b8` clears or the
+  `467770` plane-unpack, so the loaded `+0/+5/+6` bytes survive (matches the
+  +5 = 99.8% observation).
+- **The autotiler port is byte-faithful** — r2-verified end to end: the two
+  hex neighbour-offset tables (`0x4d6c28` even / `0x4d6be8` odd) match the
+  hardcoded `NEIGHBOUR_OFFSETS`; eligibility `46de94` = `(tile<0xfff0000 &&
+  (desc[+1]&4)==0) || tile==0xfff0006`; the 48-entry rule table `0x4d7310`;
+  the match loop `46c2de`; and the build seeding `46797d` (= `seed_terrain_layer`,
+  inits inactive cells to `0xfff0000+terrain`).  Given identical input it
+  produces retail's classification.
+- **THE ACTUAL GAP — a load-time spatial OWNER-STAMP of cell +7.**  Per-field
+  match of the raw save vs the captured frame: `+5 = 99.8%`, `+0 = 91.7%`,
+  `+4 = 93.4%` (preserved) but `+1 = 42%`, `+2 = 63%`, `+3 = 4%`, `+7 = 37%`
+  (recomputed).  The render only writes `+2`/`+3` (not `+1`/`+7`), so `+1`/`+7`
+  are recomputed by a NON-render load pass.  Histograms:
+  - **save `+7` ∈ {0, 1..0x0e, 0x20}** (per-cell *region* id, ~115 cells each)
+  - **captured `+7` ∈ {0, 1, 2, 3, 4, 0x20}** (owning *realm*; sea `0x20`
+    grows 84 → 497)
+  - `+1 bit2 == (+7==0)` holds **4096/4096 in BOTH** — the border gate just
+    tracks `+7`.
+  So load **remaps `+7` from region-id → owning-realm**.  The mapping is
+  **many-to-many / spatial** (save `+7=0x06` → owners 0/3/4), NOT a
+  per-territory-id table (owner = record byte +0x00 scores only 21%) — i.e. a
+  spatial ownership-fill, not yet identified/ported.  The autotile reads the
+  *post-stamp* `+1`/`+7`, so until the stamp runs, `+3` can't match.
+- **Consistency confirmed:** the save's loaded `territory_records` match the
+  captured `territory_records.bin` at **99.8%**, and `+5` at 99.8% — the
+  on-disk save and the capture are the **same game state** (a trustworthy
+  pair).  So byte-exact reproduction IS achievable.
+- **Water `+3` is RNG** (single-LFSR `DAT_00591564`, seeded `0x34518632` at
+  InitInstance): autotile type `0x16` → variant `rng&7`.  Byte-exact needs
+  RNG-phase parity — replay the consumers in order from the seed, or snapshot
+  `DAT_00591564` at finalize entry via frida.
+
+**NEXT (structural parity):** capture retail's `save_load → map-frame` call
+trace (Phase-G `call_trace_diff` / frida, host run) to enumerate exactly which
+functions run, find the `+7` ownership-fill pass, port it, then close the RNG
+phase.  The diagnostic test guards the foundation invariants (save+capture
+consistency, build correctness) and prints the live gap metrics each run.
