@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **523** (21.4%) — tested 487, ported 36
-- code bytes touched: **21.9%** (183,988 / 838,629 B)
-- unported: **1924**
+- touched: **524** (21.4%) — tested 488, ported 36
+- code bytes touched: **22.2%** (185,846 / 838,629 B)
+- unported: **1923**
 - orphan refs (in src/, not in function table): 4
 
-## tested (487) — ported + host unit suite
+## tested (488) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -165,6 +165,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x428007 | FUN_00428007 | 113 | game_init.c, game_init.h |
 | 0x428078 | FUN_00428078 | 113 | game_init.c, game_init.h |
 | 0x42847c | FUN_0042847c | 82 | game_init.c, game_init.h |
+| 0x4284ce | FUN_004284ce | 1858 | engine_army_ai.c, engine_army_ai.h |
 | 0x428c42 | FUN_00428c42 | 365 | engine_army_ai.c, engine_army_ai.h |
 | 0x4290d0 | FUN_004290d0 | 131 | engine_category_buckets.c, engine_category_buckets.h, engine_territory.c |
 | 0x429153 | FUN_00429153 | 96 | engine_category_buckets.h, engine_territory.c |

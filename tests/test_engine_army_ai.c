@@ -11,6 +11,8 @@
 
 #include "t.h"
 #include "engine_army_ai.h"
+#include "engine_army_economy.h"   /* NULL the army-record bind to isolate the re-plan tail */
+#include "engine_territory.h"      /* NULL the territory binds too */
 #include "save.h"
 
 #define AREC(key)   (&g_per_army_768[(key) * 0x300])
@@ -137,5 +139,116 @@ int test_army_ai_consume_build_demand_gates(void)
     r[0x005] = 0;                       /* independent → no-op */
     engine_army_ai_consume_build_demand(4);
     T_ASSERT_EQ_I(AI32(s, 0x130), 50);
+    return 0;
+}
+
+/* ── Buy/sell transaction executor (FUN_004284ce) ───────────────────
+ * Isolate the transaction arithmetic from the re-plan tail by leaving the
+ * separately-bound army-record / cell pointers NULL (every tail callee then
+ * no-ops); recompute_player_total touches only +0x138, away from our checks.
+ * Trade commodity slot 8 (strategic pool +0x130). */
+
+static void trade_setup(void)
+{
+    ai_setup();
+    engine_army_economy_bind_army_records(NULL);
+    engine_territory_bind_army_records(NULL);
+    engine_territory_bind_cells(NULL);
+    engine_territory_bind_cell_roster(NULL);
+}
+
+/* Buy: debit cost from cash (+0x118), credit both buy ledgers (+0x104/+0x108),
+ * add the units to the slot-8 pool (+0x130). */
+int test_army_ai_trade_buy(void)
+{
+    trade_setup();
+    uint8_t *s = PREC(2);
+    AI32(s, 0x118) = 100;               /* cash */
+    AI32(s, 0x130) = 7;                 /* existing slot-8 stock */
+
+    engine_army_ai_execute_trade(0, 5, 8, /*buy*/10, /*sell*/4, 2, 4);
+
+    T_ASSERT_EQ_I(AI32(s, 0x130), 12);  /* 7 + 5 */
+    T_ASSERT_EQ_I(AI32(s, 0x118), 50);  /* 100 - 5*10 */
+    T_ASSERT_EQ_I(AI32(s, 0x108), 50);  /* buy ledger B */
+    T_ASSERT_EQ_I(AI32(s, 0x104), 50);  /* buy ledger A */
+    return 0;
+}
+
+/* Sell: reduce the slot-8 pool, credit cash + both sell ledgers (+0x10c/+0x110). */
+int test_army_ai_trade_sell(void)
+{
+    trade_setup();
+    uint8_t *s = PREC(2);
+    AI32(s, 0x118) = 100;
+    AI32(s, 0x130) = 10;
+
+    engine_army_ai_execute_trade(0, -3, 8, /*buy*/10, /*sell*/4, 2, 4);
+
+    T_ASSERT_EQ_I(AI32(s, 0x130), 7);   /* 10 - 3 */
+    T_ASSERT_EQ_I(AI32(s, 0x118), 112); /* 100 + 3*4 */
+    T_ASSERT_EQ_I(AI32(s, 0x110), 12);  /* sell ledger B */
+    T_ASSERT_EQ_I(AI32(s, 0x10c), 12);  /* sell ledger A */
+    return 0;
+}
+
+/* Buy aborts when the owner can't afford the cost — nothing changes. */
+int test_army_ai_trade_buy_unaffordable_aborts(void)
+{
+    trade_setup();
+    uint8_t *s = PREC(2);
+    AI32(s, 0x118) = 10;                /* only 10 gold */
+    AI32(s, 0x130) = 7;
+
+    engine_army_ai_execute_trade(0, 5, 8, 10, 4, 2, 4);  /* cost 50 > 10 */
+
+    T_ASSERT_EQ_I(AI32(s, 0x130), 7);   /* untouched */
+    T_ASSERT_EQ_I(AI32(s, 0x118), 10);
+    T_ASSERT_EQ_I(AI32(s, 0x108), 0);
+    return 0;
+}
+
+/* Sell aborts when the owned realm lacks the stock to cover the sale. */
+int test_army_ai_trade_sell_insufficient_aborts(void)
+{
+    trade_setup();
+    uint8_t *s = PREC(2);
+    AI32(s, 0x118) = 100;
+    AI32(s, 0x130) = 2;                 /* only 2 in stock */
+
+    engine_army_ai_execute_trade(0, -3, 8, 10, 4, 2, 4);  /* sell 3 > 2 */
+
+    T_ASSERT_EQ_I(AI32(s, 0x130), 2);   /* untouched */
+    T_ASSERT_EQ_I(AI32(s, 0x118), 100);
+    return 0;
+}
+
+/* Independent realm (player 0): treasury is the realm's own gold (+0x1f4); no
+ * affordability gate (the gate is owner-only). */
+int test_army_ai_trade_independent_uses_realm_gold(void)
+{
+    trade_setup();
+    uint8_t *r = AREC(4);
+    AI32(r, 0x1f4) = 80;                /* realm treasury */
+
+    engine_army_ai_execute_trade(0, 5, 8, 10, 4, 0, 4);  /* buy, player 0 */
+
+    T_ASSERT_EQ_I(AI32(r, 0x1f4), 30);  /* 80 - 50 */
+    T_ASSERT_EQ_I(AI32(PREC(0), 0x130), 5);  /* slot-8 pool of player 0 */
+    return 0;
+}
+
+/* amount == 0 is a no-op (no transaction, no re-plan). */
+int test_army_ai_trade_zero_noop(void)
+{
+    trade_setup();
+    uint8_t *s = PREC(2);
+    AI32(s, 0x118) = 100;
+    AI32(s, 0x130) = 7;
+
+    engine_army_ai_execute_trade(0, 0, 8, 10, 4, 2, 4);
+
+    T_ASSERT_EQ_I(AI32(s, 0x130), 7);
+    T_ASSERT_EQ_I(AI32(s, 0x118), 100);
     return 0;
 }

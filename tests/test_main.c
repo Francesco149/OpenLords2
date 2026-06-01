@@ -1797,6 +1797,12 @@ struct test_case {
     X(army_ai_advance_tier_approval_caps_at_100) \
     X(army_ai_consume_build_demand) \
     X(army_ai_consume_build_demand_gates) \
+    X(army_ai_trade_buy) \
+    X(army_ai_trade_sell) \
+    X(army_ai_trade_buy_unaffordable_aborts) \
+    X(army_ai_trade_sell_insufficient_aborts) \
+    X(army_ai_trade_independent_uses_realm_gold) \
+    X(army_ai_trade_zero_noop) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

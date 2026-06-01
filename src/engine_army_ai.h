@@ -31,4 +31,18 @@ void engine_army_ai_advance_tier(int amount, int key);
  * settlement (+0x1c3 == 0). */
 void engine_army_ai_consume_build_demand(int key);
 
+/* Port of FUN_004284ce.  The AI buy/sell transaction executor: move `amount`
+ * units of commodity `slot` for `realm` owned by `player` (0 = independent),
+ * then re-plan the realm's economy.  `amount` < 0 sells |amount| units at
+ * `sell_price` (credit), `amount` > 0 buys at `buy_price` (debit); slot 4 funds
+ * the advancement tier instead of a stock.  Owned realms abort when they can't
+ * cover the sale stock / purchase cost.  `flag` mirrors the retail ABI but is
+ * unused.  No-op when `amount` == 0.  Commodity slots: 1/2 are army-record
+ * stocks (+0x224/+0x250), 6..0xe the owner's strategic pools; cash + ledger
+ * fields live in the strategic block (+0x118 / +0x104..+0x110) or, for
+ * independent realms, the realm's own gold (+0x1f4). */
+void engine_army_ai_execute_trade(int flag, int amount, int slot,
+                                  int buy_price, int sell_price,
+                                  int player, int realm);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_AI_H */
