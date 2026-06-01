@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **560** (22.9%) — tested 515, ported 45
-- code bytes touched: **27.2%** (227,819 / 838,629 B)
-- unported: **1887**
+- touched: **561** (22.9%) — tested 516, ported 45
+- code bytes touched: **27.2%** (228,291 / 838,629 B)
+- unported: **1886**
 - orphan refs (in src/, not in function table): 4
 
-## tested (515) — ported + host unit suite
+## tested (516) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -362,9 +362,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
 | 0x46d7f4 | FUN_0046d7f4 | 486 | engine_realm_events.h, engine_territory.c, engine_territory.h |
 | 0x46d9da | FUN_0046d9da | 113 | engine_territory.c, engine_territory.h |
-| 0x46da4b | FUN_0046da4b | 426 | engine_territory.c, engine_territory.h |
-| 0x46dbf5 | FUN_0046dbf5 | 319 | engine_territory.c, engine_territory.h |
-| 0x46dd34 | FUN_0046dd34 | 209 | engine_territory.c, engine_territory.h |
+| 0x46da4b | FUN_0046da4b | 426 | engine_territory.c, engine_territory.h, main.c |
+| 0x46dbf5 | FUN_0046dbf5 | 319 | engine_territory.c, engine_territory.h, main.c |
+| 0x46dd34 | FUN_0046dd34 | 209 | engine_territory.c, engine_territory.h, main.c |
 | 0x46de05 | FUN_0046de05 | 143 | engine_territory.c, engine_territory.h |
 | 0x46de94 | FUN_0046de94 | 189 | engine_territory.c, engine_territory.h |
 | 0x46df51 | FUN_0046df51 | 132 | engine_territory.c, engine_territory.h |
@@ -396,6 +396,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x48ee46 | FUN_0048ee46 | 87 | engine_tile.c, engine_tile.h |
 | 0x4917dd | FUN_004917dd | 599 | engine_tile.c, engine_tile.h, save.c |
 | 0x4921e5 | FUN_004921e5 | 451 | engine_tile.c, engine_tile.h |
+| 0x4976a1 | FUN_004976a1 | 472 | main.c |
 | 0x497ced | FUN_00497ced | 376 | engine_territory.c, engine_territory.h |
 | 0x497e65 | FUN_00497e65 | 1025 | game_init.c, game_init.h |
 | 0x498270 | FUN_00498270 | 327 | engine_map_init.c, engine_map_init.h |

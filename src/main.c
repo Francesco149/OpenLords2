@@ -65,6 +65,7 @@
 #include "engine_dirty_rect.h"
 #include "engine_hud_menubar.h"
 #include "engine_map_init.h"
+#include "engine_territory.h"
 #include "engine_map_render.h"
 #include "engine_map_scene.h"
 #include "engine_map_terrain.h"
@@ -1700,6 +1701,21 @@ static void bringup_strat_load(const char *dir)
     /* 3. Build the derived render arrays (tile_cells) + camera natively. */
     engine_map_init_strategic(NULL, map_id);
     int32_t *cells = engine_map_init_tile_cells();
+
+    /* 3b. Load finalize — retail FUN_004976a1's terrain tail run after
+     * save_load: autotile the terrain sprite +3 (FUN_0046dbf5), randomise the
+     * special sea tiles (FUN_0046dd34), rebuild the per-key cell roster
+     * (FUN_0046da4b(0)).  Reproduces retail's immediate post-load descriptor
+     * table byte-exact (test_map_finalize_load_path_diagnostic: +3=100%).
+     * The post-load WARMUP region->owner remap (+7) is a separate turn pass,
+     * not yet ported — territory owner tints reflect the immediate-load state. */
+    engine_territory_bind_cells(g_overworld_map);
+    engine_territory_bind_terrain_tiles(cells);
+    engine_territory_bind_cell_roster((int32_t *)g_misc_1360);
+    engine_rng_single_in_t strat_rng = { 0x34518632u };  /* InitInstance seed */
+    engine_territory_classify_feature_tiles(&strat_rng);   /* FUN_0046dbf5 */
+    engine_territory_randomise_special_tiles(&strat_rng);   /* FUN_0046dd34 */
+    engine_territory_rebuild_cell_roster(0);                /* FUN_0046da4b(0) */
 
     /* 4. Self-check: the native arrays must byte-match the captured dumps. */
     int all_ok = 1;
