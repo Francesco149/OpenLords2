@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 541,
+  "tested": 546,
   "ported": 47,
-  "unported": 1859,
+  "unported": 1854,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 588,
-  "pct_touched": 24.0,
-  "pct_tested": 22.1,
+  "touched": 593,
+  "pct_touched": 24.2,
+  "pct_tested": 22.3,
   "bytes_total": 838629,
-  "bytes_touched": 238318,
-  "pct_bytes_touched": 28.4
+  "bytes_touched": 240070,
+  "pct_bytes_touched": 28.6
  },
  "orphan_refs": [
   "0x004148",
@@ -4774,8 +4774,11 @@
    "name": "FUN_004329ec",
    "size": 281,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_load_pump.c",
+    "src/engine_load_pump.h"
+   ]
   },
   {
    "va": "0x432b05",
@@ -10681,8 +10684,11 @@
    "name": "FUN_00451f8a",
    "size": 66,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_load_pump.c",
+    "src/engine_load_pump.h"
+   ]
   },
   {
    "va": "0x451fcc",
@@ -15144,6 +15150,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_load_pump.c",
+    "src/engine_load_pump.h",
     "src/main.c"
    ]
   },
@@ -15195,6 +15203,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_load_pump.c",
     "src/engine_territory.c",
     "src/engine_territory.h"
    ]
@@ -16964,16 +16973,24 @@
    "name": "FUN_004ad9f0",
    "size": 774,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine.c",
+    "src/engine_load_pump.c",
+    "src/engine_load_pump.h",
+    "src/main.c"
+   ]
   },
   {
    "va": "0x4adcf6",
    "name": "FUN_004adcf6",
    "size": 413,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_load_pump.c",
+    "src/engine_load_pump.h"
+   ]
   },
   {
    "va": "0x4ade93",
@@ -16993,6 +17010,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_load_pump.c",
+    "src/engine_load_pump.h",
     "src/main.c",
     "src/save.c",
     "src/save.h"
@@ -17299,6 +17318,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_load_pump.c",
     "src/strutil.h"
    ]
   },
@@ -17325,8 +17345,11 @@
    "name": "FUN_004af767",
    "size": 218,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_load_pump.c",
+    "src/engine_load_pump.h"
+   ]
   },
   {
    "va": "0x4af841",
@@ -18923,6 +18946,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_load_pump.h",
     "src/engine_menu_input.c",
     "src/engine_menu_input.h",
     "src/engine_title_render.c",

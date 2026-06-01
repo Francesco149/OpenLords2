@@ -21,6 +21,7 @@
 #include "engine_screen_dispatch.h"
 #include "engine_title_render.h"
 #include "engine_menu_input.h"
+#include "engine_load_pump.h"
 #include "engine_turn.h"
 #include "gfx.h"
 #include "save.h"                 /* g_player_strategic_352 */
@@ -1123,6 +1124,16 @@ void engine_tick(void)
      * producer sets g_sim_current_screen = 0x1f).  A transition here sets
      * the demand-redraw cookie the seam below consumes. */
     engine_tick_menu_input_step();
+
+    /* Title-menu file-load confirm pump (retail FUN_004ad9f0, run from
+     * inside the menu dispatcher FUN_004ba9c8).  Self-gates on the
+     * page-3 Load request latch + its confirm timer; a no-op until the
+     * Load button latches a request.  When the timer expires on the
+     * title screen it performs the load (bound hook → save_load +
+     * engine_map_post_load, which sets g_sim_current_screen = 0) and
+     * transitions the engine to ingame, so the render step below paints
+     * the strategic map this frame. */
+    engine_load_pump_tick();
 
     /* Title-screen render step — the demand-redraw seam (retail
      * FUN_004b99c0 line 36) plus the per-frame button refresh (line 99,

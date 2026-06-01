@@ -75,6 +75,7 @@
 #include "engine_pl8.h"
 #include "engine_screen_dispatch.h"
 #include "engine_screen_strat.h"
+#include "engine_load_pump.h"
 #include "engine_title_render.h"
 #include "engine_menu_input.h"
 #include "text_input.h"
@@ -177,6 +178,8 @@ static const char *g_title_type;
  * --capture-to. */
 static const char *g_strat_map_dir;
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
+static int         g_strat_load_live;  /* --strat-load-live: drive the live
+                                        * load pump from the title menu */
 /* --audio-init: call audio_init() after window creation.  Off by
  * default — SetCooperativeLevel(PRIORITY) modifies process audio
  * state and the headless smoke harness has no way to validate
@@ -276,7 +279,9 @@ static void bringup_title_nav(const char *dir);
 static void bringup_title_live(void);
 static void bringup_strat_map(const char *dir);
 static void bringup_strat_load(const char *dir);
+static void bringup_strat_load_live(void);
 static void engine_map_post_load(void);
+static int  drop_in_load(const char *filename);
 static const char *translate_wsl_path(const char *p, char *buf, size_t cap);
 void log_line(const char *fmt, ...);   /* non-static — gfx.c links to this */
 
@@ -350,8 +355,13 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
              * FUN_0040f5fd) to the ported renderer.  Dormant until the
              * strat data path has run (engine_screen_strat_render gates on
              * engine_pl8_data_ready); the bring-up seats below set that up
-             * explicitly, the live load/new-game path will once wired. */
+             * explicitly; the live load pump (engine_load_pump_tick) sets
+             * it up when a title-menu Load request resolves. */
             engine_screen_dispatch_bind_strat_fn(engine_screen_strat_render);
+            /* Route the title-menu load-confirm pump's load action
+             * (retail FUN_004adfe6 → FUN_004976a1) to the drop-in's
+             * save_load + engine_map_post_load. */
+            engine_load_pump_bind_load_fn(drop_in_load);
             /* Bring-up: render the page-1 main menu into the back
              * buffer before the first present, so frame 0 shows the
              * menu rather than the background-erase fill.  Exercises the
@@ -374,6 +384,13 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
                                                       strat_load_buf,
                                                       sizeof strat_load_buf);
                 bringup_strat_load(g_strat_load_dir);
+            } else if (g_strat_load_live) {
+                /* Live LOAD path — drive the engine into the title state,
+                 * simulate a page-3 Load request on lastturn, then let the
+                 * main loop tick the real load-confirm pump
+                 * (engine_load_pump_tick) so the genuine menu→ingame
+                 * transition loads the save + renders the strategic map. */
+                bringup_strat_load_live();
             } else if (g_title_live) {
                 /* Live interactive menu — drive the engine into the
                  * title state, then let the main loop tick it so a real
@@ -1754,6 +1771,23 @@ static void engine_map_post_load(void)
         log_line("post-load: pl8 bank load failed");
 }
 
+/* Load action bound to the title-menu load-confirm pump
+ * (engine_load_pump_tick).  Retail FUN_004adfe6 → FUN_004976a1: read the
+ * save into the schema globals, then run the strategic-map setup.  CWD is
+ * the game dir, so the save filename + "Castles.dat" resolve relative to
+ * it exactly as retail's save_load does.  Returns 0 on success. */
+static int drop_in_load(const char *filename)
+{
+    if (save_load(filename, "Castles.dat") != 0) {
+        log_line("load-pump: save_load(%s) FAILED", filename);
+        return 1;
+    }
+    engine_map_post_load();
+    log_line("load-pump: loaded %s + map setup (screen=%d data_ready=%d)",
+             filename, engine_current_screen(), engine_pl8_data_ready());
+    return 0;
+}
+
 static void bringup_strat_load(const char *dir)
 {
     /* 1. Load the real save into the schema globals (descriptors / territory
@@ -1901,6 +1935,33 @@ static void bringup_title_live(void)
     log_line("title-live: engine in title state (screen 0x1f, page %d) — "
              "move the mouse over the menu; click to navigate.",
              g_title_page_num);
+}
+
+/* --strat-load-live: exercise the LIVE load path end-to-end.  Drive the
+ * engine into the title state (like --title-live), then simulate a
+ * page-3 "Load" click on the lastturn save — seed the selected-name
+ * field (retail DAT_004ea130) and latch the load request
+ * (DAT_005cd41c = 100).  The main loop then ticks the real ported
+ * load-confirm pump (engine_load_pump_tick = FUN_004ad9f0), which arms a
+ * ~150-frame confirm timer and, on expiry, runs drop_in_load (save_load +
+ * engine_map_post_load) and transitions the engine to ingame — so the
+ * genuine game loop reaches the screen-0 dispatch arm and paints the
+ * strategic map natively.  Run with enough frames to clear the timer,
+ * e.g. --frames 200. */
+static void bringup_strat_load_live(void)
+{
+    title_bind_render_state();
+    engine_bind_title_bg_reload_fn(title_bg_reload);
+    engine_set_viewport_game_extents(640, 480);
+    engine_title_render_set_page(1);
+    engine_set_current_screen(0x1f);               /* DAT_004eac50 = 0x1f */
+    engine_set_demand_redraw(2);
+
+    engine_title_render_set_filelist_topname((const uint8_t *)"lastturn");
+    engine_menu_input_set_filelist_load_request(100);   /* DAT_005cd41c = 100 */
+    log_line("strat-load-live: title state up; latched Load(lastturn). The "
+             "load-confirm pump will load + render the strategic map in "
+             "~150 frames.");
 }
 
 static void main_loop_body(void)
@@ -2156,6 +2217,10 @@ static void parse_cmdline(LPSTR lpCmd)
         }
         else if (!strcmp(a, "--strat-load") && i + 1 < ntok) {
             g_strat_load_dir = tokens[++i];  /* native load→build→render */
+            g_gfx_init = 1;                  /* needs DDraw */
+        }
+        else if (!strcmp(a, "--strat-load-live")) {
+            g_strat_load_live = 1;           /* live load pump → ingame map */
             g_gfx_init = 1;                  /* needs DDraw */
         }
         else if (!strcmp(a, "--audio-init"))     g_audio_init  = 1;

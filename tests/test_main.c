@@ -1554,6 +1554,11 @@ struct test_case {
     X(dispatch_strat_screen_default_stub_records_redraw) \
     X(dispatch_strat_screen_still_clears_flag_b) \
     \
+    X(load_pump_request_arms_timer_and_builds_name) \
+    X(load_pump_timer_expiry_loads_and_transitions) \
+    X(load_pump_filename_caps_stem_to_eight) \
+    X(load_pump_idle_is_noop) \
+    \
     X(panel_border_3x3_corner_and_edge_indices) \
     X(panel_border_skips_interior) \
     X(panel_border_mode2_swaps_top_corners) \

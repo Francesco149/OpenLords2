@@ -93,12 +93,46 @@ rendered frame is **byte-IDENTICAL** to the pre-refactor output
 (307200/307200) — the reorder (banks-after-finalize, screen-state set,
 minimap-before-finalize) is output-neutral.
 
-**REMAINING (verification-gated):** the LIVE load pump (`FUN_004ad9f0`) must
-call `save_load` → `engine_map_post_load` so the real game loop reaches the
-now-wired screen-0 dispatch arm.  Today only the `--strat-load` bring-up runs
-the setup; until the pump is wired the dispatch arm is dormant in the live
-loop (data-ready gate false).  Wiring `FUN_004ad9f0` into the live menu tick
-is the next step and needs the user's eyes on the live drop-in.
+## LIVE LOAD PUMP `FUN_004ad9f0` → `engine_load_pump_tick` (2026-06-02)
+
+The title-menu file-load confirm pump that drives menu→ingame — now ported
+(SP title path) as `engine_load_pump_tick()` in `src/engine_load_pump.{c,h}`
+and wired into the live per-frame tick (`engine.c`, right after the menu-
+input step, where retail runs it inside the menu dispatcher `FUN_004ba9c8`).
+This closes the loop: the real game loop now reaches the screen-0 dispatch
+arm and renders the strategic map natively after a load.
+
+**SP title-load flow (retail `DAT_00553030 == 0`, `DAT_004eac50 == 0x1f`):**
+1. The page-3 "Load" button latches the request (`DAT_005cd41c = 100`, our
+   `engine_menu_input` filelist-load-request).
+2. Pump block 2 clears the latch, arms a ~150-frame confirm timer
+   (`DAT_0057d3c4 = 0x96`) and builds the filename from the selected-name
+   field (`DAT_004ea130`) + the SP `.sav` extension (`FUN_004af675`).
+3. Pump block 1 counts the timer down; on expiry (still on the title
+   screen) it loads via the bound hook (drop-in → `save_load` +
+   `engine_map_post_load`, retail `FUN_004adfe6` → `FUN_004976a1`, setting
+   `g_sim_current_screen = 0` + data-ready) and runs the SP branch of the
+   ingame transition `FUN_004329ec`: `g_engine_state = 3` (ingame),
+   demand-redraw = 2.  Next render step paints the map.
+
+**Deferred (verification-neutral):** the multiplayer arms, the in-game
+save/load dialog states `'5'`/`'6'`, the missing-file retry `FUN_004af767`,
+the SP-noop post-load sync `FUN_004adcf6` (returns 1 immediately), the load
+sound cue, and the render-neutral UI flags `FUN_00451f8a` sets.  The actual
+load + map setup is behind a bound hook so the pump module stays out of the
+Win32 gfx / persistence link; 4 host tests cover the latch → timer →
+load + transition sequence (1772 host tests green).
+
+**Validation (live, verification-gated — user-confirmed):** the new
+`--strat-load-live` seat drives the engine into the title state, simulates a
+page-3 Load click on `lastturn`, and lets the main loop tick the real pump.
+At ~frame 150 the live drop-in transitions title-menu → loaded strategic map
+(full HUD: menu bar / year 1268 Winter / 1000 Crowns / England minimap /
+Lancashire panel pop 435 ♥72 / End-turn strip) — the SAME byte-exact
+composition as `--strat-load`, now reached through the genuine
+menu→load→ingame path.  The terrain body shows the immediate-post-load
+finalize (the settled `strat-spray` look is a later turn pass, not yet
+ported).  Montage pushed to the llm-feed (title→map transition).
 
 ## RIGHT-PANEL MINIMAP — BYTE-EXACT (2026-06-01, `src/engine_minimap.c`)
 

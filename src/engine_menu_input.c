@@ -49,13 +49,12 @@ static int g_loadlist_dir_flag;    /* DAT_0057d320 */
 static int g_filelist_return_page; /* DAT_00553e5c */
 
 /* DAT_005cd41c — the page-3 "Load" request latch.  FUN_004342f3 writes
- * 100; the deferred load-confirm pump (0x4ad9f0, deep load →
- * game-start path) consumes it.  Modeled here so the Load button's
- * faithful write is observable to tests; nothing in the drop-in acts on
- * it yet. */
+ * 100; the load-confirm pump (0x4ad9f0 → engine_load_pump_tick) consumes
+ * it (clears it to 0 once it arms its confirm timer). */
 static int g_filelist_load_request; /* DAT_005cd41c */
 
-int engine_menu_input_filelist_load_request(void) { return g_filelist_load_request; }
+int  engine_menu_input_filelist_load_request(void) { return g_filelist_load_request; }
+void engine_menu_input_set_filelist_load_request(int v) { g_filelist_load_request = v; }
 
 void engine_menu_input_bind_redraw_fn(engine_menu_redraw_fn fn)
 {

@@ -138,7 +138,9 @@ int  engine_menu_input_quit_count(void);
 void engine_menu_input_reset_counters(void);
 
 /* DAT_005cd41c — the page-3 "Load" request latch (FUN_004342f3 writes
- * 100).  Exposed for tests; the deferred load-confirm pump consumes it. */
+ * 100).  The load-confirm pump (engine_load_pump_tick) consumes it via
+ * the setter; the setter also lets a bring-up seat simulate the click. */
 int  engine_menu_input_filelist_load_request(void);
+void engine_menu_input_set_filelist_load_request(int v);
 
 #endif /* OPENLORDS2_ENGINE_MENU_INPUT_H */
