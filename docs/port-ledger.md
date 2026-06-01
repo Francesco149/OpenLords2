@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **504** (20.6%) — tested 468, ported 36
-- code bytes touched: **20.9%** (175,261 / 838,629 B)
-- unported: **1943**
+- touched: **507** (20.7%) — tested 471, ported 36
+- code bytes touched: **21.1%** (177,049 / 838,629 B)
+- unported: **1940**
 - orphan refs (in src/, not in function table): 4
 
-## tested (468) — ported + host unit suite
+## tested (471) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -216,7 +216,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x448545 | FUN_00448545 | 96 | engine_realm.c, engine_realm.h, engine_realm_upkeep.c |
 | 0x4485a5 | FUN_004485a5 | 163 | engine_army_economy.c, engine_army_economy.h, engine_realm.c (+1) |
 | 0x4486a9 | FUN_004486a9 | 256 | engine_ranking.c, engine_ranking.h |
-| 0x4487a9 | FUN_004487a9 | 112 | engine_ranking.c, engine_ranking.h |
+| 0x4487a9 | FUN_004487a9 | 112 | engine_army_economy.c, engine_ranking.c, engine_ranking.h |
 | 0x448819 | FUN_00448819 | 1277 | engine_realm_events.c, engine_realm_events.h |
 | 0x448d16 | FUN_00448d16 | 104 | engine_realm.c, engine_realm.h |
 | 0x448e12 | FUN_00448e12 | 189 | engine_realm_events.c |
@@ -278,6 +278,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x44e603 | FUN_0044e603 | 80 | engine_army_economy.c, engine_army_economy.h |
 | 0x44e653 | FUN_0044e653 | 80 | engine_army_economy.c, engine_army_economy.h |
 | 0x44e7b4 | FUN_0044e7b4 | 158 | engine_army_economy.c, engine_army_economy.h |
+| 0x44e852 | FUN_0044e852 | 576 | engine_army_economy.c, engine_army_economy.h |
+| 0x44ea92 | FUN_0044ea92 | 816 | engine_army_economy.c, engine_army_economy.h |
+| 0x44edc2 | FUN_0044edc2 | 396 | engine_army_economy.c, engine_army_economy.h |
 | 0x44ef4e | FUN_0044ef4e | 525 | engine_army_economy.c, engine_army_economy.h |
 | 0x44f15b | FUN_0044f15b | 237 | engine_army_economy.c, engine_army_economy.h |
 | 0x44f248 | FUN_0044f248 | 208 | engine_army_economy.c, engine_army_economy.h |

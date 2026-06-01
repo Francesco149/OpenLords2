@@ -250,11 +250,12 @@ void engine_army_economy_select_candidate(int key, int phase);
 
 /* Bind the per-key cell roster (retail DAT_0053ea00 = save entry 12, 17 rows ×
  * 20 i32) and the 64×64×8 cell descriptor grid (retail DAT_00522f90).  The same
- * memory engine_territory binds; this module reads both read-only to test the
- * "developed feature-cell" predicate.  NULL on either → the three functions
- * below are no-ops. */
+ * memory engine_territory binds; the development helpers read both read-only to
+ * test the "developed feature-cell" predicate, while the resource pass stamps
+ * cell type bytes through the grid.  NULL on either → the functions that need
+ * them are no-ops. */
 void engine_army_economy_bind_cell_roster(const int32_t *roster);
-void engine_army_economy_bind_cells(const uint8_t *cells);
+void engine_army_economy_bind_cells(uint8_t *cells);
 
 /* Port of FUN_0044c5fc (200 B).  Record the realm's fullest developed-cell slot
  * index (argmax of the +0x90 fill) into +0x210, or 99 when the realm has no
@@ -309,7 +310,7 @@ int engine_army_economy_distribute_stock(int key);
  * fields out of the keyed record: +0x00/+0x04 (commodity-B demand, flag 0 / !=0)
  * and +0x10/+0x14 (commodity-A demand).  NULL → the slot-2 path treats every
  * demand as 0 (so the quota collapses to 0); the other slots never touch it. */
-void engine_army_economy_bind_resource_pool(const uint8_t *pool);
+void engine_army_economy_bind_resource_pool(uint8_t *pool);
 
 /* The supply-pool totals resource_quota's slot-2 path last summed (retail
  * scalars DAT_0057c904 / DAT_0056d628).  Recomputed by every slot-2
@@ -367,5 +368,39 @@ void engine_army_economy_plan_resource(int key, int slot, int rec_idx,
  * saved game-mode code (retail DAT_0057c92c).  No-op when the army-record block
  * is unbound (each callee guards itself). */
 void engine_army_economy_plan_realm(int key, int phase);
+
+/* Port of FUN_0044edc2 (396 B).  Stamp resource `slot`'s overworld cell — the
+ * descriptor at the slot's +0x04 byte offset into the bound cell grid — with a
+ * per-slot type code (a per-slot constant {1→1,3→4,2→7,0→0xa} bumped by 1 when
+ * the slot is at its top tier, flag_c set), and, when the slot did not grow this
+ * turn (current +0x0c − previous +0x10 < 1), a per-slot value {1→0x1e,3→0,0→0x14,
+ * 2→0xa} into the cell's +3 byte.  Gated on the slot being live (flag_a +0x01 set,
+ * flag_b +0x02 clear).  No-op when the army-record or cell grid is unbound. */
+void engine_army_economy_stamp_resource_cell(int key, int slot);
+
+/* Port of FUN_0044ea92 (816 B).  Deliver resource `slot`'s production for realm
+ * `key`: snapshot the running total (+0x0c) into the previous-turn field (+0x10),
+ * then — when the slot is live (flag_b +0x02 clear) and the realm's group (+0x05)
+ * is set — credit this turn's supplied amount (the smaller of the level-scaled
+ * supply target and the delivery quota resource_quota(`group`,flag=1)) into the
+ * running total and the owning group's demand pool.  Slot 1/3/0 add to the B/C/A
+ * commodity accumulator; slot 2 adds to the per-race accumulator (+0x40) and
+ * debits A/B by the race weights, then resyncs the owner's cashflow total
+ * (engine_ranking_recompute_player_total).  When the slot is depleting (flag_b
+ * > 0) it instead zeroes the running total, ticks the countdown and re-stamps the
+ * cell once it expires.  `target`/`divisor` are the per-slot constants and
+ * `rec_idx` the job-slot record selector from the 0x44e852 call table.  No-op
+ * when the army-record block is unbound. */
+void engine_army_economy_apply_resource_quota(int key, int slot, int rec_idx,
+                                              int target, int divisor);
+
+/* Port of FUN_0044e852 (576 B).  The per-turn resource-delivery pass: snapshot
+ * each group pool's three commodity accumulators (B/C/A) into their prior-turn
+ * companions (groups 1..5), then for every realm 1..s_slot_0056d5dc deliver slot
+ * 2 (apply_resource_quota → stamp_resource_cell → plan_resource), followed by
+ * slots 1/3/0 (all four re-planned).  Each slot's cap (+0x0a) is refreshed from
+ * its job-slot count afterwards (slot 2←job 7, 1←4, 3←5, 0←6).  No-op when the
+ * army-record block is unbound. */
+void engine_army_economy_resource_pass(void);
 
 #endif /* OPENLORDS2_ENGINE_ARMY_ECONOMY_H */

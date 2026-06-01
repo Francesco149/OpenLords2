@@ -1245,8 +1245,11 @@ enum {
     RSF_FLAG_A     = 0x01,
     RSF_FLAG_B     = 0x02,
     RSF_FLAG_C     = 0x03,
+    RSF_CELL_IDX   = 0x04,
     RSF_BASE_PCT   = 0x08,
     RSF_CAP        = 0x0a,
+    RSF_CURRENT    = 0x0c,
+    RSF_PREV       = 0x10,
     RSF_QUOTA      = 0x14,
     /* job-slot record field offsets (within the 0xc-byte record) */
     JSF_COUNT      = 0x00,
@@ -1254,7 +1257,12 @@ enum {
     JSF_CAP        = 0x08,
     /* per-group resource-pool record field offsets (within the 0x160 record) */
     RP_B_FLAG0     = 0x00,
+    RP_B_FLAG1     = 0x04,
+    RP_C_FLAG0     = 0x08,
+    RP_C_FLAG1     = 0x0c,
     RP_A_FLAG0     = 0x10,
+    RP_A_FLAG1     = 0x14,
+    RP_RACE_ACC    = 0x20,
     RP_STRIDE      = 0x160,
 };
 
@@ -1589,6 +1597,186 @@ int test_army_economy_plan_realm_unbound_noop(void)
 {
     engine_army_economy_bind_army_records(NULL);
     engine_army_economy_plan_realm(3, 1);            /* no crash */
+    return 0;
+}
+
+/* ── resource-delivery turn pass — FUN_0044e852 / ea92 / edc2 ───────── */
+
+/* stamp_resource_cell (FUN_0044edc2). */
+int test_army_economy_stamp_cell_type_and_tag(void)
+{
+    dist_reset();
+    /* slot 1, live (flag_a set, flag_b clear), top tier (flag_c set), stalled. */
+    set_byte(3, res_off(1, RSF_FLAG_A), 1);
+    set_byte(3, res_off(1, RSF_FLAG_C), 1);
+    set_stock(3, res_off(1, RSF_CELL_IDX), 100);
+    set_stock(3, res_off(1, RSF_CURRENT), 5);
+    set_stock(3, res_off(1, RSF_PREV), 5);          /* cur-prev = 0 < 1 → tag */
+
+    engine_army_economy_stamp_resource_cell(3, 1);
+
+    T_ASSERT_EQ_I(g_cellgrid[100], 1 + 1);          /* slot-1 base 1 + top-tier bump */
+    T_ASSERT_EQ_I(g_cellgrid[103], 0x1e);           /* slot-1 stall tag */
+    return 0;
+}
+
+int test_army_economy_stamp_cell_growth_skips_tag(void)
+{
+    dist_reset();
+    set_byte(3, res_off(2, RSF_FLAG_A), 1);         /* slot 2, flag_c clear */
+    set_stock(3, res_off(2, RSF_CELL_IDX), 200);
+    set_stock(3, res_off(2, RSF_CURRENT), 10);
+    set_stock(3, res_off(2, RSF_PREV), 5);          /* grew → no tag */
+    g_cellgrid[203] = 0x77;                         /* sentinel must survive */
+
+    engine_army_economy_stamp_resource_cell(3, 2);
+
+    T_ASSERT_EQ_I(g_cellgrid[200], 7);              /* slot-2 base 7, no top-tier bump */
+    T_ASSERT_EQ_I(g_cellgrid[203], 0x77);           /* +3 byte untouched */
+    return 0;
+}
+
+int test_army_economy_stamp_cell_gated_off(void)
+{
+    dist_reset();
+    set_stock(3, res_off(0, RSF_CELL_IDX), 300);
+    g_cellgrid[300] = 0x55;
+    /* flag_a clear → no stamp */
+    engine_army_economy_stamp_resource_cell(3, 0);
+    T_ASSERT_EQ_I(g_cellgrid[300], 0x55);
+
+    /* flag_a set but flag_b set (depleting) → still gated off */
+    set_byte(3, res_off(0, RSF_FLAG_A), 1);
+    set_byte(3, res_off(0, RSF_FLAG_B), 1);
+    engine_army_economy_stamp_resource_cell(3, 0);
+    T_ASSERT_EQ_I(g_cellgrid[300], 0x55);
+    return 0;
+}
+
+/* apply_resource_quota (FUN_0044ea92). */
+int test_army_economy_apply_quota_nonpool_slot1(void)
+{
+    resq_reset();
+    s_slot_0053f25c = 0;                            /* supply_target → flat 80 */
+    set_byte(3, GROUP, 1);
+    set_byte(3, res_off(1, RSF_FLAG_C), 1);         /* quota gate */
+    set_byte(3, res_off(1, RSF_FLAG_A), 1);         /* → quota 999 */
+    set_stock(3, job_off(4, JSF_COUNT), 10);        /* delivery level */
+    set_stock(3, res_off(1, RSF_CURRENT), 5);       /* prior running total */
+
+    engine_army_economy_apply_resource_quota(3, 1, 4, 0x0f, 1);
+
+    /* amount = percent_of(10/1, 80) = 8 (≤ quota 999). */
+    T_ASSERT_EQ_I(rec_i32(3, res_off(1, RSF_PREV)), 5);     /* snapshot of old current */
+    T_ASSERT_EQ_I(rec_i32(3, res_off(1, RSF_CURRENT)), 13); /* 5 + 8 */
+    T_ASSERT_EQ_I(rec_byte(3, res_off(1, RSF_TARGET)), 80);
+    T_ASSERT_EQ_I(rec_byte(3, res_off(1, RSF_BASE_PCT)), 80);
+    T_ASSERT_EQ_I(*(int32_t *)(g_respool + 1 * RP_STRIDE + RP_B_FLAG0), 8);
+    T_ASSERT_EQ_I(*(int32_t *)(g_respool + 1 * RP_STRIDE + RP_A_FLAG0), 0);  /* B-only */
+    return 0;
+}
+
+int test_army_economy_apply_quota_slot2_pool_debits(void)
+{
+    resq_reset();
+    s_slot_0053f25c = 0;
+    make_pool_member(3, 1, 0);                      /* group 1, race 0 → (6,10) */
+    set_stock(3, SLOT2_JOBCOUNT, 40);               /* == job-slot 7 count (delivery level) */
+    set_respool(1, RP_A_FLAG1, 600);               /* prior-turn demand (flag=1 column) */
+    set_respool(1, RP_B_FLAG1, 200);
+
+    engine_army_economy_apply_resource_quota(3, 2, 7, 0x0f, 4);
+
+    /* quota = min(B 200/10, A 600/6) = min(20,100) = 20; amount = percent_of(40/4,80)=8. */
+    T_ASSERT_EQ_I(rec_i32(3, res_off(2, RSF_CURRENT)), 8);
+    T_ASSERT_EQ_I(*(int32_t *)(g_respool + 1 * RP_STRIDE + RP_RACE_ACC + 0 * 4), 8);
+    T_ASSERT_EQ_I(*(int32_t *)(g_respool + 1 * RP_STRIDE + RP_A_FLAG0), -8 * 6);  /* debit race col A */
+    T_ASSERT_EQ_I(*(int32_t *)(g_respool + 1 * RP_STRIDE + RP_B_FLAG0), -10 * 8); /* debit race col B */
+    return 0;
+}
+
+int test_army_economy_apply_quota_group_zero_bails_after_snapshot(void)
+{
+    resq_reset();
+    set_stock(3, res_off(1, RSF_CURRENT), 7);       /* group stays 0 */
+    engine_army_economy_apply_resource_quota(3, 1, 4, 0x0f, 1);
+    T_ASSERT_EQ_I(rec_i32(3, res_off(1, RSF_PREV)), 7);     /* snapshot still ran */
+    T_ASSERT_EQ_I(rec_i32(3, res_off(1, RSF_CURRENT)), 7);  /* delivery skipped */
+    T_ASSERT_EQ_I(rec_byte(3, res_off(1, RSF_TARGET)), 0);
+    return 0;
+}
+
+int test_army_economy_apply_quota_depletion_countdown(void)
+{
+    dist_reset();                                   /* cells bound for the expiry stamp */
+    engine_army_economy_bind_resource_pool(g_respool);
+    memset(g_respool, 0, sizeof g_respool);
+    set_byte(3, res_off(1, RSF_FLAG_A), 1);
+    set_byte(3, res_off(1, RSF_FLAG_B), 2);         /* depleting, 2 turns left */
+    set_stock(3, res_off(1, RSF_CELL_IDX), 150);
+    set_stock(3, res_off(1, RSF_CURRENT), 99);
+
+    /* First tick: countdown 2 → 1, total zeroed, no stamp yet. */
+    engine_army_economy_apply_resource_quota(3, 1, 4, 0x0f, 1);
+    T_ASSERT_EQ_I(rec_byte(3, res_off(1, RSF_FLAG_B)), 1);
+    T_ASSERT_EQ_I(rec_i32(3, res_off(1, RSF_CURRENT)), 0);
+    T_ASSERT_EQ_I(rec_i32(3, res_off(1, RSF_PREV)), 0);
+    T_ASSERT_EQ_I(g_cellgrid[150], 0);              /* not stamped */
+
+    /* Second tick: 1 → 0 expires → stamp fires (flag_b now clear). */
+    engine_army_economy_apply_resource_quota(3, 1, 4, 0x0f, 1);
+    T_ASSERT_EQ_I(rec_byte(3, res_off(1, RSF_FLAG_B)), 0);
+    T_ASSERT_EQ_I(g_cellgrid[150], 1);              /* slot-1 base type stamped */
+    T_ASSERT_EQ_I(g_cellgrid[153], 0x1e);           /* stalled tag */
+    return 0;
+}
+
+/* resource_pass (FUN_0044e852). */
+static uint8_t g_pass_pool[6 * 0x160];
+
+int test_army_economy_resource_pass_snapshot_and_caps(void)
+{
+    dist_reset();                                   /* army + cells */
+    memset(g_pass_pool, 0, sizeof g_pass_pool);
+    engine_army_economy_bind_resource_pool(g_pass_pool);
+    s_slot_0056d5dc = 1;                            /* one realm, group 0 → no pool writes */
+
+    /* Pre-load flag-0 accumulators for a couple of groups in the snapshot range. */
+    *(int32_t *)(g_pass_pool + 2 * RP_STRIDE + RP_B_FLAG0) = 111;
+    *(int32_t *)(g_pass_pool + 2 * RP_STRIDE + RP_C_FLAG0) = 222;
+    *(int32_t *)(g_pass_pool + 2 * RP_STRIDE + RP_A_FLAG0) = 333;
+    *(int32_t *)(g_pass_pool + 5 * RP_STRIDE + RP_B_FLAG0) = 44;
+
+    /* Job-slot counts feed each slot's cap after planning. */
+    set_stock(1, job_off(7, JSF_COUNT), 70);
+    set_stock(1, job_off(4, JSF_COUNT), 40);
+    set_stock(1, job_off(5, JSF_COUNT), 50);
+    set_stock(1, job_off(6, JSF_COUNT), 60);
+
+    engine_army_economy_resource_pass();
+
+    /* Snapshot: flag-0 copied into the prior-turn flag-1 fields, groups 1..5. */
+    T_ASSERT_EQ_I(*(int32_t *)(g_pass_pool + 2 * RP_STRIDE + RP_B_FLAG1), 111);
+    T_ASSERT_EQ_I(*(int32_t *)(g_pass_pool + 2 * RP_STRIDE + RP_C_FLAG1), 222);
+    T_ASSERT_EQ_I(*(int32_t *)(g_pass_pool + 2 * RP_STRIDE + RP_A_FLAG1), 333);
+    T_ASSERT_EQ_I(*(int32_t *)(g_pass_pool + 5 * RP_STRIDE + RP_B_FLAG1), 44);
+
+    /* Cap refresh: slot 2←job 7, 1←4, 3←5, 0←6. */
+    T_ASSERT_EQ_I(*(int16_t *)(g_army + 1 * ARMY_STRIDE + res_off(2, RSF_CAP)), 70);
+    T_ASSERT_EQ_I(*(int16_t *)(g_army + 1 * ARMY_STRIDE + res_off(1, RSF_CAP)), 40);
+    T_ASSERT_EQ_I(*(int16_t *)(g_army + 1 * ARMY_STRIDE + res_off(3, RSF_CAP)), 50);
+    T_ASSERT_EQ_I(*(int16_t *)(g_army + 1 * ARMY_STRIDE + res_off(0, RSF_CAP)), 60);
+    return 0;
+}
+
+int test_army_economy_resource_pass_unbound_noop(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    engine_army_economy_bind_resource_pool(NULL);
+    engine_army_economy_bind_cells(NULL);
+    engine_army_economy_apply_resource_quota(3, 1, 4, 0x0f, 1);  /* no crash */
+    engine_army_economy_stamp_resource_cell(3, 1);               /* no crash */
+    engine_army_economy_resource_pass();                         /* no crash */
     return 0;
 }
 

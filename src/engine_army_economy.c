@@ -34,6 +34,7 @@
 #include <stdint.h>
 
 #include "engine_math.h"           /* div_ceil / percent_of (FUN_00404e03/d6b) */
+#include "engine_ranking.h"        /* engine_ranking_recompute_player_total (4487a9) */
 #include "engine_territory.h"      /* engine_territory_census_army_terrain (469b8d) */
 #include "save_schema_globals.h"   /* s_slot_0053f25c / s_slot_0053f260 / s_slot_0056d5dc */
 
@@ -98,7 +99,7 @@
 
 static uint8_t *g_army_records;
 static const int32_t *g_cell_roster;   /* DAT_0053ea00 — 17 rows × 20 i32 */
-static const uint8_t *g_cells;         /* DAT_00522f90 — cell descriptor grid */
+static uint8_t *g_cells;               /* DAT_00522f90 — cell descriptor grid (resource pass stamps it) */
 
 /* Retail 0x4983b7 defaults: A=5 (DAT_00553f60), B=10 (DAT_00567594),
  * C=6 (DAT_0057cb30). */
@@ -849,7 +850,7 @@ void engine_army_economy_bind_cell_roster(const int32_t *roster)
     g_cell_roster = roster;
 }
 
-void engine_army_economy_bind_cells(const uint8_t *cells)
+void engine_army_economy_bind_cells(uint8_t *cells)
 {
     g_cells = cells;
 }
@@ -984,10 +985,13 @@ int engine_army_economy_distribute_stock(int key)
 #define RES_STRIDE          0x18
 #define RES_TARGET_PCT      0x00    /* DAT_0053fc44 — byte, plan_resource writes */
 #define RES_FLAG_A          0x01    /* DAT_0053fc45 — byte gate */
-#define RES_FLAG_B          0x02    /* DAT_0053fc46 — byte gate */
+#define RES_FLAG_B          0x02    /* DAT_0053fc46 — byte gate / depletion countdown */
 #define RES_FLAG_C          0x03    /* DAT_0053fc47 — byte gate (top gate) */
+#define RES_CELL_IDX        0x04    /* DAT_0053fc48 — i32, byte offset of the slot's overworld cell */
 #define RES_BASE_PCT        0x08    /* DAT_0053fc4c — signed byte, supply_target base */
 #define RES_CAP             0x0a    /* DAT_0053fc4e — i16, supply_target cap */
+#define RES_CURRENT         0x0c    /* DAT_0053fc50 — i32, running supplied amount */
+#define RES_PREV            0x10    /* DAT_0053fc54 — i32, previous-turn supplied amount */
 #define RES_QUOTA           0x14    /* DAT_0053fc58 — i32, plan_resource OUTPUT */
 
 /* Eight 0xc-byte job-slot records at +0xc4 (retail DAT_0053fa74 — engine_
@@ -1009,12 +1013,18 @@ int engine_army_economy_distribute_stock(int key)
 #define ARMY_SLOT2_JOBCOUNT 0x118   /* DAT_0053fac8 — job-slot record 7's count (== +0xc4 + 7*0xc) */
 #define ARMY_RES_ACTIVE2    0x2c7   /* DAT_0053fc77 — resource-slot-2 active flag (== res(2).flag_c) */
 
-/* Per-group resource-demand pool (retail DAT_0057c020, 0x160-byte stride). */
+/* Per-group resource-demand pool (retail DAT_0057c020, 0x160-byte stride).  Three
+ * commodity pairs (flag-0 accumulator / flag-1 prior-turn snapshot): B (slot 1),
+ * C (slot 3) and A (slot 0).  Slot 2 instead accumulates per-race into +0x40 and
+ * debits A/B by the race weights. */
 #define RESPOOL_STRIDE      0x160
 #define RESPOOL_B_FLAG0     0x00    /* DAT_0057c020 — commodity-B demand, flag 0 */
 #define RESPOOL_B_FLAG1     0x04    /* DAT_0057c024 — commodity-B demand, flag !=0 */
+#define RESPOOL_C_FLAG0     0x08    /* DAT_0057c028 — commodity-C demand, flag 0 */
+#define RESPOOL_C_FLAG1     0x0c    /* DAT_0057c02c — commodity-C demand, flag !=0 */
 #define RESPOOL_A_FLAG0     0x10    /* DAT_0057c030 — commodity-A demand, flag 0 */
 #define RESPOOL_A_FLAG1     0x14    /* DAT_0057c034 — commodity-A demand, flag !=0 */
+#define RESPOOL_RACE_ACC    0x20    /* DAT_0057c040 — slot-2 per-race accumulator (6× i32) */
 
 /* Baked per-race production multipliers (retail DAT_0057c020's siblings
  * DAT_004d8990 / DAT_004d8994 — a 6-entry initialised-.data table, 8-byte
@@ -1023,12 +1033,12 @@ int engine_army_economy_distribute_stock(int key)
 static const int k_race_pool_a[6] = { 6, 4, 3, 6, 13, 4 };
 static const int k_race_pool_b[6] = { 10, 4, 10, 3, 0, 18 };
 
-static const uint8_t *g_resource_pool;   /* DAT_0057c020 — per-group demand table */
+static uint8_t *g_resource_pool;   /* DAT_0057c020 — per-group demand table (resource pass accumulates into it) */
 
 static int g_supply_pool_a;   /* DAT_0057c904 — sum of race column A over the group */
 static int g_supply_pool_b;   /* DAT_0056d628 — sum of race column B over the group */
 
-void engine_army_economy_bind_resource_pool(const uint8_t *pool)
+void engine_army_economy_bind_resource_pool(uint8_t *pool)
 {
     g_resource_pool = pool;
 }
@@ -1070,6 +1080,13 @@ static int respool_demand(int group, int off)
 {
     if (g_resource_pool == NULL) return 0;
     return *(const int32_t *)(g_resource_pool + group * RESPOOL_STRIDE + off);
+}
+
+/* A writable per-group demand field, or NULL when the pool table is unbound. */
+static int32_t *respool_field(int group, int off)
+{
+    if (g_resource_pool == NULL) return NULL;
+    return (int32_t *)(g_resource_pool + group * RESPOOL_STRIDE + off);
 }
 
 /* FUN_0044ef4e */
@@ -1219,4 +1236,179 @@ void engine_army_economy_plan_realm(int key, int phase)
     engine_army_economy_plan_resource(key, 0, 6, 0x14, 1);
     engine_army_economy_plan_resource(key, 2, 7, 0x0f, 4);
     engine_army_economy_plan_secondary(key);         /* FUN_00450e46 */
+}
+
+/* --------------------------------------------------------------------- *
+ *  Per-realm resource-slot delivery pass — the FUN_0044e852 dispatcher
+ *  and its two leaves 0x44edc2 (cell stamp) / 0x44ea92 (quota apply).
+ *
+ *  Where plan_resource (0x44f318) projects each slot's quota for the turn,
+ *  these run during turn-advance: apply_resource_quota actually delivers the
+ *  slot's share into the realm's running total and the per-group demand pool,
+ *  and stamp_resource_cell repaints the slot's overworld cell to reflect its
+ *  current production state.
+ * --------------------------------------------------------------------- */
+
+/* FUN_0044edc2.  Stamp resource `slot`'s overworld cell (the descriptor at the
+ * slot's +0x04 byte offset) with a per-slot type code, plus — when the slot did
+ * not grow this turn — a per-slot value into the cell's +3 byte.  Gated on the
+ * slot being live (flag_a set, flag_b clear). */
+void engine_army_economy_stamp_resource_cell(int key, int slot)
+{
+    if (g_army_records == NULL || g_cells == NULL) return;
+
+    uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+    uint8_t *rs  = res_slot(row, slot);
+
+    if (rs[RES_FLAG_A] == 0 || rs[RES_FLAG_B] != 0) return;
+
+    int cur  = *(const int32_t *)(rs + RES_CURRENT);
+    int prev = *(const int32_t *)(rs + RES_PREV);
+    int32_t cell_off = *(const int32_t *)(rs + RES_CELL_IDX);
+
+    /* Base type code: a per-slot constant, bumped by 1 when the slot is at its
+     * top tier (flag_c set). */
+    int type = (rs[RES_FLAG_C] != 0) ? 1 : 0;
+    switch (slot) {
+        case 1: type += 1;    break;
+        case 3: type += 4;    break;
+        case 2: type += 7;    break;
+        case 0: type += 0x0a; break;
+    }
+    g_cells[cell_off + 0] = (uint8_t)type;
+
+    /* Stalled (no net growth this turn) → tag the cell's +3 byte. */
+    if (cur - prev < 1) {
+        int tag = 0;
+        switch (slot) {
+            case 1: tag = 0x1e; break;
+            case 3: tag = 0;    break;
+            case 0: tag = 0x14; break;
+            case 2: tag = 10;   break;
+        }
+        g_cells[cell_off + 3] = (uint8_t)tag;
+    }
+}
+
+/* FUN_0044ea92.  Deliver resource `slot`'s production for realm `key`: snapshot
+ * the running total into +0x10, then (when the slot is live) credit this turn's
+ * supplied amount — the smaller of the level-scaled supply target and the slot's
+ * delivery quota — into the running total and the owning group's demand pool.
+ * When the slot is depleting (flag_b > 0) it instead decays the countdown and
+ * re-stamps the cell once it hits zero.  `target`/`divisor` are the per-slot
+ * constants from the 0x44e852 call table; `rec_idx` selects the job-slot record
+ * whose count is the delivery level. */
+void engine_army_economy_apply_resource_quota(int key, int slot, int rec_idx,
+                                              int target, int divisor)
+{
+    if (g_army_records == NULL) return;
+
+    uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
+    uint8_t *rs  = res_slot(row, slot);
+
+    *(int32_t *)(rs + RES_PREV) = *(const int32_t *)(rs + RES_CURRENT);
+
+    if (rs[RES_FLAG_B] != 0) {
+        /* Depleting: zero the running total and tick the countdown; re-stamp the
+         * cell when it expires. */
+        *(int32_t *)(rs + RES_PREV)    = 0;
+        *(int32_t *)(rs + RES_CURRENT) = *(const int32_t *)(rs + RES_PREV);
+        rs[RES_FLAG_B] = (uint8_t)(rs[RES_FLAG_B] - 1);
+        if ((int8_t)rs[RES_FLAG_B] < 1)
+            engine_army_economy_stamp_resource_cell(key, slot);
+        return;
+    }
+
+    int group = row[ARMY_GROUP];
+    if (group == 0) return;
+
+    int quota = engine_army_economy_resource_quota(key, slot, group, 1);
+
+    uint8_t *job = job_slot(row, rec_idx);
+    int level = *(const int32_t *)(job + JOBSLOT_COUNT);
+
+    rs[RES_TARGET_PCT] =
+        (uint8_t)(int8_t)engine_army_economy_supply_target(key, slot, level, target);
+    rs[RES_BASE_PCT] = rs[RES_TARGET_PCT];
+
+    int amount = engine_math_percent_of(level / divisor, (int8_t)rs[RES_TARGET_PCT]);
+    if (quota < amount) amount = quota;
+    *(int32_t *)(rs + RES_CURRENT) += amount;
+
+    if (slot == 1) {
+        int32_t *p = respool_field(group, RESPOOL_B_FLAG0);
+        if (p) *p += amount;
+    } else if (slot == 3) {
+        int32_t *p = respool_field(group, RESPOOL_C_FLAG0);
+        if (p) *p += amount;
+    } else if (slot == 0) {
+        int32_t *p = respool_field(group, RESPOOL_A_FLAG0);
+        if (p) *p += amount;
+    } else if (slot == 2) {
+        unsigned race = row[ARMY_RACE];
+        int race_a = k_race_pool_a[race];
+        int race_b = k_race_pool_b[race];
+        int32_t *acc = respool_field(group, RESPOOL_RACE_ACC + (int)race * 4);
+        int32_t *pa  = respool_field(group, RESPOOL_A_FLAG0);
+        int32_t *pb  = respool_field(group, RESPOOL_B_FLAG0);
+        if (acc) *acc += amount;
+        if (pa)  *pa  -= amount * race_a;
+        if (pb)  *pb  -= race_b * amount;
+        engine_ranking_recompute_player_total(group);   /* FUN_004487a9 */
+    }
+}
+
+/* FUN_0044e852.  The per-turn resource-delivery pass over every realm.  First
+ * snapshot each group pool's three commodity accumulators into their prior-turn
+ * companions, then for every realm 1..s_slot_0056d5dc: deliver slot 2 (the
+ * race-weighted pool slot), then slots 1/3/0, stamping each slot's cell and
+ * re-planning it; each slot's cap (+0x0a) is refreshed from its job-slot count
+ * afterwards. */
+void engine_army_economy_resource_pass(void)
+{
+    /* Snapshot flag-0 accumulators → flag-1 prior-turn fields, groups 1..5. */
+    for (int g = 1; g < 6; g++) {
+        int32_t *b0 = respool_field(g, RESPOOL_B_FLAG0);
+        int32_t *c0 = respool_field(g, RESPOOL_C_FLAG0);
+        int32_t *a0 = respool_field(g, RESPOOL_A_FLAG0);
+        if (b0) *respool_field(g, RESPOOL_B_FLAG1) = *b0;
+        if (c0) *respool_field(g, RESPOOL_C_FLAG1) = *c0;
+        if (a0) *respool_field(g, RESPOOL_A_FLAG1) = *a0;
+    }
+
+    if (g_army_records == NULL) return;
+
+    /* Slot 2 (race-weighted pool slot) for every realm. */
+    for (int r = 1; r <= (int)s_slot_0056d5dc; r++) {
+        engine_army_economy_apply_resource_quota(r, 2, 7, 0x0f, 4);
+        engine_army_economy_stamp_resource_cell(r, 2);
+        engine_army_economy_plan_resource(r, 2, 7, 0x0f, 4);
+
+        uint8_t *row = g_army_records + r * ARMY_ROW_STRIDE;
+        *(int16_t *)(res_slot(row, 2) + RES_CAP) =
+            (int16_t)*(const int32_t *)(job_slot(row, 7) + JOBSLOT_COUNT);
+    }
+
+    /* Slots 1/3/0 for every realm (each cell stamped, then all four slots
+     * re-planned). */
+    for (int r = 1; r <= (int)s_slot_0056d5dc; r++) {
+        engine_army_economy_apply_resource_quota(r, 1, 4, 0x0f, 1);
+        engine_army_economy_apply_resource_quota(r, 3, 5, 0x0f, 2);
+        engine_army_economy_apply_resource_quota(r, 0, 6, 0x14, 1);
+        engine_army_economy_stamp_resource_cell(r, 1);
+        engine_army_economy_stamp_resource_cell(r, 3);
+        engine_army_economy_stamp_resource_cell(r, 0);
+        engine_army_economy_plan_resource(r, 1, 4, 0x0f, 1);
+        engine_army_economy_plan_resource(r, 3, 5, 0x0f, 2);
+        engine_army_economy_plan_resource(r, 0, 6, 0x14, 1);
+        engine_army_economy_plan_resource(r, 2, 7, 0x0f, 4);
+
+        uint8_t *row = g_army_records + r * ARMY_ROW_STRIDE;
+        *(int16_t *)(res_slot(row, 1) + RES_CAP) =
+            (int16_t)*(const int32_t *)(job_slot(row, 4) + JOBSLOT_COUNT);
+        *(int16_t *)(res_slot(row, 3) + RES_CAP) =
+            (int16_t)*(const int32_t *)(job_slot(row, 5) + JOBSLOT_COUNT);
+        *(int16_t *)(res_slot(row, 0) + RES_CAP) =
+            (int16_t)*(const int32_t *)(job_slot(row, 6) + JOBSLOT_COUNT);
+    }
 }

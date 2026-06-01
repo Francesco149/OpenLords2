@@ -5424,3 +5424,48 @@ exactly by the port.
 > 📍 `src/engine_army_economy.c` (`engine_army_economy_season_update`).
 > Ghidra/r2 `FUN_0044c8ae` @ 0x44c8ae.  Verified byte-exact vs retail
 > (`tools/diff_test.py --functions season_economy`, 128/128 across seeds).
+
+## 154. The "resource demand pool" is not its own table — it's accounts inside each player's strategic record, and resource production is booked as cashflow income
+
+The resource-delivery pass `FUN_0044e852` and its leaves (`FUN_0044ea92`
+quota-apply, `FUN_0044edc2` cell-stamp) read and write a per-group "demand
+pool" addressed as `DAT_0057c020 + group * 0x160`.  That looks like a standalone
+6×0x160 runtime table.  It is not:
+
+```
+g_player_strategic_352 base = 0x57bf00   (0x160 stride, players 0..5)
+"resource pool" base        = 0x57c020 = 0x57bf00 + 0x120
+```
+
+`0x57c020` is **field +0x120 of player 0's strategic record** — so
+`pool[group]` is just `strategic[group] + 0x120`.  The "pool" fields are
+economic accounts living in the same record the leaderboard/standings code
+already owns:
+
+| pool offset | strat offset | meaning |
+|------------:|-------------:|---------|
+| +0x00 / +0x04 | +0x120 / +0x124 | commodity-B demand (this turn / prior turn) |
+| +0x08 / +0x0c | +0x128 / +0x12c | commodity-C demand |
+| +0x10 / +0x14 | +0x130 / +0x134 | commodity-A demand |
+| +0x20 + race·4 | **+0x140 + race·4** | slot-2 per-race accumulator |
+
+That last row is the punchline: the slot-2 per-race accumulator at pool +0x20
+is the **same memory** as the strategic record's six cashflow category
+sub-accounts at +0x140..+0x154 — the very fields `FUN_004487a9`
+(`engine_ranking_recompute_player_total`) sums into the +0x138 cashflow total.
+So when a realm delivers slot-2 production, `FUN_0044ea92` credits the
+race-indexed cashflow category, debits the A/B commodity columns by the race
+weights, and then calls `recompute_player_total` to fold the new income into
+the player's running total — production and the economy/standings ledger are
+literally the same bytes.
+
+Consequence for the diff harness: there is **no separate global to inject**.
+Binding the port's resource pool to `g_player_strategic_352 + 0x120` and
+injecting/reading-back the strategic block alone covers every pool write *and*
+the cashflow resync.  A reader who treated `0x57c020` as an independent table
+would either miss the strategic-record aliasing or double-allocate it.
+
+> 📍 `src/engine_army_economy.c` (`engine_army_economy_resource_pass` +
+> `..apply_resource_quota` / `..stamp_resource_cell`).  Ghidra/r2
+> `FUN_0044e852`/`FUN_0044ea92`/`FUN_0044edc2`.  Verified byte-exact vs retail
+> (`tools/diff_test.py --functions resource_pass`, 24/24 across seeds 0+7).

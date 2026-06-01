@@ -2550,6 +2550,15 @@ FN_PAY_UPKEEP    = 0x4acbd4       # FUN_004acbd4 — __stdcall void()
 VA_SLOT_SEASON_PREV = 0x57c934    # s_slot_0057c934 — just-ended season (branch selector)
 FN_SEASON_PASS      = 0x44c8ae    # FUN_0044c8ae — __stdcall void()
 
+# resource-delivery pass (FUN_0044e852).  The per-group "demand pool" at
+# 0x57c020 is NOT a separate global — it is fields +0x120.. inside each
+# g_player_strategic_352 record (0x57bf00, 0x160 stride): 0x57c020 = strat+0x120.
+# So injecting/reading-back the strategic block covers the pool, and the
+# slot-2 per-race accumulator (+0x40 of the pool = strat +0x140) coincides with
+# the cashflow category sub-accounts that recompute_player_total resyncs.
+FN_RESOURCE_PASS    = 0x44e852    # FUN_0044e852 — __stdcall void()
+RESPOOL_OFF_IN_STRAT = 0x120      # 0x57c020 − 0x57bf00
+
 REALM_RACE_RETRIES = 8
 
 
@@ -2598,6 +2607,12 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
         lib.engine_army_economy_bind_army_records.argtypes = [ctypes.c_void_p]
         lib.engine_territory_bind_army_records.restype = None
         lib.engine_territory_bind_army_records.argtypes = [ctypes.c_void_p]
+        lib.engine_army_economy_resource_pass.restype = None
+        lib.engine_army_economy_resource_pass.argtypes = []
+        lib.engine_army_economy_bind_resource_pool.restype = None
+        lib.engine_army_economy_bind_resource_pool.argtypes = [ctypes.c_void_p]
+        lib.engine_army_economy_bind_cells.restype = None
+        lib.engine_army_economy_bind_cells.argtypes = [ctypes.c_void_p]
     return _realm_globals_cache
 
 
@@ -3143,6 +3158,194 @@ def diff_season_economy(retail: dict, port: dict) -> list[str]:
     return bad
 
 
+# ── resource-delivery pass (FUN_0044e852 — engine_army_economy_resource_pass) ──
+#
+# Per-turn pass that snapshots each group pool's three commodity accumulators
+# into their prior-turn fields, then for every realm delivers slot 2 then slots
+# 1/3/0 — crediting each slot's supplied amount into the running total and the
+# owning group's demand pool (strat +0x120..), stamping the slot's overworld
+# cell, re-planning all four slots, and refreshing each slot's cap from its
+# job-slot count.  Slot 2 additionally debits the A/B commodity columns by the
+# race weights and resyncs the owner's cashflow total (recompute_player_total).
+# Mutates g_per_army_768, g_player_strategic_352 (the pool lives inside it) and
+# the cell grid g_overworld_map.  Reads the realm count + the standings/mode
+# flag.  Both sides start byte-identical, so injected fields are free.
+
+# Per-army record offsets the pass + its callees read.
+_RPS_GROUP      = 0x05    # realm group / pool index (0..5; 0 → no delivery)
+_RPS_JOBBASE    = 0xc4    # 8× 0xc-byte job-slot records (WF_COUNTER)
+_RPS_SLOT2_JOB  = 0x118   # job-slot 7 count (slot-2 delivery level)
+_RPS_RACE       = 0x290   # race id (0..5; race-weight table index)
+_RPS_RESBASE    = 0x294   # 4× 0x18-byte resource-slot records
+_RPS_ACTIVE2    = 0x2c7   # res-slot-2 flag_c (slot-2 quota gate)
+
+
+def _rps_res(slot, f):  return _RPS_RESBASE + slot * 0x18 + f
+def _rps_job(rec, f):   return _RPS_JOBBASE + rec * 0xc + f
+
+
+def _build_resource_vec(count: int, standings: int, realms: list[dict],
+                        pools: list[dict]) -> dict:
+    army  = bytearray(REALM_ARMY_BYTES)
+    strat = bytearray(REALM_STRAT_BYTES)
+    over  = bytearray(REALM_OVER_BYTES)
+
+    # Per-group prior-turn demand (read by the slot-2 quota, flag=1 columns) +
+    # any seeded flag-0 accumulators (the snapshot copies them into flag-1).
+    for pd in pools:
+        g = pd["group"]
+        base = g * REALM_STRAT_STRIDE + RESPOOL_OFF_IN_STRAT
+        struct.pack_into("<i", strat, base + 0x00, pd.get("b0", 0))
+        struct.pack_into("<i", strat, base + 0x04, pd.get("b1", 0))
+        struct.pack_into("<i", strat, base + 0x08, pd.get("c0", 0))
+        struct.pack_into("<i", strat, base + 0x10, pd.get("a0", 0))
+        struct.pack_into("<i", strat, base + 0x14, pd.get("a1", 0))
+
+    for rd in realms:
+        slot = rd["slot"]
+        b = slot * REALM_ARMY_STRIDE
+        army[b + _RPS_GROUP]   = rd.get("group", 0) & 0xff
+        army[b + _RPS_RACE]    = rd.get("race", 0) & 0xff
+        army[b + _RPS_ACTIVE2] = rd.get("active2", 0) & 0xff
+        struct.pack_into("<i", army, b + _RPS_SLOT2_JOB, rd.get("slot2_level", 0))
+        # job-slot counts that feed each slot (4/5/6/7) and the cap refresh.
+        for rec, cnt in rd.get("jobs", {}).items():
+            struct.pack_into("<i", army, b + _rps_job(rec, 0x00), cnt)
+        # four resource-slot records.
+        for s, sd in rd.get("slots", {}).items():
+            army[b + _rps_res(s, 0x01)] = sd.get("flag_a", 0) & 0xff
+            army[b + _rps_res(s, 0x02)] = sd.get("flag_b", 0) & 0xff
+            army[b + _rps_res(s, 0x03)] = sd.get("flag_c", 0) & 0xff
+            struct.pack_into("<i", army, b + _rps_res(s, 0x04), sd.get("cell", 0))
+            army[b + _rps_res(s, 0x08)] = sd.get("base_pct", 0) & 0xff
+            struct.pack_into("<h", army, b + _rps_res(s, 0x0a), sd.get("cap", 0))
+            struct.pack_into("<i", army, b + _rps_res(s, 0x0c), sd.get("current", 0))
+            struct.pack_into("<i", army, b + _rps_res(s, 0x10), sd.get("prev", 0))
+            if sd.get("cell", 0):
+                over[sd["cell"] + 0] = 0
+                over[sd["cell"] + 3] = 0
+    return {"count": count, "standings": standings,
+            "army": bytes(army), "strat": bytes(strat), "over": bytes(over)}
+
+
+def gen_resource_pass_vectors(n: int, rng: random.Random) -> list[dict]:
+    # Cell offsets: 8-aligned, unique per (realm, slot) so stamps never overlap.
+    def cell(slot, s):
+        return (slot * 8 + s) * 8 + 8
+
+    def realm(slot, rng):
+        slots = {}
+        for s in range(4):
+            slots[s] = dict(
+                flag_a=rng.randint(0, 1),
+                flag_b=rng.choice([0, 0, 0, rng.randint(1, 3)]),  # mostly live
+                flag_c=rng.randint(0, 1),
+                cell=cell(slot, s),
+                base_pct=rng.randint(0, 60),
+                cap=rng.randint(0, 400),
+                current=rng.randint(0, 500),
+                prev=rng.randint(0, 500),
+            )
+        return dict(
+            slot=slot,
+            group=rng.randint(0, 5),
+            race=rng.randint(0, 5),
+            active2=slots[2]["flag_c"],          # +0x2c7 IS res-slot-2 flag_c
+            slot2_level=rng.choice([0, rng.randint(1, 300)]),
+            jobs={4: rng.randint(0, 200), 5: rng.randint(0, 200),
+                  6: rng.randint(0, 200), 7: rng.randint(0, 300)},
+            slots=slots)
+
+    # Fixed edge cases.
+    edge = []
+    # one live realm, group 1, standings on; both pool columns pre-seeded.
+    edge.append(_build_resource_vec(
+        1, 1,
+        [dict(slot=1, group=1, race=0, active2=1, slot2_level=40,
+              jobs={4: 10, 5: 20, 6: 30, 7: 40},
+              slots={0: dict(flag_a=1, flag_c=1, cell=cell(1, 0), base_pct=10,
+                             cap=100, current=5, prev=5),
+                     1: dict(flag_a=1, flag_c=1, cell=cell(1, 1), base_pct=10,
+                             cap=100, current=8, prev=4),
+                     2: dict(flag_a=1, flag_c=1, cell=cell(1, 2), base_pct=10,
+                             cap=100, current=0, prev=0),
+                     3: dict(flag_a=1, flag_c=1, cell=cell(1, 3), base_pct=10,
+                             cap=100, current=3, prev=3)})],
+        [dict(group=1, a1=600, b1=200, b0=50, c0=70, a0=90)]))
+    # standings off → supply_target flat 80 path.
+    edge.append(_build_resource_vec(
+        1, 0,
+        [dict(slot=1, group=2, race=4, active2=1, slot2_level=80,
+              jobs={4: 5, 5: 5, 6: 5, 7: 80},
+              slots={s: dict(flag_a=1, flag_c=(s == 2), cell=cell(1, s),
+                             base_pct=20, cap=50, current=0, prev=0)
+                     for s in range(4)})],
+        [dict(group=2, a1=400, b1=400)]))
+    # a depleting slot (flag_b>0) on one realm.
+    edge.append(_build_resource_vec(
+        1, 1,
+        [dict(slot=1, group=3, race=2, active2=0, slot2_level=0,
+              jobs={4: 7, 5: 7, 6: 7, 7: 0},
+              slots={0: dict(flag_a=1, flag_b=1, cell=cell(1, 0), current=99),
+                     1: dict(flag_a=1, flag_b=2, cell=cell(1, 1), current=50),
+                     2: dict(flag_a=0, cell=cell(1, 2)),
+                     3: dict(flag_a=1, flag_c=1, cell=cell(1, 3), current=0)})],
+        []))
+
+    vecs = list(edge)
+    while len(vecs) < n:
+        count = rng.randint(1, 6)
+        realms = [realm(slot, rng) for slot in range(1, count + 1)]
+        # pre-seed a few group pools so slot-2 quotas are non-degenerate.
+        pools = [dict(group=g, a1=rng.randint(0, 2000), b1=rng.randint(0, 2000),
+                      b0=rng.randint(0, 500), c0=rng.randint(0, 500),
+                      a0=rng.randint(0, 500))
+                 for g in range(1, 6)]
+        vecs.append(_build_resource_vec(count, rng.randint(0, 1), realms, pools))
+    return vecs
+
+
+def run_port_resource_pass(lib: ctypes.CDLL, vec: dict) -> dict:
+    g = realm_port_globals(lib)
+    ctypes.memmove(g["army"],  vec["army"],  REALM_ARMY_BYTES)
+    ctypes.memmove(g["strat"], vec["strat"], REALM_STRAT_BYTES)
+    ctypes.memmove(g["over"],  vec["over"],  REALM_OVER_BYTES)
+    g["count"].value = vec["count"]
+    g["stand"].value = vec["standings"]
+    # The pool lives at strat+0x120; bind the resource pool there.  The economy
+    # module reaches records via its own pointer and stamps cells through its
+    # own cell-grid pointer; recompute_player_total uses the strat global directly.
+    lib.engine_army_economy_bind_army_records(ctypes.addressof(g["army"]))
+    lib.engine_army_economy_bind_resource_pool(
+        ctypes.addressof(g["strat"]) + RESPOOL_OFF_IN_STRAT)
+    lib.engine_army_economy_bind_cells(ctypes.addressof(g["over"]))
+    lib.engine_army_economy_resource_pass()
+    lib.engine_army_economy_bind_cells(None)
+    lib.engine_army_economy_bind_resource_pool(None)
+    lib.engine_army_economy_bind_army_records(None)
+    return {"army": list(bytes(g["army"])), "strat": list(bytes(g["strat"])),
+            "over": list(bytes(g["over"]))}
+
+
+def resource_pass_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_RESOURCE_PASS, "regions": [
+        {"va": VA_PER_ARMY,  "len": REALM_ARMY_BYTES,  "inject": list(vec["army"]),  "read": True},
+        {"va": VA_STRATEGIC, "len": REALM_STRAT_BYTES, "inject": list(vec["strat"]), "read": True},
+        {"va": VA_OVERWORLD, "len": REALM_OVER_BYTES,  "inject": list(vec["over"]),  "read": True},
+        {"va": VA_SLOT_COUNT,"len": 4, "inject": list(_u32le(vec["count"])),     "read": False},
+        {"va": VA_SLOT_STAND,"len": 4, "inject": list(_u32le(vec["standings"])), "read": False},
+    ]}
+
+
+def diff_resource_pass(retail: dict, port: dict) -> list[str]:
+    bad = _diff_realm_region(retail, port["army"], VA_PER_ARMY,
+                             REALM_ARMY_STRIDE, 17, "army")
+    bad += _diff_realm_region(retail, port["strat"], VA_STRATEGIC,
+                              REALM_STRAT_STRIDE, 6, "strat")
+    bad += _diff_realm_flat(retail, port["over"], VA_OVERWORLD, "over")
+    return bad
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -3258,6 +3461,9 @@ def run_diff(cfg_args) -> int:
     if "season_economy" in enabled:
         test_plans.append(("season_economy",
                            gen_season_economy_vectors(cfg_args.vectors, rng)))
+    if "resource_pass" in enabled:
+        test_plans.append(("resource_pass",
+                           gen_resource_pass_vectors(cfg_args.vectors, rng)))
     # Pre-generate the rate-gate LUT — one per run, used by all
     # sim_sub_steps vectors so a re-run with the same seed produces
     # the same LUT (and thus the same retail-side gate decisions).
@@ -3386,7 +3592,8 @@ def run_diff(cfg_args) -> int:
         # this is a no-op at the agent but keeps the per-target log shape.
         shared_freeze_targets = {"sim_sub_steps", "state_hash", "tile_expand",
                                  "delayed_action", "tax_approval", "dev_spread",
-                                 "realm_income", "upkeep", "season_economy"}
+                                 "realm_income", "upkeep", "season_economy",
+                                 "resource_pass"}
         shared_freeze_installed = False
         if shared_freeze_targets & {n for (n, _) in test_plans}:
             fresp = script.exports_sync.install_sim_sub_steps_engine_freeze()
@@ -4025,6 +4232,40 @@ def run_diff(cfg_args) -> int:
                                   "note": "region readback elided"}
                         port = {"note": "region readback elided"}
                         vec = {"count": vec["count"], "season": vec["season"]}
+                elif fn_name == "resource_pass":
+                    # FUN_0044e852(): per-realm resource-delivery pass.  Inject
+                    # g_per_army_768 + g_player_strategic_352 (holds the demand
+                    # pool at +0x120) + g_overworld_map + realm count + the mode
+                    # flag; read back all three blocks.  Same race-retry handling.
+                    port = run_port_resource_pass(lib, vec)
+                    plan = resource_pass_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"count": vec["count"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_resource_pass(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"count": vec["count"]}
                 else:
                     continue
                 if bad:
@@ -4150,7 +4391,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep,season_economy",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep,season_economy,resource_pass",
                     help="comma-separated subset to test "
                          "(default: rng_step,fps_step,anim_cycle,frame_delta,"
                          "phase_ticks,input_state,sim_sub_steps,state_hash,"

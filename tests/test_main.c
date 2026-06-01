@@ -1641,6 +1641,15 @@ struct test_case {
     X(army_economy_plan_resource_unbound_noop) \
     X(army_economy_plan_realm_dispatches_all_branches) \
     X(army_economy_plan_realm_unbound_noop) \
+    X(army_economy_stamp_cell_type_and_tag) \
+    X(army_economy_stamp_cell_growth_skips_tag) \
+    X(army_economy_stamp_cell_gated_off) \
+    X(army_economy_apply_quota_nonpool_slot1) \
+    X(army_economy_apply_quota_slot2_pool_debits) \
+    X(army_economy_apply_quota_group_zero_bails_after_snapshot) \
+    X(army_economy_apply_quota_depletion_countdown) \
+    X(army_economy_resource_pass_snapshot_and_caps) \
+    X(army_economy_resource_pass_unbound_noop) \
     X(army_economy_rate_class_boundaries) \
     X(army_economy_season1_fronthalf_fallback_clear) \
     X(army_economy_season1_fallback_set_forces_denom_one) \
