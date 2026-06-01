@@ -35,7 +35,7 @@ FEED = Path("/opt/src/llm-feed/feed.py")
 SCALAR_ORDER = [
     "cam_x0", "cam_y0", "col_start", "row_start", "col_count", "row_count",
     "x_step", "y_step", "x_half_step", "view_mode", "render_mode",
-    "rotation", "overlay_base", "y_viewport",
+    "rotation", "overlay_base", "y_viewport", "arrow_marker_base",
 ]
 CANVAS_W, CANVAS_H = 0x280, 0x1e0
 MAP_W = 480              # map viewport width (HUD panel is to the right)

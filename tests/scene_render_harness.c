@@ -29,6 +29,7 @@
 #include "engine_dirty_rect.h"
 #include "engine_map_render.h"
 #include "engine_map_terrain.h"
+#include "engine_overlay_render.h"
 #include "gfx_dispatch.h"
 #include "gfx_paint.h"
 
@@ -61,24 +62,25 @@ static uint8_t *slurp(const char *dir, const char *name, size_t *out_len)
 
 int main(int argc, char **argv)
 {
-    if (argc < 3 + 14) {
+    if (argc < 3 + 15) {
         fprintf(stderr,
             "usage: %s <dump_dir> <out_raw> "
             "cam_x0 cam_y0 col_start row_start col_count row_count "
             "x_step y_step x_half_step view_mode render_mode rotation "
-            "overlay_base y_viewport\n", argv[0]);
+            "overlay_base y_viewport arrow_marker_base\n", argv[0]);
         return 2;
     }
     const char *dump_dir = argv[1];
     const char *out_raw  = argv[2];
 
-    int s[14];
-    for (int i = 0; i < 14; i++)
+    int s[15];
+    for (int i = 0; i < 15; i++)
         s[i] = (int)strtol(argv[3 + i], NULL, 0);
     int cam_x0 = s[0], cam_y0 = s[1], col_start = s[2], row_start = s[3];
     int col_count = s[4], row_count = s[5], x_step = s[6], y_step = s[7];
     int x_half_step = s[8], view_mode = s[9], render_mode = s[10];
     int rotation = s[11], overlay_base = s[12], y_viewport = s[13];
+    int arrow_marker_base = s[14];
 
     /* Shared map state used by both clusters. */
     size_t cl, dl, tl, b0l, b1l, b2l, b3l, b4l, pl, al, ol;
@@ -93,6 +95,8 @@ int main(int argc, char **argv)
     uint8_t *prim = slurp(dump_dir, "blob_primary.bin", &pl);
     uint8_t *alt  = slurp(dump_dir, "blob_alt.bin",     &al);
     uint8_t *ovl  = slurp(dump_dir, "blob_overlay.bin", &ol);
+    size_t aml;
+    uint8_t *army = slurp(dump_dir, "army_records.bin", &aml);
 
     static uint8_t canvas[CANVAS_W * CANVAS_H];
     memset(canvas, 0, sizeof canvas);
@@ -114,15 +118,39 @@ int main(int argc, char **argv)
     engine_map_terrain_reset_stats();
     engine_map_terrain_frame();
 
-    /* ---- Cluster 3: feature walker (drawn over the terrain) ---- */
+    /* Shared dirty-rect scratch + clip (overlay + feature walker). */
     engine_dirty_rect_state_t dirty = {
         .dirty_mark = 0,
         .dirty_xmin = CANVAS_W - 1, .dirty_xmax = 0,
         .dirty_ymin = CANVAS_H - 1, .dirty_ymax = 0,
         .below_status_redraw = 0,
     };
-    engine_map_render_set_dirty_state(&dirty);
     gfx_dispatch_set_alt_clip(/*enabled=*/0, /*left=*/0, /*bottom=*/0);
+
+    /* ---- Cluster 2: overlay (army / territory markers, arrows) ---- */
+    engine_overlay_render_bind_tile_array((const int32_t *)cells, 0x104);
+    engine_overlay_render_bind_tile_descriptors(descr);
+    engine_overlay_render_bind_overlay_blob(ovl);
+    engine_overlay_render_bind_territory_records(terr);
+    engine_overlay_render_bind_army_records(army);
+    engine_overlay_render_bind_camera(cam_x0, cam_y0, col_start, row_start,
+                                      col_count, row_count, x_step, y_step,
+                                      x_half_step);
+    engine_overlay_render_bind_canvas(canvas, CANVAS_W, CANVAS_H);
+    engine_overlay_render_set_dirty_state(&dirty);
+    engine_overlay_render_set_view_mode(view_mode);
+    engine_overlay_render_set_render_mode(render_mode);
+    engine_overlay_render_set_overlay_base_index(overlay_base);
+    engine_overlay_render_set_arrow_marker_base_index(arrow_marker_base);
+    engine_overlay_render_set_animation_tick(0);
+    engine_overlay_render_set_active_territory(0);
+    engine_overlay_render_set_dev_flags(0, 0);
+    engine_overlay_render_set_error_count(0);
+    engine_overlay_render_reset_call_counts();
+    engine_overlay_render_frame();
+
+    /* ---- Cluster 3: feature walker (drawn over terrain + overlay) ---- */
+    engine_map_render_set_dirty_state(&dirty);
 
     engine_map_render_bind_tile_array((const int32_t *)cells, 0x104);
     engine_map_render_bind_tile_descriptors(descr);
@@ -148,11 +176,15 @@ int main(int argc, char **argv)
     fclose(o);
 
     printf("terrain: drawA=%d sky=%d oob=%d err=%d | "
+           "overlay: army=%d city=%d err=%d | "
            "features: err=%d call=%d\n",
            engine_map_terrain_drawa_count(),
            engine_map_terrain_sky_count(),
            engine_map_terrain_oob_copies(),
            engine_map_terrain_error_count(),
+           engine_overlay_render_army_call_count(),
+           engine_overlay_render_city_call_count(),
+           engine_overlay_render_error_count(),
            engine_map_render_error_count(),
            engine_map_render_call_count());
     return 0;
