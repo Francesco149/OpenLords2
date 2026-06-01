@@ -69,6 +69,7 @@
 #include "engine_map_render.h"
 #include "engine_map_scene.h"
 #include "engine_map_terrain.h"
+#include "engine_minimap.h"
 #include "engine_overlay_render.h"
 #include "engine_pl8.h"
 #include "engine_title_render.h"
@@ -1859,6 +1860,22 @@ static void bringup_strat_load(const char *dir)
             engine_hud_menubar_render_status(&status, engine_pl8_misc_cty(),
                                              font, gfx_glyph_render_map(), &loc);
         }
+    }
+
+    /* Right-panel minimap (FUN_00410aa9 via the screen-id-0 arm): the
+     * political overview at the top of the HUD panel.  Loads the two
+     * 128x128 grids from Map0{N}.pl8 (FUN_0046a037) then plots the per-
+     * territory owner colours over the natively-loaded records.  The
+     * coloured plot is validated byte-exact (8316/8316 drawn px) against
+     * load_clean_dump — see tools/minimap_parity.py.  The sandy panel
+     * backdrop behind it is the still-unported FUN_0040f5fd panel sprite
+     * (0x36), so transparent (index-0) minimap cells show black here. */
+    if (engine_minimap_load_grids(".", map_id)) {
+        engine_minimap_render(engine_pl8_misc_cty(), 0x1e0, 0x19);
+        log_line("strat-load: rendered minimap (map_id=%d cur_terr=%d realm=%d)",
+                 map_id, (int)s_slot_0057c93c, (int)s_slot_0057c8cc);
+    } else {
+        log_line("strat-load: minimap grid load failed (map_id=%d)", map_id);
     }
 
     if (canvas) {

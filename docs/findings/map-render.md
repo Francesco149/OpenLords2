@@ -15,6 +15,62 @@ The three first functions iterate the 2-D map array and call the
 fourth per cell.  They are mechanical column-walkers; the fourth is
 where each territory's actual sprite gets staged + dispatched.
 
+## RIGHT-PANEL MINIMAP — BYTE-EXACT (2026-06-01, `src/engine_minimap.c`)
+
+The political overview at the top of the right HUD panel.  Ported the
+whole chain from the screen-id-0 arm (`FUN_0040f5fd` → `FUN_00410aa9`):
+
+| addr        | port                                | role                                   |
+|-------------|-------------------------------------|----------------------------------------|
+| `0x46a037`  | `engine_minimap_load_grids`         | read two 128×128 grids from `Map0N.pl8` |
+| `0x451bba`  | `engine_minimap_compute_bands`      | per-territory band pre-pass (modes 1-3) |
+| `0x410cbd`  | `engine_minimap_plot`               | the 128×128 coloured pixel plot        |
+| `0x410aa9`  | `engine_minimap_render`             | backdrop blit + frame + plot + button   |
+
+**Data path.**  `46a037(map_id)` opens `Map0{(map_id>>2)+1}.pl8`
+(sub-map `map_id&3`), reads a 4-byte directory entry at
+`(sub*0x50)+0xc` → 0x4000-byte **region/territory-id grid**
+(`DAT_0052aff0`), then a second entry at `((sub*5+1)*0x10)+0xc` →
+0x4000-byte **terrain-type grid** (`DAT_00569590`).  Both via the
+already-ported `io_read_file_at` (`FUN_004af8d9`).  Everything else the
+minimap needs is **save-backed** and already loaded: per-territory
+records `g_per_army_768` (0x300 stride, owner = field `+7`), current
+territory `s_slot_0057c93c` (save entry 71), current realm
+`s_slot_0057c8cc` (72), minimap mode `s_slot_0057a0c4` (175), territory
+count `s_slot_0056d5dc` (77).  The grid holds region ids 0..16 (≤ the
+17-record array); land cells reference valid records.
+
+**Plot (`410cbd`).**  For each of the 128×128 cells, skip if the type
+grid byte is sea `0x24` or outside `[10,13]`.  Border cells (`type==10`)
+of the **current** territory paint white (index `0x20`).  Otherwise:
+mode 0 (political) = `MINIMAP_OWNER_COLOR[owner*8 + (type-10)]` (table
+`0x4d2900`, 6 owner rows × 8, only the first 4 of each reachable); modes
+1/2/3 = `MINIMAP_BAND_COLOR[band]` (table `0x4d28f8`, 6 bands) gated on
+the territory being visible to the current realm (field `+5`).  Plot via
+`gfx_paint_pixel_clipped` (`FUN_004039c7`).
+
+**Backdrop (`410aa9`).**  The terrain-type grid is blitted raw as a
+128×128 sprite via `gfx_sprite_render_raw` (`FUN_0040a01d`, the
+**transparent** family — skips index-0 bytes), so the panel's sand
+parchment (drawn underneath by the unported `FUN_0040f5fd` sprite
+`0x36`) shows through everywhere the grid is 0.  The plot then overlays
+the coloured land cells.  Frame/mode-button sprites use the opaque /
+transparent blob renderers (`40a567` / `40a21a`).
+
+**VALIDATION — byte-exact.**  `test_minimap_render_political` loads the
+real `lastturn.sav`, loads the grids, renders the political minimap, and
+`tools/minimap_parity.py` applies `load_clean_dump`'s palette and diffs
+the 128×128 box against `frame_00000.bmp`: **8316/8316 drawn pixels =
+100.00 %** (the 8068 transparent backdrop cells are the panel sprite's
+pixels, scored separately).  The entire England landmass — green
+counties, red Lancashire (white-outlined current territory), and the
+yellow/magenta/grey/blue realms — is pixel-identical.  Wired into the
+drop-in `--strat-load` (`bringup_strat_load`): the exe natively loads the
+grids + renders the minimap (`map_id=0 cur_terr=13 realm=1`).  **Only the
+sand backdrop differs** (unported `40f5fd` panel chrome), confirmed by
+eye.  Remaining right-panel work: `40f5fd` panel sprites (`40a567`
+0x36/0x39/0x3b) + the territory-info panel `40f7d3`.
+
 ## Storage layouts
 
 ### Per-territory record array — `g_per_territory_420`

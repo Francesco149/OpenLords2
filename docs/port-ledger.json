@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 518,
+  "tested": 523,
   "ported": 45,
-  "unported": 1884,
+  "unported": 1879,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 563,
-  "pct_touched": 23.0,
-  "pct_tested": 21.2,
+  "touched": 568,
+  "pct_touched": 23.2,
+  "pct_tested": 21.4,
   "bytes_total": 838629,
-  "bytes_touched": 229121,
-  "pct_bytes_touched": 27.3
+  "bytes_touched": 231508,
+  "pct_bytes_touched": 27.6
  },
  "orphan_refs": [
   "0x004148",
@@ -705,6 +705,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_minimap.c",
     "src/gfx_paint.h"
    ]
   },
@@ -1482,6 +1483,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_minimap.c",
     "src/gfx_dispatch.h",
     "src/gfx_sprite_render.c",
     "src/gfx_sprite_render.h"
@@ -2173,6 +2175,7 @@
    "status": "tested",
    "src": [
     "src/engine_map_scene.h",
+    "src/engine_minimap.h",
     "src/engine_pl8.h",
     "src/engine_screen_dispatch.c",
     "src/main.c"
@@ -2271,8 +2274,12 @@
    "name": "FUN_00410aa9",
    "size": 456,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_minimap.c",
+    "src/engine_minimap.h",
+    "src/main.c"
+   ]
   },
   {
    "va": "0x410c71",
@@ -2287,8 +2294,11 @@
    "name": "FUN_00410cbd",
    "size": 654,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_minimap.c",
+    "src/engine_minimap.h"
+   ]
   },
   {
    "va": "0x410f4b",
@@ -10584,8 +10594,11 @@
    "name": "FUN_00451bba",
    "size": 864,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_minimap.c",
+    "src/engine_minimap.h"
+   ]
   },
   {
    "va": "0x451f1a",
@@ -11806,8 +11819,12 @@
    "name": "FUN_0046a037",
    "size": 202,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_minimap.c",
+    "src/engine_minimap.h",
+    "src/main.c"
+   ]
   },
   {
    "va": "0x46a101",
@@ -15044,8 +15061,10 @@
    "name": "FUN_00497500",
    "size": 211,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_minimap.c"
+   ]
   },
   {
    "va": "0x4975d3",
@@ -17932,6 +17951,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_minimap.c",
     "src/main.c"
    ]
   },
