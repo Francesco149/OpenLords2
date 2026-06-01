@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 500,
-  "ported": 36,
-  "unported": 1911,
+  "ported": 37,
+  "unported": 1910,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 536,
+  "touched": 537,
   "pct_touched": 21.9,
   "pct_tested": 20.4,
   "bytes_total": 838629,
-  "bytes_touched": 192633,
-  "pct_bytes_touched": 23.0
+  "bytes_touched": 195540,
+  "pct_bytes_touched": 23.3
  },
  "orphan_refs": [
   "0x004148",
@@ -10781,8 +10781,10 @@
    "name": "FUN_00452820",
    "size": 2907,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gen/blit_table_452820.h"
+   ]
   },
   {
    "va": "0x45337b",

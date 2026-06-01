@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **536** (21.9%) — tested 500, ported 36
-- code bytes touched: **23.0%** (192,633 / 838,629 B)
-- unported: **1911**
+- touched: **537** (21.9%) — tested 500, ported 37
+- code bytes touched: **23.3%** (195,540 / 838,629 B)
+- unported: **1910**
 - orphan refs (in src/, not in function table): 4
 
 ## tested (500) — ported + host unit suite
@@ -522,7 +522,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4beed4 | FUN_004beed4 | 805 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 
-## ported (36) — reimplemented, no host test yet
+## ported (37) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -542,6 +542,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42f449 | FUN_0042f449 | 323 | gfx.c, gfx.h |
 | 0x42ff10 | FUN_0042ff10 | 8140 | engine.c |
 | 0x440666 | FUN_00440666 | 383 | engine.c |
+| 0x452820 | FUN_00452820 | 2907 | blit_table_452820.h |
 | 0x4782c5 | FUN_004782c5 | 340 | engine.c |
 | 0x481b9a | FUN_00481b9a | 1399 | engine.c |
 | 0x482111 | FUN_00482111 | 476 | engine.c |
