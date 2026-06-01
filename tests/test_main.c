@@ -1789,6 +1789,15 @@ struct test_case {
     X(engine_upkeep_pay_afford_and_state0) \
     X(engine_upkeep_pay_escalation_and_disband) \
     X(engine_upkeep_morale_sweep) \
+    X(engine_combat_clear_battle_result) \
+    X(engine_combat_load_muster) \
+    X(engine_combat_army_strength) \
+    X(engine_combat_resolve_blowout) \
+    X(engine_combat_resolve_pyrrhic) \
+    X(engine_combat_resolve_defender_wins) \
+    X(engine_combat_resolve_tie_to_attacker) \
+    X(engine_combat_resolve_difficulty_mult) \
+    X(engine_combat_resolve_merc) \
     \
     X(army_ai_seed_workforce_ratios) \
     X(army_ai_advance_tier_nonpositive_noop) \

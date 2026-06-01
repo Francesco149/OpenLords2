@@ -1,0 +1,255 @@
+/*
+ * Tests for engine_combat.c — strategic-map army combat resolution
+ * (FUN_004aa89f / FUN_00422c12 / FUN_004ab2aa / FUN_004aad07).
+ *
+ * Operates on the per-territory occupant block (g_per_territory_420) and the
+ * mercenary-pool table (g_unit_table_20) — both canonical save globals.
+ *
+ * Per-class weights {2,16,8,13,9,13,22}; casualty table
+ * {110→10,130→20,160→30,180→40,220→50,270→65,360→80,500→90,700→95,900→98}
+ * default 100.  A strength is sum(count[c]*weight[c]) (+merc) then +20 (or
+ * floored at 1 if zero).
+ */
+
+#include <stdint.h>
+#include <string.h>
+
+#include "t.h"
+#include "engine_combat.h"
+#include "engine_realm_upkeep.h"   /* shares the merc-contract triple */
+#include "save.h"
+
+#define CREC(i)    (&g_per_territory_420[(i) * 0x1a4])
+#define I32(p, o)  (*(int32_t *)((p) + (o)))
+#define I16(p, o)  (*(int16_t *)((p) + (o)))
+
+#define C_OWNER     0x00
+#define C_ACTIVE    0x08
+#define C_VALUE     0x168
+#define C_COUNTS    0x16c
+#define C_RESULT    0x17a
+#define C_CON_CLASS 0x195
+#define C_CON_AMT   0x196
+#define C_CON_SLOT  0x197
+
+static void cb_reset(void)
+{
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_unit_table_20, 0, sizeof g_unit_table_20);
+}
+
+static void set_counts(int rec, const int16_t c[7])
+{
+    uint8_t *r = CREC(rec);
+    for (int i = 0; i < 7; i++)
+        I16(r, C_COUNTS + i * 2) = c[i];
+}
+
+/* --- FUN_004aa89f: clear battle-result accumulators ----------------------- */
+int test_engine_combat_clear_battle_result(void)
+{
+    cb_reset();
+    uint8_t *r = CREC(3);
+    I16(r, C_RESULT + 0) = 11;
+    I16(r, C_RESULT + 2) = 22;
+    I16(r, C_RESULT + 4) = 33;
+    I16(r, C_RESULT + 6) = 44;
+    I16(r, C_RESULT + 8) = 55;   /* +0x182 — must NOT be touched */
+    I16(r, C_RESULT - 2) = 66;   /* +0x178 — must NOT be touched */
+
+    engine_combat_clear_battle_result(3);
+
+    T_ASSERT_EQ_I(I16(r, C_RESULT + 0), 0);
+    T_ASSERT_EQ_I(I16(r, C_RESULT + 2), 0);
+    T_ASSERT_EQ_I(I16(r, C_RESULT + 4), 0);
+    T_ASSERT_EQ_I(I16(r, C_RESULT + 6), 0);
+    T_ASSERT_EQ_I(I16(r, C_RESULT + 8), 55);
+    T_ASSERT_EQ_I(I16(r, C_RESULT - 2), 66);
+    return 0;
+}
+
+/* --- FUN_00422c12: load muster scratch ------------------------------------ */
+int test_engine_combat_load_muster(void)
+{
+    cb_reset();
+    int16_t ac[7] = { 10, 20, 30, 40, 50, 60, 70 };
+    int16_t dc[7] = {  1,  2,  3,  4,  5,  6,  7 };
+    set_counts(1, ac);
+    set_counts(2, dc);
+    /* attacker merc: 5 of class 2; defender merc: 9 of class 6 */
+    CREC(1)[C_CON_CLASS] = 2;  CREC(1)[C_CON_AMT] = 5;
+    CREC(2)[C_CON_CLASS] = 6;  CREC(2)[C_CON_AMT] = 9;
+
+    engine_combat_load_muster(1, 2);
+
+    for (int c = 0; c < 7; c++) {
+        T_ASSERT_EQ_I(g_combat_muster_a[c], ac[c] + (c == 2 ? 5 : 0));
+        T_ASSERT_EQ_I(g_combat_muster_b[c], dc[c] + (c == 6 ? 9 : 0));
+    }
+    return 0;
+}
+
+/* --- FUN_004ab2aa: weighted army strength --------------------------------- */
+int test_engine_combat_army_strength(void)
+{
+    cb_reset();
+    /* single peasant class: 10 * weight(2) = 20, + 20 presence = 40 */
+    int16_t c1[7] = { 10, 0, 0, 0, 0, 0, 0 };
+    set_counts(1, c1);
+    T_ASSERT_EQ_I(engine_combat_army_strength(1), 40);
+
+    /* empty stack floors at 1 (no +20) */
+    cb_reset();
+    T_ASSERT_EQ_I(engine_combat_army_strength(1), 1);
+
+    /* merc: 1 of class 0 (w=2) + 5 mercs of class 6 (w=22) → 2 + 110 = 112, +20 */
+    cb_reset();
+    int16_t c3[7] = { 1, 0, 0, 0, 0, 0, 0 };
+    set_counts(1, c3);
+    CREC(1)[C_CON_CLASS] = 6;  CREC(1)[C_CON_AMT] = 5;
+    T_ASSERT_EQ_I(engine_combat_army_strength(1), 2 + 22 * 5 + 0x14);
+
+    /* full mixed stack matches the weighted sum */
+    cb_reset();
+    int16_t c4[7] = { 3, 1, 2, 1, 4, 1, 2 };
+    set_counts(1, c4);
+    int expect = 3*2 + 1*16 + 2*8 + 1*13 + 4*9 + 1*13 + 2*22 + 0x14;
+    T_ASSERT_EQ_I(engine_combat_army_strength(1), expect);
+    return 0;
+}
+
+/* --- FUN_004aad07: blowout — winner unscathed, loser annihilated ---------- */
+int test_engine_combat_resolve_blowout(void)
+{
+    cb_reset();
+    int16_t a[7] = { 100, 0, 0, 0, 0, 0, 0 };  /* str 220 */
+    int16_t d[7] = {   1, 0, 0, 0, 0, 0, 0 };  /* str  22 */
+    set_counts(1, a);
+    set_counts(2, d);
+    CREC(1)[C_OWNER] = 4;
+    CREC(2)[C_OWNER] = 7;
+
+    engine_combat_result_t out;
+    engine_combat_resolve_casualties(1, 2, 0, 0, &out);
+
+    /* ratio 1000 → fallback 100% survivors: attacker untouched */
+    T_ASSERT_EQ_I(out.winner, 1);
+    T_ASSERT_EQ_I(out.winner_owner, 4);
+    T_ASSERT_EQ_I(I16(CREC(1), C_COUNTS), 100);
+    T_ASSERT_EQ_I(I32(CREC(1), C_VALUE), 100);
+    /* defender wiped */
+    T_ASSERT_EQ_I(I16(CREC(2), C_COUNTS), 0);
+    T_ASSERT_EQ_I(I32(CREC(2), C_VALUE), 0);
+    return 0;
+}
+
+/* --- FUN_004aad07: close fight — pyrrhic winner --------------------------- */
+int test_engine_combat_resolve_pyrrhic(void)
+{
+    cb_reset();
+    int16_t a[7] = { 60, 0, 0, 0, 0, 0, 0 };   /* str 140 */
+    int16_t d[7] = { 55, 0, 0, 0, 0, 0, 0 };   /* str 130 */
+    set_counts(1, a);
+    set_counts(2, d);
+
+    engine_combat_resolve_casualties(1, 2, 0, 0, NULL);
+
+    /* ratio percent_div(140,130)=107 → <110 → 10% survivors */
+    T_ASSERT_EQ_I(I16(CREC(1), C_COUNTS), 6);   /* percent_of(60,10) */
+    T_ASSERT_EQ_I(I32(CREC(1), C_VALUE), 6);
+    T_ASSERT_EQ_I(I32(CREC(2), C_VALUE), 0);
+    return 0;
+}
+
+/* --- FUN_004aad07: defender wins ------------------------------------------ */
+int test_engine_combat_resolve_defender_wins(void)
+{
+    cb_reset();
+    int16_t a[7] = {   1, 0, 0, 0, 0, 0, 0 };  /* str  22 */
+    int16_t d[7] = { 100, 0, 0, 0, 0, 0, 0 };  /* str 220 */
+    set_counts(1, a);
+    set_counts(2, d);
+    CREC(2)[C_OWNER] = 5;
+
+    engine_combat_result_t out;
+    engine_combat_resolve_casualties(1, 2, 0, 0, &out);
+
+    T_ASSERT_EQ_I(out.winner, 2);
+    T_ASSERT_EQ_I(out.winner_owner, 5);
+    T_ASSERT_EQ_I(I16(CREC(2), C_COUNTS), 100);
+    T_ASSERT_EQ_I(I32(CREC(2), C_VALUE), 100);
+    T_ASSERT_EQ_I(I32(CREC(1), C_VALUE), 0);
+    return 0;
+}
+
+/* --- FUN_004aad07: tie goes to the attacker (and is maximally pyrrhic) ----- */
+int test_engine_combat_resolve_tie_to_attacker(void)
+{
+    cb_reset();
+    int16_t a[7] = { 50, 0, 0, 0, 0, 0, 0 };   /* str 120 */
+    int16_t d[7] = { 50, 0, 0, 0, 0, 0, 0 };   /* str 120 */
+    set_counts(1, a);
+    set_counts(2, d);
+
+    engine_combat_result_t out;
+    engine_combat_resolve_casualties(1, 2, 0, 0, &out);
+
+    /* sa < sd is false on a tie → attacker wins; ratio 100 → <110 → 10% */
+    T_ASSERT_EQ_I(out.winner, 1);
+    T_ASSERT_EQ_I(I16(CREC(1), C_COUNTS), 5);   /* percent_of(50,10) */
+    T_ASSERT_EQ_I(I32(CREC(2), C_VALUE), 0);
+    return 0;
+}
+
+/* --- FUN_004aad07: quick-resolve difficulty multiplier flips the outcome --- */
+int test_engine_combat_resolve_difficulty_mult(void)
+{
+    cb_reset();
+    int16_t a[7] = { 50, 0, 0, 0, 0, 0, 0 };   /* str 120 */
+    int16_t d[7] = { 50, 0, 0, 0, 0, 0, 0 };   /* str 120 */
+    set_counts(1, a);
+    set_counts(2, d);
+
+    /* difficulty 4 → defender ×400% → sd=480 > sa=120 → defender wins.
+     * ratio percent_div(480,120)=400 → <500 → 90% survivors. */
+    engine_combat_result_t out;
+    engine_combat_resolve_casualties(1, 2, 4, 1, &out);
+
+    T_ASSERT_EQ_I(out.winner, 2);
+    T_ASSERT_EQ_I(I16(CREC(2), C_COUNTS), 45);  /* percent_of(50,90) */
+    T_ASSERT_EQ_I(I32(CREC(2), C_VALUE), 45);
+    T_ASSERT_EQ_I(I32(CREC(1), C_VALUE), 0);
+    return 0;
+}
+
+/* --- FUN_004aad07: merc contingent — winner scaled, loser contract freed --- */
+int test_engine_combat_resolve_merc(void)
+{
+    cb_reset();
+    int16_t a[7] = { 60, 0, 0, 0, 0, 0, 0 };
+    int16_t d[7] = { 50, 0, 0, 0, 0, 0, 0 };
+    set_counts(1, a);
+    set_counts(2, d);
+    /* attacker (winner) merc: 10 of class 6 → str 120 + 220 + 20 = 360 */
+    CREC(1)[C_CON_CLASS] = 6;  CREC(1)[C_CON_AMT] = 10;
+    /* defender (loser) merc: 4 of class 0, active + pool slot 5 → str 100+8+20=128 */
+    CREC(2)[C_ACTIVE]    = 1;
+    CREC(2)[C_CON_CLASS] = 0;  CREC(2)[C_CON_AMT] = 4;  CREC(2)[C_CON_SLOT] = 5;
+    *(uint16_t *)&g_unit_table_20[5 * 0x14] = 0x1234;
+
+    engine_combat_resolve_casualties(1, 2, 0, 0, NULL);
+
+    /* ratio percent_div(360,128)=281 → <360 → 80% survivors */
+    T_ASSERT_EQ_I(I16(CREC(1), C_COUNTS), 48);  /* percent_of(60,80) */
+    T_ASSERT_EQ_I(CREC(1)[C_CON_AMT], 8);       /* percent_of(10,80) */
+    T_ASSERT_EQ_I(I32(CREC(1), C_VALUE), 48 + 8);
+
+    /* loser annihilated + merc contract released, pool slot freed */
+    T_ASSERT_EQ_I(I16(CREC(2), C_COUNTS), 0);
+    T_ASSERT_EQ_I(I32(CREC(2), C_VALUE), 0);
+    T_ASSERT_EQ_I(CREC(2)[C_CON_CLASS], 0);
+    T_ASSERT_EQ_I(CREC(2)[C_CON_AMT], 0);
+    T_ASSERT_EQ_I(CREC(2)[C_CON_SLOT], 0);
+    T_ASSERT_EQ_I(*(uint16_t *)&g_unit_table_20[5 * 0x14], 0);
+    return 0;
+}

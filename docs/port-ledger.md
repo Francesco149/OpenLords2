@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **531** (21.7%) — tested 495, ported 36
-- code bytes touched: **22.5%** (188,843 / 838,629 B)
-- unported: **1916**
+- touched: **536** (21.9%) — tested 500, ported 36
+- code bytes touched: **23.0%** (192,633 / 838,629 B)
+- unported: **1911**
 - orphan refs (in src/, not in function table): 4
 
-## tested (495) — ported + host unit suite
+## tested (500) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -159,6 +159,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x41fdd6 | FUN_0041fdd6 | 415 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x41ff75 | FUN_0041ff75 | 466 | engine_title_render.c |
 | 0x42150b | FUN_0042150b | 508 | engine_title_render.h |
+| 0x422c12 | FUN_00422c12 | 272 | engine_combat.c, engine_combat.h |
 | 0x423b4f | FUN_00423b4f | 85 | engine_mp_render.c, engine_mp_render.h |
 | 0x425d35 | FUN_00425d35 | 184 | audio.c, main.c |
 | 0x427ed0 | FUN_00427ed0 | 311 | engine_map_query.c, engine_territory.c, game_init.c (+1) |
@@ -414,8 +415,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a4b12 | FUN_004a4b12 | 298 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a4c41 | FUN_004a4c41 | 311 | engine_army_ai.c, engine_army_ai.h |
 | 0x4aa039 | FUN_004aa039 | 328 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x4aa89f | FUN_004aa89f | 107 | engine_combat.c, engine_combat.h |
+| 0x4aad07 | FUN_004aad07 | 1443 | engine_combat.c, engine_combat.h |
+| 0x4ab2aa | FUN_004ab2aa | 217 | engine_combat.c, engine_combat.h |
+| 0x4ab383 | FUN_004ab383 | 1751 | engine_combat.c, engine_combat.h |
 | 0x4aba5a | FUN_004aba5a | 220 | engine_realm_upkeep.c, engine_realm_upkeep.h |
-| 0x4ac6fe | FUN_004ac6fe | 245 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x4ac6fe | FUN_004ac6fe | 245 | engine_combat.c, engine_combat.h, engine_realm_upkeep.c (+1) |
 | 0x4ac904 | FUN_004ac904 | 295 | game_init.c, game_init.h |
 | 0x4acbd4 | FUN_004acbd4 | 650 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4ace5e | FUN_004ace5e | 650 | engine_realm_upkeep.c, engine_realm_upkeep.h |

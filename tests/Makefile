@@ -74,6 +74,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_realm_events.c \
                    ../src/engine_realm_upkeep.c \
                    ../src/engine_army_ai.c \
+                   ../src/engine_combat.c \
                    ../src/engine_turn.c \
                    ../src/save.c \
                    ../src/save_schema_globals.c \
@@ -131,6 +132,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_realm_events.c \
                    test_engine_realm_upkeep.c \
                    test_engine_army_ai.c \
+                   test_engine_combat.c \
                    test_engine_turn.c \
                    test_save.c \
                    test_io_path.c
