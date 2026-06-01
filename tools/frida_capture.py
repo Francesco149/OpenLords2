@@ -238,6 +238,11 @@ class CaptureConfig:
     # eagerly and shipped to the agent inline via init opts (the Windows-side
     # agent has no access to WSL filesystem paths).
     input_replay_path: Path | None = None
+    # Anchor-segmented input trace (TAS framework P2): superset of input_replay
+    # with {wait}/{wait_until}/{capture} ops + anchor-relative frame counting.
+    # Loaded eagerly, normalised to ops, shipped inline via init opts.  Implies
+    # anchor detection + a frames dir (its {capture} ops grab the back surface).
+    input_segtrace_path: Path | None = None
     # Call tracer (Phase G.3): hook each Ghidra-VA in call_trace_vas on
     # retail and emit per-tick call_trace_batch events → run_dir/call_trace.jsonl
     # (one row per call, schema {va, ret_va, frame}).  call_trace_frames
@@ -361,6 +366,53 @@ def _load_input_trace(path: Path) -> list[dict[str, int]]:
     return out
 
 
+def _load_segtrace(path: Path) -> list[dict[str, Any]]:
+    """Read an anchor-segmented input trace (TAS framework P2) and normalise
+    each line into an op dict with a `kind` the agent consumes directly.
+
+    Line forms (JSONL; blank / `#` lines skipped):
+      {"t":N,"m":M,"w":W,"l":L}                       → input  (t is RELATIVE
+                                                         to the current segment's
+                                                         opening anchor frame)
+      {"wait":"ANCHOR"}                               → wait
+      {"wait_until":{"va":"0x..","type":"u8","op":"<=","val":V}} → wait_until
+      {"capture":N}  or  {"capture":N,"label":"..."}  → capture (anchor-relative)
+    """
+    ops: list[dict[str, Any]] = []
+    for lineno, raw in enumerate(path.read_text().splitlines(), 1):
+        s = raw.strip()
+        if not s or s.startswith("#"):
+            continue
+        try:
+            obj = json.loads(s)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"{path}:{lineno}: {e}") from e
+        try:
+            if "wait" in obj:
+                ops.append({"kind": "wait", "anchor": str(obj["wait"])})
+            elif "wait_until" in obj:
+                wu = obj["wait_until"]
+                va = wu["va"]
+                ops.append({"kind": "wait_until",
+                            "va": int(va, 0) if isinstance(va, str) else int(va),
+                            "type": str(wu.get("type", "i32")),
+                            "op": str(wu["op"]),
+                            "val": wu["val"]})
+            elif "capture" in obj:
+                ops.append({"kind": "capture", "n": int(obj["capture"]),
+                            "label": str(obj.get("label", ""))})
+            elif "m" in obj:
+                ops.append({"kind": "input", "t": int(obj["t"]),
+                            "m": int(obj["m"]), "w": int(obj["w"]),
+                            "l": int(obj["l"])})
+            else:
+                raise ValueError("unrecognised op (need m / wait / wait_until / "
+                                 "capture)")
+        except (KeyError, TypeError, ValueError) as e:
+            raise ValueError(f"{path}:{lineno}: {e}") from e
+    return ops
+
+
 # ─── leak-proofing helpers ─────────────────────────────────────────────────
 #
 # Retail is spawned by the UAC-elevated frida-server, so the spawned process
@@ -436,7 +488,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
     done = threading.Event()
 
     frames_dir = run_dir / "frames"
-    if cfg.frame_capture:
+    if cfg.frame_capture or cfg.input_segtrace_path is not None:
         frames_dir.mkdir(exist_ok=True)
 
     # Open the input-trace sink (one JSONL line per recorded WM_*).  We hold
@@ -477,6 +529,13 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         input_replay_events = _load_input_trace(cfg.input_replay_path)
         f_log.write(f"[input_replay] loaded {len(input_replay_events)} events "
                     f"from {cfg.input_replay_path}\n")
+
+    # Preload the segtrace ops the same way (parse failures before spawn).
+    input_segtrace_ops: list[dict[str, Any]] = []
+    if cfg.input_segtrace_path is not None:
+        input_segtrace_ops = _load_segtrace(cfg.input_segtrace_path)
+        f_log.write(f"[input_segtrace] loaded {len(input_segtrace_ops)} ops "
+                    f"from {cfg.input_segtrace_path}\n")
 
     def on_message(message: dict[str, Any], data: bytes | None):
         if message.get("type") == "error":
@@ -685,6 +744,23 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
                 anchor_trace_fp.write(json.dumps(rec) + "\n")
             f_log.write(f"[anchor] {name} @ frame {frame}\n")
             return
+        if kind == "segtrace_wait":
+            f_log.write(f"[segtrace] wait {p.get('anchor')} resolved → "
+                        f"rebased segment-0 to frame {p.get('frame')}\n")
+            return
+        if kind == "segtrace_wait_until":
+            f_log.write(f"[segtrace] wait_until va=0x{int(p.get('va',0)):x} "
+                        f"val={p.get('val')} → rebased to frame {p.get('frame')}\n")
+            return
+        if kind == "segtrace_capture_sched":
+            f_log.write(f"[segtrace] capture scheduled @ frame {p.get('at')} "
+                        f"(n={p.get('n')} label={p.get('label')!r})\n")
+            return
+        if kind == "segtrace_done":
+            f_log.write(f"[segtrace] done @ frame {p.get('frame')} — "
+                        f"all ops consumed, captures taken\n")
+            done.set()
+            return
         if kind == "gdi_seat_present":
             counts["gdi_seat_present"] += 1
             f_log.write(
@@ -853,6 +929,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "skip_intro":                bool(cfg.skip_intro),
             "input_record":              bool(cfg.input_record),
             "input_replay":              input_replay_events,
+            "input_segtrace":            input_segtrace_ops,
             "call_trace":                bool(cfg.call_trace),
             "call_trace_vas":            [int(v) for v in cfg.call_trace_vas],
             "call_trace_frames":         [int(v) for v in cfg.call_trace_frames],
@@ -1150,6 +1227,14 @@ def main(argv: list[str] | None = None) -> int:
                          "for --call-trace-max-frames ticks (0 = tick filter)")
     ap.add_argument("--call-trace-max-frames", type=int, default=8,
                     help="number of ticks to emit in cum-sec window mode")
+    ap.add_argument("--input-segtrace",
+                    default=None,
+                    help="replay an anchor-segmented input trace (TAS "
+                         "framework): a JSONL superset of --input-trace with "
+                         "{wait:ANCHOR} / {wait_until:{...}} segment breaks and "
+                         "{capture:N} anchor-relative screenshots. Within a "
+                         "segment, frame stamps are relative to the opening "
+                         "anchor. See docs/plans/tas-framework.md")
     ap.add_argument("--anchor-trace", action="store_true",
                     help="emit deterministic anchors ({anchor,frame} on "
                          "engine-state / screen-id transitions) to "
@@ -1252,6 +1337,10 @@ def main(argv: list[str] | None = None) -> int:
             eff_duration_ms = 300_000
         if eff_present_every == 100:        # argparse default → tighten
             eff_present_every = 3           # smooth GDI present at full tick rate
+    # A segtrace ends the run early on segtrace_done; give it generous headroom
+    # so a late anchor (e.g. MAP_FREEROAM after a real load) is still reached.
+    if args.input_segtrace and eff_duration_ms == 10_000:
+        eff_duration_ms = 300_000
 
     cfg = CaptureConfig(
         duration_ms=eff_duration_ms,
@@ -1281,6 +1370,8 @@ def main(argv: list[str] | None = None) -> int:
         input_record=args.input_record,
         input_replay_path=(Path(args.input_trace).resolve()
                            if args.input_trace else None),
+        input_segtrace_path=(Path(args.input_segtrace).resolve()
+                             if args.input_segtrace else None),
         call_trace=args.call_trace,
         call_trace_vas=call_trace_vas,
         call_trace_frames=call_trace_frames,

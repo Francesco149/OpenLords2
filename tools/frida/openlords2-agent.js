@@ -2336,43 +2336,178 @@ function rescaleMouseLParamToClient(l) {
     return ((cy << 16) | cx) >>> 0;
 }
 
-// Emit a `{kind:"anchor",anchor,frame}` event on each observable engine-state
-// transition (TAS framework P1).  Called from engine_tick.onEnter every tick
-// right after g_tick_count is bumped, so `frame` is this tick's id.  Anchors
-// are edge-triggered and may fire more than once over a run (e.g. MAP_FREEROAM
-// after each load); the segtrace `wait` consumes the next firing.
-function emitAnchor(name, frame) {
-    send({kind: 'anchor', anchor: name, frame: frame >>> 0});
+// Detect observable engine-state transitions and fire the corresponding
+// anchors (TAS framework).  Called from engine_tick.onEnter every tick right
+// after g_tick_count is bumped, so `frame` is this tick's id.  Anchors are
+// edge-triggered and may fire more than once over a run (e.g. MAP_FREEROAM
+// after each load).  Two consumers:
+//   - --anchor-trace: fireAnchor send()s the {anchor,frame} JSONL event.
+//   - --input-segtrace: g_anchor_fired (name->frame, reset each tick) lets the
+//     segtrace `wait ANCHOR` op consume this tick's firing.
+// So anchor *detection* runs whenever EITHER is enabled; emission is gated on
+// g_anchor_enabled alone.
+// g_anchor_last persists the most-recent fire frame of each anchor across
+// ticks (segtrace `wait` resolves against it — an anchor can fire before the
+// trace's processing cursor reaches the matching `wait`, e.g. while still
+// dispatching the prior segment's inputs).
+let g_anchor_last = {};         // name -> last fire frame (persisted)
+
+function fireAnchor(name, frame) {
+    g_anchor_last[name] = frame >>> 0;
+    if (g_anchor_enabled) {
+        send({kind: 'anchor', anchor: name, frame: frame >>> 0});
+    }
 }
 
 function anchorTick(frame) {
-    if (!g_anchor_enabled) return;
+    if (!g_anchor_enabled && !g_seg_enabled) return;
     let state, screen;
     try {
         state  = rva(ADDR.var_sim_game_state_phase).readS32();
         screen = rva(ADDR.var_sim_current_screen).readU8();
     } catch (e) { return; }     // globals not mapped yet — try next tick
 
-    if (!g_anchor_booted) { g_anchor_booted = true; emitAnchor('BOOT', frame); }
+    if (!g_anchor_booted) { g_anchor_booted = true; fireAnchor('BOOT', frame); }
 
     // Screen-id edges.
     if (screen !== g_anchor_prev_screen && screen === 0x1f) {
-        emitAnchor('TITLE', frame);
+        fireAnchor('TITLE', frame);
     }
     // Engine-state edges.
     if (state !== g_anchor_prev_state) {
-        if (state === 0xb) emitAnchor('LOADING_START', frame);
-        if (g_anchor_prev_state === 0xb) emitAnchor('LOADING_END', frame);
-        if (state === 3 && g_anchor_prev_state !== 3) emitAnchor('NEW_GAME', frame);
+        if (state === 0xb) fireAnchor('LOADING_START', frame);
+        if (g_anchor_prev_state === 0xb) fireAnchor('LOADING_END', frame);
+        if (state === 3 && g_anchor_prev_state !== 3) fireAnchor('NEW_GAME', frame);
     }
     // Compound: strategic map live (ingame, map screen).  Fire on entry to the
     // (state==3 && screen==0) condition.
     const map_now  = (state === 3 && screen === 0);
     const map_prev = (g_anchor_prev_state === 3 && g_anchor_prev_screen === 0);
-    if (map_now && !map_prev) emitAnchor('MAP_FREEROAM', frame);
+    if (map_now && !map_prev) fireAnchor('MAP_FREEROAM', frame);
 
     g_anchor_prev_state  = state;
     g_anchor_prev_screen = screen;
+}
+
+// ─── anchor-segmented input trace (--input-segtrace, TAS framework P2) ────
+// A superset of the sparse {t,m,w,l} replay.  Ops (normalised by the driver):
+//   {kind:'input', t,m,w,l}  — within-segment WM_* event; t is RELATIVE to the
+//                              current segment's opening anchor frame.
+//   {kind:'wait', anchor}    — segment break: hold until ANCHOR fires this run,
+//                              then rebase segment-0 onto that anchor's frame.
+//   {kind:'wait_until', va,type,op,val} — hold until a live-global predicate
+//                              holds, then rebase segment-0 onto the current frame.
+//   {kind:'capture', n,label} — schedule an anchor-relative capture at
+//                              (segment_base + n); immune to load jitter.
+// Processed greedily each tick; a blocking op (`wait`/`wait_until`/a future
+// `input`) stops the loop until satisfied.  See docs/plans/tas-framework.md.
+let g_seg_enabled       = false;
+let g_seg_ops           = [];
+let g_seg_idx           = 0;
+let g_seg_base          = 0;        // absolute frame mapped to current segment t=0
+let g_seg_done_sent     = false;
+let g_capture_at_frames = null;     // Set<int> | null — absolute frames to capture
+
+function segReadTyped(va, type) {
+    const p = rva(va >>> 0);
+    switch (type) {
+        case 'u8':  return p.readU8();
+        case 'i8':  return p.readS8();
+        case 'u16': return p.readU16();
+        case 'i16': return p.readS16();
+        case 'u32': return p.readU32();
+        case 'i32': return p.readS32();
+        case 'f32': return p.readFloat();
+        default:    return p.readS32();
+    }
+}
+
+function segCmp(a, op, b) {
+    switch (op) {
+        case '<=': return a <= b;
+        case '>=': return a >= b;
+        case '<':  return a <  b;
+        case '>':  return a >  b;
+        case '==': return a === b;
+        case '!=': return a !== b;
+        default:   return false;
+    }
+}
+
+function segtraceTick(frame) {
+    if (!g_seg_enabled) return;
+    while (g_seg_idx < g_seg_ops.length) {
+        const op = g_seg_ops[g_seg_idx];
+
+        if (op.kind === 'input') {
+            if ((g_seg_base + op.t) > frame) break;   // future event — hold
+            const post = resolvePostMessageA();
+            if (!post) break;                          // user32 not resolved yet
+            const hwnd = rva(ADDR.var_main_hwnd).readPointer();
+            if (hwnd.isNull()) break;                  // window not up — retry
+            let lp = op.l >>> 0;
+            if (op.m >= WM_MOUSEMOVE && op.m <= WM_RBUTTONDBLCLK) {
+                lp = rescaleMouseLParamToClient(lp);
+            }
+            try {
+                post(hwnd, op.m >>> 0, op.w >>> 0, lp >>> 0);
+                g_replay_post_count++;
+                send({kind: 'input_replay_post', idx: g_seg_idx, t: op.t,
+                      m: op.m, w: op.w, l: op.l, tick_now: frame});
+            } catch (e) { err('segtrace.post', e.message); }
+            g_seg_idx++;
+            continue;
+        }
+
+        if (op.kind === 'wait') {
+            // Record the frame this op first becomes the blocking cursor, then
+            // resolve on the anchor's first firing AT OR AFTER that frame — so a
+            // firing that predates the cursor (an earlier segment's anchor)
+            // doesn't spuriously satisfy it, but one we "just missed" while
+            // dispatching prior inputs still does.
+            if (op._since === undefined) op._since = frame;
+            const lf = g_anchor_last[op.anchor];
+            if (lf !== undefined && lf >= op._since) {
+                g_seg_base = lf;
+                send({kind: 'segtrace_wait', anchor: op.anchor, frame: g_seg_base});
+                g_seg_idx++;
+                continue;
+            }
+            break;                                     // still waiting
+        }
+
+        if (op.kind === 'wait_until') {
+            let v;
+            try { v = segReadTyped(op.va, op.type); } catch (e) { break; }
+            if (segCmp(v, op.op, op.val)) {
+                g_seg_base = frame;
+                send({kind: 'segtrace_wait_until', va: op.va >>> 0,
+                      val: v, frame: frame});
+                g_seg_idx++;
+                continue;
+            }
+            break;
+        }
+
+        if (op.kind === 'capture') {
+            const at = (g_seg_base + (op.n | 0)) >>> 0;
+            if (!g_capture_at_frames) g_capture_at_frames = new Set();
+            g_capture_at_frames.add(at);
+            send({kind: 'segtrace_capture_sched', at: at, n: (op.n | 0),
+                  label: String(op.label || '')});
+            g_seg_idx++;
+            continue;
+        }
+
+        g_seg_idx++;                                   // unknown op — skip
+    }
+
+    // Completion: every op consumed and no capture still pending.
+    if (!g_seg_done_sent && g_seg_idx >= g_seg_ops.length &&
+        (!g_capture_at_frames || g_capture_at_frames.size === 0)) {
+        g_seg_done_sent = true;
+        send({kind: 'segtrace_done', frame: frame});
+    }
 }
 
 // Drain all replay events whose stamp <= the current tick. Called from
@@ -2822,6 +2957,7 @@ function installEngineTickHook() {
             g_tick_count = (g_tick_count + 1) >>> 0;
             g_engine_in_tick = 1;
             anchorTick(g_tick_count);
+            segtraceTick(g_tick_count);
             if (g_call_trace_enabled && g_call_trace_min_cum_secs > 0) {
                 callTraceWindowTick();
             }
@@ -2838,6 +2974,14 @@ function installEngineTickHook() {
         },
         onLeave: function () {
             try {
+                // Anchor-relative capture (--input-segtrace {capture}).  Checked
+                // every tick (before the cum-secs early-return) so the exact
+                // scheduled frame is grabbed.  Captured here, strictly between
+                // engine_tick iterations, same as the heartbeat path.
+                if (g_capture_at_frames && g_capture_at_frames.has(g_tick_count)) {
+                    captureFrameOnce();
+                    g_capture_at_frames.delete(g_tick_count);
+                }
                 const cum_secs = rva(ADDR.var_fps_cum_secs).readU32();
                 if (cum_secs === g_last_fps_cum_secs) return;
                 g_last_fps_cum_secs = cum_secs;
@@ -4713,6 +4857,34 @@ rpc.exports = {
         g_anchor_booted      = false;
         g_anchor_prev_state  = -1;
         g_anchor_prev_screen = -1;
+        g_anchor_last        = {};
+
+        // Anchor-segmented input trace (TAS framework P2).  opts.input_segtrace
+        // is an array of ops already normalised by the driver (kind in
+        // input/wait/wait_until/capture).  Anchor detection auto-runs whenever
+        // this is set (anchorTick gates on g_anchor_enabled || g_seg_enabled).
+        g_seg_ops = Array.isArray(opts.input_segtrace)
+            ? opts.input_segtrace.map(function (o) {
+                  const k = String(o.kind || '');
+                  if (k === 'input') {
+                      return {kind: 'input', t: (o.t | 0), m: (o.m | 0),
+                              w: (o.w | 0), l: (o.l | 0)};
+                  }
+                  if (k === 'wait')       return {kind: 'wait', anchor: String(o.anchor)};
+                  if (k === 'wait_until') return {kind: 'wait_until', va: (o.va >>> 0),
+                                                  type: String(o.type || 'i32'),
+                                                  op: String(o.op || '=='),
+                                                  val: o.val};
+                  if (k === 'capture')    return {kind: 'capture', n: (o.n | 0),
+                                                  label: String(o.label || '')};
+                  return {kind: 'nop'};
+              })
+            : [];
+        g_seg_enabled       = g_seg_ops.length > 0;
+        g_seg_idx           = 0;
+        g_seg_base          = 0;
+        g_seg_done_sent     = false;
+        g_capture_at_frames = null;
 
         g_skip_intro_enabled = !!opts.skip_intro;
         g_smack_in_open      = 0;
@@ -4842,6 +5014,10 @@ rpc.exports = {
         if (g_anchor_enabled) {
             log('anchor_trace: armed (emits {anchor,frame} on engine-state / ' +
                 'screen-id transitions: BOOT/TITLE/NEW_GAME/LOADING_*/MAP_FREEROAM)');
+        }
+        if (g_seg_enabled) {
+            log('input_segtrace: armed (' + g_seg_ops.length + ' ops; ' +
+                'wait/wait_until/capture + anchor-relative frames)');
         }
 
         if (g_frame_capture_enabled) {
