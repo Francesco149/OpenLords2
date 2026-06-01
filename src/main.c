@@ -82,6 +82,7 @@
 #include "gfx_glyph.h"
 #include "gfx_glyph_table.h"
 #include "gfx_paint.h"
+#include "gfx_sprite_render.h"
 #include "gfx_caret.h"
 #include "gfx_panel.h"
 #include "gfx_text.h"
@@ -1753,6 +1754,19 @@ static void bringup_strat_load(const char *dir)
     int ch = gfx_paint_canvas_height();
     uint8_t *canvas = gfx_paint_canvas_pixels();
     if (canvas) memset(canvas, 0, (size_t)cw * ch);
+
+    /* Right-panel sand backdrop (FUN_0040f5fd's three misc_cty blits, drawn
+     * before the map body): sprite 0x36 (panel body) at x=0x1de, plus 0x39 /
+     * 0x3b for the End-turn strip.  Provides the parchment the minimap +
+     * realm panel sit on (the "missing background" behind the minimap). */
+    {
+        const uint8_t *misc = engine_pl8_misc_cty();
+        if (misc) {
+            gfx_sprite_render_opaque_from_blob(misc, 0x36, 0x1de, 0x18);
+            gfx_sprite_render_opaque_from_blob(misc, 0x39, 0x1de, 0x1ae);
+            gfx_sprite_render_opaque_from_blob(misc, 0x3b, 0x1de, 0x1cc);
+        }
+    }
 
     engine_map_terrain_bind_tile_array(cells, 0x104);
     engine_map_terrain_bind_descriptors(g_overworld_map);
