@@ -338,3 +338,47 @@ feature blobs, and the **5 terrain blobs**: `terr_blob0` (`0x568208`,
 (`0x57d344`, 195136) / `terr_blob3` (`0x55409c`, ≥512K clamped) / `terr_blob4`
 (`0x56898c`, ≥512K clamped).  `globals_dump.json` adds `fb_pitch`=640.
 Diff target = `runs/capture/strat-spray1/frames/frame_00009.bmp` (clean map).
+
+### PASS-1 DRAWER-A PORTED + FRAME-VALIDATED (2026-06-01) — 90.9% pixel-exact
+
+`src/engine_map_terrain.{c,h}` ports the pass-1 cluster's frame driver
+(`FUN_0040526e`), both row iterators (`FUN_00405ae9` aligned phase-0,
+`FUN_00405c2f` half-shifted phase-3/0/4), terrain **drawer A**
+(`FUN_004063c1`, base ground) and the **sky** drawer (`FUN_0042a7f1`),
+dispatching the table-driven view-mode-0 blitters
+(`FUN_00452820`/`0045337b`/`004538f6`) replayed byte-exactly from
+`src/gen/blit_table_*.h`.  The C harness
+(`tests/terrain_render_harness.c`, `make -C tests terrain-harness`,
+driven by `tools/terrain_render_parity.py`) renders the captured frame
+and scores **209470/230400 = 90.9% pixel-exact** vs the clean retail
+frame over the 480×480 map region, with **0 OOB copies, 0 bad src
+offsets, error_count 0** — validating the whole data path (descriptor
+layout, blob select, sprite-directory `src_off` at `blob+idx*0x10+0xc`,
+camera walk, palette).  A Python prototype (`tools/proto_pass1_render.py`)
+produced the identical numbers first.
+
+**Descriptor / sprite-directory facts nailed down:** for cell value `cv`
+(raw byte offset into the descriptor table @ `0x522f90`):
+`desc[cv+2]` flag (bits `0x1c` select blob 0..4: `0x00/04/08/0c/10`;
+bit `0x20` render-mode mask; bit `0x1` first-paint dirty, elided in the
+single-frame port), `desc[cv+3]` = sprite index.  Sprite directory entry
+= `blob + idx*0x10`; the unrolled blitter needs only `src_off = i32 @
+entry+0xc`, validated `0 ≤ src_off < 0x4baf1`.  Phase→blitter:
+0→`452820`(A+B), 1→`452820`(A only, bottom phantom), 2→`452820`(B only,
+top phantom), 3→`45337b`(full, left edge), 4→`4538f6`(full, right edge).
+Empty cells (`≥0xfff0000`): low 20 bits = blob-0 sprite index → sky
+drawer; inner-iterator gate `DAT_0053e9ac!=0 || idx>6` (phantom rows
+ungated).  The captured interior frame has **0 empty cells**.
+
+**REMAINING 9% = drawer B (decorations).** `FUN_00406673` is the second
+stacked layer (trees/hills/roads on top of base ground).  It is **STUBBED**
+(cells counted via `drawb_skipped`, not drawn): 263 cells would draw.  It
+pulls in a SEPARATE, un-ported blitter family that takes the column-Y
+accumulator `DAT_0056957c` and keys on directory fields `DAT_00591568`
+(kind ∈ {2,3,4}) + `DAT_005bb478` (count, drawn only when `!=0`):
+`FUN_00455f04`/`459258`/`453e71`/`4580a9`/`456fd8` (view-mode-0 arms) — a
+second `src_off` is `_DAT_005aeb6c = src_off + 900` (v0).  **NEXT = RE +
+port drawer B's blitter family** (these are likely RLE/strip blitters, not
+fully-unrolled), then re-diff toward 100%.  After that: pass 2
+(`FUN_00405602` overlay cluster) + compose all three passes + wire
+screen-dispatch arm 0.

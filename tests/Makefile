@@ -54,6 +54,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/gfx_text_label.c \
                    ../src/gfx_sprite_render.c \
                    ../src/engine_map_render.c \
+                   ../src/engine_map_terrain.c \
                    ../src/engine_overlay_render.c \
                    ../src/engine_title_render.c \
                    ../src/engine_button.c \
@@ -166,10 +167,21 @@ HARNESS_OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o))) \
                 build/map_render_harness.o build/stubs.o
 HARNESS_OUT  := build/map_render_harness
 
-.PHONY: all run clean diff harness
+# Pass-1 base-terrain parity harness — drives engine_map_terrain with the
+# captured terrain dataset (see tools/terrain_render_parity.py).
+TERRAIN_HARNESS_OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o))) \
+                        build/terrain_render_harness.o build/stubs.o
+TERRAIN_HARNESS_OUT  := build/terrain_render_harness
+
+.PHONY: all run clean diff harness terrain-harness
 all: $(OUT) $(DIFF_OUT)
 
 harness: $(HARNESS_OUT)
+
+terrain-harness: $(TERRAIN_HARNESS_OUT)
+
+$(TERRAIN_HARNESS_OUT): $(TERRAIN_HARNESS_OBJS)
+	$(CC) $(LDFLAGS) -o $@ $(TERRAIN_HARNESS_OBJS)
 
 # ASan-built copy of the diff-lib stubs (log_line / io_read_file_at /
 # g_sim_* globals) so the standalone harness resolves the Win32-side

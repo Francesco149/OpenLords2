@@ -11,14 +11,21 @@ statements, parse the Ghidra decompile (docs/decompiled/by-address/<va>.c)
 into a `(dest_off, src_off, size)` copy table and emit a C array that a
 compact replay loop runs — byte-exact by construction.
 
-The decompile's pointer arithmetic (verified against FUN_00452820):
-  dest  `iVar2`   is a byte pointer    → `iVar2 + 0xD`         = dest byte 0xD
-  src   `puVar1`  is `undefined2*`     → element N = byte 2*N
-  copy size from the LHS cast: undefined2 → 2 bytes, undefined4 → 4 bytes
-  src forms:  *puVar1                    → byte 0
-              puVar1[N]                  → byte 2*N        (2-byte read)
-              *(undefined2 *)(puVar1 + N)→ byte 2*N        (2-byte read)
-              *(undefined4 *)(puVar1 + N)→ byte 2*N        (4-byte read)
+The decompile's pointer arithmetic — the dest var (`iVar2`, a byte pointer)
+is identical across all three blitters, but the SOURCE var differs and the
+extractor auto-detects it from the `param_3 + DAT_0058fe04` init line:
+
+  FUN_00452820:  src `puVar1 = (undefined2 *)(param_3 + DAT_0058fe04)`
+                 → element-indexed, scale 2 (index N = byte 2*N)
+  FUN_004538f6/  src `iVar1   =                param_3 + DAT_0058fe04`
+  FUN_0045337b   → plain byte pointer, scale 1 (iVar1 + N = byte N)
+
+  dest  `iVar2 + 0xD`  = dest byte 0xD (byte pointer, scale 1, always)
+  copy size from the LHS cast: undefined1→1, undefined2→2, undefined4→4
+  src forms (SRC = detected var, S = its scale):
+              *SRC                       → byte 0
+              SRC[N]                     → byte S*N
+              *(undefined[124] *)(SRC + N)→ byte S*N
 
 Phase blocks (FUN_00452820): the body is
     if (param_4 != 2) { <BLOCK A — top half>; if (param_4 == 1) return; }
@@ -42,32 +49,58 @@ ROOT = Path(__file__).resolve().parent.parent
 BYADDR = ROOT / "docs/decompiled/by-address"
 OUTDIR = ROOT / "src/gen"
 
-COPY_RE = re.compile(
-    r"\*\(undefined([24]) \*\)\(iVar2 \+ (0x[0-9a-fA-F]+|\d+)\)\s*=\s*(.+?);")
-
-
 def _num(s: str) -> int:
     return int(s, 16) if s.lower().startswith("0x") else int(s)
 
 
-def _src_byte(rhs: str) -> int | None:
-    """Resolve the source byte offset (puVar1 is undefined2* → byte = 2*index)."""
-    rhs = rhs.strip()
-    if rhs == "*puVar1":
-        return 0
-    m = re.match(r"puVar1\[(0x[0-9a-fA-F]+|\d+)\]$", rhs)
-    if m:
-        return 2 * _num(m.group(1))
-    m = re.match(r"\*\(undefined[24] \*\)\(puVar1 \+ (0x[0-9a-fA-F]+|\d+)\)$", rhs)
-    if m:
-        return 2 * _num(m.group(1))
-    return None
+def _detect_vars(lines: list[str]) -> tuple[str, str, int]:
+    """Return (dest_var, src_var, src_scale) from the function prologue.
+
+    dest is whatever is assigned `DAT_004ea1a8 + ...` (the framebuffer cursor);
+    src is whatever is assigned `param_3 + DAT_0058fe04` — with an
+    `(undefined2 *)` cast it is element-indexed (scale 2), else a byte pointer
+    (scale 1)."""
+    dest_var = src_var = None
+    src_scale = 1
+    for ln in lines:
+        m = re.match(r"\s*(\w+)\s*=\s*DAT_004ea1a8 \+", ln)
+        if m:
+            dest_var = m.group(1)
+        m = re.match(r"\s*(\w+)\s*=\s*(\([^)]*\*\)\s*)?\(?param_3 \+ DAT_0058fe04",
+                     ln)
+        if m:
+            src_var = m.group(1)
+            cast = m.group(2) or ""
+            src_scale = 2 if "undefined2" in cast else 1
+    if not dest_var or not src_var:
+        raise SystemExit(f"could not detect dest/src vars (dest={dest_var}, "
+                         f"src={src_var})")
+    return dest_var, src_var, src_scale
 
 
 def extract(va: str) -> dict:
     path = BYADDR / f"{va}.c"
     text = path.read_text(errors="replace")
     lines = text.splitlines()
+
+    dest_var, src_var, scale = _detect_vars(lines)
+    v = re.escape(src_var)
+    copy_re = re.compile(
+        r"\*\(undefined([124]) \*\)\(" + re.escape(dest_var) +
+        r" \+ (0x[0-9a-fA-F]+|\d+)\)\s*=\s*(.+?);")
+    bare_re = re.compile(r"\*" + v + r"$")
+    idx_re = re.compile(v + r"\[(0x[0-9a-fA-F]+|\d+)\]$")
+    cast_re = re.compile(r"\*\(undefined[124] \*\)\(" + v +
+                         r" \+ (0x[0-9a-fA-F]+|\d+)\)$")
+
+    def src_byte(rhs: str) -> int | None:
+        rhs = rhs.strip()
+        if bare_re.match(rhs):
+            return 0
+        m = idx_re.match(rhs) or cast_re.match(rhs)
+        if m:
+            return scale * _num(m.group(1))
+        return None
 
     # Find the phase control-flow boundaries (FUN_00452820 shape). If absent
     # (single-block blitter), everything is BLOCK A.
@@ -79,12 +112,12 @@ def extract(va: str) -> dict:
 
     block_a, block_b = [], []
     for i, ln in enumerate(lines):
-        m = COPY_RE.search(ln)
+        m = copy_re.search(ln)
         if not m:
             continue
         size = int(m.group(1))
         dest = _num(m.group(2))
-        src = _src_byte(m.group(3))
+        src = src_byte(m.group(3))
         if src is None:
             raise SystemExit(f"{va}.c:{i+1}: unparsed RHS: {m.group(3)!r}")
         entry = (dest, src, size)
@@ -115,8 +148,11 @@ def emit_header(info: dict) -> str:
            "",
            "#include <stdint.h>",
            "",
+           "#ifndef OPENLORDS2_BLIT_COPY_T_DEFINED",
+           "#define OPENLORDS2_BLIT_COPY_T_DEFINED",
            "typedef struct { uint16_t dest_off; uint16_t src_off; uint8_t size; }"
            " blit_copy_t;",
+           "#endif",
            ""]
 
     def arr(name, tbl):

@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 500,
-  "ported": 37,
-  "unported": 1910,
+  "ported": 44,
+  "unported": 1903,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 537,
-  "pct_touched": 21.9,
+  "touched": 544,
+  "pct_touched": 22.2,
   "pct_tested": 20.4,
   "bytes_total": 838629,
-  "bytes_touched": 195540,
-  "pct_bytes_touched": 23.3
+  "bytes_touched": 200769,
+  "pct_bytes_touched": 23.9
  },
  "orphan_refs": [
   "0x004148",
@@ -1041,8 +1041,11 @@
    "name": "FUN_0040526e",
    "size": 537,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_map_terrain.c",
+    "src/engine_map_terrain.h"
+   ]
   },
   {
    "va": "0x405487",
@@ -1053,6 +1056,7 @@
    "src": [
     "src/engine_map_render.c",
     "src/engine_map_render.h",
+    "src/engine_map_terrain.h",
     "src/engine_overlay_render.h"
    ]
   },
@@ -1094,16 +1098,22 @@
    "name": "FUN_00405ae9",
    "size": 326,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_map_terrain.c",
+    "src/engine_map_terrain.h"
+   ]
   },
   {
    "va": "0x405c2f",
    "name": "FUN_00405c2f",
    "size": 646,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_map_terrain.c",
+    "src/engine_map_terrain.h"
+   ]
   },
   {
    "va": "0x405eb5",
@@ -1148,8 +1158,11 @@
    "name": "FUN_004063c1",
    "size": 690,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_map_terrain.c",
+    "src/engine_map_terrain.h"
+   ]
   },
   {
    "va": "0x406673",
@@ -4058,8 +4071,11 @@
    "name": "FUN_0042a7f1",
    "size": 224,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_map_terrain.c",
+    "src/engine_map_terrain.h"
+   ]
   },
   {
    "va": "0x42a8d1",
@@ -10783,6 +10799,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine_map_terrain.c",
+    "src/engine_map_terrain.h",
     "src/gen/blit_table_452820.h"
    ]
   },
@@ -10791,16 +10809,24 @@
    "name": "FUN_0045337b",
    "size": 1403,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_map_terrain.c",
+    "src/engine_map_terrain.h",
+    "src/gen/blit_table_45337b.h"
+   ]
   },
   {
    "va": "0x4538f6",
    "name": "FUN_004538f6",
    "size": 1403,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_map_terrain.c",
+    "src/engine_map_terrain.h",
+    "src/gen/blit_table_4538f6.h"
+   ]
   },
   {
    "va": "0x453e71",
