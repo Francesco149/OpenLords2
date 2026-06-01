@@ -2566,6 +2566,19 @@ RESPOOL_OFF_IN_STRAT = 0x120      # 0x57c020 − 0x57bf00
 # tile stamps).
 FN_POPULATION       = 0x449ef3    # FUN_00449ef3 — __stdcall void()
 
+# combat casualty resolver (FUN_004aad07).  __stdcall void(); reads the two
+# combatant territory indices + difficulty/quick scalars from globals, mutates
+# the two combatant records in g_per_territory_420 (and, on annihilation with a
+# mercenary contingent, frees a slot in g_unit_table_20), and writes the winner
+# index + owner to scalar globals.
+FN_COMBAT_RESOLVE   = 0x4aad07    # FUN_004aad07 — __stdcall void()
+VA_COMBAT_ATTACKER   = 0x568210   # DAT_00568210 — attacker territory index (i32)
+VA_COMBAT_DEFENDER   = 0x568218   # DAT_00568218 — defender territory index (i32)
+VA_COMBAT_DIFFICULTY = 0x55401c   # DAT_0055401c — AI difficulty 0..4       (i32)
+VA_COMBAT_QUICK      = 0x53e8fc   # DAT_0053e8fc — quick-resolve flag       (i32)
+VA_COMBAT_WINNER     = 0x57c924   # DAT_0057c924 — winning territory index  (i32)
+VA_COMBAT_OWNER      = 0x5440cc   # DAT_005440cc — winner's owner id        (i32)
+
 REALM_RACE_RETRIES = 8
 
 
@@ -2622,6 +2635,10 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
         lib.engine_army_economy_bind_cells.argtypes = [ctypes.c_void_p]
         lib.engine_realm_advance_population.restype = None
         lib.engine_realm_advance_population.argtypes = []
+        lib.engine_combat_resolve_casualties.restype = None
+        lib.engine_combat_resolve_casualties.argtypes = [
+            ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.POINTER(CombatResult)]
     return _realm_globals_cache
 
 
@@ -3477,6 +3494,140 @@ def diff_population(retail: dict, port: dict) -> list[str]:
     return bad
 
 
+# ── combat casualty resolver (FUN_004aad07 — engine_combat_resolve_casualties) ──
+
+class CombatResult(ctypes.Structure):
+    _fields_ = [("winner", ctypes.c_int), ("winner_owner", ctypes.c_int)]
+
+
+def _build_combat_vec(attacker: int, defender: int, difficulty: int,
+                      quick: int, combatants: list[dict]) -> dict:
+    """combatants: list of {idx, owner, active, counts[7], merc_class, merc_amt,
+    merc_slot}.  Only the two combatant records are populated; everything else
+    in g_per_territory_420 stays zero (the resolver touches only those two)."""
+    terr    = bytearray(REALM_TERR_BYTES)
+    unittbl = bytearray(REALM_UNITTBL_BYTES)
+    for cb in combatants:
+        b = cb["idx"] * REALM_TERR_STRIDE
+        terr[b + 0x00] = cb.get("owner", 0) & 0xff
+        terr[b + 0x08] = cb.get("active", 0) & 0xff
+        for c in range(7):
+            struct.pack_into("<h", terr, b + 0x16c + c * 2, cb["counts"][c])
+        terr[b + 0x195] = cb.get("merc_class", 0) & 0xff
+        terr[b + 0x196] = cb.get("merc_amt", 0) & 0xff
+        terr[b + 0x197] = cb.get("merc_slot", 0) & 0xff
+        slot = cb.get("merc_slot", 0)
+        if slot:
+            struct.pack_into("<H", unittbl, slot * 0x14, 0xbeef)
+    return {"attacker": attacker, "defender": defender,
+            "difficulty": difficulty, "quick": quick,
+            "terr": bytes(terr), "unittbl": bytes(unittbl)}
+
+
+def gen_combat_resolve_vectors(n: int, rng: random.Random) -> list[dict]:
+    def cb(idx, counts, owner=0, active=0, mc=0, ma=0, ms=0):
+        return {"idx": idx, "owner": owner, "active": active, "counts": counts,
+                "merc_class": mc, "merc_amt": ma, "merc_slot": ms}
+
+    Z = [0, 0, 0, 0, 0, 0, 0]
+    edge = [
+        # blowout: attacker overwhelms (ratio→fallback 100% survivors)
+        (1, 2, 0, 0, [cb(1, [100, 0, 0, 0, 0, 0, 0], owner=4),
+                      cb(2, [1, 0, 0, 0, 0, 0, 0], owner=7)]),
+        # close fight: pyrrhic winner (107 → 10%)
+        (1, 2, 0, 0, [cb(1, [60, 0, 0, 0, 0, 0, 0]),
+                      cb(2, [55, 0, 0, 0, 0, 0, 0])]),
+        # defender wins
+        (1, 2, 0, 0, [cb(1, [1, 0, 0, 0, 0, 0, 0]),
+                      cb(2, [100, 0, 0, 0, 0, 0, 0], owner=5)]),
+        # exact tie → attacker wins, maximally pyrrhic (10%)
+        (1, 2, 0, 0, [cb(1, [50, 0, 0, 0, 0, 0, 0]),
+                      cb(2, [50, 0, 0, 0, 0, 0, 0])]),
+        # quick-resolve difficulty 4 flips a tie to the defender (×400%)
+        (1, 2, 4, 1, [cb(1, [50, 0, 0, 0, 0, 0, 0]),
+                      cb(2, [50, 0, 0, 0, 0, 0, 0])]),
+        # merc on both: winner merc scaled, loser merc contract freed
+        (1, 2, 0, 0, [cb(1, [60, 0, 0, 0, 0, 0, 0], mc=6, ma=10),
+                      cb(2, [50, 0, 0, 0, 0, 0, 0], owner=3, active=1,
+                         mc=0, ma=4, ms=5)]),
+        # both empty → strengths floor at 1, tie → attacker, 0 troops survive
+        (1, 2, 0, 0, [cb(1, list(Z)), cb(2, list(Z))]),
+        # signed owner byte (0x80 → -128) on the winner
+        (3, 7, 0, 0, [cb(3, [200, 0, 0, 0, 0, 0, 0], owner=0x80),
+                      cb(7, [1, 0, 0, 0, 0, 0, 0])]),
+    ]
+    vecs = [_build_combat_vec(*e) for e in edge]
+    while len(vecs) < n:
+        a = rng.randint(1, 150)
+        d = rng.randint(1, 150)
+        while d == a:
+            d = rng.randint(1, 150)
+        combatants = []
+        for idx in (a, d):
+            counts = [rng.choice([0, 0, rng.randint(1, 800)]) for _ in range(7)]
+            ma = rng.choice([0, 0, rng.randint(1, 200)])
+            combatants.append(cb(
+                idx, counts,
+                owner=rng.randint(0, 255),
+                active=rng.randint(0, 1),
+                mc=rng.randint(0, 6),
+                ma=ma,
+                ms=rng.randint(0, 12) if ma else 0,
+            ))
+        vecs.append(_build_combat_vec(
+            a, d, rng.randint(0, 5), rng.randint(0, 1), combatants))
+    return vecs
+
+
+def run_port_combat_resolve(lib: ctypes.CDLL, vec: dict) -> dict:
+    g = realm_port_globals(lib)
+    ctypes.memmove(g["terr"],    vec["terr"],    REALM_TERR_BYTES)
+    ctypes.memmove(g["unittbl"], vec["unittbl"], REALM_UNITTBL_BYTES)
+    out = CombatResult()
+    lib.engine_combat_resolve_casualties(
+        vec["attacker"], vec["defender"], vec["difficulty"], vec["quick"],
+        ctypes.byref(out))
+    return {"terr": list(bytes(g["terr"])), "unittbl": list(bytes(g["unittbl"])),
+            "winner": out.winner, "winner_owner": out.winner_owner}
+
+
+def combat_resolve_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_COMBAT_RESOLVE, "regions": [
+        {"va": VA_PER_TERRITORY,   "len": REALM_TERR_BYTES,    "inject": list(vec["terr"]),    "read": True},
+        {"va": VA_UNIT_TABLE,      "len": REALM_UNITTBL_BYTES, "inject": list(vec["unittbl"]), "read": True},
+        {"va": VA_COMBAT_ATTACKER, "len": 4, "inject": list(_u32le(vec["attacker"])),   "read": False},
+        {"va": VA_COMBAT_DEFENDER, "len": 4, "inject": list(_u32le(vec["defender"])),   "read": False},
+        {"va": VA_COMBAT_DIFFICULTY,"len": 4,"inject": list(_u32le(vec["difficulty"])), "read": False},
+        {"va": VA_COMBAT_QUICK,    "len": 4, "inject": list(_u32le(vec["quick"])),      "read": False},
+        {"va": VA_COMBAT_WINNER,   "len": 4, "inject": [0, 0, 0, 0], "read": True},
+        {"va": VA_COMBAT_OWNER,    "len": 4, "inject": [0, 0, 0, 0], "read": True},
+    ]}
+
+
+def _read_scalar_i32(retail: dict, va: int):
+    r = retail.get("regions", {}).get(str(va))
+    if r is None:
+        return None
+    return int.from_bytes(bytes(r), "little", signed=True)
+
+
+def diff_combat_resolve(retail: dict, port: dict) -> list[str]:
+    bad = _diff_realm_region(retail, port["terr"], VA_PER_TERRITORY,
+                             REALM_TERR_STRIDE, 151, "terr")
+    bad += _diff_realm_flat(retail, port["unittbl"], VA_UNIT_TABLE, "unittbl")
+    rw = _read_scalar_i32(retail, VA_COMBAT_WINNER)
+    if rw is None:
+        bad.append("winner:no-readback")
+    elif rw != port["winner"]:
+        bad.append(f"winner:{rw}!={port['winner']}")
+    ro = _read_scalar_i32(retail, VA_COMBAT_OWNER)
+    if ro is None:
+        bad.append("owner:no-readback")
+    elif ro != port["winner_owner"]:
+        bad.append(f"owner:{ro}!={port['winner_owner']}")
+    return bad
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -3598,6 +3749,9 @@ def run_diff(cfg_args) -> int:
     if "population" in enabled:
         test_plans.append(("population",
                            gen_population_vectors(cfg_args.vectors, rng)))
+    if "combat_resolve" in enabled:
+        test_plans.append(("combat_resolve",
+                           gen_combat_resolve_vectors(cfg_args.vectors, rng)))
     # Pre-generate the rate-gate LUT — one per run, used by all
     # sim_sub_steps vectors so a re-run with the same seed produces
     # the same LUT (and thus the same retail-side gate decisions).
@@ -3727,7 +3881,7 @@ def run_diff(cfg_args) -> int:
         shared_freeze_targets = {"sim_sub_steps", "state_hash", "tile_expand",
                                  "delayed_action", "tax_approval", "dev_spread",
                                  "realm_income", "upkeep", "season_economy",
-                                 "resource_pass", "population"}
+                                 "resource_pass", "population", "combat_resolve"}
         shared_freeze_installed = False
         if shared_freeze_targets & {n for (n, _) in test_plans}:
             fresp = script.exports_sync.install_sim_sub_steps_engine_freeze()
@@ -4436,6 +4590,44 @@ def run_diff(cfg_args) -> int:
                                   "note": "region readback elided"}
                         port = {"note": "region readback elided"}
                         vec = {"count": vec["count"], "season": vec["season"]}
+                elif fn_name == "combat_resolve":
+                    # FUN_004aad07(): strategic-map combat casualty resolver.
+                    # Inject g_per_territory_420 + g_unit_table_20 + the four
+                    # combat scalars (attacker/defender index, difficulty, quick
+                    # flag); read back both blocks + the winner/owner scalars.
+                    port = run_port_combat_resolve(lib, vec)
+                    plan = combat_resolve_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"attacker": vec["attacker"],
+                                                 "defender": vec["defender"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_combat_resolve(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"attacker": vec["attacker"],
+                               "defender": vec["defender"],
+                               "difficulty": vec["difficulty"],
+                               "quick": vec["quick"]}
                 else:
                     continue
                 if bad:
@@ -4561,7 +4753,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep,season_economy,resource_pass,population",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep,season_economy,resource_pass,population,combat_resolve",
                     help="comma-separated subset to test "
                          "(default: rng_step,fps_step,anim_cycle,frame_delta,"
                          "phase_ticks,input_state,sim_sub_steps,state_hash,"
