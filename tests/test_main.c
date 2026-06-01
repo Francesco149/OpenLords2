@@ -1550,6 +1550,9 @@ struct test_case {
     X(dispatch_clears_scene_flag_b_after_title) \
     X(dispatch_other_screen_routes_to_hook) \
     X(dispatch_other_screen_still_clears_flag_b) \
+    X(dispatch_strat_screen_routes_to_strat_hook) \
+    X(dispatch_strat_screen_default_stub_records_redraw) \
+    X(dispatch_strat_screen_still_clears_flag_b) \
     \
     X(panel_border_3x3_corner_and_edge_indices) \
     X(panel_border_skips_interior) \

@@ -595,13 +595,28 @@ static engine_title_bg_reload_fn g_title_bg_reload_fn = title_bg_reload_stub;
 static void engine_tick_title_render_step(void)
 {
     if (g_sim_current_screen != 0x1f) {
-        /* Other screens: generic demand-redraw seam.  The renderers are
-         * stubs (engine_screen_dispatch's other-fn hook), so no canvas
-         * lock is needed yet. */
         if (g_demand_redraw != 0) {
-            engine_screen_dispatch(g_sim_current_screen,
-                                   engine_title_render_page(),
-                                   g_demand_redraw);
+            if (g_sim_current_screen == 0) {
+                /* Strategic map (FUN_0040f5fd): the ported arm composes
+                 * into the locked back buffer like the title arm — present
+                 * runs in the tick's gfx_tick_present tail.  No-op until
+                 * the strat data path has populated the render arrays
+                 * (engine_screen_strat_render gates on
+                 * engine_pl8_data_ready), so this is dormant in the live
+                 * loop until that path is wired. */
+                if (gfx_lock_canvas()) {
+                    engine_screen_dispatch(0, engine_title_render_page(),
+                                           g_demand_redraw);
+                    gfx_unlock_canvas();
+                }
+            } else {
+                /* Other screens: generic demand-redraw seam.  The
+                 * renderers are stubs (the other-fn hook), so no canvas
+                 * lock is needed yet. */
+                engine_screen_dispatch(g_sim_current_screen,
+                                       engine_title_render_page(),
+                                       g_demand_redraw);
+            }
             g_demand_redraw = 0;
         }
         return;

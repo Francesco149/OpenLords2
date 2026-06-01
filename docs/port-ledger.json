@@ -5,14 +5,14 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 535,
-  "ported": 46,
-  "unported": 1866,
+  "ported": 48,
+  "unported": 1864,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 581,
-  "pct_touched": 23.7,
+  "touched": 583,
+  "pct_touched": 23.8,
   "pct_tested": 21.9,
   "bytes_total": 838629,
-  "bytes_touched": 237064,
+  "bytes_touched": 237123,
   "pct_bytes_touched": 28.3
  },
  "orphan_refs": [
@@ -1035,7 +1035,9 @@
    "status": "tested",
    "src": [
     "src/engine_map_scene.c",
-    "src/engine_map_scene.h"
+    "src/engine_map_scene.h",
+    "src/engine_screen_strat.c",
+    "src/engine_screen_strat.h"
    ]
   },
   {
@@ -1531,6 +1533,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_screen_strat.c",
+    "src/engine_screen_strat.h",
     "src/gfx_glyph.c",
     "src/gfx_glyph.h",
     "src/gfx_sprite.c",
@@ -2164,6 +2168,7 @@
     "src/engine.c",
     "src/engine_screen_dispatch.c",
     "src/engine_screen_dispatch.h",
+    "src/engine_screen_strat.h",
     "src/engine_title_render.h"
    ]
   },
@@ -2174,11 +2179,15 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_hud_panel.h",
     "src/engine_map_scene.h",
     "src/engine_minimap.h",
     "src/engine_pl8.h",
     "src/engine_screen_dispatch.c",
+    "src/engine_screen_dispatch.h",
+    "src/engine_screen_strat.c",
+    "src/engine_screen_strat.h",
     "src/main.c"
    ]
   },
@@ -2191,7 +2200,8 @@
    "src": [
     "src/engine_hud_panel.c",
     "src/engine_hud_panel.h",
-    "src/main.c"
+    "src/engine_screen_strat.c",
+    "src/engine_screen_strat.h"
    ]
   },
   {
@@ -2304,6 +2314,8 @@
    "src": [
     "src/engine_minimap.c",
     "src/engine_minimap.h",
+    "src/engine_screen_strat.c",
+    "src/engine_screen_strat.h",
     "src/main.c"
    ]
   },
@@ -2944,6 +2956,8 @@
    "src": [
     "src/engine_hud_menubar.c",
     "src/engine_hud_menubar.h",
+    "src/engine_screen_strat.c",
+    "src/engine_screen_strat.h",
     "src/main.c"
    ]
   },
@@ -2980,7 +2994,8 @@
    "src": [
     "src/engine_hud_panel.c",
     "src/engine_hud_panel.h",
-    "src/main.c"
+    "src/engine_screen_strat.c",
+    "src/engine_screen_strat.h"
    ]
   },
   {
@@ -10691,6 +10706,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_screen_strat.h",
     "src/gfx.c",
     "src/gfx.h",
     "src/main.c"
@@ -15196,8 +15212,7 @@
    "status": "tested",
    "src": [
     "src/engine_map_init.c",
-    "src/engine_map_init.h",
-    "src/main.c"
+    "src/engine_map_init.h"
    ]
   },
   {
@@ -17443,6 +17458,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine_screen_strat.h",
     "src/gfx.c",
     "src/gfx.h"
    ]
@@ -17520,6 +17536,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine_screen_strat.h",
     "src/gfx.c"
    ]
   },
@@ -17589,16 +17606,21 @@
    "name": "FUN_004b1867",
    "size": 48,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_screen_strat.c",
+    "src/engine_screen_strat.h"
+   ]
   },
   {
    "va": "0x4b1897",
    "name": "FUN_004b1897",
    "size": 11,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_screen_strat.h"
+   ]
   },
   {
    "va": "0x4b18a2",

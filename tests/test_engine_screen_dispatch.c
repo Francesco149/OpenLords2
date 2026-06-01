@@ -16,6 +16,12 @@ static void other_capture(int state, int redraw)
     g_other_state = state; g_other_redraw = redraw; g_other_calls++;
 }
 
+static int g_strat_redraw, g_strat_calls;
+static void strat_capture(int redraw)
+{
+    g_strat_redraw = redraw; g_strat_calls++;
+}
+
 static void disp_reset(void)
 {
     engine_screen_dispatch_reset();
@@ -32,8 +38,10 @@ static void disp_reset(void)
     engine_title_render_bind_background_fn(0);
     engine_title_render_bind_page_fn(0);
     engine_screen_dispatch_bind_other_fn(0);
+    engine_screen_dispatch_bind_strat_fn(0);
 
     g_other_state = 0; g_other_redraw = 0; g_other_calls = 0;
+    g_strat_redraw = 0; g_strat_calls = 0;
 }
 
 /* Title screen routes to the scene; we use a still-unported page (3) so
@@ -84,6 +92,44 @@ int test_dispatch_other_screen_still_clears_flag_b(void)
     /* Pre-set flag_b to confirm the unconditional tail clear. */
     engine_title_render_set_scene_flag_b(1);
     engine_screen_dispatch(0x10, 1, 0);
+    T_ASSERT_EQ_I(engine_title_render_scene_flag_b(), 0);
+    return 0;
+}
+
+/* Screen-state 0 (the in-game strategic map, FUN_0040f5fd) routes to its
+ * dedicated strat hook with the redraw-mode arg — NOT the generic
+ * other-screen hook, and not the title scene. */
+int test_dispatch_strat_screen_routes_to_strat_hook(void)
+{
+    disp_reset();
+    engine_screen_dispatch_bind_other_fn(other_capture);
+    engine_screen_dispatch_bind_strat_fn(strat_capture);
+    engine_screen_dispatch(/*screen_state=*/0, /*page=*/1, /*redraw=*/2);
+
+    /* Strat hook got the redraw-mode; the other hook + title scene did NOT run. */
+    T_ASSERT_EQ_I(g_strat_calls, 1);
+    T_ASSERT_EQ_I(g_strat_redraw, 2);
+    T_ASSERT_EQ_I(g_other_calls, 0);
+    T_ASSERT_EQ_I(engine_title_render_background_call_count(), 0);
+    return 0;
+}
+
+/* With the default (recording) strat stub bound, screen-0 dispatch updates
+ * the last-strat-redraw instrumentation. */
+int test_dispatch_strat_screen_default_stub_records_redraw(void)
+{
+    disp_reset();                          /* binds the default strat stub */
+    engine_screen_dispatch(/*screen_state=*/0, /*page=*/0, /*redraw=*/3);
+    T_ASSERT_EQ_I(engine_screen_dispatch_last_strat_redraw(), 3);
+    return 0;
+}
+
+/* The strat arm also runs the dispatcher's unconditional flag_b tail clear. */
+int test_dispatch_strat_screen_still_clears_flag_b(void)
+{
+    disp_reset();
+    engine_title_render_set_scene_flag_b(1);
+    engine_screen_dispatch(0, 1, 1);
     T_ASSERT_EQ_I(engine_title_render_scene_flag_b(), 0);
     return 0;
 }

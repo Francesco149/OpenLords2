@@ -15,6 +15,63 @@ The three first functions iterate the 2-D map array and call the
 fourth per cell.  They are mechanical column-walkers; the fourth is
 where each territory's actual sprite gets staged + dispatched.
 
+## SCREEN-DISPATCH ARM 0 WIRED — `FUN_0040f5fd` PORTED (2026-06-02, `src/engine_screen_strat.c`)
+
+The strategic-map screen-id-0 render arm (`FUN_0040f5fd`, the
+`DAT_004eac50 == '\0'` case of the dispatcher `FUN_0040f1a0`) is now a
+faithful standalone port, `engine_screen_strat_render(redraw_mode)`,
+factored out of the `--strat-load` bring-up so the SAME composition feeds
+both the bring-up seat and the live screen-dispatch.  It composes the
+already-byte-exact leaves in retail draw order:
+
+| addr        | leaf                                | port step                          |
+|-------------|-------------------------------------|------------------------------------|
+| `0x4b1867`  | clear back buffer                   | `memset(canvas, 0, cw*ch)`         |
+| `0x40a567`×3| right-panel sand 0x36/0x39/0x3b     | `strat_draw_panel_sand`            |
+| `0x4050c0`  | map body                            | `strat_draw_map_body` → engine_map_scene |
+| `0x419c78`  | menu bar + realm-status tail        | `strat_draw_menu_bar` → engine_hud_menubar |
+| `0x40f7d3`  | territory-info panel                | `strat_draw_territory_panel` → engine_hud_panel |
+| `0x41a734`  | End-turn strip                      | (same)                             |
+| `0x410aa9`  | political minimap                   | engine_minimap_render              |
+
+**Self-contained:** every input is gathered from the engine's own getters
+/ save-schema globals (engine_map_init_* camera, engine_pl8_* banks,
+g_overworld_map / g_per_territory_420 / g_per_army_768 / g_player_strategic_352,
+the s_slot_* scalars), so the only precondition is that the data path has
+run (save loaded, banks loaded, arrays built+finalised, minimap grids
+loaded).  The CALLER owns the DDraw lock + present, exactly like the title
+arm; `FUN_0040f5fd`'s own present tail (`452160`/`4b0ab5`) maps to the
+loop's `gfx_tick_present`, and its full-redraw prep (`4b1897`/`4b11ce`)
+to the gfx lock path.  Gated on `engine_pl8_data_ready()` (retail
+`DAT_0053f050 == 1`) so it is a safe no-op until data exists.
+
+**Dispatch wiring.** `engine_screen_dispatch` grows an explicit arm for
+screen-state 0 routing to a bound hook (`engine_screen_dispatch_bind_strat_fn`),
+mirroring the existing other-screen hook.  The hook keeps the Win32 gfx
+layer out of the host-test link (only `engine_screen_dispatch.c` is in the
+test build); the drop-in binds it to `engine_screen_strat_render` after
+`gfx_init`.  The live tick (`engine_tick_title_render_step`) now locks the
+canvas around the screen-0 dispatch like it does for the title, so once
+the live load/new-game path populates the globals the real game loop draws
+the map natively.  Three host tests cover the arm-0 routing.
+
+**Validation (deterministic, no regression):** the refactored
+`--strat-load` render is **byte-IDENTICAL** to the pre-refactor output
+(307200/307200 bytes), `tools/panel_parity.py` scores the territory panel
+44388/44388 = 100.00% + End-turn 3240/3240 = 100.00%, and
+`tools/minimap_parity.py` scores the minimap box 16384/16384 = 100.00%,
+all vs `runs/capture/load_clean_dump`.  1768 host tests green.
+
+**REMAINING (the prerequisite, verification-gated):** the LIVE
+load/new-game path must call the map-setup orchestrator `FUN_004976a1`
+(save_load → build_cells → camera → autotile/randomise/roster → banks →
+`FUN_0040f5fd`) to populate the globals + set `DAT_0053f050 = 1` and
+`g_sim_current_screen = 0`.  Today only the `--strat-load` bring-up does
+that setup; the live load pump (`0x4ad9f0`) is still deferred.  Until that
+is wired the dispatch arm is dormant in the live loop (data-ready gate
+false).  Wiring `FUN_004976a1` into the live load pump is the next step
+and needs the user's eyes on the live drop-in.
+
 ## RIGHT-PANEL MINIMAP — BYTE-EXACT (2026-06-01, `src/engine_minimap.c`)
 
 The political overview at the top of the right HUD panel.  Ported the

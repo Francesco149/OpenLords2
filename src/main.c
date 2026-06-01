@@ -73,6 +73,8 @@
 #include "engine_hud_panel.h"
 #include "engine_overlay_render.h"
 #include "engine_pl8.h"
+#include "engine_screen_dispatch.h"
+#include "engine_screen_strat.h"
 #include "engine_title_render.h"
 #include "engine_menu_input.h"
 #include "text_input.h"
@@ -343,6 +345,12 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
     if (g_gfx_init) {
         if (gfx_init(g_hwnd, g_fullscreen)) {
             g_gfx_active = 1;
+            /* Route screen-dispatch arm 0 (the in-game strategic map,
+             * FUN_0040f5fd) to the ported renderer.  Dormant until the
+             * strat data path has run (engine_screen_strat_render gates on
+             * engine_pl8_data_ready); the bring-up seats below set that up
+             * explicitly, the live load/new-game path will once wired. */
+            engine_screen_dispatch_bind_strat_fn(engine_screen_strat_render);
             /* Bring-up: render the page-1 main menu into the back
              * buffer before the first present, so frame 0 shows the
              * menu rather than the background-erase fill.  Exercises the
@@ -1730,23 +1738,22 @@ static void bringup_strat_load(const char *dir)
     all_ok &= strat_check_dump(dir, "army_records.bin", g_per_army_768, 13056);
     log_line("strat-load: native-vs-dump check %s", all_ok ? "PASSED" : "FAILED");
 
-    /* 5. Render — same cluster wiring as --strat-map but bound to the native
-     * arrays.  Camera: the view-mode-0 scalars come from the ported
-     * FUN_00451fcc; the load leaves the scroll at the engine default
-     * (FUN_00498270 sets col 20 / row 74), which is where retail's post-load
-     * map frame sits. */
-    const int CAM_X0 = engine_map_init_cam_x0();
-    const int CAM_Y0 = engine_map_init_cam_y0();
-    const int COL_START = engine_map_init_col_start();   /* 20 (load default) */
-    const int ROW_START = engine_map_init_row_start();   /* 74 (load default) */
-    const int COL_COUNT = engine_map_init_col_count();
-    const int ROW_COUNT = engine_map_init_row_count();
-    const int X_STEP = engine_map_init_x_step();
-    const int Y_STEP = engine_map_init_y_step();
-    const int X_HALF = engine_map_init_x_half_step();
-    const int Y_VIEWPORT = engine_map_init_y_viewport();
-    enum { VIEW = 0, RENDER = 0, ROT = 0 };
+    /* 5. Load the right-panel minimap grids (FUN_0046a037 — part of the
+     * load setup FUN_004976a1, run once before the first frame, not per
+     * render).  engine_screen_strat_render's FUN_00410aa9 step then plots
+     * over them.  The coloured plot is validated byte-exact (8316/8316
+     * drawn px) against load_clean_dump (tools/minimap_parity.py). */
+    if (!engine_minimap_load_grids(".", map_id))
+        log_line("strat-load: minimap grid load failed (map_id=%d)", map_id);
 
+    /* 6. Render the strategic-map frame via the ported screen-id-0 arm
+     * (engine_screen_strat_render = FUN_0040f5fd).  This is the SAME
+     * composition the live screen-dispatch arm 0 runs — the bring-up just
+     * supplies the data path (save + banks + arrays + grids) and owns the
+     * canvas lock + present, exactly as the live tick loop does.  Camera /
+     * view-mode-0 scalars come from the ported FUN_00451fcc; the load
+     * leaves the scroll at the engine default (col 20 / row 74), where
+     * retail's post-load map frame sits. */
     if (!gfx_lock_canvas()) {
         log_line("strat-load: gfx_lock_canvas failed");
         return;
@@ -1754,80 +1761,8 @@ static void bringup_strat_load(const char *dir)
     int cw = gfx_paint_canvas_width();
     int ch = gfx_paint_canvas_height();
     uint8_t *canvas = gfx_paint_canvas_pixels();
-    if (canvas) memset(canvas, 0, (size_t)cw * ch);
 
-    /* Right-panel sand backdrop (FUN_0040f5fd's three misc_cty blits, drawn
-     * before the map body): sprite 0x36 (panel body) at x=0x1de, plus 0x39 /
-     * 0x3b for the End-turn strip.  Provides the parchment the minimap +
-     * realm panel sit on (the "missing background" behind the minimap). */
-    {
-        const uint8_t *misc = engine_pl8_misc_cty();
-        if (misc) {
-            gfx_sprite_render_opaque_from_blob(misc, 0x36, 0x1de, 0x18);
-            gfx_sprite_render_opaque_from_blob(misc, 0x39, 0x1de, 0x1ae);
-            gfx_sprite_render_opaque_from_blob(misc, 0x3b, 0x1de, 0x1cc);
-        }
-    }
-
-    engine_map_terrain_bind_tile_array(cells, 0x104);
-    engine_map_terrain_bind_descriptors(g_overworld_map);
-    engine_map_terrain_bind_blobs(engine_pl8_bank(0), engine_pl8_bank(1),
-                                  engine_pl8_bank(2), engine_pl8_bank(3),
-                                  engine_pl8_bank(4));
-    engine_map_terrain_set_blob_lengths((int)engine_pl8_bank_size(0),
-                                        (int)engine_pl8_bank_size(1),
-                                        (int)engine_pl8_bank_size(2),
-                                        (int)engine_pl8_bank_size(3),
-                                        (int)engine_pl8_bank_size(4));
-    engine_map_terrain_bind_camera(CAM_X0, CAM_Y0, COL_START, ROW_START,
-                                   COL_COUNT, ROW_COUNT, X_STEP, Y_STEP, X_HALF);
-    engine_map_terrain_set_view_mode(VIEW);
-    engine_map_terrain_set_render_mode(RENDER);
-    engine_map_terrain_set_sky_gate_flag(0);
-    engine_map_terrain_set_error_count(0);
-    engine_map_terrain_reset_stats();
-
-    static engine_dirty_rect_state_t dirty;
-    dirty.dirty_mark = 0;
-    dirty.dirty_xmin = cw - 1; dirty.dirty_xmax = 0;
-    dirty.dirty_ymin = ch - 1; dirty.dirty_ymax = 0;
-    dirty.below_status_redraw = 0;
-    gfx_dispatch_set_alt_clip(0, 0, 0);
-
-    engine_overlay_render_bind_tile_array(cells, 0x104);
-    engine_overlay_render_bind_tile_descriptors(g_overworld_map);
-    engine_overlay_render_bind_overlay_blob(engine_pl8_bank(7));
-    engine_overlay_render_bind_territory_records(g_per_territory_420);
-    engine_overlay_render_bind_army_records(g_per_army_768);
-    engine_overlay_render_bind_camera(CAM_X0, CAM_Y0, COL_START, ROW_START,
-                                      COL_COUNT, ROW_COUNT, X_STEP, Y_STEP, X_HALF);
-    engine_overlay_render_bind_canvas(canvas, cw, ch);
-    engine_overlay_render_set_dirty_state(&dirty);
-    engine_overlay_render_set_view_mode(VIEW);
-    engine_overlay_render_set_render_mode(RENDER);
-    engine_overlay_render_set_animation_tick(0);
-    engine_overlay_render_set_active_territory(0);
-    engine_overlay_render_set_dev_flags(0, 0);
-    engine_overlay_render_set_error_count(0);
-    engine_overlay_render_reset_call_counts();
-
-    engine_map_render_set_dirty_state(&dirty);
-    engine_map_render_bind_tile_array(cells, 0x104);
-    engine_map_render_bind_tile_descriptors(g_overworld_map);
-    engine_map_render_bind_territory_records(g_per_territory_420);
-    engine_map_render_bind_blobs(engine_pl8_bank(5), engine_pl8_bank(6),
-                                 engine_pl8_bank(7));
-    engine_map_render_bind_camera(CAM_X0, CAM_Y0, COL_START, ROW_START,
-                                  COL_COUNT, ROW_COUNT, X_STEP, Y_STEP, X_HALF);
-    engine_map_render_set_view_mode(VIEW);
-    engine_map_render_set_render_mode(RENDER);
-    engine_map_render_set_rotation_offset(ROT);
-    engine_map_render_set_y_viewport_offset(Y_VIEWPORT);
-    engine_map_render_set_error_count(0);
-    engine_map_render_reset_call_count();
-
-    engine_map_scene_set_anim_counters(0, 0);
-    engine_map_scene_render_body();
+    engine_screen_strat_render(1);
 
     log_line("strat-load: rendered body — drawA=%d drawB=%d sky=%d "
              "army=%d feat=%d (oob=%d err=%d)",
@@ -1838,108 +1773,17 @@ static void bringup_strat_load(const char *dir)
              engine_map_render_call_count(),
              engine_map_terrain_oob_copies(),
              engine_map_terrain_error_count());
-
-    /* Menu-bar chrome + the data-dependent realm-status tail (flags / year
-     * / season / gold).  The status values come from the natively-loaded
-     * save (g_player_strategic_352 + the season/year/realm slot globals) —
-     * the load path now populates exactly the state FUN_00419c78 reads. */
     {
-        const uint8_t *chrome = gfx_load_chrome_sheet();
-        const uint8_t *font   = gfx_load_menu_font();
-        size_t loc_size = 0;
-        const uint8_t *locblob = config_localization_data(&loc_size);
-        if (chrome && font && locblob) {
-            engine_set_current_screen(0);
-            gfx_dispatch_set_alt_clip(0, 0, 0);
-            localization_state_t loc;
-            loc.blob = (unsigned char *)locblob;
-            loc.walker_offset = 0;
-            int16_t menu_tbl[24];
-            engine_hud_menubar_render_chrome(
-                chrome, font, gfx_glyph_render_map(), gfx_glyph_measure_map(),
-                &loc, engine_hud_menubar_default_table(menu_tbl));
-
-            engine_hud_menubar_status_t status;
-            status.realm_block   = g_player_strategic_352;
-            status.current_realm = (int)s_slot_0057c8cc;
-            status.hud_gate      = (int)s_slot_0057c8fc;
-            status.year          = (int)s_slot_00553edc;
-            status.season        = (int)s_slot_0057c934;
-            int gold = (int)( g_player_strategic_352[status.current_realm * 0x160 + 0x118]
-                            | g_player_strategic_352[status.current_realm * 0x160 + 0x119] << 8
-                            | g_player_strategic_352[status.current_realm * 0x160 + 0x11a] << 16
-                            | g_player_strategic_352[status.current_realm * 0x160 + 0x11b] << 24);
-            log_line("strat-load: status — realm=%d gate=%d year=%d season=%d gold=%d",
-                     status.current_realm, status.hud_gate, status.year,
-                     status.season, gold);
-            engine_hud_menubar_render_status(&status, engine_pl8_misc_cty(),
-                                             font, gfx_glyph_render_map(), &loc);
-        }
-    }
-
-    /* Right-panel minimap (FUN_00410aa9 via the screen-id-0 arm): the
-     * political overview at the top of the HUD panel.  Loads the two
-     * 128x128 grids from Map0{N}.pl8 (FUN_0046a037) then plots the per-
-     * territory owner colours over the natively-loaded records.  The
-     * coloured plot is validated byte-exact (8316/8316 drawn px) against
-     * load_clean_dump — see tools/minimap_parity.py.  The sandy panel
-     * backdrop behind it is the still-unported FUN_0040f5fd panel sprite
-     * (0x36), so transparent (index-0) minimap cells show black here. */
-    if (engine_minimap_load_grids(".", map_id)) {
-        engine_minimap_render(engine_pl8_misc_cty(), 0x1e0, 0x19);
-        log_line("strat-load: rendered minimap (map_id=%d cur_terr=%d realm=%d)",
-                 map_id, (int)s_slot_0057c93c, (int)s_slot_0057c8cc);
-    } else {
-        log_line("strat-load: minimap grid load failed (map_id=%d)", map_id);
-    }
-
-    /* Right-panel territory-info panel (FUN_0040f7d3(1) via the
-     * screen-id-0 arm): the selected territory's name / population /
-     * tax / ration / resources, below the minimap.  Reads the loaded
-     * per-territory record (g_per_army_768) + realm block; validated
-     * byte-exact (44388/44388 drawn px) against load_clean_dump — see
-     * tools/panel_parity.py / test_hud_panel_render_owned. */
-    {
-        const uint8_t *font_name = gfx_load_panel_name_font();
-        const uint8_t *font_res  = gfx_load_panel_resource_font();
-        const uint8_t *font_menu = gfx_load_menu_font();
-        size_t loc_size = 0;
-        const uint8_t *locblob = config_localization_data(&loc_size);
-        if (font_name && font_res && font_menu && locblob) {
-            gfx_dispatch_set_alt_clip(0, 0, 0);
-            gfx_dispatch_set_default_font(font_menu);  /* menu-font kerning gate */
-            localization_state_t loc;
-            loc.blob = (unsigned char *)locblob;
-            loc.walker_offset = 0;
-
-            engine_hud_panel_state_t pst;
-            pst.army_block       = g_per_army_768;
-            pst.realm_block      = g_player_strategic_352;
-            pst.realm_names      = NULL;       /* not-owned branch only (unbound) */
-            pst.current_territory = (int)s_slot_0057c93c;
-            pst.current_realm     = (int)s_slot_0057c8cc;
-            pst.map_id            = map_id;
-
-            engine_hud_panel_render(&pst, engine_pl8_misc_cty(),
-                                    font_name, font_res, font_menu,
-                                    gfx_glyph_render_map(), gfx_glyph_measure_map(),
-                                    &loc);
-            log_line("strat-load: rendered territory panel (terr=%d owner=%d realm=%d)",
-                     (int)s_slot_0057c93c,
-                     g_per_army_768[(int)s_slot_0057c93c * 0x300 + 5],
-                     (int)s_slot_0057c8cc);
-
-            /* End-turn button strip (FUN_0041a734(1), drawn right after the
-             * panel in the screen-id-0 arm): the "End turn" label over the
-             * bottom parchment strip. */
-            engine_hud_panel_render_endturn(engine_pl8_misc_cty(),
-                                            font_name, gfx_glyph_render_map(),
-                                            gfx_glyph_measure_map(), &loc,
-                                            g_player_strategic_352,
-                                            (int)s_slot_0057c8cc);
-        } else {
-            log_line("strat-load: panel fonts/loc unavailable — panel skipped");
-        }
+        int realm = (int)s_slot_0057c8cc;
+        int gold = (int)( g_player_strategic_352[realm * 0x160 + 0x118]
+                        | g_player_strategic_352[realm * 0x160 + 0x119] << 8
+                        | g_player_strategic_352[realm * 0x160 + 0x11a] << 16
+                        | g_player_strategic_352[realm * 0x160 + 0x11b] << 24);
+        log_line("strat-load: status — realm=%d year=%d season=%d gold=%d; "
+                 "minimap cur_terr=%d; panel terr=%d owner=%d",
+                 realm, (int)s_slot_00553edc, (int)s_slot_0057c934, gold,
+                 (int)s_slot_0057c93c, (int)s_slot_0057c93c,
+                 g_per_army_768[(int)s_slot_0057c93c * 0x300 + 5]);
     }
 
     if (canvas) {
