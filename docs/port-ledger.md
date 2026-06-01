@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **524** (21.4%) — tested 488, ported 36
-- code bytes touched: **22.2%** (185,846 / 838,629 B)
-- unported: **1923**
+- touched: **528** (21.6%) — tested 492, ported 36
+- code bytes touched: **22.3%** (186,904 / 838,629 B)
+- unported: **1919**
 - orphan refs (in src/, not in function table): 4
 
-## tested (488) — ported + host unit suite
+## tested (492) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -95,7 +95,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404a46 | FUN_00404a46 | 230 | engine.c, engine.h, engine_menu_input.c (+2) |
 | 0x404b2c | FUN_00404b2c | 109 | engine.h, engine_rng.c, engine_territory.c |
 | 0x404b99 | FUN_00404b99 | 466 | engine.c, engine.h, engine_rng.c |
-| 0x404d6b | FUN_00404d6b | 43 | engine_input.c, engine_math.c, engine_math.h (+2) |
+| 0x404d6b | FUN_00404d6b | 43 | engine_army_ai.c, engine_input.c, engine_math.c (+3) |
 | 0x404d96 | FUN_00404d96 | 43 | engine_math.h |
 | 0x404dc1 | FUN_00404dc1 | 66 | engine_input.c, engine_math.h, engine_title_render.c |
 | 0x404e03 | FUN_00404e03 | 72 | engine_army_economy.c, engine_math.h |
@@ -405,7 +405,11 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a1e6c | FUN_004a1e6c | 117 | engine_roster.c, engine_roster.h, game_init.c |
 | 0x4a2584 | FUN_004a2584 | 157 | game_init.c, game_init.h |
 | 0x4a4052 | FUN_004a4052 | 657 | engine_army_ai.c |
-| 0x4a4782 | FUN_004a4782 | 701 | engine_army_economy.c, engine_army_economy.h |
+| 0x4a4694 | FUN_004a4694 | 238 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a4782 | FUN_004a4782 | 701 | engine_army_ai.c, engine_army_ai.h, engine_army_economy.c (+1) |
+| 0x4a4a3f | FUN_004a4a3f | 211 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a4b12 | FUN_004a4b12 | 298 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a4c41 | FUN_004a4c41 | 311 | engine_army_ai.c, engine_army_ai.h |
 | 0x4aa039 | FUN_004aa039 | 328 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4aba5a | FUN_004aba5a | 220 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4ac6fe | FUN_004ac6fe | 245 | engine_realm_upkeep.c, engine_realm_upkeep.h |

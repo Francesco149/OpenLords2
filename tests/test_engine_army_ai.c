@@ -14,6 +14,7 @@
 #include "engine_army_economy.h"   /* NULL the army-record bind to isolate the re-plan tail */
 #include "engine_territory.h"      /* NULL the territory binds too */
 #include "save.h"
+#include "save_schema_globals.h"   /* s_slot_005532a0 price table, 0053f260 mode */
 
 #define AREC(key)   (&g_per_army_768[(key) * 0x300])
 #define PREC(slot)  (&g_player_strategic_352[(slot) * 0x160])
@@ -250,5 +251,170 @@ int test_army_ai_trade_zero_noop(void)
 
     T_ASSERT_EQ_I(AI32(s, 0x130), 7);
     T_ASSERT_EQ_I(AI32(s, 0x118), 100);
+    return 0;
+}
+
+/* ── Order helpers (FUN_004a4a3f / 4b12 / 4c41) ─────────────────────
+ * Set the slot-8 base price to 4 and zero the territory price-adjustment so the
+ * unit (buy) price floors to base+1 = 5 and the sell price is the base 4.  The
+ * executor's re-plan tail stays a no-op (trade_setup NULLs its records). */
+
+static void order_setup(void)
+{
+    trade_setup();
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);  /* adjpct 0 → adj floor 1 */
+    *(int32_t *)&s_slot_005532a0[8 * 0x10] = 4;                  /* slot-8 base price */
+    uint8_t *a = AREC(4);
+    a[0x1a4] = 1;                                                /* trade gate open */
+    a[0x005] = 2;                                                /* owner = player 2 */
+    a[0x1a5] = 0;                                                /* race idx 0 */
+}
+
+/* sell_order: dump 3 units of slot 8 at the base price (4) → +12 cash; no gate
+ * on stock beyond what the executor checks (owner has 10 in stock). */
+int test_army_ai_sell_order(void)
+{
+    order_setup();
+    uint8_t *s = PREC(2);
+    AI32(s, 0x118) = 100;
+    AI32(s, 0x130) = 10;
+
+    engine_army_ai_sell_order(4, 3, 8);
+
+    T_ASSERT_EQ_I(AI32(s, 0x130), 7);    /* 10 - 3 */
+    T_ASSERT_EQ_I(AI32(s, 0x118), 112);  /* 100 + 3*4 */
+    return 0;
+}
+
+/* buy_order: unit price 5, buy 3 → cost 15 affordable from 100. */
+int test_army_ai_buy_order_affordable(void)
+{
+    order_setup();
+    uint8_t *s = PREC(2);
+    AI32(s, 0x118) = 100;
+    AI32(s, 0x130) = 0;
+
+    engine_army_ai_buy_order(4, 3, 8);
+
+    T_ASSERT_EQ_I(AI32(s, 0x130), 3);
+    T_ASSERT_EQ_I(AI32(s, 0x118), 85);   /* 100 - 15 */
+    return 0;
+}
+
+/* buy_order: order unaffordable up front → nothing happens (no partial fill). */
+int test_army_ai_buy_order_unaffordable_skips(void)
+{
+    order_setup();
+    uint8_t *s = PREC(2);
+    AI32(s, 0x118) = 10;                 /* < 15 */
+    AI32(s, 0x130) = 0;
+
+    engine_army_ai_buy_order(4, 3, 8);
+
+    T_ASSERT_EQ_I(AI32(s, 0x130), 0);
+    T_ASSERT_EQ_I(AI32(s, 0x118), 10);
+    return 0;
+}
+
+/* buy_order_scaled: 3 @ 5 = 15 > 12 → halve to 1 @ 5 = 5 <= 12 → buy 1. */
+int test_army_ai_buy_order_scaled_halves(void)
+{
+    order_setup();
+    uint8_t *s = PREC(2);
+    AI32(s, 0x118) = 12;
+    AI32(s, 0x130) = 0;
+
+    engine_army_ai_buy_order_scaled(4, 3, 8);
+
+    T_ASSERT_EQ_I(AI32(s, 0x130), 1);    /* bought 1 */
+    T_ASSERT_EQ_I(AI32(s, 0x118), 7);    /* 12 - 5 */
+    return 0;
+}
+
+/* gate: a closed trade gate (+0x1a4 == 0) makes all order helpers no-ops. */
+int test_army_ai_orders_gated(void)
+{
+    order_setup();
+    uint8_t *s = PREC(2);
+    AI32(s, 0x118) = 100;
+    AI32(s, 0x130) = 10;
+    AREC(4)[0x1a4] = 0;                  /* gate closed */
+
+    engine_army_ai_buy_order(4, 3, 8);
+    engine_army_ai_sell_order(4, 3, 8);
+    engine_army_ai_buy_order_scaled(4, 3, 8);
+
+    T_ASSERT_EQ_I(AI32(s, 0x130), 10);   /* untouched */
+    T_ASSERT_EQ_I(AI32(s, 0x118), 100);
+    return 0;
+}
+
+/* ── High-cell balancer (FUN_004a4694) ──────────────────────────────
+ * Bind the territory module to the shared army block + a local cell roster/grid
+ * so the demolish + census actually run.  Shed path: low density (+0x25c),
+ * high-cell-rich (+0x200 > 2), stock-poor (+0x250 < 10) → demolish a high band. */
+
+enum { BAL_CELLS = 0x40 * 0x40 * 8, BAL_ROWS = 17, BAL_NCOL = 20 };
+static uint8_t  g_bal_cells[BAL_CELLS];
+static int32_t  g_bal_roster[BAL_ROWS * BAL_NCOL];
+
+int test_army_ai_balance_high_cells_sheds(void)
+{
+    ai_setup();
+    memset(g_bal_cells, 0, sizeof g_bal_cells);
+    memset(g_bal_roster, 0, sizeof g_bal_roster);
+    engine_territory_bind_army_records(g_per_army_768);
+    engine_territory_bind_cells(g_bal_cells);
+    engine_territory_bind_cell_roster(g_bal_roster);
+    engine_army_economy_bind_army_records(NULL);   /* grade's load path no-ops cleanly */
+
+    /* three upper-high (0x14) cells in realm 4's roster */
+    for (int c = 0; c < 3; c++) {
+        int off = (4 * BAL_NCOL + c + 1) * 8;
+        g_bal_cells[off] = 0x14;
+        g_bal_roster[4 * BAL_NCOL + c] = off;
+    }
+    uint8_t *a = AREC(4);
+    AI32(a, 0x25c) = 5;     /* density < 0xb */
+    a[0x200] = 3;           /* HIGH census > 2 */
+    AI32(a, 0x250) = 5;     /* stock A < 10 */
+    a[0x205] = 20;          /* active count for any cursor wrap */
+
+    engine_army_ai_balance_high_cells(4, 0);
+
+    /* demolish_band(0x13) turned the 0x14 cells to 1 (then convert may re-touch
+     * some); at minimum the first upper-high cell is no longer 0x14. */
+    int off0 = (4 * BAL_NCOL + 0 + 1) * 8;
+    T_ASSERT(g_bal_cells[off0] != 0x14);
+
+    engine_territory_bind_army_records(NULL);
+    engine_territory_bind_cells(NULL);
+    engine_territory_bind_cell_roster(NULL);
+    return 0;
+}
+
+/* ── Tax-rate sweep (FUN_004a4782) ──────────────────────────────────
+ * Exercise the strength-band classifier + the fixed-rate path with the economy
+ * appraisal bound (so appraisal_value / stock_a_value are real). */
+
+int test_army_ai_tax_sweep_band_and_fixed_rate(void)
+{
+    ai_setup();
+    engine_army_economy_bind_army_records(g_per_army_768);
+    engine_army_economy_set_prices(5, 10, 6);
+    s_slot_0053f260 = 0;                /* basis = feed only */
+
+    uint8_t *a = AREC(4);
+    AI32(a, 0x024) = 100;               /* feed → basis 100 */
+    AI32(a, 0x250) = 5;                 /* stock A = 5 → appraisal = 5*(5+10) = 75 */
+    AI32(a, 0x224) = 0;                 /* no provision-raw term */
+
+    engine_army_ai_tax_sweep(4, 50);    /* fixed rate path */
+
+    /* appraisal 75 vs basis 100: 75 < 100 and 75 >= 50 → band 1 */
+    T_ASSERT_EQ_I(a[0x15e], 1);
+    T_ASSERT_EQ_I(a[0x15f], 50);        /* rate fixed at 50 */
+
+    engine_army_economy_bind_army_records(NULL);
     return 0;
 }

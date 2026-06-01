@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 488,
+  "tested": 492,
   "ported": 36,
-  "unported": 1923,
+  "unported": 1919,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 524,
-  "pct_touched": 21.4,
-  "pct_tested": 19.9,
+  "touched": 528,
+  "pct_touched": 21.6,
+  "pct_tested": 20.1,
   "bytes_total": 838629,
-  "bytes_touched": 185846,
-  "pct_bytes_touched": 22.2
+  "bytes_touched": 186904,
+  "pct_bytes_touched": 22.3
  },
  "orphan_refs": [
   "0x004148",
@@ -939,6 +939,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_input.c",
     "src/engine_math.c",
     "src/engine_math.h",
@@ -15971,8 +15972,11 @@
    "name": "FUN_004a4694",
    "size": 238,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h"
+   ]
   },
   {
    "va": "0x4a4782",
@@ -15981,6 +15985,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h",
     "src/engine_army_economy.c",
     "src/engine_army_economy.h"
    ]
@@ -15990,24 +15996,33 @@
    "name": "FUN_004a4a3f",
    "size": 211,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h"
+   ]
   },
   {
    "va": "0x4a4b12",
    "name": "FUN_004a4b12",
    "size": 298,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h"
+   ]
   },
   {
    "va": "0x4a4c41",
    "name": "FUN_004a4c41",
    "size": 311,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h"
+   ]
   },
   {
    "va": "0x4a4d78",

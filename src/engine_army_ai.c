@@ -24,6 +24,7 @@
 #include "engine_army_economy.h"   /* engine_army_economy_provision / _plan_realm */
 #include "engine_territory.h"      /* recensus_reduce / grade_feature_cells / allocate_workforce */
 #include "engine_ranking.h"        /* engine_ranking_recompute_player_total */
+#include "engine_math.h"           /* engine_math_percent_of (FUN_00404d6b) */
 
 #define ARMY_REC(key)   (&g_per_army_768[(key) * 0x300])
 #define STRAT_REC(slot) (&g_player_strategic_352[(slot) * 0x160])
@@ -61,6 +62,23 @@
 #define ARMY_TREASURY       0x1f4   /* DAT_0053fba4 — independent realm's own gold */
 #define ARMY_PROVISION_RAW  0x224   /* DAT_0053fbd4 — commodity slot 1 stock */
 #define ARMY_STOCK_A        0x250   /* DAT_0053fc00 — commodity slot 2 stock */
+#define ARMY_TRADE_GATE     0x1a4   /* DAT_0053fb54 — byte: realm may trade when set */
+#define ARMY_RACE_IDX       0x1a5   /* DAT_0053fb55 — territory-420 index for price lookup */
+#define ARMY_CENSUS_HIGH    0x200   /* DAT_0053fbb0 — census 0x0f..0x16 bucket */
+#define ARMY_OVERHEAD_HI    0x198   /* DAT_0053fb48 — overhead term 1 */
+#define ARMY_OVERHEAD_LO    0x19c   /* DAT_0053fb4c — overhead term 2 */
+#define ARMY_STRENGTH_BAND  0x15e   /* DAT_0053fb0e — 0..5 strength band the sweep classifies */
+#define ARMY_PROVISION_NET  0x15d   /* DAT_0053fb0d — provision net the sweep maximises */
+#define ARMY_TAX_RATE       0x15f   /* DAT_0053fb0f — tax-rate % the sweep selects */
+#define ARMY_DENSITY_VALUE  0x25c   /* DAT_0053fc0c — graded density value */
+
+/* g_per_territory_420 field holding a per-territory price-adjustment percent
+ * (retail DAT_0052f216 = base 0x52f0b0 + 0x166), indexed by an army's +0x1a5. */
+#define TERR420_PRICE_ADJ   0x166
+
+/* Commodity base price: the int at s_slot_005532a0[slot * 0x10] (retail
+ * DAT_005532a0, a 16-entry × 0x10-byte price table). */
+#define COMMODITY_PRICE(slot) (*(int32_t *)&s_slot_005532a0[(slot) * 0x10])
 
 /* Port of FUN_0045158b (147 B).  Seed the realm's eight workforce target ratios
  * (+0x130 run) to the AI's fixed defaults {0x21, 0x32, 0x11, 0x28, 0xf, 0xf,
@@ -243,4 +261,159 @@ void engine_army_ai_execute_trade(int flag, int amount, int slot,
     engine_territory_allocate_realm_workforce(realm);
     engine_army_economy_provision(realm, (int)s_slot_0057c934);
     engine_army_economy_plan_realm(realm, (int)s_slot_0057c92c);
+}
+
+/* Per-unit BUY price for commodity `slot` in `realm`: the base price marked up
+ * by the realm's territory-420 price-adjustment percent (floor 1), or just the
+ * base for slot 4 (the markup is 0).  *base_out receives the un-marked-up base
+ * (the SELL price).  Shared by the three order helpers. */
+static int trade_unit_price(int realm, int slot, int *base_out)
+{
+    uint8_t *a = ARMY_REC(realm);
+    int base = COMMODITY_PRICE(slot);
+    int adjpct = g_per_territory_420[a[ARMY_RACE_IDX] * 0x1a4 + TERR420_PRICE_ADJ];
+    int adj = engine_math_percent_of(base, adjpct);
+    if (adj < 1) adj = 1;
+    if (slot == 4) adj = 0;
+    *base_out = base;
+    return adj + base;
+}
+
+/* Port of FUN_004a4a3f (211 B).  Issue a SELL order: dump `amount` units of
+ * `slot` at the base price through the trade executor (flag 1, signed negative).
+ * No affordability gate — selling is always allowed.  No-op unless the realm's
+ * trade gate (+0x1a4) is set. */
+void engine_army_ai_sell_order(int realm, int amount, int slot)
+{
+    uint8_t *a = ARMY_REC(realm);
+    if (a[ARMY_TRADE_GATE] == 0) return;
+
+    int base;
+    int unit = trade_unit_price(realm, slot, &base);
+    engine_army_ai_execute_trade(1, -amount, slot, unit, base, a[ARMY_OWNER], realm);
+}
+
+/* Port of FUN_004a4b12 (298 B).  Issue a BUY order for `amount` units of `slot`,
+ * but only when the buyer can afford the whole order up front: the independent
+ * realm's gold (+0x1f4) for player 0, else the owner's cash (+0x118).  No-op
+ * unless the trade gate is set. */
+void engine_army_ai_buy_order(int realm, int amount, int slot)
+{
+    uint8_t *a = ARMY_REC(realm);
+    if (a[ARMY_TRADE_GATE] == 0) return;
+
+    int player = a[ARMY_OWNER];
+    int base;
+    int unit = trade_unit_price(realm, slot, &base);
+    int cost = unit * amount;
+
+    int afford = (player == 0)
+        ? (cost <= I32(a + ARMY_TREASURY))
+        : (cost <= I32(STRAT_REC(player) + STRAT_CASH));
+    if (afford)
+        engine_army_ai_execute_trade(0, amount, slot, unit, base, player, realm);
+}
+
+/* Port of FUN_004a4c41 (311 B).  BUY as much of `amount` units of `slot` as the
+ * buyer can afford, halving the order until it fits the treasury (or hits 0).
+ * No-op unless the trade gate is set. */
+void engine_army_ai_buy_order_scaled(int realm, int amount, int slot)
+{
+    uint8_t *a = ARMY_REC(realm);
+    if (a[ARMY_TRADE_GATE] == 0) return;
+
+    int player = a[ARMY_OWNER];
+    int base;
+    int unit = trade_unit_price(realm, slot, &base);
+    int treasury = (player == 0)
+        ? I32(a + ARMY_TREASURY)
+        : I32(STRAT_REC(player) + STRAT_CASH);
+
+    while (amount > 0) {
+        if (unit * amount <= treasury) {
+            engine_army_ai_execute_trade(0, amount, slot, unit, base, player, realm);
+            return;
+        }
+        amount /= 2;
+    }
+}
+
+/* Port of FUN_004a4694 (238 B).  Re-balance the realm's high-tier cell footprint
+ * against a target `high_target`: when the graded density (+0x25c) is low (< 0xb)
+ * and the realm is high-cell-rich but stock-poor, shed one high cell; when the
+ * density is high (> 10) and the realm is below its high-cell target, add one.
+ * Either way the band is rewritten via demolish_band/convert_or_demolish_band,
+ * then the realm is re-censused and re-graded. */
+void engine_army_ai_balance_high_cells(int realm, int high_target)
+{
+    uint8_t *a = ARMY_REC(realm);
+    int high = a[ARMY_CENSUS_HIGH];
+
+    if (I32(a + ARMY_DENSITY_VALUE) < 0xb) {
+        if (high > 2 && I32(a + ARMY_STOCK_A) < 10) {
+            engine_territory_demolish_band(realm, 0x13);
+            engine_territory_convert_or_demolish_band(realm, 0x13, high - 1);
+        }
+    } else if (I32(a + ARMY_DENSITY_VALUE) > 10 && high < high_target) {
+        engine_territory_demolish_band(realm, 0x13);
+        engine_territory_convert_or_demolish_band(realm, 0x13, high + 1);
+    }
+    engine_territory_census_army_terrain(realm);
+    engine_territory_grade_feature_cells(realm);
+}
+
+/* Port of FUN_004a4782 (701 B).  Classify the realm's economic strength into a
+ * 0..5 band (+0x15e) from its appraisal value vs a cost basis (mouths-to-feed
+ * +0x24, plus the two overhead terms when the global mode s_slot_0053f260 == 1),
+ * then sweep the tax rate (+0x15f) to maximise the provision net (+0x15d):
+ *   sweep == 0   → forward sweep 0..100
+ *   sweep == 100 → backward sweep 100..0
+ *   else         → fix the rate at `sweep`
+ * Each trial calls the economy provisioner at the map season; the best rate is
+ * left in +0x15f with a final provision run there. */
+void engine_army_ai_tax_sweep(int realm, int sweep)
+{
+    uint8_t *a = ARMY_REC(realm);
+    int appraisal = engine_army_economy_appraisal_value(realm);
+    int stock_a   = engine_army_economy_stock_a_value(realm);
+
+    int basis = I32(a + ARMY_FEED_COUNT);
+    if (s_slot_0053f260 == 1)
+        basis += I32(a + ARMY_OVERHEAD_LO) + I32(a + ARMY_OVERHEAD_HI);
+
+    if      (appraisal < basis / 2)  a[ARMY_STRENGTH_BAND] = 0;
+    else if (appraisal < basis)      a[ARMY_STRENGTH_BAND] = 1;
+    else if (appraisal < basis * 2)  a[ARMY_STRENGTH_BAND] = 2;
+    else if (basis * 3 < stock_a)    a[ARMY_STRENGTH_BAND] = 5;
+    else if (basis * 2 < stock_a)    a[ARMY_STRENGTH_BAND] = 4;
+    else if (basis * 8 < appraisal)  a[ARMY_STRENGTH_BAND] = 5;
+    else if (basis * 6 < appraisal)  a[ARMY_STRENGTH_BAND] = 4;
+    else                             a[ARMY_STRENGTH_BAND] = 3;
+
+    int8_t best_net = 0;
+    int best_rate = sweep;
+    if (sweep == 0) {
+        for (int rate = 0; rate < 0x65; rate++) {
+            a[ARMY_TAX_RATE] = (uint8_t)rate;
+            engine_army_economy_provision(realm, (int)s_slot_0057c92c);
+            if (best_net < (int8_t)a[ARMY_PROVISION_NET]) {
+                best_net = (int8_t)a[ARMY_PROVISION_NET];
+                best_rate = rate;
+            }
+        }
+        a[ARMY_TAX_RATE] = (uint8_t)best_rate;
+    } else if (sweep == 100) {
+        for (int rate = 100; rate >= 0; rate--) {
+            a[ARMY_TAX_RATE] = (uint8_t)rate;
+            engine_army_economy_provision(realm, (int)s_slot_0057c92c);
+            if (best_net < (int8_t)a[ARMY_PROVISION_NET]) {
+                best_net = (int8_t)a[ARMY_PROVISION_NET];
+                best_rate = rate;
+            }
+            a[ARMY_TAX_RATE] = (uint8_t)best_rate;   /* retail resets in-loop (dead but faithful) */
+        }
+    } else {
+        a[ARMY_TAX_RATE] = (uint8_t)sweep;
+    }
+    engine_army_economy_provision(realm, (int)s_slot_0057c92c);
 }

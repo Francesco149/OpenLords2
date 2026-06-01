@@ -1803,6 +1803,13 @@ struct test_case {
     X(army_ai_trade_sell_insufficient_aborts) \
     X(army_ai_trade_independent_uses_realm_gold) \
     X(army_ai_trade_zero_noop) \
+    X(army_ai_sell_order) \
+    X(army_ai_buy_order_affordable) \
+    X(army_ai_buy_order_unaffordable_skips) \
+    X(army_ai_buy_order_scaled_halves) \
+    X(army_ai_orders_gated) \
+    X(army_ai_balance_high_cells_sheds) \
+    X(army_ai_tax_sweep_band_and_fixed_rate) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

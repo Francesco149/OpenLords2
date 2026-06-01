@@ -45,4 +45,29 @@ void engine_army_ai_execute_trade(int flag, int amount, int slot,
                                   int buy_price, int sell_price,
                                   int player, int realm);
 
+/* Port of FUN_004a4a3f.  Issue a SELL order: dump `amount` units of `slot` at
+ * the base price (no affordability gate).  No-op unless +0x1a4 is set. */
+void engine_army_ai_sell_order(int realm, int amount, int slot);
+
+/* Port of FUN_004a4b12.  Issue a BUY order for `amount` units of `slot` only
+ * when the whole order is affordable (realm gold for independents, owner cash
+ * otherwise).  No-op unless +0x1a4 is set. */
+void engine_army_ai_buy_order(int realm, int amount, int slot);
+
+/* Port of FUN_004a4c41.  BUY as much of `amount` units of `slot` as the treasury
+ * affords, halving the order until it fits (or hits 0).  No-op unless +0x1a4
+ * is set. */
+void engine_army_ai_buy_order_scaled(int realm, int amount, int slot);
+
+/* Port of FUN_004a4694.  Re-balance the realm's high-tier cell footprint toward
+ * `high_target` (shed one when density is low + stock-poor, add one when density
+ * is high + below target), then re-census and re-grade. */
+void engine_army_ai_balance_high_cells(int realm, int high_target);
+
+/* Port of FUN_004a4782.  Classify the realm's strength band (+0x15e) from its
+ * appraisal vs cost basis, then sweep the tax rate (+0x15f) to maximise the
+ * provision net (+0x15d): sweep 0 → forward 0..100, 100 → backward 100..0, else
+ * fix at `sweep`.  Leaves the best rate set with a final provision run. */
+void engine_army_ai_tax_sweep(int realm, int sweep);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_AI_H */
