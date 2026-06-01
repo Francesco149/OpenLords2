@@ -63,6 +63,7 @@
 #include "dev_hooks.h"
 #include "engine.h"
 #include "engine_dirty_rect.h"
+#include "engine_hud_menubar.h"
 #include "engine_map_render.h"
 #include "engine_map_scene.h"
 #include "engine_map_terrain.h"
@@ -1551,6 +1552,43 @@ static void bringup_strat_map(const char *dir)
              engine_map_render_call_count(),
              engine_map_terrain_oob_copies(),
              engine_map_terrain_error_count());
+
+    /* ---- HUD chrome: top menu bar (parchment + bevel + File/Options/
+     * Help).  The state-free front of FUN_0040f5fd's FUN_00419c78 call;
+     * draws into the same locked back buffer over the map body's top
+     * rows.  Assets: the chrome sheet (panels.pl8 → DAT_0057d3d0), the
+     * menu font (fntl2_14.pl8 → DAT_005af8f0), the char→glyph render /
+     * measure maps, and the l2.eng localization blob (config_init).  The
+     * data-dependent tail (realm flags / year / season / gold) is
+     * deferred — see engine_hud_menubar.h. */
+    {
+        const uint8_t *chrome = gfx_load_chrome_sheet();
+        const uint8_t *font   = gfx_load_menu_font();
+        size_t loc_size = 0;
+        const uint8_t *locblob = config_localization_data(&loc_size);
+        if (chrome && font && locblob) {
+            /* Screen byte 0 (strategic map) — gfx_text reads it as the
+             * shadow-color discriminator (in-game gets the default pair,
+             * not the title's gray). */
+            engine_set_current_screen(0);
+            gfx_dispatch_set_alt_clip(0, 0, 0);
+
+            localization_state_t loc;
+            loc.blob = (unsigned char *)locblob;
+            loc.walker_offset = 0;
+
+            int16_t menu_tbl[24];
+            engine_hud_menubar_render_chrome(
+                chrome, font,
+                gfx_glyph_render_map(), gfx_glyph_measure_map(),
+                &loc, engine_hud_menubar_default_table(menu_tbl));
+            log_line("strat-map: menu bar drawn (parchment + File/Options/Help)");
+        } else {
+            log_line("strat-map: menu-bar assets missing "
+                     "(chrome=%p font=%p loc=%p) — skipped",
+                     (void *)chrome, (void *)font, (void *)locblob);
+        }
+    }
 
     /* Dump the raw 8bpp canvas for the palette-applied parity diff. */
     if (canvas) {

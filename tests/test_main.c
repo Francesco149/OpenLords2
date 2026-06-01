@@ -1323,6 +1323,12 @@ struct test_case {
     X(engine_button_null_sheet_skips) \
     X(engine_button_marks_dirty_per_button) \
     \
+    X(hud_menubar_tile_strip_lands_each_column) \
+    X(hud_menubar_tile_strip_honors_origin) \
+    X(hud_menubar_tile_strip_null_sheet_is_noop) \
+    X(hud_menubar_tile_strip_aborts_on_bad_offset) \
+    X(hud_menubar_default_table_layout) \
+    \
     X(map_query_all_clear_returns_1) \
     X(map_query_rawflag_occupied_returns_0) \
     X(map_query_headlink_occupied_returns_0) \

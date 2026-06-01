@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 507,
-  "ported": 46,
-  "unported": 1894,
+  "tested": 511,
+  "ported": 45,
+  "unported": 1891,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 553,
-  "pct_touched": 22.6,
-  "pct_tested": 20.7,
+  "touched": 556,
+  "pct_touched": 22.7,
+  "pct_tested": 20.9,
   "bytes_total": 838629,
-  "bytes_touched": 224895,
-  "pct_bytes_touched": 26.8
+  "bytes_touched": 226318,
+  "pct_bytes_touched": 27.0
  },
  "orphan_refs": [
   "0x004148",
@@ -243,6 +243,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_hud_menubar.c",
     "src/localization.c",
     "src/localization.h"
    ]
@@ -778,6 +779,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_hud_menubar.c",
+    "src/engine_hud_menubar.h",
     "src/gfx_line.c",
     "src/gfx_line.h"
    ]
@@ -1317,6 +1320,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_hud_menubar.h",
     "src/gfx_panel.c",
     "src/gfx_sprite_render.c",
     "src/gfx_sprite_render.h"
@@ -1446,8 +1450,11 @@
    "name": "FUN_00409e09",
    "size": 368,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_menubar.c",
+    "src/engine_hud_menubar.h"
+   ]
   },
   {
    "va": "0x409f79",
@@ -1748,8 +1755,11 @@
    "name": "FUN_0040c5b0",
    "size": 373,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_menubar.c",
+    "src/engine_hud_menubar.h"
+   ]
   },
   {
    "va": "0x40c725",
@@ -2889,8 +2899,12 @@
    "name": "FUN_00419c78",
    "size": 682,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_menubar.c",
+    "src/engine_hud_menubar.h",
+    "src/main.c"
+   ]
   },
   {
    "va": "0x41a166",
@@ -10801,6 +10815,7 @@
     "src/engine_button.c",
     "src/engine_button.h",
     "src/engine_dirty_rect.h",
+    "src/engine_hud_menubar.c",
     "src/engine_title_render.c"
    ]
   },
@@ -17238,6 +17253,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_hud_menubar.h",
     "src/gfx_panel.c"
    ]
   },
@@ -17589,9 +17605,10 @@
    "name": "FUN_004b1de0",
    "size": 11,
    "is_thunk": false,
-   "status": "ported",
+   "status": "tested",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/engine_hud_menubar.c"
    ]
   },
   {

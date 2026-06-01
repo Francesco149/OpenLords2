@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **553** (22.6%) — tested 507, ported 46
-- code bytes touched: **26.8%** (224,895 / 838,629 B)
-- unported: **1894**
+- touched: **556** (22.7%) — tested 511, ported 45
+- code bytes touched: **27.0%** (226,318 / 838,629 B)
+- unported: **1891**
 - orphan refs (in src/, not in function table): 4
 
-## tested (507) — ported + host unit suite
+## tested (511) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -41,7 +41,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4016f3 | FUN_004016f3 | 204 | localization.c, localization.h |
 | 0x4017bf | FUN_004017bf | 187 | localization.c, localization.h |
 | 0x40187a | FUN_0040187a | 93 | localization.c, localization.h |
-| 0x4018d7 | FUN_004018d7 | 173 | localization.c, localization.h |
+| 0x4018d7 | FUN_004018d7 | 173 | engine_hud_menubar.c, localization.c, localization.h |
 | 0x401984 | FUN_00401984 | 156 | text_input.c, text_input.h |
 | 0x401a20 | FUN_00401a20 | 543 | main.c, text_input.h |
 | 0x401c3f | FUN_00401c3f | 28 | text_input.h |
@@ -86,7 +86,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x403cf4 | FUN_00403cf4 | 247 | gfx_line.c, gfx_line.h |
 | 0x403deb | FUN_00403deb | 249 | gfx_line.c, gfx_line.h |
 | 0x403ee4 | FUN_00403ee4 | 249 | gfx_line.c, gfx_line.h |
-| 0x403fdd | FUN_00403fdd | 249 | gfx_line.c, gfx_line.h |
+| 0x403fdd | FUN_00403fdd | 249 | engine_hud_menubar.c, engine_hud_menubar.h, gfx_line.c (+1) |
 | 0x40437d | FUN_0040437d | 197 | gfx_caret.c, gfx_caret.h, gfx_line.c (+1) |
 | 0x404442 | FUN_00404442 | 256 | gfx_dispatch.c, gfx_dispatch.h |
 | 0x404547 | FUN_00404547 | 256 | gfx_dispatch.c, gfx_dispatch.h |
@@ -118,11 +118,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4081a6 | FUN_004081a6 | 658 | engine_overlay_render.c, engine_overlay_render.h |
 | 0x408438 | FUN_00408438 | 2072 | engine_map_render.c, engine_map_render.h |
 | 0x408c50 | FUN_00408c50 | 390 | engine_overlay_render.c, engine_overlay_render.h |
-| 0x408fb0 | FUN_00408fb0 | 27 | gfx_panel.c, gfx_sprite_render.c, gfx_sprite_render.h |
+| 0x408fb0 | FUN_00408fb0 | 27 | engine_hud_menubar.h, gfx_panel.c, gfx_sprite_render.c (+1) |
 | 0x409346 | FUN_00409346 | 81 | gfx_panel.c, gfx_panel.h |
 | 0x4093e0 | FUN_004093e0 | 73 | gfx_panel.c, gfx_panel.h |
 | 0x40946d | FUN_0040946d | 856 | gfx_panel.c, gfx_panel.h |
 | 0x4097c5 | FUN_004097c5 | 367 | gfx_panel.c, gfx_panel.h |
+| 0x409e09 | FUN_00409e09 | 368 | engine_hud_menubar.c, engine_hud_menubar.h |
 | 0x40a01d | FUN_0040a01d | 261 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40a21a | FUN_0040a21a | 433 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h (+1) |
 | 0x40a3d0 | FUN_0040a3d0 | 402 | gfx_sprite_render.c, gfx_sprite_render.h, gfx_sprite_rle.h |
@@ -131,6 +132,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40a80e | FUN_0040a80e | 413 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40a9b0 | FUN_0040a9b0 | 439 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40acce | FUN_0040acce | 324 | engine_title_render.c, gfx_caret.c, gfx_caret.h (+2) |
+| 0x40c5b0 | FUN_0040c5b0 | 373 | engine_hud_menubar.c, engine_hud_menubar.h |
 | 0x40cfd2 | FUN_0040cfd2 | 490 | engine_button.c, engine_button.h, engine_menu_input.h (+3) |
 | 0x40da1e | FUN_0040da1e | 869 | engine_delta.c, engine_menu_input.c, engine_menu_input.h (+1) |
 | 0x40e3ee | FUN_0040e3ee | 505 | engine_button.h, engine_menu_input.c, engine_menu_input.h |
@@ -143,6 +145,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40f5fd | FUN_0040f5fd | 470 | engine_map_scene.h, engine_pl8.h, engine_screen_dispatch.c (+1) |
 | 0x4148e4 | FUN_004148e4 | 264 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x4149ec | FUN_004149ec | 1050 | engine_title_render.c, engine_title_render.h, gfx_sprite.c (+1) |
+| 0x419c78 | FUN_00419c78 | 682 | engine_hud_menubar.c, engine_hud_menubar.h, main.c |
 | 0x41e61d | FUN_0041e61d | 452 | engine_title_render.c, engine_title_render.h, gfx.c (+2) |
 | 0x41e7e1 | FUN_0041e7e1 | 385 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x41ea14 | FUN_0041ea14 | 143 | engine_title_render.c, engine_title_render.h |
@@ -320,7 +323,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4526b3 | FUN_004526b3 | 87 | engine_dirty_rect.c, engine_dirty_rect.h |
 | 0x45270a | FUN_0045270a | 43 | engine_dirty_rect.h, save.h |
 | 0x452735 | FUN_00452735 | 53 | engine_dirty_rect.h |
-| 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_button.c, engine_button.h (+2) |
+| 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_button.c, engine_button.h (+3) |
 | 0x4651b9 | FUN_004651b9 | 91 | engine_territory.c, engine_territory.h |
 | 0x46733c | FUN_0046733c | 124 | engine_map_query.c, engine_map_query.h |
 | 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c, engine_territory.h |
@@ -454,10 +457,11 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4af675 | FUN_004af675 | 84 | strutil.h |
 | 0x4af6c9 | FUN_004af6c9 | 67 | strutil.h |
 | 0x4af8d9 | FUN_004af8d9 | 381 | config.c, engine_pl8.h, gfx.c (+4) |
-| 0x4afab9 | FUN_004afab9 | 897 | gfx_panel.c |
+| 0x4afab9 | FUN_004afab9 | 897 | engine_hud_menubar.h, gfx_panel.c |
 | 0x4afeed | FUN_004afeed | 1214 | gfx_text_label.c, gfx_text_label.h |
 | 0x4b13ed | FUN_004b13ed | 274 | gfx_paint.c, gfx_paint.h |
 | 0x4b191e | FUN_004b191e | 981 | engine.c, engine.h, engine_input.c (+2) |
+| 0x4b1de0 | FUN_004b1de0 | 11 | engine.c, engine_hud_menubar.c |
 | 0x4b20ed | FUN_004b20ed | 68 | engine.c, engine.h, engine_delta.c |
 | 0x4b2258 | FUN_004b2258 | 797 | audio.h, engine.c, engine.h (+2) |
 | 0x4b2636 | FUN_004b2636 | 130 | engine.c, engine.h, engine_fps.c (+1) |
@@ -529,7 +533,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine_map_scene.c, engine_map_scene.h |
 
-## ported (46) — reimplemented, no host test yet
+## ported (45) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -575,7 +579,6 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b0e03 | FUN_004b0e03 | 875 | engine.c |
 | 0x4b11ce | FUN_004b11ce | 34 | gfx.c |
 | 0x4b12fb | FUN_004b12fb | 21 | engine.c |
-| 0x4b1de0 | FUN_004b1de0 | 11 | engine.c |
 | 0x4b25b0 | FUN_004b25b0 | 76 | gfx.c, gfx.h |
 | 0x4b26b8 | FUN_004b26b8 | 64 | engine.c, gfx.c |
 | 0x4b284e | FUN_004b284e | 122 | gfx.h |

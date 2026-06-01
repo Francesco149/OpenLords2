@@ -625,3 +625,70 @@ resident; the strat-map screen-dispatch arm gates on it) is mirrored as
 `engine_map_terrain_bind_blobs` / `engine_map_render_bind_blobs`, then call
 `engine_map_scene_tick` — replacing the harness's captured-blob binds.  Still
 gated on the HUD chrome fns (menu bar, right realm panel).
+
+## Strategic-map menu bar (HUD chrome) — PORTED 2026-06-01
+
+The top "File / Options / Help" bar is **engine-drawn into the 640×480 DDraw
+back surface** (`DAT_004ea1a8`), NOT a Win32 menu — the binary calls `GetMenu`
+only to size the window rect and never `SetMenu`/`LoadMenu`/`CreateMenu`.
+`frida_capture.py` grabs that back surface, so the bar appears in the captured
+truth frame; the map body is drawn into the same surface below it, which is why
+truth and the port align row-for-row (the bar replaces the top ~18 rows, it does
+not push the map down).
+
+**`FUN_004b1867` is a CLEAR, not a chrome blit.**  It calls
+`FUN_004b3e51(DAT_004ea1a8, 0x4b000)` = memset-to-zero of the whole 640×480
+buffer (0x4b000 = 640×480), run every frame at the top of the strat-map arm
+`FUN_0040f5fd`.  So the menu bar (and everything) is redrawn each frame, after
+the clear, by the arm's draw calls.
+
+**The bar is `FUN_00419c78`** (called by `FUN_0040f5fd` right after the map
+body `FUN_004050c0`).  Composition:
+
+| retail call                          | role                                   |
+|--------------------------------------|----------------------------------------|
+| `FUN_00409e09(0,0,0x19,1)`           | parchment strip, cols 0..24 (24×24 ea) |
+| `FUN_00409e09(0x250,0,2,1)`          | parchment strip, cols 25..26 (right)   |
+| `FUN_00403fdd(0,0,0x280,0x18)`       | 1-px bevel frame (gfx_line, ported)    |
+| flag loop `FUN_0040a21a` ×realms     | per-realm shield (data-dependent)      |
+| `FUN_0041a900(DAT_00553edc,0x168,6,3)`| year "1268" at x=360 (data-dependent) |
+| `FUN_00402d37(0x1d,DAT_0057c934,…)`  | season "Winter" (data-dependent)       |
+| `FUN_0041ab67(DAT_0057c018[r],0,500,…)`| gold "5000 Crowns." (data-dependent) |
+| `FUN_0040c5b0(&DAT_004dc428,3)`      | File/Options/Help labels               |
+
+**Parchment tiler `FUN_00409e09`** = a 24×24 sibling of the 16×16 panel tilers
+(`FUN_0040946d`/`004097c5`, ported in gfx_panel.c).  Per tile it stages a
+descriptor from the chrome sheet directory `chrome + 8 + idx*0x10` (sprite index
+`0xc4 + (col & 7)`, cycling 8 parchment tiles `0xc4..0xcb`) into the shared
+gfx_glyph/gfx_dispatch state and dispatches the already-ported fixed 24×24 raw
+blit `gfx_sprite_blit_24x24_raw` (`FUN_004b4cb8`).  The chrome sheet is the
+`0x57d3d0` blob = **panels.pl8**, loaded into a fixed buffer by `FUN_00499859`
+entry 10 (the port loads it as `gfx_load_chrome_sheet()`; the title screen
+already binds it).
+
+**Labels `FUN_0040c5b0`** walk `DAT_004dc428` (three int16_t[8] records: x=10,
+y=6, loc-id 1/2/3 = File/Options/Help).  Layout is a running x cursor seeded to
+the first record's x; each label draws at the current cursor via
+`FUN_00402d37` (gfx_wrap_localized_line over the l2.eng blob + menu font
+`DAT_005af8f0`), and the renderer's `line_x_acc` (`DAT_005cd404`) advances by the
+drawn width, then `+0x20` spacing is added.  This yields File@10, Options@~95,
+Help@~190.  The hovered item (`DAT_00522cb4`, 1-based) gets a highlight box
+(`FUN_004b414a`) sized from the measured width and renders in color 0x18.
+
+**Port:** `src/engine_hud_menubar.{c,h}` ports `FUN_00409e09`
+(`engine_hud_menubar_tile_strip`) and `FUN_0040c5b0`
+(`engine_hud_menubar_labels`) — both fully — plus the state-free composition
+`engine_hud_menubar_render_chrome` (the two strips + bevel + labels).  Wired into
+the `--strat-map` bring-up shim (main.c) after the map body.
+
+**Validation (live --strat-map vs strat-spray1 frame_00009):** the menu-bar
+region jumped from ~all-wrong to a clean match — **the left 270 px (parchment,
+bevel, File/Options/Help) is PIXEL-PERFECT (zero diff px)**.  Every residual
+pixel sits at x≥270, exactly the **deferred** data-dependent tail of
+`FUN_00419c78`: the realm shield (~x270), year "1268" (~x365-401), season
+"Winter" (~x414-473) and gold "5000 Crowns." (~x504-616).  Those read per-realm
+state (`DAT_0057bf*`/`DAT_0057c018`/`DAT_00553edc`, 0x160 stride) the live
+new-game/load path does not yet populate — `FUN_0041a900`/`FUN_0041ab67` and the
+flag loop are left unported (cited as bare hex) until that state lands.  5 host
+tests (tile cycling/origin/abort/null + table layout); File/Options/Help label
+rendering is validated by the render-parity harness, not re-stubbed.
