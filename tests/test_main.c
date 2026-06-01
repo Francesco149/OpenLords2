@@ -1851,6 +1851,8 @@ struct test_case {
     X(io_path_set_base_seam) \
     X(io_path_chdir_base_failure) \
     X(io_path_set_base_truncate_and_clear) \
+    X(engine_pl8_season_offset) \
+    X(engine_pl8_banks_match_captured_blobs) \
     /* end */
 
 /* Emit extern decls. */
@@ -1878,6 +1880,11 @@ void log_line(const char *fmt, ...)
      * fputc('\n', stderr); va_end(ap); */
 }
 
+/* Weak default so a test that needs real file I/O (test_engine_pl8.c,
+ * which validates the .pl8 loader against retail data) can provide a
+ * faithful strong override.  A real reader returns 0 for missing paths
+ * too, so tests that never pass valid paths are unaffected. */
+__attribute__((weak))
 int io_read_file_at(const char *path, void *buf, size_t len, long offset)
 {
     (void)path; (void)buf; (void)len; (void)offset;

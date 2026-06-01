@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 506,
+  "tested": 507,
   "ported": 46,
-  "unported": 1895,
+  "unported": 1894,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 552,
+  "touched": 553,
   "pct_touched": 22.6,
   "pct_tested": 20.7,
   "bytes_total": 838629,
-  "bytes_touched": 224164,
-  "pct_bytes_touched": 26.7
+  "bytes_touched": 224895,
+  "pct_bytes_touched": 26.8
  },
  "orphan_refs": [
   "0x004148",
@@ -2157,6 +2157,7 @@
    "status": "tested",
    "src": [
     "src/engine_map_scene.h",
+    "src/engine_pl8.h",
     "src/engine_screen_dispatch.c"
    ]
   },
@@ -15121,8 +15122,12 @@
    "name": "FUN_004984dc",
    "size": 731,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_pl8.c",
+    "src/engine_pl8.h",
+    "src/gen/pl8_table.h"
+   ]
   },
   {
    "va": "0x4987b7",
@@ -17207,6 +17212,7 @@
    "status": "tested",
    "src": [
     "src/config.c",
+    "src/engine_pl8.h",
     "src/gfx.c",
     "src/gfx.h",
     "src/io.c",

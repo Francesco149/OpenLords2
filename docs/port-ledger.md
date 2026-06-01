@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **552** (22.6%) — tested 506, ported 46
-- code bytes touched: **26.7%** (224,164 / 838,629 B)
-- unported: **1895**
+- touched: **553** (22.6%) — tested 507, ported 46
+- code bytes touched: **26.8%** (224,895 / 838,629 B)
+- unported: **1894**
 - orphan refs (in src/, not in function table): 4
 
-## tested (506) — ported + host unit suite
+## tested (507) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -140,7 +140,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40e9ab | FUN_0040e9ab | 641 | config.h, main.c |
 | 0x40ecc4 | FUN_0040ecc4 | 1099 | config.c, config.h, strutil.h |
 | 0x40f1a0 | FUN_0040f1a0 | 1117 | engine.c, engine_screen_dispatch.c, engine_screen_dispatch.h (+1) |
-| 0x40f5fd | FUN_0040f5fd | 470 | engine_map_scene.h, engine_screen_dispatch.c |
+| 0x40f5fd | FUN_0040f5fd | 470 | engine_map_scene.h, engine_pl8.h, engine_screen_dispatch.c |
 | 0x4148e4 | FUN_004148e4 | 264 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x4149ec | FUN_004149ec | 1050 | engine_title_render.c, engine_title_render.h, gfx_sprite.c (+1) |
 | 0x41e61d | FUN_0041e61d | 452 | engine_title_render.c, engine_title_render.h, gfx.c (+2) |
@@ -392,6 +392,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4921e5 | FUN_004921e5 | 451 | engine_tile.c, engine_tile.h |
 | 0x497ced | FUN_00497ced | 376 | engine_territory.c, engine_territory.h |
 | 0x497e65 | FUN_00497e65 | 1025 | game_init.c, game_init.h |
+| 0x4984dc | FUN_004984dc | 731 | engine_pl8.c, engine_pl8.h, pl8_table.h |
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h |
 | 0x499dc3 | FUN_00499dc3 | 154 | game_init.h |
 | 0x499e5d | FUN_00499e5d | 421 | game_init.h |
@@ -452,7 +453,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4af62c | FUN_004af62c | 73 | strutil.h |
 | 0x4af675 | FUN_004af675 | 84 | strutil.h |
 | 0x4af6c9 | FUN_004af6c9 | 67 | strutil.h |
-| 0x4af8d9 | FUN_004af8d9 | 381 | config.c, gfx.c, gfx.h (+3) |
+| 0x4af8d9 | FUN_004af8d9 | 381 | config.c, engine_pl8.h, gfx.c (+4) |
 | 0x4afab9 | FUN_004afab9 | 897 | gfx_panel.c |
 | 0x4afeed | FUN_004afeed | 1214 | gfx_text_label.c, gfx_text_label.h |
 | 0x4b13ed | FUN_004b13ed | 274 | gfx_paint.c, gfx_paint.h |

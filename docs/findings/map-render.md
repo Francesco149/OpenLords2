@@ -544,3 +544,75 @@ counter wraps, 16 ms rate gate, redraw-phase cycle).  **NEXT toward native:**
 wire screen-dispatch arm 0 (`FUN_0040f5fd`) to call `engine_map_scene_tick` —
 still gated on the PL8 sprite-blob loaders (`FUN_004984dc` season loader +
 `FUN_004af8d9` file read) and the HUD chrome fns (menu bar, right realm panel).
+
+### PL8 SPRITE-BLOB LOADER PORTED (2026-06-01) — engine_pl8
+
+The pivot from harness-fed captured blobs to the port loading its OWN sprite
+data.  `src/engine_pl8.{c,h}` ports the season loader **`FUN_004984dc`** (the
+file-read leaf `FUN_004af8d9` was already ported as `io_read_file_at`,
+`io.c`/`io.h`).  `.pl8` banks are **NOT compressed** — `FUN_004af8d9` is a plain
+`__open`/`__lseek`/`__read`/`__close`; the iso-tile blitters interpret the raw
+file bytes directly.
+
+**Table** (retail `0x4da050`, 64 entries × 0x14: 16-byte NUL-padded filename +
+u32 malloc/read size) is extracted by `tools/extract_pl8_table.py` →
+`src/gen/pl8_table.h`.  Indexed `table[bank + offset]`, where
+`offset = (view_mode==2 ? 0x20 : 0) + (1<=season<=4 ? season*8-8 : 0)`
+(`view_mode = DAT_0057cb18`, `season = DAT_0057c934`).  64 entries = 4 seasonal
+blocks (1a/1b/1c/1d at offsets 0/8/16/24) + a 4-copy view-mode-2 block
+(offset 0x20, all `*2a`).
+
+**Bank → retail global → renderer role** (the Ghidra pointer-assignment ladder
+in `FUN_004984dc` decodes to this slot-ordered permutation):
+
+| bank | global       | season-1d file | renderer bind          |
+|------|--------------|----------------|------------------------|
+| 0    | `DAT_00568208` | base1d.pl8   | terrain blob 0 (+ sky) |
+| 1    | `DAT_0053e914` | mtns1d.pl8   | terrain blob 1         |
+| 2    | `DAT_0057d344` | roads1d.pl8  | terrain blob 2         |
+| 3    | `DAT_0055409c` | town1d.pl8   | terrain blob 3         |
+| 4    | `DAT_0056898c` | castle1d.pl8 | terrain blob 4         |
+| 5    | `DAT_00553224` | sprite1a.pl8 | feature `primary`      |
+| 6    | `DAT_0056d8bc` | sprite1b.pl8 | feature `alt`          |
+| 7    | `DAT_0055ce5c` | flags1a.pl8  | feature/overlay `overlay` |
+
+Banks 5/6/7 are season-invariant (the table repeats sprite1a/sprite1b/flags1a
+in every seasonal block).  Plus two trailing single loads: `misc_cty.pl8`
+(size `DAT_0x4daec0` = 196000 → `DAT_005530c8`) and `vill_gd8.pl8` (fixed 0x12d8
+read → `&DAT_00542ce0`).
+
+**KEY: the captured strat-terrain1 frame is season 1d (winter), view 0**
+(`DAT_0057c934 = 4`, offset 24) — not 1a as the binding-map table implied.
+Proven by prefix-matching every captured blob to its `.pl8` file.
+
+**DETERMINISTIC VALIDATION (no human needed):**
+`tests/test_engine_pl8.c` drives the loader at season 4 / view 0 against the
+real `.pl8` files (`$OPENLORDS2_GAME_DIR`) and byte-compares each loaded bank to
+the captured retail in-memory blobs (`runs/capture/strat-terrain1/dump/`
+terr_blob0..4 + blob_primary/alt/overlay).  **All 8 banks match over their full
+file-content length** (128248 / 28670 / 147332 / 89040 / 121390 / 288296 /
+62216 / 54261 bytes).  This proves the table (filenames + sizes), the
+season/view offset arithmetic, and the bank→slot ladder all reproduce retail's
+sprite data exactly.
+
+**Malloc-slack caveat:** the table size over-allocates the buffer by a few
+dozen bytes vs the actual file (e.g. base1d table=128300, file=128248).  That
+tail is never read by the blitters and is uninitialized in retail too (the
+captured blobs show `0xcd` MSVC heap-fill there).  `engine_pl8_bank_size()`
+therefore reports the bytes the read filled (the valid content length), not the
+malloc ceiling — and that is the length to pass to `set_blob_lengths`.
+
+**Deferred (faithful, not needed for the game-dir-cwd case):** the file-read
+leaf's tiers 2/3 (CD-path / install-path `chdir` retries, `FUN_004af312` /
+`FUN_004af116`) — only tier 1 is used (cwd = game dir).  The prelude aux-init
+calls in `FUN_004984dc` (`FUN_004af502` / `FUN_004b25b0(220000)` / `FUN_0049915e`
+/ `FUN_00499366` / `FUN_0049964c`, likely palette/arena setup) are not part of
+the blob load and are not ported here.  `DAT_0053f050` (set =1 once data is
+resident; the strat-map screen-dispatch arm gates on it) is mirrored as
+`engine_pl8_data_ready()`.
+
+**NEXT toward native:** wire screen-dispatch arm 0 (`FUN_0040f5fd`) to call
+`engine_pl8_load_strategic_banks()` once at map entry, feed the bank pointers to
+`engine_map_terrain_bind_blobs` / `engine_map_render_bind_blobs`, then call
+`engine_map_scene_tick` — replacing the harness's captured-blob binds.  Still
+gated on the HUD chrome fns (menu bar, right realm panel).
