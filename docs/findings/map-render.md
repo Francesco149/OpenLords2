@@ -377,8 +377,26 @@ pulls in a SEPARATE, un-ported blitter family that takes the column-Y
 accumulator `DAT_0056957c` and keys on directory fields `DAT_00591568`
 (kind ∈ {2,3,4}) + `DAT_005bb478` (count, drawn only when `!=0`):
 `FUN_00455f04`/`459258`/`453e71`/`4580a9`/`456fd8` (view-mode-0 arms) — a
-second `src_off` is `_DAT_005aeb6c = src_off + 900` (v0).  **NEXT = RE +
-port drawer B's blitter family** (these are likely RLE/strip blitters, not
-fully-unrolled), then re-diff toward 100%.  After that: pass 2
+second `src_off` is `_DAT_005aeb6c = src_off + 900` (v0).
+
+**CONFIRMED: drawer B is the tall-sprite OVERHANG layer (the "bleed-over"
+into neighbouring cells), not a draw-order effect.**  A tall terrain
+sprite (mountain/hill/forest) is stored as TWO runs in one blob entry:
+the base diamond at `src_off` (drawn opaquely by drawer A — the part we
+render) PLUS a **transparent overhang strip at `src_off + 900`** (v0).
+The drawer-B blitters (e.g. `FUN_00453e71`, 8339 B) read `param_3 +
+_DAT_005aeb6c` and write to the SAME canvas at the SAME cursor
+(`DAT_004ea1a8 + DAT_00591524 + DAT_00591528*pitch`) but at large
+positive dest offsets (e.g. `pcVar3[0x2080]` ≈ 13 rows down) inside a
+`do{…}while` loop with per-pixel zero-skip (`if (*p!=0) dst=*p;`) — i.e.
+a clipped transparent strip blitter, NOT a fully-unrolled fixed copy, so
+NOT table-extractable.  Because the overhang rises into cells already
+painted (and the base diamonds of later cells do not cover it in retail),
+omitting drawer B makes tall features look flat/cut-off and lets a
+neighbour's base field sit where the overhang should be.  The pass-1 walk
+ORDER is correct (byte-identical to retail's frame driver); the missing
+pixels are purely drawer B.  **NEXT = RE + port drawer B's transparent
+strip-blitter family**, keyed on `DAT_00591568` (kind 2/3/4) ×
+`DAT_005bb478` (strip count, `!=0`) × view-mode, then re-diff toward 100%.  After that: pass 2
 (`FUN_00405602` overlay cluster) + compose all three passes + wire
 screen-dispatch arm 0.
