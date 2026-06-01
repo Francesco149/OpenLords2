@@ -404,3 +404,33 @@ void engine_hud_panel_render(const engine_hud_panel_state_t *st,
         }
     }
 }
+
+/* ----------------------------------------------------------------- */
+/* FUN_0041a734 (param_1 == 1 forced-redraw path) — the End-turn strip. */
+void engine_hud_panel_render_endturn(const uint8_t *chrome,
+                                     const uint8_t *font_name,
+                                     const uint8_t *glyph_table,
+                                     const unsigned char *glyph_metrics,
+                                     localization_state_t *loc,
+                                     const uint8_t *realm_block,
+                                     int current_realm)
+{
+    if (!chrome) {
+        return;
+    }
+
+    /* Redraw the parchment strip the button sits on (misc_cty 0x3b). */
+    gfx_sprite_render_opaque_from_blob(chrome, 0x3b, 0x1de, 0x1cc);
+
+    /* "End turn" label (loc group 4 sub 0), centred over the strip in
+     * colour 0x16 — drawn only while the current realm's strategic-record
+     * field +0 is below 999 (true at a normal turn start). */
+    if (realm_block) {
+        int32_t field0;
+        memcpy(&field0, realm_block + current_realm * 0x160 + 0, sizeof field0);
+        if (field0 < 999) {
+            gfx_wrap_localized_line_centered(loc, 4, 0, 0x1de, 0x1ce, 0xa2,
+                font_name, glyph_table, glyph_metrics, 0x16);
+        }
+    }
+}

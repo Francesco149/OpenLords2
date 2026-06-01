@@ -73,4 +73,33 @@ void engine_hud_panel_render(const engine_hud_panel_state_t *st,
                              const unsigned char *glyph_metrics,
                              localization_state_t *loc);
 
+/*
+ * Port of FUN_0041a734 (0x41a734) — the End-turn button strip, drawn
+ * immediately after the territory-info panel in the screen-id-0 arm
+ * FUN_0040f5fd (`FUN_0041a734(1)`, forced-redraw path).
+ *
+ * Retail's outer gate (DAT_0057c8fc == 0 && DAT_0052af94 > 2 [ingame]
+ * && DAT_004eac50 != 2 [screen]) decides whether the strip is redrawn at
+ * all; like FUN_0040f7d3's forced path, the caller owns that decision
+ * (the drop-in invokes this only when those hold).  The body redraws the
+ * misc_cty parchment sprite 0x3b at (0x1de, 0x1cc) and, when the current
+ * realm's strategic-record field +0 is below 999, centres the localized
+ * "End turn" label (loc group 4 sub 0) over it in colour 0x16.
+ *
+ * Elided (no pixel content, matching the rest of this module): the empty
+ * FUN_004b1de0, the FUN_004527a6 dirty-rect mark, and the DAT_004eb260
+ * render-flag write — all present-time bookkeeping.
+ *
+ * chrome = misc_cty (DAT_005530c8); font = fntl2_9 (DAT_005c9a90);
+ * realm_block = g_player_strategic_352 (DAT_0057bf00, 0x160 stride);
+ * current_realm = DAT_0057c8cc.
+ */
+void engine_hud_panel_render_endturn(const uint8_t *chrome,
+                                     const uint8_t *font_name,
+                                     const uint8_t *glyph_table,
+                                     const unsigned char *glyph_metrics,
+                                     localization_state_t *loc,
+                                     const uint8_t *realm_block,
+                                     int current_realm);
+
 #endif /* OPENLORDS2_ENGINE_HUD_PANEL_H */

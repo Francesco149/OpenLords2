@@ -45,6 +45,8 @@ enum { CANVAS_W = 640, CANVAS_H = 480 };
 
 /* Panel strip below the minimap: x >= 0x1de, y in [0x9c, 0x1ae). */
 enum { PN_X = 0x1de, PN_Y = 0x9c, PN_X1 = CANVAS_W, PN_Y1 = 0x1ae };
+/* End-turn button strip (FUN_0041a734): sprite 0x3b lands at (0x1de,0x1cc). */
+enum { ET_X = 0x1de, ET_Y = 0x1cc, ET_X1 = CANVAS_W, ET_Y1 = CANVAS_H };
 
 static int file_exists(const char *path)
 {
@@ -136,6 +138,12 @@ int test_hud_panel_render_owned(void)
                             gfx_glyph_render_map(), gfx_glyph_measure_map(),
                             &loc);
 
+    /* End-turn button strip (FUN_0041a734(1)) — drawn right after the
+     * panel in the screen-id-0 arm. */
+    engine_hud_panel_render_endturn(misc, font_name, gfx_glyph_render_map(),
+                                    gfx_glyph_measure_map(), &loc,
+                                    g_player_strategic_352, realm);
+
     /* 5. Count painted pixels in the panel strip. */
     int painted = 0;
     for (int y = PN_Y; y < PN_Y1; y++)
@@ -143,6 +151,15 @@ int test_hud_panel_render_owned(void)
             if (canvas[x + y * CANVAS_W] != 0) painted++;
     if (painted < 100)
         T_FAIL("panel painted only %d px in the right strip", painted);
+
+    /* End-turn strip: sprite 0x3b (opaque sand) + the "End turn" label
+     * must paint the bottom parchment band. */
+    int et_painted = 0;
+    for (int y = ET_Y; y < ET_Y1; y++)
+        for (int x = ET_X; x < ET_X1; x++)
+            if (canvas[x + y * CANVAS_W] != 0) et_painted++;
+    if (et_painted < 100)
+        T_FAIL("end-turn strip painted only %d px", et_painted);
 
     /* 6. Dump the raw canvas for tools/panel_parity.py. */
     char outdir[1200], outraw[1400];
@@ -153,7 +170,8 @@ int test_hud_panel_render_owned(void)
     if (o) { fwrite(canvas, 1, sizeof canvas, o); fclose(o); }
 
     fprintf(stderr,
-            "[hud_panel] map_id=%d terr=%d realm=%d owner=%d painted=%d -> %s\n",
-            map_id, terr, realm, owner, painted, outraw);
+            "[hud_panel] map_id=%d terr=%d realm=%d owner=%d painted=%d "
+            "endturn=%d -> %s\n",
+            map_id, terr, realm, owner, painted, et_painted, outraw);
     return 0;
 }

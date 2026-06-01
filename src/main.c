@@ -1928,6 +1928,15 @@ static void bringup_strat_load(const char *dir)
                      (int)s_slot_0057c93c,
                      g_per_army_768[(int)s_slot_0057c93c * 0x300 + 5],
                      (int)s_slot_0057c8cc);
+
+            /* End-turn button strip (FUN_0041a734(1), drawn right after the
+             * panel in the screen-id-0 arm): the "End turn" label over the
+             * bottom parchment strip. */
+            engine_hud_panel_render_endturn(engine_pl8_misc_cty(),
+                                            font_name, gfx_glyph_render_map(),
+                                            gfx_glyph_measure_map(), &loc,
+                                            g_player_strategic_352,
+                                            (int)s_slot_0057c8cc);
         } else {
             log_line("strat-load: panel fonts/loc unavailable — panel skipped");
         }

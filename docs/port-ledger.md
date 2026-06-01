@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **580** (23.7%) — tested 534, ported 46
-- code bytes touched: **28.2%** (236,792 / 838,629 B)
-- unported: **1867**
+- touched: **581** (23.7%) — tested 535, ported 46
+- code bytes touched: **28.3%** (237,064 / 838,629 B)
+- unported: **1866**
 - orphan refs (in src/, not in function table): 4
 
-## tested (534) — ported + host unit suite
+## tested (535) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -158,6 +158,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4148e4 | FUN_004148e4 | 264 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x4149ec | FUN_004149ec | 1050 | engine_title_render.c, engine_title_render.h, gfx_sprite.c (+1) |
 | 0x419c78 | FUN_00419c78 | 682 | engine_hud_menubar.c, engine_hud_menubar.h, main.c |
+| 0x41a734 | FUN_0041a734 | 272 | engine_hud_panel.c, engine_hud_panel.h, main.c |
 | 0x41a900 | FUN_0041a900 | 615 | engine_hud_menubar.c, engine_hud_menubar.h |
 | 0x41ab67 | FUN_0041ab67 | 215 | engine_hud_menubar.c, engine_hud_menubar.h |
 | 0x41ac3e | FUN_0041ac3e | 87 | engine_hud_panel.c |
@@ -341,7 +342,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4526b3 | FUN_004526b3 | 87 | engine_dirty_rect.c, engine_dirty_rect.h |
 | 0x45270a | FUN_0045270a | 43 | engine_dirty_rect.h, save.h |
 | 0x452735 | FUN_00452735 | 53 | engine_dirty_rect.h |
-| 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_button.c, engine_button.h (+3) |
+| 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_button.c, engine_button.h (+4) |
 | 0x4651b9 | FUN_004651b9 | 91 | engine_territory.c, engine_territory.h |
 | 0x46733c | FUN_0046733c | 124 | engine_map_query.c, engine_map_query.h |
 | 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c, engine_territory.h |
@@ -484,7 +485,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4afeed | FUN_004afeed | 1214 | gfx_text_label.c, gfx_text_label.h |
 | 0x4b13ed | FUN_004b13ed | 274 | gfx_paint.c, gfx_paint.h |
 | 0x4b191e | FUN_004b191e | 981 | engine.c, engine.h, engine_input.c (+2) |
-| 0x4b1de0 | FUN_004b1de0 | 11 | engine.c, engine_hud_menubar.c |
+| 0x4b1de0 | FUN_004b1de0 | 11 | engine.c, engine_hud_menubar.c, engine_hud_panel.h |
 | 0x4b20ed | FUN_004b20ed | 68 | engine.c, engine.h, engine_delta.c |
 | 0x4b2258 | FUN_004b2258 | 797 | audio.h, engine.c, engine.h (+2) |
 | 0x4b2636 | FUN_004b2636 | 130 | engine.c, engine.h, engine_fps.c (+1) |

@@ -1002,3 +1002,36 @@ canvas; `tools/panel_parity.py` diffs the panel strip (x>=0x1de, y
 Tax 0%, Ration Normal, food/tools/cow +10/timber +66 — pixel-identical).
 Wired into the drop-in `--strat-load`; the full-frame native render scores
 the same 44388/44388 = 100.00%.
+
+## END-TURN BUTTON STRIP (FUN_0041a734) — byte-exact (2026-06-02)
+
+The "End turn" label strip at the very bottom of the right HUD panel.
+Called from the screen-id-0 arm `FUN_0040f5fd` immediately after the
+territory-info panel as `FUN_0041a734(1)` (forced-redraw path).  Ported to
+`engine_hud_panel_render_endturn` in `src/engine_hud_panel.{c,h}`.
+
+**Body (all leaves already ported):**
+- `FUN_004b1de0()` — empty (elided).
+- `FUN_0040a567(DAT_005530c8, 0x3b, 0x1de, 0x1cc)` — redraw the misc_cty
+  parchment strip the button sits on → `gfx_sprite_render_opaque_from_blob`.
+- `FUN_004527a6(0x1d0, 0x1cc, 0xb, 2, 1)` — dirty-rect mark (present-time
+  bookkeeping, elided like the rest of this module).
+- `if (*(int*)(&DAT_0057bf00 + DAT_0057c8cc*0x160) < 999)` →
+  `FUN_00402c5e(4, 0, 0x1de, 0x1ce, 0xa2, &DAT_005c9a90, 0x16)` — centre the
+  localized **"End turn"** label (loc group 4 sub 0, decoded from l2.eng) in
+  colour 0x16 over the strip, using the panel name font fntl2_9.  The gate
+  field is the current realm's strategic-record field +0
+  (g_player_strategic_352, 0x160 stride); < 999 at a normal turn start.
+- `DAT_004eb260 = 1` — screen render flag (caller-owned, elided).
+
+**Outer gate (caller's responsibility, like FUN_0040f7d3's forced path):**
+`DAT_0057c8fc == 0` (hud_gate) && `DAT_0052af94 > 2` (ingame) &&
+`DAT_004eac50 != 2` (screen id).  The drop-in invokes this only when those
+hold.
+
+**Validation (deterministic):** `test_hud_panel_render_owned` now also calls
+the endturn drawer; `tools/panel_parity.py` scores a second strip (x>=0x1de,
+y 0x1cc..480) vs `load_clean_dump/frame_00000.bmp` → **3240/3240 drawn px =
+100.00%**.  The full-frame native `--strat-load` render scores the same.
+So the entire right-edge HUD panel (minimap + territory info + End-turn
+strip) is now byte-exact.

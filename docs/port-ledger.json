@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 534,
+  "tested": 535,
   "ported": 46,
-  "unported": 1867,
+  "unported": 1866,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 580,
+  "touched": 581,
   "pct_touched": 23.7,
-  "pct_tested": 21.8,
+  "pct_tested": 21.9,
   "bytes_total": 838629,
-  "bytes_touched": 236792,
-  "pct_bytes_touched": 28.2
+  "bytes_touched": 237064,
+  "pct_bytes_touched": 28.3
  },
  "orphan_refs": [
   "0x004148",
@@ -2976,8 +2976,12 @@
    "name": "FUN_0041a734",
    "size": 272,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_panel.c",
+    "src/engine_hud_panel.h",
+    "src/main.c"
+   ]
   },
   {
    "va": "0x41a844",
@@ -10875,6 +10879,7 @@
     "src/engine_button.h",
     "src/engine_dirty_rect.h",
     "src/engine_hud_menubar.c",
+    "src/engine_hud_panel.h",
     "src/engine_title_render.c"
    ]
   },
@@ -17689,7 +17694,8 @@
    "status": "tested",
    "src": [
     "src/engine.c",
-    "src/engine_hud_menubar.c"
+    "src/engine_hud_menubar.c",
+    "src/engine_hud_panel.h"
    ]
   },
   {
