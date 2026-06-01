@@ -201,3 +201,80 @@ For each record in the per-tile linked list:
     bottom is 0x1d8 (= 472); at view-mode 0 or 2 it's 0x1da (= 474).
     The 2-pixel difference matches the row-pair stride difference
     between zoom levels.
+
+## The strategic map is THREE walker clusters — this is only the FEATURE layer
+
+Validated 2026-06-01 against retail's live map state via the parity
+harness (`tests/map_render_harness.c` + `tools/map_render_parity.py`,
+fed by `frida_capture.py --dump-regions`; capture run
+`runs/capture/strat-blobs1`).  The map-draw wrapper **`FUN_004050c0`**
+(called from the strat-map composition `FUN_0040f5fd`) renders the
+overworld in three passes over the SAME 2-D cell array, in this order:
+
+| pass | frame driver | row iterators        | per-tile drawers     | reads |
+|-----:|--------------|----------------------|----------------------|-------|
+| 1 (base terrain)    | `FUN_0040526e` (537 B) | `FUN_00405ae9`/`FUN_00405c2f` | `FUN_004063c1`/`FUN_00406673` | descriptor +1/+3/+7; blobs `0x568208`,`0x53e914`,`0x57d344`,`0x55409c`,`0x56898c`,… |
+| 2 (overlay terrain) | `FUN_00405602` (608 B) | `FUN_00405eb5`/`FUN_00405fac` | `FUN_004071a0`/`FUN_004081a6` | (analogous) |
+| 3 (**features**)    | `FUN_00405487` (379 B) | `FUN_00405862`/`FUN_004059af` | `FUN_00408438` (2072 B) | descriptor +2 flag/+5 head; records via `g_per_territory_420`; blobs primary/alt/overlay |
+
+**Only pass 3 is ported** (this `engine_map_render` cluster).  The
+per-tile drawer `FUN_00408438` reads the linked-list HEAD at
+`descriptors[cell + 5]` and **returns immediately when head == 0**
+(retail `0x408483: cmp var_24h,0 / je 0x408c4b`).  In the lastturn.sav
+frame, 299 of 300 visible cells have head == 0 — i.e. plain terrain
+carries no territory record, so the feature walker correctly draws
+NOTHING for it.  The terrain grass/water/rivers/roads you see on the
+overworld come from passes 1 and 2 (the base + overlay terrain
+walkers), NOT from this cluster.
+
+**Parity-harness result (feature layer):** binding retail's captured
+camera + descriptors + records + 3 blobs and running
+`engine_map_render_frame`, the harness reports `error_count=0
+call_count=291` and draws exactly ONE sprite — a merchant wagon
+(record #2, type 3, sprite-idx 12, w40×h32, src_off 18056) at cursor
+(186,215) — the sole feature in the visible window.  This validates the
+ported walker against real data: it dispatches the one real feature
+byte-coherently and skips the 290 head-0 terrain cells, matching
+retail's control flow exactly.  (The wagon happens to sit under the
+"Non 256 colour display" scroll popup in the captured retail frame, so
+a direct pixel-diff of that sprite is occluded; the validation is the
+0-error coherent dispatch at the retail-derived position.)
+
+**Next frontier:** port passes 1 + 2 (the two terrain walker clusters)
+to draw the actual visible overworld.  New dependency: their per-tile
+drawers read base-tile sprite banks via the `0x568208`/`0x53e914`/…
+globals (loaded by the season `.pl8` loader `FUN_004984dc`, deferred) —
+the parity harness will need those banks captured (`--dump-regions`
+deref) the same way the feature blobs were.
+
+### Pass 1 (base terrain) frame driver `FUN_0040526e` — structure
+
+Parallel to the feature frame driver `FUN_00405487` (top phantom row →
+phase1 row → `(row_count-2)/2` × (phase0,phase1) pairs → bottom phantom
+row), walking the SAME camera globals (cam_x0 `0x52afdc`→`0x591524`,
+cam_y0 `0x553244`→`0x591528`, row cursor `0x5651b8`→`0x56d594`, col
+cursor `0x5651b4`→`0x56d598`, `0x56957c`=0, advances by x_step `0x568220`
+/ y_step `0x53f65c`).  Two structural differences from pass 3:
+
+1. **Each cell calls THREE drawers, not one**, and the empty/non-empty
+   split is INVERTED vs the feature walker:
+   - non-empty cell (`< 0xfff0000`): `FUN_004063c1(phase)` then
+     `FUN_00406673(phase)` — two stacked terrain sprite layers
+     (ground + decoration), each reading descriptor fields +1/+3/+7.
+   - **empty cell (`>= 0xfff0000`)**: NOT skipped.  It stores
+     `0x5c9288 = cell - 0xfff0000` (or 0 when render_mode `0x53f264`==1)
+     — i.e. the low 20 bits of the empty marker are a sprite index —
+     then calls `FUN_0042a7f1(phase)`, the **sky/border/off-map tile
+     drawer**.  This is why the feature walker (which `return`s on these
+     cells) leaves them blank but the real map shows water/sky/edges.
+
+2. Phase arg is a literal pushed per call: top phantom row pushes **2**,
+   bottom phantom pushes **1** (the inner rows get their phase from the
+   row iterators `FUN_00405ae9`/`FUN_00405c2f`).
+
+So pass 1 alone is a 6-function cluster: frame `FUN_0040526e`, row iters
+`FUN_00405ae9`/`FUN_00405c2f`, drawers `FUN_004063c1`/`FUN_00406673`/
+`FUN_0042a7f1`.  Pass 2 (`FUN_00405602` → `FUN_004071a0`/`FUN_004081a6`,
+iters `FUN_00405eb5`/`FUN_00405fac`) is the analogous overlay cluster.
+The `0x5c9288` global is the per-tile "empty-marker sprite index" the
+sky drawer consumes (the feature walker has no equivalent).

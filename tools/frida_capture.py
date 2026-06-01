@@ -216,6 +216,11 @@ class CaptureConfig:
     # first captured frame; written to <run_dir>/globals_dump.json.  Used
     # to seed a parity port's state from retail's exact values.
     dump_globals:      list[dict[str, Any]] | None = None
+    # One-shot large-region dump: list of {va, size, label, deref}.  Read once
+    # at the first captured frame; each region written as raw bytes to
+    # <run_dir>/dump/<label>.bin.  `deref` reads the 32-bit pointer at `va`
+    # first (heap-allocated sprite-bank base), then `size` bytes from there.
+    dump_regions:      list[dict[str, Any]] | None = None
     # Globals poke: list of {va, bytes}.  Written into engine memory at the
     # top of every tick (survives the engine's own writes) to force
     # scenario state — e.g. a name-box string — before a capture.
@@ -600,6 +605,27 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             except Exception as e:
                 f_log.write(f"[globals] write failed: {e}\n")
             return
+        if kind == "globals_blob":
+            label = p.get("label") or f"0x{(p.get('va') or 0):x}"
+            ok = bool(p.get("ok")) and data is not None
+            dump_dir = run_dir / "dump"
+            dump_dir.mkdir(exist_ok=True)
+            if ok:
+                out = dump_dir / f"{label}.bin"
+                try:
+                    out.write_bytes(data)
+                    counts["globals_blob"] = counts.get("globals_blob", 0) + 1
+                    f_log.write(
+                        f"[blob] {label} @0x{(p.get('va') or 0):x}"
+                        f"{' deref→' + str(p.get('resolved')) if p.get('deref') else ''}"
+                        f" size={p.get('size')} -> {out.name} "
+                        f"({len(data)}B)\n")
+                except Exception as e:
+                    f_log.write(f"[blob] write failed {label}: {e}\n")
+            else:
+                f_log.write(f"[blob] {label} read FAILED (ok={p.get('ok')}, "
+                            f"data={'present' if data else 'none'})\n")
+            return
         if kind == "fps_sample":
             counts["fps_sample"] += 1
             fps_last["current_fps"] = int(p.get("current_fps", 0))
@@ -797,6 +823,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "frame_capture_max":         int(cfg.frame_capture_max),
             "frame_capture_warmup_secs": int(cfg.frame_capture_warmup_secs),
             "dump_globals":              cfg.dump_globals or [],
+            "dump_regions":              cfg.dump_regions or [],
             "poke_globals":              cfg.poke_globals or [],
             "skip_intro":                bool(cfg.skip_intro),
             "input_record":              bool(cfg.input_record),
@@ -1046,6 +1073,14 @@ def main(argv: list[str] | None = None) -> int:
                          "once at the first captured frame; written to "
                          "<run_dir>/globals_dump.json.  Seeds a parity port's "
                          "state from retail's exact values.")
+    ap.add_argument("--dump-regions", default=None,
+                    help="comma-separated list of [*]VA:SIZE[:LABEL] specs to "
+                         "read once at the first captured frame, each written "
+                         "as raw bytes to <run_dir>/dump/<label>.bin.  A "
+                         "leading '*' dereferences the 32-bit pointer at VA "
+                         "first (heap sprite-bank base) then reads SIZE bytes "
+                         "from the target.  For large arrays/blobs that would "
+                         "be wasteful as JSON (cf. --dump-globals for scalars).")
     ap.add_argument("--poke-globals", default=None,
                     help="comma-separated list of VA:HEXBYTES specs (VA is a "
                          "Ghidra VA, HEXBYTES is a hex string like 41424300) "
@@ -1121,6 +1156,29 @@ def main(argv: list[str] | None = None) -> int:
 
     dump_globals = _parse_dump_globals(args.dump_globals)
 
+    def _parse_dump_regions(spec: str | None) -> list[dict[str, Any]]:
+        """[*]VA:SIZE[:LABEL],...  → [{va, size, label, deref}].  A leading
+        '*' marks the VA as a pointer to dereference before reading."""
+        out: list[dict[str, Any]] = []
+        if not spec:
+            return out
+        for tok in spec.split(","):
+            tok = tok.strip()
+            if not tok:
+                continue
+            deref = tok.startswith("*")
+            if deref:
+                tok = tok[1:]
+            parts = tok.split(":")
+            va = int(parts[0], 0)
+            size = int(parts[1], 0) if len(parts) > 1 else 1
+            label = parts[2] if len(parts) > 2 else f"0x{va:x}"
+            out.append({"va": va, "size": size, "label": label,
+                        "deref": deref})
+        return out
+
+    dump_regions = _parse_dump_regions(args.dump_regions)
+
     def _parse_poke_globals(spec: str | None) -> list[dict[str, Any]]:
         """VA:HEXBYTES,...  → [{va, bytes}].  HEXBYTES is a hex string."""
         out: list[dict[str, Any]] = []
@@ -1182,6 +1240,7 @@ def main(argv: list[str] | None = None) -> int:
         frame_capture_max=args.frame_capture_max,
         frame_capture_warmup_secs=args.frame_capture_warmup_secs,
         dump_globals=dump_globals,
+        dump_regions=dump_regions,
         poke_globals=poke_globals,
         skip_intro=args.skip_intro,
         input_record=args.input_record,

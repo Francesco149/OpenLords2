@@ -157,8 +157,28 @@ DIFF_OBJS := $(addprefix build/diff_,$(notdir $(DIFF_SRCS:.c=.o))) \
 DIFF_OUT  := build/libengine_diff.so
 DIFF_CFLAGS := -std=c11 -O2 -fPIC -Wall -Wextra -Wno-unused-parameter -I../src
 
-.PHONY: all run clean diff
+# Map-render parity harness — drives engine_map_render with retail's
+# captured live map state into an offscreen canvas (see
+# tools/map_render_parity.py).  Links the under-test closure (same as the
+# diff lib) plus its own main(); ASan stays on so reads against real
+# captured data are bounds-checked.
+HARNESS_OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o))) \
+                build/map_render_harness.o build/stubs.o
+HARNESS_OUT  := build/map_render_harness
+
+.PHONY: all run clean diff harness
 all: $(OUT) $(DIFF_OUT)
+
+harness: $(HARNESS_OUT)
+
+# ASan-built copy of the diff-lib stubs (log_line / io_read_file_at /
+# g_sim_* globals) so the standalone harness resolves the Win32-side
+# symbols the under-test closure references.
+build/stubs.o: diff_stubs.c | build
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(HARNESS_OUT): $(HARNESS_OBJS)
+	$(CC) $(LDFLAGS) -o $@ $(HARNESS_OBJS)
 
 run: $(OUT)
 	./$(OUT)

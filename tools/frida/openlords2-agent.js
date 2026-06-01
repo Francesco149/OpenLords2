@@ -523,6 +523,14 @@ let g_frame_capture_warmup_secs = 0;
 // first captured frame and emitted as a `globals_dump` message.
 let g_dump_globals             = [];
 let g_globals_dumped           = false;
+// One-shot large-region dump — list of {va, size, label, deref}; read once
+// at the first captured frame and emitted as one `globals_blob` message per
+// region with the raw bytes as a binary side payload (so 300 KB sprite banks
+// don't have to round-trip as a JSON number array).  `deref` reads the 32-bit
+// pointer stored at `va` first, then reads `size` bytes from that target —
+// used for the heap-allocated PL8/RLE sprite banks reached via DAT_* pointers.
+let g_dump_regions             = [];
+let g_regions_dumped           = false;
 // Globals poke — list of {va, bytes}; written into engine memory at the
 // top of every tick so the value survives the engine's own writes (used
 // to force scenario state, e.g. a name-box string, before a capture).
@@ -1691,6 +1699,58 @@ function captureFrameOnce() {
             send({kind: 'globals_dump',
                   frame_idx: g_frame_capture_count - 1,
                   regions: regions});
+        }
+
+        // One-shot large-region dump — one message per region, raw bytes as a
+        // binary side payload.  For `deref` regions the 32-bit pointer stored
+        // at `va` is read first (the heap-allocated sprite-bank base), then
+        // `size` bytes are read from that absolute target.
+        if (!g_regions_dumped && g_dump_regions.length > 0) {
+            g_regions_dumped = true;
+            for (let i = 0; i < g_dump_regions.length; i++) {
+                const s = g_dump_regions[i];
+                let base = rva(s.va);
+                let resolved = base;
+                let ok = true;
+                try {
+                    if (s.deref) {
+                        resolved = base.readPointer();
+                    }
+                } catch (e) {
+                    ok = false;
+                    err('dump_regions.deref', s.label + ': ' + e.message);
+                }
+                // Clamp the read to the enclosing mapped range so a generous
+                // requested size on a heap-allocated bank (whose exact length
+                // we don't know) never walks off the end into unmapped memory.
+                let readSize = s.size;
+                try {
+                    const range = Process.findRangeByAddress(resolved);
+                    if (range) {
+                        const avail = range.base.add(range.size)
+                                          .sub(resolved).toUInt32();
+                        if (avail < readSize) readSize = avail;
+                    }
+                } catch (e) { /* fall back to requested size */ }
+                let ab = null;
+                if (ok) {
+                    try {
+                        ab = resolved.readByteArray(readSize);
+                    } catch (e) {
+                        ok = false;
+                        err('dump_regions.read', s.label + ': ' + e.message);
+                    }
+                }
+                send({kind: 'globals_blob',
+                      frame_idx: g_frame_capture_count - 1,
+                      label: s.label,
+                      va: s.va,
+                      size: readSize,
+                      requested: s.size,
+                      deref: !!s.deref,
+                      resolved: ok ? resolved.toString() : null,
+                      ok: ok}, ok ? ab : undefined);
+            }
         }
     } catch (e) {
         err('captureFrameOnce', e.message);
@@ -4574,6 +4634,14 @@ rpc.exports = {
               })
             : [];
         g_globals_dumped = false;
+
+        g_dump_regions = Array.isArray(opts.dump_regions)
+            ? opts.dump_regions.map(function (s) {
+                  return {va: (s.va >>> 0), size: (s.size | 0),
+                          label: String(s.label || ''), deref: !!s.deref};
+              })
+            : [];
+        g_regions_dumped = false;
 
         g_poke_globals = Array.isArray(opts.poke_globals)
             ? opts.poke_globals.map(function (s) {

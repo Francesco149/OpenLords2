@@ -401,6 +401,16 @@ void engine_map_render_tile(int phase)
                                 MAP_RENDER_CLIP_Y_BOTTOM_DEFAULT);
         }
 
+#ifdef MAP_RENDER_DEBUG
+        {
+            extern void map_render_debug_dispatch(int rec_type, int sprite_idx,
+                int blob_is_alt, int sprite_w, int h_short, int src_off,
+                int cur_x, int cur_y);
+            map_render_debug_dispatch(rec_type, rec_sprite_idx,
+                blob == g_blob_alt, sprite_w, h_short, src_off,
+                gfx_glyph_cursor_x(), gfx_glyph_cursor_y());
+        }
+#endif
         /* Apply top/left skip + dispatch first-family blitter. */
         gfx_dispatch_apply_skip_and_dispatch_sprite(blob);
 
