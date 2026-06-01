@@ -276,6 +276,7 @@ static void bringup_title_nav(const char *dir);
 static void bringup_title_live(void);
 static void bringup_strat_map(const char *dir);
 static void bringup_strat_load(const char *dir);
+static void engine_map_post_load(void);
 static const char *translate_wsl_path(const char *p, char *buf, size_t cap);
 void log_line(const char *fmt, ...);   /* non-static — gfx.c links to this */
 
@@ -1687,6 +1688,72 @@ static int strat_check_dump(const char *dir, const char *name,
  * byte-exact against the dumps in DIR, then renders the body + menu bar.
  * DIR supplies only the retail dumps used for the self-check; all rendered
  * data is produced from the loaded save + L2_maps.dat. */
+/* Port of FUN_004976a1 @ 0x4976a1 — the map-setup orchestrator that
+ * retail's save-load core (FUN_004adfe6) runs immediately after a save's
+ * schema table has been deserialised.  Builds the strategic-map render
+ * arrays from the freshly-loaded schema globals, finalises the terrain
+ * descriptors, loads the seasonal sprite banks + minimap political grids,
+ * and switches the screen state to the in-game strategic map (0).  The
+ * CALLER owns save_load (the schema globals are already populated on
+ * entry) and any canvas lock + present / demand-redraw kick.
+ *
+ * This ports retail's DETERMINISTIC, render-affecting body.  The
+ * peripheral state retail also touches in FUN_004976a1 is DEFERRED —
+ * none of it changes the rendered frame (proven byte-exact without it)
+ * and the timing scalars are non-deterministic, which would break the
+ * byte-exact reproduction gate:
+ *   - timing/anim scalars DAT_0056d8b4 / DAT_0052afcc / DAT_0055403c /
+ *     DAT_005440c8 / DAT_00568d9c / DAT_00553fc8 (timeGetTime-seeded);
+ *   - FUN_0043e9e2 per-realm turn-start reset + FUN_0049ca32 visibility
+ *     bit flags (game state the loaded save already carries);
+ *   - the immediate render FUN_0040f5fd(1) — the caller renders via the
+ *     screen-0 dispatch arm (engine_screen_strat_render);
+ *   - post-load audio cues FUN_00427d19 / FUN_00499d7d / FUN_00499aca;
+ *   - the DAT_00553030 multiplayer tail (FUN_0043f4b7 / FUN_0043fd2a);
+ *   - the dirty-rect full mark FUN_0045240a and DAT_0056d6a0 = 1 (the
+ *     drop-in presents the whole back buffer, so the present region is
+ *     moot — the caller sets demand-redraw to drive the live repaint).
+ *
+ * Banks/minimap are loaded from the default dir (NULL / ".") exactly as
+ * the --strat-load bring-up did; the drop-in runs from the install dir.
+ */
+static void engine_map_post_load(void)
+{
+    int map_id = (int)s_slot_0053f034;
+    s_slot_0057cb18 = 0;                        /* view-mode normal (retail
+                                                 * reads DAT_0057cb18; our SP
+                                                 * saves carry 0) */
+
+    /* Derived render arrays (tile_cells) + camera from the loaded save
+     * (retail FUN_004298c1 build_cells + FUN_00451fcc camera). */
+    engine_map_init_strategic(NULL, map_id);
+    int32_t *cells = engine_map_init_tile_cells();
+
+    /* Minimap political grids (FUN_0046a037). */
+    if (!engine_minimap_load_grids(".", map_id))
+        log_line("post-load: minimap grid load failed (map_id=%d)", map_id);
+
+    /* Terrain descriptor finalize: autotile the terrain sprite +3
+     * (FUN_0046dbf5), randomise the special sea tiles (FUN_0046dd34),
+     * rebuild the per-key cell roster (FUN_0046da4b(0)).  Reproduces
+     * retail's immediate post-load descriptor table byte-exact. */
+    engine_territory_bind_cells(g_overworld_map);
+    engine_territory_bind_terrain_tiles(cells);
+    engine_territory_bind_cell_roster((int32_t *)g_misc_1360);
+    engine_rng_single_in_t strat_rng = { 0x34518632u };  /* InitInstance seed */
+    engine_territory_classify_feature_tiles(&strat_rng);   /* FUN_0046dbf5 */
+    engine_territory_randomise_special_tiles(&strat_rng);   /* FUN_0046dd34 */
+    engine_territory_rebuild_cell_roster(0);                /* FUN_0046da4b(0) */
+
+    /* Screen state → in-game strategic map (retail DAT_004eac50 = 0). */
+    engine_set_current_screen(0);
+
+    /* Seasonal sprite banks (FUN_004984dc) — sets the data-ready gate
+     * (DAT_0053f050) the screen-0 render arm checks. */
+    if (!engine_pl8_load_strategic_banks(NULL))
+        log_line("post-load: pl8 bank load failed");
+}
+
 static void bringup_strat_load(const char *dir)
 {
     /* 1. Load the real save into the schema globals (descriptors / territory
@@ -1703,30 +1770,14 @@ static void bringup_strat_load(const char *dir)
     log_line("strat-load: loaded lastturn.sav (map_id=%d season=%d)",
              map_id, season);
 
-    /* 2. Native sprite banks for the loaded season. */
-    if (!engine_pl8_load_strategic_banks(NULL)) {
-        log_line("strat-load: engine_pl8 load failed — aborting");
-        return;
-    }
-
-    /* 3. Build the derived render arrays (tile_cells) + camera natively. */
-    engine_map_init_strategic(NULL, map_id);
+    /* 2. Map setup — retail FUN_004976a1 (sprite banks, derived render
+     * arrays + camera, terrain descriptor finalize, minimap political
+     * grids, screen state → 0).  Factored into engine_map_post_load so the
+     * SAME orchestration feeds the live load pump; see its definition
+     * above for the deferred-state notes. */
+    (void)season;
+    engine_map_post_load();
     int32_t *cells = engine_map_init_tile_cells();
-
-    /* 3b. Load finalize — retail FUN_004976a1's terrain tail run after
-     * save_load: autotile the terrain sprite +3 (FUN_0046dbf5), randomise the
-     * special sea tiles (FUN_0046dd34), rebuild the per-key cell roster
-     * (FUN_0046da4b(0)).  Reproduces retail's immediate post-load descriptor
-     * table byte-exact (test_map_finalize_load_path_diagnostic: +3=100%).
-     * The post-load WARMUP region->owner remap (+7) is a separate turn pass,
-     * not yet ported — territory owner tints reflect the immediate-load state. */
-    engine_territory_bind_cells(g_overworld_map);
-    engine_territory_bind_terrain_tiles(cells);
-    engine_territory_bind_cell_roster((int32_t *)g_misc_1360);
-    engine_rng_single_in_t strat_rng = { 0x34518632u };  /* InitInstance seed */
-    engine_territory_classify_feature_tiles(&strat_rng);   /* FUN_0046dbf5 */
-    engine_territory_randomise_special_tiles(&strat_rng);   /* FUN_0046dd34 */
-    engine_territory_rebuild_cell_roster(0);                /* FUN_0046da4b(0) */
 
     /* 4. Self-check: the native arrays must byte-match the captured dumps. */
     int all_ok = 1;
@@ -1737,14 +1788,6 @@ static void bringup_strat_load(const char *dir)
                                g_per_territory_420, 63420);
     all_ok &= strat_check_dump(dir, "army_records.bin", g_per_army_768, 13056);
     log_line("strat-load: native-vs-dump check %s", all_ok ? "PASSED" : "FAILED");
-
-    /* 5. Load the right-panel minimap grids (FUN_0046a037 — part of the
-     * load setup FUN_004976a1, run once before the first frame, not per
-     * render).  engine_screen_strat_render's FUN_00410aa9 step then plots
-     * over them.  The coloured plot is validated byte-exact (8316/8316
-     * drawn px) against load_clean_dump (tools/minimap_parity.py). */
-    if (!engine_minimap_load_grids(".", map_id))
-        log_line("strat-load: minimap grid load failed (map_id=%d)", map_id);
 
     /* 6. Render the strategic-map frame via the ported screen-id-0 arm
      * (engine_screen_strat_render = FUN_0040f5fd).  This is the SAME

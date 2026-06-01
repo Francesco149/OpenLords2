@@ -62,15 +62,43 @@ the map natively.  Three host tests cover the arm-0 routing.
 `tools/minimap_parity.py` scores the minimap box 16384/16384 = 100.00%,
 all vs `runs/capture/load_clean_dump`.  1768 host tests green.
 
-**REMAINING (the prerequisite, verification-gated):** the LIVE
-load/new-game path must call the map-setup orchestrator `FUN_004976a1`
-(save_load → build_cells → camera → autotile/randomise/roster → banks →
-`FUN_0040f5fd`) to populate the globals + set `DAT_0053f050 = 1` and
-`g_sim_current_screen = 0`.  Today only the `--strat-load` bring-up does
-that setup; the live load pump (`0x4ad9f0`) is still deferred.  Until that
-is wired the dispatch arm is dormant in the live loop (data-ready gate
-false).  Wiring `FUN_004976a1` into the live load pump is the next step
-and needs the user's eyes on the live drop-in.
+## MAP-SETUP ORCHESTRATOR `FUN_004976a1` → `engine_map_post_load` (2026-06-02)
+
+The map-setup orchestrator retail's save-load core (`FUN_004adfe6`) runs
+immediately after deserialising a save's schema table — now ported as
+`engine_map_post_load()` in the drop-in (`src/main.c`), factored out of the
+`--strat-load` bring-up so the SAME orchestration can feed the live load
+pump.  Body, in retail order: derived render arrays + camera
+(`FUN_004298c1` build_cells / `FUN_00451fcc`), minimap political grids
+(`FUN_0046a037`), terrain descriptor finalize (`FUN_0046dbf5` autotile /
+`46dd34` randomise / `46da4b(0)` roster), `g_sim_current_screen = 0`
+(`DAT_004eac50`), then the seasonal sprite banks (`FUN_004984dc`, which sets
+the data-ready gate `DAT_0053f050 = 1` the screen-0 arm checks).  The CALLER
+owns `save_load` (schema globals already populated on entry) and any canvas
+lock + present / demand-redraw kick.
+
+**Deferred (render-neutral / non-deterministic):** the timing/anim scalars
+`DAT_0056d8b4 / 0052afcc / 0055403c / 005440c8 / 00568d9c / 00553fc8`
+(`timeGetTime`-seeded — would break the byte-exact gate); `FUN_0043e9e2`
+per-realm turn-start reset + `FUN_0049ca32` visibility bit flags (state the
+loaded save already carries); the immediate render `FUN_0040f5fd(1)` (the
+caller renders via the screen-0 dispatch arm); post-load audio
+(`FUN_00427d19 / 00499d7d / 00499aca`); the `DAT_00553030` multiplayer tail
+(`FUN_0043f4b7 / 0043fd2a`); the dirty-rect full mark `FUN_0045240a` +
+`DAT_0056d6a0 = 1` (the drop-in presents the whole back buffer).
+
+**Validation (deterministic):** `bringup_strat_load` refactored to call
+`save_load` → `engine_map_post_load` → render.  The refactored `--strat-load`
+rendered frame is **byte-IDENTICAL** to the pre-refactor output
+(307200/307200) — the reorder (banks-after-finalize, screen-state set,
+minimap-before-finalize) is output-neutral.
+
+**REMAINING (verification-gated):** the LIVE load pump (`FUN_004ad9f0`) must
+call `save_load` → `engine_map_post_load` so the real game loop reaches the
+now-wired screen-0 dispatch arm.  Today only the `--strat-load` bring-up runs
+the setup; until the pump is wired the dispatch arm is dormant in the live
+loop (data-ready gate false).  Wiring `FUN_004ad9f0` into the live menu tick
+is the next step and needs the user's eyes on the live drop-in.
 
 ## RIGHT-PANEL MINIMAP — BYTE-EXACT (2026-06-01, `src/engine_minimap.c`)
 
