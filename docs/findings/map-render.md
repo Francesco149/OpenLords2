@@ -940,3 +940,65 @@ renders the immediate-post-load map natively; (b) find the WARMUP region→owner
 remap (call-trace frames 567→~3700) to reproduce the settled `strat-terrain1`
 frame; (c) chase the +2 0.5% residual (~20 cells).  `test_map_finalize_load_path_diagnostic`
 now asserts the byte-exact load result.
+
+---
+
+## TERRITORY-INFO PANEL (FUN_0040f7d3) — byte-exact (2026-06-02)
+
+The right-edge territory-info panel below the minimap.  Called from the
+screen-id-0 arm `FUN_0040f5fd` as `FUN_0040f7d3(1)` — the `param_1==1`
+forced-redraw path that skips all the change-detection / screen-id gates at
+the function head.  Ported to `src/engine_hud_panel.{c,h}` (state-free),
+with the resource-queue builder `FUN_0040fec1` and the eight resource
+subdrawers (`4100af`/`41023a`/`4103c5` for queue-1 = food/wealth column;
+`410502`/`410598`/`41062e`/`4106c4`/`4107d1` for queue-2 = materials; the
+trivial `41ac3e` is a thin `402d37` wrapper).
+
+**Data source:** the per-territory record block is **g_per_army_768**
+(retail base `DAT_0053f9b0`, 0x300-byte stride, save entry 4 — the *same*
+block the minimap reads), indexed by the current territory
+`DAT_0057c93c`.  All field reads in the port are offsets relative to
+0x53f9b0 (e.g. owner byte `&DAT_0053f9b5` = +5).  Two branches: OWNED
+(record owner +5 == current realm `DAT_0057c8cc`) draws the full info card;
+NOT-OWNED draws the territory name + owning realm colour/name.
+
+**Fonts (the only new dependency):** every render leaf was already ported;
+the panel just needed two fonts beyond the menu font.  Identified via the
+asset loader `FUN_00499859`, whose name+size table is at **0x4d9f48**
+(0x14-byte entries: `char name[0x10]` + `u32 size`):
+
+| idx | dest VA       | file         | size   | role            |
+|----:|---------------|--------------|-------:|-----------------|
+| 4   | `DAT_005c9a90`| fntl2_9.pl8  | 0x251c | panel name/number |
+| 5   | `DAT_005aeba0`| font_10.pl8  | 0x0d48 | resource readouts |
+| 6   | `DAT_005af8f0`| fntl2_14.pl8 | 0x36b0 | menu/default      |
+| 7   | `DAT_005b2fa0`| fntl2_22.pl8 | 0x84d0 | large title       |
+
+`gfx_load_panel_name_font` / `gfx_load_panel_resource_font` load idx 4/5.
+
+**KEY: the char→glyph map is global, not per-font.**  `FUN_00402a14` reads
+`(&DAT_004d71f0)[char]` (a fixed ASCII→glyph-slot table, our
+`gfx_glyph_render_map()`) and then indexes the *font* blob at
+`font + slot*0x10 + 8` for the 16-byte glyph descriptor (width etc.).  So
+the per-call font pointer (`&DAT_005c9a90` / `005aeba0` / `005af8f0`) only
+supplies glyph pixels + widths — pass the same render map for every font and
+vary `font_base`.  The kerning special-case `if (font == &DAT_005af8f0)` in
+402a14 means the menu-font pointer must be set as the dispatch default
+(`gfx_dispatch_set_default_font(menu_font)`) so menu-font text kerns and the
+other two fonts don't.
+
+**Label strings** `DAT_004d3d34..84` (passed as the label/suffix args) are
+static 4-byte buffers — all single spaces except `0x4d3d3c` = `"%"` (ration)
+and `0x4d3d88` = `"-"`.  The resource *type* is shown by the icon sprite,
+not text; these are pure spacing.  The localized text (territory name = loc
+group 100 sub `map_id*0x14+terr`; Pop/Wealth = loc 0x3d; tax label = loc
+0x15) comes through the loc system.
+
+**Validation (deterministic):** `test_hud_panel_render_owned` loads the real
+lastturn.sav + misc_cty bank + 3 fonts + l2.eng and renders into a 640x480
+canvas; `tools/panel_parity.py` diffs the panel strip (x>=0x1de, y
+0x9c..0x1ae) vs `runs/capture/load_clean_dump/frames/frame_00000.bmp` →
+**44388/44388 drawn px = 100.00%** (Lancashire: name, pop 435, approval ♥72,
+Tax 0%, Ration Normal, food/tools/cow +10/timber +66 — pixel-identical).
+Wired into the drop-in `--strat-load`; the full-frame native render scores
+the same 44388/44388 = 100.00%.
