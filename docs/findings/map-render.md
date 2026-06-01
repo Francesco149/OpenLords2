@@ -400,3 +400,35 @@ strip-blitter family**, keyed on `DAT_00591568` (kind 2/3/4) ×
 `DAT_005bb478` (strip count, `!=0`) × view-mode, then re-diff toward 100%.  After that: pass 2
 (`FUN_00405602` overlay cluster) + compose all three passes + wire
 screen-dispatch arm 0.
+
+### CORRECTION (2026-06-01) — the missing 9% is NOT drawer B
+
+Empirical zoom-diff of the proto vs the clean retail frame (NEAREST-upscaled
+truth | mine | diff crops, not pixel samples) overturns the drawer-B overhang
+diagnosis above:
+
+* **Top band (rows 0–23, full 640px width, ~10.5k px ≈ half the miss) = the
+  "File / Options / Help" MENU BAR**, drawn by a separate menu/HUD function.
+  Pass-1 tiles only paint DOWNWARD from the cursor (block A = cursor rows
+  0..14, block B = 15..29; all dest offsets positive) and the walk's cursor
+  never rises above `y0 = 9`, so pass 1 *cannot* produce those rows. Scoring
+  them against a terrain-only render was the bulk of the artificial loss.
+* **In-body "wrong" pixels (~8.7k) = map FEATURES** (cattle / wagons / units)
+  plus pass-2 overlay — absent only because `proto_pass1_render.py` runs pass 1
+  alone. The base terrain underneath matches cleanly. The feature walker is
+  already ported (`engine_map_render`).
+* **Right edge = a 2px viewport boundary.** Negligible.
+* **Drawer B draws NOTHING in this frame.** For all 29 valid drawer-B cells the
+  row-clip `param_4 = DAT_0056957c` (col-Y accumulator, 105–300) far exceeds the
+  sprite `count = DAT_005bb478` (3–17), so the blitter guard `param_4 <= iVar1`
+  (with `iVar1 < count`) never fires. The overhang is clipped away entirely at
+  this zoom/camera. (The drawer-B blitter family was analyzed — a sliding-window
+  transparent diamond strip-blitter; net effect = each source row drawn once at
+  `base − row*pitch` with the block-0 shape, looped `[param_4, count)` — but it
+  is not needed for this frame.)
+
+Excluding the menu bar, the pass-1 proto scores **95.2%** over the map region;
+the residual is features + pass-2 overlay, i.e. the *other two clusters*, not
+pass 1. **Corrected next step: compose all three clusters (pass-1 base ✓ +
+pass-2 overlay + the ported feature walker) and diff — that should leave only
+HUD chrome (menu bar + right realm panel) as the gap.**
