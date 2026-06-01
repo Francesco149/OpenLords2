@@ -63,6 +63,11 @@
 #include "dev_hooks.h"
 #include "engine.h"
 #include "engine_dirty_rect.h"
+#include "engine_map_render.h"
+#include "engine_map_scene.h"
+#include "engine_map_terrain.h"
+#include "engine_overlay_render.h"
+#include "engine_pl8.h"
 #include "engine_title_render.h"
 #include "engine_menu_input.h"
 #include "text_input.h"
@@ -72,6 +77,7 @@
 #include "gfx_dispatch.h"
 #include "gfx_glyph.h"
 #include "gfx_glyph_table.h"
+#include "gfx_paint.h"
 #include "gfx_caret.h"
 #include "gfx_panel.h"
 #include "gfx_text.h"
@@ -148,6 +154,19 @@ static int       g_title_live;
  * keystroke route → text editor → page-4 name box.  A scripted stand-in
  * for a human at the keyboard, so the typing path can be frame-captured. */
 static const char *g_title_type;
+/* --strat-map DIR: bring up the in-game strategic-map BODY render in the
+ * live drop-in, ahead of the unported new-game/load state producer + the
+ * HUD chrome.  Loads the season sprite banks NATIVELY via engine_pl8
+ * (the ported FUN_004984dc), seeds the live map arrays
+ * (tile_cells/descriptors/territory/army) from the captured .bin dump in
+ * DIR — the same snapshot the host scene harness uses — binds the three
+ * ported map clusters at the captured camera, runs the ported map-body
+ * driver (engine_map_scene_render_body, FUN_004050f6) into the locked
+ * back buffer, dumps the raw 8bpp canvas to DIR/port_strat.raw (for a
+ * palette-applied diff vs retail), presents, and captures port_strat.bmp.
+ * Implies --gfx-init.  DIR is auto-translated Linux→WSL-UNC like
+ * --capture-to. */
+static const char *g_strat_map_dir;
 /* --audio-init: call audio_init() after window creation.  Off by
  * default — SetCooperativeLevel(PRIORITY) modifies process audio
  * state and the headless smoke harness has no way to validate
@@ -245,6 +264,8 @@ static void main_loop_body(void);
 static void bringup_title_menu(int with_panel);
 static void bringup_title_nav(const char *dir);
 static void bringup_title_live(void);
+static void bringup_strat_map(const char *dir);
+static const char *translate_wsl_path(const char *p, char *buf, size_t cap);
 void log_line(const char *fmt, ...);   /* non-static — gfx.c links to this */
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdShow)
@@ -318,7 +339,15 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
              * menu rather than the background-erase fill.  Exercises the
              * FUN_0041e61d / FUN_0041e7e1 render chain ahead of the
              * boot→title state producer. */
-            if (g_title_live) {
+            if (g_strat_map_dir) {
+                /* Live strategic-map BODY render from the captured map
+                 * state + natively-loaded sprite banks (engine_pl8). */
+                static char strat_buf[MAX_PATH];
+                g_strat_map_dir = translate_wsl_path(g_strat_map_dir,
+                                                     strat_buf,
+                                                     sizeof strat_buf);
+                bringup_strat_map(g_strat_map_dir);
+            } else if (g_title_live) {
                 /* Live interactive menu — drive the engine into the
                  * title state, then let the main loop tick it so a real
                  * mouse navigates the menu. */
@@ -1357,6 +1386,201 @@ static void bringup_title_nav(const char *dir)
              engine_title_render_page(), path);
 }
 
+/* Translate a Linux-absolute path ("/opt/src/…") to its WSL-UNC form
+ * ("\\wsl.localhost\<distro>\opt\src\…") so the Windows-side exe can
+ * reach repo files through the 9P share.  Mirrors the inline logic the
+ * capture-dir / call-trace paths use.  Non-absolute or non-WSL paths are
+ * returned unchanged (copied into buf). */
+static const char *translate_wsl_path(const char *p, char *buf, size_t cap)
+{
+    if (!p) return p;
+    const char *distro = getenv("WSL_DISTRO_NAME");
+    if (p[0] == '/' && distro && distro[0]) {
+        wsprintfA(buf, "\\\\wsl.localhost\\%s%s", distro, p);
+        for (char *q = buf; *q; q++)
+            if (*q == '/') *q = '\\';
+        return buf;
+    }
+    /* Copy through so callers can treat the result uniformly. */
+    lstrcpynA(buf, p, (int)cap);
+    return buf;
+}
+
+/* Read DIR/<name> (DIR already WSL-translated) into a caller buffer via
+ * the Win32 file helper.  Returns bytes read (0 on failure, logged). */
+static int strat_slurp(const char *dir, const char *name,
+                       void *buf, size_t cap)
+{
+    char path[MAX_PATH];
+    wsprintfA(path, "%s\\%s", dir, name);
+    int n = io_read_file_at(path, buf, cap, 0);
+    if (n == 0)
+        log_line("strat-map: read %s failed", path);
+    return n;
+}
+
+/* Live strategic-map BODY render (--strat-map DIR).  Stands in for the
+ * unported new-game/load state producer + the screen-dispatch arm-0
+ * composition (FUN_0040f5fd): native-loads the season sprite banks via
+ * engine_pl8, seeds the captured live map arrays, binds the three ported
+ * clusters at the captured camera, and runs the ported map-body driver
+ * (engine_map_scene_render_body) into the locked back buffer.  Then dumps
+ * the raw 8bpp canvas for a palette-applied diff vs retail, presents, and
+ * captures a BMP.  The HUD chrome (menu bar / realm panel) is still
+ * unported and absent — this validates the map BODY end-to-end in the
+ * live drop-in with its OWN sprite data. */
+static void bringup_strat_map(const char *dir)
+{
+    /* The captured strat-terrain1 frame's state: season 1d (winter),
+     * normal view.  These drive engine_pl8's table offset and the
+     * blitters' view-mode arm. */
+    s_slot_0057c934 = 4;   /* DAT_0057c934 — season → *1d sprite banks */
+    s_slot_0057cb18 = 0;   /* DAT_0057cb18 — view-mode normal */
+
+    /* Native sprite load — the ported FUN_004984dc, reading the real
+     * .pl8 files from the game dir (cwd, anchored by init_exe_dir). */
+    if (!engine_pl8_load_strategic_banks(NULL)) {
+        log_line("strat-map: engine_pl8 load failed — aborting bring-up");
+        return;
+    }
+    log_line("strat-map: loaded 8 sprite banks natively (season 1d)");
+
+    /* Seed the live map arrays from the captured dump (the same snapshot
+     * the host scene harness binds).  The new-game/load path that
+     * normally populates these is unported. */
+    static uint8_t cells[0x8000];      /* tile_cells  (32768) */
+    static uint8_t descr[0x8000];      /* descriptors (32768) */
+    static uint8_t terr[0x10000];      /* territory_records (65536) */
+    static uint8_t army[0x12710];      /* army_records (~71248) */
+    if (strat_slurp(dir, "tile_cells.bin",  cells, sizeof cells) == 0 ||
+        strat_slurp(dir, "descriptors.bin", descr, sizeof descr) == 0 ||
+        strat_slurp(dir, "territory_records.bin", terr, sizeof terr) == 0 ||
+        strat_slurp(dir, "army_records.bin", army, sizeof army) == 0) {
+        log_line("strat-map: missing captured map state in %s — aborting", dir);
+        return;
+    }
+
+    /* Captured strat-terrain1 camera scalars (globals_dump.json). */
+    enum { CAM_X0 = 0, CAM_Y0 = 9, COL_START = 31, ROW_START = 78,
+           COL_COUNT = 8, ROW_COUNT = 30, X_STEP = 60, Y_STEP = 15,
+           X_HALF = 30, VIEW = 0, RENDER = 0, ROT = 0,
+           OVERLAY_BASE = 0, Y_VIEWPORT = 30, ARROW_BASE = 0 };
+
+    if (!gfx_lock_canvas()) {
+        log_line("strat-map: gfx_lock_canvas failed");
+        return;
+    }
+    int cw = gfx_paint_canvas_width();
+    int ch = gfx_paint_canvas_height();
+    uint8_t *canvas = gfx_paint_canvas_pixels();
+    if (canvas) memset(canvas, 0, (size_t)cw * ch);
+
+    /* ---- Cluster 1: pass-1 base terrain ---- */
+    engine_map_terrain_bind_tile_array((const int32_t *)cells, 0x104);
+    engine_map_terrain_bind_descriptors(descr);
+    engine_map_terrain_bind_blobs(engine_pl8_bank(0), engine_pl8_bank(1),
+                                  engine_pl8_bank(2), engine_pl8_bank(3),
+                                  engine_pl8_bank(4));
+    engine_map_terrain_set_blob_lengths((int)engine_pl8_bank_size(0),
+                                        (int)engine_pl8_bank_size(1),
+                                        (int)engine_pl8_bank_size(2),
+                                        (int)engine_pl8_bank_size(3),
+                                        (int)engine_pl8_bank_size(4));
+    engine_map_terrain_bind_camera(CAM_X0, CAM_Y0, COL_START, ROW_START,
+                                   COL_COUNT, ROW_COUNT, X_STEP, Y_STEP,
+                                   X_HALF);
+    engine_map_terrain_set_view_mode(VIEW);
+    engine_map_terrain_set_render_mode(RENDER);
+    engine_map_terrain_set_sky_gate_flag(0);
+    engine_map_terrain_set_error_count(0);
+    engine_map_terrain_reset_stats();
+
+    static engine_dirty_rect_state_t dirty;
+    dirty.dirty_mark = 0;
+    dirty.dirty_xmin = cw - 1; dirty.dirty_xmax = 0;
+    dirty.dirty_ymin = ch - 1; dirty.dirty_ymax = 0;
+    dirty.below_status_redraw = 0;
+    gfx_dispatch_set_alt_clip(0, 0, 0);
+
+    /* ---- Cluster 2: overlay ---- */
+    engine_overlay_render_bind_tile_array((const int32_t *)cells, 0x104);
+    engine_overlay_render_bind_tile_descriptors(descr);
+    engine_overlay_render_bind_overlay_blob(engine_pl8_bank(7));
+    engine_overlay_render_bind_territory_records(terr);
+    engine_overlay_render_bind_army_records(army);
+    engine_overlay_render_bind_camera(CAM_X0, CAM_Y0, COL_START, ROW_START,
+                                      COL_COUNT, ROW_COUNT, X_STEP, Y_STEP,
+                                      X_HALF);
+    engine_overlay_render_bind_canvas(canvas, cw, ch);
+    engine_overlay_render_set_dirty_state(&dirty);
+    engine_overlay_render_set_view_mode(VIEW);
+    engine_overlay_render_set_render_mode(RENDER);
+    engine_overlay_render_set_animation_tick(0);
+    engine_overlay_render_set_active_territory(0);
+    engine_overlay_render_set_dev_flags(0, 0);
+    engine_overlay_render_set_error_count(0);
+    engine_overlay_render_reset_call_counts();
+
+    /* ---- Cluster 3: feature walker ---- */
+    engine_map_render_set_dirty_state(&dirty);
+    engine_map_render_bind_tile_array((const int32_t *)cells, 0x104);
+    engine_map_render_bind_tile_descriptors(descr);
+    engine_map_render_bind_territory_records(terr);
+    engine_map_render_bind_blobs(engine_pl8_bank(5), engine_pl8_bank(6),
+                                 engine_pl8_bank(7));
+    engine_map_render_bind_camera(CAM_X0, CAM_Y0, COL_START, ROW_START,
+                                  COL_COUNT, ROW_COUNT, X_STEP, Y_STEP,
+                                  X_HALF);
+    engine_map_render_set_view_mode(VIEW);
+    engine_map_render_set_render_mode(RENDER);
+    engine_map_render_set_rotation_offset(ROT);
+    engine_map_render_set_y_viewport_offset(Y_VIEWPORT);
+    engine_map_render_set_error_count(0);
+    engine_map_render_reset_call_count();
+
+    /* Compose the three clusters via the ported map-body driver. */
+    engine_map_scene_set_anim_counters(OVERLAY_BASE << 4, ARROW_BASE << 4);
+    engine_map_scene_render_body();
+
+    log_line("strat-map: rendered body — drawA=%d drawB=%d sky=%d "
+             "army=%d feat=%d (oob=%d err=%d)",
+             engine_map_terrain_drawa_count(),
+             engine_map_terrain_drawb_count(),
+             engine_map_terrain_sky_count(),
+             engine_overlay_render_army_call_count(),
+             engine_map_render_call_count(),
+             engine_map_terrain_oob_copies(),
+             engine_map_terrain_error_count());
+
+    /* Dump the raw 8bpp canvas for the palette-applied parity diff. */
+    if (canvas) {
+        char path[MAX_PATH];
+        wsprintfA(path, "%s\\port_strat.raw", dir);
+        HANDLE h = CreateFileA(path, GENERIC_WRITE, 0, NULL,
+                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (h != INVALID_HANDLE_VALUE) {
+            DWORD wn = 0;
+            WriteFile(h, canvas, (DWORD)(cw * ch), &wn, NULL);
+            CloseHandle(h);
+            log_line("strat-map: raw canvas → %s (%d bytes)", path, cw * ch);
+        } else {
+            log_line("strat-map: could not open %s for raw dump", path);
+        }
+    }
+
+    gfx_unlock_canvas();
+
+    /* Present + capture a BMP (surface palette → may be off-color; the
+     * authoritative diff uses the raw dump + the captured retail .pal). */
+    gfx_tick_present(1);
+    {
+        char path[MAX_PATH];
+        wsprintfA(path, "%s\\port_strat.bmp", dir);
+        gfx_capture_backbuffer(path);
+        log_line("strat-map: backbuffer → %s", path);
+    }
+}
+
 /* Page-background reload hook (engine → gfx).  The engine_tick title
  * render step calls this before the canvas lock on each full redraw; the
  * engine hook is `void(*)(int)` but gfx_title_background_load returns int,
@@ -1654,6 +1878,10 @@ static void parse_cmdline(LPSTR lpCmd)
         }
         else if (!strcmp(a, "--title-type") && i + 1 < ntok) {
             g_title_type = tokens[++i];   /* scripted WM_CHAR typing demo */
+        }
+        else if (!strcmp(a, "--strat-map") && i + 1 < ntok) {
+            g_strat_map_dir = tokens[++i];   /* live strategic-map render */
+            g_gfx_init = 1;                  /* needs DDraw */
         }
         else if (!strcmp(a, "--audio-init"))     g_audio_init  = 1;
         else if (!strcmp(a, "--capture-to") && i + 1 < ntok) {

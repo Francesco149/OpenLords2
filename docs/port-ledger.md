@@ -103,7 +103,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404ead | FUN_00404ead | 159 | engine_math.h, engine_path.h |
 | 0x404f4c | FUN_00404f4c | 180 | engine_path.h, engine_territory.c |
 | 0x4050c0 | FUN_004050c0 | 53 | engine_map_scene.c, engine_map_scene.h |
-| 0x4050f6 | FUN_004050f6 | 376 | engine_map_scene.c, engine_map_scene.h |
+| 0x4050f6 | FUN_004050f6 | 376 | engine_map_scene.c, engine_map_scene.h, main.c |
 | 0x40526e | FUN_0040526e | 537 | engine_map_scene.c, engine_map_scene.h, engine_map_terrain.c (+1) |
 | 0x405487 | FUN_00405487 | 379 | engine_map_render.c, engine_map_render.h, engine_map_scene.c (+3) |
 | 0x405602 | FUN_00405602 | 608 | engine_map_scene.c, engine_map_scene.h, engine_overlay_render.c (+1) |
@@ -140,7 +140,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40e9ab | FUN_0040e9ab | 641 | config.h, main.c |
 | 0x40ecc4 | FUN_0040ecc4 | 1099 | config.c, config.h, strutil.h |
 | 0x40f1a0 | FUN_0040f1a0 | 1117 | engine.c, engine_screen_dispatch.c, engine_screen_dispatch.h (+1) |
-| 0x40f5fd | FUN_0040f5fd | 470 | engine_map_scene.h, engine_pl8.h, engine_screen_dispatch.c |
+| 0x40f5fd | FUN_0040f5fd | 470 | engine_map_scene.h, engine_pl8.h, engine_screen_dispatch.c (+1) |
 | 0x4148e4 | FUN_004148e4 | 264 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x4149ec | FUN_004149ec | 1050 | engine_title_render.c, engine_title_render.h, gfx_sprite.c (+1) |
 | 0x41e61d | FUN_0041e61d | 452 | engine_title_render.c, engine_title_render.h, gfx.c (+2) |
@@ -392,7 +392,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4921e5 | FUN_004921e5 | 451 | engine_tile.c, engine_tile.h |
 | 0x497ced | FUN_00497ced | 376 | engine_territory.c, engine_territory.h |
 | 0x497e65 | FUN_00497e65 | 1025 | game_init.c, game_init.h |
-| 0x4984dc | FUN_004984dc | 731 | engine_pl8.c, engine_pl8.h, pl8_table.h |
+| 0x4984dc | FUN_004984dc | 731 | engine_pl8.c, engine_pl8.h, pl8_table.h (+1) |
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h |
 | 0x499dc3 | FUN_00499dc3 | 154 | game_init.h |
 | 0x499e5d | FUN_00499e5d | 421 | game_init.h |

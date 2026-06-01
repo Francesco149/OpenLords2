@@ -1039,7 +1039,8 @@
    "status": "tested",
    "src": [
     "src/engine_map_scene.c",
-    "src/engine_map_scene.h"
+    "src/engine_map_scene.h",
+    "src/main.c"
    ]
   },
   {
@@ -2158,7 +2159,8 @@
    "src": [
     "src/engine_map_scene.h",
     "src/engine_pl8.h",
-    "src/engine_screen_dispatch.c"
+    "src/engine_screen_dispatch.c",
+    "src/main.c"
    ]
   },
   {
@@ -15126,7 +15128,8 @@
    "src": [
     "src/engine_pl8.c",
     "src/engine_pl8.h",
-    "src/gen/pl8_table.h"
+    "src/gen/pl8_table.h",
+    "src/main.c"
    ]
   },
   {
