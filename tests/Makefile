@@ -173,15 +173,26 @@ TERRAIN_HARNESS_OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o))) \
                         build/terrain_render_harness.o build/stubs.o
 TERRAIN_HARNESS_OUT  := build/terrain_render_harness
 
-.PHONY: all run clean diff harness terrain-harness
+# Composed-scene parity harness — pass-1 terrain + feature walker in one
+# canvas (see tools/scene_render_parity.py).
+SCENE_HARNESS_OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o))) \
+                      build/scene_render_harness.o build/stubs.o
+SCENE_HARNESS_OUT  := build/scene_render_harness
+
+.PHONY: all run clean diff harness terrain-harness scene-harness
 all: $(OUT) $(DIFF_OUT)
 
 harness: $(HARNESS_OUT)
 
 terrain-harness: $(TERRAIN_HARNESS_OUT)
 
+scene-harness: $(SCENE_HARNESS_OUT)
+
 $(TERRAIN_HARNESS_OUT): $(TERRAIN_HARNESS_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $(TERRAIN_HARNESS_OBJS)
+
+$(SCENE_HARNESS_OUT): $(SCENE_HARNESS_OBJS)
+	$(CC) $(LDFLAGS) -o $@ $(SCENE_HARNESS_OBJS)
 
 # ASan-built copy of the diff-lib stubs (log_line / io_read_file_at /
 # g_sim_* globals) so the standalone harness resolves the Win32-side
