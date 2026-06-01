@@ -266,6 +266,13 @@ class CaptureConfig:
     # / screen-id transitions → run_dir/anchors.jsonl, keyed on the per-tick
     # counter.  See docs/plans/tas-framework.md.
     anchor_trace:      bool = False
+    # Per-frame state watch: [{name,va,type}] → run_dir/watch.jsonl (edge-
+    # emitted).  The state oracle for authoring wait_until predicates.
+    watch:             list[dict] = field(default_factory=list)
+    # RNG seed pin: None = off; {} = retail-canonical defaults; or {a,b,single}.
+    # Forces the new-game map RNG so port↔retail comparisons generate the same
+    # map (the two targets don't seed from the same wall-clock instant).
+    rng_seed:          dict | None = None
     exe_args:          list[str] = field(default_factory=list)
 
 
@@ -520,6 +527,12 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
     counts["anchor"] = 0
     anchors_seen: list[dict[str, int | str]] = []
 
+    # Watch sink — one JSONL row per watched-global change (edge-emitted).
+    watch_fp = None
+    if cfg.watch:
+        watch_fp = (run_dir / "watch.jsonl").open("w", buffering=1)
+    counts["watch"] = 0
+
     # Preload the replay events so any parse failure surfaces before we
     # spawn the engine.  The agent expects a JSON array of {t,m,w,l}
     # objects passed via init opts; the Frida send/recv layer marshals it
@@ -761,6 +774,16 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
                         f"all ops consumed, captures taken\n")
             done.set()
             return
+        if kind == "watch":
+            counts["watch"] += 1
+            name = str(p.get("name", "?"))
+            frame = int(p.get("frame", 0))
+            val = p.get("val")
+            rec = {"name": name, "frame": frame, "val": val}
+            if watch_fp is not None:
+                watch_fp.write(json.dumps(rec) + "\n")
+            f_log.write(f"[watch] {name} = {val} @ frame {frame}\n")
+            return
         if kind == "gdi_seat_present":
             counts["gdi_seat_present"] += 1
             f_log.write(
@@ -939,6 +962,8 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "mem_watch_regions":         cfg.mem_watch_regions,
             "mem_watch_precise":         bool(cfg.mem_watch_precise),
             "anchor_trace":              bool(cfg.anchor_trace),
+            "watch":                     cfg.watch or [],
+            "rng_seed":                  cfg.rng_seed,
             "heartbeat_timeout_ms":      HEARTBEAT_TIMEOUT_MS,
         }
         script.exports_sync.init(init_cfg)
@@ -1059,6 +1084,8 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         mem_watch_fp.close()
     if anchor_trace_fp is not None:
         anchor_trace_fp.close()
+    if watch_fp is not None:
+        watch_fp.close()
 
     return CaptureResult(
         exit_code=exit_code,
@@ -1240,6 +1267,19 @@ def main(argv: list[str] | None = None) -> int:
                          "engine-state / screen-id transitions) to "
                          "<run_dir>/anchors.jsonl (TAS framework; see "
                          "docs/plans/tas-framework.md)")
+    ap.add_argument("--watch", action="append", default=[],
+                    metavar="NAME=0xVA:TYPE",
+                    help="watch a global and emit {name,frame,val} on every "
+                         "change → <run_dir>/watch.jsonl. TYPE in "
+                         "u8/i8/u16/i16/u32/i32/f32. Repeatable. The state "
+                         "oracle for authoring wait_until predicates.")
+    ap.add_argument("--rng-seed", nargs="?", const="canonical", default=None,
+                    metavar="A[,B[,SINGLE]]",
+                    help="pin the RNG seed each pre-ingame tick so the new-game "
+                         "map is reproducible across targets (retail/port don't "
+                         "seed from the same wall-clock). Bare flag = retail-"
+                         "canonical seeds; or pass A[,B[,SINGLE]] hex/dec "
+                         "states. Use for any port↔retail comparison capture.")
     ap.add_argument("--exe-arg", action="append", default=[],
                     help="argument to pass to the spawned exe (repeatable)")
     args = ap.parse_args(argv)
@@ -1316,6 +1356,35 @@ def main(argv: list[str] | None = None) -> int:
 
     poke_globals = _parse_poke_globals(args.poke_globals)
 
+    def _parse_watch(specs: list[str]) -> list[dict]:
+        out: list[dict] = []
+        for spec in specs:
+            # NAME=0xVA:TYPE
+            name, _, rest = spec.partition("=")
+            va_s, _, ty = rest.partition(":")
+            if not name or not va_s:
+                raise SystemExit(f"--watch: bad spec {spec!r} "
+                                 f"(want NAME=0xVA:TYPE)")
+            out.append({"name": name, "va": int(va_s, 0),
+                        "type": (ty or "i32")})
+        return out
+
+    def _parse_rng_seed(spec: str | None) -> dict | None:
+        if spec is None:
+            return None
+        if spec == "canonical":
+            return {}                      # agent uses its retail-canonical defaults
+        keys = ("a", "b", "single")
+        out: dict = {}
+        for k, tok in zip(keys, spec.split(",")):
+            tok = tok.strip()
+            if tok:
+                out[k] = int(tok, 0) & 0xffffffff
+        return out
+
+    watch_specs = _parse_watch(args.watch)
+    rng_seed    = _parse_rng_seed(args.rng_seed)
+
     run_id = args.run_id or dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = ROOT / "runs" / "capture" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -1378,6 +1447,8 @@ def main(argv: list[str] | None = None) -> int:
         call_trace_min_cum_secs=args.call_trace_min_cum_secs,
         call_trace_max_frames=args.call_trace_max_frames,
         anchor_trace=args.anchor_trace,
+        watch=watch_specs,
+        rng_seed=rng_seed,
         exe_args=list(args.exe_arg),
     )
     print(f"[capture] run_dir = {run_dir}")

@@ -1,0 +1,84 @@
+# TAS new-game → strategic map (TAS framework P4).  Custom single-player game:
+#   title → Single player → Custom game → Choose-title Continue → page-7 setup
+#   → Start → (RNG map gen + load) → strategic map.
+# Start triggers FUN_004329ec → FUN_00497ced (the new-game world initialiser,
+# which GENERATES the overworld from the RNG) → screen 0 / state 3.
+#
+# Run (turbo):
+#   nix develop -c python3 -u tools/frida_capture.py --remote cutestation.soy:27042
+#     --skip-intro --turbo --anchor-trace
+#     --input-segtrace tools/traces/new_game_to_map.jsonl --run-id newgame1
+#
+# Coords GAME space (640x480); lParam=(y<<16)|x.  Within the TITLE segment t is
+# RELATIVE to the TITLE anchor frame.  Hotspots (engine_menu_input.c):
+#   Single player (320,107)=7012672 ; Custom game pg2 (320,211)=13828416 ;
+#   Continue pg4 (432,227)=14877104 ; Start pg7 (281,208)=13631769.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 13828416}
+{"t": 206, "m": 512, "w": 0, "l": 13828416}
+{"t": 210, "m": 513, "w": 1, "l": 13828416}
+{"t": 216, "m": 514, "w": 0, "l": 13828416}
+{"t": 400, "m": 512, "w": 0, "l": 14877104}
+{"t": 406, "m": 512, "w": 0, "l": 14877104}
+{"t": 410, "m": 513, "w": 1, "l": 14877104}
+{"t": 416, "m": 514, "w": 0, "l": 14877104}
+# Start click — compact (down/up close together) so the `wait` op is reached
+# before the synchronous map-gen flips to the strategic map (~2 frames after
+# the mousedown is processed).
+{"t": 560, "m": 512, "w": 0, "l": 13631769}
+{"t": 562, "m": 513, "w": 1, "l": 13631769}
+{"t": 564, "m": 514, "w": 0, "l": 13631769}
+# Span the (synchronous) RNG map generation; rebase onto the map frame.
+{"wait": "MAP_FREEROAM"}
+{"capture": 5, "label": "map_enter"}
+# Dismiss the entry message-scroll(s) (the "Non 256 colour display" warning,
+# + any follow-up) by spraying the continue-button COLUMN (x=417) over a range
+# of y — robust without per-scroll geometry.  Two rounds; each clears the
+# topmost scroll and reveals the next.  t is relative to MAP_FREEROAM.
+{"t": 100, "m": 512, "w": 0, "l": 10486177}
+{"t": 104, "m": 513, "w": 1, "l": 10486177}
+{"t": 108, "m": 514, "w": 0, "l": 10486177}
+{"t": 116, "m": 512, "w": 0, "l": 13107617}
+{"t": 120, "m": 513, "w": 1, "l": 13107617}
+{"t": 124, "m": 514, "w": 0, "l": 13107617}
+{"t": 132, "m": 512, "w": 0, "l": 15401377}
+{"t": 136, "m": 513, "w": 1, "l": 15401377}
+{"t": 140, "m": 514, "w": 0, "l": 15401377}
+{"t": 148, "m": 512, "w": 0, "l": 17695137}
+{"t": 152, "m": 513, "w": 1, "l": 17695137}
+{"t": 156, "m": 514, "w": 0, "l": 17695137}
+{"t": 164, "m": 512, "w": 0, "l": 19661217}
+{"t": 168, "m": 513, "w": 1, "l": 19661217}
+{"t": 172, "m": 514, "w": 0, "l": 19661217}
+{"t": 180, "m": 512, "w": 0, "l": 22544801}
+{"t": 184, "m": 513, "w": 1, "l": 22544801}
+{"t": 188, "m": 514, "w": 0, "l": 22544801}
+{"t": 196, "m": 512, "w": 0, "l": 26214817}
+{"t": 200, "m": 513, "w": 1, "l": 26214817}
+{"t": 204, "m": 514, "w": 0, "l": 26214817}
+{"t": 300, "m": 512, "w": 0, "l": 10486177}
+{"t": 304, "m": 513, "w": 1, "l": 10486177}
+{"t": 308, "m": 514, "w": 0, "l": 10486177}
+{"t": 316, "m": 512, "w": 0, "l": 13107617}
+{"t": 320, "m": 513, "w": 1, "l": 13107617}
+{"t": 324, "m": 514, "w": 0, "l": 13107617}
+{"t": 332, "m": 512, "w": 0, "l": 15401377}
+{"t": 336, "m": 513, "w": 1, "l": 15401377}
+{"t": 340, "m": 514, "w": 0, "l": 15401377}
+{"t": 348, "m": 512, "w": 0, "l": 17695137}
+{"t": 352, "m": 513, "w": 1, "l": 17695137}
+{"t": 356, "m": 514, "w": 0, "l": 17695137}
+{"t": 364, "m": 512, "w": 0, "l": 19661217}
+{"t": 368, "m": 513, "w": 1, "l": 19661217}
+{"t": 372, "m": 514, "w": 0, "l": 19661217}
+{"t": 380, "m": 512, "w": 0, "l": 22544801}
+{"t": 384, "m": 513, "w": 1, "l": 22544801}
+{"t": 388, "m": 514, "w": 0, "l": 22544801}
+{"t": 396, "m": 512, "w": 0, "l": 26214817}
+{"t": 400, "m": 513, "w": 1, "l": 26214817}
+{"t": 404, "m": 514, "w": 0, "l": 26214817}
+{"capture": 500, "label": "map_clean"}

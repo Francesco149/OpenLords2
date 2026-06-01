@@ -131,6 +131,9 @@ const ADDR = {
     // and src/engine_rng.c for the mirror-↔-port mapping).
     var_rng_state_a:     0x0058fe28,  // DAT_0058fe28 — state_a (the seed-init at WinMain)
     var_rng_state_b:     0x0058fe08,  // DAT_0058fe08 — state_b
+    // Single-LFSR RNG state (FUN_00404b2c) — seeded 0x34518632 at InitInstance;
+    // the new-game overworld randomisers (engine_territory_*) thread it.
+    var_rng_state_single: 0x00591564, // DAT_00591564 — single-LFSR state
     var_rng_15bit_a:     0x005aea58,  // DAT_005aea58 — state_a & 0x7fff
     var_rng_7bit_a:      0x0058fd7c,  // DAT_0058fd7c — state_a & 0x7f
     var_rng_3bit_a:      0x0058fd70,  // _DAT_0058fd70 — state_a & 0x7
@@ -2352,6 +2355,33 @@ function rescaleMouseLParamToClient(l) {
 // dispatching the prior segment's inputs).
 let g_anchor_last = {};         // name -> last fire frame (persisted)
 
+// ─── RNG seed pin (--rng-seed, TAS framework determinism) ────────────────
+// Retail/port don't seed their RNG from the same wall-clock instant, so a
+// port↔retail comparison must FORCE the same seed for the new-game map gen to
+// match.  Pin the three authoritative LFSR states each tick UNTIL the game
+// goes ingame (engine_state==3) — holds the seed through the menu so the
+// synchronous map generator (FUN_00497ced, runs in the title→ingame transition
+// tick) consumes exactly the pinned value; then stop so the live sim RNG runs.
+// Defaults are retail's own InitInstance seeds (so pinning a normal retail run
+// reproduces its own map; the point is to force the PORT to match).
+let g_rng_seed_enabled = false;
+let g_rng_seed_a       = 0x54657687;   // DAT_0058fe28 (engine_rng.c)
+let g_rng_seed_b       = 0x72641663;   // DAT_0058fe08
+let g_rng_seed_single  = 0x34518632;   // DAT_00591564
+
+function pinRngSeed() {
+    if (!g_rng_seed_enabled) return;
+    let state;
+    try { state = rva(ADDR.var_sim_game_state_phase).readS32(); }
+    catch (e) { return; }
+    if (state === 3) return;            // ingame — let the live RNG run
+    try {
+        rva(ADDR.var_rng_state_a).writeU32(g_rng_seed_a >>> 0);
+        rva(ADDR.var_rng_state_b).writeU32(g_rng_seed_b >>> 0);
+        rva(ADDR.var_rng_state_single).writeU32(g_rng_seed_single >>> 0);
+    } catch (e) { /* not mapped yet — retry next tick */ }
+}
+
 function fireAnchor(name, frame) {
     g_anchor_last[name] = frame >>> 0;
     if (g_anchor_enabled) {
@@ -2405,8 +2435,29 @@ let g_seg_enabled       = false;
 let g_seg_ops           = [];
 let g_seg_idx           = 0;
 let g_seg_base          = 0;        // absolute frame mapped to current segment t=0
+let g_seg_wait_floor    = -1;       // frame of the last resolved wait/wait_until
 let g_seg_done_sent     = false;
 let g_capture_at_frames = null;     // Set<int> | null — absolute frames to capture
+
+// ─── per-frame state watch (--watch NAME=0xVA:type, TAS framework) ───────
+// Emit {kind:"watch",name,frame,val} whenever a watched global CHANGES value
+// (edge-emitted to stay lean) — the per-frame state oracle for authoring
+// wait_until predicates + diagnosing divergence.  Reuses segReadTyped.
+let g_watch_specs = [];         // [{name, va, type}]
+let g_watch_last  = {};         // name -> last emitted value
+
+function watchTick(frame) {
+    if (g_watch_specs.length === 0) return;
+    for (let i = 0; i < g_watch_specs.length; i++) {
+        const s = g_watch_specs[i];
+        let v;
+        try { v = segReadTyped(s.va, s.type); } catch (e) { continue; }
+        if (g_watch_last[s.name] !== v) {
+            g_watch_last[s.name] = v;
+            send({kind: 'watch', name: s.name, frame: frame >>> 0, val: v});
+        }
+    }
+}
 
 function segReadTyped(va, type) {
     const p = rva(va >>> 0);
@@ -2460,15 +2511,18 @@ function segtraceTick(frame) {
         }
 
         if (op.kind === 'wait') {
-            // Record the frame this op first becomes the blocking cursor, then
-            // resolve on the anchor's first firing AT OR AFTER that frame — so a
-            // firing that predates the cursor (an earlier segment's anchor)
-            // doesn't spuriously satisfy it, but one we "just missed" while
-            // dispatching prior inputs still does.
-            if (op._since === undefined) op._since = frame;
+            // Resolve on the anchor's first firing STRICTLY AFTER the previous
+            // wait's frame (g_seg_wait_floor).  Keyed on the floor — not on when
+            // the cursor reaches this op — so an anchor that fired while we were
+            // still dispatching this segment's inputs (game-start can flip to
+            // the map within ~2 frames of the triggering click, before the
+            // click's mouseup op is even posted) still satisfies the wait.  The
+            // strict `>` keeps a repeated anchor (e.g. a double MAP_FREEROAM)
+            // from re-satisfying a later wait on the same firing.
             const lf = g_anchor_last[op.anchor];
-            if (lf !== undefined && lf >= op._since) {
-                g_seg_base = lf;
+            if (lf !== undefined && lf > g_seg_wait_floor) {
+                g_seg_base       = lf;
+                g_seg_wait_floor = lf;
                 send({kind: 'segtrace_wait', anchor: op.anchor, frame: g_seg_base});
                 g_seg_idx++;
                 continue;
@@ -2480,7 +2534,8 @@ function segtraceTick(frame) {
             let v;
             try { v = segReadTyped(op.va, op.type); } catch (e) { break; }
             if (segCmp(v, op.op, op.val)) {
-                g_seg_base = frame;
+                g_seg_base       = frame;
+                g_seg_wait_floor = frame;
                 send({kind: 'segtrace_wait_until', va: op.va >>> 0,
                       val: v, frame: frame});
                 g_seg_idx++;
@@ -2956,8 +3011,10 @@ function installEngineTickHook() {
             }
             g_tick_count = (g_tick_count + 1) >>> 0;
             g_engine_in_tick = 1;
+            pinRngSeed();
             anchorTick(g_tick_count);
             segtraceTick(g_tick_count);
+            watchTick(g_tick_count);
             if (g_call_trace_enabled && g_call_trace_min_cum_secs > 0) {
                 callTraceWindowTick();
             }
@@ -4883,8 +4940,26 @@ rpc.exports = {
         g_seg_enabled       = g_seg_ops.length > 0;
         g_seg_idx           = 0;
         g_seg_base          = 0;
+        g_seg_wait_floor    = -1;
         g_seg_done_sent     = false;
         g_capture_at_frames = null;
+
+        // Per-frame state watch (--watch NAME=0xVA:type).
+        g_watch_specs = Array.isArray(opts.watch)
+            ? opts.watch.map(function (w) {
+                  return {name: String(w.name), va: (w.va >>> 0),
+                          type: String(w.type || 'i32')};
+              })
+            : [];
+        g_watch_last = {};
+
+        // RNG seed pin (--rng-seed).  opts.rng_seed is null or {a,b,single}.
+        g_rng_seed_enabled = !!opts.rng_seed;
+        if (opts.rng_seed) {
+            if (opts.rng_seed.a      !== undefined) g_rng_seed_a      = opts.rng_seed.a >>> 0;
+            if (opts.rng_seed.b      !== undefined) g_rng_seed_b      = opts.rng_seed.b >>> 0;
+            if (opts.rng_seed.single !== undefined) g_rng_seed_single = opts.rng_seed.single >>> 0;
+        }
 
         g_skip_intro_enabled = !!opts.skip_intro;
         g_smack_in_open      = 0;
@@ -5018,6 +5093,16 @@ rpc.exports = {
         if (g_seg_enabled) {
             log('input_segtrace: armed (' + g_seg_ops.length + ' ops; ' +
                 'wait/wait_until/capture + anchor-relative frames)');
+        }
+        if (g_rng_seed_enabled) {
+            log('rng_seed: armed (pinned each pre-ingame tick: a=0x' +
+                (g_rng_seed_a >>> 0).toString(16) + ' b=0x' +
+                (g_rng_seed_b >>> 0).toString(16) + ' single=0x' +
+                (g_rng_seed_single >>> 0).toString(16) + ')');
+        }
+        if (g_watch_specs.length > 0) {
+            log('watch: armed (' + g_watch_specs.length +
+                ' globals, edge-emitted to watch.jsonl)');
         }
 
         if (g_frame_capture_enabled) {
