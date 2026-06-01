@@ -1729,12 +1729,13 @@ static void bringup_strat_load(const char *dir)
 
     /* 5. Render — same cluster wiring as --strat-map but bound to the native
      * arrays.  Camera: the view-mode-0 scalars come from the ported
-     * FUN_00451fcc; col/row start are overridden to the captured scroll
-     * (31/78) so the frame matches strat-spray1 (the native default is the
-     * pre-scroll 20/74). */
+     * FUN_00451fcc; the load leaves the scroll at the engine default
+     * (FUN_00498270 sets col 20 / row 74), which is where retail's post-load
+     * map frame sits. */
     const int CAM_X0 = engine_map_init_cam_x0();
     const int CAM_Y0 = engine_map_init_cam_y0();
-    const int COL_START = 31, ROW_START = 78;   /* captured scroll position */
+    const int COL_START = engine_map_init_col_start();   /* 20 (load default) */
+    const int ROW_START = engine_map_init_row_start();   /* 74 (load default) */
     const int COL_COUNT = engine_map_init_col_count();
     const int ROW_COUNT = engine_map_init_row_count();
     const int X_STEP = engine_map_init_x_step();

@@ -15133,7 +15133,8 @@
    "status": "tested",
    "src": [
     "src/engine_map_init.c",
-    "src/engine_map_init.h"
+    "src/engine_map_init.h",
+    "src/main.c"
    ]
   },
   {
