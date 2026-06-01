@@ -278,3 +278,63 @@ So pass 1 alone is a 6-function cluster: frame `FUN_0040526e`, row iters
 iters `FUN_00405eb5`/`FUN_00405fac`) is the analogous overlay cluster.
 The `0x5c9288` global is the per-tile "empty-marker sprite index" the
 sky drawer consumes (the feature walker has no equivalent).
+
+### Pass 1 drawers — descriptor fields, blob selector, blitters
+
+**Terrain-A drawer `FUN_004063c1`** (690 B), per non-empty cell value
+`DAT_00567954` (raw byte offset into the descriptor table at `0x522f90`):
+- reads descriptor **+1** → `DAT_0057d374`, **+7** → `DAT_0057d384`,
+  **+3** → `DAT_005c9288` = the sprite INDEX into the chosen blob.
+- descriptor **+2** flag byte `& 0x1c` selects WHICH terrain blob:
+  `0x00`→`DAT_00568208`, `0x04`→`DAT_0053e914`, `0x08`→`DAT_0057d344`,
+  `0x0c`→`DAT_0055409c`, `0x10`→`DAT_0056898c`; any other value of the
+  3 bits → return (no draw).  (render-mode gate: mode-1 + flag&0x20==0 →
+  index 0 / blob 0.)
+- flag **bit 0** is a one-shot "first paint" marker: if set, clears it and
+  marks dirty via `FUN_00452628(cursor_x>>4, cursor_y>>4)` (= ported
+  `engine_dirty_rect` helper).
+- stages the sprite descriptor `blob + index*0x10 + 8`: width→`DAT_005c9258`,
+  `DAT_005aeb70`, **src_off→`DAT_0058fe04`** (validated `< 0x4baf1`
+  =310001 and `>= 0`, else bump `_DAT_0058fea8`), byte+6→`DAT_00591568`,
+  byte+0xd→`DAT_005bb478`, byte+7→`DAT_0057d3c0`.
+- dispatches by `param_3` (phase) × view-mode `DAT_0057cb18`:
+  phase3→`FUN_0045337b`(v0)/`FUN_00463c06`(v2); phase4→`FUN_004538f6`(v0)/
+  `FUN_00463c62`(v2); else→`FUN_00452820`(v0)/`FUN_00463b42`(v2).
+
+**Sky/empty drawer `FUN_0042a7f1`** (224 B): same staging but ALWAYS from
+blob 0 (`DAT_00568208`) at index `DAT_005c9288` (the empty-marker low bits
+set by the frame driver), dispatching `FUN_00452820`(v0)/`FUN_00460501`(v1)/
+`FUN_00463b42`(v2).  No phase/flag logic.
+
+**The blitters are all UNPORTED** and are the bulk of pass 1:
+`FUN_00452820` **2907 B**, `FUN_004538f6` 1403 B, `FUN_0045337b`,
+`FUN_00460501`, `FUN_00463b42`/`c06`/`c62`.  For the captured **view-mode 0**
+frame only `0x452820` + `0x4538f6` + `0x45337b` are needed.
+
+**`FUN_00452820` is a fully-unrolled isometric-tile blitter** — no RLE, no
+palette logic, just ~450 direct `*(dest+OFF) = *(src+IDX)` copies (2/4-byte):
+- `dest = DAT_004ea1a8 (fb base) + DAT_00591524 (cursor_x) + DAT_00591528
+  (cursor_y) * DAT_004eb274 (pitch)`; `src = param_3 (blob) + DAT_0058fe04
+  (src_off)`.
+- **Pitch `DAT_004eb274` = 640** (captured `strat-terrain1`).  The unrolled
+  dest-offset rows step by **`0x27e` = 638 = pitch − 2**, i.e. each tile row
+  is drawn one scanline down AND 2 px left — a **left-leaning parallelogram
+  shear** (the iso terrain tile).  Tile row r relative to cursor lands at
+  `(cursor_x + 0x1c − 2r, cursor_y + r)`.  A pitch-640 canvas in the harness
+  is therefore correct.
+- `param_4` (phase) gates a `!= 2` (full copy) vs `== 2` variant branch.
+
+**Port plan (byte-exact, table-driven):** parse the decompile's copy list
+into a `(dest_off, src_idx, size)` table and replay it in a compact loop —
+exact by construction, and the same extractor handles `0x4538f6`/`0x45337b`.
+This avoids hand-transcribing 450 unrolled statements.
+
+### Captured terrain dataset — `runs/capture/strat-terrain1`
+
+Clean (popup-free, via `tools/traces/load_map_clean.jsonl`) view-mode-0
+frame.  `dump/` holds tile_cells, descriptors, territory_records, the 3
+feature blobs, and the **5 terrain blobs**: `terr_blob0` (`0x568208`,
+323480 B, base terrain) / `terr_blob1` (`0x53e914`, 57304) / `terr_blob2`
+(`0x57d344`, 195136) / `terr_blob3` (`0x55409c`, ≥512K clamped) / `terr_blob4`
+(`0x56898c`, ≥512K clamped).  `globals_dump.json` adds `fb_pitch`=640.
+Diff target = `runs/capture/strat-spray1/frames/frame_00009.bmp` (clean map).
