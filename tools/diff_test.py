@@ -2559,6 +2559,13 @@ FN_SEASON_PASS      = 0x44c8ae    # FUN_0044c8ae — __stdcall void()
 FN_RESOURCE_PASS    = 0x44e852    # FUN_0044e852 — __stdcall void()
 RESPOOL_OFF_IN_STRAT = 0x120      # 0x57c020 − 0x57bf00
 
+# population-growth pass (FUN_00449ef3).  __stdcall void(); processes ALL realms
+# 1..count (no owner gate).  Reads g_per_army_768 + the overworld grid (through
+# its two graphics helpers) + the just-ended season scalar s_slot_0057c934;
+# reads back the per-army block + overworld map (capital footprint + village
+# tile stamps).
+FN_POPULATION       = 0x449ef3    # FUN_00449ef3 — __stdcall void()
+
 REALM_RACE_RETRIES = 8
 
 
@@ -2613,6 +2620,8 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
         lib.engine_army_economy_bind_resource_pool.argtypes = [ctypes.c_void_p]
         lib.engine_army_economy_bind_cells.restype = None
         lib.engine_army_economy_bind_cells.argtypes = [ctypes.c_void_p]
+        lib.engine_realm_advance_population.restype = None
+        lib.engine_realm_advance_population.argtypes = []
     return _realm_globals_cache
 
 
@@ -3346,6 +3355,128 @@ def diff_resource_pass(retail: dict, port: dict) -> list[str]:
     return bad
 
 
+# ── population-growth pass (FUN_00449ef3 — engine_realm_advance_population) ──
+# Per-realm record fields the pass reads/writes (g_per_army_768, 0x300 stride):
+_POP_REGION   = 0x09   # terrain region byte (death-rate table index, 0..5)
+_POP_STANDING = 0x0c   # standing band (signed; scales the base birth-rate)
+_POP_HEAD     = 0x24   # population head-count (i32, advanced in place)
+_POP_EMIG     = 0x3c   # emigration out (i32, read)
+_POP_IMMIG    = 0x40   # immigration in (i32, read)
+_POP_CAP_OFF  = 0x70   # capital cell byte-offset (i32, → stamp_block)
+_POP_CELL_LST = 0x80   # 4 settlement cell byte-offsets (i32 each, → village)
+_POP_EVTMOD   = 0x1fb  # signed event modifier (births/deaths bonus)
+
+
+def _pop_cell(col: int, row: int) -> int:
+    return (row * 0x40 + col) * 8
+
+
+def _build_pop_vec(count: int, season: int, realms: list[dict]) -> dict:
+    army = bytearray(REALM_ARMY_BYTES)
+    over = bytearray(REALM_OVER_BYTES)
+    for rd in realms:
+        slot = rd["slot"]
+        b = slot * REALM_ARMY_STRIDE
+        struct.pack_into("<i", army, b + _POP_HEAD,  rd.get("pop", 0))
+        struct.pack_into("<i", army, b + _POP_EMIG,  rd.get("emig", 0))
+        struct.pack_into("<i", army, b + _POP_IMMIG, rd.get("immig", 0))
+        army[b + _POP_REGION]   = rd.get("region", 0) & 0xff
+        army[b + _POP_STANDING] = rd.get("standing", 0) & 0xff
+        army[b + _POP_EVTMOD]   = rd.get("evtmod", 0) & 0xff
+        # Capital footprint cell + four settlement cells — all in-bounds so the
+        # 2×2 stamp and the village retiles never run off the 64×64 grid.
+        cap_col, cap_row = rd.get("cap", (slot + 5, 5))
+        struct.pack_into("<i", army, b + _POP_CAP_OFF, _pop_cell(cap_col, cap_row))
+        for i in range(4):
+            col, row = rd.get("cells", [(slot + 5, 10 + j) for j in range(4)])[i]
+            off = _pop_cell(col, row)
+            struct.pack_into("<i", army, b + _POP_CELL_LST + i * 4, off)
+            # Seed the cell so the active/inactive branches both have inputs.
+            over[off + 0] = rd.get("cell_types", [0x13, 0x12, 0x11, 0x55])[i] & 0xff
+            over[off + 1] = rd.get("cell_flags", [0x10, 0x12, 0x00, 0x02])[i] & 0xff
+            over[off + 6] = rd.get("cell_saved", [0x20, 0x21, 0x22, 0x23])[i] & 0xff
+    return {"count": count, "season": season,
+            "army": bytes(army), "over": bytes(over)}
+
+
+def gen_population_vectors(n: int, rng: random.Random) -> list[dict]:
+    def realm(slot, rng):
+        return dict(
+            slot=slot,
+            pop=rng.choice([0, 1, 2, rng.randint(1, 6000)]),
+            region=rng.randint(0, 5),
+            standing=rng.randint(0, 100),
+            evtmod=rng.randint(-90, 90),
+            emig=rng.choice([0, rng.randint(0, 300)]),
+            immig=rng.choice([0, rng.randint(0, 300)]),
+            cap=(slot + 5, 5),
+            cells=[(slot + 5, 10 + j) for j in range(4)],
+            cell_types=[rng.choice([0x10, 0x11, 0x12, 0x13, 0x55]) for _ in range(4)],
+            cell_flags=[rng.randint(0, 0xff) for _ in range(4)],
+            cell_saved=[rng.randint(0, 0xff) for _ in range(4)])
+
+    edge = []
+    # One realm per season hitting each population marker/village band.
+    for season in (1, 2, 3, 4):
+        for pop in (500, 700, 900, 1100, 1300, 1500, 1700):
+            edge.append(_build_pop_vec(1, season, [dict(
+                slot=1, pop=pop, region=1, standing=80, evtmod=0,
+                emig=0, immig=0)]))
+    # Standing-band sweep at fixed population/season.
+    for st in (0, 25, 26, 50, 51, 75, 76, 99, 100):
+        edge.append(_build_pop_vec(1, 1, [dict(
+            slot=1, pop=1000, region=2, standing=st, evtmod=0)]))
+    # Region 0 (+2 deaths) crash + the event-modifier cap, both signs.
+    edge.append(_build_pop_vec(1, 2, [dict(slot=1, pop=2, region=0, standing=0)]))
+    edge.append(_build_pop_vec(1, 1, [dict(
+        slot=1, pop=100, region=1, standing=80, evtmod=-50)]))
+    edge.append(_build_pop_vec(1, 3, [dict(
+        slot=1, pop=1000, region=3, standing=100, evtmod=10)]))
+    # Migration applied after natural change.
+    edge.append(_build_pop_vec(1, 2, [dict(
+        slot=1, pop=500, region=1, standing=50, emig=50, immig=30)]))
+
+    vecs = list(edge)
+    while len(vecs) < n:
+        count = rng.randint(1, 6)
+        season = rng.randint(1, 4)
+        realms = [realm(slot, rng) for slot in range(1, count + 1)]
+        vecs.append(_build_pop_vec(count, season, realms))
+    return vecs
+
+
+def run_port_population(lib: ctypes.CDLL, vec: dict) -> dict:
+    g = realm_port_globals(lib)
+    ctypes.memmove(g["army"], vec["army"], REALM_ARMY_BYTES)
+    ctypes.memmove(g["over"], vec["over"], REALM_OVER_BYTES)
+    g["count"].value       = vec["count"]
+    g["season_prev"].value = vec["season"]   # 0x57c934 — death-rate season key
+    # The two graphics helpers reach the cell grid + army records through the
+    # territory module's pointers; bind both to the injected globals.
+    lib.engine_territory_bind_army_records(ctypes.addressof(g["army"]))
+    lib.engine_territory_bind_cells(ctypes.addressof(g["over"]))
+    lib.engine_realm_advance_population()
+    lib.engine_territory_bind_cells(None)
+    lib.engine_territory_bind_army_records(None)
+    return {"army": list(bytes(g["army"])), "over": list(bytes(g["over"]))}
+
+
+def population_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_POPULATION, "regions": [
+        {"va": VA_PER_ARMY,         "len": REALM_ARMY_BYTES, "inject": list(vec["army"]), "read": True},
+        {"va": VA_OVERWORLD,        "len": REALM_OVER_BYTES, "inject": list(vec["over"]), "read": True},
+        {"va": VA_SLOT_COUNT,       "len": 4, "inject": list(_u32le(vec["count"])),  "read": False},
+        {"va": VA_SLOT_SEASON_PREV, "len": 4, "inject": list(_u32le(vec["season"])), "read": False},
+    ]}
+
+
+def diff_population(retail: dict, port: dict) -> list[str]:
+    bad = _diff_realm_region(retail, port["army"], VA_PER_ARMY,
+                             REALM_ARMY_STRIDE, 17, "army")
+    bad += _diff_realm_flat(retail, port["over"], VA_OVERWORLD, "over")
+    return bad
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -3464,6 +3595,9 @@ def run_diff(cfg_args) -> int:
     if "resource_pass" in enabled:
         test_plans.append(("resource_pass",
                            gen_resource_pass_vectors(cfg_args.vectors, rng)))
+    if "population" in enabled:
+        test_plans.append(("population",
+                           gen_population_vectors(cfg_args.vectors, rng)))
     # Pre-generate the rate-gate LUT — one per run, used by all
     # sim_sub_steps vectors so a re-run with the same seed produces
     # the same LUT (and thus the same retail-side gate decisions).
@@ -3593,7 +3727,7 @@ def run_diff(cfg_args) -> int:
         shared_freeze_targets = {"sim_sub_steps", "state_hash", "tile_expand",
                                  "delayed_action", "tax_approval", "dev_spread",
                                  "realm_income", "upkeep", "season_economy",
-                                 "resource_pass"}
+                                 "resource_pass", "population"}
         shared_freeze_installed = False
         if shared_freeze_targets & {n for (n, _) in test_plans}:
             fresp = script.exports_sync.install_sim_sub_steps_engine_freeze()
@@ -4266,6 +4400,42 @@ def run_diff(cfg_args) -> int:
                                   "note": "region readback elided"}
                         port = {"note": "region readback elided"}
                         vec = {"count": vec["count"]}
+                elif fn_name == "population":
+                    # FUN_00449ef3(): per-realm population-growth pass.  Inject
+                    # g_per_army_768 + g_overworld_map (cell grid) + realm count +
+                    # the just-ended season scalar; read back the army block and
+                    # the overworld map (capital footprint + village tiles).
+                    # Same race-retry handling as the other realm passes.
+                    port = run_port_population(lib, vec)
+                    plan = population_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"count": vec["count"],
+                                                 "season": vec["season"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_population(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"count": vec["count"], "season": vec["season"]}
                 else:
                     continue
                 if bad:
@@ -4391,7 +4561,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep,season_economy,resource_pass",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep,season_economy,resource_pass,population",
                     help="comma-separated subset to test "
                          "(default: rng_step,fps_step,anim_cycle,frame_delta,"
                          "phase_ticks,input_state,sim_sub_steps,state_hash,"

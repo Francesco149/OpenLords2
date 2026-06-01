@@ -1658,6 +1658,59 @@ void engine_territory_mark_capital_features(unsigned key)
     }
 }
 
+/* Port of FUN_004684c6 (474 B) — paint army `key`'s four settlement cells to
+ * the village-size graphic that matches its population tier.  The population
+ * pass (engine_realm_advance_population, FUN_00449ef3) passes `active`, the
+ * number of settlement cells the realm's population currently sustains (0..4);
+ * each of the four cell offsets in the army row's +0x80 cell-list (the first
+ * four collected cells) is then either grown into a village or reverted to
+ * bare terrain:
+ *
+ *   slot < active  → village ON.  Shrink the +0 type one village stage toward
+ *                    the largest sprite (0x13→0x12→0x11→0x10, anything else
+ *                    →0x10), set the +3 descriptor (0x3c for the two larger
+ *                    stages, 0x3b for the smallest), set +2 bits: clear 2..4,
+ *                    set 0xc (capital-region) + 0x80 (drawn), and set +1 bit
+ *                    0x10 (settled).
+ *   slot >= active → village OFF.  Restore +3 from the saved descriptor +6,
+ *                    clear +2 bits 2..4, clear +1 bit 0x10, propagate the
+ *                    saved +1 bit 1 into +2 bit 3 (0x8), clear +2 bit 0x80,
+ *                    and clear the +0 type.
+ *
+ * No-op if the cell grid or the army-record block is unbound. */
+void engine_territory_update_village_tiles(int key, int active)
+{
+    if (g_cells == NULL || g_army_records == NULL) return;
+
+    const int32_t *list =
+        (const int32_t *)(g_army_records + key * ARMY_ROW_STRIDE + ARMY_CELL_LIST);
+
+    for (int slot = 0; slot < 4; slot++) {
+        int off = list[slot];
+        uint8_t saved_flags = g_cells[off + 1];         /* bVar1 — +1 (DAT_00522f91) */
+
+        if (slot < active) {
+            uint8_t type = g_cells[off + 0];            /* +0 (DAT_00522f90) */
+            if (type == 0x13)      { g_cells[off + 0] = 0x12; g_cells[off + 3] = 0x3c; }
+            else if (type == 0x12) { g_cells[off + 0] = 0x11; g_cells[off + 3] = 0x3c; }
+            else if (type == 0x11) { g_cells[off + 0] = 0x10; g_cells[off + 3] = 0x3b; }
+            else                   { g_cells[off + 0] = 0x10; g_cells[off + 3] = 0x3b; }
+            g_cells[off + 2] &= 0xe3;                   /* clear bits 2..4 */
+            g_cells[off + 2] |= 0x0c;                   /* capital-region   */
+            g_cells[off + 2] |= 0x80;                   /* drawn            */
+            g_cells[off + 1] |= 0x10;                   /* settled          */
+        } else {
+            g_cells[off + 3] = g_cells[off + 6];        /* restore saved descriptor */
+            g_cells[off + 2] &= 0xe3;                   /* clear bits 2..4 */
+            g_cells[off + 1] &= 0xef;                   /* clear settled    */
+            if (saved_flags & 2)
+                g_cells[off + 2] |= 0x08;
+            g_cells[off + 2] &= 0x7f;                   /* clear drawn      */
+            g_cells[off + 0] = 0;                       /* clear type       */
+        }
+    }
+}
+
 /* Port of FUN_0046c147 (407 B) — classify one orthogonal neighbour of the
  * cell at byte-offset `off` (whose grid position is (col, row)) for the
  * coastal-port placer.  `dir` is the retail direction code 0/2/4/6 = N/E/S/W.

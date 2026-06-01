@@ -931,3 +931,141 @@ void engine_realm_replan_economies(void)
         engine_realm_recompute_realm_income(key);                  /* FUN_0044b80b */
     }
 }
+
+/* ── per-realm population-growth pass (FUN_00449ef3) ──────────────────────── */
+
+/* Base birth-rate (%) by population, retail rdata 0x4d6308: 20 (threshold,
+ * rate) i32 pairs fed to engine_math_lookup_threshold (returns the first
+ * pair's rate whose threshold > population, else the fallback 1).  Smaller
+ * realms grow faster — 100% below 40 head, decaying to 1% past 3000. */
+static const int32_t k_pop_birthrate_tbl[40] = {
+      40, 100,    80,  70,   100,  50,   250,  30,   500,  20,
+     700,  15,   800,  14,   900,  13,  1000,  12,  1100,  11,
+    1200,  10,  1300,   9,  1400,   8,  1500,   7,  1600,   6,
+    1700,   5,  1800,   4,  1900,   3,  2000,   2,  3000,   1,
+};
+
+/* Death-rate (%) modifier, retail rdata 0x4d63a8 (region, 6 entries) followed
+ * back-to-back by 0x4d63c0 (season, indexed 1..4).  The pass sums one entry
+ * from each: terrain harshness by realm region byte +0x09, plus the seasonal
+ * modifier by the just-ended season (s_slot_0057c934).  Baked contiguous so
+ * the season base sits exactly where retail's adjacent array begins (+6). */
+static const int32_t k_pop_deathmod_tbl[12] = {
+    /* region 0..5  */  35, 20,  8,  3,  0,  0,
+    /* season 0..5  */   0,  4,  0,  2,  8,  0,
+};
+#define K_POP_SEASON_MOD (&k_pop_deathmod_tbl[6])
+
+/* Port of FUN_00449ef3 @ 0x449ef3 (1991 B, __stdcall void) — the per-realm
+ * population-growth turn pass run by the turn-advance engine (0x448440).  For
+ * every realm 1..s_slot_0056d5dc it advances the head-count at +0x24:
+ *
+ *   births  (+0x30) = pop × (base birth-rate × standing band) %
+ *   deaths  (+0x34) = pop × (terrain + season death-rate) %
+ *
+ * where the base birth-rate is the population-bracket lookup and the standing
+ * band scales it 25/50/75/100/120% as the realm's standing (+0x0c) crosses
+ * 26/51/76/100.  Region 0 takes +2 deaths; whichever rate is lower gets a +1
+ * nudge.  An event modifier (+0x1fb, signed) adds up to 20%-of-pop (+0x2f8,
+ * capped) extra births or deaths.  Net births−deaths apply to the head-count,
+ * then emigration (+0x3c) leaves and immigration (+0x40) arrives.  The pass
+ * also records the previous head-count (+0x28), the dominant change category
+ * (+0x5b: 1 birth / 2 death / 3 emigrate / 4 immigrate, cleared when the
+ * |growth| at +0x2c is under 6%), the population tier (+0xb8 = (pop−1)/25 + 1),
+ * then refreshes the overworld graphics: the 2×2 capital footprint descriptor
+ * by population band ('/'/'3'/'7') via engine_territory_stamp_block, and the
+ * four settlement village tiles via engine_territory_update_village_tiles.
+ *
+ * Touches g_per_army_768 and (through the two territory helpers) the overworld
+ * cell grid g_overworld_map; reads the realm count + the just-ended season
+ * scalar s_slot_0057c934.  All arithmetic is integer and deterministic. */
+void engine_realm_advance_population(void)
+{
+    for (int key = 1; key <= (int)s_slot_0056d5dc; key++) {
+        uint8_t *r = ARMY_REC(key);
+
+        int32_t *pop    = (int32_t *)(r + 0x24);
+        int32_t *prev   = (int32_t *)(r + 0x28);
+        int32_t *births = (int32_t *)(r + 0x30);
+        int32_t *deaths = (int32_t *)(r + 0x34);
+        int32_t *emig   = (int32_t *)(r + 0x3c);
+        int32_t *immig  = (int32_t *)(r + 0x40);
+        int32_t *evt    = (int32_t *)(r + 0x2f8);
+
+        *prev = *pop;                                   /* snapshot head-count */
+
+        int cap = engine_math_percent_of(*pop, 0x14);   /* iVar1 — 20% of pop  */
+        int base_rate = engine_math_lookup_threshold(*pop, k_pop_birthrate_tbl,
+                                                      0x14, 1);   /* iVar2 */
+        int death_rate = k_pop_deathmod_tbl[(int8_t)r[0x09]] +
+                         K_POP_SEASON_MOD[(int)s_slot_0057c934];  /* iVar3 */
+
+        /* Standing band scales the base birth-rate. */
+        int birth_rate;                                  /* local_c */
+        int8_t standing = (int8_t)r[0x0c];
+        if (standing < 0x1a)      birth_rate = engine_math_percent_of(base_rate, 0x19);
+        else if (standing < 0x33) birth_rate = engine_math_percent_of(base_rate, 0x32);
+        else if (standing < 0x4c) birth_rate = engine_math_percent_of(base_rate, 0x4b);
+        else if (standing < 0x64) birth_rate = engine_math_percent_of(base_rate, 100);
+        else                      birth_rate = engine_math_percent_of(base_rate, 0x78);
+
+        *births = engine_math_percent_of(*pop, birth_rate);
+        *deaths = engine_math_percent_of(*pop, death_rate);
+        if (*births == 0 && birth_rate != 0) *births = 1;
+        if (*deaths == 0 && death_rate != 0) *deaths = 1;
+        if (r[0x09] == 0) *deaths += 2;
+        if (birth_rate < death_rate) *deaths += 1;
+        else                         *births += 1;
+
+        /* Event modifier (+0x1fb signed) → bounded extra births/deaths. */
+        *evt = 0;
+        int8_t emod = (int8_t)r[0x1fb];
+        if (emod < 0)      *evt = engine_math_percent_of(*deaths, -emod) + 10;
+        else if (emod > 0) *evt = engine_math_percent_of(*births,  emod) + 10;
+        if (*evt > cap) *evt = cap;
+        if (emod < 0)      *deaths += *evt;
+        else if (emod > 0) *births += *evt;
+
+        *pop += *births - *deaths;
+        if (*pop < 1) {
+            *births = 0;
+            *deaths = *pop;                              /* retail: stores (≤0) pop */
+            *pop = 0;
+        }
+        *pop -= *emig;
+        *pop += *immig;
+        *(int32_t *)(r + 0x38) = 0;
+
+        /* Dominant change category (+0x5b). */
+        r[0x5b] = 0;
+        int top = 0;                                     /* local_18 */
+        if (*births > 0) { r[0x5b] = 1; top = *births; }
+        if (top < *deaths) { r[0x5b] = 2; top = *deaths; }
+        if (top < *emig)   { r[0x5b] = 3; top = *emig; }
+        if (top < *immig)  { r[0x5b] = 4; }
+
+        /* |growth| percent display (+0x2c). */
+        int32_t *growth = (int32_t *)(r + 0x2c);
+        if (*prev < *pop) *growth = engine_math_percent_div(*pop - *prev, *prev);
+        else              *growth = engine_math_percent_div(*prev - *pop, *prev);
+        if (*growth < 6) r[0x5b] = 0;
+
+        /* Population tier (+0xb8, 1-based). */
+        if (*pop < 1) r[0xb8] = 1;
+        else          r[0xb8] = (uint8_t)((*pop - 1) / 0x19 + 1);
+        if (*pop < 1) *pop = 0;
+
+        /* Capital footprint descriptor by population band. */
+        int cap_off = *(int32_t *)(r + 0x70);
+        if (*pop < 0x321)      engine_territory_stamp_block('/', 2, cap_off, 0xc, 0);
+        else if (*pop < 0x4b1) engine_territory_stamp_block('3', 2, cap_off, 0xc, 0);
+        else                   engine_territory_stamp_block('7', 2, cap_off, 0xc, 0);
+
+        /* Village settlement tiles by population tier. */
+        if (*pop < 0x259)      engine_territory_update_village_tiles(key, 0);
+        else if (*pop < 0x3e9) engine_territory_update_village_tiles(key, 1);
+        else if (*pop < 0x579) engine_territory_update_village_tiles(key, 2);
+        else if (*pop < 0x641) engine_territory_update_village_tiles(key, 3);
+        else                   engine_territory_update_village_tiles(key, 4);
+    }
+}

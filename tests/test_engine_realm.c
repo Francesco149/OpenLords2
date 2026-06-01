@@ -1379,3 +1379,156 @@ int test_engine_realm_replan_economies_dispatches(void)
     engine_army_economy_bind_army_records(g_per_army_768);   /* restore */
     return 0;
 }
+
+/* ─── engine_realm_advance_population (FUN_00449ef3) ─────────────────────── */
+
+/* Reset to clean per-army state, unbind the territory cell grid so the two
+ * overworld-graphics helpers no-op, and return realm 1's record. */
+static uint8_t *pop_reset(int realms, int season)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = realms;
+    s_slot_0057c934 = season;          /* just-ended season → death modifier */
+    engine_territory_bind_cells(NULL); /* stamp / village helpers no-op */
+    return AREC(1);
+}
+
+/* Basic growth: pop 100, full-standing birth band (100%), region 1, season 1.
+ * base rate lookup(100)=30; deaths = 20(region)+4(season) = 24%; births 30 +1
+ * nudge (birth-rate >= death-rate) = 31; pop 100 + 31 - 24 = 107. */
+int test_engine_realm_population_basic_growth(void)
+{
+    uint8_t *r = pop_reset(1, 1);
+    AI32(r, 0x24) = 100;          /* population */
+    r[0x0c] = 80;                 /* standing → 100% birth band */
+    r[0x09] = 1;                  /* region */
+
+    engine_realm_advance_population();
+
+    T_ASSERT_EQ_I(AI32(r, 0x28), 100);   /* prev snapshot */
+    T_ASSERT_EQ_I(AI32(r, 0x30), 31);    /* births */
+    T_ASSERT_EQ_I(AI32(r, 0x34), 24);    /* deaths */
+    T_ASSERT_EQ_I(AI32(r, 0x24), 107);   /* population */
+    T_ASSERT_EQ_I(AI32(r, 0x2f8), 0);    /* no event delta */
+    T_ASSERT_EQ_I(r[0x5b], 1);           /* dominant change = births */
+    T_ASSERT_EQ_I(AI32(r, 0x2c), 7);     /* |growth| percent */
+    T_ASSERT_EQ_I(r[0xb8], 5);           /* tier = (107-1)/25 + 1 */
+    return 0;
+}
+
+/* Population crash: a tiny realm whose deaths exceed births floors to 0 — and
+ * retail stores the (negative) leftover into the deaths field +0x34.  region 0
+ * adds +2 deaths, low standing → 25% birth band. */
+int test_engine_realm_population_crash_quirk(void)
+{
+    uint8_t *r = pop_reset(1, 2);
+    AI32(r, 0x24) = 2;
+    r[0x0c] = 0;                  /* standing → 25% birth band */
+    r[0x09] = 0;                  /* region 0 → +2 deaths */
+
+    engine_realm_advance_population();
+
+    T_ASSERT_EQ_I(AI32(r, 0x30), 0);     /* births zeroed on crash */
+    T_ASSERT_EQ_I(AI32(r, 0x34), -1);    /* deaths = negative leftover (quirk) */
+    T_ASSERT_EQ_I(AI32(r, 0x24), 0);     /* population floored to 0 */
+    T_ASSERT_EQ_I(r[0xb8], 1);           /* tier 1 */
+    T_ASSERT_EQ_I(r[0x5b], 0);           /* no dominant category */
+    return 0;
+}
+
+/* Positive event modifier (+0x1fb) adds bounded births: pop 1000, 120% band,
+ * base lookup(1000)=11 → birth-rate 13 → births 131; evt = 10% of 131 + 10 =
+ * 23 (under the 20%-of-pop=200 cap); deaths 50. */
+int test_engine_realm_population_event_birth_bonus(void)
+{
+    uint8_t *r = pop_reset(1, 3);
+    AI32(r, 0x24) = 1000;
+    r[0x0c] = 100;                /* standing → 120% birth band */
+    r[0x09] = 3;
+    r[0x1fb] = 10;                /* positive event modifier */
+
+    engine_realm_advance_population();
+
+    T_ASSERT_EQ_I(AI32(r, 0x34), 50);    /* deaths */
+    T_ASSERT_EQ_I(AI32(r, 0x2f8), 23);   /* event delta */
+    T_ASSERT_EQ_I(AI32(r, 0x30), 154);   /* births 131 + 23 */
+    T_ASSERT_EQ_I(AI32(r, 0x24), 1104);  /* 1000 + 154 - 50 */
+    T_ASSERT_EQ_I(r[0xb8], 45);          /* tier = (1104-1)/25 + 1 */
+    return 0;
+}
+
+/* Negative event modifier exceeding the 20%-of-pop cap is clamped: pop 100,
+ * cap = 20; raw evt = 50% of deaths(24) + 10 = 22 → clamped to 20; deaths
+ * 24 + 20 = 44; pop 100 + 31 - 44 = 87 → deaths now dominate. */
+int test_engine_realm_population_event_death_capped(void)
+{
+    uint8_t *r = pop_reset(1, 1);
+    AI32(r, 0x24) = 100;
+    r[0x0c] = 80;
+    r[0x09] = 1;
+    r[0x1fb] = (uint8_t)(-50);    /* large negative modifier */
+
+    engine_realm_advance_population();
+
+    T_ASSERT_EQ_I(AI32(r, 0x30), 31);    /* births */
+    T_ASSERT_EQ_I(AI32(r, 0x2f8), 20);   /* event delta capped at 20% of pop */
+    T_ASSERT_EQ_I(AI32(r, 0x34), 44);    /* deaths 24 + 20 */
+    T_ASSERT_EQ_I(AI32(r, 0x24), 87);    /* 100 + 31 - 44 */
+    T_ASSERT_EQ_I(r[0x5b], 2);           /* deaths dominate */
+    return 0;
+}
+
+/* Emigration (+0x3c) leaves and immigration (+0x40) arrives after the natural
+ * birth/death step: pop 500, 50% band, base lookup(500)=15 → birth-rate 7 →
+ * births 35; deaths 100 +1 = 101; 500 - 66 - 50 + 30 = 414. */
+int test_engine_realm_population_migration_applied(void)
+{
+    uint8_t *r = pop_reset(1, 2);
+    AI32(r, 0x24) = 500;
+    r[0x0c] = 50;                 /* standing → 50% birth band */
+    r[0x09] = 1;
+    AI32(r, 0x3c) = 50;           /* emigration */
+    AI32(r, 0x40) = 30;           /* immigration */
+
+    engine_realm_advance_population();
+
+    T_ASSERT_EQ_I(AI32(r, 0x30), 35);    /* births */
+    T_ASSERT_EQ_I(AI32(r, 0x34), 101);   /* deaths */
+    T_ASSERT_EQ_I(AI32(r, 0x24), 414);   /* 500 + 35 - 101 - 50 + 30 */
+    T_ASSERT_EQ_I(r[0x5b], 2);           /* deaths dominate */
+    T_ASSERT_EQ_I(r[0xb8], 17);          /* tier = (414-1)/25 + 1 */
+    return 0;
+}
+
+/* With the overworld cell grid + army records bound, the pass refreshes the
+ * capital footprint (low-pop descriptor '/') and the village tiles (tier 0 →
+ * all four settlement cells reverted to bare terrain). */
+int test_engine_realm_population_refreshes_overworld(void)
+{
+    static uint8_t cells[0x1000 * 8];
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(cells, 0, sizeof cells);
+    s_slot_0056d5dc = 1;
+    s_slot_0057c934 = 1;
+    engine_territory_bind_cells(cells);
+    engine_territory_bind_army_records(g_per_army_768);
+
+    uint8_t *r = AREC(1);
+    AI32(r, 0x24) = 100;          /* low pop → '/' capital, village tier 0 */
+    r[0x0c] = 80; r[0x09] = 1;
+    int cap_off = (5 * 0x40 + 5) * 8;
+    AI32(r, 0x70) = cap_off;      /* capital cell offset */
+    int s0 = (10 * 0x40 + 10) * 8;
+    AI32(r, 0x80) = s0;           /* settlement cell 0 (slots 1..3 → cell 0) */
+    cells[s0 + 0] = 0x13;         /* a standing village */
+
+    engine_realm_advance_population();
+
+    T_ASSERT_EQ_I(cells[cap_off + 2] & 0x1c, 0x0c);  /* capital-region bits */
+    T_ASSERT_EQ_I(cells[cap_off + 3], '/');          /* low-pop descriptor */
+    T_ASSERT_EQ_I(cells[s0 + 0], 0);                 /* village tier 0 → reverted */
+
+    engine_territory_bind_cells(NULL);
+    engine_territory_bind_army_records(NULL);
+    return 0;
+}

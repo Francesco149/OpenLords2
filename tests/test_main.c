@@ -1503,6 +1503,8 @@ struct test_case {
     X(territory_recenter_capital_centres_and_selects) \
     X(territory_recenter_capital_zero_offset_is_noop) \
     X(territory_recenter_capital_unbound_is_noop) \
+    X(territory_village_tiles_grow_and_revert) \
+    X(territory_village_tiles_unbound_is_noop) \
     \
     X(mp_indicator_renders_and_keeps_timer_before_10s) \
     X(mp_indicator_clears_timer_after_10s_still_renders) \
@@ -1757,6 +1759,12 @@ struct test_case {
     X(engine_realm_recompute_income_band_cap) \
     X(engine_realm_recompute_income_player_summary) \
     X(engine_realm_replan_economies_dispatches) \
+    X(engine_realm_population_basic_growth) \
+    X(engine_realm_population_crash_quirk) \
+    X(engine_realm_population_event_birth_bonus) \
+    X(engine_realm_population_event_death_capped) \
+    X(engine_realm_population_migration_applied) \
+    X(engine_realm_population_refreshes_overworld) \
     \
     X(engine_events_scratch_and_gates) \
     X(engine_events_commit_resource) \

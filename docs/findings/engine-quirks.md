@@ -5469,3 +5469,35 @@ would either miss the strategic-record aliasing or double-allocate it.
 > `..apply_resource_quota` / `..stamp_resource_cell`).  Ghidra/r2
 > `FUN_0044e852`/`FUN_0044ea92`/`FUN_0044edc2`.  Verified byte-exact vs retail
 > (`tools/diff_test.py --functions resource_pass`, 24/24 across seeds 0+7).
+
+## 155. When a realm's population crashes below 1, the engine records a *negative* death count
+
+`FUN_00449ef3` (`engine_realm_advance_population`), the per-realm population
+turn pass, advances the head-count at `+0x24` by `births (+0x30) − deaths
+(+0x34)`.  When that net change drives the head-count below 1, retail runs a
+crash-floor block:
+
+```c
+*pop += *births - *deaths;
+if (*pop < 1) {
+    *births = 0;
+    *deaths = *pop;     // <-- stores the (≤ 0) leftover head-count into deaths
+    *pop    = 0;
+}
+```
+
+So a realm that ends the turn at, say, −1 has its **deaths field set to −1**,
+not to the number of people who actually died.  The births field is zeroed and
+the head-count floored to 0, but the deaths field is overwritten with the
+signed remainder.  Whatever per-turn report reads `+0x34` for a depopulated
+realm shows a negative death toll — almost certainly a bug nobody noticed,
+because a realm that hits zero population is usually about to be removed anyway.
+
+The port reproduces this verbatim (`*deaths = *pop` before the floor), and the
+retail diff (`tools/diff_test.py --functions population`) exercises the branch
+with a 2-head realm in region 0 (the +2-deaths terrain) at zero standing — both
+sides land on `deaths == -1`.
+
+> 📍 `src/engine_realm.c` (`engine_realm_advance_population`).  Ghidra/r2
+> `FUN_00449ef3`.  Verified byte-exact vs retail (`tools/diff_test.py
+> --functions population`, 200/200).

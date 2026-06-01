@@ -383,4 +383,14 @@ void engine_territory_load_strat_map(void);
  * at its call site — see the .c. */
 void engine_territory_setup_overworld(engine_rng_single_in_t *rng);
 
+/* Port of FUN_004684c6.  Paint army `key`'s four settlement cells (its +0x80
+ * cell-list) to the village-size graphic for `active` (0..4) sustained
+ * settlements: slots below `active` grow one village stage (type
+ * 0x13→0x12→0x11→0x10, descriptor 0x3c/0x3b, +2 |= 0xc|0x80, +1 |= 0x10);
+ * slots at/above revert to bare terrain (restore +3 from +6, clear the
+ * settled/drawn flags + type).  Driven by the population pass
+ * (engine_realm_advance_population).  No-op if the cell grid or army-record
+ * block is unbound. */
+void engine_territory_update_village_tiles(int key, int active);
+
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

@@ -3072,3 +3072,67 @@ int test_territory_recenter_capital_unbound_is_noop(void)
     engine_territory_recenter_on_capital(1);      /* must not crash */
     return 0;
 }
+
+/* ── Village settlement tiles (port of FUN_004684c6) ───────────────── */
+
+/* Slots below `active` grow one village stage; slots at/above revert to bare
+ * terrain (restoring the saved +6 descriptor and propagating the saved +1
+ * bit 1 into +2 bit 3). */
+int test_territory_village_tiles_grow_and_revert(void)
+{
+    memset(g_cells, 0, sizeof g_cells);
+    memset(g_army, 0, sizeof g_army);
+    engine_territory_bind_cells(g_cells);
+    engine_territory_bind_army_records(g_army);
+
+    int off0 = cell_off(10, 5);
+    int off1 = cell_off(11, 5);
+    int off2 = cell_off(12, 5);
+    int off3 = cell_off(13, 5);
+    int32_t *list = (int32_t *)(g_army + 1 * ARMY_STRIDE + 0x80);
+    list[0] = off0; list[1] = off1; list[2] = off2; list[3] = off3;
+
+    g_cells[off0 + 0] = 0x13;                       /* active: largest stage   */
+    g_cells[off1 + 0] = 0x11;                        /* active: small stage      */
+    g_cells[off2 + 0] = 0x55; g_cells[off2 + 6] = 0x22;
+    g_cells[off2 + 1] = 0x10 | 0x02; g_cells[off2 + 2] = 0x80;   /* inactive, saved bit1 */
+    g_cells[off3 + 0] = 0x55; g_cells[off3 + 6] = 0x33;
+    g_cells[off3 + 1] = 0x10; g_cells[off3 + 2] = 0x80;          /* inactive, no bit1    */
+
+    engine_territory_update_village_tiles(1, 2);     /* slots 0,1 active */
+
+    /* slot 0 grows 0x13 → 0x12, descriptor 0x3c, capital-region + drawn + settled */
+    T_ASSERT_EQ_I(g_cells[off0 + 0], 0x12);
+    T_ASSERT_EQ_I(g_cells[off0 + 3], 0x3c);
+    T_ASSERT_EQ_I(g_cells[off0 + 2] & 0x1c, 0x0c);
+    T_ASSERT_EQ_I(g_cells[off0 + 2] & 0x80, 0x80);
+    T_ASSERT_EQ_I(g_cells[off0 + 1] & 0x10, 0x10);
+    /* slot 1 grows 0x11 → 0x10, descriptor 0x3b */
+    T_ASSERT_EQ_I(g_cells[off1 + 0], 0x10);
+    T_ASSERT_EQ_I(g_cells[off1 + 3], 0x3b);
+    /* slot 2 reverts: type 0, descriptor restored from +6, settled+drawn clear,
+       saved +1 bit 1 → +2 bit 3 set */
+    T_ASSERT_EQ_I(g_cells[off2 + 0], 0);
+    T_ASSERT_EQ_I(g_cells[off2 + 3], 0x22);
+    T_ASSERT_EQ_I(g_cells[off2 + 1] & 0x10, 0);
+    T_ASSERT_EQ_I(g_cells[off2 + 2] & 0x80, 0);
+    T_ASSERT_EQ_I(g_cells[off2 + 2] & 0x08, 0x08);
+    /* slot 3 reverts: saved +1 bit 1 clear → +2 bit 3 stays clear */
+    T_ASSERT_EQ_I(g_cells[off3 + 3], 0x33);
+    T_ASSERT_EQ_I(g_cells[off3 + 2] & 0x08, 0);
+
+    engine_territory_bind_cells(NULL);
+    engine_territory_bind_army_records(NULL);
+    return 0;
+}
+
+int test_territory_village_tiles_unbound_is_noop(void)
+{
+    engine_territory_bind_cells(NULL);
+    engine_territory_update_village_tiles(1, 4);   /* cells unbound → no crash */
+    engine_territory_bind_cells(g_cells);
+    engine_territory_bind_army_records(NULL);
+    engine_territory_update_village_tiles(1, 4);   /* records unbound → no crash */
+    engine_territory_bind_cells(NULL);
+    return 0;
+}

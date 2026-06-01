@@ -7,6 +7,64 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-01 — TURN-ENGINE chip: per-realm population-growth pass (FUN_00449ef3 + FUN_004684c6 village-tile leaf)
+
+Ported the turn-advance engine's (retail 0x448440) per-realm **population-growth**
+pass `FUN_00449ef3` (1991 B) → `engine_realm_advance_population`, plus its one
+unported leaf `FUN_004684c6` (474 B, the village-tile updater) →
+`engine_territory_update_village_tiles`.  This fills driver-callee slot #22, the
+last big unported pass in the contiguous economy cluster around the HEAD chips.
+
+**Mechanism.**  For every realm 1..`s_slot_0056d5dc` (note: *all* realms, no
+owner gate — unlike the other turn passes) it advances the head-count at
+`g_per_army_768 + key*0x300 + 0x24`:
+
+  * **births** = pop × (base birth-rate × standing band)%.  The base rate comes
+    from a 20-pair population-bracket table (rdata 0x4d6308 → `engine_math_lookup_threshold`):
+    100% under 40 head, decaying to 1% past 3000 — small realms grow fast.  The
+    standing byte `+0x0c` scales it 25/50/75/100/120% across the 26/51/76/100
+    cut-offs (happier realms breed faster).
+  * **deaths** = pop × (terrain + season death-rate)%.  Terrain harshness is
+    indexed by the region byte `+0x09` (rdata 0x4d63a8, {35,20,8,3,0,0}); the
+    seasonal modifier by the *just-ended* season `s_slot_0057c934` (rdata
+    0x4d63c0, {_,4,0,2,8}).  Region 0 takes +2 deaths; whichever rate is lower
+    gets a +1 nudge.
+  * an **event modifier** `+0x1fb` (signed) adds bounded extra births (positive)
+    or deaths (negative), capped at 20% of pop (`+0x2f8`).
+  * net births−deaths apply, then **emigration** `+0x3c` leaves and
+    **immigration** `+0x40` arrives.
+
+It then records the previous head-count (`+0x28`), the dominant change category
+(`+0x5b`: 1 birth / 2 death / 3 emigrate / 4 immigrate, cleared when |growth| at
+`+0x2c` is under 6%), and the population tier (`+0xb8 = (pop−1)/25 + 1`), and
+refreshes the overworld graphics: the 2×2 capital footprint descriptor by
+population band ('/'/'3'/'7') via the already-ported
+`engine_territory_stamp_block` (FUN_0046ac22), and the four settlement village
+tiles by tier via the new `engine_territory_update_village_tiles` — which grows
+each settlement cell one village stage (0x13→0x12→0x11→0x10) or reverts it to
+bare terrain.
+
+**Quirk #155 surfaced.**  On a population crash (head-count < 1 after
+births−deaths) retail stores the *negative leftover* into the deaths field
+`+0x34` (rather than the actual death toll) before flooring pop to 0 — ported
+verbatim and pinned by a dedicated diff vector.
+
+**Verification.**  6 host unit tests (engine_realm) + 2 (engine_territory) cover
+the bands, the crash quirk, the event cap, migration, and the overworld refresh.
+New diff-harness target `population` (`tools/diff_test.py --functions population`)
+injects g_per_army_768 + g_overworld_map + count + season and reads both blocks
+back: **200/200 byte-exact vs retail**.  The two graphics helpers reach the cell
+grid + army records through the territory module's pointers, bound to the
+injected globals for the run.
+
+Next contiguous unported driver callees are the rebel/standing pass
+`FUN_0044aa41` (#13) and the construction-completion pass `FUN_004508de` (#20) —
+both reach into the still-unported combat-initiation / unit-spawn subsystem
+(`FUN_004a7158`/`FUN_004aad07`/`FUN_004ab383`), a real subsystem boundary to
+take on as its own track rather than chasing the subtree here.
+
+---
+
 ## 2026-06-01 — TURN-ENGINE chip: per-realm unit upkeep / wages / desertion pass (FUN_004acbd4 + 13-function lifecycle cluster) — new engine_realm_upkeep module
 
 Ported the turn-advance engine's (retail 0x448440, line 32) per-realm

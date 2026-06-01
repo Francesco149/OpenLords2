@@ -335,4 +335,20 @@ void engine_realm_spread_development(void);
  * unbound. */
 void engine_realm_replan_economies(void);
 
+/* Port of FUN_00449ef3 @ 0x449ef3 (1991 B, __stdcall void) — the per-realm
+ * population-growth turn pass of the turn-advance engine (0x448440).  For each
+ * realm 1..s_slot_0056d5dc it advances the head-count (+0x24) by births and
+ * deaths derived from a population-bracket base birth-rate (rdata 0x4d6308)
+ * scaled 25/50/75/100/120% by the realm's standing band (+0x0c), a
+ * region+season death-rate (rdata 0x4d63a8/0x4d63c0, the latter keyed by the
+ * just-ended season s_slot_0057c934), a bounded signed event modifier (+0x1fb,
+ * up to 20% of pop), then emigration (+0x3c) and immigration (+0x40).  Records
+ * the previous head-count (+0x28), the dominant change category (+0x5b), the
+ * |growth| percent (+0x2c) and the population tier (+0xb8), and refreshes the
+ * overworld graphics — the capital footprint descriptor by population band via
+ * engine_territory_stamp_block and the four village settlement tiles via
+ * engine_territory_update_village_tiles.  Touches g_per_army_768 and the
+ * overworld cell grid g_overworld_map; reads the realm count + season scalar. */
+void engine_realm_advance_population(void);
+
 #endif /* OPENLORDS2_ENGINE_REALM_H */
