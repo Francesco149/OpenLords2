@@ -1048,6 +1048,193 @@ void engine_territory_census_all_realms(void)
         engine_territory_census_army_terrain(key);
 }
 
+/* ──────────────────────────────────────────────────────────────────
+ * Per-realm AI development / demolition primitives — the cell-roster
+ * mutators reached from the per-army AI dispatch (FUN_0049dd01, the first
+ * call of the turn-advance engine 0x448440 → 0x49a990).  Each walks the
+ * realm's ≤20-cell roster and stamps cell type bytes through
+ * engine_territory_set_cell_type, mirroring the way an AI player builds out
+ * or tears down its feature cells across a turn.  All read the same bound
+ * cell roster + grid the census uses; no-op when either is unbound.
+ *
+ * Cell-TYPE bands (the census buckets above name them): 0 = empty,
+ * 1 = cleared/level-1, 0x02..0x0e = "mid" developed, 0x0f..0x16 = "high"
+ * developed, 0x13..0x16 the upper high tier, 0x17/0x18 special, >= 0x19 the
+ * "over"/fully-built tier.
+ * ────────────────────────────────────────────────────────────────── */
+
+/* Roster cursor (DAT_0053fb0a) the cycle-demolish helpers advance round the
+ * ≤20 columns; ARMY_ACTIVE_COUNT (+0x205) is the wrap length (also defined in
+ * the secondary-settlement section below — identical, benign). */
+#define ARMY_ROSTER_CURSOR  0x15a
+#define ARMY_ACTIVE_COUNT   0x205
+/* +0x206 (DAT_0053fbb6) — a "mid" reserve companion decremented in step with
+ * the census MID bucket when a mid cell is demolished; +0x234 / +0x244
+ * (DAT_0053fbe4 / DAT_0053fbf4) — paired stock accumulators the demolish
+ * refunds a 1/MID fraction between.  Semantics provisional. */
+#define ARMY_MID_RESERVE    0x206
+#define ARMY_STOCK_234      0x234
+#define ARMY_STOCK_244      0x244
+
+/* Port of FUN_0044c6c4 (182 B).  Develop up to `count` of the realm's cells to
+ * the fully-built tier 0x19: walk the roster, stamp each empty (type 0) cell to
+ * 0x19 (consuming one of `count`), skip cells already part-built (type 1..0x18,
+ * which neither develop nor consume), and let cells already at >= 0x19 consume a
+ * slot too — so `count` bounds the realm's total >= 0x19 cells after the pass.
+ * No-op when the roster or cell grid is unbound. */
+void engine_territory_develop_empty_cells(int key, int count)
+{
+    if (g_cell_roster == NULL || g_cells == NULL) return;
+
+    const int32_t *roster_row = g_cell_roster + key * ROSTER_ROW_I32;
+    for (int col = 0; col < ROSTER_COLS; col++) {
+        int32_t off = roster_row[col];
+        if (off == 0) continue;
+        if (g_cells[(unsigned)off] < 0x19) {
+            if (g_cells[(unsigned)off] != 0) continue;   /* part-built — leave */
+            engine_territory_set_cell_type(off, 0x19, 0);
+        }
+        if (--count < 1) return;
+    }
+}
+
+/* Port of FUN_004697cd (192 B).  Demolish a band of the realm's cells back to
+ * the cleared tier 1.  `mode` selects the band: 2 → demolish "mid" cells
+ * (types 0x02..0x0e), 0x13 → demolish upper-high cells (types 0x13..0x16).
+ * No-op when the roster or cell grid is unbound. */
+void engine_territory_demolish_band(int key, int mode)
+{
+    if (g_cell_roster == NULL || g_cells == NULL) return;
+
+    const int32_t *roster_row = g_cell_roster + key * ROSTER_ROW_I32;
+    for (int col = 0; col < ROSTER_COLS; col++) {
+        int32_t off = roster_row[col];
+        if (off == 0) continue;
+        unsigned b = g_cells[(unsigned)off];
+        if (mode == 2) {
+            if (b > 1 && b < 0xf) engine_territory_set_cell_type(off, 1, 0);
+        } else if (mode == 0x13) {
+            if (b > 0x12 && b < 0x17) engine_territory_set_cell_type(off, 1, 0);
+        }
+    }
+}
+
+/* Port of FUN_0046988d (274 B).  As engine_territory_demolish_band, but first
+ * spend a `budget` of conversions: each cleared (type 1) cell is upgraded to
+ * `mode` while budget remains; once the budget is exhausted, surplus cells in
+ * the `mode` band are demolished back to type 1 (cells that would have been
+ * converted while budget remained instead just draw it down).  No-op when the
+ * roster or cell grid is unbound. */
+void engine_territory_convert_or_demolish_band(int key, int mode, int budget)
+{
+    if (g_cell_roster == NULL || g_cells == NULL) return;
+
+    const int32_t *roster_row = g_cell_roster + key * ROSTER_ROW_I32;
+    for (int col = 0; col < ROSTER_COLS; col++) {
+        int32_t off = roster_row[col];
+        if (off == 0) continue;
+        unsigned b = g_cells[(unsigned)off];
+        if (b == 1 && budget > 0) {
+            engine_territory_set_cell_type(off, mode, 0);
+            budget--;
+        } else if (mode == 2) {
+            if (b > 1 && b < 0xf) {
+                if (budget < 1) engine_territory_set_cell_type(off, 1, 0);
+                else            budget--;
+            }
+        } else if (mode == 0x13) {
+            if (b > 0x12 && b < 0x17) {
+                if (budget < 1) engine_territory_set_cell_type(off, 1, 0);
+                else            budget--;
+            }
+        }
+    }
+}
+
+/* Port of FUN_0046958f (203 B).  Advance the roster cursor (+0x15a, wrapping at
+ * the active-cell count +0x205) until it lands on a cleared (type 1) cell, up to
+ * 20 steps, then stamp that cell to the high tier 0x13.  Leaves the cursor on
+ * the chosen cell.  No-op (cursor still advances) when no type-1 cell is found
+ * within 20 steps, or when the roster / cell grid is unbound. */
+void engine_territory_cycle_set_type1(int key)
+{
+    if (g_army_records == NULL) return;
+    uint8_t *rowbase = g_army_records + key * ARMY_ROW_STRIDE;
+    if (g_cell_roster == NULL || g_cells == NULL) return;
+
+    const int32_t *roster_row = g_cell_roster + key * ROSTER_ROW_I32;
+    for (int step = 0; step <= 0x13; step++) {
+        uint8_t cur = (uint8_t)(rowbase[ARMY_ROSTER_CURSOR] + 1);
+        if (rowbase[ARMY_ACTIVE_COUNT] <= cur) cur = 0;
+        rowbase[ARMY_ROSTER_CURSOR] = cur;
+        int32_t off = roster_row[cur];
+        if (off != 0 && g_cells[(unsigned)off] == 1) {
+            engine_territory_set_cell_type(off, 0x13, 0);
+            return;
+        }
+    }
+}
+
+/* Port of FUN_0046965a (371 B).  Advance the roster cursor until it lands on a
+ * "mid" developed cell (type 0x02..0x0e), up to 20 steps; on a hit, demolish it
+ * to the high tier 0x13, move a 1/MID fraction of stock +0x244 into +0x234
+ * (refunding the invested input), draw down the +0x206 mid reserve when it still
+ * covers the MID census count, and decrement the MID bucket (+0x201).  No-op
+ * when no mid cell is found within 20 steps or the roster / grid is unbound.
+ * Callers guarantee MID > 0 (the only site, FUN_0046921d, gates on it). */
+void engine_territory_cycle_demolish_mid(int key)
+{
+    if (g_army_records == NULL) return;
+    uint8_t *rowbase = g_army_records + key * ARMY_ROW_STRIDE;
+    if (g_cell_roster == NULL || g_cells == NULL) return;
+
+    const int32_t *roster_row = g_cell_roster + key * ROSTER_ROW_I32;
+    for (int step = 0; step <= 0x13; step++) {
+        uint8_t cur = (uint8_t)(rowbase[ARMY_ROSTER_CURSOR] + 1);
+        if (rowbase[ARMY_ACTIVE_COUNT] <= cur) cur = 0;
+        rowbase[ARMY_ROSTER_CURSOR] = cur;
+        int32_t off = roster_row[cur];
+        if (off != 0 && g_cells[(unsigned)off] > 1 && g_cells[(unsigned)off] < 0xf) {
+            engine_territory_set_cell_type(off, 0x13, 0);
+
+            int frac = engine_math_percent_div(1, rowbase[ARMY_CENSUS_MID]);
+            int moved = engine_math_percent_of(
+                *(int32_t *)(rowbase + ARMY_STOCK_244), frac);
+            *(int32_t *)(rowbase + ARMY_STOCK_244) -= moved;
+            *(int32_t *)(rowbase + ARMY_STOCK_234) += moved;
+
+            if (rowbase[ARMY_CENSUS_MID] <= rowbase[ARMY_MID_RESERVE])
+                rowbase[ARMY_MID_RESERVE]--;
+            rowbase[ARMY_CENSUS_MID]--;
+            return;
+        }
+    }
+}
+
+/* Port of FUN_0046921d (138 B).  Re-census the realm, then reduce over-built
+ * footprints when it has no high-tier cell (+0x200 == 0): if it also has no
+ * cleared/level-1 cell, demolish one mid cell (engine_territory_cycle_demolish_mid)
+ * when any remain; otherwise cycle one level-1 cell up to 0x13
+ * (engine_territory_cycle_set_type1).  Re-censuses afterward so the buckets
+ * reflect the change.  No-op contributions when the records / roster are
+ * unbound (each callee guards). */
+void engine_territory_recensus_reduce(int key)
+{
+    if (g_army_records == NULL) return;
+    uint8_t *rowbase = g_army_records + key * ARMY_ROW_STRIDE;
+
+    engine_territory_census_army_terrain(key);
+    if (rowbase[ARMY_CENSUS_HIGH] == 0) {
+        if (rowbase[ARMY_CENSUS_TYPE1] == 0) {
+            if (rowbase[ARMY_CENSUS_MID] != 0)
+                engine_territory_cycle_demolish_mid(key);
+        } else {
+            engine_territory_cycle_set_type1(key);
+        }
+        engine_territory_census_army_terrain(key);
+    }
+}
+
 /* Realm-record fields the secondary-settlement stamp reads to pick its
  * descriptor tier (both inside g_per_army_768 row `key`). */
 #define ARMY_SETTLE_FLAG  0x1c3   /* DAT_0053fb73 — secondary settlement present  */

@@ -217,6 +217,41 @@ void engine_territory_census_army_terrain(int key);
  * whole-map census wrapper. */
 void engine_territory_census_all_realms(void);
 
+/* Per-realm AI development / demolition primitives — cell-roster mutators
+ * reached from the per-army AI dispatch (FUN_0049dd01, first call of the
+ * turn-advance engine 0x448440).  Each walks the realm's ≤20-cell roster and
+ * stamps cell type bytes via engine_territory_set_cell_type.  All no-op when
+ * the cell roster / grid (or, where noted, the army-record block) is unbound. */
+
+/* Port of FUN_0044c6c4.  Develop up to `count` empty cells to the fully-built
+ * tier 0x19 (skipping part-built cells; cells already >= 0x19 also consume a
+ * slot), so `count` bounds the realm's >= 0x19 cell total after the pass. */
+void engine_territory_develop_empty_cells(int key, int count);
+
+/* Port of FUN_004697cd.  Demolish a band of cells back to the cleared tier 1:
+ * `mode` 2 → mid cells (0x02..0x0e), 0x13 → upper-high cells (0x13..0x16). */
+void engine_territory_demolish_band(int key, int mode);
+
+/* Port of FUN_0046988d.  As engine_territory_demolish_band, but first spend a
+ * `budget` of cleared(type 1)→`mode` upgrades; once exhausted, surplus `mode`-
+ * band cells are demolished back to type 1. */
+void engine_territory_convert_or_demolish_band(int key, int mode, int budget);
+
+/* Port of FUN_0046958f.  Advance the roster cursor (+0x15a) up to 20 steps to a
+ * cleared(type 1) cell and stamp it to the high tier 0x13. */
+void engine_territory_cycle_set_type1(int key);
+
+/* Port of FUN_0046965a.  Advance the cursor up to 20 steps to a mid(0x02..0x0e)
+ * cell, demolish it to 0x13, move a 1/MID fraction of stock +0x244 into +0x234,
+ * and decrement the MID bucket (+0x201) and its +0x206 reserve.  Callers
+ * guarantee MID > 0. */
+void engine_territory_cycle_demolish_mid(int key);
+
+/* Port of FUN_0046921d.  Re-census, then when the realm has no high-tier cell
+ * (+0x200 == 0) reduce one footprint — demolish a mid cell when no level-1 cell
+ * exists, else cycle a level-1 cell to 0x13 — and re-census. */
+void engine_territory_recensus_reduce(int key);
+
 /* Port of FUN_0046826c.  Stamp the realm's secondary-settlement 2×2 footprint
  * at its secondary cell (record +0x78), via engine_territory_stamp_block.  The
  * descriptor base is one of three tiers ('P'/'('/'<') picked by the realm's

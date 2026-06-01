@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **509** (20.8%) — tested 473, ported 36
-- code bytes touched: **21.4%** (179,514 / 838,629 B)
-- unported: **1938**
+- touched: **516** (21.1%) — tested 480, ported 36
+- code bytes touched: **21.6%** (181,457 / 838,629 B)
+- unported: **1931**
 - orphan refs (in src/, not in function table): 4
 
-## tested (473) — ported + host unit suite
+## tested (480) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -260,6 +260,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x44c278 | FUN_0044c278 | 707 | engine_army_economy.c, engine_army_economy.h, engine_realm.c (+2) |
 | 0x44c53b | FUN_0044c53b | 193 | engine_army_economy.c, engine_army_economy.h, engine_realm.c (+1) |
 | 0x44c5fc | FUN_0044c5fc | 200 | engine_army_economy.c, engine_army_economy.h, engine_realm.c (+1) |
+| 0x44c6c4 | FUN_0044c6c4 | 182 | engine_territory.c, engine_territory.h |
 | 0x44c77a | FUN_0044c77a | 139 | engine_realm_events.c |
 | 0x44c80a | FUN_0044c80a | 159 | engine_realm_events.c |
 | 0x44c8ae | FUN_0044c8ae | 1729 | engine_army_economy.c, engine_army_economy.h |
@@ -323,7 +324,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x468d4f | FUN_00468d4f | 274 | engine_territory.c, engine_territory.h |
 | 0x468e61 | FUN_00468e61 | 457 | engine_territory.c, engine_territory.h |
 | 0x46902a | FUN_0046902a | 499 | engine_territory.c, engine_territory.h |
+| 0x46921d | FUN_0046921d | 138 | engine_territory.c, engine_territory.h |
 | 0x46942c | FUN_0046942c | 147 | engine_realm.c, engine_realm.h |
+| 0x46958f | FUN_0046958f | 203 | engine_territory.c, engine_territory.h |
+| 0x46965a | FUN_0046965a | 371 | engine_territory.c, engine_territory.h |
+| 0x4697cd | FUN_004697cd | 192 | engine_territory.c, engine_territory.h |
+| 0x46988d | FUN_0046988d | 274 | engine_territory.c, engine_territory.h |
 | 0x469a9c | FUN_00469a9c | 176 | engine_realm.c, engine_realm.h |
 | 0x469b51 | FUN_00469b51 | 60 | engine_territory.c, engine_territory.h |
 | 0x469b8d | FUN_00469b8d | 404 | engine_army_economy.c, engine_territory.c, engine_territory.h (+1) |
@@ -388,6 +394,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49bc5f | FUN_0049bc5f | 314 | engine_roster.c, engine_roster.h |
 | 0x49bd99 | FUN_0049bd99 | 3063 | game_init.c, game_init.h |
 | 0x49caaa | FUN_0049caaa | 935 | engine_menu_input.c, engine_npc_schedule.c, engine_npc_schedule.h (+3) |
+| 0x49dd01 | FUN_0049dd01 | 583 | engine_territory.c, engine_territory.h |
 | 0x4a1c53 | FUN_004a1c53 | 537 | game_init.c, game_init.h |
 | 0x4a1e6c | FUN_004a1e6c | 117 | engine_roster.c, engine_roster.h, game_init.c |
 | 0x4a2584 | FUN_004a2584 | 157 | game_init.c, game_init.h |

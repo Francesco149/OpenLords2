@@ -2105,6 +2105,164 @@ int test_territory_grade_unbound_is_noop(void)
     return 0;
 }
 
+/* ── Per-realm AI development / demolition primitives ───────────────
+ * (ports of FUN_0044c6c4 / 0x4697cd / 0x46988d / 0x46958f / 0x46965a /
+ * 0x46921d).  Reuse census_setup / census_tile / census from above: a
+ * "cell of TYPE t in army K's roster column c" is census_tile(K,c,t),
+ * and its backing cell's TYPE byte (after set_cell_type restamps it) is
+ * cen_type(K,c). */
+
+static int cen_type(int key, int col)
+{
+    int off = (key * ROSTER_NCOL + col + 1) * CELL_STRIDE;
+    return g_cells[off];
+}
+
+/* develop_empty_cells: empties → 0x19 up to `count`; part-built skipped (no
+ * develop, no slot); cells already >= 0x19 consume a slot. */
+int test_territory_develop_empty_cells_budget(void)
+{
+    census_setup();
+    census_tile(5, 0, 0);       /* empty     → develop */
+    census_tile(5, 1, 5);       /* part-built → skip    */
+    census_tile(5, 2, 0);       /* empty     → develop  */
+    census_tile(5, 3, 0x19);    /* over      → consumes slot, no stamp */
+    census_tile(5, 4, 0);       /* empty     → would develop, but budget gone */
+
+    engine_territory_develop_empty_cells(5, 2);
+
+    T_ASSERT_EQ_I(cen_type(5, 0), 0x19);
+    T_ASSERT_EQ_I(cen_type(5, 1), 5);      /* untouched */
+    T_ASSERT_EQ_I(cen_type(5, 2), 0x19);
+    T_ASSERT_EQ_I(cen_type(5, 3), 0x19);
+    T_ASSERT_EQ_I(cen_type(5, 4), 0);      /* budget exhausted before here */
+    return 0;
+}
+
+/* demolish_band mode 2 → mid cells (0x02..0x0e) back to 1; mode 0x13 → upper-
+ * high (0x13..0x16) back to 1; out-of-band cells untouched. */
+int test_territory_demolish_band_mid_and_high(void)
+{
+    census_setup();
+    census_tile(5, 0, 5);       /* mid       */
+    census_tile(5, 1, 0x10);    /* high (not in either band end) */
+    census_tile(5, 2, 3);       /* mid       */
+    census_tile(5, 3, 0x14);    /* upper-high */
+
+    engine_territory_demolish_band(5, 2);
+    T_ASSERT_EQ_I(cen_type(5, 0), 1);
+    T_ASSERT_EQ_I(cen_type(5, 1), 0x10);
+    T_ASSERT_EQ_I(cen_type(5, 2), 1);
+    T_ASSERT_EQ_I(cen_type(5, 3), 0x14);
+
+    engine_territory_demolish_band(5, 0x13);
+    T_ASSERT_EQ_I(cen_type(5, 3), 1);      /* 0x14 demolished */
+    T_ASSERT_EQ_I(cen_type(5, 1), 0x10);   /* still untouched */
+    return 0;
+}
+
+/* convert_or_demolish_band mode 2 budget 1: first cleared cell upgraded to 2
+ * (budget spent), surplus mid cell demolished to 1 once budget gone. */
+int test_territory_convert_or_demolish_budget(void)
+{
+    census_setup();
+    census_tile(5, 0, 1);       /* cleared → convert to mode 2 (budget→0) */
+    census_tile(5, 1, 1);       /* cleared → budget gone, no-op           */
+    census_tile(5, 2, 5);       /* mid     → budget gone, demolish to 1    */
+
+    engine_territory_convert_or_demolish_band(5, 2, 1);
+
+    T_ASSERT_EQ_I(cen_type(5, 0), 2);
+    T_ASSERT_EQ_I(cen_type(5, 1), 1);
+    T_ASSERT_EQ_I(cen_type(5, 2), 1);
+    return 0;
+}
+
+/* cycle_set_type1: advance cursor to the first cleared(type 1) cell, stamp it
+ * to 0x13, leaving the cursor on it. */
+int test_territory_cycle_set_type1(void)
+{
+    census_setup();
+    g_army[5 * ARMY_STRIDE + 0x205] = 20;    /* active count (wrap length) */
+    g_army[5 * ARMY_STRIDE + 0x15a] = 0;     /* cursor */
+    census_tile(5, 3, 1);                    /* the only type-1 cell */
+
+    engine_territory_cycle_set_type1(5);
+
+    T_ASSERT_EQ_I(cen_type(5, 3), 0x13);
+    T_ASSERT_EQ_I(g_army[5 * ARMY_STRIDE + 0x15a], 3);   /* cursor parked on it */
+    return 0;
+}
+
+/* cycle_demolish_mid: advance to a mid cell, demolish to 0x13, move a 1/MID
+ * fraction of +0x244 into +0x234, decrement MID(+0x201) and reserve(+0x206). */
+int test_territory_cycle_demolish_mid(void)
+{
+    census_setup();
+    g_army[5 * ARMY_STRIDE + 0x205] = 20;
+    g_army[5 * ARMY_STRIDE + 0x15a] = 0;
+    g_army[5 * ARMY_STRIDE + 0x201] = 3;     /* MID census */
+    g_army[5 * ARMY_STRIDE + 0x206] = 3;     /* mid reserve */
+    *(int32_t *)&g_army[5 * ARMY_STRIDE + 0x244] = 300;
+    *(int32_t *)&g_army[5 * ARMY_STRIDE + 0x234] = 0;
+    census_tile(5, 2, 5);                    /* the mid cell */
+
+    engine_territory_cycle_demolish_mid(5);
+
+    T_ASSERT_EQ_I(cen_type(5, 2), 0x13);
+    /* moved = (300 * (100/3)) / 100 = (300*33)/100 = 99 */
+    T_ASSERT_EQ_I(*(int32_t *)&g_army[5 * ARMY_STRIDE + 0x244], 201);
+    T_ASSERT_EQ_I(*(int32_t *)&g_army[5 * ARMY_STRIDE + 0x234], 99);
+    T_ASSERT_EQ_I(g_army[5 * ARMY_STRIDE + 0x201], 2);   /* MID-- */
+    T_ASSERT_EQ_I(g_army[5 * ARMY_STRIDE + 0x206], 2);   /* reserve-- */
+    return 0;
+}
+
+/* recensus_reduce: with a high cell present (HIGH != 0), nothing is reduced. */
+int test_territory_recensus_reduce_high_present_noop(void)
+{
+    census_setup();
+    g_army[5 * ARMY_STRIDE + 0x205] = 20;
+    census_tile(5, 0, 0x10);                 /* high cell */
+
+    engine_territory_recensus_reduce(5);
+
+    T_ASSERT_EQ_I(census(5, 0x200), 1);      /* HIGH counted */
+    T_ASSERT_EQ_I(cen_type(5, 0), 0x10);     /* untouched */
+    return 0;
+}
+
+/* recensus_reduce: no high, no level-1, mid present → demolish one mid; the
+ * re-census then reflects the change. */
+int test_territory_recensus_reduce_type1_path(void)
+{
+    census_setup();
+    g_army[5 * ARMY_STRIDE + 0x205] = 20;
+    g_army[5 * ARMY_STRIDE + 0x15a] = 0;
+    census_tile(5, 4, 1);                    /* only a cleared(type 1) cell */
+
+    engine_territory_recensus_reduce(5);
+
+    /* HIGH==0, TYPE1!=0 → cycle_set_type1 stamps the cell to 0x13; re-census
+     * then lands it in the HIGH band (0x0f..0x16). */
+    T_ASSERT_EQ_I(cen_type(5, 4), 0x13);
+    T_ASSERT_EQ_I(census(5, 0x200), 1);      /* HIGH now 1 */
+    T_ASSERT_EQ_I(census(5, 0x1ff), 0);      /* TYPE1 now 0 */
+    return 0;
+}
+
+/* Unbound roster → develop/demolish are no-ops (don't crash). */
+int test_territory_ai_dev_unbound_is_noop(void)
+{
+    census_setup();
+    census_tile(5, 0, 0);
+    engine_territory_bind_cell_roster(NULL);
+    engine_territory_develop_empty_cells(5, 5);   /* must not crash */
+    engine_territory_demolish_band(5, 2);
+    T_ASSERT_EQ_I(cen_type(5, 0), 0);             /* untouched */
+    return 0;
+}
+
 /* ── Capital-region setup: block stamp + capital placement ──────────
  * (port of FUN_0046ac22 / FUN_00467fd1, the leaves of the 0x468d4f
  * castle-setup subtree).  Reuse the module-level g_cells + cell_off. */

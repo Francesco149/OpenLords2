@@ -1457,6 +1457,14 @@ struct test_case {
     X(territory_grade_density_tiers) \
     X(territory_grade_saturated_no_high) \
     X(territory_grade_unbound_is_noop) \
+    X(territory_develop_empty_cells_budget) \
+    X(territory_demolish_band_mid_and_high) \
+    X(territory_convert_or_demolish_budget) \
+    X(territory_cycle_set_type1) \
+    X(territory_cycle_demolish_mid) \
+    X(territory_recensus_reduce_high_present_noop) \
+    X(territory_recensus_reduce_type1_path) \
+    X(territory_ai_dev_unbound_is_noop) \
     X(territory_stamp_block_2x2_gradient) \
     X(territory_stamp_block_is_square_not_strip) \
     X(territory_stamp_block_unbound_is_noop) \
