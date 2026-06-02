@@ -18,6 +18,22 @@
  * before the workforce allocator redistributes population against them. */
 void engine_army_ai_seed_workforce_ratios(int key);
 
+/* Port of FUN_004502ca.  Toggle one of the realm's eight workforce slots (the
+ * +0x130 run) and re-normalise the five ratio slots 3..7 (a percentage split
+ * summing to 100) around the change.  `slot` selects which slot is toggled;
+ * `mode` 1 enables it — it claims a share of pct[active-ratio-count]
+ * (table 0x4d6768 {100,50,33,25,20}) and scales the five ratios down by the
+ * remainder; `mode` 0 disables it — it scales the ratios back up by
+ * 100/(100−wf[slot]).  Either way the five ratios are re-normalised so their
+ * remainder-to-100 lands on the currently-largest ratio.  No-op when the slot is
+ * already in the requested state.  Drivers: the workforce-allocation UI handlers
+ * (FUN_00436e.. / FUN_0043d3.., dynamic slot) and the secondary-settlement
+ * completion pass FUN_004508de, which always calls (realm, 3, 0).  The disable
+ * branch divides by 100−wf[slot]; that is 0 only if the slot had previously
+ * claimed the full 100% (enabled when no ratios were active) — a latent retail
+ * div-by-zero the live drivers never reach. */
+void engine_army_ai_rebalance_workforce(int key, int slot, int mode);
+
 /* Port of FUN_00428c42.  Advance the realm's advancement progress by a 0..5 tier
  * step sized by `amount` (a gold spend) relative to mouths-to-feed/10, clamped
  * so the tier byte +0x219 never exceeds 5, folding the step into +0x219, the

@@ -4,19 +4,21 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 578,
+  "tested": 580,
   "ported": 45,
-  "unported": 1824,
-  "orphan_refs_not_in_function_table": 4,
-  "touched": 623,
+  "unported": 1822,
+  "orphan_refs_not_in_function_table": 6,
+  "touched": 625,
   "pct_touched": 25.5,
-  "pct_tested": 23.6,
+  "pct_tested": 23.7,
   "bytes_total": 838629,
-  "bytes_touched": 253772,
-  "pct_bytes_touched": 30.3
+  "bytes_touched": 255658,
+  "pct_bytes_touched": 30.5
  },
  "orphan_refs": [
   "0x004148",
+  "0x00436e",
+  "0x0043d3",
   "0x40eb4c",
   "0x4bd180",
   "0x4d5c98"
@@ -10557,8 +10559,11 @@
    "name": "FUN_004502ca",
    "size": 879,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h"
+   ]
   },
   {
    "va": "0x450639",
@@ -10573,8 +10578,10 @@
    "name": "FUN_004508de",
    "size": 1007,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.h"
+   ]
   },
   {
    "va": "0x450ccd",

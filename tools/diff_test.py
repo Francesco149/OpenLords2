@@ -2534,6 +2534,7 @@ VA_SLOT_SEASON  = 0x57c92c       # s_slot_0057c92c — season (dev reads, unused
 FN_TAX_APPROVAL = 0x44bd9f
 FN_DEV_SPREAD   = 0x44bf7a
 FN_REALM_INCOME = 0x44b80b       # FUN_0044b80b — __cdecl(int realm)
+FN_WORKFORCE_REBALANCE = 0x4502ca  # FUN_004502ca — __cdecl(int realm, slot, mode)
 FN_PLAYER_AGGREGATE = 0x49d1e0   # FUN_0049d1e0 — __cdecl(uint player)
 FN_ELIMINATION  = 0x49b42b       # FUN_0049b42b — __cdecl(uint player)
 REALM_BOARD_BYTES = 48           # s_slot_00565410 (6 × {i32 slot, i32 score})
@@ -2626,6 +2627,9 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
         lib.engine_realm_spread_development.argtypes = []
         lib.engine_realm_recompute_realm_income.restype = None
         lib.engine_realm_recompute_realm_income.argtypes = [ctypes.c_int]
+        lib.engine_army_ai_rebalance_workforce.restype = None
+        lib.engine_army_ai_rebalance_workforce.argtypes = [
+            ctypes.c_int, ctypes.c_int, ctypes.c_int]
         lib.engine_ranking_recompute_player_aggregate.restype = None
         lib.engine_ranking_recompute_player_aggregate.argtypes = [ctypes.c_uint]
         lib.engine_ranking_check_elimination.restype = None
@@ -2958,6 +2962,79 @@ def diff_realm_income(retail: dict, port: dict) -> list[str]:
     bad += _diff_realm_region(retail, port["strat"], VA_STRATEGIC,
                               REALM_STRAT_STRIDE, 6, "strat")
     return bad
+
+
+# ── workforce-ratio re-balance (FUN_004502ca — engine_army_ai_rebalance_workforce) ──
+#
+# __cdecl(int realm, int slot, int mode): re-normalises one realm's eight
+# workforce slots (+0x130 run) when policy slot `slot` (0..2) is toggled by
+# `mode` (1=enable / 0=disable).  Touches ONLY that realm's +0x130..+0x14c, so
+# g_per_army_768 is the sole injected/read-back block.  Driven through the
+# generic RPC with args=[realm, slot, mode] + cc='mscdecl'.  Denominator for the
+# disable branch is 100-wf[slot]; vectors keep wf[slot] != 100 to dodge the
+# div-by-zero both sides would take.
+
+def _build_workforce_vec(realm: int, slot: int, mode: int,
+                         wf: list[int]) -> dict:
+    army = bytearray(REALM_ARMY_BYTES)
+    b = realm * REALM_ARMY_STRIDE
+    for i in range(8):
+        struct.pack_into("<i", army, b + 0x130 + i * 4, wf[i])
+    return {"realm": realm, "slot": slot, "mode": mode, "army": bytes(army)}
+
+
+def gen_workforce_rebalance_vectors(n: int, rng: random.Random) -> list[dict]:
+    # Fixed edge cases mirroring the host unit tests + the live-caller args.
+    edge = [
+        # enable slot 0, two active ratios → share 33%
+        (3, 0, 1, [0, 0, 0, 50, 50, 0, 0, 0]),
+        # disable slot 0 (inverse of the above result)
+        (3, 0, 0, [33, 0, 0, 67, 33, 0, 0, 0]),
+        # all five ratios active → share table yields 0 (no-op-ish)
+        (3, 1, 1, [0, 0, 0, 40, 15, 15, 15, 15]),
+        # enable an already-active slot → gate fails (no change)
+        (3, 0, 1, [33, 0, 0, 60, 40, 0, 0, 0]),
+        # disable an already-clear slot → gate fails (no change)
+        (3, 1, 0, [33, 0, 0, 60, 40, 0, 0, 0]),
+        # the secondary-settlement pass's call (realm, 3, 0) — retire ratio 3
+        (5, 3, 0, [0, 0, 0, 40, 15, 15, 15, 15]),
+        # a UI handler's call (realm, 3, 1) — enable ratio 3 fresh
+        (5, 3, 1, [0, 0, 0, 0, 25, 25, 25, 25]),
+    ]
+    vecs = [_build_workforce_vec(*e) for e in edge]
+    while len(vecs) < n:
+        realm = rng.randint(1, 16)
+        slot  = rng.randint(0, 7)            # live callers pass 0..3; widen to 0..7
+        mode  = rng.randint(0, 1)
+        wf = [0] * 8
+        # all eight slots get a value; the toggled slot is forced to 0 for the
+        # enable path (else the gate no-ops) and 1..99 for the disable path
+        # (keeps 100−wf[slot] != 0, dodging the latent div-by-zero).
+        for s in range(8):
+            wf[s] = rng.choice([0, rng.randint(1, 100), rng.randint(1, 100)])
+        wf[slot] = 0 if mode == 1 else rng.randint(1, 99)
+        vecs.append(_build_workforce_vec(realm, slot, mode, wf))
+    return vecs
+
+
+def run_port_workforce_rebalance(lib: ctypes.CDLL, vec: dict) -> dict:
+    g = realm_port_globals(lib)
+    ctypes.memmove(g["army"], vec["army"], REALM_ARMY_BYTES)
+    lib.engine_army_ai_rebalance_workforce(vec["realm"], vec["slot"], vec["mode"])
+    return {"army": list(bytes(g["army"]))}
+
+
+def workforce_rebalance_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_WORKFORCE_REBALANCE, "cc": "mscdecl",
+            "args": [vec["realm"], vec["slot"], vec["mode"]], "regions": [
+        {"va": VA_PER_ARMY, "len": REALM_ARMY_BYTES, "inject": list(vec["army"]),
+         "read": True},
+    ]}
+
+
+def diff_workforce_rebalance(retail: dict, port: dict) -> list[str]:
+    return _diff_realm_region(retail, port["army"], VA_PER_ARMY,
+                              REALM_ARMY_STRIDE, 17, "army")
 
 
 # ── player aggregate recompute (FUN_0049d1e0 — engine_ranking_recompute_player_aggregate) ──
@@ -4378,6 +4455,9 @@ def run_diff(cfg_args) -> int:
     if "realm_income" in enabled:
         test_plans.append(("realm_income",
                            gen_realm_income_vectors(cfg_args.vectors, rng)))
+    if "workforce_rebalance" in enabled:
+        test_plans.append(("workforce_rebalance",
+                           gen_workforce_rebalance_vectors(cfg_args.vectors, rng)))
     if "upkeep" in enabled:
         test_plans.append(("upkeep",
                            gen_upkeep_vectors(cfg_args.vectors, rng)))
@@ -4539,7 +4619,8 @@ def run_diff(cfg_args) -> int:
         # this is a no-op at the agent but keeps the per-target log shape.
         shared_freeze_targets = {"sim_sub_steps", "state_hash", "tile_expand",
                                  "delayed_action", "tax_approval", "dev_spread",
-                                 "realm_income", "upkeep", "season_economy",
+                                 "realm_income", "workforce_rebalance",
+                                 "upkeep", "season_economy",
                                  "resource_pass", "population", "combat_resolve",
                                  "combat_condition", "combat_halve",
                                  "diplomacy_adjust", "combat_ownership"}
@@ -5109,6 +5190,42 @@ def run_diff(cfg_args) -> int:
                                   "note": "region readback elided"}
                         port = {"note": "region readback elided"}
                         vec = {"count": vec["count"], "realm": vec["realm"]}
+                elif fn_name == "workforce_rebalance":
+                    # FUN_004502ca(int realm, slot, mode): one realm's workforce
+                    # ratio re-balance.  Inject g_per_army_768; call with
+                    # args=[realm, slot, mode] (cc=mscdecl); read the block back.
+                    port = run_port_workforce_rebalance(lib, vec)
+                    plan = workforce_rebalance_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"realm": vec["realm"],
+                                                 "slot": vec["slot"],
+                                                 "mode": vec["mode"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_workforce_rebalance(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"realm": vec["realm"], "slot": vec["slot"],
+                               "mode": vec["mode"]}
                 elif fn_name == "upkeep":
                     # FUN_004acbd4(): per-realm unit-upkeep / wages / desertion.
                     # Inject g_per_territory_420 + g_player_strategic_352 +
@@ -5626,7 +5743,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep,season_economy,resource_pass,population,combat_resolve,player_aggregate,elimination,combat_ownership",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,workforce_rebalance,upkeep,season_economy,resource_pass,population,combat_resolve,player_aggregate,elimination,combat_ownership",
                     help="comma-separated subset to test "
                          "(default: rng_step,fps_step,anim_cycle,frame_delta,"
                          "phase_ticks,input_state,sim_sub_steps,state_hash,"

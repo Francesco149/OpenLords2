@@ -221,6 +221,53 @@ void engine_army_ai_seed_workforce_ratios(int key)
     I32(r + ARMY_WF_RATIO_3) = 0x28;
 }
 
+/* Share a newly-enabled slot claims, indexed by how many of the five ratios are
+ * already active (DAT_004d6768 — only entries 0..5 are reachable, the table
+ * tail {5,0} past that is never indexed because the five ratios cap the count at
+ * 5 and the active==5 entry is 0). */
+static const int32_t k_wf_policy_share[8] = { 100, 50, 33, 25, 20, 0, 5, 0 };
+
+/* Port of FUN_004502ca (879 B).  See engine_army_ai.h for the overview. */
+void engine_army_ai_rebalance_workforce(int key, int slot, int mode)
+{
+    uint8_t *r  = ARMY_REC(key);
+    int32_t *wf = (int32_t *)(r + ARMY_WF_RATIO_0);   /* eight i32 slots at +0x130 */
+
+    /* Only act on a real state change: enabling an inactive slot, or disabling
+     * an active one.  (The de-Morgan form the binary emits.) */
+    if (((wf[slot] == 0) || (mode != 1)) && ((wf[slot] != 0) || (mode != 0))) {
+        int s6 = wf[6], s5 = wf[5], s4 = wf[4], s7 = wf[7], s3 = wf[3];
+        unsigned active = (s6 != 0) + (s5 != 0) + (s4 != 0) + (s7 != 0) + (s3 != 0);
+
+        if (mode == 1) {
+            int share = k_wf_policy_share[active];
+            int keep  = 100 - share;
+            wf[6] = engine_math_percent_of(keep, s6);
+            wf[5] = engine_math_percent_of(keep, s5);
+            wf[4] = engine_math_percent_of(keep, s4);
+            wf[7] = engine_math_percent_of(keep, s7);
+            wf[3] = engine_math_percent_of(keep, s3);
+            wf[slot] = share;
+        } else { /* mode == 0 */
+            int grow = 100 - wf[slot];
+            wf[6] = engine_math_percent_div(s6, grow);
+            wf[5] = engine_math_percent_div(s5, grow);
+            wf[4] = engine_math_percent_div(s4, grow);
+            wf[7] = engine_math_percent_div(s7, grow);
+            wf[3] = engine_math_percent_div(s3, grow);
+            wf[slot] = 0;
+        }
+
+        /* Re-normalise the five ratios to 100 by dumping the remainder onto the
+         * currently-largest ratio (ties resolve to the lowest slot, 6 first). */
+        int top = 6, topv = wf[6];
+        for (int i = 3; i < 8; i++) {
+            if (topv < wf[i]) { top = i; topv = wf[i]; }
+        }
+        wf[top] += ((((100 - wf[6]) - wf[5]) - wf[4]) - wf[7]) - wf[3];
+    }
+}
+
 /* Port of FUN_00428c42 (365 B).  Advance the realm's "advancement" progress by a
  * 0..5 tier step sized by how `amount` (a gold spend) compares to the realm's
  * mouths-to-feed/10 (+0x24): each whole multiple up to 5 is one tier.  The step

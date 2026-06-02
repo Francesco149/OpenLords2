@@ -293,7 +293,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x461a54 | 1191 | 1 | 0 | ✓ |
 | 0x460a1c | 2003 | 1 | 0 | ✓ |
 
-### d3d/mesh pool + preload + palette (17)
+### d3d/mesh pool + preload + palette (18)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
@@ -302,6 +302,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x47703a | 126 | 1 | 2 |  |
 | 0x4788c6 | 140 | 1 | 1 |  |
 | 0x472a31 | 152 | 1 | 0 | ✓ |
+| 0x47fe0b | 156 | 1 | 1 |  |
 | 0x476768 | 245 | 1 | 2 |  |
 | 0x477b2f | 346 | 1 | 2 |  |
 | 0x477c89 | 371 | 1 | 8 |  |
@@ -326,7 +327,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x488dfe | 943 | 1 | 0 | ✓ |
 | 0x485bb1 | 1592 | 1 | 5 |  |
 
-### npc schedule + worker walk (18)
+### npc schedule + worker walk (17)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
@@ -342,7 +343,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x49c995 | 157 | 1 | 2 |  |
 | 0x4983b7 | 161 | 1 | 0 | ✓ |
 | 0x4975d3 | 170 | 1 | 1 |  |
-| 0x49b2a3 | 187 | 1 | 1 |  |
 | 0x499261 | 261 | 1 | 0 | ✓ |
 | 0x49b973 | 374 | 1 | 2 |  |
 | 0x49dfc6 | 505 | 1 | 2 |  |

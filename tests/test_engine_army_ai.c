@@ -121,6 +121,113 @@ int test_army_ai_consume_build_demand(void)
     return 0;
 }
 
+/* rebalance_workforce: enabling a policy slot scales the five ratios down by the
+ * remainder of pct[active-count] and folds the leftover onto the largest ratio.
+ * Start {pol 0,0,0 | ratios 50,50,0,0,0}; active=2 → share=33, keep=67. */
+int test_army_ai_rebalance_enable_distributes(void)
+{
+    ai_setup();
+    uint8_t *r = AREC(3);
+    AI32(r, 0x13c) = 50;   /* ratio slot 3 */
+    AI32(r, 0x140) = 50;   /* ratio slot 4 */
+
+    engine_army_ai_rebalance_workforce(3, 0, 1);
+
+    T_ASSERT_EQ_I(AI32(r, 0x130), 33);  /* policy slot 0 claims share */
+    T_ASSERT_EQ_I(AI32(r, 0x13c), 67);  /* slot 3: percent_of(67,50)=33, +34 fold */
+    T_ASSERT_EQ_I(AI32(r, 0x140), 33);  /* slot 4: percent_of(67,50)=33 */
+    T_ASSERT_EQ_I(AI32(r, 0x144), 0);
+    T_ASSERT_EQ_I(AI32(r, 0x148), 0);
+    T_ASSERT_EQ_I(AI32(r, 0x14c), 0);
+    /* five ratios still sum to 100 */
+    T_ASSERT_EQ_I(AI32(r,0x13c)+AI32(r,0x140)+AI32(r,0x144)+AI32(r,0x148)+AI32(r,0x14c), 100);
+    return 0;
+}
+
+/* rebalance_workforce: disabling a policy slot scales the ratios back up by
+ * 100/(100-share) and re-normalises.  Inverse of the enable vector above. */
+int test_army_ai_rebalance_disable_restores(void)
+{
+    ai_setup();
+    uint8_t *r = AREC(3);
+    AI32(r, 0x130) = 33;   /* policy slot 0 active */
+    AI32(r, 0x13c) = 67;   /* ratio slot 3 */
+    AI32(r, 0x140) = 33;   /* ratio slot 4 */
+
+    engine_army_ai_rebalance_workforce(3, 0, 0);
+
+    T_ASSERT_EQ_I(AI32(r, 0x130), 0);   /* policy cleared */
+    T_ASSERT_EQ_I(AI32(r, 0x13c), 51);  /* percent_div(67,67)=100, +(-49) fold */
+    T_ASSERT_EQ_I(AI32(r, 0x140), 49);  /* percent_div(33,67)=49 */
+    T_ASSERT_EQ_I(AI32(r,0x13c)+AI32(r,0x140)+AI32(r,0x144)+AI32(r,0x148)+AI32(r,0x14c), 100);
+    return 0;
+}
+
+/* rebalance_workforce: no-op when the slot is already in the requested state
+ * (enable an already-active slot, or disable an already-clear one). */
+int test_army_ai_rebalance_noop_when_already_set(void)
+{
+    ai_setup();
+    uint8_t *r = AREC(3);
+    AI32(r, 0x130) = 33;   /* slot 0 already active */
+    AI32(r, 0x13c) = 60;
+    AI32(r, 0x140) = 40;
+
+    engine_army_ai_rebalance_workforce(3, 0, 1);   /* enable an active slot → no-op */
+    T_ASSERT_EQ_I(AI32(r, 0x130), 33);
+    T_ASSERT_EQ_I(AI32(r, 0x13c), 60);
+    T_ASSERT_EQ_I(AI32(r, 0x140), 40);
+
+    engine_army_ai_rebalance_workforce(3, 1, 0);   /* disable a clear slot → no-op */
+    T_ASSERT_EQ_I(AI32(r, 0x134), 0);
+    T_ASSERT_EQ_I(AI32(r, 0x13c), 60);
+    return 0;
+}
+
+/* rebalance_workforce: with all five ratios active the share table yields 0, so
+ * enabling claims nothing and the ratios are unchanged after re-normalisation. */
+int test_army_ai_rebalance_full_table_zero_share(void)
+{
+    ai_setup();
+    uint8_t *r = AREC(3);
+    AI32(r, 0x13c) = 40;
+    AI32(r, 0x140) = 15;
+    AI32(r, 0x144) = 15;
+    AI32(r, 0x148) = 15;
+    AI32(r, 0x14c) = 15;
+
+    engine_army_ai_rebalance_workforce(3, 1, 1);
+
+    T_ASSERT_EQ_I(AI32(r, 0x134), 0);   /* share[5] == 0 */
+    T_ASSERT_EQ_I(AI32(r, 0x13c), 40);
+    T_ASSERT_EQ_I(AI32(r, 0x140), 15);
+    T_ASSERT_EQ_I(AI32(r, 0x14c), 15);
+    return 0;
+}
+
+/* rebalance_workforce: the live secondary-settlement call (realm, slot 3, mode
+ * 0) retires ratio slot 3 and spreads its share evenly across the other four. */
+int test_army_ai_rebalance_settlement_retire_ratio3(void)
+{
+    ai_setup();
+    uint8_t *r = AREC(5);
+    AI32(r, 0x13c) = 40;   /* ratio slot 3 (retired) */
+    AI32(r, 0x140) = 15;
+    AI32(r, 0x144) = 15;
+    AI32(r, 0x148) = 15;
+    AI32(r, 0x14c) = 15;
+
+    engine_army_ai_rebalance_workforce(5, 3, 0);
+
+    T_ASSERT_EQ_I(AI32(r, 0x13c), 0);   /* slot cleared */
+    T_ASSERT_EQ_I(AI32(r, 0x140), 25);  /* percent_div(15,60)=25 */
+    T_ASSERT_EQ_I(AI32(r, 0x144), 25);
+    T_ASSERT_EQ_I(AI32(r, 0x148), 25);  /* +0 fold (largest, but remainder 0) */
+    T_ASSERT_EQ_I(AI32(r, 0x14c), 25);
+    T_ASSERT_EQ_I(AI32(r,0x13c)+AI32(r,0x140)+AI32(r,0x144)+AI32(r,0x148)+AI32(r,0x14c), 100);
+    return 0;
+}
+
 /* consume_build_demand: no-op for independent realms (owner 0) and realms with
  * no secondary settlement (+0x1c3 == 0). */
 int test_army_ai_consume_build_demand_gates(void)

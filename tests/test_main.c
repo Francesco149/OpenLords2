@@ -1894,6 +1894,11 @@ struct test_case {
     X(army_ai_advance_tier_approval_caps_at_100) \
     X(army_ai_consume_build_demand) \
     X(army_ai_consume_build_demand_gates) \
+    X(army_ai_rebalance_enable_distributes) \
+    X(army_ai_rebalance_disable_restores) \
+    X(army_ai_rebalance_noop_when_already_set) \
+    X(army_ai_rebalance_full_table_zero_share) \
+    X(army_ai_rebalance_settlement_retire_ratio3) \
     X(army_ai_trade_buy) \
     X(army_ai_trade_sell) \
     X(army_ai_trade_buy_unaffordable_aborts) \
