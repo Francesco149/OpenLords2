@@ -1205,6 +1205,7 @@ struct test_case {
     X(turn_end_mp_single_active_advances) \
     X(turn_end_mp_handshake_arms_then_finalises) \
     X(turn_end_mp_state1_waits) \
+    X(turn_hook_noop_is_inert) \
     \
     X(title_buttons_marks_four_dirty_boxes) \
     X(title_buttons_draws_bevel_rects) \
@@ -1957,6 +1958,8 @@ struct test_case {
     X(io_path_set_base_seam) \
     X(io_path_chdir_base_failure) \
     X(io_path_set_base_truncate_and_clear) \
+    X(io_path_probe_cd_audio) \
+    X(io_path_probe_cd_audio_drive_letter) \
     X(engine_pl8_season_offset) \
     X(engine_pl8_banks_match_captured_blobs) \
     X(engine_pl8_native_load_renders_identical_frame) \

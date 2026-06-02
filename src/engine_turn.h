@@ -66,6 +66,15 @@ typedef struct {
 void engine_turn_end_check(const engine_turn_end_in_t *in,
                            engine_turn_end_out_t *out);
 
+/* Empty per-turn hook — port of retail FUN_00428471 @ 0x428471, an
+ * 11-byte stub (push/pop register-preserve prologue, then leave/ret)
+ * with no body, called from the turn-advance engine 0x448440 between
+ * the population-growth pass and the demolish/aftermath cluster.  A
+ * compiled-out debug/profiling hook in the retail build; ported as a
+ * no-op so the driver's call sequence stays complete and 0x428471 is
+ * accounted for. */
+void engine_turn_hook_noop(void);
+
 /* ─── Turn-handshake runtime state (canonical storage) ──────────────
  *
  * Retail DAT_00553fc8 / _DAT_0056d658.  NOT save-schema scalars — pure

@@ -67,6 +67,7 @@ void engine_menu_input_bind_quit_fn(engine_menu_quit_fn fn)
 }
 
 void engine_menu_input_set_sp_available(int value) { g_sp_available = value; }
+int  engine_menu_input_sp_available(void)           { return g_sp_available; }
 
 int  engine_menu_input_last_redraw_mode(void) { return g_stub_last_redraw_mode; }
 int  engine_menu_input_quit_count(void)       { return g_stub_quit_count; }

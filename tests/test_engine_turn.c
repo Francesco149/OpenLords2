@@ -193,3 +193,11 @@ int test_turn_end_mp_state1_waits(void)
     T_ASSERT_EQ_U(out.new_sync_baseline_ms, 42u);
     return 0;
 }
+
+/* engine_turn_hook_noop (retail FUN_00428471): empty stub — calling it
+ * must have no effect.  Smoke-test that it links and returns. */
+int test_turn_hook_noop_is_inert(void)
+{
+    engine_turn_hook_noop();   /* no observable state to assert */
+    return 0;
+}

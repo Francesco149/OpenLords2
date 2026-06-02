@@ -5985,3 +5985,46 @@ head-count summing in the cap check.  `engine_combat_spawn_unit` and the four
 leaves are host-unit-tested (the spawn's economy tail + the race-0 `strat[6]`
 read keep them off the diffable path); their occupant-field writes share the
 already-diffed `g_per_territory_420` layout.
+
+## 170. The year-rollover CD-audio probe's path-template `memcpy` overruns the `"c:.\wav"` literal into the adjacent pooled string literals — and every flag write stores the same value, so the file checks are dead
+
+The turn-advance engine `FUN_00448440` calls `FUN_004aef7e` once per year on the
+winter→spring rollover (`season == 4` branch) to probe the CD for its full audio
+set.  Two faithful oddities, both reproduced verbatim in
+`io_path_probe_cd_audio` (`src/io_path.c`):
+
+**(a) string-pool overrun.**  The function builds the probe path with
+`FUN_00401136(0x4df3ac, 0x5cd490, 0x1e)` — a 30-byte (`0x1e`) bounded copy.  But
+the source literal at `0x4df3ac` is only `"c:.\wav\0"` (8 bytes).  The linker
+packed the next pooled string literals immediately after it, so the 30-byte copy
+drags in 22 bytes of *adjacent string-table residue*: 8 pad bytes, then
+`"swor_p2.wav\0"` (the first WAV name, at `0x4df3bc`), then `"pu"` (the head of
+`"pumkin.wav"` at `0x4df3c8`).  The chdir/open calls that follow stop at the
+`\0` at offset 7, so the trailing 22 bytes are functionally inert — but they are
+the byte-exact contents of `DAT_005cd490` after the copy, so the port hardcodes
+the full 30-byte template (`CD_PATH_TEMPLATE`) rather than just `"c:.\wav"`.
+Byte 0 is then overwritten with the CD drive letter (`DAT_0053f200`,
+`g_config.cd_drive`), giving e.g. `"D:.\wav"`.
+
+**(b) the availability gate is always 1.**  `FUN_004aef7e`'s only persistent
+output besides the path buffer is the single-player / CD-audio availability gate
+`DAT_005c9a74` (the gate `engine_menu_input` reads to route "Single player" to
+page 2 vs the deferred profile page).  Retail stores **1** in four places: the
+unconditional store at entry, the redundant `if (DAT_0053f684 == 1)` branch, and
+both `filelength >= 151 MB` ("full audio CD present") branches.  Every store is
+the same value, so the elaborate `swor_p2.wav` / `pumkin.wav` / `pumkin2.wav`
+open + size-check sequence **can never change the gate** — it is dead with
+respect to the observable state.  The port collapses it to one
+`engine_menu_input_set_sp_available(1)` at entry plus a faithful (but effect-free)
+transcription of the file probe.  On the flat drop-in / host layout the first
+chdir into the (absent) CD wav dir fails and the probe is skipped entirely,
+leaving gate=1 and the path buffer built — the faithful retail behaviour when no
+CD audio is present.
+
+Verification: `io_path_probe_cd_audio` is pinned by two host tests
+(`test_io_path.c`): one asserts the gate forced to 1 and the full 40-byte buffer
+byte-exact (drive letter + `"c:.\wav"` body + the pooled `swor_p2.wav`/`pu`
+residue + zero tail), the other the drive-letter patch.  No live retail-diff
+target: the output is fully determined by static `rdata` (the 30-byte template
+read directly from the image) and the constant gate, so a Frida diff would only
+re-confirm static bytes while running real `chdir`/file-IO in the retail process.

@@ -18,6 +18,8 @@
 
 #include "t.h"
 #include "io_path.h"
+#include "engine_menu_input.h"
+#include "config.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -138,5 +140,65 @@ int test_io_path_set_base_truncate_and_clear(void)
 
     io_path_set_base(NULL);
     T_ASSERT_EQ_S(io_path_base(), "");
+    return 0;
+}
+
+/* io_path_probe_cd_audio (retail FUN_004aef7e): on a layout with no CD
+ * `wav` directory the chdir fails, so the probe's only observable
+ * effects are the gate (→1) and the path buffer.  Assert both, and that
+ * the buffer is byte-exact including the string-pool overrun tail. */
+int test_io_path_probe_cd_audio(void)
+{
+    char orig[256];
+    if (OS_GETCWD(orig, sizeof orig) == NULL) T_SKIP("getcwd unavailable");
+
+    /* Anchor the revert at the current dir so the tail chdir is a
+     * no-op rather than logging an error. */
+    io_path_set_base(orig);
+
+    /* Drive letter feeds buffer byte 0 (retail DAT_0053f200). */
+    g_config.cd_drive = 'D';
+
+    /* Sentinel the gate so the probe's write is observable. */
+    engine_menu_input_set_sp_available(7);
+
+    io_path_probe_cd_audio();
+
+    /* Gate forced to 1 on every retail path. */
+    T_ASSERT_EQ_I(engine_menu_input_sp_available(), 1);
+
+    /* Byte-exact 40-byte buffer: "D:.\\wav\0" + pad + pooled residue. */
+    static const unsigned char want[40] = {
+        0x44,0x3a,0x2e,0x5c,0x77,0x61,0x76,0x00,  /* "D:.\\wav\0" */
+        0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+        0x73,0x77,0x6f,0x72,0x5f,0x70,0x32,0x2e,  /* "swor_p2." */
+        0x77,0x61,0x76,0x00,                      /* "wav\0"     */
+        0x70,0x75,                                /* "pu"        */
+        0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    };
+    T_ASSERT_EQ_I(memcmp(io_path_cd_audio_path(), want, sizeof want), 0);
+
+    /* cwd reverted to the anchored base. */
+    char now[256];
+    T_ASSERT(OS_GETCWD(now, sizeof now) != NULL);
+    T_ASSERT_EQ_S(now, orig);
+
+    OS_CHDIR(orig);
+    return 0;
+}
+
+/* The drive letter is patched into byte 0 from g_config.cd_drive. */
+int test_io_path_probe_cd_audio_drive_letter(void)
+{
+    char orig[256];
+    if (OS_GETCWD(orig, sizeof orig) == NULL) T_SKIP("getcwd unavailable");
+    io_path_set_base(orig);
+
+    g_config.cd_drive = 'E';
+    io_path_probe_cd_audio();
+    T_ASSERT_EQ_I((unsigned char)io_path_cd_audio_path()[0], 'E');
+    T_ASSERT_EQ_S(io_path_cd_audio_path(), "E:.\\wav");
+
+    OS_CHDIR(orig);
     return 0;
 }

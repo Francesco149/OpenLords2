@@ -138,6 +138,11 @@ void engine_menu_input_bind_quit_fn(engine_menu_quit_fn fn);
  * the drop-in reaches "Your options".  Setter exists for tests. */
 void engine_menu_input_set_sp_available(int value);
 
+/* Read-only view of the gate — the CD-audio probe
+ * (io_path_probe_cd_audio, retail FUN_004aef7e) is the producer.
+ * Exposed for tests/diff. */
+int  engine_menu_input_sp_available(void);
+
 /* Test introspection: last demand-redraw mode / quit count seen by the
  * default stubs (only meaningful when no real hook is bound). */
 int  engine_menu_input_last_redraw_mode(void);

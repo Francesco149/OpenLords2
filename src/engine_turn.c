@@ -83,3 +83,8 @@ void engine_turn_end_check(const engine_turn_end_in_t *in,
     }
     /* progress == 1 falls through: advance stays 0 */
 }
+
+/* retail FUN_00428471 @ 0x428471 — empty turn-driver hook (no body). */
+void engine_turn_hook_noop(void)
+{
+}

@@ -12,19 +12,19 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **633** (25.9%) — tested 588, ported 45
-- code bytes touched: **31.0%** (259,822 / 838,629 B)
-- unported: **1814**
+- touched: **635** (26.0%) — tested 590, ported 45
+- code bytes touched: **31.0%** (260,241 / 838,629 B)
+- unported: **1812**
 - orphan refs (in src/, not in function table): 6
 
-## tested (588) — ported + host unit suite
+## tested (590) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
 | 0x401000 | FUN_00401000 | 133 | strutil.h |
 | 0x401085 | FUN_00401085 | 85 | strutil.h |
 | 0x4010da | FUN_004010da | 92 | strutil.c, strutil.h |
-| 0x401136 | FUN_00401136 | 64 | engine_event_queue.c, engine_event_queue.h, engine_npc_schedule.c (+3) |
+| 0x401136 | FUN_00401136 | 64 | engine_event_queue.c, engine_event_queue.h, engine_npc_schedule.c (+4) |
 | 0x401176 | FUN_00401176 | 58 | strutil.h |
 | 0x4011b0 | FUN_004011b0 | 58 | strutil.h |
 | 0x4011ea | FUN_004011ea | 92 | strutil.h |
@@ -191,6 +191,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x427ed0 | FUN_00427ed0 | 311 | engine_map_query.c, engine_territory.c, game_init.c (+1) |
 | 0x428007 | FUN_00428007 | 113 | engine_combat.c, game_init.c, game_init.h |
 | 0x428078 | FUN_00428078 | 113 | engine_combat.c, game_init.c, game_init.h |
+| 0x428471 | FUN_00428471 | 11 | engine_turn.c, engine_turn.h |
 | 0x42847c | FUN_0042847c | 82 | game_init.c, game_init.h |
 | 0x4284ce | FUN_004284ce | 1858 | engine_army_ai.c, engine_army_ai.h |
 | 0x428c42 | FUN_00428c42 | 365 | engine_army_ai.c, engine_army_ai.h |
@@ -525,6 +526,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4ae8a9 | FUN_004ae8a9 | 191 | game_init.c, game_init.h, save.c (+1) |
 | 0x4ae968 | FUN_004ae968 | 264 | save.c, save.h |
 | 0x4aea70 | FUN_004aea70 | 506 | save.c, save.h |
+| 0x4aef7e | FUN_004aef7e | 408 | engine_menu_input.h, io_path.c, io_path.h |
 | 0x4af502 | FUN_004af502 | 72 | io_path.c, io_path.h |
 | 0x4af54a | FUN_004af54a | 112 | io.h, strutil.h |
 | 0x4af5ba | FUN_004af5ba | 114 | strutil.h |

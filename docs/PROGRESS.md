@@ -7,6 +7,58 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-02 — TURN-ENGINE: last two driver callees ported (FUN_004aef7e CD-audio probe + FUN_00428471 no-op) — orchestrator FUN_00448440 now fully unblocked
+
+Closed out the final two unported direct callees of the turn-advance engine
+`FUN_00448440` (the 261-byte per-turn / season-rollover sequencer).  Of its 30
+direct callees, 28 had landed across prior chips; these two were all that
+remained:
+
+* **`FUN_004aef7e`** (408 B) → `io_path_probe_cd_audio` (`src/io_path.c`) — the
+  **year-rollover CD-audio presence probe**, called only on the winter→spring
+  rollover (`season == 4`).  Builds the CD `wav`-dir path into the shared scratch
+  buffer `DAT_005cd490` from the CD drive letter (`DAT_0053f200` =
+  `g_config.cd_drive`), chdir's in, probes `swor_p2.wav` / `pumkin.wav` /
+  `pumkin2.wav` for the ≥151 MB full-audio set, then reverts the cwd via the
+  already-ported `io_path_chdir_base` (`FUN_004af502`).  Its observable output is
+  the single-player / CD-audio availability gate `DAT_005c9a74` (→1) plus the
+  path buffer.  Lives in `io_path.c` because the scratch buffer is shared with
+  the deferred asset-chdir helper `0x4af116`; the gate (owned by
+  `engine_menu_input`) is written through its setter.
+
+  Two quirks documented (**#170**): (a) the 30-byte path `memcpy` overruns the
+  8-byte `"c:.\wav"` literal into the adjacent pooled string literals
+  (`swor_p2.wav` + `"pu"`), so the 40-byte buffer carries 22 bytes of
+  string-table residue — reproduced verbatim via a hardcoded template; (b) all
+  four gate stores write the same value `1`, so the elaborate file-size checks
+  are **dead** with respect to the gate — collapsed to one set + a faithful but
+  effect-free probe transcription.
+
+* **`FUN_00428471`** (11 B) → `engine_turn_hook_noop` (`src/engine_turn.c`) — an
+  empty retail stub (register-preserve prologue + `ret`, no body; a compiled-out
+  debug/profiling hook), ported as a no-op so the driver's call sequence is
+  complete.
+
+**Verification.**  3 new host tests (`test_io_path.c` ×2: gate→1 + full 40-byte
+buffer byte-exact incl. the pooled residue, and the drive-letter patch;
+`test_engine_turn.c` ×1: the no-op links and is inert).  Full suite **1866/1866**
+green; drop-in cross-build clean.  No live retail-diff target: the probe's output
+is fully determined by static `rdata` (the 30-byte template read directly from
+the image) and the constant gate, so a Frida diff would only re-confirm static
+bytes while running real `chdir`/file-IO in the retail process — host test +
+direct binary confirmation is the byte-exact gate here.
+
+**Next milestone now unblocked.**  With all 30 callees ported, the
+orchestrator `FUN_00448440` itself (currently deferred — `game_init.c`'s
+`g_gi_turn_driver_fn` hook is unbound) can be **assembled** into a real
+`engine_turn_advance()`: the inline season-rollover arithmetic (turn counter
+`DAT_00553240++`, the season triple rotation `DAT_0057c934`/`0057c92c`/`00554470`,
+the year-rollover branch incrementing `_DAT_0055cd5c`) plus the 30-call sequence.
+The season arithmetic is a small, deterministic, retail-diffable block; the call
+sequence is wiring.
+
+---
+
 ## 2026-06-01 — TURN-ENGINE chip: per-realm population-growth pass (FUN_00449ef3 + FUN_004684c6 village-tile leaf)
 
 Ported the turn-advance engine's (retail 0x448440) per-realm **population-growth**
