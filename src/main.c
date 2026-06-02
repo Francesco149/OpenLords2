@@ -180,6 +180,8 @@ static const char *g_strat_map_dir;
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 static int         g_strat_load_live;  /* --strat-load-live: drive the live
                                         * load pump from the title menu */
+static int         g_strat_load_grid;  /* --strat-load-grid: scripted page-3
+                                        * grid click → Load → ingame map */
 /* --audio-init: call audio_init() after window creation.  Off by
  * default — SetCooperativeLevel(PRIORITY) modifies process audio
  * state and the headless smoke harness has no way to validate
@@ -280,6 +282,7 @@ static void bringup_title_live(void);
 static void bringup_strat_map(const char *dir);
 static void bringup_strat_load(const char *dir);
 static void bringup_strat_load_live(void);
+static void bringup_strat_load_grid(void);
 static void engine_map_post_load(void);
 static int  drop_in_load(const char *filename);
 static const char *translate_wsl_path(const char *p, char *buf, size_t cap);
@@ -391,6 +394,15 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
                  * (engine_load_pump_tick) so the genuine menu→ingame
                  * transition loads the save + renders the strategic map. */
                 bringup_strat_load_live();
+            } else if (g_strat_load_grid) {
+                /* Scripted page-3 grid click-to-load — drive the engine
+                 * into the live title page-3 file list, then (in
+                 * main_loop_body) post a synthetic click on the
+                 * "lastturn" save row + the Load button through the real
+                 * WM_MOUSE route, so the new grid selector
+                 * (engine_menu_input_filelist_grid_step → FUN_0043400b)
+                 * loads the name + the load pump renders the map. */
+                bringup_strat_load_grid();
             } else if (g_title_live) {
                 /* Live interactive menu — drive the engine into the
                  * title state, then let the main loop tick it so a real
@@ -1975,6 +1987,35 @@ static void bringup_strat_load_live(void)
              "~150 frames.");
 }
 
+/* --strat-load-grid: like --strat-load-live, but instead of latching the
+ * Load request directly it drives the live page-3 file list and lets
+ * main_loop_body post a synthetic mouse click on the "lastturn" save row
+ * + the Load button through the genuine WM_MOUSE route — exercising the
+ * newly-ported grid selector (engine_menu_input_filelist_grid_step →
+ * FUN_0043400b) end-to-end: row click → name field → Load → confirm pump
+ * → ingame strategic map.  Run with enough frames to clear the ~150-frame
+ * confirm timer after the Load click, e.g. --frames 220. */
+static void bringup_strat_load_grid(void)
+{
+    title_bind_render_state();
+    engine_bind_title_bg_reload_fn(title_bg_reload);
+    engine_set_viewport_game_extents(640, 480);   /* cursor maps 1:1 */
+    /* The capture window is created hidden (show_window=0), so it never
+     * receives WM_SIZE to populate g_client_screen — the cursor→game
+     * mapping (game = cached * game_extent / client_width) would divide
+     * by a zero width.  Pin it to the 640×480 logical client so the
+     * scripted WM_MOUSEMOVE client coords map 1:1 (cursor cache stays
+     * disabled on the title screen, so the WndProc-cached coords are
+     * what the mapping reads — engine-quirks #120). */
+    SetRect(&g_client_screen, 0, 0, 640, 480);
+    engine_title_render_set_page(3);               /* DAT_005530f0 = 3 (file list) */
+    seed_page3_state();                            /* save list + editor live */
+    engine_set_current_screen(0x1f);               /* DAT_004eac50 = 0x1f */
+    engine_set_demand_redraw(2);
+    log_line("strat-load-grid: title page-3 file list up; main loop will "
+             "click the lastturn row + Load → map renders in ~150 frames.");
+}
+
 static void main_loop_body(void)
 {
     /* Scripted WM_CHAR typing demo (--title-type STR): post one character
@@ -1987,6 +2028,33 @@ static void main_loop_body(void)
         if (idx < strlen(g_title_type)) {
             PostMessageA(g_hwnd, WM_CHAR,
                          (WPARAM)(unsigned char)g_title_type[idx], 0);
+        }
+    }
+
+    /* Scripted page-3 grid click-to-load (--strat-load-grid): post a
+     * synthetic mouse click on the "lastturn" save row (grid row 0 col 0)
+     * then the Load button, through the genuine WM_MOUSE route, so the
+     * engine resolves the press edges and the new grid selector
+     * (FUN_0043400b) + load pump run exactly as for a real click.  The
+     * positions are the rendered geometry: the grid cell at (0x60+0x40,
+     * 0x76) and the Load gauntlet button centred at (0x1a0, 0x5a). */
+    if (g_strat_load_grid && g_hwnd) {
+        switch (g_frame_counter) {
+        case 12:   /* move over the lastturn row + press */
+            PostMessageA(g_hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(0xa0, 0x7e));
+            PostMessageA(g_hwnd, WM_LBUTTONDOWN, 0, MAKELPARAM(0xa0, 0x7e));
+            break;
+        case 13:   /* release */
+            PostMessageA(g_hwnd, WM_LBUTTONUP, 0, MAKELPARAM(0xa0, 0x7e));
+            break;
+        case 16:   /* move over Load + press → latch the load request */
+            PostMessageA(g_hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(0x1a0, 0x5a));
+            PostMessageA(g_hwnd, WM_LBUTTONDOWN, 0, MAKELPARAM(0x1a0, 0x5a));
+            break;
+        case 17:   /* release */
+            PostMessageA(g_hwnd, WM_LBUTTONUP, 0, MAKELPARAM(0x1a0, 0x5a));
+            break;
+        default: break;
         }
     }
 
@@ -2232,6 +2300,10 @@ static void parse_cmdline(LPSTR lpCmd)
         }
         else if (!strcmp(a, "--strat-load-live")) {
             g_strat_load_live = 1;           /* live load pump → ingame map */
+            g_gfx_init = 1;                  /* needs DDraw */
+        }
+        else if (!strcmp(a, "--strat-load-grid")) {
+            g_strat_load_grid = 1;           /* scripted grid click → load */
             g_gfx_init = 1;                  /* needs DDraw */
         }
         else if (!strcmp(a, "--audio-init"))     g_audio_init  = 1;

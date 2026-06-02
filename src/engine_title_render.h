@@ -268,6 +268,15 @@ void engine_title_render_filelist_name_tail(void);
 /* Port of FUN_00434346 — scroll-arrow action: advance the first-visible
  * index by `delta` (±3) with the `mode` (param1) clamp. */
 void engine_title_render_filelist_scroll(int delta, int mode);
+/* DAT_004e65dc — the highlighted grid entry (999 = none). */
+int  engine_title_render_filelist_selected(void);
+/* Port of FUN_0043400b — the grid hit-test/selection.  `param_1` picks
+ * the grid origin (1 = title page-3, 0 = in-game save/load dialog).
+ * Latches the hovered entry into DAT_004e65dc; on a press edge commits
+ * the entry's filename into the name field + re-inits the editor.
+ * Returns non-zero when a press consumes a valid entry. */
+int  engine_title_render_filelist_grid_pick(int param_1, int cursor_x,
+                                            int cursor_y, int lmb_pressed);
 
 /* Page-4 per-frame refresh (FUN_0041f321 standalone) — re-renders the
  * name box with the text shadow ON (the steady-state appearance, unlike

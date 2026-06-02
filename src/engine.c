@@ -561,7 +561,14 @@ static void engine_tick_menu_input_step(void)
                                                        * scroll auto-repeat
                                                        * advances at. */
 
-    engine_menu_title_input(&in);
+    /* Retail order: FUN_004ba9c8 (the click router) first; when it does
+     * not consume the click, FUN_0042ff10's per-state machine runs — of
+     * which only the page-3 file-list grid selector (FUN_0043400b(1)) is
+     * ported.  So a click on a save-list row that missed the Load/Cancel/
+     * scroll strip selects that entry + loads its name into the filename
+     * field, ready for the Load button → load-confirm pump. */
+    if (engine_menu_title_input(&in) == 0)
+        engine_menu_input_filelist_grid_step(&in);
 }
 
 /* Page-background reload hook — the drop-in's gfx background load takes

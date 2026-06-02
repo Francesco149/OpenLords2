@@ -113,6 +113,13 @@ int engine_menu_button_dispatch(int ox, int oy,
  * hook in engine_title_render). */
 int engine_menu_title_input(const engine_menu_click_in_t *in);
 
+/* Outer transition-dispatcher arm (FUN_0042ff10): the page-3 file-list
+ * grid selector (FUN_0043400b(1)).  Retail runs it after FUN_004ba9c8
+ * returns 0; call it from the live tick when engine_menu_title_input did
+ * not consume the click.  Self-gates on screen 0x1f + page 3.  Returns
+ * non-zero when the grid pick consumed the click. */
+int engine_menu_input_filelist_grid_step(const engine_menu_click_in_t *in);
+
 /* ── engine-side-effect hooks ─────────────────────────────────────── */
 
 /* Demand-redraw request (retail DAT_0057d340 = mode).  Default stub

@@ -12,19 +12,19 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **593** (24.2%) — tested 546, ported 47
-- code bytes touched: **28.6%** (240,070 / 838,629 B)
-- unported: **1854**
+- touched: **594** (24.3%) — tested 548, ported 46
+- code bytes touched: **28.7%** (240,431 / 838,629 B)
+- unported: **1853**
 - orphan refs (in src/, not in function table): 4
 
-## tested (546) — ported + host unit suite
+## tested (548) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
 | 0x401000 | FUN_00401000 | 133 | strutil.h |
 | 0x401085 | FUN_00401085 | 85 | strutil.h |
 | 0x4010da | FUN_004010da | 92 | strutil.c, strutil.h |
-| 0x401136 | FUN_00401136 | 64 | engine_event_queue.c, engine_event_queue.h, engine_npc_schedule.c (+2) |
+| 0x401136 | FUN_00401136 | 64 | engine_event_queue.c, engine_event_queue.h, engine_npc_schedule.c (+3) |
 | 0x401176 | FUN_00401176 | 58 | strutil.h |
 | 0x4011b0 | FUN_004011b0 | 58 | strutil.h |
 | 0x4011ea | FUN_004011ea | 92 | strutil.h |
@@ -58,7 +58,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x401ed0 | FUN_00401ed0 | 121 | text_input.h |
 | 0x401f49 | FUN_00401f49 | 70 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
 | 0x401f8f | FUN_00401f8f | 122 | font_metrics.c, font_metrics.h, text_input.c (+1) |
-| 0x402009 | FUN_00402009 | 165 | main.c, text_input.h |
+| 0x402009 | FUN_00402009 | 165 | engine_title_render.c, main.c, text_input.h |
 | 0x4020ae | FUN_004020ae | 94 | save.h, text_input.h |
 | 0x40210c | FUN_0040210c | 90 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
 | 0x4022bd | FUN_004022bd | 394 | gfx_text_label.c, gfx_text_label.h |
@@ -204,6 +204,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42e3ba | FUN_0042e3ba | 164 | main.c |
 | 0x42ec91 | FUN_0042ec91 | 1207 | gfx.c, gfx.h, gfx_paint.h |
 | 0x42f1df | FUN_0042f1df | 295 | gfx.c, main.c |
+| 0x42ff10 | FUN_0042ff10 | 8140 | engine.c, engine_menu_input.c, engine_menu_input.h (+1) |
 | 0x432746 | FUN_00432746 | 69 | engine_territory.c, engine_territory.h, game_init.c |
 | 0x43278b | FUN_0043278b | 223 | engine_territory.c, engine_territory.h |
 | 0x4329ec | FUN_004329ec | 281 | engine_load_pump.c, engine_load_pump.h |
@@ -221,6 +222,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x433ba2 | FUN_00433ba2 | 287 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x433cc1 | FUN_00433cc1 | 35 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x433ce4 | FUN_00433ce4 | 217 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
+| 0x43400b | FUN_0043400b | 361 | engine.c, engine_menu_input.c, engine_menu_input.h (+3) |
 | 0x4342f3 | FUN_004342f3 | 21 | engine_menu_input.c, engine_menu_input.h |
 | 0x434308 | FUN_00434308 | 62 | engine_menu_input.c |
 | 0x434346 | FUN_00434346 | 178 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
@@ -568,7 +570,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine_map_scene.c, engine_map_scene.h |
 
-## ported (47) — reimplemented, no host test yet
+## ported (46) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -588,7 +590,6 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42eb7c | FUN_0042eb7c | 277 | gfx.c, gfx.h |
 | 0x42f306 | FUN_0042f306 | 323 | gfx.c, gfx.h |
 | 0x42f449 | FUN_0042f449 | 323 | gfx.c, gfx.h |
-| 0x42ff10 | FUN_0042ff10 | 8140 | engine.c |
 | 0x440666 | FUN_00440666 | 383 | engine.c |
 | 0x452820 | FUN_00452820 | 2907 | engine_map_terrain.c, engine_map_terrain.h, blit_table_452820.h |
 | 0x45337b | FUN_0045337b | 1403 | engine_map_terrain.c, engine_map_terrain.h, blit_table_45337b.h |

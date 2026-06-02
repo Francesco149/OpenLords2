@@ -20,7 +20,7 @@ Two parallel dispatch ladders run while `DAT_004eac50 == 0x1f`:
 |----------------------:|--------------|---------------|--------|
 | 1   | `FUN_0041ea14` | `FUN_0041eaa3` | **Main menu** — Single player / Multiple players / Lords of Magic? / Exit game |
 | 2   | `FUN_0041ec8a` | `FUN_0041ece6` | **"Your options"** (single-player) — Play Now! / Load a game / Skirmish! / Custom game / Back |
-| 3   | `FUN_0041ef42` | `FUN_004149ec` | **"Loading a game." save/load list** — file grid + scrollbar (list render ported; button overlay pending) |
+| 3   | `FUN_0041ef42` | `FUN_004149ec` | **"Loading a game." save/load list** — file grid + scrollbar + Load/Cancel/scroll buttons + row click-to-select (`FUN_0043400b`) all ported; click-to-load drives the map |
 | 4   | `FUN_0041ef57` | `FUN_0041f321`+ | **"Choose your title and your shield"** — name box + 5 shields + Back/Continue (ported) |
 | 5   | `FUN_0041f592` | `FUN_0041f5e8` | **"Play Now!" campaign chooser** — Original campaign / The new campaign (ported) |
 | 6   | `FUN_0041f3e9` | `FUN_0041f4a1` | (sub-screen) |
@@ -587,6 +587,61 @@ forced-zero, click-flash-then-settle, auto-repeat-gated, editor-streams-to-
 filename).  Driveable + verified: `--title-live --title-page 3` (and
 `--title-type war` typed "lastturn" → "wartturn" through the live WndProc;
 `runs/title-type-p3/`, 2026-05-30).
+
+### Page-3 grid row-click — the save-list selector (`FUN_0043400b`)
+
+> 2026-06-02.  Click-to-load: clicking a save *row* (not the Load button)
+> selects it and loads its name into the filename field, so the Load button
+> then loads the clicked save.  The whole title→Load→map path is now genuinely
+> mouse-drivable.
+
+**KEY — the row hit-test does NOT live in the click router `FUN_004ba9c8`.**
+The page-3 arm of `FUN_004ba9c8` (above) only runs the editor name-tail + the
+Load/Cancel/scroll button strip — there is **no** grid-row hit-test there.  The
+selector lives in the *outer* per-state transition machine **`FUN_0042ff10`**
+(the 8 KB dispatcher that runs `FUN_004ba9c8` first and, when it returns 0,
+walks a big `DAT_004eac50` switch).  Its `0x1f` / `DAT_005530f0 == 3` arm is:
+
+```c
+iVar2 = FUN_0043400b(1);            // grid hit-test → name field
+if (iVar2 != 0) goto LAB_00431f25;  // consumed → stop processing this frame
+```
+
+**`FUN_0043400b(param_1)`** (`param_1` = 1 title page-3 origin x0=0x60/y0=10;
+0 = the in-game save/load dialog x0=0x10/y0=0x90, deferred):
+
+1. Reject the cursor outside the grid box `[x0+0x20, x0+0x180) × [y0+0x6c,
+   y0+0x10c)` → return 0.
+2. Latch the hovered entry into `DAT_004e65dc`: column from x (3 cols, 0x78
+   wide), row from y (0x10 tall) advancing **3 entries** per row, plus the
+   scroll origin `DAT_004ea1a0`.  This runs on **hover** (no press needed) — so
+   the highlight follows the mouse; the per-frame refresh `FUN_004ba26e` page-3
+   arm draws `FUN_004149ec(DAT_004e65dc, 1)` with it highlighted.
+3. **Only on a left press edge** (`DAT_004eafb4`) and `entry < count`
+   (`DAT_004eb25c`): copy the entry's 13-byte filename (`&DAT_004e8790 +
+   entry*0x41`) into the filename field `DAT_004ea130` (`FUN_00401136`) and
+   re-init the shared editor on it (`FUN_00402009(&DAT_004ea130, 8, 0xa0, 1)`),
+   then return non-zero (consume the click).
+
+> **Return-value gotcha (r2-verified).** `FUN_0043400b` returns
+> `FUN_00402009`'s result, but `00402009` is `void` — the decompiler surfaces
+> the leftover `eax`.  At `0x402083` the last write to `eax` is `mov eax,
+> [arg_14h]` (the init-mode arg = 1), so a successful pick returns **1**.  The
+> caller only needs non-zero ("consumed"), so this is behaviorally exact.
+
+Port: `engine_title_render_filelist_grid_pick` + the `g_fl_selected`
+(`DAT_004e65dc`) state + the per-frame refresh now highlighting it
+(`engine_title_render.c`); `engine_menu_input_filelist_grid_step` wraps the
+`FUN_0042ff10` page-3 arm (`engine_menu_input.c`); wired into the live tick
+**after** `engine_menu_title_input` returns 0 (`engine.c`
+`engine_tick_menu_input_step`), mirroring retail's `FUN_004ba9c8` → `FUN_0042ff10`
+order.  Host-tested (6 cases: hover-selects, press-commits-name + editor re-init,
+out-of-bounds, empty-slot-no-commit, scroll-offset, + the live-tick
+router→grid-step integration through to the Load latch).  Verified end-to-end
+via **`--strat-load-grid`** (scripted WM_MOUSE click on the "lastturn" row →
+highlighted → Load → confirm pump → native strategic map; the hidden capture
+window needs `g_client_screen` pinned to 640×480 so the scripted client coords
+map 1:1 — engine-quirks #120).
 
 ## Input side — hotspot hit-test + page navigation (`engine_menu_input`)
 

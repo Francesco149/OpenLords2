@@ -897,6 +897,93 @@ int test_title_filelist_scene_routes_page_3(void)
     return 0;
 }
 
+/* ── grid hit-test/selection (FUN_0043400b) ──────────────────────────
+ * Grid origin for the title page-3 (param_1 = 1): x0 = 0x60, y0 = 10.
+ * x bounds [0x80, 0x1e0); y bounds [0x76, 0x116).  Column boundaries
+ * x0+0x78=0xd8 / x0+0xf0=0x150; rows 0x10 px tall advance 3 entries. */
+
+int test_title_filelist_grid_hover_sets_selected(void)
+{
+    fl_setup();                       /* 4 entries, first_visible 0 */
+    /* Hover col 1 (x in [0xd8, 0x150)), row 0 (y in [0x76, 0x86)) →
+     * entry 0 + 1 + 0 = 1, no press → no commit, returns 0. */
+    int r = engine_title_render_filelist_grid_pick(1, 0x100, 0x80, /*lmb=*/0);
+    T_ASSERT_EQ_I(r, 0);
+    T_ASSERT_EQ_I(engine_title_render_filelist_selected(), 1);
+    /* The name field is untouched on hover (still the seeded topname). */
+    T_ASSERT(strcmp((const char *)engine_title_render_filelist_name(),
+                    "lastturn") == 0);
+    return 0;
+}
+
+int test_title_filelist_grid_press_commits_name(void)
+{
+    fl_setup();
+    text_input_state_t ed;
+    text_input_init(&ed, "", 8, 0xa0, 1);
+    engine_title_render_set_filelist_editor(&ed);
+    /* Press col 1, row 0 → entry 1 ("old_turn"). */
+    int r = engine_title_render_filelist_grid_pick(1, 0x100, 0x80, /*lmb=*/1);
+    T_ASSERT_EQ_I(r, 1);                          /* consumed (eax == 1) */
+    T_ASSERT_EQ_I(engine_title_render_filelist_selected(), 1);
+    T_ASSERT(strcmp((const char *)engine_title_render_filelist_name(),
+                    "old_turn") == 0);
+    /* The shared editor was re-initialised on the new name. */
+    T_ASSERT_EQ_I(ed.length, 8);
+    T_ASSERT(strcmp((const char *)ed.buf, "old_turn") == 0);
+    engine_title_render_set_filelist_editor(0);
+    return 0;
+}
+
+int test_title_filelist_grid_out_of_bounds(void)
+{
+    fl_setup();
+    /* Latch a known selection first, then click left of the grid. */
+    (void)engine_title_render_filelist_grid_pick(1, 0x90, 0x80, 0);  /* entry 0 */
+    int r = engine_title_render_filelist_grid_pick(1, 0x70, 0x80, /*lmb=*/1);
+    T_ASSERT_EQ_I(r, 0);
+    /* Out-of-bounds neither re-selects nor commits. */
+    T_ASSERT_EQ_I(engine_title_render_filelist_selected(), 0);
+    T_ASSERT(strcmp((const char *)engine_title_render_filelist_name(),
+                    "lastturn") == 0);
+    return 0;
+}
+
+int test_title_filelist_grid_empty_slot_no_commit(void)
+{
+    fl_setup();
+    text_input_state_t ed;
+    text_input_init(&ed, "seed", 8, 0xa0, 1);
+    engine_title_render_set_filelist_editor(&ed);
+    /* Press col 1, row 1 → entry 0 + 1 + 3 = 4 ≥ count(4): empty slot. */
+    int r = engine_title_render_filelist_grid_pick(1, 0x100, 0x86, /*lmb=*/1);
+    T_ASSERT_EQ_I(r, 0);
+    T_ASSERT_EQ_I(engine_title_render_filelist_selected(), 4);  /* hovered */
+    /* No name/editor commit. */
+    T_ASSERT(strcmp((const char *)engine_title_render_filelist_name(),
+                    "lastturn") == 0);
+    T_ASSERT(strcmp((const char *)ed.buf, "seed") == 0);
+    engine_title_render_set_filelist_editor(0);
+    return 0;
+}
+
+int test_title_filelist_grid_first_visible_offset(void)
+{
+    fl_setup();
+    engine_title_render_set_filelist(g_fl_test_entries, 0x41, 4, 3); /* scroll to 3 */
+    text_input_state_t ed;
+    text_input_init(&ed, "", 8, 0xa0, 1);
+    engine_title_render_set_filelist_editor(&ed);
+    /* Press col 0, row 0 → first_visible(3) + 0 = entry 3 ("test"). */
+    int r = engine_title_render_filelist_grid_pick(1, 0x90, 0x80, /*lmb=*/1);
+    T_ASSERT_EQ_I(r, 1);
+    T_ASSERT_EQ_I(engine_title_render_filelist_selected(), 3);
+    T_ASSERT(strcmp((const char *)engine_title_render_filelist_name(),
+                    "test") == 0);
+    engine_title_render_set_filelist_editor(0);
+    return 0;
+}
+
 /* ──────────────────────────────────────────────────────────────────
  * Page 7 — game-setup screen (FUN_0041f6c7 + subs)
  * ────────────────────────────────────────────────────────────────── */

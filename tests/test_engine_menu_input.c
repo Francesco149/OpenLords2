@@ -806,6 +806,60 @@ int test_menu_page3_load_sets_request(void)
     return 0;
 }
 
+/* End-to-end wiring of the page-3 grid selector through the exact
+ * live-tick sequence (engine_tick_menu_input_step): run the click router
+ * FUN_004ba9c8 (engine_menu_title_input); when it does NOT consume the
+ * click, run the outer-dispatcher page-3 grid arm FUN_0042ff10 →
+ * FUN_0043400b (engine_menu_input_filelist_grid_step).  Proves a save-row
+ * click selects the entry + loads its name into the filename field, then
+ * a Load-button click latches the request the load pump consumes. */
+static int live_tick_menu_input(const engine_menu_click_in_t *in)
+{
+    if (engine_menu_title_input(in) == 0)
+        return engine_menu_input_filelist_grid_step(in);
+    return 1;   /* the click router consumed it */
+}
+
+static const char *g_p3it_names[4] = {"lastturn","old_turn","safeturn","test"};
+static uint8_t g_p3it_entries[4 * 0x41];
+
+int test_menu_page3_grid_click_selects_then_load_latches(void)
+{
+    mi_reset();
+    reset_filelist_buttons();
+    /* The live caller (engine_tick_menu_input_step) gates on screen 0x1f
+     * before reaching grid_step, so the page-3 gate is the relevant one. */
+    engine_title_render_set_page(3);              /* DAT_005530f0 */
+    memset(g_p3it_entries, 0, sizeof g_p3it_entries);
+    for (int e = 0; e < 4; e++)
+        for (int j = 0; g_p3it_names[e][j]; j++)
+            g_p3it_entries[e * 0x41 + j] = (uint8_t)g_p3it_names[e][j];
+    engine_title_render_set_filelist(g_p3it_entries, 0x41, 4, 0);
+    text_input_state_t ed;
+    text_input_init(&ed, "", 8, 0xa0, 1);
+    engine_title_render_set_filelist_editor(&ed);
+
+    /* A click on grid row 0, col 1 ("old_turn") — misses the Load/Cancel/
+     * scroll strip, so the click router returns 0 and the grid arm runs. */
+    engine_menu_click_in_t row = press_at(0x100, 0x80);
+    T_ASSERT_EQ_I(live_tick_menu_input(&row), 1);          /* grid consumed */
+    T_ASSERT_EQ_I(engine_title_render_filelist_selected(), 1);
+    T_ASSERT(strcmp((const char *)engine_title_render_filelist_name(),
+                    "old_turn") == 0);
+
+    /* Now a Load-button click latches the load request (DAT_005cd41c). */
+    engine_menu_click_in_t load = press_at(P3_LOAD_X, P3_LOAD_Y);
+    T_ASSERT_EQ_I(live_tick_menu_input(&load), 1);         /* router consumed */
+    T_ASSERT_EQ_I(engine_menu_input_filelist_load_request(), 100);
+    /* The filename the pump will build "<name>.sav" from is the clicked
+     * entry — name_tail re-streamed the committed editor on the Load frame. */
+    T_ASSERT(strcmp((const char *)engine_title_render_filelist_name(),
+                    "old_turn") == 0);
+
+    engine_title_render_set_filelist_editor(0);
+    return 0;
+}
+
 int test_menu_page3_cancel_returns_to_bookmark(void)
 {
     mi_reset();

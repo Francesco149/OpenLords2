@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 546,
-  "ported": 47,
-  "unported": 1854,
+  "tested": 548,
+  "ported": 46,
+  "unported": 1853,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 593,
-  "pct_touched": 24.2,
-  "pct_tested": 22.3,
+  "touched": 594,
+  "pct_touched": 24.3,
+  "pct_tested": 22.4,
   "bytes_total": 838629,
-  "bytes_touched": 240070,
-  "pct_bytes_touched": 28.6
+  "bytes_touched": 240431,
+  "pct_bytes_touched": 28.7
  },
  "orphan_refs": [
   "0x004148",
@@ -64,6 +64,7 @@
     "src/engine_event_queue.h",
     "src/engine_npc_schedule.c",
     "src/engine_roster.c",
+    "src/engine_title_render.c",
     "src/strutil.h"
    ]
   },
@@ -447,6 +448,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_title_render.c",
     "src/main.c",
     "src/text_input.h"
    ]
@@ -4637,9 +4639,12 @@
    "name": "FUN_0042ff10",
    "size": 8140,
    "is_thunk": false,
-   "status": "ported",
+   "status": "tested",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/engine_menu_input.c",
+    "src/engine_menu_input.h",
+    "src/engine_title_render.c"
    ]
   },
   {
@@ -5016,8 +5021,15 @@
    "name": "FUN_0043400b",
    "size": 361,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine.c",
+    "src/engine_menu_input.c",
+    "src/engine_menu_input.h",
+    "src/engine_title_render.c",
+    "src/engine_title_render.h",
+    "src/main.c"
+   ]
   },
   {
    "va": "0x434174",

@@ -202,6 +202,12 @@ static int            g_fl_entry_stride = 0x41;
 static int            g_fl_count;
 static int            g_fl_first_visible;
 
+/* The highlighted grid entry (DAT_004e65dc).  999 = no selection — the
+ * full-scene draw (FUN_004148e4) resets it; a grid hover/click
+ * (FUN_0043400b) sets it; the per-frame refresh (FUN_004ba26e page-3
+ * arm) renders the list with this entry highlighted. */
+static int            g_fl_selected = 999;
+
 /* The selected-name field shown above the grid (DAT_004ea130).  A
  * renderer-owned mutable buffer (like g_p4_name_buf) so the page-3
  * editor tail's per-frame copy-out (FUN_0040210c, &DAT_004ea130, 0x40)
@@ -456,6 +462,71 @@ int engine_title_render_filelist_first_visible(void)
 const uint8_t *engine_title_render_filelist_name(void)
 {
     return g_fl_name_buf;
+}
+
+int engine_title_render_filelist_selected(void)
+{
+    return g_fl_selected;
+}
+
+/* Port of FUN_0043400b — the file-list grid hit-test/selection.  Lives
+ * in the outer transition dispatcher FUN_0042ff10 (the 0x1f / page-3
+ * arm calls FUN_0043400b(1); the in-game save/load dialog '5'/'6' calls
+ * FUN_0043400b(0)).  `param_1` selects the grid origin: 1 = title
+ * page-3 (x0=0x60, y0=10), 0 = in-game dialog (x0=0x10, y0=0x90).
+ *
+ * Behaviour: while the cursor is over the 3-column × 0x10-row grid the
+ * hovered entry is latched into g_fl_selected (DAT_004e65dc) — so the
+ * highlight follows the mouse — and ON a left-button press edge the
+ * entry's 13-byte filename is copied into the selected-name field
+ * (DAT_004ea130) and the shared title editor is re-initialised on it
+ * (retail FUN_00401136(.,.,0xd) + FUN_00402009(.,8,0xa0,1)).  Returns
+ * non-zero (retail: the init's eax == the init-mode arg, 1) when a press
+ * commits a valid entry — the caller treats that as "click consumed";
+ * 0 on hover-only, out-of-bounds, or an empty slot.  The editor's
+ * enabled flag is the caller's (the page-3 name-tail sets it each
+ * frame). */
+int engine_title_render_filelist_grid_pick(int param_1, int cursor_x,
+                                           int cursor_y, int lmb_pressed)
+{
+    int x0, y0;
+    if (param_1 == 0) { x0 = 0x10; y0 = 0x90; }   /* in-game dialog   */
+    else              { x0 = 0x60; y0 = 10;   }   /* title page-3 grid */
+
+    /* Reject the cursor outside the grid's pixel bounds. */
+    if (cursor_x < x0 + 0x20 || x0 + 0x180 <= cursor_x)
+        return 0;
+    if (cursor_y < y0 + 0x6c || y0 + 0x10c <= cursor_y)
+        return 0;
+
+    /* Column from x (3 columns, 0x78 px wide), then row from y (0x10 px
+     * tall) advancing 3 entries each — the iso-grid index arithmetic
+     * verbatim from FUN_0043400b. */
+    if      (cursor_x < x0 + 0x78) g_fl_selected = g_fl_first_visible;
+    else if (cursor_x < x0 + 0xf0) g_fl_selected = g_fl_first_visible + 1;
+    else                           g_fl_selected = g_fl_first_visible + 2;
+    {
+        int dy = cursor_y - (y0 + 0x6c);
+        g_fl_selected += ((dy + ((dy >> 31) & 0xf)) >> 4) * 3;
+    }
+
+    if (!lmb_pressed)               /* hover only — highlight, no commit */
+        return 0;
+    if (g_fl_selected >= g_fl_count) /* press over an empty slot */
+        return 0;
+
+    /* Commit the clicked entry's filename into the name field + re-init
+     * the editor on it (FUN_00401136 13-byte copy, FUN_00402009). */
+    if (g_fl_entries) {
+        const uint8_t *src = g_fl_entries + g_fl_selected * g_fl_entry_stride;
+        for (int i = 0; i < 0xd; i++)
+            g_fl_name_buf[i] = src[i];
+    }
+    if (g_title_editor) {
+        text_input_init(g_title_editor, (const char *)g_fl_name_buf,
+                        8, 0xa0, 1);
+    }
+    return 1;
 }
 
 /* Port of FUN_00434346 — the scroll-arrow action.  Advances the
@@ -915,6 +986,7 @@ void engine_title_render_filelist(int title_sub)
     gfx_line_rect(0x78, 0x4a, 0xc0, 0x20, 0x3f);
     gfx_line_rect(0x78, 0x72, 0x160, 0xa4, 0x3f);
     gfx_line_rect(0x78, 0x11e, 0x180, 0x1c, 0x3f);
+    g_fl_selected = 999;                 /* retail FUN_004148e4: DAT_004e65dc = 999 */
     engine_title_render_filelist_content(999);
 }
 
@@ -961,13 +1033,15 @@ engine_button_rec_t *engine_title_render_filelist_button_table(int *count)
  *
  * The list-content refresh repaints the selected-name field + grid the
  * same way the full-scene draw did (idempotent for a settled frame);
- * `selected` 999 means no highlight, matching the draw pass.  The
+ * it highlights the currently-selected entry (DAT_004e65dc, set by the
+ * grid hit-test FUN_0043400b) — retail passes it as FUN_004149ec's
+ * first arg, so the highlight follows the mouse over the grid.  The
  * button strip is the part the full-scene draw omits — the gauntlet
  * buttons + scroll arrows over the action-button bevel.  base = (0x60,
  * 10). */
 void engine_title_render_filelist_buttons(void)
 {
-    engine_title_render_filelist_content(999);
+    engine_title_render_filelist_content(g_fl_selected);
     engine_button_render_list(0x60, 10, g_filelist_buttons, 4,
                               /*misc=*/NULL, g_system_asset, g_dirty_state);
 }

@@ -1244,6 +1244,11 @@ struct test_case {
     X(title_filelist_renders_grid_text) \
     X(title_filelist_empty_no_grid_text) \
     X(title_filelist_scene_routes_page_3) \
+    X(title_filelist_grid_hover_sets_selected) \
+    X(title_filelist_grid_press_commits_name) \
+    X(title_filelist_grid_out_of_bounds) \
+    X(title_filelist_grid_empty_slot_no_commit) \
+    X(title_filelist_grid_first_visible_offset) \
     X(title_setup_country_list_fills_and_selection) \
     X(title_setup_country_list_scrollbar_tracks_scroll) \
     X(title_setup_roster_draws_occupied_skips_empty) \
@@ -1307,6 +1312,7 @@ struct test_case {
     X(menu_page4_editor_disabled_off_page) \
     \
     X(menu_page3_load_sets_request) \
+    X(menu_page3_grid_click_selects_then_load_latches) \
     X(menu_page3_cancel_returns_to_bookmark) \
     X(menu_page3_scroll_down_advances_first_visible) \
     X(menu_page3_scroll_up_clamps_at_zero) \

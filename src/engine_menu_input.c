@@ -830,3 +830,35 @@ int engine_menu_title_input(const engine_menu_click_in_t *in)
     }
     return 0;
 }
+
+/* ─── outer transition-dispatcher arm (FUN_0042ff10) ─────────────────
+ *
+ * Retail runs FUN_004ba9c8 (engine_menu_title_input) first, and when it
+ * returns 0 runs the big per-state machine FUN_0042ff10.  That machine's
+ * 0x1f / page-3 (DAT_005530f0 == 3) arm is the file-list grid selector:
+ *
+ *     iVar2 = FUN_0043400b(1);            // grid hit-test → name field
+ *     if (iVar2 != 0) goto LAB_00431f25;  // consumed → stop this frame
+ *
+ * The drop-in calls this from the live tick after engine_menu_title_input
+ * returns 0, so the grid hover-highlight + click-to-select runs in retail
+ * order without the click router consuming the press first.  Only the
+ * title page-3 grid (param_1 = 1) is ported; the in-game save/load dialog
+ * (param_1 = 0, screens '5'/'6') and the outer machine's selection
+ * debounce (DAT_0053f648 == DAT_00553114 — a 1-frame gate with no
+ * observable effect on page 3, which has no hover pass to change the
+ * selected-button id) are deferred.  Returns non-zero when the grid
+ * consumed the click.
+ *
+ * Self-gates on page 3 only; the screen-0x1f gate (FUN_0042ff10's
+ * DAT_004eac50 == '\x1f') is the caller's — engine_tick_menu_input_step
+ * runs this only on the title screen — which keeps this module free of
+ * engine.c deps for host tests. */
+int engine_menu_input_filelist_grid_step(const engine_menu_click_in_t *in)
+{
+    if (engine_title_render_page() != 3)
+        return 0;
+    return engine_title_render_filelist_grid_pick(1, in->cursor_x,
+                                                  in->cursor_y,
+                                                  in->lmb_newly_pressed);
+}
