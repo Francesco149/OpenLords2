@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 561,
+  "tested": 563,
   "ported": 45,
-  "unported": 1841,
+  "unported": 1839,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 606,
+  "touched": 608,
   "pct_touched": 24.8,
-  "pct_tested": 22.9,
+  "pct_tested": 23.0,
   "bytes_total": 838629,
-  "bytes_touched": 244008,
-  "pct_bytes_touched": 29.1
+  "bytes_touched": 245604,
+  "pct_bytes_touched": 29.3
  },
  "orphan_refs": [
   "0x004148",
@@ -9955,8 +9955,11 @@
    "name": "FUN_0044aa41",
    "size": 1019,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm.c",
+    "src/engine_realm.h"
+   ]
   },
   {
    "va": "0x44ae3c",
@@ -16831,8 +16834,11 @@
    "name": "FUN_004ac185",
    "size": 577,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm.c",
+    "src/engine_realm.h"
+   ]
   },
   {
    "va": "0x4ac3c6",
@@ -16841,6 +16847,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_realm.c",
     "src/engine_realm.h"
    ]
   },

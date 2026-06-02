@@ -1818,6 +1818,11 @@ struct test_case {
     X(engine_realm_coalition_separate_owners) \
     X(engine_realm_coalition_strength_sum) \
     X(engine_realm_coalition_inactive_skipped) \
+    X(engine_realm_unrest_unowned_cleared) \
+    X(engine_realm_unrest_ai_drift) \
+    X(engine_realm_unrest_human_warning) \
+    X(engine_realm_unrest_human_escalate) \
+    X(engine_realm_unrest_rebellion_resets) \
     \
     X(engine_events_scratch_and_gates) \
     X(engine_events_commit_resource) \

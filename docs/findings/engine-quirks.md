@@ -5639,3 +5639,32 @@ in a final pass, and the active-group count is mirrored to `_DAT_00553ef4`.
 Ported as `engine_realm_build_coalitions` (engine_realm.c); the consumer half
 `FUN_0044ae51` (eliminate every group but each owner's strongest — it reaches
 the combat-init chokepoint `FUN_004ac3c6` and posts popups) is deferred.
+
+## 160. The unrest pass warns a human realm exactly once, and the warning latch can leave a low-approval realm permanently calm
+
+`FUN_0044aa41` escalates each realm's unrest band (+0x20) every turn, but the
+human-player branch is gated by a one-shot warning latch (+0x21) that produces
+two non-obvious behaviours.
+
+**(a) One warning per "spell", cleared only by a real recovery.**  The first
+turn a human realm's approval (+0x0c) dips below 30 it posts a single warning
+(event 0x92) and sets the latch — and does *nothing else* that turn (no unrest
+change).  The latch is cleared only when approval climbs back above 29.  So the
+player is warned once as the realm slips, not every turn.
+
+**(b) The escalation threshold (25) is below the warning threshold (30), so a
+realm parked in [25, 29] is calm forever after its one warning.**  Once latched,
+the pass escalates unrest only while approval < 25; at approval ≥ 25 it sets
+unrest back to 0.  A realm hovering at 25–29 approval is below the warning line
+(so it never re-warns — the latch stays set) yet at/above the escalation line
+(so unrest is held at 0).  It sits in a quiet limbo: visibly unhappy, never
+revolting, never re-flagged.  Only a drop below 25 starts the band climb
+(0x96→0x99 notifications) toward a rebellion.
+
+AI realms use neither the latch nor the 0x92 warning — they drift purely on
+approval (≥41 calm, 11–40 ease, <1 climb).  Also note the decompile's
+`approval < 1 → unrest = 4` arm in the human branch is dead code: it sits under
+the `approval < 0x19` (< 25) test in the `else` of `approval < 0x19`, which can
+never be entered, so the port elides it.  Ported as
+`engine_realm_escalate_unrest` (engine_realm.c); the rebellion trigger
+`FUN_004ac185` is a deferred bound seam (it reaches combat-init).

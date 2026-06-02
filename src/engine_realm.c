@@ -1229,3 +1229,91 @@ int engine_realm_coalition_group_member(int group, int slot)
 {
     return COAL_MEMBER(group, slot);
 }
+
+/* ===================================================================== *
+ *  Unrest / rebellion escalation pass (FUN_0044aa41).                     *
+ * ===================================================================== */
+
+/* Optional rebellion-spawn hook (retail FUN_004ac185): returns nonzero when a
+ * rebellion is spawned for the realm (which resets its unrest level).  The real
+ * function reaches the combat-init chokepoint FUN_004ac3c6 (deferred), so this
+ * is a bound seam — NULL (the default) means "no rebellion this turn". */
+static int (*g_rebellion_fn)(int realm);
+
+void engine_realm_bind_rebellion_fn(int (*fn)(int realm))
+{
+    g_rebellion_fn = fn;
+}
+
+/* Shared escalation tail (retail LAB_0044adf3): a realm whose unrest has just
+ * been raised to the top band (>3) may erupt into a rebellion, which resets the
+ * level back to 0. */
+static void unrest_maybe_rebel(int realm, uint8_t *r)
+{
+    if (r[0x20] > 3 && g_rebellion_fn != NULL && g_rebellion_fn(realm) != 0)
+        r[0x20] = 0;
+}
+
+/* Port of FUN_0044aa41 — see engine_realm.h. */
+void engine_realm_escalate_unrest(engine_event_queue_state_t *evq)
+{
+    /* Notification filter table — each player's strategic +0x05 (active/human). */
+    uint8_t has_data[7];
+    for (int i = 0; i < 6; i++) has_data[i] = STRAT_REC(i)[0x05];
+    has_data[6] = 0;
+
+    for (int realm = 1; realm <= (int)s_slot_0056d5dc; realm++) {
+        uint8_t *r     = ARMY_REC(realm);
+        uint8_t  owner = r[0x05];
+        if (owner == 0) {
+            r[0x20] = 0;                       /* unowned realm carries no unrest */
+            continue;
+        }
+
+        uint8_t old      = r[0x20];            /* unrest level before this turn */
+        int     approval = (int8_t)r[0x0c];
+
+        if (STRAT_REC(owner)[0x05] == 0) {
+            /* --- AI-owned realm: unrest drifts silently --- */
+            if (approval < 0x29) {             /* < 41 */
+                if (approval < 0x0b) {         /* < 11: only a starving realm climbs */
+                    if (approval < 1 && r[0x20] < 4) r[0x20]++;
+                } else if (r[0x20] != 0) {     /* 11..40: unrest eases off */
+                    r[0x20]--;
+                }
+            } else {
+                r[0x20] = 0;                   /* >= 41: content */
+            }
+            if (old < r[0x20])
+                unrest_maybe_rebel(realm, r);
+        } else {
+            /* --- Human-owned realm: warn the player, then escalate --- */
+            if (approval > 0x1d)               /* > 29 clears the one-shot warning latch */
+                r[0x21] = 0;
+
+            if (approval < 0x1e && r[0x21] == 0) {
+                /* First dip below 30 this spell: a single warning, no escalation. */
+                r[0x21] = 1;
+                engine_event_queue_post(evq, 0, owner, 0x92, 0,
+                                        3, (uint8_t)realm, 0, 0,
+                                        has_data, (int)s_slot_0057c8cc);
+            } else {
+                if (approval < 0x19) {         /* < 25: unrest rises one band (cap 4).
+                                                * Retail's dead approval<1→4 arm is
+                                                * unreachable (it sits under approval<25)
+                                                * and is elided. */
+                    if (r[0x20] < 4) r[0x20]++;
+                } else {
+                    r[0x20] = 0;               /* >= 25: order restored */
+                }
+                if (old < r[0x20]) {
+                    int code = 0x95 + r[0x20]; /* band 1→0x96 .. 4→0x99 */
+                    engine_event_queue_post(evq, 0, owner, code, 0,
+                                            3, (uint8_t)realm, 0, 0,
+                                            has_data, (int)s_slot_0057c8cc);
+                    unrest_maybe_rebel(realm, r);
+                }
+            }
+        }
+    }
+}

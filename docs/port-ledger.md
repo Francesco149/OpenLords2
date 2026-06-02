@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **606** (24.8%) — tested 561, ported 45
-- code bytes touched: **29.1%** (244,008 / 838,629 B)
-- unported: **1841**
+- touched: **608** (24.8%) — tested 563, ported 45
+- code bytes touched: **29.3%** (245,604 / 838,629 B)
+- unported: **1839**
 - orphan refs (in src/, not in function table): 4
 
-## tested (561) — ported + host unit suite
+## tested (563) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -282,6 +282,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x449d6e | FUN_00449d6e | 354 | engine_realm.c, engine_realm.h |
 | 0x449ef3 | FUN_00449ef3 | 1991 | engine_realm.c, engine_realm.h, engine_territory.c |
 | 0x44a6ba | FUN_0044a6ba | 903 | engine_realm.c, engine_realm.h |
+| 0x44aa41 | FUN_0044aa41 | 1019 | engine_realm.c, engine_realm.h |
 | 0x44ae3c | FUN_0044ae3c | 21 | engine_realm.c, engine_realm.h |
 | 0x44ae51 | FUN_0044ae51 | 497 | engine_realm.h |
 | 0x44b042 | FUN_0044b042 | 704 | engine_realm.c, engine_realm.h |
@@ -474,7 +475,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4ab2aa | FUN_004ab2aa | 217 | engine_combat.c, engine_combat.h |
 | 0x4ab383 | FUN_004ab383 | 1751 | engine_combat.c, engine_combat.h |
 | 0x4aba5a | FUN_004aba5a | 220 | engine_realm_upkeep.c, engine_realm_upkeep.h |
-| 0x4ac3c6 | FUN_004ac3c6 | 211 | engine_realm.h |
+| 0x4ac185 | FUN_004ac185 | 577 | engine_realm.c, engine_realm.h |
+| 0x4ac3c6 | FUN_004ac3c6 | 211 | engine_realm.c, engine_realm.h |
 | 0x4ac6fe | FUN_004ac6fe | 245 | engine_combat.c, engine_combat.h, engine_realm_upkeep.c (+1) |
 | 0x4ac904 | FUN_004ac904 | 295 | game_init.c, game_init.h |
 | 0x4acbd4 | FUN_004acbd4 | 650 | engine_realm_upkeep.c, engine_realm_upkeep.h |

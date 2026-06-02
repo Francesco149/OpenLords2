@@ -383,4 +383,37 @@ int engine_realm_coalition_group_key(int group);
 int engine_realm_coalition_group_strength(int group);
 int engine_realm_coalition_group_member(int group, int slot);
 
+/* Bind the optional rebellion-spawn hook used by engine_realm_escalate_unrest
+ * (retail FUN_004ac185).  It returns nonzero when a rebellion is spawned for
+ * the realm, which resets that realm's unrest.  The real function reaches the
+ * deferred combat-init chokepoint FUN_004ac3c6, so this is a seam — NULL (the
+ * default) means no rebellion fires. */
+void engine_realm_bind_rebellion_fn(int (*fn)(int realm));
+
+/* Port of FUN_0044aa41 @ 0x44aa41 (1019 B, void) — the per-realm unrest /
+ * rebellion-escalation turn pass of the turn-advance engine (0x448440).  For
+ * every realm 1..s_slot_0056d5dc it advances the realm's unrest level (+0x20,
+ * band 0..4) from its approval rating (+0x0c, signed) and owner:
+ *
+ *   - An UNOWNED realm (owner +0x05 == 0) is forced to no unrest.
+ *   - An AI realm (owning player's strategic +0x05 == 0) drifts silently:
+ *     approval >= 41 → calm (0); 11..40 → unrest eases by one; below 11 a
+ *     starving realm (approval < 1) climbs by one (cap 4).
+ *   - A HUMAN realm warns first: the first time approval dips below 30 it posts
+ *     a single warning (event 0x92) and latches +0x21 (cleared once approval
+ *     rises back above 29); thereafter approval < 25 raises unrest one band
+ *     (posting the band notification 0x96..0x99) and approval >= 25 restores
+ *     order (0).
+ *
+ *   Whenever unrest is RAISED, a realm now at the top band (>3) may erupt into
+ *   a rebellion via the bound rebellion hook (FUN_004ac185), which resets it.
+ *
+ * Notifications route through engine_event_queue_post (audience = the realm's
+ * owner).  Touches only g_per_army_768 / g_player_strategic_352 + the realm
+ * count.  Field semantics (unrest band / warning latch) are provisional; the
+ * thresholds and branch structure are ported byte-faithfully from the decompile
+ * (its unreachable approval<1→band-4 arm under the approval<25 gate is elided).
+ * The rebellion hook is a deferred bound seam (combat-init). */
+void engine_realm_escalate_unrest(engine_event_queue_state_t *evq);
+
 #endif /* OPENLORDS2_ENGINE_REALM_H */

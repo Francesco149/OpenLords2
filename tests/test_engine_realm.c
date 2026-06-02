@@ -1645,3 +1645,116 @@ int test_engine_realm_coalition_inactive_skipped(void)
     T_ASSERT(!coal_has(0, 2));
     return 0;
 }
+
+/* ---- engine_realm_escalate_unrest (FUN_0044aa41) ------------------------- *
+ * Per-army: owner +0x05, approval +0x0c (i8), unrest +0x20, warn-latch +0x21.*/
+
+static void unrest_reset(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_0056d5dc = 1;
+    s_slot_0057c8cc = 1;
+    engine_realm_bind_rebellion_fn(NULL);
+}
+
+/* Unowned realm: unrest forced to 0 regardless of prior level. */
+int test_engine_realm_unrest_unowned_cleared(void)
+{
+    unrest_reset();
+    AREC(1)[0x05] = 0; AREC(1)[0x20] = 3;
+    engine_realm_escalate_unrest(NULL);
+    T_ASSERT_EQ_I(AREC(1)[0x20], 0);
+    return 0;
+}
+
+/* AI realm: a starving realm (approval < 1) climbs one band; a moderate one
+ * (11..40) eases off; a content one (>= 41) is reset. */
+int test_engine_realm_unrest_ai_drift(void)
+{
+    unrest_reset();
+    PREC(1)[0x05] = 0;                  /* AI owner */
+    AREC(1)[0x05] = 1;
+
+    AREC(1)[0x0c] = 0;  AREC(1)[0x20] = 0;     /* starving → climb */
+    engine_realm_escalate_unrest(NULL);
+    T_ASSERT_EQ_I(AREC(1)[0x20], 1);
+
+    AREC(1)[0x0c] = 20; AREC(1)[0x20] = 2;     /* moderate → ease */
+    engine_realm_escalate_unrest(NULL);
+    T_ASSERT_EQ_I(AREC(1)[0x20], 1);
+
+    AREC(1)[0x0c] = 50; AREC(1)[0x20] = 3;     /* content → reset */
+    engine_realm_escalate_unrest(NULL);
+    T_ASSERT_EQ_I(AREC(1)[0x20], 0);
+    return 0;
+}
+
+/* Human realm: first dip below 30 posts a one-shot warning (0x92) and latches
+ * +0x21, leaving unrest unchanged; a recovery above 29 clears the latch. */
+int test_engine_realm_unrest_human_warning(void)
+{
+    unrest_reset();
+    PREC(1)[0x05] = 1;                  /* human owner = local player 1 */
+    AREC(1)[0x05] = 1;
+    AREC(1)[0x0c] = 20; AREC(1)[0x20] = 0; AREC(1)[0x21] = 0;
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_realm_escalate_unrest(&evq);
+
+    T_ASSERT_EQ_I(AREC(1)[0x21], 1);          /* latched */
+    T_ASSERT_EQ_I(AREC(1)[0x20], 0);          /* no escalation yet */
+    T_ASSERT_EQ_I(evq.notify_flag, 1);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0x92);
+
+    /* recovery above 29 clears the latch */
+    AREC(1)[0x0c] = 40;
+    engine_realm_escalate_unrest(NULL);
+    T_ASSERT_EQ_I(AREC(1)[0x21], 0);
+    return 0;
+}
+
+/* Human realm already warned: approval < 25 raises unrest a band and posts the
+ * matching band notification (1 → 0x96); approval >= 25 restores order. */
+int test_engine_realm_unrest_human_escalate(void)
+{
+    unrest_reset();
+    PREC(1)[0x05] = 1;
+    AREC(1)[0x05] = 1;
+    AREC(1)[0x0c] = 20; AREC(1)[0x20] = 0; AREC(1)[0x21] = 1;   /* latched */
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_realm_escalate_unrest(&evq);
+
+    T_ASSERT_EQ_I(AREC(1)[0x20], 1);          /* climbed one band */
+    T_ASSERT_EQ_I(evq.ring[0].code, 0x96);    /* band-1 notification */
+
+    AREC(1)[0x0c] = 28;                        /* >= 25 → order restored */
+    engine_realm_escalate_unrest(NULL);
+    T_ASSERT_EQ_I(AREC(1)[0x20], 0);
+    return 0;
+}
+
+static int g_rebel_seen;
+static int rebel_always(int realm) { g_rebel_seen = realm; return 1; }
+
+/* When unrest is raised to the top band, the rebellion hook fires and resets
+ * the level. */
+int test_engine_realm_unrest_rebellion_resets(void)
+{
+    unrest_reset();
+    PREC(1)[0x05] = 0;                  /* AI realm */
+    AREC(1)[0x05] = 1;
+    AREC(1)[0x0c] = 0; AREC(1)[0x20] = 3;     /* starving, one band from the top */
+    g_rebel_seen = 0;
+    engine_realm_bind_rebellion_fn(rebel_always);
+
+    engine_realm_escalate_unrest(NULL);
+
+    T_ASSERT_EQ_I(g_rebel_seen, 1);           /* hook saw realm 1 */
+    T_ASSERT_EQ_I(AREC(1)[0x20], 0);          /* rebellion reset unrest */
+    engine_realm_bind_rebellion_fn(NULL);
+    return 0;
+}
