@@ -2586,6 +2586,7 @@ VA_COMBAT_WINNER     = 0x57c924   # DAT_0057c924 — winning territory index  (i
 VA_COMBAT_OWNER      = 0x5440cc   # DAT_005440cc — winner's owner id        (i32)
 FN_COMBAT_CONDITION  = 0x4a80db   # FUN_004a80db — __cdecl int(int rec)
 FN_COMBAT_HALVE      = 0x4ad8cc   # FUN_004ad8cc — __cdecl void(int rec)
+FN_DIPLOMACY_ADJUST  = 0x4a1ee1   # FUN_004a1ee1 — __cdecl void(uint,uint,char)
 
 REALM_RACE_RETRIES = 8
 
@@ -2659,6 +2660,9 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
         lib.engine_combat_recompute_condition.argtypes = [ctypes.c_int]
         lib.engine_combat_halve_garrison.restype = None
         lib.engine_combat_halve_garrison.argtypes = [ctypes.c_int]
+        lib.engine_diplomacy_battle_adjust.restype = None
+        lib.engine_diplomacy_battle_adjust.argtypes = [
+            ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
     return _realm_globals_cache
 
 
@@ -3981,6 +3985,115 @@ def diff_combat_halve(retail: dict, port: dict) -> list[str]:
                               REALM_TERR_STRIDE, 151, "terr")
 
 
+# ── post-battle diplomacy adjust (FUN_004a1ee1 — engine_diplomacy_battle_adjust) ──
+#
+# __cdecl(uint p1, uint p2, char amount): AI player p1's relation toward p2 is
+# downgraded after a fight — breaking a lord/vassal treaty, possibly declaring
+# war, and posting diplomacy notifications via the event queue.  Only
+# g_player_strategic_352 is mutated (the notifications go to the queue ring, a
+# different region), so strat is the sole readback.  Driven through the generic
+# RPC with args=[p1,p2,amount] + cc='mscdecl'.
+
+_DIP_EVQ_BYTES = 1280   # >= sizeof(engine_event_queue_state_t) (1240)
+_diplo_evq = None
+
+
+def _set_dip_rec(strat: bytearray, s: int, *, active=0, ai=0, pers=0, lord=0,
+                 feud=0, moodcyc=0, rels=None):
+    """rels: dict other-> (rel, treaty, warcnt, warflag)."""
+    b = s * REALM_STRAT_STRIDE
+    strat[b + 0x04] = active & 0xff
+    strat[b + 0x05] = ai     & 0xff
+    strat[b + 0x07] = pers   & 0xff
+    strat[b + 0x81] = lord   & 0xff
+    strat[b + 0xeb] = feud   & 0xff
+    strat[b + 0x159] = moodcyc & 0xff
+    for other, (rel, treaty, warcnt, warflag) in (rels or {}).items():
+        o = b + 0x84 + other * 0x10
+        strat[o + 0] = rel     & 0xff
+        strat[o + 1] = treaty  & 0xff
+        strat[o + 3] = warcnt  & 0xff
+        strat[o + 4] = warflag & 0xff
+
+
+def gen_diplomacy_adjust_vectors(n: int, rng: random.Random) -> list[dict]:
+    def vec(p1, p2, amount, build):
+        strat = bytearray(REALM_STRAT_BYTES)
+        build(strat)
+        return {"p1": p1, "p2": p2, "amount": amount, "strat": bytes(strat)}
+
+    edge = []
+    # plain hit: AI vs AI, no bond
+    edge.append(vec(2, 3, 0x14, lambda s: (
+        _set_dip_rec(s, 2, active=1, ai=0, rels={3: (10, 0, 0, 0)}),
+        _set_dip_rec(s, 3, active=1, ai=0))))
+    # betrayal: p2 is p1's vassal
+    edge.append(vec(2, 3, 0x14, lambda s: (
+        _set_dip_rec(s, 2, active=1, ai=0, pers=1, rels={3: (40, 0, 0, 0)}),
+        _set_dip_rec(s, 3, active=1, ai=0, lord=2, rels={2: (0, 1, 0, 0)}))))
+    # war escalation: AI p1 vs HUMAN p2, relation bottoms out
+    edge.append(vec(2, 3, 0x14, lambda s: (
+        _set_dip_rec(s, 2, active=1, ai=0, rels={3: (0xec, 0, 0, 0)}),
+        _set_dip_rec(s, 3, active=1, ai=1))))
+    # war final step: counter already 2
+    edge.append(vec(2, 3, 0x14, lambda s: (
+        _set_dip_rec(s, 2, active=1, ai=0, rels={3: (0xe2, 0, 2, 0)}),
+        _set_dip_rec(s, 3, active=1, ai=1))))
+    # guard no-op: p1 human
+    edge.append(vec(2, 3, 0x14, lambda s: (
+        _set_dip_rec(s, 2, active=1, ai=1, rels={3: (20, 0, 0, 0)}),
+        _set_dip_rec(s, 3, active=1, ai=0))))
+    # personality 4: betrayal but no war flag
+    edge.append(vec(4, 1, 0x14, lambda s: (
+        _set_dip_rec(s, 4, active=1, ai=0, pers=4, rels={1: (30, 0, 0, 0)}),
+        _set_dip_rec(s, 1, active=1, ai=0, lord=4, rels={4: (0, 1, 0, 0)}))))
+
+    vecs = list(edge)
+    while len(vecs) < n:
+        p1 = rng.randint(1, 5)
+        p2 = rng.randint(1, 5)
+        while p2 == p1:
+            p2 = rng.randint(1, 5)
+        amount = rng.randint(0, 40)
+
+        def build(s, p1=p1, p2=p2):
+            for slot in range(6):
+                rels = {o: (rng.randint(0, 255), rng.randint(0, 1),
+                            rng.randint(0, 3), rng.randint(0, 1))
+                        for o in range(1, 6) if o != slot}
+                _set_dip_rec(s, slot,
+                             active=rng.randint(0, 1), ai=rng.randint(0, 1),
+                             pers=rng.randint(0, 4), lord=rng.choice([0, p1, p2]),
+                             feud=rng.choice([0, rng.randint(1, 5)]),
+                             moodcyc=rng.randint(0, 3), rels=rels)
+        vecs.append(vec(p1, p2, amount, build))
+    return vecs
+
+
+def run_port_diplomacy_adjust(lib: ctypes.CDLL, vec: dict) -> dict:
+    global _diplo_evq
+    g = realm_port_globals(lib)
+    if _diplo_evq is None:
+        _diplo_evq = ctypes.create_string_buffer(_DIP_EVQ_BYTES)
+    lib.engine_event_queue_init(_diplo_evq)
+    ctypes.memmove(g["strat"], vec["strat"], REALM_STRAT_BYTES)
+    lib.engine_diplomacy_battle_adjust(vec["p1"], vec["p2"], vec["amount"],
+                                       _diplo_evq)
+    return {"strat": list(bytes(g["strat"]))}
+
+
+def diplomacy_adjust_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_DIPLOMACY_ADJUST, "cc": "mscdecl",
+            "args": [vec["p1"], vec["p2"], vec["amount"]], "regions": [
+        {"va": VA_STRATEGIC, "len": REALM_STRAT_BYTES, "inject": list(vec["strat"]), "read": True},
+    ]}
+
+
+def diff_diplomacy_adjust(retail: dict, port: dict) -> list[str]:
+    return _diff_realm_region(retail, port["strat"], VA_STRATEGIC,
+                              REALM_STRAT_STRIDE, 6, "strat")
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -4111,6 +4224,9 @@ def run_diff(cfg_args) -> int:
     if "combat_halve" in enabled:
         test_plans.append(("combat_halve",
                            gen_combat_halve_vectors(cfg_args.vectors, rng)))
+    if "diplomacy_adjust" in enabled:
+        test_plans.append(("diplomacy_adjust",
+                           gen_diplomacy_adjust_vectors(cfg_args.vectors, rng)))
     if "player_aggregate" in enabled:
         test_plans.append(("player_aggregate",
                            gen_player_aggregate_vectors(cfg_args.vectors, rng)))
@@ -4247,7 +4363,8 @@ def run_diff(cfg_args) -> int:
                                  "delayed_action", "tax_approval", "dev_spread",
                                  "realm_income", "upkeep", "season_economy",
                                  "resource_pass", "population", "combat_resolve",
-                                 "combat_condition", "combat_halve"}
+                                 "combat_condition", "combat_halve",
+                                 "diplomacy_adjust"}
         shared_freeze_installed = False
         if shared_freeze_targets & {n for (n, _) in test_plans}:
             fresp = script.exports_sync.install_sim_sub_steps_engine_freeze()
@@ -5134,6 +5251,42 @@ def run_diff(cfg_args) -> int:
                         port = {"note": "region readback elided"}
                         vec = {"rec": vec["rec"], "owner": vec["owner"],
                                "diff": vec["diff"]}
+                elif fn_name == "diplomacy_adjust":
+                    # FUN_004a1ee1(p1,p2,amount): post-battle diplomacy relation
+                    # adjust.  Inject g_player_strategic_352; call with
+                    # args=[p1,p2,amount] (cc=mscdecl); read back the strat block
+                    # (its sole mutation — notifications go to the event queue).
+                    port = run_port_diplomacy_adjust(lib, vec)
+                    plan = diplomacy_adjust_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"p1": vec["p1"], "p2": vec["p2"],
+                                                 "amount": vec["amount"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_diplomacy_adjust(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"p1": vec["p1"], "p2": vec["p2"],
+                               "amount": vec["amount"]}
                 else:
                     continue
                 if bad:

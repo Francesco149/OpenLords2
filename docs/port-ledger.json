@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 570,
+  "tested": 573,
   "ported": 45,
-  "unported": 1832,
+  "unported": 1829,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 615,
-  "pct_touched": 25.1,
-  "pct_tested": 23.3,
+  "touched": 618,
+  "pct_touched": 25.3,
+  "pct_tested": 23.4,
   "bytes_total": 838629,
-  "bytes_touched": 248937,
-  "pct_bytes_touched": 29.7
+  "bytes_touched": 250849,
+  "pct_bytes_touched": 29.9
  },
  "orphan_refs": [
   "0x004148",
@@ -12889,6 +12889,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_diplomacy.c",
     "src/engine_event_queue.c",
     "src/engine_event_queue.h",
     "src/engine_ranking.h",
@@ -16072,8 +16073,11 @@
    "name": "FUN_004a1a54",
    "size": 213,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_diplomacy.c",
+    "src/engine_diplomacy.h"
+   ]
   },
   {
    "va": "0x4a1b29",
@@ -16111,16 +16115,22 @@
    "name": "FUN_004a1ee1",
    "size": 1520,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_diplomacy.c",
+    "src/engine_diplomacy.h"
+   ]
   },
   {
    "va": "0x4a24d1",
    "name": "FUN_004a24d1",
    "size": 179,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_diplomacy.c",
+    "src/engine_diplomacy.h"
+   ]
   },
   {
    "va": "0x4a2584",
@@ -16810,6 +16820,7 @@
    "src": [
     "src/engine_combat.c",
     "src/engine_combat.h",
+    "src/engine_diplomacy.h",
     "src/engine_realm_upkeep.c"
    ]
   },

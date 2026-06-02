@@ -1866,6 +1866,13 @@ struct test_case {
     X(engine_combat_condition_mixed) \
     X(engine_combat_condition_roundup_and_empty) \
     X(engine_combat_halve_garrison) \
+    X(engine_diplomacy_clear_treaty) \
+    X(engine_diplomacy_broadcast_penalty) \
+    X(engine_diplomacy_battle_adjust_guards) \
+    X(engine_diplomacy_battle_adjust_plain) \
+    X(engine_diplomacy_battle_adjust_betrayal) \
+    X(engine_diplomacy_battle_adjust_war_escalate) \
+    X(engine_diplomacy_battle_adjust_war_final) \
     \
     X(army_ai_seed_workforce_ratios) \
     X(army_ai_advance_tier_nonpositive_noop) \

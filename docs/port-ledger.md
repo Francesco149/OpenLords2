@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **615** (25.1%) — tested 570, ported 45
-- code bytes touched: **29.7%** (248,937 / 838,629 B)
-- unported: **1832**
+- touched: **618** (25.3%) — tested 573, ported 45
+- code bytes touched: **29.9%** (250,849 / 838,629 B)
+- unported: **1829**
 - orphan refs (in src/, not in function table): 4
 
-## tested (570) — ported + host unit suite
+## tested (573) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -427,7 +427,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x472ad0 | FUN_00472ad0 | 16 | engine_event_queue.c, engine_event_queue.h, game_init.c |
 | 0x472ae0 | FUN_00472ae0 | 96 | engine_event_queue.c, engine_event_queue.h |
 | 0x472b40 | FUN_00472b40 | 133 | engine_event_queue.c, engine_event_queue.h |
-| 0x472bc5 | FUN_00472bc5 | 560 | engine_event_queue.c, engine_event_queue.h, engine_ranking.h (+3) |
+| 0x472bc5 | FUN_00472bc5 | 560 | engine_diplomacy.c, engine_event_queue.c, engine_event_queue.h (+4) |
 | 0x472df5 | FUN_00472df5 | 81 | engine_event_queue.c, engine_event_queue.h |
 | 0x47ed34 | FUN_0047ed34 | 103 | engine.c, engine_camera.c, engine_camera.h |
 | 0x48ee46 | FUN_0048ee46 | 87 | engine_tile.c, engine_tile.h |
@@ -460,8 +460,11 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49d1e0 | FUN_0049d1e0 | 1024 | engine_ranking.c, engine_ranking.h |
 | 0x49dd01 | FUN_0049dd01 | 583 | engine_army_ai.c, engine_army_ai.h, engine_territory.c (+1) |
 | 0x49e39b | FUN_0049e39b | 994 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a1a54 | FUN_004a1a54 | 213 | engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a1c53 | FUN_004a1c53 | 537 | game_init.c, game_init.h |
 | 0x4a1e6c | FUN_004a1e6c | 117 | engine_roster.c, engine_roster.h, game_init.c |
+| 0x4a1ee1 | FUN_004a1ee1 | 1520 | engine_diplomacy.c, engine_diplomacy.h |
+| 0x4a24d1 | FUN_004a24d1 | 179 | engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a2584 | FUN_004a2584 | 157 | game_init.c, game_init.h |
 | 0x4a4052 | FUN_004a4052 | 657 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a42e3 | FUN_004a42e3 | 300 | engine_army_ai.c |
@@ -478,7 +481,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4aa89f | FUN_004aa89f | 107 | engine_combat.c, engine_combat.h |
 | 0x4aad07 | FUN_004aad07 | 1443 | engine_combat.c, engine_combat.h |
 | 0x4ab2aa | FUN_004ab2aa | 217 | engine_combat.c, engine_combat.h |
-| 0x4ab383 | FUN_004ab383 | 1751 | engine_combat.c, engine_combat.h, engine_realm_upkeep.c |
+| 0x4ab383 | FUN_004ab383 | 1751 | engine_combat.c, engine_combat.h, engine_diplomacy.h (+1) |
 | 0x4aba5a | FUN_004aba5a | 220 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4ac185 | FUN_004ac185 | 577 | engine_realm.c, engine_realm.h |
 | 0x4ac3c6 | FUN_004ac3c6 | 211 | engine_realm.c, engine_realm.h |
