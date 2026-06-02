@@ -6049,3 +6049,39 @@ Verification: the host test `game_init_turn_driver_advances_to_turn_1`
 step-17 seam and runs a full new game over the real L2_maps world, asserting the
 exact post-state — turn 1, season `{prev 3, cur 4, next 1}`, rollover counter 1,
 year 1268 — which is only reachable through the rollover branch.
+
+## 172 — strategic cattle/livestock render in the OVERLAY pass, AFTER terrain (z-order bug surfaced by --newgame)
+
+The `--newgame 0` first frame shows the player-capital's livestock (a fenced
+field of black-and-white cows) rendering **over the top of a snow-capped
+mountain** that sits in front of (below, in iso) the field — the cows paint on
+the mountain peak instead of being occluded by it.
+
+Pass-skip diagnosis (`OL2_SKIP_PASSES` mask in `engine_map_scene.c`,
+bit0=terrain/bit1=overlay/bit2=features) localised it cleanly:
+
+- terrain-only (mask 6): the fenced field-plot **base** and the **mountain**
+  (peak and all) are present — both are pass-1 TERRAIN (`FUN_0040526e`); the
+  **cows are absent**.
+- +overlay (mask 4, features off): the **cows return** (and still cover the
+  mountain).  → the cows are drawn by the pass-2 OVERLAY cluster
+  (`engine_overlay_render` / `FUN_00405602`), which runs AFTER the entire
+  pass-1 terrain.  So a pass-2 cow always paints over a pass-1 mountain
+  regardless of iso depth.
+
+This is a different cow system from the map-17 decorative-herd cows that an
+earlier note recorded as terrain-walk-drawn (`blob2 idx84/104`,
+[[project_strategic_map_render_frontier]]); the capital-livestock cows are an
+overlay-pass entity.
+
+OPEN (not yet resolved — needs retail ground truth at a cow-behind-mountain
+frame): whether retail's `FUN_00405602` draws these capital-livestock cows at
+all (if so it would have the same over-mountain ordering — i.e. this would be
+*faithful*, not a port bug), or whether the mountain's tall overhang is meant to
+be re-drawn in a later pass to occlude them.  Frame parity for the truth capture
+is currently blocked by a separate issue: a retail LOAD of the port's
+`--newgame` save lands on a DIFFERENT map region than the port renders for the
+same stored scroll (entries 16/17) — the new-game render camera and retail's
+load camera project the same scroll differently.  Captured under run ids
+`newgame-truth` (custom-game retail), `newgame-clean2` (retail load of the port
+save).

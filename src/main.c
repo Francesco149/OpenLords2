@@ -2032,6 +2032,24 @@ static void bringup_newgame(int map_id)
              g_engine_state, engine_pl8_data_ready(),
              (int)s_slot_00553edc, (int)s_slot_0057c934);
 
+    /* Sync the save's scroll (entries 16/17) to the ACTUAL rendered scroll
+     * (engine_map_init's camera) so a retail LOAD of this save lands on the
+     * exact frame the port renders — recenter_on_capital wrote the capital
+     * scroll to the save entries but the render reads engine_map_init's
+     * camera, so without this the two diverge. */
+    s_slot_005651b4 = (uint32_t)engine_map_init_col_start();
+    s_slot_005651b8 = (uint32_t)engine_map_init_row_start();
+
+    /* Dump the new-game state to a save so retail can be driven to LOAD the
+     * EXACT same world (a deterministic truth|mine|diff: retail's renderer
+     * over the port's generated state).  save_write persists all schema
+     * globals incl. the scroll (entries 16/17) + livestock state, so retail's
+     * load lands on the same frame.  Dev-only side effect. */
+    if (save_write("port_newgame.sav", "Castles.dat") != 0)
+        log_line("newgame: save_write failed");
+    else
+        log_line("newgame: wrote port_newgame.sav (castle tail from Castles.dat)");
+
     /* 3. Render the first strategic frame via the screen-0 dispatch arm
      * (engine_screen_strat_render = FUN_0040f5fd) — the SAME composition the
      * live loop runs.  The caller owns the canvas lock + present, like the

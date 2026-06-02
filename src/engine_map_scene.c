@@ -5,6 +5,8 @@
  * Faithful port of FUN_004050c0 / FUN_004cfb08 / FUN_004050f6.
  */
 
+#include <stdlib.h>
+
 #include "engine_map_scene.h"
 
 #include "engine_map_render.h"
@@ -92,9 +94,15 @@ void engine_map_scene_render_body(void)
      * the next frame's camera.  See the header / map-render.md. */
 
     /* Three clusters, retail draw order. */
-    engine_map_terrain_frame();    /* FUN_0040526e — pass 1 base terrain */
-    engine_overlay_render_frame(); /* FUN_00405602 — pass 2 overlay       */
-    engine_map_render_frame();     /* FUN_00405487 — pass 3 features      */
+    {
+        /* DEV: OL2_SKIP_PASSES=<mask> drops passes for diagnosis
+         * (bit0=terrain, bit1=overlay, bit2=features). */
+        const char *sp = getenv("OL2_SKIP_PASSES");
+        int skip = sp ? atoi(sp) : 0;
+        if (!(skip & 1)) engine_map_terrain_frame();    /* FUN_0040526e — pass 1 base terrain */
+        if (!(skip & 2)) engine_overlay_render_frame(); /* FUN_00405602 — pass 2 overlay       */
+        if (!(skip & 4)) engine_map_render_frame();     /* FUN_00405487 — pass 3 features      */
+    }
 
     /* if (DAT_0053e9ac != 0) DAT_0053e9ac--;  (next-frame empty-redraw-gate decay) */
     {
