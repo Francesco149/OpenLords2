@@ -239,6 +239,27 @@ void engine_army_economy_eval_candidate(int key, int budget, int level,
  * army-record block is unbound. */
 void engine_army_economy_select_candidate(int key, int phase);
 
+/* Port of FUN_0044d60d (774 B, void) — the per-turn stock-A settle, a callee of
+ * the turn-advance engine (0x448440) and the third sharer of the g_eval_cost /
+ * g_eval_revenue scratch pair (after eval_candidate / select_candidate).  For
+ * every realm 1..s_slot_0056d5dc it:
+ *   1. snapshots stock A (+0x250 → +0x254) and draws this turn's consumption
+ *      (+0x190) off the stockpile;
+ *   2. books the base production cost/revenue at the current level via
+ *      engine_army_economy_eval_candidate (current season s_slot_0057c934);
+ *   3. layers on the model-type rate (k_stock_a_rate[+0x21b], % of the stock)
+ *      and the per-realm signed trade rate (+0x1fd; the sentinel 99 disables
+ *      trade and zeroes the revenue), accumulating each into cost or revenue;
+ *   4. applies the net (revenue − cost) to the stockpile, floored at 0, and
+ *      records the revenue (+0x260) and net-change ledger (+0x264);
+ *   5. regrades the realm's feature cells (engine_territory_grade_feature_cells,
+ *      FUN_0044d913) and re-plans next turn (engine_army_economy_select_candidate
+ *      at the map season s_slot_0057c92c).
+ * No-op when the army-record block is unbound.  Touches only g_per_army_768 and
+ * (through the regrade) the overworld; field semantics are provisional, offsets
+ * + the rate table r2-verified. */
+void engine_army_economy_settle_stock_a(void);
+
 /* ──────────────────────────────────────────────────────────────────
  * Storage/supply distribution — the 0x44c278 branch of 0x4485a5.
  *

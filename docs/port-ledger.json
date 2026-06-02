@@ -10312,6 +10312,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_economy.c",
+    "src/engine_army_economy.h",
     "src/engine_territory.c",
     "src/engine_territory.h",
     "src/game_init.c"

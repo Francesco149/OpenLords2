@@ -852,6 +852,92 @@ void engine_army_economy_select_candidate(int key, int phase)
 }
 
 /* --------------------------------------------------------------------- *
+ *  Per-turn stock-A settle (FUN_0044d60d) — the third sharer of the
+ *  g_eval_cost / g_eval_revenue scratch pair (the turn-advance engine
+ *  0x448440 runs it once per realm).  It draws this turn's consumption off
+ *  stock A (+0x250), books the base production cost/revenue (eval_candidate),
+ *  layers on the model-type rate and the per-realm trade rate, applies the net
+ *  to the stockpile (floored at 0), records the ledger fields, regrades the
+ *  realm's feature cells, and re-plans next turn's candidate (select_candidate).
+ * --------------------------------------------------------------------- */
+
+/* Per-model-type stock-A rate (retail DAT_004d6560[0..5], i32), indexed by the
+ * army's model-type byte (+0x21b, ARMY_SEASON_TYPE — the enum runs 0/1/2/4/5,
+ * skipping 3, which is why slot 3 is 0).  Two unrelated tables sit back-to-back
+ * at 0x4d6560; only these six entries belong to this lookup.  The model-type
+ * byte is always 0..5, so the read is always in range. */
+static const int32_t k_stock_a_rate[6] = { -2, -10, 5, 0, -5, -10 };
+
+#define ARMY_STOCK_A_PREV      0x254  /* DAT_0053fc04 — prior-turn +0x250 snapshot     */
+#define ARMY_STOCK_A_DRAW      0x190  /* DAT_0053fb40 — consumption drawn off +0x250   */
+#define ARMY_STOCK_A_SCRATCH   0x27c  /* DAT_0053fc2c — cleared each turn, unread here */
+#define ARMY_STOCK_A_REVENUE   0x260  /* DAT_0053fc10 — this turn's gross revenue      */
+#define ARMY_STOCK_A_BALANCE   0x264  /* DAT_0053fc14 — net-change ledger              */
+#define ARMY_STOCK_A_RATE_AMT  0x270  /* DAT_0053fc20 — model-rate amount applied      */
+#define ARMY_STOCK_A_TRADE_AMT 0x274  /* DAT_0053fc24 — trade-rate amount applied      */
+#define ARMY_STOCK_A_TRADE_RATE 0x1fd /* DAT_0053fbad — signed trade rate %, 99=off    */
+
+/* Port of FUN_0044d60d. */
+void engine_army_economy_settle_stock_a(void)
+{
+    if (g_army_records == NULL) return;
+
+    for (int key = 1; key <= (int)s_slot_0056d5dc; key++) {
+        uint8_t *row    = g_army_records + key * ARMY_ROW_STRIDE;
+        int32_t *stockA = (int32_t *)(row + ARMY_STOCK_A);
+
+        *(int32_t *)(row + ARMY_STOCK_A_PREV)    = *stockA;     /* snapshot */
+        *(int32_t *)(row + ARMY_STOCK_A_SCRATCH) = 0;
+        *stockA -= *(int32_t *)(row + ARMY_STOCK_A_DRAW);       /* consume */
+        *(int32_t *)(row + ARMY_STOCK_A_BALANCE) = 0;
+        *(int32_t *)(row + ARMY_STOCK_A_REVENUE) =
+            *(int32_t *)(row + ARMY_STOCK_A_BALANCE);           /* = 0 */
+
+        /* Base production cost/revenue for the current stock level
+         * (writes the g_eval_cost / g_eval_revenue scratch pair). */
+        engine_army_economy_eval_candidate(key, *stockA,
+                                           *(int32_t *)(row + ARMY_EVAL_REF),
+                                           *(int32_t *)(row + ARMY_EVAL_CATEGORY),
+                                           (int)s_slot_0057c934);
+
+        int rate_amt = engine_math_percent_of(*stockA,
+                            k_stock_a_rate[row[ARMY_SEASON_TYPE]]);
+
+        *(int32_t *)(row + ARMY_STOCK_A_TRADE_AMT) = 0;
+        int trade = (int8_t)row[ARMY_STOCK_A_TRADE_RATE];
+        if (trade == 'c') {                       /* 99 → trade disabled */
+            rate_amt = 0;
+            g_eval_revenue = 0;
+        } else if (trade < 0) {                    /* net outgoing */
+            int v = engine_math_percent_of(*stockA, -trade);
+            *(int32_t *)(row + ARMY_STOCK_A_TRADE_AMT) = v;
+            g_eval_cost += v;
+        } else if (trade > 0) {                    /* net incoming */
+            int v = engine_math_percent_of(*stockA, trade);
+            *(int32_t *)(row + ARMY_STOCK_A_TRADE_AMT) = v;
+            g_eval_revenue += v;
+        }
+
+        if (rate_amt < 0) g_eval_cost    -= rate_amt;
+        else              g_eval_revenue += rate_amt;
+        *(int32_t *)(row + ARMY_STOCK_A_RATE_AMT) = rate_amt;
+
+        *stockA += g_eval_revenue - g_eval_cost;
+        *(int32_t *)(row + ARMY_STOCK_A_REVENUE) = g_eval_revenue;
+        *(int32_t *)(row + ARMY_STOCK_A_BALANCE) =
+            ((*(int32_t *)(row + ARMY_STOCK_A_PREV) - *stockA) + g_eval_revenue)
+            - *(int32_t *)(row + ARMY_STOCK_A_DRAW);
+        if (*stockA < 0) {                         /* stockpile can't go negative */
+            *(int32_t *)(row + ARMY_STOCK_A_BALANCE) = *stockA + g_eval_revenue;
+            *stockA = 0;
+        }
+
+        engine_territory_grade_feature_cells(key);             /* FUN_0044d913 */
+        engine_army_economy_select_candidate(key, (int)s_slot_0057c92c);
+    }
+}
+
+/* --------------------------------------------------------------------- *
  *  Storage/supply distribution — the 0x44c278 branch of 0x4485a5.
  *
  *  Spreads a realm's per-turn supply budget (+0xdc) across its developed

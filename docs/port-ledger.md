@@ -314,7 +314,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x44d303 | FUN_0044d303 | 113 | engine_army_economy.c |
 | 0x44d374 | FUN_0044d374 | 665 | engine_army_economy.c, engine_army_economy.h, engine_realm.c |
 | 0x44d60d | FUN_0044d60d | 774 | engine_army_economy.c, engine_army_economy.h |
-| 0x44d913 | FUN_0044d913 | 390 | engine_territory.c, engine_territory.h, game_init.c |
+| 0x44d913 | FUN_0044d913 | 390 | engine_army_economy.c, engine_army_economy.h, engine_territory.c (+2) |
 | 0x44da99 | FUN_0044da99 | 692 | engine_army_economy.c, engine_army_economy.h |
 | 0x44dd4d | FUN_0044dd4d | 530 | engine_army_economy.c, engine_army_economy.h, engine_realm.c |
 | 0x44df5f | FUN_0044df5f | 1628 | engine_army_economy.c, engine_army_economy.h, engine_realm.c (+1) |

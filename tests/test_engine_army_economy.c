@@ -1050,6 +1050,115 @@ int test_army_economy_select_unbound_noop(void)
 }
 
 /* --------------------------------------------------------------------- *
+ *  Per-turn stock-A settle (FUN_0044d60d).  Tests use the simple
+ *  eval_candidate path (CENSUS_HIGH == 0 → flat cost = budget/2, no
+ *  revenue) so the settle's own rate/trade arithmetic is isolated, with
+ *  PLAN_GATE == 0 so the trailing select_candidate is an early no-op.
+ * --------------------------------------------------------------------- */
+enum {
+    STOCK_A_PREV     = 0x254,
+    STOCK_A_DRAW     = 0x190,
+    STOCK_A_REVENUE  = 0x260,
+    STOCK_A_BALANCE  = 0x264,
+    STOCK_A_RATE_AMT = 0x270,
+    STOCK_A_TRADE_AMT = 0x274,
+    STOCK_A_TRADE_RATE = 0x1fd,
+};
+
+/* Consumption draw + flat production cost (census 0, neutral model type 3, no
+ * trade): stock falls by the draw, then by budget/2 of the post-draw level. */
+int test_army_economy_settle_basic_consume(void)
+{
+    army_reset();
+    s_slot_0056d5dc = 1;
+    s_slot_0057c934 = 2; s_slot_0057c92c = 2;
+    set_stock(1, STOCK_A, 100);
+    set_stock(1, STOCK_A_DRAW, 20);
+    g_army[1 * ARMY_STRIDE + SEASON_TYPE] = 3;     /* k_rate[3] = 0 */
+
+    engine_army_economy_settle_stock_a();
+
+    /* prev=100, draw→80, cost=40, rev=0 → stock 40 */
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A), 40);
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A_PREV), 100);
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A_REVENUE), 0);
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A_BALANCE), 40);   /* (100-40)+0-20 */
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A_RATE_AMT), 0);
+    return 0;
+}
+
+/* Positive model-type rate (type 2 → +5%) and positive trade rate (+10%) both
+ * add to revenue. */
+int test_army_economy_settle_positive_rates(void)
+{
+    army_reset();
+    s_slot_0056d5dc = 1;
+    s_slot_0057c934 = 2; s_slot_0057c92c = 2;
+    set_stock(1, STOCK_A, 200);
+    g_army[1 * ARMY_STRIDE + SEASON_TYPE]      = 2;    /* k_rate[2] = 5 */
+    g_army[1 * ARMY_STRIDE + STOCK_A_TRADE_RATE] = 10; /* +10% trade */
+
+    engine_army_economy_settle_stock_a();
+
+    /* cost=100, model +5%→10, trade +10%→20 ; rev=30 → stock 200+30-100=130 */
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A), 130);
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A_TRADE_AMT), 20);
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A_RATE_AMT), 10);
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A_REVENUE), 30);
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A_BALANCE), 100);  /* (200-130)+30 */
+    return 0;
+}
+
+/* Trade-rate sentinel 99 disables trade and zeroes the revenue + model rate. */
+int test_army_economy_settle_trade_disabled(void)
+{
+    army_reset();
+    s_slot_0056d5dc = 1;
+    s_slot_0057c934 = 2; s_slot_0057c92c = 2;
+    set_stock(1, STOCK_A, 100);
+    g_army[1 * ARMY_STRIDE + SEASON_TYPE]      = 2;    /* would be +5% */
+    g_army[1 * ARMY_STRIDE + STOCK_A_TRADE_RATE] = 'c'; /* 99 → disabled */
+
+    engine_army_economy_settle_stock_a();
+
+    /* cost=50, rev forced 0, rate forced 0 → stock 100-50=50 */
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A), 50);
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A_REVENUE), 0);
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A_RATE_AMT), 0);
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A_TRADE_AMT), 0);
+    return 0;
+}
+
+/* Negative model + trade rates can drive the stock below zero → floored to 0,
+ * the balance ledger recording the pre-floor shortfall. */
+int test_army_economy_settle_negative_floor(void)
+{
+    army_reset();
+    s_slot_0056d5dc = 1;
+    s_slot_0057c934 = 2; s_slot_0057c92c = 2;
+    set_stock(1, STOCK_A, 10);
+    g_army[1 * ARMY_STRIDE + SEASON_TYPE]      = 1;     /* k_rate[1] = -10 */
+    g_army[1 * ARMY_STRIDE + STOCK_A_TRADE_RATE] = (uint8_t)(int8_t)-50;
+
+    engine_army_economy_settle_stock_a();
+
+    /* cost=5; trade -50%→+5 cost=10; model -10%→-1→cost=11; stock 10-11=-1→0 */
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A), 0);
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A_RATE_AMT), -1);
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A_TRADE_AMT), 5);
+    T_ASSERT_EQ_I(rec_i32(1, STOCK_A_BALANCE), -1);   /* pre-floor stock + rev(0) */
+    return 0;
+}
+
+int test_army_economy_settle_unbound_noop(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+    engine_army_economy_settle_stock_a();
+    engine_army_economy_bind_army_records(g_army);   /* restore for later tests */
+    return 0;
+}
+
+/* --------------------------------------------------------------------- *
  *  Storage/supply distribution — FUN_0044c278 / c53b / c5fc.
  *  Expected values cross-checked against a Python transcription of the
  *  decompile (truncating C division throughout).

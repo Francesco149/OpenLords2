@@ -1656,6 +1656,11 @@ struct test_case {
     X(army_economy_select_gate_off) \
     X(army_economy_select_keyed_by_row) \
     X(army_economy_select_unbound_noop) \
+    X(army_economy_settle_basic_consume) \
+    X(army_economy_settle_positive_rates) \
+    X(army_economy_settle_trade_disabled) \
+    X(army_economy_settle_negative_floor) \
+    X(army_economy_settle_unbound_noop) \
     X(army_economy_seed_fullest_cell_argmax) \
     X(army_economy_seed_fullest_cell_default_99) \
     X(army_economy_pick_fullest_cell_default_0) \
