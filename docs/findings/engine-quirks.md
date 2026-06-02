@@ -6085,3 +6085,57 @@ same stored scroll (entries 16/17) — the new-game render camera and retail's
 load camera project the same scroll differently.  Captured under run ids
 `newgame-truth` (custom-game retail), `newgame-clean2` (retail load of the port
 save).
+
+**RESOLVED (2026-06-02) — it WAS a symptom of #173, not a render-order bug.**
+The cow-over-mountain came from the broken new-game *state*: the player capital
+was being placed on the wrong territory (the strategic slots were never set up,
+so the camera recentred on a stale slot).  Once the config-screen player setup
+was seeded (#173), the capital recentres on the human's real capital (army
+`0x0d`), the livestock pasture renders in the correct region, and the cows are
+no longer over a mountain (user-confirmed).  The overlay-after-terrain z-order
+observation above is faithful retail behaviour — the bug was *where* the pasture
+was, not *when* it drew.
+
+## 173 — the new-game player roster is config-screen output, not init output; +0x07 is the NPC work-location (NOT an opponent-type), and the AI count gate is `DAT_0053f268`
+
+The `--newgame` drop-in seat seeds map + economy presets but the **config screen**
+(`FUN_00499dc3` finalise + the screen-entry default population, both unported)
+also sets up the *players* before `FUN_00497ced` runs.  Skipping that left the
+strategic slots empty, so a saved new game read to retail as an all-AI /
+auto-advancing turn state and **retail spammed turns on load**
+(project_new_game_render bug #1).  Pinning the fix surfaced three non-obvious
+facts (frida ground truth: `newgame-preinit1` at the config screen,
+`newgame-statedump1`/`newgame-cfgdump1` at the first MAP_FREEROAM):
+
+1. **The player→army roster is rebuilt from the MAP, not the config screen.**
+   `engine_territory_load_strat_map` (in `setup_overworld`) calls
+   `player_roster_clear` + `player_roster_add(plane5, plane4)` over the map's
+   owner tiles, so seeding `g_player_roster` in the seat is overwritten.  Seed
+   only the player *types*; the roster (army ids + seats) comes from the map and
+   is then permuted by the seat-shuffle `0x497e65`.
+
+2. **player_strategic `+0x07` is the NPC scheduler's work-location, not an AI
+   "opponent-type".**  `engine_npc_schedule_init` (`0x49caaa`, init step 4)
+   CLEARS `+0x07` for every slot, then assigns a work-location to the first
+   `s_slot_0053f268` *unowned* (has_data==0) slots.  Phase 2 / the inactive-purge
+   (`0x49b35e`) later read that same `+0x07` as the active-or-empty test.  So an
+   AI slot is "active" iff the scheduler gave it a work-location.
+
+3. **The AI count is `DAT_0053f268`, computed by the unported `FUN_00499dc3`**
+   as `(DAT_0053f288 + 2) - DAT_00553f98` = total_players - humans.  The seat
+   never set it → it stayed 0 → the scheduler assigned NO work-locations → every
+   AI slot read as empty and got purged, leaving a 1-player (human-only) world.
+
+The fix (`engine_game_init_set_player_config`): seed per-slot `+0x05` has_data /
+`+0x0a` job-slot / `+0xee` player-bit, the local player `DAT_0057c8cc`, the AI
+count `DAT_0053f268`, and the human's aux job reservation
+(`g_player_aux_44[+0x25/+0x27]`, retail's SP `player_seat_assign`) so the
+scheduler schedules the AI players *around* the human's fixed job — without it
+the AI work-locations shift and diverge.  Also corrected the map-0 presets to
+the captured retail values (economy 1 / resource 2 / gold 1000 / keep 3, NOT the
+scenario-table values assumed earlier).  Result: post-init `player_strategic`
+matches retail 2108/2112 bytes (the 4 residual = AI `+0x130` strategy field,
+shared root with ~90 `per_army` AI-economy bytes — a separate turn-driver/AI
+byte-completeness frontier), `cur_player`/roster/armies/work-locations exact, and
+a retail LOAD of the resulting save sits stable (no turn spam — `year`/`season`
+set once and hold; run `newgame-loadverify1`).

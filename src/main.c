@@ -1985,8 +1985,27 @@ static void bringup_newgame(int map_id)
     /* 1. Config-screen preconditions. */
     s_slot_0053f034 = (uint32_t)map_id;             /* map id */
     s_slot_0057cb18 = 0;                            /* view-mode normal */
-    engine_game_init_set_realm_presets(/*econ*/2, /*res*/1, /*troop*/0,
-                                       /*gold_base*/5000, /*keep_level*/4);
+    /* Realm presets + the persisted config scalars — the config screen's
+     * output (FUN_00499dc3 finalise + screen-entry defaults, both unported).
+     * Ground truth = runs/capture/newgame-cfgdump1, the retail values for a
+     * DEFAULT single-player custom game on map 0 (NOT the scenario-table
+     * defaults assumed earlier): economy 1 / resource 2 / troop 0 / gold 1000
+     * / keep 3.  set_realm_presets latches the init-read statics; the matching
+     * presets feed the per-army/territory economy seeding (persisted), so they
+     * must be right for the save to byte-match.  They are not save-schema
+     * scalars themselves (no persisted s_slot home), so set_realm_presets — the
+     * init-read statics — is the only home needed. */
+    engine_game_init_set_realm_presets(/*econ*/1, /*res*/2, /*troop*/0,
+                                       /*gold_base*/1000, /*keep_level*/3);
+
+    /* Players: a default custom game is 1 human (slot 1) + 4 AI (slots 2..5),
+     * local player = 1.  set_player_config seeds the few config-screen-owned
+     * fields + the AI count (s_slot_0053f268); the ported initialiser derives
+     * the rest (roster from the map, work-locations from the NPC scheduler).
+     * Without this the strategic slots stay empty and retail spams turns on a
+     * load of the resulting save. */
+    engine_game_init_set_player_config(/*count*/5, /*human_count*/1,
+                                       /*cur_player*/1);
 
     /* tile_cells + camera from L2_maps.dat[map_id] (retail FUN_004298c1
      * build_cells + FUN_00451fcc camera, run by the config screen). */

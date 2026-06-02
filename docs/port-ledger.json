@@ -15552,6 +15552,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/game_init.c",
     "src/game_init.h",
     "src/main.c"
    ]

@@ -1384,3 +1384,75 @@ int test_game_init_turn_driver_advances_to_turn_1(void)
     T_ASSERT_EQ_I(ok, 4096);
     return 0;
 }
+
+/* engine_game_init_set_player_config — assert a default custom game (1 human +
+ * 4 AI on map 0) lands on the retail-captured post-init player state.  Without
+ * the config seeding the strategic slots stay empty (no ACTIVE players) and a
+ * saved new game makes retail spam turns on load (project_new_game_render bug
+ * #1); this gate locks in the fix.  Ground truth = runs/capture/newgame-
+ * statedump1 (retail dump at the first MAP_FREEROAM frame, canonical RNG seed):
+ *   slot 1 = HUMAN, slots 2..5 = AI; cur_player = 1; AI count = 4
+ *   work-locations (+0x07, the npc-scheduler field Phase 2 reads): 0,1,2,4,3
+ *   per-slot army (+0xe4, the map-built + shuffled roster):        0d,0b,04,08,01
+ * Mirrors the orchestrator test's preconditions, then adds the player config. */
+int test_game_init_player_config_activates_realms(void)
+{
+    char gdir[1024];
+    gi_game_dir(gdir, sizeof gdir);
+    char l2[1200];
+    snprintf(l2, sizeof l2, "%s/L2_maps.dat", gdir);
+    if (!gi_file_exists(l2)) T_SKIP("L2_maps.dat not found at %s", l2);
+
+    static uint8_t maprec[0x80c1];
+    {
+        FILE *f = fopen(l2, "rb");
+        if (!f) T_FAIL("open %s", l2);
+        size_t got = fread(maprec, 1, sizeof maprec, f);
+        fclose(f);
+        if (got != sizeof maprec) T_FAIL("maprec short read");
+    }
+
+    /* CD-audio probe (year rollover) chdir-probes then reverts; pin base. */
+    char cwd[1024];
+#if defined(_WIN32)
+    if (_getcwd(cwd, sizeof cwd) == NULL) T_SKIP("getcwd");
+#else
+    if (getcwd(cwd, sizeof cwd) == NULL) T_SKIP("getcwd");
+#endif
+    io_path_set_base(cwd);
+    g_config.cd_drive = 'D';
+
+    s_slot_0053f034 = 0;                            /* map id */
+    s_slot_0057cb18 = 0;                            /* view-mode normal */
+    if (engine_map_init_build_cells(gdir, 0, 0) == 0)
+        T_FAIL("build_cells failed (L2_maps.dat read)");
+    engine_map_init_set_camera(0);
+    engine_territory_bind_strat_map_record(maprec);
+    engine_npc_schedule_set_localization(NULL, 0);
+
+    /* The config-screen output for a default custom game on map 0. */
+    engine_game_init_set_realm_presets(1, 2, 0, 1000, 3);
+    engine_game_init_set_player_config(/*count*/5, /*human_count*/1,
+                                       /*cur_player*/1);
+
+    engine_game_init_bind_turn_driver_fn(gi_turn_driver_shim);
+    engine_game_init();                             /* FUN_00497ced + driver */
+    engine_game_init_bind_turn_driver_fn(NULL);
+
+    /* Local player + AI count. */
+    T_ASSERT_EQ_U(s_slot_0057c8cc, 1u);
+    T_ASSERT_EQ_I((int)s_slot_0053f268, 4);
+
+    /* Every player slot 1..5 is ACTIVE (the turn-spam fix). */
+    static const uint8_t exp_hasdata[6] = {0, 1, 0, 0, 0, 0};
+    static const uint8_t exp_workloc[6] = {0, 0, 1, 2, 4, 3};   /* +0x07 */
+    static const uint8_t exp_army[6]    = {0, 0x0d, 0x0b, 0x04, 0x08, 0x01}; /* +0xe4 */
+    for (int s = 1; s < 6; s++) {
+        const uint8_t *p = &g_player_strategic_352[s * 0x160];
+        T_ASSERT_EQ_I(p[0x04], 1);                  /* ACTIVE          */
+        T_ASSERT_EQ_I(p[0x05], exp_hasdata[s]);     /* HAS_DATA        */
+        T_ASSERT_EQ_I(p[0x07], exp_workloc[s]);     /* npc work-loc    */
+        T_ASSERT_EQ_I(p[0xe4], exp_army[s]);        /* roster army id  */
+    }
+    return 0;
+}

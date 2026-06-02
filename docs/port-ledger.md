@@ -446,7 +446,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h |
 | 0x499aca | FUN_00499aca | 487 | engine_combat.c, engine_combat.h, main.c |
 | 0x499d7d | FUN_00499d7d | 26 | main.c |
-| 0x499dc3 | FUN_00499dc3 | 154 | game_init.h, main.c |
+| 0x499dc3 | FUN_00499dc3 | 154 | game_init.c, game_init.h, main.c |
 | 0x499e5d | FUN_00499e5d | 421 | game_init.h, main.c |
 | 0x49a453 | FUN_0049a453 | 302 | game_init.c, game_init.h, save.c (+1) |
 | 0x49a990 | FUN_0049a990 | 126 | engine_army_ai.c, engine_army_ai.h, engine_combat.c (+1) |

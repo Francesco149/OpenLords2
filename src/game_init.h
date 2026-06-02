@@ -177,6 +177,20 @@ void engine_game_init_set_realm_presets(int economy_preset, int resource_preset,
                                         int troop_preset, int gold_base,
                                         int keep_level);
 
+/* Seat the config-screen player setup (the second half of the new-game
+ * preconditions, alongside engine_game_init_set_realm_presets).  Players
+ * occupy slots 1..count; slots 1..human_count are human, the rest AI.
+ * cur_player is the local/human player index (save entry 72, DAT_0057c8cc;
+ * 1 for a standard single-player game).  Reproduces the unported config
+ * screen so the ported initialiser lands byte-exact on retail — without it
+ * the strategic slots stay empty (no ACTIVE players), which makes a saved new
+ * game read as an all-AI/auto-advancing turn state (retail spams turns on
+ * load).  See the implementation for exactly which fields the config screen
+ * owns vs. which the initialiser/NPC-scheduler derive.  Call before
+ * engine_game_start / engine_game_init_setup_realms. */
+void engine_game_init_set_player_config(int count, int human_count,
+                                        int cur_player);
+
 /* Optional battlefield-spawn seam — retail 0x4a9a9a(player, army, 0, 0),
  * the troop-muster → battlefield unit spawn (with its placement SFX).  The
  * spawn pulls in the unported 0x4a9xx/0x4acxx subtree and needs audible human

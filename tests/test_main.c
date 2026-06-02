@@ -1761,6 +1761,7 @@ struct test_case {
     X(game_init_seed_army_baseline_tiers_and_parity) \
     X(game_init_orchestrator_builds_map) \
     X(game_init_turn_driver_advances_to_turn_1) \
+    X(game_init_player_config_activates_realms) \
     \
     X(engine_realm_rating_rollforward) \
     X(engine_realm_rating_zero_pop_reset) \

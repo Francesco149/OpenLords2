@@ -598,6 +598,64 @@ void engine_game_init_set_realm_presets(int economy_preset, int resource_preset,
     g_keep_level      = keep_level;
 }
 
+/* engine_game_init_set_player_config — seat the config-screen's player setup,
+ * the OTHER half of the new-game preconditions (the realm presets above being
+ * the first half).  The custom-game / scenario config screen (FUN_00499dc3 +
+ * the screen-entry default population, both unported) writes a small set of
+ * player fields BEFORE FUN_00497ced runs; this setter reproduces them so the
+ * ported initialiser lands byte-exact on retail.
+ *
+ * The config screen sets surprisingly little per slot — almost everything is
+ * (re)derived by the ported initialiser from the map + the NPC scheduler:
+ *   - the player→army ROSTER (g_player_roster) is rebuilt from the map's
+ *     plane-4/5 owner tiles by engine_territory_load_strat_map, so it is NOT
+ *     seeded here (seeding it is overwritten);
+ *   - the AI "opponent-type" byte +0x07 is actually the NPC scheduler's
+ *     work-location field: engine_npc_schedule_init CLEARS +0x07 for every
+ *     slot, then assigns a work-location to the first `s_slot_0053f268`
+ *     UNOWNED (has_data==0) slots — that count, not a per-slot flag, is what
+ *     decides how many AI players exist (and Phase 2 / the inactive-purge read
+ *     the resulting +0x07 as the active-or-empty test).  So the AI count is
+ *     seeded once via s_slot_0053f268, not per slot;
+ *   - the work-position bytes +0x08/+0x09 and the job-slot id +0x0a are set by
+ *     the NPC scheduler too — except for owned (human) slots, which it skips,
+ *     so the human's +0x0a (its job-slot id) must be pre-seeded.
+ *
+ * What the config screen genuinely owns, and we seed here, is therefore:
+ *   +0x05 has_data   — 1 for the human slot(s), 0 for AI
+ *   +0x0a            — the slot index (the human's survives the scheduler)
+ *   +0xee            — the player bit 1<<(slot-1) (scheduler never touches it)
+ * plus the local-player index s_slot_0057c8cc (save entry 72) and the AI count
+ * s_slot_0053f268 (read by the NPC scheduler).  ACTIVE (+0x04) is left clear —
+ * Phase 2 latches it.
+ *
+ * Players occupy slots 1..count; slots 1..human_count are human, the rest AI.
+ * cur_player is the local/human player index (1 for a standard single-player
+ * game). */
+void engine_game_init_set_player_config(int count, int human_count,
+                                        int cur_player)
+{
+    for (int s = 1; s <= count && s < 6; s++) {
+        uint8_t *p = STRAT_REC(s);
+        p[STRAT_HAS_DATA] = (s <= human_count) ? 1 : 0;   /* +0x05 */
+        p[0x0a]           = (uint8_t)s;                    /* job-slot id */
+        p[0xee]           = (uint8_t)(1u << (s - 1));      /* player bit */
+
+        /* Human slots reserve their job slot via the aux record (retail's SP
+         * seating player_seat_assign sets aux[+0x25] = strategic[+0x0a] +
+         * aux[+0x27] = 1).  engine_npc_schedule_init reads aux[+0x25] (with
+         * aux[+0x26]==0) to pre-reserve that job, so the AI players are
+         * scheduled around it — without it the AI work-location assignment
+         * shifts and diverges from retail. */
+        if (s <= human_count) {
+            g_player_aux_44[s * 0x2c + 0x25] = p[0x0a];   /* fixed-job id   */
+            g_player_aux_44[s * 0x2c + 0x27] = 1;         /* aux in-use flag */
+        }
+    }
+    s_slot_0057c8cc = (uint32_t)cur_player;        /* entry 72: local player */
+    s_slot_0053f268 = count - human_count;         /* NPC/worker (AI) count */
+}
+
 /* Optional battlefield-spawn seam (retail 0x4a9a9a). */
 static void (*g_troop_spawn)(int player, int army);
 
