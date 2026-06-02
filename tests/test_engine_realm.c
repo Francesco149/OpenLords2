@@ -1905,3 +1905,89 @@ int test_engine_realm_player_owns_neighbor_terminator(void)
     T_ASSERT_EQ_I(engine_realm_player_owns_neighbor(1, 1), 1);  /* 2 still found */
     return 0;
 }
+
+/* ── settlement / construction-completion pass (FUN_004508de) ───────────────
+ * engine_realm_complete_settlements resets each race's built / in-progress
+ * tallies (strat +0x4c / +0x4d), advances construction, and on completion
+ * spawns + homes a garrison.  The spawn-cluster mechanics are covered directly
+ * in test_engine_combat.c; these tests exercise the pass-level control flow.
+ * The economy re-plan tails are held to no-ops with the army-records bind NULL.*/
+
+static void settle_reset(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    engine_army_economy_bind_army_records(NULL);   /* plan_secondary → no-op */
+    s_slot_0057c92c = 1;
+    s_slot_0057c934 = 1;
+}
+
+/* No construction (+0x1c3 == 0): a realm with a keep (+0x1c0 != 0) bumps its
+ * race's built tally (+0x4c); one without a keep does not. */
+int test_engine_realm_settle_counts_keeps(void)
+{
+    settle_reset();
+    s_slot_0056d5dc = 2;
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    AREC(1)[0x05] = 3;  AREC(1)[0x1c3] = 0;  AREC(1)[0x1c0] = 2;  /* has keep */
+    AREC(2)[0x05] = 3;  AREC(2)[0x1c3] = 0;  AREC(2)[0x1c0] = 0;  /* no keep  */
+
+    engine_realm_complete_settlements(&evq);
+
+    T_ASSERT_EQ_U(PREC(3)[0x4c], 1);   /* one keep counted for race 3 */
+    T_ASSERT_EQ_U(PREC(3)[0x4d], 0);   /* none in progress */
+    return 0;
+}
+
+/* In-progress construction owned by the independent race (0) only bumps the
+ * in-progress tally; the body (and its build-type clear) is skipped. */
+int test_engine_realm_settle_race0_tally_only(void)
+{
+    settle_reset();
+    s_slot_0056d5dc = 1;
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    AREC(1)[0x05] = 0;       /* independent */
+    AREC(1)[0x1c3] = 1;      /* construction in progress */
+
+    engine_realm_complete_settlements(&evq);
+
+    T_ASSERT_EQ_U(PREC(0)[0x4d], 1);   /* tallied */
+    T_ASSERT_EQ_U(AREC(1)[0x1c3], 1);  /* build kind NOT cleared (body skipped) */
+    T_ASSERT_EQ_I(evq.write_idx, 0);   /* no completion notice */
+    return 0;
+}
+
+/* An owned keep UPGRADE (+0x1c3 == 2) that reaches 100% completes: it clears
+ * the build kind, posts the 0xa3 notice (audience = the realm's owner) and
+ * does NOT spawn a fresh garrison (upgrade path). */
+int test_engine_realm_settle_upgrade_completes(void)
+{
+    settle_reset();
+    s_slot_0056d5dc = 1;
+    s_slot_0057c8cc = 1;                 /* viewer == owner → notice publishes */
+    engine_territory_bind_cells(g_overworld_map);   /* stamp_secondary_keep */
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    uint8_t *a = AREC(1);
+    a[0x05]  = 1;                        /* owner race 1 */
+    PREC(1)[0x05] = 1;                   /* race 1 has data (event filter) */
+    a[0x1c3] = 2;                        /* upgrade in progress */
+    a[0x1c0] = 2;                        /* keep level */
+    a[0x1c1] = 2;                        /* already-built level */
+    *(int32_t *)(a + 0x1cc) = 0;         /* remaining demand 0 → 100% */
+    *(int32_t *)(a + 0x1d8) = 100;       /* divisor */
+
+    engine_realm_complete_settlements(&evq);
+
+    T_ASSERT_EQ_U(a[0x1c4], 100);        /* progress = 100% */
+    T_ASSERT_EQ_U(a[0x1c3], 0);          /* build kind cleared */
+    T_ASSERT_EQ_U(PREC(1)[0x4d], 1);     /* tallied in progress */
+    T_ASSERT_EQ_I(evq.write_idx, 1);     /* one notice posted */
+    T_ASSERT_EQ_I(evq.ring[0].code, 0xa3);
+    T_ASSERT_EQ_I(evq.ring[0].audience, 1);
+
+    engine_territory_bind_cells(NULL);
+    return 0;
+}

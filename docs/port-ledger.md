@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **627** (25.6%) — tested 582, ported 45
-- code bytes touched: **30.7%** (257,778 / 838,629 B)
-- unported: **1820**
+- touched: **633** (25.9%) — tested 588, ported 45
+- code bytes touched: **31.0%** (259,822 / 838,629 B)
+- unported: **1814**
 - orphan refs (in src/, not in function table): 6
 
-## tested (582) — ported + host unit suite
+## tested (588) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -189,8 +189,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x427990 | FUN_00427990 | 779 | audio.h, engine_combat.c, engine_combat.h |
 | 0x427d19 | FUN_00427d19 | 89 | audio.c, audio.h, main.c |
 | 0x427ed0 | FUN_00427ed0 | 311 | engine_map_query.c, engine_territory.c, game_init.c (+1) |
-| 0x428007 | FUN_00428007 | 113 | game_init.c, game_init.h |
-| 0x428078 | FUN_00428078 | 113 | game_init.c, game_init.h |
+| 0x428007 | FUN_00428007 | 113 | engine_combat.c, game_init.c, game_init.h |
+| 0x428078 | FUN_00428078 | 113 | engine_combat.c, game_init.c, game_init.h |
 | 0x42847c | FUN_0042847c | 82 | game_init.c, game_init.h |
 | 0x4284ce | FUN_004284ce | 1858 | engine_army_ai.c, engine_army_ai.h |
 | 0x428c42 | FUN_00428c42 | 365 | engine_army_ai.c, engine_army_ai.h |
@@ -253,7 +253,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x448545 | FUN_00448545 | 96 | engine_combat.c, engine_realm.c, engine_realm.h (+1) |
 | 0x4485a5 | FUN_004485a5 | 163 | engine_army_economy.c, engine_army_economy.h, engine_combat.c (+2) |
 | 0x4486a9 | FUN_004486a9 | 256 | engine_ranking.c, engine_ranking.h |
-| 0x4487a9 | FUN_004487a9 | 112 | engine_army_economy.c, engine_ranking.c, engine_ranking.h |
+| 0x4487a9 | FUN_004487a9 | 112 | engine_army_economy.c, engine_combat.c, engine_ranking.c (+1) |
 | 0x448819 | FUN_00448819 | 1277 | engine_realm_events.c, engine_realm_events.h |
 | 0x448d16 | FUN_00448d16 | 104 | engine_realm.c, engine_realm.h |
 | 0x448e12 | FUN_00448e12 | 189 | engine_realm_events.c |
@@ -335,9 +335,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x44f699 | FUN_0044f699 | 78 | engine_territory.c, engine_territory.h |
 | 0x44f6e7 | FUN_0044f6e7 | 2147 | engine_army_ai.c, engine_army_economy.c, engine_army_economy.h (+4) |
 | 0x4502ca | FUN_004502ca | 879 | engine_army_ai.c, engine_army_ai.h |
-| 0x4508de | FUN_004508de | 1007 | engine_army_ai.h |
-| 0x450ccd | FUN_00450ccd | 377 | engine_army_ai.c, engine_army_ai.h |
-| 0x450e46 | FUN_00450e46 | 366 | engine_army_economy.c, engine_army_economy.h |
+| 0x4508de | FUN_004508de | 1007 | engine_army_ai.h, engine_combat.c, engine_combat.h (+2) |
+| 0x450ccd | FUN_00450ccd | 377 | engine_army_ai.c, engine_army_ai.h, engine_realm.c |
+| 0x450e46 | FUN_00450e46 | 366 | engine_army_economy.c, engine_army_economy.h, engine_realm.c |
 | 0x450fb4 | FUN_00450fb4 | 173 | engine_army_economy.c, engine_army_economy.h |
 | 0x451061 | FUN_00451061 | 239 | engine_realm.c, engine_realm.h |
 | 0x451150 | FUN_00451150 | 936 | game_init.c, game_init.h |
@@ -351,7 +351,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x452160 | FUN_00452160 | 422 | engine.c, engine_screen_strat.h, gfx.c (+2) |
 | 0x452306 | FUN_00452306 | 224 | engine_dirty_rect.c, engine_dirty_rect.h, gfx.c (+1) |
 | 0x4523e6 | FUN_004523e6 | 36 | engine_dirty_rect.h |
-| 0x45240a | FUN_0045240a | 33 | engine_dirty_rect.h, engine_territory.c, engine_title_render.h (+3) |
+| 0x45240a | FUN_0045240a | 33 | engine_combat.c, engine_dirty_rect.h, engine_territory.c (+5) |
 | 0x452436 | FUN_00452436 | 83 | engine_dirty_rect.h |
 | 0x452489 | FUN_00452489 | 83 | engine_dirty_rect.h |
 | 0x4524dc | FUN_004524dc | 83 | engine_dirty_rect.h |
@@ -409,7 +409,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46df51 | FUN_0046df51 | 132 | engine_territory.c, engine_territory.h |
 | 0x46dfd5 | FUN_0046dfd5 | 146 | engine_combat.c, engine_territory.c, engine_territory.h (+1) |
 | 0x46e067 | FUN_0046e067 | 317 | engine_territory.c, engine_territory.h |
-| 0x46e1b0 | FUN_0046e1b0 | 792 | engine_territory.c, engine_territory.h, game_init.c |
+| 0x46e1b0 | FUN_0046e1b0 | 792 | engine_combat.c, engine_territory.c, engine_territory.h (+1) |
 | 0x46ea28 | FUN_0046ea28 | 57 | game_init.c, game_init.h |
 | 0x46ea61 | FUN_0046ea61 | 57 | engine_combat.c, game_init.c |
 | 0x46ead0 | FUN_0046ead0 | 57 | engine_map_init.c, engine_realm_upkeep.c, engine_territory.c (+2) |
@@ -480,11 +480,16 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a4a3f | FUN_004a4a3f | 211 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a4b12 | FUN_004a4b12 | 298 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a4c41 | FUN_004a4c41 | 311 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a551b | FUN_004a551b | 332 | engine_combat.c, engine_combat.h |
 | 0x4a6a30 | FUN_004a6a30 | 568 | engine_combat.c, engine_combat.h |
 | 0x4a7158 | FUN_004a7158 | 402 | engine_combat.c, engine_combat.h |
 | 0x4a72fe | FUN_004a72fe | 1516 | engine_combat.c, engine_combat.h |
 | 0x4a79a3 | FUN_004a79a3 | 767 | engine_combat.c, engine_combat.h |
 | 0x4a80db | FUN_004a80db | 478 | engine_combat.c, engine_combat.h |
+| 0x4a9a9a | FUN_004a9a9a | 1047 | engine_combat.c, engine_combat.h |
+| 0x4a9eb1 | FUN_004a9eb1 | 103 | engine_combat.c |
+| 0x4a9f18 | FUN_004a9f18 | 90 | engine_combat.c |
+| 0x4a9f72 | FUN_004a9f72 | 199 | engine_combat.c |
 | 0x4aa039 | FUN_004aa039 | 328 | engine_combat.c, engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4aa181 | FUN_004aa181 | 1353 | engine_combat.c, engine_combat.h |
 | 0x4aa89f | FUN_004aa89f | 107 | engine_combat.c, engine_combat.h |
@@ -495,6 +500,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4ac185 | FUN_004ac185 | 577 | engine_realm.c, engine_realm.h |
 | 0x4ac3c6 | FUN_004ac3c6 | 211 | engine_combat.c, engine_combat.h, engine_realm.c (+1) |
 | 0x4ac6fe | FUN_004ac6fe | 245 | engine_combat.c, engine_combat.h, engine_realm_upkeep.c (+1) |
+| 0x4ac7f3 | FUN_004ac7f3 | 273 | engine_combat.c |
 | 0x4ac904 | FUN_004ac904 | 295 | game_init.c, game_init.h |
 | 0x4acbd4 | FUN_004acbd4 | 650 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4ace5e | FUN_004ace5e | 650 | engine_realm_upkeep.c, engine_realm_upkeep.h |
@@ -505,7 +511,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4ad39a | FUN_004ad39a | 140 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4ad426 | FUN_004ad426 | 111 | engine_combat.c, engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4ad495 | FUN_004ad495 | 150 | engine_realm_upkeep.c, engine_realm_upkeep.h |
-| 0x4ad52b | FUN_004ad52b | 405 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x4ad52b | FUN_004ad52b | 405 | engine_combat.c, engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4ad6c0 | FUN_004ad6c0 | 524 | engine_combat.c, engine_realm.c, engine_realm.h (+1) |
 | 0x4ad8cc | FUN_004ad8cc | 277 | engine_combat.c, engine_combat.h |
 | 0x4ad9f0 | FUN_004ad9f0 | 774 | engine.c, engine_load_pump.c, engine_load_pump.h (+1) |

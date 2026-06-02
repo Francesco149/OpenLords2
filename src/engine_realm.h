@@ -443,4 +443,13 @@ void engine_realm_bind_rebellion_fn(int (*fn)(int realm));
  * The rebellion hook is a deferred bound seam (combat-init). */
 void engine_realm_escalate_unrest(engine_event_queue_state_t *evq);
 
+/* Port of FUN_004508de (1007 B).  The turn driver's settlement /
+ * construction-completion pass: advances each realm's keep-construction
+ * progress, and on completion spawns + homes the new garrison unit (via the
+ * engine_combat settlement-spawn cluster), notifies the owner (event 0xa3) and
+ * re-plans.  Resets the per-race built / in-progress tallies (strat +0x4c /
+ * +0x4d) at entry.  Touches g_per_army_768 / g_player_strategic_352 /
+ * g_per_territory_420 + the overworld cell grid. */
+void engine_realm_complete_settlements(engine_event_queue_state_t *evq);
+
 #endif /* OPENLORDS2_ENGINE_REALM_H */

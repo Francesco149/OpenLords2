@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 582,
+  "tested": 588,
   "ported": 45,
-  "unported": 1820,
+  "unported": 1814,
   "orphan_refs_not_in_function_table": 6,
-  "touched": 627,
-  "pct_touched": 25.6,
-  "pct_tested": 23.8,
+  "touched": 633,
+  "pct_touched": 25.9,
+  "pct_tested": 24.0,
   "bytes_total": 838629,
-  "bytes_touched": 257778,
-  "pct_bytes_touched": 30.7
+  "bytes_touched": 259822,
+  "pct_bytes_touched": 31.0
  },
  "orphan_refs": [
   "0x004148",
@@ -3946,6 +3946,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_combat.c",
     "src/game_init.c",
     "src/game_init.h"
    ]
@@ -3957,6 +3958,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_combat.c",
     "src/game_init.c",
     "src/game_init.h"
    ]
@@ -9644,6 +9646,7 @@
    "status": "tested",
    "src": [
     "src/engine_army_economy.c",
+    "src/engine_combat.c",
     "src/engine_ranking.c",
     "src/engine_ranking.h"
    ]
@@ -10580,7 +10583,11 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.h"
+    "src/engine_army_ai.h",
+    "src/engine_combat.c",
+    "src/engine_combat.h",
+    "src/engine_realm.c",
+    "src/engine_realm.h"
    ]
   },
   {
@@ -10591,7 +10598,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_ai.c",
-    "src/engine_army_ai.h"
+    "src/engine_army_ai.h",
+    "src/engine_realm.c"
    ]
   },
   {
@@ -10602,7 +10610,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_economy.c",
-    "src/engine_army_economy.h"
+    "src/engine_army_economy.h",
+    "src/engine_realm.c"
    ]
   },
   {
@@ -10819,8 +10828,10 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_combat.c",
     "src/engine_dirty_rect.h",
     "src/engine_territory.c",
+    "src/engine_territory.h",
     "src/engine_title_render.h",
     "src/gfx.c",
     "src/gfx.h",
@@ -12395,6 +12406,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_combat.c",
     "src/engine_territory.c",
     "src/engine_territory.h",
     "src/game_init.c"
@@ -16418,8 +16430,11 @@
    "name": "FUN_004a551b",
    "size": 332,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x4a5667",
@@ -16745,32 +16760,41 @@
    "name": "FUN_004a9a9a",
    "size": 1047,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x4a9eb1",
    "name": "FUN_004a9eb1",
    "size": 103,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c"
+   ]
   },
   {
    "va": "0x4a9f18",
    "name": "FUN_004a9f18",
    "size": 90,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c"
+   ]
   },
   {
    "va": "0x4a9f72",
    "name": "FUN_004a9f72",
    "size": 199,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c"
+   ]
   },
   {
    "va": "0x4aa039",
@@ -16966,8 +16990,10 @@
    "name": "FUN_004ac7f3",
    "size": 273,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c"
+   ]
   },
   {
    "va": "0x4ac904",
@@ -17099,6 +17125,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_combat.c",
     "src/engine_realm_upkeep.c",
     "src/engine_realm_upkeep.h"
    ]

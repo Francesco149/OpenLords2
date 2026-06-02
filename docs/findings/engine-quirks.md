@@ -5937,3 +5937,38 @@ zero on un-set-up menu-state realm records).  The merge's own writes land in
 `combat_resolve` / `combat_condition` / `combat_halve` diff targets sharing that
 record layout; the five host tests pin every summed field, the linkage folds,
 and this quirk.
+
+## 169. The settlement-spawn cluster has no audio — and a race-0 (independent) garrison spawns with owner 6, which the income pass reads one slot past the strategic array
+
+The per-turn settlement / construction-completion pass `FUN_004508de` and its
+spawn subtree (`FUN_004a551b` find-slot → `FUN_004a9a9a` spawn → `FUN_004a79a3`
+place-garrison, plus the four pure leaves `FUN_004a9f18` provision-debit /
+`FUN_004a9f72` roster-load pick / `FUN_004a9eb1` cashflow-debit / `FUN_004ac7f3`
+muster-attach) were long deferred as "spawn + SFX" pending audible verification.
+**On decompiling the whole chain there is no WAV / sound call anywhere in it** —
+the only side effects beyond record mutation are two render-dirty signals
+(`FUN_0046e067` draw-box + `FUN_0045240a` full-screen, fired only when the spawn
+belongs to the viewing player; and `DAT_005530d0` view-dirty in place-garrison).
+The cluster is pure logic + render-dirty flags, so it is host-testable and
+retail-diffable without an A/V gate.  (Audio for *new-game* troop spawns lives
+elsewhere; this turn-pass spawn path is silent.)
+
+The second half is a faithful out-of-bounds read.  `FUN_004a9a9a` sets a fresh
+occupant's owner byte (`+0x00`) to **6** when its `owner`/race argument is 0
+(an independent / neutral settlement).  The pass then calls
+`engine_realm_collect_territory_income` (`FUN_004ad6c0`), whose pass-2 reads
+`STRAT_REC(terr_owner)[0x81]` for every counted territory — i.e.
+`g_player_strategic_352[6 * 0x160 + 0x81]`.  The strategic array is only six
+slots (`2112 = 6 × 0x160`, save entry 3), so slot 6 is one past the end.  Retail
+reads whatever global the linker placed next (harmless in its flat address
+space); under ASan the host build flags it.  This is not introduced by the port
+— `collect_territory_income` already had the read — but the race-0 spawn is what
+feeds an owner-6 occupant into it.  Consequently the owner-0 spawn path is **not
+host-unit-tested** (it would need a 7-slot strategic array); the owner≠0 spawn,
+the four leaves, and the place-garrison cap/role logic are pinned by the eight
+host tests in `test_engine_combat.c` / `test_engine_realm.c`, and the owner-6
+field assignment is trivially correct by inspection.
+
+`FUN_004a9a9a` also re-runs the per-realm economy trio
+(`FUN_0044f6e7`/`FUN_0044df5f`/`FUN_004485a5`) **twice, back to back, verbatim**
+— ported as a 2-iteration loop, not deduplicated.

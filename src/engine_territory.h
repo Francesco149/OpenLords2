@@ -81,6 +81,10 @@ void engine_territory_clear_cell_render_flags(void);
  * dirty mark — callers repaint once after a batch of stamps. */
 void engine_territory_mark_draw_box(int col, int row, int radius);
 
+/* Mark the whole screen dirty through the bound dirty state (retail
+ * FUN_0045240a).  No-op when no dirty state is bound. */
+void engine_territory_mark_full_screen_dirty(void);
+
 /* Port of FUN_0046dfd5.  Highlight group-key `key` on the strategic map:
  * scan the whole 64×64 grid and, for every cell whose group-key byte (+7)
  * equals `key`, stamp a radius-1 alternate-draw box (its 3×3

@@ -209,6 +209,16 @@ void engine_territory_clear_cell_render_flags(void)
         engine_dirty_rect_mark_full_screen(g_dirty_state);
 }
 
+/* Mark the whole screen dirty through the bound dirty state (retail
+ * FUN_0045240a — engine_dirty_rect_mark_full_screen).  Exposed so callers in
+ * other modules (e.g. the settlement-spawn view refresh) can request a full
+ * repaint without owning the dirty state.  No-op when no state is bound. */
+void engine_territory_mark_full_screen_dirty(void)
+{
+    if (g_dirty_state != NULL)
+        engine_dirty_rect_mark_full_screen(g_dirty_state);
+}
+
 /* Port of FUN_0046e067.  The set-side counterpart of
  * clear_cell_render_flags: OR bit 0x20 into byte +2 of every cell of
  * the (2*radius+1)-square box centred at (col, row), clamped to the

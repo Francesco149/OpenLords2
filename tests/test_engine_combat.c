@@ -19,6 +19,8 @@
 #include "engine_realm_upkeep.h"   /* shares the merc-contract triple */
 #include "engine_army_economy.h"   /* NULL the army-records bind (resign re-plan) */
 #include "engine_map_query.h"      /* bind_cell_descriptors (transfer-army ring) */
+#include "engine_territory.h"      /* bind_records / bind_cells (spawn place_entity) */
+#include "game_init.h"             /* engine_game_init_troop_pool_row (muster pool) */
 #include "save.h"
 #include "save_schema_globals.h"   /* s_slot_0053f23c (wage divisor) */
 
@@ -663,6 +665,173 @@ int test_engine_combat_merge_rehomes_survivor(void)
     T_ASSERT_EQ_I(I32(d, C_VALUE), 120);     /* still merged */
     T_ASSERT_EQ_U(d[0x199], 2);              /* survive flag kept */
     T_ASSERT_EQ_U(CREC(7)[0x19a], 3);        /* back-reference re-homed to dst */
+    return 0;
+}
+
+/* ---- settlement-spawn cluster (FUN_004a551b / 4a9a9a / 4a79a3) ----------- *
+ * Garrison placement (engine_combat_place_garrison) homes a freshly-spawned   *
+ * occupant onto a realm's keep cell, capping the combined head-count against   *
+ * the keep-level table {2500,150,200,200,400,600,0,50,75,100}.  The unit-spawn *
+ * (engine_combat_spawn_unit) allocates an occupant near the army's seat and    *
+ * fills it from the owner's primed muster pool, debiting provision + cashflow. *
+ * The economy re-plan tails are held to no-ops with the army-records bind NULL.*/
+
+/* Reset + neuter the economy re-plan tail (collect_territory_income / spawn). */
+static void spawn_reset(void)
+{
+    scc_reset();
+    engine_army_economy_bind_army_records(NULL);
+}
+
+/* Over the keep-level cap → occupant rejected (role 2), nothing else placed. */
+int test_engine_combat_place_garrison_over_cap(void)
+{
+    spawn_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    uint8_t *a = R_REC(5);
+    a[0x1c0] = 1;                       /* keep level 1 → cap k_garrison_cap[1]=150 */
+    uint8_t *c = CREC(4);
+    I32(c, C_VALUE) = 200;              /* 200 > 150 → reject */
+    c[0x14c] = 7;                       /* must be cleared */
+
+    engine_combat_place_garrison(4, 5, &evq);
+
+    T_ASSERT_EQ_U(c[0x1a], 2);          /* role = rejected */
+    T_ASSERT_EQ_U(c[0x14c], 0);         /* cleared */
+    T_ASSERT_EQ_I(I32(R_REC(5), 0x1bc), 0);   /* no garrison pending set */
+    return 0;
+}
+
+/* Under cap, no garrison pending → occupant becomes the garrison (role 5) on
+ * the keep's seat cell, and the realm's pending slot points at it. */
+int test_engine_combat_place_garrison_becomes_garrison(void)
+{
+    spawn_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    uint8_t *a = R_REC(5);
+    a[0x1c0] = 2;                       /* keep level 2 → cap 200 */
+    a[0x05] = 3;                        /* race (≠ local player) → no view dirty */
+    a[0x74] = 10;                       /* seat col */
+    a[0x75] = 12;                       /* seat row */
+    uint8_t *c = CREC(4);
+    I32(c, C_VALUE) = 100;              /* 100 < 200 → placed */
+    c[0x153] = 4;                       /* presence accumulator, += 5 */
+
+    engine_combat_place_garrison(4, 5, &evq);
+
+    T_ASSERT_EQ_I(I32(R_REC(5), 0x1bc), 4);   /* garrison pending = this occupant */
+    T_ASSERT_EQ_U(c[0x1a], 5);          /* role = garrison */
+    T_ASSERT_EQ_U(c[0x14], 10);         /* home col ← seat */
+    T_ASSERT_EQ_U(c[0x0a], 10);         /* col ← home col */
+    T_ASSERT_EQ_U(c[0x15], 12);         /* home row ← seat */
+    T_ASSERT_EQ_U(c[0x0b], 12);         /* row ← home row */
+    T_ASSERT_EQ_I(I32(c, 0x0c), (12 * 0x40 + 10) * 8);   /* cell offset */
+    T_ASSERT_EQ_U(c[0x150], 1);
+    T_ASSERT_EQ_U(c[0x06], 1);
+    T_ASSERT_EQ_U(c[0x153], 9);         /* 4 + 5 */
+    T_ASSERT_EQ_U(c[0x151], 5);         /* spawning key */
+    T_ASSERT_EQ_U(c[0x198], 5);         /* spawning key */
+    return 0;
+}
+
+/* Under cap WITH a garrison pending → the occupant is merged into the pending
+ * stack (head-count summed, source disbanded) rather than placed afresh. */
+int test_engine_combat_place_garrison_merges_when_pending(void)
+{
+    spawn_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    uint8_t *a = R_REC(5);
+    a[0x1c0] = 4;                       /* keep level 4 → cap 400 */
+    I32(a, 0x1bc) = 3;                  /* garrison pending = occupant 3 (dst) */
+
+    uint8_t *dst = CREC(3), *src = CREC(4);
+    dst[0x00] = 2; I32(dst, C_VALUE) = 100;
+    src[0x00] = 2; src[0x08] = 1; I32(src, C_VALUE) = 50;   /* 150 < 400 */
+    P_REC(2)[0x2d] = 5;                 /* disband decrements this */
+
+    engine_combat_place_garrison(4, 5, &evq);
+
+    T_ASSERT_EQ_I(I32(dst, C_VALUE), 150);   /* merged head-count */
+    T_ASSERT_EQ_U(P_REC(2)[0x2d], 4);        /* src disbanded */
+    return 0;
+}
+
+/* Bind a shared cell grid + occupant records so engine_combat_spawn_unit can
+ * run end-to-end: probe → place_entity → populate from the muster pool. */
+enum { SPAWN_GRID = 0x40, SPAWN_STRIDE = 8, SPAWN_COORD_OFF = 0x6c };
+static uint8_t g_spawn_cells[SPAWN_GRID * SPAWN_GRID * SPAWN_STRIDE];
+
+/* Full spawn: occupant created near army `army`'s seat, value/counts copied from
+ * the owner's primed muster pool, provision + cashflow debited, roster bumped. */
+int test_engine_combat_spawn_unit_populates(void)
+{
+    spawn_reset();
+    memset(g_spawn_cells, 0, sizeof g_spawn_cells);
+    /* a free, plantable bit0 cell at the army's seat (flag 1: probe bit0 hit +
+     * place_entity unblocked since (1 & 0xfc) == 0). */
+    g_spawn_cells[(20 * SPAWN_GRID + 20) * SPAWN_STRIDE + 1] = 1;
+    engine_map_query_bind_cell_descriptors(g_spawn_cells);
+    engine_territory_bind_cells(g_spawn_cells);
+    engine_territory_bind_records(g_per_territory_420);
+
+    int army = 2, owner = 2;
+    R_REC(army)[SPAWN_COORD_OFF + army * 3]     = 20;   /* army seat col */
+    R_REC(army)[SPAWN_COORD_OFF + army * 3 + 1] = 20;   /* army seat row */
+    R_REC(army)[0x05] = owner;                          /* race */
+    R_REC(army)[0x0c] = 9;                              /* +0x166 source byte  */
+    I32(R_REC(army), 0x24) = 500;                       /* provision A */
+    I32(R_REC(army), 0x38) = 500;                       /* provision B */
+
+    P_REC(owner)[0x05] = 1;             /* owner active (→ occupant garrison byte) */
+    P_REC(owner)[0x0a] = 4;             /* → occupant count byte */
+
+    /* Prime the owner's muster pool: value at +0x70, per-class counts at slot+0. */
+    uint8_t *pool = engine_game_init_troop_pool_row(owner);
+    memset(pool, 0, 0x80);
+    *(int32_t *)(pool + 0x70) = 120;    /* staged head-count → occupant +0x168 */
+    for (int k = 0; k < 7; k++)
+        *(int32_t *)(pool + k * 0x10) = k + 1;   /* class counts → +0x16c.. */
+    for (int i = 1; i < 7; i++)
+        *(int32_t *)(pool + i * 0x10) = i + 1;   /* (cashflow debit reads these) */
+
+    int ret = engine_combat_spawn_unit(owner, army, 0, 0);
+    T_ASSERT(ret != 0);
+
+    uint8_t *c = CREC(ret);
+    T_ASSERT_EQ_U(c[0x06], 1);
+    T_ASSERT_EQ_U(c[0x150], 1);
+    T_ASSERT_EQ_U(c[0x01], 1);          /* garrison ← owner active */
+    T_ASSERT_EQ_U(c[0x10], army);
+    T_ASSERT_EQ_U(c[0x11], army);
+    T_ASSERT_EQ_U(c[0x02], 4);          /* count ← owner +0x0a */
+    T_ASSERT_EQ_U(c[0x166], 9);
+    T_ASSERT_EQ_I(I32(c, C_VALUE), 120);            /* ← pool +0x70 */
+    T_ASSERT_EQ_I(I16(c, C_COUNTS + 2), 2);         /* class-1 count */
+    /* provision debited by the staged head-count (pool +0x70). */
+    T_ASSERT_EQ_I(I32(R_REC(army), 0x24), 380);
+    T_ASSERT_EQ_I(I32(R_REC(army), 0x38), 380);
+
+    engine_map_query_bind_cell_descriptors(NULL);
+    engine_territory_bind_cells(NULL);
+    engine_territory_bind_records(NULL);
+    return 0;
+}
+
+/* No reachable free cell near the army's seat → spawn returns 0, no record. */
+int test_engine_combat_spawn_unit_no_cell(void)
+{
+    spawn_reset();
+    engine_map_query_bind_cell_descriptors(NULL);   /* every probe misses */
+    engine_territory_bind_cells(NULL);
+    engine_territory_bind_records(g_per_territory_420);
+
+    int ret = engine_combat_spawn_unit(2, 2, 0, 0);
+    T_ASSERT_EQ_I(ret, 0);
+
+    engine_territory_bind_records(NULL);
     return 0;
 }
 

@@ -219,4 +219,34 @@ void engine_combat_resign_player(int player, engine_event_queue_state_t *evq,
  * resigned (status +0x07 = 6). */
 void engine_combat_mp_resign_sweep(engine_event_queue_state_t *evq, int mp_active);
 
+/* ── settlement-spawn cluster (per-turn pass FUN_004508de) ───────────────── */
+
+/* Port of FUN_004a9a9a @ 0x4a9a9a (1047 B, __cdecl int(int,int,int,int)).
+ * Spawn a fresh occupant record near army `army`'s map seat from owner
+ * `owner`'s primed muster pool; returns the created occupant index (retail
+ * DAT_0052afe0) or 0 when no free cell is reachable.  `attach_unit` non-zero
+ * folds the army's mustered g_unit_table_20 unit (+0x1ad) in as a mercenary
+ * contingent; `supply_cost` is debited from the army settlement byte pair
+ * (+0x0c / +0x15).  Debits the owner's provision / cashflow, re-plans the
+ * realm's economy, and refreshes the map view when the spawn belongs to the
+ * viewing player.  The settlement path calls it with attach_unit = 0,
+ * supply_cost = 0. */
+int engine_combat_spawn_unit(int owner, int army, int attach_unit, int supply_cost);
+
+/* Port of FUN_004a551b @ 0x4a551b (332 B, __cdecl int(int)).  Size realm
+ * `key`'s due garrison from the keep-capacity tables, prime its owner's muster
+ * pool, and spawn the unit via engine_combat_spawn_unit.  Returns the new
+ * occupant index, or 0 when no garrison is due (capacity used up, or the staged
+ * size exceeds half the realm's provision +0x24). */
+int engine_combat_settlement_find_slot(int key);
+
+/* Port of FUN_004a79a3 @ 0x4a79a3 (767 B, __cdecl void(uint,int)).  Home
+ * freshly-spawned occupant `occ` onto realm `key`'s keep cell: cap the combined
+ * head-count against the keep-level table (over cap → role 2 reject), else make
+ * it the garrison (role 5) on the seat cell when none is pending, or merge it
+ * into the pending garrison.  Re-collects territory income and latches the
+ * view-dirty flag for the viewing player's selected keep. */
+void engine_combat_place_garrison(unsigned occ, int key,
+                                  engine_event_queue_state_t *evq);
+
 #endif /* OPENLORDS2_ENGINE_COMBAT_H */

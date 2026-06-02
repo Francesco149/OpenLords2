@@ -1836,6 +1836,9 @@ struct test_case {
     X(engine_realm_unrest_rebellion_resets) \
     X(engine_realm_player_owns_neighbor) \
     X(engine_realm_player_owns_neighbor_terminator) \
+    X(engine_realm_settle_counts_keeps) \
+    X(engine_realm_settle_race0_tally_only) \
+    X(engine_realm_settle_upgrade_completes) \
     \
     X(engine_events_scratch_and_gates) \
     X(engine_events_commit_resource) \
@@ -1880,6 +1883,11 @@ struct test_case {
     X(engine_combat_merge_capacity_gate) \
     X(engine_combat_merge_inherits_src_merc) \
     X(engine_combat_merge_rehomes_survivor) \
+    X(engine_combat_place_garrison_over_cap) \
+    X(engine_combat_place_garrison_becomes_garrison) \
+    X(engine_combat_place_garrison_merges_when_pending) \
+    X(engine_combat_spawn_unit_populates) \
+    X(engine_combat_spawn_unit_no_cell) \
     X(engine_combat_resign_eliminates) \
     X(engine_combat_resign_recount_always_zero) \
     X(engine_combat_resign_sweep_sp_noop) \

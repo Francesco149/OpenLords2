@@ -29,6 +29,7 @@
 #include "engine_ranking.h"       /* recompute_player_aggregate / check_elimination */
 #include "engine_diplomacy.h"     /* battle_adjust */
 #include "engine_army_ai.h"       /* run_turn (FUN_0049df48 ≡ FUN_0049a990) */
+#include "game_init.h"            /* troop_pool_row / army_near_rawflag probes */
 
 /* --- per-territory occupant ("army") record fields (stride 0x1a4) ---------
  * Shared with engine_realm_upkeep.c's UNIT_* layout; named here for the
@@ -339,9 +340,22 @@ void engine_combat_halve_garrison(int rec)
 #define C_F153      0x153   /* per-battle "presence" accumulator (i8)       */
 #define C_F154      0x154   /* baseline the +0x153 accumulator resets to(i8)*/
 #define C_F167      0x167   /* secondary takeover flag (u8)                 */
-#define C_F198      0x198   /* region-transfer pending flag (u8)            */
+#define C_F198      0x198   /* region-transfer pending flag (u8); on the    */
+                            /*   garrison-place path holds the spawning key */
 #define C_F199      0x199   /* survives-this-battle flag (u8)               */
 #define C_F19A      0x19a   /* defender-occupant index when this army moves (u8)*/
+
+/* --- occupant fields touched by the settlement-spawn cluster ------------- */
+#define C_F06       0x06    /* live-unit flag (u8)                          */
+#define C_ROLE      0x1a    /* placement role: 2 = rejected / 5 = garrison  */
+#define C_F11       0x11    /* home army/region key (u8)                    */
+#define C_HOMECOL   0x14    /* home column (i8, ← army seat +0x74)          */
+#define C_HOMEROW   0x15    /* home row (i8, ← army seat +0x75)             */
+#define C_F14F      0x14f   /* owner's roster load-balance slot (u8)        */
+#define C_F150      0x150   /* placed/active flag (u8)                      */
+#define C_F151      0x151   /* spawning army/region key (u8)                */
+#define C_F164      0x164   /* spawn epoch (i16, ← DAT_00553edc)            */
+#define C_F166      0x166   /* per-army settlement byte (u8, ← army +0x0c)  */
 
 /* --- per-region army-economy record (g_per_army_768, stride 0x300) ------- */
 #define RSTRIDE     0x300
@@ -869,4 +883,300 @@ void engine_combat_mp_resign_sweep(engine_event_queue_state_t *evq, int mp_activ
         s_slot_00553f98 -= 1;                          /* active-player count-- */
         PREC(player)[P_STATUS] = 6;                    /* mark resigned */
     }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Settlement-spawn cluster (reached from the per-turn pass FUN_004508de).
+ *
+ * When a realm finishes building a keep upgrade the turn driver spawns a fresh
+ * garrison unit into the realm's secondary settlement.  The cluster:
+ *   engine_combat_settlement_find_slot  (FUN_004a551b) — size the garrison from
+ *       the keep-capacity tables, prime the owner's muster pool, then spawn,
+ *   engine_combat_spawn_unit            (FUN_004a9a9a) — allocate a fresh
+ *       occupant record, copy the muster pool into it, debit the owner, re-plan,
+ *   engine_combat_place_garrison        (FUN_004a79a3) — home the new occupant
+ *       onto the keep cell (or merge it into the existing garrison).
+ * Three exclusive helpers below feed engine_combat_spawn_unit.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* --- army-economy record (g_per_army_768) fields the cluster reads -------- */
+#define A_RACE      0x05    /* owning player / race (u8)                    */
+#define A_F0C       0x0c    /* per-army settlement byte (i8)                */
+#define A_F15       0x15    /* paired settlement byte (i8)                  */
+#define A_PROV24    0x24    /* provision / treasury figure A (i32)          */
+#define A_F38       0x38    /* provision / treasury figure B (i32)          */
+#define A_SEATCOL   0x74    /* seat column (i8)                             */
+#define A_SEATROW   0x75    /* seat row (i8)                                */
+#define A_F1AD      0x1ad   /* mustered-unit scratch index (u8)             */
+#define A_PENDING   0x1bc   /* pending garrison occupant index (i32)        */
+#define A_KEEPLVL   0x1c0   /* keep level (u8)                              */
+#define A_BUILTLVL  0x1c1   /* currently-built keep level (u8)              */
+#define A_F2F4      0x2f4   /* post-spawn refresh marker (i32)              */
+
+/* --- strategic record (g_player_strategic_352) fields -------------------- */
+#define P_F150      0x150   /* running garrison-headcount reserve (i32)     */
+#define P_WAGE      0xfc    /* total wage bill (i32)                        */
+#define P_F118      0x118   /* treasury / cashflow figure (i32, per owner)  */
+#define P_LOAD      0x2d    /* 0x18-byte roster load-balance array (u8 each)*/
+#define P_CAT       0x13c   /* cashflow category base; cats 1..6 at +i*4    */
+
+/* --- per-owner troop muster pool (g_troop_pool, stride 0x80) ------------- */
+#define M_SLOT      0x00    /* 8 contingent slots × 0x10; +0 = count (i32)  */
+#define M_F50       0x50    /* staged garrison size A (i32)                 */
+#define M_F70       0x70    /* staged garrison size B (i32) → occupant value*/
+
+/* --- g_unit_table_20 (retail 0x568dc0, 13 × 20 B) ------------------------ */
+#define U_STRIDE    0x14
+#define U_BACKREF   0x00    /* occupant back-reference (i16)                */
+#define U_F03       0x03    /* cleared on attach (u8)                       */
+#define U_CLASS     0x05    /* contingent troop class (u8)                  */
+#define U_AMT       0x08    /* head-count / value (i32; low byte = count)   */
+#define U_COST      0x0c    /* cashflow cost charged to the owner (i32)     */
+
+/* Keep-capacity table (retail .rdata 0x4d8a3c, 12 × i32).  FUN_004a551b reads
+ * it from base 0x4d8a40 (= &k_keep_tbl[1]) indexed by (keeplvl-1) → k_keep_tbl
+ * [keeplvl], and from base 0x4d8a3c indexed by the built level. */
+static const int32_t k_keep_tbl[12] = {
+    0, 50, 150, 150, 200, 300, 0, 1, 2, 100, 500, 5,
+};
+
+/* Garrison head-count cap by keep level (retail .rdata 0x4d8a0c, 10 × i32). */
+static const int32_t k_garrison_cap[10] = {
+    2500, 150, 200, 200, 400, 600, 0, 50, 75, 100,
+};
+
+/* Port of FUN_004a9f18 (90 B) — debit the owner's just-staged garrison size
+ * (muster pool row +0x70) from realm `key`'s two provision figures
+ * (+0x24 / +0x38).  Pool row selected by the realm's race (+0x05). */
+static void spawn_debit_provision(int key)
+{
+    uint8_t *a = REGREC(key);
+    const uint8_t *pool = engine_game_init_troop_pool_row(a[A_RACE]);
+    int32_t staged = *(const int32_t *)(pool + M_F70);
+    wr_i32(a, A_PROV24, rd_i32(a, A_PROV24) - staged);
+    wr_i32(a, A_F38,    rd_i32(a, A_F38)    - staged);
+}
+
+/* Port of FUN_004a9f72 (199 B) — pick player `slot`'s least-loaded roster
+ * entry (the lowest of the 0x18-byte load array at strat +0x2d), bump it by 2,
+ * and return its index.  Returns 0 for out-of-range players. */
+static int spawn_pick_roster_slot(int slot)
+{
+    if (slot < 1 || slot > 5)
+        return 0;
+    uint8_t *load = PREC(slot) + P_LOAD;
+    int best = 0;
+    unsigned lo = 0x101;            /* retail sentinel above any u8 */
+    for (int i = 0; i < 0x18; i++) {
+        if (load[i] < lo) {
+            best = i;
+            lo = load[i];
+        }
+    }
+    load[best] = (uint8_t)(load[best] + 2);
+    return best;
+}
+
+/* Port of FUN_004a9eb1 (103 B) — debit the owner's muster-pool per-slot stock
+ * (rows 1..6 of the pool) from its six cashflow categories (strat +0x140..),
+ * then resync the cashflow total.  `slot` indexes both pool and strat. */
+static void spawn_debit_cashflow(int slot)
+{
+    uint8_t *strat = PREC(slot);
+    const uint8_t *pool = engine_game_init_troop_pool_row(slot);
+    for (int i = 1; i < 7; i++) {
+        int32_t *cat = (int32_t *)(strat + P_CAT + i * 4);
+        *cat -= *(const int32_t *)(pool + i * 0x10);
+    }
+    engine_ranking_recompute_player_total(slot);   /* FUN_004487a9 */
+}
+
+/* Port of FUN_004ac7f3 (273 B) — attach mustered g_unit_table_20 unit `unit`
+ * to occupant `occ` as its mercenary contingent: copy class/amount, fold the
+ * unit's value into the occupant head-count (+0x168), set the back-reference,
+ * charge the owner's treasury (strat +0x118) the unit cost, and clear the
+ * source army's mustered-unit scratch (+0x1ad). */
+static void spawn_attach_muster_unit(int occ, int unit)
+{
+    uint8_t *c = CREC(occ);
+    uint8_t *u = &g_unit_table_20[unit * U_STRIDE];
+
+    int8_t owner = (int8_t)c[C_OWNER];
+    uint8_t army = c[C_F11];
+
+    c[C_CON_SLOT]  = (uint8_t)unit;             /* +0x197 */
+    c[C_CON_CLASS] = u[U_CLASS];                /* +0x195 ← unit +0x05 */
+    c[C_CON_AMT]   = u[U_AMT];                  /* +0x196 ← unit +0x08 low byte */
+    wr_i32(c, C_VALUE, rd_i32(c, C_VALUE) + *(int32_t *)(u + U_AMT));
+
+    *(int16_t *)(u + U_BACKREF) = (int16_t)occ;
+    u[U_F03] = 0;
+
+    int32_t *treasury = (int32_t *)(PREC(owner) + P_F118);
+    *treasury -= *(int32_t *)(u + U_COST);
+
+    REGREC(army)[A_F1AD] = 0;
+}
+
+/* Port of FUN_004a9a9a (1047 B) — spawn a fresh occupant record near army
+ * `army`'s map seat, populated from owner `owner`'s primed muster pool.  Returns
+ * the created occupant index (DAT_0052afe0) on success, else 0.  `attach_unit`
+ * non-zero attaches the army's mustered unit (+0x1ad) as a merc contingent;
+ * `supply_cost` is debited from the army's settlement byte pair (+0x0c/+0x15).
+ * The settlement path passes attach_unit=0, supply_cost=0. */
+int engine_combat_spawn_unit(int owner, int army, int attach_unit, int supply_cost)
+{
+    /* Refuse unless a free, plantable map cell lies within radius 1..3 of the
+     * army's seat (FUN_00428007 bit0, else FUN_00428078 flag∈{0,2}).  The found
+     * cell is reported in col/row — retail leaves it in DAT_00569570/78. */
+    int col = 0, row = 0;
+    if (!engine_game_init_army_near_rawflag_bit0(army, &col, &row) &&
+        !engine_game_init_army_near_rawflag_only_bit1(army, &col, &row))
+        return 0;
+
+    if (!engine_territory_place_entity(1, col, row, owner))   /* FUN_0046e1b0 */
+        return 0;
+
+    int slot = engine_territory_current_slot();               /* DAT_0052afe0 */
+    uint8_t *c = CREC(slot);
+    uint8_t *a = REGREC(army);
+
+    c[C_F06]      = 1;
+    c[C_F150]     = 1;
+    c[C_GARRISON] = PREC(owner)[P_ACTIVE];        /* +0x01 ← strat owner +0x05 */
+    c[C_ARMYKEY]  = (uint8_t)army;                /* +0x10 */
+    c[C_F11]      = (uint8_t)army;                /* +0x11 */
+    wr_i16(c, C_F164, (int16_t)s_slot_00553edc);  /* +0x164 spawn epoch */
+    c[C_F166]     = a[A_F0C];                      /* +0x166 ← army +0x0c */
+
+    if (owner == 0) {
+        c[C_COUNT] = 0;                            /* +0x02 */
+        c[C_OWNER] = 6;                            /* +0x00 */
+    } else {
+        c[C_COUNT] = PREC(owner)[P_F0A];           /* +0x02 ← strat owner +0x0a */
+    }
+
+    spawn_debit_provision(army);                   /* FUN_004a9f18 */
+
+    const uint8_t *pool = engine_game_init_troop_pool_row(owner);
+    wr_i32(c, C_VALUE, *(const int32_t *)(pool + M_F70));   /* +0x168 */
+    for (int k = 0; k < 7; k++)
+        wr_i16(c, C_COUNTS + k * 2,
+               (int16_t)*(const int32_t *)(pool + k * 0x10 + M_SLOT));
+
+    c[C_F14F] = (uint8_t)spawn_pick_roster_slot(army);       /* FUN_004a9f72 */
+    spawn_debit_cashflow(owner);                             /* FUN_004a9eb1 */
+
+    if (attach_unit != 0)
+        spawn_attach_muster_unit(slot, REGREC(army)[A_F1AD]); /* FUN_004ac7f3 */
+
+    engine_realm_collect_territory_income();                 /* FUN_004ad6c0 */
+    engine_unit_recompute_wage(slot);                        /* FUN_004ad52b */
+
+    /* Re-plan the army's economy twice (retail repeats the trio verbatim). */
+    for (int pass = 0; pass < 2; pass++) {
+        engine_territory_allocate_realm_workforce(army);             /* 44f6e7 */
+        engine_army_economy_provision(army, (int)s_slot_0057c934);   /* 44df5f */
+        engine_army_economy_plan_realm(army, (int)s_slot_0057c92c);  /* 4485a5 */
+    }
+
+    /* Debit the supply cost from the army's settlement byte pair. */
+    if ((int8_t)a[A_F0C] < supply_cost) {
+        a[A_F15] = (uint8_t)((int8_t)a[A_F15] - (int8_t)a[A_F0C]);
+        a[A_F0C] = 0;
+    } else {
+        a[A_F0C] = (uint8_t)((int8_t)a[A_F0C] - (int8_t)supply_cost);
+        a[A_F15] = (uint8_t)((int8_t)a[A_F15] - (int8_t)supply_cost);
+    }
+
+    wr_i32(a, A_F2F4, 0xf);
+    *(int32_t *)(PREC(owner) + P_WAGE) = engine_unit_total_wage(owner); /* 4ad495 */
+
+    if ((int)s_slot_0057c8cc == owner) {           /* spawn belongs to viewer */
+        engine_territory_mark_draw_box((int8_t)c[C_COL], (int8_t)c[C_ROW], 6);
+        engine_territory_mark_full_screen_dirty(); /* FUN_0045240a */
+    }
+    return 1;
+}
+
+/* Port of FUN_004a551b (332 B) — size the garrison for realm `key` from the
+ * keep-capacity tables, prime the owner's muster pool, and spawn the unit.
+ * Returns the new occupant index, or 0 when no garrison is due (capacity used
+ * up, or the staged size exceeds half the realm's provision +0x24). */
+int engine_combat_settlement_find_slot(int key)
+{
+    PREC(0)[P_ACTIVE] = 0;          /* reserved slot 0 guard (DAT_0057bf05) */
+
+    uint8_t *a = REGREC(key);
+    int race = a[A_RACE];
+    int size = k_keep_tbl[a[A_KEEPLVL]];           /* 0x4d8a40[keeplvl-1] */
+
+    if (a[A_BUILTLVL] != 0) {
+        size -= k_keep_tbl[a[A_BUILTLVL]];         /* 0x4d8a3c[builtlvl] */
+        if (size <= 0)
+            return 0;
+    }
+
+    if (rd_i32(a, A_PROV24) / 2 < size)
+        return 0;
+
+    uint8_t *pool = engine_game_init_troop_pool_row(race);
+    for (int c = 0; c < 8; c++)
+        *(int32_t *)(pool + c * 0x10 + M_SLOT) = 0;
+    *(int32_t *)(PREC(race) + P_F150) += size;
+    *(int32_t *)(pool + M_F50) = size;
+    *(int32_t *)(pool + M_F70) = size;
+
+    if (!engine_combat_spawn_unit(race, key, 0, 0))
+        return 0;
+    return engine_territory_current_slot();        /* DAT_0052afe0 */
+}
+
+/* Port of FUN_004a79a3 (767 B) — home freshly-spawned occupant `occ` onto realm
+ * `key`'s keep cell.  Caps the combined head-count against the keep-level table;
+ * if over cap the occupant is rejected (role 2).  Otherwise, if no garrison is
+ * pending it becomes the garrison (role 5) on the seat cell, else it is merged
+ * into the existing garrison.  Re-collects territory income and latches the
+ * view-dirty flag when the keep belongs to the viewing player's selection. */
+void engine_combat_place_garrison(unsigned occ, int key,
+                                  engine_event_queue_state_t *evq)
+{
+    uint8_t *c = CREC((int)occ);
+    uint8_t *a = REGREC(key);
+    int32_t pending = rd_i32(a, A_PENDING);
+
+    c[C_F150] = 1;
+    int32_t head = rd_i32(c, C_VALUE);
+    if (pending != 0)
+        head += rd_i32(CREC(pending), C_VALUE);
+
+    if (k_garrison_cap[a[A_KEEPLVL]] < head) {
+        c[C_ROLE]     = 2;                          /* rejected */
+        c[C_FLAG_14C] = 0;
+        return;
+    }
+
+    if (rd_i32(a, A_PENDING) == 0) {
+        wr_i32(a, A_PENDING, (int32_t)occ);
+        c[C_ROLE]    = 5;                            /* garrison */
+        c[C_F198]    = (uint8_t)key;
+        c[C_HOMECOL] = a[A_SEATCOL];
+        c[C_COL]     = c[C_HOMECOL];
+        c[C_HOMEROW] = a[A_SEATROW];
+        c[C_ROW]     = c[C_HOMEROW];
+        engine_unit_map_unlink((int)occ);           /* FUN_0046ec6e */
+        wr_i32(c, C_CELLOFS, ((int8_t)c[C_ROW] * 0x40 + (int8_t)c[C_COL]) * 8);
+        c[C_SCRATCH_1C] = 0;
+        c[C_FLAG_14C]   = 0;
+        c[C_F150]       = 1;
+        c[C_F06]        = 1;
+        c[C_F153]       = (uint8_t)((int8_t)c[C_F153] + 5);
+        c[C_F151]       = (uint8_t)key;
+    } else {
+        engine_combat_merge_stack(pending, (int)occ, evq);   /* FUN_004aa181 */
+    }
+
+    engine_realm_collect_territory_income();        /* FUN_004ad6c0 */
+    if (a[A_RACE] == (uint8_t)s_slot_0057c8cc && (int)s_slot_0057c93c == key)
+        g_combat_flag_530d0 = 1;
 }

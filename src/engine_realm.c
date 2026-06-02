@@ -18,6 +18,7 @@
 #include "engine_territory.h"      /* engine_territory_set_cell_type (0x46d7f4) */
 #include "engine_event_queue.h"    /* engine_event_queue_post (0x472bc5) */
 #include "engine_combat.h"         /* engine_combat_demolish_realm (0x4ac3c6) */
+#include "engine_army_ai.h"        /* consume_build_demand / rebalance_workforce */
 
 #define ARMY_REC(key)   (&g_per_army_768[(key) * 0x300])
 #define STRAT_REC(slot) (&g_player_strategic_352[(slot) * 0x160])
@@ -1402,5 +1403,114 @@ void engine_realm_escalate_unrest(engine_event_queue_state_t *evq)
                 }
             }
         }
+    }
+}
+
+/* ── per-turn settlement / construction-completion pass (FUN_004508de) ───── */
+
+/* Army-economy settlement fields (g_per_army_768). */
+#define S_F1C8      0x1c8   /* per-turn delivered amount scratch (i32)      */
+#define S_RACE      0x05    /* owning race (u8)                             */
+#define S_BUILDTYPE 0x1c3   /* construction kind: 0 = none, 2 = upgrade (u8)*/
+#define S_KEEPLVL   0x1c0   /* target keep level (u8)                       */
+#define S_BUILTLVL  0x1c1   /* currently-built keep level (u8)              */
+#define S_RATE      0xe8    /* per-turn build rate (i32)                    */
+#define S_DEMAND    0x1cc   /* remaining build demand (i32)                 */
+#define S_DIVISOR   0x1d8   /* progress divisor / total demand (i32)        */
+#define S_PROGRESS  0x1c4   /* construction progress percent (u8)           */
+/* Strategic per-race settlement tallies. */
+#define S_BUILT_CNT 0x4c    /* completed-keep count this pass (u8)          */
+#define S_BUILD_CNT 0x4d    /* in-progress-construction count this pass (u8)*/
+
+/* Port of FUN_004508de (1007 B) — the turn driver's settlement /
+ * construction-completion pass.  Resets the per-race built / in-progress
+ * tallies (strat +0x4c / +0x4d), then for every realm 1..s_slot_0056d5dc:
+ *   - no construction (+0x1c3 == 0): count the keep if it has one, then
+ *     re-plan the secondary settlement reserve.
+ *   - construction in progress (+0x1c3 != 0) and owned (race != 0): consume the
+ *     build demand, advance progress (+0x1c4); on completion clear the build
+ *     scratch, spawn + home the new garrison unit (find_slot → place_garrison,
+ *     skipped for an upgrade or an already-at-target built level), notify the
+ *     owner (event 0xa3), clear the build kind, rebalance the workforce, then
+ *     stamp the keep footprint and re-plan the reserve.
+ * Independent in-progress realms (race == 0) only bump the in-progress tally. */
+void engine_realm_complete_settlements(engine_event_queue_state_t *evq)
+{
+    for (int race = 1; race < 6; race++) {
+        STRAT_REC(race)[S_BUILT_CNT] = 0;
+        STRAT_REC(race)[S_BUILD_CNT] = 0;
+    }
+
+    int count = (int)s_slot_0056d5dc;
+    for (int key = 1; key <= count; key++) {
+        uint8_t *a = ARMY_REC(key);
+        *(int32_t *)(a + S_F1C8) = 0;
+        int race = a[S_RACE];
+
+        if (a[S_BUILDTYPE] == 0) {
+            if (a[S_KEEPLVL] != 0)
+                STRAT_REC(race)[S_BUILT_CNT] += 1;
+            engine_army_economy_plan_secondary(key);          /* FUN_00450e46 */
+            continue;
+        }
+
+        STRAT_REC(race)[S_BUILD_CNT] += 1;
+        if (race == 0)
+            continue;                          /* independent: tally only */
+
+        int rate = *(int32_t *)(a + S_RATE);
+        engine_army_ai_consume_build_demand(key);             /* FUN_00450ccd */
+        int prog = 100 - engine_math_percent_div(*(int32_t *)(a + S_DEMAND),
+                                                 *(int32_t *)(a + S_DIVISOR));
+        int headroom = engine_army_economy_secondary_headroom(key); /* 450fb4 */
+        *(int32_t *)(a + S_F1C8) = 0;
+        if (headroom > 99) {
+            int32_t *demand = (int32_t *)(a + S_DEMAND);
+            if (*demand < rate)
+                rate = *demand;
+            if (rate < *demand)
+                *demand -= rate;
+            else
+                *demand = 0;
+            *(int32_t *)(a + S_F1C8) = *demand;
+            prog = 100 - engine_math_percent_div(*demand, *(int32_t *)(a + S_DIVISOR));
+            if (prog > 99 && *(int32_t *)(a + S_F1C8) != 0)
+                prog = 99;
+        }
+
+        a[S_PROGRESS] = (uint8_t)prog;
+        if (a[S_PROGRESS] > 99) {              /* construction complete */
+            *(int16_t *)(a + 0x1e4) = 0;
+            *(int16_t *)(a + 0x1e6) = 0;
+            *(int32_t *)(a + 0x1e8) = 0;
+            *(int32_t *)(a + 0x1ec) = 0;
+            a[0x1f0] = 0;
+            a[0x1f1] = 0;
+
+            int occ;
+            if (a[S_BUILDTYPE] == 2)
+                occ = 0;                       /* upgrade: no new garrison */
+            else if (a[S_BUILTLVL] < a[S_KEEPLVL])
+                occ = engine_combat_settlement_find_slot(key);    /* 4a551b */
+            else
+                occ = 0;
+            if (occ != 0)
+                engine_combat_place_garrison((unsigned)occ, key, evq); /* 4a79a3 */
+
+            uint8_t has_data[7];
+            for (int i = 0; i < 6; i++)
+                has_data[i] = STRAT_REC(i)[0x05];
+            has_data[6] = 0;
+            int upgrade = (a[S_BUILDTYPE] == 2) ? 1 : 0;
+            engine_event_queue_post(evq, 0, race, 0xa3, upgrade, 0x12,
+                                    (uint8_t)key, 0, 0,
+                                    has_data, (int)s_slot_0057c8cc);
+
+            a[S_BUILDTYPE] = 0;
+            engine_army_ai_rebalance_workforce(key, 3, 0);        /* 4502ca */
+        }
+
+        engine_territory_stamp_secondary_keep(key, a[S_KEEPLVL] - 1); /* 46826c */
+        engine_army_economy_plan_secondary(key);                  /* FUN_00450e46 */
     }
 }
