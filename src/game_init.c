@@ -22,6 +22,7 @@
 #include "engine_map_init.h"      /* engine_map_init_tile_cells                  */
 #include "engine_map_terrain.h"   /* engine_map_terrain_set_empty_redraw_gate    */
 #include "engine_category_buckets.h" /* the strategic category-bucket digest      */
+#include "engine_title_render.h"   /* engine_title_render_tab_value (config tabs)  */
 
 /* Fixed-length record zeroer — retail FUN_0046ea28 (len 0x300),
  * FUN_0046eb09 (len 0x14), FUN_0046ead0 (len 0x1a4) and FUN_0046ea61
@@ -597,6 +598,73 @@ void engine_game_init_set_realm_presets(int economy_preset, int resource_preset,
     g_troop_preset    = troop_preset;
     g_gold_base       = gold_base;
     g_keep_level      = keep_level;
+}
+
+void engine_game_init_preset_snapshot(int out[5])
+{
+    if (!out) return;
+    out[0] = g_economy_preset;
+    out[1] = g_resource_preset;
+    out[2] = g_troop_preset;
+    out[3] = g_gold_base;
+    out[4] = g_keep_level;
+}
+
+/* Const selector tables retail's FUN_00499dc3 indexes (baked from Lords2.exe).
+ *   0x4dbbf8 — picked by config tab 10 → s_slot_0053f26c (a turn/difficulty
+ *              budget the game-start also mirrors to DAT_005440c8); 7 valid
+ *              entries (tab 10 offers 7 values).
+ *   0x4dbc18 — picked by config tab 8 → g_gold_base (starting gold); 5 valid
+ *              entries (tab 8 offers 5 values; the bytes past entry 5 are
+ *              unrelated rdata string data, not table entries). */
+static const int32_t k_cfg_budget_0x4dbbf8[7] = {
+    30, 60, 120, 240, 480, 600, 0,
+};
+static const int32_t k_cfg_gold_0x4dbc18[5] = {
+    100, 500, 1000, 2500, 5000,
+};
+
+/* Port of FUN_00499dc3 (154 B) — the custom-game config-apply, retail's page-7
+ * "Start" finalise.  Copies the 12 config-screen option-tab selections (the
+ * port holds them in engine_title_render's g_p7_tab_values, retail
+ * DAT_0053f288..0x53f2b4; the tab->VA map lives in apply_defaults there) into
+ * the live game-config globals the new-game initialiser reads:
+ *   - the five realm presets (economy/resource/troop/gold/keep) — the SAME
+ *     storage engine_game_init_set_realm_presets latches, so this is the
+ *     config-driven alternative to that hard-coded setter;
+ *   - the config scalars s_slot_0053f25c/260/264/23c (standings / two mode
+ *     flags / render-mode) and the table-selected budget s_slot_0053f26c;
+ *   - the AI count s_slot_0053f268 = (player-count selector + 2) - human count.
+ *
+ * Must run AFTER the player setup (engine_game_init_set_player_config), which
+ * seeds the human count s_slot_00553f98 the AI-count formula reads.
+ *
+ * The one retail store dropped: DAT_0053f284 (= tab 11) is engine_combat's
+ * quick-anim suppressor — a battle-time flag, not a save scalar and never read
+ * on the new-game / first-frame path; engine_combat owns it. */
+void engine_game_init_apply_custom_config(void)
+{
+    /* AI/worker count: total players (selector + 2) minus the humans. */
+    s_slot_0053f268 = (uint32_t)((engine_title_render_tab_value(2) + 2)
+                                 - (int)s_slot_00553f98);
+
+    s_slot_0053f25c = (uint32_t)engine_title_render_tab_value(0);  /* standings  */
+    s_slot_0053f264 = (uint32_t)engine_title_render_tab_value(1);  /* render-mode */
+    s_slot_0053f260 = (uint32_t)engine_title_render_tab_value(3);  /* mode flag  */
+    s_slot_0053f23c = (uint32_t)engine_title_render_tab_value(4);
+
+    int budget_sel = engine_title_render_tab_value(10);
+    s_slot_0053f26c = (uint32_t)((budget_sel >= 0 && budget_sel < 7)
+                                 ? k_cfg_budget_0x4dbbf8[budget_sel] : 0);
+
+    int gold_sel = engine_title_render_tab_value(8);
+    g_gold_base = (gold_sel >= 0 && gold_sel < 5)
+                  ? k_cfg_gold_0x4dbc18[gold_sel] : 0;
+
+    g_keep_level      = engine_title_render_tab_value(6);
+    g_resource_preset = engine_title_render_tab_value(7);
+    g_troop_preset    = engine_title_render_tab_value(5);
+    g_economy_preset  = engine_title_render_tab_value(9);
 }
 
 /* engine_game_init_set_player_config — seat the config-screen's player setup,

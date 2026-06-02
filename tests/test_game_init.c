@@ -26,6 +26,7 @@
 #include "engine_turn.h"          /* turn-handshake globals reset by the seed */
 #include "engine_map_query.h"     /* cell-grid binding for the army probes */
 #include "engine_territory.h"     /* entity placer + record/cell binding */
+#include "engine_title_render.h"  /* config-tab staging (apply_custom_config) */
 #include "engine_army_economy.h"  /* army-record bind (NULLed to isolate setup_realms) */
 
 /* The save blocks under test live in save.c (linked into the suite). */
@@ -1408,6 +1409,41 @@ int test_game_init_turn_driver_advances_to_turn_1(void)
  *   work-locations (+0x07, the npc-scheduler field Phase 2 reads): 0,1,2,4,3
  *   per-slot army (+0xe4, the map-built + shuffled roster):        0d,0b,04,08,01
  * Mirrors the orchestrator test's preconditions, then adds the player config. */
+/* engine_game_init_apply_custom_config (port of FUN_00499dc3) reproduces the
+ * seat's hard-coded presets when driven off the config screen's default tab
+ * selections.  apply_defaults stages the 12 option tabs to their SP defaults;
+ * with 1 human, the config-apply must yield economy 1 / resource 2 / troop 0 /
+ * gold 1000 / keep 3 (== engine_game_init_set_realm_presets(1,2,0,1000,3),
+ * what the --newgame seat hard-codes) plus AI count 4 and the standings/mode/
+ * render-mode/budget config scalars. */
+int test_game_init_apply_custom_config_defaults(void)
+{
+    g_sim_mp_active = 0;                              /* single-player */
+    engine_title_render_setup_apply_defaults();      /* stage the 12 tabs */
+    s_slot_00553f98 = 1;                             /* 1 human (set by player setup) */
+
+    engine_game_init_apply_custom_config();
+
+    /* AI/worker count = (player-count selector 3 + 2) - human 1 = 4. */
+    T_ASSERT_EQ_I((int)s_slot_0053f268, 4);
+    /* Config scalars copied straight from the default tabs (all 0). */
+    T_ASSERT_EQ_U(s_slot_0053f25c, 0u);              /* standings */
+    T_ASSERT_EQ_U(s_slot_0053f264, 0u);              /* render-mode */
+    T_ASSERT_EQ_U(s_slot_0053f260, 0u);
+    T_ASSERT_EQ_U(s_slot_0053f23c, 0u);
+    T_ASSERT_EQ_U(s_slot_0053f26c, 0u);              /* budget[tab10=6] = 0 */
+
+    /* The five realm presets latched from the config tabs. */
+    int p[5];
+    engine_game_init_preset_snapshot(p);
+    T_ASSERT_EQ_I(p[0], 1);     /* economy  (tab 9 = 1)       */
+    T_ASSERT_EQ_I(p[1], 2);     /* resource (tab 7 = 2)       */
+    T_ASSERT_EQ_I(p[2], 0);     /* troop    (tab 5 = 0)       */
+    T_ASSERT_EQ_I(p[3], 1000);  /* gold     (gold[tab8=2])    */
+    T_ASSERT_EQ_I(p[4], 3);     /* keep     (tab 6 = 3)       */
+    return 0;
+}
+
 int test_game_init_player_config_activates_realms(void)
 {
     char gdir[1024];

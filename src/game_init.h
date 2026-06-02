@@ -177,6 +177,20 @@ void engine_game_init_set_realm_presets(int economy_preset, int resource_preset,
                                         int troop_preset, int gold_base,
                                         int keep_level);
 
+/* Port of FUN_00499dc3 — the custom-game config-apply (retail's page-7 "Start"
+ * finalise).  Reads the 12 config-screen option-tab selections from
+ * engine_title_render (g_p7_tab_values) and writes the live game-config: the
+ * five realm presets above (config-driven alternative to set_realm_presets),
+ * the standings/mode/render-mode config scalars, the table-selected turn
+ * budget, and the AI count.  Call AFTER engine_game_init_set_player_config
+ * (which seeds the human count the AI-count formula reads) and before
+ * engine_game_start. */
+void engine_game_init_apply_custom_config(void);
+
+/* Test/inspect accessor: snapshot the five latched realm presets in order
+ * { economy, resource, troop, gold_base, keep_level }. */
+void engine_game_init_preset_snapshot(int out[5]);
+
 /* Seat the config-screen player setup (the second half of the new-game
  * preconditions, alongside engine_game_init_set_realm_presets).  Players
  * occupy slots 1..count; slots 1..human_count are human, the rest AI.
