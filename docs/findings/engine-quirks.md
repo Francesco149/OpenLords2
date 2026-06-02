@@ -5733,3 +5733,57 @@ handled elsewhere.
 Validated 192/192 byte-exact vs retail (`elimination` diff target, 64 @ seed0 +
 128 @ seed7); because the readback is the strategic block after the internal
 re-rank, the diff also re-validates `engine_ranking_recompute` byte-for-byte.
+
+## 163. The post-battle condition recompute returns garbage (the caller ignores it), and the survivor percent is written before being clamped
+
+`FUN_004a80db` (ported as `engine_combat_recompute_condition`, engine_combat.c)
+recomputes a battle survivor's supply condition from 3 groups (count +0x182 /
+out% +0x184 / stock +0x186) against the rate table `DAT_004de440 = {200,200,400}`,
+storing the shortfall averaged over the head-count (+0x168, rounded up) into the
+condition byte +0x19c.
+
+Two oddities:
+
+**(a) The return value is dead.**  The function is declared `int` but its two
+call sites (both in the aftermath `FUN_004ab383`) invoke it as a statement.  The
+returned value is `shortfall / head` — except when there is a nonzero remainder,
+in which case it is *overwritten* with `rec * 0x54` (the byte-stride of an
+unrelated record table) right before returning.  Pure garbage; the port returns
+`void`.
+
+**(b) out% is written, then conditionally re-written.**  For each group the
+percent `stock*100/(rate*count)` is stored into +0x184 first; only then is it
+compared against 100 and, if it reached or exceeded 100, overwritten with exactly
+100.  The intermediate write is invisible (same field), but it means an
+over-supplied group lands on a flat 100, never its true ratio.
+
+Validated 64/64 byte-exact vs retail (`combat_condition` diff target, seed 7).
+
+## 164. The combat-aftermath diplomacy hit double-counts the loser via the broadcast penalty, and its war-declaration escalation only ever fires against a human
+
+`FUN_004a1ee1` (ported as `engine_diplomacy_battle_adjust`, engine_diplomacy.c)
+is the post-battle relations adjustment — AI-only (it no-ops unless the actor
++0x04 is set and +0x05 is clear).
+
+**(a) The actor's own relation toward the loser is decremented twice on a
+betrayal.**  When the loser was the AI's vassal, the function calls
+`engine_diplomacy_broadcast_penalty(loser, 15)`, which loops *every* other realm
+— including the actor itself — and subtracts 15 from its relation toward the
+loser.  Then the main hit subtracts the (now +15-bumped) delta a second time.  So
+the actor takes a −15 broadcast hit *plus* the −(amount+15) direct hit in one
+call.
+
+**(b) The escalating war-declaration sequence is gated on a HUMAN opponent.**
+The 0xbd → 0xbe → 0xbf escalation (driven by the per-pair counter +0x87) only
+runs when the bottomed-out (-30) opponent's +0x05 is nonzero — i.e. a human.  Two
+AIs that hate each other never walk this ladder; they just sit pinned at −30.
+
+**(c) The notification variant is sampled before the mood counter advances.**
+Each notification's payload is `(mood-cycle − 4) + personality·4` read from the
+current +0x159, which is only bumped (wrap 0..3) *after* the post — the same
+rotating-counter pattern as quirks #162/#147, here shared across all four
+diplomacy codes (0xb6/0xbd/0xbe/0xbf).
+
+Validated 64/64 byte-exact vs retail (`diplomacy_adjust` diff target, seed 7),
+which also covers the two callees `engine_diplomacy_clear_treaty` (4a1a54) and
+`engine_diplomacy_broadcast_penalty` (4a24d1).

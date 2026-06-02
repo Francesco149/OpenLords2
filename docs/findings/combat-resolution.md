@@ -102,3 +102,52 @@ retail `FUN_004aad07`, read back both blocks + the winner/owner scalars.
 the 7-entry weight table) and the pool slot in 0..12 (g_unit_table_20 has 13
 slots); the resolver touches only the two combatant records, so the other 149
 records stay zero on both sides.
+
+---
+
+## Combat-init SCC prerequisites (2026-06-02)
+
+The combat-initiation chokepoint is a 5-function mutually-recursive cluster:
+`FUN_004ac3c6` demolish → `FUN_00437535` transfer → `FUN_004a7158` dispatch →
+`FUN_004ab383` aftermath → `FUN_004a72fe` ownership-transfer (→ back to
+`FUN_004ac3c6`).  Assembling these bodies is the A/V-gated frontier (battle SFX
+s080/ff_batl/ff_lose, the battlefield render handoff via screen-state 0x12/0x13,
+and ~15 ownership-transfer popups).  Before that assembly, every pure-logic leaf
+they reach is now ported and — where it mutates save state — retail-diffed:
+
+### Aftermath occupant fix-ups (engine_combat.c)
+
+| retail         | port                                  | role |
+|----------------|---------------------------------------|------|
+| `FUN_004a80db` | `engine_combat_recompute_condition`   | post-battle supply/condition recompute (quirk #163) |
+| `FUN_004ad8cc` | `engine_combat_halve_garrison`        | halve a conquered occupant's troops, recompute wage |
+
+`combat_condition` and `combat_halve` diff targets: **64/64 byte-exact each**
+(seed 7).  `FUN_004ad426` → `engine_realm_refresh_wage_bills`
+(engine_realm_upkeep.c) refreshes every realm's wage bill; host-test-only (loops
+the already-diffed `engine_unit_total_wage`).  `FUN_0049df48` (the aftermath's
+AI re-dispatch) is byte-identical to `FUN_0049a990` → reuse
+`engine_army_ai_run_turn`, no separate chip.
+
+### Diplomacy (engine_diplomacy.c — new module)
+
+Reached from the aftermath's final `FUN_004a1ee1(loser_owner, attacker_owner,
+0x14)`.  All three functions touch only `g_player_strategic_352`; notifications
+route through the already-ported event queue.
+
+| retail         | port                                  | role |
+|----------------|---------------------------------------|------|
+| `FUN_004a1a54` | `engine_diplomacy_clear_treaty`       | break a lord/vassal bond |
+| `FUN_004a24d1` | `engine_diplomacy_broadcast_penalty`  | penalise one player with everyone |
+| `FUN_004a1ee1` | `engine_diplomacy_battle_adjust`      | post-battle relation hit (quirk #164) |
+
+`diplomacy_adjust` diff target (inject strat, args=[p1,p2,amount] cc=mscdecl):
+**64/64 byte-exact** (seed 7) — also covers the two callees.
+
+### Still unported (the SCC bodies themselves — next, A/V-gated)
+
+The 5 recursive bodies, plus the audio seams `FUN_00499aca` (click) and
+`FUN_00427990` (WAV), and the interactive-battle screen-state handoff in
+`FUN_004a7158` (`DAT_004eac50` 0x12/0x13, `timeGetTime`).  The auto-resolve path
+(neither side garrisoned) is pure logic and should diff; the interactive path
+hands off to the existing battlefield renderer and needs human A/V verification.
