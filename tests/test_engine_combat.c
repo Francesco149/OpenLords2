@@ -253,3 +253,85 @@ int test_engine_combat_resolve_merc(void)
     T_ASSERT_EQ_I(*(uint16_t *)&g_unit_table_20[5 * 0x14], 0);
     return 0;
 }
+
+/* --- battle sizing / setup (FUN_004a6a30) -------------------------------- */
+#define C_GARRISON  0x01
+#define C_COUNT     0x02
+
+/* Neither side garrisoned → no battle UI; returns 0, role stays 0. */
+int test_engine_combat_size_no_garrison(void)
+{
+    cb_reset();
+    CREC(1)[C_OWNER] = 1; CREC(2)[C_OWNER] = 2;
+    T_ASSERT_EQ_I(engine_combat_size_battle(1, 2, 1), 0);
+    T_ASSERT_EQ_I(g_combat_local_role, 0);
+    return 0;
+}
+
+/* Local player is the (garrisoned) attacker, defender open field. */
+int test_engine_combat_size_local_attacks(void)
+{
+    cb_reset();
+    CREC(1)[C_OWNER] = 1; CREC(1)[C_GARRISON] = 1; CREC(1)[C_COUNT] = 4;
+    CREC(2)[C_OWNER] = 2; CREC(2)[C_GARRISON] = 0; CREC(2)[C_COUNT] = 0;
+    T_ASSERT_EQ_I(engine_combat_size_battle(1, 2, 1), 1);
+    T_ASSERT_EQ_I(g_combat_local_role, 1);
+    T_ASSERT_EQ_I(g_combat_ctrl_408, 2);
+    T_ASSERT_EQ_I(g_combat_ctrl_5b0, 2);
+    T_ASSERT_EQ_I(g_combat_both_garrison, 0);
+    T_ASSERT_EQ_I(g_combat_size_a, 4);
+    T_ASSERT_EQ_I(g_combat_size_b, 6);          /* 0 count floored to 6 */
+    T_ASSERT_EQ_I(g_combat_owner_a, 1);
+    T_ASSERT_EQ_I(g_combat_owner_b, 2);
+    return 0;
+}
+
+/* Both garrisoned, local player defends → role 2, control flags stay clear. */
+int test_engine_combat_size_local_defends(void)
+{
+    cb_reset();
+    CREC(1)[C_OWNER] = 2; CREC(1)[C_GARRISON] = 1; CREC(1)[C_COUNT] = 9;
+    CREC(2)[C_OWNER] = 1; CREC(2)[C_GARRISON] = 1; CREC(2)[C_COUNT] = 3;
+    T_ASSERT_EQ_I(engine_combat_size_battle(1, 2, 1), 1);
+    T_ASSERT_EQ_I(g_combat_both_garrison, 1);
+    T_ASSERT_EQ_I(g_combat_local_role, 2);
+    T_ASSERT_EQ_I(g_combat_ctrl_408, 0);
+    T_ASSERT_EQ_I(g_combat_size_a, 9);
+    T_ASSERT_EQ_I(g_combat_size_b, 3);
+    return 0;
+}
+
+/* Defender is local but the attacker has no garrison → role still 1. */
+int test_engine_combat_size_defender_local_open_attacker(void)
+{
+    cb_reset();
+    CREC(1)[C_OWNER] = 2; CREC(1)[C_GARRISON] = 0;
+    CREC(2)[C_OWNER] = 1; CREC(2)[C_GARRISON] = 1;
+    T_ASSERT_EQ_I(engine_combat_size_battle(1, 2, 1), 1);
+    T_ASSERT_EQ_I(g_combat_local_role, 1);
+    T_ASSERT_EQ_I(g_combat_both_garrison, 0);
+    return 0;
+}
+
+static int g_sfx_calls;
+static void count_sfx(void) { g_sfx_calls++; }
+
+/* The battle cue fires once iff a battle UI is set up (a side is garrisoned). */
+int test_engine_combat_size_sfx_hook(void)
+{
+    cb_reset();
+    g_sfx_calls = 0;
+    engine_combat_bind_battle_sfx(count_sfx);
+
+    engine_combat_size_battle(1, 2, 1);          /* no garrison → no cue */
+    T_ASSERT_EQ_I(g_sfx_calls, 0);
+
+    CREC(1)[C_GARRISON] = 1;
+    engine_combat_size_battle(1, 2, 1);          /* garrison → one cue */
+    T_ASSERT_EQ_I(g_sfx_calls, 1);
+
+    engine_combat_bind_battle_sfx(NULL);         /* restore default */
+    return 0;
+}
+#undef C_GARRISON
+#undef C_COUNT

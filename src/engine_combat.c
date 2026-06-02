@@ -28,6 +28,8 @@
 #define CREC(i)      (&g_per_territory_420[(i) * CSTRIDE])
 
 #define C_OWNER      0x00    /* owning player id (i8)                         */
+#define C_GARRISON   0x01    /* castle/garrison present → interactive battle (u8)*/
+#define C_COUNT      0x02    /* battle troop count for sizing (u8; floored to 6)*/
 #define C_VALUE      0x168   /* total head-count, re-summed here (i32)        */
 #define C_COUNTS     0x16c   /* 7 × troop-class count (i16)                   */
 #define C_RESULT     0x17a   /* 4 × battle-result accumulator (i16)           */
@@ -169,4 +171,66 @@ void engine_combat_resolve_casualties(int attacker, int defender,
     }
 
     apply_outcome(winner, loser, surv);
+}
+
+/* ===================================================================== *
+ *  Battle sizing / setup (FUN_004a6a30) — see engine_combat.h.           *
+ * ===================================================================== */
+
+int g_combat_both_garrison;   /* DAT_004ee89c */
+int g_combat_local_role;      /* DAT_005533d0 */
+int g_combat_ctrl_408;        /* DAT_00554408 */
+int g_combat_ctrl_5b0;        /* DAT_0056d5b0 */
+int g_combat_size_a;          /* DAT_00568934 */
+int g_combat_size_b;          /* DAT_00568938 */
+int g_combat_owner_a;         /* DAT_005681ec */
+int g_combat_owner_b;         /* DAT_005681d8 */
+
+/* Optional battle-cue hook standing in for retail FUN_00427990(ff_batl.wav).
+ * The cue-playback path is deferred project-wide (see audio.c), so this is
+ * NULL by default and the cue is silently skipped. */
+static void (*g_battle_sfx_fn)(void);
+
+void engine_combat_bind_battle_sfx(void (*fn)(void)) { g_battle_sfx_fn = fn; }
+
+/* Port of FUN_004a6a30. */
+int engine_combat_size_battle(int attacker, int defender, int local_player)
+{
+    uint8_t *a = CREC(attacker);
+    uint8_t *d = CREC(defender);
+
+    g_player_strategic_352[5]  = 0;   /* retail DAT_0057bf05 (neutral slot +5) */
+    g_combat_local_role        = 0;
+    g_combat_ctrl_408          = 0;
+    g_combat_ctrl_5b0          = 0;
+    g_combat_both_garrison     = 0;
+
+    /* No garrison on either side → the caller auto-resolves (no battle UI). */
+    if (a[C_GARRISON] == 0 && d[C_GARRISON] == 0)
+        return 0;
+
+    if (a[C_GARRISON] != 0 && d[C_GARRISON] != 0)
+        g_combat_both_garrison = 1;
+
+    if (g_battle_sfx_fn)
+        g_battle_sfx_fn();            /* ff_batl.wav (deferred audio seam) */
+
+    /* Which side, if any, the local player controls.  A defending local player
+     * still "attacks" (role 1) when the attacker has no garrison; otherwise it
+     * is the defending side (role 2). */
+    if ((int8_t)a[C_OWNER] == local_player)
+        g_combat_local_role = 1;
+    if ((int8_t)d[C_OWNER] == local_player)
+        g_combat_local_role = (a[C_GARRISON] == 0) ? 1 : 2;
+
+    if (g_combat_local_role == 1) {
+        g_combat_ctrl_408 = 2;
+        g_combat_ctrl_5b0 = 2;
+    }
+
+    g_combat_size_a = a[C_COUNT]; if (g_combat_size_a == 0) g_combat_size_a = 6;
+    g_combat_size_b = d[C_COUNT]; if (g_combat_size_b == 0) g_combat_size_b = 6;
+    g_combat_owner_a = (int8_t)a[C_OWNER];
+    g_combat_owner_b = (int8_t)d[C_OWNER];
+    return 1;
 }

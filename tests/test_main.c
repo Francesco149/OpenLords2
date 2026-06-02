@@ -1844,6 +1844,11 @@ struct test_case {
     X(engine_combat_resolve_tie_to_attacker) \
     X(engine_combat_resolve_difficulty_mult) \
     X(engine_combat_resolve_merc) \
+    X(engine_combat_size_no_garrison) \
+    X(engine_combat_size_local_attacks) \
+    X(engine_combat_size_local_defends) \
+    X(engine_combat_size_defender_local_open_attacker) \
+    X(engine_combat_size_sfx_hook) \
     \
     X(army_ai_seed_workforce_ratios) \
     X(army_ai_advance_tier_nonpositive_noop) \
