@@ -187,9 +187,15 @@ void engine_game_init_set_realm_presets(int economy_preset, int resource_preset,
  * game read as an all-AI/auto-advancing turn state (retail spams turns on
  * load).  See the implementation for exactly which fields the config screen
  * owns vs. which the initialiser/NPC-scheduler derive.  Call before
- * engine_game_start / engine_game_init_setup_realms. */
+ * engine_game_start / engine_game_init_setup_realms.
+ *
+ * player_name (optional, may be NULL) is the lords2.inf prefs buffer
+ * (config_player_prefs): its 31-byte name field is copied into the human
+ * seat's aux record at +0x04 — the player name (+0x00) and kingdom/title
+ * (+0x18) that retail's SP seat lands there (save entry 2). */
 void engine_game_init_set_player_config(int count, int human_count,
-                                        int cur_player);
+                                        int cur_player,
+                                        const void *player_name);
 
 /* Optional battlefield-spawn seam — retail 0x4a9a9a(player, army, 0, 0),
  * the troop-muster → battlefield unit spawn (with its placement SFX).  The

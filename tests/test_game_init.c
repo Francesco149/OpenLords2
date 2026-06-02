@@ -1443,18 +1443,27 @@ int test_game_init_player_config_activates_realms(void)
     engine_territory_bind_strat_map_record(maprec);
     engine_npc_schedule_set_localization(NULL, 0);
 
-    /* The config-screen output for a default custom game on map 0. */
+    /* The config-screen output for a default custom game on map 0.  The
+     * prefs buffer mirrors lords2.inf: name at +0x00, title at +0x18. */
+    static uint8_t prefs[0x1f] = {0};
+    memcpy(&prefs[0x00], "aaaaaa    ", 10);
+    memcpy(&prefs[0x18], "castles", 7);
     engine_game_init_set_realm_presets(1, 2, 0, 1000, 3);
     engine_game_init_set_player_config(/*count*/5, /*human_count*/1,
-                                       /*cur_player*/1);
+                                       /*cur_player*/1, /*player_name*/prefs);
 
     engine_game_init_bind_turn_driver_fn(gi_turn_driver_shim);
     engine_game_init();                             /* FUN_00497ced + driver */
     engine_game_init_bind_turn_driver_fn(NULL);
 
-    /* Local player + AI count. */
+    /* Local player + AI count + human/active count (entry 86). */
     T_ASSERT_EQ_U(s_slot_0057c8cc, 1u);
     T_ASSERT_EQ_I((int)s_slot_0053f268, 4);
+    T_ASSERT_EQ_U(s_slot_00553f98, 1u);
+
+    /* Human seat (record 1) name +0x04 and title +0x1c (save entry 2). */
+    T_ASSERT_EQ_I(g_player_aux_44[1 * 0x2c + 0x04], 'a');
+    T_ASSERT_EQ_I(g_player_aux_44[1 * 0x2c + 0x1c], 'c');   /* "castles" */
 
     /* Every player slot 1..5 is ACTIVE (the turn-spam fix). */
     static const uint8_t exp_hasdata[6] = {0, 1, 0, 0, 0, 0};

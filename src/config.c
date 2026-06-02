@@ -63,6 +63,16 @@ static size_t  g_localization_size;
 #define CONFIG_INI_SCRATCH 20000
 static char g_ini_scratch[CONFIG_INI_SCRATCH];
 
+/* Persisted player-prefs blob (retail's `lords2.inf`, 0x468 = 1128 B,
+ * read verbatim into DAT_0053f1e0 by the bootstrap chain at 0x4ae158).
+ * The leading bytes are the config-screen player setup the new-game
+ * seat depends on: the player name field at +0x00 and the kingdom/title
+ * name at +0x18 (both copied into the human's aux record by the SP seat
+ * `player_seat_assign`), followed by the persisted custom-game settings
+ * dwords.  Held raw; consumers index by offset. */
+static uint8_t g_player_prefs[CONFIG_PLAYER_PREFS_BYTES];
+static size_t  g_player_prefs_size;
+
 /* ---------------------------------------------------------------- *
  *  Internal helpers.  These mirror retail's exact two-step pattern  *
  *  for "find KEY then find = then read value at the position past   *
@@ -230,6 +240,26 @@ static void load_l2_eng(void)
     log_line("config: loaded l2.eng (%zu bytes)", g_localization_size);
 }
 
+/* ---------------------------------------------------------------- *
+ *  lords2.inf player-prefs load.  Retail's bootstrap opens the file *
+ *  (0x4ae158) and reads 0x468 bytes into DAT_0053f1e0; the new-game *
+ *  config screen then seats the human player's name/title out of it. *
+ *  Tolerates the file being absent (a fresh install ships one, but   *
+ *  the headless seats must not hard-fail on it).                     *
+ * ---------------------------------------------------------------- */
+static void load_lords2_inf(void)
+{
+    int n = io_read_file_at("lords2.inf", g_player_prefs,
+                            CONFIG_PLAYER_PREFS_BYTES, 0);
+    if (n <= 0) {
+        log_line("config: lords2.inf not readable (got %d bytes) —"
+                 " player name/title default to empty", n);
+        g_player_prefs_size = 0;
+        return;
+    }
+    g_player_prefs_size = (size_t)n;
+}
+
 /* ---------------------------------------------------------------- */
 
 void config_init(void)
@@ -237,6 +267,7 @@ void config_init(void)
     config_set_defaults(&g_config);
 
     load_l2_eng();
+    load_lords2_inf();
 
     /* Three outcomes from the l2.ini lookup (see comment on
      * try_l2ini_to_sierra_ini):
@@ -270,4 +301,10 @@ const uint8_t *config_localization_data(size_t *size_out)
 {
     if (size_out) *size_out = g_localization_size;
     return g_localization_size ? g_localization_buf : NULL;
+}
+
+const uint8_t *config_player_prefs(size_t *size_out)
+{
+    if (size_out) *size_out = g_player_prefs_size;
+    return g_player_prefs_size ? g_player_prefs : NULL;
 }

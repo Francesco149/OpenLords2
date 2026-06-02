@@ -87,15 +87,24 @@ a *separate* root cause, see the box below.  Original analysis kept for context:
 > **5** match retail.  The "packed stride-3 / unported computed-base store" theory
 > was a misread of the probe addressing.
 
-### 2. Human player name not copied — Entry 2 (`0x553d50`, 17 B)
-- `player_aux` record 1 `+0x04..+0x23` (the 31-byte name) holds the retail
-  config-screen name (`0x61 'a' …`) ; the port leaves it zero.
-- `engine_game_init_set_player_config` seeds the aux **job reservation**
-  (`+0x25/+0x27`) but not the name string that retail's SP `player_seat_assign`
-  copies (from the config name buffer `0x53f1e0`).
-- **Fix (trivial, cosmetic):** seed the default name into `g_player_aux_44[1*0x2c + 4..]`.
-  Also seed entry 86 (`0x553f98`, human count) = 1 (retail's 0x4410bd `inc`),
-  currently 0.
+### 2. Human player name not copied — Entry 2 (`0x553d50`, 17 B) — FIXED
+- `player_aux` record 1 holds the retail config-screen name **and** kingdom/title:
+  `+0x04..+0x0d` = the player name (`"aaaaaa    "`), `+0x1c..+0x22` = the title
+  (`"castles"`).  The port left the whole record zero.
+- Root cause traced end-to-end: retail's bootstrap (`0x4ae158`) reads
+  **`lords2.inf`** (0x468 B) verbatim into the config buffer `DAT_0053f1e0`; that
+  blob carries the **name at +0x00** and the **title at +0x18**.  The SP seat
+  (`0x4410bd` → `player_seat_assign` `0x49bae9`) then copies a **31-byte** name
+  field from `0x53f1e0` into the aux record at `+0x04` — so the name lands at aux
+  `+0x04` and the title at aux `+0x1c` (the `+0x18` shift).  Both strings come
+  from one 31-byte copy out of the persisted prefs; NOT a hard-coded default.
+- **Fix (DONE):** port the prefs load (`config.c load_lords2_inf` → buffer +
+  `config_player_prefs()` accessor, faithful to `0x4ae1b8`) and pass that buffer
+  to `engine_game_init_set_player_config`, which copies the 31-byte name into the
+  human seat's aux `+0x04` (NULL = file absent → left zero).  Also seeds entry 86
+  (`0x553f98`, human/active count) = `human_count` (retail's `0x4410bd inc`).
+  Verified: entry 2 (17 B) and entry 86 drop out of `save_diff` →
+  **101 B → 83 B, 26 → 24 entries**; all 1871 host tests green.
 
 ### 3. Descriptor autotile-build residual — Entry 0 (`0x522f90`, 37 B)
 - The new-game descriptor **build** (`setup_overworld` → `classify_feature_tiles`

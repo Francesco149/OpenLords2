@@ -2008,8 +2008,14 @@ static void bringup_newgame(int map_id)
      * the rest (roster from the map, work-locations from the NPC scheduler).
      * Without this the strategic slots stay empty and retail spams turns on a
      * load of the resulting save. */
-    engine_game_init_set_player_config(/*count*/5, /*human_count*/1,
-                                       /*cur_player*/1);
+    {
+        /* Human player's name/title from the lords2.inf prefs (loaded by
+         * config_init), matching retail's SP seat (save entry 2). */
+        const uint8_t *prefs = config_player_prefs(NULL);
+        engine_game_init_set_player_config(/*count*/5, /*human_count*/1,
+                                           /*cur_player*/1,
+                                           /*player_name*/prefs);
+    }
 
     /* tile_cells + camera from L2_maps.dat[map_id] (retail FUN_004298c1
      * build_cells + FUN_00451fcc camera, run by the config screen). */

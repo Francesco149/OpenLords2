@@ -10,10 +10,13 @@
  *      values that gate audio + video + CD path selection in
  *      various downstream subsystems.
  *
- * `0x4ae1b8` (the `lords2.inf` 1128-byte persistence blob load)
- * is deferred — its consumer chain (0x4ae2bd, 0x4ae2ab,
- * 0x4ae310) hasn't been decoded yet, so loading the bytes
- * without a consumer would be write-only state.
+ * `0x4ae158` (the `lords2.inf` 1128-byte persistence blob load,
+ * read into DAT_0053f1e0) is now ported: `load_lords2_inf` reads
+ * it and `config_player_prefs()` exposes the blob.  Its first
+ * consumer is the new-game player setup, which seats the human
+ * player's name/title (+0x00 / +0x18) out of it (save entry 2).
+ * The remaining persisted custom-game settings dwords (+0x20…)
+ * are held raw until their consumers land.
  *
  * Today this slice is *purely preparatory*: no behavioural change
  * visible at runtime.  The values become load-bearing as we port
@@ -49,6 +52,9 @@ extern config_t g_config;
 /* Localization-buffer storage. */
 #define CONFIG_L2ENG_MAX_BYTES 120000
 
+/* Persisted player-prefs blob size (retail's lords2.inf, 0x468 B). */
+#define CONFIG_PLAYER_PREFS_BYTES 0x468
+
 /* Initialise globals + read l2.eng + parse l2.ini/sierra.ini.
  * Tolerates all files being missing — failure logs a one-liner and
  * leaves defaults in place. */
@@ -59,6 +65,11 @@ void config_init(void);
  * entries from this — retail addresses these by offset inside the
  * 120-KB blob. */
 const uint8_t *config_localization_data(size_t *size_out);
+
+/* Pointer/size of the loaded lords2.inf player-prefs blob (NULL/0 if
+ * the file wasn't readable).  The new-game player setup seats the human
+ * player's name (+0x00) and kingdom/title (+0x18) out of this. */
+const uint8_t *config_player_prefs(size_t *size_out);
 
 /* Pure-C surface for unit tests + reuse.  These are exactly the
  * routines under test in tests/test_config.c — kept here so the

@@ -634,7 +634,7 @@ void engine_game_init_set_realm_presets(int economy_preset, int resource_preset,
  * cur_player is the local/human player index (1 for a standard single-player
  * game). */
 void engine_game_init_set_player_config(int count, int human_count,
-                                        int cur_player)
+                                        int cur_player, const void *player_name)
 {
     for (int s = 1; s <= count && s < 6; s++) {
         uint8_t *p = STRAT_REC(s);
@@ -651,10 +651,22 @@ void engine_game_init_set_player_config(int count, int human_count,
         if (s <= human_count) {
             g_player_aux_44[s * 0x2c + 0x25] = p[0x0a];   /* fixed-job id   */
             g_player_aux_44[s * 0x2c + 0x27] = 1;         /* aux in-use flag */
+
+            /* Player name + kingdom/title.  Retail's SP seat (0x4410bd →
+             * player_seat_assign 0x49bae9) copies the 31-byte name field
+             * from the lords2.inf prefs buffer (DAT_0053f1e0) into the aux
+             * record at +0x04; that field carries the name at prefs +0x00
+             * and the title at prefs +0x18, so the 31-byte copy lands the
+             * name at aux +0x04 and the title at aux +0x1c (save entry 2).
+             * Left zero when the prefs file is absent. */
+            if (player_name) {
+                memcpy(&g_player_aux_44[s * 0x2c + 0x04], player_name, 0x1f);
+            }
         }
     }
     s_slot_0057c8cc = (uint32_t)cur_player;        /* entry 72: local player */
     s_slot_0053f268 = count - human_count;         /* NPC/worker (AI) count */
+    s_slot_00553f98 = (uint32_t)human_count;       /* entry 86: human/active count */
 }
 
 /* Optional battlefield-spawn seam (retail 0x4a9a9a). */
