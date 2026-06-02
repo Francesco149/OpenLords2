@@ -209,14 +209,14 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42ff10 | FUN_0042ff10 | 8140 | engine.c, engine_menu_input.c, engine_menu_input.h (+1) |
 | 0x432746 | FUN_00432746 | 69 | engine_territory.c, engine_territory.h, game_init.c |
 | 0x43278b | FUN_0043278b | 223 | engine_territory.c, engine_territory.h |
-| 0x4329ec | FUN_004329ec | 281 | engine_load_pump.c, engine_load_pump.h, game_init.c (+1) |
+| 0x4329ec | FUN_004329ec | 281 | engine_load_pump.c, engine_load_pump.h, game_init.c (+2) |
 | 0x432b05 | FUN_00432b05 | 451 | engine_menu_input.c, engine_menu_input.h |
 | 0x432cc8 | FUN_00432cc8 | 526 | engine_menu_input.c, main.c |
 | 0x432ee6 | FUN_00432ee6 | 197 | engine_menu_input.c |
 | 0x432fab | FUN_00432fab | 191 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x433155 | FUN_00433155 | 569 | engine_menu_input.c |
 | 0x433461 | FUN_00433461 | 208 | engine_menu_input.c |
-| 0x4335f0 | FUN_004335f0 | 452 | engine_menu_input.c |
+| 0x4335f0 | FUN_004335f0 | 452 | engine_menu_input.c, main.c |
 | 0x4337b4 | FUN_004337b4 | 337 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x433905 | FUN_00433905 | 147 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x433998 | FUN_00433998 | 139 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
@@ -366,7 +366,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4651b9 | FUN_004651b9 | 91 | engine_territory.c, engine_territory.h |
 | 0x46733c | FUN_0046733c | 124 | engine_combat.c, engine_map_query.c, engine_map_query.h |
 | 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c, engine_territory.h |
-| 0x467770 | FUN_00467770 | 525 | engine_territory.c, engine_territory.h, engine_title_render.c (+1) |
+| 0x467770 | FUN_00467770 | 525 | engine_territory.c, engine_territory.h, engine_title_render.c (+2) |
 | 0x46797d | FUN_0046797d | 185 | engine_map_init.c, engine_map_init.h |
 | 0x467a36 | FUN_00467a36 | 624 | engine_territory.c, engine_territory.h |
 | 0x467ca6 | FUN_00467ca6 | 385 | engine_territory.c, engine_territory.h |
@@ -446,8 +446,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h |
 | 0x499aca | FUN_00499aca | 487 | engine_combat.c, engine_combat.h, main.c |
 | 0x499d7d | FUN_00499d7d | 26 | main.c |
-| 0x499dc3 | FUN_00499dc3 | 154 | game_init.h |
-| 0x499e5d | FUN_00499e5d | 421 | game_init.h |
+| 0x499dc3 | FUN_00499dc3 | 154 | game_init.h, main.c |
+| 0x499e5d | FUN_00499e5d | 421 | game_init.h, main.c |
 | 0x49a453 | FUN_0049a453 | 302 | game_init.c, game_init.h, save.c (+1) |
 | 0x49a990 | FUN_0049a990 | 126 | engine_army_ai.c, engine_army_ai.h, engine_combat.c (+1) |
 | 0x49aa0e | FUN_0049aa0e | 2197 | engine_ranking.c, engine_ranking.h, game_init.c |

@@ -77,6 +77,7 @@
 #include "engine_screen_strat.h"
 #include "engine_load_pump.h"
 #include "game_init.h"
+#include "engine_npc_schedule.h"   /* engine_npc_schedule_set_localization (l2.eng) */
 #include "engine_title_render.h"
 #include "input_trace.h"
 #include "engine_menu_input.h"
@@ -182,6 +183,9 @@ static const char *g_strat_map_dir;
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 static int         g_strat_load_live;  /* --strat-load-live: drive the live
                                         * load pump from the title menu */
+static int         g_newgame;          /* --newgame [MAP_ID]: run the new-game
+                                        * initialiser + render the first frame */
+static int         g_newgame_map_id;   /* MAP_ID for --newgame (default 0) */
 static const char *g_input_segtrace;   /* --input-segtrace FILE: replay a TAS
                                         * input trace through the live tick */
 /* --audio-init: call audio_init() after window creation.  Off by
@@ -284,6 +288,7 @@ static void bringup_title_live(void);
 static void bringup_strat_map(const char *dir);
 static void bringup_strat_load(const char *dir);
 static void bringup_strat_load_live(void);
+static void bringup_newgame(int map_id);
 static void bringup_input_segtrace(void);
 static void engine_map_post_load(void);
 static int  drop_in_load(const char *filename);
@@ -404,6 +409,12 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
                  * (engine_load_pump_tick) so the genuine menu→ingame
                  * transition loads the save + renders the strategic map. */
                 bringup_strat_load_live();
+            } else if (g_newgame) {
+                /* New-game path — run the ported new-game initialiser
+                 * (engine_game_init) + game-start over the config-screen
+                 * preconditions, then render the resulting first strategic
+                 * frame.  The new-game analogue of --strat-load. */
+                bringup_newgame(g_newgame_map_id);
             } else if (g_input_segtrace) {
                 /* TAS input-trace replay — drive the engine into the live
                  * title state, then (in main_loop_body) replay the trace's
@@ -1932,6 +1943,140 @@ static void bringup_strat_load(const char *dir)
     }
 }
 
+/* Banks seam for the new-game orchestrator (the engine_game_init step that
+ * runs retail's FUN_004984dc).  Loads the seasonal .pl8 sprite banks from
+ * the install dir, setting the render data-ready gate the screen-0 arm
+ * checks (engine_pl8_data_ready). */
+static void newgame_load_banks(void)
+{
+    if (!engine_pl8_load_strategic_banks(NULL))
+        log_line("newgame: pl8 bank load failed");
+}
+
+/* New-game world-state producer + first-frame render (--newgame [MAP_ID]).
+ * The new-game analogue of bringup_strat_load: instead of deserialising a
+ * save it RUNS the ported new-game initialiser (engine_game_init =
+ * FUN_00497ced) + game-start (engine_game_start = FUN_004329ec) over the
+ * config-screen preconditions, then renders the first strategic frame
+ * through the SAME screen-0 dispatch arm (engine_screen_strat_render).
+ *
+ * Mirrors retail's page-7 "Start" path: the config screen (scenario apply
+ * FUN_00499e5d / custom apply FUN_00499dc3, both unported) sets the map id
+ * + the five realm presets + builds the cells/camera; FUN_004335f0 →
+ * FUN_004329ec then runs FUN_00497ced and flips to the ingame state.  This
+ * seat supplies those preconditions inline.
+ *
+ * Presets come from the scenario table (retail 0x4d8e18, indexed by the
+ * config screen's scenario selector; FUN_00499e5d reads a 0x20-stride row).
+ * The map-0 row (record 4 @ 0x4d8e98) = gold 5000 / keep 4 / economy 2 /
+ * resource 1 / troop 0.  troop_preset 0 disables the starting-army block,
+ * so the deferred troop-spawn seam (audible, human-verification-gated) is
+ * not exercised for the first frame.  Other map ids render the same terrain
+ * (the presets drive the per-realm economy, not the descriptor build).
+ *
+ * Banks (FUN_004984dc, the render data-ready gate) ride the orchestrator's
+ * bound banks seam; the minimap political grids (FUN_0046a037) are loaded
+ * here exactly as retail's scenario-apply does — the new-game path does not
+ * route through engine_map_post_load.  The per-turn driver (FUN_00448440)
+ * is already bound to the orchestrator's step-17 seam in WinMain, so a
+ * fresh game ticks to turn 1 during init, matching retail. */
+static void bringup_newgame(int map_id)
+{
+    /* 1. Config-screen preconditions. */
+    s_slot_0053f034 = (uint32_t)map_id;             /* map id */
+    s_slot_0057cb18 = 0;                            /* view-mode normal */
+    engine_game_init_set_realm_presets(/*econ*/2, /*res*/1, /*troop*/0,
+                                       /*gold_base*/5000, /*keep_level*/4);
+
+    /* tile_cells + camera from L2_maps.dat[map_id] (retail FUN_004298c1
+     * build_cells + FUN_00451fcc camera, run by the config screen). */
+    if (engine_map_init_build_cells(".", map_id, 0) == 0) {
+        log_line("newgame: build_cells failed (L2_maps.dat read, map=%d)",
+                 map_id);
+        return;
+    }
+    engine_map_init_set_camera(0);
+
+    /* Bind the loaded L2_maps.dat[map_id] record — the seam for
+     * FUN_00467770's file read, which setup_overworld plane-unpacks into
+     * the terrain descriptors.  One block = 0x80c1 B at map_id*0x80c1. */
+    static uint8_t maprec[0x80c1];
+    if (io_read_file_at("L2_maps.dat", maprec, sizeof maprec,
+                        map_id * (long)sizeof maprec) == 0) {
+        log_line("newgame: L2_maps.dat record read failed (map=%d)", map_id);
+        return;
+    }
+    engine_territory_bind_strat_map_record(maprec);
+
+    /* l2.eng localization blob for the NPC-schedule job names (retail
+     * config_localization_data; NULL skips the loc walk — engine-quirks #107). */
+    size_t loc_sz = 0;
+    const uint8_t *loc = config_localization_data(&loc_sz);
+    engine_npc_schedule_set_localization(loc, loc_sz);
+
+    /* Minimap political grids (retail FUN_0046a037, run by the scenario
+     * apply — NOT inside FUN_00497ced). */
+    if (!engine_minimap_load_grids(".", map_id))
+        log_line("newgame: minimap grid load failed (map=%d)", map_id);
+
+    /* 2. Run the new-game initialiser + game-start.  Bind the banks seam
+     * for the orchestrator's render-data load; the turn-driver seam is
+     * already bound in WinMain. */
+    engine_game_init_bind_banks_fn(newgame_load_banks);
+    engine_game_start();                            /* FUN_004329ec (SP) */
+    engine_game_init_bind_banks_fn(NULL);
+
+    log_line("newgame: init done (map=%d realms=%d screen=%d state=%d "
+             "data_ready=%d year=%d season=%d)",
+             map_id, (int)s_slot_0056d5dc, engine_current_screen(),
+             g_engine_state, engine_pl8_data_ready(),
+             (int)s_slot_00553edc, (int)s_slot_0057c934);
+
+    /* 3. Render the first strategic frame via the screen-0 dispatch arm
+     * (engine_screen_strat_render = FUN_0040f5fd) — the SAME composition the
+     * live loop runs.  The caller owns the canvas lock + present, like the
+     * load seat. */
+    if (!gfx_lock_canvas()) {
+        log_line("newgame: gfx_lock_canvas failed");
+        return;
+    }
+    int cw = gfx_paint_canvas_width();
+    int ch = gfx_paint_canvas_height();
+    uint8_t *canvas = gfx_paint_canvas_pixels();
+
+    engine_screen_strat_render(1);
+
+    log_line("newgame: rendered body — drawA=%d drawB=%d sky=%d army=%d "
+             "feat=%d (oob=%d err=%d)",
+             engine_map_terrain_drawa_count(),
+             engine_map_terrain_drawb_count(),
+             engine_map_terrain_empty_draw_count(),
+             engine_overlay_render_army_call_count(),
+             engine_map_render_call_count(),
+             engine_map_terrain_oob_copies(),
+             engine_map_terrain_error_count());
+
+    gfx_unlock_canvas();
+    gfx_tick_present(1);
+
+    /* Dump the first frame for byte-validation vs the retail capture
+     * (Phase C).  Written to the install dir — the GUI exe can't write WSL
+     * UNC paths. */
+    if (canvas) {
+        HANDLE h = CreateFileA("port_newgame.raw", GENERIC_WRITE, 0, NULL,
+                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (h != INVALID_HANDLE_VALUE) {
+            DWORD wn = 0;
+            WriteFile(h, canvas, (DWORD)(cw * ch), &wn, NULL);
+            CloseHandle(h);
+            log_line("newgame: raw canvas → port_newgame.raw (%d bytes)",
+                     cw * ch);
+        }
+    }
+    gfx_capture_backbuffer("port_newgame.bmp");
+    log_line("newgame: backbuffer → port_newgame.bmp");
+}
+
 /* Page-background reload hook (engine → gfx).  The engine_tick title
  * render step calls this before the canvas lock on each full redraw; the
  * engine hook is `void(*)(int)` but gfx_title_background_load returns int,
@@ -2353,6 +2498,20 @@ static void parse_cmdline(LPSTR lpCmd)
         }
         else if (!strcmp(a, "--strat-load-live")) {
             g_strat_load_live = 1;           /* live load pump → ingame map */
+            g_gfx_init = 1;                  /* needs DDraw */
+        }
+        else if (!strcmp(a, "--newgame")) {
+            g_newgame = 1;                   /* new-game init → first frame */
+            g_newgame_map_id = 0;            /* default map 0 (matches lastturn) */
+            /* Optional MAP_ID: consume the next token only if it is a
+             * non-negative integer (so "--newgame" alone still works). */
+            if (i + 1 < ntok) {
+                const char *m = tokens[i + 1];
+                int allnum = m[0] != '\0';
+                for (const char *p = m; *p; p++)
+                    if (*p < '0' || *p > '9') { allnum = 0; break; }
+                if (allnum) g_newgame_map_id = atoi(tokens[++i]);
+            }
             g_gfx_init = 1;                  /* needs DDraw */
         }
         else if (!strcmp(a, "--input-segtrace") && i + 1 < ntok) {

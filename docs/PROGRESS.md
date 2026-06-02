@@ -7,6 +7,57 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-02 — NEW-GAME: `--newgame [MAP_ID]` seat — live drop-in renders a fresh game's first strategic frame
+
+The new-game render path is now **live end-to-end**: the drop-in can START a
+fresh game and draw its first strategic-map frame natively, the new-game
+analogue of `--strat-load` (Phase B of the new-game-render plan).
+
+`bringup_newgame(map_id)` in `main.c` supplies retail's page-7 config-screen
+preconditions inline (the scenario/custom apply `FUN_00499e5d`/`FUN_00499dc3`
+are unported), then runs the ported new-game initialiser + game-start:
+
+- **Preconditions:** map id (`s_slot_0053f034`) + view-mode 0; the five realm
+  presets via `engine_game_init_set_realm_presets` — taken from the scenario
+  table (retail `0x4d8e18`, a 0x20-stride row `FUN_00499e5d` indexes by the
+  config selector); the map-0 row (record 4 @ `0x4d8e98`) = gold 5000 / keep 4 /
+  economy 2 / resource 1 / **troop 0** (troop 0 disables the starting-army block,
+  so the deferred audible troop-spawn seam is not exercised for the first frame).
+  Then `engine_map_init_build_cells` + `_set_camera`, bind the loaded
+  `L2_maps.dat[map_id]` record (the `FUN_00467770` plane-unpack seam), bind
+  `l2.eng` (`config_localization_data`), and load the minimap political grids
+  (`FUN_0046a037`, run by retail's scenario-apply — *not* inside `FUN_00497ced`).
+- **Run:** bind the seasonal-bank seam (`FUN_004984dc`, the render data-ready
+  gate) and call `engine_game_start` (`FUN_004329ec` SP branch → `FUN_00497ced`).
+  The per-turn driver (`FUN_00448440`) is already bound to the orchestrator's
+  step-17 seam in WinMain, so the fresh game ticks to turn 1 during init.
+- **Render:** the SAME screen-0 dispatch arm the live loop runs
+  (`engine_screen_strat_render` = `FUN_0040f5fd`); dumps `port_newgame.raw`/
+  `.bmp` for the future Phase-C byte-validation vs a retail new-game capture.
+
+**Verified live (user-confirmed via feed).** `--newgame 0` on the install
+host: `init done (map=0 realms=14 screen=0 state=3 data_ready=1 year=1268
+season=4)` — a full 14-realm world ticked to turn 1 (1268 Winter, the
+year-rollover quirk #171), then `rendered body — drawA=263 drawB=19 sky=0
+army=15 feat=291 (0 oob/err)`.  drawA=263 matches the map-0 LOAD frame's
+terrain-walk count exactly (same map → identical descriptor build), confirming
+the new-game descriptor finalize is correct; the new-game-specific deltas
+(camera recentred on the player's capital, fresh ownership, 15 army start
+markers vs the load save's 14, fewer settlements → drawB 19 vs 29) are the
+expected fresh-game state.  Frame is a coherent full-HUD strategic map
+(menu bar / minimap / territory panel / End-turn).  1870 host tests green
+(seat is Win32-only; the orchestrator path it drives is already host-tested
+byte-exact: +7 == L2_maps plane5 = 4096/4096, territory_count 14).
+
+**NEXT — Phase C (byte-validation):** capture retail's new-game state at the
+first MAP_FREEROAM frame via `new_game_to_map.jsonl` + `--rng-seed` +
+`--dump-regions`/`--dump-globals`, then a host byte-diff of `engine_game_init`'s
+output (gold standard, like the load path's `load_clean_dump`).  The custom-game
+preset path (`FUN_00499dc3`, the trace's actual route) vs the scenario presets
+used here is the one remaining seam to reconcile for an exact HUD-economy match.
+
+---
+
 ## 2026-06-02 — TURN-ENGINE: full per-turn driver FUN_00448440 ASSEMBLED → engine_turn_run_passes + engine_turn_advance, wired into new-game init
 
 The turn-advance engine is now **assembled end-to-end**.  All 30 direct callees

@@ -4798,7 +4798,8 @@
     "src/engine_load_pump.c",
     "src/engine_load_pump.h",
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/main.c"
    ]
   },
   {
@@ -4904,7 +4905,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_menu_input.c"
+    "src/engine_menu_input.c",
+    "src/main.c"
    ]
   },
   {
@@ -11615,7 +11617,8 @@
     "src/engine_territory.c",
     "src/engine_territory.h",
     "src/engine_title_render.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/main.c"
    ]
   },
   {
@@ -15549,7 +15552,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/main.c"
    ]
   },
   {
@@ -15559,7 +15563,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/main.c"
    ]
   },
   {
