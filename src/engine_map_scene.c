@@ -96,10 +96,10 @@ void engine_map_scene_render_body(void)
     engine_overlay_render_frame(); /* FUN_00405602 — pass 2 overlay       */
     engine_map_render_frame();     /* FUN_00405487 — pass 3 features      */
 
-    /* if (DAT_0053e9ac != 0) DAT_0053e9ac--;  (next-frame sky-gate decay) */
+    /* if (DAT_0053e9ac != 0) DAT_0053e9ac--;  (next-frame empty-redraw-gate decay) */
     {
-        int gate = engine_map_terrain_sky_gate_flag();
-        if (gate != 0) engine_map_terrain_set_sky_gate_flag(gate - 1);
+        int gate = engine_map_terrain_empty_redraw_gate();
+        if (gate != 0) engine_map_terrain_set_empty_redraw_gate(gate - 1);
     }
 }
 

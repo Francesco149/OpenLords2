@@ -108,7 +108,7 @@ static void strat_draw_map_body(uint8_t *canvas, int cw, int ch)
      * "missing grass tiles" at scrolls where low-index border cells are on
      * screen (the load scroll exposes them; the strat-terrain1 scroll did
      * not, which is why the earlier hard-coded 0 looked correct). */
-    engine_map_terrain_set_sky_gate_flag(1);
+    engine_map_terrain_set_empty_redraw_gate(1);
     engine_map_terrain_set_error_count(0);
     engine_map_terrain_reset_stats();
 

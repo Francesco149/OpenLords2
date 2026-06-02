@@ -8,16 +8,16 @@
  *   pass 3  features        — FUN_00405487  (engine_map_render.c)
  *
  * This module ports pass 1's frame driver + row iterators + the two
- * terrain drawers + the sky/empty drawer:
+ * terrain drawers + the empty-cell drawer:
  *
  *   FUN_0040526e (537 B) → engine_map_terrain_frame
  *   FUN_00405ae9 (326 B) → (internal) aligned phase-0 row
  *   FUN_00405c2f (646 B) → (internal) half-shifted phase-3/0/4 row
  *   FUN_004063c1 (690 B) → (internal) terrain drawer A (base ground)
  *   0x406673     (1351 B)→ (internal) terrain drawer B (decoration) — STUB
- *   FUN_0042a7f1 (224 B) → (internal) sky/empty-cell drawer
+ *   FUN_0042a7f1 (224 B) → (internal) empty-cell drawer (top-edge sky band + interior border tiles)
  *
- * Drawer A and the sky drawer dispatch the fully-unrolled iso-tile
+ * Drawer A and the empty-cell drawer dispatch the fully-unrolled iso-tile
  * blitters FUN_00452820 / FUN_0045337b / FUN_004538f6 (view-mode 0),
  * replayed byte-exactly from the table-extracted headers in src/gen/.
  *
@@ -37,7 +37,7 @@
 #include <stdint.h>
 
 /* Tile-cell array (retail DAT_0055cea0, row stride 0x104 bytes).
- * Cell values >= ENGINE_MAP_TERRAIN_CELL_EMPTY are the sky/off-map
+ * Cell values >= ENGINE_MAP_TERRAIN_CELL_EMPTY are the empty/off-map
  * marker (low 20 bits = a blob-0 sprite index). */
 void engine_map_terrain_bind_tile_array(const int32_t *cells,
                                         int row_stride_bytes);
@@ -49,7 +49,7 @@ void engine_map_terrain_bind_descriptors(const uint8_t *descriptors);
 
 /* The five base-terrain sprite blobs (retail DAT_00568208 /
  * 0053e914 / 0057d344 / 0055409c / 0056898c), selected by the
- * descriptor +2 flag's 0x1c bits.  blob[0] is also the sky blob. */
+ * descriptor +2 flag's 0x1c bits.  blob[0] is also the empty-cell/border blob. */
 void engine_map_terrain_bind_blobs(const uint8_t *blob0,
                                    const uint8_t *blob1,
                                    const uint8_t *blob2,
@@ -67,18 +67,20 @@ void engine_map_terrain_bind_camera(int x0, int y0,
 
 void engine_map_terrain_set_view_mode(int view_mode);     /* DAT_0057cb18 */
 void engine_map_terrain_set_render_mode(int mode);        /* DAT_0053f264 */
-/* Sky-draw gate companion (retail DAT_0053e9ac).  When 0, the inner
- * iterators draw a sky tile only for empty cells whose sprite index
- * exceeds 6; the phantom rows always draw.  Default 0. */
-void engine_map_terrain_set_sky_gate_flag(int flag);
-int  engine_map_terrain_sky_gate_flag(void);
+/* Empty-cell redraw gate (retail DAT_0053e9ac).  When 0, the inner
+ * iterators draw an empty cell only when its sprite index exceeds 6 (so
+ * interior low-index border tiles are skipped — an incremental-redraw
+ * optimisation); the phantom rows always draw.  Retail sets it 1 on a
+ * full redraw.  Default 0. */
+void engine_map_terrain_set_empty_redraw_gate(int flag);
+int  engine_map_terrain_empty_redraw_gate(void);
 
 int  engine_map_terrain_error_count(void);                /* _DAT_0058fea8 */
 void engine_map_terrain_set_error_count(int n);
 
 /* Stats (test-only, not retail globals). */
 int  engine_map_terrain_drawa_count(void);
-int  engine_map_terrain_sky_count(void);
+int  engine_map_terrain_empty_draw_count(void);
 int  engine_map_terrain_drawb_count(void);
 int  engine_map_terrain_drawb_skipped(void);
 int  engine_map_terrain_oob_copies(void);

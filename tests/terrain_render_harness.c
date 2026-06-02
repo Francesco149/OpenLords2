@@ -90,7 +90,7 @@ int main(int argc, char **argv)
                                    x_half_step);
     engine_map_terrain_set_view_mode(view_mode);
     engine_map_terrain_set_render_mode(render_mode);
-    engine_map_terrain_set_sky_gate_flag(0);
+    engine_map_terrain_set_empty_redraw_gate(0);
     engine_map_terrain_set_error_count(0);
     engine_map_terrain_reset_stats();
 
@@ -106,7 +106,7 @@ int main(int argc, char **argv)
     printf("drawA=%d sky=%d drawB_skipped=%d oob=%d error_count=%d "
            "blobs=%zu,%zu,%zu,%zu,%zu\n",
            engine_map_terrain_drawa_count(),
-           engine_map_terrain_sky_count(),
+           engine_map_terrain_empty_draw_count(),
            engine_map_terrain_drawb_skipped(),
            engine_map_terrain_oob_copies(),
            engine_map_terrain_error_count(),

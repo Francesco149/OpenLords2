@@ -228,7 +228,7 @@ static void render_scene(uint8_t *canvas,
                                    SC_x_step, SC_y_step, SC_x_half);
     engine_map_terrain_set_view_mode(SC_view);
     engine_map_terrain_set_render_mode(SC_render);
-    engine_map_terrain_set_sky_gate_flag(0);
+    engine_map_terrain_set_empty_redraw_gate(0);
     engine_map_terrain_set_error_count(0);
     engine_map_terrain_reset_stats();
 
@@ -279,7 +279,7 @@ static void render_scene(uint8_t *canvas,
 
     counts[0] = engine_map_terrain_drawa_count();
     counts[1] = engine_map_terrain_drawb_count();
-    counts[2] = engine_map_terrain_sky_count();
+    counts[2] = engine_map_terrain_empty_draw_count();
     counts[3] = engine_overlay_render_army_call_count();
     counts[4] = engine_map_render_call_count();
 }

@@ -48,7 +48,7 @@ static int g_x_step, g_y_step, g_x_half; /* DAT_00568220 / 0053f65c / 0567950 */
 
 static int g_view_mode;                  /* DAT_0057cb18 */
 static int g_render_mode;                /* DAT_0053f264 */
-static int g_sky_gate;                   /* DAT_0053e9ac */
+static int g_empty_redraw_gate;                   /* DAT_0053e9ac */
 
 /* Walker state — retail DAT_0056d594 / 0056d598 / 0056957c / 00567954. */
 static int g_cur_row;
@@ -62,7 +62,7 @@ static int g_sprite_index;
 static int g_error_count;                /* _DAT_0058fea8 */
 
 /* Stats. */
-static int g_n_drawa, g_n_sky, g_n_drawb, g_n_drawb_skipped, g_n_oob;
+static int g_n_drawa, g_n_empty, g_n_drawb, g_n_drawb_skipped, g_n_oob;
 
 /* Retail src_off validation upper bound (FUN_004063c1 line "< 0x4baf1"). */
 #define TERRAIN_SRC_OFFSET_MAX  0x4baf1
@@ -109,20 +109,20 @@ void engine_map_terrain_bind_camera(int x0, int y0,
 
 void engine_map_terrain_set_view_mode(int v)   { g_view_mode = v; }
 void engine_map_terrain_set_render_mode(int m)  { g_render_mode = m; }
-void engine_map_terrain_set_sky_gate_flag(int f){ g_sky_gate = f; }
-int  engine_map_terrain_sky_gate_flag(void)      { return g_sky_gate; }
+void engine_map_terrain_set_empty_redraw_gate(int f){ g_empty_redraw_gate = f; }
+int  engine_map_terrain_empty_redraw_gate(void)      { return g_empty_redraw_gate; }
 
 int  engine_map_terrain_error_count(void)       { return g_error_count; }
 void engine_map_terrain_set_error_count(int n)  { g_error_count = n; }
 
 int  engine_map_terrain_drawa_count(void)       { return g_n_drawa; }
-int  engine_map_terrain_sky_count(void)         { return g_n_sky; }
+int  engine_map_terrain_empty_draw_count(void)         { return g_n_empty; }
 int  engine_map_terrain_drawb_count(void)       { return g_n_drawb; }
 int  engine_map_terrain_drawb_skipped(void)     { return g_n_drawb_skipped; }
 int  engine_map_terrain_oob_copies(void)        { return g_n_oob; }
 void engine_map_terrain_reset_stats(void)
 {
-    g_n_drawa = g_n_sky = g_n_drawb = g_n_drawb_skipped = g_n_oob = 0;
+    g_n_drawa = g_n_empty = g_n_drawb = g_n_drawb_skipped = g_n_oob = 0;
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -400,9 +400,12 @@ static void drawer_b(int phase)
     }
 }
 
-/* Sky / empty-cell drawer — port of FUN_0042a7f1.  Always blob 0 at the
- * empty-marker sprite index, view-mode-0 blitter FUN_00452820. */
-static void sky_draw(int phase)
+/* Empty-cell drawer — port of FUN_0042a7f1.  Draws blob 0 at the
+ * empty-marker sprite index (view-mode-0 blitter FUN_00452820).  At the
+ * map's TOP edge these off-map cells paint the sky band (hence the
+ * historical "sky" naming), but the same path also fills INTERIOR empty
+ * "border" cells with a base-grass sprite — not sky. */
+static void empty_cell_draw(int phase)
 {
     const uint8_t *blob = g_blob[0];
     if (!blob) return;
@@ -413,11 +416,11 @@ static void sky_draw(int phase)
     }
     if (g_view_mode != 0) return;
     terrain_blit(blob, g_blob_len[0], src_off, phase);
-    g_n_sky++;
+    g_n_empty++;
 }
 
 /* Per-cell dispatch shared by the iterators.  `gated` mirrors the
- * inner-iterator sky gate (empty cells draw sky only when the gate
+ * inner-iterator empty-redraw gate (empty cells draw only when the gate
  * flag is set OR the sprite index exceeds 6); phantom rows pass
  * gated=0 (always draw). */
 static void do_cell(int col, int row, int phase, int gated)
@@ -430,8 +433,8 @@ static void do_cell(int col, int row, int phase, int gated)
     } else {
         g_sprite_index = (g_render_mode == 1)
                        ? 0 : (cv - (int)ENGINE_MAP_TERRAIN_CELL_EMPTY);
-        if (!gated || g_sky_gate != 0 || g_sprite_index > 6)
-            sky_draw(phase);
+        if (!gated || g_empty_redraw_gate != 0 || g_sprite_index > 6)
+            empty_cell_draw(phase);
     }
 }
 
