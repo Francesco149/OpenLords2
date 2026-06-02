@@ -1783,6 +1783,17 @@ static int drop_in_load(const char *filename)
         return 1;
     }
     engine_map_post_load();
+    /* Restore the strategic-map palette.  The strategic map renders under
+     * the game's base palette base01.256 (installed at gfx_init; the
+     * seasonal variation lives in the sprite banks, not the palette).
+     * When we arrive here from the live title menu, the page-background
+     * load has swapped in the menu palette (gateway.256), so the sand HUD
+     * parchment + map indices would present as magenta.  Reinstall the
+     * base palette on map entry.  (The --strat-load seat never shows the
+     * menu, so base01.256 is already active there — this is the menu→map
+     * transition's responsibility.) */
+    if (!gfx_load_palette("base01.256"))
+        log_line("load-pump: base01.256 palette restore failed");
     log_line("load-pump: loaded %s + map setup (screen=%d data_ready=%d)",
              filename, engine_current_screen(), engine_pl8_data_ready());
     return 0;
