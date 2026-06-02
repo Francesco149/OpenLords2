@@ -2584,6 +2584,8 @@ VA_COMBAT_DIFFICULTY = 0x55401c   # DAT_0055401c — AI difficulty 0..4       (i
 VA_COMBAT_QUICK      = 0x53e8fc   # DAT_0053e8fc — quick-resolve flag       (i32)
 VA_COMBAT_WINNER     = 0x57c924   # DAT_0057c924 — winning territory index  (i32)
 VA_COMBAT_OWNER      = 0x5440cc   # DAT_005440cc — winner's owner id        (i32)
+FN_COMBAT_CONDITION  = 0x4a80db   # FUN_004a80db — __cdecl int(int rec)
+FN_COMBAT_HALVE      = 0x4ad8cc   # FUN_004ad8cc — __cdecl void(int rec)
 
 REALM_RACE_RETRIES = 8
 
@@ -2653,6 +2655,10 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
         lib.engine_combat_resolve_casualties.argtypes = [
             ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
             ctypes.POINTER(CombatResult)]
+        lib.engine_combat_recompute_condition.restype = None
+        lib.engine_combat_recompute_condition.argtypes = [ctypes.c_int]
+        lib.engine_combat_halve_garrison.restype = None
+        lib.engine_combat_halve_garrison.argtypes = [ctypes.c_int]
     return _realm_globals_cache
 
 
@@ -3843,6 +3849,138 @@ def diff_combat_resolve(retail: dict, port: dict) -> list[str]:
     return bad
 
 
+# ── post-battle condition recompute (FUN_004a80db — engine_combat_recompute_condition) ──
+#
+# __cdecl(int rec): for one g_per_territory_420 occupant, recompute the supply
+# condition from 3 groups (count +0x182 / out% +0x184 / stock +0x186, stride 6),
+# the head-count +0x168 and the rate table {200,200,400}, writing out% (clamped
+# 100) and the averaged-shortfall condition byte +0x19c.  Touches only that one
+# record, so terr is the sole readback.  Driven through the generic RPC with
+# args=[rec] + cc='mscdecl' (the returned int is dead).
+
+def _build_condition_vec(rec: int, head: int, groups: list[tuple]) -> dict:
+    """groups: 3 × (count, out_prev, stock)."""
+    terr = bytearray(REALM_TERR_BYTES)
+    b = rec * REALM_TERR_STRIDE
+    struct.pack_into("<i", terr, b + 0x168, head)
+    for g, (cnt, out_prev, stock) in enumerate(groups):
+        struct.pack_into("<h", terr, b + 0x182 + g * 6, cnt)
+        struct.pack_into("<h", terr, b + 0x184 + g * 6, out_prev)
+        struct.pack_into("<h", terr, b + 0x186 + g * 6, stock)
+    return {"rec": rec, "terr": bytes(terr)}
+
+
+def gen_combat_condition_vectors(n: int, rng: random.Random) -> list[dict]:
+    edge = [
+        # head 0 → early return, fields untouched
+        (4, 0,  [(10, 12, 1000), (5, 0, 2000), (2, 0, 400)]),
+        # mixed: under (50%), over (clamp 100), under; exact average
+        (4, 100, [(10, 0, 1000), (5, 0, 2000), (2, 0, 400)]),
+        # nonzero remainder rounds up; empty group zeroes out%/stock
+        (4, 99, [(10, 0, 1000), (0, 55, 66), (2, 0, 400)]),
+        # all groups fully supplied → condition byte 0
+        (7, 50, [(10, 0, 9999), (10, 0, 9999), (10, 0, 9999)]),
+    ]
+    vecs = [_build_condition_vec(*e) for e in edge]
+    while len(vecs) < n:
+        rec  = rng.randint(1, 150)
+        head = rng.choice([0, rng.randint(1, 4000)])
+        groups = [(rng.choice([0, rng.randint(1, 400)]),
+                   rng.randint(0, 200),
+                   rng.choice([0, rng.randint(1, 20000)])) for _ in range(3)]
+        vecs.append(_build_condition_vec(rec, head, groups))
+    return vecs
+
+
+def run_port_combat_condition(lib: ctypes.CDLL, vec: dict) -> dict:
+    g = realm_port_globals(lib)
+    ctypes.memmove(g["terr"], vec["terr"], REALM_TERR_BYTES)
+    lib.engine_combat_recompute_condition(vec["rec"])
+    return {"terr": list(bytes(g["terr"]))}
+
+
+def combat_condition_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_COMBAT_CONDITION, "cc": "mscdecl", "args": [vec["rec"]],
+            "regions": [
+        {"va": VA_PER_TERRITORY, "len": REALM_TERR_BYTES, "inject": list(vec["terr"]), "read": True},
+    ]}
+
+
+def diff_combat_condition(retail: dict, port: dict) -> list[str]:
+    return _diff_realm_region(retail, port["terr"], VA_PER_TERRITORY,
+                              REALM_TERR_STRIDE, 151, "terr")
+
+
+# ── post-conquest garrison halve (FUN_004ad8cc — engine_combat_halve_garrison) ──
+#
+# __cdecl(int rec): halve a conquered occupant's 7 class counts (+0x16c, >10
+# halved / <=10 wiped), re-sum head-count +0x168 + merc +0x196, clear scratch
+# +0x1c / +0x14c, then recompute its wage +0x15c via engine_unit_recompute_wage
+# (which reads the owner's strat +0x05 and the AI-divisor scalar s_slot_0053f23c).
+# Inject terr + strat + the divisor; only terr is mutated.
+
+def _build_halve_vec(rec: int, owner: int, counts: list[int], merc: int,
+                     human: int, diff: int) -> dict:
+    terr  = bytearray(REALM_TERR_BYTES)
+    strat = bytearray(REALM_STRAT_BYTES)
+    b = rec * REALM_TERR_STRIDE
+    terr[b + 0x00] = owner & 0xff
+    terr[b + 0x08] = 1                 # active (recompute_wage gate is upstream)
+    for c in range(7):
+        struct.pack_into("<h", terr, b + 0x16c + c * 2, counts[c])
+    terr[b + 0x196] = merc & 0xff
+    terr[b + 0x1c]  = 0x9              # scratch — must clear
+    terr[b + 0x14c] = 0x9              # flag    — must clear
+    strat[(owner & 0xff) * REALM_STRAT_STRIDE + 0x05] = human & 0xff
+    return {"rec": rec, "owner": owner & 0xff, "diff": diff,
+            "terr": bytes(terr), "strat": bytes(strat)}
+
+
+def gen_combat_halve_vectors(n: int, rng: random.Random) -> list[dict]:
+    edge = [
+        # mixed counts, human owner (/4 wage), merc folded in
+        (5, 2, [20, 10, 11, 100, 5, 0, 3], 7, 1, 0),
+        # AI owner, divisor /3
+        (6, 3, [40, 12, 80, 0, 200, 14, 9], 0, 0, 0),
+        # AI owner, divisor /10 (difficulty 2)
+        (9, 4, [11, 11, 11, 11, 11, 11, 11], 5, 0, 2),
+        # all <=10 → fully wiped, only merc remains
+        (3, 1, [1, 2, 3, 10, 0, 9, 5], 13, 1, 0),
+    ]
+    vecs = [_build_halve_vec(*e) for e in edge]
+    while len(vecs) < n:
+        rec    = rng.randint(1, 150)
+        owner  = rng.randint(1, 5)
+        counts = [rng.choice([0, rng.randint(1, 10), rng.randint(11, 900)]) for _ in range(7)]
+        vecs.append(_build_halve_vec(rec, owner, counts,
+                                     rng.choice([0, rng.randint(1, 200)]),
+                                     rng.randint(0, 1), rng.randint(0, 3)))
+    return vecs
+
+
+def run_port_combat_halve(lib: ctypes.CDLL, vec: dict) -> dict:
+    g = realm_port_globals(lib)
+    ctypes.memmove(g["terr"],  vec["terr"],  REALM_TERR_BYTES)
+    ctypes.memmove(g["strat"], vec["strat"], REALM_STRAT_BYTES)
+    g["diff"].value = vec["diff"]
+    lib.engine_combat_halve_garrison(vec["rec"])
+    return {"terr": list(bytes(g["terr"]))}
+
+
+def combat_halve_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_COMBAT_HALVE, "cc": "mscdecl", "args": [vec["rec"]],
+            "regions": [
+        {"va": VA_PER_TERRITORY, "len": REALM_TERR_BYTES,  "inject": list(vec["terr"]),  "read": True},
+        {"va": VA_STRATEGIC,     "len": REALM_STRAT_BYTES, "inject": list(vec["strat"]), "read": False},
+        {"va": VA_SLOT_DIFF,     "len": 4, "inject": list(_u32le(vec["diff"])), "read": False},
+    ]}
+
+
+def diff_combat_halve(retail: dict, port: dict) -> list[str]:
+    return _diff_realm_region(retail, port["terr"], VA_PER_TERRITORY,
+                              REALM_TERR_STRIDE, 151, "terr")
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -3967,6 +4105,12 @@ def run_diff(cfg_args) -> int:
     if "combat_resolve" in enabled:
         test_plans.append(("combat_resolve",
                            gen_combat_resolve_vectors(cfg_args.vectors, rng)))
+    if "combat_condition" in enabled:
+        test_plans.append(("combat_condition",
+                           gen_combat_condition_vectors(cfg_args.vectors, rng)))
+    if "combat_halve" in enabled:
+        test_plans.append(("combat_halve",
+                           gen_combat_halve_vectors(cfg_args.vectors, rng)))
     if "player_aggregate" in enabled:
         test_plans.append(("player_aggregate",
                            gen_player_aggregate_vectors(cfg_args.vectors, rng)))
@@ -4102,7 +4246,8 @@ def run_diff(cfg_args) -> int:
         shared_freeze_targets = {"sim_sub_steps", "state_hash", "tile_expand",
                                  "delayed_action", "tax_approval", "dev_spread",
                                  "realm_income", "upkeep", "season_economy",
-                                 "resource_pass", "population", "combat_resolve"}
+                                 "resource_pass", "population", "combat_resolve",
+                                 "combat_condition", "combat_halve"}
         shared_freeze_installed = False
         if shared_freeze_targets & {n for (n, _) in test_plans}:
             fresp = script.exports_sync.install_sim_sub_steps_engine_freeze()
@@ -4921,6 +5066,74 @@ def run_diff(cfg_args) -> int:
                         port = {"note": "region readback elided"}
                         vec = {"count": vec["count"], "player": vec["player"],
                                "local": vec["local"]}
+                elif fn_name == "combat_condition":
+                    # FUN_004a80db(int rec): post-battle supply/condition recompute
+                    # for one occupant.  Inject g_per_territory_420; call with
+                    # args=[rec] (cc=mscdecl); read back the record block.
+                    port = run_port_combat_condition(lib, vec)
+                    plan = combat_condition_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"rec": vec["rec"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_combat_condition(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"rec": vec["rec"]}
+                elif fn_name == "combat_halve":
+                    # FUN_004ad8cc(int rec): post-conquest garrison halve.  Inject
+                    # g_per_territory_420 + g_player_strategic_352 + the AI-divisor
+                    # scalar; call with args=[rec] (cc=mscdecl); read back the
+                    # record block (its sole mutation, incl. the recomputed wage).
+                    port = run_port_combat_halve(lib, vec)
+                    plan = combat_halve_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"rec": vec["rec"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_combat_halve(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"rec": vec["rec"], "owner": vec["owner"],
+                               "diff": vec["diff"]}
                 else:
                     continue
                 if bad:
