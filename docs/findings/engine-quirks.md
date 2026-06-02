@@ -5601,3 +5601,41 @@ captures may just be two different inputs.  Fingerprint the *source asset*
 (here: per-map plane-5 of `L2_maps.dat`) before hypothesising an engine pass —
 it's a free local check that needs no frida and would have killed this phantom
 on day one.  See `docs/findings/map-render.md` "L2_maps.dat plane layout".
+
+## 159. Coalitions are adjacency-connected components per owner — built by a two-phase fixpoint that joins everyone it can before seeding a single new group
+
+`FUN_0044b042` (the producer half of the turn-driver's coalition pass
+`FUN_0044ae3c`) partitions every active army (per-army owner byte +0x05 != 0)
+into "coalition groups" held in the runtime table at `0x568240` (17 groups ×
+`0x1c`: +0x00 i32 strength, +0x04 owner key, +0x05.. 20 member army ids).  Two
+behaviours are worth pinning down because they are easy to get subtly wrong when
+porting:
+
+**(a) The round structure is join-all-then-maybe-seed-one, not seed-then-grow.**
+Each round of the bounded fixpoint (`local_c < 100`, so ≤ 99 rounds) does two
+sweeps over armies `1..DAT_0056d5dc`:
+
+1. For every ungrouped army, try to fold it into an *existing* same-owner group
+   it is adjacent to (`FUN_0044b391`); count already-grouped armies into
+   `local_1c`; set `bVar1` if anything joined.
+2. **Only if `bVar1` is still false** (the whole first sweep joined nobody),
+   seed exactly one fresh group from the first ungrouped army (`FUN_0044b302`).
+
+So a round never both grows existing groups *and* creates a new one — creation
+is the fallback for a stalled round.  The loop ends when the grouped count
+reaches the active count.
+
+**(b) Adjacency is read DIRECTED, from the joining army's list.**  An army `a`
+joins a group iff `a`'s own +0x5c adjacency list (16 bytes, 0-terminated,
+`FUN_00467e2c`) names *some current member* of a same-owner group — the
+member's list is never consulted.  In practice the +0x5c neighbour lists are
+symmetric so this rarely matters, but a hand-built asymmetric list would group
+differently depending on which army seeds the group first.  The seeding order is
+strictly ascending army index, so the partition is deterministic for a given
+state.
+
+The strength field (+0x00) is a plain sum of member populations (+0x24) computed
+in a final pass, and the active-group count is mirrored to `_DAT_00553ef4`.
+Ported as `engine_realm_build_coalitions` (engine_realm.c); the consumer half
+`FUN_0044ae51` (eliminate every group but each owner's strongest — it reaches
+the combat-init chokepoint `FUN_004ac3c6` and posts popups) is deferred.

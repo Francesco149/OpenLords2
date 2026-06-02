@@ -1813,6 +1813,11 @@ struct test_case {
     X(engine_realm_population_event_death_capped) \
     X(engine_realm_population_migration_applied) \
     X(engine_realm_population_refreshes_overworld) \
+    X(engine_realm_coalition_single_owner_chain) \
+    X(engine_realm_coalition_disconnected_split) \
+    X(engine_realm_coalition_separate_owners) \
+    X(engine_realm_coalition_strength_sum) \
+    X(engine_realm_coalition_inactive_skipped) \
     \
     X(engine_events_scratch_and_gates) \
     X(engine_events_commit_resource) \

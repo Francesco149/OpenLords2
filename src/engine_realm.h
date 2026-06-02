@@ -351,4 +351,36 @@ void engine_realm_replan_economies(void);
  * overworld cell grid g_overworld_map; reads the realm count + season scalar. */
 void engine_realm_advance_population(void);
 
+/* Port of FUN_0044b042 @ 0x44b042 (704 B, void) — the coalition-group builder,
+ * the producer half of the turn-driver's coalition pass FUN_0044ae3c (its
+ * consumer half, the disconnected-group elimination FUN_0044ae51, reaches the
+ * combat-init chokepoint FUN_004ac3c6 + posts popups, so it is deferred).
+ *
+ * It partitions every active army (per-army owner byte +0x05 != 0) into
+ * "coalitions" = the adjacency-connected components of each owner's armies,
+ * where adjacency is army B appearing in army A's +0x5c list (FUN_00467e2c).
+ * The result lands in the runtime group table (retail 0x568240, 17 groups ×
+ * 0x1c B: +0x00 i32 strength, +0x04 owner key, +0x05.. 20 member army ids),
+ * rebuilt from scratch each call.  Algorithm: clear the table; count active
+ * armies; run a guarded fixpoint (≤99 rounds) that each round either joins
+ * ungrouped armies into an adjacent same-owner group (FUN_0044b391) or, if none
+ * joined, seeds one new group from the first ungrouped army (FUN_0044b302),
+ * skipping already-grouped armies (FUN_0044b4d0); finally tally the active
+ * group count (retail _DAT_00553ef4) and sum each group's member populations
+ * (army +0x24) into its strength field.
+ *
+ * Touches only g_per_army_768 and the realm count s_slot_0056d5dc; the group
+ * table + count are module-private runtime scratch exposed for inspection (and
+ * the future FUN_0044ae51 port) through the accessors below.  Field semantics
+ * (owner / population / adjacency list) are provisional; offsets r2-verified
+ * against the 0x300 / 0x1c strides. */
+void engine_realm_build_coalitions(void);
+
+/* Inspectors for the coalition table built by engine_realm_build_coalitions
+ * (groups 0..16; member slots 0..19).  Group key 0 marks an empty group. */
+int engine_realm_coalition_active_count(void);
+int engine_realm_coalition_group_key(int group);
+int engine_realm_coalition_group_strength(int group);
+int engine_realm_coalition_group_member(int group, int slot);
+
 #endif /* OPENLORDS2_ENGINE_REALM_H */

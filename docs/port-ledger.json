@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 549,
+  "tested": 557,
   "ported": 46,
-  "unported": 1852,
+  "unported": 1844,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 595,
-  "pct_touched": 24.3,
-  "pct_tested": 22.4,
+  "touched": 603,
+  "pct_touched": 24.6,
+  "pct_tested": 22.8,
   "bytes_total": 838629,
-  "bytes_touched": 240469,
-  "pct_bytes_touched": 28.7
+  "bytes_touched": 242689,
+  "pct_bytes_touched": 28.9
  },
  "orphan_refs": [
   "0x004148",
@@ -9961,48 +9961,65 @@
    "name": "FUN_0044ae3c",
    "size": 21,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm.c",
+    "src/engine_realm.h"
+   ]
   },
   {
    "va": "0x44ae51",
    "name": "FUN_0044ae51",
    "size": 497,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm.h"
+   ]
   },
   {
    "va": "0x44b042",
    "name": "FUN_0044b042",
    "size": 704,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm.c",
+    "src/engine_realm.h"
+   ]
   },
   {
    "va": "0x44b302",
    "name": "FUN_0044b302",
    "size": 138,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm.c",
+    "src/engine_realm.h"
+   ]
   },
   {
    "va": "0x44b391",
    "name": "FUN_0044b391",
    "size": 319,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm.c",
+    "src/engine_realm.h"
+   ]
   },
   {
    "va": "0x44b4d0",
    "name": "FUN_0044b4d0",
    "size": 203,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm.c",
+    "src/engine_realm.h"
+   ]
   },
   {
    "va": "0x44b59b",
@@ -11588,8 +11605,11 @@
    "name": "FUN_00467e2c",
    "size": 127,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm.c",
+    "src/engine_realm.h"
+   ]
   },
   {
    "va": "0x467eb0",
@@ -16809,8 +16829,10 @@
    "name": "FUN_004ac3c6",
    "size": 211,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm.h"
+   ]
   },
   {
    "va": "0x4ac499",

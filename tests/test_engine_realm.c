@@ -1532,3 +1532,116 @@ int test_engine_realm_population_refreshes_overworld(void)
     engine_territory_bind_army_records(NULL);
     return 0;
 }
+
+/* ---- engine_realm_build_coalitions (FUN_0044b042) ------------------------ *
+ * Partitions active armies into adjacency-connected components per owner.    *
+ * Per-army fields: owner +0x05 (0 = inactive), strength +0x24, adjacency     *
+ * list +0x5c (16 bytes, 0-terminated).                                       */
+
+static void army_setup(int key, uint8_t owner, int32_t strength)
+{
+    uint8_t *r = AREC(key);
+    r[0x05] = owner;
+    AI32(r, 0x24) = strength;
+}
+
+/* Append `nbr` to army `key`'s +0x5c adjacency list (first empty slot). */
+static void army_add_adj(int key, uint8_t nbr)
+{
+    uint8_t *adj = &AREC(key)[0x5c];
+    for (int i = 0; i < 0x10; i++)
+        if (adj[i] == 0) { adj[i] = nbr; return; }
+}
+
+/* True if group g lists army `m` in any member slot. */
+static int coal_has(int g, int m)
+{
+    for (int s = 0; s < 0x14; s++)
+        if (engine_realm_coalition_group_member(g, s) == m) return 1;
+    return 0;
+}
+
+/* One owner, a chain 1→2→3 (each adjacent to the previous) collapses into a
+ * single coalition group. */
+int test_engine_realm_coalition_single_owner_chain(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 3;
+    army_setup(1, 1, 10); army_setup(2, 1, 20); army_setup(3, 1, 30);
+    army_add_adj(2, 1);                 /* 2 adjacent to 1 */
+    army_add_adj(3, 2);                 /* 3 adjacent to 2 */
+
+    engine_realm_build_coalitions();
+
+    T_ASSERT_EQ_I(engine_realm_coalition_active_count(), 1);
+    T_ASSERT_EQ_I(engine_realm_coalition_group_key(0), 1);
+    T_ASSERT(coal_has(0, 1) && coal_has(0, 2) && coal_has(0, 3));
+    return 0;
+}
+
+/* Same owner but two non-adjacent clusters {1,2} and {3,4} → two groups. */
+int test_engine_realm_coalition_disconnected_split(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 4;
+    army_setup(1, 1, 0); army_setup(2, 1, 0);
+    army_setup(3, 1, 0); army_setup(4, 1, 0);
+    army_add_adj(2, 1);                 /* cluster A */
+    army_add_adj(4, 3);                 /* cluster B */
+
+    engine_realm_build_coalitions();
+
+    T_ASSERT_EQ_I(engine_realm_coalition_active_count(), 2);
+    T_ASSERT(coal_has(0, 1) && coal_has(0, 2));
+    T_ASSERT(coal_has(1, 3) && coal_has(1, 4));
+    return 0;
+}
+
+/* Two different owners never share a group, even when cross-listed. */
+int test_engine_realm_coalition_separate_owners(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 2;
+    army_setup(1, 1, 0); army_setup(2, 2, 0);
+    army_add_adj(1, 2); army_add_adj(2, 1);
+
+    engine_realm_build_coalitions();
+
+    T_ASSERT_EQ_I(engine_realm_coalition_active_count(), 2);
+    T_ASSERT_EQ_I(engine_realm_coalition_group_key(0), 1);
+    T_ASSERT_EQ_I(engine_realm_coalition_group_key(1), 2);
+    T_ASSERT(coal_has(0, 1) && coal_has(1, 2));
+    return 0;
+}
+
+/* A group's strength field sums its members' +0x24 populations. */
+int test_engine_realm_coalition_strength_sum(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 2;
+    army_setup(1, 1, 100); army_setup(2, 1, 250);
+    army_add_adj(2, 1);
+
+    engine_realm_build_coalitions();
+
+    T_ASSERT_EQ_I(engine_realm_coalition_active_count(), 1);
+    T_ASSERT_EQ_I(engine_realm_coalition_group_strength(0), 350);
+    return 0;
+}
+
+/* Inactive armies (owner byte 0) are skipped entirely. */
+int test_engine_realm_coalition_inactive_skipped(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 3;
+    army_setup(1, 1, 100); army_setup(2, 0, 999); army_setup(3, 1, 50);
+    army_add_adj(3, 1);                 /* 3 adjacent to 1; 2 inactive */
+
+    engine_realm_build_coalitions();
+
+    T_ASSERT_EQ_I(engine_realm_coalition_active_count(), 1);
+    T_ASSERT_EQ_I(engine_realm_coalition_group_strength(0), 150);
+    T_ASSERT(coal_has(0, 1) && coal_has(0, 3));
+    T_ASSERT(!coal_has(0, 2));
+    return 0;
+}

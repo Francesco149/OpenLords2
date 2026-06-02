@@ -1069,3 +1069,163 @@ void engine_realm_advance_population(void)
         else                   engine_territory_update_village_tiles(key, 4);
     }
 }
+
+/* ===================================================================== *
+ *  Coalition grouping (FUN_0044b042 + helpers) — the producer half of    *
+ *  the turn-driver's coalition pass FUN_0044ae3c.                         *
+ * ===================================================================== */
+
+/* Coalition group table — retail 0x568240, runtime scratch rebuilt every
+ * call (NOT a saved global).  17 groups, 0x1c-byte stride:
+ *   +0x00  i32 total strength (sum of member +0x24 populations)
+ *   +0x04  owner key byte (the per-army owner +0x05 the group is keyed on)
+ *   +0x05.. 20 member army-id bytes (0 = empty slot).
+ * Backed by an i32-aligned union so the +0x00 strength reads/writes are
+ * naturally aligned (the 0x1c stride is a multiple of 4). */
+#define COALITION_GROUPS   0x11   /* 17 */
+#define COALITION_STRIDE   0x1c
+#define COALITION_MEMBERS  0x14   /* 20 member slots per group */
+
+static union {
+    int32_t align_;
+    uint8_t b[COALITION_GROUPS * COALITION_STRIDE];
+} g_coalition_tbl;
+
+#define COAL_BASE          (g_coalition_tbl.b)
+#define COAL_STRENGTH(g)   (*(int32_t *)&COAL_BASE[(g) * COALITION_STRIDE])
+#define COAL_KEY(g)        (COAL_BASE[(g) * COALITION_STRIDE + 4])
+#define COAL_MEMBER(g, m)  (COAL_BASE[(g) * COALITION_STRIDE + 5 + (m)])
+
+/* Active (non-empty) coalition group count — retail _DAT_00553ef4. */
+static int32_t g_coalition_active_count;
+
+/* Port of FUN_00467e2c — is army `other` named in army `a`'s adjacency list
+ * (per-army +0x5c, up to 16 bytes, 0-terminated)?  The adjacency relation is
+ * what binds armies into one coalition. */
+static int coalition_armies_adjacent(int a, unsigned other)
+{
+    const uint8_t *adj = &ARMY_REC(a)[0x5c];
+    for (int i = 0; i < 0x10; i++) {
+        if (adj[i] == other) return 1;
+        if (adj[i] == 0)     return 0;
+    }
+    return 0;
+}
+
+/* Port of FUN_0044b4d0 — is army `a` already a member of some coalition group?
+ * Only groups keyed on `a`'s own owner are scanned; the densely-packed table
+ * ends at the first key==0 slot. */
+static int coalition_army_grouped(int a)
+{
+    uint8_t key = ARMY_REC(a)[5];
+    for (int g = 0; g <= 0x10; g++) {
+        if (COAL_KEY(g) == 0) break;
+        if (COAL_KEY(g) == key) {
+            for (int m = 0; m < COALITION_MEMBERS; m++)
+                if (COAL_MEMBER(g, m) == (uint8_t)a) return 1;
+        }
+    }
+    return 0;
+}
+
+/* Port of FUN_0044b391 — try to grow an existing same-owner group with army `a`
+ * if `a` is adjacent to any current member; append it to the first empty member
+ * slot.  Returns 1 if added. */
+static int coalition_try_join(int a)
+{
+    uint8_t key = ARMY_REC(a)[5];
+    for (int g = 0; g <= 0x10; g++) {
+        if (COAL_KEY(g) == 0) break;
+        if (COAL_KEY(g) == key) {
+            for (int m = 0; m < COALITION_MEMBERS; m++) {
+                uint8_t mem = COAL_MEMBER(g, m);
+                if (mem != 0 && coalition_armies_adjacent(a, mem)) {
+                    for (int s = 0; s < COALITION_MEMBERS; s++) {
+                        if (COAL_MEMBER(g, s) == 0) {
+                            COAL_MEMBER(g, s) = (uint8_t)a;
+                            return 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+/* Port of FUN_0044b302 — seed a new coalition group keyed on army `a`'s owner
+ * with `a` as its sole member, in the first key==0 slot.  Returns 1, or 0 if
+ * the 17-group table is full. */
+static int coalition_create_group(int a)
+{
+    for (int g = 0; g <= 0x10; g++) {
+        if (COAL_KEY(g) == 0) {
+            COAL_KEY(g)       = ARMY_REC(a)[5];
+            COAL_MEMBER(g, 0) = (uint8_t)a;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Port of FUN_0044b042 — see engine_realm.h. */
+void engine_realm_build_coalitions(void)
+{
+    /* Clear the whole group table. */
+    for (int g = 0; g < COALITION_GROUPS; g++) {
+        COAL_STRENGTH(g) = 0;
+        COAL_KEY(g)      = 0;
+        for (int m = 0; m < COALITION_MEMBERS; m++)
+            COAL_MEMBER(g, m) = 0;
+    }
+
+    /* Count active armies (owner byte +5 != 0). */
+    int active = 0;                                  /* local_20 */
+    for (int a = 1; a <= (int)s_slot_0056d5dc; a++)
+        if (ARMY_REC(a)[5] != 0) active++;
+
+    /* Fixpoint over rounds (guarded at 99): each round folds every ungrouped
+     * army that is adjacent to an existing same-owner group into that group; if
+     * a round joins nothing, it instead seeds exactly one fresh group from the
+     * first ungrouped army.  This yields the adjacency-connected components of
+     * each owner's armies. */
+    int grouped = 0;                                 /* local_1c */
+    int guard   = 0;                                 /* local_c */
+    while (grouped < active && (++guard < 100)) {
+        grouped = 0;
+        int progressed = 0;                          /* bVar1 */
+        for (int a = 1; a <= (int)s_slot_0056d5dc; a++) {
+            if (ARMY_REC(a)[5] != 0) {
+                if (coalition_army_grouped(a))      grouped++;
+                else if (coalition_try_join(a))     progressed = 1;
+            }
+        }
+        for (int a = 1; a <= (int)s_slot_0056d5dc && !progressed; a++) {
+            if (ARMY_REC(a)[5] != 0 && !coalition_army_grouped(a)
+                && coalition_create_group(a))
+                progressed = 1;
+        }
+    }
+
+    /* Tally active groups and sum each group's member strength (army +0x24). */
+    g_coalition_active_count = 0;
+    for (int g = 0; g < COALITION_GROUPS; g++) {
+        if (COAL_KEY(g) != 0) {
+            g_coalition_active_count++;
+            COAL_STRENGTH(g) = 0;
+            for (int m = 0; m < COALITION_MEMBERS; m++) {
+                uint8_t mem = COAL_MEMBER(g, m);
+                if (mem != 0)
+                    COAL_STRENGTH(g) += *(int32_t *)&ARMY_REC(mem)[0x24];
+            }
+        }
+    }
+}
+
+int engine_realm_coalition_active_count(void)        { return g_coalition_active_count; }
+int engine_realm_coalition_group_key(int group)      { return COAL_KEY(group); }
+int engine_realm_coalition_group_strength(int group) { return COAL_STRENGTH(group); }
+int engine_realm_coalition_group_member(int group, int slot)
+{
+    return COAL_MEMBER(group, slot);
+}

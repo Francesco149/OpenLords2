@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **595** (24.3%) — tested 549, ported 46
-- code bytes touched: **28.7%** (240,469 / 838,629 B)
-- unported: **1852**
+- touched: **603** (24.6%) — tested 557, ported 46
+- code bytes touched: **28.9%** (242,689 / 838,629 B)
+- unported: **1844**
 - orphan refs (in src/, not in function table): 4
 
-## tested (549) — ported + host unit suite
+## tested (557) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -281,6 +281,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x449d6e | FUN_00449d6e | 354 | engine_realm.c, engine_realm.h |
 | 0x449ef3 | FUN_00449ef3 | 1991 | engine_realm.c, engine_realm.h, engine_territory.c |
 | 0x44a6ba | FUN_0044a6ba | 903 | engine_realm.c, engine_realm.h |
+| 0x44ae3c | FUN_0044ae3c | 21 | engine_realm.c, engine_realm.h |
+| 0x44ae51 | FUN_0044ae51 | 497 | engine_realm.h |
+| 0x44b042 | FUN_0044b042 | 704 | engine_realm.c, engine_realm.h |
+| 0x44b302 | FUN_0044b302 | 138 | engine_realm.c, engine_realm.h |
+| 0x44b391 | FUN_0044b391 | 319 | engine_realm.c, engine_realm.h |
+| 0x44b4d0 | FUN_0044b4d0 | 203 | engine_realm.c, engine_realm.h |
 | 0x44b59b | FUN_0044b59b | 624 | engine_realm.c, engine_realm.h |
 | 0x44b80b | FUN_0044b80b | 399 | engine_realm.c, engine_realm.h |
 | 0x44b99a | FUN_0044b99a | 155 | engine_realm.c, engine_realm.h |
@@ -357,6 +363,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46797d | FUN_0046797d | 185 | engine_map_init.c, engine_map_init.h |
 | 0x467a36 | FUN_00467a36 | 624 | engine_territory.c, engine_territory.h |
 | 0x467ca6 | FUN_00467ca6 | 385 | engine_territory.c, engine_territory.h |
+| 0x467e2c | FUN_00467e2c | 127 | engine_realm.c, engine_realm.h |
 | 0x467fd1 | FUN_00467fd1 | 336 | engine_territory.c, engine_territory.h |
 | 0x468121 | FUN_00468121 | 331 | engine_territory.c, engine_territory.h |
 | 0x46826c | FUN_0046826c | 221 | engine_territory.c, engine_territory.h |
@@ -463,6 +470,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4ab2aa | FUN_004ab2aa | 217 | engine_combat.c, engine_combat.h |
 | 0x4ab383 | FUN_004ab383 | 1751 | engine_combat.c, engine_combat.h |
 | 0x4aba5a | FUN_004aba5a | 220 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x4ac3c6 | FUN_004ac3c6 | 211 | engine_realm.h |
 | 0x4ac6fe | FUN_004ac6fe | 245 | engine_combat.c, engine_combat.h, engine_realm_upkeep.c (+1) |
 | 0x4ac904 | FUN_004ac904 | 295 | game_init.c, game_init.h |
 | 0x4acbd4 | FUN_004acbd4 | 650 | engine_realm_upkeep.c, engine_realm_upkeep.h |
