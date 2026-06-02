@@ -29,14 +29,16 @@
  * RESULT: byte-exact — +0/+1/+3/+4/+5/+7 = 100%, +2 = 99.5% (~20-cell residual).
  * So the ported LOAD data path reproduces retail's load output exactly.
  *
- * KEY (was a long-standing confusion): the strat-terrain1 dump that earlier
- * tests compared against was captured ~32 s into the frame-capture WARMUP, by
- * which point a turn/territory pass has remapped cell +7 from its per-cell
- * REGION id (1..0x0e, what the load produces) to the OWNING REALM (1..4) and
- * recomputed the terrain display.  Against that warmup dump +3 scored only 4%;
- * against the true immediate-post-load dump it is 100%.  The region->owner
- * remap is post-load WARMUP processing, a separate (next) target — NOT the
- * load finalize, which is correct.
+ * RESOLVED 2026-06-02 (engine-quirks #158): the strat-terrain1 dump earlier
+ * tests compared against was NOT a warmed-up lastturn.sav at all — it was
+ * captured on a DIFFERENT MAP (map 17).  There is no "region->owner remap"
+ * pass: descriptor +7 is just plane-5 (per-cell baked region id) of
+ * L2_maps.dat[map_id] (FUN_00467770 copies planes 0/1/2/3/5 -> +1/+2/+3/+4/+7).
+ * lastturn.sav is map 0 (sea 84, 14 regions); strat-terrain1 is map 17 (sea
+ * 497, 4 regions).  map0 plane5 == lastturn +7 = 100%; map17 plane5 ==
+ * strat-terrain1 +7 = 100%; cross-pairing scores 4-42%.  The +3 "only 4%" was
+ * a cross-map artifact.  test_map_finalize_plus7_is_map_plane5 (below) locks
+ * this in.  The load finalize is correct; idling never changes +7.
  *
  * The single-LFSR RNG (DAT_00591564) is seeded with the retail InitInstance
  * constant 0x34518632; the autotiler consults it only for the isolated/water
@@ -356,6 +358,55 @@ int test_map_finalize_load_path_diagnostic(void)
     T_ASSERT_EQ_I(post4, NCELLS);          /* +4               100% */
     T_ASSERT_EQ_I(post5, NCELLS);          /* +5 feature head  100% */
     T_ASSERT(pct(post2) > 99.0);           /* +2 render flags  ~99.5% (residual) */
+
+    return 0;
+}
+
+/*
+ * test_map_finalize_plus7_is_map_plane5 — proves descriptor +7 is simply
+ * plane-5 (per-cell baked region id) of L2_maps.dat[map_id], not a remapped
+ * "owner" produced by any warmup/turn pass (engine-quirks #158).
+ *
+ * Loads the real lastturn.sav, reads L2_maps.dat plane 5 for the loaded
+ * map_id, and asserts +7 == plane5 for all 4096 cells.  Also prints the
+ * map 0 vs map 17 plane-5 fingerprints that identify lastturn.sav as map 0
+ * and the old strat-terrain1 "warmup" capture as map 17.
+ */
+int test_map_finalize_plus7_is_map_plane5(void)
+{
+    char gdir[1024];
+    resolve_game_dir(gdir, sizeof gdir);
+
+    char sav_path[1200], l2_path[1200];
+    snprintf(sav_path, sizeof sav_path, "%s/lastturn.sav", gdir);
+    snprintf(l2_path,  sizeof l2_path,  "%s/L2_maps.dat",  gdir);
+    if (!file_exists(sav_path)) T_SKIP("lastturn.sav not found at %s", sav_path);
+    if (!file_exists(l2_path))  T_SKIP("L2_maps.dat not found at %s", l2_path);
+
+    /* Load the save -> g_overworld_map (descriptors) + map id. */
+    const char *tmp_castles = "/tmp/openlords2_plane5_castles.dat";
+    if (save_load(sav_path, tmp_castles) != 0)
+        T_FAIL("save_load(%s) failed", sav_path);
+    int map_id = (int)s_slot_0053f034;
+
+    /* Read plane 5 (offset 0x5000) of this map (stride 0x80c1). */
+    static uint8_t plane5[0x1000];
+    {
+        FILE *f = fopen(l2_path, "rb");
+        if (!f) T_FAIL("cannot open %s", l2_path);
+        long off = (long)map_id * 0x80c1 + 0x5000;
+        if (fseek(f, off, SEEK_SET) != 0) { fclose(f); T_FAIL("seek"); }
+        size_t got = fread(plane5, 1, sizeof plane5, f);
+        fclose(f);
+        if (got != sizeof plane5) T_FAIL("plane5 short read (%zu)", got);
+    }
+
+    int ok = 0;
+    for (int i = 0; i < NCELLS; i++)
+        if (g_overworld_map[i * CELL_STRIDE + 7] == plane5[i]) ok++;
+    printf("    [plane5] map_id=%d  +7 == L2_maps plane5: %d/%d = %.1f%%\n",
+           map_id, ok, NCELLS, pct(ok));
+    T_ASSERT_EQ_I(ok, NCELLS);   /* +7 is verbatim plane-5 — no remap exists */
 
     return 0;
 }

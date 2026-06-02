@@ -924,6 +924,48 @@ mismatched capture's `.pal` to the port's 8bpp raw recolours the shields
 matching capture instead.  The "5000 Crowns" in the older menu-bar note was a
 new-game spray value; `lastturn.sav` is 1000 Crowns / year 1268 / Winter.
 
+## L2_maps.dat plane layout + the "warmup remap" phantom (2026-06-02)
+
+`FUN_00467770` (new-game plane-unpack) reads a map from `L2_maps.dat` and
+fills the 64×64 descriptor table verbatim from six packed planes:
+
+    FUN_004af8d9(L2_maps.dat, buf, 0x80c1, map_id * 0x80c1)   // per-map blob
+    per cell (row*0x40 + col):
+        plane 0 (buf + 0x0000) -> desc +1   (flags; bit2 = border gate)
+        plane 1 (buf + 0x1000) -> desc +2   (render flags)
+        plane 2 (buf + 0x2000) -> desc +3   (terrain sprite, then autotiled)
+        plane 3 (buf + 0x3000) -> desc +4
+        plane 4 (buf + 0x4000) -> feature dispatch (FUN_0049bbe8 / FUN_00429153)
+        plane 5 (buf + 0x5000) -> desc +7   (per-cell baked REGION id; 0x20 = sea)
+    DAT_0056d5dc (territory count) = max(plane5 where plane5 < 0x11)
+
+Map stride is `0x80c1` (32961 B); each plane is `0x1000` (4096 = 64×64).  A
+`.sav` preserves these descriptor bytes, so the **load** path reproduces them
+without re-running `FUN_00467770`.
+
+**So descriptor +7 IS the map's baked region id — there is no "warmup
+region→owner remap."**  A long-standing render note claimed loading
+`lastturn.sav` left +7 as region ids `{1..0e}` that a *post-load turn/warmup
+pass* later remapped to owners `{0..4}` (with sea growing 84→497), matching the
+`strat-terrain1` capture.  That pass does not exist.  Plane-5 is a per-map
+fingerprint:
+
+| map | sea (0x20) | neutral | regions 1..0e | distinct | == capture |
+|----:|-----------:|--------:|--------------:|---------:|------------|
+| 0   | 84         | 2337    | 1675          | 16       | lastturn.sav + **all** load captures |
+| 17  | 497        | 2367    | 1232          | 6        | **strat-terrain1** |
+
+Per-cell: map 0 plane5 == `load-immediate1` +7 = 4096/4096 (100%); map 17
+plane5 == `strat-terrain1` +7 = 4096/4096 (100%) — and +4 (plane3) likewise
+100% for the matching map.  Cross-pairing (map 0 vs strat-terrain1) scores
+4–42%.  `strat-terrain1` was simply captured on a **different map** (map 17, a
+4-region sea-heavy scenario); its "owners {1,2,3,4}" are map 17's native region
+ids.  The port's immediate-load render of map 0 is byte-exact and is exactly
+what retail shows on load (idling 600 frames / 32 s never changes +7 — verified
+across `load_at_30/150/600`, `load_clean_32`).  Regression:
+`tests/test_map_finalize.c::test_map_finalize_plus7_is_map_plane5` asserts +7 ==
+plane-5(L2_maps.dat[map_id]) = 100%.  See engine-quirks #158.
+
 ## Native data path (load route) — FOUNDATION + the descriptor-finalize gap (2026-06-01)
 
 Goal: make the drop-in produce the strategic-map render arrays itself

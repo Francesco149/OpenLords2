@@ -1340,6 +1340,7 @@ struct test_case {
     X(map_init_camera_view0) \
     X(map_init_strategic_sets_default_scroll) \
     X(map_finalize_load_path_diagnostic) \
+    X(map_finalize_plus7_is_map_plane5) \
     X(minimap_render_political) \
     X(hud_panel_render_owned) \
     \

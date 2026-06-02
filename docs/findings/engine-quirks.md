@@ -5559,3 +5559,45 @@ after `engine_map_init_strategic`, via `engine_map_init_set_scroll`.  Note the
 port keeps the scroll in a private `g_col_start/g_row_start` (not the shared
 `s_slot_*` save globals), so the save restore does not reach it automatically —
 the explicit copy is required.
+
+## 158. There is no "warmup region→owner remap" — descriptor +7 is just plane-5 of the map file, and a cross-map capture invented a transformation that never happens
+
+For ~two sessions the render notes carried a "remaining gap": loading
+`lastturn.sav` produced a descriptor table whose per-cell **+7** field held
+*region ids* `{1..0x0e}` (sea `0x20`), but a captured "settled" frame
+(`runs/capture/strat-terrain1`) had **+7** ∈ `{0,1,2,3,4}` with sea grown
+84→497.  The theory was a post-load **turn/warmup pass** that remaps
+region→owner and recomputes terrain — a "spatial ownership fill" nobody could
+locate in the decompile.
+
+It does not exist.  The descriptor planes are read **verbatim** from the map
+file.  `FUN_00467770` (the new-game plane-unpack) does:
+`FUN_004af8d9(L2_maps.dat, buf, 0x80c1, map_id*0x80c1)` then, per 64×64 cell,
+copies six 0x1000-byte planes — plane 0/1/2/3 → desc **+1/+2/+3/+4**, plane 5 →
+desc **+7** (plane 4 drives feature dispatch; `DAT_0056d5dc` territory-count =
+`max(plane5 < 0x11)`).  A `.sav` preserves these planes, so the load path
+reproduces them.
+
+So **+7 is the map's baked per-cell region id**, and its histogram is a map
+fingerprint.  Extracting plane-5 for all 80 maps in `L2_maps.dat` (stride
+`0x80c1`, plane 5 at `+0x5000`):
+
+- **map 0** → sea 84 / neutral 2337 / regions 1675 / 16 distinct — matches
+  `lastturn.sav` and *every* load capture (immediate, +30, +150, +600,
+  clean+32s) **byte-for-byte** (plane5 == +7 = 4096/4096; plane3 == +4 = 100%).
+- **map 17** → sea 497 / neutral 2367 / regions 1232 / **6 distinct** — matches
+  `strat-terrain1` byte-for-byte (plane5 == +7 = 4096/4096; plane3 == +4 =
+  100%).  Cross-pairing map 0 ↔ strat-terrain1 scores 4–42%.
+
+`strat-terrain1` was simply captured on a **different map** (map 17, a
+4-region sea-heavy scenario), not a warmed-up `lastturn.sav`.  Its "owners
+`{1,2,3,4}`" are map 17's native region ids; the "sea growth" is map 17's
+coastline.  The port's immediate-load render of map 0 is byte-exact and is
+exactly what retail shows on load — idling 600 frames / 32 s never changes +7
+(confirmed across all load captures).
+
+**Lesson:** a descriptor field whose values look "transformed" across two
+captures may just be two different inputs.  Fingerprint the *source asset*
+(here: per-map plane-5 of `L2_maps.dat`) before hypothesising an engine pass —
+it's a free local check that needs no frida and would have killed this phantom
+on day one.  See `docs/findings/map-render.md` "L2_maps.dat plane layout".
