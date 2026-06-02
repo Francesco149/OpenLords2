@@ -5972,3 +5972,16 @@ field assignment is trivially correct by inspection.
 `FUN_004a9a9a` also re-runs the per-realm economy trio
 (`FUN_0044f6e7`/`FUN_0044df5f`/`FUN_004485a5`) **twice, back to back, verbatim**
 — ported as a 2-iteration loop, not deduplicated.
+
+Verification: `engine_combat_place_garrison` (`FUN_004a79a3`) is **retail-diff
+gated** — new diff target `place_garrison`, **96/96 byte-exact** (48 seed0 + 48
+seed7).  It dodges the economy-re-plan wall the same way `combat_ownership`
+does: only the occupant block (`g_per_territory_420`) is read back, and the
+place branch's `collect_territory_income` tail writes only `g_per_army_768`, so
+the readback stays a pure save-state diff.  The diff covers the within-cap place
+branch (role 5 + seat coords + cell offset + `+0x153 += 5` + `+0x151` / `+0x198`)
+and the over-cap reject branch (role 2), including the pending-garrison
+head-count summing in the cap check.  `engine_combat_spawn_unit` and the four
+leaves are host-unit-tested (the spawn's economy tail + the race-0 `strat[6]`
+read keep them off the diffable path); their occupant-field writes share the
+already-diffed `g_per_territory_420` layout.

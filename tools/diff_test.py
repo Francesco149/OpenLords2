@@ -2589,6 +2589,7 @@ FN_COMBAT_CONDITION  = 0x4a80db   # FUN_004a80db — __cdecl int(int rec)
 FN_COMBAT_HALVE      = 0x4ad8cc   # FUN_004ad8cc — __cdecl void(int rec)
 FN_DIPLOMACY_ADJUST  = 0x4a1ee1   # FUN_004a1ee1 — __cdecl void(uint,uint,char)
 FN_COMBAT_OWNERSHIP  = 0x4a72fe   # FUN_004a72fe — __cdecl void(uint new_owner, uint key)
+FN_PLACE_GARRISON    = 0x4a79a3   # FUN_004a79a3 — __cdecl void(uint occ, int key)
 
 REALM_RACE_RETRIES = 8
 
@@ -2671,6 +2672,11 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
         lib.engine_combat_transfer_ownership.restype = None
         lib.engine_combat_transfer_ownership.argtypes = [
             ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p, ctypes.c_int]
+        lib.engine_combat_place_garrison.restype = None
+        lib.engine_combat_place_garrison.argtypes = [
+            ctypes.c_uint, ctypes.c_int, ctypes.c_void_p]
+        lib.engine_army_economy_bind_army_records.restype = None
+        lib.engine_army_economy_bind_army_records.argtypes = [ctypes.c_void_p]
     return _realm_globals_cache
 
 
@@ -4346,6 +4352,134 @@ def diff_combat_ownership(retail: dict, port: dict) -> list[str]:
     return bad
 
 
+# ── settlement-spawn garrison placement (FUN_004a79a3 — engine_combat_place_garrison) ──
+#
+# __cdecl(uint occ, int key): home freshly-spawned occupant `occ` onto realm
+# `key`'s keep cell.  Caps the combined head-count (occ +0x168, plus the pending
+# garrison's when one exists) against the keep-level table 0x4d8a0c
+# {2500,150,200,200,400,600,0,50,75,100}[army+0x1c0]:
+#   - over cap → occupant rejected: role +0x1a = 2, +0x14c = 0, return (no tail);
+#   - within cap, NO garrison pending → occupant becomes the garrison: role 5,
+#     coords copied from the army seat (+0x74/+0x75 → +0x14/+0x0a / +0x15/+0x0b),
+#     cell offset, +0x06/+0x150 set, +0x153 += 5, +0x151/+0x198 = key, and the
+#     army's pending slot (+0x1bc) set to occ.
+# The pending-set place branch then runs engine_realm_collect_territory_income
+# (the price/cell-dependent economy re-plan), but that touches only
+# g_per_army_768 — NOT the occupant block — so the readback is restricted to
+# g_per_territory_420 and stays a pure save-state diff (same trick the
+# combat_ownership target uses to dodge the re-plan wall).  The MERGE branch
+# (within cap WITH a pending garrison) is excluded — vectors keep pending == 0
+# on the within-cap path, and force over-cap whenever pending != 0.
+# Inject a zeroed overworld map so the place branch's map-unlink (FUN_0046ec6e)
+# is a no-op on both sides (head-link 0 → early return).  Driven through the
+# generic RPC with args=[occ, key] cc='mscdecl'.
+
+_PG_EVQ_BYTES = 1280
+_pg_evq = None
+
+
+def _build_garrison_vec(occ, key, *, keeplvl, value, seat_col, seat_row, race,
+                        f153, pending=0, pending_value=0) -> dict:
+    army = bytearray(REALM_ARMY_BYTES)
+    terr = bytearray(REALM_TERR_BYTES)
+
+    a = key * REALM_ARMY_STRIDE
+    army[a + 0x05]  = race    & 0xff       # race (view-dirty gate; harmless)
+    army[a + 0x74]  = seat_col & 0xff      # seat column → occupant home col
+    army[a + 0x75]  = seat_row & 0xff      # seat row    → occupant home row
+    army[a + 0x1c0] = keeplvl & 0xff       # keep level → cap table index
+    struct.pack_into("<i", army, a + 0x1bc, pending)   # pending garrison occ
+
+    t = occ * REALM_TERR_STRIDE
+    struct.pack_into("<i", terr, t + 0x168, value)     # head-count
+    terr[t + 0x08]  = 0                    # kind 0 → not counted by collect pass-2
+    terr[t + 0x10]  = key & 0xff           # home key (kept small)
+    terr[t + 0x153] = f153 & 0xff          # presence accumulator (+= 5 on place)
+
+    if pending:
+        p = pending * REALM_TERR_STRIDE
+        struct.pack_into("<i", terr, p + 0x168, pending_value)
+        terr[p + 0x08] = 0
+
+    return {"occ": occ, "key": key, "army": bytes(army), "terr": bytes(terr),
+            "season": 1, "season_prev": 1, "local": 0}
+
+
+def gen_place_garrison_vectors(n: int, rng: random.Random) -> list[dict]:
+    edge = [
+        # within cap, no pending → placed as garrison (role 5) at the seat
+        _build_garrison_vec(4, 5, keeplvl=3, value=100, seat_col=10, seat_row=12,
+                            race=2, f153=4),
+        # head-count exactly at the cap (200 for keeplvl 2) → within → placed
+        _build_garrison_vec(6, 3, keeplvl=2, value=200, seat_col=20, seat_row=5,
+                            race=3, f153=0),
+        # over cap (keeplvl 1 → 150) → rejected (role 2)
+        _build_garrison_vec(7, 4, keeplvl=1, value=200, seat_col=0, seat_row=0,
+                            race=1, f153=10),
+        # keeplvl 5 → cap 600; value 500 placed; presence wraps near i8 edge
+        _build_garrison_vec(8, 2, keeplvl=5, value=500, seat_col=30, seat_row=30,
+                            race=4, f153=0x7e),
+        # zero head-count → within cap → placed
+        _build_garrison_vec(9, 6, keeplvl=2, value=0, seat_col=40, seat_row=40,
+                            race=5, f153=1),
+        # pending garrison present, combined head OVER cap → rejected (exercises
+        # the pending-value summing in the cap check; stays off the merge branch)
+        _build_garrison_vec(10, 7, keeplvl=2, value=120, seat_col=8, seat_row=8,
+                            race=2, f153=3, pending=11, pending_value=150),
+        # keeplvl 7 → cap 50; value 40 placed
+        _build_garrison_vec(12, 9, keeplvl=7, value=40, seat_col=15, seat_row=22,
+                            race=3, f153=0),
+    ]
+    vecs = list(edge)
+    while len(vecs) < n:
+        keeplvl = rng.randint(0, 9)            # cap table index
+        occ = rng.randint(1, 150)
+        key = rng.randint(1, 16)
+        cap_tbl = [2500, 150, 200, 200, 400, 600, 0, 50, 75, 100]
+        cap = cap_tbl[keeplvl]
+        # No pending → within-cap places, over-cap rejects (both occupant-pure).
+        value = rng.choice([0, cap, cap + 1, rng.randint(0, 800)])
+        vecs.append(_build_garrison_vec(
+            occ, key, keeplvl=keeplvl, value=value,
+            seat_col=rng.randint(0, 63), seat_row=rng.randint(0, 63),
+            race=rng.randint(0, 5), f153=rng.randint(0, 255)))
+    return vecs
+
+
+def run_port_place_garrison(lib: ctypes.CDLL, vec: dict) -> dict:
+    global _pg_evq
+    g = realm_port_globals(lib)
+    if _pg_evq is None:
+        _pg_evq = ctypes.create_string_buffer(_PG_EVQ_BYTES)
+    lib.engine_event_queue_init(_pg_evq)
+    lib.engine_army_economy_bind_army_records(None)   # neuter the re-plan tail
+    ctypes.memmove(g["army"], vec["army"], REALM_ARMY_BYTES)
+    ctypes.memmove(g["terr"], vec["terr"], REALM_TERR_BYTES)
+    ctypes.memset(g["over"], 0, REALM_OVER_BYTES)     # map-unlink → no-op
+    g["season"].value      = vec["season"]
+    g["season_prev"].value = vec["season_prev"]
+    g["local"].value       = vec["local"]
+    lib.engine_combat_place_garrison(vec["occ"], vec["key"], _pg_evq)
+    return {"terr": list(bytes(g["terr"]))}
+
+
+def place_garrison_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_PLACE_GARRISON, "cc": "mscdecl",
+            "args": [vec["occ"], vec["key"]], "regions": [
+        {"va": VA_PER_ARMY,      "len": REALM_ARMY_BYTES, "inject": list(vec["army"]), "read": False},
+        {"va": VA_PER_TERRITORY, "len": REALM_TERR_BYTES, "inject": list(vec["terr"]), "read": True},
+        {"va": VA_OVERWORLD,     "len": REALM_OVER_BYTES,  "inject": [0] * REALM_OVER_BYTES, "read": False},
+        {"va": VA_SLOT_SEASON,      "len": 4, "inject": list(_u32le(vec["season"])),      "read": False},
+        {"va": VA_SLOT_SEASON_PREV, "len": 4, "inject": list(_u32le(vec["season_prev"])), "read": False},
+        {"va": VA_SLOT_LOCAL,       "len": 4, "inject": list(_u32le(vec["local"])),       "read": False},
+    ]}
+
+
+def diff_place_garrison(retail: dict, port: dict) -> list[str]:
+    return _diff_realm_region(retail, port["terr"], VA_PER_TERRITORY,
+                              REALM_TERR_STRIDE, 151, "terr")
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -4485,6 +4619,9 @@ def run_diff(cfg_args) -> int:
     if "combat_ownership" in enabled:
         test_plans.append(("combat_ownership",
                            gen_combat_ownership_vectors(cfg_args.vectors, rng)))
+    if "place_garrison" in enabled:
+        test_plans.append(("place_garrison",
+                           gen_place_garrison_vectors(cfg_args.vectors, rng)))
     if "player_aggregate" in enabled:
         test_plans.append(("player_aggregate",
                            gen_player_aggregate_vectors(cfg_args.vectors, rng)))
@@ -4623,7 +4760,8 @@ def run_diff(cfg_args) -> int:
                                  "upkeep", "season_economy",
                                  "resource_pass", "population", "combat_resolve",
                                  "combat_condition", "combat_halve",
-                                 "diplomacy_adjust", "combat_ownership"}
+                                 "diplomacy_adjust", "combat_ownership",
+                                 "place_garrison"}
         shared_freeze_installed = False
         if shared_freeze_targets & {n for (n, _) in test_plans}:
             fresp = script.exports_sync.install_sim_sub_steps_engine_freeze()
@@ -5618,6 +5756,42 @@ def run_diff(cfg_args) -> int:
                                   "note": "region readback elided"}
                         port = {"note": "region readback elided"}
                         vec = {"new_owner": vec["new_owner"], "key": vec["key"]}
+                elif fn_name == "place_garrison":
+                    # FUN_004a79a3(occ,key): settlement-spawn garrison placement.
+                    # Inject army+terr + a zeroed overworld map (map-unlink no-op)
+                    # + season/local scalars; call args=[occ,key] (cc=mscdecl);
+                    # read back only the occupant block (the place branch's
+                    # economy re-plan touches g_per_army_768, not occupants).
+                    port = run_port_place_garrison(lib, vec)
+                    plan = place_garrison_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"occ": vec["occ"],
+                                                 "key": vec["key"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_place_garrison(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"occ": vec["occ"], "key": vec["key"]}
                 else:
                     continue
                 if bad:
