@@ -16,6 +16,7 @@ int  g_engine_state;
 static int g_stub_screen;
 static int g_stub_redraw;
 int  engine_current_screen(void)        { return g_stub_screen; }
+void engine_set_current_screen(int s)   { g_stub_screen = s; }
 void engine_set_demand_redraw(int mode) { g_stub_redraw = mode; }
 
 /* ── Fake load hook: records the filename the pump hands it. ── */

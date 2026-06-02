@@ -1748,6 +1748,7 @@ struct test_case {
     X(game_init_setup_realms_roster_mapping) \
     X(game_init_seed_army_baseline_fields) \
     X(game_init_seed_army_baseline_tiers_and_parity) \
+    X(game_init_orchestrator_builds_map) \
     \
     X(engine_realm_rating_rollforward) \
     X(engine_realm_rating_zero_pop_reset) \

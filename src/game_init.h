@@ -245,4 +245,60 @@ void engine_game_init_setup_realms(void);
  * territory callees (each is individually NULL-safe). */
 void engine_game_init_seed_army_baseline(void);
 
+/* ──────────────────────────────────────────────────────────────────
+ * New-game orchestrator (FUN_00497ced) + game-start (FUN_004329ec)
+ * ────────────────────────────────────────────────────────────────── */
+
+/* Optional seams for the orchestrator's non-state-producing tail calls.
+ * Each defaults to NULL (skipped), following the engine_game_init_bind_
+ * troop_spawn precedent — the host test + headless --newgame seat run
+ * clean, and the live path binds the real ones.
+ *
+ *   turn_driver  — FUN_00448440, the per-turn driver run once at new-game
+ *                  (advances season/year + runs the economy/AI passes).
+ *                  DEFERRED — needs its mostly-ported sub-passes assembled.
+ *   banks        — FUN_004984dc, the seasonal .pl8 sprite-bank load (the
+ *                  render data-ready gate); the seat binds the engine_pl8
+ *                  loader.  No gfx in host tests, so it stays NULL there.
+ *   castles_init — FUN_004ae8a9, write the fresh 16-record castles.dat.
+ *   save_rotate  — FUN_0049a453, rotate + write the initial save slots.
+ *                  Both are file IO with no effect on the in-memory tables
+ *                  the byte-validation checks. */
+void engine_game_init_bind_turn_driver_fn(void (*fn)(void));
+void engine_game_init_bind_banks_fn(void (*fn)(void));
+void engine_game_init_bind_castles_init_fn(void (*fn)(void));
+void engine_game_init_bind_save_rotate_fn(void (*fn)(void));
+
+/* Port of FUN_00497ced @ 0x497ced (376 B) — the new-game world-state
+ * initialiser.  Runs the ported seed phases in retail order, threading the
+ * engine's two LFSRs (seeded to the InitInstance constants so a port↔retail
+ * comparison under frida_capture --rng-seed matches), and owns the runtime-
+ * only cell-score table (DAT_0053fa40) + strategic category-bucket digest it
+ * binds for the territory passes.
+ *
+ * PRECONDITION (caller — the config screen in retail, the seat/test here):
+ * s_slot_0053f034 (map id), s_slot_0056d5dc (army/realm count) and the realm
+ * presets (engine_game_init_set_realm_presets) are set, and the tile_cells +
+ * camera are built (engine_map_init_build_cells / _set_camera) — retail builds
+ * those in the page-7 config screen, not in 0x497ced.  This binds tile_cells
+ * via engine_map_init_tile_cells().  The caller must also bind the loaded
+ * L2_maps.dat[map_id] record (engine_territory_bind_strat_map_record) — the
+ * port's seam for FUN_00467770's file read, which setup_overworld unpacks.
+ * The NPC-schedule seed reads the bound l2.eng blob (engine_npc_schedule_
+ * set_localization, config_localization_data on the live path) for job names;
+ * bind NULL to skip it (engine-quirks #107).
+ *
+ * Builds the descriptor table from L2_maps.dat[map_id] (engine_territory_
+ * setup_overworld → the 467770 plane-unpack + autotile) and seeds every
+ * per-army / per-player / per-territory record.  The deferred tail calls
+ * (turn driver / banks / file IO / audio / cursor) are the optional seams
+ * above + inline no-ops. */
+void engine_game_init(void);
+
+/* Port of FUN_004329ec @ 0x4329ec single-player new-game branch: run
+ * engine_game_init(), set the in-game screen (DAT_004eac50 = 0) and engine
+ * state (DAT_0052af94 = 3), then FUN_00451f8a (timer reset, in engine_load_
+ * pump.c).  The multiplayer / load branches are not ported. */
+void engine_game_start(void);
+
 #endif /* OPENLORDS2_GAME_INIT_H */

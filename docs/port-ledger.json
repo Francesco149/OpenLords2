@@ -4,15 +4,15 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 548,
+  "tested": 549,
   "ported": 46,
-  "unported": 1853,
+  "unported": 1852,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 594,
+  "touched": 595,
   "pct_touched": 24.3,
   "pct_tested": 22.4,
   "bytes_total": 838629,
-  "bytes_touched": 240431,
+  "bytes_touched": 240469,
   "pct_bytes_touched": 28.7
  },
  "orphan_refs": [
@@ -4022,7 +4022,8 @@
    "src": [
     "src/engine_category_buckets.c",
     "src/engine_category_buckets.h",
-    "src/engine_territory.c"
+    "src/engine_territory.c",
+    "src/game_init.c"
    ]
   },
   {
@@ -4783,7 +4784,9 @@
    "status": "tested",
    "src": [
     "src/engine_load_pump.c",
-    "src/engine_load_pump.h"
+    "src/engine_load_pump.h",
+    "src/game_init.c",
+    "src/game_init.h"
    ]
   },
   {
@@ -9569,7 +9572,9 @@
    "src": [
     "src/engine_army_ai.c",
     "src/engine_army_ai.h",
-    "src/engine_realm.c"
+    "src/engine_realm.c",
+    "src/game_init.c",
+    "src/game_init.h"
    ]
   },
   {
@@ -10699,7 +10704,9 @@
    "status": "tested",
    "src": [
     "src/engine_load_pump.c",
-    "src/engine_load_pump.h"
+    "src/engine_load_pump.h",
+    "src/game_init.c",
+    "src/game_init.h"
    ]
   },
   {
@@ -11539,7 +11546,8 @@
    "src": [
     "src/engine_territory.c",
     "src/engine_territory.h",
-    "src/engine_title_render.c"
+    "src/engine_title_render.c",
+    "src/game_init.h"
    ]
   },
   {
@@ -12634,7 +12642,8 @@
    "status": "tested",
    "src": [
     "src/engine_strat_cost.c",
-    "src/engine_strat_cost.h"
+    "src/engine_strat_cost.h",
+    "src/game_init.c"
    ]
   },
   {
@@ -12810,7 +12819,8 @@
    "status": "tested",
    "src": [
     "src/engine_event_queue.c",
-    "src/engine_event_queue.h"
+    "src/engine_event_queue.h",
+    "src/game_init.c"
    ]
   },
   {
@@ -15218,7 +15228,9 @@
    "src": [
     "src/engine_load_pump.c",
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/game_init.c",
+    "src/game_init.h"
    ]
   },
   {
@@ -15271,6 +15283,8 @@
    "src": [
     "src/engine_pl8.c",
     "src/engine_pl8.h",
+    "src/game_init.c",
+    "src/game_init.h",
     "src/gen/pl8_table.h",
     "src/main.c"
    ]
@@ -15488,6 +15502,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/game_init.c",
+    "src/game_init.h",
     "src/save.c",
     "src/save.h"
    ]
@@ -15519,7 +15535,8 @@
    "status": "tested",
    "src": [
     "src/engine_ranking.c",
-    "src/engine_ranking.h"
+    "src/engine_ranking.h",
+    "src/game_init.c"
    ]
   },
   {
@@ -17145,6 +17162,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/game_init.c",
+    "src/game_init.h",
     "src/save.c",
     "src/save.h"
    ]
@@ -17725,8 +17744,10 @@
    "name": "FUN_004b18f8",
    "size": 38,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/game_init.c"
+   ]
   },
   {
    "va": "0x4b191e",

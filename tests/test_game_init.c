@@ -1205,3 +1205,83 @@ int test_game_init_seed_army_baseline_tiers_and_parity(void)
         T_ASSERT_EQ_I(r[0x297 + i * 0x18], 0);
     return 0;
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+ * engine_game_init orchestrator (FUN_00497ced) — structural smoke.
+ *
+ * Runs the full new-game initialiser for map 0 and asserts the render-
+ * critical descriptor build executed inside it: descriptor +7 must equal
+ * plane-5 of L2_maps.dat[0] (the 467770 plane-unpack via setup_overworld),
+ * and the territory count s_slot_0056d5dc must be the max plane-5 id < 0x11.
+ * This proves the orchestrator wires + runs end-to-end (clean under ASan)
+ * and produces a coherent map; the byte-exact per-army/territory validation
+ * vs a retail dump is the separate Phase-C diff test.
+ * ──────────────────────────────────────────────────────────────────────── */
+#include <stdio.h>
+#include <sys/stat.h>
+#include <stdlib.h>
+#include "engine_map_init.h"
+#include "engine_npc_schedule.h"   /* loc-blob bind isolation */
+
+static int gi_file_exists(const char *p)
+{
+    struct stat st; return stat(p, &st) == 0 && S_ISREG(st.st_mode);
+}
+static int gi_game_dir(char *dst, size_t cap)
+{
+    const char *e = getenv("OPENLORDS2_GAME_DIR");
+    if (e && *e) { snprintf(dst, cap, "%s", e); return 1; }
+    snprintf(dst, cap, "%s/vendor/original", OPENLORDS2_ROOT);
+    return 1;
+}
+
+int test_game_init_orchestrator_builds_map(void)
+{
+    char gdir[1024];
+    gi_game_dir(gdir, sizeof gdir);
+    char l2[1200];
+    snprintf(l2, sizeof l2, "%s/L2_maps.dat", gdir);
+    if (!gi_file_exists(l2)) T_SKIP("L2_maps.dat not found at %s", l2);
+
+    /* Load the full map-0 record (0x80c1 B); plane 5 (offset 0x5000) is the
+     * expected +7.  The orchestrator's setup_overworld reads the bound record
+     * (the port's seam for FUN_00467770's file read). */
+    static uint8_t maprec[0x80c1];
+    {
+        FILE *f = fopen(l2, "rb");
+        if (!f) T_FAIL("open %s", l2);
+        size_t got = fread(maprec, 1, sizeof maprec, f);   /* map 0 = offset 0 */
+        fclose(f);
+        if (got != sizeof maprec) T_FAIL("maprec short read");
+    }
+    const uint8_t *plane5 = maprec + 0x5000;
+    int exp_count = 0;
+    for (int i = 0; i < 0x1000; i++)
+        if (plane5[i] < 0x11 && plane5[i] > exp_count) exp_count = plane5[i];
+
+    /* Caller preconditions (retail's config screen): map id + tile_cells +
+     * camera built and the L2_maps record bound before the orchestrator. */
+    s_slot_0053f034 = 0;                            /* map id */
+    s_slot_0057cb18 = 0;                            /* view-mode normal */
+    if (engine_map_init_build_cells(gdir, 0, 0) == 0)
+        T_FAIL("build_cells failed (L2_maps.dat read)");
+    engine_map_init_set_camera(0);
+    engine_territory_bind_strat_map_record(maprec);
+    /* No NPC-name localization needed for the descriptor-build check (and it
+     * isolates us from any blob a prior test left bound — engine-quirks #107
+     * skips the loc walk when none is set).  Phase C binds real l2.eng. */
+    engine_npc_schedule_set_localization(NULL, 0);
+
+    engine_game_init();                             /* FUN_00497ced */
+
+    /* The plane-unpack inside setup_overworld must have populated +7. */
+    int ok = 0;
+    for (int i = 0; i < 4096; i++)
+        if (g_overworld_map[i * 8 + 7] == plane5[i]) ok++;
+    printf("    [game_init] orchestrator +7 == map0 plane5: %d/4096 = %.1f%%; "
+           "territory_count=%d (exp %d)\n",
+           ok, 100.0 * ok / 4096, (int)s_slot_0056d5dc, exp_count);
+    T_ASSERT_EQ_I(ok, 4096);
+    T_ASSERT_EQ_I((int)s_slot_0056d5dc, exp_count);
+    return 0;
+}

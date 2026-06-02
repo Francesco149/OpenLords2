@@ -15,6 +15,13 @@
 #include "engine_map_query.h"     /* box predicates for the army-coord probes */
 #include "engine_territory.h"     /* entity placer FUN_0046e1b0 (army starts) */
 #include "engine_army_economy.h"  /* provision / plan_realm (per-realm economy) */
+#include "engine_npc_schedule.h"  /* engine_npc_schedule_init (FUN_0049caaa)     */
+#include "engine_strat_cost.h"    /* engine_strat_cost_rebuild (FUN_0046ff43)    */
+#include "engine_event_queue.h"   /* engine_event_queue_init_wrapper (FUN_00472ad0) */
+#include "engine_ranking.h"       /* engine_ranking_recompute (FUN_0049aa0e)     */
+#include "engine_map_init.h"      /* engine_map_init_tile_cells                  */
+#include "engine_map_terrain.h"   /* engine_map_terrain_set_empty_redraw_gate    */
+#include "engine_category_buckets.h" /* the strategic category-bucket digest      */
 
 /* Fixed-length record zeroer — retail FUN_0046ea28 (len 0x300),
  * FUN_0046eb09 (len 0x14), FUN_0046ead0 (len 0x1a4) and FUN_0046ea61
@@ -903,4 +910,117 @@ void engine_game_init_seed_army_baseline(void)
         engine_territory_allocate_realm_workforce(key);       /* FUN_0044f6e7 */
         engine_army_economy_provision(key, (int)s_slot_0057c934); /* 0x44df5f */
     }
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * New-game orchestrator (FUN_00497ced) + game-start (FUN_004329ec)
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/* Runtime-only state the orchestrator owns + binds for the territory passes.
+ * The cell-score table is retail DAT_0053fa40 (17 rows × 384 i16, the per-
+ * army cell scoring grid the new-game rebuild resets); the category-bucket
+ * digest is the strategic FUN_004290d0/429153 working set. */
+#define GI_SCORE_ROWS 17
+#define GI_SCORE_ROW_I16 384
+static int16_t g_gi_cell_score[GI_SCORE_ROWS * GI_SCORE_ROW_I16];   /* DAT_0053fa40 */
+static engine_category_buckets_state_t g_gi_strat_buckets;
+
+/* Optional seams (see game_init.h) — default NULL = skip. */
+static void (*g_gi_turn_driver_fn)(void);   /* FUN_00448440 (deferred)        */
+static void (*g_gi_banks_fn)(void);         /* FUN_004984dc (seat-bound)      */
+static void (*g_gi_castles_init_fn)(void);  /* FUN_004ae8a9 (file IO)         */
+static void (*g_gi_save_rotate_fn)(void);   /* FUN_0049a453 (file IO)         */
+
+void engine_game_init_bind_turn_driver_fn(void (*fn)(void)) { g_gi_turn_driver_fn = fn; }
+void engine_game_init_bind_banks_fn(void (*fn)(void))       { g_gi_banks_fn = fn; }
+void engine_game_init_bind_castles_init_fn(void (*fn)(void)){ g_gi_castles_init_fn = fn; }
+void engine_game_init_bind_save_rotate_fn(void (*fn)(void)) { g_gi_save_rotate_fn = fn; }
+
+void engine_game_init(void)
+{
+    /* RNG streams, seeded to the InitInstance constants (so a port↔retail
+     * capture under frida_capture --rng-seed, which pins the same, matches).
+     * The double LFSR is consumed by the roster/value randomiser (497e65);
+     * the single LFSR by the overworld autotiler (46dbf5/46dd34). They are
+     * independent streams in this orchestrator. */
+    engine_rng_in_t        rng  = { .state_a = 0x54657687u, .state_b = 0x72641663u };
+    engine_rng_single_in_t rngs = { .state   = 0x34518632u };
+
+    /* Bind the runtime tables the seeders read/write to the live save blocks
+     * (the same blocks the load path + tests bind). */
+    int32_t *tile_cells = engine_map_init_tile_cells();      /* built by the caller */
+    engine_territory_bind_records(g_per_territory_420);
+    engine_territory_bind_cells(g_overworld_map);            /* descriptor table */
+    engine_territory_bind_cell_roster((int32_t *)g_misc_1360);
+    engine_territory_bind_cell_score_table(g_gi_cell_score);
+    engine_territory_bind_terrain_tiles(tile_cells);
+    engine_territory_bind_army_records(g_per_army_768);
+    engine_territory_bind_category_buckets(&g_gi_strat_buckets);
+    engine_army_economy_bind_army_records(g_per_army_768);
+    engine_army_economy_bind_cell_roster((int32_t *)g_misc_1360);
+    engine_army_economy_bind_cells(g_overworld_map);
+
+    /* 1–3: clear the per-territory / unit-type / per-army save blocks. */
+    engine_game_init_clear_tables();                  /* 46f3cd / 46f2ae / 46f1dc */
+    /* 4: NPC schedule seed. */
+    engine_npc_schedule_init();                       /* 49caaa */
+    /* 5: scalar world-state block (calendar etc.). */
+    engine_game_init_seed_scalars();
+    /* 6: overworld descriptor build (plane-unpack + autotile, single LFSR). */
+    engine_territory_setup_overworld(&rngs);          /* 4676e0 */
+    /* 7: per-army baseline economy/state row. */
+    engine_game_init_seed_army_baseline();            /* 451150 */
+    /* 8: place each army's start marker. */
+    engine_game_init_place_army_starts();             /* 427ed0 */
+    /* 9: unit/opponent-type table. */
+    engine_game_init_seed_unit_table();               /* 4ac904 */
+    /* 10: roster shuffle + the two 48-entry tables (double LFSR). */
+    engine_game_init_seat_shuffle(&rng);              /* 497e65 */
+    /* 11: compact the player roster. */
+    player_roster_compact();                          /* 49bc5f */
+    /* 12: per-realm / country setup. */
+    engine_game_init_setup_realms();                  /* 49bd99 */
+    /* 13: per-player sub-table reset. */
+    engine_game_init_reset_player_subtables();        /* 4a1c53 */
+    /* 14: 16-entry value table. */
+    engine_game_init_seed_value_table();              /* 42847c */
+    /* 15: per-realm stat-history ring. */
+    engine_game_init_clear_realm_history();           /* 4ae74d */
+    /* 16: write the fresh castles.dat (file IO seam). */
+    if (g_gi_castles_init_fn) g_gi_castles_init_fn();  /* 4ae8a9 */
+    /* 17: per-turn driver — DEFERRED (advances calendar + economy/AI). */
+    if (g_gi_turn_driver_fn) g_gi_turn_driver_fn();    /* 448440 */
+    /* 18: rebuild the strategic move-cost table from the descriptors. */
+    engine_strat_cost_rebuild(g_overworld_map);       /* 46ff43 */
+    /* 19: rotate + write the initial save slots (file IO seam). */
+    if (g_gi_save_rotate_fn) g_gi_save_rotate_fn();    /* 49a453 */
+    /* 20–21: event queue init + ranking recompute. */
+    {
+        engine_event_queue_state_t evq;
+        engine_event_queue_init_wrapper(&evq);        /* 472ad0 */
+        engine_ranking_recompute(&evq);               /* 49aa0e */
+    }
+    /* 22: audio cue — no-op (seats muted; see feedback_mute_and_skip_intro). */
+    /* 23: seasonal sprite banks (render data-ready gate; seat-bound). */
+    if (g_gi_banks_fn) g_gi_banks_fn();               /* 4984dc */
+    /* 24: FUN_004b18f8(0xe8,0xc0) — synthetic WM_MOUSEMOVE to centre the
+     *      cursor; a no-op for the headless render path. */
+    /* 25: audio cue — no-op. */
+    /* 26: purge inactive player records. */
+    engine_game_init_purge_inactive_records();        /* 49b35e */
+}
+
+void engine_game_start(void)
+{
+    /* Single-player new-game branch of FUN_004329ec: build the world, then
+     * flip to the in-game strategic-map screen + ingame engine state. The
+     * MP / load branches are not ported. */
+    engine_game_init();                               /* 497ced */
+    engine_set_current_screen(0);                     /* DAT_004eac50 = 0 (ingame map) */
+    g_engine_state = 3;                               /* DAT_0052af94 = 3 (ingame) */
+    /* FUN_00451f8a's render-relevant flag: force a full empty-cell redraw on
+     * the first frame (DAT_0053e9ac = 1; the others it sets are render-neutral
+     * UI flags the live tick re-establishes). */
+    engine_map_terrain_set_empty_redraw_gate(1);
+    engine_set_demand_redraw(2);                      /* DAT_0057d340 = 2 */
 }
