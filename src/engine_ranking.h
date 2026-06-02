@@ -74,4 +74,20 @@ void engine_ranking_snapshot_player_metrics(void);
  *   FUN_0049d1e0 @ 0x49d1e0. */
 void engine_ranking_recompute_player_aggregate(unsigned player);
 
+/* Bind the optional local-defeat game-over screen used by
+ * engine_ranking_check_elimination (retail FUN_0043eda0(0x24, 0)).  NULL (the
+ * default) runs the elimination logic headless. */
+void engine_ranking_bind_game_over_fn(void (*fn)(void));
+
+/* Re-evaluate whether `player` has been eliminated (liveness +0x04 = 3·armies +
+ * 1·territories falls to 0), firing the defeat notification (0xe0 local / 0xc2
+ * AI), advancing the rotating message counter, re-ranking the field, and — for
+ * a local-player elimination in a multiplayer game (`mp_active`, retail
+ * DAT_00553030) — the bound game-over screen.  The elimination mirror of
+ * engine_ranking_recompute's victory branch.  `evq` is the live event queue.
+ *   FUN_0049b42b @ 0x49b42b. */
+void engine_ranking_check_elimination(unsigned player,
+                                      engine_event_queue_state_t *evq,
+                                      int mp_active);
+
 #endif /* OPENLORDS2_ENGINE_RANKING_H */

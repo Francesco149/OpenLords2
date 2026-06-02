@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **610** (24.9%) — tested 565, ported 45
-- code bytes touched: **29.4%** (246,754 / 838,629 B)
-- unported: **1837**
+- touched: **612** (25.0%) — tested 567, ported 45
+- code bytes touched: **29.6%** (248,071 / 838,629 B)
+- unported: **1835**
 - orphan refs (in src/, not in function table): 4
 
-## tested (565) — ported + host unit suite
+## tested (567) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -233,6 +233,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43e433 | FUN_0043e433 | 218 | engine.h, engine_rate.c |
 | 0x43e50d | FUN_0043e50d | 180 | engine.h, engine_rate.c |
 | 0x43e9e2 | FUN_0043e9e2 | 223 | main.c |
+| 0x43eda0 | FUN_0043eda0 | 637 | engine_ranking.c, engine_ranking.h |
 | 0x43f4b7 | FUN_0043f4b7 | 270 | engine.h, engine_state_hash.c, main.c |
 | 0x43fd2a | FUN_0043fd2a | 413 | main.c |
 | 0x43ffc3 | FUN_0043ffc3 | 117 | engine_state_hash.c |
@@ -447,6 +448,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49a990 | FUN_0049a990 | 126 | engine_army_ai.c, engine_army_ai.h |
 | 0x49aa0e | FUN_0049aa0e | 2197 | engine_ranking.c, engine_ranking.h, game_init.c |
 | 0x49b35e | FUN_0049b35e | 205 | game_init.c, game_init.h |
+| 0x49b42b | FUN_0049b42b | 680 | engine_ranking.c, engine_ranking.h |
 | 0x49b762 | FUN_0049b762 | 334 | engine.c, engine.h, engine_turn.c (+1) |
 | 0x49bae9 | FUN_0049bae9 | 180 | engine_menu_input.c, engine_roster.c, engine_roster.h |
 | 0x49bbe8 | FUN_0049bbe8 | 53 | engine_roster.c, engine_roster.h, engine_territory.c |

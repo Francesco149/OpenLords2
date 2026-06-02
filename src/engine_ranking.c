@@ -333,3 +333,75 @@ void engine_ranking_recompute(engine_event_queue_state_t *evq)
         }
     }
 }
+
+/* Optional game-over-screen hook for engine_ranking_check_elimination — retail
+ * FUN_0043eda0(0x24, 0), the local-player defeat screen.  NULL (the default)
+ * means no screen change, so the elimination logic + notifications run headless
+ * (the diff / host tests bind it to NULL).  It is the function's only side
+ * effect outside the save-state globals + the event ring. */
+static void (*s_game_over_fn)(void);
+
+void engine_ranking_bind_game_over_fn(void (*fn)(void)) { s_game_over_fn = fn; }
+
+/* Port of FUN_0049b42b @ 0x49b42b (680 B) — re-evaluate whether `player` has
+ * been eliminated and, if so, fire the defeat notification (and, for the local
+ * player in a multiplayer game, the game-over screen).  The exact mirror of
+ * engine_ranking_recompute's victory branch: same rotating message counter
+ * (+0x159) and opponent-type payload (+0x07), elimination codes 0xe0/0xc2 in
+ * place of victory's 0xe1/0xc3.
+ *
+ * A player's "liveness score" (+0x04, also the active-slot flag the ranking
+ * recompute reads) is rebuilt as 3 per owned army + 1 per owned settled
+ * territory (kind +0x08 == 1).  Zero ⇒ eliminated:
+ *   - local player  → defeat notification 0xe0 (audience = local);
+ *   - an AI player (+0x05 has-data == 0) → flavoured elimination 0xc2 with the
+ *     same `(rot − 4) + opp_type·4` payload as a victory message;
+ *   - a non-local human keeps quiet but still rolls its message counter.
+ * The rotating counter advances (wrap 0..3) on every elimination regardless of
+ * which branch posted.  The field is then re-ranked via engine_ranking_recompute,
+ * and finally, if the local player was the one eliminated in a multiplayer game
+ * (retail DAT_00553030 / g_sim_mp_active, threaded as `mp_active`), the bound
+ * game-over hook fires.
+ *
+ * Slots outside 1..5 or already-inactive (+0x04 == 0) are no-ops. */
+void engine_ranking_check_elimination(unsigned player,
+                                      engine_event_queue_state_t *evq,
+                                      int mp_active)
+{
+    if (!(player > 0 && player < 6) || REC(player)[F_ACTIVE] == 0)
+        return;
+
+    uint8_t *p = REC(player);
+    p[F_ACTIVE] = 0;
+    for (int key = 1; key <= (int)s_slot_0056d5dc; key++)
+        if (AREC(key)[A_OWNER] == player)
+            p[F_ACTIVE] = (uint8_t)(p[F_ACTIVE] + 3);
+    for (int t = 1; t < 0x97; t++)
+        if ((int8_t)TREC(t)[T_OWNER] == (int)player && TREC(t)[T_KIND] == 1)
+            p[F_ACTIVE] = (uint8_t)(p[F_ACTIVE] + 1);
+
+    if (p[F_ACTIVE] == 0) {
+        uint8_t has_data[7];
+        for (int i = 0; i < 6; i++) has_data[i] = REC(i)[F_HAS_DATA];
+        has_data[6] = 0;
+        const int local_player = (int)s_slot_0057c8cc;
+
+        if (s_slot_0057c8cc == player) {
+            engine_event_queue_post(evq, local_player, local_player, 0xe0, 0,
+                                    0xe, 0, 0, 0, has_data, local_player);
+        } else if (p[F_HAS_DATA] == 0) {
+            int32_t payload = ((int)p[F_VICT_ROT] - 4) + (int)p[F_OPP_TYPE] * 4;
+            engine_event_queue_post(evq, (int)player, 0, 0xc2, payload,
+                                    0xe, 0, 0, 0, has_data, local_player);
+        }
+        p[F_VICT_ROT]++;
+        if (p[F_VICT_ROT] > 3)
+            p[F_VICT_ROT] = 0;
+    }
+
+    engine_ranking_recompute(evq);
+
+    if (p[F_ACTIVE] == 0 && s_slot_0057c8cc == player && mp_active != 0
+        && s_game_over_fn)
+        s_game_over_fn();
+}

@@ -1904,6 +1904,12 @@ struct test_case {
     X(engine_ranking_aggregate_player0_early_return) \
     X(engine_ranking_aggregate_zero_owned) \
     X(engine_ranking_aggregate_standing_byte_wrap) \
+    X(engine_ranking_elim_survivor) \
+    X(engine_ranking_elim_local_defeat) \
+    X(engine_ranking_elim_ai_broadcast) \
+    X(engine_ranking_elim_counter_wrap_silent) \
+    X(engine_ranking_elim_inactive_noop) \
+    X(engine_ranking_elim_game_over_hook) \
     X(io_path_chdir_base_roundtrip) \
     X(io_path_set_base_seam) \
     X(io_path_chdir_base_failure) \

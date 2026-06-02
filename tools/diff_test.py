@@ -2535,6 +2535,11 @@ FN_TAX_APPROVAL = 0x44bd9f
 FN_DEV_SPREAD   = 0x44bf7a
 FN_REALM_INCOME = 0x44b80b       # FUN_0044b80b — __cdecl(int realm)
 FN_PLAYER_AGGREGATE = 0x49d1e0   # FUN_0049d1e0 — __cdecl(uint player)
+FN_ELIMINATION  = 0x49b42b       # FUN_0049b42b — __cdecl(uint player)
+REALM_BOARD_BYTES = 48           # s_slot_00565410 (6 × {i32 slot, i32 score})
+VA_BOARD        = 0x565410       # s_slot_00565410 — leaderboard board
+VA_SIM_MP       = 0x553030       # DAT_00553030 / g_sim_mp_active — MP flag
+EVQ_BUF_BYTES   = 4096           # throwaway engine_event_queue_state_t buffer
 
 # upkeep pass (FUN_004acbd4) extra blocks/scalars
 REALM_TERR_BYTES   = 63420       # g_per_territory_420  (151 × 0x1a4)
@@ -2609,6 +2614,7 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
             "morale": ctypes.c_uint32.in_dll(lib, "s_slot_0053f260"),
             "local":  ctypes.c_uint32.in_dll(lib, "s_slot_0057c8cc"),
             "season_prev": ctypes.c_uint32.in_dll(lib, "s_slot_0057c934"),
+            "board":  (ctypes.c_uint8 * REALM_BOARD_BYTES).in_dll(lib, "s_slot_00565410"),
         }
         lib.engine_realm_apply_tax_approval.restype = None
         lib.engine_realm_apply_tax_approval.argtypes = []
@@ -2618,6 +2624,11 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
         lib.engine_realm_recompute_realm_income.argtypes = [ctypes.c_int]
         lib.engine_ranking_recompute_player_aggregate.restype = None
         lib.engine_ranking_recompute_player_aggregate.argtypes = [ctypes.c_uint]
+        lib.engine_ranking_check_elimination.restype = None
+        lib.engine_ranking_check_elimination.argtypes = [
+            ctypes.c_uint, ctypes.c_void_p, ctypes.c_int]
+        lib.engine_ranking_bind_game_over_fn.restype = None
+        lib.engine_ranking_bind_game_over_fn.argtypes = [ctypes.c_void_p]
         lib.engine_territory_bind_cells.restype = None
         lib.engine_territory_bind_cells.argtypes = [ctypes.c_void_p]
         lib.engine_realm_pay_upkeep.restype = None
@@ -3024,6 +3035,114 @@ def player_aggregate_rpc_plan(vec: dict) -> dict:
 
 
 def diff_player_aggregate(retail: dict, port: dict) -> list[str]:
+    return _diff_realm_region(retail, port["strat"], VA_STRATEGIC,
+                              REALM_STRAT_STRIDE, 6, "strat")
+
+
+# ── player elimination check (FUN_0049b42b — engine_ranking_check_elimination) ──
+#
+# __cdecl(uint player): rebuilds the player's liveness score (+0x04), may post a
+# defeat notification (to the global event ring — not read back), advances the
+# rotating counter (+0x159), then re-ranks the whole field via the recompute
+# (FUN_0049aa0e), which writes per-player score/rank/victory back into the
+# strategic block.  So the strategic block is the sole readback, and it captures
+# BOTH this function's mutations and the recompute's — re-validating the
+# recompute byte-for-byte along the way.  The MP flag (0x553030) is injected 0 so
+# the game-over screen (FUN_0043eda0) never fires on either side; the leaderboard
+# board (0x565410) is injected 0 so the recompute's sort starts from a known
+# state.
+
+def _build_elim_vec(count: int, player: int, local: int, realms: list[tuple],
+                    terrs: list[tuple], players: list[tuple]) -> dict:
+    army  = bytearray(REALM_ARMY_BYTES)
+    strat = bytearray(REALM_STRAT_BYTES)
+    terr  = bytearray(REALM_TERR_BYTES)
+    for (slot, owner) in realms:
+        army[slot * REALM_ARMY_STRIDE + 0x05] = owner & 0xff
+    for (idx, kind, owner, value) in terrs:
+        b = idx * REALM_TERR_STRIDE
+        terr[b + 0x00] = owner & 0xff
+        terr[b + 0x08] = kind  & 0xff
+        struct.pack_into("<i", terr, b + 0x168, value)
+    for (p, active, has_data, opp_type, vict_rot, m60) in players:
+        b = p * REALM_STRAT_STRIDE
+        strat[b + 0x04]  = active   & 0xff
+        strat[b + 0x05]  = has_data & 0xff
+        strat[b + 0x07]  = opp_type & 0xff
+        strat[b + 0x60]  = m60      & 0xff
+        strat[b + 0x159] = vict_rot & 0xff
+    return {"count": count, "player": player, "local": local,
+            "army": bytes(army), "strat": bytes(strat), "terr": bytes(terr)}
+
+
+def gen_elimination_vectors(n: int, rng: random.Random) -> list[dict]:
+    # All 6 player slots active so the recompute always has a field to rank.
+    def actives(extra=None):
+        ps = []
+        for p in range(6):
+            ps.append((p, rng.randint(1, 6), rng.randint(0, 1),
+                       rng.randint(0, 4), rng.randint(0, 3), rng.randint(0, 200)))
+        if extra:
+            for (p, *rest) in extra:
+                ps[p] = (p, *rest)
+        return ps
+    edge = [
+        # local player wiped out (no armies/territories) → 0xe0 + game-over gated off.
+        (3, 1, 1, [(1, 2), (2, 3)], [],
+         [(1, 4, 1, 0, 2, 10)]),
+        # AI eliminated → 0xc2 broadcast, payload (rot-4)+opp*4.
+        (3, 2, 1, [(1, 1), (2, 3)], [(5, 1, 1, 0)],
+         [(2, 4, 0, 2, 1, 20)]),
+        # survivor: owns armies + a settled territory → liveness 7, no elimination.
+        (3, 2, 1, [(1, 2), (2, 2), (3, 1)], [(5, 1, 2, 500), (6, 2, 2, 0)],
+         [(2, 5, 0, 0, 0, 30)]),
+        # inactive slot → early-return no-op.
+        (3, 2, 1, [(1, 2)], [], [(2, 0, 0, 0, 0, 0)]),
+    ]
+    vecs = []
+    for (count, player, local, realms, terrs, extra) in edge:
+        vecs.append(_build_elim_vec(count, player, local, realms, terrs,
+                                    actives(extra)))
+    while len(vecs) < n:
+        count  = rng.randint(1, 16)
+        player = rng.randint(1, 5)
+        local  = rng.randint(1, 5)
+        realms = [(s, rng.randint(0, 5)) for s in range(1, count + 1)]
+        terrs  = [(idx, rng.randint(0, 3), rng.randint(-1, 5), rng.randint(-500, 3000))
+                  for idx in range(1, 0x97) if rng.random() < 0.2]
+        vecs.append(_build_elim_vec(count, player, local, realms, terrs, actives()))
+    return vecs
+
+
+def run_port_elimination(lib: ctypes.CDLL, vec: dict) -> dict:
+    g = realm_port_globals(lib)
+    ctypes.memmove(g["army"],  vec["army"],  REALM_ARMY_BYTES)
+    ctypes.memmove(g["strat"], vec["strat"], REALM_STRAT_BYTES)
+    ctypes.memmove(g["terr"],  vec["terr"],  REALM_TERR_BYTES)
+    g["count"].value = vec["count"]
+    g["local"].value = vec["local"]
+    ctypes.memset(g["board"], 0, REALM_BOARD_BYTES)
+    lib.engine_ranking_bind_game_over_fn(None)
+    evq = (ctypes.c_uint8 * EVQ_BUF_BYTES)()
+    lib.engine_event_queue_init(evq)
+    lib.engine_ranking_check_elimination(vec["player"], evq, 0)
+    return {"strat": list(bytes(g["strat"]))}
+
+
+def elimination_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_ELIMINATION, "cc": "mscdecl", "args": [vec["player"]],
+            "regions": [
+        {"va": VA_PER_ARMY,      "len": REALM_ARMY_BYTES,  "inject": list(vec["army"]),  "read": False},
+        {"va": VA_STRATEGIC,     "len": REALM_STRAT_BYTES, "inject": list(vec["strat"]), "read": True},
+        {"va": VA_PER_TERRITORY, "len": REALM_TERR_BYTES,  "inject": list(vec["terr"]),  "read": False},
+        {"va": VA_SLOT_COUNT,    "len": 4, "inject": list(_u32le(vec["count"])), "read": False},
+        {"va": VA_SLOT_LOCAL,    "len": 4, "inject": list(_u32le(vec["local"])), "read": False},
+        {"va": VA_BOARD,         "len": REALM_BOARD_BYTES, "inject": [0] * REALM_BOARD_BYTES, "read": False},
+        {"va": VA_SIM_MP,        "len": 4, "inject": list(_u32le(0)), "read": False},
+    ]}
+
+
+def diff_elimination(retail: dict, port: dict) -> list[str]:
     return _diff_realm_region(retail, port["strat"], VA_STRATEGIC,
                               REALM_STRAT_STRIDE, 6, "strat")
 
@@ -3851,6 +3970,9 @@ def run_diff(cfg_args) -> int:
     if "player_aggregate" in enabled:
         test_plans.append(("player_aggregate",
                            gen_player_aggregate_vectors(cfg_args.vectors, rng)))
+    if "elimination" in enabled:
+        test_plans.append(("elimination",
+                           gen_elimination_vectors(cfg_args.vectors, rng)))
     # Pre-generate the rate-gate LUT — one per run, used by all
     # sim_sub_steps vectors so a re-run with the same seed produces
     # the same LUT (and thus the same retail-side gate decisions).
@@ -4762,6 +4884,43 @@ def run_diff(cfg_args) -> int:
                                   "note": "region readback elided"}
                         port = {"note": "region readback elided"}
                         vec = {"count": vec["count"], "player": vec["player"]}
+                elif fn_name == "elimination":
+                    # FUN_0049b42b(uint player): player-elimination check.  Inject
+                    # g_per_army_768 + g_player_strategic_352 + g_per_territory_420
+                    # + realm count + local slot + a zeroed board + MP flag = 0;
+                    # call with args=[player] (cc=mscdecl); read back the strategic
+                    # block (this fn's mutations + the recompute's score/rank).
+                    port = run_port_elimination(lib, vec)
+                    plan = elimination_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"count": vec["count"],
+                                                 "player": vec["player"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_elimination(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"count": vec["count"], "player": vec["player"],
+                               "local": vec["local"]}
                 else:
                     continue
                 if bad:
@@ -4887,7 +5046,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep,season_economy,resource_pass,population,combat_resolve,player_aggregate",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep,season_economy,resource_pass,population,combat_resolve,player_aggregate,elimination",
                     help="comma-separated subset to test "
                          "(default: rng_step,fps_step,anim_cycle,frame_delta,"
                          "phase_ticks,input_state,sim_sub_steps,state_hash,"

@@ -5699,3 +5699,37 @@ The previous-turn strength snapshot (+0x18 ← old +0x10) is taken *unconditiona
 at the top, before the player==0 / zero-owned gates, so even an empty slot rolls
 its strength history forward.  Validated 192/192 byte-exact vs retail
 (`player_aggregate` diff target, 64 @ seed0 + 128 @ seed7).
+
+## 162. Player elimination shares the victory message's rotating counter, advances it even when no message is shown, and only opens the game-over screen in multiplayer
+
+`FUN_0049b42b` (ported as `engine_ranking_check_elimination`, engine_ranking.c)
+is the exact structural mirror of the victory branch inside the standings
+recompute (quirk-free `engine_ranking_recompute` Phase G): same per-player
+rotating counter at +0x159, same `(rot − 4) + opp_type·4` payload, just the
+defeat codes 0xe0/0xc2 in place of victory's 0xe1/0xc3.
+
+Three non-obvious behaviours:
+
+**(a) Liveness is weighted 3:1.**  A player is "alive" iff +0x04 (which doubles
+as the active-slot flag the recompute reads) is nonzero, and it is rebuilt each
+call as `3·(owned armies) + 1·(owned settled territories, kind +0x08 == 1)`.  So
+a single army outweighs two territories for survival purposes; only a player
+with *no* armies and *no* settled territory is eliminated.
+
+**(b) The rotating counter advances on every elimination, even silent ones.**
+The `+0x159 += 1` (wrap 0..3) sits *outside* the notification if/else, so it
+ticks whenever the player is eliminated — including the third case where nobody
+is notified at all (a non-local human player: not the local slot, so no 0xe0,
+and +0x05 has-data != 0, so no 0xc2).  The counter and the local human therefore
+drift out of step with the messages actually shown.
+
+**(c) The game-over screen is multiplayer-only.**  The local-defeat screen
+(`FUN_0043eda0(0x24, 0)`, a bound NULL seam in the port) fires only when the
+eliminated player is the local slot *and* `DAT_00553030` (g_sim_mp_active,
+threaded as `mp_active`) is nonzero.  In single-player a local elimination posts
+the 0xe0 notification but does **not** trigger this screen here — that path is
+handled elsewhere.
+
+Validated 192/192 byte-exact vs retail (`elimination` diff target, 64 @ seed0 +
+128 @ seed7); because the readback is the strategic block after the internal
+re-rank, the diff also re-validates `engine_ranking_recompute` byte-for-byte.

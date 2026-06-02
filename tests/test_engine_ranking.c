@@ -473,3 +473,165 @@ int test_engine_ranking_aggregate_standing_byte_wrap(void)
     T_ASSERT_EQ_I(REC(1)[F_M_58], 72);
     return 0;
 }
+
+/* ─────────────────── FUN_0049b42b elimination check ───────────────────── */
+
+#define F_HAS_DATA 0x05
+#define F_OPP_TYPE 0x07
+#define F_VICTORY  0xed
+#define F_VICT_ROT 0x159
+
+static void clear_elim_world(void)
+{
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(s_slot_00565410, 0, sizeof s_slot_00565410);
+    s_slot_0056d5dc = 0;
+    s_slot_0057c8cc = 0;
+    engine_ranking_bind_game_over_fn(NULL);
+}
+
+static int g_game_over_calls;
+static void game_over_stub(void) { g_game_over_calls++; }
+
+/* A surviving player: liveness = 3·armies + 1·settled-territory, no elimination.
+ * Two other active players keep the post-recompute quiet. */
+int test_engine_ranking_elim_survivor(void)
+{
+    clear_elim_world();
+    s_slot_0056d5dc = 3;
+    set_active(1); set_active(2); set_active(3);
+    AREC(1)[A_OWNER] = 2; AREC(2)[A_OWNER] = 2; AREC(3)[A_OWNER] = 1;
+    TREC(5)[T_KIND] = 1; TREC(5)[T_OWNER] = 2;   /* +1 */
+    TREC(6)[T_KIND] = 2; TREC(6)[T_OWNER] = 2;   /* wrong kind */
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_ranking_check_elimination(2, &evq, 0);
+
+    T_ASSERT_EQ_I(REC(2)[F_ACTIVE], 7);          /* 3·2 + 1 */
+    T_ASSERT_EQ_I(evq.write_idx, 0);             /* not eliminated, recompute quiet */
+    return 0;
+}
+
+/* Local player wiped out → defeat notification 0xe0 (audience = local). */
+int test_engine_ranking_elim_local_defeat(void)
+{
+    clear_elim_world();
+    s_slot_0056d5dc = 3;
+    s_slot_0057c8cc = 1;                         /* local = player 1 */
+    set_active(1); set_active(2); set_active(3); /* 2,3 survive → recompute quiet */
+    REC(1)[F_HAS_DATA] = 1;
+    REC(1)[F_VICT_ROT] = 2;
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_ranking_check_elimination(1, &evq, 0);
+
+    T_ASSERT_EQ_I(REC(1)[F_ACTIVE], 0);
+    T_ASSERT_EQ_I(evq.write_idx, 1);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0xe0);
+    T_ASSERT_EQ_I(evq.ring[0].target, 1);
+    T_ASSERT_EQ_I(evq.ring[0].audience, 1);
+    T_ASSERT_EQ_U(REC(1)[F_VICT_ROT], 3);        /* counter advanced */
+    return 0;
+}
+
+/* An AI player eliminated → flavoured broadcast 0xc2 with the victory-style
+ * payload (rot − 4) + opp_type·4. */
+int test_engine_ranking_elim_ai_broadcast(void)
+{
+    clear_elim_world();
+    s_slot_0056d5dc = 3;
+    s_slot_0057c8cc = 1;                         /* local ≠ the AI being eliminated */
+    set_active(1); set_active(2); set_active(3);
+    REC(2)[F_HAS_DATA] = 0;                      /* AI */
+    REC(2)[F_OPP_TYPE] = 2;
+    REC(2)[F_VICT_ROT] = 1;
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_ranking_check_elimination(2, &evq, 0);
+
+    T_ASSERT_EQ_I(REC(2)[F_ACTIVE], 0);
+    T_ASSERT_EQ_I(evq.write_idx, 1);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0xc2);
+    T_ASSERT_EQ_I(evq.ring[0].target, 2);
+    T_ASSERT_EQ_I(evq.ring[0].audience, 0);
+    T_ASSERT_EQ_I(evq.ring[0].payload32a, 5);    /* (1-4) + 2*4 */
+    T_ASSERT_EQ_U(REC(2)[F_VICT_ROT], 2);
+    return 0;
+}
+
+/* The rotating counter wraps 3 → 0 on the increment that always follows an
+ * elimination, regardless of which (if any) notification branch fired. */
+int test_engine_ranking_elim_counter_wrap_silent(void)
+{
+    clear_elim_world();
+    s_slot_0056d5dc = 3;
+    s_slot_0057c8cc = 1;                         /* local ≠ the eliminated human */
+    set_active(1); set_active(2); set_active(3);
+    REC(2)[F_HAS_DATA] = 1;                      /* non-local human → no event */
+    REC(2)[F_VICT_ROT] = 3;
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_ranking_check_elimination(2, &evq, 0);
+
+    T_ASSERT_EQ_I(REC(2)[F_ACTIVE], 0);
+    T_ASSERT_EQ_I(evq.write_idx, 0);             /* silent branch */
+    T_ASSERT_EQ_U(REC(2)[F_VICT_ROT], 0);        /* 3 → 4 → wrap 0 */
+    return 0;
+}
+
+/* An already-inactive slot (or out-of-range) is a no-op: no recount, no event. */
+int test_engine_ranking_elim_inactive_noop(void)
+{
+    clear_elim_world();
+    s_slot_0056d5dc = 3;
+    AREC(1)[A_OWNER] = 2;                        /* player 2 *would* score 3 */
+    /* player 2 left inactive (F_ACTIVE == 0). */
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_ranking_check_elimination(2, &evq, 0);
+
+    T_ASSERT_EQ_I(REC(2)[F_ACTIVE], 0);          /* untouched, not recomputed to 3 */
+    T_ASSERT_EQ_I(evq.write_idx, 0);
+    return 0;
+}
+
+/* The game-over screen hook fires only for a local elimination in a multiplayer
+ * game (mp_active != 0) — and only when bound. */
+int test_engine_ranking_elim_game_over_hook(void)
+{
+    clear_elim_world();
+    s_slot_0056d5dc = 3;
+    s_slot_0057c8cc = 1;
+    set_active(1); set_active(2); set_active(3);
+    REC(1)[F_HAS_DATA] = 1;
+    engine_ranking_bind_game_over_fn(game_over_stub);
+
+    /* mp_active == 0: logic runs, screen suppressed. */
+    g_game_over_calls = 0;
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_ranking_check_elimination(1, &evq, 0);
+    T_ASSERT_EQ_I(g_game_over_calls, 0);
+
+    /* mp_active != 0 with the local player eliminated: screen fires. */
+    clear_elim_world();
+    s_slot_0056d5dc = 3;
+    s_slot_0057c8cc = 1;
+    set_active(1); set_active(2); set_active(3);
+    REC(1)[F_HAS_DATA] = 1;
+    engine_ranking_bind_game_over_fn(game_over_stub);
+    g_game_over_calls = 0;
+    engine_event_queue_init(&evq);
+    engine_ranking_check_elimination(1, &evq, 1);
+    T_ASSERT_EQ_I(g_game_over_calls, 1);
+
+    engine_ranking_bind_game_over_fn(NULL);
+    return 0;
+}
