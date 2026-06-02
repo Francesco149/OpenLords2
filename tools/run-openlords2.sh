@@ -6,10 +6,10 @@
 #   2. Copy openlords2-debug.exe to /tmp/openlords2-<pid>.exe so each
 #      run gets a fresh PE-image mapping (dodges WSL's image-by-path
 #      reuse).
-#   3. Exec the launcher to supervise it.  Launcher guarantees the
-#      child dies if anything kills us — Job Object with
+#   3. Run the launcher (NOT via exec) to supervise it.  Launcher
+#      guarantees the child dies if anything kills us — Job Object with
 #      KILL_ON_JOB_CLOSE.
-#   4. Clean up the /tmp/openlords2-*.exe after.
+#   4. Clean up this run's /tmp/openlords2-<pid>.exe via an EXIT trap.
 #
 # Run inside `nix develop`.  Defaults match a typical smoke run:
 # 200 frames, 8 s timeout.  Override the timeout via
@@ -55,7 +55,9 @@ make -s -C tools/launcher
 
 stamp=$$
 tmp_exe="/tmp/openlords2-${stamp}.exe"
-cleanup() { rm -f /tmp/openlords2-*.exe; }
+# Remove only THIS run's copy (a broad /tmp/openlords2-*.exe sweep would race
+# concurrent runs).  Must NOT use `exec` below, or this trap never fires.
+cleanup() { rm -f "$tmp_exe"; }
 trap cleanup EXIT
 
 cp build/openlords2-debug.exe "$tmp_exe"
@@ -72,7 +74,11 @@ else
     echo "[run-openlords2] launcher → $tmp_exe (timeout=${TIMEOUT_MS}ms, frames=${FRAMES})"
 fi
 
-exec ./build/openlords2-launcher.exe \
+# Run as a child (not `exec`) so the EXIT trap above fires and removes the
+# temp copy — `exec` would replace this shell and skip cleanup, leaking
+# /tmp/openlords2-<pid>.exe on every run.
+./build/openlords2-launcher.exe \
     --timeout-ms "$TIMEOUT_MS" \
     -- \
     "$tmp_exe" "${child_args[@]}"
+exit $?
