@@ -66,4 +66,12 @@ void engine_ranking_recompute_player_total(int player);
  *   FUN_004486a9 @ 0x4486a9. */
 void engine_ranking_snapshot_player_metrics(void);
 
+/* Recompute one player's aggregate strategic metrics (army count, total/avg/
+ * previous troop strength, averaged rating + standing, realm-share percent, and
+ * territory count + value) from the realms and territories it owns — the source
+ * metrics engine_ranking_recompute later reduces to leaders/scores.  Player 0
+ * only clears the four head fields.
+ *   FUN_0049d1e0 @ 0x49d1e0. */
+void engine_ranking_recompute_player_aggregate(unsigned player);
+
 #endif /* OPENLORDS2_ENGINE_RANKING_H */

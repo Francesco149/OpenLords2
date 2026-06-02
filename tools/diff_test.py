@@ -2534,6 +2534,7 @@ VA_SLOT_SEASON  = 0x57c92c       # s_slot_0057c92c — season (dev reads, unused
 FN_TAX_APPROVAL = 0x44bd9f
 FN_DEV_SPREAD   = 0x44bf7a
 FN_REALM_INCOME = 0x44b80b       # FUN_0044b80b — __cdecl(int realm)
+FN_PLAYER_AGGREGATE = 0x49d1e0   # FUN_0049d1e0 — __cdecl(uint player)
 
 # upkeep pass (FUN_004acbd4) extra blocks/scalars
 REALM_TERR_BYTES   = 63420       # g_per_territory_420  (151 × 0x1a4)
@@ -2615,6 +2616,8 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
         lib.engine_realm_spread_development.argtypes = []
         lib.engine_realm_recompute_realm_income.restype = None
         lib.engine_realm_recompute_realm_income.argtypes = [ctypes.c_int]
+        lib.engine_ranking_recompute_player_aggregate.restype = None
+        lib.engine_ranking_recompute_player_aggregate.argtypes = [ctypes.c_uint]
         lib.engine_territory_bind_cells.restype = None
         lib.engine_territory_bind_cells.argtypes = [ctypes.c_void_p]
         lib.engine_realm_pay_upkeep.restype = None
@@ -2930,6 +2933,99 @@ def diff_realm_income(retail: dict, port: dict) -> list[str]:
     bad += _diff_realm_region(retail, port["strat"], VA_STRATEGIC,
                               REALM_STRAT_STRIDE, 6, "strat")
     return bad
+
+
+# ── player aggregate recompute (FUN_0049d1e0 — engine_ranking_recompute_player_aggregate) ──
+#
+# __cdecl(uint player): recomputes one player's aggregate standings metrics from
+# the realms (g_per_army_768) and territories (g_per_territory_420) it owns, plus
+# the realm count.  It writes only that player's g_player_strategic_352 record,
+# so the strategic block is the sole readback.  Driven through the generic RPC
+# with args=[player] + cc='mscdecl'.
+
+def _build_aggregate_vec(count: int, player: int, realms: list[tuple],
+                         terrs: list[tuple], strat_prev: list[tuple]) -> dict:
+    army  = bytearray(REALM_ARMY_BYTES)
+    strat = bytearray(REALM_STRAT_BYTES)
+    terr  = bytearray(REALM_TERR_BYTES)
+    for (slot, owner, strength, rating, standing) in realms:
+        b = slot * REALM_ARMY_STRIDE
+        army[b + 0x05] = owner    & 0xff
+        army[b + 0x0b] = standing & 0xff
+        army[b + 0x0c] = rating   & 0xff
+        struct.pack_into("<i", army, b + 0x24, strength)
+    for (idx, kind, owner, value) in terrs:
+        b = idx * REALM_TERR_STRIDE
+        terr[b + 0x00] = owner & 0xff
+        terr[b + 0x08] = kind  & 0xff
+        struct.pack_into("<i", terr, b + 0x168, value)
+    for (p, prev) in strat_prev:
+        struct.pack_into("<i", strat, p * REALM_STRAT_STRIDE + 0x10, prev)
+    return {"count": count, "player": player, "army": bytes(army),
+            "strat": bytes(strat), "terr": bytes(terr)}
+
+
+def gen_player_aggregate_vectors(n: int, rng: random.Random) -> list[dict]:
+    # Fixed edge cases mirroring the host unit tests.
+    edge = [
+        # player 0 — early return after clearing the four head fields.
+        (4, 0, [(1, 0, 999, 50, 60)], [], [(0, 321)]),
+        # basic: player 2 owns realms 1,3 + territories 5,6 (kind-1) only.
+        (4, 2, [(1, 2, 100, 10, 20), (2, 1, 77, 5, 5),
+                (3, 2, 50, 30, 40), (4, 3, 99, 9, 9)],
+               [(5, 1, 2, 1000), (6, 1, 2, 500),
+                (7, 2, 2, 999), (8, 1, 3, 999)], [(2, 777)]),
+        # zero-owned active player: averages all 0, prev still snapshotted.
+        (2, 2, [(1, 1, 10, 1, 1), (2, 3, 10, 1, 1)], [], [(2, 42)]),
+        # standing byte wrap: 200+200 → byte 144 → /2 = 72.
+        (2, 1, [(1, 1, 0, 0, 200), (2, 1, 0, 0, 200)], [], []),
+    ]
+    vecs = [_build_aggregate_vec(*e) for e in edge]
+    while len(vecs) < n:
+        count  = rng.randint(1, 16)
+        player = rng.randint(0, 5)
+        realms = []
+        for slot in range(1, count + 1):
+            realms.append((
+                slot,
+                rng.randint(0, 5),            # owner player
+                rng.randint(-2000, 2000),     # troop strength (i32)
+                rng.randint(-128, 127),       # rating (i8)
+                rng.randint(0, 255),          # standing (u8, wraps)
+            ))
+        terrs = []
+        for idx in range(1, 0x97):
+            if rng.random() < 0.25:           # sparse occupancy
+                terrs.append((idx, rng.randint(0, 3), rng.randint(-1, 5),
+                              rng.randint(-1000, 5000)))
+        strat_prev = [(p, rng.randint(-5000, 5000)) for p in range(6)]
+        vecs.append(_build_aggregate_vec(count, player, realms, terrs, strat_prev))
+    return vecs
+
+
+def run_port_player_aggregate(lib: ctypes.CDLL, vec: dict) -> dict:
+    g = realm_port_globals(lib)
+    ctypes.memmove(g["army"],  vec["army"],  REALM_ARMY_BYTES)
+    ctypes.memmove(g["strat"], vec["strat"], REALM_STRAT_BYTES)
+    ctypes.memmove(g["terr"],  vec["terr"],  REALM_TERR_BYTES)
+    g["count"].value = vec["count"]
+    lib.engine_ranking_recompute_player_aggregate(vec["player"])
+    return {"strat": list(bytes(g["strat"]))}
+
+
+def player_aggregate_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_PLAYER_AGGREGATE, "cc": "mscdecl", "args": [vec["player"]],
+            "regions": [
+        {"va": VA_PER_ARMY,      "len": REALM_ARMY_BYTES,  "inject": list(vec["army"]),  "read": False},
+        {"va": VA_STRATEGIC,     "len": REALM_STRAT_BYTES, "inject": list(vec["strat"]), "read": True},
+        {"va": VA_PER_TERRITORY, "len": REALM_TERR_BYTES,  "inject": list(vec["terr"]),  "read": False},
+        {"va": VA_SLOT_COUNT,    "len": 4, "inject": list(_u32le(vec["count"])), "read": False},
+    ]}
+
+
+def diff_player_aggregate(retail: dict, port: dict) -> list[str]:
+    return _diff_realm_region(retail, port["strat"], VA_STRATEGIC,
+                              REALM_STRAT_STRIDE, 6, "strat")
 
 
 # ── unit upkeep / wages / desertion pass (FUN_004acbd4 — engine_realm_pay_upkeep) ──
@@ -3752,6 +3848,9 @@ def run_diff(cfg_args) -> int:
     if "combat_resolve" in enabled:
         test_plans.append(("combat_resolve",
                            gen_combat_resolve_vectors(cfg_args.vectors, rng)))
+    if "player_aggregate" in enabled:
+        test_plans.append(("player_aggregate",
+                           gen_player_aggregate_vectors(cfg_args.vectors, rng)))
     # Pre-generate the rate-gate LUT — one per run, used by all
     # sim_sub_steps vectors so a re-run with the same seed produces
     # the same LUT (and thus the same retail-side gate decisions).
@@ -4628,6 +4727,41 @@ def run_diff(cfg_args) -> int:
                                "defender": vec["defender"],
                                "difficulty": vec["difficulty"],
                                "quick": vec["quick"]}
+                elif fn_name == "player_aggregate":
+                    # FUN_0049d1e0(uint player): per-player aggregate standings
+                    # recompute.  Inject g_per_army_768 + g_player_strategic_352 +
+                    # g_per_territory_420 + realm count; call with args=[player]
+                    # (cc=mscdecl); read back the strategic block (its sole output).
+                    port = run_port_player_aggregate(lib, vec)
+                    plan = player_aggregate_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"count": vec["count"],
+                                                 "player": vec["player"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_player_aggregate(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"count": vec["count"], "player": vec["player"]}
                 else:
                     continue
                 if bad:
@@ -4753,7 +4887,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep,season_economy,resource_pass,population,combat_resolve",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep,season_economy,resource_pass,population,combat_resolve,player_aggregate",
                     help="comma-separated subset to test "
                          "(default: rng_step,fps_step,anim_cycle,frame_delta,"
                          "phase_ticks,input_state,sim_sub_steps,state_hash,"

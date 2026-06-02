@@ -5668,3 +5668,34 @@ the `approval < 0x19` (< 25) test in the `else` of `approval < 0x19`, which can
 never be entered, so the port elides it.  Ported as
 `engine_realm_escalate_unrest` (engine_realm.c); the rebellion trigger
 `FUN_004ac185` is a deferred bound seam (it reaches combat-init).
+
+## 161. The player-aggregate recompute averages the per-realm "standing" byte in 8-bit arithmetic, so a populous player's average can wrap
+
+`FUN_0049d1e0` (ported as `engine_ranking_recompute_player_aggregate`,
+engine_ranking.c) recomputes one player's standings inputs from the realms it
+owns: army count (+0x29), total/avg/previous troop strength (+0x10/+0x14/+0x18),
+an averaged rating (+0x0c) and standing (+0x58), realm-share percent (+0x60),
+and territory count/value (+0x2c/+0x54).
+
+Two of those averages accumulate into **byte** fields before the divide, and the
+binary does the running sum in 8-bit registers:
+
+- The standing accumulator at +0x58 is a `byte += byte` (AL) add, so once the
+  per-realm standing values sum past 255 it **wraps mod 256** — and the average
+  is then taken of the *wrapped* value.  A player with two realms at standing
+  200 sums to 400 → byte 144 → averaged /2 = 72, not 200.  This is not a sign
+  bug to "fix": the resulting save byte is what retail writes, so the port keeps
+  the 8-bit add (`p[0x58] = (uint8_t)(p[0x58] + r[0x0b])`).  The rating
+  accumulator, by contrast, is a real `int` (sign-extended `(char)` adds), so it
+  does not wrap in practice.
+
+- All four divides are guarded on the army count: a zero-owned player gets every
+  average set to 0 rather than dividing by zero.  Player 0 (the neutral/unowned
+  slot) is special-cased even earlier — it only clears the four head fields
+  (+0x29/+0x18/+0x10/+0x0c/+0x58) and returns before any averaging or the
+  territory loop, so its +0x14/+0x60/+0x2c/+0x54 keep whatever they held.
+
+The previous-turn strength snapshot (+0x18 ← old +0x10) is taken *unconditionally*
+at the top, before the player==0 / zero-owned gates, so even an empty slot rolls
+its strength history forward.  Validated 192/192 byte-exact vs retail
+(`player_aggregate` diff target, 64 @ seed0 + 128 @ seed7).

@@ -1112,6 +1112,23 @@ static int coalition_armies_adjacent(int a, unsigned other)
     return 0;
 }
 
+/* Port of FUN_00467eb0 @ 0x467eb0 (126 B) — does player `owner` control any
+ * realm adjacent to realm `realm`?  Walks realm `realm`'s 0-terminated
+ * adjacency list (per-army +0x5c, up to 16 neighbour realm ids) and returns 1
+ * as soon as a listed neighbour realm's owning player (+0x05) matches `owner`.
+ * Sibling of coalition_armies_adjacent (FUN_00467e2c) over the same +0x5c list,
+ * but keyed on the neighbour's owner rather than a specific army id. */
+int engine_realm_player_owns_neighbor(unsigned owner, int realm)
+{
+    const uint8_t *adj = &ARMY_REC(realm)[0x5c];
+    for (int i = 0; i < 0x10; i++) {
+        uint8_t nb = adj[i];
+        if (nb == 0) break;
+        if (ARMY_REC(nb)[0x05] == owner) return 1;
+    }
+    return 0;
+}
+
 /* Port of FUN_0044b4d0 — is army `a` already a member of some coalition group?
  * Only groups keyed on `a`'s own owner are scanned; the densely-packed table
  * ends at the first key==0 slot. */

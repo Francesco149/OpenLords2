@@ -1758,3 +1758,40 @@ int test_engine_realm_unrest_rebellion_resets(void)
     engine_realm_bind_rebellion_fn(NULL);
     return 0;
 }
+
+/* ───────────── FUN_00467eb0 player-owns-adjacent-realm query ───────────── */
+
+/* The +0x5c list is 0-terminated; the query returns 1 on the first listed
+ * neighbour realm whose owner (+0x05) matches, else 0. */
+int test_engine_realm_player_owns_neighbor(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+
+    /* realm 1's adjacency: neighbours 2, 3 (then terminator). */
+    AREC(1)[0x5c + 0] = 2;
+    AREC(1)[0x5c + 1] = 3;
+    AREC(2)[0x05] = 4;     /* neighbour 2 owned by player 4 */
+    AREC(3)[0x05] = 7;     /* neighbour 3 owned by player 7 */
+
+    T_ASSERT_EQ_I(engine_realm_player_owns_neighbor(7, 1), 1);  /* via realm 3 */
+    T_ASSERT_EQ_I(engine_realm_player_owns_neighbor(4, 1), 1);  /* via realm 2 */
+    T_ASSERT_EQ_I(engine_realm_player_owns_neighbor(9, 1), 0);  /* no neighbour */
+    return 0;
+}
+
+/* The 0 terminator stops the scan: a realm listed *after* a 0 entry is not
+ * consulted even if it would match. */
+int test_engine_realm_player_owns_neighbor_terminator(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+
+    AREC(1)[0x5c + 0] = 2;
+    AREC(1)[0x5c + 1] = 0;     /* terminator */
+    AREC(1)[0x5c + 2] = 3;     /* past the terminator — must be ignored */
+    AREC(2)[0x05] = 1;
+    AREC(3)[0x05] = 5;
+
+    T_ASSERT_EQ_I(engine_realm_player_owns_neighbor(5, 1), 0);  /* 3 unreachable */
+    T_ASSERT_EQ_I(engine_realm_player_owns_neighbor(1, 1), 1);  /* 2 still found */
+    return 0;
+}

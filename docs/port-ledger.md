@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **608** (24.8%) — tested 563, ported 45
-- code bytes touched: **29.3%** (245,604 / 838,629 B)
-- unported: **1839**
+- touched: **610** (24.9%) — tested 565, ported 45
+- code bytes touched: **29.4%** (246,754 / 838,629 B)
+- unported: **1837**
 - orphan refs (in src/, not in function table): 4
 
-## tested (563) — ported + host unit suite
+## tested (565) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -97,7 +97,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404b99 | FUN_00404b99 | 466 | engine.c, engine.h, engine_rng.c |
 | 0x404d6b | FUN_00404d6b | 43 | engine_army_ai.c, engine_input.c, engine_math.c (+3) |
 | 0x404d96 | FUN_00404d96 | 43 | engine_math.h |
-| 0x404dc1 | FUN_00404dc1 | 66 | engine_input.c, engine_math.h, engine_title_render.c |
+| 0x404dc1 | FUN_00404dc1 | 66 | engine_input.c, engine_math.h, engine_ranking.c (+1) |
 | 0x404e03 | FUN_00404e03 | 72 | engine_army_economy.c, engine_math.h |
 | 0x404e4b | FUN_00404e4b | 98 | engine_math.h |
 | 0x404ead | FUN_00404ead | 159 | engine_math.h, engine_path.h |
@@ -366,6 +366,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x467a36 | FUN_00467a36 | 624 | engine_territory.c, engine_territory.h |
 | 0x467ca6 | FUN_00467ca6 | 385 | engine_territory.c, engine_territory.h |
 | 0x467e2c | FUN_00467e2c | 127 | engine_realm.c, engine_realm.h |
+| 0x467eb0 | FUN_00467eb0 | 126 | engine_realm.c, engine_realm.h |
 | 0x467fd1 | FUN_00467fd1 | 336 | engine_territory.c, engine_territory.h |
 | 0x468121 | FUN_00468121 | 331 | engine_territory.c, engine_territory.h |
 | 0x46826c | FUN_0046826c | 221 | engine_territory.c, engine_territory.h |
@@ -454,6 +455,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49bd99 | FUN_0049bd99 | 3063 | game_init.c, game_init.h |
 | 0x49ca32 | FUN_0049ca32 | 46 | main.c |
 | 0x49caaa | FUN_0049caaa | 935 | engine_menu_input.c, engine_npc_schedule.c, engine_npc_schedule.h (+3) |
+| 0x49d1e0 | FUN_0049d1e0 | 1024 | engine_ranking.c, engine_ranking.h |
 | 0x49dd01 | FUN_0049dd01 | 583 | engine_army_ai.c, engine_army_ai.h, engine_territory.c (+1) |
 | 0x49e39b | FUN_0049e39b | 994 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a1c53 | FUN_004a1c53 | 537 | game_init.c, game_init.h |

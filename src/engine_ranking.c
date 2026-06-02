@@ -14,6 +14,7 @@
 #include "engine_ranking.h"
 #include "save.h"                 /* g_player_strategic_352 (0x57bf00) */
 #include "save_schema_globals.h"  /* the leaderboard result scalars + the board */
+#include "engine_math.h"          /* engine_math_percent_div (FUN_00404dc1) */
 
 /* --- per-player strategic record (g_player_strategic_352, stride 0x160) ---
  *
@@ -52,6 +53,28 @@
 #define F_TOTAL       0x138  /* cashflow total (i32) = Σ F_CAT0[0..5]     */
 #define F_CAT0        0x140  /* first of six i32 category sub-accounts    */
 #define F_PREV        0x04   /* previous-turn companion = current + 4     */
+
+/* Two more output fields the aggregate recompute (below) fills; the rest of
+ * its outputs reuse the metric offsets above. */
+#define F_M_14        0x14   /* output: average troop strength (i32)       */
+#define F_M_18        0x18   /* output: previous-turn total strength (i32)  */
+
+/* --- aggregate-source records the recompute reads from -------------------
+ * Per-realm "army" record (g_per_army_768, retail 0x53f9b0, stride 0x300):
+ *   +0x05 owning player id (u8)   +0x24 troop strength (i32)
+ *   +0x0b standing byte           +0x0c rating byte (i8)
+ * Per-territory record (g_per_territory_420, retail 0x52f0b0, stride 0x1a4):
+ *   +0x00 owning player id (i8)   +0x08 record kind (1 = settled territory)
+ *   +0x168 territory value (i32) */
+#define AREC(k)       (&g_per_army_768[(k) * 0x300])
+#define A_OWNER       0x05
+#define A_STANDING    0x0b
+#define A_RATING      0x0c
+#define A_STRENGTH    0x24
+#define TREC(t)       (&g_per_territory_420[(t) * 0x1a4])
+#define T_OWNER       0x00
+#define T_KIND        0x08
+#define T_VALUE       0x168
 
 /* Leaderboard board s_slot_00565410[48] = 6 × {i32 slot, i32 score}. */
 #define BOARD_SLOT(i)   (*(int32_t *)&s_slot_00565410[(i) * 8 + 0])
@@ -98,6 +121,60 @@ void engine_ranking_snapshot_player_metrics(void)
         rec_set_i32(p, F_M_128 + F_PREV, rec_i32(p, F_M_128));
         rec_set_i32(p, F_M_130 + F_PREV, rec_i32(p, F_M_130));
         engine_ranking_recompute_player_total(p);
+    }
+}
+
+/* Port of FUN_0049d1e0 @ 0x49d1e0 (1024 B) — recompute one player's aggregate
+ * strategic metrics from the realms and territories it owns.  These are exactly
+ * the per-metric inputs engine_ranking_recompute later reduces to leaders and
+ * composite scores: army count (+0x29), total / average / previous-turn troop
+ * strength (+0x10 / +0x14 / +0x18), an averaged rating (+0x0c) and standing
+ * (+0x58), the realm-share percent (+0x60), and the territory count (+0x2c) and
+ * total value (+0x54).
+ *
+ * Player 0 (the neutral/unowned slot) only gets the four head fields cleared —
+ * the whole aggregation is gated on player != 0.  The +0x58 byte accumulator
+ * wraps mod 256 exactly as the binary's 8-bit add does, then is averaged with
+ * unsigned division; the rating accumulator is a signed int averaged with
+ * signed division.  Reads only the realm count + the army/territory blocks. */
+void engine_ranking_recompute_player_aggregate(unsigned player)
+{
+    uint8_t *p = REC(player);
+
+    p[F_M_29] = 0;
+    rec_set_i32(player, F_M_18, rec_i32(player, F_M_10));   /* prev = current  */
+    rec_set_i32(player, F_M_10, 0);
+    p[F_M_0C] = 0;
+    p[F_M_58] = 0;
+
+    if (player == 0)
+        return;
+
+    int rating_sum = 0;
+    for (int key = 1; key <= (int)s_slot_0056d5dc; key++) {
+        const uint8_t *r = AREC(key);
+        if (r[A_OWNER] == player) {
+            p[F_M_29]++;
+            *(int32_t *)&p[F_M_10] += *(const int32_t *)&r[A_STRENGTH];
+            rating_sum += (int8_t)r[A_RATING];
+            p[F_M_58] = (uint8_t)(p[F_M_58] + r[A_STANDING]);
+        }
+    }
+
+    int n = p[F_M_29];
+    rec_set_i32(player, F_M_14, n == 0 ? 0 : rec_i32(player, F_M_10) / n);
+    p[F_M_60] = n == 0 ? 0 : (uint8_t)engine_math_percent_div(n, (int)s_slot_0056d5dc);
+    p[F_M_0C] = n == 0 ? 0 : (uint8_t)(rating_sum / n);
+    p[F_M_58] = n == 0 ? 0 : (uint8_t)(p[F_M_58] / n);
+
+    p[F_M_2C] = 0;
+    rec_set_i32(player, F_M_54, 0);
+    for (int t = 1; t < 0x97; t++) {
+        const uint8_t *terr = TREC(t);
+        if (terr[T_KIND] == 1 && (int8_t)terr[T_OWNER] == (int)player) {
+            p[F_M_2C]++;
+            *(int32_t *)&p[F_M_54] += *(const int32_t *)&terr[T_VALUE];
+        }
     }
 }
 

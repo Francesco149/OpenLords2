@@ -15,11 +15,24 @@
 #include "t.h"
 #include "engine_ranking.h"
 #include "engine_event_queue.h"
-#include "save.h"                 /* g_player_strategic_352 */
-#include "save_schema_globals.h"  /* leaderboard result scalars + board */
+#include "save.h"                 /* g_player_strategic_352, g_per_army_768, g_per_territory_420 */
+#include "save_schema_globals.h"  /* leaderboard result scalars + board + s_slot_0056d5dc */
 
 #define REC(p)        (&g_player_strategic_352[(p) * 0x160])
 #define REC_I32(p,o)  (*(int32_t *)&g_player_strategic_352[(p) * 0x160 + (o)])
+
+/* aggregate-source records (mirror engine_ranking.c). */
+#define AREC(k)       (&g_per_army_768[(k) * 0x300])
+#define TREC(t)       (&g_per_territory_420[(t) * 0x1a4])
+#define A_OWNER       0x05
+#define A_STANDING    0x0b
+#define A_RATING      0x0c
+#define A_STRENGTH    0x24
+#define T_OWNER       0x00
+#define T_KIND        0x08
+#define T_VALUE       0x168
+#define F_M_14        0x14
+#define F_M_18        0x18
 
 /* Field offsets (mirror engine_ranking.c). */
 #define F_ACTIVE   0x04
@@ -326,5 +339,137 @@ int test_engine_ranking_snapshot_all_slots_no_filter(void)
     for (int p = 1; p <= 5; p++)
         T_ASSERT_EQ_I(REC_I32(p, F_TOTAL), 6);       /* every slot rolled, no filter */
     T_ASSERT_EQ_I(REC_I32(0, F_TOTAL), 12345);       /* slot 0 untouched */
+    return 0;
+}
+
+/* ───────────────────── FUN_0049d1e0 player aggregate ──────────────────── */
+
+static void clear_aggregate_world(void)
+{
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    s_slot_0056d5dc = 0;
+}
+
+static void set_realm(int k, int owner, int32_t strength, int rating, int standing)
+{
+    AREC(k)[A_OWNER]    = (uint8_t)owner;
+    AREC(k)[A_RATING]   = (uint8_t)(int8_t)rating;
+    AREC(k)[A_STANDING] = (uint8_t)standing;
+    *(int32_t *)&AREC(k)[A_STRENGTH] = strength;
+}
+
+static void set_terr(int t, int kind, int owner, int32_t value)
+{
+    TREC(t)[T_KIND]  = (uint8_t)kind;
+    TREC(t)[T_OWNER] = (uint8_t)(int8_t)owner;
+    *(int32_t *)&TREC(t)[T_VALUE] = value;
+}
+
+/* Full aggregation: counts, total/avg strength, share percent, averaged
+ * rating + standing, and territory count/value — filtered by owner and the
+ * settled-kind (==1) gate. */
+int test_engine_ranking_aggregate_basic(void)
+{
+    clear_aggregate_world();
+    s_slot_0056d5dc = 4;
+    set_realm(1, 2, 100, 10, 20);
+    set_realm(2, 1,  77,  5,  5);   /* other owner */
+    set_realm(3, 2,  50, 30, 40);
+    set_realm(4, 3,  99,  9,  9);   /* other owner */
+
+    set_terr(5, 1, 2, 1000);
+    set_terr(6, 1, 2,  500);
+    set_terr(7, 2, 2,  999);        /* wrong kind */
+    set_terr(8, 1, 3,  999);        /* wrong owner */
+
+    REC_I32(2, F_M_10) = 777;       /* old total → should land in +0x18 */
+
+    engine_ranking_recompute_player_aggregate(2);
+
+    T_ASSERT_EQ_I(REC(2)[F_M_29], 2);              /* army count            */
+    T_ASSERT_EQ_I(REC_I32(2, F_M_10), 150);        /* total strength        */
+    T_ASSERT_EQ_I(REC_I32(2, F_M_18), 777);        /* previous total kept   */
+    T_ASSERT_EQ_I(REC_I32(2, F_M_14), 75);         /* avg strength 150/2    */
+    T_ASSERT_EQ_I(REC(2)[F_M_60], 50);             /* percent 2/4 ×100      */
+    T_ASSERT_EQ_I((int8_t)REC(2)[F_M_0C], 20);     /* avg rating (10+30)/2  */
+    T_ASSERT_EQ_I(REC(2)[F_M_58], 30);             /* avg standing (20+40)/2*/
+    T_ASSERT_EQ_I(REC(2)[F_M_2C], 2);              /* territory count       */
+    T_ASSERT_EQ_I(REC_I32(2, F_M_54), 1500);       /* territory value sum   */
+    return 0;
+}
+
+/* Player 0 is the neutral slot: only the four head fields are cleared, then
+ * the function returns before computing any averages or the territory loop. */
+int test_engine_ranking_aggregate_player0_early_return(void)
+{
+    clear_aggregate_world();
+    s_slot_0056d5dc = 4;
+    set_realm(1, 0, 999, 50, 60);   /* owned by player 0 — must be ignored */
+
+    REC_I32(0, F_M_10) = 321;
+    REC(0)[F_M_29] = 9;
+    REC_I32(0, F_M_14) = 0x1111;    /* sentinels: must stay untouched */
+    REC(0)[F_M_60]    = 0x22;
+    REC(0)[F_M_2C]    = 0x33;
+    REC_I32(0, F_M_54) = 0x4444;
+
+    engine_ranking_recompute_player_aggregate(0);
+
+    T_ASSERT_EQ_I(REC(0)[F_M_29], 0);              /* head fields cleared   */
+    T_ASSERT_EQ_I(REC_I32(0, F_M_18), 321);        /* prev = old total      */
+    T_ASSERT_EQ_I(REC_I32(0, F_M_10), 0);
+    T_ASSERT_EQ_I(REC(0)[F_M_0C], 0);
+    T_ASSERT_EQ_I(REC(0)[F_M_58], 0);
+    T_ASSERT_EQ_I(REC_I32(0, F_M_14), 0x1111);     /* untouched (early ret) */
+    T_ASSERT_EQ_I(REC(0)[F_M_60], 0x22);
+    T_ASSERT_EQ_I(REC(0)[F_M_2C], 0x33);
+    T_ASSERT_EQ_I(REC_I32(0, F_M_54), 0x4444);
+    return 0;
+}
+
+/* An owned-by-nobody active player: count 0 drives every average to 0 (no
+ * divide-by-zero), but +0x18 still snapshots the old total and the territory
+ * outputs are explicitly zeroed (loop runs for non-0 players). */
+int test_engine_ranking_aggregate_zero_owned(void)
+{
+    clear_aggregate_world();
+    s_slot_0056d5dc = 2;
+    set_realm(1, 1, 10, 1, 1);
+    set_realm(2, 3, 10, 1, 1);
+
+    REC_I32(2, F_M_10) = 42;
+    REC_I32(2, F_M_14) = 555;
+    REC(2)[F_M_2C] = 7;
+    REC_I32(2, F_M_54) = 888;
+
+    engine_ranking_recompute_player_aggregate(2);
+
+    T_ASSERT_EQ_I(REC(2)[F_M_29], 0);
+    T_ASSERT_EQ_I(REC_I32(2, F_M_18), 42);
+    T_ASSERT_EQ_I(REC_I32(2, F_M_10), 0);
+    T_ASSERT_EQ_I(REC_I32(2, F_M_14), 0);          /* n==0 → 0, not /0      */
+    T_ASSERT_EQ_I(REC(2)[F_M_60], 0);
+    T_ASSERT_EQ_I(REC(2)[F_M_0C], 0);
+    T_ASSERT_EQ_I(REC(2)[F_M_58], 0);
+    T_ASSERT_EQ_I(REC(2)[F_M_2C], 0);              /* territory loop cleared */
+    T_ASSERT_EQ_I(REC_I32(2, F_M_54), 0);
+    return 0;
+}
+
+/* The +0x58 standing accumulator is a byte: it wraps mod 256 across realms
+ * before being averaged, exactly as the binary's 8-bit add does. */
+int test_engine_ranking_aggregate_standing_byte_wrap(void)
+{
+    clear_aggregate_world();
+    s_slot_0056d5dc = 2;
+    set_realm(1, 1, 0, 0, 200);
+    set_realm(2, 1, 0, 0, 200);     /* 200+200 = 400 → byte 144 → /2 = 72 */
+
+    engine_ranking_recompute_player_aggregate(1);
+
+    T_ASSERT_EQ_I(REC(1)[F_M_29], 2);
+    T_ASSERT_EQ_I(REC(1)[F_M_58], 72);
     return 0;
 }

@@ -383,6 +383,13 @@ int engine_realm_coalition_group_key(int group);
 int engine_realm_coalition_group_strength(int group);
 int engine_realm_coalition_group_member(int group, int slot);
 
+/* Port of FUN_00467eb0 @ 0x467eb0 (126 B) — does player `owner` control any
+ * realm adjacent to realm `realm`?  Scans realm `realm`'s 0-terminated +0x5c
+ * adjacency list for a neighbour realm whose owning player (+0x05) is `owner`,
+ * returning 1 on the first match else 0.  Used by the combat ownership-transfer
+ * path to decide whether a conquered realm borders the conqueror. */
+int engine_realm_player_owns_neighbor(unsigned owner, int realm);
+
 /* Bind the optional rebellion-spawn hook used by engine_realm_escalate_unrest
  * (retail FUN_004ac185).  It returns nonzero when a rebellion is spawned for
  * the realm, which resets that realm's unrest.  The real function reaches the

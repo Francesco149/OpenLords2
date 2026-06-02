@@ -1828,6 +1828,8 @@ struct test_case {
     X(engine_realm_unrest_human_warning) \
     X(engine_realm_unrest_human_escalate) \
     X(engine_realm_unrest_rebellion_resets) \
+    X(engine_realm_player_owns_neighbor) \
+    X(engine_realm_player_owns_neighbor_terminator) \
     \
     X(engine_events_scratch_and_gates) \
     X(engine_events_commit_resource) \
@@ -1898,6 +1900,10 @@ struct test_case {
     X(engine_ranking_recompute_player_total) \
     X(engine_ranking_snapshot_player_metrics) \
     X(engine_ranking_snapshot_all_slots_no_filter) \
+    X(engine_ranking_aggregate_basic) \
+    X(engine_ranking_aggregate_player0_early_return) \
+    X(engine_ranking_aggregate_zero_owned) \
+    X(engine_ranking_aggregate_standing_byte_wrap) \
     X(io_path_chdir_base_roundtrip) \
     X(io_path_set_base_seam) \
     X(io_path_chdir_base_failure) \

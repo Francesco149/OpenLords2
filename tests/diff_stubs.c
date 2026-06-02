@@ -20,6 +20,21 @@ int g_sim_mp_active;
 int g_sim_mp_variant;
 int g_sim_save_rotate_hold;
 
+/* engine.c engine-phase scalar (retail DAT_0052af94); game_init.c /
+ * engine_load_pump.c (both linked here) write it to 3 (in-game).  Inert for
+ * the diff targets, which never read it. */
+int g_engine_state;
+
+/* engine.c screen / demand-redraw accessors that game_init.c / engine_load_pump.c
+ * call when transitioning into the in-game map.  Mirrors the inert stubs the
+ * test binary keeps in test_engine_load_pump.c — plain state, never observed by
+ * the diff targets. */
+static int g_stub_screen;
+static int g_stub_redraw;
+int  engine_current_screen(void)        { return g_stub_screen; }
+void engine_set_current_screen(int s)   { g_stub_screen = s; }
+void engine_set_demand_redraw(int mode) { g_stub_redraw = mode; }
+
 /* main.c logging sink — suppressed, as in the test binary. */
 void log_line(const char *fmt, ...)
 {
