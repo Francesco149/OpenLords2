@@ -38,6 +38,8 @@
 #define U_OWNER      0x00   /* owning player id (i8)                          */
 #define U_NEXT       0x04   /* map-occupant list "next" link (i16; low byte
                              * is the head field's width)                     */
+#define U_LINKED_06  0x06   /* set 1 when record is the cell list head, 0 when
+                             * appended to the tail (u8; FUN_0046eddf)        */
 #define U_ACTIVE     0x08   /* active flag (u8)                               */
 #define U_CELL       0x0c   /* overworld-map cell byte offset (i32)           */
 #define U_TYPE       0x10   /* unit type / kind (u8)                          */
@@ -164,6 +166,38 @@ void engine_unit_map_unlink(int rec)
         wr_i16(UNIT_REC(cur), U_NEXT, rd_i16(r, U_NEXT));
     }
     wr_i16(r, U_NEXT, 0);
+}
+
+/* Port of FUN_0046eddf — link the unit into its overworld cell's occupant list
+ * (the inverse of engine_unit_map_unlink).  The list head is the cell byte
+ * g_overworld_map[cell+5]; the per-record "next" link (+0x04) is an i16.  A
+ * record that is an active army member already carrying an army back-link
+ * (U_ACTIVE == 1 AND U_LINK_A != 0) is left out of the map list entirely.
+ * Otherwise the record is appended: it becomes the head when the list is empty
+ * (U_LINKED_06 stays 1), else it is spliced onto the tail after at most a
+ * 10-hop walk (U_LINKED_06 cleared to 0). */
+void engine_unit_map_link(int rec)
+{
+    uint8_t *r    = UNIT_REC(rec);
+    int      cell = rd_i32(r, U_CELL);
+    unsigned head = g_overworld_map[cell + 0x05];
+    int      guard = 0;
+
+    if (r[U_ACTIVE] == 1 && r[U_LINK_A] != 0)
+        return;
+
+    r[U_LINKED_06] = 1;
+    if (head == 0) {
+        g_overworld_map[cell + 0x05] = (uint8_t)rec;
+    } else {
+        unsigned cur = head;
+        while (rd_i16(UNIT_REC(cur), U_NEXT) != 0 && guard < 10) {
+            cur = (uint16_t)rd_i16(UNIT_REC(cur), U_NEXT);
+            guard++;
+        }
+        wr_i16(UNIT_REC(cur), U_NEXT, (int16_t)rec);
+        r[U_LINKED_06] = 0;
+    }
 }
 
 /* Port of FUN_0046f0a9. */

@@ -60,6 +60,15 @@ void engine_unit_clear_contract(int rec);
  * (g_overworld_map[rec+0x0c]+0x05 is the list head; +0x04 is the next link). */
 void engine_unit_map_unlink(int rec);
 
+/* Port of FUN_0046eddf @ 0x46eddf (349 B, __cdecl void(int)).  Link the unit
+ * into the singly-linked occupant list of its overworld-map cell — the inverse
+ * of engine_unit_map_unlink, used by the territory-transfer path to re-home a
+ * record after its cell changes.  Skips active army members that already hold
+ * an army back-link (U_ACTIVE==1 && U_LINK_A!=0); otherwise appends the record
+ * (head when empty, else tail after ≤10 hops) and records via +0x06 whether it
+ * became the head. */
+void engine_unit_map_link(int rec);
+
 /* Port of FUN_0046f0a9 @ 0x46f0a9 (71 B, __cdecl void(uint)).  Fully remove a
  * unit: clear its contract, unlink it from the map, zero its whole 0x1a4-byte
  * record, then re-run the territory-income aggregation. */

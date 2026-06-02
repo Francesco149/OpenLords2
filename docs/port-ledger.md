@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **603** (24.6%) — tested 557, ported 46
-- code bytes touched: **28.9%** (242,689 / 838,629 B)
-- unported: **1844**
+- touched: **604** (24.7%) — tested 558, ported 46
+- code bytes touched: **29.0%** (243,038 / 838,629 B)
+- unported: **1843**
 - orphan refs (in src/, not in function table): 4
 
-## tested (557) — ported + host unit suite
+## tested (558) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -408,6 +408,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46ead0 | FUN_0046ead0 | 57 | engine_map_init.c, engine_realm_upkeep.c, engine_territory.c (+2) |
 | 0x46eb09 | FUN_0046eb09 | 54 | game_init.c, game_init.h |
 | 0x46ec6e | FUN_0046ec6e | 369 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x46eddf | FUN_0046eddf | 349 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x46f0a9 | FUN_0046f0a9 | 71 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x46f1dc | FUN_0046f1dc | 67 | game_init.c, game_init.h |
 | 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h |

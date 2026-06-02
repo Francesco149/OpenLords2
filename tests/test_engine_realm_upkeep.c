@@ -149,6 +149,45 @@ int test_engine_upkeep_map_unlink(void)
     return 0;
 }
 
+/* --- map link: append to a cell's occupant list (FUN_0046eddf) ------------ */
+int test_engine_upkeep_map_link(void)
+{
+    const int CELL = 0x200;
+
+    /* Empty cell: the record becomes the list head, flagged head (+0x06 = 1). */
+    up_reset();
+    I32(UREC(1), 0x0c) = CELL;
+    engine_unit_map_link(1);
+    T_ASSERT_EQ_U(g_overworld_map[CELL + 5], 1);
+    T_ASSERT_EQ_U(UREC(1)[0x06], 1);
+
+    /* Non-empty head→1→0: append rec 2; 1.next=2, rec2 flagged tail (+0x06=0). */
+    up_reset();
+    I32(UREC(1), 0x0c) = CELL; I32(UREC(2), 0x0c) = CELL;
+    g_overworld_map[CELL + 5] = 1; I16(UREC(1), 0x04) = 0;
+    engine_unit_map_link(2);
+    T_ASSERT_EQ_U(g_overworld_map[CELL + 5], 1);   /* head unchanged */
+    T_ASSERT_EQ_I(I16(UREC(1), 0x04), 2);          /* 1 → 2 */
+    T_ASSERT_EQ_I(I16(UREC(2), 0x04), 0);
+    T_ASSERT_EQ_U(UREC(2)[0x06], 0);
+
+    /* Walk to the tail of head→1→2→0 and append rec 3. */
+    up_reset();
+    for (int i = 1; i <= 3; i++) I32(UREC(i), 0x0c) = CELL;
+    g_overworld_map[CELL + 5] = 1; I16(UREC(1), 0x04) = 2; I16(UREC(2), 0x04) = 0;
+    engine_unit_map_link(3);
+    T_ASSERT_EQ_I(I16(UREC(2), 0x04), 3);
+
+    /* An active army member already holding a back-link is left out entirely. */
+    up_reset();
+    I32(UREC(1), 0x0c) = CELL;
+    UREC(1)[0x08] = 1;          /* U_ACTIVE == 1 */
+    UREC(1)[0x198] = 5;         /* U_LINK_A != 0 */
+    engine_unit_map_link(1);
+    T_ASSERT_EQ_U(g_overworld_map[CELL + 5], 0);   /* not linked */
+    return 0;
+}
+
 /* --- disband: army back-links + strat counter + wage refresh (FUN_004aa039) */
 int test_engine_upkeep_disband_links(void)
 {

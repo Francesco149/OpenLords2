@@ -1829,6 +1829,7 @@ struct test_case {
     X(engine_upkeep_total_wage_filters) \
     X(engine_upkeep_clear_contract) \
     X(engine_upkeep_map_unlink) \
+    X(engine_upkeep_map_link) \
     X(engine_upkeep_disband_links) \
     X(engine_upkeep_absorb) \
     X(engine_upkeep_pay_afford_and_state0) \
