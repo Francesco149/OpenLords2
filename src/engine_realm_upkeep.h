@@ -49,6 +49,11 @@ int engine_unit_recompute_wage(int rec);
  * engine_unit_recompute_wage over every active unit owned by `owner`. */
 int engine_unit_total_wage(int owner);
 
+/* Port of FUN_004ad426 @ 0x4ad426 (111 B, __cdecl void(void)).  Refresh every
+ * in-game realm's (strat +0x04 set, slots 1..5) total wage bill (strat +0xfc)
+ * from the live unit roster via engine_unit_total_wage. */
+void engine_realm_refresh_wage_bills(void);
+
 /* Port of FUN_004ac6fe @ 0x4ac6fe (245 B, __cdecl void(int)).  If the unit is
  * active and holds a hire contract (+0x197 != 0), refund its contract amount
  * (+0x196) out of its value (+0x168), clear the three contract bytes

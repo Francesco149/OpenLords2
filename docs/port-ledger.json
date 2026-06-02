@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 567,
+  "tested": 570,
   "ported": 45,
-  "unported": 1835,
+  "unported": 1832,
   "orphan_refs_not_in_function_table": 4,
-  "touched": 612,
-  "pct_touched": 25.0,
-  "pct_tested": 23.2,
+  "touched": 615,
+  "pct_touched": 25.1,
+  "pct_tested": 23.3,
   "bytes_total": 838629,
-  "bytes_touched": 248071,
-  "pct_bytes_touched": 29.6
+  "bytes_touched": 248937,
+  "pct_bytes_touched": 29.7
  },
  "orphan_refs": [
   "0x004148",
@@ -16567,8 +16567,11 @@
    "name": "FUN_004a80db",
    "size": 478,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x4a82b9",
@@ -16806,7 +16809,8 @@
    "status": "tested",
    "src": [
     "src/engine_combat.c",
-    "src/engine_combat.h"
+    "src/engine_combat.h",
+    "src/engine_realm_upkeep.c"
    ]
   },
   {
@@ -17008,8 +17012,11 @@
    "name": "FUN_004ad426",
    "size": 111,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_realm_upkeep.c",
+    "src/engine_realm_upkeep.h"
+   ]
   },
   {
    "va": "0x4ad495",
@@ -17050,8 +17057,11 @@
    "name": "FUN_004ad8cc",
    "size": 277,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x4ad9f0",

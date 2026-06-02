@@ -18,6 +18,7 @@
 #include "engine_combat.h"
 #include "engine_realm_upkeep.h"   /* shares the merc-contract triple */
 #include "save.h"
+#include "save_schema_globals.h"   /* s_slot_0053f23c (wage divisor) */
 
 #define CREC(i)    (&g_per_territory_420[(i) * 0x1a4])
 #define I32(p, o)  (*(int32_t *)((p) + (o)))
@@ -335,3 +336,106 @@ int test_engine_combat_size_sfx_hook(void)
 }
 #undef C_GARRISON
 #undef C_COUNT
+
+/* --- FUN_004a80db: post-battle condition recompute ------------------------ */
+
+#define C_COND_CNT   0x182
+#define C_COND_OUT   0x184
+#define C_COND_STOCK 0x186
+#define C_COND_LEVEL 0x19c
+
+/* head-count 0 → early return, condition byte untouched. */
+int test_engine_combat_condition_zero_head(void)
+{
+    cb_reset();
+    uint8_t *r = CREC(4);
+    I32(r, C_VALUE)      = 0;
+    r[C_COND_LEVEL]      = 77;
+    I16(r, C_COND_OUT)   = 12;     /* must stay untouched */
+    engine_combat_recompute_condition(4);
+    T_ASSERT_EQ_U(r[C_COND_LEVEL], 77);
+    T_ASSERT_EQ_I(I16(r, C_COND_OUT), 12);
+    return 0;
+}
+
+/* Mixed groups: under-supplied (50 %), over-supplied (clamped 100), and a
+ * second under-supplied group; shortfall averaged exactly over the head. */
+int test_engine_combat_condition_mixed(void)
+{
+    cb_reset();
+    uint8_t *r = CREC(4);
+    I32(r, C_VALUE) = 100;
+    /* g0: cnt 10 stock 1000, req 2000 → 50 %, shortfall 1000 */
+    I16(r, C_COND_CNT   + 0) = 10; I16(r, C_COND_STOCK + 0) = 1000;
+    /* g1: cnt 5  stock 2000, req 1000 → 200→clamp 100, no shortfall */
+    I16(r, C_COND_CNT   + 6) = 5;  I16(r, C_COND_STOCK + 6) = 2000;
+    /* g2: cnt 2  stock 400,  req 800  → 50 %, shortfall 400 */
+    I16(r, C_COND_CNT   + 12) = 2; I16(r, C_COND_STOCK + 12) = 400;
+
+    engine_combat_recompute_condition(4);
+
+    T_ASSERT_EQ_I(I16(r, C_COND_OUT + 0), 50);
+    T_ASSERT_EQ_I(I16(r, C_COND_OUT + 6), 100);
+    T_ASSERT_EQ_I(I16(r, C_COND_OUT + 12), 50);
+    /* shortfall 1400 / head 100 = 14, remainder 0 */
+    T_ASSERT_EQ_U(r[C_COND_LEVEL], 14);
+    return 0;
+}
+
+/* Nonzero remainder rounds the averaged shortfall up; a zero-count group has
+ * its out%/stock fields zeroed. */
+int test_engine_combat_condition_roundup_and_empty(void)
+{
+    cb_reset();
+    uint8_t *r = CREC(4);
+    I32(r, C_VALUE) = 99;
+    I16(r, C_COND_CNT   + 0) = 10; I16(r, C_COND_STOCK + 0) = 1000;  /* sf 1000 */
+    I16(r, C_COND_CNT   + 12) = 2; I16(r, C_COND_STOCK + 12) = 400;  /* sf 400  */
+    /* g1: count 0 → out%/stock zeroed */
+    I16(r, C_COND_CNT   + 6) = 0;  I16(r, C_COND_OUT + 6) = 55; I16(r, C_COND_STOCK + 6) = 66;
+
+    engine_combat_recompute_condition(4);
+
+    T_ASSERT_EQ_I(I16(r, C_COND_OUT + 6), 0);
+    T_ASSERT_EQ_I(I16(r, C_COND_STOCK + 6), 0);
+    /* shortfall 1400 / 99 = 14 r 14 → 15 */
+    T_ASSERT_EQ_U(r[C_COND_LEVEL], 15);
+    return 0;
+}
+
+#undef C_COND_CNT
+#undef C_COND_OUT
+#undef C_COND_STOCK
+#undef C_COND_LEVEL
+
+/* --- FUN_004ad8cc: post-conquest garrison halve -------------------------- */
+int test_engine_combat_halve_garrison(void)
+{
+    cb_reset();
+    uint8_t *r = CREC(5);
+    static const int16_t c[7] = { 20, 10, 11, 100, 5, 0, 3 };
+    set_counts(5, c);
+    r[C_OWNER]    = 2;
+    r[C_ACTIVE]   = 1;
+    r[C_CON_AMT]  = 7;
+    r[0x1c]       = 9;     /* scratch — must clear */
+    r[0x14c]      = 9;     /* flag    — must clear */
+    g_player_strategic_352[2 * 0x160 + 0x05] = 1;   /* human wage path: /4 */
+    s_slot_0053f23c = 0;
+
+    engine_combat_halve_garrison(5);
+
+    /* >10 halved, ≤10 wiped: 10,0,5,50,0,0,0 → sum 65, + merc 7 = 72 */
+    T_ASSERT_EQ_I(I16(r, C_COUNTS + 0), 10);
+    T_ASSERT_EQ_I(I16(r, C_COUNTS + 2), 0);
+    T_ASSERT_EQ_I(I16(r, C_COUNTS + 4), 5);
+    T_ASSERT_EQ_I(I16(r, C_COUNTS + 6), 50);
+    T_ASSERT_EQ_I(I16(r, C_COUNTS + 8), 0);
+    T_ASSERT_EQ_I(I16(r, C_COUNTS + 10), 0);
+    T_ASSERT_EQ_I(I16(r, C_COUNTS + 12), 0);
+    T_ASSERT_EQ_I(I32(r, C_VALUE), 72);
+    T_ASSERT_EQ_U(r[0x1c], 0);
+    T_ASSERT_EQ_U(r[0x14c], 0);
+    T_ASSERT_EQ_I(I32(r, 0x15c), 18);   /* recomputed wage 72/4 */
+    return 0;
+}

@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **612** (25.0%) — tested 567, ported 45
-- code bytes touched: **29.6%** (248,071 / 838,629 B)
-- unported: **1835**
+- touched: **615** (25.1%) — tested 570, ported 45
+- code bytes touched: **29.7%** (248,937 / 838,629 B)
+- unported: **1832**
 - orphan refs (in src/, not in function table): 4
 
-## tested (567) — ported + host unit suite
+## tested (570) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -473,11 +473,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a4c41 | FUN_004a4c41 | 311 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a6a30 | FUN_004a6a30 | 568 | engine_combat.c, engine_combat.h |
 | 0x4a7158 | FUN_004a7158 | 402 | engine_combat.h |
+| 0x4a80db | FUN_004a80db | 478 | engine_combat.c, engine_combat.h |
 | 0x4aa039 | FUN_004aa039 | 328 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4aa89f | FUN_004aa89f | 107 | engine_combat.c, engine_combat.h |
 | 0x4aad07 | FUN_004aad07 | 1443 | engine_combat.c, engine_combat.h |
 | 0x4ab2aa | FUN_004ab2aa | 217 | engine_combat.c, engine_combat.h |
-| 0x4ab383 | FUN_004ab383 | 1751 | engine_combat.c, engine_combat.h |
+| 0x4ab383 | FUN_004ab383 | 1751 | engine_combat.c, engine_combat.h, engine_realm_upkeep.c |
 | 0x4aba5a | FUN_004aba5a | 220 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4ac185 | FUN_004ac185 | 577 | engine_realm.c, engine_realm.h |
 | 0x4ac3c6 | FUN_004ac3c6 | 211 | engine_realm.c, engine_realm.h |
@@ -490,9 +491,11 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4ad230 | FUN_004ad230 | 230 | engine_realm_upkeep.c |
 | 0x4ad316 | FUN_004ad316 | 132 | engine_realm_upkeep.c |
 | 0x4ad39a | FUN_004ad39a | 140 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x4ad426 | FUN_004ad426 | 111 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4ad495 | FUN_004ad495 | 150 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4ad52b | FUN_004ad52b | 405 | engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4ad6c0 | FUN_004ad6c0 | 524 | engine_realm.c, engine_realm.h, engine_realm_upkeep.c |
+| 0x4ad8cc | FUN_004ad8cc | 277 | engine_combat.c, engine_combat.h |
 | 0x4ad9f0 | FUN_004ad9f0 | 774 | engine.c, engine_load_pump.c, engine_load_pump.h (+1) |
 | 0x4adcf6 | FUN_004adcf6 | 413 | engine_load_pump.c, engine_load_pump.h |
 | 0x4ade93 | FUN_004ade93 | 339 | save.c, save.h |

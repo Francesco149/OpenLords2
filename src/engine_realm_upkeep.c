@@ -63,6 +63,7 @@
 /* --- per-player strategic record (g_player_strategic_352, stride 0x160) --- */
 #define STRAT_STRIDE 0x160
 #define STRAT_REC(s) (&g_player_strategic_352[(s) * STRAT_STRIDE])
+#define S_ACTIVE_04  0x04   /* realm in-game flag (u8; DAT_0057bf04)          */
 #define S_FLAG_05    0x05   /* human/events-on gate; selects wage divisor (u8)*/
 #define S_CNT_2D     0x2d   /* per-type unit counter array (u8)               */
 #define S_WAGE_SUM   0xfc   /* total wage owed this turn (i32)                */
@@ -119,6 +120,17 @@ int engine_unit_total_wage(int owner)
             total += engine_unit_recompute_wage(i);
     }
     return total;
+}
+
+/* Port of FUN_004ad426.  Refresh every in-game realm's total wage bill (strat
+ * +0xfc) from the live unit roster.  Run by the combat aftermath (FUN_004ab383)
+ * after a fight has changed troop counts. */
+void engine_realm_refresh_wage_bills(void)
+{
+    for (int realm = 1; realm < 6; realm++) {
+        if (STRAT_REC(realm)[S_ACTIVE_04] != 0)
+            wr_i32(STRAT_REC(realm), S_WAGE_SUM, engine_unit_total_wage(realm));
+    }
 }
 
 /* Port of FUN_004ac6fe. */

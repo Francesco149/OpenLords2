@@ -1839,6 +1839,7 @@ struct test_case {
     \
     X(engine_upkeep_wage_divisors) \
     X(engine_upkeep_total_wage_filters) \
+    X(engine_upkeep_refresh_wage_bills) \
     X(engine_upkeep_clear_contract) \
     X(engine_upkeep_map_unlink) \
     X(engine_upkeep_map_link) \
@@ -1861,6 +1862,10 @@ struct test_case {
     X(engine_combat_size_local_defends) \
     X(engine_combat_size_defender_local_open_attacker) \
     X(engine_combat_size_sfx_hook) \
+    X(engine_combat_condition_zero_head) \
+    X(engine_combat_condition_mixed) \
+    X(engine_combat_condition_roundup_and_empty) \
+    X(engine_combat_halve_garrison) \
     \
     X(army_ai_seed_workforce_ratios) \
     X(army_ai_advance_tier_nonpositive_noop) \

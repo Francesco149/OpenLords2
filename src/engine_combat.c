@@ -36,8 +36,22 @@
 #define C_CON_CLASS  0x195   /* merc contingent's troop class (u8)            */
 #define C_CON_AMT    0x196   /* merc contingent head-count (u8)               */
 
+/* Post-battle resupply / condition fields (FUN_004a80db). */
+#define C_COND_CNT   0x182   /* 3 supply groups × {count,out%,stock} stride 6 */
+#define C_COND_OUT   0x184   /*   (i16 each); group g at base + g*6           */
+#define C_COND_STOCK 0x186
+#define C_COND_LEVEL 0x19c   /* averaged supply shortfall per head (i8)       */
+
+/* Post-conquest garrison-halve scratch (FUN_004ad8cc). */
+#define C_SCRATCH_1C 0x1c    /* cleared after conquest (u8)                   */
+#define C_FLAG_14C   0x14c   /* cleared after conquest (u8)                   */
+
 /* Per-class combat weight (DAT_004d4b98): peasant .. the heaviest unit. */
 static const int32_t k_unit_strength[7] = { 2, 16, 8, 13, 9, 13, 22 };
+
+/* Per-supply-group "required stock" rate (DAT_004de440, 3 × i32) — the
+ * denominator multiplier in the post-battle condition recompute. */
+static const int32_t k_cond_rate[3] = { 200, 200, 400 };
 
 /* Strength-ratio (winner/loser × 100) → winner survivor percent
  * (DAT_004de710, walked as 10 {threshold, value} pairs by lookup_threshold;
@@ -51,6 +65,7 @@ int32_t g_combat_muster_a[7];   /* retail 0x568420 */
 int32_t g_combat_muster_b[7];   /* retail 0x56843c */
 
 static int16_t  rd_i16(const uint8_t *r, int off) { return *(const int16_t *)(r + off); }
+static int32_t  rd_i32(const uint8_t *r, int off) { return *(const int32_t *)(r + off); }
 static void     wr_i16(uint8_t *r, int off, int16_t v) { *(int16_t *)(r + off) = v; }
 static void     wr_i32(uint8_t *r, int off, int32_t v) { *(int32_t *)(r + off) = v; }
 
@@ -233,4 +248,69 @@ int engine_combat_size_battle(int attacker, int defender, int local_player)
     g_combat_owner_a = (int8_t)a[C_OWNER];
     g_combat_owner_b = (int8_t)d[C_OWNER];
     return 1;
+}
+
+/* ===================================================================== *
+ *  Combat-aftermath occupant fix-ups (FUN_004a80db / FUN_004ad8cc).      *
+ * ===================================================================== */
+
+/* Port of FUN_004a80db.  Post-battle supply/condition recompute for a surviving
+ * occupant: for each of 3 supply groups, express the present stock (+0x186) as a
+ * percent of the requirement (rate × count, +0x182) into the out% field (+0x184)
+ * clamped to 100, accumulate the shortfall of every under-supplied group, then
+ * store the shortfall averaged over the head-count (+0x168, rounded up) into the
+ * condition byte (+0x19c).  Groups with no count zero their out%/stock fields.
+ *
+ * The int the binary returns is dead — both callers (FUN_004ab383) invoke it for
+ * effect only, and on a nonzero remainder it is overwritten with rec*0x54
+ * garbage — so this port returns void. */
+void engine_combat_recompute_condition(int rec)
+{
+    uint8_t *r    = CREC(rec);
+    int      head = rd_i32(r, C_VALUE);
+    if (head <= 0)
+        return;
+
+    int shortfall = 0;
+    for (int g = 0; g < 3; g++) {
+        int cnt = rd_i16(r, C_COND_CNT + g * 6);
+        if (cnt < 1) {
+            wr_i16(r, C_COND_OUT   + g * 6, 0);
+            wr_i16(r, C_COND_STOCK + g * 6, 0);
+        } else {
+            int stock = rd_i16(r, C_COND_STOCK + g * 6);
+            int req   = k_cond_rate[g] * cnt;
+            int pct   = engine_math_percent_div(stock, req);
+            wr_i16(r, C_COND_OUT + g * 6, (int16_t)pct);
+            if (pct < 100)
+                shortfall += req - stock;
+            else
+                wr_i16(r, C_COND_OUT + g * 6, 100);
+        }
+    }
+
+    int level = shortfall / head;
+    if (shortfall % head != 0)
+        level += 1;
+    r[C_COND_LEVEL] = (uint8_t)level;
+}
+
+/* Port of FUN_004ad8cc.  Halve a conquered occupant's surviving troops: each of
+ * the 7 class counts above 10 is halved (≤10 → wiped), the head-count (+0x168)
+ * is re-summed and the merc contingent (+0x196) folded back in, two scratch
+ * flags (+0x1c, +0x14c) are cleared, and the per-turn wage is recomputed. */
+void engine_combat_halve_garrison(int rec)
+{
+    uint8_t *r   = CREC(rec);
+    int      sum = 0;
+    for (int c = 0; c < 7; c++) {
+        int16_t v  = rd_i16(r, C_COUNTS + c * 2);
+        int     nv = (v < 0xb) ? 0 : v / 2;
+        wr_i16(r, C_COUNTS + c * 2, (int16_t)nv);
+        sum += nv;
+    }
+    wr_i32(r, C_VALUE, sum + r[C_CON_AMT]);
+    r[C_SCRATCH_1C] = 0;
+    r[C_FLAG_14C]   = 0;
+    engine_unit_recompute_wage(rec);
 }

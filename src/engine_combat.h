@@ -102,4 +102,17 @@ void engine_combat_bind_battle_sfx(void (*fn)(void));
  * g_per_territory_420 occupants the resolver validates. */
 int engine_combat_size_battle(int attacker, int defender, int local_player);
 
+/* Port of FUN_004a80db @ 0x4a80db (478 B) — post-battle supply/condition
+ * recompute for a surviving occupant.  For each of 3 supply groups, express the
+ * present stock as a percent of (rate × count) clamped to 100, and store the
+ * shortfall averaged over the head-count (rounded up) into the condition byte
+ * (+0x19c).  Run by the aftermath FUN_004ab383 on the battle winner. */
+void engine_combat_recompute_condition(int rec);
+
+/* Port of FUN_004ad8cc @ 0x4ad8cc (277 B) — halve a conquered occupant's
+ * surviving troops (each class count >10 is halved, ≤10 wiped), re-sum the
+ * head-count with the merc contingent, clear two scratch flags, and recompute
+ * the per-turn wage.  Run by the aftermath when a garrison is captured. */
+void engine_combat_halve_garrison(int rec);
+
 #endif /* OPENLORDS2_ENGINE_COMBAT_H */

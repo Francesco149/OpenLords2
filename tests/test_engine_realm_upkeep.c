@@ -77,6 +77,27 @@ int test_engine_upkeep_total_wage_filters(void)
     return 0;
 }
 
+/* --- per-realm wage-bill refresh (FUN_004ad426) --------------------------- */
+int test_engine_upkeep_refresh_wage_bills(void)
+{
+    up_reset();
+    s_slot_0053f23c = 0;                       /* AI divisor /3 */
+    /* realm 2 is in-game (+0x04 set) with two active units → wage 13+27=40 */
+    SREC(2)[0x04] = 1;
+    UREC(1)[0x00] = 2; UREC(1)[0x08] = 1; I32(UREC(1), 0x168) = 40;  /* 13 */
+    UREC(2)[0x00] = 2; UREC(2)[0x08] = 1; I32(UREC(2), 0x168) = 81;  /* 27 */
+    /* realm 3 NOT in-game (+0x04 clear) → its +0xfc must be left untouched */
+    SREC(3)[0x04] = 0;
+    I32(SREC(3), 0xfc) = 999;
+    UREC(3)[0x00] = 3; UREC(3)[0x08] = 1; I32(UREC(3), 0x168) = 60;
+
+    engine_realm_refresh_wage_bills();
+
+    T_ASSERT_EQ_I(I32(SREC(2), 0xfc), 40);
+    T_ASSERT_EQ_I(I32(SREC(3), 0xfc), 999);
+    return 0;
+}
+
 /* --- contract clear / refund (FUN_004ac6fe) ------------------------------- */
 int test_engine_upkeep_clear_contract(void)
 {
