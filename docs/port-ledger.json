@@ -4182,7 +4182,8 @@
    "status": "ported",
    "src": [
     "src/engine_map_terrain.c",
-    "src/engine_map_terrain.h"
+    "src/engine_map_terrain.h",
+    "src/engine_screen_strat.c"
    ]
   },
   {
@@ -18931,6 +18932,7 @@
     "src/engine.h",
     "src/engine_fps.c",
     "src/engine_mp_render.c",
+    "src/engine_screen_strat.c",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
     "src/main.c"

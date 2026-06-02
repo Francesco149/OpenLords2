@@ -94,7 +94,21 @@ static void strat_draw_map_body(uint8_t *canvas, int cw, int ch)
                                    COL_COUNT, ROW_COUNT, X_STEP, Y_STEP, X_HALF);
     engine_map_terrain_set_view_mode(VIEW);
     engine_map_terrain_set_render_mode(RENDER);
-    engine_map_terrain_set_sky_gate_flag(0);
+    /* Empty-cell redraw gate (DAT_0053e9ac).  "Sky gate" is a misnomer:
+     * the empty-cell drawer (FUN_0042a7f1) was named for the map's TOP
+     * edge, where off-map empty cells paint the dark sky band — but the
+     * same path also fills INTERIOR empty "border" cells, which draw a
+     * base-grass sprite (blob 0), not sky.  Those interior cells (low
+     * sprite index <=6) draw ONLY when this gate is non-zero — retail's
+     * optimisation that skips repainting them on incremental frames (they
+     * persist in the back buffer).  Retail sets DAT_0053e9ac = 1 on every
+     * FULL redraw (e.g. FUN_004b99c0); the drop-in clears + fully redraws
+     * the map each strategic frame, so the gate must be 1.  With 0, those
+     * empty cells show the black clear-colour as iso-diamond holes —
+     * "missing grass tiles" at scrolls where low-index border cells are on
+     * screen (the load scroll exposes them; the strat-terrain1 scroll did
+     * not, which is why the earlier hard-coded 0 looked correct). */
+    engine_map_terrain_set_sky_gate_flag(1);
     engine_map_terrain_set_error_count(0);
     engine_map_terrain_reset_stats();
 
