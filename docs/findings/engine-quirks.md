@@ -5820,15 +5820,27 @@ ported as one unit into `engine_combat.c`.  Four non-obvious behaviours:
    quick-path field clears also differ between the branches.  They are written
    out explicitly rather than factored, to preserve the byte sequence.
 
-4. **A winner can immediately lose a too-distant conquest.**  In
-   `FUN_004a72fe`, if the capturing player has already conquered before
-   (`+0x29 != 0`) *and* owns no neighbour of the region (`FUN_00467eb0` == 0),
-   the just-won region is demolished (`FUN_004ac3c6`, recursing the cycle)
-   instead of held — modelling supply lines: you cannot annex a region you
-   cannot reach.
+4. **A winner can immediately lose a too-distant conquest — and "already
+   conquered" really means "already owns a realm".**  `FUN_004a72fe` first calls
+   the standings aggregate `FUN_0049d1e0`, which *overwrites* the player's
+   `+0x29` byte with the number of realms it currently owns.  The very next
+   can-hold test reads that freshly-recomputed `+0x29`: if it is non-zero (the
+   player already holds ≥1 realm) *and* the player owns no neighbour of the
+   region (`FUN_00467eb0` == 0), the just-won region is demolished
+   (`FUN_004ac3c6`, recursing the cycle) instead of held — modelling supply
+   lines, you cannot annex a region you cannot reach.  So `+0x29` is not a
+   persistent "times conquered" counter here; it is the live realm-ownership
+   count the aggregate just wrote.
 
 The auto-resolve path is pure save-state logic and is the target of the retail
 diff; the interactive path (`DAT_004eac50` 0x12/0x13 screen-state, the
 s080/ff_lose/ff_batl WAV cues, the battlefield render handoff) is bound through
 NULL-default seams (`engine_combat_bind_wav_fn` / `_click_fn` / `_clock_fn`) and
 needs human A/V verification.
+
+The **`combat_ownership` diff target** (FUN_004a72fe, can-hold path: region
+unowned, new owner holds no realms, local ≠ new owner) is **32/32 byte-exact**
+(seed 7) across the army + strat + territory blocks — covering the up-front
+aggregate, the region reassign, the popularity decay, and the conquest-counter
+bump.  Constraining the new owner to own no realms is what keeps it off the
+non-diffable demolish branch (point 4 above).

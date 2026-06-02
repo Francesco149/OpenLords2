@@ -2587,6 +2587,7 @@ VA_COMBAT_OWNER      = 0x5440cc   # DAT_005440cc — winner's owner id        (i
 FN_COMBAT_CONDITION  = 0x4a80db   # FUN_004a80db — __cdecl int(int rec)
 FN_COMBAT_HALVE      = 0x4ad8cc   # FUN_004ad8cc — __cdecl void(int rec)
 FN_DIPLOMACY_ADJUST  = 0x4a1ee1   # FUN_004a1ee1 — __cdecl void(uint,uint,char)
+FN_COMBAT_OWNERSHIP  = 0x4a72fe   # FUN_004a72fe — __cdecl void(uint new_owner, uint key)
 
 REALM_RACE_RETRIES = 8
 
@@ -2663,6 +2664,9 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
         lib.engine_diplomacy_battle_adjust.restype = None
         lib.engine_diplomacy_battle_adjust.argtypes = [
             ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
+        lib.engine_combat_transfer_ownership.restype = None
+        lib.engine_combat_transfer_ownership.argtypes = [
+            ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p, ctypes.c_int]
     return _realm_globals_cache
 
 
@@ -4094,6 +4098,177 @@ def diff_diplomacy_adjust(retail: dict, port: dict) -> list[str]:
                               REALM_STRAT_STRIDE, 6, "strat")
 
 
+# ── combat-init ownership transfer (FUN_004a72fe — engine_combat_transfer_ownership) ──
+#
+# __cdecl(uint new_owner, uint key): hand region `key` to player `new_owner`.
+# Constrained to the can-hold path so the diff stays pure save-state logic:
+#   - region currently UNOWNED (army[key]+0x05 == 0) → skips the elimination
+#     re-rank (FUN_0049b42b) and its leaderboard/mp dependencies;
+#   - new_owner owns NO realms → the up-front aggregate (FUN_0049d1e0)
+#     recomputes its conquest count (strat+0x29) to 0, so the can-hold first
+#     clause holds and we skip the owns-neighbour probe + the demolish branch.
+#     NB the aggregate OVERWRITES +0x29 with the realm-ownership count, so a
+#     new_owner that already holds a realm is diverted to demolish (FUN_004ac3c6)
+#     — whose economy re-plan reads price/cell state this harness does not bind
+#     (the same wall the upkeep/season diffs hit), hence the constraint;
+#   - local player (0x57c8cc) injected != new_owner → skips the strategic-map
+#     highlight (FUN_0046dfd5) and the local-victory popups.
+# The function still runs the player-aggregate recompute (FUN_0049d1e0) up front
+# and posts a captured/lost notice to the event ring (not read back), then
+# reassigns the region owner, decays its popularity (+0x0c reserve / +0x17), and
+# bumps the conquest counters (+0x29 / high-water +0x2a).  Readback: army + strat
+# + terr.  Driven through the generic RPC with args=[new_owner, key] cc='mscdecl'.
+
+_OWN_EVQ_BYTES = 1280   # >= sizeof(engine_event_queue_state_t)
+_own_evq = None
+
+
+def _build_ownership_vec(new_owner, key, *, local, diff, count,
+                         active, banner, conqmax, r_f0c, r_f17, r_f07,
+                         realms=None, terrs=None) -> dict:
+    army  = bytearray(REALM_ARMY_BYTES)
+    strat = bytearray(REALM_STRAT_BYTES)
+    terr  = bytearray(REALM_TERR_BYTES)
+
+    # The region being handed over (currently unowned).
+    b = key * REALM_ARMY_STRIDE
+    army[b + 0x05] = 0                 # region owner — unowned
+    army[b + 0x07] = r_f07 & 0xff
+    army[b + 0x0c] = r_f0c & 0xff      # popularity reserve (i8)
+    army[b + 0x17] = r_f17 & 0xff      # popularity (i8)
+
+    # The capturing player's strategic record.
+    s = new_owner * REALM_STRAT_STRIDE
+    strat[s + 0x05] = active  & 0xff   # active → capture penalty path
+    strat[s + 0x0a] = banner  & 0xff   # banner key → copied to region +0x07
+    strat[s + 0x29] = 0                # conquests — 0 keeps the can-hold path
+    strat[s + 0x2a] = conqmax & 0xff   # high-water mark
+
+    # Optional extra realms / territories owned by new_owner so the up-front
+    # aggregate recompute does real work (it writes strat[new_owner]).
+    for (slot, owner, strength, rating, standing) in (realms or []):
+        a = slot * REALM_ARMY_STRIDE
+        army[a + 0x05] = owner    & 0xff
+        army[a + 0x0b] = standing & 0xff
+        army[a + 0x0c] = rating   & 0xff
+        struct.pack_into("<i", army, a + 0x24, strength)
+    for (idx, kind, owner, value) in (terrs or []):
+        t = idx * REALM_TERR_STRIDE
+        terr[t + 0x00] = owner & 0xff
+        terr[t + 0x08] = kind  & 0xff
+        struct.pack_into("<i", terr, t + 0x168, value)
+
+    return {"new_owner": new_owner, "key": key, "local": local, "diff": diff,
+            "count": count, "army": bytes(army), "strat": bytes(strat),
+            "terr": bytes(terr)}
+
+
+def gen_combat_ownership_vectors(n: int, rng: random.Random) -> list[dict]:
+    edge = [
+        # active capturer, reserve >= penalty(10): both fields debited by 10
+        _build_ownership_vec(2, 5, local=0, diff=0, count=6,
+                             active=1, banner=7, conqmax=0,
+                             r_f0c=30, r_f17=50, r_f07=0),
+        # reserve < penalty: popularity drops only by the reserve, reserve floored
+        _build_ownership_vec(2, 5, local=0, diff=0, count=6,
+                             active=1, banner=3, conqmax=0,
+                             r_f0c=5, r_f17=50, r_f07=0),
+        # inactive capturer → penalty = 0x1e (30); reserve 50 >= 30
+        _build_ownership_vec(3, 7, local=0, diff=2, count=6,
+                             active=0, banner=9, conqmax=0,
+                             r_f0c=50, r_f17=80, r_f07=1),
+        # high-water already above the new conquest count → unchanged
+        _build_ownership_vec(4, 9, local=0, diff=1, count=6,
+                             active=1, banner=2, conqmax=5,
+                             r_f0c=20, r_f17=20, r_f07=0),
+        # signed popularity bytes near the wrap boundary
+        _build_ownership_vec(1, 3, local=0, diff=4, count=6,
+                             active=1, banner=4, conqmax=0,
+                             r_f0c=0x80, r_f17=0x81, r_f07=0),
+        # aggregate does real work on the territory side: the new owner holds
+        # territories (exercises the aggregate's territory loop) but NO realms,
+        # so the recomputed conquest count (+0x29) stays 0 and the can-hold
+        # first clause keeps us off the demolish branch.  (Other players DO own
+        # realms, so the aggregate's realm loop still iterates.)
+        _build_ownership_vec(2, 4, local=0, diff=2, count=6,
+                             active=1, banner=6, conqmax=1,
+                             r_f0c=40, r_f17=60, r_f07=0,
+                             realms=[(1, 5, 500, 10, 40), (3, 3, 200, 5, 80)],
+                             terrs=[(5, 1, 2, 1000), (6, 1, 2, 500), (7, 1, 4, 99)]),
+    ]
+    vecs = list(edge)
+    while len(vecs) < n:
+        p = rng.randint(1, 5)
+        local = rng.choice([x for x in range(0, 6) if x != p])
+        key = rng.randint(1, 16)
+        # The new owner must own NO realms: the aggregate recomputes its
+        # conquest count (+0x29) from realm ownership, and a non-zero count
+        # diverts FUN_004a72fe to the demolish branch (FUN_004ac3c6), whose
+        # economy re-plan depends on the price/cell state this harness does not
+        # bind (see the combat_ownership header).  Other players may own realms.
+        realms = []
+        for slot in range(1, rng.randint(1, 16) + 1):
+            if slot == key:
+                continue
+            realms.append((slot, rng.choice([o for o in range(0, 6) if o != p]),
+                           rng.randint(-2000, 2000),
+                           rng.randint(-128, 127), rng.randint(0, 255)))
+        # Territories may be owned by the new owner — they feed the aggregate's
+        # territory loop (+0x2c / +0x54) without touching the conquest count.
+        terrs = [(idx, rng.randint(0, 3), rng.randint(0, 5),
+                  rng.randint(-1000, 5000))
+                 for idx in range(1, 0x97) if rng.random() < 0.15]
+        vecs.append(_build_ownership_vec(
+            p, key, local=local, diff=rng.randint(0, 4),
+            count=rng.randint(1, 16),
+            active=rng.randint(0, 1), banner=rng.randint(0, 255),
+            conqmax=rng.randint(0, 40),
+            r_f0c=rng.randint(0, 255), r_f17=rng.randint(0, 255),
+            r_f07=rng.randint(0, 255), realms=realms, terrs=terrs))
+    return vecs
+
+
+def run_port_combat_ownership(lib: ctypes.CDLL, vec: dict) -> dict:
+    global _own_evq
+    g = realm_port_globals(lib)
+    if _own_evq is None:
+        _own_evq = ctypes.create_string_buffer(_OWN_EVQ_BYTES)
+    lib.engine_event_queue_init(_own_evq)
+    ctypes.memmove(g["army"],  vec["army"],  REALM_ARMY_BYTES)
+    ctypes.memmove(g["strat"], vec["strat"], REALM_STRAT_BYTES)
+    ctypes.memmove(g["terr"],  vec["terr"],  REALM_TERR_BYTES)
+    g["count"].value = vec["count"]
+    g["diff"].value  = vec["diff"]
+    g["local"].value = vec["local"]
+    lib.engine_combat_transfer_ownership(vec["new_owner"], vec["key"],
+                                         _own_evq, 0)
+    return {"army":  list(bytes(g["army"])),
+            "strat": list(bytes(g["strat"])),
+            "terr":  list(bytes(g["terr"]))}
+
+
+def combat_ownership_rpc_plan(vec: dict) -> dict:
+    return {"fn_va": FN_COMBAT_OWNERSHIP, "cc": "mscdecl",
+            "args": [vec["new_owner"], vec["key"]], "regions": [
+        {"va": VA_PER_ARMY,      "len": REALM_ARMY_BYTES,  "inject": list(vec["army"]),  "read": True},
+        {"va": VA_STRATEGIC,     "len": REALM_STRAT_BYTES, "inject": list(vec["strat"]), "read": True},
+        {"va": VA_PER_TERRITORY, "len": REALM_TERR_BYTES,  "inject": list(vec["terr"]),  "read": True},
+        {"va": VA_SLOT_COUNT, "len": 4, "inject": list(_u32le(vec["count"])), "read": False},
+        {"va": VA_SLOT_DIFF,  "len": 4, "inject": list(_u32le(vec["diff"])),  "read": False},
+        {"va": VA_SLOT_LOCAL, "len": 4, "inject": list(_u32le(vec["local"])), "read": False},
+    ]}
+
+
+def diff_combat_ownership(retail: dict, port: dict) -> list[str]:
+    bad = _diff_realm_region(retail, port["army"], VA_PER_ARMY,
+                             REALM_ARMY_STRIDE, 17, "army")
+    bad += _diff_realm_region(retail, port["strat"], VA_STRATEGIC,
+                              REALM_STRAT_STRIDE, 6, "strat")
+    bad += _diff_realm_region(retail, port["terr"], VA_PER_TERRITORY,
+                              REALM_TERR_STRIDE, 151, "terr")
+    return bad
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -4227,6 +4402,9 @@ def run_diff(cfg_args) -> int:
     if "diplomacy_adjust" in enabled:
         test_plans.append(("diplomacy_adjust",
                            gen_diplomacy_adjust_vectors(cfg_args.vectors, rng)))
+    if "combat_ownership" in enabled:
+        test_plans.append(("combat_ownership",
+                           gen_combat_ownership_vectors(cfg_args.vectors, rng)))
     if "player_aggregate" in enabled:
         test_plans.append(("player_aggregate",
                            gen_player_aggregate_vectors(cfg_args.vectors, rng)))
@@ -4364,7 +4542,7 @@ def run_diff(cfg_args) -> int:
                                  "realm_income", "upkeep", "season_economy",
                                  "resource_pass", "population", "combat_resolve",
                                  "combat_condition", "combat_halve",
-                                 "diplomacy_adjust"}
+                                 "diplomacy_adjust", "combat_ownership"}
         shared_freeze_installed = False
         if shared_freeze_targets & {n for (n, _) in test_plans}:
             fresp = script.exports_sync.install_sim_sub_steps_engine_freeze()
@@ -5287,6 +5465,42 @@ def run_diff(cfg_args) -> int:
                         port = {"note": "region readback elided"}
                         vec = {"p1": vec["p1"], "p2": vec["p2"],
                                "amount": vec["amount"]}
+                elif fn_name == "combat_ownership":
+                    # FUN_004a72fe(new_owner,key): combat-init region ownership
+                    # transfer (can-hold path).  Inject army+strat+terr + the
+                    # local/diff/count scalars; call with args=[new_owner,key]
+                    # (cc=mscdecl); read back army+strat+terr (the event-queue
+                    # notifications are not validated).
+                    port = run_port_combat_ownership(lib, vec)
+                    plan = combat_ownership_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"new_owner": vec["new_owner"],
+                                                 "key": vec["key"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_combat_ownership(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"new_owner": vec["new_owner"], "key": vec["key"]}
                 else:
                     continue
                 if bad:
@@ -5412,7 +5626,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0,
                     help="RNG seed for vector generation (default 0)")
     ap.add_argument("--functions",
-                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep,season_economy,resource_pass,population,combat_resolve,player_aggregate,elimination",
+                    default="rng_step,fps_step,anim_cycle,frame_delta,phase_ticks,input_state,sim_sub_steps,state_hash,tile_expand,delayed_action,tax_approval,dev_spread,realm_income,upkeep,season_economy,resource_pass,population,combat_resolve,player_aggregate,elimination,combat_ownership",
                     help="comma-separated subset to test "
                          "(default: rng_step,fps_step,anim_cycle,frame_delta,"
                          "phase_ticks,input_state,sim_sub_steps,state_hash,"
