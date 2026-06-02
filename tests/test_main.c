@@ -1206,6 +1206,8 @@ struct test_case {
     X(turn_end_mp_handshake_arms_then_finalises) \
     X(turn_end_mp_state1_waits) \
     X(turn_hook_noop_is_inert) \
+    X(turn_calendar_non_rollover) \
+    X(turn_calendar_year_rollover) \
     \
     X(title_buttons_marks_four_dirty_boxes) \
     X(title_buttons_draws_bevel_rects) \

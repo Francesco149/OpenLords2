@@ -7,6 +7,39 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-02 — TURN-ENGINE: calendar / season-rollover block of FUN_00448440 assembled → engine_turn_advance_calendar
+
+First piece of the now-unblocked orchestrator assembly (see entry below):
+ported the inline **calendar arithmetic** at the top of the turn-advance
+engine `FUN_00448440` → `engine_turn_advance_calendar` (`src/engine_turn.c`).
+Each turn it bumps the turn counter (`s_slot_00553240`) and rotates the season
+triple (`s_slot_0057c934`/`00554470`/`0057c92c`: cur←next, prev←cur, next++,
+wrap 1..4).  On the season wrap point (the just-consumed `next` was 4) it fires
+the **year rollover**: rollover counter `s_slot_0055cd5c`++, the year triple
+(`s_slot_00553edc`/`0057c900`/`00553e74`) rotates the same way (no wrap), and
+the just-ported `io_path_probe_cd_audio` (FUN_004aef7e) runs.  The season/year
+*copy* slots are seed-only and left untouched.  All eight calendar slots were
+already defined save-schema scalars, so the block ports verbatim.
+
+Notably the season wrap and the year rollover are driven by the *same*
+predicate (`old season-next == 4`) — they always coincide, since the season is
+clamped to 1..4.  Mutates globals in place (like the engine_realm passes), not
+the pure-struct style of the sibling `engine_turn_end_check`.
+
+Verification: 2 host tests (`test_engine_turn.c`) — a non-rollover turn (season
+triple + counter only; year/copies/gate untouched) and a year rollover (season
+wraps 5→1, year triple advances, counter ticks, and the CD-audio gate is forced
+to 1 by the probe firing).  **1868/1868** green; engine_turn.c compiles clean
+under both host gcc and the mingw cross-toolchain.
+
+Remaining for the full `FUN_00448440` (→ a live `engine_turn_advance()` bound to
+`game_init`'s `g_gi_turn_driver_fn`): the 30-call sequence — `FUN_0049a990` +
+`FUN_00404a46`, then this calendar block, then the 28 economy/realm passes.
+That is engine.c live-marshalling integration and wants an in-game
+turn-advance check, so it's the human-verification-gated next step.
+
+---
+
 ## 2026-06-02 — TURN-ENGINE: last two driver callees ported (FUN_004aef7e CD-audio probe + FUN_00428471 no-op) — orchestrator FUN_00448440 now fully unblocked
 
 Closed out the final two unported direct callees of the turn-advance engine

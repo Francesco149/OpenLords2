@@ -9592,6 +9592,7 @@
     "src/engine_army_ai.h",
     "src/engine_combat.c",
     "src/engine_realm.c",
+    "src/engine_turn.h",
     "src/game_init.c",
     "src/game_init.h"
    ]
@@ -17445,6 +17446,8 @@
    "status": "tested",
    "src": [
     "src/engine_menu_input.h",
+    "src/engine_turn.c",
+    "src/engine_turn.h",
     "src/io_path.c",
     "src/io_path.h"
    ]

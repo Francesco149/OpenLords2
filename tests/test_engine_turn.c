@@ -6,8 +6,17 @@
 #include "t.h"
 
 #include "engine_turn.h"
+#include "save_schema_globals.h"
+#include "io_path.h"
+#include "engine_menu_input.h"
+#include "config.h"
 
 #include <string.h>
+#if defined(_WIN32)
+#  include <direct.h>
+#else
+#  include <unistd.h>
+#endif
 
 #define STRIDE 0x160
 
@@ -199,5 +208,77 @@ int test_turn_end_mp_state1_waits(void)
 int test_turn_hook_noop_is_inert(void)
 {
     engine_turn_hook_noop();   /* no observable state to assert */
+    return 0;
+}
+
+/* engine_turn_advance_calendar (the calendar block of FUN_00448440):
+ * a non-rollover turn rotates only the season triple + turn counter;
+ * the year triple, the copy slots, and the CD-audio gate are untouched. */
+int test_turn_calendar_non_rollover(void)
+{
+    s_slot_00553240 = 5;          /* turn counter        */
+    s_slot_0057c934 = 1;          /* season cur          */
+    s_slot_00554470 = 0;          /* season prev         */
+    s_slot_0057c92c = 2;          /* season next (!= 4)  */
+    s_slot_0057c990 = 1;          /* season copy (seed)  */
+    s_slot_0055cd5c = 7;          /* rollover counter    */
+    s_slot_00553edc = 1267;       /* year cur            */
+    s_slot_0057c900 = 1266;       /* year prev           */
+    s_slot_00553e74 = 1268;       /* year next           */
+    s_slot_00553228 = 1267;       /* year copy (seed)    */
+    engine_menu_input_set_sp_available(9);
+
+    engine_turn_advance_calendar();
+
+    T_ASSERT_EQ_U(s_slot_00553240, 6u);     /* turn ++              */
+    T_ASSERT_EQ_U(s_slot_00554470, 1u);     /* prev = old cur       */
+    T_ASSERT_EQ_U(s_slot_0057c934, 2u);     /* cur  = old next      */
+    T_ASSERT_EQ_U(s_slot_0057c92c, 3u);     /* next ++ (no wrap)    */
+    /* Year triple + copies + gate untouched. */
+    T_ASSERT_EQ_U(s_slot_0055cd5c, 7u);
+    T_ASSERT_EQ_U(s_slot_00553edc, 1267u);
+    T_ASSERT_EQ_U(s_slot_0057c900, 1266u);
+    T_ASSERT_EQ_U(s_slot_00553e74, 1268u);
+    T_ASSERT_EQ_U(s_slot_0057c990, 1u);
+    T_ASSERT_EQ_U(s_slot_00553228, 1267u);
+    T_ASSERT_EQ_I(engine_menu_input_sp_available(), 9);   /* probe not fired */
+    return 0;
+}
+
+/* When the just-consumed season-next was 4, the season wraps to 1, the
+ * year triple rotates, the rollover counter ticks, and the CD-audio
+ * probe fires (forcing the gate to 1). */
+int test_turn_calendar_year_rollover(void)
+{
+    char orig[256];
+#if defined(_WIN32)
+    if (_getcwd(orig, sizeof orig) == NULL) T_SKIP("getcwd");
+#else
+    if (getcwd(orig, sizeof orig) == NULL) T_SKIP("getcwd");
+#endif
+    io_path_set_base(orig);       /* clean revert for the probe tail */
+    g_config.cd_drive = 'D';
+
+    s_slot_00553240 = 10;
+    s_slot_0057c934 = 3;          /* season cur          */
+    s_slot_00554470 = 2;          /* season prev         */
+    s_slot_0057c92c = 4;          /* season next == 4 → rollover */
+    s_slot_0055cd5c = 7;
+    s_slot_00553edc = 1267;       /* year cur            */
+    s_slot_0057c900 = 1266;       /* year prev           */
+    s_slot_00553e74 = 1268;       /* year next           */
+    engine_menu_input_set_sp_available(9);
+
+    engine_turn_advance_calendar();
+
+    T_ASSERT_EQ_U(s_slot_00553240, 11u);    /* turn ++              */
+    T_ASSERT_EQ_U(s_slot_00554470, 3u);     /* season prev = old cur */
+    T_ASSERT_EQ_U(s_slot_0057c934, 4u);     /* season cur  = old next */
+    T_ASSERT_EQ_U(s_slot_0057c92c, 1u);     /* season next wrapped 5→1 */
+    T_ASSERT_EQ_U(s_slot_0055cd5c, 8u);     /* rollover counter ++   */
+    T_ASSERT_EQ_U(s_slot_00553edc, 1268u);  /* year cur  = old next  */
+    T_ASSERT_EQ_U(s_slot_0057c900, 1267u);  /* year prev = old cur   */
+    T_ASSERT_EQ_U(s_slot_00553e74, 1269u);  /* year next ++          */
+    T_ASSERT_EQ_I(engine_menu_input_sp_available(), 1);  /* probe fired */
     return 0;
 }

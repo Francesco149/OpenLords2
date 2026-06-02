@@ -250,7 +250,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4483fb | FUN_004483fb | 11 | engine_handlers_da.h |
 | 0x448406 | FUN_00448406 | 11 | engine_handlers_da.h |
 | 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h |
-| 0x448440 | FUN_00448440 | 261 | engine_army_ai.c, engine_army_ai.h, engine_combat.c (+3) |
+| 0x448440 | FUN_00448440 | 261 | engine_army_ai.c, engine_army_ai.h, engine_combat.c (+4) |
 | 0x448545 | FUN_00448545 | 96 | engine_combat.c, engine_realm.c, engine_realm.h (+1) |
 | 0x4485a5 | FUN_004485a5 | 163 | engine_army_economy.c, engine_army_economy.h, engine_combat.c (+2) |
 | 0x4486a9 | FUN_004486a9 | 256 | engine_ranking.c, engine_ranking.h |
@@ -526,7 +526,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4ae8a9 | FUN_004ae8a9 | 191 | game_init.c, game_init.h, save.c (+1) |
 | 0x4ae968 | FUN_004ae968 | 264 | save.c, save.h |
 | 0x4aea70 | FUN_004aea70 | 506 | save.c, save.h |
-| 0x4aef7e | FUN_004aef7e | 408 | engine_menu_input.h, io_path.c, io_path.h |
+| 0x4aef7e | FUN_004aef7e | 408 | engine_menu_input.h, engine_turn.c, engine_turn.h (+2) |
 | 0x4af502 | FUN_004af502 | 72 | io_path.c, io_path.h |
 | 0x4af54a | FUN_004af54a | 112 | io.h, strutil.h |
 | 0x4af5ba | FUN_004af5ba | 114 | strutil.h |

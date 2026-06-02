@@ -66,6 +66,27 @@ typedef struct {
 void engine_turn_end_check(const engine_turn_end_in_t *in,
                            engine_turn_end_out_t *out);
 
+/* Calendar / season-rollover advance — the inline arithmetic block of
+ * the turn-advance engine FUN_00448440 @ 0x448440 (it sits near the top
+ * of the per-turn sequence, after the first two AI calls and before the
+ * 28 economy / realm passes).  Operates in place on the save-schema
+ * calendar slots:
+ *
+ *   - turn counter  s_slot_00553240 (entry 31)            ++ every turn
+ *   - season triple s_slot_0057c934/00554470/0057c92c     (cur/prev/next)
+ *       rotate: prev = cur; cur = next; next++ ; wrap next 1..4
+ *   - on the season wrap point (the just-consumed `next` was 4) a YEAR
+ *     rollover fires: s_slot_0055cd5c (entry 30) ++, the year triple
+ *       s_slot_00553edc/0057c900/00553e74 (cur/prev/next) rotates the
+ *       same way (no wrap), and the seasonal CD-audio probe
+ *       io_path_probe_cd_audio (retail FUN_004aef7e) runs.
+ *
+ * The season/year *copy* slots (0057c990 / 00553228) are seed-only and
+ * untouched here.  Mutates globals in place (not the pure-struct style
+ * of engine_turn_end_check) because retail does — this is a save-state
+ * step, like the engine_realm turn passes. */
+void engine_turn_advance_calendar(void);
+
 /* Empty per-turn hook — port of retail FUN_00428471 @ 0x428471, an
  * 11-byte stub (push/pop register-preserve prologue, then leave/ret)
  * with no body, called from the turn-advance engine 0x448440 between

@@ -10,6 +10,8 @@
  */
 
 #include "engine_turn.h"
+#include "save_schema_globals.h"  /* s_slot_<va> — calendar scalars */
+#include "io_path.h"              /* io_path_probe_cd_audio (FUN_004aef7e) */
 
 #include <string.h>   /* memcpy — aligned int read without aliasing UB */
 
@@ -82,6 +84,30 @@ void engine_turn_end_check(const engine_turn_end_in_t *in,
         out->advance           = 1;
     }
     /* progress == 1 falls through: advance stays 0 */
+}
+
+void engine_turn_advance_calendar(void)
+{
+    /* Snapshot the season-next *before* the rotation: its old value is
+     * what the year-rollover branch tests (retail `iVar1 = DAT_0057c92c`
+     * read at the top, checked as `iVar1 == 4` after the season write). */
+    uint32_t season_next_old = s_slot_0057c92c;
+
+    s_slot_00553240 += 1;                       /* turn counter ++        */
+
+    s_slot_00554470  = s_slot_0057c934;          /* season prev = cur      */
+    s_slot_0057c934  = s_slot_0057c92c;          /* season cur  = next     */
+    s_slot_0057c92c += 1;                        /* season next ++         */
+    if (s_slot_0057c92c > 4)                     /* wrap to the 1..4 range */
+        s_slot_0057c92c = 1;
+
+    if (season_next_old == 4) {                  /* year rollover          */
+        s_slot_0055cd5c += 1;                    /* rollover counter ++    */
+        s_slot_0057c900  = s_slot_00553edc;      /* year prev = cur        */
+        s_slot_00553edc  = s_slot_00553e74;      /* year cur  = next       */
+        s_slot_00553e74 += 1;                    /* year next ++ (no wrap) */
+        io_path_probe_cd_audio();                /* FUN_004aef7e           */
+    }
 }
 
 /* retail FUN_00428471 @ 0x428471 — empty turn-driver hook (no body). */
