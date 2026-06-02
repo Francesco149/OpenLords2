@@ -262,6 +262,16 @@ class CaptureConfig:
     mem_watch:         bool = False
     mem_watch_regions: list[dict] = field(default_factory=list)
     mem_watch_precise: bool = True
+    # Lever 4 — configurable re-arm budget (0 → agent default 8000).
+    mem_watch_rearm_cap: int = 0
+    # Lever 1 — bracketed arm window {"enter":VA,"leave":VA} (Ghidra VAs): arm
+    # MemoryAccessMonitor only between ENTER's onEnter and LEAVE's onLeave, so a
+    # read-hot page's neighbour traffic only burns the budget during the call.
+    mem_watch_arm_between: dict | None = None
+    # Lever 2 — snapshot-diff regions ([{va,size,label}], Ghidra VAs): poll each
+    # tick and emit changed bytes → run_dir/mem_snapshot.jsonl.  Op-agnostic /
+    # read-heat-immune; localises the writer's TICK (not the faulting insn).
+    mem_snapshot_regions: list[dict] = field(default_factory=list)
     # Deterministic anchors (TAS framework): emit {anchor,frame} on engine-state
     # / screen-id transitions → run_dir/anchors.jsonl, keyed on the per-tick
     # counter.  See docs/plans/tas-framework.md.
@@ -517,6 +527,12 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
     if cfg.mem_watch:
         mem_watch_fp = (run_dir / "mem_watch.jsonl").open("w", buffering=1)
     counts["mem_watch_accesses"] = 0
+
+    # Snapshot-diff sink — one JSONL row per (region, tick) that changed.
+    mem_snapshot_fp = None
+    if cfg.mem_snapshot_regions:
+        mem_snapshot_fp = (run_dir / "mem_snapshot.jsonl").open("w", buffering=1)
+    counts["mem_snapshot_changes"] = 0
 
     # Anchor sink — one JSONL row per emitted {anchor,frame} (TAS framework).
     # Also kept in-memory (anchors_seen) so callers can align captures by
@@ -840,6 +856,25 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             f_log.write(f"[mem_watch] frame={p.get('frame')} "
                         f"accesses={len(evs)}\n")
             return
+        if kind == "mem_snapshot":
+            evs = p.get("events", []) or []
+            counts["mem_snapshot_changes"] += len(evs)
+            if mem_snapshot_fp is not None:
+                for ev in evs:
+                    # changes: [[off, old, new], ...]
+                    mem_snapshot_fp.write(json.dumps({
+                        "region": int(ev.get("region", 0)),
+                        "label":  ev.get("label", ""),
+                        "va":     int(ev.get("va", 0)),
+                        "tick":   int(ev.get("tick", 0)),
+                        "n":      int(ev.get("n", 0)),
+                        "changes": ev.get("changes", []),
+                    }) + "\n")
+            for ev in evs:
+                f_log.write(f"[mem_snapshot] tick={ev.get('tick')} "
+                            f"region={ev.get('label')} "
+                            f"changed={ev.get('n')} bytes\n")
+            return
         # unknown kind — log it raw so we can spot agent extensions we
         # haven't wired up yet.
         f_log.write(f"[unknown-event] {json.dumps(p)}\n")
@@ -961,6 +996,9 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "mem_watch":                 bool(cfg.mem_watch),
             "mem_watch_regions":         cfg.mem_watch_regions,
             "mem_watch_precise":         bool(cfg.mem_watch_precise),
+            "mem_watch_rearm_cap":       int(cfg.mem_watch_rearm_cap),
+            "mem_watch_arm_between":     cfg.mem_watch_arm_between,
+            "mem_snapshot_regions":      cfg.mem_snapshot_regions,
             "anchor_trace":              bool(cfg.anchor_trace),
             "watch":                     cfg.watch or [],
             "rng_seed":                  cfg.rng_seed,
@@ -1082,6 +1120,8 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         call_trace_fp.close()
     if mem_watch_fp is not None:
         mem_watch_fp.close()
+    if mem_snapshot_fp is not None:
+        mem_snapshot_fp.close()
     if anchor_trace_fp is not None:
         anchor_trace_fp.close()
     if watch_fp is not None:

@@ -2754,8 +2754,29 @@ let g_mem_watch_neighbor = 0;     // page-neighbor traps skipped (precise mode)
 let g_mem_watch_rearm    = 0;     // re-arm count (budget against the cap)
 let g_mem_watch_precise  = true;
 const MEM_WATCH_FLUSH_AT  = 50000;
-const MEM_WATCH_REARM_CAP = 8000;  // max re-arms before giving up on a hot page
+let g_mem_watch_rearm_cap = 8000;  // max re-arms before giving up on a hot page
+                                   // (configurable via --rearm-cap; lever 4)
 const MEM_WATCH_MAX_HITS  = 64;    // stop re-arming after this many in-region hits
+
+// Bracketed arming (lever 1, --arm-between ENTER:LEAVE).  Instead of arming
+// MemoryAccessMonitor pre-resume (so it competes with a read-hot page's
+// neighbour traffic for the WHOLE run), defer the arm to a function window:
+// arm on ENTER's onEnter, disarm on LEAVE's onLeave.  The budget then only
+// burns DURING the suspect call — turning "boot→frame-N of hot traffic" into a
+// few-thousand-instruction window.  ENTER may equal LEAVE (bracket that call).
+let g_mem_watch_arm_between    = null;   // {enter:VA, leave:VA} or null
+let g_mem_watch_bracket_active = false;
+
+// Snapshot-diff mode (lever 2, --snapshot-region).  Poll regions each tick and
+// emit the changed bytes + tick.  Op-agnostic and immune to page-read heat —
+// it never traps, so a read-hot page is irrelevant.  Localises the WRITER'S
+// TICK (then a call-trace over that tick pins the function); does NOT catch an
+// intra-tick transient write that is overwritten before tick end (use the
+// bracketed trap for those).
+let g_mem_snapshot_enabled = false;
+let g_mem_snapshot_regions = [];   // [{va, size, label}] — Ghidra VAs
+let g_mem_snapshot_last    = [];   // [Uint8Array|null] last-seen bytes per region
+let g_mem_snapshot_buffer  = [];   // batched change records
 
 function memWatchFlush(frameNumber) {
     if (g_mem_watch_buffer.length === 0) return;
@@ -2793,13 +2814,13 @@ function memWatchOnAccess(details) {
         // Page neighbor consumed this page's one-shot. Re-arm and keep
         // hunting, unless the page is so hot we've burned the budget.
         g_mem_watch_neighbor++;
-        if (g_mem_watch_rearm < MEM_WATCH_REARM_CAP) {
+        if (g_mem_watch_rearm < g_mem_watch_rearm_cap) {
             g_mem_watch_rearm++;
             try { memWatchArm(); }
             catch (e) { err('memWatchArm', e.message); }
-        } else if (g_mem_watch_rearm === MEM_WATCH_REARM_CAP) {
+        } else if (g_mem_watch_rearm === g_mem_watch_rearm_cap) {
             g_mem_watch_rearm++;   // log-once sentinel
-            log('mem_watch: re-arm budget (' + MEM_WATCH_REARM_CAP +
+            log('mem_watch: re-arm budget (' + g_mem_watch_rearm_cap +
                 ') exhausted on a hot page for region "' +
                 (region.label || idx) + '" before any in-region write — ' +
                 'consider a narrower region or a HW write breakpoint.');
@@ -2825,14 +2846,14 @@ function memWatchOnAccess(details) {
     // page and we deliberately let it stay disabled.)
     if (g_mem_watch_precise &&
         g_mem_watch_n < MEM_WATCH_MAX_HITS &&
-        g_mem_watch_rearm < MEM_WATCH_REARM_CAP) {
+        g_mem_watch_rearm < g_mem_watch_rearm_cap) {
         g_mem_watch_rearm++;
         try { memWatchArm(); }
         catch (e) { err('memWatchArm', e.message); }
     }
 }
 
-function installMemoryWatch(regions, precise) {
+function installMemoryWatch(regions, precise, deferArm) {
     g_mem_watch_regions = (regions || []).map(function (r) {
         return {
             va:     r.va | 0,
@@ -2852,6 +2873,25 @@ function installMemoryWatch(regions, precise) {
     g_mem_watch_ranges   = g_mem_watch_regions.map(function (r) {
         return {base: rva(r.va), size: r.size};
     });
+
+    // Bracketed mode configures the ranges now but defers the actual arm to the
+    // ENTER hook (installMemWatchBracket), so MemoryAccessMonitor is only live
+    // during the suspect call window.
+    if (deferArm) {
+        g_mem_watch_enabled = true;
+        log('mem_watch: configured ' + g_mem_watch_regions.length +
+            ' region(s) [deferred arm — bracketed]: ' +
+            g_mem_watch_regions.map(function (r) {
+                return r.label + '@0x' + (r.va >>> 0).toString(16) +
+                       '+' + r.size + '(' + r.access + ')';
+            }).join(', '));
+        send({kind: 'mem_watch_ready',
+              precise: g_mem_watch_precise,
+              regions: g_mem_watch_regions.map(function (r) {
+                  return {va: r.va, size: r.size, label: r.label, access: r.access};
+              })});
+        return true;
+    }
 
     try {
         memWatchArm();
@@ -2873,6 +2913,89 @@ function installMemoryWatch(regions, precise) {
               return {va: r.va, size: r.size, label: r.label, access: r.access};
           })});
     return true;
+}
+
+// Lever 1 — bracketed arming.  Attaches the ENTER/LEAVE pair so the monitor is
+// armed only inside the window.  ENTER==LEAVE brackets exactly that call (arm
+// onEnter, disarm onLeave of the same function, re-armed for each call).
+function installMemWatchBracket() {
+    const b = g_mem_watch_arm_between;
+    if (!b) return;
+    Interceptor.attach(rva(b.enter), {
+        onEnter: function () {
+            if (g_mem_watch_bracket_active) return;   // already inside the window
+            g_mem_watch_bracket_active = true;
+            try { memWatchArm(); }
+            catch (e) { err('memWatchBracket.arm', e.message); }
+        },
+    });
+    Interceptor.attach(rva(b.leave), {
+        onLeave: function () {
+            if (!g_mem_watch_bracket_active) return;
+            g_mem_watch_bracket_active = false;
+            try { MemoryAccessMonitor.disable(); }
+            catch (e) { err('memWatchBracket.disarm', e.message); }
+            memWatchFlush(g_tick_count);
+            log('mem_watch: bracket window closed @ 0x' +
+                (b.leave >>> 0).toString(16) + ' (hits=' + g_mem_watch_n +
+                ' neighbor=' + g_mem_watch_neighbor +
+                ' rearm=' + g_mem_watch_rearm + '/' + g_mem_watch_rearm_cap + ')');
+        },
+    });
+    log('mem_watch: bracketed arm window enter=0x' +
+        (b.enter >>> 0).toString(16) + ' leave=0x' +
+        (b.leave >>> 0).toString(16) + ' (deferred arm)');
+}
+
+// Lever 2 — snapshot-diff.  Capture the baseline once (pre-resume), then
+// memWatchSnapshotPoll() each tick compares + emits changed bytes.
+function memSnapshotInit() {
+    g_mem_snapshot_last = g_mem_snapshot_regions.map(function (r) {
+        try {
+            const ab = rva(r.va).readByteArray(r.size);
+            return ab ? new Uint8Array(ab) : null;
+        } catch (e) { return null; }
+    });
+    log('mem_snapshot: baseline captured for ' +
+        g_mem_snapshot_regions.length + ' region(s): ' +
+        g_mem_snapshot_regions.map(function (r) {
+            return r.label + '@0x' + (r.va >>> 0).toString(16) + '+' + r.size;
+        }).join(', '));
+}
+
+function memSnapshotFlush(frameNumber) {
+    if (g_mem_snapshot_buffer.length === 0) return;
+    const events = g_mem_snapshot_buffer;
+    g_mem_snapshot_buffer = [];
+    send({kind: 'mem_snapshot', frame: frameNumber, events: events});
+}
+
+function memSnapshotPoll(frameNumber) {
+    if (!g_mem_snapshot_enabled) return;
+    for (let i = 0; i < g_mem_snapshot_regions.length; i++) {
+        const r = g_mem_snapshot_regions[i];
+        let cur;
+        try {
+            const ab = rva(r.va).readByteArray(r.size);
+            if (!ab) continue;
+            cur = new Uint8Array(ab);
+        } catch (e) { continue; }
+        const prev = g_mem_snapshot_last[i];
+        if (!prev) { g_mem_snapshot_last[i] = cur; continue; }
+        const changes = [];
+        const lim = Math.min(prev.length, cur.length);
+        for (let o = 0; o < lim; o++) {
+            if (cur[o] !== prev[o]) changes.push([o, prev[o], cur[o]]);
+        }
+        if (changes.length) {
+            g_mem_snapshot_buffer.push({
+                region: i, label: r.label, va: r.va,
+                tick: frameNumber, n: changes.length, changes: changes,
+            });
+            g_mem_snapshot_last[i] = cur;
+        }
+    }
+    memSnapshotFlush(frameNumber);
 }
 
 function installCallTraceHooks(vasArray) {
@@ -3077,6 +3200,9 @@ function installEngineTickHook() {
                 }
                 if (g_mem_watch_enabled) {
                     memWatchFlush(g_tick_count);
+                }
+                if (g_mem_snapshot_enabled) {
+                    memSnapshotPoll(g_tick_count);
                 }
                 g_engine_in_tick = 0;
                 // Lazy install of the DDraw → GDI present seat.  The
@@ -5011,6 +5137,27 @@ rpc.exports = {
         g_mem_watch_enabled = !!opts.mem_watch &&
                               Array.isArray(opts.mem_watch_regions) &&
                               opts.mem_watch_regions.length > 0;
+        // Lever 4 — configurable re-arm budget.
+        g_mem_watch_rearm_cap = (opts.mem_watch_rearm_cap | 0) || 8000;
+        // Lever 1 — bracketed arm window {enter, leave} (Ghidra VAs).
+        g_mem_watch_arm_between =
+            (opts.mem_watch_arm_between &&
+             typeof opts.mem_watch_arm_between.enter === 'number' &&
+             typeof opts.mem_watch_arm_between.leave === 'number')
+                ? {enter: opts.mem_watch_arm_between.enter | 0,
+                   leave: opts.mem_watch_arm_between.leave | 0}
+                : null;
+        // Lever 2 — snapshot-diff regions [{va, size, label}].
+        g_mem_snapshot_regions =
+            (Array.isArray(opts.mem_snapshot_regions)
+                ? opts.mem_snapshot_regions
+                : []).map(function (r) {
+                    return {va: r.va | 0,
+                            size: (r.size | 0) || 16,
+                            label: String(r.label ||
+                                ('0x' + ((r.va | 0) >>> 0).toString(16)))};
+                });
+        g_mem_snapshot_enabled = g_mem_snapshot_regions.length > 0;
 
         const mod = Process.findModuleByName(g_target_module_name);
         if (!mod) {
@@ -5138,9 +5285,17 @@ rpc.exports = {
 
         // Arm mem_watch PRE-RESUME so an init-time writer is trapped on its
         // first write (init runs before the controller calls device.resume).
+        // With a bracketed window (--arm-between) the arm is deferred to the
+        // ENTER hook so the monitor is only live during the suspect call.
         if (g_mem_watch_enabled) {
+            const defer = g_mem_watch_arm_between !== null;
             installMemoryWatch(opts.mem_watch_regions,
-                               opts.mem_watch_precise !== false);
+                               opts.mem_watch_precise !== false, defer);
+            if (defer) installMemWatchBracket();
+        }
+        // Snapshot-diff baseline (polled per tick thereafter).
+        if (g_mem_snapshot_enabled) {
+            memSnapshotInit();
         }
 
         send({kind: 'ready',

@@ -32,12 +32,30 @@ Usage:
 The agent arms the monitor pre-resume (before the engine runs), so an init-time
 writer during scene bootstrap is trapped on its first write.
 
+Hot-page workarounds (MemoryAccessMonitor is page-granular + op-blind, so a
+write inside a page that is READ every frame burns the re-arm budget on
+neighbour reads before the write lands — see docs/findings/mem-watch.md #2):
+
+  --arm-between ENTER:LEAVE   (lever 1, best) arm only inside a function window,
+                             so the budget competes with neighbour reads ONLY
+                             during the suspect call. ENTER may equal LEAVE.
+  --snapshot-region VA:SIZE  (lever 2) poll + diff per tick instead of trapping;
+                             op-agnostic, immune to read heat. Reports the
+                             writer's TICK (then call-trace that tick). Misses
+                             an intra-tick transient write.
+  --rearm-cap N              (lever 4) raise the re-arm budget for a short window.
+
+What does NOT help: a tighter --region. The monitor protects the whole 4 KiB
+page regardless of region size, so neighbour-read heat is unchanged.
+
 Output:
-    <run_dir>/mem_watch.jsonl    one row per trapped access
+    <run_dir>/mem_watch.jsonl    one row per trapped access (--region)
+    <run_dir>/mem_snapshot.jsonl one row per (region,tick) that changed (--snapshot-region)
     <run_dir>/agent.log          Frida send(log)/errors
-    stdout                       a single JSON object: ranked writer table,
-                                 each writer mapped to its owning engine
-                                 function + port status (classifier-clean).
+    stdout                       a single JSON object: ranked writer table
+                                 (each writer → owning engine function + port
+                                 status), plus a "snapshot" block of change-ticks
+                                 + offsets per snapshot region.
 """
 
 from __future__ import annotations
@@ -131,6 +149,15 @@ def _parse_region(spec: str) -> dict:
     return {"va": va, "size": size, "label": label}
 
 
+def _parse_arm_between(spec: str) -> dict:
+    """`ENTER:LEAVE` → {enter, leave} (Ghidra VAs). ENTER may equal LEAVE."""
+    parts = spec.split(":")
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError(
+            f"--arm-between expects ENTER_VA:LEAVE_VA, got {spec!r}")
+    return {"enter": int(parts[0], 0), "leave": int(parts[1], 0)}
+
+
 # ─── post-processing: rank trapped accesses by faulting instruction ────────
 
 
@@ -194,6 +221,44 @@ def _rank(run_dir: Path, regions: list[dict]) -> dict:
     }
 
 
+def _snapshot_summary(run_dir: Path, snap_regions: list[dict]) -> dict:
+    """Summarise mem_snapshot.jsonl: per region, the ticks at which it changed
+    and the union of changed byte offsets — localises the writer's TICK.  Pair
+    with a call-trace over that tick (or --arm-between bracketing the suspect
+    call) to pin the faulting instruction."""
+    jsonl = run_dir / "mem_snapshot.jsonl"
+    per_region: dict[int, dict] = {}
+    total = 0
+    if jsonl.exists():
+        for line in jsonl.read_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            ev = json.loads(line)
+            total += 1
+            ridx = int(ev.get("region", 0))
+            g = per_region.setdefault(ridx, {
+                "label": ev.get("label", ""),
+                "va": int(ev.get("va", 0)),
+                "change_ticks": [], "offsets": set(),
+            })
+            g["change_ticks"].append(int(ev.get("tick", 0)))
+            for off, _old, _new in ev.get("changes", []):
+                g["offsets"].add(int(off))
+    out = []
+    for i, r in enumerate(snap_regions):
+        g = per_region.get(i)
+        out.append({
+            "index": i, "label": r["label"],
+            "va": f"0x{r['va']:08x}", "size": r["size"],
+            "change_events": len(g["change_ticks"]) if g else 0,
+            "first_change_tick": min(g["change_ticks"]) if g and g["change_ticks"] else None,
+            "last_change_tick":  max(g["change_ticks"]) if g and g["change_ticks"] else None,
+            "changed_offsets": [f"+0x{o:x}" for o in sorted(g["offsets"])[:24]] if g else [],
+        })
+    return {"total_change_events": total, "snapshot_regions": out}
+
+
 # ─── cli ────────────────────────────────────────────────────────────────────
 
 
@@ -204,8 +269,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--run-dir", type=Path, required=True,
                     help="where to write mem_watch.jsonl + agent.log")
     ap.add_argument("--region", type=_parse_region, action="append",
-                    required=True, metavar="VA:SIZE[:LABEL]",
-                    help="watched region (Ghidra VA). Repeatable.")
+                    metavar="VA:SIZE[:LABEL]",
+                    help="trapped watch region (Ghidra VA). Repeatable. "
+                         "At least one --region or --snapshot-region is required.")
     ap.add_argument("--access", choices=("w", "rw"), default="w",
                     help="metadata only — MemoryAccessMonitor is op-blind and "
                          "traps every first-touch; the ranker separates "
@@ -214,6 +280,25 @@ def main(argv: list[str] | None = None) -> int:
                     help="raw one-shot-per-page mode. By default the agent "
                          "re-arms on page-neighbor traps and records only "
                          "in-region accesses. Disable to see raw page traffic.")
+    ap.add_argument("--rearm-cap", type=int, default=0, metavar="N",
+                    help="lever 4 — precise-mode re-arm budget (0 = agent "
+                         "default 8000). Raise when a short hot window just "
+                         "overshoots the budget; pair with --arm-between.")
+    ap.add_argument("--arm-between", type=_parse_arm_between, default=None,
+                    metavar="ENTER_VA:LEAVE_VA",
+                    help="lever 1 — arm the monitor ONLY between ENTER's onEnter "
+                         "and LEAVE's onLeave (Ghidra VAs; ENTER may equal "
+                         "LEAVE). Collapses a read-hot page's neighbour traffic "
+                         "to the suspect call window so the budget survives to "
+                         "the write. The high-value fix for a write inside a "
+                         "page that is read every frame.")
+    ap.add_argument("--snapshot-region", type=_parse_region, action="append",
+                    metavar="VA:SIZE[:LABEL]",
+                    help="lever 2 — poll this region each tick and report the "
+                         "ticks it changed (op-agnostic, immune to page-read "
+                         "heat). Localises the writer's TICK, not the faulting "
+                         "instruction; misses an intra-tick transient write. "
+                         "Repeatable. No page-fault cost.")
     ap.add_argument("--input-trace", type=Path, default=None,
                     help="drive retail into the target scene by replaying this "
                          "input trace (omit for boot/init-time writers)")
@@ -243,7 +328,11 @@ def main(argv: list[str] | None = None) -> int:
                          "<run_dir>/mem_watch.jsonl")
     args = ap.parse_args(argv)
 
-    regions = [{**r, "access": args.access} for r in args.region]
+    if not args.region and not args.snapshot_region:
+        ap.error("at least one --region or --snapshot-region is required")
+
+    regions = [{**r, "access": args.access} for r in (args.region or [])]
+    snap_regions = list(args.snapshot_region or [])
     args.run_dir.mkdir(parents=True, exist_ok=True)
 
     # Bare --rng-seed → canonical ({}), else parse A[,B[,SINGLE]].
@@ -273,9 +362,12 @@ def main(argv: list[str] | None = None) -> int:
             skip_intro=args.skip_intro or args.input_segtrace is not None,
             anchor_trace=args.input_segtrace is not None,
             rng_seed=rng_seed,
-            mem_watch=True,
+            mem_watch=bool(regions),
             mem_watch_regions=regions,
             mem_watch_precise=not args.no_precise,
+            mem_watch_rearm_cap=int(args.rearm_cap),
+            mem_watch_arm_between=args.arm_between,
+            mem_snapshot_regions=snap_regions,
         )
         result = fc._run_capture_impl(cfg, args.run_dir)
         # Capture diagnostics → file, not stdout (stdout stays one JSON object).
@@ -284,7 +376,11 @@ def main(argv: list[str] | None = None) -> int:
             "elapsed_ms":  result.elapsed_ms,
         }, indent=2))
 
-    summary = _rank(args.run_dir, regions)
+    summary: dict = {}
+    if regions:
+        summary = _rank(args.run_dir, regions)
+    if snap_regions:
+        summary["snapshot"] = _snapshot_summary(args.run_dir, snap_regions)
     print(json.dumps(summary, indent=2))
     return 0
 
