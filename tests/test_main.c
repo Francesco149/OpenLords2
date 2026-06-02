@@ -1875,6 +1875,11 @@ struct test_case {
     X(engine_combat_transfer_ownership_reassign) \
     X(engine_combat_transfer_ownership_reserve_underflow) \
     X(engine_combat_transfer_army_no_cell_disbands) \
+    X(engine_combat_merge_sums_and_disbands) \
+    X(engine_combat_merge_refused_both_merc) \
+    X(engine_combat_merge_capacity_gate) \
+    X(engine_combat_merge_inherits_src_merc) \
+    X(engine_combat_merge_rehomes_survivor) \
     X(engine_combat_resign_eliminates) \
     X(engine_combat_resign_recount_always_zero) \
     X(engine_combat_resign_sweep_sp_noop) \

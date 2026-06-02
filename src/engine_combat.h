@@ -147,6 +147,17 @@ extern int g_combat_render_active;
  * entry.  A runtime UI cursor, not save state; injected for the diff/tests. */
 extern int g_combat_active_terr;
 
+/* Port of FUN_004aa181 @ 0x4aa181 (1353 B, __cdecl void(int dst, uint src)).
+ * Merge occupant `src`'s contingent into `dst` (g_per_territory_420): sum the
+ * head-count / 7 troop-class counts / 3 supply-group triples, keep the larger
+ * battle-presence accumulator, fold the survive/move linkage (re-homing the
+ * survivor back-reference through the region pending slot), inherit src's merc
+ * triple, recompute dst's condition, and disband src.  No-op when the combined
+ * head-count is >= 0x5dd; refused (owner notified, event 0xa7) when both carry a
+ * mercenary contingent.  `evq` carries the refusal notification.  Reached via
+ * the garrison-placement path FUN_004a79a3. */
+void engine_combat_merge_stack(int dst, int src, engine_event_queue_state_t *evq);
+
 /* Port of FUN_004ac3c6 @ 0x4ac3c6 (211 B, __cdecl void(int)).  Demolish realm
  * `key`: zero its army-economy header fields, re-run its workforce / provision /
  * production / income plan, then — if it has a pending territory transfer

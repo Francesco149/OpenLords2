@@ -5902,3 +5902,38 @@ immediately precede a full `memset` of the 0x160-byte strategic record (so they
 are redundant), and the interactive on-screen cleanup (`FUN_0047fe0b`, a
 0x50-entry stride-0x1b0 UI table) only runs when the game-mode byte
 `s_slot_0057c8fc == 2` — deferred to a NULL-default seam in the port.
+
+
+## 168. The army-stack merge inherits the absorbed unit's mercenary contract, then frees that contract's pool slot out from under the survivor
+
+`FUN_004aa181` (the army-stack merge run when a unit stacks onto an occupied
+territory, reached via the garrison-placement path `FUN_004a79a3`) folds
+occupant `src` into `dst`.  When `src` is the one carrying a mercenary
+contingent (the merge only runs when *at most one* side has one), it copies
+src's contract triple — class `+0x195`, head-count `+0x196`, **pool slot
+`+0x197`** — onto `dst`, then unconditionally disbands `src`
+(`FUN_004aa039`).
+
+The disband routes through `FUN_0046f0a9` → `FUN_004ac6fe`
+(`engine_unit_clear_contract`), which frees `g_unit_table_20[src.+0x197]` —
+*src's* pool slot.  But the merge never cleared src's `+0x197` after copying it,
+so src still names the slot at disband time.  The result: `dst` ends the merge
+holding a mercenary contract (`+0x195/+0x196/+0x197` all set) whose backing
+g_unit_table_20 entry has just been zeroed.  The survivor's merc slot index is
+dangling.
+
+Ported verbatim (the merge copies the triple, the disband frees the slot) and
+pinned by `test_engine_combat_merge_inherits_src_merc`, which seeds the pool
+slot and asserts it reads 0 after the merge.
+
+Verification note: `FUN_004aa181` is **host-unit-tested only**, not retail-diff
+gated.  Its disband tail reaches `engine_realm_collect_territory_income`
+(`FUN_004ad6c0`), which unconditionally runs the per-realm production planners
+(`FUN_0044df5f`/`FUN_0044d374`/`FUN_0044dd4d`) for all 16 realms — the same
+price-scalar-dependent path the `upkeep` diff target had to carve out (the diff
+lib's fixed prices vs retail's live ones diverge, and the planners can divide by
+zero on un-set-up menu-state realm records).  The merge's own writes land in
+`g_per_territory_420`, whose field offsets are already retail-validated by the
+`combat_resolve` / `combat_condition` / `combat_halve` diff targets sharing that
+record layout; the five host tests pin every summed field, the linkage folds,
+and this quirk.

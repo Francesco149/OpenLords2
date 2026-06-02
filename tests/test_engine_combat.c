@@ -546,6 +546,126 @@ int test_engine_combat_transfer_army_no_cell_disbands(void)
     return 0;
 }
 
+/* ---- army-stack merge (FUN_004aa181 / engine_combat_merge_stack) --------- *
+ * Merge occupant `src` into `dst`: sum head-count (+0x168) / 7 troop shorts
+ * (+0x16c) / 3 supply triples (+0x182/+0x184/+0x186), keep the larger presence
+ * accumulator (+0x153), inherit src's merc triple, then disband src.  The
+ * disband re-plan tail is held to a no-op by leaving the army-records bind
+ * NULL (same as the resign tests).                                            */
+
+static void merge_reset(void)
+{
+    scc_reset();
+    engine_army_economy_bind_army_records(NULL);   /* neuter disband's re-plan */
+}
+
+/* Two merc-free stacks merge: dst gains src's head-count, troop counts and
+ * supply triples, keeps the larger presence byte, and src is disbanded. */
+int test_engine_combat_merge_sums_and_disbands(void)
+{
+    merge_reset();
+    uint8_t *d = CREC(3), *s = CREC(5);
+    d[0x00] = 2; I32(d, C_VALUE) = 100; d[0x153] = 5;
+    I16(d, C_COUNTS) = 10; I16(d, C_COUNTS + 2) = 5;
+    I16(d, 0x182) = 4; I16(d, 0x184) = 2; I16(d, 0x186) = 8;   /* supply group 0 */
+    s[0x00] = 2; s[0x08] = 1; I32(s, C_VALUE) = 50; s[0x153] = 9;
+    I16(s, C_COUNTS) = 3; I16(s, C_COUNTS + 2) = 2; I16(s, C_COUNTS + 4) = 1;
+    I16(s, 0x182) = 1; I16(s, 0x184) = 1; I16(s, 0x186) = 2;
+    P_REC(2)[0x2d] = 5;                                        /* disband decrements this */
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_combat_merge_stack(3, 5, &evq);
+
+    T_ASSERT_EQ_I(I32(d, C_VALUE), 150);     /* head-count summed */
+    T_ASSERT_EQ_I(I16(d, C_COUNTS), 13);
+    T_ASSERT_EQ_I(I16(d, C_COUNTS + 2), 7);
+    T_ASSERT_EQ_I(I16(d, C_COUNTS + 4), 1);
+    T_ASSERT_EQ_I(d[0x153], 9);              /* max presence kept */
+    T_ASSERT_EQ_I(I16(d, 0x182), 5);         /* supply group 0 summed */
+    T_ASSERT_EQ_I(I16(d, 0x184), 3);
+    T_ASSERT_EQ_I(I16(d, 0x186), 10);
+    T_ASSERT_EQ_U(CREC(5)[0x00], 0);         /* src disbanded (record cleared) */
+    T_ASSERT_EQ_U(P_REC(2)[0x2d], 4);        /* disband decremented owner counter */
+    return 0;
+}
+
+/* When both stacks carry a mercenary contingent the merge is refused: neither
+ * record is touched and nothing is disbanded. */
+int test_engine_combat_merge_refused_both_merc(void)
+{
+    merge_reset();
+    uint8_t *d = CREC(3), *s = CREC(5);
+    d[0x00] = 2; I32(d, C_VALUE) = 100; d[C_CON_AMT] = 4;
+    s[0x00] = 2; s[0x08] = 1; I32(s, C_VALUE) = 50; s[C_CON_AMT] = 3;
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_combat_merge_stack(3, 5, &evq);
+
+    T_ASSERT_EQ_I(I32(d, C_VALUE), 100);     /* unchanged */
+    T_ASSERT_EQ_U(CREC(5)[0x00], 2);         /* src NOT disbanded */
+    return 0;
+}
+
+/* Combined head-count >= 0x5dd (1501) gates the whole merge out. */
+int test_engine_combat_merge_capacity_gate(void)
+{
+    merge_reset();
+    uint8_t *d = CREC(3), *s = CREC(5);
+    d[0x00] = 2; I32(d, C_VALUE) = 1000;
+    s[0x00] = 2; s[0x08] = 1; I32(s, C_VALUE) = 600;
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_combat_merge_stack(3, 5, &evq);
+
+    T_ASSERT_EQ_I(I32(d, C_VALUE), 1000);    /* no-op */
+    T_ASSERT_EQ_U(CREC(5)[0x00], 2);         /* src untouched */
+    return 0;
+}
+
+/* src carries a merc contingent and dst does not → dst inherits src's merc
+ * triple (class / amount / pool slot).  Quirk #168: because src keeps its own
+ * +0x197 slot, the subsequent disband(src) → clear_contract frees that same
+ * g_unit_table_20 slot — so dst inherits a contract whose pool entry is gone. */
+int test_engine_combat_merge_inherits_src_merc(void)
+{
+    merge_reset();
+    uint8_t *d = CREC(3), *s = CREC(5);
+    d[0x00] = 2; I32(d, C_VALUE) = 100;
+    s[0x00] = 2; s[0x08] = 1; I32(s, C_VALUE) = 50;
+    s[C_CON_AMT] = 7; s[C_CON_CLASS] = 3; s[C_CON_SLOT] = 4;
+    *(uint16_t *)&g_unit_table_20[4 * 0x14] = 0xbeef;   /* the live pool slot */
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_combat_merge_stack(3, 5, &evq);
+
+    T_ASSERT_EQ_I(d[C_CON_AMT], 7);
+    T_ASSERT_EQ_I(d[C_CON_CLASS], 3);
+    T_ASSERT_EQ_I(d[C_CON_SLOT], 4);
+    /* quirk #168: src's disband freed the inherited pool slot out from under dst */
+    T_ASSERT_EQ_I(*(uint16_t *)&g_unit_table_20[4 * 0x14], 0);
+    return 0;
+}
+
+/* dst holds the survive-linkage byte (+0x199): the merge keeps it, re-homes the
+ * survivor's back-reference (region pending slot → +0x19a) onto dst, and runs
+ * the supply-condition recompute. */
+int test_engine_combat_merge_rehomes_survivor(void)
+{
+    merge_reset();
+    uint8_t *d = CREC(3), *s = CREC(5);
+    d[0x00] = 2; I32(d, C_VALUE) = 80; d[0x199] = 2;   /* survive flag = region 2 */
+    s[0x00] = 2; s[0x08] = 1; I32(s, C_VALUE) = 40;
+    I32(R_REC(2), 0x1bc) = 7;                          /* region 2's pending unit = 7 */
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_combat_merge_stack(3, 5, &evq);
+
+    T_ASSERT_EQ_I(I32(d, C_VALUE), 120);     /* still merged */
+    T_ASSERT_EQ_U(d[0x199], 2);              /* survive flag kept */
+    T_ASSERT_EQ_U(CREC(7)[0x19a], 3);        /* back-reference re-homed to dst */
+    return 0;
+}
+
 /* ---- player resignation (FUN_0049cf20 / FUN_0049b2a3) -------------------- *
  * resign_player demolishes a player's realms (R_REC +0x05 owner zeroed) and  *
  * disbands their placed units (CREC), then wipes the strategic record and    *

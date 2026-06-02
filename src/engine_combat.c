@@ -45,6 +45,7 @@
 #define C_RESULT     0x17a   /* 4 × battle-result accumulator (i16)           */
 #define C_CON_CLASS  0x195   /* merc contingent's troop class (u8)            */
 #define C_CON_AMT    0x196   /* merc contingent head-count (u8)               */
+#define C_CON_SLOT   0x197   /* merc contingent pool slot in g_unit_table_20 (u8)*/
 
 /* Post-battle resupply / condition fields (FUN_004a80db). */
 #define C_COND_CNT   0x182   /* 3 supply groups × {count,out%,stock} stride 6 */
@@ -428,6 +429,78 @@ static void resolve_combat(void)
                                      (int)s_slot_0055401c, (int)s_slot_0053e8fc, &res);
     s_slot_0057c924       = (uint32_t)res.winner;
     g_combat_winner_owner = res.winner_owner;
+}
+
+/* Port of FUN_004aa181 (1353 B) — merge occupant `src`'s contingent into `dst`.
+ * Runs only when the combined head-count stays under 0x5dd (1501) and at most
+ * one of the two carries a mercenary contingent.  Sums the head-count (+0x168),
+ * the 7 troop-class counts (+0x16c) and the 3 supply-group {count,out,stock}
+ * shorts (+0x182/+0x184/+0x186, stride 6); keeps the larger (signed) battle-
+ * presence accumulator (+0x153); folds the survive/move linkage bytes
+ * (+0x199/+0x19a, dst preferred), re-homing the survivor back-reference through
+ * the region's pending-unit slot (g_per_army_768 +0x1bc); copies src's merc
+ * triple (+0x195/+0x196/+0x197) when src is the one carrying it; recomputes
+ * dst's supply condition when it now holds the survive flag; and disbands src.
+ * When BOTH carry a merc contingent the merge is refused and dst's owner is
+ * notified (event 0xa7).  Reached via the garrison-placement path FUN_004a79a3. */
+void engine_combat_merge_stack(int dst, int src, engine_event_queue_state_t *evq)
+{
+    uint8_t *d = CREC(dst);
+    uint8_t *s = CREC(src);
+
+    if (rd_i32(d, C_VALUE) + rd_i32(s, C_VALUE) >= 0x5dd)
+        return;
+
+    if (d[C_CON_AMT] != 0 && s[C_CON_AMT] != 0) {
+        /* both carry mercenaries → merge refused, notify dst's owner (0xa7) */
+        uint8_t hd[7]; build_has_data(hd);
+        engine_event_queue_post(evq, 0, (int8_t)d[C_OWNER], 0xa7, 0, 0, 0, 0, 0,
+                                hd, (int)s_slot_0057c8cc);
+        return;
+    }
+
+    /* keep the larger (signed) battle-presence accumulator */
+    if ((int8_t)d[C_F153] < (int8_t)s[C_F153])
+        d[C_F153] = s[C_F153];
+
+    /* fold the survive-linkage byte: keep dst's if set, else inherit src's;
+     * src's is cleared.  When the survivor index is live, re-home its back-
+     * reference (the region's pending-unit slot → +0x19a) onto dst. */
+    uint8_t survivor = d[C_F199] != 0 ? d[C_F199] : s[C_F199];
+    d[C_F199] = survivor;
+    s[C_F199] = 0;
+    if (survivor != 0)
+        CREC(rd_i32(REGREC(survivor), R_PENDING))[C_F19A] = (uint8_t)dst;
+
+    /* fold the move-linkage byte the same way (dst preferred) */
+    if (d[C_F19A] == 0)
+        d[C_F19A] = s[C_F19A];
+
+    /* inherit src's mercenary contingent when src is the one carrying it */
+    if (s[C_CON_AMT] != 0) {
+        d[C_CON_AMT]   = s[C_CON_AMT];
+        d[C_CON_CLASS] = s[C_CON_CLASS];
+        d[C_CON_SLOT]  = s[C_CON_SLOT];
+    }
+
+    /* sum head-count, the 7 troop-class counts, the 3 supply-group triples */
+    wr_i32(d, C_VALUE, rd_i32(d, C_VALUE) + rd_i32(s, C_VALUE));
+    for (int k = 0; k < 7; k++)
+        wr_i16(d, C_COUNTS + k * 2,
+               rd_i16(d, C_COUNTS + k * 2) + rd_i16(s, C_COUNTS + k * 2));
+    for (int k = 0; k < 3; k++)
+        wr_i16(d, C_COND_CNT + k * 6,
+               rd_i16(d, C_COND_CNT + k * 6) + rd_i16(s, C_COND_CNT + k * 6));
+    for (int k = 0; k < 3; k++)
+        wr_i16(d, C_COND_OUT + k * 6,
+               rd_i16(d, C_COND_OUT + k * 6) + rd_i16(s, C_COND_OUT + k * 6));
+    for (int k = 0; k < 3; k++)
+        wr_i16(d, C_COND_STOCK + k * 6,
+               rd_i16(d, C_COND_STOCK + k * 6) + rd_i16(s, C_COND_STOCK + k * 6));
+
+    if (d[C_F199] != 0)
+        engine_combat_recompute_condition(dst);   /* FUN_004a80db */
+    engine_unit_disband(src);                      /* FUN_004aa039 */
 }
 
 /* Port of FUN_004ac3c6 — demolish realm `key`. */
