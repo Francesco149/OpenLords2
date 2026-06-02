@@ -17,6 +17,7 @@
 #include "t.h"
 #include "engine_combat.h"
 #include "engine_realm_upkeep.h"   /* shares the merc-contract triple */
+#include "engine_army_economy.h"   /* NULL the army-records bind (resign re-plan) */
 #include "engine_map_query.h"      /* bind_cell_descriptors (transfer-army ring) */
 #include "save.h"
 #include "save_schema_globals.h"   /* s_slot_0053f23c (wage divisor) */
@@ -542,5 +543,118 @@ int test_engine_combat_transfer_army_no_cell_disbands(void)
 
     T_ASSERT_EQ_I(I32(t, 0x0c), 0);    /* placement skipped */
     T_ASSERT_EQ_U(P_REC(3)[0x2d], 4);  /* disband decremented the counter */
+    return 0;
+}
+
+/* ---- player resignation (FUN_0049cf20 / FUN_0049b2a3) -------------------- *
+ * resign_player demolishes a player's realms (R_REC +0x05 owner zeroed) and  *
+ * disbands their placed units (CREC), then wipes the strategic record and    *
+ * the per-player aux slot (g_player_aux_44, stride 0x2c).  The economy        *
+ * re-plan is held to a no-op by leaving the army-records bind NULL.          */
+
+static void resign_reset(void)
+{
+    scc_reset();
+    memset(g_player_aux_44, 0, sizeof g_player_aux_44);
+    engine_army_economy_bind_army_records(NULL);
+    s_slot_0057c8fc = 0;       /* game-mode ≠ 2 → UI seam not consulted */
+    engine_combat_bind_resign_ui_fn(NULL);
+}
+
+#define AUX(p)  (&g_player_aux_44[(p) * 0x2c])
+
+/* A player owning two realms and one placed unit is eliminated: realms'
+ * owner byte zeroed, unit disbanded, strategic record wiped, aux reset, and
+ * the "eliminated" notice (code 0xe0) posted to the local player. */
+int test_engine_combat_resign_eliminates(void)
+{
+    resign_reset();
+    s_slot_0056d5dc = 8;                 /* ≤ 16 → all realms hit by the demolish loop */
+    R_REC(2)[0x05] = 3;                  /* player 3 owns realms 2 and 3 */
+    R_REC(3)[0x05] = 3;
+    uint8_t *u = CREC(5);
+    u[0x08] = 1;                         /* a live placed unit */
+    u[0x00] = 3;                         /* owned by player 3 */
+    P_REC(3)[0x05] = 1;                  /* in-game */
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_combat_resign_player(3, &evq, 1);
+
+    T_ASSERT_EQ_U(R_REC(2)[0x05], 0);    /* realms demolished */
+    T_ASSERT_EQ_U(R_REC(3)[0x05], 0);
+    T_ASSERT_EQ_U(CREC(5)[0x00], 0);     /* unit disbanded (record cleared) */
+    T_ASSERT_EQ_U(P_REC(3)[0x05], 0);    /* strategic record wiped */
+    T_ASSERT_EQ_U(AUX(3)[0x27], 1);      /* aux slot reset */
+    T_ASSERT_EQ_I(evq.write_idx, 1);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0xe0);
+    T_ASSERT_EQ_I(evq.ring[0].target, 3);
+    T_ASSERT_EQ_I(evq.ring[0].audience, 1);
+    return 0;
+}
+
+/* Quirk #167: the survivor recount runs AFTER the demolish/disband loops over
+ * the same tables, so it is always 0 — even with the slot byte (+0x04) set,
+ * which would otherwise select the 0x102 "resigned" branch, a player owning
+ * realms is still reported eliminated (0xe0) because those realms were already
+ * demolished before the recount.  The 0x102 branch is dead code. */
+int test_engine_combat_resign_recount_always_zero(void)
+{
+    resign_reset();
+    s_slot_0056d5dc = 8;
+    R_REC(2)[0x05] = 3; R_REC(3)[0x05] = 3;   /* player 3 owns two realms (≤16) */
+    P_REC(3)[0x04] = 1;                  /* slot byte set → 0x102 IF any survived */
+    P_REC(3)[0x05] = 1;
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_combat_resign_player(3, &evq, 1);
+
+    T_ASSERT_EQ_U(R_REC(2)[0x05], 0);    /* demolished before the recount */
+    T_ASSERT_EQ_U(R_REC(3)[0x05], 0);
+    T_ASSERT_EQ_I(evq.write_idx, 1);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0xe0);   /* eliminated, not 0x102 */
+    return 0;
+}
+
+/* The sweep is a no-op outside multiplayer. */
+int test_engine_combat_resign_sweep_sp_noop(void)
+{
+    resign_reset();
+    P_REC(2)[0x05] = 1;                  /* eligible but SP */
+    s_slot_00553f98 = 4;
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_combat_mp_resign_sweep(&evq, 0);
+
+    T_ASSERT_EQ_U(P_REC(2)[0x05], 1);    /* untouched */
+    T_ASSERT_EQ_U(s_slot_00553f98, 4);
+    T_ASSERT_EQ_I(evq.write_idx, 0);
+    return 0;
+}
+
+/* In multiplayer the sweep resigns only eligible slots: in-game (+0x05),
+ * status 0 (+0x07) and aux +0x00 == 0.  A status-marked slot and an
+ * aux-flagged slot are both skipped; the resigned slot is marked status 6
+ * and the active-player count is decremented once. */
+int test_engine_combat_resign_sweep_mp(void)
+{
+    resign_reset();
+    P_REC(2)[0x05] = 1;                  /* eligible */
+    P_REC(3)[0x05] = 1; P_REC(3)[0x07] = 5;   /* skipped: status != 0 */
+    P_REC(4)[0x05] = 1; AUX(4)[0x00] = 1;     /* skipped: aux +0x00 set */
+    s_slot_00553f98 = 3;
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_combat_mp_resign_sweep(&evq, 1);
+
+    T_ASSERT_EQ_U(P_REC(2)[0x05], 0);    /* player 2 resigned (record wiped) */
+    T_ASSERT_EQ_U(P_REC(2)[0x07], 6);    /* marked resigned */
+    T_ASSERT_EQ_U(P_REC(3)[0x05], 1);    /* skipped, untouched */
+    T_ASSERT_EQ_U(P_REC(4)[0x05], 1);    /* skipped, untouched */
+    T_ASSERT_EQ_U(s_slot_00553f98, 2);   /* one player removed */
+    T_ASSERT_EQ_I(evq.write_idx, 1);
     return 0;
 }

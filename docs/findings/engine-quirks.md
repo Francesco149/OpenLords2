@@ -5872,3 +5872,33 @@ lost army id in `flag6`) when exactly one army was demolished, else code `0x80`.
 Demolish's economy re-plan hits the price-scalar wall (same as the other AI
 passes), so the pass is host-test verified — demolish's unconditional `+0x05`
 owner-zeroing is the observable hook the tests assert on.
+
+## 167. The player-resign routine recounts a player's surviving realms/units AFTER it has already destroyed them, so its "resigned with assets" notification is dead code
+
+`FUN_0049cf20` (the per-player removal body run by the multiplayer resignation
+sweep `FUN_0049b2a3`) does four passes in this order: (1) demolish every realm
+the player owns (`FUN_004ac3c6`, army records 1..16); (2) disband every live
+placed unit they own (`FUN_004aa039`, which `memset`s the occupant record);
+(3) **recount** the player's realms (1..`s_slot_0056d5dc`, ×3 each) and units
+(same predicate as pass 2) into a survivor tally; (4) post a notification keyed
+on that tally.
+
+Because passes 1–2 run *before* the recount over the *same* tables, the tally
+is always 0:
+
+* the realm array `g_per_army_768` holds only 17 records ("16 used + slot 0"),
+  so `s_slot_0056d5dc` ≤ 16 and the 1..16 demolish loop fully covers everything
+  the recount walks — every owned realm's owner byte is already zeroed;
+* the unit recount uses the identical `+0x08 == 1 && owner == player` predicate
+  the disband loop used, and disband `memset`s each matched record.
+
+So the survivor count is invariably 0, and the branch that would post code
+`0x102` ("player resigned", with surviving assets) is unreachable — a removed
+player is *always* reported eliminated via code `0xe0`.  The recount and the
+`0x102` arm are ported verbatim but are effectively dead.
+
+Two smaller notes on the same routine: the explicit `+0x04`/`+0x0a` clears
+immediately precede a full `memset` of the 0x160-byte strategic record (so they
+are redundant), and the interactive on-screen cleanup (`FUN_0047fe0b`, a
+0x50-entry stride-0x1b0 UI table) only runs when the game-mode byte
+`s_slot_0057c8fc == 2` — deferred to a NULL-default seam in the port.

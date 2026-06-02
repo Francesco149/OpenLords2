@@ -1875,6 +1875,10 @@ struct test_case {
     X(engine_combat_transfer_ownership_reassign) \
     X(engine_combat_transfer_ownership_reserve_underflow) \
     X(engine_combat_transfer_army_no_cell_disbands) \
+    X(engine_combat_resign_eliminates) \
+    X(engine_combat_resign_recount_always_zero) \
+    X(engine_combat_resign_sweep_sp_noop) \
+    X(engine_combat_resign_sweep_mp) \
     X(engine_diplomacy_clear_treaty) \
     X(engine_diplomacy_broadcast_penalty) \
     X(engine_diplomacy_battle_adjust_guards) \

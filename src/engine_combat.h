@@ -188,4 +188,24 @@ void engine_combat_transfer_ownership(unsigned new_owner, unsigned key,
                                       engine_event_queue_state_t *evq,
                                       int mp_active);
 
+/* Bind the resign-time interactive UI cleanup seam (retail 0x47fe0b,
+ * game-mode-gated on s_slot_0057c8fc == 2).  NULL default → no-op. */
+void engine_combat_bind_resign_ui_fn(void (*fn)(int player));
+
+/* Port of FUN_0049cf20 (704 B) — remove player `player` from the game:
+ * demolish every realm they own (army records 1..16), disband every live
+ * placed unit, post the eliminated/resigned notification (code 0xe0 / 0x102),
+ * then wipe their strategic record and reset their per-player aux slot.  Sets
+ * the combat screen-mode handoff (DAT_0057d340 = 2). */
+void engine_combat_resign_player(int player, engine_event_queue_state_t *evq,
+                                 int mp_active);
+
+/* Port of FUN_0049b2a3 (187 B) — the turn orchestrator's multiplayer
+ * player-resignation sweep.  No-op unless `mp_active` (retail DAT_00553030).
+ * For each player slot 1..5 that is in-game (strat +0x05), live (status
+ * +0x07 == 0) and has a zero aux +0x00, calls engine_combat_resign_player,
+ * decrements the active-player count (s_slot_00553f98) and marks the slot
+ * resigned (status +0x07 = 6). */
+void engine_combat_mp_resign_sweep(engine_event_queue_state_t *evq, int mp_active);
+
 #endif /* OPENLORDS2_ENGINE_COMBAT_H */

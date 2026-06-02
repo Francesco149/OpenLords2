@@ -15,6 +15,7 @@
  */
 
 #include <stdint.h>
+#include <string.h>
 
 #include "engine_combat.h"
 #include "save.h"                 /* g_per_territory_420, g_per_army_768, … */
@@ -36,6 +37,7 @@
 #define CREC(i)      (&g_per_territory_420[(i) * CSTRIDE])
 
 #define C_OWNER      0x00    /* owning player id (i8)                         */
+#define C_ACTIVE     0x08    /* occupant kind: 1 = a live placed unit (u8)    */
 #define C_GARRISON   0x01    /* castle/garrison present → interactive battle (u8)*/
 #define C_COUNT      0x02    /* battle troop count for sizing (u8; floored to 6)*/
 #define C_VALUE      0x168   /* total head-count, re-summed here (i32)        */
@@ -354,7 +356,9 @@ void engine_combat_halve_garrison(int rec)
 /* --- per-player strategic record (g_player_strategic_352, stride 0x160) -- */
 #define PSTRIDE     0x160
 #define PREC(s)     (&g_player_strategic_352[(s) * PSTRIDE])
+#define P_SLOT      0x04    /* player-slot in-game flag (u8; ≠ +0x05)       */
 #define P_ACTIVE    0x05    /* realm in-game / has-data flag (u8)           */
+#define P_STATUS    0x07    /* player status (0 = live; 6 = resigned)       */
 #define P_F0A       0x0a    /* banner/colour key (u8)                       */
 #define P_CONQ      0x29    /* conquests this game (u8)                     */
 #define P_CONQMAX   0x2a    /* conquest high-water mark (u8)                */
@@ -371,6 +375,15 @@ void engine_combat_bind_clock_fn(uint32_t (*fn)(void))             { g_combat_cl
 
 static void     combat_wav(const char *n, int a, int b) { if (g_combat_wav_fn) g_combat_wav_fn(n, a, b); }
 static uint32_t combat_clock(void) { return g_combat_clock_fn ? g_combat_clock_fn() : 0; }
+
+/* Resign-time interactive UI cleanup seam (retail 0x47fe0b, game-mode-gated
+ * on s_slot_0057c8fc == 2).  The real function sweeps a 0x50-entry stride-0x1b0
+ * on-screen element table (0x5544ac) clearing the resigned player's entries and
+ * releasing a UI resource — interactive-only render state, deferred like the
+ * other UI/audio seams.  NULL default → no-op (correct for the headless turn
+ * driver, which never has game-mode 2). */
+static void (*g_resign_ui_fn)(int player);
+void engine_combat_bind_resign_ui_fn(void (*fn)(int player)) { g_resign_ui_fn = fn; }
 
 int g_combat_render_active;      /* DAT_0056d5c8 */
 int g_combat_active_terr;        /* DAT_00553f8c */
@@ -692,5 +705,95 @@ void engine_combat_transfer_ownership(unsigned new_owner, unsigned key,
             engine_event_queue_post(evq, 0, local, 0x81, 0, 0, key_lo, 0, 0, hd, local);
         }
         engine_combat_demolish_realm((int)key, evq, mp_active);    /* FUN_004ac3c6 (recurse) */
+    }
+}
+
+/* ===================================================================== *
+ *  Multiplayer player-resignation pass (FUN_0049b2a3 + FUN_0049cf20).    *
+ *                                                                        *
+ *  Runs only in multiplayer.  For each in-game player slot that has not  *
+ *  already resigned, it removes the player from the game: demolish every *
+ *  realm they own, disband every placed unit, notify, then wipe their    *
+ *  strategic + aux records.  Reached from the turn orchestrator          *
+ *  (FUN_00448440) right after the season rollover.                       *
+ * ===================================================================== */
+
+/* Port of FUN_0049cf20 — remove player `player` from the game. */
+void engine_combat_resign_player(int player, engine_event_queue_state_t *evq,
+                                 int mp_active)
+{
+    int local = (int)s_slot_0057c8cc;
+
+    /* Interactive on-screen cleanup, game-mode 2 only — deferred UI seam. */
+    if (s_slot_0057c8fc == 2 && g_resign_ui_fn)
+        g_resign_ui_fn(player);                        /* 0x47fe0b (deferred UI seam) */
+
+    /* Demolish every realm this player owns (army records 1..16). */
+    for (int v = 1; v < 0x11; v++)
+        if (REGREC(v)[R_OWNER] == (uint8_t)player)
+            engine_combat_demolish_realm(v, evq, mp_active);   /* FUN_004ac3c6 */
+
+    /* Disband every live placed unit this player owns (occupant records). */
+    for (int v = 1; v < 0x97; v++)
+        if (CREC(v)[C_ACTIVE] == 1 && (int8_t)CREC(v)[C_OWNER] == player)
+            engine_unit_disband(v);                            /* FUN_004aa039 */
+
+    /* Recount survivors AFTER the destroy loops above (quirk #167): both loops
+     * recount over the very tables the demolish/disband loops just cleared —
+     * the realm recount walks 1..s_slot_0056d5dc (≤16, the realm array holds
+     * only 17 records) which the 1..16 demolish loop fully covers, and the unit
+     * recount repeats the disband loop's exact predicate over memset records.
+     * So `survivors` is always 0 here and the 0x102 "resigned" branch below is
+     * dead — every removed player is reported eliminated (0xe0).  Ported
+     * verbatim regardless. */
+    int survivors = 0;
+    for (int v = 1; v <= (int)s_slot_0056d5dc; v++)
+        if (REGREC(v)[R_OWNER] == (uint8_t)player)
+            survivors += 3;
+    for (int v = 1; v < 0x97; v++)
+        if ((int8_t)CREC(v)[C_OWNER] == player && CREC(v)[C_ACTIVE] == 1)
+            survivors += 1;
+
+    /* Notification (read the slot byte before the record is wiped). */
+    uint8_t hd[7]; build_has_data(hd);
+    if (PREC(player)[P_SLOT] == 0 || survivors == 0)
+        engine_event_queue_post(evq, player, local, 0xe0, 1, 0xe, 0, 0, 0,
+                                hd, local);            /* "eliminated" */
+    else
+        engine_event_queue_post(evq, 0, local, 0x102, 0, 0, 0, (uint8_t)player, 0,
+                                hd, local);            /* "resigned" (rare) */
+
+    /* Wipe the strategic record (the explicit +0x04/+0x0a clears are redundant
+     * with the full record clear that follows — ported verbatim). */
+    PREC(player)[P_SLOT] = 0;
+    PREC(player)[P_F0A]  = 0;
+    memset(PREC(player), 0, PSTRIDE);                  /* FUN_0046ea61 */
+
+    /* Reset the per-player aux slot (g_player_aux_44, stride 0x2c). */
+    uint8_t *aux = &g_player_aux_44[player * 0x2c];
+    aux[0x26] = 0;
+    *(int32_t *)&aux[0x00] = 0;
+    aux[0x25] = 0;
+    aux[0x27] = 1;
+
+    g_combat_screen_mode = 2;                          /* DAT_0057d340 */
+}
+
+/* Port of FUN_0049b2a3 — multiplayer player-resignation sweep. */
+void engine_combat_mp_resign_sweep(engine_event_queue_state_t *evq, int mp_active)
+{
+    if (!mp_active)                                    /* DAT_00553030 gate */
+        return;
+    for (int player = 1; player < 6; player++) {
+        /* aux +0x00 set (e.g. connected/human) → leave alone. */
+        if (*(int32_t *)&g_player_aux_44[player * 0x2c] != 0)
+            continue;
+        if (PREC(player)[P_STATUS] != 0)               /* already resigned */
+            continue;
+        if (PREC(player)[P_ACTIVE] == 0)               /* not in-game */
+            continue;
+        engine_combat_resign_player(player, evq, mp_active);
+        s_slot_00553f98 -= 1;                          /* active-player count-- */
+        PREC(player)[P_STATUS] = 6;                    /* mark resigned */
     }
 }
