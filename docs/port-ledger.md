@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **635** (26.0%) — tested 590, ported 45
+- touched: **635** (26.0%) — tested 592, ported 43
 - code bytes touched: **31.0%** (260,241 / 838,629 B)
 - unported: **1812**
 - orphan refs (in src/, not in function table): 6
 
-## tested (590) — ported + host unit suite
+## tested (592) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -439,6 +439,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4921e5 | FUN_004921e5 | 451 | engine_tile.c, engine_tile.h |
 | 0x497500 | FUN_00497500 | 211 | engine_minimap.c |
 | 0x4976a1 | FUN_004976a1 | 472 | engine_load_pump.c, engine_load_pump.h, engine_map_init.c (+1) |
+| 0x49792e | FUN_0049792e | 262 | engine.c, engine.h, game_init.c |
+| 0x497a34 | FUN_00497a34 | 697 | engine.c, engine.h, main.c |
 | 0x497ced | FUN_00497ced | 376 | engine_load_pump.c, engine_territory.c, engine_territory.h (+3) |
 | 0x497e65 | FUN_00497e65 | 1025 | game_init.c, game_init.h |
 | 0x498270 | FUN_00498270 | 327 | engine_map_init.c, engine_map_init.h, main.c |
@@ -612,7 +614,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine_map_scene.c, engine_map_scene.h |
 
-## ported (45) — reimplemented, no host test yet
+## ported (43) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -643,8 +645,6 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x481b9a | FUN_00481b9a | 1399 | engine.c |
 | 0x482111 | FUN_00482111 | 476 | engine.c |
 | 0x4978ad | FUN_004978ad | 129 | engine.c, engine.h |
-| 0x49792e | FUN_0049792e | 262 | engine.c, engine.h |
-| 0x497a34 | FUN_00497a34 | 697 | engine.c, engine.h |
 | 0x498458 | FUN_00498458 | 132 | engine.c |
 | 0x499859 | FUN_00499859 | 451 | gfx.c |
 | 0x499a1c | FUN_00499a1c | 174 | engine.c, gfx.c, gfx.h |

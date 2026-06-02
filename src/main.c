@@ -2017,6 +2017,15 @@ static void bringup_newgame(int map_id)
                                            /*player_name*/prefs);
     }
 
+    /* Two more config-screen substate scalars the headless seat skips.
+     * Both are set by the new-game screen entry the live menu path runs but
+     * this seat doesn't, and both persist to the save:
+     *   - entry 207 (0x53f0d4) = 0xa — retail FUN_00497a34 @ 0x497abc.
+     *   - entry 197 (0x55302c) =  2  — the SP "full-game" substate the live
+     *     menu path (engine_menu_input.c) latches on entry. */
+    s_slot_0053f0d4 = 0xa;
+    s_slot_0055302c = 2;
+
     /* tile_cells + camera from L2_maps.dat[map_id] (retail FUN_004298c1
      * build_cells + FUN_00451fcc camera, run by the config screen). */
     if (engine_map_init_build_cells(".", map_id, 0) == 0) {

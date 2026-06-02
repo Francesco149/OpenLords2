@@ -4,13 +4,13 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 590,
-  "ported": 45,
+  "tested": 592,
+  "ported": 43,
   "unported": 1812,
   "orphan_refs_not_in_function_table": 6,
   "touched": 635,
   "pct_touched": 26.0,
-  "pct_tested": 24.1,
+  "pct_tested": 24.2,
   "bytes_total": 838629,
   "bytes_touched": 260241,
   "pct_bytes_touched": 31.0
@@ -15290,10 +15290,11 @@
    "name": "FUN_0049792e",
    "size": 262,
    "is_thunk": false,
-   "status": "ported",
+   "status": "tested",
    "src": [
     "src/engine.c",
-    "src/engine.h"
+    "src/engine.h",
+    "src/game_init.c"
    ]
   },
   {
@@ -15301,10 +15302,11 @@
    "name": "FUN_00497a34",
    "size": 697,
    "is_thunk": false,
-   "status": "ported",
+   "status": "tested",
    "src": [
     "src/engine.c",
-    "src/engine.h"
+    "src/engine.h",
+    "src/main.c"
    ]
   },
   {

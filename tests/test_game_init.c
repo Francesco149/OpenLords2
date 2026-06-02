@@ -1461,6 +1461,12 @@ int test_game_init_player_config_activates_realms(void)
     T_ASSERT_EQ_I((int)s_slot_0053f268, 4);
     T_ASSERT_EQ_U(s_slot_00553f98, 1u);
 
+    /* Config-screen substate scalars (FUN_0049792e top): entries 73/75/76/84. */
+    T_ASSERT_EQ_U(s_slot_00569584, 1u);
+    T_ASSERT_EQ_U(s_slot_0053f06c, 7u);
+    T_ASSERT_EQ_U(s_slot_0053f678, 4u);
+    T_ASSERT_EQ_U(s_slot_0057c944, 1u);
+
     /* Human seat (record 1) name +0x04 and title +0x1c (save entry 2). */
     T_ASSERT_EQ_I(g_player_aux_44[1 * 0x2c + 0x04], 'a');
     T_ASSERT_EQ_I(g_player_aux_44[1 * 0x2c + 0x1c], 'c');   /* "castles" */

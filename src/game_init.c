@@ -667,6 +667,17 @@ void engine_game_init_set_player_config(int count, int human_count,
     s_slot_0057c8cc = (uint32_t)cur_player;        /* entry 72: local player */
     s_slot_0053f268 = count - human_count;         /* NPC/worker (AI) count */
     s_slot_00553f98 = (uint32_t)human_count;       /* entry 86: human/active count */
+
+    /* The four config-screen substate scalars written at the TOP of the
+     * same setup routine this function reproduces (retail FUN_0049792e @
+     * 0x49792e, before its player loop + npc-schedule call): a screen/page
+     * index, two selection cursors, and a player iterator.  Constants for a
+     * default new game; they persist to the save (entries 73/75/76/84) so
+     * the headless seat must seat them too. */
+    s_slot_00569584 = 1;   /* entry 73: config-screen page/state index   */
+    s_slot_0053f06c = 7;   /* entry 75                                   */
+    s_slot_0053f678 = 4;   /* entry 76                                   */
+    s_slot_0057c944 = 1;   /* entry 84: player iterator (1..6)           */
 }
 
 /* Optional battlefield-spawn seam (retail 0x4a9a9a). */

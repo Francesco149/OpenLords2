@@ -126,13 +126,31 @@ a *separate* root cause, see the box below.  Original analysis kept for context:
   passes; the documented turn-driver/AI byte-completeness frontier
   (project_next_chip_4485a5).  Not a new-game-specific bug.
 
-### 5. Misc bookkeeping scalars
-- `0x569584` (73)=1, `0x53f06c` (75)=7, `0x53f678` (76)=4, `0x5530b4` (78)=6,
-  `0x554020` (79)=11, `0x57c944` (84)=1, `0x553f98` (86)=1, `0x55302c` (197)=2,
-  `0x53f0d4` (207)=10 — port mostly 0.  Some cascade from #1 (76/78 are
-  placement-adjacent); 197 (`0x55302c`) is the SP "full-game" substate the live
-  menu path sets (engine_menu_input.c) but the headless `--newgame` seat skips.
-  Mostly one-line seeds; low priority.
+### 5. Misc bookkeeping scalars — mostly FIXED
+- **Seeded (DONE):** entries **73** (`0x569584`=1), **75** (`0x53f06c`=7),
+  **76** (`0x53f678`=4), **84** (`0x57c944`=1) — all written at the **top** of
+  the config-screen player-setup routine the port already reproduces (retail
+  **FUN_0049792e** @ 0x49792e, before its player loop + npc-schedule call), so
+  they were added to `engine_game_init_set_player_config`.  Plus **207**
+  (`0x53f0d4`=0xa, retail FUN_00497a34 @ 0x497abc) and **197** (`0x55302c`=2, the
+  SP "full-game" substate) seeded in the `--newgame` seat (`bringup_newgame`).
+  Entry **86** (`0x553f98`) handled in #2.  Entry **78** (`0x5530b4`) was the
+  placement cascade — already resolved in #1.
+- **Remaining (not clean constants, deferred):**
+  - **79** (`0x554020`): retail 0x0b, port 2 — a config-screen player-**selection
+    cursor** (retail reads `[0x554020]+1` at 0x4499ca, wraps at `[0x56d5dc]`).
+    Interaction state advanced by clicking through players; the headless seat
+    doesn't, so it sits at its own value.  Hard-coding 0x0b would bake in a
+    capture artifact, not port behaviour.
+  - **16/17** (`0x5651b4`/`0x5651b8`): the camera scroll col/row — retail
+    24/2, port 20/74 (the map-init defaults).  A new-game camera-position
+    divergence (config-screen camera FUN_00451fcc); deferred with camera work.
+  - **18/19** (`0x58fe28`/`0x58fe08`): the **RNG state** (`g_rng_state_a/b`).
+    Port writes 0 — the RNG runs on private statics in engine.c, never mirrored
+    into the save-schema globals (classic scalar-wall).  But even if mirrored it
+    would not match retail's `abf3a863`/`e902a252`: that value is the seed
+    stepped N times through the full init RNG-consumer chain, which is not yet
+    ported.  Rides the turn-driver/AI byte-completeness frontier, not a one-liner.
 
 ## Not divergences (save-point artifacts — port already correct)
 Entries **124, 150, 151, 152, 159, 160, 161, 162, 163, 164** match the live
@@ -154,10 +172,18 @@ nix develop -c python3 tools/frida_capture.py --remote cutestation.soy:27042 \
 
 nix develop -c python3 tools/save_diff.py "$GAMEDIR/lastturn.sav" "$GAMEDIR/port_newgame.sav"
 ```
-Suggested order of attack: **#2 (name) → #5 → #4/#3** (the last two ride existing
-autotile / turn-driver frontiers).
-**#1 is fully DONE** — bucket cluster (138/139) + the placement cascade (entry 78
-count and entry-5 capital records) are byte-exact; the cascade was two port bugs
-(coord stride + unbound query grid), not an unported populator (engine-quirks
-#174 corrected, #175).  Total save-diff vs `lastturn.sav`: **101 B** across 26
-entries (down from 251), all in #2/#3/#4/#5 + save-point artifacts.
+**#1 (bucket cluster + placement cascade) and #2 (name/title) are fully DONE,
+and #5 is mostly seeded** (73/75/76/84/197/207 + 86).  Total save-diff vs
+`lastturn.sav`: **77 B** across 18 entries (down from 251 → 101 → 83 → 77).
+Of the residual 77 B:
+- **20 B** are save-point artifacts (entries 124/150/151/152/159–164) — the
+  port is already correct; retail's step-19 `lastturn.sav` just predates them.
+- **9 B** entry 0 — autotile build residual (#3, deferred).
+- **37 B** entries 3/4 — AI economy/strategy (#4, turn-driver frontier).
+- **8 B** entries 18/19 — RNG state (rides the turn-driver frontier, #5).
+- **3 B** entries 16/17/79 — camera position + selection cursor (#5, deferred).
+
+So everything that is a clean, faithful one-liner is now seeded; the rest ride
+the autotile / turn-driver / camera frontiers (none new-game-specific) or are
+artifacts.  Next genuine new-game-specific targets: the camera position (16/17)
+once the config-screen camera (FUN_00451fcc) is ported.
