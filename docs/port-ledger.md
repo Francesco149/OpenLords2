@@ -377,7 +377,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46826c | FUN_0046826c | 221 | engine_territory.c, engine_territory.h |
 | 0x4684c6 | FUN_004684c6 | 474 | engine_territory.c, engine_territory.h |
 | 0x468c41 | FUN_00468c41 | 270 | engine_territory.c, engine_territory.h |
-| 0x468d4f | FUN_00468d4f | 274 | engine_territory.c, engine_territory.h |
+| 0x468d4f | FUN_00468d4f | 274 | engine_territory.c, engine_territory.h, game_init.c |
 | 0x468e61 | FUN_00468e61 | 457 | engine_territory.c, engine_territory.h |
 | 0x46902a | FUN_0046902a | 499 | engine_territory.c, engine_territory.h |
 | 0x46921d | FUN_0046921d | 138 | engine_territory.c, engine_territory.h |

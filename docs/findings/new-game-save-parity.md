@@ -33,8 +33,20 @@ set (port vs live `newgame-fulldump1`), i.e. the genuine divergences.
 
 ## Real divergences (point-matched)
 
-### 1. Category-bucket table not persisted — FIXED (entries 138/139); cascade is a SEPARATE root cause
-**STATUS (commit landing this update):** the bucket cluster is now byte-exact.
+### 1. Category-bucket table not persisted — FIXED (entries 138/139) + cascade RESOLVED (entries 78 + 5)
+**STATUS:** the bucket cluster is byte-exact AND the placement cascade is now
+resolved (entry **78** count = 6, entry **5** capital records match retail).
+The cascade was NOT an unported populator (the original quirk #174 was wrong) —
+it was two port bugs: (a) `army_near` misread the coord stride as `3` instead of
+`0x300` — the probe addressing has a `shl eax,8` that makes it
+`g_per_army_768[id*0x300 + 0x6c]` (record `id`'s capital cursor, written by the
+already-ported `setup_capitals`); and (b) `engine_map_query`'s cell grid was
+never bound in `src/` (only in tests), so the radius probe always early-returned
+on `g_cells==NULL`.  Fixing both: 251→**101 B** total, 1871/1871 tests green.
+See engine-quirks #174 (corrected) + #175.
+
+**Original bucket-fix note (still accurate for entries 138/139):** the bucket
+cluster is byte-exact.
 `engine_game_init` mirrors the computed `g_gi_strat_buckets` into its two
 save-schema homes at a new step **6b** (after `setup_overworld` finalises the
 digest, before step-8 `place_army_starts` reads it) — the two retail globals
@@ -64,19 +76,16 @@ a *separate* root cause, see the box below.  Original analysis kept for context:
 - **Fix (DONE):** mirror the cluster into the two save-schema homes at init
   step 6b (post-`setup_overworld`).  Recovered entries 138/139 only.
 
-> **Cascade root cause — NOT the buckets (engine-quirks #174).**  With the
-> digest now correct, `place_army_starts` (step 8) still places **0** (retail
-> places 6): its probe reads each army's coord from a **packed stride-3** table
-> `coord[id*3]` based at `0x53fa1c` (= `g_per_army_768 + 0x6c`), and for every
-> digest id that read returns `(0,0)` (diag-build confirmed) → both rawflag
-> probes fail → nothing placed, so entry 78 stays 0 and the entry-5 capital
-> records stay unstamped.  This packed table is **distinct** from the stride-
-> `0x300` capital cursors `setup_capitals` writes to the same base, and is
-> populated by **no ported pass** (ruled out: `load_strat_map`, `setup_capitals`,
-> roster).  Retail fills it before step 8 via a computed-base store (transient —
-> record-0's `+0x6c` already matches retail in the save).  **Next step:** frida
-> mem-watch `0x53fa1c` across a retail new-game to identify the populator; it
-> belongs to the per-army-setup frontier, not this bucket fix.
+> **Cascade root cause — RESOLVED (engine-quirks #174 corrected + #175).**  With
+> the digest correct, `place_army_starts` (step 8) still placed **0** until two
+> port bugs were fixed: (1) `army_near` read the coord at a bogus packed stride
+> `id*3`; the probe addressing has a `shl eax,8` making it `id*0x300 + 0x6c` =
+> record `id`'s capital cursor (stride `0x300`), written by the **already-ported**
+> `setup_capitals` — so there was no unported populator.  (2) `engine_map_query`'s
+> `g_cells` was never bound in `src/` (only in tests), so the radius probe always
+> early-returned on `NULL`.  After both, all 6 armies place; entries **78** and
+> **5** match retail.  The "packed stride-3 / unported computed-base store" theory
+> was a misread of the probe addressing.
 
 ### 2. Human player name not copied — Entry 2 (`0x553d50`, 17 B)
 - `player_aux` record 1 `+0x04..+0x23` (the 31-byte name) holds the retail
@@ -136,8 +145,10 @@ nix develop -c python3 tools/frida_capture.py --remote cutestation.soy:27042 \
 
 nix develop -c python3 tools/save_diff.py "$GAMEDIR/lastturn.sav" "$GAMEDIR/port_newgame.sav"
 ```
-Suggested order of attack: **#1 (buckets) → #2 (name) → #5 → #4/#3** (the last two
-ride existing autotile / turn-driver frontiers).
-**#1's bucket half is DONE**; its placement cascade (entry 78 + entry-5 capitals)
-now rides the unported coord-table populator (engine-quirks #174), which is
-per-army-setup-frontier work, not a bucket change.
+Suggested order of attack: **#2 (name) → #5 → #4/#3** (the last two ride existing
+autotile / turn-driver frontiers).
+**#1 is fully DONE** — bucket cluster (138/139) + the placement cascade (entry 78
+count and entry-5 capital records) are byte-exact; the cascade was two port bugs
+(coord stride + unbound query grid), not an unported populator (engine-quirks
+#174 corrected, #175).  Total save-diff vs `lastturn.sav`: **101 B** across 26
+entries (down from 251), all in #2/#3/#4/#5 + save-point artifacts.

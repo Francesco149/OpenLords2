@@ -6140,43 +6140,68 @@ byte-completeness frontier), `cur_player`/roster/armies/work-locations exact, an
 a retail LOAD of the resulting save sits stable (no turn spam — `year`/`season`
 set once and hold; run `newgame-loadverify1`).
 
-## 174 — `place_army_starts` reads a PACKED stride-3 coord table at `0x53fa1c`, distinct from `setup_capitals`' stride-`0x300` capital cursors that share the same base
+## 174 — `place_army_starts` reads the per-army capital cursor at `record[id]+0x6c` (stride `0x300`), populated by the ported `setup_capitals` — there is NO unported coord-table populator (RESOLVED)
 
-The category-bucket digest fix (save entries 138/139 → `s_slot_00567970` /
-`s_slot_00569518`, commit landing this quirk) makes the strategic
-`buckets[6][16]` + `digest[6]` byte-exact and re-arms `place_army_starts`
-(`FUN_00427ed0`, init step 8) with a non-empty army-id list.  But the doc's
-predicted **cascade** (entry 78 placed-army count + entry 5 capital records)
-did **NOT** follow.  Root cause, verified by r2 + a one-shot diag build:
+**This quirk's original analysis was WRONG on two counts** — corrected and
+resolved here (commit landing this update).  The entry-78 / entry-5-capital
+cascade predicted by new-game-save-parity #1 IS real, but it was gated by two
+*port* bugs, not a missing populator.
 
-- `place_army_starts` walks the digest ids `[0e,05,0d,0b,0c,04]` and for each
-  calls the probe `army_near` (`FUN_00428007`/`428078`), which reads the army's
-  map coord at **`byte [eax + eax*2 + 0x53fa1c]` with `eax = id`** — i.e. a
-  **packed stride-3** table `coord[id*3]` based at `0x53fa1c` (= `g_per_army_768`
-  `0x53f9b0` + `0x6c`).  The port's `army_near` (game_init.c) matches this byte
-  for byte.
-- `setup_capitals` (`FUN_00468d4f`, inside step-6 `setup_overworld`) writes the
-  capital/secondary cursors to the SAME base but at **`[ecx + ecx*2 + 0x53fa1c]`
-  with `ecx = key << 8`** → `key*0x300 + 0x6c`, i.e. **stride `0x300`** (one per
-  per-army record).  These two tables share base `0x53fa1c` but never overlap
-  for small ids — `setup_capitals` fills records 1..count's `+0x6c`; the probe
-  reads record-0's body.
-- A diag build (`-DGI_DIAG_ARMY_STARTS`) confirms: for every digest id the port
-  reads `coord=(0,0)` and both rawflag probes return 0 → **0 placed** (entry 78
-  stays 0, entry-5 capital records stay unstamped).  Retail places **6** (only
-  `0x427ed0` writes `0x5530b4`, so retail genuinely placed them).
-- Exhausted the displacement-form writers of `0x53fa1c`: `load_strat_map`
-  (`FUN_00467770` — bit-0x40 only `append`s, bit-0x80 only `roster_add`s, no
-  coord store), `setup_capitals` (stride `0x300`), and the player roster
-  (stores at `0x568db0`, not here).  **None populate the packed stride-3
-  region.**  Since 6 distinct category markers can't all sit at (0,0), retail
-  must fill `coord[id*3]` before step 8 via a **computed-base store** (no
-  literal `0x53fa1c` displacement — invisible to a byte search) whose output is
-  transient (record-0's `+0x6c` region already matches retail in the *save*, so
-  it is overwritten before the step-19 save).
+**Mistake 1 — the coord-table stride is `0x300`, not `3`.**  The probe
+`army_near` (`FUN_00428007`/`428078`) is:
 
-**Takeaway:** the entry-78 / entry-5-capital cascade is gated by this
-**unported coord-table populator**, NOT by the category buckets.  Finding it
-needs a frida mem-watch on `0x53fa1c` across a retail new-game (or r2 hunting
-computed-base stores), and belongs to the per-army-setup frontier.  See
-docs/findings/new-game-save-parity.md #1.
+```
+mov  eax, [id]          ; eax = id
+shl  eax, 8             ; eax = id << 8        ← the original read MISSED this
+mov  cl,  byte [eax + eax*2 + 0x53fa1c]
+```
+
+`3 * (id<<8) = id*0x300`, so the effective address is `id*0x300 + 0x53fa1c =
+g_per_army_768[id*0x300 + 0x6c]` — i.e. **per-army record `id`'s capital cursor
+at `+0x6c/+0x6d`, stride `0x300`** (the universal per-army-record size).  Ghidra's
+original `(&DAT_0053fa1c)[id*0x300]` rendering was CORRECT; the port author
+"corrected" it to packed `id*3` after reading the r2 `[eax+eax*2+...]` form
+without accounting for the preceding `shl eax,8`.  The packed-stride-3 table,
+the "distinct sub-table", and the hunt for an unported computed-base populator
+were all artifacts of this misread.  **The populator is the already-ported
+`setup_capitals` (`FUN_00468d4f`)**, which writes exactly `record[key]+0x6c/+0x6d`
+(stride `0x300`) for `key=1..count` — the same bytes the probe reads.
+
+With the stride misread, the port read `g_per_army_768[0x6c + id*3]` (all
+clustered in record 0's body) = `(0,0)` for every digest id → 0 placed.  Fix:
+`ARMY_COORD_STRIDE` `3` → `0x300` in game_init.c.  After it, `army_near` reads
+the real cursors `(20,4)/(48,10)/(4,11)/(31,10)/(24,13)/(60,24)` (diag-verified).
+
+**Mistake 2 — `engine_map_query`'s cell grid was never bound (see #175).**  Even
+with correct coords, the radius-1..3 rawflag probe (`box_scan`) returned 0 for
+all six because `engine_map_query`'s `g_cells` pointer had **no `src/` caller** —
+only tests bound it.  At step 8 it was NULL, so every scan early-returned 0.
+Binding it to `g_overworld_map` in `engine_game_init` (and the load path) lets
+the probe find each capital's adjacent feature.
+
+**Result (both fixes):** all 6 armies place; new-game save entry **78** (count) =
+6 and entry **5** (per-territory capital records, ~119 B) drop out of the
+`save_diff` vs `lastturn.sav`; entry 4 shrinks 41→23 B; total 251→101 B; 1871/1871
+host tests green.  See docs/findings/new-game-save-parity.md #1.
+
+## 175 — `engine_map_query`'s cell grid (`g_cells`) had no `src/` binder — the army-proximity probes were silent no-ops in every live build
+
+`engine_map_query_bind_cell_descriptors` (the only setter for the query module's
+`g_cells`) was called **only by tests** — no `src/` file ever bound it.  In retail
+there is ONE shared cell-grid global that every consumer reads; the port split the
+grid into per-module bound pointers (`engine_territory`, `engine_map_terrain`,
+`engine_army_economy`, …) and each is bound at init — except `engine_map_query`.
+
+Consequence: every `box_scan`/`region_clear`/ring-probe in `engine_map_query`
+(`FUN_0046cfbd`, `46d130`, `46733c`, `46d2a3`) early-returned 0 on the `g_cells ==
+NULL` guard.  Two live consumers were affected:
+
+- **`place_army_starts`** (init step 8) — placed 0 armies (see #174).
+- **the combat path** (`engine_combat.c` army-near probes) — would have read a
+  NULL grid in-game.
+
+Fix: bind it to the same `g_overworld_map` the other modules use, next to
+`engine_territory_bind_cells`, in BOTH the new-game (`engine_game_init`) and load
+(`main.c` post-load) paths.  Lesson: a module-local bound pointer with no
+production binder is invisible to unit tests (which bind their own scratch grid) —
+grep every `*_bind_*` setter for a non-test caller when splitting a shared global.

@@ -217,6 +217,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--input-trace", type=Path, default=None,
                     help="drive retail into the target scene by replaying this "
                          "input trace (omit for boot/init-time writers)")
+    ap.add_argument("--input-segtrace", type=Path, default=None,
+                    help="anchor-segmented input trace (TAS format) to drive the "
+                         "target scene; pairs with --rng-seed for deterministic "
+                         "new-game capture")
+    ap.add_argument("--rng-seed", nargs="?", const="canonical", default=None,
+                    metavar="A[,B[,SINGLE]]",
+                    help="pin the RNG seed (bare = retail-canonical) so a "
+                         "new-game capture is reproducible across targets")
+    ap.add_argument("--skip-intro", action="store_true",
+                    help="skip the intro movie chain (reach the menu fast); "
+                         "implied when driving a menu→scene segtrace")
     ap.add_argument("--remote", default=fc.DEFAULT_REMOTE,
                     help="frida-server host:port (default %(default)s)")
     ap.add_argument("--exe", type=Path, default=fc.RETAIL_EXE)
@@ -235,6 +246,18 @@ def main(argv: list[str] | None = None) -> int:
     regions = [{**r, "access": args.access} for r in args.region]
     args.run_dir.mkdir(parents=True, exist_ok=True)
 
+    # Bare --rng-seed → canonical ({}), else parse A[,B[,SINGLE]].
+    rng_seed: dict | None = None
+    if args.rng_seed is not None:
+        if args.rng_seed == "canonical":
+            rng_seed = {}
+        else:
+            rng_seed = {}
+            for k, tok in zip(("a", "b", "single"), args.rng_seed.split(",")):
+                tok = tok.strip()
+                if tok:
+                    rng_seed[k] = int(tok, 0) & 0xffffffff
+
     if not args.analyze_only:
         cfg = fc.CaptureConfig(
             duration_ms=args.duration_ms,
@@ -244,6 +267,12 @@ def main(argv: list[str] | None = None) -> int:
             turbo=not args.no_turbo,
             silent_audio=True,
             input_replay_path=args.input_trace,
+            input_segtrace_path=args.input_segtrace,
+            # A menu→scene segtrace needs the intro skipped and anchor detection
+            # on (its {wait} ops resolve against emitted anchors).
+            skip_intro=args.skip_intro or args.input_segtrace is not None,
+            anchor_trace=args.input_segtrace is not None,
+            rng_seed=rng_seed,
             mem_watch=True,
             mem_watch_regions=regions,
             mem_watch_precise=not args.no_precise,

@@ -66,6 +66,7 @@
 #include "engine_hud_menubar.h"
 #include "engine_map_init.h"
 #include "engine_territory.h"
+#include "engine_map_query.h"
 #include "engine_map_render.h"
 #include "engine_map_scene.h"
 #include "engine_map_terrain.h"
@@ -1803,6 +1804,9 @@ static void engine_map_post_load(void)
     engine_territory_bind_cells(g_overworld_map);
     engine_territory_bind_terrain_tiles(cells);
     engine_territory_bind_cell_roster((int32_t *)g_misc_1360);
+    /* The live army-proximity probes (combat path) read the cell grid via
+     * engine_map_query's own pointer — bind it to the same shared grid. */
+    engine_map_query_bind_cell_descriptors(g_overworld_map);
     engine_rng_single_in_t strat_rng = { 0x34518632u };  /* InitInstance seed */
     engine_territory_classify_feature_tiles(&strat_rng);   /* FUN_0046dbf5 */
     engine_territory_randomise_special_tiles(&strat_rng);   /* FUN_0046dd34 */

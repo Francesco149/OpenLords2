@@ -468,18 +468,19 @@ void engine_game_init_clear_realm_history(void)
     s_slot_00553f30 = 0;                          /* entry 68 */
 }
 
-/* Per-army map-coordinate sub-table: a 3-byte-stride array living at
- * offset 0x6c of save entry 4 (g_per_army_768, retail base 0x53fa1c),
- * indexed by player/army id — {col @ +0, row @ +1, ? @ +2} per id.
+/* Army `id`'s capital cursor lives at offset +0x6c/+0x6d (col/row) of its
+ * per-army record in save entry 4 (g_per_army_768, retail base 0x53f9b0):
+ * the very cursor engine_territory_setup_capitals (FUN_00468d4f) stamps at
+ * +0x6c/+0x6d for key=1..count.  The record stride is 0x300 (ARMY_ROW_STRIDE),
+ * the universal per-army-record size.
  *
- * NOTE the stride: Ghidra renders the access as `(&DAT_0053fa1c)[id *
- * 0x300]`, but r2 shows `byte [eax + eax*2 + 0x53fa1c]` — i.e. id*3, a
- * 3-byte record.  The 0x300 is a decompiler misread; the real table is
- * a packed coord array, not the 768-B per-army record stride.  This
- * also means save entry 4 is not a flat 17×768 block but carries
- * internal sub-tables.  See engine-quirks.md. */
+ * Addressing (r2 @ FUN_00428007/428078): `mov eax,[id]; shl eax,8;
+ * mov cl, byte [eax + eax*2 + 0x53fa1c]` → 3*(id<<8) + 0x53fa1c =
+ * id*0x300 + 0x53fa1c = g_per_army_768[id*0x300 + 0x6c].  The `shl eax,8`
+ * is what makes the effective stride 0x300, NOT 3 — Ghidra's original
+ * `(&DAT_0053fa1c)[id * 0x300]` rendering was correct (engine-quirks #174). */
 #define ARMY_COORD_OFF      0x6c
-#define ARMY_COORD_STRIDE   3
+#define ARMY_COORD_STRIDE   0x300
 
 /* Shared body for FUN_00428007 / FUN_00428078: look up army `id`'s map
  * coordinate, then probe Chebyshev radii 1..3 around it, returning 1 at
@@ -1009,6 +1010,12 @@ void engine_game_init(void)
     int32_t *tile_cells = engine_map_init_tile_cells();      /* built by the caller */
     engine_territory_bind_records(g_per_territory_420);
     engine_territory_bind_cells(g_overworld_map);            /* descriptor table */
+    /* The army-proximity probes (FUN_0046cfbd/46d130, used by step-8
+     * place_army_starts and the live combat path) read the SAME 8-byte cell
+     * grid through engine_map_query's own pointer — retail has one shared
+     * grid global; the port must bind the query module to it too, or every
+     * box scan sees NULL and returns 0 (→ 0 armies placed). */
+    engine_map_query_bind_cell_descriptors(g_overworld_map);
     engine_territory_bind_cell_roster((int32_t *)g_misc_1360);
     engine_territory_bind_cell_score_table(g_gi_cell_score);
     engine_territory_bind_terrain_tiles(tile_cells);

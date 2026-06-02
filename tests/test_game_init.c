@@ -764,8 +764,12 @@ static void army_fill_rawflag(uint8_t v)
         g_army_cells[i * ARMY_STRIDE + 1] = v;
 }
 
+/* The capital cursor lives at +0x6c/+0x6d of army `id`'s per-army record,
+ * stride 0x300 (the universal per-army-record size). */
+#define ARMY_COORD_STRIDE 0x300
+
 /* Reset the cell grid + per-army block, bind the grid, and seat army
- * `id`'s map coordinate into the 3-byte-stride sub-table at +0x6c. */
+ * `id`'s capital cursor at record[id]+0x6c/+0x6d. */
 static void army_setup(int id, int col, int row, uint8_t fill)
 {
     memset(g_army_cells, 0, sizeof g_army_cells);
@@ -773,8 +777,8 @@ static void army_setup(int id, int col, int row, uint8_t fill)
     engine_map_query_bind_cell_descriptors(g_army_cells);
 
     memset(g_per_army_768, 0, sizeof g_per_army_768);
-    g_per_army_768[ARMY_COORD_OFF + id * 3]     = (uint8_t)col;
-    g_per_army_768[ARMY_COORD_OFF + id * 3 + 1] = (uint8_t)row;
+    g_per_army_768[ARMY_COORD_OFF + id * ARMY_COORD_STRIDE]     = (uint8_t)col;
+    g_per_army_768[ARMY_COORD_OFF + id * ARMY_COORD_STRIDE + 1] = (uint8_t)row;
 }
 
 static void army_set_rawflag(int col, int row, uint8_t v)
@@ -811,24 +815,33 @@ int test_game_init_army_only_bit1_within_radius3(void)
     return 0;
 }
 
-/* The coordinate sub-table is 3-byte-stride (r2 `id*3`), NOT the 0x300
- * per-army-record stride Ghidra rendered.  Seat two armies one record
- * apart and confirm each probe reads its own (col,row): army 1 sits on a
- * matching cell, army 2 three bytes further sits far away. */
-int test_game_init_army_coord_stride_is_3(void)
+/* The coordinate table is the per-army record's +0x6c/+0x6d capital cursor,
+ * stride 0x300 (r2: `shl eax,8; [eax+eax*2+0x53fa1c]` = id*0x300 + 0x53fa1c —
+ * Ghidra's `(&DAT_0053fa1c)[id*0x300]` was right; engine-quirks #174).  Seat
+ * two armies one record apart and confirm each probe reads its own (col,row).
+ * If the stride were the buggy 3, army 2's coord at +0x6c+6 would overlap
+ * record 0's body and army 2 would NOT read (50,50). */
+int test_game_init_army_coord_stride_is_0x300(void)
 {
     memset(g_army_cells, 0, sizeof g_army_cells);
     army_fill_rawflag(4);
     engine_map_query_bind_cell_descriptors(g_army_cells);
 
     memset(g_per_army_768, 0, sizeof g_per_army_768);
-    g_per_army_768[ARMY_COORD_OFF + 1 * 3]     = 10;  /* army 1 col */
-    g_per_army_768[ARMY_COORD_OFF + 1 * 3 + 1] = 10;  /* army 1 row */
-    g_per_army_768[ARMY_COORD_OFF + 2 * 3]     = 50;  /* army 2 col */
-    g_per_army_768[ARMY_COORD_OFF + 2 * 3 + 1] = 50;  /* army 2 row */
+    g_per_army_768[ARMY_COORD_OFF + 1 * ARMY_COORD_STRIDE]     = 10;  /* army 1 col */
+    g_per_army_768[ARMY_COORD_OFF + 1 * ARMY_COORD_STRIDE + 1] = 10;  /* army 1 row */
+    g_per_army_768[ARMY_COORD_OFF + 2 * ARMY_COORD_STRIDE]     = 50;  /* army 2 col */
+    g_per_army_768[ARMY_COORD_OFF + 2 * ARMY_COORD_STRIDE + 1] = 50;  /* army 2 row */
 
-    army_set_rawflag(10, 10, 0x01);     /* feature on army 1 only */
+    army_set_rawflag(10, 10, 0x01);     /* feature on army 1's coord only */
+    army_set_rawflag(50, 50, 0x01);     /* feature on army 2's coord only */
 
+    /* Each army reads its own record's cursor — both match. */
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1, NULL, NULL), 1);
+    T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(2, NULL, NULL), 1);
+
+    /* Move army 2's feature away; army 1 (different record) is unaffected. */
+    army_set_rawflag(50, 50, 0x00);
     T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(1, NULL, NULL), 1);
     T_ASSERT_EQ_I(engine_game_init_army_near_rawflag_bit0(2, NULL, NULL), 0);
     return 0;
@@ -869,8 +882,8 @@ static void army_starts_setup(void)
 
 static void army_seat(int id, int col, int row)
 {
-    g_per_army_768[ARMY_COORD_OFF + id * 3]     = (uint8_t)col;
-    g_per_army_768[ARMY_COORD_OFF + id * 3 + 1] = (uint8_t)row;
+    g_per_army_768[ARMY_COORD_OFF + id * ARMY_COORD_STRIDE]     = (uint8_t)col;
+    g_per_army_768[ARMY_COORD_OFF + id * ARMY_COORD_STRIDE + 1] = (uint8_t)row;
 }
 
 /* Two seated armies, each with a feature on its own cell, are placed:

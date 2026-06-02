@@ -1749,7 +1749,7 @@ struct test_case {
     X(game_init_clear_realm_history_scalars) \
     X(game_init_army_bit0_within_radius3) \
     X(game_init_army_only_bit1_within_radius3) \
-    X(game_init_army_coord_stride_is_3) \
+    X(game_init_army_coord_stride_is_0x300) \
     X(game_init_army_probe_reports_matched_cell) \
     X(game_init_place_army_starts_places_two) \
     X(game_init_place_army_starts_skips_and_terminates) \
