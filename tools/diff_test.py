@@ -4679,6 +4679,18 @@ def run_diff(cfg_args) -> int:
     win_cwd = fc.wslpath_w(ASSET_CWD.resolve())
     device = frida.get_device_manager().add_remote_device(remote)
 
+    # Pre-run sweep: kill any leaked retail from a prior diff run before
+    # spawning a fresh one.  diff_test spawns retail directly (not through
+    # frida_capture's reaper-armed controller), so unlike frida_capture it has
+    # no detached reaper backstop — if a previous run was SIGKILLed or its WSL
+    # session was torn down mid-diff, its `finally` never ran and retail leaked
+    # (elevated, frida-server-spawned → non-admin-unkillable from WSL).  This
+    # sweep is the same self-healing frida_capture does at startup; it makes
+    # those leaks transient instead of accumulating across diff runs.
+    stray = fc._reap_by_name(device, RETAIL_EXE.name, log_fp)
+    if stray:
+        log(f"[diff] pre-run swept stray {RETAIL_EXE.name}: {stray}")
+
     pid = None
     session = None
     script = None
