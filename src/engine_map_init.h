@@ -71,6 +71,9 @@ int engine_map_init_x_half_step(void);   /* DAT_00567950 */
 int engine_map_init_y_viewport(void);    /* DAT_0057c97c */
 int engine_map_init_col_start(void);     /* DAT_005651b4 (map-init default 20) */
 int engine_map_init_row_start(void);     /* DAT_005651b8 (map-init default 74) */
+/* Restore the scroll origin from the loaded save (the LOAD path, after
+ * engine_map_init_strategic resets it to the new-game default). */
+void engine_map_init_set_scroll(int col_start, int row_start);
 
 /* Port of FUN_00498270.  Full strategic-map init: set dims (64×64,
  * stride 8) + the default col/row start (20/74), build tile_cells

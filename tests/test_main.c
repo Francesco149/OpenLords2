@@ -1882,6 +1882,13 @@ struct test_case {
     X(engine_pl8_season_offset) \
     X(engine_pl8_banks_match_captured_blobs) \
     X(engine_pl8_native_load_renders_identical_frame) \
+    X(input_trace_parse_skips_comments_and_blanks) \
+    X(input_trace_wait_until_is_ignored) \
+    X(input_trace_input_due_relative_to_anchor) \
+    X(input_trace_wait_rebases_clock) \
+    X(input_trace_capture_anchor_relative) \
+    X(input_trace_fast_anchor_resolves) \
+    X(input_trace_multiple_msgs_same_frame) \
     /* end */
 
 /* Emit extern decls. */

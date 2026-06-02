@@ -222,7 +222,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x433ba2 | FUN_00433ba2 | 287 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x433cc1 | FUN_00433cc1 | 35 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x433ce4 | FUN_00433ce4 | 217 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+1) |
-| 0x43400b | FUN_0043400b | 361 | engine.c, engine_menu_input.c, engine_menu_input.h (+3) |
+| 0x43400b | FUN_0043400b | 361 | engine.c, engine_menu_input.c, engine_menu_input.h (+2) |
 | 0x4342f3 | FUN_004342f3 | 21 | engine_menu_input.c, engine_menu_input.h |
 | 0x434308 | FUN_00434308 | 62 | engine_menu_input.c |
 | 0x434346 | FUN_00434346 | 178 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
@@ -422,10 +422,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4917dd | FUN_004917dd | 599 | engine_tile.c, engine_tile.h, save.c |
 | 0x4921e5 | FUN_004921e5 | 451 | engine_tile.c, engine_tile.h |
 | 0x497500 | FUN_00497500 | 211 | engine_minimap.c |
-| 0x4976a1 | FUN_004976a1 | 472 | engine_load_pump.c, engine_load_pump.h, main.c |
+| 0x4976a1 | FUN_004976a1 | 472 | engine_load_pump.c, engine_load_pump.h, engine_map_init.c (+1) |
 | 0x497ced | FUN_00497ced | 376 | engine_load_pump.c, engine_territory.c, engine_territory.h |
 | 0x497e65 | FUN_00497e65 | 1025 | game_init.c, game_init.h |
-| 0x498270 | FUN_00498270 | 327 | engine_map_init.c, engine_map_init.h |
+| 0x498270 | FUN_00498270 | 327 | engine_map_init.c, engine_map_init.h, main.c |
 | 0x4984dc | FUN_004984dc | 731 | engine_pl8.c, engine_pl8.h, pl8_table.h (+1) |
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h |
 | 0x499aca | FUN_00499aca | 487 | main.c |

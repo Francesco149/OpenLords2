@@ -86,7 +86,8 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/save.c \
                    ../src/save_schema_globals.c \
                    ../src/engine_pl8.c \
-                   ../src/io_path.c
+                   ../src/io_path.c \
+                   ../src/input_trace.c
 
 # Test files — each defines one or more `int test_<name>(void)`
 # functions registered in test_main.c.
@@ -151,7 +152,8 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_turn.c \
                    test_save.c \
                    test_engine_pl8.c \
-                   test_io_path.c
+                   test_io_path.c \
+                   test_input_trace.c
 
 OBJS := $(addprefix build/,$(notdir $(SRCS_UNDER_TEST:.c=.o)) \
                             $(SRCS_TESTS:.c=.o))

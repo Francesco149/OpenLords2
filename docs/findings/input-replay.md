@@ -188,3 +188,54 @@ Three smoke runs 2026-05-24:
 
 Smoke equivalents (with the same flags) drop their artifacts under
 `runs/smoke/<id>/` instead of `runs/capture/<ts>/`.
+
+## Port-side replay (TAS framework P5)
+
+> 2026-06-02.  The retail input-replay above is now mirrored on the
+> drop-in, so ONE trace drives both engines to comparable frames for a
+> 1:1 retail-vs-port diff.
+
+`src/input_trace.{c,h}` is a Win32-free parser + per-frame scheduler for
+the same anchor-segmented JSONL the retail side consumes
+(`frida_capture.py --input-segtrace`):
+
+    {"t":N,"m":M,"w":W,"l":L}     input — post WndProc message M (wParam W,
+                                  lParam L=(y<<16)|x, GAME space) at tick N
+                                  RELATIVE to the current segment's anchor.
+    {"wait":"ANCHOR"}             block until ANCHOR fires; rebase the
+                                  t-clock floor onto its frame.
+    {"capture":N,"label":"..."}   capture a frame N ticks after the anchor.
+    {"wait_until":{...}}          parsed-and-IGNORED on the port (no global
+                                  VA-read predicate yet — the load flow uses
+                                  only {wait}).
+
+`input_trace_step(frame, anchor_edge, out)` drains due ops in order,
+emitting the messages to post + captures to take this frame; the driver
+(`main.c`, `--input-segtrace FILE`) owns the `PostMessageA` +
+`gfx_capture_backbuffer`.  Anchors are remembered across frames, so a
+`{wait}` whose anchor already fired (a "fast anchor") resolves
+immediately — matching the retail segtrace's per-segment floor.
+
+**Port anchors** (`main.c current_tas_anchor`) derive from the engine
+state, mirroring `openlords2-agent.js anchorTick`: `TITLE` when screen
+(`engine_current_screen`) == 0x1f; `MAP_FREEROAM` when `g_engine_state`
+== 3 && screen == 0.  Only the anchors the load flow needs are emitted.
+
+**Seat** `--input-segtrace FILE`: title-live setup + `g_client_screen`
+pinned to 640×480 (the hidden capture window never gets WM_SIZE, so the
+cursor→game mapping would divide by a zero width — engine-quirks #120).
+The trace's WM_* coords are GAME space; with the client pinned 640×480
+and the cursor cache disabled on the title screen, they map 1:1.
+
+**Trace** `tools/traces/grid_load.jsonl`: title → Single player → Load a
+game → click the lastturn save ROW (FUN_0043400b grid selector) → Load →
+MAP_FREEROAM → capture.  Drives retail (`frida_capture.py
+--input-segtrace`) AND the port (`openlords2.exe --input-segtrace`)
+identically.  Host-tested (`tests/test_input_trace.c`): anchor-relative
+scheduling, `{wait}` clock-rebase, capture emission, fast-anchor resolve.
+
+**Verification (2026-06-02):** both engines reach the strategic map via
+the same trace; the chrome (menu bar / right panel / minimap) is
+pixel-1:1, and after the load-scroll-restore fix (see map-render.md) the
+terrain aligns (diff 66%→31%; residual = the retail-only 256-colour
+popup + top border tiles + faint text-glyph diffs).

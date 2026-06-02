@@ -5529,3 +5529,33 @@ suspect the palette before the render.
 > 📍 `src/main.c` (`drop_in_load` → `gfx_load_palette("base01.256")`); the
 > menu page palettes are in `gfx.c` (`gfx_title_background_load`).  Found
 > live 2026-06-02 when the wired menu→load path rendered the map magenta.
+
+---
+
+## 157. A loaded save's camera scroll survives because the load path skips FUN_00498270's default-scroll write
+
+The strategic-map scroll origin (`DAT_005651b4` col / `DAT_005651b8` row) is a
+**saved** field (save-schema entries 16/17), so a `.sav` carries the camera the
+player left the map at — `lastturn.sav` is at col 31 / row 78, not the
+new-game default 20/74.
+
+It survives a load because the two map-setup entry points differ:
+
+- **New game** runs `FUN_00498270`, which writes the **default** scroll
+  (`DAT_005651b4 = 0x14`, `DAT_005651b8 = 0x4a`) before building the map.
+- **Load** (`FUN_004adfe6` save_load → `FUN_004976a1` map setup) does **NOT**
+  call `FUN_00498270` — `FUN_004976a1` is `build_cells` (4298c1) + `set_camera`
+  (451fcc) + autotile/roster/banks, with no default-scroll write — so the
+  scroll `save_load` just restored into `DAT_005651b4/b8` is what the camera
+  (`FUN_00451fcc` derives the viewport from it) and the renderer read.
+
+**Port gotcha (fixed 2026-06-02):** the drop-in's `engine_map_post_load`
+reused `engine_map_init_strategic` (the `FUN_00498270` port) for its
+build_cells + set_camera convenience, which *also* reset the scroll to 20/74 —
+so a loaded map rendered at the default view, not the saved one (a glaring
+terrain mismatch vs retail once the trace-replay diff put them side by side).
+Fix: restore `DAT_005651b4/b8` from the save globals (`s_slot_005651b4/b8`)
+after `engine_map_init_strategic`, via `engine_map_init_set_scroll`.  Note the
+port keeps the scroll in a private `g_col_start/g_row_start` (not the shared
+`s_slot_*` save globals), so the save restore does not reach it automatically —
+the explicit copy is required.

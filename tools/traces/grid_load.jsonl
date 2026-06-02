@@ -1,0 +1,47 @@
+# TAS trace (framework P5): page-3 click-to-LOAD, exercising the grid
+# row-click selector FUN_0043400b.  Drives the SAME ops on retail
+# (frida_capture.py --input-segtrace) AND the port (openlords2.exe
+# --input-segtrace) for a 1:1 retail-vs-port diff of the loaded map.
+#
+# Flow: title menu -> Single player -> Your options -> Load a game ->
+#   CLICK the "lastturn" save ROW (selects it, FUN_0043400b) -> Load ->
+#   strategic map.
+#
+# Run (retail, turbo):
+#   nix develop -c python3 -u tools/frida_capture.py
+#     --remote cutestation.soy:27042 --skip-intro --turbo --anchor-trace
+#     --input-segtrace tools/traces/grid_load.jsonl --run-id grid-load-retail
+# Run (port):
+#   openlords2.exe --input-segtrace tools/traces/grid_load.jsonl
+#     --capture-to 'C:\dir'
+#
+# Coords GAME space (640x480); lParam=(y<<16)|x.  m=512 WM_MOUSEMOVE,
+# 513 WM_LBUTTONDOWN, 514 WM_LBUTTONUP.  Within the TITLE segment, t is
+# RELATIVE to the TITLE anchor frame (rebased by {wait}).
+{"wait": "TITLE"}
+# "Single player" (320,107) -> page 2 ("Your options")
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+# "Load a game" page-2 button 2 (320,139) -> page 3 (file list)
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+# CLICK the "lastturn" save row, grid col0/row0 (160,126) -> FUN_0043400b
+# selects it + loads its name into the filename field.
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+# "Load" gauntlet button (414,90) -> arms the load-confirm pump.
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+# The t=496 LBUTTONUP clicks Load and kicks the (non-deterministic) save
+# load.  Span it with a wait — the counter rebases onto the map frame.
+{"wait": "MAP_FREEROAM"}
+{"capture": 2, "label": "map_enter"}
+{"capture": 60, "label": "map_settled"}

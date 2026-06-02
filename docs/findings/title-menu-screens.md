@@ -638,10 +638,12 @@ Port: `engine_title_render_filelist_grid_pick` + the `g_fl_selected`
 order.  Host-tested (6 cases: hover-selects, press-commits-name + editor re-init,
 out-of-bounds, empty-slot-no-commit, scroll-offset, + the live-tick
 router→grid-step integration through to the Load latch).  Verified end-to-end
-via **`--strat-load-grid`** (scripted WM_MOUSE click on the "lastturn" row →
-highlighted → Load → confirm pump → native strategic map; the hidden capture
-window needs `g_client_screen` pinned to 640×480 so the scripted client coords
-map 1:1 — engine-quirks #120).
+via the TAS trace **`tools/traces/grid_load.jsonl`** replayed through
+**`--input-segtrace`** (the port-side TAS replayer — see input-replay.md
+"Port-side replay"): a WM_MOUSE click on the "lastturn" row → highlighted →
+Load → confirm pump → native strategic map.  The SAME trace drives retail via
+`frida_capture.py --input-segtrace` for a 1:1 diff.  (The earlier one-off
+`--strat-load-grid` hardcoded seat was replaced by this trace replayer.)
 
 ## Input side — hotspot hit-test + page navigation (`engine_menu_input`)
 

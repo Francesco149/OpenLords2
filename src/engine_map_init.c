@@ -161,6 +161,17 @@ int engine_map_init_y_viewport(void)  { return g_y_viewport; }
 int engine_map_init_col_start(void)   { return g_col_start; }
 int engine_map_init_row_start(void)   { return g_row_start; }
 
+/* Override the scroll origin (DAT_005651b4 / DAT_005651b8).  The LOAD path
+ * uses this to restore the save-carried scroll after engine_map_init_strategic
+ * resets it to the new-game default — retail's load (FUN_004976a1) never
+ * runs FUN_00498270's default-scroll write, so the save's camera survives;
+ * the port reuses _strategic and restores afterward. */
+void engine_map_init_set_scroll(int col_start, int row_start)
+{
+    g_col_start = col_start;
+    g_row_start = row_start;
+}
+
 int engine_map_init_strategic(const char *map_dir, int map_id)
 {
     /* FUN_00498270: strategic-map dims + default scroll origin. */

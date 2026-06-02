@@ -77,6 +77,7 @@
 #include "engine_screen_strat.h"
 #include "engine_load_pump.h"
 #include "engine_title_render.h"
+#include "input_trace.h"
 #include "engine_menu_input.h"
 #include "text_input.h"
 #include "gfx.h"
@@ -180,8 +181,8 @@ static const char *g_strat_map_dir;
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 static int         g_strat_load_live;  /* --strat-load-live: drive the live
                                         * load pump from the title menu */
-static int         g_strat_load_grid;  /* --strat-load-grid: scripted page-3
-                                        * grid click → Load → ingame map */
+static const char *g_input_segtrace;   /* --input-segtrace FILE: replay a TAS
+                                        * input trace through the live tick */
 /* --audio-init: call audio_init() after window creation.  Off by
  * default — SetCooperativeLevel(PRIORITY) modifies process audio
  * state and the headless smoke harness has no way to validate
@@ -282,7 +283,7 @@ static void bringup_title_live(void);
 static void bringup_strat_map(const char *dir);
 static void bringup_strat_load(const char *dir);
 static void bringup_strat_load_live(void);
-static void bringup_strat_load_grid(void);
+static void bringup_input_segtrace(void);
 static void engine_map_post_load(void);
 static int  drop_in_load(const char *filename);
 static const char *translate_wsl_path(const char *p, char *buf, size_t cap);
@@ -394,15 +395,20 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
                  * (engine_load_pump_tick) so the genuine menu→ingame
                  * transition loads the save + renders the strategic map. */
                 bringup_strat_load_live();
-            } else if (g_strat_load_grid) {
-                /* Scripted page-3 grid click-to-load — drive the engine
-                 * into the live title page-3 file list, then (in
-                 * main_loop_body) post a synthetic click on the
-                 * "lastturn" save row + the Load button through the real
-                 * WM_MOUSE route, so the new grid selector
-                 * (engine_menu_input_filelist_grid_step → FUN_0043400b)
-                 * loads the name + the load pump renders the map. */
-                bringup_strat_load_grid();
+            } else if (g_input_segtrace) {
+                /* TAS input-trace replay — drive the engine into the live
+                 * title state, then (in main_loop_body) replay the trace's
+                 * WM_* ops through the genuine WndProc + capture frames on
+                 * its {capture} ops.  The SAME trace drives retail via
+                 * frida_capture.py --input-segtrace, for a 1:1 diff.  The
+                 * exe is chdir'd to the game dir, so translate the (absolute)
+                 * trace path to a native \\wsl.localhost UNC the GUI exe
+                 * can fopen. */
+                static char segtrace_buf[MAX_PATH];
+                g_input_segtrace = translate_wsl_path(g_input_segtrace,
+                                                      segtrace_buf,
+                                                      sizeof segtrace_buf);
+                bringup_input_segtrace();
             } else if (g_title_live) {
                 /* Live interactive menu — drive the engine into the
                  * title state, then let the main loop tick it so a real
@@ -1758,6 +1764,14 @@ static void engine_map_post_load(void)
     engine_map_init_strategic(NULL, map_id);
     int32_t *cells = engine_map_init_tile_cells();
 
+    /* Restore the save-carried scroll origin (schema entries 16/17 =
+     * DAT_005651b4 / DAT_005651b8).  Retail's load (FUN_004976a1) never
+     * runs FUN_00498270, so the save's camera survives; the port reuses
+     * engine_map_init_strategic (which resets it to the new-game default
+     * 20/74), then restores here so the map renders at the SAVED scroll
+     * — matching retail instead of the default view. */
+    engine_map_init_set_scroll((int)s_slot_005651b4, (int)s_slot_005651b8);
+
     /* Minimap political grids (FUN_0046a037). */
     if (!engine_minimap_load_grids(".", map_id))
         log_line("post-load: minimap grid load failed (map_id=%d)", map_id);
@@ -1987,16 +2001,20 @@ static void bringup_strat_load_live(void)
              "~150 frames.");
 }
 
-/* --strat-load-grid: like --strat-load-live, but instead of latching the
- * Load request directly it drives the live page-3 file list and lets
- * main_loop_body post a synthetic mouse click on the "lastturn" save row
- * + the Load button through the genuine WM_MOUSE route — exercising the
- * newly-ported grid selector (engine_menu_input_filelist_grid_step →
- * FUN_0043400b) end-to-end: row click → name field → Load → confirm pump
- * → ingame strategic map.  Run with enough frames to clear the ~150-frame
- * confirm timer after the Load click, e.g. --frames 220. */
-static void bringup_strat_load_grid(void)
+/* --input-segtrace FILE: replay a TAS input trace through the live tick.
+ * Drives the engine into the live title state (page 1, with the page-3
+ * file list pre-seeded so the trace's menu-nav reaches a populated save
+ * list), then main_loop_body replays the trace's WM_* ops through the
+ * genuine WndProc and captures frames on its {capture} ops.  The same
+ * trace drives retail via frida_capture.py --input-segtrace, so the two
+ * runs reach comparable frames for a 1:1 diff.  See input_trace.{c,h}. */
+static void bringup_input_segtrace(void)
 {
+    if (input_trace_load(g_input_segtrace) != 0) {
+        log_line("input-segtrace: failed to load trace '%s'", g_input_segtrace);
+        g_shutdown = 1;
+        return;
+    }
     title_bind_render_state();
     engine_bind_title_bg_reload_fn(title_bg_reload);
     engine_set_viewport_game_extents(640, 480);   /* cursor maps 1:1 */
@@ -2004,17 +2022,37 @@ static void bringup_strat_load_grid(void)
      * receives WM_SIZE to populate g_client_screen — the cursor→game
      * mapping (game = cached * game_extent / client_width) would divide
      * by a zero width.  Pin it to the 640×480 logical client so the
-     * scripted WM_MOUSEMOVE client coords map 1:1 (cursor cache stays
-     * disabled on the title screen, so the WndProc-cached coords are
-     * what the mapping reads — engine-quirks #120). */
+     * replayed WM_MOUSEMOVE client coords map 1:1 (the cursor cache stays
+     * disabled on the title screen, so the WndProc-cached coords are what
+     * the mapping reads — engine-quirks #120). */
     SetRect(&g_client_screen, 0, 0, 640, 480);
-    engine_title_render_set_page(3);               /* DAT_005530f0 = 3 (file list) */
-    seed_page3_state();                            /* save list + editor live */
+    engine_title_render_set_page(1);               /* trace navigates from page 1 */
+    seed_page3_state();                            /* file list ready for page 3 */
     engine_set_current_screen(0x1f);               /* DAT_004eac50 = 0x1f */
     engine_set_demand_redraw(2);
-    log_line("strat-load-grid: title page-3 file list up; main loop will "
-             "click the lastturn row + Load → map renders in ~150 frames.");
+    log_line("input-segtrace: replaying '%s' (%d ops) through the live tick.",
+             g_input_segtrace, input_trace_op_count());
 }
+
+/* The TAS anchor for the current engine state (input_trace's {wait}
+ * targets).  Mirrors tools/frida/openlords2-agent.js anchorTick: keyed on
+ * the engine state (g_engine_state) + screen id (engine_current_screen).
+ * Only the anchors the load flow needs are emitted; extend as needed. */
+static const char *current_tas_anchor(void)
+{
+    int screen = engine_current_screen();
+    if (g_engine_state == 3 && screen == 0)
+        return "MAP_FREEROAM";
+    if (screen == 0x1f)
+        return "TITLE";
+    return "";
+}
+
+/* Per-frame TAS replay state (--input-segtrace): the actions due this
+ * frame (messages posted at the top of main_loop_body, captures taken
+ * after the tick) + the previous anchor for edge detection. */
+static input_trace_actions_t g_seg_actions;
+static const char           *g_seg_prev_anchor = "";
 
 static void main_loop_body(void)
 {
@@ -2031,31 +2069,22 @@ static void main_loop_body(void)
         }
     }
 
-    /* Scripted page-3 grid click-to-load (--strat-load-grid): post a
-     * synthetic mouse click on the "lastturn" save row (grid row 0 col 0)
-     * then the Load button, through the genuine WM_MOUSE route, so the
-     * engine resolves the press edges and the new grid selector
-     * (FUN_0043400b) + load pump run exactly as for a real click.  The
-     * positions are the rendered geometry: the grid cell at (0x60+0x40,
-     * 0x76) and the Load gauntlet button centred at (0x1a0, 0x5a). */
-    if (g_strat_load_grid && g_hwnd) {
-        switch (g_frame_counter) {
-        case 12:   /* move over the lastturn row + press */
-            PostMessageA(g_hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(0xa0, 0x7e));
-            PostMessageA(g_hwnd, WM_LBUTTONDOWN, 0, MAKELPARAM(0xa0, 0x7e));
-            break;
-        case 13:   /* release */
-            PostMessageA(g_hwnd, WM_LBUTTONUP, 0, MAKELPARAM(0xa0, 0x7e));
-            break;
-        case 16:   /* move over Load + press → latch the load request */
-            PostMessageA(g_hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(0x1a0, 0x5a));
-            PostMessageA(g_hwnd, WM_LBUTTONDOWN, 0, MAKELPARAM(0x1a0, 0x5a));
-            break;
-        case 17:   /* release */
-            PostMessageA(g_hwnd, WM_LBUTTONUP, 0, MAKELPARAM(0x1a0, 0x5a));
-            break;
-        default: break;
-        }
+    /* TAS input-trace replay (--input-segtrace): post the trace's due
+     * WM_* ops through the genuine WndProc this frame, so the engine
+     * resolves the press edges exactly as for a real click.  The anchor
+     * edge (engine-state / screen transition) drives the trace's {wait}
+     * ops; captures are taken after the tick (below) so they grab the
+     * rendered frame.  g_seg_actions carries the captures to that point. */
+    if (g_input_segtrace && g_hwnd) {
+        const char *anchor = current_tas_anchor();
+        const char *edge = (strcmp(anchor, g_seg_prev_anchor) != 0)
+                         ? anchor : "";
+        g_seg_prev_anchor = anchor;
+        input_trace_step((int)g_frame_counter, edge, &g_seg_actions);
+        for (int i = 0; i < g_seg_actions.msg_count; i++)
+            PostMessageA(g_hwnd, g_seg_actions.msgs[i].msg,
+                         (WPARAM)g_seg_actions.msgs[i].wparam,
+                         (LPARAM)g_seg_actions.msgs[i].lparam);
     }
 
     MSG msg;
@@ -2081,7 +2110,22 @@ static void main_loop_body(void)
      * in both cases the present is skipped, matching retail. */
     if (g_gfx_active) {
         engine_tick_guard();
-        if (g_capture_dir
+        if (g_input_segtrace) {
+            /* Take the trace's {capture} frames (labeled), now that the
+             * tick has rendered + presented this frame. */
+            for (int i = 0; i < g_seg_actions.cap_count; i++) {
+                char path[MAX_PATH];
+                const char *lbl = g_seg_actions.caps[i].label[0]
+                                ? g_seg_actions.caps[i].label : "capture";
+                wsprintfA(path, "%s\\%s.bmp",
+                          g_capture_dir ? g_capture_dir : ".", lbl);
+                gfx_capture_backbuffer(path);
+                log_line("input-segtrace: captured '%s' (frame %d) → %s",
+                         lbl, g_seg_actions.caps[i].frame, path);
+            }
+            if (input_trace_done())
+                g_shutdown = 1;          /* trace exhausted → end the run */
+        } else if (g_capture_dir
                 && (g_frame_counter % g_capture_every) == 0) {
             char path[MAX_PATH];
             wsprintfA(path, "%s\\frame_%05u.bmp",
@@ -2302,8 +2346,8 @@ static void parse_cmdline(LPSTR lpCmd)
             g_strat_load_live = 1;           /* live load pump → ingame map */
             g_gfx_init = 1;                  /* needs DDraw */
         }
-        else if (!strcmp(a, "--strat-load-grid")) {
-            g_strat_load_grid = 1;           /* scripted grid click → load */
+        else if (!strcmp(a, "--input-segtrace") && i + 1 < ntok) {
+            g_input_segtrace = tokens[++i];  /* TAS trace replay → ingame */
             g_gfx_init = 1;                  /* needs DDraw */
         }
         else if (!strcmp(a, "--audio-init"))     g_audio_init  = 1;

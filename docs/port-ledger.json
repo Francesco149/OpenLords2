@@ -5027,8 +5027,7 @@
     "src/engine_menu_input.c",
     "src/engine_menu_input.h",
     "src/engine_title_render.c",
-    "src/engine_title_render.h",
-    "src/main.c"
+    "src/engine_title_render.h"
    ]
   },
   {
@@ -15164,6 +15163,7 @@
    "src": [
     "src/engine_load_pump.c",
     "src/engine_load_pump.h",
+    "src/engine_map_init.c",
     "src/main.c"
    ]
   },
@@ -15239,7 +15239,8 @@
    "status": "tested",
    "src": [
     "src/engine_map_init.c",
-    "src/engine_map_init.h"
+    "src/engine_map_init.h",
+    "src/main.c"
    ]
   },
   {
