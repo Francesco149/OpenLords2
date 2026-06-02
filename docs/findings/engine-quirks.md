@@ -5501,3 +5501,31 @@ sides land on `deaths == -1`.
 > 📍 `src/engine_realm.c` (`engine_realm_advance_population`).  Ghidra/r2
 > `FUN_00449ef3`.  Verified byte-exact vs retail (`tools/diff_test.py
 > --functions population`, 200/200).
+
+## 156. The active 8bpp palette is screen-state-owned — a menu→map transition must reinstall the strategic palette or the map presents under the menu's colours
+
+The game runs a single 256-colour DirectDraw palette at a time, and **the
+title-menu page backgrounds swap it.**  `gfx_init` installs the base game
+palette `base01.256` (the one the strategic map renders under — the seasonal
+variation lives in the sprite *banks*, not the palette).  But each title page's
+background load (`gateway.256` / `custom.256` / `skirmish.256`) installs its own
+palette over it.
+
+So when the **live load path** arrives at the strategic map from the menu, the
+active palette is the last menu page's (`gateway.256`), and the map + sand HUD
+parchment present as **magenta / rainbow speckle** — the correct 8bpp indices
+mapped through the wrong colour table.  (Palette swaps don't touch the index
+data, so a raw-index dump / `--strat-load` byte-exact validation is blind to
+this — the `--strat-load` seat never shows the menu, so `base01.256` is still
+active there, which is why its frame looked right.)
+
+**The transition into a screen owns its palette.**  The drop-in's menu→map load
+(`drop_in_load`) reinstalls `base01.256` after the map setup; any future screen
+that arrives from a differently-palettized one will need the same.  Symptom to
+watch for: a structurally-correct frame that is uniformly mis-coloured (often
+magenta, since unused/parchment indices land on magenta in foreign palettes) —
+suspect the palette before the render.
+
+> 📍 `src/main.c` (`drop_in_load` → `gfx_load_palette("base01.256")`); the
+> menu page palettes are in `gfx.c` (`gfx_title_background_load`).  Found
+> live 2026-06-02 when the wired menu→load path rendered the map magenta.
