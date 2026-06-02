@@ -9,6 +9,10 @@
 #include "save_schema_globals.h"
 #include "io_path.h"
 #include "engine_menu_input.h"
+#include "engine_event_queue.h"
+#include "engine_army_economy.h"
+#include "engine_territory.h"
+#include "save.h"                 /* g_per_army_768 / _territory_420 / strategic */
 #include "config.h"
 
 #include <string.h>
@@ -280,5 +284,61 @@ int test_turn_calendar_year_rollover(void)
     T_ASSERT_EQ_U(s_slot_0057c900, 1267u);  /* year prev = old cur   */
     T_ASSERT_EQ_U(s_slot_00553e74, 1269u);  /* year next ++          */
     T_ASSERT_EQ_I(engine_menu_input_sp_available(), 1);  /* probe fired */
+    return 0;
+}
+
+/* engine_turn_run_passes (the assembled tail of FUN_00448440): drive the
+ * full 27-pass sequence end-to-end over an empty world and confirm it
+ * links, returns, and lands the calendar correctly amid all the passes
+ * (no pass clobbers the calendar scalars).
+ *
+ * Hermetic empty world: realm count 0 (every per-realm loop empty),
+ * every economy/territory seam unbound (the fixed-range planner loops —
+ * collect_territory_income's realms-1..16 re-plan, the resource-pool
+ * group loop — all early-return on the NULL guard), and the per-territory
+ * + per-player save blocks zeroed (the territory-income scan finds no
+ * counted territory, so no out-of-range strategic read).  The only
+ * observable effect is the calendar advance, which the per-pass economy
+ * effects (price-scalar-gated, covered by their own diff targets) never
+ * touch.  This is the orchestrator's sequencing + linkage gate; calendar
+ * parity through the *retail* full driver is the `turn_driver` diff. */
+int test_turn_run_passes_sequences_full_driver(void)
+{
+    /* Empty, hermetic world. */
+    s_slot_0056d5dc = 0;                       /* realm count → all loops empty */
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_per_army_768,      0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+
+    engine_army_economy_bind_army_records(NULL);   /* pass-3 planners → no-op */
+    engine_army_economy_bind_cells(NULL);
+    engine_army_economy_bind_resource_pool(NULL);  /* group loop → no-op      */
+    engine_territory_bind_records(NULL);
+    engine_territory_bind_cells(NULL);
+
+    /* Non-rollover calendar pre-state (same shape as the calendar test). */
+    s_slot_00553240 = 20;          /* turn counter        */
+    s_slot_0057c934 = 1;           /* season cur          */
+    s_slot_00554470 = 0;           /* season prev         */
+    s_slot_0057c92c = 2;           /* season next (!= 4)  */
+    s_slot_0055cd5c = 3;           /* rollover counter    */
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init_wrapper(&evq);
+
+    /* Post-stir RNG bytes are arbitrary here (no realm consumes them in
+     * an empty world); pass representative non-zero values, SP. */
+    engine_turn_run_passes(&evq, 0x44, 0x12, /*mp_active=*/0);
+
+    /* Calendar advanced exactly as the standalone block does. */
+    T_ASSERT_EQ_U(s_slot_00553240, 21u);   /* turn ++          */
+    T_ASSERT_EQ_U(s_slot_00554470, 1u);    /* prev = old cur   */
+    T_ASSERT_EQ_U(s_slot_0057c934, 2u);    /* cur  = old next  */
+    T_ASSERT_EQ_U(s_slot_0057c92c, 3u);    /* next ++          */
+    T_ASSERT_EQ_U(s_slot_0055cd5c, 3u);    /* no year rollover */
+
+    /* Restore the unbound seams (other tests bind their own, but leave
+     * the shared globals tidy). */
+    engine_army_economy_bind_army_records(NULL);
     return 0;
 }

@@ -7,6 +7,65 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-02 — TURN-ENGINE: full per-turn driver FUN_00448440 ASSEMBLED → engine_turn_run_passes + engine_turn_advance, wired into new-game init
+
+The turn-advance engine is now **assembled end-to-end**.  All 30 direct callees
+plus the inline calendar block had landed across prior chips; this chip strings
+them into the live driver in retail's exact order
+(`docs/decompiled/by-address/448440.c`):
+
+- **`engine_turn_run_passes(evq, rng_7bit_b, rng_7bit_a, mp_active)`**
+  (`src/engine_turn.c`) — the host-testable / diffable core: the inline calendar
+  block followed by the 27 economy / realm / territory passes, a 1:1
+  transcription of the decompiled call sequence.  Retail threads the UI event
+  queue, the MP flag, and the two cached RNG bytes through file-scope globals;
+  the ports take them as explicit params, so the orchestrator stays in the host
+  suite and out of Win32-only engine.c.
+- **`engine_turn_advance(void)`** (`src/engine.c`) — the Win32 wrapper.  Runs
+  retail's two head calls — the per-realm AI brain (`FUN_0049a990` =
+  `engine_army_ai_run_turn`) and the RNG stir (`FUN_00404a46`, which refreshes
+  the masked-RNG mirrors `g_rng_7bit_b/a` the next passes consume) — then hands
+  the freshly-stirred bytes, the engine's one canonical event queue (a new
+  file-static, lazily inited), and `g_sim_mp_active` to `engine_turn_run_passes`.
+  The RNG-state coupling stays where the live mirrors are; the pure sequence
+  stays where it can be tested.
+- **Wired into new-game init**: `main.c` binds `engine_turn_advance` to
+  `game_init`'s deferred `g_gi_turn_driver_fn` seam (step 17), so a fresh game
+  ticks the world to turn 1 exactly as retail's `FUN_00497ced` does.  Inert in
+  every current live seat (nothing drives `engine_game_start` yet — the new-game
+  seating is Phase B, Windows-host-gated) and inert in the host suite (tests
+  don't bind it), so binding early is harmless.
+
+**Verification — driven over the real world, no Windows host needed.**  The new
+host test `game_init_turn_driver_advances_to_turn_1` (`test_game_init.c`) binds
+the assembled driver into the new-game initialiser and runs a **full new game
+over the real `L2_maps.dat` world** (14 realms, the live cell grid +
+territory/army records the init binds).  Every one of the 27 passes executes
+over valid bound state; the test asserts the exact turn-1 calendar landing —
+turn 0→1, season `{prev 3, cur 4, next 1}`, year rollover counter 1, year
+1267→1268 — and that the realm count (14) and the overworld `+7` terrain plane
+(4096/4096) survived the sequence intact.  This surfaced **engine-quirk #171**:
+the seed season-next is 4, so the *first* turn of every new game takes the
+year-rollover branch and fires the CD-audio probe.  A second host test
+(`turn_run_passes_sequences_full_driver`, `test_engine_turn.c`) drives the
+sequence over an empty hermetic world (linkage + sequencing gate).  **1870/1870**
+green under ASan/UBSan.
+
+No Frida full-driver diff: the diffable surface of a whole turn is just the
+calendar scalars (RNG/world-independent, already byte-exact), since the 27
+economy passes hit the variable price-scalar wall and are each covered by their
+own diff targets — and the port side would have to skip retail's AI/stir head
+and bind the union of every pass's world state, high fragility for no new
+coverage.  The real end-to-end run over the seeded world is the stronger gate.
+
+**Remaining = the live visual gate (Windows-host).**  Once the new-game seating
+(Phase B) drives `engine_game_start`, a fresh game will tick to turn 1 on screen:
+the season should read winter/year 1268 and the strategic map should reflect the
+first turn's economy/population/development.  That subjective check is the one
+piece still owed to a human at the keyboard.
+
+---
+
 ## 2026-06-02 — TURN-ENGINE: calendar / season-rollover block of FUN_00448440 assembled → engine_turn_advance_calendar
 
 First piece of the now-unblocked orchestrator assembly (see entry below):

@@ -917,6 +917,7 @@
     "src/engine.h",
     "src/engine_menu_input.c",
     "src/engine_rng.c",
+    "src/engine_turn.h",
     "src/game_init.c"
    ]
   },
@@ -9588,13 +9589,17 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
+    "src/engine.h",
     "src/engine_army_ai.c",
     "src/engine_army_ai.h",
     "src/engine_combat.c",
     "src/engine_realm.c",
+    "src/engine_turn.c",
     "src/engine_turn.h",
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/main.c"
    ]
   },
   {
@@ -15309,7 +15314,8 @@
     "src/engine_territory.c",
     "src/engine_territory.h",
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/main.c"
    ]
   },
   {
@@ -15606,7 +15612,8 @@
    "src": [
     "src/engine_army_ai.c",
     "src/engine_army_ai.h",
-    "src/engine_combat.c"
+    "src/engine_combat.c",
+    "src/engine_turn.h"
    ]
   },
   {

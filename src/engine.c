@@ -23,6 +23,7 @@
 #include "engine_menu_input.h"
 #include "engine_load_pump.h"
 #include "engine_turn.h"
+#include "engine_army_ai.h"       /* engine_army_ai_run_turn (0049a990) */
 #include "gfx.h"
 #include "save.h"                 /* g_player_strategic_352 */
 #include "save_schema_globals.h"  /* s_slot_00554004 */
@@ -734,6 +735,35 @@ static void engine_tick_rng_step(void)
     g_rng_15bit_b = out.rng_15bit_b;
     g_rng_7bit_b  = out.rng_7bit_b;
     g_rng_3bit_b  = out.rng_3bit_b;
+}
+
+/* The engine's one canonical UI event queue — retail's global ring at
+ * DAT_00568480 et al., which the turn passes post screen messages into
+ * (and the in-game consumer 0x472e46, unported, drains).  Lazily inited
+ * on the first turn advance so a fresh boot starts empty.  File-static:
+ * the turn driver is the only producer wired live so far. */
+static engine_event_queue_state_t g_turn_event_queue;
+static int                        g_turn_event_queue_inited;
+
+/* Win32 wrapper around the assembled per-turn driver (FUN_00448440).
+ * See engine.h.  Runs retail's two head calls — the per-realm AI brain
+ * (0049a990) and the RNG stir (00404a46, which refreshes the masked-RNG
+ * mirrors g_rng_7bit_b/a) — then hands the freshly-stirred 7-bit bytes,
+ * the engine's event queue, and the MP flag to engine_turn_run_passes
+ * for the calendar block and the 27 economy/realm passes. */
+void engine_turn_advance(void)
+{
+    if (!g_turn_event_queue_inited) {
+        engine_event_queue_init_wrapper(&g_turn_event_queue);
+        g_turn_event_queue_inited = 1;
+    }
+
+    engine_army_ai_run_turn();   /* #1  0049a990 — per-realm AI economic brain */
+    engine_tick_rng_step();      /* #2  00404a46 — RNG stir → g_rng_7bit_b/a   */
+
+    engine_turn_run_passes(&g_turn_event_queue,
+                           g_rng_7bit_b, g_rng_7bit_a,
+                           g_sim_mp_active);
 }
 
 /* Public readers used by main.c's shutdown summary so the harness can

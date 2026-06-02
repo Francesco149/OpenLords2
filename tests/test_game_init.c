@@ -1222,6 +1222,14 @@ int test_game_init_seed_army_baseline_tiers_and_parity(void)
 #include <stdlib.h>
 #include "engine_map_init.h"
 #include "engine_npc_schedule.h"   /* loc-blob bind isolation */
+#include "engine_event_queue.h"    /* turn-driver shim's event queue */
+#include "io_path.h"               /* io_path_set_base — CD-probe revert */
+#include "config.h"                /* g_config.cd_drive — CD-probe input */
+#if defined(_WIN32)
+#  include <direct.h>
+#else
+#  include <unistd.h>
+#endif
 
 static int gi_file_exists(const char *p)
 {
@@ -1283,5 +1291,96 @@ int test_game_init_orchestrator_builds_map(void)
            ok, 100.0 * ok / 4096, (int)s_slot_0056d5dc, exp_count);
     T_ASSERT_EQ_I(ok, 4096);
     T_ASSERT_EQ_I((int)s_slot_0056d5dc, exp_count);
+    return 0;
+}
+
+/* Host-side stand-in for the engine.c turn-driver wrapper (engine_turn_advance,
+ * which is Win32-only and excluded from this suite).  Drives only the
+ * assembled pass sequence — engine_turn_run_passes — the part under test;
+ * the wrapper's two head calls (AI brain + RNG stir) are separately covered
+ * and skipped here.  SP, RNG bytes 0 (the calendar we assert is RNG-blind). */
+static void gi_turn_driver_shim(void)
+{
+    static engine_event_queue_state_t evq;
+    engine_event_queue_init_wrapper(&evq);
+    engine_turn_run_passes(&evq, 0, 0, /*mp_active=*/0);
+}
+
+/* End-to-end: bind the assembled per-turn driver into the new-game
+ * initialiser's deferred seam (step 17) and run a full new game.  This
+ * drives the 27-pass orchestrator over the REAL seeded world — 14 realms,
+ * the live cell grid + territory/army records the init binds — exactly the
+ * path retail's FUN_00497ced takes when it ticks a fresh game to turn 1.
+ *
+ * The seeded calendar is turn 0 / season {prev 2, cur 3, next 4}; because
+ * the just-consumed season-next is 4, the first driver run takes the
+ * year-rollover branch.  We assert the precise post-state: turn → 1, season
+ * rotates to {prev 3, cur 4, next 1}, the rollover counter ticks to 1, and
+ * the year triple advances (1267 → 1268).  Reaching that landing without a
+ * crash means every one of the 27 passes executed over valid bound state.
+ *
+ * Not a byte-diff of the economy passes (those hit the variable price-scalar
+ * wall — each is covered by its own diff target); this is the orchestrator's
+ * end-to-end integration gate over a real world. */
+int test_game_init_turn_driver_advances_to_turn_1(void)
+{
+    char gdir[1024];
+    gi_game_dir(gdir, sizeof gdir);
+    char l2[1200];
+    snprintf(l2, sizeof l2, "%s/L2_maps.dat", gdir);
+    if (!gi_file_exists(l2)) T_SKIP("L2_maps.dat not found at %s", l2);
+
+    static uint8_t maprec[0x80c1];
+    {
+        FILE *f = fopen(l2, "rb");
+        if (!f) T_FAIL("open %s", l2);
+        size_t got = fread(maprec, 1, sizeof maprec, f);
+        fclose(f);
+        if (got != sizeof maprec) T_FAIL("maprec short read");
+    }
+
+    /* CD-audio probe (fires on the year rollover) chdir-probes then reverts;
+     * pin the base dir so the revert lands back here for later tests. */
+    char cwd[1024];
+#if defined(_WIN32)
+    if (_getcwd(cwd, sizeof cwd) == NULL) T_SKIP("getcwd");
+#else
+    if (getcwd(cwd, sizeof cwd) == NULL) T_SKIP("getcwd");
+#endif
+    io_path_set_base(cwd);
+    g_config.cd_drive = 'D';
+
+    /* Same caller preconditions as the map-build orchestrator test. */
+    s_slot_0053f034 = 0;                            /* map id */
+    s_slot_0057cb18 = 0;                            /* view-mode normal */
+    if (engine_map_init_build_cells(gdir, 0, 0) == 0)
+        T_FAIL("build_cells failed (L2_maps.dat read)");
+    engine_map_init_set_camera(0);
+    engine_territory_bind_strat_map_record(maprec);
+    engine_npc_schedule_set_localization(NULL, 0);
+
+    /* Wire the assembled driver into step 17, then run a fresh game. */
+    engine_game_init_bind_turn_driver_fn(gi_turn_driver_shim);
+    engine_game_init();                             /* FUN_00497ced + driver */
+    engine_game_init_bind_turn_driver_fn(NULL);     /* don't leak into later tests */
+
+    /* Driver ran exactly once → turn 1, year-rollover branch taken. */
+    T_ASSERT_EQ_U(s_slot_00553240, 1u);     /* turn 0 → 1            */
+    T_ASSERT_EQ_U(s_slot_00554470, 3u);     /* season prev = old cur */
+    T_ASSERT_EQ_U(s_slot_0057c934, 4u);     /* season cur  = old next */
+    T_ASSERT_EQ_U(s_slot_0057c92c, 1u);     /* season next 5 → wrap 1 */
+    T_ASSERT_EQ_U(s_slot_0055cd5c, 1u);     /* rollover counter ++   */
+    T_ASSERT_EQ_U(s_slot_00553edc, 0x4f4u); /* year cur 1267 → 1268  */
+    T_ASSERT_EQ_U(s_slot_0057c900, 0x4f3u); /* year prev = old cur   */
+    T_ASSERT_EQ_U(s_slot_00553e74, 0x4f5u); /* year next ++          */
+
+    /* The world is still coherent: realm count and the overworld +7 plane
+     * survived the full pass sequence (no pass corrupted the terrain). */
+    T_ASSERT_EQ_I((int)s_slot_0056d5dc, 14);
+    int ok = 0;
+    const uint8_t *plane5 = maprec + 0x5000;
+    for (int i = 0; i < 4096; i++)
+        if (g_overworld_map[i * 8 + 7] == plane5[i]) ok++;
+    T_ASSERT_EQ_I(ok, 4096);
     return 0;
 }

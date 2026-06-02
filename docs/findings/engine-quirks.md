@@ -6028,3 +6028,24 @@ residue + zero tail), the other the drive-letter patch.  No live retail-diff
 target: the output is fully determined by static `rdata` (the 30-byte template
 read directly from the image) and the constant gate, so a Frida diff would only
 re-confirm static bytes while running real `chdir`/file-IO in the retail process.
+
+## 171. The very first turn-driver run of every new game takes the year-rollover branch, so the CD-audio probe fires on turn 1
+
+The new-game initialiser `FUN_00497ced` seeds the calendar (in
+`engine_game_init_seed_scalars`) to turn 0 with the season triple
+`{prev 2, cur 3, next 4}` (`s_slot_00554470`/`0057c934`/`0057c92c`), then calls
+the turn-advance engine `FUN_00448440` once to tick the fresh world to turn 1.
+But the calendar block's year-rollover predicate (quirk #170's caller) is "the
+just-consumed season-next was 4" — and the seed *is* 4.  So the first advance
+**always** rotates the year: rollover counter `s_slot_0055cd5c` 0→1, year triple
+1267→1268, and `io_path_probe_cd_audio` (`FUN_004aef7e`) runs.  In other words
+the seasonal CD-audio re-probe is not a once-a-year-from-now event — it fires on
+literally the first turn of a brand-new game (season then reads cur=4 / winter,
+next wraps 5→1).  The seed `next == 4` is deliberate: it makes turn 1 land on the
+winter→spring boundary so year 1268 begins immediately.
+
+Verification: the host test `game_init_turn_driver_advances_to_turn_1`
+(`test_game_init.c`) binds the assembled driver into the new-game initialiser's
+step-17 seam and runs a full new game over the real L2_maps world, asserting the
+exact post-state — turn 1, season `{prev 3, cur 4, next 1}`, rollover counter 1,
+year 1268 — which is only reachable through the rollover branch.

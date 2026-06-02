@@ -92,7 +92,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404547 | FUN_00404547 | 256 | gfx_dispatch.c, gfx_dispatch.h |
 | 0x40464c | FUN_0040464c | 303 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h (+2) |
 | 0x40477b | FUN_0040477b | 291 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h (+1) |
-| 0x404a46 | FUN_00404a46 | 230 | engine.c, engine.h, engine_menu_input.c (+2) |
+| 0x404a46 | FUN_00404a46 | 230 | engine.c, engine.h, engine_menu_input.c (+3) |
 | 0x404b2c | FUN_00404b2c | 109 | engine.h, engine_rng.c, engine_territory.c |
 | 0x404b99 | FUN_00404b99 | 466 | engine.c, engine.h, engine_rng.c |
 | 0x404d6b | FUN_00404d6b | 43 | engine_army_ai.c, engine_input.c, engine_math.c (+3) |
@@ -250,7 +250,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4483fb | FUN_004483fb | 11 | engine_handlers_da.h |
 | 0x448406 | FUN_00448406 | 11 | engine_handlers_da.h |
 | 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h |
-| 0x448440 | FUN_00448440 | 261 | engine_army_ai.c, engine_army_ai.h, engine_combat.c (+4) |
+| 0x448440 | FUN_00448440 | 261 | engine.c, engine.h, engine_army_ai.c (+8) |
 | 0x448545 | FUN_00448545 | 96 | engine_combat.c, engine_realm.c, engine_realm.h (+1) |
 | 0x4485a5 | FUN_004485a5 | 163 | engine_army_economy.c, engine_army_economy.h, engine_combat.c (+2) |
 | 0x4486a9 | FUN_004486a9 | 256 | engine_ranking.c, engine_ranking.h |
@@ -439,7 +439,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4921e5 | FUN_004921e5 | 451 | engine_tile.c, engine_tile.h |
 | 0x497500 | FUN_00497500 | 211 | engine_minimap.c |
 | 0x4976a1 | FUN_004976a1 | 472 | engine_load_pump.c, engine_load_pump.h, engine_map_init.c (+1) |
-| 0x497ced | FUN_00497ced | 376 | engine_load_pump.c, engine_territory.c, engine_territory.h (+2) |
+| 0x497ced | FUN_00497ced | 376 | engine_load_pump.c, engine_territory.c, engine_territory.h (+3) |
 | 0x497e65 | FUN_00497e65 | 1025 | game_init.c, game_init.h |
 | 0x498270 | FUN_00498270 | 327 | engine_map_init.c, engine_map_init.h, main.c |
 | 0x4984dc | FUN_004984dc | 731 | engine_pl8.c, engine_pl8.h, game_init.c (+3) |
@@ -449,7 +449,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x499dc3 | FUN_00499dc3 | 154 | game_init.h |
 | 0x499e5d | FUN_00499e5d | 421 | game_init.h |
 | 0x49a453 | FUN_0049a453 | 302 | game_init.c, game_init.h, save.c (+1) |
-| 0x49a990 | FUN_0049a990 | 126 | engine_army_ai.c, engine_army_ai.h, engine_combat.c |
+| 0x49a990 | FUN_0049a990 | 126 | engine_army_ai.c, engine_army_ai.h, engine_combat.c (+1) |
 | 0x49aa0e | FUN_0049aa0e | 2197 | engine_ranking.c, engine_ranking.h, game_init.c |
 | 0x49b2a3 | FUN_0049b2a3 | 187 | engine_combat.c, engine_combat.h |
 | 0x49b35e | FUN_0049b35e | 205 | game_init.c, game_init.h |

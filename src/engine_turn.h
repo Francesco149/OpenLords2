@@ -38,6 +38,8 @@
 
 #include <stdint.h>
 
+#include "engine_event_queue.h"   /* engine_event_queue_state_t */
+
 typedef struct {
     uint32_t       now_ms;            /* timeGetTime() at call site */
     int            mp_active;         /* DAT_00553030 — MP session flag */
@@ -95,6 +97,41 @@ void engine_turn_advance_calendar(void);
  * no-op so the driver's call sequence stays complete and 0x428471 is
  * accounted for. */
 void engine_turn_hook_noop(void);
+
+/* ─── Full per-turn driver (assembled orchestrator) ─────────────────
+ *
+ * Host-side core of retail FUN_00448440 @ 0x448440 (261 B) — the per-turn
+ * advance engine.  Runs the deterministic tail of the driver: the inline
+ * calendar/season-rollover block followed by the 27 economy / realm /
+ * territory passes, in retail's exact call order (see
+ * docs/decompiled/by-address/448440.c).
+ *
+ * The two passes that head retail's sequence — the per-realm AI brain
+ * (FUN_0049a990 = engine_army_ai_run_turn) and the RNG stir
+ * (FUN_00404a46 = engine_rng_step) — are NOT run here.  They live in the
+ * engine.c Win32 wrapper engine_turn_advance(), which owns the masked-RNG
+ * global mirrors (g_rng_7bit_b/a) the stir produces and the AI consumes;
+ * the wrapper runs AI + stir, then hands the freshly-stirred 7-bit bytes
+ * to this function as rng_7bit_b / rng_7bit_a.  Splitting here keeps the
+ * orchestrator host-testable / retail-diffable (engine.c is Win32-only,
+ * excluded from the host suite and the diff .so) while the RNG-state
+ * coupling stays where the live mirrors are.
+ *
+ * Retail threads the UI event queue, the MP flag, and the two cached RNG
+ * bytes through file-scope globals; the ports thread them as explicit
+ * params (queue posts go through evq; coalition/resign sweeps branch on
+ * mp_active; roll-events + mood read the RNG bytes).  Pass the engine's
+ * one canonical queue, g_sim_mp_active, and the post-stir RNG bytes.
+ *
+ * Mutates global save state in place (the passes are save-state steps).
+ * Calendar parity through the full sequence is the retail-diff gate
+ * (the `turn_driver` target reads back the 8 calendar scalars); the
+ * per-pass economy effects hit the variable price-scalar wall and are
+ * each verified by their own host tests / diff targets. */
+void engine_turn_run_passes(engine_event_queue_state_t *evq,
+                            uint32_t rng_7bit_b,
+                            uint32_t rng_7bit_a,
+                            int mp_active);
 
 /* ─── Turn-handshake runtime state (canonical storage) ──────────────
  *

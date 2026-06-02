@@ -76,6 +76,7 @@
 #include "engine_screen_dispatch.h"
 #include "engine_screen_strat.h"
 #include "engine_load_pump.h"
+#include "game_init.h"
 #include "engine_title_render.h"
 #include "input_trace.h"
 #include "engine_menu_input.h"
@@ -366,6 +367,14 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
              * (retail FUN_004adfe6 → FUN_004976a1) to the drop-in's
              * save_load + engine_map_post_load. */
             engine_load_pump_bind_load_fn(drop_in_load);
+            /* Wire the per-turn driver into the new-game initialiser's
+             * deferred seam (game_init step 17): a fresh game ticks the
+             * world to turn 1 exactly as retail's FUN_00497ced does by
+             * calling FUN_00448440 once.  Inert until a new-game path
+             * (engine_game_start) actually runs — no current live seat
+             * drives it, so this only takes effect once new-game seating
+             * is wired (Phase B).  Harmless to bind early. */
+            engine_game_init_bind_turn_driver_fn(engine_turn_advance);
             /* Bring-up: render the page-1 main menu into the back
              * buffer before the first present, so frame 0 shows the
              * menu rather than the background-erase fill.  Exercises the

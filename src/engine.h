@@ -189,6 +189,15 @@ void engine_compute_sim_sub_steps(const engine_rate_in_t *in,
  * lives in engine_turn.c.  No caller in the drop-in yet. */
 int engine_sim_turn_resolved(void);
 
+/* Win32 wrapper around the assembled per-turn driver (retail FUN_00448440
+ * @ 0x448440).  Runs the AI brain + RNG stir (the head of retail's
+ * sequence, which owns the masked-RNG global mirrors), then drives the
+ * calendar block + 27 economy/realm passes via engine_turn_run_passes.
+ * Bound to game_init's turn-driver seam (engine_game_init_bind_turn_driver_fn)
+ * so a new game ticks the world to turn 1 exactly as retail does.
+ * Defined in engine.c; the pure pass sequence lives in engine_turn.c. */
+void engine_turn_advance(void);
+
 /* ─── scenario-rate hint (port of FUN_0043de70) ────────────────────
  *
  * Computes the `scenario_hint` value that engine_compute_sim_sub_steps
