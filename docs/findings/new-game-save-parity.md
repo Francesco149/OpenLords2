@@ -33,8 +33,19 @@ set (port vs live `newgame-fulldump1`), i.e. the genuine divergences.
 
 ## Real divergences (point-matched)
 
-### 1. Category-bucket table not persisted — ROOT of the largest chunk
-- **Entries 138 (`0x567970`, 96 B) + 139 (`0x569518`, 6 B)** are entirely zero
+### 1. Category-bucket table not persisted — FIXED (entries 138/139); cascade is a SEPARATE root cause
+**STATUS (commit landing this update):** the bucket cluster is now byte-exact.
+`engine_game_init` mirrors the computed `g_gi_strat_buckets` into its two
+save-schema homes at a new step **6b** (after `setup_overworld` finalises the
+digest, before step-8 `place_army_starts` reads it) — the two retail globals
+are non-contiguous so the single struct can't overlay both.  Result: entries
+**138/139 dropped out of the diff** (48 B recovered, 299→251 B; verified via
+`save_diff` vs `lastturn.sav`, all 1871 host tests green).
+
+The predicted **cascade (entry 78 + entry-5 capitals) did NOT follow** — it has
+a *separate* root cause, see the box below.  Original analysis kept for context:
+
+- **Entries 138 (`0x567970`, 96 B) + 139 (`0x569518`, 6 B)** were entirely zero
   in the port save, fully populated in retail.
 - These are the strategic **category-bucket table**: `buckets[6][16]` (entry
   138) + `digest[6]` (entry 139), per `engine_category_buckets_state_t`.
@@ -50,11 +61,22 @@ set (port vs live `newgame-fulldump1`), i.e. the genuine divergences.
   - **entry 5 per_territory** (`0x52f0b0`, ~131 B) — the capital records'
     `+0x150/+0x10/+0x164/+0x166/+0x167/+0x14f` stay unstamped;
   - likely some of **entry 4 per_army** too.
-- **Fix (highest value):** route the category-bucket cluster through the two
-  save-schema homes — either bind `buckets`→`s_slot_00567970` and
-  `digest`→`s_slot_00569518` (they are non-contiguous in retail, so the single
-  struct can't overlay both — needs a split or a post-`load_strat_map` copy
-  into the s_slots).  This should recover entries 138/139/78 and most of entry 5.
+- **Fix (DONE):** mirror the cluster into the two save-schema homes at init
+  step 6b (post-`setup_overworld`).  Recovered entries 138/139 only.
+
+> **Cascade root cause — NOT the buckets (engine-quirks #174).**  With the
+> digest now correct, `place_army_starts` (step 8) still places **0** (retail
+> places 6): its probe reads each army's coord from a **packed stride-3** table
+> `coord[id*3]` based at `0x53fa1c` (= `g_per_army_768 + 0x6c`), and for every
+> digest id that read returns `(0,0)` (diag-build confirmed) → both rawflag
+> probes fail → nothing placed, so entry 78 stays 0 and the entry-5 capital
+> records stay unstamped.  This packed table is **distinct** from the stride-
+> `0x300` capital cursors `setup_capitals` writes to the same base, and is
+> populated by **no ported pass** (ruled out: `load_strat_map`, `setup_capitals`,
+> roster).  Retail fills it before step 8 via a computed-base store (transient —
+> record-0's `+0x6c` already matches retail in the save).  **Next step:** frida
+> mem-watch `0x53fa1c` across a retail new-game to identify the populator; it
+> belongs to the per-army-setup frontier, not this bucket fix.
 
 ### 2. Human player name not copied — Entry 2 (`0x553d50`, 17 B)
 - `player_aux` record 1 `+0x04..+0x23` (the 31-byte name) holds the retail
@@ -116,3 +138,6 @@ nix develop -c python3 tools/save_diff.py "$GAMEDIR/lastturn.sav" "$GAMEDIR/port
 ```
 Suggested order of attack: **#1 (buckets) → #2 (name) → #5 → #4/#3** (the last two
 ride existing autotile / turn-driver frontiers).
+**#1's bucket half is DONE**; its placement cascade (entry 78 + entry-5 capitals)
+now rides the unported coord-table populator (engine-quirks #174), which is
+per-army-setup-frontier work, not a bucket change.

@@ -6139,3 +6139,44 @@ shared root with ~90 `per_army` AI-economy bytes — a separate turn-driver/AI
 byte-completeness frontier), `cur_player`/roster/armies/work-locations exact, and
 a retail LOAD of the resulting save sits stable (no turn spam — `year`/`season`
 set once and hold; run `newgame-loadverify1`).
+
+## 174 — `place_army_starts` reads a PACKED stride-3 coord table at `0x53fa1c`, distinct from `setup_capitals`' stride-`0x300` capital cursors that share the same base
+
+The category-bucket digest fix (save entries 138/139 → `s_slot_00567970` /
+`s_slot_00569518`, commit landing this quirk) makes the strategic
+`buckets[6][16]` + `digest[6]` byte-exact and re-arms `place_army_starts`
+(`FUN_00427ed0`, init step 8) with a non-empty army-id list.  But the doc's
+predicted **cascade** (entry 78 placed-army count + entry 5 capital records)
+did **NOT** follow.  Root cause, verified by r2 + a one-shot diag build:
+
+- `place_army_starts` walks the digest ids `[0e,05,0d,0b,0c,04]` and for each
+  calls the probe `army_near` (`FUN_00428007`/`428078`), which reads the army's
+  map coord at **`byte [eax + eax*2 + 0x53fa1c]` with `eax = id`** — i.e. a
+  **packed stride-3** table `coord[id*3]` based at `0x53fa1c` (= `g_per_army_768`
+  `0x53f9b0` + `0x6c`).  The port's `army_near` (game_init.c) matches this byte
+  for byte.
+- `setup_capitals` (`FUN_00468d4f`, inside step-6 `setup_overworld`) writes the
+  capital/secondary cursors to the SAME base but at **`[ecx + ecx*2 + 0x53fa1c]`
+  with `ecx = key << 8`** → `key*0x300 + 0x6c`, i.e. **stride `0x300`** (one per
+  per-army record).  These two tables share base `0x53fa1c` but never overlap
+  for small ids — `setup_capitals` fills records 1..count's `+0x6c`; the probe
+  reads record-0's body.
+- A diag build (`-DGI_DIAG_ARMY_STARTS`) confirms: for every digest id the port
+  reads `coord=(0,0)` and both rawflag probes return 0 → **0 placed** (entry 78
+  stays 0, entry-5 capital records stay unstamped).  Retail places **6** (only
+  `0x427ed0` writes `0x5530b4`, so retail genuinely placed them).
+- Exhausted the displacement-form writers of `0x53fa1c`: `load_strat_map`
+  (`FUN_00467770` — bit-0x40 only `append`s, bit-0x80 only `roster_add`s, no
+  coord store), `setup_capitals` (stride `0x300`), and the player roster
+  (stores at `0x568db0`, not here).  **None populate the packed stride-3
+  region.**  Since 6 distinct category markers can't all sit at (0,0), retail
+  must fill `coord[id*3]` before step 8 via a **computed-base store** (no
+  literal `0x53fa1c` displacement — invisible to a byte search) whose output is
+  transient (record-0's `+0x6c` region already matches retail in the *save*, so
+  it is overwritten before the step-19 save).
+
+**Takeaway:** the entry-78 / entry-5-capital cascade is gated by this
+**unported coord-table populator**, NOT by the category buckets.  Finding it
+needs a frida mem-watch on `0x53fa1c` across a retail new-game (or r2 hunting
+computed-base stores), and belongs to the per-army-setup frontier.  See
+docs/findings/new-game-save-parity.md #1.

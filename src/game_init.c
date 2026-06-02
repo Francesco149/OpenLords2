@@ -1026,6 +1026,18 @@ void engine_game_init(void)
     engine_game_init_seed_scalars();
     /* 6: overworld descriptor build (plane-unpack + autotile, single LFSR). */
     engine_territory_setup_overworld(&rngs);          /* 4676e0 */
+    /* 6b: mirror the computed category-bucket cluster into its two save homes.
+     * Retail's buckets/digest ARE the globals DAT_00567970 / DAT_00569518 (save
+     * entries 138/139); the port merges them into one struct (g_gi_strat_buckets)
+     * for cluster locality, so the homes must be reconciled here — before step 8
+     * (place_army_starts reads the digest at s_slot_00569518) and before the
+     * step-19 save.  The two retail globals are non-contiguous, so the single
+     * struct can't overlay them; we copy each member to its home.  See
+     * docs/findings/new-game-save-parity.md #1 + engine-quirks. */
+    memcpy(s_slot_00567970, g_gi_strat_buckets.buckets,
+           sizeof g_gi_strat_buckets.buckets);        /* entry 138 — buckets[6][16] */
+    memcpy(s_slot_00569518, g_gi_strat_buckets.digest,
+           sizeof g_gi_strat_buckets.digest);         /* entry 139 — digest[6]      */
     /* 7: per-army baseline economy/state row. */
     engine_game_init_seed_army_baseline();            /* 451150 */
     /* 8: place each army's start marker. */
