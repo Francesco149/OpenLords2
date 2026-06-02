@@ -6205,3 +6205,38 @@ Fix: bind it to the same `g_overworld_map` the other modules use, next to
 (`main.c` post-load) paths.  Lesson: a module-local bound pointer with no
 production binder is invisible to unit tests (which bind their own scratch grid) —
 grep every `*_bind_*` setter for a non-test caller when splitting a shared global.
+
+## 176 — the strategic scroll origin (`DAT_005651b4/b8`) is ONE retail global but TWO port storages; the new-game capital recenter was written to the save mirror, not the render camera
+
+Retail has a single scroll-origin storage, `DAT_005651b4` (col) / `DAT_005651b8`
+(row), read by **both** the strategic renderer (as the terrain-walk start) **and**
+the save serialiser (entries 16/17).  Three writers touch it: `FUN_00498270`
+(map setup, default **20/74**), the recenter-on-capital chain (`FUN_00432746` →
+`FUN_0043278b`, which sets it to **col-4 / evenrow-12** = the capital-centred
+**24/2** on map 0), and load (the save value survives because retail's load never
+re-runs `FUN_00498270`).
+
+The port **split that one global into two storages**:
+- the renderer reads `engine_map_init`'s `g_col_start`/`g_row_start` statics;
+- the save reads the `s_slot_005651b4`/`s_slot_005651b8` schema mirrors;
+- the recenter (`engine_territory_recenter_on_capital`) writes **only the
+  `s_slot` mirror**.
+
+So the recenter moved the *save's* camera but not the *rendered* camera.  The
+`--newgame` seat originally "fixed" the resulting save↔render divergence by
+clobbering the `s_slot` mirror back to the render statics' default (20/74) — which
+picked the **wrong winner**: the first new-game frame drew at the map default
+instead of the capital, and the save carried 20/74 instead of retail's 24/2.
+
+Fix: bridge the *other* direction — after the new-game init, push the recenter'd
+`s_slot` scroll into the render camera via `engine_map_init_set_scroll(...)`,
+exactly as the LOAD path (`engine_map_post_load`) already does after
+`engine_map_init_strategic` resets to the default.  Now both the render and the
+save reflect 24/2.  (Verified: a `DIAG` log confirmed the recenter produces
+col=24/row=2 pre-clobber; save entries 16/17 then match `lastturn.sav` byte-exact
+and the rendered frame recentres on the capital — user-confirmed via feed.)
+
+Same family as #175 (a split shared-grid global): when retail has ONE global and
+the port shards it per-consumer, every writer must fan out to all shards, or the
+one consumer reading a stale shard silently diverges.  Grep: a `*_set_scroll` /
+`*_bind_*` that writes one shard but not the sibling is the smell.

@@ -2070,13 +2070,19 @@ static void bringup_newgame(int map_id)
              g_engine_state, engine_pl8_data_ready(),
              (int)s_slot_00553edc, (int)s_slot_0057c934);
 
-    /* Sync the save's scroll (entries 16/17) to the ACTUAL rendered scroll
-     * (engine_map_init's camera) so a retail LOAD of this save lands on the
-     * exact frame the port renders — recenter_on_capital wrote the capital
-     * scroll to the save entries but the render reads engine_map_init's
-     * camera, so without this the two diverge. */
-    s_slot_005651b4 = (uint32_t)engine_map_init_col_start();
-    s_slot_005651b8 = (uint32_t)engine_map_init_row_start();
+    /* Push the capital-centred scroll the new-game init computed (entries
+     * 16/17 = DAT_005651b4/b8, written by recenter_on_capital inside
+     * engine_game_start → setup_realms) into the render camera, so the first
+     * strategic frame is centred on the player's capital — matching retail,
+     * whose single scroll storage (DAT_005651b4/b8) is read by BOTH the
+     * renderer and the save.  The port splits that storage (the renderer
+     * reads engine_map_init's statics, the save reads the s_slot mirror), so
+     * the recenter's value must be bridged across here — exactly as the LOAD
+     * path does (engine_map_post_load) after engine_map_init_strategic resets
+     * to the new-game default.  Verified: recenter yields col=24/row=2 on
+     * map 0, matching retail's lastturn.sav (was 20/74, the render default,
+     * which clobbered the recenter output and left the frame off-capital). */
+    engine_map_init_set_scroll((int)s_slot_005651b4, (int)s_slot_005651b8);
 
     /* Dump the new-game state to a save so retail can be driven to LOAD the
      * EXACT same world (a deterministic truth|mine|diff: retail's renderer

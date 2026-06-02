@@ -142,9 +142,23 @@ a *separate* root cause, see the box below.  Original analysis kept for context:
     Interaction state advanced by clicking through players; the headless seat
     doesn't, so it sits at its own value.  Hard-coding 0x0b would bake in a
     capture artifact, not port behaviour.
-  - **16/17** (`0x5651b4`/`0x5651b8`): the camera scroll col/row — retail
-    24/2, port 20/74 (the map-init defaults).  A new-game camera-position
-    divergence (config-screen camera FUN_00451fcc); deferred with camera work.
+  - **16/17** (`0x5651b4`/`0x5651b8`): the camera scroll col/row — **FIXED**.
+    The recenter-on-capital (`engine_territory_recenter_on_capital`
+    `FUN_00432746` → `_recenter_on_tile` `FUN_0043278b`, run by `setup_realms`)
+    already computed the capital-centred scroll **24/2** into the save globals
+    (verified live: `DIAG recenter scroll s_slot col=24 row=2`).  The bug was a
+    **scalar-wall storage split**: retail has ONE scroll storage
+    (`DAT_005651b4/b8`) read by both the renderer and the save, but the port
+    splits it (the renderer reads `engine_map_init`'s `g_col_start/g_row_start`
+    statics — left at the map-init default 20/74 — while the save reads the
+    `s_slot` mirror).  The `--newgame` seat had *clobbered* the recenter output
+    back to the render default (20/74) to keep save==render, picking the wrong
+    winner.  **Fix:** bridge the other way — push the recenter'd `s_slot` scroll
+    into the render camera via `engine_map_init_set_scroll`, exactly as the LOAD
+    path (`engine_map_post_load`) already does.  Now the first new-game frame
+    is centred on the player's capital (matching retail) AND the save carries
+    24/2 byte-exact.  Entries 16/17 drop from the diff → **77 B → 75 B,
+    18 → 16 entries**.  See engine-quirks (camera scroll-storage split).
   - **18/19** (`0x58fe28`/`0x58fe08`): the **RNG state** (`g_rng_state_a/b`).
     Port writes 0 — the RNG runs on private statics in engine.c, never mirrored
     into the save-schema globals (classic scalar-wall).  But even if mirrored it
@@ -173,17 +187,18 @@ nix develop -c python3 tools/frida_capture.py --remote cutestation.soy:27042 \
 nix develop -c python3 tools/save_diff.py "$GAMEDIR/lastturn.sav" "$GAMEDIR/port_newgame.sav"
 ```
 **#1 (bucket cluster + placement cascade) and #2 (name/title) are fully DONE,
-and #5 is mostly seeded** (73/75/76/84/197/207 + 86).  Total save-diff vs
-`lastturn.sav`: **77 B** across 18 entries (down from 251 → 101 → 83 → 77).
-Of the residual 77 B:
+#5 is mostly seeded** (73/75/76/84/197/207 + 86), **and the camera scroll
+16/17 is FIXED** (capital-centred 24/2, render + save).  Total save-diff vs
+`lastturn.sav`: **75 B** across 16 entries (down from 251 → 101 → 83 → 77 → 75).
+Of the residual 75 B:
 - **20 B** are save-point artifacts (entries 124/150/151/152/159–164) — the
   port is already correct; retail's step-19 `lastturn.sav` just predates them.
 - **9 B** entry 0 — autotile build residual (#3, deferred).
 - **37 B** entries 3/4 — AI economy/strategy (#4, turn-driver frontier).
 - **8 B** entries 18/19 — RNG state (rides the turn-driver frontier, #5).
-- **3 B** entries 16/17/79 — camera position + selection cursor (#5, deferred).
+- **1 B** entry 79 — config-screen player-selection cursor (#5, deferred).
 
 So everything that is a clean, faithful one-liner is now seeded; the rest ride
-the autotile / turn-driver / camera frontiers (none new-game-specific) or are
-artifacts.  Next genuine new-game-specific targets: the camera position (16/17)
-once the config-screen camera (FUN_00451fcc) is ported.
+the autotile / turn-driver frontiers (none new-game-specific) or are artifacts.
+The new-game camera frame is now byte-exact + visually confirmed (the first
+strategic frame recentres on the player's capital, user-confirmed via feed).
