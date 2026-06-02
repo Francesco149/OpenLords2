@@ -1369,6 +1369,8 @@ struct test_case {
     X(map_query_ring_only_bit1_uses_radius_d) \
     X(map_query_ring_bit0_distance_4_returns_3) \
     X(map_query_ring_out_of_range_returns_0) \
+    X(map_query_ring_at_reports_matched_cell) \
+    X(map_query_ring_at_miss_leaves_outputs) \
     \
     X(strat_cost_water_blocked) \
     X(strat_cost_level_gate) \
@@ -1866,6 +1868,9 @@ struct test_case {
     X(engine_combat_condition_mixed) \
     X(engine_combat_condition_roundup_and_empty) \
     X(engine_combat_halve_garrison) \
+    X(engine_combat_transfer_ownership_reassign) \
+    X(engine_combat_transfer_ownership_reserve_underflow) \
+    X(engine_combat_transfer_army_no_cell_disbands) \
     X(engine_diplomacy_clear_treaty) \
     X(engine_diplomacy_broadcast_penalty) \
     X(engine_diplomacy_battle_adjust_guards) \

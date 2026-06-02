@@ -17,6 +17,7 @@
 #include "t.h"
 #include "engine_combat.h"
 #include "engine_realm_upkeep.h"   /* shares the merc-contract triple */
+#include "engine_map_query.h"      /* bind_cell_descriptors (transfer-army ring) */
 #include "save.h"
 #include "save_schema_globals.h"   /* s_slot_0053f23c (wage divisor) */
 
@@ -437,5 +438,109 @@ int test_engine_combat_halve_garrison(void)
     T_ASSERT_EQ_U(r[0x1c], 0);
     T_ASSERT_EQ_U(r[0x14c], 0);
     T_ASSERT_EQ_I(I32(r, 0x15c), 18);   /* recomputed wage 72/4 */
+    return 0;
+}
+
+/* ===================================================================== *
+ *  Combat-initiation SCC — the pieces that mutate save state without     *
+ *  pulling in the full economy / battlefield-render machinery.           *
+ *  (The full auto-resolve chain is covered byte-exactly by the retail    *
+ *  diff target `combat_dispatch`.)                                        *
+ * ===================================================================== */
+
+#define R_REC(k)   (&g_per_army_768[(k) * 0x300])
+#define P_REC(s)   (&g_player_strategic_352[(s) * 0x160])
+
+static void scc_reset(void)
+{
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(s_slot_00565410, 0, sizeof s_slot_00565410);
+    g_combat_render_active = 0;
+    s_slot_0057c8cc = 1;     /* local player */
+    s_slot_0053f23c = 0;     /* difficulty base → active capture penalty = 10 */
+    s_slot_0056d5dc = 6;     /* player count (keeps the victory popup off) */
+}
+
+/* FUN_004a72fe: a non-local owner captures an unowned region — reassign the
+ * region, bump the conquest counters, decay the region's popularity by the
+ * active penalty (10), and post the "territory captured" notice (0x74). */
+int test_engine_combat_transfer_ownership_reassign(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+
+    uint8_t *no  = P_REC(2);
+    uint8_t *reg = R_REC(5);
+    no[0x05] = 1;            /* new owner active → penalty = f23c*0x14 + 10 = 10 */
+    no[0x0a] = 7;            /* banner key → copied to region +0x07 */
+    reg[0x05] = 0;           /* region currently unowned */
+    reg[0x0c] = 30;          /* reserve ≥ penalty → both fields debited */
+    reg[0x17] = 50;
+
+    engine_combat_transfer_ownership(2, 5, &evq, 0);
+
+    T_ASSERT_EQ_U(reg[0x05], 2);    /* owner reassigned */
+    T_ASSERT_EQ_U(no[0x29], 1);     /* conquests bumped */
+    T_ASSERT_EQ_U(no[0x2a], 1);     /* high-water updated */
+    T_ASSERT_EQ_U(reg[0x0c], 20);   /* 30 - 10 */
+    T_ASSERT_EQ_U(reg[0x17], 40);   /* 50 - 10 */
+    T_ASSERT_EQ_U(reg[0x07], 7);    /* banner copied from new owner +0x0a */
+    T_ASSERT_EQ_I(evq.write_idx, 1);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0x74);
+    T_ASSERT_EQ_I(evq.ring[0].target, 2);
+    return 0;
+}
+
+/* The popularity decay's reserve-underflow branch: when the reserve (+0x0c) is
+ * below the penalty, the popularity (+0x17) drops only by the reserve and the
+ * reserve floors to 0 (FUN_004a72fe, the `(char)+0x0c < local_8` arm). */
+int test_engine_combat_transfer_ownership_reserve_underflow(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+
+    uint8_t *no  = P_REC(2);
+    uint8_t *reg = R_REC(5);
+    no[0x05] = 1;
+    reg[0x05] = 0;
+    reg[0x0c] = 5;           /* reserve < penalty (10) */
+    reg[0x17] = 50;
+
+    engine_combat_transfer_ownership(2, 5, &evq, 0);
+
+    T_ASSERT_EQ_U(reg[0x05], 2);
+    T_ASSERT_EQ_U(reg[0x0c], 0);    /* reserve floored */
+    T_ASSERT_EQ_U(reg[0x17], 45);   /* 50 - reserve(5) */
+    return 0;
+}
+
+/* FUN_00437535: when no free cell exists near the destination (no cell grid
+ * bound → the ring probe misses), the marching army is disbanded rather than
+ * placed.  The placement branch would stamp the occupant's cell offset (+0x0c)
+ * non-zero; instead the disband branch runs, decrementing the owner's per-type
+ * strategic unit counter (+0x2d) and leaving +0x0c at 0. */
+int test_engine_combat_transfer_army_no_cell_disbands(void)
+{
+    scc_reset();
+    engine_map_query_bind_cell_descriptors(NULL);   /* force a ring miss */
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+
+    uint8_t *t = CREC(4);
+    t[0x00] = 3;             /* occupant owner */
+    t[0x0a] = 20;            /* col */
+    t[0x0b] = 20;            /* row → placement would write (20*0x40+20)*8 ≠ 0 */
+    I32(t, 0x0c) = 0;
+    /* owner 3's per-type counter for this unit's type (rec +0x14f == 0). */
+    P_REC(3)[0x2d] = 5;
+
+    engine_combat_transfer_army(4, 5, &evq, 0);
+
+    T_ASSERT_EQ_I(I32(t, 0x0c), 0);    /* placement skipped */
+    T_ASSERT_EQ_U(P_REC(3)[0x2d], 4);  /* disband decremented the counter */
     return 0;
 }

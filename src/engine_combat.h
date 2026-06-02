@@ -115,4 +115,77 @@ void engine_combat_recompute_condition(int rec);
  * the per-turn wage.  Run by the aftermath when a garrison is captured. */
 void engine_combat_halve_garrison(int rec);
 
+/* ===================================================================== *
+ *  Combat-initiation SCC (FUN_004ac3c6 / 437535 / 4a7158 / 4ab383 /      *
+ *  4a72fe) — the 5 mutually-recursive bodies reached from the turn       *
+ *  driver when a realm loses its last territory or an army marches into  *
+ *  a defended region.  The auto-resolve path (neither side garrisoned)   *
+ *  is pure save-state logic; the interactive path hands off to the       *
+ *  battlefield renderer through the seams below.                          *
+ * ===================================================================== */
+
+#include "engine_event_queue.h"   /* engine_event_queue_state_t */
+
+/* Bind the optional deferred-audio seams.  All default NULL (silent):
+ *   wav_fn   — retail FUN_00427990(name, loop, z): the s080 / ff_lose cues
+ *   click_fn — retail FUN_00499aca(): the territory-captured click
+ * The battlefield-render clock (retail timeGetTime) used only on the
+ * interactive/animation handoff is bound separately; NULL → 0. */
+void engine_combat_bind_wav_fn(void (*fn)(const char *name, int loop, int z));
+void engine_combat_bind_click_fn(void (*fn)(void));
+void engine_combat_bind_clock_fn(uint32_t (*fn)(void));
+
+/* Render-handoff state mirror (retail DAT_0056d5c8): 1 only while the
+ * interactive battlefield render is active (set by the renderer between the
+ * resolver and the aftermath).  0 on the headless auto-resolve path, where the
+ * aftermath fully disbands the loser instead of halving a captured garrison.
+ * Exposed so the future battle-UI wiring (and the host tests) can drive it. */
+extern int g_combat_render_active;
+
+/* Current strategic-map selection (retail DAT_00553f8c): the territory whose
+ * +0x10 region key seeds the combat region scalar (s_slot_0056822c) at dispatch
+ * entry.  A runtime UI cursor, not save state; injected for the diff/tests. */
+extern int g_combat_active_terr;
+
+/* Port of FUN_004ac3c6 @ 0x4ac3c6 (211 B, __cdecl void(int)).  Demolish realm
+ * `key`: zero its army-economy header fields, re-run its workforce / provision /
+ * production / income plan, then — if it has a pending territory transfer
+ * (+0x1bc) — hand that territory to engine_combat_transfer_army. */
+void engine_combat_demolish_realm(int key, engine_event_queue_state_t *evq,
+                                  int mp_active);
+
+/* Port of FUN_00437535 @ 0x437535 (390 B, __cdecl void(uint,int)).  Move army
+ * occupant `occupant` into a free cell near realm `key`'s seat; if the move
+ * lands on a defended region, dispatch the resulting fight.  When no free cell
+ * exists the occupant is disbanded instead. */
+void engine_combat_transfer_army(unsigned occupant, int key,
+                                 engine_event_queue_state_t *evq, int mp_active);
+
+/* Port of FUN_004a7158 @ 0x4a7158 (402 B, __cdecl int(int,int)).  Combat
+ * dispatch: park the combatant indices in the combat scalars, size the fight,
+ * then either auto-resolve it head-less (returns 0) or hand off to the
+ * interactive battlefield render (returns 1, screen-state + s080 cue). */
+int  engine_combat_dispatch(int attacker, int defender,
+                            engine_event_queue_state_t *evq, int mp_active);
+
+/* Port of FUN_004ab383 @ 0x4ab383 (1751 B, __cdecl void(int)).  Battle
+ * aftermath: apply the winner's resupply / the loser's capture-or-disband,
+ * transfer the conquered region's ownership, post the result notifications,
+ * adjust diplomacy, then re-plan every realm's economy and re-run the AI.
+ * `render` (retail param) is non-zero only when invoked from the battlefield
+ * renderer (the animation-teardown block); the dispatch always passes 0. */
+void engine_combat_aftermath(int render, engine_event_queue_state_t *evq,
+                             int mp_active);
+
+/* Port of FUN_004a72fe @ 0x4a72fe (1516 B, __cdecl void(uint,uint)).  Transfer
+ * region `key`'s ownership to player `new_owner`: recompute the new owner's
+ * standings aggregate, post the appropriate captured/lost/eliminated
+ * notification (codes 0x72..0x81), reassign the region owner and decay its
+ * popularity — or, if the new owner already conquered before and owns no
+ * neighbour, demolish the region instead (recurses to
+ * engine_combat_demolish_realm). */
+void engine_combat_transfer_ownership(unsigned new_owner, unsigned key,
+                                      engine_event_queue_state_t *evq,
+                                      int mp_active);
+
 #endif /* OPENLORDS2_ENGINE_COMBAT_H */

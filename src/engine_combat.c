@@ -17,9 +17,17 @@
 #include <stdint.h>
 
 #include "engine_combat.h"
-#include "save.h"                 /* g_per_territory_420, g_unit_table_20 */
-#include "engine_realm_upkeep.h"  /* engine_unit_clear_contract (FUN_004ac6fe) */
+#include "save.h"                 /* g_per_territory_420, g_per_army_768, … */
+#include "save_schema_globals.h"  /* s_slot_* combat / season / player scalars */
+#include "engine_realm_upkeep.h"  /* clear_contract, disband, map link/unlink, … */
 #include "engine_math.h"          /* percent_of / percent_div / lookup_threshold */
+#include "engine_map_query.h"     /* nearest_feature_ring_at (FUN_0046733c) */
+#include "engine_realm.h"         /* replan_economies / recompute_realm_income / … */
+#include "engine_army_economy.h"  /* provision / plan_realm */
+#include "engine_territory.h"     /* allocate_realm_workforce / highlight_key_cells */
+#include "engine_ranking.h"       /* recompute_player_aggregate / check_elimination */
+#include "engine_diplomacy.h"     /* battle_adjust */
+#include "engine_army_ai.h"       /* run_turn (FUN_0049df48 ≡ FUN_0049a990) */
 
 /* --- per-territory occupant ("army") record fields (stride 0x1a4) ---------
  * Shared with engine_realm_upkeep.c's UNIT_* layout; named here for the
@@ -313,4 +321,376 @@ void engine_combat_halve_garrison(int rec)
     r[C_SCRATCH_1C] = 0;
     r[C_FLAG_14C]   = 0;
     engine_unit_recompute_wage(rec);
+}
+
+/* ===================================================================== *
+ *  Combat-initiation SCC — the 5 mutually-recursive bodies              *
+ *  (FUN_004ac3c6 / 00437535 / 004a7158 / 004ab383 / 004a72fe).          *
+ * ===================================================================== */
+
+/* --- additional per-territory occupant fields (g_per_territory_420) ----- */
+#define C_COL       0x0a    /* overworld column (i8)                        */
+#define C_ROW       0x0b    /* overworld row (i8)                           */
+#define C_CELLOFS   0x0c    /* (row*0x40+col)*8 byte offset into cell grid  */
+#define C_ARMYKEY   0x10    /* region key of the occupant (u8)              */
+#define C_F153      0x153   /* per-battle "presence" accumulator (i8)       */
+#define C_F154      0x154   /* baseline the +0x153 accumulator resets to(i8)*/
+#define C_F167      0x167   /* secondary takeover flag (u8)                 */
+#define C_F198      0x198   /* region-transfer pending flag (u8)            */
+#define C_F199      0x199   /* survives-this-battle flag (u8)               */
+#define C_F19A      0x19a   /* defender-occupant index when this army moves (u8)*/
+
+/* --- per-region army-economy record (g_per_army_768, stride 0x300) ------- */
+#define RSTRIDE     0x300
+#define REGREC(k)   (&g_per_army_768[(k) * RSTRIDE])
+#define R_OWNER     0x05    /* region owning player (u8)                    */
+#define R_F07       0x07    /* owner's banner/colour key (u8, ← strat +0xa) */
+#define R_F0C       0x0c    /* region popularity reserve (i8)               */
+#define R_F17       0x17    /* region popularity (i8)                       */
+#define R_F1B0      0x1b0   /* cleared on demolish (u8)                     */
+#define R_PENDING   0x1bc   /* pending territory-transfer occupant (i32)    */
+#define R_F297      0x297   /* 4 × i8 (stride 0x18) cleared on demolish     */
+
+/* --- per-player strategic record (g_player_strategic_352, stride 0x160) -- */
+#define PSTRIDE     0x160
+#define PREC(s)     (&g_player_strategic_352[(s) * PSTRIDE])
+#define P_ACTIVE    0x05    /* realm in-game / has-data flag (u8)           */
+#define P_F0A       0x0a    /* banner/colour key (u8)                       */
+#define P_CONQ      0x29    /* conquests this game (u8)                     */
+#define P_CONQMAX   0x2a    /* conquest high-water mark (u8)                */
+#define P_TERRCNT   0x60    /* territory count (u8)                         */
+
+/* Deferred-audio + render-clock seams (all default NULL / silent). */
+static void     (*g_combat_wav_fn)(const char *, int, int);
+static void     (*g_combat_click_fn)(void);
+static uint32_t (*g_combat_clock_fn)(void);
+
+void engine_combat_bind_wav_fn(void (*fn)(const char *, int, int)) { g_combat_wav_fn = fn; }
+void engine_combat_bind_click_fn(void (*fn)(void))                 { g_combat_click_fn = fn; }
+void engine_combat_bind_clock_fn(uint32_t (*fn)(void))             { g_combat_clock_fn = fn; }
+
+static void     combat_wav(const char *n, int a, int b) { if (g_combat_wav_fn) g_combat_wav_fn(n, a, b); }
+static uint32_t combat_clock(void) { return g_combat_clock_fn ? g_combat_clock_fn() : 0; }
+
+int g_combat_render_active;      /* DAT_0056d5c8 */
+int g_combat_active_terr;        /* DAT_00553f8c */
+int g_combat_winner_owner;       /* DAT_005440cc — winner owner (UI, not save) */
+
+/* Interactive battlefield-render handoff scalars (retail runtime globals; not
+ * save state).  Written on the interactive/animation path, read by the future
+ * battle-UI wiring; inert on the headless auto-resolve path the diff exercises. */
+static int      g_combat_screen_state;   /* DAT_004eac50 0x12 interactive / 0x13 anim */
+static int      g_combat_screen_mode;    /* DAT_0057d340 */
+static int      g_combat_anim_a;         /* DAT_00553c70 */
+static int      g_combat_anim_b;         /* DAT_00553d20 */
+static uint32_t g_combat_anim_clock;     /* _DAT_005689a0 / _DAT_0057a0d0 */
+static int      g_combat_audio_latch;    /* _DAT_005533f0 */
+static int      g_combat_render_dirty;   /* DAT_0052afcc */
+static int      g_combat_flag_530d0;     /* DAT_005530d0 */
+static int      g_combat_flag_567d0c;    /* DAT_00567d0c */
+static int      g_combat_flag_53f284;    /* DAT_0053f284 — quick-anim suppressor */
+static uint32_t g_combat_anim_t0;        /* DAT_0053e994 — animation start time */
+static uint32_t g_combat_anim_deadline;  /* _DAT_00568d9c */
+static int      g_combat_anim_scratch[10]; /* DAT_00515d60[10] */
+static int      g_combat_anim_53fc8;     /* DAT_00553fc8 */
+
+/* Build the per-player has-data filter table the event queue post() consults
+ * (retail (&DAT_0057bf05)[i*0x160], one byte per slot, last slot inert). */
+static void build_has_data(uint8_t hd[7])
+{
+    for (int i = 0; i < 6; i++)
+        hd[i] = PREC(i)[P_ACTIVE];
+    hd[6] = 0;
+}
+
+/* Run the resolver (FUN_004aad07) over the parked combatant scalars and
+ * publish its winner outputs (DAT_0057c924 winner / DAT_005440cc owner), the
+ * way retail's resolver writes them in-line.  Clears the render-handoff flag
+ * (DAT_0056d5c8) exactly as the resolver does at entry. */
+static void resolve_combat(void)
+{
+    g_combat_render_active = 0;
+    engine_combat_result_t res;
+    engine_combat_resolve_casualties((int)s_slot_00568210, (int)s_slot_00568218,
+                                     (int)s_slot_0055401c, (int)s_slot_0053e8fc, &res);
+    s_slot_0057c924       = (uint32_t)res.winner;
+    g_combat_winner_owner = res.winner_owner;
+}
+
+/* Port of FUN_004ac3c6 — demolish realm `key`. */
+void engine_combat_demolish_realm(int key, engine_event_queue_state_t *evq, int mp_active)
+{
+    uint8_t *reg = REGREC(key);
+    reg[R_OWNER] = 0;
+    reg[R_F07]   = 0;
+    for (int i = 0; i < 4; i++)
+        reg[R_F297 + i * 0x18] = 0;
+    reg[R_F1B0] = 0;
+
+    engine_territory_allocate_realm_workforce(key);            /* FUN_0044f6e7 */
+    engine_army_economy_provision(key, (int)s_slot_0057c934);  /* FUN_0044df5f */
+    engine_army_economy_plan_realm(key, (int)s_slot_0057c92c); /* FUN_004485a5 */
+    engine_realm_recompute_realm_income(key);                  /* FUN_0044b80b */
+
+    int32_t pending = rd_i32(reg, R_PENDING);
+    if (pending != 0)
+        engine_combat_transfer_army((unsigned)pending, key, evq, mp_active);
+}
+
+/* Port of FUN_00437535 — move occupant `occupant` to a free cell near realm
+ * `key`, dispatching combat if the destination is defended. */
+void engine_combat_transfer_army(unsigned occupant, int key,
+                                 engine_event_queue_state_t *evq, int mp_active)
+{
+    uint8_t *t = CREC((int)occupant);
+
+    int col = 0, row = 0;
+    int hit = engine_map_query_nearest_feature_ring_at(
+                  (int8_t)t[C_COL], (int8_t)t[C_ROW], &col, &row);  /* FUN_0046733c */
+    if (hit == 0) {
+        engine_unit_disband((int)occupant);                        /* FUN_004aa039 */
+        return;
+    }
+
+    engine_unit_map_unlink((int)occupant);                         /* FUN_0046ec6e */
+    wr_i32(t, C_CELLOFS, (row * 0x40 + col) * 8);
+    t[C_COL]  = (uint8_t)col;
+    t[C_ROW]  = (uint8_t)row;
+    t[C_F198] = 0;
+    wr_i32(REGREC(key), R_PENDING, 0);
+    engine_unit_map_link((int)occupant);                           /* FUN_0046eddf */
+
+    uint8_t def = t[C_F19A];
+    if (def != 0 &&
+        engine_combat_dispatch((int)occupant, def, evq, mp_active) != 0)
+        s_slot_0056822c = (uint32_t)key;
+
+    engine_realm_collect_territory_income();                       /* FUN_004ad6c0 */
+    g_combat_flag_530d0 = 1;
+    if (REGREC(key)[R_OWNER] == (uint8_t)s_slot_0057c8cc && key == (int)s_slot_0057c93c)
+        g_combat_flag_530d0 = 1;
+}
+
+/* Port of FUN_004a7158 — combat dispatch. */
+int engine_combat_dispatch(int attacker, int defender,
+                           engine_event_queue_state_t *evq, int mp_active)
+{
+    s_slot_0053e8fc = 0;   /* quick-resolve cleared on every dispatch */
+    s_slot_0056822c = (uint8_t)CREC(g_combat_active_terr)[C_ARMYKEY];
+    s_slot_00568210 = (uint32_t)attacker;
+    s_slot_00568218 = (uint32_t)defender;
+
+    engine_combat_clear_battle_result(attacker);                   /* FUN_004aa89f */
+    engine_combat_clear_battle_result((int)s_slot_00568218);
+
+    int sized = engine_combat_size_battle((int)s_slot_00568210, (int)s_slot_00568218,
+                                          (int)s_slot_0057c8cc);    /* FUN_004a6a30 */
+    if (sized == 0) {
+        resolve_combat();                                          /* FUN_004aad07 */
+        engine_combat_aftermath(0, evq, mp_active);                /* FUN_004ab383 */
+        return 0;
+    }
+
+    if (g_combat_flag_53f284 == 0 && g_combat_both_garrison == 0) {
+        /* Quick-anim path: resolve head-less, then play back the result. */
+        engine_combat_load_muster((int)s_slot_00568210, (int)s_slot_00568218);
+        resolve_combat();
+        engine_combat_aftermath(0, evq, mp_active);
+        g_combat_screen_state = 0x13;
+        g_combat_anim_clock   = combat_clock();
+        g_combat_anim_a       = (int)s_slot_00568210;
+        g_combat_anim_b       = (int)s_slot_00568218;
+        g_combat_screen_mode  = 2;
+        return 0;
+    }
+
+    /* Fully interactive battlefield: hand off to the renderer (s080 cue). */
+    g_combat_screen_state = 0x12;
+    g_combat_anim_clock   = combat_clock();
+    g_combat_screen_mode  = 2;
+    g_combat_audio_latch  = 1;
+    if (g_combat_local_role == 1)
+        combat_wav("s080_03.wav", 1, 0);
+    else if (g_combat_local_role == 2)
+        combat_wav("s080_01.wav", 1, 0);
+    else
+        combat_wav("s080_02.wav", 1, 0);
+    return 1;
+}
+
+/* Shared aftermath tail: clear both result records, optionally halve the
+ * captured garrison, then disband-or-spare the loser and run the elimination /
+ * diplomacy follow-ups.  `loser`/`winner` are occupant indices. */
+static void aftermath_settle_loser(int loser, int winner,
+                                   engine_event_queue_state_t *evq, int mp_active)
+{
+    engine_combat_clear_battle_result((int)s_slot_00568210);
+    engine_combat_clear_battle_result((int)s_slot_00568218);
+    if (g_combat_render_active == 1)
+        engine_combat_halve_garrison(loser);                       /* FUN_004ad8cc */
+
+    uint8_t *L          = CREC(loser);
+    int      loser_own  = (int8_t)L[C_OWNER];
+
+    if (L[C_F199] == 0 || rd_i32(L, C_VALUE) == 0) {
+        if (g_combat_render_active == 1) {
+            if (rd_i32(L, C_VALUE) < 0x32) {
+                uint8_t hd[7]; build_has_data(hd);
+                engine_event_queue_post(evq, 0, loser_own, 0x120, 0, 0, 0, 0, 0,
+                                        hd, (int)s_slot_0057c8cc);
+                engine_unit_disband(loser);                        /* FUN_004aa039 */
+            } else {
+                L[C_F199] = 0;
+            }
+        } else {
+            engine_unit_disband(loser);
+        }
+    } else {
+        L[C_F199] = 0;
+    }
+
+    engine_ranking_check_elimination((unsigned)loser_own, evq, mp_active); /* FUN_0049b42b */
+    if (loser_own != 0)
+        engine_diplomacy_battle_adjust(loser_own, (int8_t)CREC(winner)[C_OWNER],
+                                       0x14, evq);                 /* FUN_004a1ee1 */
+}
+
+/* Port of FUN_004ab383 — battle aftermath / takeover.  `render` is non-zero
+ * only when entered from the battlefield renderer's teardown (the dispatch
+ * always passes 0). */
+void engine_combat_aftermath(int render, engine_event_queue_state_t *evq, int mp_active)
+{
+    int a = (int)s_slot_00568210;
+    int d = (int)s_slot_00568218;
+
+    if (render != 0) {
+        uint32_t now = combat_clock();
+        g_combat_anim_deadline = now + (uint32_t)(((int)s_slot_0053f26c - (int)g_combat_anim_t0) * -1000);
+        s_slot_005440c8        = g_combat_anim_t0;
+        for (int i = 0; i < 10; i++)
+            g_combat_anim_scratch[i] = 0;
+        g_combat_anim_53fc8 = 0;
+    }
+
+    if (CREC(a)[C_GARRISON] != 0 || CREC(d)[C_GARRISON] != 0)
+        g_combat_render_dirty = 1;
+
+    if ((int)s_slot_0057c924 == a) {
+        /* Attacker won. */
+        if ((int8_t)CREC(d)[C_OWNER] == (int)s_slot_0057c8cc)
+            combat_wav("ff_lose.wav", 0, 0);
+        if (CREC(d)[C_F198] != 0) {
+            wr_i32(REGREC((int)s_slot_0056822c), R_PENDING, 0);
+            engine_combat_transfer_ownership((unsigned)(int8_t)CREC(a)[C_OWNER],
+                                             s_slot_0056822c, evq, mp_active);
+        }
+        if (CREC(d)[C_F167] != 0)
+            engine_combat_transfer_ownership((unsigned)(int8_t)CREC(a)[C_OWNER],
+                                             s_slot_0056822c, evq, mp_active);
+
+        if (s_slot_0053e8fc == 0) engine_combat_recompute_condition(a); /* FUN_004a80db */
+        else                      CREC(a)[C_F199] = 0;
+        CREC(a)[C_F19A]  = 0;
+        CREC(a)[C_F153]  = (uint8_t)((int8_t)CREC(a)[C_F153] + 8);
+        if (CREC(a)[C_GARRISON] == 0)
+            CREC(a)[C_F153] = (uint8_t)((int8_t)CREC(a)[C_F154] - 1);
+
+        aftermath_settle_loser(d, a, evq, mp_active);
+    } else if ((int)s_slot_0057c924 == d) {
+        /* Defender won. */
+        if (CREC(a)[C_F198] != 0)
+            wr_i32(REGREC((int)s_slot_0056822c), R_PENDING, 0);
+        if ((int8_t)CREC(a)[C_OWNER] == (int)s_slot_0057c8cc)
+            combat_wav("ff_lose.wav", 0, 0);
+
+        if (s_slot_0053e8fc != 0) CREC(d)[C_F199] = 0;
+        if (s_slot_0053e8fc == 0) engine_combat_recompute_condition(d);
+        else                      CREC(d)[C_F19A] = 0;
+        if (CREC(d)[C_GARRISON] == 0)
+            CREC(d)[C_F153] = (uint8_t)((int8_t)CREC(d)[C_F153] + 7);
+
+        aftermath_settle_loser(a, d, evq, mp_active);
+    }
+
+    engine_realm_refresh_wage_bills();   /* FUN_004ad426 */
+    engine_realm_replan_economies();     /* FUN_00448545 */
+    engine_army_ai_run_turn();           /* FUN_0049df48 ≡ FUN_0049a990 */
+}
+
+/* Port of FUN_004a72fe — transfer region `key`'s ownership to `new_owner`. */
+void engine_combat_transfer_ownership(unsigned new_owner, unsigned key,
+                                      engine_event_queue_state_t *evq, int mp_active)
+{
+    int local = (int)s_slot_0057c8cc;
+
+    g_combat_flag_567d0c = 1;
+    if ((int)new_owner == local)
+        engine_territory_highlight_key_cells(key);                 /* FUN_0046dfd5 */
+    engine_ranking_recompute_player_aggregate(new_owner);          /* FUN_0049d1e0 */
+
+    uint8_t *no  = PREC((int)new_owner);
+    uint8_t *reg = REGREC((int)key);
+    uint8_t  region_owner = reg[R_OWNER];
+    uint8_t  key_lo       = (uint8_t)key;
+
+    int can_hold = (no[P_CONQ] == 0) ||
+                   (engine_realm_player_owns_neighbor(new_owner, (int)key) != 0); /* FUN_00467eb0 */
+
+    if (can_hold) {
+        no[P_CONQ] += 1;
+        uint8_t hd[7]; build_has_data(hd);
+
+        if ((int)new_owner == local) {
+            if (g_combat_click_fn) g_combat_click_fn();             /* FUN_00499aca */
+            if ((unsigned)no[P_CONQ] == (unsigned)s_slot_0056d5dc - 1U)
+                engine_event_queue_post(evq, 0, local, 0x7b, 0, 0xd, key_lo, region_owner, 0, hd, local);
+            else if (no[P_CONQMAX] < no[P_CONQ]) {
+                if (no[P_CONQMAX] < 2)
+                    engine_event_queue_post(evq, 0, local, 0x75, 0, 0xd, key_lo, region_owner, 0, hd, local);
+                else if (no[P_CONQMAX] < 3)
+                    engine_event_queue_post(evq, 0, local, 0x76, 0, 0xd, key_lo, region_owner, 0, hd, local);
+                else if (no[P_TERRCNT] < 0x1a)
+                    engine_event_queue_post(evq, 0, local, 0x77, 0, 0xd, key_lo, region_owner, 0, hd, local);
+                else if (no[P_TERRCNT] < 0x29)
+                    engine_event_queue_post(evq, 0, local, 0x78, 0, 0xd, key_lo, region_owner, 0, hd, local);
+                else if (no[P_TERRCNT] < 0x3d)
+                    engine_event_queue_post(evq, 0, local, 0x79, 0, 0xd, key_lo, region_owner, 0, hd, local);
+                else if (no[P_TERRCNT] < 0x51)
+                    engine_event_queue_post(evq, 0, local, 0x7a, 0, 0xd, key_lo, region_owner, 0, hd, local);
+                else
+                    engine_event_queue_post(evq, 0, local, 0x7d, 0, 0xd, key_lo, region_owner, 0, hd, local);
+            } else {
+                engine_event_queue_post(evq, 0, local, 0x7e, 0, 0xd, key_lo, region_owner, 0, hd, local);
+            }
+        } else if (region_owner == (uint8_t)local) {
+            engine_event_queue_post(evq, (int)new_owner, region_owner, 0x73, 0, 0, key_lo, 0, 0, hd, local);
+        } else if (region_owner == 0) {
+            engine_event_queue_post(evq, (int)new_owner, local, 0x74, 0, 0, key_lo, 0, 0, hd, local);
+        } else {
+            engine_event_queue_post(evq, (int)new_owner, local, 0x72, 0, 0, key_lo, region_owner, 0, hd, local);
+        }
+
+        if (region_owner != 0)
+            engine_ranking_check_elimination((unsigned)region_owner, evq, mp_active); /* FUN_0049b42b */
+
+        reg[R_OWNER] = (uint8_t)new_owner;
+
+        int adj = (no[P_ACTIVE] == 0) ? 0x1e : ((int)s_slot_0053f23c * 0x14 + 10);
+        if ((int8_t)reg[R_F0C] < adj) {
+            reg[R_F17] = (uint8_t)(reg[R_F17] - reg[R_F0C]);
+            reg[R_F0C] = 0;
+        } else {
+            reg[R_F0C] = (uint8_t)(reg[R_F0C] - (uint8_t)adj);
+            reg[R_F17] = (uint8_t)(reg[R_F17] - (uint8_t)adj);
+        }
+        reg[R_F07] = no[P_F0A];
+        if (no[P_CONQMAX] < no[P_CONQ])
+            no[P_CONQMAX] = no[P_CONQ];
+    } else {
+        if ((int)new_owner == local) {
+            uint8_t hd[7]; build_has_data(hd);
+            engine_event_queue_post(evq, 0, local, 0x81, 0, 0, key_lo, 0, 0, hd, local);
+        }
+        engine_combat_demolish_realm((int)key, evq, mp_active);    /* FUN_004ac3c6 (recurse) */
+    }
 }

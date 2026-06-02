@@ -5787,3 +5787,48 @@ diplomacy codes (0xb6/0xbd/0xbe/0xbf).
 Validated 64/64 byte-exact vs retail (`diplomacy_adjust` diff target, seed 7),
 which also covers the two callees `engine_diplomacy_clear_treaty` (4a1a54) and
 `engine_diplomacy_broadcast_penalty` (4a24d1).
+
+## 165. The combat-init SCC resolves into the UI-selected territory's region, clears quick-resolve on every dispatch, and lets a winner immediately lose a too-distant conquest
+
+The strategic-combat chokepoint is a 5-function mutually-recursive cluster
+(`FUN_004ac3c6` demolish → `FUN_00437535` transfer → `FUN_004a7158` dispatch →
+`FUN_004ab383` aftermath → `FUN_004a72fe` ownership-transfer → back to demolish),
+ported as one unit into `engine_combat.c`.  Four non-obvious behaviours:
+
+1. **The aftermath transfers the region named by the UI selection, not the
+   marching army.**  `FUN_004a7158` seeds the combat region scalar
+   `DAT_0056822c` from `(&DAT_0052f0c0)[DAT_00553f8c * 0x1a4]` — the `+0x10`
+   region key of the *currently selected* territory (`DAT_00553f8c`).  On the
+   auto-resolve path `FUN_004a7158` returns 0, so the `DAT_0056822c = key`
+   correction in `FUN_00437535` is skipped, and the aftermath's
+   `FUN_004a72fe(winner_owner, DAT_0056822c)` hands over *that* region.  The
+   transferred region is therefore coupled to the UI cursor, not to the
+   battle's own location — a port that "fixes" this to use the battle region
+   diverges from retail.
+
+2. **`FUN_004a7158` clears `DAT_0053e8fc` (quick-resolve) to 0 unconditionally
+   at entry**, before both the resolver and the aftermath run.  So the
+   difficulty multiplier (quirk in `combat_resolve`) and the aftermath's
+   `DAT_0053e8fc != 0` quick-paths *never* fire when combat is reached through
+   the turn driver — those are a separate "resolve all battles" UI entry.  The
+   dispatch path always takes the `recompute_condition` (FUN_004a80db) arm.
+
+3. **The two aftermath win-branches are asymmetric.**  Attacker-win runs the
+   ownership transfer (`FUN_004a72fe`) and bumps `+0x153` by 8 then, if the
+   winner is ungarrisoned, resets it to `+0x154 − 1`; defender-win does *no*
+   ownership transfer and bumps `+0x153` by only 7 (ungarrisoned).  The
+   quick-path field clears also differ between the branches.  They are written
+   out explicitly rather than factored, to preserve the byte sequence.
+
+4. **A winner can immediately lose a too-distant conquest.**  In
+   `FUN_004a72fe`, if the capturing player has already conquered before
+   (`+0x29 != 0`) *and* owns no neighbour of the region (`FUN_00467eb0` == 0),
+   the just-won region is demolished (`FUN_004ac3c6`, recursing the cycle)
+   instead of held — modelling supply lines: you cannot annex a region you
+   cannot reach.
+
+The auto-resolve path is pure save-state logic and is the target of the retail
+diff; the interactive path (`DAT_004eac50` 0x12/0x13 screen-state, the
+s080/ff_lose/ff_batl WAV cues, the battlefield render handoff) is bound through
+NULL-default seams (`engine_combat_bind_wav_fn` / `_click_fn` / `_clock_fn`) and
+needs human A/V verification.

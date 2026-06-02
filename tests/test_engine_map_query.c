@@ -281,3 +281,33 @@ int test_map_query_ring_out_of_range_returns_0(void)
     T_ASSERT_EQ_I(engine_map_query_nearest_feature_ring(20, 20), 0);
     return 0;
 }
+
+/* The _at variant surfaces the matched cell's (col,row) — the position
+ * retail leaves in its DAT_00569570/78 scratch for FUN_00437535. */
+int test_map_query_ring_at_reports_matched_cell(void)
+{
+    grid_reset();
+    grid_fill_rawflag(4);
+    occupy(22, 20, 1, 0x01);     /* the lone bit0 cell, distance 2 */
+    int col = -1, row = -1;
+    int d = engine_map_query_nearest_feature_ring_at(20, 20, &col, &row);
+    T_ASSERT_EQ_I(d, 1);
+    T_ASSERT_EQ_I(col, 22);
+    T_ASSERT_EQ_I(row, 20);
+    return 0;
+}
+
+/* On a miss the outputs are left untouched (callers only trust them on a
+ * non-zero return, mirroring retail's scratch reuse). */
+int test_map_query_ring_at_miss_leaves_outputs(void)
+{
+    grid_reset();
+    grid_fill_rawflag(4);
+    occupy(27, 20, 1, 0x01);     /* distance 7 — out of range */
+    int col = 7, row = 9;
+    int d = engine_map_query_nearest_feature_ring_at(20, 20, &col, &row);
+    T_ASSERT_EQ_I(d, 0);
+    T_ASSERT_EQ_I(col, 7);
+    T_ASSERT_EQ_I(row, 9);
+    return 0;
+}

@@ -42,4 +42,10 @@ int engine_map_query_box_any_rawflag_only_bit1(int col, int row, int radius,
  * the matched cell position. */
 int engine_map_query_nearest_feature_ring(int col, int row);
 
+/* As above, but also writes the matched cell's (col, row) to *out_col /
+ * *out_row (the position retail leaves in its DAT_00569570/78 scratch).  Pass
+ * NULL to ignore either; the outputs are only meaningful on a non-zero return. */
+int engine_map_query_nearest_feature_ring_at(int col, int row,
+                                             int *out_col, int *out_row);
+
 #endif /* OPENLORDS2_ENGINE_MAP_QUERY_H */

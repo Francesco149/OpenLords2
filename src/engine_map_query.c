@@ -142,10 +142,22 @@ int engine_map_query_box_any_rawflag_only_bit1(int col, int row, int radius,
  * the entity placer).  See docs/findings/engine-quirks.md quirk #130. */
 int engine_map_query_nearest_feature_ring(int col, int row)
 {
+    return engine_map_query_nearest_feature_ring_at(col, row, NULL, NULL);
+}
+
+/* As engine_map_query_nearest_feature_ring, but also surfaces the matched
+ * cell's (col, row) — the position retail leaves in the DAT_00569570/78 scratch
+ * for its callers (e.g. FUN_00437535 re-homes the moved army AT this cell).
+ * On a hit the matching box scan's cell is written to *out_col / *out_row; on a
+ * miss they are left untouched (callers only read them when the return is
+ * non-zero, mirroring retail). */
+int engine_map_query_nearest_feature_ring_at(int col, int row,
+                                             int *out_col, int *out_row)
+{
     for (int d = 1; d <= 5; d++) {
-        if (engine_map_query_box_any_rawflag_bit0(col, row, d + 1, NULL, NULL))
+        if (engine_map_query_box_any_rawflag_bit0(col, row, d + 1, out_col, out_row))
             return d;
-        if (engine_map_query_box_any_rawflag_only_bit1(col, row, d, NULL, NULL))
+        if (engine_map_query_box_any_rawflag_only_bit1(col, row, d, out_col, out_row))
             return d;
     }
     return 0;
