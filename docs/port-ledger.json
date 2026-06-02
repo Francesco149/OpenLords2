@@ -9989,6 +9989,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_realm.c",
     "src/engine_realm.h"
    ]
   },

@@ -1646,6 +1646,116 @@ int test_engine_realm_coalition_inactive_skipped(void)
     return 0;
 }
 
+/* ---- engine_realm_consolidate_coalitions (FUN_0044ae51) ------------------ *
+ * Builds (then reuses) the coalition table, keeps each player's strongest     *
+ * group and demolishes the members of all weaker groups.  demolish operates   *
+ * on the same per-army block (REGREC == g_per_army_768) — its first act is to  *
+ * zero the army's +0x05 owner byte, so a demolished army is observable there.  *
+ * The economy re-plan demolish triggers is a no-op while g_army_records is     *
+ * unbound, which we force so the test exercises only the selection + popup.    */
+
+static void coal_consume_reset(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    engine_army_economy_bind_army_records(NULL);   /* demolish re-plan → no-op */
+    s_slot_0057c8cc = 1;                            /* local player = slot 1 */
+}
+
+/* Local player (slot 1) holds a strong 2-army group {1,2} and a lone weak army
+ * 3 in a second group.  Consolidation demolishes army 3 only and posts the
+ * single-army-lost notice (code 0x7f, lost-army id in flag6). */
+int test_engine_realm_coalition_consume_single_lost(void)
+{
+    coal_consume_reset();
+    s_slot_0056d5dc = 3;
+    army_setup(1, 1, 100); army_setup(2, 1, 200); army_setup(3, 1, 10);
+    army_add_adj(2, 1);                  /* {1,2} one group; 3 alone */
+    PREC(1)[0x04] = 1;                   /* slot 1 in-game */
+    PREC(1)[0x05] = 1;                   /* has-data (event filter) */
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_realm_build_coalitions();
+    engine_realm_consolidate_coalitions(&evq, 0);
+
+    T_ASSERT_EQ_U(AREC(1)[0x05], 1);     /* strongest group survives */
+    T_ASSERT_EQ_U(AREC(2)[0x05], 1);
+    T_ASSERT_EQ_U(AREC(3)[0x05], 0);     /* weak group's army demolished */
+    T_ASSERT_EQ_I(evq.write_idx, 1);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0x7f);
+    T_ASSERT_EQ_I(evq.ring[0].audience, 1);
+    T_ASSERT_EQ_U(evq.ring[0].flag6, 3);
+    return 0;
+}
+
+/* Three lone groups for the local player: the strongest (army 1) survives, the
+ * other two armies are demolished, and the plural notice (code 0x80) fires. */
+int test_engine_realm_coalition_consume_plural_lost(void)
+{
+    coal_consume_reset();
+    s_slot_0056d5dc = 3;
+    army_setup(1, 1, 100); army_setup(2, 1, 50); army_setup(3, 1, 10);
+    /* no adjacencies → three separate groups */
+    PREC(1)[0x04] = 1;
+    PREC(1)[0x05] = 1;
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_realm_build_coalitions();
+    engine_realm_consolidate_coalitions(&evq, 0);
+
+    T_ASSERT_EQ_U(AREC(1)[0x05], 1);     /* strongest survives */
+    T_ASSERT_EQ_U(AREC(2)[0x05], 0);
+    T_ASSERT_EQ_U(AREC(3)[0x05], 0);
+    T_ASSERT_EQ_I(evq.write_idx, 1);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0x80);
+    return 0;
+}
+
+/* A non-local player (slot 2) is still consolidated, but no notification is
+ * posted — the popup is gated on the affected player being the local POV. */
+int test_engine_realm_coalition_consume_nonlocal_silent(void)
+{
+    coal_consume_reset();
+    s_slot_0056d5dc = 2;
+    army_setup(1, 2, 100); army_setup(2, 2, 10);   /* both owned by player 2 */
+    /* no adjacency → two groups keyed on owner 2 */
+    PREC(2)[0x04] = 1;                   /* slot 2 in-game; slot 1 (local) not */
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_realm_build_coalitions();
+    engine_realm_consolidate_coalitions(&evq, 0);
+
+    T_ASSERT_EQ_U(AREC(1)[0x05], 2);     /* strongest survives */
+    T_ASSERT_EQ_U(AREC(2)[0x05], 0);     /* weaker demolished */
+    T_ASSERT_EQ_I(evq.write_idx, 0);     /* but no popup for non-local player */
+    return 0;
+}
+
+/* A player with a single coalition group has nothing to consolidate: no army
+ * is demolished and no notification fires (group_count <= 1 gate). */
+int test_engine_realm_coalition_consume_single_group_noop(void)
+{
+    coal_consume_reset();
+    s_slot_0056d5dc = 2;
+    army_setup(1, 1, 100); army_setup(2, 1, 50);
+    army_add_adj(2, 1);                  /* one connected group */
+    PREC(1)[0x04] = 1;
+    PREC(1)[0x05] = 1;
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+    engine_realm_build_coalitions();
+    engine_realm_consolidate_coalitions(&evq, 0);
+
+    T_ASSERT_EQ_U(AREC(1)[0x05], 1);
+    T_ASSERT_EQ_U(AREC(2)[0x05], 1);     /* both kept */
+    T_ASSERT_EQ_I(evq.write_idx, 0);
+    return 0;
+}
+
 /* ---- engine_realm_escalate_unrest (FUN_0044aa41) ------------------------- *
  * Per-army: owner +0x05, approval +0x0c (i8), unrest +0x20, warn-latch +0x21.*/
 

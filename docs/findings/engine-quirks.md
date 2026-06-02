@@ -5844,3 +5844,31 @@ unowned, new owner holds no realms, local ≠ new owner) is **32/32 byte-exact**
 aggregate, the region reassign, the popularity decay, and the conquest-counter
 bump.  Constraining the new owner to own no realms is what keeps it off the
 non-diffable demolish branch (point 4 above).
+
+## 166. Coalition consolidation walks a hardcoded 5 player slots (not the dynamic realm count), gates on the +0x04 slot byte, and breaks strength ties toward the later group
+
+`FUN_0044ae51` (the consumer half of the turn-driver's coalition pass
+`FUN_0044ae3c`, which first rebuilds the group table via `FUN_0044b042`) keeps
+each player's strongest coalition group and demolishes every member army of all
+the player's weaker groups (`FUN_004ac3c6`), so a player whose armies split into
+disconnected clusters loses all but the largest cluster each turn.  Three
+details are worth pinning:
+
+1. **The player loop is hardcoded `1..5`** (`cmp 6` / `jge`), *not* the dynamic
+   realm count `s_slot_0056d5dc` that every other per-realm turn pass iterates.
+   Slots beyond 5 are never consolidated by this pass.
+2. **The in-game gate reads strategic `+0x04`** (`0x57bf04 + slot*0x160`), the
+   slot-active byte — a *different* byte from the `+0x05` has-data byte that the
+   event-queue filter (`engine_event_queue_post`) consults for the same slot.
+3. **The strongest-group search compares with `jg`**, i.e. it updates the
+   winner on `max <= strength`, so equal-strength groups resolve to the *later*
+   group in the table.  (`best_group` is never explicitly initialised, but a
+   live player always has at least one matching group, so it is always set
+   before the demolish pass reads it.)
+
+The notification is posted only when the affected player is the local POV
+(`s_slot_0057c8cc`) *and* they held more than one group: code `0x7f` (with the
+lost army id in `flag6`) when exactly one army was demolished, else code `0x80`.
+Demolish's economy re-plan hits the price-scalar wall (same as the other AI
+passes), so the pass is host-test verified — demolish's unconditional `+0x05`
+owner-zeroing is the observable hook the tests assert on.

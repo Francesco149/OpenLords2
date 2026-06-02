@@ -1825,6 +1825,10 @@ struct test_case {
     X(engine_realm_coalition_separate_owners) \
     X(engine_realm_coalition_strength_sum) \
     X(engine_realm_coalition_inactive_skipped) \
+    X(engine_realm_coalition_consume_single_lost) \
+    X(engine_realm_coalition_consume_plural_lost) \
+    X(engine_realm_coalition_consume_nonlocal_silent) \
+    X(engine_realm_coalition_consume_single_group_noop) \
     X(engine_realm_unrest_unowned_cleared) \
     X(engine_realm_unrest_ai_drift) \
     X(engine_realm_unrest_human_warning) \

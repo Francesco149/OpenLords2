@@ -17,6 +17,7 @@
 #include "engine_math.h"           /* engine_math_percent_of / _lookup_threshold */
 #include "engine_territory.h"      /* engine_territory_set_cell_type (0x46d7f4) */
 #include "engine_event_queue.h"    /* engine_event_queue_post (0x472bc5) */
+#include "engine_combat.h"         /* engine_combat_demolish_realm (0x4ac3c6) */
 
 #define ARMY_REC(key)   (&g_per_army_768[(key) * 0x300])
 #define STRAT_REC(slot) (&g_player_strategic_352[(slot) * 0x160])
@@ -1245,6 +1246,75 @@ int engine_realm_coalition_group_strength(int group) { return COAL_STRENGTH(grou
 int engine_realm_coalition_group_member(int group, int slot)
 {
     return COAL_MEMBER(group, slot);
+}
+
+/* Port of FUN_0044ae51 — see engine_realm.h. */
+void engine_realm_consolidate_coalitions(engine_event_queue_state_t *evq,
+                                         int mp_active)
+{
+    /* Event-queue filter table: per-player has-data byte (+0x05), slot 6 inert. */
+    uint8_t has_data[7];
+    for (int i = 0; i < 6; i++)
+        has_data[i] = STRAT_REC(i)[0x05];
+    has_data[6] = 0;
+
+    /* Player slots 1..5 (hardcoded in retail, not the dynamic realm count). */
+    for (int owner = 1; owner < 6; owner++) {
+        if (STRAT_REC(owner)[0x04] == 0)            /* slot not in-game */
+            continue;
+
+        int max_strength = 0;     /* var_8h */
+        int group_count  = 0;     /* var_4h — number of groups this player owns */
+        int demolished   = 0;     /* var_14h — armies demolished this player */
+        int best_group   = 0;     /* var_20h — strongest group (set below) */
+        int last_member  = 0;     /* var_28h — last demolished army (popup arg) */
+
+        /* Find the player's strongest group; ties resolve to the later group
+         * (retail compares with `jg`, so equal strength still updates). */
+        for (int g = 0; g < COALITION_GROUPS; g++) {
+            if (COAL_KEY(g) != owner)
+                continue;
+            group_count++;
+            int strength = COAL_STRENGTH(g);
+            if (max_strength <= strength) {
+                max_strength = strength;
+                best_group   = g;
+            }
+        }
+
+        /* Demolish every member of the player's weaker groups. */
+        for (int g = 0; g < COALITION_GROUPS; g++) {
+            if (COAL_KEY(g) != owner || g == best_group)
+                continue;
+            for (int m = 0; m < COALITION_MEMBERS; m++) {
+                uint8_t member = COAL_MEMBER(g, m);
+                if (member == 0)
+                    continue;
+                engine_combat_demolish_realm((int)member, evq, mp_active);
+                last_member = member;
+                demolished++;
+            }
+        }
+
+        /* Notify only the local player, and only if they held >1 group. */
+        if (group_count <= 1 || (int)s_slot_0057c8cc != owner)
+            continue;
+        if (demolished == 1)
+            engine_event_queue_post(evq, 0, (int)s_slot_0057c8cc, 0x7f, 0,
+                                    0, (uint8_t)last_member, 0, 0,
+                                    has_data, (int)s_slot_0057c8cc);
+        else
+            engine_event_queue_post(evq, 0, (int)s_slot_0057c8cc, 0x80, 0,
+                                    0, 0, 0, 0,
+                                    has_data, (int)s_slot_0057c8cc);
+    }
+}
+
+/* Port of FUN_0044ae3c — see engine_realm.h. */
+void engine_realm_coalition_pass(engine_event_queue_state_t *evq, int mp_active)
+{
+    engine_realm_build_coalitions();
+    engine_realm_consolidate_coalitions(evq, mp_active);
 }
 
 /* ===================================================================== *

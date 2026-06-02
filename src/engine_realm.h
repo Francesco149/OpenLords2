@@ -383,6 +383,26 @@ int engine_realm_coalition_group_key(int group);
 int engine_realm_coalition_group_strength(int group);
 int engine_realm_coalition_group_member(int group, int slot);
 
+/* Port of FUN_0044ae51 (497 B) — the consumer half of the coalition pass.
+ * For each in-game player slot 1..5 (gated on strategic +0x04, the slot-active
+ * byte — NOT the +0x05 has-data byte the event filter consults; and note the
+ * hardcoded 1..5 bound, unlike the dynamic s_slot_0056d5dc count the other turn
+ * passes use), it finds that player's strongest coalition group (max +0x00
+ * strength, ties resolving to the later group) and DEMOLISHES every member
+ * army of all the player's *other* groups via engine_combat_demolish_realm
+ * (FUN_004ac3c6) — consolidating each player down to a single coalition.  When
+ * the affected player is the local POV (s_slot_0057c8cc) and they held more
+ * than one group, it posts a notification: code 0x7f (single army lost, with
+ * the lost army id in flag6) if exactly one army was demolished, else code 0x80
+ * (plural).  mp_active threads the multiplayer flag through to demolish. */
+void engine_realm_consolidate_coalitions(engine_event_queue_state_t *evq,
+                                         int mp_active);
+
+/* Port of FUN_0044ae3c (21 B) — the turn-driver's coalition pass: rebuild the
+ * coalition table (engine_realm_build_coalitions) then consolidate each player
+ * to its strongest group (engine_realm_consolidate_coalitions). */
+void engine_realm_coalition_pass(engine_event_queue_state_t *evq, int mp_active);
+
 /* Port of FUN_00467eb0 @ 0x467eb0 (126 B) — does player `owner` control any
  * realm adjacent to realm `realm`?  Scans realm `realm`'s 0-terminated +0x5c
  * adjacency list for a neighbour realm whose owning player (+0x05) is `owner`,

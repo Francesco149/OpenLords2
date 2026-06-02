@@ -286,7 +286,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x44a6ba | FUN_0044a6ba | 903 | engine_realm.c, engine_realm.h |
 | 0x44aa41 | FUN_0044aa41 | 1019 | engine_realm.c, engine_realm.h |
 | 0x44ae3c | FUN_0044ae3c | 21 | engine_realm.c, engine_realm.h |
-| 0x44ae51 | FUN_0044ae51 | 497 | engine_realm.h |
+| 0x44ae51 | FUN_0044ae51 | 497 | engine_realm.c, engine_realm.h |
 | 0x44b042 | FUN_0044b042 | 704 | engine_realm.c, engine_realm.h |
 | 0x44b302 | FUN_0044b302 | 138 | engine_realm.c, engine_realm.h |
 | 0x44b391 | FUN_0044b391 | 319 | engine_realm.c, engine_realm.h |
