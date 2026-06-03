@@ -465,20 +465,44 @@ header), host-tested (5 new tests, 1964 total green): strongest-in-box pick,
 owner/active/out-of-box filtering, the asymmetric-box boundary (cap+2 excluded /
 cap-2 included), all four grid-edge rejections, and the empty box.
 
+#### Defender muster prime `FUN_004aaa80` → `engine_combat_prime_muster` (ported)
+
+The deepest leaf of the combat-resolve back half: `FUN_004a6c68` → `FUN_004a50ae`
+(garrison/auto-defender builder, 731 B, still unported) → **this**.  Before the
+builder redistributes/recruits a defending unit it resets the region owner's
+**troop muster pool** (`g_troop_pool`, the same per-player grid `game_init`'s
+recruitment seeds, 8 contingent slots × 0x10) and seeds it from the owner's six
+**cashflow-category reserves** (strat +0x140..+0x154 = `P_CAT` cats 1..6).  Given
+a region key and a staged head-count it: clears the +0x00 and +0x04 fields of all
+eight slots; copies reserve `cat[i]` into slots 1..6 fields **+0x04 and +0x08**
+(two identical copies — the builder draws one down, keeps the other as the
+original cap); then parks the staged head in slots **0 and 7** fields +0x00 and
++0x08 (slot 7 = the pool's +0x70 budget cell, reused here as a second head
+marker).  Pool row and strat reserves both indexed by the region owner byte
+(g_per_army_768 +0x05).  The `uVar1*0x160` strat stride (`0xB*0x20` SIB),
+`uVar1*0x80` pool stride, the asymmetric clear (+0x00/+0x04 wiped, +0x08 left for
+the slot-0/7 head stores) and the `+0x70`/`+0x78` budget-cell reuse all
+r2-verified against `FUN_004aaa80`.  Ported into `engine_combat.c` (+ header),
+host-tested (1 new test, 1965 total green): slot-1..6 reserve copy + +0x00 clear,
+slot-0/7 head park, and the +0x04 clear on slots 0/7.
+
 ### Frontier (next chips)
 
 1. **The remaining executor dispatcher callees** — port each and bind it into
    the executor through the seam it already calls: `FUN_004a6c68` (combat resolve
    — the 1264 B back half of the code-5 pair; once it lands, bind **both** combat
    seams together via `engine_army_move_bind_combat_fns`).  Its two unported deps
-   are now down to one: `FUN_0046d42c` (capital-defender finder) is **done**
-   (above); the remaining `FUN_004a50ae` (731 B) still needs its callee
-   `FUN_004aaa80`.  Then `FUN_004686a0` (region-event handler, **high** terrain —
-   needs its two callees `FUN_004a78ea` / `FUN_004a7ca2` first, which chain into
-   `FUN_004a79a3` / `FUN_004a7e0a`), and `FUN_00426360` (DirectDraw surface
-   present/scroll — render seam, lands with the strategic-map camera cluster).
-   **Done**: special-tile `FUN_00468ae2`, region-event-lo `FUN_0046873f`, arrival
-   `FUN_00467196`, settle-deposit `FUN_004296b5`, capital-defender `FUN_0046d42c`.
+   are now both **done**: `FUN_0046d42c` (capital-defender finder) and
+   `FUN_004aaa80` (defender muster prime) are ported (above).  `FUN_004a50ae`
+   (731 B garrison/auto-defender builder) is therefore now a **leaf** — its only
+   remaining callees `FUN_00404d6b` / `FUN_004a9a9a` are ported.  Land it, then
+   `FUN_004a6c68` itself.  Then `FUN_004686a0` (region-event handler, **high**
+   terrain — needs its two callees `FUN_004a78ea` / `FUN_004a7ca2` first, which
+   chain into `FUN_004a79a3` / `FUN_004a7e0a`), and `FUN_00426360` (DirectDraw
+   surface present/scroll — render seam, lands with the strategic-map camera
+   cluster).  **Done**: special-tile `FUN_00468ae2`, region-event-lo
+   `FUN_0046873f`, arrival `FUN_00467196`, settle-deposit `FUN_004296b5`,
+   capital-defender `FUN_0046d42c`, muster-prime `FUN_004aaa80`.
 2. **Wire `engine_army_state_run` into `engine_tick`'s SP per-tick path**
    (engine.c, beside the existing `FUN_0040490d`/`FUN_0049a010` arm) + bind the
    rebellion seam (`engine_realm_bind_rebellion_fn`) to

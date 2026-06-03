@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **665** (27.2%) — tested 622, ported 43
-- code bytes touched: **33.2%** (278,278 / 838,629 B)
-- unported: **1782**
+- touched: **667** (27.3%) — tested 624, ported 43
+- code bytes touched: **33.3%** (279,353 / 838,629 B)
+- unported: **1780**
 - orphan refs (in src/, not in function table): 7
 
-## tested (622) — ported + host unit suite
+## tested (624) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -509,6 +509,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a4a3f | FUN_004a4a3f | 211 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a4b12 | FUN_004a4b12 | 298 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a4c41 | FUN_004a4c41 | 311 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a50ae | FUN_004a50ae | 731 | engine_combat.c, engine_combat.h |
 | 0x4a551b | FUN_004a551b | 332 | engine_combat.c, engine_combat.h |
 | 0x4a6a30 | FUN_004a6a30 | 568 | engine_combat.c, engine_combat.h |
 | 0x4a6c68 | FUN_004a6c68 | 1264 | engine_army_move.c, engine_army_move.h, engine_combat.c (+1) |
@@ -523,6 +524,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4aa039 | FUN_004aa039 | 328 | engine_combat.c, engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4aa181 | FUN_004aa181 | 1353 | engine_combat.c, engine_combat.h |
 | 0x4aa89f | FUN_004aa89f | 107 | engine_combat.c, engine_combat.h |
+| 0x4aaa80 | FUN_004aaa80 | 344 | engine_combat.c, engine_combat.h |
 | 0x4aad07 | FUN_004aad07 | 1443 | engine_combat.c, engine_combat.h |
 | 0x4ab2aa | FUN_004ab2aa | 217 | engine_combat.c, engine_combat.h |
 | 0x4ab383 | FUN_004ab383 | 1751 | engine_combat.c, engine_combat.h, engine_diplomacy.h (+1) |

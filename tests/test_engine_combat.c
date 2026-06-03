@@ -1135,6 +1135,46 @@ int test_engine_combat_spawn_unit_no_cell(void)
     return 0;
 }
 
+/* ---- defender muster prime (FUN_004aaa80) -------------------------------- *
+ * Reset the region owner's muster pool and seed it from the owner's six       *
+ * cashflow-category reserves (strat +0x140..+0x154), parking the staged head  *
+ * `count` in contingent slots 0 and 7 (fields +0x00 / +0x08).                 */
+int test_engine_combat_prime_muster(void)
+{
+    int region = 3, owner = 2;
+    int32_t count = 99;
+
+    memset(R_REC(region), 0, 0x300);
+    R_REC(region)[0x05] = owner;                       /* region owner */
+
+    memset(P_REC(owner), 0, 0x160);
+    const int32_t res[6] = { 10, 20, 30, 40, 50, 60 }; /* cats 1..6 */
+    for (int i = 0; i < 6; i++)
+        I32(P_REC(owner), 0x140 + i * 4) = res[i];
+
+    /* Dirty the pool so the clears are observable; +0x0c is never touched. */
+    uint8_t *pool = engine_game_init_troop_pool_row(owner);
+    memset(pool, 0xAA, 0x80);
+
+    engine_combat_prime_muster(region, count);
+
+    /* Slots 1..6: +0x00 cleared, +0x04 and +0x08 = the matching reserve. */
+    for (int i = 1; i < 7; i++) {
+        T_ASSERT_EQ_I(I32(pool, i * 0x10 + 0x00), 0);
+        T_ASSERT_EQ_I(I32(pool, i * 0x10 + 0x04), res[i - 1]);
+        T_ASSERT_EQ_I(I32(pool, i * 0x10 + 0x08), res[i - 1]);
+    }
+    /* Slot 0 + slot 7 hold the staged head at +0x00 and +0x08; their +0x04 is
+     * cleared (outside the 1..6 reserve copy). */
+    T_ASSERT_EQ_I(I32(pool, 0x00), count);
+    T_ASSERT_EQ_I(I32(pool, 0x04), 0);
+    T_ASSERT_EQ_I(I32(pool, 0x08), count);
+    T_ASSERT_EQ_I(I32(pool, 0x70), count);
+    T_ASSERT_EQ_I(I32(pool, 0x74), 0);
+    T_ASSERT_EQ_I(I32(pool, 0x78), count);
+    return 0;
+}
+
 /* ---- player resignation (FUN_0049cf20 / FUN_0049b2a3) -------------------- *
  * resign_player demolishes a player's realms (R_REC +0x05 owner zeroed) and  *
  * disbands their placed units (CREC), then wipes the strategic record and    *

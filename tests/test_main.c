@@ -1926,6 +1926,7 @@ struct test_case {
     X(engine_combat_place_garrison_merges_when_pending) \
     X(engine_combat_spawn_unit_populates) \
     X(engine_combat_spawn_unit_no_cell) \
+    X(engine_combat_prime_muster) \
     X(engine_combat_resign_eliminates) \
     X(engine_combat_resign_recount_always_zero) \
     X(engine_combat_resign_sweep_sp_noop) \

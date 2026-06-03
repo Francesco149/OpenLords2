@@ -1446,3 +1446,47 @@ void engine_combat_place_garrison(unsigned occ, int key,
     if (a[A_RACE] == (uint8_t)s_slot_0057c8cc && (int)s_slot_0057c93c == key)
         g_combat_flag_530d0 = 1;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Combat-resolution defender muster (reached from combat_b FUN_004a6c68).
+ *
+ * Before a contested region's fight is sized, the resolver stages the
+ * defending side's troops in the owner's muster pool.  The garrison/auto-
+ * defender builder FUN_004a50ae (not yet ported) first resets the pool grid
+ * and seeds it from the owner's six cashflow-category reserves, then
+ * redistributes/recruits from it before spawning the defending unit.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* Extra muster sub-row fields this path stages (slot stride 0x10). */
+#define M_RES_A     0x04    /* per-slot reserve copy A (i32, 0x53f6a4)      */
+#define M_RES_B     0x08    /* per-slot reserve copy B (i32, 0x53f6a8)      */
+
+/* Port of FUN_004aaa80 (344 B, __cdecl void(int region, int32_t count)).
+ * Reset region `region`'s owner muster pool and seed it for a staged defender
+ * of `count` head.  Clears the +0x00 and +0x04 fields of all eight contingent
+ * slots, copies the owner's six cashflow-category reserves (strat P_CAT cats
+ * 1..6, retail +0x140..+0x154) into slots 1..6 fields +0x04 and +0x08, then
+ * parks `count` in slots 0 and 7 fields +0x00 and +0x08.  Pool row + strat
+ * reserves both indexed by the region owner (+0x05). */
+void engine_combat_prime_muster(int region, int32_t count)
+{
+    int slot = REGREC(region)[A_RACE];
+    uint8_t       *pool  = engine_game_init_troop_pool_row(slot);
+    const uint8_t *strat = PREC(slot);
+
+    for (int i = 0; i < 8; i++)
+        *(int32_t *)(pool + i * 0x10 + M_SLOT)  = 0;
+    for (int i = 0; i < 8; i++)
+        *(int32_t *)(pool + i * 0x10 + M_RES_A) = 0;
+    for (int i = 1; i < 7; i++)
+        *(int32_t *)(pool + i * 0x10 + M_RES_A) =
+            *(const int32_t *)(strat + P_CAT + i * 4);
+    for (int i = 1; i < 7; i++)
+        *(int32_t *)(pool + i * 0x10 + M_RES_B) =
+            *(const int32_t *)(strat + P_CAT + i * 4);
+
+    *(int32_t *)(pool + 0x00 + M_SLOT)  = count;   /* slot 0 +0x00 (0x53f6a0) */
+    *(int32_t *)(pool + 0x00 + M_RES_B) = count;   /* slot 0 +0x08 (0x53f6a8) */
+    *(int32_t *)(pool + 0x70 + M_SLOT)  = count;   /* slot 7 +0x00 (0x53f710) */
+    *(int32_t *)(pool + 0x70 + M_RES_B) = count;   /* slot 7 +0x08 (0x53f718) */
+}

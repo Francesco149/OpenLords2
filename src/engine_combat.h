@@ -112,6 +112,16 @@ int engine_combat_size_battle(int attacker, int defender, int local_player);
  * combat_b (FUN_004a6c68) parks the result in the defender slot DAT_00568218. */
 int engine_combat_find_capital_defender(int key);
 
+/* Port of FUN_004aaa80 @ 0x4aaa80 (344 B) — reset region `region`'s owner
+ * muster pool and seed it for a staged defender of `count` head.  Clears the
+ * +0x00 and +0x04 fields of all eight contingent slots, copies the owner's six
+ * cashflow-category reserves (strat +0x140..+0x154) into slots 1..6 fields
+ * +0x04 and +0x08, then parks `count` in slots 0 and 7 fields +0x00 and +0x08.
+ * Pool row + strat reserves both indexed by the region owner (+0x05).  The
+ * garrison/auto-defender builder FUN_004a50ae (unported) calls this before it
+ * redistributes the pool; combat_b (FUN_004a6c68) drives that path. */
+void engine_combat_prime_muster(int region, int32_t count);
+
 /* Port of FUN_004a80db @ 0x4a80db (478 B) — post-battle supply/condition
  * recompute for a surviving occupant.  For each of 3 supply groups, express the
  * present stock as a percent of (rate × count) clamped to 100, and store the
