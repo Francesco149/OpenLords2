@@ -38,6 +38,7 @@
 #include "engine_combat.h"         /* engine_combat_dispatch / _merge_stack, terr  */
 #include "engine_diplomacy.h"      /* should_engage / battle_adjust                */
 #include "engine_realm_upkeep.h"   /* engine_unit_remove / map link / unlink       */
+#include "engine_army_economy.h"    /* economy_provision / _plan_realm (FUN_0044df5f/004485a5) */
 #include "engine_event_queue.h"    /* engine_event_queue_post (FUN_00472bc5)       */
 #include "engine_math.h"           /* engine_math_percent_div / _percent_of        */
 #include "engine_territory.h"      /* set_cell_type / mark_draw_box / full_dirty   */
@@ -77,6 +78,11 @@
 #define M_TIMER      0x160    /* per-occupant countdown timer (i32; reset to 4)  */
 
 /* Classifier hysteresis fields (FUN_0046634d), all in the same record. */
+/* Settle-deposit fields (FUN_004296b5), all in the per-territory record. */
+#define M_SETTLE_REGION 0x167  /* target settle region; deposit fires iff == cell region (u8) */
+#define M_DEPOSIT_RAW   0x16c  /* provision-raw the settler carries → region +0x224 (i16) */
+#define M_DEPOSIT_STOCK 0x170  /* stock-A the settler carries → region +0x250 (i16)        */
+
 #define M_FACING     0x1b     /* facing/shuffle counter, bumped while stalling (u8)*/
 #define M_STALL_ACC  0x149    /* stall accumulator (+2 SP / +4 MP), latch ≥0x10(i8)*/
 #define M_RETRY      0x14a    /* per-tick retry counter vs the 3/0 budget (i8)   */
@@ -98,6 +104,7 @@
 #define RSTRIDE          0x300
 #define R_OWNER          0x05   /* region owning player (u8; DAT_0053f9b5)       */
 #define R_STOCK_24       0x24   /* region stockpile drained by a special-tile plunder (i32; DAT_0053f9d4) */
+#define R_PROVISION_RAW  0x224  /* production limit_raw / C-need base (i32; DAT_0053fbd4) */
 #define R_CENSUS_HIGH    0x200  /* high-terrain (0x0f..0x16) cell census (u8)    */
 #define R_CENSUS_MID     0x201  /* mid-terrain (0x02..0x0e) cell census (u8)     */
 #define R_MID_RESERVE    0x206  /* mid-tier reserve, drawn down with the census(u8)*/
@@ -124,6 +131,11 @@ static engine_army_move_cell_fn    g_region_lo_fn; /* 0x46873f region-event lo *
 static engine_army_move_cell_fn    g_region_hi_fn; /* 0x4686a0 region-event hi */
 static engine_army_move_cell_fn    g_special_fn;   /* 0x468ae2 special tile    */
 
+/* Demand-redraw seam (retail DAT_0057d340 = 2).  The settle-deposit handler
+ * raises it when the absorbed army's region is the on-screen one; bound to
+ * engine_set_demand_redraw by the render wiring (NULL = no-op for headless). */
+static engine_army_move_redraw_fn  g_redraw_fn;
+
 void engine_army_move_bind_present_fn(engine_army_move_present_fn fn) { g_present_fn = fn; }
 void engine_army_move_bind_arrive_fn(engine_army_move_arrive_fn fn)   { g_arrive_fn = fn; }
 void engine_army_move_bind_combat_fns(engine_army_move_region_fn engage,
@@ -133,7 +145,9 @@ void engine_army_move_bind_region_fns(engine_army_move_cell_fn lo,
                                       engine_army_move_cell_fn hi)
 { g_region_lo_fn = lo; g_region_hi_fn = hi; }
 void engine_army_move_bind_special_fn(engine_army_move_cell_fn fn) { g_special_fn = fn; }
+void engine_army_move_bind_redraw_fn(engine_army_move_redraw_fn fn)  { g_redraw_fn = fn; }
 
+static void army_move_redraw(int mode) { if (g_redraw_fn) g_redraw_fn(mode); }
 static void army_move_present(int mode) { if (g_present_fn) g_present_fn(mode); }
 static void army_move_arrive(int self)   { if (g_arrive_fn)  g_arrive_fn(self); }
 static void army_move_combat_a(int self, unsigned r, engine_event_queue_state_t *e, int mp)
@@ -717,6 +731,49 @@ void engine_army_move_region_event_lo(int self, int cell_off,
 
     army_move_alert(3);                          /* FUN_00426216(3) */
     r[M_PROGRESS] += 7;
+}
+
+/* --- FUN_004296b5 @ 0x4296b5: settle-deposit / combat-engage (319 B) -------
+ * See engine_army_move.h.  The first of the two seams the executor fires on a
+ * combat outcome (code 5): combat_a (this) then combat_b (FUN_004a6c68).  Only a
+ * stack in state 4 whose target settle region (+0x167) is the very region it is
+ * entering acts — it is *absorbed*, depositing the two contingent values it
+ * carries into the region's economy:
+ *   region +0x224 (provision-raw) += (i16) stack +0x16c
+ *   region +0x250 (stock A)       += (i16) stack +0x170
+ * If the stock-A total goes positive a recensus/reduce runs; the realm is then
+ * fully recomputed — grade feature cells, provision, plan, allocate workforce,
+ * provision + plan again — the stack is removed, and if the absorbed region is
+ * the on-screen one a demand-redraw (DAT_0057d340 = 2) is raised.  Any other
+ * state / mismatched region is a no-op.  `evq` / `mp_active` are unused (accepted
+ * for the combat-seam signature).  All offsets r2-verified against FUN_004296b5. */
+void engine_army_move_combat_engage(int self, unsigned region,
+                                    engine_event_queue_state_t *evq, int mp_active)
+{
+    (void)evq;                                  /* retail reads neither here */
+    (void)mp_active;
+    uint8_t *r = MREC(self);
+
+    if (r[M_STATE] != 4 || r[M_SETTLE_REGION] != region)
+        return;
+
+    uint8_t *rg = &g_per_army_768[region * RSTRIDE];
+    *(int32_t *)(rg + R_PROVISION_RAW) += *(int16_t *)(r + M_DEPOSIT_RAW);
+    *(int32_t *)(rg + R_DENSITY_LOAD)  += *(int16_t *)(r + M_DEPOSIT_STOCK);
+
+    if (*(int32_t *)(rg + R_DENSITY_LOAD) > 0)
+        engine_territory_recensus_reduce(region);          /* FUN_0046921d */
+
+    engine_territory_grade_feature_cells(region);          /* FUN_0044d913 */
+    engine_army_economy_provision(region, (int)s_slot_0057c934);  /* FUN_0044df5f */
+    engine_army_economy_plan_realm(region, (int)s_slot_0057c92c); /* FUN_004485a5 */
+    engine_territory_allocate_realm_workforce(region);     /* FUN_0044f6e7 */
+    engine_army_economy_provision(region, (int)s_slot_0057c934);  /* FUN_0044df5f */
+    engine_army_economy_plan_realm(region, (int)s_slot_0057c92c); /* FUN_004485a5 */
+    engine_unit_remove(self);                              /* FUN_0046f0a9 */
+
+    if (region == s_slot_0057c93c)
+        army_move_redraw(2);                               /* DAT_0057d340 = 2 */
 }
 
 /* --- FUN_00467196 @ 0x467196: arrival / waypoint re-path (422 B) -----------

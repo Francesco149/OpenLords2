@@ -70,6 +70,7 @@ typedef void (*engine_army_move_region_fn)(int self, unsigned region,
 typedef void (*engine_army_move_cell_fn)(int self, int cell_off,
                                          engine_event_queue_state_t *evq,
                                          int mp_active);
+typedef void (*engine_army_move_redraw_fn)(int mode);
 
 void engine_army_move_bind_present_fn(engine_army_move_present_fn fn);
 void engine_army_move_bind_arrive_fn(engine_army_move_arrive_fn fn);
@@ -78,6 +79,9 @@ void engine_army_move_bind_combat_fns(engine_army_move_region_fn engage,
 void engine_army_move_bind_region_fns(engine_army_move_cell_fn lo,
                                       engine_army_move_cell_fn hi);
 void engine_army_move_bind_special_fn(engine_army_move_cell_fn fn);
+/* Bind the demand-redraw seam used by the settle-deposit handler (DAT_0057d340).
+ * NULL (default) → no-op; the render wiring binds engine_set_demand_redraw. */
+void engine_army_move_bind_redraw_fn(engine_army_move_redraw_fn fn);
 
 /* Outcome scratch latched by the evaluator from the cell it classified (retail
  * runtime scalars).  The movement executor (FUN_00465d28, later chip) consumes
@@ -190,6 +194,23 @@ void engine_army_move_special_tile(int self, int cell_off,
 void engine_army_move_region_event_lo(int self, int cell_off,
                                       engine_event_queue_state_t *evq,
                                       int mp_active);
+
+/* Port of FUN_004296b5 @ 0x4296b5 (319 B, __cdecl void).  The first of the two
+ * seams the executor fires on a combat outcome (code 5): combat_a (this), then
+ * combat_b (FUN_004a6c68, unported).  A settling stack (state 4) whose target
+ * settle region (+0x167) is the very region it enters is *absorbed*: it deposits
+ * the two contingent values it carries — provision-raw (+0x16c i16) into the
+ * region's +0x224 and stock-A (+0x170 i16) into +0x250 — then (recensus/reduce
+ * iff stock-A > 0) the realm is fully recomputed (grade cells, provision, plan,
+ * allocate workforce, provision + plan again), the stack is removed, and a
+ * demand-redraw (DAT_0057d340 = 2, the redraw seam above) is raised iff the
+ * absorbed region is the on-screen one (s_slot_0057c93c).  Any other state /
+ * mismatched region → no-op.  `evq` / `mp_active` are unused (combat-seam
+ * signature).  Bind-able via engine_army_move_bind_combat_fns; left NULL until
+ * combat_b (FUN_004a6c68) lands, since firing only half the pair would skip the
+ * actual combat resolution on a contested step. */
+void engine_army_move_combat_engage(int self, unsigned region,
+                                    engine_event_queue_state_t *evq, int mp_active);
 
 /* Port of FUN_00467196 @ 0x467196 (422 B, __cdecl void).  The executor's arrival
  * seam: when a stack reaches its path end / spends its step budget, probe for

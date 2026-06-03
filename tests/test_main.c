@@ -1979,6 +1979,10 @@ struct test_case {
     X(engine_army_move_arrival_repath) \
     X(engine_army_move_arrival_progress_clamp) \
     X(engine_army_move_arrival_no_feature) \
+    X(engine_army_move_combat_engage_absorb) \
+    X(engine_army_move_combat_engage_offscreen) \
+    X(engine_army_move_combat_engage_wrong_state) \
+    X(engine_army_move_combat_engage_region_mismatch) \
     X(engine_diplomacy_clear_treaty) \
     X(engine_diplomacy_broadcast_penalty) \
     X(engine_diplomacy_battle_adjust_guards) \

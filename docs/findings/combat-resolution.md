@@ -414,18 +414,47 @@ event lo/hi terrain bands, and special-tile dispatch.  All offsets, the +0x160
 store width, the waypoint indexing, and the 14-call dispatch order r2-verified
 against `FUN_00465d28`.
 
+#### Settle-deposit / combat-engage `FUN_004296b5` → `engine_army_move_combat_engage` (ported)
+
+The **first** of the two seams the executor fires on a combat outcome (code 5):
+combat_a (this), then combat_b (`FUN_004a6c68`, still unported).  Despite the
+"combat" label it only acts on a stack in **state 4** whose target settle region
+(record +0x167) is the very region it is entering — that stack is **absorbed**.
+It deposits the two contingent values it carries into the region's economy
+(`region +0x224` provision-raw `+= (i16) stack +0x16c`; `region +0x250` stock-A
+`+= (i16) stack +0x170`), and if the stock-A total goes positive runs the
+recensus/reduce (`engine_territory_recensus_reduce`).  The realm is then fully
+recomputed in retail's exact order — grade feature cells, provision
+(`s_slot_0057c934`), plan-realm (`s_slot_0057c92c`), allocate workforce, then
+provision + plan-realm **again** — the stack is removed
+(`engine_unit_remove`), and a demand-redraw (`DAT_0057d340 = 2`, a new bind-able
+seam) is raised iff the absorbed region is the on-screen one (`s_slot_0057c93c`).
+Any other state / mismatched region → no-op.  The two `add dword` deposits (both
+`movsx`-widened i16→i32), the `region·0x300` SIB stride, the `jle`-gated recensus
+and the full 6-call recompute order all r2-verified against `FUN_004296b5`.
+
+Ported into `engine_army_move.c` (+ header).  **Not yet bound live** into the
+executor's `g_combat_a_fn` seam — firing only half the combat pair (deposit
+without `FUN_004a6c68`'s actual resolution on a contested step) would be wrong,
+so `engine_army_move_bind_combat_fns` stays NULL until combat_b lands (mirrors
+how the arrival seam waits on the move-cost grid).  Host-tested (4 new tests,
+1959 total green): happy-path absorb (both deposits + removal + redraw mode 2),
+off-screen region (deposit + removal but **no** redraw), wrong-state no-op, and
+settle-region≠entered-region no-op.  The recompute chain delegates to
+already-tested ports, bound NULL in the test so the deposit lands observably.
+
 ### Frontier (next chips)
 
 1. **The remaining executor dispatcher callees** — port each and bind it into
-   the executor through the seam it already calls: `FUN_00467196` (path-end /
-   arrival finaliser, clears the order), `FUN_004296b5` + `FUN_004a6c68` (combat
-   engage + resolve), `FUN_0046873f` / `FUN_004686a0` (region-event handlers),
-   and `FUN_00426360` (DirectDraw surface present/scroll — render seam, lands
-   with the strategic-map camera cluster).  The special-tile seam `FUN_00468ae2`
-   is **done** (above).  `FUN_004296b5` and `FUN_0046873f` are zero-dep leaves
-   today; `FUN_004296b5` drags in the per-realm economy recompute chain
-   (`engine_army_economy_provision` / `_plan_realm`, `engine_territory_*`) so its
-   tests need that state stood up.
+   the executor through the seam it already calls: `FUN_004a6c68` (combat resolve
+   — the 1264 B back half of the code-5 pair; once it lands, bind **both** combat
+   seams together via `engine_army_move_bind_combat_fns`), `FUN_004686a0`
+   (region-event handler, **high** terrain — needs its two callees `FUN_004a78ea`
+   / `FUN_004a7ca2` first, which chain into `FUN_004a79a3` / `FUN_004a7e0a`), and
+   `FUN_00426360` (DirectDraw surface present/scroll — render seam, lands with the
+   strategic-map camera cluster).  **Done**: special-tile `FUN_00468ae2`,
+   region-event-lo `FUN_0046873f`, arrival `FUN_00467196`, settle-deposit
+   `FUN_004296b5` (all above).
 2. **Wire `engine_army_state_run` into `engine_tick`'s SP per-tick path**
    (engine.c, beside the existing `FUN_0040490d`/`FUN_0049a010` arm) + bind the
    rebellion seam (`engine_realm_bind_rebellion_fn`) to

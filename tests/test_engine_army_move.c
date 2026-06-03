@@ -20,6 +20,7 @@
 #include "engine_diplomacy.h"
 #include "engine_event_queue.h"
 #include "engine_territory.h"      /* engine_territory_bind_cells (decay sink)*/
+#include "engine_army_economy.h"   /* economy record binding (combat-engage recompute)*/
 #include "engine.h"                /* engine_set_current_screen (battle 0x12)  */
 #include "engine_turn.h"           /* g_sim_turn_progress (forced arrival)     */
 #include "engine_map_query.h"       /* feature probe (arrival)                  */
@@ -1123,5 +1124,122 @@ int test_engine_army_move_arrival_no_feature(void)
     T_ASSERT_EQ_U(r[0x14c], 0);                /* sub-state untouched */
     T_ASSERT_EQ_U(r[0x153], 100);              /* progress untouched  */
     T_ASSERT_EQ_U(r[0x1c], 0);                 /* no route copied     */
+    return 0;
+}
+
+/* ==========================================================================
+ * FUN_004296b5 — settle-deposit / combat-engage (engine_army_move_combat_engage)
+ * ==========================================================================
+ *
+ * The realm-recompute chain (recensus/grade/provision/plan/allocate) and the
+ * unit-remove income sweep are delegated to already-tested ports; both record
+ * blocks are bound NULL in ce_reset so they no-op here and the deposit lands
+ * observably.  engine_unit_remove still zeroes the absorbed record (and unlinks
+ * its cell, head 0 → immediate return on the zeroed grid). */
+#define M_SETTLE_REGION 0x167
+#define M_DEPOSIT_RAW   0x16c
+#define M_DEPOSIT_STOCK 0x170
+
+static int ce_redraw, ce_redraw_mode;
+static void ce_cap_redraw(int m) { ce_redraw++; ce_redraw_mode = m; }
+
+static void ce_reset(void)
+{
+    mv_reset();
+    engine_territory_bind_army_records(NULL);     /* recensus/grade/allocate → no-op */
+    engine_army_economy_bind_army_records(NULL);  /* provision/plan_realm    → no-op */
+    engine_army_move_bind_redraw_fn(ce_cap_redraw);
+    ce_redraw = 0; ce_redraw_mode = -1;
+    s_slot_0057c934 = 0;
+    s_slot_0057c92c = 0;
+    s_slot_0057c93c = 0;
+}
+
+/* Stage the absorbed stack: state 4, settle region == region 9, carrying a
+ * +100 provision-raw / +50 stock-A contingent; region pre-seeded with 1000 /
+ * −5 so the stock-A total goes positive (recensus gate fires, inert here). */
+static uint8_t *ce_stage(int state, int settle_region)
+{
+    uint8_t *r = MREC(1);
+    r[M_OWNER]         = 2;
+    r[M_STATE]         = (uint8_t)state;
+    r[M_SETTLE_REGION] = (uint8_t)settle_region;
+    *(int16_t *)(r + M_DEPOSIT_RAW)   = 100;
+    *(int16_t *)(r + M_DEPOSIT_STOCK) = 50;
+    I32(r, M_CELL) = 0;                            /* cell head 0 → unlink no-op */
+
+    uint8_t *rg = &g_per_army_768[9 * 0x300];
+    rg[0x05]            = 3;                        /* region owner               */
+    I32(rg, 0x224)      = 1000;
+    I32(rg, 0x250)      = -5;
+    return r;
+}
+
+/* --- happy path: state 4, region match, on-screen region → absorb + redraw - */
+int test_engine_army_move_combat_engage_absorb(void)
+{
+    ce_reset();
+    s_slot_0057c93c = 9;                           /* region 9 is the on-screen one */
+    uint8_t *r  = ce_stage(4, 9);
+    uint8_t *rg = &g_per_army_768[9 * 0x300];
+
+    engine_army_move_combat_engage(1, 9, NULL, 0);
+
+    T_ASSERT_EQ_I(I32(rg, 0x224), 1100);           /* +100 provision-raw deposited */
+    T_ASSERT_EQ_I(I32(rg, 0x250), 45);             /* −5 + 50 stock-A deposited    */
+    T_ASSERT_EQ_U(r[M_OWNER], 0);                  /* stack removed (record zeroed)*/
+    T_ASSERT_EQ_I(ce_redraw, 1);                   /* demand-redraw raised         */
+    T_ASSERT_EQ_I(ce_redraw_mode, 2);              /* DAT_0057d340 = 2             */
+    return 0;
+}
+
+/* --- off-screen region: deposit + removal, but no redraw ------------------- */
+int test_engine_army_move_combat_engage_offscreen(void)
+{
+    ce_reset();
+    s_slot_0057c93c = 5;                           /* a different region on-screen */
+    uint8_t *r  = ce_stage(4, 9);
+    uint8_t *rg = &g_per_army_768[9 * 0x300];
+
+    engine_army_move_combat_engage(1, 9, NULL, 0);
+
+    T_ASSERT_EQ_I(I32(rg, 0x224), 1100);
+    T_ASSERT_EQ_I(I32(rg, 0x250), 45);
+    T_ASSERT_EQ_U(r[M_OWNER], 0);                  /* still absorbed             */
+    T_ASSERT_EQ_I(ce_redraw, 0);                   /* but no redraw              */
+    return 0;
+}
+
+/* --- guard: wrong state (not 4) → complete no-op --------------------------- */
+int test_engine_army_move_combat_engage_wrong_state(void)
+{
+    ce_reset();
+    s_slot_0057c93c = 9;
+    uint8_t *r  = ce_stage(1, 9);                  /* marching, not settling     */
+    uint8_t *rg = &g_per_army_768[9 * 0x300];
+
+    engine_army_move_combat_engage(1, 9, NULL, 0);
+
+    T_ASSERT_EQ_I(I32(rg, 0x224), 1000);           /* no deposit                 */
+    T_ASSERT_EQ_I(I32(rg, 0x250), -5);
+    T_ASSERT_EQ_U(r[M_OWNER], 2);                  /* not removed                */
+    T_ASSERT_EQ_I(ce_redraw, 0);
+    return 0;
+}
+
+/* --- guard: settle region differs from the entered region → no-op ---------- */
+int test_engine_army_move_combat_engage_region_mismatch(void)
+{
+    ce_reset();
+    s_slot_0057c93c = 9;
+    uint8_t *r  = ce_stage(4, 5);                  /* settling toward region 5   */
+    uint8_t *rg = &g_per_army_768[9 * 0x300];
+
+    engine_army_move_combat_engage(1, 9, NULL, 0); /* but entering region 9      */
+
+    T_ASSERT_EQ_I(I32(rg, 0x224), 1000);
+    T_ASSERT_EQ_I(I32(rg, 0x250), -5);
+    T_ASSERT_EQ_U(r[M_OWNER], 2);
+    T_ASSERT_EQ_I(ce_redraw, 0);
     return 0;
 }

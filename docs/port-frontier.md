@@ -138,7 +138,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x41635f | 1478 | 1 | 3 |  |
 | 0x418653 | 2010 | 1 | 1 |  |
 
-### strategic-map camera + scroll (51)
+### strategic-map camera + scroll (50)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
@@ -171,7 +171,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x426120 | 246 | 1 | 0 | ✓ |
 | 0x420316 | 274 | 1 | 0 | ✓ |
 | 0x42b7f7 | 290 | 1 | 6 |  |
-| 0x4296b5 | 319 | 1 | 0 | ✓ |
 | 0x425314 | 371 | 1 | 0 | ✓ |
 | 0x423739 | 383 | 1 | 2 |  |
 | 0x425487 | 437 | 1 | 0 | ✓ |
@@ -272,7 +271,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x45161e | 428 | 1 | 2 |  |
 | 0x456fd8 | 4305 | 1 | 0 | ✓ |
 
-### tables (item/char) + populators (16)
+### tables (item/char) + populators (17)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
@@ -285,6 +284,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x463e91 | 276 | 1 | 0 | ✓ |
 | 0x4640b6 | 339 | 1 | 0 | ✓ |
 | 0x464209 | 345 | 1 | 0 | ✓ |
+| 0x46d42c | 456 | 1 | 0 | ✓ |
 | 0x463cbe | 467 | 1 | 0 | ✓ |
 | 0x460501 | 668 | 1 | 0 | ✓ |
 | 0x461623 | 1073 | 1 | 0 | ✓ |
@@ -368,9 +368,9 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4a82b9 | 365 | 1 | 1 |  |
 | 0x4aa90a | 374 | 1 | 0 | ✓ |
 | 0x4a1847 | 525 | 1 | 0 | ✓ |
+| 0x4a50ae | 731 | 1 | 1 |  |
 | 0x4a8aab | 753 | 1 | 2 |  |
 | 0x4a8e0b | 943 | 1 | 3 |  |
-| 0x4a6c68 | 1264 | 1 | 2 |  |
 
 ### battlefield render + wndproc (24)
 

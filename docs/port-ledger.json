@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 619,
+  "tested": 621,
   "ported": 43,
-  "unported": 1785,
+  "unported": 1783,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 662,
+  "touched": 664,
   "pct_touched": 27.1,
-  "pct_tested": 25.3,
+  "pct_tested": 25.4,
   "bytes_total": 838629,
-  "bytes_touched": 276239,
-  "pct_bytes_touched": 32.9
+  "bytes_touched": 277822,
+  "pct_bytes_touched": 33.1
  },
  "orphan_refs": [
   "0x004148",
@@ -4096,8 +4096,11 @@
    "name": "FUN_004296b5",
    "size": 319,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move.c",
+    "src/engine_army_move.h"
+   ]
   },
   {
    "va": "0x429800",
@@ -9633,6 +9636,7 @@
    "src": [
     "src/engine_army_economy.c",
     "src/engine_army_economy.h",
+    "src/engine_army_move.c",
     "src/engine_combat.c",
     "src/engine_realm.c",
     "src/engine_realm.h"
@@ -10351,6 +10355,7 @@
    "src": [
     "src/engine_army_economy.c",
     "src/engine_army_economy.h",
+    "src/engine_army_move.c",
     "src/engine_territory.c",
     "src/engine_territory.h",
     "src/game_init.c"
@@ -10388,6 +10393,7 @@
    "src": [
     "src/engine_army_economy.c",
     "src/engine_army_economy.h",
+    "src/engine_army_move.c",
     "src/engine_combat.c",
     "src/engine_realm.c",
     "src/engine_realm.h"
@@ -10554,6 +10560,7 @@
     "src/engine_army_ai.c",
     "src/engine_army_economy.c",
     "src/engine_army_economy.h",
+    "src/engine_army_move.c",
     "src/engine_combat.c",
     "src/engine_territory.c",
     "src/engine_territory.h",
@@ -11882,6 +11889,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_move.c",
     "src/engine_territory.c",
     "src/engine_territory.h"
    ]
@@ -12663,6 +12671,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_move.c",
     "src/engine_army_state.c",
     "src/engine_realm_upkeep.c",
     "src/engine_realm_upkeep.h"
@@ -16668,8 +16677,11 @@
    "name": "FUN_004a6c68",
    "size": 1264,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move.c",
+    "src/engine_army_move.h"
+   ]
   },
   {
    "va": "0x4a7158",
