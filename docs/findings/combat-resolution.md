@@ -151,3 +151,61 @@ The 5 recursive bodies, plus the audio seams `FUN_00499aca` (click) and
 `FUN_004a7158` (`DAT_004eac50` 0x12/0x13, `timeGetTime`).  The auto-resolve path
 (neither side garrisoned) is pure logic and should diff; the interactive path
 hands off to the existing battlefield renderer and needs human A/V verification.
+
+---
+
+## Real-time army-state machine — region-occupation cluster (2026-06-03)
+
+The per-tick SP driver `FUN_004650b0` (one of the three updaters
+`FUN_0040490d`/`FUN_0049a010`/`FUN_004650b0` the main loop `FUN_004b99c0`
+runs each sim sub-step when `DAT_0057c8fc == 0`) walks all 150 occupant
+records (`g_per_territory_420`, stride 0x1a4) and dispatches each **live**
+one (owner +0x00 != 0) through a 6-entry handler table `PTR_FUN_004d6a50`
+indexed by the occupant **state byte** (+0x08); state 0 or > 5 falls to the
+record-zeroing disband `FUN_0046ead0`.  The handlers update the occupant's
+display sprite byte (+0x07) for the walk-cycle, sync its effective-region
+colour (+0x10) against the cell's region key (`g_cells[+0x0c cell] + 7`),
+decrement a timer (+0x160), and — when the occupant's sub-state (+0x14c) is 2
+— run the movement-step executor `FUN_00465d28`.
+
+State→handler table (`0x4d6a50`):
+
+| state | handler        | role                                            |
+|------:|----------------|-------------------------------------------------|
+| 1     | `FUN_0046521f` | marching/occupying — anim by income bucket; region-owner reconcile via `FUN_004abb36` |
+| 2     | `FUN_00465486` | settling — low head → `FUN_0046f0a9`; else reconcile via `FUN_004abd0f` |
+| 3,4   | `FUN_00465622` / `FUN_00465761` | idle/in-transit — set region colour directly (byte-identical handlers) |
+
+Facing→frame tables: `0x4d6a78` = {0,1,2,1,0,1,2,1}, `0x4d6ab8` =
+{0,1,2,3,4,5,0,1} (4-byte stride, indexed by occupant facing +0x1b).
+
+### Ported so far (region-occupation reconcile helpers)
+
+These are the handlers' occupation callees — all now in `engine_combat.c`,
+host-tested:
+
+| retail         | port                                  | role |
+|----------------|---------------------------------------|------|
+| `FUN_004abf77` | `engine_combat_notify_occupation`     | neutral-region population-reception notice (0x82..0x86) |
+| `FUN_004abb36` | `engine_combat_army_enter_region`     | state-1 reconcile: latch colour, notify, owned-arrival 0xaa |
+| `FUN_004ac185` | `engine_combat_spawn_rebellion`       | spawn a rebel stack (kind 2/type 6) on a dry-reserve owned region |
+| `FUN_004abd0f` | `engine_combat_army_settle_region`    | state-2 reconcile: warn owner (0x9a/0x9b/0x9c), maybe rebel, decay popularity |
+
+### Frontier (next chips)
+
+1. **Driver `FUN_004650b0` + the 4 display handlers** (0x46521f / 465486 /
+   465622 / 465761) — the handlers' only remaining unported callee is
+   `FUN_00465d28`; everything else is ported.  Needs a cell-grid binding in
+   the driver's module (to read the cell region key +7) and the two facing
+   tables baked.  Land with `FUN_00465d28` as a bound seam.
+2. **Movement-step executor `FUN_00465d28`** (1441 B) — advances the occupant
+   one step along its path (`FUN_0046f434`, ported) and dispatches the result
+   code (`FUN_0046634d`, unported) into arrival / blocked / combat-engage
+   (5 → `FUN_004296b5` + `FUN_004a6c68`) / region-event (6 → `FUN_0046873f` /
+   `FUN_004686a0`) / (7 → `FUN_00468ae2`).  Deep: 7 unported callees, the
+   real "armies move on the strategic map" engine.  Its own multi-chip arc.
+3. **Wire the driver into `engine_tick`'s SP per-tick path** (engine.c, beside
+   the existing `FUN_0040490d`/`FUN_0049a010` arm) + bind the rebellion seam
+   (`engine_realm_bind_rebellion_fn`) to `engine_combat_spawn_rebellion` —
+   deferred from the occupation-cluster chip because it needs the turn evq +
+   mp_active context that the driver wiring establishes.
