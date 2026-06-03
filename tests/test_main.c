@@ -1891,6 +1891,10 @@ struct test_case {
     X(engine_combat_notify_occupation_wary) \
     X(engine_combat_notify_occupation_fill_tiers) \
     X(engine_combat_notify_occupation_owned_region_silent) \
+    X(engine_combat_army_enter_neutral) \
+    X(engine_combat_army_enter_owned_arrival) \
+    X(engine_combat_army_enter_owned_not_destination_silent) \
+    X(engine_combat_army_enter_rotation_wraps) \
     X(engine_combat_merge_sums_and_disbands) \
     X(engine_combat_merge_refused_both_merc) \
     X(engine_combat_merge_capacity_gate) \

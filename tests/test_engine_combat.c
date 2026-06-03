@@ -613,6 +613,92 @@ int test_engine_combat_notify_occupation_owned_region_silent(void)
     return 0;
 }
 
+/* ---- army-enters-region reconcile (FUN_004abb36) ------------------------ *
+ * Latches the army's effective-region colour (+0x10), fires the neutral-region
+ * reception notice, and posts the 0xaa arrival notice when the army reaches an
+ * OWNED destination region (+0x151 == region).                                */
+
+/* Neutral region: colour latched, a reception notice published (army owner is
+ * local), and NO 0xaa arrival notice (that path is owned-region only). */
+int test_engine_combat_army_enter_neutral(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *a = CREC(4), *r = R_REC(5);
+    a[0x00] = 1;                 /* army owner = local */
+    a[0x151] = 5;                /* destination key = this region */
+    I32(a, 0x168) = 10;
+    r[0x05] = 0;                 /* neutral */
+    r[0x0c] = 5;                 /* hostile reserve → reception code 0x82 */
+    I32(r, 0x24) = 100;
+
+    engine_combat_army_enter_region(4, 5, &evq);
+
+    T_ASSERT_EQ_U(a[0x10], 5);             /* effective-region colour latched */
+    T_ASSERT_EQ_I(evq.write_idx, 1);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0x82); /* reception, not arrival */
+    return 0;
+}
+
+/* Owned destination region: the army (owner 3) marching to region 5 which the
+ * local player (1) owns → the 0xaa arrival notice is posted to the local owner
+ * and the owner's rotating notification counter (+0x159) advances 0 → 1.  The
+ * neutral reception path early-returns (region is owned). */
+int test_engine_combat_army_enter_owned_arrival(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *a = CREC(4), *r = R_REC(5);
+    a[0x00] = 3;                 /* army owner (not local) */
+    a[0x151] = 5;                /* destination = this region */
+    r[0x05] = 1;                 /* region owned by local player → publishes */
+    P_REC(3)[0x159] = 0;
+    P_REC(3)[0x07]  = 0;
+
+    engine_combat_army_enter_region(4, 5, &evq);
+
+    T_ASSERT_EQ_U(a[0x10], 5);
+    T_ASSERT_EQ_I(evq.write_idx, 1);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0xaa);
+    T_ASSERT_EQ_I(evq.ring[0].target, 3);   /* army owner */
+    T_ASSERT_EQ_U(P_REC(3)[0x159], 1);      /* rotation advanced */
+    return 0;
+}
+
+/* Owned region the army is NOT marching to (+0x151 != region) → no 0xaa, and
+ * (region owned) no reception notice either: silent but colour still latched. */
+int test_engine_combat_army_enter_owned_not_destination_silent(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *a = CREC(4), *r = R_REC(5);
+    a[0x00] = 3;
+    a[0x151] = 9;                /* destination is some OTHER region */
+    r[0x05] = 1;
+
+    engine_combat_army_enter_region(4, 5, &evq);
+
+    T_ASSERT_EQ_U(a[0x10], 5);
+    T_ASSERT_EQ_I(evq.write_idx, 0);
+    return 0;
+}
+
+/* The rotating notification counter wraps 3 → 0 (not 4). */
+int test_engine_combat_army_enter_rotation_wraps(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *a = CREC(4), *r = R_REC(5);
+    a[0x00] = 3;  a[0x151] = 5;  r[0x05] = 1;
+    P_REC(3)[0x159] = 3;         /* about to wrap */
+
+    engine_combat_army_enter_region(4, 5, &evq);
+
+    T_ASSERT_EQ_U(P_REC(3)[0x159], 0);      /* 3 + 1 → wrap to 0 */
+    T_ASSERT_EQ_I(evq.ring[0].code, 0xaa);
+    return 0;
+}
+
 /* ---- army-stack merge (FUN_004aa181 / engine_combat_merge_stack) --------- *
  * Merge occupant `src` into `dst`: sum head-count (+0x168) / 7 troop shorts
  * (+0x16c) / 3 supply triples (+0x182/+0x184/+0x186), keep the larger presence

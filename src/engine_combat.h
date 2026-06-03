@@ -208,6 +208,16 @@ void engine_combat_transfer_ownership(unsigned new_owner, unsigned key,
 void engine_combat_notify_occupation(int army, int region,
                                      engine_event_queue_state_t *evq);
 
+/* Port of FUN_004abb36 @ 0x4abb36 (473 B, __cdecl void(int army,uint region)).
+ * Reconcile an army's occupation of `region` against the region's true owner:
+ * latch the army's effective-region colour (+0x10), fire the neutral-region
+ * reception notice, raise the local-view dirty + combat-focus flags, and — for
+ * an owned region the army was marching to (+0x151) — post the 0xaa arrival
+ * notice and advance the owner's rotating notification-variant counter (+0x159).
+ * Reached from the per-tick army-state machine's marching handler (FUN_0046521f). */
+void engine_combat_army_enter_region(int army, unsigned region,
+                                     engine_event_queue_state_t *evq);
+
 /* Bind the resign-time interactive UI cleanup seam (retail 0x47fe0b,
  * game-mode-gated on s_slot_0057c8fc == 2).  NULL default → no-op. */
 void engine_combat_bind_resign_ui_fn(void (*fn)(int player));

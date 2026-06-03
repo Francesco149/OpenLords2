@@ -378,6 +378,7 @@ void engine_combat_halve_garrison(int rec)
 #define P_CONQ      0x29    /* conquests this game (u8)                     */
 #define P_CONQMAX   0x2a    /* conquest high-water mark (u8)                */
 #define P_TERRCNT   0x60    /* territory count (u8)                         */
+#define P_NOTIFY_ROT 0x159  /* rotating 0..3 notification-variant counter (u8)*/
 
 /* Deferred-audio + render-clock seams (all default NULL / silent). */
 static void     (*g_combat_wav_fn)(const char *, int, int);
@@ -415,6 +416,8 @@ static uint32_t g_combat_anim_clock;     /* _DAT_005689a0 / _DAT_0057a0d0 */
 static int      g_combat_audio_latch;    /* _DAT_005533f0 */
 static int      g_combat_render_dirty;   /* DAT_0052afcc */
 static int      g_combat_flag_530d0;     /* DAT_005530d0 */
+static int      g_combat_flag_553210;    /* DAT_00553210 — UI dirty: a local-owned
+                                          * army's region relationship changed */
 static int      g_combat_flag_567d0c;    /* DAT_00567d0c */
 static int      g_combat_flag_53f284;    /* DAT_0053f284 — quick-anim suppressor */
 static uint32_t g_combat_anim_t0;        /* DAT_0053e994 — animation start time */
@@ -844,6 +847,48 @@ void engine_combat_notify_occupation(int army, int region,
     uint8_t hd[7]; build_has_data(hd);
     engine_event_queue_post(evq, 0, owner, code, 0, 2, (uint8_t)region, 0, 0,
                             hd, (int)s_slot_0057c8cc);
+}
+
+/* Port of FUN_004abb36 @ 0x4abb36 (473 B, __cdecl void(int army,uint region)).
+ * Reconcile an army's occupation of `region` against that region's true owner.
+ * Latches the army's effective-region colour (+0x10), fires the neutral-region
+ * reception notice (engine_combat_notify_occupation), and — when the region's
+ * true owner differs from the army's owner — flags the local-view dirty bit
+ * (DAT_00553210, only for a local-owned army) and, if the region is owned and
+ * the army's destination key (+0x151) is this region, posts the "your army has
+ * reached enemy/owned territory" arrival notice (0xaa) to the army's owner,
+ * advancing that owner's rotating notification-variant counter (+0x159, 0..3).
+ * Also raises the combat-focus flag (DAT_005530d0) when the region belongs to
+ * the local player's currently-selected realm.  Reached from the per-tick
+ * army-state machine's "marching/occupying" handler (FUN_0046521f). */
+void engine_combat_army_enter_region(int army, unsigned region,
+                                     engine_event_queue_state_t *evq)
+{
+    CREC(army)[C_ARMYKEY] = (uint8_t)region;       /* effective region colour */
+    engine_combat_notify_occupation(army, (int)region, evq);   /* FUN_004abf77 */
+
+    if (REGREC(region)[R_OWNER] == (uint8_t)s_slot_0057c8cc &&
+        (int)s_slot_0057c93c == (int)region)
+        g_combat_flag_530d0 = 1;
+
+    int army_owner = (int8_t)CREC(army)[C_OWNER];
+    if ((unsigned)REGREC(region)[R_OWNER] != (unsigned)army_owner) {
+        if (army_owner == (int)s_slot_0057c8cc)
+            g_combat_flag_553210 = 1;
+
+        if (REGREC(region)[R_OWNER] != 0 &&
+            CREC(army)[C_F151] == (uint8_t)region) {
+            uint8_t *po = PREC(army_owner);
+            uint8_t hd[7]; build_has_data(hd);
+            engine_event_queue_post(evq, army_owner, REGREC(region)[R_OWNER], 0xaa,
+                                    (po[P_NOTIFY_ROT] - 4) + po[P_STATUS] * 4,
+                                    1, (uint8_t)region, 0, 0,
+                                    hd, (int)s_slot_0057c8cc);
+            po[P_NOTIFY_ROT]++;
+            if (po[P_NOTIFY_ROT] > 3)
+                po[P_NOTIFY_ROT] = 0;
+        }
+    }
 }
 
 /* ===================================================================== *
