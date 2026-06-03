@@ -1746,3 +1746,116 @@ int test_engine_combat_capital_defender_empty(void)
     T_ASSERT_EQ_I(engine_combat_find_capital_defender(6), 0);
     return 0;
 }
+
+/* ── FUN_004aca2b: per-turn mercenary-offer rotation ───────────────────────
+ *
+ * g_unit_table_20 slot fields (stride 0x14): +0x00 back-ref (free when 0),
+ * +0x03 published offer, +0x04 realm cursor, +0x06 countdown, +0x07 period.
+ * The reverse map lands in g_per_army_768[v*0x300 + 0x1ad]. */
+
+#define U_REC(i)    (&g_unit_table_20[(i) * 0x14])
+#define MR_REC(k)   (&g_per_army_768[(k) * 0x300])
+
+static void mr_reset(int pool_slots, int realms)
+{
+    memset(g_unit_table_20, 0, sizeof g_unit_table_20);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_00554030 = (uint32_t)pool_slots;   /* merc-pool slot count */
+    s_slot_0056d5dc = (uint32_t)realms;       /* realm count          */
+}
+
+/* A free slot whose countdown hasn't expired only counts down + steps the
+ * cursor; nothing is published, so no realm is offered anything. */
+int test_engine_combat_merc_rotate_no_publish(void)
+{
+    mr_reset(1, 4);
+    uint8_t *u = U_REC(1);
+    u[0x04] = 2;  u[0x06] = 3;  u[0x07] = 5;   /* cursor 2, count 3, period 5 */
+
+    engine_combat_rotate_merc_offers();
+
+    T_ASSERT_EQ_I(u[0x03], 0);                 /* offer cleared, not republished */
+    T_ASSERT_EQ_I(u[0x06], 2);                 /* countdown 3 → 2  */
+    T_ASSERT_EQ_I(u[0x04], 3);                 /* cursor 2 → 3     */
+    for (int v = 1; v <= 4; v++)
+        T_ASSERT_EQ_I(MR_REC(v)[0x1ad], 0);
+    return 0;
+}
+
+/* The turn the countdown expires: publish the cursor as the offer, reload the
+ * countdown from the period, step the cursor once more, and stamp the offering
+ * slot into the offered realm's +0x1ad. */
+int test_engine_combat_merc_rotate_publishes(void)
+{
+    mr_reset(1, 4);
+    uint8_t *u = U_REC(1);
+    u[0x04] = 2;  u[0x06] = 1;  u[0x07] = 5;   /* expires this turn */
+
+    engine_combat_rotate_merc_offers();
+
+    /* count 1→0 (dec), cursor 2→3 (pre-clamp), expired → offer=3, count=5, cursor=4 */
+    T_ASSERT_EQ_I(u[0x03], 3);                 /* offer = published cursor */
+    T_ASSERT_EQ_I(u[0x06], 5);                 /* reloaded from period     */
+    T_ASSERT_EQ_I(u[0x04], 4);                 /* stepped past the offer   */
+    T_ASSERT_EQ_I(MR_REC(3)[0x1ad], 1);        /* realm 3 ← slot 1         */
+    T_ASSERT_EQ_I(MR_REC(1)[0x1ad], 0);
+    T_ASSERT_EQ_I(MR_REC(2)[0x1ad], 0);
+    T_ASSERT_EQ_I(MR_REC(4)[0x1ad], 0);
+    return 0;
+}
+
+/* The cursor wraps back to 1 once it steps past the last realm. */
+int test_engine_combat_merc_rotate_cursor_wraps(void)
+{
+    mr_reset(1, 4);
+    uint8_t *u = U_REC(1);
+    u[0x04] = 4;  u[0x06] = 2;  u[0x07] = 5;   /* cursor at last realm */
+
+    engine_combat_rotate_merc_offers();
+
+    T_ASSERT_EQ_I(u[0x04], 1);                 /* 4 → 5 → wrap → 1 */
+    T_ASSERT_EQ_I(u[0x06], 1);                 /* not yet expired  */
+    T_ASSERT_EQ_I(u[0x03], 0);
+    return 0;
+}
+
+/* An in-use slot (back-ref != 0) is skipped entirely — no countdown/cursor
+ * change — and never matches as an offer holder even if its +0x03 lines up. */
+int test_engine_combat_merc_rotate_skips_in_use(void)
+{
+    mr_reset(1, 4);
+    uint8_t *u = U_REC(1);
+    *(int16_t *)(u + 0x00) = 7;                /* slot occupied  */
+    u[0x03] = 3;  u[0x04] = 2;  u[0x06] = 1;  u[0x07] = 5;
+
+    engine_combat_rotate_merc_offers();
+
+    T_ASSERT_EQ_I(u[0x04], 2);                 /* untouched */
+    T_ASSERT_EQ_I(u[0x06], 1);
+    T_ASSERT_EQ_I(u[0x03], 3);
+    T_ASSERT_EQ_I(MR_REC(3)[0x1ad], 0);        /* in-use slot is not an offer */
+    return 0;
+}
+
+/* With two free slots publishing the same realm this turn, the reverse map
+ * records the lowest-indexed offering slot per realm, 0 for unoffered realms. */
+int test_engine_combat_merc_rotate_reverse_map(void)
+{
+    mr_reset(3, 4);
+    /* Slots 1 & 2 both expire onto realm 3 (cursor 2 → +1 → publish 3); slot 3
+     * expires onto realm 4 (cursor 3 → +1 → publish 4). */
+    U_REC(1)[0x04] = 2; U_REC(1)[0x06] = 1; U_REC(1)[0x07] = 9;
+    U_REC(2)[0x04] = 2; U_REC(2)[0x06] = 1; U_REC(2)[0x07] = 9;
+    U_REC(3)[0x04] = 3; U_REC(3)[0x06] = 1; U_REC(3)[0x07] = 9;
+
+    engine_combat_rotate_merc_offers();
+
+    T_ASSERT_EQ_I(U_REC(1)[0x03], 3);
+    T_ASSERT_EQ_I(U_REC(2)[0x03], 3);
+    T_ASSERT_EQ_I(U_REC(3)[0x03], 4);
+    T_ASSERT_EQ_I(MR_REC(3)[0x1ad], 1);        /* realm 3 ← lowest slot (1) */
+    T_ASSERT_EQ_I(MR_REC(4)[0x1ad], 3);        /* realm 4 ← slot 3          */
+    T_ASSERT_EQ_I(MR_REC(1)[0x1ad], 0);
+    T_ASSERT_EQ_I(MR_REC(2)[0x1ad], 0);
+    return 0;
+}

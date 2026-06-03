@@ -1209,10 +1209,14 @@ void engine_combat_mp_resign_sweep(engine_event_queue_state_t *evq, int mp_activ
 /* --- g_unit_table_20 (retail 0x568dc0, 13 × 20 B) ------------------------ */
 #define U_STRIDE    0x14
 #define U_BACKREF   0x00    /* occupant back-reference (i16)                */
-#define U_F03       0x03    /* cleared on attach (u8)                       */
+#define U_F03       0x03    /* cleared on attach; per-turn published offer (u8)*/
 #define U_CLASS     0x05    /* contingent troop class (u8)                  */
 #define U_AMT       0x08    /* head-count / value (i32; low byte = count)   */
 #define U_COST      0x0c    /* cashflow cost charged to the owner (i32)     */
+/* Per-turn merc-offer rotation cursor (engine_combat_rotate_merc_offers). */
+#define U_CURSOR    0x04    /* rotating realm cursor 1..realms, wraps (u8)  */
+#define U_COUNTDOWN 0x06    /* turns until the next offer publishes (u8)    */
+#define U_PERIOD    0x07    /* countdown reload value (u8)                  */
 
 /* Keep-capacity table (retail .rdata 0x4d8a3c, 12 × i32).  FUN_004a551b reads
  * it from base 0x4d8a40 (= &k_keep_tbl[1]) indexed by (keeplvl-1) → k_keep_tbl
@@ -1900,4 +1904,50 @@ void engine_combat_contest_region(int attacker, unsigned region,
         else
             combat_wav("s080_02.wav", 1, 0);
     }
+}
+
+/* Port of FUN_004acb54 (128 B) — find the free merc-pool slot currently
+ * publishing offer `value`: the first slot 1..realms whose occupant back-ref
+ * (+0x00) is 0 (free) and whose published-offer byte (+0x03) equals `value`.
+ * Returns its index, or 0 if no free slot is offering that value this turn. */
+static int merc_offer_holder(unsigned value)
+{
+    for (int i = 1; i <= (int)s_slot_00554030; i++) {
+        uint8_t *u = &g_unit_table_20[i * U_STRIDE];
+        if (*(int16_t *)(u + U_BACKREF) == 0 && u[U_F03] == value)
+            return i;
+    }
+    return 0;
+}
+
+/* Port of FUN_004aca2b (297 B) — advance the per-turn mercenary-offer rotation
+ * (a phase-7 turn-rollover callee).  Each free merc-pool slot (back-ref +0x00 ==
+ * 0) clears its published offer, counts down, and steps its realm cursor (+0x04,
+ * wrapping at the realm count); the turn its countdown expires it republishes
+ * the cursor as the offer (+0x03), reloads the countdown from its period (+0x07)
+ * and steps the cursor once more.  Then, for every realm 1..realms, record which
+ * pool slot is currently offering to it in the realm's mustered-unit scratch
+ * (g_per_army_768 +0x1ad). */
+void engine_combat_rotate_merc_offers(void)
+{
+    for (int i = 1; i <= (int)s_slot_00554030; i++) {
+        uint8_t *u = &g_unit_table_20[i * U_STRIDE];
+        if (*(int16_t *)(u + U_BACKREF) != 0)
+            continue;                          /* slot in use — not rotating */
+
+        u[U_F03] = 0;                          /* clear last turn's offer     */
+        u[U_COUNTDOWN] = (uint8_t)(u[U_COUNTDOWN] - 1);
+        u[U_CURSOR]    = (uint8_t)(u[U_CURSOR] + 1);
+        if ((int)s_slot_0056d5dc < u[U_CURSOR])
+            u[U_CURSOR] = 1;                   /* wrap past the last realm     */
+
+        if ((int8_t)u[U_COUNTDOWN] < 1) {      /* countdown expired this turn  */
+            u[U_F03] = u[U_CURSOR];            /* publish the cursor as offer  */
+            u[U_COUNTDOWN] = u[U_PERIOD];      /* reload the countdown         */
+            u[U_CURSOR] = (uint8_t)(u[U_CURSOR] + 1);
+        }
+    }
+
+    for (int v = 1; v <= (int)s_slot_0056d5dc; v++)
+        REGREC(v)[A_F1AD] = (uint8_t)merc_offer_holder((unsigned)v);
 }

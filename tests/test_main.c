@@ -1897,6 +1897,11 @@ struct test_case {
     X(engine_combat_capital_defender_asymmetric) \
     X(engine_combat_capital_defender_edge) \
     X(engine_combat_capital_defender_empty) \
+    X(engine_combat_merc_rotate_no_publish) \
+    X(engine_combat_merc_rotate_publishes) \
+    X(engine_combat_merc_rotate_cursor_wraps) \
+    X(engine_combat_merc_rotate_skips_in_use) \
+    X(engine_combat_merc_rotate_reverse_map) \
     X(engine_combat_condition_zero_head) \
     X(engine_combat_condition_mixed) \
     X(engine_combat_condition_roundup_and_empty) \

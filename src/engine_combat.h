@@ -360,4 +360,16 @@ void engine_combat_begin_siege(unsigned occ, int region,
  * besieging.  Shared by the turn-driver phase sweeps and other teardown paths. */
 void engine_combat_break_siege_link(int occ);
 
+/* Port of FUN_004aca2b (297 B) — advance the per-turn mercenary-offer rotation
+ * (a phase-7 turn-rollover callee in the strategic turn driver 0x49a010).  Every
+ * free merc-pool slot (g_unit_table_20, back-ref +0x00 == 0) clears its offer,
+ * counts down (+0x06), and steps a realm cursor (+0x04, wrapping at the realm
+ * count s_slot_0056d5dc); on the turn its countdown expires it republishes the
+ * cursor as its offered realm (+0x03), reloads the countdown from its period
+ * (+0x07), and steps the cursor once more.  Then for every realm
+ * 1..s_slot_0056d5dc it stamps which pool slot is offering to it this turn into
+ * the realm's mustered-unit scratch (g_per_army_768 +0x1ad, A_F1AD) — 0 when no
+ * slot is.  Pure scalar/record bookkeeping; pool-slot count is s_slot_00554030. */
+void engine_combat_rotate_merc_offers(void);
+
 #endif /* OPENLORDS2_ENGINE_COMBAT_H */

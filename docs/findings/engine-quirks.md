@@ -6470,3 +6470,35 @@ Mechanics worth recording:
 The remaining-byte ceiling is inlined in retail (`div` + `mod != 0 ? +1`) rather
 than routed through the ported `engine_math_div_ceil` (`FUN_00404e03`); the port
 mirrors the inline form to stay byte-faithful.
+
+## 183 — the mercenary-offer rotation (`FUN_004aca2b`) publishes each offer for exactly one turn; the cursor double-steps on publish so consecutive offers never repeat
+
+A phase-7 (turn-rollover) callee of the strategic turn driver `0x49a010`.  Each
+free merc-pool slot (`g_unit_table_20`, stride 0x14, back-ref `+0x00` == 0)
+carries a rotation cursor (`+0x04`), a countdown (`+0x06`) and a reload period
+(`+0x07`).  Every turn the offer byte (`+0x03`) is **cleared first**, the
+countdown decremented and the cursor stepped (wrapping at the realm count
+`s_slot_0056d5dc`); only on the turn the countdown reaches ≤ 0 is the cursor
+**republished** into `+0x03`, the countdown reloaded from the period, and the
+cursor stepped *again*.
+
+Two consequences worth recording:
+
+- **An offer is visible for a single turn.**  `+0x03` is non-zero only on the
+  exact turn a slot's countdown expires; every other turn it reads 0.  The
+  reverse map built in the second loop (`g_per_army_768[realm*0x300 + 0x1ad]`,
+  the per-realm mustered-unit scratch `A_F1AD`) is therefore mostly zero and
+  lights up one realm per expiring slot.
+
+- **The publish path steps the cursor twice** (once in the common per-turn step,
+  once inside the expiry block) and does *not* re-clamp after the second step.
+  So the cursor can transiently sit at `realms + 1`; the next turn's ordinary
+  step+clamp folds it back to 1.  This is deliberate — it guarantees the value
+  published next period differs from the one just published (no back-to-back
+  identical offers to the same realm).
+
+The countdown decrement is a raw byte `dec` followed by a *signed* `< 1` test,
+so a slot already at 0 wraps to 0xff and reads as `-1` → immediately "expired".
+The port mirrors the unsigned-decrement / signed-compare pair exactly.  In-use
+slots (back-ref `!= 0`) are skipped wholesale and never match as an offer holder
+even if their stale `+0x03` happens to line up with a realm.
