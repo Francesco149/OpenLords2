@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **657** (26.8%) — tested 614, ported 43
-- code bytes touched: **32.4%** (272,058 / 838,629 B)
-- unported: **1790**
+- touched: **661** (27.0%) — tested 618, ported 43
+- code bytes touched: **32.9%** (275,817 / 838,629 B)
+- unported: **1786**
 - orphan refs (in src/, not in function table): 7
 
-## tested (614) — ported + host unit suite
+## tested (618) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -440,10 +440,14 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h |
 | 0x46f3cd | FUN_0046f3cd | 78 | engine_map_init.c, game_init.c, game_init.h |
 | 0x46f434 | FUN_0046f434 | 216 | engine_army_move.c, engine_path.c, engine_path.h |
+| 0x46f700 | FUN_0046f700 | 2115 | engine_path_field.c, engine_path_field.h |
 | 0x46ff43 | FUN_0046ff43 | 617 | engine_strat_cost.c, engine_strat_cost.h, game_init.c |
+| 0x4701ac | FUN_004701ac | 1228 | engine_path_field.c, engine_path_field.h |
+| 0x4707be | FUN_004707be | 274 | engine_path_field.c, engine_path_field.h |
+| 0x4708d0 | FUN_004708d0 | 142 | engine_path_field.c, engine_path_field.h |
 | 0x471c1f | FUN_00471c1f | 273 | engine_tile.c, engine_tile.h |
 | 0x471d30 | FUN_00471d30 | 118 | engine_tile.c, engine_tile.h |
-| 0x472392 | FUN_00472392 | 715 | engine_path.c, engine_path.h |
+| 0x472392 | FUN_00472392 | 715 | engine_path.c, engine_path.h, engine_path_field.h |
 | 0x47265d | FUN_0047265d | 536 | engine_path.h |
 | 0x472875 | FUN_00472875 | 151 | engine_path.h |
 | 0x472ad0 | FUN_00472ad0 | 16 | engine_event_queue.c, engine_event_queue.h, game_init.c |

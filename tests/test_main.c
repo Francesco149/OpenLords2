@@ -398,6 +398,14 @@ struct test_case {
     X(engine_path_nearest_quirk13_topleft_invisible) \
     X(engine_path_stash_copies_path_and_flags) \
     X(engine_path_stash_zero_step_count_only_sets_active) \
+    X(engine_path_field_fill_corridor) \
+    X(engine_path_field_blocked_clamp) \
+    X(engine_path_field_trace_corridor) \
+    X(engine_path_field_trace_at_source) \
+    X(engine_path_field_trace_unflooded) \
+    X(engine_path_field_copy_record) \
+    X(engine_path_field_field_selection) \
+    X(engine_path_field_diagonal) \
     \
     X(engine_handlers_da_install_wires_noop_slots) \
     X(engine_handlers_da_noop_increments_sentinel) \

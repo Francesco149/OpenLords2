@@ -37,6 +37,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_handlers_da.c \
                    ../src/engine_math.c \
                    ../src/engine_path.c \
+                   ../src/engine_path_field.c \
                    ../src/text_input.c \
                    ../src/font_metrics.c \
                    ../src/localization.c \
@@ -107,6 +108,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_handlers_da.c \
                    test_engine_math.c \
                    test_engine_path.c \
+                   test_engine_path_field.c \
                    test_text_input.c \
                    test_font_metrics.c \
                    test_localization.c \

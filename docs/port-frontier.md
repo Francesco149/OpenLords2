@@ -6,7 +6,7 @@ The unported, non-thunk engine functions already **called by ported code** — t
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
 - frontier functions: **289**
-- of those, zero-dependency **leaves: 127** (recommended order below)
+- of those, zero-dependency **leaves: 130** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
 
@@ -16,6 +16,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x42e26f | 41 | 2 | strategic-map camera + scroll |
 | 0x4360f2 | 41 | 2 | stage/post-load + char tables |
 | 0x4b049b | 103 | 2 | battlefield render + wndproc |
+| 0x4b3e51 | 111 | 2 | battlefield render + wndproc |
 | 0x42f58c | 130 | 2 | strategic-map camera + scroll |
 | 0x463b42 | 196 | 2 | tables (item/char) + populators |
 | 0x409c93 | 374 | 2 | early/runtime + low-level helpers |
@@ -51,7 +52,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4b7514 | 87 | 1 | battlefield render + wndproc |
 | 0x463c06 | 92 | 1 | tables (item/char) + populators |
 | 0x463c62 | 92 | 1 | tables (item/char) + populators |
-| 0x40ccfa | 94 | 1 | early/runtime + low-level helpers |
 
 ## Full frontier by address band
 
@@ -181,12 +181,12 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x421d09 | 523 | 1 | 0 | ✓ |
 | 0x421005 | 556 | 1 | 2 |  |
 | 0x422ff1 | 592 | 1 | 3 |  |
-| 0x429418 | 669 | 1 | 3 |  |
+| 0x429418 | 669 | 1 | 0 | ✓ |
 | 0x422d22 | 719 | 1 | 2 |  |
 | 0x425e4b | 725 | 1 | 4 |  |
 | 0x42dbc7 | 868 | 1 | 7 |  |
 | 0x429ba4 | 878 | 1 | 0 | ✓ |
-| 0x4280e9 | 904 | 1 | 3 |  |
+| 0x4280e9 | 904 | 1 | 0 | ✓ |
 | 0x421f14 | 1491 | 1 | 1 |  |
 | 0x42c64f | 1531 | 1 | 3 |  |
 | 0x421707 | 1538 | 1 | 2 |  |
@@ -285,7 +285,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x463e91 | 276 | 1 | 0 | ✓ |
 | 0x4640b6 | 339 | 1 | 0 | ✓ |
 | 0x464209 | 345 | 1 | 0 | ✓ |
-| 0x467196 | 422 | 1 | 3 |  |
+| 0x467196 | 422 | 1 | 0 | ✓ |
 | 0x463cbe | 467 | 1 | 0 | ✓ |
 | 0x460501 | 668 | 1 | 0 | ✓ |
 | 0x461623 | 1073 | 1 | 0 | ✓ |
@@ -364,13 +364,13 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4ae1b8 | 243 | 1 | 4 |  |
 | 0x4a4e3d | 286 | 1 | 1 |  |
 | 0x4a9252 | 288 | 1 | 5 |  |
-| 0x4ac499 | 289 | 1 | 4 |  |
+| 0x4ac499 | 289 | 1 | 1 |  |
 | 0x4aca2b | 297 | 1 | 1 |  |
 | 0x4a82b9 | 365 | 1 | 1 |  |
 | 0x4aa90a | 374 | 1 | 0 | ✓ |
 | 0x4a1847 | 525 | 1 | 0 | ✓ |
 | 0x4a8aab | 753 | 1 | 2 |  |
-| 0x4a8e0b | 943 | 1 | 4 |  |
+| 0x4a8e0b | 943 | 1 | 3 |  |
 | 0x4a6c68 | 1264 | 1 | 2 |  |
 
 ### battlefield render + wndproc (24)
@@ -379,6 +379,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 |----|-----:|---------------:|--------------:|:----:|
 | 0x4b25fc | 58 | 2 | 1 |  |
 | 0x4b049b | 103 | 2 | 0 | ✓ |
+| 0x4b3e51 | 111 | 2 | 0 | ✓ |
 | 0x4b743b | 147 | 2 | 4 |  |
 | 0x4b0cb4 | 314 | 2 | 1 |  |
 | 0x4b8c3a | 1202 | 2 | 8 |  |
@@ -392,7 +393,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4bbe51 | 86 | 1 | 0 | ✓ |
 | 0x4b7514 | 87 | 1 | 0 | ✓ |
 | 0x4bbea7 | 110 | 1 | 0 | ✓ |
-| 0x4b3e51 | 111 | 1 | 0 | ✓ |
 | 0x4b3d5d | 112 | 1 | 0 | ✓ |
 | 0x4bbf15 | 116 | 1 | 0 | ✓ |
 | 0x4b7180 | 208 | 1 | 2 |  |
