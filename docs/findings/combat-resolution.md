@@ -330,13 +330,32 @@ accumulator (+0x153), the path ends, or an outcome interrupts:
 
 `evq` / `mp_active` are threaded straight into `engine_army_move_classify_step`;
 the army-state driver's move_fn seam now carries them (signature changed from
-argless).  The seven deeper callees above are bind-able seams (NULL = no-op,
+argless).  The deeper callees above are bind-able seams (NULL = no-op,
 `engine_army_move_bind_present_fn` / `_arrive_fn` / `_combat_fns` / `_region_fns`
 / `_special_fn`), so until each is ported the executor faithfully **steps and
 commits** the stack across the grid (real save-state mutation via
 `engine_army_move_commit_step`) without firing those events — exactly the staged
-shape the move_fn seam itself had before this chip.  Bound to the driver via
+shape the move_fn seam itself had before this chip.  The gameplay seams
+(combat / region / special) carry `evq` / `mp_active`; only the present seam is a
+bare render call.  Bound to the driver via
 `engine_army_state_bind_move_fn(engine_army_move_run)` in `game_init`.
+
+#### Special-tile plunder `FUN_00468ae2` → `engine_army_move_special_tile` (ported)
+
+The first dispatcher callee filled in (outcome code 7), bound into the executor's
+special seam in `game_init`.  A non-idle stack (state ≠ 3/4) that steps onto an
+**untouched special tile** (cell terrain +0 == 0x10) in a **foreign** region
+(region owner +0x05 ≠ mover owner) plunders it: +7 to the stack's path-progress
+accumulator (+0x153), flip the tile to terrain 0x13 with a 0x3c countdown stamped
+at cell +3, drain a quarter of the region's +0x24 stockpile (`x -= x/4`, round
+toward zero — matches retail's `cdq` / `and 3` / `sar 2` signed div), a relation
+hit (`engine_diplomacy_battle_adjust(region_owner, mover_owner, 0x14, evq)`,
+retail `FUN_004a1ee1`), and the blocked-step alert cue (id 3, the existing
+`engine_army_move_bind_alert_sfx_fn` seam).  Same-owner / idle / already-flipped
+tiles are a no-op.  Host-tested (4 new tests, 1939 total green): full plunder
+(flip + countdown + 1/4 drain + progress + cue), same-owner no-op, idle no-op,
+already-plundered no-op.  Offsets + the signed-div drain r2-verified against
+`FUN_00468ae2`.
 
 Ported into `engine_army_move.c` (+ header), host-tested (9 new tests, 1935
 total green): budget-spent arrival (clamp + present + arrive + timer reset),
@@ -349,13 +368,16 @@ against `FUN_00465d28`.
 
 ### Frontier (next chips)
 
-1. **The seven executor dispatcher callees** — port each and bind it into the
-   executor through the seam it already calls: `FUN_00467196` (path-end / arrival
-   finaliser, clears the order), `FUN_004296b5` + `FUN_004a6c68` (combat engage +
-   resolve), `FUN_0046873f` / `FUN_004686a0` (region-event handlers), `FUN_00468ae2`
-   (special-tile event), and `FUN_00426360` (DirectDraw surface present/scroll —
-   render seam, lands with the strategic-map camera cluster).  `FUN_004296b5`,
-   `FUN_0046873f`, `FUN_00468ae2` are zero-dep leaves today.
+1. **The remaining executor dispatcher callees** — port each and bind it into
+   the executor through the seam it already calls: `FUN_00467196` (path-end /
+   arrival finaliser, clears the order), `FUN_004296b5` + `FUN_004a6c68` (combat
+   engage + resolve), `FUN_0046873f` / `FUN_004686a0` (region-event handlers),
+   and `FUN_00426360` (DirectDraw surface present/scroll — render seam, lands
+   with the strategic-map camera cluster).  The special-tile seam `FUN_00468ae2`
+   is **done** (above).  `FUN_004296b5` and `FUN_0046873f` are zero-dep leaves
+   today; `FUN_004296b5` drags in the per-realm economy recompute chain
+   (`engine_army_economy_provision` / `_plan_realm`, `engine_territory_*`) so its
+   tests need that state stood up.
 2. **Wire `engine_army_state_run` into `engine_tick`'s SP per-tick path**
    (engine.c, beside the existing `FUN_0040490d`/`FUN_0049a010` arm) + bind the
    rebellion seam (`engine_realm_bind_rebellion_fn`) to

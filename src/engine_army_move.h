@@ -50,7 +50,9 @@ void engine_army_move_bind_alert_sfx_fn(engine_army_move_sfx_fn fn);
  * outcome into a handful of deeper sub-trees, each its own later port chip.
  * Until one lands it is a bind-able seam defaulting to a no-op — exactly like
  * the SFX seams above and the army-state move_fn seam.  Binding them is how each
- * future chip wires itself into the executor.
+ * future chip wires itself into the executor.  The gameplay handlers receive the
+ * driver's `evq` / `mp_active` (retail reads them from globals); the present seam
+ * is pure render and takes only its mode arg.
  *
  *   present  0x426360  flush/scroll the strategic-map surface (DirectDraw
  *                          vtable present; pure render side-effect)
@@ -59,11 +61,15 @@ void engine_army_move_bind_alert_sfx_fn(engine_army_move_sfx_fn fn);
  *   combat_b 0x4a6c68  combat resolution / aftermath
  *   region_lo 0x46873f region-event handler, low terrain (< 0x10)
  *   region_hi 0x4686a0 region-event handler, high terrain (0x15..0x19)
- *   special  0x468ae2  special-tile event (outcome code 7) */
+ *   special  0x468ae2  special-tile event (outcome code 7) — ported, see below */
 typedef void (*engine_army_move_present_fn)(int mode);
 typedef void (*engine_army_move_arrive_fn)(int self);
-typedef void (*engine_army_move_region_fn)(int self, unsigned region);
-typedef void (*engine_army_move_cell_fn)(int self, int cell_off);
+typedef void (*engine_army_move_region_fn)(int self, unsigned region,
+                                           engine_event_queue_state_t *evq,
+                                           int mp_active);
+typedef void (*engine_army_move_cell_fn)(int self, int cell_off,
+                                         engine_event_queue_state_t *evq,
+                                         int mp_active);
 
 void engine_army_move_bind_present_fn(engine_army_move_present_fn fn);
 void engine_army_move_bind_arrive_fn(engine_army_move_arrive_fn fn);
@@ -149,5 +155,21 @@ int engine_army_move_classify_step(int dir, engine_event_queue_state_t *evq,
  * above (NULL = no-op), so until they are ported the executor faithfully steps
  * and commits the stack across the grid without firing those deeper events. */
 void engine_army_move_run(engine_event_queue_state_t *evq, int mp_active);
+
+/* Port of FUN_00468ae2 @ 0x468ae2 (351 B, __cdecl void).  The special-tile event
+ * the executor dispatches on outcome code 7: a non-idle stack (state ≠ 3/4)
+ * stepping onto an *untouched* special tile (cell terrain +0 == 0x10) in a
+ * foreign region (region owner +0x05 ≠ mover owner +0x00) plunders it:
+ *   • bumps the stack's path-progress accumulator (+0x153) by 7,
+ *   • flips the tile to terrain 0x13 and stamps a 0x3c countdown at cell +3,
+ *   • drains a quarter of the region's +0x24 stockpile (x -= x/4, round toward
+ *     zero — matches the cdq/and-3/sar retail signed div),
+ *   • levies a relation hit (engine_diplomacy_battle_adjust(region_owner,
+ *     mover_owner, 0x14, evq)) and plays the blocked-step alert cue (id 3).
+ * Idle/same-owner/already-plundered tiles are a no-op.  `mp_active` is unused
+ * (accepted for seam uniformity).  Bound to the executor's special seam via
+ * engine_army_move_bind_special_fn in game_init. */
+void engine_army_move_special_tile(int self, int cell_off,
+                                   engine_event_queue_state_t *evq, int mp_active);
 
 #endif /* OPENLORDS2_ENGINE_ARMY_MOVE_H */

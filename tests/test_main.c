@@ -1959,6 +1959,10 @@ struct test_case {
     X(engine_army_move_exec_combat_abort_on_battle_screen) \
     X(engine_army_move_exec_region_event_bands) \
     X(engine_army_move_exec_special_dispatch) \
+    X(engine_army_move_special_plunder) \
+    X(engine_army_move_special_same_owner_noop) \
+    X(engine_army_move_special_idle_noop) \
+    X(engine_army_move_special_already_plundered_noop) \
     X(engine_diplomacy_clear_treaty) \
     X(engine_diplomacy_broadcast_penalty) \
     X(engine_diplomacy_battle_adjust_guards) \

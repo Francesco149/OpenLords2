@@ -603,13 +603,18 @@ static int ex_combat_a, ex_combat_b, ex_combat_self, ex_combat_region;
 static int ex_region_lo, ex_region_hi, ex_region_self, ex_region_off;
 static int ex_special, ex_special_off;
 
-static void sp_present(int m)            { (void)m; ex_present++; }
-static void sp_arrive(int s)             { ex_arrive++; ex_arrive_self = s; }
-static void sp_combat_a(int s, unsigned r){ ex_combat_a++; ex_combat_self = s; ex_combat_region = (int)r; }
-static void sp_combat_b(int s, unsigned r){ (void)s; (void)r; ex_combat_b++; }
-static void sp_region_lo(int s, int o)   { ex_region_lo++; ex_region_self = s; ex_region_off = o; }
-static void sp_region_hi(int s, int o)   { (void)s; ex_region_hi++; ex_region_off = o; }
-static void sp_special(int s, int o)     { (void)s; ex_special++; ex_special_off = o; }
+static void sp_present(int m) { (void)m; ex_present++; }
+static void sp_arrive(int s)  { ex_arrive++; ex_arrive_self = s; }
+static void sp_combat_a(int s, unsigned r, engine_event_queue_state_t *e, int mp)
+{ (void)e; (void)mp; ex_combat_a++; ex_combat_self = s; ex_combat_region = (int)r; }
+static void sp_combat_b(int s, unsigned r, engine_event_queue_state_t *e, int mp)
+{ (void)s; (void)r; (void)e; (void)mp; ex_combat_b++; }
+static void sp_region_lo(int s, int o, engine_event_queue_state_t *e, int mp)
+{ (void)e; (void)mp; ex_region_lo++; ex_region_self = s; ex_region_off = o; }
+static void sp_region_hi(int s, int o, engine_event_queue_state_t *e, int mp)
+{ (void)s; (void)e; (void)mp; ex_region_hi++; ex_region_off = o; }
+static void sp_special(int s, int o, engine_event_queue_state_t *e, int mp)
+{ (void)s; (void)e; (void)mp; ex_special++; ex_special_off = o; }
 
 static void ex_reset(void)
 {
@@ -817,5 +822,93 @@ int test_engine_army_move_exec_special_dispatch(void)
     T_ASSERT_EQ_I(ex_special, 1);
     T_ASSERT_EQ_I(ex_special_off, 0x1458);
     T_ASSERT_EQ_U(r[M_SUBSTATE], 0);
+    return 0;
+}
+
+/* ==========================================================================
+ * FUN_00468ae2 — special-tile plunder (engine_army_move_special_tile)
+ * ========================================================================== */
+
+/* Shared setup: army idx 1 (owner 3), a special tile at off 0x1458 in foreign
+ * region 9 (owner 2) with 1000 in its +0x24 stockpile. */
+static uint8_t *st_setup(int off)
+{
+    cm_reset();
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    engine_army_move_bind_alert_sfx_fn(cap_alert);
+    g_last_alert = -1;
+
+    uint8_t *r = MREC(1);
+    r[M_OWNER] = 3; r[M_STATE] = 1; r[M_PROGRESS] = 0;
+
+    g_overworld_map[off + 0] = 0x10;            /* untouched special tile */
+    g_overworld_map[off + 7] = 9;               /* region key            */
+    uint8_t *rg = &g_per_army_768[9 * 0x300];
+    rg[0x05] = 2;                               /* region owner != mover  */
+    I32(rg, 0x24) = 1000;
+    return r;
+}
+
+/* --- the full plunder: flip tile, stamp countdown, drain 1/4, cue ---------- */
+int test_engine_army_move_special_plunder(void)
+{
+    int off = 0x1458;
+    uint8_t *r = st_setup(off);
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_special_tile(1, off, &evq, 0);
+
+    T_ASSERT_EQ_U(g_overworld_map[off + 0], 0x13);   /* plundered          */
+    T_ASSERT_EQ_U(g_overworld_map[off + 3], 0x3c);   /* regrow countdown   */
+    T_ASSERT_EQ_I(I32(&g_per_army_768[9 * 0x300], 0x24), 750);  /* 1000-250 */
+    T_ASSERT_EQ_U(r[M_PROGRESS], 7);                 /* +7 progress        */
+    T_ASSERT_EQ_I(g_last_alert, 3);                  /* blocked-cue id 3   */
+    return 0;
+}
+
+/* --- a same-owner region is not plundered -------------------------------- */
+int test_engine_army_move_special_same_owner_noop(void)
+{
+    int off = 0x1458;
+    uint8_t *r = st_setup(off);
+    g_per_army_768[9 * 0x300 + 0x05] = 3;            /* owner == mover      */
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_special_tile(1, off, &evq, 0);
+
+    T_ASSERT_EQ_U(g_overworld_map[off + 0], 0x10);   /* untouched           */
+    T_ASSERT_EQ_I(I32(&g_per_army_768[9 * 0x300], 0x24), 1000);
+    T_ASSERT_EQ_U(r[M_PROGRESS], 0);
+    T_ASSERT_EQ_I(g_last_alert, -1);
+    return 0;
+}
+
+/* --- an idle stack (state 3/4) never plunders ---------------------------- */
+int test_engine_army_move_special_idle_noop(void)
+{
+    int off = 0x1458;
+    uint8_t *r = st_setup(off);
+    r[M_STATE] = 3;
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_special_tile(1, off, &evq, 0);
+
+    T_ASSERT_EQ_U(g_overworld_map[off + 0], 0x10);
+    T_ASSERT_EQ_I(g_last_alert, -1);
+    return 0;
+}
+
+/* --- an already-plundered tile (terrain != 0x10) is a no-op -------------- */
+int test_engine_army_move_special_already_plundered_noop(void)
+{
+    int off = 0x1458;
+    uint8_t *r = st_setup(off);
+    g_overworld_map[off + 0] = 0x13;                /* already flipped     */
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_special_tile(1, off, &evq, 0);
+
+    T_ASSERT_EQ_I(I32(&g_per_army_768[9 * 0x300], 0x24), 1000);  /* untouched */
+    T_ASSERT_EQ_U(r[M_PROGRESS], 0);
     return 0;
 }

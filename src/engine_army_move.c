@@ -95,6 +95,7 @@
 /* --- per-region record (g_per_army_768, retail DAT_0053f9b0, stride 0x300) -- */
 #define RSTRIDE          0x300
 #define R_OWNER          0x05   /* region owning player (u8; DAT_0053f9b5)       */
+#define R_STOCK_24       0x24   /* region stockpile drained by a special-tile plunder (i32; DAT_0053f9d4) */
 #define R_CENSUS_HIGH    0x200  /* high-terrain (0x0f..0x16) cell census (u8)    */
 #define R_CENSUS_MID     0x201  /* mid-terrain (0x02..0x0e) cell census (u8)     */
 #define R_MID_RESERVE    0x206  /* mid-tier reserve, drawn down with the census(u8)*/
@@ -131,13 +132,18 @@ void engine_army_move_bind_region_fns(engine_army_move_cell_fn lo,
 { g_region_lo_fn = lo; g_region_hi_fn = hi; }
 void engine_army_move_bind_special_fn(engine_army_move_cell_fn fn) { g_special_fn = fn; }
 
-static void army_move_present(int mode)            { if (g_present_fn) g_present_fn(mode); }
-static void army_move_arrive(int self)             { if (g_arrive_fn)  g_arrive_fn(self); }
-static void army_move_combat_a(int self, unsigned r) { if (g_combat_a_fn) g_combat_a_fn(self, r); }
-static void army_move_combat_b(int self, unsigned r) { if (g_combat_b_fn) g_combat_b_fn(self, r); }
-static void army_move_region_lo(int self, int off) { if (g_region_lo_fn) g_region_lo_fn(self, off); }
-static void army_move_region_hi(int self, int off) { if (g_region_hi_fn) g_region_hi_fn(self, off); }
-static void army_move_special(int self, int off)   { if (g_special_fn)  g_special_fn(self, off); }
+static void army_move_present(int mode) { if (g_present_fn) g_present_fn(mode); }
+static void army_move_arrive(int self)   { if (g_arrive_fn)  g_arrive_fn(self); }
+static void army_move_combat_a(int self, unsigned r, engine_event_queue_state_t *e, int mp)
+{ if (g_combat_a_fn) g_combat_a_fn(self, r, e, mp); }
+static void army_move_combat_b(int self, unsigned r, engine_event_queue_state_t *e, int mp)
+{ if (g_combat_b_fn) g_combat_b_fn(self, r, e, mp); }
+static void army_move_region_lo(int self, int off, engine_event_queue_state_t *e, int mp)
+{ if (g_region_lo_fn) g_region_lo_fn(self, off, e, mp); }
+static void army_move_region_hi(int self, int off, engine_event_queue_state_t *e, int mp)
+{ if (g_region_hi_fn) g_region_hi_fn(self, off, e, mp); }
+static void army_move_special(int self, int off, engine_event_queue_state_t *e, int mp)
+{ if (g_special_fn) g_special_fn(self, off, e, mp); }
 
 /* Outcome scratch latched per classified cell (retail runtime scalars). */
 uint8_t g_army_move_cell_flags;           /* DAT_0050a4a4 */
@@ -578,20 +584,60 @@ void engine_army_move_run(engine_event_queue_state_t *evq, int mp_active)
         if (code > 4) {
             r[M_SUBSTATE] = 0;
             if (code == 5) {                     /* combat */
-                army_move_combat_a(self, g_army_move_cell_region);
-                army_move_combat_b(self, g_army_move_cell_region);
+                army_move_combat_a(self, g_army_move_cell_region, evq, mp_active);
+                army_move_combat_b(self, g_army_move_cell_region, evq, mp_active);
                 if (engine_current_screen() == 0x12)
                     g_army_state_abort = 1;      /* battle screen up → halt walk */
             } else if (code == 6) {              /* region-event by terrain band */
                 if (g_army_move_cell_terrain < 0x10)
-                    army_move_region_lo(self, g_army_move_cell_off);
+                    army_move_region_lo(self, g_army_move_cell_off, evq, mp_active);
                 if (g_army_move_cell_terrain > 0x14 && g_army_move_cell_terrain < 0x1a)
-                    army_move_region_hi(self, g_army_move_cell_off);
+                    army_move_region_hi(self, g_army_move_cell_off, evq, mp_active);
             } else if (code == 7) {              /* special tile */
-                army_move_special(self, g_army_move_cell_off);
+                army_move_special(self, g_army_move_cell_off, evq, mp_active);
                 r[M_SUBSTATE] = 0;
             }
         }
         return;
     }
+}
+
+/* --- FUN_00468ae2 @ 0x468ae2: special-tile plunder event (351 B, __cdecl) ---
+ * See engine_army_move.h.  Reached from the executor on outcome code 7. */
+void engine_army_move_special_tile(int self, int cell_off,
+                                   engine_event_queue_state_t *evq, int mp_active)
+{
+    (void)mp_active;                            /* retail reads no MP flag here */
+    uint8_t *r = MREC(self);
+
+    /* Idle stacks (state 3/4) never plunder. */
+    if (r[M_STATE] == 3 || r[M_STATE] == 4)
+        return;
+
+    unsigned region       = g_cells[cell_off + C_REGION];        /* cell +7 */
+    int      region_owner = g_per_army_768[region * RSTRIDE + R_OWNER];
+    int      mover_owner  = (int8_t)r[M_OWNER];
+
+    /* Only a foreign region's still-untouched special tile (terrain 0x10). */
+    if (region_owner == mover_owner)
+        return;
+    if (g_cells[cell_off + C_TERRAIN] != 0x10)
+        return;
+
+    r[M_PROGRESS] += 7;
+
+    /* Flip the tile to plundered (0x13) and stamp the 0x3c regrow countdown at
+     * cell +3.  g_cells is the const view the evaluator reads; the executor and
+     * this handler share the same mutable grid the engine binds, so cast away
+     * const to write it (retail writes DAT_00522f90/+3 directly). */
+    uint8_t *cell = (uint8_t *)&g_cells[cell_off];
+    cell[C_TERRAIN] = 0x13;
+    cell[3]         = 0x3c;
+
+    /* Drain a quarter of the region's +0x24 stockpile (round toward zero). */
+    int32_t *stock = (int32_t *)(g_per_army_768 + region * RSTRIDE + R_STOCK_24);
+    *stock -= *stock / 4;
+
+    engine_diplomacy_battle_adjust(region_owner, mover_owner, 0x14, evq);
+    army_move_alert(3);                          /* FUN_00426216(3) */
 }

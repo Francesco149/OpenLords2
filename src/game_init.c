@@ -1227,6 +1227,10 @@ void engine_game_init(void)
      * the driver runs the executor, which steps the stack toward its waypoints
      * and threads the driver's evq / mp_active into the per-step classifier. */
     engine_army_state_bind_move_fn(engine_army_move_run);
+    /* Bind the ported special-tile plunder handler (FUN_00468ae2) into the
+     * executor's outcome-7 seam.  The other dispatcher seams (combat / region-
+     * event / arrival / present) stay NULL no-ops until ported. */
+    engine_army_move_bind_special_fn(engine_army_move_special_tile);
     /* The per-group resource-demand pool (retail DAT_0057c020, stride 0x160)
      * physically lives INSIDE the player-strategic block at +0x120 — retail's
      * commodity pools +0x120/+0x128/+0x130 ARE the resource accumulators, viewed
