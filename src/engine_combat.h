@@ -353,4 +353,11 @@ void engine_combat_reinforce_keep(unsigned occ, int region,
 void engine_combat_begin_siege(unsigned occ, int region,
                                engine_event_queue_state_t *evq);
 
+/* Port of FUN_0043b917 — tear down occupant `occ`'s siege link (the inverse of
+ * the siege-setup link): clear `occ`'s besieged-region byte (+0x199) and the
+ * defending occupant's besieged mark (+0x19a), resolving the defender through
+ * the region's per-army pending slot (+0x1bc).  No-op when `occ` isn't
+ * besieging.  Shared by the turn-driver phase sweeps and other teardown paths. */
+void engine_combat_break_siege_link(int occ);
+
 #endif /* OPENLORDS2_ENGINE_COMBAT_H */

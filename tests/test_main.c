@@ -1962,6 +1962,8 @@ struct test_case {
     X(engine_army_state_abort_breaks_walk) \
     X(engine_army_state_arm_movement_matches_state) \
     X(engine_army_state_arm_movement_none_returns_zero) \
+    X(engine_army_state_arm_movement_owned_gates) \
+    X(engine_army_state_arm_movement_owned_state1_breaks_siege) \
     X(engine_army_move_dir_offsets) \
     X(engine_army_move_dir_edges) \
     X(engine_army_move_classify_flags) \

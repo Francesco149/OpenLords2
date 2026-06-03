@@ -543,6 +543,20 @@ cursor as the army-state machine, so it lives in `engine_army_state.c`
 (r2-verified: the i*0x1a4 stride, the +0x08/+0x14c offsets, the 1..0x96
 bound).
 
+Its owner-gated sibling **`FUN_004a4e3d`** → `engine_army_state_arm_movement_owned(state, owner)`
+is also ported (driver phase 5 runs `(2, 6)`): same sweep but additionally
+requires the owner byte (+0x00, signed) == `owner` and the control-type
+byte (+0x01) == 0 (a local/viewer occupant), and on a state-1 match it
+tears down that occupant's siege link.  That teardown is the leaf
+**`FUN_0043b917`** → `engine_combat_break_siege_link(occ)`: the inverse
+of siege setup — clear the besieger's +0x199 region link and, via the
+region's per-army pending slot (+0x1bc → defender occupant), the
+defender's +0x19a besieged mark.  `FUN_0043b917` is a shared teardown
+helper (5+ siege-subsystem callers), ported standalone into
+`engine_combat.c` beside the siege-setup chain.  On the phase-5 `(2, 6)`
+call the state-1 hook is inert (state == 2), but the port wires it
+faithfully and a host test drives the hook directly via `(1, owner)`.
+
 ### Render-phase tail — camera clamps + FPS counter ported (2026-05-24 / 26)
 
 Six functions run at the tail of the render phase, after the screen-

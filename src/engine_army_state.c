@@ -50,6 +50,7 @@
 #define AREC(i)      (&g_per_territory_420[(i) * ASTRIDE])
 
 #define A_OWNER      0x00     /* owning player id; 0 = dead record (u8)         */
+#define A_CONTROL    0x01     /* control-type flag: 0 = local/viewer (u8)       */
 #define A_READY      0x06     /* march-ready flag: 0 → advance sub-state (u8)   */
 #define A_SPRITE     0x07     /* display sprite frame, recomputed each tick (u8)*/
 #define A_STATE      0x08     /* state byte → handler-table index (u8)          */
@@ -216,6 +217,26 @@ int engine_army_state_arm_movement(unsigned state)
          * and the sub-state currently non-zero (a pending sub-state). */
         if ((unsigned)r[A_STATE] == state && r[A_SUBSTATE] != 0) {
             r[A_SUBSTATE] = 2;                     /* → run movement executor */
+            armed = 1;
+        }
+    }
+    return armed;
+}
+
+/* --- FUN_004a4e3d: arm movement for owner's local occupants of a state ---- */
+int engine_army_state_arm_movement_owned(unsigned state, int owner)
+{
+    int armed = 0;
+
+    for (g_army_state_index = 1; g_army_state_index < 0x97; g_army_state_index++) {
+        uint8_t *r = AREC(g_army_state_index);
+        /* state byte == arg, sub-state pending, owner byte (signed) == arg,
+         * and the control-type byte (+0x01) clear (a local/viewer occupant). */
+        if ((unsigned)r[A_STATE] == state && r[A_SUBSTATE] != 0 &&
+            (int8_t)r[A_OWNER] == owner && r[A_CONTROL] == 0) {
+            r[A_SUBSTATE] = 2;                     /* → run movement executor */
+            if (r[A_STATE] == 1)                   /* settle-on-keep teardown */
+                engine_combat_break_siege_link(g_army_state_index);
             armed = 1;
         }
     }

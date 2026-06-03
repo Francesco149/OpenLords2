@@ -1462,6 +1462,27 @@ void engine_combat_place_garrison(unsigned occ, int key,
         g_combat_flag_530d0 = 1;
 }
 
+/* Port of FUN_0043b917 (115 B) — tear down occupant `occ`'s siege link.  The
+ * inverse of the siege-setup link (engine_combat_siege_setup): a besieging
+ * stack records the besieged region in its +0x199 byte (C_F199), and the
+ * region's per-army record carries the defender occupant index in its +0x1bc
+ * slot (R_PENDING); the defender in turn marks itself besieged via +0x19a
+ * (C_F19A).  If `occ` holds a live link, resolve the defender through the
+ * region record, then clear both ends — `occ`'s +0x199 and the defender's
+ * +0x19a.  A no-op when +0x199 is 0 (not besieging).  Shared by several siege
+ * teardown paths (the turn-driver phase sweeps, army-move, demolish). */
+void engine_combat_break_siege_link(int occ)
+{
+    uint8_t *c = CREC(occ);
+    unsigned link = c[C_F199];                 /* +0x199 besieged-region key */
+    if (link != 0) {
+        int32_t defender;
+        memcpy(&defender, REGREC(link) + R_PENDING, sizeof defender); /* +0x1bc */
+        c[C_F199] = 0;                          /* clear our besieging link */
+        CREC(defender)[C_F19A] = 0;             /* clear defender's besieged mark */
+    }
+}
+
 /* ════════════════════════════════════════════════════════════════════════
  * Region-event "enter keep terrain" dispatcher  (FUN_004686a0 + siege chain)
  *

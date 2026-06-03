@@ -325,3 +325,57 @@ int test_engine_army_state_arm_movement_none_returns_zero(void)
     T_ASSERT_EQ_I(CREC(3)[A_SUBSTATE], 0);     /* untouched */
     return 0;
 }
+
+#define A_CONTROL 0x01     /* control-type byte: 0 = local/viewer */
+#define A_F199    0x199    /* besieged-region link (besieger) */
+#define A_F19A    0x19a    /* besieged mark (defender) */
+#define R_PENDING 0x1bc    /* per-army pending-occupant slot (i32) */
+
+/* engine_army_state_arm_movement_owned (FUN_004a4e3d): the owner-gated sibling.
+ * Arms sub-state 2 only when state + owner (+0x00) + control (+0x01 == 0) all
+ * match and the sub-state is pending. */
+int test_engine_army_state_arm_movement_owned_gates(void)
+{
+    as_reset();
+
+    /* idx 2: state 2, owner 6, control 0, pending → armed */
+    CREC(2)[A_STATE] = 2; CREC(2)[A_OWNER] = 6; CREC(2)[A_CONTROL] = 0; CREC(2)[A_SUBSTATE] = 1;
+    /* idx 3: wrong owner (5) → rejected */
+    CREC(3)[A_STATE] = 2; CREC(3)[A_OWNER] = 5; CREC(3)[A_CONTROL] = 0; CREC(3)[A_SUBSTATE] = 1;
+    /* idx 4: control byte set (AI/remote) → rejected */
+    CREC(4)[A_STATE] = 2; CREC(4)[A_OWNER] = 6; CREC(4)[A_CONTROL] = 1; CREC(4)[A_SUBSTATE] = 1;
+    /* idx 5: right owner+control but sub-state 0 → rejected */
+    CREC(5)[A_STATE] = 2; CREC(5)[A_OWNER] = 6; CREC(5)[A_CONTROL] = 0; CREC(5)[A_SUBSTATE] = 0;
+
+    int r = engine_army_state_arm_movement_owned(2, 6);
+
+    T_ASSERT_EQ_I(r, 1);
+    T_ASSERT_EQ_I(CREC(2)[A_SUBSTATE], 2);     /* armed */
+    T_ASSERT_EQ_I(CREC(3)[A_SUBSTATE], 1);     /* wrong owner */
+    T_ASSERT_EQ_I(CREC(4)[A_SUBSTATE], 1);     /* AI/remote control */
+    T_ASSERT_EQ_I(CREC(5)[A_SUBSTATE], 0);     /* not pending */
+    return 0;
+}
+
+/* State == 1 fires the siege-link teardown (engine_combat_break_siege_link):
+ * the matched occupant's +0x199 and the resolved defender's +0x19a are cleared. */
+int test_engine_army_state_arm_movement_owned_state1_breaks_siege(void)
+{
+    as_reset();
+
+    /* Besieger occ 2: state 1, owner 3, control 0, pending; besieging region 9. */
+    CREC(2)[A_STATE] = 1; CREC(2)[A_OWNER] = 3; CREC(2)[A_CONTROL] = 0;
+    CREC(2)[A_SUBSTATE] = 1; CREC(2)[A_F199] = 9;
+    /* Region 9's per-army record points its pending slot at defender occ 7. */
+    I32(R_REC(9), R_PENDING) = 7;
+    /* Defender occ 7 carries the besieged mark. */
+    CREC(7)[A_F19A] = 2;
+
+    int r = engine_army_state_arm_movement_owned(1, 3);
+
+    T_ASSERT_EQ_I(r, 1);
+    T_ASSERT_EQ_I(CREC(2)[A_SUBSTATE], 2);     /* armed to movement */
+    T_ASSERT_EQ_I(CREC(2)[A_F199], 0);         /* besieger link cleared */
+    T_ASSERT_EQ_I(CREC(7)[A_F19A], 0);         /* defender mark cleared */
+    return 0;
+}

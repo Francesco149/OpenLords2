@@ -52,4 +52,17 @@ void engine_army_state_run(engine_event_queue_state_t *evq, int mp_active);
  * their movement. */
 int engine_army_state_arm_movement(unsigned state);
 
+/* Port of FUN_004a4e3d (286 B, __cdecl uint).  The owner-gated sibling of
+ * engine_army_state_arm_movement: same sweep + arm-to-2, but it additionally
+ * requires the record's owner byte (+0x00, signed) == `owner` and the
+ * control-type byte (+0x01) == 0 (a local/viewer occupant).  When the matched
+ * state is 1 it also tears down that occupant's siege link
+ * (engine_combat_break_siege_link).  Returns 1 if any record was armed.
+ *
+ * The turn driver (retail 0x49a010) calls this in phase 5 as `(2, 6)` — arm
+ * the settle-state, locally-controlled occupants owned by realm 6 (so the
+ * state-1 siege-break hook is inert on that call) — advancing the phase only
+ * when nothing was armed. */
+int engine_army_state_arm_movement_owned(unsigned state, int owner);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_STATE_H */
