@@ -7,6 +7,53 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-04 — TURN DRIVER: phase-3/6 march planners — capital-march + settle-march (3 fns, host-tested)
+
+Landed the two phase-init planners the previous dispatch teed up as
+zero-dependency leaves.  Two commits, three functions, 2011 host tests green
+(ASAN/UBSAN), cross-build clean.  Offsets/strides/call-targets r2-verified
+byte-exact; pure record/path-field bookkeeping (host tests + r2 transcription
+are the gate, no retail-diff target).  Two engine-quirks (#186/#187) captured.
+
+- **Phase 3 — capital-march planner** (`FUN_00429418` →
+  `engine_army_state_plan_capital_marches`, engine_army_state.c).  Sweep the 150
+  occupant records; each idle (state 4) stack gets its march goal set to its
+  target realm's (+0x167) capital cell (g_per_army_768 +0x6c/+0x6d), mirrored
+  into both the executor destination (+0x14/+0x15) and the path-trace goal
+  (+0x16/+0x17), then routed via a shared **dual-flood** tail: flood
+  conservatively (blocked_mode 1, costly cells penalised), trace to the capital,
+  commit + arm (+0x14c = 1) when it lands in < 150 waypoints (the trace cap),
+  else re-flood permissively (blocked_mode 0) and retry once.  Quirk #186.
+
+- **Phase 6 — settle-march planner** (`FUN_004280e9` →
+  `engine_army_state_plan_settle_marches`; `FUN_00428007` →
+  static `find_settle_spot_near_realm`, engine_army_state.c).  An idle (state 3)
+  stack flagged "arrived" (+0x150) scans up to 16 entries of its category-bucket
+  row from a round-robin cursor (+0x164) for the first in-range realm, finds an
+  open cell near that realm's capital (FUN_00428007 = radius-1..3 box scan, the
+  already-ported engine_map_query_box_any_rawflag_bit0 / FUN_0046cfbd), routes
+  there + clears arrived; non-arrived stacks then run the same dual-flood tail.
+  FUN_00428007 surfaces the cell through file-static scratch standing in for
+  retail's DAT_00569570/78 find-nearest globals (promote to shared when a second
+  caller — e.g. FUN_004292af — is ported).  Quirk #187: phase-6 indexes the
+  6-row `buckets[6][16]` table (DAT_00567970, save entry 138) by **per-region**
+  (i-1)*16 with i up to 150, sliding past row 5 into zero BSS slack; the
+  in-memory backing of `s_slot_00567970` was widened to 150*16 (save still 96 B)
+  so those reads match retail without an OOB.
+
+**Next on this thread:** the phase-1 inits remain.  `FUN_0049d638` (1737 B) is a
+zero-callee leaf but a meatier port — a per-realm AI stat→bucket classifier
+(personality-keyed threshold ladders) plus per-realm economy accumulation; it
+needs two retail config tables baked first (`DAT_004d8a5c` personality ladder
+block, `DAT_004dc1e0`) and, since it mutates economy fields, is a good fit for
+the pure-function-diff harness (byte-exact vs retail) rather than host tests
+alone.  `FUN_0049dfc6` (505 B) is **not** a clean leaf — it still calls the
+unported `FUN_004a3c67` / `FUN_004a3ed3`.  After the phase-1 inits, the
+default-branch per-tick `FUN_0049a581` (1039 B, ~15 unported callees) and then
+the dispatcher `0x49a010` itself.  The two A/V phase-7 callees
+(`FUN_0043ad25` / `FUN_004b0cb4`) and the assault trigger `FUN_004a8aab` remain
+verification-gated.
+
 ## 2026-06-03 — TURN DRIVER: phase-2/5/7 callees — siege-build, merc rotation, treaty reconcile, raider planner (7 fns, host-tested)
 
 Continued working down the strategic turn driver `0x49a010` (still unported)
