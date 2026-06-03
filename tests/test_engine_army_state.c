@@ -379,3 +379,144 @@ int test_engine_army_state_arm_movement_owned_state1_breaks_siege(void)
     T_ASSERT_EQ_I(CREC(7)[A_F19A], 0);         /* defender mark cleared */
     return 0;
 }
+
+/* --- siege-engine construction (FUN_004a8507 / FUN_004a84ba) -------------- */
+
+/* Siege-build slot accessors: 3 × { i16 count, i16 pct, i16 value } @ +0x182. */
+#define A_SIEGE_REMAIN  0x19c
+#define SLOT_COUNT(p, s) (*(int16_t *)((p) + 0x182 + (s) * 6 + 0))
+#define SLOT_PCT(p, s)   (*(int16_t *)((p) + 0x182 + (s) * 6 + 2))
+#define SLOT_VALUE(p, s) (*(int16_t *)((p) + 0x182 + (s) * 6 + 4))
+
+/* A live, state-1, besieging stack with `head` build budget and one ordered
+ * engine in slot 0 (target 200). */
+static uint8_t *siege_setup(int occ, int head)
+{
+    uint8_t *r = CREC(occ);
+    r[A_OWNER] = 4; r[A_STATE] = 1; r[A_F199] = 9;
+    I32(r, A_HEAD) = head;
+    SLOT_COUNT(r, 0) = 1;        /* one engine, target = 200 * 1 = 200 */
+    return r;
+}
+
+/* Each of the four gates (dead / wrong-state / not-besieging / no head-count)
+ * short-circuits the build step to a no-op returning 0. */
+int test_engine_army_state_siege_build_gates(void)
+{
+    as_reset();
+
+    siege_setup(2, 50); CREC(2)[A_OWNER] = 0;          /* dead record    */
+    T_ASSERT_EQ_I(engine_army_state_siege_build_step(2), 0);
+    T_ASSERT_EQ_I(SLOT_VALUE(CREC(2), 0), 0);
+
+    siege_setup(3, 50); CREC(3)[A_STATE] = 2;          /* not state 1    */
+    T_ASSERT_EQ_I(engine_army_state_siege_build_step(3), 0);
+
+    siege_setup(4, 50); CREC(4)[A_F199] = 0;           /* not besieging  */
+    T_ASSERT_EQ_I(engine_army_state_siege_build_step(4), 0);
+
+    siege_setup(5, 0);                                 /* no head-count  */
+    T_ASSERT_EQ_I(engine_army_state_siege_build_step(5), 0);
+    T_ASSERT_EQ_I(SLOT_VALUE(CREC(5), 0), 0);
+    return 0;
+}
+
+/* One under-funded slot: the whole head budget goes in, value advances by the
+ * budget, percent is recomputed, and the remaining byte is ceil(gap / head). */
+int test_engine_army_state_siege_build_partial(void)
+{
+    as_reset();
+    uint8_t *r = siege_setup(2, 50);   /* target 200, value 0, budget 50 */
+
+    int done = engine_army_state_siege_build_step(2);
+
+    T_ASSERT_EQ_I(done, 0);
+    T_ASSERT_EQ_I(SLOT_VALUE(r, 0), 50);              /* 0 + 50          */
+    T_ASSERT_EQ_I(SLOT_PCT(r, 0), 25);               /* 50*100/200      */
+    T_ASSERT_EQ_I(r[A_SIEGE_REMAIN], 3);             /* ceil(150/50)    */
+    return 0;
+}
+
+/* The tick a slot reaches its target: value clamps to target, percent hits 100,
+ * the remaining byte zeroes, and the step returns 1 ("built"). */
+int test_engine_army_state_siege_build_completes(void)
+{
+    as_reset();
+    uint8_t *r = siege_setup(2, 50);
+    SLOT_VALUE(r, 0) = 190; SLOT_PCT(r, 0) = 95;      /* 10 from target  */
+
+    int done = engine_army_state_siege_build_step(2);
+
+    T_ASSERT_EQ_I(done, 1);
+    T_ASSERT_EQ_I(SLOT_VALUE(r, 0), 200);            /* clamped         */
+    T_ASSERT_EQ_I(SLOT_PCT(r, 0), 100);
+    T_ASSERT_EQ_I(r[A_SIEGE_REMAIN], 0);
+    return 0;
+}
+
+/* Two active slots split the budget evenly; the third (no engines ordered) is
+ * inert. */
+int test_engine_army_state_siege_build_even_split(void)
+{
+    as_reset();
+    uint8_t *r = siege_setup(2, 100);
+    SLOT_COUNT(r, 1) = 1;            /* slot 1 also one engine (target 200) */
+    /* slot 2 left at count 0 → inactive */
+
+    int done = engine_army_state_siege_build_step(2);
+
+    T_ASSERT_EQ_I(done, 0);
+    T_ASSERT_EQ_I(SLOT_VALUE(r, 0), 50);             /* 100/2 each      */
+    T_ASSERT_EQ_I(SLOT_VALUE(r, 1), 50);
+    T_ASSERT_EQ_I(SLOT_VALUE(r, 2), 0);              /* inactive        */
+    T_ASSERT_EQ_I(SLOT_PCT(r, 0), 25);
+    T_ASSERT_EQ_I(SLOT_PCT(r, 1), 25);
+    return 0;
+}
+
+/* When one slot's even share overshoots its target, the leftover budget tops up
+ * the other unfinished slot in the second pass. */
+int test_engine_army_state_siege_build_topup(void)
+{
+    as_reset();
+    uint8_t *r = siege_setup(2, 100);
+    SLOT_VALUE(r, 0) = 195; SLOT_PCT(r, 0) = 97;      /* 5 from target   */
+    SLOT_COUNT(r, 1) = 1;                             /* fresh slot      */
+
+    int done = engine_army_state_siege_build_step(2);
+
+    /* share = 50.  Pass1: slot0 +5 → 200 (spent 5), slot1 +50 → 50 (spent 50),
+     * budget left = 100-55 = 45.  Pass2: slot1 += 45 → 95. */
+    T_ASSERT_EQ_I(done, 0);
+    T_ASSERT_EQ_I(SLOT_VALUE(r, 0), 200);
+    T_ASSERT_EQ_I(SLOT_PCT(r, 0), 100);
+    T_ASSERT_EQ_I(SLOT_VALUE(r, 1), 95);
+    T_ASSERT_EQ_I(SLOT_PCT(r, 1), 47);               /* 95*100/200 = 47 */
+    return 0;
+}
+
+/* The scanner resumes from the persistent cursor, advances each record's build,
+ * and parks on the first that completes (returning 1); a dry pass walks the
+ * cursor past record 150 and returns 0. */
+int test_engine_army_state_scan_siege_built(void)
+{
+    as_reset();
+
+    /* Record 5 is one tick from done; records before it are not besieging. */
+    uint8_t *r5 = siege_setup(5, 50);
+    SLOT_VALUE(r5, 0) = 190; SLOT_PCT(r5, 0) = 95;
+
+    s_slot_0057cad4 = 1;
+    int hit = engine_army_state_scan_siege_built();
+
+    T_ASSERT_EQ_I(hit, 1);
+    T_ASSERT_EQ_I((int)s_slot_0057cad4, 5);          /* parked on record 5 */
+    T_ASSERT_EQ_I(CREC(5)[A_SIEGE_REMAIN], 0);
+
+    /* From just past it, nothing else is besieging → dry pass past 150. */
+    s_slot_0057cad4 = 6;
+    int dry = engine_army_state_scan_siege_built();
+    T_ASSERT_EQ_I(dry, 0);
+    T_ASSERT_EQ_I((int)s_slot_0057cad4, 0x97);       /* walked off the end */
+    return 0;
+}

@@ -65,4 +65,29 @@ int engine_army_state_arm_movement(unsigned state);
  * when nothing was armed. */
 int engine_army_state_arm_movement_owned(unsigned state, int owner);
 
+/* Port of FUN_004a8507 (1444 B, __cdecl uint).  Advance one besieging stack's
+ * siege-equipment construction by one turn-phase tick.  A no-op returning 0
+ * unless the record at `idx` is live (owner +0x00 != 0), state 1, actively
+ * besieging (+0x199 != 0) and has head-count (+0x168 >= 1, the per-tick build
+ * budget).  Otherwise it pours the head-count budget — split evenly across the
+ * still-unfinished slots, then topped up in slot order — into the three siege
+ * slots' build values (each capped at k_siege_build_target[slot] * count),
+ * recomputes each slot's percent, and writes the aggregate remaining-work byte
+ * (+0x19c, ceil(total gap / head)).  Returns 1 the tick that byte reaches 0 —
+ * all ordered siege engines built — else 0. */
+int engine_army_state_siege_build_step(int idx);
+
+/* Port of FUN_004a84ba (77 B, __cdecl uint).  Resume the persistent siege-scan
+ * cursor (s_slot_0057cad4, reset to 1 at phase-2 entry by retail FUN_004a82b9)
+ * and step it forward one record at a time, advancing each one's siege
+ * construction (engine_army_state_siege_build_step); stop on the first stack
+ * that finishes building this pass, leaving the cursor parked on it and
+ * returning 1.  Returns 0 once the cursor walks past record 150 with nothing
+ * completed.
+ *
+ * The turn driver (retail 0x49a010) calls this in phase 2 every 100th sub-tick:
+ * on 1 it launches the assault on the parked record (retail FUN_004a8aab, the
+ * A/V assault trigger — not yet ported); on 0 it advances the phase. */
+int engine_army_state_scan_siege_built(void);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_STATE_H */

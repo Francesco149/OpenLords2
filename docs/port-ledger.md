@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **675** (27.6%) — tested 634, ported 41
-- code bytes touched: **33.4%** (280,122 / 838,629 B)
-- unported: **1772**
+- touched: **679** (27.7%) — tested 638, ported 41
+- code bytes touched: **33.7%** (282,761 / 838,629 B)
+- unported: **1768**
 - orphan refs (in src/, not in function table): 7
 
-## tested (634) — ported + host unit suite
+## tested (638) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -97,7 +97,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404b99 | FUN_00404b99 | 466 | engine.c, engine.h, engine_rng.c |
 | 0x404d6b | FUN_00404d6b | 43 | engine_army_ai.c, engine_input.c, engine_math.c (+3) |
 | 0x404d96 | FUN_00404d96 | 43 | engine_math.h |
-| 0x404dc1 | FUN_00404dc1 | 66 | engine_combat.c, engine_input.c, engine_math.h (+2) |
+| 0x404dc1 | FUN_00404dc1 | 66 | engine_army_state.c, engine_combat.c, engine_input.c (+3) |
 | 0x404e03 | FUN_00404e03 | 72 | engine_army_economy.c, engine_math.h |
 | 0x404e4b | FUN_00404e4b | 98 | engine_math.h |
 | 0x404ead | FUN_00404ead | 159 | engine_math.h, engine_path.h |
@@ -527,6 +527,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a7e0a | FUN_004a7e0a | 171 | engine_combat.c, engine_combat.h |
 | 0x4a7eb5 | FUN_004a7eb5 | 550 | engine_combat.c, engine_combat.h |
 | 0x4a80db | FUN_004a80db | 478 | engine_combat.c, engine_combat.h |
+| 0x4a82b9 | FUN_004a82b9 | 365 | engine_army_state.c, engine_army_state.h |
+| 0x4a84ba | FUN_004a84ba | 77 | engine_army_state.c, engine_army_state.h |
+| 0x4a8507 | FUN_004a8507 | 1444 | engine_army_state.c, engine_army_state.h |
+| 0x4a8aab | FUN_004a8aab | 753 | engine_army_state.h |
 | 0x4a9a9a | FUN_004a9a9a | 1047 | engine_combat.c, engine_combat.h |
 | 0x4a9eb1 | FUN_004a9eb1 | 103 | engine_combat.c |
 | 0x4a9f18 | FUN_004a9f18 | 90 | engine_combat.c |

@@ -1964,6 +1964,12 @@ struct test_case {
     X(engine_army_state_arm_movement_none_returns_zero) \
     X(engine_army_state_arm_movement_owned_gates) \
     X(engine_army_state_arm_movement_owned_state1_breaks_siege) \
+    X(engine_army_state_siege_build_gates) \
+    X(engine_army_state_siege_build_partial) \
+    X(engine_army_state_siege_build_completes) \
+    X(engine_army_state_siege_build_even_split) \
+    X(engine_army_state_siege_build_topup) \
+    X(engine_army_state_scan_siege_built) \
     X(engine_army_move_dir_offsets) \
     X(engine_army_move_dir_edges) \
     X(engine_army_move_classify_flags) \

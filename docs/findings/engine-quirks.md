@@ -6421,3 +6421,52 @@ observationally identical to retail except in the impossible (0,0)-corner case,
 and the disarmed classifier discards the value regardless.  Same "faithfully
 reproduce retail's control flow, tighten only the genuinely-unreachable UB"
 posture as elsewhere.
+
+## 182 — siege-engine construction (`FUN_004a8507`) splits the besieger's head-count as the per-turn build budget; assault launches the tick all ordered engines hit 100%
+
+The strategic turn driver's phase-2 callee `FUN_004a84ba`
+(`engine_army_state_scan_siege_built`) scans the 150 per-territory occupant
+records and, for each **besieging** stack (live, state 1, `+0x199` siege link
+set), advances its siege-engine construction one tick via `FUN_004a8507`
+(`engine_army_state_siege_build_step`).  The build state is three i16 slots
+`{ count, pct, value }` at `+0x182` (stride 6) — `count` engines of that type
+ordered, `value` build progress, `pct` = `value` as a percent of the target.
+
+Mechanics worth recording:
+
+- **The build budget is the army's head-count** (`+0x168`, the same field the
+  march/settle handlers read as total troops).  Each tick that whole budget is
+  poured into the unfinished slots: first split **evenly** across the active
+  slots (`head / active`), then a second pass tops up any slot the even share
+  left short, in slot order, until the budget is spent.  So a bigger besieging
+  army literally builds its siege engines faster.
+
+- **Per-engine targets are baked** — `k_siege_build_target` (retail
+  `DAT_004de440`) = `{ 200, 200, 400 }`.  A slot's full build value is
+  `target[slot] * count`, i.e. ordering two of engine-type 0 needs 400 build,
+  not 200.
+
+- **The completion signal is an aggregate remaining-work byte** (`+0x19c`):
+  `ceil(sum_of_unfinished_gaps / head)`.  `FUN_004a8507` returns 1 the tick that
+  byte reaches 0 — every ordered engine at 100% — and the scanner then parks its
+  persistent cursor (`s_slot_0057cad4`) on that record so the driver can launch
+  the assault on it (`FUN_004a8aab`, the A/V assault trigger — sounds + combat
+  render, not yet ported).  A non-zero remaining byte (or any failed gate)
+  returns 0 and the cursor steps to the next record.
+
+- **The "pct < 100" gate is read pre-recompute in every pass.**  All three
+  passes test the *old* `pct` to decide whether a slot is active; only the third
+  pass rewrites it (`engine_math_percent_div`, clamped to 100).  A slot whose
+  `pct` was already 100 from a prior turn is skipped entirely — never
+  re-evaluated — which is why a fully-built slot stops contributing to the
+  even-split denominator.
+
+- **The cursor is resumable, not reset here.**  `FUN_004a84ba` only ever
+  *increments* `s_slot_0057cad4`; the reset to 1 lives in the phase-2 entry init
+  `FUN_004a82b9` (unported).  The driver calls the scan once per 100 sub-ticks,
+  so the cursor walks the record block at one assault-check per ~100 ticks and is
+  re-armed to 1 each time phase 2 is re-entered.
+
+The remaining-byte ceiling is inlined in retail (`div` + `mod != 0 ? +1`) rather
+than routed through the ported `engine_math_div_ceil` (`FUN_00404e03`); the port
+mirrors the inline form to stay byte-faithful.

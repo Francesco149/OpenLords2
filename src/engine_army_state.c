@@ -44,6 +44,8 @@
 #include "engine_combat.h"         /* army_enter_region / army_settle_region    */
 #include "engine_realm.h"          /* collect_territory_income (FUN_004ad6c0)    */
 #include "engine_realm_upkeep.h"   /* engine_unit_remove (FUN_0046f0a9)          */
+#include "engine_math.h"           /* engine_math_percent_div (FUN_00404dc1)     */
+#include "save_schema_globals.h"   /* s_slot_0057cad4 — siege-scan cursor        */
 
 /* --- per-territory occupant record (g_per_territory_420, stride 0x1a4) ----- */
 #define ASTRIDE      0x1a4
@@ -62,6 +64,21 @@
 #define A_TICKS      0x154    /* redraw-priority byte, latched per state (u8)   */
 #define A_TIMER      0x160    /* per-occupant countdown timer (i32)             */
 #define A_HEAD       0x168    /* total head-count (i32)                         */
+
+/* Siege-construction sub-record (besieging stacks only).  When a stack is
+ * besieging a region (+0x199 != 0, the C_F199 siege link), state 1, it builds
+ * three siege-equipment slots over successive turns.  Each slot is three i16:
+ * { count, pct, value } at +0x182 stride 6 — `count` siege engines of that
+ * type ordered, `value` build progress accumulated toward the per-engine target
+ * (k_siege_build_target[slot] * count), `pct` = value as a percent of target
+ * (clamped to 100 = built).  The aggregate remaining-work byte (+0x19c) is the
+ * head-count fraction of all unfinished gaps, rounded up; 0 = fully built. */
+#define A_SIEGE_LINK   0x199  /* besieged-region link (C_F199); 0 = not besieging*/
+#define A_SIEGE_SLOTS  0x182  /* 3 × { i16 count, i16 pct, i16 value }, stride 6 */
+#define A_SIEGE_REMAIN 0x19c  /* aggregate build-remaining byte; 0 = built (u8)  */
+#define SIEGE_SLOT_COUNT 0    /* i16 offset within a slot: engines ordered       */
+#define SIEGE_SLOT_PCT   2    /* i16 offset within a slot: percent built (0..100)*/
+#define SIEGE_SLOT_VALUE 4    /* i16 offset within a slot: accumulated build     */
 
 /* Facing-frame deltas (DAT_004d6a78 / DAT_004d6ab8, 8 × i32 each), indexed by
  * the occupant facing byte (+0x1b, a 0..7 compass direction). */
@@ -241,4 +258,116 @@ int engine_army_state_arm_movement_owned(unsigned state, int owner)
         }
     }
     return armed;
+}
+
+/* Per-engine-type build target multiplied by the slot's engine count to give
+ * the full build value (retail DAT_004de440, 3 × i32). */
+static const int32_t k_siege_build_target[3] = { 200, 200, 400 };
+
+/* --- FUN_004a8507: advance one besieging stack's siege construction ------- */
+int engine_army_state_siege_build_step(int idx)
+{
+    uint8_t *r = AREC(idx);
+
+    /* Only live (owner != 0), state-1, actively-besieging stacks build, and
+     * only while they have head-count (the per-tick build budget). */
+    if (r[A_OWNER] == '\0')              return 0;
+    if (r[A_STATE] != 1)                 return 0;
+    if (r[A_SIEGE_LINK] == '\0')         return 0;
+
+    int head = *(int32_t *)(r + A_HEAD);
+    if (head < 1)                        return 0;
+
+    /* Each slot is three i16 { count, pct, value } at +0x182 stride 6; mirror
+     * retail's byte-offset addressing (`&DAT_0052f232 + i*6 + offset`). */
+#define SLOT(i, field) (*(int16_t *)(r + A_SIEGE_SLOTS + (i) * 6 + (field)))
+
+    /* An "active" slot has engines ordered (count > 0) and is not yet built
+     * (pct < 100).  Split the build budget evenly across active slots. */
+    int active = 0;
+    for (int i = 0; i < 3; i++)
+        if (SLOT(i, SIEGE_SLOT_COUNT) > 0 && SLOT(i, SIEGE_SLOT_PCT) < 100)
+            active++;
+
+    int share = head;
+    if (active != 0)
+        share = head / active;
+
+    /* Pass 1: pour each active slot's even share into its build value (capped
+     * at the slot's target), tracking how much budget is left unspent. */
+    int budget = head;
+    for (int i = 0; i < 3; i++) {
+        if (SLOT(i, SIEGE_SLOT_COUNT) > 0 && SLOT(i, SIEGE_SLOT_PCT) < 100) {
+            int16_t value  = SLOT(i, SIEGE_SLOT_VALUE);
+            int     target = k_siege_build_target[i] * SLOT(i, SIEGE_SLOT_COUNT);
+            int     spent;
+            if (share < target - value) {
+                SLOT(i, SIEGE_SLOT_VALUE) = (int16_t)(value + share);
+                spent = share;
+            } else {
+                SLOT(i, SIEGE_SLOT_VALUE) = (int16_t)target;
+                spent = target - value;
+            }
+            budget -= spent;
+        }
+    }
+
+    /* Pass 2: top up the still-unfinished slots with whatever budget remains,
+     * in slot order, until either each is full or the budget runs dry. */
+    for (int i = 0; i < 3; i++) {
+        if (SLOT(i, SIEGE_SLOT_COUNT) > 0 && SLOT(i, SIEGE_SLOT_PCT) < 100) {
+            int value  = SLOT(i, SIEGE_SLOT_VALUE);
+            int target = k_siege_build_target[i] * SLOT(i, SIEGE_SLOT_COUNT);
+            if (value < target) {
+                if (budget < target - value) {
+                    SLOT(i, SIEGE_SLOT_VALUE) = (int16_t)(value + budget);
+                    budget = 0;
+                } else {
+                    SLOT(i, SIEGE_SLOT_VALUE) = (int16_t)target;
+                    budget -= target - value;
+                }
+            }
+        }
+    }
+
+    /* Pass 3: recompute each active slot's percent, clamp built slots to 100,
+     * and accumulate the remaining build gap across the still-unfinished ones. */
+    int remaining = 0;
+    for (int i = 0; i < 3; i++) {
+        if (SLOT(i, SIEGE_SLOT_COUNT) > 0 && SLOT(i, SIEGE_SLOT_PCT) < 100) {
+            int16_t value  = SLOT(i, SIEGE_SLOT_VALUE);
+            int     target = k_siege_build_target[i] * SLOT(i, SIEGE_SLOT_COUNT);
+            SLOT(i, SIEGE_SLOT_PCT) = (int16_t)engine_math_percent_div(value, target);
+            if (SLOT(i, SIEGE_SLOT_PCT) < 100)
+                remaining += target - value;
+            else
+                SLOT(i, SIEGE_SLOT_PCT) = 100;
+        }
+    }
+
+    /* Remaining-work byte = ceil(remaining / head) (retail inlines the ceiling
+     * as div + (mod != 0)); built when it reaches 0. */
+    r[A_SIEGE_REMAIN] = (uint8_t)(remaining / head);
+    if (remaining % head != 0)
+        r[A_SIEGE_REMAIN] = (uint8_t)(r[A_SIEGE_REMAIN] + 1);
+
+    return r[A_SIEGE_REMAIN] == '\0' ? 1 : 0;
+#undef SLOT
+}
+
+/* --- FUN_004a84ba: scan for the next besieging stack that finished building - */
+int engine_army_state_scan_siege_built(void)
+{
+    /* Resume from the persistent cursor (reset to 1 at phase-2 entry by the
+     * retail dispatcher's FUN_004a82b9 init) and advance one record at a time;
+     * stop and report on the first stack whose siege construction just hit
+     * 100% (engine_army_state_siege_build_step returns 1), leaving the cursor
+     * parked on it for the assault trigger.  Returns 0 once the cursor walks
+     * past the last record (index 150) with nothing built this pass. */
+    while ((int)s_slot_0057cad4 <= 0x96) {
+        if (engine_army_state_siege_build_step((int)s_slot_0057cad4) != 0)
+            return 1;
+        s_slot_0057cad4 = s_slot_0057cad4 + 1;
+    }
+    return 0;
 }

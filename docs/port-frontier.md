@@ -5,8 +5,8 @@
 The unported, non-thunk engine functions already **called by ported code** — the natural next chips. A **leaf** has all of its
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
-- frontier functions: **271**
-- of those, zero-dependency **leaves: 124** (recommended order below)
+- frontier functions: **273**
+- of those, zero-dependency **leaves: 126** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
 
@@ -339,20 +339,22 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4975d3 | 170 | 1 | 1 |  |
 | 0x499261 | 261 | 1 | 0 | ✓ |
 | 0x49b973 | 374 | 1 | 2 |  |
-| 0x49a010 | 982 | 1 | 14 |  |
+| 0x49a010 | 982 | 1 | 11 |  |
 
-### asset-load IO helper cluster (0x4af*) (9)
+### asset-load IO helper cluster (0x4af*) (11)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
 | 0x4af312 | 496 | 4 | 1 |  |
 | 0x4af116 | 508 | 4 | 0 | ✓ |
 | 0x4aecf0 | 334 | 2 | 1 |  |
+| 0x4a8426 | 148 | 1 | 0 | ✓ |
 | 0x4af841 | 152 | 1 | 1 |  |
 | 0x4afe3a | 179 | 1 | 0 | ✓ |
 | 0x4ae1b8 | 243 | 1 | 4 |  |
 | 0x4a9252 | 288 | 1 | 5 |  |
 | 0x4aa90a | 374 | 1 | 0 | ✓ |
+| 0x4aa6ca | 469 | 1 | 0 | ✓ |
 | 0x4a8e0b | 943 | 1 | 3 |  |
 
 ### battlefield render + wndproc (24)
