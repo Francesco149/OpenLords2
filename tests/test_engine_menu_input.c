@@ -365,15 +365,36 @@ int test_menu_page7_cancel_returns_to_main_menu(void)
     return 0;
 }
 
-int test_menu_page7_start_is_deferred_but_consumes(void)
+int test_menu_page7_start_fires_game_start_seam(void)
 {
     mi_reset();
+    engine_menu_input_bind_game_start_fn(0);     /* default counting stub */
     engine_title_render_set_page(7);
+    s_slot_00553f98 = 1;                         /* 1 human */
+    s_slot_0053e8a4 = 5;                         /* 5-seat roster → gate passes */
     /* Start box (243,181)-(319,236) → centre (281, 208). */
     engine_menu_click_in_t in = press_at(281, 208);
     T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);     /* click consumed */
-    T_ASSERT_EQ_I(engine_title_render_page(), 7);       /* still page 7 (deferred) */
+    T_ASSERT_EQ_I(engine_title_render_page(), 7);       /* Start does not change page */
     T_ASSERT_EQ_I(engine_menu_input_last_redraw_mode(), 2);
+    T_ASSERT_EQ_I(engine_menu_input_game_start_count(), 1);  /* seam fired once */
+    T_ASSERT_EQ_I(engine_menu_input_game_start_mode(), 0);   /* custom game */
+    return 0;
+}
+
+/* Start is gated on humans <= roster: with no roster seats the seam must NOT
+ * fire (the click is still consumed, page unchanged). */
+int test_menu_page7_start_blocked_when_roster_too_small(void)
+{
+    mi_reset();
+    engine_menu_input_bind_game_start_fn(0);
+    engine_title_render_set_page(7);
+    s_slot_00553f98 = 2;                         /* 2 humans */
+    s_slot_0053e8a4 = 1;                         /* only 1 roster seat → gate fails */
+    engine_menu_click_in_t in = press_at(281, 208);
+    T_ASSERT_EQ_I(engine_menu_title_input(&in), 1);     /* click consumed */
+    T_ASSERT_EQ_I(engine_title_render_page(), 7);
+    T_ASSERT_EQ_I(engine_menu_input_game_start_count(), 0);  /* seam did NOT fire */
     return 0;
 }
 

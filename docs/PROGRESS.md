@@ -7,6 +7,63 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-03 — NEW-GAME: live page-7 "Start" → strategic map through the genuine menu (USER-CONFIRMED)
+
+A new game is now reachable through the **real menu UI**: clicking "Start" on the
+page-7 config screen drops the drop-in into the natively-rendered strategic map —
+the new-game analogue of the `--strat-load-live` menu→load→map path.  Previously
+only the headless `--newgame` seat could start a game (it supplied the config
+inline).  Three pieces landed:
+
+- **`engine_game_init_apply_custom_config` (port of FUN_00499dc3)** — retail's
+  page-7 "Start" config-apply.  Copies the 12 config-screen option-tab selections
+  (engine_title_render `g_p7_tab_values`, retail DAT_0053f288..0x53f2b4) into the
+  live game-config the new-game initialiser reads: the five realm presets
+  (econ/resource/troop/gold/keep — the SAME storage `set_realm_presets` latches,
+  so this is the config-driven alternative to that hard-coded setter), the
+  standings/mode/render-mode/budget config scalars (s_slot_0053f25c/260/264/23c/
+  26c), and the AI count s_slot_0053f268.  Two selectors index const tables baked
+  from Lords2.exe (0x4dbbf8 budget, 0x4dbc18 gold).  Verified: over apply_defaults'
+  SP-default tabs it reproduces the `--newgame` seat's hard-coded presets exactly
+  (economy 1 / resource 2 / troop 0 / gold 1000 / keep 3, AI 4).
+
+- **Game-start seam + Start wiring** — engine_menu_input grows a bound seam
+  `engine_menu_input_bind_game_start_fn`; the page-7 Start handler (FUN_004335f0
+  arm 2) keeps retail's faithful gate `DAT_00553f98 <= DAT_0053e8a4` (humans fit
+  the roster) and routes 499dc3 + 4329ec through the seam, keeping the input
+  module free of game-init/IO deps.  The live engine binds it (in
+  `title_bind_render_state`) to `newgame_enter_live`, which seeds the players
+  (set_player_config), applies the config (apply_custom_config), builds the world
+  + game-start (shared `newgame_build_world_and_start`, factored out of the
+  `--newgame` seat), reinstalls the strategic palette (base01.256 — the same
+  menu→map magenta fix the LOAD path applies, engine-quirks #156), and sets the
+  in-game-active flag DAT_0052afa4.
+
+- **`--newgame-live` seat** — drives the engine into the page-7 config screen
+  (reusing `seed_page7_state`: country list + SP-default tabs + a 5-seat roster so
+  the Start gate passes), then `main_loop_body` fires the genuine page-7 Start
+  click on frame 5.  `engine_menu_title_input` routes it through the wired handler
+  → seam → `engine_game_start`, which flips `g_sim_current_screen` 0x1f→0; the
+  real tick's screen-0 dispatch then paints the map natively.
+
+**Verified live (user-confirmed via feed, 2026-06-03).** `--newgame-live`:
+`started (map=0 realms=14 screen=0 state=3 data_ready=1 year=1268 season=4)` —
+the SAME end state as the validated `--newgame` seat, reached through the genuine
+menu Start click.  The rendered frame is a clean full-HUD strategic map
+(File/Options/Help bar, 1268 Winter, 1000 Crowns, England minimap with red
+Lancashire, territory panel pop 435 / ♥72 / Tax 0% / Ration Normal, cows in
+fenced pastures, castle, the red capital flag, End turn).  Caught + fixed the
+expected menu→map palette magenta on the way (the config screen leaves gateway.256
+active; base01.256 reinstalled on map entry, exactly as the load path does).
+1873 host tests green (+ apply_custom_config defaults + 2 Start-seam routing tests).
+
+**NEXT options:** Play Now! / scenario Start (mode 1 → port FUN_00499e5d, the
+scenario config-apply + map setup, left as a TODO in the seam); the fully
+interactive page-1→4→7→Start nav (the seam is bound in `title_bind_render_state`
+so `--title-live --title-page 7` Start already works — the gap is page-4/7
+rendering polish); the residual new-game save-parity (autotile +2 / AI-economy /
+RNG, all on deeper frontiers).
+
 ## 2026-06-02 — NEW-GAME: `--newgame [MAP_ID]` seat — live drop-in renders a fresh game's first strategic frame
 
 The new-game render path is now **live end-to-end**: the drop-in can START a

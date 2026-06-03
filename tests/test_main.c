@@ -1293,7 +1293,8 @@ struct test_case {
     X(menu_title_input_click_does_not_refresh_hover) \
     X(menu_title_input_other_page_is_noop) \
     X(menu_page7_cancel_returns_to_main_menu) \
-    X(menu_page7_start_is_deferred_but_consumes) \
+    X(menu_page7_start_fires_game_start_seam) \
+    X(menu_page7_start_blocked_when_roster_too_small) \
     X(menu_page7_country_row_selects_and_sets_id) \
     X(menu_page7_scrollbar_down_scrolls) \
     X(menu_page7_option_tab_opens_page9) \

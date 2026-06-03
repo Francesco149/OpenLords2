@@ -184,6 +184,8 @@ static const char *g_strat_map_dir;
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 static int         g_strat_load_live;  /* --strat-load-live: drive the live
                                         * load pump from the title menu */
+static int         g_newgame_live;     /* --newgame-live: live page-7 Start →
+                                        * genuine menu→ingame map transition */
 static int         g_newgame;          /* --newgame [MAP_ID]: run the new-game
                                         * initialiser + render the first frame */
 static int         g_newgame_map_id;   /* MAP_ID for --newgame (default 0) */
@@ -290,6 +292,8 @@ static void bringup_strat_map(const char *dir);
 static void bringup_strat_load(const char *dir);
 static void bringup_strat_load_live(void);
 static void bringup_newgame(int map_id);
+static void bringup_newgame_live(void);
+static void newgame_enter_live(int mode);
 static void bringup_input_segtrace(void);
 static void engine_map_post_load(void);
 static int  drop_in_load(const char *filename);
@@ -410,6 +414,14 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
                  * (engine_load_pump_tick) so the genuine menu→ingame
                  * transition loads the save + renders the strategic map. */
                 bringup_strat_load_live();
+            } else if (g_newgame_live) {
+                /* Live NEW-GAME path — drive the engine into the page-7 config
+                 * screen, then (in main_loop_body) fire the genuine "Start"
+                 * click so the wired Start handler → game-start seam runs the
+                 * new-game init + flips to ingame; the main loop then renders
+                 * the strategic map natively.  New-game analogue of
+                 * --strat-load-live. */
+                bringup_newgame_live();
             } else if (g_newgame) {
                 /* New-game path — run the ported new-game initialiser
                  * (engine_game_init) + game-start over the config-screen
@@ -1010,6 +1022,12 @@ static void title_bind_render_state(void)
     gfx_glyph_set_dest(0, 0);
     gfx_glyph_set_glyph(0, 0, 0);
     gfx_glyph_set_color_modulation(0);
+
+    /* Game-start seam: wire the page-7 "Start" action to the live new-game
+     * enter so any live-menu seat (--title-live, --newgame-live) can launch a
+     * game through the genuine menu input.  Host tests leave the default
+     * counting stub bound. */
+    engine_menu_input_bind_game_start_fn(newgame_enter_live);
 }
 
 /* Load the backdrop for the current page (engine_title_render_page) and
@@ -1957,6 +1975,128 @@ static void newgame_load_banks(void)
         log_line("newgame: pl8 bank load failed");
 }
 
+/* Shared new-game world build + game-start.  Assumes the config (realm
+ * presets, player config, config substate scalars) is ALREADY set by the
+ * caller — the only difference between the headless --newgame seat and the
+ * live page-7 "Start" path is where that config comes from (the seat hard-codes
+ * it; the live path reads the config screen via engine_game_init_apply_custom_
+ * config).  This routine is the common tail both run: build the map cells +
+ * camera from L2_maps.dat[map_id], bind the map record (the FUN_00467770
+ * plane-unpack seam) + l2.eng localization + the minimap political grids, then
+ * run engine_game_start (FUN_004329ec SP branch → FUN_00497ced + flip to the
+ * ingame screen/state), and bridge the capital-centred scroll into the render
+ * camera (see the scroll-storage-split note, engine-quirks #176).  Returns 1
+ * on success, 0 if the map files can't be read. */
+static int newgame_build_world_and_start(int map_id)
+{
+    s_slot_0053f034 = (uint32_t)map_id;             /* map id */
+    s_slot_0057cb18 = 0;                            /* view-mode normal */
+
+    /* tile_cells + camera from L2_maps.dat[map_id] (retail FUN_004298c1
+     * build_cells + FUN_00451fcc camera, run by the config screen). */
+    if (engine_map_init_build_cells(".", map_id, 0) == 0) {
+        log_line("newgame: build_cells failed (L2_maps.dat read, map=%d)",
+                 map_id);
+        return 0;
+    }
+    engine_map_init_set_camera(0);
+
+    /* Bind the loaded L2_maps.dat[map_id] record — the seam for FUN_00467770's
+     * file read, which setup_overworld plane-unpacks into the terrain
+     * descriptors.  One block = 0x80c1 B at map_id*0x80c1. */
+    static uint8_t maprec[0x80c1];
+    if (io_read_file_at("L2_maps.dat", maprec, sizeof maprec,
+                        map_id * (long)sizeof maprec) == 0) {
+        log_line("newgame: L2_maps.dat record read failed (map=%d)", map_id);
+        return 0;
+    }
+    engine_territory_bind_strat_map_record(maprec);
+
+    /* l2.eng localization blob for the NPC-schedule job names (retail
+     * config_localization_data; NULL skips the loc walk — engine-quirks #107). */
+    size_t loc_sz = 0;
+    const uint8_t *loc = config_localization_data(&loc_sz);
+    engine_npc_schedule_set_localization(loc, loc_sz);
+
+    /* Minimap political grids (retail FUN_0046a037, run by the scenario
+     * apply — NOT inside FUN_00497ced). */
+    if (!engine_minimap_load_grids(".", map_id))
+        log_line("newgame: minimap grid load failed (map=%d)", map_id);
+
+    /* Run the new-game initialiser + game-start.  Bind the banks seam for the
+     * orchestrator's render-data load; the turn-driver seam is bound in
+     * WinMain.  engine_game_start flips g_sim_current_screen 0x1f→0 +
+     * g_engine_state→3, which is what drives the live menu→map transition. */
+    engine_game_init_bind_banks_fn(newgame_load_banks);
+    engine_game_start();                            /* FUN_004329ec (SP) */
+    engine_game_init_bind_banks_fn(NULL);
+
+    /* Push the capital-centred scroll the new-game init computed (entries
+     * 16/17 = DAT_005651b4/b8, written by recenter_on_capital inside
+     * engine_game_start → setup_realms) into the render camera, so the first
+     * strategic frame is centred on the player's capital — exactly as the LOAD
+     * path does (engine_map_post_load).  See engine-quirks #176 (scroll-storage
+     * split: the renderer reads engine_map_init statics, the save the s_slot
+     * mirror). */
+    engine_map_init_set_scroll((int)s_slot_005651b4, (int)s_slot_005651b8);
+    return 1;
+}
+
+/* In-strategic-map active flag (retail DAT_0052afa4 = 1, set by the page-7
+ * Start / Play Now! tail).  No ported reader yet — the live menu→map transition
+ * is driven by g_sim_current_screen (flipped by engine_game_start) — but set it
+ * faithfully so a future ported reader finds it.  File-static: only the
+ * integration layer writes it today. */
+static int g_sim_game_active;   /* DAT_0052afa4 */
+
+/* Game-start seam binding — bound to engine_menu_input's page-7 "Start" action
+ * (and reachable from any live-menu seat).  Reproduces retail's FUN_004335f0
+ * arm-2 tail (config-apply FUN_00499dc3 + opening-stage load FUN_004329ec +
+ * DAT_0052afa4 = 1) over the ported world build.  `mode` 0 = custom game; the
+ * scenario / Play Now! path (mode 1, FUN_00499e5d) is deferred. */
+static void newgame_enter_live(int mode)
+{
+    (void)mode;   /* only custom (0) wired today */
+
+    /* The config-screen player setup (FUN_0049792e) is deferred, so seed the
+     * player slots here: a single-player custom game is 1 human + N AI, where
+     * the page-7 player-count tab gives the total (selector + 2). */
+    int total = engine_title_render_tab_value(2) + 2;
+    const uint8_t *prefs = config_player_prefs(NULL);
+    engine_game_init_set_player_config(total, /*human*/1, /*cur_player*/1, prefs);
+
+    /* Config-apply (FUN_00499dc3): the five realm presets + the standings/mode/
+     * render-mode/budget config scalars + the AI count, all read from the
+     * page-7 option tabs. */
+    engine_game_init_apply_custom_config();
+
+    /* Config substate scalars the deferred screen-entry would set (entries
+     * 207 / 197) — mirror the headless seat so a save of the live game matches. */
+    s_slot_0053f0d4 = 0xa;
+    s_slot_0055302c = 2;
+
+    /* Build the world + game-start (shared with the --newgame seat).  The map
+     * id is whatever the config screen latched (country select → s_slot_0053f034). */
+    if (!newgame_build_world_and_start((int)s_slot_0053f034))
+        return;
+
+    /* Restore the strategic-map palette (base01.256).  Arriving from the live
+     * config screen, the page-background load swapped in the menu palette
+     * (gateway.256), so the terrain indices would present as magenta — the
+     * same menu→map transition fix the LOAD path applies in engine_map_post_load
+     * (engine-quirks #156: the palette is screen-state-owned).  The --newgame
+     * seat never shows the menu, so it doesn't need this. */
+    if (!gfx_load_palette("base01.256"))
+        log_line("newgame-live: base01.256 palette restore failed");
+
+    g_sim_game_active = 1;   /* DAT_0052afa4 — now in the strategic map */
+    log_line("newgame-live: started (map=%d realms=%d screen=%d state=%d "
+             "data_ready=%d year=%d season=%d)",
+             (int)s_slot_0053f034, (int)s_slot_0056d5dc, engine_current_screen(),
+             g_engine_state, engine_pl8_data_ready(),
+             (int)s_slot_00553edc, (int)s_slot_0057c934);
+}
+
 /* New-game world-state producer + first-frame render (--newgame [MAP_ID]).
  * The new-game analogue of bringup_strat_load: instead of deserialising a
  * save it RUNS the ported new-game initialiser (engine_game_init =
@@ -1986,28 +2126,23 @@ static void newgame_load_banks(void)
  * fresh game ticks to turn 1 during init, matching retail. */
 static void bringup_newgame(int map_id)
 {
-    /* 1. Config-screen preconditions. */
-    s_slot_0053f034 = (uint32_t)map_id;             /* map id */
-    s_slot_0057cb18 = 0;                            /* view-mode normal */
-    /* Realm presets + the persisted config scalars — the config screen's
-     * output (FUN_00499dc3 finalise + screen-entry defaults, both unported).
-     * Ground truth = runs/capture/newgame-cfgdump1, the retail values for a
-     * DEFAULT single-player custom game on map 0 (NOT the scenario-table
-     * defaults assumed earlier): economy 1 / resource 2 / troop 0 / gold 1000
-     * / keep 3.  set_realm_presets latches the init-read statics; the matching
-     * presets feed the per-army/territory economy seeding (persisted), so they
-     * must be right for the save to byte-match.  They are not save-schema
-     * scalars themselves (no persisted s_slot home), so set_realm_presets — the
-     * init-read statics — is the only home needed. */
+    /* 1. Config-screen preconditions — supplied inline (the seat does not run
+     * the config screen).  Realm presets = the retail values for a DEFAULT
+     * single-player custom game on map 0 (ground truth
+     * runs/capture/newgame-cfgdump1): economy 1 / resource 2 / troop 0 / gold
+     * 1000 / keep 3.  The live page-7 path derives these from the config screen
+     * instead (engine_game_init_apply_custom_config); this seat hard-codes them
+     * so it can validate the world build without the config-screen UI.
+     * set_realm_presets latches the init-read statics; they feed the per-army/
+     * territory economy seeding (persisted), so they must match for the save to
+     * byte-match. */
     engine_game_init_set_realm_presets(/*econ*/1, /*res*/2, /*troop*/0,
                                        /*gold_base*/1000, /*keep_level*/3);
 
     /* Players: a default custom game is 1 human (slot 1) + 4 AI (slots 2..5),
      * local player = 1.  set_player_config seeds the few config-screen-owned
      * fields + the AI count (s_slot_0053f268); the ported initialiser derives
-     * the rest (roster from the map, work-locations from the NPC scheduler).
-     * Without this the strategic slots stay empty and retail spams turns on a
-     * load of the resulting save. */
+     * the rest (roster from the map, work-locations from the NPC scheduler). */
     {
         /* Human player's name/title from the lords2.inf prefs (loaded by
          * config_init), matching retail's SP seat (save entry 2). */
@@ -2026,63 +2161,15 @@ static void bringup_newgame(int map_id)
     s_slot_0053f0d4 = 0xa;
     s_slot_0055302c = 2;
 
-    /* tile_cells + camera from L2_maps.dat[map_id] (retail FUN_004298c1
-     * build_cells + FUN_00451fcc camera, run by the config screen). */
-    if (engine_map_init_build_cells(".", map_id, 0) == 0) {
-        log_line("newgame: build_cells failed (L2_maps.dat read, map=%d)",
-                 map_id);
+    /* 2. Build the world + game-start (shared with the live Start path). */
+    if (!newgame_build_world_and_start(map_id))
         return;
-    }
-    engine_map_init_set_camera(0);
-
-    /* Bind the loaded L2_maps.dat[map_id] record — the seam for
-     * FUN_00467770's file read, which setup_overworld plane-unpacks into
-     * the terrain descriptors.  One block = 0x80c1 B at map_id*0x80c1. */
-    static uint8_t maprec[0x80c1];
-    if (io_read_file_at("L2_maps.dat", maprec, sizeof maprec,
-                        map_id * (long)sizeof maprec) == 0) {
-        log_line("newgame: L2_maps.dat record read failed (map=%d)", map_id);
-        return;
-    }
-    engine_territory_bind_strat_map_record(maprec);
-
-    /* l2.eng localization blob for the NPC-schedule job names (retail
-     * config_localization_data; NULL skips the loc walk — engine-quirks #107). */
-    size_t loc_sz = 0;
-    const uint8_t *loc = config_localization_data(&loc_sz);
-    engine_npc_schedule_set_localization(loc, loc_sz);
-
-    /* Minimap political grids (retail FUN_0046a037, run by the scenario
-     * apply — NOT inside FUN_00497ced). */
-    if (!engine_minimap_load_grids(".", map_id))
-        log_line("newgame: minimap grid load failed (map=%d)", map_id);
-
-    /* 2. Run the new-game initialiser + game-start.  Bind the banks seam
-     * for the orchestrator's render-data load; the turn-driver seam is
-     * already bound in WinMain. */
-    engine_game_init_bind_banks_fn(newgame_load_banks);
-    engine_game_start();                            /* FUN_004329ec (SP) */
-    engine_game_init_bind_banks_fn(NULL);
 
     log_line("newgame: init done (map=%d realms=%d screen=%d state=%d "
              "data_ready=%d year=%d season=%d)",
              map_id, (int)s_slot_0056d5dc, engine_current_screen(),
              g_engine_state, engine_pl8_data_ready(),
              (int)s_slot_00553edc, (int)s_slot_0057c934);
-
-    /* Push the capital-centred scroll the new-game init computed (entries
-     * 16/17 = DAT_005651b4/b8, written by recenter_on_capital inside
-     * engine_game_start → setup_realms) into the render camera, so the first
-     * strategic frame is centred on the player's capital — matching retail,
-     * whose single scroll storage (DAT_005651b4/b8) is read by BOTH the
-     * renderer and the save.  The port splits that storage (the renderer
-     * reads engine_map_init's statics, the save reads the s_slot mirror), so
-     * the recenter's value must be bridged across here — exactly as the LOAD
-     * path does (engine_map_post_load) after engine_map_init_strategic resets
-     * to the new-game default.  Verified: recenter yields col=24/row=2 on
-     * map 0, matching retail's lastturn.sav (was 20/74, the render default,
-     * which clobbered the recenter output and left the frame off-capital). */
-    engine_map_init_set_scroll((int)s_slot_005651b4, (int)s_slot_005651b8);
 
     /* Dump the new-game state to a save so retail can be driven to LOAD the
      * EXACT same world (a deterministic truth|mine|diff: retail's renderer
@@ -2217,6 +2304,30 @@ static void bringup_strat_load_live(void)
              "~150 frames.");
 }
 
+/* --newgame-live: exercise the LIVE new-game "Start" path end-to-end through
+ * the genuine menu input.  Drive the engine into the title state with the
+ * page-7 config screen seeded (the same snapshot --title-live --title-page 7
+ * uses: country list + SP-default option tabs + a 5-seat roster so the Start
+ * gate passes), then main_loop_body fires the page-7 "Start" click on frame 5.
+ * engine_menu_title_input routes it through the wired Start handler → the bound
+ * game-start seam (newgame_enter_live) → world build + engine_game_start, which
+ * flips g_sim_current_screen 0x1f→0.  The real main loop then ticks the screen-0
+ * dispatch arm and paints the strategic map natively — the new-game analogue of
+ * --strat-load-live.  Run with a few frames (e.g. --frames 10). */
+static void bringup_newgame_live(void)
+{
+    title_bind_render_state();   /* also binds the game-start seam */
+    engine_bind_title_bg_reload_fn(title_bg_reload);
+    engine_set_viewport_game_extents(640, 480);
+    engine_title_render_set_page(7);               /* straight to the config screen */
+    seed_page7_state();                            /* country list + tabs + roster */
+    s_slot_0053f034 = 0;                           /* default map 0 */
+    engine_set_current_screen(0x1f);
+    engine_set_demand_redraw(2);
+    log_line("newgame-live: config screen up; the Start click fires on frame 5 "
+             "→ genuine menu→ingame map transition.");
+}
+
 /* --input-segtrace FILE: replay a TAS input trace through the live tick.
  * Drives the engine into the live title state (page 1, with the page-3
  * file list pre-seeded so the trace's menu-nav reaches a populated save
@@ -2283,6 +2394,21 @@ static void main_loop_body(void)
             PostMessageA(g_hwnd, WM_CHAR,
                          (WPARAM)(unsigned char)g_title_type[idx], 0);
         }
+    }
+
+    /* --newgame-live: fire the page-7 "Start" click on frame 5, routed through
+     * the genuine menu input handler (engine_menu_title_input → Start gate →
+     * game-start seam → newgame_enter_live → engine_game_start, which flips
+     * g_sim_current_screen 0x1f→0).  After it returns the live tick's screen-0
+     * dispatch paints the strategic map.  One-shot (frame == 5). */
+    if (g_newgame_live && g_frame_counter == 5) {
+        engine_menu_click_in_t click;
+        memset(&click, 0, sizeof click);
+        click.cursor_x = 281;          /* page-7 Start box (243,181)-(319,236) centre */
+        click.cursor_y = 208;
+        click.lmb_newly_pressed = 1;   /* press edge → type-1 button action */
+        engine_menu_title_input(&click);
+        log_line("newgame-live: fired page-7 Start click at frame 5.");
     }
 
     /* TAS input-trace replay (--input-segtrace): post the trace's due
@@ -2560,6 +2686,10 @@ static void parse_cmdline(LPSTR lpCmd)
         }
         else if (!strcmp(a, "--strat-load-live")) {
             g_strat_load_live = 1;           /* live load pump → ingame map */
+            g_gfx_init = 1;                  /* needs DDraw */
+        }
+        else if (!strcmp(a, "--newgame-live")) {
+            g_newgame_live = 1;              /* live page-7 Start → ingame map */
             g_gfx_init = 1;                  /* needs DDraw */
         }
         else if (!strcmp(a, "--newgame")) {

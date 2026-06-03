@@ -29,6 +29,17 @@ static int g_stub_quit_count;
 static void quit_stub(void) { g_stub_quit_count++; }
 static engine_menu_quit_fn g_quit_fn = quit_stub;
 
+/* Game-start seam.  Retail's page-7 "Start" (FUN_004335f0 arm 2) and Play Now!
+ * (FUN_00433155) run the config-apply (FUN_00499dc3 / 0x499e5d) + opening-stage
+ * load (FUN_004329ec).  Those reach the new-game initialiser + map/IO setup, so
+ * the port routes them through this bound seam (the live engine binds it to the
+ * new-game enter; host tests count the calls via the stub).  `mode` selects the
+ * config-apply: 0 = custom game, 1 = scenario / Play Now!. */
+static int g_stub_game_start_count;
+static int g_stub_game_start_mode = -1;
+static void game_start_stub(int mode) { g_stub_game_start_count++; g_stub_game_start_mode = mode; }
+static engine_menu_game_start_fn g_game_start_fn = game_start_stub;
+
 /* DAT_005c9a74 — single-player availability gate (see header). */
 static int g_sp_available = 1;
 
@@ -61,6 +72,15 @@ void engine_menu_input_bind_redraw_fn(engine_menu_redraw_fn fn)
     g_redraw_fn = fn ? fn : redraw_stub;
 }
 
+void engine_menu_input_bind_game_start_fn(engine_menu_game_start_fn fn)
+{
+    g_game_start_fn = fn ? fn : game_start_stub;
+}
+
+/* Test accessors for the game-start seam (mirrors the redraw/quit counters). */
+int engine_menu_input_game_start_count(void) { return g_stub_game_start_count; }
+int engine_menu_input_game_start_mode(void)  { return g_stub_game_start_mode; }
+
 void engine_menu_input_bind_quit_fn(engine_menu_quit_fn fn)
 {
     g_quit_fn = fn ? fn : quit_stub;
@@ -75,6 +95,8 @@ void engine_menu_input_reset_counters(void)
 {
     g_stub_last_redraw_mode = 0;
     g_stub_quit_count = 0;
+    g_stub_game_start_count = 0;
+    g_stub_game_start_mode = -1;
 }
 
 /* ─── click actions ──────────────────────────────────────────────── */
@@ -320,12 +342,20 @@ static void menu_action_p7_button(int param)
         g_redraw_fn(2);
         /* TODO(setup-exit): 0x499a1c(0) reset; MP teardown 0x4b743b/0x43e8f4. */
     } else if (param == 2) {
-        /* Start — finalize the roster (0x499dc3), load the opening stage
-         * (0x4329ec) and drop into the strategic map (DAT_0052afa4 = 1),
-         * gated on DAT_00553f98 <= DAT_0053e8a4.  The game-start subsystem
-         * is unported; deferred. */
-        g_redraw_fn(2);
-        /* TODO(game-start): 0x499dc3 + 0x4329ec; DAT_0052afa4 = 1. */
+        /* Start — finalize the config (FUN_00499dc3) + load the opening stage
+         * (FUN_004329ec) and drop into the strategic map, gated (faithfully) on
+         * DAT_00553f98 <= DAT_0053e8a4 (the humans must fit the roster).  Retail
+         * runs 499dc3 + 4329ec inline; the port routes both through the
+         * game-start seam (the live engine binds it to the new-game enter, which
+         * reads the config tabs via apply_custom_config, builds the world, runs
+         * engine_game_start, and sets the in-game-active flag DAT_0052afa4).
+         * NOTE: the roster count DAT_0053e8a4 is populated by the deferred
+         * roster recompute (FUN_00433cc1); the live seat seeds it so the gate
+         * passes (see main.c). */
+        if (s_slot_00553f98 <= s_slot_0053e8a4) {
+            g_redraw_fn(2);
+            g_game_start_fn(/*mode*/0);             /* 0 = custom game */
+        }
     } else if (param == 3) {
         /* Defaults — re-apply the default option values (FUN_004ae539) and
          * clamp the player count to the live roster size (FUN_004ae5e2),

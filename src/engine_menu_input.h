@@ -132,6 +132,20 @@ void engine_menu_input_bind_redraw_fn(engine_menu_redraw_fn fn);
 typedef void (*engine_menu_quit_fn)(void);
 void engine_menu_input_bind_quit_fn(engine_menu_quit_fn fn);
 
+/* Game-start seam — the page-7 "Start" / Play Now! actions (retail's
+ * FUN_00499dc3/0x499e5d config-apply + FUN_004329ec opening-stage load).  Those
+ * reach the new-game initialiser + map/IO setup, so the live engine binds this
+ * to the new-game enter; host tests leave the default counting stub bound.
+ * `mode` selects the config-apply: 0 = custom game, 1 = scenario / Play Now!. */
+typedef void (*engine_menu_game_start_fn)(int mode);
+void engine_menu_input_bind_game_start_fn(engine_menu_game_start_fn fn);
+
+/* Test introspection for the game-start seam (only meaningful with the default
+ * stub bound): number of Start invocations + the mode of the last one (-1 if
+ * none). */
+int  engine_menu_input_game_start_count(void);
+int  engine_menu_input_game_start_mode(void);
+
 /* Single-player availability gate — retail DAT_005c9a74.  "Single
  * player" routes to page 2 only when this is in [1,2]; otherwise retail
  * routes to the (deferred) profile-select page 10.  Defaults to 1 so
