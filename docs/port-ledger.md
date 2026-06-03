@@ -200,7 +200,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x429153 | FUN_00429153 | 96 | engine_category_buckets.h, engine_territory.c |
 | 0x4291b3 | FUN_004291b3 | 171 | engine_category_buckets.h, engine_territory.c |
 | 0x42925e | FUN_0042925e | 81 | engine_category_buckets.c, engine_category_buckets.h |
-| 0x4296b5 | FUN_004296b5 | 319 | engine_army_move.c, engine_army_move.h |
+| 0x4296b5 | FUN_004296b5 | 319 | engine_army_move.c, engine_army_move.h, game_init.c |
 | 0x4298c1 | FUN_004298c1 | 604 | engine_map_init.c, engine_map_init.h, game_init.c (+1) |
 | 0x429b1d | FUN_00429b1d | 135 | engine.c, engine_camera.c, engine_camera.h (+1) |
 | 0x42a15f | FUN_0042a15f | 206 | engine_camera.c, engine_camera.h |
@@ -512,7 +512,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a50ae | FUN_004a50ae | 731 | engine_combat.c, engine_combat.h |
 | 0x4a551b | FUN_004a551b | 332 | engine_combat.c, engine_combat.h |
 | 0x4a6a30 | FUN_004a6a30 | 568 | engine_combat.c, engine_combat.h |
-| 0x4a6c68 | FUN_004a6c68 | 1264 | engine_army_move.c, engine_army_move.h, engine_combat.c (+1) |
+| 0x4a6c68 | FUN_004a6c68 | 1264 | engine_army_move.c, engine_army_move.h, engine_combat.c (+2) |
 | 0x4a7158 | FUN_004a7158 | 402 | engine_combat.c, engine_combat.h |
 | 0x4a72fe | FUN_004a72fe | 1516 | engine_combat.c, engine_combat.h |
 | 0x4a79a3 | FUN_004a79a3 | 767 | engine_combat.c, engine_combat.h |

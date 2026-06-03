@@ -4099,7 +4099,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_move.c",
-    "src/engine_army_move.h"
+    "src/engine_army_move.h",
+    "src/game_init.c"
    ]
   },
   {
@@ -16688,7 +16689,8 @@
     "src/engine_army_move.c",
     "src/engine_army_move.h",
     "src/engine_combat.c",
-    "src/engine_combat.h"
+    "src/engine_combat.h",
+    "src/game_init.c"
    ]
   },
   {

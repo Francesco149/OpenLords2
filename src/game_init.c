@@ -17,6 +17,7 @@
 #include "engine_army_economy.h"  /* provision / plan_realm (per-realm economy) */
 #include "engine_army_state.h"    /* per-tick army-state machine cell binding   */
 #include "engine_army_move.h"     /* army-movement cell-evaluator binding       */
+#include "engine_combat.h"        /* combat_b seam (engine_combat_contest_region)*/
 #include "engine_npc_schedule.h"  /* engine_npc_schedule_init (FUN_0049caaa)     */
 #include "engine_strat_cost.h"    /* engine_strat_cost_rebuild (FUN_0046ff43)    */
 #include "engine_event_queue.h"   /* engine_event_queue_init_wrapper (FUN_00472ad0) */
@@ -1230,10 +1231,18 @@ void engine_game_init(void)
     /* Bind the ported special-tile plunder handler (FUN_00468ae2) into the
      * executor's outcome-7 seam, and the region-event low-terrain develop
      * handler (FUN_0046873f) into the outcome-6 region-lo seam.  The remaining
-     * dispatcher seams (combat / region-hi / arrival / present) stay NULL no-ops
-     * until ported. */
+     * dispatcher seams (region-hi / arrival / present) stay NULL no-ops until
+     * ported. */
     engine_army_move_bind_special_fn(engine_army_move_special_tile);
     engine_army_move_bind_region_fns(engine_army_move_region_event_lo, NULL);
+    /* Bind BOTH combat-outcome (code-5) seams together now that the pair is
+     * ported: combat_a engine_army_move_combat_engage (FUN_004296b5 settle-
+     * deposit) then combat_b engine_combat_contest_region (FUN_004a6c68 resolve).
+     * Firing only half would deposit without resolving, so they bind as a unit.
+     * Inert until the army-state driver (engine_army_state_run) is wired into the
+     * tick — a contested move then settles its stack and resolves the battle. */
+    engine_army_move_bind_combat_fns(engine_army_move_combat_engage,
+                                     engine_combat_contest_region);
     /* The per-group resource-demand pool (retail DAT_0057c020, stride 0x160)
      * physically lives INSIDE the player-strategic block at +0x120 — retail's
      * commodity pools +0x120/+0x128/+0x130 ARE the resource accumulators, viewed
