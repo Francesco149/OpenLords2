@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 631,
+  "tested": 632,
   "ported": 41,
-  "unported": 1775,
+  "unported": 1774,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 672,
+  "touched": 673,
   "pct_touched": 27.5,
   "pct_tested": 25.8,
   "bytes_total": 838629,
-  "bytes_touched": 279553,
-  "pct_bytes_touched": 33.3
+  "bytes_touched": 279721,
+  "pct_bytes_touched": 33.4
  },
  "orphan_refs": [
   "0x004148",
@@ -16532,8 +16532,11 @@
    "name": "FUN_004a4f5b",
    "size": 168,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_state.c",
+    "src/engine_army_state.h"
+   ]
   },
   {
    "va": "0x4a5003",

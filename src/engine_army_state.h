@@ -38,4 +38,18 @@ extern uint8_t g_army_state_abort;         /* DAT_0050a49e — seam-set early-ex
  * (retail reads them from globals). */
 void engine_army_state_run(engine_event_queue_state_t *evq, int mp_active);
 
+/* Port of FUN_004a4f5b (168 B, __cdecl uint).  Sweep the same 150 occupant
+ * records (g_per_territory_420, stride 0x1a4, index 1..150 through the shared
+ * cursor g_army_state_index) and, for every record whose state byte (+0x08)
+ * equals `state` AND whose sub-state (+0x14c) is currently non-zero, force the
+ * sub-state to 2 — arming the deep movement-step executor for that occupant on
+ * its next driver pass.  Returns 1 if any record was armed, else 0.
+ *
+ * The strategic turn driver (retail 0x49a010, unported) calls this once per
+ * phase — `arm_movement(3)` in phase 6, `arm_movement(4)` in phase 3 — and
+ * advances to the next phase (engine_turn_advance_phase) only when the sweep
+ * arms nothing — i.e. all occupants of that state have been driven through
+ * their movement. */
+int engine_army_state_arm_movement(unsigned state);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_STATE_H */

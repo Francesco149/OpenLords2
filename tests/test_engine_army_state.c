@@ -282,3 +282,46 @@ int test_engine_army_state_abort_breaks_walk(void)
     T_ASSERT_EQ_I(g_army_state_live_count, 1);   /* stopped after idx 4 */
     return 0;
 }
+
+/* engine_army_state_arm_movement (FUN_004a4f5b): arm sub-state 2 for every
+ * occupant whose state byte matches AND whose sub-state is non-zero; return 1
+ * if any was armed.  Matching is purely on state + non-zero sub-state — owner
+ * is not consulted, and a zero sub-state is left untouched. */
+int test_engine_army_state_arm_movement_matches_state(void)
+{
+    as_reset();
+
+    /* idx 2: state 3, sub-state 1 (non-zero)   → armed to 2 */
+    CREC(2)[A_STATE] = 3; CREC(2)[A_SUBSTATE] = 1;
+    /* idx 3: state 3, sub-state 0              → left at 0 (not pending) */
+    CREC(3)[A_STATE] = 3; CREC(3)[A_SUBSTATE] = 0;
+    /* idx 4: state 4, sub-state 5              → wrong state, untouched */
+    CREC(4)[A_STATE] = 4; CREC(4)[A_SUBSTATE] = 5;
+    /* idx 5: state 3, sub-state 7 (non-zero)   → armed to 2 (owner unset) */
+    CREC(5)[A_STATE] = 3; CREC(5)[A_SUBSTATE] = 7;
+
+    int r = engine_army_state_arm_movement(3);
+
+    T_ASSERT_EQ_I(r, 1);                       /* something armed */
+    T_ASSERT_EQ_I(CREC(2)[A_SUBSTATE], 2);     /* matched + pending → armed */
+    T_ASSERT_EQ_I(CREC(3)[A_SUBSTATE], 0);     /* zero sub-state untouched */
+    T_ASSERT_EQ_I(CREC(4)[A_SUBSTATE], 5);     /* wrong state untouched */
+    T_ASSERT_EQ_I(CREC(5)[A_SUBSTATE], 2);     /* matched + pending → armed */
+    return 0;
+}
+
+/* No occupant of the requested state with a pending sub-state → returns 0
+ * (the phase-advance gate the turn driver uses). */
+int test_engine_army_state_arm_movement_none_returns_zero(void)
+{
+    as_reset();
+    CREC(2)[A_STATE] = 4; CREC(2)[A_SUBSTATE] = 1;   /* state 4, not 3 */
+    CREC(3)[A_STATE] = 3; CREC(3)[A_SUBSTATE] = 0;   /* state 3 but not pending */
+
+    int r = engine_army_state_arm_movement(3);
+
+    T_ASSERT_EQ_I(r, 0);
+    T_ASSERT_EQ_I(CREC(2)[A_SUBSTATE], 1);     /* untouched */
+    T_ASSERT_EQ_I(CREC(3)[A_SUBSTATE], 0);     /* untouched */
+    return 0;
+}

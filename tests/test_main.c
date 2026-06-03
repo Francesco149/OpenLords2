@@ -1960,6 +1960,8 @@ struct test_case {
     X(engine_army_state_idle_sets_region) \
     X(engine_army_state_move_seam_invoked) \
     X(engine_army_state_abort_breaks_walk) \
+    X(engine_army_state_arm_movement_matches_state) \
+    X(engine_army_state_arm_movement_none_returns_zero) \
     X(engine_army_move_dir_offsets) \
     X(engine_army_move_dir_edges) \
     X(engine_army_move_classify_flags) \

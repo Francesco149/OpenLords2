@@ -532,6 +532,16 @@ dispatches the 7 phases (and the sibling `FUN_0040490d`).  Porting it
 wires the whole turn loop into the tick; both were demoted from the
 ledger's touched set this session (they were falsely promoted by the
 engine.c sub-step-body TODO comments — see ledger-provenance-audit.md).
+One more of its per-phase callees is now ported too: **`FUN_004a4f5b`**
+→ `engine_army_state_arm_movement(state)` (the driver runs `(3)` in
+phase 6, `(4)` in phase 3) — it sweeps the 150 occupant records and
+forces sub-state 2 (→ movement executor) on every record whose state
+byte (+0x08) matches and whose sub-state (+0x14c) is already non-zero,
+returning 1 if any was armed; the driver advances the phase only when
+the sweep arms nothing.  Same occupant block + `g_army_state_index`
+cursor as the army-state machine, so it lives in `engine_army_state.c`
+(r2-verified: the i*0x1a4 stride, the +0x08/+0x14c offsets, the 1..0x96
+bound).
 
 ### Render-phase tail — camera clamps + FPS counter ported (2026-05-24 / 26)
 

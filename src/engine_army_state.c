@@ -204,3 +204,20 @@ void engine_army_state_run(engine_event_queue_state_t *evq, int mp_active)
             break;
     }
 }
+
+/* --- FUN_004a4f5b: arm movement for all occupants of a given state -------- */
+int engine_army_state_arm_movement(unsigned state)
+{
+    int armed = 0;
+
+    for (g_army_state_index = 1; g_army_state_index < 0x97; g_army_state_index++) {
+        uint8_t *r = AREC(g_army_state_index);
+        /* state byte zero-extended == arg (retail compares the full uint),
+         * and the sub-state currently non-zero (a pending sub-state). */
+        if ((unsigned)r[A_STATE] == state && r[A_SUBSTATE] != 0) {
+            r[A_SUBSTATE] = 2;                     /* → run movement executor */
+            armed = 1;
+        }
+    }
+    return armed;
+}
