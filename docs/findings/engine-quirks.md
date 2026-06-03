@@ -6639,3 +6639,32 @@ All three tables are baked verbatim from the image (`g_ai_cash_grant` 0xa0 B;
 the personality block was already baked as `g_ai_personality`).  Host tests
 exercise both rations ladders that fire, the player-0 ladder, and all three grant
 regimes (level 2 / 4 / 5) plus the active/eliminated/level-0 gating.
+
+## 189 — independent realms run a SEPARATE AI dispatch table and self-fund provisions from their own gold pool
+
+The strategic independent-realm block (`DAT_00569584 == 1`) drives owner-0
+realms through `FUN_0049d638(0)` (rations, quirk #188) and then
+`FUN_0049dfc6(0)` → `engine_army_ai_run_independent`.  The latter is a parallel
+of the owned-realm driver `FUN_0049dd01` (`engine_army_ai_run_player`) but with
+two differences:
+
+1. **A different dispatch table.**  Owned realms latch a personality dispatch
+   code (+0x1fe) of 0/1/9 → balanced / compact / expansionist
+   (`FUN_004a4052/42e3/440f`).  Independent realms read the *same* +0x1fe field
+   but route 0/1 → `FUN_004a3c67` / `FUN_004a3ed3`
+   (`engine_army_ai_dispatch_independent_balanced` / `_compact`).  Code 9 and
+   any other value are no-ops for independent realms.
+
+2. **No market — self-funding instead.**  Both independent dispatchers skip the
+   `engine_army_ai_reconcile_resources` market step (it is player-gated and an
+   independent realm has no player).  When provisions (+0x224) run below 100 the
+   balanced variant credits the realm's *own* gold pool (+0x1f4, the field
+   `engine_realm_accrue_income` accrues an unowned realm's income into) by 100
+   and then runs a self-funded buy ladder (400/200/100/50, each re-checking the
+   `< 100` gate); the compact variant runs the buy ladder without the gold
+   credit.  Their cell-reshape math also keys off the census-bucket *sum*
+   (type-1 + mid + high) rather than the live `feature_cell_total`, and both
+   stamp the strategy tag (+0x008) to 0 (owned dispatchers stamp 0x32 / 0x14 /
+   0x28).  `engine_army_ai_run_independent` clears a per-realm review flag
+   (+0x1b0) before each realm and develops empty cells on the same
+   population-gated ladder as `run_player`, sized off the census sum.

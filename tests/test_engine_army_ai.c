@@ -812,3 +812,84 @@ int test_army_ai_grant_gated(void)
     T_ASSERT_EQ_I(AI32(AREC(1), 0x024), 100);
     return 0;
 }
+
+/* Independent dispatch code 0 (balanced): a provision shortfall is met by
+ * crediting the realm's OWN gold pool (+0x1f4) by 100, and the strategy tag
+ * (+0x008) is cleared.  ai_turn_setup NULLs the heavy binds and skips season 4. */
+int test_army_ai_dispatch_indep_balanced_selffunds(void)
+{
+    ai_turn_setup();
+    uint8_t *a = AREC(3);
+    AI32(a, 0x224) = 50;                /* provisions < 100 */
+    AI32(a, 0x1f4) = 0;                 /* treasury */
+    a[0x008] = 0x32;                    /* pre-set strategy tag */
+
+    engine_army_ai_dispatch_independent_balanced(3);
+
+    T_ASSERT_EQ_I(AI32(a, 0x1f4), 100); /* +100 self-fund */
+    T_ASSERT_EQ_I(a[0x008], 0);         /* tag cleared */
+    return 0;
+}
+
+/* Independent balanced: adequate provisions (>= 100) → no self-fund. */
+int test_army_ai_dispatch_indep_balanced_no_selffund(void)
+{
+    ai_turn_setup();
+    uint8_t *a = AREC(3);
+    AI32(a, 0x224) = 100;              /* not < 100 */
+    AI32(a, 0x1f4) = 500;
+
+    engine_army_ai_dispatch_independent_balanced(3);
+
+    T_ASSERT_EQ_I(AI32(a, 0x1f4), 500); /* unchanged */
+    T_ASSERT_EQ_I(a[0x008], 0);
+    return 0;
+}
+
+/* Independent dispatch code 1 (compact): clears the strategy tag but, unlike
+ * the balanced variant, never self-funds the treasury. */
+int test_army_ai_dispatch_indep_compact_no_selffund(void)
+{
+    ai_turn_setup();
+    uint8_t *a = AREC(2);
+    AI32(a, 0x224) = 50;               /* low provisions */
+    AI32(a, 0x1f4) = 300;
+    a[0x008] = 0x14;
+
+    engine_army_ai_dispatch_independent_compact(2);
+
+    T_ASSERT_EQ_I(AI32(a, 0x1f4), 300); /* compact has no self-fund path */
+    T_ASSERT_EQ_I(a[0x008], 0);
+    return 0;
+}
+
+/* run_independent: clears the +0x1b0 review flag and routes by dispatch code
+ * (+0x1fe) for owner-0 realms only — code 0 self-funds, code 1 does not, and a
+ * realm owned by another player is skipped entirely. */
+int test_army_ai_run_independent_routes(void)
+{
+    ai_turn_setup();
+    s_slot_0056d5dc = 3;
+
+    uint8_t *a1 = AREC(1);            /* independent, code 0, low provisions */
+    a1[0x005] = 0; a1[0x1fe] = 0;
+    AI32(a1, 0x224) = 50; AI32(a1, 0x1f4) = 0; a1[0x1b0] = 1;
+
+    uint8_t *a2 = AREC(2);            /* independent, code 1 */
+    a2[0x005] = 0; a2[0x1fe] = 1;
+    AI32(a2, 0x224) = 50; AI32(a2, 0x1f4) = 0; a2[0x1b0] = 1;
+
+    uint8_t *a3 = AREC(3);           /* owned by player 2 → skipped */
+    a3[0x005] = 2; a3[0x1b0] = 1;
+
+    engine_army_ai_run_independent(0);
+
+    T_ASSERT_EQ_I(a1[0x1b0], 0);       /* review flag cleared */
+    T_ASSERT_EQ_I(a2[0x1b0], 0);
+    T_ASSERT_EQ_I(a3[0x1b0], 1);       /* non-owned realm untouched */
+    T_ASSERT_EQ_I(AI32(a1, 0x1f4), 100);/* code 0 self-funded */
+    T_ASSERT_EQ_I(AI32(a2, 0x1f4), 0);  /* code 1 did not */
+    T_ASSERT_EQ_I(a1[0x008], 0);        /* both ran a dispatcher → tag 0 */
+    T_ASSERT_EQ_I(a2[0x008], 0);
+    return 0;
+}

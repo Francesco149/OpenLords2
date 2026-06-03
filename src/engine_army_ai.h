@@ -116,4 +116,17 @@ void engine_army_ai_run_turn(void);
  * cash grant and top up its realms' population / stock / provisions. */
 void engine_army_ai_set_rations_and_grant(int player);
 
+/* Ports of FUN_004a3c67 / FUN_004a3ed3 — the dispatch-code-0 / -1 managers for
+ * INDEPENDENT realms (owner 0): self-funded balanced / compact variants of the
+ * personality dispatchers, with no market reconcile (a provision shortfall is
+ * met by crediting the realm's own gold pool +0x1f4). */
+void engine_army_ai_dispatch_independent_balanced(int realm);
+void engine_army_ai_dispatch_independent_compact(int realm);
+
+/* Port of FUN_0049dfc6.  Per-realm AI driver for INDEPENDENT realms (sibling of
+ * engine_army_ai_run_player, always called with player 0): develop empty cells
+ * toward a census-scaled target, run each realm's dispatch code (+0x1fe → 0/1),
+ * re-allocate the workforce. */
+void engine_army_ai_run_independent(int player);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_AI_H */

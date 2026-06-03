@@ -2082,6 +2082,10 @@ struct test_case {
     X(army_ai_grant_level2_easy) \
     X(army_ai_grant_level5_cash_only) \
     X(army_ai_grant_gated) \
+    X(army_ai_dispatch_indep_balanced_selffunds) \
+    X(army_ai_dispatch_indep_balanced_no_selffund) \
+    X(army_ai_dispatch_indep_compact_no_selffund) \
+    X(army_ai_run_independent_routes) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

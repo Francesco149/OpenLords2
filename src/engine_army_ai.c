@@ -90,6 +90,8 @@
 #define ARMY_YIELD_BONUS    0x208   /* DAT_0053fbb8 — signed yield-bonus (season-4 split) */
 #define ARMY_DISPATCH_CODE  0x1fe   /* DAT_0053fbae — personality dispatch code latch */
 #define ARMY_RESOURCE_SEL   0x290   /* DAT_0053fc40 — selects the cash-funded commodity */
+#define ARMY_REVIEW_FLAG    0x1b0   /* DAT_0053fb60 — per-realm byte flag cleared at the
+                                     *   start of the independent-realm AI pass */
 
 /* ── Per-player strategic fields used by the resource orchestrator ── */
 #define STRAT_ACTIVE        0x004   /* DAT_0057bf04 — in-game flag */
@@ -929,5 +931,114 @@ void engine_army_ai_set_rations_and_grant(int player)
             I32(a + ARMY_STOCK_A) += stock_step;
         if (I32(a + ARMY_PROVISION_RAW) > 0x32)
             I32(a + ARMY_PROVISION_RAW) += prov_step;
+    }
+}
+
+/* Census-bucket sum (type-1 + mid + high) — the cell-footprint proxy the
+ * independent-realm dispatchers use in place of feature_cell_total. */
+static int census_sum(const uint8_t *a)
+{
+    return (int)a[ARMY_CENSUS_TYPE1] + (int)a[ARMY_CENSUS_MID] + (int)a[ARMY_CENSUS_HIGH];
+}
+
+/* Port of FUN_004a3c67 (620 B).  Dispatch-code-0 manager for an INDEPENDENT
+ * realm (run by engine_army_ai_run_independent, owner 0).  The balanced-style
+ * variant: there is no market reconcile — a provision shortfall is met by
+ * crediting the realm's own gold pool (+0x1f4) and a self-funded buy ladder —
+ * and the season-4 cell reshape sizes off the census sum rather than the live
+ * cell total.  Otherwise mirrors engine_army_ai_dispatch_balanced. */
+void engine_army_ai_dispatch_independent_balanced(int realm)
+{
+    uint8_t *a = ARMY_REC(realm);
+
+    if (I32(a + ARMY_PROVISION_RAW) < 100) I32(a + ARMY_TREASURY) += 100;
+    if (I32(a + ARMY_PROVISION_RAW) < 100) engine_army_ai_buy_order(realm, 400, 1);
+    if (I32(a + ARMY_PROVISION_RAW) < 100) engine_army_ai_buy_order(realm, 200, 1);
+    if (I32(a + ARMY_PROVISION_RAW) < 100) engine_army_ai_buy_order(realm, 100, 1);
+    if (I32(a + ARMY_PROVISION_RAW) < 100) engine_army_ai_buy_order(realm, 0x32, 1);
+
+    int sum = census_sum(a);
+    a[ARMY_STRATEGY_TAG] = 0;
+    engine_army_ai_seed_workforce_ratios(realm);
+    engine_territory_allocate_realm_workforce(realm);
+
+    if (I32(a + ARMY_STOCK_A) < 0x65) engine_army_ai_tax_sweep(realm, 0);
+    else                              engine_army_ai_tax_sweep(realm, 100);
+
+    engine_territory_demolish_band(realm, 0x13);
+    if (s_slot_0057c934 == 4) {
+        engine_territory_demolish_band(realm, 2);
+        int n;
+        if      ((int8_t)a[ARMY_YIELD_BONUS] < -0x14) n = sum / 2 - 1;
+        else if ((int8_t)a[ARMY_YIELD_BONUS] < -0x32) n = sum / 2 - 2;
+        else                                          n = sum / 2;
+        if (s_slot_0053f25c == 0) n = sum - 3;
+        engine_territory_convert_or_demolish_band(realm, 2, n);
+    }
+    if (I32(a + ARMY_STOCK_A) > 10) {
+        engine_territory_convert_or_demolish_band(realm, 0x13, 1);
+        engine_territory_census_army_terrain(realm);
+        engine_territory_grade_feature_cells(realm);
+    }
+    engine_army_economy_plan_realm(realm, (int)s_slot_0057c92c);
+    engine_territory_allocate_realm_workforce(realm);
+    engine_army_economy_plan_realm(realm, (int)s_slot_0057c92c);
+}
+
+/* Port of FUN_004a3ed3 (383 B).  Dispatch-code-1 manager for an INDEPENDENT
+ * realm — the compact-style variant: top up commodity stock and provisions via
+ * self-funded buys, then reshape toward the existing census footprint
+ * (balance_high_cells target = census sum − 1).  No market reconcile. */
+void engine_army_ai_dispatch_independent_compact(int realm)
+{
+    uint8_t *a = ARMY_REC(realm);
+
+    if (I32(a + ARMY_STOCK_A) < 0xb)       engine_army_ai_buy_order(realm, 10, 2);
+    if (I32(a + ARMY_PROVISION_RAW) < 100) engine_army_ai_buy_order(realm, 400, 1);
+    if (I32(a + ARMY_PROVISION_RAW) < 100) engine_army_ai_buy_order(realm, 200, 1);
+    if (I32(a + ARMY_PROVISION_RAW) < 100) engine_army_ai_buy_order(realm, 100, 1);
+    if (I32(a + ARMY_PROVISION_RAW) < 100) engine_army_ai_buy_order(realm, 0x32, 1);
+
+    int sum = census_sum(a);
+    a[ARMY_STRATEGY_TAG] = 0;
+    engine_army_ai_seed_workforce_ratios(realm);
+    engine_territory_allocate_realm_workforce(realm);
+    engine_army_ai_tax_sweep(realm, 0);
+    engine_territory_demolish_band(realm, 2);
+    engine_army_ai_balance_high_cells(realm, sum - 1);
+    engine_army_economy_plan_realm(realm, (int)s_slot_0057c92c);
+    engine_territory_allocate_realm_workforce(realm);
+    engine_army_economy_plan_realm(realm, (int)s_slot_0057c92c);
+}
+
+/* Port of FUN_0049dfc6 (505 B).  The per-realm AI driver for INDEPENDENT realms
+ * (always called with player 0; the sibling of engine_army_ai_run_player for
+ * owned realms).  For each realm owned by `player`: clear the +0x1b0 review
+ * flag, develop empty cells toward a census-scaled target (the same
+ * population-gated ladder as run_player, sized off the census sum), run the
+ * realm's dispatch code (+0x1fe → 0/1 independent manager), then re-allocate the
+ * workforce. */
+void engine_army_ai_run_independent(int player)
+{
+    int count = (int)s_slot_0056d5dc;
+    for (int realm = 1; realm <= count; realm++) {
+        uint8_t *a = ARMY_REC(realm);
+        if (a[ARMY_OWNER] != player) continue;
+
+        a[ARMY_REVIEW_FLAG] = 0;
+        int sum = census_sum(a);
+        int pop = I32(a + ARMY_FEED_COUNT);
+        if      (sum == 0)                 engine_territory_develop_empty_cells(realm, 1);
+        else if (sum < 3 && pop > 200)     engine_territory_develop_empty_cells(realm, 1);
+        else if (sum < 5 && pop > 400)     engine_territory_develop_empty_cells(realm, 1);
+        else if (sum < 7 && pop > 600)     engine_territory_develop_empty_cells(realm, 1);
+        else if (sum < 9 && pop > 1000)    engine_territory_develop_empty_cells(realm, 1);
+        else if (pop > 0x4b0)              engine_territory_develop_empty_cells(realm, 2);
+
+        uint8_t code = a[ARMY_DISPATCH_CODE];
+        if      (code == 0) engine_army_ai_dispatch_independent_balanced(realm);
+        else if (code == 1) engine_army_ai_dispatch_independent_compact(realm);
+
+        engine_territory_allocate_realm_workforce(realm);
     }
 }
