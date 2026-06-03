@@ -19,6 +19,7 @@
 #include "engine_combat.h"         /* g_combat_active_terr                   */
 #include "engine_diplomacy.h"
 #include "engine_event_queue.h"
+#include "engine_territory.h"      /* engine_territory_bind_cells (decay sink)*/
 #include "save.h"
 #include "save_schema_globals.h"   /* s_slot_0057c8cc (local player) */
 
@@ -362,5 +363,221 @@ int test_engine_army_move_commit_sfx(void)
     r[M_STATE] = 3; engine_army_move_commit_step(); T_ASSERT_EQ_I(g_last_sfx, 0xb);
     cm_reset(); r = MREC(1); r[M_DIR] = 2; I32(r, M_CELL) = 0x1450;
     r[M_STATE] = 4; engine_army_move_commit_step(); T_ASSERT_EQ_I(g_last_sfx, 0xb);
+    return 0;
+}
+
+/* --- FUN_00469e0e: terrain-passability predicate ------------------------- */
+int test_engine_army_move_terrain_passable(void)
+{
+    mv_reset();
+    int off = 0x100;
+    g_test_cells[off] = 0x00; T_ASSERT_EQ_I(engine_army_move_terrain_passable(off), 0);
+    g_test_cells[off] = 0x01; T_ASSERT_EQ_I(engine_army_move_terrain_passable(off), 0);
+    g_test_cells[off] = 0x02; T_ASSERT_EQ_I(engine_army_move_terrain_passable(off), 1);
+    g_test_cells[off] = 0x16; T_ASSERT_EQ_I(engine_army_move_terrain_passable(off), 1);
+    g_test_cells[off] = 0x17; T_ASSERT_EQ_I(engine_army_move_terrain_passable(off), 0);
+    g_test_cells[off] = 0xff; T_ASSERT_EQ_I(engine_army_move_terrain_passable(off), 0);
+    return 0;
+}
+
+/* --- FUN_0046634d: stall/retry hysteresis (step-eval disarmed) ----------- */
+#define M_FACING    0x1b
+#define M_STALL     0x149
+#define M_RETRY     0x14a
+#define M_FLAGS14B  0x14b
+#define M_PROGRESS  0x153
+
+int test_engine_army_move_classify_hysteresis(void)
+{
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    /* No wrap: a single retry increment under-budget returns 1, no stall bump. */
+    mv_reset();
+    uint8_t *r = MREC(1);
+    r[M_FLAGS14B] = 0; r[M_ROUGH] = 0; r[M_RETRY] = 0; r[M_STALL] = 0;
+    T_ASSERT_EQ_I(engine_army_move_classify_step(0, &evq, 0), 1);
+    T_ASSERT_EQ_U(r[M_RETRY], 1);
+    T_ASSERT_EQ_I((int8_t)r[M_STALL], 0);
+
+    /* Wrap (budget 3, retry hits 4): reset retry, bump facing, stall += 2 (SP). */
+    mv_reset(); r = MREC(1);
+    r[M_FLAGS14B] = 0; r[M_ROUGH] = 0; r[M_RETRY] = 3; r[M_STALL] = 0; r[M_FACING] = 0;
+    T_ASSERT_EQ_I(engine_army_move_classify_step(0, &evq, 0), 1);
+    T_ASSERT_EQ_U(r[M_RETRY], 0);
+    T_ASSERT_EQ_U(r[M_FACING], 1);
+    T_ASSERT_EQ_I((int8_t)r[M_STALL], 2);
+
+    /* Multiplayer wrap advances the stall accumulator by 4 instead of 2. */
+    mv_reset(); r = MREC(1);
+    r[M_FLAGS14B] = 0; r[M_ROUGH] = 0; r[M_RETRY] = 3; r[M_STALL] = 0;
+    engine_army_move_classify_step(0, &evq, 1);
+    T_ASSERT_EQ_I((int8_t)r[M_STALL], 4);
+
+    /* Rough flag drops the budget to 0, so the first increment wraps. */
+    mv_reset(); r = MREC(1);
+    r[M_FLAGS14B] = 0; r[M_ROUGH] = 1; r[M_RETRY] = 0; r[M_STALL] = 0;
+    engine_army_move_classify_step(0, &evq, 0);
+    T_ASSERT_EQ_U(r[M_RETRY], 0);
+    T_ASSERT_EQ_I((int8_t)r[M_STALL], 2);
+
+    /* Reaching the 0x10 stall ceiling arms the step-eval and returns 2. */
+    mv_reset(); r = MREC(1);
+    r[M_FLAGS14B] = 0; r[M_ROUGH] = 0; r[M_RETRY] = 3; r[M_STALL] = 0x0e; r[M_FACING] = 5;
+    T_ASSERT_EQ_I(engine_army_move_classify_step(0, &evq, 0), 2);
+    T_ASSERT_EQ_U(r[M_FLAGS14B] & 1, 1);
+    T_ASSERT_EQ_I((int8_t)r[M_STALL], 0);
+    T_ASSERT_EQ_U(r[M_FACING], 0);
+    return 0;
+}
+
+/* --- FUN_0046634d: armed step → open commit ------------------------------ */
+int test_engine_army_move_classify_commit_open(void)
+{
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    cm_reset();                       /* binds the global grid for commit link */
+    g_army_state_abort = 0;
+    uint8_t *r = MREC(1);
+    r[M_COL] = 10; r[M_ROW] = 10; I32(r, M_CELL) = 0x1450; r[M_STATE] = 1;
+    r[M_FLAGS14B] = 1; r[M_ROUGH] = 0; r[M_PROGRESS] = 0;   /* armed, east open */
+
+    T_ASSERT_EQ_I(engine_army_move_classify_step(2, &evq, 0), 1);
+    T_ASSERT_EQ_U(r[M_FLAGS14B] & 1, 0);    /* step-eval disarmed again      */
+    T_ASSERT_EQ_U(r[M_DIR], 2);             /* committed direction latched   */
+    T_ASSERT_EQ_U(r[M_PROGRESS], 3);        /* +3 for an open step           */
+    T_ASSERT_EQ_I((int8_t)r[M_STALL], 1);   /* stall accumulator re-primed   */
+    T_ASSERT_EQ_I((int8_t)r[M_COL], 11);    /* stack stepped east            */
+    return 0;
+}
+
+/* --- FUN_0046634d: armed step → rough commit ----------------------------- */
+int test_engine_army_move_classify_commit_rough(void)
+{
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    cm_reset();
+    g_army_state_abort = 0;
+    uint8_t *r = MREC(1);
+    r[M_COL] = 10; r[M_ROW] = 10; I32(r, M_CELL) = 0x1450; r[M_STATE] = 1;
+    r[M_FLAGS14B] = 1; r[M_PROGRESS] = 0;
+    g_overworld_map[0x1458 + 1] = 0x01;     /* east cell carries rough bit0  */
+
+    T_ASSERT_EQ_I(engine_army_move_classify_step(2, &evq, 0), 3);
+    T_ASSERT_EQ_U(r[M_ROUGH], 1);           /* sticky rough flag set         */
+    T_ASSERT_EQ_U(r[M_PROGRESS], 1);        /* +1 for a rough step           */
+    T_ASSERT_EQ_I((int8_t)r[M_COL], 11);    /* still committed               */
+    return 0;
+}
+
+/* --- FUN_0046634d: combat / region-event / special pass straight up ------ */
+int test_engine_army_move_classify_passthrough(void)
+{
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    struct { uint8_t flags; int code; } cases[] = {
+        { 0x40, 5 },   /* combat       */
+        { 0x80, 6 },   /* region-event */
+        { 0x10, 7 },   /* special      */
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof *cases; i++) {
+        mv_reset();
+        uint8_t *r = MREC(1);
+        r[M_COL] = 10; r[M_ROW] = 10; I32(r, M_CELL) = 0x1450; r[M_STATE] = 1;
+        r[M_FLAGS14B] = 1;
+        g_test_cells[0x1458 + 1] = cases[i].flags;
+        T_ASSERT_EQ_I(engine_army_move_classify_step(2, &evq, 0), cases[i].code);
+        T_ASSERT_EQ_U(r[M_FLAGS14B] & 1, 1);     /* still armed (not committed) */
+        T_ASSERT_EQ_I((int8_t)r[M_COL], 10);     /* stack did not move          */
+    }
+    return 0;
+}
+
+/* --- FUN_0046634d: a grid-edge step yields 0 and commits nothing --------- */
+int test_engine_army_move_classify_grid_edge(void)
+{
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    mv_reset();
+    uint8_t *r = MREC(1);
+    r[M_COL] = 0; r[M_ROW] = 0; I32(r, M_CELL) = 0; r[M_STATE] = 1;
+    r[M_FLAGS14B] = 1;
+    T_ASSERT_EQ_I(engine_army_move_classify_step(0, &evq, 0), 0);   /* N off top */
+    T_ASSERT_EQ_I((int8_t)r[M_COL], 0);
+    return 0;
+}
+
+/* --- FUN_0046673c: impassable foreign-region step → scorch + relation hit  */
+static int g_last_alert;
+static void cap_alert(int id) { g_last_alert = id; }
+
+int test_engine_army_move_classify_blocked(void)
+{
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    cm_reset();
+    g_army_state_abort = 0;
+    engine_territory_bind_cells(g_overworld_map);   /* decay's set_cell_type sink */
+    engine_territory_bind_cell_roster(NULL);        /* clear_cell_score → no-op   */
+    engine_territory_bind_cell_score_table(NULL);
+    engine_army_move_bind_alert_sfx_fn(cap_alert);
+    g_last_alert = -1;
+
+    uint8_t *r = MREC(1);
+    r[M_COL] = 10; r[M_ROW] = 10; I32(r, M_CELL) = 0x1450;
+    r[M_STATE] = 1; r[M_OWNER] = 2; r[M_FLAGS14B] = 1; r[M_PROGRESS] = 0;
+    g_player_strategic_352[2 * 0x160 + 0x05] = 1;   /* mover is an active player  */
+
+    int e = 0x1458;                                  /* the cell to the east       */
+    g_overworld_map[e + 1] = 0x20;                   /* impassable (bit5)          */
+    g_overworld_map[e + 0] = 5;                      /* real land terrain          */
+    g_overworld_map[e + 7] = 9;                      /* region key 9               */
+    g_overworld_map[e + 5] = 0;                      /* empty                      */
+
+    uint8_t *rg = &g_per_army_768[9 * 0x300];
+    rg[0x05]  = 3;        /* foreign region owner                                  */
+    rg[0x201] = 2;        /* mid census  (≤ reserve → drain path)                  */
+    rg[0x206] = 4;        /* mid reserve                                           */
+    I32(rg, 0x244) = 1000;/* mid stock pool                                        */
+    I32(rg, 0x234) = 0;   /* mid stock accumulator                                 */
+
+    int res = engine_army_move_classify_step(2, &evq, 0);
+
+    T_ASSERT_EQ_I(res, 1);                  /* impassable (8) handled → open (1)  */
+    T_ASSERT_EQ_I(g_last_alert, 3);         /* blocked-step cue played            */
+    T_ASSERT_EQ_U(r[M_PROGRESS], 6);        /* +3 (blocked) +3 (classifier)       */
+    /* decay: frac = 100/4 = 25; amt = 1000*25/100 = 250. */
+    T_ASSERT_EQ_I(I32(rg, 0x244), 750);
+    T_ASSERT_EQ_I(I32(rg, 0x234), 250);
+    T_ASSERT_EQ_U(rg[0x206], 3);            /* reserve drawn down                 */
+    T_ASSERT_EQ_U(rg[0x201], 1);            /* mid census decremented             */
+    T_ASSERT_EQ_U(g_overworld_map[e + 0], 0); /* cell flattened (terrain → 0)     */
+    T_ASSERT_EQ_I((int8_t)r[M_COL], 11);    /* and the stack pushes through       */
+    return 0;
+}
+
+/* --- FUN_0046673c: same-region / sea-terrain block does NOT scorch ------- */
+int test_engine_army_move_classify_blocked_friendly(void)
+{
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    cm_reset();
+    g_army_state_abort = 0;
+    engine_territory_bind_cells(g_overworld_map);
+    engine_territory_bind_cell_roster(NULL);
+    engine_territory_bind_cell_score_table(NULL);
+    engine_army_move_bind_alert_sfx_fn(cap_alert);
+    g_last_alert = -1;
+
+    uint8_t *r = MREC(1);
+    r[M_COL] = 10; r[M_ROW] = 10; I32(r, M_CELL) = 0x1450;
+    r[M_STATE] = 1; r[M_OWNER] = 3; r[M_FLAGS14B] = 1; r[M_PROGRESS] = 0;
+
+    int e = 0x1458;
+    g_overworld_map[e + 1] = 0x20;          /* impassable                         */
+    g_overworld_map[e + 0] = 5;             /* land terrain                       */
+    g_overworld_map[e + 7] = 9;
+    uint8_t *rg = &g_per_army_768[9 * 0x300];
+    rg[0x05]  = 3;                          /* SAME owner as the mover            */
+    rg[0x201] = 2; rg[0x206] = 4; I32(rg, 0x244) = 1000;
+
+    T_ASSERT_EQ_I(engine_army_move_classify_step(2, &evq, 0), 1);
+    T_ASSERT_EQ_I(g_last_alert, -1);        /* no cue                             */
+    T_ASSERT_EQ_I(I32(rg, 0x244), 1000);    /* stock untouched                    */
+    T_ASSERT_EQ_U(g_overworld_map[e + 0], 5); /* cell not flattened               */
+    T_ASSERT_EQ_U(r[M_PROGRESS], 6);        /* +3 (blocked) +3 (classifier) still */
     return 0;
 }

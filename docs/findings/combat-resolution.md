@@ -240,44 +240,75 @@ is exposed for the executor.  The live combat-engage and merge *invocations*
 are exercised by the combat module's own tests and will be diffed against
 retail once the executor lands; this chip's tests cover the decision routing.
 
-### Commit-step + blocked-branch — partial (2026-06-03)
+### Commit-step + classifier + blocked-branch — DONE (2026-06-03)
 
-The classifier's two action helpers (it commits the move when the step is
+The classifier and its two action helpers (it commits the move when the step is
 legal, or runs the blocked-branch when it isn't):
 
-| retail         | port                                  | status | role |
-|----------------|---------------------------------------|--------|------|
-| `FUN_00466d84` | `engine_army_move_commit_step`        | DONE   | unlink → per-state footstep SFX (seam) → apply the latched +0x09 direction's col/row/cell delta → relink → set sticky rough flag (+0x14d) from the new cell's bit0 |
-| `FUN_0046673c` | — (blocked-branch)                    | TODO   | on an impassable step against a foreign region: +0x153 += 3, relation hit (`FUN_004a1ee1` 10), `FUN_00469e5b`, SFX `FUN_00426216` |
+| retail         | port                                  | role |
+|----------------|---------------------------------------|------|
+| `FUN_00466d84` | `engine_army_move_commit_step`        | unlink → per-state footstep SFX (seam) → apply the latched +0x09 direction's col/row/cell delta → relink → set sticky rough flag (+0x14d) from the new cell's bit0 |
+| `FUN_0046634d` | `engine_army_move_classify_step`      | per-step result classifier (spine) |
+| `FUN_0046673c` | `blocked_branch` (static)             | impassable-on-foreign-region effect |
+| `FUN_00469e0e` | `engine_army_move_terrain_passable`   | terrain predicate (2 ≤ t < 0x17) |
+| `FUN_00469e5b` | `decay_region_cell` (static)          | scorched-earth resource decay |
 
 `engine_army_move_commit_step` reads the committed direction from record +0x09
 (retail aliases the army-state anim byte; the classifier latches it there) and
-plays the footstep through the new `engine_army_move_bind_sfx_fn` seam (retail
+plays the footstep through the `engine_army_move_bind_sfx_fn` seam (retail
 0x426120, default NULL no-op — drop-in stays silent until audio is wired, like
-the combat seams).  4 tests: all 8 direction deltas, out-of-range no-op, rough
-flag, and the per-state SFX id.
+the combat seams).
+
+`engine_army_move_classify_step(dir, evq, mp_active)` is the spine the executor
+(`FUN_00465d28`) calls each tick.  Until the stack's **step-eval** is armed
+(record flag +0x14b bit0) it runs a stall/retry hysteresis: each tick bumps the
+retry counter (+0x14a) and, once it clears a direction-dependent budget (3
+normal, 0 once the previous step was rough — read from the sticky rough flag
++0x14d), it shuffles the facing (+0x1b), advances the stall accumulator (+0x149;
++2 single-player, +4 MP — `DAT_00553030`/`g_sim_mp_active` threaded as the
+`mp_active` param), and at 0x10 arms the step-eval (returns 2).  Disarmed → 1.
+
+Once armed it calls `engine_army_move_eval_dir` and post-processes: an aborted
+walk (`g_army_state_abort`) reports 10; a grid edge (0) passes through; codes
+> 4 (5 combat / 6 region-event / 7 special / 10 arrival) return straight up for
+the executor to dispatch; an impassable step (8) runs the blocked branch and is
+then treated as open (1); a rough step (3) latches the sticky rough flag.  Any
+committable outcome (1/3) bumps the path-progress accumulator (+0x153; +3
+normal, +1 rough), disarms the step-eval, latches the committed direction at
++0x09, re-primes the stall accumulator to 1, and commits the move.
+
+`blocked_branch` (only when the stack is not idle, state 3/4): +0x153 += 3, then
+— iff the obstacle belongs to a **foreign** region (`g_per_army_768[region*0x300
++5]` ≠ mover owner) and the cell is real land (`engine_army_move_terrain_passable`)
+— levies a relation penalty (`engine_diplomacy_battle_adjust(region_owner,
+mover_owner, 10, evq)`, only when the mover's `P_ACTIVE` byte is set), scorch-
+decays the cell, and plays the blocked cue through a *second* SFX seam
+`engine_army_move_bind_alert_sfx_fn` (retail 0x426216, distinct DirectSound
+play from the footstep family; default NULL no-op).  `decay_region_cell` drains
+a census-proportional share of the foreign region's stockpile — mid tier
+(terrain < 0x0f, fields +0x201/+0x206/+0x234/+0x244) or high tier (terrain ≥
+0x0f, fields +0x200/+0x250/+0x27c) — via `engine_math_percent_div/_of`, then
+flattens the cell to terrain 0 (`engine_territory_set_cell_type`).  The army
+then commits the step into the now-cleared cell (bulldoze-through).
+
+Ported into `engine_army_move.c` (+ header), host-tested (8 new tests, 1926
+total green): terrain predicate range, hysteresis (no-wrap / wrap +2 / MP +4 /
+rough-budget / 0x10 arm), open commit, rough commit, combat/region/special
+pass-through, grid-edge no-op, blocked scorched-earth (decay arithmetic +
+flatten + alert + push-through), and the same-region no-scorch guard.  All
+offsets r2-verified against `FUN_0046634d`.
 
 ### Frontier (next chips)
 
-1. **Result classifier `FUN_0046634d`** (1002 B) + the blocked-branch
-   `FUN_0046673c` (343 B).  The classifier is the spine between the path step
-   and the outcome dispatch: it runs a stall/retry hysteresis counter, then (on
-   the live branch) calls the now-ported step-result evaluator `FUN_00466893`,
-   post-processes the code (calling the ported `engine_army_move_commit_step`
-   on a legal step and `FUN_0046673c` on an impassable one).  Remaining
-   unported leaves of the blocked-branch: the terrain predicate `FUN_00469e0e`
-   (72 B), the region-resource decay `FUN_00469e5b` (476 B, touches the per-
-   region 0x300 block) and the SFX `FUN_00426216` (deferrable seam).
-2. **Movement-step executor `FUN_00465d28`** (1441 B) — advances the occupant
+1. **Movement-step executor `FUN_00465d28`** (1441 B) — advances the occupant
    one step along its path (`FUN_0046f434`, ported) and dispatches the
-   classifier's result into arrival / blocked / combat-engage (5 →
-   `FUN_004296b5` + `FUN_004a6c68`) / region-event (6 → `FUN_0046873f` /
-   `FUN_004686a0`) / (7 → `FUN_00468ae2`).  The destination-cell evaluator it
-   leans on (`FUN_00466893` / `466c3c` / `4658c1` / `4a16f7`) is now **ported**
-   (see above); what remains is the classifier (chip 1) plus the four
-   region/combat event callees.  Bind it via `engine_army_state_bind_move_fn`
-   once ported.
-3. **Wire `engine_army_state_run` into `engine_tick`'s SP per-tick path**
+   classifier's result (`engine_army_move_classify_step`, ported above) into
+   arrival / blocked / combat-engage (5 → `FUN_004296b5` + `FUN_004a6c68`) /
+   region-event (6 → `FUN_0046873f` / `FUN_004686a0`) / (7 → `FUN_00468ae2`).
+   The destination-cell evaluator and classifier it leans on are now **ported**;
+   what remains is the executor body plus the four region/combat event callees.
+   Bind it via `engine_army_state_bind_move_fn` once ported.
+2. **Wire `engine_army_state_run` into `engine_tick`'s SP per-tick path**
    (engine.c, beside the existing `FUN_0040490d`/`FUN_0049a010` arm) + bind the
    rebellion seam (`engine_realm_bind_rebellion_fn`) to
    `engine_combat_spawn_rebellion` — deferred from this chip because it needs

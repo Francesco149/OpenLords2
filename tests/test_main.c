@@ -1942,6 +1942,14 @@ struct test_case {
     X(engine_army_move_commit_out_of_range) \
     X(engine_army_move_commit_rough_flag) \
     X(engine_army_move_commit_sfx) \
+    X(engine_army_move_terrain_passable) \
+    X(engine_army_move_classify_hysteresis) \
+    X(engine_army_move_classify_commit_open) \
+    X(engine_army_move_classify_commit_rough) \
+    X(engine_army_move_classify_passthrough) \
+    X(engine_army_move_classify_grid_edge) \
+    X(engine_army_move_classify_blocked) \
+    X(engine_army_move_classify_blocked_friendly) \
     X(engine_diplomacy_clear_treaty) \
     X(engine_diplomacy_broadcast_penalty) \
     X(engine_diplomacy_battle_adjust_guards) \

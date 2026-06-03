@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 607,
+  "tested": 612,
   "ported": 43,
-  "unported": 1797,
+  "unported": 1792,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 650,
-  "pct_touched": 26.6,
-  "pct_tested": 24.8,
+  "touched": 655,
+  "pct_touched": 26.8,
+  "pct_tested": 25.0,
   "bytes_total": 838629,
-  "bytes_touched": 268698,
-  "pct_bytes_touched": 32.0
+  "bytes_touched": 270776,
+  "pct_bytes_touched": 32.3
  },
  "orphan_refs": [
   "0x004148",
@@ -3801,8 +3801,10 @@
    "name": "FUN_00426216",
    "size": 185,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move.c"
+   ]
   },
   {
    "va": "0x4262cf",
@@ -11536,6 +11538,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_move.c",
     "src/engine_army_move.h",
     "src/engine_army_state.c",
     "src/engine_army_state.h"
@@ -11554,16 +11557,21 @@
    "name": "FUN_0046634d",
    "size": 1002,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move.c",
+    "src/engine_army_move.h"
+   ]
   },
   {
    "va": "0x46673c",
    "name": "FUN_0046673c",
    "size": 343,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move.c"
+   ]
   },
   {
    "va": "0x466893",
@@ -12003,16 +12011,21 @@
    "name": "FUN_00469e0e",
    "size": 72,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move.c",
+    "src/engine_army_move.h"
+   ]
   },
   {
    "va": "0x469e5b",
    "name": "FUN_00469e5b",
    "size": 476,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move.c"
+   ]
   },
   {
    "va": "0x46a037",
@@ -12345,6 +12358,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_move.c",
     "src/engine_realm_events.h",
     "src/engine_territory.c",
     "src/engine_territory.h"

@@ -33,12 +33,14 @@
 #include <stdint.h>
 
 #include "engine_army_move.h"
-#include "save.h"                  /* g_per_territory_420, g_player_strategic_352 */
+#include "save.h"                  /* g_per_territory_420, g_player_strategic_352, g_per_army_768 */
 #include "engine_army_state.h"     /* g_army_state_index, g_army_state_abort       */
 #include "engine_combat.h"         /* engine_combat_dispatch / _merge_stack, terr  */
 #include "engine_diplomacy.h"      /* should_engage / battle_adjust                */
 #include "engine_realm_upkeep.h"   /* engine_unit_remove / map link / unlink       */
 #include "engine_event_queue.h"    /* engine_event_queue_post (FUN_00472bc5)       */
+#include "engine_math.h"           /* engine_math_percent_div / _percent_of        */
+#include "engine_territory.h"      /* engine_territory_set_cell_type (FUN_0046d7f4) */
 #include "save_schema_globals.h"   /* s_slot_0057c8cc (local player)               */
 
 /* --- per-territory occupant record (g_per_territory_420, stride 0x1a4) ----- */
@@ -59,6 +61,13 @@
 #define M_F14E       0x14e    /* clears the cell's 0x80 region-event flag (u8)  */
 #define M_F152       0x152    /* expected merge-partner index (u8)              */
 
+/* Classifier hysteresis fields (FUN_0046634d), all in the same record. */
+#define M_FACING     0x1b     /* facing/shuffle counter, bumped while stalling (u8)*/
+#define M_STALL_ACC  0x149    /* stall accumulator (+2 SP / +4 MP), latch ≥0x10(i8)*/
+#define M_RETRY      0x14a    /* per-tick retry counter vs the 3/0 budget (i8)   */
+#define M_FLAGS14B   0x14b    /* state flags: bit0 = step-eval armed, bit3 spare(u8)*/
+#define M_PROGRESS   0x153    /* path-progress accumulator (+3 fast / +1 rough)(u8)*/
+
 /* --- per-cell descriptor grid (DAT_00522f90, 8 bytes/cell, row stride 0x200) */
 #define C_TERRAIN    0        /* terrain / owner byte                           */
 #define C_FLAGS      1        /* movement flags                                 */
@@ -70,11 +79,25 @@
 #define PSTRIDE      0x160
 #define P_ACTIVE     0x05     /* (&DAT_0057bf05)[i*0x160] — has-data filter byte */
 
+/* --- per-region record (g_per_army_768, retail DAT_0053f9b0, stride 0x300) -- */
+#define RSTRIDE          0x300
+#define R_OWNER          0x05   /* region owning player (u8; DAT_0053f9b5)       */
+#define R_CENSUS_HIGH    0x200  /* high-terrain (0x0f..0x16) cell census (u8)    */
+#define R_CENSUS_MID     0x201  /* mid-terrain (0x02..0x0e) cell census (u8)     */
+#define R_MID_RESERVE    0x206  /* mid-tier reserve, drawn down with the census(u8)*/
+#define R_STOCK_234      0x234  /* mid-tier stock accumulator (i32)              */
+#define R_STOCK_244      0x244  /* mid-tier stock pool (i32)                     */
+#define R_DENSITY_LOAD   0x250  /* high-tier load numerator (i32)                */
+#define R_LOAD_SCRATCH   0x27c  /* high-tier load drain sink (i32; DAT_0053fc2c) */
+
 static const uint8_t *g_cells;            /* DAT_00522f90 */
-static engine_army_move_sfx_fn g_sfx_fn;  /* footstep seam (retail 0x426120) */
+static engine_army_move_sfx_fn   g_sfx_fn;    /* footstep seam (retail 0x426120) */
+static engine_army_move_sfx_fn   g_alert_fn;  /* blocked-step seam (retail 0x426216)*/
 
 void engine_army_move_bind_sfx_fn(engine_army_move_sfx_fn fn) { g_sfx_fn = fn; }
-static void army_move_sfx(int id) { if (g_sfx_fn) g_sfx_fn(id); }
+void engine_army_move_bind_alert_sfx_fn(engine_army_move_sfx_fn fn) { g_alert_fn = fn; }
+static void army_move_sfx(int id)   { if (g_sfx_fn)   g_sfx_fn(id);   }
+static void army_move_alert(int id) { if (g_alert_fn) g_alert_fn(id); }
 
 /* Outcome scratch latched per classified cell (retail runtime scalars). */
 uint8_t g_army_move_cell_flags;           /* DAT_0050a4a4 */
@@ -274,4 +297,163 @@ void engine_army_move_commit_step(void)
 
     /* Sticky rough-terrain flag: set iff the new cell carries movement bit0. */
     r[M_ROUGH] = (g_cells[*cell + 1] & 1) ? 1 : 0;
+}
+
+/* --- FUN_00469e0e @ 0x469e0e: terrain-passability predicate (72 B, __cdecl) -
+ * 1 iff the cell at byte offset `cell_off` carries a real land terrain type
+ * (2 ≤ terrain < 0x17); 0 for sea/edge (< 2) and special tiles (≥ 0x17).  Reads
+ * the cell grid's terrain byte (+0).  Shared by the blocked-branch and the
+ * movement executor (FUN_00465d28). */
+int engine_army_move_terrain_passable(int cell_off)
+{
+    uint8_t t = g_cells[cell_off + C_TERRAIN];
+    return (t >= 2 && t < 0x17) ? 1 : 0;
+}
+
+/* --- FUN_00469e5b @ 0x469e5b: scorched-earth resource decay (476 B, __cdecl) -
+ * The destroyed-cell side of the blocked branch: when a stack bulldozes a cell
+ * of a foreign region, drain a census-proportional share of that region's
+ * stockpile and then flatten the cell (terrain → 0).  Two tiers, partitioned on
+ * the cell's terrain byte:
+ *   mid  (terrain < 0x0f, while the mid reserve +0x206 is non-empty): if the mid
+ *        census +0x201 still fits inside the reserve, move a 1/reserve fraction
+ *        of stock +0x244 into +0x234 (capped at 100%) and draw the reserve down;
+ *        always decrement the mid census.
+ *   high (terrain ≥ 0x0f, with a non-zero high census +0x200 and load +0x250):
+ *        move a 1/census fraction of the load +0x250 into the scratch sink +0x27c
+ *        and decrement the high census.
+ * Then set the cell type to 0 (FUN_0046d7f4). */
+static void decay_region_cell(int cell_off)
+{
+    unsigned region   = g_cells[cell_off + C_REGION];   /* DAT_00522f97 = grid+7 */
+    uint8_t  terrain  = g_cells[cell_off + C_TERRAIN];  /* DAT_00522f90 = grid+0 */
+    uint8_t *rg       = &g_per_army_768[region * RSTRIDE];
+    int      frac     = 0;
+
+    if (terrain < 0x0f && rg[R_MID_RESERVE] != 0) {
+        if (rg[R_CENSUS_MID] <= rg[R_MID_RESERVE])
+            frac = engine_math_percent_div(1, rg[R_MID_RESERVE]);
+        if (frac > 100)
+            frac = 100;
+        int amt = engine_math_percent_of(*(int32_t *)(rg + R_STOCK_244), frac);
+        *(int32_t *)(rg + R_STOCK_244) -= amt;
+        *(int32_t *)(rg + R_STOCK_234) += amt;
+        if (rg[R_CENSUS_MID] <= rg[R_MID_RESERVE])
+            rg[R_MID_RESERVE]--;
+        rg[R_CENSUS_MID]--;
+    }
+    else if (terrain > 0x0e && rg[R_CENSUS_HIGH] != 0 &&
+             *(int32_t *)(rg + R_DENSITY_LOAD) != 0) {
+        int amt = engine_math_percent_div(1, rg[R_CENSUS_HIGH]);
+        amt = engine_math_percent_of(*(int32_t *)(rg + R_DENSITY_LOAD), amt);
+        *(int32_t *)(rg + R_DENSITY_LOAD)  -= amt;
+        *(int32_t *)(rg + R_LOAD_SCRATCH)  += amt;
+        rg[R_CENSUS_HIGH]--;
+    }
+
+    engine_territory_set_cell_type(cell_off, 0, 0);   /* FUN_0046d7f4(off,0,'\0') */
+}
+
+/* --- FUN_0046673c @ 0x46673c: blocked-step branch (343 B) ------------------
+ * Reached from the classifier when a step is impassable.  Bumps the stack's
+ * path-progress accumulator (+0x153) and, if the obstacle belongs to a foreign
+ * region and the cell is real land, levies a relation penalty (only when the
+ * mover is an active player), scorch-decays the cell, and plays the blocked
+ * cue.  Idle stacks (state 3/4) never reach this.  `evq` carries the relation
+ * notification. */
+static void blocked_branch(engine_event_queue_state_t *evq)
+{
+    uint8_t *r = MREC(g_army_state_index);
+
+    if (r[M_STATE] == 3 || r[M_STATE] == 4)
+        return;
+
+    int8_t   mover_owner = (int8_t)r[M_OWNER];
+    unsigned region      = g_army_move_cell_region;   /* DAT_0050a49c cell +7 key */
+    int      region_owner = g_per_army_768[region * RSTRIDE + R_OWNER];
+
+    r[M_PROGRESS] += 3;
+
+    if ((int)mover_owner != region_owner &&
+        engine_army_move_terrain_passable(g_army_move_cell_off) != 0) {
+        if (g_player_strategic_352[(uint8_t)mover_owner * PSTRIDE + P_ACTIVE] != 0)
+            engine_diplomacy_battle_adjust(region_owner, mover_owner, 10, evq);
+        decay_region_cell(g_army_move_cell_off);
+        army_move_alert(3);                            /* FUN_00426216(3) */
+    }
+}
+
+/* --- FUN_0046634d @ 0x46634d: per-step result classifier (1002 B, __cdecl) --
+ * The spine between the path step and the outcome dispatch.  Until the stack's
+ * step-eval is armed (record flag +0x14b bit0), it runs a stall/retry
+ * hysteresis: each tick bumps the retry counter, and once it clears the
+ * direction-dependent budget (3 normal, 0 once rough) it shuffles the facing,
+ * advances the stall accumulator (+2 single-player, +4 multiplayer), and — at
+ * 0x10 — arms the step-eval (returning 2).  While disarmed it returns 1.
+ *
+ * Once armed, it evaluates the actual step (engine_army_move_eval_dir) and post-
+ * processes the outcome: an aborted walk reports 10; a grid edge (0) passes
+ * through; codes > 4 (combat/region-event/special/arrival) return straight up;
+ * an impassable step (8) runs the blocked branch and is then treated as open
+ * (1); a rough step (3) sets the sticky rough flag.  Any committable outcome
+ * (1/3) bumps the path-progress accumulator (+3 normal, +1 rough), disarms the
+ * step-eval, latches the committed direction at record +0x09, re-primes the
+ * stall accumulator to 1, and commits the move (engine_army_move_commit_step). */
+int engine_army_move_classify_step(int dir, engine_event_queue_state_t *evq,
+                                   int mp_active)
+{
+    uint8_t *r = MREC(g_army_state_index);
+    int result;
+
+    r[M_FLAGS14B] &= 0xf7;          /* clear the spare bit3 each entry */
+
+    if ((r[M_FLAGS14B] & 1) == 0) {
+        /* Step-eval disarmed: stall/retry hysteresis. */
+        int8_t budget = (r[M_ROUGH] == 0) ? 3 : 0;
+        r[M_RETRY]++;
+        if (budget < (int8_t)r[M_RETRY]) {
+            r[M_RETRY] = 0;
+            r[M_FACING]++;
+            r[M_STALL_ACC] += (mp_active == 0) ? 2 : 4;
+            if ((int8_t)r[M_STALL_ACC] < 0x10) {
+                result = 1;
+            } else {
+                r[M_FLAGS14B] |= 1;     /* arm the step-eval */
+                r[M_STALL_ACC] = 0;
+                r[M_FACING]    = 0;
+                result = 2;
+            }
+        } else {
+            result = 1;
+        }
+        return result;
+    }
+
+    /* Step-eval armed: evaluate and post-process the real step. */
+    r[M_STALL_ACC] = 0;
+    r[M_RETRY]     = 0;
+    result = engine_army_move_eval_dir(dir, evq, mp_active);
+
+    if (g_army_state_abort != 0)
+        return 10;
+
+    if (result == 0)
+        return 0;
+
+    r[M_ROUGH] = 0;
+    if (result == 3) {
+        r[M_ROUGH] = 1;
+    } else if (result == 8) {
+        blocked_branch(evq);
+        result = 1;
+    } else if (result > 4) {
+        return result;
+    }
+
+    r[M_PROGRESS] += (r[M_ROUGH] == 0) ? 3 : 1;
+    r[M_FLAGS14B] &= 0xfe;          /* disarm the step-eval */
+    r[M_DIR] = (uint8_t)dir;        /* latch committed direction for commit_step */
+    r[M_STALL_ACC] = 1;
+    engine_army_move_commit_step();
+    return result;
 }

@@ -39,6 +39,12 @@ void engine_army_move_bind_cells(const uint8_t *cells);
 typedef void (*engine_army_move_sfx_fn)(int sound_id);
 void engine_army_move_bind_sfx_fn(engine_army_move_sfx_fn fn);
 
+/* Bind the blocked-step alert seam (retail 0x426216 — a distinct indexed
+ * DirectSound play call, separate from the 0x426120 footstep family).  The
+ * blocked branch plays id 3 when a stack bulldozes a foreign-region cell.  NULL
+ * (the default) is a no-op, keeping the drop-in silent unless audio is wired. */
+void engine_army_move_bind_alert_sfx_fn(engine_army_move_sfx_fn fn);
+
 /* Outcome scratch latched by the evaluator from the cell it classified (retail
  * runtime scalars).  The movement executor (FUN_00465d28, later chip) consumes
  * them to drive arrival / region-event / combat-engage.  Not save state. */
@@ -67,5 +73,26 @@ int engine_army_move_eval_dir(int dir, engine_event_queue_state_t *evq,
  * the new cell's movement flags carry bit0.  A direction byte > 7 is a no-op
  * (no relink). */
 void engine_army_move_commit_step(void);
+
+/* Port of FUN_00469e0e @ 0x469e0e (72 B, __cdecl int(int)).  1 iff the cell at
+ * byte offset `cell_off` is real land terrain (2 ≤ terrain < 0x17); 0 for
+ * sea/edge and special tiles.  Reads the bound cell grid's terrain byte (+0). */
+int engine_army_move_terrain_passable(int cell_off);
+
+/* Port of FUN_0046634d @ 0x46634d (1002 B, __cdecl int(int)).  The per-step
+ * result classifier the movement executor (FUN_00465d28) calls each tick with
+ * the path-step direction `dir` (0..7).  Runs the stall/retry hysteresis until
+ * the step-eval is armed, then evaluates the step (engine_army_move_eval_dir),
+ * post-processes the outcome (running the blocked branch on an impassable step,
+ * latching the rough flag on a rough one), and commits the move on a legal
+ * step.  Returns:
+ *   1 open / committed · 2 step-eval just armed · 3 rough (handled internally
+ *   then committed as 1's sibling) · 5 combat · 6 region-event · 7 special ·
+ *   10 arrival or walk aborted · 0 grid edge.
+ * Codes 5/6/7/10 are passed straight up for the executor to dispatch; 1/3/8 are
+ * resolved here.  Threads `evq` / `mp_active` to the step evaluator and the
+ * blocked branch's relation hit. */
+int engine_army_move_classify_step(int dir, engine_event_queue_state_t *evq,
+                                   int mp_active);
 
 #endif /* OPENLORDS2_ENGINE_ARMY_MOVE_H */

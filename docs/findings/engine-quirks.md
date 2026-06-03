@@ -6366,3 +6366,30 @@ size (here `0x57c020 − 0x57bf00 = 0x120 < 0x160` stride), they are very likely
 **the same storage viewed twice** — bind the port's second view to alias the
 first, never to a fresh buffer.  Grep heuristic: a `bind_*` setter only ever
 called from tests (never from `game_init`/`main`) is a NULL-in-production wall.
+
+## 180 — a blocked army `engine_army_move_classify_step` step into an impassable foreign-region cell does NOT stall: it scorch-decays the cell and bulldozes through
+
+`FUN_0046634d` post-processes an outcome of 8 (impassable) by running the
+blocked branch (`FUN_0046673c`) and then **rewriting the code to 1 (open) and
+committing the step anyway** — the stack ends the tick standing in the cell it
+"could not enter".  The blocked branch is what makes this consistent: when the
+obstacle belongs to a foreign region and the tile is real land
+(`engine_army_move_terrain_passable`, terrain 2..0x16), it drains a census-
+proportional slice of that region's stockpile (`decay_region_cell` /
+`FUN_00469e5b`) and flattens the tile to terrain 0
+(`engine_territory_set_cell_type`).  So by the time `commit_step` relinks the
+stack, the cell IS passable.  This is the strategic-map "raze your way in"
+mechanic, not a bug.
+
+Two secondary gotchas in the same function:
+
+- **The path-progress accumulator (+0x153) is bumped twice on an impassable
+  step**: once inside the blocked branch (`+= 3`) and again in the classifier's
+  common tail (`+= 3`, since the rough flag was just cleared) — net +6, vs +3
+  for a plain open step.  Not a double-count bug; retail does exactly this.
+- **The retry budget reads the PREVIOUS step's rough flag** (+0x14d): a stack
+  that stepped onto rough terrain last tick gets budget 0 (wraps its retry
+  counter immediately, ramping the stall accumulator faster) instead of the
+  normal budget 3.  The flag is the single sticky `M_ROUGH` byte that
+  `commit_step` writes from the entered cell and the classifier both reads (for
+  the budget) and rewrites (from the new step outcome).
