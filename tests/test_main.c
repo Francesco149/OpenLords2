@@ -1931,6 +1931,11 @@ struct test_case {
     X(engine_combat_muster_defender_mode2_distributes) \
     X(engine_combat_muster_defender_mode1_recruits) \
     X(engine_combat_muster_defender_spawns) \
+    X(engine_combat_contest_region_same_owner_noop) \
+    X(engine_combat_contest_region_dead_attacker_noop) \
+    X(engine_combat_contest_region_enemy_garrison_noop) \
+    X(engine_combat_contest_region_undefended_seizes) \
+    X(engine_combat_contest_region_neutral_muster_fails_seizes) \
     X(engine_combat_resign_eliminates) \
     X(engine_combat_resign_recount_always_zero) \
     X(engine_combat_resign_sweep_sp_noop) \

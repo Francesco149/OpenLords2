@@ -521,26 +521,68 @@ mode-0 happy path (occupant index == current_slot) over the shared spawn harness
 This makes `FUN_004a6c68` (combat_b, 1264 B) a **leaf** — all its non-seam
 callees are now ported.
 
+#### Combat resolve `FUN_004a6c68` → `engine_combat_contest_region` (ported)
+
+The army-move executor's **second** combat-outcome seam (code 5; combat_a
+`engine_army_move_combat_engage` runs first).  A live owned attacker has stepped
+into a region held by another owner.  After the entry guard — attacker is a live
+owned unit (`+0x08 == 1`, `+0x00 != 0`), the region owner differs (u8 vs the i8
+attacker owner), and the region is either unfortified (`+0x1c0 == 0`), has no
+pending garrison (`+0x1bc == 0`), or that garrison already belongs to the
+attacker — it bumps the attacker's presence accumulator (`+0x153 += 8`) and
+placed flag (`+0x150 = 1`), latches the battle region (`s_slot_0056822c`) and
+clears the quick-resolve flag, then **selects a defender** three ways:
+
+* **neutral region** (owner 0): popularity reserve (`+0x0c`) `< 0x0b` → none;
+  else raise a fresh garrison sized by difficulty (`engine_combat_muster_defender`
+  mode 2, pct `0x19/0x28/0x32/0x3c` for diff 0..3) and mark takeover-flag 1.
+* **owned by an inactive realm** (strat `+0x05 == 0`): the capital garrison if
+  present (flag 2), else a mode-1 top-up muster (flag 1).
+* **owned by an active realm**: the capital garrison, else a mode-0 muster
+  (flag 1 only when the muster succeeds).
+
+No defender → `engine_combat_transfer_ownership` seizes the region for the
+attacker and the function stops.  Else it clears both result records, sizes the
+fight (`engine_combat_size_battle`) and runs the **same resolve tail as
+`engine_combat_dispatch`** (its FUN_004a7158 twin): auto-resolve (size 0) →
+resolve + aftermath + **`engine_unit_absorb`** the defender (combat_b's extra
+step over dispatch); else, when unsuppressed (`DAT_0053f284`/`DAT_004ee89c` both
+0), the 0x13 quick-anim replay; else the 0x12 interactive battlefield + the
+`s080` cue keyed by the local player's combat role.  The defender-selection
+routing (the three owner cases + the `0x0b` reserve gate + the four difficulty
+pcts), the entry guard's four clauses, the `+8`/`= 1` bookkeeping, the absorb on
+auto-resolve and the screen/clock/WAV handoff all r2-verified against
+`FUN_004a6c68`.  The seam's clock + WAV calls are the existing bound combat seams;
+the timer collapses to `g_combat_anim_clock` exactly as dispatch does.  Out-of-
+range difficulty keeps retail's stale-`DAT_00568218` semantics (the local is
+seeded from the persisted global; never hit — diff is 0..3).
+
+Ported into `engine_combat.c` (+ header), host-tested (5 new tests, 1974 total
+green, ASAN/UBSAN clean): the three entry-guard rejections (same owner / dead
+attacker / enemy garrison staged), the undefended-neutral seize (transfer +
+bookkeeping latches), and the neutral above-reserve muster routing that still
+seizes when the muster yields nothing.  The defender-found resolve tail is left
+to the resolver's own tests + the live seam (binding it makes a contested move
+trigger an actual battle — a verification-gated step, not yet wired).
+
 ### Frontier (next chips)
 
-1. **The remaining executor dispatcher callees** — port each and bind it into
-   the executor through the seam it already calls: `FUN_004a6c68` (combat resolve
-   — the 1264 B back half of the code-5 pair; once it lands, bind **both** combat
-   seams together via `engine_army_move_bind_combat_fns`).  Its two unported deps
-   are now both **done**: `FUN_0046d42c` (capital-defender finder) and
-   `FUN_004aaa80` (defender muster prime) are ported (above).  `FUN_004a50ae`
-   (731 B garrison/auto-defender builder) is **done** too
-   (`engine_combat_muster_defender`, above) — so `FUN_004a6c68` (combat_b, 1264 B)
-   is now a **leaf** and is the next chip: port it, then bind **both** combat
-   seams together via `engine_army_move_bind_combat_fns`.  Then `FUN_004686a0`
-   (region-event handler, **high**
+1. **Bind both combat seams live** — the whole code-5 pair is now ported:
+   combat_a `engine_army_move_combat_engage` (FUN_004296b5) + combat_b
+   `engine_combat_contest_region` (FUN_004a6c68).  Call
+   `engine_army_move_bind_combat_fns(engage, resolve)` at the wiring site so a
+   contested army-move actually deposits the settling stack **and** resolves the
+   battle.  **Verification-gated**: with the seam live a contested move triggers
+   an on-screen battle (screen 0x12/0x13 + the s080 cue) — drive port+retail and
+   confirm the battle fires.  After that, the remaining executor dispatcher
+   callees: `FUN_004686a0` (region-event handler, **high**
    terrain — needs its two callees `FUN_004a78ea` / `FUN_004a7ca2` first, which
    chain into `FUN_004a79a3` / `FUN_004a7e0a`), and `FUN_00426360` (DirectDraw
    surface present/scroll — render seam, lands with the strategic-map camera
    cluster).  **Done**: special-tile `FUN_00468ae2`, region-event-lo
    `FUN_0046873f`, arrival `FUN_00467196`, settle-deposit `FUN_004296b5`,
    capital-defender `FUN_0046d42c`, muster-prime `FUN_004aaa80`, defender
-   muster/spawn `FUN_004a50ae`.
+   muster/spawn `FUN_004a50ae`, combat-resolve `FUN_004a6c68`.
 2. **Wire `engine_army_state_run` into `engine_tick`'s SP per-tick path**
    (engine.c, beside the existing `FUN_0040490d`/`FUN_0049a010` arm) + bind the
    rebellion seam (`engine_realm_bind_rebellion_fn`) to

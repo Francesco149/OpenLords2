@@ -211,6 +211,19 @@ void engine_combat_transfer_army(unsigned occupant, int key,
 int  engine_combat_dispatch(int attacker, int defender,
                             engine_event_queue_state_t *evq, int mp_active);
 
+/* Port of FUN_004a6c68 @ 0x4a6c68 (1264 B) — combat_b, the army-move executor's
+ * second combat-outcome seam (matches engine_army_move_region_fn).  A live owned
+ * attacker `attacker` has stepped into a region `region` held by another owner:
+ * select or raise its defender (capital garrison via find_capital_defender, or a
+ * fresh/top-up muster via engine_combat_muster_defender keyed by ownership +
+ * difficulty), then resolve the battle (size → resolve → aftermath, with an
+ * absorb on auto-resolve, the 0x13 quick-anim replay, or the 0x12 interactive
+ * battlefield + s080 cue).  Undefended → transfer the region to the attacker.
+ * Shares engine_combat_dispatch's resolve tail; clock/WAV are the bound combat
+ * seams.  Bind alongside combat_a via engine_army_move_bind_combat_fns. */
+void engine_combat_contest_region(int attacker, unsigned region,
+                                  engine_event_queue_state_t *evq, int mp_active);
+
 /* Port of FUN_004ab383 @ 0x4ab383 (1751 B, __cdecl void(int)).  Battle
  * aftermath: apply the winner's resupply / the loser's capture-or-disband,
  * transfer the conquered region's ownership, post the result notifications,

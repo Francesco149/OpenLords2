@@ -528,7 +528,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4aad07 | FUN_004aad07 | 1443 | engine_combat.c, engine_combat.h |
 | 0x4ab2aa | FUN_004ab2aa | 217 | engine_combat.c, engine_combat.h |
 | 0x4ab383 | FUN_004ab383 | 1751 | engine_combat.c, engine_combat.h, engine_diplomacy.h (+1) |
-| 0x4aba5a | FUN_004aba5a | 220 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x4aba5a | FUN_004aba5a | 220 | engine_combat.c, engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4abb36 | FUN_004abb36 | 473 | engine_army_state.c, engine_combat.c, engine_combat.h |
 | 0x4abd0f | FUN_004abd0f | 616 | engine_army_state.c, engine_combat.c, engine_combat.h |
 | 0x4abf77 | FUN_004abf77 | 526 | engine_combat.c, engine_combat.h |

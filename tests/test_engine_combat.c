@@ -1285,6 +1285,100 @@ int test_engine_combat_muster_defender_spawns(void)
     return 0;
 }
 
+/* ---- combat_b: contest region (FUN_004a6c68) ---------------------------- *
+ * An attacker stepping into a foreign region selects/raises its defender, then  *
+ * resolves the fight — or seizes the region outright when it is undefended.      *
+ * These cover combat_b's own logic: the three entry guards, the bookkeeping     *
+ * latches, and the defender-selection routing into the no-defender transfer.    *
+ * The defender-found resolve tail (size→resolve→aftermath→absorb) is exercised   *
+ * by the resolver's own tests and the live seam.                                 */
+int test_engine_combat_contest_region_same_owner_noop(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *att = CREC(4);
+    att[0x00] = 2;                  /* owner */
+    att[0x08] = 1;                  /* live unit */
+    R_REC(5)[0x05] = 2;             /* region held by the same player */
+    engine_combat_contest_region(4, 5, &evq, 0);
+    T_ASSERT_EQ_U(att[0x150], 0);   /* no bookkeeping → bailed at the guard */
+    T_ASSERT_EQ_U(att[0x153], 0);
+    return 0;
+}
+
+int test_engine_combat_contest_region_dead_attacker_noop(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *att = CREC(4);
+    att[0x00] = 2; att[0x08] = 0;   /* owned but not a live unit */
+    R_REC(5)[0x05] = 3;
+    engine_combat_contest_region(4, 5, &evq, 0);
+    T_ASSERT_EQ_U(att[0x150], 0);
+    return 0;
+}
+
+int test_engine_combat_contest_region_enemy_garrison_noop(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *att = CREC(4);
+    att[0x00] = 2; att[0x08] = 1;
+    uint8_t *reg = R_REC(5);
+    reg[0x05]    = 3;               /* enemy region */
+    reg[0x1c0]   = 1;               /* fortified (keep present) */
+    I32(reg, 0x1bc) = 7;            /* pending garrison = occupant 7 */
+    CREC(7)[0x00] = 3;              /* pending owner ≠ attacker → blocked */
+    engine_combat_contest_region(4, 5, &evq, 0);
+    T_ASSERT_EQ_U(att[0x150], 0);
+    return 0;
+}
+
+int test_engine_combat_contest_region_undefended_seizes(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *att = CREC(4);
+    att[0x00] = 2; att[0x08] = 1;
+    P_REC(2)[0x05] = 1;             /* attacker realm active (capture penalty) */
+    uint8_t *reg = R_REC(5);
+    reg[0x05] = 0;                  /* neutral */
+    reg[0x0c] = 5;                  /* reserve < 0x0b → no garrison raised */
+    reg[0x17] = 40;
+    s_slot_00568218 = 0;            /* clear any persisted defender */
+
+    engine_combat_contest_region(4, 5, &evq, 0);
+
+    T_ASSERT_EQ_U(reg[0x05], 2);                /* seized by the attacker's owner */
+    T_ASSERT_EQ_U(att[0x153], 8);               /* presence accumulator += 8 */
+    T_ASSERT_EQ_U(att[0x150], 1);               /* placed flag */
+    T_ASSERT_EQ_I((int)s_slot_0056822c, 5);     /* battle region latched */
+    T_ASSERT_EQ_I((int)s_slot_00568218, 0);     /* no defender */
+    return 0;
+}
+
+int test_engine_combat_contest_region_neutral_muster_fails_seizes(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *att = CREC(4);
+    att[0x00] = 2; att[0x08] = 1;
+    P_REC(2)[0x05] = 1;
+    uint8_t *reg = R_REC(5);
+    reg[0x05] = 0;                  /* neutral */
+    reg[0x0c] = 20;                 /* reserve ≥ 0x0b → difficulty muster attempted */
+    reg[0x17] = 40;
+    I32(reg, 0x24) = 10;            /* provision < muster floor (0x28) → muster 0 */
+    s_slot_0053f23c = 1;            /* difficulty 1 → the 0x28 pct branch */
+    s_slot_00568218 = 0;
+
+    engine_combat_contest_region(4, 5, &evq, 0);
+
+    T_ASSERT_EQ_U(reg[0x05], 2);                /* muster produced nothing → seized */
+    T_ASSERT_EQ_I((int)s_slot_00568218, 0);
+    return 0;
+}
+
 /* ---- player resignation (FUN_0049cf20 / FUN_0049b2a3) -------------------- *
  * resign_player demolishes a player's realms (R_REC +0x05 owner zeroed) and  *
  * disbands their placed units (CREC), then wipes the strategic record and    *

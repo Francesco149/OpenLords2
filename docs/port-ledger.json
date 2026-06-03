@@ -17047,6 +17047,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_combat.c",
     "src/engine_realm_upkeep.c",
     "src/engine_realm_upkeep.h"
    ]

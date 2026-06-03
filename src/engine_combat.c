@@ -1598,3 +1598,137 @@ spawn:
         return 0;
     return engine_territory_current_slot();         /* DAT_0052afe0 */
 }
+
+/* Region keep level lives at the same g_per_army_768 +0x1c0 field the spawn
+ * cluster reads (A_KEEPLVL); name it for the region context here. */
+#define R_KEEPLVL   0x1c0
+
+/* Port of FUN_004a6c68 (1264 B, __cdecl void(int attacker, uint region)) —
+ * combat_b, the second of the army-move executor's combat-outcome seams (code
+ * 5; combat_a engine_army_move_combat_engage runs first).  A live owned
+ * attacker `attacker` has stepped into a region `region` held by someone else:
+ * pick or raise its defender, then resolve the battle — or, when the region is
+ * undefended, seize it outright.
+ *
+ * After the entry guard (attacker is a live owned unit, region owner differs,
+ * and the region is either unfortified, ungarrisoned, or its pending garrison
+ * already belongs to the attacker) it bumps the attacker's presence accumulator
+ * (+0x153 += 8) and placed flag (+0x150 = 1), latches the battle region
+ * (s_slot_0056822c) and clears the quick-resolve flag, then selects a defender
+ * three ways:
+ *   • neutral region (owner 0): if popularity reserve (+0x0c) < 0x0b none;
+ *     else raise a fresh garrison sized by difficulty (muster_defender mode 2,
+ *     pct 0x19/0x28/0x32/0x3c) and mark it takeover-flag 1.
+ *   • owned by an inactive realm (strat +0x05 == 0): the capital garrison if
+ *     present (flag 2), else a mode-1 top-up muster (flag 1).
+ *   • owned by an active realm: the capital garrison, else a mode-0 muster
+ *     (flag 1 only when the muster succeeds).
+ * No defender → transfer the region to the attacker's owner and stop.  Else
+ * clear both result records, size the battle (engine_combat_size_battle) and:
+ *   • size 0 (auto-resolve): resolve, run aftermath, absorb the defender;
+ *   • else if not suppressed (DAT_0053f284 / DAT_004ee89c both 0): the quick
+ *     replay path — load muster, resolve, aftermath, then hand the renderer the
+ *     0x13 anim screen with both combatants;
+ *   • else the fully interactive battlefield (screen 0x12 + the s080 cue keyed
+ *     by the local player's combat role).
+ * The clock + WAV calls are the bound combat seams; mirrors the shared resolve
+ * tail of engine_combat_dispatch (its FUN_004a7158 twin), adding the defender-
+ * selection prologue and the auto-resolve absorb. */
+void engine_combat_contest_region(int attacker, unsigned region,
+                                  engine_event_queue_state_t *evq, int mp_active)
+{
+    g_player_strategic_352[5] = 0;                 /* DAT_0057bf05 = 0 */
+
+    uint8_t *att = CREC(attacker);
+    uint8_t *reg = REGREC((int)region);
+    int att_owner = (int8_t)att[C_OWNER];
+
+    if (att[C_ACTIVE] != 1 || att[C_OWNER] == 0)
+        return;
+    if ((int)(uint8_t)reg[R_OWNER] == att_owner)   /* same owner → not a fight */
+        return;
+    int32_t pending = rd_i32(reg, R_PENDING);
+    if (reg[R_KEEPLVL] != 0 && pending != 0 &&
+        CREC(pending)[C_OWNER] != att[C_OWNER])     /* enemy garrison already staged */
+        return;
+
+    att[C_F153] = (uint8_t)((int8_t)att[C_F153] + 8);
+    att[C_F150] = 1;
+    s_slot_0056822c = region;
+    s_slot_0053e8fc = 0;
+
+    /* Seeded from the persisted global so the (impossible) neutral / out-of-range
+     * difficulty path keeps retail's stale-defender semantics. */
+    int defender = (int)s_slot_00568218;
+
+    if (reg[R_OWNER] == 0) {
+        if ((int8_t)reg[R_F0C] < 0x0b) {
+            defender = 0;
+        } else {
+            int diff = (int)s_slot_0053f23c;
+            if (diff == 0)
+                defender = engine_combat_muster_defender((int)region, 0x19, 0x28, 2);
+            else if (diff == 1)
+                defender = engine_combat_muster_defender((int)region, 0x28, 0x28, 2);
+            else if (diff == 2)
+                defender = engine_combat_muster_defender((int)region, 0x32, 0x28, 2);
+            else if (diff == 3)
+                defender = engine_combat_muster_defender((int)region, 0x3c, 0x28, 2);
+        }
+        if (defender != 0)
+            CREC(defender)[C_F167] = 1;
+    } else if (PREC(reg[R_OWNER])[P_ACTIVE] == 0) {
+        defender = engine_combat_find_capital_defender((int)region);
+        if (defender == 0) {
+            defender = engine_combat_muster_defender((int)region, 0x28, 0x28, 1);
+            if (defender != 0)
+                CREC(defender)[C_F167] = 1;
+        } else {
+            CREC(defender)[C_F167] = 2;
+        }
+    } else {
+        defender = engine_combat_find_capital_defender((int)region);
+        if (defender == 0) {
+            defender = engine_combat_muster_defender((int)region, 0x28, 0x28, 0);
+            if (defender != 0)
+                CREC(defender)[C_F167] = 1;
+        }
+    }
+    s_slot_00568218 = (uint32_t)defender;
+
+    if (defender == 0) {
+        engine_combat_transfer_ownership((unsigned)att_owner, region, evq, mp_active);
+        return;
+    }
+
+    s_slot_00568210 = (uint32_t)attacker;
+    engine_combat_clear_battle_result(attacker);
+    engine_combat_clear_battle_result(defender);
+
+    int sized = engine_combat_size_battle(attacker, defender, (int)s_slot_0057c8cc);
+    if (sized == 0) {
+        resolve_combat();
+        engine_combat_aftermath(0, evq, mp_active);
+        engine_unit_absorb(defender);                  /* FUN_004aba5a */
+    } else if (g_combat_flag_53f284 == 0 && g_combat_both_garrison == 0) {
+        engine_combat_load_muster(attacker, defender);
+        resolve_combat();
+        engine_combat_aftermath(0, evq, mp_active);
+        g_combat_screen_state = 0x13;
+        g_combat_anim_clock   = combat_clock();
+        g_combat_anim_a       = attacker;
+        g_combat_anim_b       = defender;
+        g_combat_screen_mode  = 2;
+    } else {
+        g_combat_screen_state = 0x12;
+        g_combat_anim_clock   = combat_clock();
+        g_combat_screen_mode  = 2;
+        g_combat_audio_latch  = 1;
+        if (g_combat_local_role == 1)
+            combat_wav("s080_03.wav", 1, 0);
+        else if (g_combat_local_role == 2)
+            combat_wav("s080_01.wav", 1, 0);
+        else
+            combat_wav("s080_02.wav", 1, 0);
+    }
+}
