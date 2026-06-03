@@ -199,6 +199,15 @@ void engine_combat_transfer_ownership(unsigned new_owner, unsigned key,
                                       engine_event_queue_state_t *evq,
                                       int mp_active);
 
+/* Port of FUN_004abf77 @ 0x4abf77 (526 B, __cdecl void(int army,int region)).
+ * When an army occupies a NEUTRAL region, post a one-shot population-reception
+ * notification (codes 0x82..0x86) to the army's owner, chosen from the region's
+ * popularity reserve and how fully the army fills the region's capacity.
+ * Notification-only (no save-state mutation); a private helper of the army-
+ * state machine's region-entry path (FUN_004abb36). */
+void engine_combat_notify_occupation(int army, int region,
+                                     engine_event_queue_state_t *evq);
+
 /* Bind the resign-time interactive UI cleanup seam (retail 0x47fe0b,
  * game-mode-gated on s_slot_0057c8fc == 2).  NULL default → no-op. */
 void engine_combat_bind_resign_ui_fn(void (*fn)(int player));

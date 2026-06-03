@@ -548,6 +548,71 @@ int test_engine_combat_transfer_army_no_cell_disbands(void)
     return 0;
 }
 
+/* ---- region-occupation reception notice (FUN_004abf77) ------------------ *
+ * Posts a population-reception message (0x82..0x86) to the occupying army's
+ * owner when it sits on a NEUTRAL region, chosen from the region's popularity
+ * reserve (+0x0c) and the head-count/capacity fill ratio.  Notification-only.
+ * scc_reset() sets the local player to 1, so an army owned by 1 publishes.    */
+
+/* Set up army `a` (owner = local) on neutral region `r` with the given
+ * head-count, capacity and popularity reserve; returns the chosen event code
+ * (or -1 if nothing was published). */
+static int notify_occ_code(int head, int cap, int8_t pop)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *a = CREC(4), *r = R_REC(5);
+    a[0x00] = 1;                 /* army owner = local player → published */
+    I32(a, 0x168) = head;        /* C_VALUE head-count */
+    r[0x05] = 0;                 /* neutral region */
+    r[0x0c] = (uint8_t)pop;      /* popularity reserve (signed) */
+    I32(r, 0x24) = cap;          /* region capacity */
+    engine_combat_notify_occupation(4, 5, &evq);
+    return evq.write_idx == 1 ? evq.ring[0].code : -1;
+}
+
+/* Hostile population (reserve < 0x0a) → 0x82 regardless of fill. */
+int test_engine_combat_notify_occupation_hostile(void)
+{
+    T_ASSERT_EQ_I(notify_occ_code(60, 100, 5), 0x82);
+    return 0;
+}
+
+/* Wary population (0x0a <= reserve < 0x1e) → 0x83 regardless of fill. */
+int test_engine_combat_notify_occupation_wary(void)
+{
+    T_ASSERT_EQ_I(notify_occ_code(60, 100, 0x14), 0x83);
+    return 0;
+}
+
+/* Healthy population (reserve >= 0x1e): the message tracks the fill ratio.
+ *   fill < 0x14            → 0x86   (head 10 / cap 100 = 10%)
+ *   0x14 <= fill < 0x32    → 0x85   (head 30 / cap 100 = 30%)
+ *   0x32 <= fill < 0x65    → 0x84   (head 60 / cap 100 = 60%)
+ *   fill >= 0x65 (head>=cap) → 0x83 (clamped to 0x65) */
+int test_engine_combat_notify_occupation_fill_tiers(void)
+{
+    T_ASSERT_EQ_I(notify_occ_code(10,  100, 0x1e), 0x86);
+    T_ASSERT_EQ_I(notify_occ_code(30,  100, 0x1e), 0x85);
+    T_ASSERT_EQ_I(notify_occ_code(60,  100, 0x1e), 0x84);
+    T_ASSERT_EQ_I(notify_occ_code(100, 100, 0x1e), 0x83);
+    return 0;
+}
+
+/* An OWNED region (R_OWNER != 0) gets no message — the function early-returns. */
+int test_engine_combat_notify_occupation_owned_region_silent(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *a = CREC(4), *r = R_REC(5);
+    a[0x00] = 1;  I32(a, 0x168) = 60;
+    r[0x05] = 3;                 /* region already owned */
+    r[0x0c] = 5;  I32(r, 0x24) = 100;
+    engine_combat_notify_occupation(4, 5, &evq);
+    T_ASSERT_EQ_I(evq.write_idx, 0);
+    return 0;
+}
+
 /* ---- army-stack merge (FUN_004aa181 / engine_combat_merge_stack) --------- *
  * Merge occupant `src` into `dst`: sum head-count (+0x168) / 7 troop shorts
  * (+0x16c) / 3 supply triples (+0x182/+0x184/+0x186), keep the larger presence

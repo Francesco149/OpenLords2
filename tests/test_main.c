@@ -1887,6 +1887,10 @@ struct test_case {
     X(engine_combat_transfer_ownership_reassign) \
     X(engine_combat_transfer_ownership_reserve_underflow) \
     X(engine_combat_transfer_army_no_cell_disbands) \
+    X(engine_combat_notify_occupation_hostile) \
+    X(engine_combat_notify_occupation_wary) \
+    X(engine_combat_notify_occupation_fill_tiers) \
+    X(engine_combat_notify_occupation_owned_region_silent) \
     X(engine_combat_merge_sums_and_disbands) \
     X(engine_combat_merge_refused_both_merc) \
     X(engine_combat_merge_capacity_gate) \

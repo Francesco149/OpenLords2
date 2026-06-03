@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **635** (26.0%) — tested 592, ported 43
-- code bytes touched: **31.0%** (260,241 / 838,629 B)
-- unported: **1812**
+- touched: **638** (26.1%) — tested 595, ported 43
+- code bytes touched: **31.2%** (261,505 / 838,629 B)
+- unported: **1809**
 - orphan refs (in src/, not in function table): 6
 
-## tested (592) — ported + host unit suite
+## tested (595) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -97,7 +97,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404b99 | FUN_00404b99 | 466 | engine.c, engine.h, engine_rng.c |
 | 0x404d6b | FUN_00404d6b | 43 | engine_army_ai.c, engine_input.c, engine_math.c (+3) |
 | 0x404d96 | FUN_00404d96 | 43 | engine_math.h |
-| 0x404dc1 | FUN_00404dc1 | 66 | engine_input.c, engine_math.h, engine_ranking.c (+1) |
+| 0x404dc1 | FUN_00404dc1 | 66 | engine_combat.c, engine_input.c, engine_math.h (+2) |
 | 0x404e03 | FUN_00404e03 | 72 | engine_army_economy.c, engine_math.h |
 | 0x404e4b | FUN_00404e4b | 98 | engine_math.h |
 | 0x404ead | FUN_00404ead | 159 | engine_math.h, engine_path.h |
@@ -363,6 +363,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x45270a | FUN_0045270a | 43 | engine_dirty_rect.h, save.h |
 | 0x452735 | FUN_00452735 | 53 | engine_dirty_rect.h |
 | 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_button.c, engine_button.h (+4) |
+| 0x4650b0 | FUN_004650b0 | 265 | engine_combat.c |
 | 0x4651b9 | FUN_004651b9 | 91 | engine_territory.c, engine_territory.h |
 | 0x46733c | FUN_0046733c | 124 | engine_combat.c, engine_map_query.c, engine_map_query.h |
 | 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c, engine_territory.h |
@@ -500,7 +501,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4ab2aa | FUN_004ab2aa | 217 | engine_combat.c, engine_combat.h |
 | 0x4ab383 | FUN_004ab383 | 1751 | engine_combat.c, engine_combat.h, engine_diplomacy.h (+1) |
 | 0x4aba5a | FUN_004aba5a | 220 | engine_realm_upkeep.c, engine_realm_upkeep.h |
-| 0x4ac185 | FUN_004ac185 | 577 | engine_realm.c, engine_realm.h |
+| 0x4abb36 | FUN_004abb36 | 473 | engine_combat.h |
+| 0x4abf77 | FUN_004abf77 | 526 | engine_combat.c, engine_combat.h |
+| 0x4ac185 | FUN_004ac185 | 577 | engine_combat.c, engine_realm.c, engine_realm.h |
 | 0x4ac3c6 | FUN_004ac3c6 | 211 | engine_combat.c, engine_combat.h, engine_realm.c (+1) |
 | 0x4ac6fe | FUN_004ac6fe | 245 | engine_combat.c, engine_combat.h, engine_realm_upkeep.c (+1) |
 | 0x4ac7f3 | FUN_004ac7f3 | 273 | engine_combat.c |

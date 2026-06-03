@@ -796,6 +796,57 @@ void engine_combat_transfer_ownership(unsigned new_owner, unsigned key,
 }
 
 /* ===================================================================== *
+ *  Region-occupation helpers (FUN_004abXX / FUN_004ac185) — reached from  *
+ *  per-tick army-state machine (FUN_004650b0's state handlers) when a    *
+ *  live army sits on a region and its effective owner/popularity needs   *
+ *  reconciling.  These mutate the region's effective-owner colour byte   *
+ *  (occupant +0x10) and the region popularity reserve, and notify the    *
+ *  controlling player.                                                   *
+ * ===================================================================== */
+
+/* Port of FUN_004abf77 @ 0x4abf77 (526 B, __cdecl void(int army,int region)).
+ * When an army occupies a NEUTRAL region (R_OWNER == 0), post a one-shot
+ * "reception" notification to the army's owner describing how the local
+ * population receives the occupation.  The message code is chosen from the
+ * region's popularity reserve (+0x0c) and, once popularity is healthy
+ * (>= 0x1e), from how fully the army's head-count fills the region's capacity
+ * (+0x24):
+ *   pop <  0x0a                       → 0x82 (hostile)
+ *   pop <  0x1e                       → 0x83 (wary)
+ *   pop >= 0x1e, fill <  0x14         → 0x86
+ *   pop >= 0x1e, 0x14 <= fill < 0x32  → 0x85
+ *   pop >= 0x1e, 0x32 <= fill < 0x65  → 0x84
+ *   pop >= 0x1e, fill >= 0x65         → 0x83
+ * `fill` is percent_div(head, capacity) clamped to 0x65 (head >= capacity).
+ * Notification-only: no save-state mutation.  All callees ported
+ * (engine_math_percent_div = FUN_00404dc1, engine_event_queue_post). */
+void engine_combat_notify_occupation(int army, int region,
+                                     engine_event_queue_state_t *evq)
+{
+    if (REGREC(region)[R_OWNER] != 0)
+        return;                       /* only neutral regions get the message */
+
+    int head = *(const int32_t *)(CREC(army)  + C_VALUE);
+    int cap  = *(const int32_t *)(REGREC(region) + 0x24);   /* region capacity */
+    int fill = (head < cap) ? engine_math_percent_div(head, cap) : 0x65;
+
+    int     owner = (int8_t)CREC(army)[C_OWNER];
+    int8_t  pop   = (int8_t)REGREC(region)[R_F0C];
+    int     code;
+    if      (pop < 0x0a)   code = 0x82;
+    else if (pop < 0x1e)   code = 0x83;
+    else if (fill < 0x65) {
+        if      (fill < 0x32) code = (fill < 0x14) ? 0x86 : 0x85;
+        else                  code = 0x84;
+    }
+    else                   code = 0x83;
+
+    uint8_t hd[7]; build_has_data(hd);
+    engine_event_queue_post(evq, 0, owner, code, 0, 2, (uint8_t)region, 0, 0,
+                            hd, (int)s_slot_0057c8cc);
+}
+
+/* ===================================================================== *
  *  Multiplayer player-resignation pass (FUN_0049b2a3 + FUN_0049cf20).    *
  *                                                                        *
  *  Runs only in multiplayer.  For each in-game player slot that has not  *
