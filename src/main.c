@@ -189,6 +189,9 @@ static int         g_newgame_live;     /* --newgame-live: live page-7 Start →
 static int         g_newgame;          /* --newgame [MAP_ID]: run the new-game
                                         * initialiser + render the first frame */
 static int         g_newgame_map_id;   /* MAP_ID for --newgame (default 0) */
+static int         g_playnow;          /* --playnow [IDX]: scenario config-apply
+                                        * → first frame (scenario analogue) */
+static int         g_playnow_idx;      /* scenario row for --playnow (default 0) */
 static const char *g_input_segtrace;   /* --input-segtrace FILE: replay a TAS
                                         * input trace through the live tick */
 /* --audio-init: call audio_init() after window creation.  Off by
@@ -292,6 +295,8 @@ static void bringup_strat_map(const char *dir);
 static void bringup_strat_load(const char *dir);
 static void bringup_strat_load_live(void);
 static void bringup_newgame(int map_id);
+static void bringup_playnow(int scenario_idx);
+static void newgame_dump_first_frame(const char *base);
 static void bringup_newgame_live(void);
 static void newgame_enter_live(int mode);
 static void bringup_input_segtrace(void);
@@ -428,6 +433,12 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
                  * preconditions, then render the resulting first strategic
                  * frame.  The new-game analogue of --strat-load. */
                 bringup_newgame(g_newgame_map_id);
+            } else if (g_playnow) {
+                /* Scenario / Play Now! path — run the scenario config-apply
+                 * (engine_game_init_apply_scenario_config) over the preset
+                 * table row, then engine_game_init + game-start, then render
+                 * the first frame.  The scenario analogue of --newgame. */
+                bringup_playnow(g_playnow_idx);
             } else if (g_input_segtrace) {
                 /* TAS input-trace replay — drive the engine into the live
                  * title state, then (in main_loop_body) replay the trace's
@@ -2052,17 +2063,36 @@ static int g_sim_game_active;   /* DAT_0052afa4 */
 /* Game-start seam binding — bound to engine_menu_input's page-7 "Start" action
  * (and reachable from any live-menu seat).  Reproduces retail's FUN_004335f0
  * arm-2 tail (config-apply FUN_00499dc3 + opening-stage load FUN_004329ec +
- * DAT_0052afa4 = 1) over the ported world build.  `mode` 0 = custom game; the
- * scenario / Play Now! path (mode 1, FUN_00499e5d) is deferred. */
+ * DAT_0052afa4 = 1) over the ported world build.  `mode` 0 = custom game
+ * (page-7 "Start", config from the option tabs via FUN_00499dc3); `mode` 1 =
+ * scenario / "Play Now!" (config from the scenario preset table via
+ * FUN_00499e5d, selected by the difficulty picker's s_slot_0053f640 campaign
+ * flag + s_slot_0053f258 index). */
 static void newgame_enter_live(int mode)
 {
-    (void)mode;   /* only custom (0) wired today */
+    const uint8_t *prefs = config_player_prefs(NULL);
+
+    if (mode == 1) {
+        /* Scenario / Play Now!: presets come from the scenario/campaign preset
+         * table (campaign flag + index latched by the difficulty picker).  This
+         * sets the AI count (s_slot_0053f268) directly from the table, so it
+         * runs BEFORE set_player_config, which then rewrites the same AI count
+         * as count - human (count sized to the table AI count + the human). */
+        engine_game_init_apply_scenario_config((int)s_slot_0053f640,
+                                               (int)s_slot_0053f258);
+        engine_game_init_set_player_config((int)s_slot_0053f268 + 1,
+                                           /*human*/1, /*cur_player*/1, prefs);
+        s_slot_0053f0d4 = 0xa;
+        s_slot_0055302c = 2;
+        if (!newgame_build_world_and_start((int)s_slot_0053f034))
+            return;
+        goto entered;
+    }
 
     /* The config-screen player setup (FUN_0049792e) is deferred, so seed the
      * player slots here: a single-player custom game is 1 human + N AI, where
      * the page-7 player-count tab gives the total (selector + 2). */
     int total = engine_title_render_tab_value(2) + 2;
-    const uint8_t *prefs = config_player_prefs(NULL);
     engine_game_init_set_player_config(total, /*human*/1, /*cur_player*/1, prefs);
 
     /* Config-apply (FUN_00499dc3): the five realm presets + the standings/mode/
@@ -2080,6 +2110,7 @@ static void newgame_enter_live(int mode)
     if (!newgame_build_world_and_start((int)s_slot_0053f034))
         return;
 
+entered:
     /* Restore the strategic-map palette (base01.256).  Arriving from the live
      * config screen, the page-background load swapped in the menu palette
      * (gateway.256), so the terrain indices would present as magenta — the
@@ -2095,6 +2126,56 @@ static void newgame_enter_live(int mode)
              (int)s_slot_0053f034, (int)s_slot_0056d5dc, engine_current_screen(),
              g_engine_state, engine_pl8_data_ready(),
              (int)s_slot_00553edc, (int)s_slot_0057c934);
+}
+
+/* Render the first strategic frame via the screen-0 dispatch arm
+ * (engine_screen_strat_render = FUN_0040f5fd) — the SAME composition the live
+ * loop runs — and dump it for byte-validation as <base>.raw / <base>.bmp
+ * (written to the install dir; the GUI exe can't write WSL UNC paths).  Shared
+ * by the --newgame and --playnow seats.  Owns the canvas lock + present. */
+static void newgame_dump_first_frame(const char *base)
+{
+    if (!gfx_lock_canvas()) {
+        log_line("%s: gfx_lock_canvas failed", base);
+        return;
+    }
+    int cw = gfx_paint_canvas_width();
+    int ch = gfx_paint_canvas_height();
+    uint8_t *canvas = gfx_paint_canvas_pixels();
+
+    engine_screen_strat_render(1);
+
+    log_line("%s: rendered body — drawA=%d drawB=%d sky=%d army=%d "
+             "feat=%d (oob=%d err=%d)", base,
+             engine_map_terrain_drawa_count(),
+             engine_map_terrain_drawb_count(),
+             engine_map_terrain_empty_draw_count(),
+             engine_overlay_render_army_call_count(),
+             engine_map_render_call_count(),
+             engine_map_terrain_oob_copies(),
+             engine_map_terrain_error_count());
+
+    gfx_unlock_canvas();
+    gfx_tick_present(1);
+
+    if (canvas) {
+        char fn[64];
+        snprintf(fn, sizeof fn, "%s.raw", base);
+        HANDLE h = CreateFileA(fn, GENERIC_WRITE, 0, NULL,
+                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (h != INVALID_HANDLE_VALUE) {
+            DWORD wn = 0;
+            WriteFile(h, canvas, (DWORD)(cw * ch), &wn, NULL);
+            CloseHandle(h);
+            log_line("%s: raw canvas → %s (%d bytes)", base, fn, cw * ch);
+        }
+    }
+    {
+        char fn[64];
+        snprintf(fn, sizeof fn, "%s.bmp", base);
+        gfx_capture_backbuffer(fn);
+        log_line("%s: backbuffer → %s", base, fn);
+    }
 }
 
 /* New-game world-state producer + first-frame render (--newgame [MAP_ID]).
@@ -2181,49 +2262,63 @@ static void bringup_newgame(int map_id)
     else
         log_line("newgame: wrote port_newgame.sav (castle tail from Castles.dat)");
 
-    /* 3. Render the first strategic frame via the screen-0 dispatch arm
-     * (engine_screen_strat_render = FUN_0040f5fd) — the SAME composition the
-     * live loop runs.  The caller owns the canvas lock + present, like the
-     * load seat. */
-    if (!gfx_lock_canvas()) {
-        log_line("newgame: gfx_lock_canvas failed");
+    /* 3. Render the first strategic frame + dump it for byte-validation. */
+    newgame_dump_first_frame("port_newgame");
+}
+
+/* Scenario / "Play Now!" world-state producer + first-frame render
+ * (--playnow [IDX]).  The scenario analogue of bringup_newgame: where that seat
+ * hard-codes the realm presets, this sources them from the ported scenario
+ * config-apply (engine_game_init_apply_scenario_config = FUN_00499e5d) — the
+ * SAME function the live Play Now! button now runs — driven off the scenario
+ * preset table row IDX (campaign flag 0 = the skirmish/deathmatch table; rows
+ * 0..7).  Row 4 = map 0 (the England default); other rows pick a different map
+ * + difficulty.  The map id, presets and AI count all come from the table.
+ *
+ * Run (space-free capture path — the exe arg tokenizer splits on spaces):
+ *   /tmp/ol2.exe --playnow 4 --frames 5 --no-cd --allow-multi
+ * Writes port_playnow.{sav,raw,bmp} for retail-load + byte-validation. */
+static void bringup_playnow(int scenario_idx)
+{
+    /* 1. Scenario config-apply: presets from the table, not hard-coded.  Latch
+     * the selector globals the difficulty picker would set (campaign flag 0,
+     * index = IDX), then apply — which writes the map id + presets + AI count
+     * (s_slot_0053f268) into the live config. */
+    s_slot_0053f640 = 0;                            /* skirmish/deathmatch table */
+    s_slot_0053f258 = (uint32_t)scenario_idx;
+    engine_game_init_apply_scenario_config(0, scenario_idx);
+
+    /* 2. Players: 1 human + the table's AI count (just latched into
+     * s_slot_0053f268).  set_player_config rewrites the AI count to the same
+     * value (count - human) + seeds the human slot/name + config substate
+     * scalars — same as the --newgame seat. */
+    {
+        const uint8_t *prefs = config_player_prefs(NULL);
+        engine_game_init_set_player_config((int)s_slot_0053f268 + 1,
+                                           /*human_count*/1, /*cur_player*/1,
+                                           prefs);
+    }
+    s_slot_0053f0d4 = 0xa;
+    s_slot_0055302c = 2;
+
+    /* 3. Build the world + game-start (shared tail).  The map id is the table
+     * row's, latched into s_slot_0053f034 by the scenario apply. */
+    int map_id = (int)s_slot_0053f034;
+    if (!newgame_build_world_and_start(map_id))
         return;
-    }
-    int cw = gfx_paint_canvas_width();
-    int ch = gfx_paint_canvas_height();
-    uint8_t *canvas = gfx_paint_canvas_pixels();
 
-    engine_screen_strat_render(1);
+    log_line("playnow: init done (scenario=%d map=%d realms=%d ai=%d screen=%d "
+             "state=%d data_ready=%d year=%d season=%d)",
+             scenario_idx, map_id, (int)s_slot_0056d5dc, (int)s_slot_0053f268,
+             engine_current_screen(), g_engine_state, engine_pl8_data_ready(),
+             (int)s_slot_00553edc, (int)s_slot_0057c934);
 
-    log_line("newgame: rendered body — drawA=%d drawB=%d sky=%d army=%d "
-             "feat=%d (oob=%d err=%d)",
-             engine_map_terrain_drawa_count(),
-             engine_map_terrain_drawb_count(),
-             engine_map_terrain_empty_draw_count(),
-             engine_overlay_render_army_call_count(),
-             engine_map_render_call_count(),
-             engine_map_terrain_oob_copies(),
-             engine_map_terrain_error_count());
+    if (save_write("port_playnow.sav", "Castles.dat") != 0)
+        log_line("playnow: save_write failed");
+    else
+        log_line("playnow: wrote port_playnow.sav (castle tail from Castles.dat)");
 
-    gfx_unlock_canvas();
-    gfx_tick_present(1);
-
-    /* Dump the first frame for byte-validation vs the retail capture
-     * (Phase C).  Written to the install dir — the GUI exe can't write WSL
-     * UNC paths. */
-    if (canvas) {
-        HANDLE h = CreateFileA("port_newgame.raw", GENERIC_WRITE, 0, NULL,
-                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-        if (h != INVALID_HANDLE_VALUE) {
-            DWORD wn = 0;
-            WriteFile(h, canvas, (DWORD)(cw * ch), &wn, NULL);
-            CloseHandle(h);
-            log_line("newgame: raw canvas → port_newgame.raw (%d bytes)",
-                     cw * ch);
-        }
-    }
-    gfx_capture_backbuffer("port_newgame.bmp");
-    log_line("newgame: backbuffer → port_newgame.bmp");
+    newgame_dump_first_frame("port_playnow");
 }
 
 /* Page-background reload hook (engine → gfx).  The engine_tick title
@@ -2703,6 +2798,20 @@ static void parse_cmdline(LPSTR lpCmd)
                 for (const char *p = m; *p; p++)
                     if (*p < '0' || *p > '9') { allnum = 0; break; }
                 if (allnum) g_newgame_map_id = atoi(tokens[++i]);
+            }
+            g_gfx_init = 1;                  /* needs DDraw */
+        }
+        else if (!strcmp(a, "--playnow")) {
+            g_playnow = 1;                   /* scenario apply → first frame */
+            g_playnow_idx = 0;               /* default scenario row 0 (map 17) */
+            /* Optional IDX: consume the next token only if it is a non-negative
+             * integer (so "--playnow" alone still works). */
+            if (i + 1 < ntok) {
+                const char *m = tokens[i + 1];
+                int allnum = m[0] != '\0';
+                for (const char *p = m; *p; p++)
+                    if (*p < '0' || *p > '9') { allnum = 0; break; }
+                if (allnum) g_playnow_idx = atoi(tokens[++i]);
             }
             g_gfx_init = 1;                  /* needs DDraw */
         }

@@ -6240,3 +6240,40 @@ Same family as #175 (a split shared-grid global): when retail has ONE global and
 the port shards it per-consumer, every writer must fan out to all shards, or the
 one consumer reading a stale shard silently diverges.  Grep: a `*_set_scroll` /
 `*_bind_*` that writes one shard but not the sibling is the smell.
+
+## 177 — scenario / "Play Now!" config-apply (`FUN_00499e5d`): same config globals as the custom apply, but from a table; the five realm presets are NOT saved (only the config scalars are)
+
+The scenario/"Play Now!" start (`FUN_00499e5d`, ported as
+`engine_game_init_apply_scenario_config`) is the sibling of the page-7 custom
+apply (`FUN_00499dc3`).  Two non-obvious facts:
+
+**(1) It writes the SAME config globals as the custom apply, just sourced from a
+table.**  Where `499dc3` reads the 12 page-7 option tabs, `499e5d` copies a row
+of a fixed 0x20-stride preset table — `0x4d8e18` (skirmish/deathmatch) or
+`0x4d8f58` (campaign), selected by the difficulty picker's campaign flag
+`DAT_0053f640` + index `DAT_0053f258` (range 0..7) — into the identical globals
+(map id `0x53f034`, density `0x53f23c`, gold `0x53f278`, keep `0x53f280`, economy
+`0x53f27c`, resource `0x53f270`, troop `0x53f274`, AI count `0x53f268`).  It then
+forces standings off / render-mode 0 / morale-gate off / zero turn budget.  The
+two tables carry DIFFERENT map ranges (skirmish: maps 17/12/2/5/0/3/7/4 — incl.
+map 0, the England default at row 4; campaign: 52/53/45/44/41/42).  `499e5d`
+ALSO runs the map-setup tail inline (`0x46a037` minimap grids / `0x467770`
+plane-unpack / `0x4298c1` build-cells) that `499dc3` leaves to the surrounding
+flow — the port reproduces that tail once in `newgame_build_world_and_start`
+(shared by both apply paths), so it is NOT duplicated in the scenario apply.
+
+**(2) The five realm presets are transient, NOT saved — only the config scalars
+round-trip.**  `gold/keep/economy/resource/troop` (`0x53f278/280/27c/270/274`)
+are recomputed each new game and have no save-schema entry; only the config
+SCALARS do (map `123`, scen-idx `198`, camp-flag `212`, AI `173`, density `13`,
+the mode flags `170/171/172`, budget `169`).  So a retail LOAD of a port-written
+scenario save shows the saved scalars byte-exact (verified: `playnow-loadverify1`
+— retail loads `port_playnow.sav`, dumps scen_idx=4 / density=2 / ai=4 / map=0 /
+standings=render=budget=0, all matching the port) but the preset globals read
+back as retail's transient MENU values (gold 2500 / keep 1), NOT the scenario
+row's (gold 5000 / keep 4).  That is correct: the presets' EFFECT is already
+baked into the saved per-army/per-realm records (player gold 5000, keep-4 stamps
+— visible in the `port_newgame.sav` vs `port_playnow.sav` save diff), so the
+loaded world is faithful even though the input globals aren't persisted.  Retail
+loads the scenario world STABLE (single `NEW_GAME` + `MAP_FREEROAM` anchor, no
+turn-spam), confirming it is a valid retail game state.

@@ -1444,6 +1444,63 @@ int test_game_init_apply_custom_config_defaults(void)
     return 0;
 }
 
+/* engine_game_init_apply_scenario_config (port of FUN_00499e5d) copies a fixed
+ * row of the baked scenario/campaign preset table into the config globals.  The
+ * table bytes are the ground truth (baked from Lords2.exe @ 0x4d8e18 / 0x4d8f58),
+ * so the test pins the exact globals each indexed row must produce — and the
+ * forced standings-off / zero-budget invariants every scenario start sets. */
+int test_game_init_apply_scenario_config_rows(void)
+{
+    int p[5];
+
+    /* Scenario table (campaign flag 0), row 4 = the map-0 England default:
+     * gold 5000 / keep 4 / economy 2 / resource 1 / troop 0, AI count 4,
+     * density 2.  (Same row the --newgame seat's hard-coded presets descend
+     * from.) */
+    engine_game_init_apply_scenario_config(0, 4);
+    T_ASSERT_EQ_U(s_slot_0053f034, 0u);     /* map id */
+    T_ASSERT_EQ_U(s_slot_0053f23c, 2u);     /* density */
+    T_ASSERT_EQ_U(s_slot_0053f268, 4u);     /* AI count (from table, not humans) */
+    engine_game_init_preset_snapshot(p);
+    T_ASSERT_EQ_I(p[0], 2);     /* economy  */
+    T_ASSERT_EQ_I(p[1], 1);     /* resource */
+    T_ASSERT_EQ_I(p[2], 0);     /* troop    */
+    T_ASSERT_EQ_I(p[3], 5000);  /* gold     */
+    T_ASSERT_EQ_I(p[4], 4);     /* keep     */
+    /* Forced invariants for every scenario start. */
+    T_ASSERT_EQ_U(s_slot_0053f25c, 0u);     /* standings off */
+    T_ASSERT_EQ_U(s_slot_0053f264, 0u);     /* render-mode 0 */
+    T_ASSERT_EQ_U(s_slot_0053f260, 0u);     /* morale-pass gate off */
+    T_ASSERT_EQ_U(s_slot_0053f26c, 0u);     /* zero turn budget */
+
+    /* Scenario row 0 = map 17, gold 5000 / keep 1 / economy 1 / resource 1 /
+     * troop 0, AI count 1, density 0. */
+    engine_game_init_apply_scenario_config(0, 0);
+    T_ASSERT_EQ_U(s_slot_0053f034, 17u);
+    T_ASSERT_EQ_U(s_slot_0053f23c, 0u);
+    T_ASSERT_EQ_U(s_slot_0053f268, 1u);
+    engine_game_init_preset_snapshot(p);
+    T_ASSERT_EQ_I(p[0], 1);     /* economy  */
+    T_ASSERT_EQ_I(p[3], 5000);  /* gold     */
+    T_ASSERT_EQ_I(p[4], 1);     /* keep     */
+
+    /* Campaign table (flag 1), row 2 = map 52, gold 5000 / keep 2 / economy 1 /
+     * resource 1 / troop 0, AI count 1, density 2. */
+    engine_game_init_apply_scenario_config(1, 2);
+    T_ASSERT_EQ_U(s_slot_0053f034, 52u);
+    T_ASSERT_EQ_U(s_slot_0053f23c, 2u);
+    T_ASSERT_EQ_U(s_slot_0053f268, 1u);
+    engine_game_init_preset_snapshot(p);
+    T_ASSERT_EQ_I(p[0], 1);     /* economy  */
+    T_ASSERT_EQ_I(p[3], 5000);  /* gold     */
+    T_ASSERT_EQ_I(p[4], 2);     /* keep     */
+
+    /* Out-of-range index clamps to row 0 (no OOB read). */
+    engine_game_init_apply_scenario_config(0, 99);
+    T_ASSERT_EQ_U(s_slot_0053f034, 17u);    /* scenario row 0 map */
+    return 0;
+}
+
 int test_game_init_player_config_activates_realms(void)
 {
     char gdir[1024];

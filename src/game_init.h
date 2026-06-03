@@ -187,6 +187,20 @@ void engine_game_init_set_realm_presets(int economy_preset, int resource_preset,
  * engine_game_start. */
 void engine_game_init_apply_custom_config(void);
 
+/* Port of FUN_00499e5d — the scenario / "Play Now!" config-apply, the sibling
+ * of engine_game_init_apply_custom_config.  Sources the same config globals (map
+ * id, density scalar, five realm presets, AI count) from a fixed row of the
+ * baked scenario/campaign preset table instead of the page-7 option tabs:
+ * `campaign_flag` (retail s_slot_0053f640) picks the table, `scenario_idx`
+ * (retail s_slot_0053f258, 0..7) picks the row.  Also forces standings off,
+ * render-mode 0, the morale-pass gate off and a zero turn budget.  Unlike the
+ * custom apply it does not read the human count, so it may run before
+ * engine_game_init_set_player_config (which then rewrites the AI count to
+ * count - human_count; size count = table ai_count + human_count).  The tail
+ * map-setup that retail's FUN_00499e5d runs inline (minimap/plane-unpack/
+ * build-cells) is the port's shared world-build tail, not duplicated here. */
+void engine_game_init_apply_scenario_config(int campaign_flag, int scenario_idx);
+
 /* Test/inspect accessor: snapshot the five latched realm presets in order
  * { economy, resource, troop, gold_base, keep_level }. */
 void engine_game_init_preset_snapshot(int out[5]);

@@ -667,6 +667,96 @@ void engine_game_init_apply_custom_config(void)
     g_economy_preset  = engine_title_render_tab_value(9);
 }
 
+/* The two scenario / "Play Now!" preset tables FUN_00499e5d indexes (baked from
+ * Lords2.exe via r2 `pxw @ 0x4d8e18 / 0x4d8f58`).  Each is 10 entries of eight
+ * i32 fields at a 0x20-byte stride; the selector s_slot_0053f258 (set by the
+ * difficulty picker 0x4334f0, range 0..7) picks the row, the campaign flag
+ * s_slot_0053f640 picks the table (1 = campaign, 0 = skirmish/deathmatch).  The
+ * fields land in the SAME config globals the page-7 custom apply fills — so the
+ * difference between a scenario start and a custom start is just where the
+ * presets come from (a fixed table row vs. the option tabs), plus that scenario
+ * starts force standings off + a zero turn budget (below).  Entries 8/9 are
+ * unused padding (selector never reaches them); kept so the table is indexable
+ * 1:1 with retail.  Field order matches FUN_00499e5d's stores:
+ *   +0x00 map_id     +0x10 economy
+ *   +0x04 density    +0x14 resource     (s_slot_0053f23c — the density/
+ *   +0x08 gold       +0x18 troop          difficulty scalar)
+ *   +0x0c keep       +0x1c ai_count                                          */
+typedef struct {
+    int32_t map_id, density, gold, keep, economy, resource, troop, ai_count;
+} scenario_preset_t;
+
+static const scenario_preset_t k_scenario_presets[10] = {   /* retail 0x4d8e18 */
+    { 17, 0, 5000, 1, 1, 1, 0, 1 },
+    { 12, 0, 2500, 1, 1, 1, 0, 2 },
+    {  2, 1, 5000, 2, 1, 1, 0, 3 },
+    {  5, 1, 2500, 3, 0, 1, 0, 4 },
+    {  0, 2, 5000, 4, 2, 1, 0, 4 },   /* map 0 (England) = the default new game */
+    {  3, 2, 2500, 4, 1, 1, 0, 4 },
+    {  7, 2, 1000, 5, 0, 1, 0, 4 },
+    {  4, 2, 1000, 5, 0, 1, 0, 4 },
+    {  0, 0,    0, 0, 0, 0, 0, 4 },   /* padding */
+    {  0, 0,    0, 0, 0, 0, 0, 4 },   /* padding */
+};
+
+static const scenario_preset_t k_campaign_presets[10] = {   /* retail 0x4d8f58 */
+    {  0, 0,    0, 0, 0, 0, 0, 4 },   /* padding */
+    {  0, 0,    0, 0, 0, 0, 0, 4 },   /* padding */
+    { 52, 2, 5000, 2, 1, 1, 0, 1 },
+    { 53, 2, 2500, 3, 0, 1, 0, 1 },
+    { 45, 2, 2500, 4, 2, 1, 0, 2 },
+    { 44, 2, 2500, 4, 1, 1, 0, 3 },
+    { 41, 2, 1000, 5, 0, 1, 0, 4 },
+    { 42, 2, 1000, 5, 0, 1, 0, 4 },
+    {  0, 0,    0, 0, 0, 0, 0, 4 },   /* padding */
+    {  0, 0,    0, 0, 0, 0, 0, 4 },   /* padding */
+};
+
+/* Port of FUN_00499e5d (421 B) — the scenario / "Play Now!" config-apply, the
+ * sibling of engine_game_init_apply_custom_config.  Where the custom apply reads
+ * the page-7 option tabs, this reads a fixed row of the scenario/campaign preset
+ * table (selected by `campaign_flag` + `scenario_idx`, retail s_slot_0053f640 /
+ * s_slot_0053f258), writing the SAME config globals: the map id, the density
+ * scalar, the five realm presets (gold/keep/economy/resource/troop) and the AI
+ * count.  Scenario starts force standings off (s_slot_0053f25c), render-mode 0
+ * (s_slot_0053f264), the morale-pass gate off (s_slot_0053f260) and a zero turn
+ * budget (s_slot_0053f26c).
+ *
+ * Two retail stores are intentionally dropped, matching the custom apply:
+ *   - DAT_0053f284 (= 1): engine_combat's quick-anim suppressor — a battle-time
+ *     flag, not read on the new-game / first-frame path; engine_combat owns it.
+ *   - the tail map-setup calls FUN_0046a037 (minimap grids) / FUN_00467770
+ *     (strat-map record / plane-unpack) / FUN_004298c1 (build cells): the port's
+ *     newgame_build_world_and_start runs all three (plus camera + game-start) as
+ *     the shared world-build tail, so reproducing them here would double them.
+ *
+ * Sets s_slot_0053f268 (AI count) directly from the table, so — unlike the
+ * custom apply — it does NOT depend on the human count and may run before
+ * engine_game_init_set_player_config (which then rewrites the same value to
+ * count - human_count; the caller sizes count = ai_count + human_count). */
+void engine_game_init_apply_scenario_config(int campaign_flag, int scenario_idx)
+{
+    const scenario_preset_t *tbl = campaign_flag ? k_campaign_presets
+                                                 : k_scenario_presets;
+    const scenario_preset_t *e =
+        (scenario_idx >= 0 && scenario_idx < 10) ? &tbl[scenario_idx] : &tbl[0];
+
+    s_slot_0053f26c = 0;                       /* turn budget (none in table) */
+
+    s_slot_0053f034  = (uint32_t)e->map_id;
+    s_slot_0053f23c  = (uint32_t)e->density;
+    g_gold_base      = e->gold;
+    g_keep_level     = e->keep;
+    g_economy_preset = e->economy;
+    g_resource_preset = e->resource;
+    g_troop_preset   = e->troop;
+    s_slot_0053f268  = (uint32_t)e->ai_count;
+
+    s_slot_0053f25c = 0;                       /* standings off          */
+    s_slot_0053f264 = 0;                       /* render-mode 0          */
+    s_slot_0053f260 = 0;                       /* morale-pass gate off   */
+}
+
 /* engine_game_init_set_player_config — seat the config-screen's player setup,
  * the OTHER half of the new-game preconditions (the realm presets above being
  * the first half).  The custom-game / scenario config screen (FUN_00499dc3 +

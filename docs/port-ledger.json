@@ -4112,6 +4112,7 @@
    "src": [
     "src/engine_map_init.c",
     "src/engine_map_init.h",
+    "src/game_init.c",
     "src/main.c"
    ]
   },
@@ -11619,6 +11620,7 @@
     "src/engine_territory.c",
     "src/engine_territory.h",
     "src/engine_title_render.c",
+    "src/game_init.c",
     "src/game_init.h",
     "src/main.c"
    ]
@@ -11985,6 +11987,7 @@
    "src": [
     "src/engine_minimap.c",
     "src/engine_minimap.h",
+    "src/game_init.c",
     "src/main.c"
    ]
   },
@@ -15572,6 +15575,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_menu_input.c",
+    "src/game_init.c",
     "src/game_init.h",
     "src/main.c"
    ]

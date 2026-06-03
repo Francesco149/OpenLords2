@@ -279,9 +279,16 @@ static void menu_action_p4_button(int param)
 
     if (param == 2 && g_sim_mp_active == 0) {
         if (g_loadlist_dir_flag == 1) {
-            /* Play Now! quick-start — game-start subsystem (deferred). */
+            /* Play Now! quick-start — scenario config-apply (FUN_00499e5d) +
+             * opening-stage load (FUN_004329ec), routed through the game-start
+             * seam (mode 1).  The live engine binds it to newgame_enter_live,
+             * which sources the presets from the scenario preset table by the
+             * difficulty picker's campaign flag / index, builds the world, runs
+             * engine_game_start and sets DAT_0052afa4.  The difficulty-picker UI
+             * that varies the index (retail 0x4334f0) is not wired yet, so the
+             * live button uses the default selection (s_slot_0053f258 = 0). */
             g_redraw_fn(2);
-            /* TODO(game-start): 0x499e5d + 0x4329ec; DAT_0052afa4 = 1. */
+            g_game_start_fn(/*mode*/1);             /* 1 = scenario / Play Now! */
             return;
         }
         if (s_slot_0055302c == 3) {

@@ -1764,6 +1764,7 @@ struct test_case {
     X(game_init_turn_driver_advances_to_turn_1) \
     X(game_init_player_config_activates_realms) \
     X(game_init_apply_custom_config_defaults) \
+    X(game_init_apply_scenario_config_rows) \
     \
     X(engine_realm_rating_rollforward) \
     X(engine_realm_rating_zero_pop_reset) \

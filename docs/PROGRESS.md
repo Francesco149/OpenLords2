@@ -7,6 +7,62 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-03 — SCENARIO START: port FUN_00499e5d ("Play Now!") + wire the Play Now! button + `--playnow` seat (RETAIL-DIFFED)
+
+The "Play Now!" / scenario quick-start config-apply (`FUN_00499e5d`) is now
+ported and wired — the scenario sibling of the page-7 custom apply
+(`FUN_00499dc3`) landed the day before.
+
+- **`engine_game_init_apply_scenario_config(campaign_flag, scenario_idx)`
+  (port of FUN_00499e5d)** — sources the SAME config globals as the custom apply
+  (map id / density / five realm presets / AI count) from a fixed row of a baked
+  0x20-stride preset table instead of the page-7 tabs: `campaign_flag`
+  (s_slot_0053f640) picks the table — `k_scenario_presets` (retail 0x4d8e18,
+  skirmish/deathmatch) or `k_campaign_presets` (retail 0x4d8f58) — and
+  `scenario_idx` (s_slot_0053f258, 0..7) picks the row.  Forces standings off /
+  render-mode 0 / morale-gate off / zero budget.  Both tables baked dword-exact
+  from Lords2.exe via r2 (`pxw @ 0x4d8e18 / 0x4d8f58`); the field→global mapping
+  is read straight from the decompiled stores.  The map-setup tail retail runs
+  inline (minimap/plane-unpack/build-cells) is the port's shared
+  `newgame_build_world_and_start`, not duplicated here.  See engine-quirks #177.
+
+- **Live wiring** — `newgame_enter_live` grows a `mode 1` branch (scenario): it
+  applies the scenario config first (which sets the AI count directly from the
+  table), then `set_player_config(ai_count + 1, human 1, …)`, then the shared
+  world build + game-start.  The main-menu "Play Now!" seam (engine_menu_input
+  `param==2 && g_loadlist_dir_flag==1`, previously a `TODO(game-start)`) now
+  routes through `g_game_start_fn(1)`.  The difficulty-picker UI (retail
+  0x4334f0) that varies the index isn't wired yet, so the live button uses the
+  default selection (index 0).
+
+- **`--playnow [IDX]` headless seat** — the scenario analogue of `--newgame`:
+  sources the presets from the table row IDX via the ported apply, builds the
+  world, renders the first frame, dumps `port_playnow.{sav,raw,bmp}`.  Different
+  rows pick different maps + AI counts (idx 0 → map 17 / 4 realms, idx 2 → map 2
+  / 10 realms, idx 4 → map 0 / 14 realms, idx 6 → map 7 / 15 realms), all
+  rendering coherently (0 oob/err).  Refactored the render+dump tail out of
+  `bringup_newgame` into the shared `newgame_dump_first_frame(base)`.
+
+- **VALIDATION.**  Host test `game_init_apply_scenario_config_rows` pins the
+  exact config globals each indexed scenario/campaign row produces + the forced
+  invariants + OOB clamp (1874 host tests).  **Retail diff** (`playnow-loadverify1`):
+  retail LOADS the port's `port_playnow.sav` (scenario 4 = map 0) → the saved
+  config scalars round-trip byte-exact (scen_idx=4, density=2, ai=4, map=0,
+  standings/render/budget=0) and the world loads STABLE (single NEW_GAME +
+  MAP_FREEROAM anchor @ frame 563, no turn-spam).  The unsaved preset globals
+  read back as retail's transient menu values (gold 2500 / keep 1, NOT the row's
+  5000 / 4) — confirming they're correctly not persisted (their effect is baked
+  into the saved per-army/realm records, visible in the port_newgame↔port_playnow
+  save diff).  USER-CONFIRMED the scenario frames look good via feed.
+
+- **NEXT.**  The difficulty-picker UI (page-5 campaign chooser 0x4334f0 +
+  per-button index mapping) so the live Play Now! varies the scenario; the
+  gold-standard config-apply diff (drive retail's own Play Now!→campaign + dump
+  pre-save config globals) builds on that.  Deeper frontiers unchanged: AI
+  economy / autotile / RNG save-parity.
+
+---
+
 ## 2026-06-03 — NEW-GAME: live page-7 "Start" → strategic map through the genuine menu (USER-CONFIRMED)
 
 A new game is now reachable through the **real menu UI**: clicking "Start" on the
