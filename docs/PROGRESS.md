@@ -7,6 +7,54 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-03 — TURN DRIVER: phase sequencer + army-state phase sweeps + siege teardown (5 fns, host-tested)
+
+Worked down the **strategic turn driver** chain — the SP per-tick
+screen-substate-0 dispatcher `0x49a010` (still unported) drives a 7-phase
+cycle, and this session ports the small pure-logic callees it fires each
+phase.  Three commits, five functions, 1988 host tests green (ASAN/UBSAN
+clean), cross-build clean:
+
+- **`FUN_0049ce51` → `engine_turn_advance_phase`** + **`FUN_0049b6d3` →
+  `engine_turn_reset_roster`** (engine_turn.c).  The phase sequencer steps
+  the turn phase 1..7 (wrapping 7→1), maintains the prev/next-phase
+  scalars + the per-phase pass counter + the redraw cookie; on the cycle
+  wrap it re-arms the per-realm roster (active realms → mid-turn 0 +
+  counted into s_slot_00554004, inactive → 999 "done" sentinel).  This is
+  the **producer** of the exact field `engine_turn_end_check`
+  (`FUN_0049b762`) already consumes — opposite ends of the turn cycle.
+  All six fields are existing save-schema scalars (no scalar wall).
+
+- **`FUN_004a4f5b` → `engine_army_state_arm_movement(state)`** +
+  **`FUN_004a4e3d` → `engine_army_state_arm_movement_owned(state, owner)`**
+  (engine_army_state.c).  Per-phase occupant sweeps over the same 150
+  records the army-state machine drives: force sub-state 2 (→ movement
+  executor) on records matching the phase's state (and, for the owner-
+  gated variant, owner +0x00 + local-control +0x01); return 1 if any
+  armed so the driver advances the phase only when the sweep is dry.  The
+  driver runs `(3)`/`(4)` in phases 6/3 and `(2,6)` in phase 5.
+
+- **`FUN_0043b917` → `engine_combat_break_siege_link(occ)`**
+  (engine_combat.c).  The inverse of siege setup (a shared teardown helper
+  with 5+ siege callers): clear the besieger's +0x199 region link and,
+  via the region's per-army pending slot (+0x1bc → defender occupant), the
+  defender's +0x19a besieged mark.  Fired by the owner-gated sweep's
+  state-1 hook.
+
+All offsets/strides r2-verified byte-exact.  Pure scalar/record
+bookkeeping with no baked tables, so host tests + the r2 transcription
+checks are the gate (no retail-diff target, unlike the table-baking
+combat chips).  Also **demoted two ledger phantoms** — `0x49a010`
+(982 B) + `0x40490d` (313 B), the substate-0 driver pair falsely promoted
+to "tested" by engine.c sub-step-body TODO comments citing them by `FUN_`
+token (the recurring ledger gotcha) — to bare hex.
+
+**Next on this thread:** the remaining phase callees deepen quickly —
+phase 2's `FUN_004a84ba` needs `FUN_004a8507` + the 753 B `FUN_004a8aab`;
+then the phase-7 turn-advance arm (which calls the already-ported
+`engine_turn_run_passes`) and finally the dispatcher `0x49a010` itself,
+which wires the whole turn loop into `engine_tick`'s substate-0 branch.
+
 ## 2026-06-03 — SCENARIO START: port FUN_00499e5d ("Play Now!") + wire the Play Now! button + `--playnow` seat (RETAIL-DIFFED)
 
 The "Play Now!" / scenario quick-start config-apply (`FUN_00499e5d`) is now
