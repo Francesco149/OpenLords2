@@ -42,6 +42,8 @@
 #include "engine_math.h"           /* engine_math_percent_div / _percent_of        */
 #include "engine_territory.h"      /* set_cell_type / mark_draw_box / full_dirty   */
 #include "engine_path.h"           /* engine_path_direction_8way (FUN_0046f434)    */
+#include "engine_path_field.h"      /* cost-field pathfinder (FUN_0046f700 group)   */
+#include "engine_map_query.h"       /* nearest_feature_ring_at (FUN_0046733c)       */
 #include "engine.h"                /* engine_current_screen (DAT_004eac50)         */
 #include "engine_turn.h"           /* g_sim_turn_progress (DAT_00553fc8)           */
 #include "save_schema_globals.h"   /* s_slot_0057c8cc (local player)               */
@@ -715,4 +717,45 @@ void engine_army_move_region_event_lo(int self, int cell_off,
 
     army_move_alert(3);                          /* FUN_00426216(3) */
     r[M_PROGRESS] += 7;
+}
+
+/* --- FUN_00467196 @ 0x467196: arrival / waypoint re-path (422 B) -----------
+ * The path-end handler the executor invokes (army_move_arrive seam) when a stack
+ * runs out of waypoints or spends its step budget.  It probes for the nearest
+ * map feature from the stack's current cell (engine_map_query_nearest_feature_
+ * ring_at = FUN_0046733c, which also surfaces the matched cell — the position
+ * retail leaves in its DAT_00569570/78 scratch).  If a feature is in range it
+ * becomes the stack's new destination and the stack re-paths to it via the
+ * cost-field pathfinder: flood from the current cell (engine_path_field_fill),
+ * trace the descent from the new destination (engine_path_field_trace), and on a
+ * successful trace blit the route into the stack's waypoint list
+ * (engine_path_field_copy_record).  The path-progress accumulator (+0x153) is
+ * debited by the feature's ring distance (clamped at 0), the sub-state is set to
+ * 2 (re-march) and the region-event suppressor (+0x14e) cleared.  No feature in
+ * range → a no-op. */
+void engine_army_move_arrival(int self)
+{
+    uint8_t *r = MREC(self);
+
+    int dest_col = 0, dest_row = 0;
+    int dist = engine_map_query_nearest_feature_ring_at(
+                   (int8_t)r[M_COL], (int8_t)r[M_ROW], &dest_col, &dest_row);
+    if (dist == 0)
+        return;
+
+    if ((int8_t)r[M_PROGRESS] < dist)
+        r[M_PROGRESS] = 0;
+    else
+        r[M_PROGRESS] -= (uint8_t)dist;
+
+    r[M_SUBSTATE] = 2;
+    r[M_DEST_COL] = (uint8_t)dest_col;
+    r[M_DEST_ROW] = (uint8_t)dest_row;
+    r[M_F14E]     = 0;
+
+    /* Path slot 0 (transient): flood from the current cell, trace from the new
+     * destination, copy on success. */
+    engine_path_field_fill(0, (int8_t)r[M_COL], (int8_t)r[M_ROW], 0);
+    if (engine_path_field_trace(0, (int8_t)r[M_DEST_COL], (int8_t)r[M_DEST_ROW]) != 0)
+        engine_path_field_copy_record(0, self);
 }

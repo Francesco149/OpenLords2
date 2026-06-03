@@ -22,6 +22,8 @@
 #include "engine_territory.h"      /* engine_territory_bind_cells (decay sink)*/
 #include "engine.h"                /* engine_set_current_screen (battle 0x12)  */
 #include "engine_turn.h"           /* g_sim_turn_progress (forced arrival)     */
+#include "engine_map_query.h"       /* feature probe (arrival)                  */
+#include "engine_path_field.h"      /* cost-field pathfinder (arrival)          */
 #include "save.h"
 #include "save_schema_globals.h"   /* s_slot_0057c8cc (local player) */
 
@@ -1021,5 +1023,105 @@ int test_engine_army_move_region_lo_idle_noop(void)
     T_ASSERT_EQ_U(g_overworld_map[off + 0], 1);
     T_ASSERT_EQ_U(r[M_PROGRESS], 0);
     T_ASSERT_EQ_I(g_last_alert, -1);
+    return 0;
+}
+
+/* ==========================================================================
+ * FUN_00467196 — arrival / waypoint re-path (engine_army_move_arrival)
+ * ========================================================================== */
+
+/* Cost grid for the pathfinder leg (int16/cell; padded past CELLS by 0x82). */
+static int16_t ar_terrain[0x1000 + 0x83];
+/* Cell-descriptor grid for the feature probe (stride 8). */
+static uint8_t ar_cells[0x40 * 0x40 * 8];
+
+#define AR_CELL(col, row)  ((row) * 0x40 + (col))
+
+/* The feature probe (engine_map_query_nearest_feature_ring) matches the nearest
+ * "qualifying" cell: a bit0 cell (one ring closer) OR an empty/only-bit1 cell.
+ * So an OPEN map always resolves to distance 1; a *bit0* feature one ring out is
+ * what a meaningful re-path targets.  To suppress the open-map match (force a
+ * genuine no-op or a longer ring) we paint cells with flag 0x04 — bit0 clear and
+ * a non-bit1 bit set, so they match neither predicate. */
+static void ar_block(int c0, int r0, int c1, int r1)
+{
+    for (int r = r0; r <= r1; r++)
+        for (int c = c0; c <= c1; c++)
+            ar_cells[AR_CELL(c, r) * 8 + 1] = 0x04;
+}
+
+/* Army idx 1 at (10,10); a bit0 feature at (12,10); an east cost corridor from
+ * (10,10) to (12,10) so the re-path trace succeeds. */
+static uint8_t *ar_setup(void)
+{
+    memset(g_per_territory_420, 0, 151 * 0x1a4);
+    memset(ar_terrain, 0, sizeof ar_terrain);
+    memset(ar_cells, 0, sizeof ar_cells);
+
+    engine_path_field_bind_terrain(ar_terrain);
+    engine_map_query_bind_cell_descriptors(ar_cells);
+    s_slot_0057c8cc = 1;                       /* slot 0 → transient field */
+
+    uint8_t *r = MREC(1);
+    r[0x0a] = 10; r[0x0b] = 10;                /* current col,row */
+    r[0x153] = 100;                            /* path progress   */
+
+    /* Block the open-map match so the bit0 feature at (12,10) is THE target. */
+    ar_block(4, 4, 16, 16);
+    ar_cells[AR_CELL(12, 10) * 8 + 1] = 0x01;  /* feature at (12,10): bit0 set */
+
+    ar_terrain[AR_CELL(10, 10) + 0x42] = 1;    /* (10,10)→E cost 1 */
+    ar_terrain[AR_CELL(11, 10) + 0x42] = 1;    /* (11,10)→E cost 1 */
+    return r;
+}
+
+/* --- feature in range: new dest + re-path + progress debit ----------------- */
+int test_engine_army_move_arrival_repath(void)
+{
+    uint8_t *r = ar_setup();
+
+    int ec = 0, er = 0;
+    int dist = engine_map_query_nearest_feature_ring_at(10, 10, &ec, &er);
+    T_ASSERT(dist != 0);
+
+    engine_army_move_arrival(1);
+
+    T_ASSERT_EQ_U(r[0x14c], 2);                /* sub-state = re-march      */
+    T_ASSERT_EQ_U(r[0x14], (uint8_t)ec);       /* new dest col = matched    */
+    T_ASSERT_EQ_U(r[0x15], (uint8_t)er);       /* new dest row = matched    */
+    T_ASSERT_EQ_U(r[0x14e], 0);                /* suppressor cleared        */
+    T_ASSERT_EQ_U(r[0x153], (uint8_t)(100 - dist));  /* progress debited    */
+    T_ASSERT(r[0x1c] != 0);                    /* a route was copied in     */
+    return 0;
+}
+
+/* --- progress clamps to 0 when the ring distance exceeds it ---------------- */
+int test_engine_army_move_arrival_progress_clamp(void)
+{
+    uint8_t *r = ar_setup();
+    ar_cells[AR_CELL(12, 10) * 8 + 1] = 0x04;  /* drop the near feature (re-block) */
+    ar_cells[AR_CELL(13, 10) * 8 + 1] = 0x01;  /* bit0 feature at (13,10): ring dist 2 */
+    r[0x153] = 1;                              /* progress < ring distance → clamp */
+
+    int ec = 0, er = 0;
+    int dist = engine_map_query_nearest_feature_ring_at(10, 10, &ec, &er);
+    T_ASSERT(dist > 1);                        /* the clamp branch is exercised */
+
+    engine_army_move_arrival(1);
+    T_ASSERT_EQ_U(r[0x153], 0);
+    return 0;
+}
+
+/* --- no feature in range: a complete no-op --------------------------------- */
+int test_engine_army_move_arrival_no_feature(void)
+{
+    uint8_t *r = ar_setup();
+    ar_cells[AR_CELL(12, 10) * 8 + 1] = 0x04;  /* remove the feature (re-block) */
+
+    engine_army_move_arrival(1);
+
+    T_ASSERT_EQ_U(r[0x14c], 0);                /* sub-state untouched */
+    T_ASSERT_EQ_U(r[0x153], 100);              /* progress untouched  */
+    T_ASSERT_EQ_U(r[0x1c], 0);                 /* no route copied     */
     return 0;
 }

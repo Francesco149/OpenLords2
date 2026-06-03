@@ -1976,6 +1976,9 @@ struct test_case {
     X(engine_army_move_region_lo_high_noop) \
     X(engine_army_move_region_lo_same_owner_noop) \
     X(engine_army_move_region_lo_idle_noop) \
+    X(engine_army_move_arrival_repath) \
+    X(engine_army_move_arrival_progress_clamp) \
+    X(engine_army_move_arrival_no_feature) \
     X(engine_diplomacy_clear_treaty) \
     X(engine_diplomacy_broadcast_penalty) \
     X(engine_diplomacy_battle_adjust_guards) \

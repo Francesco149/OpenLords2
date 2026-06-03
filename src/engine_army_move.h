@@ -191,4 +191,16 @@ void engine_army_move_region_event_lo(int self, int cell_off,
                                       engine_event_queue_state_t *evq,
                                       int mp_active);
 
+/* Port of FUN_00467196 @ 0x467196 (422 B, __cdecl void).  The executor's arrival
+ * seam: when a stack reaches its path end / spends its step budget, probe for
+ * the nearest map feature from the stack's current cell; if one is in range,
+ * adopt it as the new destination (+0x14/+0x15), debit the path-progress
+ * accumulator (+0x153) by the feature's ring distance (clamp 0), set sub-state 2
+ * and clear the region-event suppressor (+0x14e), then re-path with the cost-
+ * field pathfinder (flood from current cell → trace from new dest → copy route
+ * into the waypoint list).  No feature in range → a no-op.  Bound to the
+ * executor's arrive seam via engine_army_move_bind_arrive_fn — pending the
+ * move-cost grid populator (retail 0x46ee31) so the flood has real terrain. */
+void engine_army_move_arrival(int self);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_MOVE_H */

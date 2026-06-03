@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **661** (27.0%) — tested 618, ported 43
-- code bytes touched: **32.9%** (275,817 / 838,629 B)
-- unported: **1786**
+- touched: **662** (27.1%) — tested 619, ported 43
+- code bytes touched: **32.9%** (276,239 / 838,629 B)
+- unported: **1785**
 - orphan refs (in src/, not in function table): 7
 
-## tested (618) — ported + host unit suite
+## tested (619) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -378,7 +378,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x466893 | FUN_00466893 | 900 | engine_army_move.c, engine_army_move.h, game_init.c |
 | 0x466c3c | FUN_00466c3c | 328 | engine_army_move.c, engine_army_move.h |
 | 0x466d84 | FUN_00466d84 | 995 | engine_army_move.c, engine_army_move.h |
-| 0x46733c | FUN_0046733c | 124 | engine_combat.c, engine_map_query.c, engine_map_query.h |
+| 0x467196 | FUN_00467196 | 422 | engine_army_move.c, engine_army_move.h |
+| 0x46733c | FUN_0046733c | 124 | engine_army_move.c, engine_combat.c, engine_map_query.c (+1) |
 | 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c, engine_territory.h |
 | 0x467770 | FUN_00467770 | 525 | engine_territory.c, engine_territory.h, engine_title_render.c (+3) |
 | 0x46797d | FUN_0046797d | 185 | engine_map_init.c, engine_map_init.h |
@@ -440,7 +441,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h |
 | 0x46f3cd | FUN_0046f3cd | 78 | engine_map_init.c, game_init.c, game_init.h |
 | 0x46f434 | FUN_0046f434 | 216 | engine_army_move.c, engine_path.c, engine_path.h |
-| 0x46f700 | FUN_0046f700 | 2115 | engine_path_field.c, engine_path_field.h |
+| 0x46f700 | FUN_0046f700 | 2115 | engine_army_move.c, engine_path_field.c, engine_path_field.h |
 | 0x46ff43 | FUN_0046ff43 | 617 | engine_strat_cost.c, engine_strat_cost.h, game_init.c |
 | 0x4701ac | FUN_004701ac | 1228 | engine_path_field.c, engine_path_field.h |
 | 0x4707be | FUN_004707be | 274 | engine_path_field.c, engine_path_field.h |

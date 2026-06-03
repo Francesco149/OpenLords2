@@ -378,6 +378,33 @@ offsets + the `shl 8` / SIB×3 = ·0x300 region stride r2-verified against
 (terrain + countdown + node triple/pair + progress + cue), sentinel no-op (×4),
 terrain≥0xd no-op, same-owner no-op, idle no-op.
 
+#### Arrival / waypoint re-path `FUN_00467196` → `engine_army_move_arrival` (ported)
+
+The executor's *arrival seam* (`army_move_arrive`), invoked when a stack reaches
+its path end / spends its step budget.  It probes for the nearest map feature
+from the stack's current cell — `engine_map_query_nearest_feature_ring_at`
+(`FUN_0046733c`), whose out-params surface the matched cell, i.e. the position
+retail leaves in its `DAT_00569570/78` find-nearest scratch (quirk #130: the port
+threads it explicitly instead of via the global).  On a hit (ring distance ≠ 0)
+the matched cell becomes the new destination (+0x14/+0x15), the path-progress
+accumulator (+0x153) is debited by the ring distance (signed `< dist → 0` clamp),
+sub-state (+0x14c) is set to 2 (re-march) and the region-event suppressor (+0x14e)
+cleared; the stack then **re-paths** via the cost-field pathfinder (see
+[engine_path_field.h]) — `fill` from the current cell, `trace` from the new
+destination, `copy_record` on a successful trace.  No feature in range → a no-op.
+
+Note the feature probe's real semantics: `only_bit1` (mask 0xfd, expect 0) matches
+*empty* cells, so on an open map the probe always resolves to ring distance 1 at
+the nearest cell; a *bit0* feature one ring out is what a deliberate re-path
+targets.  All record offsets r2-verified against `FUN_00467196`.  Host-tested
+(3 new tests, 1955 total green): bit0-feature re-path (dest + sub-state +
+suppressor + progress debit + a copied route), the progress `< dist → 0` clamp,
+and the no-feature no-op.
+
+**Not yet wired into the executor's `g_arrive_fn` seam** — binding it live needs
+the per-cell move-cost grid populator (retail 0x46ee31) so the flood reads real
+terrain; until then the seam stays the existing NULL no-op (no behaviour change).
+
 Ported into `engine_army_move.c` (+ header), host-tested (9 new tests, 1935
 total green): budget-spent arrival (clamp + present + arrive + timer reset),
 +0x06 arrival suppression, turn-progress forced arrival, open-step walk (commit
