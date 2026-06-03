@@ -364,6 +364,8 @@ void engine_combat_halve_garrison(int rec)
 #define R_F07       0x07    /* owner's banner/colour key (u8, ← strat +0xa) */
 #define R_F0C       0x0c    /* region popularity reserve (i8)               */
 #define R_F17       0x17    /* region popularity (i8)                       */
+#define R_UNREST    0x20    /* region unrest level (i8, band 0..4)          */
+#define R_CAP       0x24    /* region population capacity (i32)             */
 #define R_F1B0      0x1b0   /* cleared on demolish (u8)                     */
 #define R_PENDING   0x1bc   /* pending territory-transfer occupant (i32)    */
 #define R_F297      0x297   /* 4 × i8 (stride 0x18) cleared on demolish     */
@@ -889,6 +891,127 @@ void engine_combat_army_enter_region(int army, unsigned region,
                 po[P_NOTIFY_ROT] = 0;
         }
     }
+}
+
+/* Port of FUN_004ac185 @ 0x4ac185 (577 B, __cdecl int(int region)).  Spawn a
+ * rebellion army on a populated, owned region whose population reserve has run
+ * dry.  Returns 1 when a rebel stack is created, 0 otherwise.
+ *
+ *   - An UNOWNED region (R_OWNER == 0) never rebels → 0.
+ *   - The region must have a placeable cell within Chebyshev radius 1..3 of its
+ *     seat, found by the two map-feature probes (rawflag bit 0, then "0-or-2");
+ *     each leaves the matched cell in the find-nearest scratch (DAT_00569570/78).
+ *     No match → 0.
+ *   - A free record slot must exist at that cell (engine_territory_place_entity,
+ *     kind 2 / type 6 = the rebel "peasant" faction).  No slot → 0.
+ *
+ * On success it demolishes the region's standing economy (the conquered realm
+ * is gone), then fills the new rebel occupant: head-count = 30% of the region's
+ * capacity (+0x24), all of it in troop-class 0, with the result accumulator
+ * (+0x17a) and class-0 count (+0x16c) seeded to the head-count; stamps the spawn
+ * turn (+0x164 ← season s_slot_00553edc) and a 0x32 timer (+0x166); and debits
+ * the spawned head-count from the region capacity.  `mp_active` is forwarded to
+ * the demolish path.  All callees ported. */
+int engine_combat_spawn_rebellion(int region, engine_event_queue_state_t *evq,
+                                  int mp_active)
+{
+    if (REGREC(region)[R_OWNER] == 0)
+        return 0;                          /* unowned regions never rebel */
+
+    int col = 0, row = 0;
+    int hit = engine_game_init_army_near_rawflag_bit0(region, &col, &row);
+    if (hit == 0)
+        hit = engine_game_init_army_near_rawflag_only_bit1(region, &col, &row);
+    if (hit == 0)
+        return 0;                          /* no placeable cell near the seat */
+
+    if (engine_territory_place_entity(2, col, row, 6) == 0)
+        return 0;                          /* cell taken / record table full  */
+    int slot = engine_territory_current_slot();
+
+    engine_combat_demolish_realm(region, evq, mp_active);   /* FUN_004ac3c6 */
+
+    uint8_t *c = CREC(slot);
+    c[0x150]      = 1;
+    c[0x01]       = 0;
+    c[C_ARMYKEY]  = (uint8_t)region;                        /* +0x10 region    */
+    *(int16_t *)(c + 0x164) = (int16_t)s_slot_00553edc;     /* spawn turn      */
+    c[0x166]      = 0x32;                                   /* spawn timer     */
+    c[0x02]       = 0;
+
+    int head = engine_math_percent_of(*(int32_t *)(REGREC(region) + R_CAP), 0x1e);
+    *(int32_t *)(c + C_VALUE) = head;                       /* +0x168 head     */
+    for (int i = 0; i < 7; i++)
+        *(int16_t *)(c + C_COUNTS + i * 2) = 0;
+    *(int16_t *)(c + C_COUNTS) = (int16_t)head;             /* class-0 count   */
+    *(int16_t *)(c + C_RESULT) = (int16_t)head;             /* +0x17a result   */
+    c[0x14f]      = 0;
+
+    *(int32_t *)(REGREC(region) + R_CAP) -= head;           /* debit capacity  */
+    return 1;
+}
+
+/* Port of FUN_004abd0f @ 0x4abd0f (616 B, __cdecl void(int army,uint region)).
+ * Reconcile an army SETTLING onto a region (the per-tick driver's state-2
+ * handler).  On a NEUTRAL region it just latches the army's effective-region
+ * colour (+0x10).  On an OWNED region it acts only when the army's colour is
+ * not already this region: it warns the region owner about the occupation,
+ * with the message and reaction scaled by the region's popularity reserve
+ * (+0x0c):
+ *   reserve <  0x0a → 0x9a + try to spawn a rebellion (engine_combat_spawn_
+ *                     rebellion); on success reset unrest (+0x20) and restore
+ *                     +0x1e to both popularity fields;
+ *   reserve <  0x1e → 0x9b + latch unrest (+0x20 = 1 if currently 0);
+ *   reserve >= 0x1e → 0x9c.
+ * Then it debits the popularity reserve/value by 10 (or, when the reserve is
+ * below 10, drains the reserve into the value and floors the reserve at 0),
+ * and finally clamps the reserve non-negative. */
+void engine_combat_army_settle_region(int army, unsigned region,
+                                      engine_event_queue_state_t *evq,
+                                      int mp_active)
+{
+    uint8_t *r = REGREC(region);
+
+    if (r[R_OWNER] == 0) {
+        CREC(army)[C_ARMYKEY] = (uint8_t)region;
+        return;
+    }
+
+    if (CREC(army)[C_ARMYKEY] != (uint8_t)region) {
+        CREC(army)[C_ARMYKEY] = (uint8_t)region;
+
+        uint8_t hd[7]; build_has_data(hd);
+        int local = (int)s_slot_0057c8cc;
+
+        if ((int8_t)r[R_F0C] < 0x0a) {
+            engine_event_queue_post(evq, 0, r[R_OWNER], 0x9a, 0, 3,
+                                    (uint8_t)region, 0, 0, hd, local);
+            if (engine_combat_spawn_rebellion((int)region, evq, mp_active) != 0) {
+                r[R_UNREST] = 0;
+                r[R_F0C] = (uint8_t)(r[R_F0C] + 0x1e);
+                r[R_F17] = (uint8_t)(r[R_F17] + 0x1e);
+            }
+        } else if ((int8_t)r[R_F0C] < 0x1e) {
+            engine_event_queue_post(evq, 0, r[R_OWNER], 0x9b, 0, 3,
+                                    (uint8_t)region, 0, 0, hd, local);
+            if (r[R_UNREST] == 0)
+                r[R_UNREST] = 1;
+        } else {
+            engine_event_queue_post(evq, 0, r[R_OWNER], 0x9c, 0, 3,
+                                    (uint8_t)region, 0, 0, hd, local);
+        }
+
+        if ((int8_t)r[R_F0C] < 0x0a) {
+            r[R_F17] = (uint8_t)(r[R_F17] - r[R_F0C]);
+            r[R_F0C] = 0;
+        } else {
+            r[R_F0C] = (uint8_t)(r[R_F0C] - 10);
+            r[R_F17] = (uint8_t)(r[R_F17] - 10);
+        }
+    }
+
+    if ((int8_t)r[R_F0C] < 0)
+        r[R_F0C] = 0;
 }
 
 /* ===================================================================== *

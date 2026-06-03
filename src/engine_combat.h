@@ -218,6 +218,27 @@ void engine_combat_notify_occupation(int army, int region,
 void engine_combat_army_enter_region(int army, unsigned region,
                                      engine_event_queue_state_t *evq);
 
+/* Port of FUN_004ac185 @ 0x4ac185 (577 B, __cdecl int(int region)).  Spawn a
+ * rebel "peasant" stack (kind 2 / type 6) on an owned region whose population
+ * reserve has run dry, when a placeable cell exists within radius 1..3 of the
+ * region seat.  Demolishes the region's economy, seeds the rebel head-count to
+ * 30% of the region capacity (+0x24) and debits it.  Returns 1 on success, 0 if
+ * the region is unowned, no cell is reachable, or the record table is full.
+ * Reached from the army-state machine's settle path and (as the rebellion seam)
+ * from the per-realm unrest pass. */
+int engine_combat_spawn_rebellion(int region, engine_event_queue_state_t *evq,
+                                  int mp_active);
+
+/* Port of FUN_004abd0f @ 0x4abd0f (616 B, __cdecl void(int army,uint region)).
+ * Reconcile an army settling on a region (the per-tick driver's state-2
+ * handler).  Neutral region → latch the army's effective-region colour.  Owned
+ * region newly occupied → warn the owner (codes 0x9a/0x9b/0x9c by popularity
+ * reserve), possibly spawn a rebellion (reserve < 0x0a), then debit the region
+ * popularity and clamp it non-negative. */
+void engine_combat_army_settle_region(int army, unsigned region,
+                                      engine_event_queue_state_t *evq,
+                                      int mp_active);
+
 /* Bind the resign-time interactive UI cleanup seam (retail 0x47fe0b,
  * game-mode-gated on s_slot_0057c8fc == 2).  NULL default → no-op. */
 void engine_combat_bind_resign_ui_fn(void (*fn)(int player));

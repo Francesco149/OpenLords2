@@ -1895,6 +1895,14 @@ struct test_case {
     X(engine_combat_army_enter_owned_arrival) \
     X(engine_combat_army_enter_owned_not_destination_silent) \
     X(engine_combat_army_enter_rotation_wraps) \
+    X(engine_combat_spawn_rebellion_unowned) \
+    X(engine_combat_spawn_rebellion_no_cell) \
+    X(engine_combat_spawn_rebellion_success) \
+    X(engine_combat_settle_neutral) \
+    X(engine_combat_settle_owned_calm) \
+    X(engine_combat_settle_owned_wary) \
+    X(engine_combat_settle_owned_hostile_no_rebellion) \
+    X(engine_combat_settle_same_colour_noop) \
     X(engine_combat_merge_sums_and_disbands) \
     X(engine_combat_merge_refused_both_merc) \
     X(engine_combat_merge_capacity_gate) \

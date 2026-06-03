@@ -699,6 +699,155 @@ int test_engine_combat_army_enter_rotation_wraps(void)
     return 0;
 }
 
+/* ---- rebellion spawn (FUN_004ac185) + army settle (FUN_004abd0f) -------- *
+ * spawn_rebellion places a rebel stack (kind 2 / type 6) on an owned region
+ * with a dry population reserve; settle_region is the per-tick state-2 handler
+ * that warns the owner and may trigger the rebellion.                         */
+
+enum { OCC_GRID = 0x40, OCC_STRIDE = 8 };
+static uint8_t g_occ_cells[OCC_GRID * OCC_GRID * OCC_STRIDE];
+static int occ_cell_off(int col, int row) { return (row * OCC_GRID + col) * OCC_STRIDE; }
+
+/* An UNOWNED region never rebels — returns 0 and allocates no occupant. */
+int test_engine_combat_spawn_rebellion_unowned(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    R_REC(5)[0x05] = 0;                 /* unowned */
+    T_ASSERT_EQ_I(engine_combat_spawn_rebellion(5, &evq, 0), 0);
+    return 0;
+}
+
+/* An owned region with no placeable cell near its seat (no map-query grid) —
+ * both probes miss → 0. */
+int test_engine_combat_spawn_rebellion_no_cell(void)
+{
+    scc_reset();
+    engine_map_query_bind_cell_descriptors(NULL);   /* force probe misses */
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    R_REC(5)[0x05] = 2;                 /* owned */
+    T_ASSERT_EQ_I(engine_combat_spawn_rebellion(5, &evq, 0), 0);
+    return 0;
+}
+
+/* Bind the cell grid + records and seat region 5 at (10,10) with a single
+ * rawflag-bit0 free cell there, so the probe hits and place_entity succeeds. */
+static void rebellion_fixture(void)
+{
+    scc_reset();
+    engine_army_economy_bind_army_records(NULL);    /* neuter demolish re-plan */
+    memset(g_occ_cells, 0, sizeof g_occ_cells);
+    engine_territory_bind_cells(g_occ_cells);
+    engine_map_query_bind_cell_descriptors(g_occ_cells);
+    engine_territory_bind_records(g_per_territory_420);
+
+    uint8_t *r = R_REC(5);
+    r[0x05] = 2;                        /* owned region */
+    r[0x6c] = 10; r[0x6d] = 10;         /* region seat (col,row) */
+    I32(r, 0x24) = 100;                 /* capacity → rebel head = 30% = 30 */
+    g_occ_cells[occ_cell_off(10, 10) + 1] = 0x01;   /* rawflag bit0 set, free */
+    s_slot_00553edc = 7;               /* season → stamped into +0x164 */
+}
+
+/* Full success path: rebel occupant created at slot 1 with 30% of capacity in
+ * troop-class 0, the spawn turn + timer stamped, and the capacity debited. */
+int test_engine_combat_spawn_rebellion_success(void)
+{
+    rebellion_fixture();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    T_ASSERT_EQ_I(engine_combat_spawn_rebellion(5, &evq, 0), 1);
+
+    uint8_t *c = CREC(1);              /* first free record slot */
+    T_ASSERT_EQ_U(c[0x00], 6);         /* rebel faction (type, set by placer)  */
+    T_ASSERT_EQ_U(c[0x10], 5);         /* effective region                     */
+    T_ASSERT_EQ_U(c[0x150], 1);
+    T_ASSERT_EQ_U(c[0x166], 0x32);     /* spawn timer                          */
+    T_ASSERT_EQ_I(I16(c, 0x164), 7);   /* spawn turn = season                  */
+    T_ASSERT_EQ_I(I32(c, 0x168), 30);  /* head = 30% of capacity 100           */
+    T_ASSERT_EQ_I(I16(c, 0x16c), 30);  /* all of it in class 0                 */
+    T_ASSERT_EQ_I(I16(c, 0x17a), 30);  /* result accumulator                   */
+    T_ASSERT_EQ_I(I32(R_REC(5), 0x24), 70);   /* capacity debited 100 - 30     */
+    return 0;
+}
+
+/* settle on a NEUTRAL region: latch colour, no notifications. */
+int test_engine_combat_settle_neutral(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    CREC(4)[0x00] = 1;
+    R_REC(5)[0x05] = 0;                 /* neutral */
+    engine_combat_army_settle_region(4, 5, &evq, 0);
+    T_ASSERT_EQ_U(CREC(4)[0x10], 5);
+    T_ASSERT_EQ_I(evq.write_idx, 0);
+    return 0;
+}
+
+/* settle on an owned region, healthy reserve (>= 0x1e) → 0x9c, reserve -10. */
+int test_engine_combat_settle_owned_calm(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *r = R_REC(5);
+    r[0x05] = 1;                        /* owned by local → publishes */
+    r[0x0c] = 40; r[0x17] = 50;
+    engine_combat_army_settle_region(4, 5, &evq, 0);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0x9c);
+    T_ASSERT_EQ_U(r[0x0c], 30);        /* 40 - 10 */
+    T_ASSERT_EQ_U(r[0x17], 40);        /* 50 - 10 */
+    return 0;
+}
+
+/* settle on an owned region, wary reserve (0x0a..0x1d) → 0x9b + unrest latch. */
+int test_engine_combat_settle_owned_wary(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *r = R_REC(5);
+    r[0x05] = 1;
+    r[0x0c] = 20; r[0x17] = 50; r[0x20] = 0;
+    engine_combat_army_settle_region(4, 5, &evq, 0);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0x9b);
+    T_ASSERT_EQ_U(r[0x20], 1);         /* unrest latched */
+    T_ASSERT_EQ_U(r[0x0c], 10);        /* 20 - 10 */
+    return 0;
+}
+
+/* settle on an owned region, dry reserve (< 0x0a), no rebellion possible
+ * (no map grid) → 0x9a posted, rebellion fails, reserve drains into the value
+ * and floors at 0 (the < 0x0a debit arm). */
+int test_engine_combat_settle_owned_hostile_no_rebellion(void)
+{
+    scc_reset();
+    engine_map_query_bind_cell_descriptors(NULL);   /* spawn_rebellion → 0 */
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *r = R_REC(5);
+    r[0x05] = 1;
+    r[0x0c] = 5; r[0x17] = 50; r[0x20] = 2;
+    engine_combat_army_settle_region(4, 5, &evq, 0);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0x9a);
+    T_ASSERT_EQ_U(r[0x0c], 0);         /* reserve drained */
+    T_ASSERT_EQ_U(r[0x17], 45);        /* 50 - reserve(5) */
+    T_ASSERT_EQ_U(r[0x20], 2);         /* unrest untouched (rebellion failed) */
+    return 0;
+}
+
+/* settle when the army's colour already equals the region → only the final
+ * non-negative clamp runs; no notification, no debit. */
+int test_engine_combat_settle_same_colour_noop(void)
+{
+    scc_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    uint8_t *r = R_REC(5);
+    r[0x05] = 1; r[0x0c] = 40; r[0x17] = 50;
+    CREC(4)[0x10] = 5;                  /* already this region */
+    engine_combat_army_settle_region(4, 5, &evq, 0);
+    T_ASSERT_EQ_I(evq.write_idx, 0);
+    T_ASSERT_EQ_U(r[0x0c], 40);        /* untouched */
+    return 0;
+}
+
 /* ---- army-stack merge (FUN_004aa181 / engine_combat_merge_stack) --------- *
  * Merge occupant `src` into `dst`: sum head-count (+0x168) / 7 troop shorts
  * (+0x16c) / 3 supply triples (+0x182/+0x184/+0x186), keep the larger presence
