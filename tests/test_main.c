@@ -1936,6 +1936,12 @@ struct test_case {
     X(engine_combat_contest_region_enemy_garrison_noop) \
     X(engine_combat_contest_region_undefended_seizes) \
     X(engine_combat_contest_region_neutral_muster_fails_seizes) \
+    X(engine_combat_region_event_hi_dead_noop) \
+    X(engine_combat_region_event_hi_reinforces) \
+    X(engine_combat_region_event_hi_begins_siege) \
+    X(engine_combat_begin_siege_guards) \
+    X(engine_combat_begin_siege_board_type8) \
+    X(engine_combat_begin_siege_board_type7_keep) \
     X(engine_combat_resign_eliminates) \
     X(engine_combat_resign_recount_always_zero) \
     X(engine_combat_resign_sweep_sp_noop) \

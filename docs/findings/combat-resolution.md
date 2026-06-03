@@ -589,3 +589,74 @@ trigger an actual battle — a verification-gated step, not yet wired).
    `engine_combat_spawn_rebellion` — deferred from this chip because it needs
    the turn evq + mp_active context that the driver wiring establishes.  The
    cell-grid bind is already in `game_init`.
+
+---
+
+## Region-event-hi siege initiation `FUN_004686a0` chain (2026-06-03)
+
+The army-move executor's **region-event seam** (outcome code 6) has two arms by
+terrain band: low terrain (< 0x10) → the resource-develop handler
+`engine_army_move_region_event_lo` (FUN_0046873f, ported earlier); **keep terrain
+(0x15..0x19)** → `FUN_004686a0`, now ported as the seam
+`engine_army_move_region_event_hi` (it resolves `region = cells[cell_off+7]` and
+hands off to the combat dispatcher).  Both arms are now bound in `game_init` via
+`engine_army_move_bind_region_fns(lo, hi)`.
+
+The dispatcher + its four-function siege chain (all callees already ported) land
+in `engine_combat.c`:
+
+| retail         | port                              | role |
+|----------------|-----------------------------------|------|
+| `FUN_004686a0` | `engine_combat_region_event_hi`   | dispatch: live stack (+0x08==1); owner == region race (+0x05) → reinforce, else → siege |
+| `FUN_004a78ea` | `engine_combat_reinforce_keep`    | home onto the keep (`place_garrison`); AI/remote path latches DAT_0055cd58/0052f0a8 |
+| `FUN_004a7ca2` | `engine_combat_begin_siege`       | guarded siege start (defender present, no +0x1c2 block, not the +0x1c3==1/unbuilt lockout, defender not already besieged) |
+| `FUN_004a7e0a` | `engine_combat_siege_setup` (static) | link besieger↔defender (occ +0x150/+0x199, defender +0x19a); siege-screen scalars (0x4eac50=0x1d) when the besieger is the viewer |
+| `FUN_004a7eb5` | `engine_combat_siege_build_board` (static) | seed the besieger's three siege supply lanes (+0x182.. stride 6) by race, then `recompute_condition` |
+
+### Siege supply-lane seed (the modelled novelty)
+
+`FUN_004a7eb5` zeroes the condition level (+0x19c) and all three
+`{count,out,stock}` lane triples (+0x182, +0x188, +0x18e), then — only on the
+viewer-interactive path (occupant +0x01 == 0) — primes lane counts from the
+owner race's **unit category** and runs the post-battle condition recompute:
+
+```
+type = *(i32)(0x4d8af8 + (race-1)*0xf0)   /* race = strategic +0x07, 1..7 */
+                                          /* baked: k_race_siege_unit_type   */
+                                          /* {race1→8,2→9,3→7,4→7,5→3,6→1,7→3}*/
+lane1 = 2;  if type==8: lane1 = 4
+if type==9: lane2 = 1
+if type==7: lane0 = 3;  if keeplvl>3 && season>=3: lane2 = 1
+```
+
+The race byte (strategic +0x07) is **overloaded**: the MP resign sweep
+(`FUN_0049b2a3`) treats the same byte as a status flag (0 active / 6 resigned),
+but the siege path and the per-race unit tables (0x4d8a68/0x4d8a88/0x4d8af8,
+stride 0x50, 3 rows/race) read it as the race/lord id 1..7 — hence the port's
+`P_RACE` alias for the offset `engine_combat.c` elsewhere calls `P_STATUS`.
+
+### Verification
+
+6 host unit tests (`tests/test_engine_combat.c`): the three dispatcher routes
+(dead occupant no-op / reinforce / siege), the four begin-siege guard rejections,
+and the lane seeds for race types 8 and 7-with-high-keep.  1980 host tests green,
+ASAN/UBSAN clean.
+
+The **retail diff target `region_event_hi`** is the byte-exact gate: inject
+g_per_territory_420 + g_per_army_768 + g_player_strategic_352 + the cell array
+(region id at cell +7) + season/local, run retail `FUN_004686a0(occ, cell_off)`,
+read back the occupant block; the port calls `engine_combat_region_event_hi(occ,
+region)` directly.  All vectors keep owner != region race so the reinforce
+branch's economy re-plan never perturbs the readback — the diff isolates the
+siege chain (links + race-table lane seeds + the `recompute_condition` tail).
+**81/81 byte-exact vs retail** (17 edge seed 0 + 64 seed 7, 2026-06-03,
+cutestation.soy), proving the baked `k_race_siege_unit_type` table.
+
+### Frontier (next)
+
+The last executor dispatcher callee is `FUN_00426360` (DirectDraw surface
+present/scroll — a render seam that lands with the strategic-map camera cluster,
+not pure logic).  With both region-event arms + both combat arms bound, the
+army-move executor's outcome dispatch is fully wired except that render seam.
+The **live** siege screen (0x1d) is the verification-gated follow-on, like the
+0x12/0x13 battle screen.

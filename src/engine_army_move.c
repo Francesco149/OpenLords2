@@ -733,6 +733,21 @@ void engine_army_move_region_event_lo(int self, int cell_off,
     r[M_PROGRESS] += 7;
 }
 
+/* --- FUN_004686a0 @ 0x4686a0: region-event high-terrain "enter keep" (159 B) -
+ * See engine_army_move.h.  Reached from the executor on outcome code 6 when the
+ * cell terrain is 0x15..0x19 (keep terrain).  Resolves the cell's region (cell
+ * +7) and hands the moving stack to the combat region-event dispatcher, which
+ * reinforces a friendly keep or lays siege to an enemy one.  `mp_active` is
+ * unused (accepted for the cell-handler signature); `evq` threads through to the
+ * garrison-place path.  Region lookup r2-verified against FUN_004686a0. */
+void engine_army_move_region_event_hi(int self, int cell_off,
+                                      engine_event_queue_state_t *evq, int mp_active)
+{
+    (void)mp_active;
+    unsigned region = g_cells[cell_off + C_REGION];        /* cell +7 */
+    engine_combat_region_event_hi(self, (int)region, evq); /* FUN_004686a0 body */
+}
+
 /* --- FUN_004296b5 @ 0x4296b5: settle-deposit / combat-engage (319 B) -------
  * See engine_army_move.h.  The first of the two seams the executor fires on a
  * combat outcome (code 5): combat_a (this) then combat_b (FUN_004a6c68).  Only a

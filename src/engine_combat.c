@@ -333,6 +333,8 @@ void engine_combat_halve_garrison(int rec)
  * ===================================================================== */
 
 /* --- additional per-territory occupant fields (g_per_territory_420) ----- */
+#define C_CONTROL   0x01    /* owner control-type flag (← strategic +0x05): */
+                            /*   0 = viewer-interactive path, != 0 = AI/remote*/
 #define C_COL       0x0a    /* overworld column (i8)                        */
 #define C_ROW       0x0b    /* overworld row (i8)                           */
 #define C_CELLOFS   0x0c    /* (row*0x40+col)*8 byte offset into cell grid  */
@@ -473,6 +475,14 @@ static uint32_t g_combat_anim_t0;        /* DAT_0053e994 — animation start tim
 static uint32_t g_combat_anim_deadline;  /* _DAT_00568d9c */
 static int      g_combat_anim_scratch[10]; /* DAT_00515d60[10] */
 static int      g_combat_anim_53fc8;     /* DAT_00553fc8 */
+
+/* Siege-initiation selection scalars (retail runtime globals; not save state).
+ * Latched when an army enters a keep region so the siege/garrison UI knows the
+ * pending pair; inert on the headless diff path. */
+static int      g_siege_sel_attacker;    /* DAT_0055cd58 — reinforce-keep latch */
+static int      g_siege_sel_region;      /* DAT_0052f0a8 — reinforce-keep latch */
+static int      g_siege_besieger;        /* DAT_00568ed0 — begin-siege besieger */
+static int      g_siege_region;          /* DAT_00554000 — begin-siege region   */
 
 /* Build the per-player has-data filter table the event queue post() consults
  * (retail (&DAT_0057bf05)[i*0x160], one byte per slot, last slot inert). */
@@ -1177,9 +1187,14 @@ void engine_combat_mp_resign_sweep(engine_event_queue_state_t *evq, int mp_activ
 #define A_PENDING   0x1bc   /* pending garrison occupant index (i32)        */
 #define A_KEEPLVL   0x1c0   /* keep level (u8)                              */
 #define A_BUILTLVL  0x1c1   /* currently-built keep level (u8)              */
+#define A_F1C2      0x1c2   /* siege-block flag — non-0 forbids a new siege (u8)*/
+#define A_F1C3      0x1c3   /* siege-mode flag — 1 + builtlvl 0 forbids siege(u8)*/
 #define A_F2F4      0x2f4   /* post-spawn refresh marker (i32)              */
 
 /* --- strategic record (g_player_strategic_352) fields -------------------- */
+#define P_RACE      0x07    /* race / lord id (1..7) — picks the per-race    */
+                            /*   siege unit-template row (aliases the byte    */
+                            /*   the MP resign sweep treats as a status flag) */
 #define P_F150      0x150   /* running garrison-headcount reserve (i32)     */
 #define P_WAGE      0xfc    /* total wage bill (i32)                        */
 #define P_F118      0x118   /* treasury / cashflow figure (i32, per owner)  */
@@ -1445,6 +1460,139 @@ void engine_combat_place_garrison(unsigned occ, int key,
     engine_realm_collect_territory_income();        /* FUN_004ad6c0 */
     if (a[A_RACE] == (uint8_t)s_slot_0057c8cc && (int)s_slot_0057c93c == key)
         g_combat_flag_530d0 = 1;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Region-event "enter keep terrain" dispatcher  (FUN_004686a0 + siege chain)
+ *
+ * Reached from the army-move executor (outcome code 6) when a stack steps onto
+ * a keep-terrain cell (terrain band 0x15..0x19).  A live placed stack either
+ * reinforces the keep it already controls or lays siege to an enemy-held one.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* Per-race siege unit-category (retail *(i32)(0x4d8af8 + (race-1)*0xf0): the
+ * first int of each race's 3-row × 0x50 unit-template block, race = strategic
+ * +0x07, 1..7).  Selects which of the besieger's three siege supply lanes are
+ * seeded by engine_combat_siege_build_board. */
+static const int k_race_siege_unit_type[7] = { 8, 9, 7, 7, 3, 1, 3 };
+
+/* Port of FUN_004a7eb5 (550 B) — seed besieger `occ`'s three siege supply lanes
+ * from its race's unit category, then recompute the per-head condition.  Always
+ * clears the condition level and the three {count,out,stock} lane triples; on
+ * the viewer-interactive path (C_CONTROL == 0) it primes lane counts by the
+ * owner race's category code and runs the post-battle condition recompute. */
+static void engine_combat_siege_build_board(int occ)
+{
+    uint8_t *c = CREC(occ);
+    c[C_COND_LEVEL] = 0;                              /* +0x19c */
+    int region = (uint8_t)c[C_F199];                  /* +0x199 besieged region */
+
+    for (int g = 0; g < 3; g++) {                     /* zero all 3 lane triples */
+        wr_i16(c, C_COND_CNT   + g * 6, 0);
+        wr_i16(c, C_COND_OUT   + g * 6, 0);
+        wr_i16(c, C_COND_STOCK + g * 6, 0);
+    }
+
+    if (c[C_CONTROL] != 0)                            /* AI/remote — no board */
+        return;
+
+    int owner = (int8_t)c[C_OWNER];                   /* +0x00 */
+    int race  = (uint8_t)PREC(owner)[P_RACE];         /* strategic +0x07 (1..7) */
+    int type  = k_race_siege_unit_type[race - 1];
+
+    wr_i16(c, C_COND_CNT + 6, 2);                     /* lane 1 count = 2 */
+    if (type == 8)
+        wr_i16(c, C_COND_CNT + 6, 4);                 /* lane 1 count = 4 */
+    if (type == 9)
+        wr_i16(c, C_COND_CNT + 12, 1);                /* lane 2 count = 1 */
+    if (type == 7) {
+        wr_i16(c, C_COND_CNT, 3);                     /* lane 0 count = 3 */
+        if (REGREC(region)[A_KEEPLVL] > 3 &&          /* +0x1c0 */
+            (int)s_slot_0057c934 >= 3)                /* season >= 3 (autumn/winter)*/
+            wr_i16(c, C_COND_CNT + 12, 1);            /* lane 2 count = 1 */
+    }
+
+    engine_combat_recompute_condition(occ);           /* FUN_004a80db */
+}
+
+/* Port of FUN_004a7e0a (171 B) — link besieger `occ` to region `region`'s
+ * defending garrison, build the siege board, and (when the besieger belongs to
+ * the viewing player) raise the siege screen.  The defender's +0x19a records the
+ * besieger; the besieger's +0x199 records the region. */
+static void engine_combat_siege_setup(int occ, int region)
+{
+    uint8_t *rg = REGREC(region);
+    int defender = rd_i32(rg, A_PENDING);             /* +0x1bc */
+
+    CREC(occ)[C_F150]      = 1;                        /* +0x150 placed */
+    CREC(occ)[C_F199]      = (uint8_t)region;          /* +0x199 besieged region */
+    CREC(defender)[C_F19A] = (uint8_t)occ;             /* +0x19a besieger link */
+
+    engine_combat_siege_build_board(occ);              /* FUN_004a7eb5 */
+
+    if ((int8_t)CREC(occ)[C_OWNER] == (int)s_slot_0057c8cc) {
+        g_combat_screen_state = 0x1d;                  /* DAT_004eac50 = siege */
+        g_combat_screen_mode  = 2;                     /* DAT_0057d340 */
+        g_siege_besieger      = occ;                   /* DAT_00568ed0 */
+    }
+}
+
+/* Port of FUN_004a7ca2 (269 B) — begin a siege of enemy-held keep region
+ * `region` by mover `occ`.  All guards must pass: the region has a defending
+ * garrison (+0x1bc != 0), no siege block (+0x1c2 == 0), not the "mode 1 with
+ * unbuilt keep" lockout (+0x1c3 == 1 && +0x1c1 == 0), and the defender is not
+ * already besieged (+0x19a == 0).  On the AI/remote path (C_CONTROL != 0) it
+ * also latches the besieger/region selection scalars.  `evq` is accepted for the
+ * dispatcher signature; this branch posts no events. */
+void engine_combat_begin_siege(unsigned occ, int region,
+                               engine_event_queue_state_t *evq)
+{
+    (void)evq;
+    uint8_t *rg = REGREC(region);
+
+    if (rd_i32(rg, A_PENDING) == 0)                    /* no defender */
+        return;
+    if (rg[A_F1C2] != 0)                               /* siege blocked */
+        return;
+    if (rg[A_F1C3] == 1 && rg[A_BUILTLVL] == 0)        /* unbuilt-keep lockout */
+        return;
+    if (CREC((int)rd_i32(rg, A_PENDING))[C_F19A] != 0) /* defender already besieged */
+        return;
+
+    if (CREC((int)occ)[C_CONTROL] != 0) {
+        g_siege_besieger = (int)occ;                   /* DAT_00568ed0 */
+        g_siege_region   = region;                     /* DAT_00554000 */
+    }
+    engine_combat_siege_setup((int)occ, region);       /* FUN_004a7e0a */
+}
+
+/* Port of FUN_004a78ea (94 B) — reinforce friendly keep region `region` with
+ * mover `occ`.  Both paths home the occupant onto the keep (place_garrison); the
+ * AI/remote path (C_CONTROL != 0) additionally latches the pending-garrison
+ * selection scalars. */
+void engine_combat_reinforce_keep(unsigned occ, int region,
+                                  engine_event_queue_state_t *evq)
+{
+    if (CREC((int)occ)[C_CONTROL] != 0) {
+        g_siege_sel_attacker = (int)occ;               /* DAT_0055cd58 */
+        g_siege_sel_region   = region;                 /* DAT_0052f0a8 */
+    }
+    engine_combat_place_garrison(occ, region, evq);    /* FUN_004a79a3 */
+}
+
+/* Port of FUN_004686a0 (159 B) — region-event-hi dispatcher.  `occ` is the
+ * moving stack; `region` is the keep region under its cell.  Only a live placed
+ * stack (C_ACTIVE == 1) acts: if its owner matches the region's race it
+ * reinforces the keep, otherwise it lays siege. */
+void engine_combat_region_event_hi(int occ, int region,
+                                   engine_event_queue_state_t *evq)
+{
+    if (CREC(occ)[C_ACTIVE] != 1)                      /* +0x08 not a live unit */
+        return;
+    if ((int8_t)CREC(occ)[C_OWNER] == REGREC(region)[A_RACE])
+        engine_combat_reinforce_keep((unsigned)occ, region, evq);
+    else
+        engine_combat_begin_siege((unsigned)occ, region, evq);
 }
 
 /* ════════════════════════════════════════════════════════════════════════

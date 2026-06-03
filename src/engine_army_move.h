@@ -195,6 +195,16 @@ void engine_army_move_region_event_lo(int self, int cell_off,
                                       engine_event_queue_state_t *evq,
                                       int mp_active);
 
+/* Port of FUN_004686a0 @ 0x4686a0 (159 B, __cdecl void).  The executor's
+ * region-event-hi seam, fired on outcome code 6 when the cell terrain is
+ * 0x15..0x19 (keep terrain).  Resolves the cell's region and dispatches the
+ * moving stack to engine_combat_region_event_hi (reinforce keep / begin siege).
+ * Bound to the executor's region-hi seam via engine_army_move_bind_region_fns
+ * in game_init. */
+void engine_army_move_region_event_hi(int self, int cell_off,
+                                      engine_event_queue_state_t *evq,
+                                      int mp_active);
+
 /* Port of FUN_004296b5 @ 0x4296b5 (319 B, __cdecl void).  The first of the two
  * seams the executor fires on a combat outcome (code 5): combat_a (this), then
  * combat_b (FUN_004a6c68, unported).  A settling stack (state 4) whose target

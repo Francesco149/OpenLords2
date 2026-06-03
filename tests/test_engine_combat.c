@@ -1059,6 +1059,163 @@ int test_engine_combat_place_garrison_merges_when_pending(void)
     return 0;
 }
 
+/* ---- region-event-hi "enter keep" chain (FUN_004686a0 + siege chain) ----- *
+ * The dispatcher routes a live placed stack entering a keep region: owner ==   *
+ * region race → reinforce (place_garrison); else → begin siege.  The siege path *
+ * links besieger↔defender and seeds the besieger's three siege supply lanes by *
+ * the owner race's unit-category {race1→8, race2→9, race3/4→7, ...}.            */
+
+/* A dead occupant (C_ACTIVE != 1) is ignored entirely. */
+int test_engine_combat_region_event_hi_dead_noop(void)
+{
+    spawn_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    uint8_t *c = CREC(4);
+    c[0x08] = 0;                         /* not a live unit */
+    c[0x00] = 3;
+    R_REC(5)[0x05] = 9;                  /* region race differs → would siege */
+    I32(R_REC(5), 0x1bc) = 6;            /* a defender exists */
+
+    engine_combat_region_event_hi(4, 5, &evq);
+
+    T_ASSERT_EQ_U(c[0x150], 0);          /* nothing placed */
+    T_ASSERT_EQ_U(c[0x199], 0);          /* no siege link */
+    return 0;
+}
+
+/* Owner matches the region race → reinforce: the live stack homes onto the keep
+ * as its garrison (place_garrison, role 5, pending slot points at it). */
+int test_engine_combat_region_event_hi_reinforces(void)
+{
+    spawn_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    uint8_t *a = R_REC(5);
+    a[0x05] = 3;                         /* region race */
+    a[0x1c0] = 2;                        /* keep level 2 → cap 200 */
+    a[0x74] = 10; a[0x75] = 12;          /* seat */
+    uint8_t *c = CREC(4);
+    c[0x08] = 1;                         /* live unit */
+    c[0x00] = 3;                         /* owner == region race → reinforce */
+    I32(c, C_VALUE) = 100;               /* under cap → placed */
+
+    engine_combat_region_event_hi(4, 5, &evq);
+
+    T_ASSERT_EQ_I(I32(a, 0x1bc), 4);     /* garrison pending = this occupant */
+    T_ASSERT_EQ_U(c[0x1a], 5);           /* role = garrison */
+    return 0;
+}
+
+/* Owner differs from the region race → siege: the besieger links to the region's
+ * defending garrison (occ +0x150/+0x199, defender +0x19a). */
+int test_engine_combat_region_event_hi_begins_siege(void)
+{
+    spawn_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    uint8_t *a = R_REC(5);
+    a[0x05] = 9;                         /* region race ≠ owner → siege */
+    I32(a, 0x1bc) = 6;                   /* defending garrison = occupant 6 */
+    uint8_t *c = CREC(4);
+    c[0x08] = 1;                         /* live unit */
+    c[0x00] = 3;                         /* owner */
+    c[0x01] = 0;                         /* viewer-interactive path */
+    I32(c, C_VALUE) = 0;                 /* head 0 → recompute_condition no-op */
+    P_REC(3)[0x07] = 2;                  /* owner race 2 → unit type 9 */
+
+    engine_combat_region_event_hi(4, 5, &evq);
+
+    T_ASSERT_EQ_U(c[0x150], 1);          /* besieger placed */
+    T_ASSERT_EQ_U(c[0x199], 5);          /* besieged region recorded */
+    T_ASSERT_EQ_U(CREC(6)[0x19a], 4);    /* defender back-links to besieger */
+    return 0;
+}
+
+/* begin_siege guard rejections: no defender, siege-block (+0x1c2), the
+ * "+0x1c3 == 1 && unbuilt keep" lockout, and an already-besieged defender. */
+int test_engine_combat_begin_siege_guards(void)
+{
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    /* (a) no defending garrison → no-op */
+    spawn_reset();
+    I32(R_REC(5), 0x1bc) = 0;
+    engine_combat_begin_siege(4, 5, &evq);
+    T_ASSERT_EQ_U(CREC(4)[0x199], 0);
+
+    /* (b) siege-block flag set → no-op */
+    spawn_reset();
+    I32(R_REC(5), 0x1bc) = 6;
+    R_REC(5)[0x1c2] = 1;
+    engine_combat_begin_siege(4, 5, &evq);
+    T_ASSERT_EQ_U(CREC(4)[0x199], 0);
+
+    /* (c) +0x1c3 == 1 with unbuilt keep (+0x1c1 == 0) → no-op */
+    spawn_reset();
+    I32(R_REC(5), 0x1bc) = 6;
+    R_REC(5)[0x1c3] = 1; R_REC(5)[0x1c1] = 0;
+    engine_combat_begin_siege(4, 5, &evq);
+    T_ASSERT_EQ_U(CREC(4)[0x199], 0);
+
+    /* (d) defending garrison already besieged (+0x19a != 0) → no-op */
+    spawn_reset();
+    I32(R_REC(5), 0x1bc) = 6;
+    CREC(6)[0x19a] = 7;
+    engine_combat_begin_siege(4, 5, &evq);
+    T_ASSERT_EQ_U(CREC(4)[0x199], 0);
+    return 0;
+}
+
+/* Siege board seed, race 1 (unit type 8) → lane-1 count = 4; all other lanes 0.
+ * Head-count 0 keeps recompute_condition a no-op so the seeds are observable. */
+int test_engine_combat_begin_siege_board_type8(void)
+{
+    spawn_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    I32(R_REC(5), 0x1bc) = 6;            /* defender */
+    uint8_t *c = CREC(4);
+    c[0x00] = 3;                         /* owner */
+    c[0x01] = 0;                         /* interactive path → board built */
+    c[0x19c] = 7;                        /* condition level must clear */
+    I32(c, C_VALUE) = 0;                 /* recompute no-op */
+    P_REC(3)[0x07] = 1;                  /* owner race 1 → unit type 8 */
+
+    engine_combat_begin_siege(4, 5, &evq);
+
+    T_ASSERT_EQ_U(c[0x19c], 0);          /* condition level cleared */
+    T_ASSERT_EQ_I(I16(c, 0x182), 0);     /* lane 0 count */
+    T_ASSERT_EQ_I(I16(c, 0x188), 4);     /* lane 1 count = 4 (type 8) */
+    T_ASSERT_EQ_I(I16(c, 0x18e), 0);     /* lane 2 count */
+    return 0;
+}
+
+/* Siege board seed, race 3 (unit type 7) with a high keep (+0x1c0 > 3) in late
+ * season (>= 3) → lane 0 = 3 and lane 2 = 1. */
+int test_engine_combat_begin_siege_board_type7_keep(void)
+{
+    spawn_reset();
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    uint8_t *a = R_REC(5);
+    I32(a, 0x1bc) = 6;                   /* defender */
+    a[0x1c0] = 4;                        /* keep level 4 (> 3) */
+    uint8_t *c = CREC(4);
+    c[0x00] = 3;                         /* owner */
+    c[0x01] = 0;                         /* interactive path */
+    I32(c, C_VALUE) = 0;                 /* recompute no-op */
+    P_REC(3)[0x07] = 3;                  /* owner race 3 → unit type 7 */
+    s_slot_0057c934 = 4;                 /* season >= 3 */
+
+    engine_combat_begin_siege(4, 5, &evq);
+
+    T_ASSERT_EQ_I(I16(c, 0x182), 3);     /* lane 0 count = 3 (type 7) */
+    T_ASSERT_EQ_I(I16(c, 0x188), 2);     /* lane 1 count = 2 (base) */
+    T_ASSERT_EQ_I(I16(c, 0x18e), 1);     /* lane 2 count = 1 (keep>3 & late season) */
+    return 0;
+}
+
 /* Bind a shared cell grid + occupant records so engine_combat_spawn_unit can
  * run end-to-end: probe → place_entity → populate from the muster pool. */
 enum { SPAWN_GRID = 0x40, SPAWN_STRIDE = 8, SPAWN_COORD_OFF = 0x6c };

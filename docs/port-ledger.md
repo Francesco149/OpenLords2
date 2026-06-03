@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **667** (27.3%) — tested 624, ported 43
-- code bytes touched: **33.3%** (279,353 / 838,629 B)
-- unported: **1780**
+- touched: **672** (27.5%) — tested 629, ported 43
+- code bytes touched: **33.5%** (280,596 / 838,629 B)
+- unported: **1775**
 - orphan refs (in src/, not in function table): 7
 
-## tested (624) — ported + host unit suite
+## tested (629) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -392,6 +392,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x468121 | FUN_00468121 | 331 | engine_territory.c, engine_territory.h |
 | 0x46826c | FUN_0046826c | 221 | engine_territory.c, engine_territory.h |
 | 0x4684c6 | FUN_004684c6 | 474 | engine_territory.c, engine_territory.h |
+| 0x4686a0 | FUN_004686a0 | 159 | engine_army_move.c, engine_army_move.h, engine_combat.c (+1) |
 | 0x46873f | FUN_0046873f | 931 | engine_army_move.c, engine_army_move.h, game_init.c |
 | 0x468ae2 | FUN_00468ae2 | 351 | engine_army_move.c, engine_army_move.h, game_init.c |
 | 0x468c41 | FUN_00468c41 | 270 | engine_territory.c, engine_territory.h |
@@ -515,7 +516,11 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a6c68 | FUN_004a6c68 | 1264 | engine_army_move.c, engine_army_move.h, engine_combat.c (+2) |
 | 0x4a7158 | FUN_004a7158 | 402 | engine_combat.c, engine_combat.h |
 | 0x4a72fe | FUN_004a72fe | 1516 | engine_combat.c, engine_combat.h |
+| 0x4a78ea | FUN_004a78ea | 94 | engine_combat.c, engine_combat.h |
 | 0x4a79a3 | FUN_004a79a3 | 767 | engine_combat.c, engine_combat.h |
+| 0x4a7ca2 | FUN_004a7ca2 | 269 | engine_combat.c, engine_combat.h |
+| 0x4a7e0a | FUN_004a7e0a | 171 | engine_combat.c, engine_combat.h |
+| 0x4a7eb5 | FUN_004a7eb5 | 550 | engine_combat.c, engine_combat.h |
 | 0x4a80db | FUN_004a80db | 478 | engine_combat.c, engine_combat.h |
 | 0x4a9a9a | FUN_004a9a9a | 1047 | engine_combat.c, engine_combat.h |
 | 0x4a9eb1 | FUN_004a9eb1 | 103 | engine_combat.c |

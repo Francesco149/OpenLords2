@@ -5,7 +5,7 @@
 The unported, non-thunk engine functions already **called by ported code** — the natural next chips. A **leaf** has all of its
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
-- frontier functions: **287**
+- frontier functions: **285**
 - of those, zero-dependency **leaves: 128** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
@@ -271,14 +271,13 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x45161e | 428 | 1 | 2 |  |
 | 0x456fd8 | 4305 | 1 | 0 | ✓ |
 
-### tables (item/char) + populators (16)
+### tables (item/char) + populators (15)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
 | 0x463b42 | 196 | 2 | 0 | ✓ |
 | 0x463c06 | 92 | 1 | 0 | ✓ |
 | 0x463c62 | 92 | 1 | 0 | ✓ |
-| 0x4686a0 | 159 | 1 | 2 |  |
 | 0x46a101 | 165 | 1 | 0 | ✓ |
 | 0x463fa5 | 273 | 1 | 0 | ✓ |
 | 0x463e91 | 276 | 1 | 0 | ✓ |
@@ -348,7 +347,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x49a581 | 1039 | 1 | 13 |  |
 | 0x49d638 | 1737 | 1 | 0 | ✓ |
 
-### asset-load IO helper cluster (0x4af*) (18)
+### asset-load IO helper cluster (0x4af*) (17)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
@@ -367,7 +366,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4a82b9 | 365 | 1 | 1 |  |
 | 0x4aa90a | 374 | 1 | 0 | ✓ |
 | 0x4a1847 | 525 | 1 | 0 | ✓ |
-| 0x4a50ae | 731 | 1 | 1 |  |
 | 0x4a8aab | 753 | 1 | 2 |  |
 | 0x4a8e0b | 943 | 1 | 3 |  |
 

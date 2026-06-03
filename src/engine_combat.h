@@ -334,4 +334,23 @@ int engine_combat_settlement_find_slot(int key);
 void engine_combat_place_garrison(unsigned occ, int key,
                                   engine_event_queue_state_t *evq);
 
+/* Region-event "enter keep terrain" chain (FUN_004686a0 + FUN_004a78ea /
+ * FUN_004a7ca2 / FUN_004a7e0a / FUN_004a7eb5).  Reached from the army-move
+ * executor (outcome code 6) via engine_army_move_region_event_hi. */
+
+/* Port of FUN_004686a0 — dispatcher: a live placed stack `occ` entering keep
+ * region `region` reinforces it (owner matches the region race) or lays siege. */
+void engine_combat_region_event_hi(int occ, int region,
+                                   engine_event_queue_state_t *evq);
+
+/* Port of FUN_004a78ea — reinforce friendly keep `region` with `occ`
+ * (place_garrison; AI/remote path also latches the garrison-selection scalars). */
+void engine_combat_reinforce_keep(unsigned occ, int region,
+                                  engine_event_queue_state_t *evq);
+
+/* Port of FUN_004a7ca2 — begin a siege of enemy-held keep `region` by `occ`,
+ * subject to the defending-garrison / siege-block / already-besieged guards. */
+void engine_combat_begin_siege(unsigned occ, int region,
+                               engine_event_queue_state_t *evq);
+
 #endif /* OPENLORDS2_ENGINE_COMBAT_H */

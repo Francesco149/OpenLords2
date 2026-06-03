@@ -2590,6 +2590,7 @@ FN_COMBAT_HALVE      = 0x4ad8cc   # FUN_004ad8cc — __cdecl void(int rec)
 FN_DIPLOMACY_ADJUST  = 0x4a1ee1   # FUN_004a1ee1 — __cdecl void(uint,uint,char)
 FN_COMBAT_OWNERSHIP  = 0x4a72fe   # FUN_004a72fe — __cdecl void(uint new_owner, uint key)
 FN_PLACE_GARRISON    = 0x4a79a3   # FUN_004a79a3 — __cdecl void(uint occ, int key)
+FN_REGION_EVENT_HI   = 0x4686a0   # FUN_004686a0 — __cdecl void(uint occ, int cell_off)
 
 REALM_RACE_RETRIES = 8
 
@@ -2675,6 +2676,9 @@ def realm_port_globals(lib: ctypes.CDLL) -> dict:
         lib.engine_combat_place_garrison.restype = None
         lib.engine_combat_place_garrison.argtypes = [
             ctypes.c_uint, ctypes.c_int, ctypes.c_void_p]
+        lib.engine_combat_region_event_hi.restype = None
+        lib.engine_combat_region_event_hi.argtypes = [
+            ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
         lib.engine_army_economy_bind_army_records.restype = None
         lib.engine_army_economy_bind_army_records.argtypes = [ctypes.c_void_p]
     return _realm_globals_cache
@@ -4480,6 +4484,146 @@ def diff_place_garrison(retail: dict, port: dict) -> list[str]:
                               REALM_TERR_STRIDE, 151, "terr")
 
 
+# ── region-event-hi siege initiation (FUN_004686a0 + 4a78ea/4a7ca2/4a7e0a/4a7eb5) ──
+# A live stack entering a keep region whose race differs from its owner lays
+# siege: links besieger↔defender (+0x150/+0x199/+0x19a) and seeds the besieger's
+# three siege supply lanes (+0x182.. stride 6) by the owner race's unit category
+# (retail *(i32)(0x4d8af8 + (race-1)*0xf0); the port bakes this as
+# k_race_siege_unit_type {race1→8,race2→9,race3/4→7,race5→3,race6→1,race7→3}),
+# then recomputes per-head condition.  All vectors keep owner != region race so
+# the reinforce branch's economy re-plan never runs — the readback is clean terr.
+def _build_siege_vec(occ, region, *, owner, region_race, control, defender,
+                     keeplvl=0, builtlvl=0, f1c2=0, f1c3=0, race=1, head=0,
+                     defender_besieged=0, active=1, season=1, local=0,
+                     cell_off=0x100):
+    terr  = bytearray(REALM_TERR_BYTES)
+    army  = bytearray(REALM_ARMY_BYTES)
+    strat = bytearray(REALM_STRAT_BYTES)
+    over  = bytearray(REALM_OVER_BYTES)
+    cb = occ * REALM_TERR_STRIDE
+    terr[cb + 0x08] = active & 0xff          # C_ACTIVE (live placed unit)
+    terr[cb + 0x00] = owner & 0xff           # C_OWNER (i8)
+    terr[cb + 0x01] = control & 0xff         # C_CONTROL
+    struct.pack_into("<i", terr, cb + 0x168, head)   # C_VALUE head-count
+    terr[cb + 0x19c] = 0x55                  # condition-level scratch (must clear)
+    if defender:
+        db = defender * REALM_TERR_STRIDE
+        terr[db + 0x19a] = defender_besieged & 0xff  # C_F19A already-besieged flag
+    rb = region * REALM_ARMY_STRIDE
+    army[rb + 0x05]  = region_race & 0xff     # A_RACE
+    struct.pack_into("<i", army, rb + 0x1bc, defender)  # A_PENDING (defender occ)
+    army[rb + 0x1c0] = keeplvl  & 0xff        # A_KEEPLVL
+    army[rb + 0x1c1] = builtlvl & 0xff        # A_BUILTLVL
+    army[rb + 0x1c2] = f1c2 & 0xff            # A_F1C2 siege-block
+    army[rb + 0x1c3] = f1c3 & 0xff            # A_F1C3 siege-mode
+    strat[owner * REALM_STRAT_STRIDE + 0x07] = race & 0xff   # P_RACE
+    over[cell_off + 7] = region & 0xff        # cell +7 → region id
+    return {"occ": occ, "region": region, "cell_off": cell_off,
+            "terr": bytes(terr), "army": bytes(army), "strat": bytes(strat),
+            "over": bytes(over), "season": season, "local": local}
+
+
+def gen_region_event_hi_vectors(n: int, rng: random.Random) -> list[dict]:
+    edge = [
+        # happy siege, race 1 (type 8) → lane1=4, no head (recompute no-op)
+        _build_siege_vec(4, 5, owner=3, region_race=2, control=0, defender=6, race=1),
+        # race 2 (type 9) → lane2=1
+        _build_siege_vec(7, 3, owner=2, region_race=5, control=0, defender=8, race=2),
+        # race 3 (type 7), high keep + late season → lane0=3, lane2=1
+        _build_siege_vec(9, 4, owner=1, region_race=4, control=0, defender=10,
+                         race=3, keeplvl=4, season=4),
+        # race 3 (type 7), low keep → only lane0=3
+        _build_siege_vec(11, 6, owner=0, region_race=3, control=0, defender=12,
+                         race=3, keeplvl=2, season=4),
+        # race 5 (type 3) → just lane1=2
+        _build_siege_vec(13, 2, owner=4, region_race=1, control=0, defender=14, race=5),
+        # race 6 (type 1), race 7 (type 3) — exercise the remaining table rows
+        _build_siege_vec(28, 14, owner=5, region_race=2, control=0, defender=29, race=6),
+        _build_siege_vec(30, 15, owner=1, region_race=4, control=0, defender=31, race=7),
+        # control != 0 (AI) → board zeroed, no recompute, links still set
+        _build_siege_vec(15, 7, owner=2, region_race=6, control=1, defender=16,
+                         race=1, head=50),
+        # head > 0 → recompute condition tail exercised (race 1 type 8)
+        _build_siege_vec(17, 8, owner=3, region_race=2, control=0, defender=18,
+                         race=1, head=120),
+        # head > 0, race 3 type 7 high keep late season (lane0+lane2 + recompute)
+        _build_siege_vec(32, 9, owner=0, region_race=5, control=0, defender=33,
+                         race=3, keeplvl=5, season=3, head=240),
+        # local == owner → siege-screen scalar branch fires (not read back)
+        _build_siege_vec(34, 10, owner=2, region_race=6, control=0, defender=35,
+                         race=2, head=80, local=2),
+        # guard: no defender → no-op
+        _build_siege_vec(19, 11, owner=1, region_race=5, control=0, defender=0, race=2),
+        # guard: siege block (+0x1c2) → no-op
+        _build_siege_vec(20, 12, owner=2, region_race=4, control=0, defender=21,
+                         race=2, f1c2=1),
+        # guard: lockout (+0x1c3==1 && builtlvl 0) → no-op
+        _build_siege_vec(22, 13, owner=0, region_race=3, control=0, defender=23,
+                         race=3, f1c3=1, builtlvl=0),
+        # +0x1c3==1 but builtlvl != 0 → proceeds (lockout not triggered)
+        _build_siege_vec(24, 14, owner=1, region_race=6, control=0, defender=25,
+                         race=4, f1c3=1, builtlvl=2),
+        # guard: defender already besieged → no-op
+        _build_siege_vec(26, 15, owner=2, region_race=5, control=0, defender=27,
+                         race=2, defender_besieged=9),
+        # dispatcher: dead occupant (active 0) → no-op
+        _build_siege_vec(36, 16, owner=3, region_race=2, control=0, defender=37,
+                         race=1, active=0),
+    ]
+    vecs = list(edge)
+    while len(vecs) < n:
+        owner = rng.randint(0, 5)
+        region_race = rng.choice([r for r in range(8) if r != owner])
+        occ = rng.randint(1, 150)
+        defender = rng.choice([0, 0] + [d for d in (rng.randint(1, 150),) if d != occ])
+        vecs.append(_build_siege_vec(
+            occ, rng.randint(1, 16), owner=owner, region_race=region_race,
+            control=rng.choice([0, 0, 0, 1]), defender=defender,
+            keeplvl=rng.randint(0, 9), builtlvl=rng.randint(0, 4),
+            f1c2=rng.choice([0, 0, 0, 1]), f1c3=rng.choice([0, 0, 1]),
+            race=rng.randint(1, 7), head=rng.choice([0, 0, rng.randint(0, 600)]),
+            defender_besieged=rng.choice([0, 0, 0, rng.randint(1, 150)]),
+            active=rng.choice([1, 1, 1, 0]),
+            season=rng.randint(1, 4), local=rng.choice([0, owner]),
+            cell_off=rng.randint(0, REALM_OVER_BYTES - 8)))
+    return vecs
+
+
+def run_port_region_event_hi(lib: ctypes.CDLL, vec: dict) -> dict:
+    global _pg_evq
+    g = realm_port_globals(lib)
+    if _pg_evq is None:
+        _pg_evq = ctypes.create_string_buffer(_PG_EVQ_BYTES)
+    lib.engine_event_queue_init(_pg_evq)
+    lib.engine_army_economy_bind_army_records(None)   # neuter any re-plan tail
+    ctypes.memmove(g["terr"],  vec["terr"],  REALM_TERR_BYTES)
+    ctypes.memmove(g["army"],  vec["army"],  REALM_ARMY_BYTES)
+    ctypes.memmove(g["strat"], vec["strat"], REALM_STRAT_BYTES)
+    g["season_prev"].value = vec["season"]            # s_slot_0057c934
+    g["local"].value       = vec["local"]             # s_slot_0057c8cc
+    lib.engine_combat_region_event_hi(vec["occ"], vec["region"], _pg_evq)
+    return {"terr": list(bytes(g["terr"]))}
+
+
+def region_event_hi_rpc_plan(vec: dict) -> dict:
+    # Retail FUN_004686a0(occ, cell_off): resolves region = cells[cell_off+7]
+    # itself, so inject the cell array with that byte set and pass cell_off.
+    return {"fn_va": FN_REGION_EVENT_HI, "cc": "mscdecl",
+            "args": [vec["occ"], vec["cell_off"]], "regions": [
+        {"va": VA_PER_TERRITORY, "len": REALM_TERR_BYTES, "inject": list(vec["terr"]), "read": True},
+        {"va": VA_PER_ARMY,      "len": REALM_ARMY_BYTES, "inject": list(vec["army"]), "read": False},
+        {"va": VA_STRATEGIC,     "len": REALM_STRAT_BYTES,"inject": list(vec["strat"]),"read": False},
+        {"va": VA_OVERWORLD,     "len": REALM_OVER_BYTES, "inject": list(vec["over"]), "read": False},
+        {"va": VA_SLOT_SEASON_PREV, "len": 4, "inject": list(_u32le(vec["season"])), "read": False},
+        {"va": VA_SLOT_LOCAL,       "len": 4, "inject": list(_u32le(vec["local"])),  "read": False},
+    ]}
+
+
+def diff_region_event_hi(retail: dict, port: dict) -> list[str]:
+    return _diff_realm_region(retail, port["terr"], VA_PER_TERRITORY,
+                              REALM_TERR_STRIDE, 151, "terr")
+
+
 # RNG diff includes ALL output fields.  Retail vs. port mismatch on any
 # field is a divergence.
 def diff_rng(retail: dict, port: dict) -> list[str]:
@@ -4622,6 +4766,9 @@ def run_diff(cfg_args) -> int:
     if "place_garrison" in enabled:
         test_plans.append(("place_garrison",
                            gen_place_garrison_vectors(cfg_args.vectors, rng)))
+    if "region_event_hi" in enabled:
+        test_plans.append(("region_event_hi",
+                           gen_region_event_hi_vectors(cfg_args.vectors, rng)))
     if "player_aggregate" in enabled:
         test_plans.append(("player_aggregate",
                            gen_player_aggregate_vectors(cfg_args.vectors, rng)))
@@ -5804,6 +5951,42 @@ def run_diff(cfg_args) -> int:
                                   "note": "region readback elided"}
                         port = {"note": "region readback elided"}
                         vec = {"occ": vec["occ"], "key": vec["key"]}
+                elif fn_name == "region_event_hi":
+                    # FUN_004686a0(occ,cell_off): region-event-hi siege initiation.
+                    # Inject terr+army+strat + the cell array (region at +7) +
+                    # season/local; call args=[occ,cell_off] (cc=mscdecl); read
+                    # back only the occupant block (the siege branch mutates
+                    # occupant records + the recompute tail, never the economy).
+                    port = run_port_region_event_hi(lib, vec)
+                    plan = region_event_hi_rpc_plan(vec)
+                    retail = None
+                    for attempt in range(REALM_RACE_RETRIES + 1):
+                        retail = script.exports_sync.run_retail_realm_pass(plan)
+                        if isinstance(retail, dict) and retail.get("error"):
+                            break
+                        if int(retail.get("raced", 0)) == 0:
+                            break
+                        if attempt < REALM_RACE_RETRIES:
+                            time.sleep(0.01)
+                    if isinstance(retail, dict) and retail.get("error"):
+                        log(f"[diff] {fn_name}#{i}: agent error: "
+                            f"{retail['error']}")
+                        r.fail_count += 1
+                        r.failures.append({
+                            "idx": i, "vector": {"occ": vec["occ"],
+                                                 "region": vec["region"]},
+                            "retail": retail, "port": None,
+                            "diff": ["agent-error"]})
+                        continue
+                    bad = diff_region_event_hi(retail, port)
+                    if bad and int(retail.get("raced", 0)) != 0:
+                        r.race_count += 1
+                        bad = []
+                    if bad:
+                        retail = {"raced": retail.get("raced", 0),
+                                  "note": "region readback elided"}
+                        port = {"note": "region readback elided"}
+                        vec = {"occ": vec["occ"], "region": vec["region"]}
                 else:
                     continue
                 if bad:

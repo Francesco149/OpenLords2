@@ -1234,7 +1234,8 @@ void engine_game_init(void)
      * dispatcher seams (region-hi / arrival / present) stay NULL no-ops until
      * ported. */
     engine_army_move_bind_special_fn(engine_army_move_special_tile);
-    engine_army_move_bind_region_fns(engine_army_move_region_event_lo, NULL);
+    engine_army_move_bind_region_fns(engine_army_move_region_event_lo,
+                                     engine_army_move_region_event_hi);
     /* Bind BOTH combat-outcome (code-5) seams together now that the pair is
      * ported: combat_a engine_army_move_combat_engage (FUN_004296b5 settle-
      * deposit) then combat_b engine_combat_contest_region (FUN_004a6c68 resolve).
