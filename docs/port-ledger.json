@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 613,
+  "tested": 614,
   "ported": 43,
-  "unported": 1791,
+  "unported": 1790,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 656,
+  "touched": 657,
   "pct_touched": 26.8,
   "pct_tested": 25.1,
   "bytes_total": 838629,
-  "bytes_touched": 271127,
-  "pct_bytes_touched": 32.3
+  "bytes_touched": 272058,
+  "pct_bytes_touched": 32.4
  },
  "orphan_refs": [
   "0x004148",
@@ -11807,8 +11807,12 @@
    "name": "FUN_0046873f",
    "size": 931,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move.c",
+    "src/engine_army_move.h",
+    "src/game_init.c"
+   ]
   },
   {
    "va": "0x468ae2",

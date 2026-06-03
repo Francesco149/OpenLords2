@@ -641,3 +641,78 @@ void engine_army_move_special_tile(int self, int cell_off,
     engine_diplomacy_battle_adjust(region_owner, mover_owner, 0x14, evq);
     army_move_alert(3);                          /* FUN_00426216(3) */
 }
+
+/* --- FUN_0046873f @ 0x46873f: region-event low-terrain develop (931 B) ------
+ * See engine_army_move.h.  Reached from the executor on outcome code 6 when the
+ * cell terrain is < 0x10.  Each of the four resource bands resets a distinct
+ * region "node": a +0x2xx triple (u8 state, u8 counter, i32) and a +0xfx pair
+ * (i32 timer, i32).  All region offsets are relative to g_per_army_768 (retail
+ * base 0x53f9b0).  r2-verified against FUN_0046873f (shl 8 + SIB ×3 = ×0x300). */
+struct army_move_dev_band {
+    uint8_t  to;        /* developed-terrain sentinel / new cell +0 value      */
+    uint8_t  regrow;    /* cell +3 regrow countdown                            */
+    unsigned node_b3;   /* region off: u8 := 3 (node active)                   */
+    unsigned node_b0;   /* region off: u8 := 0                                 */
+    unsigned node_w0;   /* region off: i32 := 0                                */
+    unsigned node_wm1;  /* region off: i32 := -1                               */
+    unsigned node_w0b;  /* region off: i32 := 0                                */
+};
+
+static const struct army_move_dev_band ARMY_MOVE_DEV_BANDS[4] = {
+    /* {0,1,2} → 3   */ { 0x03, 0x2e, 0x2ae, 0x2ac, 0x2c0, 0x0f8, 0x0fc },
+    /* {4,5}   → 6   */ { 0x06, 0x09, 0x2de, 0x2dc, 0x2f0, 0x104, 0x108 },
+    /* {7,8}   → 9   */ { 0x09, 0x13, 0x2c6, 0x2c4, 0x2d8, 0x11c, 0x120 },
+    /* {10,11} → 0xc */ { 0x0c, 0x1d, 0x296, 0x294, 0x2a8, 0x110, 0x114 },
+};
+
+void engine_army_move_region_event_lo(int self, int cell_off,
+                                      engine_event_queue_state_t *evq, int mp_active)
+{
+    (void)evq;                                  /* retail posts nothing here */
+    (void)mp_active;
+    uint8_t *r = MREC(self);
+
+    /* Idle stacks (state 3/4) never develop. */
+    if (r[M_STATE] == 3 || r[M_STATE] == 4)
+        return;
+
+    unsigned region       = g_cells[cell_off + C_REGION];        /* cell +7 */
+    int      region_owner = g_per_army_768[region * RSTRIDE + R_OWNER];
+    int      mover_owner  = (int8_t)r[M_OWNER];
+
+    /* Only a foreign region's tile develops. */
+    if (region_owner == mover_owner)
+        return;
+
+    /* Terrain band → already-developed sentinels (3/6/9/0xc) and terrain ≥ 0xd
+     * are a no-op (retail's nested != guards inside each < range). */
+    uint8_t t = g_cells[cell_off + C_TERRAIN];
+    int band;
+    if      (t < 0x04) band = (t != 0x03) ? 0 : -1;
+    else if (t < 0x07) band = (t != 0x06) ? 1 : -1;
+    else if (t < 0x0a) band = (t != 0x09) ? 2 : -1;
+    else if (t < 0x0d) band = (t != 0x0c) ? 3 : -1;
+    else               band = -1;
+    if (band < 0)
+        return;
+
+    const struct army_move_dev_band *b = &ARMY_MOVE_DEV_BANDS[band];
+
+    /* Flip the cell to the developed sentinel + stamp its regrow countdown.
+     * g_cells is the const evaluator view; the executor and this handler share
+     * the mutable grid (retail writes DAT_00522f90/+3 directly). */
+    uint8_t *cell = (uint8_t *)&g_cells[cell_off];
+    cell[C_TERRAIN] = b->to;
+    cell[3]         = b->regrow;
+
+    /* Reset the region's matching resource node. */
+    uint8_t *rg = g_per_army_768 + region * RSTRIDE;
+    rg[b->node_b3] = 3;
+    rg[b->node_b0] = 0;
+    *(int32_t *)(rg + b->node_w0)  = 0;
+    *(int32_t *)(rg + b->node_wm1) = -1;
+    *(int32_t *)(rg + b->node_w0b) = 0;
+
+    army_move_alert(3);                          /* FUN_00426216(3) */
+    r[M_PROGRESS] += 7;
+}

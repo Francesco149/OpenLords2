@@ -172,4 +172,23 @@ void engine_army_move_run(engine_event_queue_state_t *evq, int mp_active);
 void engine_army_move_special_tile(int self, int cell_off,
                                    engine_event_queue_state_t *evq, int mp_active);
 
+/* Port of FUN_0046873f @ 0x46873f (931 B, __cdecl void).  The region-event
+ * handler the executor dispatches on outcome code 6 for *low* terrain (cell +0
+ * < 0x10): a non-idle stack (state ≠ 3/4) stepping onto a foreign region's
+ * (region owner +0x05 ≠ mover owner +0x00) *undeveloped* resource tile develops
+ * it.  The cell terrain selects one of four resource bands:
+ *   {0,1,2} → 3 (regrow 0x2e) · {4,5} → 6 (regrow 9) ·
+ *   {7,8} → 9 (regrow 0x13)   · {10,11} → 0xc (regrow 0x1d)
+ * Already-developed sentinels (3/6/9/0xc) and terrain ≥ 0xd are a no-op.  A
+ * developed tile: flips the cell terrain to the band sentinel, stamps the regrow
+ * countdown at cell +3, resets the region's matching resource node (a +0x2xx
+ * triple: u8 state := 3, u8 counter := 0, i32 := 0; plus a +0xfx pair: i32 timer
+ * := -1, i32 := 0), plays the alert cue (id 3) and bumps the stack's path-
+ * progress accumulator (+0x153) by 7.  `evq` / `mp_active` are unused (accepted
+ * for seam uniformity).  Bound to the executor's region-lo seam via
+ * engine_army_move_bind_region_fns in game_init. */
+void engine_army_move_region_event_lo(int self, int cell_off,
+                                      engine_event_queue_state_t *evq,
+                                      int mp_active);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_MOVE_H */

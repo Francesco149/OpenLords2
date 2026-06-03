@@ -357,6 +357,27 @@ tiles are a no-op.  Host-tested (4 new tests, 1939 total green): full plunder
 already-plundered no-op.  Offsets + the signed-div drain r2-verified against
 `FUN_00468ae2`.
 
+#### Region-event low-terrain develop `FUN_0046873f` → `engine_army_move_region_event_lo` (ported)
+
+The second dispatcher callee (outcome code 6, **low** terrain — the executor
+routes here when the cell terrain is < 0x10), bound into the executor's region-lo
+seam in `game_init` (`engine_army_move_bind_region_fns(…, NULL)`; the region-hi
+seam `FUN_004686a0` stays NULL until ported).  A non-idle stack (state ≠ 3/4)
+that steps onto a **foreign** region's (owner +0x05 ≠ mover owner) *undeveloped*
+resource tile **develops** it.  The cell terrain picks one of four resource bands
+— `{0,1,2}→3` (regrow 0x2e), `{4,5}→6` (regrow 9), `{7,8}→9` (regrow 0x13),
+`{10,11}→0xc` (regrow 0x1d) — flips the cell terrain to the band sentinel, stamps
+the regrow countdown at cell +3, resets the region's matching resource node (a
+`+0x2xx` triple `u8:=3 / u8:=0 / i32:=0` plus a `+0xfx` pair `i32:=-1 / i32:=0`,
+all at g_per_army_768 + region·0x300), plays the alert cue (id 3) and bumps
+path-progress (+0x153) by 7.  Already-developed sentinels (3/6/9/0xc) and terrain
+≥ 0xd (incl. the 0xd..0xf low band the executor still routes here) are a no-op,
+matching retail's nested `!=` guards inside each `<` range.  All 20 region-node
+offsets + the `shl 8` / SIB×3 = ·0x300 region stride r2-verified against
+`FUN_0046873f`.  Host-tested (5 new tests, 1944 total green): all four bands
+(terrain + countdown + node triple/pair + progress + cue), sentinel no-op (×4),
+terrain≥0xd no-op, same-owner no-op, idle no-op.
+
 Ported into `engine_army_move.c` (+ header), host-tested (9 new tests, 1935
 total green): budget-spent arrival (clamp + present + arrive + timer reset),
 +0x06 arrival suppression, turn-progress forced arrival, open-step walk (commit

@@ -912,3 +912,114 @@ int test_engine_army_move_special_already_plundered_noop(void)
     T_ASSERT_EQ_U(r[M_PROGRESS], 0);
     return 0;
 }
+
+/* ==========================================================================
+ * FUN_0046873f — region-event low-terrain develop (engine_army_move_region_event_lo)
+ * ========================================================================== */
+
+/* Shared setup: army idx 1 (owner 3), a cell at off 0x1458 in foreign region 9
+ * (owner 2).  Caller sets the cell terrain.  Returns the army record. */
+static uint8_t *rl_setup(int off, uint8_t terrain)
+{
+    cm_reset();
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    engine_army_move_bind_alert_sfx_fn(cap_alert);
+    g_last_alert = -1;
+
+    uint8_t *r = MREC(1);
+    r[M_OWNER] = 3; r[M_STATE] = 1; r[M_PROGRESS] = 0;
+
+    g_overworld_map[off + 0] = terrain;
+    g_overworld_map[off + 7] = 9;               /* region key            */
+    g_per_army_768[9 * 0x300 + 0x05] = 2;       /* region owner != mover */
+    return r;
+}
+
+/* --- each terrain band develops to its sentinel + resets its node --------- */
+int test_engine_army_move_region_lo_bands(void)
+{
+    int off = 0x1458;
+    /* {from terrain, to sentinel, regrow, node_b3, node_b0, node_w0, node_wm1, node_w0b} */
+    struct { uint8_t from, to, regrow; unsigned b3, b0, w0, wm1, w0b; } cases[] = {
+        { 1,  0x03, 0x2e, 0x2ae, 0x2ac, 0x2c0, 0x0f8, 0x0fc },
+        { 5,  0x06, 0x09, 0x2de, 0x2dc, 0x2f0, 0x104, 0x108 },
+        { 8,  0x09, 0x13, 0x2c6, 0x2c4, 0x2d8, 0x11c, 0x120 },
+        { 11, 0x0c, 0x1d, 0x296, 0x294, 0x2a8, 0x110, 0x114 },
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        uint8_t *r = rl_setup(off, cases[i].from);
+        uint8_t *rg = &g_per_army_768[9 * 0x300];
+        rg[cases[i].b3] = 9; rg[cases[i].b0] = 9;     /* dirty → must be reset */
+
+        engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+        engine_army_move_region_event_lo(1, off, &evq, 0);
+
+        T_ASSERT_EQ_U(g_overworld_map[off + 0], cases[i].to);
+        T_ASSERT_EQ_U(g_overworld_map[off + 3], cases[i].regrow);
+        T_ASSERT_EQ_U(rg[cases[i].b3], 3);
+        T_ASSERT_EQ_U(rg[cases[i].b0], 0);
+        T_ASSERT_EQ_I(I32(rg, cases[i].w0),  0);
+        T_ASSERT_EQ_I(I32(rg, cases[i].wm1), -1);
+        T_ASSERT_EQ_I(I32(rg, cases[i].w0b), 0);
+        T_ASSERT_EQ_U(r[M_PROGRESS], 7);
+        T_ASSERT_EQ_I(g_last_alert, 3);
+    }
+    return 0;
+}
+
+/* --- an already-developed sentinel (terrain 3/6/9/0xc) is a no-op --------- */
+int test_engine_army_move_region_lo_sentinel_noop(void)
+{
+    int off = 0x1458;
+    uint8_t sentinels[] = { 3, 6, 9, 0xc };
+    for (unsigned i = 0; i < sizeof sentinels; i++) {
+        uint8_t *r = rl_setup(off, sentinels[i]);
+        engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+        engine_army_move_region_event_lo(1, off, &evq, 0);
+        T_ASSERT_EQ_U(g_overworld_map[off + 0], sentinels[i]);  /* untouched */
+        T_ASSERT_EQ_U(r[M_PROGRESS], 0);
+        T_ASSERT_EQ_I(g_last_alert, -1);
+    }
+    return 0;
+}
+
+/* --- terrain >= 0xd (none of the four bands) is a no-op ------------------- */
+int test_engine_army_move_region_lo_high_noop(void)
+{
+    int off = 0x1458;
+    uint8_t *r = rl_setup(off, 0x0d);
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_region_event_lo(1, off, &evq, 0);
+    T_ASSERT_EQ_U(g_overworld_map[off + 0], 0x0d);
+    T_ASSERT_EQ_U(r[M_PROGRESS], 0);
+    T_ASSERT_EQ_I(g_last_alert, -1);
+    return 0;
+}
+
+/* --- a same-owner region does not develop -------------------------------- */
+int test_engine_army_move_region_lo_same_owner_noop(void)
+{
+    int off = 0x1458;
+    uint8_t *r = rl_setup(off, 1);
+    g_per_army_768[9 * 0x300 + 0x05] = 3;           /* owner == mover */
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_region_event_lo(1, off, &evq, 0);
+    T_ASSERT_EQ_U(g_overworld_map[off + 0], 1);     /* untouched */
+    T_ASSERT_EQ_U(r[M_PROGRESS], 0);
+    T_ASSERT_EQ_I(g_last_alert, -1);
+    return 0;
+}
+
+/* --- an idle stack (state 3/4) never develops ---------------------------- */
+int test_engine_army_move_region_lo_idle_noop(void)
+{
+    int off = 0x1458;
+    uint8_t *r = rl_setup(off, 1);
+    r[M_STATE] = 4;
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_region_event_lo(1, off, &evq, 0);
+    T_ASSERT_EQ_U(g_overworld_map[off + 0], 1);
+    T_ASSERT_EQ_U(r[M_PROGRESS], 0);
+    T_ASSERT_EQ_I(g_last_alert, -1);
+    return 0;
+}

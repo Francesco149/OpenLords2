@@ -1963,6 +1963,11 @@ struct test_case {
     X(engine_army_move_special_same_owner_noop) \
     X(engine_army_move_special_idle_noop) \
     X(engine_army_move_special_already_plundered_noop) \
+    X(engine_army_move_region_lo_bands) \
+    X(engine_army_move_region_lo_sentinel_noop) \
+    X(engine_army_move_region_lo_high_noop) \
+    X(engine_army_move_region_lo_same_owner_noop) \
+    X(engine_army_move_region_lo_idle_noop) \
     X(engine_diplomacy_clear_treaty) \
     X(engine_diplomacy_broadcast_penalty) \
     X(engine_diplomacy_battle_adjust_guards) \
