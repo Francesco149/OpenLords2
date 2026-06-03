@@ -235,8 +235,9 @@ int test_engine_army_state_idle_sets_region(void)
 /* --- movement seam: invoked on sub-state 2, sees the current index --------- */
 static int s_move_calls;
 static int s_move_seen_index;
-static void counting_move(void)
+static void counting_move(engine_event_queue_state_t *evq, int mp_active)
 {
+    (void)evq; (void)mp_active;
     s_move_calls++;
     s_move_seen_index = g_army_state_index;
 }
@@ -260,8 +261,9 @@ int test_engine_army_state_move_seam_invoked(void)
 }
 
 /* --- abort flag: a seam that raises it stops the walk early ---------------- */
-static void aborting_move(void)
+static void aborting_move(engine_event_queue_state_t *evq, int mp_active)
 {
+    (void)evq; (void)mp_active;
     g_army_state_abort = 1;
 }
 

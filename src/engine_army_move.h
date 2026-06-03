@@ -45,6 +45,34 @@ void engine_army_move_bind_sfx_fn(engine_army_move_sfx_fn fn);
  * (the default) is a no-op, keeping the drop-in silent unless audio is wired. */
 void engine_army_move_bind_alert_sfx_fn(engine_army_move_sfx_fn fn);
 
+/* ── Movement-executor dispatcher seams (retail callees not yet ported) ──────
+ * The executor (engine_army_move_run, FUN_00465d28) dispatches each step's
+ * outcome into a handful of deeper sub-trees, each its own later port chip.
+ * Until one lands it is a bind-able seam defaulting to a no-op — exactly like
+ * the SFX seams above and the army-state move_fn seam.  Binding them is how each
+ * future chip wires itself into the executor.
+ *
+ *   present  0x426360  flush/scroll the strategic-map surface (DirectDraw
+ *                          vtable present; pure render side-effect)
+ *   arrive   0x467196  path-end / arrival finaliser (clears the order)
+ *   combat_a 0x4296b5  combat-engage on a hostile-occupied destination
+ *   combat_b 0x4a6c68  combat resolution / aftermath
+ *   region_lo 0x46873f region-event handler, low terrain (< 0x10)
+ *   region_hi 0x4686a0 region-event handler, high terrain (0x15..0x19)
+ *   special  0x468ae2  special-tile event (outcome code 7) */
+typedef void (*engine_army_move_present_fn)(int mode);
+typedef void (*engine_army_move_arrive_fn)(int self);
+typedef void (*engine_army_move_region_fn)(int self, unsigned region);
+typedef void (*engine_army_move_cell_fn)(int self, int cell_off);
+
+void engine_army_move_bind_present_fn(engine_army_move_present_fn fn);
+void engine_army_move_bind_arrive_fn(engine_army_move_arrive_fn fn);
+void engine_army_move_bind_combat_fns(engine_army_move_region_fn engage,
+                                      engine_army_move_region_fn resolve);
+void engine_army_move_bind_region_fns(engine_army_move_cell_fn lo,
+                                      engine_army_move_cell_fn hi);
+void engine_army_move_bind_special_fn(engine_army_move_cell_fn fn);
+
 /* Outcome scratch latched by the evaluator from the cell it classified (retail
  * runtime scalars).  The movement executor (FUN_00465d28, later chip) consumes
  * them to drive arrival / region-event / combat-engage.  Not save state. */
@@ -94,5 +122,32 @@ int engine_army_move_terrain_passable(int cell_off);
  * blocked branch's relation hit. */
 int engine_army_move_classify_step(int dir, engine_event_queue_state_t *evq,
                                    int mp_active);
+
+/* Port of FUN_00465d28 @ 0x465d28 (1441 B, __cdecl void).  The real-time
+ * movement-step executor: the army-state driver hands the current occupant
+ * (engine_army_state's g_army_state_index) off here when its sub-state (+0x14c)
+ * is 2.  Each entry resets the per-occupant timer (+0x160 = 4) and walks the
+ * stack toward its next waypoint, looping until the per-tick step budget (+0x154,
+ * set by the state handler) is spent, the path ends, or an event interrupts:
+ *
+ *   • While disarmed it spins the classifier's stall/retry hysteresis (the
+ *     classifier ignores the direction until armed), then on arming loads the
+ *     next waypoint from the per-record list (+0x1d col / +0x1e row, indexed by
+ *     the waypoint counter +0x1c) and evaluates the step toward it.
+ *   • The local player's marching stack stamps a 13×13 alternate-draw box and
+ *     marks the screen dirty each armed pass (render only).
+ *   • Budget spent or a turn commit in progress (g_sim_turn_progress 1/2) snaps
+ *     progress to the budget, recenters the map on the stack, and finalises via
+ *     the arrival seam unless the record's +0x06 byte suppresses it.
+ *   • A classifier outcome of 5 runs the two combat seams (and aborts the whole
+ *     army walk if the battle screen 0x12 is up); 6 runs a region-event seam
+ *     chosen by the destination terrain; 7 runs the special-tile seam; 10 ends
+ *     the walk (arrival / collision-destroyed).
+ *
+ * `evq` / `mp_active` are forwarded straight to engine_army_move_classify_step.
+ * All combat / region-event / arrival / camera callees are bind-able seams
+ * above (NULL = no-op), so until they are ported the executor faithfully steps
+ * and commits the stack across the grid without firing those deeper events. */
+void engine_army_move_run(engine_event_queue_state_t *evq, int mp_active);
 
 #endif /* OPENLORDS2_ENGINE_ARMY_MOVE_H */

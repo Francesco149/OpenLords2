@@ -1222,6 +1222,11 @@ void engine_game_init(void)
      * 4658c1) reads the same shared 8-byte grid (cell flags +1, region +7,
      * terrain +0, occupant +5). */
     engine_army_move_bind_cells(g_overworld_map);
+    /* Connect the per-tick army-state driver to the deep movement-step executor
+     * (FUN_00465d28 → engine_army_move_run): when an occupant's sub-state is 2
+     * the driver runs the executor, which steps the stack toward its waypoints
+     * and threads the driver's evq / mp_active into the per-step classifier. */
+    engine_army_state_bind_move_fn(engine_army_move_run);
     /* The per-group resource-demand pool (retail DAT_0057c020, stride 0x160)
      * physically lives INSIDE the player-strategic block at +0x120 — retail's
      * commodity pools +0x120/+0x128/+0x130 ARE the resource accumulators, viewed

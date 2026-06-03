@@ -1950,6 +1950,15 @@ struct test_case {
     X(engine_army_move_classify_grid_edge) \
     X(engine_army_move_classify_blocked) \
     X(engine_army_move_classify_blocked_friendly) \
+    X(engine_army_move_exec_arrival_budget) \
+    X(engine_army_move_exec_arrival_ready_suppressed) \
+    X(engine_army_move_exec_turn_progress_forces_arrival) \
+    X(engine_army_move_exec_open_step_walks) \
+    X(engine_army_move_exec_already_on_waypoint) \
+    X(engine_army_move_exec_combat_dispatch) \
+    X(engine_army_move_exec_combat_abort_on_battle_screen) \
+    X(engine_army_move_exec_region_event_bands) \
+    X(engine_army_move_exec_special_dispatch) \
     X(engine_diplomacy_clear_treaty) \
     X(engine_diplomacy_broadcast_penalty) \
     X(engine_diplomacy_battle_adjust_guards) \

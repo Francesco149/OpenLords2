@@ -20,6 +20,8 @@
 #include "engine_diplomacy.h"
 #include "engine_event_queue.h"
 #include "engine_territory.h"      /* engine_territory_bind_cells (decay sink)*/
+#include "engine.h"                /* engine_set_current_screen (battle 0x12)  */
+#include "engine_turn.h"           /* g_sim_turn_progress (forced arrival)     */
 #include "save.h"
 #include "save_schema_globals.h"   /* s_slot_0057c8cc (local player) */
 
@@ -579,5 +581,241 @@ int test_engine_army_move_classify_blocked_friendly(void)
     T_ASSERT_EQ_I(I32(rg, 0x244), 1000);    /* stock untouched                    */
     T_ASSERT_EQ_U(g_overworld_map[e + 0], 5); /* cell not flattened               */
     T_ASSERT_EQ_U(r[M_PROGRESS], 6);        /* +3 (blocked) +3 (classifier) still */
+    return 0;
+}
+
+/* ==========================================================================
+ * FUN_00465d28 — movement-step executor (engine_army_move_run)
+ * ========================================================================== */
+
+#define M_READY       0x06
+#define M_DEST_COL    0x14
+#define M_DEST_ROW    0x15
+#define M_WP_LIST     0x1d
+#define M_SUBSTATE    0x14c
+#define M_ARRIVED     0x150
+#define M_STEP_BUDGET 0x154
+#define M_TIMER_OFF   0x160
+
+/* Dispatcher-seam spies. */
+static int ex_present, ex_arrive, ex_arrive_self;
+static int ex_combat_a, ex_combat_b, ex_combat_self, ex_combat_region;
+static int ex_region_lo, ex_region_hi, ex_region_self, ex_region_off;
+static int ex_special, ex_special_off;
+
+static void sp_present(int m)            { (void)m; ex_present++; }
+static void sp_arrive(int s)             { ex_arrive++; ex_arrive_self = s; }
+static void sp_combat_a(int s, unsigned r){ ex_combat_a++; ex_combat_self = s; ex_combat_region = (int)r; }
+static void sp_combat_b(int s, unsigned r){ (void)s; (void)r; ex_combat_b++; }
+static void sp_region_lo(int s, int o)   { ex_region_lo++; ex_region_self = s; ex_region_off = o; }
+static void sp_region_hi(int s, int o)   { (void)s; ex_region_hi++; ex_region_off = o; }
+static void sp_special(int s, int o)     { (void)s; ex_special++; ex_special_off = o; }
+
+static void ex_reset(void)
+{
+    cm_reset();                                 /* binds g_overworld_map */
+    engine_army_move_bind_present_fn(sp_present);
+    engine_army_move_bind_arrive_fn(sp_arrive);
+    engine_army_move_bind_combat_fns(sp_combat_a, sp_combat_b);
+    engine_army_move_bind_region_fns(sp_region_lo, sp_region_hi);
+    engine_army_move_bind_special_fn(sp_special);
+    ex_present = ex_arrive = ex_arrive_self = 0;
+    ex_combat_a = ex_combat_b = ex_combat_self = ex_combat_region = 0;
+    ex_region_lo = ex_region_hi = ex_region_self = ex_region_off = 0;
+    ex_special = ex_special_off = 0;
+    s_slot_0057c8cc = 1;
+    g_army_state_index = 1;
+    g_army_state_abort = 0;
+    g_sim_turn_progress = 0;
+    engine_set_current_screen(0);
+}
+
+/* Stack at (10,10) facing east toward a single waypoint at (11,10). */
+static uint8_t *ex_place_east(void)
+{
+    uint8_t *r = MREC(1);
+    r[M_OWNER] = 2;                 /* != local → skip the render box */
+    r[M_STATE] = 1;
+    r[M_COL] = 10; r[M_ROW] = 10; I32(r, M_CELL) = 0x1450;
+    r[M_FLAGS14B] = 1;              /* step-eval armed */
+    r[M_STEP_BUDGET] = 0xf; r[M_PROGRESS] = 0;   /* budget unspent */
+    r[M_WP] = 1; r[M_WP_LIST + 0] = 11; r[M_WP_LIST + 1] = 10;  /* wp[0] = (11,10) */
+    return r;
+}
+
+/* --- per-tick budget spent → snap + arrival seam ------------------------- */
+int test_engine_army_move_exec_arrival_budget(void)
+{
+    ex_reset();
+    uint8_t *r = MREC(1);
+    r[M_OWNER] = 2; r[M_STATE] = 1; r[M_FLAGS14B] = 1;
+    r[M_COL] = 10; r[M_ROW] = 10; I32(r, M_CELL) = 0x1450;
+    r[M_DEST_COL] = 10; r[M_DEST_ROW] = 10;     /* already on the destination */
+    r[M_STEP_BUDGET] = 3; r[M_PROGRESS] = 5;    /* budget spent (3 <= 5)      */
+    r[M_F01] = 1;                               /* carries a live order       */
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_run(&evq, 0);
+
+    T_ASSERT_EQ_U(r[M_PROGRESS], 3);            /* clamped to budget          */
+    T_ASSERT_EQ_U(r[M_SUBSTATE], 0);            /* movement finished          */
+    T_ASSERT_EQ_U(r[M_ARRIVED], 1);             /* dir-to-dest == 8           */
+    T_ASSERT_EQ_I(ex_present, 1);               /* F01 set → map recenter     */
+    T_ASSERT_EQ_I(ex_arrive, 1);
+    T_ASSERT_EQ_I(ex_arrive_self, 1);
+    T_ASSERT_EQ_I(I32(r, M_TIMER_OFF), 4);      /* +0x160 reset on entry      */
+    return 0;
+}
+
+/* --- record +0x06 suppresses the arrival seam ---------------------------- */
+int test_engine_army_move_exec_arrival_ready_suppressed(void)
+{
+    ex_reset();
+    uint8_t *r = MREC(1);
+    r[M_OWNER] = 2; r[M_STATE] = 1; r[M_FLAGS14B] = 1;
+    r[M_COL] = 10; r[M_ROW] = 10; I32(r, M_CELL) = 0x1450;
+    r[M_DEST_COL] = 12; r[M_DEST_ROW] = 10;
+    r[M_STEP_BUDGET] = 3; r[M_PROGRESS] = 5;
+    r[M_READY] = 1;                             /* +0x06 set → suppress arrive */
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_run(&evq, 0);
+
+    T_ASSERT_EQ_U(r[M_SUBSTATE], 0);            /* still finished              */
+    T_ASSERT_EQ_I(ex_arrive, 0);                /* but no arrival callback     */
+    return 0;
+}
+
+/* --- a turn commit in progress forces the arrival path ------------------- */
+int test_engine_army_move_exec_turn_progress_forces_arrival(void)
+{
+    ex_reset();
+    uint8_t *r = MREC(1);
+    r[M_OWNER] = 2; r[M_STATE] = 1; r[M_FLAGS14B] = 1;
+    r[M_COL] = 10; r[M_ROW] = 10; I32(r, M_CELL) = 0x1450;
+    r[M_DEST_COL] = 12; r[M_DEST_ROW] = 10;
+    r[M_STEP_BUDGET] = 0xf; r[M_PROGRESS] = 0;  /* budget NOT spent            */
+    g_sim_turn_progress = 1;                    /* … but a turn is committing  */
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_run(&evq, 0);
+
+    T_ASSERT_EQ_I(ex_arrive, 1);                /* forced arrival              */
+    T_ASSERT_EQ_U(r[M_PROGRESS], 0xf);          /* clamped to budget           */
+    g_sim_turn_progress = 0;
+    return 0;
+}
+
+/* --- an open step commits and steps the stack one cell east -------------- */
+int test_engine_army_move_exec_open_step_walks(void)
+{
+    ex_reset();
+    ex_place_east();                            /* east cell is open (flags 0) */
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_run(&evq, 0);
+
+    uint8_t *r = MREC(1);
+    T_ASSERT_EQ_I((int8_t)r[M_COL], 11);        /* stepped east                */
+    T_ASSERT_EQ_U(r[M_FLAGS14B] & 1, 0);        /* committed → step-eval disarmed */
+    T_ASSERT_EQ_I(ex_arrive, 0);                /* mid-path, no arrival        */
+    return 0;
+}
+
+/* --- destination already on the waypoint → immediate stop ---------------- */
+int test_engine_army_move_exec_already_on_waypoint(void)
+{
+    ex_reset();
+    uint8_t *r = ex_place_east();
+    r[M_WP_LIST + 0] = 10; r[M_WP_LIST + 1] = 10;   /* wp == current cell      */
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_run(&evq, 0);
+
+    T_ASSERT_EQ_U(r[M_SUBSTATE], 0);
+    T_ASSERT_EQ_U(r[M_ARRIVED], 1);
+    T_ASSERT_EQ_I((int8_t)r[M_COL], 10);        /* did not move                */
+    return 0;
+}
+
+/* --- combat outcome (5) runs both combat seams with the cell region ------ */
+int test_engine_army_move_exec_combat_dispatch(void)
+{
+    ex_reset();
+    ex_place_east();
+    g_overworld_map[0x1458 + 1] = 0x40;         /* east cell: combat flag      */
+    g_overworld_map[0x1458 + 7] = 9;            /* region key 9                */
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_run(&evq, 0);
+
+    uint8_t *r = MREC(1);
+    T_ASSERT_EQ_I(ex_combat_a, 1);
+    T_ASSERT_EQ_I(ex_combat_b, 1);
+    T_ASSERT_EQ_I(ex_combat_self, 1);
+    T_ASSERT_EQ_I(ex_combat_region, 9);
+    T_ASSERT_EQ_U(r[M_SUBSTATE], 0);
+    T_ASSERT_EQ_U(g_army_state_abort, 0);       /* not on the battle screen    */
+    return 0;
+}
+
+/* --- combat while the battle screen (0x12) is up aborts the army walk ---- */
+int test_engine_army_move_exec_combat_abort_on_battle_screen(void)
+{
+    ex_reset();
+    ex_place_east();
+    g_overworld_map[0x1458 + 1] = 0x40;
+    engine_set_current_screen(0x12);
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_run(&evq, 0);
+
+    T_ASSERT_EQ_U(g_army_state_abort, 1);
+    engine_set_current_screen(0);
+    return 0;
+}
+
+/* --- region-event (6): terrain band selects the lo vs hi seam ------------ */
+int test_engine_army_move_exec_region_event_bands(void)
+{
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+
+    /* low terrain (< 0x10) → region_lo only */
+    ex_reset();
+    ex_place_east();
+    g_overworld_map[0x1458 + 1] = 0x80;         /* region-event flag           */
+    g_overworld_map[0x1458 + 0] = 5;            /* low terrain                 */
+    engine_army_move_run(&evq, 0);
+    T_ASSERT_EQ_I(ex_region_lo, 1);
+    T_ASSERT_EQ_I(ex_region_hi, 0);
+    T_ASSERT_EQ_I(ex_region_self, 1);
+    T_ASSERT_EQ_I(ex_region_off, 0x1458);
+
+    /* high terrain (0x15..0x19) → region_hi only */
+    ex_reset();
+    ex_place_east();
+    g_overworld_map[0x1458 + 1] = 0x80;
+    g_overworld_map[0x1458 + 0] = 0x16;         /* high terrain                */
+    engine_army_move_run(&evq, 0);
+    T_ASSERT_EQ_I(ex_region_lo, 0);
+    T_ASSERT_EQ_I(ex_region_hi, 1);
+    T_ASSERT_EQ_I(ex_region_off, 0x1458);
+    return 0;
+}
+
+/* --- special tile (7) runs the special seam ------------------------------ */
+int test_engine_army_move_exec_special_dispatch(void)
+{
+    ex_reset();
+    ex_place_east();
+    g_overworld_map[0x1458 + 1] = 0x10;         /* special flag                */
+
+    engine_event_queue_state_t evq; engine_event_queue_init(&evq);
+    engine_army_move_run(&evq, 0);
+
+    uint8_t *r = MREC(1);
+    T_ASSERT_EQ_I(ex_special, 1);
+    T_ASSERT_EQ_I(ex_special_off, 0x1458);
+    T_ASSERT_EQ_U(r[M_SUBSTATE], 0);
     return 0;
 }

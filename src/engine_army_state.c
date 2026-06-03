@@ -95,7 +95,6 @@ static int anim_phase(const uint8_t *r)
 /* --- state 1: marching / occupying (FUN_0046521f) ------------------------- */
 static void handler_march(engine_event_queue_state_t *evq, int mp_active)
 {
-    (void)mp_active;
     uint8_t *r = AREC(g_army_state_index);
 
     r[A_TICKS] = 0xf;
@@ -116,7 +115,7 @@ static void handler_march(engine_event_queue_state_t *evq, int mp_active)
         (*(int32_t *)(r + A_TIMER))--;
 
     if ((int8_t)r[A_SUBSTATE] == 2) {
-        if (g_move_fn) g_move_fn();                /* FUN_00465d28 seam */
+        if (g_move_fn) g_move_fn(evq, mp_active);   /* FUN_00465d28 seam */
     } else if (r[A_READY] == 0) {
         r[A_SUBSTATE] = 2;
     }
@@ -146,13 +145,12 @@ static void handler_settle(engine_event_queue_state_t *evq, int mp_active)
         (*(int32_t *)(r + A_TIMER))--;
 
     if ((int8_t)r[A_SUBSTATE] == 2 && g_move_fn)
-        g_move_fn();                               /* FUN_00465d28 seam */
+        g_move_fn(evq, mp_active);                  /* FUN_00465d28 seam */
 }
 
 /* --- states 3 & 4: idle / in-transit (FUN_00465622 ≡ FUN_00465761) -------- */
 static void handler_idle(engine_event_queue_state_t *evq, int mp_active)
 {
-    (void)evq; (void)mp_active;
     uint8_t *r = AREC(g_army_state_index);
 
     r[A_TICKS] = 0xa;
@@ -165,7 +163,7 @@ static void handler_idle(engine_event_queue_state_t *evq, int mp_active)
         (*(int32_t *)(r + A_TIMER))--;
 
     if ((int8_t)r[A_SUBSTATE] == 2 && g_move_fn)
-        g_move_fn();                               /* FUN_00465d28 seam */
+        g_move_fn(evq, mp_active);                  /* FUN_00465d28 seam */
 }
 
 /* Handler dispatch table (PTR_FUN_004d6a50).  Index 0 is the no-op stub (never

@@ -40,7 +40,10 @@
 #include "engine_realm_upkeep.h"   /* engine_unit_remove / map link / unlink       */
 #include "engine_event_queue.h"    /* engine_event_queue_post (FUN_00472bc5)       */
 #include "engine_math.h"           /* engine_math_percent_div / _percent_of        */
-#include "engine_territory.h"      /* engine_territory_set_cell_type (FUN_0046d7f4) */
+#include "engine_territory.h"      /* set_cell_type / mark_draw_box / full_dirty   */
+#include "engine_path.h"           /* engine_path_direction_8way (FUN_0046f434)    */
+#include "engine.h"                /* engine_current_screen (DAT_004eac50)         */
+#include "engine_turn.h"           /* g_sim_turn_progress (DAT_00553fc8)           */
 #include "save_schema_globals.h"   /* s_slot_0057c8cc (local player)               */
 
 /* --- per-territory occupant record (g_per_territory_420, stride 0x1a4) ----- */
@@ -60,6 +63,16 @@
 #define M_ROUGH      0x14d    /* sticky rough-terrain flag, set per step (u8)    */
 #define M_F14E       0x14e    /* clears the cell's 0x80 region-event flag (u8)  */
 #define M_F152       0x152    /* expected merge-partner index (u8)              */
+
+/* Executor fields (FUN_00465d28), all in the same record. */
+#define M_READY      0x06     /* set → suppress the arrival seam (AI/auto army)(u8)*/
+#define M_DEST_COL   0x14     /* final destination column (i8)                   */
+#define M_DEST_ROW   0x15     /* final destination row (i8)                      */
+#define M_WP_LIST    0x1d     /* waypoint list: (col,row) byte pairs from here   */
+#define M_SUBSTATE   0x14c    /* sub-state; executor clears it (0) when finished(u8)*/
+#define M_ARRIVED    0x150    /* arrived-this-tick flag, set on path/budget end (u8)*/
+#define M_STEP_BUDGET 0x154   /* per-tick progress budget (handler sets 0xf/0xa)(i8)*/
+#define M_TIMER      0x160    /* per-occupant countdown timer (i32; reset to 4)  */
 
 /* Classifier hysteresis fields (FUN_0046634d), all in the same record. */
 #define M_FACING     0x1b     /* facing/shuffle counter, bumped while stalling (u8)*/
@@ -98,6 +111,33 @@ void engine_army_move_bind_sfx_fn(engine_army_move_sfx_fn fn) { g_sfx_fn = fn; }
 void engine_army_move_bind_alert_sfx_fn(engine_army_move_sfx_fn fn) { g_alert_fn = fn; }
 static void army_move_sfx(int id)   { if (g_sfx_fn)   g_sfx_fn(id);   }
 static void army_move_alert(int id) { if (g_alert_fn) g_alert_fn(id); }
+
+/* Movement-executor dispatcher seams (see header).  All default NULL → no-op. */
+static engine_army_move_present_fn g_present_fn;   /* 0x426360 surface present */
+static engine_army_move_arrive_fn  g_arrive_fn;    /* 0x467196 arrival         */
+static engine_army_move_region_fn  g_combat_a_fn;  /* 0x4296b5 combat-engage   */
+static engine_army_move_region_fn  g_combat_b_fn;  /* 0x4a6c68 combat-resolve  */
+static engine_army_move_cell_fn    g_region_lo_fn; /* 0x46873f region-event lo */
+static engine_army_move_cell_fn    g_region_hi_fn; /* 0x4686a0 region-event hi */
+static engine_army_move_cell_fn    g_special_fn;   /* 0x468ae2 special tile    */
+
+void engine_army_move_bind_present_fn(engine_army_move_present_fn fn) { g_present_fn = fn; }
+void engine_army_move_bind_arrive_fn(engine_army_move_arrive_fn fn)   { g_arrive_fn = fn; }
+void engine_army_move_bind_combat_fns(engine_army_move_region_fn engage,
+                                      engine_army_move_region_fn resolve)
+{ g_combat_a_fn = engage; g_combat_b_fn = resolve; }
+void engine_army_move_bind_region_fns(engine_army_move_cell_fn lo,
+                                      engine_army_move_cell_fn hi)
+{ g_region_lo_fn = lo; g_region_hi_fn = hi; }
+void engine_army_move_bind_special_fn(engine_army_move_cell_fn fn) { g_special_fn = fn; }
+
+static void army_move_present(int mode)            { if (g_present_fn) g_present_fn(mode); }
+static void army_move_arrive(int self)             { if (g_arrive_fn)  g_arrive_fn(self); }
+static void army_move_combat_a(int self, unsigned r) { if (g_combat_a_fn) g_combat_a_fn(self, r); }
+static void army_move_combat_b(int self, unsigned r) { if (g_combat_b_fn) g_combat_b_fn(self, r); }
+static void army_move_region_lo(int self, int off) { if (g_region_lo_fn) g_region_lo_fn(self, off); }
+static void army_move_region_hi(int self, int off) { if (g_region_hi_fn) g_region_hi_fn(self, off); }
+static void army_move_special(int self, int off)   { if (g_special_fn)  g_special_fn(self, off); }
 
 /* Outcome scratch latched per classified cell (retail runtime scalars). */
 uint8_t g_army_move_cell_flags;           /* DAT_0050a4a4 */
@@ -456,4 +496,102 @@ int engine_army_move_classify_step(int dir, engine_event_queue_state_t *evq,
     r[M_STALL_ACC] = 1;
     engine_army_move_commit_step();
     return result;
+}
+
+/* --- FUN_00465d28 @ 0x465d28: movement-step executor (1441 B, __cdecl) ------
+ * See engine_army_move.h for the full contract. */
+void engine_army_move_run(engine_event_queue_state_t *evq, int mp_active)
+{
+    int      self = g_army_state_index;          /* DAT_005533e8 */
+    uint8_t *r    = MREC(self);
+
+    /* Retail leaves these uninitialised on the first (step-eval disarmed) pass;
+     * the disarmed classifier ignores the direction computed from them, so the
+     * only observable use is the dir==8 grid-arrival guard.  We zero-init for a
+     * defined first pass — a real stack is never at the (0,0) corner where that
+     * differs (engine-quirk: retail-UB first-pass waypoint). */
+    unsigned wp_col = 0, wp_row = 0;
+
+    *(int32_t *)(r + M_TIMER) = 4;               /* +0x160 reset per entry */
+
+    for (;;) {
+        if (r[M_FLAGS14B] & 1) {                 /* step-eval armed */
+            /* Local player's marching stack: stamp a 13×13 alternate-draw box
+             * around it and mark the screen dirty (pure render). */
+            if (r[M_STATE] == 1 && (int8_t)r[M_OWNER] == (int8_t)s_slot_0057c8cc) {
+                engine_territory_mark_draw_box((int8_t)r[M_COL], (int8_t)r[M_ROW], 6);
+                engine_territory_mark_full_screen_dirty();
+            }
+
+            /* Per-tick step budget spent, or a turn commit in progress → snap
+             * progress to the budget and finalise this army for the tick. */
+            if ((int8_t)r[M_STEP_BUDGET] <= (int8_t)r[M_PROGRESS] ||
+                g_sim_turn_progress == 1 || g_sim_turn_progress == 2) {
+                r[M_PROGRESS] = r[M_STEP_BUDGET];
+                if (r[M_F01] != 0)
+                    army_move_present(0xc);
+                int d = engine_path_direction_8way((int8_t)r[M_COL], (int8_t)r[M_ROW],
+                                                   (int8_t)r[M_DEST_COL],
+                                                   (int8_t)r[M_DEST_ROW]);
+                if ((d & 0xff) == 8)
+                    r[M_ARRIVED] = 1;
+                r[M_SUBSTATE] = 0;
+                if (r[M_READY] != 0)
+                    return;
+                army_move_arrive(self);
+                return;
+            }
+
+            /* Pull the next waypoint off the per-record list. */
+            if (r[M_WP_COUNT] == 0) {
+                r[M_ARRIVED] = 1;
+                if (r[M_F01] != 0)
+                    army_move_present(0xc);
+                r[M_SUBSTATE] = 0;
+                if (r[M_READY] != 0)
+                    return;
+                army_move_arrive(self);          /* path end — but keep walking */
+            }
+            if (r[M_WP_COUNT] != 0)
+                r[M_WP_COUNT]--;
+            wp_col = r[M_WP_LIST + r[M_WP_COUNT] * 2 + 0];   /* +0x1d */
+            wp_row = r[M_WP_LIST + r[M_WP_COUNT] * 2 + 1];   /* +0x1e */
+        }
+
+        /* Direction toward the current waypoint; 8 == already standing on it. */
+        int dir = engine_path_direction_8way((int8_t)r[M_COL], (int8_t)r[M_ROW],
+                                             (int)wp_col, (int)wp_row);
+        if ((dir & 0xff) == 8) {
+            r[M_SUBSTATE] = 0;
+            r[M_ARRIVED]  = 1;
+            return;
+        }
+
+        int code = engine_army_move_classify_step(dir & 0xff, evq, mp_active);
+        if (code == 10)
+            return;                              /* arrival / walk aborted */
+        if (code == 2)
+            continue;                            /* step-eval just armed — re-loop */
+
+        if (code == 3)
+            r[M_ROUGH] = 1;
+        if (code > 4) {
+            r[M_SUBSTATE] = 0;
+            if (code == 5) {                     /* combat */
+                army_move_combat_a(self, g_army_move_cell_region);
+                army_move_combat_b(self, g_army_move_cell_region);
+                if (engine_current_screen() == 0x12)
+                    g_army_state_abort = 1;      /* battle screen up → halt walk */
+            } else if (code == 6) {              /* region-event by terrain band */
+                if (g_army_move_cell_terrain < 0x10)
+                    army_move_region_lo(self, g_army_move_cell_off);
+                if (g_army_move_cell_terrain > 0x14 && g_army_move_cell_terrain < 0x1a)
+                    army_move_region_hi(self, g_army_move_cell_off);
+            } else if (code == 7) {              /* special tile */
+                army_move_special(self, g_army_move_cell_off);
+                r[M_SUBSTATE] = 0;
+            }
+        }
+        return;
+    }
 }

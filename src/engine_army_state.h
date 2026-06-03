@@ -16,10 +16,12 @@
  * occupant's region colour against the cell it stands on. */
 void engine_army_state_bind_cells(const uint8_t *cells);
 
-/* Bind the deep movement-step executor seam (retail FUN_00465d28).  Invoked by
- * a handler when the occupant's sub-state (+0x14c) is 2.  NULL (the default)
- * leaves it an unbound no-op — the executor is its own multi-chip port arc. */
-typedef void (*engine_army_move_fn)(void);
+/* Bind the deep movement-step executor seam (retail FUN_00465d28, now ported as
+ * engine_army_move_run).  Invoked by a handler when the occupant's sub-state
+ * (+0x14c) is 2; the driver forwards its own `evq` / `mp_active` so the executor
+ * can thread them into the per-step classifier (retail reads them from globals).
+ * NULL (the default) leaves it an unbound no-op. */
+typedef void (*engine_army_move_fn)(engine_event_queue_state_t *evq, int mp_active);
 void engine_army_state_bind_move_fn(engine_army_move_fn fn);
 
 /* Current occupant index the driver is processing (retail DAT_005533e8).

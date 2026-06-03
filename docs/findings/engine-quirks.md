@@ -6393,3 +6393,31 @@ Two secondary gotchas in the same function:
   normal budget 3.  The flag is the single sticky `M_ROUGH` byte that
   `commit_step` writes from the entered cell and the classifier both reads (for
   the budget) and rewrites (from the new step outcome).
+
+## 181 — the movement executor `FUN_00465d28` reads an UNINITIALISED waypoint on its disarmed first pass (harmless because the disarmed classifier ignores the direction)
+
+`engine_army_move_run` only assigns its `wp_col`/`wp_row` locals (retail stack
+slots `var_ch`/`var_10h`) inside the **step-eval-armed** branch (+0x14b bit0).
+But the common tail after that branch unconditionally evaluates a direction from
+them (`engine_path_direction_8way`, `FUN_0046f434`) and feeds it to the
+classifier.  On the very first executor pass for an army the flag is still
+disarmed, so retail reads whatever those stack slots last held — genuine
+read-before-write UB.
+
+It's benign in practice for two reasons:
+
+1. The **disarmed** classifier path (`engine_army_move_classify_step` with
+   +0x14b bit0 = 0) runs only the stall/retry hysteresis and **never reads its
+   direction argument** — so the garbage direction is computed and discarded.
+2. The only other use of that garbage is the `dir == 8` (already-on-cell) early
+   return guarding the classifier call.  `FUN_0046f434` returns 8 only when the
+   "from" and "to" coordinates are equal, which for a real stack position
+   requires the garbage waypoint to exactly equal the stack's own (col,row) — it
+   essentially never does, and a stack can't legitimately sit at the (0,0) grid
+   corner where the zero-init equivalent would trip.
+
+The port zero-initialises `wp_col`/`wp_row` for a defined first pass; this is
+observationally identical to retail except in the impossible (0,0)-corner case,
+and the disarmed classifier discards the value regardless.  Same "faithfully
+reproduce retail's control flow, tighten only the genuinely-unreachable UB"
+posture as elsewhere.

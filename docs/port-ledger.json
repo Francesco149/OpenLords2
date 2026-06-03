@@ -11541,7 +11541,8 @@
     "src/engine_army_move.c",
     "src/engine_army_move.h",
     "src/engine_army_state.c",
-    "src/engine_army_state.h"
+    "src/engine_army_state.h",
+    "src/game_init.c"
    ]
   },
   {
@@ -12752,6 +12753,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_move.c",
     "src/engine_path.c",
     "src/engine_path.h"
    ]

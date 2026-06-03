@@ -298,16 +298,64 @@ pass-through, grid-edge no-op, blocked scorched-earth (decay arithmetic +
 flatten + alert + push-through), and the same-region no-scorch guard.  All
 offsets r2-verified against `FUN_0046634d`.
 
+### Movement-step executor `FUN_00465d28` → `engine_army_move_run` (ported)
+
+The inner loop the army-state driver runs when an occupant's sub-state (+0x14c)
+is 2.  Each entry resets the per-occupant timer (+0x160 = 4) and walks the stack
+toward its waypoints, looping until the per-tick **step budget** (+0x154, set by
+the state handler to 0xf march / 0xa settle) is consumed by the path-progress
+accumulator (+0x153), the path ends, or an outcome interrupts:
+
+- While the step-eval is disarmed (+0x14b bit0 = 0) the loop spins the
+  classifier's stall/retry hysteresis — the classifier ignores the direction
+  until armed — then on arming loads the next waypoint off the per-record list
+  (+0x1d col / +0x1e row, pairs indexed by the waypoint counter +0x1c) and
+  evaluates the step toward it.
+- The **local player's** marching stack (state 1, owner == `s_slot_0057c8cc`)
+  stamps a 13×13 alternate-draw box (`engine_territory_mark_draw_box`, retail
+  `FUN_0046e067`) and marks the screen dirty (`..._mark_full_screen_dirty`,
+  `FUN_0045240a`) each armed pass — pure render, both already ported.
+- **Budget spent**, or a turn commit in progress (`g_sim_turn_progress` 1/2),
+  snaps +0x153 to the budget, recenters the strategic-map surface on the stack
+  (camera/present seam `FUN_00426360`, gated on the live-order byte +0x01), and
+  finalises via the **arrival** seam (`FUN_00467196`) unless the record's +0x06
+  byte suppresses it.  Same path when the waypoint counter hits 0.
+- A classifier outcome of **5** runs the two **combat** seams (`FUN_004296b5`
+  engage + `FUN_004a6c68` resolve, both with the latched cell region) and aborts
+  the whole army walk (`g_army_state_abort`) if the battle screen 0x12 is up; **6**
+  runs a **region-event** seam picked by the destination terrain (`FUN_0046873f`
+  for terrain < 0x10, `FUN_004686a0` for 0x15..0x19); **7** runs the
+  **special-tile** seam (`FUN_00468ae2`); **10** ends the walk (arrival or
+  collision-destroyed).
+
+`evq` / `mp_active` are threaded straight into `engine_army_move_classify_step`;
+the army-state driver's move_fn seam now carries them (signature changed from
+argless).  The seven deeper callees above are bind-able seams (NULL = no-op,
+`engine_army_move_bind_present_fn` / `_arrive_fn` / `_combat_fns` / `_region_fns`
+/ `_special_fn`), so until each is ported the executor faithfully **steps and
+commits** the stack across the grid (real save-state mutation via
+`engine_army_move_commit_step`) without firing those events — exactly the staged
+shape the move_fn seam itself had before this chip.  Bound to the driver via
+`engine_army_state_bind_move_fn(engine_army_move_run)` in `game_init`.
+
+Ported into `engine_army_move.c` (+ header), host-tested (9 new tests, 1935
+total green): budget-spent arrival (clamp + present + arrive + timer reset),
++0x06 arrival suppression, turn-progress forced arrival, open-step walk (commit
+steps the stack east + disarms), already-on-waypoint immediate stop, combat
+dispatch (both seams + cell region), combat abort on battle screen 0x12, region-
+event lo/hi terrain bands, and special-tile dispatch.  All offsets, the +0x160
+store width, the waypoint indexing, and the 14-call dispatch order r2-verified
+against `FUN_00465d28`.
+
 ### Frontier (next chips)
 
-1. **Movement-step executor `FUN_00465d28`** (1441 B) — advances the occupant
-   one step along its path (`FUN_0046f434`, ported) and dispatches the
-   classifier's result (`engine_army_move_classify_step`, ported above) into
-   arrival / blocked / combat-engage (5 → `FUN_004296b5` + `FUN_004a6c68`) /
-   region-event (6 → `FUN_0046873f` / `FUN_004686a0`) / (7 → `FUN_00468ae2`).
-   The destination-cell evaluator and classifier it leans on are now **ported**;
-   what remains is the executor body plus the four region/combat event callees.
-   Bind it via `engine_army_state_bind_move_fn` once ported.
+1. **The seven executor dispatcher callees** — port each and bind it into the
+   executor through the seam it already calls: `FUN_00467196` (path-end / arrival
+   finaliser, clears the order), `FUN_004296b5` + `FUN_004a6c68` (combat engage +
+   resolve), `FUN_0046873f` / `FUN_004686a0` (region-event handlers), `FUN_00468ae2`
+   (special-tile event), and `FUN_00426360` (DirectDraw surface present/scroll —
+   render seam, lands with the strategic-map camera cluster).  `FUN_004296b5`,
+   `FUN_0046873f`, `FUN_00468ae2` are zero-dep leaves today.
 2. **Wire `engine_army_state_run` into `engine_tick`'s SP per-tick path**
    (engine.c, beside the existing `FUN_0040490d`/`FUN_0049a010` arm) + bind the
    rebellion seam (`engine_realm_bind_rebellion_fn`) to

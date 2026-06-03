@@ -372,7 +372,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x465622 | FUN_00465622 | 319 | engine_army_state.c |
 | 0x465761 | FUN_00465761 | 319 | engine_army_state.c |
 | 0x4658c1 | FUN_004658c1 | 1112 | engine_army_move.c, engine_army_move.h |
-| 0x465d28 | FUN_00465d28 | 1441 | engine_army_move.c, engine_army_move.h, engine_army_state.c (+1) |
+| 0x465d28 | FUN_00465d28 | 1441 | engine_army_move.c, engine_army_move.h, engine_army_state.c (+2) |
 | 0x46634d | FUN_0046634d | 1002 | engine_army_move.c, engine_army_move.h |
 | 0x46673c | FUN_0046673c | 343 | engine_army_move.c |
 | 0x466893 | FUN_00466893 | 900 | engine_army_move.c, engine_army_move.h, game_init.c |
@@ -437,7 +437,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46f1dc | FUN_0046f1dc | 67 | game_init.c, game_init.h |
 | 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h |
 | 0x46f3cd | FUN_0046f3cd | 78 | engine_map_init.c, game_init.c, game_init.h |
-| 0x46f434 | FUN_0046f434 | 216 | engine_path.c, engine_path.h |
+| 0x46f434 | FUN_0046f434 | 216 | engine_army_move.c, engine_path.c, engine_path.h |
 | 0x46ff43 | FUN_0046ff43 | 617 | engine_strat_cost.c, engine_strat_cost.h, game_init.c |
 | 0x471c1f | FUN_00471c1f | 273 | engine_tile.c, engine_tile.h |
 | 0x471d30 | FUN_00471d30 | 118 | engine_tile.c, engine_tile.h |
