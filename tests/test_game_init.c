@@ -31,6 +31,35 @@
 
 /* The save blocks under test live in save.c (linked into the suite). */
 
+/* Host-side stand-in for the engine.c double-LFSR global (DAT_0058fe28/08).
+ * engine.c (Win32-only) owns the real one, seeded to the InitInstance
+ * constants; this stub mirrors that so engine_game_init's seat-shuffle draws
+ * start from the same seed they always have.  game_init threads this global
+ * through seat_shuffle (advancing it via engine_rng_global_set), so it is a
+ * shared engine symbol, not file-static. */
+static uint32_t gi_stub_rng_a = 0x54657687u;
+static uint32_t gi_stub_rng_b = 0x72641663u;
+void engine_rng_global_get(uint32_t *a, uint32_t *b)
+{
+    if (a) *a = gi_stub_rng_a;
+    if (b) *b = gi_stub_rng_b;
+}
+void engine_rng_global_set(uint32_t a, uint32_t b)
+{
+    gi_stub_rng_a = a;
+    gi_stub_rng_b = b;
+}
+/* Reset the stub global to its InitInstance seed.  Retail seeds DAT_0058fe28/08
+ * once at program start (FUN_004b2258) and never per new-game, so each full
+ * engine_game_init() test — conceptually a fresh program — must restore the
+ * seed first (the stub persists across tests within this binary, exactly as
+ * the real global persists within a process). */
+static void gi_reset_global_rng(void)
+{
+    gi_stub_rng_a = 0x54657687u;
+    gi_stub_rng_b = 0x72641663u;
+}
+
 int test_game_init_clear_tables_zeroes_per_army(void)
 {
     memset(g_per_army_768, 0xAB, sizeof g_per_army_768);
@@ -1294,6 +1323,7 @@ int test_game_init_orchestrator_builds_map(void)
      * skips the loc walk when none is set).  Phase C binds real l2.eng. */
     engine_npc_schedule_set_localization(NULL, 0);
 
+    gi_reset_global_rng();                          /* fresh InitInstance seed */
     engine_game_init();                             /* FUN_00497ced */
 
     /* The plane-unpack inside setup_overworld must have populated +7. */
@@ -1374,6 +1404,7 @@ int test_game_init_turn_driver_advances_to_turn_1(void)
     engine_npc_schedule_set_localization(NULL, 0);
 
     /* Wire the assembled driver into step 17, then run a fresh game. */
+    gi_reset_global_rng();                          /* fresh InitInstance seed */
     engine_game_init_bind_turn_driver_fn(gi_turn_driver_shim);
     engine_game_init();                             /* FUN_00497ced + driver */
     engine_game_init_bind_turn_driver_fn(NULL);     /* don't leak into later tests */
@@ -1545,6 +1576,7 @@ int test_game_init_player_config_activates_realms(void)
     engine_game_init_set_player_config(/*count*/5, /*human_count*/1,
                                        /*cur_player*/1, /*player_name*/prefs);
 
+    gi_reset_global_rng();                          /* fresh InitInstance seed */
     engine_game_init_bind_turn_driver_fn(gi_turn_driver_shim);
     engine_game_init();                             /* FUN_00497ced + driver */
     engine_game_init_bind_turn_driver_fn(NULL);

@@ -1,11 +1,24 @@
 # New-game save parity — port `--newgame` vs retail (residual divergences)
 
-Status as of 2026-06-02 (after the config-screen player-setup fix, engine-quirks
-#173 / commit a8eee4c).  The new-game **turn-spam bug is fixed** and a retail load
+Status as of 2026-06-03 (after the **turn-driver global-RNG threading fix** —
+see #3/#4/#5 below).  The new-game **turn-spam bug is fixed** and a retail load
 of `port_newgame.sav` is stable (user-confirmed).  This note records the
 **remaining byte divergences** between the port's new-game save and a same-seed
 retail new-game save, with root causes, for future resolution.  None affect the
 turn-spam fix or human-player playability.
+
+**2026-06-03 update — one fix collapsed five entries.**  The whole-save diff vs
+`lastturn.sav` dropped from **75 B → 34 B**, and of the residual 34 B, **20 B are
+save-point artifacts** (entries 124/150/151/152/159–164, below) — leaving **only
+entry 3 (14 B, AI strategy +0x130)** as a genuine divergence.  The fix: retail's
+new-game seeder **FUN_00497e65 (seat_shuffle) stirs the GLOBAL double-LFSR**
+(`DAT_0058fe28/0058fe08`) via FUN_00404a46; the port threaded its draws through a
+*local* copy seeded to the same InitInstance constants, so the global never
+advanced and the turn driver's stir (step 17) started from the wrong state.
+Threading the global through seat_shuffle (`engine_rng_global_get`/`_set`, and
+mirroring the live state into the save home) fixed entries **0, 4, 18, 19, 79**
+at once — they were all downstream of that one global-RNG divergence, NOT the
+separate causes the earlier draft assigned them (see the per-entry notes).
 
 ## Method
 
@@ -106,25 +119,33 @@ a *separate* root cause, see the box below.  Original analysis kept for context:
   Verified: entry 2 (17 B) and entry 86 drop out of `save_diff` →
   **101 B → 83 B, 26 → 24 entries**; all 1871 host tests green.
 
-### 3. Descriptor autotile-build residual — Entry 0 (`0x522f90`, 37 B)
-- The new-game descriptor **build** (`setup_overworld` → `classify_feature_tiles`
-  0x46dbf5 / `randomise_special_tiles` 0x46dd34, the single-LFSR autotiler)
-  produces a handful of cells differently — 3 cells of field **+0** (type) plus
-  **+2/+3** (render-flags / sprite) on a few border/special cells.
-- Same family as the known autotile near-miss (`test_map_finalize` reports
-  +2≈99.5%).  NOT the LOAD path, which deserialises descriptors and matches
-  100% — this is build-only.
-- **Fix:** an autotiler RNG/order residual; defer with the other autotile work.
+### 3. Entry 0 (`0x522f90`) — realm-standing markers — **FIXED** (was mis-filed "autotile")
+- **RE-ATTRIBUTED + FIXED 2026-06-03.**  The 9-B residual was **NOT** an autotiler
+  build issue.  Per-pass instrumentation of `setup_overworld` showed the autotiler
+  leaves these cells untouched; the divergence is 3 **single** cells (273→realm
+  0xe, 601→0xb, 917→0xc) that retail sets to type **0x17** and the port left at
+  the `seed_army_features` type 0x14.  Type 0x17 is written by
+  `engine_realm_update_mood` (FUN_00449889) → `realm_mark_next_cell(key,0x17)` —
+  the **band-5 (worst-mood) realm standing marker**, run by the turn driver
+  (step 17).  Retail classified realms 0xe/0xb/0xc as band 5 and marked one cell
+  each; the port did not, because its turn-driver `update_mood` saw the wrong RNG
+  state (focus realm `sel = rng_a & 0xf` and the per-realm mood deltas both
+  diverged).  Root cause = the global double-LFSR not advanced through
+  `seat_shuffle` (see the header + #5).  Fixed → entry 0 byte-exact.
+  (The matching 2×2 type-0x17 blocks, e.g. 797/798/861/862, are the unrelated
+  *secondary-keep* footprints — those already matched.)
 
-### 4. AI economy / strategy residual — turn-driver/AI frontier
-- **Entry 3** (`0x57bf00`): 4 B — the AI players' `+0x130` strategy field
-  (port 0x32, retail 0x74/0x74/0xb6/0xd8).
-- **Entry 4 per_army** (`0x53f9b0`): ~90 B — AI realm economy fields
-  (`+0x01/02/03`, `+0xb9`, `+0x1a0`, `+0x21d`, …).
-- Remaining **entry 5** beyond the cascade in #1.
-- These are AI-realm economy/strategy values produced by the turn-driver's AI
-  passes; the documented turn-driver/AI byte-completeness frontier
-  (project_next_chip_4485a5).  Not a new-game-specific bug.
+### 4. AI economy — Entry 4 (`0x53f9b0`) — **FIXED**; Entry 3 (`0x57bf00`) — remaining
+- **Entry 4 per_army** (`0x53f9b0`, was ~23 B): AI realm economy fields — **FIXED**
+  by the global-RNG threading fix.  These are produced by the turn driver's AI
+  economy passes (provision / plan_realm / season passes); once the turn driver
+  ran from the correct RNG state they matched byte-exact.
+- **Entry 3** (`0x57bf00`, 14 B) — **remaining.**  The AI players' strategy block:
+  per AI player, `+0x2b` (retail 1/2/3, port 0), `+0x50` (retail 0, port 0x32),
+  `+0x130` (retail 0x74, port 0x32).  Unchanged by the RNG fix → a genuinely
+  separate AI-strategy computation (the per-realm AI brain `+0x130` strategy
+  selection), still on the turn-driver/AI byte-completeness frontier
+  (project_next_chip_4485a5).  The only real residual left on the new-game path.
 
 ### 5. Misc bookkeeping scalars — mostly FIXED
 - **Seeded (DONE):** entries **73** (`0x569584`=1), **75** (`0x53f06c`=7),
@@ -137,11 +158,13 @@ a *separate* root cause, see the box below.  Original analysis kept for context:
   Entry **86** (`0x553f98`) handled in #2.  Entry **78** (`0x5530b4`) was the
   placement cascade — already resolved in #1.
 - **Remaining (not clean constants, deferred):**
-  - **79** (`0x554020`): retail 0x0b, port 2 — a config-screen player-**selection
-    cursor** (retail reads `[0x554020]+1` at 0x4499ca, wraps at `[0x56d5dc]`).
-    Interaction state advanced by clicking through players; the headless seat
-    doesn't, so it sits at its own value.  Hard-coding 0x0b would bake in a
-    capture artifact, not port behaviour.
+  - **79** (`0x554020`): retail 0x0b, port 2 — **FIXED 2026-06-03.**  This is NOT
+    a config-screen selection cursor (the earlier guess); it is the realm-mood
+    **focus realm** `sel`, written by `engine_realm_update_mood` (FUN_00449889)
+    at `s_slot_00554020 = sel` after `sel = rng_a & 0xf` (+ fallbacks).  It
+    diverged for the same reason as entry 0: the turn-driver `update_mood` saw
+    the wrong global RNG state.  Fixed by the global-RNG threading fix → 0x0b
+    byte-exact.
   - **16/17** (`0x5651b4`/`0x5651b8`): the camera scroll col/row — **FIXED**.
     The recenter-on-capital (`engine_territory_recenter_on_capital`
     `FUN_00432746` → `_recenter_on_tile` `FUN_0043278b`, run by `setup_realms`)
@@ -159,12 +182,16 @@ a *separate* root cause, see the box below.  Original analysis kept for context:
     is centred on the player's capital (matching retail) AND the save carries
     24/2 byte-exact.  Entries 16/17 drop from the diff → **77 B → 75 B,
     18 → 16 entries**.  See engine-quirks (camera scroll-storage split).
-  - **18/19** (`0x58fe28`/`0x58fe08`): the **RNG state** (`g_rng_state_a/b`).
-    Port writes 0 — the RNG runs on private statics in engine.c, never mirrored
-    into the save-schema globals (classic scalar-wall).  But even if mirrored it
-    would not match retail's `abf3a863`/`e902a252`: that value is the seed
-    stepped N times through the full init RNG-consumer chain, which is not yet
-    ported.  Rides the turn-driver/AI byte-completeness frontier, not a one-liner.
+  - **18/19** (`0x58fe28`/`0x58fe08`): the **RNG state** (`g_rng_state_a/b`) —
+    **FIXED 2026-06-03.**  Two bugs, both addressed: (a) the live state was never
+    mirrored into the save-schema globals (classic scalar-wall) — now
+    `engine_tick_rng_step` + `engine_rng_global_set` write `s_slot_0058fe28/08`
+    on every advance; (b) the state didn't reach retail's `abf3a863`/`e902a252`
+    because the port left the **global** at its InitInstance seed — the init
+    RNG-consumer chain (just `seat_shuffle`, FUN_00497e65, which stirs the global
+    3×/iteration via FUN_00404a46) was running on a *local* copy.  Threading the
+    global through `seat_shuffle` advances it exactly as retail does; the turn
+    driver's stir (step 17) then lands on retail's value → 18/19 byte-exact.
 
 ## Not divergences (save-point artifacts — port already correct)
 Entries **124, 150, 151, 152, 159, 160, 161, 162, 163, 164** match the live
@@ -187,18 +214,37 @@ nix develop -c python3 tools/frida_capture.py --remote cutestation.soy:27042 \
 nix develop -c python3 tools/save_diff.py "$GAMEDIR/lastturn.sav" "$GAMEDIR/port_newgame.sav"
 ```
 **#1 (bucket cluster + placement cascade) and #2 (name/title) are fully DONE,
-#5 is mostly seeded** (73/75/76/84/197/207 + 86), **and the camera scroll
-16/17 is FIXED** (capital-centred 24/2, render + save).  Total save-diff vs
-`lastturn.sav`: **75 B** across 16 entries (down from 251 → 101 → 83 → 77 → 75).
-Of the residual 75 B:
+#5 is FIXED** (73/75/76/84/197/207/86 seeded; 16/17 camera; 18/19 RNG; 79 focus
+realm), **entry 0 (#3) and entry 4 (#4) are FIXED** by the global-RNG threading.
+Total save-diff vs `lastturn.sav`: **34 B** across 11 entries (down from
+251 → 101 → 83 → 77 → 75 → **34**).  Of the residual 34 B:
 - **20 B** are save-point artifacts (entries 124/150/151/152/159–164) — the
   port is already correct; retail's step-19 `lastturn.sav` just predates them.
-- **9 B** entry 0 — autotile build residual (#3, deferred).
-- **37 B** entries 3/4 — AI economy/strategy (#4, turn-driver frontier).
-- **8 B** entries 18/19 — RNG state (rides the turn-driver frontier, #5).
-- **1 B** entry 79 — config-screen player-selection cursor (#5, deferred).
+- **14 B** entry 3 — the AI per-realm strategy block (`+0x2b/+0x50/+0x130`),
+  the last genuine residual (#4, turn-driver/AI byte-completeness frontier).
 
-So everything that is a clean, faithful one-liner is now seeded; the rest ride
-the autotile / turn-driver frontiers (none new-game-specific) or are artifacts.
-The new-game camera frame is now byte-exact + visually confirmed (the first
-strategic frame recentres on the player's capital, user-confirmed via feed).
+So **every new-game divergence except the AI-strategy block is now byte-exact**.
+The remaining 14 B rides the per-realm AI-brain frontier (project_next_chip_4485a5),
+not anything new-game-specific.  The new-game camera frame is byte-exact +
+visually confirmed (first strategic frame recentres on the player's capital).
+
+### The fix (2026-06-03) — global double-LFSR threading
+Retail's new-game seeder **FUN_00497e65 (seat_shuffle)** stirs the **global**
+double-LFSR `DAT_0058fe28/0058fe08` via FUN_00404a46 (3 advances per loop
+iteration; it is the *only* init consumer of that global before the turn driver).
+The port had ported seat_shuffle to thread a **local** `engine_rng_in_t` seeded
+to the same InitInstance constants — so its *output* (the shuffle + the two
+48-entry tables) matched, but the global never advanced.  The turn driver
+(step 17) reads that global, stirs it once (`engine_tick_rng_step`), and feeds
+`rng_7bit_a/b` to every RNG-driven turn-1 pass (realm mood/standings, focus
+realm, AI economy).  Starting from the un-advanced seed perturbed all of them.
+
+Changes:
+- `engine.c`: `engine_rng_global_get/_set` accessors; `engine_tick_rng_step` and
+  `_set` mirror the live state into `s_slot_0058fe28/08` (save entries 18/19),
+  collapsing the scalar-wall split (one storage, as retail).
+- `game_init.c`: load the global in (`engine_rng_global_get`), thread it through
+  `engine_game_init_seat_shuffle`, write the advanced state back
+  (`engine_rng_global_set`) — exactly the side effect retail's seat_shuffle has.
+- Tests: host stubs for the two accessors + a per-test seed reset (retail seeds
+  the global once at InitInstance/FUN_004b2258, never per new-game).

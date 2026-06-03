@@ -14,6 +14,7 @@
  */
 
 #include <stddef.h>
+#include <stdint.h>
 
 /* engine.c runtime sim flags (retail DAT_00553030 etc.) — plain state. */
 int g_sim_mp_active;
@@ -34,6 +35,22 @@ static int g_stub_redraw;
 int  engine_current_screen(void)        { return g_stub_screen; }
 void engine_set_current_screen(int s)   { g_stub_screen = s; }
 void engine_set_demand_redraw(int mode) { g_stub_redraw = mode; }
+
+/* engine.c double-LFSR global (DAT_0058fe28/08), seeded to the InitInstance
+ * constants.  game_init.c threads it through the seat-shuffle seeder; the diff
+ * targets that exercise that path expect the same seed engine.c would supply. */
+static uint32_t g_stub_rng_a = 0x54657687u;
+static uint32_t g_stub_rng_b = 0x72641663u;
+void engine_rng_global_get(uint32_t *a, uint32_t *b)
+{
+    if (a) *a = g_stub_rng_a;
+    if (b) *b = g_stub_rng_b;
+}
+void engine_rng_global_set(uint32_t a, uint32_t b)
+{
+    g_stub_rng_a = a;
+    g_stub_rng_b = b;
+}
 
 /* main.c logging sink — suppressed, as in the test binary. */
 void log_line(const char *fmt, ...)

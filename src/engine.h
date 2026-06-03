@@ -198,6 +198,13 @@ int engine_sim_turn_resolved(void);
  * Defined in engine.c; the pure pass sequence lives in engine_turn.c. */
 void engine_turn_advance(void);
 
+/* Read / write the live double-LFSR RNG state (retail DAT_0058fe28/0058fe08).
+ * game_init uses these to thread the global through the new-game seeder
+ * FUN_00497e65, which in retail stirs this same global.  engine_rng_global_set
+ * also refreshes the save mirror (entries 18/19). */
+void engine_rng_global_get(uint32_t *state_a, uint32_t *state_b);
+void engine_rng_global_set(uint32_t state_a, uint32_t state_b);
+
 /* ─── scenario-rate hint (port of FUN_0043de70) ────────────────────
  *
  * Computes the `scenario_hint` value that engine_compute_sim_sub_steps

@@ -1178,12 +1178,20 @@ void engine_game_init_bind_save_rotate_fn(void (*fn)(void)) { g_gi_save_rotate_f
 
 void engine_game_init(void)
 {
-    /* RNG streams, seeded to the InitInstance constants (so a port↔retail
-     * capture under frida_capture --rng-seed, which pins the same, matches).
-     * The double LFSR is consumed by the roster/value randomiser (497e65);
-     * the single LFSR by the overworld autotiler (46dbf5/46dd34). They are
-     * independent streams in this orchestrator. */
-    engine_rng_in_t        rng  = { .state_a = 0x54657687u, .state_b = 0x72641663u };
+    /* RNG streams.  The double LFSR is consumed by the roster/value randomiser
+     * (497e65); the single LFSR by the overworld autotiler (46dbf5/46dd34).
+     * They are independent streams in this orchestrator.
+     *
+     * The double LFSR is NOT a private stream: retail's seat_shuffle stirs the
+     * GLOBAL double-LFSR (DAT_0058fe28/0058fe08) via FUN_00404a46, advancing
+     * the same state the turn driver later reads.  So load the live global in
+     * (seeded to the InitInstance constants 0x54657687/0x72641663, matching a
+     * --rng-seed capture), thread it through the seeder, and write the advanced
+     * state back below — otherwise the global stays at its seed and the turn
+     * driver's stir (step 17) starts from the wrong state.  The single LFSR is
+     * a genuinely separate stream, seeded to its own InitInstance constant. */
+    engine_rng_in_t        rng;
+    engine_rng_global_get(&rng.state_a, &rng.state_b);
     engine_rng_single_in_t rngs = { .state   = 0x34518632u };
 
     /* Bind the runtime tables the seeders read/write to the live save blocks
@@ -1232,8 +1240,12 @@ void engine_game_init(void)
     engine_game_init_place_army_starts();             /* 427ed0 */
     /* 9: unit/opponent-type table. */
     engine_game_init_seed_unit_table();               /* 4ac904 */
-    /* 10: roster shuffle + the two 48-entry tables (double LFSR). */
+    /* 10: roster shuffle + the two 48-entry tables (double LFSR).  Write the
+     * advanced state back into the global the seeder stirred (retail's
+     * seat_shuffle stirs DAT_0058fe28/08 directly), so the turn driver and the
+     * save mirror (entries 18/19) see the same post-seeder state retail does. */
     engine_game_init_seat_shuffle(&rng);              /* 497e65 */
+    engine_rng_global_set(rng.state_a, rng.state_b);
     /* 11: compact the player roster. */
     player_roster_compact();                          /* 49bc5f */
     /* 12: per-realm / country setup. */

@@ -729,12 +729,42 @@ static void engine_tick_rng_step(void)
 
     g_rng_state_a = out.new_state_a;
     g_rng_state_b = out.new_state_b;
+    /* Mirror the live double-LFSR state into its save home (entries 18/19).
+     * Retail has ONE storage (DAT_0058fe28/0058fe08) read by both the stir
+     * and the save; the port split it into this static + the s_slot mirror,
+     * so reconcile here on every advance to keep the save in sync (see
+     * project_shared_save_globals / new-game-save-parity #5). */
+    s_slot_0058fe28 = g_rng_state_a;
+    s_slot_0058fe08 = g_rng_state_b;
     g_rng_15bit_a = out.rng_15bit_a;
     g_rng_7bit_a  = out.rng_7bit_a;
     g_rng_3bit_a  = out.rng_3bit_a;
     g_rng_15bit_b = out.rng_15bit_b;
     g_rng_7bit_b  = out.rng_7bit_b;
     g_rng_3bit_b  = out.rng_3bit_b;
+}
+
+/* Read / write the live double-LFSR state (retail DAT_0058fe28/0058fe08).
+ * The new-game seeder FUN_00497e65 (seat_shuffle) stirs this SAME global in
+ * retail (3 FUN_00404a46 advances per loop iteration); the port threads its
+ * draws through a local engine_rng_in_t, so game_init must load the global
+ * in, run the seeder, and write the advanced state back — otherwise the
+ * global stays at its InitInstance seed and the turn driver's stir (step 17)
+ * starts from the wrong state, perturbing every RNG-driven turn-1 result
+ * (realm standings/mood markers, the focus realm DAT_00554020, AI economy).
+ * Writing back also refreshes the save mirror (entries 18/19). */
+void engine_rng_global_get(uint32_t *state_a, uint32_t *state_b)
+{
+    if (state_a) *state_a = g_rng_state_a;
+    if (state_b) *state_b = g_rng_state_b;
+}
+
+void engine_rng_global_set(uint32_t state_a, uint32_t state_b)
+{
+    g_rng_state_a   = state_a;
+    g_rng_state_b   = state_b;
+    s_slot_0058fe28 = state_a;
+    s_slot_0058fe08 = state_b;
 }
 
 /* The engine's one canonical UI event queue — retail's global ring at

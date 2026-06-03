@@ -6277,3 +6277,47 @@ baked into the saved per-army/per-realm records (player gold 5000, keep-4 stamps
 loaded world is faithful even though the input globals aren't persisted.  Retail
 loads the scenario world STABLE (single `NEW_GAME` + `MAP_FREEROAM` anchor, no
 turn-spam), confirming it is a valid retail game state.
+
+## 178 — the new-game seeder `seat_shuffle` (FUN_00497e65) stirs the GLOBAL double-LFSR; the port's local copy left the turn driver reading a stale RNG (scalar-wall again, same family as #175/#176)
+
+Retail's new-game randomiser `FUN_00497e65` (`engine_game_init_seat_shuffle`)
+draws from the **global** double-LFSR `DAT_0058fe28/0058fe08` by calling the
+shared stir `FUN_00404a46` (3 advances per loop iteration — once in each of its
+three phases).  It is the **only** consumer of that global on the new-game init
+path before the turn driver (verified: of the seven `FUN_00404a46` callers, only
+`497e65` and the turn driver `448440` are reachable from `497ced`; the value
+table `42847c` does NOT stir).  So after seat_shuffle the global has advanced by
+`active + 96` steps from its InitInstance seed.
+
+The port ported seat_shuffle to thread a **local** `engine_rng_in_t` seeded to
+the same InitInstance constants (`0x54657687/0x72641663`).  Its *output* — the
+roster shuffle + the two 48-entry tables — matched retail exactly (local starts
+at the same seed), so seat_shuffle never showed up in the save diff.  **But the
+global side effect was dropped:** `DAT_0058fe28/08` stayed at the seed.  The turn
+driver (game_init step 17, `engine_turn_advance`) then reads that global, stirs
+it once (`engine_tick_rng_step`), and feeds `rng_7bit_a/b` into every RNG-driven
+turn-1 pass.  Starting from the un-advanced seed silently perturbed:
+
+- **`engine_realm_update_mood` (FUN_00449889)** — the focus realm
+  `sel = rng_a & 0xf` (save entry 79, `DAT_00554020`) and the per-realm mood
+  deltas, hence which realms land in band 5 and get a type-**0x17** standing
+  marker cell (`realm_mark_next_cell`).  That marker is save entry 0 — which an
+  earlier draft mis-filed as an *autotile build residual*.  It is not: the
+  autotiler leaves those cells untouched (per-pass instrumentation of
+  `setup_overworld` confirmed); they are turn-1 standing markers.
+- the **AI economy passes** (save entry 4, per-army economy).
+
+Fix (same shape as #176): collapse the scalar-wall split.  `game_init` now loads
+the global (`engine_rng_global_get`), threads it through seat_shuffle, and writes
+the advanced state back (`engine_rng_global_set`); `engine_tick_rng_step` /
+`_set` mirror the live state into the save home `s_slot_0058fe28/08` (entries
+18/19).  Result: the whole-save diff vs `lastturn.sav` dropped 75 B → 34 B,
+entries 0/4/18/19/79 all byte-exact, leaving only entry 3 (the AI strategy
+block) on the AI-brain frontier.
+
+**Smell (recurring across #175/#176/#178):** a ported seeder that takes a *local*
+RNG/state when retail consumes a *global* one — the output matches but a later
+global reader diverges.  Grep for a seeder threading a private `engine_rng_in_t`
+seeded to an InitInstance constant: if retail's original calls `FUN_00404a46`
+(or any shared-global mutator) rather than a local stepper, the global must be
+threaded through, not copied.

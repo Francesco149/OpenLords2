@@ -442,7 +442,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49792e | FUN_0049792e | 262 | engine.c, engine.h, game_init.c (+1) |
 | 0x497a34 | FUN_00497a34 | 697 | engine.c, engine.h, main.c |
 | 0x497ced | FUN_00497ced | 376 | engine_load_pump.c, engine_territory.c, engine_territory.h (+3) |
-| 0x497e65 | FUN_00497e65 | 1025 | game_init.c, game_init.h |
+| 0x497e65 | FUN_00497e65 | 1025 | engine.c, engine.h, game_init.c (+1) |
 | 0x498270 | FUN_00498270 | 327 | engine_map_init.c, engine_map_init.h, main.c |
 | 0x4984dc | FUN_004984dc | 731 | engine_pl8.c, engine_pl8.h, game_init.c (+3) |
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h |

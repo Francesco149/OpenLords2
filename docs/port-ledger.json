@@ -15337,6 +15337,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
+    "src/engine.h",
     "src/game_init.c",
     "src/game_init.h"
    ]
