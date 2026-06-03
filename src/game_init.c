@@ -1213,6 +1213,16 @@ void engine_game_init(void)
     engine_army_economy_bind_army_records(g_per_army_768);
     engine_army_economy_bind_cell_roster((int32_t *)g_misc_1360);
     engine_army_economy_bind_cells(g_overworld_map);
+    /* The per-group resource-demand pool (retail DAT_0057c020, stride 0x160)
+     * physically lives INSIDE the player-strategic block at +0x120 — retail's
+     * commodity pools +0x120/+0x128/+0x130 ARE the resource accumulators, viewed
+     * through two bases (the economy pass via DAT_0057c020, the AI brain via the
+     * strategic record).  The port split them: the strategic block was real but
+     * the resource pool stayed NULL, so the turn-1 resource pass (apply_resource_
+     * quota → strategic +0x130 += amount) was silently dropped.  Bridge the
+     * scalar wall — bind the pool to alias the strategic block, exactly as retail
+     * overlaps them. */
+    engine_army_economy_bind_resource_pool(g_player_strategic_352 + 0x120);
 
     /* 1–3: clear the per-territory / unit-type / per-army save blocks. */
     engine_game_init_clear_tables();                  /* 46f3cd / 46f2ae / 46f1dc */

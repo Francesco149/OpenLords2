@@ -6321,3 +6321,48 @@ global reader diverges.  Grep for a seeder threading a private `engine_rng_in_t`
 seeded to an InitInstance constant: if retail's original calls `FUN_00404a46`
 (or any shared-global mutator) rather than a local stepper, the global must be
 threaded through, not copied.
+
+## 179 — the AI resource-demand pool `DAT_0057c020` is the SAME memory as the player-strategic commodity pools `+0x120/+0x128/+0x130` (overlapping global; scalar-wall again, family #175/#176/#178)
+
+Retail's per-group resource-demand pool `DAT_0057c020` (stride `0x160`, the table
+the per-turn resource-delivery pass `FUN_0044e852` accumulates production into)
+does **not** have its own storage — it physically lives **inside** the
+player-strategic block `g_player_strategic_352` (`0x57bf00`, stride `0x160`) at
+offset `+0x120`: `0x57c020 = 0x57bf00 + 0x120`.  So the commodity pools the AI
+brain reads through the strategic record — `+0x120` (commodity 6 / B), `+0x128`
+(7 / C), `+0x130` (8 / A) — **are** the resource accumulators the economy pass
+writes through `DAT_0057c020`.  One memory, two bases/views:
+
+```
+strategic[player] + 0x120   ==  DAT_0057c020 + player*0x160 + 0x00   (RESPOOL_B_FLAG0)
+strategic[player] + 0x128   ==  DAT_0057c020 + player*0x160 + 0x08   (RESPOOL_C_FLAG0)
+strategic[player] + 0x130   ==  DAT_0057c020 + player*0x160 + 0x10   (RESPOOL_A_FLAG0)
+```
+
+(The `group` the economy pass indexes by IS the owning player index for owned
+realms, so the overlap is meaningful — `apply_resource_quota`'s
+`respool_field(group, RESPOOL_A_FLAG0) += amount` lands on that owner's strategic
+`+0x130`.)
+
+**The port split them.**  `g_player_strategic_352` is a real buffer, but
+`engine_army_economy_bind_resource_pool` was only ever called from tests — the
+live `g_resource_pool` stayed **NULL**, so `respool_field`/`respool_demand`
+returned NULL/0 and the entire turn-1 resource-delivery accumulation was a silent
+no-op.  Symptom: new-game save entry 3, strategic `+0x130` for AI players 2–5,
+stuck at the config default `0x32` where retail had `0x74/0x74/0xb6/0xd8` (the
+accumulated commodity-A production).  `+0x120`/`+0x128` happened to match only
+because turn-1 produced 0 demand into B/C.
+
+**Fix:** bind the pool to alias the strategic block in `engine_game_init`, next
+to the other economy binders:
+`engine_army_economy_bind_resource_pool(g_player_strategic_352 + 0x120)` — exactly
+the address (`0x57c020`) retail's pool sits at.  Entry 3 `+0x130` → byte-exact;
+the full `0x57bf00:2112` block matches a point-matched retail dump with 0 B diff.
+
+**Smell (the now-canonical scalar-wall family #175/#176/#178/#179):** a ported
+table whose retail base is a `DAT_` *inside* another already-bound structure's
+address range.  When two retail globals' VAs differ by less than the structure's
+size (here `0x57c020 − 0x57bf00 = 0x120 < 0x160` stride), they are very likely
+**the same storage viewed twice** — bind the port's second view to alias the
+first, never to a fresh buffer.  Grep heuristic: a `bind_*` setter only ever
+called from tests (never from `game_init`/`main`) is a NULL-in-production wall.

@@ -20,6 +20,43 @@ mirroring the live state into the save home) fixed entries **0, 4, 18, 19, 79**
 at once — they were all downstream of that one global-RNG divergence, NOT the
 separate causes the earlier draft assigned them (see the per-entry notes).
 
+**2026-06-03 update #2 — entry 3 closed; the new-game strategic block is now
+byte-exact vs a point-matched retail dump (0 B).**  The previously-"genuine"
+entry-3 residual was two unrelated things the raw `lastturn.sav` diff conflated:
+- **+0x130 (4 B, players 2–5) — REAL bug, now FIXED.**  A **scalar-wall split**:
+  retail's per-group resource-demand pool `DAT_0057c020` (stride 0x160)
+  physically **lives inside** the player-strategic block at `+0x120` — the
+  commodity pools `+0x120/+0x128/+0x130` *are* the resource accumulators, viewed
+  through two bases (the economy pass via `DAT_0057c020`, the AI brain via the
+  strategic record).  The port split them: the strategic block was a real buffer
+  but `engine_army_economy_bind_resource_pool` was only ever called in tests, so
+  the live `g_resource_pool` stayed **NULL** and the turn-1 resource-delivery
+  pass (`apply_resource_quota` → `respool_field(group, RESPOOL_A_FLAG0) +=
+  amount`, i.e. strategic `+0x130`) was silently dropped — `+0x130` stayed at the
+  config default `0x32`.  **Fix:** bind the pool to alias the strategic block in
+  `engine_game_init` — `engine_army_economy_bind_resource_pool(g_player_strategic_352
+  + 0x120)`, exactly as retail overlaps them.  `+0x130` now produces
+  `0x32/0x74/0x74/0xb6/0xd8` byte-exact.  (Recurring scalar-wall smell — cf.
+  #175/#176/#178 and the RNG global threading above.)
+- **+0x2b (rank ×5) and +0x50 (score ×5) — NOT divergences; save-point
+  artifacts.**  These are ranking outputs: `F_RANK = 0x2b`, `F_SCORE = 0x50`,
+  written by `engine_ranking_recompute` (FUN_0049aa0e) at orchestrator **step
+  20–21**, *after* the **step-19** `save_rotate` that produces retail's
+  `lastturn.sav`.  So `lastturn.sav` has them at 0 (ranking hadn't run); the
+  port's save is taken after the full init (step 26) and carries the computed
+  rank/score.  Same nature as entry **150** (the compact ranking board) — already
+  a confirmed artifact.  **Verified:** a point-matched frida dump of the whole
+  `0x57bf00:2112` strategic block (driven by `new_game_to_map.jsonl`, `--rng-seed`)
+  is **byte-for-byte identical to `port_newgame.sav` — 0 differing bytes**,
+  rank/score included.  So the port is correct; only the raw `lastturn.sav` diff
+  (a step-19 snapshot) shows them.
+
+Net: the raw `lastturn.sav` diff is now **30 B across 11 entries, and every one
+of those 30 B is a step-20…26 save-point artifact** (entry 3 +0x2b/+0x50, 124,
+150, 151, 152, 159–164).  The new-game save is byte-exact for the entire state
+that exists at retail's step-19 save point, and the strategic block matches a
+point-matched step-26 dump with **zero** differences.
+
 ## Method
 
 Both sides use map 0 + the canonical RNG seed (`--rng-seed`), a default custom
@@ -135,17 +172,21 @@ a *separate* root cause, see the box below.  Original analysis kept for context:
   (The matching 2×2 type-0x17 blocks, e.g. 797/798/861/862, are the unrelated
   *secondary-keep* footprints — those already matched.)
 
-### 4. AI economy — Entry 4 (`0x53f9b0`) — **FIXED**; Entry 3 (`0x57bf00`) — remaining
+### 4. AI economy — Entry 4 (`0x53f9b0`) — **FIXED**; Entry 3 (`0x57bf00`) — **FIXED**
 - **Entry 4 per_army** (`0x53f9b0`, was ~23 B): AI realm economy fields — **FIXED**
   by the global-RNG threading fix.  These are produced by the turn driver's AI
   economy passes (provision / plan_realm / season passes); once the turn driver
   ran from the correct RNG state they matched byte-exact.
-- **Entry 3** (`0x57bf00`, 14 B) — **remaining.**  The AI players' strategy block:
-  per AI player, `+0x2b` (retail 1/2/3, port 0), `+0x50` (retail 0, port 0x32),
-  `+0x130` (retail 0x74, port 0x32).  Unchanged by the RNG fix → a genuinely
-  separate AI-strategy computation (the per-realm AI brain `+0x130` strategy
-  selection), still on the turn-driver/AI byte-completeness frontier
-  (project_next_chip_4485a5).  The only real residual left on the new-game path.
+- **Entry 3** (`0x57bf00`) — **FIXED 2026-06-03 (update #2 above).**  The 14 B
+  split into a 4 B real bug + 10 B save-point artifacts:
+  - `+0x130` (players 2–5): the resource-demand pool `DAT_0057c020` was never
+    bound (NULL), so the turn-1 resource pass dropped its `strategic+0x130 +=
+    amount` accumulation.  Bound it to alias the strategic block at `+0x120` →
+    byte-exact (`0x32/0x74/0x74/0xb6/0xd8`).
+  - `+0x2b` (rank) / `+0x50` (score): ranking outputs (`engine_ranking_recompute`,
+    step 20–21) that post-date retail's step-19 `lastturn.sav`; not a divergence.
+  Point-matched frida dump of the full `0x57bf00:2112` block vs `port_newgame.sav`
+  = **0 differing bytes**.  Nothing left on the new-game strategic block.
 
 ### 5. Misc bookkeeping scalars — mostly FIXED
 - **Seeded (DONE):** entries **73** (`0x569584`=1), **75** (`0x53f06c`=7),
@@ -215,18 +256,18 @@ nix develop -c python3 tools/save_diff.py "$GAMEDIR/lastturn.sav" "$GAMEDIR/port
 ```
 **#1 (bucket cluster + placement cascade) and #2 (name/title) are fully DONE,
 #5 is FIXED** (73/75/76/84/197/207/86 seeded; 16/17 camera; 18/19 RNG; 79 focus
-realm), **entry 0 (#3) and entry 4 (#4) are FIXED** by the global-RNG threading.
-Total save-diff vs `lastturn.sav`: **34 B** across 11 entries (down from
-251 → 101 → 83 → 77 → 75 → **34**).  Of the residual 34 B:
-- **20 B** are save-point artifacts (entries 124/150/151/152/159–164) — the
-  port is already correct; retail's step-19 `lastturn.sav` just predates them.
-- **14 B** entry 3 — the AI per-realm strategy block (`+0x2b/+0x50/+0x130`),
-  the last genuine residual (#4, turn-driver/AI byte-completeness frontier).
+realm), **entry 0 (#3), entry 4 (#4) AND entry 3 are FIXED** (global-RNG
+threading + resource-pool binding).  Total save-diff vs `lastturn.sav`: **30 B**
+across 11 entries (down from 251 → 101 → 83 → 77 → 75 → 34 → **30**), and **all
+30 B are now save-point artifacts** — every one is a step-20…26 output that
+retail's step-19 `lastturn.sav` predates (entry 3 +0x2b/+0x50 ranking, 124, 150,
+151, 152, 159–164).  **No genuine new-game divergence remains.**
 
-So **every new-game divergence except the AI-strategy block is now byte-exact**.
-The remaining 14 B rides the per-realm AI-brain frontier (project_next_chip_4485a5),
-not anything new-game-specific.  The new-game camera frame is byte-exact +
-visually confirmed (first strategic frame recentres on the player's capital).
+So **the entire new-game save is byte-exact for the state that exists at retail's
+step-19 save point**, and a point-matched step-26 frida dump of the player-
+strategic block (which held the last genuine residual, +0x130) matches the port
+**byte-for-byte (0 B)**.  The new-game camera frame is byte-exact + visually
+confirmed (first strategic frame recentres on the player's capital).
 
 ### The fix (2026-06-03) — global double-LFSR threading
 Retail's new-game seeder **FUN_00497e65 (seat_shuffle)** stirs the **global**
