@@ -2033,6 +2033,10 @@ struct test_case {
     X(engine_diplomacy_should_engage_hostile) \
     X(engine_diplomacy_should_engage_self) \
     X(engine_diplomacy_should_engage_lord) \
+    X(engine_diplomacy_reconcile_mutual) \
+    X(engine_diplomacy_reconcile_imposes_on_unbonded) \
+    X(engine_diplomacy_reconcile_severs_taken_lord) \
+    X(engine_diplomacy_reconcile_severs_dead_lord) \
     \
     X(army_ai_seed_workforce_ratios) \
     X(army_ai_advance_tier_nonpositive_noop) \

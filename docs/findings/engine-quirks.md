@@ -6502,3 +6502,30 @@ so a slot already at 0 wraps to 0xff and reads as `-1` → immediately "expired"
 The port mirrors the unsigned-decrement / signed-compare pair exactly.  In-use
 slots (back-ref `!= 0`) are skipped wholesale and never match as an offer holder
 even if their stale `+0x03` happens to line up with a realm.
+
+## 184 — lord/vassal treaty reconciliation (`FUN_004a1847`) is order-dependent: a dead or contested lord only severs the bond when it has the lower player index
+
+The phase-7 reconciler snapshots every player's declared lord (+0x81) into a
+local array *before* the pass, then validates players 1..5 in ascending order.
+Two consequences fall out of "ascending order + pre-pass snapshot":
+
+- **The "settled" (inactive/severed) flag is only reliable for lower indices.**
+  A player's settled flag is set during *its own* iteration, so when player `i`
+  inspects its lord `p`, `settled[p]` reflects reality only if `p < i`.  A bond
+  onto a *dead higher-indexed* lord therefore is NOT severed by the dead-check —
+  it falls through to the mutual branch and the bond gets imposed onto the
+  corpse.  The game avoids visible breakage because the inactive record is inert
+  elsewhere, but the asymmetry is real and faithfully reproduced.
+
+- **A one-sided declaration onto a live, *unbonded* player imposes the bond.**
+  Severance fires only when the lord is settled OR already bonded to a *third*
+  player (`lord[p] != 0 && lord[p] != i`).  If the target simply has no lord
+  (`lord[p] == 0`), the else-branch pins `target.lord = i` and sets the matrix
+  both ways — vassalizing the target.  Because the lord array is a pre-pass
+  snapshot, the freshly-imposed `target.lord` is not seen when the target's own
+  (later) iteration runs (it still reads the snapshot 0), so the imposed bond is
+  not re-processed and survives the pass.
+
+The port mirrors the snapshot + ascending-order exactly (the matrix wipe, the
+settled/lord local arrays, the lower-index-only reliability).  Same family as
+the other "scalar snapshot vs live store" ordering quirks.

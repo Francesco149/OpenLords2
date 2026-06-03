@@ -163,3 +163,55 @@ int engine_diplomacy_should_engage(int aggressor, int defender)
 
     return 1;                                  /* different player → engage */
 }
+
+/* Port of FUN_004a1847 (525 B) — per-turn lord/vassal treaty reconciliation
+ * over players 1..5.  Wipe the whole treaty matrix (+0x85, stride 0x10), then
+ * validate each player's declared lord (+0x81): a bond survives only when it is
+ * mutual (the lord is alive and either unbonded or already bonded back to this
+ * player), in which case both ends are re-pinned and the matrix entries on both
+ * sides set; otherwise the bond is severed (this player's lord cleared, its
+ * matrix entry toward the lord cleared) and the player is treated as "settled"
+ * for the rest of this pass so nobody can still bind to it.  Pure scalar/record
+ * bookkeeping on g_player_strategic_352. */
+void engine_diplomacy_reconcile_treaties(void)
+{
+    int settled[6];   /* retail aiStack_34: inactive OR severed this pass */
+    int lord[6];      /* retail auStack_1c: each player's declared lord    */
+
+    /* Wipe the treaty matrix for every (player, other) pair. */
+    for (int i = 1; i < 6; i++)
+        for (int j = 1; j < 6; j++)
+            STRAT_REC(i)[D_TREATY + j * 0x10] = 0;
+
+    for (int i = 1; i < 6; i++)
+        settled[i] = 0;
+    for (int i = 1; i < 6; i++)
+        lord[i] = STRAT_REC(i)[D_LORD];
+
+    for (int i = 1; i < 6; i++) {
+        uint8_t *si = STRAT_REC(i);
+        if (si[D_ACTIVE] == 0) {
+            settled[i] = 1;                    /* inactive realm — no bonds */
+            continue;
+        }
+
+        unsigned p = (unsigned)lord[i];
+        if (p == 0)
+            continue;                          /* no declared lord */
+
+        if (settled[p] == 1 || (lord[p] != 0 && lord[p] != i)) {
+            /* Lord is gone or already bonded elsewhere → sever this end. */
+            si[D_LORD] = 0;
+            si[D_TREATY + p * 0x10] = 0;
+            settled[i] = 1;
+            lord[i] = 0;
+        } else {
+            /* Mutual bond confirmed → re-pin both ends and the matrix. */
+            uint8_t *sp = STRAT_REC(p);
+            si[D_LORD] = (uint8_t)p;
+            sp[D_LORD] = (uint8_t)i;
+            si[D_TREATY + p * 0x10] = 1;
+            sp[D_TREATY + i * 0x10] = 1;
+        }
+    }
+}

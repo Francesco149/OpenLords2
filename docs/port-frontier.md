@@ -339,7 +339,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4975d3 | 170 | 1 | 1 |  |
 | 0x499261 | 261 | 1 | 0 | ✓ |
 | 0x49b973 | 374 | 1 | 2 |  |
-| 0x49a010 | 982 | 1 | 10 |  |
+| 0x49a010 | 982 | 1 | 9 |  |
 
 ### asset-load IO helper cluster (0x4af*) (11)
 

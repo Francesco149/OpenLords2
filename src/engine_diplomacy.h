@@ -58,4 +58,14 @@ void engine_diplomacy_battle_adjust(int p1, int p2, int amount,
  * only the aggressor's strategic record. */
 int engine_diplomacy_should_engage(int aggressor, int defender);
 
+/* Port of FUN_004a1847 @ 0x4a1847 (525 B, __cdecl void).  Per-turn lord/vassal
+ * treaty reconciliation over players 1..5 (a phase-7 turn-rollover callee of the
+ * strategic turn driver 0x49a010).  Wipes the treaty matrix (+0x85, stride 0x10)
+ * then re-derives it from each player's declared lord (+0x81): mutual,
+ * live-lord bonds are re-pinned on both ends (matrix set both ways); one-sided
+ * or dead-lord bonds are severed.  An inactive (+0x04 == 0) or just-severed
+ * player is marked "settled" so no later player in the pass can bond to it.
+ * Pure: touches only g_player_strategic_352. */
+void engine_diplomacy_reconcile_treaties(void);
+
 #endif /* OPENLORDS2_ENGINE_DIPLOMACY_H */

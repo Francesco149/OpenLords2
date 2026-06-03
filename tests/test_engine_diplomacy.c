@@ -223,3 +223,76 @@ int test_engine_diplomacy_should_engage_lord(void)
     T_ASSERT_EQ_I(engine_diplomacy_should_engage(2, 4), 1);
     return 0;
 }
+
+/* --- FUN_004a1847: per-turn lord/vassal treaty reconciliation ------------- */
+#define MATRIX(i, j)  (SREC(i)[D_TREATY + (j) * 0x10])
+
+/* A mutual bond (each names the other) is confirmed: lords kept, matrix set
+ * both ways; a stale matrix entry with no backing bond is wiped. */
+int test_engine_diplomacy_reconcile_mutual(void)
+{
+    dp_reset();
+    mk_ai(1); mk_ai(2); mk_ai(3);
+    SREC(1)[D_LORD] = 2; SREC(2)[D_LORD] = 1;
+    MATRIX(3, 1) = 1;                          /* stale, unbacked → wiped */
+
+    engine_diplomacy_reconcile_treaties();
+
+    T_ASSERT_EQ_I(SREC(1)[D_LORD], 2);
+    T_ASSERT_EQ_I(SREC(2)[D_LORD], 1);
+    T_ASSERT_EQ_I(MATRIX(1, 2), 1);
+    T_ASSERT_EQ_I(MATRIX(2, 1), 1);
+    T_ASSERT_EQ_I(MATRIX(3, 1), 0);            /* wiped */
+    return 0;
+}
+
+/* A one-sided declaration onto an UNBONDED, live player imposes the bond: the
+ * target gains this player as its lord (snapshot keeps it from re-processing). */
+int test_engine_diplomacy_reconcile_imposes_on_unbonded(void)
+{
+    dp_reset();
+    mk_ai(1); mk_ai(2);
+    SREC(1)[D_LORD] = 2;                       /* 2 declares nothing */
+
+    engine_diplomacy_reconcile_treaties();
+
+    T_ASSERT_EQ_I(SREC(1)[D_LORD], 2);
+    T_ASSERT_EQ_I(SREC(2)[D_LORD], 1);         /* bond imposed back */
+    T_ASSERT_EQ_I(MATRIX(1, 2), 1);
+    T_ASSERT_EQ_I(MATRIX(2, 1), 1);
+    return 0;
+}
+
+/* A bond whose lord is already bonded to a THIRD player is severed. */
+int test_engine_diplomacy_reconcile_severs_taken_lord(void)
+{
+    dp_reset();
+    mk_ai(1); mk_ai(2); mk_ai(3);
+    SREC(1)[D_LORD] = 2;                       /* 1 → 2 */
+    SREC(2)[D_LORD] = 3;                       /* but 2 → 3 (not 1) */
+    MATRIX(1, 2) = 1;                          /* stale link to be cleared */
+
+    engine_diplomacy_reconcile_treaties();
+
+    T_ASSERT_EQ_I(SREC(1)[D_LORD], 0);         /* severed */
+    T_ASSERT_EQ_I(MATRIX(1, 2), 0);
+    return 0;
+}
+
+/* A bond onto a lower-indexed, already-marked-inactive lord is severed (the
+ * "settled" flag is only reliable for lords processed earlier in the pass). */
+int test_engine_diplomacy_reconcile_severs_dead_lord(void)
+{
+    dp_reset();
+    /* player 1 inactive (processed first → settled[1]=1); player 2 vassal of 1 */
+    SREC(1)[D_ACTIVE] = 0;
+    mk_ai(2);
+    SREC(2)[D_LORD] = 1;
+    MATRIX(2, 1) = 1;
+
+    engine_diplomacy_reconcile_treaties();
+
+    T_ASSERT_EQ_I(SREC(2)[D_LORD], 0);         /* severed: lord 1 is dead */
+    T_ASSERT_EQ_I(MATRIX(2, 1), 0);
+    return 0;
+}
