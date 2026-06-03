@@ -1490,3 +1490,111 @@ void engine_combat_prime_muster(int region, int32_t count)
     *(int32_t *)(pool + 0x70 + M_SLOT)  = count;   /* slot 7 +0x00 (0x53f710) */
     *(int32_t *)(pool + 0x70 + M_RES_B) = count;   /* slot 7 +0x08 (0x53f718) */
 }
+
+/* Percentage→muster-cost curve (retail .rdata 0x4d8778, 102 × i32, indices
+ * 0..101).  A clamped diminishing-returns ramp: input percent maps to a supply
+ * cost that saturates at 101.  Indexed by the percentage arg below. */
+static const int32_t k_muster_cost[102] = {
+      0,   1,   1,   1,   2,   2,   3,   3,   4,   4,
+      5,   5,   6,   6,   7,   7,   8,   8,   9,   9,
+     10,  11,  13,  15,  17,  19,  21,  23,  25,  27,
+     29,  31,  34,  37,  40,  44,  48,  52,  56,  60,
+     64,  68,  72,  75,  78,  80,  82,  84,  86,  88,
+     90,  91,  92,  93,  94,  95,  96,  97,  98,  99,
+    100, 101, 101, 101, 101, 101, 101, 101, 101, 101,
+    101, 101, 101, 101, 101, 101, 101, 101, 101, 101,
+    101, 101, 101, 101, 101, 101, 101, 101, 101, 101,
+    101, 101, 101, 101, 101, 101, 101, 101, 101, 101,
+    101, 101,
+};
+
+/* Port of FUN_004a50ae (731 B, __cdecl int(int region, int pct, int min_prov,
+ * int mode)).  Raise a defending garrison unit in region `region`, sized at
+ * `pct` percent of the region's provision (+0x24), and spawn it.  Returns the
+ * new occupant index (DAT_0052afe0) or 0 when the region's provision is below
+ * `min_prov` (or no map cell is free for the spawn).  Three staging modes:
+ *
+ *   mode 2 — fresh garrison: spawn it free (supply cost 0), seat three strat
+ *     reserve cells (+0x144/+0x14c/+0x150) at 500, then distribute the sized
+ *     head into troop-class slots 2/4/5 by size band, leaving the remainder in
+ *     slot 0.
+ *   mode 1 — top-up: recruit from the owner's primed reserves (slot +0x08),
+ *     moving 10 head at a time into the class counts (slot +0x00) until the
+ *     staged budget (slot 7 +0x00) is spent or 50 sweeps elapse.
+ *   mode 0 — plain spawn at the muster-cost supply price.
+ *
+ * combat_b (FUN_004a6c68) calls it with mode 2/1/0 to materialise a region's
+ * auto-defender when no live capital garrison is found. */
+int engine_combat_muster_defender(int region, int pct, int min_prov, int mode)
+{
+    g_player_strategic_352[5] = 0;                  /* DAT_0057bf05 = 0 */
+
+    int owner = REGREC(region)[A_RACE];
+    int prov  = rd_i32(REGREC(region), A_PROV24);   /* region +0x24 */
+    if (prov < min_prov)
+        return 0;
+
+    int32_t supply = k_muster_cost[pct];            /* DAT_004d8778[pct] */
+    int     sized  = engine_math_percent_of(prov, pct);
+    engine_combat_prime_muster(region, sized);
+
+    uint8_t *pool  = engine_game_init_troop_pool_row(owner);
+    uint8_t *strat = PREC(owner);
+
+    if (mode == 2) {
+        *(int32_t *)(strat + 0x150) = 500;          /* DAT_0057c050 */
+        *(int32_t *)(strat + 0x14c) = 500;          /* DAT_0057c04c */
+        *(int32_t *)(strat + 0x144) = 500;          /* DAT_0057c044 */
+        supply = 0;
+
+        /* Distribute the sized head into class slots by size band; the leftover
+         * stays in slot 0 (debited by the staged amount). */
+        if (sized < 0x1e0) {
+            if (sized < 0x168) {
+                if (sized < 0xf0) {
+                    if (sized >= 0x78) {
+                        *(int32_t *)(pool + 5 * 0x10)  = 0x3c;
+                        *(int32_t *)(pool + 0 * 0x10) -= 0x3c;
+                    }
+                } else {
+                    *(int32_t *)(pool + 5 * 0x10)  = 0x50;
+                    *(int32_t *)(pool + 4 * 0x10)  = 0x28;
+                    *(int32_t *)(pool + 0 * 0x10) -= 0x78;
+                }
+            } else {
+                *(int32_t *)(pool + 5 * 0x10)  = 100;
+                *(int32_t *)(pool + 4 * 0x10)  = 0x46;
+                *(int32_t *)(pool + 0 * 0x10) -= 0xaa;
+            }
+        } else {
+            *(int32_t *)(pool + 5 * 0x10)  = 0x96;
+            *(int32_t *)(pool + 4 * 0x10)  = 100;
+            *(int32_t *)(pool + 2 * 0x10)  = 0x32;
+            *(int32_t *)(pool + 0 * 0x10) -= 300;
+        }
+    } else if (mode == 1) {
+        int32_t budget = *(int32_t *)(pool + M_F70);   /* slot 7 +0x00 = sized */
+        int  sweep = 0;
+        bool moved = true;
+        while (sweep < 0x32 && moved) {
+            moved = false;
+            for (int c = 1; c < 7; c++) {
+                if (budget < 10)
+                    goto spawn;
+                if (*(int32_t *)(pool + c * 0x10 + M_RES_B) > 9) {
+                    *(int32_t *)(pool + c * 0x10 + M_SLOT)  += 10;
+                    *(int32_t *)(pool + c * 0x10 + M_RES_B) -= 10;
+                    *(int32_t *)(pool + 0 * 0x10)           -= 10;
+                    budget -= 10;
+                    moved = true;
+                }
+            }
+            sweep++;
+        }
+    }
+
+spawn:
+    if (!engine_combat_spawn_unit(owner, region, 0, supply))
+        return 0;
+    return engine_territory_current_slot();         /* DAT_0052afe0 */
+}

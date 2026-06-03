@@ -486,6 +486,41 @@ r2-verified against `FUN_004aaa80`.  Ported into `engine_combat.c` (+ header),
 host-tested (1 new test, 1965 total green): slot-1..6 reserve copy + +0x00 clear,
 slot-0/7 head park, and the +0x04 clear on slots 0/7.
 
+#### Defender muster/spawn `FUN_004a50ae` → `engine_combat_muster_defender` (ported)
+
+The garrison/auto-defender builder combat_b reaches when no live capital garrison
+is found.  Given a region, a percentage, a provision floor and a mode, it raises
+a defending unit sized at `pct`% of the region's provision (+0x24) and spawns it.
+Guard: provision < floor → return 0.  Otherwise it looks up a supply cost from
+the percentage→cost curve (retail .rdata 0x4d8778, a 102-entry clamped ramp
+saturating at 101), computes `sized = percent_of(provision, pct)`, primes the
+owner muster pool (`engine_combat_prime_muster`), then stages by mode:
+
+* **mode 2** (fresh garrison) — spawn free (cost 0), seat three strat reserve
+  cells (+0x144/+0x14c/+0x150 = 500), and distribute the `sized` head into troop-
+  class slots by size band (`< 0x78` none; `0x78..0xef` slot5=60; `0xf0..0x167`
+  slot5=80/slot4=40; `0x168..0x1df` slot5=100/slot4=70; `≥ 0x1e0` slot5=150/
+  slot4=100/slot2=50), debiting the leftover from slot 0.
+* **mode 1** (top-up) — recruit 10 head at a time from the primed reserves (slot
+  +0x08 → slot +0x00, debiting slot 0) round-robin over classes 1..6 until the
+  staged budget (slot 7 +0x00) drops below 10 or 50 sweeps elapse.
+* **mode 0** — plain spawn at the muster-cost supply price.
+
+Then `engine_combat_spawn_unit(owner, region, 0, supply)`; on success returns the
+new occupant index (retail reads `DAT_0052afe0` = `engine_territory_current_slot`
+after the spawn — the port's spawn_unit returns 1/0, so the index comes from
+current_slot), else 0.  The `cmp 0x78` band edge (not `> 0x77`), the four band
+constants, the 0x1f4=500 reserve seeds, the `+= 0xa / -= 0xa` recruit deltas, the
+slot-7 budget read and the `percent_of` + cost-table indexing all r2-verified
+against `FUN_004a50ae`.  The 102-entry curve is embedded verbatim as
+`k_muster_cost`.  Ported into `engine_combat.c` (+ header), host-tested (4 new
+tests, 1969 total green): provision-floor bail, the mode-2 360..479 band
+distribution + reserve seeds, the mode-1 four-move recruit drain, and the full
+mode-0 happy path (occupant index == current_slot) over the shared spawn harness.
+
+This makes `FUN_004a6c68` (combat_b, 1264 B) a **leaf** — all its non-seam
+callees are now ported.
+
 ### Frontier (next chips)
 
 1. **The remaining executor dispatcher callees** — port each and bind it into
@@ -494,15 +529,18 @@ slot-0/7 head park, and the +0x04 clear on slots 0/7.
    seams together via `engine_army_move_bind_combat_fns`).  Its two unported deps
    are now both **done**: `FUN_0046d42c` (capital-defender finder) and
    `FUN_004aaa80` (defender muster prime) are ported (above).  `FUN_004a50ae`
-   (731 B garrison/auto-defender builder) is therefore now a **leaf** — its only
-   remaining callees `FUN_00404d6b` / `FUN_004a9a9a` are ported.  Land it, then
-   `FUN_004a6c68` itself.  Then `FUN_004686a0` (region-event handler, **high**
+   (731 B garrison/auto-defender builder) is **done** too
+   (`engine_combat_muster_defender`, above) — so `FUN_004a6c68` (combat_b, 1264 B)
+   is now a **leaf** and is the next chip: port it, then bind **both** combat
+   seams together via `engine_army_move_bind_combat_fns`.  Then `FUN_004686a0`
+   (region-event handler, **high**
    terrain — needs its two callees `FUN_004a78ea` / `FUN_004a7ca2` first, which
    chain into `FUN_004a79a3` / `FUN_004a7e0a`), and `FUN_00426360` (DirectDraw
    surface present/scroll — render seam, lands with the strategic-map camera
    cluster).  **Done**: special-tile `FUN_00468ae2`, region-event-lo
    `FUN_0046873f`, arrival `FUN_00467196`, settle-deposit `FUN_004296b5`,
-   capital-defender `FUN_0046d42c`, muster-prime `FUN_004aaa80`.
+   capital-defender `FUN_0046d42c`, muster-prime `FUN_004aaa80`, defender
+   muster/spawn `FUN_004a50ae`.
 2. **Wire `engine_army_state_run` into `engine_tick`'s SP per-tick path**
    (engine.c, beside the existing `FUN_0040490d`/`FUN_0049a010` arm) + bind the
    rebellion seam (`engine_realm_bind_rebellion_fn`) to

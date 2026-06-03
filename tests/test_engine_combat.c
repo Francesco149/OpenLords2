@@ -1175,6 +1175,116 @@ int test_engine_combat_prime_muster(void)
     return 0;
 }
 
+/* ---- defender muster/spawn (FUN_004a50ae) -------------------------------- *
+ * Raise a defending garrison sized at pct% of the region's provision, stage    *
+ * its troops in the owner's muster pool, then spawn.  Below the provision floor *
+ * it returns 0 untouched.  Mode 2 seeds three strat reserve cells and          *
+ * distributes the sized head into class slots by band; mode 1 recruits 10-at-  *
+ * a-time from the primed reserves.  The staging is observable even when the     *
+ * spawn itself fails (no free cell bound).                                      */
+int test_engine_combat_muster_defender_below_min(void)
+{
+    int region = 4, owner = 3;
+    memset(R_REC(region), 0, 0x300);
+    R_REC(region)[0x05] = owner;
+    I32(R_REC(region), 0x24) = 30;                 /* provision below floor */
+
+    /* min_prov 40 > provision 30 → bail before any staging or spawn. */
+    int ret = engine_combat_muster_defender(region, 40, 40, 2);
+    T_ASSERT_EQ_I(ret, 0);
+    return 0;
+}
+
+int test_engine_combat_muster_defender_mode2_distributes(void)
+{
+    int region = 4, owner = 3;
+    memset(R_REC(region), 0, 0x300);
+    R_REC(region)[0x05] = owner;
+    I32(R_REC(region), 0x24) = 1000;               /* provision */
+    memset(P_REC(owner), 0, 0x160);
+
+    uint8_t *pool = engine_game_init_troop_pool_row(owner);
+    memset(pool, 0, 0x80);
+
+    /* No cell grid bound → spawn fails, return 0, but the staging stands.
+     * sized = 1000 * 40 / 100 = 400 → band 0x168..0x1df. */
+    engine_map_query_bind_cell_descriptors(NULL);
+    engine_territory_bind_cells(NULL);
+    int ret = engine_combat_muster_defender(region, 40, 40, 2);
+    T_ASSERT_EQ_I(ret, 0);
+
+    /* Three strat reserve cells seeded to 500. */
+    T_ASSERT_EQ_I(I32(P_REC(owner), 0x144), 500);
+    T_ASSERT_EQ_I(I32(P_REC(owner), 0x14c), 500);
+    T_ASSERT_EQ_I(I32(P_REC(owner), 0x150), 500);
+    /* Class distribution for the 360..479 band: slot5=100, slot4=70. */
+    T_ASSERT_EQ_I(I32(pool, 5 * 0x10), 100);
+    T_ASSERT_EQ_I(I32(pool, 4 * 0x10), 0x46);
+    /* slot 0 starts at the staged head (400) and is debited 0xaa (170). */
+    T_ASSERT_EQ_I(I32(pool, 0 * 0x10), 400 - 0xaa);
+    return 0;
+}
+
+int test_engine_combat_muster_defender_mode1_recruits(void)
+{
+    int region = 4, owner = 3;
+    memset(R_REC(region), 0, 0x300);
+    R_REC(region)[0x05] = owner;
+    I32(R_REC(region), 0x24) = 100;                /* provision */
+    memset(P_REC(owner), 0, 0x160);
+    /* Owner reserves cats 1..6 (strat +0x140..+0x154) = 100 each → seeded into
+     * muster slots 1..6 +0x08 by prime_muster. */
+    for (int i = 0; i < 6; i++)
+        I32(P_REC(owner), 0x140 + i * 4) = 100;
+
+    uint8_t *pool = engine_game_init_troop_pool_row(owner);
+    memset(pool, 0, 0x80);
+
+    /* sized = 100 * 40 / 100 = 40 budget → 4 moves of 10 (slots 1..4), then the
+     * budget hits 0 and the sweep bails.  Spawn fails (no cell) → return 0. */
+    engine_map_query_bind_cell_descriptors(NULL);
+    engine_territory_bind_cells(NULL);
+    int ret = engine_combat_muster_defender(region, 40, 40, 1);
+    T_ASSERT_EQ_I(ret, 0);
+
+    for (int c = 1; c <= 4; c++) {
+        T_ASSERT_EQ_I(I32(pool, c * 0x10 + 0x00), 10);   /* recruited */
+        T_ASSERT_EQ_I(I32(pool, c * 0x10 + 0x08), 90);   /* reserve drained */
+    }
+    T_ASSERT_EQ_I(I32(pool, 5 * 0x10 + 0x00), 0);        /* slots 5/6 untouched */
+    T_ASSERT_EQ_I(I32(pool, 5 * 0x10 + 0x08), 100);
+    T_ASSERT_EQ_I(I32(pool, 0 * 0x10), 0);               /* 40 staged − 40 = 0 */
+    return 0;
+}
+
+int test_engine_combat_muster_defender_spawns(void)
+{
+    spawn_reset();
+    memset(g_spawn_cells, 0, sizeof g_spawn_cells);
+    g_spawn_cells[(20 * SPAWN_GRID + 20) * SPAWN_STRIDE + 1] = 1;
+    engine_map_query_bind_cell_descriptors(g_spawn_cells);
+    engine_territory_bind_cells(g_spawn_cells);
+    engine_territory_bind_records(g_per_territory_420);
+
+    int army = 2, owner = 2;
+    R_REC(army)[SPAWN_COORD_OFF + army * 3]     = 20;
+    R_REC(army)[SPAWN_COORD_OFF + army * 3 + 1] = 20;
+    R_REC(army)[0x05] = owner;
+    I32(R_REC(army), 0x24) = 500;                  /* provision (≥ min_prov) */
+    I32(R_REC(army), 0x38) = 500;
+    P_REC(owner)[0x05] = 1;
+
+    /* mode 0: plain spawn at the muster-cost price; returns the new occupant. */
+    int ret = engine_combat_muster_defender(army, 40, 40, 0);
+    T_ASSERT(ret != 0);
+    T_ASSERT_EQ_I(ret, engine_territory_current_slot());
+
+    engine_map_query_bind_cell_descriptors(NULL);
+    engine_territory_bind_cells(NULL);
+    engine_territory_bind_records(NULL);
+    return 0;
+}
+
 /* ---- player resignation (FUN_0049cf20 / FUN_0049b2a3) -------------------- *
  * resign_player demolishes a player's realms (R_REC +0x05 owner zeroed) and  *
  * disbands their placed units (CREC), then wipes the strategic record and    *

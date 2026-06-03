@@ -122,6 +122,18 @@ int engine_combat_find_capital_defender(int key);
  * redistributes the pool; combat_b (FUN_004a6c68) drives that path. */
 void engine_combat_prime_muster(int region, int32_t count);
 
+/* Port of FUN_004a50ae @ 0x4a50ae (731 B) — raise a defending garrison in
+ * region `region` sized at `pct` percent of its provision (+0x24) and spawn it.
+ * Returns the new occupant index (DAT_0052afe0) or 0 when provision < `min_prov`
+ * or no free spawn cell exists.  `mode` selects the staging: 2 = fresh garrison
+ * (free spawn, strat reserves seeded, sized head distributed into troop classes
+ * by size band), 1 = top-up (recruit 10-at-a-time from the primed reserves up to
+ * the staged budget), 0 = plain spawn at the muster-cost supply price.  Reads
+ * the percentage→cost curve (retail .rdata 0x4d8778).  Its callees
+ * engine_combat_prime_muster / engine_combat_spawn_unit are ported; combat_b
+ * (FUN_004a6c68) drives it to materialise a region's auto-defender. */
+int engine_combat_muster_defender(int region, int pct, int min_prov, int mode);
+
 /* Port of FUN_004a80db @ 0x4a80db (478 B) — post-battle supply/condition
  * recompute for a surviving occupant.  For each of 3 supply groups, express the
  * present stock as a percent of (rate × count) clamped to 100, and store the

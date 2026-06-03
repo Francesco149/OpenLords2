@@ -1927,6 +1927,10 @@ struct test_case {
     X(engine_combat_spawn_unit_populates) \
     X(engine_combat_spawn_unit_no_cell) \
     X(engine_combat_prime_muster) \
+    X(engine_combat_muster_defender_below_min) \
+    X(engine_combat_muster_defender_mode2_distributes) \
+    X(engine_combat_muster_defender_mode1_recruits) \
+    X(engine_combat_muster_defender_spawns) \
     X(engine_combat_resign_eliminates) \
     X(engine_combat_resign_recount_always_zero) \
     X(engine_combat_resign_sweep_sp_noop) \
