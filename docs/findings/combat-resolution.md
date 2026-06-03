@@ -191,21 +191,45 @@ host-tested:
 | `FUN_004ac185` | `engine_combat_spawn_rebellion`       | spawn a rebel stack (kind 2/type 6) on a dry-reserve owned region |
 | `FUN_004abd0f` | `engine_combat_army_settle_region`    | state-2 reconcile: warn owner (0x9a/0x9b/0x9c), maybe rebel, decay popularity |
 
+### Driver + display handlers — DONE (2026-06-03)
+
+Ported as the new module `engine_army_state.c` (driver `engine_army_state_run`
++ the four handlers), host-tested (10 tests, 1900 total green):
+
+| retail         | port (engine_army_state.c)        | role |
+|----------------|-----------------------------------|------|
+| `FUN_004650b0` | `engine_army_state_run`           | walk records 1..150, count live, dispatch by state / disband 0,≥6 |
+| `FUN_0046521f` | `handler_march` (state 1)         | sprite by head bucket (≤300→0x48, ≤600→0x60, else 0x78) + facing; enter_region reconcile; sub-state advance |
+| `FUN_00465486` | `handler_settle` (state 2)        | head<30 → `engine_unit_remove`; else sprite base 0x90 + settle_region reconcile |
+| `FUN_00465622` / `FUN_00465761` | `handler_idle` (states 3/4, retail byte-identical) | sprite ((anim+1)&7)·6 + idle-facing; region colour set directly |
+
+Display formula (all states): `sprite[+0x07] = (((anim[+0x09]+1)&7) · K) + base
++ facing_table[facing[+0x1b]]`, where K=3/base∈{0x48,0x60,0x78} for state 1,
+K=3/base=0x90 for state 2, K=6/base=0 for states 3/4.  Facing tables baked:
+`k_facing_march` = DAT_004d6a78 {0,1,2,1,0,1,2,1}, `k_facing_idle` =
+DAT_004d6ab8 {0,1,2,3,4,5,0,1}.  Every state decrements the +0x160 timer
+(floored 0) and, when sub-state +0x14c == 2, calls the bound movement seam.
+
+Bound seams: `engine_army_state_bind_cells` (DAT_00522f90, region key at cell
++7 — wired in `game_init`), `engine_army_state_bind_move_fn` (FUN_00465d28,
+default NULL no-op).  Driver globals exposed: `g_army_state_index`
+(DAT_005533e8, the seam reads it), `g_army_state_live_count` (DAT_00553f08),
+`g_army_state_abort` (DAT_0050a49e — a seam may raise it to halt the walk).
+The state-0 table slot is a no-op stub (never dispatched: state 0 disbands);
+slot 5 is null in retail (state 5 never occurs).
+
 ### Frontier (next chips)
 
-1. **Driver `FUN_004650b0` + the 4 display handlers** (0x46521f / 465486 /
-   465622 / 465761) — the handlers' only remaining unported callee is
-   `FUN_00465d28`; everything else is ported.  Needs a cell-grid binding in
-   the driver's module (to read the cell region key +7) and the two facing
-   tables baked.  Land with `FUN_00465d28` as a bound seam.
-2. **Movement-step executor `FUN_00465d28`** (1441 B) — advances the occupant
+1. **Movement-step executor `FUN_00465d28`** (1441 B) — advances the occupant
    one step along its path (`FUN_0046f434`, ported) and dispatches the result
    code (`FUN_0046634d`, unported) into arrival / blocked / combat-engage
    (5 → `FUN_004296b5` + `FUN_004a6c68`) / region-event (6 → `FUN_0046873f` /
    `FUN_004686a0`) / (7 → `FUN_00468ae2`).  Deep: 7 unported callees, the
    real "armies move on the strategic map" engine.  Its own multi-chip arc.
-3. **Wire the driver into `engine_tick`'s SP per-tick path** (engine.c, beside
-   the existing `FUN_0040490d`/`FUN_0049a010` arm) + bind the rebellion seam
-   (`engine_realm_bind_rebellion_fn`) to `engine_combat_spawn_rebellion` —
-   deferred from the occupation-cluster chip because it needs the turn evq +
-   mp_active context that the driver wiring establishes.
+   Bind it via `engine_army_state_bind_move_fn` once ported.
+2. **Wire `engine_army_state_run` into `engine_tick`'s SP per-tick path**
+   (engine.c, beside the existing `FUN_0040490d`/`FUN_0049a010` arm) + bind the
+   rebellion seam (`engine_realm_bind_rebellion_fn`) to
+   `engine_combat_spawn_rebellion` — deferred from this chip because it needs
+   the turn evq + mp_active context that the driver wiring establishes.  The
+   cell-grid bind is already in `game_init`.

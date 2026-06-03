@@ -1917,6 +1917,16 @@ struct test_case {
     X(engine_combat_resign_recount_always_zero) \
     X(engine_combat_resign_sweep_sp_noop) \
     X(engine_combat_resign_sweep_mp) \
+    X(engine_army_state_driver_counts_live) \
+    X(engine_army_state_disband_out_of_range) \
+    X(engine_army_state_march_sprite_buckets) \
+    X(engine_army_state_march_reconcile) \
+    X(engine_army_state_march_substate_and_timer) \
+    X(engine_army_state_settle_low_head_removes) \
+    X(engine_army_state_settle_sprite_and_latch) \
+    X(engine_army_state_idle_sets_region) \
+    X(engine_army_state_move_seam_invoked) \
+    X(engine_army_state_abort_breaks_walk) \
     X(engine_diplomacy_clear_treaty) \
     X(engine_diplomacy_broadcast_penalty) \
     X(engine_diplomacy_battle_adjust_guards) \

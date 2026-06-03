@@ -15,6 +15,7 @@
 #include "engine_map_query.h"     /* box predicates for the army-coord probes */
 #include "engine_territory.h"     /* entity placer FUN_0046e1b0 (army starts) */
 #include "engine_army_economy.h"  /* provision / plan_realm (per-realm economy) */
+#include "engine_army_state.h"    /* per-tick army-state machine cell binding   */
 #include "engine_npc_schedule.h"  /* engine_npc_schedule_init (FUN_0049caaa)     */
 #include "engine_strat_cost.h"    /* engine_strat_cost_rebuild (FUN_0046ff43)    */
 #include "engine_event_queue.h"   /* engine_event_queue_init_wrapper (FUN_00472ad0) */
@@ -1213,6 +1214,9 @@ void engine_game_init(void)
     engine_army_economy_bind_army_records(g_per_army_768);
     engine_army_economy_bind_cell_roster((int32_t *)g_misc_1360);
     engine_army_economy_bind_cells(g_overworld_map);
+    /* The per-tick army-state machine (FUN_004650b0) reads each occupant's
+     * cell region key (cell +7) through the same shared 8-byte grid. */
+    engine_army_state_bind_cells(g_overworld_map);
     /* The per-group resource-demand pool (retail DAT_0057c020, stride 0x160)
      * physically lives INSIDE the player-strategic block at +0x120 — retail's
      * commodity pools +0x120/+0x128/+0x130 ARE the resource accumulators, viewed
