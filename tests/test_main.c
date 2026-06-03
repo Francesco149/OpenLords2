@@ -1888,6 +1888,11 @@ struct test_case {
     X(engine_combat_size_local_defends) \
     X(engine_combat_size_defender_local_open_attacker) \
     X(engine_combat_size_sfx_hook) \
+    X(engine_combat_capital_defender_strongest) \
+    X(engine_combat_capital_defender_filters) \
+    X(engine_combat_capital_defender_asymmetric) \
+    X(engine_combat_capital_defender_edge) \
+    X(engine_combat_capital_defender_empty) \
     X(engine_combat_condition_zero_head) \
     X(engine_combat_condition_mixed) \
     X(engine_combat_condition_roundup_and_empty) \

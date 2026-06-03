@@ -443,18 +443,42 @@ off-screen region (deposit + removal but **no** redraw), wrong-state no-op, and
 settle-region≠entered-region no-op.  The recompute chain delegates to
 already-tested ports, bound NULL in the test so the deposit lands observably.
 
+#### Capital-defender finder `FUN_0046d42c` → `engine_combat_find_capital_defender` (ported)
+
+A leaf dependency of the combat-resolve back half `FUN_004a6c68` (combat_b parks
+its result in the defender slot `DAT_00568218`).  Given a region key it scans the
+**4×4 cell block** anchored two cells up and left of the region's capital cell
+(record +0x6c col / +0x6d row) — columns `[cap_col-2 .. cap_col+1]`, rows
+`[cap_row-2 .. cap_row+1]` — and returns the strongest friendly live unit there:
+the occupant whose owner (+0x00, sign-extended) equals the region owner (+0x05),
+whose kind byte (+0x08) is 1, with the greatest head-count (+0x168, strict `<`).
+Returns 0 when the capital is within two cells of the 0..63 grid edge (the whole
+box must fit) or nothing qualifies.  The box is **asymmetric** — 2 cells left/up
+but only 1 right/down — a retail quirk (the loop runs `[cap-2, cap+2)` on both
+axes); ported verbatim.  Reads `g_overworld_map` (cell +5 head-link) directly.
+Retail reuses engine_path's find-nearest scratch `DAT_00569570/78` as the loop
+counters (codegen artifact, quirk #130); the answer is the returned index, never
+the scratch, so the port uses locals.  Capital offsets (+0x6c/+0x6d), the signed
+`movsx` owner compare, the +0x168 dword strength and the `+8` / `+0x1e0` row
+stride r2-verified against `FUN_0046d42c`.  Ported into `engine_combat.c` (+
+header), host-tested (5 new tests, 1964 total green): strongest-in-box pick,
+owner/active/out-of-box filtering, the asymmetric-box boundary (cap+2 excluded /
+cap-2 included), all four grid-edge rejections, and the empty box.
+
 ### Frontier (next chips)
 
 1. **The remaining executor dispatcher callees** — port each and bind it into
    the executor through the seam it already calls: `FUN_004a6c68` (combat resolve
    — the 1264 B back half of the code-5 pair; once it lands, bind **both** combat
-   seams together via `engine_army_move_bind_combat_fns`), `FUN_004686a0`
-   (region-event handler, **high** terrain — needs its two callees `FUN_004a78ea`
-   / `FUN_004a7ca2` first, which chain into `FUN_004a79a3` / `FUN_004a7e0a`), and
-   `FUN_00426360` (DirectDraw surface present/scroll — render seam, lands with the
-   strategic-map camera cluster).  **Done**: special-tile `FUN_00468ae2`,
-   region-event-lo `FUN_0046873f`, arrival `FUN_00467196`, settle-deposit
-   `FUN_004296b5` (all above).
+   seams together via `engine_army_move_bind_combat_fns`).  Its two unported deps
+   are now down to one: `FUN_0046d42c` (capital-defender finder) is **done**
+   (above); the remaining `FUN_004a50ae` (731 B) still needs its callee
+   `FUN_004aaa80`.  Then `FUN_004686a0` (region-event handler, **high** terrain —
+   needs its two callees `FUN_004a78ea` / `FUN_004a7ca2` first, which chain into
+   `FUN_004a79a3` / `FUN_004a7e0a`), and `FUN_00426360` (DirectDraw surface
+   present/scroll — render seam, lands with the strategic-map camera cluster).
+   **Done**: special-tile `FUN_00468ae2`, region-event-lo `FUN_0046873f`, arrival
+   `FUN_00467196`, settle-deposit `FUN_004296b5`, capital-defender `FUN_0046d42c`.
 2. **Wire `engine_army_state_run` into `engine_tick`'s SP per-tick path**
    (engine.c, beside the existing `FUN_0040490d`/`FUN_0049a010` arm) + bind the
    rebellion seam (`engine_realm_bind_rebellion_fn`) to

@@ -102,6 +102,16 @@ void engine_combat_bind_battle_sfx(void (*fn)(void));
  * g_per_territory_420 occupants the resolver validates. */
 int engine_combat_size_battle(int attacker, int defender, int local_player);
 
+/* Port of FUN_0046d42c @ 0x46d42c (456 B) — find the strongest friendly live
+ * unit in the 4×4 cell block anchored two cells up/left of region `key`'s
+ * capital cell (record +0x6c col / +0x6d row): the occupant whose owner (+0x00)
+ * matches the region owner (+0x05), whose kind byte (+0x08) is 1, with the
+ * greatest head-count (+0x168).  Returns 0 if the capital is within two cells of
+ * the grid edge (the box must fit fully) or no qualifying unit is present.  The
+ * scanned box is asymmetric (2 left/up, 1 right/down) — retail's exact bounds.
+ * combat_b (FUN_004a6c68) parks the result in the defender slot DAT_00568218. */
+int engine_combat_find_capital_defender(int key);
+
 /* Port of FUN_004a80db @ 0x4a80db (478 B) — post-battle supply/condition
  * recompute for a surviving occupant.  For each of 3 supply groups, express the
  * present stock as a percent of (rate × count) clamped to 100, and store the

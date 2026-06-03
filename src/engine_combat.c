@@ -362,6 +362,8 @@ void engine_combat_halve_garrison(int rec)
 #define REGREC(k)   (&g_per_army_768[(k) * RSTRIDE])
 #define R_OWNER     0x05    /* region owning player (u8)                    */
 #define R_F07       0x07    /* owner's banner/colour key (u8, ← strat +0xa) */
+#define R_CAP_COL   0x6c    /* region capital cell column (u8)              */
+#define R_CAP_ROW   0x6d    /* region capital cell row (u8)                 */
 #define R_F0C       0x0c    /* region popularity reserve (i8)               */
 #define R_F17       0x17    /* region popularity (i8)                       */
 #define R_UNREST    0x20    /* region unrest level (i8, band 0..4)          */
@@ -393,6 +395,51 @@ void engine_combat_bind_clock_fn(uint32_t (*fn)(void))             { g_combat_cl
 
 static void     combat_wav(const char *n, int a, int b) { if (g_combat_wav_fn) g_combat_wav_fn(n, a, b); }
 static uint32_t combat_clock(void) { return g_combat_clock_fn ? g_combat_clock_fn() : 0; }
+
+/* Port of FUN_0046d42c (456 B).  Scan the 4×4 cell block anchored two cells up
+ * and left of region `key`'s capital cell (record +0x6c col / +0x6d row) — i.e.
+ * columns [cap_col-2 .. cap_col+1], rows [cap_row-2 .. cap_row+1], the asymmetric
+ * box retail uses (covers 2 cells left/up but only 1 right/down) — and return the
+ * index of the strongest friendly live unit there: an occupant whose owner
+ * (+0x00, sign-extended) equals the region owner (+0x05), whose kind byte (+0x08)
+ * is 1, with the greatest head-count (+0x168, strictly).  Returns 0 when the
+ * capital sits within two cells of the 0..63 grid edge (the whole box must fit)
+ * or no qualifying unit is present.  combat_b (FUN_004a6c68) parks the result in
+ * the defender slot DAT_00568218.
+ *
+ * Retail reuses engine_path's find-nearest scratch DAT_00569570/78 as the loop
+ * counters (a codegen artifact, quirk #130); the answer is the returned occupant
+ * index, never the scratch, so we use locals rather than clobber those globals. */
+int engine_combat_find_capital_defender(int key)
+{
+    uint8_t *reg = REGREC(key);
+    int cap_col = reg[R_CAP_COL];
+    int cap_row = reg[R_CAP_ROW];
+
+    if (cap_col - 2 < 0)     return 0;
+    if (cap_col + 2 >= 0x41) return 0;
+    if (cap_row - 2 < 0)     return 0;
+    if (cap_row + 2 >= 0x41) return 0;
+
+    int region_owner = reg[R_OWNER];
+    int best = 0, best_val = 0;
+    int idx = ((cap_row - 2) * 0x40 + (cap_col - 2)) * 8;  /* byte offset of box origin */
+    for (int row = cap_row - 2; row < cap_row + 2; row++) {
+        for (int col = cap_col - 2; col < cap_col + 2; col++) {
+            unsigned occ = g_overworld_map[idx + 5];          /* cell +5 head-link */
+            if (occ != 0
+                && (int)(int8_t)CREC(occ)[C_OWNER] == region_owner
+                && CREC(occ)[C_ACTIVE] == 1
+                && best_val < *(const int32_t *)(CREC(occ) + C_VALUE)) {
+                best     = (int)occ;
+                best_val = *(const int32_t *)(CREC(occ) + C_VALUE);
+            }
+            idx += 8;
+        }
+        idx += (0x40 - 4) * 8;   /* 0x1e0: advance to the next row, same start column */
+    }
+    return best;
+}
 
 /* Resign-time interactive UI cleanup seam (retail 0x47fe0b, game-mode-gated
  * on s_slot_0057c8fc == 2).  The real function sweeps a 0x50-entry stride-0x1b0

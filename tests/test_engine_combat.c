@@ -1247,3 +1247,101 @@ int test_engine_combat_resign_sweep_mp(void)
     T_ASSERT_EQ_I(evq.write_idx, 1);
     return 0;
 }
+
+/* ==========================================================================
+ * FUN_0046d42c — capital-defender finder (engine_combat_find_capital_defender)
+ * ========================================================================== */
+
+#define R_REC(k)     (&g_per_army_768[(k) * 0x300])
+#define R_CAP_COL    0x6c
+#define R_CAP_ROW    0x6d
+
+/* Reset the blocks the finder reads and stage region 6 with a capital at
+ * (cap_col, cap_row), owner 2. */
+static void cd_reset(int cap_col, int cap_row)
+{
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_overworld_map, 0, sizeof g_overworld_map);
+    uint8_t *reg = R_REC(6);
+    reg[0x05]      = 2;                  /* region owner                       */
+    reg[R_CAP_COL] = (uint8_t)cap_col;
+    reg[R_CAP_ROW] = (uint8_t)cap_row;
+}
+
+/* Place occupant `occ` at grid (col,row) with owner/active/value. */
+static void cd_place(int occ, int col, int row, int owner, int active, int value)
+{
+    g_overworld_map[(row * 0x40 + col) * 8 + 5] = (uint8_t)occ;
+    uint8_t *r = CREC(occ);
+    r[C_OWNER]  = (uint8_t)owner;
+    r[C_ACTIVE] = (uint8_t)active;
+    I32(r, C_VALUE) = value;
+}
+
+/* --- picks the strongest friendly live unit inside the box ----------------- */
+int test_engine_combat_capital_defender_strongest(void)
+{
+    cd_reset(10, 10);                       /* box cols 8..11, rows 8..11      */
+    cd_place(3,  8,  8, 2, 1, 50);          /* in box (left/up edge)           */
+    cd_place(4, 11, 11, 2, 1, 100);         /* in box (right/down edge), bigger */
+    cd_place(7,  9,  9, 2, 1, 70);          /* in box, middling                */
+
+    T_ASSERT_EQ_I(engine_combat_find_capital_defender(6), 4);
+    return 0;
+}
+
+/* --- skips hostile-owner, inactive, and out-of-box units ------------------- */
+int test_engine_combat_capital_defender_filters(void)
+{
+    cd_reset(10, 10);
+    cd_place(3,  9,  9, 5, 1, 900);         /* hostile owner → ignored         */
+    cd_place(4, 10, 10, 2, 0, 900);         /* not active (+0x08 != 1) → ignored */
+    cd_place(5, 12, 10, 2, 1, 900);         /* col cap+2 → outside box (right)  */
+    cd_place(6,  8, 10, 2, 1, 40);          /* col cap-2 → inside box (left)    */
+
+    /* Only occupant 6 qualifies, despite the bigger ignored ones. */
+    T_ASSERT_EQ_I(engine_combat_find_capital_defender(6), 6);
+    return 0;
+}
+
+/* --- asymmetric box: cap+2 column/row excluded, cap-2 included ------------- */
+int test_engine_combat_capital_defender_asymmetric(void)
+{
+    cd_reset(10, 10);
+    cd_place(5, 10, 12, 2, 1, 900);         /* row cap+2 → outside box (down)   */
+    T_ASSERT_EQ_I(engine_combat_find_capital_defender(6), 0);  /* nothing in box */
+
+    cd_place(6, 10,  8, 2, 1, 30);          /* row cap-2 → inside box (up)      */
+    T_ASSERT_EQ_I(engine_combat_find_capital_defender(6), 6);
+    return 0;
+}
+
+/* --- capital within two cells of the grid edge → 0 (box must fit) ---------- */
+int test_engine_combat_capital_defender_edge(void)
+{
+    cd_reset(1, 10);                        /* cap_col-2 < 0                    */
+    cd_place(3, 1, 10, 2, 1, 100);
+    T_ASSERT_EQ_I(engine_combat_find_capital_defender(6), 0);
+
+    cd_reset(0x3f, 10);                     /* cap_col+2 >= 0x41                */
+    cd_place(3, 0x3f, 10, 2, 1, 100);
+    T_ASSERT_EQ_I(engine_combat_find_capital_defender(6), 0);
+
+    cd_reset(10, 1);                        /* cap_row-2 < 0                    */
+    cd_place(3, 10, 1, 2, 1, 100);
+    T_ASSERT_EQ_I(engine_combat_find_capital_defender(6), 0);
+
+    cd_reset(10, 0x3f);                     /* cap_row+2 >= 0x41                */
+    cd_place(3, 10, 0x3f, 2, 1, 100);
+    T_ASSERT_EQ_I(engine_combat_find_capital_defender(6), 0);
+    return 0;
+}
+
+/* --- empty box → 0 --------------------------------------------------------- */
+int test_engine_combat_capital_defender_empty(void)
+{
+    cd_reset(20, 20);
+    T_ASSERT_EQ_I(engine_combat_find_capital_defender(6), 0);
+    return 0;
+}

@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **664** (27.1%) — tested 621, ported 43
-- code bytes touched: **33.1%** (277,822 / 838,629 B)
-- unported: **1783**
+- touched: **665** (27.2%) — tested 622, ported 43
+- code bytes touched: **33.2%** (278,278 / 838,629 B)
+- unported: **1782**
 - orphan refs (in src/, not in function table): 7
 
-## tested (621) — ported + host unit suite
+## tested (622) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -420,6 +420,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46cfbd | FUN_0046cfbd | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |
 | 0x46d130 | FUN_0046d130 | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |
 | 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
+| 0x46d42c | FUN_0046d42c | 456 | engine_combat.c, engine_combat.h |
 | 0x46d7f4 | FUN_0046d7f4 | 486 | engine_army_move.c, engine_realm_events.h, engine_territory.c (+1) |
 | 0x46d9da | FUN_0046d9da | 113 | engine_territory.c, engine_territory.h |
 | 0x46da4b | FUN_0046da4b | 426 | engine_territory.c, engine_territory.h, main.c |
@@ -510,7 +511,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a4c41 | FUN_004a4c41 | 311 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a551b | FUN_004a551b | 332 | engine_combat.c, engine_combat.h |
 | 0x4a6a30 | FUN_004a6a30 | 568 | engine_combat.c, engine_combat.h |
-| 0x4a6c68 | FUN_004a6c68 | 1264 | engine_army_move.c, engine_army_move.h |
+| 0x4a6c68 | FUN_004a6c68 | 1264 | engine_army_move.c, engine_army_move.h, engine_combat.c (+1) |
 | 0x4a7158 | FUN_004a7158 | 402 | engine_combat.c, engine_combat.h |
 | 0x4a72fe | FUN_004a72fe | 1516 | engine_combat.c, engine_combat.h |
 | 0x4a79a3 | FUN_004a79a3 | 767 | engine_combat.c, engine_combat.h |
