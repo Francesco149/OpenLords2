@@ -420,8 +420,8 @@ Per-iteration shape (in retail call order):
 | Retail        | Size  | Gate                          | Disposition |
 |---------------|-------|-------------------------------|-------------|
 | `FUN_0040490d` | 313 B | Sub-state 0 | **Deferred — sim subsystem.** |
-| `FUN_0049a010` | 982 B | Sub-state 0 | **Deferred — sim subsystem.** |
-| `FUN_004650b0` | 265 B | Sub-state 0 | **Deferred — sim subsystem.** |
+| `FUN_0049a010` | 982 B | Sub-state 0 | **Deferred — sim turn driver.**  Its phase sequencer `FUN_0049ce51` + roster reset `FUN_0049b6d3` are ported (engine_turn, 2026-06-03); the dispatcher itself is the next chip. |
+| `FUN_004650b0` | 265 B | Sub-state 0 | **Ported** → `engine_army_state_run` + bound to its movement executor in game_init; not yet wired into this tick (needs the driver's evq + mp_active). |
 | `FUN_00478952` | 53 B  | Sub-state 2 (no inner gate) | **Deferred — sim subsystem.** |
 | `FUN_0040490d` | 313 B | Sub-state 2 AND `DAT_004eac50 < 0x2b` (combat-resolution screen lower-half) | **Deferred — combat subsystem.** |
 | `FUN_00488dfe` | 943 B | as above | **Deferred — combat subsystem.** |
@@ -480,6 +480,58 @@ stays 0), `g_sim_turn_timeout_reached` (`DAT_00553018`),
 unported, and no producer drives `g_sim_turn_progress` past 0, so the
 live SP path always takes the `mp_active == 0` → advance branch.  The
 host suite exercises every branch directly via the pure core.
+
+### Turn phase sequencer `FUN_0049ce51` + roster reset `FUN_0049b6d3` (ported 2026-06-03)
+
+The strategic turn is a **7-phase cycle**: the SP per-tick driver
+`FUN_0049a010` (unported — the substate-0 extra `0x49a010` surveyed
+above) keys its per-pass work off the current phase `DAT_00569584`
+(1..7), and once a phase resolves it calls **`FUN_0049ce51`** to step to
+the next.  Ported as `engine_turn_advance_phase` (`src/engine_turn.c`):
+
+```
+s_slot_0053f06c (prev)  ← s_slot_00569584 (current)     // save outgoing phase
+s_slot_00569584         ++ ; if > 7 → 1  (+ reset roster on the wrap)
+s_slot_0053f678 (next)  = current + 1 ; if > 7 → 1      // one-phase lookahead
+s_slot_0053f658 (tick)  = 0                              // per-phase pass counter
+s_slot_0057c944         = 1                              // demand-redraw cookie
+```
+
+The per-phase pass counter `s_slot_0053f658` is the gate `FUN_0049a010`
+reads as `if (DAT_0053f658 == 1)` to run each phase's one-shot setup; the
+sequencer zeroes it so the next phase's first pass is pass 1.  All six
+fields are existing save-schema scalars (entries 73/74/75/76/84/85) — no
+new storage, no scalar wall.
+
+On the **7→1 wrap** (a fresh full turn cycle) the sequencer calls
+**`FUN_0049b6d3`** → `engine_turn_reset_roster`: it walks the per-realm
+strategic roster slots 1..5 (`g_player_strategic_352`, retail 0x57bf00,
+stride 0x160) and re-arms each slot's turn-progress field (int @ +0) — an
+**active** realm (byte @ +4 != 0) reset to 0 (mid-turn) and counted into
+`s_slot_00554004`, an **inactive** slot parked at the `999` "turn done"
+sentinel.  This is the **producer** of the exact field
+`engine_turn_end_check` (`FUN_0049b762`, above) consumes: reset arms the
+realms at cycle start, the end-check scans for any still below 999 to
+decide whether the turn may advance.  Same `s_slot_00554004` tally,
+opposite ends of the cycle.
+
+Both r2-verified byte-exact (stride `i*0x160` via the `lea/lea/shl 5`
+idiom, the `> 7` wrap on both phase and lookahead, the `i < 6` slot
+bound, the unconditional `+0 = 0` store before the active-byte test).  4
+host tests (`tests/test_engine_turn.c`): mid-cycle step + lookahead, the
+lookahead-wraps-at-7 edge, the 7→1 wrap firing the roster reset (active
+counted / inactive parked), and the standalone roster reset (slot 0 never
+touched, all-active vs all-inactive tallies).  Pure scalar/roster
+bookkeeping with no baked tables or arithmetic — host tests + the r2
+transcription check are the gate (no retail-diff target needed, unlike
+the table-baking combat chips).  1984 host tests green, ASAN/UBSAN clean.
+
+**Frontier.** The phase sequencer's only remaining caller-side gap is
+its parent `FUN_0049a010` itself — the substate-0 turn driver that
+dispatches the 7 phases (and the sibling `FUN_0040490d`).  Porting it
+wires the whole turn loop into the tick; both were demoted from the
+ledger's touched set this session (they were falsely promoted by the
+engine.c sub-step-body TODO comments — see ledger-provenance-audit.md).
 
 ### Render-phase tail — camera clamps + FPS counter ported (2026-05-24 / 26)
 

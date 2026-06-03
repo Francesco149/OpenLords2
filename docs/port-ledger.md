@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **672** (27.5%) — tested 629, ported 43
-- code bytes touched: **33.5%** (280,596 / 838,629 B)
+- touched: **672** (27.5%) — tested 631, ported 41
+- code bytes touched: **33.3%** (279,553 / 838,629 B)
 - unported: **1775**
 - orphan refs (in src/, not in function table): 7
 
-## tested (629) — ported + host unit suite
+## tested (631) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -482,6 +482,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49b2a3 | FUN_0049b2a3 | 187 | engine_combat.c, engine_combat.h |
 | 0x49b35e | FUN_0049b35e | 205 | game_init.c, game_init.h |
 | 0x49b42b | FUN_0049b42b | 680 | engine_combat.c, engine_ranking.c, engine_ranking.h |
+| 0x49b6d3 | FUN_0049b6d3 | 143 | engine.c, engine_turn.c, engine_turn.h |
 | 0x49b762 | FUN_0049b762 | 334 | engine.c, engine.h, engine_turn.c (+1) |
 | 0x49bae9 | FUN_0049bae9 | 180 | engine_menu_input.c, engine_roster.c, engine_roster.h |
 | 0x49bbe8 | FUN_0049bbe8 | 53 | engine_roster.c, engine_roster.h, engine_territory.c |
@@ -490,6 +491,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49bd99 | FUN_0049bd99 | 3063 | game_init.c, game_init.h |
 | 0x49ca32 | FUN_0049ca32 | 46 | main.c |
 | 0x49caaa | FUN_0049caaa | 935 | engine_menu_input.c, engine_npc_schedule.c, engine_npc_schedule.h (+3) |
+| 0x49ce51 | FUN_0049ce51 | 109 | engine.c, engine_turn.c, engine_turn.h |
 | 0x49cf20 | FUN_0049cf20 | 704 | engine_combat.c, engine_combat.h |
 | 0x49d1e0 | FUN_0049d1e0 | 1024 | engine_combat.c, engine_ranking.c, engine_ranking.h |
 | 0x49dd01 | FUN_0049dd01 | 583 | engine_army_ai.c, engine_army_ai.h, engine_territory.c (+1) |
@@ -651,11 +653,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine_map_scene.c, engine_map_scene.h |
 
-## ported (43) — reimplemented, no host test yet
+## ported (41) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
-| 0x40490d | FUN_0040490d | 313 | engine.c |
 | 0x4063c1 | FUN_004063c1 | 690 | engine_map_terrain.c, engine_map_terrain.h |
 | 0x406673 | FUN_00406673 | 1351 | engine_map_terrain.c |
 | 0x408fcb | FUN_00408fcb | 96 | gfx.c, gfx.h |
@@ -685,7 +686,6 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x498458 | FUN_00498458 | 132 | engine.c |
 | 0x499859 | FUN_00499859 | 451 | gfx.c |
 | 0x499a1c | FUN_00499a1c | 174 | engine.c, gfx.c, gfx.h |
-| 0x49a010 | FUN_0049a010 | 982 | engine.c |
 | 0x49a3e6 | FUN_0049a3e6 | 109 | engine.c |
 | 0x49b8b0 | FUN_0049b8b0 | 195 | engine.c |
 | 0x4b0aaa | FUN_004b0aaa | 11 | engine.c |

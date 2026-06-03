@@ -1217,6 +1217,10 @@ struct test_case {
     X(turn_calendar_non_rollover) \
     X(turn_calendar_year_rollover) \
     X(turn_run_passes_sequences_full_driver) \
+    X(turn_advance_phase_steps_and_lookahead) \
+    X(turn_advance_phase_lookahead_wraps_at_7) \
+    X(turn_advance_phase_wraps_and_resets_roster) \
+    X(turn_reset_roster_arms_active_parks_inactive) \
     \
     X(title_buttons_marks_four_dirty_boxes) \
     X(title_buttons_draws_bevel_rects) \

@@ -1075,7 +1075,7 @@ void engine_tick(void)
          *   - master tick counter bump
          *   - FUN_00404a46 (LFSR advance — ported as engine_rng_step)
          *   - FUN_0049b8b0 (turn-timeout, unported)
-         *   - screen-state-specific FUN_0040490d / FUN_0049a010 /
+         *   - screen-state-specific 0x40490d / 0x49a010 /
          *     0x4650b0 (sub-state 0) or the sub-state-2 chain
          *
          * Today sub_steps is always 0 because scenario_hint == 0
@@ -1154,8 +1154,13 @@ void engine_tick(void)
          *    sim / UI / map subsystems.  Surveyed in
          *    main-loop-tick.md §"sub-step body screen-state extras". */
         if (g_sim_screen_substate == 0 && sub_steps != 0) {
-            /* TODO(sim): FUN_0040490d (313 B), FUN_0049a010 (982 B),
-             * 0x4650b0 (265 B). */
+            /* Retail runs three in order here: 0x40490d (313 B) and the
+             * turn driver 0x49a010 (982 B) — both still unported — then
+             * 0x4650b0, ported as engine_army_state_run + bound to its
+             * movement executor in game_init, but not yet wired into this
+             * tick (it needs the turn evq + mp_active the driver supplies).
+             * 0x49a010's phase sequencer FUN_0049ce51 + its turn-cycle
+             * roster reset FUN_0049b6d3 are now ported (engine_turn). */
         } else if (g_sim_screen_substate == 2 && sub_steps != 0) {
             /* TODO(sim): 0x478952 (53 B) + per-screen chain
              * 0x488dfe (943 B), 0x4822ed (644 B),

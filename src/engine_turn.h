@@ -133,6 +133,46 @@ void engine_turn_run_passes(engine_event_queue_state_t *evq,
                             uint32_t rng_7bit_a,
                             int mp_active);
 
+/* ─── Phase sequencer ───────────────────────────────────────────────
+ *
+ * The strategic turn runs as a 7-phase cycle (retail global DAT_00569584,
+ * the save-schema scalar s_slot_00569584, values 1..7).  Each phase the
+ * driver 0x49a010 (the SP per-tick screen-substate-0 turn driver, still
+ * unported) does its phase-specific work, and when that phase resolves
+ * it calls FUN_0049ce51 to step to the next phase.
+ *
+ * engine_turn_advance_phase — port of retail FUN_0049ce51 @ 0x49ce51
+ * (109 B).  Steps the phase counter, wrapping 7→1; on the wrap (a fresh
+ * full turn cycle beginning) it resets the per-realm turn roster via
+ * engine_turn_reset_roster.  All state lives in save-schema scalars:
+ *
+ *   s_slot_0053f06c (prev phase)   ← s_slot_00569584 (current), saved first
+ *   s_slot_00569584 (current)      ++ ; if > 7 → 1 (+ reset roster)
+ *   s_slot_0053f678 (next phase)   = current + 1 ; if > 7 → 1  (lookahead)
+ *   s_slot_0053f658 (phase tick)   = 0   (the per-phase pass counter the
+ *                                          driver bumps each pass and gates
+ *                                          its first-tick setup on == 1)
+ *   s_slot_0057c944 (redraw cookie)= 1
+ *
+ * engine_turn_reset_roster — port of retail FUN_0049b6d3 @ 0x49b6d3
+ * (143 B).  Called by the phase sequencer when the cycle wraps back to
+ * phase 1.  Walks the per-realm strategic roster slots 1..5
+ * (g_player_strategic_352, retail 0x57bf00, stride 0x160) and re-arms
+ * each turn-progress field (int @ slot+0): an *active* realm (byte @
+ * slot+4 != 0) is reset to 0 (mid-turn) and counted into the active
+ * tally s_slot_00554004 (retail DAT_00554004); an *inactive* slot is
+ * parked at the 999 "turn done" sentinel so the readiness scan
+ * (engine_turn_end_check) skips it.  This is the producer that seeds the
+ * exact field engine_turn_end_check consumes.
+ *
+ * Both mutate global save state in place (phase/roster are save-state),
+ * like engine_turn_advance_calendar — not the pure-struct style of
+ * engine_turn_end_check.
+ *
+ * Reference: docs/decompiled/by-address/{49ce51,49b6d3}.c. */
+void engine_turn_advance_phase(void);
+void engine_turn_reset_roster(void);
+
 /* ─── Turn-handshake runtime state (canonical storage) ──────────────
  *
  * Retail DAT_00553fc8 / _DAT_0056d658.  NOT save-schema scalars — pure

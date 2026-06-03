@@ -23,6 +23,7 @@
 #include "engine_realm_upkeep.h"  /* pay_upkeep (004acbd4)                 */
 #include "engine_territory.h"     /* census / workforce passes             */
 #include "engine_army_economy.h"  /* season / stock-A / resource passes    */
+#include "save.h"                 /* g_player_strategic_352 (retail 0x57bf00) */
 
 #include <string.h>   /* memcpy — aligned int read without aliasing UB */
 
@@ -124,6 +125,50 @@ void engine_turn_advance_calendar(void)
 /* retail FUN_00428471 @ 0x428471 — empty turn-driver hook (no body). */
 void engine_turn_hook_noop(void)
 {
+}
+
+/* ─── Phase sequencer (FUN_0049b6d3 / FUN_0049ce51) ──────────────────
+ * See engine_turn.h for the retail global ↔ scalar mapping.  Both reuse
+ * the module's PLAYER_STRIDE (0x160) / READY_DONE (999) constants. */
+
+#define PHASE_LAST 7      /* phases run 1..7; > 7 wraps to 1 */
+
+/* Port of retail FUN_0049b6d3 @ 0x49b6d3.  Re-arm the per-realm turn
+ * roster at the start of a new full turn cycle: active realms reset to
+ * mid-turn (0) and counted; inactive realms parked at the 999 sentinel. */
+void engine_turn_reset_roster(void)
+{
+    s_slot_00554004 = 0;
+    for (int i = 1; i < 6; i++) {       /* slots 1..5 (retail `i < 6`) */
+        uint8_t *slot = &g_player_strategic_352[i * PLAYER_STRIDE];
+        int32_t  v = 0;
+        memcpy(slot, &v, sizeof v);                 /* ready-value = 0 */
+        if (slot[4] == 0) {                          /* inactive realm */
+            v = READY_DONE;
+            memcpy(slot, &v, sizeof v);              /* park at sentinel */
+        } else {
+            s_slot_00554004++;                       /* count active realm */
+        }
+    }
+}
+
+/* Port of retail FUN_0049ce51 @ 0x49ce51.  Step the strategic turn phase,
+ * wrapping 7→1 (and resetting the roster on the wrap). */
+void engine_turn_advance_phase(void)
+{
+    s_slot_0053f06c = s_slot_00569584;               /* prev = current   */
+    s_slot_00569584 += 1;                            /* advance phase    */
+    if (s_slot_00569584 > PHASE_LAST) {
+        s_slot_00569584 = 1;                         /* wrap → new cycle */
+        engine_turn_reset_roster();                  /* FUN_0049b6d3     */
+    }
+
+    s_slot_0053f678 = s_slot_00569584 + 1;           /* next-phase lookahead */
+    if (s_slot_0053f678 > PHASE_LAST)
+        s_slot_0053f678 = 1;
+
+    s_slot_0053f658 = 0;                             /* reset phase tick */
+    s_slot_0057c944 = 1;                             /* demand redraw    */
 }
 
 /* Assembled per-turn driver — the deterministic tail of FUN_00448440.

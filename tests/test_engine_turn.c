@@ -342,3 +342,114 @@ int test_turn_run_passes_sequences_full_driver(void)
     engine_army_economy_bind_army_records(NULL);
     return 0;
 }
+
+/* ─── Phase sequencer (FUN_0049ce51 / FUN_0049b6d3) ──────────────────── */
+
+/* Mid-cycle step: phase 3 → 4 (no wrap).  prev = old phase, lookahead =
+ * new + 1, phase-tick reset to 0, redraw cookie set.  Roster untouched. */
+int test_turn_advance_phase_steps_and_lookahead(void)
+{
+    s_slot_00569584 = 3;     /* current phase */
+    s_slot_0053f06c = 99;    /* prev (clobbered) */
+    s_slot_0053f678 = 99;    /* lookahead (clobbered) */
+    s_slot_0053f658 = 7;     /* phase tick (reset) */
+    s_slot_0057c944 = 0;     /* redraw cookie (set) */
+    s_slot_00554004 = 42;    /* active tally — must NOT change (no wrap) */
+
+    engine_turn_advance_phase();
+
+    T_ASSERT_EQ_U(s_slot_0053f06c, 3u);    /* prev = old current */
+    T_ASSERT_EQ_U(s_slot_00569584, 4u);    /* advanced */
+    T_ASSERT_EQ_U(s_slot_0053f678, 5u);    /* lookahead = new + 1 */
+    T_ASSERT_EQ_U(s_slot_0053f658, 0u);    /* phase tick reset */
+    T_ASSERT_EQ_U(s_slot_0057c944, 1u);    /* redraw demanded */
+    T_ASSERT_EQ_U(s_slot_00554004, 42u);   /* roster untouched (no wrap) */
+    return 0;
+}
+
+/* Phase 6 → 7 (no wrap of the phase itself), but the lookahead 7+1=8
+ * wraps to 1. */
+int test_turn_advance_phase_lookahead_wraps_at_7(void)
+{
+    s_slot_00569584 = 6;
+    s_slot_0053f678 = 0;
+
+    engine_turn_advance_phase();
+
+    T_ASSERT_EQ_U(s_slot_00569584, 7u);    /* advanced, still in range */
+    T_ASSERT_EQ_U(s_slot_0053f678, 1u);    /* 8 → wrapped to 1 */
+    T_ASSERT_EQ_U(s_slot_0053f06c, 6u);
+    return 0;
+}
+
+/* Phase 7 → wrap to 1: the cycle-rollover fires engine_turn_reset_roster,
+ * which re-arms the per-realm roster and tallies the active realms. */
+int test_turn_advance_phase_wraps_and_resets_roster(void)
+{
+    s_slot_00569584 = 7;
+    s_slot_0053f06c = 0;
+    s_slot_00554004 = 0;
+
+    /* 5 roster slots (1..5): slots 1,2,4 active, slots 3,5 inactive. */
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    int mid = 123;   /* a mid-turn ready-value to prove it gets reset */
+    for (int i = 1; i < 6; i++)
+        memcpy(&g_player_strategic_352[i * STRIDE], &mid, sizeof mid);
+    g_player_strategic_352[1 * STRIDE + 4] = 1;   /* active */
+    g_player_strategic_352[2 * STRIDE + 4] = 1;   /* active */
+    g_player_strategic_352[4 * STRIDE + 4] = 1;   /* active */
+    /* slots 3, 5 left inactive (byte +4 == 0) */
+
+    engine_turn_advance_phase();
+
+    T_ASSERT_EQ_U(s_slot_00569584, 1u);    /* wrapped to phase 1 */
+    T_ASSERT_EQ_U(s_slot_0053f06c, 7u);    /* prev = old phase 7 */
+    T_ASSERT_EQ_U(s_slot_0053f678, 2u);    /* lookahead = 1 + 1 */
+    T_ASSERT_EQ_U(s_slot_00554004, 3u);    /* 3 active realms counted */
+
+    int v;
+    memcpy(&v, &g_player_strategic_352[1 * STRIDE], sizeof v);
+    T_ASSERT_EQ_I(v, 0);                   /* active → reset to mid-turn 0 */
+    memcpy(&v, &g_player_strategic_352[3 * STRIDE], sizeof v);
+    T_ASSERT_EQ_I(v, 999);                 /* inactive → parked at sentinel */
+    memcpy(&v, &g_player_strategic_352[5 * STRIDE], sizeof v);
+    T_ASSERT_EQ_I(v, 999);
+    return 0;
+}
+
+/* Direct test of engine_turn_reset_roster: slot 0 is never touched
+ * (loop is 1..5), all-active counts 5, all-inactive counts 0. */
+int test_turn_reset_roster_arms_active_parks_inactive(void)
+{
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    /* Slot 0 sentinel value that must survive (loop starts at 1). */
+    int guard = 0x7777;
+    memcpy(&g_player_strategic_352[0], &guard, sizeof guard);
+
+    /* All five active. */
+    for (int i = 1; i < 6; i++)
+        g_player_strategic_352[i * STRIDE + 4] = 1;
+    s_slot_00554004 = 99;
+
+    engine_turn_reset_roster();
+
+    T_ASSERT_EQ_U(s_slot_00554004, 5u);    /* all five active counted */
+    int v;
+    memcpy(&v, &g_player_strategic_352[0], sizeof v);
+    T_ASSERT_EQ_I(v, 0x7777);              /* slot 0 untouched */
+    for (int i = 1; i < 6; i++) {
+        memcpy(&v, &g_player_strategic_352[i * STRIDE], sizeof v);
+        T_ASSERT_EQ_I(v, 0);               /* every active slot reset to 0 */
+    }
+
+    /* Now all inactive → count 0, every slot parked at 999. */
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    s_slot_00554004 = 99;
+    engine_turn_reset_roster();
+    T_ASSERT_EQ_U(s_slot_00554004, 0u);
+    for (int i = 1; i < 6; i++) {
+        memcpy(&v, &g_player_strategic_352[i * STRIDE], sizeof v);
+        T_ASSERT_EQ_I(v, 999);
+    }
+    return 0;
+}
