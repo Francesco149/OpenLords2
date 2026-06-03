@@ -1975,6 +1975,11 @@ struct test_case {
     X(engine_army_state_siege_build_even_split) \
     X(engine_army_state_siege_build_topup) \
     X(engine_army_state_scan_siege_built) \
+    X(engine_army_state_raid_assign_skips_own_region) \
+    X(engine_army_state_raid_assign_wraps) \
+    X(engine_army_state_raid_assign_keeps_target_dest_from_cursor) \
+    X(engine_army_state_raid_assign_force_mode) \
+    X(engine_army_state_plan_raids_routes_state2) \
     X(engine_army_move_dir_offsets) \
     X(engine_army_move_dir_edges) \
     X(engine_army_move_classify_flags) \

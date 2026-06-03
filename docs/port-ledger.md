@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **682** (27.9%) — tested 641, ported 41
-- code bytes touched: **33.8%** (283,711 / 838,629 B)
-- unported: **1765**
+- touched: **684** (28.0%) — tested 643, ported 41
+- code bytes touched: **33.9%** (284,324 / 838,629 B)
+- unported: **1763**
 - orphan refs (in src/, not in function table): 7
 
-## tested (641) — ported + host unit suite
+## tested (643) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -549,6 +549,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4abf77 | FUN_004abf77 | 526 | engine_combat.c, engine_combat.h |
 | 0x4ac185 | FUN_004ac185 | 577 | engine_combat.c, engine_combat.h, engine_realm.c (+1) |
 | 0x4ac3c6 | FUN_004ac3c6 | 211 | engine_combat.c, engine_combat.h, engine_realm.c (+1) |
+| 0x4ac499 | FUN_004ac499 | 289 | engine_army_state.c, engine_army_state.h |
+| 0x4ac5ba | FUN_004ac5ba | 324 | engine_army_state.c, engine_army_state.h |
 | 0x4ac6fe | FUN_004ac6fe | 245 | engine_combat.c, engine_combat.h, engine_realm_upkeep.c (+1) |
 | 0x4ac7f3 | FUN_004ac7f3 | 273 | engine_combat.c |
 | 0x4ac904 | FUN_004ac904 | 295 | game_init.c, game_init.h |

@@ -18,6 +18,7 @@
 #include "engine_event_queue.h"
 #include "save.h"
 #include "save_schema_globals.h"   /* s_slot_0057c8cc (local player) */
+#include "engine_path_field.h"     /* raid-planning path seams */
 
 #define CREC(i)    (&g_per_territory_420[(i) * 0x1a4])
 #define R_REC(k)   (&g_per_army_768[(k) * 0x300])
@@ -518,5 +519,143 @@ int test_engine_army_state_scan_siege_built(void)
     int dry = engine_army_state_scan_siege_built();
     T_ASSERT_EQ_I(dry, 0);
     T_ASSERT_EQ_I((int)s_slot_0057cad4, 0x97);       /* walked off the end */
+    return 0;
+}
+
+/* --- raider targeting + movement planning (FUN_004ac5ba / FUN_004ac499) ---- */
+
+#define A_REGION_O   0x10
+#define A_DEST_COL_O 0x116
+#define A_DEST_ROW_O 0x117
+#define A_RAID_FLAG_O 0x150
+#define A_RAID_DEST_O 0x151
+#define A_PLAN_PEND_O 0x14e
+#define A_POS_COL_O  0x0a
+#define A_POS_ROW_O  0x0b
+#define RAID_REC(k)  (&g_per_army_768[(k) * 0x300])
+
+static void raid_reset(int realms)
+{
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = (uint32_t)realms;
+    s_slot_0057c934 = 0;                 /* not force-mode */
+    g_raider_target_cursor = 0;
+}
+
+/* Set realm `k`'s capital cell (record +0x6c col / +0x6d row). */
+static void set_capital(int k, int col, int row)
+{
+    RAID_REC(k)[0x6c] = (uint8_t)col;
+    RAID_REC(k)[0x6d] = (uint8_t)row;
+}
+
+/* A fresh stack steps the shared cursor, skips its own region, and copies the
+ * chosen realm's capital into its destination. */
+int test_engine_army_state_raid_assign_skips_own_region(void)
+{
+    raid_reset(3);
+    set_capital(1, 11, 21);
+    set_capital(2, 12, 22);
+    set_capital(3, 13, 23);
+
+    /* Stack in region 1: cursor 0→1 lands on own region → advance to 2. */
+    CREC(5)[A_REGION_O] = 1;
+    int got = engine_army_state_raid_assign_target(5);
+
+    T_ASSERT_EQ_I(got, 1);
+    T_ASSERT_EQ_I(g_raider_target_cursor, 2);
+    T_ASSERT_EQ_I(CREC(5)[A_RAID_DEST_O], 2);
+    T_ASSERT_EQ_I(CREC(5)[A_DEST_COL_O], 12);
+    T_ASSERT_EQ_I(CREC(5)[A_DEST_ROW_O], 22);
+    T_ASSERT_EQ_I(CREC(5)[A_RAID_FLAG_O], 0);
+    return 0;
+}
+
+/* Cursor wraps back to 1 once it would step past the last realm. */
+int test_engine_army_state_raid_assign_wraps(void)
+{
+    raid_reset(2);
+    set_capital(1, 5, 6);
+    set_capital(2, 7, 8);
+    g_raider_target_cursor = 2;          /* next step → 3 → wrap → 1 */
+
+    CREC(4)[A_REGION_O] = 2;             /* region 2 != cursor 1, no extra skip */
+    int got = engine_army_state_raid_assign_target(4);
+
+    T_ASSERT_EQ_I(got, 1);
+    T_ASSERT_EQ_I(g_raider_target_cursor, 1);
+    T_ASSERT_EQ_I(CREC(4)[A_RAID_DEST_O], 1);
+    T_ASSERT_EQ_I(CREC(4)[A_DEST_COL_O], 5);
+    return 0;
+}
+
+/* With an existing target and no force-mode, the target byte is kept but the
+ * destination is recomputed from the SHARED cursor's current realm — the retail
+ * quirk where dest can disagree with the stored target. */
+int test_engine_army_state_raid_assign_keeps_target_dest_from_cursor(void)
+{
+    raid_reset(3);
+    set_capital(1, 11, 21);
+    set_capital(2, 12, 22);
+    set_capital(3, 13, 23);
+    g_raider_target_cursor = 3;          /* cursor parked on realm 3 */
+
+    CREC(6)[A_RAID_DEST_O] = 2;          /* stack already targets realm 2 */
+    int got = engine_army_state_raid_assign_target(6);
+
+    T_ASSERT_EQ_I(got, 1);
+    T_ASSERT_EQ_I(g_raider_target_cursor, 3);         /* unchanged (no reassign) */
+    T_ASSERT_EQ_I(CREC(6)[A_RAID_DEST_O], 2);         /* target byte kept */
+    T_ASSERT_EQ_I(CREC(6)[A_DEST_COL_O], 13);         /* but dest = realm 3 cap! */
+    T_ASSERT_EQ_I(CREC(6)[A_DEST_ROW_O], 23);
+    return 0;
+}
+
+/* Force-mode 2 reassigns even when the stack already has a target. */
+int test_engine_army_state_raid_assign_force_mode(void)
+{
+    raid_reset(3);
+    set_capital(1, 11, 21);
+    g_raider_target_cursor = 3;
+    s_slot_0057c934 = 2;                 /* force re-target */
+
+    CREC(7)[A_REGION_O] = 0;             /* region 0 never equals a 1.. cursor */
+    CREC(7)[A_RAID_DEST_O] = 2;
+    int got = engine_army_state_raid_assign_target(7);
+
+    T_ASSERT_EQ_I(got, 1);
+    T_ASSERT_EQ_I(g_raider_target_cursor, 1);         /* 3 → 4 → wrap → 1 */
+    T_ASSERT_EQ_I(CREC(7)[A_RAID_DEST_O], 1);
+    T_ASSERT_EQ_I(CREC(7)[A_DEST_COL_O], 11);
+    return 0;
+}
+
+/* The phase-5 sweep routes a settling (state 2) stack toward its target capital
+ * — arming its sub-state — and leaves non-state-2 stacks untouched. */
+static int16_t raid_terrain[ENGINE_PATH_FIELD_CELLS + 0x83];
+int test_engine_army_state_plan_raids_routes_state2(void)
+{
+    raid_reset(2);
+    memset(raid_terrain, 0, sizeof raid_terrain);
+    engine_path_field_bind_terrain(raid_terrain);
+    s_slot_0057c8cc = 1;
+
+    set_capital(1, 11, 10);              /* realm 1 capital one cell east */
+    /* one-cost step east from (10,10) so the flood + trace connect */
+    raid_terrain[10 * ENGINE_PATH_FIELD_DIM + 10 + 0x42] = 1;
+
+    /* Stack 3: settling, region 2 (so cursor 0→1 targets realm 1), at (10,10). */
+    CREC(3)[A_STATE] = 2; CREC(3)[A_REGION_O] = 2;
+    CREC(3)[A_POS_COL_O] = 10; CREC(3)[A_POS_ROW_O] = 10;
+    /* Stack 4: not settling → skipped. */
+    CREC(4)[A_STATE] = 1; CREC(4)[A_SUBSTATE] = 0;
+
+    engine_army_state_plan_raids();
+
+    T_ASSERT_EQ_I(CREC(3)[A_RAID_DEST_O], 1);         /* targeted realm 1 */
+    T_ASSERT_EQ_I(CREC(3)[A_SUBSTATE], 1);            /* armed (path found) */
+    T_ASSERT_EQ_I(CREC(3)[A_PLAN_PEND_O], 0);
+    T_ASSERT_EQ_I(CREC(4)[A_SUBSTATE], 0);            /* untouched */
     return 0;
 }

@@ -46,6 +46,7 @@
 #include "engine_realm_upkeep.h"   /* engine_unit_remove (FUN_0046f0a9)          */
 #include "engine_math.h"           /* engine_math_percent_div (FUN_00404dc1)     */
 #include "save_schema_globals.h"   /* s_slot_0057cad4 — siege-scan cursor        */
+#include "engine_path_field.h"     /* fill / trace / copy_record (raid planning) */
 
 /* --- per-territory occupant record (g_per_territory_420, stride 0x1a4) ----- */
 #define ASTRIDE      0x1a4
@@ -53,6 +54,8 @@
 
 #define A_OWNER      0x00     /* owning player id; 0 = dead record (u8)         */
 #define A_CONTROL    0x01     /* control-type flag: 0 = local/viewer (u8)       */
+#define A_POS_COL    0x0a     /* occupant map column (u8)                       */
+#define A_POS_ROW    0x0b     /* occupant map row (u8)                          */
 #define A_READY      0x06     /* march-ready flag: 0 → advance sub-state (u8)   */
 #define A_SPRITE     0x07     /* display sprite frame, recomputed each tick (u8)*/
 #define A_STATE      0x08     /* state byte → handler-table index (u8)          */
@@ -60,6 +63,11 @@
 #define A_CELL       0x0c     /* byte offset of the occupant's cell (i32)       */
 #define A_REGION     0x10     /* effective-region colour key (u8)               */
 #define A_FACING     0x1b     /* facing 0..7 → facing-frame table index (u8)    */
+#define A_DEST_COL   0x116    /* planned destination column (u8)                */
+#define A_DEST_ROW   0x117    /* planned destination row (u8)                   */
+#define A_RAID_FLAG  0x150    /* raider path-retry flag, cleared on retarget(u8)*/
+#define A_RAID_DEST  0x151    /* raider target realm id (u8)                    */
+#define A_PLAN_PEND  0x14e    /* path-planning pending flag, cleared pre-plan(u8)*/
 #define A_SUBSTATE   0x14c    /* sub-state: 2 → run movement executor (u8)      */
 #define A_TICKS      0x154    /* redraw-priority byte, latched per state (u8)   */
 #define A_TIMER      0x160    /* per-occupant countdown timer (i32)             */
@@ -370,4 +378,66 @@ int engine_army_state_scan_siege_built(void)
         s_slot_0057cad4 = s_slot_0057cad4 + 1;
     }
     return 0;
+}
+
+/* Round-robin realm cursor for raider targeting (retail DAT_004e59dc — a plain
+ * runtime scalar, not part of the save schema, shared across every record the
+ * planner visits this turn). */
+int g_raider_target_cursor;
+
+/* Capital-cursor offsets within a per-realm record (g_per_army_768, stride
+ * 0x300): the realm's capital map cell col/row (retail DAT_0053fa1c/1d). */
+#define RAID_RSTRIDE  0x300
+#define RAID_CAP_COL  0x6c
+#define RAID_CAP_ROW  0x6d
+
+/* --- FUN_004ac5ba: assign a roving stack its target realm + capital dest ---- */
+int engine_army_state_raid_assign_target(int idx)
+{
+    uint8_t *r = AREC(idx);
+
+    /* (Re)pick a target when the global planner is in force-mode 2 or the stack
+     * has no target yet: step the shared realm cursor (wrapping at the realm
+     * count), and if it lands on the stack's own region advance once more. */
+    if (s_slot_0057c934 == 2 || r[A_RAID_DEST] == '\0') {
+        g_raider_target_cursor++;
+        if ((int)s_slot_0056d5dc < g_raider_target_cursor)
+            g_raider_target_cursor = 1;
+        if ((uint8_t)r[A_REGION] == g_raider_target_cursor &&
+            (g_raider_target_cursor++, (int)s_slot_0056d5dc < g_raider_target_cursor))
+            g_raider_target_cursor = 1;
+        r[A_RAID_DEST] = (uint8_t)g_raider_target_cursor;
+    }
+
+    /* Point the stack's destination at the target realm's capital.  Retail reads
+     * the capital through the *shared* cursor (not the per-record target byte),
+     * so a stack that kept a prior target picks up whichever realm the cursor
+     * was last left on this pass — reproduced verbatim (see engine-quirks). */
+    if (r[A_RAID_DEST] != '\0') {
+        r[A_RAID_FLAG] = 0;
+        r[A_DEST_COL] = g_per_army_768[g_raider_target_cursor * RAID_RSTRIDE + RAID_CAP_COL];
+        r[A_DEST_ROW] = g_per_army_768[g_raider_target_cursor * RAID_RSTRIDE + RAID_CAP_ROW];
+    }
+    return r[A_RAID_DEST] != '\0';
+}
+
+/* --- FUN_004ac499: plan raider movement for all settling stacks ------------- */
+void engine_army_state_plan_raids(void)
+{
+    for (int i = 1; i < 0x97; i++) {
+        uint8_t *r = AREC(i);
+        if ((unsigned)r[A_STATE] != 2)
+            continue;
+        if (engine_army_state_raid_assign_target(i) == 0)
+            continue;
+
+        r[A_PLAN_PEND] = 0;
+        /* Flood a cost field from the stack, trace it to the target capital, and
+         * if reachable commit the path into the stack's waypoints + arm it. */
+        engine_path_field_fill(0, (int8_t)r[A_POS_COL], (int8_t)r[A_POS_ROW], 0);
+        if (engine_path_field_trace(0, (int8_t)r[A_DEST_COL], (int8_t)r[A_DEST_ROW]) != 0) {
+            engine_path_field_copy_record(0, i);
+            r[A_SUBSTATE] = 1;
+        }
+    }
 }

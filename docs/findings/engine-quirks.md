@@ -6529,3 +6529,28 @@ Two consequences fall out of "ascending order + pre-pass snapshot":
 The port mirrors the snapshot + ascending-order exactly (the matrix wipe, the
 settled/lord local arrays, the lower-index-only reliability).  Same family as
 the other "scalar snapshot vs live store" ordering quirks.
+
+## 185 — raider target assignment (`FUN_004ac5ba`) recomputes the destination from the SHARED realm cursor, not the stack's stored target — so a kept target can point at the wrong capital
+
+The phase-5 raider planner gives each settling stack a target realm via a single
+global round-robin cursor (`DAT_004e59dc`, `g_raider_target_cursor`).  The
+reassignment block (entered when the planner is in force-mode 2 *or* the stack
+has no target yet) steps the cursor, skips the stack's own region, and writes the
+result into the per-record target byte (`+0x151`).
+
+The bug-shaped detail: the *destination* write that follows reads the capital
+through the **cursor** (`g_per_army_768[cursor*0x300 + 0x6c/0x6d]`), not through
+the per-record target byte.  These agree on the turn a target is freshly
+assigned (cursor == target), but a stack that re-enters with a target already set
+(mode != 2) **skips the reassignment** yet still recomputes its destination from
+whatever realm the cursor currently points at — which, mid-sweep, is the target
+of the most recently *reassigned* stack, not this stack's own.  So a stack can
+keep target realm N in `+0x151` while its destination coords point at realm M's
+capital.
+
+In practice the sweep `FUN_004ac499` re-floods and re-traces from the (possibly
+mismatched) destination every pass, so the stack simply drifts toward whichever
+capital the cursor last named; the stored target is essentially advisory.  The
+port reproduces the cursor-sourced destination verbatim rather than "fixing" it
+to read the target byte — same faithful-to-retail posture as the other
+snapshot/shared-cursor quirks (#183/#184).

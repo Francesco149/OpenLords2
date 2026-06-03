@@ -90,4 +90,30 @@ int engine_army_state_siege_build_step(int idx);
  * A/V assault trigger — not yet ported); on 0 it advances the phase. */
 int engine_army_state_scan_siege_built(void);
 
+/* Round-robin realm cursor used by raider targeting (retail DAT_004e59dc — a
+ * runtime scalar, not save-schema; exposed so the planner and tests can read /
+ * reset it). */
+extern int g_raider_target_cursor;
+
+/* Port of FUN_004ac5ba (324 B, __cdecl bool).  Assign roving stack `idx` a
+ * target realm and point its destination (+0x116/+0x117) at that realm's
+ * capital cell.  When the global planner is in force-mode 2 (s_slot_0057c934)
+ * or the stack has no target yet (+0x151 == 0), step the shared realm cursor
+ * g_raider_target_cursor (wrapping at the realm count s_slot_0056d5dc) and, if
+ * it lands on the stack's own region (+0x10), advance once more; store it as the
+ * target.  Then copy the target realm's capital (g_per_army_768 +0x6c/+0x6d, via
+ * the shared cursor) into the destination and clear the retry flag (+0x150).
+ * Returns non-zero when a target is set.  Pure record/scalar bookkeeping. */
+int engine_army_state_raid_assign_target(int idx);
+
+/* Port of FUN_004ac499 (289 B, __cdecl void).  Plan raider movement for every
+ * settling stack: sweep the 150 occupant records and, for each in state 2 that
+ * engine_army_state_raid_assign_target gives a target, clear its planning-pending
+ * flag (+0x14e), flood a path-field cost map from the stack's cell
+ * (engine_path_field_fill, slot 0), trace it to the target capital
+ * (engine_path_field_trace); if reachable, commit the path into the stack's
+ * waypoints (engine_path_field_copy_record) and arm its sub-state (+0x14c = 1).
+ * A phase-5 callee of the strategic turn driver 0x49a010. */
+void engine_army_state_plan_raids(void);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_STATE_H */
