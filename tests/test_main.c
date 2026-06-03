@@ -1938,6 +1938,10 @@ struct test_case {
     X(engine_army_move_merge_partner_guard) \
     X(engine_army_move_merge_eligibility_guard) \
     X(engine_army_move_overrun_garrison) \
+    X(engine_army_move_commit_directions) \
+    X(engine_army_move_commit_out_of_range) \
+    X(engine_army_move_commit_rough_flag) \
+    X(engine_army_move_commit_sfx) \
     X(engine_diplomacy_clear_treaty) \
     X(engine_diplomacy_broadcast_penalty) \
     X(engine_diplomacy_battle_adjust_guards) \

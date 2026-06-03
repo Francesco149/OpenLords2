@@ -31,6 +31,14 @@
  * index, +7 effective-region key.  Same grid engine_army_state binds. */
 void engine_army_move_bind_cells(const uint8_t *cells);
 
+/* Bind the movement-SFX seam (retail 0x426120 — an indexed DirectSound
+ * footstep buffer keyed by sound id; not yet ported).  Called by the commit-
+ * step with the per-state id (0xb idle, 5 settle, 0xc march).  NULL (the
+ * default) is a no-op, keeping the drop-in silent unless audio is wired —
+ * matching the combat seams. */
+typedef void (*engine_army_move_sfx_fn)(int sound_id);
+void engine_army_move_bind_sfx_fn(engine_army_move_sfx_fn fn);
+
 /* Outcome scratch latched by the evaluator from the cell it classified (retail
  * runtime scalars).  The movement executor (FUN_00465d28, later chip) consumes
  * them to drive arrival / region-event / combat-engage.  Not save state. */
@@ -50,5 +58,14 @@ extern int     g_army_move_cell_off;      /* DAT_0050a4a0 — byte offset of the
  * so `evq` / `mp_active` are threaded through to the combat callees. */
 int engine_army_move_eval_dir(int dir, engine_event_queue_state_t *evq,
                               int mp_active);
+
+/* Port of FUN_00466d84 @ 0x466d84 (995 B, __stdcall void).  Commit the current
+ * occupant's move into the neighbour cell in the direction latched at record
+ * +0x09 (the classifier writes it there): unlink from the old cell, play the
+ * per-state footstep SFX, apply the direction's column/row/cell-offset delta,
+ * relink into the new cell, then set the sticky rough-terrain flag (+0x14d) iff
+ * the new cell's movement flags carry bit0.  A direction byte > 7 is a no-op
+ * (no relink). */
+void engine_army_move_commit_step(void);
 
 #endif /* OPENLORDS2_ENGINE_ARMY_MOVE_H */

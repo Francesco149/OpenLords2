@@ -240,14 +240,34 @@ is exposed for the executor.  The live combat-engage and merge *invocations*
 are exercised by the combat module's own tests and will be diffed against
 retail once the executor lands; this chip's tests cover the decision routing.
 
+### Commit-step + blocked-branch — partial (2026-06-03)
+
+The classifier's two action helpers (it commits the move when the step is
+legal, or runs the blocked-branch when it isn't):
+
+| retail         | port                                  | status | role |
+|----------------|---------------------------------------|--------|------|
+| `FUN_00466d84` | `engine_army_move_commit_step`        | DONE   | unlink → per-state footstep SFX (seam) → apply the latched +0x09 direction's col/row/cell delta → relink → set sticky rough flag (+0x14d) from the new cell's bit0 |
+| `FUN_0046673c` | — (blocked-branch)                    | TODO   | on an impassable step against a foreign region: +0x153 += 3, relation hit (`FUN_004a1ee1` 10), `FUN_00469e5b`, SFX `FUN_00426216` |
+
+`engine_army_move_commit_step` reads the committed direction from record +0x09
+(retail aliases the army-state anim byte; the classifier latches it there) and
+plays the footstep through the new `engine_army_move_bind_sfx_fn` seam (retail
+0x426120, default NULL no-op — drop-in stays silent until audio is wired, like
+the combat seams).  4 tests: all 8 direction deltas, out-of-range no-op, rough
+flag, and the per-state SFX id.
+
 ### Frontier (next chips)
 
-1. **Result classifier `FUN_0046634d`** (1002 B) — the spine between the path
-   step and the outcome dispatch.  It runs a stall/retry hysteresis counter,
-   then (on the live branch) calls the now-ported step-result evaluator
-   `FUN_00466893` and post-processes its code.  Its only remaining unported
-   sub-callees are `FUN_0046673c` (343 B) and `FUN_00466d84` (995 B).  Land
-   these three next.
+1. **Result classifier `FUN_0046634d`** (1002 B) + the blocked-branch
+   `FUN_0046673c` (343 B).  The classifier is the spine between the path step
+   and the outcome dispatch: it runs a stall/retry hysteresis counter, then (on
+   the live branch) calls the now-ported step-result evaluator `FUN_00466893`,
+   post-processes the code (calling the ported `engine_army_move_commit_step`
+   on a legal step and `FUN_0046673c` on an impassable one).  Remaining
+   unported leaves of the blocked-branch: the terrain predicate `FUN_00469e0e`
+   (72 B), the region-resource decay `FUN_00469e5b` (476 B, touches the per-
+   region 0x300 block) and the SFX `FUN_00426216` (deferrable seam).
 2. **Movement-step executor `FUN_00465d28`** (1441 B) — advances the occupant
    one step along its path (`FUN_0046f434`, ported) and dispatches the
    classifier's result into arrival / blocked / combat-engage (5 →

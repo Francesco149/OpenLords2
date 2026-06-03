@@ -29,11 +29,13 @@
 #define M_OWNER   0x00
 #define M_F01     0x01
 #define M_STATE   0x08
+#define M_DIR     0x09
 #define M_COL     0x0a
 #define M_ROW     0x0b
 #define M_CELL    0x0c
 #define M_F1A     0x1a
 #define M_WP      0x1c
+#define M_ROUGH   0x14d
 #define M_F14E    0x14e
 #define M_F152    0x152
 
@@ -266,5 +268,99 @@ int test_engine_army_move_overrun_garrison(void)
     MREC(2)[M_STATE] = 4; MREC(2)[M_OWNER] = 3;   /* enemy garrison */
     T_ASSERT_EQ_I(engine_army_move_eval_dir(2, &evq, 0), 10);
     T_ASSERT_EQ_U(MREC(2)[M_OWNER], 0);           /* garrison removed */
+    return 0;
+}
+
+/* --- FUN_00466d84: commit the move into the chosen neighbour -------------- */
+static int g_last_sfx;
+static void cap_sfx(int id) { g_last_sfx = id; }
+
+/* The commit-step uses the GLOBAL overworld grid for the map link/unlink
+ * (engine_unit_map_*), so bind the evaluator to it too. */
+static void cm_reset(void)
+{
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_overworld_map, 0, sizeof g_overworld_map);
+    engine_army_move_bind_cells(g_overworld_map);
+    engine_army_move_bind_sfx_fn(cap_sfx);
+    g_army_state_index = 1;
+    g_last_sfx = -1;
+}
+
+int test_engine_army_move_commit_directions(void)
+{
+    /* expected (col, row, cell) from base (10, 10, 0x1450) per direction. */
+    static const struct { int col, row, cell; } exp[8] = {
+        { 10,  9, 0x1250 },  /* 0 N  */
+        { 11,  9, 0x1258 },  /* 1 NE */
+        { 11, 10, 0x1458 },  /* 2 E  */
+        { 11, 11, 0x1658 },  /* 3 SE */
+        { 10, 11, 0x1650 },  /* 4 S  */
+        {  9, 11, 0x1648 },  /* 5 SW */
+        {  9, 10, 0x1448 },  /* 6 W  */
+        {  9,  9, 0x1248 },  /* 7 NW */
+    };
+    for (int dir = 0; dir < 8; dir++) {
+        cm_reset();
+        uint8_t *r = MREC(1);
+        r[M_COL] = 10; r[M_ROW] = 10; I32(r, M_CELL) = 0x1450;
+        r[M_STATE] = 1; r[M_DIR] = (uint8_t)dir;
+        engine_army_move_commit_step();
+        T_ASSERT_EQ_I((int8_t)r[M_COL], exp[dir].col);
+        T_ASSERT_EQ_I((int8_t)r[M_ROW], exp[dir].row);
+        T_ASSERT_EQ_I(I32(r, M_CELL), exp[dir].cell);
+    }
+    return 0;
+}
+
+/* A direction byte > 7 commits nothing. */
+int test_engine_army_move_commit_out_of_range(void)
+{
+    cm_reset();
+    uint8_t *r = MREC(1);
+    r[M_COL] = 10; r[M_ROW] = 10; I32(r, M_CELL) = 0x1450;
+    r[M_STATE] = 1; r[M_DIR] = 8;
+    engine_army_move_commit_step();
+    T_ASSERT_EQ_I((int8_t)r[M_COL], 10);
+    T_ASSERT_EQ_I((int8_t)r[M_ROW], 10);
+    T_ASSERT_EQ_I(I32(r, M_CELL), 0x1450);
+    return 0;
+}
+
+/* The sticky rough flag (+0x14d) tracks the new cell's movement bit0. */
+int test_engine_army_move_commit_rough_flag(void)
+{
+    cm_reset();
+    uint8_t *r = MREC(1);
+    r[M_COL] = 10; r[M_ROW] = 10; I32(r, M_CELL) = 0x1450;
+    r[M_STATE] = 1; r[M_DIR] = 2;                  /* E → 0x1458 */
+    g_overworld_map[0x1458 + 1] = 0x01;            /* rough */
+    engine_army_move_commit_step();
+    T_ASSERT_EQ_U(r[M_ROUGH], 1);
+
+    cm_reset();
+    r = MREC(1);
+    r[M_COL] = 10; r[M_ROW] = 10; I32(r, M_CELL) = 0x1450;
+    r[M_STATE] = 1; r[M_DIR] = 2;
+    g_overworld_map[0x1458 + 1] = 0x40;            /* not bit0 */
+    engine_army_move_commit_step();
+    T_ASSERT_EQ_U(r[M_ROUGH], 0);
+    return 0;
+}
+
+/* The per-state footstep cue: idle(3/4)=0xb, settle(2)=5, march(1)=0xc. */
+int test_engine_army_move_commit_sfx(void)
+{
+    cm_reset();
+    uint8_t *r = MREC(1);
+    r[M_DIR] = 2; r[M_COL] = 10; r[M_ROW] = 10; I32(r, M_CELL) = 0x1450;
+
+    r[M_STATE] = 1; engine_army_move_commit_step(); T_ASSERT_EQ_I(g_last_sfx, 0xc);
+    cm_reset(); r = MREC(1); r[M_DIR] = 2; I32(r, M_CELL) = 0x1450;
+    r[M_STATE] = 2; engine_army_move_commit_step(); T_ASSERT_EQ_I(g_last_sfx, 0x5);
+    cm_reset(); r = MREC(1); r[M_DIR] = 2; I32(r, M_CELL) = 0x1450;
+    r[M_STATE] = 3; engine_army_move_commit_step(); T_ASSERT_EQ_I(g_last_sfx, 0xb);
+    cm_reset(); r = MREC(1); r[M_DIR] = 2; I32(r, M_CELL) = 0x1450;
+    r[M_STATE] = 4; engine_army_move_commit_step(); T_ASSERT_EQ_I(g_last_sfx, 0xb);
     return 0;
 }

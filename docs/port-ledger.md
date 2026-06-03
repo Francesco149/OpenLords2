@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **649** (26.5%) — tested 606, ported 43
-- code bytes touched: **31.9%** (267,703 / 838,629 B)
-- unported: **1798**
+- touched: **650** (26.6%) — tested 607, ported 43
+- code bytes touched: **32.0%** (268,698 / 838,629 B)
+- unported: **1797**
 - orphan refs (in src/, not in function table): 7
 
-## tested (606) — ported + host unit suite
+## tested (607) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -374,6 +374,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x465d28 | FUN_00465d28 | 1441 | engine_army_move.h, engine_army_state.c, engine_army_state.h |
 | 0x466893 | FUN_00466893 | 900 | engine_army_move.c, engine_army_move.h, game_init.c |
 | 0x466c3c | FUN_00466c3c | 328 | engine_army_move.c, engine_army_move.h |
+| 0x466d84 | FUN_00466d84 | 995 | engine_army_move.c, engine_army_move.h |
 | 0x46733c | FUN_0046733c | 124 | engine_combat.c, engine_map_query.c, engine_map_query.h |
 | 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c, engine_territory.h |
 | 0x467770 | FUN_00467770 | 525 | engine_territory.c, engine_territory.h, engine_title_render.c (+3) |
@@ -425,9 +426,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46ea61 | FUN_0046ea61 | 57 | engine_combat.c, game_init.c |
 | 0x46ead0 | FUN_0046ead0 | 57 | engine_army_state.c, engine_map_init.c, engine_realm_upkeep.c (+3) |
 | 0x46eb09 | FUN_0046eb09 | 54 | game_init.c, game_init.h |
-| 0x46ec6e | FUN_0046ec6e | 369 | engine_combat.c, engine_realm_upkeep.c, engine_realm_upkeep.h |
-| 0x46eddf | FUN_0046eddf | 349 | engine_combat.c, engine_realm_upkeep.c, engine_realm_upkeep.h |
-| 0x46f0a9 | FUN_0046f0a9 | 71 | engine_army_move.c, engine_army_state.c, engine_realm_upkeep.c (+1) |
+| 0x46ec6e | FUN_0046ec6e | 369 | engine_army_move.c, engine_combat.c, engine_realm_upkeep.c (+1) |
+| 0x46eddf | FUN_0046eddf | 349 | engine_army_move.c, engine_combat.c, engine_realm_upkeep.c (+1) |
+| 0x46f0a9 | FUN_0046f0a9 | 71 | engine_army_state.c, engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x46f1dc | FUN_0046f1dc | 67 | game_init.c, game_init.h |
 | 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h |
 | 0x46f3cd | FUN_0046f3cd | 78 | engine_map_init.c, game_init.c, game_init.h |

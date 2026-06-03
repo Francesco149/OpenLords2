@@ -37,7 +37,7 @@
 #include "engine_army_state.h"     /* g_army_state_index, g_army_state_abort       */
 #include "engine_combat.h"         /* engine_combat_dispatch / _merge_stack, terr  */
 #include "engine_diplomacy.h"      /* should_engage / battle_adjust                */
-#include "engine_realm_upkeep.h"   /* engine_unit_remove (FUN_0046f0a9)            */
+#include "engine_realm_upkeep.h"   /* engine_unit_remove / map link / unlink       */
 #include "engine_event_queue.h"    /* engine_event_queue_post (FUN_00472bc5)       */
 #include "save_schema_globals.h"   /* s_slot_0057c8cc (local player)               */
 
@@ -47,12 +47,15 @@
 
 #define M_OWNER      0x00     /* owning player id; 0 = dead record (u8)         */
 #define M_F01        0x01     /* "has a live order" flag (u8)                   */
+#define M_DIR        0x09     /* committed move direction 0..7 (u8; aliases the */
+                              /* army-state anim byte — classifier latches it)  */
 #define M_STATE      0x08     /* state byte (1 march, 2 settle, 3/4 idle) (u8)  */
 #define M_COL        0x0a     /* grid column 0..63 (i8)                         */
 #define M_ROW        0x0b     /* grid row 0..63 (i8)                            */
 #define M_CELL       0x0c     /* byte offset of the occupant's cell (i32)       */
 #define M_F1A        0x1a     /* merge-eligibility guard (u8; 4 = ineligible)   */
 #define M_WP_COUNT   0x1c     /* waypoint counter (u8)                          */
+#define M_ROUGH      0x14d    /* sticky rough-terrain flag, set per step (u8)    */
 #define M_F14E       0x14e    /* clears the cell's 0x80 region-event flag (u8)  */
 #define M_F152       0x152    /* expected merge-partner index (u8)              */
 
@@ -68,6 +71,10 @@
 #define P_ACTIVE     0x05     /* (&DAT_0057bf05)[i*0x160] — has-data filter byte */
 
 static const uint8_t *g_cells;            /* DAT_00522f90 */
+static engine_army_move_sfx_fn g_sfx_fn;  /* footstep seam (retail 0x426120) */
+
+void engine_army_move_bind_sfx_fn(engine_army_move_sfx_fn fn) { g_sfx_fn = fn; }
+static void army_move_sfx(int id) { if (g_sfx_fn) g_sfx_fn(id); }
 
 /* Outcome scratch latched per classified cell (retail runtime scalars). */
 uint8_t g_army_move_cell_flags;           /* DAT_0050a4a4 */
@@ -228,4 +235,43 @@ int engine_army_move_eval_dir(int dir, engine_event_queue_state_t *evq,
 
     int cell_off = *(int32_t *)(r + M_CELL) + k_dir[dir].delta;
     return classify_cell(cell_off, evq, mp_active);
+}
+
+/* --- FUN_00466d84 @ 0x466d84: commit the move into the chosen neighbour
+ * (995 B, __stdcall) -------------------------------------------------------- */
+void engine_army_move_commit_step(void)
+{
+    int self = g_army_state_index;
+    uint8_t *r = MREC(self);
+
+    engine_unit_map_unlink(self);              /* FUN_0046ec6e — leave old cell */
+
+    /* Per-state footstep cue (indexed DirectSound buffer; seam). */
+    switch (r[M_STATE]) {
+    case 3: case 4: army_move_sfx(0xb); break;
+    case 2:         army_move_sfx(0x5); break;
+    case 1:         army_move_sfx(0xc); break;
+    default: break;
+    }
+
+    /* Apply the latched direction's column/row/cell-offset delta.  Deltas match
+     * engine_army_move_eval_dir: ±1 column = ±8 bytes, ±1 row = ±0x200 bytes.
+     * A direction > 7 commits nothing (no relink). */
+    int32_t *cell = (int32_t *)(r + M_CELL);
+    switch (r[M_DIR]) {
+    case 0: r[M_ROW]--;             *cell -= 0x200;             break;  /* N  */
+    case 1: r[M_ROW]--; r[M_COL]++; *cell -= 0x200; *cell += 8; break;  /* NE */
+    case 2:             r[M_COL]++;                 *cell += 8; break;  /* E  */
+    case 3: r[M_ROW]++; r[M_COL]++; *cell += 0x200; *cell += 8; break;  /* SE */
+    case 4: r[M_ROW]++;             *cell += 0x200;             break;  /* S  */
+    case 5: r[M_ROW]++; r[M_COL]--; *cell += 0x200; *cell -= 8; break;  /* SW */
+    case 6:             r[M_COL]--;                 *cell -= 8; break;  /* W  */
+    case 7: r[M_ROW]--; r[M_COL]--; *cell -= 0x200; *cell -= 8; break;  /* NW */
+    default: return;
+    }
+
+    engine_unit_map_link(self);                /* FUN_0046eddf — enter new cell */
+
+    /* Sticky rough-terrain flag: set iff the new cell carries movement bit0. */
+    r[M_ROUGH] = (g_cells[*cell + 1] & 1) ? 1 : 0;
 }
