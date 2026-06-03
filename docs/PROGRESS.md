@@ -7,6 +7,67 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-03 — TURN DRIVER: phase-2/5/7 callees — siege-build, merc rotation, treaty reconcile, raider planner (7 fns, host-tested)
+
+Continued working down the strategic turn driver `0x49a010` (still unported)
+by porting the **pure phase callees** it fires each phase.  Four commits, seven
+functions, 2008 host tests green (ASAN/UBSAN), cross-build clean.  All
+offsets/strides/tables/call-targets r2-verified byte-exact; pure scalar/record
+bookkeeping (host tests + r2 transcription checks are the gate, no retail-diff
+target).  Five engine-quirks (#182–#185) captured at port time.
+
+- **Phase 2 — siege-engine construction** (`FUN_004a8507` →
+  `engine_army_state_siege_build_step`, `FUN_004a84ba` →
+  `engine_army_state_scan_siege_built`, engine_army_state.c).  A besieging stack
+  (live / state 1 / `+0x199` siege link) builds three equipment slots
+  `{count,pct,value}@+0x182` toward `k_siege_build_target[slot]*count`
+  (`{200,200,400}`, retail DAT_004de440), the army's head-count (`+0x168`) split
+  evenly then topped up as the per-tick build budget; the aggregate
+  remaining-byte (`+0x19c`) hits 0 when all engines are built.  The scanner
+  resumes the persistent cursor `s_slot_0057cad4` (reset to 1 by the
+  already-ported phase-2 init FUN_004a82b9), parks on the first completed stack
+  and returns 1 → the driver launches the assault (`FUN_004a8aab`, the A/V
+  trigger — **still deferred**, plays s080 SFX + battlefield render).  Quirk #182.
+
+- **Phase 7 — mercenary-offer rotation** (`FUN_004aca2b` →
+  `engine_combat_rotate_merc_offers`, `FUN_004acb54` → static `merc_offer_holder`,
+  engine_combat.c).  Each free merc-pool slot (g_unit_table_20, back-ref `+0x00`
+  == 0) clears its offer, counts down (`+0x06`) and steps a realm cursor (`+0x04`,
+  wrapping at realm count); the turn its countdown expires it republishes the
+  cursor (`+0x03`), reloads from the period (`+0x07`) and double-steps the cursor;
+  then each realm's mustered-unit scratch (g_per_army_768 `+0x1ad` / A_F1AD) is
+  stamped with the slot offering it.  Quirk #183 (one-turn offer visibility +
+  publish-path double cursor step).
+
+- **Phase 7 — lord/vassal treaty reconciliation** (`FUN_004a1847` →
+  `engine_diplomacy_reconcile_treaties`, engine_diplomacy.c).  Wipe the treaty
+  matrix (`+0x85` stride 0x10), then re-derive from each player's declared lord
+  (`+0x81`): mutual / impose-on-unbonded bonds re-pinned both ends, one-sided /
+  dead-lord bonds severed.  Quirk #184 — snapshot + ascending-order dependence (a
+  dead/contested lord only severs when it has the lower player index).
+
+- **Phase 5 — raider target + movement planning** (`FUN_004ac5ba` →
+  `engine_army_state_raid_assign_target`, `FUN_004ac499` →
+  `engine_army_state_plan_raids`, engine_army_state.c).  A settling (state 2)
+  stack is given a target realm via a shared round-robin cursor
+  (`g_raider_target_cursor` = DAT_004e59dc, a runtime non-save scalar), its
+  destination set to that realm's capital (`+0x6c/+0x6d`); the sweep then floods
+  a cost field from the stack (engine_path_field_fill), traces to the capital
+  (engine_path_field_trace) and on success commits the path
+  (engine_path_field_copy_record) + arms `+0x14c`.  Quirk #185 — the destination
+  is recomputed from the *shared cursor*, not the stored target, so a kept target
+  can point at the wrong capital.
+
+**Next on this thread:** the phase-3 init `FUN_00429418` (669 B) and phase-6 init
+`FUN_004280e9` (904 B) are now **zero-dependency leaves** — all their path-field
+deps are ported — so both land today; they look like sibling movement/placement
+sweeps to the phase-5 planner.  Then the remaining unported phase callees are the
+phase-1 inits `FUN_0049d638` (1737 B) / `FUN_0049dfc6` (505 B) and the
+default-branch per-tick `FUN_0049a581` (1039 B), after which the dispatcher
+`0x49a010` itself can be assembled into `engine_tick`'s substate-0 branch.  The
+two A/V phase-7 callees (`FUN_0043ad25` screen-mode dispatch, `FUN_004b0cb4`
+palette/fade) and the assault trigger `FUN_004a8aab` remain verification-gated.
+
 ## 2026-06-03 — TURN DRIVER: phase sequencer + army-state phase sweeps + siege teardown (5 fns, host-tested)
 
 Worked down the **strategic turn driver** chain — the SP per-tick
