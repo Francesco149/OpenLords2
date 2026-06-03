@@ -6601,3 +6601,41 @@ serialises only the first 96).  Behaviour matches retail for every index a
 legitimate game state can produce; the only divergence (port reads zero vs
 retail reading `DAT_00567d10`) is confined to indices retail itself could not
 survive.
+
+## 188 — phase-1 AI grant (`FUN_0049d638`): higher AI levels get the BIGGER cash table but NO resource topups, and one ration ladder is dead code
+
+The phase-1 per-player AI init (`FUN_0049d638` → `engine_army_ai_set_rations_and_grant`,
+strategic FSM `FUN_0049a581` dispatch step 3) does two passes: a per-realm
+approval→ration-setting (+0xb9) ladder, then a difficulty cash/resource grant.
+Three counterintuitive facts:
+
+1. **The grant scales inversely to what the table sizes suggest.**  The cash
+   grant is read from one of two adjacent const tables keyed by the player's AI
+   level (+0x29): level `< 3` draws `DAT_004dc230` (small — max 600), level
+   `>= 3` draws `DAT_004dc1e0` (large — max 1800).  So the *higher* AI levels
+   receive the *bigger* treasury injection.  But the per-realm resource topups
+   (population +0x24 & its +0x30 mirror, stock +0x250, provisions +0x224) run the
+   *opposite* way: level 1-2 get the big step set (diff×{20,5,40}), level 3-4 the
+   small set (diff×{10,2,20}), and **level ≥ 5 get the cash grant but every
+   per-realm step stays 0**.  Net: top-level AI is funded by cash alone, low-level
+   AI is padded with both cash and raw resources.  Both tables are indexed
+   `base + difficulty(s_slot_0053f23c)*4 + personality*0x10`; row 0 (personality
+   0) is unused.
+
+2. **The ration ladder's selector-0 branch is dead code in retail.**  Pass 1
+   picks one of three approval ladders by the int at +4 of the AI's personality
+   row (retail `DAT_004d8a5c`-based read).  The four shipped personalities have
+   selector values {2, 2, 2, 1} — none select 0, so the harshest ladder
+   (`<30→0, <50→2, <65→4, <80→10, else→15`) never fires for any retail AI.  The
+   port keeps the branch faithfully; only a hypothetical 5th personality (or an
+   edited tuning table) would reach it.
+
+3. **Pass 1 runs for player 0 too.**  Called with `player == 0` it sets every
+   *independent* realm's ration via a distinct fixed 8-step ladder; pass 2 then
+   falls out immediately (strat slot 0 is inactive).  So the same function both
+   manages AI economies and reposts independent-realm rations each turn.
+
+All three tables are baked verbatim from the image (`g_ai_cash_grant` 0xa0 B;
+the personality block was already baked as `g_ai_personality`).  Host tests
+exercise both rations ladders that fire, the player-0 ladder, and all three grant
+regimes (level 2 / 4 / 5) plus the active/eliminated/level-0 gating.

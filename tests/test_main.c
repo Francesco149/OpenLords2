@@ -2075,6 +2075,13 @@ struct test_case {
     X(army_ai_reconcile_trade_lock_gates) \
     X(army_ai_run_player_dispatch_expansionist) \
     X(army_ai_run_turn_active_gate) \
+    X(army_ai_rations_independent_ladder) \
+    X(army_ai_rations_selector2) \
+    X(army_ai_rations_selector1) \
+    X(army_ai_grant_level4_topups) \
+    X(army_ai_grant_level2_easy) \
+    X(army_ai_grant_level5_cash_only) \
+    X(army_ai_grant_gated) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

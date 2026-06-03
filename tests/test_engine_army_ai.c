@@ -608,3 +608,207 @@ int test_army_ai_tax_sweep_band_and_fixed_rate(void)
     engine_army_economy_bind_army_records(NULL);
     return 0;
 }
+
+/* set_rations_and_grant, player 0: independent realms use the fixed 8-step
+ * approval → ration (+0xb9) ladder.  Pass 2 is skipped (strat slot 0 inactive). */
+int test_army_ai_rations_independent_ladder(void)
+{
+    ai_setup();
+    s_slot_0056d5dc = 7;
+    AREC(1)[0x0c] = 10;   /* <20  → 0  */
+    AREC(2)[0x0c] = 45;   /* <50  → 2  */
+    AREC(3)[0x0c] = 55;   /* <60  → 3  */
+    AREC(4)[0x0c] = 60;   /* <70  → 4  */
+    AREC(5)[0x0c] = 75;   /* <80  → 6  */
+    AREC(6)[0x0c] = 85;   /* <90  → 8  */
+    AREC(7)[0x0c] = 95;   /* else → 12 */
+
+    engine_army_ai_set_rations_and_grant(0);
+
+    T_ASSERT_EQ_I(AREC(1)[0xb9], 0);
+    T_ASSERT_EQ_I(AREC(2)[0xb9], 2);
+    T_ASSERT_EQ_I(AREC(3)[0xb9], 3);
+    T_ASSERT_EQ_I(AREC(4)[0xb9], 4);
+    T_ASSERT_EQ_I(AREC(5)[0xb9], 6);
+    T_ASSERT_EQ_I(AREC(6)[0xb9], 8);
+    T_ASSERT_EQ_I(AREC(7)[0xb9], 12);
+    return 0;
+}
+
+/* set_rations_and_grant, AI player with personality 1 → selector 2 ladder.
+ * AI level left 0 so the grant pass returns early and only rations are set. */
+int test_army_ai_rations_selector2(void)
+{
+    ai_setup();
+    s_slot_0056d5dc = 6;
+    PREC(2)[0x007] = 1;   /* personality 1 → +4 selector == 2 */
+    PREC(2)[0x029] = 0;   /* AI level 0 → grant pass skipped */
+    for (int r = 1; r <= 6; r++) AREC(r)[0x005] = 2;
+    AREC(1)[0x0c] = 55;   /* <60 → 0  */
+    AREC(2)[0x0c] = 65;   /* <70 → 1  */
+    AREC(3)[0x0c] = 75;   /* <80 → 2  */
+    AREC(4)[0x0c] = 85;   /* <90 → 3  */
+    AREC(5)[0x0c] = 93;   /* <95 → 8  */
+    AREC(6)[0x0c] = 99;   /* else → 10 */
+
+    engine_army_ai_set_rations_and_grant(2);
+
+    T_ASSERT_EQ_I(AREC(1)[0xb9], 0);
+    T_ASSERT_EQ_I(AREC(2)[0xb9], 1);
+    T_ASSERT_EQ_I(AREC(3)[0xb9], 2);
+    T_ASSERT_EQ_I(AREC(4)[0xb9], 3);
+    T_ASSERT_EQ_I(AREC(5)[0xb9], 8);
+    T_ASSERT_EQ_I(AREC(6)[0xb9], 10);
+    return 0;
+}
+
+/* set_rations_and_grant, AI player with personality 4 → selector 1 ladder. */
+int test_army_ai_rations_selector1(void)
+{
+    ai_setup();
+    s_slot_0056d5dc = 5;
+    PREC(3)[0x007] = 4;   /* personality 4 → +4 selector == 1 */
+    PREC(3)[0x029] = 0;
+    for (int r = 1; r <= 5; r++) AREC(r)[0x005] = 3;
+    AREC(1)[0x0c] = 20;   /* <30 → 0  */
+    AREC(2)[0x0c] = 40;   /* <50 → 1  */
+    AREC(3)[0x0c] = 60;   /* <65 → 3  */
+    AREC(4)[0x0c] = 75;   /* <80 → 7  */
+    AREC(5)[0x0c] = 90;   /* else → 12 */
+
+    engine_army_ai_set_rations_and_grant(3);
+
+    T_ASSERT_EQ_I(AREC(1)[0xb9], 0);
+    T_ASSERT_EQ_I(AREC(2)[0xb9], 1);
+    T_ASSERT_EQ_I(AREC(3)[0xb9], 3);
+    T_ASSERT_EQ_I(AREC(4)[0xb9], 7);
+    T_ASSERT_EQ_I(AREC(5)[0xb9], 12);
+    return 0;
+}
+
+/* Grant pass, AI level 4 (>= 3 → DC1E0 table; 3..4 → level<5 step set).
+ * personality 2, difficulty 3: cash += DC1E0[pers2][diff3] = 1400; per-realm
+ * steps pop=30, stock=6, prov=60 applied only above the thresholds. */
+int test_army_ai_grant_level4_topups(void)
+{
+    ai_setup();
+    s_slot_0056d5dc = 2;
+    s_slot_0053f23c = 3;                /* difficulty */
+    uint8_t *s = PREC(3);
+    s[0x004] = 1;                       /* active */
+    s[0x007] = 2;                       /* personality 2 */
+    s[0x029] = 4;                       /* AI level 4 */
+    AI32(s, 0x118) = 1000;              /* treasury */
+
+    uint8_t *a1 = AREC(1);              /* above every threshold → topped up */
+    a1[0x005] = 3;
+    AI32(a1, 0x024) = 100;
+    AI32(a1, 0x250) = 50;
+    AI32(a1, 0x224) = 100;
+    uint8_t *a2 = AREC(2);              /* exactly at thresholds → untouched */
+    a2[0x005] = 3;
+    AI32(a2, 0x024) = 20;
+    AI32(a2, 0x250) = 10;
+    AI32(a2, 0x224) = 50;
+
+    engine_army_ai_set_rations_and_grant(3);
+
+    T_ASSERT_EQ_I(AI32(s, 0x118), 1000 + 1400);
+    T_ASSERT_EQ_I(AI32(a1, 0x024), 130);   /* +30 */
+    T_ASSERT_EQ_I(AI32(a1, 0x030), 30);    /* mirror +30 */
+    T_ASSERT_EQ_I(AI32(a1, 0x250), 56);    /* +6  */
+    T_ASSERT_EQ_I(AI32(a1, 0x224), 160);   /* +60 */
+    T_ASSERT_EQ_I(AI32(a2, 0x024), 20);    /* unchanged */
+    T_ASSERT_EQ_I(AI32(a2, 0x030), 0);
+    T_ASSERT_EQ_I(AI32(a2, 0x250), 10);
+    T_ASSERT_EQ_I(AI32(a2, 0x224), 50);
+    return 0;
+}
+
+/* Grant pass, AI level 2 (< 3 → DC230 table; bigger step set pop=40/stock=10/
+ * prov=80).  personality 1, difficulty 2: cash += DC230[pers1][diff2] = 250. */
+int test_army_ai_grant_level2_easy(void)
+{
+    ai_setup();
+    s_slot_0056d5dc = 1;
+    s_slot_0053f23c = 2;
+    uint8_t *s = PREC(4);
+    s[0x004] = 1;
+    s[0x007] = 1;                       /* personality 1 */
+    s[0x029] = 2;                       /* AI level 2 */
+    AI32(s, 0x118) = 0;
+
+    uint8_t *a = AREC(1);
+    a[0x005] = 4;
+    AI32(a, 0x024) = 100;
+    AI32(a, 0x250) = 20;
+    AI32(a, 0x224) = 100;
+
+    engine_army_ai_set_rations_and_grant(4);
+
+    T_ASSERT_EQ_I(AI32(s, 0x118), 250);
+    T_ASSERT_EQ_I(AI32(a, 0x024), 140);    /* +40 */
+    T_ASSERT_EQ_I(AI32(a, 0x030), 40);
+    T_ASSERT_EQ_I(AI32(a, 0x250), 30);     /* +10 */
+    T_ASSERT_EQ_I(AI32(a, 0x224), 180);    /* +80 */
+    return 0;
+}
+
+/* Grant pass, AI level 5: still draws the DC1E0 cash grant, but every per-realm
+ * step is 0 (level >= 5 falls through both step branches). */
+int test_army_ai_grant_level5_cash_only(void)
+{
+    ai_setup();
+    s_slot_0056d5dc = 1;
+    s_slot_0053f23c = 2;
+    uint8_t *s = PREC(2);
+    s[0x004] = 1;
+    s[0x007] = 1;                       /* personality 1 */
+    s[0x029] = 5;                       /* AI level 5 */
+    AI32(s, 0x118) = 0;
+
+    uint8_t *a = AREC(1);
+    a[0x005] = 2;
+    AI32(a, 0x024) = 100;
+    AI32(a, 0x250) = 50;
+    AI32(a, 0x224) = 100;
+
+    engine_army_ai_set_rations_and_grant(2);
+
+    T_ASSERT_EQ_I(AI32(s, 0x118), 700);    /* DC1E0[pers1][diff2] = 700 */
+    T_ASSERT_EQ_I(AI32(a, 0x024), 100);    /* no topup */
+    T_ASSERT_EQ_I(AI32(a, 0x030), 0);
+    T_ASSERT_EQ_I(AI32(a, 0x250), 50);
+    T_ASSERT_EQ_I(AI32(a, 0x224), 100);
+    return 0;
+}
+
+/* Grant pass is fully gated: an inactive player, an eliminated player, or one
+ * with AI level 0 gets no cash and no topups. */
+int test_army_ai_grant_gated(void)
+{
+    ai_setup();
+    s_slot_0056d5dc = 1;
+    s_slot_0053f23c = 3;
+    AREC(1)[0x005] = 2;
+    AI32(AREC(1), 0x024) = 100;
+
+    uint8_t *s = PREC(2);
+    s[0x007] = 2;
+    s[0x029] = 4;                       /* level set, but ... */
+
+    s[0x004] = 0;                       /* inactive → no grant */
+    engine_army_ai_set_rations_and_grant(2);
+    T_ASSERT_EQ_I(AI32(s, 0x118), 0);
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x024), 100);
+
+    s[0x004] = 1; s[0x005] = 1;         /* active but eliminated → no grant */
+    engine_army_ai_set_rations_and_grant(2);
+    T_ASSERT_EQ_I(AI32(s, 0x118), 0);
+
+    s[0x005] = 0; s[0x029] = 0;         /* active, alive, level 0 → no grant */
+    engine_army_ai_set_rations_and_grant(2);
+    T_ASSERT_EQ_I(AI32(s, 0x118), 0);
+    T_ASSERT_EQ_I(AI32(AREC(1), 0x024), 100);
+    return 0;
+}

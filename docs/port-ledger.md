@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **687** (28.1%) — tested 646, ported 41
-- code bytes touched: **34.1%** (286,258 / 838,629 B)
-- unported: **1760**
+- touched: **689** (28.2%) — tested 648, ported 41
+- code bytes touched: **34.5%** (289,034 / 838,629 B)
+- unported: **1758**
 - orphan refs (in src/, not in function table): 7
 
-## tested (646) — ported + host unit suite
+## tested (648) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -481,6 +481,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x499dc3 | FUN_00499dc3 | 154 | engine_menu_input.c, engine_menu_input.h, game_init.c (+2) |
 | 0x499e5d | FUN_00499e5d | 421 | engine_menu_input.c, game_init.c, game_init.h (+1) |
 | 0x49a453 | FUN_0049a453 | 302 | game_init.c, game_init.h, save.c (+1) |
+| 0x49a581 | FUN_0049a581 | 1039 | engine_army_ai.c |
 | 0x49a990 | FUN_0049a990 | 126 | engine_army_ai.c, engine_army_ai.h, engine_combat.c (+1) |
 | 0x49aa0e | FUN_0049aa0e | 2197 | engine_ranking.c, engine_ranking.h, game_init.c |
 | 0x49b2a3 | FUN_0049b2a3 | 187 | engine_combat.c, engine_combat.h |
@@ -498,6 +499,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49ce51 | FUN_0049ce51 | 109 | engine.c, engine_turn.c, engine_turn.h |
 | 0x49cf20 | FUN_0049cf20 | 704 | engine_combat.c, engine_combat.h |
 | 0x49d1e0 | FUN_0049d1e0 | 1024 | engine_combat.c, engine_ranking.c, engine_ranking.h |
+| 0x49d638 | FUN_0049d638 | 1737 | engine_army_ai.c, engine_army_ai.h |
 | 0x49dd01 | FUN_0049dd01 | 583 | engine_army_ai.c, engine_army_ai.h, engine_territory.c (+1) |
 | 0x49df48 | FUN_0049df48 | 126 | engine_combat.c |
 | 0x49e39b | FUN_0049e39b | 994 | engine_army_ai.c, engine_army_ai.h |

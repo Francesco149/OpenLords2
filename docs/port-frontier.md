@@ -5,8 +5,8 @@
 The unported, non-thunk engine functions already **called by ported code** — the natural next chips. A **leaf** has all of its
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
-- frontier functions: **273**
-- of those, zero-dependency **leaves: 126** (recommended order below)
+- frontier functions: **284**
+- of those, zero-dependency **leaves: 128** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
 
@@ -25,6 +25,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x41423f | 11 | 1 | render-quad / blit primitives |
 | 0x45242b | 11 | 1 | fade / loading / audio-mci |
 | 0x45280b | 11 | 1 | fade / loading / audio-mci |
+| 0x49f96c | 11 | 1 | npc schedule + worker walk |
 | 0x4b1dd5 | 11 | 1 | battlefield render + wndproc |
 | 0x43cc56 | 16 | 1 | stage/post-load + char tables |
 | 0x401c5b | 21 | 1 | early/runtime + low-level helpers |
@@ -51,7 +52,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4bbe51 | 86 | 1 | battlefield render + wndproc |
 | 0x4b7514 | 87 | 1 | battlefield render + wndproc |
 | 0x463c06 | 92 | 1 | tables (item/char) + populators |
-| 0x463c62 | 92 | 1 | tables (item/char) + populators |
 
 ## Full frontier by address band
 
@@ -322,7 +322,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x488dfe | 943 | 1 | 0 | ✓ |
 | 0x485bb1 | 1592 | 1 | 5 |  |
 
-### npc schedule + worker walk (14)
+### npc schedule + worker walk (20)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
@@ -330,8 +330,10 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x49915e | 259 | 3 | 2 |  |
 | 0x499366 | 691 | 3 | 2 |  |
 | 0x4987b7 | 1536 | 2 | 4 |  |
+| 0x49f96c | 11 | 1 | 0 | ✓ |
 | 0x499d97 | 26 | 1 | 1 |  |
 | 0x49767d | 36 | 1 | 5 |  |
+| 0x49f93d | 47 | 1 | 3 |  |
 | 0x499619 | 51 | 1 | 0 | ✓ |
 | 0x4990f9 | 101 | 1 | 0 | ✓ |
 | 0x49c995 | 157 | 1 | 2 |  |
@@ -339,9 +341,13 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4975d3 | 170 | 1 | 1 |  |
 | 0x499261 | 261 | 1 | 0 | ✓ |
 | 0x49b973 | 374 | 1 | 2 |  |
-| 0x49a010 | 982 | 1 | 8 |  |
+| 0x49e1bf | 476 | 1 | 1 |  |
+| 0x49f977 | 841 | 1 | 6 |  |
+| 0x49edc7 | 872 | 1 | 1 |  |
+| 0x49a010 | 982 | 1 | 4 |  |
+| 0x49e77d | 1430 | 1 | 1 |  |
 
-### asset-load IO helper cluster (0x4af*) (11)
+### asset-load IO helper cluster (0x4af*) (16)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
@@ -353,9 +359,14 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4afe3a | 179 | 1 | 0 | ✓ |
 | 0x4ae1b8 | 243 | 1 | 4 |  |
 | 0x4a9252 | 288 | 1 | 5 |  |
+| 0x4a5667 | 325 | 1 | 1 |  |
 | 0x4aa90a | 374 | 1 | 0 | ✓ |
+| 0x4a0015 | 469 | 1 | 4 |  |
 | 0x4aa6ca | 469 | 1 | 0 | ✓ |
+| 0x4a277d | 565 | 1 | 7 |  |
+| 0x4a13a6 | 849 | 1 | 0 | ✓ |
 | 0x4a8e0b | 943 | 1 | 3 |  |
+| 0x4a0c1d | 1572 | 1 | 2 |  |
 
 ### battlefield render + wndproc (24)
 

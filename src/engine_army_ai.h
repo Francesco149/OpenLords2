@@ -109,4 +109,11 @@ void engine_army_ai_run_player(int player);
  * every player slot 1..5 still in the game (strategic +0x4 set, +0x5 clear). */
 void engine_army_ai_run_turn(void);
 
+/* Port of FUN_0049d638.  Phase-1 AI init for one player slot: set each owned
+ * realm's ration/tax setting (+0xb9) from its approval via a personality-keyed
+ * ladder (player 0 uses a fixed independent ladder), then — for an active,
+ * non-eliminated AI player whose level (+0x29) is set — credit a difficulty
+ * cash grant and top up its realms' population / stock / provisions. */
+void engine_army_ai_set_rations_and_grant(int player);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_AI_H */

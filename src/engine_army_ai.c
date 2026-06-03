@@ -35,6 +35,10 @@
 #define ARMY_OWNER          0x005   /* DAT_0053f9b5 — owning player (0 = independent) */
 #define ARMY_APPROVAL       0x00c   /* DAT_0053f9bc — signed approval byte, capped 100 */
 #define ARMY_FEED_COUNT     0x024   /* DAT_0053f9d4 — mouths to feed (tier denominator) */
+#define ARMY_POP_SUPPORTED  0x030   /* DAT_0053f9e0 — percent-of-population scratch, bumped
+                                     *   alongside the feed count by the difficulty grant */
+#define ARMY_RATION         0x0b9   /* DAT_0053fa69 — realm ration/tax setting (HUD "ration %",
+                                     *   consumed by the engine_realm income calc); set here */
 /* Workforce target-ratio run (+0x130 .. +0x14c, eight i32) the AI seeds before
  * the workforce allocator (engine_territory_allocate_realm_workforce) runs. */
 #define ARMY_WF_RATIO_0     0x130   /* DAT_0053fae0 */
@@ -91,6 +95,8 @@
 #define STRAT_ACTIVE        0x004   /* DAT_0057bf04 — in-game flag */
 #define STRAT_ELIMINATED    0x005   /* DAT_0057bf05 — eliminated flag */
 #define STRAT_PERSONALITY   0x007   /* DAT_0057bf07 — AI personality 1..4 */
+#define STRAT_AI_LEVEL      0x029   /* DAT_0057bf29 — AI difficulty/aggression level (seeded
+                                     *   from +0x2a at player setup); gates + scales the grant */
 #define STRAT_BUY_REQ_8     0x070   /* DAT_0057bf70 — explicit buy request, commodity 8 */
 #define STRAT_BUY_REQ_6     0x074   /* DAT_0057bf74 — explicit buy request, commodity 6 */
 #define STRAT_BUY_REQ_7     0x07c   /* DAT_0057bf7c — explicit buy request, commodity 7 */
@@ -203,6 +209,29 @@ static const uint8_t *personality_row(int p)
     return &g_ai_personality[(p - 1) * AI_PERS_STRIDE];
 }
 static int pers_i32(const uint8_t *row, int off) { return *(const int32_t *)(row + off); }
+
+/* AI difficulty cash-grant tables (retail DAT_004dc1e0 / DAT_004dc230, adjacent
+ * const .data — baked here as one verbatim 0xa0-byte image).  Each is five rows
+ * of four i32 columns: row = personality (0 unused, 1..4), column = the global
+ * difficulty s_slot_0053f23c (0..3).  The phase-1 grant indexes one as
+ * base + difficulty*4 + personality*0x10.  AI level < 3 draws the DC230 table
+ * (smaller grants); AI level >= 3 draws DC1E0 (larger). */
+#define AI_GRANT_DC1E0  0x00    /* DAT_004dc1e0 — AI level >= 3 */
+#define AI_GRANT_DC230  0x50    /* DAT_004dc230 — AI level <  3 */
+_Alignas(int32_t) static const uint8_t g_ai_cash_grant[0xa0] = {
+    /* 0x4dc1e0  DAT_004dc1e0 (>= 3) */
+    0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
+    0x00,0x00,0x00,0x00, 0x90,0x01,0x00,0x00, 0xbc,0x02,0x00,0x00, 0xb0,0x04,0x00,0x00,
+    0x64,0x00,0x00,0x00, 0xf4,0x01,0x00,0x00, 0x20,0x03,0x00,0x00, 0x78,0x05,0x00,0x00,
+    0x00,0x00,0x00,0x00, 0x90,0x01,0x00,0x00, 0xbc,0x02,0x00,0x00, 0xb0,0x04,0x00,0x00,
+    0xfa,0x00,0x00,0x00, 0x58,0x02,0x00,0x00, 0x4c,0x04,0x00,0x00, 0x08,0x07,0x00,0x00,
+    /* 0x4dc230  DAT_004dc230 (< 3) */
+    0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
+    0x00,0x00,0x00,0x00, 0xa0,0x00,0x00,0x00, 0xfa,0x00,0x00,0x00, 0x90,0x01,0x00,0x00,
+    0x28,0x00,0x00,0x00, 0xb4,0x00,0x00,0x00, 0x2c,0x01,0x00,0x00, 0xf4,0x01,0x00,0x00,
+    0x00,0x00,0x00,0x00, 0xa0,0x00,0x00,0x00, 0xfa,0x00,0x00,0x00, 0x90,0x01,0x00,0x00,
+    0x64,0x00,0x00,0x00, 0xf0,0x00,0x00,0x00, 0x90,0x01,0x00,0x00, 0x58,0x02,0x00,0x00,
+};
 
 /* Port of FUN_0045158b (147 B).  Seed the realm's eight workforce target ratios
  * (+0x130 run) to the AI's fixed defaults {0x21, 0x32, 0x11, 0x28, 0xf, 0xf,
@@ -801,5 +830,104 @@ void engine_army_ai_run_turn(void)
         uint8_t *s = STRAT_REC(p);
         if (s[STRAT_ACTIVE] != 0 && s[STRAT_ELIMINATED] == 0)
             engine_army_ai_run_player(p);
+    }
+}
+
+/* Port of FUN_0049d638 (1737 B).  Phase-1 AI init, run once per player slot by
+ * the strategic per-tick FSM (FUN_0049a581, dispatch step 3; also called with
+ * `player` == 0 for independent realms).  Two passes:
+ *
+ *   1. Ration ladder — for every realm owned by `player`, map its approval byte
+ *      (+0xc, signed) to a ration/tax setting (+0xb9) through a threshold
+ *      ladder.  Player 0 (independent realms) uses a fixed 8-step ladder; an AI
+ *      player picks one of three ladders by the +4 selector int of its
+ *      personality row (retail DAT_004d8a5c-based read).
+ *
+ *   2. Difficulty cash/resource grant — gated on an active, non-eliminated
+ *      player whose AI level (+0x29) is non-zero.  Credits the treasury (+0x118)
+ *      a personality×difficulty grant from the DC230 (level < 3) or DC1E0
+ *      (level >= 3) table, then for AI levels 1..4 tops up each owned realm's
+ *      population (+0x24 and its +0x30 mirror), commodity stock (+0x250) and
+ *      provision raw (+0x224) by difficulty-scaled steps — level >= 5 takes the
+ *      cash only (the per-realm multipliers stay 0). */
+void engine_army_ai_set_rations_and_grant(int player)
+{
+    int count = (int)s_slot_0056d5dc;
+    int diff  = (int)s_slot_0053f23c;
+
+    /* Pass 1 — per-realm ration ladder. */
+    for (int realm = 1; realm <= count; realm++) {
+        uint8_t *a = ARMY_REC(realm);
+        if (a[ARMY_OWNER] != player) continue;
+        int ap = (int8_t)a[ARMY_APPROVAL];
+
+        if (player == 0) {
+            if      (ap < 20) a[ARMY_RATION] = 0;
+            else if (ap < 40) a[ARMY_RATION] = 1;
+            else if (ap < 50) a[ARMY_RATION] = 2;
+            else if (ap < 60) a[ARMY_RATION] = 3;
+            else if (ap < 70) a[ARMY_RATION] = 4;
+            else if (ap < 80) a[ARMY_RATION] = 6;
+            else if (ap < 90) a[ARMY_RATION] = 8;
+            else              a[ARMY_RATION] = 12;
+            continue;
+        }
+
+        int sel = pers_i32(personality_row(STRAT_REC(player)[STRAT_PERSONALITY]), 4);
+        if (sel == 0) {
+            if      (ap < 30) a[ARMY_RATION] = 0;
+            else if (ap < 50) a[ARMY_RATION] = 2;
+            else if (ap < 65) a[ARMY_RATION] = 4;
+            else if (ap < 80) a[ARMY_RATION] = 10;
+            else              a[ARMY_RATION] = 15;
+        } else if (sel == 1) {
+            if      (ap < 30) a[ARMY_RATION] = 0;
+            else if (ap < 50) a[ARMY_RATION] = 1;
+            else if (ap < 65) a[ARMY_RATION] = 3;
+            else if (ap < 80) a[ARMY_RATION] = 7;
+            else              a[ARMY_RATION] = 12;
+        } else if (sel == 2) {
+            if      (ap < 60) a[ARMY_RATION] = 0;
+            else if (ap < 70) a[ARMY_RATION] = 1;
+            else if (ap < 80) a[ARMY_RATION] = 2;
+            else if (ap < 90) a[ARMY_RATION] = 3;
+            else if (ap < 95) a[ARMY_RATION] = 8;
+            else              a[ARMY_RATION] = 10;
+        }
+    }
+
+    /* Pass 2 — difficulty grant.  Only for an active, non-eliminated AI player
+     * with a level set (player 0 and humans fall out here). */
+    uint8_t *s = STRAT_REC(player);
+    int level = s[STRAT_AI_LEVEL];
+    if (s[STRAT_ACTIVE] == 0 || s[STRAT_ELIMINATED] != 0 || level == 0)
+        return;
+
+    int pers = s[STRAT_PERSONALITY];
+    const uint8_t *grant = &g_ai_cash_grant[(level < 3) ? AI_GRANT_DC230 : AI_GRANT_DC1E0];
+    I32(s + STRAT_CASH) += *(const int32_t *)(grant + diff * 4 + pers * 0x10);
+
+    int pop_step = 0, stock_step = 0, prov_step = 0;
+    if (level < 3) {
+        pop_step   = diff * 0x14;
+        stock_step = diff * 5;
+        prov_step  = diff * 0x28;
+    } else if (level < 5) {
+        pop_step   = diff * 10;
+        stock_step = diff * 2;
+        prov_step  = diff * 0x14;
+    }
+
+    for (int realm = 1; realm <= count; realm++) {
+        uint8_t *a = ARMY_REC(realm);
+        if (a[ARMY_OWNER] != player) continue;
+        if (I32(a + ARMY_FEED_COUNT) > 0x14) {
+            I32(a + ARMY_FEED_COUNT)    += pop_step;
+            I32(a + ARMY_POP_SUPPORTED) += pop_step;
+        }
+        if (I32(a + ARMY_STOCK_A) > 10)
+            I32(a + ARMY_STOCK_A) += stock_step;
+        if (I32(a + ARMY_PROVISION_RAW) > 0x32)
+            I32(a + ARMY_PROVISION_RAW) += prov_step;
     }
 }
