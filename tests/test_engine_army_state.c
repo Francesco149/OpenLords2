@@ -659,3 +659,51 @@ int test_engine_army_state_plan_raids_routes_state2(void)
     T_ASSERT_EQ_I(CREC(4)[A_SUBSTATE], 0);            /* untouched */
     return 0;
 }
+
+/* --- phase-3 capital-march planner (FUN_00429418) ------------------------- */
+
+#define A_TARGET_REALM_O  0x167
+#define A_MOVE_DEST_COL_O 0x14
+#define A_MOVE_DEST_ROW_O 0x15
+#define A_PATH_COL_O      0x16
+#define A_PATH_ROW_O      0x17
+
+static int16_t cap_terrain[ENGINE_PATH_FIELD_CELLS + 0x83];
+
+/* A state-4 (idle/in-transit) stack is routed to its target realm's capital:
+ * the executor destination (+0x14/+0x15) and path-trace goal (+0x16/+0x17) are
+ * copied from the capital cell, the target byte (+0x151) is republished, the
+ * retarget/plan flags (+0x150/+0x14e) are cleared, and a found path arms the
+ * executor (+0x14c = 1).  Non-state-4 stacks are left untouched. */
+int test_engine_army_state_plan_capital_marches_routes_state4(void)
+{
+    raid_reset(2);
+    memset(cap_terrain, 0, sizeof cap_terrain);
+    engine_path_field_bind_terrain(cap_terrain);
+    s_slot_0057c8cc = 1;
+
+    set_capital(1, 11, 10);              /* target realm 1 capital one cell east */
+    cap_terrain[10 * ENGINE_PATH_FIELD_DIM + 10 + 0x42] = 1;
+
+    CREC(3)[A_STATE] = 4;
+    CREC(3)[A_TARGET_REALM_O] = 1;
+    CREC(3)[A_POS_COL_O] = 10; CREC(3)[A_POS_ROW_O] = 10;
+    CREC(3)[A_RAID_FLAG_O] = 9;          /* stale → must be cleared */
+    CREC(3)[A_PLAN_PEND_O] = 9;          /* stale → must be cleared */
+
+    /* Stack 4: not idle → skipped entirely. */
+    CREC(4)[A_STATE] = 1; CREC(4)[A_SUBSTATE] = 0;
+
+    engine_army_state_plan_capital_marches();
+
+    T_ASSERT_EQ_I(CREC(3)[A_MOVE_DEST_COL_O], 11);
+    T_ASSERT_EQ_I(CREC(3)[A_MOVE_DEST_ROW_O], 10);
+    T_ASSERT_EQ_I(CREC(3)[A_PATH_COL_O], 11);
+    T_ASSERT_EQ_I(CREC(3)[A_PATH_ROW_O], 10);
+    T_ASSERT_EQ_I(CREC(3)[A_RAID_DEST_O], 1);
+    T_ASSERT_EQ_I(CREC(3)[A_RAID_FLAG_O], 0);
+    T_ASSERT_EQ_I(CREC(3)[A_PLAN_PEND_O], 0);
+    T_ASSERT_EQ_I(CREC(3)[A_SUBSTATE], 1);            /* armed (path found) */
+    T_ASSERT_EQ_I(CREC(4)[A_SUBSTATE], 0);            /* untouched */
+    return 0;
+}

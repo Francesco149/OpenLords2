@@ -441,3 +441,61 @@ void engine_army_state_plan_raids(void)
         }
     }
 }
+
+/* Move-executor destination + path-trace goal fields used by the phase-3/6
+ * march planners.  Distinct from the raider planner's +0x116/+0x117 pair: these
+ * are the executor's own final-destination bytes (retail M_DEST_COL/ROW) plus a
+ * separate path-trace goal pair the planner floods toward. */
+#define A_MOVE_DEST_COL 0x14   /* executor final destination col (u8; M_DEST_COL)*/
+#define A_MOVE_DEST_ROW 0x15   /* executor final destination row (u8; M_DEST_ROW)*/
+#define A_PATH_COL      0x16   /* path-trace goal col (u8)                        */
+#define A_PATH_ROW      0x17   /* path-trace goal row (u8)                        */
+#define A_TARGET_REALM  0x167  /* target realm id; capital is the march goal (u8) */
+
+/* Flood/trace a path-field route from a stack's cell to its goal and, if it
+ * reaches in under 0x96 (150) waypoints, commit the route + arm the executor.
+ * Retail floods conservatively first (blocked_mode 1 — costly cells heavily
+ * penalised) and, only if that route is degenerate (>= 150 waypoints, i.e. it
+ * hit the trace cap), re-floods permissively (blocked_mode 0) and retries once.
+ * Shared by the phase-3 and phase-6 planners. */
+static void plan_route_to_goal(uint8_t *r, int idx)
+{
+    engine_path_field_fill(0, (int8_t)r[A_POS_COL], (int8_t)r[A_POS_ROW], 1);
+    if (engine_path_field_trace(0, (int8_t)r[A_PATH_COL], (int8_t)r[A_PATH_ROW]) == 0)
+        return;
+    if (engine_path_field_wp_count(0) < 0x96) {
+        engine_path_field_copy_record(0, idx);
+        r[A_SUBSTATE] = 1;
+        return;
+    }
+    engine_path_field_fill(0, (int8_t)r[A_POS_COL], (int8_t)r[A_POS_ROW], 0);
+    if (engine_path_field_trace(0, (int8_t)r[A_PATH_COL], (int8_t)r[A_PATH_ROW]) != 0) {
+        engine_path_field_copy_record(0, idx);
+        r[A_SUBSTATE] = 1;
+    }
+}
+
+/* --- FUN_00429418: phase-3 — route idle (state 4) stacks to a target capital - */
+void engine_army_state_plan_capital_marches(void)
+{
+    for (int i = 1; i < 0x97; i++) {
+        uint8_t *r = AREC(i);
+        if ((unsigned)r[A_STATE] != 4)
+            continue;
+
+        /* Goal = the target realm's (+0x167) capital cell (g_per_army_768
+         * +0x6c/+0x6d).  Mirror it into both the executor destination and the
+         * path-trace goal, then republish the target byte + clear the planning
+         * flags, exactly as retail. */
+        uint8_t realm = r[A_TARGET_REALM];
+        r[A_MOVE_DEST_COL] = g_per_army_768[realm * RAID_RSTRIDE + RAID_CAP_COL];
+        r[A_PATH_COL]      = r[A_MOVE_DEST_COL];
+        r[A_MOVE_DEST_ROW] = g_per_army_768[realm * RAID_RSTRIDE + RAID_CAP_ROW];
+        r[A_PATH_ROW]      = r[A_MOVE_DEST_ROW];
+        r[A_RAID_DEST]     = realm;
+        r[A_RAID_FLAG]     = 0;
+        r[A_PLAN_PEND]     = 0;
+
+        plan_route_to_goal(r, i);
+    }
+}

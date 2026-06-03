@@ -116,4 +116,16 @@ int engine_army_state_raid_assign_target(int idx);
  * A phase-5 callee of the strategic turn driver 0x49a010. */
 void engine_army_state_plan_raids(void);
 
+/* Port of FUN_00429418 (669 B, __cdecl void).  Phase-3 callee of the strategic
+ * turn driver 0x49a010.  Sweep the 150 occupant records and, for each in state 4
+ * (idle/in-transit), set its march goal to its target realm's (+0x167) capital
+ * cell (g_per_army_768 +0x6c/+0x6d): mirror that into the executor destination
+ * (+0x14/+0x15) and the path-trace goal (+0x16/+0x17), republish the target byte
+ * (+0x151), and clear the retarget/plan flags (+0x150/+0x14e).  Then flood a
+ * path-field from the stack and, if it traces to the capital in under 150
+ * waypoints, commit the route + arm the executor (+0x14c = 1); a degenerate
+ * (>= 150-waypoint) route re-floods permissively and retries once.  Pure
+ * record/path-field bookkeeping. */
+void engine_army_state_plan_capital_marches(void);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_STATE_H */

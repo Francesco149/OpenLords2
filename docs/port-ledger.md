@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **684** (28.0%) — tested 643, ported 41
-- code bytes touched: **33.9%** (284,324 / 838,629 B)
-- unported: **1763**
+- touched: **685** (28.0%) — tested 644, ported 41
+- code bytes touched: **34.0%** (284,993 / 838,629 B)
+- unported: **1762**
 - orphan refs (in src/, not in function table): 7
 
-## tested (643) — ported + host unit suite
+## tested (644) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -200,6 +200,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x429153 | FUN_00429153 | 96 | engine_category_buckets.h, engine_territory.c |
 | 0x4291b3 | FUN_004291b3 | 171 | engine_category_buckets.h, engine_territory.c |
 | 0x42925e | FUN_0042925e | 81 | engine_category_buckets.c, engine_category_buckets.h |
+| 0x429418 | FUN_00429418 | 669 | engine_army_state.c, engine_army_state.h |
 | 0x4296b5 | FUN_004296b5 | 319 | engine_army_move.c, engine_army_move.h, game_init.c |
 | 0x4298c1 | FUN_004298c1 | 604 | engine_map_init.c, engine_map_init.h, game_init.c (+1) |
 | 0x429b1d | FUN_00429b1d | 135 | engine.c, engine_camera.c, engine_camera.h (+1) |

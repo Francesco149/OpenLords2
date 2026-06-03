@@ -1980,6 +1980,7 @@ struct test_case {
     X(engine_army_state_raid_assign_keeps_target_dest_from_cursor) \
     X(engine_army_state_raid_assign_force_mode) \
     X(engine_army_state_plan_raids_routes_state2) \
+    X(engine_army_state_plan_capital_marches_routes_state4) \
     X(engine_army_move_dir_offsets) \
     X(engine_army_move_dir_edges) \
     X(engine_army_move_classify_flags) \

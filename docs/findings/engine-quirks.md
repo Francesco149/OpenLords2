@@ -6554,3 +6554,23 @@ capital the cursor last named; the stored target is essentially advisory.  The
 port reproduces the cursor-sourced destination verbatim rather than "fixing" it
 to read the target byte — same faithful-to-retail posture as the other
 snapshot/shared-cursor quirks (#183/#184).
+
+## 186 — phase-3 march planner (`FUN_00429418`) floods conservatively first, then permissively only on a degenerate route
+
+The phase-3 turn-driver callee routes every idle (state 4) stack toward its
+target realm's (+0x167) capital.  It floods the path-field cost map with
+`blocked_mode = 1` (costly-but-passable cells clamped to cost 100 — heavily
+penalised), traces to the capital, and commits the route only when the trace
+lands in **under 150 waypoints**.  150 is the path-field's hard trace cap
+(`engine_path_field` writes at most 0x96 waypoints), so a path of exactly 150
+is the engine's "didn't actually reach / had to give up" sentinel, not a real
+route.  On that sentinel it re-floods with `blocked_mode = 0` (no cost clamp,
+costly terrain freely traversable) and traces once more, committing whatever
+that yields.
+
+Net effect: stacks prefer routes that avoid expensive terrain, and fall back to
+"go through the swamp/forest" only when the cheap-terrain route can't be found
+within the waypoint budget.  The waypoint-count gate reads slot 0's count
+(`DAT_0053f070[0]`, the value later copied into the record's +0x1c waypoint
+counter) — the same slot the two floods/traces use.  The phase-6 planner
+(`FUN_004280e9`) shares this exact dual-flood tail.
