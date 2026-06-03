@@ -47,6 +47,7 @@
 #include "engine_math.h"           /* engine_math_percent_div (FUN_00404dc1)     */
 #include "save_schema_globals.h"   /* s_slot_0057cad4 — siege-scan cursor        */
 #include "engine_path_field.h"     /* fill / trace / copy_record (raid planning) */
+#include "engine_map_query.h"      /* box_any_rawflag_bit0 (FUN_0046cfbd)        */
 
 /* --- per-territory occupant record (g_per_territory_420, stride 0x1a4) ----- */
 #define ASTRIDE      0x1a4
@@ -497,5 +498,71 @@ void engine_army_state_plan_capital_marches(void)
         r[A_PLAN_PEND]     = 0;
 
         plan_route_to_goal(r, i);
+    }
+}
+
+/* Find-nearest scratch (retail DAT_00569570 col / DAT_00569578 row): the settle
+ * cell FUN_0046cfbd surfaces from its box scan, meaningful only immediately
+ * after a hit.  Retail keeps these in shared scalar globals; here they back the
+ * single ported consumer (the phase-6 planner).  Promote to a shared global if
+ * another FUN_00428007 caller (e.g. FUN_004292af) is ported. */
+static int s_settle_col, s_settle_row;
+
+/* Port of FUN_00428007 (113 B, __cdecl bool).  Probe radii 1..3 around realm
+ * `realm`'s capital cell (g_per_army_768 +0x6c/+0x6d) for an unlinked,
+ * bit0-flagged cell (engine_map_query_box_any_rawflag_bit0 = FUN_0046cfbd).  On
+ * the first hit it surfaces that cell in s_settle_col/row and returns 1; returns
+ * 0 if no radius yields one (leaving the scratch untouched, as retail does). */
+static int find_settle_spot_near_realm(int realm)
+{
+    int col = g_per_army_768[realm * RAID_RSTRIDE + RAID_CAP_COL];
+    int row = g_per_army_768[realm * RAID_RSTRIDE + RAID_CAP_ROW];
+    for (int radius = 1; radius < 4; radius++)
+        if (engine_map_query_box_any_rawflag_bit0(col, row, radius,
+                                                  &s_settle_col, &s_settle_row))
+            return 1;
+    return 0;
+}
+
+#define A_ADJ_CURSOR  0x164  /* round-robin category-bucket cursor 0..15 (u8)    */
+
+/* --- FUN_004280e9: phase-6 — settle idle (state 3) stacks near a neighbour --- */
+void engine_army_state_plan_settle_marches(void)
+{
+    for (int i = 1; i < 0x97; i++) {
+        uint8_t *r = AREC(i);
+        if ((unsigned)r[A_STATE] != 3)
+            continue;
+
+        /* A stack flagged "arrived" (+0x150) picks a fresh settle target: scan up
+         * to 16 entries of category-bucket row (i-1) from the round-robin cursor
+         * (+0x164, wrapping at 16), taking the first in-range (<= realm count)
+         * realm id.  If one exists AND a settle cell is found near its capital,
+         * route there and clear the arrived flag; if no cell, skip the record. */
+        if (r[A_RAID_FLAG] != 0) {
+            unsigned realm = 0;
+            for (int n = 0; realm == 0 && n < 0x10; n++) {
+                realm = s_slot_00567970[(i - 1) * 0x10 + r[A_ADJ_CURSOR]];
+                if ((int)s_slot_0056d5dc < (int)realm)
+                    realm = 0;
+                r[A_ADJ_CURSOR]++;
+                if (r[A_ADJ_CURSOR] > 0xf)
+                    r[A_ADJ_CURSOR] = 0;
+            }
+            if (realm != 0) {
+                if (find_settle_spot_near_realm((int)realm) == 0)
+                    continue;            /* retail goto LAB_004280fe (next record) */
+                r[A_MOVE_DEST_COL] = (uint8_t)s_settle_col;
+                r[A_PATH_COL]      = r[A_MOVE_DEST_COL];
+                r[A_MOVE_DEST_ROW] = (uint8_t)s_settle_row;
+                r[A_PATH_ROW]      = r[A_MOVE_DEST_ROW];
+                r[A_RAID_DEST]     = (uint8_t)realm;
+                r[A_RAID_FLAG]     = 0;
+            }
+        }
+        if (r[A_RAID_FLAG] == 0) {
+            r[A_PLAN_PEND] = 0;
+            plan_route_to_goal(r, i);
+        }
     }
 }

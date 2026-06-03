@@ -6574,3 +6574,30 @@ within the waypoint budget.  The waypoint-count gate reads slot 0's count
 (`DAT_0053f070[0]`, the value later copied into the record's +0x1c waypoint
 counter) — the same slot the two floods/traces use.  The phase-6 planner
 (`FUN_004280e9`) shares this exact dual-flood tail.
+
+## 187 — phase-6 settle planner (`FUN_004280e9`) indexes the 6-row category-bucket table by per-region (i-1), sliding past row 5 into BSS slack
+
+The phase-6 turn-driver callee, when an idle (state 3) stack is flagged
+"arrived" (+0x150), scans up to 16 entries of a category-bucket row for a
+neighbour realm to settle toward.  The bucket table is `DAT_00567970`, which the
+rest of the engine treats as `buckets[6][16]` — a fixed 6-category × 16-entry
+list (built by FUN_004290d0/FUN_00429153, read by FUN_0042925e; the save schema
+persists exactly its 96 bytes, entry 138).
+
+But phase-6 indexes it as `buckets[(i-1)*0x10 + cursor]` where **i is the
+per-territory record index 1..150**, not a category 1..6.  For records 1..6 this
+reads a real bucket row; for i >= 7 it reads off the end of the 96-byte table.
+The next BSS global (`DAT_00567d10`, save entry 149) does not start until
++0x3a0 (928 B), so rows 6..57 are uninitialised BSS — they read as zero, the
+loop finds no in-range realm, and the stack is left unchanged.  Only a state-3 +
+arrived record at i >= 58 would reach `DAT_00567d10`'s live data; that the
+engine never corrupts the save in practice means such records do not occur at
+high indices (state 3 + arrived is effectively a low-index / player-row event).
+
+The port reproduces the exact `(i-1)*0x10 + cursor` arithmetic.  To read the
+same zeros retail reads for rows 6..57 without an out-of-bounds access, the
+in-memory backing of `s_slot_00567970` is widened to 150*16 B (the save still
+serialises only the first 96).  Behaviour matches retail for every index a
+legitimate game state can produce; the only divergence (port reads zero vs
+retail reading `DAT_00567d10`) is confined to indices retail itself could not
+survive.

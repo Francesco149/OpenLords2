@@ -147,7 +147,12 @@ uint32_t s_slot_0056651c;                /* entry  59 */
 uint32_t s_slot_005678a0;                /* entry  62 */
 uint32_t s_slot_00567958;                /* entry 148 */
 uint32_t s_slot_00567960;                /* entry 183 */
-uint8_t  s_slot_00567970[96];            /* entry 138 */
+/* Category-bucket table: logically buckets[6][16] = 96 B (only the first 96 B
+ * are saved — entry 138 below).  Backed at 150*16 because the phase-6 settle
+ * planner (FUN_004280e9) indexes it by per-region (i-1)*16 with i up to 150,
+ * sliding past row 5 into what is zero-init BSS slack in retail; the over-allocation
+ * reproduces those zero reads without an OOB.  See engine-quirks #187. */
+uint8_t  s_slot_00567970[150 * 16];      /* entry 138 (saves first 96 B)        */
 uint8_t  s_slot_00567d10[1212];          /* entry 149 */
 uint32_t s_slot_005681d8;                /* entry  97 */
 uint32_t s_slot_005681ec;                /* entry  96 */

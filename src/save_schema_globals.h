@@ -156,7 +156,7 @@ extern uint32_t s_slot_0056651c;         /* entry  59 */
 extern uint32_t s_slot_005678a0;         /* entry  62 */
 extern uint32_t s_slot_00567958;         /* entry 148 */
 extern uint32_t s_slot_00567960;         /* entry 183 */
-extern uint8_t  s_slot_00567970[96];     /* entry 138 */
+extern uint8_t  s_slot_00567970[150 * 16]; /* entry 138 (buckets[6][16]; saves 96 B) */
 extern uint8_t  s_slot_00567d10[1212];   /* entry 149 */
 extern uint32_t s_slot_005681d8;         /* entry  97 */
 extern uint32_t s_slot_005681ec;         /* entry  96 */

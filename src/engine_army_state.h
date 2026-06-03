@@ -128,4 +128,15 @@ void engine_army_state_plan_raids(void);
  * record/path-field bookkeeping. */
 void engine_army_state_plan_capital_marches(void);
 
+/* Port of FUN_004280e9 (904 B, __cdecl void).  Phase-6 callee of the strategic
+ * turn driver 0x49a010.  Sweep the 150 occupant records; for each in state 3
+ * (idle/in-transit) that is flagged "arrived" (+0x150), scan up to 16 entries of
+ * its category-bucket row (s_slot_00567970 +(i-1)*16) from a round-robin cursor
+ * (+0x164) for the first in-range realm id, find a settle cell near that realm's
+ * capital (FUN_00428007 / box scan), and on success point the march goal there
+ * (+0x14..+0x17), republish the target (+0x151) and clear the arrived flag.
+ * Every stack then not "arrived" routes to its goal via the shared dual-flood
+ * tail (clearing +0x14e, arming +0x14c).  Pure record/path-field bookkeeping. */
+void engine_army_state_plan_settle_marches(void);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_STATE_H */

@@ -19,6 +19,7 @@
 #include "save.h"
 #include "save_schema_globals.h"   /* s_slot_0057c8cc (local player) */
 #include "engine_path_field.h"     /* raid-planning path seams */
+#include "engine_map_query.h"      /* settle-spot box scan (FUN_0046cfbd)  */
 
 #define CREC(i)    (&g_per_territory_420[(i) * 0x1a4])
 #define R_REC(k)   (&g_per_army_768[(k) * 0x300])
@@ -705,5 +706,88 @@ int test_engine_army_state_plan_capital_marches_routes_state4(void)
     T_ASSERT_EQ_I(CREC(3)[A_PLAN_PEND_O], 0);
     T_ASSERT_EQ_I(CREC(3)[A_SUBSTATE], 1);            /* armed (path found) */
     T_ASSERT_EQ_I(CREC(4)[A_SUBSTATE], 0);            /* untouched */
+    return 0;
+}
+
+/* --- phase-6 settle-march planner (FUN_004280e9 + FUN_00428007) ----------- */
+
+#define A_ARRIVED_O    0x150        /* aliases A_RAID_FLAG */
+#define A_ADJ_CURSOR_O 0x164
+
+static uint8_t  settle_cells[64 * 64 * 8];   /* engine_map_query descriptor grid */
+static int16_t  settle_terrain[ENGINE_PATH_FIELD_CELLS + 0x83];
+
+/* Set cell (col,row)'s raw-flag (+1) and head-link (+5) so the bit0 box scan
+ * accepts it (flag bit0 set, head-link clear). */
+static void settle_set_cell(int col, int row, int flag, int link)
+{
+    int idx = (row * 0x40 + col) * 8;
+    settle_cells[idx + 1] = (uint8_t)flag;
+    settle_cells[idx + 5] = (uint8_t)link;
+}
+
+/* An "arrived" state-3 stack reads its category-bucket row from the cursor,
+ * picks the first in-range realm, finds a settle cell near that realm's capital
+ * (box scan radius 1..3), routes there, and clears the arrived flag — then the
+ * shared dual-flood arms the executor. */
+int test_engine_army_state_plan_settle_marches_picks_bucket_realm(void)
+{
+    raid_reset(2);
+    memset(settle_cells, 0, sizeof settle_cells);
+    memset(settle_terrain, 0, sizeof settle_terrain);
+    memset(s_slot_00567970, 0, sizeof s_slot_00567970);
+    engine_map_query_bind_cell_descriptors(settle_cells);
+    engine_path_field_bind_terrain(settle_terrain);
+    s_slot_0057c8cc = 1;
+
+    set_capital(1, 20, 20);                  /* realm 1 capital */
+    settle_set_cell(21, 20, 0x01, 0);        /* settle cell one east of capital */
+    settle_terrain[20 * ENGINE_PATH_FIELD_DIM + 20 + 0x42] = 1; /* path connects  */
+
+    /* Bucket row for record 3 (i-1 = 2), cursor slot 0 → realm 1. */
+    s_slot_00567970[2 * 0x10 + 0] = 1;
+
+    CREC(3)[A_STATE] = 3;
+    CREC(3)[A_ARRIVED_O]    = 1;              /* arrived → pick a fresh target  */
+    CREC(3)[A_ADJ_CURSOR_O] = 0;
+    CREC(3)[A_POS_COL_O] = 20; CREC(3)[A_POS_ROW_O] = 20;
+
+    engine_army_state_plan_settle_marches();
+
+    T_ASSERT_EQ_I(CREC(3)[A_RAID_DEST_O], 1);         /* targeted bucket realm 1 */
+    T_ASSERT_EQ_I(CREC(3)[A_MOVE_DEST_COL_O], 21);    /* settle cell col         */
+    T_ASSERT_EQ_I(CREC(3)[A_MOVE_DEST_ROW_O], 20);
+    T_ASSERT_EQ_I(CREC(3)[A_PATH_COL_O], 21);
+    T_ASSERT_EQ_I(CREC(3)[A_PATH_ROW_O], 20);
+    T_ASSERT_EQ_I(CREC(3)[A_ARRIVED_O], 0);           /* arrived cleared         */
+    T_ASSERT_EQ_I(CREC(3)[A_ADJ_CURSOR_O], 1);        /* cursor advanced once    */
+    T_ASSERT_EQ_I(CREC(3)[A_SUBSTATE], 1);            /* armed (route found)     */
+    return 0;
+}
+
+/* An arrived stack whose bucket row holds no in-range realm (only ids beyond the
+ * realm count) finds no target, keeps its arrived flag, and is not routed. */
+int test_engine_army_state_plan_settle_marches_no_valid_realm(void)
+{
+    raid_reset(2);
+    memset(settle_cells, 0, sizeof settle_cells);
+    memset(settle_terrain, 0, sizeof settle_terrain);
+    memset(s_slot_00567970, 0, sizeof s_slot_00567970);
+    engine_map_query_bind_cell_descriptors(settle_cells);
+    engine_path_field_bind_terrain(settle_terrain);
+
+    /* Every bucket slot names realm 9 > realm count 2 → rejected. */
+    for (int j = 0; j < 0x10; j++)
+        s_slot_00567970[2 * 0x10 + j] = 9;
+
+    CREC(3)[A_STATE] = 3;
+    CREC(3)[A_ARRIVED_O]    = 1;
+    CREC(3)[A_ADJ_CURSOR_O] = 0;
+
+    engine_army_state_plan_settle_marches();
+
+    T_ASSERT_EQ_I(CREC(3)[A_ARRIVED_O], 1);           /* still arrived (no pick) */
+    T_ASSERT_EQ_I(CREC(3)[A_SUBSTATE], 0);            /* not routed              */
+    T_ASSERT_EQ_I(CREC(3)[A_ADJ_CURSOR_O], 0);        /* 16 steps wrapped to 0   */
     return 0;
 }

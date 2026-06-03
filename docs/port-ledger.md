@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **685** (28.0%) — tested 644, ported 41
-- code bytes touched: **34.0%** (284,993 / 838,629 B)
-- unported: **1762**
+- touched: **687** (28.1%) — tested 646, ported 41
+- code bytes touched: **34.1%** (286,258 / 838,629 B)
+- unported: **1760**
 - orphan refs (in src/, not in function table): 7
 
-## tested (644) — ported + host unit suite
+## tested (646) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -190,8 +190,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x427990 | FUN_00427990 | 779 | audio.h, engine_combat.c, engine_combat.h |
 | 0x427d19 | FUN_00427d19 | 89 | audio.c, audio.h, main.c |
 | 0x427ed0 | FUN_00427ed0 | 311 | engine_map_query.c, engine_territory.c, game_init.c (+1) |
-| 0x428007 | FUN_00428007 | 113 | engine_combat.c, game_init.c, game_init.h |
+| 0x428007 | FUN_00428007 | 113 | engine_army_state.c, engine_army_state.h, engine_combat.c (+2) |
 | 0x428078 | FUN_00428078 | 113 | engine_combat.c, game_init.c, game_init.h |
+| 0x4280e9 | FUN_004280e9 | 904 | engine_army_state.c, engine_army_state.h, save_schema_globals.c |
 | 0x428471 | FUN_00428471 | 11 | engine_turn.c, engine_turn.h |
 | 0x42847c | FUN_0042847c | 82 | game_init.c, game_init.h |
 | 0x4284ce | FUN_004284ce | 1858 | engine_army_ai.c, engine_army_ai.h |
@@ -200,6 +201,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x429153 | FUN_00429153 | 96 | engine_category_buckets.h, engine_territory.c |
 | 0x4291b3 | FUN_004291b3 | 171 | engine_category_buckets.h, engine_territory.c |
 | 0x42925e | FUN_0042925e | 81 | engine_category_buckets.c, engine_category_buckets.h |
+| 0x4292af | FUN_004292af | 361 | engine_army_state.c |
 | 0x429418 | FUN_00429418 | 669 | engine_army_state.c, engine_army_state.h |
 | 0x4296b5 | FUN_004296b5 | 319 | engine_army_move.c, engine_army_move.h, game_init.c |
 | 0x4298c1 | FUN_004298c1 | 604 | engine_map_init.c, engine_map_init.h, game_init.c (+1) |
@@ -420,7 +422,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46c2de | FUN_0046c2de | 292 | engine_territory.c, engine_territory.h |
 | 0x46c4a3 | FUN_0046c4a3 | 277 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x46c5b8 | FUN_0046c5b8 | 258 | engine_territory.c, engine_territory.h |
-| 0x46cfbd | FUN_0046cfbd | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |
+| 0x46cfbd | FUN_0046cfbd | 371 | engine_army_state.c, engine_map_query.c, engine_map_query.h (+2) |
 | 0x46d130 | FUN_0046d130 | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |
 | 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
 | 0x46d42c | FUN_0046d42c | 456 | engine_combat.c, engine_combat.h |
