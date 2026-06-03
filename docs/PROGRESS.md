@@ -7,6 +7,53 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-04 — TURN DRIVER: phase-1 AI inits — ration ladder + difficulty grant + independent-realm driver (4 fns, host-tested)
+
+Landed both phase-1 AI inits the previous dispatch teed up, plus the second
+init's full callee chain.  Two commits, four functions, 2022 host tests green
+(ASAN/UBSAN), cross-build clean.  All offsets/strides/tables/call-targets
+r2-verified byte-exact; pure record/scalar bookkeeping over the shared save
+blocks (host tests + r2 transcription are the gate, no retail-diff target).  Two
+engine-quirks (#188/#189) captured at port time.
+
+- **Phase-1 init #1 — ration ladder + difficulty grant** (`FUN_0049d638` →
+  `engine_army_ai_set_rations_and_grant`, engine_army_ai.c).  Run once per player
+  slot by the strategic per-tick FSM (`FUN_0049a581` dispatch step 3; also
+  directly with player 0).  Pass 1 maps each owned realm's approval (+0xc) to its
+  ration/tax setting (+0xb9) through a threshold ladder — player 0 uses a fixed
+  8-step independent ladder, an AI player selects one of three ladders by the +4
+  selector int of its personality row (reuses the already-baked `g_ai_personality`
+  block).  Pass 2 (active / non-eliminated / level!=0 AI players only) credits a
+  difficulty cash grant from a newly-baked `g_ai_cash_grant` table (0xa0 B, retail
+  DAT_004dc1e0/DAT_004dc230) and tops up realms' population / stock / provisions.
+  Quirk #188: the grant scales **inversely** (higher AI level → bigger cash table
+  but level ≥ 5 gets cash only, no resource topups), and the selector-0 ration
+  ladder is dead code (no shipped personality selects it).
+
+- **Phase-1 init #2 — independent-realm AI driver** (`FUN_0049dfc6` →
+  `engine_army_ai_run_independent`; `FUN_004a3c67` →
+  `engine_army_ai_dispatch_independent_balanced`; `FUN_004a3ed3` →
+  `engine_army_ai_dispatch_independent_compact`, engine_army_ai.c).  Always called
+  with player 0; the sibling of `engine_army_ai_run_player` for realms with no
+  player.  Quirk #189: independent realms route the same +0x1fe dispatch field
+  through a **separate** table (0/1 → balanced/compact, no expansionist) and have
+  **no market reconcile** — the balanced variant self-funds a provisions shortfall
+  by crediting the realm's own gold pool (+0x1f4) +100 plus a self-funded buy
+  ladder; both size their cell reshape off the census-bucket sum rather than the
+  live cell total, and stamp strategy tag 0.  All helper calls reuse already-ported
+  engine_army_ai / engine_territory / engine_army_economy entry points.
+
+**Next on this thread:** the AI FSM `FUN_0049a581` (1039 B) still has ~13 unported
+brain-step callees.  The clean leaves now are `FUN_004a13a6` (849 B, FSM step 0xd
+— a diplomacy-proposal step that posts treaty/war messages 0xc0/0xc1 via
+`engine_event_queue_post`; needs the event-queue state + has-data + local-player
+threaded in, and is a good fit for the pure-function-diff harness given its
+event-ring side effects) and the trivial no-op `FUN_0049f96c` (11 B, step 8).
+The other steps (`FUN_004a277d`, `FUN_004a0c1d`, `FUN_0049e1bf`, `FUN_0049edc7`,
+`FUN_0049f977`, `FUN_004a0015`, `FUN_004a5667`, `FUN_0049e77d`) each still carry
+1-7 unported callees.  Once the FSM's leaves are down, `FUN_0049a581` and then the
+substate-0 dispatcher `0x49a010` can be assembled into `engine_tick`.
+
 ## 2026-06-04 — TURN DRIVER: phase-3/6 march planners — capital-march + settle-march (3 fns, host-tested)
 
 Landed the two phase-init planners the previous dispatch teed up as
