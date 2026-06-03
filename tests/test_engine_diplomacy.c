@@ -188,3 +188,38 @@ int test_engine_diplomacy_battle_adjust_war_final(void)
     T_ASSERT_EQ_U(SREC(2)[D_FEUD], 3);
     return 0;
 }
+
+/* --- FUN_004a16f7: should-engage predicate -------------------------------- */
+#define D_CONTACT  0x86
+
+/* Neutral defender (0) always engages; a genuinely different player engages. */
+int test_engine_diplomacy_should_engage_hostile(void)
+{
+    dp_reset();
+    SREC(2)[D_LORD] = 4;     /* 2's lord is 4, not 3 */
+    T_ASSERT_EQ_I(engine_diplomacy_should_engage(2, 0), 1);   /* neutral */
+    T_ASSERT_EQ_I(engine_diplomacy_should_engage(2, 3), 1);   /* different */
+    return 0;
+}
+
+/* Same owner never engages (a stack can't fight itself). */
+int test_engine_diplomacy_should_engage_self(void)
+{
+    dp_reset();
+    T_ASSERT_EQ_I(engine_diplomacy_should_engage(2, 2), 0);
+    return 0;
+}
+
+/* The aggressor never fights its own lord; the contact counter (+0x86) bumps. */
+int test_engine_diplomacy_should_engage_lord(void)
+{
+    dp_reset();
+    SREC(2)[D_LORD] = 3;                       /* 2 is a vassal of 3 */
+    SREC(2)[D_CONTACT + 3 * 0x10] = 7;
+
+    T_ASSERT_EQ_I(engine_diplomacy_should_engage(2, 3), 0);
+    T_ASSERT_EQ_U(SREC(2)[D_CONTACT + 3 * 0x10], 8);   /* counter bumped */
+    /* a different defender that is NOT the lord still engages */
+    T_ASSERT_EQ_I(engine_diplomacy_should_engage(2, 4), 1);
+    return 0;
+}

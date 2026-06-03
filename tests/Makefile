@@ -89,6 +89,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_pl8.c \
                    ../src/io_path.c \
                    ../src/engine_army_state.c \
+                   ../src/engine_army_move.c \
                    ../src/input_trace.c
 
 # Test files — each defines one or more `int test_<name>(void)`
@@ -152,6 +153,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_army_ai.c \
                    test_engine_combat.c \
                    test_engine_army_state.c \
+                   test_engine_army_move.c \
                    test_engine_diplomacy.c \
                    test_engine_turn.c \
                    test_save.c \

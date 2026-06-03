@@ -218,16 +218,46 @@ default NULL no-op).  Driver globals exposed: `g_army_state_index`
 The state-0 table slot is a no-op stub (never dispatched: state 0 disbands);
 slot 5 is null in retail (state 5 never occurs).
 
+### Destination-cell evaluator — DONE (2026-06-03)
+
+The bottom of the movement executor: the sub-tree that answers "what is in the
+cell my stack is about to enter?".  Ported as the new module
+`engine_army_move.c` (+ the leaf relations predicate in `engine_diplomacy.c`),
+host-tested (11 + 3 tests):
+
+| retail         | port (engine_army_move.c)         | role |
+|----------------|-----------------------------------|------|
+| `FUN_00466893` | `engine_army_move_eval_dir`       | pick the neighbour cell in compass direction 0..7 over the 64×64 / 8-byte grid (row stride 0x200; deltas ±8 col, ±0x200 row, ±0x1f8/0x208 diag), grid-edge-guard it, then classify |
+| `FUN_00466c3c` | `classify_cell` (static)          | latch the cell scratch (flags +1, region +7, terrain +0, offset, occupant +5 → `g_combat_active_terr`) and map the movement flags to a code (priority bit0→3, bit6→5, bit7→6, bit4→7, bit5→8, else 1); 0x80 suppressed on terrain 0x14 / the stack's +0x14e; occupied cell → `eval_occupied` |
+| `FUN_004658c1` | `eval_occupied` (static)          | resolve a collision: same owner → `engine_combat_merge_stack` (partner/eligibility guards); hostile (via the predicate) state-1/2 → `engine_combat_dispatch` (interactive → raise abort + bump waypoint; auto-resolved + self destroyed → 10); hostile state-4 garrison → relation hit + notify 0xa2/0xa1 + `engine_unit_remove`, code 10 |
+| `FUN_004a16f7` | `engine_diplomacy_should_engage`  | engage predicate: neutral/different owner → 1; self or own lord (+0x81) → 0 (lord case bumps the +0x86 contact counter) |
+
+Outcome codes returned up to the executor: 1 open · 3 rough-base · 5 combat ·
+6 region-event · 7 special · 8 impassable · 10 arrival · 0 grid edge.  Cell
+grid bound via `engine_army_move_bind_cells` in `game_init`; the cell scratch
+(`g_army_move_cell_flags/region/terrain/off`, retail DAT_0050a4a4/49c/49d/4a0)
+is exposed for the executor.  The live combat-engage and merge *invocations*
+are exercised by the combat module's own tests and will be diffed against
+retail once the executor lands; this chip's tests cover the decision routing.
+
 ### Frontier (next chips)
 
-1. **Movement-step executor `FUN_00465d28`** (1441 B) — advances the occupant
-   one step along its path (`FUN_0046f434`, ported) and dispatches the result
-   code (`FUN_0046634d`, unported) into arrival / blocked / combat-engage
-   (5 → `FUN_004296b5` + `FUN_004a6c68`) / region-event (6 → `FUN_0046873f` /
-   `FUN_004686a0`) / (7 → `FUN_00468ae2`).  Deep: 7 unported callees, the
-   real "armies move on the strategic map" engine.  Its own multi-chip arc.
-   Bind it via `engine_army_state_bind_move_fn` once ported.
-2. **Wire `engine_army_state_run` into `engine_tick`'s SP per-tick path**
+1. **Result classifier `FUN_0046634d`** (1002 B) — the spine between the path
+   step and the outcome dispatch.  It runs a stall/retry hysteresis counter,
+   then (on the live branch) calls the now-ported step-result evaluator
+   `FUN_00466893` and post-processes its code.  Its only remaining unported
+   sub-callees are `FUN_0046673c` (343 B) and `FUN_00466d84` (995 B).  Land
+   these three next.
+2. **Movement-step executor `FUN_00465d28`** (1441 B) — advances the occupant
+   one step along its path (`FUN_0046f434`, ported) and dispatches the
+   classifier's result into arrival / blocked / combat-engage (5 →
+   `FUN_004296b5` + `FUN_004a6c68`) / region-event (6 → `FUN_0046873f` /
+   `FUN_004686a0`) / (7 → `FUN_00468ae2`).  The destination-cell evaluator it
+   leans on (`FUN_00466893` / `466c3c` / `4658c1` / `4a16f7`) is now **ported**
+   (see above); what remains is the classifier (chip 1) plus the four
+   region/combat event callees.  Bind it via `engine_army_state_bind_move_fn`
+   once ported.
+3. **Wire `engine_army_state_run` into `engine_tick`'s SP per-tick path**
    (engine.c, beside the existing `FUN_0040490d`/`FUN_0049a010` arm) + bind the
    rebellion seam (`engine_realm_bind_rebellion_fn`) to
    `engine_combat_spawn_rebellion` — deferred from this chip because it needs

@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **645** (26.4%) — tested 602, ported 43
-- code bytes touched: **31.6%** (265,238 / 838,629 B)
-- unported: **1802**
+- touched: **649** (26.5%) — tested 606, ported 43
+- code bytes touched: **31.9%** (267,703 / 838,629 B)
+- unported: **1798**
 - orphan refs (in src/, not in function table): 7
 
-## tested (602) — ported + host unit suite
+## tested (606) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -370,7 +370,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x465486 | FUN_00465486 | 412 | engine_army_state.c |
 | 0x465622 | FUN_00465622 | 319 | engine_army_state.c |
 | 0x465761 | FUN_00465761 | 319 | engine_army_state.c |
-| 0x465d28 | FUN_00465d28 | 1441 | engine_army_state.c, engine_army_state.h |
+| 0x4658c1 | FUN_004658c1 | 1112 | engine_army_move.c, engine_army_move.h |
+| 0x465d28 | FUN_00465d28 | 1441 | engine_army_move.h, engine_army_state.c, engine_army_state.h |
+| 0x466893 | FUN_00466893 | 900 | engine_army_move.c, engine_army_move.h, game_init.c |
+| 0x466c3c | FUN_00466c3c | 328 | engine_army_move.c, engine_army_move.h |
 | 0x46733c | FUN_0046733c | 124 | engine_combat.c, engine_map_query.c, engine_map_query.h |
 | 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c, engine_territory.h |
 | 0x467770 | FUN_00467770 | 525 | engine_territory.c, engine_territory.h, engine_title_render.c (+3) |
@@ -424,7 +427,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46eb09 | FUN_0046eb09 | 54 | game_init.c, game_init.h |
 | 0x46ec6e | FUN_0046ec6e | 369 | engine_combat.c, engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x46eddf | FUN_0046eddf | 349 | engine_combat.c, engine_realm_upkeep.c, engine_realm_upkeep.h |
-| 0x46f0a9 | FUN_0046f0a9 | 71 | engine_army_state.c, engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x46f0a9 | FUN_0046f0a9 | 71 | engine_army_move.c, engine_army_state.c, engine_realm_upkeep.c (+1) |
 | 0x46f1dc | FUN_0046f1dc | 67 | game_init.c, game_init.h |
 | 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h |
 | 0x46f3cd | FUN_0046f3cd | 78 | engine_map_init.c, game_init.c, game_init.h |
@@ -438,7 +441,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x472ad0 | FUN_00472ad0 | 16 | engine_event_queue.c, engine_event_queue.h, game_init.c |
 | 0x472ae0 | FUN_00472ae0 | 96 | engine_event_queue.c, engine_event_queue.h |
 | 0x472b40 | FUN_00472b40 | 133 | engine_event_queue.c, engine_event_queue.h |
-| 0x472bc5 | FUN_00472bc5 | 560 | engine_diplomacy.c, engine_event_queue.c, engine_event_queue.h (+4) |
+| 0x472bc5 | FUN_00472bc5 | 560 | engine_army_move.c, engine_diplomacy.c, engine_event_queue.c (+5) |
 | 0x472df5 | FUN_00472df5 | 81 | engine_event_queue.c, engine_event_queue.h |
 | 0x47ed34 | FUN_0047ed34 | 103 | engine.c, engine_camera.c, engine_camera.h |
 | 0x48ee46 | FUN_0048ee46 | 87 | engine_tile.c, engine_tile.h |
@@ -476,6 +479,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49dd01 | FUN_0049dd01 | 583 | engine_army_ai.c, engine_army_ai.h, engine_territory.c (+1) |
 | 0x49df48 | FUN_0049df48 | 126 | engine_combat.c |
 | 0x49e39b | FUN_0049e39b | 994 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a16f7 | FUN_004a16f7 | 125 | engine_army_move.h, engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a1a54 | FUN_004a1a54 | 213 | engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a1c53 | FUN_004a1c53 | 537 | game_init.c, game_init.h |
 | 0x4a1e6c | FUN_004a1e6c | 117 | engine_roster.c, engine_roster.h, game_init.c |

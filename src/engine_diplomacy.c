@@ -25,6 +25,7 @@
 #define D_LORD        0x81   /* this player's lord/vassal id (u8)            */
 #define D_REL         0x84   /* relation toward other (i8; + other*0x10)     */
 #define D_TREATY      0x85   /* treaty flag toward other (u8; + other*0x10)  */
+#define D_CONTACT     0x86   /* lord-contact counter (u8; + other*0x10)      */
 #define D_WARCNT      0x87   /* war-declaration escalation (u8; + other*0x10)*/
 #define D_WARFLAG     0x88   /* war-declared flag (u8; + other*0x10)         */
 #define D_FEUD        0xeb   /* primary feud target (u8)                     */
@@ -142,4 +143,23 @@ void engine_diplomacy_battle_adjust(int p1, int p2, int amount,
             mood_cycle_bump(s1);
         }
     }
+}
+
+/* Port of FUN_004a16f7. */
+int engine_diplomacy_should_engage(int aggressor, int defender)
+{
+    if (defender == 0)
+        return 1;                              /* neutral / unowned cell → engage */
+
+    uint8_t *s = STRAT_REC(aggressor);
+    if (s[D_LORD] == defender) {
+        /* Defender is the aggressor's lord: never fight him; just record the
+         * contact (per-lord counter at +0x86, indexed by defender). */
+        s[D_CONTACT + defender * 0x10]++;
+        return 0;
+    }
+    if (aggressor == defender)
+        return 0;                              /* same stack owner → no fight */
+
+    return 1;                                  /* different player → engage */
 }

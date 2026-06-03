@@ -49,4 +49,13 @@ void engine_diplomacy_broadcast_penalty(int target, int amount);
 void engine_diplomacy_battle_adjust(int p1, int p2, int amount,
                                     engine_event_queue_state_t *evq);
 
+/* Port of FUN_004a16f7 @ 0x4a16f7 (125 B, __cdecl int(uint,uint)).  Decide
+ * whether army owner `aggressor` engages a stack/region owned by `defender`
+ * when they collide on the strategic map.  Returns 1 (engage) when the defender
+ * is neutral (0) or a genuinely different player, 0 when the defender is the
+ * aggressor itself or the aggressor's own lord (+0x81).  In the lord case it
+ * also bumps the per-lord contact counter (+0x86 + defender*0x10).  Pure: reads
+ * only the aggressor's strategic record. */
+int engine_diplomacy_should_engage(int aggressor, int defender);
+
 #endif /* OPENLORDS2_ENGINE_DIPLOMACY_H */

@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 602,
+  "tested": 606,
   "ported": 43,
-  "unported": 1802,
+  "unported": 1798,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 645,
-  "pct_touched": 26.4,
-  "pct_tested": 24.6,
+  "touched": 649,
+  "pct_touched": 26.5,
+  "pct_tested": 24.8,
   "bytes_total": 838629,
-  "bytes_touched": 265238,
-  "pct_bytes_touched": 31.6
+  "bytes_touched": 267703,
+  "pct_bytes_touched": 31.9
  },
  "orphan_refs": [
   "0x004148",
@@ -11523,8 +11523,11 @@
    "name": "FUN_004658c1",
    "size": 1112,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move.c",
+    "src/engine_army_move.h"
+   ]
   },
   {
    "va": "0x465d28",
@@ -11533,6 +11536,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_move.h",
     "src/engine_army_state.c",
     "src/engine_army_state.h"
    ]
@@ -11566,16 +11570,23 @@
    "name": "FUN_00466893",
    "size": 900,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move.c",
+    "src/engine_army_move.h",
+    "src/game_init.c"
+   ]
   },
   {
    "va": "0x466c3c",
    "name": "FUN_00466c3c",
    "size": 328,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move.c",
+    "src/engine_army_move.h"
+   ]
   },
   {
    "va": "0x466d84",
@@ -12620,6 +12631,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_move.c",
     "src/engine_army_state.c",
     "src/engine_realm_upkeep.c",
     "src/engine_realm_upkeep.h"
@@ -12968,6 +12980,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_move.c",
     "src/engine_diplomacy.c",
     "src/engine_event_queue.c",
     "src/engine_event_queue.h",
@@ -16155,8 +16168,12 @@
    "name": "FUN_004a16f7",
    "size": 125,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move.h",
+    "src/engine_diplomacy.c",
+    "src/engine_diplomacy.h"
+   ]
   },
   {
    "va": "0x4a1774",

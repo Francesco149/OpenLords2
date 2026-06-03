@@ -1927,6 +1927,17 @@ struct test_case {
     X(engine_army_state_idle_sets_region) \
     X(engine_army_state_move_seam_invoked) \
     X(engine_army_state_abort_breaks_walk) \
+    X(engine_army_move_dir_offsets) \
+    X(engine_army_move_dir_edges) \
+    X(engine_army_move_classify_flags) \
+    X(engine_army_move_classify_scratch) \
+    X(engine_army_move_classify_event_suppress) \
+    X(engine_army_move_self_idle_no_interact) \
+    X(engine_army_move_other_idle_no_interact) \
+    X(engine_army_move_lord_no_engage) \
+    X(engine_army_move_merge_partner_guard) \
+    X(engine_army_move_merge_eligibility_guard) \
+    X(engine_army_move_overrun_garrison) \
     X(engine_diplomacy_clear_treaty) \
     X(engine_diplomacy_broadcast_penalty) \
     X(engine_diplomacy_battle_adjust_guards) \
@@ -1934,6 +1945,9 @@ struct test_case {
     X(engine_diplomacy_battle_adjust_betrayal) \
     X(engine_diplomacy_battle_adjust_war_escalate) \
     X(engine_diplomacy_battle_adjust_war_final) \
+    X(engine_diplomacy_should_engage_hostile) \
+    X(engine_diplomacy_should_engage_self) \
+    X(engine_diplomacy_should_engage_lord) \
     \
     X(army_ai_seed_workforce_ratios) \
     X(army_ai_advance_tier_nonpositive_noop) \
