@@ -6765,3 +6765,42 @@ maintaining those globals (the same dodge `engine_combat_find_capital_defender`
 uses for the loop-counter reuse, quirk #130).  The distance itself is retail's
 `FUN_00404ead` (`engine_path_manhattan_distance`); only its `|dx|+|dy|` return is
 consumed here (the dx/dy side-effect globals go unread), so it is inlined.
+
+## 193 — AI brain step 0xa (attack launch) raises its force from the RICHEST realm but marches it at an enemy realm near that muster point, throttled by a personality-column cooldown
+
+The AI offensive (`FUN_004a0015`, `engine_army_ai_launch_attack`, dispatch step
+0xa) is a multi-stage pipeline assembled from a 9-function chain:
+
+1. **Throttle.**  A per-player cooldown (`+0x15a`) ticks down each turn; the step
+   does nothing else until it hits 0.
+2. **Pick the foe.**  `most_hostile_player` (`FUN_004a0309`) returns a pinned war
+   target (`+0xeb`) or the active slot this player's relation (`+0x84`) is most
+   negative toward, requiring < −10.
+3. **Pick the target realm.**  `select_target` (`FUN_004a03f2`) scans the foe's
+   realms (forced-owner mode) for the best one near the muster realm — scored by
+   chebyshev distance + a defended-keep penalty − stock/provision wealth bonuses
+   — and stores it in `+0x4b`.
+4. **Gate on the muster realm.**  The force is raised from the player's **richest**
+   realm (`+0xe5`, chosen earlier by `pick_muster_realms` `FUN_004a0aaa`), but
+   only if that realm is prosperous: provision `+0x24` ≥ 400 **and** approval
+   `+0xc` ≥ 25.
+5. **Raise + order the march.**  `raise_region_unit` (`FUN_004a5003`) musters a
+   ~50-head field unit; the new occupant is stamped with order code 7 (`+0x1a`),
+   pointed at the deploy cell `find_deploy_cell` (`FUN_004a689d`) picks inside the
+   target realm (`+0x16`/`+0x17`), tagged with the target realm (`+0x151`) and its
+   placed flag cleared (`+0x150`).
+6. **Reload the cooldown** from the personality row at `+0x74` (6/10/5/10 by
+   personality) — the **same per-personality table** whose `+0x50..+0x64` columns
+   hold the build-order tags of quirk #191.  So the personality block is not just
+   economy tuning: it encodes build orders *and* attack cadence as interleaved
+   columns.
+
+The split in step 4 is the notable design quirk: the AI does **not** attack from
+the realm nearest the enemy — it always musters from its wealthiest realm and
+accepts whatever march distance that implies, which is exactly why
+`select_target` scores candidates from the muster realm's capital rather than a
+frontier.
+
+(Caveat for future porters: the Ghidra decompile of `pick_muster_realms`
+`FUN_004a0aaa` transposes its two score variables — the r2 ground truth has the
+stockpile-below-provision realm feeding the `+0xe6` score, not `+0xe5`.)

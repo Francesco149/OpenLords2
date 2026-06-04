@@ -7,6 +7,59 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-04 — TURN DRIVER: AI brain FSM — build orders (step 0xc) + the COMPLETE attack-launch chain (step 0xa, 9 fns) (10 fns, host-tested)
+
+Cleared two whole dispatch steps of the per-realm AI brain FSM `FUN_0049a581`:
+step 0xc (build orders) and the entire step-0xa (attack launch) 9-function chain
+— bottom-up, leaf by leaf, each its own commit.  Ten functions across
+`engine_army_ai.c`, `engine_combat.c` and `engine_realm.c`; 2078 host tests green
+(ASAN/UBSAN), cross-build clean every commit.  All offsets/tables/thresholds/
+call-targets r2-verified byte-exact.  Quirks #191/#192/#193 captured at port time.
+
+- **Step 0xc — build orders** (`FUN_0049e77d` → `engine_army_ai_run_build_orders`
+  + leaf `FUN_0049ed13` → `engine_army_ai_mark_build_affordable`).  Rotates each
+  owned realm's build tag through the personality build columns (offsets
+  +0x50..+0x64 *inside* `g_ai_personality`, selected by the per-player +0x6c
+  counter cycling 0..9 over six columns — quirk #191), refreshes an affordability
+  flag against the six-entry cost table `DAT_004d8990`, lights the four
+  stride-0x18 workforce job-bucket gates (subject to the secondary-settlement
+  filter), then runs the workforce allocator + economy orchestrator per realm.
+
+- **Step 0xa — attack launch** (`FUN_004a0015` → `engine_army_ai_launch_attack`),
+  assembled from its full chain (quirk #193 documents the pipeline):
+  - `FUN_004a5003` → `engine_combat_raise_region_unit` (raise a ~50-head field
+    unit at the muster-cost price; sibling of muster_defender mode 0).
+  - `FUN_004a689d` → `engine_combat_find_deploy_cell` (nearest deployable owned
+    overworld cell to an army, capital fallback; out-params replace the
+    find-nearest scratch — quirk #192 notes cell (0,0) is unselectable).
+  - `FUN_004a0917` → `engine_combat_pick_best_unit` (best idle placed friendly
+    unit by home-region affinity + ⅛ strength); promoted the static
+    `coalition_armies_adjacent` to public `engine_realm_armies_adjacent`.
+  - `FUN_004a07f2` → `engine_combat_find_garrison_realm` (first owned keep with
+    spare capacity for a unit; reuses the imaged `k_garrison_cap`).
+  - `FUN_004a0aaa` → `engine_army_ai_pick_muster_realms` (score owned realms,
+    record the richest into +0xe5 — the muster source; r2 ground truth, the
+    Ghidra decompile transposes the two score vars).
+  - `FUN_004a0649` → `engine_army_ai_pick_attack_target` and `FUN_004a03f2` →
+    `engine_army_ai_select_target` (best adjacent enemy realm by distance −
+    wealth; the latter stores the choice in +0x4b and adds forced-owner / owner-
+    gate filter modes).
+  - `FUN_004a0309` → `engine_army_ai_most_hostile_player` (pinned target or the
+    most-negative relation below −10).
+  - The body ties it together: cooldown gate (+0x15a) → most-hostile foe → target
+    realm near the muster realm → prosperity gate (provision ≥ 400, approval ≥ 25)
+    → raise force + march order (+0x1a = 7) + deploy cell + cooldown reload from
+    the personality column +0x74.  A full end-to-end integration test drives the
+    spawn→march in `test_engine_combat.c`.
+
+**Next on this thread:** `FUN_0049a581`'s remaining step callees, each still
+carrying unported leaves: step 1 (`FUN_004a277d`, 7 callees), step 6
+(`FUN_0049edc7`, sole callee `FUN_00436d02` 768 B w/ 7 leaves), step 9
+(`FUN_0049f977`, 7 callees), step 0xb (`FUN_004a5667`, 4 callees incl.
+`FUN_004a58f4` which reuses `engine_combat_find_deploy_cell`).  Steps 2/3/4/5/8/
+0xa/0xc/0xd are now ported.  Once the ladder is down, `FUN_0049a581` and then the
+substate-0 dispatcher `0x49a010` assemble into `engine_tick`.
+
 ## 2026-06-04 — TURN DRIVER: AI brain FSM — diplomacy decision (step 2) + proposals + buy-request seed + primitives (7 fns, host-tested)
 
 Worked down the AI per-realm brain FSM `FUN_0049a581` (the substate dispatch the
