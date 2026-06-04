@@ -1772,6 +1772,93 @@ spawn:
     return engine_territory_current_slot();         /* DAT_0052afe0 */
 }
 
+/* Port of FUN_004a5003 (171 B, __cdecl int(int region)).  Raise a field unit
+ * from `region`, sized to ~50 head: percent_div(0x32, provision) gives a
+ * percentage index into the muster-cost curve, percent_of converts it back to a
+ * head count, then prime the region owner's muster pool and spawn the unit at
+ * the curve's supply cost.  Returns the new occupant index (DAT_0052afe0) on
+ * success, else 0.  AI brain step 0xa (FUN_004a0015) raises an offensive force
+ * this way before ordering its march; the sibling of muster_defender mode 0 with
+ * the size fixed at ~50 head and no minimum-provision gate. */
+int engine_combat_raise_region_unit(int region)
+{
+    g_player_strategic_352[5] = 0;                  /* DAT_0057bf05 = 0 */
+
+    int owner = REGREC(region)[A_RACE];
+    int prov  = rd_i32(REGREC(region), A_PROV24);
+
+    int     pct    = engine_math_percent_div(0x32, prov);
+    int32_t supply = k_muster_cost[pct];            /* DAT_004d8778[pct] */
+    int     sized  = engine_math_percent_of(prov, pct);
+    engine_combat_prime_muster(region, sized);
+
+    if (!engine_combat_spawn_unit(owner, region, 0, supply))
+        return 0;
+    return engine_territory_current_slot();         /* DAT_0052afe0 */
+}
+
+/* Overworld cell fields (g_overworld_map, 8 bytes/cell): +0 terrain, +1 flag
+ * bits (bit 0x20 = deployable), +7 owning region key. */
+#define CELL_TERRAIN          0
+#define CELL_FLAGS            1
+#define CELL_REGION           7
+#define CELL_FLAG_DEPLOYABLE  0x20
+
+/* Port of FUN_004a689d (399 B, __cdecl void(int army, uint region)).  Choose the
+ * deployment cell for `army`'s next march: scan the 0x40×0x40 overworld grid for
+ * a cell owned by `region` (cell +7), marked deployable (cell +1 bit 0x20), with
+ * passable terrain (cell +0 in [3, 0x16]), nearest by Manhattan distance to the
+ * army's current seat (territory record +0xa/+0xb).  On no match, fall back to
+ * the region's capital cell (+0x6c/+0x6d).  Retail leaves the chosen col/row in
+ * the find-nearest scratch DAT_00569570/78, which both callers (step 0xa and
+ * FUN_004a58f4) copy straight into the army's destination fields; we return them
+ * via out-params instead — the scratch globals are never read between the call
+ * and that copy, mirroring how engine_combat_find_capital_defender avoids
+ * clobbering them.
+ *
+ * NB: a match at cell (0,0) has byte offset 0, indistinguishable from the
+ * "no match" sentinel, so the grid origin can never be selected — retail's
+ * behaviour.  retail computes the distance via FUN_00404ead
+ * (engine_path_manhattan_distance); only its |dx|+|dy| return is consumed here
+ * (the dx/dy side-effect globals go unread), so it is computed inline. */
+void engine_combat_find_deploy_cell(int army, int region, int *out_col, int *out_row)
+{
+    int army_x = (int8_t)CREC(army)[C_COL];
+    int army_y = (int8_t)CREC(army)[C_ROW];
+
+    int best_dist = 1000;
+    int best_ofs  = 0;
+    int ofs = 0;
+    for (int row = 0; row < 0x40; row++) {
+        for (int col = 0; col < 0x40; col++, ofs += 8) {
+            if ((int)g_overworld_map[ofs + CELL_REGION] != region)
+                continue;
+            if ((g_overworld_map[ofs + CELL_FLAGS] & CELL_FLAG_DEPLOYABLE) == 0)
+                continue;
+            int terrain = g_overworld_map[ofs + CELL_TERRAIN];
+            if (terrain < 3 || terrain > 0x16)
+                continue;
+
+            int dx = army_x - col; if (dx < 0) dx = -dx;
+            int dy = army_y - row; if (dy < 0) dy = -dy;
+            int dist = dx + dy;
+            if (dist < best_dist) {
+                best_dist = dist;
+                best_ofs  = ofs;
+            }
+        }
+    }
+
+    if (best_ofs != 0) {
+        int idx = best_ofs >> 3;        /* byte offset → cell index (always ≥ 0) */
+        *out_col = idx & 0x3f;
+        *out_row = idx >> 6;
+    } else {
+        *out_col = REGREC(region)[R_CAP_COL];
+        *out_row = REGREC(region)[R_CAP_ROW];
+    }
+}
+
 /* Region keep level lives at the same g_per_army_768 +0x1c0 field the spawn
  * cluster reads (A_KEEPLVL); name it for the region context here. */
 #define R_KEEPLVL   0x1c0

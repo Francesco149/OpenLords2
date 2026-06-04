@@ -6743,3 +6743,25 @@ applies a per-bucket filter that drops buckets 1/2 outright and gates bucket 0 o
 build-draw-hi (`+0x1d4 > 0`) and bucket 3 on build-draw-lo (`+0x1d0 > 0`).  The
 third pass then runs the workforce allocator (`FUN_0044f6e7`) and per-realm
 economy orchestrator (`FUN_004485a5`) over the now-enabled gates.
+
+## 192 — the AI deploy-cell finder (`FUN_004a689d`) can never select grid cell (0,0); it reuses the byte offset 0 as its "no match" sentinel
+
+`FUN_004a689d` (`engine_combat_find_deploy_cell`) scans the 0x40×0x40 overworld
+grid for the cell owned by a region (`+0x07`), marked deployable (`+0x01` bit
+0x20), with passable terrain (`+0x00` in `[3, 0x16]`), nearest by Manhattan
+distance to the army's seat — tracking the winner as its **byte offset** into
+`g_overworld_map` (cell index × 8).  The "no candidate yet" sentinel is offset
+`0`, which is also the legitimate offset of grid cell `(0,0)`.  So a match at the
+grid origin is indistinguishable from no match, and the function falls through to
+its capital-cell fallback (region `+0x6c`/`+0x6d`) instead.  Cell (0,0) is the
+top-left corner — effectively never a real deployment target — so the collision
+is benign, but it is a true retail behaviour the port reproduces.
+
+Both callers (brain step 0xa `FUN_004a0015` and `FUN_004a58f4`) read the chosen
+col/row out of engine_path's find-nearest scratch `DAT_00569570/78` immediately
+after the call and copy them into the army's destination fields; nothing reads
+the scratch in between, so the port returns the pair via out-params rather than
+maintaining those globals (the same dodge `engine_combat_find_capital_defender`
+uses for the loop-counter reuse, quirk #130).  The distance itself is retail's
+`FUN_00404ead` (`engine_path_manhattan_distance`); only its `|dx|+|dy|` return is
+consumed here (the dx/dy side-effect globals go unread), so it is inlined.

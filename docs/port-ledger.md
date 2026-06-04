@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **701** (28.6%) — tested 660, ported 41
-- code bytes touched: **35.3%** (295,716 / 838,629 B)
-- unported: **1746**
+- touched: **705** (28.8%) — tested 664, ported 41
+- code bytes touched: **35.4%** (296,924 / 838,629 B)
+- unported: **1742**
 - orphan refs (in src/, not in function table): 7
 
-## tested (660) — ported + host unit suite
+## tested (664) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -100,7 +100,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404dc1 | FUN_00404dc1 | 66 | engine_army_state.c, engine_combat.c, engine_input.c (+3) |
 | 0x404e03 | FUN_00404e03 | 72 | engine_army_economy.c, engine_math.h |
 | 0x404e4b | FUN_00404e4b | 98 | engine_math.h |
-| 0x404ead | FUN_00404ead | 159 | engine_math.h, engine_path.h |
+| 0x404ead | FUN_00404ead | 159 | engine_combat.c, engine_math.h, engine_path.h |
 | 0x404f4c | FUN_00404f4c | 180 | engine_path.h, engine_territory.c |
 | 0x4050c0 | FUN_004050c0 | 53 | engine_map_scene.c, engine_map_scene.h, engine_screen_strat.c (+1) |
 | 0x4050f6 | FUN_004050f6 | 376 | engine_map_scene.c, engine_map_scene.h, main.c |
@@ -509,6 +509,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49e77d | FUN_0049e77d | 1430 | engine_army_ai.c, engine_army_ai.h |
 | 0x49ed13 | FUN_0049ed13 | 180 | engine_army_ai.c, engine_army_ai.h |
 | 0x49f96c | FUN_0049f96c | 11 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a0015 | FUN_004a0015 | 469 | engine_combat.c |
 | 0x4a0c1d | FUN_004a0c1d | 1572 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a1241 | FUN_004a1241 | 357 | engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a13a6 | FUN_004a13a6 | 849 | engine_army_ai.c, engine_army_ai.h |
@@ -533,8 +534,11 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a4c41 | FUN_004a4c41 | 311 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a4e3d | FUN_004a4e3d | 286 | engine_army_state.c, engine_army_state.h |
 | 0x4a4f5b | FUN_004a4f5b | 168 | engine_army_state.c, engine_army_state.h |
+| 0x4a5003 | FUN_004a5003 | 171 | engine_combat.c, engine_combat.h |
 | 0x4a50ae | FUN_004a50ae | 731 | engine_combat.c, engine_combat.h |
 | 0x4a551b | FUN_004a551b | 332 | engine_combat.c, engine_combat.h |
+| 0x4a58f4 | FUN_004a58f4 | 169 | engine_combat.c |
+| 0x4a689d | FUN_004a689d | 399 | engine_combat.c, engine_combat.h |
 | 0x4a6a30 | FUN_004a6a30 | 568 | engine_combat.c, engine_combat.h |
 | 0x4a6c68 | FUN_004a6c68 | 1264 | engine_army_move.c, engine_army_move.h, engine_combat.c (+2) |
 | 0x4a7158 | FUN_004a7158 | 402 | engine_combat.c, engine_combat.h |

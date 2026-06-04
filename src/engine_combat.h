@@ -134,6 +134,20 @@ void engine_combat_prime_muster(int region, int32_t count);
  * (FUN_004a6c68) drives it to materialise a region's auto-defender. */
 int engine_combat_muster_defender(int region, int pct, int min_prov, int mode);
 
+/* Port of FUN_004a5003 (171 B).  Raise a ~50-head field unit from `region` at
+ * the muster-cost supply price (the sibling of muster_defender mode 0 with a
+ * fixed size and no min-provision gate).  Returns the new occupant index
+ * (DAT_0052afe0) on success, else 0.  AI brain step 0xa raises its offensive
+ * force this way. */
+int engine_combat_raise_region_unit(int region);
+
+/* Port of FUN_004a689d (399 B).  Pick `army`'s next deployment cell: the nearest
+ * deployable, passable cell owned by `region` to the army's seat, or the
+ * region's capital cell on no match.  Writes the chosen column/row through
+ * `out_col`/`out_row` (retail leaves them in the find-nearest scratch
+ * DAT_00569570/78, which callers copy into the army's destination fields). */
+void engine_combat_find_deploy_cell(int army, int region, int *out_col, int *out_row);
+
 /* Port of FUN_004a80db @ 0x4a80db (478 B) — post-battle supply/condition
  * recompute for a surviving occupant.  For each of 3 supply groups, express the
  * present stock as a percent of (rate × count) clamped to 100, and store the

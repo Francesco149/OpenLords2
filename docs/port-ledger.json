@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 660,
+  "tested": 664,
   "ported": 41,
-  "unported": 1746,
+  "unported": 1742,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 701,
-  "pct_touched": 28.6,
-  "pct_tested": 27.0,
+  "touched": 705,
+  "pct_touched": 28.8,
+  "pct_tested": 27.1,
   "bytes_total": 838629,
-  "bytes_touched": 295716,
-  "pct_bytes_touched": 35.3
+  "bytes_touched": 296924,
+  "pct_bytes_touched": 35.4
  },
  "orphan_refs": [
   "0x004148",
@@ -1012,6 +1012,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_combat.c",
     "src/engine_math.h",
     "src/engine_path.h"
    ]
@@ -16188,8 +16189,10 @@
    "name": "FUN_004a0015",
    "size": 469,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c"
+   ]
   },
   {
    "va": "0x4a01ea",
@@ -16607,8 +16610,11 @@
    "name": "FUN_004a5003",
    "size": 171,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x4a50ae",
@@ -16669,8 +16675,10 @@
    "name": "FUN_004a58f4",
    "size": 169,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c"
+   ]
   },
   {
    "va": "0x4a599d",
@@ -16741,8 +16749,11 @@
    "name": "FUN_004a689d",
    "size": 399,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x4a6a30",

@@ -1859,3 +1859,102 @@ int test_engine_combat_merc_rotate_reverse_map(void)
     T_ASSERT_EQ_I(MR_REC(2)[0x1ad], 0);
     return 0;
 }
+
+/* ---- raise region unit (FUN_004a5003) ----------------------------------- *
+ * A ~50-head field unit mustered from a region: provision 500 → pct = 5000/500
+ * = 10 → sized = percent_of(500, 10) = 50 head, primed into the pool and spawned
+ * at the muster-cost price.  Same spawn path as muster_defender mode 0. */
+int test_engine_combat_raise_region_unit_spawns(void)
+{
+    spawn_reset();
+    memset(g_spawn_cells, 0, sizeof g_spawn_cells);
+    g_spawn_cells[(20 * SPAWN_GRID + 20) * SPAWN_STRIDE + 1] = 1;   /* free seat cell */
+    engine_map_query_bind_cell_descriptors(g_spawn_cells);
+    engine_territory_bind_cells(g_spawn_cells);
+    engine_territory_bind_records(g_per_territory_420);
+
+    int region = 2, owner = 2;
+    R_REC(region)[SPAWN_COORD_OFF + region * 3]     = 20;   /* seat col */
+    R_REC(region)[SPAWN_COORD_OFF + region * 3 + 1] = 20;   /* seat row */
+    R_REC(region)[0x05] = owner;                            /* region owner */
+    I32(R_REC(region), 0x24) = 500;                         /* provision → pct 10 */
+    I32(R_REC(region), 0x38) = 500;
+    P_REC(owner)[0x05] = 1;                                 /* owner active */
+
+    int ret = engine_combat_raise_region_unit(region);
+    T_ASSERT(ret != 0);
+    T_ASSERT_EQ_I(ret, engine_territory_current_slot());
+    T_ASSERT_EQ_I(I32(CREC(ret), C_VALUE), 50);            /* sized 50 head */
+
+    engine_map_query_bind_cell_descriptors(NULL);
+    engine_territory_bind_cells(NULL);
+    engine_territory_bind_records(NULL);
+    return 0;
+}
+
+/* ---- find deploy cell (FUN_004a689d) ------------------------------------- */
+
+/* Place a deployable, passable overworld cell owned by `region`. */
+static void deploy_cell_set(int col, int row, int region)
+{
+    int o = (row * 0x40 + col) * 8;
+    g_overworld_map[o + 0] = 10;            /* terrain in [3,0x16] */
+    g_overworld_map[o + 1] = 0x20;          /* deployable flag bit */
+    g_overworld_map[o + 7] = (uint8_t)region;
+}
+
+/* Nearest qualifying cell to the army's seat is returned (col, row). */
+int test_engine_combat_find_deploy_cell_nearest(void)
+{
+    memset(g_overworld_map, 0, sizeof g_overworld_map);
+    int army = 2, region = 3;
+    CREC(army)[0x0a] = 10;                 /* army seat */
+    CREC(army)[0x0b] = 10;
+
+    deploy_cell_set(12, 10, region);        /* dist 2 — nearer */
+    deploy_cell_set(20, 20, region);        /* dist 20 — farther */
+
+    int col = -1, row = -1;
+    engine_combat_find_deploy_cell(army, region, &col, &row);
+    T_ASSERT_EQ_I(col, 12);
+    T_ASSERT_EQ_I(row, 10);
+    return 0;
+}
+
+/* A cell owned by a different region, or non-deployable, is ignored. */
+int test_engine_combat_find_deploy_cell_filters(void)
+{
+    memset(g_overworld_map, 0, sizeof g_overworld_map);
+    int army = 2, region = 3;
+    CREC(army)[0x0a] = 5;
+    CREC(army)[0x0b] = 5;
+
+    deploy_cell_set(6, 5, 4);               /* wrong owner — ignored */
+    int o = (5 * 0x40 + 7) * 8;             /* right owner but no deploy flag */
+    g_overworld_map[o + 0] = 10;
+    g_overworld_map[o + 7] = (uint8_t)region;
+    deploy_cell_set(30, 5, region);         /* the only qualifier (dist 25) */
+
+    int col = -1, row = -1;
+    engine_combat_find_deploy_cell(army, region, &col, &row);
+    T_ASSERT_EQ_I(col, 30);
+    T_ASSERT_EQ_I(row, 5);
+    return 0;
+}
+
+/* No qualifying cell → fall back to the region's capital cell (+0x6c/+0x6d). */
+int test_engine_combat_find_deploy_cell_fallback(void)
+{
+    memset(g_overworld_map, 0, sizeof g_overworld_map);
+    int army = 2, region = 3;
+    CREC(army)[0x0a] = 5;
+    CREC(army)[0x0b] = 5;
+    R_REC(region)[0x6c] = 42;               /* capital col */
+    R_REC(region)[0x6d] = 17;               /* capital row */
+
+    int col = -1, row = -1;
+    engine_combat_find_deploy_cell(army, region, &col, &row);
+    T_ASSERT_EQ_I(col, 42);
+    T_ASSERT_EQ_I(row, 17);
+    return 0;
+}
