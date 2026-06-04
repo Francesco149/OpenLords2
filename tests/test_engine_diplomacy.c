@@ -20,10 +20,13 @@
 #define D_ACTIVE   0x04
 #define D_AI       0x05
 #define D_PERS     0x07
+#define D_FLAG_1C  0x1c
 #define D_FLAG_1E  0x1e
+#define D_RANK     0x2b
 #define D_LORD     0x81
 #define D_REL      0x84
 #define D_TREATY   0x85
+#define D_CONTACT  0x86
 #define D_WARCNT   0x87
 #define D_WARFLAG  0x88
 #define D_FEUD     0xeb
@@ -190,7 +193,6 @@ int test_engine_diplomacy_battle_adjust_war_final(void)
 }
 
 /* --- FUN_004a16f7: should-engage predicate -------------------------------- */
-#define D_CONTACT  0x86
 
 /* Neutral defender (0) always engages; a genuinely different player engages. */
 int test_engine_diplomacy_should_engage_hostile(void)
@@ -294,5 +296,58 @@ int test_engine_diplomacy_reconcile_severs_dead_lord(void)
 
     T_ASSERT_EQ_I(SREC(2)[D_LORD], 0);         /* severed: lord 1 is dead */
     T_ASSERT_EQ_I(MATRIX(2, 1), 0);
+    return 0;
+}
+
+/* --- FUN_004a1241: best alliance candidate -------------------------------- */
+int test_engine_diplomacy_best_ally_candidate(void)
+{
+    dp_reset();
+    /* player 1 is the chooser; default relations 0 (> -11), no wars. */
+    mk_ai(2); SREC(2)[D_RANK] = 3;           /* eligible, rank 3 */
+    mk_ai(3); SREC(3)[D_RANK] = 2;           /* eligible, rank 2 (better) */
+    mk_ai(4); SREC(4)[D_RANK] = 1;           /* leader → excluded */
+    mk_ai(5); SREC(5)[D_RANK] = 2; SREC(5)[D_LORD] = 4;  /* has lord → excluded */
+
+    T_ASSERT_EQ_I(engine_diplomacy_best_ally_candidate(1), 3);
+    return 0;
+}
+
+/* Each disqualifier (relation floor, war flag, +0x1c gate) drops a candidate. */
+int test_engine_diplomacy_best_ally_candidate_excludes(void)
+{
+    dp_reset();
+    uint8_t *s = SREC(1);
+    mk_ai(2); SREC(2)[D_RANK] = 2; s[D_REL + 2 * 0x10] = (uint8_t)(-11); /* not > -11 */
+    mk_ai(3); SREC(3)[D_RANK] = 2; s[D_WARFLAG + 3 * 0x10] = 1;          /* at war */
+    mk_ai(4); SREC(4)[D_RANK] = 2; SREC(4)[D_FLAG_1C] = 1;               /* gate set */
+
+    T_ASSERT_EQ_I(engine_diplomacy_best_ally_candidate(1), 0);
+
+    /* Loosen relation to exactly -10 → candidate 2 now qualifies. */
+    s[D_REL + 2 * 0x10] = (uint8_t)(-10);
+    T_ASSERT_EQ_I(engine_diplomacy_best_ally_candidate(1), 2);
+    return 0;
+}
+
+/* --- FUN_004a1774: form mutual alliance bond ------------------------------ */
+int test_engine_diplomacy_form_alliance(void)
+{
+    dp_reset();
+    SREC(2)[D_FLAG_1E] = 5;             /* pre-set; bond formation clears it */
+    SREC(3)[D_FLAG_1E] = 5;
+    SREC(2)[D_CONTACT + 3 * 0x10] = 9;  /* pre-set contact; cleared */
+    SREC(3)[D_CONTACT + 2 * 0x10] = 9;
+
+    engine_diplomacy_form_alliance(2, 3);
+
+    T_ASSERT_EQ_I(SREC(2)[D_TREATY + 3 * 0x10], 1);
+    T_ASSERT_EQ_I(SREC(3)[D_TREATY + 2 * 0x10], 1);
+    T_ASSERT_EQ_I(SREC(2)[D_CONTACT + 3 * 0x10], 0);
+    T_ASSERT_EQ_I(SREC(3)[D_CONTACT + 2 * 0x10], 0);
+    T_ASSERT_EQ_I(SREC(2)[D_LORD], 3);
+    T_ASSERT_EQ_I(SREC(3)[D_LORD], 2);
+    T_ASSERT_EQ_I(SREC(2)[D_FLAG_1E], 0);
+    T_ASSERT_EQ_I(SREC(3)[D_FLAG_1E], 0);
     return 0;
 }

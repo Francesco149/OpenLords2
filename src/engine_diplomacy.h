@@ -68,4 +68,15 @@ int engine_diplomacy_should_engage(int aggressor, int defender);
  * Pure: touches only g_player_strategic_352. */
 void engine_diplomacy_reconcile_treaties(void);
 
+/* Port of FUN_004a1241 @ 0x4a1241 (357 B, __cdecl int(int)).  Return the best
+ * alliance candidate for `player` — an in-game, non-leader (rank != 1), lordless
+ * slot with its +0x1c gate clear, toward whom `player`'s relation is > -11 and
+ * no war is flagged, with the lowest rank — or 0 when none qualifies. */
+int engine_diplomacy_best_ally_candidate(int player);
+
+/* Port of FUN_004a1774 @ 0x4a1774 (211 B, __cdecl void(int,int)).  Forge a
+ * mutual alliance bond between p1 and p2: treaty flag set + contact counter
+ * cleared both ways, each pinned as the other's lord, bond-break flag cleared. */
+void engine_diplomacy_form_alliance(int p1, int p2);
+
 #endif /* OPENLORDS2_ENGINE_DIPLOMACY_H */

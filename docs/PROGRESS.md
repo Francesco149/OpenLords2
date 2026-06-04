@@ -7,11 +7,11 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
-## 2026-06-04 — TURN DRIVER: AI brain FSM leaves — diplomacy proposals + buy-request seed + helpers (4 fns, host-tested)
+## 2026-06-04 — TURN DRIVER: AI brain FSM leaves — diplomacy proposals + buy-request seed + alliance primitives (6 fns, host-tested)
 
 Worked down the AI per-realm brain FSM `FUN_0049a581` (the substate dispatch the
-previous dispatch teed up) by porting clean leaves.  Two commits, four functions,
-2033 host tests green (ASAN/UBSAN), cross-build clean.  All
+previous dispatch teed up) by porting clean leaves.  Three commits, six functions,
+2036 host tests green (ASAN/UBSAN), cross-build clean.  All
 offsets/thresholds/codes/call-targets r2-verified byte-exact against the
 disassembly.  Engine-quirk #190 captured at port time.
 
@@ -46,6 +46,19 @@ disassembly.  Engine-quirk #190 captured at port time.
   it next reconciles the player's market.  The helper is a generic owner-byte
   (+0x005) scan returning the first realm a player owns (or 0).
 
+- **Step-2 alliance primitives** (`FUN_004a1241` →
+  `engine_diplomacy_best_ally_candidate`; `FUN_004a1774` →
+  `engine_diplomacy_form_alliance`, both in engine_diplomacy.c alongside their
+  sibling primitives).  The first scans slots 1..5 for the best alliance
+  candidate — in-game, non-leader (rank +0x2b != 1), lordless (+0x81 == 0), gate
+  +0x1c clear, relation (+0x84) > -11, no war flagged (+0x88) — returning the
+  lowest-ranked qualifier or 0.  The second forges a mutual bond: treaty flag
+  (+0x85) set + contact (+0x86) cleared both ways, each pinned as the other's
+  lord (+0x81), bond-break flag (+0x1e) cleared.  These are the two remaining
+  unported callees of brain step 2 (`FUN_004a0c1d`); its other three callees
+  (event-queue post + `engine_diplomacy_clear_treaty` / `_battle_adjust`) were
+  already ported, so step 2 itself is now a clean leaf.
+
 **Quirk #190:** the strategic `+5` byte (variously labelled `STRAT_ELIMINATED` /
 "active" / "AI gate" across modules) is really **human-controlled** — the FSM
 dispatcher runs a slot's brain iff `+4 != 0 && +5 == 0`, and the diplomacy step
@@ -58,11 +71,14 @@ callees), `FUN_004a0c1d` (2, 5 callees incl. the already-ported event-queue +
 diplomacy entries), `FUN_0049edc7` (6, sole callee `FUN_00436d02` 768 B w/ 7
 leaves), `FUN_0049f977` (9, 7 callees), `FUN_004a0015` (10, 4 callees),
 `FUN_004a5667` (0xb, 4 callees), `FUN_0049e77d` (0xc, 3 callees incl. the turn-
-chip `FUN_004485a5`).  (Steps 3 / 4 / 5 / 8 / 0xd / 0xe are now ported.)  The
-shallowest remaining is step 0xc's leaf set or step 2 (only `FUN_004a1241` /
-`FUN_004a1774` remain unported — the other three callees are done).  Once the
-ladder is down, `FUN_0049a581` and then the substate-0 dispatcher `0x49a010` can
-be assembled into `engine_tick`.
+chip `FUN_004485a5`).  (Steps 3 / 4 / 5 / 8 / 0xd / 0xe are now ported.)  **Brain step 2
+(`FUN_004a0c1d`, 1572 B) is now a clean leaf** — all five of its callees are
+ported (event-queue post + four engine_diplomacy primitives) — so it is the
+recommended next chip; it is a meatier body (the AI's per-turn diplomacy
+decision: weigh relations, pick an ally via `engine_diplomacy_best_ally_candidate`
+and bond via `engine_diplomacy_form_alliance`, post proposals).  After that, step
+0xc's leaf set.  Once the ladder is down, `FUN_0049a581` and then the substate-0
+dispatcher `0x49a010` can be assembled into `engine_tick`.
 
 ## 2026-06-04 — TURN DRIVER: phase-1 AI inits — ration ladder + difficulty grant + independent-realm driver (4 fns, host-tested)
 

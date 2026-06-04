@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 655,
+  "tested": 657,
   "ported": 41,
-  "unported": 1751,
+  "unported": 1749,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 696,
-  "pct_touched": 28.4,
+  "touched": 698,
+  "pct_touched": 28.5,
   "pct_tested": 26.8,
   "bytes_total": 838629,
-  "bytes_touched": 291966,
-  "pct_bytes_touched": 34.8
+  "bytes_touched": 292534,
+  "pct_bytes_touched": 34.9
  },
  "orphan_refs": [
   "0x004148",
@@ -16254,8 +16254,11 @@
    "name": "FUN_004a1241",
    "size": 357,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_diplomacy.c",
+    "src/engine_diplomacy.h"
+   ]
   },
   {
    "va": "0x4a13a6",
@@ -16285,8 +16288,11 @@
    "name": "FUN_004a1774",
    "size": 211,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_diplomacy.c",
+    "src/engine_diplomacy.h"
+   ]
   },
   {
    "va": "0x4a1847",

@@ -21,7 +21,9 @@
 #define D_ACTIVE      0x04   /* realm in-game flag (u8)                       */
 #define D_AI          0x05   /* AI gate: 0 = AI-controlled (u8)              */
 #define D_PERSONALITY 0x07   /* AI personality (u8)                          */
+#define D_FLAG_1C     0x1c   /* per-player gate byte; an ally candidate needs it 0 */
 #define D_FLAG_1E     0x1e   /* cleared when a lord/vassal bond breaks (u8)  */
+#define D_RANK        0x2b   /* 1-based finishing rank (engine_ranking F_RANK) */
 #define D_LORD        0x81   /* this player's lord/vassal id (u8)            */
 #define D_REL         0x84   /* relation toward other (i8; + other*0x10)     */
 #define D_TREATY      0x85   /* treaty flag toward other (u8; + other*0x10)  */
@@ -214,4 +216,48 @@ void engine_diplomacy_reconcile_treaties(void)
             sp[D_TREATY + i * 0x10] = 1;
         }
     }
+}
+
+/* Port of FUN_004a1241.  Pick the best alliance candidate for `player`: scan the
+ * other slots 1..5 for an in-game, non-leader (rank != 1), lordless player whose
+ * +0x1c gate is clear, toward whom `player`'s relation (+0x84) is > -11 and no
+ * war is flagged (+0x88), and return the one with the best (lowest) rank — or 0
+ * when none qualifies.  Pure read over g_player_strategic_352. */
+int engine_diplomacy_best_ally_candidate(int player)
+{
+    uint8_t *s = STRAT_REC(player);
+    int best = 0;
+    uint8_t best_rank = 6;
+
+    for (int i = 1; i < 6; i++) {
+        uint8_t *si = STRAT_REC(i);
+        if (si[D_ACTIVE] != 0 && i != player &&
+            si[D_RANK] != 1 && si[D_LORD] == 0 && si[D_FLAG_1C] == 0 &&
+            (int8_t)s[D_REL + i * 0x10] > -0x0b &&
+            s[D_WARFLAG + i * 0x10] == 0 &&
+            si[D_RANK] < best_rank) {
+            best = i;
+            best_rank = si[D_RANK];
+        }
+    }
+    return best;
+}
+
+/* Port of FUN_004a1774.  Forge a mutual alliance bond between p1 and p2: set the
+ * treaty flag (+0x85) and clear the contact counter (+0x86) both ways, pin each
+ * as the other's lord (+0x81), and clear the bond-break flag (+0x1e) on both.
+ * Pure write over g_player_strategic_352. */
+void engine_diplomacy_form_alliance(int p1, int p2)
+{
+    uint8_t *s1 = STRAT_REC(p1);
+    uint8_t *s2 = STRAT_REC(p2);
+
+    s1[D_TREATY + p2 * 0x10] = 1;
+    s1[D_CONTACT + p2 * 0x10] = 0;
+    s2[D_TREATY + p1 * 0x10] = 1;
+    s2[D_CONTACT + p1 * 0x10] = 0;
+    s1[D_LORD] = (uint8_t)p2;
+    s2[D_LORD] = (uint8_t)p1;
+    s1[D_FLAG_1E] = 0;
+    s2[D_FLAG_1E] = 0;
 }

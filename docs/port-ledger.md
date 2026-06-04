@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **696** (28.4%) — tested 655, ported 41
-- code bytes touched: **34.8%** (291,966 / 838,629 B)
-- unported: **1751**
+- touched: **698** (28.5%) — tested 657, ported 41
+- code bytes touched: **34.9%** (292,534 / 838,629 B)
+- unported: **1749**
 - orphan refs (in src/, not in function table): 7
 
-## tested (655) — ported + host unit suite
+## tested (657) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -507,8 +507,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49e1bf | FUN_0049e1bf | 476 | engine_army_ai.c, engine_army_ai.h |
 | 0x49e39b | FUN_0049e39b | 994 | engine_army_ai.c, engine_army_ai.h |
 | 0x49f96c | FUN_0049f96c | 11 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a1241 | FUN_004a1241 | 357 | engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a13a6 | FUN_004a13a6 | 849 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a16f7 | FUN_004a16f7 | 125 | engine_army_move.h, engine_diplomacy.c, engine_diplomacy.h |
+| 0x4a1774 | FUN_004a1774 | 211 | engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a1847 | FUN_004a1847 | 525 | engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a1a54 | FUN_004a1a54 | 213 | engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a1c53 | FUN_004a1c53 | 537 | game_init.c, game_init.h |

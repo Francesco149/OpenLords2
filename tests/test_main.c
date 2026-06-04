@@ -2045,6 +2045,9 @@ struct test_case {
     X(engine_diplomacy_reconcile_imposes_on_unbonded) \
     X(engine_diplomacy_reconcile_severs_taken_lord) \
     X(engine_diplomacy_reconcile_severs_dead_lord) \
+    X(engine_diplomacy_best_ally_candidate) \
+    X(engine_diplomacy_best_ally_candidate_excludes) \
+    X(engine_diplomacy_form_alliance) \
     \
     X(army_ai_seed_workforce_ratios) \
     X(army_ai_advance_tier_nonpositive_noop) \

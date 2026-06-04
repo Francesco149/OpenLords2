@@ -6,7 +6,7 @@ The unported, non-thunk engine functions already **called by ported code** — t
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
 - frontier functions: **281**
-- of those, zero-dependency **leaves: 126** (recommended order below)
+- of those, zero-dependency **leaves: 127** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
 
@@ -363,7 +363,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4aa6ca | 469 | 1 | 0 | ✓ |
 | 0x4a277d | 565 | 1 | 7 |  |
 | 0x4a8e0b | 943 | 1 | 3 |  |
-| 0x4a0c1d | 1572 | 1 | 2 |  |
+| 0x4a0c1d | 1572 | 1 | 0 | ✓ |
 
 ### battlefield render + wndproc (24)
 
