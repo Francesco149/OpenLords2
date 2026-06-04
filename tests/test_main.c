@@ -2131,6 +2131,9 @@ struct test_case {
     X(army_ai_pick_attack_target_nearest) \
     X(army_ai_pick_attack_target_prefers_rich) \
     X(army_ai_pick_attack_target_requires_border) \
+    X(army_ai_select_target_forced_owner) \
+    X(army_ai_select_target_owner_gate) \
+    X(army_ai_select_target_none) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

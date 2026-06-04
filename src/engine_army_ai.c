@@ -80,6 +80,10 @@
 /* ── Per-player record fields (offsets into g_player_strategic_352 row p) ── */
 #define STRAT_BUILD_ROTATE  0x06c   /* DAT_0057bf6c — per-player build-order rotation counter (i32,
                                      *   cycles 0..9, selects the personality build column) */
+#define STRAT_TARGET_OWNER  0x048   /* DAT_0057bf48 — owner the target search is gated to when the
+                                     *   gate flag is set */
+#define STRAT_ATTACK_TARGET 0x04b   /* DAT_0057bf4b — chosen attack-target realm (step 0xa marches
+                                     *   its mustered force here via the deploy-cell finder) */
 #define STRAT_MUSTER_REALM  0x0e5   /* DAT_0057bfe5 — richest owned realm; the muster source step
                                      *   0xa raises its offensive force from (also read by the
                                      *   spawn/seize paths) */
@@ -1567,4 +1571,85 @@ int engine_army_ai_pick_attack_target(int player, int from_realm)
         }
     }
     return best_realm;
+}
+
+/* Port of FUN_004a03f2 — select `player`'s attack target into +0x4b (the realm
+ * step 0xa marches its mustered force at) and return whether one was found.  The
+ * richer sibling of engine_army_ai_pick_attack_target, scored the same way from
+ * `from_realm`'s capital but with a three-tier provision bonus, and with two
+ * candidate-filter modes:
+ *
+ *   forced_owner != 0 — consider only realms owned by `forced_owner` (the
+ *     should-engage / border checks are skipped).
+ *   forced_owner == 0 — consider realms `player` would engage
+ *     (engine_diplomacy_should_engage) that border a player realm
+ *     (engine_realm_player_owns_neighbor); when `gate_owner` is set, additionally
+ *     restrict to realms owned by the stored owner gate +0x48.
+ *
+ * Score = chebyshev distance (FUN_00404f4c, inlined) + 0x28 for a defended keep
+ * (+0x1c0 set & pending +0x1bc), − stock bonus (+0x250: ≥0xc9 −0x14, >100 −0xa),
+ * − provision bonus (+0x224: ≥0x9c5 −0x14, ≥0x4b1 −0xa, >500 −5).  Lowest score
+ * under the 0x80 ceiling wins; the winner is stored in +0x4b. */
+int engine_army_ai_select_target(int player, int from_realm, int gate_owner,
+                                 int forced_owner)
+{
+    int best_score = 0x80;
+    int best_realm = 0;
+    int count = (int)s_slot_0056d5dc;
+
+    int home_col = ARMY_REC(from_realm)[ARMY_CAP_COL];
+    int home_row = ARMY_REC(from_realm)[ARMY_CAP_ROW];
+
+    for (int realm = 1; realm <= count; realm++) {
+        uint8_t *r = ARMY_REC(realm);
+        int owner = r[ARMY_OWNER];
+
+        int eligible;
+        if (forced_owner == 0) {
+            eligible =
+                (gate_owner == 0 ||
+                 STRAT_REC(player)[STRAT_TARGET_OWNER] == owner) &&
+                engine_diplomacy_should_engage(player, owner) &&
+                engine_realm_player_owns_neighbor((unsigned)player, realm);
+        } else {
+            eligible = (owner == forced_owner);
+        }
+        if (!eligible)
+            continue;
+
+        int dx = home_col - r[ARMY_CAP_COL]; if (dx < 0) dx = -dx;
+        int dy = home_row - r[ARMY_CAP_ROW]; if (dy < 0) dy = -dy;
+        int score = (dx < dy) ? dy : dx;          /* chebyshev */
+
+        if (r[ARMY_KEEP_LEVEL] != 0 && I32(r + ARMY_PENDING) != 0)
+            score += 0x28;
+
+        int stock = I32(r + ARMY_STOCK_A);
+        if (stock < 0xc9) {
+            if (stock > 100)
+                score -= 0xa;
+        } else {
+            score -= 0x14;
+        }
+
+        int prov = I32(r + ARMY_PROVISION_RAW);
+        if (prov < 0x9c5) {
+            if (prov < 0x4b1) {
+                if (prov > 500)
+                    score -= 5;
+            } else {
+                score -= 0xa;
+            }
+        } else {
+            score -= 0x14;
+        }
+
+        if (score < best_score) {
+            best_score = score;
+            best_realm = realm;
+        }
+    }
+
+    STRAT_REC(player)[STRAT_ATTACK_TARGET] = (uint8_t)best_realm;
+    return STRAT_REC(player)[STRAT_ATTACK_TARGET] != 0;
 }

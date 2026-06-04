@@ -1612,3 +1612,63 @@ int test_army_ai_pick_attack_target_requires_border(void)
     T_ASSERT_EQ_I(engine_army_ai_pick_attack_target(2, 1), 0);
     return 0;
 }
+
+/* ── select_target (FUN_004a03f2): stores the chosen realm in +0x4b ──────── */
+
+/* forced_owner mode: only realms owned by that owner are considered (the
+ * engage/border checks are skipped); the winner lands in +0x4b. */
+int test_army_ai_select_target_forced_owner(void)
+{
+    ai_turn_setup();
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 3;
+
+    AREC(1)[0x06c] = 10; AREC(1)[0x06d] = 10;       /* from-realm capital */
+    AREC(2)[0x005] = 4; AREC(2)[0x06c] = 12; AREC(2)[0x06d] = 10;  /* owner 4 */
+    AREC(3)[0x005] = 7;                             /* owner 7 → excluded */
+
+    int ret = engine_army_ai_select_target(2, 1, 0, 4);
+    T_ASSERT_EQ_I(ret, 1);
+    T_ASSERT_EQ_I(PREC(2)[0x04b], 2);
+    return 0;
+}
+
+/* gate_owner mode: with the gate set, only realms owned by the stored gate +0x48
+ * (and engageable + bordering) qualify. */
+int test_army_ai_select_target_owner_gate(void)
+{
+    ai_turn_setup();
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 4;
+    PREC(2)[0x081] = 0;                 /* no lord → should_engage allows enemies */
+    PREC(2)[0x048] = 5;                 /* gate owner = 5 */
+
+    AREC(1)[0x005] = 2; AREC(1)[0x06c] = 10; AREC(1)[0x06d] = 10;  /* player's own border realm */
+    uint8_t *g = AREC(3);              /* owner 5 → passes gate */
+    g[0x005] = 5; g[0x06c] = 12; g[0x06d] = 10; g[0x05c] = 1;
+    uint8_t *o = AREC(4);              /* owner 6 → fails gate */
+    o[0x005] = 6; o[0x06c] = 11; o[0x06d] = 10; o[0x05c] = 1;
+
+    int ret = engine_army_ai_select_target(2, 1, 1, 0);
+    T_ASSERT_EQ_I(ret, 1);
+    T_ASSERT_EQ_I(PREC(2)[0x04b], 3);
+    return 0;
+}
+
+/* No eligible realm (enemy present but not bordering) → +0x4b cleared, returns 0. */
+int test_army_ai_select_target_none(void)
+{
+    ai_turn_setup();
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 3;
+    PREC(2)[0x081] = 0;
+    PREC(2)[0x04b] = 0x55;             /* sentinel — must be overwritten with 0 */
+
+    AREC(1)[0x005] = 2; AREC(1)[0x06c] = 10; AREC(1)[0x06d] = 10;
+    AREC(3)[0x005] = 4; AREC(3)[0x06c] = 12; AREC(3)[0x06d] = 10;  /* enemy, no +0x5c border */
+
+    int ret = engine_army_ai_select_target(2, 1, 0, 0);
+    T_ASSERT_EQ_I(ret, 0);
+    T_ASSERT_EQ_I(PREC(2)[0x04b], 0);
+    return 0;
+}

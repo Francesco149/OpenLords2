@@ -168,6 +168,14 @@ void engine_army_ai_pick_muster_realms(int player);
  * target realm, or 0. */
 int engine_army_ai_pick_attack_target(int player, int from_realm);
 
+/* Port of FUN_004a03f2.  Select `player`'s attack target into its strategic
+ * record (+0x4b) and return whether one was found.  Richer sibling of
+ * engine_army_ai_pick_attack_target with two filter modes: `forced_owner` != 0
+ * restricts to that owner's realms; otherwise engageable bordering realms,
+ * optionally gated to the stored owner +0x48 when `gate_owner` is set. */
+int engine_army_ai_select_target(int player, int from_realm, int gate_owner,
+                                 int forced_owner);
+
 /* Port of FUN_0049ed13.  Flag whether `player` can afford `realm`'s current
  * build order: clears the realm's affordability flag, runs the slot-2 resource
  * planner, then re-sets the flag iff the player's +0x130/+0x120 pools both cover
