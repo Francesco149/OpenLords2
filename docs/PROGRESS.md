@@ -7,11 +7,11 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
-## 2026-06-04 — TURN DRIVER: AI brain FSM leaves — diplomacy-proposal step + no-op step (2 fns, host-tested)
+## 2026-06-04 — TURN DRIVER: AI brain FSM leaves — diplomacy proposals + buy-request seed + helpers (4 fns, host-tested)
 
 Worked down the AI per-realm brain FSM `FUN_0049a581` (the substate dispatch the
-previous dispatch teed up) by porting its two clean leaves.  One commit, two
-functions, 2029 host tests green (ASAN/UBSAN), cross-build clean.  All
+previous dispatch teed up) by porting clean leaves.  Two commits, four functions,
+2033 host tests green (ASAN/UBSAN), cross-build clean.  All
 offsets/thresholds/codes/call-targets r2-verified byte-exact against the
 disassembly.  Engine-quirk #190 captured at port time.
 
@@ -34,18 +34,33 @@ disassembly.  Engine-quirk #190 captured at port time.
   empty body — a live entry in the dispatch ladder that the shipped build leaves
   inert.
 
+- **Brain step 4 — seed explicit buy requests** (`FUN_0049e1bf` →
+  `engine_army_ai_seed_buy_requests`; helper `FUN_0049d5e0` →
+  `engine_army_ai_first_owned_realm`).  Clears the player's four buy-request ints
+  (+0x70 run), then — for an AI above level 1, OR whose first owned realm is
+  prosperous (approval +0xc > 14 AND morale +0xb > 19) — tops the two staple
+  commodities to a floor when their pool runs short (+0x120 < 0x32 → +0x74 =
+  0x32; +0x130 < 100 → +0x70 = 100) and folds every developed, keep-bearing
+  (+0x1c0 && +0x1c3) owned realm's build demand into the requests (+0x1d4 →
+  +0x70, +0x1d0 → +0x7c).  The strategic resource orchestrator drains these when
+  it next reconciles the player's market.  The helper is a generic owner-byte
+  (+0x005) scan returning the first realm a player owns (or 0).
+
 **Quirk #190:** the strategic `+5` byte (variously labelled `STRAT_ELIMINATED` /
 "active" / "AI gate" across modules) is really **human-controlled** — the FSM
 dispatcher runs a slot's brain iff `+4 != 0 && +5 == 0`, and the diplomacy step
 targets `+5 != 0` (human) slots, which is why the proposals surface through the
 UI notification ring.
 
-**Next on this thread:** the brain FSM `FUN_0049a581` still has ~11 unported step
-callees, each carrying 1-7 unported leaves of its own: `FUN_004a277d` (step 1),
-`FUN_004a0c1d` (2), `FUN_0049e1bf` (4), `FUN_0049edc7` (6), `FUN_0049f977` (9),
-`FUN_004a0015` (10), `FUN_004a5667` (0xb), `FUN_0049e77d` (0xc).  (Steps 3 / 5 /
-0xe — `FUN_0049d638` rations, `FUN_0049dd01` run-player, `FUN_0049d1e0` init —
-are already ported.)  Pick whichever exposes the cleanest leaf next; once the
+**Next on this thread:** the brain FSM `FUN_0049a581` still has ~10 unported step
+callees, each carrying 1-7 unported leaves of its own: `FUN_004a277d` (step 1, 7
+callees), `FUN_004a0c1d` (2, 5 callees incl. the already-ported event-queue +
+diplomacy entries), `FUN_0049edc7` (6, sole callee `FUN_00436d02` 768 B w/ 7
+leaves), `FUN_0049f977` (9, 7 callees), `FUN_004a0015` (10, 4 callees),
+`FUN_004a5667` (0xb, 4 callees), `FUN_0049e77d` (0xc, 3 callees incl. the turn-
+chip `FUN_004485a5`).  (Steps 3 / 4 / 5 / 8 / 0xd / 0xe are now ported.)  The
+shallowest remaining is step 0xc's leaf set or step 2 (only `FUN_004a1241` /
+`FUN_004a1774` remain unported — the other three callees are done).  Once the
 ladder is down, `FUN_0049a581` and then the substate-0 dispatcher `0x49a010` can
 be assembled into `engine_tick`.
 

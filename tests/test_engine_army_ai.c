@@ -1060,3 +1060,96 @@ int test_army_ai_step_noop(void)
     engine_army_ai_step_noop();
     return 0;
 }
+
+/* ── FUN_0049d5e0 / FUN_0049e1bf — first-owned-realm + brain step 4 ──────── */
+
+/* first_owned_realm: returns the lowest-keyed realm owned by the player, 0 when
+ * none. */
+int test_army_ai_first_owned_realm(void)
+{
+    ai_turn_setup();
+    s_slot_0056d5dc = 4;
+    AREC(1)[0x005] = 3;
+    AREC(2)[0x005] = 2;
+    AREC(3)[0x005] = 2;
+    AREC(4)[0x005] = 0;
+
+    T_ASSERT_EQ_I(engine_army_ai_first_owned_realm(2), 2);   /* first match */
+    T_ASSERT_EQ_I(engine_army_ai_first_owned_realm(3), 1);
+    T_ASSERT_EQ_I(engine_army_ai_first_owned_realm(5), 0);   /* owns none */
+    return 0;
+}
+
+/* seed_buy_requests: a high-level AI (+0x29 > 1) always seeds.  Clears the
+ * +0x70 run, floors the staples from short pools, and folds each developed
+ * keep-bearing owned realm's build demand into +0x70 (from +0x1d4) and +0x7c
+ * (from +0x1d0). */
+int test_army_ai_seed_buy_requests_highlevel(void)
+{
+    ai_turn_setup();
+    s_slot_0056d5dc = 2;
+    uint8_t *s = PREC(2);
+    s[0x029] = 2;                       /* AI level > 1 → always seeds */
+    AI32(s, 0x70) = 7; AI32(s, 0x74) = 7; AI32(s, 0x78) = 7; AI32(s, 0x7c) = 7;
+    AI32(s, 0x120) = 0;                /* pool short → floor +0x74 = 0x32 */
+    AI32(s, 0x130) = 0;                /* pool short → floor +0x70 = 100  */
+
+    uint8_t *a1 = AREC(1);             /* eligible: owned, keep, settle */
+    a1[0x005] = 2; a1[0x1c0] = 1; a1[0x1c3] = 1;
+    AI32(a1, 0x1d4) = 5; AI32(a1, 0x1d0) = 9;
+    uint8_t *a2 = AREC(2);             /* owned but no keep → skipped */
+    a2[0x005] = 2; a2[0x1c0] = 0; a2[0x1c3] = 1;
+    AI32(a2, 0x1d4) = 100; AI32(a2, 0x1d0) = 100;
+
+    engine_army_ai_seed_buy_requests(2);
+
+    T_ASSERT_EQ_I(AI32(s, 0x74), 0x32);    /* commodity-6 floored */
+    T_ASSERT_EQ_I(AI32(s, 0x78), 0);       /* +0x78 cleared, untouched after */
+    T_ASSERT_EQ_I(AI32(s, 0x70), 100 + 5); /* floor 100 + realm-1 +0x1d4 */
+    T_ASSERT_EQ_I(AI32(s, 0x7c), 9);       /* realm-1 +0x1d0 */
+    return 0;
+}
+
+/* seed_buy_requests: a low-level AI with no prosperous realm clears the run but
+ * seeds nothing further (the approval/morale gate fails). */
+int test_army_ai_seed_buy_requests_gate_fails(void)
+{
+    ai_turn_setup();
+    s_slot_0056d5dc = 1;
+    uint8_t *s = PREC(2);
+    s[0x029] = 1;                      /* not above level 1 */
+    AI32(s, 0x70) = 7; AI32(s, 0x74) = 7; AI32(s, 0x78) = 7; AI32(s, 0x7c) = 7;
+    AI32(s, 0x120) = 0; AI32(s, 0x130) = 0;
+
+    uint8_t *a1 = AREC(1);             /* owned but approval too low */
+    a1[0x005] = 2; a1[0x00c] = 14; a1[0x00b] = 30;
+    a1[0x1c0] = 1; a1[0x1c3] = 1; AI32(a1, 0x1d4) = 5; AI32(a1, 0x1d0) = 9;
+
+    engine_army_ai_seed_buy_requests(2);
+
+    T_ASSERT_EQ_I(AI32(s, 0x70), 0);   /* run cleared */
+    T_ASSERT_EQ_I(AI32(s, 0x74), 0);   /* staples NOT floored (gate failed) */
+    T_ASSERT_EQ_I(AI32(s, 0x7c), 0);
+    return 0;
+}
+
+/* seed_buy_requests: the prosperity gate passes when the first owned realm has
+ * approval > 14 AND morale > 19 — then the staples floor even for a level-1 AI. */
+int test_army_ai_seed_buy_requests_prosperity_gate(void)
+{
+    ai_turn_setup();
+    s_slot_0056d5dc = 1;
+    uint8_t *s = PREC(2);
+    s[0x029] = 0;
+    AI32(s, 0x120) = 0; AI32(s, 0x130) = 200;   /* only +0x74 should floor */
+
+    uint8_t *a1 = AREC(1);
+    a1[0x005] = 2; a1[0x00c] = 15; a1[0x00b] = 20;   /* approval 15>14, morale 20>19 */
+    a1[0x1c0] = 0;                                     /* no keep → no build fold */
+
+    engine_army_ai_seed_buy_requests(2);
+
+    T_ASSERT_EQ_I(AI32(s, 0x74), 0x32);   /* commodity-6 floored */
+    T_ASSERT_EQ_I(AI32(s, 0x70), 0);      /* +0x130 not short → not floored */
+    return 0;
+}

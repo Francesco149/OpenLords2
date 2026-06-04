@@ -2093,6 +2093,10 @@ struct test_case {
     X(army_ai_propose_cooldown_holds) \
     X(army_ai_propose_war_lord_gate) \
     X(army_ai_step_noop) \
+    X(army_ai_first_owned_realm) \
+    X(army_ai_seed_buy_requests_highlevel) \
+    X(army_ai_seed_buy_requests_gate_fails) \
+    X(army_ai_seed_buy_requests_prosperity_gate) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

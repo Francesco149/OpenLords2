@@ -131,6 +131,16 @@ void engine_army_ai_dispatch_independent_compact(int realm);
  * re-allocate the workforce. */
 void engine_army_ai_run_independent(int player);
 
+/* Port of FUN_0049d5e0.  Return the key of the first realm owned by `owner`
+ * (1..count), or 0 if none — a generic owner-byte (+0x005) scan. */
+int engine_army_ai_first_owned_realm(int owner);
+
+/* Port of FUN_0049e1bf — AI brain step 4 (seed explicit buy requests).  Clears
+ * the player's +0x70 buy-request run, then (for a high-level or prosperous AI)
+ * tops the staple commodities to a floor and folds in each developed,
+ * keep-bearing owned realm's build demand. */
+void engine_army_ai_seed_buy_requests(int player);
+
 /* Port of FUN_004a13a6 — AI brain step 0xd (diplomacy proposals).  For a #1-or-
  * unranked player, alternately broadcasts alliance (0xc1) proposals to every
  * in-game human slot then sends a war (0xc0) proposal to the weakest player

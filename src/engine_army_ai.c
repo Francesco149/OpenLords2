@@ -34,7 +34,9 @@
 
 /* ── Per-realm record fields (offsets into g_per_army_768 row `key`) ── */
 #define ARMY_OWNER          0x005   /* DAT_0053f9b5 — owning player (0 = independent) */
+#define ARMY_MORALE         0x00b   /* DAT_0053f9bb — signed morale/standing stat (i8) */
 #define ARMY_APPROVAL       0x00c   /* DAT_0053f9bc — signed approval byte, capped 100 */
+#define ARMY_KEEP_LEVEL     0x1c0   /* DAT_0053fb70 — keep level (u8; 0 = no keep) */
 #define ARMY_FEED_COUNT     0x024   /* DAT_0053f9d4 — mouths to feed (tier denominator) */
 #define ARMY_POP_SUPPORTED  0x030   /* DAT_0053f9e0 — percent-of-population scratch, bumped
                                      *   alongside the feed count by the difficulty grant */
@@ -1054,6 +1056,61 @@ void engine_army_ai_run_independent(int player)
         else if (code == 1) engine_army_ai_dispatch_independent_compact(realm);
 
         engine_territory_allocate_realm_workforce(realm);
+    }
+}
+
+/* Port of FUN_0049d5e0.  Return the key of the first realm (1..count) owned by
+ * `owner`, or 0 if the player owns none.  A generic scan over g_per_army_768's
+ * owner byte (+0x005) used by the brain steps to test a player's holdings. */
+int engine_army_ai_first_owned_realm(int owner)
+{
+    int count = (int)s_slot_0056d5dc;
+    for (int realm = 1; realm <= count; realm++) {
+        if (ARMY_REC(realm)[ARMY_OWNER] == (uint8_t)owner)
+            return realm;
+    }
+    return 0;
+}
+
+/* Port of FUN_0049e1bf — AI brain step 4 (seed explicit buy requests).  Clears
+ * the player's four buy-request ints (+0x70 run), then — for an AI above level
+ * 1, or whose first owned realm is prosperous (approval +0xc > 14 AND morale
+ * +0xb > 19) — tops the two staple commodities to a floor when their pool runs
+ * short (+0x120 < 0x32 → +0x74 = 0x32; +0x130 < 100 → +0x70 = 100) and adds
+ * every developed, keep-bearing owned realm's build demand (+0x1d4 → +0x70,
+ * +0x1d0 → +0x7c) to the requests.  The strategic resource orchestrator drains
+ * these +0x70/+0x74/+0x7c requests when it next reconciles the player's market. */
+void engine_army_ai_seed_buy_requests(int player)
+{
+    uint8_t *s = STRAT_REC(player);
+
+    for (int i = 0; i < 4; i++)
+        I32(s + STRAT_BUY_REQ_8 + i * 4) = 0;
+
+    int gate = s[STRAT_AI_LEVEL] > 1;
+    if (!gate) {
+        int r = engine_army_ai_first_owned_realm(player);
+        if (r > 0) {
+            uint8_t *a = ARMY_REC(r);
+            gate = (int8_t)a[ARMY_APPROVAL] > 0x0e && (int8_t)a[ARMY_MORALE] > 0x13;
+        }
+    }
+    if (!gate)
+        return;
+
+    if (I32(s + STRAT_POOL_120) < 0x32)
+        I32(s + STRAT_BUY_REQ_6) = 0x32;
+    if (I32(s + STRAT_POOL_130) < 100)
+        I32(s + STRAT_BUY_REQ_8) = 100;
+
+    int count = (int)s_slot_0056d5dc;
+    for (int r = 1; r <= count; r++) {
+        uint8_t *a = ARMY_REC(r);
+        if (a[ARMY_OWNER] == (uint8_t)player &&
+            a[ARMY_KEEP_LEVEL] != 0 && a[ARMY_SETTLE_FLAG] != 0) {
+            I32(s + STRAT_BUY_REQ_8) += I32(a + ARMY_BUILD_DRAW_HI);
+            I32(s + STRAT_BUY_REQ_7) += I32(a + ARMY_BUILD_DRAW_LO);
+        }
     }
 }
 
