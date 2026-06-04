@@ -148,6 +148,12 @@ int engine_combat_raise_region_unit(int region);
  * DAT_00569570/78, which callers copy into the army's destination fields). */
 void engine_combat_find_deploy_cell(int army, int region, int *out_col, int *out_row);
 
+/* Port of FUN_004a0917 (403 B).  Pick `owner`'s best available (idle, placed,
+ * ≥ `min_head`) unit for `region`, scored by home-region affinity (same region
+ * 300, adjacent 100, else 0) plus an eighth of its weighted strength.  Returns
+ * the best occupant index, or 0 if none qualifies. */
+int engine_combat_pick_best_unit(int owner, int region, int min_head);
+
 /* Port of FUN_004a80db @ 0x4a80db (478 B) — post-battle supply/condition
  * recompute for a surviving occupant.  For each of 3 supply groups, express the
  * present stock as a percent of (rate × count) clamped to 100, and store the

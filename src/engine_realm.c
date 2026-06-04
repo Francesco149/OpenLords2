@@ -1104,7 +1104,7 @@ static int32_t g_coalition_active_count;
 /* Port of FUN_00467e2c — is army `other` named in army `a`'s adjacency list
  * (per-army +0x5c, up to 16 bytes, 0-terminated)?  The adjacency relation is
  * what binds armies into one coalition. */
-static int coalition_armies_adjacent(int a, unsigned other)
+int engine_realm_armies_adjacent(int a, unsigned other)
 {
     const uint8_t *adj = &ARMY_REC(a)[0x5c];
     for (int i = 0; i < 0x10; i++) {
@@ -1158,7 +1158,7 @@ static int coalition_try_join(int a)
         if (COAL_KEY(g) == key) {
             for (int m = 0; m < COALITION_MEMBERS; m++) {
                 uint8_t mem = COAL_MEMBER(g, m);
-                if (mem != 0 && coalition_armies_adjacent(a, mem)) {
+                if (mem != 0 && engine_realm_armies_adjacent(a, mem)) {
                     for (int s = 0; s < COALITION_MEMBERS; s++) {
                         if (COAL_MEMBER(g, s) == 0) {
                             COAL_MEMBER(g, s) = (uint8_t)a;

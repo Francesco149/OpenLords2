@@ -1958,3 +1958,82 @@ int test_engine_combat_find_deploy_cell_fallback(void)
     T_ASSERT_EQ_I(row, 17);
     return 0;
 }
+
+/* ---- pick best available unit (FUN_004a0917) ---------------------------- *
+ * Occupant fields beyond the few the test header names: home region +0x10,
+ * placed +0x150, region-transfer pending +0x198, survives-battle +0x199. */
+static void pick_unit_reset(void)
+{
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+}
+
+/* A unit whose home region IS the target scores 300 and is returned. */
+int test_engine_combat_pick_best_unit_same_region(void)
+{
+    pick_unit_reset();
+    uint8_t *c = CREC(1);
+    c[C_OWNER] = 2;                     /* owner match */
+    c[0x150]   = 1;                     /* placed */
+    I32(c, C_VALUE) = 50;              /* head ≥ min */
+    c[0x10]    = 5;                     /* home region == target */
+
+    T_ASSERT_EQ_I(engine_combat_pick_best_unit(2, 5, 10), 1);
+    return 0;
+}
+
+/* A unit whose home region is adjacent to the target scores 100; a non-adjacent,
+ * non-home unit scores 0 and is never selected. */
+int test_engine_combat_pick_best_unit_adjacent(void)
+{
+    pick_unit_reset();
+    uint8_t *c1 = CREC(1);
+    c1[C_OWNER] = 2; c1[0x150] = 1; I32(c1, C_VALUE) = 50;
+    c1[0x10] = 9;                      /* home region 9: not target, not adjacent */
+
+    uint8_t *c2 = CREC(2);
+    c2[C_OWNER] = 2; c2[0x150] = 1; I32(c2, C_VALUE) = 50;
+    c2[0x10] = 8;                      /* home region 8 ... */
+    g_per_army_768[8 * 0x300 + 0x5c] = 5;   /* ... adjacency list lists region 5 */
+
+    T_ASSERT_EQ_I(engine_combat_pick_best_unit(2, 5, 10), 2);
+    return 0;
+}
+
+/* Equal affinity → the stronger unit (more weighted strength) wins, even at a
+ * higher index (strict > keeps the earlier on a true tie). */
+int test_engine_combat_pick_best_unit_strength_breaks_tie(void)
+{
+    pick_unit_reset();
+    uint8_t *c1 = CREC(1);
+    c1[C_OWNER] = 2; c1[0x150] = 1; I32(c1, C_VALUE) = 50;
+    c1[0x10] = 5;                      /* 300, strength 1 → +0 */
+
+    uint8_t *c2 = CREC(2);
+    c2[C_OWNER] = 2; c2[0x150] = 1; I32(c2, C_VALUE) = 50;
+    c2[0x10] = 5;                      /* 300, plus strength bonus */
+    I16(c2, C_COUNTS) = 10;            /* class-0 ×10 → strength 40 → +5 */
+
+    T_ASSERT_EQ_I(engine_combat_pick_best_unit(2, 5, 10), 2);
+    return 0;
+}
+
+/* Every disqualifier — wrong owner, pending transfer (+0x198), survives flag
+ * (+0x199), unplaced (+0x150 == 0), under-strength — is filtered out → 0. */
+int test_engine_combat_pick_best_unit_filters(void)
+{
+    pick_unit_reset();
+    uint8_t *c1 = CREC(1);             /* wrong owner */
+    c1[C_OWNER] = 3; c1[0x150] = 1; I32(c1, C_VALUE) = 50; c1[0x10] = 5;
+    uint8_t *c2 = CREC(2);             /* transfer pending */
+    c2[C_OWNER] = 2; c2[0x150] = 1; c2[0x198] = 1; I32(c2, C_VALUE) = 50; c2[0x10] = 5;
+    uint8_t *c3 = CREC(3);             /* survives-battle flag set */
+    c3[C_OWNER] = 2; c3[0x150] = 1; c3[0x199] = 1; I32(c3, C_VALUE) = 50; c3[0x10] = 5;
+    uint8_t *c4 = CREC(4);             /* not placed */
+    c4[C_OWNER] = 2; I32(c4, C_VALUE) = 50; c4[0x10] = 5;
+    uint8_t *c5 = CREC(5);             /* head below min */
+    c5[C_OWNER] = 2; c5[0x150] = 1; I32(c5, C_VALUE) = 5; c5[0x10] = 5;
+
+    T_ASSERT_EQ_I(engine_combat_pick_best_unit(2, 5, 10), 0);
+    return 0;
+}

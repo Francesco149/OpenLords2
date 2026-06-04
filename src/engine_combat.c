@@ -1859,6 +1859,47 @@ void engine_combat_find_deploy_cell(int army, int region, int *out_col, int *out
     }
 }
 
+/* Port of FUN_004a0917 (403 B, __cdecl int(int owner, uint region, int min_head)).
+ * Pick `owner`'s best available unit for `region`: scan the occupant table
+ * (1..0x96) for a live unit owned by `owner` (+0x00), idle (region-transfer
+ * pending +0x198 and survives-battle +0x199 both clear), placed (+0x150 set),
+ * with a head-count (+0x168) of at least `min_head`.  Score each by home-region
+ * affinity — its home region (+0x10) being `region` scores 300, a region in its
+ * adjacency list (engine_realm_armies_adjacent) scores 100, otherwise 0 — plus
+ * one eighth of its weighted strength (engine_combat_army_strength).  Returns the
+ * highest-scoring occupant index (first on a tie, strict >), or 0 if none
+ * qualifies or every qualifier scores 0. */
+int engine_combat_pick_best_unit(int owner, int region, int min_head)
+{
+    int best = 0, best_score = 0;
+
+    for (int i = 1; i < 0x97; i++) {
+        uint8_t *c = CREC(i);
+        if ((int8_t)c[C_OWNER] != owner)      continue;
+        if (c[C_F198] != 0 || c[C_F199] != 0) continue;
+        if (c[C_F150] == 0)                   continue;
+        if (rd_i32(c, C_VALUE) < min_head)    continue;
+
+        int score;
+        if (c[C_ARMYKEY] == (unsigned)region)
+            score = 300;
+        else if (engine_realm_armies_adjacent(c[C_ARMYKEY], (unsigned)region))
+            score = 100;
+        else
+            score = 0;
+
+        /* retail: (strength + (strength>>31 & 7)) >> 3 — signed /8; the strength
+         * is a sum of counts × positive weights, so it is never negative. */
+        score += engine_combat_army_strength(i) >> 3;
+
+        if (best_score < score) {
+            best_score = score;
+            best = i;
+        }
+    }
+    return best;
+}
+
 /* Region keep level lives at the same g_per_army_768 +0x1c0 field the spawn
  * cluster reads (A_KEEPLVL); name it for the region context here. */
 #define R_KEEPLVL   0x1c0

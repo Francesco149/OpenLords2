@@ -383,6 +383,11 @@ int engine_realm_coalition_group_key(int group);
 int engine_realm_coalition_group_strength(int group);
 int engine_realm_coalition_group_member(int group, int slot);
 
+/* Port of FUN_00467e2c — is army `other` named in army `a`'s adjacency list
+ * (per-army +0x5c, up to 16 bytes, 0-terminated)?  The adjacency relation binds
+ * armies into one coalition; also used by the AI unit selector. */
+int engine_realm_armies_adjacent(int a, unsigned other);
+
 /* Port of FUN_0044ae51 (497 B) — the consumer half of the coalition pass.
  * For each in-game player slot 1..5 (gated on strategic +0x04, the slot-active
  * byte — NOT the +0x05 has-data byte the event filter consults; and note the
