@@ -2037,3 +2037,53 @@ int test_engine_combat_pick_best_unit_filters(void)
     T_ASSERT_EQ_I(engine_combat_pick_best_unit(2, 5, 10), 0);
     return 0;
 }
+
+/* ---- find a realm to garrison a unit (FUN_004a07f2) ---------------------- */
+
+/* A keep-bearing owned realm with room returns immediately. */
+int test_engine_combat_find_garrison_realm_found(void)
+{
+    pick_unit_reset();
+    s_slot_0056d5dc = 1;
+    uint8_t *a = R_REC(1);
+    a[0x05] = 2;                       /* owner */
+    a[0x1c0] = 4;                      /* keep level 4 → garrison cap 400 */
+    I32(CREC(3), 0x168) = 100;        /* unit 3 head 100 ≤ 400 */
+
+    T_ASSERT_EQ_I(engine_combat_find_garrison_realm(2, 3), 1);
+    return 0;
+}
+
+/* A pending garrison eats the keep's capacity; the search skips that realm and
+ * picks the next one with room. */
+int test_engine_combat_find_garrison_realm_pending_blocks(void)
+{
+    pick_unit_reset();
+    s_slot_0056d5dc = 2;
+    uint8_t *a1 = R_REC(1);
+    a1[0x05] = 2; a1[0x1c0] = 1;       /* cap 150 */
+    I32(a1, 0x1bc) = 7;                /* pending garrison occupant 7 ... */
+    I32(CREC(7), 0x168) = 100;        /* ... head 100 → only 50 spare */
+    uint8_t *a2 = R_REC(2);
+    a2[0x05] = 2; a2[0x1c0] = 4;       /* cap 400 */
+    I32(CREC(3), 0x168) = 100;        /* unit 100 > 50 (realm 1) but ≤ 400 (realm 2) */
+
+    T_ASSERT_EQ_I(engine_combat_find_garrison_realm(2, 3), 2);
+    return 0;
+}
+
+/* Wrong owner, no keep, siege-mode (+0x1c3 == 1) and siege-block (+0x1c2 != 0)
+ * realms are all rejected → 0. */
+int test_engine_combat_find_garrison_realm_filters(void)
+{
+    pick_unit_reset();
+    s_slot_0056d5dc = 4;
+    R_REC(1)[0x05] = 3; R_REC(1)[0x1c0] = 4;                  /* wrong owner */
+    R_REC(2)[0x05] = 2; R_REC(2)[0x1c0] = 0;                  /* no keep */
+    R_REC(3)[0x05] = 2; R_REC(3)[0x1c0] = 2; R_REC(3)[0x1c3] = 1;   /* siege mode */
+    R_REC(4)[0x05] = 2; R_REC(4)[0x1c0] = 2; R_REC(4)[0x1c2] = 1;   /* siege block */
+    I32(CREC(5), 0x168) = 10;          /* small unit that would otherwise fit */
+
+    T_ASSERT_EQ_I(engine_combat_find_garrison_realm(2, 5), 0);
+    return 0;
+}

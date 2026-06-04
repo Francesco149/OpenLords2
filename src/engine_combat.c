@@ -1900,6 +1900,36 @@ int engine_combat_pick_best_unit(int owner, int region, int min_head)
     return best;
 }
 
+/* Port of FUN_004a07f2 (293 B, __cdecl int(uint owner, int unit)).  Find the
+ * first realm owned by `owner` whose keep can still garrison occupant `unit`:
+ * the realm must have a keep (+0x1c0 != 0), not be in siege-mode (+0x1c3 != 1)
+ * and carry no siege block (+0x1c2 == 0).  Its spare garrison capacity is the
+ * cap for its keep level (k_garrison_cap[+0x1c0], retail 0x4d8a10 =
+ * &k_garrison_cap[1] indexed by keeplvl−1) minus the head-count of any pending
+ * garrison occupant (+0x1bc → that occupant's +0x168); the realm qualifies when
+ * `unit`'s head-count (+0x168) fits in the remainder.  Returns the realm index,
+ * or 0 if none. */
+int engine_combat_find_garrison_realm(int owner, int unit)
+{
+    int count = (int)s_slot_0056d5dc;
+    for (int realm = 1; realm <= count; realm++) {
+        uint8_t *a = REGREC(realm);
+        if (a[R_OWNER] != owner) continue;
+        if (a[A_KEEPLVL] == 0)   continue;
+        if (a[A_F1C3] == 1)      continue;
+        if (a[A_F1C2] != 0)      continue;
+
+        int pending_head = 0;
+        int pending = rd_i32(a, A_PENDING);
+        if (pending != 0)
+            pending_head = rd_i32(CREC(pending), C_VALUE);
+
+        if (rd_i32(CREC(unit), C_VALUE) <= k_garrison_cap[a[A_KEEPLVL]] - pending_head)
+            return realm;
+    }
+    return 0;
+}
+
 /* Region keep level lives at the same g_per_army_768 +0x1c0 field the spawn
  * cluster reads (A_KEEPLVL); name it for the region context here. */
 #define R_KEEPLVL   0x1c0

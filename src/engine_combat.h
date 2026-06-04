@@ -154,6 +154,11 @@ void engine_combat_find_deploy_cell(int army, int region, int *out_col, int *out
  * the best occupant index, or 0 if none qualifies. */
 int engine_combat_pick_best_unit(int owner, int region, int min_head);
 
+/* Port of FUN_004a07f2 (293 B).  Find the first realm owned by `owner` whose
+ * keep has spare garrison capacity (keep cap minus the pending garrison's head)
+ * to hold occupant `unit`.  Returns the realm index, or 0 if none. */
+int engine_combat_find_garrison_realm(int owner, int unit);
+
 /* Port of FUN_004a80db @ 0x4a80db (478 B) — post-battle supply/condition
  * recompute for a surviving occupant.  For each of 3 supply groups, express the
  * present stock as a percent of (rate × count) clamped to 100, and store the

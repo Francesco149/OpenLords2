@@ -4,15 +4,15 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 666,
+  "tested": 667,
   "ported": 41,
-  "unported": 1740,
+  "unported": 1739,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 707,
+  "touched": 708,
   "pct_touched": 28.9,
-  "pct_tested": 27.2,
+  "pct_tested": 27.3,
   "bytes_total": 838629,
-  "bytes_touched": 297698,
+  "bytes_touched": 297991,
   "pct_bytes_touched": 35.5
  },
  "orphan_refs": [
@@ -16231,8 +16231,11 @@
    "name": "FUN_004a07f2",
    "size": 293,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x4a0917",

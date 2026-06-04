@@ -1948,6 +1948,9 @@ struct test_case {
     X(engine_combat_pick_best_unit_adjacent) \
     X(engine_combat_pick_best_unit_strength_breaks_tie) \
     X(engine_combat_pick_best_unit_filters) \
+    X(engine_combat_find_garrison_realm_found) \
+    X(engine_combat_find_garrison_realm_pending_blocks) \
+    X(engine_combat_find_garrison_realm_filters) \
     X(engine_combat_contest_region_same_owner_noop) \
     X(engine_combat_contest_region_dead_attacker_noop) \
     X(engine_combat_contest_region_enemy_garrison_noop) \
