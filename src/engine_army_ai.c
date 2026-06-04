@@ -28,6 +28,7 @@
 #include "engine_event_queue.h"    /* engine_event_queue_post (FUN_00472bc5) */
 #include "engine_diplomacy.h"      /* clear_treaty / battle_adjust / best_ally / form_alliance / should_engage */
 #include "engine_realm.h"          /* engine_realm_player_owns_neighbor (FUN_00467eb0) */
+#include "engine_combat.h"         /* raise_region_unit / find_deploy_cell (step-0xa attack) */
 
 #define ARMY_REC(key)   (&g_per_army_768[(key) * 0x300])
 #define STRAT_REC(slot) (&g_player_strategic_352[(slot) * 0x160])
@@ -86,6 +87,7 @@
                                      *   its mustered force here via the deploy-cell finder) */
 #define STRAT_PINNED_ENEMY  0x0eb   /* DAT_0057bfeb — pinned war target player; overrides the
                                      *   relation scan in most_hostile_player when non-zero */
+#define STRAT_ATTACK_COOLDOWN 0x15a /* DAT_0057c05a — turns until the AI may launch its next attack */
 #define STRAT_MUSTER_REALM  0x0e5   /* DAT_0057bfe5 — richest owned realm; the muster source step
                                      *   0xa raises its offensive force from (also read by the
                                      *   spawn/seize paths) */
@@ -1682,4 +1684,64 @@ int engine_army_ai_most_hostile_player(int player)
         }
     }
     return worst;
+}
+
+/* New-occupant record (g_per_territory_420, stride 0x1a4) fields brain step 0xa
+ * stamps onto the force it raises. */
+#define OCC_REC(i)    (&g_per_territory_420[(i) * 0x1a4])
+#define OCC_DEST_COL  0x016   /* DAT_0052f0c6 — march destination column */
+#define OCC_DEST_ROW  0x017   /* DAT_0052f0c7 — march destination row */
+#define OCC_ORDER     0x01a   /* DAT_0052f0ca — order code (7 = march to attack) */
+#define OCC_PLACED    0x150   /* DAT_0052f200 — placed flag (cleared so it deploys) */
+#define OCC_TARGET    0x151   /* DAT_0052f201 — target realm the march heads for */
+#define AI_PERS_ATTACK_CD 0x74 /* personality-row byte: post-attack cooldown reload */
+
+/* Port of FUN_004a0015 — AI brain step 0xa (launch an offensive).  Gated by the
+ * per-player attack cooldown (+0x15a): while it is non-zero it just ticks down.
+ * Otherwise, find the most-hostile enemy (most_hostile_player); if one exists,
+ * select a target realm of that enemy near the AI's muster realm (+0xe5) via
+ * select_target (forced owner = the enemy, gate on).  When a target is found and
+ * the muster realm is prosperous (provision +0x24 ≥ 400 and approval +0xc ≥ 25),
+ * raise a field force there (raise_region_unit), stamp it with a march order
+ * (+0x1a = 7), point it at the chosen deploy cell (find_deploy_cell → +0x16/+0x17)
+ * with the target realm recorded (+0x151) and its placed flag cleared (+0x150),
+ * and reload the attack cooldown from the personality row (+0x74). */
+void engine_army_ai_launch_attack(int player)
+{
+    uint8_t *s = STRAT_REC(player);
+
+    if (s[STRAT_ATTACK_COOLDOWN] != 0) {
+        s[STRAT_ATTACK_COOLDOWN] -= 1;
+        return;
+    }
+
+    int enemy = engine_army_ai_most_hostile_player(player);
+    if (enemy <= 0)
+        return;
+
+    int muster = s[STRAT_MUSTER_REALM];
+    if (!engine_army_ai_select_target(player, muster, 1, enemy))
+        return;
+    if (I32(ARMY_REC(muster) + ARMY_FEED_COUNT) < 400)
+        return;
+    if ((int8_t)ARMY_REC(muster)[ARMY_APPROVAL] < 0x19)
+        return;
+
+    int occ = engine_combat_raise_region_unit(muster);
+    if (occ == 0)
+        return;
+
+    int target = s[STRAT_ATTACK_TARGET];
+    uint8_t *c = OCC_REC(occ);
+    c[OCC_ORDER] = 7;
+
+    int col = 0, row = 0;
+    engine_combat_find_deploy_cell(occ, target, &col, &row);
+    c[OCC_DEST_COL] = (uint8_t)col;
+    c[OCC_DEST_ROW] = (uint8_t)row;
+    c[OCC_PLACED]   = 0;
+    c[OCC_TARGET]   = (uint8_t)target;
+
+    s[STRAT_ATTACK_COOLDOWN] =
+        g_ai_personality[(s[STRAT_PERSONALITY] - 1) * AI_PERS_STRIDE + AI_PERS_ATTACK_CD];
 }

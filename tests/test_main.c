@@ -1951,6 +1951,7 @@ struct test_case {
     X(engine_combat_find_garrison_realm_found) \
     X(engine_combat_find_garrison_realm_pending_blocks) \
     X(engine_combat_find_garrison_realm_filters) \
+    X(engine_combat_ai_launch_attack) \
     X(engine_combat_contest_region_same_owner_noop) \
     X(engine_combat_contest_region_dead_attacker_noop) \
     X(engine_combat_contest_region_enemy_garrison_noop) \
@@ -2138,6 +2139,9 @@ struct test_case {
     X(army_ai_most_hostile_scan) \
     X(army_ai_most_hostile_skips_inactive) \
     X(army_ai_most_hostile_none) \
+    X(army_ai_launch_attack_cooldown_ticks) \
+    X(army_ai_launch_attack_no_enemy) \
+    X(army_ai_launch_attack_unprosperous_gates) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

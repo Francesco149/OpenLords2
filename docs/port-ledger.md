@@ -509,7 +509,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49e77d | FUN_0049e77d | 1430 | engine_army_ai.c, engine_army_ai.h |
 | 0x49ed13 | FUN_0049ed13 | 180 | engine_army_ai.c, engine_army_ai.h |
 | 0x49f96c | FUN_0049f96c | 11 | engine_army_ai.c, engine_army_ai.h |
-| 0x4a0015 | FUN_004a0015 | 469 | engine_combat.c |
+| 0x4a0015 | FUN_004a0015 | 469 | engine_army_ai.c, engine_army_ai.h, engine_combat.c |
 | 0x4a0309 | FUN_004a0309 | 233 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a03f2 | FUN_004a03f2 | 599 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a0649 | FUN_004a0649 | 425 | engine_army_ai.c, engine_army_ai.h |

@@ -162,6 +162,12 @@ void engine_army_ai_step_noop(void);
  * (+0xe6) into the player's strategic record. */
 void engine_army_ai_pick_muster_realms(int player);
 
+/* Port of FUN_004a0015 — AI brain step 0xa (launch an offensive).  Ticks the
+ * per-player attack cooldown (+0x15a); when ready, raises a field force from the
+ * muster realm against the most-hostile enemy's nearest target realm and orders
+ * it to march there.  No-op while on cooldown or with no viable target. */
+void engine_army_ai_launch_attack(int player);
+
 /* Port of FUN_004a0309.  Return the player `player` is most hostile toward — a
  * pinned war target (+0xeb) if set, else the active slot its relation (+0x84) is
  * most negative toward (below −10), or 0. */

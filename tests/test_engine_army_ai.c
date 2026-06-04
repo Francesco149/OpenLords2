@@ -1727,3 +1727,56 @@ int test_army_ai_most_hostile_none(void)
     T_ASSERT_EQ_I(engine_army_ai_most_hostile_player(2), 0);
     return 0;
 }
+
+/* ── launch_attack (FUN_004a0015), decision/gate logic ────────────────────
+ * The full spawn path is exercised in test_engine_combat.c; these cover the
+ * cooldown tick and the early-out gates (no enemy / un-prosperous muster). */
+
+/* While the attack cooldown (+0x15a) is set, the step only ticks it down. */
+int test_army_ai_launch_attack_cooldown_ticks(void)
+{
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    PREC(2)[0x15a] = 3;
+    engine_army_ai_launch_attack(2);
+    T_ASSERT_EQ_I(PREC(2)[0x15a], 2);
+    return 0;
+}
+
+/* Cooldown ready but no hostile enemy → no-op (cooldown stays 0, not reloaded). */
+int test_army_ai_launch_attack_no_enemy(void)
+{
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    PREC(2)[0x15a] = 0;                /* ready */
+    /* no pin, no relation below −10 → most_hostile returns 0 */
+    engine_army_ai_launch_attack(2);
+    T_ASSERT_EQ_I(PREC(2)[0x15a], 0);
+    return 0;
+}
+
+/* Target selected but the muster realm is not prosperous (provision < 400) → the
+ * attack is gated before the raise: select_target still ran (+0x4b set) but the
+ * cooldown is not reloaded. */
+int test_army_ai_launch_attack_unprosperous_gates(void)
+{
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 3;
+    PREC(2)[0x15a] = 0;
+    PREC(2)[0x0eb] = 4;               /* pinned enemy 4 */
+    PREC(2)[0x0e5] = 1;               /* muster realm 1 */
+
+    AREC(1)[0x005] = 2;               /* muster realm */
+    AI32(AREC(1), 0x024) = 399;       /* provision < 400 → gate blocks */
+    AREC(1)[0x00c] = 30;              /* approval fine */
+    AREC(3)[0x005] = 4;               /* an enemy-owned realm select_target can pick */
+    AREC(3)[0x06c] = 5; AREC(3)[0x06d] = 5;
+
+    engine_army_ai_launch_attack(2);
+    T_ASSERT_EQ_I(PREC(2)[0x04b], 3);  /* select_target ran */
+    T_ASSERT_EQ_I(PREC(2)[0x15a], 0);  /* but cooldown not reloaded */
+    return 0;
+}

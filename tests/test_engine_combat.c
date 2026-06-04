@@ -16,6 +16,7 @@
 
 #include "t.h"
 #include "engine_combat.h"
+#include "engine_army_ai.h"        /* engine_army_ai_launch_attack (step-0xa integration) */
 #include "engine_realm_upkeep.h"   /* shares the merc-contract triple */
 #include "engine_army_economy.h"   /* NULL the army-records bind (resign re-plan) */
 #include "engine_map_query.h"      /* bind_cell_descriptors (transfer-army ring) */
@@ -2085,5 +2086,57 @@ int test_engine_combat_find_garrison_realm_filters(void)
     I32(CREC(5), 0x168) = 10;          /* small unit that would otherwise fit */
 
     T_ASSERT_EQ_I(engine_combat_find_garrison_realm(2, 5), 0);
+    return 0;
+}
+
+/* ---- AI brain step 0xa: launch an attack (FUN_004a0015) end-to-end ------- *
+ * Integration: cooldown ready + pinned enemy + prosperous muster realm + a
+ * spawn seat → the step raises a force, stamps it with a march order to the
+ * selected target realm, and reloads the personality cooldown. */
+int test_engine_combat_ai_launch_attack(void)
+{
+    spawn_reset();
+    memset(g_spawn_cells, 0, sizeof g_spawn_cells);
+    memset(g_overworld_map, 0, sizeof g_overworld_map);
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    g_spawn_cells[(20 * SPAWN_GRID + 20) * SPAWN_STRIDE + 1] = 1;   /* free spawn seat */
+    engine_map_query_bind_cell_descriptors(g_spawn_cells);
+    engine_territory_bind_cells(g_spawn_cells);
+    engine_territory_bind_records(g_per_territory_420);
+
+    int player = 2, muster = 2, enemy = 4;
+    P_REC(player)[0x07]  = 1;          /* personality 1 → cooldown reload 6 */
+    P_REC(player)[0x15a] = 0;          /* ready */
+    P_REC(player)[0x0eb] = enemy;      /* pinned war target */
+    P_REC(player)[0x0e5] = muster;     /* muster realm */
+    P_REC(player)[0x05]  = 1;          /* owner active (spawn garrison source) */
+
+    s_slot_0056d5dc = 4;
+    R_REC(muster)[0x05] = player;
+    R_REC(muster)[SPAWN_COORD_OFF + muster * 3]     = 20;   /* spawn seat */
+    R_REC(muster)[SPAWN_COORD_OFF + muster * 3 + 1] = 20;
+    I32(R_REC(muster), 0x24) = 500;    /* provision ≥ 400 */
+    I32(R_REC(muster), 0x38) = 500;
+    R_REC(muster)[0x0c] = 30;          /* approval ≥ 25 */
+
+    R_REC(3)[0x05] = enemy;            /* enemy realm select_target picks */
+    R_REC(3)[0x6c] = 22; R_REC(3)[0x6d] = 20;
+
+    int o = (20 * 0x40 + 22) * 8;      /* a deployable cell owned by realm 3 */
+    g_overworld_map[o + 0] = 10; g_overworld_map[o + 1] = 0x20; g_overworld_map[o + 7] = 3;
+
+    engine_army_ai_launch_attack(player);
+
+    int occ = engine_territory_current_slot();
+    T_ASSERT(occ != 0);
+    T_ASSERT_EQ_I(CREC(occ)[0x1a], 7);        /* march order */
+    T_ASSERT_EQ_I(CREC(occ)[0x151], 3);       /* target realm recorded */
+    T_ASSERT_EQ_U(CREC(occ)[0x150], 0);       /* placed flag cleared */
+    T_ASSERT_EQ_I(P_REC(player)[0x4b], 3);    /* selected target */
+    T_ASSERT_EQ_I(P_REC(player)[0x15a], 6);   /* cooldown reloaded (personality 1) */
+
+    engine_map_query_bind_cell_descriptors(NULL);
+    engine_territory_bind_cells(NULL);
+    engine_territory_bind_records(NULL);
     return 0;
 }

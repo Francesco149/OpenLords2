@@ -16193,6 +16193,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h",
     "src/engine_combat.c"
    ]
   },
