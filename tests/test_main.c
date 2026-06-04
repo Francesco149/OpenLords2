@@ -2100,6 +2100,12 @@ struct test_case {
     X(army_ai_seed_buy_requests_highlevel) \
     X(army_ai_seed_buy_requests_gate_fails) \
     X(army_ai_seed_buy_requests_prosperity_gate) \
+    X(army_ai_diplomacy_warm_relations) \
+    X(army_ai_diplomacy_dead_lord_clears) \
+    X(army_ai_diplomacy_betrayal_fires) \
+    X(army_ai_diplomacy_no_betrayal_below_threshold) \
+    X(army_ai_diplomacy_forms_alliance_with_ai) \
+    X(army_ai_diplomacy_proposes_to_human) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

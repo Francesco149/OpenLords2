@@ -5,8 +5,8 @@
 The unported, non-thunk engine functions already **called by ported code** — the natural next chips. A **leaf** has all of its
 own callees ported, so it can land today with zero new dependencies. Sorted by how many ported callers want it.
 
-- frontier functions: **281**
-- of those, zero-dependency **leaves: 127** (recommended order below)
+- frontier functions: **280**
+- of those, zero-dependency **leaves: 126** (recommended order below)
 
 ## Leaf shortlist — portable today (top 40 by ported-caller count)
 
@@ -345,7 +345,7 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x49a010 | 982 | 1 | 3 |  |
 | 0x49e77d | 1430 | 1 | 1 |  |
 
-### asset-load IO helper cluster (0x4af*) (15)
+### asset-load IO helper cluster (0x4af*) (14)
 
 | VA | size | ported callers | unported deps | leaf |
 |----|-----:|---------------:|--------------:|:----:|
@@ -363,7 +363,6 @@ own callees ported, so it can land today with zero new dependencies. Sorted by h
 | 0x4aa6ca | 469 | 1 | 0 | ✓ |
 | 0x4a277d | 565 | 1 | 7 |  |
 | 0x4a8e0b | 943 | 1 | 3 |  |
-| 0x4a0c1d | 1572 | 1 | 0 | ✓ |
 
 ### battlefield render + wndproc (24)
 

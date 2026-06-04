@@ -148,6 +148,12 @@ void engine_army_ai_seed_buy_requests(int player);
  * counter (+0x60).  Proposals are posted through `evq`. */
 void engine_army_ai_propose_diplomacy(int player, engine_event_queue_state_t *evq);
 
+/* Port of FUN_004a0c1d — AI brain step 2 (per-turn diplomacy decision): warm
+ * relations toward AI players, maintain or betray the player's lord as betrayal
+ * pressure accrues, and — when lordless and past year 1268 — seek/propose a new
+ * alliance.  Notifications post through `evq`. */
+void engine_army_ai_run_diplomacy(int player, engine_event_queue_state_t *evq);
+
 /* Port of FUN_0049f96c — AI brain step 8.  A no-op in the shipped build. */
 void engine_army_ai_step_noop(void);
 

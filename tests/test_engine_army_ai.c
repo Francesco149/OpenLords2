@@ -1133,6 +1133,158 @@ int test_army_ai_seed_buy_requests_gate_fails(void)
     return 0;
 }
 
+/* ── FUN_004a0c1d — AI brain step 2 (per-turn diplomacy decision) ────────── */
+
+#define DREL(p, o)  PREC(p)[0x84 + (o) * 0x10]   /* relation p→o (i8) */
+#define DPRS(p, o)  PREC(p)[0x86 + (o) * 0x10]   /* contact/pressure p→o (u8) */
+
+/* Pass 1 warms the relation toward each AI slot (+5 == 0) by 1, clamped to +30;
+ * human slots (+5 != 0) are skipped.  Isolated by leaving the player lordless
+ * and pinning the year below the ally-seek gate. */
+int test_army_ai_diplomacy_warm_relations(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    engine_event_queue_init(&evq);
+    s_slot_00553edc = 0;                  /* year gate fails → pass 3 skipped */
+
+    PREC(2)[0x081] = 0;                   /* no lord → pass 2 skipped */
+    PREC(3)[0x005] = 0;                   /* AI → warmed */
+    PREC(5)[0x005] = 0;                   /* AI → warmed (already at cap) */
+    PREC(1)[0x005] = 1;                   /* human → skipped */
+    PREC(2)[0x005] = 1;                   /* keep self out of the warm loop */
+    DREL(2, 3) = 5;
+    DREL(2, 5) = 0x1e;                    /* at +30 cap */
+    DREL(2, 1) = 5;
+
+    engine_army_ai_run_diplomacy(2, &evq);
+
+    T_ASSERT_EQ_I((int8_t)DREL(2, 3), 6);     /* warmed +1 */
+    T_ASSERT_EQ_I((int8_t)DREL(2, 5), 0x1e);  /* clamped at +30 */
+    T_ASSERT_EQ_I((int8_t)DREL(2, 1), 5);     /* human → untouched */
+    return 0;
+}
+
+/* Pass 2: a lord that has dropped out of the game (+4 == 0) has its treaty
+ * cleared outright and the step returns. */
+int test_army_ai_diplomacy_dead_lord_clears(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    engine_event_queue_init(&evq);
+
+    PREC(2)[0x081] = 3;                   /* lord = 3 */
+    PREC(2)[0x085 + 3 * 0x10] = 1;        /* treaty toward 3 */
+    PREC(2)[0x01e] = 9;
+    PREC(3)[0x004] = 0;                   /* lord inactive */
+
+    engine_army_ai_run_diplomacy(2, &evq);
+
+    T_ASSERT_EQ_I(PREC(2)[0x081], 0);             /* lord cleared */
+    T_ASSERT_EQ_I(PREC(2)[0x085 + 3 * 0x10], 0);  /* treaty cleared */
+    T_ASSERT_EQ_I(PREC(2)[0x01e], 0);
+    return 0;
+}
+
+/* Pass 2: betrayal pressure from a soured relation tops personality 1's
+ * threshold (5) → clear treaty + post a 0xb5 notification. */
+int test_army_ai_diplomacy_betrayal_fires(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    engine_event_queue_init(&evq);
+    s_slot_00553edc = 0;                  /* year gate fails → pass 3 skipped */
+    s_slot_00554004 = 5;                  /* not a thinning field (no +25) */
+    s_slot_00553d24 = 0;                  /* lord is not the leader (no bonus) */
+    s_slot_0057c8cc = 3;                  /* local player = lord → 0xb5 publishes */
+
+    PREC(2)[0x004] = 1; PREC(2)[0x005] = 0; PREC(2)[0x007] = 1;  /* AI, personality 1 */
+    PREC(2)[0x081] = 3;                   /* lord = 3 */
+    PREC(2)[0x085 + 3 * 0x10] = 1;        /* treaty toward 3 */
+    PREC(3)[0x004] = 1; PREC(3)[0x005] = 0;  /* lord active + AI */
+    DREL(2, 3) = (uint8_t)(-20);          /* < -10 even after pass-1 warm (-19) */
+
+    engine_army_ai_run_diplomacy(2, &evq);
+
+    T_ASSERT_EQ_I(PREC(2)[0x081], 0);     /* treaty cleared on betrayal */
+    T_ASSERT_EQ_I(evq.write_idx, 1);      /* one notification published */
+    T_ASSERT_EQ_I(evq.ring[0].code, 0xb5);
+    T_ASSERT_EQ_I(evq.ring[0].audience, 3);
+    return 0;
+}
+
+/* Pass 2: pressure below threshold leaves the bond intact and posts nothing. */
+int test_army_ai_diplomacy_no_betrayal_below_threshold(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    engine_event_queue_init(&evq);
+    s_slot_00553edc = 0;
+    s_slot_00554004 = 5;
+    s_slot_00553d24 = 0;
+
+    PREC(2)[0x004] = 1; PREC(2)[0x005] = 0; PREC(2)[0x007] = 4;  /* personality 4: thr 20 */
+    PREC(2)[0x081] = 3;
+    PREC(3)[0x004] = 1; PREC(3)[0x005] = 0;
+    DREL(2, 3) = (uint8_t)(-20);          /* +10 pressure < 20 threshold */
+
+    engine_army_ai_run_diplomacy(2, &evq);
+
+    T_ASSERT_EQ_I(PREC(2)[0x081], 3);     /* lord kept */
+    T_ASSERT_EQ_I(evq.write_idx, 0);
+    return 0;
+}
+
+/* Pass 3: a lordless player past the year gate, whose personality cooldown
+ * elapses, bonds directly with an AI candidate (engine_diplomacy_form_alliance). */
+int test_army_ai_diplomacy_forms_alliance_with_ai(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    engine_event_queue_init(&evq);
+    s_slot_00553edc = 0x500;              /* > 0x4f4 → year gate passes */
+
+    PREC(2)[0x007] = 1;                   /* personality 1: ally period 12 */
+    PREC(2)[0x081] = 0;                   /* lordless */
+    PREC(2)[0x02b] = 2;                   /* not the leader */
+    PREC(2)[0x0ec] = 11;                  /* +1 → 12, period 12 elapses */
+    PREC(3)[0x004] = 1; PREC(3)[0x005] = 0; PREC(3)[0x02b] = 2;  /* eligible AI candidate */
+
+    engine_army_ai_run_diplomacy(2, &evq);
+
+    T_ASSERT_EQ_I(PREC(2)[0x080], 3);     /* candidate latched */
+    T_ASSERT_EQ_I(PREC(2)[0x081], 3);     /* mutual bond formed */
+    T_ASSERT_EQ_I(PREC(3)[0x081], 2);
+    T_ASSERT_EQ_I(PREC(2)[0x0ec], 0);     /* cooldown reset */
+    return 0;
+}
+
+/* Pass 3: a human candidate gets a 0xb4 proposal instead, latching the +0x1c
+ * pending gate. */
+int test_army_ai_diplomacy_proposes_to_human(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    engine_event_queue_init(&evq);
+    s_slot_00553edc = 0x500;
+    s_slot_0057c8cc = 3;                  /* local = candidate → proposal publishes */
+
+    PREC(2)[0x007] = 1;
+    PREC(2)[0x081] = 0;
+    PREC(2)[0x02b] = 2;
+    PREC(2)[0x0ec] = 11;
+    PREC(3)[0x004] = 1; PREC(3)[0x005] = 1; PREC(3)[0x02b] = 2; PREC(3)[0x081] = 0;  /* human, lordless */
+
+    engine_army_ai_run_diplomacy(2, &evq);
+
+    T_ASSERT_EQ_I(PREC(2)[0x01c], 1);     /* pending gate latched */
+    T_ASSERT_EQ_I(PREC(2)[0x081], 0);     /* no direct bond with a human */
+    T_ASSERT_EQ_I(evq.write_idx, 1);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0xb4);
+    T_ASSERT_EQ_I(evq.ring[0].audience, 3);
+    return 0;
+}
+
 /* seed_buy_requests: the prosperity gate passes when the first owned realm has
  * approval > 14 AND morale > 19 — then the staples floor even for a level-1 AI. */
 int test_army_ai_seed_buy_requests_prosperity_gate(void)

@@ -26,6 +26,7 @@
 #include "engine_ranking.h"        /* engine_ranking_recompute_player_total */
 #include "engine_math.h"           /* engine_math_percent_of (FUN_00404d6b) */
 #include "engine_event_queue.h"    /* engine_event_queue_post (FUN_00472bc5) */
+#include "engine_diplomacy.h"      /* clear_treaty / battle_adjust / best_ally / form_alliance */
 
 #define ARMY_REC(key)   (&g_per_army_768[(key) * 0x300])
 #define STRAT_REC(slot) (&g_player_strategic_352[(slot) * 0x160])
@@ -110,6 +111,13 @@
 #define STRAT_DIPLO_GAUGE   0x060   /* DAT_0057bf60 — monotonic diplomacy-readiness counter;
                                      *   proposals gate above 0x28 (alliance) / 0x1c (war) */
 #define STRAT_LORD          0x081   /* DAT_0057bf81 — this player's lord (diplomacy D_LORD) */
+#define STRAT_PROPOSAL_GATE 0x01c   /* DAT_0057bf1c — set to 1 while an alliance proposal to a
+                                     *   human is pending (diplomacy D_FLAG_1C) */
+#define STRAT_REL           0x084   /* DAT_0057bf84 — relation toward other (i8; + other*0x10) */
+#define STRAT_CONTACT       0x086   /* DAT_0057bf86 — lord-contact / betrayal-pressure accumulator
+                                     *   toward other (u8; + other*0x10) */
+#define STRAT_ALLY_CAND     0x080   /* DAT_0057bf80 — chosen alliance candidate (step 2) */
+#define STRAT_ALLY_COOLDOWN 0x0ec   /* DAT_0057bfec — alliance-proposal cooldown counter (step 2) */
 #define STRAT_PROPOSE_TICK  0x0e9   /* DAT_0057bfe9 — ticks toward the next proposal; fires at 8 */
 #define STRAT_PROPOSE_PHASE 0x0ea   /* DAT_0057bfea — 0 → broadcast alliance next, 1 → war next */
 #define STRAT_MOOD_CYCLE    0x159   /* DAT_0057c059 — notification mood-cycle 0..3 (D_MOODCYC) */
@@ -128,6 +136,8 @@
 #define AI_PERS_STRIDE      0xf0
 #define AI_PERS_COUNT       4
 #define AI_PERS_DISPATCH    0x00    /* dispatch-code byte (0 / 1 / 9) */
+#define AI_PERS_BETRAY_THR  0x10    /* i32: betrayal-pressure threshold (step 2) */
+#define AI_PERS_ALLY_PERIOD 0x14    /* i32: alliance-proposal cooldown period (step 2) */
 #define AI_PERS_CASH_THRESH 0x78    /* cash floor to fund the discretionary buy */
 #define AI_PERS_BUY_AMOUNT  0x7c    /* discretionary buy quantity */
 #define AI_PERS_TARGET_8    0x84    /* commodity-8 target stock */
@@ -1130,13 +1140,13 @@ static void build_has_data(uint8_t has_data[7])
  * The variant selector is (mood-cycle − 4) + personality·4, read from the
  * CURRENT counter before it advances. */
 static void propose_notify(engine_event_queue_state_t *evq, int player,
-                           int audience, int code, uint8_t *s)
+                           int audience, int code, uint8_t flag5, uint8_t *s)
 {
     uint8_t has_data[7];
     build_has_data(has_data);
 
     int variant = ((int)s[STRAT_MOOD_CYCLE] - 4) + (int)s[STRAT_PERSONALITY] * 4;
-    engine_event_queue_post(evq, player, audience, code, variant, 1, 0, 0, 0,
+    engine_event_queue_post(evq, player, audience, code, variant, flag5, 0, 0, 0,
                             has_data, (int)s_slot_0057c8cc);
 
     s[STRAT_MOOD_CYCLE] += 1;
@@ -1181,7 +1191,7 @@ void engine_army_ai_propose_diplomacy(int player, engine_event_queue_state_t *ev
             uint8_t *o = STRAT_REC(other);
             if (o[STRAT_ACTIVE] == 0 || o[STRAT_ELIMINATED] == 0)
                 continue;
-            propose_notify(evq, player, other, 0xc1, s);
+            propose_notify(evq, player, other, 0xc1, 1, s);
         }
 
         s[STRAT_PROPOSE_TICK]  = 0;
@@ -1200,7 +1210,104 @@ void engine_army_ai_propose_diplomacy(int player, engine_event_queue_state_t *ev
 
         s[STRAT_PROPOSE_TICK]  = 0;
         s[STRAT_PROPOSE_PHASE] = 0;
-        propose_notify(evq, player, target, 0xc0, s);
+        propose_notify(evq, player, target, 0xc0, 1, s);
+    }
+}
+
+/* Port of FUN_004a0c1d — AI brain step 2 (per-turn diplomacy decision).  Three
+ * passes over `player`'s strategic record:
+ *
+ *  1. Warm relations: the relation toward every AI-controlled slot (+0x84,
+ *     stride 0x10) drifts +1 per turn toward the +30 ceiling.
+ *  2. Lord upkeep: if `player` has a lord (+0x81), a lord that has dropped out
+ *     (+0x04 == 0) has its treaty cleared outright; otherwise betrayal pressure
+ *     (+0x86) accumulates from a soured relation (< -10 → +10), a thinning field
+ *     (s_slot_00554004 < 3 → +25), and the lord being the leader
+ *     (s_slot_00553d24); once the pressure tops the personality threshold (+0x10)
+ *     the AI betrays — clears the treaty, takes the relation hit, posts 0xb5.
+ *  3. Ally seeking: a lordless, non-leader (rank != 1) player past year 1268
+ *     (s_slot_00553edc > 0x4f4) picks the best ally candidate into +0x80; once
+ *     its personality cooldown (+0x14) elapses it bonds with an AI candidate
+ *     directly (engine_diplomacy_form_alliance) or posts a 0xb4 proposal to a
+ *     lordless human candidate, latching the +0x1c pending gate.
+ *
+ * Notifications route through the event-queue producer; the queue state, the
+ * has-data filter and the local-player slot are threaded in. */
+void engine_army_ai_run_diplomacy(int player, engine_event_queue_state_t *evq)
+{
+    uint8_t *s = STRAT_REC(player);
+
+    /* Pass 1 — warm relations toward AI players, capped at +30. */
+    for (int i = 1; i < 6; i++) {
+        if (STRAT_REC(i)[STRAT_ELIMINATED] == 0) {
+            int rel = STRAT_REL + i * 0x10;
+            s[rel] += 1;
+            if ((int8_t)s[rel] > 0x1e)
+                s[rel] = 0x1e;
+        }
+    }
+
+    /* Pass 2 — lord upkeep / betrayal. */
+    if (s[STRAT_LORD] != 0) {
+        int betray_thr =
+            pers_i32(personality_row(s[STRAT_PERSONALITY]), AI_PERS_BETRAY_THR);
+        int lord = s[STRAT_LORD];
+
+        if (STRAT_REC(lord)[STRAT_ACTIVE] == 0) {
+            engine_diplomacy_clear_treaty(player, lord);
+            return;
+        }
+
+        int pres = STRAT_CONTACT + lord * 0x10;
+        if ((int8_t)s[STRAT_REL + lord * 0x10] < -10)
+            s[pres] += 0x0a;
+        if ((int)s_slot_00554004 < 3)
+            s[pres] += 0x19;
+        if (s_slot_00553d24 == (uint32_t)lord) {
+            uint8_t gauge = STRAT_REC(lord)[STRAT_DIPLO_GAUGE];
+            if (gauge < 0x15) {
+                /* Retail nests two further comparisons here, both unreachable
+                 * when gauge < 0x15 (the < 0x22 test is always true, the > 0x32
+                 * test always false) — preserved verbatim as dead arms so the
+                 * structure matches the binary; only the >= 0x15 → +1 path and
+                 * this empty < 0x15 path actually fire. */
+                if (gauge < 0x22) {
+                    if (gauge > 0x32)
+                        s[pres] += 4;
+                } else {
+                    s[pres] += 2;
+                }
+            } else {
+                s[pres] += 1;
+            }
+        }
+
+        if (betray_thr < (int)s[pres]) {
+            engine_diplomacy_clear_treaty(player, lord);
+            engine_diplomacy_battle_adjust(player, lord, 5, evq);
+            propose_notify(evq, player, lord, 0xb5, 1, s);
+        }
+    }
+
+    /* Pass 3 — seek a new alliance. */
+    if (s[STRAT_LORD] == 0 && (int)s_slot_00553edc > 0x4f4 && s[STRAT_RANK] != 1) {
+        int cand = engine_diplomacy_best_ally_candidate(player);
+        s[STRAT_ALLY_CAND] = (uint8_t)cand;
+        if (s[STRAT_ALLY_CAND] != 0) {
+            int period =
+                pers_i32(personality_row(s[STRAT_PERSONALITY]), AI_PERS_ALLY_PERIOD);
+            s[STRAT_ALLY_COOLDOWN] += 1;
+            if (period <= (int)(int8_t)s[STRAT_ALLY_COOLDOWN]) {
+                s[STRAT_ALLY_COOLDOWN] = 0;
+                int c = s[STRAT_ALLY_CAND];
+                if (STRAT_REC(c)[STRAT_ELIMINATED] == 0) {
+                    engine_diplomacy_form_alliance(player, c);
+                } else if (STRAT_REC(c)[STRAT_LORD] == 0) {
+                    s[STRAT_PROPOSAL_GATE] = 1;
+                    propose_notify(evq, player, c, 0xb4, 0xb, s);
+                }
+            }
+        }
     }
 }
 
