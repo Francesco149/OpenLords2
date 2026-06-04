@@ -1554,3 +1554,61 @@ int test_army_ai_pick_muster_skips_unowned(void)
     engine_army_economy_bind_army_records(NULL);
     return 0;
 }
+
+/* ── Attack-target selection (FUN_004a0649) ───────────────────────────────
+ * Needs the realm records clean; should_engage reads the player's strategic
+ * record (lord +0x81 must not be the target owner). */
+
+/* The nearest adjacent enemy realm is chosen (lowest king-move score). */
+int test_army_ai_pick_attack_target_nearest(void)
+{
+    ai_turn_setup();
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 3;
+
+    AREC(1)[0x005] = 2; AREC(1)[0x06c] = 10; AREC(1)[0x06d] = 10;  /* own realm + home */
+    AREC(2)[0x005] = 2;                                            /* own → skipped */
+    uint8_t *t = AREC(3);                                          /* enemy target */
+    t[0x005] = 4; t[0x06c] = 12; t[0x06d] = 10;                   /* dist 2 */
+    t[0x05c] = 1;                                                  /* borders realm 1 (player 2) */
+
+    T_ASSERT_EQ_I(engine_army_ai_pick_attack_target(2, 1), 3);
+    return 0;
+}
+
+/* A richer, defended target can outscore a closer poor one (wealth bonus beats
+ * distance). */
+int test_army_ai_pick_attack_target_prefers_rich(void)
+{
+    ai_turn_setup();
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 4;
+
+    AREC(1)[0x005] = 2; AREC(1)[0x06c] = 10; AREC(1)[0x06d] = 10;
+
+    uint8_t *near = AREC(3);                       /* close + poor → score 2 */
+    near[0x005] = 4; near[0x06c] = 12; near[0x06d] = 10; near[0x05c] = 1;
+
+    uint8_t *rich = AREC(4);                       /* far but rich → score 10−0x14−0xa = −20 */
+    rich[0x005] = 4; rich[0x06c] = 20; rich[0x06d] = 10; rich[0x05c] = 1;
+    AI32(rich, 0x250) = 0xc9;                      /* stock ≥ 0xc9 → −0x14 */
+    AI32(rich, 0x224) = 0x3e9;                     /* provision ≥ 0x3e9 → −0xa */
+
+    T_ASSERT_EQ_I(engine_army_ai_pick_attack_target(2, 1), 4);
+    return 0;
+}
+
+/* An enemy realm with no player-owned neighbour is not a target → 0. */
+int test_army_ai_pick_attack_target_requires_border(void)
+{
+    ai_turn_setup();
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    s_slot_0056d5dc = 3;
+
+    AREC(1)[0x005] = 2; AREC(1)[0x06c] = 10; AREC(1)[0x06d] = 10;
+    uint8_t *t = AREC(3);
+    t[0x005] = 4; t[0x06c] = 12; t[0x06d] = 10;    /* enemy, near — but no +0x5c border */
+
+    T_ASSERT_EQ_I(engine_army_ai_pick_attack_target(2, 1), 0);
+    return 0;
+}

@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **708** (28.9%) — tested 667, ported 41
-- code bytes touched: **35.5%** (297,991 / 838,629 B)
-- unported: **1739**
+- touched: **709** (29.0%) — tested 668, ported 41
+- code bytes touched: **35.6%** (298,416 / 838,629 B)
+- unported: **1738**
 - orphan refs (in src/, not in function table): 7
 
-## tested (667) — ported + host unit suite
+## tested (668) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -101,7 +101,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404e03 | FUN_00404e03 | 72 | engine_army_economy.c, engine_math.h |
 | 0x404e4b | FUN_00404e4b | 98 | engine_math.h |
 | 0x404ead | FUN_00404ead | 159 | engine_combat.c, engine_math.h, engine_path.h |
-| 0x404f4c | FUN_00404f4c | 180 | engine_path.h, engine_territory.c |
+| 0x404f4c | FUN_00404f4c | 180 | engine_army_ai.c, engine_path.h, engine_territory.c |
 | 0x4050c0 | FUN_004050c0 | 53 | engine_map_scene.c, engine_map_scene.h, engine_screen_strat.c (+1) |
 | 0x4050f6 | FUN_004050f6 | 376 | engine_map_scene.c, engine_map_scene.h, main.c |
 | 0x40526e | FUN_0040526e | 537 | engine_map_scene.c, engine_map_scene.h, engine_map_terrain.c (+1) |
@@ -391,7 +391,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x467a36 | FUN_00467a36 | 624 | engine_territory.c, engine_territory.h |
 | 0x467ca6 | FUN_00467ca6 | 385 | engine_territory.c, engine_territory.h |
 | 0x467e2c | FUN_00467e2c | 127 | engine_realm.c, engine_realm.h |
-| 0x467eb0 | FUN_00467eb0 | 126 | engine_combat.c, engine_realm.c, engine_realm.h |
+| 0x467eb0 | FUN_00467eb0 | 126 | engine_army_ai.c, engine_combat.c, engine_realm.c (+1) |
 | 0x467fd1 | FUN_00467fd1 | 336 | engine_territory.c, engine_territory.h |
 | 0x468121 | FUN_00468121 | 331 | engine_territory.c, engine_territory.h |
 | 0x46826c | FUN_0046826c | 221 | engine_territory.c, engine_territory.h |
@@ -510,6 +510,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49ed13 | FUN_0049ed13 | 180 | engine_army_ai.c, engine_army_ai.h |
 | 0x49f96c | FUN_0049f96c | 11 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a0015 | FUN_004a0015 | 469 | engine_combat.c |
+| 0x4a0649 | FUN_004a0649 | 425 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a07f2 | FUN_004a07f2 | 293 | engine_combat.c, engine_combat.h |
 | 0x4a0917 | FUN_004a0917 | 403 | engine_combat.c, engine_combat.h |
 | 0x4a0aaa | FUN_004a0aaa | 371 | engine_army_ai.c, engine_army_ai.h |

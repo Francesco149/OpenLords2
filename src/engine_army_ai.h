@@ -162,6 +162,12 @@ void engine_army_ai_step_noop(void);
  * (+0xe6) into the player's strategic record. */
 void engine_army_ai_pick_muster_realms(int player);
 
+/* Port of FUN_004a0649.  Pick `player`'s best adjacent enemy attack target,
+ * scored from `from_realm`'s capital by king-move distance plus defence/wealth
+ * adjustments; the lowest-scoring candidate below the ceiling wins.  Returns the
+ * target realm, or 0. */
+int engine_army_ai_pick_attack_target(int player, int from_realm);
+
 /* Port of FUN_0049ed13.  Flag whether `player` can afford `realm`'s current
  * build order: clears the realm's affordability flag, runs the slot-2 resource
  * planner, then re-sets the flag iff the player's +0x130/+0x120 pools both cover

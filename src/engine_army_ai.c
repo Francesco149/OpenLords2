@@ -26,7 +26,8 @@
 #include "engine_ranking.h"        /* engine_ranking_recompute_player_total */
 #include "engine_math.h"           /* engine_math_percent_of (FUN_00404d6b) */
 #include "engine_event_queue.h"    /* engine_event_queue_post (FUN_00472bc5) */
-#include "engine_diplomacy.h"      /* clear_treaty / battle_adjust / best_ally / form_alliance */
+#include "engine_diplomacy.h"      /* clear_treaty / battle_adjust / best_ally / form_alliance / should_engage */
+#include "engine_realm.h"          /* engine_realm_player_owns_neighbor (FUN_00467eb0) */
 
 #define ARMY_REC(key)   (&g_per_army_768[(key) * 0x300])
 #define STRAT_REC(slot) (&g_player_strategic_352[(slot) * 0x160])
@@ -58,6 +59,9 @@
 #define ARMY_BUILD_DRAW_HI  0x1d4   /* DAT_0053fb84 — settlement build demand, pool +0x130 */
 #define ARMY_SETTLE_FLAG    0x1c3   /* DAT_0053fb73 — secondary settlement present */
 #define ARMY_TIER_STEP      0x219   /* DAT_0053fbc9 — advancement tier byte (0..5) */
+#define ARMY_CAP_COL        0x06c   /* DAT_0053fa1c — capital cell column (u8) */
+#define ARMY_CAP_ROW        0x06d   /* DAT_0053fa1d — capital cell row (u8) */
+#define ARMY_PENDING        0x1bc   /* DAT_0053fb6c — pending garrison occupant (i32) */
 #define ARMY_BUILD_TAG      0x290   /* DAT_0053fc40 — rotating build-order tag (0..5); the AI
                                      *   pulls one per turn from its personality build column */
 #define ARMY_BUILD_AFFORD   0x2c5   /* DAT_0053fc75 — set when the player can afford the current
@@ -1502,4 +1506,65 @@ void engine_army_ai_pick_muster_realms(int player)
 
     STRAT_REC(player)[STRAT_MUSTER_REALM] = (uint8_t)rich_realm;
     STRAT_REC(player)[STRAT_WEAK_REALM]   = (uint8_t)weak_realm;
+}
+
+/* Port of FUN_004a0649 — pick `player`'s best adjacent enemy attack target,
+ * scored from `from_realm`'s capital.  A candidate must be a realm not owned by
+ * `player` that `player` would engage (engine_diplomacy_should_engage) and that
+ * borders one of `player`'s realms (engine_realm_player_owns_neighbor).  Its
+ * score starts at the king-move distance from `from_realm`'s capital to the
+ * target's (retail FUN_00404f4c, engine_path_chebyshev_distance — only the
+ * distance is used, so it is inlined), then: +0x28 if the target is a defended
+ * keep (+0x1c0 set and a pending garrison +0x1bc); −0x14 if its stock (+0x250) is
+ * ≥ 0xc9 else −0xa if > 100; −0xa if its provision (+0x224) is ≥ 0x3e9 else −5 if
+ * > 500.  The lowest-scoring candidate below the 0x80 ceiling wins (richer,
+ * closer, weaker → lower).  Returns the target realm, or 0. */
+int engine_army_ai_pick_attack_target(int player, int from_realm)
+{
+    int best_score = 0x80;
+    int best_realm = 0;
+    int count = (int)s_slot_0056d5dc;
+
+    int home_col = ARMY_REC(from_realm)[ARMY_CAP_COL];
+    int home_row = ARMY_REC(from_realm)[ARMY_CAP_ROW];
+
+    for (int realm = 1; realm <= count; realm++) {
+        uint8_t *r = ARMY_REC(realm);
+        int owner = r[ARMY_OWNER];
+        if (owner == player)
+            continue;
+        if (!engine_diplomacy_should_engage(player, owner))
+            continue;
+        if (!engine_realm_player_owns_neighbor((unsigned)player, realm))
+            continue;
+
+        int dx = home_col - r[ARMY_CAP_COL]; if (dx < 0) dx = -dx;
+        int dy = home_row - r[ARMY_CAP_ROW]; if (dy < 0) dy = -dy;
+        int score = (dx < dy) ? dy : dx;          /* chebyshev */
+
+        if (r[ARMY_KEEP_LEVEL] != 0 && I32(r + ARMY_PENDING) != 0)
+            score += 0x28;
+
+        int stock = I32(r + ARMY_STOCK_A);
+        if (stock < 0xc9) {
+            if (stock > 100)
+                score -= 0xa;
+        } else {
+            score -= 0x14;
+        }
+
+        int prov = I32(r + ARMY_PROVISION_RAW);
+        if (prov < 0x3e9) {
+            if (prov > 500)
+                score -= 5;
+        } else {
+            score -= 0xa;
+        }
+
+        if (score < best_score) {
+            best_score = score;
+            best_realm = realm;
+        }
+    }
+    return best_realm;
 }

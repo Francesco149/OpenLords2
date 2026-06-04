@@ -2128,6 +2128,9 @@ struct test_case {
     X(army_ai_pick_muster_approval_boost) \
     X(army_ai_pick_muster_tie_higher_index) \
     X(army_ai_pick_muster_skips_unowned) \
+    X(army_ai_pick_attack_target_nearest) \
+    X(army_ai_pick_attack_target_prefers_rich) \
+    X(army_ai_pick_attack_target_requires_border) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \
