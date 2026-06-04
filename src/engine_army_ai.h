@@ -162,6 +162,11 @@ void engine_army_ai_step_noop(void);
  * (+0xe6) into the player's strategic record. */
 void engine_army_ai_pick_muster_realms(int player);
 
+/* Port of FUN_004a0309.  Return the player `player` is most hostile toward — a
+ * pinned war target (+0xeb) if set, else the active slot its relation (+0x84) is
+ * most negative toward (below −10), or 0. */
+int engine_army_ai_most_hostile_player(int player);
+
 /* Port of FUN_004a0649.  Pick `player`'s best adjacent enemy attack target,
  * scored from `from_realm`'s capital by king-move distance plus defence/wealth
  * adjustments; the lowest-scoring candidate below the ceiling wins.  Returns the

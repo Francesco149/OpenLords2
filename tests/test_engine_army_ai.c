@@ -1672,3 +1672,58 @@ int test_army_ai_select_target_none(void)
     T_ASSERT_EQ_I(PREC(2)[0x04b], 0);
     return 0;
 }
+
+/* ── most_hostile_player (FUN_004a0309) ───────────────────────────────────── */
+
+/* A pinned war target (+0xeb) overrides the relation scan. */
+int test_army_ai_most_hostile_pinned(void)
+{
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    PREC(2)[0x0eb] = 4;
+    T_ASSERT_EQ_I(engine_army_ai_most_hostile_player(2), 4);
+    return 0;
+}
+
+/* Without a pin, the active slot the player's relation is most negative toward
+ * (below −10) wins; a boundary −10 does not qualify. */
+int test_army_ai_most_hostile_scan(void)
+{
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    uint8_t *s = PREC(2);
+    PREC(1)[0x04] = 1; PREC(3)[0x04] = 1; PREC(4)[0x04] = 1; PREC(5)[0x04] = 1;
+    s[0x84 + 1 * 0x10] = (uint8_t)(int8_t)-10;   /* boundary → excluded */
+    s[0x84 + 3 * 0x10] = (uint8_t)(int8_t)-15;
+    s[0x84 + 4 * 0x10] = (uint8_t)(int8_t)-20;   /* most negative → chosen */
+    s[0x84 + 5 * 0x10] = 0;
+
+    T_ASSERT_EQ_I(engine_army_ai_most_hostile_player(2), 4);
+    return 0;
+}
+
+/* An inactive slot is skipped even if it is the most hated. */
+int test_army_ai_most_hostile_skips_inactive(void)
+{
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    uint8_t *s = PREC(2);
+    PREC(3)[0x04] = 0;                            /* inactive */
+    s[0x84 + 3 * 0x10] = (uint8_t)(int8_t)-30;    /* hated hardest but out of game */
+    PREC(4)[0x04] = 1;
+    s[0x84 + 4 * 0x10] = (uint8_t)(int8_t)-12;    /* active, below −10 → chosen */
+
+    T_ASSERT_EQ_I(engine_army_ai_most_hostile_player(2), 4);
+    return 0;
+}
+
+/* No slot hated below −10 → 0. */
+int test_army_ai_most_hostile_none(void)
+{
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    PREC(3)[0x04] = 1; PREC(4)[0x04] = 1;
+    PREC(2)[0x84 + 3 * 0x10] = (uint8_t)(int8_t)-8;
+    T_ASSERT_EQ_I(engine_army_ai_most_hostile_player(2), 0);
+    return 0;
+}

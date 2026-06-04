@@ -2134,6 +2134,10 @@ struct test_case {
     X(army_ai_select_target_forced_owner) \
     X(army_ai_select_target_owner_gate) \
     X(army_ai_select_target_none) \
+    X(army_ai_most_hostile_pinned) \
+    X(army_ai_most_hostile_scan) \
+    X(army_ai_most_hostile_skips_inactive) \
+    X(army_ai_most_hostile_none) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

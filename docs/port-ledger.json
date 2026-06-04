@@ -4,15 +4,15 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 669,
+  "tested": 670,
   "ported": 41,
-  "unported": 1737,
+  "unported": 1736,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 710,
-  "pct_touched": 29.0,
-  "pct_tested": 27.3,
+  "touched": 711,
+  "pct_touched": 29.1,
+  "pct_tested": 27.4,
   "bytes_total": 838629,
-  "bytes_touched": 299015,
+  "bytes_touched": 299248,
   "pct_bytes_touched": 35.7
  },
  "orphan_refs": [
@@ -16209,8 +16209,11 @@
    "name": "FUN_004a0309",
    "size": 233,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h"
+   ]
   },
   {
    "va": "0x4a03f2",

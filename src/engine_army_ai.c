@@ -84,6 +84,8 @@
                                      *   gate flag is set */
 #define STRAT_ATTACK_TARGET 0x04b   /* DAT_0057bf4b — chosen attack-target realm (step 0xa marches
                                      *   its mustered force here via the deploy-cell finder) */
+#define STRAT_PINNED_ENEMY  0x0eb   /* DAT_0057bfeb — pinned war target player; overrides the
+                                     *   relation scan in most_hostile_player when non-zero */
 #define STRAT_MUSTER_REALM  0x0e5   /* DAT_0057bfe5 — richest owned realm; the muster source step
                                      *   0xa raises its offensive force from (also read by the
                                      *   spawn/seize paths) */
@@ -1652,4 +1654,32 @@ int engine_army_ai_select_target(int player, int from_realm, int gate_owner,
 
     STRAT_REC(player)[STRAT_ATTACK_TARGET] = (uint8_t)best_realm;
     return STRAT_REC(player)[STRAT_ATTACK_TARGET] != 0;
+}
+
+/* Port of FUN_004a0309 — return the player `player` is most hostile toward.  When
+ * a war target is pinned (+0xeb != 0) that player is returned outright; otherwise
+ * scan the other in-game slots (+0x04 active) for the one `player`'s relation
+ * toward (+0x84 + slot*0x10, signed) is most negative, requiring it below −10.
+ * Returns 0 when no slot is hated that strongly.  Brain step 0xa feeds the result
+ * to engine_army_ai_select_target as the forced target owner. */
+int engine_army_ai_most_hostile_player(int player)
+{
+    uint8_t *s = STRAT_REC(player);
+    if (s[STRAT_PINNED_ENEMY] != 0)
+        return s[STRAT_PINNED_ENEMY];
+
+    int worst = 0;
+    int worst_rel = -10;
+    for (int p = 1; p < 6; p++) {
+        if (p == player)
+            continue;
+        if (STRAT_REC(p)[STRAT_ACTIVE] == 0)
+            continue;
+        int rel = (int8_t)s[STRAT_REL + p * 0x10];
+        if (rel < worst_rel) {
+            worst_rel = rel;
+            worst = p;
+        }
+    }
+    return worst;
 }
