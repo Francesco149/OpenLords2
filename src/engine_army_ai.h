@@ -13,6 +13,8 @@
 #ifndef OPENLORDS2_ENGINE_ARMY_AI_H
 #define OPENLORDS2_ENGINE_ARMY_AI_H
 
+#include "engine_event_queue.h"   /* engine_event_queue_state_t (proposal posting) */
+
 /* Port of FUN_0045158b.  Seed the realm's eight workforce target ratios
  * (+0x130 run) to the AI defaults {0x21, 0x32, 0x11, 0x28, 0xf, 0xf, 0xf, 0xf}
  * before the workforce allocator redistributes population against them. */
@@ -128,5 +130,15 @@ void engine_army_ai_dispatch_independent_compact(int realm);
  * toward a census-scaled target, run each realm's dispatch code (+0x1fe → 0/1),
  * re-allocate the workforce. */
 void engine_army_ai_run_independent(int player);
+
+/* Port of FUN_004a13a6 — AI brain step 0xd (diplomacy proposals).  For a #1-or-
+ * unranked player, alternately broadcasts alliance (0xc1) proposals to every
+ * in-game human slot then sends a war (0xc0) proposal to the weakest player
+ * (s_slot_00522d90), once per per-tick cooldown, gated on a diplomacy-readiness
+ * counter (+0x60).  Proposals are posted through `evq`. */
+void engine_army_ai_propose_diplomacy(int player, engine_event_queue_state_t *evq);
+
+/* Port of FUN_0049f96c — AI brain step 8.  A no-op in the shipped build. */
+void engine_army_ai_step_noop(void);
 
 #endif /* OPENLORDS2_ENGINE_ARMY_AI_H */

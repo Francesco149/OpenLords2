@@ -25,6 +25,7 @@
 #include "engine_territory.h"      /* recensus_reduce / grade_feature_cells / allocate_workforce */
 #include "engine_ranking.h"        /* engine_ranking_recompute_player_total */
 #include "engine_math.h"           /* engine_math_percent_of (FUN_00404d6b) */
+#include "engine_event_queue.h"    /* engine_event_queue_post (FUN_00472bc5) */
 
 #define ARMY_REC(key)   (&g_per_army_768[(key) * 0x300])
 #define STRAT_REC(slot) (&g_player_strategic_352[(slot) * 0x160])
@@ -95,8 +96,21 @@
 
 /* ── Per-player strategic fields used by the resource orchestrator ── */
 #define STRAT_ACTIVE        0x004   /* DAT_0057bf04 — in-game flag */
-#define STRAT_ELIMINATED    0x005   /* DAT_0057bf05 — eliminated flag */
+#define STRAT_ELIMINATED    0x005   /* DAT_0057bf05 — human-controlled byte (0 = AI).  The
+                                     *   grant path above calls it "eliminated"; the FSM
+                                     *   (FUN_0049a581) runs a slot's brain iff +4 != 0 &&
+                                     *   +5 == 0, so +5 != 0 actually means "a human owns this
+                                     *   slot".  The diplomacy step below sends proposals to
+                                     *   exactly those human slots. */
 #define STRAT_PERSONALITY   0x007   /* DAT_0057bf07 — AI personality 1..4 */
+#define STRAT_RANK          0x02b   /* DAT_0057bf2b — 1-based finishing rank (engine_ranking
+                                     *   F_RANK); 0 = unranked/inactive */
+#define STRAT_DIPLO_GAUGE   0x060   /* DAT_0057bf60 — monotonic diplomacy-readiness counter;
+                                     *   proposals gate above 0x28 (alliance) / 0x1c (war) */
+#define STRAT_LORD          0x081   /* DAT_0057bf81 — this player's lord (diplomacy D_LORD) */
+#define STRAT_PROPOSE_TICK  0x0e9   /* DAT_0057bfe9 — ticks toward the next proposal; fires at 8 */
+#define STRAT_PROPOSE_PHASE 0x0ea   /* DAT_0057bfea — 0 → broadcast alliance next, 1 → war next */
+#define STRAT_MOOD_CYCLE    0x159   /* DAT_0057c059 — notification mood-cycle 0..3 (D_MOODCYC) */
 #define STRAT_AI_LEVEL      0x029   /* DAT_0057bf29 — AI difficulty/aggression level (seeded
                                      *   from +0x2a at player setup); gates + scales the grant */
 #define STRAT_BUY_REQ_8     0x070   /* DAT_0057bf70 — explicit buy request, commodity 8 */
@@ -1041,4 +1055,100 @@ void engine_army_ai_run_independent(int player)
 
         engine_territory_allocate_realm_workforce(realm);
     }
+}
+
+/* Build the per-player has-data filter table the event-queue producer expects:
+ * has_data[i] = g_player_strategic_352[i].+5 for slots 0..5, slot 6 inert (the
+ * producer reads only index `target`, which is 1..5 here).  Mirrors retail
+ * (&DAT_0057bf05)[i * 0x160]. */
+static void build_has_data(uint8_t has_data[7])
+{
+    for (int i = 0; i < 6; i++)
+        has_data[i] = STRAT_REC(i)[STRAT_ELIMINATED];
+    has_data[6] = 0;
+}
+
+/* Post one diplomacy proposal (retail FUN_00472bc5(player, audience, code,
+ * variant, 1, 0, 0, 0)) and advance the mood-cycle (+0x159, wrapping 0..3).
+ * The variant selector is (mood-cycle − 4) + personality·4, read from the
+ * CURRENT counter before it advances. */
+static void propose_notify(engine_event_queue_state_t *evq, int player,
+                           int audience, int code, uint8_t *s)
+{
+    uint8_t has_data[7];
+    build_has_data(has_data);
+
+    int variant = ((int)s[STRAT_MOOD_CYCLE] - 4) + (int)s[STRAT_PERSONALITY] * 4;
+    engine_event_queue_post(evq, player, audience, code, variant, 1, 0, 0, 0,
+                            has_data, (int)s_slot_0057c8cc);
+
+    s[STRAT_MOOD_CYCLE] += 1;
+    if (s[STRAT_MOOD_CYCLE] > 3)
+        s[STRAT_MOOD_CYCLE] = 0;
+}
+
+/* Port of FUN_004a13a6 — AI brain step 0xd (diplomacy proposals).  Runs only
+ * for a #1-or-unranked player (+0x2b < 2).  Alternates, via the +0xea phase
+ * flag, between two proposal modes once the per-tick +0xe9 counter reaches 8:
+ *
+ *   phase 0 (alliance): once the diplomacy gauge (+0x60) tops 0x28, broadcast a
+ *     0xc1 (alliance) proposal to every OTHER in-game human slot (+4 != 0 &&
+ *     +5 != 0), then flip the phase to 1.
+ *   phase 1 (war): once the gauge tops 0x1c, send a 0xc0 (war) proposal to the
+ *     last-ranked (weakest) player s_slot_00522d90 — provided that player is a
+ *     human (+5 != 0) and is not already this AI's lord (+0x81) — then flip the
+ *     phase back to 0.
+ *
+ * The proposals surface as UI notifications, so they route through the ported
+ * event-queue producer; the queue state is threaded in (the engine.c file-
+ * statics it would otherwise read are not linked into the host TU). */
+void engine_army_ai_propose_diplomacy(int player, engine_event_queue_state_t *evq)
+{
+    int target = (int)s_slot_00522d90;          /* retail latches DAT_00522d90 up front */
+    uint8_t *s = STRAT_REC(player);
+
+    if (s[STRAT_RANK] >= 2)
+        return;
+
+    if (s[STRAT_PROPOSE_PHASE] == 0) {
+        /* Phase 0 — broadcast alliance proposals. */
+        if (s[STRAT_DIPLO_GAUGE] <= 0x27)
+            return;
+        s[STRAT_PROPOSE_TICK] += 1;
+        if (s[STRAT_PROPOSE_TICK] < 8)
+            return;
+
+        for (int other = 1; other < 6; other++) {
+            if (other == player)
+                continue;
+            uint8_t *o = STRAT_REC(other);
+            if (o[STRAT_ACTIVE] == 0 || o[STRAT_ELIMINATED] == 0)
+                continue;
+            propose_notify(evq, player, other, 0xc1, s);
+        }
+
+        s[STRAT_PROPOSE_TICK]  = 0;
+        s[STRAT_PROPOSE_PHASE] = 1;
+    } else {
+        /* Phase 1 — targeted war proposal against the weakest player. */
+        if (s[STRAT_DIPLO_GAUGE] <= 0x1b)
+            return;
+        if (STRAT_REC(target)[STRAT_ELIMINATED] == 0)
+            return;
+        if (s[STRAT_LORD] == target)
+            return;
+        s[STRAT_PROPOSE_TICK] += 1;
+        if (s[STRAT_PROPOSE_TICK] < 8)
+            return;
+
+        s[STRAT_PROPOSE_TICK]  = 0;
+        s[STRAT_PROPOSE_PHASE] = 0;
+        propose_notify(evq, player, target, 0xc0, s);
+    }
+}
+
+/* Port of FUN_0049f96c — AI brain step 8.  A no-op in the shipped build (the
+ * substate exists in the dispatch ladder but its body returns immediately). */
+void engine_army_ai_step_noop(void)
+{
 }

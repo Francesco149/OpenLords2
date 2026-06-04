@@ -7,6 +7,48 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-04 — TURN DRIVER: AI brain FSM leaves — diplomacy-proposal step + no-op step (2 fns, host-tested)
+
+Worked down the AI per-realm brain FSM `FUN_0049a581` (the substate dispatch the
+previous dispatch teed up) by porting its two clean leaves.  One commit, two
+functions, 2029 host tests green (ASAN/UBSAN), cross-build clean.  All
+offsets/thresholds/codes/call-targets r2-verified byte-exact against the
+disassembly.  Engine-quirk #190 captured at port time.
+
+- **Brain step 0xd — diplomacy proposals** (`FUN_004a13a6` →
+  `engine_army_ai_propose_diplomacy`, engine_army_ai.c).  Runs only for a
+  leader-or-unranked player (rank `+0x2b < 2`) and alternates, via the `+0xea`
+  phase flag once the per-tick cooldown `+0xe9` reaches 8, between two proposal
+  modes: phase 0 broadcasts an alliance proposal (code `0xc1`) to every other
+  in-game human slot once the readiness gauge `+0x60` tops `0x28`; phase 1 sends
+  a war proposal (code `0xc0`) to the last-ranked / weakest player
+  (`s_slot_00522d90`) once the gauge tops `0x1c`, provided that player is human
+  and not already this AI's lord (`+0x81`).  Proposals route through the already-
+  ported event-queue producer (`engine_event_queue_post`); the queue state, the
+  per-player has-data filter and the local-player slot are threaded in as params
+  (same pattern as `engine_diplomacy.c`).  The variant selector
+  `(mood[+0x159] − 4) + personality[+0x07]·4` and the `+0x159` rotation are
+  byte-identical to `diplo_notify`.
+
+- **Brain step 8 — no-op** (`FUN_0049f96c` → `engine_army_ai_step_noop`).  An
+  empty body — a live entry in the dispatch ladder that the shipped build leaves
+  inert.
+
+**Quirk #190:** the strategic `+5` byte (variously labelled `STRAT_ELIMINATED` /
+"active" / "AI gate" across modules) is really **human-controlled** — the FSM
+dispatcher runs a slot's brain iff `+4 != 0 && +5 == 0`, and the diplomacy step
+targets `+5 != 0` (human) slots, which is why the proposals surface through the
+UI notification ring.
+
+**Next on this thread:** the brain FSM `FUN_0049a581` still has ~11 unported step
+callees, each carrying 1-7 unported leaves of its own: `FUN_004a277d` (step 1),
+`FUN_004a0c1d` (2), `FUN_0049e1bf` (4), `FUN_0049edc7` (6), `FUN_0049f977` (9),
+`FUN_004a0015` (10), `FUN_004a5667` (0xb), `FUN_0049e77d` (0xc).  (Steps 3 / 5 /
+0xe — `FUN_0049d638` rations, `FUN_0049dd01` run-player, `FUN_0049d1e0` init —
+are already ported.)  Pick whichever exposes the cleanest leaf next; once the
+ladder is down, `FUN_0049a581` and then the substate-0 dispatcher `0x49a010` can
+be assembled into `engine_tick`.
+
 ## 2026-06-04 — TURN DRIVER: phase-1 AI inits — ration ladder + difficulty grant + independent-realm driver (4 fns, host-tested)
 
 Landed both phase-1 AI inits the previous dispatch teed up, plus the second

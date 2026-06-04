@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **692** (28.3%) — tested 651, ported 41
-- code bytes touched: **34.6%** (290,542 / 838,629 B)
-- unported: **1755**
+- touched: **694** (28.4%) — tested 653, ported 41
+- code bytes touched: **34.7%** (291,402 / 838,629 B)
+- unported: **1753**
 - orphan refs (in src/, not in function table): 7
 
-## tested (651) — ported + host unit suite
+## tested (653) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -461,7 +461,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x472ad0 | FUN_00472ad0 | 16 | engine_event_queue.c, engine_event_queue.h, game_init.c |
 | 0x472ae0 | FUN_00472ae0 | 96 | engine_event_queue.c, engine_event_queue.h |
 | 0x472b40 | FUN_00472b40 | 133 | engine_event_queue.c, engine_event_queue.h |
-| 0x472bc5 | FUN_00472bc5 | 560 | engine_army_move.c, engine_diplomacy.c, engine_event_queue.c (+5) |
+| 0x472bc5 | FUN_00472bc5 | 560 | engine_army_ai.c, engine_army_move.c, engine_diplomacy.c (+6) |
 | 0x472df5 | FUN_00472df5 | 81 | engine_event_queue.c, engine_event_queue.h |
 | 0x47ed34 | FUN_0047ed34 | 103 | engine.c, engine_camera.c, engine_camera.h |
 | 0x48ee46 | FUN_0048ee46 | 87 | engine_tile.c, engine_tile.h |
@@ -504,6 +504,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49df48 | FUN_0049df48 | 126 | engine_combat.c |
 | 0x49dfc6 | FUN_0049dfc6 | 505 | engine_army_ai.c, engine_army_ai.h |
 | 0x49e39b | FUN_0049e39b | 994 | engine_army_ai.c, engine_army_ai.h |
+| 0x49f96c | FUN_0049f96c | 11 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a13a6 | FUN_004a13a6 | 849 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a16f7 | FUN_004a16f7 | 125 | engine_army_move.h, engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a1847 | FUN_004a1847 | 525 | engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a1a54 | FUN_004a1a54 | 213 | engine_diplomacy.c, engine_diplomacy.h |

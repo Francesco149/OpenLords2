@@ -13,6 +13,7 @@
 #include "engine_army_ai.h"
 #include "engine_army_economy.h"   /* NULL the army-record bind to isolate the re-plan tail */
 #include "engine_territory.h"      /* NULL the territory binds too */
+#include "engine_event_queue.h"    /* diplomacy proposals post through the event queue */
 #include "save.h"
 #include "save_schema_globals.h"   /* s_slot_005532a0 price table, 0053f260 mode */
 
@@ -891,5 +892,171 @@ int test_army_ai_run_independent_routes(void)
     T_ASSERT_EQ_I(AI32(a2, 0x1f4), 0);  /* code 1 did not */
     T_ASSERT_EQ_I(a1[0x008], 0);        /* both ran a dispatcher → tag 0 */
     T_ASSERT_EQ_I(a2[0x008], 0);
+    return 0;
+}
+
+/* ── FUN_004a13a6 / FUN_0049f96c — AI brain steps 0xd / 8 ───────────────── */
+
+/* Per-player strategic field offsets used by the diplomacy step. */
+#define P_RANK    0x02b
+#define P_HUMAN   0x005
+#define P_PERS    0x007
+#define P_GAUGE   0x060
+#define P_LORD    0x081
+#define P_TICK    0x0e9
+#define P_PHASE   0x0ea
+#define P_MOOD    0x159
+
+/* Common setup for a diplomacy-step test: zero the strategic block + queue,
+ * make `player` a #1-ranked AI whose proposal cooldown is one tick from firing. */
+static void diplo_setup(engine_event_queue_state_t *evq, int player)
+{
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    engine_event_queue_init(evq);
+    s_slot_00522d90 = 0;
+    s_slot_0057c8cc = 0;
+
+    uint8_t *s = PREC(player);
+    s[P_RANK] = 1;          /* leader → passes the +0x2b < 2 gate */
+    s[P_TICK] = 7;          /* one ++ away from firing at 8       */
+}
+
+/* Phase 0: once the gauge tops 0x28, broadcast a 0xc1 alliance proposal to each
+ * in-game human slot, flip the phase to 1, reset the tick. */
+int test_army_ai_propose_alliance_broadcast(void)
+{
+    engine_event_queue_state_t evq;
+    diplo_setup(&evq, 2);
+    uint8_t *s = PREC(2);
+    s[P_GAUGE] = 0x28;                 /* > 0x27 */
+    s[P_PERS]  = 2;
+    s[P_MOOD]  = 4;                    /* variant = (4−4) + 2·4 = 8 */
+
+    PREC(3)[0x004] = 1; PREC(3)[P_HUMAN] = 1;   /* eligible recipient */
+    PREC(1)[0x004] = 1; PREC(1)[P_HUMAN] = 0;   /* AI → skipped       */
+    PREC(4)[0x004] = 0; PREC(4)[P_HUMAN] = 1;   /* not in game → skipped */
+    s_slot_0057c8cc = 3;               /* local player = 3 → its post publishes */
+
+    engine_army_ai_propose_diplomacy(2, &evq);
+
+    T_ASSERT_EQ_I(s[P_PHASE], 1);      /* flipped to war-proposal phase */
+    T_ASSERT_EQ_I(s[P_TICK], 0);       /* cooldown reset */
+    T_ASSERT_EQ_I(s[P_MOOD], 0);       /* 4 → 5 wraps to 0 */
+    T_ASSERT_EQ_I(evq.write_idx, 1);   /* exactly one record published */
+    T_ASSERT_EQ_I(evq.ring[0].target, 2);
+    T_ASSERT_EQ_I(evq.ring[0].audience, 3);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0xc1);
+    T_ASSERT_EQ_I(evq.ring[0].payload32a, 8);
+    return 0;
+}
+
+/* Phase 1: once the gauge tops 0x1c, send a 0xc0 war proposal to the weakest
+ * player (s_slot_00522d90), flip the phase back to 0, reset the tick. */
+int test_army_ai_propose_war_targeted(void)
+{
+    engine_event_queue_state_t evq;
+    diplo_setup(&evq, 2);
+    uint8_t *s = PREC(2);
+    s[P_RANK]  = 0;                    /* unranked still passes < 2 */
+    s[P_PHASE] = 1;
+    s[P_GAUGE] = 0x1c;                 /* > 0x1b */
+    s[P_PERS]  = 3;
+    s[P_MOOD]  = 2;                    /* variant = (2−4) + 3·4 = 10 */
+    s[P_LORD]  = 0;                    /* lord != target */
+
+    s_slot_00522d90 = 4;               /* weakest player */
+    PREC(4)[P_HUMAN] = 1;              /* target is a human */
+    s_slot_0057c8cc = 4;               /* local player = 4 → the post publishes */
+
+    engine_army_ai_propose_diplomacy(2, &evq);
+
+    T_ASSERT_EQ_I(s[P_PHASE], 0);      /* flipped back */
+    T_ASSERT_EQ_I(s[P_TICK], 0);
+    T_ASSERT_EQ_I(s[P_MOOD], 3);       /* 2 → 3 (no wrap) */
+    T_ASSERT_EQ_I(evq.write_idx, 1);
+    T_ASSERT_EQ_I(evq.ring[0].target, 2);
+    T_ASSERT_EQ_I(evq.ring[0].audience, 4);
+    T_ASSERT_EQ_I(evq.ring[0].code, 0xc0);
+    T_ASSERT_EQ_I(evq.ring[0].payload32a, 10);
+    return 0;
+}
+
+/* Gate: a player ranked 2 or worse (+0x2b >= 2) issues nothing. */
+int test_army_ai_propose_rank_gate(void)
+{
+    engine_event_queue_state_t evq;
+    diplo_setup(&evq, 2);
+    uint8_t *s = PREC(2);
+    s[P_RANK]  = 2;
+    s[P_GAUGE] = 0x40;
+
+    engine_army_ai_propose_diplomacy(2, &evq);
+
+    T_ASSERT_EQ_I(s[P_TICK], 7);       /* untouched */
+    T_ASSERT_EQ_I(s[P_PHASE], 0);
+    T_ASSERT_EQ_I(evq.write_idx, 0);
+    return 0;
+}
+
+/* Gate: phase 0 below the 0x28 gauge does not even tick the cooldown. */
+int test_army_ai_propose_gauge_gate(void)
+{
+    engine_event_queue_state_t evq;
+    diplo_setup(&evq, 2);
+    uint8_t *s = PREC(2);
+    s[P_GAUGE] = 0x27;                 /* not > 0x27 */
+
+    engine_army_ai_propose_diplomacy(2, &evq);
+
+    T_ASSERT_EQ_I(s[P_TICK], 7);       /* gauge fails before the ++ */
+    T_ASSERT_EQ_I(s[P_PHASE], 0);
+    T_ASSERT_EQ_I(evq.write_idx, 0);
+    return 0;
+}
+
+/* Cooldown: phase 0 above the gauge ticks the counter but holds until it hits
+ * 8 — nothing is posted on the earlier ticks. */
+int test_army_ai_propose_cooldown_holds(void)
+{
+    engine_event_queue_state_t evq;
+    diplo_setup(&evq, 2);
+    uint8_t *s = PREC(2);
+    s[P_GAUGE] = 0x28;
+    s[P_TICK]  = 5;                    /* 5 → 6, still < 8 */
+
+    engine_army_ai_propose_diplomacy(2, &evq);
+
+    T_ASSERT_EQ_I(s[P_TICK], 6);       /* incremented, not reset */
+    T_ASSERT_EQ_I(s[P_PHASE], 0);      /* no flip yet */
+    T_ASSERT_EQ_I(evq.write_idx, 0);
+    return 0;
+}
+
+/* Gate: phase 1 against a target that is already this AI's lord does nothing —
+ * and leaves the cooldown untouched (the lord check precedes the ++). */
+int test_army_ai_propose_war_lord_gate(void)
+{
+    engine_event_queue_state_t evq;
+    diplo_setup(&evq, 2);
+    uint8_t *s = PREC(2);
+    s[P_PHASE] = 1;
+    s[P_GAUGE] = 0x1c;
+    s[P_LORD]  = 4;
+
+    s_slot_00522d90 = 4;
+    PREC(4)[P_HUMAN] = 1;
+
+    engine_army_ai_propose_diplomacy(2, &evq);
+
+    T_ASSERT_EQ_I(s[P_TICK], 7);       /* lord == target → bail before ++ */
+    T_ASSERT_EQ_I(s[P_PHASE], 1);
+    T_ASSERT_EQ_I(evq.write_idx, 0);
+    return 0;
+}
+
+/* FUN_0049f96c — step 8 is a no-op; touches nothing and returns. */
+int test_army_ai_step_noop(void)
+{
+    engine_army_ai_step_noop();
     return 0;
 }

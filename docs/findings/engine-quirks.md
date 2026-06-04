@@ -6668,3 +6668,43 @@ two differences:
    0x28).  `engine_army_ai_run_independent` clears a per-realm review flag
    (+0x1b0) before each realm and develops empty cells on the same
    population-gated ladder as `run_player`, sized off the census sum.
+
+## 190 — the per-player strategic +5 byte is "human-controlled", not "eliminated"; the AI brain runs iff +4 != 0 && +5 == 0, and diplomacy proposals target +5 != 0 slots
+
+The strategic-block byte at `(&DAT_0057bf05)[p * 0x160]` has accumulated three
+contradictory names across modules: `engine_army_ai.c` calls it
+`STRAT_ELIMINATED`, `engine_event_queue.c` calls it "slot is active", and
+`engine_diplomacy.c` calls it the "AI gate (0 = AI-controlled)".  The ground
+truth, pinned by the AI FSM dispatcher `FUN_0049a581`, is the diplomacy reading:
+**+5 != 0 means a human owns the slot.**  The dispatcher runs a slot's brain
+only when `(&DAT_0057bf04)[p*0x160] != 0` (in game) **and**
+`(&DAT_0057bf05)[p*0x160] == 0` (AI-controlled) — so a human slot (in game, +5
+set) is skipped, and the difficulty cash grant (`FUN_0049d638`, quirk #188),
+gated on `+5 != 0 → bail`, lands only on AI players.  The `STRAT_ELIMINATED`
+label is a misnomer; the byte is the human/AI discriminator.
+
+The diplomacy-proposal brain step `FUN_004a13a6`
+(`engine_army_ai_propose_diplomacy`, brain step 0xd) consumes this directly: it
+posts treaty/war proposals through the event-queue producer to the **human**
+slots (+4 != 0 && +5 != 0), which is exactly why these route through the UI
+notification ring rather than mutating diplomacy state inline.  Its own shape:
+
+1. **Gate on rank.**  Runs only when the player's finishing rank
+   (`+0x2b`, `engine_ranking` F_RANK) is `< 2` — i.e. the current leader
+   (rank 1) or an unranked slot (rank 0).
+2. **Alternate two proposal modes** via the `+0xea` phase flag, each fired once
+   the per-tick cooldown `+0xe9` reaches 8 (incremented only after the mode's
+   own gauge gate passes):
+   - **phase 0 (alliance):** once the diplomacy-readiness gauge `+0x60` tops
+     `0x28`, broadcast code `0xc1` to every other in-game human slot, then flip
+     the phase to 1.
+   - **phase 1 (war):** once `+0x60` tops `0x1c`, send code `0xc0` to the
+     **last-ranked (weakest)** player `s_slot_00522d90` — provided that player
+     is human and is not already this AI's lord (`+0x81`) — then flip back to 0.
+   The proposal variant selector reuses the shared notification rotation:
+   `(mood-cycle[+0x159] − 4) + personality[+0x07]·4`, identical to
+   `engine_diplomacy.c`'s `diplo_notify`, advancing `+0x159` (wrap 0..3) per
+   post.
+
+Brain step 8 (`FUN_0049f96c`, `engine_army_ai_step_noop`) is an empty function
+— a live slot in the dispatch ladder with no shipped body.

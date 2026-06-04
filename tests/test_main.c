@@ -2086,6 +2086,13 @@ struct test_case {
     X(army_ai_dispatch_indep_balanced_no_selffund) \
     X(army_ai_dispatch_indep_compact_no_selffund) \
     X(army_ai_run_independent_routes) \
+    X(army_ai_propose_alliance_broadcast) \
+    X(army_ai_propose_war_targeted) \
+    X(army_ai_propose_rank_gate) \
+    X(army_ai_propose_gauge_gate) \
+    X(army_ai_propose_cooldown_holds) \
+    X(army_ai_propose_war_lord_gate) \
+    X(army_ai_step_noop) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \
