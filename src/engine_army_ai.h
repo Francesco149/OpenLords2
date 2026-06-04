@@ -157,6 +157,11 @@ void engine_army_ai_run_diplomacy(int player, engine_event_queue_state_t *evq);
 /* Port of FUN_0049f96c — AI brain step 8.  A no-op in the shipped build. */
 void engine_army_ai_step_noop(void);
 
+/* Port of FUN_004a0aaa.  Score `player`'s owned realms and record the muster
+ * source (richest, +0xe5 — read by brain step 0xa) and the inverse-scored realm
+ * (+0xe6) into the player's strategic record. */
+void engine_army_ai_pick_muster_realms(int player);
+
 /* Port of FUN_0049ed13.  Flag whether `player` can afford `realm`'s current
  * build order: clears the realm's affordability flag, runs the slot-2 resource
  * planner, then re-sets the flag iff the player's +0x130/+0x120 pools both cover

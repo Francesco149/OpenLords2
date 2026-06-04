@@ -76,6 +76,11 @@
 /* ── Per-player record fields (offsets into g_player_strategic_352 row p) ── */
 #define STRAT_BUILD_ROTATE  0x06c   /* DAT_0057bf6c — per-player build-order rotation counter (i32,
                                      *   cycles 0..9, selects the personality build column) */
+#define STRAT_MUSTER_REALM  0x0e5   /* DAT_0057bfe5 — richest owned realm; the muster source step
+                                     *   0xa raises its offensive force from (also read by the
+                                     *   spawn/seize paths) */
+#define STRAT_WEAK_REALM    0x0e6   /* DAT_0057bfe6 — poorest owned realm by the inverse score; no
+                                     *   shipped reader consumes it */
 #define STRAT_POOL_128      0x128   /* DAT_0057c028 — resource pool drawn by +0x1d0 */
 #define STRAT_POOL_130      0x130   /* DAT_0057c030 — resource pool drawn by +0x1d4 */
 #define STRAT_CASH          0x118   /* DAT_0057c018 — player treasury */
@@ -1446,4 +1451,55 @@ void engine_army_ai_run_build_orders(int player)
         engine_territory_allocate_realm_workforce(realm);
         engine_army_economy_plan_realm(realm, (int)s_slot_0057c92c);
     }
+}
+
+/* Port of FUN_004a0aaa — score `player`'s owned realms to pick its muster
+ * source.  Each owned realm gets a base score (provision +0x24 ÷ 500, doubled)
+ * nudged ±1 by its approval (+0xc: < 0x28 → −1, > 0x50 → +1).  The base then
+ * forks into two scores by comparing the realm's stockpile value
+ * (engine_army_economy_stockpile_value) against its provision: a thin realm
+ * (stockpile < provision) is a poor muster source (rich −2 / weak +2); a flush
+ * realm (provision×4 < stockpile) is the best (rich +1 / weak −2).  The realm
+ * with the greatest "rich" score lands in +0xe5 — the muster realm brain step
+ * 0xa (and the spawn/seize paths) raise the AI's force from; the greatest "weak"
+ * score lands in +0xe6 (no shipped reader).  Ties resolve to the higher index.
+ *
+ * NB: the Ghidra decompile transposes the two score variables — the binary
+ * (r2-verified) is what is transcribed here: stockpile-below-provision favours
+ * the +0xe6 score, not +0xe5. */
+void engine_army_ai_pick_muster_realms(int player)
+{
+    int best_rich = 0, rich_realm = 0;     /* → +0xe5 */
+    int best_weak = 0, weak_realm = 0;     /* → +0xe6 */
+    int count = (int)s_slot_0056d5dc;
+
+    for (int realm = 1; realm <= count; realm++) {
+        uint8_t *r = ARMY_REC(realm);
+        if (r[ARMY_OWNER] != player)
+            continue;
+
+        int stock = engine_army_economy_stockpile_value(realm);
+        int feed  = I32(r + ARMY_FEED_COUNT);
+
+        int base = (feed / 500) * 2;
+        if ((int8_t)r[ARMY_APPROVAL] < 0x28)
+            base -= 1;
+        else if ((int8_t)r[ARMY_APPROVAL] > 0x50)
+            base += 1;
+
+        int rich = base, weak = base;
+        if (stock < feed) {
+            rich -= 2;
+            weak += 2;
+        } else if (feed * 4 < stock) {
+            rich += 1;
+            weak -= 2;
+        }
+
+        if (best_rich <= rich) { best_rich = rich; rich_realm = realm; }
+        if (best_weak <= weak) { best_weak = weak; weak_realm = realm; }
+    }
+
+    STRAT_REC(player)[STRAT_MUSTER_REALM] = (uint8_t)rich_realm;
+    STRAT_REC(player)[STRAT_WEAK_REALM]   = (uint8_t)weak_realm;
 }

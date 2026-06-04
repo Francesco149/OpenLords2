@@ -1451,3 +1451,106 @@ int test_army_ai_build_orders_skips_unowned(void)
     T_ASSERT_EQ_I(AREC(1)[0x1b0], 0);   /* plan flag not set for unowned realm */
     return 0;
 }
+
+/* ── Muster-realm scoring (FUN_004a0aaa) ──────────────────────────────────
+ * Stores only realm indices, so these verify the selection.  Bind the econ
+ * records (ai_turn_setup NULLs them) and pin prices so stockpile_value is
+ * deterministic: stock A (+0x250) × price_a drives the rich/thin fork. */
+
+/* The flush realm (provision×4 < stockpile) wins the +0xe5 muster slot; the thin
+ * realm (stockpile < provision) wins the inverse +0xe6 slot. */
+int test_army_ai_pick_muster_rich_vs_weak(void)
+{
+    ai_turn_setup();
+    engine_army_economy_bind_army_records(g_per_army_768);
+    engine_army_economy_set_prices(5, 10, 6);
+    s_slot_0056d5dc = 2;
+
+    uint8_t *a1 = AREC(1);              /* flush: base 4 → rich 5, weak 2 */
+    a1[0x005] = 2; a1[0x00c] = 0x40;   /* approval neutral */
+    AI32(a1, 0x024) = 1000;            /* provision → base (1000/500)*2 = 4 */
+    AI32(a1, 0x250) = 1000;            /* stock A 1000×5 = 5000 > 4×1000 */
+
+    uint8_t *a2 = AREC(2);             /* thin: base 4 → rich 2, weak 6 */
+    a2[0x005] = 2; a2[0x00c] = 0x40;
+    AI32(a2, 0x024) = 1000;
+    AI32(a2, 0x250) = 0;               /* stockpile 0 < provision */
+
+    engine_army_ai_pick_muster_realms(2);
+
+    T_ASSERT_EQ_I(PREC(2)[0x0e5], 1);  /* flush realm = muster source */
+    T_ASSERT_EQ_I(PREC(2)[0x0e6], 2);  /* thin realm = inverse score */
+
+    engine_army_economy_bind_army_records(NULL);
+    return 0;
+}
+
+/* A high-approval realm (+1) outscores a neutral one in both slots. */
+int test_army_ai_pick_muster_approval_boost(void)
+{
+    ai_turn_setup();
+    engine_army_economy_bind_army_records(g_per_army_768);
+    engine_army_economy_set_prices(5, 10, 6);
+    s_slot_0056d5dc = 2;
+
+    /* both in the no-fork zone (provision ≤ stockpile ≤ 4×provision). */
+    uint8_t *a1 = AREC(1);
+    a1[0x005] = 2; a1[0x00c] = 0x60;   /* approval > 0x50 → +1 */
+    AI32(a1, 0x024) = 1000; AI32(a1, 0x250) = 400;   /* 2000, in [1000,4000] */
+    uint8_t *a2 = AREC(2);
+    a2[0x005] = 2; a2[0x00c] = 0x40;   /* approval neutral */
+    AI32(a2, 0x024) = 1000; AI32(a2, 0x250) = 400;
+
+    engine_army_ai_pick_muster_realms(2);
+
+    T_ASSERT_EQ_I(PREC(2)[0x0e5], 1);  /* boosted realm wins both */
+    T_ASSERT_EQ_I(PREC(2)[0x0e6], 1);
+
+    engine_army_economy_bind_army_records(NULL);
+    return 0;
+}
+
+/* Equal scores resolve to the higher realm index (retail's <= update). */
+int test_army_ai_pick_muster_tie_higher_index(void)
+{
+    ai_turn_setup();
+    engine_army_economy_bind_army_records(g_per_army_768);
+    engine_army_economy_set_prices(5, 10, 6);
+    s_slot_0056d5dc = 2;
+
+    for (int k = 1; k <= 2; k++) {
+        uint8_t *a = AREC(k);
+        a[0x005] = 2; a[0x00c] = 0x40;
+        AI32(a, 0x024) = 1000; AI32(a, 0x250) = 400;   /* identical, no fork */
+    }
+
+    engine_army_ai_pick_muster_realms(2);
+
+    T_ASSERT_EQ_I(PREC(2)[0x0e5], 2);
+    T_ASSERT_EQ_I(PREC(2)[0x0e6], 2);
+
+    engine_army_economy_bind_army_records(NULL);
+    return 0;
+}
+
+/* Realms owned by another player are not scored. */
+int test_army_ai_pick_muster_skips_unowned(void)
+{
+    ai_turn_setup();
+    engine_army_economy_bind_army_records(g_per_army_768);
+    engine_army_economy_set_prices(5, 10, 6);
+    s_slot_0056d5dc = 2;
+
+    PREC(2)[0x0e5] = 0x33;             /* sentinels */
+    PREC(2)[0x0e6] = 0x33;
+    uint8_t *a1 = AREC(1);             /* owned by player 3 */
+    a1[0x005] = 3; a1[0x00c] = 0x40; AI32(a1, 0x024) = 1000; AI32(a1, 0x250) = 400;
+
+    engine_army_ai_pick_muster_realms(2);
+
+    T_ASSERT_EQ_I(PREC(2)[0x0e5], 0);  /* no owned realm → realm 0 recorded */
+    T_ASSERT_EQ_I(PREC(2)[0x0e6], 0);
+
+    engine_army_economy_bind_army_records(NULL);
+    return 0;
+}

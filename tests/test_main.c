@@ -2117,6 +2117,10 @@ struct test_case {
     X(army_ai_build_orders_enables_gates) \
     X(army_ai_build_orders_settle_filter) \
     X(army_ai_build_orders_skips_unowned) \
+    X(army_ai_pick_muster_rich_vs_weak) \
+    X(army_ai_pick_muster_approval_boost) \
+    X(army_ai_pick_muster_tie_higher_index) \
+    X(army_ai_pick_muster_skips_unowned) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \
