@@ -58,8 +58,24 @@
 #define ARMY_BUILD_DRAW_HI  0x1d4   /* DAT_0053fb84 — settlement build demand, pool +0x130 */
 #define ARMY_SETTLE_FLAG    0x1c3   /* DAT_0053fb73 — secondary settlement present */
 #define ARMY_TIER_STEP      0x219   /* DAT_0053fbc9 — advancement tier byte (0..5) */
+#define ARMY_BUILD_TAG      0x290   /* DAT_0053fc40 — rotating build-order tag (0..5); the AI
+                                     *   pulls one per turn from its personality build column */
+#define ARMY_BUILD_AFFORD   0x2c5   /* DAT_0053fc75 — set when the player can afford the current
+                                     *   build tag's two pool costs (mark_build_affordable) */
+#define ARMY_BUILD_PLAN_FLAG 0x1b0  /* DAT_0053fb60 — "build plan settled" flag, lit once the AI
+                                     *   has enabled this realm's job-bucket gates (== WF_GATE_C3B) */
+/* The four stride-0x18 settlement job-bucket descriptors (retail +0x295/+0x296/
+ * +0x297 .. +0x2df).  +0x295 is the "building present" flag (== ARMY_FEAT_C_FLAG
+ * for bucket 0), +0x296 a lock byte, +0x297 the workforce-allocator enable gate
+ * (== WF_GATE_C6 for bucket 0). */
+#define ARMY_BUILDGATE_PRESENT 0x295 /* DAT_0053fc45 — descriptor present (i8) */
+#define ARMY_BUILDGATE_LOCK    0x296 /* DAT_0053fc46 — in-progress lock (i8; must be clear) */
+#define ARMY_BUILDGATE_ENABLE  0x297 /* DAT_0053fc47 — workforce enable gate written here */
+#define ARMY_BUILDGATE_STRIDE  0x18  /* per-bucket stride for the three fields above */
 
 /* ── Per-player record fields (offsets into g_player_strategic_352 row p) ── */
+#define STRAT_BUILD_ROTATE  0x06c   /* DAT_0057bf6c — per-player build-order rotation counter (i32,
+                                     *   cycles 0..9, selects the personality build column) */
 #define STRAT_POOL_128      0x128   /* DAT_0057c028 — resource pool drawn by +0x1d0 */
 #define STRAT_POOL_130      0x130   /* DAT_0057c030 — resource pool drawn by +0x1d4 */
 #define STRAT_CASH          0x118   /* DAT_0057c018 — player treasury */
@@ -1315,4 +1331,119 @@ void engine_army_ai_run_diplomacy(int player, engine_event_queue_state_t *evq)
  * substate exists in the dispatch ladder but its body returns immediately). */
 void engine_army_ai_step_noop(void)
 {
+}
+
+/* Build-order cost table (retail DAT_004d8990, six 8-byte entries — the next
+ * const table begins at 0x4d89c0).  Indexed by a realm's current build tag
+ * (ARMY_BUILD_TAG, 0..5); [tag][0] is the cost charged against the player's
+ * +0x130 pool, [tag][1] the cost against the +0x120 pool. */
+static const int32_t g_ai_build_cost[6][2] = {
+    {  6, 10 },   /* tag 0 */
+    {  4,  4 },   /* tag 1 */
+    {  3, 10 },   /* tag 2 */
+    {  6,  3 },   /* tag 3 */
+    { 13,  0 },   /* tag 4 */
+    {  4, 18 },   /* tag 5 */
+};
+
+/* Personality-row byte offset of the build tag selected by rotation counter
+ * 0..9 (retail's DAT_004d8aa8/aac/ab0/ab4/ab8/abc columns, which sit at +0x50
+ * .. +0x64 inside each 0xf0-byte personality row).  Counters 0..3 and 4..7 both
+ * map to the first four columns; 8/9 add the last two. */
+static const int g_ai_build_col_off[10] = {
+    0x50, 0x54, 0x58, 0x5c, 0x50, 0x54, 0x58, 0x5c, 0x60, 0x64,
+};
+
+/* Port of FUN_0049ed13 — flag whether `player` can afford `realm`'s current
+ * build order.  Clears the realm's affordability flag, looks up the two pool
+ * costs of its current build tag, runs the slot-2 resource planner
+ * (engine_army_economy_plan_resource for slot 2), then re-sets the flag iff the
+ * player's +0x130 and +0x120 pools both cover the respective costs. */
+void engine_army_ai_mark_build_affordable(int player, int realm)
+{
+    uint8_t *r = ARMY_REC(realm);
+    uint8_t *s = STRAT_REC(player);
+
+    r[ARMY_BUILD_AFFORD] = 0;
+
+    int tag = r[ARMY_BUILD_TAG];
+    int cost_130 = g_ai_build_cost[tag][0];
+    int cost_120 = g_ai_build_cost[tag][1];
+
+    engine_army_economy_plan_resource(realm, 2, 7, 0xf, 4);
+
+    if (cost_130 <= I32(s + STRAT_POOL_130) && cost_120 <= I32(s + STRAT_POOL_120))
+        r[ARMY_BUILD_AFFORD] = 1;
+}
+
+/* Port of FUN_0049e77d — AI brain step 0xc (per-turn build-order planning).
+ * Three passes over `player`'s owned realms:
+ *
+ *  1. Rotate build orders: each owned realm is stamped with the build tag from
+ *     the player's personality row column selected by the per-player rotation
+ *     counter (+0x6c, cycling 0..9); the counter advances and wraps at 10.  Each
+ *     realm's affordability flag is then refreshed (mark_build_affordable).
+ *  2. Enable job-bucket gates: for each of the four stride-0x18 settlement
+ *     buckets, clear the workforce enable gate, then re-light it when the bucket
+ *     descriptor is present (+0x295 != 0) and unlocked (+0x296 == 0) — subject,
+ *     when a secondary settlement exists (+0x1c3), to a per-bucket filter that
+ *     drops buckets 1 and 2, gates bucket 0 on build-draw-hi (+0x1d4 > 0) and
+ *     bucket 3 on build-draw-lo (+0x1d0 > 0).  Mark the realm's plan settled.
+ *  3. Run the workforce allocator then the per-realm economy orchestrator for
+ *     each owned realm (the now-enabled gates steer both). */
+void engine_army_ai_run_build_orders(int player)
+{
+    int count = (int)s_slot_0056d5dc;
+
+    /* Pass 1 — rotate each owned realm's build tag, refresh affordability. */
+    for (int realm = 1; realm <= count; realm++) {
+        uint8_t *r = ARMY_REC(realm);
+        if (r[ARMY_OWNER] != player)
+            continue;
+
+        uint8_t *s = STRAT_REC(player);
+        int rot = I32(s + STRAT_BUILD_ROTATE);
+        /* Retail's switch only assigns for rotation codes 0..9 (else the tag is
+         * left unchanged); the counter is kept in that range by the wrap below. */
+        if ((unsigned)rot < 10) {
+            const uint8_t *row =
+                &g_ai_personality[(s[STRAT_PERSONALITY] - 1) * AI_PERS_STRIDE];
+            r[ARMY_BUILD_TAG] = row[g_ai_build_col_off[rot]];
+        }
+
+        I32(s + STRAT_BUILD_ROTATE) = rot + 1;
+        if (I32(s + STRAT_BUILD_ROTATE) >= 10)
+            I32(s + STRAT_BUILD_ROTATE) = 0;
+
+        engine_army_ai_mark_build_affordable(player, realm);
+    }
+
+    /* Pass 2 — enable this player's realm job-bucket gates. */
+    for (int realm = 1; realm <= count; realm++) {
+        uint8_t *r = ARMY_REC(realm);
+        if (r[ARMY_OWNER] != player)
+            continue;
+
+        for (int slot = 0; slot < 4; slot++) {
+            uint8_t *g = r + slot * ARMY_BUILDGATE_STRIDE;
+            g[ARMY_BUILDGATE_ENABLE] = 0;
+            if ((int8_t)g[ARMY_BUILDGATE_PRESENT] != 0 &&
+                (int8_t)g[ARMY_BUILDGATE_LOCK] == 0 &&
+                (r[ARMY_SETTLE_FLAG] == 0 ||
+                 (slot != 1 && slot != 2 &&
+                  (slot != 0 || I32(r + ARMY_BUILD_DRAW_HI) > 0) &&
+                  (slot != 3 || I32(r + ARMY_BUILD_DRAW_LO) > 0)))) {
+                g[ARMY_BUILDGATE_ENABLE] = 1;
+            }
+        }
+        r[ARMY_BUILD_PLAN_FLAG] = 1;
+    }
+
+    /* Pass 3 — allocate workforce + run the economy orchestrator per realm. */
+    for (int realm = 1; realm <= count; realm++) {
+        if (ARMY_REC(realm)[ARMY_OWNER] != player)
+            continue;
+        engine_territory_allocate_realm_workforce(realm);
+        engine_army_economy_plan_realm(realm, (int)s_slot_0057c92c);
+    }
 }

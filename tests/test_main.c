@@ -2106,6 +2106,13 @@ struct test_case {
     X(army_ai_diplomacy_no_betrayal_below_threshold) \
     X(army_ai_diplomacy_forms_alliance_with_ai) \
     X(army_ai_diplomacy_proposes_to_human) \
+    X(army_ai_mark_build_affordable_sets_flag) \
+    X(army_ai_mark_build_affordable_clears_when_short) \
+    X(army_ai_build_orders_rotates_tag) \
+    X(army_ai_build_orders_rotation_wraps) \
+    X(army_ai_build_orders_enables_gates) \
+    X(army_ai_build_orders_settle_filter) \
+    X(army_ai_build_orders_skips_unowned) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

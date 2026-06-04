@@ -6708,3 +6708,38 @@ notification ring rather than mutating diplomacy state inline.  Its own shape:
 
 Brain step 8 (`FUN_0049f96c`, `engine_army_ai_step_noop`) is an empty function
 — a live slot in the dispatch ladder with no shipped body.
+
+## 191 — AI brain step 0xc (`FUN_0049e77d`) reads its per-realm build orders from columns BAKED INTO the personality table, cycling 10 rotation codes over only 6 distinct columns
+
+The per-turn build-order planner `FUN_0049e77d`
+(`engine_army_ai_run_build_orders`, brain step 0xc) stamps each owned realm's
+build tag (`+0x290`) from the AI's personality row — but the "build columns" are
+not a separate table.  Retail reads `(&DAT_004d8aa8)[(personality·3−3)·0x50]`,
+and `DAT_004d8aa8 = 0x4d8a58 + 0x50` is offset **0x50 inside the personality
+table** (`g_ai_personality`, base `0x4d8a58`, stride `0xf0 = 3·0x50`).  So the
+build tags live at personality-row offsets `+0x50/+0x54/+0x58/+0x5c/+0x60/+0x64`
+— six bytes interleaved with the economy targets the same row carries at
+`+0x78`+.  The port reads them straight out of the already-imaged
+`g_ai_personality` image rather than baking a second table.
+
+The per-player rotation counter `+0x6c` (`STRAT_BUILD_ROTATE`) advances 0..9 and
+wraps at 10, but maps onto only the **six** columns: codes 0..3 and 4..7 both
+select columns 0..3 (offsets 0x50..0x5c), and only 8/9 reach the last two
+(0x60/0x64).  Net effect: the first four build orders are each twice as likely
+per cycle as the last two.
+
+The build **cost** table `DAT_004d8990` (consumed by the affordability leaf
+`FUN_0049ed13` → `engine_army_ai_mark_build_affordable`) is exactly **six**
+8-byte entries (`{cost_vs_pool130, cost_vs_pool120}`, tags 0..5) — the next const
+table begins at `0x4d89c0`, +0x30 — matching the six possible build tags.  A
+realm is flagged affordable (`+0x2c5`) iff the player's `+0x130` and `+0x120`
+pools (the overlapping strategic commodity pools of #179) both cover the tag's
+two costs.
+
+Step 0xc's second pass lights the four stride-0x18 settlement workforce gates
+(`+0x297`, `engine_territory`'s `WF_GATE_C6`+) for present (`+0x295`), unlocked
+(`+0x296 == 0`) buckets, then — when a secondary settlement exists (`+0x1c3`) —
+applies a per-bucket filter that drops buckets 1/2 outright and gates bucket 0 on
+build-draw-hi (`+0x1d4 > 0`) and bucket 3 on build-draw-lo (`+0x1d0 > 0`).  The
+third pass then runs the workforce allocator (`FUN_0044f6e7`) and per-realm
+economy orchestrator (`FUN_004485a5`) over the now-enabled gates.

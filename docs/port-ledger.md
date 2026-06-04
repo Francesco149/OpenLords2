@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **699** (28.6%) — tested 658, ported 41
-- code bytes touched: **35.1%** (294,106 / 838,629 B)
-- unported: **1748**
+- touched: **701** (28.6%) — tested 660, ported 41
+- code bytes touched: **35.3%** (295,716 / 838,629 B)
+- unported: **1746**
 - orphan refs (in src/, not in function table): 7
 
-## tested (658) — ported + host unit suite
+## tested (660) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -506,6 +506,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49dfc6 | FUN_0049dfc6 | 505 | engine_army_ai.c, engine_army_ai.h |
 | 0x49e1bf | FUN_0049e1bf | 476 | engine_army_ai.c, engine_army_ai.h |
 | 0x49e39b | FUN_0049e39b | 994 | engine_army_ai.c, engine_army_ai.h |
+| 0x49e77d | FUN_0049e77d | 1430 | engine_army_ai.c, engine_army_ai.h |
+| 0x49ed13 | FUN_0049ed13 | 180 | engine_army_ai.c, engine_army_ai.h |
 | 0x49f96c | FUN_0049f96c | 11 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a0c1d | FUN_004a0c1d | 1572 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a1241 | FUN_004a1241 | 357 | engine_diplomacy.c, engine_diplomacy.h |

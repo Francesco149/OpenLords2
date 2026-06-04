@@ -1305,3 +1305,149 @@ int test_army_ai_seed_buy_requests_prosperity_gate(void)
     T_ASSERT_EQ_I(AI32(s, 0x70), 0);      /* +0x130 not short → not floored */
     return 0;
 }
+
+/* ── Build-order planning (FUN_0049ed13 / FUN_0049e77d, brain step 0xc) ──
+ * ai_turn_setup NULLs the econ/territory binds, so plan_resource /
+ * allocate_realm_workforce / plan_realm all no-op — these exercise the pure
+ * bookkeeping (tag rotation, affordability flag, gate enabling). */
+
+/* mark_build_affordable: build tag 2 costs {3,10} against pools +0x130/+0x120;
+ * both pools cover → the realm's +0x2c5 affordability flag is set. */
+int test_army_ai_mark_build_affordable_sets_flag(void)
+{
+    ai_turn_setup();
+    uint8_t *s = PREC(2);
+    uint8_t *a = AREC(1);
+    a[0x290] = 2;                       /* build tag 2 → cost {3, 10} */
+    AI32(s, 0x130) = 3; AI32(s, 0x120) = 10;   /* exactly cover both */
+
+    engine_army_ai_mark_build_affordable(2, 1);
+
+    T_ASSERT_EQ_I(a[0x2c5], 1);
+    return 0;
+}
+
+/* mark_build_affordable: the flag clears when either pool falls short (here the
+ * +0x120 pool is one under the tag-2 cost of 10). */
+int test_army_ai_mark_build_affordable_clears_when_short(void)
+{
+    ai_turn_setup();
+    uint8_t *s = PREC(2);
+    uint8_t *a = AREC(1);
+    a[0x2c5] = 1;                       /* stale flag → must be cleared */
+    a[0x290] = 2;                       /* cost {3, 10} */
+    AI32(s, 0x130) = 100; AI32(s, 0x120) = 9;  /* +0x120 short */
+
+    engine_army_ai_mark_build_affordable(2, 1);
+
+    T_ASSERT_EQ_I(a[0x2c5], 0);
+    return 0;
+}
+
+/* run_build_orders: rotation counter 1 + personality 1 selects build column
+ * +0x54 (tag 1); the counter advances to 2. */
+int test_army_ai_build_orders_rotates_tag(void)
+{
+    ai_turn_setup();
+    s_slot_0056d5dc = 1;
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;                       /* personality 1 → columns {0,1,4,2,5,2} */
+    AI32(s, 0x06c) = 1;                 /* rotation counter 1 → column +0x54 */
+    AREC(1)[0x005] = 2;                 /* realm 1 owned by player 2 */
+
+    engine_army_ai_run_build_orders(2);
+
+    T_ASSERT_EQ_I(AREC(1)[0x290], 1);   /* personality-1 column 1 = tag 1 */
+    T_ASSERT_EQ_I(AI32(s, 0x06c), 2);   /* counter advanced */
+    return 0;
+}
+
+/* run_build_orders: rotation counter 9 reads the last column (+0x64, tag 2 for
+ * personality 1) and wraps back to 0. */
+int test_army_ai_build_orders_rotation_wraps(void)
+{
+    ai_turn_setup();
+    s_slot_0056d5dc = 1;
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;
+    AI32(s, 0x06c) = 9;                 /* column +0x64 → tag 2; then wrap */
+    AREC(1)[0x005] = 2;
+
+    engine_army_ai_run_build_orders(2);
+
+    T_ASSERT_EQ_I(AREC(1)[0x290], 2);
+    T_ASSERT_EQ_I(AI32(s, 0x06c), 0);   /* wrapped */
+    return 0;
+}
+
+/* run_build_orders: with no secondary settlement, a present + unlocked bucket
+ * lights its workforce gate, a locked bucket does not, and the realm's plan flag
+ * is set. */
+int test_army_ai_build_orders_enables_gates(void)
+{
+    ai_turn_setup();
+    s_slot_0056d5dc = 1;
+    PREC(2)[0x007] = 1;
+    uint8_t *a = AREC(1);
+    a[0x005] = 2;
+    a[0x1c3] = 0;                       /* no secondary settlement → no filter */
+    /* bucket 0: present + unlocked → gate lights */
+    a[0 * 0x18 + 0x295] = 1; a[0 * 0x18 + 0x296] = 0;
+    /* bucket 1: present but locked → gate stays clear */
+    a[1 * 0x18 + 0x295] = 1; a[1 * 0x18 + 0x296] = 1;
+    /* bucket 2: absent → gate stays clear */
+    a[2 * 0x18 + 0x295] = 0; a[2 * 0x18 + 0x296] = 0;
+    a[0 * 0x18 + 0x297] = 9;            /* stale enable → cleared first */
+
+    engine_army_ai_run_build_orders(2);
+
+    T_ASSERT_EQ_I(a[0 * 0x18 + 0x297], 1);
+    T_ASSERT_EQ_I(a[1 * 0x18 + 0x297], 0);
+    T_ASSERT_EQ_I(a[2 * 0x18 + 0x297], 0);
+    T_ASSERT_EQ_I(a[0x1b0], 1);         /* plan settled */
+    return 0;
+}
+
+/* run_build_orders: with a secondary settlement (+0x1c3) the per-bucket filter
+ * drops buckets 1/2 outright, gates bucket 0 on build-draw-hi (+0x1d4 > 0) and
+ * bucket 3 on build-draw-lo (+0x1d0 > 0). */
+int test_army_ai_build_orders_settle_filter(void)
+{
+    ai_turn_setup();
+    s_slot_0056d5dc = 1;
+    PREC(2)[0x007] = 1;
+    uint8_t *a = AREC(1);
+    a[0x005] = 2;
+    a[0x1c3] = 1;                       /* secondary settlement present */
+    for (int slot = 0; slot < 4; slot++) {
+        a[slot * 0x18 + 0x295] = 1;     /* all present + unlocked */
+        a[slot * 0x18 + 0x296] = 0;
+    }
+    AI32(a, 0x1d4) = 5;                 /* draw-hi > 0 → bucket 0 allowed */
+    AI32(a, 0x1d0) = 0;                 /* draw-lo == 0 → bucket 3 blocked */
+
+    engine_army_ai_run_build_orders(2);
+
+    T_ASSERT_EQ_I(a[0 * 0x18 + 0x297], 1);   /* bucket 0: draw-hi > 0 */
+    T_ASSERT_EQ_I(a[1 * 0x18 + 0x297], 0);   /* bucket 1: always dropped */
+    T_ASSERT_EQ_I(a[2 * 0x18 + 0x297], 0);   /* bucket 2: always dropped */
+    T_ASSERT_EQ_I(a[3 * 0x18 + 0x297], 0);   /* bucket 3: draw-lo == 0 */
+    return 0;
+}
+
+/* run_build_orders: realms owned by another player are skipped entirely — no tag
+ * write, no gate change. */
+int test_army_ai_build_orders_skips_unowned(void)
+{
+    ai_turn_setup();
+    s_slot_0056d5dc = 2;
+    PREC(2)[0x007] = 1;
+    AREC(1)[0x005] = 3;                 /* owned by player 3, not 2 */
+    AREC(1)[0x290] = 0x77;              /* sentinel — must stay untouched */
+
+    engine_army_ai_run_build_orders(2);
+
+    T_ASSERT_EQ_I(AREC(1)[0x290], 0x77);
+    T_ASSERT_EQ_I(AREC(1)[0x1b0], 0);   /* plan flag not set for unowned realm */
+    return 0;
+}

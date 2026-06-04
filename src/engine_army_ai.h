@@ -157,4 +157,17 @@ void engine_army_ai_run_diplomacy(int player, engine_event_queue_state_t *evq);
 /* Port of FUN_0049f96c — AI brain step 8.  A no-op in the shipped build. */
 void engine_army_ai_step_noop(void);
 
+/* Port of FUN_0049ed13.  Flag whether `player` can afford `realm`'s current
+ * build order: clears the realm's affordability flag, runs the slot-2 resource
+ * planner, then re-sets the flag iff the player's +0x130/+0x120 pools both cover
+ * the current build tag's two costs. */
+void engine_army_ai_mark_build_affordable(int player, int realm);
+
+/* Port of FUN_0049e77d — AI brain step 0xc (per-turn build-order planning).
+ * Rotates each owned realm's build tag through the personality build columns and
+ * refreshes affordability, enables the realm job-bucket workforce gates (subject
+ * to the secondary-settlement filter), then runs the workforce allocator and the
+ * per-realm economy orchestrator for each owned realm. */
+void engine_army_ai_run_build_orders(int player);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_AI_H */
