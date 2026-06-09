@@ -7,6 +7,65 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-10 — TRACE STUDIO: the port↔retail workhorse (capture → label-diff → serve → recapture), state parity, load-path divergence fenced
+
+Brought the project up to openrecet's tooling standard — and past it where
+its postmortems pointed (user-directed).  `tools/trace_studio/` +
+`tools/trace_studio_web/`: ONE studio trace drives BOTH engines (port local
+via run-openlords2.sh, retail via remote frida) to label-keyed captured
+frames; the studio pixel-diffs per label, snapshots the 225-entry save
+schema at every capture instant on both sides (scalars by value, blocks by
+FNV-1a32 — port `src/state_dump.c`, agent `stateDumpOnce`, identical
+format), field-diffs the state with schema symbol names, encodes per-group
+scrub mp4s, and serves a Preact SPA (capture strip → A|B/diff stage →
+GroupVideo + diff ribbon → State/Anchor panels → in-browser ⟳port/⟳both
+recapture).  Plan: `docs/plans/trace-studio.md`; usage:
+`docs/findings/trace-studio.md`.
+
+Deliberate deviations from openrecet (it's not battle-tested): a SINGLE
+op-compiler in the studio lowers sugar (`{caprange}` dense ranges, strides)
+to the frozen primitive op set both engines already parse — killing its
+"three segtrace parsers" trap; pairing is by LABEL (not ordinal kept-count)
+— immune to drift; no D1/D2 engine gates (Lords2 loads are one-tick flips,
+frames 10× smaller, retail frames ride the frida socket); state parity is
+first-class because the game is turn-based.
+
+What the studio caught in its first hours (all logged in the plan doc):
+(1) the retail-harness segtrace parser required `w`/`l` where the C parser
+defaults them — fixed both ways; (2) a ~1-in-3 retail load-camera flake
+(saved+1 step = 60 px, within-run stable; port bit-identical every run) —
+now identified numerically as state slot 16; (3) `new_game_to_map` is
+config-state-dependent (the config screen persists the last game; the
+scroll-dismiss over-spray now territory-selects); (4) THE BISECT
+(`grid_load_probe`, captures at MAP_FREEROAM+0/1/2/3/60): the ENTIRE
+state residual (9/225 slots) is born inside the load-flip tick and frozen
+after — the port's ingame tick is state-identical to retail's across 60
+ticks.  Retail's load tick does exactly ONE more double-LFSR pull
+(canonical+103 vs +102, proven by stepping the ported LFSR), sets
+`s_slot_0053f658`=1 (256c-popup-active suspect), and hash-diffs blocks
+0/3/4/5/11.  Port `--rng-seed` (pre-ingame canonical pin mirroring the
+agent) landed alongside.
+
+Substrate: port emits `anchors.jsonl`/`captures.jsonl` (machine-readable)
+in segtrace runs; `INPUT_TRACE_MAX_OPS` 512→8192; retail harness persists
+the label→tick map + `state/state_<tick>.json`; quirk #194 (stale
+`gen_save_schema.py` clobbers entry 138's widened storage).
+
+### Next candidates
+1. Name the 103rd pull site: mem-watch the LFSR global / call-trace the
+   load-flip tick; port the 256c popup (slot 74 + likely the pull + the
+   92.9k-px residual's biggest chunk).
+2. Per-block sub-hashing (split big blocks into ~64 ranges) to localize
+   the block 0/3/4/5/11 diffs byte-wise.
+3. Camera flake root-cause (slot 16 = saved+1, load-tick-local, retail-
+   side wall-clock leak).
+4. Turn-pass state traces: end-turn clicks + per-turn statedumps → the
+   AI-economy/RNG save-parity frontier with the state ribbon as the gate.
+5. New-game determinism: config pinning + the scroll-active global
+   (`{wait_until scroll==0}`) + port entry scrolls.
+
+---
+
 ## 2026-06-04 — TURN DRIVER: AI brain FSM — build orders (step 0xc) + the COMPLETE attack-launch chain (step 0xa, 9 fns) (10 fns, host-tested)
 
 Cleared two whole dispatch steps of the per-realm AI brain FSM `FUN_0049a581`:

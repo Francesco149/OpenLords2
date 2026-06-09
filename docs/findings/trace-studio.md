@@ -57,6 +57,20 @@ sequence. RNG: retail runs with `--rng-seed` (canonical LFSR pin) by
 default; the port's defaults ARE those seeds, so both sides agree without a
 port flag.
 
+## State parity (the sim oracle)
+
+Every capture instant also snapshots the 225-entry save schema on BOTH
+sides (port `src/state_dump.c` walks `g_save_schema`; the agent reads the
+same slots by VA from `state_slots.json`, regenerated per capture from
+`save_schema_table.h`). Scalars compare by value, big blocks by FNV-1a32
+hash; the manifest's `captures[].state` lists differing slots with schema
+symbol names and the UI StatePanel shows them for the selected capture.
+STATE-CLEAN on a label = the sim states are byte-equal (blocks at
+hash-resolution). Both sides run with the canonical pre-ingame RNG pin
+(`--rng-seed`, port main.c + retail agent) so LFSR slots compare apples to
+apples. To bisect WHEN a divergence is born, probe-capture consecutive
+ticks (`{capture:0..3}` after an anchor) — see grid_load_probe.
+
 ## Debug kit
 
 - `--watch NAME=0xVA:type` (repeatable) → retail/watch.jsonl. Camera:
