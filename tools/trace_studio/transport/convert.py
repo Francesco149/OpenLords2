@@ -81,7 +81,53 @@ def convert_retail(retail_dir: Path) -> dict[str, dict]:
     return out
 
 
+def collect_state_port(port_dir: Path) -> dict[str, Path]:
+    """Port state snapshots: frames-raw/<label>.state.json → state/<label>.json
+    (idempotent; a cached side just lists state/)."""
+    raw = port_dir / "frames-raw"
+    sdir = port_dir / "state"
+    sdir.mkdir(parents=True, exist_ok=True)
+    rows = read_jsonl(port_dir / "captures.jsonl")
+    out: dict[str, Path] = {}
+    for r in rows:
+        label = str(r.get("label") or "")
+        if not label:
+            continue
+        dst = sdir / f"{label}.json"
+        if not dst.exists():
+            src = raw / f"{label}.state.json"
+            if src.exists():
+                shutil.copy2(src, dst)
+        if dst.exists():
+            out[label] = dst
+    return out
+
+
+def collect_state_retail(retail_dir: Path) -> dict[str, Path]:
+    """Retail state snapshots: state-raw/state_<tick>.json (named by the TICK
+    the agent stamped) → state/<label>.json via captures.jsonl."""
+    raw = retail_dir / "state-raw"
+    sdir = retail_dir / "state"
+    sdir.mkdir(parents=True, exist_ok=True)
+    rows = read_jsonl(retail_dir / "captures.jsonl")
+    out: dict[str, Path] = {}
+    for r in rows:
+        label = str(r.get("label") or "")
+        tick = int(r.get("frame", 0))
+        if not label:
+            continue
+        dst = sdir / f"{label}.json"
+        if not dst.exists():
+            src = raw / f"state_{tick:05d}.json"
+            if src.exists():
+                shutil.copy2(src, dst)
+        if dst.exists():
+            out[label] = dst
+    return out
+
+
 def prune_raw(side_dir: Path) -> None:
-    raw = side_dir / "frames-raw"
-    if raw.exists():
-        shutil.rmtree(raw)
+    for sub in ("frames-raw", "state-raw"):
+        raw = side_dir / sub
+        if raw.exists():
+            shutil.rmtree(raw)

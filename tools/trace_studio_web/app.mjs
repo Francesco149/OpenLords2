@@ -10,6 +10,7 @@ import { CaptureStrip } from "/components/CaptureStrip.mjs";
 import { Stage } from "/components/Stage.mjs";
 import { GroupVideo } from "/components/GroupVideo.mjs";
 import { AnchorPanel } from "/components/AnchorPanel.mjs";
+import { StatePanel } from "/components/StatePanel.mjs";
 import { JobTray } from "/components/JobTray.mjs";
 
 const SESS = qparam("session");
@@ -71,6 +72,7 @@ function App() {
       : html`<${Stage} sess=${SESS} cap=${cur} mode=${mode} setMode=${setMode}
                zoom=${zoom} setZoom=${setZoom} />`}
     <div class="panels">
+      <${StatePanel} cap=${cur} />
       <${AnchorPanel} anchors=${manifest.anchors} />
       <div class="panel">
         <h3>session</h3>

@@ -276,6 +276,9 @@ class CaptureConfig:
     # / screen-id transitions → run_dir/anchors.jsonl, keyed on the per-tick
     # counter.  See docs/plans/tas-framework.md.
     anchor_trace:      bool = False
+    # Save-schema state dump at segtrace {capture} instants:
+    # [{i,va,size}] → run_dir/state/state_<tick>.json (trace_studio parity).
+    state_dump_slots:  list[dict] = field(default_factory=list)
     # Per-frame state watch: [{name,va,type}] → run_dir/watch.jsonl (edge-
     # emitted).  The state oracle for authoring wait_until predicates.
     watch:             list[dict] = field(default_factory=list)
@@ -798,6 +801,15 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
                     {"label": p.get("label") or "capture",
                      "frame": int(p.get("at", 0))}) + "\n")
             return
+        if kind == "state_dump":
+            frame = int(p.get("frame", 0))
+            sdir = run_dir / "state"
+            sdir.mkdir(exist_ok=True)
+            (sdir / f"state_{frame:05d}.json").write_text(
+                json.dumps({"slots": p.get("slots") or []}) + "\n")
+            f_log.write(f"[state_dump] frame {frame} "
+                        f"({len(p.get('slots') or [])} slots)\n")
+            return
         if kind == "segtrace_done":
             f_log.write(f"[segtrace] done @ frame {p.get('frame')} — "
                         f"all ops consumed, captures taken\n")
@@ -1001,6 +1013,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "input_record":              bool(cfg.input_record),
             "input_replay":              input_replay_events,
             "input_segtrace":            input_segtrace_ops,
+            "state_dump_slots":          cfg.state_dump_slots or [],
             "call_trace":                bool(cfg.call_trace),
             "call_trace_vas":            [int(v) for v in cfg.call_trace_vas],
             "call_trace_frames":         [int(v) for v in cfg.call_trace_frames],
@@ -1317,6 +1330,10 @@ def main(argv: list[str] | None = None) -> int:
                          "{capture:N} anchor-relative screenshots. Within a "
                          "segment, frame stamps are relative to the opening "
                          "anchor. See docs/plans/tas-framework.md")
+    ap.add_argument("--state-dump-slots", default=None,
+                    help="save-schema slot list (JSON file: [{i,va,size}]) — "
+                         "dump these at every segtrace {capture} instant to "
+                         "state/state_<tick>.json (trace_studio state parity)")
     ap.add_argument("--anchor-trace", action="store_true",
                     help="emit deterministic anchors ({anchor,frame} on "
                          "engine-state / screen-id transitions) to "
@@ -1438,6 +1455,12 @@ def main(argv: list[str] | None = None) -> int:
         return out
 
     watch_specs = _parse_watch(args.watch)
+
+    state_dump_slots: list[dict] = []
+    if args.state_dump_slots:
+        rows = json.loads(Path(args.state_dump_slots).read_text())
+        state_dump_slots = [{"i": int(r["i"]), "va": int(r["va"]),
+                             "size": int(r["size"])} for r in rows]
     rng_seed    = _parse_rng_seed(args.rng_seed)
 
     run_id = args.run_id or dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -1503,6 +1526,7 @@ def main(argv: list[str] | None = None) -> int:
         call_trace_max_frames=args.call_trace_max_frames,
         anchor_trace=args.anchor_trace,
         watch=watch_specs,
+        state_dump_slots=state_dump_slots,
         rng_seed=rng_seed,
         exe_args=list(args.exe_arg),
     )

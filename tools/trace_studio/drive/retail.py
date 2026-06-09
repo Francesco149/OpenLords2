@@ -19,7 +19,8 @@ from ..paths import ROOT
 
 def capture_retail(*, compiled: Path, retail_dir: Path, remote: str,
                    rng_seed: bool, result: dict,
-                   watch: list[str] | None = None) -> None:
+                   watch: list[str] | None = None,
+                   state_slots: Path | None = None) -> None:
     retail_dir.mkdir(parents=True, exist_ok=True)
     run_id = f"ts-{dt.datetime.now():%Y%m%d-%H%M%S}"
     cmd = [sys.executable, str(ROOT / "tools" / "frida_capture.py"),
@@ -32,6 +33,8 @@ def capture_retail(*, compiled: Path, retail_dir: Path, remote: str,
         cmd.append("--rng-seed")
     for w in watch or []:
         cmd += ["--watch", w]
+    if state_slots is not None:
+        cmd += ["--state-dump-slots", str(state_slots)]
     log_path = retail_dir / "log.txt"
     try:
         with log_path.open("w") as log:
@@ -58,6 +61,11 @@ def capture_retail(*, compiled: Path, retail_dir: Path, remote: str,
     src_frames = run_dir / "frames"
     if src_frames.exists():
         shutil.copytree(src_frames, frames_raw)
+    state_raw = retail_dir / "state-raw"
+    if state_raw.exists():
+        shutil.rmtree(state_raw)
+    if (run_dir / "state").exists():
+        shutil.copytree(run_dir / "state", state_raw)
     for name in ("anchors.jsonl", "captures.jsonl", "watch.jsonl"):
         if (run_dir / name).exists():
             shutil.copy2(run_dir / name, retail_dir / name)

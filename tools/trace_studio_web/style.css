@@ -86,3 +86,4 @@ select { background: var(--bg3); color: var(--fg); border: 1px solid #333;
 .kv { color: var(--dim); margin: 2px 0; }
 pre.err { color: var(--bad); white-space: pre-wrap; max-width: 480px; }
 .sesspick { max-width: 280px; }
+.ok { color: var(--ok); } .bad { color: var(--bad); }

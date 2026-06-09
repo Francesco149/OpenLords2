@@ -15,9 +15,9 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from .analysis import pixeldiff
+from .analysis import pixeldiff, statediff
 from .drive import runner
-from .model import ops, session as sess_mod
+from .model import ops, schema, session as sess_mod
 from .paths import DEFAULT_REMOTE, ROOT, SESS_ROOT
 from .transport import convert, encode
 
@@ -113,11 +113,20 @@ def run_capture(cfg: CaptureConfig) -> int:
         shutil.rmtree(sess_dir / "diff")
 
     # ── drive ────────────────────────────────────────────────────────────────
+    # The save-schema slot list (state parity): regenerated per capture from
+    # src/save_schema_table.h so the retail agent reads exactly the slots the
+    # built port dumps.
+    slots_file = sess_dir / "state_slots.json"
+    n_slots = schema.write_slots_file(slots_file)
+    slot_names = [s["name"] for s in schema.load_slots()]
+    _log(f"state parity: {n_slots} schema slots")
+
     result = runner.drive(
         compiled=compiled, port_dir=port_dir, retail_dir=retail_dir,
         run_port=run_port, run_retail=run_retail, remote=cfg.remote,
         rng_seed=cfg.rng_seed, port_max_frames=cfg.port_max_frames,
-        port_timeout_ms=cfg.port_timeout_ms, watch=cfg.watch)
+        port_timeout_ms=cfg.port_timeout_ms, watch=cfg.watch,
+        state_slots=slots_file)
     for k in ("port_error", "retail_error"):
         if result.get(k):
             _log(f"{k}: {result[k]}")
@@ -134,6 +143,26 @@ def run_capture(cfg: CaptureConfig) -> int:
     captures = pixeldiff.build_captures(
         plan, port_map, retail_map, sess_dir, cfg.amp, compare_retail)
     vd = pixeldiff.verdict(captures, compare_retail)
+
+    # ── state parity (save-schema snapshots, label-paired like frames) ──────
+    port_state = convert.collect_state_port(port_dir) if want_port else {}
+    retail_state = (convert.collect_state_retail(retail_dir)
+                    if want_retail else {})
+    n_state_diff_labels = 0
+    if compare_retail:
+        for c in captures:
+            lb = c["label"]
+            if lb in port_state and lb in retail_state:
+                sd = statediff.diff_label(port_state[lb], retail_state[lb],
+                                          slot_names)
+                if sd is not None:
+                    c["state"] = sd
+                    if sd["n_diff"]:
+                        n_state_diff_labels += 1
+        have_state = sum(1 for c in captures if "state" in c)
+        if have_state:
+            _log(f"state parity: {have_state}/{len(captures)} labels paired, "
+                 f"{n_state_diff_labels} with differing slots")
 
     # ── group videos (dense ranges) ──────────────────────────────────────────
     videos: dict[str, dict] = {}
@@ -166,6 +195,7 @@ def run_capture(cfg: CaptureConfig) -> int:
         "n_captures": len(plan),
         "n_port": len(port_map),
         "n_retail": len(retail_map),
+        "n_state_diff_labels": n_state_diff_labels if compare_retail else None,
         "captures": captures,
         "groups": [{"name": g,
                     "labels": [p["label"] for p in plan if p["group"] == g],

@@ -2439,6 +2439,44 @@ let g_seg_wait_floor    = -1;       // frame of the last resolved wait/wait_unti
 let g_seg_done_sent     = false;
 let g_capture_at_frames = null;     // Set<int> | null — absolute frames to capture
 
+// ─── save-schema state dump (trace_studio state parity) ──────────────────
+// At each segtrace {capture} instant, read the 225 save-schema slots and
+// send {kind:'state_dump', frame, slots:[…]} — scalars (size ≤ 4) as
+// unsigned ints, big blocks as 32-bit FNV-1a hashes ("h:xxxxxxxx").  The
+// port writes the IDENTICAL format from its g_save_schema walk
+// (src/state_dump.c) — the hash must match bit-for-bit.
+let g_state_dump_slots = null;      // [{i, va, size}] | null
+
+function stateFnv1a(u8) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < u8.length; i++) {
+        h ^= u8[i];
+        h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+}
+
+function stateDumpOnce(frame) {
+    if (!g_state_dump_slots) return;
+    const out = new Array(g_state_dump_slots.length);
+    for (let i = 0; i < g_state_dump_slots.length; i++) {
+        const s = g_state_dump_slots[i];
+        try {
+            const u8 = new Uint8Array(rva(s.va).readByteArray(s.size));
+            if (s.size <= 4) {
+                let v = 0;
+                for (let k = s.size - 1; k >= 0; k--) v = v * 256 + u8[k];
+                out[i] = v >>> 0;
+            } else {
+                out[i] = 'h:' + ('0000000' + stateFnv1a(u8).toString(16)).slice(-8);
+            }
+        } catch (e) {
+            out[i] = null;              // region not mapped — surfaced as null
+        }
+    }
+    send({kind: 'state_dump', frame: frame, slots: out});
+}
+
 // ─── per-frame state watch (--watch NAME=0xVA:type, TAS framework) ───────
 // Emit {kind:"watch",name,frame,val} whenever a watched global CHANGES value
 // (edge-emitted to stay lean) — the per-frame state oracle for authoring
@@ -3160,6 +3198,7 @@ function installEngineTickHook() {
                 // engine_tick iterations, same as the heartbeat path.
                 if (g_capture_at_frames && g_capture_at_frames.has(g_tick_count)) {
                     captureFrameOnce();
+                    stateDumpOnce(g_tick_count);   // schema snapshot, same instant
                     g_capture_at_frames.delete(g_tick_count);
                 }
                 const cum_secs = rva(ADDR.var_fps_cum_secs).readU32();
@@ -5069,6 +5108,15 @@ rpc.exports = {
         g_seg_wait_floor    = -1;
         g_seg_done_sent     = false;
         g_capture_at_frames = null;
+
+        // Save-schema state dump at capture instants (trace_studio).
+        g_state_dump_slots = Array.isArray(opts.state_dump_slots)
+            ? opts.state_dump_slots.map(function (s) {
+                  return {i: (s.i | 0), va: (s.va >>> 0), size: (s.size | 0)};
+              })
+            : null;
+        if (g_state_dump_slots !== null && g_state_dump_slots.length === 0)
+            g_state_dump_slots = null;
 
         // Per-frame state watch (--watch NAME=0xVA:type).
         g_watch_specs = Array.isArray(opts.watch)

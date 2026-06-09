@@ -81,6 +81,7 @@
 #include "engine_npc_schedule.h"   /* engine_npc_schedule_set_localization (l2.eng) */
 #include "engine_title_render.h"
 #include "input_trace.h"
+#include "state_dump.h"
 #include "engine_menu_input.h"
 #include "text_input.h"
 #include "gfx.h"
@@ -2576,6 +2577,11 @@ static void main_loop_body(void)
                 wsprintfA(path, "%s\\%s.bmp",
                           g_capture_dir ? g_capture_dir : ".", lbl);
                 gfx_capture_backbuffer(path);
+                /* Save-schema snapshot at the same instant (trace_studio
+                 * state parity; the retail agent mirrors this). */
+                wsprintfA(path, "%s\\%s.state.json",
+                          g_capture_dir ? g_capture_dir : ".", lbl);
+                state_dump_write(path);
                 {
                     char line[128];
                     wsprintfA(line, "{\"label\":\"%s\",\"frame\":%d}",
