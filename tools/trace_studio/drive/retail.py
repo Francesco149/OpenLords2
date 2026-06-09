@@ -18,7 +18,8 @@ from ..paths import ROOT
 
 
 def capture_retail(*, compiled: Path, retail_dir: Path, remote: str,
-                   rng_seed: bool, result: dict) -> None:
+                   rng_seed: bool, result: dict,
+                   watch: list[str] | None = None) -> None:
     retail_dir.mkdir(parents=True, exist_ok=True)
     run_id = f"ts-{dt.datetime.now():%Y%m%d-%H%M%S}"
     cmd = [sys.executable, str(ROOT / "tools" / "frida_capture.py"),
@@ -29,6 +30,8 @@ def capture_retail(*, compiled: Path, retail_dir: Path, remote: str,
            "--run-id", run_id]
     if rng_seed:
         cmd.append("--rng-seed")
+    for w in watch or []:
+        cmd += ["--watch", w]
     log_path = retail_dir / "log.txt"
     try:
         with log_path.open("w") as log:

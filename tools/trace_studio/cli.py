@@ -34,6 +34,9 @@ def main(argv: list[str] | None = None) -> int:
                      help="keep frames-raw BMPs (debugging)")
     cap.add_argument("--port-max-frames", type=int, default=4000)
     cap.add_argument("--port-timeout-ms", type=int, default=240_000)
+    cap.add_argument("--watch", action="append", default=[],
+                     help="retail watch spec NAME=0xVA:type (repeatable) — "
+                          "edge-emitted to retail/watch.jsonl")
 
     li = sub.add_parser("lint", help="preflight a studio trace")
     li.add_argument("--trace", required=True)
@@ -66,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
             rng_seed=not args.no_rng_seed, lint=not args.no_lint,
             encode_videos=not args.no_videos, prune_raw=not args.keep_raw,
             port_max_frames=args.port_max_frames,
-            port_timeout_ms=args.port_timeout_ms))
+            port_timeout_ms=args.port_timeout_ms, watch=args.watch))
     if args.cmd == "lint":
         return cmd_lint(args.trace, args.target)
     if args.cmd == "compile":

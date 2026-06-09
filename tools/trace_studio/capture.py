@@ -40,6 +40,7 @@ class CaptureConfig:
     lint: bool = True
     prune_raw: bool = True
     encode_videos: bool = True
+    watch: list[str] | None = None      # retail --watch NAME=0xVA:type specs
 
 
 def _resolve_trace(spec: str) -> Path:
@@ -116,7 +117,7 @@ def run_capture(cfg: CaptureConfig) -> int:
         compiled=compiled, port_dir=port_dir, retail_dir=retail_dir,
         run_port=run_port, run_retail=run_retail, remote=cfg.remote,
         rng_seed=cfg.rng_seed, port_max_frames=cfg.port_max_frames,
-        port_timeout_ms=cfg.port_timeout_ms)
+        port_timeout_ms=cfg.port_timeout_ms, watch=cfg.watch)
     for k in ("port_error", "retail_error"):
         if result.get(k):
             _log(f"{k}: {result[k]}")

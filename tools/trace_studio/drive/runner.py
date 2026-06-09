@@ -15,7 +15,8 @@ from . import retail as retail_drive
 
 def drive(*, compiled: Path, port_dir: Path, retail_dir: Path,
           run_port: bool, run_retail: bool, remote: str, rng_seed: bool,
-          port_max_frames: int, port_timeout_ms: int) -> dict:
+          port_max_frames: int, port_timeout_ms: int,
+          watch: list[str] | None = None) -> dict:
     result: dict = {}
     threads: list[threading.Thread] = []
     if run_port:
@@ -28,7 +29,7 @@ def drive(*, compiled: Path, port_dir: Path, retail_dir: Path,
     if run_retail:
         t = threading.Thread(target=retail_drive.capture_retail, kwargs=dict(
             compiled=compiled, retail_dir=retail_dir, remote=remote,
-            rng_seed=rng_seed, result=result))
+            rng_seed=rng_seed, watch=watch, result=result))
         t.start()
         threads.append(t)
     for t in threads:

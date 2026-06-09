@@ -140,6 +140,25 @@ JobTray + Recapture. Marks/notes + state panel later.
   mem-watch hand-off, TAS determinism gate (double-run bit-identical check)
   in CI.
 
+## Findings log
+
+- **2026-06-10 (Phase 1 shakeout) — retail load-camera flake.** One
+  grid_load_dense retail run landed the post-load camera 60px right of the
+  save's restored position (template match: dx=-60 dy=0, mean 0.00) and
+  STAYED there (within-run stable, n=2 through n=60); two follow-up runs +
+  the sparse session all restored exactly (CAMX/CAMY watch: boot 0,0 →
+  title default 20,74 → save's 24,2 at the flip tick 647). The PORT was
+  bit-identical across all runs (0 px run-vs-run). So retail's save-load
+  camera has a ~1-in-N wall-clock-paced disturbance; the port↔retail gate
+  must treat a one-off whole-map shift as a retail re-run signal, not a
+  port regression. Standard kit when it recurs:
+  `--watch CAMX=0x5651b4:i32 --watch CAMY=0x5651b8:i32`.
+- **Parity baseline (grid_load / grid_load_dense):** every map label sits at
+  92,897 px (30.24%) — the known residual (retail-only 256-colour popup +
+  water anim phase + faint glyphs). Chrome-only labels would be ~0; the map
+  labels carry the popup. This is the number to beat when the popup gets
+  ported / the anim phase gets pinned.
+
 ## Verification
 
 - Phase 1: `grid_load` session — labels paired 1:1, chrome labels ~0 diff px,

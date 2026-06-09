@@ -1,0 +1,33 @@
+# trace_studio trace: grid_load + a DENSE capture range over the map entry.
+# Same flow as grid_load.jsonl (title -> Single player -> Load a game ->
+# lastturn row -> Load -> map), but captures a 48-frame range after
+# MAP_FREEROAM so the studio's group-video / scrub path gets exercised
+# (load-scroll restore + water anim phase over the first map ticks).
+#
+# {caprange} is studio sugar — `trace_studio capture` compiles it to one
+# {capture} per frame; the engines replay only primitives.
+{"wait": "TITLE"}
+# "Single player" (320,107) -> page 2 ("Your options")
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+# "Load a game" page-2 button 2 (320,139) -> page 3 (file list)
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+# CLICK the "lastturn" save row, grid col0/row0 (160,126)
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+# "Load" gauntlet button (414,90)
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"capture": 2, "label": "map_enter"}
+{"caprange": [4, 48], "label": "map"}
+{"capture": 60, "label": "map_settled"}
