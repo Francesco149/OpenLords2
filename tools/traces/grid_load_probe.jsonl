@@ -1,0 +1,27 @@
+# Diagnostic probe: grid_load flow with state captures at the first ticks
+# after the load flips ingame (MAP_FREEROAM+0/1/2/3, then settled 60).
+# Purpose: bisect WHERE retail's one-extra-RNG-pull (state slots 18/19,
+# 102 vs 103 advances from canonical by +2) and the big-block diffs land.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"capture": 0, "label": "flip0"}
+{"capture": 1, "label": "tick1"}
+{"capture": 2, "label": "tick2"}
+{"capture": 3, "label": "tick3"}
+{"capture": 60, "label": "settled"}

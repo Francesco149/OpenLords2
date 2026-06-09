@@ -17,7 +17,8 @@ from ..paths import ROOT
 
 
 def capture_port(*, compiled: Path, port_dir: Path, max_frames: int,
-                 timeout_ms: int, result: dict) -> None:
+                 timeout_ms: int, result: dict,
+                 rng_seed: bool = True) -> None:
     frames_raw = port_dir / "frames-raw"
     frames_raw.mkdir(parents=True, exist_ok=True)
     log_path = port_dir / "log.txt"
@@ -25,6 +26,8 @@ def capture_port(*, compiled: Path, port_dir: Path, max_frames: int,
            "--input-segtrace", str(compiled),
            "--capture-to", str(frames_raw),
            "--frames", str(max_frames)]
+    if rng_seed:
+        cmd.append("--rng-seed")      # pre-ingame LFSR pin (mirrors retail)
     env = dict(os.environ)
     env["OPENLORDS2_TIMEOUT_MS"] = str(timeout_ms)
     try:

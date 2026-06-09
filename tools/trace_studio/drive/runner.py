@@ -24,7 +24,7 @@ def drive(*, compiled: Path, port_dir: Path, retail_dir: Path,
         t = threading.Thread(target=port_drive.capture_port, kwargs=dict(
             compiled=compiled, port_dir=port_dir,
             max_frames=port_max_frames, timeout_ms=port_timeout_ms,
-            result=result))
+            rng_seed=rng_seed, result=result))
         t.start()
         threads.append(t)
     if run_retail:

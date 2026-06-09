@@ -158,6 +158,22 @@ JobTray + Recapture. Marks/notes + state panel later.
   water anim phase + faint glyphs). Chrome-only labels would be ~0; the map
   labels carry the popup. This is the number to beat when the popup gets
   ported / the anim phase gets pinned.
+- **2026-06-10 — load-path state divergence FENCED (grid_load_probe).**
+  State parity (Phase 3) bisect with captures at MAP_FREEROAM+0/1/2/3/60:
+  every diff (9/225 slots) is established INSIDE the load-flip tick and
+  FROZEN after — the port's ingame tick is state-identical to retail's
+  across 60 ticks on the loaded map. The residual, all load-tick-local:
+  (a) slots 18/19: retail does exactly ONE more double-LFSR pull than the
+  port — port = canonical+102, retail = canonical+103 advances, constant
+  thereafter (so the menu+load consumes ~102 pulls and ingame map idle
+  consumes none); (b) slot 74 `s_slot_0053f658` port=0 retail=1 —
+  suspected 256c-popup-active flag (the popup is born at load; plausibly
+  owns the extra pull too); (c) big blocks 0/3/4/5/11 hash-diff; (d) the
+  camera flake (slot 16 = saved+1) recurs and is also load-tick-local.
+  Next chips: mem-watch the RNG writer / call-trace the flip tick to name
+  the 103rd pull site; per-block sub-hashing to localize the block diffs.
+  Port `--rng-seed` (pre-ingame canonical pin, mirrors the agent) landed —
+  proven by both sides reaching their values from canonical.
 - **2026-06-10 — new_game_to_map is config-state-dependent.** The studio
   run shows retail@map+780 inside a Berkshire COUNTY VIEW (banner + castle
   dialog) instead of the recorded clean map: the new-game config screen

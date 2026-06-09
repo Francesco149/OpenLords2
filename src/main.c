@@ -195,6 +195,14 @@ static int         g_playnow;          /* --playnow [IDX]: scenario config-apply
 static int         g_playnow_idx;      /* scenario row for --playnow (default 0) */
 static const char *g_input_segtrace;   /* --input-segtrace FILE: replay a TAS
                                         * input trace through the live tick */
+static int         g_rng_seed_pin;     /* --rng-seed: pin the double-LFSR to
+                                        * the canonical InitInstance seeds each
+                                        * PRE-INGAME tick, mirroring the retail
+                                        * agent's pinRngSeed — so both engines
+                                        * enter ingame from the same RNG state
+                                        * regardless of menu-path consumption.
+                                        * (The single-LFSR is owner-local in
+                                        * the port and already canonical.) */
 /* --audio-init: call audio_init() after window creation.  Off by
  * default — SetCooperativeLevel(PRIORITY) modifies process audio
  * state and the headless smoke harness has no way to validate
@@ -2520,6 +2528,14 @@ static void main_loop_body(void)
         log_line("newgame-live: fired page-7 Start click at frame 5.");
     }
 
+    /* RNG pin (--rng-seed): hold the double-LFSR at the canonical seeds
+     * while pre-ingame, exactly like the retail agent does each tick —
+     * the menu path consumes RNG pulls, so without the pin the two
+     * engines enter ingame from different states (state-parity slots
+     * 18/19).  Ingame, the live RNG runs free on both sides. */
+    if (g_rng_seed_pin && g_engine_state != 3)
+        engine_rng_global_set(0x54657687u, 0x72641663u);
+
     /* TAS input-trace replay (--input-segtrace): post the trace's due
      * WM_* ops through the genuine WndProc this frame, so the engine
      * resolves the press edges exactly as for a real click.  The anchor
@@ -2850,6 +2866,7 @@ static void parse_cmdline(LPSTR lpCmd)
             g_input_segtrace = tokens[++i];  /* TAS trace replay → ingame */
             g_gfx_init = 1;                  /* needs DDraw */
         }
+        else if (!strcmp(a, "--rng-seed"))   g_rng_seed_pin = 1;
         else if (!strcmp(a, "--audio-init"))     g_audio_init  = 1;
         else if (!strcmp(a, "--capture-to") && i + 1 < ntok) {
             g_capture_dir = tokens[++i];
