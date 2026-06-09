@@ -419,9 +419,11 @@ def _load_segtrace(path: Path) -> list[dict[str, Any]]:
                 ops.append({"kind": "capture", "n": int(obj["capture"]),
                             "label": str(obj.get("label", ""))})
             elif "m" in obj:
+                # w/l default to 0 when omitted — same leniency as the port's
+                # C parser (src/input_trace.c), so one trace parses on both.
                 ops.append({"kind": "input", "t": int(obj["t"]),
-                            "m": int(obj["m"]), "w": int(obj["w"]),
-                            "l": int(obj["l"])})
+                            "m": int(obj["m"]), "w": int(obj.get("w", 0)),
+                            "l": int(obj.get("l", 0))})
             else:
                 raise ValueError("unrecognised op (need m / wait / wait_until / "
                                  "capture)")
