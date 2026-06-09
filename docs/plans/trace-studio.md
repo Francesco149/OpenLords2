@@ -158,6 +158,19 @@ JobTray + Recapture. Marks/notes + state panel later.
   water anim phase + faint glyphs). Chrome-only labels would be ~0; the map
   labels carry the popup. This is the number to beat when the popup gets
   ported / the anim phase gets pinned.
+- **2026-06-10 — new_game_to_map is config-state-dependent.** The studio
+  run shows retail@map+780 inside a Berkshire COUNTY VIEW (banner + castle
+  dialog) instead of the recorded clean map: the new-game config screen
+  retains the LAST game's settings (persisted outside the trace), so the
+  generated world changed since the 2026-06-01 ground truth, and the x=417
+  scroll-dismiss over-spray now lands on the map → territory select (the
+  exact trap the TAS notes warned about). The port (no entry scrolls yet)
+  ends on the strategic map with a Kent panel → honest 68% diff. New-game
+  parity needs: (a) config pinning (drive the config page in the trace, or
+  poke the config globals), (b) the scroll-active global for a clean
+  `{wait_until scroll==0}` (still unidentified), (c) port entry scrolls.
+  Both engines DID reach MAP_FREEROAM within 5 ticks (563 vs 568) — the
+  menu→newgame→map seam itself replays 1:1.
 
 ## Verification
 
