@@ -49,6 +49,15 @@ def main(argv: list[str] | None = None) -> int:
     srv.add_argument("--host", default="127.0.0.1")
     srv.add_argument("--remote", default=DEFAULT_REMOTE)
 
+    fp = sub.add_parser("feed", help="push a session's paired captures to "
+                                     "the llm-feed as a comparison item")
+    fp.add_argument("--session", required=True)
+    fp.add_argument("--labels", default=None,
+                    help="comma-separated subset (default: all paired)")
+    fp.add_argument("--amp", type=float, default=6.0)
+    fp.add_argument("--title", default=None)
+    fp.add_argument("--note", default=None)
+
     args = ap.parse_args(argv)
     if args.cmd == "capture":
         return run_capture(CaptureConfig(
@@ -68,4 +77,11 @@ def main(argv: list[str] | None = None) -> int:
         return serve(SESS_ROOT, ROOT / "tools" / "trace_studio_web",
                      host=args.host, port=args.http_port,
                      default_session=args.session, remote=args.remote)
+    if args.cmd == "feed":
+        from .analysis.feedpush import push_session
+        from .paths import SESS_ROOT
+        return push_session(
+            SESS_ROOT / args.session,
+            labels=args.labels.split(",") if args.labels else None,
+            amp=args.amp, title=args.title, note=args.note)
     return 2
