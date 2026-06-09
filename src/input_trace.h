@@ -32,8 +32,10 @@
 #ifndef OPENLORDS2_INPUT_TRACE_H
 #define OPENLORDS2_INPUT_TRACE_H
 
-/* Generous fixed caps — traces are tiny (a few dozen ops). */
-#define INPUT_TRACE_MAX_OPS            512
+/* Generous fixed caps.  MAX_OPS sized for trace_studio's compiled dense
+ * capture ranges (a {caprange} lowers to one {capture} op per kept frame);
+ * hand-written traces stay a few dozen ops.  ~76B/op → ~620KB static. */
+#define INPUT_TRACE_MAX_OPS            8192
 #define INPUT_TRACE_MAX_FRAME_ACTIONS  16
 #define INPUT_TRACE_MAX_LABEL          32
 #define INPUT_TRACE_MAX_ANCHORS        16

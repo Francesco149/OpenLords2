@@ -2476,6 +2476,19 @@ static const char *current_tas_anchor(void)
 static input_trace_actions_t g_seg_actions;
 static const char           *g_seg_prev_anchor = "";
 
+/* Append one JSON line to <capture-dir>/<name> (trace_studio's machine-
+ * readable anchor/capture streams; mirrors the retail harness's
+ * anchors.jsonl / captures.jsonl so the two sides pair by label). */
+static void segtrace_jsonl(const char *name, const char *json_line)
+{
+    char path[MAX_PATH];
+    wsprintfA(path, "%s\\%s", g_capture_dir ? g_capture_dir : ".", name);
+    FILE *f = fopen(path, "a");
+    if (!f) return;
+    fprintf(f, "%s\n", json_line);
+    fclose(f);
+}
+
 static void main_loop_body(void)
 {
     /* Scripted WM_CHAR typing demo (--title-type STR): post one character
@@ -2517,6 +2530,12 @@ static void main_loop_body(void)
         const char *edge = (strcmp(anchor, g_seg_prev_anchor) != 0)
                          ? anchor : "";
         g_seg_prev_anchor = anchor;
+        if (edge[0]) {
+            char line[96];
+            wsprintfA(line, "{\"anchor\":\"%s\",\"frame\":%u}",
+                      edge, g_frame_counter);
+            segtrace_jsonl("anchors.jsonl", line);
+        }
         input_trace_step((int)g_frame_counter, edge, &g_seg_actions);
         for (int i = 0; i < g_seg_actions.msg_count; i++)
             PostMessageA(g_hwnd, g_seg_actions.msgs[i].msg,
@@ -2557,6 +2576,12 @@ static void main_loop_body(void)
                 wsprintfA(path, "%s\\%s.bmp",
                           g_capture_dir ? g_capture_dir : ".", lbl);
                 gfx_capture_backbuffer(path);
+                {
+                    char line[128];
+                    wsprintfA(line, "{\"label\":\"%s\",\"frame\":%d}",
+                              lbl, g_seg_actions.caps[i].frame);
+                    segtrace_jsonl("captures.jsonl", line);
+                }
                 log_line("input-segtrace: captured '%s' (frame %d) → %s",
                          lbl, g_seg_actions.caps[i].frame, path);
             }

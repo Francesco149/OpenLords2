@@ -549,6 +549,13 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         watch_fp = (run_dir / "watch.jsonl").open("w", buffering=1)
     counts["watch"] = 0
 
+    # Segtrace capture map — one JSONL row per scheduled {capture} op
+    # ({label, frame}); trace_studio renames frame_<tick>.bmp to the label
+    # so the retail side pairs with the port's label-named captures.
+    captures_fp = None
+    if cfg.input_segtrace_path is not None:
+        captures_fp = (run_dir / "captures.jsonl").open("w", buffering=1)
+
     # Preload the replay events so any parse failure surfaces before we
     # spawn the engine.  The agent expects a JSON array of {t,m,w,l}
     # objects passed via init opts; the Frida send/recv layer marshals it
@@ -784,6 +791,10 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         if kind == "segtrace_capture_sched":
             f_log.write(f"[segtrace] capture scheduled @ frame {p.get('at')} "
                         f"(n={p.get('n')} label={p.get('label')!r})\n")
+            if captures_fp is not None:
+                captures_fp.write(json.dumps(
+                    {"label": p.get("label") or "capture",
+                     "frame": int(p.get("at", 0))}) + "\n")
             return
         if kind == "segtrace_done":
             f_log.write(f"[segtrace] done @ frame {p.get('frame')} — "
@@ -1126,6 +1137,8 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
         anchor_trace_fp.close()
     if watch_fp is not None:
         watch_fp.close()
+    if captures_fp is not None:
+        captures_fp.close()
 
     return CaptureResult(
         exit_code=exit_code,
