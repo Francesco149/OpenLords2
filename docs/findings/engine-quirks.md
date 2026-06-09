@@ -6804,3 +6804,16 @@ frontier.
 (Caveat for future porters: the Ghidra decompile of `pick_muster_realms`
 `FUN_004a0aaa` transposes its two score variables — the r2 ground truth has the
 stockpile-below-provision realm feeding the `+0xe6` score, not `+0xe5`.)
+
+## 194 — tools gotcha: `gen_save_schema.py` is STALE vs the committed schema headers (clobbers entry 138's widened storage)
+
+Running `tools/gen_save_schema.py` regenerates `save_schema_table.h` /
+`save_schema_globals.{h,c}` from its CSV — but the committed headers carry a
+LATER hand-adjustment the generator does not know about: entry 138's storage
+was widened from its saved 96 bytes to `s_slot_00567970[150*16]`
+(`buckets[6][16]`; the save still persists exactly 96 bytes — quirk above).
+Re-running the generator silently narrows it back to `[96]`, which compiles
+fine and then corrupts the category-bucket plane at runtime. Until the
+generator/CSV is taught the widened storage, treat the three schema files as
+hand-maintained: do NOT re-run the generator blind; if you do, restore with
+`git checkout -- src/save_schema_*.{h,c} src/save_schema_table.h`.
