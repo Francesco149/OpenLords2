@@ -6868,3 +6868,69 @@ Port-side corollary: any engine-side WORKING MIRROR of a schema slot
 (the RNG mirrors, the event-queue ring struct) must re-seed from the
 schema storage after save_load, or the first ingame mutation advances
 from boot state (two such bugs fixed in the load route this session).
+
+## 197 — `DAT_004eac50` (the current-SCREEN byte) is the text shadow-pair discriminator; an early port pass misread it as a "language tag"
+
+`FUN_00402637` (the per-line text renderer) picks its two drop-shadow
+colors from the CURRENT SCREEN id: screens 0x1c / 0x1f (title class) get
+the gray pair (0x36, 0x2c), every other screen the parchment pair
+(0x10, 0x1f).  The boot-era port named the gfx_text mirror
+"language_tag" and set it ONCE to 0x1f at title bring-up — so every
+in-game string (the event scroll's whole text block) rendered with the
+title's gray shadows: ~8.1k px of the load-route popup diff, invisible
+until the trace-studio per-label compare put truth|port|diff side by
+side.  Renamed `gfx_text_set_screen_byte`; `engine_set_current_screen`
+forwards every write so the two mirrors of `DAT_004eac50` cannot skew.
+Port lesson: a retail global with TWO port-side mirrors (engine screen
+byte + gfx_text discriminator) is a standing desync hazard — route all
+writes through one setter.
+
+## 198 — `DAT_005bb540` is a SWAPPED sheet slot: system2.pl8 on the title flow, system.pl8 ingame, re-ensured EVERY in-game tick
+
+`FUN_00499a1c(which)` loads `(0x4dbbd0 + which*0x10)` → "system2.pl8"
+(0) or "system.pl8" (1) into the single 0xdd18-byte slot at
+`DAT_005bb540`, with an asymmetric latch (`DAT_004dbbf0`): a which==1
+request when 1 is already resident is a no-op, a which==0 request
+ALWAYS reloads.  The per-tick body's second line is
+`if (DAT_0052af94 == 3) FUN_00499a1c(1);` — the in-game sheet is
+re-ensured every tick (free after the first).  Consequences:
+- The in-game UI sprites (the event-scroll seal 0x33, cursors, in-game
+  buttons) index the system.pl8 image; title chrome (gauntlet buttons,
+  scroll arrows) indexes system2.pl8 — same indices, different art.
+  The port served system2 unconditionally and the popup seal drew as a
+  gray box of wrong pixels (descriptor 0x33 points at different data
+  in each file).
+- The latch is written BEFORE the read: a failed system.pl8 read still
+  flips it to 1, so every later per-tick ensure no-ops on a garbage
+  blob.  Latent in retail (the file always exists); mirrored verbatim.
+
+## 199 — `DAT_005aeb68` is BOTH the sprite-render error latch and the main-loop run-state: error code 4 == the deferred-shutdown value
+
+`FUN_00408fb0` (the 27-byte error latch the sprite-render descriptor
+gates call with code 4) stores into `DAT_005aeb68` — the SAME global
+WinMain's loop polls for deferred shutdown (== 4) and the scroll
+dismiss writes 3 into on game-end events (0xef/0xee/0x9f/0x9e arm of
+0x476768).  So a corrupt sprite descriptor doesn't just log: it
+REQUESTS APPLICATION SHUTDOWN (latch 4 == shutdown 4).  The port keeps
+them as two storages today (gfx_sprite_render's g_last_error vs the
+engine's shutdown latch) — safe while nothing corrupts descriptors, but
+the unification (one global, both meanings) is required before the
+game-end flow ports.  Run-state value map so far: 1 = quit (menu Exit),
+3 = game-end handoff, 4 = deferred shutdown / sprite error.
+
+## 200 — the open scroll re-renders EVERY frame and beats its one-shots off exact consumer-cooldown values (frame-locked, not wall-clock)
+
+While `DAT_0053e910` != 0 the consumer calls the renderer
+(`FUN_0047309e`) every render frame; the scroll surface is repainted
+whole each time (then tile-marked via `FUN_004527a6(..., 2)`).  The
+per-event one-shots fire when the decrementing cooldown
+(`DAT_0057c954`: 2000 on open, −1/frame, pinned ≥ 1 in SP) crosses
+EXACT values: 2000 = open frame (capture-fanfare cue, message wavs),
+0x7c6 (1990) / 0x776 (1910) / 0x708 (1800) = camera-jump / speak beats
+~10/90/200 frames in (per type).  All frame-count-locked: at retail's
+~14 fps the speak lands ~6 s in; in turbo it lands almost immediately;
+the beats NEVER fire on MP timed scrolls that dismiss before the
+threshold.  The voice ranges in the 0x776 speak (`FUN_004b35c1`) are
+codes 100..0xa9 (S1xx table), 0xaa..0xc5 (ktxxx per-payload variants),
+200..0x11c (S2xx) — 198/199 and ≥ 0x11d (incl. the 256c warning 0x12a)
+fall through silently.
