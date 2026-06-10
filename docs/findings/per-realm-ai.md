@@ -99,6 +99,54 @@ only by human-UI/MP diplomacy (see the inbox row above), so a headless SP
 `--only port` on `endturn_auto` is byte-identical).  Exercising it on-engine
 needs a diplomacy-UI trace (human proposes/breaks/tributes to an AI realm).
 
+## Brain step 9 — offensive-campaign planner (`FUN_0049f977`, landed)
+
+The per-tick brain dispatcher runs step 9 as the AI's persistent army-campaign
+driver (dispatch state 9).  Ported 2026-06-10 as
+`engine_army_ai_run_campaign` + six closure functions (all in
+`engine_army_ai.c`).  Unlike step 0xa (a one-shot, cooldown-gated raid) it carries
+a multi-turn campaign target in `+0xe8` and sizes the raised force against a
+personality "force budget".
+
+| fn | role |
+|----|------|
+| `FUN_0049f977` | entry: tick patience (+0x45 vs personality +0x28) → commit/validate a target → raise (muster) or redirect (pick_best_unit) a force → assign it |
+| `FUN_0049ff71` | validate a committed target: drop if the player has no lord, the target is the lord's own undefended realm, or the target is self-owned |
+| `FUN_004a01ea` | set the target-owner gate (+0x48): a pinned enemy, else the field leader (rank < 2) if foreign/active/high-gauge |
+| `FUN_0049fcc5` | easy-AI funding cheat: personalities 3/4 below the late-era cutoff bank +100 into the funding reserves; returns whether it funded |
+| `FUN_0049fda5` | stamp the chosen unit with the march order (code 2, or 6 when the target is the lord's realm), clear placed, pick a deploy cell |
+| `FUN_004a65a3` / `FUN_004a6735` | find the nearest owned cell to the unit (flag 0x80 + cropland terrain 0x15..0x19 / flag 0x40), leaving col/row in the find-nearest scratch (DAT_00569570/78); fall back to the realm's settled/capital anchor cell |
+
+The pathfinder/deploy closure (`FUN_0046f700` group) was already ported in
+`engine_path_field.c`; the muster (`FUN_004a50ae`), unit-pick (`FUN_004a0917`)
+and target-select (`FUN_004a03f2`) callees were already ported in
+`engine_combat.c` / `engine_army_ai.c`, so step 9 added only the six functions
+above (~1.9 KB).
+
+**Personality-table fields newly mapped** (offsets into a `personality_row`):
+`+0x28` campaign period (3/4/4/2), `+0x30` force budget (750/800/900/1000 — the
+SAME byte as the step-1 tribute floor, reused), `+0x40` muster percent
+(30/30/40/50), `+0x68` force-credit floor (100/120/200/250).
+
+**Verification.**  `FUN_0049f977`/`FUN_0049fda5`/`FUN_004a65a3` are r2-verified
+byte-for-byte (the entry's target/pinned/patience branch structure with
+`cmp [+0x4d8a80], tick; jle`, the budget `sar 1` halvings, the +0x4b commit; the
+assigner's order codes 2/6 at `0x52f0ca` + the keeplvl/pending finder dispatch;
+the finder's flag `0x80`/terrain `0x14<t<0x1a` gates).  Six host tests in
+`test_engine_army_ai.c` cover the patience tick, the self-owned-target drop, two
+deployment paths (capital fallback + settled-cell finder, order codes 2 and 6),
+the muster-branch force-floor gate, and the dispatcher wiring.
+
+**Unlike step 1, the trace-studio oracle DOES reach step 9.**  A before/after
+`--only port` on `endturn_auto` (same pinned RNG seed; the only change is step 9
+stub vs live) shows the port's `g_player_strategic_352` change at the run2/run3/
+settled labels — by then the AI realms' patience counters fire and step 9 starts
+committing campaign targets.  It does NOT yet byte-match retail there: the
+documented ±3-4 pass-counter timing offset (auto_dismiss onEnter vs the port's
+input phase) skews the snapshot instants, and steps 6/7/0xb are still stubbed —
+the run-label strategic sub_diff `[5,7,8,9,10,11,12,13,15]` is that combined
+residual, not a step-9 defect.
+
 ## Quirks captured in-code
 
 - `FUN_004a4782` backward tax sweep resets `+0x15f` to the best rate **inside**

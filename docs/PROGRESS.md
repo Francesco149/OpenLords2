@@ -7,6 +7,70 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-10 (session 7) — BRAIN STEP 9 LANDED (FUN_0049f977 offensive-campaign planner + 6 callees); and the oracle DOES reach it — before/after --only port proves it's active on-engine (unlike the inert step 1)
+
+Picked up the session-6 "Next": port the remaining stubbed brain steps
+bottom-up, step 9 (FUN_0049f977) and 0xb first since they run every turn in
+headless SP.  Closure analysis picked the order: with descent stopping at the
+already-ported boundary, **step 9 needs only 6 unported fns (~1.9 KB)** while
+step 0xb needs 14 (~6 KB) — and step 9 shares two leaves (FUN_004a65a3/6735)
+with 0xb, so it de-risks 0xb too.  Step 9 landed byte-exact AND oracle-active.
+
+**Step 9 = the offensive-campaign planner (committed 0a1d770).**  Replaced the
+case-0x9 advance-only stub in `engine_army_ai_run_per_tick` with
+`engine_army_ai_run_campaign` — the faithful port of FUN_0049f977 (841 B) + its
+six-fn closure: the campaign-target validator (FUN_0049ff71), the target-owner
+gate (FUN_004a01ea), the easy-AI funding cheat (FUN_0049fcc5), the deployment
+assigner (FUN_0049fda5), and the two find-nearest deploy-cell scanners
+(FUN_004a65a3 flag-0x80+cropland / FUN_004a6735 flag-0x40).  The heavy
+dependencies were already ported — the FUN_0046f700 pathfield group
+(engine_path_field.c) and the muster/unit-pick/target-select callees
+(FUN_004a50ae/4a0917/4a03f2 in engine_combat.c / engine_army_ai.c) — so step 9
+added only those six.  It's the AI's persistent **multi-turn** army campaign
+(vs step 0xa's one-shot raid): tick a patience counter (+0x45 vs personality
++0x28) → commit/validate a target (+0xe8) → size a force against a personality
+budget (+0x30, the byte the step-1 tribute floor reuses) → raise (muster) or
+redirect (pick_best_unit) it → stamp a march order (code 2, or 6 toward the
+lord's realm) at a finder-chosen owned cell.  Newly maps personality
++0x28/+0x40/+0x68 and strategic +0x45/+0xe8/+0x138/+0x140/+0x14c/+0x150.  Gate:
+2101 host tests (+6 step-9 tests, every branch), mingw clean.
+
+**The headline contrast with step 1 — step 9 IS reachable by the headless
+oracle.**  A before/after `--only port` on `endturn_auto` (same pinned RNG seed;
+the ONLY change is step 9 stub vs live) shows the port's `g_player_strategic_352`
+**change at run2/run3/settled** (e.g. run2 h:6f5573c0→h:a83ff1a8) — by then the
+AI realms' patience counters fire and step 9 starts committing campaign targets.
+So unlike step 1 (provably inert, byte-identical before/after — its inbox never
+fills in SP), step 9 runs every turn and the oracle moves.  It does NOT yet
+byte-MATCH retail at those labels, but that's the EXPECTED residual: the cursor
+slot 84 (port 2-4 vs retail 1) and pass counter s_slot_0053f658 (port
+37/52/81/111 vs retail 40/55/85/115) show the documented **±3-4 pass-counter
+timing offset** (auto_dismiss dismisses at the per-tick onEnter vs the port's
+input phase → snapshots land at different sim-progress points), and steps 6/7/0xb
+are still stubbed.  The run-label strategic sub_diff `[5,7,8,9,10,11,12,13,15]`
+is that combined residual, not a step-9 defect.
+
+**Verification = r2 byte-exact + units + before/after oracle-active.**  r2
+confirmed the entry's target/pinned/patience branch structure (`cmp [+0x4d8a80],
+tick; jle` = `if (tick<period) return`, the budget `sar 1` halvings, the +0x4b
+commit), the assigner's order codes 2/6 at 0x52f0ca + the keeplvl/pending finder
+dispatch, and the finder's flag-0x80 / terrain-`0x14<t<0x1a` gates.  Personality
+constants read straight from the binary (period 3/4/4/2, budget
+750/800/900/1000, pct 30/30/40/50, floor 100/120/200/250).
+
+**Next: the remaining stubbed brain steps, bottom-up.**  Step 0xb (FUN_004a5667,
+the army-movement/deployment planner) is next — now smaller since step 9 already
+landed its two shared finders; its closure is the entry + the FUN_004a57ac
+order-type gate dispatching 6 per-order handlers (FUN_004a58f4/599d/5b1f/5f0a/
+6270/60b9, ~5 KB).  Then steps 7 (FUN_0049f93d) and 6 (FUN_0049edc7).  All run
+every turn in headless SP, so each should move the run-label sub_diff as it
+lands — watch slot 84 / the strategic+army bands converge.  Separately, the ±3-4
+pass-counter timing offset (auto_dismiss onEnter vs input phase) is the parity
+residual to close once the steps are in; and to ever on-engine-test step 1, a
+diplomacy-UI trace is still owed.
+
+---
+
 ## 2026-06-10 (session 6) — BRAIN STEP 1 LANDED (FUN_004a277d diplomacy-inbox processor + 7 handlers); the oracle CAN'T reach it (inbox is human-UI/MP-only → inert in headless SP) — verified instead by r2 + units + zero-regression before/after
 
 Picked up the session-5 "Next": port the brain step subtrees bottom-up against
