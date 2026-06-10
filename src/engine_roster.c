@@ -158,3 +158,44 @@ void player_first_active_nonlocal(void)
     }
     s_slot_00553fbc = 0;
 }
+
+/* Port of FUN_0043e9e2 @ 0x43e9e2 (223 B).  Session-start player
+ * activation reset, run from the load tail (FUN_004976a1) right after
+ * the turn-progress reset (and from the MP session paths, 0x49c995
+ * band).  Zeroes the per-player aux ints (g_player_aux_44 +0, players
+ * 1..5), DEACTIVATES every human-flagged slot (+5 != 0 → +4 = 0; in a
+ * loaded SP session the other ex-human seats go dormant), then
+ * re-activates the current player and stamps its aux int with the
+ * session stamp (retail DAT_004e2a28 — a DirectPlay-session-derived
+ * value, 0x4b7a9a writes `dplay_handle() + 1`; .data ships 0x6578).
+ * The port has no DirectPlay layer, so it PRESERVES the loaded save's
+ * own stamp through the reset instead: the save was written by the
+ * same session code, so retail's re-stamp reproduces the saved value —
+ * re-stamping the loaded value is byte-equivalent without modelling
+ * dplay (state-oracle-gated; documented drop-in deviation).  The
+ * MP-only autosave broadcast (0x43eda0(0xf,0)) is a no-op in SP and
+ * stays bare-hex. */
+void player_session_activate_current(void)
+{
+    int cur = (int)(s_slot_0057c8cc & 7);
+    int32_t session_stamp = *(int32_t *)(g_player_aux_44 + cur * 0x2c);
+    for (int p = 1; p < 6; p++)
+        *(int32_t *)(g_player_aux_44 + p * 0x2c) = 0;
+    for (int p = 1; p < 6; p++) {
+        if (g_player_strategic_352[p * 0x160 + 0x05] != 0)
+            g_player_strategic_352[p * 0x160 + 0x04] = 0;
+    }
+    *(int32_t *)(g_player_aux_44 + cur * 0x2c) = session_stamp;
+    g_player_strategic_352[cur * 0x160 + 0x04] = 1;
+    /* if (MP active) 0x43eda0(0xf, 0) — MP-only, no-op in SP. */
+}
+
+/* Port of FUN_0049ca32 @ 0x49ca32 (46 B).  Seed the five per-player
+ * visibility bitmasks (g_player_strategic_352 +0x24e) with their
+ * one-hot values 1/2/4/8/0x10 for players 1..5.  Run from the load
+ * tail after the descriptor rebuild. */
+void player_seed_visibility_bits(void)
+{
+    for (int p = 1; p < 6; p++)
+        g_player_strategic_352[p * 0x160 + 0x24e] = (uint8_t)(1 << (p - 1));
+}

@@ -77,6 +77,7 @@
 #include "engine_screen_dispatch.h"
 #include "engine_screen_strat.h"
 #include "engine_load_pump.h"
+#include "engine_roster.h"         /* load-tail session re-arm (0043e9e2/0049ca32) */
 #include "game_init.h"
 #include "engine_npc_schedule.h"   /* engine_npc_schedule_set_localization (l2.eng) */
 #include "engine_title_render.h"
@@ -1818,6 +1819,20 @@ static void engine_map_post_load(void)
                                                  * reads DAT_0057cb18; our SP
                                                  * saves carry 0) */
 
+    /* Retail's load tail (FUN_004976a1) re-arms the per-player session
+     * state BEFORE rebuilding the map arrays — all save-state (blocks
+     * 2/3), so the state oracle sees it:
+     *   1. every ACTIVE player's turn-progress int (+0) = 1 (mid-turn);
+     *   2. FUN_0043e9e2 — aux zero + human-slot deactivate + current-
+     *      player activate + session stamp;
+     * (the wall-clock timer scalars it also seeds stay deferred —
+     * non-deterministic, runtime-only). */
+    for (int p = 1; p < 6; p++) {
+        if (g_player_strategic_352[p * 0x160 + 0x04] != 0)
+            *(int32_t *)(g_player_strategic_352 + p * 0x160) = 1;
+    }
+    player_session_activate_current();          /* FUN_0043e9e2 */
+
     /* Derived render arrays (tile_cells) + camera from the loaded save
      * (retail FUN_004298c1 build_cells + FUN_00451fcc camera). */
     engine_map_init_strategic(NULL, map_id);
@@ -1850,6 +1865,7 @@ static void engine_map_post_load(void)
     engine_territory_classify_feature_tiles(&strat_rng);   /* FUN_0046dbf5 */
     engine_territory_randomise_special_tiles(&strat_rng);   /* FUN_0046dd34 */
     engine_territory_rebuild_cell_roster(0);                /* FUN_0046da4b(0) */
+    player_seed_visibility_bits();                          /* FUN_0049ca32 */
 
     /* Screen state → in-game strategic map (retail DAT_004eac50 = 0). */
     engine_set_current_screen(0);
@@ -1875,6 +1891,12 @@ static int drop_in_load(const char *filename)
      * the loaded bytes before anything posts/consumes (retail's ring is
      * the save storage itself; the port's queue struct must catch up). */
     engine_event_queue_seed_from_save();
+    /* Same stale-mirror class for the double-LFSR: save_load filled the
+     * schema slots 18/19 (the .sav carries the live RNG state) but the
+     * engine's working mirrors still hold the boot seeds — sync them or
+     * the first ingame stir advances from the WRONG state (retail's
+     * post-load state is exactly the save's, +1 per sub-step stir). */
+    engine_rng_global_set(s_slot_0058fe28, s_slot_0058fe08);
     engine_map_post_load();
     /* Restore the strategic-map palette.  The strategic map renders under
      * the game's base palette base01.256 (installed at gfx_init; the

@@ -242,7 +242,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43e330 | FUN_0043e330 | 259 | engine.c, engine.h, engine_rate.c (+1) |
 | 0x43e433 | FUN_0043e433 | 218 | engine.h, engine_rate.c |
 | 0x43e50d | FUN_0043e50d | 180 | engine.h, engine_rate.c |
-| 0x43e9e2 | FUN_0043e9e2 | 223 | main.c |
+| 0x43e9e2 | FUN_0043e9e2 | 223 | engine_roster.c, engine_roster.h, main.c |
 | 0x43eda0 | FUN_0043eda0 | 637 | engine_ranking.c, engine_ranking.h |
 | 0x43f4b7 | FUN_0043f4b7 | 270 | engine.h, engine_state_hash.c, main.c |
 | 0x43fd2a | FUN_0043fd2a | 413 | main.c |
@@ -470,7 +470,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4917dd | FUN_004917dd | 599 | engine_tile.c, engine_tile.h, save.c |
 | 0x4921e5 | FUN_004921e5 | 451 | engine_tile.c, engine_tile.h |
 | 0x497500 | FUN_00497500 | 211 | engine_minimap.c |
-| 0x4976a1 | FUN_004976a1 | 472 | engine_load_pump.c, engine_load_pump.h, engine_map_init.c (+1) |
+| 0x4976a1 | FUN_004976a1 | 472 | engine_load_pump.c, engine_load_pump.h, engine_map_init.c (+2) |
 | 0x49792e | FUN_0049792e | 262 | engine.c, engine.h, game_init.c (+1) |
 | 0x497a34 | FUN_00497a34 | 697 | engine.c, engine.h, main.c |
 | 0x497ced | FUN_00497ced | 376 | engine_load_pump.c, engine_territory.c, engine_territory.h (+3) |
@@ -497,7 +497,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49bc1d | FUN_0049bc1d | 66 | engine_roster.c, engine_roster.h, engine_territory.c |
 | 0x49bc5f | FUN_0049bc5f | 314 | engine_roster.c, engine_roster.h |
 | 0x49bd99 | FUN_0049bd99 | 3063 | game_init.c, game_init.h |
-| 0x49ca32 | FUN_0049ca32 | 46 | main.c |
+| 0x49ca32 | FUN_0049ca32 | 46 | engine_roster.c, engine_roster.h, main.c |
 | 0x49caaa | FUN_0049caaa | 935 | engine_menu_input.c, engine_npc_schedule.c, engine_npc_schedule.h (+3) |
 | 0x49ce51 | FUN_0049ce51 | 109 | engine.c, engine_turn.c, engine_turn.h |
 | 0x49cf20 | FUN_0049cf20 | 704 | engine_combat.c, engine_combat.h |

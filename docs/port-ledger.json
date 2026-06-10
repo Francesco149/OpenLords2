@@ -7221,6 +7221,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_roster.c",
+    "src/engine_roster.h",
     "src/main.c"
    ]
   },
@@ -15402,6 +15404,7 @@
     "src/engine_load_pump.c",
     "src/engine_load_pump.h",
     "src/engine_map_init.c",
+    "src/engine_roster.c",
     "src/main.c"
    ]
   },
@@ -15944,6 +15947,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_roster.c",
+    "src/engine_roster.h",
     "src/main.c"
    ]
   },

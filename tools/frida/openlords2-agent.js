@@ -2459,6 +2459,7 @@ function stateFnv1a(u8) {
 function stateDumpOnce(frame) {
     if (!g_state_dump_slots) return;
     const out = new Array(g_state_dump_slots.length);
+    const sub = {};   // per-block 16-range sub-hashes (mirrors state_dump.c)
     for (let i = 0; i < g_state_dump_slots.length; i++) {
         const s = g_state_dump_slots[i];
         try {
@@ -2469,12 +2470,21 @@ function stateDumpOnce(frame) {
                 out[i] = v >>> 0;
             } else {
                 out[i] = 'h:' + ('0000000' + stateFnv1a(u8).toString(16)).slice(-8);
+                const step = Math.floor(s.size / 16);
+                const ranges = new Array(16);
+                for (let r = 0; r < 16; r++) {
+                    const off = r * step;
+                    const len = (r === 15) ? s.size - off : step;
+                    ranges[r] = 'h:' + ('0000000' +
+                        stateFnv1a(u8.subarray(off, off + len)).toString(16)).slice(-8);
+                }
+                sub[String(s.i !== undefined ? s.i : i)] = ranges;
             }
         } catch (e) {
             out[i] = null;              // region not mapped — surfaced as null
         }
     }
-    send({kind: 'state_dump', frame: frame, slots: out});
+    send({kind: 'state_dump', frame: frame, slots: out, sub: sub});
 }
 
 // ─── per-frame state watch (--watch NAME=0xVA:type, TAS framework) ───────

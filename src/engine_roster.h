@@ -92,4 +92,14 @@ void player_roster_compact(void);
  * (s_slot_0057c8cc, entry 72).  Port of FUN_004a1e6c. */
 void player_first_active_nonlocal(void);
 
+/* Session-start player activation reset (load tail / MP session start):
+ * zero the per-player aux ints, deactivate human-flagged slots 1..5,
+ * re-activate the current player + stamp its aux int with the session
+ * stamp (0x6578).  Port of FUN_0043e9e2. */
+void player_session_activate_current(void);
+
+/* Seed the five per-player visibility bitmasks (strategic +0x24e) with
+ * one-hot 1/2/4/8/0x10.  Port of FUN_0049ca32 (load tail). */
+void player_seed_visibility_bits(void);
+
 #endif /* OPENLORDS2_ENGINE_ROSTER_H */
