@@ -6840,3 +6840,31 @@ retail seat runs exactly ONE sub-step at the load flip (elapsed-since-boot
 huge) and zero during idle (sub-ms frames).  A port default of 100 (2 ms
 gate) sub-stepped nearly every frame and would have drifted the LFSR
 arbitrarily far from retail.
+
+## 196 — an open event scroll IS the sim freeze: the consumer parks the event code in `DAT_0053e910`, the rate controller's extended-pause input
+
+The in-game event-scroll consumer (`FUN_00472e46`, render phase) dequeues
+the next pending ring record and stores its CODE in `DAT_0053e910`
+(`g_sim_extended_pause`).  That same global is the rate controller
+`FUN_004bb978`'s "extended pause" gate — non-zero returns 0 sub-steps in
+SP.  So "a scroll is open" and "the sim is frozen" are one mechanism with
+no separate modal flag; dismissing the scroll (0x476768) zeroes the code
+and the sim resumes.  In SP the consumer pins its cooldown at ≥ 1 while a
+scroll is open, so scrolls never time out — modal until input.
+
+This is what froze retail for the whole grid_load_probe idle window after
+exactly ONE sub-step: the load-flip tick posts the "Non 256 colour
+display" warning (event 0x12a, posted by the per-tick body's head when
+`DAT_0053f228 == 1 && DAT_0053f22c != 8`, one-shot `DAT_005533d4`), the
+same tick's render dequeues it, and every later tick is extended-paused.
+Deterministic — not a wall-clock artifact.
+
+Related: the .sav CARRIES the live double-LFSR state (slots 18/19 of the
+save schema are `DAT_0058fe28/08`!) — a load restores the saved RNG
+stream and the flip tick advances it by exactly the one per-sub-step SP
+stir.  The earlier "menu+load consumes ~102 pulls" reading of the
+canonical+102/+103 numbers was wrong: the save itself stored +102.
+Port-side corollary: any engine-side WORKING MIRROR of a schema slot
+(the RNG mirrors, the event-queue ring struct) must re-seed from the
+schema storage after save_load, or the first ingame mutation advances
+from boot state (two such bugs fixed in the load route this session).

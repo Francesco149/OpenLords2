@@ -7,6 +7,76 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-10 (session 2) — LOAD-FLIP TICK PORTED: substate-0 trio + the 256c-popup post/consume seam; state residual 9 → 4 slots; per-block sub-hashing
+
+Chased the trace-studio bisect's three named unknowns to ground and ported
+the lot.  A 3-call retail call-trace (`--call-trace-vas 0x404a46,0x49a010,
+0x49d638` over the probe trace — exactly three hits, all in the flip frame)
+plus the L2.eng string table (idx 297 = "Non 256 colour display") and the
+options-init disassembly turned the whole load-flip-tick divergence into ONE
+explainable retail engine-tick iteration, then the session ported it:
+
+- **The "103rd pull"** = the SP per-sub-step LFSR stir inside FUN_004b99c0
+  (ret 0x4b9c4f).  The rate controller grants exactly one sub-step at the
+  flip: game speed defaults to **90** (FUN_004ae310, not a schema slot →
+  12 ms slider gate) and the duty LUT row 0 passes phase 1; turbo's sub-ms
+  frames starve every later grant.  Ported: the LUT image (`g_engine_rate_
+  lut`, full 0xe60 reachable extent incl. the as-shipped OOB rows — quirk
+  #195) + the speed default + schema-backed substate/human-active gates.
+- **Slot 74's writer** = FUN_0049a010, now ported as engine_turn_tick_
+  substate0: the 7-phase strategic dispatcher (phases 1/3/5/6 fully live
+  on existing ports — rations+grant WAS already ported as engine_army_ai_
+  set_rations_and_grant; 2/7 partial with bare-hex TODOs; 4 = end-check +
+  brain-FSM TODO), wired as the substate-0 trio 0x40490d (new
+  engine_tick_cadence) → 0x49a010 → 0x4650b0 (engine_army_state_run, now
+  fed the live evq) inside engine_tick's sub-step loop.
+- **The 256c popup** = event 0x12a posted by the tick head on non-8bpp
+  desktops (one-shot), consumed by the render-phase scroll consumer
+  0x472e46 — whose dequeue parks the event code in DAT_0053e910, WHICH IS
+  the rate controller's extended-pause input: an open scroll IS the SP sim
+  freeze (quirk #196; retail's 60-tick freeze is deterministic).  Ported
+  the post gate + the consumer slice (scroll renderer 0x47309e + dismiss
+  0x476768 = the remaining pixel/input chips).  Block 11 identified:
+  g_misc_128 IS the event-ring head; the live queue now mirrors into it
+  and seeds from it on load.
+- **Two stale-mirror load bugs** (same class): the .sav CARRIES the LFSR
+  (slots 18/19 ARE schema!) — the old "+102 menu pulls" reading was wrong,
+  the save stored +102 — and the port's RNG mirrors + ring struct never
+  re-seeded after save_load.  Both fixed in drop_in_load.  Plus the load
+  tail's deferred block-2/3 writers: active-player turn-progress=1,
+  FUN_0043e9e2 session re-arm (dplay stamp preserved from the save —
+  documented deviation), FUN_0049ca32 visibility bits.
+- **Per-block sub-hashing** (the planned next instrument): both state
+  dumpers emit 16 range-hashes per block; statediff reports `sub_diff`
+  range indices.  First use localized everything left.
+
+**grid_load_probe state ribbon: 9 → 4 differing slots.**  GREEN now: LFSR
+18/19 (save+1 exactly), phase tick 74, blocks 4/5 (the trio's writes
+match retail byte-for-byte), block 11 at the flip.  Remaining, all
+localized: block 0 cells 512..1279 (retail run-DEPENDENT — anim/wall-clock
+class), block 2 player-5 aux-name area, block 3 AI-record bands
+(+0xdc..+0x160 class, records 2..5), settled-only block 11 record 1
+(retail posts a SECOND event mid-idle — poster unnamed), camera flake
+(slot 16; hit 2 of 3 retail runs today, recapture clears it).  Pixels:
+clean-run 92,897 px baseline holds = the scroll itself.
+
+### Next candidates
+1. Name retail's mid-idle second event: probe captures at +10/+20/+30 +
+   `--call-trace-vas 0x472bc5` → poster's ret_va; port it.
+2. Block 3 AI-record bands: sub-hash maps to the +0xdc..+0x160 field
+   class (pools/cooldowns/mood) in records 2..5 — suspect a load-time
+   AI-record re-arm the port lacks; finer 64-range sub-hash or a
+   targeted dump-regions diff will name the fields.
+3. Block 0 cells 512..1279 + run-dependence: byte-plane attribution
+   (which of the 8 cell bytes) — likely the render-phase anim stamps;
+   decide pin vs accept-as-flake.
+4. The scroll renderer 0x47309e (closes the 92.9k-px residual) + dismiss
+   0x476768 (unfreezes the sim → opens the END-TURN frontier through the
+   now-live phase dispatcher).
+5. Block 2 player-5 aux-name writer (dplay session name?) — cheap RE.
+
+---
+
 ## 2026-06-10 — TRACE STUDIO: the port↔retail workhorse (capture → label-diff → serve → recapture), state parity, load-path divergence fenced
 
 Brought the project up to openrecet's tooling standard — and past it where

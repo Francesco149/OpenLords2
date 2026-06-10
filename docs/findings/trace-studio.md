@@ -71,6 +71,14 @@ hash-resolution). Both sides run with the canonical pre-ingame RNG pin
 apples. To bisect WHEN a divergence is born, probe-capture consecutive
 ticks (`{capture:0..3}` after an anchor) — see grid_load_probe.
 
+### Sub-hash localization
+
+Both dumpers also emit `"sub": {"<slot>": [16 range hashes]}` for every
+block entry; a differing block's manifest entry carries
+`sub_diff: [range indices]` — byte range `r` = `[r·size/16, (r+1)·size/16)`
+(last range absorbs the remainder).  Map ranges to records by the block's
+stride (e.g. block 3 stride 0x160: range 7 of 132 B ⇒ record 2 tail).
+
 ## Debug kit
 
 - `--watch NAME=0xVA:type` (repeatable) → retail/watch.jsonl. Camera:
@@ -92,4 +100,13 @@ ticks (`{capture:0..3}` after an anchor) — see grid_load_probe.
 ## Parity baselines (update when beaten)
 
 - grid_load / grid_load_dense map labels: **92,897 px (30.24%)** — the
-  retail-only 256-colour popup + water anim phase + faint glyphs.
+  retail-only 256-colour popup + water anim phase + faint glyphs.  The
+  popup is the event scroll (consumer 0x472e46 ported for STATE; its
+  renderer 0x47309e is the pixel chip).
+- grid_load_probe STATE ribbon: **4 differing slots** (was 9 before the
+  2026-06-10 session-2 ports): block 0 `sub_diff [2,3,4]` (cells
+  512..1279; retail run-dependent), block 2 `[14]` (player-5 aux name),
+  block 3 `[7,9,12,15]` (AI-record +0xdc..+0x160 bands), + the
+  camera-flake slot 16 when it recurs; settled-only block 11 `[3,4,5]`
+  (ring record 1 — retail's mid-idle second event).  LFSR 18/19, phase
+  tick 74, blocks 4/5/11-at-flip: GREEN.

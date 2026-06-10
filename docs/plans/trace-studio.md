@@ -174,6 +174,42 @@ JobTray + Recapture. Marks/notes + state panel later.
   the 103rd pull site; per-block sub-hashing to localize the block diffs.
   Port `--rng-seed` (pre-ingame canonical pin, mirrors the agent) landed —
   proven by both sides reaching their values from canonical.
+- **2026-06-10 (session 2) — the load-flip tick EXPLAINED and mostly
+  PORTED; state residual 9 → 4 slots.**  The probe's whole flip-tick
+  divergence decomposed into one retail engine-tick iteration the port
+  wasn't running:  (1) the rate controller granted ONE sub-step at the
+  flip (game-speed default 90 → 12 ms slider gate + LUT row 0; turbo
+  starves it afterwards) — call-traced via `--call-trace-vas
+  0x404a46,0x49a010,0x49d638`: exactly 3 calls all in the flip frame, the
+  "103rd pull" = the SP per-sub-step stir at 0x4b9c4f;  (2) the sub-step
+  ran the substate-0 trio (0x40490d cadence counters → 0x49a010 phase
+  dispatch [slot 74's only incrementer; phase-1 tick-1 = rations+grant]
+  → 0x4650b0 army-state driver);  (3) the tick's head posted the "Non
+  256 colour display" warning (event 0x12a — L2.eng string 297; gated
+  on `53f228==1 && 53f22c!=8`, one-shot 5533d4) and the render-phase
+  consumer 0x472e46 parked its code in `DAT_0053e910` = the rate
+  controller's extended-pause input → SIM FROZEN while the scroll is
+  open (quirk #196) — retail's 60-tick freeze is deterministic, not
+  wall-clock.  CORRECTION to the earlier finding: slots 18/19 are
+  schema entries — the .sav CARRIES the LFSR state (+102 was the
+  save's stored stream, not "menu+load pulls"); the port's load now
+  re-seeds its RNG mirrors + event-ring struct from the loaded schema
+  storage (two stale-mirror bugs).  Ported alongside: the load tail's
+  deferred block-2/3 writers (turn-progress=1, FUN_0043e9e2 session
+  re-arm, FUN_0049ca32 visibility bits).  Block 11 = the EVENT RING
+  HEAD (g_misc_128 ↔ 0x568480), now mirrored both ways.  Residual
+  after all of it (sub-hash-localized): block 0 cells 512..1279 band
+  (retail run-dependent — anim/wall-clock class), block 2 player-5
+  aux-name area, block 3 AI-record bands (+0xdc..+0x160 class, recs
+  2..5), settled-only block 11 record 1 (retail posts a SECOND event
+  mid-idle — poster unidentified), and the camera flake (hit 2 of 3
+  retail runs today).  Pixel: clean-run baseline holds at 92,897 px =
+  the scroll itself (render of 0x47309e = the remaining pixel chip).
+- **2026-06-10 (session 2) — per-block sub-hashing landed.**  Both
+  state dumpers emit `"sub": {slot: [16 range-hashes]}` per block
+  (identical FNV-1a ranges, last range absorbs the remainder);
+  statediff annotates differing blocks with `sub_diff` range indices.
+  First use localized every remaining block residual (above).
 - **2026-06-10 — new_game_to_map is config-state-dependent.** The studio
   run shows retail@map+780 inside a Berkshire COUNTY VIEW (banner + castle
   dialog) instead of the recorded clean map: the new-game config screen
