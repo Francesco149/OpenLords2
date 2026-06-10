@@ -205,6 +205,14 @@ int engine_sim_turn_resolved(void);
  * Defined in engine.c; the pure pass sequence lives in engine_turn.c. */
 void engine_turn_advance(void);
 
+/* Seed the live event queue's ring head from the loaded save block
+ * (g_misc_128 = schema entry 11 = the first 128 bytes of retail's ring
+ * at 0x568480).  The load route calls this after save_load so the
+ * consumer sees the saved events exactly as retail does; the queue
+ * indices/cooldown are boot-runtime (not schema) and keep their
+ * defaults.  Defined in engine.c next to the ring↔save mirror. */
+void engine_event_queue_seed_from_save(void);
+
 /* Read / write the live double-LFSR RNG state (retail DAT_0058fe28/0058fe08).
  * game_init uses these to thread the global through the new-game seeder
  * FUN_00497e65, which in retail stirs this same global.  engine_rng_global_set

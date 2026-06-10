@@ -343,6 +343,14 @@ void engine_game_init_bind_save_rotate_fn(void (*fn)(void));
  * above + inline no-ops. */
 void engine_game_init(void);
 
+/* Bind every sim-runtime pointer seam (territory / map-query / economy /
+ * army-state / army-move executors + the resource-pool alias) to its live
+ * save-block storage.  Process-level wiring retail does not need (it reads
+ * fixed globals); MUST hold on every route into the in-game sim, so both
+ * engine_game_init and the save-load route (engine_map_post_load) call it.
+ * Idempotent.  `tile_cells` = the caller-built derived terrain-tile grid. */
+void engine_game_init_bind_runtime_tables(int32_t *tile_cells);
+
 /* Port of FUN_004329ec @ 0x4329ec single-player new-game branch: run
  * engine_game_init(), set the in-game screen (DAT_004eac50 = 0) and engine
  * state (DAT_0052af94 = 3), then FUN_00451f8a (timer reset, in engine_load_

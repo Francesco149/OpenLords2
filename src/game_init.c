@@ -1179,27 +1179,19 @@ void engine_game_init_bind_banks_fn(void (*fn)(void))       { g_gi_banks_fn = fn
 void engine_game_init_bind_castles_init_fn(void (*fn)(void)){ g_gi_castles_init_fn = fn; }
 void engine_game_init_bind_save_rotate_fn(void (*fn)(void)) { g_gi_save_rotate_fn = fn; }
 
-void engine_game_init(void)
+/* Bind every sim-runtime pointer seam to its live save-block storage.
+ * Retail has no indirection here — the sim reads one set of fixed
+ * globals — so these bindings are PROCESS-LEVEL wiring that must hold on
+ * every route into the in-game sim: the new-game initialiser AND the
+ * save-load route (engine_map_post_load), which both call this.  All
+ * targets are static storage, so rebinding is idempotent.
+ *
+ * `tile_cells` is the caller-built derived terrain-tile grid
+ * (engine_map_init_tile_cells) — both routes construct it before
+ * binding.  The two game_init-private seeder inputs (cell-score table,
+ * category-bucket cluster) are deliberately NOT here. */
+void engine_game_init_bind_runtime_tables(int32_t *tile_cells)
 {
-    /* RNG streams.  The double LFSR is consumed by the roster/value randomiser
-     * (497e65); the single LFSR by the overworld autotiler (46dbf5/46dd34).
-     * They are independent streams in this orchestrator.
-     *
-     * The double LFSR is NOT a private stream: retail's seat_shuffle stirs the
-     * GLOBAL double-LFSR (DAT_0058fe28/0058fe08) via FUN_00404a46, advancing
-     * the same state the turn driver later reads.  So load the live global in
-     * (seeded to the InitInstance constants 0x54657687/0x72641663, matching a
-     * --rng-seed capture), thread it through the seeder, and write the advanced
-     * state back below — otherwise the global stays at its seed and the turn
-     * driver's stir (step 17) starts from the wrong state.  The single LFSR is
-     * a genuinely separate stream, seeded to its own InitInstance constant. */
-    engine_rng_in_t        rng;
-    engine_rng_global_get(&rng.state_a, &rng.state_b);
-    engine_rng_single_in_t rngs = { .state   = 0x34518632u };
-
-    /* Bind the runtime tables the seeders read/write to the live save blocks
-     * (the same blocks the load path + tests bind). */
-    int32_t *tile_cells = engine_map_init_tile_cells();      /* built by the caller */
     engine_territory_bind_records(g_per_territory_420);
     engine_territory_bind_cells(g_overworld_map);            /* descriptor table */
     /* The army-proximity probes (FUN_0046cfbd/46d130, used by step-8
@@ -1209,10 +1201,8 @@ void engine_game_init(void)
      * box scan sees NULL and returns 0 (→ 0 armies placed). */
     engine_map_query_bind_cell_descriptors(g_overworld_map);
     engine_territory_bind_cell_roster((int32_t *)g_misc_1360);
-    engine_territory_bind_cell_score_table(g_gi_cell_score);
     engine_territory_bind_terrain_tiles(tile_cells);
     engine_territory_bind_army_records(g_per_army_768);
-    engine_territory_bind_category_buckets(&g_gi_strat_buckets);
     engine_army_economy_bind_army_records(g_per_army_768);
     engine_army_economy_bind_cell_roster((int32_t *)g_misc_1360);
     engine_army_economy_bind_cells(g_overworld_map);
@@ -1254,6 +1244,36 @@ void engine_game_init(void)
      * scalar wall — bind the pool to alias the strategic block, exactly as retail
      * overlaps them. */
     engine_army_economy_bind_resource_pool(g_player_strategic_352 + 0x120);
+}
+
+void engine_game_init(void)
+{
+    /* RNG streams.  The double LFSR is consumed by the roster/value randomiser
+     * (497e65); the single LFSR by the overworld autotiler (46dbf5/46dd34).
+     * They are independent streams in this orchestrator.
+     *
+     * The double LFSR is NOT a private stream: retail's seat_shuffle stirs the
+     * GLOBAL double-LFSR (DAT_0058fe28/0058fe08) via FUN_00404a46, advancing
+     * the same state the turn driver later reads.  So load the live global in
+     * (seeded to the InitInstance constants 0x54657687/0x72641663, matching a
+     * --rng-seed capture), thread it through the seeder, and write the advanced
+     * state back below — otherwise the global stays at its seed and the turn
+     * driver's stir (step 17) starts from the wrong state.  The single LFSR is
+     * a genuinely separate stream, seeded to its own InitInstance constant. */
+    engine_rng_in_t        rng;
+    engine_rng_global_get(&rng.state_a, &rng.state_b);
+    engine_rng_single_in_t rngs = { .state   = 0x34518632u };
+
+    /* Bind the runtime tables the seeders read/write to the live save
+     * blocks — shared with the load route via the helper below.  The two
+     * new-game-only seeder inputs stay inline: the cell-score table and
+     * the category-bucket cluster are game_init-private scratch the LOAD
+     * route must NOT bind (a loaded game's buckets live in their schema
+     * homes, entries 138/139). */
+    int32_t *tile_cells = engine_map_init_tile_cells();      /* built by the caller */
+    engine_game_init_bind_runtime_tables(tile_cells);
+    engine_territory_bind_cell_score_table(g_gi_cell_score);
+    engine_territory_bind_category_buckets(&g_gi_strat_buckets);
 
     /* 1–3: clear the per-territory / unit-type / per-army save blocks. */
     engine_game_init_clear_tables();                  /* 46f3cd / 46f2ae / 46f1dc */

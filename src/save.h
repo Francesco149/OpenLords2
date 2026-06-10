@@ -68,7 +68,10 @@ extern uint8_t g_per_battle_hex_432[34992];     /* entry 7  retail 0x554480  (81
 extern uint8_t g_per_combat_unit_76[7676];      /* entry 8  retail 0x57a100  (101 × 76 B — 100 combat units + slot 0) */
 extern uint8_t g_per_battle_hex_aux_52[4212];   /* entry 9  retail 0x566520  (81 × 52 B — 80 battle hexes + slot 0) */
 extern uint8_t g_realm_history[51200];         /* entry 10 retail 0x56d8c0  (per-realm stat history ring: 400 turn-slots × 16 realms × 8 B; rec +0 = population, +4 = approval — producer FUN_004ae7dd) */
-extern uint8_t g_misc_128[128];                 /* entry 11 retail 0x568480  (unknown 128 B) */
+extern uint8_t g_misc_128[128];                 /* entry 11 retail 0x568480  — the EVENT-QUEUE RING HEAD
+                                                 * (first 5⅓ of the 50 × 24 B records; engine_event_queue.h).
+                                                 * The live queue mirrors into / seeds from this block:
+                                                 * engine.c evq_sync_save_mirror / engine_event_queue_seed_from_save */
 extern uint8_t g_misc_1360[1360];               /* entry 12 retail 0x53ea00  (unknown 1360 B) */
 
 /* Castles.dat scratch (12800 B, retail DAT_004eb2b0).  Used by the

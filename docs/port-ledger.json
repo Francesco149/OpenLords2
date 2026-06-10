@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 673,
-  "ported": 42,
-  "unported": 1732,
+  "ported": 44,
+  "unported": 1730,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 715,
-  "pct_touched": 29.2,
+  "touched": 717,
+  "pct_touched": 29.3,
   "pct_tested": 27.5,
   "bytes_total": 838629,
-  "bytes_touched": 301207,
-  "pct_bytes_touched": 35.9
+  "bytes_touched": 312717,
+  "pct_bytes_touched": 37.3
  },
  "orphan_refs": [
   "0x004148",
@@ -3983,6 +3983,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_army_state.c",
     "src/engine_army_state.h",
     "src/save_schema_globals.c"
@@ -4103,6 +4104,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_army_state.c",
     "src/engine_army_state.h"
    ]
@@ -11468,6 +11470,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_territory.c",
     "src/engine_territory.h"
    ]
@@ -12845,6 +12848,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_strat_cost.c",
     "src/engine_strat_cost.h",
     "src/game_init.c"
@@ -13055,6 +13059,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_event_queue.c",
     "src/engine_event_queue.h"
    ]
@@ -13066,6 +13071,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_army_ai.c",
     "src/engine_army_move.c",
     "src/engine_diplomacy.c",
@@ -13093,16 +13099,20 @@
    "name": "FUN_00472e46",
    "size": 595,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c"
+   ]
   },
   {
    "va": "0x47309e",
    "name": "FUN_0047309e",
    "size": 10915,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c"
+   ]
   },
   {
    "va": "0x475b41",
@@ -15714,6 +15724,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_tick_cadence.h"
    ]
   },
@@ -15770,6 +15781,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_ranking.c",
     "src/engine_ranking.h",
     "src/game_init.c"
@@ -15816,7 +15828,6 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine.c",
     "src/engine_turn.c",
     "src/engine_turn.h"
    ]
@@ -16020,6 +16031,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_army_ai.c",
     "src/engine_army_ai.h"
    ]
@@ -16054,6 +16066,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_army_ai.c",
     "src/engine_army_ai.h"
    ]
@@ -16342,6 +16355,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_diplomacy.c",
     "src/engine_diplomacy.h"
    ]
@@ -16630,6 +16644,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_army_state.c",
     "src/engine_army_state.h"
    ]
@@ -17261,6 +17276,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_army_state.c",
     "src/engine_army_state.h"
    ]
@@ -17317,6 +17333,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_combat.c",
     "src/engine_combat.h"
    ]

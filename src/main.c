@@ -1835,16 +1835,17 @@ static void engine_map_post_load(void)
     if (!engine_minimap_load_grids(".", map_id))
         log_line("post-load: minimap grid load failed (map_id=%d)", map_id);
 
-    /* Terrain descriptor finalize: autotile the terrain sprite +3
-     * (FUN_0046dbf5), randomise the special sea tiles (FUN_0046dd34),
-     * rebuild the per-key cell roster (FUN_0046da4b(0)).  Reproduces
-     * retail's immediate post-load descriptor table byte-exact. */
-    engine_territory_bind_cells(g_overworld_map);
-    engine_territory_bind_terrain_tiles(cells);
-    engine_territory_bind_cell_roster((int32_t *)g_misc_1360);
-    /* The live army-proximity probes (combat path) read the cell grid via
-     * engine_map_query's own pointer — bind it to the same shared grid. */
-    engine_map_query_bind_cell_descriptors(g_overworld_map);
+    /* Bind ALL sim-runtime pointer seams (territory + map-query as before,
+     * plus the army-state/army-move executors and economy aliases) to the
+     * loaded save blocks — the load route enters the same live sim the
+     * new-game route does, so it needs the same process-level wiring.
+     * Without this the substate-0 trio's army-state driver would walk
+     * occupants with a NULL cell grid.  Then finalize the terrain
+     * descriptors: autotile the terrain sprite +3 (FUN_0046dbf5),
+     * randomise the special sea tiles (FUN_0046dd34), rebuild the per-key
+     * cell roster (FUN_0046da4b(0)) — reproduces retail's immediate
+     * post-load descriptor table byte-exact. */
+    engine_game_init_bind_runtime_tables(cells);
     engine_rng_single_in_t strat_rng = { 0x34518632u };  /* InitInstance seed */
     engine_territory_classify_feature_tiles(&strat_rng);   /* FUN_0046dbf5 */
     engine_territory_randomise_special_tiles(&strat_rng);   /* FUN_0046dd34 */
@@ -1870,6 +1871,10 @@ static int drop_in_load(const char *filename)
         log_line("load-pump: save_load(%s) FAILED", filename);
         return 1;
     }
+    /* The live event queue's ring head IS save block 11 — seed it from
+     * the loaded bytes before anything posts/consumes (retail's ring is
+     * the save storage itself; the port's queue struct must catch up). */
+    engine_event_queue_seed_from_save();
     engine_map_post_load();
     /* Restore the strategic-map palette.  The strategic map renders under
      * the game's base palette base01.256 (installed at gfx_init; the

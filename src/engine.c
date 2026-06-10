@@ -24,6 +24,13 @@
 #include "engine_load_pump.h"
 #include "engine_turn.h"
 #include "engine_army_ai.h"       /* engine_army_ai_run_turn (0049a990) */
+#include "engine_army_state.h"    /* substate-0 trio: army-state driver + phase arms */
+#include "engine_combat.h"        /* engine_combat_rotate_merc_offers (004aca2b) */
+#include "engine_territory.h"     /* engine_territory_clear_size_state (004651b9) */
+#include "engine_strat_cost.h"    /* engine_strat_cost_rebuild (0046ff43) */
+#include "engine_ranking.h"       /* engine_ranking_recompute (0049aa0e) */
+#include "engine_diplomacy.h"     /* engine_diplomacy_reconcile_treaties (004a1847) */
+#include "engine_tick_cadence.h"  /* sub-step cadence counters (0040490d) */
 #include "gfx.h"
 #include "save.h"                 /* g_player_strategic_352 */
 #include "save_schema_globals.h"  /* s_slot_00554004 */
@@ -812,6 +819,310 @@ void engine_turn_advance(void)
                            g_sim_mp_active);
 }
 
+/* ─── Screen-substate-0 strategic turn-phase dispatcher ─────────────
+ *
+ * Port of FUN_0049a010 @ 0x49a010 (982 B) — the per-sub-step driver of
+ * the seven strategic turn phases, run as the middle call of the
+ * sub-step trio (0x40490d → 0x49a010 → 0x4650b0) whenever the screen
+ * sub-state is 0.  Bumps the per-phase pass counter (schema slot 74,
+ * s_slot_0053f658) every pass, then dispatches on the current phase
+ * (slot 73, s_slot_00569584); first-pass work is gated on the counter
+ * == 1.  This is the slot-74 writer the grid_load_probe state bisect
+ * fenced to retail's load-flip tick.
+ *
+ * Phase arms wired to their ported bodies:
+ *   1  tick1 rations+grant(0) · tick2 independent-AI(0) · tick3 advance
+ *   2  PARTIAL: scan-siege-built cadence live; entry pass 0x4a82b9
+ *      (pending-garrison sweep + siege-cursor reset + 0x52afac clear)
+ *      and the assault A/V trigger 0x4a8aab are TODO
+ *   3  plan-capital-marches + arm-movement(4)
+ *   5  plan-raids + arm-movement-owned(2,6)
+ *   6  plan-settle-marches + arm-movement(3)
+ *   7  PARTIAL: tick-counter resets + full turn rollover (turn driver,
+ *      merc rotation, territory size clear, strat-cost rebuild, ranking,
+ *      treaty reconcile, phase advance) live; the sub-screen closer
+ *      0x43ad25 is sliced to its screen-id reset (per-screen closers
+ *      0x4984dc/0x42df30 + repaint chain 0x40f1a0/0x4050c0/0x45240a/
+ *      0x452160 are render-side TODO); the year-rollover scroll popup
+ *      0x4b0cb4(0x24,1,0x5691f0) is TODO (popup-by-id system unported);
+ *      the rollover wall-clock stamp 0x4e59d8 has no ported consumer
+ *   4  (else) PARTIAL: the end-of-turn readiness check + phase advance
+ *      are live; the per-tick AI brain FSM 0x49a581 (steps 1/6/9/0xb
+ *      still unported), the turn-timer countdown block (0x5440c8 /
+ *      0x53f26c / 0x568d9c + 0x43ac23 + the end-turn strip redraw
+ *      0x41a734), the roster-999 10s re-poll, and the auto-advance
+ *      block (0x55403c / 0x57cad0 / 0x553018) are TODO — all are
+ *      wall-clock-paced UI/MP affordances, not sim state
+ *
+ * The phase-1 tick-3 arm stamps the phase-4 auto-advance baseline
+ * (retail _DAT_0057cad0 = timeGetTime()) into a runtime mirror so the
+ * TODO auto-advance block has its input when it lands. */
+static uint32_t g_sim_phase4_baseline_ms;       /* _DAT_0057cad0 */
+static int32_t  g_sim_player_ticks[10];         /* DAT_0053e8d0[0..9] */
+
+/* The ten sub-step cadence counters (0x40490d/0x40489e state) — first
+ * call of the substate-0 trio.  All .bss runtime, never saved. */
+static engine_tick_cadence_t g_tick_cadence;
+
+static void engine_turn_tick_substate0(void)
+{
+    CALL_TRACE_ENTER(0x0049a010);
+
+    if (!g_turn_event_queue_inited) {
+        engine_event_queue_init_wrapper(&g_turn_event_queue);
+        g_turn_event_queue_inited = 1;
+    }
+
+    s_slot_0053f658 += 1;            /* per-phase pass counter (slot 74) */
+
+    if (s_slot_00569584 == 7) {
+        /* Turn rollover. */
+        g_sim_tick_counter = 0;                       /* DAT_0057c998 */
+        for (int i = 0; i < 10; i++)
+            g_sim_player_ticks[i] = 0;                /* DAT_0053e8d0 */
+        /* 0x43ad25 slice: force the strategic-map screen back (retail
+         * also closes any open sub-screen first — TODO, see header). */
+        g_sim_current_screen = 0;                     /* DAT_004eac50 */
+        /* TODO: _DAT_004e59d8 = now (rollover stamp, no consumer). */
+        engine_turn_advance();                        /* FUN_00448440 */
+        engine_combat_rotate_merc_offers();           /* FUN_004aca2b */
+        engine_territory_clear_size_state();          /* FUN_004651b9 */
+        engine_strat_cost_rebuild(g_overworld_map);   /* FUN_0046ff43 */
+        engine_ranking_recompute(&g_turn_event_queue);/* FUN_0049aa0e */
+        engine_diplomacy_reconcile_treaties();        /* FUN_004a1847 */
+        engine_turn_advance_phase();                  /* FUN_0049ce51 */
+        /* TODO: 0x4b0cb4(0x24, 1, 0x5691f0) — year-rollover scroll. */
+    } else if (s_slot_00569584 == 5) {
+        if (s_slot_0053f658 == 1) {
+            engine_army_state_plan_raids();           /* FUN_004ac499 */
+        }
+        if (engine_army_state_arm_movement_owned(2, 6) == 0)  /* 4a4e3d */
+            engine_turn_advance_phase();
+    } else if (s_slot_00569584 == 2) {
+        if (s_slot_0053f658 == 1) {
+            /* TODO: 0x4a82b9 — phase-2 entry: pending-garrison sweep
+             * over realms 1..16, siege-scan cursor reset
+             * (s_slot_0057cad4 = 1), 0x52afac clear. */
+        }
+        /* Retail: if (DAT_00553030 == 0) DAT_0052afac = 1 — runtime
+         * screen flag, producer TODO with the 0x4a82b9 port. */
+        if (s_slot_0053f658 % 100 == 2) {
+            if (engine_army_state_scan_siege_built() == 0) {  /* 4a84ba */
+                engine_turn_advance_phase();
+            } else {
+                /* TODO: 0x5540 3c = 0 (turn-wait state) + 0x4a8aab
+                 * (assault A/V trigger on the parked siege record). */
+            }
+        }
+    } else if (s_slot_00569584 == 1) {
+        if (s_slot_0053f658 == 1) {
+            engine_army_ai_set_rations_and_grant(0);  /* FUN_0049d638 */
+        } else if (s_slot_0053f658 == 2) {
+            engine_army_ai_run_independent(0);        /* FUN_0049dfc6 */
+        } else if (s_slot_0053f658 == 3) {
+            engine_turn_advance_phase();              /* FUN_0049ce51 */
+            g_sim_phase4_baseline_ms = timeGetTime(); /* _DAT_0057cad0 */
+        }
+    } else if (s_slot_00569584 == 6) {
+        if (s_slot_0053f658 == 1) {
+            engine_army_state_plan_settle_marches();  /* FUN_004280e9 */
+        }
+        if (engine_army_state_arm_movement(3) == 0)   /* FUN_004a4f5b */
+            engine_turn_advance_phase();
+    } else if (s_slot_00569584 == 3) {
+        if (s_slot_0053f658 == 1) {
+            engine_army_state_plan_capital_marches(); /* FUN_00429418 */
+        }
+        if (engine_army_state_arm_movement(4) == 0)   /* FUN_004a4f5b */
+            engine_turn_advance_phase();
+    } else {
+        /* Phase 4 — the human player's interactive phase.
+         * TODO (wall-clock UI/MP affordances, see header): the turn-timer
+         * countdown, the roster-999 10-second re-poll, the auto-advance
+         * block.  TODO (sim): the per-tick AI brain FSM 0x49a581. */
+        if (engine_sim_turn_resolved() != 0)          /* FUN_0049b762 */
+            engine_turn_advance_phase();
+    }
+}
+
+/* ─── In-game event scroll: depth-warning post + consumer slice ─────
+ *
+ * Retail's first act inside the per-tick body FUN_004b99c0 is the
+ * "Non 256 colour display" warning: ONCE per session, on the first
+ * in-game tick with a full-color desktop, it posts event code 0x12a
+ * into the global event ring:
+ *
+ *   if (DAT_0053f228 == 1 && DAT_0053f22c != 8 &&
+ *       DAT_005533d4 == 0 && DAT_0052af94 == 3) {
+ *       DAT_005533d4 = 1;
+ *       FUN_00472bc5(0, DAT_0057c8cc, 0x12a, 0,0,0,0,0);
+ *   }
+ *
+ * The render-phase consumer FUN_00472e46 then dequeues it, loads the
+ * payload mirrors, and parks the event code in DAT_0053e910 — which is
+ * EXACTLY the rate controller's extended_pause input: an open event
+ * scroll freezes the SP sim (this is what froze retail's sim for the
+ * whole 60-tick grid_load_probe window after exactly one sub-step).
+ * The scroll's pixels come from FUN_0047309e (unported — the 92.9k-px
+ * load-route map residual closes when that render slice lands).
+ *
+ * Display globals: DAT_0053f228 (depth class) / DAT_0053f22c (bpp) are
+ * options-init'd to 1/8 and boot-resolved from the desktop; the
+ * drop-in targets modern full-color desktops (gfx.c's full-range
+ * palette default), so the faithful defaults here are class 1 /
+ * 32 bpp → the warning posts, matching retail-under-seat.  A true
+ * 8bpp/legacy configuration (gfx_set_palette_full_range(0)) would set
+ * bpp 8 and never warn — wire that coupling when a legacy seat needs
+ * it.  None of these is a schema slot; only their consequence (the
+ * ring write) is save-state. */
+static int g_display_depth_class = 1;     /* DAT_0053f228 */
+static int g_display_bpp         = 32;    /* DAT_0053f22c (boot-resolved) */
+static int g_sim_depth_warned;            /* DAT_005533d4 (one-shot) */
+
+/* Consumer payload mirrors (runtime .bss in retail, no ported readers
+ * yet — the scroll renderer 0x47309e and the dismiss path 0x476768
+ * consume them when they land). */
+static int32_t g_popup_payload_a;         /* DAT_005440ac ← rec +0x0c */
+static int32_t g_popup_payload_b;         /* DAT_005678ac ← rec +0x14 */
+static uint8_t g_popup_flag6;             /* DAT_0055ce54 ← rec +0x12 */
+static uint8_t g_popup_flag7;             /* DAT_0057c8ac ← rec +0x13 */
+static uint8_t g_popup_type;              /* DAT_005440a4 ← rec +0x11 */
+static int32_t g_popup_target;            /* DAT_00553ee0 ← rec +0x04 */
+
+/* Schema block 11 (g_misc_128, retail 0x568480) IS the first 128 bytes
+ * of the live event ring — retail's producer/consumer mutate the ring
+ * in place and the save schema captures its head (5⅓ records).  The
+ * port's queue lives in a struct, so every ring mutation re-mirrors
+ * the head into the save block (the same pattern as the LFSR slots
+ * 18/19 in engine_rng_global_set). */
+static void evq_sync_save_mirror(void)
+{
+    memcpy(g_misc_128, g_turn_event_queue.ring, sizeof(g_misc_128));
+}
+
+/* Load-route seeding — the inverse mirror.  save_load fills g_misc_128
+ * from the .sav; the live queue must then see that ring head, or the
+ * first consumer pass would read a stale slot 0.  write_idx/read_idx/
+ * notify/cooldown are NOT schema slots (retail leaves them at their
+ * boot values across a load), so only the ring bytes seed. */
+void engine_event_queue_seed_from_save(void)
+{
+    if (!g_turn_event_queue_inited) {
+        engine_event_queue_init_wrapper(&g_turn_event_queue);
+        g_turn_event_queue_inited = 1;
+    }
+    memcpy(g_turn_event_queue.ring, g_misc_128, sizeof(g_misc_128));
+}
+
+/* The pre-tick depth-warning post (the FUN_004b99c0 head block above). */
+static void engine_tick_depth_warning_step(void)
+{
+    if (g_display_depth_class == 1 && g_display_bpp != 8 &&
+        g_sim_depth_warned == 0 && g_engine_state == 3) {
+        g_sim_depth_warned = 1;
+        if (!g_turn_event_queue_inited) {
+            engine_event_queue_init_wrapper(&g_turn_event_queue);
+            g_turn_event_queue_inited = 1;
+        }
+        /* The producer's filter table: has_data[i] = strategic +5 byte
+         * (same construction as engine_army_ai's build_has_data). */
+        uint8_t has_data[7];
+        for (int i = 0; i < 6; i++)
+            has_data[i] = g_player_strategic_352[i * 0x160 + 0x05];
+        has_data[6] = 0;
+        engine_event_queue_post(&g_turn_event_queue,
+                                0, (int32_t)s_slot_0057c8cc,
+                                0x12a, 0, 0, 0, 0, 0,
+                                has_data, (int)s_slot_0057c8cc);
+        evq_sync_save_mirror();
+    }
+}
+
+/* Render-phase event-scroll consumer — port of FUN_00472e46 @ 0x472e46
+ * (595 B), minus the two render/dismiss callees:
+ *   0x47309e — draw the open scroll        (render frontier, TODO)
+ *   0x476768 — dismiss/close the scroll    (input frontier, TODO)
+ * Runs mid render-pump in retail (between the UI pumps and the
+ * screen-render dispatch).  Dequeues at most one pending event per
+ * cooldown window: parks its code in g_sim_extended_pause (the modal
+ * sim freeze), mirrors the payload fields, zeros the consumed slot's
+ * code (engine_event_queue_slot_zero — ring mutation → re-mirror) and
+ * arms the 2000-frame cooldown.  In SP the cooldown is pinned at ≥ 1
+ * while a scroll is open — modal until dismissed by input. */
+static void engine_tick_event_popup_step(void)
+{
+    CALL_TRACE_ENTER(0x00472e46);
+
+    uint8_t scr = g_sim_current_screen;
+    int in_gate = (scr == 0 || scr == 0x27 || scr == 0x29);
+    /* TODO: retail's fourth arm — scr == 0xf with DAT_00553f54 == 8
+     * (battle sub-screen); 0x553f54 has no port storage yet. */
+    if (!in_gate) {
+        if (g_sim_extended_pause != 0) {
+            /* TODO: 0x476768 — auto-dismiss when the screen leaves
+             * the scroll-capable set. */
+        }
+        return;
+    }
+    if (g_sim_screen_substate == 2 && g_sim_extended_pause != 0) {
+        /* TODO: 0x476768 — alt-UI sub-state dismiss arm. */
+        return;
+    }
+
+    if (!g_turn_event_queue_inited) {
+        engine_event_queue_init_wrapper(&g_turn_event_queue);
+        g_turn_event_queue_inited = 1;
+    }
+    engine_event_queue_state_t *q = &g_turn_event_queue;
+
+    if (q->consumer_cooldown < 1) {
+        q->consumer_cooldown = 0;
+        engine_event_queue_record_t *slot = &q->ring[q->read_idx];
+        g_sim_extended_pause = slot->code;          /* DAT_0053e910 */
+        if (g_sim_extended_pause == 0) {
+            /* Empty slot: chase the producer one step per frame. */
+            if (q->read_idx == q->write_idx)
+                return;                              /* fully drained */
+            q->read_idx += 1;
+            if (q->read_idx >= 0x32)
+                q->read_idx = 0;
+            return;
+        }
+        /* Live event — open it. */
+        g_popup_payload_a = slot->payload32a;        /* DAT_005440ac */
+        g_popup_payload_b = slot->payload32b;        /* DAT_005678ac */
+        g_popup_flag6     = slot->flag6;             /* DAT_0055ce54 */
+        g_popup_flag7     = slot->flag7;             /* DAT_0057c8ac */
+        g_popup_type      = slot->flag5;             /* DAT_005440a4 */
+        g_popup_target    = slot->target;            /* DAT_00553ee0 */
+        engine_event_queue_slot_zero(q, q->read_idx);/* FUN_00472b40 */
+        q->read_idx += 1;
+        if (q->read_idx > 0x31)
+            q->read_idx = 0;
+        q->consumer_cooldown = 2000;
+        evq_sync_save_mirror();                      /* ring mutated */
+    } else {
+        q->consumer_cooldown -= 1;
+        if (g_sim_mp_active == 0 || g_popup_type == 0xe) {
+            /* SP (or type-0xe broadcast): modal — pin the cooldown so
+             * the scroll never times out; only input dismisses. */
+            if (q->consumer_cooldown < 1)
+                q->consumer_cooldown = 1;
+        } else if (g_popup_type == 4) {
+            if (q->consumer_cooldown < 1) {
+                /* TODO: 0x476768 — MP type-4 timed dismiss. */
+            }
+        } else if (q->consumer_cooldown < 0x641) {
+            /* TODO: 0x476768 — MP general timed dismiss. */
+        }
+    }
+
+    if (g_sim_extended_pause != 0) {
+        /* TODO: 0x47309e — draw the open event scroll (the load-route
+         * 92.9k-px popup residual closes here). */
+    }
+}
+
 /* Public readers used by main.c's shutdown summary so the harness can
  * verify the FPS counter is alive without poking file-static state. */
 uint32_t engine_get_current_fps(void)        { return g_fps_current; }
@@ -1056,6 +1367,10 @@ void engine_tick(void)
     call_trace_begin_frame(g_engine_frame_counter);
     CALL_TRACE_ENTER_STUB(0x004b99c0);   /* engine_tick — scaffold body */
 
+    /* Retail's first act in the per-tick body: the once-per-session
+     * non-8bpp display warning post (see the block's header above). */
+    engine_tick_depth_warning_step();
+
     /* Pre-tick block — retail does (in order): FUN_004b0aaa input
      * poll, FUN_00499a1c music (only when ingame), FUN_00498458,
      * FUN_004b20ed (← ported), FUN_004bbc80 (← ported), FUN_00481b9a,
@@ -1165,13 +1480,11 @@ void engine_tick(void)
          *    sim / UI / map subsystems.  Surveyed in
          *    main-loop-tick.md §"sub-step body screen-state extras". */
         if (g_sim_screen_substate == 0 && sub_steps != 0) {
-            /* Retail runs three in order here: 0x40490d (313 B) and the
-             * turn driver 0x49a010 (982 B) — both still unported — then
-             * 0x4650b0, ported as engine_army_state_run + bound to its
-             * movement executor in game_init, but not yet wired into this
-             * tick (it needs the turn evq + mp_active the driver supplies).
-             * 0x49a010's phase sequencer FUN_0049ce51 + its turn-cycle
-             * roster reset FUN_0049b6d3 are now ported (engine_turn). */
+            /* The substate-0 trio, in retail order. */
+            engine_tick_cadence_step(&g_tick_cadence);    /* 0x40490d */
+            engine_turn_tick_substate0();                 /* 0x49a010 */
+            engine_army_state_run(&g_turn_event_queue,    /* 0x4650b0 */
+                                  g_sim_mp_active);
         } else if (g_sim_screen_substate == 2 && sub_steps != 0) {
             /* TODO(sim): 0x478952 (53 B) + per-screen chain
              * 0x488dfe (943 B), 0x4822ed (644 B),
@@ -1207,6 +1520,13 @@ void engine_tick(void)
      * producer sets g_sim_current_screen = 0x1f).  A transition here sets
      * the demand-redraw cookie the seam below consumes. */
     engine_tick_menu_input_step();
+
+    /* In-game event-scroll consumer (retail FUN_00472e46, run mid
+     * render-pump between the UI pumps and the screen-render dispatch).
+     * Dequeues posted events into the modal scroll state — opening one
+     * parks its code in extended_pause, freezing the SP sim until
+     * dismissed.  No-op off the scroll-capable screens. */
+    engine_tick_event_popup_step();
 
     /* Title-menu file-load confirm pump (retail FUN_004ad9f0, run from
      * inside the menu dispatcher FUN_004ba9c8).  Self-gates on the
