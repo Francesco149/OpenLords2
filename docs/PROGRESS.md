@@ -7,6 +7,65 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-10 (session 6) — BRAIN STEP 1 LANDED (FUN_004a277d diplomacy-inbox processor + 7 handlers); the oracle CAN'T reach it (inbox is human-UI/MP-only → inert in headless SP) — verified instead by r2 + units + zero-regression before/after
+
+Picked up the session-5 "Next": port the brain step subtrees bottom-up against
+the clean oracle, step 1 (the gateway, FUN_004a277d) first.  Step 1 landed
+byte-exact and verified — but the headline lesson is about WHERE it can be
+verified.
+
+**Step 1 = the diplomacy-inbox processor (committed 27b6ca3).**  Replaced the
+case-0x1 advance-only stub in `engine_army_ai_run_per_tick` with
+`engine_army_ai_step1_process_inbox` — the faithful port of FUN_004a277d (565 B)
++ its full closure: the seven message handlers (FUN_004a29b2 / 2cd6 / 2f61 /
+30f6 / 3475 / 3551 / 38db) + the gift transfer FUN_004a1b29 (the treaty
+break/forge callees 004a1a54 / 004a1774 were already ported).  It drains each
+realm's five-entry inbox (`s_slot_0053f0f0`, save entry 146 — +0 sender / +1
+type / +2 param / +4 i32 value), dispatching by type: resource-offer eval
+(±band tiers), repeat-offer, notified/silent treaty break, alliance-proposal
+response (forge on a warm or RNG-favourable relation), and lord-tribute demands;
+then clears the inbox + resets the per-pair +0x90 scratch byte.  Relation (+0x84)
+clamps ±30 after every adjust.  The 7-bit RNG byte (g_rng_7bit_b / DAT_0058fd60)
+threads from the dispatcher into the alliance/tribute rolls — the sub-step body
+stirs it (engine.c:2028) BEFORE the strategic dispatch (engine.c:2048), retail's
+FUN_004b99c0 order, so the roll is byte-exact.  Gate: 2095 host tests (+5
+step-1 tests, every handler path), mingw clean.
+
+**The big finding — step 1 is unreachable by the headless oracle.**  A fresh
+`--target both` on `endturn_auto` showed step 1 changed NOTHING vs the stub, and
+a before/after `--only port` (stash step 1 → rebuild → recapture vs the same
+cached retail) is **byte-identical** at every label.  Root cause: the inbox's
+sole writer `FUN_004a2621` has exactly two callers — a human-UI diplomacy action
+(`DAT_0057c8cc` = local player) and an inbound MP message.  In a headless SP
+AI-only sim (load lastturn.sav → dismiss scrolls → run), NEITHER fires, so the
+inbox never fills and step 1 is provably inert.  Step 1 IS the AI's "respond to
+the human's/MP diplomatic overtures" logic; it only activates when a human sends
+diplomacy.  So this port is verified by **r2 byte-exactness** (FUN_004a277d +
+FUN_004a29b2: dispatch addr 0x53f0f0+self*0x28+entry*8, sender==0 breaks /
+sender==self continues, personality LUT 0x4d8a60 = row+0x08, codes 0xab-0xc5 +
+±30 clamp) + **units** + **zero-regression before/after** — NOT the trace
+oracle.  Exercising it on-engine later needs a diplomacy-UI trace.
+
+**Oracle residual is unchanged (as expected).**  endturn_auto still shows the
+known ±1-2 pass-counter timing offset (auto_dismiss dismisses at the per-tick
+onEnter vs the port's input-phase → ~6-frame skew → LFSR slots 18/19 + phase/
+pass slots diverge at the snapshot points) and the strategic-record run-label
+sub_diff [5,7,8,9,10,11,12,13,15] — both untouched by step 1, both attributable
+to the STILL-stubbed steps 6/7/9/0xb + the timing residual.  flip0 strategic +
+inbox match (brain doesn't run in phase 1); quirk #201 cosmetic map residual
+persists.
+
+**Next: the remaining stubbed brain steps, bottom-up — but they need on-engine
+reach too.**  Steps 6 (FUN_0049edc7), 7 (FUN_0049f93d), 9 (FUN_0049f977), 0xb
+(FUN_004a5667) are the run-label sub_diff signal (unlike step 1, these run every
+turn in headless SP, so the oracle WILL move when they land).  Port 0xb (the
+army-movement/deployment planner, 6.3 KB, pulls in path_field) and 9 first —
+they touch the army/territory bands the sub_diff fingers.  Separately, to ever
+regression-test step 1 on-engine, craft a diplomacy-UI trace (human proposes an
+alliance to an AI realm → that AI's inbox fills → its step 1 fires next turn).
+
+---
+
 ## 2026-06-10 (session 5) — PER-TICK AI BRAIN DISPATCHER LANDED (FUN_0049a581 wired into phase-4); trace-studio oracle re-tightened (stale-cache phantom debunked, continuous-dismiss isolates a residual rate ratio)
 
 Picked up the session-4 "Next" (port FUN_0049a581) and the user-chosen oracle

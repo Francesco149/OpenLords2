@@ -47,7 +47,9 @@ diplomacy/AI cluster behind the driver's other head calls `FUN_0049b2a3` /
 | cell roster + grid (`DAT_0053ea00` / `DAT_00522f90`) | the same feature-cell roster + descriptor grid `engine_territory` owns; the develop/demolish leaves stamp cell TYPE bytes through it |
 | `s_slot_005532a0` (save entry 82) | 16-entry × 0x10 B commodity price table (base prices) |
 | `g_per_territory_420` +0x166 | per-territory price-adjustment percent the order helpers mark base prices up by |
-| **AI personality table** (`DAT_004d8a58`, const `.data`) | 4 personalities × 0xf0 B (= 3×0x50; retail indexes `(p-1)·0xf0`).  Embedded verbatim in `engine_army_ai.c`.  Reads: dispatch code (+0), cash floor (+0x78), discretionary buy qty (+0x7c), commodity 8/7/6 stock targets (+0x84/0x88/0x8c).  Values: pers1 code 1 (1000/100/250³), pers2 code 1 (1500/80/300³), pers3 code 0 (2500/70/500³), pers4 code 9 (4000/150/1000³) |
+| **AI personality table** (`DAT_004d8a58`, const `.data`) | 4 personalities × 0xf0 B (= 3×0x50; retail indexes `(p-1)·0xf0`).  Embedded verbatim in `engine_army_ai.c`.  Reads: dispatch code (+0), offer band (+0x08), per-gift unit (+0x0c), tribute avg-troop floor (+0x30), cash floor (+0x78), discretionary buy qty (+0x7c), commodity 8/7/6 stock targets (+0x84/0x88/0x8c).  Values: pers1 code 1 (1000/100/250³), pers2 code 1 (1500/80/300³), pers3 code 0 (2500/70/500³), pers4 code 9 (4000/150/1000³) |
+| **diplomacy inbox** (`s_slot_0053f0f0`, save entry 146, 240 B) | 6 rows (one per realm) × 5 entries × 8 B: +0 sender, +1 type (0..6), +2 byte param, +4 i32 value.  Drained + cleared by brain step 1.  Written by `FUN_004a2621(sender, receiver, type, value)` — **only two callers**: a human-UI diplomacy action (`DAT_0057c8cc` = local player) and an inbound MP message.  So in a headless SP AI-only sim it is **never populated** → step 1 is inert (see below). |
+| per-pair AI fields (in `g_player_strategic_352` row p, `+ other·0x10`) | relation +0x84 (i8, ±30), contact/betrayal +0x86, alliance-exists +0x88, repeat-offer counter +0x89, best-offer-seen +0x8c (i32), per-turn scratch +0x90, gift counter +0x91.  Per-player scalars touched by step 1: avg-troop strength +0x14 (ranking output F_M_14), lord +0x81, last-gift-giver +0xe8, ally cooldown +0xec, mood-cycle +0x159 |
 
 ## Verification
 
@@ -62,6 +64,40 @@ scalars `g_price_a/b/c` (fixed 5/10/6 in the diff lib, variable in retail) — t
 same wall the upkeep pass hit ([pure-function-diff.md](pure-function-diff.md)
 `upkeep` row).  A full-pass diff would need vectors constrained so the re-plan
 tail stays deterministic; deferred as a separate effort.
+
+## Brain step 1 — diplomacy inbox (`FUN_004a277d`, landed)
+
+The per-tick brain dispatcher (`FUN_0049a581`) runs step 1 first for every realm
+(state 0 init → state 1).  Step 1 = `engine_army_ai_step1_process_inbox`: it
+walks the realm's five-entry inbox, dispatches each message to one of seven
+type handlers, then clears the inbox (zeroing +0/+1/+2/+4, leaving +3 — same as
+`FUN_004a2584`) and resets the per-pair +0x90 scratch byte.
+
+| type | handler | effect |
+|------|---------|--------|
+| 0 | `FUN_004a29b2` | evaluate a resource offer vs the running best-offer (+0x8c) + a personality band; relation −8 / +5 / +10 by tier; post 0xad/0xac/0xab |
+| 1 | `FUN_004a2cd6` | repeat-offer response keyed on +0x89; relation +15 / +8 / −4; post 0xae/0xaf/0xb0 |
+| 2 | `FUN_004a2f61` | notified treaty break: `clear_treaty` + relation −20 + post 0xb1 |
+| 3 | `FUN_004a30f6` | alliance-proposal response: reject 0xb2 / accept+`form_alliance` 0xb3 / has-lord 0xc5 / already-allied 0xc4 (probabilistic accept in the marginal band via `DAT_0058fd60`) |
+| 4 | `FUN_004a3475` | silent treaty break: `clear_treaty` + relation −15 (no post) |
+| 5/6 | `FUN_004a3551` / `FUN_004a38db` | tribute demand from one's lord: yield 0xb7/0xba / token-gift 0xb8/0xbb (`FUN_004a1b29`) / refuse 0xb9/0xbc; RNG-gated |
+
+The relation byte is clamped to ±30 after every adjust (`>=31 → 30`, `<=-31 →
+-30`).  The RNG input is the freshly-stirred 7-bit byte `DAT_0058fd60`
+(`g_rng_7bit_b`), threaded from `engine.c` — the sub-step body stirs it
+(line 2028) *before* the strategic dispatch (line 2048), exactly retail's
+`FUN_004b99c0` order, so the value is byte-exact.
+
+**Verification.**  `FUN_004a277d` + `FUN_004a29b2` are r2-verified byte-for-byte
+(dispatch address `0x53f0f0 + self·0x28 + entry·8`; sender==0 breaks,
+sender==self continues; personality read `0x4d8a60` = row+0x08; codes/clamp
+constants).  Five host tests in `test_engine_army_ai.c` exercise every handler
+path (offer warm, treaty break, alliance accept, self-skip + gap-stop, empty
+drain).  **The trace-studio oracle CANNOT reach step 1** — the inbox is filled
+only by human-UI/MP diplomacy (see the inbox row above), so a headless SP
+`endturn_*` capture leaves it empty and step 1 is provably inert (a before/after
+`--only port` on `endturn_auto` is byte-identical).  Exercising it on-engine
+needs a diplomacy-UI trace (human proposes/breaks/tributes to an AI realm).
 
 ## Quirks captured in-code
 
