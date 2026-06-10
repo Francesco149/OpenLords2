@@ -7,6 +7,68 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-10 (session 5) — PER-TICK AI BRAIN DISPATCHER LANDED (FUN_0049a581 wired into phase-4); trace-studio oracle re-tightened (stale-cache phantom debunked, continuous-dismiss isolates a residual rate ratio)
+
+Picked up the session-4 "Next" (port FUN_0049a581) and the user-chosen oracle
+work.  Two arcs: the brain dispatcher landed, and the trace-studio oracle was
+diagnosed + tightened.
+
+**Brain dispatcher (committed 9e31b61).**  Assembled FUN_0049a581 →
+`engine_army_ai_run_per_tick(evq, mp_active)` and wired it into
+`engine_turn_tick_substate0`'s phase-4 arm (retail order 0x49a3ca: brain →
+turn-resolved → phase-advance).  It advances the persistent round-robin cursor
+(s_slot_0057c944, slot 84) one in-game realm per call, runs one FSM transition
+(init: check_elimination + aggregate + clear +0x1c, state→1; human/parked gates;
+14-task ladder; terminal park at 999 once arm_movement_owned drains).  Steps
+2/3/4/5/8/0xa/0xc/0xd/0xe dispatch live; **steps 1/6/7/9/0xb are advance-only
+stubs** (CALL_TRACE_ENTER_STUB) — their unported closures are LARGE (step 1 = 9
+fns/5.6 KB, step 0xb = 15 fns/6.3 KB, step 7 = 8 fns/2.9 KB, step 9 = 7 fns/2.7
+KB, step 6 = 3 fns/1.8 KB; ~18 KB total), to port bottom-up next.  Gate: 2090
+host tests (+6 dispatcher FSM tests), r2-verified byte-exact, mingw cross-build
+clean.  **Result: slot 84 now advances and converges to retail's value (4) by
+run3/settled** — it was frozen at 1 (the session-4 flagged divergence).
+
+**Oracle tightening — the big lesson: ALWAYS `--target both` fresh.**  An
+apparent 12-slot ranking "regression" (s_slot_00553d24 leader / 00522d90 weakest
+/ 0053e97c score etc., port!=0 retail=0, even in the phase-1 load route) was a
+**100% stale-cache phantom**: the retail captures were 3-12 h old and had loaded
+a *different* lastturn.sav than the fresh port (the .sav is unpinned —
+[[project_save_redirect_reproducibility]]).  A fresh `--target both` collapsed
+flip0 back to **ndiff=1** (the known quirk-#201 cosmetic map residual) and the
+ranking slots to **0 diff**.  The brain is provably load-route-inert (phase 1,
+brain runs only in phase 4); no regression.
+
+**Residual = a real rate-controller parity gap (NOT freeze).**  With both sides
+fresh, the only genuine divergence is the sub-step rate: pass counter
+(s_slot_0053f658) port 33 vs retail 98 over the window, and the port *freezes* at
+33 (brain-posted scroll, no dismiss).  A continuous-dismiss probe
+(`tools/traces/endturn_cd.jsonl`, a right-click every 3 frames, symmetric on both
+sides) unfroze the port (33→73) and made the **render near-exact** at the
+quiet-map labels (85355px → 355px) — but the rate ratio **persisted at ~0.67**
+(port 73 vs retail 108).  So the residual is NOT the scroll freeze: the port is
+capped at the LUT row-0 duty (~0.67 sub-steps/tick, FUN_004bb978 LUT @ 0x4e3260)
+while retail runs ~0.90/tick.  The port passes the real LUT + advances g_sim_phase
+correctly, so retail must NOT be capped by row 0 — its scenario hint (FUN_0043de70)
+or phase differs.  Needs retail-side instrumentation (agent --watch on the hint /
+DAT_004d2164 phase / _DAT_0053f230 speed, or an Interceptor on the FUN_0043de70
+return) to pin which input diverges.
+
+**Reactive auto_dismiss on the retail agent is still a TODO** (commit 60269bb's
+deferred half): the port has `{"auto_dismiss":1}` (engine.c:2098 — set
+DAT_004e6900 then FUN_0047685d dismisses while DAT_0053e910!=0), but the agent
+doesn't mirror it, so it can't be used symmetrically yet.  The mechanism is
+verified (FUN_0047685d @ 0x47685d: cmp dword[0x53e910]; mov byte[0x4e6900]; call
+0x476768) — the hook is a one-liner in installEngineTickHook once the rate ratio
+is understood (auto_dismiss won't close the ratio, only the freeze).
+
+**Next:** (a) instrument retail's rate inputs to close the ~0.67 sub-step ratio
+(the last thing between here and a byte-exact full-turn oracle); OR (b) the oracle
+is already clean enough in the DENSE EARLY WINDOW (cursor + first few sub-steps
+track) to verify brain-step ports incrementally — port step 1 (the gateway, runs
+first for every realm) bottom-up and watch its state writes land.
+
+---
+
 ## 2026-06-10 (session 4) — END-TURN FRONTIER LIVE: the SP turn now RUNS in the port (scroll-dismiss input chip + port virtual clock); divergence isolated to the phase-4 AI brain FSM
 
 Opened the END-TURN frontier the load-route closure pointed at, using the
