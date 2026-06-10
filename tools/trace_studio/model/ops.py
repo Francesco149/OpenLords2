@@ -77,6 +77,8 @@ def parse(lines: list[str]) -> list[dict]:
             op["_kind"] = "wait"
         elif "wait_until" in d:
             op["_kind"] = "wait_until"
+        elif "auto_dismiss" in d:
+            op["_kind"] = "auto_dismiss"
         elif "m" in d and "t" in d:
             op["_kind"] = "input"
         else:
@@ -109,6 +111,10 @@ def compile_ops(ops: list[dict]) -> tuple[list[str], list[dict]]:
             out.append(json.dumps({"wait": op["wait"]}))
         elif k == "wait_until":
             out.append(json.dumps({"wait_until": op["wait_until"]}))
+        elif k == "auto_dismiss":
+            # Reactive mode toggle — passes through verbatim; both engine
+            # parsers (src/input_trace.c, openlords2-agent.js) honour it.
+            out.append(json.dumps({"auto_dismiss": int(op["auto_dismiss"])}))
         elif k == "input":
             # Maximally explicit primitives — every engine parser sees all
             # four fields regardless of its own default-handling.

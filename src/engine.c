@@ -1211,6 +1211,19 @@ static void engine_popup_scroll_dismiss(void)
     }
 }
 
+/* Reactive popup auto-dismiss (TAS trace `{"auto_dismiss":1}`).  While on,
+ * the in-game input phase synthesizes a right-click (the position-
+ * independent dismiss path of FUN_0047685d) on any frame a modal popup is
+ * open, so a recorded trace can run a turn through the tutorial/event
+ * scrolls without hand-timed clicks — the engine reacts to its own live
+ * popup state.  The retail agent mirrors this (Interceptor on 0x47685d),
+ * so both sides dismiss the SAME popups reactively and stay frame-aligned.
+ * Right-click (not the seal hit-test) so it works for popup types whose
+ * renderer arm — hence committed seal coords — isn't ported yet. */
+static int g_popup_auto_dismiss;
+void engine_set_popup_auto_dismiss(int on) { g_popup_auto_dismiss = on ? 1 : 0; }
+int  engine_popup_is_open(void)            { return g_sim_extended_pause != 0; }
+
 /* Cursor-in-rect hit test — port of FUN_004b1deb @ 0x4b1deb (92 B).
  * Half-open box [x, x+w) × [y, y+h) against the game-space cursor
  * (DAT_004e65fc / DAT_004e65f4 = g_input_game_x/y). */
@@ -2074,8 +2087,14 @@ void engine_tick(void)
      * retail (0x42ff10 runs off the 0x1f title screen).  The consumed-click
      * return is informational until the rest of the in-game input machine
      * ports. */
-    if (g_engine_state == 3)
+    if (g_engine_state == 3) {
+        /* Reactive auto-dismiss: synthesize the right-click edge while a
+         * popup is open, so the dismiss handler below closes it this frame
+         * (no hand-timed clicks needed in the trace). */
+        if (g_popup_auto_dismiss && g_sim_extended_pause != 0)
+            g_input_rmb_newly_released = 1;       /* DAT_004e6900 */
         (void)engine_popup_scroll_input_step();
+    }
 
     /* Title-menu file-load confirm pump (retail FUN_004ad9f0, run from
      * inside the menu dispatcher FUN_004ba9c8).  Self-gates on the

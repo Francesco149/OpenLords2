@@ -9,7 +9,7 @@
 
 /* ─── parsed op list ──────────────────────────────────────────────── */
 
-enum { OP_INPUT, OP_WAIT, OP_CAPTURE };
+enum { OP_INPUT, OP_WAIT, OP_CAPTURE, OP_AUTODISMISS };
 
 typedef struct {
     int  kind;
@@ -116,6 +116,17 @@ static void parse_line(const char *line)
         g_op_count++;
         return;
     }
+    if (strstr(line, "\"auto_dismiss\"")) {
+        /* Reactive mode toggle: while on, the engine dismisses any open
+         * modal popup each tick (right-click path, position-independent).
+         * Drains immediately (not anchor-relative).  Value 1 = on, 0 = off. */
+        long v = 1;
+        op->kind = OP_AUTODISMISS;
+        extract_int(line, "\"auto_dismiss\"", &v);   /* default on */
+        op->n = (int)v;
+        g_op_count++;
+        return;
+    }
     if (strstr(line, "\"m\"")) {
         long t = 0, m = 0, w = 0, l = 0;
         op->kind = OP_INPUT;
@@ -192,6 +203,7 @@ void input_trace_step(int frame, const char *anchor_edge,
                       input_trace_actions_t *out)
 {
     memset(out, 0, sizeof *out);
+    out->set_auto_dismiss = -1;        /* no change unless an op drains below */
 
     /* Remember a newly-fired anchor (first occurrence wins). */
     if (anchor_edge && anchor_edge[0] && !anchor_seen_frame(anchor_edge, 0) &&
@@ -229,6 +241,14 @@ void input_trace_step(int frame, const char *anchor_edge,
                 out->msgs[out->msg_count].lparam = op->lparam;
                 out->msg_count++;
             }
+            g_cursor++;
+            continue;
+        }
+
+        if (op->kind == OP_AUTODISMISS) {
+            /* Mode toggle — drains immediately (no t-gate); the caller
+             * applies it to the engine's reactive-dismiss flag. */
+            out->set_auto_dismiss = op->n;
             g_cursor++;
             continue;
         }

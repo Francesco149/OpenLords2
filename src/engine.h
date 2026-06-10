@@ -124,6 +124,13 @@ void engine_tick(void);
  * turn.  Call once at startup (the --turbo seat). */
 void engine_virtual_clock_enable(uint32_t step_ms);
 
+/* Reactive popup auto-dismiss (TAS `{"auto_dismiss":1}`): while on, the
+ * in-game input phase dismisses any open modal popup each tick (the
+ * position-independent right-click path), so a trace can run a turn
+ * through tutorial/event scrolls without hand-timed clicks. */
+void engine_set_popup_auto_dismiss(int on);
+int  engine_popup_is_open(void);
+
 /* Render-fast-skip dispatcher — port of retail FUN_0040e890.
  *   1. call engine_tick
  *   2. if g_engine_state > 8, latch g_savepump_request = 1

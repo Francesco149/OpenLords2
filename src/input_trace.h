@@ -61,6 +61,9 @@ typedef struct {
     input_trace_capture_t caps[INPUT_TRACE_MAX_FRAME_ACTIONS];
     int                   cap_count;
     int                   blocked;      /* nonzero: parked on an unmet {wait} */
+    int                   set_auto_dismiss; /* -1 = no change this frame, else
+                                             * the new reactive-dismiss mode
+                                             * (1 on / 0 off) the caller applies */
 } input_trace_actions_t;
 
 /* Parse a trace file into the static op list.  Returns 0 on success,

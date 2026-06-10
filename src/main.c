@@ -2598,6 +2598,8 @@ static void main_loop_body(void)
             segtrace_jsonl("anchors.jsonl", line);
         }
         input_trace_step((int)g_frame_counter, edge, &g_seg_actions);
+        if (g_seg_actions.set_auto_dismiss >= 0)
+            engine_set_popup_auto_dismiss(g_seg_actions.set_auto_dismiss);
         for (int i = 0; i < g_seg_actions.msg_count; i++)
             PostMessageA(g_hwnd, g_seg_actions.msgs[i].msg,
                          (WPARAM)g_seg_actions.msgs[i].wparam,
