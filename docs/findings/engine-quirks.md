@@ -6822,14 +6822,23 @@ hand-maintained: do NOT re-run the generator blind; if you do, restore with
 
 The rate controller `FUN_004bb978` gates each sim sub-step on
 `DAT_004e3260[phase + (hint/10)*0xa0]` after clamping the scenario hint to
-0x8c (140) — so the row index reaches 14, while the shipped table object is
-11 rows (0x6e0 bytes).  Rows 11..14 land in the adjacent object at
-0x4e3940, whose bytes (i32-looking values 0xf0..0xff, 0x64..0x74, 226..255)
-are all conveniently non-zero — so in practice "hint ≥ 110" degrades to
-"always pass the duty gate, let the slider gate pace".  Only MP throttle
-ladders produce hints ≥ 110; SP pins the hint at 1 (row 0, ~2/3 duty).
-The port images the full reachable 0xe60 bytes verbatim
-(`g_engine_rate_lut`, engine_rate.c) so the OOB rows behave byte-identically.
+0x8c (140) — so the row index reaches 14, while the shipped duty table is
+11 rows (0x6e0 bytes).  The table is a clean LINEAR-DECAY duty mask:
+**row 0 = all 160 ones** (full duty — step every iteration), row 1 = 144,
+row 2 = 128, … row 9 = 16, then 8/4/2/1/0 for rows 10..14.  Rows 11..14 read
+PAST the table into the adjacent .data (the "ERR:…reloading data" ASCII +
+i32 bytes), which is mostly ZERO with a few non-zero — so a high MP hint
+degrades toward "skip almost every iteration", not the reverse.  SP pins the
+hint at 1 → hint/10 == 0 → **row 0, full duty**: SP steps every iteration that
+clears the slider gate (rate is gate/freeze-limited, NOT LUT-limited).
+
+**Port-bug correction (2026-06-10 session 5, commit e179d8a):** the prior
+`g_engine_rate_lut` image had a BOGUS row 0 (`1,1,0,…` ~2/3 duty, wrong file
+offset) that capped the port at ~0.67 sub-steps/tick vs retail's ~0.95 — the
+entire end-turn rate offset.  Re-imaged verbatim from VA 0x4e3260; live retail
+`--watch` (hint=1, phase +1/frame, sub-step 0.95/frame) confirms the all-ones
+row 0.  The port now images the full 0xe60 bytes verbatim so the OOB rows
+behave byte-identically.
 
 Related find, same chase (the grid_load_probe load-flip bisect): retail's
 game-speed slider default is 90 (`FUN_004ae310` seeds `_DAT_0053f230 =

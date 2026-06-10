@@ -61,11 +61,27 @@ verified (FUN_0047685d @ 0x47685d: cmp dword[0x53e910]; mov byte[0x4e6900]; call
 0x476768) — the hook is a one-liner in installEngineTickHook once the rate ratio
 is understood (auto_dismiss won't close the ratio, only the freeze).
 
-**Next:** (a) instrument retail's rate inputs to close the ~0.67 sub-step ratio
-(the last thing between here and a byte-exact full-turn oracle); OR (b) the oracle
-is already clean enough in the DENSE EARLY WINDOW (cursor + first few sub-steps
-track) to verify brain-step ports incrementally — port step 1 (the gateway, runs
-first for every realm) bottom-up and watch its state writes land.
+**RESOLVED (same session) — the rate ratio was a BOGUS LUT image (commit
+e179d8a).**  Instrumented retail's rate inputs via agent `--watch` (hint /
+DAT_004d2164 phase / DAT_0057c998 sub-step / speed): retail's hint=1, speed=90
+(IDENTICAL to the port), phase advances +1/frame, sub-step 0.95/frame.  So
+retail steps ~every tick — meaning its LUT row 0 is all-ones.  Read retail's
+actual DAT_004e3260: **row 0 = all 160 ones** (clean linear-decay duty table:
+160/144/128/…/16 then 8/4/2/1/0), but the port's *imaged* `g_engine_rate_lut`
+had a bogus `1,1,0,…` ~2/3-duty row 0 (extracted from the wrong file offset),
+capping the port at ~0.67/tick.  Re-imaged the full 0xe60 verbatim from
+0x4e3260.  After the fix the pass counter TRACKS retail **±1 across the whole
+window** (with continuous dismiss: d3 11/11, run1b 34/34, run2 49/49, settled
+107/108 — was 33/98) and the render is near-exact at quiet labels (355 px).
+The trace-studio oracle is now CLEAN; the residual ndiff at the run labels is
+exactly the *signal* — the stubbed brain steps 1/6/7/9/0xb.
+
+**Next:** (a) optional zero-jitter polish — mirror reactive `auto_dismiss` on
+the retail agent (one-liner in installEngineTickHook: while DAT_0053e910!=0 call
+FUN_00476768) so probes don't need hand-placed continuous clicks (the ±1 is the
+continuous-dismiss approximation); (b) **the main thread — port the brain step
+subtrees bottom-up** (step 1 the gateway first: 9 fns/5.6 KB) and watch each
+step's state writes land against the now-clean oracle.
 
 ---
 
