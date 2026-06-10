@@ -6934,3 +6934,53 @@ threshold.  The voice ranges in the 0x776 speak (`FUN_004b35c1`) are
 codes 100..0xa9 (S1xx table), 0xaa..0xc5 (ktxxx per-payload variants),
 200..0x11c (S2xx) — 198/199 and ≥ 0x11d (incl. the 256c warning 0x12a)
 fall through silently.
+
+## 201 — the last load-route map residual is COSMETIC: reload re-rolls the +3 terrain sprite-variant from an UNSAVED session LFSR, so block 0 can never round-trip
+
+The grid_load_probe state ribbon collapses to a SINGLE differing save
+slot — block 0 `g_overworld_map` (0x522f90), and within it only
+sub-ranges 2/3/4 (records 512..1279 at the true 8-byte cell stride; the
+"2 bytes / 128×128" theory in save-format.md is WRONG — the grid is
+4096 cells × 8 B = 64×64).  A 3-way FNV diff (.sav vs port vs retail,
+all per-range) pins it precisely: ranges 0/1/5..15 are .sav == port ==
+retail; ranges 2/3/4 are **.sav == port ≠ retail**.  The port loads the
+block verbatim and KEEPS the saved value; retail MUTATES those records
+during load.
+
+By elimination, the only load-tail (`FUN_004976a1`) writer that can
+touch block 0 is `FUN_0046dbf5` (the autotile classify), and it writes
+**only the +3 byte** — the terrain sprite variant:
+`(&DAT_00522f93)[cell] = DAT_00568200 + DAT_0057c8a4`.  The siblings
+don't qualify: `FUN_004298c1` (build_cells) and `FUN_0046dd34`
+(randomise specials) write the tile_cells int-view 0x55cea0, not the
+grid; `FUN_0046da4b(0)` evicts roster overflow but the raw .sav grid
+has ZERO overflow (max 16 feature cells/key vs the 20 cap — simulated);
+`FUN_0049ca32` writes player records, not the map.  So the residual is
++3-ONLY = a cosmetic per-tile sprite frame (which of 8 jittered art
+variants), never gameplay.
+
+Why it diverges: the variant comes from `FUN_00404b2c`, a 31-step LFSR
+over `DAT_00591564` (`DAT_005c9a84 = state & 0x7f`).  **`DAT_00591564`
+is NOT a save-schema slot** — it's runtime-only, seeded once at
+InitInstance (0x34518632) and advanced by every puller since boot
+(several 0x47xxxx menu/preload sites, plus classify itself).  On
+RELOAD retail re-runs classify with `DAT_00591564` at its
+boot+menu+load-advanced state, so the isolated-feature cells (the arm
+where `DAT_0057c8a4 == 0x16` pulls the LFSR) get FRESH variants that
+differ from the ones the .sav stored.  The port re-runs the same
+classify but reseeds a LOCAL single-RNG to the fixed 0x34518632 —
+reproducing the .sav's ORIGINAL new-game variants byte-exact (which is
+why block 0 == .sav), but not retail's reload re-roll.
+
+Consequence: this byte band can NEVER round-trip even in retail —
+load→save→load→save re-rolls the variants every time, because the RNG
+that drives them isn't persisted.  The port's fixed-seed choice is
+arguably MORE faithful to the saved file than retail's re-roll.  The
+downstream pixel cost is 273 px (0.089 %), the handful of re-rolled
+variants that happen to be on-screen under the load camera; most of
+records 512..1279 (rows ~8..19) sit outside the viewport.  Treated as
+an accepted cosmetic divergence, NOT a bug.  To bit-match retail
+under a FIXED seat one could capture retail's live `DAT_00591564` at
+load-classify time and seed the port's classify with it — deterministic
+per-seat but fragile (any seat/RNG-pull change shifts it) and
+cosmetic-only, so deferred.

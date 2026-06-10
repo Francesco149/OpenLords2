@@ -7,6 +7,64 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-10 (session 3) — LOAD ROUTE CLOSED: state residual 4 → 1 slot, and that last slot ROOT-CAUSED as a cosmetic sprite-variant re-roll (quirk #201)
+
+Re-ran the grid_load_probe through the studio in PORT-ONLY mode (port
+drives locally; diffed against the prior session's cached retail
+captures — retail host was down all session).  The state ribbon has
+collapsed from 4 differing slots to **ONE**, and it is now stable +
+frozen across all 5 labels (flip0→settled), not the flaky/multi-slot
+picture the last dispatch left:
+
+- GREEN since last session's commits (f04f8bc help-hint, 4bca373
+  visibility-stride): LFSR 18/19, phase tick 74, block 11, blocks 2/3
+  (the AI-record + aux-name bands), camera slot 16.  Pixels also fell
+  from the 92.9k scroll baseline to **273 px (0.089 %)** — the scroll
+  renderer port (a96e7a3) closed the big residual.
+- The lone survivor: block 0 `g_overworld_map`, sub-ranges 2/3/4.
+  Chased to ground entirely from CACHED data (no live retail):
+
+A 3-way FNV diff (.sav vs port vs retail, per 2048-B range) showed
+ranges 2/3/4 are **.sav == port ≠ retail** — the port loads the block
+verbatim and keeps it; retail mutates those records on load.  First
+correction: the grid is **8 B/cell, 4096 cells (64×64)**, not the
+"2 B / 128×128" in save-format.md — so ranges 2/3/4 = records
+**512..1279**, exactly the stale candidate-#3 "cells 512..1279" (I'd
+mis-converted earlier).  By elimination over retail's load tail
+`FUN_004976a1`, the ONLY block-0 writer is the autotile classify
+`FUN_0046dbf5`, and it writes **only the +3 byte = the terrain sprite
+variant** (build_cells `004298c1` + randomise `0046dd34` write the
+tile_cells int-view 0x55cea0; rebuild `0046da4b` evicts nothing — the
+raw grid has 0 roster overflow, simulated; visibility `0049ca32`
+writes player records).  The variant is RNG-rolled from `FUN_00404b2c`,
+a 31-step LFSR over `DAT_00591564` — which is **NOT a save slot**
+(runtime-only, InitInstance-seeded 0x34518632, advanced by every puller
+since boot).  So retail's reload re-rolls the isolated-feature variants
+from its boot+menu+load-advanced LFSR, while the port reseeds the fixed
+0x34518632 and reproduces the .sav's ORIGINAL variants byte-exact.
+
+**Verdict: the load route is done.** The last residual is cosmetic
+(+3 sprite frame, non-gameplay) and can't round-trip even in retail
+(the driving RNG isn't persisted) — accepted + documented as quirk
+#201, not a bug.  Optional bit-match (capture retail's live
+`DAT_00591564` at load-classify, seed the port's classify with it) is
+deterministic per-seat but fragile and cosmetic-only → deferred.
+
+### Next candidates
+1. **END-TURN frontier** (the now-unblocked big one): the scroll
+   dismiss (a96e7a3) unfreezes the SP sim, so the phase dispatcher
+   `engine_turn_tick_substate0` can drive a full turn cycle.  Remaining
+   sim-state TODOs in it: phase-4 per-tick AI brain FSM `0x49a581`
+   (states 1/6/9/0xb + their deep callee trees unported) and phase-2
+   entry `0x4a82b9`.  Deep AI subsystem — needs live retail to verify
+   AI decisions byte-for-byte, so gated on the host being up.
+2. Optional load-route bit-match (quirk #201) — cosmetic, deferred.
+3. Re-capture grid_load_probe with retail LIVE to confirm the 273 px /
+   1-slot picture on a fresh retail run (this session diffed the port
+   against the prior session's cached retail).
+
+---
+
 ## 2026-06-10 (session 2) — LOAD-FLIP TICK PORTED: substate-0 trio + the 256c-popup post/consume seam; state residual 9 → 4 slots; per-block sub-hashing
 
 Chased the trace-studio bisect's three named unknowns to ground and ported
