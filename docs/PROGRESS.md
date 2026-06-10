@@ -88,7 +88,17 @@ seed.)
 
 **Next: steps 7 (FUN_0049f93d) and 6 (FUN_0049edc7) — the last two stubs.**  Then
 the brain dispatcher is fully ported.  Both run every turn; whether they move the
-oracle depends on their input tables (like 9 = active, 0xb/1 = input-empty).  The
+oracle depends on their input tables (like 9 = active, 0xb/1 = input-empty).
+SCOPED this session (callees all already ported): **step 6 = the AI keep-builder**
+— entry FUN_0049edc7 (872 B; for each owned realm big enough with no keep, pick
+the highest keep tier the treasury affords from personality columns +0xcc..+0xdc
++ limit +0x90, gated by feed +0xc8) → FUN_00436d02 (768 B keep builder: set keep
+level +0x1c0, refund/debit the pool costs, stamp the keep fields, re-plan) →
+FUN_0046841c (170 B: evict armies off the 2×2 keep footprint).  Needs a NEW
+.rdata embed — the keep cost/display table at 0x4d89b8 (8-B stride, ~5 tiers,
+sits just before k_garrison_cap @ 0x4d8a0c); the personality keep columns are
+already in the embedded g_ai_personality.  **Step 7 = FUN_0049f93d (47 B) + 6
+callees (~2.5 KB: 49f12f/49f431/49f73f/49f850/4a5389/4a545f)**.  The
 deeper open items: (a) a multi-turn or mid-game-save trace to exercise steps 0xb
 (field armies) and 1 (a diplomacy-UI overture) on-engine; (b) the ±3-4
 pass-counter timing offset (auto_dismiss onEnter vs the port's input phase) — the
