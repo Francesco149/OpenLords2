@@ -7,6 +7,51 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-10 (session 4) — END-TURN FRONTIER LIVE: the SP turn now RUNS in the port (scroll-dismiss input chip + port virtual clock); divergence isolated to the phase-4 AI brain FSM
+
+Opened the END-TURN frontier the load-route closure pointed at, using the
+trace studio as the workhorse end to end (craft trace → anchor → diff →
+the real divergence emerges).  Two ports unblocked a running turn:
+
+- **FUN_0047685d (the open-scroll input handler)** — retail runs it first
+  in its in-game input dispatcher (0x42ff10).  Ported as
+  engine_popup_scroll_input_step: a right-click (rmb release) or a
+  left-click in the seal box dismisses the modal event scroll →
+  extended_pause = 0, the SP sim unfreezes.  Tiny helper FUN_004b1deb
+  (cursor-in-rect) inlined; FUN_0040da1e/FUN_00476768 already ported.
+  Deferred (documented): the special report-type arms (0x11/10/0xb/0xc)
+  + the write-only game-active side effect.  This is the prerequisite for
+  ANY interactive in-game trace (every modal scroll was undismissable).
+- **Port virtual sim clock (--turbo, +17 ms/tick)** — mirrors the retail
+  agent's installVirtualClockHook (turbo_step_ms 17).  Without it the
+  port's real sub-ms frames starve the 12 ms rate gate (speed 90) and the
+  turn barely advances; retail (virtualised) grants ~1 sub-step/tick.  All
+  engine.c sim-timing reads route through engine_now_ms(); the trace_studio
+  port driver now passes --turbo to match the retail seat.
+
+**endturn_probe.jsonl** (load → right-click dismiss → state sweep) drives
+both sides.  Result: the load is byte-exact (flip0 = the 1-slot cosmetic
+residual), then the **port RUNS the turn** — phases 1→2→3→4, LFSR pulling,
+army/territory/player state updating.  run1 pairs to **355 px** (near-exact).
+The first REAL divergence then emerges cleanly:
+
+- **slot 84 (s_slot_0057c944) port=1 retail=4** — the AI brain's
+  round-robin realm cursor (FUN_0049a581).  Retail runs the per-tick AI
+  brain in phase 4; the port's phase-4 arm is the TODO stub.
+- Downstream: blocks 3/4/5 (player/army/territory) diverge, and retail
+  opens a territory event scroll ("Here Be Dragons! / Scrubland") the port
+  never posts — the AI brain's work.  Pushed as a feed comparison.
+
+**Next: port FUN_0049a581 (the phase-4 per-tick AI brain FSM)** — the
+round-robin over realms 1..5 dispatching a 14-state machine; states
+1/6/9/0xb + their callee trees are the unported depth.  First tighten the
+probe (continuous dismiss + dense early window) so the counter is
+frame-exact up to the brain divergence (a residual rate offset remains:
+counter 4 vs 7 early), then port + verify each brain state against retail
+via the studio.
+
+---
+
 ## 2026-06-10 (session 3) — LOAD ROUTE CLOSED: state residual 4 → 1 slot, and that last slot ROOT-CAUSED as a cosmetic sprite-variant re-roll (quirk #201)
 
 Re-ran the grid_load_probe through the studio in PORT-ONLY mode (port

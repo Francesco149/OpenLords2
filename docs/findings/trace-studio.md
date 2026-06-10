@@ -99,14 +99,16 @@ stride (e.g. block 3 stride 0x160: range 7 of 132 B ⇒ record 2 tail).
 
 ## Parity baselines (update when beaten)
 
-- grid_load / grid_load_dense map labels: **92,897 px (30.24%)** — the
-  retail-only 256-colour popup + water anim phase + faint glyphs.  The
-  popup is the event scroll (consumer 0x472e46 ported for STATE; its
-  renderer 0x47309e is the pixel chip).
-- grid_load_probe STATE ribbon: **4 differing slots** (was 9 before the
-  2026-06-10 session-2 ports): block 0 `sub_diff [2,3,4]` (cells
-  512..1279; retail run-dependent), block 2 `[14]` (player-5 aux name),
-  block 3 `[7,9,12,15]` (AI-record +0xdc..+0x160 bands), + the
-  camera-flake slot 16 when it recurs; settled-only block 11 `[3,4,5]`
-  (ring record 1 — retail's mid-idle second event).  LFSR 18/19, phase
-  tick 74, blocks 4/5/11-at-flip: GREEN.
+- grid_load / grid_load_dense map labels: **273 px** (was 92,897) — the
+  scroll renderer port (0x47309e, commit a96e7a3) closed the big residual;
+  what's left is the cosmetic +3 sprite jitter (quirk #201) on-screen.
+- grid_load_probe STATE ribbon: **1 differing slot** (9 → 4 → 1 over the
+  2026-06-10 sessions): block 0 `sub_diff [2,3,4]` ONLY (records 512..1279
+  at the true 8 B cell stride) — root-caused as the cosmetic +3
+  sprite-variant re-roll (quirk #201), accepted.  Everything else GREEN.
+- endturn_probe STATE: load byte-exact (flip0 = the 1-slot residual), then
+  the turn RUNS; first real divergence = **slot 84 (AI brain cursor,
+  FUN_0049a581) port=1 vs retail=4** + blocks 3/4/5 (player/army/territory)
+  + retail's AI territory event scroll the port never posts.  The phase-4
+  AI brain FSM is the open chip.  (The trace_studio port driver passes
+  --turbo so the port's virtual clock matches retail's sub-step rate.)
