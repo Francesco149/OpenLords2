@@ -191,11 +191,23 @@ void player_session_activate_current(void)
 }
 
 /* Port of FUN_0049ca32 @ 0x49ca32 (46 B).  Seed the five per-player
- * visibility bitmasks (g_player_strategic_352 +0x24e) with their
- * one-hot values 1/2/4/8/0x10 for players 1..5.  Run from the load
- * tail after the descriptor rebuild. */
+ * visibility bitmasks with their one-hot values 1/2/4/8/0x10 for
+ * players 1..5.  Run from the load tail after the descriptor rebuild.
+ *
+ * Retail is five direct stores 0x57c14e/0x57c2ae/0x57c40e/0x57c56e/
+ * 0x57c6ce = block-3 bytes 0x24e + (p-1)*0x160 — i.e. player p's bit
+ * lives at STRATEGIC RECORD p, offset +0xee... shifted one record up
+ * (0x24e = record 1 + 0xee).  All five land inside the 2112-byte
+ * block.  An earlier transcription used p*0x160 + 0x24e (one record
+ * further still): records 2..5 got the wrong one-hot values — the
+ * whole block-3 state-ribbon residual (sub-ranges 7/9/12/15) — and
+ * the p=5 store ran 238 bytes past the block into whatever the
+ * linker placed next (g_player_aux_44[238], the block-2 player-5
+ * name residual).  Caught by the trace-studio save-schema oracle +
+ * a -Warray-bounds warning that was dismissed as pre-existing. */
 void player_seed_visibility_bits(void)
 {
     for (int p = 1; p < 6; p++)
-        g_player_strategic_352[p * 0x160 + 0x24e] = (uint8_t)(1 << (p - 1));
+        g_player_strategic_352[(p - 1) * 0x160 + 0x24e] =
+            (uint8_t)(1 << (p - 1));
 }
