@@ -76,12 +76,26 @@ window** (with continuous dismiss: d3 11/11, run1b 34/34, run2 49/49, settled
 The trace-studio oracle is now CLEAN; the residual ndiff at the run labels is
 exactly the *signal* — the stubbed brain steps 1/6/7/9/0xb.
 
-**Next:** (a) optional zero-jitter polish — mirror reactive `auto_dismiss` on
-the retail agent (one-liner in installEngineTickHook: while DAT_0053e910!=0 call
-FUN_00476768) so probes don't need hand-placed continuous clicks (the ±1 is the
-continuous-dismiss approximation); (b) **the main thread — port the brain step
-subtrees bottom-up** (step 1 the gateway first: 9 fns/5.6 KB) and watch each
-step's state writes land against the now-clean oracle.
+**Reactive auto_dismiss on the retail agent — DONE (commit d550088).**  Mirrored
+commit-60269bb's deferred half: the `{"auto_dismiss":1}` segtrace op now drives
+BOTH engines (agent closes any open modal scroll each per-tick call via
+FUN_00476768).  Three fixes: frida_capture._load_segtrace parse, the agent rpc
+input_segtrace loader (was silently dropping unknown ops to `nop` — the bug),
+and the agent flag + autoDismissTick() hook.  `endturn_auto.jsonl` (load → arm
+{auto_dismiss} → STATE sweep, NO hand-timed clicks) verifies --target both:
+neither side freezes, render near-exact (355–1198px), pass tracks ±4 (111/115).
+A small residual ±4 pass offset remains (the agent dismisses at the per-tick
+onEnter vs the port's input-phase — minor timing; tighten later if needed).
+
+**Next: the main thread — port the brain step subtrees bottom-up** against the
+now-clean oracle.  Step 1 (the gateway, FUN_004a277d) first: it runs first for
+every realm (init→state 1), 9 fns / 5.6 KB closure (4a29b2/4a2cd6/4a2f61/4a30f6/
+4a3475/4a3551/4a38db + 4a1b29).  Watch each step's state writes land as the
+run-label ndiff (currently the stubbed-step signal) shrinks.
+
+**Render gap flagged (user, 2026-06-10):** the blacksmith building's drawer-B
+overhang (the part overlapping the adjacent tile) is clipped — see
+map-render.md, likely an unported kind-3/4 / kind-2-phase-4 overhang variant.
 
 ---
 
