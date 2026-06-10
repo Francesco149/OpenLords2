@@ -2222,3 +2222,135 @@ int test_army_ai_per_tick_step9_dispatches(void)
     T_ASSERT_EQ_I((int)s_slot_0057c944, 3);  /* cursor stepped */
     return 0;
 }
+
+/* ── Brain step 0xb: army-movement planner (FUN_004a5667) ───────────────────
+ * These drive the public entry engine_army_ai_run_movement, which dispatches
+ * each owned army to its order handler then runs the cost-field pathfinder.
+ * OREC (the occupant accessor) is defined with the step-9 tests above. */
+
+/* Dispatcher wiring: a realm parked on FSM state 0xb routes through
+ * run_movement (a no-op with no owned armies), then the state advances. */
+int test_army_ai_per_tick_step0xb_dispatches(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    engine_event_queue_init(&evq);
+    PREC(2)[0x04] = 1;                       /* in-game */
+    AI32(PREC(2), 0x00) = 0xb;               /* FSM state 0xb → step 0xb */
+    s_slot_0057c944 = 2;
+
+    engine_army_ai_run_per_tick(&evq, 0, 0);
+
+    T_ASSERT_EQ_I(AI32(PREC(2), 0x00), 0xc);   /* state advanced past step 0xb */
+    T_ASSERT_EQ_I((int)s_slot_0057c944, 3);    /* cursor stepped */
+    return 0;
+}
+
+/* The order gate resets an unknown order code to 2 (advance) and reports "no
+ * destination set" (return 0), so the pathfinder is skipped this tick. */
+int test_army_ai_movement_unknown_order_resets(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    engine_event_queue_init(&evq);
+
+    uint8_t *c = OREC(1);
+    c[0x008] = 1;                            /* active */
+    c[0x000] = 2;                            /* owned by realm 2 */
+    c[0x01a] = 0x20;                         /* unknown order */
+
+    engine_army_ai_run_movement(2, &evq, 0);
+
+    T_ASSERT_EQ_I(OREC(1)[0x01a], 2);        /* reset to advance */
+    T_ASSERT_EQ_I(OREC(1)[0x14c], 0);        /* path-OK flag never set (dispatch returned 0) */
+    return 0;
+}
+
+/* Order 7 (attack-march): an un-held army is pointed at its target realm's
+ * deploy cell.  With no deployable overworld cell for the target, the combat
+ * deploy finder falls back to that realm's capital cell. */
+int test_army_ai_movement_attack_march_deploys(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_overworld_map, 0, sizeof g_overworld_map);
+    engine_event_queue_init(&evq);
+
+    uint8_t *c = OREC(1);
+    c[0x008] = 1; c[0x000] = 2;              /* active, owned by realm 2 */
+    c[0x00a] = 5; c[0x00b] = 5;              /* current seat */
+    c[0x01a] = 7;                            /* order: attack-march */
+    c[0x199] = 0;                            /* not held */
+    c[0x151] = 3;                            /* target realm 3 */
+
+    AREC(3)[0x06c] = 9; AREC(3)[0x06d] = 4;  /* capital cell (deploy fallback) */
+
+    engine_army_ai_run_movement(2, &evq, 0);
+
+    T_ASSERT_EQ_I(OREC(1)[0x016], 9);        /* dest col = capital */
+    T_ASSERT_EQ_I(OREC(1)[0x017], 4);        /* dest row = capital */
+    T_ASSERT_EQ_I(OREC(1)[0x150], 0);        /* placed cleared */
+    return 0;
+}
+
+/* Order 2 (advance): a hostile army within 6 tiles is intercepted — the army's
+ * destination is set to the enemy's cell. */
+int test_army_ai_movement_advance_engages_enemy(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_overworld_map, 0, sizeof g_overworld_map);
+    engine_event_queue_init(&evq);
+
+    uint8_t *c = OREC(1);                    /* our army */
+    c[0x008] = 1; c[0x000] = 2;              /* active, realm 2 */
+    c[0x00a] = 10; c[0x00b] = 10;            /* seat (10,10) */
+    c[0x01a] = 2;                            /* order: advance */
+    c[0x199] = 0;                            /* not held */
+
+    uint8_t *e = OREC(2);                    /* enemy army within 6 tiles */
+    e[0x008] = 1; e[0x000] = 4;              /* active, realm 4 (enemy) */
+    e[0x00a] = 12; e[0x00b] = 11;           /* (12,11): chebyshev dist 2 */
+    e[0x198] = 0;                            /* idle (engageable) */
+    e[0x01a] = 0;                            /* not order 2 → engage condition holds */
+    /* realm 2 has no lord (+0x81 = 0) ≠ enemy owner 4 → engage allowed */
+
+    engine_army_ai_run_movement(2, &evq, 0);
+
+    T_ASSERT_EQ_I(OREC(1)[0x016], 12);       /* dest = enemy col */
+    T_ASSERT_EQ_I(OREC(1)[0x017], 11);       /* dest = enemy row */
+    T_ASSERT_EQ_I(OREC(1)[0x150], 0);        /* placed cleared */
+    return 0;
+}
+
+/* Order 5 (siege): when the target realm is already ours the handler reports
+ * "nothing to do" (return 0) and leaves the order code untouched. */
+int test_army_ai_movement_siege_target_owned_noop(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    engine_event_queue_init(&evq);
+
+    uint8_t *c = OREC(1);
+    c[0x008] = 1; c[0x000] = 2;              /* active, realm 2 */
+    c[0x01a] = 5;                            /* order: siege */
+    c[0x151] = 3;                            /* target realm 3 */
+    AREC(3)[0x005] = 2;                      /* target already owned by realm 2 */
+
+    engine_army_ai_run_movement(2, &evq, 0);
+
+    T_ASSERT_EQ_I(OREC(1)[0x01a], 5);        /* order untouched (returned 0) */
+    T_ASSERT_EQ_I(OREC(1)[0x14c], 0);        /* no path set */
+    return 0;
+}

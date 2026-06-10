@@ -29,6 +29,8 @@
 #include "engine_diplomacy.h"      /* clear_treaty / battle_adjust / best_ally / form_alliance / should_engage */
 #include "engine_realm.h"          /* engine_realm_player_owns_neighbor (FUN_00467eb0) */
 #include "engine_combat.h"         /* raise_region_unit / find_deploy_cell (step-0xa attack) */
+#include "engine_path_field.h"     /* cost-field fill/trace/copy (brain step 0xb deployment) */
+#include "engine_realm_upkeep.h"   /* unit_disband / clear_contract / total_wage (step-0xb disband) */
 #include "engine_army_state.h"     /* arm_movement_owned (FUN_004a4e3d — brain terminal check) */
 #include "call_trace.h"            /* CALL_TRACE_ENTER (per-tick brain dispatch marker) */
 
@@ -2309,6 +2311,398 @@ void engine_army_ai_run_campaign(int player)
     }
 }
 
+/* ── Brain step 0xb: army-movement / deployment planner (FUN_004a5667 + 13 callees)
+ *
+ * Step 0xb walks every army (occupant record) the realm owns and, per the army's
+ * current order code (+0x1a), recomputes its march destination, then runs the
+ * cost-field pathfinder from the army's seat to that destination and copies the
+ * resulting waypoint chain into the army record.  The order code is set by the
+ * other brain steps (step 0xa = 7 attack-march, step 9 = 2 advance / 6 lord-move)
+ * and self-rewritten by the handlers here (e.g. a finished siege downgrades to 2).
+ *
+ * Occupant-record fields step 0xb adds (g_per_territory_420, stride 0x1a4). */
+#define OCC_OWNER        0x000  /* DAT_0052f0b0 — owning player (i8; 0 = empty slot) */
+#define OCC_ACTIVE       0x008  /* DAT_0052f0b8 — live-army flag (1 = present) */
+#define OCC_HOME_REGION  0x010  /* DAT_0052f0c0 — home region key (u8; == combat C_ARMYKEY) */
+#define OCC_TARGET_REGION 0x011 /* DAT_0052f0c1 — secondary/march region key (u8) */
+#define OCC_PATH_OK      0x14c  /* DAT_0052f1fc — set when a path to the destination was found */
+#define OCC_PATH_FAIL    0x14e  /* DAT_0052f1fe — cleared before each path attempt */
+#define OCC_HEAD         0x168  /* DAT_0052f218 — total head-count (i32; == combat C_VALUE) */
+#define OCC_GOODS        0x16e  /* DAT_0052f21e — six i16 carried-goods (poured back on disband) */
+#define OCC_IDLE         0x198  /* DAT_0052f248 — region-transfer-pending gate (0 = idle; C_F198) */
+#define OCC_HELD         0x199  /* DAT_0052f249 — survives-battle / held-this-tick gate (C_F199) */
+
+/* Per-realm record fields step 0xb adds (g_per_army_768, stride 0x300). */
+#define ARMY_POP_BASE      0x038  /* DAT_0053f9e8 — population figure topped up on disband */
+#define ARMY_ADJ_LIST      0x05c  /* DAT_0053fa0c — 16-entry region adjacency list */
+#define ARMY_GARRISON_HEAD 0x124  /* DAT_0053fad4 — garrison head figure topped up on disband */
+#define ARMY_SIEGE_BLOCK   0x1c2  /* DAT_0053fb72 — siege-block byte (must be clear to garrison) */
+#define ARMY_SIEGE_MODE    0x1c3  /* DAT_0053fb73 — siege-mode byte (== combat A_F1C3; the same
+                                   *   byte engine_army_ai's ARMY_SETTLE_FLAG names in the build
+                                   *   context — retail overloads it) */
+
+/* Per-player record fields step 0xb adds (g_player_strategic_352, stride 0x160). */
+#define STRAT_WAGE_TOTAL 0x0fc  /* DAT_0057bffc — recomputed total unit wage on disband (i32) */
+#define STRAT_RESERVE_144 0x144 /* DAT_0057c044 — funding reserve (i32) */
+#define STRAT_RESERVE_148 0x148 /* DAT_0057c048 — funding reserve (i32) */
+#define STRAT_RESERVE_154 0x154 /* DAT_0057c054 — funding reserve (i32) */
+
+/* Find-nearest-army scratch (retail reuses DAT_00553f8c — the combat occupied-cell
+ * register — as the scanner's loop var + result index; those uses are in disjoint
+ * sim phases, so a private file-static is faithful here). */
+static int s_nearest_occ;   /* DAT_00553f8c (step-0xb scanner result) */
+
+/* Port of FUN_00467f2e — does region `region` border a region owned by someone
+ * other than its own owner? (a frontier check; walks the +0x5c adjacency list). */
+static int engine_army_ai_region_borders_enemy(int region)
+{
+    for (int i = 0; i < 16; i++) {
+        unsigned nb = ARMY_REC(region)[ARMY_ADJ_LIST + i];
+        if (nb == 0)
+            break;
+        if (ARMY_REC(nb)[ARMY_OWNER] != 0 &&
+            ARMY_REC(region)[ARMY_OWNER] != ARMY_REC(nb)[ARMY_OWNER])
+            return 1;
+    }
+    return 0;
+}
+
+/* Port of FUN_004673b8 — find the nearest live, idle, enemy-owned army to `occ`
+ * by Chebyshev (king-move) distance, leaving its index in s_nearest_occ and
+ * returning the distance (1000 if none).  The distance is FUN_00404f4c's
+ * max(|dx|,|dy|) return, computed inline. */
+static int engine_army_ai_nearest_enemy_army(int occ)
+{
+    int best = 1000, best_idx = 0;
+    int ax = (int8_t)OCC_REC(occ)[OCC_COL], ay = (int8_t)OCC_REC(occ)[OCC_ROW];
+    for (s_nearest_occ = 1; s_nearest_occ < 0x97; s_nearest_occ++) {
+        uint8_t *o = OCC_REC(s_nearest_occ);
+        if (o[OCC_OWNER] == 0)                                continue;
+        if (OCC_REC(occ)[OCC_OWNER] == o[OCC_OWNER])          continue;
+        if (o[OCC_ACTIVE] != 1)                               continue;
+        if (o[OCC_IDLE] != 0)                                 continue;
+        int dx = ax - (int8_t)o[OCC_COL]; if (dx < 0) dx = -dx;
+        int dy = ay - (int8_t)o[OCC_ROW]; if (dy < 0) dy = -dy;
+        int d = dx > dy ? dx : dy;
+        if (d < best) { best_idx = s_nearest_occ; best = d; }
+    }
+    s_nearest_occ = best_idx;
+    return best;
+}
+
+/* Port of FUN_00467532 — find the nearest live, idle, engageable army whose home
+ * region is `region` to `occ` (Chebyshev), leaving its index in s_nearest_occ and
+ * returning the distance.  Engageability is engine_diplomacy_should_engage. */
+static int engine_army_ai_nearest_engageable_army(int occ, unsigned region)
+{
+    int best = 1000, best_idx = 0;
+    int ax = (int8_t)OCC_REC(occ)[OCC_COL], ay = (int8_t)OCC_REC(occ)[OCC_ROW];
+    for (s_nearest_occ = 1; s_nearest_occ < 0x97; s_nearest_occ++) {
+        uint8_t *o = OCC_REC(s_nearest_occ);
+        if (o[OCC_OWNER] == 0)                                continue;
+        if (o[OCC_ACTIVE] != 1)                               continue;
+        if (engine_diplomacy_should_engage((int8_t)OCC_REC(occ)[OCC_OWNER],
+                                           (int8_t)o[OCC_OWNER]) == 0) continue;
+        if (o[OCC_IDLE] != 0)                                 continue;
+        if ((uint8_t)o[OCC_HOME_REGION] != region)            continue;
+        int dx = ax - (int8_t)o[OCC_COL]; if (dx < 0) dx = -dx;
+        int dy = ay - (int8_t)o[OCC_ROW]; if (dy < 0) dy = -dy;
+        int d = dx > dy ? dx : dy;
+        if (d < best) { best_idx = s_nearest_occ; best = d; }
+    }
+    s_nearest_occ = best_idx;
+    return best;
+}
+
+/* Port of FUN_004a64ca — set occupant `occ`'s march destination toward region
+ * `region`: clear the placed flag, pick a deploy cell (settled-cell finder when
+ * the region holds a keep with a pending garrison, else the owned-cell finder),
+ * and copy the find-nearest scratch into the destination fields.  Identical to
+ * brain step 9's assign-deployment tail. */
+static void engine_army_ai_set_deploy_cell(int occ, unsigned region)
+{
+    OCC_REC(occ)[OCC_PLACED] = 0;
+    if (ARMY_REC(region)[ARMY_KEEP_LEVEL] == 0 || I32(ARMY_REC(region) + ARMY_PENDING) == 0)
+        engine_army_ai_find_owned_cell(occ, region);
+    else
+        engine_army_ai_find_settled_cell(occ, region);
+    OCC_REC(occ)[OCC_DEST_COL] = (uint8_t)s_ai_find_col;
+    OCC_REC(occ)[OCC_DEST_ROW] = (uint8_t)s_ai_find_row;
+}
+
+/* Port of FUN_00438681 — disband occupant `occ` back into a realm: pour its
+ * carried goods into the owner's funding reserves and its troops into the chosen
+ * region's population, recompute that realm's economy, destroy the occupant, and
+ * re-plan twice.  The destination region is the army's secondary region (+0x11)
+ * if the owner holds it, else its home region (+0x10). */
+static void engine_army_ai_disband_into_realm(int occ)
+{
+    int owner = (int8_t)OCC_REC(occ)[OCC_OWNER];
+    engine_unit_clear_contract(occ);                        /* FUN_004ac6fe */
+
+    uint8_t *s = STRAT_REC(owner);
+    for (int g = 0; g < 6; g++)
+        I32(s + STRAT_RESERVE_140 + g * 4) +=
+            *(int16_t *)(OCC_REC(occ) + OCC_GOODS + g * 2);
+
+    unsigned region = (uint8_t)OCC_REC(occ)[OCC_TARGET_REGION];
+    if ((uint8_t)ARMY_REC(region)[ARMY_OWNER] != (unsigned)owner)
+        region = (uint8_t)OCC_REC(occ)[OCC_HOME_REGION];
+
+    int head = I32(OCC_REC(occ) + OCC_HEAD);
+    I32(ARMY_REC(region) + ARMY_FEED_COUNT)    += head;
+    I32(ARMY_REC(region) + ARMY_GARRISON_HEAD) += head;
+    I32(ARMY_REC(region) + ARMY_POP_BASE)      += head;
+
+    engine_army_economy_plan_realm((int)region, (int)s_slot_0057c92c);  /* FUN_004485a5 */
+    engine_unit_disband(occ);                                           /* FUN_004aa039 */
+    if ((unsigned)I32(ARMY_REC(region) + ARMY_PENDING) == (unsigned)occ)
+        I32(ARMY_REC(region) + ARMY_PENDING) = 0;
+    I32(STRAT_REC(owner) + STRAT_WAGE_TOTAL) = engine_unit_total_wage(owner); /* FUN_004ad495 */
+
+    for (int rep = 0; rep < 2; rep++) {
+        engine_territory_allocate_realm_workforce((int)region);             /* FUN_0044f6e7 */
+        engine_army_economy_provision((int)region, (int)s_slot_0057c934);   /* FUN_0044df5f */
+        engine_army_economy_plan_realm((int)region, (int)s_slot_0057c92c);  /* FUN_004485a5 */
+    }
+}
+
+/* Port of FUN_004a58f4 — order 7 (attack-march): unless the army is held, point
+ * it at the deploy cell toward its target realm (+0x151) via the combat
+ * find-deploy-cell scanner and clear the placed flag.  Returns 1 when it set a
+ * destination (army not held), else 0. */
+static int engine_army_ai_order_attack_march(int occ)
+{
+    if (OCC_REC(occ)[OCC_HELD] != 0)
+        return 0;
+    int col = 0, row = 0;
+    engine_combat_find_deploy_cell(occ, (uint8_t)OCC_REC(occ)[OCC_TARGET], &col, &row);
+    OCC_REC(occ)[OCC_DEST_COL] = (uint8_t)col;
+    OCC_REC(occ)[OCC_DEST_ROW] = (uint8_t)row;
+    OCC_REC(occ)[OCC_PLACED]   = 0;
+    return 1;
+}
+
+/* Port of FUN_004a5b1f — order 2 (advance/seek).  Held armies skip.  Otherwise:
+ * if a hostile army is within 6 tiles (and outranks the local advance / isn't a
+ * lord's), march to intercept it; else validate or re-pick a target realm and
+ * deploy toward it.  Returns 1 when it set a destination, 0 when no target. */
+static int engine_army_ai_order_advance(int occ)
+{
+    if (OCC_REC(occ)[OCC_HELD] != 0)
+        return 0;
+
+    int owner = (int8_t)OCC_REC(occ)[OCC_OWNER];
+
+    if (engine_army_ai_nearest_enemy_army(occ) < 6) {
+        uint8_t *n = OCC_REC(s_nearest_occ);
+        if ((n[OCC_ORDER] != 2 || (int8_t)OCC_REC(occ)[OCC_COL] < (int8_t)n[OCC_COL]) &&
+            (uint8_t)STRAT_REC(owner)[STRAT_LORD] != (uint8_t)n[OCC_OWNER]) {
+            OCC_REC(occ)[OCC_PLACED]   = 0;
+            OCC_REC(occ)[OCC_DEST_COL] = n[OCC_COL];
+            OCC_REC(occ)[OCC_DEST_ROW] = n[OCC_ROW];
+            return 1;
+        }
+    }
+
+    unsigned target = (uint8_t)OCC_REC(occ)[OCC_TARGET];
+    if (target != 0 &&
+        (uint8_t)ARMY_REC(target)[ARMY_OWNER] != (unsigned)owner &&
+        engine_realm_player_owns_neighbor((unsigned)owner, (int)target) != 0) {
+        engine_army_ai_set_deploy_cell(occ, target);        /* existing target still good */
+        return 1;
+    }
+
+    int home = (uint8_t)OCC_REC(occ)[OCC_HOME_REGION];
+    if ((uint8_t)ARMY_REC(home)[ARMY_OWNER] == (unsigned)owner ||
+        engine_realm_player_owns_neighbor((unsigned)owner, home) == 0) {
+        /* retail's && short-circuit: only re-pick (reassigning `home`) when the
+         * home region does NOT border an enemy. */
+        int take = 0;
+        if (engine_army_ai_region_borders_enemy(home) == 0) {
+            home = engine_army_ai_pick_attack_target(owner, home);
+            if (home != 0)
+                take = 1;
+        }
+        if (take) {
+            OCC_REC(occ)[OCC_TARGET] = (uint8_t)home;
+            engine_army_ai_set_deploy_cell(occ, (unsigned)home);
+            return 1;
+        }
+        int t = engine_army_ai_pick_attack_target(owner, home);
+        if (t == 0)
+            return 0;
+        OCC_REC(occ)[OCC_TARGET] = (uint8_t)t;
+        engine_army_ai_set_deploy_cell(occ, (unsigned)t);
+        return 1;
+    } else {
+        if (STRAT_REC(owner)[STRAT_LORD] == ARMY_REC(home)[ARMY_OWNER]) {
+            home = engine_army_ai_pick_attack_target(owner, home);
+            OCC_REC(occ)[OCC_TARGET] = (uint8_t)home;
+        }
+        engine_army_ai_set_deploy_cell(occ, (unsigned)home);
+        return 1;
+    }
+}
+
+/* Port of FUN_004a599d — order 6 (lord-directed move).  Validate the campaign
+ * target (+0x19b); if it cleared, downgrade to order 2 and run the advance
+ * handler; else intercept the nearest engageable army in that region when within
+ * 21 tiles.  Returns 1 when it set a destination, else 0. */
+static int engine_army_ai_order_lord_move(int occ)
+{
+    if (OCC_REC(occ)[OCC_HELD] != 0)
+        return 0;
+    if (OCC_REC(occ)[OCC_CAMPAIGN] != 0) {
+        int v = engine_army_ai_validate_campaign_target(
+            (int8_t)OCC_REC(occ)[OCC_CAMPAIGN], (int8_t)OCC_REC(occ)[OCC_OWNER]);
+        OCC_REC(occ)[OCC_CAMPAIGN] = (uint8_t)v;
+    }
+    if ((uint8_t)OCC_REC(occ)[OCC_CAMPAIGN] == 0) {
+        OCC_REC(occ)[OCC_ORDER] = 2;
+        return engine_army_ai_order_advance(occ);
+    }
+    if (engine_army_ai_nearest_engageable_army(occ, (uint8_t)OCC_REC(occ)[OCC_CAMPAIGN]) < 0x15) {
+        OCC_REC(occ)[OCC_PLACED]   = 0;
+        OCC_REC(occ)[OCC_DEST_COL] = OCC_REC(s_nearest_occ)[OCC_COL];
+        OCC_REC(occ)[OCC_DEST_ROW] = OCC_REC(s_nearest_occ)[OCC_ROW];
+        return 1;
+    }
+    return 0;
+}
+
+/* Port of FUN_004a5f0a — order 3 (intercept).  Unless held: if a engageable army
+ * in the secondary region (+0x11) is within 31 tiles (and outranks / isn't a
+ * lord's), march to it; else deploy toward that region.  Always returns 1 unless
+ * held. */
+static int engine_army_ai_order_intercept(int occ)
+{
+    if (OCC_REC(occ)[OCC_HELD] != 0)
+        return 0;
+    unsigned region = (uint8_t)OCC_REC(occ)[OCC_TARGET_REGION];
+    int owner = (int8_t)OCC_REC(occ)[OCC_OWNER];
+    if (engine_army_ai_nearest_engageable_army(occ, region) < 0x1f) {
+        uint8_t *n = OCC_REC(s_nearest_occ);
+        if ((n[OCC_ORDER] != 2 || (int8_t)OCC_REC(occ)[OCC_COL] < (int8_t)n[OCC_COL]) &&
+            (uint8_t)STRAT_REC(owner)[STRAT_LORD] != (uint8_t)n[OCC_OWNER]) {
+            OCC_REC(occ)[OCC_PLACED]   = 0;
+            OCC_REC(occ)[OCC_DEST_COL] = n[OCC_COL];
+            OCC_REC(occ)[OCC_DEST_ROW] = n[OCC_ROW];
+            return 1;
+        }
+    }
+    engine_army_ai_set_deploy_cell(occ, region);
+    return 1;
+}
+
+/* Port of FUN_004a6270 — order 4 (garrison).  If the target keep can hold this
+ * army (spare cap ≥ head, no siege, owned by us), deploy toward its settled
+ * cell; otherwise find another garrison realm (retarget + deploy), or disband
+ * the army back into a realm when none can hold it.  Always returns 1. */
+static int engine_army_ai_order_garrison(int occ)
+{
+    unsigned region = (uint8_t)OCC_REC(occ)[OCC_TARGET];
+    int pending_head = 0;
+    int pending = I32(ARMY_REC(region) + ARMY_PENDING);
+    if (pending != 0)
+        pending_head = I32(OCC_REC(pending) + OCC_HEAD);
+
+    int cap = engine_combat_garrison_cap(ARMY_REC(region)[ARMY_KEEP_LEVEL]);
+    if (cap - pending_head < I32(OCC_REC(occ) + OCC_HEAD) ||
+        ARMY_REC(region)[ARMY_SIEGE_BLOCK] != 0 ||
+        ARMY_REC(region)[ARMY_SIEGE_MODE] == 1 ||
+        ARMY_REC(region)[ARMY_KEEP_LEVEL] == 0 ||
+        (uint8_t)ARMY_REC(region)[ARMY_OWNER] != (unsigned)(int8_t)OCC_REC(occ)[OCC_OWNER]) {
+        int realm = engine_combat_find_garrison_realm((int8_t)OCC_REC(occ)[OCC_OWNER], occ);
+        if (realm == 0) {
+            engine_army_ai_disband_into_realm(occ);
+        } else {
+            OCC_REC(occ)[OCC_TARGET] = (uint8_t)realm;
+            OCC_REC(occ)[OCC_PLACED] = 0;
+            engine_army_ai_find_settled_cell(occ, (unsigned)realm);
+            OCC_REC(occ)[OCC_DEST_COL] = (uint8_t)s_ai_find_col;
+            OCC_REC(occ)[OCC_DEST_ROW] = (uint8_t)s_ai_find_row;
+        }
+    } else {
+        OCC_REC(occ)[OCC_PLACED] = 0;
+        engine_army_ai_find_settled_cell(occ, region);
+        OCC_REC(occ)[OCC_DEST_COL] = (uint8_t)s_ai_find_col;
+        OCC_REC(occ)[OCC_DEST_ROW] = (uint8_t)s_ai_find_row;
+    }
+    return 1;
+}
+
+/* Port of FUN_004a60b9 — order 5 (siege).  If the target realm is now ours, or
+ * has no keep / is already under siege / carries a siege block, hand the army to
+ * the combat transfer executor and downgrade to order 2 (returning 0); only when
+ * the keep is besiegable do we deploy toward an owned cell and return 1. */
+static int engine_army_ai_order_siege(int occ, engine_event_queue_state_t *evq, int mp_active)
+{
+    unsigned region = (uint8_t)OCC_REC(occ)[OCC_TARGET];
+    if ((uint8_t)ARMY_REC(region)[ARMY_OWNER] == (unsigned)(int8_t)OCC_REC(occ)[OCC_OWNER])
+        return 0;
+    if (ARMY_REC(region)[ARMY_KEEP_LEVEL] == 0 ||
+        ARMY_REC(region)[ARMY_SIEGE_MODE] == 1) {
+        engine_combat_transfer_army((unsigned)occ, (int)region, evq, mp_active);
+        OCC_REC(occ)[OCC_ORDER] = 2;
+        return 0;
+    }
+    if (ARMY_REC(region)[ARMY_SIEGE_BLOCK] == 0) {
+        OCC_REC(occ)[OCC_ORDER] = 2;
+        engine_combat_transfer_army((unsigned)occ, (int)region, evq, mp_active);
+        OCC_REC(occ)[OCC_PLACED] = 0;
+        engine_army_ai_find_owned_cell(occ, region);
+        OCC_REC(occ)[OCC_DEST_COL] = (uint8_t)s_ai_find_col;
+        OCC_REC(occ)[OCC_DEST_ROW] = (uint8_t)s_ai_find_row;
+        return 1;
+    }
+    engine_combat_transfer_army((unsigned)occ, (int)region, evq, mp_active);
+    OCC_REC(occ)[OCC_ORDER] = 2;
+    return 0;
+}
+
+/* Port of FUN_004a57ac — dispatch occupant `occ` to its order handler by the
+ * order code (+0x1a); an unknown code resets the order to 2 and returns 0.
+ * Threads evq/mp_active down to the siege handler (which calls the combat
+ * transfer executor). */
+static int engine_army_ai_dispatch_order(int occ, engine_event_queue_state_t *evq, int mp_active)
+{
+    switch (OCC_REC(occ)[OCC_ORDER]) {
+    case 7:  return engine_army_ai_order_attack_march(occ);
+    case 6:  return engine_army_ai_order_lord_move(occ);
+    case 2:  return engine_army_ai_order_advance(occ);
+    case 3:  return engine_army_ai_order_intercept(occ);
+    case 4:  return engine_army_ai_order_garrison(occ);
+    case 5:  return engine_army_ai_order_siege(occ, evq, mp_active);
+    default: OCC_REC(occ)[OCC_ORDER] = 2; return 0;
+    }
+}
+
+/* Port of FUN_004a5667 — AI brain step 0xb (army-movement planner).  For every
+ * live army `realm` owns, recompute its march order; when the handler set a
+ * destination, fill the cost field from the army's seat (slot 0), trace the
+ * cheapest descent to the destination, and — if reachable — copy the path into
+ * the army's waypoint record and flag the path-OK byte. */
+void engine_army_ai_run_movement(int realm, engine_event_queue_state_t *evq, int mp_active)
+{
+    CALL_TRACE_ENTER(0x004a5667);
+
+    for (int occ = 1; occ < 0x97; occ++) {
+        uint8_t *c = OCC_REC(occ);
+        if (c[OCC_ACTIVE] != 1)                 continue;
+        if ((int8_t)c[OCC_OWNER] != realm)      continue;
+        if (engine_army_ai_dispatch_order(occ, evq, mp_active) == 0)
+            continue;
+
+        c[OCC_PATH_FAIL] = 0;
+        engine_path_field_fill(0, (int8_t)c[OCC_COL], (int8_t)c[OCC_ROW], 0);
+        if (engine_path_field_trace(0, (int8_t)c[OCC_DEST_COL], (int8_t)c[OCC_DEST_ROW]) != 0) {
+            engine_path_field_copy_record(0, occ);
+            c[OCC_PATH_OK] = 1;
+        }
+    }
+}
+
 /* ── Per-tick AI brain dispatcher (FUN_0049a581) ──────────────────────────
  *
  * Ranking-changed redraw cookie — retail _DAT_0056d6a0, set to 1 by the brain
@@ -2337,12 +2731,12 @@ static int g_ai_ranking_dirty;   /* _DAT_0056d6a0 */
  *     the realm is parked at the 999 "turn done" sentinel + the ranking redraw
  *     cookie is set.
  *
- * Steps 6/7/0xb are advance-only stubs (CALL_TRACE_ENTER_STUB markers +
- * the TODO notes below): the FSM still advances through them so the cursor and
- * dispatch structure track retail exactly (closing the slot-84 divergence the
- * trace studio flagged), while their per-realm state writes — FUN_0049edc7 /
- * 0049f93d / 004a5667 and their callee trees — land incrementally bottom-up.
- * Steps 1/2/3/4/5/8/9/0xa/0xc/0xd/0xe are live.
+ * Steps 6/7 are advance-only stubs (CALL_TRACE_ENTER_STUB markers + the TODO
+ * notes below): the FSM still advances through them so the cursor and dispatch
+ * structure track retail exactly (closing the slot-84 divergence the trace studio
+ * flagged), while their per-realm state writes — FUN_0049edc7 / 0049f93d and
+ * their callee trees — land incrementally bottom-up.  Steps
+ * 1/2/3/4/5/8/9/0xa/0xb/0xc/0xd/0xe are live.
  *
  * `evq` is the live turn event queue (steps 1/2/0xd + the init elimination
  * post); `mp_active` threads retail DAT_00553030 into the init elimination
@@ -2400,11 +2794,7 @@ void engine_army_ai_run_per_tick(engine_event_queue_state_t *evq, int mp_active,
     case 0x8:  engine_army_ai_step_noop();                  break; /* 0x49f96c */
     case 0x9:  engine_army_ai_run_campaign(sel);            break; /* 0x49f977 */
     case 0xa:  engine_army_ai_launch_attack(sel);           break; /* 0x4a0015 */
-    case 0xb:
-        /* TODO(brain step 0xb): FUN_004a5667 (325 B) + 14-fn / 6.3 KB closure
-         * (the army-movement/deployment planner — pulls in path_field). */
-        CALL_TRACE_ENTER_STUB(0x004a5667);
-        break;
+    case 0xb:  engine_army_ai_run_movement(sel, evq, mp_active); break; /* 0x4a5667 */
     case 0xc:  engine_army_ai_run_build_orders(sel);        break; /* 0x49e77d */
     case 0xd:  engine_army_ai_propose_diplomacy(sel, evq);  break; /* 0x4a13a6 */
     case 0xe:  engine_ranking_recompute_player_aggregate((unsigned)sel); break; /* 0x49d1e0 */

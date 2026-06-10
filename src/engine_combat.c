@@ -1235,6 +1235,15 @@ static const int32_t k_garrison_cap[10] = {
     2500, 150, 200, 200, 400, 600, 0, 50, 75, 100,
 };
 
+/* Garrison cap for keep level `keeplvl` (retail reads k_garrison_cap[keeplvl] —
+ * DAT_004d8a10 = &k_garrison_cap[1] indexed by keeplvl−1).  Exposed for the AI
+ * movement planner (brain step 0xb, FUN_004a6270) which checks a specific keep's
+ * spare garrison capacity. */
+int engine_combat_garrison_cap(int keeplvl)
+{
+    return k_garrison_cap[keeplvl];
+}
+
 /* Port of FUN_004a9f18 (90 B) — debit the owner's just-staged garrison size
  * (muster pool row +0x70) from realm `key`'s two provision figures
  * (+0x24 / +0x38).  Pool row selected by the realm's race (+0x05). */

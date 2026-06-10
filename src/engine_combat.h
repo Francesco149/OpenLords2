@@ -164,6 +164,10 @@ void engine_combat_find_deploy_cell(int army, int region, int *out_col, int *out
  * the best occupant index, or 0 if none qualifies. */
 int engine_combat_pick_best_unit(int owner, int region, int min_head);
 
+/* Garrison head-count cap for keep level `keeplvl` (k_garrison_cap[keeplvl]).
+ * Exposed for the AI movement planner (brain step 0xb, FUN_004a6270). */
+int engine_combat_garrison_cap(int keeplvl);
+
 /* Port of FUN_004a07f2 (293 B).  Find the first realm owned by `owner` whose
  * keep has spare garrison capacity (keep cap minus the pending garrison's head)
  * to hold occupant `unit`.  Returns the realm index, or 0 if none. */

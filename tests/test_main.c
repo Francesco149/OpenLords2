@@ -2166,6 +2166,11 @@ struct test_case {
     X(army_ai_campaign_deploys_finds_settled_cell) \
     X(army_ai_campaign_muster_force_floor_gates) \
     X(army_ai_per_tick_step9_dispatches) \
+    X(army_ai_per_tick_step0xb_dispatches) \
+    X(army_ai_movement_unknown_order_resets) \
+    X(army_ai_movement_attack_march_deploys) \
+    X(army_ai_movement_advance_engages_enemy) \
+    X(army_ai_movement_siege_target_owned_noop) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

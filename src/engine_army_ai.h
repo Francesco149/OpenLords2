@@ -187,6 +187,14 @@ void engine_army_ai_launch_attack(int player);
  * cell.  Carries a multi-turn campaign target, unlike the one-shot step 0xa. */
 void engine_army_ai_run_campaign(int player);
 
+/* Port of FUN_004a5667 — AI brain step 0xb (army-movement planner).  For every
+ * live army `realm` owns, recompute its march order (via the per-order-code
+ * handler) then run the cost-field pathfinder from the army's seat to the chosen
+ * destination, copying the waypoint chain into the army record.  `evq`/`mp_active`
+ * thread to the siege handler's combat-transfer call. */
+void engine_army_ai_run_movement(int realm, engine_event_queue_state_t *evq,
+                                 int mp_active);
+
 /* Port of FUN_004a0309.  Return the player `player` is most hostile toward — a
  * pinned war target (+0xeb) if set, else the active slot its relation (+0x84) is
  * most negative toward (below −10), or 0. */

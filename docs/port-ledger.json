@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 693,
+  "tested": 704,
   "ported": 53,
-  "unported": 1701,
+  "unported": 1690,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 746,
-  "pct_touched": 30.5,
-  "pct_tested": 28.3,
+  "touched": 757,
+  "pct_touched": 30.9,
+  "pct_tested": 28.8,
   "bytes_total": 838629,
-  "bytes_touched": 324737,
-  "pct_bytes_touched": 38.7
+  "bytes_touched": 329809,
+  "pct_bytes_touched": 39.3
  },
  "orphan_refs": [
   "0x004148",
@@ -6159,8 +6159,10 @@
    "name": "FUN_00438681",
    "size": 699,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x43893c",
@@ -9664,6 +9666,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_army_economy.c",
     "src/engine_army_economy.h",
     "src/engine_army_move.c",
@@ -10421,6 +10424,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_army_economy.c",
     "src/engine_army_economy.h",
     "src/engine_army_move.c",
@@ -11678,16 +11682,20 @@
    "name": "FUN_004673b8",
    "size": 378,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x467532",
    "name": "FUN_00467532",
    "size": 426,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4676e0",
@@ -11777,8 +11785,10 @@
    "name": "FUN_00467f2e",
    "size": 163,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x467fd1",
@@ -16769,7 +16779,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h"
    ]
   },
   {
@@ -16777,8 +16788,10 @@
    "name": "FUN_004a57ac",
    "size": 328,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a58f4",
@@ -16787,6 +16800,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_combat.c"
    ]
   },
@@ -16795,48 +16809,62 @@
    "name": "FUN_004a599d",
    "size": 386,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a5b1f",
    "name": "FUN_004a5b1f",
    "size": 1003,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a5f0a",
    "name": "FUN_004a5f0a",
    "size": 431,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a60b9",
    "name": "FUN_004a60b9",
    "size": 439,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a6270",
    "name": "FUN_004a6270",
    "size": 602,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c",
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x4a64ca",
    "name": "FUN_004a64ca",
    "size": 217,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a65a3",
@@ -17169,6 +17197,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_combat.c",
     "src/engine_realm_upkeep.c",
     "src/engine_realm_upkeep.h"
@@ -17369,6 +17398,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_combat.c",
     "src/engine_combat.h",
     "src/engine_realm_upkeep.c",
@@ -17510,6 +17540,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_realm_upkeep.c",
     "src/engine_realm_upkeep.h"
    ]
