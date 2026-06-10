@@ -84,6 +84,13 @@ extern int g_combat_size_a;         /* DAT_00568934 — attacker battle size (�
 extern int g_combat_size_b;         /* DAT_00568938 — defender battle size */
 extern int g_combat_owner_a;        /* DAT_005681ec — attacker owner (signed) */
 extern int g_combat_owner_b;        /* DAT_005681d8 — defender owner (signed) */
+extern int g_combat_audio_latch;    /* _DAT_005533f0 — voice/cue-active flag.
+                                     * Combat raises it around battle cues; the
+                                     * event-scroll renderer (engine.c) clears
+                                     * it before a capture-event cue and the
+                                     * speak helper (0x4b35c1) raises it. */
+extern int g_combat_flag_530d0;     /* DAT_005530d0 — combat-focus flag; the
+                                     * scroll dismiss (0x476768) raises it. */
 
 /* Bind the optional battle-cue hook (retail FUN_00427990 ff_batl.wav); NULL
  * (the default) skips the cue.  The cue-playback path is deferred. */

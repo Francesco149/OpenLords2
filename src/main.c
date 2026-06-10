@@ -1032,8 +1032,10 @@ static void title_bind_render_state(void)
      * screen the text shadow pair is the gray (0x36, 0x2c) rather than the
      * default colorful (0x10, 0x1f).  The boot→title state producer
      * (0x42b780, unported) is the real writer; set it here for the
-     * bring-up so the menu text shadows match retail.  See quirk #114. */
-    gfx_text_set_screen_byte(0x1f);
+     * bring-up so the menu text shadows match retail.  See quirk #114.
+     * Route through the engine setter so both screen-byte mirrors track
+     * (it forwards to gfx_text — see engine_set_current_screen). */
+    engine_set_current_screen(0x1f);
 
     /* Init the shared gfx render state to its retail BSS-zero values
      * (the panel renderer assumes these, same as the panel unit test). */

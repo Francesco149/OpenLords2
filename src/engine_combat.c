@@ -464,9 +464,12 @@ static int      g_combat_screen_mode;    /* DAT_0057d340 */
 static int      g_combat_anim_a;         /* DAT_00553c70 */
 static int      g_combat_anim_b;         /* DAT_00553d20 */
 static uint32_t g_combat_anim_clock;     /* _DAT_005689a0 / _DAT_0057a0d0 */
-static int      g_combat_audio_latch;    /* _DAT_005533f0 */
+int             g_combat_audio_latch;    /* _DAT_005533f0 — shared: the event-
+                                          * scroll renderer/dismiss (engine.c)
+                                          * clear/set it around voice cues */
 static int      g_combat_render_dirty;   /* DAT_0052afcc */
-static int      g_combat_flag_530d0;     /* DAT_005530d0 */
+int             g_combat_flag_530d0;     /* DAT_005530d0 — shared: the scroll
+                                          * dismiss (engine.c) raises it */
 static int      g_combat_flag_553210;    /* DAT_00553210 — UI dirty: a local-owned
                                           * army's region relationship changed */
 static int      g_combat_flag_567d0c;    /* DAT_00567d0c */

@@ -31,7 +31,17 @@
 #include "engine_ranking.h"       /* engine_ranking_recompute (0049aa0e) */
 #include "engine_diplomacy.h"     /* engine_diplomacy_reconcile_treaties (004a1847) */
 #include "engine_tick_cadence.h"  /* sub-step cadence counters (0040490d) */
+#include "engine_map_terrain.h"   /* empty-cell redraw gate (scroll dismiss) */
+#include "game_init.h"            /* g_anim_gate_53f0c4 (scroll dismiss) */
 #include "gfx.h"
+#include "gfx_panel.h"            /* scroll backdrop (004093e0) */
+#include "gfx_wrap.h"             /* localized line/wrap draws (00402c5e/0040328e) */
+#include "gfx_text.h"             /* raw name line + uppercase-highlight flag */
+#include "gfx_sprite_render.h"    /* continue-seal draw (0040d1bc) */
+#include "gfx_glyph_table.h"      /* char→glyph render/measure maps */
+#include "audio.h"                /* audio_cue_release (00427d19) */
+#include "localization.h"
+#include "config.h"               /* config_localization_data (l2.eng blob) */
 #include "save.h"                 /* g_player_strategic_352 */
 #include "save_schema_globals.h"  /* s_slot_00554004 */
 
@@ -882,7 +892,7 @@ static void engine_turn_tick_substate0(void)
             g_sim_player_ticks[i] = 0;                /* DAT_0053e8d0 */
         /* 0x43ad25 slice: force the strategic-map screen back (retail
          * also closes any open sub-screen first — TODO, see header). */
-        g_sim_current_screen = 0;                     /* DAT_004eac50 */
+        engine_set_current_screen(0);                 /* DAT_004eac50 */
         /* TODO: _DAT_004e59d8 = now (rollover stamp, no consumer). */
         engine_turn_advance();                        /* FUN_00448440 */
         engine_combat_rotate_merc_offers();           /* FUN_004aca2b */
@@ -963,8 +973,8 @@ static void engine_turn_tick_substate0(void)
  * EXACTLY the rate controller's extended_pause input: an open event
  * scroll freezes the SP sim (this is what froze retail's sim for the
  * whole 60-tick grid_load_probe window after exactly one sub-step).
- * The scroll's pixels come from FUN_0047309e (unported — the 92.9k-px
- * load-route map residual closes when that render slice lands).
+ * The scroll's pixels come from the renderer below (0x47309e, type-0
+ * arm ported — the load-route 92.9k-px map residual).
  *
  * Display globals: DAT_0053f228 (depth class) / DAT_0053f22c (bpp) are
  * options-init'd to 1/8 and boot-resolved from the desktop; the
@@ -979,15 +989,33 @@ static int g_display_depth_class = 1;     /* DAT_0053f228 */
 static int g_display_bpp         = 32;    /* DAT_0053f22c (boot-resolved) */
 static int g_sim_depth_warned;            /* DAT_005533d4 (one-shot) */
 
-/* Consumer payload mirrors (runtime .bss in retail, no ported readers
- * yet — the scroll renderer 0x47309e and the dismiss path 0x476768
- * consume them when they land). */
+/* Consumer payload mirrors (runtime .bss in retail) — read by the
+ * scroll renderer below and the dismiss path. */
 static int32_t g_popup_payload_a;         /* DAT_005440ac ← rec +0x0c */
 static int32_t g_popup_payload_b;         /* DAT_005678ac ← rec +0x14 */
 static uint8_t g_popup_flag6;             /* DAT_0055ce54 ← rec +0x12 */
 static uint8_t g_popup_flag7;             /* DAT_0057c8ac ← rec +0x13 */
 static uint8_t g_popup_type;              /* DAT_005440a4 ← rec +0x11 */
 static int32_t g_popup_target;            /* DAT_00553ee0 ← rec +0x04 */
+
+/* Open-scroll geometry + render bookkeeping (runtime .bss; written by
+ * the renderer each frame, read by the dismiss hit-test when the
+ * scroll-input chip lands). */
+static int     g_popup_x;                 /* DAT_00553060 (px) */
+static int     g_popup_y;                 /* DAT_00553064 (px) */
+static int     g_popup_w;                 /* DAT_00553024 (px) */
+static int     g_popup_h;                 /* DAT_00552ff8 (px) */
+static int32_t g_popup_stash_code;        /* DAT_004f0374 — head stash; the
+                                           * type-0xd/0xe arms re-speak from
+                                           * it after their inner dismiss */
+static int32_t g_popup_stash_payload;     /* DAT_004f0354 */
+static int     g_popup_seal_committed_x;  /* DAT_005681dc ← seal x, per frame */
+static int     g_popup_seal_committed_y;  /* DAT_0056950c ← seal y, per frame */
+static int     g_popup_mp_substate;       /* DAT_0055cd78 — MP popup sub-state;
+                                           * dismiss parks it at 2 */
+static uint8_t g_screen27_saved_screen;   /* DAT_004f0350 — screen to restore
+                                           * when leaving the 0x27 report */
+static int     g_screen27_cookie;         /* DAT_004f0358 */
 
 /* Schema block 11 (g_misc_128, retail 0x568480) IS the first 128 bytes
  * of the live event ring — retail's producer/consumer mutate the ring
@@ -1038,17 +1066,247 @@ static void engine_tick_depth_warning_step(void)
     }
 }
 
+/* ─── Event voice-over speak — port of FUN_004b35c1 @ 0x4b35c1 (255 B)
+ *
+ * Speaks the event's voice line: stops any in-flight cue
+ * (audio_cue_release), raises the cue-active latch, and plays the
+ * event's wav from one of three .rdata name tables:
+ *
+ *   codes 100..0xa9 → "S1xx_xx.wav" table @ 0x4df9b8 (stride 0x10)
+ *   codes 0xaa..0xc5 → "ktxxx_x.wav" table @ 0x4e0458 (stride 0x100
+ *                       per code + 0x10 per `variant` — the payload-a
+ *                       mirror selects the line variant)
+ *   codes 200..0x11c → "S2xx_xx.wav" table @ 0x4dfe18 (stride 0x10)
+ *
+ * Codes outside all three ranges (198/199, ≥ 0x11d — including the
+ * 256-colour warning 0x12a) fall through silently: no latch write, no
+ * cue release.  The cue-playback path (0x427990) is deferred
+ * project-wide (audio.c), so the latch + release are the live state
+ * effects; the audible part lands with the SFX subsystem (the name
+ * tables image then). */
+static void engine_popup_speak_event(int code, int variant)
+{
+    (void)variant;
+    if (code >= 0xaa && code <= 0xc5) {
+        g_combat_audio_latch = 1;             /* _DAT_005533f0 */
+        audio_cue_release();                  /* FUN_00427d19 */
+        /* TODO(sfx): 0x427990(0x4e0458 + (code-0xaa)*0x100
+         *                              + variant*0x10, 1, 0). */
+    } else if (code >= 200 && code <= 0x11c) {
+        g_combat_audio_latch = 1;
+        audio_cue_release();
+        /* TODO(sfx): 0x427990(0x4dfe18 + (code-200)*0x10, 1, 0). */
+    } else if (code >= 100 && code <= 0xa9) {
+        g_combat_audio_latch = 1;
+        audio_cue_release();
+        /* TODO(sfx): 0x427990(0x4df9b8 + (code-100)*0x10, 1, 0). */
+    }
+}
+
+/* ─── Screen-0x27 restore — port of FUN_00476e21 @ 0x476e21 (116 B)
+ *
+ * When the scroll being dismissed was opened over the 0x27 report
+ * screen, restore the screen saved at entry (DAT_004f0350; 0x27 saved
+ * → fall back to the strategic map), re-arm the report cookie, and
+ * request a demand redraw (full when restoring screen 0x17, else
+ * mode 2).  No-op on every other screen — including the load route's
+ * screen 0. */
+static void engine_popup_screen27_restore(void)
+{
+    if (g_sim_current_screen == 0x27) {
+        int restored = g_screen27_saved_screen;
+        if (g_screen27_saved_screen == 0x27)
+            restored = 0;
+        engine_set_current_screen(restored);
+        g_screen27_cookie = 0x14;             /* DAT_004f0358 */
+        if (g_sim_current_screen == 0x17)
+            g_demand_redraw = 1;              /* DAT_0057d340 */
+        else
+            g_demand_redraw = 2;
+    }
+}
+
+/* ─── Scroll dismiss — port of FUN_00476768 @ 0x476768 (245 B)
+ *
+ * Closes the open event scroll: unfreezes the SP sim (extended_pause
+ * → 0), zeroes the consumer cooldown so the next pending event can
+ * open next frame, marks the full screen dirty so the map repaints
+ * under where the scroll was, and re-arms the empty-cell redraw gate.
+ * Retail callers: the consumer's off-screen / MP-timed arms, the
+ * scroll-input click chip (0x476aa7 — unported), and the renderer's
+ * type-0xb/0xd/0xe arms. */
+static void engine_popup_scroll_dismiss(void)
+{
+    CALL_TRACE_ENTER(0x00476768);
+
+    int code = g_sim_extended_pause;
+    if (code == 0xef || code == 0xee || code == 0x9f || code == 0x9e) {
+        /* Game-end event class (won/lost) — hand off to the end-game
+         * flow.  TODO(endgame): 0x4afab9(0x4d7094) log line, screen
+         * (DAT_004eac50) = 0x26, 0x426d11(0) stream stop, main-loop
+         * run-state DAT_005aeb68 = 3. */
+    }
+    if (code != 0xc2)
+        audio_cue_release();                  /* FUN_00427d19 */
+
+    gfx_mark_all_dirty();                     /* FUN_0045240a */
+    engine_popup_screen27_restore();          /* FUN_00476e21 */
+
+    if (!g_turn_event_queue_inited) {
+        engine_event_queue_init_wrapper(&g_turn_event_queue);
+        g_turn_event_queue_inited = 1;
+    }
+    g_turn_event_queue.consumer_cooldown = 0; /* DAT_0057c954 */
+    g_sim_extended_pause = 0;                 /* DAT_0053e910 — unfreeze */
+    g_popup_mp_substate  = 2;                 /* DAT_0055cd78 */
+    engine_map_terrain_set_empty_redraw_gate(1); /* DAT_0053e9ac */
+    g_combat_flag_530d0  = 1;                 /* DAT_005530d0 */
+
+    if (g_anim_gate_53f0c4 == 0xb || g_anim_gate_53f0c4 == 10) {
+        /* Battle-accept handoff parked by the renderer's type-0xe arm.
+         * TODO(combat-ui): 0x497879 (scenario config-apply 0x499e5d +
+         * screen 0x1c) + DAT_0057d340 = 1. */
+    }
+}
+
+/* ─── Open-scroll renderer — port of FUN_0047309e @ 0x47309e (10,915 B)
+ *
+ * One arm per popup TYPE (the flag5 mirror).  The common shape: stash
+ * the code/payload pair, arm the uppercase-highlight text flag, run
+ * the per-type layout (a beveled parchment panel + title line + word-
+ * wrapped body + the click-to-continue seal), then the shared tail
+ * (commit the seal position, tile-mark the panel box, clear the
+ * highlight flag).  Per-type one-shots key off exact consumer-
+ * cooldown values (the cooldown counts 2000 → 1 once a scroll opens):
+ * 2000 = first open frame (fanfare cues), 0x7c6/0x776/0x708 = speak /
+ * camera-jump beats ~16-90 frames in.
+ *
+ * Ported arm: type 0 — generic event scroll (the load route's event
+ * 0x12a "Non 256 colour display" posts with type 0; r2-verified
+ * byte-exact against 0x4730d2..0x4732c5 + the tail 0x475ae8).  The
+ * remaining arms are skeleton TODOs (bare-hex ranges in the arm
+ * ladder below); each lands with its event producer.
+ *
+ * Drop-in deviations (structure-preserving):
+ *   - assets fetch lazily (gfx_load_*) and the body paints inside a
+ *     gfx canvas lock — retail's surface pointer is always live.
+ *   - the tail's FUN_004527a6(x, y, w/16+1, h/16+1, 2) tile-mark is
+ *     subsumed by gfx_unlock_canvas()'s mark-all-dirty until the
+ *     per-frame map-scene tile renderer (0x4050c0) is wired into the
+ *     live loop; the committed-seal copy IS mirrored. */
+static void engine_popup_scroll_render(void)
+{
+    CALL_TRACE_ENTER(0x0047309e);
+
+    g_popup_stash_code    = g_sim_extended_pause;  /* DAT_004f0374 */
+    g_popup_stash_payload = g_popup_payload_a;     /* DAT_004f0354 */
+    gfx_text_set_uppercase_highlight(1);           /* DAT_0058fe2c = 1 */
+
+    const uint8_t *chrome     = gfx_load_chrome_sheet();  /* panels.pl8  */
+    const uint8_t *sys_sheet  = gfx_system_sheet_current(); /* the live
+                                  DAT_005bb540 slot — system.pl8 ingame
+                                  (the tick-head ensure), system2 on the
+                                  title flow */
+    const uint8_t *title_font = gfx_load_title_font();    /* fntl2_22    */
+    const uint8_t *menu_font  = gfx_load_menu_font();     /* fntl2_14    */
+    size_t loc_size = 0;
+    const uint8_t *locblob = config_localization_data(&loc_size);
+    if (!chrome || !sys_sheet || !title_font || !menu_font || !locblob) {
+        gfx_text_set_uppercase_highlight(0);
+        return;
+    }
+    localization_state_t loc;
+    loc.blob = (unsigned char *)locblob;
+    loc.walker_offset = 0;
+
+    int cooldown = g_turn_event_queue.consumer_cooldown; /* DAT_0057c954 */
+
+    if (!gfx_lock_canvas()) {
+        gfx_text_set_uppercase_highlight(0);
+        return;
+    }
+
+    if (g_popup_type == 0) {
+        /* ── Type 0: generic event scroll ──────────────────────── */
+        if (cooldown == 2000 && g_sim_extended_pause > 0x71
+                             && g_sim_extended_pause < 0x7f) {
+            /* Territory-capture event class (0x72..0x7e): fanfare on
+             * the first open frame. */
+            g_combat_audio_latch = 0;          /* _DAT_005533f0 */
+            /* TODO(sfx): 0x427990("ff_capt.wav", 1, 0) — cue playback
+             * deferred project-wide (audio.c). */
+        }
+        if (cooldown == 0x776) {
+            /* 90 frames in: speak the event voice-over (silent for
+             * codes outside the voiced ranges — incl. 0x12a). */
+            engine_popup_speak_event(g_sim_extended_pause,
+                                     g_popup_payload_a);
+        }
+        g_popup_x = 0x20;  g_popup_y = 0xa0;   /* DAT_00553060/64 */
+        g_popup_w = 0x1a0; g_popup_h = 0xe0;   /* DAT_00553024/0x552ff8 */
+        gfx_panel_draw_bevel(chrome, g_popup_x, g_popup_y,
+                             g_popup_w / 16, g_popup_h / 16);
+        if (g_popup_flag6 != 0) {
+            /* County-titled event: loc entry 100, sub = map-id*20 +
+             * county index. */
+            gfx_wrap_localized_line_centered(&loc, 100,
+                (int)s_slot_0053f034 * 0x14 + g_popup_flag6,
+                g_popup_x + 0x10, g_popup_y + 0x20, g_popup_w - 0x20,
+                title_font, gfx_glyph_render_map(),
+                gfx_glyph_measure_map(), 0x3f);
+        } else if (g_popup_flag7 != 0) {
+            /* Player-titled event: the player's name from the block-2
+             * aux record (retail 0x553d54 = g_player_aux_44 + 4). */
+            gfx_text_render_line(g_player_aux_44 + g_popup_flag7 * 0x2c + 4,
+                                 g_popup_x + 0x20, g_popup_y + 0x20,
+                                 title_font, gfx_glyph_render_map(), 0x3f);
+        } else {
+            /* Generic title: the event's own loc entry, sub 0. */
+            gfx_wrap_localized_line_centered(&loc, g_sim_extended_pause, 0,
+                g_popup_x + 0x10, g_popup_y + 0x20, g_popup_w - 0x20,
+                title_font, gfx_glyph_render_map(),
+                gfx_glyph_measure_map(), 0x3f);
+        }
+        /* Body: sub-string 1, word-wrapped inside the panel. */
+        gfx_wrap_localized(&loc, g_sim_extended_pause, 1,
+                           g_popup_x + 0x20, g_popup_y + 0x50,
+                           g_popup_w - 0x40, 400, 0, 0,
+                           menu_font, gfx_glyph_render_map(),
+                           gfx_glyph_measure_map(), 0x3f);
+        /* Click-to-continue seal at the bottom-right corner. */
+        gfx_sprite_seal_draw(sys_sheet,
+                             g_popup_x + g_popup_w - 0x30,
+                             g_popup_h + g_popup_y - 0x30, 0);
+    } else {
+        /* TODO(popup-arms): types 0x10/0x11/0x12 (production/harvest
+         * reports), 1/2 (capture w/ portrait), 3, 4 (tooltip-sized,
+         * position-tracking), 5..9 (multi-line generic), 0x13 (table-
+         * driven rect ladder), 10/0xb (portrait + accept), 0xc
+         * (0x475e07), 0x14 (0x476488), 0xd/0xe (smk-playing victory /
+         * ownership arms — call the dismiss inline), 0xf (event-
+         * detail ladder).  Each lands with its event producer; the
+         * shared tail below still runs so the state effects (seal
+         * commit + highlight clear) stay faithful. */
+    }
+
+    /* ── Common tail (0x475ae8) ───────────────────────────────── */
+    g_popup_seal_committed_x = gfx_sprite_seal_x();  /* DAT_005681dc */
+    g_popup_seal_committed_y = gfx_sprite_seal_y();  /* DAT_0056950c */
+    /* FUN_004527a6(x, y, w/16+1, h/16+1, 2) — tile-mark subsumed by
+     * the unlock's mark-all-dirty (see header note). */
+    gfx_unlock_canvas();
+    gfx_text_set_uppercase_highlight(0);             /* DAT_0058fe2c = 0 */
+}
+
 /* Render-phase event-scroll consumer — port of FUN_00472e46 @ 0x472e46
- * (595 B), minus the two render/dismiss callees:
- *   0x47309e — draw the open scroll        (render frontier, TODO)
- *   0x476768 — dismiss/close the scroll    (input frontier, TODO)
- * Runs mid render-pump in retail (between the UI pumps and the
- * screen-render dispatch).  Dequeues at most one pending event per
+ * (595 B).  Runs mid render-pump in retail (between the UI pumps and
+ * the screen-render dispatch).  Dequeues at most one pending event per
  * cooldown window: parks its code in g_sim_extended_pause (the modal
  * sim freeze), mirrors the payload fields, zeros the consumed slot's
  * code (engine_event_queue_slot_zero — ring mutation → re-mirror) and
  * arms the 2000-frame cooldown.  In SP the cooldown is pinned at ≥ 1
- * while a scroll is open — modal until dismissed by input. */
+ * while a scroll is open — modal until dismissed by input.  While a
+ * scroll is open the renderer paints it every frame. */
 static void engine_tick_event_popup_step(void)
 {
     CALL_TRACE_ENTER(0x00472e46);
@@ -1059,13 +1317,15 @@ static void engine_tick_event_popup_step(void)
      * (battle sub-screen); 0x553f54 has no port storage yet. */
     if (!in_gate) {
         if (g_sim_extended_pause != 0) {
-            /* TODO: 0x476768 — auto-dismiss when the screen leaves
-             * the scroll-capable set. */
+            /* Auto-dismiss when the screen leaves the scroll-capable
+             * set. */
+            engine_popup_scroll_dismiss();           /* FUN_00476768 */
         }
         return;
     }
     if (g_sim_screen_substate == 2 && g_sim_extended_pause != 0) {
-        /* TODO: 0x476768 — alt-UI sub-state dismiss arm. */
+        /* Alt-UI sub-state arm: dismiss and skip the consumer pass. */
+        engine_popup_scroll_dismiss();               /* FUN_00476768 */
         return;
     }
 
@@ -1110,16 +1370,18 @@ static void engine_tick_event_popup_step(void)
                 q->consumer_cooldown = 1;
         } else if (g_popup_type == 4) {
             if (q->consumer_cooldown < 1) {
-                /* TODO: 0x476768 — MP type-4 timed dismiss. */
+                /* MP type-4 timed dismiss. */
+                engine_popup_scroll_dismiss();       /* FUN_00476768 */
             }
         } else if (q->consumer_cooldown < 0x641) {
-            /* TODO: 0x476768 — MP general timed dismiss. */
+            /* MP general timed dismiss. */
+            engine_popup_scroll_dismiss();           /* FUN_00476768 */
         }
     }
 
     if (g_sim_extended_pause != 0) {
-        /* TODO: 0x47309e — draw the open event scroll (the load-route
-         * 92.9k-px popup residual closes here). */
+        /* Draw the open event scroll every frame it stays open. */
+        engine_popup_scroll_render();                /* FUN_0047309e */
     }
 }
 
@@ -1319,6 +1581,12 @@ void engine_set_demand_redraw(int mode)
 void engine_set_current_screen(int screen)
 {
     g_sim_current_screen = (uint8_t)screen;
+    /* gfx_text keeps its own mirror of the screen byte (retail reads
+     * the live DAT_004eac50 at every text render to pick the shadow
+     * color pair — title-class screens 0x1c/0x1f get the gray pair,
+     * everything else the parchment pair).  Forward every write so
+     * the two mirrors can't skew. */
+    gfx_text_set_screen_byte(screen);
 }
 
 int engine_current_screen(void)
@@ -1347,9 +1615,10 @@ void engine_tick(void)
      *
      * Today's scaffold has the structural skeleton in place:
      *   1. Bump the wall-clock frame counter (retail _DAT_005bb4c8).
-     *   2. Pre-tick block — TODO (all retail subfunctions still
-     *      unported: FUN_004b0aaa input poll, FUN_00499a1c music,
-     *      FUN_00498458 unknown, FUN_004b20ed unknown, …).
+     *   2. Pre-tick block — TODO (remaining retail subfunctions:
+     *      FUN_004b0aaa input poll, FUN_00498458 unknown,
+     *      FUN_004b20ed unknown, …).  FUN_00499a1c(1) (in-game
+     *      system-sheet ensure) is ported + wired below.
      *   3. Variable-rate sim sub-step loop — driven by
      *      engine_tick_rate_step.  Currently produces 0 sub-steps
      *      because scenario_hint is hardcoded to "engine state != 3
@@ -1371,9 +1640,18 @@ void engine_tick(void)
      * non-8bpp display warning post (see the block's header above). */
     engine_tick_depth_warning_step();
 
+    /* Retail line 2: while ingame (state 3), ensure the IN-GAME system
+     * sheet (system.pl8) is resident in the shared sheet slot —
+     * FUN_00499a1c(1), sticky no-op after the first call.  The title
+     * flow loads system2.pl8 into the same slot; the in-game UI (the
+     * event-scroll seal, cursors) indexes the system.pl8 image. */
+    if (g_engine_state == 3) {
+        gfx_load_system_sheet_select(1);     /* FUN_00499a1c(1) */
+    }
+
     /* Pre-tick block — retail does (in order): FUN_004b0aaa input
-     * poll, FUN_00499a1c music (only when ingame), FUN_00498458,
-     * FUN_004b20ed (← ported), FUN_004bbc80 (← ported), FUN_00481b9a,
+     * poll, FUN_00498458, FUN_004b20ed (← ported), FUN_004bbc80
+     * (← ported), FUN_00481b9a,
      * FUN_00482111, FUN_004782c5, FUN_00451f1a (← ported).  Order
      * between independent state updates doesn't matter for
      * behavior, but we keep them in retail order so future bisection
@@ -1521,13 +1799,6 @@ void engine_tick(void)
      * the demand-redraw cookie the seam below consumes. */
     engine_tick_menu_input_step();
 
-    /* In-game event-scroll consumer (retail FUN_00472e46, run mid
-     * render-pump between the UI pumps and the screen-render dispatch).
-     * Dequeues posted events into the modal scroll state — opening one
-     * parks its code in extended_pause, freezing the SP sim until
-     * dismissed.  No-op off the scroll-capable screens. */
-    engine_tick_event_popup_step();
-
     /* Title-menu file-load confirm pump (retail FUN_004ad9f0, run from
      * inside the menu dispatcher FUN_004ba9c8).  Self-gates on the
      * page-3 Load request latch + its confirm timer; a no-op until the
@@ -1549,6 +1820,16 @@ void engine_tick(void)
      * transition 0x42b780).  See docs/plans/main-menu-render-chips.md
      * chip 5 + docs/findings/title-menu-screens.md. */
     engine_tick_title_render_step();
+
+    /* In-game event-scroll consumer (retail FUN_00472e46).  Retail
+     * frame order: the demand-redraw seam (0x40f1a0, line 36) and the
+     * map-scene render (0x4050c0, line 42) run FIRST and the consumer
+     * at line 105 — an open scroll paints OVER the freshly-rendered
+     * frame.  Dequeues posted events into the modal scroll state —
+     * opening one parks its code in extended_pause, freezing the SP
+     * sim until dismissed — and renders the open scroll every frame.
+     * No-op off the scroll-capable screens. */
+    engine_tick_event_popup_step();
 
     /* TODO(render): the remaining ~30 per-subsystem renders (the screen-0
      * in-game path 0x4050c0, the strategic-map / sprite renders, …)
