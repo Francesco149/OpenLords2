@@ -27,6 +27,7 @@ LDFLAGS := $(SAN)
 SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_rate.c ../src/engine_phase.c \
                    ../src/engine_delta.c ../src/engine_anim_cycle.c \
+                   ../src/engine_tick_cadence.c \
                    ../src/engine_input.c ../src/engine_fps.c \
                    ../src/engine_rng.c ../src/engine_state_hash.c \
                    ../src/engine_tile.c \
@@ -98,6 +99,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
 SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_rate.c test_engine_phase.c \
                    test_engine_delta.c test_engine_anim_cycle.c \
+                   test_engine_tick_cadence.c \
                    test_engine_input.c test_engine_fps.c \
                    test_engine_rng.c test_engine_state_hash.c \
                    test_engine_tile.c \

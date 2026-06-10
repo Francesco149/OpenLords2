@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **712** (29.1%) — tested 670, ported 42
-- code bytes touched: **35.7%** (299,801 / 838,629 B)
-- unported: **1735**
+- touched: **715** (29.2%) — tested 673, ported 42
+- code bytes touched: **35.9%** (301,207 / 838,629 B)
+- unported: **1732**
 - orphan refs (in src/, not in function table): 7
 
-## tested (670) — ported + host unit suite
+## tested (673) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -92,6 +92,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404547 | FUN_00404547 | 256 | gfx_dispatch.c, gfx_dispatch.h |
 | 0x40464c | FUN_0040464c | 303 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h (+2) |
 | 0x40477b | FUN_0040477b | 291 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h (+1) |
+| 0x40489e | FUN_0040489e | 111 | engine_tick_cadence.h |
+| 0x40490d | FUN_0040490d | 313 | engine_tick_cadence.h |
 | 0x404a46 | FUN_00404a46 | 230 | engine.c, engine.h, engine_menu_input.c (+3) |
 | 0x404b2c | FUN_00404b2c | 109 | engine.h, engine_rng.c, engine_territory.c |
 | 0x404b99 | FUN_00404b99 | 466 | engine.c, engine.h, engine_rng.c |
@@ -369,7 +371,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x45270a | FUN_0045270a | 43 | engine_dirty_rect.h, save.h |
 | 0x452735 | FUN_00452735 | 53 | engine_dirty_rect.h |
 | 0x4527a6 | FUN_004527a6 | 101 | engine_battlefield_render.h, engine_button.c, engine_button.h (+4) |
-| 0x4650b0 | FUN_004650b0 | 265 | engine_army_state.c, engine_army_state.h, engine_combat.c (+1) |
+| 0x4650b0 | FUN_004650b0 | 265 | engine_army_state.c, engine_army_state.h, engine_combat.c (+2) |
 | 0x4651b9 | FUN_004651b9 | 91 | engine_territory.c, engine_territory.h |
 | 0x465214 | FUN_00465214 | 11 | engine_army_state.c |
 | 0x46521f | FUN_0046521f | 615 | engine_army_state.c, engine_combat.c, engine_combat.h |
@@ -480,6 +482,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x499d7d | FUN_00499d7d | 26 | main.c |
 | 0x499dc3 | FUN_00499dc3 | 154 | engine_menu_input.c, engine_menu_input.h, game_init.c (+2) |
 | 0x499e5d | FUN_00499e5d | 421 | engine_menu_input.c, game_init.c, game_init.h (+1) |
+| 0x49a010 | FUN_0049a010 | 982 | engine_tick_cadence.h |
 | 0x49a453 | FUN_0049a453 | 302 | game_init.c, game_init.h, save.c (+1) |
 | 0x49a581 | FUN_0049a581 | 1039 | engine_army_ai.c |
 | 0x49a990 | FUN_0049a990 | 126 | engine_army_ai.c, engine_army_ai.h, engine_combat.c (+1) |
@@ -650,7 +653,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b49f7 | FUN_004b49f7 | 705 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b4cb8 | FUN_004b4cb8 | 1659 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b5333 | FUN_004b5333 | 2997 | gfx_sprite.c, gfx_sprite.h |
-| 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+6) |
+| 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+7) |
 | 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_button.c, engine_button.h (+3) |
 | 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_load_pump.h, engine_menu_input.c (+4) |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c |

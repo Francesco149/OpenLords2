@@ -191,6 +191,10 @@ struct test_case {
     X(engine_delta_overflow_wrap_then_advance) \
     X(engine_delta_baseline_zero_first_call_advances) \
     \
+    X(engine_tick_cadence_first_step_all_ones) \
+    X(engine_tick_cadence_periods) \
+    X(engine_tick_cadence_reset) \
+    \
     X(engine_anim_cycle_no_tick_holds) \
     X(engine_anim_cycle_tick_bumps) \
     X(engine_anim_cycle_from_zero_bumps) \

@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 670,
+  "tested": 673,
   "ported": 42,
-  "unported": 1735,
+  "unported": 1732,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 712,
-  "pct_touched": 29.1,
-  "pct_tested": 27.4,
+  "touched": 715,
+  "pct_touched": 29.2,
+  "pct_tested": 27.5,
   "bytes_total": 838629,
-  "bytes_touched": 299801,
-  "pct_bytes_touched": 35.7
+  "bytes_touched": 301207,
+  "pct_bytes_touched": 35.9
  },
  "orphan_refs": [
   "0x004148",
@@ -894,16 +894,20 @@
    "name": "FUN_0040489e",
    "size": 111,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_tick_cadence.h"
+   ]
   },
   {
    "va": "0x40490d",
    "name": "FUN_0040490d",
    "size": 313,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_tick_cadence.h"
+   ]
   },
   {
    "va": "0x404a46",
@@ -11453,6 +11457,7 @@
     "src/engine_army_state.c",
     "src/engine_army_state.h",
     "src/engine_combat.c",
+    "src/engine_tick_cadence.h",
     "src/game_init.c"
    ]
   },
@@ -15707,8 +15712,10 @@
    "name": "FUN_0049a010",
    "size": 982,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_tick_cadence.h"
+   ]
   },
   {
    "va": "0x49a3e6",
@@ -19420,6 +19427,7 @@
     "src/engine_fps.c",
     "src/engine_mp_render.c",
     "src/engine_screen_strat.c",
+    "src/engine_tick_cadence.h",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
     "src/main.c"

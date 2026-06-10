@@ -6817,3 +6817,26 @@ fine and then corrupts the category-bucket plane at runtime. Until the
 generator/CSV is taught the widened storage, treat the three schema files as
 hand-maintained: do NOT re-run the generator blind; if you do, restore with
 `git checkout -- src/save_schema_*.{h,c} src/save_schema_table.h`.
+
+## 195 — the sub-step duty-cycle LUT (`DAT_004e3260`) is 11 rows but MP hints ≥ 110 index rows 11..14 — an as-shipped OOB read into the next .data object
+
+The rate controller `FUN_004bb978` gates each sim sub-step on
+`DAT_004e3260[phase + (hint/10)*0xa0]` after clamping the scenario hint to
+0x8c (140) — so the row index reaches 14, while the shipped table object is
+11 rows (0x6e0 bytes).  Rows 11..14 land in the adjacent object at
+0x4e3940, whose bytes (i32-looking values 0xf0..0xff, 0x64..0x74, 226..255)
+are all conveniently non-zero — so in practice "hint ≥ 110" degrades to
+"always pass the duty gate, let the slider gate pace".  Only MP throttle
+ladders produce hints ≥ 110; SP pins the hint at 1 (row 0, ~2/3 duty).
+The port images the full reachable 0xe60 bytes verbatim
+(`g_engine_rate_lut`, engine_rate.c) so the OOB rows behave byte-identically.
+
+Related find, same chase (the grid_load_probe load-flip bisect): retail's
+game-speed slider default is 90 (`FUN_004ae310` seeds `_DAT_0053f230 =
+0x5a`), and the slider is NOT a save-schema slot — a boot→load session
+plays at 90 regardless of the loaded save.  At 90 the slider gate needs
+12 ms wall-clock between sub-steps, which is precisely why the turbo'd
+retail seat runs exactly ONE sub-step at the load flip (elapsed-since-boot
+huge) and zero during idle (sub-ms frames).  A port default of 100 (2 ms
+gate) sub-stepped nearly every frame and would have drifted the LFSR
+arbitrarily far from retail.
