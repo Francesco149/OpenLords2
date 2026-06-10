@@ -2041,6 +2041,274 @@ static void engine_army_ai_step1_process_inbox(int self,
         STRAT_REC(self)[STRAT_PAIR_BYTE90 + other * 0x10] = 0;
 }
 
+/* ── Brain step 9: offensive-campaign planner (FUN_0049f977 + 6 callees) ────
+ *
+ * Step 9 is the AI's persistent army-campaign driver.  Each call either ticks a
+ * patience counter toward the next campaign, or — once a target is committed —
+ * raises/picks a force from the player's muster realm (+0xe5) and stamps it with
+ * a march order toward a chosen deployment cell.  Unlike step 0xa (a one-shot
+ * cooldown-gated raid) it carries a multi-turn campaign target in +0xe8 and
+ * sizes the force against a personality "force budget".  It runs every turn in
+ * headless SP, so the trace-studio oracle exercises it directly.
+ *
+ * The two finders below leave their chosen cell in this find-nearest scratch
+ * (retail DAT_00569570 col / DAT_00569578 row — shared scalar globals); the
+ * deployment assigner copies it into the army's destination fields immediately
+ * after.  File-static because every consumer lives in this TU. */
+static int s_ai_find_col;   /* DAT_00569570 */
+static int s_ai_find_row;   /* DAT_00569578 */
+
+/* Per-player strategic-record fields step 9 adds (offsets into g_player_strategic_352). */
+#define STRAT_CAMPAIGN_TICK   0x045  /* DAT_0057bf45 — patience counter toward the next campaign */
+#define STRAT_CAMPAIGN_TARGET 0x0e8  /* DAT_0057bfe8 — committed multi-turn campaign target realm */
+#define STRAT_FORCE_ACC       0x138  /* DAT_0057c038 — accumulated force credit (i32; gates a muster) */
+#define STRAT_RESERVE_140     0x140  /* DAT_0057c040 — funding reserve A (i32; personality 3) */
+#define STRAT_RESERVE_14C     0x14c  /* DAT_0057c04c — funding reserve B (i32; personality 4) */
+#define STRAT_RESERVE_150     0x150  /* DAT_0057c050 — funding reserve C (i32; personality 4) */
+
+/* Personality-row fields step 9 reads (offsets into a personality_row()).  The
+ * +0x30 force budget shares its byte with AI_PERS_TRIBUTE_FLOOR (step 1). */
+#define AI_PERS_CAMPAIGN_PERIOD 0x28 /* i32: ticks between campaigns (vs STRAT_CAMPAIGN_TICK) */
+#define AI_PERS_FORCE_BUDGET    0x30 /* i32: force budget compared to the muster realm's feed count */
+#define AI_PERS_MUSTER_PCT      0x40 /* i32: provision percent the campaign muster raises */
+#define AI_PERS_FORCE_THRESH    0x68 /* i32: STRAT_FORCE_ACC floor below which a funded muster is skipped */
+
+/* Per-realm record fields step 9 adds: the FUN_004a65a3 fallback anchor cell. */
+#define ARMY_SETTLE_COL 0x074        /* DAT_0053fa24 — settled-cell fallback column */
+#define ARMY_SETTLE_ROW 0x075        /* DAT_0053fa25 — settled-cell fallback row */
+
+/* Occupant-record fields step 9 adds (the existing OCC_DEST_COL/ROW/ORDER/PLACED/
+ * TARGET are defined alongside step 0xa above). */
+#define OCC_COL      0x00a           /* DAT_0052f0ba — occupant's current overworld column (i8) */
+#define OCC_ROW      0x00b           /* DAT_0052f0bb — occupant's current overworld row (i8) */
+#define OCC_CAMPAIGN 0x19b           /* DAT_0052f24b — campaign target realm stamped on the order */
+
+/* Overworld cell descriptor (g_overworld_map, 8 B/cell): +0 terrain, +1 flag
+ * bits, +7 owning region.  The finders gate on two flag bits: 0x40 (any owned
+ * cell, FUN_004a6735) and 0x80 (the retail region-event bit, paired with a
+ * cropland-class terrain window 0x15..0x19, FUN_004a65a3). */
+#define CELL_TERRAIN 0
+#define CELL_FLAGS   1
+#define CELL_REGION  7
+
+/* Port of FUN_004a6735 — find the nearest cell owned by `region` carrying flag
+ * bit 0x40, by Manhattan distance to occupant `occ`'s current seat (OCC +0xa/+0xb).
+ * Leaves the chosen column/row in the find-nearest scratch; on no match falls
+ * back to the region's capital cell (ARMY +0x6c/+0x6d).  The distance is the
+ * |dx|+|dy| return of FUN_00404ead, computed inline (its dx/dy side-effect
+ * globals go unread here, as in engine_combat_find_deploy_cell).  retail decodes
+ * the winning byte offset with signed gymnastics that reduce to a plain
+ * (ofs>>3)&0x3f / (ofs>>3)>>6 for the always-non-negative offset. */
+static void engine_army_ai_find_owned_cell(int occ, unsigned region)
+{
+    int ax = (int8_t)OCC_REC(occ)[OCC_COL];
+    int ay = (int8_t)OCC_REC(occ)[OCC_ROW];
+
+    int best_dist = 1000, best_ofs = 0, ofs = 0;
+    for (int row = 0; row < 0x40; row++) {
+        for (int col = 0; col < 0x40; col++, ofs += 8) {
+            if ((uint8_t)g_overworld_map[ofs + CELL_REGION] != region)  continue;
+            if ((g_overworld_map[ofs + CELL_FLAGS] & 0x40) == 0)        continue;
+            int dx = ax - col; if (dx < 0) dx = -dx;
+            int dy = ay - row; if (dy < 0) dy = -dy;
+            int dist = dx + dy;
+            if (dist < best_dist) { best_dist = dist; best_ofs = ofs; }
+        }
+    }
+    if (best_ofs == 0) {
+        s_ai_find_col = (uint8_t)ARMY_REC(region)[ARMY_CAP_COL];
+        s_ai_find_row = (uint8_t)ARMY_REC(region)[ARMY_CAP_ROW];
+    } else {
+        int idx = best_ofs >> 3;
+        s_ai_find_col = idx & 0x3f;
+        s_ai_find_row = idx >> 6;
+    }
+}
+
+/* Port of FUN_004a65a3 — like engine_army_ai_find_owned_cell but gated on flag
+ * bit 0x80 AND a cropland-class terrain window (0x14 < terrain < 0x1a), with the
+ * fallback anchor at ARMY +0x74/+0x75. */
+static void engine_army_ai_find_settled_cell(int occ, unsigned region)
+{
+    int ax = (int8_t)OCC_REC(occ)[OCC_COL];
+    int ay = (int8_t)OCC_REC(occ)[OCC_ROW];
+
+    int best_dist = 1000, best_ofs = 0, ofs = 0;
+    for (int row = 0; row < 0x40; row++) {
+        for (int col = 0; col < 0x40; col++, ofs += 8) {
+            if ((uint8_t)g_overworld_map[ofs + CELL_REGION] != region)  continue;
+            if ((g_overworld_map[ofs + CELL_FLAGS] & 0x80) == 0)        continue;
+            int terr = (uint8_t)g_overworld_map[ofs + CELL_TERRAIN];
+            if (terr <= 0x14 || terr >= 0x1a)                           continue;
+            int dx = ax - col; if (dx < 0) dx = -dx;
+            int dy = ay - row; if (dy < 0) dy = -dy;
+            int dist = dx + dy;
+            if (dist < best_dist) { best_dist = dist; best_ofs = ofs; }
+        }
+    }
+    if (best_ofs == 0) {
+        s_ai_find_col = (uint8_t)ARMY_REC(region)[ARMY_SETTLE_COL];
+        s_ai_find_row = (uint8_t)ARMY_REC(region)[ARMY_SETTLE_ROW];
+    } else {
+        int idx = best_ofs >> 3;
+        s_ai_find_col = idx & 0x3f;
+        s_ai_find_row = idx >> 6;
+    }
+}
+
+/* Port of FUN_0049fda5 — stamp occupant `occ` with the campaign march order for
+ * `player`.  Order code 2 (advance) by default; 6 (a lord-directed move) when a
+ * campaign target is active and that target realm is owned by the player's lord.
+ * The placed flag is cleared so the move executor redeploys it, the attack
+ * target (+0x4b) is recorded at +0x151, and the destination cell is chosen by
+ * one of the two finders: the settled-cell finder when the muster realm holds a
+ * keep with a pending garrison, otherwise the owned-cell finder. */
+static void engine_army_ai_assign_deployment(int player, int occ)
+{
+    uint8_t *s = STRAT_REC(player);
+    uint8_t  target = s[STRAT_ATTACK_TARGET];
+    unsigned region = target;
+    uint8_t *c = OCC_REC(occ);
+
+    if (s[STRAT_CAMPAIGN_TARGET] == 0) {
+        c[OCC_ORDER] = 2;
+    } else {
+        c[OCC_CAMPAIGN] = s[STRAT_CAMPAIGN_TARGET];
+        c[OCC_ORDER] = (ARMY_REC(region)[ARMY_OWNER] == s[STRAT_LORD]) ? 6 : 2;
+    }
+    c[OCC_PLACED] = 0;
+    c[OCC_TARGET] = target;
+
+    if (ARMY_REC(region)[ARMY_KEEP_LEVEL] == 0 || I32(ARMY_REC(region) + ARMY_PENDING) == 0)
+        engine_army_ai_find_owned_cell(occ, region);    /* FUN_004a6735 */
+    else
+        engine_army_ai_find_settled_cell(occ, region);  /* FUN_004a65a3 */
+    c[OCC_DEST_COL] = (uint8_t)s_ai_find_col;
+    c[OCC_DEST_ROW] = (uint8_t)s_ai_find_row;
+}
+
+/* Port of FUN_0049ff71 — validate a committed campaign target `target` for
+ * `player`.  Drops the target (returns 0) when the player has no lord, when the
+ * target realm belongs to the player's lord and is undefended (overhead-lo == 0),
+ * or when the target realm is the player's own; otherwise keeps it. */
+static int engine_army_ai_validate_campaign_target(int target, int player)
+{
+    uint8_t *s = STRAT_REC(player);
+    if (s[STRAT_LORD] == 0)
+        target = 0;
+    else if (s[STRAT_LORD] == ARMY_REC(target)[ARMY_OWNER]) {
+        if (I32(ARMY_REC(target) + ARMY_OVERHEAD_LO) == 0)
+            target = 0;
+    } else if ((uint8_t)ARMY_REC(target)[ARMY_OWNER] == (uint8_t)player)
+        target = 0;
+    return target;
+}
+
+/* Port of FUN_004a01ea — set `player`'s target-owner gate (+0x48) for the
+ * campaign target search.  A pinned enemy (+0xeb) wins outright; otherwise scan
+ * the field leader(s) (rank < 2) and adopt one as the target owner, bailing if
+ * the leader is the player itself, inactive, or below the diplomacy-gauge floor
+ * (+0x60 < 40). */
+static void engine_army_ai_pick_target_owner(int player)
+{
+    uint8_t *s = STRAT_REC(player);
+    s[STRAT_TARGET_OWNER] = 0;
+    if (s[STRAT_PINNED_ENEMY] != 0) {
+        s[STRAT_TARGET_OWNER] = s[STRAT_PINNED_ENEMY];
+        return;
+    }
+    for (int other = 1; other < 6; other++) {
+        if ((uint8_t)STRAT_REC(other)[STRAT_RANK] < 2) {
+            if (player == other)                                       return;
+            if (STRAT_REC(other)[STRAT_ACTIVE] == 0)                   return;
+            if ((uint8_t)STRAT_REC(other)[STRAT_DIPLO_GAUGE] < 0x28)   return;
+            s[STRAT_TARGET_OWNER] = (uint8_t)other;
+        }
+    }
+}
+
+/* Port of FUN_0049fcc5 — top up `player`'s funding reserves for an easy-AI
+ * campaign.  Only the two low difficulty levels (+0x29 < 2), before the late-era
+ * cutoff (turn counter < 0x4f9), and only for personalities 3 and 4: personality
+ * 4 banks +100 into reserves B and C, personality 3 banks +100 into reserve A.
+ * Returns 1 when it funded, 0 otherwise. */
+static int engine_army_ai_fund_campaign(int player)
+{
+    uint8_t *s = STRAT_REC(player);
+    if ((uint8_t)s[STRAT_AI_LEVEL] >= 2)   return 0;
+    if ((int)s_slot_00553edc >= 0x4f9)     return 0;
+    if (s[STRAT_PERSONALITY] == 4) {
+        I32(s + STRAT_RESERVE_14C) += 100;
+        I32(s + STRAT_RESERVE_150) += 100;
+        return 1;
+    }
+    if (s[STRAT_PERSONALITY] == 3) {
+        I32(s + STRAT_RESERVE_140) += 100;
+        return 1;
+    }
+    return 0;
+}
+
+/* Port of FUN_0049f977 — AI brain step 9 (offensive-campaign planner).  See the
+ * block comment above.  Two arms select/commit a target and a force budget; a
+ * third raises (muster) or picks (pick_best_unit) the force and hands it to
+ * engine_army_ai_assign_deployment, clearing the campaign target on success. */
+void engine_army_ai_run_campaign(int player)
+{
+    CALL_TRACE_ENTER(0x0049f977);
+
+    uint8_t *s = STRAT_REC(player);
+    const uint8_t *pr = personality_row(s[STRAT_PERSONALITY]);
+    int budget = I32(pr + AI_PERS_FORCE_BUDGET);
+
+    if (s[STRAT_CAMPAIGN_TARGET] == 0) {
+        if (s[STRAT_PINNED_ENEMY] == 0) {
+            /* No campaign and no pinned enemy: tick patience; bail until it fires. */
+            s[STRAT_CAMPAIGN_TICK]++;
+            if ((int)s[STRAT_CAMPAIGN_TICK] < I32(pr + AI_PERS_CAMPAIGN_PERIOD))
+                return;
+            s[STRAT_CAMPAIGN_TICK] = 0;
+        } else {
+            budget /= 2;                       /* pinned enemy: commit at half budget */
+        }
+    } else {
+        /* Re-validate the committed target (it may have been conquered/allied). */
+        s[STRAT_CAMPAIGN_TARGET] = (uint8_t)engine_army_ai_validate_campaign_target(
+            (int8_t)s[STRAT_CAMPAIGN_TARGET], player);
+    }
+
+    unsigned muster = s[STRAT_MUSTER_REALM];
+    if (s[STRAT_CAMPAIGN_TARGET] == 0) {
+        /* Pick a fresh target: gated to the field leader first, then unrestricted. */
+        engine_army_ai_pick_target_owner(player);
+        if (!engine_army_ai_select_target(player, (int)muster, 1, 0) &&
+            !engine_army_ai_select_target(player, (int)muster, 0, 0))
+            return;                            /* no viable target */
+    } else {
+        s[STRAT_ATTACK_TARGET] = s[STRAT_CAMPAIGN_TARGET];
+        budget /= 2;                           /* committed campaign: half budget */
+    }
+
+    int occ;
+    if (budget < I32(ARMY_REC(muster) + ARMY_FEED_COUNT)) {
+        /* Muster realm can bear the budget: raise a fresh force there. */
+        if (engine_army_ai_fund_campaign(player) == 0 &&
+            I32(s + STRAT_FORCE_ACC) < I32(pr + AI_PERS_FORCE_THRESH))
+            return;                            /* unfunded and below the force floor */
+        if (engine_combat_muster_defender((int)muster, I32(pr + AI_PERS_MUSTER_PCT), 100, 1) == 0)
+            return;                            /* muster failed */
+        occ = engine_territory_current_slot(); /* the freshly-mustered occupant */
+    } else {
+        /* Realm too lean: redirect the best existing unit toward the target. */
+        occ = engine_combat_pick_best_unit(player, s[STRAT_ATTACK_TARGET], 200);
+    }
+
+    if (occ != 0) {
+        engine_army_ai_assign_deployment(player, occ);
+        s[STRAT_CAMPAIGN_TARGET] = 0;          /* campaign launched — clear the commit */
+    }
+}
+
 /* ── Per-tick AI brain dispatcher (FUN_0049a581) ──────────────────────────
  *
  * Ranking-changed redraw cookie — retail _DAT_0056d6a0, set to 1 by the brain
@@ -2069,12 +2337,12 @@ static int g_ai_ranking_dirty;   /* _DAT_0056d6a0 */
  *     the realm is parked at the 999 "turn done" sentinel + the ranking redraw
  *     cookie is set.
  *
- * Steps 6/7/9/0xb are advance-only stubs (CALL_TRACE_ENTER_STUB markers +
+ * Steps 6/7/0xb are advance-only stubs (CALL_TRACE_ENTER_STUB markers +
  * the TODO notes below): the FSM still advances through them so the cursor and
  * dispatch structure track retail exactly (closing the slot-84 divergence the
  * trace studio flagged), while their per-realm state writes — FUN_0049edc7 /
- * 0049f93d / 0049f977 / 004a5667 and their ~12 KB of callee trees — land
- * incrementally bottom-up.  Steps 1/2/3/4/5/8/0xa/0xc/0xd/0xe are live.
+ * 0049f93d / 004a5667 and their callee trees — land incrementally bottom-up.
+ * Steps 1/2/3/4/5/8/9/0xa/0xc/0xd/0xe are live.
  *
  * `evq` is the live turn event queue (steps 1/2/0xd + the init elimination
  * post); `mp_active` threads retail DAT_00553030 into the init elimination
@@ -2130,11 +2398,7 @@ void engine_army_ai_run_per_tick(engine_event_queue_state_t *evq, int mp_active,
         CALL_TRACE_ENTER_STUB(0x0049f93d);
         break;
     case 0x8:  engine_army_ai_step_noop();                  break; /* 0x49f96c */
-    case 0x9:
-        /* TODO(brain step 9): FUN_0049f977 (846 B) + 49fda5/4a65a3/4a6735/
-         * 4a01ea/49fcc5/49ff71. */
-        CALL_TRACE_ENTER_STUB(0x0049f977);
-        break;
+    case 0x9:  engine_army_ai_run_campaign(sel);            break; /* 0x49f977 */
     case 0xa:  engine_army_ai_launch_attack(sel);           break; /* 0x4a0015 */
     case 0xb:
         /* TODO(brain step 0xb): FUN_004a5667 (325 B) + 14-fn / 6.3 KB closure

@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 687,
+  "tested": 693,
   "ported": 53,
-  "unported": 1707,
+  "unported": 1701,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 740,
-  "pct_touched": 30.2,
-  "pct_tested": 28.1,
+  "touched": 746,
+  "pct_touched": 30.5,
+  "pct_tested": 28.3,
   "bytes_total": 838629,
-  "bytes_touched": 322840,
-  "pct_bytes_touched": 38.5
+  "bytes_touched": 324737,
+  "pct_bytes_touched": 38.7
  },
  "orphan_refs": [
   "0x004148",
@@ -1016,6 +1016,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_combat.c",
     "src/engine_math.h",
     "src/engine_path.h"
@@ -16211,7 +16212,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h"
    ]
   },
   {
@@ -16219,24 +16221,30 @@
    "name": "FUN_0049fcc5",
    "size": 224,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x49fda5",
    "name": "FUN_0049fda5",
    "size": 460,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x49ff71",
    "name": "FUN_0049ff71",
    "size": 164,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a0015",
@@ -16255,8 +16263,10 @@
    "name": "FUN_004a01ea",
    "size": 287,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a0309",
@@ -16833,16 +16843,20 @@
    "name": "FUN_004a65a3",
    "size": 402,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a6735",
    "name": "FUN_004a6735",
    "size": 360,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a689d",

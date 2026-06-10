@@ -2160,6 +2160,12 @@ struct test_case {
     X(army_ai_step1_break_clears_treaty) \
     X(army_ai_step1_alliance_accept_forges) \
     X(army_ai_step1_skips_self_and_stops_at_gap) \
+    X(army_ai_campaign_patience_ticks) \
+    X(army_ai_campaign_validate_drops_self_target) \
+    X(army_ai_campaign_deploys_via_pick_unit) \
+    X(army_ai_campaign_deploys_finds_settled_cell) \
+    X(army_ai_campaign_muster_force_floor_gates) \
+    X(army_ai_per_tick_step9_dispatches) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

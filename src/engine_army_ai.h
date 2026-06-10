@@ -180,6 +180,13 @@ void engine_army_ai_pick_muster_realms(int player);
  * it to march there.  No-op while on cooldown or with no viable target. */
 void engine_army_ai_launch_attack(int player);
 
+/* Port of FUN_0049f977 — AI brain step 9 (offensive-campaign planner).  Ticks a
+ * patience counter toward the next campaign; once a target is committed (+0xe8)
+ * raises a force from the muster realm (+0xe5) or redirects the best existing
+ * unit, then stamps it with a march order toward a finder-chosen deployment
+ * cell.  Carries a multi-turn campaign target, unlike the one-shot step 0xa. */
+void engine_army_ai_run_campaign(int player);
+
 /* Port of FUN_004a0309.  Return the player `player` is most hostile toward — a
  * pinned war target (+0xeb) if set, else the active slot its relation (+0x84) is
  * most negative toward (below −10), or 0. */

@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **740** (30.2%) — tested 687, ported 53
-- code bytes touched: **38.5%** (322,840 / 838,629 B)
-- unported: **1707**
+- touched: **746** (30.5%) — tested 693, ported 53
+- code bytes touched: **38.7%** (324,737 / 838,629 B)
+- unported: **1701**
 - orphan refs (in src/, not in function table): 7
 
-## tested (687) — ported + host unit suite
+## tested (693) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -102,7 +102,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404dc1 | FUN_00404dc1 | 66 | engine_army_state.c, engine_combat.c, engine_input.c (+3) |
 | 0x404e03 | FUN_00404e03 | 72 | engine_army_economy.c, engine_math.h |
 | 0x404e4b | FUN_00404e4b | 98 | engine_math.h |
-| 0x404ead | FUN_00404ead | 159 | engine_combat.c, engine_math.h, engine_path.h |
+| 0x404ead | FUN_00404ead | 159 | engine_army_ai.c, engine_combat.c, engine_math.h (+1) |
 | 0x404f4c | FUN_00404f4c | 180 | engine_army_ai.c, engine_path.h, engine_territory.c |
 | 0x4050c0 | FUN_004050c0 | 53 | engine_map_scene.c, engine_map_scene.h, engine_screen_strat.c (+1) |
 | 0x4050f6 | FUN_004050f6 | 376 | engine_map_scene.c, engine_map_scene.h, main.c |
@@ -515,8 +515,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49edc7 | FUN_0049edc7 | 872 | engine_army_ai.c |
 | 0x49f93d | FUN_0049f93d | 47 | engine_army_ai.c |
 | 0x49f96c | FUN_0049f96c | 11 | engine_army_ai.c, engine_army_ai.h |
-| 0x49f977 | FUN_0049f977 | 841 | engine_army_ai.c |
+| 0x49f977 | FUN_0049f977 | 841 | engine_army_ai.c, engine_army_ai.h |
+| 0x49fcc5 | FUN_0049fcc5 | 224 | engine_army_ai.c |
+| 0x49fda5 | FUN_0049fda5 | 460 | engine_army_ai.c |
+| 0x49ff71 | FUN_0049ff71 | 164 | engine_army_ai.c |
 | 0x4a0015 | FUN_004a0015 | 469 | engine_army_ai.c, engine_army_ai.h, engine_combat.c |
+| 0x4a01ea | FUN_004a01ea | 287 | engine_army_ai.c |
 | 0x4a0309 | FUN_004a0309 | 233 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a03f2 | FUN_004a03f2 | 599 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a0649 | FUN_004a0649 | 425 | engine_army_ai.c, engine_army_ai.h |
@@ -561,6 +565,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a551b | FUN_004a551b | 332 | engine_combat.c, engine_combat.h |
 | 0x4a5667 | FUN_004a5667 | 325 | engine_army_ai.c |
 | 0x4a58f4 | FUN_004a58f4 | 169 | engine_combat.c |
+| 0x4a65a3 | FUN_004a65a3 | 402 | engine_army_ai.c |
+| 0x4a6735 | FUN_004a6735 | 360 | engine_army_ai.c |
 | 0x4a689d | FUN_004a689d | 399 | engine_combat.c, engine_combat.h |
 | 0x4a6a30 | FUN_004a6a30 | 568 | engine_combat.c, engine_combat.h |
 | 0x4a6c68 | FUN_004a6c68 | 1264 | engine_army_move.c, engine_army_move.h, engine_combat.c (+2) |

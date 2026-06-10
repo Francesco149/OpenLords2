@@ -2044,3 +2044,181 @@ int test_army_ai_step1_skips_self_and_stops_at_gap(void)
     T_ASSERT_EQ_I(PREC(1)[0x159], 1);                    /* exactly one post */
     return 0;
 }
+
+/* ── Brain step 9: offensive-campaign planner (FUN_0049f977) ────────────────
+ * Occupant ("army") record accessor — g_per_territory_420, stride 0x1a4. */
+#define OREC(i)  (&g_per_territory_420[(i) * 0x1a4])
+
+/* No campaign and no pinned enemy: step 9 just ticks the patience counter
+ * (+0x45) and returns before selecting any target. */
+int test_army_ai_campaign_patience_ticks(void)
+{
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;                       /* personality 1 → period 3 */
+
+    engine_army_ai_run_campaign(2);
+
+    T_ASSERT_EQ_I(s[0x045], 1);         /* patience ticked (1 < period 3 → returned) */
+    T_ASSERT_EQ_I(s[0x04b], 0);         /* no attack target selected */
+    return 0;
+}
+
+/* A committed campaign target (+0xe8) that turns out to be the player's own
+ * realm is dropped by the validator; with no fresh target available the call
+ * returns leaving the campaign target cleared. */
+int test_army_ai_campaign_validate_drops_self_target(void)
+{
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;
+    s[0x0e8] = 3;                       /* committed target realm 3 */
+    s[0x081] = 5;                       /* has a lord (so the no-lord drop is not the cause) */
+    s[0x0e5] = 1;                       /* muster realm */
+    AREC(3)[0x005] = 2;                 /* realm 3 is owned by SELF → validator drops it */
+
+    engine_army_ai_run_campaign(2);
+
+    T_ASSERT_EQ_I(s[0x0e8], 0);         /* self-owned target dropped */
+    return 0;
+}
+
+/* Committed campaign against a lean muster realm: step 9 redirects the best
+ * existing unit (pick_best_unit) and stamps it with an advance order (2, since
+ * the target owner is not the player's lord).  With no flagged owned cell the
+ * deploy finder falls back to the target realm's capital. */
+int test_army_ai_campaign_deploys_via_pick_unit(void)
+{
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_overworld_map, 0, sizeof g_overworld_map);
+
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;                       /* personality 1 → budget 750 */
+    s[0x0e8] = 3;                       /* committed target realm 3 */
+    s[0x081] = 5;                       /* lord = realm 5 (≠ target owner, ≠ self) */
+    s[0x0e5] = 1;                       /* muster realm 1 */
+
+    AREC(3)[0x005] = 4;                 /* realm 3 owned by player 4 */
+    AREC(3)[0x06c] = 7;                 /* capital col (owned-cell fallback) */
+    AREC(3)[0x06d] = 8;                 /* capital row */
+    AI32(AREC(1), 0x024) = 0;           /* lean muster realm → budget(375) ≥ feed → pick path */
+
+    uint8_t *c = OREC(1);
+    c[0x000] = 2;                       /* unit owned by player 2 */
+    c[0x010] = 3;                       /* home region == target → pick score 300 */
+    c[0x150] = 1;                       /* placed (eligible) */
+    AI32(c, 0x168) = 250;              /* head count ≥ 200 */
+
+    engine_army_ai_run_campaign(2);
+
+    T_ASSERT_EQ_I(s[0x0e8], 0);         /* campaign launched → target cleared */
+    T_ASSERT_EQ_I(s[0x04b], 3);         /* attack target committed */
+    T_ASSERT_EQ_I(OREC(1)[0x01a], 2);   /* order 2 (target owner ≠ lord) */
+    T_ASSERT_EQ_I(OREC(1)[0x151], 3);   /* attack-target realm recorded */
+    T_ASSERT_EQ_I(OREC(1)[0x150], 0);   /* placed cleared → redeploys */
+    T_ASSERT_EQ_I(OREC(1)[0x19b], 3);   /* campaign target stamped */
+    T_ASSERT_EQ_I(OREC(1)[0x016], 7);   /* dest = capital fallback (no 0x40 cell) */
+    T_ASSERT_EQ_I(OREC(1)[0x017], 8);
+    return 0;
+}
+
+/* Committed campaign against a lord-owned but defended realm (kept by the
+ * validator): the muster realm holds a keep with a pending garrison, so the
+ * deploy finder uses the settled-cell scan (flag 0x80 + cropland terrain), and
+ * the order is the lord-directed move code 6. */
+int test_army_ai_campaign_deploys_finds_settled_cell(void)
+{
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_overworld_map, 0, sizeof g_overworld_map);
+
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;
+    s[0x0e8] = 3;                       /* committed target realm 3 */
+    s[0x081] = 5;                       /* lord = realm 5 */
+    s[0x0e5] = 1;                       /* muster realm 1 */
+
+    AREC(3)[0x005] = 5;                 /* realm 3 owned by the LORD (5) */
+    AI32(AREC(3), 0x19c) = 1;          /* defended (overhead-lo ≠ 0) → validator keeps it */
+    AREC(3)[0x1c0] = 1;                 /* keep level set */
+    AI32(AREC(3), 0x1bc) = 9;          /* pending garrison ≠ 0 → settled-cell finder */
+    AI32(AREC(1), 0x024) = 0;           /* lean muster realm → pick path */
+
+    uint8_t *c = OREC(1);
+    c[0x000] = 2; c[0x010] = 3; c[0x150] = 1; AI32(c, 0x168) = 250;
+
+    /* one owned settled cell for region 3 at (col 20, row 5): offset
+     * (5*64 + 20)*8 = 2720 — flag 0x80, terrain 0x16 (in the 0x15..0x19 window). */
+    int ofs = (5 * 64 + 20) * 8;
+    g_overworld_map[ofs + 7] = 3;       /* owning region */
+    g_overworld_map[ofs + 1] = 0x80;    /* region-event flag */
+    g_overworld_map[ofs + 0] = 0x16;    /* cropland-class terrain */
+
+    engine_army_ai_run_campaign(2);
+
+    T_ASSERT_EQ_I(s[0x0e8], 0);         /* launched */
+    T_ASSERT_EQ_I(OREC(1)[0x01a], 6);   /* lord-directed move order */
+    T_ASSERT_EQ_I(OREC(1)[0x016], 20);  /* dest = the settled cell */
+    T_ASSERT_EQ_I(OREC(1)[0x017], 5);
+    return 0;
+}
+
+/* Muster-branch selection: when the muster realm can bear the force budget the
+ * planner raises a fresh force, but an easy-AI-unfunded personality below the
+ * force-credit floor (+0x138 < personality +0x68) bails before mustering, so the
+ * campaign target survives and no order is stamped. */
+int test_army_ai_campaign_muster_force_floor_gates(void)
+{
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;                       /* personality 1: not a funding (3/4) cheat → fund=0 */
+    s[0x029] = 5;                       /* AI level ≥ 2 → fund_campaign returns 0 outright */
+    s[0x0e8] = 3;                       /* committed target realm 3 */
+    s[0x081] = 5;
+    s[0x0e5] = 1;                       /* muster realm 1 */
+    AI32(s, 0x138) = 50;               /* force credit below personality-1 floor (100) */
+
+    AREC(3)[0x005] = 4;                 /* target owned by player 4 (validator keeps it) */
+    AI32(AREC(1), 0x024) = 400;         /* feed 400 > budget 375 → muster branch */
+
+    engine_army_ai_run_campaign(2);
+
+    T_ASSERT_EQ_I(s[0x0e8], 3);         /* bailed before mustering → target NOT cleared */
+    T_ASSERT_EQ_I(OREC(1)[0x01a], 0);   /* no deployment order stamped */
+    return 0;
+}
+
+/* Dispatcher wiring: a realm parked on FSM state 9 routes through run_campaign
+ * (here it just ticks patience), then the dispatcher advances the state by one
+ * and steps the round-robin cursor. */
+int test_army_ai_per_tick_step9_dispatches(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    engine_event_queue_init(&evq);
+    PREC(2)[0x04] = 1;                  /* in-game */
+    PREC(2)[0x07] = 1;                  /* personality 1 */
+    AI32(PREC(2), 0x00) = 9;            /* FSM state 9 → step 9 */
+    s_slot_0057c944 = 2;
+
+    engine_army_ai_run_per_tick(&evq, 0, 0);
+
+    T_ASSERT_EQ_I(AI32(PREC(2), 0x00), 10);  /* state advanced past step 9 */
+    T_ASSERT_EQ_I(PREC(2)[0x45], 1);         /* run_campaign ticked patience */
+    T_ASSERT_EQ_I((int)s_slot_0057c944, 3);  /* cursor stepped */
+    return 0;
+}
