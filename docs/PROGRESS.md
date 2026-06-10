@@ -7,7 +7,7 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
-## 2026-06-10 (session 7) — BRAIN STEP 9 LANDED (FUN_0049f977 offensive-campaign planner + 6 callees); and the oracle DOES reach it — before/after --only port proves it's active on-engine (unlike the inert step 1)
+## 2026-06-10 (session 7) — BRAIN STEPS 9 + 0xb LANDED (FUN_0049f977 campaign planner + FUN_004a5667 army-movement planner, 20 callees total); step 9 is oracle-active, step 0xb is reached-but-input-empty (no field armies in turn 1, like step 1)
 
 Picked up the session-6 "Next": port the remaining stubbed brain steps
 bottom-up, step 9 (FUN_0049f977) and 0xb first since they run every turn in
@@ -58,16 +58,42 @@ dispatch, and the finder's flag-0x80 / terrain-`0x14<t<0x1a` gates.  Personality
 constants read straight from the binary (period 3/4/4/2, budget
 750/800/900/1000, pct 30/30/40/50, floor 100/120/200/250).
 
-**Next: the remaining stubbed brain steps, bottom-up.**  Step 0xb (FUN_004a5667,
-the army-movement/deployment planner) is next — now smaller since step 9 already
-landed its two shared finders; its closure is the entry + the FUN_004a57ac
-order-type gate dispatching 6 per-order handlers (FUN_004a58f4/599d/5b1f/5f0a/
-6270/60b9, ~5 KB).  Then steps 7 (FUN_0049f93d) and 6 (FUN_0049edc7).  All run
-every turn in headless SP, so each should move the run-label sub_diff as it
-lands — watch slot 84 / the strategic+army bands converge.  Separately, the ±3-4
-pass-counter timing offset (auto_dismiss onEnter vs input phase) is the parity
-residual to close once the steps are in; and to ever on-engine-test step 1, a
-diplomacy-UI trace is still owed.
+**Step 0xb = the army-movement / deployment planner (committed ca718f9).**
+Replaced the case-0xb stub with `engine_army_ai_run_movement` — the faithful port
+of FUN_004a5667 (325 B) + its 13-fn closure: the order gate FUN_004a57ac
+dispatching six per-order-code handlers (attack-march 7 / advance 2 / intercept 3
+/ garrison 4 / siege 5 / lord-move 6 = FUN_004a58f4/5b1f/5f0a/6270/60b9/599d) plus
+the shared scanners (frontier FUN_00467f2e, nearest-army FUN_004673b8/00467532),
+the deploy-cell setter FUN_004a64ca and the disband-into-realm fallback
+FUN_00438681.  For each live army the realm owns it recomputes a march
+destination, then runs the cost-field pathfinder (engine_path_field, already
+ported) and copies the waypoint chain.  Step 9 had already landed the two shared
+deploy-cell finders, so this was the remaining closure.  Added
+engine_combat_garrison_cap.  Gate: 2106 host tests (+5), mingw clean; r2
+byte-exact on the gate dispatch, the entry's active-gate→gate→pathfield sequence,
+and the order-2 handler's &&-short-circuit triple pick_attack_target.
+
+**Step 0xb is REACHED but input-empty in turn 1 (a step-1-shaped result, NOT a
+defect).**  Instrumenting run_movement on endturn_auto showed it fires once per AI
+realm (2/3/4/5) — dispatcher wiring + FSM progression confirmed — but
+`active_total = 0`: there are NO field armies (active occupant records) anywhere
+in the turn-1 scenario (the AI's military sits in garrisons/keeps), so the
+planner's loop has nothing to move and a before/after --only port is
+byte-identical.  Same shape as step 1 (reached, empty input), differing only in
+the input table (occupants vs the diplomacy inbox).  (Aside: this session's
+endturn_auto retail captures vary at flip0 — 91k→198k px — because the
+lastturn.sav is unpinned and prior captures mutated it; [[project_save_redirect_
+reproducibility]].  The port-vs-port before/after is unaffected since it pins the
+seed.)
+
+**Next: steps 7 (FUN_0049f93d) and 6 (FUN_0049edc7) — the last two stubs.**  Then
+the brain dispatcher is fully ported.  Both run every turn; whether they move the
+oracle depends on their input tables (like 9 = active, 0xb/1 = input-empty).  The
+deeper open items: (a) a multi-turn or mid-game-save trace to exercise steps 0xb
+(field armies) and 1 (a diplomacy-UI overture) on-engine; (b) the ±3-4
+pass-counter timing offset (auto_dismiss onEnter vs the port's input phase) — the
+parity residual to close once all steps are in; (c) pin the lastturn.sav per
+[[project_save_redirect_reproducibility]] so retail captures stop drifting.
 
 ---
 

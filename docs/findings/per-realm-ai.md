@@ -147,6 +147,53 @@ input phase) skews the snapshot instants, and steps 6/7/0xb are still stubbed �
 the run-label strategic sub_diff `[5,7,8,9,10,11,12,13,15]` is that combined
 residual, not a step-9 defect.
 
+## Brain step 0xb — army-movement / deployment planner (`FUN_004a5667`, landed)
+
+The per-tick brain dispatcher runs step 0xb (dispatch state 0xb) as the AI's
+army-movement planner.  Ported 2026-06-10 as `engine_army_ai_run_movement` + a
+13-function closure (all in `engine_army_ai.c`; the cost-field pathfinder and the
+muster/transfer callees were already ported).  For every live army (occupant
+record) the realm owns, it recomputes the army's march destination per the army's
+current order code (+0x1a), then runs the cost-field pathfinder from the army's
+seat to that destination and copies the resulting waypoint chain into the army
+record.
+
+| order | handler | role |
+|-------|---------|------|
+| 7 | `FUN_004a58f4` | attack-march: deploy toward the target realm's combat deploy cell |
+| 2 | `FUN_004a5b1f` | advance/seek: intercept a hostile within 6 tiles, else validate/re-pick a target realm and deploy |
+| 3 | `FUN_004a5f0a` | intercept: engage an engageable army in the secondary region (+0x11) within 31 tiles, else deploy toward it |
+| 4 | `FUN_004a6270` | garrison: deploy to the target keep if it can hold the army, else find another garrison realm or disband |
+| 5 | `FUN_004a60b9` | siege: press a besiegable keep (deploy to an owned cell), else transfer the army and downgrade to order 2 |
+| 6 | `FUN_004a599d` | lord-move: validate the campaign target, else downgrade to advance; intercept within 21 tiles |
+
+Shared callees ported alongside: the frontier check `FUN_00467f2e`, the
+nearest-army scanners `FUN_004673b8` / `FUN_00467532` (Chebyshev distance; reuse
+the retail `DAT_00553f8c` scratch — modeled as a private file-static since the
+combat-move and AI-brain uses are in disjoint phases), the deploy-cell setter
+`FUN_004a64ca` (= step 9's assign-deployment tail), and the disband-into-realm
+fallback `FUN_00438681` (pours the army's carried goods into the owner's reserves
+and its troops into a realm, then re-plans the economy).  Added
+`engine_combat_garrison_cap` to expose combat's keep-cap table.
+
+**Verification.**  r2 byte-exact on the gate (order-code 7/6/2/3/4/5 → handler
+addresses, default→reset 2), the entry (active-gate → gate → path-field
+fill/trace/copy from +0xa/+0xb to +0x16/+0x17), and the order-2 handler's
+`&&`-short-circuit triple `pick_attack_target`.  Five host tests in
+`test_engine_army_ai.c` cover the dispatcher wiring, the unknown-order reset, and
+three order handlers (attack-march capital fallback, advance-engage, siege
+target-owned no-op).
+
+**On-engine: reached but input-empty (like step 1).**  Instrumenting
+`run_movement` on `endturn_auto` showed it IS reached — once per AI realm
+(2/3/4/5) — but `active_total = 0`: there are NO field armies (active occupant
+records) anywhere in the turn-1 scenario; the AI's military is all in
+garrisons/keeps.  So the planner's loop finds nothing to move and a before/after
+`--only port` is byte-identical (the occupant table never changes).  This is the
+same shape as step 1 (reached, empty input), differing only in the input table.
+Exercising step 0xb on-engine needs a trace/save where AI realms have deployed
+field armies — a later turn or a mid-game save — not a step-0xb defect.
+
 ## Quirks captured in-code
 
 - `FUN_004a4782` backward tax sweep resets `+0x15f` to the best rate **inside**
