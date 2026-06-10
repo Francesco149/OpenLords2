@@ -618,13 +618,29 @@ const uint8_t *gfx_load_panel_sheet(void)
     return g_panel_sheet;
 }
 
-/* Port of FUN_00499a1c(0) — load system2.pl8 into the DAT_005bb540 blob
- * (retail allocates 0xdd18 = 56600 bytes; the on-disk file is 56518 and
- * fits).  The UI button-strip renderer (engine_button) indexes it for
- * the gauntlet buttons + scroll arrows.  Verified byte-identical to the
- * live DAT_005bb540 at the page-3 frame. */
-const uint8_t *gfx_load_system_sheet(void)
+/* Port of FUN_00499a1c — load one of the two system sheets into the
+ * single DAT_005bb540 slot (retail allocates 0xdd18 = 56600 bytes;
+ * both on-disk files fit):
+ *
+ *   which 0 → system2.pl8 (title-screen chrome: gauntlet buttons,
+ *             scroll arrows — engine_button indexes it)
+ *   which 1 → system.pl8  (in-game chrome: the event-scroll seal,
+ *             cursors, in-game buttons)
+ *
+ * Retail semantics mirrored exactly: a `which == 1` request when the
+ * in-game sheet is already resident is a no-op (the per-tick ensure
+ * in FUN_004b99c0's head costs nothing); a `which == 0` request
+ * ALWAYS reloads.  The current-index latch (retail DAT_004dbbf0) is
+ * written before the read — a failed read still flips the latch
+ * (retail shape, latent).  Verified byte-identical to the live
+ * DAT_005bb540 at the page-3 frame (system2 arm). */
+static int g_system_sheet_which = -1;   /* DAT_004dbbf0 (-1 = never) */
+
+const uint8_t *gfx_load_system_sheet_select(int which)
 {
+    if (which == 1 && g_system_sheet_which == 1) {
+        return g_system_sheet;          /* sticky in-game sheet */
+    }
     if (!g_system_sheet) {
         g_system_sheet = (uint8_t *)malloc(0xdd18);
         if (!g_system_sheet) {
@@ -632,12 +648,27 @@ const uint8_t *gfx_load_system_sheet(void)
             return NULL;
         }
     }
-    int n = io_read_file_at("system2.pl8", g_system_sheet, 0xdd18, 0);
+    g_system_sheet_which = which;
+    const char *name = (which == 1) ? "system.pl8" : "system2.pl8";
+    int n = io_read_file_at(name, g_system_sheet, 0xdd18, 0);
     if (n < 1) {
-        log_line("gfx_load_system_sheet: read system2.pl8 failed (%d)", n);
+        log_line("gfx_load_system_sheet: read %s failed (%d)", name, n);
         return NULL;
     }
-    log_line("OK :System sheet loaded (system2.pl8, %d bytes).", n);
+    log_line("OK :System sheet loaded (%s, %d bytes).", name, n);
+    return g_system_sheet;
+}
+
+const uint8_t *gfx_load_system_sheet(void)
+{
+    return gfx_load_system_sheet_select(0);
+}
+
+/* The resident sheet (whatever was last loaded), without touching
+ * disk — retail readers just dereference DAT_005bb540.  NULL until a
+ * load happened. */
+const uint8_t *gfx_system_sheet_current(void)
+{
     return g_system_sheet;
 }
 

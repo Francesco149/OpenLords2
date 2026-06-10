@@ -205,11 +205,16 @@ void gfx_text_set_collapse_spaces(int enabled);
  * renderer at the end of every call. */
 void gfx_text_set_collapse_active(int enabled);
 
-/* DAT_004eac50 — language tag governing the shadow color pair.  When
- * 0x1c or 0x1f, shadow colors are (0x36, 0x2c); else (0x10, 0x1f).
- * Set once at startup from the language config; the renderer reads
- * this every call. */
-void gfx_text_set_language_tag(int tag);
+/* DAT_004eac50 — the CURRENT SCREEN byte (the same global engine.c
+ * mirrors as g_sim_current_screen), read by the renderer every call
+ * to pick the shadow color pair: title-class screens 0x1c / 0x1f get
+ * the gray pair (0x36, 0x2c), every other screen the parchment pair
+ * (0x10, 0x1f).  An earlier port pass misread this as a language tag
+ * set once at boot — it must track every screen transition or in-game
+ * text renders with the title's gray shadows (caught by the trace-
+ * studio popup diff).  engine_set_current_screen forwards every
+ * write here. */
+void gfx_text_set_screen_byte(int screen);
 
 /* ──────────────────────────────────────────────────────────────────
  * Substitution stream — the '#' macro

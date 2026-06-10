@@ -692,6 +692,9 @@ struct test_case {
     X(gfx_sprite_render_truncate_top_error_gates) \
     X(gfx_sprite_render_error_latch_sticky_until_cleared) \
     X(gfx_sprite_render_log_hook_null_is_no_op) \
+    X(gfx_sprite_seal_draw_mode0_blits_idx_0x33) \
+    X(gfx_sprite_seal_draw_mode_nonzero_uses_idx_0x10) \
+    X(gfx_sprite_seal_draw_null_sheet_sets_state_only) \
     \
     X(gfx_sprite_rle_render_basic_decode) \
     X(gfx_sprite_rle_render_16byte_literal) \

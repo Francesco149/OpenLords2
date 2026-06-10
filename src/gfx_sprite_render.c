@@ -267,6 +267,45 @@ void gfx_sprite_render_opaque_from_blob(const uint8_t *blob,
 }
 
 /* ──────────────────────────────────────────────────────────────────
+ * Port of FUN_0040d1bc — continue/dismiss seal draw
+ * ────────────────────────────────────────────────────────────────── */
+
+/* Seal-position globals.  Retail parks the most recent seal draw's
+ * coordinates here; the event-scroll renderer copies them into its
+ * "committed" pair at the end of every popup frame and the dismiss
+ * hit-test reads them to bound the click region. */
+static int g_seal_x;      /* DAT_0055ce78 */
+static int g_seal_y;      /* DAT_0057c8a0 */
+static int g_seal_mode;   /* DAT_0056956c */
+
+int gfx_sprite_seal_x(void)    { return g_seal_x; }
+int gfx_sprite_seal_y(void)    { return g_seal_y; }
+int gfx_sprite_seal_mode(void) { return g_seal_mode; }
+
+void gfx_sprite_seal_draw(const uint8_t *system_sheet,
+                          int x, int y, int mode)
+{
+    g_seal_x    = x;
+    g_seal_y    = y;
+    g_seal_mode = mode;
+
+    /* Sprite select: mode 0 = the wax-seal "continue" stamp (0x33);
+     * any other mode = the small variant (0x10). */
+    int idx = (mode == 0) ? 0x33 : 0x10;
+    gfx_dispatch_set_last_glyph_index(idx);          /* DAT_005c9288 */
+
+    gfx_glyph_set_dest(x, y);                        /* DAT_00591524/8 */
+
+    /* Drop-in guard: retail's system sheet is always resident.  When
+     * the blob isn't loaded, keep the position/index writes (state-
+     * faithful) and skip the descriptor read + blit. */
+    if (system_sheet != 0) {
+        gfx_dispatch_stage_sprite_descriptor(system_sheet, idx);
+        gfx_sprite_blit_24x24_raw(system_sheet);     /* FUN_004b4cb8 */
+    }
+}
+
+/* ──────────────────────────────────────────────────────────────────
  * Port of FUN_0040a682 — global-blob render
  * ────────────────────────────────────────────────────────────────── */
 

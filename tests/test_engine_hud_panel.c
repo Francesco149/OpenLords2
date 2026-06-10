@@ -37,7 +37,7 @@
 #include "gfx_paint.h"
 #include "gfx_glyph_table.h"       /* gfx_glyph_render_map / measure_map   */
 #include "gfx_dispatch.h"          /* gfx_dispatch_set_default_font / clip */
-#include "gfx_text.h"              /* gfx_text_set_language_tag            */
+#include "gfx_text.h"              /* gfx_text_set_screen_byte            */
 #include "io.h"                    /* io_read_file_at                      */
 #include "localization.h"
 
@@ -111,7 +111,7 @@ int test_hud_panel_render_owned(void)
     static uint8_t canvas[CANVAS_W * CANVAS_H];
     memset(canvas, 0, sizeof canvas);
     gfx_paint_bind_canvas(canvas, CANVAS_W, CANVAS_H);
-    gfx_text_set_language_tag(0);                  /* DAT_004eac50 = strat map */
+    gfx_text_set_screen_byte(0);                  /* DAT_004eac50 = strat map */
     gfx_dispatch_set_alt_clip(0, 0, 0);
     gfx_dispatch_set_default_font(font_menu);     /* menu-font kerning gate   */
 

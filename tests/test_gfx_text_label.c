@@ -96,7 +96,7 @@ static void label_reset(void)
     gfx_text_set_tight_shadow(0);
     gfx_text_set_uppercase_highlight(0);
     gfx_text_set_collapse_spaces(0);
-    gfx_text_set_language_tag(0);
+    gfx_text_set_screen_byte(0);
     gfx_text_load_substitution_stream("");
     gfx_text_enable_substitution(0);
     gfx_text_set_first_pos_target(-1);

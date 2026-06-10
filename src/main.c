@@ -1033,7 +1033,7 @@ static void title_bind_render_state(void)
      * default colorful (0x10, 0x1f).  The boot→title state producer
      * (0x42b780, unported) is the real writer; set it here for the
      * bring-up so the menu text shadows match retail.  See quirk #114. */
-    gfx_text_set_language_tag(0x1f);
+    gfx_text_set_screen_byte(0x1f);
 
     /* Init the shared gfx render state to its retail BSS-zero values
      * (the panel renderer assumes these, same as the panel unit test). */

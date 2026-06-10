@@ -164,6 +164,25 @@ void    gfx_sprite_render_clear_error(void);
 void gfx_sprite_render_set_blob(const uint8_t *blob);
 const uint8_t *gfx_sprite_render_blob(void);
 
+/* Port of FUN_0040d1bc @ 0x40d1bc (181 B).  The "click to continue"
+ * seal stamp drawn at the bottom-right of event scrolls, dialog
+ * panels and report screens (55 retail call sites).  Parks (x, y,
+ * mode) in the seal-position globals (DAT_0055ce78 / DAT_0057c8a0 /
+ * DAT_0056956c — read back via the getters below; the event-scroll
+ * renderer commits them per frame and the dismiss hit-test bounds the
+ * click region with them), selects sprite 0x33 (mode 0, the wax seal)
+ * or 0x10 (any other mode) from the system sheet (system2.pl8, retail
+ * DAT_005bb540), stages its 16-byte descriptor and blits the fixed
+ * 24×24 opaque raw sprite at (x, y).  No clip pair — the raw blit is
+ * unclipped (retail FUN_004b4cb8), so callers position the seal fully
+ * on-canvas.  NULL sheet: position/index writes happen, draw skipped
+ * (drop-in guard; retail's sheet is always resident). */
+void gfx_sprite_seal_draw(const uint8_t *system_sheet,
+                          int x, int y, int mode);
+int  gfx_sprite_seal_x(void);     /* DAT_0055ce78 */
+int  gfx_sprite_seal_y(void);     /* DAT_0057c8a0 */
+int  gfx_sprite_seal_mode(void);  /* DAT_0056956c */
+
 /* Port of FUN_0040a01d.  Render a raw caller-supplied buffer at
  * (x, y) with the given width × height.  Source pixels are densely
  * packed at `w` bytes per row starting at `buffer[0]`.  No descriptor

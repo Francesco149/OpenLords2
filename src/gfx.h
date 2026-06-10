@@ -97,6 +97,17 @@ int  gfx_title_background_load(int page);
  * gfx_shutdown. */
 const uint8_t *gfx_load_panel_sheet(void);
 
+/* Select-load one of the two system sheets into the single retail
+ * DAT_005bb540 slot — port of FUN_00499a1c.  which 0 = system2.pl8
+ * (title chrome, always reloads), which 1 = system.pl8 (in-game
+ * chrome, sticky no-op when already resident — the per-tick ensure).
+ * Returns the blob or NULL on read failure. */
+const uint8_t *gfx_load_system_sheet_select(int which);
+
+/* The resident system sheet (last loaded, either file) without disk
+ * I/O — what retail readers see in DAT_005bb540.  NULL until loaded. */
+const uint8_t *gfx_system_sheet_current(void);
+
 /* Load the static system sprite sheet (system2.pl8 → retail DAT_005bb540,
  * loaded by FUN_00499a1c(0) / FUN_004af8d9 into a 0xdd18-byte buffer).
  * The raw PL8 the UI button-strip renderer (engine_button) indexes for

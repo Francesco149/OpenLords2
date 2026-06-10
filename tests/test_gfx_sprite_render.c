@@ -561,3 +561,94 @@ int test_gfx_sprite_render_opaque_from_blob_offset_too_high_logs(void)
     T_ASSERT_EQ_U(gfx_sprite_render_last_error(), 4);
     return 0;
 }
+
+/* ────────────────────────────────────────────────────────────────
+ * gfx_sprite_seal_draw — FUN_0040d1bc
+ *
+ * The seal blits a FIXED 24×24 raw sprite (hardcoded 640-byte dest
+ * stride — quirk #75), so these tests bind a 640-wide canvas like
+ * the raw-blit tests in test_gfx_sprite.c.
+ * ──────────────────────────────────────────────────────────────── */
+
+enum { SEAL_W = 640, SEAL_H = 32 };
+
+static uint8_t g_seal_canvas[SEAL_W * SEAL_H];
+
+static void seal_canvas_init(void)
+{
+    memset(g_seal_canvas, 0, sizeof g_seal_canvas);
+    gfx_paint_bind_canvas(g_seal_canvas, SEAL_W, SEAL_H);
+}
+
+/* Synthetic system sheet: 8-byte header + 0x34 descriptor slots +
+ * two 24×24 pixel tiles.  Slot 0x33 points at tile A (every byte
+ * 0x33), slot 0x10 at tile B (every byte 0x10). */
+static uint8_t g_seal_sheet[8 + 0x34 * 16 + 2 * 576];
+
+static void seal_sheet_init(void)
+{
+    memset(g_seal_sheet, 0, sizeof g_seal_sheet);
+    uint32_t tile_a = 8 + 0x34 * 16;
+    uint32_t tile_b = tile_a + 576;
+    memset(g_seal_sheet + tile_a, 0x33, 576);
+    memset(g_seal_sheet + tile_b, 0x10, 576);
+
+    uint8_t *d33 = g_seal_sheet + 0x33 * 16 + 8;
+    d33[0] = 24; d33[2] = 24;                     /* w, h_short */
+    d33[4] = (uint8_t)(tile_a & 0xff);
+    d33[5] = (uint8_t)(tile_a >> 8);
+    d33[0xd] = 24;                                /* row count */
+
+    uint8_t *d10 = g_seal_sheet + 0x10 * 16 + 8;
+    d10[0] = 24; d10[2] = 24;
+    d10[4] = (uint8_t)(tile_b & 0xff);
+    d10[5] = (uint8_t)(tile_b >> 8);
+    d10[0xd] = 24;
+}
+
+int test_gfx_sprite_seal_draw_mode0_blits_idx_0x33(void)
+{
+    seal_canvas_init();
+    seal_sheet_init();
+
+    gfx_sprite_seal_draw(g_seal_sheet, 12, 4, 0);
+
+    T_ASSERT_EQ_I(gfx_sprite_seal_x(), 12);
+    T_ASSERT_EQ_I(gfx_sprite_seal_y(), 4);
+    T_ASSERT_EQ_I(gfx_sprite_seal_mode(), 0);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x33);
+    /* 24×24 of tile A's bytes at (12, 4). */
+    T_ASSERT_EQ_U(g_seal_canvas[12 + 4 * SEAL_W], 0x33);
+    T_ASSERT_EQ_U(g_seal_canvas[12 + 23 + (4 + 23) * SEAL_W], 0x33);
+    /* One past the extent stays clear. */
+    T_ASSERT_EQ_U(g_seal_canvas[12 + 24 + 4 * SEAL_W], 0);
+    T_ASSERT_EQ_U(g_seal_canvas[12 + (4 + 24) * SEAL_W], 0);
+    return 0;
+}
+
+int test_gfx_sprite_seal_draw_mode_nonzero_uses_idx_0x10(void)
+{
+    seal_canvas_init();
+    seal_sheet_init();
+
+    gfx_sprite_seal_draw(g_seal_sheet, 0, 0, 2);
+
+    T_ASSERT_EQ_I(gfx_sprite_seal_mode(), 2);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x10);
+    T_ASSERT_EQ_U(g_seal_canvas[0], 0x10);
+    return 0;
+}
+
+int test_gfx_sprite_seal_draw_null_sheet_sets_state_only(void)
+{
+    seal_canvas_init();
+
+    gfx_sprite_seal_draw(0, 7, 9, 0);
+
+    T_ASSERT_EQ_I(gfx_sprite_seal_x(), 7);
+    T_ASSERT_EQ_I(gfx_sprite_seal_y(), 9);
+    T_ASSERT_EQ_I(gfx_dispatch_last_glyph_index(), 0x33);
+    for (int i = 0; i < SEAL_W * SEAL_H; i++)
+        T_ASSERT_EQ_U(g_seal_canvas[i], 0);
+    return 0;
+}

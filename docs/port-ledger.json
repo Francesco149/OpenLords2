@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 673,
-  "ported": 44,
-  "unported": 1730,
+  "tested": 674,
+  "ported": 47,
+  "unported": 1726,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 717,
-  "pct_touched": 29.3,
+  "touched": 721,
+  "pct_touched": 29.5,
   "pct_tested": 27.5,
   "bytes_total": 838629,
-  "bytes_touched": 312717,
-  "pct_bytes_touched": 37.3
+  "bytes_touched": 313514,
+  "pct_bytes_touched": 37.4
  },
  "orphan_refs": [
   "0x004148",
@@ -1910,8 +1910,11 @@
    "name": "FUN_0040d1bc",
    "size": 181,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_sprite_render.c",
+    "src/gfx_sprite_render.h"
+   ]
   },
   {
    "va": "0x40d271",
@@ -3924,6 +3927,7 @@
    "src": [
     "src/audio.c",
     "src/audio.h",
+    "src/engine.c",
     "src/main.c"
    ]
   },
@@ -10878,6 +10882,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_combat.c",
     "src/engine_dirty_rect.h",
     "src/engine_territory.c",
@@ -11028,6 +11033,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_battlefield_render.h",
     "src/engine_button.c",
     "src/engine_button.h",
@@ -13161,8 +13167,10 @@
    "name": "FUN_00476768",
    "size": 245,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c"
+   ]
   },
   {
    "va": "0x47685d",
@@ -13201,8 +13209,10 @@
    "name": "FUN_00476e21",
    "size": 116,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c"
+   ]
   },
   {
    "va": "0x476e95",
@@ -18616,8 +18626,10 @@
    "name": "FUN_004b35c1",
    "size": 255,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c"
+   ]
   },
   {
    "va": "0x4b36c0",
@@ -18990,7 +19002,9 @@
    "status": "tested",
    "src": [
     "src/gfx_sprite.c",
-    "src/gfx_sprite.h"
+    "src/gfx_sprite.h",
+    "src/gfx_sprite_render.c",
+    "src/gfx_sprite_render.h"
    ]
   },
   {
@@ -19452,6 +19466,7 @@
     "src/engine_tick_cadence.h",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
+    "src/gfx.c",
     "src/main.c"
    ]
   },

@@ -26,7 +26,7 @@ static int g_outline;               /* DAT_0058fe9c */
 static int g_tight_shadow;          /* DAT_005aeb90 */
 static int g_uppercase_highlight;   /* DAT_0058fe2c */
 static int g_collapse_spaces;       /* DAT_005aeb7c */
-static int g_language_tag;          /* DAT_004eac50 */
+static int g_screen_byte;           /* DAT_004eac50 — current screen id */
 
 /* Substitution stream. */
 #define GFX_TEXT_SUBSTITUTION_BUF_LEN 256
@@ -56,7 +56,7 @@ void gfx_text_set_tight_shadow(int enabled)        { g_tight_shadow = enabled; }
 void gfx_text_set_uppercase_highlight(int enabled) { g_uppercase_highlight = enabled; }
 void gfx_text_set_collapse_spaces(int enabled)     { g_collapse_spaces = enabled; }
 void gfx_text_set_collapse_active(int enabled)     { g_collapse_active = enabled; }
-void gfx_text_set_language_tag(int tag)            { g_language_tag = tag; }
+void gfx_text_set_screen_byte(int screen)          { g_screen_byte = screen; }
 
 /* ──────────────────────────────────────────────────────────────────
  * Substitution-stream setters
@@ -165,7 +165,7 @@ void gfx_text_render_line(const uint8_t *buf,
      * once per call. */
     uint8_t shadow_color_a = 0x10;
     uint8_t shadow_color_b = 0x1f;
-    if (g_language_tag == 0x1f || g_language_tag == 0x1c) {
+    if (g_screen_byte == 0x1f || g_screen_byte == 0x1c) {
         shadow_color_a = 0x36;
         shadow_color_b = 0x2c;
     }

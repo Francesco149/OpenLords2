@@ -69,7 +69,7 @@ static void text_reset(void)
     gfx_text_set_tight_shadow(0);
     gfx_text_set_uppercase_highlight(0);
     gfx_text_set_collapse_spaces(0);
-    gfx_text_set_language_tag(0);
+    gfx_text_set_screen_byte(0);
     gfx_text_load_substitution_stream("");
     gfx_text_enable_substitution(0);
     gfx_text_set_first_pos_target(-1);
@@ -322,7 +322,7 @@ int test_gfx_text_language_tag_flips_shadow_colors(void)
 {
     canvas_t c; canvas_init(&c);
     text_reset();
-    gfx_text_set_language_tag(0x1f);    /* triggers Polish/Czech tweak */
+    gfx_text_set_screen_byte(0x1f);    /* triggers Polish/Czech tweak */
 
     uint8_t font[FONT_BLOB_LEN];
     font_blob_init_3x3(font, 0xff, 0);

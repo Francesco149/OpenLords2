@@ -48,11 +48,11 @@
  * asset pointer, and the selected-button index.  All injected via the
  * binders below.  No Win32 deps — pure C, host-testable.
  *
- * Text-render globals (no_shadow / uppercase_highlight / language tag)
+ * Text-render globals (no_shadow / uppercase_highlight / screen byte)
  * live in gfx_text.c; this module toggles them through the gfx_text
  * setters exactly as retail toggles DAT_005aea40 / DAT_0058fe2c around
  * the title and subtitle.  The taller title-font line box keys on the
- * gfx_text language tag being 0x1f (set via gfx_text_set_language_tag) —
+ * gfx_text screen byte being 0x1f (set via gfx_text_set_screen_byte) —
  * that is the caller's responsibility, mirroring retail where it is the
  * ambient screen-state global.
  */
