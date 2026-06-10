@@ -658,6 +658,15 @@ known sparse ~1px cattle-edge speckle (a separate issue — see memory
 drawB_skip if hit): edge-phase kind-3/4 (param_5=2 variants of 4580a9/459258)
 and kind-2 phase-4 `FUN_00456fd8`, plus all view-mode 1/2 arms.
 
+**FLAGGED (2026-06-10, user): the BLACKSMITH overhang is clipped** — the part
+of the blacksmith building sprite that should overlap/bleed into the adjacent
+tile is missing (crop box≈444,251..477,291 in a load-route ingame frame; capture
+`20260610T163627_40e3` f=2).  Almost certainly one of the unported drawer-B
+overhang variants above (the blacksmith's tall-sprite strip B rising into the
+neighbour cell isn't drawn) rather than the now-1:1 town-centre/lumberjack path.
+TODO: identify the blacksmith feature's draw kind/phase, confirm it routes
+through a `drawb_skipped` arm, port that variant, re-verify zoom-diff.
+
 ### MAP-BODY COMPOSITION DRIVER PORTED (2026-06-01) — engine_map_scene
 
 The three cluster modules (engine_map_terrain pass-1, engine_overlay_render
