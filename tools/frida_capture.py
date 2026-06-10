@@ -421,6 +421,13 @@ def _load_segtrace(path: Path) -> list[dict[str, Any]]:
             elif "capture" in obj:
                 ops.append({"kind": "capture", "n": int(obj["capture"]),
                             "label": str(obj.get("label", ""))})
+            elif "auto_dismiss" in obj:
+                # Reactive popup auto-dismiss toggle (mirrors the port's
+                # {"auto_dismiss":N} op): applied immediately when the cursor
+                # reaches it (no frame gate).  The agent's per-tick hook then
+                # dismisses any open modal scroll while it's on.
+                ops.append({"kind": "auto_dismiss",
+                            "n": int(obj["auto_dismiss"])})
             elif "m" in obj:
                 # w/l default to 0 when omitted — same leniency as the port's
                 # C parser (src/input_trace.c), so one trace parses on both.
@@ -429,7 +436,7 @@ def _load_segtrace(path: Path) -> list[dict[str, Any]]:
                             "l": int(obj.get("l", 0))})
             else:
                 raise ValueError("unrecognised op (need m / wait / wait_until / "
-                                 "capture)")
+                                 "capture / auto_dismiss)")
         except (KeyError, TypeError, ValueError) as e:
             raise ValueError(f"{path}:{lineno}: {e}") from e
     return ops

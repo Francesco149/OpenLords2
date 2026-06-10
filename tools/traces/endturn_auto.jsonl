@@ -1,0 +1,32 @@
+# END-TURN auto-dismiss probe (endturn_auto): load -> MAP_FREEROAM, arm reactive
+# {auto_dismiss} (both port + retail agent close any open modal scroll each tick
+# — no hand-timed clicks), then a STATE+pixel sweep as the SP turn runs.  This is
+# the clean self-reacting oracle (cf. endturn_cd's explicit every-3-frame clicks).
+# Load prefix verbatim from endturn_probe.jsonl.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 2, "label": "flip0"}
+{"capture": 8, "label": "early1"}
+{"capture": 16, "label": "early2"}
+{"capture": 30, "label": "run1"}
+{"capture": 45, "label": "run1b"}
+{"capture": 60, "label": "run2"}
+{"capture": 90, "label": "run3"}
+{"capture": 120, "label": "settled"}

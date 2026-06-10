@@ -64,6 +64,15 @@ let   g_target_module_name = MODULE_NAME;
 // Cross-referenced in docs/findings/main-loop-tick.md.
 const ADDR = {
     fn_engine_tick:    0x004b99c0,  // FUN_004b99c0 — per-tick driver (sim + render)
+    // Reactive popup auto-dismiss ({"auto_dismiss":1}) — mirror of the port's
+    // engine.c:2098 chip.  While a modal scroll is open (DAT_0053e910 != 0) the
+    // per-tick hook sets the rmb-newly-released flag (DAT_004e6900) and calls
+    // the open-scroll input handler FUN_0047685d, whose right-click path closes
+    // the scroll (FUN_00476768) → unfreezes the SP sim, same tick.
+    fn_popup_scroll_input: 0x0047685d,  // FUN_0047685d — open-scroll input/dismiss
+    fn_popup_dismiss:      0x00476768,  // FUN_00476768 — the dismiss (clears 0x53e910)
+    var_extended_pause:    0x0053e910,  // DAT_0053e910 — modal-scroll freeze (dword)
+    var_rmb_released:      0x004e6900,  // DAT_004e6900 — rmb-newly-released (byte)
     // Fullscreen-mode global (1 = exclusive, 0 = windowed) — read 50+
     // places throughout the engine.  FUN_0042e5c0 auto-promotes to 1 on
     // any non-8bpp desktop, so retail effectively always goes
@@ -2439,6 +2448,15 @@ let g_seg_wait_floor    = -1;       // frame of the last resolved wait/wait_unti
 let g_seg_done_sent     = false;
 let g_capture_at_frames = null;     // Set<int> | null — absolute frames to capture
 
+// Reactive popup auto-dismiss (segtrace {"auto_dismiss":N}) — mirror of the
+// port's engine_set_popup_auto_dismiss.  While on, the per-tick hook closes any
+// open modal scroll (DAT_0053e910 != 0) the same tick, so a turn trace runs
+// through the 256c warning + brain-posted event scrolls with no hand-timed
+// clicks (and no freeze desync vs the port).
+let g_auto_dismiss      = 0;
+let g_popup_dismiss_fn  = null;     // lazy NativeFunction(FUN_00476768)
+let g_auto_dismiss_logged = false;  // one-shot log on first dismiss
+
 // ─── save-schema state dump (trace_studio state parity) ──────────────────
 // At each segtrace {capture} instant, read the 225 save-schema slots and
 // send {kind:'state_dump', frame, slots:[…]} — scalars (size ≤ 4) as
@@ -2602,6 +2620,15 @@ function segtraceTick(frame) {
             continue;
         }
 
+        if (op.kind === 'auto_dismiss') {
+            // State toggle — applied immediately (no frame gate), like the
+            // port's input-trace op.  The per-tick hook does the dismissing.
+            g_auto_dismiss = (op.n | 0);
+            log('segtrace: auto_dismiss = ' + g_auto_dismiss + ' @ frame ' + frame);
+            g_seg_idx++;
+            continue;
+        }
+
         g_seg_idx++;                                   // unknown op — skip
     }
 
@@ -2611,6 +2638,37 @@ function segtraceTick(frame) {
         g_seg_done_sent = true;
         send({kind: 'segtrace_done', frame: frame});
     }
+}
+
+// Reactive popup auto-dismiss — the retail mirror of the port's engine.c:2098
+// chip.  Called from engine_tick.onEnter (before the tick body, so the freeze
+// is cleared before retail's rate controller checks it): while a modal scroll
+// is open (DAT_0053e910 != 0), set the rmb-newly-released flag (DAT_004e6900)
+// and call the open-scroll input handler FUN_0047685d, whose right-click path
+// closes the scroll — exactly what the port does.  One-shot per scroll (the
+// dismiss clears DAT_0053e910, so the next tick's read is 0).
+function autoDismissTick() {
+    if (!g_auto_dismiss) return;
+    let ep;
+    try { ep = rva(ADDR.var_extended_pause).readU32(); } catch (e) { return; }
+    if (ep === 0) return;                       // no modal scroll open
+    try {
+        // Call the dismiss directly (FUN_00476768 — what FUN_0047685d's
+        // right-click path invokes): clears DAT_0053e910 → unfreezes the SP
+        // sim this tick.  Also set the rmb-released flag for parity with the
+        // port's chip (in case a later in-tick handler reads it).
+        rva(ADDR.var_rmb_released).writeU8(1);  // DAT_004e6900
+        if (!g_popup_dismiss_fn) {
+            g_popup_dismiss_fn = new NativeFunction(
+                rva(ADDR.fn_popup_dismiss), 'void', []);
+        }
+        g_popup_dismiss_fn();                   // FUN_00476768
+        if (!g_auto_dismiss_logged) {
+            g_auto_dismiss_logged = true;
+            log('auto_dismiss: dismissed modal scroll (ep was 0x' +
+                ep.toString(16) + ')');
+        }
+    } catch (e) { err('autoDismiss', e.message); }
 }
 
 // Drain all replay events whose stamp <= the current tick. Called from
@@ -3185,6 +3243,7 @@ function installEngineTickHook() {
             pinRngSeed();
             anchorTick(g_tick_count);
             segtraceTick(g_tick_count);
+            autoDismissTick();   // reactive modal-scroll dismiss (mirror of port)
             watchTick(g_tick_count);
             if (g_call_trace_enabled && g_call_trace_min_cum_secs > 0) {
                 callTraceWindowTick();
@@ -5109,6 +5168,7 @@ rpc.exports = {
                                                   val: o.val};
                   if (k === 'capture')    return {kind: 'capture', n: (o.n | 0),
                                                   label: String(o.label || '')};
+                  if (k === 'auto_dismiss') return {kind: 'auto_dismiss', n: (o.n | 0)};
                   return {kind: 'nop'};
               })
             : [];
