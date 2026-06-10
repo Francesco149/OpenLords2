@@ -1900,7 +1900,21 @@ static void engine_map_post_load(void)
  * it exactly as retail's save_load does.  Returns 0 on success. */
 static int drop_in_load(const char *filename)
 {
-    if (save_load(filename, "Castles.dat") != 0) {
+    /* Reproducibility: save_load rewrites its castles_path from the .sav
+     * tail, but the in-game render reads the in-memory castle block (schema
+     * block 1), not the file — the --strat-load seat proves a scratch path
+     * works.  Write the derived Castles to a scratch temp file so a trace
+     * replay NEVER overwrites the install's Castles.dat (the host tests +
+     * the load-route reference depend on it).  See memory
+     * project_save_redirect_reproducibility — the full save sandbox (agent
+     * CreateFile redirect + pinned reference .sav) is the follow-up that
+     * also makes the .sav LOAD deterministic. */
+    char castles_scratch[MAX_PATH], tmp_dir[MAX_PATH];
+    DWORD tn = GetTempPathA(sizeof tmp_dir, tmp_dir);
+    if (tn == 0 || tn >= sizeof tmp_dir)
+        lstrcpyA(tmp_dir, ".\\");
+    wsprintfA(castles_scratch, "%s_ol2_load_castles.dat", tmp_dir);
+    if (save_load(filename, castles_scratch) != 0) {
         log_line("load-pump: save_load(%s) FAILED", filename);
         return 1;
     }
