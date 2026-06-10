@@ -99,18 +99,20 @@ int g_sim_save_rotate_hold;
  * retail.  Options-screen slider (0x434cbe binding, 10..100) lands
  * later. */
 static int g_sim_game_speed = 90;
+/* Help-hints option (retail DAT_0053f24c).  The same options-init
+ * FUN_004ae310 seeds 1 (hints ON); the options-screen checkbox
+ * (0x434787) toggles.  Not a schema slot.  Gates the per-frame
+ * help-hint pump (0x476aa7) below. */
+static int g_help_hints_enabled = 1;
 /* Pause lock — non-zero freezes the sim.  retail DAT_0053f238.
  * Today no UI sets it, so always 0. */
 static int g_sim_pause_lock;
 /* Current screen ID.  retail DAT_004eac50 — single byte indexing the
- * per-screen tables.  Today nothing transitions screens, so 0.
+ * per-screen tables.
  *
- * NOTE: gfx_text.c keeps an independent mirror of this same retail byte
- * (its `g_language_tag`, used to render title-screen text in a taller
- * box when the value is 0x1f/0x1c).  Both are 0 today since no producer
- * transitions screens, so they cannot yet desync — but when the
- * boot→title transition (0x42b780, sets 0x1f) lands it must update
- * BOTH.  See docs/findings/engine-quirks.md. */
+ * NOTE: gfx_text.c keeps a mirror of this same retail byte (the
+ * shadow-pair discriminator — quirk #197).  engine_set_current_screen
+ * forwards every write; ALL screen transitions must route through it. */
 static uint8_t g_sim_current_screen;
 
 /* Demand-redraw cookie.  retail DAT_0057d340 — set to 1 or 2 by 50+
@@ -1015,7 +1017,13 @@ static int     g_popup_mp_substate;       /* DAT_0055cd78 — MP popup sub-state
                                            * dismiss parks it at 2 */
 static uint8_t g_screen27_saved_screen;   /* DAT_004f0350 — screen to restore
                                            * when leaving the 0x27 report */
-static int     g_screen27_cookie;         /* DAT_004f0358 */
+static int     g_screen27_cookie = 0x14;  /* DAT_004f0358 — the hint-
+                                           * pump cooldown.  Boot-armed
+                                           * to 0x14 by the WinMain
+                                           * hint reset (FUN_00476a5d
+                                           * from 0x40e9ab); re-armed
+                                           * by every screen-27
+                                           * restore. */
 
 /* Schema block 11 (g_misc_128, retail 0x568480) IS the first 128 bytes
  * of the live event ring — retail's producer/consumer mutate the ring
@@ -1298,6 +1306,154 @@ static void engine_popup_scroll_render(void)
     gfx_text_set_uppercase_highlight(0);             /* DAT_0058fe2c = 0 */
 }
 
+/* ─── Help-hint pump + report opener ────────────────────────────────
+ *
+ * Retail shows a one-shot tutorial scroll the first time each screen
+ * (or screen sub-mode) comes up in a session.  Two pieces:
+ *
+ *   FUN_00476da9 — open a help report: save the current screen into
+ *   the restore slot (the dismiss's screen-0x27 restore reads it
+ *   back), flip to screen 0x27, latch the per-code shown flag, zero
+ *   the report scroll position, and POST the hint event (code = the
+ *   hint id, type byte from the .rdata table 0x4d6ed8[code]).
+ *
+ *   FUN_00476aa7 — the per-frame pump (retail tick line 104, right
+ *   before the scroll consumer): gated on the help-hints option +
+ *   ingame state + the post-restore cooldown (DAT_004f0358 = 0x14,
+ *   re-armed by the screen-27 restore — one hint per 20 frames).
+ *   Strategic screen: view-mode-2 hint 0xce, then the 0xc8/0xc9/0xca
+ *   welcome series (one per pass).  Combat sub-state: 0xd4 or
+ *   0xd6/0xd7 by quick-resolve.  Then one ladder arm per screen id.
+ *
+ * The shown flags live at retail 0x4f0360..0x4f0373 — one byte per
+ * hint code 0xc8..0xdb (the opener indexes (&0x4f0298)[code], which
+ * lands in that window for every caller).  FUN_00476a5d resets the
+ * 20 flags + arms the cooldown to 0x14; retail runs it ONCE from the
+ * WinMain boot init (0x40e9ab) and again when the options checkbox
+ * toggles (0x434787).  Because the cooldown only counts down while
+ * INGAME, the boot arm means the first hint posts exactly 20 ingame
+ * frames after a load/new-game flips state 3.  On the load route this
+ * is the "mid-idle second event": the pump posts hint 0xc8 (first-
+ * time strategic-screen help, type 7) into ring slot 1 while the
+ * 256c warning still holds the scroll modal — the settled-state
+ * block-11 record-1 residual. */
+static uint8_t g_hint_shown[0x14];       /* 0x4f0360[code - 0xc8] */
+static int     g_report_scroll_pos;      /* DAT_0052f004 */
+static int     g_combat_flag_57a0f0;     /* DAT_0057a0f0 — combat-mode
+                                          * gate read by the pump's
+                                          * sub-state-2 arm; no port
+                                          * writer yet (combat UI) */
+static uint8_t g_sim_battle_subscreen;   /* DAT_00553f54 — battle sub-
+                                          * screen id; 8 = the hint-
+                                          * capable battle sub-mode.
+                                          * No port writer yet. */
+
+/* The hint-event TYPE table — image of retail .rdata 0x4d6ed8[code]
+ * for the hint code range 0xc8..0xdb (r2: px @ 0x4d6fa0).  Type 7..9
+ * select the multi-line generic scroll arms (3..5 body sub-strings),
+ * 5/6 the shorter ones, 8 the portrait arm. */
+static const uint8_t k_hint_event_type[0x14] = {
+    /* 0xc8 */ 0x07, 0x08, 0x09, 0x05, 0x05, 0x05, 0x05, 0x08,
+    /* 0xd0 */ 0x05, 0x08, 0x07, 0x05, 0x06, 0x05, 0x07, 0x05,
+    /* 0xd8 */ 0x05, 0x09, 0x07, 0x05,
+};
+
+/* Open a help report — port of FUN_00476da9 @ 0x476da9 (120 B). */
+static void engine_popup_open_report(int code)
+{
+    CALL_TRACE_ENTER(0x00476da9);
+    if (g_sim_current_screen != 0x27) {
+        g_screen27_saved_screen = g_sim_current_screen;  /* DAT_004f0350 */
+        engine_set_current_screen(0x27);
+        if (code >= 0xc8 && code < 0xc8 + 0x14)
+            g_hint_shown[code - 0xc8] = 1;     /* (&DAT_004f0298)[code] */
+        g_report_scroll_pos = 0;                         /* DAT_0052f004 */
+
+        if (!g_turn_event_queue_inited) {
+            engine_event_queue_init_wrapper(&g_turn_event_queue);
+            g_turn_event_queue_inited = 1;
+        }
+        uint8_t has_data[7];
+        for (int i = 0; i < 6; i++)
+            has_data[i] = g_player_strategic_352[i * 0x160 + 0x05];
+        has_data[6] = 0;
+        uint8_t type = (code >= 0xc8 && code < 0xc8 + 0x14)
+                           ? k_hint_event_type[code - 0xc8] : 0;
+        engine_event_queue_post(&g_turn_event_queue,
+                                0, (int32_t)s_slot_0057c8cc,
+                                code, 0, type, 0, 0, 0,
+                                has_data, (int)s_slot_0057c8cc);
+        evq_sync_save_mirror();
+    }
+}
+
+/* The per-frame hint pump — port of FUN_00476aa7 @ 0x476aa7 (770 B). */
+static void engine_tick_help_hint_step(void)
+{
+    CALL_TRACE_ENTER(0x00476aa7);
+
+    if (g_help_hints_enabled == 0 || g_engine_state != 3)
+        return;
+    if (g_screen27_cookie != 0) {
+        g_screen27_cookie -= 1;                  /* DAT_004f0358 */
+        return;
+    }
+
+    uint8_t scr = g_sim_current_screen;
+    if (scr == 0 && g_sim_screen_substate == 0) {
+        /* Strategic screen: the view-mode-2 hint, then the welcome
+         * series — one hint per pump pass. */
+        if (s_slot_0057cb18 == 2 && g_hint_shown[0xce - 0xc8] == 0) {
+            engine_popup_open_report(0xce);
+            return;
+        }
+        if (g_hint_shown[0xc8 - 0xc8] == 0) { engine_popup_open_report(0xc8); return; }
+        if (g_hint_shown[0xc9 - 0xc8] == 0) { engine_popup_open_report(0xc9); return; }
+        if (g_hint_shown[0xca - 0xc8] == 0) { engine_popup_open_report(0xca); return; }
+    }
+    if (scr == 0 && g_sim_screen_substate == 2) {
+        /* Combat sub-state: the whole arm bails while the combat gate
+         * holds; quick-resolve picks the hint pair. */
+        if (g_combat_flag_57a0f0 != 0)
+            return;
+        if (s_slot_0053e8fc == 0) {
+            if (g_hint_shown[0xd4 - 0xc8] == 0) {
+                engine_popup_open_report(0xd4);
+                return;
+            }
+        } else {
+            if (g_hint_shown[0xd6 - 0xc8] == 0) {
+                engine_popup_open_report(0xd6);
+                return;
+            }
+            if (g_hint_shown[0xd7 - 0xc8] == 0) {
+                engine_popup_open_report(0xd7);
+                return;
+            }
+        }
+    }
+    if (scr == 0x17 && g_hint_shown[0xd1 - 0xc8] == 0) {
+        engine_popup_open_report(0xd1);
+    } else if (scr == 0xf && g_sim_battle_subscreen == 8 &&
+               g_hint_shown[0xd0 - 0xc8] == 0) {
+        engine_popup_open_report(0xd0);
+    } else if (scr == 0x02 && g_hint_shown[0xcf - 0xc8] == 0) {
+        engine_popup_open_report(0xcf);
+    } else if (scr == 0x39 && g_hint_shown[0xda - 0xc8] == 0) {
+        engine_popup_open_report(0xda);
+    } else if (scr == 0x1b && g_hint_shown[0xd9 - 0xc8] == 0) {
+        engine_popup_open_report(0xd9);
+    } else if (scr == 0x10 && g_hint_shown[0xd2 - 0xc8] == 0) {
+        engine_popup_open_report(0xd2);
+    } else if (g_combat_flag_553210 != 0) {
+        /* Consumed-and-cleared even when the hint was already shown
+         * (retail clears it inside the condition). */
+        g_combat_flag_553210 = 0;
+        if (g_hint_shown[0xd3 - 0xc8] == 0)
+            engine_popup_open_report(0xd3);
+    }
+}
+
 /* Render-phase event-scroll consumer — port of FUN_00472e46 @ 0x472e46
  * (595 B).  Runs mid render-pump in retail (between the UI pumps and
  * the screen-render dispatch).  Dequeues at most one pending event per
@@ -1312,9 +1468,8 @@ static void engine_tick_event_popup_step(void)
     CALL_TRACE_ENTER(0x00472e46);
 
     uint8_t scr = g_sim_current_screen;
-    int in_gate = (scr == 0 || scr == 0x27 || scr == 0x29);
-    /* TODO: retail's fourth arm — scr == 0xf with DAT_00553f54 == 8
-     * (battle sub-screen); 0x553f54 has no port storage yet. */
+    int in_gate = (scr == 0 || scr == 0x27 || scr == 0x29 ||
+                   (scr == 0xf && g_sim_battle_subscreen == 8));
     if (!in_gate) {
         if (g_sim_extended_pause != 0) {
             /* Auto-dismiss when the screen leaves the scroll-capable
@@ -1820,6 +1975,14 @@ void engine_tick(void)
      * transition 0x42b780).  See docs/plans/main-menu-render-chips.md
      * chip 5 + docs/findings/title-menu-screens.md. */
     engine_tick_title_render_step();
+
+    /* Help-hint pump (retail FUN_00476aa7, tick line 104 — immediately
+     * before the consumer).  First-time-per-session tutorial scrolls:
+     * posts the per-screen hint event + flips to the 0x27 report
+     * screen.  On the load route this posts hint 0xc8 (strategic-
+     * screen welcome) ~20 frames after the flip — the "mid-idle
+     * second event" the state oracle sees in ring record 1. */
+    engine_tick_help_hint_step();
 
     /* In-game event-scroll consumer (retail FUN_00472e46).  Retail
      * frame order: the demand-redraw seam (0x40f1a0, line 36) and the

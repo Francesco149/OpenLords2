@@ -470,8 +470,10 @@ int             g_combat_audio_latch;    /* _DAT_005533f0 — shared: the event-
 static int      g_combat_render_dirty;   /* DAT_0052afcc */
 int             g_combat_flag_530d0;     /* DAT_005530d0 — shared: the scroll
                                           * dismiss (engine.c) raises it */
-static int      g_combat_flag_553210;    /* DAT_00553210 — UI dirty: a local-owned
-                                          * army's region relationship changed */
+int             g_combat_flag_553210;    /* DAT_00553210 — UI dirty: a local-owned
+                                          * army's region relationship changed.
+                                          * Shared: the help-hint pump (engine.c)
+                                          * consumes-and-clears it for hint 0xd3 */
 static int      g_combat_flag_567d0c;    /* DAT_00567d0c */
 static int      g_combat_flag_53f284;    /* DAT_0053f284 — quick-anim suppressor */
 static uint32_t g_combat_anim_t0;        /* DAT_0053e994 — animation start time */

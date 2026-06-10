@@ -91,6 +91,9 @@ extern int g_combat_audio_latch;    /* _DAT_005533f0 — voice/cue-active flag.
                                      * speak helper (0x4b35c1) raises it. */
 extern int g_combat_flag_530d0;     /* DAT_005530d0 — combat-focus flag; the
                                      * scroll dismiss (0x476768) raises it. */
+extern int g_combat_flag_553210;    /* DAT_00553210 — region-relationship UI
+                                     * dirty; the help-hint pump (0x476aa7)
+                                     * consumes-and-clears it (hint 0xd3). */
 
 /* Bind the optional battle-cue hook (retail FUN_00427990 ff_batl.wav); NULL
  * (the default) skips the cue.  The cue-playback path is deferred. */
