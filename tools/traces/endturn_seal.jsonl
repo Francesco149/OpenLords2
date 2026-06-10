@@ -1,0 +1,39 @@
+# END-TURN (clean): load lastturn.sav, dismiss the 256c warning by a PRECISE
+# LEFT-click on the seal (the click-to-continue black circle, bottom-right of
+# the scroll ~ (415,345) in 640x480) — NOT right-click spray, so no stray
+# terrain clicks / "Here Be Dragons" artifact.  Then watch the turn machinery:
+# phase (slot 73), AI-brain cursor (84), players-still-thinking (85), season
+# (23).  The port is expected to STALL in the think phase (AI brain FUN_0049a581
+# unported) while retail's brains progress; once the brain is ported the brains
+# reach 999 -> phase advances -> rollover -> season/palette change.
+#
+# Load prefix copied from grid_load_probe.jsonl.  Post-MAP_FREEROAM t/n are
+# anchor-relative.  Seal click: move cursor to the seal, then LMB down/up there.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"capture": 0, "label": "flip0"}
+{"t": 3, "m": 512, "w": 0, "l": 22610335}
+{"t": 6, "m": 513, "w": 1, "l": 22610335}
+{"t": 9, "m": 514, "w": 0, "l": 22610335}
+{"capture": 14, "label": "dismiss"}
+{"capture": 30, "label": "t030"}
+{"capture": 60, "label": "t060"}
+{"capture": 100, "label": "t100"}
+{"capture": 150, "label": "t150"}
+{"capture": 220, "label": "t220"}

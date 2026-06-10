@@ -31,3 +31,17 @@ Hand-craft traces and add anchors as needed to keep port↔retail in sync — th
 game is simple enough that bespoke traces beat generic capture for most chips.
 `capture --only port` is the fast loop against cached retail; `--target both`
 re-runs retail live.
+
+**Keep the studio SERVER running so the user can look** (it's their primary
+way to verify work + flag divergences). If nothing is listening on :8780,
+start it yourself in the background — don't ask:
+```
+ss -ltnp | grep -q ':8780' || \
+  nix develop -c python3 tools/trace_studio.py serve --session <name> &
+```
+URL: `http://localhost:8780/?session=<name>`. Re-point at the latest session
+after a capture. The baseline workflow is: craft a REPRODUCIBLE trace, pin the
+non-deterministic parts with anchors (and `--turbo` on the port to match
+retail's virtual clock / sub-step rate) so BOTH sides run frame-by-frame exact
+up until a REAL divergence — then the divergence stands out cleanly. The
+sibling projects ../openrecet and ../OpenSummoners do this well; mirror them.
