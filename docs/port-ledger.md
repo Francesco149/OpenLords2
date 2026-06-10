@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **727** (29.7%) — tested 674, ported 53
-- code bytes touched: **37.6%** (315,103 / 838,629 B)
-- unported: **1720**
+- touched: **732** (29.9%) — tested 679, ported 53
+- code bytes touched: **37.9%** (317,753 / 838,629 B)
+- unported: **1715**
 - orphan refs (in src/, not in function table): 7
 
-## tested (674) — ported + host unit suite
+## tested (679) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -485,7 +485,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x499e5d | FUN_00499e5d | 421 | engine_menu_input.c, game_init.c, game_init.h (+1) |
 | 0x49a010 | FUN_0049a010 | 982 | engine.c, engine_tick_cadence.h |
 | 0x49a453 | FUN_0049a453 | 302 | game_init.c, game_init.h, save.c (+1) |
-| 0x49a581 | FUN_0049a581 | 1039 | engine_army_ai.c |
+| 0x49a581 | FUN_0049a581 | 1039 | engine.c, engine_army_ai.c, engine_army_ai.h |
 | 0x49a990 | FUN_0049a990 | 126 | engine_army_ai.c, engine_army_ai.h, engine_combat.c (+1) |
 | 0x49aa0e | FUN_0049aa0e | 2197 | engine.c, engine_ranking.c, engine_ranking.h (+1) |
 | 0x49b2a3 | FUN_0049b2a3 | 187 | engine_combat.c, engine_combat.h |
@@ -512,7 +512,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49e39b | FUN_0049e39b | 994 | engine_army_ai.c, engine_army_ai.h |
 | 0x49e77d | FUN_0049e77d | 1430 | engine_army_ai.c, engine_army_ai.h |
 | 0x49ed13 | FUN_0049ed13 | 180 | engine_army_ai.c, engine_army_ai.h |
+| 0x49edc7 | FUN_0049edc7 | 872 | engine_army_ai.c |
+| 0x49f93d | FUN_0049f93d | 47 | engine_army_ai.c |
 | 0x49f96c | FUN_0049f96c | 11 | engine_army_ai.c, engine_army_ai.h |
+| 0x49f977 | FUN_0049f977 | 841 | engine_army_ai.c |
 | 0x4a0015 | FUN_004a0015 | 469 | engine_army_ai.c, engine_army_ai.h, engine_combat.c |
 | 0x4a0309 | FUN_004a0309 | 233 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a03f2 | FUN_004a03f2 | 599 | engine_army_ai.c, engine_army_ai.h |
@@ -532,6 +535,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a1ee1 | FUN_004a1ee1 | 1520 | engine_combat.c, engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a24d1 | FUN_004a24d1 | 179 | engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a2584 | FUN_004a2584 | 157 | game_init.c, game_init.h |
+| 0x4a277d | FUN_004a277d | 565 | engine_army_ai.c |
 | 0x4a3c67 | FUN_004a3c67 | 620 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a3ed3 | FUN_004a3ed3 | 383 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a4052 | FUN_004a4052 | 657 | engine_army_ai.c, engine_army_ai.h |
@@ -542,11 +546,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a4a3f | FUN_004a4a3f | 211 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a4b12 | FUN_004a4b12 | 298 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a4c41 | FUN_004a4c41 | 311 | engine_army_ai.c, engine_army_ai.h |
-| 0x4a4e3d | FUN_004a4e3d | 286 | engine_army_state.c, engine_army_state.h |
+| 0x4a4e3d | FUN_004a4e3d | 286 | engine_army_ai.c, engine_army_state.c, engine_army_state.h |
 | 0x4a4f5b | FUN_004a4f5b | 168 | engine.c, engine_army_state.c, engine_army_state.h |
 | 0x4a5003 | FUN_004a5003 | 171 | engine_combat.c, engine_combat.h |
 | 0x4a50ae | FUN_004a50ae | 731 | engine_combat.c, engine_combat.h |
 | 0x4a551b | FUN_004a551b | 332 | engine_combat.c, engine_combat.h |
+| 0x4a5667 | FUN_004a5667 | 325 | engine_army_ai.c |
 | 0x4a58f4 | FUN_004a58f4 | 169 | engine_combat.c |
 | 0x4a689d | FUN_004a689d | 399 | engine_combat.c, engine_combat.h |
 | 0x4a6a30 | FUN_004a6a30 | 568 | engine_combat.c, engine_combat.h |

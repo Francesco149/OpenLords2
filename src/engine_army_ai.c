@@ -29,6 +29,8 @@
 #include "engine_diplomacy.h"      /* clear_treaty / battle_adjust / best_ally / form_alliance / should_engage */
 #include "engine_realm.h"          /* engine_realm_player_owns_neighbor (FUN_00467eb0) */
 #include "engine_combat.h"         /* raise_region_unit / find_deploy_cell (step-0xa attack) */
+#include "engine_army_state.h"     /* arm_movement_owned (FUN_004a4e3d — brain terminal check) */
+#include "call_trace.h"            /* CALL_TRACE_ENTER (per-tick brain dispatch marker) */
 
 #define ARMY_REC(key)   (&g_per_army_768[(key) * 0x300])
 #define STRAT_REC(slot) (&g_player_strategic_352[(slot) * 0x160])
@@ -131,6 +133,11 @@
                                      *   start of the independent-realm AI pass */
 
 /* ── Per-player strategic fields used by the resource orchestrator ── */
+#define STRAT_BRAIN_STATE   0x000   /* DAT_0057bf00 — the per-tick brain FSM state /
+                                     *   "turn-progress" field (i32).  engine_turn_reset_roster
+                                     *   seeds it (0 = mid-turn → re-init, 999 = turn done); the
+                                     *   per-tick dispatcher (FUN_0049a581) walks it 0→1→…→0xe→idle
+                                     *   then parks it at 999 once movement drains. */
 #define STRAT_ACTIVE        0x004   /* DAT_0057bf04 — in-game flag */
 #define STRAT_ELIMINATED    0x005   /* DAT_0057bf05 — human-controlled byte (0 = AI).  The
                                      *   grant path above calls it "eliminated"; the FSM
@@ -1744,4 +1751,124 @@ void engine_army_ai_launch_attack(int player)
 
     s[STRAT_ATTACK_COOLDOWN] =
         g_ai_personality[(s[STRAT_PERSONALITY] - 1) * AI_PERS_STRIDE + AI_PERS_ATTACK_CD];
+}
+
+/* ── Per-tick AI brain dispatcher (FUN_0049a581) ──────────────────────────
+ *
+ * Ranking-changed redraw cookie — retail _DAT_0056d6a0, set to 1 by the brain
+ * terminal arm when a realm is parked at the turn-done sentinel (the field
+ * ranking has settled → repaint).  Runtime-only render flag (NOT save-state);
+ * the port has no consumer yet, so it is a faithful write-only mirror.
+ * TODO(render): wire the dirty-rect repaint that consumes it. */
+static int g_ai_ranking_dirty;   /* _DAT_0056d6a0 */
+
+/* Port of FUN_0049a581 (1039 B) — the per-tick AI "brain" FSM dispatcher,
+ * reached from the strategic sub-step driver (engine_turn_tick_substate0,
+ * phase 4) once per sub-step.  It does NOT loop over all realms: it advances a
+ * persistent round-robin cursor (s_slot_0057c944, slot 84) by one in-game realm
+ * per call and runs a single FSM transition on that realm, so the per-turn AI
+ * work is amortised one state-per-tick across the whole human-interactive phase.
+ *
+ *   - round-robin: walk the cursor (1..5, wrapping) up to 5 times to find the
+ *     next in-game realm (+0x4 != 0); if none, return.
+ *   - state 0 → first-tick init: re-check elimination + recompute the player's
+ *     ranking aggregate, clear the proposal gate (+0x1c), set state := 1.
+ *   - human-owned (+0x5 != 0, quirk #190) or already parked (state >= 999) →
+ *     return without AI work.
+ *   - else dispatch the current state through the 14-task ladder (one task per
+ *     tick), then state++.  After the ladder (states >= sel*2+15), once the
+ *     realm's owned-army movement has drained (arm_movement_owned(1, sel) == 0)
+ *     the realm is parked at the 999 "turn done" sentinel + the ranking redraw
+ *     cookie is set.
+ *
+ * Steps 1/6/7/9/0xb are advance-only stubs (CALL_TRACE_ENTER_STUB markers +
+ * the TODO notes below): the FSM still advances through them so the cursor and
+ * dispatch structure track retail exactly (closing the slot-84 divergence the
+ * trace studio flagged), while their per-realm state writes — FUN_004a277d /
+ * 0049edc7 / 0049f93d / 0049f977 / 004a5667 and their ~18 KB of callee trees —
+ * land incrementally bottom-up.  Steps 2/3/4/5/8/0xa/0xc/0xd/0xe are live.
+ *
+ * `evq` is the live turn event queue (steps 2/0xd + the init elimination post);
+ * `mp_active` threads retail DAT_00553030 into the init elimination check. */
+void engine_army_ai_run_per_tick(engine_event_queue_state_t *evq, int mp_active)
+{
+    CALL_TRACE_ENTER(0x0049a581);
+
+    /* Round-robin: advance the persistent cursor (1..5, wrapping) up to 5
+     * times looking for the next in-game realm. */
+    int sel = (int)s_slot_0057c944;
+    for (int i = 1; i < 6; i++) {
+        sel = (int)s_slot_0057c944;
+        if (++s_slot_0057c944 >= 6)
+            s_slot_0057c944 = 1;
+        if (STRAT_REC(sel)[STRAT_ACTIVE] != 0)
+            break;
+    }
+
+    uint8_t *rec = STRAT_REC(sel);
+    if (rec[STRAT_ACTIVE] == 0)
+        return;                                       /* no in-game realm found */
+
+    int32_t *state = (int32_t *)(rec + STRAT_BRAIN_STATE);
+    if (*state == 0) {
+        /* First-tick init for this realm. */
+        engine_ranking_check_elimination((unsigned)sel, evq, mp_active); /* 0x49b42b */
+        engine_ranking_recompute_player_aggregate((unsigned)sel);        /* 0x49d1e0 */
+        rec[STRAT_PROPOSAL_GATE] = 0;                 /* +0x1c byte */
+        *state = 1;
+    }
+
+    if (rec[STRAT_ELIMINATED] != 0)
+        return;                                       /* human-owned (quirk #190) */
+    if (*state >= 0x3e7)
+        return;                                       /* already parked (turn done) */
+
+    switch (*state) {
+    case 0x1:
+        /* TODO(brain step 1): FUN_004a277d (565 B) + 8-fn / 5.6 KB closure
+         * (4a29b2 4a2cd6 4a2f61 4a30f6 4a3475 4a3551 4a38db + 4a1b29).  Runs
+         * first for every realm; advance-only until ported. */
+        CALL_TRACE_ENTER_STUB(0x004a277d);
+        break;
+    case 0x2:  engine_army_ai_run_diplomacy(sel, evq);      break; /* 0x4a0c1d */
+    case 0x3:  engine_army_ai_set_rations_and_grant(sel);   break; /* 0x49d638 */
+    case 0x4:  engine_army_ai_seed_buy_requests(sel);       break; /* 0x49e1bf */
+    case 0x5:  engine_army_ai_run_player(sel);              break; /* 0x49dd01 */
+    case 0x6:
+        /* TODO(brain step 6): FUN_0049edc7 (872 B) + 436d02 (768 B) + 46841c. */
+        CALL_TRACE_ENTER_STUB(0x0049edc7);
+        break;
+    case 0x7:
+        /* TODO(brain step 7): FUN_0049f93d (47 B) + 49f12f/49f431 (~770 B ea.)
+         * + 4a65a3/49f73f/49f850/4a5389/4a545f. */
+        CALL_TRACE_ENTER_STUB(0x0049f93d);
+        break;
+    case 0x8:  engine_army_ai_step_noop();                  break; /* 0x49f96c */
+    case 0x9:
+        /* TODO(brain step 9): FUN_0049f977 (846 B) + 49fda5/4a65a3/4a6735/
+         * 4a01ea/49fcc5/49ff71. */
+        CALL_TRACE_ENTER_STUB(0x0049f977);
+        break;
+    case 0xa:  engine_army_ai_launch_attack(sel);           break; /* 0x4a0015 */
+    case 0xb:
+        /* TODO(brain step 0xb): FUN_004a5667 (325 B) + 14-fn / 6.3 KB closure
+         * (the army-movement/deployment planner — pulls in path_field). */
+        CALL_TRACE_ENTER_STUB(0x004a5667);
+        break;
+    case 0xc:  engine_army_ai_run_build_orders(sel);        break; /* 0x49e77d */
+    case 0xd:  engine_army_ai_propose_diplomacy(sel, evq);  break; /* 0x4a13a6 */
+    case 0xe:  engine_ranking_recompute_player_aggregate((unsigned)sel); break; /* 0x49d1e0 */
+    default:   break;   /* states 15.. — idle ramp toward the terminal threshold */
+    }
+
+    /* Terminal check: once the state crosses the per-slot threshold (sel*2+15)
+     * and the realm's owned-army movement has drained, park at the 999 sentinel
+     * and flag the ranking redraw cookie. */
+    if (*state >= sel * 2 + 0xf) {
+        if (engine_army_state_arm_movement_owned(1, sel) == 0) {  /* 0x4a4e3d */
+            *state = 0x3e7;
+            g_ai_ranking_dirty = 1;                   /* _DAT_0056d6a0 */
+        }
+    }
+    (*state)++;
 }

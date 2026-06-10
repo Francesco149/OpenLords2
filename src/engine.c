@@ -982,10 +982,14 @@ static void engine_turn_tick_substate0(void)
         if (engine_army_state_arm_movement(4) == 0)   /* FUN_004a4f5b */
             engine_turn_advance_phase();
     } else {
-        /* Phase 4 — the human player's interactive phase.
+        /* Phase 4 — the human player's interactive phase.  Retail order
+         * (FUN_0049a010 @ 0x49a3ca): run the per-tick AI brain, then the
+         * end-of-turn readiness check → phase advance.
          * TODO (wall-clock UI/MP affordances, see header): the turn-timer
-         * countdown, the roster-999 10-second re-poll, the auto-advance
-         * block.  TODO (sim): the per-tick AI brain FSM 0x49a581. */
+         * countdown, the roster-999 10-second re-poll, the auto-advance block
+         * (all precede the brain conditionally, 0x49a3a1; UI-only, not sim). */
+        engine_army_ai_run_per_tick(&g_turn_event_queue,  /* FUN_0049a581 */
+                                    g_sim_mp_active);
         if (engine_sim_turn_resolved() != 0)          /* FUN_0049b762 */
             engine_turn_advance_phase();
     }

@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 674,
+  "tested": 679,
   "ported": 53,
-  "unported": 1720,
+  "unported": 1715,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 727,
-  "pct_touched": 29.7,
-  "pct_tested": 27.5,
+  "touched": 732,
+  "pct_touched": 29.9,
+  "pct_tested": 27.7,
   "bytes_total": 838629,
-  "bytes_touched": 315103,
-  "pct_bytes_touched": 37.6
+  "bytes_touched": 317753,
+  "pct_bytes_touched": 37.9
  },
  "orphan_refs": [
   "0x004148",
@@ -15780,7 +15780,9 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine.c",
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h"
    ]
   },
   {
@@ -16144,8 +16146,10 @@
    "name": "FUN_0049edc7",
    "size": 872,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x49f12f",
@@ -16184,8 +16188,10 @@
    "name": "FUN_0049f93d",
    "size": 47,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x49f96c",
@@ -16203,8 +16209,10 @@
    "name": "FUN_0049f977",
    "size": 841,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x49fcc5",
@@ -16473,8 +16481,10 @@
    "name": "FUN_004a277d",
    "size": 565,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a29b2",
@@ -16657,6 +16667,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_army_state.c",
     "src/engine_army_state.h"
    ]
@@ -16727,8 +16738,10 @@
    "name": "FUN_004a5667",
    "size": 325,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a57ac",

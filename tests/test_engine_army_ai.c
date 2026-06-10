@@ -1780,3 +1780,124 @@ int test_army_ai_launch_attack_unprosperous_gates(void)
     T_ASSERT_EQ_I(PREC(2)[0x15a], 0);  /* but cooldown not reloaded */
     return 0;
 }
+
+/* ── Per-tick AI brain dispatcher (FUN_0049a581) ──────────────────────────
+ * These cover the dispatcher's own FSM bookkeeping — the round-robin cursor,
+ * first-tick init, the human/parked gates, the per-tick state advance, and the
+ * terminal park.  Every realm here sits on a stub state (7) or state 0/17 so
+ * only the dispatcher's logic runs; the step bodies have their own tests. */
+
+/* A realm on a stub state: dispatch is a no-op, the state advances by one, and
+ * the round-robin cursor steps to the next slot. */
+int test_army_ai_per_tick_advances_stub_state(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    engine_event_queue_init(&evq);
+    PREC(2)[0x04] = 1;                       /* in-game */
+    AI32(PREC(2), 0x00) = 7;                 /* stub step 7 */
+    s_slot_0057c944 = 2;
+
+    engine_army_ai_run_per_tick(&evq, 0);
+
+    T_ASSERT_EQ_I(AI32(PREC(2), 0x00), 8);   /* state advanced */
+    T_ASSERT_EQ_I((int)s_slot_0057c944, 3);  /* cursor stepped */
+    return 0;
+}
+
+/* The round-robin skips inactive slots and wraps the cursor 5→1. */
+int test_army_ai_per_tick_round_robin_skips_inactive(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    engine_event_queue_init(&evq);
+    PREC(5)[0x04] = 1;                       /* only slot 5 is in-game */
+    AI32(PREC(5), 0x00) = 7;
+    s_slot_0057c944 = 4;                     /* starts before slot 5 */
+
+    engine_army_ai_run_per_tick(&evq, 0);
+
+    T_ASSERT_EQ_I(AI32(PREC(5), 0x00), 8);   /* slot 5 advanced */
+    T_ASSERT_EQ_I((int)s_slot_0057c944, 1);  /* 4→5, then 6 wraps to 1 */
+    return 0;
+}
+
+/* No in-game realm: the cursor sweeps all five (wrapping back to its start) and
+ * the call returns without touching any FSM state. */
+int test_army_ai_per_tick_no_active_realm(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    engine_event_queue_init(&evq);
+    s_slot_0057c944 = 1;                     /* all slots inactive */
+
+    engine_army_ai_run_per_tick(&evq, 0);
+
+    T_ASSERT_EQ_I((int)s_slot_0057c944, 1);  /* +5 increments, wrapping → 1 */
+    return 0;
+}
+
+/* A human-owned realm (+0x05 != 0, quirk #190) is skipped: no dispatch, no
+ * state advance — but the round-robin cursor still steps. */
+int test_army_ai_per_tick_human_skipped(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    engine_event_queue_init(&evq);
+    PREC(2)[0x04] = 1;                       /* in-game */
+    PREC(2)[0x05] = 1;                       /* human-owned */
+    AI32(PREC(2), 0x00) = 7;                 /* non-zero state → no init */
+    s_slot_0057c944 = 2;
+
+    engine_army_ai_run_per_tick(&evq, 0);
+
+    T_ASSERT_EQ_I(AI32(PREC(2), 0x00), 7);   /* state untouched */
+    T_ASSERT_EQ_I((int)s_slot_0057c944, 3);  /* cursor still stepped */
+    return 0;
+}
+
+/* First-tick init (state 0): runs the elimination/aggregate init, clears the
+ * proposal gate (+0x1c), sets state := 1, then the step-1 stub advances it
+ * to 2. */
+int test_army_ai_per_tick_init_sets_state(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    engine_event_queue_init(&evq);
+    s_slot_0056d5dc = 0;                     /* no realms → init is headless */
+    PREC(2)[0x04] = 1;                       /* in-game */
+    PREC(2)[0x1c] = 9;                       /* proposal gate set — init clears it */
+    AI32(PREC(2), 0x00) = 0;                 /* state 0 → init */
+    s_slot_0057c944 = 2;
+
+    engine_army_ai_run_per_tick(&evq, 0);
+
+    T_ASSERT_EQ_I(AI32(PREC(2), 0x00), 2);   /* 0 → init → 1 → step-1 stub → 2 */
+    T_ASSERT_EQ_I(PREC(2)[0x1c], 0);         /* proposal gate cleared */
+    return 0;
+}
+
+/* Terminal park: once the state crosses the per-slot threshold (sel*2+15) and
+ * no owned army movement is pending, the realm is parked at 999 (then ++ to
+ * 0x3e8 by the tail increment). */
+int test_army_ai_per_tick_terminal_parks(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(g_per_army_768, 0, sizeof g_per_army_768);   /* no pending movement */
+    engine_event_queue_init(&evq);
+    PREC(1)[0x04] = 1;                       /* in-game */
+    AI32(PREC(1), 0x00) = 17;                /* == threshold 1*2+15 */
+    s_slot_0057c944 = 1;
+
+    engine_army_ai_run_per_tick(&evq, 0);
+
+    T_ASSERT_EQ_I(AI32(PREC(1), 0x00), 0x3e8);  /* parked at 999, then ++ */
+    return 0;
+}

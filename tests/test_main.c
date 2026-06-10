@@ -2149,6 +2149,12 @@ struct test_case {
     X(army_ai_launch_attack_cooldown_ticks) \
     X(army_ai_launch_attack_no_enemy) \
     X(army_ai_launch_attack_unprosperous_gates) \
+    X(army_ai_per_tick_advances_stub_state) \
+    X(army_ai_per_tick_round_robin_skips_inactive) \
+    X(army_ai_per_tick_no_active_realm) \
+    X(army_ai_per_tick_human_skipped) \
+    X(army_ai_per_tick_init_sets_state) \
+    X(army_ai_per_tick_terminal_parks) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

@@ -111,6 +111,15 @@ void engine_army_ai_run_player(int player);
  * every player slot 1..5 still in the game (strategic +0x4 set, +0x5 clear). */
 void engine_army_ai_run_turn(void);
 
+/* Port of FUN_0049a581 — the per-tick AI "brain" FSM dispatcher (the phase-4
+ * sub-step driver), reached from engine_turn_tick_substate0.  Advances the
+ * persistent round-robin cursor (s_slot_0057c944) by one in-game realm per call
+ * and runs a single FSM transition (init → 14-task ladder → park at 999) on it.
+ * `evq` is the live turn event queue (diplomacy/elimination posts); `mp_active`
+ * threads DAT_00553030 into the init elimination check.  Steps 1/6/7/9/0xb are
+ * advance-only stubs pending their callee-tree ports. */
+void engine_army_ai_run_per_tick(engine_event_queue_state_t *evq, int mp_active);
+
 /* Port of FUN_0049d638.  Phase-1 AI init for one player slot: set each owned
  * realm's ration/tax setting (+0xb9) from its approval via a personality-keyed
  * ladder (player 0 uses a fixed independent ladder), then — for an active,
