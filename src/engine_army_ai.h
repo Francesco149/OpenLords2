@@ -116,9 +116,12 @@ void engine_army_ai_run_turn(void);
  * persistent round-robin cursor (s_slot_0057c944) by one in-game realm per call
  * and runs a single FSM transition (init → 14-task ladder → park at 999) on it.
  * `evq` is the live turn event queue (diplomacy/elimination posts); `mp_active`
- * threads DAT_00553030 into the init elimination check.  Steps 1/6/7/9/0xb are
- * advance-only stubs pending their callee-tree ports. */
-void engine_army_ai_run_per_tick(engine_event_queue_state_t *evq, int mp_active);
+ * threads DAT_00553030 into the init elimination check; `rng_7bit_b` is the
+ * freshly-stirred 7-bit RNG byte (DAT_0058fd60) the step-1 diplomacy handlers
+ * roll against.  Steps 6/7/9/0xb are advance-only stubs pending their
+ * callee-tree ports. */
+void engine_army_ai_run_per_tick(engine_event_queue_state_t *evq, int mp_active,
+                                 uint32_t rng_7bit_b);
 
 /* Port of FUN_0049d638.  Phase-1 AI init for one player slot: set each owned
  * realm's ration/tax setting (+0xb9) from its approval via a personality-keyed

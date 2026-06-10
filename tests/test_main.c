@@ -2155,6 +2155,11 @@ struct test_case {
     X(army_ai_per_tick_human_skipped) \
     X(army_ai_per_tick_init_sets_state) \
     X(army_ai_per_tick_terminal_parks) \
+    X(army_ai_step1_empty_inbox_clears) \
+    X(army_ai_step1_offer_warms_and_posts) \
+    X(army_ai_step1_break_clears_treaty) \
+    X(army_ai_step1_alliance_accept_forges) \
+    X(army_ai_step1_skips_self_and_stops_at_gap) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

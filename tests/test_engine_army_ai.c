@@ -1799,7 +1799,7 @@ int test_army_ai_per_tick_advances_stub_state(void)
     AI32(PREC(2), 0x00) = 7;                 /* stub step 7 */
     s_slot_0057c944 = 2;
 
-    engine_army_ai_run_per_tick(&evq, 0);
+    engine_army_ai_run_per_tick(&evq, 0, 0);
 
     T_ASSERT_EQ_I(AI32(PREC(2), 0x00), 8);   /* state advanced */
     T_ASSERT_EQ_I((int)s_slot_0057c944, 3);  /* cursor stepped */
@@ -1817,7 +1817,7 @@ int test_army_ai_per_tick_round_robin_skips_inactive(void)
     AI32(PREC(5), 0x00) = 7;
     s_slot_0057c944 = 4;                     /* starts before slot 5 */
 
-    engine_army_ai_run_per_tick(&evq, 0);
+    engine_army_ai_run_per_tick(&evq, 0, 0);
 
     T_ASSERT_EQ_I(AI32(PREC(5), 0x00), 8);   /* slot 5 advanced */
     T_ASSERT_EQ_I((int)s_slot_0057c944, 1);  /* 4→5, then 6 wraps to 1 */
@@ -1834,7 +1834,7 @@ int test_army_ai_per_tick_no_active_realm(void)
     engine_event_queue_init(&evq);
     s_slot_0057c944 = 1;                     /* all slots inactive */
 
-    engine_army_ai_run_per_tick(&evq, 0);
+    engine_army_ai_run_per_tick(&evq, 0, 0);
 
     T_ASSERT_EQ_I((int)s_slot_0057c944, 1);  /* +5 increments, wrapping → 1 */
     return 0;
@@ -1853,7 +1853,7 @@ int test_army_ai_per_tick_human_skipped(void)
     AI32(PREC(2), 0x00) = 7;                 /* non-zero state → no init */
     s_slot_0057c944 = 2;
 
-    engine_army_ai_run_per_tick(&evq, 0);
+    engine_army_ai_run_per_tick(&evq, 0, 0);
 
     T_ASSERT_EQ_I(AI32(PREC(2), 0x00), 7);   /* state untouched */
     T_ASSERT_EQ_I((int)s_slot_0057c944, 3);  /* cursor still stepped */
@@ -1861,8 +1861,8 @@ int test_army_ai_per_tick_human_skipped(void)
 }
 
 /* First-tick init (state 0): runs the elimination/aggregate init, clears the
- * proposal gate (+0x1c), sets state := 1, then the step-1 stub advances it
- * to 2. */
+ * proposal gate (+0x1c), sets state := 1, then step 1 runs (empty inbox here)
+ * and the tail increment advances it to 2. */
 int test_army_ai_per_tick_init_sets_state(void)
 {
     engine_event_queue_state_t evq;
@@ -1875,9 +1875,9 @@ int test_army_ai_per_tick_init_sets_state(void)
     AI32(PREC(2), 0x00) = 0;                 /* state 0 → init */
     s_slot_0057c944 = 2;
 
-    engine_army_ai_run_per_tick(&evq, 0);
+    engine_army_ai_run_per_tick(&evq, 0, 0);
 
-    T_ASSERT_EQ_I(AI32(PREC(2), 0x00), 2);   /* 0 → init → 1 → step-1 stub → 2 */
+    T_ASSERT_EQ_I(AI32(PREC(2), 0x00), 2);   /* 0 → init → 1 → step 1 → 2 */
     T_ASSERT_EQ_I(PREC(2)[0x1c], 0);         /* proposal gate cleared */
     return 0;
 }
@@ -1896,8 +1896,151 @@ int test_army_ai_per_tick_terminal_parks(void)
     AI32(PREC(1), 0x00) = 17;                /* == threshold 1*2+15 */
     s_slot_0057c944 = 1;
 
-    engine_army_ai_run_per_tick(&evq, 0);
+    engine_army_ai_run_per_tick(&evq, 0, 0);
 
     T_ASSERT_EQ_I(AI32(PREC(1), 0x00), 0x3e8);  /* parked at 999, then ++ */
+    return 0;
+}
+
+/* ── Brain step 1: diplomacy-inbox processor (FUN_004a277d + handlers) ─────
+ * These drive the dispatcher on a realm sitting at state 1, so case 0x1 runs
+ * the real inbox processor.  The cursor starts on the realm so the round-robin
+ * selects it (sel = cursor, then cursor steps).  Relation lives at +0x84 +
+ * other*0x10; the per-pair best-offer at +0x8c; the mood-cycle at +0x159. */
+
+/* Stage one diplomacy message into receiver `rcv`'s inbox slot `i`. */
+static void inbox_set(int rcv, int i, uint8_t sender, uint8_t type,
+                      uint8_t param, int32_t value)
+{
+    uint8_t *e = &s_slot_0053f0f0[rcv * 0x28 + i * 8];
+    e[0] = sender;
+    e[1] = type;
+    e[2] = param;
+    *(int32_t *)(e + 4) = value;
+}
+
+/* An empty inbox: the processor drains nothing, resets the per-pair +0x90
+ * scratch bytes, and the FSM advances 1 → 2. */
+int test_army_ai_step1_empty_inbox_clears(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(s_slot_0053f0f0, 0, sizeof s_slot_0053f0f0);
+    engine_event_queue_init(&evq);
+    PREC(2)[0x04] = 1;                       /* in-game */
+    AI32(PREC(2), 0x00) = 1;                 /* state 1 → step 1 */
+    PREC(2)[0x90 + 3 * 0x10] = 7;            /* a stale +0x90 scratch byte */
+    s_slot_0057c944 = 2;
+
+    engine_army_ai_run_per_tick(&evq, 0, 0);
+
+    T_ASSERT_EQ_I(PREC(2)[0x90 + 3 * 0x10], 0);  /* scratch reset */
+    T_ASSERT_EQ_I(AI32(PREC(2), 0x00), 2);       /* state advanced */
+    return 0;
+}
+
+/* type 0 — a generous offer (over the personality band) warms the relation by
+ * +10, latches the per-pair best-offer, bumps the mood-cycle, and drains the
+ * inbox slot. */
+int test_army_ai_step1_offer_warms_and_posts(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(s_slot_0053f0f0, 0, sizeof s_slot_0053f0f0);
+    engine_event_queue_init(&evq);
+    PREC(1)[0x04] = 1;                       /* p1 in-game */
+    PREC(1)[0x07] = 1;                       /* personality 1 → offer band 100 */
+    AI32(PREC(1), 0x00) = 1;                 /* state 1 */
+    PREC(2)[0x05] = 1;                       /* sender active (type-0 gate) */
+    inbox_set(1, 0, /*sender*/2, /*type*/0, /*param*/0, /*value*/1000);
+    s_slot_0057c944 = 1;
+
+    engine_army_ai_run_per_tick(&evq, 0, 0);
+
+    T_ASSERT_EQ_I((int8_t)PREC(1)[0x84 + 2 * 0x10], 10);  /* relation +10 */
+    T_ASSERT_EQ_I(AI32(PREC(1), 0x8c + 2 * 0x10), 1000);  /* best-offer latched */
+    T_ASSERT_EQ_I(PREC(1)[0x159], 1);                     /* mood-cycle bumped */
+    T_ASSERT_EQ_I(s_slot_0053f0f0[1 * 0x28 + 0], 0);      /* inbox slot drained */
+    T_ASSERT_EQ_I(AI32(PREC(1), 0x00), 2);                /* state advanced */
+    return 0;
+}
+
+/* type 2 — a notified treaty break: clears p1's lord bond to p2, sours the
+ * relation by 20, posts (mood-cycle bumps). */
+int test_army_ai_step1_break_clears_treaty(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(s_slot_0053f0f0, 0, sizeof s_slot_0053f0f0);
+    engine_event_queue_init(&evq);
+    PREC(1)[0x04] = 1;                       /* p1 in-game */
+    PREC(1)[0x81] = 2;                       /* p1's lord is p2 */
+    AI32(PREC(1), 0x00) = 1;                 /* state 1 */
+    PREC(2)[0x05] = 1;                       /* sender active (type-2 gate) */
+    inbox_set(1, 0, /*sender*/2, /*type*/2, 0, 0);
+    s_slot_0057c944 = 1;
+
+    engine_army_ai_run_per_tick(&evq, 0, 0);
+
+    T_ASSERT_EQ_I(PREC(1)[0x81], 0);                       /* lord bond cleared */
+    T_ASSERT_EQ_I((int8_t)PREC(1)[0x84 + 2 * 0x10], -20);  /* relation -20 */
+    T_ASSERT_EQ_I(PREC(1)[0x159], 1);                      /* mood-cycle bumped */
+    return 0;
+}
+
+/* type 3 — an alliance proposal accepted on a warm relation (>= 11, no RNG
+ * roll): the relation gains +4 and a mutual lord bond is forged. */
+int test_army_ai_step1_alliance_accept_forges(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(s_slot_0053f0f0, 0, sizeof s_slot_0053f0f0);
+    engine_event_queue_init(&evq);
+    PREC(1)[0x04] = 1;                       /* p1 in-game */
+    AI32(PREC(1), 0x00) = 1;                 /* state 1 */
+    PREC(1)[0x84 + 2 * 0x10] = 20;           /* warm relation → accept */
+    s_slot_00554004 = 5;                     /* plenty of players left */
+    inbox_set(1, 0, /*sender*/2, /*type*/3, 0, 0);
+    s_slot_0057c944 = 1;
+
+    engine_army_ai_run_per_tick(&evq, 0, 0);
+
+    T_ASSERT_EQ_I((int8_t)PREC(1)[0x84 + 2 * 0x10], 24);  /* relation +4 */
+    T_ASSERT_EQ_I(PREC(1)[0x81], 2);                      /* p2 forged as lord */
+    T_ASSERT_EQ_I(PREC(2)[0x81], 1);                      /* mutual bond */
+    return 0;
+}
+
+/* Loop control: a self-addressed slot is skipped (not dispatched), and the scan
+ * stops at the first empty slot — a message queued *after* a gap is never
+ * processed. */
+int test_army_ai_step1_skips_self_and_stops_at_gap(void)
+{
+    engine_event_queue_state_t evq;
+    ai_turn_setup();
+    memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
+    memset(s_slot_0053f0f0, 0, sizeof s_slot_0053f0f0);
+    engine_event_queue_init(&evq);
+    PREC(1)[0x04] = 1;                       /* p1 in-game */
+    PREC(1)[0x07] = 1;                       /* personality 1 */
+    AI32(PREC(1), 0x00) = 1;                 /* state 1 */
+    PREC(2)[0x05] = 1;                       /* senders active */
+    PREC(3)[0x05] = 1;
+    inbox_set(1, 0, /*sender*/1, /*type*/0, 0, 1000);   /* self → skipped */
+    inbox_set(1, 1, /*sender*/2, /*type*/0, 0, 1000);   /* processed */
+    /* slot 2 left empty → break */
+    inbox_set(1, 3, /*sender*/3, /*type*/0, 0, 1000);   /* after gap → ignored */
+    s_slot_0057c944 = 1;
+
+    engine_army_ai_run_per_tick(&evq, 0, 0);
+
+    T_ASSERT_EQ_I((int8_t)PREC(1)[0x84 + 2 * 0x10], 10); /* from-2 handler ran */
+    T_ASSERT_EQ_I((int8_t)PREC(1)[0x84 + 1 * 0x10], 0);  /* self never dispatched */
+    T_ASSERT_EQ_I((int8_t)PREC(1)[0x84 + 3 * 0x10], 0);  /* post-gap never reached */
+    T_ASSERT_EQ_I(PREC(1)[0x159], 1);                    /* exactly one post */
     return 0;
 }

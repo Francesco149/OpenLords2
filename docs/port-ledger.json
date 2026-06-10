@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 679,
+  "tested": 687,
   "ported": 53,
-  "unported": 1715,
+  "unported": 1707,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 732,
-  "pct_touched": 29.9,
-  "pct_tested": 27.7,
+  "touched": 740,
+  "pct_touched": 30.2,
+  "pct_tested": 28.1,
   "bytes_total": 838629,
-  "bytes_touched": 317753,
-  "pct_bytes_touched": 37.9
+  "bytes_touched": 322840,
+  "pct_bytes_touched": 38.5
  },
  "orphan_refs": [
   "0x004148",
@@ -16376,6 +16376,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_diplomacy.c",
     "src/engine_diplomacy.h"
    ]
@@ -16399,6 +16400,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_diplomacy.c",
     "src/engine_diplomacy.h"
    ]
@@ -16408,8 +16410,10 @@
    "name": "FUN_004a1b29",
    "size": 298,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a1c53",
@@ -16464,6 +16468,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/game_init.c",
     "src/game_init.h"
    ]
@@ -16491,56 +16496,70 @@
    "name": "FUN_004a29b2",
    "size": 804,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a2cd6",
    "name": "FUN_004a2cd6",
    "size": 651,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a2f61",
    "name": "FUN_004a2f61",
    "size": 405,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a30f6",
    "name": "FUN_004a30f6",
    "size": 895,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a3475",
    "name": "FUN_004a3475",
    "size": 220,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a3551",
    "name": "FUN_004a3551",
    "size": 906,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a38db",
    "name": "FUN_004a38db",
    "size": 908,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4a3c67",

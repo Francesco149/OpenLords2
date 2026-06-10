@@ -989,7 +989,7 @@ static void engine_turn_tick_substate0(void)
          * countdown, the roster-999 10-second re-poll, the auto-advance block
          * (all precede the brain conditionally, 0x49a3a1; UI-only, not sim). */
         engine_army_ai_run_per_tick(&g_turn_event_queue,  /* FUN_0049a581 */
-                                    g_sim_mp_active);
+                                    g_sim_mp_active, g_rng_7bit_b);
         if (engine_sim_turn_resolved() != 0)          /* FUN_0049b762 */
             engine_turn_advance_phase();
     }

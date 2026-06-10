@@ -169,6 +169,24 @@
 #define STRAT_POOL_120      0x120   /* DAT_0057c020 — commodity-6 pool */
 #define STRAT_TRADE_LOCK    0x158   /* DAT_0057c058 — when set, the orchestrator skips */
 
+/* ── Diplomacy-inbox / pair fields (brain step 1, FUN_004a277d + handlers) ──
+ * The per-pair sub-records share STRAT_REL/STRAT_CONTACT's stride (+ other*0x10
+ * inside player p's row).  All five below are first touched by the step-1
+ * message handlers. */
+#define STRAT_AVG_TROOP     0x014   /* DAT_0057bf14 — average troop strength (ranking
+                                     *   output F_M_14; tribute-affordability input) */
+#define STRAT_PAIR_ALLIED   0x088   /* DAT_0057bf88 — pair: alliance-already-exists flag
+                                     *   (u8; + other*0x10) */
+#define STRAT_PAIR_CNT89    0x089   /* DAT_0057bf89 — pair: repeat-offer counter
+                                     *   (u8; + other*0x10) */
+#define STRAT_PAIR_MAXOFFER 0x08c   /* DAT_0057bf8c — pair: best offer seen so far
+                                     *   (i32; + other*0x10) */
+#define STRAT_PAIR_BYTE90   0x090   /* DAT_0057bf90 — pair: per-turn message scratch byte,
+                                     *   reset after the inbox drains (u8; + other*0x10) */
+#define STRAT_PAIR_GIFTCNT  0x091   /* DAT_0057bf91 — pair: gifts/tributes paid counter
+                                     *   (u8; + other*0x10) */
+#define STRAT_GIFT_LAST     0x0e8   /* DAT_0057bfe8 — last gift giver byte (per player) */
+
 /* AI personality tuning table (retail DAT_004d8a58, const .data).  Four
  * personalities, each a 0xf0-byte (= 3 × 0x50) row; retail indexes row p as
  * (p*3 − 3)·0x50 = (p−1)·0xf0.  Verbatim image bytes; the AI reads the dispatch
@@ -183,6 +201,10 @@
 #define AI_PERS_TARGET_8    0x84    /* commodity-8 target stock */
 #define AI_PERS_TARGET_7    0x88    /* commodity-7 target stock */
 #define AI_PERS_TARGET_6    0x8c    /* commodity-6 target stock */
+#define AI_PERS_OFFER_BAND  0x08    /* DAT_004d8a60 — offer-tier band width (step-1 type 0) */
+#define AI_PERS_GIFT_UNIT   0x0c    /* DAT_004d8a64 — per-gift display unit (step-1 types 5/6) */
+#define AI_PERS_TRIBUTE_FLOOR 0x30  /* DAT_004d8a88 — avg-troop floor below which the AI
+                                     *   yields to a tribute demand (step-1 types 5/6) */
 
 _Alignas(int32_t) static const uint8_t g_ai_personality[AI_PERS_COUNT * AI_PERS_STRIDE] = {
     0x01,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x64,0x00,0x00,0x00,
@@ -1180,13 +1202,14 @@ static void build_has_data(uint8_t has_data[7])
  * The variant selector is (mood-cycle − 4) + personality·4, read from the
  * CURRENT counter before it advances. */
 static void propose_notify(engine_event_queue_state_t *evq, int player,
-                           int audience, int code, uint8_t flag5, uint8_t *s)
+                           int audience, int code, uint8_t flag5, uint8_t flag6,
+                           uint8_t *s)
 {
     uint8_t has_data[7];
     build_has_data(has_data);
 
     int variant = ((int)s[STRAT_MOOD_CYCLE] - 4) + (int)s[STRAT_PERSONALITY] * 4;
-    engine_event_queue_post(evq, player, audience, code, variant, flag5, 0, 0, 0,
+    engine_event_queue_post(evq, player, audience, code, variant, flag5, flag6, 0, 0,
                             has_data, (int)s_slot_0057c8cc);
 
     s[STRAT_MOOD_CYCLE] += 1;
@@ -1231,7 +1254,7 @@ void engine_army_ai_propose_diplomacy(int player, engine_event_queue_state_t *ev
             uint8_t *o = STRAT_REC(other);
             if (o[STRAT_ACTIVE] == 0 || o[STRAT_ELIMINATED] == 0)
                 continue;
-            propose_notify(evq, player, other, 0xc1, 1, s);
+            propose_notify(evq, player, other, 0xc1, 1, 0, s);
         }
 
         s[STRAT_PROPOSE_TICK]  = 0;
@@ -1250,7 +1273,7 @@ void engine_army_ai_propose_diplomacy(int player, engine_event_queue_state_t *ev
 
         s[STRAT_PROPOSE_TICK]  = 0;
         s[STRAT_PROPOSE_PHASE] = 0;
-        propose_notify(evq, player, target, 0xc0, 1, s);
+        propose_notify(evq, player, target, 0xc0, 1, 0, s);
     }
 }
 
@@ -1325,7 +1348,7 @@ void engine_army_ai_run_diplomacy(int player, engine_event_queue_state_t *evq)
         if (betray_thr < (int)s[pres]) {
             engine_diplomacy_clear_treaty(player, lord);
             engine_diplomacy_battle_adjust(player, lord, 5, evq);
-            propose_notify(evq, player, lord, 0xb5, 1, s);
+            propose_notify(evq, player, lord, 0xb5, 1, 0, s);
         }
     }
 
@@ -1344,7 +1367,7 @@ void engine_army_ai_run_diplomacy(int player, engine_event_queue_state_t *evq)
                     engine_diplomacy_form_alliance(player, c);
                 } else if (STRAT_REC(c)[STRAT_LORD] == 0) {
                     s[STRAT_PROPOSAL_GATE] = 1;
-                    propose_notify(evq, player, c, 0xb4, 0xb, s);
+                    propose_notify(evq, player, c, 0xb4, 0xb, 0, s);
                 }
             }
         }
@@ -1753,6 +1776,271 @@ void engine_army_ai_launch_attack(int player)
         g_ai_personality[(s[STRAT_PERSONALITY] - 1) * AI_PERS_STRIDE + AI_PERS_ATTACK_CD];
 }
 
+/* ── Brain step 1: diplomacy-inbox processor (FUN_004a277d + 7 handlers) ────
+ *
+ * Step 1 runs first for every realm (state 0 init → state 1).  It drains the
+ * realm's five-slot message inbox (s_slot_0053f0f0, save entry 146: 6 rows ×
+ * 0x28, each row five 8-byte entries — +0 sender, +1 type, +2 byte param,
+ * +4 i32 value), dispatching each message to its type handler, then clears the
+ * inbox and resets the per-pair +0x90 scratch byte.  The handlers adjust the
+ * receiver's per-pair relation (+0x84, clamped to ±30) and post a UI
+ * notification (event codes 0xab..0xc5) through the event-queue producer; types
+ * 2/3/4 also forge or break treaties, types 5/6 (tribute) read the cached 7-bit
+ * RNG byte (DAT_0058fd60, threaded in) for a probabilistic yield. */
+
+/* Retail's relation clamp, applied after every +0x84 adjust (verbatim in each
+ * handler): values >= +31 pin to +30, values <= -31 pin to -30. */
+static void adjust_rel(int p1, int p2, int delta)
+{
+    uint8_t *r = &STRAT_REC(p1)[STRAT_REL + p2 * 0x10];
+    *r = (uint8_t)(*r + delta);
+    int8_t v = (int8_t)*r;
+    if (v < 0x1f) {
+        if (v < -0x1e)
+            *r = (uint8_t)0xe2;       /* -30 */
+    } else {
+        *r = 0x1e;                    /* +30 */
+    }
+}
+
+/* Port of FUN_004a1b29 — transfer `amount` cash p2→p1 (a no-op when amount is
+ * 0, as the tribute handlers call it), bump the pair gift counter, sour the
+ * relation by 4 (low clamp only), and stash the giver byte. */
+static void ai_diplomacy_gift(int p1, int p2, uint8_t giver, int amount)
+{
+    uint8_t *s2 = STRAT_REC(p2);
+    if (amount <= I32(s2 + STRAT_CASH)) {
+        uint8_t *s1 = STRAT_REC(p1);
+        I32(s2 + STRAT_CASH) -= amount;
+        I32(s1 + STRAT_CASH) += amount;
+        s1[STRAT_PAIR_GIFTCNT + p2 * 0x10] += 1;
+        uint8_t *r = &s1[STRAT_REL + p2 * 0x10];
+        *r = (uint8_t)(*r - 4);
+        if ((int8_t)*r < -0x1e)
+            *r = (uint8_t)0xe2;
+        s1[STRAT_GIFT_LAST] = giver;
+    }
+}
+
+/* type 0 — FUN_004a29b2: evaluate a resource offer of `value` against the
+ * running best-offer (+0x8c) plus a personality band; warm or cool relations
+ * by tier. */
+static void ai_inbox_eval_offer(engine_event_queue_state_t *evq, int p1, int p2, int value)
+{
+    uint8_t *s = STRAT_REC(p1);
+    if (STRAT_REC(p2)[STRAT_ELIMINATED] == 0)
+        return;
+
+    int32_t *maxoffer = (int32_t *)&s[STRAT_PAIR_MAXOFFER + p2 * 0x10];
+    int band = pers_i32(personality_row(s[STRAT_PERSONALITY]), AI_PERS_OFFER_BAND);
+
+    int delta, code;
+    if (value < *maxoffer + band / 2)   { delta = -8; code = 0xad; }
+    else if (value < *maxoffer + band)  { delta =  5; code = 0xac; }
+    else                                { delta = 10; code = 0xab; }
+
+    if (*maxoffer < value)
+        *maxoffer = value;
+
+    adjust_rel(p1, p2, delta);
+    propose_notify(evq, p1, p2, code, 1, 0, s);
+}
+
+/* type 1 — FUN_004a2cd6: repeat-offer response keyed on the pair repeat
+ * counter (+0x89): the first two are welcomed warmly, the third cools. */
+static void ai_inbox_eval_repeat(engine_event_queue_state_t *evq, int p1, int p2)
+{
+    uint8_t *s = STRAT_REC(p1);
+    if (STRAT_REC(p2)[STRAT_ELIMINATED] == 0)
+        return;
+
+    uint8_t cnt = s[STRAT_PAIR_CNT89 + p2 * 0x10];
+    int delta, code;
+    if (cnt < 3) {
+        if (cnt < 2) { delta = 0xf; code = 0xae; }
+        else         { delta = 8;   code = 0xaf; }
+    } else           { delta = -4;  code = 0xb0; }
+
+    adjust_rel(p1, p2, delta);
+    propose_notify(evq, p1, p2, code, 1, 0, s);
+}
+
+/* type 2 — FUN_004a2f61: a treaty break that still notifies (code 0xb1);
+ * relation drops 20. */
+static void ai_inbox_break_notify(engine_event_queue_state_t *evq, int p1, int p2)
+{
+    uint8_t *s = STRAT_REC(p1);
+    if (STRAT_REC(p2)[STRAT_ELIMINATED] == 0)
+        return;
+
+    engine_diplomacy_clear_treaty(p1, p2);       /* FUN_004a1a54 */
+    adjust_rel(p1, p2, -0x14);
+    propose_notify(evq, p1, p2, 0xb1, 1, 0, s);
+}
+
+/* type 3 — FUN_004a30f6: respond to an alliance proposal from p2.  Reject
+ * (0xb2) / accept+forge (0xb3) / already-have-lord (0xc5) / already-allied
+ * (0xc4), with a probabilistic accept in the marginal relation band. */
+static void ai_inbox_alliance_response(engine_event_queue_state_t *evq, int p1, int p2,
+                                       uint32_t rng_7bit_b)
+{
+    uint8_t *s  = STRAT_REC(p1);
+    int8_t  rel = (int8_t)s[STRAT_REL + p2 * 0x10];
+
+    int code;
+    if (s[STRAT_PAIR_ALLIED + p2 * 0x10] != 0) {
+        code = 0xc4;
+    } else if ((int)s_slot_00554004 < 3) {
+        code = 0xb2;
+    } else if (s[STRAT_LORD] == 0) {                       /* p1 has no lord */
+        if (STRAT_REC(p2)[STRAT_LORD] != 0) {              /* p2 already has one */
+            code = 0xb2;
+        } else if (rel < 0x0b) {
+            if (rel < -10)                          code = 0xb2;
+            else if ((int)rng_7bit_b < rel * 3 + 0x2d) code = 0xb3;
+            else                                    code = 0xb2;
+        } else {
+            code = 0xb3;
+        }
+    } else {
+        code = 0xc5;                                       /* p1 already has a lord */
+    }
+
+    if (s[STRAT_ALLY_COOLDOWN] != 0)
+        s[STRAT_ALLY_COOLDOWN] -= 1;
+
+    if (code == 0xb2) {
+        adjust_rel(p1, p2, -2);
+    } else if (code == 0xb3) {
+        adjust_rel(p1, p2, 4);
+        engine_diplomacy_form_alliance(p1, p2);            /* FUN_004a1774 */
+    } else {
+        adjust_rel(p1, p2, -1);
+    }
+    propose_notify(evq, p1, p2, code, 1, 0, s);
+}
+
+/* type 4 — FUN_004a3475: a silent treaty break (no notification); relation
+ * drops 15. */
+static void ai_inbox_break_silent(int p1, int p2)
+{
+    engine_diplomacy_clear_treaty(p1, p2);       /* FUN_004a1a54 */
+    adjust_rel(p1, p2, -0xf);
+}
+
+/* types 5/6 — FUN_004a3551 / FUN_004a38db: a tribute demand from p2.  When p2
+ * is p1's lord, yield (0xb7/0xba) if too poor or cold, pay a token gift
+ * (0xb8/0xbb) on a favourable RNG roll, else stage the demand amount and refuse
+ * (0xb9/0xbc).  The two differ only in event codes, the contact-counter bump,
+ * and the RNG multiplier — kept as separate verbatim ports. */
+static void ai_inbox_tribute(engine_event_queue_state_t *evq, int p1, int p2,
+                             int param, uint32_t rng_7bit_b)
+{
+    uint8_t       *s   = STRAT_REC(p1);
+    const uint8_t *row = personality_row(s[STRAT_PERSONALITY]);
+    int8_t  rel  = (int8_t)s[STRAT_REL + p2 * 0x10];
+    uint8_t flag6 = (uint8_t)param;
+
+    int code;
+    if (s[STRAT_LORD] == (uint8_t)p2) {
+        if (I32(s + STRAT_AVG_TROOP) < pers_i32(row, AI_PERS_TRIBUTE_FLOOR)) code = 0xb7;
+        else if (rel < 0x0a)                                                code = 0xb7;
+        else if ((int)rng_7bit_b < rel * 4)                                 code = 0xb8;
+        else                                                                code = 0xb9;
+    } else {
+        code = 0xb7;
+    }
+
+    if (code == 0xb7) {
+        s[STRAT_CONTACT + p2 * 0x10] += 1;
+        propose_notify(evq, p1, p2, 0xb7, 1, flag6, s);
+    } else if (code == 0xb8) {
+        propose_notify(evq, p1, p2, 0xb8, 1, flag6, s);
+        ai_diplomacy_gift(p1, p2, flag6, 0);
+    } else {
+        s_slot_0055ce50 = (uint32_t)param;
+        s_slot_00567958 = (uint32_t)(pers_i32(row, AI_PERS_GIFT_UNIT)
+                                     * (int)s[STRAT_PAIR_GIFTCNT + p2 * 0x10]);
+        propose_notify(evq, p1, p2, 0xb9, 10, flag6, s);
+    }
+}
+
+static void ai_inbox_demand(engine_event_queue_state_t *evq, int p1, int p2,
+                            int param, uint32_t rng_7bit_b)
+{
+    uint8_t       *s   = STRAT_REC(p1);
+    const uint8_t *row = personality_row(s[STRAT_PERSONALITY]);
+    int8_t  rel  = (int8_t)s[STRAT_REL + p2 * 0x10];
+    uint8_t flag6 = (uint8_t)param;
+
+    int code;
+    if (s[STRAT_LORD] == (uint8_t)p2) {
+        if (I32(s + STRAT_AVG_TROOP) < pers_i32(row, AI_PERS_TRIBUTE_FLOOR)) code = 0xba;
+        else if (rel < 0x0a)                                                code = 0xba;
+        else if ((int)rng_7bit_b < rel * 2)                                 code = 0xbb;
+        else                                                                code = 0xbc;
+    } else {
+        code = 0xba;
+    }
+
+    if (code == 0xba) {
+        s[STRAT_CONTACT + p2 * 0x10] += 2;
+        propose_notify(evq, p1, p2, 0xba, 1, flag6, s);
+    } else if (code == 0xbb) {
+        propose_notify(evq, p1, p2, 0xbb, 1, flag6, s);
+        ai_diplomacy_gift(p1, p2, flag6, 0);
+    } else {
+        s_slot_0055ce50 = (uint32_t)param;
+        s_slot_00567958 = (uint32_t)(pers_i32(row, AI_PERS_GIFT_UNIT)
+                                     * (int)s[STRAT_PAIR_GIFTCNT + p2 * 0x10]);
+        propose_notify(evq, p1, p2, 0xbc, 10, flag6, s);
+    }
+}
+
+/* Port of FUN_004a277d (565 B) — brain step 1.  Dispatch then drain `self`'s
+ * five-slot diplomacy inbox, then reset the per-pair +0x90 scratch byte. */
+static void engine_army_ai_step1_process_inbox(int self,
+                                               engine_event_queue_state_t *evq,
+                                               uint32_t rng_7bit_b)
+{
+    CALL_TRACE_ENTER(0x004a277d);
+
+    /* Pass 1 — dispatch each queued message (stop at the first empty slot;
+     * skip self-addressed entries without breaking). */
+    for (int i = 0; i < 5; i++) {
+        uint8_t *e = &s_slot_0053f0f0[self * 0x28 + i * 8];
+        unsigned sender = e[0];
+        if (sender == 0)
+            break;
+        if (sender != (unsigned)self) {
+            int value = *(int32_t *)(e + 4);
+            int param = e[2];
+            switch ((int8_t)e[1]) {           /* message type */
+            case 0: ai_inbox_eval_offer(evq, self, (int)sender, value);             break;
+            case 1: ai_inbox_eval_repeat(evq, self, (int)sender);                   break;
+            case 2: ai_inbox_break_notify(evq, self, (int)sender);                  break;
+            case 3: ai_inbox_alliance_response(evq, self, (int)sender, rng_7bit_b); break;
+            case 4: ai_inbox_break_silent(self, (int)sender);                       break;
+            case 5: ai_inbox_tribute(evq, self, (int)sender, param, rng_7bit_b);    break;
+            case 6: ai_inbox_demand(evq, self, (int)sender, param, rng_7bit_b);     break;
+            default: break;
+            }
+        }
+    }
+
+    /* Pass 2 — clear self's inbox: zero +0/+1/+2 and the i32 at +4, leaving
+     * byte +3 untouched (matches FUN_004a2584 / clear_grid_53f0f0). */
+    for (int i = 0; i < 5; i++) {
+        uint8_t *e = &s_slot_0053f0f0[self * 0x28 + i * 8];
+        e[0] = 0; e[1] = 0; e[2] = 0;
+        *(uint32_t *)(e + 4) = 0;
+    }
+
+    /* Pass 3 — reset the per-pair +0x90 scratch byte for all six counterparts. */
+    for (int other = 0; other < 6; other++)
+        STRAT_REC(self)[STRAT_PAIR_BYTE90 + other * 0x10] = 0;
+}
+
 /* ── Per-tick AI brain dispatcher (FUN_0049a581) ──────────────────────────
  *
  * Ranking-changed redraw cookie — retail _DAT_0056d6a0, set to 1 by the brain
@@ -1781,16 +2069,19 @@ static int g_ai_ranking_dirty;   /* _DAT_0056d6a0 */
  *     the realm is parked at the 999 "turn done" sentinel + the ranking redraw
  *     cookie is set.
  *
- * Steps 1/6/7/9/0xb are advance-only stubs (CALL_TRACE_ENTER_STUB markers +
+ * Steps 6/7/9/0xb are advance-only stubs (CALL_TRACE_ENTER_STUB markers +
  * the TODO notes below): the FSM still advances through them so the cursor and
  * dispatch structure track retail exactly (closing the slot-84 divergence the
- * trace studio flagged), while their per-realm state writes — FUN_004a277d /
- * 0049edc7 / 0049f93d / 0049f977 / 004a5667 and their ~18 KB of callee trees —
- * land incrementally bottom-up.  Steps 2/3/4/5/8/0xa/0xc/0xd/0xe are live.
+ * trace studio flagged), while their per-realm state writes — FUN_0049edc7 /
+ * 0049f93d / 0049f977 / 004a5667 and their ~12 KB of callee trees — land
+ * incrementally bottom-up.  Steps 1/2/3/4/5/8/0xa/0xc/0xd/0xe are live.
  *
- * `evq` is the live turn event queue (steps 2/0xd + the init elimination post);
- * `mp_active` threads retail DAT_00553030 into the init elimination check. */
-void engine_army_ai_run_per_tick(engine_event_queue_state_t *evq, int mp_active)
+ * `evq` is the live turn event queue (steps 1/2/0xd + the init elimination
+ * post); `mp_active` threads retail DAT_00553030 into the init elimination
+ * check; `rng_7bit_b` is the freshly-stirred 7-bit RNG byte (retail
+ * DAT_0058fd60) the step-1 alliance/tribute handlers roll against. */
+void engine_army_ai_run_per_tick(engine_event_queue_state_t *evq, int mp_active,
+                                 uint32_t rng_7bit_b)
 {
     CALL_TRACE_ENTER(0x0049a581);
 
@@ -1824,12 +2115,7 @@ void engine_army_ai_run_per_tick(engine_event_queue_state_t *evq, int mp_active)
         return;                                       /* already parked (turn done) */
 
     switch (*state) {
-    case 0x1:
-        /* TODO(brain step 1): FUN_004a277d (565 B) + 8-fn / 5.6 KB closure
-         * (4a29b2 4a2cd6 4a2f61 4a30f6 4a3475 4a3551 4a38db + 4a1b29).  Runs
-         * first for every realm; advance-only until ported. */
-        CALL_TRACE_ENTER_STUB(0x004a277d);
-        break;
+    case 0x1:  engine_army_ai_step1_process_inbox(sel, evq, rng_7bit_b); break; /* 0x4a277d */
     case 0x2:  engine_army_ai_run_diplomacy(sel, evq);      break; /* 0x4a0c1d */
     case 0x3:  engine_army_ai_set_rations_and_grant(sel);   break; /* 0x49d638 */
     case 0x4:  engine_army_ai_seed_buy_requests(sel);       break; /* 0x49e1bf */

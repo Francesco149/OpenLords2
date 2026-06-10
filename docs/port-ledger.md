@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **732** (29.9%) — tested 679, ported 53
-- code bytes touched: **37.9%** (317,753 / 838,629 B)
-- unported: **1715**
+- touched: **740** (30.2%) — tested 687, ported 53
+- code bytes touched: **38.5%** (322,840 / 838,629 B)
+- unported: **1707**
 - orphan refs (in src/, not in function table): 7
 
-## tested (679) — ported + host unit suite
+## tested (687) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -527,15 +527,23 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a1241 | FUN_004a1241 | 357 | engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a13a6 | FUN_004a13a6 | 849 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a16f7 | FUN_004a16f7 | 125 | engine_army_move.h, engine_diplomacy.c, engine_diplomacy.h |
-| 0x4a1774 | FUN_004a1774 | 211 | engine_diplomacy.c, engine_diplomacy.h |
+| 0x4a1774 | FUN_004a1774 | 211 | engine_army_ai.c, engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a1847 | FUN_004a1847 | 525 | engine.c, engine_diplomacy.c, engine_diplomacy.h |
-| 0x4a1a54 | FUN_004a1a54 | 213 | engine_diplomacy.c, engine_diplomacy.h |
+| 0x4a1a54 | FUN_004a1a54 | 213 | engine_army_ai.c, engine_diplomacy.c, engine_diplomacy.h |
+| 0x4a1b29 | FUN_004a1b29 | 298 | engine_army_ai.c |
 | 0x4a1c53 | FUN_004a1c53 | 537 | game_init.c, game_init.h |
 | 0x4a1e6c | FUN_004a1e6c | 117 | engine_roster.c, engine_roster.h, game_init.c |
 | 0x4a1ee1 | FUN_004a1ee1 | 1520 | engine_combat.c, engine_diplomacy.c, engine_diplomacy.h |
 | 0x4a24d1 | FUN_004a24d1 | 179 | engine_diplomacy.c, engine_diplomacy.h |
-| 0x4a2584 | FUN_004a2584 | 157 | game_init.c, game_init.h |
+| 0x4a2584 | FUN_004a2584 | 157 | engine_army_ai.c, game_init.c, game_init.h |
 | 0x4a277d | FUN_004a277d | 565 | engine_army_ai.c |
+| 0x4a29b2 | FUN_004a29b2 | 804 | engine_army_ai.c |
+| 0x4a2cd6 | FUN_004a2cd6 | 651 | engine_army_ai.c |
+| 0x4a2f61 | FUN_004a2f61 | 405 | engine_army_ai.c |
+| 0x4a30f6 | FUN_004a30f6 | 895 | engine_army_ai.c |
+| 0x4a3475 | FUN_004a3475 | 220 | engine_army_ai.c |
+| 0x4a3551 | FUN_004a3551 | 906 | engine_army_ai.c |
+| 0x4a38db | FUN_004a38db | 908 | engine_army_ai.c |
 | 0x4a3c67 | FUN_004a3c67 | 620 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a3ed3 | FUN_004a3ed3 | 383 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a4052 | FUN_004a4052 | 657 | engine_army_ai.c, engine_army_ai.h |
