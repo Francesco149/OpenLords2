@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **724** (29.6%) — tested 674, ported 50
-- code bytes touched: **37.5%** (314,478 / 838,629 B)
-- unported: **1723**
+- touched: **727** (29.7%) — tested 674, ported 53
+- code bytes touched: **37.6%** (315,103 / 838,629 B)
+- unported: **1720**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (674) — ported + host unit suite
@@ -137,7 +137,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40c5b0 | FUN_0040c5b0 | 373 | engine_hud_menubar.c, engine_hud_menubar.h |
 | 0x40cfd2 | FUN_0040cfd2 | 490 | engine_button.c, engine_button.h, engine_menu_input.h (+3) |
 | 0x40d1bc | FUN_0040d1bc | 181 | gfx_sprite_render.c, gfx_sprite_render.h |
-| 0x40da1e | FUN_0040da1e | 869 | engine_delta.c, engine_menu_input.c, engine_menu_input.h (+1) |
+| 0x40da1e | FUN_0040da1e | 869 | engine.c, engine_delta.c, engine_menu_input.c (+2) |
 | 0x40e3ee | FUN_0040e3ee | 505 | engine_button.h, engine_menu_input.c, engine_menu_input.h |
 | 0x40e5e7 | FUN_0040e5e7 | 153 | engine_menu_input.c, engine_menu_input.h |
 | 0x40e890 | FUN_0040e890 | 43 | engine.c, engine.h, main.c |
@@ -696,7 +696,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine_map_scene.c, engine_map_scene.h |
 
-## ported (50) — reimplemented, no host test yet
+## ported (53) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -725,6 +725,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x472e46 | FUN_00472e46 | 595 | engine.c |
 | 0x47309e | FUN_0047309e | 10915 | engine.c |
 | 0x476768 | FUN_00476768 | 245 | engine.c |
+| 0x47685d | FUN_0047685d | 512 | engine.c |
 | 0x476a5d | FUN_00476a5d | 74 | engine.c |
 | 0x476aa7 | FUN_00476aa7 | 770 | engine.c |
 | 0x476da9 | FUN_00476da9 | 120 | engine.c |
@@ -746,6 +747,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b12fb | FUN_004b12fb | 21 | engine.c |
 | 0x4b1867 | FUN_004b1867 | 48 | engine_screen_strat.c, engine_screen_strat.h |
 | 0x4b1897 | FUN_004b1897 | 11 | engine_screen_strat.h |
+| 0x4b18e3 | FUN_004b18e3 | 21 | engine.c |
+| 0x4b1deb | FUN_004b1deb | 92 | engine.c |
 | 0x4b25b0 | FUN_004b25b0 | 76 | gfx.c, gfx.h |
 | 0x4b26b8 | FUN_004b26b8 | 64 | engine.c, gfx.c |
 | 0x4b284e | FUN_004b284e | 122 | gfx.h |

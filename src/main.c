@@ -204,6 +204,13 @@ static int         g_rng_seed_pin;     /* --rng-seed: pin the double-LFSR to
                                         * regardless of menu-path consumption.
                                         * (The single-LFSR is owner-local in
                                         * the port and already canonical.) */
+static int         g_turbo_clock;      /* --turbo: enable the virtual sim
+                                        * clock (mirrors the retail agent's
+                                        * +step ms/tick) so the rate
+                                        * controller grants the same
+                                        * sub-steps and both sides stay
+                                        * frame-exact through a running turn. */
+static uint32_t    g_turbo_step = 17;  /* --turbo-step MS (agent default 17) */
 /* --audio-init: call audio_init() after window creation.  Off by
  * default — SetCooperativeLevel(PRIORITY) modifies process audio
  * state and the headless smoke harness has no way to validate
@@ -559,10 +566,18 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
 
     g_base_time_ms = timeGetTime();
 
+    /* --turbo: enable the virtual sim clock so the rate controller grants
+     * the same sub-steps per tick as the retail --turbo seat (otherwise
+     * the port's real sub-ms frames starve the 12 ms gate and the turn
+     * barely advances — see engine.c's virtual-clock block). */
+    if (g_turbo_clock)
+        engine_virtual_clock_enable(g_turbo_step);
+
     while (!g_shutdown && (g_max_frames == 0 || g_frame_counter < g_max_frames)) {
         main_loop_body();
         g_frame_counter++;
-        frame_limiter();
+        if (!g_turbo_clock)
+            frame_limiter();   /* turbo runs flat-out (virtual clock paces the sim) */
     }
 
     log_line("main loop exited after %u frame(s)", g_frame_counter);
@@ -2896,6 +2911,13 @@ static void parse_cmdline(LPSTR lpCmd)
             g_gfx_init = 1;                  /* needs DDraw */
         }
         else if (!strcmp(a, "--rng-seed"))   g_rng_seed_pin = 1;
+        else if (!strcmp(a, "--turbo"))      g_turbo_clock = 1;
+        else if (!strcmp(a, "--turbo-step") && i + 1 < ntok) {
+            if (!parse_uint(tokens[++i], &g_turbo_step) || g_turbo_step == 0) {
+                fprintf(stderr, "[openlords2] bad --turbo-step (need >0)\n");
+                g_turbo_step = 17;
+            }
+        }
         else if (!strcmp(a, "--audio-init"))     g_audio_init  = 1;
         else if (!strcmp(a, "--capture-to") && i + 1 < ntok) {
             g_capture_dir = tokens[++i];

@@ -116,6 +116,14 @@ void engine_bind_title_bg_reload_fn(engine_title_bg_reload_fn fn);
  * engine_tick_dispatch can call it without going through the guard. */
 void engine_tick(void);
 
+/* Enable the virtual sim clock (segtrace/turbo determinism): every
+ * sim-timing read advances by `step_ms` (0 → default 17) once per
+ * engine_tick instead of using real timeGetTime.  Mirrors the retail
+ * harness's --turbo virtual clock so the rate controller grants the same
+ * sub-steps per tick and both sides stay frame-exact through a running
+ * turn.  Call once at startup (the --turbo seat). */
+void engine_virtual_clock_enable(uint32_t step_ms);
+
 /* Render-fast-skip dispatcher — port of retail FUN_0040e890.
  *   1. call engine_tick
  *   2. if g_engine_state > 8, latch g_savepump_request = 1

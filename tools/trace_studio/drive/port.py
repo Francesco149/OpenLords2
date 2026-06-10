@@ -25,7 +25,12 @@ def capture_port(*, compiled: Path, port_dir: Path, max_frames: int,
     cmd = [str(ROOT / "tools" / "run-openlords2.sh"), "--",
            "--input-segtrace", str(compiled),
            "--capture-to", str(frames_raw),
-           "--frames", str(max_frames)]
+           "--frames", str(max_frames),
+           # Virtual sim clock (+17 ms/tick) — mirrors the retail driver's
+           # --turbo (frida_capture turbo_step_ms default 17) so the rate
+           # controller grants the same sub-steps/tick and both sides stay
+           # frame-exact through a running turn (not just the frozen load).
+           "--turbo"]
     if rng_seed:
         cmd.append("--rng-seed")      # pre-ingame LFSR pin (mirrors retail)
     env = dict(os.environ)

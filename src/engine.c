@@ -77,6 +77,40 @@ static uint32_t g_sim_autosave_start_ms;
  * sim sub-step body — today nothing produces sub-steps, so it stays
  * 0. */
 static uint32_t g_sim_tick_counter;
+
+/* ─── Virtual sim clock (segtrace/turbo determinism) ──────────────────
+ *
+ * Mirrors the retail harness's turbo virtual clock (tools/frida/
+ * openlords2-agent.js installVirtualClockHook): under --turbo the agent
+ * overwrites main-thread winmm!timeGetTime with a clock it bumps by a
+ * fixed step on every entry to the per-tick driver FUN_004b99c0.  Real
+ * turbo frames run sub-millisecond apart, so WITHOUT a virtual clock the
+ * 12 ms rate gate (game speed 90) starves and the sub-step loop barely
+ * advances — while virtualised retail grants ~1 sub-step/tick.  The port
+ * runs just as fast (no frame sleep), so it needs the SAME virtual clock
+ * to grant the same sub-steps and stay frame-exact through a running
+ * turn (endturn_probe: port counter 6 vs retail 98 before this).
+ *
+ * Seeded once from real timeGetTime (only the per-tick DELTA matters, not
+ * the absolute), bumped by g_virtual_clock_step at the top of engine_tick
+ * (the FUN_004b99c0 analog), read by every sim-timing site via
+ * engine_now_ms().  Disabled by default → engine_now_ms() == timeGetTime()
+ * (the interactive seats' real-time behaviour). */
+static int      g_virtual_clock_enabled;
+static uint32_t g_virtual_clock_ms;
+static uint32_t g_virtual_clock_step = 17;   /* matches agent g_turbo_step_ms */
+
+void engine_virtual_clock_enable(uint32_t step_ms)
+{
+    g_virtual_clock_enabled = 1;
+    g_virtual_clock_step    = step_ms ? step_ms : 17;
+    g_virtual_clock_ms      = timeGetTime();  /* seed once; the delta drives the rate */
+}
+
+static uint32_t engine_now_ms(void)
+{
+    return g_virtual_clock_enabled ? g_virtual_clock_ms : timeGetTime();
+}
 /* Multiplayer-session active flag.  retail DAT_00553030.  SP only
  * today, so always 0.  Shared (declared extern in engine.h) so the
  * strategic-layer modules that branch on it — e.g. engine_npc_schedule
@@ -402,7 +436,7 @@ static void engine_tick_delta_step(void)
     engine_delta_in_t  in  = {0};
     engine_delta_out_t out = {0};
 
-    in.now_ms        = timeGetTime();
+    in.now_ms        = engine_now_ms();
     in.last_frame_ms = g_frame_delta_last_ms;
 
     engine_compute_frame_delta(&in, &out);
@@ -446,7 +480,7 @@ int engine_sim_turn_resolved(void)
     engine_turn_end_in_t  in  = {0};
     engine_turn_end_out_t out = {0};
 
-    in.now_ms           = timeGetTime();
+    in.now_ms           = engine_now_ms();
     in.mp_active        = g_sim_mp_active;
     in.active_count     = g_sim_active_player_count;
     in.turn_progress    = g_sim_turn_progress;
@@ -492,7 +526,7 @@ static void engine_tick_input_step(void)
 
     in.cursor_screen_x      = cursor.x;
     in.cursor_screen_y      = cursor.y;
-    in.now_ms               = timeGetTime();
+    in.now_ms               = engine_now_ms();
     in.cursor_cache_enabled = g_input_cursor_cache_enabled;
     in.pending_dblclk       = g_mouse_dblclk;
     in.button_state         = g_mouse_buttons;
@@ -721,8 +755,8 @@ static void engine_tick_fps_step(void)
     engine_fps_in_t  in  = {0};
     engine_fps_out_t out = {0};
 
-    in.now_ms          = timeGetTime();
-    in.rollover_now_ms = timeGetTime();
+    in.now_ms          = engine_now_ms();
+    in.rollover_now_ms = engine_now_ms();
     in.last_render_ms  = g_fps_last_render_ms;
 
     /* Lazy init — retail's InitInstance sets the window-start basis
@@ -933,7 +967,7 @@ static void engine_turn_tick_substate0(void)
             engine_army_ai_run_independent(0);        /* FUN_0049dfc6 */
         } else if (s_slot_0053f658 == 3) {
             engine_turn_advance_phase();              /* FUN_0049ce51 */
-            g_sim_phase4_baseline_ms = timeGetTime(); /* _DAT_0057cad0 */
+            g_sim_phase4_baseline_ms = engine_now_ms(); /* _DAT_0057cad0 */
         }
     } else if (s_slot_00569584 == 6) {
         if (s_slot_0053f658 == 1) {
@@ -1175,6 +1209,78 @@ static void engine_popup_scroll_dismiss(void)
          * TODO(combat-ui): 0x497879 (scenario config-apply 0x499e5d +
          * screen 0x1c) + DAT_0057d340 = 1. */
     }
+}
+
+/* Cursor-in-rect hit test — port of FUN_004b1deb @ 0x4b1deb (92 B).
+ * Half-open box [x, x+w) × [y, y+h) against the game-space cursor
+ * (DAT_004e65fc / DAT_004e65f4 = g_input_game_x/y). */
+static int engine_popup_cursor_in_rect(int x, int y, int w, int h)
+{
+    if (g_input_game_x < x || x + w <= g_input_game_x ||
+        g_input_game_y < y || y + h <= g_input_game_y)
+        return 0;
+    return 1;
+}
+
+/* ─── Open-scroll input handler — port of FUN_0047685d @ 0x47685d (512 B)
+ *
+ * The in-game input dispatcher (FUN_0042ff10) calls this FIRST each frame,
+ * before its own per-state machine.  When an event scroll is open
+ * (extended_pause != 0) it consumes the dismiss gesture and returns 1 (so
+ * the dispatcher skips the rest of its input handling); otherwise 0.
+ *
+ * Two dismiss gestures, both routing to engine_popup_scroll_dismiss
+ * (FUN_00476768):
+ *   - RIGHT-click (rmb release, DAT_004e6900) — dismiss immediately,
+ *     regardless of scroll type or cursor position;
+ *   - LEFT-click (lmb press, DAT_004eafb4) inside the click-to-continue
+ *     seal box — a 0x30×0x30 square at the committed seal origin − 0xc
+ *     (DAT_005681dc / DAT_0056950c = g_popup_seal_committed_x/y).
+ * The MP popup sub-state countdown (DAT_0055cd78) ticks down every frame.
+ *
+ * DEFERRED (not exercised by the basic event scroll / welcome hints / the
+ * 256-colour warning — all take the seal/right-click path):
+ *   - the special report-type arms (DAT_005440a4 == 0x11/10/0xb/0xc, the
+ *     latter keyed further on extended_pause 0xf8/0xfa/0xfb) hit-test extra
+ *     in-scroll buttons via FUN_0040da1e against the button records at
+ *     0x4ddb50/0x4dda90/0x4ddac0/0x4ddaf0/0x4ddb20 — none present in the
+ *     port yet.  Wire when a report popup needs its in-scroll buttons.
+ *   - the seal-dismiss side effect `if (DAT_005533b0) DAT_0052afa4 = 1`
+ *     (mark in-game-active when the map is ready): DAT_0052afa4
+ *     (g_sim_game_active) is currently write-only in the port — no reader
+ *     gates on it (the sub-step loop gates on g_engine_state == 3) — and
+ *     it is not save-schema, so reproducing the write has no observable
+ *     effect today.  Restore it alongside the flag's first consumer. */
+static int engine_popup_scroll_input_step(void)
+{
+    CALL_TRACE_ENTER(0x0047685d);
+
+    if (g_popup_mp_substate != 0)            /* DAT_0055cd78 */
+        g_popup_mp_substate -= 1;
+
+    if (g_sim_extended_pause == 0)           /* DAT_0053e910 — no scroll open */
+        return 0;
+
+    if (g_input_rmb_newly_released != 0) {   /* DAT_004e6900 — right-click */
+        engine_popup_scroll_dismiss();       /* FUN_00476768 */
+        return 1;
+    }
+
+    /* TODO(report-buttons): special types 0x11/10/0xb/0xc hit-test their
+     * in-scroll buttons here (see header) — deferred. */
+
+    if (g_input_lmb_newly_pressed == 0)      /* DAT_004eafb4 — need a fresh LMB */
+        return 0;
+    if (!engine_popup_cursor_in_rect(g_popup_seal_committed_x - 0xc,
+                                     g_popup_seal_committed_y - 0xc, 0x30, 0x30))
+        return 0;
+
+    /* Seal hit.  (Retail: if map-ready, g_sim_game_active = 1 — deferred,
+     * see header.)  Clear the LMB hold-timer latch (FUN_004b18e3:
+     * DAT_004e65e8 = 0), then dismiss. */
+    g_input_lmb_timer_armed = 0;             /* FUN_004b18e3 */
+    engine_popup_scroll_dismiss();           /* FUN_00476768 */
+    return 1;
 }
 
 /* ─── Open-scroll renderer — port of FUN_0047309e @ 0x47309e (10,915 B)
@@ -1552,7 +1658,7 @@ static void engine_tick_phase_step(void)
     engine_phase_in_t  in  = {0};
     engine_phase_out_t out = {0};
 
-    in.now_ms              = timeGetTime();
+    in.now_ms              = engine_now_ms();
     in.last_base_tick_ms   = g_phase_last_base_tick_ms;
     in.base_tick_counter   = g_phase_base_tick_counter;
     in.counter_2           = g_phase_counter_2;
@@ -1689,7 +1795,7 @@ static int engine_tick_rate_step(void)
     engine_rate_in_t  in  = {0};
     engine_rate_out_t out = {0};
 
-    in.now_ms             = timeGetTime();
+    in.now_ms             = engine_now_ms();
     in.last_step_ms       = g_sim_last_step_ms;
     in.autosave_start_ms  = g_sim_autosave_start_ms;
     in.run_gate           = engine_run_gate();
@@ -1783,6 +1889,13 @@ void engine_tick(void)
      *      per call regardless of sub-step count. */
 
     g_engine_frame_counter++;
+
+    /* Advance the virtual sim clock once per tick (segtrace/turbo) — the
+     * FUN_004b99c0-entry bump that mirrors the retail agent's virtual
+     * clock, so the rate controller grants the same sub-steps per tick.
+     * No-op (real time) unless engine_virtual_clock_enable() was called. */
+    if (g_virtual_clock_enabled)
+        g_virtual_clock_ms += g_virtual_clock_step;
 
     /* Open this frame's call-trace window (no-op unless --call-trace).
      * Uses the same per-tick counter the agent stamps on retail, so the
@@ -1953,6 +2066,16 @@ void engine_tick(void)
      * producer sets g_sim_current_screen = 0x1f).  A transition here sets
      * the demand-redraw cookie the seam below consumes. */
     engine_tick_menu_input_step();
+
+    /* In-game open-scroll input — the dismiss chip retail runs FIRST in its
+     * per-state input dispatcher (FUN_0042ff10 → FUN_0047685d).  A no-op
+     * unless a modal event scroll is open; then a right-click or a click on
+     * the seal dismisses it and unfreezes the SP sim.  Gated to in-game like
+     * retail (0x42ff10 runs off the 0x1f title screen).  The consumed-click
+     * return is informational until the rest of the in-game input machine
+     * ports. */
+    if (g_engine_state == 3)
+        (void)engine_popup_scroll_input_step();
 
     /* Title-menu file-load confirm pump (retail FUN_004ad9f0, run from
      * inside the menu dispatcher FUN_004ba9c8).  Self-gates on the
