@@ -183,6 +183,13 @@ typedef struct {
 void engine_compute_sim_sub_steps(const engine_rate_in_t *in,
                                   engine_rate_out_t *out);
 
+/* Verbatim image of retail's sub-step duty-cycle LUT DAT_004e3260
+ * (15 × 0xa0 bytes — the full reachable extent including the as-shipped
+ * OOB tail rows 11..14; see the definition in engine_rate.c and
+ * engine-quirks #195).  Wired as engine_rate_in_t.rate_lut by
+ * engine_tick_rate_step. */
+extern const uint8_t g_engine_rate_lut[0xe60];
+
 /* End-of-turn readiness predicate — Win32 wrapper around the pure
  * engine_turn_end_check (port of FUN_0049b762).  Returns 1 when the
  * strategic turn may advance.  Defined in engine.c; the pure core

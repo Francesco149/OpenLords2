@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **711** (29.1%) — tested 670, ported 41
-- code bytes touched: **35.7%** (299,248 / 838,629 B)
-- unported: **1736**
+- touched: **712** (29.1%) — tested 670, ported 42
+- code bytes touched: **35.7%** (299,801 / 838,629 B)
+- unported: **1735**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (670) — ported + host unit suite
@@ -692,7 +692,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine_map_scene.c, engine_map_scene.h |
 
-## ported (41) — reimplemented, no host test yet
+## ported (42) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -727,6 +727,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x499a1c | FUN_00499a1c | 174 | engine.c, gfx.c, gfx.h |
 | 0x49a3e6 | FUN_0049a3e6 | 109 | engine.c |
 | 0x49b8b0 | FUN_0049b8b0 | 195 | engine.c |
+| 0x4ae310 | FUN_004ae310 | 553 | engine.c |
 | 0x4b0aaa | FUN_004b0aaa | 11 | engine.c |
 | 0x4b0ab5 | FUN_004b0ab5 | 212 | engine_screen_strat.h, gfx.c, gfx.h |
 | 0x4b0e03 | FUN_004b0e03 | 875 | engine.c |

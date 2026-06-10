@@ -70,9 +70,18 @@ int g_sim_mp_active;
  * See engine.h for semantics; consumed by save_rotate_and_write. */
 int g_sim_mp_variant;
 int g_sim_save_rotate_hold;
-/* Game-speed slider (0..100, retail _DAT_0053f230).  Default 100
- * (max speed) until the UI slider lands. */
-static int g_sim_game_speed = 100;
+/* Game-speed slider (0..100, retail _DAT_0053f230).  Default 90
+ * (0x5a) — retail's game-options initialiser FUN_004ae310 @ 0x4ae310
+ * seeds exactly this, and the value is NOT a save-schema slot, so a
+ * boot→load session plays at the boot default.  90 → slider gate
+ * threshold (100-90)/10*10+2 = 12 ms between sub-steps; this is what
+ * starves the sub-step loop during turbo idle on the retail seat
+ * (grid_load_probe: exactly one sub-step at the load flip, zero
+ * after).  The previous port default of 100 was a bug: threshold
+ * 2 ms → a sub-step nearly every frame → runaway LFSR drift vs
+ * retail.  Options-screen slider (0x434cbe binding, 10..100) lands
+ * later. */
+static int g_sim_game_speed = 90;
 /* Pause lock — non-zero freezes the sim.  retail DAT_0053f238.
  * Today no UI sets it, so always 0. */
 static int g_sim_pause_lock;
@@ -114,20 +123,27 @@ static int g_sim_phase;
  * parity. */
 static int g_sim_derived_hint;
 
-/* ─── Sim screen sub-state mirror ───────────────────────────────────
+/* ─── Sim screen sub-state ──────────────────────────────────────────
  *
- * Retail DAT_0057c8fc.  0 = normal ingame, 2 = alt UI (combat
+ * Retail DAT_0057c8fc — save-schema slot 14 (s_slot_0057c8fc), so the
+ * canonical storage is the shared schema global and a load fills it
+ * straight from the .sav.  0 = normal ingame, 2 = alt UI (combat
  * resolution / events screen).  Gates several sub-step body branches.
- * No producer in our port today — stays 0.  Lands when the screen-
- * state machine ports. */
-static uint8_t g_sim_screen_substate;          /* DAT_0057c8fc */
+ * (Replaced the old file-static mirror, which a load could silently
+ * desync from the schema slot.) */
+#define g_sim_screen_substate   ((uint8_t)s_slot_0057c8fc)
 
 /* "This player is human/active" gate.  Retail (&DAT_0057bf04)[player_index *
- * 0x160].  Indexed by current-player mirror DAT_0057c8cc.  The whole
- * scheduled-events block in the sub-step body is gated on this byte
- * being non-zero.  Today no producer — defaults to 0 → scheduled-events
- * block is skipped. */
-static uint8_t g_sim_player_human_active;      /* DAT_0057bf04[curp] */
+ * 0x160].  Both pieces are save-state (block 3 g_player_strategic_352 +
+ * current-player slot 72 s_slot_0057c8cc), so derive on read — a load
+ * route then needs no extra seeding. */
+static uint8_t sim_player_human_active(void)
+{
+    /* Slot is 0..6 by construction; the &7 only bounds a corrupt save
+     * (retail reads adjacent .data unchecked — personality_row-style
+     * defensive clamp, same disposition). */
+    return g_player_strategic_352[(s_slot_0057c8cc & 7) * 0x160 + 0x04];
+}
 
 /* "Turn end pending" latch.  Retail DAT_0056d6a4.  Set by FUN_0049b8b0
  * (turn-timeout subsystem); consumed by the sub-step body's SP-only
@@ -958,12 +974,7 @@ static int engine_tick_rate_step(void)
     in.extended_pause     = g_sim_extended_pause;
     in.mp_skip_flag       = g_sim_mp_skip_table[g_sim_mp_player_index];
     in.phase              = g_sim_phase;
-    in.rate_lut           = NULL;       /* TODO: extract DAT_004e3260 bytes from
-                                         * retail.  NULL → treat as all-zeros,
-                                         * which forces 0 sub-steps via the
-                                         * LUT==0 branch.  Today the function
-                                         * returns 0 before reaching the LUT
-                                         * anyway (scenario_hint == 0). */
+    in.rate_lut           = g_engine_rate_lut;   /* imaged DAT_004e3260 */
 
     engine_compute_sim_sub_steps(&in, &out);
 
@@ -1089,7 +1100,7 @@ void engine_tick(void)
          *    flag.  In SP all the 0x43eda0 calls are no-ops (gated
          *    on DAT_00553030 != 0 inside), so we only mirror the SP
          *    branch's other side effects. */
-        if (g_sim_player_human_active != 0) {
+        if (sim_player_human_active() != 0) {
             if (g_sim_screen_substate == 2) {
                 /* TODO(sim): MP sub-state 2 path.
                  *   - tick % 0x82 == 0    → 0x43eda0(0xc, 0)  // MP-only, no-op in SP
