@@ -62,3 +62,9 @@ runs/
 *.swo
 .DS_Store
 src/gen/
+
+# Trace Studio v3 build artifacts + stray capture outputs
+tools/trace_studio_v3/replay/replay
+tools/trace_studio_v3/**/*.olv3
+tools/trace_studio_v3/**/*.raw
+tools/trace_studio_v3/**/*.bmp

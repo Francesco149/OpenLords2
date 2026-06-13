@@ -694,6 +694,10 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
                 # can settle windowed-vs-fullscreen reserved-range behavior
                 # (idx 1 = title caps, 0xf9 = selected-button highlight).
                 (frames_dir / f"frame_{fi:05d}.pal").write_bytes(palette_bytes)
+                # Trace Studio v3 raw payload — the agent's exact bytes
+                # [w][h][idx][1024 palette][w*h 8bpp]; the native viewer's
+                # container ingest reads this (index plane preserved).
+                (frames_dir / f"frame_{fi:05d}.raw").write_bytes(data)
                 def _pe(i):
                     o = i * 4
                     return (palette_bytes[o], palette_bytes[o+1],

@@ -16,6 +16,13 @@
         # smackw32.dll for Smacker cutscenes. No DRM packer.
         mingw32 = pkgs.pkgsCross.mingw32.buildPackages;
 
+        # Dear ImGui source (Trace Studio v3 native viewer — compiled into the
+        # 32-bit viewer.exe with the Win32 + DX9 backends). ImGui is meant to be
+        # vendored into the app, so we pin the upstream source via nixpkgs and
+        # point the Makefile at $IMGUI_SRC rather than committing it. Mirrors the
+        # openrecet sibling's viewer build. See project_trace_studio_v3 memory.
+        imguiSrc = pkgs.imgui.src;
+
         # Python tooling — same shape as the OpenMare/openrecet siblings so
         # the same authoring habits transfer:
         #   - pillow / numpy / scikit-image / opencv4 for frame work
@@ -123,6 +130,11 @@
             export MINGW_CC=i686-w64-mingw32-gcc
             export MINGW_AR=i686-w64-mingw32-ar
             export MINGW_STRIP=i686-w64-mingw32-strip
+
+            # Trace Studio v3 native viewer deps (tools/trace_studio_v3/viewer).
+            # Dear ImGui source + header-only nlohmann/json (parses view.json).
+            export IMGUI_SRC=${imguiSrc}
+            export NLOHMANN_JSON_INC=${pkgs.nlohmann_json}/include
 
             # Same Frida instance the OpenMare / openrecet siblings use.
             # The Windows-side frida-server.exe binds 0.0.0.0:27042, but WSL2's

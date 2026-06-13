@@ -214,6 +214,12 @@ void gfx_fill_back_index(uint8_t palette_index);
  * matches openrecet's capture_backbuffer in spirit. */
 int  gfx_capture_backbuffer(const char *path);
 
+/* Capture the back buffer as a raw Trace Studio v3 frame payload (the exact
+ * byte layout the retail Frida agent emits): [u32 w][u32 h][u32 present]
+ * [256×(R,G,B,flags)][w*h 8bpp indices].  Preserves the index plane verbatim
+ * for the v3 viewer's INDEX-level diff.  Returns 1 on success, 0 on failure. */
+int  gfx_capture_backbuffer_raw(const char *path, unsigned present);
+
 /* Capture the visible window's client area via GDI BitBlt (24bpp
  * BMP).  Bypasses DDraw entirely — useful as a cross-check against
  * gfx_capture_backbuffer to confirm that the back→primary Blt in

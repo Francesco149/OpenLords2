@@ -1,5 +1,9 @@
 # Trace Studio — OpenLords2's port↔retail workhorse
 
+> ⚠️ **RETIRED (2026-06-13).** This is the plan for the old WEB studio, now
+> removed. The workhorse is the NATIVE viewer `tools/trace_studio_v3/` (see its
+> README + the `project_trace_studio_v3` memory). Kept for historical rationale.
+
 **Status (2026-06-10):** Phase 1 IN PROGRESS. Modeled on
 `../openrecet/tools/trace_studio/` (see its `docs/plans/trace-studio-v2.md`),
 which is NOT battle-tested — we lift its proven structure and deliberately fix

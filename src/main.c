@@ -226,6 +226,10 @@ static int       g_audio_active;
  * are `<DIR>/frame_NNNNN.bmp`, indexed by g_frame_counter. */
 static const char *g_capture_dir;
 static unsigned   g_capture_every = 25;
+/* --capture-raw : in addition to <label>.bmp, write <label>.raw — the Trace
+ * Studio v3 frame payload (8bpp indices + palette) the native viewer ingests.
+ * Off by default (normal runs keep just the BMP). */
+static int        g_capture_raw;
 /* --call-trace PATH / --call-trace-frames i,j,k : per-frame JSONL of
  * which annotated port functions ran, for tools/call_trace_diff.py.
  * Off when PATH is NULL; frames empty = every frame. */
@@ -2653,6 +2657,14 @@ static void main_loop_body(void)
                 wsprintfA(path, "%s\\%s.bmp",
                           g_capture_dir ? g_capture_dir : ".", lbl);
                 gfx_capture_backbuffer(path);
+                if (g_capture_raw) {
+                    /* Trace Studio v3 raw payload (8bpp indices + palette) —
+                     * the native viewer's container ingest reads this. */
+                    wsprintfA(path, "%s\\%s.raw",
+                              g_capture_dir ? g_capture_dir : ".", lbl);
+                    gfx_capture_backbuffer_raw(
+                        path, (unsigned)g_seg_actions.caps[i].frame);
+                }
                 /* Save-schema snapshot at the same instant (trace_studio
                  * state parity; the retail agent mirrors this). */
                 wsprintfA(path, "%s\\%s.state.json",
@@ -2948,6 +2960,8 @@ static void parse_cmdline(LPSTR lpCmd)
                         "[openlords2] bad --capture-every (need >0)\n");
                 g_capture_every = 25;
             }
+        } else if (!strcmp(a, "--capture-raw")) {
+            g_capture_raw = 1;     /* also emit <label>.raw (Trace Studio v3) */
         }
         else if (!strcmp(a, "--frames") && i + 1 < ntok) {
             if (!parse_uint(tokens[++i], &g_max_frames)) {

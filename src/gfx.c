@@ -1237,6 +1237,58 @@ int gfx_capture_backbuffer(const char *path)
     return 1;
 }
 
+/* Capture the back buffer as a raw Trace Studio v3 frame payload — the EXACT
+ * byte layout the retail Frida agent's captureFrameOnce() emits, so one ingest
+ * path reads both engines:
+ *   [u32 w][u32 h][u32 present][256×(R,G,B,flags)=1024][w*h 8bpp indices, tight]
+ * The 8bpp index plane is preserved verbatim (no palette resolution), which is
+ * what the v3 viewer's INDEX-level diff needs. `present` is the engine frame
+ * counter at capture. Returns 1 on success, 0 on any failure. */
+int gfx_capture_backbuffer_raw(const char *path, unsigned present)
+{
+    if (!g_back || !path) return 0;
+
+    DDSURFACEDESC desc;
+    ZeroMemory(&desc, sizeof(desc));
+    desc.dwSize = sizeof(desc);
+    HRESULT hr = IDirectDrawSurface_Lock(g_back, NULL, &desc,
+                                         DDLOCK_WAIT | DDLOCK_READONLY, NULL);
+    if (FAILED(hr) || !desc.lpSurface) {
+        log_line("gfx_capture_raw: Lock failed 0x%08lx", (unsigned long)hr);
+        return 0;
+    }
+    const int w = (int)desc.dwWidth;
+    const int h = (int)desc.dwHeight;
+    const int pitch = (int)desc.lPitch;
+
+    FILE *fp = fopen(path, "wb");
+    if (!fp) {
+        log_line("gfx_capture_raw: fopen(%s) failed", path);
+        IDirectDrawSurface_Unlock(g_back, NULL);
+        return 0;
+    }
+
+    uint32_t hdr[3] = { (uint32_t)w, (uint32_t)h, present };
+    fwrite(hdr, 4, 3, fp);
+    /* palette: g_palette_rgb is 256×(R,G,B) triplets → 256×(R,G,B,flags=0). */
+    uint8_t pal[256 * 4];
+    for (int i = 0; i < 256; i++) {
+        pal[i*4+0] = g_palette_rgb[i*3+0];
+        pal[i*4+1] = g_palette_rgb[i*3+1];
+        pal[i*4+2] = g_palette_rgb[i*3+2];
+        pal[i*4+3] = 0;
+    }
+    fwrite(pal, 1, sizeof pal, fp);
+    /* index plane, tight rows (strip any DDraw pitch padding). */
+    const uint8_t *base = (const uint8_t *)desc.lpSurface;
+    for (int y = 0; y < h; y++)
+        fwrite(base + (size_t)y * pitch, 1, (size_t)w, fp);
+    fclose(fp);
+
+    IDirectDrawSurface_Unlock(g_back, NULL);
+    return 1;
+}
+
 /* GDI BitBlt capture of the window's client area to a 24bpp BMP.
  * Independent of DDraw — reads whatever's currently composited at
  * the window's screen position.  Mostly a diagnostic, but useful

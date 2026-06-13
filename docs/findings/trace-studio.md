@@ -1,5 +1,10 @@
 # trace_studio — usage + workflow notes
 
+> ⚠️ **RETIRED (2026-06-13).** Describes the old WEB studio (`tools/trace_studio`
+> + `_web`, the `:8780` server), now removed. The workhorse is the NATIVE viewer
+> `tools/trace_studio_v3/` (see its README + the `project_trace_studio_v3`
+> memory). Kept for historical rationale only.
+
 The port↔retail trace workhorse (plan + design rationale:
 `docs/plans/trace-studio.md`). One studio trace drives BOTH engines to
 label-keyed captured frames; the studio diffs them per label, builds group

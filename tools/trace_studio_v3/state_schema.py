@@ -1,8 +1,10 @@
-"""model/schema.py — the save-schema slot list, parsed from the C table.
+"""state_schema.py — the save-schema slot list, parsed from the C table.
 
-src/save_schema_table.h is the single source of truth (225 entries, each
-`{ symbol, size }, /* idx retail 0xVA */`).  The retail agent needs the
-(va, size) list; the UI wants the symbol names.  Parsed, not duplicated.
+src/save_schema_table.h is the single source of truth (each
+`{ symbol, size }, /* idx retail 0xVA */`). The retail agent needs the (va, size)
+list to read the same slots the port dumps; the viewer wants the symbol names.
+Parsed, not duplicated. (Absorbed into trace_studio_v3 when the web studio was
+retired — was tools/trace_studio/model/schema.py.)
 """
 from __future__ import annotations
 
@@ -10,7 +12,7 @@ import json
 import re
 from pathlib import Path
 
-from ..paths import ROOT
+ROOT = Path(__file__).resolve().parent.parent.parent     # repo root
 
 _ROW = re.compile(
     r"^\s*\{\s*&?([A-Za-z0-9_]+)\s*,\s*(\d+)\s*\}\s*,\s*"

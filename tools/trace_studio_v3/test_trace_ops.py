@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Unit tests for trace_studio.model.ops (parser / compiler / lint).
+"""Unit tests for the trace op parser / compiler / lint (trace_ops).
 
-Run: nix develop -c python3 tools/test_trace_studio_ops.py
+Run: nix develop -c python3 tools/trace_studio_v3/test_trace_ops.py
 """
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from trace_studio.model import ops  # noqa: E402
+import trace_ops as ops  # noqa: E402
 
 FAILS = 0
 
