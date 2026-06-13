@@ -1,7 +1,8 @@
 /* OpenLords2 Trace Studio v3 — headless replay CLI.
  *
- *   replay <cap.olv3>                  print a structured summary (count/dims/presents)
- *   replay <cap.olv3> <idx> <out.bmp>  reconstruct kept frame <idx> → a 32bpp .bmp
+ *   replay <cap.olv3>                       print a structured summary
+ *   replay <cap.olv3> <idx> <out.bmp> [K]   reconstruct kept frame <idx> → a 32bpp .bmp
+ *                                           (K = draw-prefix: only the first K draws; omit = full)
  *
  * Pure C, no Windows/D3D — builds host-native (gcc) for tests AND under mingw. The
  * .bmp it writes is the exact BGRA the viewer uploads, so a host render here is the
@@ -38,11 +39,12 @@ int main(int argc, char **argv)
 
     if (argc >= 4) {
         int idx = atoi(argv[2]);
-        const uint8_t *bgra = olv3_render(r, idx);
+        int kdraws = argc >= 5 ? atoi(argv[4]) : -1;   /* draw-prefix; -1 = full frame */
+        const uint8_t *bgra = kdraws >= 0 ? olv3_render_upto(r, idx, kdraws) : olv3_render(r, idx);
         if (!bgra) { fprintf(stderr, "render frame %d failed\n", idx); olv3_close(r); return 2; }
         int ok = save_bmp(argv[3], bgra, W, H);
-        fprintf(stderr, "frame %d/%d (present %d) -> %s %s\n", idx, n - 1, olv3_present(r, idx),
-                argv[3], ok ? "OK" : "WRITE-FAILED");
+        fprintf(stderr, "frame %d/%d (present %d, %d draws, prefix %d) -> %s %s\n", idx, n - 1,
+                olv3_present(r, idx), olv3_draws(r, idx), kdraws, argv[3], ok ? "OK" : "WRITE-FAILED");
         olv3_close(r);
         return ok ? 0 : 2;
     }

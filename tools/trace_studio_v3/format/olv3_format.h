@@ -39,14 +39,32 @@
 #include <string.h>
 
 #define OLV3_MAGIC   0x33564C4Fu   /* "OLV3" (little-endian bytes O,L,V,3) */
-#define OLV3_VERSION 1u
+#define OLV3_VERSION 2u            /* v2: per-draw write-deltas (DRAW records) for draw-stepping */
 
 /* Container = [u32 MAGIC][u32 VERSION][u32 W][u32 H] then a record stream. */
 enum {
     OLV3_PALETTE = 2,   /* id, 256*4 bytes: per entry R,G,B,flags (DDraw PALETTEENTRY order) */
     OLV3_PIXELS  = 3,   /* id, encoding, w, h, datalen, data[] (8bpp index plane, see ENC_*) */
-    OLV3_FRAME   = 10,  /* palette_id, pixels_id, present_idx — the kept-frame commit marker */
+    OLV3_FRAME   = 10,  /* v1: palette_id, pixels_id, present
+                           v2: palette_id, pixels_id(final), present, base_id, n_draws — kept-frame commit.
+                           The n_draws DRAW records immediately PRECEDE this FRAME. */
+    OLV3_DRAW    = 11,  /* op_type, m0, m1, m2, n, offsets[n] (u32 y*W+x), vals[n] (u8) —
+                           ONE draw's sparse write-delta. Replay = base plane + apply draws in order
+                           (canvas[offset]=val); render_upto(K) applies [0,K); pixel->draw pick is the
+                           highest draw whose offsets include the pixel. See OLV3_OP_* for op_type. */
     OLV3_EOF     = 99,
+};
+
+/* DRAW op_type — what kind of primitive painted this delta (for the viewer readout
+ * + per-type colour). m0/m1/m2 carry primitive-specific labels (see each). */
+enum {
+    OLV3_OP_SPRITE = 0,   /* m0=sprite_index, m1=x, m2=y                    */
+    OLV3_OP_GLYPH  = 1,   /* m0=char_code,    m1=x, m2=y                    */
+    OLV3_OP_LINE   = 2,   /* m0=color,        m1=x, m2=y (start)            */
+    OLV3_OP_PANEL  = 3,   /* m0=kind,         m1=x, m2=y                    */
+    OLV3_OP_FILL   = 4,   /* m0=color,        m1=x, m2=y                    */
+    OLV3_OP_IMAGE  = 5,   /* full-screen background image                   */
+    OLV3_OP_OTHER  = 6,
 };
 
 /* PIXELS payload encodings. RAW always works; the others are size optimisations a

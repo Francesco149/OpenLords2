@@ -83,3 +83,44 @@ def test_summary_cli(replay_bin, tmp_path):
     out = subprocess.run([str(replay_bin), str(tmp_path / "y.olv3")],
                          capture_output=True, text=True, check=True).stdout
     assert '"n_frames": 4' in out and '"dims": "64x48"' in out
+
+
+# ── draw-stepping (v2) ──────────────────────────────────────────────────────
+
+def test_draw_roundtrip_and_buildup(tmp_path):
+    olv3.make_synthetic_draws(tmp_path / "d.olv3", w=96, h=72, n_frames=3, draws_per_frame=5)
+    c = olv3.Container.load(tmp_path / "d.olv3")
+    assert c.version == 2
+    for f in c.frames:
+        assert len(f.draws) == 5
+        # base + all draws applied == the stored final plane (build-up is exact)
+        assert c.render_upto(f.index, -1) == c.indices(f.index)
+        # prefix 0 == base; each successive prefix only grows the painted set
+        assert c.render_upto(f.index, 0) == c.pixels[f.base_id]
+
+
+def test_pick_owner(tmp_path):
+    """The owning draw of a pixel is the LAST draw that wrote it."""
+    olv3.make_synthetic_draws(tmp_path / "p.olv3", w=96, h=72, n_frames=1, draws_per_frame=4)
+    c = olv3.Container.load(tmp_path / "p.olv3")
+    f = c.frames[0]
+    # take the last draw's first written pixel — its owner under the full prefix is that draw
+    last = len(f.draws) - 1
+    off = f.draws[last].offsets[0]
+    base = c.pixels[f.base_id]
+    full = c.render_upto(0, -1)
+    assert full[off] == f.draws[last].vals[0]      # last draw's value wins at its pixel
+    assert base[off] != full[off]                   # it really changed vs base
+
+
+def test_c_render_upto_bit_exact(tmp_path, replay_bin):
+    """The C replay core's render_upto matches the Python build-up, bit for bit."""
+    olv3.make_synthetic_draws(tmp_path / "s.olv3", w=96, h=72, n_frames=2, draws_per_frame=5)
+    c = olv3.Container.load(tmp_path / "s.olv3")
+    import numpy as np
+    for k in (0, 2, 5):
+        bmp = tmp_path / f"k{k}.bmp"
+        subprocess.run([str(replay_bin), str(tmp_path / "s.olv3"), "0", str(bmp), str(k)], check=True)
+        idx = np.frombuffer(c.render_upto(0, k), np.uint8)
+        pal = np.frombuffer(c.palette(0), np.uint8).reshape(256, 4)[:, :3]
+        assert np.array_equal(_read_bmp_rgb(bmp), pal[idx].reshape(c.h, c.w, 3))

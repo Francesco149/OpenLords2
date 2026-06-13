@@ -51,6 +51,28 @@ const uint8_t *olv3_indices(Olv3Replay *r, int idx);
  * or NULL if out of range. For the palette-strip panel + palette diff. */
 const uint8_t *olv3_palette(Olv3Replay *r, int idx);
 
+/* ── draw-stepping (v2 containers; 0 / NULL when a frame carries no draw capture) ── */
+
+/* Number of per-draw write-deltas recorded for kept frame `idx` (-1 oob, 0 = none). */
+int olv3_draws(const Olv3Replay *r, int idx);
+
+/* Fill the op_type + 3 label fields (m0,m1,m2 — see OLV3_OP_* in olv3_format.h) for
+ * draw `k` of frame `idx`. Returns 1 on success, 0 if out of range. */
+int olv3_draw_meta(const Olv3Replay *r, int idx, int k, int *op_type, int *m0, int *m1, int *m2);
+
+/* Reconstruct frame `idx` with only the FIRST `kdraws` draws applied to its base
+ * plane (build-up); kdraws<0 ⇒ all (== olv3_render). Internal BGRA buffer, NULL on
+ * failure. */
+const uint8_t *olv3_render_upto(Olv3Replay *r, int idx, int kdraws);
+
+/* Reconstruct frame `idx` as base + ONLY draw `j` (that draw in isolation over its
+ * real prior state). Internal BGRA buffer, NULL on failure. */
+const uint8_t *olv3_render_solo(Olv3Replay *r, int idx, int j);
+
+/* Which draw last painted pixel (x,y) under the first `kdraws` draws? Returns the
+ * draw index, -1 if no draw painted it (the base shows through), -2 on bad args. */
+int olv3_pick(Olv3Replay *r, int idx, int kdraws, int x, int y);
+
 void olv3_close(Olv3Replay *r);
 
 #ifdef __cplusplus

@@ -23,12 +23,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 MAGIC = 0x33564C4F  # "OLV3"
-VERSION = 1
+VERSION = 2          # v2: per-draw write-deltas (DRAW records)
 
 # record types (mirror olv3_format.h)
-PALETTE, PIXELS, FRAME, EOF = 2, 3, 10, 99
+PALETTE, PIXELS, FRAME, DRAW, EOF = 2, 3, 10, 11, 99
 # PIXELS encodings
 ENC_RAW, ENC_RLE = 0, 1
+# DRAW op_type
+OP_SPRITE, OP_GLYPH, OP_LINE, OP_PANEL, OP_FILL, OP_IMAGE, OP_OTHER = range(7)
 
 PALETTE_BYTES = 256 * 4  # 256 × (R,G,B,flags)
 
@@ -88,10 +90,25 @@ class Writer:
             self._bytes_raw += len(idx)   # this frame's pixels cost nothing
         return pid
 
-    def add_frame(self, palette_1024: bytes, indices_whbytes: bytes, present: int) -> None:
+    def add_frame(self, palette_1024: bytes, indices_whbytes: bytes, present: int,
+                  base_whbytes: bytes | None = None, draws: list[dict] | None = None) -> None:
+        """Commit one kept frame. With `draws` (each {op_type,m0,m1,m2,offsets:[u32],
+        vals:[u8]}) + `base_whbytes` (the canvas before draw 0), the frame is
+        draw-steppable: base + applying the deltas in order == the final plane. Without
+        them it's a plain frame (base == final, 0 draws)."""
         pal_id = self._palette_id(palette_1024)
         pix_id = self._pixels_id(indices_whbytes)
-        self._wu(FRAME, pal_id, pix_id, present & 0xFFFFFFFF)
+        base_id = self._pixels_id(base_whbytes) if base_whbytes is not None else pix_id
+        draws = draws or []
+        for d in draws:
+            offs, vals = d["offsets"], d["vals"]
+            if len(offs) != len(vals):
+                raise ValueError("draw offsets/vals length mismatch")
+            self._wu(DRAW, d.get("op_type", OP_OTHER), d.get("m0", 0), d.get("m1", 0),
+                     d.get("m2", 0), len(offs))
+            self._f.write(struct.pack("<%dI" % len(offs), *offs))
+            self._f.write(bytes(vals))
+        self._wu(FRAME, pal_id, pix_id, present & 0xFFFFFFFF, base_id, len(draws))
         self._n_frames += 1
 
     def close(self) -> dict:
@@ -105,6 +122,19 @@ class Writer:
             "size": self.path.stat().st_size,
             "dedup_saved_bytes": self._bytes_raw,
         }
+
+
+def compute_draw_writes(before: bytes, after: bytes) -> tuple[list[int], bytes]:
+    """Changed pixels between two equal-length index planes → (offsets, after-vals).
+    The delta a draw produces; used to turn a before/after snapshot pair (e.g. the
+    retail dispatch hook) into a DRAW record."""
+    offs: list[int] = []
+    vals = bytearray()
+    for i, (b, a) in enumerate(zip(before, after)):
+        if b != a:
+            offs.append(i)
+            vals.append(a)
+    return offs, bytes(vals)
 
 
 def _rle_encode(buf: bytes) -> bytes:
@@ -136,11 +166,23 @@ def _rle_decode(buf: bytes, outlen: int) -> bytes:
 # Reader — parse + reason about a container.
 # ──────────────────────────────────────────────────────────────────────────────
 @dataclass
+class Draw:
+    op_type: int
+    m0: int
+    m1: int
+    m2: int
+    offsets: tuple  # u32 y*w+x
+    vals: bytes     # u8
+
+
+@dataclass
 class Frame:
     index: int          # 0-based kept-frame index
     palette_id: int
-    pixels_id: int
+    pixels_id: int      # final plane
     present: int        # absolute engine present counter at capture
+    base_id: int = 0    # canvas before draw 0 (== pixels_id if no draws)
+    draws: list = None  # list[Draw]
 
 
 class Container:
@@ -170,6 +212,7 @@ class Container:
         self.w, self.h = u(8), u(12)
         plane = self.w * self.h
         p = 16
+        pending_draws: list = []
         while p < n:
             t = u(p); p += 4
             if t == PALETTE:
@@ -179,9 +222,19 @@ class Container:
                 pid = u(p); enc = u(p + 4); w = u(p + 8); h = u(p + 12); dl = u(p + 16); p += 20
                 raw = d[p:p + dl]; p += dl
                 self.pixels[pid] = raw if enc == ENC_RAW else _rle_decode(raw, w * h)
+            elif t == DRAW:
+                op_type, m0, m1, m2, nw = u(p), u(p + 4), u(p + 8), u(p + 12), u(p + 16); p += 20
+                offs = struct.unpack_from("<%dI" % nw, d, p); p += nw * 4
+                vals = d[p:p + nw]; p += nw
+                pending_draws.append(Draw(op_type, m0, m1, m2, offs, vals))
             elif t == FRAME:
                 pal_id, pix_id, present = u(p), u(p + 4), u(p + 8); p += 12
-                self.frames.append(Frame(len(self.frames), pal_id, pix_id, present))
+                base_id, ndraws = pix_id, 0
+                if self.version >= 2:
+                    base_id, ndraws = u(p), u(p + 4); p += 8
+                drs = pending_draws[len(pending_draws) - ndraws:] if ndraws else []
+                pending_draws = []
+                self.frames.append(Frame(len(self.frames), pal_id, pix_id, present, base_id, drs))
             elif t == EOF:
                 break
             else:
@@ -211,6 +264,19 @@ class Container:
         idx = np.frombuffer(self.indices(i), dtype=np.uint8)
         pal = np.frombuffer(self.palette(i), dtype=np.uint8).reshape(256, 4)[:, :3]
         return pal[idx].reshape(self.h, self.w, 3)
+
+    def render_upto(self, i: int, kdraws: int) -> bytes:
+        """Index plane of frame i with the first kdraws draws applied to its base
+        (kdraws < 0 ⇒ all draws — must equal the stored final plane)."""
+        f = self.frames[i]
+        canvas = bytearray(self.pixels[f.base_id])
+        drs = f.draws or []
+        lim = len(drs) if kdraws < 0 else max(0, min(kdraws, len(drs)))
+        for k in range(lim):
+            dr = drs[k]
+            for off, val in zip(dr.offsets, dr.vals):
+                canvas[off] = val
+        return bytes(canvas)
 
     def summary(self) -> dict:
         return {
@@ -274,10 +340,44 @@ def make_synthetic(path: str | Path, w: int = 640, h: int = 480, n: int = 48,
     return wr.close()
 
 
+def make_synthetic_draws(path: str | Path, w: int = 128, h: int = 96, n_frames: int = 3,
+                         draws_per_frame: int = 6, rle: bool = False) -> dict:
+    """Write draw-STEPPABLE frames: each starts from the prior frame's final (base),
+    then lays down `draws_per_frame` coloured blocks (each captured as a DRAW delta);
+    the final plane == base + all draws applied in order. Exercises render_upto / solo
+    / pick against a known build-up."""
+    pal = bytearray(256 * 4)
+    for i in range(256):
+        pal[i*4:i*4+3] = bytes((i, (i * 5) & 255, (i * 9) & 255))
+    pal = bytes(pal)
+    wr = Writer(path, w, h, rle=rle)
+    canvas = bytearray([5]) * (w * h)
+    bw = bh = max(6, min(w, h) // 8)
+    for fr in range(n_frames):
+        base = bytes(canvas)
+        draws = []
+        for k in range(draws_per_frame):
+            before = bytes(canvas)
+            bx = (4 + (k * 17 + fr * 5)) % max(1, w - bw)
+            by = (4 + (k * 11 + fr * 7)) % max(1, h - bh)
+            col = (40 + fr * 20 + k * 7) & 255
+            for yy in range(by, by + bh):
+                row = yy * w
+                for xx in range(bx, bx + bw):
+                    canvas[row + xx] = col
+            offs, vals = compute_draw_writes(before, bytes(canvas))
+            draws.append({"op_type": OP_SPRITE, "m0": k, "m1": bx, "m2": by,
+                          "offsets": offs, "vals": vals})
+        wr.add_frame(pal, bytes(canvas), present=200 + fr, base_whbytes=base, draws=draws)
+    return wr.close()
+
+
 if __name__ == "__main__":
     import json
     import sys
-    if len(sys.argv) >= 3 and sys.argv[1] == "synth":
+    if len(sys.argv) >= 3 and sys.argv[1] == "synth-draws":
+        print(json.dumps(make_synthetic_draws(sys.argv[2]), indent=1))
+    elif len(sys.argv) >= 3 and sys.argv[1] == "synth":
         info = make_synthetic(sys.argv[2], n=int(sys.argv[3]) if len(sys.argv) > 3 else 48,
                               shift=int(sys.argv[4]) if len(sys.argv) > 4 else 0)
         print(json.dumps(info, indent=1))
