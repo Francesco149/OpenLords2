@@ -73,6 +73,35 @@ static char g_state_filter[64] = {0};
 // per-pixel hover readout (engine-appropriate replacement for openrecet's pixel→draw pick)
 static int g_hover_x = -1, g_hover_y = -1;
 
+// ── draw-stepping (v2 containers: per-draw write-deltas on the PORT side) ──
+// The port emits a base plane + ordered op-deltas per captured frame; the replay
+// core reconstructs any prefix (build-up), one draw in isolation (solo), and the
+// draw that last painted a pixel (pick). These drive the panel below.
+static bool g_drawstep   = false;   // step the port frame's draws (port panel shows the build-up)
+static int  g_draw_k     = -1;      // # draws applied in the build-up (slider; clamped to [0,n])
+static int  g_draw_n     = 0;       // draw count of the current port frame
+static bool g_draw_solo  = false;   // show ONLY the selected draw over its base
+static int  g_draw_sel   = 0;       // selected draw (solo target + list highlight + pick result)
+static int  g_ds_col     = -1;      // column the draw-step bounds were last refreshed for
+static int  g_pick_owner = -2;      // last pixel-pick: -2 none, -1 base shows through, >=0 draw idx
+static int  g_pick_x = -1, g_pick_y = -1;
+static bool g_do_pick    = false;   // a port-panel click is pending pick resolution
+static bool g_draw_scroll = false;  // scroll the draw list to g_draw_sel next frame
+
+static const char *OPN[8] = {"sprite","glyph","line","panel","fill","image","other","?"};
+static ImU32 op_color(int op)
+{
+    switch (op & 7) {
+        case 0: return IM_COL32(120, 200, 255, 255);  // sprite  — blue
+        case 1: return IM_COL32(170, 255, 150, 255);  // glyph   — green
+        case 2: return IM_COL32(255, 210, 120, 255);  // line    — amber
+        case 3: return IM_COL32(220, 160, 255, 255);  // panel   — violet
+        case 4: return IM_COL32(255, 150, 150, 255);  // fill    — red
+        case 5: return IM_COL32(150, 224, 224, 255);  // image   — cyan
+        default:return IM_COL32(200, 200, 200, 255);  // other
+    }
+}
+
 // ── notes / crop regions (the web studio's note loop, native) ──
 struct Note { int id = 0; std::string label, side, text; int col = -1; bool hasbox = false; float box[4] = {0,0,0,0}; };
 static std::vector<Note> g_notes;
@@ -212,14 +241,40 @@ static void pump_metrics(double budget_ms)
 }
 
 // render column `i` into the three panel textures (+ refresh its diff image/metrics).
+// Refresh the draw-step bounds for the column being shown. On a genuine column
+// change the build-up resets to "all draws applied" (== the final plane).
+static void refresh_drawstep(int col, int port_idx)
+{
+    int n = port_idx >= 0 ? olv3_draws(g_port, port_idx) : 0;
+    if (n < 0) n = 0;
+    g_draw_n = n;
+    if (col != g_ds_col) {
+        g_draw_k = n; g_draw_sel = 0; g_pick_owner = -2; g_ds_col = col;
+    } else {
+        if (g_draw_k < 0 || g_draw_k > n) g_draw_k = n;
+        if (g_draw_sel >= n) g_draw_sel = n ? n - 1 : 0;
+    }
+}
+
 static void show_column(int i)
 {
     if (i < 0 || i >= (int)g_cols.size()) return;
     g_cur = i;
     Col &c = g_cols[i];
+    refresh_drawstep(i, c.port_idx);
     const uint8_t *p = c.port_idx   >= 0 ? olv3_render(g_port,   c.port_idx)   : nullptr;
     std::vector<uint8_t> pcopy;
-    if (p) { pcopy.assign(p, p + (size_t)g_w * g_h * 4); upload(g_tport, pcopy.data()); }
+    if (p) pcopy.assign(p, p + (size_t)g_w * g_h * 4);
+    // Port panel shows the build-up when stepping (render_upto / solo share the
+    // replay buffer with olv3_render above — copy the full plane out FIRST).
+    if (c.port_idx >= 0 && g_drawstep && g_draw_n > 0) {
+        const uint8_t *dp = g_draw_solo ? olv3_render_solo(g_port, c.port_idx, g_draw_sel)
+                                        : olv3_render_upto(g_port, c.port_idx, g_draw_k);
+        if (dp) upload(g_tport, dp);
+        else if (!pcopy.empty()) upload(g_tport, pcopy.data());
+    } else if (!pcopy.empty()) {
+        upload(g_tport, pcopy.data());
+    }
     const uint8_t *r = c.retail_idx >= 0 ? olv3_render(g_retail, c.retail_idx) : nullptr;
     if (r) upload(g_tretail, r);
     if (!pcopy.empty() && r) {
@@ -323,12 +378,16 @@ static bool load_view(const char *path)
     char err[128] = {0};
     g_port = olv3_open(pc.c_str(), err, sizeof err);
     if (!g_port) { fprintf(stderr, "port container: %s\n", err); return false; }
+    // Retail is OPTIONAL — a port-only capture (e.g. --only port, or draw-step
+    // verification before Phase 2b retail hooks) leaves an empty retail.olv3.
+    // The diff/retail panels just stay blank; everything else (incl. draw-step)
+    // works against the port alone.
     g_retail = olv3_open(rc.c_str(), err, sizeof err);
-    if (!g_retail) { fprintf(stderr, "retail container: %s\n", err); return false; }
     g_w = olv3_width(g_port); g_h = olv3_height(g_port);
-    if (olv3_width(g_retail) != g_w || olv3_height(g_retail) != g_h) {
+    if (g_retail && (olv3_width(g_retail) != g_w || olv3_height(g_retail) != g_h)) {
         fprintf(stderr, "port/retail dims differ\n"); return false;
     }
+    if (!g_retail) fprintf(stderr, "retail container: %s (port-only view)\n", err);
 
     for (auto &jf : m["frames"]) {
         Col c;
@@ -391,6 +450,12 @@ static void panel(const char *label, LPDIRECT3DTEXTURE9 tex, bool present, float
             ImVec2 mp = ImGui::GetIO().MousePos;
             g_hover_x = (int)((mp.x - mn.x) / (mx.x - mn.x) * g_w);
             g_hover_y = (int)((mp.y - mn.y) / (mx.y - mn.y) * g_h);
+            // draw-step pixel→draw pick: left-click the PORT panel (outside note mode)
+            // → which draw last painted this pixel (resolved after the panel row).
+            if (g_drawstep && sidename && std::string(sidename) == "port"
+                && !g_note_mode && ImGui::IsMouseClicked(0)) {
+                g_do_pick = true;
+            }
         }
         // note mode: drag a crop box on THIS side
         if (g_note_mode && !g_notes_path.empty()) {
@@ -603,6 +668,63 @@ static void draw_ui()
         else if ((enter || save) && g_draft.text[0]) commit_draft();
     }
 
+    // draw-step controls (v2 per-draw write-deltas; only when the port frame has draws)
+    if (g_draw_n > 0) {
+        ImGui::Separator();
+        if (ImGui::Checkbox("draw-step port (d)", &g_drawstep)) show_column(g_cur);
+        ImGui::SameLine(); ImGui::TextDisabled("| %d draws", g_draw_n);
+        if (g_drawstep) {
+            ImGui::SameLine(); if (ImGui::Checkbox("solo", &g_draw_solo)) show_column(g_cur);
+            if (!g_draw_solo) {
+                ImGui::SameLine(); if (ImGui::Button("|<##d")) { g_draw_k = 0; show_column(g_cur); }
+                ImGui::SameLine(); if (ImGui::Button("<##d"))  { if (g_draw_k > 0) { g_draw_k--; show_column(g_cur); } }
+                int k = g_draw_k; ImGui::SameLine(); ImGui::SetNextItemWidth(-360);
+                if (ImGui::SliderInt("##dk", &k, 0, g_draw_n)) { g_draw_k = k; show_column(g_cur); }
+                ImGui::SameLine(); if (ImGui::Button(">##d"))  { if (g_draw_k < g_draw_n) { g_draw_k++; show_column(g_cur); } }
+                ImGui::SameLine(); if (ImGui::Button(">|##d")) { g_draw_k = g_draw_n; show_column(g_cur); }
+                ImGui::SameLine(); ImGui::Text("k=%d", g_draw_k);
+            } else {
+                int s = g_draw_sel; ImGui::SameLine(); ImGui::SetNextItemWidth(-200);
+                if (ImGui::SliderInt("##dsel", &s, 0, g_draw_n - 1)) { g_draw_sel = s; g_draw_scroll = true; show_column(g_cur); }
+            }
+            // last pixel-pick readout
+            if (g_pick_owner != -2) {
+                if (g_pick_owner < 0) {
+                    ImGui::TextDisabled("pick (%d,%d): base shows through (no draw painted it)", g_pick_x, g_pick_y);
+                } else if (c.port_idx >= 0) {
+                    int op = 6, m0 = 0, m1 = 0, m2 = 0;
+                    olv3_draw_meta(g_port, c.port_idx, g_pick_owner, &op, &m0, &m1, &m2);
+                    ImGui::TextColored(ImColor(op_color(op)), "pick (%d,%d): draw #%d  %s  m0=%d  @(%d,%d)",
+                                       g_pick_x, g_pick_y, g_pick_owner, OPN[op & 7], m0, m1, m2);
+                }
+            }
+            // the draw list — click a row to build up to (and select) it
+            if (c.port_idx >= 0 && ImGui::BeginChild("##drawlist", ImVec2(0, 130), true)) {
+                ImGuiListClipper clip; clip.Begin(g_draw_n);
+                while (clip.Step()) {
+                    for (int k = clip.DisplayStart; k < clip.DisplayEnd; k++) {
+                        int op = 6, m0 = 0, m1 = 0, m2 = 0;
+                        olv3_draw_meta(g_port, c.port_idx, k, &op, &m0, &m1, &m2);
+                        bool active = g_draw_solo ? (k == g_draw_sel) : (k < g_draw_k);
+                        bool isSel  = (k == g_draw_sel);
+                        ImGui::PushStyleColor(ImGuiCol_Text, active ? op_color(op) : IM_COL32(105, 105, 112, 255));
+                        char buf[112];
+                        snprintf(buf, sizeof buf, "#%-4d %-6s  m0=%-5d (%4d,%4d)", k, OPN[op & 7], m0, m1, m2);
+                        if (ImGui::Selectable(buf, isSel)) {
+                            g_draw_sel = k;
+                            if (!g_draw_solo) g_draw_k = k + 1;   // build up to and including this draw
+                            show_column(g_cur);
+                        }
+                        ImGui::PopStyleColor();
+                        if (isSel && g_draw_scroll) { ImGui::SetScrollHereY(0.5f); }
+                    }
+                }
+                g_draw_scroll = false;
+                ImGui::EndChild();
+            }
+        }
+    }
+
     // 3-panel row
     g_hover_x = g_hover_y = -1;
     int nshow = (g_show[0] ? 1 : 0) + (g_show[1] ? 1 : 0) + (g_show[2] ? 1 : 0);
@@ -614,6 +736,16 @@ static void draw_ui()
     if (g_show[1]) { if (!first) ImGui::SameLine(); panel("retail", g_tretail, c.retail_idx >= 0, pw, "retail"); first = false; }
     if (g_show[2]) { if (!first) ImGui::SameLine(); panel(g_diff_mode ? "diff (index: red=differ)" : "diff (rgb x6)",
                      g_tdiff, c.port_idx >= 0 && c.retail_idx >= 0, pw, "diff"); }
+
+    // resolve a pending draw-step pixel→draw pick (panel() set g_do_pick + g_hover on click)
+    if (g_do_pick) {
+        g_do_pick = false;
+        if (g_drawstep && c.port_idx >= 0 && g_hover_x >= 0 && g_hover_y >= 0) {
+            g_pick_x = g_hover_x; g_pick_y = g_hover_y;
+            g_pick_owner = olv3_pick(g_port, c.port_idx, g_draw_k, g_hover_x, g_hover_y);
+            if (g_pick_owner >= 0) { g_draw_sel = g_pick_owner; g_draw_scroll = true; if (g_draw_solo) show_column(g_cur); }
+        }
+    }
 
     // diff ribbon (one cell per column, heat = selected metric, click to seek)
     ImGui::Spacing();
@@ -797,6 +929,19 @@ static void handle_keys()
     if (ImGui::IsKeyPressed(ImGuiKey_M) && !g_notes_path.empty()) g_note_mode = !g_note_mode;
     if (ImGui::IsKeyPressed(ImGuiKey_W)) { int wb = 0; for (size_t i = 0; i < g_cols.size(); i++) if (col_signal(g_cols[i]) > col_signal(g_cols[wb])) wb = (int)i; seek(wb); }
     if (ImGui::IsKeyPressed(ImGuiKey_N)) { for (size_t i = g_cur + 1; i < g_cols.size(); i++) if (col_signal(g_cols[i]) > 0) { seek((int)i); break; } }
+    // draw-stepping: d = toggle, s = solo, [ / ] = step the build-up
+    if (g_draw_n > 0) {
+        if (ImGui::IsKeyPressed(ImGuiKey_D)) { g_drawstep = !g_drawstep; show_column(g_cur); }
+        if (g_drawstep && ImGui::IsKeyPressed(ImGuiKey_S)) { g_draw_solo = !g_draw_solo; show_column(g_cur); }
+        if (g_drawstep && !g_draw_solo) {
+            if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket)  && g_draw_k > 0)         { g_draw_k--; show_column(g_cur); }
+            if (ImGui::IsKeyPressed(ImGuiKey_RightBracket) && g_draw_k < g_draw_n)  { g_draw_k++; show_column(g_cur); }
+        }
+        if (g_drawstep && g_draw_solo) {
+            if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket)  && g_draw_sel > 0)            { g_draw_sel--; g_draw_scroll = true; show_column(g_cur); }
+            if (ImGui::IsKeyPressed(ImGuiKey_RightBracket) && g_draw_sel < g_draw_n - 1) { g_draw_sel++; g_draw_scroll = true; show_column(g_cur); }
+        }
+    }
 }
 
 static int do_interactive(const char *view)
