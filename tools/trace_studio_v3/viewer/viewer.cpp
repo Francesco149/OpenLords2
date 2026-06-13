@@ -77,15 +77,17 @@ static int g_hover_x = -1, g_hover_y = -1;
 // The port emits a base plane + ordered op-deltas per captured frame; the replay
 // core reconstructs any prefix (build-up), one draw in isolation (solo), and the
 // draw that last painted a pixel (pick). These drive the panel below.
-static bool g_drawstep   = false;   // step the port frame's draws (port panel shows the build-up)
+static bool g_drawstep   = false;   // step a frame's draws (the stepped panel shows the build-up)
+static int  g_ds_side    = 0;       // which engine to step: 0 = port, 1 = retail
 static int  g_draw_k     = -1;      // # draws applied in the build-up (slider; clamped to [0,n])
-static int  g_draw_n     = 0;       // draw count of the current port frame
+static int  g_draw_n     = 0;       // draw count of the current frame on the stepped side
 static bool g_draw_solo  = false;   // show ONLY the selected draw over its base
-static int  g_draw_sel   = 0;       // selected draw (solo target + list highlight + pick result)
-static int  g_ds_col     = -1;      // column the draw-step bounds were last refreshed for
-static int  g_pick_owner = -2;      // last pixel-pick: -2 none, -1 base shows through, >=0 draw idx
+static int  g_draw_sel   = 0;       // selected draw (solo target + list highlight)
+static int  g_ds_col     = -1;      // (col<<1|side) the draw-step bounds were last refreshed for
+// cross-engine pixel pick: the owning draw on EACH engine at (g_pick_x,g_pick_y)
 static int  g_pick_x = -1, g_pick_y = -1;
-static bool g_do_pick    = false;   // a port-panel click is pending pick resolution
+static int  g_pick_port = -2, g_pick_retail = -2;   // -2 none, -1 base shows through, >=0 draw idx
+static bool g_do_pick    = false;   // a panel click is pending pick resolution
 static bool g_draw_scroll = false;  // scroll the draw list to g_draw_sel next frame
 
 static const char *OPN[8] = {"sprite","glyph","line","panel","fill","image","other","?"};
@@ -100,6 +102,18 @@ static ImU32 op_color(int op)
         case 5: return IM_COL32(150, 224, 224, 255);  // image   — cyan
         default:return IM_COL32(200, 200, 200, 255);  // other
     }
+}
+
+// One engine's pixel-pick result: the owning draw + its op/meta, op-coloured.
+// owner: -2 = side has no draws, -1 = base shows through, >=0 = draw index.
+static void pick_readout(const char *name, Olv3Replay *rep, int idx, int owner)
+{
+    if (owner == -2) { ImGui::TextDisabled("%s: (no draws)", name); return; }
+    if (owner < 0)   { ImGui::TextDisabled("%s: base", name); return; }
+    int op = 6, m0 = 0, m1 = 0, m2 = 0;
+    olv3_draw_meta(rep, idx, owner, &op, &m0, &m1, &m2);
+    ImGui::TextColored(ImColor(op_color(op)), "%s: #%d %s m0=%d (%d,%d)",
+                       name, owner, OPN[op & 7], m0, m1, m2);
 }
 
 // ── notes / crop regions (the web studio's note loop, native) ──
@@ -240,19 +254,42 @@ static void pump_metrics(double budget_ms)
     }
 }
 
+// the engine being draw-stepped (port or retail) + its kept-frame index for col.
+static Olv3Replay *ds_replay() { return g_ds_side ? g_retail : g_port; }
+static int ds_idx(const Col &c) { return g_ds_side ? c.retail_idx : c.port_idx; }
+
 // render column `i` into the three panel textures (+ refresh its diff image/metrics).
-// Refresh the draw-step bounds for the column being shown. On a genuine column
-// change the build-up resets to "all draws applied" (== the final plane).
-static void refresh_drawstep(int col, int port_idx)
+// Refresh the draw-step bounds for the column/side being shown. On a genuine
+// (col,side) change the build-up resets to "all draws applied" (== the final plane).
+static void refresh_drawstep(int col, const Col &c)
 {
-    int n = port_idx >= 0 ? olv3_draws(g_port, port_idx) : 0;
+    int idx = ds_idx(c);
+    int n = idx >= 0 ? olv3_draws(ds_replay(), idx) : 0;
     if (n < 0) n = 0;
     g_draw_n = n;
-    if (col != g_ds_col) {
-        g_draw_k = n; g_draw_sel = 0; g_pick_owner = -2; g_ds_col = col;
+    int key = (col << 1) | g_ds_side;
+    if (key != g_ds_col) {
+        g_draw_k = n; g_draw_sel = 0; g_ds_col = key;
     } else {
         if (g_draw_k < 0 || g_draw_k > n) g_draw_k = n;
         if (g_draw_sel >= n) g_draw_sel = n ? n - 1 : 0;
+    }
+}
+
+// Upload `tex` from engine `rep`/`idx`: the stepped side shows the build-up
+// (render_upto / solo), every other panel the full final plane. `full` is the
+// already-copied full plane (render_upto/solo share the replay's one buffer, so
+// the caller copies the full render out FIRST).
+static void upload_panel(LPDIRECT3DTEXTURE9 tex, Olv3Replay *rep, int idx,
+                         int side, const std::vector<uint8_t> &full)
+{
+    if (idx < 0 || full.empty()) return;
+    if (g_drawstep && g_ds_side == side && g_draw_n > 0) {
+        const uint8_t *dp = g_draw_solo ? olv3_render_solo(rep, idx, g_draw_sel)
+                                        : olv3_render_upto(rep, idx, g_draw_k);
+        upload(tex, dp ? dp : full.data());
+    } else {
+        upload(tex, full.data());
     }
 }
 
@@ -261,29 +298,23 @@ static void show_column(int i)
     if (i < 0 || i >= (int)g_cols.size()) return;
     g_cur = i;
     Col &c = g_cols[i];
-    refresh_drawstep(i, c.port_idx);
+    refresh_drawstep(i, c);
+    // Full renders FIRST (build-up reuses each replay's single buffer).
+    std::vector<uint8_t> pcopy, rcopy;
     const uint8_t *p = c.port_idx   >= 0 ? olv3_render(g_port,   c.port_idx)   : nullptr;
-    std::vector<uint8_t> pcopy;
     if (p) pcopy.assign(p, p + (size_t)g_w * g_h * 4);
-    // Port panel shows the build-up when stepping (render_upto / solo share the
-    // replay buffer with olv3_render above — copy the full plane out FIRST).
-    if (c.port_idx >= 0 && g_drawstep && g_draw_n > 0) {
-        const uint8_t *dp = g_draw_solo ? olv3_render_solo(g_port, c.port_idx, g_draw_sel)
-                                        : olv3_render_upto(g_port, c.port_idx, g_draw_k);
-        if (dp) upload(g_tport, dp);
-        else if (!pcopy.empty()) upload(g_tport, pcopy.data());
-    } else if (!pcopy.empty()) {
-        upload(g_tport, pcopy.data());
-    }
     const uint8_t *r = c.retail_idx >= 0 ? olv3_render(g_retail, c.retail_idx) : nullptr;
-    if (r) upload(g_tretail, r);
-    if (!pcopy.empty() && r) {
+    if (r) rcopy.assign(r, r + (size_t)g_w * g_h * 4);
+    upload_panel(g_tport,   g_port,   c.port_idx,   0, pcopy);
+    upload_panel(g_tretail, g_retail, c.retail_idx, 1, rcopy);
+    // Diff is always full port vs full retail (the stepped panel may show a prefix).
+    if (!pcopy.empty() && !rcopy.empty()) {
         if (g_diff_mode == 0) {
-            diff_rgb(pcopy.data(), r, g_diffbuf, c);
+            diff_rgb(pcopy.data(), rcopy.data(), g_diffbuf, c);
         } else {
             const uint8_t *pi = olv3_indices(g_port, c.port_idx);
             const uint8_t *ri = olv3_indices(g_retail, c.retail_idx);
-            diff_rgb(pcopy.data(), r, nullptr, c);   // keep RGB metric current too
+            diff_rgb(pcopy.data(), rcopy.data(), nullptr, c);   // keep RGB metric current too
             if (pi && ri) diff_index(pi, ri, pcopy.data(), g_diffbuf, c);
         }
         c.paldiff = palette_diff_count(olv3_palette(g_port, c.port_idx), olv3_palette(g_retail, c.retail_idx));
@@ -432,7 +463,8 @@ static double col_heat_t(const Col &c)
 }
 static int col_signal(const Col &c) { return g_heat_metric == 1 ? c.idxdiff : c.gt8; }
 
-static void seek(int i) { if (i < 0) i = 0; if (i >= (int)g_cols.size()) i = (int)g_cols.size() - 1; if (i != g_cur) show_column(i); }
+static void seek(int i) { if (i < 0) i = 0; if (i >= (int)g_cols.size()) i = (int)g_cols.size() - 1;
+    if (i != g_cur) { g_pick_port = g_pick_retail = -2; show_column(i); } }   // pick is column-specific
 
 // one panel: a labelled image (or a gap placeholder), scaled to `panel_w`. Tracks the
 // hovered capture-pixel (for the index/RGB readout) and hosts note-mode crop boxes.
@@ -450,9 +482,10 @@ static void panel(const char *label, LPDIRECT3DTEXTURE9 tex, bool present, float
             ImVec2 mp = ImGui::GetIO().MousePos;
             g_hover_x = (int)((mp.x - mn.x) / (mx.x - mn.x) * g_w);
             g_hover_y = (int)((mp.y - mn.y) / (mx.y - mn.y) * g_h);
-            // draw-step pixel→draw pick: left-click the PORT panel (outside note mode)
-            // → which draw last painted this pixel (resolved after the panel row).
-            if (g_drawstep && sidename && std::string(sidename) == "port"
+            // cross-engine pixel→draw pick: left-click the port OR retail panel
+            // (outside note mode) → owning draw on EACH engine (resolved after the
+            // panel row). Available whenever a side carries draws.
+            if (sidename && (std::string(sidename) == "port" || std::string(sidename) == "retail")
                 && !g_note_mode && ImGui::IsMouseClicked(0)) {
                 g_do_pick = true;
             }
@@ -668,13 +701,20 @@ static void draw_ui()
         else if ((enter || save) && g_draft.text[0]) commit_draft();
     }
 
-    // draw-step controls (v2 per-draw write-deltas; only when the port frame has draws)
-    if (g_draw_n > 0) {
+    // draw-step controls (v2 per-draw write-deltas) — when EITHER engine has draws
+    int port_nd   = c.port_idx   >= 0 ? olv3_draws(g_port,   c.port_idx)   : 0; if (port_nd   < 0) port_nd   = 0;
+    int retail_nd = c.retail_idx >= 0 ? olv3_draws(g_retail, c.retail_idx) : 0; if (retail_nd < 0) retail_nd = 0;
+    if (port_nd > 0 || retail_nd > 0) {
         ImGui::Separator();
-        if (ImGui::Checkbox("draw-step port (d)", &g_drawstep)) show_column(g_cur);
-        ImGui::SameLine(); ImGui::TextDisabled("| %d draws", g_draw_n);
-        if (g_drawstep) {
-            ImGui::SameLine(); if (ImGui::Checkbox("solo", &g_draw_solo)) show_column(g_cur);
+        if (ImGui::Checkbox("draw-step (d)", &g_drawstep)) show_column(g_cur);
+        ImGui::SameLine(); ImGui::TextDisabled("| step:");
+        ImGui::SameLine(); if (ImGui::RadioButton("port##ds", &g_ds_side, 0)) show_column(g_cur);
+        ImGui::SameLine(); if (ImGui::RadioButton("retail##ds", &g_ds_side, 1)) show_column(g_cur);
+        ImGui::SameLine(); ImGui::TextDisabled("| %d draws (port %d / retail %d)", g_draw_n, port_nd, retail_nd);
+        Olv3Replay *rep = ds_replay();
+        int didx = ds_idx(c);
+        if (g_drawstep && g_draw_n > 0) {
+            ImGui::SameLine(); if (ImGui::Checkbox("solo (s)", &g_draw_solo)) show_column(g_cur);
             if (!g_draw_solo) {
                 ImGui::SameLine(); if (ImGui::Button("|<##d")) { g_draw_k = 0; show_column(g_cur); }
                 ImGui::SameLine(); if (ImGui::Button("<##d"))  { if (g_draw_k > 0) { g_draw_k--; show_column(g_cur); } }
@@ -687,41 +727,37 @@ static void draw_ui()
                 int s = g_draw_sel; ImGui::SameLine(); ImGui::SetNextItemWidth(-200);
                 if (ImGui::SliderInt("##dsel", &s, 0, g_draw_n - 1)) { g_draw_sel = s; g_draw_scroll = true; show_column(g_cur); }
             }
-            // last pixel-pick readout
-            if (g_pick_owner != -2) {
-                if (g_pick_owner < 0) {
-                    ImGui::TextDisabled("pick (%d,%d): base shows through (no draw painted it)", g_pick_x, g_pick_y);
-                } else if (c.port_idx >= 0) {
+        }
+        // cross-engine pixel pick — the owning draw on EACH engine (click any panel)
+        if (g_pick_port != -2 || g_pick_retail != -2) {
+            ImGui::Text("pick (%d,%d):", g_pick_x, g_pick_y);
+            ImGui::SameLine(); pick_readout("port", g_port, c.port_idx, g_pick_port);
+            ImGui::SameLine(); ImGui::TextDisabled("|");
+            ImGui::SameLine(); pick_readout("retail", g_retail, c.retail_idx, g_pick_retail);
+        }
+        // the draw list for the stepped side — click a row to build up to (+select) it
+        if (g_drawstep && g_draw_n > 0 && didx >= 0 && ImGui::BeginChild("##drawlist", ImVec2(0, 120), true)) {
+            ImGuiListClipper clip; clip.Begin(g_draw_n);
+            while (clip.Step()) {
+                for (int k = clip.DisplayStart; k < clip.DisplayEnd; k++) {
                     int op = 6, m0 = 0, m1 = 0, m2 = 0;
-                    olv3_draw_meta(g_port, c.port_idx, g_pick_owner, &op, &m0, &m1, &m2);
-                    ImGui::TextColored(ImColor(op_color(op)), "pick (%d,%d): draw #%d  %s  m0=%d  @(%d,%d)",
-                                       g_pick_x, g_pick_y, g_pick_owner, OPN[op & 7], m0, m1, m2);
-                }
-            }
-            // the draw list — click a row to build up to (and select) it
-            if (c.port_idx >= 0 && ImGui::BeginChild("##drawlist", ImVec2(0, 130), true)) {
-                ImGuiListClipper clip; clip.Begin(g_draw_n);
-                while (clip.Step()) {
-                    for (int k = clip.DisplayStart; k < clip.DisplayEnd; k++) {
-                        int op = 6, m0 = 0, m1 = 0, m2 = 0;
-                        olv3_draw_meta(g_port, c.port_idx, k, &op, &m0, &m1, &m2);
-                        bool active = g_draw_solo ? (k == g_draw_sel) : (k < g_draw_k);
-                        bool isSel  = (k == g_draw_sel);
-                        ImGui::PushStyleColor(ImGuiCol_Text, active ? op_color(op) : IM_COL32(105, 105, 112, 255));
-                        char buf[112];
-                        snprintf(buf, sizeof buf, "#%-4d %-6s  m0=%-5d (%4d,%4d)", k, OPN[op & 7], m0, m1, m2);
-                        if (ImGui::Selectable(buf, isSel)) {
-                            g_draw_sel = k;
-                            if (!g_draw_solo) g_draw_k = k + 1;   // build up to and including this draw
-                            show_column(g_cur);
-                        }
-                        ImGui::PopStyleColor();
-                        if (isSel && g_draw_scroll) { ImGui::SetScrollHereY(0.5f); }
+                    olv3_draw_meta(rep, didx, k, &op, &m0, &m1, &m2);
+                    bool active = g_draw_solo ? (k == g_draw_sel) : (k < g_draw_k);
+                    bool isSel  = (k == g_draw_sel);
+                    ImGui::PushStyleColor(ImGuiCol_Text, active ? op_color(op) : IM_COL32(105, 105, 112, 255));
+                    char buf[112];
+                    snprintf(buf, sizeof buf, "#%-4d %-6s  m0=%-5d (%4d,%4d)", k, OPN[op & 7], m0, m1, m2);
+                    if (ImGui::Selectable(buf, isSel)) {
+                        g_draw_sel = k;
+                        if (!g_draw_solo) g_draw_k = k + 1;   // build up to and including this draw
+                        show_column(g_cur);
                     }
+                    ImGui::PopStyleColor();
+                    if (isSel && g_draw_scroll) { ImGui::SetScrollHereY(0.5f); }
                 }
-                g_draw_scroll = false;
-                ImGui::EndChild();
             }
+            g_draw_scroll = false;
+            ImGui::EndChild();
         }
     }
 
@@ -737,13 +773,19 @@ static void draw_ui()
     if (g_show[2]) { if (!first) ImGui::SameLine(); panel(g_diff_mode ? "diff (index: red=differ)" : "diff (rgb x6)",
                      g_tdiff, c.port_idx >= 0 && c.retail_idx >= 0, pw, "diff"); }
 
-    // resolve a pending draw-step pixel→draw pick (panel() set g_do_pick + g_hover on click)
+    // resolve a pending pixel pick (panel() set g_do_pick + g_hover on click): the
+    // draw that last painted (x,y) on EACH engine — "which draw produced this pixel,
+    // and does it differ port↔retail?". Uses all draws (k=-1) = final-frame owner.
     if (g_do_pick) {
         g_do_pick = false;
-        if (g_drawstep && c.port_idx >= 0 && g_hover_x >= 0 && g_hover_y >= 0) {
+        if (g_hover_x >= 0 && g_hover_y >= 0) {
             g_pick_x = g_hover_x; g_pick_y = g_hover_y;
-            g_pick_owner = olv3_pick(g_port, c.port_idx, g_draw_k, g_hover_x, g_hover_y);
-            if (g_pick_owner >= 0) { g_draw_sel = g_pick_owner; g_draw_scroll = true; if (g_draw_solo) show_column(g_cur); }
+            g_pick_port   = (c.port_idx   >= 0 && olv3_draws(g_port,   c.port_idx)   > 0)
+                            ? olv3_pick(g_port,   c.port_idx,   -1, g_pick_x, g_pick_y) : -2;
+            g_pick_retail = (c.retail_idx >= 0 && olv3_draws(g_retail, c.retail_idx) > 0)
+                            ? olv3_pick(g_retail, c.retail_idx, -1, g_pick_x, g_pick_y) : -2;
+            int own = g_ds_side ? g_pick_retail : g_pick_port;   // sync stepped side's selection
+            if (own >= 0) { g_draw_sel = own; g_draw_scroll = true; if (g_draw_solo) show_column(g_cur); }
         }
     }
 
