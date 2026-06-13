@@ -579,7 +579,11 @@ let g_dc_hdrs                = null;   // per-draw headers (MAXH × 6 u32)
 let g_dc_state               = null;   // scalar state int[16] (CModule globals aren't writable)
 // dc_st[] indices — MUST match the CModule's S_* #defines.
 const DC_S_ARMED = 0, DC_S_PENDING = 1, DC_S_HAVEBASE = 2, DC_S_W = 3, DC_S_H = 4,
-      DC_S_NHDR = 5, DC_S_NWRITE = 6, DC_S_OVERFLOW = 7;
+      DC_S_NHDR = 5, DC_S_NWRITE = 6, DC_S_OVERFLOW = 7,
+      // 8..11 = OP/M0/M1/M2 (CModule-internal staging). 12/13 = the FUN_00408438
+      // return-address window for the map-structure leaf gate (see
+      // installDrawCaptureHooks / dc_on_map_sprite).
+      DC_S_RA_LO = 12, DC_S_RA_HI = 13;
 
 // Per-tick anchor counter. Bumped in engine_tick.onEnter (1-indexed: equals
 // the tick number currently executing). Used both as the timestamp for
@@ -5169,6 +5173,8 @@ extern int g_canvas_stride;              /* DAT_004eb274 (== width, no padding) 
 extern int g_canvas_height;              /* DAT_004eac4c                        */
 extern int g_glyph_cursor_x;             /* DAT_00591524                        */
 extern int g_glyph_cursor_y;             /* DAT_00591528                        */
+extern int g_sprite_dir_idx;             /* DAT_005c9288 — map struct/overlay sprite-dir index */
+extern int g_cell_value;                 /* DAT_00567954 — terrain cell value   */
 
 /* ALL mutable state lives in JS-allocated memory passed as pointer-slot symbols.
  * The CModule has ZERO writable globals: in this Frida build the CModule's own
@@ -5202,6 +5208,8 @@ extern unsigned int  * dc_hdrs_buf;      /* DRAWCAP_MAXH * 6 (op,m0,m1,m2,start,
 #define S_M0       9
 #define S_M1      10
 #define S_M2      11
+#define S_RA_LO   12   /* FUN_00408438 lo bound — map-structure leaf gate */
+#define S_RA_HI   13   /* FUN_00408438 hi bound                            */
 
 void dc_begin (void) {
   dc_st[S_ARMED] = 1; dc_st[S_HAVEBASE] = 0; dc_st[S_PENDING] = 0;
@@ -5270,6 +5278,47 @@ void dc_on_glyph (GumInvocationContext * ic) {
   dc_draw(1u /*GLYPH*/, cc & 0xffu,
           (unsigned int) g_glyph_cursor_x, (unsigned int) g_glyph_cursor_y);
 }
+
+/* onEnter for the generic sprite dispatchers FUN_00404442 (canvas-clip) and
+ * FUN_00404547 (caller-clip): (blob, sprite_index, x, y[, l,t,r,b]). Mirrors the
+ * port's gfx_dispatch_sprite / _clipped drawcap_draw — the HUD/UI sprites. Meta
+ * comes from the ARGS (the dest globals aren't staged until inside the fn). */
+void dc_on_dispatch_sprite (GumInvocationContext * ic) {
+  if (!dc_st[S_ARMED]) return;
+  dc_draw(0u /*SPRITE*/,
+          GPOINTER_TO_UINT(gum_invocation_context_get_nth_argument(ic, 1)),
+          GPOINTER_TO_UINT(gum_invocation_context_get_nth_argument(ic, 2)),
+          GPOINTER_TO_UINT(gum_invocation_context_get_nth_argument(ic, 3)));
+}
+
+/* onEnter for the leaf sprite blitters (main 4b43b1/446d/44d2, overlay RLE
+ * 4b4537/4814/48b8) ONLY when called from the map-structure drawer FUN_00408438.
+ * That fn inlines the dispatch and calls a leaf DIRECTLY, so the return address
+ * lands inside its [lo,hi) window; HUD/panel/generic callers (gfx_panel,
+ * gfx_sprite_render, FUN_00404442) reach the same leaves via other frames and
+ * are gated out — exactly as the port FOLDS those (no drawcap_draw there).
+ * Mirrors the port's engine_map_render main + overlay drawcap_draw. Meta = the
+ * sprite-dir index + cursor FUN_00408438 staged just before the blit. */
+void dc_on_map_sprite (GumInvocationContext * ic) {
+  unsigned int ra;
+  if (!dc_st[S_ARMED]) return;
+  ra = (unsigned int) (gsize) gum_invocation_context_get_return_address(ic);
+  if (ra < (unsigned int) dc_st[S_RA_LO] || ra >= (unsigned int) dc_st[S_RA_HI]) return;
+  dc_draw(0u /*SPRITE*/, (unsigned int) g_sprite_dir_idx,
+          (unsigned int) g_glyph_cursor_x, (unsigned int) g_glyph_cursor_y);
+}
+
+/* onEnter for the terrain per-cell drawers FUN_004063c1 (drawer_a) and
+ * FUN_0042a7f1 (empty_cell) — map-exclusive, one draw per cell. drawer_b
+ * (FUN_00406673) is NOT hooked so its writes FOLD into the cell's draw, matching
+ * the port's do_cell (drawer_a + drawer_b == one draw). Meta = cell value +
+ * cursor (the row iterator stages both before the call). */
+void dc_on_terrain_cell (GumInvocationContext * ic) {
+  if (!dc_st[S_ARMED]) return;
+  (void) ic;
+  dc_draw(0u /*SPRITE*/, (unsigned int) g_cell_value,
+          (unsigned int) g_glyph_cursor_x, (unsigned int) g_glyph_cursor_y);
+}
 `;
 
 function installDrawCaptureHooks() {
@@ -5289,6 +5338,8 @@ function installDrawCaptureHooks() {
         g_canvas_height:  rva(0x004eac4c),
         g_glyph_cursor_x: rva(0x00591524),
         g_glyph_cursor_y: rva(0x00591528),
+        g_sprite_dir_idx: rva(0x005c9288),
+        g_cell_value:     rva(0x00567954),
         dc_st:         slot(g_dc_state),
         dc_base_buf:   slot(g_dc_base),
         dc_shadow_buf: slot(g_dc_shadow),
@@ -5299,12 +5350,28 @@ function installDrawCaptureHooks() {
     g_dc_begin     = new NativeFunction(g_drawcap_cm.dc_begin,     'void', []);
     g_dc_flush_ptr = new NativeFunction(g_drawcap_cm.dc_flush_ptr, 'void', ['pointer', 'int', 'int']);
     g_dc_end       = new NativeFunction(g_drawcap_cm.dc_end,       'void', []);
-    // Hook the glyph dispatcher (FUN_00402a14). More dispatch hooks (sprite,
-    // map tile, terrain cell) go here next — each is one Interceptor.attach
-    // pointing at the matching CModule onEnter.
+    // The map-structure leaf gate window = [FUN_00408438, +size). A leaf blit
+    // whose return address lands here was called directly by the map drawer
+    // (which inlines the dispatch), distinguishing it from HUD/panel callers.
+    const F408438 = rva(0x00408438);
+    g_dc_state.add(DC_S_RA_LO * 4).writeU32(F408438.toUInt32());
+    g_dc_state.add(DC_S_RA_HI * 4).writeU32(F408438.add(2072).toUInt32());  // FUN_00408438 = 2072 B
+    // Symmetric draw-attribution hooks, one Interceptor.attach per dispatch
+    // mirroring a port gfx_drawcap_draw site:
+    //   glyph         FUN_00402a14                     (gfx_dispatch.c glyph)
+    //   UI sprite     FUN_00404442 / FUN_00404547      (gfx_dispatch_sprite[_clipped])
+    //   map struct    4b43b1/446d/44d2 + 4b4537/4814/48b8, gated to FUN_00408438
+    //                                                  (engine_map_render main + overlay)
+    //   terrain cell  FUN_004063c1 / FUN_0042a7f1      (engine_map_terrain do_cell)
     Interceptor.attach(rva(0x00402a14), { onEnter: g_drawcap_cm.dc_on_glyph });
+    [0x00404442, 0x00404547].forEach(
+        (va) => Interceptor.attach(rva(va), { onEnter: g_drawcap_cm.dc_on_dispatch_sprite }));
+    [0x004b43b1, 0x004b446d, 0x004b44d2, 0x004b4537, 0x004b4814, 0x004b48b8].forEach(
+        (va) => Interceptor.attach(rva(va), { onEnter: g_drawcap_cm.dc_on_map_sprite }));
+    [0x004063c1, 0x0042a7f1].forEach(
+        (va) => Interceptor.attach(rva(va), { onEnter: g_drawcap_cm.dc_on_terrain_cell }));
     g_drawcap_active = true;
-    log('drawcap: CModule installed — glyph dispatch hook @ 0x402a14');
+    log('drawcap: CModule installed — glyph + UI-sprite + map-struct + terrain hooks');
 }
 
 // Read the CModule's accumulated draws → OLDR payload → send (frida_capture
