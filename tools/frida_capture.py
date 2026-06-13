@@ -285,6 +285,11 @@ class CaptureConfig:
     # into the draw journal (cross-engine map-draw diff, aligned zone). Sets the
     # retail demand-redraw global DAT_0057d340 = 2 before the tick.
     capture_force_redraw: bool = False
+    # Neuter retail's strat-map mouse edge-scroll (FUN_00432221) so the captured
+    # camera is the loaded-save scroll, not whatever the headless host cursor's
+    # screen-edge position scrolled it to (nondeterministic vs the port, which has
+    # no edge-scroll). Default off; trace_studio parity captures turn it on.
+    suppress_edge_scroll: bool = False
     # Save-schema state dump at segtrace {capture} instants:
     # [{i,va,size}] → run_dir/state/state_<tick>.json (trace_studio parity).
     state_dump_slots:  list[dict] = field(default_factory=list)
@@ -1065,6 +1070,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "anchor_trace":              bool(cfg.anchor_trace),
             "capture_draws":             bool(cfg.capture_draws),
             "capture_force_redraw":      bool(cfg.capture_force_redraw),
+            "suppress_edge_scroll":      bool(cfg.suppress_edge_scroll),
             "watch":                     cfg.watch or [],
             "rng_seed":                  cfg.rng_seed,
             "heartbeat_timeout_ms":      HEARTBEAT_TIMEOUT_MS,
@@ -1380,6 +1386,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--capture-force-redraw", action="store_true",
                     help="force a full strategic re-render on each {capture} tick "
                          "(DAT_0057d340=2) so the map composites into the draw journal")
+    ap.add_argument("--suppress-edge-scroll", action="store_true",
+                    help="neuter retail's strat-map mouse edge-scroll (FUN_00432221) "
+                         "so the captured camera is the loaded-save scroll, not a "
+                         "host-cursor screen-edge scroll (parity determinism)")
     ap.add_argument("--anchor-trace", action="store_true",
                     help="emit deterministic anchors ({anchor,frame} on "
                          "engine-state / screen-id transitions) to "
@@ -1573,6 +1583,7 @@ def main(argv: list[str] | None = None) -> int:
         anchor_trace=args.anchor_trace,
         capture_draws=args.capture_draws,
         capture_force_redraw=args.capture_force_redraw,
+        suppress_edge_scroll=args.suppress_edge_scroll,
         watch=watch_specs,
         state_dump_slots=state_dump_slots,
         rng_seed=rng_seed,

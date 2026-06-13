@@ -562,6 +562,16 @@ let g_last_capture_h         = 0;
 // not-armed early-out cost nothing on the hot path.
 let g_capture_draws          = false;
 let g_capture_force_redraw   = false;  // force full strat re-render on capture ticks (DAT_0057d340=2)
+// Suppress retail's mouse edge-scroll during capture. The strat map edge-scroll
+// (FUN_00432221 → FUN_00431f59) reads the LIVE Windows cursor (GetCursorPos,
+// screen coords) vs GetSystemMetrics screen bounds, so in a headless capture a
+// host cursor parked at a screen edge scrolls the map one cell — a
+// nondeterministic divergence from the port (which has no edge-scroll). Neutering
+// FUN_00432221 (→ return 0, "did not scroll") makes the captured camera the
+// faithfully-loaded save scroll on both engines. Default off (normal interactive
+// runs keep edge-scroll); olv3 parity captures turn it on.
+let g_suppress_edge_scroll   = false;
+let g_edge_scroll_cb         = null;   // keep the NativeCallback alive (no GC)
 let g_drawcap_cm             = null;   // the CModule
 let g_dc_begin               = null;   // NativeFunction wrappers
 let g_dc_flush_ptr           = null;
@@ -5321,6 +5331,18 @@ void dc_on_terrain_cell (GumInvocationContext * ic) {
 }
 `;
 
+// Neuter the strat-map mouse edge-scroll dispatcher FUN_00432221 (returns
+// undefined4: 1 = scrolled this tick, 0 = did not). Replacing it with a constant
+// 0 keeps DAT_005651b4/8 (the cell-scroll col/row) at the loaded-save value, so a
+// host cursor parked at a screen edge can't scroll the captured map. See
+// g_suppress_edge_scroll.
+function installEdgeScrollSuppress() {
+    if (g_edge_scroll_cb) return;
+    g_edge_scroll_cb = new NativeCallback(function () { return 0; }, 'uint32', []);
+    Interceptor.replace(rva(0x00432221), g_edge_scroll_cb);
+    log('edge-scroll: FUN_00432221 neutered (capture determinism)');
+}
+
 function installDrawCaptureHooks() {
     if (g_drawcap_cm) return;
     // JS-owned buffers (committed) handed to the CModule via pointer-holding
@@ -5446,6 +5468,7 @@ rpc.exports = {
         g_frame_capture_count       = 0;
         g_capture_draws             = !!opts.capture_draws;
         g_capture_force_redraw      = !!opts.capture_force_redraw;
+        g_suppress_edge_scroll      = !!opts.suppress_edge_scroll;
 
         g_dump_globals = Array.isArray(opts.dump_globals)
             ? opts.dump_globals.map(function (s) {
@@ -5718,6 +5741,10 @@ rpc.exports = {
         if (g_capture_draws) {
             try { installDrawCaptureHooks(); }
             catch (e) { err('installDrawCaptureHooks', e.message); }
+        }
+        if (g_suppress_edge_scroll) {
+            try { installEdgeScrollSuppress(); }
+            catch (e) { err('installEdgeScrollSuppress', e.message); }
         }
         if (g_input_replay_events) {
             log('input_replay: armed (' + g_input_replay_events.length +

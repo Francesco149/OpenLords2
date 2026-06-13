@@ -249,7 +249,11 @@ def drive_retail(compiled: Path, retail_dir: Path, remote: str, rng_seed: bool,
     run_id = f"olv3-{dt.datetime.now():%Y%m%d-%H%M%S}"
     cmd = [sys.executable, str(ROOT / "tools" / "frida_capture.py"), "--remote", remote,
            "--skip-intro", "--turbo", "--input-segtrace", str(compiled),
-           "--anchor-trace", "--state-dump-slots", str(slots), "--run-id", run_id]
+           "--anchor-trace", "--state-dump-slots", str(slots), "--run-id", run_id,
+           # Always neuter retail's host-cursor edge-scroll: it scrolls the map by
+           # the headless cursor's screen-edge position (the "camera flake slot 16"
+           # 1-cell port↔retail divergence); the port has no edge-scroll.
+           "--suppress-edge-scroll"]
     if draws:
         cmd.append("--capture-draws")   # per-draw write-journal → frame_<idx>.draws
     if force_redraw:
