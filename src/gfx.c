@@ -71,6 +71,7 @@
 
 #include "gfx.h"
 #include "gfx_paint.h"
+#include "gfx_drawcap.h"
 #include "io.h"
 
 /* Logger lives in main.c — declared here as a weak local prototype
@@ -821,6 +822,9 @@ int gfx_lock_canvas(void)
 
 void gfx_unlock_canvas(void)
 {
+    /* Close the last pending draw-step delta while the canvas is still bound +
+     * the surface still locked (drawcap reads it).  No-op unless capturing. */
+    gfx_drawcap_flush();
     if (g_back) IDirectDrawSurface_Unlock(g_back, NULL);
     gfx_paint_bind_canvas(NULL, 0, 0);
     gfx_mark_all_dirty();

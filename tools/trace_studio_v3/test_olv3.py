@@ -124,3 +124,59 @@ def test_c_render_upto_bit_exact(tmp_path, replay_bin):
         idx = np.frombuffer(c.render_upto(0, k), np.uint8)
         pal = np.frombuffer(c.palette(0), np.uint8).reshape(256, 4)[:, :3]
         assert np.array_equal(_read_bmp_rgb(bmp), pal[idx].reshape(c.h, c.w, 3))
+
+
+# ── port .draws sidecar (the C↔Python transport contract) ───────────────────
+
+def _pack_draws_sidecar(w: int, h: int, present: int, base: bytes,
+                        draws: list[dict]) -> bytes:
+    """Build a <label>.draws blob byte-for-byte as src/gfx_drawcap.c writes it —
+    pins the on-disk layout the C writer and the Python reader must agree on."""
+    out = bytearray(struct.pack("<IIIII", 0x52444C4F, w, h, present, len(draws)))
+    out += base
+    for d in draws:
+        offs, vals = d["offsets"], d["vals"]
+        out += struct.pack("<IIIII", d["op_type"], d["m0"], d["m1"], d["m2"], len(offs))
+        out += struct.pack("<%dI" % len(offs), *offs)
+        out += bytes(vals)
+    return bytes(out)
+
+
+def test_draws_sidecar_roundtrip(tmp_path):
+    import olv3_capture as cap
+    w, h = 16, 12
+    base = bytes([3]) * (w * h)
+    # two draws: a 2x2 block, then a single pixel overwriting one of its corners
+    d0 = {"op_type": olv3.OP_SPRITE, "m0": 42, "m1": 1, "m2": 1,
+          "offsets": [1*w+1, 1*w+2, 2*w+1, 2*w+2], "vals": bytes([10, 11, 12, 13])}
+    d1 = {"op_type": olv3.OP_GLYPH, "m0": ord("A"), "m1": 2, "m2": 2,
+          "offsets": [2*w+2], "vals": bytes([99])}
+    blob = _pack_draws_sidecar(w, h, 7, base, [d0, d1])
+    p = tmp_path / "frame.draws"
+    p.write_bytes(blob)
+
+    got = cap._read_draws(p)
+    assert got is not None
+    rb, rd = got
+    assert rb == base
+    assert len(rd) == 2
+    assert rd[0]["op_type"] == olv3.OP_SPRITE and rd[0]["m0"] == 42
+    assert rd[0]["offsets"] == [1*w+1, 1*w+2, 2*w+1, 2*w+2]
+    assert rd[1]["offsets"] == [2*w+2] and rd[1]["vals"] == bytes([99])
+
+    # build the final plane the way the port would, and confirm the verify gate
+    final = bytearray(base)
+    for d in (d0, d1):
+        for o, v in zip(d["offsets"], d["vals"]):
+            final[o] = v
+    assert cap._verify_draws(rb, rd, bytes(final)) == 0
+    # a corrupted final must be flagged
+    bad = bytearray(final); bad[0] ^= 0xFF
+    assert cap._verify_draws(rb, rd, bytes(bad)) == 1
+
+
+def test_draws_sidecar_rejects_bad_magic(tmp_path):
+    import olv3_capture as cap
+    p = tmp_path / "x.draws"
+    p.write_bytes(struct.pack("<IIIII", 0xDEADBEEF, 4, 4, 0, 0) + bytes(16))
+    assert cap._read_draws(p) is None

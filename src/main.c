@@ -89,6 +89,7 @@
 #include "io.h"
 #include "io_path.h"
 #include "gfx_dispatch.h"
+#include "gfx_drawcap.h"
 #include "gfx_glyph.h"
 #include "gfx_glyph_table.h"
 #include "gfx_paint.h"
@@ -230,6 +231,11 @@ static unsigned   g_capture_every = 25;
  * Studio v3 frame payload (8bpp indices + palette) the native viewer ingests.
  * Off by default (normal runs keep just the BMP). */
 static int        g_capture_raw;
+/* --capture-draws : with --capture-raw, also emit <label>.draws — the Trace
+ * Studio v3 per-draw write-journal (base plane + sprite/glyph deltas) that makes
+ * a captured frame draw-steppable in the native viewer.  Implies --capture-raw.
+ * Off by default (the draw journal does a full-canvas diff per draw). */
+static int        g_capture_draws;
 /* --call-trace PATH / --call-trace-frames i,j,k : per-frame JSONL of
  * which annotated port functions ran, for tools/call_trace_diff.py.
  * Off when PATH is NULL; frames empty = every frame. */
@@ -2646,6 +2652,13 @@ static void main_loop_body(void)
      * Restore attempt or when shutdown_request has latched to 1;
      * in both cases the present is skipped, matching retail. */
     if (g_gfx_active) {
+        /* Draw-step capture: arm BEFORE the tick renders so the dispatch hooks
+         * record this frame's draws (the journal is gone by post-tick capture
+         * time — the back buffer only holds the final composite). */
+        int cap_this_frame = g_capture_draws && g_input_segtrace
+                          && g_seg_actions.cap_count > 0;
+        if (cap_this_frame)
+            gfx_drawcap_begin_frame();
         engine_tick_guard();
         if (g_input_segtrace) {
             /* Take the trace's {capture} frames (labeled), now that the
@@ -2665,6 +2678,14 @@ static void main_loop_body(void)
                     gfx_capture_backbuffer_raw(
                         path, (unsigned)g_seg_actions.caps[i].frame);
                 }
+                if (g_capture_draws && gfx_drawcap_has_base()) {
+                    /* Per-draw write-journal sidecar (base + ordered deltas) —
+                     * makes this frame draw-steppable in the native viewer. */
+                    wsprintfA(path, "%s\\%s.draws",
+                              g_capture_dir ? g_capture_dir : ".", lbl);
+                    gfx_drawcap_write(
+                        path, (unsigned)g_seg_actions.caps[i].frame);
+                }
                 /* Save-schema snapshot at the same instant (trace_studio
                  * state parity; the retail agent mirrors this). */
                 wsprintfA(path, "%s\\%s.state.json",
@@ -2679,6 +2700,8 @@ static void main_loop_body(void)
                 log_line("input-segtrace: captured '%s' (frame %d) → %s",
                          lbl, g_seg_actions.caps[i].frame, path);
             }
+            if (cap_this_frame)
+                gfx_drawcap_end_frame();
             if (input_trace_done())
                 g_shutdown = 1;          /* trace exhausted → end the run */
         } else if (g_capture_dir
@@ -2962,6 +2985,9 @@ static void parse_cmdline(LPSTR lpCmd)
             }
         } else if (!strcmp(a, "--capture-raw")) {
             g_capture_raw = 1;     /* also emit <label>.raw (Trace Studio v3) */
+        } else if (!strcmp(a, "--capture-draws")) {
+            g_capture_draws = 1;   /* per-draw write-journal; implies --capture-raw */
+            g_capture_raw = 1;
         }
         else if (!strcmp(a, "--frames") && i + 1 < ntok) {
             if (!parse_uint(tokens[++i], &g_max_frames)) {

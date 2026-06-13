@@ -43,6 +43,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/font_metrics.c \
                    ../src/localization.c \
                    ../src/gfx_paint.c \
+                   ../src/gfx_drawcap.c \
                    ../src/gfx_glyph.c \
                    ../src/gfx_glyph_table.c \
                    ../src/gfx_sprite.c \

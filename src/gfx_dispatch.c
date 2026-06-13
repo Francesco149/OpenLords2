@@ -11,6 +11,7 @@
 
 #include "gfx_dispatch.h"
 
+#include "gfx_drawcap.h"
 #include "gfx_glyph.h"
 #include "gfx_paint.h"
 #include "gfx_sprite.h"
@@ -207,6 +208,11 @@ int gfx_dispatch_glyph(const uint8_t *font_base,
                        const uint8_t *char_glyph_table,
                        unsigned char  char_code)
 {
+    /* Trace Studio v3 draw-step capture: one draw per glyph (meta = char code +
+     * pre-advance cursor).  Early-out when not armed. */
+    gfx_drawcap_draw(GFX_DRAWCAP_OP_GLYPH, (int)char_code,
+                     gfx_glyph_cursor_x(), gfx_glyph_cursor_y());
+
     int idx_one_based = 0;
     if (char_glyph_table != 0) {
         idx_one_based = char_glyph_table[char_code];
@@ -385,6 +391,7 @@ void gfx_dispatch_sprite(const uint8_t *sprite_blob,
                          int            x,
                          int            y)
 {
+    gfx_drawcap_draw(GFX_DRAWCAP_OP_SPRITE, sprite_index, x, y);
     gfx_dispatch_stage_sprite_descriptor(sprite_blob, sprite_index);
     gfx_glyph_set_dest(x, y);
 
@@ -403,6 +410,7 @@ void gfx_dispatch_sprite_clipped(const uint8_t *sprite_blob,
                                  int            right,
                                  int            bottom)
 {
+    gfx_drawcap_draw(GFX_DRAWCAP_OP_SPRITE, sprite_index, x, y);
     gfx_dispatch_stage_sprite_descriptor(sprite_blob, sprite_index);
     gfx_glyph_set_dest(x, y);
 

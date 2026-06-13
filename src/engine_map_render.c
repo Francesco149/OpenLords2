@@ -10,6 +10,7 @@
 #include "call_trace.h"
 #include "engine_dirty_rect.h"
 #include "gfx_dispatch.h"
+#include "gfx_drawcap.h"
 #include "gfx_glyph.h"
 
 #include <stddef.h>
@@ -412,6 +413,7 @@ void engine_map_render_tile(int phase)
         }
 #endif
         /* Apply top/left skip + dispatch first-family blitter. */
+        gfx_drawcap_draw(GFX_DRAWCAP_OP_SPRITE, (int)rec_sprite_idx, cur_x, cur_y);
         gfx_dispatch_apply_skip_and_dispatch_sprite(blob);
 
         /* Overlay sprite — only for record types 1 (with overlay
@@ -476,6 +478,7 @@ void engine_map_render_tile(int phase)
                                     MAP_RENDER_CLIP_Y_BOTTOM_DEFAULT);
             }
 
+            gfx_drawcap_draw(GFX_DRAWCAP_OP_SPRITE, overlay_idx, overlay_x, overlay_y);
             gfx_dispatch_dispatch_sprite_rle(g_blob_overlay);
 
             engine_dirty_rect_mark_tile_48(g_dirty_state,

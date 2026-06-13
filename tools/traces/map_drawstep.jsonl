@@ -1,0 +1,36 @@
+# trace_studio trace: grid_load + an ABSOLUTE capture range over the load-flip
+# (map-entry) tick — the RICH draw-stepping case.  Same load flow as
+# grid_load_dense.jsonl, but the captures are deliberately absolute (no
+# {wait}), because the full-map render happens on the load-flip tick which is
+# ONE tick BEFORE the MAP_FREEROAM anchor fires — anchor+offset can't reach it.
+#
+# The flip frame (≈present 640 with --rng-seed) renders the whole map as ~269
+# SPRITE draws (terrain tiles + objects) + ~196 GLYPH draws (HUD); stepping it
+# in the viewer builds the map up tile-by-tile from the load screen.  The
+# trailing frames are glyph-only HUD redraws (dirty-rect steady state).
+#
+# Port-only by design (absolute frames don't align port↔retail — the cross-
+# engine flip-anchor is Phase 2b work); drive with `--only port`.
+{"wait": "TITLE"}
+# "Single player" (320,107) -> page 2
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+# "Load a game" page-2 button 2 -> page 3 (file list)
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+# CLICK the "lastturn" save row (160,126)
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+# "Load" gauntlet button (414,90)
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+# Absolute range bracketing the load-flip render (margin for load-timing drift).
+{"caprange": [632, 14], "label": "flip"}

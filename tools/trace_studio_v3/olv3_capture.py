@@ -61,12 +61,59 @@ def _read_raw(path: Path) -> tuple[bytes, bytes, int] | None:
     return pal, px, present, w, h
 
 
+# ── per-draw write-journal sidecar (port draw-step capture) ─────────────────────
+DRAWS_MAGIC = 0x52444C4F   # 'OLDR' (bytes O,L,D,R little-endian)
+
+
+def _read_draws(path: Path) -> tuple[bytes, list[dict]] | None:
+    """A <label>.draws sidecar (gfx_drawcap_write) → (base_plane, draws). Layout
+    (native LE): [u32 'OLDR'][w][h][present][n_draws][base w*h] then n_draws ×
+    [op_type][m0][m1][m2][n][n×u32 offset][n×u8 val]. base + applying the draws in
+    order == the frame's final plane. Returns None on any malformation."""
+    b = path.read_bytes()
+    if len(b) < 20:
+        return None
+    magic, w, h, _present, ndraws = struct.unpack_from("<IIIII", b, 0)
+    if magic != DRAWS_MAGIC:
+        return None
+    off = 20
+    base = b[off:off + w * h]; off += w * h
+    if len(base) != w * h:
+        return None
+    draws: list[dict] = []
+    for _ in range(ndraws):
+        if off + 20 > len(b):
+            return None
+        op_type, m0, m1, m2, n = struct.unpack_from("<IIIII", b, off); off += 20
+        if off + n * 4 + n > len(b):
+            return None
+        offsets = list(struct.unpack_from("<%dI" % n, b, off)) if n else []
+        off += n * 4
+        vals = b[off:off + n]; off += n
+        draws.append({"op_type": op_type, "m0": m0, "m1": m1, "m2": m2,
+                      "offsets": offsets, "vals": vals})
+    return base, draws
+
+
+def _verify_draws(base: bytes, draws: list[dict], final: bytes) -> int:
+    """base + applying every draw delta == final? Return #mismatched pixels (0 = ok).
+    The built-in correctness gate on the port's draw capture."""
+    canvas = bytearray(base)
+    for d in draws:
+        for o, v in zip(d["offsets"], d["vals"]):
+            canvas[o] = v
+    return sum(1 for a, b in zip(canvas, final) if a != b)
+
+
 # ── ingest: raw frames → container, returns label→(idx,present) ────────────────
 def ingest_port(port_dir: Path, out: Path) -> dict[str, dict]:
-    """Port frames are named <label>.raw (captures.jsonl gives label→tick)."""
+    """Port frames are named <label>.raw (captures.jsonl gives label→tick); a
+    <label>.draws sidecar (when present, from --capture-draws) makes the frame
+    draw-steppable."""
     rows = _read_jsonl(port_dir / "captures.jsonl") or _read_jsonl(port_dir / "frames-raw" / "captures.jsonl")
     return _ingest_by_label(port_dir, out, [(str(r.get("label") or ""), int(r.get("frame", 0))) for r in rows],
-                            lambda lbl: _find(port_dir, f"{lbl}.raw"))
+                            lambda lbl: _find(port_dir, f"{lbl}.raw"),
+                            locate_draws=lambda lbl: _find(port_dir, f"{lbl}.draws"))
 
 
 def ingest_retail(retail_dir: Path, out: Path) -> dict[str, dict]:
@@ -82,13 +129,18 @@ def ingest_retail(retail_dir: Path, out: Path) -> dict[str, dict]:
                             need_tick=True)
 
 
-def _ingest_by_label(side_dir, out, pairs, locate, need_tick=False) -> dict[str, dict]:
+def _ingest_by_label(side_dir, out, pairs, locate, need_tick=False,
+                     locate_draws=None) -> dict[str, dict]:
     """Write a container from (label, tick) pairs; dedup'd. Returns label→{idx,present}.
     A frame's container index is its write order; identical frames dedup but each
-    label still maps to a kept FRAME record, so distinct labels can share pixels."""
+    label still maps to a kept FRAME record, so distinct labels can share pixels.
+    When `locate_draws` resolves a <label>.draws sidecar, the frame is committed
+    draw-steppable (base + deltas) and the base/final consistency is verified."""
     wr = olv3.Writer(out, 640, 480)
     label_map: dict[str, dict] = {}
     n = 0
+    n_drawsteppable = 0
+    n_drawmismatch = 0
     for lbl, tick in pairs:
         raw = locate(lbl, tick) if need_tick else locate(lbl)
         if not raw or not raw.exists():
@@ -97,12 +149,30 @@ def _ingest_by_label(side_dir, out, pairs, locate, need_tick=False) -> dict[str,
         if not got:
             continue
         pal, px, present, w, h = got
-        wr.add_frame(pal, px, present)
+        base, draws = None, None
+        if locate_draws is not None:
+            dp = locate_draws(lbl)
+            if dp and dp.exists():
+                got_d = _read_draws(dp)
+                if got_d:
+                    base, draws = got_d
+                    bad = _verify_draws(base, draws, px)
+                    if bad:
+                        n_drawmismatch += 1
+                        _log(f"  WARN {lbl}: base+draws != final ({bad} px) — "
+                             f"committing plain (draw capture dropped)")
+                        base, draws = None, None
+                    else:
+                        n_drawsteppable += 1
+        wr.add_frame(pal, px, present, base_whbytes=base, draws=draws)
         label_map[lbl] = {"idx": n, "present": present}
         n += 1
     info = wr.close()
+    extra = (f", {n_drawsteppable} draw-steppable"
+             + (f" ({n_drawmismatch} mismatched→plain)" if n_drawmismatch else "")
+             if locate_draws is not None else "")
     _log(f"  {out.name}: {info['n_frames']} frames, {info['n_palettes']} palettes, "
-         f"{info['n_pixels']} planes, {info['size']//1024} KB")
+         f"{info['n_pixels']} planes, {info['size']//1024} KB{extra}")
     return label_map
 
 
@@ -143,11 +213,20 @@ def _read_state(side_dir: Path, label: str, retail: bool, tick: int) -> dict | N
 
 # ── drive (reuse the proven command shapes) ────────────────────────────────────
 def drive_port(compiled: Path, port_dir: Path, max_frames: int, timeout_ms: int,
-               rng_seed: bool) -> int:
+               rng_seed: bool, draws: bool = True) -> int:
     port_dir.mkdir(parents=True, exist_ok=True)
+    # The game APPENDS to captures.jsonl and reuses <label>.{raw,draws,bmp}; clear
+    # last run's artifacts so the container isn't polluted with stale/duplicate
+    # frames (retail uses a fresh run-id dir, so only the port needs this).
+    for pat in ("*.raw", "*.draws", "*.bmp", "*.state.json",
+                "captures.jsonl", "anchors.jsonl"):
+        for f in port_dir.glob(pat):
+            f.unlink()
     cmd = [str(ROOT / "tools" / "run-openlords2.sh"), "--",
            "--input-segtrace", str(compiled), "--capture-to", str(port_dir),
            "--capture-raw", "--frames", str(max_frames), "--turbo"]
+    if draws:
+        cmd.append("--capture-draws")   # per-draw write-journal → <label>.draws
     if rng_seed:
         cmd.append("--rng-seed")
     env = dict(os.environ, OPENLORDS2_TIMEOUT_MS=str(timeout_ms))
@@ -195,6 +274,8 @@ def main() -> int:
     ap.add_argument("--no-rng-seed", action="store_true")
     ap.add_argument("--port-max-frames", type=int, default=4000)
     ap.add_argument("--port-timeout-ms", type=int, default=240_000)
+    ap.add_argument("--draws", action=argparse.BooleanOptionalAction, default=True,
+                    help="port: emit per-draw write-journal (.draws) for draw-stepping (default on)")
     ap.add_argument("--no-capture", action="store_true", help="skip driving; ingest existing raws")
     ap.add_argument("--no-view", action="store_true", help="build containers + view.json, don't launch")
     args = ap.parse_args()
@@ -223,7 +304,8 @@ def main() -> int:
     if run_port:
         _log("driving port…")
         try:
-            rc = drive_port(compiled, port_dir, args.port_max_frames, args.port_timeout_ms, rng_seed)
+            rc = drive_port(compiled, port_dir, args.port_max_frames, args.port_timeout_ms,
+                            rng_seed, draws=args.draws)
             _log(f"port rc={rc}")
         except subprocess.TimeoutExpired:
             _log("port TIMED OUT (continuing with what landed)")

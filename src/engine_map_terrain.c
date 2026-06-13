@@ -8,6 +8,7 @@
 #include "engine_map_terrain.h"
 
 #include "call_trace.h"
+#include "gfx_drawcap.h"
 #include "gfx_glyph.h"
 #include "gfx_paint.h"
 
@@ -427,6 +428,11 @@ static void do_cell(int col, int row, int phase, int gated)
 {
     int cv = terrain_cell(col, row);
     g_current_cell = cv;
+    /* Draw-step capture: one terrain tile per do_cell (drawer A+B or empty).
+     * Meta = cell value + cursor; empty/masked cells finalize as a 0-write
+     * delta and are dropped. */
+    gfx_drawcap_draw(GFX_DRAWCAP_OP_SPRITE, cv,
+                     gfx_glyph_cursor_x(), gfx_glyph_cursor_y());
     if ((uint32_t)cv < ENGINE_MAP_TERRAIN_CELL_EMPTY) {
         drawer_a(phase);
         drawer_b(phase);
