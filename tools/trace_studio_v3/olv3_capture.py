@@ -119,14 +119,16 @@ def ingest_port(port_dir: Path, out: Path) -> dict[str, dict]:
 def ingest_retail(retail_dir: Path, out: Path) -> dict[str, dict]:
     """Retail frames are frame_NNNNN.raw in capture order; captures.jsonl maps
     label→tick and captures fire in ascending-tick order, so the i-th distinct tick
-    pairs with frame_{i:05d} (mirrors the retired convert_retail)."""
+    pairs with frame_{i:05d} (mirrors the retired convert_retail). A matching
+    frame_{i:05d}.draws sidecar (from --capture-draws) makes it draw-steppable."""
     rows = _read_jsonl(retail_dir / "captures.jsonl")
     ticks = sorted({int(r.get("frame", 0)) for r in rows if r.get("label")})
     tick_idx = {t: i for i, t in enumerate(ticks)}
     pairs = [(str(r.get("label") or ""), int(r.get("frame", 0))) for r in rows if r.get("label")]
     return _ingest_by_label(retail_dir, out, pairs,
                             lambda lbl, tick: _find(retail_dir, f"frame_{tick_idx[tick]:05d}.raw"),
-                            need_tick=True)
+                            need_tick=True,
+                            locate_draws=lambda lbl, tick: _find(retail_dir, f"frame_{tick_idx[tick]:05d}.draws"))
 
 
 def _ingest_by_label(side_dir, out, pairs, locate, need_tick=False,
@@ -151,7 +153,7 @@ def _ingest_by_label(side_dir, out, pairs, locate, need_tick=False,
         pal, px, present, w, h = got
         base, draws = None, None
         if locate_draws is not None:
-            dp = locate_draws(lbl)
+            dp = locate_draws(lbl, tick) if need_tick else locate_draws(lbl)
             if dp and dp.exists():
                 got_d = _read_draws(dp)
                 if got_d:
@@ -237,12 +239,17 @@ def drive_port(compiled: Path, port_dir: Path, max_frames: int, timeout_ms: int,
 
 
 def drive_retail(compiled: Path, retail_dir: Path, remote: str, rng_seed: bool,
-                 slots: Path) -> int:
+                 slots: Path, draws: bool = True) -> int:
     retail_dir.mkdir(parents=True, exist_ok=True)
+    for pat in ("frame_*.raw", "frame_*.draws", "captures.jsonl", "anchors.jsonl"):
+        for f in retail_dir.glob(pat):
+            f.unlink()
     run_id = f"olv3-{dt.datetime.now():%Y%m%d-%H%M%S}"
     cmd = [sys.executable, str(ROOT / "tools" / "frida_capture.py"), "--remote", remote,
            "--skip-intro", "--turbo", "--input-segtrace", str(compiled),
            "--anchor-trace", "--state-dump-slots", str(slots), "--run-id", run_id]
+    if draws:
+        cmd.append("--capture-draws")   # per-draw write-journal → frame_<idx>.draws
     if rng_seed:
         cmd.append("--rng-seed")
     with (retail_dir / "log.txt").open("w") as log:
@@ -252,8 +259,9 @@ def drive_retail(compiled: Path, retail_dir: Path, remote: str, rng_seed: bool,
     run_dir = ROOT / "runs" / "capture" / run_id
     import shutil
     if (run_dir / "frames").exists():
-        for f in (run_dir / "frames").glob("*.raw"):
-            shutil.copy2(f, retail_dir / f.name)
+        for pat in ("*.raw", "*.draws"):
+            for f in (run_dir / "frames").glob(pat):
+                shutil.copy2(f, retail_dir / f.name)
     for name in ("captures.jsonl", "anchors.jsonl"):
         if (run_dir / name).exists():
             shutil.copy2(run_dir / name, retail_dir / name)
@@ -276,6 +284,8 @@ def main() -> int:
     ap.add_argument("--port-timeout-ms", type=int, default=240_000)
     ap.add_argument("--draws", action=argparse.BooleanOptionalAction, default=True,
                     help="port: emit per-draw write-journal (.draws) for draw-stepping (default on)")
+    ap.add_argument("--retail-draws", action="store_true",
+                    help="ALSO capture retail draws (WIP — CModule symbol issue; off by default)")
     ap.add_argument("--no-capture", action="store_true", help="skip driving; ingest existing raws")
     ap.add_argument("--no-view", action="store_true", help="build containers + view.json, don't launch")
     args = ap.parse_args()
@@ -312,7 +322,12 @@ def main() -> int:
     if run_retail:
         _log("driving retail…")
         try:
-            rc = drive_retail(compiled, retail_dir, args.remote, rng_seed, slots)
+            # Retail draw capture (CModule) is WIP — blocked on a Frida CModule
+            # symbol/codegen issue (see project_trace_studio_v3 memory). Gated off
+            # so normal runs aren't affected; the plumbing + ingest are ready for
+            # when it works. Opt in with --retail-draws to resume debugging.
+            rc = drive_retail(compiled, retail_dir, args.remote, rng_seed, slots,
+                              draws=args.draws and args.retail_draws)
             _log(f"retail rc={rc}")
         except subprocess.TimeoutExpired:
             _log("retail TIMED OUT (continuing with what landed)")

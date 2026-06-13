@@ -276,6 +276,11 @@ class CaptureConfig:
     # / screen-id transitions → run_dir/anchors.jsonl, keyed on the per-tick
     # counter.  See docs/plans/tas-framework.md.
     anchor_trace:      bool = False
+    # Trace Studio v3 draw-stepping: a CModule mirrors the port's draw journal
+    # (base + per-dispatch write-deltas vs the locked back buffer) at segtrace
+    # {capture} ticks → run_dir/frames/frame_<idx>.draws (same OLDR sidecar the
+    # port emits). Makes a retail frame draw-steppable / cross-engine diffable.
+    capture_draws:     bool = False
     # Save-schema state dump at segtrace {capture} instants:
     # [{i,va,size}] → run_dir/state/state_<tick>.json (trace_studio parity).
     state_dump_slots:  list[dict] = field(default_factory=list)
@@ -511,7 +516,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
 
     counts = {"hwnd": 0, "hide": 0, "msgbox": 0, "ddraw_coop": 0,
               "dsound_coop": 0, "audio_mute": 0, "display_blocked": 0,
-              "fps_sample": 0, "frame": 0, "input_event": 0,
+              "fps_sample": 0, "frame": 0, "input_event": 0, "draws": 0,
               "input_replay_post": 0, "gdi_seat_present": 0}
     fps_last = {"current_fps": 0, "avg_fps": 0, "cum_secs": 0}
     done = threading.Event()
@@ -713,6 +718,22 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
                             f"t_ms={p.get('t_ms')}\n")
             except Exception as e:
                 f_log.write(f"[frame] write failed {out}: {e}\n")
+            return
+        if kind == "draws":
+            # Trace Studio v3 draw-step sidecar — the OLDR payload (base plane +
+            # ordered op-deltas) the agent's draw-capture CModule serialized for
+            # this frame. Pairs with frame_<idx>.raw by index.
+            if data is None:
+                f_log.write("[draws] payload missing\n")
+                return
+            fi = int(p.get("frame_idx", 0))
+            try:
+                (frames_dir / f"frame_{fi:05d}.draws").write_bytes(data)
+                counts["draws"] = counts.get("draws", 0) + 1
+                f_log.write(f"[draws] #{fi} {len(data)} bytes "
+                            f"({p.get('n_draws')} draws)\n")
+            except Exception as e:
+                f_log.write(f"[draws] write failed #{fi}: {e}\n")
             return
         if kind == "globals_dump":
             regions = p.get("regions") or []
@@ -1038,6 +1059,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "mem_watch_arm_between":     cfg.mem_watch_arm_between,
             "mem_snapshot_regions":      cfg.mem_snapshot_regions,
             "anchor_trace":              bool(cfg.anchor_trace),
+            "capture_draws":             bool(cfg.capture_draws),
             "watch":                     cfg.watch or [],
             "rng_seed":                  cfg.rng_seed,
             "heartbeat_timeout_ms":      HEARTBEAT_TIMEOUT_MS,
@@ -1346,6 +1368,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="save-schema slot list (JSON file: [{i,va,size}]) — "
                          "dump these at every segtrace {capture} instant to "
                          "state/state_<tick>.json (trace_studio state parity)")
+    ap.add_argument("--capture-draws", action="store_true",
+                    help="Trace Studio v3 draw-stepping: capture per-draw "
+                         "write-deltas at {capture} ticks (CModule diff vs the "
+                         "back buffer) → frames/frame_<idx>.draws (OLDR sidecar)")
     ap.add_argument("--anchor-trace", action="store_true",
                     help="emit deterministic anchors ({anchor,frame} on "
                          "engine-state / screen-id transitions) to "
@@ -1537,6 +1563,7 @@ def main(argv: list[str] | None = None) -> int:
         call_trace_min_cum_secs=args.call_trace_min_cum_secs,
         call_trace_max_frames=args.call_trace_max_frames,
         anchor_trace=args.anchor_trace,
+        capture_draws=args.capture_draws,
         watch=watch_specs,
         state_dump_slots=state_dump_slots,
         rng_seed=rng_seed,

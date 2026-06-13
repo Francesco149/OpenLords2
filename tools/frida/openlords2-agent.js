@@ -551,6 +551,30 @@ let g_nf_surface_lock        = null;
 let g_nf_surface_unlock      = null;
 let g_nf_palette_get_entries = null;
 let g_capture_scratch        = null;   // pre-allocated payload buffer
+let g_last_capture_w         = 0;      // dims of the last captureFrameOnce frame
+let g_last_capture_h         = 0;
+
+// Trace Studio v3 draw-stepping (retail side). A CModule mirrors the port's
+// gfx_drawcap: at armed (capture) ticks, each hooked dispatch diffs the locked
+// back buffer (DAT_004ea1a8) against a running shadow, accumulating per-draw
+// write-deltas; engine_tick.onLeave flushes + serializes them into the same
+// OLDR sidecar the port emits. Native (CModule) so the per-dispatch diff +
+// not-armed early-out cost nothing on the hot path.
+let g_capture_draws          = false;
+let g_drawcap_cm             = null;   // the CModule
+let g_dc_begin               = null;   // NativeFunction wrappers
+let g_dc_flush_ptr           = null;
+let g_dc_end                 = null;
+let g_drawcap_active          = false; // CModule installed + hooks attached
+// Big buffers are JS-allocated (Memory.alloc → committed) and passed to the
+// CModule as symbols, NOT CModule static BSS (multi-MB CModule BSS is not
+// reliably backed — it faulted at a fixed static-array boundary). The JS owns
+// them, so drawcapSend reads them directly.
+let g_dc_base                = null;   // base plane (W*H)
+let g_dc_shadow              = null;   // running canvas mirror (W*H)
+let g_dc_offs                = null;   // changed-pixel offsets (MAXW u32)
+let g_dc_vals                = null;   // changed-pixel values  (MAXW u8)
+let g_dc_hdrs                = null;   // per-draw headers (MAXH × 6 u32)
 
 // Per-tick anchor counter. Bumped in engine_tick.onEnter (1-indexed: equals
 // the tick number currently executing). Used both as the timestamp for
@@ -1664,6 +1688,7 @@ function captureFrameOnce() {
                 'w=' + width + ' h=' + height + ' surf=' + lpSurface);
             return;
         }
+        g_last_capture_w = width; g_last_capture_h = height;
 
         // Allocate / grow scratch buffer for one frame's worth of payload:
         //   [header 12] [palette 1024] [tight pixels w*h]
@@ -3245,6 +3270,12 @@ function installEngineTickHook() {
             segtraceTick(g_tick_count);
             autoDismissTick();   // reactive modal-scroll dismiss (mirror of port)
             watchTick(g_tick_count);
+            // Arm draw capture BEFORE this tick renders, iff it's a scheduled
+            // capture tick (segtraceTick above may have just added it for {capture:0}).
+            if (g_drawcap_active && g_capture_at_frames &&
+                g_capture_at_frames.has(g_tick_count)) {
+                g_dc_begin();
+            }
             if (g_call_trace_enabled && g_call_trace_min_cum_secs > 0) {
                 callTraceWindowTick();
             }
@@ -3266,7 +3297,23 @@ function installEngineTickHook() {
                 // scheduled frame is grabbed.  Captured here, strictly between
                 // engine_tick iterations, same as the heartbeat path.
                 if (g_capture_at_frames && g_capture_at_frames.has(g_tick_count)) {
+                    // captureFrameOnce tight-packs the final 640x480 plane into
+                    // g_capture_scratch (after [hdr 12][palette 1024]); finalize
+                    // the last pending draw against THAT (the render pass already
+                    // unlocked the back buffer, so DAT_004ea1a8 is stale here).
                     captureFrameOnce();
+                    if (g_drawcap_active) {
+                        try {
+                            if (g_capture_scratch &&
+                                g_last_capture_w === 640 && g_last_capture_h === 480) {
+                                g_dc_flush_ptr(g_capture_scratch.add(12 + 1024), 640, 480);
+                            }
+                        } catch (e) { err('drawcap.flush', e.message); }
+                        try {
+                            drawcapSend(g_frame_capture_count - 1);
+                        } catch (e) { err('drawcap.send', e.message); }
+                        g_dc_end();
+                    }
                     stateDumpOnce(g_tick_count);   // schema snapshot, same instant
                     g_capture_at_frames.delete(g_tick_count);
                 }
@@ -5084,6 +5131,201 @@ function runRetailInputState(in_obj) {
     return out;
 }
 
+// ─── Trace Studio v3 draw-step capture (retail) — WIP / BLOCKED ──────────
+//
+// STATUS: gated off by default (olv3 drive_retail passes draws only with
+// --retail-draws). Blocked on a Frida CModule construction issue: calling any
+// CModule function (dc_begin/dc_flush_ptr) faults with an access violation at an
+// address INSIDE the JS-allocated buffer region (e.g. hdrs_end+0x500), i.e. the
+// function symbols resolve into data / the BSS scalars aren't writable. An
+// install-time self-test (dc_begin then read-back dc_armed) reproduced it
+// directly — no capture needed. The PORT side (src/gfx_drawcap.c) + all the
+// olv3/frida_capture plumbing + ingest work; only this CModule is broken.
+// Next: try a minimal CModule (no glib/gum includes, scalars only) to isolate
+// whether the includes or the data-symbol passing corrupts codegen; or replace
+// the CModule with a different mechanism. See project_trace_studio_v3 memory.
+//
+// A CModule mirror of src/gfx_drawcap.c. The engine globals are passed as
+// symbols (their absolute addresses): reading `g_canvas_base` reads the pointer
+// stored at DAT_004ea1a8 (the locked back buffer); `g_canvas_stride/height` and
+// `g_glyph_cursor_x/y` are the i32 globals. dc_begin/draw/flush accumulate
+// per-draw deltas; the JS reads dc_base/dc_hdrs/dc_offs/dc_vals and builds the
+// OLDR payload. base + Σ(deltas) == the final plane EXACTLY (each delta is
+// shadow→canvas), so a write that bypasses a hooked dispatch only folds into
+// the adjacent draw — never a wrong pixel; the Python ingest re-verifies this.
+const DRAWCAP_NPX  = 640 * 480;
+const DRAWCAP_MAXW = 900000;            // cap on accumulated write entries/frame
+const DRAWCAP_MAXH = 16384;             // cap on draws/frame
+const DRAWCAP_CMODULE_SRC = `
+#include <gum/guminterceptor.h>
+#include <glib.h>
+
+extern unsigned char * g_canvas_base;    /* *(DAT_004ea1a8) — back-buffer base */
+extern int g_canvas_stride;              /* DAT_004eb274 (== width, no padding) */
+extern int g_canvas_height;              /* DAT_004eac4c                        */
+extern int g_glyph_cursor_x;             /* DAT_00591524                        */
+extern int g_glyph_cursor_y;             /* DAT_00591528                        */
+
+/* big buffers — JS Memory.alloc'd. Passed via the CANONICAL CModule data-symbol
+ * pattern (same as the engine globals above): each symbol is the address of a
+ * POINTER-HOLDING SLOT, so 'extern T * buf' reads the slot to get the buffer
+ * address, and buf[i] indexes the buffer. (Passing the buffer address directly
+ * with this decl would deref the buffer's first bytes as a pointer; passing it
+ * with an array decl 'T buf[]' mis-links under CModule.) */
+extern unsigned char * dc_base_buf;      /* DRAWCAP_NPX  */
+extern unsigned char * dc_shadow_buf;    /* DRAWCAP_NPX  */
+extern unsigned int  * dc_offs_buf;      /* DRAWCAP_MAXW */
+extern unsigned char * dc_vals_buf;      /* DRAWCAP_MAXW */
+extern unsigned int  * dc_hdrs_buf;      /* DRAWCAP_MAXH * 6 (op,m0,m1,m2,start,count) */
+
+#define DC_W 640
+#define DC_H 480
+#define DC_NPX (DC_W * DC_H)
+#define DC_MAXW 900000
+#define DC_MAXH 16384
+
+/* scalars exported to JS (small — CModule BSS is fine for these) */
+int dc_w, dc_h, dc_nhdr, dc_nwrite, dc_have_base, dc_overflow;
+static int dc_armed, dc_pending;
+static unsigned int dc_op, dc_m0, dc_m1, dc_m2;
+
+void dc_begin (void) {
+  dc_armed = 1; dc_have_base = 0; dc_pending = 0;
+  dc_nhdr = 0; dc_nwrite = 0; dc_overflow = 0;
+}
+
+static void dc_finalize (unsigned char * cv) {
+  int n, i; unsigned int start, count;
+  if (!dc_pending) return;
+  dc_pending = 0;
+  n = dc_w * dc_h;
+  start = (unsigned int) dc_nwrite;
+  for (i = 0; i < n; i++) {
+    if (dc_shadow_buf[i] != cv[i]) {
+      if (dc_nwrite >= DC_MAXW) { dc_overflow = 1; break; }
+      dc_offs_buf[dc_nwrite] = (unsigned int) i;
+      dc_vals_buf[dc_nwrite] = cv[i];
+      dc_nwrite++;
+      dc_shadow_buf[i] = cv[i];
+    }
+  }
+  count = (unsigned int) dc_nwrite - start;
+  if (count && dc_nhdr < DC_MAXH) {
+    unsigned int * h = &dc_hdrs_buf[dc_nhdr * 6];
+    h[0] = dc_op; h[1] = dc_m0; h[2] = dc_m1; h[3] = dc_m2; h[4] = start; h[5] = count;
+    dc_nhdr++;
+  }
+}
+
+static void dc_draw (unsigned int op, unsigned int m0, unsigned int m1, unsigned int m2) {
+  unsigned char * cv;
+  int i;
+  if (!dc_armed) return;
+  cv = g_canvas_base;
+  if (cv == 0) return;
+  if (g_canvas_stride != DC_W || g_canvas_height != DC_H) return;  /* only 640x480 tight */
+  if (dc_pending) dc_finalize(cv);
+  if (!dc_have_base) {
+    dc_w = DC_W; dc_h = DC_H;
+    for (i = 0; i < DC_NPX; i++) { dc_base_buf[i] = cv[i]; dc_shadow_buf[i] = cv[i]; }
+    dc_have_base = 1;
+  }
+  dc_op = op; dc_m0 = m0; dc_m1 = m1; dc_m2 = m2; dc_pending = 1;
+}
+
+/* Finalize the last pending draw against a CALLER-SUPPLIED canvas pointer. The
+ * engine's render pass has already unlocked the back buffer by engine_tick.onLeave,
+ * so the DAT_004ea1a8 pointer is stale there — the caller passes captureFrameOnce's
+ * freshly-packed final plane (valid Frida memory, tight 640x480) instead. */
+void dc_flush_ptr (unsigned char * cv, int w, int h) {
+  if (!dc_armed || !dc_pending) { dc_pending = 0; return; }
+  if (cv == 0 || w != dc_w || h != dc_h) { dc_pending = 0; return; }
+  dc_finalize(cv);
+}
+
+void dc_end (void) { dc_armed = 0; dc_pending = 0; }
+
+/* onEnter for the glyph dispatcher FUN_00402a14(font, char_table, char_code). */
+void dc_on_glyph (GumInvocationContext * ic) {
+  unsigned int cc;
+  if (!dc_armed) return;
+  cc = GPOINTER_TO_UINT(gum_invocation_context_get_nth_argument(ic, 2));
+  dc_draw(1u /*GLYPH*/, cc & 0xffu,
+          (unsigned int) g_glyph_cursor_x, (unsigned int) g_glyph_cursor_y);
+}
+`;
+
+function installDrawCaptureHooks() {
+    if (g_drawcap_cm) return;
+    // JS-owned buffers (committed) handed to the CModule via pointer-holding
+    // slots (the canonical CModule data-symbol pattern).
+    g_dc_base   = Memory.alloc(DRAWCAP_NPX);
+    g_dc_shadow = Memory.alloc(DRAWCAP_NPX);
+    g_dc_offs   = Memory.alloc(DRAWCAP_MAXW * 4);
+    g_dc_vals   = Memory.alloc(DRAWCAP_MAXW);
+    g_dc_hdrs   = Memory.alloc(DRAWCAP_MAXH * 24);
+    const slot = (p) => { const s = Memory.alloc(Process.pointerSize); s.writePointer(p); return s; };
+    g_drawcap_cm = new CModule(DRAWCAP_CMODULE_SRC, {
+        g_canvas_base:    rva(0x004ea1a8),
+        g_canvas_stride:  rva(0x004eb274),
+        g_canvas_height:  rva(0x004eac4c),
+        g_glyph_cursor_x: rva(0x00591524),
+        g_glyph_cursor_y: rva(0x00591528),
+        dc_base_buf:   slot(g_dc_base),
+        dc_shadow_buf: slot(g_dc_shadow),
+        dc_offs_buf:   slot(g_dc_offs),
+        dc_vals_buf:   slot(g_dc_vals),
+        dc_hdrs_buf:   slot(g_dc_hdrs),
+    });
+    g_dc_begin     = new NativeFunction(g_drawcap_cm.dc_begin,     'void', []);
+    g_dc_flush_ptr = new NativeFunction(g_drawcap_cm.dc_flush_ptr, 'void', ['pointer', 'int', 'int']);
+    g_dc_end       = new NativeFunction(g_drawcap_cm.dc_end,       'void', []);
+    // Hook the glyph dispatcher (FUN_00402a14). More dispatch hooks (sprite,
+    // map tile, terrain cell) go here next — each is one Interceptor.attach
+    // pointing at the matching CModule onEnter.
+    Interceptor.attach(rva(0x00402a14), { onEnter: g_drawcap_cm.dc_on_glyph });
+    g_drawcap_active = true;
+    log('drawcap: CModule installed — glyph dispatch hook @ 0x402a14');
+}
+
+// Read the CModule's accumulated draws → OLDR payload → send (frida_capture
+// writes frame_<idx>.draws). No-op if the frame recorded no base (no draws).
+function drawcapSend(frameIdx) {
+    const cm = g_drawcap_cm;
+    if (!cm) return;
+    if (cm.dc_have_base.readInt() === 0) return;
+    const w = cm.dc_w.readInt(), h = cm.dc_h.readInt();
+    if (w !== 640 || h !== 480) { err('drawcap.send', 'bad dims ' + w + 'x' + h); return; }
+    const nhdr = Math.min(Math.max(cm.dc_nhdr.readInt(), 0), DRAWCAP_MAXH);
+    const nwrite = Math.min(Math.max(cm.dc_nwrite.readInt(), 0), DRAWCAP_MAXW);
+    const total = 20 + w * h + nhdr * 20 + nwrite * 4 + nwrite;
+    const buf = new Uint8Array(total);
+    const dv = new DataView(buf.buffer);
+    let o = 0;
+    dv.setUint32(o, 0x52444C4F, true); o += 4;   // 'OLDR'
+    dv.setUint32(o, w, true); o += 4;
+    dv.setUint32(o, h, true); o += 4;
+    dv.setUint32(o, frameIdx >>> 0, true); o += 4;
+    dv.setUint32(o, nhdr, true); o += 4;
+    buf.set(new Uint8Array(g_dc_base.readByteArray(w * h)), o); o += w * h;
+    const hdrs = new Uint32Array(g_dc_hdrs.readByteArray(nhdr * 24));
+    const offs = nwrite ? new Uint32Array(g_dc_offs.readByteArray(nwrite * 4)) : new Uint32Array(0);
+    const vals = nwrite ? new Uint8Array(g_dc_vals.readByteArray(nwrite)) : new Uint8Array(0);
+    for (let k = 0; k < nhdr; k++) {
+        const b = k * 6;
+        dv.setUint32(o, hdrs[b],     true); o += 4;  // op
+        dv.setUint32(o, hdrs[b + 1], true); o += 4;  // m0
+        dv.setUint32(o, hdrs[b + 2], true); o += 4;  // m1
+        dv.setUint32(o, hdrs[b + 3], true); o += 4;  // m2
+        const start = hdrs[b + 4], count = hdrs[b + 5];
+        dv.setUint32(o, count, true); o += 4;
+        for (let i = 0; i < count; i++) { dv.setUint32(o, offs[start + i], true); o += 4; }
+        for (let i = 0; i < count; i++) { buf[o++] = vals[start + i]; }
+    }
+    if (cm.dc_overflow.readInt()) err('drawcap', 'write buffer overflow @ frame ' + frameIdx);
+    send({kind: 'draws', frame_idx: frameIdx, n_draws: nhdr}, buf.buffer);
+}
+
 // ─── init RPC ──────────────────────────────────────────────────────────
 
 rpc.exports = {
@@ -5116,6 +5358,7 @@ rpc.exports = {
         g_frame_capture_max         = (opts.frame_capture_max | 0);
         g_frame_capture_warmup_secs = (opts.frame_capture_warmup_secs | 0);
         g_frame_capture_count       = 0;
+        g_capture_draws             = !!opts.capture_draws;
 
         g_dump_globals = Array.isArray(opts.dump_globals)
             ? opts.dump_globals.map(function (s) {
@@ -5384,6 +5627,10 @@ rpc.exports = {
 
         if (g_input_record_enabled) {
             installInputRecordHook();
+        }
+        if (g_capture_draws) {
+            try { installDrawCaptureHooks(); }
+            catch (e) { err('installDrawCaptureHooks', e.message); }
         }
         if (g_input_replay_events) {
             log('input_replay: armed (' + g_input_replay_events.length +
