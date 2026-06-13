@@ -283,9 +283,7 @@ def main() -> int:
     ap.add_argument("--port-max-frames", type=int, default=4000)
     ap.add_argument("--port-timeout-ms", type=int, default=240_000)
     ap.add_argument("--draws", action=argparse.BooleanOptionalAction, default=True,
-                    help="port: emit per-draw write-journal (.draws) for draw-stepping (default on)")
-    ap.add_argument("--retail-draws", action="store_true",
-                    help="ALSO capture retail draws (WIP — CModule symbol issue; off by default)")
+                    help="emit per-draw write-journals (.draws) on BOTH engines for draw-stepping + cross-engine draw diff (default on)")
     ap.add_argument("--no-capture", action="store_true", help="skip driving; ingest existing raws")
     ap.add_argument("--no-view", action="store_true", help="build containers + view.json, don't launch")
     args = ap.parse_args()
@@ -322,12 +320,7 @@ def main() -> int:
     if run_retail:
         _log("driving retail…")
         try:
-            # Retail draw capture (CModule) is WIP — blocked on a Frida CModule
-            # symbol/codegen issue (see project_trace_studio_v3 memory). Gated off
-            # so normal runs aren't affected; the plumbing + ingest are ready for
-            # when it works. Opt in with --retail-draws to resume debugging.
-            rc = drive_retail(compiled, retail_dir, args.remote, rng_seed, slots,
-                              draws=args.draws and args.retail_draws)
+            rc = drive_retail(compiled, retail_dir, args.remote, rng_seed, slots, draws=args.draws)
             _log(f"retail rc={rc}")
         except subprocess.TimeoutExpired:
             _log("retail TIMED OUT (continuing with what landed)")

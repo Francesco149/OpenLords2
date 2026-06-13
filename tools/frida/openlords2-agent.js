@@ -575,6 +575,10 @@ let g_dc_shadow              = null;   // running canvas mirror (W*H)
 let g_dc_offs                = null;   // changed-pixel offsets (MAXW u32)
 let g_dc_vals                = null;   // changed-pixel values  (MAXW u8)
 let g_dc_hdrs                = null;   // per-draw headers (MAXH × 6 u32)
+let g_dc_state               = null;   // scalar state int[16] (CModule globals aren't writable)
+// dc_st[] indices — MUST match the CModule's S_* #defines.
+const DC_S_ARMED = 0, DC_S_PENDING = 1, DC_S_HAVEBASE = 2, DC_S_W = 3, DC_S_H = 4,
+      DC_S_NHDR = 5, DC_S_NWRITE = 6, DC_S_OVERFLOW = 7;
 
 // Per-tick anchor counter. Bumped in engine_tick.onEnter (1-indexed: equals
 // the tick number currently executing). Used both as the timestamp for
@@ -5131,21 +5135,14 @@ function runRetailInputState(in_obj) {
     return out;
 }
 
-// ─── Trace Studio v3 draw-step capture (retail) — WIP / BLOCKED ──────────
+// ─── Trace Studio v3 draw-step capture (retail) ─────────────────────────
 //
-// STATUS: gated off by default (olv3 drive_retail passes draws only with
-// --retail-draws). Blocked on a Frida CModule construction issue: calling any
-// CModule function (dc_begin/dc_flush_ptr) faults with an access violation at an
-// address INSIDE the JS-allocated buffer region (e.g. hdrs_end+0x500), i.e. the
-// function symbols resolve into data / the BSS scalars aren't writable. An
-// install-time self-test (dc_begin then read-back dc_armed) reproduced it
-// directly — no capture needed. The PORT side (src/gfx_drawcap.c) + all the
-// olv3/frida_capture plumbing + ingest work; only this CModule is broken.
-// Next: try a minimal CModule (no glib/gum includes, scalars only) to isolate
-// whether the includes or the data-symbol passing corrupts codegen; or replace
-// the CModule with a different mechanism. See project_trace_studio_v3 memory.
-//
-// A CModule mirror of src/gfx_drawcap.c. The engine globals are passed as
+// A CModule mirror of src/gfx_drawcap.c. KEY CONSTRAINT (found by isolation
+// test): in this Frida build the CModule's OWN .data/.bss globals are NOT
+// writable — writing a CModule global faults instantly — but read/write through
+// a JS-passed pointer works. So this CModule has ZERO mutable globals: ALL
+// state (scalars in dc_st[], + the plane/delta buffers) lives in JS-allocated
+// memory passed as pointer-slot symbols. The engine globals are passed as
 // symbols (their absolute addresses): reading `g_canvas_base` reads the pointer
 // stored at DAT_004ea1a8 (the locked back buffer); `g_canvas_stride/height` and
 // `g_glyph_cursor_x/y` are the i32 globals. dc_begin/draw/flush accumulate
@@ -5166,12 +5163,13 @@ extern int g_canvas_height;              /* DAT_004eac4c                        
 extern int g_glyph_cursor_x;             /* DAT_00591524                        */
 extern int g_glyph_cursor_y;             /* DAT_00591528                        */
 
-/* big buffers — JS Memory.alloc'd. Passed via the CANONICAL CModule data-symbol
- * pattern (same as the engine globals above): each symbol is the address of a
- * POINTER-HOLDING SLOT, so 'extern T * buf' reads the slot to get the buffer
- * address, and buf[i] indexes the buffer. (Passing the buffer address directly
- * with this decl would deref the buffer's first bytes as a pointer; passing it
- * with an array decl 'T buf[]' mis-links under CModule.) */
+/* ALL mutable state lives in JS-allocated memory passed as pointer-slot symbols.
+ * The CModule has ZERO writable globals: in this Frida build the CModule's own
+ * .data/.bss is NOT writable (writing a CModule global faults), but read/write
+ * through a JS-passed pointer works (proven by isolation test). dc_st is a JS
+ * int array (see DC_S_* indices); the buffers are JS Memory.alloc'd. Each symbol
+ * is the address of a pointer-slot, so 'extern T * x' reads the slot → buffer. */
+extern int           * dc_st;            /* scalar state (DC_S_* slots)          */
 extern unsigned char * dc_base_buf;      /* DRAWCAP_NPX  */
 extern unsigned char * dc_shadow_buf;    /* DRAWCAP_NPX  */
 extern unsigned int  * dc_offs_buf;      /* DRAWCAP_MAXW */
@@ -5184,53 +5182,65 @@ extern unsigned int  * dc_hdrs_buf;      /* DRAWCAP_MAXH * 6 (op,m0,m1,m2,start,
 #define DC_MAXW 900000
 #define DC_MAXH 16384
 
-/* scalars exported to JS (small — CModule BSS is fine for these) */
-int dc_w, dc_h, dc_nhdr, dc_nwrite, dc_have_base, dc_overflow;
-static int dc_armed, dc_pending;
-static unsigned int dc_op, dc_m0, dc_m1, dc_m2;
+/* dc_st[] indices (kept in sync with the JS DC_S_* constants) */
+#define S_ARMED    0
+#define S_PENDING  1
+#define S_HAVEBASE 2
+#define S_W        3
+#define S_H        4
+#define S_NHDR     5
+#define S_NWRITE   6
+#define S_OVERFLOW 7
+#define S_OP       8
+#define S_M0       9
+#define S_M1      10
+#define S_M2      11
 
 void dc_begin (void) {
-  dc_armed = 1; dc_have_base = 0; dc_pending = 0;
-  dc_nhdr = 0; dc_nwrite = 0; dc_overflow = 0;
+  dc_st[S_ARMED] = 1; dc_st[S_HAVEBASE] = 0; dc_st[S_PENDING] = 0;
+  dc_st[S_NHDR] = 0; dc_st[S_NWRITE] = 0; dc_st[S_OVERFLOW] = 0;
 }
 
 static void dc_finalize (unsigned char * cv) {
   int n, i; unsigned int start, count;
-  if (!dc_pending) return;
-  dc_pending = 0;
-  n = dc_w * dc_h;
-  start = (unsigned int) dc_nwrite;
+  if (!dc_st[S_PENDING]) return;
+  dc_st[S_PENDING] = 0;
+  n = dc_st[S_W] * dc_st[S_H];
+  start = (unsigned int) dc_st[S_NWRITE];
   for (i = 0; i < n; i++) {
     if (dc_shadow_buf[i] != cv[i]) {
-      if (dc_nwrite >= DC_MAXW) { dc_overflow = 1; break; }
-      dc_offs_buf[dc_nwrite] = (unsigned int) i;
-      dc_vals_buf[dc_nwrite] = cv[i];
-      dc_nwrite++;
+      if (dc_st[S_NWRITE] >= DC_MAXW) { dc_st[S_OVERFLOW] = 1; break; }
+      dc_offs_buf[dc_st[S_NWRITE]] = (unsigned int) i;
+      dc_vals_buf[dc_st[S_NWRITE]] = cv[i];
+      dc_st[S_NWRITE]++;
       dc_shadow_buf[i] = cv[i];
     }
   }
-  count = (unsigned int) dc_nwrite - start;
-  if (count && dc_nhdr < DC_MAXH) {
-    unsigned int * h = &dc_hdrs_buf[dc_nhdr * 6];
-    h[0] = dc_op; h[1] = dc_m0; h[2] = dc_m1; h[3] = dc_m2; h[4] = start; h[5] = count;
-    dc_nhdr++;
+  count = (unsigned int) dc_st[S_NWRITE] - start;
+  if (count && dc_st[S_NHDR] < DC_MAXH) {
+    unsigned int * h = &dc_hdrs_buf[dc_st[S_NHDR] * 6];
+    h[0] = (unsigned int) dc_st[S_OP]; h[1] = (unsigned int) dc_st[S_M0];
+    h[2] = (unsigned int) dc_st[S_M1]; h[3] = (unsigned int) dc_st[S_M2];
+    h[4] = start; h[5] = count;
+    dc_st[S_NHDR]++;
   }
 }
 
 static void dc_draw (unsigned int op, unsigned int m0, unsigned int m1, unsigned int m2) {
   unsigned char * cv;
   int i;
-  if (!dc_armed) return;
+  if (!dc_st[S_ARMED]) return;
   cv = g_canvas_base;
   if (cv == 0) return;
   if (g_canvas_stride != DC_W || g_canvas_height != DC_H) return;  /* only 640x480 tight */
-  if (dc_pending) dc_finalize(cv);
-  if (!dc_have_base) {
-    dc_w = DC_W; dc_h = DC_H;
+  if (dc_st[S_PENDING]) dc_finalize(cv);
+  if (!dc_st[S_HAVEBASE]) {
+    dc_st[S_W] = DC_W; dc_st[S_H] = DC_H;
     for (i = 0; i < DC_NPX; i++) { dc_base_buf[i] = cv[i]; dc_shadow_buf[i] = cv[i]; }
-    dc_have_base = 1;
+    dc_st[S_HAVEBASE] = 1;
   }
-  dc_op = op; dc_m0 = m0; dc_m1 = m1; dc_m2 = m2; dc_pending = 1;
+  dc_st[S_OP] = (int) op; dc_st[S_M0] = (int) m0;
+  dc_st[S_M1] = (int) m1; dc_st[S_M2] = (int) m2; dc_st[S_PENDING] = 1;
 }
 
 /* Finalize the last pending draw against a CALLER-SUPPLIED canvas pointer. The
@@ -5238,17 +5248,17 @@ static void dc_draw (unsigned int op, unsigned int m0, unsigned int m1, unsigned
  * so the DAT_004ea1a8 pointer is stale there — the caller passes captureFrameOnce's
  * freshly-packed final plane (valid Frida memory, tight 640x480) instead. */
 void dc_flush_ptr (unsigned char * cv, int w, int h) {
-  if (!dc_armed || !dc_pending) { dc_pending = 0; return; }
-  if (cv == 0 || w != dc_w || h != dc_h) { dc_pending = 0; return; }
+  if (!dc_st[S_ARMED] || !dc_st[S_PENDING]) { dc_st[S_PENDING] = 0; return; }
+  if (cv == 0 || w != dc_st[S_W] || h != dc_st[S_H]) { dc_st[S_PENDING] = 0; return; }
   dc_finalize(cv);
 }
 
-void dc_end (void) { dc_armed = 0; dc_pending = 0; }
+void dc_end (void) { dc_st[S_ARMED] = 0; dc_st[S_PENDING] = 0; }
 
 /* onEnter for the glyph dispatcher FUN_00402a14(font, char_table, char_code). */
 void dc_on_glyph (GumInvocationContext * ic) {
   unsigned int cc;
-  if (!dc_armed) return;
+  if (!dc_st[S_ARMED]) return;
   cc = GPOINTER_TO_UINT(gum_invocation_context_get_nth_argument(ic, 2));
   dc_draw(1u /*GLYPH*/, cc & 0xffu,
           (unsigned int) g_glyph_cursor_x, (unsigned int) g_glyph_cursor_y);
@@ -5259,6 +5269,7 @@ function installDrawCaptureHooks() {
     if (g_drawcap_cm) return;
     // JS-owned buffers (committed) handed to the CModule via pointer-holding
     // slots (the canonical CModule data-symbol pattern).
+    g_dc_state  = Memory.alloc(16 * 4);    // zero-filled by Frida
     g_dc_base   = Memory.alloc(DRAWCAP_NPX);
     g_dc_shadow = Memory.alloc(DRAWCAP_NPX);
     g_dc_offs   = Memory.alloc(DRAWCAP_MAXW * 4);
@@ -5271,6 +5282,7 @@ function installDrawCaptureHooks() {
         g_canvas_height:  rva(0x004eac4c),
         g_glyph_cursor_x: rva(0x00591524),
         g_glyph_cursor_y: rva(0x00591528),
+        dc_st:         slot(g_dc_state),
         dc_base_buf:   slot(g_dc_base),
         dc_shadow_buf: slot(g_dc_shadow),
         dc_offs_buf:   slot(g_dc_offs),
@@ -5291,13 +5303,13 @@ function installDrawCaptureHooks() {
 // Read the CModule's accumulated draws → OLDR payload → send (frida_capture
 // writes frame_<idx>.draws). No-op if the frame recorded no base (no draws).
 function drawcapSend(frameIdx) {
-    const cm = g_drawcap_cm;
-    if (!cm) return;
-    if (cm.dc_have_base.readInt() === 0) return;
-    const w = cm.dc_w.readInt(), h = cm.dc_h.readInt();
+    if (!g_drawcap_cm || !g_dc_state) return;
+    const st = (i) => g_dc_state.add(i * 4).readInt();   // scalars live in dc_st[]
+    if (st(DC_S_HAVEBASE) === 0) return;
+    const w = st(DC_S_W), h = st(DC_S_H);
     if (w !== 640 || h !== 480) { err('drawcap.send', 'bad dims ' + w + 'x' + h); return; }
-    const nhdr = Math.min(Math.max(cm.dc_nhdr.readInt(), 0), DRAWCAP_MAXH);
-    const nwrite = Math.min(Math.max(cm.dc_nwrite.readInt(), 0), DRAWCAP_MAXW);
+    const nhdr = Math.min(Math.max(st(DC_S_NHDR), 0), DRAWCAP_MAXH);
+    const nwrite = Math.min(Math.max(st(DC_S_NWRITE), 0), DRAWCAP_MAXW);
     const total = 20 + w * h + nhdr * 20 + nwrite * 4 + nwrite;
     const buf = new Uint8Array(total);
     const dv = new DataView(buf.buffer);
@@ -5322,7 +5334,7 @@ function drawcapSend(frameIdx) {
         for (let i = 0; i < count; i++) { dv.setUint32(o, offs[start + i], true); o += 4; }
         for (let i = 0; i < count; i++) { buf[o++] = vals[start + i]; }
     }
-    if (cm.dc_overflow.readInt()) err('drawcap', 'write buffer overflow @ frame ' + frameIdx);
+    if (st(DC_S_OVERFLOW)) err('drawcap', 'write buffer overflow @ frame ' + frameIdx);
     send({kind: 'draws', frame_idx: frameIdx, n_draws: nhdr}, buf.buffer);
 }
 
