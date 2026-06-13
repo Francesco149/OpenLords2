@@ -281,6 +281,10 @@ class CaptureConfig:
     # {capture} ticks → run_dir/frames/frame_<idx>.draws (same OLDR sidecar the
     # port emits). Makes a retail frame draw-steppable / cross-engine diffable.
     capture_draws:     bool = False
+    # Force a full strategic re-render on each {capture} tick so the map composites
+    # into the draw journal (cross-engine map-draw diff, aligned zone). Sets the
+    # retail demand-redraw global DAT_0057d340 = 2 before the tick.
+    capture_force_redraw: bool = False
     # Save-schema state dump at segtrace {capture} instants:
     # [{i,va,size}] → run_dir/state/state_<tick>.json (trace_studio parity).
     state_dump_slots:  list[dict] = field(default_factory=list)
@@ -1060,6 +1064,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "mem_snapshot_regions":      cfg.mem_snapshot_regions,
             "anchor_trace":              bool(cfg.anchor_trace),
             "capture_draws":             bool(cfg.capture_draws),
+            "capture_force_redraw":      bool(cfg.capture_force_redraw),
             "watch":                     cfg.watch or [],
             "rng_seed":                  cfg.rng_seed,
             "heartbeat_timeout_ms":      HEARTBEAT_TIMEOUT_MS,
@@ -1372,6 +1377,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="Trace Studio v3 draw-stepping: capture per-draw "
                          "write-deltas at {capture} ticks (CModule diff vs the "
                          "back buffer) → frames/frame_<idx>.draws (OLDR sidecar)")
+    ap.add_argument("--capture-force-redraw", action="store_true",
+                    help="force a full strategic re-render on each {capture} tick "
+                         "(DAT_0057d340=2) so the map composites into the draw journal")
     ap.add_argument("--anchor-trace", action="store_true",
                     help="emit deterministic anchors ({anchor,frame} on "
                          "engine-state / screen-id transitions) to "
@@ -1564,6 +1572,7 @@ def main(argv: list[str] | None = None) -> int:
         call_trace_max_frames=args.call_trace_max_frames,
         anchor_trace=args.anchor_trace,
         capture_draws=args.capture_draws,
+        capture_force_redraw=args.capture_force_redraw,
         watch=watch_specs,
         state_dump_slots=state_dump_slots,
         rng_seed=rng_seed,

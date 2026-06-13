@@ -236,6 +236,10 @@ static int        g_capture_raw;
  * a captured frame draw-steppable in the native viewer.  Implies --capture-raw.
  * Off by default (the draw journal does a full-canvas diff per draw). */
 static int        g_capture_draws;
+/* --capture-force-redraw : on each capture tick, force a full strategic
+ * re-render so the map composites into the draw journal (cross-engine
+ * map-draw diff in the aligned zone). Off by default. */
+static int        g_capture_force_redraw;
 /* --call-trace PATH / --call-trace-frames i,j,k : per-frame JSONL of
  * which annotated port functions ran, for tools/call_trace_diff.py.
  * Off when PATH is NULL; frames empty = every frame. */
@@ -2659,6 +2663,17 @@ static void main_loop_body(void)
                           && g_seg_actions.cap_count > 0;
         if (cap_this_frame)
             gfx_drawcap_begin_frame();
+        /* --capture-force-redraw: on a capture tick, force a full strategic
+         * re-render (g_demand_redraw=2) so the WHOLE map composites this tick —
+         * the map-tile/terrain draws then land in the draw journal (in steady
+         * state the map sits in the base + only the HUD redraws). The final
+         * pixels match the incremental result; it just makes the map render
+         * draw-attributable, and being a normal post-anchor capture tick it
+         * stays port↔retail aligned (unlike the load-flip, which is inside the
+         * non-aligned load-stretch). */
+        if (g_capture_force_redraw && g_input_segtrace
+            && g_seg_actions.cap_count > 0)
+            engine_set_demand_redraw(2);
         engine_tick_guard();
         if (g_input_segtrace) {
             /* Take the trace's {capture} frames (labeled), now that the
@@ -2988,6 +3003,8 @@ static void parse_cmdline(LPSTR lpCmd)
         } else if (!strcmp(a, "--capture-draws")) {
             g_capture_draws = 1;   /* per-draw write-journal; implies --capture-raw */
             g_capture_raw = 1;
+        } else if (!strcmp(a, "--capture-force-redraw")) {
+            g_capture_force_redraw = 1;   /* full strat re-render on capture ticks */
         }
         else if (!strcmp(a, "--frames") && i + 1 < ntok) {
             if (!parse_uint(tokens[++i], &g_max_frames)) {

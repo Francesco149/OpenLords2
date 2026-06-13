@@ -561,6 +561,7 @@ let g_last_capture_h         = 0;
 // OLDR sidecar the port emits. Native (CModule) so the per-dispatch diff +
 // not-armed early-out cost nothing on the hot path.
 let g_capture_draws          = false;
+let g_capture_force_redraw   = false;  // force full strat re-render on capture ticks (DAT_0057d340=2)
 let g_drawcap_cm             = null;   // the CModule
 let g_dc_begin               = null;   // NativeFunction wrappers
 let g_dc_flush_ptr           = null;
@@ -3280,6 +3281,12 @@ function installEngineTickHook() {
                 g_capture_at_frames.has(g_tick_count)) {
                 g_dc_begin();
             }
+            // --capture-force-redraw: force a full strat re-render this tick so the
+            // map composites into the draw journal (DAT_0057d340 = g_demand_redraw).
+            if (g_capture_force_redraw && g_capture_at_frames &&
+                g_capture_at_frames.has(g_tick_count)) {
+                try { rva(0x0057d340).writeS32(2); } catch (e) { err('force_redraw', e.message); }
+            }
             if (g_call_trace_enabled && g_call_trace_min_cum_secs > 0) {
                 callTraceWindowTick();
             }
@@ -5371,6 +5378,7 @@ rpc.exports = {
         g_frame_capture_warmup_secs = (opts.frame_capture_warmup_secs | 0);
         g_frame_capture_count       = 0;
         g_capture_draws             = !!opts.capture_draws;
+        g_capture_force_redraw      = !!opts.capture_force_redraw;
 
         g_dump_globals = Array.isArray(opts.dump_globals)
             ? opts.dump_globals.map(function (s) {

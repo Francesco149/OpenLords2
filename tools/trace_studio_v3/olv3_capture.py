@@ -215,7 +215,7 @@ def _read_state(side_dir: Path, label: str, retail: bool, tick: int) -> dict | N
 
 # ── drive (reuse the proven command shapes) ────────────────────────────────────
 def drive_port(compiled: Path, port_dir: Path, max_frames: int, timeout_ms: int,
-               rng_seed: bool, draws: bool = True) -> int:
+               rng_seed: bool, draws: bool = True, force_redraw: bool = False) -> int:
     port_dir.mkdir(parents=True, exist_ok=True)
     # The game APPENDS to captures.jsonl and reuses <label>.{raw,draws,bmp}; clear
     # last run's artifacts so the container isn't polluted with stale/duplicate
@@ -229,6 +229,8 @@ def drive_port(compiled: Path, port_dir: Path, max_frames: int, timeout_ms: int,
            "--capture-raw", "--frames", str(max_frames), "--turbo"]
     if draws:
         cmd.append("--capture-draws")   # per-draw write-journal → <label>.draws
+    if force_redraw:
+        cmd.append("--capture-force-redraw")   # full map re-render on capture ticks
     if rng_seed:
         cmd.append("--rng-seed")
     env = dict(os.environ, OPENLORDS2_TIMEOUT_MS=str(timeout_ms))
@@ -239,7 +241,7 @@ def drive_port(compiled: Path, port_dir: Path, max_frames: int, timeout_ms: int,
 
 
 def drive_retail(compiled: Path, retail_dir: Path, remote: str, rng_seed: bool,
-                 slots: Path, draws: bool = True) -> int:
+                 slots: Path, draws: bool = True, force_redraw: bool = False) -> int:
     retail_dir.mkdir(parents=True, exist_ok=True)
     for pat in ("frame_*.raw", "frame_*.draws", "captures.jsonl", "anchors.jsonl"):
         for f in retail_dir.glob(pat):
@@ -250,6 +252,8 @@ def drive_retail(compiled: Path, retail_dir: Path, remote: str, rng_seed: bool,
            "--anchor-trace", "--state-dump-slots", str(slots), "--run-id", run_id]
     if draws:
         cmd.append("--capture-draws")   # per-draw write-journal → frame_<idx>.draws
+    if force_redraw:
+        cmd.append("--capture-force-redraw")   # full map re-render on capture ticks
     if rng_seed:
         cmd.append("--rng-seed")
     with (retail_dir / "log.txt").open("w") as log:
@@ -284,6 +288,8 @@ def main() -> int:
     ap.add_argument("--port-timeout-ms", type=int, default=240_000)
     ap.add_argument("--draws", action=argparse.BooleanOptionalAction, default=True,
                     help="emit per-draw write-journals (.draws) on BOTH engines for draw-stepping + cross-engine draw diff (default on)")
+    ap.add_argument("--force-redraw", action="store_true",
+                    help="force a full map re-render on each capture tick so the MAP composites into the draw journal (cross-engine map-draw diff; default off = HUD-only steady draws)")
     ap.add_argument("--no-capture", action="store_true", help="skip driving; ingest existing raws")
     ap.add_argument("--no-view", action="store_true", help="build containers + view.json, don't launch")
     args = ap.parse_args()
@@ -313,14 +319,15 @@ def main() -> int:
         _log("driving port…")
         try:
             rc = drive_port(compiled, port_dir, args.port_max_frames, args.port_timeout_ms,
-                            rng_seed, draws=args.draws)
+                            rng_seed, draws=args.draws, force_redraw=args.force_redraw)
             _log(f"port rc={rc}")
         except subprocess.TimeoutExpired:
             _log("port TIMED OUT (continuing with what landed)")
     if run_retail:
         _log("driving retail…")
         try:
-            rc = drive_retail(compiled, retail_dir, args.remote, rng_seed, slots, draws=args.draws)
+            rc = drive_retail(compiled, retail_dir, args.remote, rng_seed, slots,
+                              draws=args.draws, force_redraw=args.force_redraw)
             _log(f"retail rc={rc}")
         except subprocess.TimeoutExpired:
             _log("retail TIMED OUT (continuing with what landed)")
