@@ -32,6 +32,7 @@
 #include "engine_path_field.h"     /* cost-field fill/trace/copy (brain step 0xb deployment) */
 #include "engine_realm_upkeep.h"   /* unit_disband / clear_contract / total_wage (step-0xb disband) */
 #include "engine_army_state.h"     /* arm_movement_owned (FUN_004a4e3d — brain terminal check) */
+#include "game_init.h"             /* army_near_rawflag_only_bit1 (step-7 caravan settle probe) */
 #include "call_trace.h"            /* CALL_TRACE_ENTER (per-tick brain dispatch marker) */
 
 #define ARMY_REC(key)   (&g_per_army_768[(key) * 0x300])
@@ -2703,6 +2704,224 @@ void engine_army_ai_run_movement(int realm, engine_event_queue_state_t *evq, int
     }
 }
 
+/* ── Brain step 7: defensive deployment planner (FUN_0049f93d + 6 callees) ──
+ *
+ * Step 7 is the AI's defence layer.  It first re-scores the realms to refresh the
+ * muster realm (engine_army_ai_pick_muster_realms = FUN_004a0aaa), then runs two
+ * planners:
+ *   garrison_keeps   (FUN_0049f12f) — for each owned keep that is unbesieged and
+ *     big enough (population ≥ the personality's keep floor), muster a garrison
+ *     up to the keep's head cap and stamp it order 4 at a settled cell.
+ *   reinforce_realms (FUN_0049f431) — for each owned realm where the enemy army
+ *     strength present outweighs the player's, muster a defender; if it is the
+ *     muster realm or critically outnumbered the defender stays put (order 3),
+ *     otherwise it heads for the muster realm and the realm ships its surplus
+ *     provisions/stock there (a goods caravan) or sells them.
+ *
+ * Personality-row columns step 7 reads (offsets into a personality_row()). */
+#define AI_PERS_KEEP_MIN_POP     0x70  /* i32: min realm population to bother garrisoning a keep */
+#define AI_PERS_REINFORCE_RATION 0x9c  /* u8: ration the AI sets on a reinforced realm */
+
+/* Caravan occupant fields (offsets into an OCC_REC; the carrier the caravan
+ * dispatcher spawns).  +0x166/+0x167 record the source/destination realm; the
+ * three i16 at +0x16c..+0x170 are the carried provisions/?/stock load. */
+#define OCC_CARAVAN_SRC   0x166  /* DAT_0052f216 — source realm (u8) */
+#define OCC_CARAVAN_DST   0x167  /* DAT_0052f217 — destination realm (u8) */
+#define OCC_CARAVAN_LOAD  0x16c  /* DAT_0052f21c — first of three i16 cargo cells */
+
+/* Per-player staged goods-shipment order (retail DAT_005678c0, stride 0x18 = six
+ * i32; the trade/gift UI shares it, indexed by the local player).  reinforce_realms
+ * stages a realm's surplus into fields [1]/[5] (provisions/stock) and the caravan
+ * dispatcher reads [1]/[3]/[5].  File-static until the (unported) trade UI forces
+ * promotion to a shared global — same pattern as the find-settle scratch. */
+static int32_t g_caravan_order[8][6];   /* DAT_005678c0 */
+
+/* Port of FUN_0049f73f (273 B) — sum the head-count of every live army standing
+ * in realm `realm` that is owned neither by `player` nor by `player`'s lord (the
+ * enemy strength bearing on the realm). */
+static int engine_army_ai_realm_enemy_strength(int player, int realm)
+{
+    uint8_t *s = STRAT_REC(player);
+    int total = 0;
+    for (int occ = 1; occ < 0x97; occ++) {
+        uint8_t *c = OCC_REC(occ);
+        if (c[OCC_ACTIVE] != 1)                         continue;
+        if (c[OCC_OWNER] == 0)                          continue;
+        if ((uint8_t)c[OCC_HOME_REGION] != (uint8_t)realm)  continue;
+        if ((int8_t)c[OCC_OWNER] == player)             continue;
+        if ((uint8_t)s[STRAT_LORD] == (uint8_t)(int8_t)c[OCC_OWNER]) continue;
+        total += I32(c + OCC_HEAD);
+    }
+    return total;
+}
+
+/* Port of FUN_0049f850 (237 B) — sum the head-count of `player`'s own live armies
+ * standing in realm `realm` (the friendly strength already defending it). */
+static int engine_army_ai_realm_own_strength(int player, int realm)
+{
+    int total = 0;
+    for (int occ = 1; occ < 0x97; occ++) {
+        uint8_t *c = OCC_REC(occ);
+        if (c[OCC_ACTIVE] != 1)                         continue;
+        if (c[OCC_OWNER] == 0)                          continue;
+        if ((uint8_t)c[OCC_HOME_REGION] != (uint8_t)realm)  continue;
+        if (player != (int8_t)c[OCC_OWNER])             continue;
+        total += I32(c + OCC_HEAD);
+    }
+    return total;
+}
+
+/* Port of FUN_004292af (361 B) — dispatch a goods caravan for `player`: find a
+ * settle cell near `realm`'s capital, spawn a type-4 carrier there loaded with
+ * the staged goods order (g_caravan_order[player]) bound for `dest`, and debit
+ * the shipped provisions/stock from `realm`.  No-op if no settle cell is found.
+ * Retail ignores the placer's return and always stamps the current-slot record
+ * (engine_territory_current_slot), as engine_game_init_place_army_starts does. */
+static void engine_army_ai_dispatch_caravan(int player, int realm, uint8_t dest)
+{
+    int col, row;
+    if (!engine_army_state_find_settle_spot(realm, &col, &row) &&        /* FUN_00428007 */
+        !engine_game_init_army_near_rawflag_only_bit1(realm, &col, &row)) /* FUN_00428078 */
+        return;
+
+    engine_territory_place_entity(4, col, row, player);   /* FUN_0046e1b0 (return ignored) */
+
+    int      cur = engine_territory_current_slot();       /* DAT_0052afe0 */
+    uint8_t *c   = OCC_REC(cur);
+    int32_t *ord = g_caravan_order[player];
+
+    c[OCC_PLACED]       = 0;
+    c[OCC_HOME_REGION]  = (uint8_t)realm;
+    c[OCC_CARAVAN_SRC]  = (uint8_t)realm;
+    c[OCC_CARAVAN_DST]  = dest;
+    *(int16_t *)(c + OCC_CARAVAN_LOAD + 0) = (int16_t)ord[1];
+    *(int16_t *)(c + OCC_CARAVAN_LOAD + 2) = (int16_t)ord[3];
+    *(int16_t *)(c + OCC_CARAVAN_LOAD + 4) = (int16_t)ord[5];
+
+    I32(ARMY_REC(realm) + ARMY_PROVISION_RAW) -= ord[1];
+    I32(ARMY_REC(realm) + ARMY_STOCK_A)       -= ord[5];
+}
+
+/* Port of FUN_0049f12f (765 B) — garrison `player`'s keeps.  For each owned realm
+ * with a keep that is unbesieged, not flagged settled, populous enough for the
+ * personality, and with both funding reserves above 0x13: size the garrison need
+ * as the keep's head cap minus any pending garrison, scale it down by how large a
+ * fraction of the realm's population it would consume, muster that force, and
+ * stamp it order 4 (garrison) bound for a settled cell in the realm. */
+static void engine_army_ai_garrison_keeps(int player)
+{
+    uint8_t *s     = STRAT_REC(player);
+    int      count = (int)s_slot_0056d5dc;
+
+    for (int realm = 1; realm <= count; realm++) {
+        uint8_t *r = ARMY_REC(realm);
+        if (r[ARMY_OWNER] != player)                 continue;
+        if (r[ARMY_KEEP_LEVEL] == 0)                 continue;
+        if (r[ARMY_SETTLE_FLAG] == 1)                continue;
+        if (r[ARMY_SIEGE_BLOCK] != 0)                continue;
+        if (I32(personality_row(s[STRAT_PERSONALITY]) + AI_PERS_KEEP_MIN_POP)
+                > I32(r + ARMY_FEED_COUNT))          continue;
+        if (I32(s + STRAT_RESERVE_150) + I32(s + STRAT_RESERVE_140) <= 0x13) continue;
+
+        int pending_head = 0;
+        if (I32(r + ARMY_PENDING) != 0)
+            pending_head = I32(OCC_REC(I32(r + ARMY_PENDING)) + OCC_HEAD);
+
+        int need = engine_combat_garrison_cap(r[ARMY_KEEP_LEVEL]) - pending_head;
+        if (need <= 0x13)                            continue;
+
+        int pop = I32(r + ARMY_FEED_COUNT);
+        int pct = engine_math_percent_div(need, pop);
+        if (pct >= 0x50)                             continue;
+
+        /* Scale the garrison down the larger a fraction of the realm it is. */
+        if (pct < 0x41) {
+            if (pct < 0x32) {
+                if (pct < 0x1e) {
+                    if (pct > 0xe) need /= 2;        /* 15..29% */
+                } else      need /= 3;               /* 30..49% */
+            } else          need /= 4;               /* 50..64% */
+        } else              need /= 5;               /* 65..79% */
+
+        pct = engine_math_percent_div(need, pop);
+        if (engine_combat_muster_garrison(realm, pct) == 0) continue;
+
+        int      cur = engine_territory_current_slot();
+        uint8_t *c   = OCC_REC(cur);
+        c[OCC_ORDER]  = 4;                           /* garrison */
+        c[OCC_PLACED] = 0;
+        c[OCC_TARGET] = (uint8_t)realm;
+        engine_army_ai_find_settled_cell(cur, realm);   /* FUN_004a65a3 */
+        c[OCC_DEST_COL] = (uint8_t)s_ai_find_col;
+        c[OCC_DEST_ROW] = (uint8_t)s_ai_find_row;
+    }
+}
+
+/* Port of FUN_0049f431 (782 B) — reinforce `player`'s threatened realms.  For each
+ * owned realm with no keep (or no pending garrison) where the enemy strength
+ * present exceeds the player's by more than 100, muster a defender: if the realm
+ * is the muster realm or the threat is below the player's defence threshold the
+ * defender garrisons in place (order 3); otherwise it marches to the muster realm
+ * (its target region) and the realm consolidates — shipping its surplus
+ * provisions/stock to the muster realm as a caravan, or (if a trade gate is set)
+ * selling them. */
+static void engine_army_ai_reinforce_realms(int player)
+{
+    uint8_t *s     = STRAT_REC(player);
+    int      count = (int)s_slot_0056d5dc;
+
+    for (int realm = 1; realm <= count; realm++) {
+        uint8_t *r = ARMY_REC(realm);
+        if (r[ARMY_OWNER] != player)                                 continue;
+        if (r[ARMY_KEEP_LEVEL] != 0 && I32(r + ARMY_PENDING) != 0)   continue;
+
+        int enemy = engine_army_ai_realm_enemy_strength(player, realm);
+        int own   = engine_army_ai_realm_own_strength(player, realm);
+        if (enemy <= 99 || own >= enemy - 100)                       continue;
+
+        int thresh = I32(s + STRAT_FORCE_ACC) + (I32(r + ARMY_FEED_COUNT) * 2) / 3;
+        if (I32(r + ARMY_FEED_COUNT) < 200)
+            thresh = 0;
+
+        if (enemy < thresh || (uint8_t)s[STRAT_MUSTER_REALM] == (uint8_t)realm) {
+            if (engine_combat_muster_defender(realm, 0x32, 100, 1) != 0)
+                OCC_REC(engine_territory_current_slot())[OCC_ORDER] = 3;
+            continue;
+        }
+
+        if (engine_combat_muster_defender(realm, 0x32, 100, 0) != 0) {
+            uint8_t *c = OCC_REC(engine_territory_current_slot());
+            c[OCC_TARGET_REGION] = s[STRAT_MUSTER_REALM];
+            c[OCC_ORDER]         = 3;
+        }
+        r[ARMY_RATION]       = (uint8_t)personality_row(s[STRAT_PERSONALITY])[AI_PERS_REINFORCE_RATION];
+        r[ARMY_STRATEGY_TAG] = 100;
+
+        if (r[ARMY_TRADE_GATE] == 0) {
+            if (I32(r + ARMY_PROVISION_RAW) > 10 || I32(r + ARMY_STOCK_A) > 5) {
+                g_caravan_order[player][1] = I32(r + ARMY_PROVISION_RAW);
+                g_caravan_order[player][0] = 0;
+                g_caravan_order[player][5] = I32(r + ARMY_STOCK_A);
+                g_caravan_order[player][4] = 0;
+                engine_army_ai_dispatch_caravan(player, realm, s[STRAT_MUSTER_REALM]);
+            }
+        } else {
+            engine_army_ai_sell_order(realm, I32(r + ARMY_PROVISION_RAW), 1);
+            engine_army_ai_sell_order(realm, I32(r + ARMY_STOCK_A), 2);
+        }
+    }
+}
+
+/* Port of FUN_0049f93d (47 B) — AI brain step 7 entry.  Refresh the muster realm,
+ * then run the keep-garrison and realm-reinforcement planners. */
+void engine_army_ai_run_garrison(int player)
+{
+    CALL_TRACE_ENTER(0x0049f93d);
+    engine_army_ai_pick_muster_realms(player);   /* FUN_004a0aaa */
+    engine_army_ai_garrison_keeps(player);        /* FUN_0049f12f */
+    engine_army_ai_reinforce_realms(player);      /* FUN_0049f431 */
+}
+
 /* ── Per-tick AI brain dispatcher (FUN_0049a581) ──────────────────────────
  *
  * Ranking-changed redraw cookie — retail _DAT_0056d6a0, set to 1 by the brain
@@ -2731,12 +2950,12 @@ static int g_ai_ranking_dirty;   /* _DAT_0056d6a0 */
  *     the realm is parked at the 999 "turn done" sentinel + the ranking redraw
  *     cookie is set.
  *
- * Steps 6/7 are advance-only stubs (CALL_TRACE_ENTER_STUB markers + the TODO
- * notes below): the FSM still advances through them so the cursor and dispatch
+ * Step 6 is the last advance-only stub (CALL_TRACE_ENTER_STUB marker + the TODO
+ * note below): the FSM still advances through it so the cursor and dispatch
  * structure track retail exactly (closing the slot-84 divergence the trace studio
- * flagged), while their per-realm state writes — FUN_0049edc7 / 0049f93d and
- * their callee trees — land incrementally bottom-up.  Steps
- * 1/2/3/4/5/8/9/0xa/0xb/0xc/0xd/0xe are live.
+ * flagged), while its per-realm state writes — FUN_0049edc7 and its callee tree —
+ * land in the keep-builder port.  Steps 1/2/3/4/5/7/8/9/0xa/0xb/0xc/0xd/0xe are
+ * live.
  *
  * `evq` is the live turn event queue (steps 1/2/0xd + the init elimination
  * post); `mp_active` threads retail DAT_00553030 into the init elimination
@@ -2786,11 +3005,7 @@ void engine_army_ai_run_per_tick(engine_event_queue_state_t *evq, int mp_active,
         /* TODO(brain step 6): FUN_0049edc7 (872 B) + 436d02 (768 B) + 46841c. */
         CALL_TRACE_ENTER_STUB(0x0049edc7);
         break;
-    case 0x7:
-        /* TODO(brain step 7): FUN_0049f93d (47 B) + 49f12f/49f431 (~770 B ea.)
-         * + 4a65a3/49f73f/49f850/4a5389/4a545f. */
-        CALL_TRACE_ENTER_STUB(0x0049f93d);
-        break;
+    case 0x7:  engine_army_ai_run_garrison(sel);            break; /* 0x49f93d */
     case 0x8:  engine_army_ai_step_noop();                  break; /* 0x49f96c */
     case 0x9:  engine_army_ai_run_campaign(sel);            break; /* 0x49f977 */
     case 0xa:  engine_army_ai_launch_attack(sel);           break; /* 0x4a0015 */

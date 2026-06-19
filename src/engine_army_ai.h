@@ -195,6 +195,12 @@ void engine_army_ai_run_campaign(int player);
 void engine_army_ai_run_movement(int realm, engine_event_queue_state_t *evq,
                                  int mp_active);
 
+/* Port of FUN_0049f93d — AI brain step 7 (defensive deployment planner).  Refresh
+ * the muster realm, then garrison the player's keeps (FUN_0049f12f) and reinforce
+ * its threatened realms (FUN_0049f431), mustering defenders and consolidating
+ * surplus goods toward the muster realm. */
+void engine_army_ai_run_garrison(int player);
+
 /* Port of FUN_004a0309.  Return the player `player` is most hostile toward — a
  * pinned war target (+0xeb) if set, else the active slot its relation (+0x84) is
  * most negative toward (below −10), or 0. */

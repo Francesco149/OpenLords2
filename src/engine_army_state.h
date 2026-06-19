@@ -139,4 +139,9 @@ void engine_army_state_plan_capital_marches(void);
  * tail (clearing +0x14e, arming +0x14c).  Pure record/path-field bookkeeping. */
 void engine_army_state_plan_settle_marches(void);
 
+/* Probe for a settle spot near `realm`'s capital (FUN_00428007); on a hit return
+ * 1 and the matched cell via the out-params.  Exposes the box-scan scratch for
+ * the AI caravan dispatcher (engine_army_ai, brain step 7). */
+int engine_army_state_find_settle_spot(int realm, int *col, int *row);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_STATE_H */

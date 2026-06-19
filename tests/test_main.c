@@ -1948,6 +1948,7 @@ struct test_case {
     X(engine_combat_muster_defender_mode1_recruits) \
     X(engine_combat_muster_defender_spawns) \
     X(engine_combat_raise_region_unit_spawns) \
+    X(engine_combat_muster_garrison_distributes) \
     X(engine_combat_find_deploy_cell_nearest) \
     X(engine_combat_find_deploy_cell_filters) \
     X(engine_combat_find_deploy_cell_fallback) \
@@ -2171,6 +2172,12 @@ struct test_case {
     X(army_ai_movement_attack_march_deploys) \
     X(army_ai_movement_advance_engages_enemy) \
     X(army_ai_movement_siege_target_owned_noop) \
+    X(army_ai_garrison_keeps_reaches_muster) \
+    X(army_ai_garrison_keeps_besieged_skips) \
+    X(army_ai_garrison_keeps_low_reserves_skips) \
+    X(army_ai_reinforce_holds_below_threshold) \
+    X(army_ai_reinforce_lord_army_not_enemy) \
+    X(army_ai_reinforce_marches_ships_caravan) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

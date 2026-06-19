@@ -1278,6 +1278,48 @@ int test_engine_combat_spawn_unit_populates(void)
     return 0;
 }
 
+/* engine_combat_muster_garrison (FUN_004a5389): size a keep garrison at pct% of
+ * the region's provision, distribute the head across troop classes 5/1/3/2/6 from
+ * the owner's primed category reserves, then spawn.  provision 200 @ pct 50 →
+ * head 100; cats {1:40,2:30,3:20,4:0,5:50,6:10} fill in order 5,1,3,2,6 against
+ * the shrinking slot-0 pool: class5←50 (pool 100→50), class1←40 (→10), class3←10
+ * (→0), class2/6←0 (pool drained). */
+int test_engine_combat_muster_garrison_distributes(void)
+{
+    spawn_reset();
+    memset(g_spawn_cells, 0, sizeof g_spawn_cells);
+    g_spawn_cells[(20 * SPAWN_GRID + 20) * SPAWN_STRIDE + 1] = 1;   /* free bit0 cell */
+    engine_map_query_bind_cell_descriptors(g_spawn_cells);
+    engine_territory_bind_cells(g_spawn_cells);
+    engine_territory_bind_records(g_per_territory_420);
+
+    int region = 2, owner = 2;
+    R_REC(region)[SPAWN_COORD_OFF + region * 3]     = 20;   /* region seat col */
+    R_REC(region)[SPAWN_COORD_OFF + region * 3 + 1] = 20;   /* region seat row */
+    R_REC(region)[0x05] = owner;                            /* region owner */
+    I32(R_REC(region), 0x24) = 200;                         /* provision (+0x24) */
+
+    /* Owner's six cashflow-category reserves (strat +0x140..+0x154 = cats 1..6). */
+    const int32_t cats[6] = { 40, 30, 20, 0, 50, 10 };
+    for (int i = 0; i < 6; i++)
+        I32(P_REC(owner), 0x140 + i * 4) = cats[i];
+
+    int ret = engine_combat_muster_garrison(region, 50);
+    T_ASSERT(ret != 0);
+
+    uint8_t *c = CREC(ret);
+    T_ASSERT_EQ_I(I32(c, C_VALUE), 100);            /* staged head ← percent_of(200,50) */
+    T_ASSERT_EQ_I(I16(c, C_COUNTS + 5 * 2), 50);    /* class 5 filled first */
+    T_ASSERT_EQ_I(I16(c, C_COUNTS + 1 * 2), 40);    /* class 1 */
+    T_ASSERT_EQ_I(I16(c, C_COUNTS + 3 * 2), 10);    /* class 3 (pool ran dry) */
+    T_ASSERT_EQ_I(I16(c, C_COUNTS + 2 * 2), 0);     /* class 2 got nothing */
+
+    engine_map_query_bind_cell_descriptors(NULL);
+    engine_territory_bind_cells(NULL);
+    engine_territory_bind_records(NULL);
+    return 0;
+}
+
 /* No reachable free cell near the army's seat → spawn returns 0, no record. */
 int test_engine_combat_spawn_unit_no_cell(void)
 {

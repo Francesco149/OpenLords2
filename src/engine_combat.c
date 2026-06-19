@@ -1811,6 +1811,51 @@ int engine_combat_raise_region_unit(int region)
     return engine_territory_current_slot();         /* DAT_0052afe0 */
 }
 
+/* Port of FUN_004a545f (188 B, __cdecl void(int owner, int klass)).  Commit head
+ * from owner `owner`'s primed muster pool (slot 0 +0x00, set by prime_muster to
+ * the sized head) into troop class `klass`'s count (slot[klass] +0x00), bounded
+ * by that class's seeded reserve (slot[klass] +0x08 = the strat category copy).
+ * Moves min(available, reserve), then debits both the reserve and the slot-0
+ * pool.  A no-op when the class reserve is empty.  muster_garrison runs it over
+ * classes 5/1/3/2/6 to fill the garrison from the owner's cashflow categories. */
+static void engine_combat_pool_commit(int owner, int klass)
+{
+    uint8_t *pool   = engine_game_init_troop_pool_row(owner);
+    int32_t  demand = *(int32_t *)(pool + klass * 0x10 + M_RES_B);
+    if (demand <= 0)
+        return;
+
+    int32_t avail = *(int32_t *)(pool + M_SLOT);    /* slot 0 +0x00 = staged head */
+    int32_t mv    = (demand <= avail) ? demand : avail;
+
+    *(int32_t *)(pool + klass * 0x10 + M_SLOT)  += mv;
+    *(int32_t *)(pool + klass * 0x10 + M_RES_B) -= mv;
+    *(int32_t *)(pool + M_SLOT)                 -= mv;
+}
+
+/* Port of FUN_004a5389 (214 B).  See engine_combat.h. */
+int engine_combat_muster_garrison(int region, int pct)
+{
+    g_player_strategic_352[5] = 0;                  /* DAT_0057bf05 = 0 */
+
+    int     owner  = REGREC(region)[A_RACE];
+    int32_t supply = k_muster_cost[pct];            /* DAT_004d8778[pct] */
+    int     sized  = engine_math_percent_of(rd_i32(REGREC(region), A_PROV24), pct);
+    engine_combat_prime_muster(region, sized);
+
+    /* Fill troop classes from the owner's seeded category reserves, in the
+     * retail order 5, 1, 3, 2, 6 (class 4 is left for the leftover in slot 0). */
+    engine_combat_pool_commit(owner, 5);
+    engine_combat_pool_commit(owner, 1);
+    engine_combat_pool_commit(owner, 3);
+    engine_combat_pool_commit(owner, 2);
+    engine_combat_pool_commit(owner, 6);
+
+    if (!engine_combat_spawn_unit(owner, region, 0, supply))
+        return 0;
+    return engine_territory_current_slot();         /* DAT_0052afe0 */
+}
+
 /* Overworld cell fields (g_overworld_map, 8 bytes/cell): +0 terrain, +1 flag
  * bits (bit 0x20 = deployable), +7 owning region key. */
 #define CELL_TERRAIN          0

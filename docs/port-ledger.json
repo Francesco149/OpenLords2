@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 704,
+  "tested": 710,
   "ported": 53,
-  "unported": 1690,
+  "unported": 1684,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 757,
-  "pct_touched": 30.9,
-  "pct_tested": 28.8,
+  "touched": 763,
+  "pct_touched": 31.2,
+  "pct_tested": 29.0,
   "bytes_total": 838629,
-  "bytes_touched": 329809,
-  "pct_bytes_touched": 39.3
+  "bytes_touched": 332268,
+  "pct_bytes_touched": 39.6
  },
  "orphan_refs": [
   "0x004148",
@@ -3963,6 +3963,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_army_state.c",
     "src/engine_army_state.h",
     "src/engine_combat.c",
@@ -3977,6 +3978,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_combat.c",
     "src/game_init.c",
     "src/game_init.h"
@@ -4100,6 +4102,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_army_state.c"
    ]
   },
@@ -12550,6 +12553,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_combat.c",
     "src/engine_territory.c",
     "src/engine_territory.h",
@@ -16167,32 +16171,43 @@
    "name": "FUN_0049f12f",
    "size": 765,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x49f431",
    "name": "FUN_0049f431",
    "size": 782,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h"
+   ]
   },
   {
    "va": "0x49f73f",
    "name": "FUN_0049f73f",
    "size": 273,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x49f850",
    "name": "FUN_0049f850",
    "size": 237,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x49f93d",
@@ -16201,7 +16216,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h"
    ]
   },
   {
@@ -16750,16 +16766,21 @@
    "name": "FUN_004a5389",
    "size": 214,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x4a545f",
    "name": "FUN_004a545f",
    "size": 188,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c"
+   ]
   },
   {
    "va": "0x4a551b",

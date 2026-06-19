@@ -13,6 +13,7 @@
 #include "engine_army_ai.h"
 #include "engine_army_economy.h"   /* NULL the army-record bind to isolate the re-plan tail */
 #include "engine_territory.h"      /* NULL the territory binds too */
+#include "engine_map_query.h"      /* bind cell descriptors (step-7 caravan place_entity) */
 #include "engine_event_queue.h"    /* diplomacy proposals post through the event queue */
 #include "save.h"
 #include "save_schema_globals.h"   /* s_slot_005532a0 price table, 0053f260 mode */
@@ -2352,5 +2353,187 @@ int test_army_ai_movement_siege_target_owned_noop(void)
 
     T_ASSERT_EQ_I(OREC(1)[0x01a], 5);        /* order untouched (returned 0) */
     T_ASSERT_EQ_I(OREC(1)[0x14c], 0);        /* no path set */
+    return 0;
+}
+
+/* ── Brain step 7: defensive deployment planner (FUN_0049f93d) ───────────────
+ * engine_combat_muster_garrison / muster_defender both zero g_player_strategic_352[5]
+ * (DAT_0057bf05) at entry, so it doubles as a "did the planner reach a muster?"
+ * sentinel: pre-set it to 0xab and check whether the call cleared it.  The step-7
+ * entry runs pick_muster_realms first, so bind the economy + pin prices. */
+static void step7_setup(void)
+{
+    ai_setup();
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_overworld_map, 0, sizeof g_overworld_map);
+    engine_army_economy_bind_army_records(g_per_army_768);
+    engine_army_economy_set_prices(5, 10, 6);
+    s_slot_0056d5dc = 4;
+    g_player_strategic_352[5] = 0xab;        /* muster sentinel */
+}
+
+static void step7_teardown(void)
+{
+    engine_army_economy_bind_army_records(NULL);
+}
+
+/* A qualifying keep (unbesieged, populous enough, reserves above 0x13) reaches the
+ * garrison muster — the sentinel is cleared. */
+int test_army_ai_garrison_keeps_reaches_muster(void)
+{
+    step7_setup();
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;                            /* personality 1 → keep floor 300 */
+    AI32(s, 0x150) = 200;                    /* reserve_150 (cat 5) */
+    AI32(s, 0x140) = 200;                    /* reserve_140 (cat 1); sum 400 > 0x13 */
+
+    uint8_t *r = AREC(3);
+    r[0x005] = 2;                            /* owned by player 2 */
+    r[0x1c0] = 1;                            /* keep level 1 */
+    AI32(r, 0x024) = 400;                    /* population ≥ floor 300 */
+
+    engine_army_ai_run_garrison(2);
+
+    T_ASSERT_EQ_I(g_player_strategic_352[5], 0);   /* muster reached */
+    step7_teardown();
+    return 0;
+}
+
+/* A besieged keep (+0x1c2 set) is skipped — the sentinel survives. */
+int test_army_ai_garrison_keeps_besieged_skips(void)
+{
+    step7_setup();
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;
+    AI32(s, 0x150) = 200; AI32(s, 0x140) = 200;
+
+    uint8_t *r = AREC(3);
+    r[0x005] = 2; r[0x1c0] = 1; AI32(r, 0x024) = 400;
+    r[0x1c2] = 1;                            /* siege-block set → skip */
+
+    engine_army_ai_run_garrison(2);
+
+    T_ASSERT_EQ_I(g_player_strategic_352[5], 0xab);  /* muster NOT reached */
+    step7_teardown();
+    return 0;
+}
+
+/* Both funding reserves at/below 0x13 gate the keep garrison off. */
+int test_army_ai_garrison_keeps_low_reserves_skips(void)
+{
+    step7_setup();
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;
+    AI32(s, 0x150) = 10; AI32(s, 0x140) = 9;  /* sum 19 == 0x13 → not > 0x13 */
+
+    uint8_t *r = AREC(3);
+    r[0x005] = 2; r[0x1c0] = 1; AI32(r, 0x024) = 400;
+
+    engine_army_ai_run_garrison(2);
+
+    T_ASSERT_EQ_I(g_player_strategic_352[5], 0xab);  /* gated off */
+    step7_teardown();
+    return 0;
+}
+
+/* A realm out-garrisoned by the enemy but still within the player's reserved
+ * defence threshold (enemy < force_acc + pop·2/3) musters a defender in place
+ * (mode 1): the sentinel clears but the realm is not re-tasked as a goods source
+ * (strategy tag stays 0).  Exercises the enemy-strength sum + the threshold gate. */
+int test_army_ai_reinforce_holds_below_threshold(void)
+{
+    step7_setup();
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;
+    AI32(s, 0x138) = 10000;                  /* force_acc → threshold dwarfs the enemy */
+
+    uint8_t *r = AREC(3);
+    r[0x005] = 2;                            /* owned by player 2, no keep */
+    AI32(r, 0x024) = 300;                    /* population ≥ 200 → threshold is real */
+
+    uint8_t *e = OREC(1);                    /* an enemy army standing in realm 3 */
+    e[0x008] = 1; e[0x000] = 4;             /* active, owned by player 4 */
+    e[0x010] = 3;                            /* home region 3 */
+    AI32(e, 0x168) = 250;                    /* head 250 > 99, own 0 → outnumbered */
+
+    engine_army_ai_run_garrison(2);
+
+    T_ASSERT_EQ_I(g_player_strategic_352[5], 0);   /* defender muster reached */
+    T_ASSERT_EQ_I(AREC(3)[0x008], 0);              /* not the march/consolidate branch */
+    step7_teardown();
+    return 0;
+}
+
+/* An army owned by the player's lord does not count as an enemy, so a realm
+ * holding only a lord army is not seen as threatened — nothing musters. */
+int test_army_ai_reinforce_lord_army_not_enemy(void)
+{
+    step7_setup();
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;
+    s[0x081] = 4;                            /* lord = player 4 */
+
+    uint8_t *r = AREC(3);
+    r[0x005] = 2; AI32(r, 0x024) = 100;
+
+    uint8_t *e = OREC(1);
+    e[0x008] = 1; e[0x000] = 4;             /* army owned by the LORD */
+    e[0x010] = 3; AI32(e, 0x168) = 250;
+
+    engine_army_ai_run_garrison(2);
+
+    T_ASSERT_EQ_I(g_player_strategic_352[5], 0xab);  /* not threatened → no muster */
+    T_ASSERT_EQ_I(AREC(3)[0x008], 0);
+    step7_teardown();
+    return 0;
+}
+
+/* A threatened realm that is NOT the muster realm and not critically outnumbered
+ * marches a defender to the muster realm and ships its surplus there as a caravan:
+ * the realm is tagged (strategy 100, personality ration), and the shipped
+ * provisions/stock are debited.  End-to-end: binds cells so the caravan's
+ * place_entity succeeds near realm 3's capital. */
+static uint8_t g_step7_cells[0x40 * 0x40 * 8];
+int test_army_ai_reinforce_marches_ships_caravan(void)
+{
+    step7_setup();
+    memset(g_step7_cells, 0, sizeof g_step7_cells);
+    /* free bit0 cells around realm 3's capital (20,20) for the settle probe. */
+    for (int dr = -1; dr <= 1; dr++)
+        for (int dc = -1; dc <= 1; dc++)
+            g_step7_cells[((20 + dr) * 0x40 + (20 + dc)) * 8 + 1] = 1;
+    engine_map_query_bind_cell_descriptors(g_step7_cells);
+    engine_territory_bind_cells(g_step7_cells);
+    engine_territory_bind_records(g_per_territory_420);
+
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;                            /* personality 1 → reinforce ration 32 */
+
+    uint8_t *m = AREC(1);                    /* the muster realm: flush → picked */
+    m[0x005] = 2; m[0x00c] = 0x40;
+    AI32(m, 0x024) = 1000; AI32(m, 0x250) = 1000;   /* stockpile 5000 > 4×prov */
+
+    uint8_t *r = AREC(3);                    /* the threatened realm */
+    r[0x005] = 2; r[0x00c] = 0x40;
+    AI32(r, 0x024) = 50;                     /* feed < 200 (thresh 0) and < muster min_prov */
+    AI32(r, 0x224) = 50;                     /* surplus provisions to ship */
+    AI32(r, 0x250) = 20;                     /* surplus stock to ship */
+    r[0x06c] = 20; r[0x06d] = 20;            /* capital cell (caravan origin probe) */
+
+    uint8_t *e = OREC(1);
+    e[0x008] = 1; e[0x000] = 4; e[0x010] = 3;
+    AI32(e, 0x168) = 250;                    /* enemy 250, own 0 → outnumbered, not critical */
+
+    engine_army_ai_run_garrison(2);
+
+    T_ASSERT_EQ_I(AREC(3)[0x008], 100);      /* march/consolidate branch: strategy tag */
+    T_ASSERT_EQ_I(AREC(3)[0x0b9], 32);       /* personality reinforce ration */
+    T_ASSERT_EQ_I(AI32(AREC(3), 0x224), 0);  /* provisions shipped out */
+    T_ASSERT_EQ_I(AI32(AREC(3), 0x250), 0);  /* stock shipped out */
+
+    engine_map_query_bind_cell_descriptors(NULL);
+    engine_territory_bind_cells(NULL);
+    engine_territory_bind_records(NULL);
+    step7_teardown();
     return 0;
 }

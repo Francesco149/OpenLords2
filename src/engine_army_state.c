@@ -524,6 +524,21 @@ static int find_settle_spot_near_realm(int realm)
     return 0;
 }
 
+/* Expose FUN_00428007's result for the other ported caller (FUN_004292af, the AI
+ * caravan dispatcher in engine_army_ai): probe for a settle spot near `realm`'s
+ * capital and, on a hit, return 1 and the matched cell via the out-params.  This is
+ * the "promote to a shared global" the comment above anticipated — done via
+ * out-params (the project's scratch-as-out-param convention) rather than
+ * resurrecting DAT_00569570/78 as a global. */
+int engine_army_state_find_settle_spot(int realm, int *col, int *row)
+{
+    if (!find_settle_spot_near_realm(realm))
+        return 0;
+    *col = s_settle_col;
+    *row = s_settle_row;
+    return 1;
+}
+
 #define A_ADJ_CURSOR  0x164  /* round-robin category-bucket cursor 0..15 (u8)    */
 
 /* --- FUN_004280e9: phase-6 — settle idle (state 3) stacks near a neighbour --- */

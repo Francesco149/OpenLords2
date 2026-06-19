@@ -7,6 +7,76 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-19 (session 8) — BRAIN STEP 7 LANDED (FUN_0049f93d defensive-deployment planner + 7 callees): keep-garrison muster + threatened-realm reinforcement w/ goods-caravan consolidation; only step 6 (keep-builder) remains stubbed
+
+Picked up the session-7 "Next" — port the remaining stubbed brain steps.  Step 7
+landed byte-exact (r2-verified) and brings the per-tick brain dispatcher to
+**13 of 14 steps live** (only step 6, the keep-builder, is still a stub).
+
+**Step 7 = the defensive-deployment planner (committed this session).**  Replaced
+the case-0x7 advance-only stub in `engine_army_ai_run_per_tick` with
+`engine_army_ai_run_garrison` — the faithful port of FUN_0049f93d (47 B) + its
+closure.  The entry refreshes the muster realm (engine_army_ai_pick_muster_realms
+= FUN_004a0aaa, already ported) then runs two planners:
+  • **garrison_keeps (FUN_0049f12f, 765 B)** — for each owned keep that is
+    unbesieged, not settle-flagged, populous enough (population ≥ the personality
+    keep-floor at personality_row +0x70), and with both funding reserves above
+    0x13: size the garrison need as the keep's head cap (engine_combat_garrison_cap,
+    = DAT_004d8a10[keeplvl−1]) minus any pending garrison, scale it down by the
+    band of population it consumes (≤14% none / 15–29 ÷2 / 30–49 ÷3 / 50–64 ÷4 /
+    65–79 ÷5; ≥80% bail), muster that force (muster_garrison), and stamp it order 4
+    bound for a settled cell.
+  • **reinforce_realms (FUN_0049f431, 782 B)** — for each owned realm where the
+    enemy army strength present (FUN_0049f73f, excludes the player's & its lord's
+    armies) outweighs the player's own (FUN_0049f850) by >100: muster a defender.
+    If the realm is the muster realm or the threat is below the player's reserved
+    defence threshold (force_acc + pop·2/3, 0 when pop<200) the defender garrisons
+    in place (mode 1, order 3); otherwise it marches to the muster realm (mode 0,
+    order 3 + target region) and the realm consolidates — shipping its surplus
+    provisions/stock there as a goods caravan (FUN_004292af) or, when a trade gate
+    is set, selling them (engine_army_ai_sell_order ×2).
+
+**New callees ported (7, not the scoped 6 — the scope note missed FUN_004292af).**
+The muster pair lives in the engine_combat muster cluster next to its siblings:
+**engine_combat_muster_garrison** (FUN_004a5389 — like raise_region_unit but with
+pct passed in + the class-distribution pool sweep) and **engine_combat_pool_commit**
+(FUN_004a545f — commit staged head into troop classes 5/1/3/2/6 from the owner's
+seeded category reserves).  The strength sums + caravan dispatcher
+(engine_army_ai_dispatch_caravan = FUN_004292af) live in engine_army_ai.  The
+caravan spawns a type-4 carrier near the realm's capital loaded with the staged
+goods order and debits the shipped goods; it needed exposing FUN_00428007's
+box-scan result via a small engine_army_state wrapper
+(`engine_army_state_find_settle_spot`) — the "promote to shared global" the
+scratch-global comment had anticipated, done via out-params.  No new .rdata embeds:
+the muster-cost curve (0x4d8778 = k_muster_cost) and keep-cap table (0x4d8a10 =
+k_garrison_cap) were already embedded, and the two personality columns
+(+0x70 keep-floor i32, +0x9c reinforce-ration u8) are columns of the already-
+embedded g_ai_personality.
+
+**Verification = r2 byte-exact + host tests.**  r2 confirmed all four nontrivial
+functions: muster_garrison's pool-commit order (5,1,3,2,6) + DAT_0057bf05 clear +
+cost-curve/percent_of; garrison_keeps's five band thresholds (0xf/0x1e/0x32/0x41/
+0x50) and their ÷2/÷3/÷4/÷5 divisions + the garrison-cap/personality-col indexing;
+reinforce_realms's two muster_defender modes (1/0), ration column, strategy tag
+100, and sell×2 / caravan branches; and dispatch_caravan's occupant field stamps
+(+0x166/+0x167/+0x16c/+0x16e/+0x170) and the goods debit (the compiler's xor/sub/
+neg load nets `prov −= goods[1]`, `stock −= goods[5]`).  Gate: **2113 host tests**
+(+7: one combat muster_garrison class-distribution test + six AI step-7 tests
+covering the keep-garrison gates, the reinforce hold/march/lord-exclusion branches,
+and the end-to-end goods caravan), mingw clean.  Whether step 7 moves the trace
+oracle depends on the turn-1 input (it runs every turn, but turn-1 SP may lack
+threatened realms / affordable keeps, like step 0xb) — the before/after oracle
+check is the remaining verification, alongside step 6.
+
+**Next: step 6 (FUN_0049edc7) — the LAST stub → brain dispatcher fully ported.**
+The AI keep-builder: for each owned realm big enough with no keep, pick the highest
+keep tier the treasury affords (personality columns +0xcc..+0xdc + limit +0x90,
+feed gate +0xc8) → FUN_00436d02 (set keep level +0x1c0, debit the pool costs, stamp
+the keep) → FUN_0046841c (evict armies off the 2×2 keep footprint).  Needs the
+keep cost/display .rdata table (~0x4d89c0, just after g_ai_build_cost) embedded.
+
+---
+
 ## 2026-06-10 (session 7) — BRAIN STEPS 9 + 0xb LANDED (FUN_0049f977 campaign planner + FUN_004a5667 army-movement planner, 20 callees total); step 9 is oracle-active, step 0xb is reached-but-input-empty (no field armies in turn 1, like step 1)
 
 Picked up the session-6 "Next": port the remaining stubbed brain steps

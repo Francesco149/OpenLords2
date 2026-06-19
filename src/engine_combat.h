@@ -151,6 +151,16 @@ int engine_combat_muster_defender(int region, int pct, int min_prov, int mode);
  * force this way. */
 int engine_combat_raise_region_unit(int region);
 
+/* Port of FUN_004a5389 (214 B).  Raise a keep-garrison unit from `region` sized
+ * at `pct` percent of its provision (+0x24), distributing the head across troop
+ * classes 5/1/3/2/6 from the owner's primed category reserves, then spawn it at
+ * the muster-cost supply price.  The sibling of raise_region_unit with the size
+ * passed in (not fixed at ~50) and the class-distribution pool sweep that
+ * muster_defender mode 1 also uses.  Returns the new occupant index
+ * (DAT_0052afe0) on success, else 0.  AI brain step 7 (FUN_0049f12f) garrisons
+ * its keeps this way. */
+int engine_combat_muster_garrison(int region, int pct);
+
 /* Port of FUN_004a689d (399 B).  Pick `army`'s next deployment cell: the nearest
  * deployable, passable cell owned by `region` to the army's seat, or the
  * region's capital cell on no match.  Writes the chosen column/row through
