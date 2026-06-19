@@ -1,0 +1,31 @@
+# CLICK a county on the strategic map → territory selection + panel update.
+# Load prefix verbatim from grid_load_dense.jsonl, then auto-dismiss the headless
+# 256-colour popup (both engines), then LEFT-click a map cell to select its
+# territory and capture the panel before/after. Exercises the click→select
+# input path + the territory-info panel render under a different selection.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "before_click"}
+# move to a map cell (260,250) then LMB down/up there → select that territory
+{"t": 24, "m": 512, "w": 0, "l": 16384260}
+{"t": 28, "m": 513, "w": 1, "l": 16384260}
+{"t": 32, "m": 514, "w": 0, "l": 16384260}
+{"capture": 40, "label": "after_click"}
+{"capture": 70, "label": "settled"}

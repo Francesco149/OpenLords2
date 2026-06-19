@@ -1,0 +1,29 @@
+# END-TURN with a DETERMINISTIC right-click dismiss (the path that works on the
+# port regardless of seal-commit). Dismiss the headless 256-colour warning at a
+# fixed tick, then capture as the welcome/objectives scroll opens — to see whether
+# the port shows the Game Objectives matching retail once the 256-warning is gone.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"capture": 2, "label": "flip0"}
+# right-click to dismiss the 256-colour warning (RBUTTONDOWN 516 / RBUTTONUP 517)
+{"t": 6, "m": 516, "w": 2, "l": 11141290}
+{"t": 9, "m": 517, "w": 0, "l": 11141290}
+{"capture": 16, "label": "after_dismiss"}
+{"capture": 35, "label": "objectives"}
+{"capture": 70, "label": "t070"}
