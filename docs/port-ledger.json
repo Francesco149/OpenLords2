@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 712,
-  "ported": 54,
-  "unported": 1681,
+  "ported": 55,
+  "unported": 1680,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 766,
+  "touched": 767,
   "pct_touched": 31.3,
   "pct_tested": 29.1,
   "bytes_total": 838629,
-  "bytes_touched": 337511,
-  "pct_bytes_touched": 40.2
+  "bytes_touched": 337708,
+  "pct_bytes_touched": 40.3
  },
  "orphan_refs": [
   "0x004148",
@@ -655,6 +655,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/font_metrics.h",
     "src/gfx_wrap.c",
     "src/gfx_wrap.h"
@@ -18819,8 +18820,10 @@
    "name": "FUN_004b3acd",
    "size": 197,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c"
+   ]
   },
   {
    "va": "0x4b3b92",

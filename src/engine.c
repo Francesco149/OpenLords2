@@ -1408,16 +1408,59 @@ static void engine_popup_scroll_render(void)
         gfx_sprite_seal_draw(sys_sheet,
                              g_popup_x + g_popup_w - 0x30,
                              g_popup_h + g_popup_y - 0x30, 0);
+    } else if (g_popup_type >= 5 && g_popup_type <= 9) {
+        /* ── Types 5..9: multi-line generic scroll (retail FUN_0047309e
+         * final else, line 603).  The in-game help/welcome hints use these:
+         * 0xc8/0xc9/0xca (strategic welcome series) are types 7/8/9, and the
+         * combat hints 0xd1..0xda likewise.  `g_popup_type - 5` is the count
+         * of EXTRA body sub-strings past the first; sub-string 0 is the title,
+         * sub-strings 1..(type-4) are one body line each.  Without this arm the
+         * port flipped to the report screen + opened the event but rendered
+         * nothing — leaving the prior scroll (the headless 256-colour warning)
+         * stale on screen, which read as "the port is missing the Game
+         * Objectives popup" vs retail. */
+        if (cooldown == 0x7c6)
+            engine_popup_speak_event(g_sim_extended_pause, g_popup_payload_a);
+        /* else cooldown < 0x780 → FUN_004b3acd ambient cue — deferred (audio.c). */
+        int n_extra = g_popup_type - 5;                /* retail iVar3 */
+        g_popup_x = 0x10; g_popup_y = 0x40; g_popup_w = 0x1c0;
+        /* Retail's body-height accumulator (DAT_005cd4f8) advances per
+         * sub-string by the WRAPPED line height (FUN_0040328e bumps the
+         * y-cursor) PLUS a flat 0x10 gap.  The strategic/combat hint strings
+         * (0xc8..0xda) are each a single line, so the wrapped height is one
+         * row (0x10) → 0x20 total per sub-string.  (A multi-line hint would
+         * need gfx_wrap_localized to return its wrapped height — none of the
+         * shipped hint codes wrap, so the single-row stride is exact here.) */
+        const int ROW = 0x20;
+        int body_h = 0x20 + (n_extra + 1) * ROW;       /* DAT_005cd4f8 */
+        if (body_h < 0x61) g_popup_y += 0x40;
+        g_popup_h = body_h + g_popup_y;                /* DAT_00552ff8 */
+        gfx_panel_draw_bevel(chrome, g_popup_x, g_popup_y,
+                             g_popup_w / 16, g_popup_h / 16);
+        /* Title (sub-string 0), left-aligned, title font. */
+        gfx_wrap_localized_line(&loc, g_sim_extended_pause, 0,
+                                g_popup_x + 0x10, g_popup_y + 0x14,
+                                title_font, gfx_glyph_render_map(), 0x3f);
+        /* Body lines (sub-strings 1..n_extra+1), one wrapped block each. */
+        int row = 0x40;
+        for (int i = 0; i <= n_extra; i++) {
+            gfx_wrap_localized(&loc, g_sim_extended_pause, i + 1,
+                               g_popup_x + 0x10, row + g_popup_y,
+                               g_popup_w - 0x20, 0x1b0, 0, 0, menu_font,
+                               gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
+            row += ROW;
+        }
+        gfx_sprite_seal_draw(sys_sheet, g_popup_x + g_popup_w - 0x30,
+                             g_popup_h + g_popup_y - 0x30, 0);
     } else {
         /* TODO(popup-arms): types 0x10/0x11/0x12 (production/harvest
          * reports), 1/2 (capture w/ portrait), 3, 4 (tooltip-sized,
-         * position-tracking), 5..9 (multi-line generic), 0x13 (table-
-         * driven rect ladder), 10/0xb (portrait + accept), 0xc
-         * (0x475e07), 0x14 (0x476488), 0xd/0xe (smk-playing victory /
-         * ownership arms — call the dismiss inline), 0xf (event-
-         * detail ladder).  Each lands with its event producer; the
-         * shared tail below still runs so the state effects (seal
-         * commit + highlight clear) stay faithful. */
+         * position-tracking), 0x13 (table-driven rect ladder), 10/0xb
+         * (portrait + accept), 0xc (0x475e07), 0x14 (0x476488), 0xd/0xe
+         * (smk-playing victory / ownership arms — call the dismiss inline),
+         * 0xf (event-detail ladder).  Each lands with its event producer; the
+         * shared tail below still runs so the state effects (seal commit +
+         * highlight clear) stay faithful. */
     }
 
     /* ── Common tail (0x475ae8) ───────────────────────────────── */

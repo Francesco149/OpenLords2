@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **766** (31.3%) — tested 712, ported 54
-- code bytes touched: **40.2%** (337,511 / 838,629 B)
-- unported: **1681**
+- touched: **767** (31.3%) — tested 712, ported 55
+- code bytes touched: **40.3%** (337,708 / 838,629 B)
+- unported: **1680**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (712) — ported + host unit suite
@@ -74,7 +74,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x403015 | FUN_00403015 | 177 | gfx_text_label.c, gfx_text_label.h |
 | 0x4030c6 | FUN_004030c6 | 202 | gfx_text_label.c, gfx_text_label.h |
 | 0x403190 | FUN_00403190 | 254 | gfx_text_label.c, gfx_text_label.h |
-| 0x40328e | FUN_0040328e | 673 | font_metrics.h, gfx_wrap.c, gfx_wrap.h |
+| 0x40328e | FUN_0040328e | 673 | engine.c, font_metrics.h, gfx_wrap.c (+1) |
 | 0x40352f | FUN_0040352f | 458 | font_metrics.h, gfx_wrap.c, gfx_wrap.h |
 | 0x4036f9 | FUN_004036f9 | 235 | font_metrics.h |
 | 0x4037ee | FUN_004037ee | 347 | gfx_line.c, gfx_line.h |
@@ -734,7 +734,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine_map_scene.c, engine_map_scene.h |
 
-## ported (54) — reimplemented, no host test yet
+## ported (55) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -792,4 +792,5 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b26b8 | FUN_004b26b8 | 64 | engine.c, gfx.c |
 | 0x4b284e | FUN_004b284e | 122 | gfx.h |
 | 0x4b35c1 | FUN_004b35c1 | 255 | engine.c |
+| 0x4b3acd | FUN_004b3acd | 197 | engine.c |
 
