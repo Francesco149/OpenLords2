@@ -94,6 +94,48 @@ Mouse state globals (already mirrored in the port via main.c WndProc): `DAT_004e
 - DETERMINISTIC input only for port↔retail diffs — reactive `{auto_dismiss}` desyncs
   the engines ([[project_event_popup_arms]]).
 
+## Step-1 RE findings (2026-06-19, scoping pass — read the full chain)
+
+Read the whole dispatcher + every strategic sub-handler + the edge-scroll tree.
+Key facts that refine the plan:
+
+- **The input SAMPLER is already ported.** `FUN_004b191e` (981 B, GetCursorPos +
+  button-edge detection + 300 ms delayed-click) → the port's `engine_tick_input_step`
+  already produces the cursor/button/edge mirrors (DAT_004e65fc/f4 client cursor,
+  DAT_004e6900 RMB-released, DAT_004e65d8 LMB-released, DAT_004eafb4 LMB-pressed,
+  DAT_004e6594/98 screen cursor). The dispatcher only CONSUMES these — no sampler
+  port needed.
+- **The 8 strategic dispatch-chain handlers are ALL HUD-region (x ≥ 0x1de) or
+  edge-scroll** — none handle a map-area click. (439079 = minimap rclick; 432967/
+  43292d = button hit-tests via FUN_0040e3ee @ 0x262/0x1de; 438ceb = the 4-button
+  action grid x[0x1e7,0x276]; 439122 = right-panel scrollbar; 438e3b = right-panel
+  production toggles; 0040deca = a 3-region table @ 0x4dc428; 432640 = a cursor-
+  region classifier into _DAT_005534f0, NOT a click handler.)
+- **The MAP-tile interaction is the strategic FALL-THROUGH**, after every HUD
+  handler returns 0 (dispatcher lines 43-61), gated on `DAT_005533b0` (cursor-over-
+  map):
+    - LMB released (DAT_004e65d8) → `FUN_0043ce1a()` — army select / move.
+    - **RMB released (DAT_004e6900) → `DAT_004eac50 = 4; FUN_0043caf4()`** — this is
+      the **terrain-info** open ("Here Be Dragons"): screen 4 + FUN_0043caf4. The
+      screen-4 popup is the tooltip-sized/position-tracking arm (popup type 4,
+      geometry 0xb0×0x30, FUN_0047309e case 4 — still an UNPORTED popup arm).
+  So **terrain-info (step 3) = dispatcher fall-through + `FUN_0043caf4` opener +
+  the type-4 / screen-4 renderer + the `DAT_005533b0` map-cursor gate.** Moderately
+  deep but now fully located.
+- **Edge-scroll (former step-1 pick) is a POOR first increment**: FUN_00431f59
+  adjusts col_start (DAT_005651b4) / vertical pixel (DAT_005651b8) / alt-view
+  (DAT_005678a0/0055ce70) by DAT_0055cd48, validates via FUN_004bbbe3, marks dirty
+  via FUN_0045270a — AND it reads the live GetCursorPos screen cursor, so porting it
+  RE-INTRODUCES the camera-gap flake (see project_trace_studio_v3); captures would
+  need port-side `--suppress-edge-scroll`. Verify its LOGIC by unit test (deterministic),
+  not capture. Defer unless gameplay edge-scroll is explicitly wanted.
+
+**Revised first-increment recommendation:** the dispatcher SKELETON (faithful
+prologue latches + FUN_00432640 region-classify + dismiss-chip subsumption +
+strategic-screen shell with the fall-through LMB/RMB-over-map branches + tail),
+then port the RMB→terrain-info path (`FUN_0043caf4` + type-4 arm) for a verifiable
+win via `terrain_info.jsonl`. End-Turn → reports stays the deeper step.
+
 ## Risks / notes
 
 - Edge-scroll reads the live host cursor (FUN_004b191e = GetCursorPos) vs screen
