@@ -29,6 +29,7 @@
  * Pyramid branch A is dead (param_4=col_y_accum >> count); the flat strip is
  * the live path.  See tools/extract_drawb_stripB.py + map-render.md "drawer B". */
 #include "gen/drawb_stripb_455f04.h"   /* kind 2, phase 3 (left edge) */
+#include "gen/drawb_stripb_456fd8.h"   /* kind 2, phase 4 (right edge) */
 #include "gen/drawb_stripb_4580a9.h"   /* kind 3, phase 0/1 (aligned) */
 #include "gen/drawb_stripb_459258.h"   /* kind 4, phase 0/1 (aligned) */
 
@@ -339,9 +340,10 @@ static void drawb_dir(const uint8_t *blob, int idx,
  * Draws the part of mountains / improvements / livestock that rises above
  * the base diamond and bleeds into neighbouring cells.  View-mode 0 only.
  *
- * Currently ported blitter: kind 2 phase 0/1 (FUN_00453e71).  Kinds 3/4 and
- * the phase-3/4 edge variants (455f04/456fd8/4580a9/459258) are counted in
- * g_n_drawb_skipped pending their tables. */
+ * Ported blitters: kind 2 phase 0/1 (453e71), kind 2 phase 3 left-edge
+ * (455f04), kind 2 phase 4 right-edge (456fd8), kind 3 / kind 4 aligned
+ * (4580a9 / 459258).  Only the kind-3/4 edge variants (param_5=2) remain
+ * counted in g_n_drawb_skipped pending their tables. */
 static void drawer_b(int phase)
 {
     if (phase == 2) return;                  /* dispatcher skips phase 2 */
@@ -371,11 +373,12 @@ static void drawer_b(int phase)
 
     /* Dispatch mirrors retail FUN_00406673 (view-mode 0).  Phase 0/1 = aligned
      * (param_5=0); phase 3 = left edge, phase 4 = right edge.  Ported variants:
-     *   kind 2 phase 0/1 → 453e71 (pyramid replay), phase 3 → 455f04
+     *   kind 2 phase 0/1 → 453e71 (pyramid replay), phase 3 → 455f04,
+     *                      phase 4 → 456fd8 (right-edge overhang)
      *   kind 3 phase 0/1 → 4580a9 (param_5=0)
      *   kind 4 phase 0/1 → 459258 (param_5=0)
-     * Edge-phase kind-3/4 (param_5=2) + kind-2 phase-4 (456fd8) are not yet
-     * ported — counted as skipped (don't appear in the strat-terrain1 frame). */
+     * Edge-phase kind-3/4 (param_5=2) are not yet ported — counted as
+     * skipped (rare; one off-blacksmith cell in grid_load_dense). */
     int aligned = (phase == 0 || phase == 1);
     if (kind == 2 && aligned) {
         drawb_strip(k_drawb_453e71, k_drawb_453e71_n, blob, g_blob_len[bi],
@@ -384,6 +387,11 @@ static void drawer_b(int phase)
     } else if (kind == 2 && phase == 3) {
         drawb_strip_flat(k_drawb_stripb_455f04, k_drawb_stripb_455f04_n,
                          k_drawb_stripb_455f04_stride, blob, g_blob_len[bi],
+                         src_off2, count, g_col_y_accum);
+        g_n_drawb++;
+    } else if (kind == 2 && phase == 4) {
+        drawb_strip_flat(k_drawb_stripb_456fd8, k_drawb_stripb_456fd8_n,
+                         k_drawb_stripb_456fd8_stride, blob, g_blob_len[bi],
                          src_off2, count, g_col_y_accum);
         g_n_drawb++;
     } else if (kind == 3 && aligned) {
@@ -397,7 +405,7 @@ static void drawer_b(int phase)
                          src_off2, count, g_col_y_accum);
         g_n_drawb++;
     } else {
-        g_n_drawb_skipped++;   /* edge-phase kind 3/4 / kind-2 phase-4 — TODO */
+        g_n_drawb_skipped++;   /* edge-phase kind 3/4 (param_5=2) — TODO */
     }
 }
 

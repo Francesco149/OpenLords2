@@ -55,6 +55,7 @@ OUTDIR = ROOT / "src/gen"
 #              (459258: `if (param_5 != 2) pcVar3 += 0x1c`)
 CONFIG = {
     "455f04": dict(stride=0x3a, init_off=0x00, kind=2, phase="3 (left edge)"),
+    "456fd8": dict(stride=0x3a, init_off=0x00, kind=2, phase="4 (right edge)"),
     "4580a9": dict(stride=0x1e, init_off=0x00, kind=3, phase="0/1 (aligned)"),
     "459258": dict(stride=0x1e, init_off=0x1c, kind=4, phase="0/1 (aligned)"),
 }

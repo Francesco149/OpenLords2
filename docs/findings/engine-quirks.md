@@ -7009,6 +7009,35 @@ unpadded end).  Fix: `g_strat_move_cost` is now a `+0x41` view into a padded
 backing; `engine_strat_cost_pathfield_base()` returns the 0x4f3ffe base, bound in
 `engine_game_init_bind_runtime_tables`.
 
+## 203 — terrain drawer-B kind-2 **phase-4** (right-edge overhang, FUN_00456fd8) was unported → the "blacksmith forge" top dropped on right-column tiles
+
+`engine_map_terrain` `drawer_b` (FUN_00406673) is the tall-sprite OVERHANG layer:
+the part of a tile sprite that rises ABOVE the iso base diamond (mountain peaks,
+building tops, the blacksmith anvil + orange forge fire).  It dispatches by sprite
+`kind` (dir entry +0x14) × walk `phase`.  The port had ported kind-2 phase-0/1
+(453e71) + phase-3 left-edge (455f04), kind-3/4 aligned — but **kind-2 phase-4
+(the RIGHT-edge sibling, FUN_00456fd8)** fell into the `g_n_drawb_skipped++` TODO.
+Phase 4 is the TRAILING cell of every `row_shifted` (FUN_00405c2f) — i.e. the
+right column of the visible map — so any overhang sprite on a right-edge tile lost
+its top.  In `grid_load_dense` that was the settlement tile at cell 4680 (screen
+450,264): drawer_a drew the base diamond (cattle pen, lower roof), but the anvil +
+forge overhang above the diamond never blit → the tile read as plain grass on top.
+**This is NOT an anim-phase diff** (the figure never appears at any animation
+counter — verified by sweeping the overlay anim base 0..7 across a 50-frame
+capture; the overhang is terrain pass-1, not the overlay/army/feature passes).
+Mis-attributed twice before settling: it is NOT the cat-7 army unit at that cell
+(`tile_army` cat 7 → return, faithful to retail FUN_004071a0 `0x40786f`), NOT a
+feature-pass head-link (cell +5 == 0 in save AND retail render dump), NOT the
+overlay city/army pass.  Fix: extracted `456fd8`'s branch-B strip table
+(stride 0x3a, 28 zero-skip copies, init_off 0 — same shape as 455f04) via
+`tools/extract_drawb_stripB.py 456fd8` → `src/gen/drawb_stripb_456fd8.h`, added the
+`kind == 2 && phase == 4` dispatch case in `drawer_b`.  Verified: grid_load_dense
+blacksmith box 157→17 px, whole-frame mean parity 0.116%→0.058% (the same right-edge
+overhang recurs on cells 3640/7280 across all frames).  Residual 17 px = the
+forge-fire anim phase (8 px, port renders anim frame 0) + a pre-existing 9-px
+left-edge terrain clip diff (unrelated, `oldport == port`).  Still skipped: kind-3/4
+**edge** phases (param_5=2) — one off-blacksmith cell (4160) in this frame.
+
 The gap stayed latent until the brain dispatcher was completed: the ONLY on-engine
 caller of the pathfinder is the AI brain (steps 6/9/0xb deployment), and in a
 turn-1 headless SP world steps 9/0xb find no field armies to move

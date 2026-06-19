@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 712,
-  "ported": 53,
-  "unported": 1682,
+  "ported": 54,
+  "unported": 1681,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 765,
+  "touched": 766,
   "pct_touched": 31.3,
   "pct_tested": 29.1,
   "bytes_total": 838629,
-  "bytes_touched": 333206,
-  "pct_bytes_touched": 39.7
+  "bytes_touched": 337511,
+  "pct_bytes_touched": 40.2
  },
  "orphan_refs": [
   "0x004148",
@@ -11109,7 +11109,6 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
     "src/gen/drawb_table_453e71.h"
    ]
   },
@@ -11129,8 +11128,10 @@
    "name": "FUN_00456fd8",
    "size": 4305,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gen/drawb_stripb_456fd8.h"
+   ]
   },
   {
    "va": "0x4580a9",

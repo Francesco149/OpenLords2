@@ -644,8 +644,11 @@ view-mode=`DAT_0057cb18`) and the `param_5` left-edge shift (2 for edge phases
 unique `dst = dst + -DAT_004eb274;` line to `} while`) into flat
 `{src_idx, dst_off}` tables, folding `init_off` (459258's `+0x1c`) and the
 `pcVar4 = pcVar3 + 2` aliasing into dst_off for the param_5=0 variant →
-`src/gen/drawb_stripb_{455f04,4580a9,459258}.h`. Regenerate with
-`nix develop -c python3 tools/extract_drawb_stripB.py 455f04 4580a9 459258`.
+`src/gen/drawb_stripb_{455f04,456fd8,4580a9,459258}.h`. Regenerate with
+`nix develop -c python3 tools/extract_drawb_stripB.py 455f04 456fd8 4580a9 459258`.
+(456fd8 = kind-2 **phase-4** right-edge overhang, the sibling of 455f04's
+phase-3 left edge — its absence dropped the blacksmith forge top on
+right-edge cells; see engine-quirks blacksmith-overhang entry.)
 
 **Validated** (`tools/scene_render_parity.py` vs clean truth
 `strat-spray1/frame_00009.bmp`): `drawB=29 drawB_skip=0 oob=0 err=0`,
