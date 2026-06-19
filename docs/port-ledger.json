@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 710,
+  "tested": 712,
   "ported": 53,
-  "unported": 1684,
+  "unported": 1682,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 763,
-  "pct_touched": 31.2,
-  "pct_tested": 29.0,
+  "touched": 765,
+  "pct_touched": 31.3,
+  "pct_tested": 29.1,
   "bytes_total": 838629,
-  "bytes_touched": 332268,
-  "pct_bytes_touched": 39.6
+  "bytes_touched": 333206,
+  "pct_bytes_touched": 39.7
  },
  "orphan_refs": [
   "0x004148",
@@ -6030,8 +6030,11 @@
    "name": "FUN_00436d02",
    "size": 768,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h"
+   ]
   },
   {
    "va": "0x437002",
@@ -10120,6 +10123,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_combat.c",
     "src/engine_realm.c",
     "src/engine_realm.h"
@@ -10672,6 +10676,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_army_economy.c",
     "src/engine_army_economy.h",
     "src/engine_realm.c"
@@ -10684,6 +10689,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_army_economy.c",
     "src/engine_army_economy.h"
    ]
@@ -11663,6 +11669,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_army_move.c",
     "src/engine_army_move.h"
    ]
@@ -11674,6 +11681,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_army_move.c",
     "src/engine_combat.c",
     "src/engine_map_query.c",
@@ -11822,6 +11830,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_territory.c",
     "src/engine_territory.h"
    ]
@@ -11839,8 +11848,10 @@
    "name": "FUN_0046841c",
    "size": 170,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_ai.c"
+   ]
   },
   {
    "va": "0x4684c6",
@@ -12860,6 +12871,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_army_move.c",
     "src/engine_path_field.c",
     "src/engine_path_field.h"
@@ -12885,6 +12897,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_path_field.c",
     "src/engine_path_field.h"
    ]
@@ -12904,6 +12917,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_ai.c",
     "src/engine_path_field.c",
     "src/engine_path_field.h"
    ]
@@ -16163,7 +16177,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h"
    ]
   },
   {

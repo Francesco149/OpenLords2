@@ -7,11 +7,12 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
-## 2026-06-19 (session 8) — BRAIN STEP 7 LANDED (FUN_0049f93d defensive-deployment planner + 7 callees): keep-garrison muster + threatened-realm reinforcement w/ goods-caravan consolidation; only step 6 (keep-builder) remains stubbed
+## 2026-06-19 (session 8) — BRAIN DISPATCHER FULLY PORTED: steps 7 (FUN_0049f93d defensive-deployment) + 6 (FUN_0049edc7 keep-builder) LANDED — all 14 per-tick brain steps are now live (no stubs remain)
 
-Picked up the session-7 "Next" — port the remaining stubbed brain steps.  Step 7
-landed byte-exact (r2-verified) and brings the per-tick brain dispatcher to
-**13 of 14 steps live** (only step 6, the keep-builder, is still a stub).
+Picked up the session-7 "Next" — port the remaining stubbed brain steps.  Both
+landed byte-exact (r2-verified) and the per-tick brain dispatcher
+(engine_army_ai_run_per_tick) is now **fully assembled: all 14 steps (1..0xe) are
+live ports, no advance-only stubs remain.**
 
 **Step 7 = the defensive-deployment planner (committed this session).**  Replaced
 the case-0x7 advance-only stub in `engine_army_ai_run_per_tick` with
@@ -68,12 +69,40 @@ oracle depends on the turn-1 input (it runs every turn, but turn-1 SP may lack
 threatened realms / affordable keeps, like step 0xb) — the before/after oracle
 check is the remaining verification, alongside step 6.
 
-**Next: step 6 (FUN_0049edc7) — the LAST stub → brain dispatcher fully ported.**
-The AI keep-builder: for each owned realm big enough with no keep, pick the highest
-keep tier the treasury affords (personality columns +0xcc..+0xdc + limit +0x90,
-feed gate +0xc8) → FUN_00436d02 (set keep level +0x1c0, debit the pool costs, stamp
-the keep) → FUN_0046841c (evict armies off the 2×2 keep footprint).  Needs the
-keep cost/display .rdata table (~0x4d89c0, just after g_ai_build_cost) embedded.
+**Step 6 = the AI keep-builder (committed this session).**  Replaced the case-0x6
+advance-only stub with `engine_army_ai_run_keep_builder` — the faithful port of
+FUN_0049edc7 (872 B) + its 5-callee closure.  For each owned realm big enough
+(population ≥ the personality keep-build floor at personality_row +0xc8) with no
+keep, and while the player is under its keep cap (+0x90), it builds the highest
+keep tier the treasury (cash +0x118) affords from the personality's five cost
+columns (+0xcc..+0xdc) via **engine_army_ai_build_keep** (FUN_00436d02, 768 B — the
+keep-construction primitive, also exposed for the future human build-keep action,
+retail's other two callers).  build_keep charges the level's two pool costs
+(refunding the old level on an upgrade, the surplus poured back when negative),
+stamps the keep fields + build-work totals, evicts any armies off the 2×2 keep
+footprint (FUN_0046841c → FUN_00467196 army-relocate), and re-plans the realm's
+economy/workforce/income (all already-ported re-plan tails).  New callees ported:
+the evict (FUN_0046841c), the army-relocate (FUN_00467196, all deeper callees —
+the map-feature ring scan + the cost-field pathfinder — already ported), and the
+two keep-progress helpers (FUN_00450e46 build-rate / FUN_00450fb4 completion-%).
+Two new .rdata embeds: the keep cost table (0x4d89b8 = `k_keep_cost`, six 8-byte
+{pool-130, pool-128} entries by level) and the build-work table (0x4d89e8 =
+`k_keep_work`); the personality cost/cap/floor columns were already in
+g_ai_personality.  r2-verified byte-exact: the builder's table indexing
+(0x4d89c0/c4 new-cost, 0x4d89b8/bc refund, 0x4d89e8 work), the dual pool
+debit/refund (0x57c028/030), and the keep-field stamps; the entry's gate (minpop /
+keep-cap) + highest-affordable tier walk (cost5→cost1).  Gate: **2118 host tests**
+(+5: build_keep fresh/upgrade-refund + the entry's tier selection + the three
+gates), mingw clean.
+
+**The dispatcher is COMPLETE.** All 14 per-tick brain steps are now faithful ports.
+**Next** (post-dispatcher frontiers): (a) run the before/after `--only port` oracle
+on `endturn_auto` to see which of steps 6/7 move it on-engine (both run every turn,
+but turn-1 SP may lack threatened realms / affordable keeps / keepless populous
+realms — a step-0xb-shaped reached-but-input-empty result is possible); (b) close
+the ±3-4 pass-counter timing residual (auto_dismiss onEnter vs the port's input
+phase); (c) pin the lastturn.sav per [[project_save_redirect_reproducibility]] so
+retail captures stop drifting; (d) the deeper combat-init A/V interactive wiring.
 
 ---
 

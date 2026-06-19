@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **763** (31.2%) — tested 710, ported 53
-- code bytes touched: **39.6%** (332,268 / 838,629 B)
-- unported: **1684**
+- touched: **765** (31.3%) — tested 712, ported 53
+- code bytes touched: **39.7%** (333,206 / 838,629 B)
+- unported: **1682**
 - orphan refs (in src/, not in function table): 7
 
-## tested (710) — ported + host unit suite
+## tested (712) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -237,6 +237,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x434308 | FUN_00434308 | 62 | engine_menu_input.c |
 | 0x434346 | FUN_00434346 | 178 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x4343f8 | FUN_004343f8 | 36 | main.c |
+| 0x436d02 | FUN_00436d02 | 768 | engine_army_ai.c, engine_army_ai.h |
 | 0x437535 | FUN_00437535 | 390 | engine_combat.c, engine_combat.h, engine_map_query.c |
 | 0x438681 | FUN_00438681 | 699 | engine_army_ai.c |
 | 0x43b917 | FUN_0043b917 | 115 | engine_combat.c, engine_combat.h |
@@ -303,7 +304,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x44b391 | FUN_0044b391 | 319 | engine_realm.c, engine_realm.h |
 | 0x44b4d0 | FUN_0044b4d0 | 203 | engine_realm.c, engine_realm.h |
 | 0x44b59b | FUN_0044b59b | 624 | engine_realm.c, engine_realm.h |
-| 0x44b80b | FUN_0044b80b | 399 | engine_combat.c, engine_realm.c, engine_realm.h |
+| 0x44b80b | FUN_0044b80b | 399 | engine_army_ai.c, engine_combat.c, engine_realm.c (+1) |
 | 0x44b99a | FUN_0044b99a | 155 | engine_realm.c, engine_realm.h |
 | 0x44ba35 | FUN_0044ba35 | 181 | engine_realm.c, engine_realm.h |
 | 0x44baea | FUN_0044baea | 693 | engine_realm.c, engine_realm.h |
@@ -348,8 +349,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4502ca | FUN_004502ca | 879 | engine_army_ai.c, engine_army_ai.h |
 | 0x4508de | FUN_004508de | 1007 | engine_army_ai.h, engine_combat.c, engine_combat.h (+2) |
 | 0x450ccd | FUN_00450ccd | 377 | engine_army_ai.c, engine_army_ai.h, engine_realm.c |
-| 0x450e46 | FUN_00450e46 | 366 | engine_army_economy.c, engine_army_economy.h, engine_realm.c |
-| 0x450fb4 | FUN_00450fb4 | 173 | engine_army_economy.c, engine_army_economy.h |
+| 0x450e46 | FUN_00450e46 | 366 | engine_army_ai.c, engine_army_economy.c, engine_army_economy.h (+1) |
+| 0x450fb4 | FUN_00450fb4 | 173 | engine_army_ai.c, engine_army_economy.c, engine_army_economy.h |
 | 0x451061 | FUN_00451061 | 239 | engine_realm.c, engine_realm.h |
 | 0x451150 | FUN_00451150 | 936 | game_init.c, game_init.h |
 | 0x4514f8 | FUN_004514f8 | 147 | game_init.c, game_init.h |
@@ -387,8 +388,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x466893 | FUN_00466893 | 900 | engine_army_move.c, engine_army_move.h, game_init.c |
 | 0x466c3c | FUN_00466c3c | 328 | engine_army_move.c, engine_army_move.h |
 | 0x466d84 | FUN_00466d84 | 995 | engine_army_move.c, engine_army_move.h |
-| 0x467196 | FUN_00467196 | 422 | engine_army_move.c, engine_army_move.h |
-| 0x46733c | FUN_0046733c | 124 | engine_army_move.c, engine_combat.c, engine_map_query.c (+1) |
+| 0x467196 | FUN_00467196 | 422 | engine_army_ai.c, engine_army_move.c, engine_army_move.h |
+| 0x46733c | FUN_0046733c | 124 | engine_army_ai.c, engine_army_move.c, engine_combat.c (+2) |
 | 0x4673b8 | FUN_004673b8 | 378 | engine_army_ai.c |
 | 0x467532 | FUN_00467532 | 426 | engine_army_ai.c |
 | 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c, engine_territory.h |
@@ -401,7 +402,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x467f2e | FUN_00467f2e | 163 | engine_army_ai.c |
 | 0x467fd1 | FUN_00467fd1 | 336 | engine_territory.c, engine_territory.h |
 | 0x468121 | FUN_00468121 | 331 | engine_territory.c, engine_territory.h |
-| 0x46826c | FUN_0046826c | 221 | engine_territory.c, engine_territory.h |
+| 0x46826c | FUN_0046826c | 221 | engine_army_ai.c, engine_territory.c, engine_territory.h |
+| 0x46841c | FUN_0046841c | 170 | engine_army_ai.c |
 | 0x4684c6 | FUN_004684c6 | 474 | engine_territory.c, engine_territory.h |
 | 0x4686a0 | FUN_004686a0 | 159 | engine_army_move.c, engine_army_move.h, engine_combat.c (+1) |
 | 0x46873f | FUN_0046873f | 931 | engine_army_move.c, engine_army_move.h, game_init.c |
@@ -455,10 +457,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h |
 | 0x46f3cd | FUN_0046f3cd | 78 | engine_map_init.c, game_init.c, game_init.h |
 | 0x46f434 | FUN_0046f434 | 216 | engine_army_move.c, engine_path.c, engine_path.h |
-| 0x46f700 | FUN_0046f700 | 2115 | engine_army_move.c, engine_path_field.c, engine_path_field.h |
+| 0x46f700 | FUN_0046f700 | 2115 | engine_army_ai.c, engine_army_move.c, engine_path_field.c (+1) |
 | 0x46ff43 | FUN_0046ff43 | 617 | engine.c, engine_strat_cost.c, engine_strat_cost.h (+1) |
-| 0x4701ac | FUN_004701ac | 1228 | engine_path_field.c, engine_path_field.h |
-| 0x4707be | FUN_004707be | 274 | engine_path_field.c, engine_path_field.h |
+| 0x4701ac | FUN_004701ac | 1228 | engine_army_ai.c, engine_path_field.c, engine_path_field.h |
+| 0x4707be | FUN_004707be | 274 | engine_army_ai.c, engine_path_field.c, engine_path_field.h |
 | 0x4708d0 | FUN_004708d0 | 142 | engine_path_field.c, engine_path_field.h |
 | 0x471c1f | FUN_00471c1f | 273 | engine_tile.c, engine_tile.h |
 | 0x471d30 | FUN_00471d30 | 118 | engine_tile.c, engine_tile.h |
@@ -516,7 +518,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49e39b | FUN_0049e39b | 994 | engine_army_ai.c, engine_army_ai.h |
 | 0x49e77d | FUN_0049e77d | 1430 | engine_army_ai.c, engine_army_ai.h |
 | 0x49ed13 | FUN_0049ed13 | 180 | engine_army_ai.c, engine_army_ai.h |
-| 0x49edc7 | FUN_0049edc7 | 872 | engine_army_ai.c |
+| 0x49edc7 | FUN_0049edc7 | 872 | engine_army_ai.c, engine_army_ai.h |
 | 0x49f12f | FUN_0049f12f | 765 | engine_army_ai.c, engine_army_ai.h, engine_combat.h |
 | 0x49f431 | FUN_0049f431 | 782 | engine_army_ai.c, engine_army_ai.h |
 | 0x49f73f | FUN_0049f73f | 273 | engine_army_ai.c |

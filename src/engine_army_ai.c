@@ -33,6 +33,7 @@
 #include "engine_realm_upkeep.h"   /* unit_disband / clear_contract / total_wage (step-0xb disband) */
 #include "engine_army_state.h"     /* arm_movement_owned (FUN_004a4e3d — brain terminal check) */
 #include "game_init.h"             /* army_near_rawflag_only_bit1 (step-7 caravan settle probe) */
+#include "engine_map_query.h"      /* nearest_feature_ring_at (step-6 keep-evict relocate) */
 #include "call_trace.h"            /* CALL_TRACE_ENTER (per-tick brain dispatch marker) */
 
 #define ARMY_REC(key)   (&g_per_army_768[(key) * 0x300])
@@ -2922,6 +2923,243 @@ void engine_army_ai_run_garrison(int player)
     engine_army_ai_reinforce_realms(player);      /* FUN_0049f431 */
 }
 
+/* ── Brain step 6: AI keep-builder (FUN_0049edc7 + 5 callees) ────────────────
+ *
+ * For each owned realm big enough with no keep yet, build the highest keep tier
+ * the treasury affords.  The construction primitive (build_keep = FUN_00436d02)
+ * is shared with the human build-keep action; it sets the keep level, debits the
+ * two resource pools, evicts any armies off the 2×2 keep footprint, and re-plans
+ * the realm's economy.  No new render state — only save-schema realm/strat fields.
+ *
+ * Keep cost table (retail .rdata 0x4d89b8, six 8-byte entries indexed by keep
+ * level 0..5; +0 = the pool-130 cost, +4 = the pool-128 cost).  Building level
+ * `lvl` costs entry[lvl]; an upgrade refunds the old level's entry. */
+static const int32_t k_keep_cost[6][2] = {
+    {   4,   18 },   /* level 0 (base; never built, indexes the refund of a razed keep) */
+    { 400,   40 },   /* level 1 */
+    { 800,   80 },   /* level 2 */
+    { 200, 1000 },   /* level 3 */
+    { 400, 2000 },   /* level 4 */
+    { 800, 3000 },   /* level 5 */
+};
+
+/* Keep build-work figure by tier (retail .rdata 0x4d89e8, 8-byte stride; only the
+ * +0 word is read).  Seeds the realm's keep-progress total when construction
+ * starts. */
+static const int32_t k_keep_work[5] = { 200, 400, 800, 1500, 2500 };
+
+/* Per-realm record fields step 6 adds (offsets into g_per_army_768 row). */
+#define ARMY_KEEP_ANCHOR_CELL 0x078  /* DAT_0053fa28 — keep footprint anchor cell byte-offset (i32) */
+#define ARMY_KEEP_WORK_UNIT   0x0e8  /* DAT_0053fa98 — per-turn keep build-work unit (rate divisor) */
+#define ARMY_KEEP_RATE_LO     0x0ec  /* DAT_0053fa9c — keep build-rate scratch (i32; −1 sentinel) */
+#define ARMY_KEEP_RATE_HI     0x0f0  /* DAT_0053faa0 — keep build-rate scratch (i32) */
+#define ARMY_KEEP_TURNS       0x1a6  /* DAT_0053fb56 — turns to finish the keep (u8; ceil work/unit) */
+#define ARMY_KEEP_PREV_LEVEL  0x1c1  /* DAT_0053fb71 — keep level before an upgrade (u8) */
+#define ARMY_KEEP_FLAG_1C4    0x1c4  /* DAT_0053fb74 — keep-construction flag, cleared on start */
+#define ARMY_KEEP_WORK_TOTAL  0x1cc  /* DAT_0053fb7c — total keep build work (i32; the k_keep_work seed) */
+#define ARMY_KEEP_WORK_TOTAL2 0x1d8  /* DAT_0053fb88 — copy of the build-work total */
+#define ARMY_KEEP_COST_TOT_LO 0x1dc  /* DAT_0053fb8c — total pool-128 cost (completion denominator) */
+#define ARMY_KEEP_COST_TOT_HI 0x1e0  /* DAT_0053fb90 — total pool-130 cost (completion denominator) */
+
+/* Per-player record field step 6 adds. */
+#define STRAT_KEEP_COUNT      0x04d  /* DAT_0057bf4d — number of keeps the player has built (u8) */
+
+/* Occupant fields step 6's army-relocate adds (offsets into an OCC_REC). */
+#define OCC_MOVE_DEST_COL     0x014  /* DAT_0052f0c4 — move-executor destination column (u8) */
+#define OCC_MOVE_DEST_ROW     0x015  /* DAT_0052f0c5 — move-executor destination row (u8) */
+#define OCC_MOVE_BUDGET       0x153  /* DAT_0052f203 — remaining move budget this turn (i8) */
+
+/* Personality-row columns step 6 reads (offsets into a personality_row()). */
+#define AI_PERS_KEEP_MAX          0x90  /* i32: max keeps the personality will build */
+#define AI_PERS_KEEP_BUILD_MINPOP 0xc8  /* i32: min realm population to build a keep */
+#define AI_PERS_KEEP_COST_1       0xcc  /* i32: tier-1 cash the personality requires */
+#define AI_PERS_KEEP_COST_2       0xd0  /* i32: tier-2 */
+#define AI_PERS_KEEP_COST_3       0xd4  /* i32: tier-3 */
+#define AI_PERS_KEEP_COST_4       0xd8  /* i32: tier-4 */
+#define AI_PERS_KEEP_COST_5       0xdc  /* i32: tier-5 */
+
+/* Port of FUN_00467196 (422 B) — relocate army `occ` off the cell it stands on:
+ * find the nearest map feature ring to its seat, dock its move budget by the ring
+ * distance, set the new destination, and route there via the cost-field
+ * pathfinder.  No-op if no ring cell is found. */
+static void engine_army_ai_relocate_army(int occ)
+{
+    uint8_t *c = OCC_REC(occ);
+    int col, row;
+    int d = engine_map_query_nearest_feature_ring_at(   /* FUN_0046733c */
+                (int8_t)c[OCC_COL], (int8_t)c[OCC_ROW], &col, &row);
+    if (d == 0)
+        return;
+
+    if ((int8_t)c[OCC_MOVE_BUDGET] < d)
+        c[OCC_MOVE_BUDGET] = 0;
+    else
+        c[OCC_MOVE_BUDGET] = (uint8_t)((int8_t)c[OCC_MOVE_BUDGET] - d);
+
+    c[OCC_PATH_OK]       = 2;
+    c[OCC_MOVE_DEST_COL] = (uint8_t)col;
+    c[OCC_MOVE_DEST_ROW] = (uint8_t)row;
+    c[OCC_PATH_FAIL]     = 0;
+
+    engine_path_field_fill(0, (int8_t)c[OCC_COL], (int8_t)c[OCC_ROW], 0);   /* FUN_0046f700 */
+    if (engine_path_field_trace(0, (int8_t)c[OCC_MOVE_DEST_COL],
+                                   (int8_t)c[OCC_MOVE_DEST_ROW]) != 0)      /* FUN_004701ac */
+        engine_path_field_copy_record(0, occ);                             /* FUN_004707be */
+}
+
+/* Port of FUN_0046841c (170 B) — evict any armies standing on the 2×2 keep
+ * footprint anchored at the realm's keep cell: relocate each off the footprint and
+ * flag its path stale.  The footprint walks (anchor, anchor+1 col) × (two rows). */
+static void engine_army_ai_evict_keep_footprint(int realm)
+{
+    int cell = I32(ARMY_REC(realm) + ARMY_KEEP_ANCHOR_CELL);   /* byte offset into the grid */
+    for (int r = 0; r < 2; r++) {
+        for (int c = 0; c < 2; c++) {
+            unsigned occ = (uint8_t)g_overworld_map[cell + 5];  /* head-link byte */
+            if (occ != 0) {
+                engine_army_ai_relocate_army((int)occ);         /* FUN_00467196 */
+                OCC_REC(occ)[OCC_PATH_FAIL] = 1;
+            }
+            cell += 8;
+        }
+        cell += 0x1f0;                                          /* next row, same column */
+    }
+}
+
+/* Port of FUN_00450fb4 (173 B) — the keep's construction completion percentage:
+ * the smaller of the two pools' (100 − remaining/total %).  0 when no keep is
+ * under construction (settle flag clear). */
+static int engine_army_ai_keep_completion(int realm)
+{
+    uint8_t *r = ARMY_REC(realm);
+    if (r[ARMY_SETTLE_FLAG] == 0)
+        return 0;
+
+    int hi = engine_math_percent_div(I32(r + ARMY_BUILD_DRAW_HI), I32(r + ARMY_KEEP_COST_TOT_HI));
+    int lo = engine_math_percent_div(I32(r + ARMY_BUILD_DRAW_LO), I32(r + ARMY_KEEP_COST_TOT_LO));
+    lo = 100 - lo;
+    if (100 - hi < lo)
+        lo = 100 - hi;
+    return lo;
+}
+
+/* Port of FUN_00450e46 (366 B) — recompute the realm's keep-build rate: while a
+ * keep is under construction, latch the per-turn work figure and the turns-to-
+ * finish (ceil total-work / work-unit), or 100 turns when complete / no unit. */
+static void engine_army_ai_update_keep_rate(int realm)
+{
+    uint8_t *r = ARMY_REC(realm);
+    I32(r + ARMY_KEEP_RATE_LO) = -1;
+    I32(r + ARMY_KEEP_RATE_HI) = 0;
+    if (r[ARMY_SETTLE_FLAG] == 0)
+        return;
+
+    (void)engine_math_percent_div(I32(r + ARMY_KEEP_WORK_TOTAL),     /* retail's dead pure call */
+                                  I32(r + ARMY_KEEP_WORK_TOTAL2));
+    int pct = engine_army_ai_keep_completion(realm);                  /* FUN_00450fb4 */
+
+    I32(r + ARMY_KEEP_RATE_LO) = -1;
+    I32(r + ARMY_KEEP_RATE_HI) = (pct < 100) ? 0 : I32(r + ARMY_KEEP_WORK_TOTAL);
+
+    if (pct < 100 || I32(r + ARMY_KEEP_WORK_UNIT) < 1) {
+        r[ARMY_KEEP_TURNS] = 100;
+    } else {
+        int turns = I32(r + ARMY_KEEP_WORK_TOTAL) / I32(r + ARMY_KEEP_WORK_UNIT);
+        if (I32(r + ARMY_KEEP_WORK_TOTAL) % I32(r + ARMY_KEEP_WORK_UNIT) != 0)
+            turns++;
+        r[ARMY_KEEP_TURNS] = (uint8_t)(char)turns;
+    }
+}
+
+/* Port of FUN_00436d02 (768 B) — build (or upgrade) realm `realm`'s keep to level
+ * `tier`+1.  Charges the level's two pool costs (refunding the old level on an
+ * upgrade), stamps the keep fields + build-work totals, evicts armies off the
+ * footprint, and re-plans the realm's economy/workforce/income.  Shared with the
+ * human build-keep action (retail callers DAT_0057c93c/DAT_005158e8). */
+void engine_army_ai_build_keep(int realm, int tier)
+{
+    uint8_t *r     = ARMY_REC(realm);
+    int      owner = r[ARMY_OWNER];
+    uint8_t *s     = STRAT_REC(owner);
+
+    int cost_hi = k_keep_cost[tier + 1][0];   /* pool-130 cost */
+    int cost_lo = k_keep_cost[tier + 1][1];   /* pool-128 cost */
+
+    if (r[ARMY_KEEP_LEVEL] != 0) {            /* upgrade: refund the old level */
+        r[ARMY_KEEP_PREV_LEVEL] = r[ARMY_KEEP_LEVEL];
+        cost_hi -= k_keep_cost[r[ARMY_KEEP_LEVEL]][0];
+        cost_lo -= k_keep_cost[r[ARMY_KEEP_LEVEL]][1];
+        if (cost_hi < 0) { I32(s + STRAT_POOL_130) -= cost_hi; cost_hi = 0; }
+        if (cost_lo < 0) { I32(s + STRAT_POOL_128) -= cost_lo; cost_lo = 0; }
+    }
+
+    r[ARMY_KEEP_LEVEL]      = (uint8_t)(tier + 1);
+    r[ARMY_SIEGE_BLOCK]     = 0;
+    r[ARMY_SETTLE_FLAG]     = 1;
+    r[ARMY_BUILD_PLAN_FLAG] = 1;
+    I32(r + ARMY_KEEP_WORK_TOTAL)  = k_keep_work[tier];
+    I32(r + ARMY_KEEP_WORK_TOTAL2) = k_keep_work[tier];
+    I32(r + ARMY_KEEP_COST_TOT_LO) = cost_lo;
+    I32(r + ARMY_KEEP_COST_TOT_HI) = cost_hi;
+    r[ARMY_KEEP_FLAG_1C4] = 0;
+
+    engine_territory_stamp_secondary_keep(realm, tier);   /* FUN_0046826c */
+    engine_army_ai_evict_keep_footprint(realm);           /* FUN_0046841c */
+    engine_army_ai_rebalance_workforce(realm, 3, 1);      /* FUN_004502ca */
+
+    /* Debit the build cost from the owner's two resource pools; the unpaid
+     * remainder becomes the realm's settlement build demand. */
+    if (I32(s + STRAT_POOL_128) < cost_lo) { cost_lo -= I32(s + STRAT_POOL_128); I32(s + STRAT_POOL_128) = 0; }
+    else                                   { I32(s + STRAT_POOL_128) -= cost_lo; cost_lo = 0; }
+    if (I32(s + STRAT_POOL_130) < cost_hi) { cost_hi -= I32(s + STRAT_POOL_130); I32(s + STRAT_POOL_130) = 0; }
+    else                                   { I32(s + STRAT_POOL_130) -= cost_hi; cost_hi = 0; }
+    I32(r + ARMY_BUILD_DRAW_LO) = cost_lo;
+    I32(r + ARMY_BUILD_DRAW_HI) = cost_hi;
+
+    engine_army_ai_update_keep_rate(realm);                       /* FUN_00450e46 */
+    engine_territory_allocate_realm_workforce(realm);             /* FUN_0044f6e7 */
+    engine_army_economy_plan_realm(realm, (int)s_slot_0057c92c);  /* FUN_004485a5 */
+    engine_realm_recompute_realm_income(realm);                   /* FUN_0044b80b */
+}
+
+/* Port of FUN_0049edc7 (872 B) — AI brain step 6 (keep-builder).  For each owned
+ * realm big enough (population ≥ the personality keep-build floor) with no keep
+ * yet, and while the player is under its keep cap, build the highest keep tier the
+ * treasury (cash +0x118) affords from the personality's five cost columns. */
+void engine_army_ai_run_keep_builder(int player)
+{
+    CALL_TRACE_ENTER(0x0049edc7);
+
+    uint8_t       *s     = STRAT_REC(player);
+    const uint8_t *pr    = personality_row(s[STRAT_PERSONALITY]);
+    int            count = (int)s_slot_0056d5dc;
+
+    for (int realm = 1; realm <= count; realm++) {
+        uint8_t *r = ARMY_REC(realm);
+        if (r[ARMY_OWNER] != player)                                      continue;
+        if (I32(pr + AI_PERS_KEEP_BUILD_MINPOP) > I32(r + ARMY_FEED_COUNT)) continue;
+        if (r[ARMY_KEEP_LEVEL] != 0)                                      continue;
+        if ((int)(uint8_t)s[STRAT_KEEP_COUNT] >= I32(pr + AI_PERS_KEEP_MAX)) continue;
+
+        int cash = I32(s + STRAT_CASH);
+        int c5 = I32(pr + AI_PERS_KEEP_COST_5);
+        int c4 = I32(pr + AI_PERS_KEEP_COST_4);
+        int c3 = I32(pr + AI_PERS_KEEP_COST_3);
+        int c2 = I32(pr + AI_PERS_KEEP_COST_2);
+        int c1 = I32(pr + AI_PERS_KEEP_COST_1);
+
+        int tier = 0;                          /* build the highest affordable tier */
+        if      (c5 != 0 && c5 <= cash) tier = 5;
+        else if (c4 != 0 && c4 <= cash) tier = 4;
+        else if (c3 != 0 && c3 <= cash) tier = 3;
+        else if (c2 != 0 && c2 <= cash) tier = 2;
+        else if (c1 != 0 && c1 <= cash) tier = 1;
+
+        if (tier != 0)
+            engine_army_ai_build_keep(realm, tier - 1);
+    }
+}
+
 /* ── Per-tick AI brain dispatcher (FUN_0049a581) ──────────────────────────
  *
  * Ranking-changed redraw cookie — retail _DAT_0056d6a0, set to 1 by the brain
@@ -2950,12 +3188,9 @@ static int g_ai_ranking_dirty;   /* _DAT_0056d6a0 */
  *     the realm is parked at the 999 "turn done" sentinel + the ranking redraw
  *     cookie is set.
  *
- * Step 6 is the last advance-only stub (CALL_TRACE_ENTER_STUB marker + the TODO
- * note below): the FSM still advances through it so the cursor and dispatch
- * structure track retail exactly (closing the slot-84 divergence the trace studio
- * flagged), while its per-realm state writes — FUN_0049edc7 and its callee tree —
- * land in the keep-builder port.  Steps 1/2/3/4/5/7/8/9/0xa/0xb/0xc/0xd/0xe are
- * live.
+ * All fourteen brain steps (1..0xe) are now live ports — the per-tick dispatcher
+ * is fully assembled, no advance-only stubs remain.  Step 8 is a no-op in retail
+ * too (engine_army_ai_step_noop); the rest run their faithful per-realm logic.
  *
  * `evq` is the live turn event queue (steps 1/2/0xd + the init elimination
  * post); `mp_active` threads retail DAT_00553030 into the init elimination
@@ -3001,10 +3236,7 @@ void engine_army_ai_run_per_tick(engine_event_queue_state_t *evq, int mp_active,
     case 0x3:  engine_army_ai_set_rations_and_grant(sel);   break; /* 0x49d638 */
     case 0x4:  engine_army_ai_seed_buy_requests(sel);       break; /* 0x49e1bf */
     case 0x5:  engine_army_ai_run_player(sel);              break; /* 0x49dd01 */
-    case 0x6:
-        /* TODO(brain step 6): FUN_0049edc7 (872 B) + 436d02 (768 B) + 46841c. */
-        CALL_TRACE_ENTER_STUB(0x0049edc7);
-        break;
+    case 0x6:  engine_army_ai_run_keep_builder(sel);       break; /* 0x49edc7 */
     case 0x7:  engine_army_ai_run_garrison(sel);            break; /* 0x49f93d */
     case 0x8:  engine_army_ai_step_noop();                  break; /* 0x49f96c */
     case 0x9:  engine_army_ai_run_campaign(sel);            break; /* 0x49f977 */

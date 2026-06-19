@@ -2178,6 +2178,11 @@ struct test_case {
     X(army_ai_reinforce_holds_below_threshold) \
     X(army_ai_reinforce_lord_army_not_enemy) \
     X(army_ai_reinforce_marches_ships_caravan) \
+    X(army_ai_build_keep_fresh) \
+    X(army_ai_build_keep_upgrade_refunds) \
+    X(army_ai_keep_builder_picks_highest_affordable) \
+    X(army_ai_keep_builder_builds_cheapest_when_poor) \
+    X(army_ai_keep_builder_gates) \
     \
     X(engine_ranking_leaders_and_ties) \
     X(engine_ranking_active_count_excludes_local) \

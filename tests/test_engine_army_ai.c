@@ -2537,3 +2537,135 @@ int test_army_ai_reinforce_marches_ships_caravan(void)
     step7_teardown();
     return 0;
 }
+
+/* ── Brain step 6: AI keep-builder (FUN_0049edc7) ────────────────────────────
+ * The economy/territory re-plan tails run with their record binds NULL (no-ops),
+ * and the keep-footprint evict reads the zeroed overworld grid (no army to move).
+ * keep_level (+0x1c0) doubles as the "did a keep get built?" signal. */
+static void step6_setup(void)
+{
+    ai_setup();
+    memset(g_overworld_map, 0, sizeof g_overworld_map);   /* evict reads head-links */
+    s_slot_0056d5dc = 4;
+}
+
+/* engine_army_ai_build_keep on a keepless realm: stamp level 1, seed the build-work
+ * total + per-pool cost totals, debit the owner's two pools, and leave the unpaid
+ * remainder as the realm's build demand.  Pools (128:10 / 130:100) are below the
+ * level-1 cost {hi 400, lo 40}, so both drain to 0 and the remainder carries over. */
+int test_army_ai_build_keep_fresh(void)
+{
+    step6_setup();
+    uint8_t *r = AREC(3);
+    r[0x005] = 2;                            /* owned by player 2, no keep */
+    uint8_t *s = PREC(2);
+    AI32(s, 0x128) = 10;                     /* pool 128 < lo cost 40 */
+    AI32(s, 0x130) = 100;                    /* pool 130 < hi cost 400 */
+
+    engine_army_ai_build_keep(3, 0);         /* tier 0 → keep level 1 */
+
+    T_ASSERT_EQ_I(r[0x1c0], 1);              /* keep level */
+    T_ASSERT_EQ_I(r[0x1c3], 1);              /* settle flag */
+    T_ASSERT_EQ_I(r[0x1b0], 1);              /* build-plan flag */
+    T_ASSERT_EQ_I(AI32(r, 0x1cc), 200);      /* build-work total = k_keep_work[0] */
+    T_ASSERT_EQ_I(AI32(r, 0x1e0), 400);      /* total hi cost */
+    T_ASSERT_EQ_I(AI32(r, 0x1dc), 40);       /* total lo cost */
+    T_ASSERT_EQ_I(AI32(s, 0x128), 0);        /* pool 128 drained */
+    T_ASSERT_EQ_I(AI32(s, 0x130), 0);        /* pool 130 drained */
+    T_ASSERT_EQ_I(AI32(r, 0x1d0), 30);       /* remaining lo demand (40 − 10) */
+    T_ASSERT_EQ_I(AI32(r, 0x1d4), 300);      /* remaining hi demand (400 − 100) */
+    return 0;
+}
+
+/* Upgrading a level-2 keep to level 3: the new level's cost {hi 200, lo 1000}
+ * minus the old level's {hi 800, lo 80} yields hi −600 (refunded to pool 130) and
+ * lo 920.  Records the previous level and seeds the new totals. */
+int test_army_ai_build_keep_upgrade_refunds(void)
+{
+    step6_setup();
+    uint8_t *r = AREC(3);
+    r[0x005] = 2;
+    r[0x1c0] = 2;                            /* existing keep level 2 */
+    uint8_t *s = PREC(2);
+    AI32(s, 0x128) = 1000;
+    AI32(s, 0x130) = 1000;
+
+    engine_army_ai_build_keep(3, 2);         /* tier 2 → keep level 3 */
+
+    T_ASSERT_EQ_I(r[0x1c0], 3);              /* upgraded */
+    T_ASSERT_EQ_I(r[0x1c1], 2);              /* previous level recorded */
+    T_ASSERT_EQ_I(AI32(s, 0x130), 1600);     /* hi over-refund (1000 + 600) */
+    T_ASSERT_EQ_I(AI32(s, 0x128), 80);       /* lo paid (1000 − 920) */
+    T_ASSERT_EQ_I(AI32(r, 0x1e0), 0);        /* total hi cost (clamped after refund) */
+    T_ASSERT_EQ_I(AI32(r, 0x1dc), 920);      /* total lo cost */
+    T_ASSERT_EQ_I(AI32(r, 0x1d0), 0);        /* lo fully paid */
+    T_ASSERT_EQ_I(AI32(r, 0x1d4), 0);        /* hi fully paid */
+    return 0;
+}
+
+/* run_keep_builder picks the highest affordable tier.  Personality 1's keep cost
+ * columns are {1:200, 2:0, 3:1000, 4:0, 5:10000}; with 1500 cash, tier 5 (10000)
+ * is unaffordable, tier 4/2 are absent (0), tier 3 (1000) fits → builds level 3. */
+int test_army_ai_keep_builder_picks_highest_affordable(void)
+{
+    step6_setup();
+    uint8_t *r = AREC(3);
+    r[0x005] = 2;                            /* owned, no keep */
+    AI32(r, 0x024) = 800;                    /* population ≥ keep floor 700 */
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;                            /* personality 1 */
+    AI32(s, 0x118) = 1500;                   /* cash */
+    AI32(s, 0x128) = 100000; AI32(s, 0x130) = 100000;
+
+    engine_army_ai_run_keep_builder(2);
+
+    T_ASSERT_EQ_I(r[0x1c0], 3);              /* built the level-3 keep */
+    return 0;
+}
+
+/* With only 500 cash, tiers 3/5 are out of reach and 2/4 absent → the cheapest
+ * tier 1 (200) is built (level 1). */
+int test_army_ai_keep_builder_builds_cheapest_when_poor(void)
+{
+    step6_setup();
+    uint8_t *r = AREC(3);
+    r[0x005] = 2; AI32(r, 0x024) = 800;
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;
+    AI32(s, 0x118) = 500;
+    AI32(s, 0x128) = 100000; AI32(s, 0x130) = 100000;
+
+    engine_army_ai_run_keep_builder(2);
+
+    T_ASSERT_EQ_I(r[0x1c0], 1);              /* cheapest affordable tier */
+    return 0;
+}
+
+/* run_keep_builder gates: a realm below the personality keep-build population floor
+ * (700), a player already at its keep cap (4), and a treasury below the cheapest
+ * tier (200) all leave the realm keepless. */
+int test_army_ai_keep_builder_gates(void)
+{
+    step6_setup();
+    uint8_t *r = AREC(3);
+    r[0x005] = 2;
+    uint8_t *s = PREC(2);
+    s[0x007] = 1;
+    AI32(s, 0x118) = 100000;
+    AI32(s, 0x128) = 100000; AI32(s, 0x130) = 100000;
+
+    AI32(r, 0x024) = 500;                    /* (1) population < floor 700 */
+    engine_army_ai_run_keep_builder(2);
+    T_ASSERT_EQ_I(r[0x1c0], 0);
+    AI32(r, 0x024) = 800;
+
+    s[0x04d] = 4;                            /* (2) keep count == cap 4 */
+    engine_army_ai_run_keep_builder(2);
+    T_ASSERT_EQ_I(r[0x1c0], 0);
+    s[0x04d] = 0;
+
+    AI32(s, 0x118) = 100;                    /* (3) cash < cheapest tier 200 */
+    engine_army_ai_run_keep_builder(2);
+    T_ASSERT_EQ_I(r[0x1c0], 0);
+    return 0;
+}
