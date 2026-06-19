@@ -655,7 +655,6 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine.c",
     "src/font_metrics.h",
     "src/gfx_wrap.c",
     "src/gfx_wrap.h"

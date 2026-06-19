@@ -1424,15 +1424,30 @@ static void engine_popup_scroll_render(void)
         /* else cooldown < 0x780 → FUN_004b3acd ambient cue — deferred (audio.c). */
         int n_extra = g_popup_type - 5;                /* retail iVar3 */
         g_popup_x = 0x10; g_popup_y = 0x40; g_popup_w = 0x1c0;
-        /* Retail's body-height accumulator (DAT_005cd4f8) advances per
-         * sub-string by the WRAPPED line height (FUN_0040328e bumps the
-         * y-cursor) PLUS a flat 0x10 gap.  The strategic/combat hint strings
-         * (0xc8..0xda) are each a single line, so the wrapped height is one
-         * row (0x10) → 0x20 total per sub-string.  (A multi-line hint would
-         * need gfx_wrap_localized to return its wrapped height — none of the
-         * shipped hint codes wrap, so the single-row stride is exact here.) */
-        const int ROW = 0x20;
-        int body_h = 0x20 + (n_extra + 1) * ROW;       /* DAT_005cd4f8 */
+        /* Body sub-strings 1..(type-4) are word-wrapped blocks, one per
+         * objective.  Their stacked height is DATA-dependent (a long
+         * objective wraps to >1 line), so retail (FUN_0047309e final else)
+         * cannot pre-compute the panel height — it runs TWO passes over the
+         * shared body-Y accumulator DAT_005cd4f8 (= gfx_text line_y_acc, which
+         * gfx_wrap_localized bumps by line_height PER WRAPPED LINE):
+         *   • MEASURE pass — render each block at a throwaway y (overpainted
+         *     by the bevel) purely so the wrap advances the accumulator; the
+         *     loop adds a flat 0x10 gap between blocks.  The final value is
+         *     the body height that sizes the panel.
+         *   • RENDER pass — re-seed the accumulator to 0x40 and draw each
+         *     block at y = popup_y + acc, so each objective starts below the
+         *     previous one's WRAPPED extent (+ the 0x10 gap).
+         * A fixed per-block stride collides a wrapping objective with the
+         * next one; the shared accumulator is what keeps them apart. */
+        gfx_text_set_line_y_acc(0x20);                 /* DAT_005cd4f8 = 0x20 */
+        for (int i = 0; i <= n_extra; i++) {
+            gfx_wrap_localized(&loc, g_sim_extended_pause, i + 1,
+                               g_popup_x + 0x10, g_popup_y + 0x40,
+                               g_popup_w - 0x20, 0x1b0, 0, 0, menu_font,
+                               gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
+            gfx_text_set_line_y_acc(gfx_text_line_y_acc() + 0x10);
+        }
+        int body_h = gfx_text_line_y_acc();            /* DAT_005cd4f8 */
         if (body_h < 0x61) g_popup_y += 0x40;
         g_popup_h = body_h + g_popup_y;                /* DAT_00552ff8 */
         gfx_panel_draw_bevel(chrome, g_popup_x, g_popup_y,
@@ -1441,14 +1456,14 @@ static void engine_popup_scroll_render(void)
         gfx_wrap_localized_line(&loc, g_sim_extended_pause, 0,
                                 g_popup_x + 0x10, g_popup_y + 0x14,
                                 title_font, gfx_glyph_render_map(), 0x3f);
-        /* Body lines (sub-strings 1..n_extra+1), one wrapped block each. */
-        int row = 0x40;
+        /* Body blocks (sub-strings 1..n_extra+1), each below the previous. */
+        gfx_text_set_line_y_acc(0x40);                 /* DAT_005cd4f8 = 0x40 */
         for (int i = 0; i <= n_extra; i++) {
             gfx_wrap_localized(&loc, g_sim_extended_pause, i + 1,
-                               g_popup_x + 0x10, row + g_popup_y,
+                               g_popup_x + 0x10, gfx_text_line_y_acc() + g_popup_y,
                                g_popup_w - 0x20, 0x1b0, 0, 0, menu_font,
                                gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
-            row += ROW;
+            gfx_text_set_line_y_acc(gfx_text_line_y_acc() + 0x10);
         }
         gfx_sprite_seal_draw(sys_sheet, g_popup_x + g_popup_w - 0x30,
                              g_popup_h + g_popup_y - 0x30, 0);

@@ -74,7 +74,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x403015 | FUN_00403015 | 177 | gfx_text_label.c, gfx_text_label.h |
 | 0x4030c6 | FUN_004030c6 | 202 | gfx_text_label.c, gfx_text_label.h |
 | 0x403190 | FUN_00403190 | 254 | gfx_text_label.c, gfx_text_label.h |
-| 0x40328e | FUN_0040328e | 673 | engine.c, font_metrics.h, gfx_wrap.c (+1) |
+| 0x40328e | FUN_0040328e | 673 | font_metrics.h, gfx_wrap.c, gfx_wrap.h |
 | 0x40352f | FUN_0040352f | 458 | font_metrics.h, gfx_wrap.c, gfx_wrap.h |
 | 0x4036f9 | FUN_004036f9 | 235 | font_metrics.h |
 | 0x4037ee | FUN_004037ee | 347 | gfx_line.c, gfx_line.h |

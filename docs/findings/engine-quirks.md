@@ -7046,3 +7046,28 @@ turn-1 headless SP world steps 9/0xb find no field armies to move
 first code to invoke the pathfinder on-engine — and it crashed (access violation in
 `engine_path_field_fill`) until the grid was bound (commit f6e77d5).  Corollary:
 that crash is positive proof step 7 is live + active on the real new-game world.
+
+## 204 — the multi-line event scroll (types 5–9) lays its objectives out through a SHARED y-accumulator that the wrap renderer advances per WRAPPED line — not a fixed per-block stride
+
+`engine_popup_scroll_render`'s types-5..9 arm (retail `FUN_0047309e` final else, the
+in-game welcome/objectives + combat hints 0xc8..0xda) stacks N word-wrapped body
+sub-strings.  Each block's height is DATA-dependent — a long objective wraps to >1
+line — so the panel height and the next block's Y can't be pre-computed.  Retail
+threads this through a **shared module global `DAT_005cd4f8`** (= the gfx_text
+`line_y_acc`, `g_line_y_acc` in the port): the wrap renderer `FUN_0040328e`
+(`gfx_wrap_localized`) bumps it by the per-line height (`0x18` tall font / `0x10`
+else) for **every wrapped line it emits** (its lines 71–78, alongside the local
+cursor), and the caller seeds it + adds a flat `0x10` gap between blocks.  So the
+caller runs TWO passes: a MEASURE pass (seed `0x20`, render each block at a throwaway
+y that the bevel overpaints, purely to accumulate the wrapped height → panel height)
+then a RENDER pass (re-seed `0x40`, draw each block at `popup_y + acc`).  A port that
+used a fixed per-block stride (`row += 0x10` or `0x20`) instead of the shared
+accumulator **collapsed a wrapping objective onto the next one** ("them multiply"
+overprinting "Make weapons…") AND mis-sized the panel — because with a fixed stride
+`body_h` no longer reflects the real wrap, which also flips the `body_h < 0x61`
+y-bump.  Fix (commit pending): drive the arm off `gfx_text_{,set_}line_y_acc`
+exactly like retail.  Verified on `endturn_seal` t030 (welcome objectives 0xc8,
+type 7): objectives-frame diff 43%→14.8%, and the objectives panel proper
+(x[16,464) y[64,232)) is now **0-px byte-exact** vs retail.  The 14.8% residual is
+the SEPARATE stale-256-warning block (y[272,383], below the panel) — the dismiss
+doesn't repaint the map there (the "256-warning dismiss-tick" follow-up).
