@@ -1406,6 +1406,7 @@ struct test_case {
     X(strat_cost_default) \
     X(strat_cost_writes_every_cell) \
     X(strat_cost_cell_indexing) \
+    X(strat_cost_pathfield_base_feeds_flood) \
     \
     X(territory_clears_size_bytes_1_to_150) \
     X(territory_skips_record_0) \

@@ -5,8 +5,23 @@
 
 #include "engine_strat_cost.h"
 
-/* Canonical home for retail DAT_004f4080. */
-int16_t g_strat_move_cost[ENGINE_STRAT_COST_CELLS];
+/* Retail keeps the cost cells at DAT_004f4080, but that address sits 0x41 int16
+ * into a larger move-cost region whose base is the *NW sub-table* at 0x4f3ffe:
+ * the AI cost-field pathfinder (engine_path_field) reads each cell's eight
+ * direction costs + a diagonal-forbid flag at fixed offsets 0..0x82 *around* the
+ * cell (COST_DIAG == +0x41 is the cell itself), so the grid needs a 0x41-entry
+ * skirt on each side — off-map neighbours then read cost 0 (impassable).  We
+ * mirror that with a padded backing: `g_strat_move_cost` is the 0x4f4080 cost-cell
+ * view (rebuild + the per-cell consumers index it), and
+ * engine_strat_cost_pathfield_base() returns the 0x4f3ffe base the pathfinder
+ * binds.  The skirt stays zero (static init; rebuild only writes the cells). */
+static int16_t g_strat_cost_grid[ENGINE_STRAT_COST_CELLS + 0x82];  /* retail 0x4f3ffe */
+int16_t *const g_strat_move_cost = g_strat_cost_grid + 0x41;       /* retail 0x4f4080 */
+
+const int16_t *engine_strat_cost_pathfield_base(void)
+{
+    return g_strat_cost_grid;
+}
 
 void engine_strat_cost_rebuild(const uint8_t *overworld_map)
 {

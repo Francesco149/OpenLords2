@@ -44,9 +44,16 @@
 /* Bytes per overworld cell descriptor (g_overworld_map stride). */
 #define ENGINE_STRAT_COST_DESC_STRIDE 8
 
-/* Canonical home for retail DAT_004f4080 — the strategic per-cell
- * movement-cost grid.  Cell (col, row) lives at index row*64 + col. */
-extern int16_t g_strat_move_cost[ENGINE_STRAT_COST_CELLS];
+/* Retail DAT_004f4080 — the strategic per-cell movement-cost grid.  Cell
+ * (col, row) lives at index row*64 + col.  Backed by a padded grid (a 0x41-entry
+ * skirt each side) so the AI pathfinder can read the 3×3 direction window around
+ * any cell; bind the pathfinder to engine_strat_cost_pathfield_base(), NOT to
+ * g_strat_move_cost (which is the cost-cell view, 0x41 entries in). */
+extern int16_t *const g_strat_move_cost;
+
+/* The move-cost region's NW-sub-table base (retail 0x4f3ffe = g_strat_move_cost −
+ * 0x41): what engine_path_field_bind_terrain expects.  See engine_path_field.h. */
+const int16_t *engine_strat_cost_pathfield_base(void);
 
 /* Port of FUN_0046ff43.  Rebuilds g_strat_move_cost from the overworld
  * terrain descriptors at `overworld_map` (the 64×64×8-byte grid, i.e.

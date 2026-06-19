@@ -20,6 +20,7 @@
 #include "engine_combat.h"        /* combat_b seam (engine_combat_contest_region)*/
 #include "engine_npc_schedule.h"  /* engine_npc_schedule_init (FUN_0049caaa)     */
 #include "engine_strat_cost.h"    /* engine_strat_cost_rebuild (FUN_0046ff43)    */
+#include "engine_path_field.h"    /* bind the move-cost grid for the AI pathfinder */
 #include "engine_event_queue.h"   /* engine_event_queue_init_wrapper (FUN_00472ad0) */
 #include "engine_ranking.h"       /* engine_ranking_recompute (FUN_0049aa0e)     */
 #include "engine_map_init.h"      /* engine_map_init_tile_cells                  */
@@ -1213,6 +1214,13 @@ void engine_game_init_bind_runtime_tables(int32_t *tile_cells)
      * 4658c1) reads the same shared 8-byte grid (cell flags +1, region +7,
      * terrain +0, occupant +5). */
     engine_army_move_bind_cells(g_overworld_map);
+    /* The AI cost-field pathfinder (engine_path_field, brain steps 6/9/0xb) reads
+     * the strategic move-cost grid retail keeps at the fixed global 0x4f3ffe; the
+     * port builds it (engine_strat_cost_rebuild) and must point the pathfinder at
+     * its NW-sub-table base here, or its first use (the first AI army to move or
+     * garrison) dereferences a NULL grid.  Pointer-bind only — the contents are
+     * (re)built by engine_strat_cost_rebuild at new-game + each turn rollover. */
+    engine_path_field_bind_terrain(engine_strat_cost_pathfield_base());
     /* Connect the per-tick army-state driver to the deep movement-step executor
      * (FUN_00465d28 → engine_army_move_run): when an occupant's sub-state is 2
      * the driver runs the executor, which steps the stack toward its waypoints

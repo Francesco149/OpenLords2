@@ -14,6 +14,7 @@
 
 #include "t.h"
 #include "engine_strat_cost.h"
+#include "engine_path_field.h"    /* the AI pathfinder consumes the move-cost grid */
 
 #define MAP_BYTES (ENGINE_STRAT_COST_CELLS * ENGINE_STRAT_COST_DESC_STRIDE)
 
@@ -152,5 +153,29 @@ int test_strat_cost_cell_indexing(void)
     T_ASSERT(g_strat_move_cost[idx] == 1);
     T_ASSERT(g_strat_move_cost[idx - 1] == 3);   /* neighbour stays default */
     T_ASSERT(g_strat_move_cost[idx + 1] == 3);
+    return 0;
+}
+
+/* Regression: the AI cost-field pathfinder must bind to
+ * engine_strat_cost_pathfield_base() (the 0x4f3ffe NW-sub-table base, 0x41 int16
+ * before the cost cells), NOT to g_strat_move_cost directly.  With a uniform
+ * passable grid and one costly east neighbour, a flood from (20,20) reaches that
+ * neighbour at cost 1 + 100 only if the base + its 0x41 skirt are correct; a bind
+ * to bare g_strat_move_cost would mis-read the cost (off by 0x41) and/or run off
+ * the unpadded array end.  Guards the brain step-6/7 on-engine crash that an
+ * unbound grid caused (the first AI army to move dereferenced a NULL/short grid). */
+int test_strat_cost_pathfield_base_feeds_flood(void)
+{
+    for (int i = 0; i < ENGINE_STRAT_COST_CELLS; i++)
+        g_strat_move_cost[i] = 3;                          /* uniform open terrain */
+    int src  = 20 * ENGINE_PATH_FIELD_DIM + 20;
+    int east = 20 * ENGINE_PATH_FIELD_DIM + 21;
+    g_strat_move_cost[east] = 100;                          /* costly east neighbour */
+
+    engine_path_field_bind_terrain(engine_strat_cost_pathfield_base());
+    engine_path_field_fill(0, 20, 20, 0);
+
+    T_ASSERT_EQ_I(engine_path_field_cost(0, src), 1);       /* source seeded */
+    T_ASSERT_EQ_I(engine_path_field_cost(0, east), 101);    /* 1 + cost(east)=100 */
     return 0;
 }
