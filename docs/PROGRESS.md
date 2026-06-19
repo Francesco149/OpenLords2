@@ -96,13 +96,32 @@ keep-cap) + highest-affordable tier walk (cost5→cost1).  Gate: **2118 host tes
 gates), mingw clean.
 
 **The dispatcher is COMPLETE.** All 14 per-tick brain steps are now faithful ports.
-**Next** (post-dispatcher frontiers): (a) run the before/after `--only port` oracle
-on `endturn_auto` to see which of steps 6/7 move it on-engine (both run every turn,
-but turn-1 SP may lack threatened realms / affordable keeps / keepless populous
-realms — a step-0xb-shaped reached-but-input-empty result is possible); (b) close
-the ±3-4 pass-counter timing residual (auto_dismiss onEnter vs the port's input
-phase); (c) pin the lastturn.sav per [[project_save_redirect_reproducibility]] so
-retail captures stop drifting; (d) the deeper combat-init A/V interactive wiring.
+
+**ON-ENGINE VERIFIED + a latent infra gap found & fixed (commit f6e77d5).** Ran the
+dispatcher on the real new-game world (`olv3_capture --trace endturn_auto --only
+port`).  First run **crashed** (access violation in engine_path_field_fill).
+Bisected (stub each step / sub-planner) → step 7's `garrison_keeps`, specifically
+the order-4 garrison occupant it musters; a temporary unhandled-exception filter
++ addr2line pinned the fault.  **Root cause was NOT a step-6/7 bug — it was a
+pre-existing deferred gap:** the AI cost-field pathfinder's move-cost grid
+(`engine_path_field` g_terrain, retail 0x4f3ffe) was **never bound**
+(`engine_path_field_bind_terrain` had zero callers).  It hid because step 0xb's
+run_movement was reached-but-input-empty in turn 1 (no field armies) — so the brain
+never invoked the pathfinder until **step 7's garrison occupant became the first AI
+army to move**.  (So the crash itself PROVES step 7 is active on-engine: it musters
+the first garrison.)  Fix: g_strat_move_cost is now a 0x41-int16-in view of a
+padded backing (the pathfinder reads a 3×3 direction window, COST_DIAG=+0x41 = the
+cell), exposed via engine_strat_cost_pathfield_base(); engine_game_init_bind_runtime_tables
+binds the pathfinder to it (both new-game + load routes).  After the fix
+endturn_auto --only port runs all 8 capture labels to a clean exit.
+
+**Next** (post-dispatcher frontiers): (a) the port↔retail STATE oracle on
+`endturn_auto` (now that the port runs the full AI turn) to measure step-6/7 parity
+vs retail — pending the ±3-4 pass-counter timing residual + the unpinned
+lastturn.sav drift below; (b) close the ±3-4 pass-counter timing residual
+(auto_dismiss onEnter vs the port's input phase); (c) pin the lastturn.sav per
+[[project_save_redirect_reproducibility]] so retail captures stop drifting; (d) the
+deeper combat-init A/V interactive wiring.
 
 ---
 

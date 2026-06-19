@@ -6993,3 +6993,27 @@ under a FIXED seat one could capture retail's live `DAT_00591564` at
 load-classify time and seed the port's classify with it — deterministic
 per-seat but fragile (any seat/RNG-pull change shifts it) and
 cosmetic-only, so deferred.
+
+## 202 — the AI pathfinder's move-cost grid base (0x4f3ffe) is the cost cells (0x4f4080) MINUS 0x41 int16; it must be bound, or the first AI army to move NULL-derefs
+
+`engine_path_field` (the cost-field flood/trace, retail FUN_0046f700/4701ac) reads
+its move-cost input at `g_terrain[cell + dir]` for the nine direction offsets
+`{0,1,2,0x40,0x41,0x42,0x80,0x81,0x82}` — a 3×3 window with row-stride 0x40, where
+**`COST_DIAG == +0x41` is the cell ITSELF**.  So the grid's NW-sub-table base
+(retail 0x4f3ffe) is the per-cell cost grid (retail `DAT_004f4080` =
+`g_strat_move_cost`) **minus 0x41 int16**, and the grid needs a **0x41-entry skirt
+on each side** so edge cells' off-map neighbours read cost 0 (impassable).  The
+port had `g_strat_move_cost` as a bare `[4096]` array and never bound it — binding
+the pathfinder to it directly is doubly wrong (off by 0x41 AND runs off the
+unpadded end).  Fix: `g_strat_move_cost` is now a `+0x41` view into a padded
+backing; `engine_strat_cost_pathfield_base()` returns the 0x4f3ffe base, bound in
+`engine_game_init_bind_runtime_tables`.
+
+The gap stayed latent until the brain dispatcher was completed: the ONLY on-engine
+caller of the pathfinder is the AI brain (steps 6/9/0xb deployment), and in a
+turn-1 headless SP world steps 9/0xb find no field armies to move
+(reached-but-input-empty, like step 1).  **Brain step 7's keep-garrison muster
+(commit fd50752) creates the first AI army that actually moves**, so it was the
+first code to invoke the pathfinder on-engine — and it crashed (access violation in
+`engine_path_field_fill`) until the grid was bound (commit f6e77d5).  Corollary:
+that crash is positive proof step 7 is live + active on the real new-game world.
