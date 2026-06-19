@@ -1,0 +1,33 @@
+# TERRAIN-INFO probe — clear the boot/welcome popups with reactive
+# {auto_dismiss} (proven to reach a clean map by ~t90 in turn_probe2), then
+# turn auto_dismiss OFF and RIGHT-CLICK a map tile to open the terrain-info
+# popup ("Here Be Dragons / <terrain>") that retail shows on a tile right-click.
+# Captures the result on BOTH engines → does the PORT render it, or is the arm
+# unported?  Load prefix copied from endturn_seal.jsonl.  Tile (34,76) =
+# l (y<<16)|x = 76*65536+34 = 4980770 (scrubland in turn_probe).
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 100, "label": "cleared"}
+{"auto_dismiss": 0}
+{"t": 106, "m": 512, "w": 0, "l": 4980770}
+{"t": 110, "m": 516, "w": 2, "l": 4980770}
+{"t": 113, "m": 517, "w": 0, "l": 4980770}
+{"capture": 125, "label": "rclick1"}
+{"capture": 155, "label": "rclick1b"}

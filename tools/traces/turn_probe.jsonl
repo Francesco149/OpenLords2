@@ -1,0 +1,46 @@
+# TURN PROBE — load lastturn.sav, then walk through the boot popups with
+# FIXED-tick RIGHT-clicks (position-independent dismiss, FUN_0047685d) so the
+# turn machinery advances, and capture a dense window to SEE which event
+# scrolls a real turn produces (256-warning → welcome series 0xc8/0xc9/0xca →
+# turn-advance reports).  Right-clicks are deterministic (fixed tick, not
+# reactive {auto_dismiss}), spaced ~25 ticks so each popup is open when its
+# dismiss fires; the welcome series shows one per ~20 frames after a dismiss.
+# Load prefix copied verbatim from endturn_seal.jsonl.  Exploratory — both
+# engines stay in lockstep given deterministic input + --rng-seed.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"capture": 0, "label": "flip0"}
+{"t": 20, "m": 516, "w": 0, "l": 4980770}
+{"t": 22, "m": 517, "w": 0, "l": 4980770}
+{"capture": 30, "label": "p030"}
+{"t": 45, "m": 516, "w": 0, "l": 4980770}
+{"t": 47, "m": 517, "w": 0, "l": 4980770}
+{"capture": 55, "label": "p055"}
+{"t": 70, "m": 516, "w": 0, "l": 4980770}
+{"t": 72, "m": 517, "w": 0, "l": 4980770}
+{"capture": 80, "label": "p080"}
+{"t": 95, "m": 516, "w": 0, "l": 4980770}
+{"t": 97, "m": 517, "w": 0, "l": 4980770}
+{"capture": 110, "label": "p110"}
+{"t": 125, "m": 516, "w": 0, "l": 4980770}
+{"t": 127, "m": 517, "w": 0, "l": 4980770}
+{"capture": 145, "label": "p145"}
+{"capture": 180, "label": "p180"}
+{"capture": 240, "label": "p240"}
+{"capture": 320, "label": "p320"}
