@@ -290,6 +290,12 @@ class CaptureConfig:
     # screen-edge position scrolled it to (nondeterministic vs the port, which has
     # no edge-scroll). Default off; trace_studio parity captures turn it on.
     suppress_edge_scroll: bool = False
+    # Save sandbox: Windows path to a per-run dir into which the agent redirects
+    # every save-file open (the .sav backup family + Castles.dat), so a capture
+    # replay never reads or writes the real game-dir saves (reproducibility —
+    # installSaveRedirectHook). None = off (real saves used in place). The caller
+    # pre-seeds the sandbox with the reference save (olv3_capture does this).
+    save_sandbox:      str | None = None
     # Save-schema state dump at segtrace {capture} instants:
     # [{i,va,size}] → run_dir/state/state_<tick>.json (trace_studio parity).
     state_dump_slots:  list[dict] = field(default_factory=list)
@@ -1071,6 +1077,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "capture_draws":             bool(cfg.capture_draws),
             "capture_force_redraw":      bool(cfg.capture_force_redraw),
             "suppress_edge_scroll":      bool(cfg.suppress_edge_scroll),
+            "save_sandbox":              cfg.save_sandbox or "",
             "watch":                     cfg.watch or [],
             "rng_seed":                  cfg.rng_seed,
             "heartbeat_timeout_ms":      HEARTBEAT_TIMEOUT_MS,
@@ -1390,6 +1397,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="neuter retail's strat-map mouse edge-scroll (FUN_00432221) "
                          "so the captured camera is the loaded-save scroll, not a "
                          "host-cursor screen-edge scroll (parity determinism)")
+    ap.add_argument("--save-sandbox", default=None,
+                    help="Windows path to a per-run sandbox dir; the agent "
+                         "redirects every save-file open (.sav family + "
+                         "Castles.dat) into it so the replay never reads or "
+                         "writes the real game-dir saves (reproducibility). "
+                         "Pre-seed it with the reference save.")
     ap.add_argument("--anchor-trace", action="store_true",
                     help="emit deterministic anchors ({anchor,frame} on "
                          "engine-state / screen-id transitions) to "
@@ -1584,6 +1597,7 @@ def main(argv: list[str] | None = None) -> int:
         capture_draws=args.capture_draws,
         capture_force_redraw=args.capture_force_redraw,
         suppress_edge_scroll=args.suppress_edge_scroll,
+        save_sandbox=args.save_sandbox,
         watch=watch_specs,
         state_dump_slots=state_dump_slots,
         rng_seed=rng_seed,

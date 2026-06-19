@@ -124,6 +124,18 @@ extern uint8_t g_footprint_storage_160[160];
  * resets).  Higher-level wrappers will reintroduce them once those
  * subsystems exist. */
 
+/* Save-file sandbox redirect (reproducibility — see memory
+ * project_save_redirect_reproducibility).  When `dir` is non-empty, every
+ * BARE save-file basename passed to the functions below (e.g. "lastturn.sav",
+ * "Castles.dat") is resolved into `dir` instead of the process CWD, so a
+ * trace-capture run never reads or writes the real game-dir saves.  Paths
+ * that already contain a '/' or '\' separator (an explicit/absolute path,
+ * such as drop_in_load's Castles temp) are left untouched.  Passing NULL or
+ * "" clears the redirect.  Host tests never set it, so save_load/save_write
+ * resolve exactly as before.  Mirrors the retail-side CreateFile redirect in
+ * tools/frida/openlords2-agent.js (installSaveRedirectHook). */
+void save_set_sandbox(const char *dir);
+
 int save_write(const char *sav_path, const char *castles_path);
 int save_load (const char *sav_path, const char *castles_path);
 

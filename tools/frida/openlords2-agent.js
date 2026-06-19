@@ -1037,6 +1037,70 @@ function installMessageBoxRedirectHook() {
     }
 }
 
+// ─── Save-file sandbox redirect (reproducibility) ─────────────────────
+// Redirect every save-file open (the .sav backup family + Castles.dat) into a
+// per-run sandbox dir so a trace-capture run NEVER reads or writes the real
+// game-dir saves.  Retail's save_load (FUN_004adfe6) writes Castles.dat from
+// the loaded .sav tail and the turn-save rotation (FUN_0049a453) overwrites
+// lastturn/old_turn/safeturn — both MUTATE the install dir, which made captures
+// non-reproducible and once corrupted the test reference (see memory
+// project_save_redirect_reproducibility).  The fix mirrors openrecet's
+// installSaveRedirectHook: hook kernel32!CreateFileW + CreateFileA (the CRT's
+// fopen funnels through one of these regardless of static/dynamic CRT linkage),
+// and on a matching open rewrite the path argument in place to
+// <sandbox>\<basename>.  The save LIST still enumerates the real dir (we don't
+// hook FindFirstFile), so the harness pre-seeds the sandbox with the reference
+// under every name a list row might select — whichever row the trace clicks,
+// the OPEN lands on the seeded reference.  The port mirror is save.c
+// save_set_sandbox (--save-sandbox).
+let g_save_sandbox = null;            // Windows path to the per-run sandbox dir
+const g_save_redirect_keep = [];      // keep redirected path buffers alive
+
+function installSaveRedirectHook(sandboxWin) {
+    sandboxWin = String(sandboxWin).replace(/[\\/]+$/, '');
+
+    function saveBase(name) {
+        const m = /[^\\/]*$/.exec(name);
+        return m ? m[0] : name;
+    }
+    function isSaveBase(name) {
+        const b = saveBase(name).toLowerCase();
+        // The SP/MP turn-save families (.sav/.svb/.sva) + the castle DB. Match
+        // by suffix so any save the menu list opens is caught; "castles.dat" is
+        // matched exactly so other .dat assets (L2_maps.dat, …) are untouched.
+        return b === 'castles.dat'
+            || b.endsWith('.sav') || b.endsWith('.svb') || b.endsWith('.sva');
+    }
+
+    function attachOne(exportName, wide) {
+        // Frida 17.x: resolve the module instance first, then the export off it
+        // (the legacy Module.getExportByName(name, export) global was removed).
+        const k32 = Process.findModuleByName('kernel32.dll');
+        const addr = k32 ? k32.findExportByName(exportName) : null;
+        if (!addr) { err('saveRedirect', 'no ' + exportName); return; }
+        Interceptor.attach(addr, {
+            onEnter: function (args) {
+                try {
+                    const p = args[0];
+                    if (p.isNull()) return;
+                    const orig = wide ? p.readUtf16String() : p.readAnsiString();
+                    if (!orig || !isSaveBase(orig)) return;
+                    const np = sandboxWin + '\\' + saveBase(orig);
+                    const buf = wide ? Memory.allocUtf16String(np)
+                                     : Memory.allocAnsiString(np);
+                    g_save_redirect_keep.push(buf);   // outlive the call
+                    args[0] = buf;
+                    log('saveRedirect ' + exportName + ': ' + orig + ' -> ' + np);
+                } catch (e) { err('saveRedirect.onEnter', e.message); }
+            }
+        });
+    }
+
+    attachOne('CreateFileW', true);
+    attachOne('CreateFileA', false);
+    log('save redirect armed → sandbox ' + sandboxWin);
+}
+
 // ─── force windowed — three layers ─────────────────────────────────────
 // Lords II is a 1996 DDraw-1.x game.  It uses the legacy
 // `IDirectDraw::SetCooperativeLevel` API to take exclusive fullscreen
@@ -5469,6 +5533,8 @@ rpc.exports = {
         g_capture_draws             = !!opts.capture_draws;
         g_capture_force_redraw      = !!opts.capture_force_redraw;
         g_suppress_edge_scroll      = !!opts.suppress_edge_scroll;
+        g_save_sandbox = (typeof opts.save_sandbox === 'string'
+                          && opts.save_sandbox) ? opts.save_sandbox : null;
 
         g_dump_globals = Array.isArray(opts.dump_globals)
             ? opts.dump_globals.map(function (s) {
@@ -5646,6 +5712,14 @@ rpc.exports = {
         // can plot a baseline curve).
         installCreateWindowExHooks();
         installMessageBoxRedirectHook();
+        // Save virtualization — install pre-resume so it catches any boot-path
+        // Castles.dat open AND the trace's later save load + turn-save rotation,
+        // so a capture replay never reads or writes the real game-dir saves
+        // (reproducibility — see installSaveRedirectHook above).
+        if (g_save_sandbox) {
+            try { installSaveRedirectHook(g_save_sandbox); }
+            catch (e) { err('installSaveRedirectHook', e.message); }
+        }
         installEngineTickHook();
 
         // Conditionally-on hooks based on init flags.

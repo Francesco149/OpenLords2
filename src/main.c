@@ -227,6 +227,12 @@ static int       g_audio_active;
  * are `<DIR>/frame_NNNNN.bmp`, indexed by g_frame_counter. */
 static const char *g_capture_dir;
 static unsigned   g_capture_every = 25;
+/* --save-sandbox DIR : redirect every bare save-file open (lastturn.sav,
+ * Castles.dat, …) into DIR so a trace-capture run never mutates the real
+ * game-dir saves (reproducibility — see save.h / save_set_sandbox + memory
+ * project_save_redirect_reproducibility).  Linux-abs paths are auto-translated
+ * to a WSL-UNC like --capture-to.  Off (CWD-relative) when NULL. */
+static const char *g_save_sandbox;
 /* --capture-raw : in addition to <label>.bmp, write <label>.raw — the Trace
  * Studio v3 frame payload (8bpp indices + palette) the native viewer ingests.
  * Off by default (normal runs keep just the BMP). */
@@ -554,6 +560,29 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
             log_line("captures → %s every %u frame(s)",
                      g_capture_dir, g_capture_every);
         }
+    }
+
+    /* Save sandbox: same Linux-abs → WSL-UNC translation the capture dir
+     * uses (a native Windows path passes through untouched), then arm the
+     * save.c redirect so bare save opens land in the sandbox, not the real
+     * game dir.  Set before the main loop so the trace's load click — which
+     * runs drop_in_load → save_load("lastturn.sav") during the loop —
+     * resolves into the sandbox. */
+    if (g_save_sandbox) {
+        static char save_sandbox_buf[MAX_PATH];
+        if (g_save_sandbox[0] == '/') {
+            const char *distro = getenv("WSL_DISTRO_NAME");
+            if (distro && distro[0]) {
+                wsprintfA(save_sandbox_buf, "\\\\wsl.localhost\\%s%s",
+                          distro, g_save_sandbox);
+                for (char *p = save_sandbox_buf; *p; p++)
+                    if (*p == '/') *p = '\\';
+                g_save_sandbox = save_sandbox_buf;
+            }
+        }
+        save_set_sandbox(g_save_sandbox);
+        log_line("save sandbox → %s (real game-dir saves protected)",
+                 g_save_sandbox);
     }
 
     if (g_call_trace_path) {
@@ -2991,6 +3020,10 @@ static void parse_cmdline(LPSTR lpCmd)
         } else if (!strncmp(a, "--capture-to=", 13)) {
             g_capture_dir = a + 13;
             g_gfx_init = 1;
+        } else if (!strcmp(a, "--save-sandbox") && i + 1 < ntok) {
+            g_save_sandbox = tokens[++i];
+        } else if (!strncmp(a, "--save-sandbox=", 15)) {
+            g_save_sandbox = a + 15;
         } else if (!strcmp(a, "--capture-every") && i + 1 < ntok) {
             if (!parse_uint(tokens[++i], &g_capture_every)
                     || g_capture_every == 0) {

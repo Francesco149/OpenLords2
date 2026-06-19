@@ -56,6 +56,48 @@ uint8_t g_player_roster          [ 12];
 #include "save_schema_table.h"
 
 /* ------------------------------------------------------------------ */
+/*  Save-file sandbox redirect                                        */
+/* ------------------------------------------------------------------ */
+
+/* When set (via save_set_sandbox), bare save-file basenames resolve into
+ * this directory instead of the process CWD, so a trace-capture run never
+ * mutates the real game-dir saves.  See save.h + the memory
+ * project_save_redirect_reproducibility.  Plain C / no Win32 so save.c stays
+ * host-portable (host tests leave it unset → the resolver is a no-op). */
+static char g_save_dir[512];
+static int  g_save_dir_set;
+
+void save_set_sandbox(const char *dir)
+{
+    if (!dir || !dir[0]) { g_save_dir_set = 0; g_save_dir[0] = '\0'; return; }
+    size_t n = 0;
+    while (dir[n] && n + 1 < sizeof g_save_dir) { g_save_dir[n] = dir[n]; n++; }
+    /* Trim trailing separators for a clean single-separator join. */
+    while (n > 0 && (g_save_dir[n - 1] == '/' || g_save_dir[n - 1] == '\\'))
+        n--;
+    g_save_dir[n] = '\0';
+    g_save_dir_set = (n > 0);
+}
+
+/* Resolve a save filename through the sandbox.  A BARE basename (no '/' or
+ * '\') gets the sandbox dir prefixed into `out`; anything already containing
+ * a separator (an explicit/absolute path) is returned unchanged.  When no
+ * sandbox is set, returns `name` verbatim.  '/' joins cleanly on both the
+ * Windows mingw CRT (which accepts mixed separators) and the host. */
+static const char *save_resolve(const char *name, char *out, size_t cap)
+{
+    if (!g_save_dir_set || !name || !cap) return name;
+    for (const char *p = name; *p; p++)
+        if (*p == '/' || *p == '\\') return name;   /* not a bare basename */
+    size_t i = 0;
+    for (const char *p = g_save_dir; *p && i + 1 < cap; p++) out[i++] = *p;
+    if (i + 1 < cap) out[i++] = '/';
+    for (const char *p = name; *p && i + 1 < cap; p++) out[i++] = *p;
+    out[i] = '\0';
+    return out;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Save / load                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -66,6 +108,10 @@ uint8_t g_player_roster          [ 12];
 int save_write(const char *sav_path, const char *castles_path)
 {
     if (!sav_path || !castles_path) return 1;
+
+    char sb[512], cb[512];
+    sav_path     = save_resolve(sav_path, sb, sizeof sb);
+    castles_path = save_resolve(castles_path, cb, sizeof cb);
 
     FILE *out = fopen(sav_path, "wb");
     if (!out) return 1;
@@ -105,6 +151,10 @@ int save_write(const char *sav_path, const char *castles_path)
 int save_load(const char *sav_path, const char *castles_path)
 {
     if (!sav_path || !castles_path) return 1;
+
+    char sb[512], cb[512];
+    sav_path     = save_resolve(sav_path, sb, sizeof sb);
+    castles_path = save_resolve(castles_path, cb, sizeof cb);
 
     FILE *in = fopen(sav_path, "rb");
     if (!in) return 1;
@@ -198,9 +248,15 @@ int save_rotate_and_write(const char *castles_path)
     }
 
     if (g_sim_save_rotate_hold < 1) {
-        remove(safeturn);            /* drop the oldest backup       */
-        rename(old_turn, safeturn);  /* previous turn → oldest        */
-        rename(lastturn, old_turn);  /* last turn     → previous      */
+        /* Resolve through the sandbox so the rotation never touches the real
+         * game dir (save_write resolves lastturn itself, below). */
+        char lb[512], ob[512], sfb[512];
+        const char *lastturn_r = save_resolve(lastturn, lb, sizeof lb);
+        const char *old_turn_r = save_resolve(old_turn, ob, sizeof ob);
+        const char *safeturn_r = save_resolve(safeturn, sfb, sizeof sfb);
+        remove(safeturn_r);              /* drop the oldest backup       */
+        rename(old_turn_r, safeturn_r);  /* previous turn → oldest        */
+        rename(lastturn_r, old_turn_r);  /* last turn     → previous      */
     }
 
     return save_write(lastturn, castles_path);
@@ -213,6 +269,8 @@ int save_rotate_and_write(const char *castles_path)
 int castles_init_blank(const char *castles_path)
 {
     if (!castles_path) return 1;
+    char cb[512];
+    castles_path = save_resolve(castles_path, cb, sizeof cb);
     FILE *f = fopen(castles_path, "wb");
     if (!f) return 1;
     for (size_t i = 0; i < CASTLES_BLOCK_BYTES; ++i)
@@ -239,6 +297,8 @@ int castles_write_scenario(const char *castles_path, int scenario_idx)
 {
     if (!castles_path) return 1;
     if (scenario_idx < 1 || scenario_idx > CASTLES_BLOCK_COUNT) return 1;
+    char cb[512];
+    castles_path = save_resolve(castles_path, cb, sizeof cb);
 
     /* Pack 8-B records → 2-B records. */
     int j = 0;
@@ -285,6 +345,8 @@ int castles_read_scenario(const char *castles_path, int scenario_idx)
 {
     if (!castles_path) return 1;
     if (scenario_idx < 1 || scenario_idx > CASTLES_BLOCK_COUNT) return 1;
+    char cb[512];
+    castles_path = save_resolve(castles_path, cb, sizeof cb);
 
     FILE *f = fopen(castles_path, "rb");
     if (!f) return 1;

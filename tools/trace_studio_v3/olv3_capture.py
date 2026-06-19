@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import os
+import shutil
 import struct
 import subprocess
 import sys
@@ -44,6 +45,88 @@ DEFAULT_REMOTE = os.environ.get("OPENLORDS2_FRIDA_REMOTE", "cutestation.soy:2704
 
 def _log(m: str) -> None:
     print(f"olv3_capture: {m}", flush=True)
+
+
+# ── save sandbox (reproducibility) ──────────────────────────────────────────────
+# Both engines load a PINNED reference save and write into a per-run sandbox, so a
+# capture never mutates the real game dir (retail's save_load rewrites Castles.dat
+# + the turn-save rotation overwrites lastturn/old_turn/safeturn — see memory
+# project_save_redirect_reproducibility). Port: --save-sandbox (save.c redirect).
+# Retail: frida_capture --save-sandbox (agent CreateFile redirect).
+GAME_DIR_WIN = os.environ.get("OPENLORDS2_GAME_DIR", "")
+SP_SAVE_NAMES = ("lastturn.sav", "old_turn.sav", "safeturn.sav")  # turn-save chain
+
+
+def _wsl(win_path: str) -> Path:
+    """A Windows path (C:\\…) → its WSL mount path."""
+    return Path(subprocess.run(["wslpath", "-u", win_path], capture_output=True,
+                               text=True, check=True).stdout.strip())
+
+
+def _game_dir() -> Path | None:
+    # The flake exports OPENLORDS2_GAME_DIR as a WSL path (/mnt/c/…) inside the dev
+    # shell; WSLENV/p translates it to C:\… only when it crosses into the Windows
+    # exe. Accept either form here.
+    if not GAME_DIR_WIN:
+        return None
+    gd = Path(GAME_DIR_WIN) if GAME_DIR_WIN.startswith("/") else _wsl(GAME_DIR_WIN)
+    return gd if gd.is_dir() else None
+
+
+def pin_reference() -> Path | None:
+    """Return the dir holding the pinned, read-only reference save (lastturn.sav +
+    Castles.dat). Created ONCE from the game dir's current good save, then immutable
+    — so every later run reseeds a byte-identical sandbox even if a stray run (or a
+    future feature) were to touch the live game-dir saves."""
+    gd = _game_dir()
+    if not gd:
+        _log(f"WARN game dir not found ({GAME_DIR_WIN!r}); save sandbox disabled")
+        return None
+    ref = gd / "_ol2_reference"
+    ref.mkdir(exist_ok=True)
+    for name in ("lastturn.sav", "Castles.dat"):
+        dst, src = ref / name, gd / name
+        if not dst.exists():
+            if not src.exists():
+                _log(f"WARN reference source missing: {src}")
+                continue
+            shutil.copyfile(src, dst)
+            try:
+                os.chmod(dst, 0o444)            # read-only pin
+            except OSError:
+                pass
+            _log(f"pinned reference {name} ← {src} (read-only)")
+    return ref if (ref / "lastturn.sav").exists() else None
+
+
+def seed_sandbox(sandbox: Path, ref: Path) -> bool:
+    """(Re)seed a per-run sandbox from the pinned reference. The .sav is copied
+    under EVERY save name the menu list might select (the list still enumerates the
+    real dir; the OPEN redirects in here — so whichever row the trace clicks lands
+    on the reference). Castles.dat seeded too (retail reads it, then rewrites it
+    from the .sav tail — into the sandbox, never the real dir)."""
+    ref_sav, ref_cas = ref / "lastturn.sav", ref / "Castles.dat"
+    if not ref_sav.exists():
+        return False
+    sandbox.mkdir(parents=True, exist_ok=True)
+    gd = _game_dir()
+    names = set(SP_SAVE_NAMES)
+    if gd:
+        names |= {p.name for p in gd.glob("*.sav")}    # any real-dir save row
+    for name in sorted(names):
+        dst = sandbox / name
+        if dst.exists():
+            try: os.chmod(dst, 0o644)
+            except OSError: pass
+        shutil.copyfile(ref_sav, dst)
+    if ref_cas.exists():
+        dst = sandbox / "Castles.dat"
+        if dst.exists():
+            try: os.chmod(dst, 0o644)
+            except OSError: pass
+        shutil.copyfile(ref_cas, dst)
+    _log(f"seeded sandbox: {len(names)} .sav names + Castles.dat ← reference")
+    return True
 
 
 # ── raw frame payload (shared port/retail format) ──────────────────────────────
@@ -215,7 +298,8 @@ def _read_state(side_dir: Path, label: str, retail: bool, tick: int) -> dict | N
 
 # ── drive (reuse the proven command shapes) ────────────────────────────────────
 def drive_port(compiled: Path, port_dir: Path, max_frames: int, timeout_ms: int,
-               rng_seed: bool, draws: bool = True, force_redraw: bool = False) -> int:
+               rng_seed: bool, draws: bool = True, force_redraw: bool = False,
+               save_sandbox: str | None = None) -> int:
     port_dir.mkdir(parents=True, exist_ok=True)
     # The game APPENDS to captures.jsonl and reuses <label>.{raw,draws,bmp}; clear
     # last run's artifacts so the container isn't polluted with stale/duplicate
@@ -233,6 +317,8 @@ def drive_port(compiled: Path, port_dir: Path, max_frames: int, timeout_ms: int,
         cmd.append("--capture-force-redraw")   # full map re-render on capture ticks
     if rng_seed:
         cmd.append("--rng-seed")
+    if save_sandbox:
+        cmd += ["--save-sandbox", save_sandbox]   # port self-translates /-paths
     env = dict(os.environ, OPENLORDS2_TIMEOUT_MS=str(timeout_ms))
     with (port_dir / "log.txt").open("w") as log:
         return subprocess.run(cmd, cwd=ROOT, env=env, stdout=log,
@@ -241,7 +327,8 @@ def drive_port(compiled: Path, port_dir: Path, max_frames: int, timeout_ms: int,
 
 
 def drive_retail(compiled: Path, retail_dir: Path, remote: str, rng_seed: bool,
-                 slots: Path, draws: bool = True, force_redraw: bool = False) -> int:
+                 slots: Path, draws: bool = True, force_redraw: bool = False,
+                 save_sandbox: str | None = None) -> int:
     retail_dir.mkdir(parents=True, exist_ok=True)
     for pat in ("frame_*.raw", "frame_*.draws", "captures.jsonl", "anchors.jsonl"):
         for f in retail_dir.glob(pat):
@@ -260,6 +347,8 @@ def drive_retail(compiled: Path, retail_dir: Path, remote: str, rng_seed: bool,
         cmd.append("--capture-force-redraw")   # full map re-render on capture ticks
     if rng_seed:
         cmd.append("--rng-seed")
+    if save_sandbox:
+        cmd += ["--save-sandbox", save_sandbox]   # Windows/UNC path for the agent
     with (retail_dir / "log.txt").open("w") as log:
         rc = subprocess.run(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
                             timeout=420).returncode
@@ -296,6 +385,13 @@ def main() -> int:
                     help="force a full map re-render on each capture tick so the MAP composites into the draw journal (cross-engine map-draw diff; default off = HUD-only steady draws)")
     ap.add_argument("--no-capture", action="store_true", help="skip driving; ingest existing raws")
     ap.add_argument("--no-view", action="store_true", help="build containers + view.json, don't launch")
+    ap.add_argument("--no-save-sandbox", action="store_true",
+                    help="DON'T redirect saves into a per-run sandbox (default: BOTH engines "
+                         "load the pinned reference + write into the sandbox, so the real game "
+                         "dir is never mutated — reproducible captures)")
+    ap.add_argument("--save-ref", default=None,
+                    help="dir holding the reference save (lastturn.sav + Castles.dat) to seed "
+                         "the sandbox from (default: <game_dir>/_ol2_reference, auto-pinned)")
     args = ap.parse_args()
 
     src = _resolve_trace(args.trace) if args.trace else None
@@ -317,13 +413,29 @@ def main() -> int:
     slots = sess_dir / "state_slots.json"
     ts_schema.write_slots_file(slots)
 
+    # Save sandbox: seed a per-session dir from the pinned reference so BOTH engines
+    # load the same canonical save + write here, never the real game dir. The port
+    # takes the WSL path (it self-translates to a \\wsl.localhost UNC); retail's
+    # agent needs the Windows/UNC form.
+    port_sandbox = retail_sandbox = None
+    if not args.no_save_sandbox:
+        ref = Path(args.save_ref) if args.save_ref else pin_reference()
+        if ref and seed_sandbox(sess_dir / "saveout", ref):
+            port_sandbox = str(sess_dir / "saveout")
+            retail_sandbox = viewbuild.win_path(sess_dir / "saveout")
+            _log(f"save sandbox armed (real game dir protected) → {retail_sandbox}")
+        else:
+            _log("WARN no usable reference save — captures will use the REAL game "
+                 "dir (not reproducible; pass --save-ref or check the game dir)")
+
     run_port = args.only in (None, "port") and not args.no_capture
     run_retail = args.only in (None, "retail") and not args.no_capture
     if run_port:
         _log("driving port…")
         try:
             rc = drive_port(compiled, port_dir, args.port_max_frames, args.port_timeout_ms,
-                            rng_seed, draws=args.draws, force_redraw=args.force_redraw)
+                            rng_seed, draws=args.draws, force_redraw=args.force_redraw,
+                            save_sandbox=port_sandbox)
             _log(f"port rc={rc}")
         except subprocess.TimeoutExpired:
             _log("port TIMED OUT (continuing with what landed)")
@@ -331,7 +443,8 @@ def main() -> int:
         _log("driving retail…")
         try:
             rc = drive_retail(compiled, retail_dir, args.remote, rng_seed, slots,
-                              draws=args.draws, force_redraw=args.force_redraw)
+                              draws=args.draws, force_redraw=args.force_redraw,
+                              save_sandbox=retail_sandbox)
             _log(f"retail rc={rc}")
         except subprocess.TimeoutExpired:
             _log("retail TIMED OUT (continuing with what landed)")
