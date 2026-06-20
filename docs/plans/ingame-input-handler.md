@@ -247,3 +247,55 @@ win via `terrain_info.jsonl`. End-Turn → reports stays the deeper step.
   extract those tables as the handlers land.
 - The shared tail `FUN_004323fe` (right-panel tab strip) fires across most screens;
   port it once with the skeleton.
+
+## 2026-06-20 (session 3) — End-Turn LANDED; turn-advance season change VERIFIED; AI-brain is the last gate
+
+The strategic in-game frontier moved a long way this session.
+
+**Every-frame map composite (commit d7cc930, engine-quirk #209).** The root
+cause of the "0x27 report renderer" gap was NOT a screen-0x27 dispatch arm
+(FUN_0040f1a0 has no 0x27 case) — it was that the port only composited the map
+on the demand-redraw seam, never retail's EVERY-FRAME map scene (FUN_004050c0,
+tick line 42).  Ported it (full strat render each in-game frame, anim counters
+free-running via a LIVE/PINNED flag so the seats stay byte-exact).  Result: the
+boot 256-warning behind the welcome scroll is GONE (endturn_seal t030
+14.82%→0.08%, user-confirmed "popups 1:1"); grid_load_dense parity HELD at
+0.055%.  This is also the render substrate for everything dynamic — animation,
+army moves, AND the season change below.
+
+**End-Turn button (commit ef7a675).**  `hud_btn_a` hook = FUN_00432967: the
+End-Turn button is entry 5 of table DAT_004dc680 (rect [0,0x1e]-[0xa1,0x31] at
+origin 0x1de,0x1ae, type-1 LMB-press, action FUN_0043ac23), hit-tested via the
+reused engine_menu_hotspot_click (= FUN_0040e3ee).  The action (SP arm of
+FUN_0043ac23) sets the active realm's ready slot to 999.  The 5 panel TABS in
+that row flip to unported sub-screens → deferred.
+
+**Season bank reload (commit ef7a675).**  After the turn passes rotate the
+season, engine_turn_advance reloads the strategic banks (engine_pl8 keys the
+table off the season) so the new season's terrain shows — retail does this
+lazily on the screen-0x22 rollover-scroll close (unported); the port reloads
+eagerly.
+
+**VERIFIED end-to-end (tools/traces/endturn_advance.jsonl, port-only):**
+click End-Turn on a clean map → turn rolls over → season 4(Winter)→1(Spring):
+terrain snow→green AND HUD "Winter"→"Spring", composited live.  Pushed to feed.
+
+**⚠ THE LAST GATE — AI-brain completion (next frontier).**  The turn only
+advances with `OL2_FORCE_AI_READY` (parks the non-current AI realms ready=999).
+Without it the per-tick AI brain FSM (FUN_0049a581 / engine_army_ai_run_per_tick)
+STALLS: slot 84 (brain cursor) parks at 4, slot 85 (players-still-thinking)
+stays 5, and the AI realms never set their own ready=999 → engine_turn_end_check
+never resolves phase 4.  Retail's AI completes (its turn processes in seconds);
+the port's brain parks short.  So a FULLY-NATURAL turn advance (no dev flag) is
+gated on the AI brain reaching its turn-end — the deeper sim frontier to chase
+next.  Everything downstream of "all realms ready" (resolve → phases 5/6/7 →
+rollover → season change → reload → render) is proven working.
+
+**Capture caveat (CRITICAL, engine-quirk territory):** WSL→Windows env vars do
+NOT cross unless listed in WSLENV.  flake.nix now forwards OL2_NO_HINTS +
+OL2_FORCE_AI_READY (alongside OPENLORDS2_GAME_DIR); set the values AND rely on
+that WSLENV entry, or getenv() in the .exe silently sees nothing.  Also: a
+trace's injected cursor reaches the game via the WM_MOUSEMOVE cache (1:1 at the
+pinned 640×480 client) — position-INDEPENDENT input (scroll dismiss) worked
+before without this, but the End-Turn HIT-TEST is the first capture-verified
+position-DEPENDENT click.
