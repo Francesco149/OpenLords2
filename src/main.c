@@ -68,6 +68,8 @@
 #include "engine_territory.h"
 #include "engine_map_query.h"
 #include "engine_map_render.h"
+#include "engine_terrain_info.h"   /* forced terrain-info render (verification seat) */
+#include "gfx_wrap.h"              /* gfx_wrap_set_tall_font_marker */
 #include "engine_map_scene.h"
 #include "engine_map_terrain.h"
 #include "engine_minimap.h"
@@ -184,6 +186,7 @@ static const char *g_title_type;
  * Implies --gfx-init.  DIR is auto-translated Linux→WSL-UNC like
  * --capture-to. */
 static const char *g_strat_map_dir;
+static int         g_ti_cell = -1;     /* --ti-cell N: forced terrain-info render */
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 static int         g_strat_load_live;  /* --strat-load-live: drive the live
                                         * load pump from the title menu */
@@ -1771,6 +1774,60 @@ static void bringup_strat_map(const char *dir)
         }
     }
 
+    /* Forced terrain-info panel render (verification seat) — set
+     * OPENLORDS2_TI_CELL=<cell-index> to compute the terrain attrs for that
+     * descriptor cell and paint the screen-4 "Here Be Dragons" panel over the
+     * rendered map.  Bypasses the live input/popup path (blocked on the
+     * report-screen popup frontier) so the panel render can be eyeballed vs
+     * retail.  cell-index = row*0x40 + col (descriptor grid is 64×64). */
+    {
+        if (g_ti_cell >= 0) {
+            int cell = g_ti_cell;
+            engine_map_terrain_in_t cin;
+            cin.cell_grid = descr;
+            cin.army_recs = army;
+            cin.tile_off  = cell * 8;
+            engine_map_terrain_out_t cout;
+            memset(&cout, 0, sizeof cout);
+            engine_map_query_terrain_info(&cin, &cout);
+
+            engine_terrain_info_attr_t a;
+            memset(&a, 0, sizeof a);
+            a.flags        = cout.flags;
+            a.terrain_type = cout.terrain_type;
+            a.head_link    = cout.head_link;
+            a.owner        = cout.army_byte5;
+            a.derived_bit  = cout.derived_bit;
+            a.player_id    = (int)s_slot_0057c8cc;
+            a.army_block   = army;
+
+            size_t ti_loc_size = 0;
+            const uint8_t *ti_locblob = config_localization_data(&ti_loc_size);
+            localization_state_t ti_loc;
+            ti_loc.blob = (unsigned char *)ti_locblob;
+            ti_loc.walker_offset = 0;
+
+            engine_terrain_info_render_ctx_t tctx;
+            memset(&tctx, 0, sizeof tctx);
+            tctx.chrome        = gfx_load_chrome_sheet();
+            tctx.system_sheet  = gfx_system_sheet_current();
+            tctx.title_font    = gfx_load_title_font();
+            tctx.menu_font     = gfx_load_menu_font();
+            tctx.glyph_table   = gfx_glyph_render_map();
+            tctx.glyph_metrics = gfx_glyph_measure_map();
+            tctx.icon_sheet    = gfx_load_terrain_icon_sheet();
+            tctx.map_id        = (int)s_slot_0053f034;
+            tctx.loc           = &ti_loc;
+            if (tctx.title_font) {
+                gfx_wrap_set_tall_font_marker(tctx.title_font);
+            }
+            engine_terrain_info_render(&a, &tctx);
+            log_line("strat-map: forced terrain-info cell=%d flags=0x%02x type=%d "
+                     "head=%d county=%d", cell, cout.flags, cout.terrain_type,
+                     cout.head_link, cout.county_id);
+        }
+    }
+
     /* Dump the raw 8bpp canvas for the palette-applied parity diff. */
     if (canvas) {
         char path[MAX_PATH];
@@ -3020,6 +3077,8 @@ static void parse_cmdline(LPSTR lpCmd)
         } else if (!strncmp(a, "--capture-to=", 13)) {
             g_capture_dir = a + 13;
             g_gfx_init = 1;
+        } else if (!strcmp(a, "--ti-cell") && i + 1 < ntok) {
+            g_ti_cell = (int)strtol(tokens[++i], NULL, 0);
         } else if (!strcmp(a, "--save-sandbox") && i + 1 < ntok) {
             g_save_sandbox = tokens[++i];
         } else if (!strncmp(a, "--save-sandbox=", 15)) {

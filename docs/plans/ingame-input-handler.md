@@ -57,7 +57,41 @@ prologue latches, region classify, dismiss-chip subsumption, the full strategic
 (==0) screen incl. the map fall-through (dismiss / view-mode-2 / army-LMB /
 terrain-RMB), the matched terrain-info (==4) close case, and the shared tail.
 
-## What's left for terrain-info ("Here Be Dragons", map RMB) — NEXT SESSION
+## 2026-06-20 (session 2) — terrain-info LANDED end-to-end; render VISUALLY VERIFIED
+
+All three pieces ported + committed; the panel render is confirmed correct via a
+forced-render seat.
+
+| piece | retail | port | status |
+|---|---|---|---|
+| opener glue | FUN_0043caf4 | `engine_terrain_info_open` (engine_terrain_info.c) | DONE, 10 tests (commit 14a6810) |
+| panel render | FUN_0041befe + FUN_0041c208 | `engine_terrain_info_render` + the two classifiers (engine_terrain_info.c) | DONE, 9 tests (commit ad236b2) |
+| live wiring | FUN_0042ff10 tick seam | `engine_tick_ingame_input_step` + screen-4 arm (engine.c) | DONE, builds clean (commit 9574bce) |
+
+- The **parchment box is the already-ported `gfx_panel_draw`** with the panels.pl8
+  chrome sheet (quirk #207); the text uses the same localized-wrap primitives the
+  event-scroll renderer plumbs; the terrain icon loads from icon_tmp.pl8.  The army
+  sub-renderers (FUN_0041cb3a/d299/da2f), the complex county/army panel
+  (FUN_0041b19d), and the FUN_00426216 SFX cue (quirk #208) are DEFERRED — guarded
+  where retail branches, so common terrain renders + the army arms are stubbed.
+- **VISUAL VERIFICATION (the win):** a forced-render seat `--ti-cell <cell>` runs the
+  terrain compute for a descriptor cell + paints the screen-4 panel over the
+  `--strat-map` map (bypasses the blocked live input path).  Cell 2080 →
+  a polished, correct panel: "Kent" (county, blackletter title), "Scrubland."
+  (terrain name), the landscape icon (sprite 0x17), and the wrapped body "Empty
+  land that may be crossed, but is unusable for farming." on the parchment chrome.
+  The render is byte-plausible vs retail (structure + strings + icon all correct);
+  the pixel-exact zoom-diff is the remaining polish pass.
+- **LIVE path blocked on a SEPARATE frontier:** the live RMB→terrain-info path is
+  wired but cannot be triggered in a both-engines capture because the port never
+  reaches a clean in-game map — a re-posting "Game Objectives" / report-screen
+  popup (the unported 0x27 scroll renderer, [[project_loadflip_rng_clarified]])
+  sits on the map, so the dispatcher consumes the RMB as a dismiss (correct
+  behavior).  No regression: the welcome-series deterministic seal-dismiss still
+  works.  Verifying the live RMB end-to-end needs that popup frontier closed (or an
+  interactive seat on a hand-cleared map).
+
+## What's left for terrain-info ("Here Be Dragons", map RMB) — DONE (see above)
 
 Three pieces, all best done WITH the in-game viewer (render-parity + integration):
 
