@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **768** (31.4%) — tested 713, ported 55
-- code bytes touched: **40.4%** (338,586 / 838,629 B)
-- unported: **1679**
+- touched: **787** (32.2%) — tested 734, ported 53
+- code bytes touched: **41.0%** (344,241 / 838,629 B)
+- unported: **1660**
 - orphan refs (in src/, not in function table): 7
 
-## tested (713) — ported + host unit suite
+## tested (734) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -138,8 +138,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40cfd2 | FUN_0040cfd2 | 490 | engine_button.c, engine_button.h, engine_menu_input.h (+3) |
 | 0x40d1bc | FUN_0040d1bc | 181 | gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40da1e | FUN_0040da1e | 869 | engine.c, engine_delta.c, engine_menu_input.c (+2) |
+| 0x40deca | FUN_0040deca | 152 | engine_ingame_input.h |
 | 0x40e3ee | FUN_0040e3ee | 505 | engine_button.h, engine_menu_input.c, engine_menu_input.h |
 | 0x40e5e7 | FUN_0040e5e7 | 153 | engine_menu_input.c, engine_menu_input.h |
+| 0x40e7e4 | FUN_0040e7e4 | 87 | engine_ingame_input.h |
 | 0x40e890 | FUN_0040e890 | 43 | engine.c, engine.h, main.c |
 | 0x40e8bb | FUN_0040e8bb | 240 | engine.c, engine.h, main.c |
 | 0x40e9ab | FUN_0040e9ab | 641 | config.h, main.c |
@@ -158,6 +160,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4107d1 | FUN_004107d1 | 652 | engine_hud_panel.c |
 | 0x410aa9 | FUN_00410aa9 | 456 | engine_minimap.c, engine_minimap.h, engine_screen_strat.c (+1) |
 | 0x410cbd | FUN_00410cbd | 654 | engine_minimap.c, engine_minimap.h |
+| 0x41438c | FUN_0041438c | 446 | engine_ingame_input.h |
 | 0x4148e4 | FUN_004148e4 | 264 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x4149ec | FUN_004149ec | 1050 | engine_title_render.c, engine_title_render.h, gfx_sprite.c (+1) |
 | 0x419c78 | FUN_00419c78 | 682 | engine_hud_menubar.c, engine_hud_menubar.h, engine_screen_strat.c (+2) |
@@ -191,7 +194,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x425d35 | FUN_00425d35 | 184 | audio.c, main.c |
 | 0x426216 | FUN_00426216 | 185 | engine_army_move.c |
 | 0x427990 | FUN_00427990 | 779 | audio.h, engine_combat.c, engine_combat.h |
-| 0x427d19 | FUN_00427d19 | 89 | audio.c, audio.h, engine.c (+1) |
+| 0x427d19 | FUN_00427d19 | 89 | audio.c, audio.h, engine.c (+2) |
 | 0x427ed0 | FUN_00427ed0 | 311 | engine_map_query.c, engine_territory.c, game_init.c (+1) |
 | 0x428007 | FUN_00428007 | 113 | engine_army_ai.c, engine_army_state.c, engine_army_state.h (+3) |
 | 0x428078 | FUN_00428078 | 113 | engine_army_ai.c, engine_combat.c, game_init.c (+1) |
@@ -215,9 +218,14 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42e3ba | FUN_0042e3ba | 164 | main.c |
 | 0x42ec91 | FUN_0042ec91 | 1207 | gfx.c, gfx.h, gfx_paint.h |
 | 0x42f1df | FUN_0042f1df | 295 | gfx.c, main.c |
-| 0x42ff10 | FUN_0042ff10 | 8140 | engine.c, engine_camera.h, engine_menu_input.c (+2) |
+| 0x42ff10 | FUN_0042ff10 | 8140 | engine.c, engine_camera.h, engine_ingame_input.c (+4) |
+| 0x432221 | FUN_00432221 | 477 | engine_ingame_input.h |
+| 0x4323fe | FUN_004323fe | 64 | engine_ingame_input.h |
+| 0x432640 | FUN_00432640 | 262 | engine_ingame_input.c, engine_ingame_input.h |
 | 0x432746 | FUN_00432746 | 69 | engine_territory.c, engine_territory.h, game_init.c |
 | 0x43278b | FUN_0043278b | 223 | engine_territory.c, engine_territory.h |
+| 0x43292d | FUN_0043292d | 58 | engine_ingame_input.h |
+| 0x432967 | FUN_00432967 | 61 | engine_ingame_input.h |
 | 0x4329ec | FUN_004329ec | 281 | engine_load_pump.c, engine_load_pump.h, engine_menu_input.c (+4) |
 | 0x432b05 | FUN_00432b05 | 451 | engine_menu_input.c, engine_menu_input.h |
 | 0x432cc8 | FUN_00432cc8 | 526 | engine_menu_input.c, main.c |
@@ -238,10 +246,21 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x434308 | FUN_00434308 | 62 | engine_menu_input.c |
 | 0x434346 | FUN_00434346 | 178 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x4343f8 | FUN_004343f8 | 36 | main.c |
+| 0x4350a1 | FUN_004350a1 | 232 | engine_ingame_input.h |
 | 0x436d02 | FUN_00436d02 | 768 | engine_army_ai.c, engine_army_ai.h |
+| 0x437002 | FUN_00437002 | 261 | engine_ingame_input.h |
 | 0x437535 | FUN_00437535 | 390 | engine_combat.c, engine_combat.h, engine_map_query.c |
 | 0x438681 | FUN_00438681 | 699 | engine_army_ai.c |
+| 0x438990 | FUN_00438990 | 257 | engine_ingame_input.h |
+| 0x438a91 | FUN_00438a91 | 59 | engine_ingame_input.h |
+| 0x438ceb | FUN_00438ceb | 326 | engine_ingame_input.h |
+| 0x438e3b | FUN_00438e3b | 574 | engine_ingame_input.h |
+| 0x439079 | FUN_00439079 | 169 | engine_ingame_input.h |
+| 0x439122 | FUN_00439122 | 537 | engine_ingame_input.h |
 | 0x43b917 | FUN_0043b917 | 115 | engine_combat.c, engine_combat.h |
+| 0x43caf4 | FUN_0043caf4 | 354 | engine_ingame_input.h |
+| 0x43cc56 | FUN_0043cc56 | 16 | engine_ingame_input.h |
+| 0x43ce1a | FUN_0043ce1a | 1263 | engine_ingame_input.h |
 | 0x43de70 | FUN_0043de70 | 1211 | engine.c, engine.h, engine_rate.c |
 | 0x43e330 | FUN_0043e330 | 259 | engine.c, engine.h, engine_rate.c (+1) |
 | 0x43e433 | FUN_0043e433 | 218 | engine.h, engine_rate.c |
@@ -372,7 +391,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4525d5 | FUN_004525d5 | 83 | engine_dirty_rect.h |
 | 0x452628 | FUN_00452628 | 56 | engine_dirty_rect.c, engine_dirty_rect.h |
 | 0x4526b3 | FUN_004526b3 | 87 | engine_dirty_rect.c, engine_dirty_rect.h |
-| 0x45270a | FUN_0045270a | 43 | engine_dirty_rect.h, save.h |
+| 0x45270a | FUN_0045270a | 43 | engine_dirty_rect.h, engine_ingame_input.h, save.h |
 | 0x452735 | FUN_00452735 | 53 | engine_dirty_rect.h |
 | 0x4527a6 | FUN_004527a6 | 101 | engine.c, engine_battlefield_render.h, engine_button.c (+5) |
 | 0x4650b0 | FUN_004650b0 | 265 | engine_army_state.c, engine_army_state.h, engine_combat.c (+2) |
@@ -473,6 +492,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x472b40 | FUN_00472b40 | 133 | engine.c, engine_event_queue.c, engine_event_queue.h |
 | 0x472bc5 | FUN_00472bc5 | 560 | engine.c, engine_army_ai.c, engine_army_move.c (+7) |
 | 0x472df5 | FUN_00472df5 | 81 | engine_event_queue.c, engine_event_queue.h |
+| 0x476768 | FUN_00476768 | 245 | engine.c, engine_ingame_input.h |
+| 0x47685d | FUN_0047685d | 512 | engine.c, engine_ingame_input.h |
 | 0x47ed34 | FUN_0047ed34 | 103 | engine.c, engine_camera.c, engine_camera.h |
 | 0x48ee46 | FUN_0048ee46 | 87 | engine_tile.c, engine_tile.h |
 | 0x4917dd | FUN_004917dd | 599 | engine_tile.c, engine_tile.h, save.c |
@@ -693,9 +714,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b49f7 | FUN_004b49f7 | 705 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b4cb8 | FUN_004b4cb8 | 1659 | gfx_sprite.c, gfx_sprite.h, gfx_sprite_render.c (+1) |
 | 0x4b5333 | FUN_004b5333 | 2997 | gfx_sprite.c, gfx_sprite.h |
-| 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+8) |
+| 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+9) |
 | 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_button.c, engine_button.h (+3) |
-| 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_load_pump.h, engine_menu_input.c (+4) |
+| 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_ingame_input.h, engine_load_pump.h (+5) |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c |
 | 0x4bb978 | FUN_004bb978 | 614 | engine.c, engine.h, engine_rate.c |
 | 0x4bbc80 | FUN_004bbc80 | 465 | engine.c, engine.h, engine_phase.c |
@@ -735,7 +756,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine_map_scene.c, engine_map_scene.h |
 
-## ported (55) — reimplemented, no host test yet
+## ported (53) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -764,8 +785,6 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x459258 | FUN_00459258 | 4377 | drawb_stripb_459258.h |
 | 0x472e46 | FUN_00472e46 | 595 | engine.c |
 | 0x47309e | FUN_0047309e | 10915 | engine.c |
-| 0x476768 | FUN_00476768 | 245 | engine.c |
-| 0x47685d | FUN_0047685d | 512 | engine.c |
 | 0x476a5d | FUN_00476a5d | 74 | engine.c |
 | 0x476aa7 | FUN_00476aa7 | 770 | engine.c |
 | 0x476da9 | FUN_00476da9 | 120 | engine.c |

@@ -1187,6 +1187,33 @@ struct test_case {
     X(engine_camera_hover_edge_bottom) \
     X(engine_camera_hover_edge_left_odd_row) \
     X(engine_camera_hover_scroll_offset) \
+    X(ingame_region_map_area) \
+    X(ingame_region_top_bar) \
+    X(ingame_region_right_panel_mode_nonzero) \
+    X(ingame_region_right_panel_mode0_extends_up) \
+    X(ingame_region_high_screen_returns_zero) \
+    X(ingame_region_panel_x_excludes_left) \
+    X(ingame_prologue_latches) \
+    X(ingame_tail_falling_edge_latch) \
+    X(ingame_dismiss_chip_consumes_skips_body) \
+    X(ingame_ui_router_consumes_skips_body) \
+    X(ingame_afa8_rmb_swallow) \
+    X(ingame_strategic_call_order) \
+    X(ingame_strategic_edge_scroll_short_circuits) \
+    X(ingame_strategic_turn_busy_gates_inner) \
+    X(ingame_map_rmb_opens_terrain_info) \
+    X(ingame_map_lmb_selects_army) \
+    X(ingame_map_lmb_precedence_over_rmb) \
+    X(ingame_map_dismiss_precedes_clicks) \
+    X(ingame_map_viewmode2_jump_bare_returns) \
+    X(ingame_screen4_rmb_closes) \
+    X(ingame_screen4_turn_busy_closes) \
+    X(ingame_screen4_generic_click_closes) \
+    X(ingame_screen4_subhandler_consumes_no_close) \
+    X(ingame_screen4_idle_no_click_stays_open) \
+    X(ingame_tail_tab_strip_resets_screen) \
+    X(ingame_tail_tab_strip_not_run_without_press) \
+    X(ingame_null_hooks_safe) \
     X(engine_camera_anchor_zero_unchanged) \
     X(engine_camera_anchor_in_range_unchanged) \
     X(engine_camera_anchor_at_max_x_unchanged) \

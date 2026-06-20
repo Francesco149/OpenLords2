@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 713,
-  "ported": 55,
-  "unported": 1679,
+  "tested": 734,
+  "ported": 53,
+  "unported": 1660,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 768,
-  "pct_touched": 31.4,
-  "pct_tested": 29.1,
+  "touched": 787,
+  "pct_touched": 32.2,
+  "pct_tested": 30.0,
   "bytes_total": 838629,
-  "bytes_touched": 338586,
-  "pct_bytes_touched": 40.4
+  "bytes_touched": 344241,
+  "pct_bytes_touched": 41.0
  },
  "orphan_refs": [
   "0x004148",
@@ -2000,8 +2000,10 @@
    "name": "FUN_0040deca",
    "size": 152,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x40df62",
@@ -2103,8 +2105,10 @@
    "name": "FUN_0040e7e4",
    "size": 87,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x40e83b",
@@ -2553,8 +2557,10 @@
    "name": "FUN_0041438c",
    "size": 446,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x41454a",
@@ -3930,6 +3936,7 @@
     "src/audio.c",
     "src/audio.h",
     "src/engine.c",
+    "src/engine_ingame_input.h",
     "src/main.c"
    ]
   },
@@ -4696,6 +4703,8 @@
    "src": [
     "src/engine.c",
     "src/engine_camera.h",
+    "src/engine_ingame_input.c",
+    "src/engine_ingame_input.h",
     "src/engine_menu_input.c",
     "src/engine_menu_input.h",
     "src/engine_title_render.c"
@@ -4714,16 +4723,20 @@
    "name": "FUN_00432221",
    "size": 477,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x4323fe",
    "name": "FUN_004323fe",
    "size": 64,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x432443",
@@ -4746,8 +4759,11 @@
    "name": "FUN_00432640",
    "size": 262,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.c",
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x432746",
@@ -4801,16 +4817,20 @@
    "name": "FUN_0043292d",
    "size": 58,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x432967",
    "name": "FUN_00432967",
    "size": 61,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x4329a4",
@@ -5634,8 +5654,10 @@
    "name": "FUN_004350a1",
    "size": 232,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x435189",
@@ -6045,8 +6067,10 @@
    "name": "FUN_00437002",
    "size": 261,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x437107",
@@ -6195,16 +6219,20 @@
    "name": "FUN_00438990",
    "size": 257,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x438a91",
    "name": "FUN_00438a91",
    "size": 59,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x438acc",
@@ -6235,32 +6263,40 @@
    "name": "FUN_00438ceb",
    "size": 326,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x438e3b",
    "name": "FUN_00438e3b",
    "size": 574,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x439079",
    "name": "FUN_00439079",
    "size": 169,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x439122",
    "name": "FUN_00439122",
    "size": 537,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x43933b",
@@ -6934,16 +6970,20 @@
    "name": "FUN_0043caf4",
    "size": 354,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x43cc56",
    "name": "FUN_0043cc56",
    "size": 16,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x43cc66",
@@ -6990,8 +7030,10 @@
    "name": "FUN_0043ce1a",
    "size": 1263,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x43d309",
@@ -11016,6 +11058,7 @@
    "status": "tested",
    "src": [
     "src/engine_dirty_rect.h",
+    "src/engine_ingame_input.h",
     "src/save.h"
    ]
   },
@@ -13202,9 +13245,10 @@
    "name": "FUN_00476768",
    "size": 245,
    "is_thunk": false,
-   "status": "ported",
+   "status": "tested",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/engine_ingame_input.h"
    ]
   },
   {
@@ -13212,9 +13256,10 @@
    "name": "FUN_0047685d",
    "size": 512,
    "is_thunk": false,
-   "status": "ported",
+   "status": "tested",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/engine_ingame_input.h"
    ]
   },
   {
@@ -19594,6 +19639,7 @@
     "src/engine.c",
     "src/engine.h",
     "src/engine_fps.c",
+    "src/engine_ingame_input.h",
     "src/engine_mp_render.c",
     "src/engine_screen_strat.c",
     "src/engine_tick_cadence.h",
@@ -19626,6 +19672,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_ingame_input.h",
     "src/engine_load_pump.h",
     "src/engine_menu_input.c",
     "src/engine_menu_input.h",

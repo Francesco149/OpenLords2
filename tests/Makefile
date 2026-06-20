@@ -65,6 +65,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_hud_menubar.c \
                    ../src/engine_map_init.c \
                    ../src/engine_menu_input.c \
+                   ../src/engine_ingame_input.c \
                    ../src/engine_map_query.c \
                    ../src/engine_strat_cost.c \
                    ../src/engine_territory.c \
@@ -139,6 +140,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_minimap.c \
                    test_engine_hud_panel.c \
                    test_engine_menu_input.c \
+                   test_engine_ingame_input.c \
                    test_engine_map_query.c \
                    test_engine_strat_cost.c \
                    test_engine_territory.c \
