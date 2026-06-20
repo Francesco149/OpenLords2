@@ -7071,3 +7071,28 @@ type 7): objectives-frame diff 43%→14.8%, and the objectives panel proper
 (x[16,464) y[64,232)) is now **0-px byte-exact** vs retail.  The 14.8% residual is
 the SEPARATE stale-256-warning block (y[272,383], below the panel) — the dismiss
 doesn't repaint the map there (the "256-warning dismiss-tick" follow-up).
+
+## 205 — the in-game dispatcher's view-mode-2 LMB path BARE-RETURNS, skipping the tail edge latch (the one asymmetric exit)
+
+`FUN_0042ff10` (`engine_ingame_input_dispatch`) ends every screen-case branch with
+`goto LAB_00431f25` — the shared tail that runs the falling-edge latch on
+`DAT_0057cac4` and clears `DAT_004eabb4 = 0`.  Every path reaches it EXCEPT one: the
+strategic-screen view-mode-2 map-LMB jump (`DAT_005533b0 && DAT_004eafb4 &&
+DAT_0057cb18 == 2`) does `DAT_004eac50 = 0; FUN_004350a1(); return;` — a bare
+`return`, NOT a goto.  So on that one frame the tail latch does not run and
+`DAT_004eabb4` is left at its entry value (not cleared).  The port mirrors this
+(`st->returned_early = 1; return;` before the tail).  Almost certainly an oversight
+in the original (every sibling path gotos), but it is in the binary, so it is
+preserved for parity; pinned by `test_ingame_map_viewmode2_jump_bare_returns`.
+
+## 206 — terrain-info compute (FUN_0046d5fe) reads the army record with the ORIGINAL head-link, THEN applies the 0x20→0 reset (statement order is load-bearing)
+
+`engine_map_query_terrain_info` (FUN_0046d5fe) reads the hovered cell's head-link
+byte (+7) into `DAT_005681e0`, immediately reads the army record
+`(&DAT_0053f9b5)[DAT_005681e0 * 0x300]` (= record[head_link] byte +5) into
+`DAT_005681d0`, and only AFTER that does `if (DAT_005681e0 == 0x20) DAT_005681e0 = 0`.
+So the army-record fetch uses the UN-reset head-link (a head-link of 0x20 fetches
+record 0x20, not record 0), while every later consumer of `DAT_005681e0` sees the
+reset-to-0 value.  A port that hoisted the reset above the army read would fetch the
+wrong record.  (0x20 is the "no real army / sentinel" head-link; the reset funnels
+later logic to record 0.)  Pinned by `test_map_query_terrain_head_link_reset`.

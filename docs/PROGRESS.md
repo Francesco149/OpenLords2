@@ -7,6 +7,62 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-20 (session 9) — IN-GAME INPUT-HANDLER SPINE: the dispatcher (FUN_0042ff10) + cursor→cell resolver (FUN_00429ba4) + terrain-info compute (FUN_0046d5fe) ported as pure/tested modules (49 tests). Autonomous session; live wiring + render deferred to a verification session.
+
+Picked up the in-game input-handler frontier ([[project_ingame_input_handler]],
+plan in `docs/plans/ingame-input-handler.md`).  The user stepped away with
+verification deferred, so this session lands the high-confidence, UNIT-TESTABLE
+half of the terrain-info click path (the render half + the live wiring are
+render-parity / integration work that needs the in-game viewer).  Three commits:
+
+**1. Cursor → map-cell resolver (FUN_00429ba4 → `engine_camera_cursor_to_cell`).**
+The inverse of the camera projection: screen cursor + live viewport geometry →
+the staggered-row map cell under the cursor, its tile index, and whether the
+cursor is over a valid tile.  This is the producer of retail's DAT_005533b0
+(`map_ready`) gate + DAT_00568974 (hovered tile) that the dispatcher reads to
+route map clicks.  Pure (in/out struct); verbatim staggered-row half-step parity
+math, the game-mode-2 +0x10 Y bias, the signed invalid-tile sentinel, the
+row/col edge flags.  14 host tests hand-compute every pick branch.
+
+**2. The dispatcher skeleton (FUN_0042ff10 → `engine_ingame_input`).** The per-tick
+strategic input/UI dispatcher, the enabler for every in-game click path.  Ported:
+the prologue latches + region classifier (FUN_00432640), the dismiss-chip / UI-
+router subsumption (the dispatcher calls the open-scroll dismiss handler FIRST,
+exactly like retail), the STRATEGIC (==0) screen in full (the 8 HUD/edge sub-
+handlers in retail call-order + short-circuit, then the map fall-through: dismiss /
+view-mode-2 jump / army-select on LMB / terrain-info on RMB, gated on the turn
+handshake + the map_ready cursor gate), the matched TERRAIN-INFO (==4) close case
+(any click → screen 0 + cleanup), and the shared tail.  Design mirrors
+engine_menu_input: per-frame input snapshot + mutable state struct + a HOOKS
+struct of sub-handler/action callbacks (NULL = inert — the default for the not-yet-
+ported handlers), so retail's exact call order + state transitions are preserved
+and unit-testable.  The ~30 other screen cases (battle/county/market/report) are
+deferred with NULL hook slots ready.  27 host tests (region classifier, latches,
+subsumption, call order + short-circuit, every map fall-through branch incl. LMB-
+over-RMB precedence + the view-mode-2 bare-return, the screen-4 close paths, tail).
+
+**3. Terrain-info compute (FUN_0046d5fe → `engine_map_query_terrain_info`).** Tile →
+the attribute bundle the "Here Be Dragons / <terrain>" popup + the right-panel HUD
+read (terrain type, county/owner id, flags, head-link/army id, derived bit).  Pure
+(cell grid + army record array passed explicitly); verbatim feature-width decode,
+the width-2 walk-back to the feature origin via the byte+4 sub-tile nibble, the
+head-link 0x20→0 reset, the two flag-clear rules.  8 host tests.
+
+**What's left for a visible terrain-info (NEXT SESSION, needs the viewer):** (a) the
+opener glue FUN_0043caf4 (mostly testable col/row math + state over the ported
+compute); (b) the panel render FUN_0041befe (778 B, screen-4 simple-terrain arm —
+RENDER-PARITY: zoom-diff loop) + a `screen==4 → FUN_0041b032` arm in
+engine_screen_dispatch; (c) the LIVE WIRING — replace engine.c's bare dismiss call
+(~2152) with the dispatcher, feed map_ready from the resolver (needs a camera-
+geometry getter off engine_map_render.c's g_cam_* statics), bind the hooks.  Full
+recipe + the ⚠don't-flip-map_ready-before-the-renderer caveat are in the plan doc.
+Verify via tools/traces/terrain_info.jsonl; no-regression = welcome series byte-exact
+(the dismiss path is subsumed unchanged).  Deferred-but-located: End-Turn→reports
+(FUN_00432967 + FUN_0040e3ee, the latter analogous to the ported
+engine_menu_hotspot_click).
+
+---
+
 ## 2026-06-19 (session 8) — BRAIN DISPATCHER FULLY PORTED: steps 7 (FUN_0049f93d defensive-deployment) + 6 (FUN_0049edc7 keep-builder) LANDED — all 14 per-tick brain steps are now live (no stubs remain)
 
 Picked up the session-7 "Next" — port the remaining stubbed brain steps.  Both

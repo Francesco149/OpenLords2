@@ -38,9 +38,76 @@ fans out to the real map-input handlers.
 
 ## Current port state
 
-Only the **dismiss chip** is wired: `engine_popup_scroll_input_step` (FUN_0047685d)
-is called from the tick (engine.c ~2152), gated to `g_engine_state == 3`. Nothing
-else of FUN_0042ff10 exists — clicks on the map / HUD / End-Turn do nothing.
+The LIVE tick (engine.c ~2152, gated `g_engine_state == 3`) still calls only the
+**dismiss chip** `engine_popup_scroll_input_step` (FUN_0047685d) directly — the
+dispatcher is NOT wired in yet (see the wiring recipe below).
+
+But the testable SPINE of the dispatcher + the terrain-info data path is now
+ported as pure/unit-tested modules (2026-06-20 session):
+
+| piece | retail | port | status |
+|---|---|---|---|
+| cursor → map cell + `map_ready` | FUN_00429ba4 | `engine_camera_cursor_to_cell` (engine_camera.c) | DONE, 14 tests |
+| dispatcher skeleton (screens 0 + 4) | FUN_0042ff10 | `engine_ingame_input_dispatch` + `_classify_region` (engine_ingame_input.c) | DONE, 27 tests |
+| terrain-info compute (tile → attrs) | FUN_0046d5fe | `engine_map_query_terrain_info` (engine_map_query.c) | DONE, 8 tests |
+
+The dispatcher is a pure function: per-frame input snapshot + mutable state struct
++ a HOOKS struct of sub-handler/action callbacks (NULL = inert). It ports the
+prologue latches, region classify, dismiss-chip subsumption, the full strategic
+(==0) screen incl. the map fall-through (dismiss / view-mode-2 / army-LMB /
+terrain-RMB), the matched terrain-info (==4) close case, and the shared tail.
+
+## What's left for terrain-info ("Here Be Dragons", map RMB) — NEXT SESSION
+
+Three pieces, all best done WITH the in-game viewer (render-parity + integration):
+
+1. **Opener orchestration — port FUN_0043caf4** (354 B, decompile read). It is glue
+   over already-ported pieces: re-resolve hover (FUN_00429ba4 param 1) → copy tile
+   (`DAT_0056795c = DAT_00568974`) → cell col/row (`DAT_0053f064 = tile/DAT_0057d338`,
+   `_DAT_0053e98c = %DAT_0052afd4`, `_DAT_0053e99c = /DAT_0052afd4`) → `FUN_0046d5fe`
+   (= engine_map_query_terrain_info, DONE) → set `DAT_00553e68 = county` if nonzero,
+   dismiss any open scroll (FUN_00476768) → `_DAT_005681cc = 3` → army-hover branch
+   (select army via FUN_0043278b + map render FUN_004050c0) → render (FUN_0041b032)
+   + FUN_004b37bc. Model as a function-with-hooks like the dispatcher; the col/row
+   math + state flags + army-hover branch are unit-testable.
+2. **Panel render — port FUN_0041befe** (778 B) — the screen-4 simple-terrain panel
+   (the `DAT_0052afbc==0 && DAT_0052afb4==0` arm of FUN_0041b032). Paints the
+   parchment chrome + "Here Be Dragons" title + the terrain-name string. RENDER-
+   PARITY work: run the zoom truth|mine|diff loop, push to the feed, r2-verify.
+   (The complex arm FUN_0041b19d, 3425 B, is the county/army info panel — defer.)
+   The screen-4 render arm wiring: engine_screen_dispatch currently routes screen 4
+   → other_stub; add a `screen==4 → FUN_0041b032` arm (cf. the FUN_0040f1a0 screen-4
+   case = `FUN_0041b032()`).
+3. **Live wiring — replace the bare dismiss call in engine.c's tick** (~2152) with:
+   - build `engine_ingame_input_in_t` from the live globals (the input mirrors
+     g_input_*, g_sim_extended_pause, g_sim_turn_progress/_timeout_reached,
+     s_slot_0057cb18 view_mode, the game-mode DAT_0057c8fc; region_in from the
+     cursor + HUD panel rect);
+   - `map_ready` + the hovered tile from `engine_camera_cursor_to_cell` fed the live
+     camera geometry (expose it from engine_map_render.c via a getter — the geometry
+     lives in its statics g_cam_*);  retail computes this in the render tick
+     (FUN_004b99c0 line 63: `DAT_005533b0 = FUN_00429ba4(0)`), so call the resolver
+     once per frame before dispatch and mirror DAT_00568974/DAT_005533b0;
+   - bind hooks: `dismiss_chip = engine_popup_scroll_input_step`,
+     `terrain_info_open` = the FUN_0043caf4 port, `terrain_info_close` →
+     FUN_0045270a (demand-redraw; FUN_0043cc56 just calls it), `army_select` =
+     FUN_0043ce1a (defer → NULL until ported), the HUD sub-handlers stay NULL;
+   - keep the reactive auto-dismiss poke (set rmb_released before dispatch).
+   **VERIFY:** capture `tools/traces/terrain_info.jsonl` → the port must now show the
+   terrain-info panel on the tile RMB matching retail; no-regression: the welcome
+   series stays byte-exact (the dismiss path is subsumed unchanged).
+   ⚠ Do NOT flip `map_ready` live until the screen-4 renderer (piece 2) exists, or
+   a tile RMB flips to a renderer-less screen 4 (visible freeze).
+
+### Deferred-but-located (the OTHER strategic paths)
+- **End-Turn → reports (plan step 2):** the HUD button row hit-test FUN_00432967 +
+  FUN_0040e3ee (the latter is the analog of the already-ported
+  engine_menu_hotspot_click — a 0x18-byte button-table walker). Then the turn
+  advance + the season production report 0x10 render arm.
+- The remaining strategic sub-handlers (edge-scroll FUN_00432221, FUN_00439079,
+  FUN_0043292d, FUN_00438ceb, FUN_00439122, FUN_00438e3b) + the ~30 non-strategic
+  screen cases each land with their screen/feature; the dispatcher already has the
+  NULL hook slots + (other-screen) deferral comments.
 
 ## Strategic-screen (DAT_004eac50 == 0) sub-handler chain (the priority target)
 
