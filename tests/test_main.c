@@ -1445,6 +1445,17 @@ struct test_case {
     X(map_query_terrain_flag_rule2) \
     X(map_query_terrain_derived_bit) \
     \
+    X(terrain_info_non_campaign_noop) \
+    X(terrain_info_normal_open_publishes_and_renders) \
+    X(terrain_info_pending_flag_snaps_back) \
+    X(terrain_info_viewmode2_jumps) \
+    X(terrain_info_county_sets_store_no_army) \
+    X(terrain_info_army_hover_selects) \
+    X(terrain_info_army_hover_inactive_no_select) \
+    X(terrain_info_army_already_selected_skips) \
+    X(terrain_info_open_scroll_dismissed) \
+    X(terrain_info_null_hooks_safe) \
+    \
     X(strat_cost_water_blocked) \
     X(strat_cost_level_gate) \
     X(strat_cost_road) \
