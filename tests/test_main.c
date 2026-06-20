@@ -1455,6 +1455,15 @@ struct test_case {
     X(terrain_info_army_already_selected_skips) \
     X(terrain_info_open_scroll_dismissed) \
     X(terrain_info_null_hooks_safe) \
+    X(terrain_info_class_empty) \
+    X(terrain_info_class_bit0_priority) \
+    X(terrain_info_class_bit4) \
+    X(terrain_info_class_bit3_derived) \
+    X(terrain_info_class_bit6_army_byte) \
+    X(terrain_info_class_bit7_named) \
+    X(terrain_info_class_bit7_army_stats) \
+    X(terrain_info_class_bit5_table) \
+    X(terrain_info_render_null_assets_safe) \
     \
     X(strat_cost_water_blocked) \
     X(strat_cost_level_gate) \

@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 737,
+  "tested": 745,
   "ported": 53,
-  "unported": 1657,
+  "unported": 1649,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 790,
-  "pct_touched": 32.3,
-  "pct_tested": 30.1,
+  "touched": 798,
+  "pct_touched": 32.6,
+  "pct_tested": 30.4,
   "bytes_total": 838629,
-  "bytes_touched": 345210,
-  "pct_bytes_touched": 41.2
+  "bytes_touched": 356865,
+  "pct_bytes_touched": 42.6
  },
  "orphan_refs": [
   "0x004148",
@@ -766,6 +766,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_terrain_info.c",
     "src/gfx_line.c",
     "src/gfx_line.h"
    ]
@@ -1408,8 +1409,10 @@
    "name": "FUN_00409397",
    "size": 73,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_terrain_info.c"
+   ]
   },
   {
    "va": "0x4093e0",
@@ -1538,6 +1541,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_terrain_info.c",
     "src/gfx_sprite_render.c",
     "src/gfx_sprite_render.h",
     "src/gfx_sprite_rle.h"
@@ -1915,6 +1919,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_terrain_info.c",
     "src/gfx_sprite_render.c",
     "src/gfx_sprite_render.h"
    ]
@@ -3120,56 +3125,75 @@
    "name": "FUN_0041b19d",
    "size": 3425,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_terrain_info.h"
+   ]
   },
   {
    "va": "0x41befe",
    "name": "FUN_0041befe",
    "size": 778,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_terrain_info.c",
+    "src/engine_terrain_info.h"
+   ]
   },
   {
    "va": "0x41c208",
    "name": "FUN_0041c208",
    "size": 1934,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_terrain_info.c",
+    "src/engine_terrain_info.h"
+   ]
   },
   {
    "va": "0x41c996",
    "name": "FUN_0041c996",
    "size": 420,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_terrain_info.c"
+   ]
   },
   {
    "va": "0x41cb3a",
    "name": "FUN_0041cb3a",
    "size": 1887,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_terrain_info.c",
+    "src/engine_terrain_info.h"
+   ]
   },
   {
    "va": "0x41d299",
    "name": "FUN_0041d299",
    "size": 1942,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_terrain_info.c",
+    "src/engine_terrain_info.h"
+   ]
   },
   {
    "va": "0x41da2f",
    "name": "FUN_0041da2f",
    "size": 1196,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_terrain_info.c",
+    "src/engine_terrain_info.h"
+   ]
   },
   {
    "va": "0x41dedb",
@@ -3824,7 +3848,9 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_move.c"
+    "src/engine_army_move.c",
+    "src/engine_terrain_info.c",
+    "src/engine_terrain_info.h"
    ]
   },
   {

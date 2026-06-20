@@ -7,10 +7,17 @@
  */
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include "engine_terrain_info.h"
 
 #include "call_trace.h"
+#include "gfx_panel.h"
+#include "gfx_line.h"
+#include "gfx_wrap.h"
+#include "gfx_text.h"
+#include "gfx_sprite_render.h"
+#include "localization.h"
 
 /* NULL-safe hook caller. */
 static void call_hook(engine_terrain_info_hook_fn fn,
@@ -106,4 +113,295 @@ void engine_terrain_info_open(const engine_terrain_info_open_in_t *in,
 
     call_hook(hooks->panel_render, in, st);         /* FUN_0041b032 */
     call_hook(hooks->tail, in, st);                 /* FUN_004b37bc */
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Screen-4 terrain-info PANEL RENDER (FUN_0041befe + FUN_0041c208).
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* g_per_army_768 field accessors (base DAT_0053f9b0, 0x300 stride). */
+static int army_u8(const uint8_t *blk, int head, int off)
+{
+    if (!blk) return 0;
+    return blk[(size_t)head * 0x300 + off];
+}
+static int army_s8(const uint8_t *blk, int head, int off)
+{
+    if (!blk) return 0;
+    return (int8_t)blk[(size_t)head * 0x300 + off];
+}
+static int army_s32(const uint8_t *blk, int head, int off)
+{
+    if (!blk) return 0;
+    const uint8_t *p = blk + (size_t)head * 0x300 + off;
+    return (int)((uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                 ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24));
+}
+
+/* Port of FUN_0041befe's classification (the chrome-sizing half).  Picks the
+ * panel row count DAT_00553d2c + the vertical offset DAT_005651c8 from the
+ * terrain flag byte / type / the army record under the cursor.  Branch shape
+ * verbatim from docs/decompiled/by-address/41befe.c lines 6-77. */
+engine_terrain_info_panel_class_t
+engine_terrain_info_classify_panel(const engine_terrain_info_attr_t *a)
+{
+    engine_terrain_info_panel_class_t c = {0x11, 2};
+    const int f = a->flags;
+
+    if ((f & 0x20) == 0) {
+        if ((f & 4) == 0) {
+            if ((f & 0x10) == 0) {
+                if ((f & 0x40) == 0) {
+                    if ((f & 0x80) == 0) {
+                        c.row = 0x11; c.off = 2;          /* empty terrain   */
+                    } else {
+                        if (a->terrain_type < 0xd) {
+                            c.row = 0x11;
+                        } else if (army_u8(a->army_block, a->head_link, 0x1c3) == 0) {
+                            if (army_u8(a->army_block, a->head_link, 0x1c2) == 0) {
+                                c.row = 0xe;
+                            } else {
+                                c.row = 0x11;
+                            }
+                        } else if (a->player_id == a->owner) {
+                            c.row = 10;
+                        } else {
+                            c.row = 0x11;
+                        }
+                        c.off = 2;
+                    }
+                } else {                                  /* flags & 0x40    */
+                    c.row = army_u8(a->army_block, a->head_link, 0x1ad) == 0 ? 0x11 : 0xf;
+                    c.off = 2;
+                }
+            } else {                                      /* flags & 0x10    */
+                c.row = 0x10; c.off = 0;
+            }
+        } else {                                          /* flags & 4       */
+            c.row = 0x11; c.off = 0;
+        }
+    } else {                                              /* flags & 0x20    */
+        if (a->terrain_type == 0x17) {
+            c.row = 0x11;
+        } else if (a->terrain_type == 0x18) {
+            c.row = 0x11;
+        } else if (a->player_id == a->owner) {
+            if (a->terrain_type == 0) {
+                c.row = 0xc;
+            } else if (a->terrain_type < 0x19) {
+                c.row = 5;
+            } else {
+                c.row = 0xc;
+            }
+        } else {
+            c.row = 0x11;
+        }
+        c.off = 2;
+    }
+    return c;
+}
+
+/* Port of FUN_0041c208's classification (the string/sprite-index half).
+ * Branch shape verbatim from docs/decompiled/by-address/41c208.c lines
+ * 14-154.  The army-stats arm (flags&0x80, type<0xd) reads the per-unit
+ * stat fields to bump the body sub-index and records the SFX-cue arg
+ * (FUN_00426216 — deferred, audio-off).  The flags&0x20 arm reads the
+ * special-feature table (a->terr_table; NULL ⇒ zeroes = deferred). */
+engine_terrain_info_text_class_t
+engine_terrain_info_classify_text(const engine_terrain_info_attr_t *a)
+{
+    engine_terrain_info_text_class_t r = {0, 0x16, 0, 0x17, 0, 0};
+    const int f = a->flags;
+    const int t = a->terrain_type;
+    const int h = a->head_link;
+
+    if ((f & 1) == 0) {
+        if ((f & 4) == 0) {
+            if ((f & 0x10) == 0) {
+                if ((f & 8) == 0) {
+                    if ((f & 0x20) == 0) {
+                        if ((f & 0x40) == 0) {
+                            if ((f & 0x80) == 0) {
+                                r.idx20 = 0; r.idx1c = 0x16; r.idx8 = 0x17; r.idxc = 0;
+                            } else if (t < 0xd) {
+                                /* army-stats arm */
+                                if (t < 4) {
+                                    r.idx20 = 9;  r.idx18 = 1; r.idx1c = 0x35; r.idx8 = 0x1e; r.idxc = 0; r.alert_arg = 10;
+                                } else if (t < 7) {
+                                    r.idx20 = 10; r.idx18 = 3; r.idx1c = 0x3d; r.idx8 = 0x1f; r.idxc = 0; r.alert_arg = 8;
+                                } else if (t < 10) {
+                                    r.idx20 = 0x52; r.idx18 = 2; r.idx1c = 0x53; r.idx8 = 0x12; r.idxc = 0; r.alert_arg = 8;
+                                } else { /* t < 0xd */
+                                    r.idx20 = 0xb; r.idx18 = 0; r.idx1c = 0x45; r.idx8 = 0x20; r.idxc = 0; r.alert_arg = 9;
+                                }
+                                int base = r.idx18 * 0x18;
+                                int diff = army_s32(a->army_block, h, 0x2a0 + base) -
+                                           army_s32(a->army_block, h, 0x2a4 + base);
+                                if (army_u8(a->army_block, h, 0x296 + base) == 0) {
+                                    if (9 < diff) {
+                                        if (diff < 0x19)      r.idx1c += 1;
+                                        else if (diff < 0x32) r.idx1c += 2;
+                                        else                  r.idx1c += 3;
+                                    }
+                                } else {
+                                    r.idx1c += 4;
+                                }
+                            } else if (t < 0x1a) {
+                                int b = army_u8(a->army_block, h, 0x1c3);
+                                if (b == 1)      r.idx20 = 0xe;
+                                else if (b == 2) r.idx20 = 0xf;
+                                else             r.idx20 = 8;
+                                r.idx1c = t + 7; r.idx8 = 0x1c; r.idxc = 0;
+                            }
+                        } else {                          /* flags & 0x40    */
+                            r.idx20 = 7; r.idx1c = 0x1b; r.idx8 = 0x1b; r.idxc = 0;
+                        }
+                    } else {                              /* flags & 0x20    */
+                        if (a->terr_table) {
+                            r.idx20 = a->terr_table[t * 4 + 0];
+                            r.idx1c = a->terr_table[t * 4 + 1];
+                            r.idx8  = a->terr_table[t * 4 + 2];
+                            r.idxc  = a->terr_table[t * 4 + 3];
+                        }
+                        if (r.idxc == 0x12) {
+                            r.idx1c = a->f25c == 0 ? 0x3a : 0x22;
+                        }
+                    }
+                } else {                                  /* flags & 8       */
+                    if (a->derived_bit == 0) {
+                        r.idx20 = 5; r.idx1c = 0x1a; r.idx8 = 0x1a;
+                    } else {
+                        r.idx20 = 4; r.idx1c = 0x19; r.idx8 = 0x19;
+                    }
+                    r.idxc = 0;
+                }
+            } else {                                      /* flags & 0x10    */
+                if (t == 0x10) { r.idx20 = 0x30; r.idx1c = 0x31; }
+                else           { r.idx20 = 0x32; r.idx1c = 0x33; }
+                r.idx8 = 0x1b; r.idxc = 0;
+            }
+        } else {                                          /* flags & 4       */
+            r.idx20 = 3; r.idx1c = 0x18; r.idx8 = 0x1d; r.idxc = 0;
+        }
+    } else {                                              /* flags & 1       */
+        r.idx20 = 1; r.idx1c = 0x17; r.idx8 = 0x18; r.idxc = 0;
+    }
+    return r;
+}
+
+/* The text/sprite draw sequence of FUN_0041c208 (after the classifier).
+ * The three army-roster sub-renderers (FUN_0041cb3a local_c==0x13,
+ * FUN_0041d299 local_c==0x15, FUN_0041da2f type 0xd..0x19) and the
+ * selection-blob sprite (FUN_0040a3d0, flags&0x40) are DEFERRED — guarded
+ * exactly where retail branches, so the common terrain paths render. */
+static void render_text(const engine_terrain_info_attr_t *a,
+                        const engine_terrain_info_render_ctx_t *ctx,
+                        int row, int off)
+{
+    localization_state_t *loc = (localization_state_t *)ctx->loc;
+    const int f = a->flags;
+    const int t = a->terrain_type;
+    const int h = a->head_link;
+    const int owned = (a->player_id == a->owner);
+
+    engine_terrain_info_text_class_t r = engine_terrain_info_classify_text(a);
+    /* r.alert_arg → FUN_00426216(n): a UI SFX cue, deferred (audio-off). */
+
+    /* Title line(s): the terrain name, title font, two-segment when idxc. */
+    gfx_text_set_line_x_acc(0);                            /* DAT_005cd404 = 0 */
+    gfx_wrap_localized_line(loc, 0x1e, r.idx20, 0x28, row * 0x10 + 0x40,
+                            ctx->title_font, ctx->glyph_table, 0x3f);
+    if (r.idxc != 0) {
+        gfx_wrap_localized_line(loc, 0x1e, r.idxc,
+                                gfx_text_line_x_acc() + 0x28, row * 0x10 + 0x40,
+                                ctx->title_font, ctx->glyph_table, 0x3f);
+    }
+
+    /* County name, centered (loc group 100, sub = map_id*0x14 + head_link).
+     * Gated on the panel offset DAT_005651c8 (retail FUN_0041c208 line 160). */
+    if (off != 0) {
+        gfx_wrap_localized_line_centered(loc, 100,
+            ctx->map_id * 0x14 + h, 8, row * 0x10 + 0x18, 0x1c0,
+            ctx->title_font, ctx->glyph_table, ctx->glyph_metrics, 0x3f);
+    }
+
+    /* Body block: word-wrapped, menu font.  local_c selects the layout;
+     * 0x13/0x15 route to the deferred army-roster renderers. */
+    if (r.idxc == 0x13) {
+        /* FUN_0041cb3a — army roster A (deferred). */
+    } else if (r.idxc == 0x15) {
+        /* FUN_0041d299 — army roster B (deferred). */
+    } else if (r.idxc == 0x12) {
+        if (owned) {
+            gfx_wrap_localized(loc, 0x1e, r.idx1c, 0x48, row * 0x10 + 0xb0,
+                               0x150, 100, 0x28, 0x170, ctx->menu_font,
+                               ctx->glyph_table, ctx->glyph_metrics, 0x3f);
+        } else {
+            gfx_wrap_localized(loc, 0x1e, r.idx1c, 0x68, row * 0x10 + 0x60,
+                               0x130, 100, 0x28, 0x170, ctx->menu_font,
+                               ctx->glyph_table, ctx->glyph_metrics, 0x3f);
+        }
+    } else {
+        /* both owned / not-owned arms use the same geometry */
+        gfx_wrap_localized(loc, 0x1e, r.idx1c, 0x68, row * 0x10 + 100,
+                           0x130, 0x40, 0x28, 0x170, ctx->menu_font,
+                           ctx->glyph_table, ctx->glyph_metrics, 0x3f);
+    }
+
+    /* Sub-info block. */
+    if ((f & 0x80) == 0) {
+        if ((f & 0x40) != 0 && army_u8(a->army_block, h, 0x1ad) != 0) {
+            /* selection-blob sprite (FUN_0040a3d0) — deferred (sel_sheet). */
+            if (ctx->sel_sheet) {
+                gfx_sprite_render_rle_from_blob(ctx->sel_sheet, 0x81, 0x32,
+                                                row * 0x10 + 0x9c);
+            }
+            gfx_wrap_localized(loc, 0x1e, 0x3b, 0x68, row * 0x10 + 0xa0,
+                               0x140, 100, 0x28, 0x170, ctx->menu_font,
+                               ctx->glyph_table, ctx->glyph_metrics, 0x3f);
+        }
+    } else if (t < 0xd) {
+        int rdy;
+        if (t < 4)       rdy = army_s8(a->army_block, h, 0x2af);
+        else if (t < 7)  rdy = army_s8(a->army_block, h, 0x2df);
+        else if (t < 10) rdy = army_s8(a->army_block, h, 0x2c7);
+        else             rdy = army_s8(a->army_block, h, 0x297);
+        gfx_wrap_localized_line(loc, 0x1e, rdy < 1 ? 0x4d : 0x4e, 0x68,
+                                row * 0x10 + 0x74, ctx->menu_font,
+                                ctx->glyph_table, 0x3f);
+    } else if (t < 0x1a) {
+        /* FUN_0041da2f — army roster C (deferred). */
+    }
+
+    /* Terrain icon sprite from icon_tmp.pl8 (retail loads it into the shared
+     * DAT_004eabec scratch then renders sprite[idx8]).  The caller binds the
+     * sheet; bind it as the global sprite blob for gfx_sprite_render. */
+    if (ctx->icon_sheet) {
+        gfx_sprite_render_set_blob(ctx->icon_sheet);
+        gfx_sprite_render(r.idx8, 0x28, row * 0x10 + 0x60);
+    }
+}
+
+void engine_terrain_info_render(const engine_terrain_info_attr_t *a,
+                                const engine_terrain_info_render_ctx_t *ctx)
+{
+    CALL_TRACE_ENTER(0x0041befe);
+
+    engine_terrain_info_panel_class_t pc = engine_terrain_info_classify_panel(a);
+    const int row = pc.row;
+
+    /* Parchment box (FUN_00409397 = gfx_panel_draw with the chrome sheet). */
+    if (ctx->chrome) {
+        gfx_panel_draw(ctx->chrome, 8, (row - pc.off) * 0x10 + 0x20,
+                       0x1c, (0x1b - row) + pc.off);
+    }
+    /* Corner "click to continue" seal (FUN_0040d1bc = gfx_sprite_seal_draw). */
+    gfx_sprite_seal_draw(ctx->system_sheet, 0x1ac, 0x1b6, 0);
+    /* Inner bevel frame (FUN_00403deb). */
+    gfx_line_rect_bevel_dark_br(0x20, row * 0x10 + 0x38, 400, (0x18 - row) * 0x10);
+
+    /* The text + sprite content (FUN_0041c208). */
+    render_text(a, ctx, row, pc.off);
+
+    /* if (flags & 0x20) FUN_0041c996() — sub-feature stamp, deferred. */
 }

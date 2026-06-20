@@ -101,4 +101,81 @@ void engine_terrain_info_open(const engine_terrain_info_open_in_t *in,
                               engine_terrain_info_open_state_t *st,
                               const engine_terrain_info_hooks_t *hooks);
 
+/* ════════════════════════════════════════════════════════════════════════
+ * Screen-4 terrain-info PANEL RENDER — port of FUN_0041befe (778 B, the
+ * simple-terrain arm of FUN_0041b032) + FUN_0041c208 (1934 B, the
+ * string/sprite classifier + draws).  The complex county/army panel
+ * FUN_0041b19d and the three army-roster sub-renderers (FUN_0041cb3a /
+ * FUN_0041d299 / FUN_0041da2f, each fired only for armies / special
+ * features) are DEFERRED — guarded behind the same flag/type branches
+ * retail uses, so the common terrain tiles ("Here Be Dragons" / named
+ * terrain) render and the deferred arms are visibly stubbed.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* The terrain-attribute bundle the classifier reads — exactly the globals
+ * the terrain-info compute (engine_map_query_terrain_info) leaves behind,
+ * plus the few extra strategic-state globals FUN_0041c208 reads. */
+typedef struct engine_terrain_info_attr {
+    int flags;          /* DAT_005440b0 — post-masked terrain flag byte    */
+    int terrain_type;   /* DAT_0057cb2c — origin cell terrain type         */
+    int head_link;      /* DAT_005681e0 — army/territory record index      */
+    int owner;          /* DAT_005681d0 — record's owner realm             */
+    int player_id;      /* DAT_0057c8cc — local/current player realm       */
+    int derived_bit;    /* DAT_005651bc — compute's derived bit            */
+    int f25c;           /* DAT_0053f25c — detail toggle (special arm)      */
+    /* g_per_army_768 (DAT_0053f9b0, 0x300 stride): the classifier reads
+     * byte/int fields at army_block[head_link*0x300 + off].  NULL ⇒ 0. */
+    const uint8_t *army_block;
+    /* &DAT_004d2ec8 special-feature 4-int table (stride 0x10), indexed by
+     * terrain_type; read only on the flags&0x20 arm.  NULL ⇒ that arm
+     * yields zeroes (a deferred special feature). */
+    const int32_t *terr_table;
+} engine_terrain_info_attr_t;
+
+/* FUN_0041befe classification result. */
+typedef struct engine_terrain_info_panel_class {
+    int row;            /* DAT_00553d2c — panel row count / string row     */
+    int off;            /* DAT_005651c8 — vertical offset (0 or 2)         */
+} engine_terrain_info_panel_class_t;
+
+/* FUN_0041c208 classification result (string/sprite indices + the
+ * army-alert arg the draw driver fires via army_move_alert). */
+typedef struct engine_terrain_info_text_class {
+    int idx20;          /* local_20 — title string sub-index               */
+    int idx1c;          /* local_1c — body string sub-index                */
+    int idx18;          /* local_18 — army stat slot (0..3)                */
+    int idx8;           /* local_8  — terrain icon sprite index            */
+    int idxc;           /* local_c  — secondary title / body-mode selector */
+    int alert_arg;      /* FUN_00426216(n) arg, 0 = none                   */
+} engine_terrain_info_text_class_t;
+
+/* Pure classifiers — port the index logic of FUN_0041befe / FUN_0041c208
+ * with no draws.  Unit-testable against the decompile branch table. */
+engine_terrain_info_panel_class_t
+engine_terrain_info_classify_panel(const engine_terrain_info_attr_t *a);
+
+engine_terrain_info_text_class_t
+engine_terrain_info_classify_text(const engine_terrain_info_attr_t *a);
+
+/* Render-context assets (the fonts / glyph maps / loc / sprite sheets the
+ * panel draws from — same set the event-scroll renderer plumbs). */
+typedef struct engine_terrain_info_render_ctx {
+    const uint8_t           *chrome;       /* panels.pl8 (parchment box)    */
+    const uint8_t           *system_sheet; /* system.pl8 (the corner seal)  */
+    const uint8_t           *title_font;   /* fntl2_22 (DAT_005b2fa0)        */
+    const uint8_t           *menu_font;    /* fntl2_14 (DAT_005af8f0)        */
+    const uint8_t           *glyph_table;  /* gfx_glyph_render_map()         */
+    const unsigned char     *glyph_metrics;/* gfx_glyph_measure_map()        */
+    const uint8_t           *icon_sheet;   /* icon_tmp.pl8 (terrain icon)    */
+    const uint8_t           *sel_sheet;    /* DAT_0055ce5c selection blob    */
+    int                      map_id;       /* DAT_0053f034 — county name idx */
+    void                    *loc;          /* localization_state_t *         */
+} engine_terrain_info_render_ctx_t;
+
+/* Render the screen-4 simple-terrain panel (FUN_0041befe → FUN_0041c208).
+ * Draws to the bound gfx canvas.  `ctx->loc` is a localization_state_t*
+ * (void* to keep this header free of the localization include). */
+void engine_terrain_info_render(const engine_terrain_info_attr_t *a,
+                                const engine_terrain_info_render_ctx_t *ctx);
+
 #endif /* OPENLORDS2_ENGINE_TERRAIN_INFO_H */

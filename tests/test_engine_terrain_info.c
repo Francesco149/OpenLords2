@@ -14,6 +14,7 @@
 
 #include "t.h"
 #include "engine_terrain_info.h"
+#include "localization.h"
 
 /* ── recording hook harness ──────────────────────────────────────────── */
 
@@ -292,5 +293,185 @@ int test_terrain_info_null_hooks_safe(void)
     /* tile_index never set (no resolve hook) → geometry from 0 */
     T_ASSERT_EQ_I(st.state_5681cc, 3);
     T_ASSERT_EQ_I(st.screen, 4);
+    return 0;
+}
+
+/* ── panel/text classifier coverage (FUN_0041befe / FUN_0041c208) ─────── */
+
+/* head_link 1 army record with bytes set at the given offsets. */
+static engine_terrain_info_attr_t attr_with(int flags, int type, int player,
+                                            int owner, int derived)
+{
+    engine_terrain_info_attr_t a = {0};
+    a.flags = flags; a.terrain_type = type; a.head_link = 1;
+    a.player_id = player; a.owner = owner; a.derived_bit = derived;
+    return a;
+}
+
+/* Empty terrain (flags 0): the "Here Be Dragons" panel. */
+int test_terrain_info_class_empty(void)
+{
+    engine_terrain_info_attr_t a = attr_with(0, 0, 0, 0, 0);
+    engine_terrain_info_panel_class_t pc = engine_terrain_info_classify_panel(&a);
+    engine_terrain_info_text_class_t  tc = engine_terrain_info_classify_text(&a);
+    T_ASSERT_EQ_I(pc.row, 0x11);
+    T_ASSERT_EQ_I(pc.off, 2);
+    T_ASSERT_EQ_I(tc.idx20, 0);
+    T_ASSERT_EQ_I(tc.idx1c, 0x16);
+    T_ASSERT_EQ_I(tc.idx8, 0x17);
+    T_ASSERT_EQ_I(tc.idxc, 0);
+    T_ASSERT_EQ_I(tc.alert_arg, 0);
+    return 0;
+}
+
+/* flag-bit priority: bit0 (flags&1) wins over every other bit. */
+int test_terrain_info_class_bit0_priority(void)
+{
+    engine_terrain_info_attr_t a = attr_with(0xff, 5, 0, 0, 0);  /* all bits */
+    engine_terrain_info_text_class_t tc = engine_terrain_info_classify_text(&a);
+    T_ASSERT_EQ_I(tc.idx20, 1);    /* the flags&1 arm */
+    T_ASSERT_EQ_I(tc.idx1c, 0x17);
+    T_ASSERT_EQ_I(tc.idx8, 0x18);
+    return 0;
+}
+
+/* flags&0x10 panel row + the type-keyed text indices. */
+int test_terrain_info_class_bit4(void)
+{
+    engine_terrain_info_attr_t a = attr_with(0x10, 0x10, 0, 0, 0);
+    engine_terrain_info_panel_class_t pc = engine_terrain_info_classify_panel(&a);
+    engine_terrain_info_text_class_t  tc = engine_terrain_info_classify_text(&a);
+    T_ASSERT_EQ_I(pc.row, 0x10);
+    T_ASSERT_EQ_I(pc.off, 0);
+    T_ASSERT_EQ_I(tc.idx20, 0x30);  /* type == 0x10 */
+    T_ASSERT_EQ_I(tc.idx1c, 0x31);
+    T_ASSERT_EQ_I(tc.idx8, 0x1b);
+    a.terrain_type = 0x11;
+    tc = engine_terrain_info_classify_text(&a);
+    T_ASSERT_EQ_I(tc.idx20, 0x32);  /* type != 0x10 */
+    T_ASSERT_EQ_I(tc.idx1c, 0x33);
+    return 0;
+}
+
+/* flags&8 derived-bit split. */
+int test_terrain_info_class_bit3_derived(void)
+{
+    engine_terrain_info_attr_t a = attr_with(8, 0, 0, 0, 0);
+    engine_terrain_info_text_class_t tc = engine_terrain_info_classify_text(&a);
+    T_ASSERT_EQ_I(tc.idx20, 5); T_ASSERT_EQ_I(tc.idx1c, 0x1a); T_ASSERT_EQ_I(tc.idx8, 0x1a);
+    a.derived_bit = 1;
+    tc = engine_terrain_info_classify_text(&a);
+    T_ASSERT_EQ_I(tc.idx20, 4); T_ASSERT_EQ_I(tc.idx1c, 0x19); T_ASSERT_EQ_I(tc.idx8, 0x19);
+    return 0;
+}
+
+/* flags&0x40 panel row depends on the army record byte +0x1ad. */
+int test_terrain_info_class_bit6_army_byte(void)
+{
+    static uint8_t blk[0x600];
+    memset(blk, 0, sizeof blk);
+    engine_terrain_info_attr_t a = attr_with(0x40, 0, 0, 0, 0);
+    a.army_block = blk;
+    /* +0x1ad zero → row 0x11 */
+    engine_terrain_info_panel_class_t pc = engine_terrain_info_classify_panel(&a);
+    T_ASSERT_EQ_I(pc.row, 0x11);
+    /* +0x1ad set → row 0xf */
+    blk[1 * 0x300 + 0x1ad] = 1;
+    pc = engine_terrain_info_classify_panel(&a);
+    T_ASSERT_EQ_I(pc.row, 0xf);
+    /* text arm is the flat flags&0x40 case */
+    engine_terrain_info_text_class_t tc = engine_terrain_info_classify_text(&a);
+    T_ASSERT_EQ_I(tc.idx20, 7); T_ASSERT_EQ_I(tc.idx1c, 0x1b); T_ASSERT_EQ_I(tc.idx8, 0x1b);
+    return 0;
+}
+
+/* flags&0x80 named terrain (type 0xd..0x19): idx20 from army byte +0x1c3,
+ * idx1c = type+7, panel row from the player==owner / army-byte branches. */
+int test_terrain_info_class_bit7_named(void)
+{
+    static uint8_t blk[0x600];
+    memset(blk, 0, sizeof blk);
+    engine_terrain_info_attr_t a = attr_with(0x80, 0x14, 3, 3, 0);  /* owned */
+    a.army_block = blk;
+
+    /* army +0x1c3 == 0, +0x1c2 == 0 → panel row 0xe */
+    engine_terrain_info_panel_class_t pc = engine_terrain_info_classify_panel(&a);
+    T_ASSERT_EQ_I(pc.row, 0xe);
+    engine_terrain_info_text_class_t tc = engine_terrain_info_classify_text(&a);
+    T_ASSERT_EQ_I(tc.idx20, 8);          /* byte +0x1c3 != 1 && != 2 */
+    T_ASSERT_EQ_I(tc.idx1c, 0x14 + 7);   /* type + 7 */
+    T_ASSERT_EQ_I(tc.idx8, 0x1c);
+
+    /* army +0x1c3 == 1 → idx20 0xe; +0x1c3 set non-zero → panel uses
+     * player==owner branch → row 10 */
+    blk[1 * 0x300 + 0x1c3] = 1;
+    pc = engine_terrain_info_classify_panel(&a);
+    T_ASSERT_EQ_I(pc.row, 10);
+    tc = engine_terrain_info_classify_text(&a);
+    T_ASSERT_EQ_I(tc.idx20, 0xe);
+    return 0;
+}
+
+/* flags&0x80 army-stats arm (type<0xd): records the SFX-cue arg + bumps
+ * the body sub-index from the per-unit stat fields. */
+int test_terrain_info_class_bit7_army_stats(void)
+{
+    static uint8_t blk[0x600];
+    memset(blk, 0, sizeof blk);
+    engine_terrain_info_attr_t a = attr_with(0x80, 2, 0, 0, 0);  /* type < 4 */
+    a.army_block = blk;
+    /* type<4 → idx18=1, base 0x18; stat diff = int32[0x2a0+0x18] - [0x2a4+0x18].
+     * Set a diff of 0x20 (in [0x19,0x32) → +2), readiness byte +0x296+0x18 == 0. */
+    blk[1 * 0x300 + 0x2a0 + 0x18] = 0x20;   /* low byte of the first int32 */
+    engine_terrain_info_text_class_t tc = engine_terrain_info_classify_text(&a);
+    T_ASSERT_EQ_I(tc.idx20, 9);
+    T_ASSERT_EQ_I(tc.idx18, 1);
+    T_ASSERT_EQ_I(tc.idx8, 0x1e);
+    T_ASSERT_EQ_I(tc.alert_arg, 10);
+    T_ASSERT_EQ_I(tc.idx1c, 0x35 + 2);      /* base 0x35, diff 0x20 → +2 */
+    /* readiness byte non-zero → flat +4 instead */
+    blk[1 * 0x300 + 0x296 + 0x18] = 1;
+    tc = engine_terrain_info_classify_text(&a);
+    T_ASSERT_EQ_I(tc.idx1c, 0x35 + 4);
+    return 0;
+}
+
+/* flags&0x20 special arm: indices from the 4-int table; NULL table → the
+ * inert default (a deferred special feature). */
+int test_terrain_info_class_bit5_table(void)
+{
+    static const int32_t table[0x20 * 4];   /* zero-filled */
+    static int32_t tbl[0x20 * 4];
+    memset(tbl, 0, sizeof tbl);
+    tbl[5 * 4 + 0] = 0x40; tbl[5 * 4 + 1] = 0x41; tbl[5 * 4 + 2] = 0x42; tbl[5 * 4 + 3] = 7;
+    engine_terrain_info_attr_t a = attr_with(0x20, 5, 3, 3, 0);
+    a.terr_table = tbl;
+    engine_terrain_info_text_class_t tc = engine_terrain_info_classify_text(&a);
+    T_ASSERT_EQ_I(tc.idx20, 0x40);
+    T_ASSERT_EQ_I(tc.idx1c, 0x41);
+    T_ASSERT_EQ_I(tc.idx8, 0x42);
+    T_ASSERT_EQ_I(tc.idxc, 7);
+    /* panel row: flags&0x20, owned, type 5 (<0x19, !=0) → row 5 */
+    engine_terrain_info_panel_class_t pc = engine_terrain_info_classify_panel(&a);
+    T_ASSERT_EQ_I(pc.row, 5);
+    /* NULL table → inert default (idxc 0 so no 0x12 fixup) */
+    a.terr_table = NULL;
+    tc = engine_terrain_info_classify_text(&a);
+    T_ASSERT_EQ_I(tc.idx20, 0);
+    T_ASSERT_EQ_I(tc.idx1c, 0x16);
+    (void)table;
+    return 0;
+}
+
+/* The render driver must not crash with NULL assets (drop-in guards). */
+int test_terrain_info_render_null_assets_safe(void)
+{
+    engine_terrain_info_attr_t a = attr_with(0, 0, 0, 0, 0);
+    engine_terrain_info_render_ctx_t ctx = {0};
+    /* loc NULL would deref in the text path; the localized renderers guard
+     * a NULL blob, but loc itself must be valid — pass a zeroed loc. */
+    localization_state_t loc = {0};
+    ctx.loc = &loc;
+    engine_terrain_info_render(&a, &ctx);   /* all sheets NULL → draws skipped */
     return 0;
 }
