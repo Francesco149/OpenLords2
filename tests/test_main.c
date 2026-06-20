@@ -1173,6 +1173,20 @@ struct test_case {
     X(engine_camera_scroll_pixels_col_off_map_no_write) \
     X(engine_camera_scroll_pixels_row_off_map_no_write) \
     X(engine_camera_scroll_pixels_negative_cell_no_write) \
+    X(engine_camera_hover_miss_left) \
+    X(engine_camera_hover_miss_right) \
+    X(engine_camera_hover_miss_top) \
+    X(engine_camera_hover_miss_bottom) \
+    X(engine_camera_hover_valid_pick) \
+    X(engine_camera_hover_invalid_tile_writes_cell) \
+    X(engine_camera_hover_par0_row_bump) \
+    X(engine_camera_hover_par0_col_bump) \
+    X(engine_camera_hover_par1_row_bump) \
+    X(engine_camera_hover_game_mode2_bias) \
+    X(engine_camera_hover_edge_top) \
+    X(engine_camera_hover_edge_bottom) \
+    X(engine_camera_hover_edge_left_odd_row) \
+    X(engine_camera_hover_scroll_offset) \
     X(engine_camera_anchor_zero_unchanged) \
     X(engine_camera_anchor_in_range_unchanged) \
     X(engine_camera_anchor_at_max_x_unchanged) \

@@ -368,3 +368,275 @@ int test_engine_camera_scroll_pixels_negative_cell_no_write(void)
     T_ASSERT_EQ_I(sy, 222);
     return 0;
 }
+
+/* ── cursor → cell resolver (FUN_00429ba4) ───────────────────────────
+ *
+ * Standard test geometry (chosen so the staggered-row pick math is
+ * hand-checkable):
+ *   x_origin 0, x_step 0x20 (32), half_step 0x10 (16)
+ *   y_origin 0, y_step 0x10 (16)
+ *   col_count 4, row_count 4, scroll 0/0
+ * Viewport band:  X ∈ [0, 128)   Y ∈ [16, 80)
+ * Tile grid: int32, row stride 0x41; default cell = 0x7fffffff (invalid,
+ * since 0x7fffffff >= 0xfff0000). */
+#define HOVER_GRID_N (0x41 * 8)
+
+static void hover_grid_init(int32_t *g)
+{
+    for (int i = 0; i < HOVER_GRID_N; i++) {
+        g[i] = 0x7fffffff;
+    }
+}
+
+static engine_camera_hover_in_t hover_base(const int32_t *grid,
+                                           int cx, int cy, int game_mode)
+{
+    engine_camera_hover_in_t in;
+    in.cursor_x   = cx;
+    in.cursor_y   = cy;
+    in.x_origin   = 0;
+    in.x_step     = 0x20;
+    in.half_step  = 0x10;
+    in.y_origin   = 0;
+    in.y_step     = 0x10;
+    in.col_count  = 4;
+    in.row_count  = 4;
+    in.scroll_col = 0;
+    in.scroll_row = 0;
+    in.game_mode  = game_mode;
+    in.tile_grid  = grid;
+    return in;
+}
+
+/* Out-of-band early returns must leave *out untouched (retail keeps its
+ * stale globals on a band miss). */
+static int hover_miss_keeps_out(int cx, int cy)
+{
+    int32_t grid[HOVER_GRID_N];
+    hover_grid_init(grid);
+    engine_camera_hover_in_t in = hover_base(grid, cx, cy, 0);
+    engine_camera_hover_out_t out;
+    out.cell_col = 777; out.cell_row = 777;
+    out.cell_px_x = 777; out.cell_px_y = 777;
+    out.tile_index = 777; out.edge_row = 777; out.edge_col = 777;
+    int r = engine_camera_cursor_to_cell(&in, &out);
+    T_ASSERT_EQ_I(r, 0);
+    T_ASSERT_EQ_I(out.cell_col, 777);
+    T_ASSERT_EQ_I(out.tile_index, 777);
+    return 0;
+}
+
+int test_engine_camera_hover_miss_left(void)   { return hover_miss_keeps_out(-1, 40); }
+int test_engine_camera_hover_miss_right(void)  { return hover_miss_keeps_out(128, 40); }
+int test_engine_camera_hover_miss_top(void)    { return hover_miss_keeps_out(40, 15); }
+int test_engine_camera_hover_miss_bottom(void) { return hover_miss_keeps_out(40, 80); }
+
+/* Valid pick, parity_cr==1 no-bump branch.  cursor (40,40):
+ *   row_span 24 → cell_row 1, col_raw 2 → cell_col 1, parity_cr 1,
+ *   y_frac 8, x_frac 4 → 15 <= 12 false → no bump.
+ *   px = (1*32-16, 16*1) = (16,16); cell (1,1) → grid[1 + 1*0x41]=grid[0x42]. */
+int test_engine_camera_hover_valid_pick(void)
+{
+    int32_t grid[HOVER_GRID_N];
+    hover_grid_init(grid);
+    grid[0x42] = 5;
+    engine_camera_hover_in_t in = hover_base(grid, 40, 40, 0);
+    engine_camera_hover_out_t out = {0};
+    int r = engine_camera_cursor_to_cell(&in, &out);
+    T_ASSERT_EQ_I(r, 1);
+    T_ASSERT_EQ_I(out.cell_col, 1);
+    T_ASSERT_EQ_I(out.cell_row, 1);
+    T_ASSERT_EQ_I(out.cell_px_x, 16);
+    T_ASSERT_EQ_I(out.cell_px_y, 16);
+    T_ASSERT_EQ_I(out.tile_index, 5);
+    T_ASSERT_EQ_I(out.edge_row, 0);
+    T_ASSERT_EQ_I(out.edge_col, 0);
+    return 0;
+}
+
+/* Same cell as above but the grid cell is the invalid sentinel: returns 0,
+ * yet cell_col/row/px/tile are STILL written (only edge flags are gated on
+ * the valid-tile path). */
+int test_engine_camera_hover_invalid_tile_writes_cell(void)
+{
+    int32_t grid[HOVER_GRID_N];
+    hover_grid_init(grid);                 /* grid[0x42] stays 0x7fffffff */
+    engine_camera_hover_in_t in = hover_base(grid, 40, 40, 0);
+    engine_camera_hover_out_t out = {0};
+    out.edge_row = 333; out.edge_col = 333;
+    int r = engine_camera_cursor_to_cell(&in, &out);
+    T_ASSERT_EQ_I(r, 0);
+    T_ASSERT_EQ_I(out.cell_col, 1);
+    T_ASSERT_EQ_I(out.cell_row, 1);
+    T_ASSERT_EQ_I(out.tile_index, 0x7fffffff);
+    T_ASSERT_EQ_I(out.edge_row, 333);      /* untouched — edge flags gated */
+    T_ASSERT_EQ_I(out.edge_col, 333);
+    return 0;
+}
+
+/* parity_cr==0, x_frac<y_frac → cell_row += 1.  cursor (20,40):
+ *   col_raw 1, x_frac 2; row_span 24 → cell_row 1, y_frac 8; parity_cr 0;
+ *   2<8 → cell_row 2.  cell_col = 1/2 = 0.  px=(0,32); grid[0 + 2*0x41]. */
+int test_engine_camera_hover_par0_row_bump(void)
+{
+    int32_t grid[HOVER_GRID_N];
+    hover_grid_init(grid);
+    grid[0x82] = 7;
+    engine_camera_hover_in_t in = hover_base(grid, 20, 40, 0);
+    engine_camera_hover_out_t out = {0};
+    int r = engine_camera_cursor_to_cell(&in, &out);
+    T_ASSERT_EQ_I(r, 1);
+    T_ASSERT_EQ_I(out.cell_col, 0);
+    T_ASSERT_EQ_I(out.cell_row, 2);
+    T_ASSERT_EQ_I(out.cell_px_x, 0);
+    T_ASSERT_EQ_I(out.cell_px_y, 32);
+    T_ASSERT_EQ_I(out.tile_index, 7);
+    return 0;
+}
+
+/* parity_cr==0, else-if (col_raw odd & parity_r) → cell_col += 1.
+ * cursor (30,36): col_raw 1, x_frac 7; row_span 20 → cell_row 1, y_frac 4;
+ * parity_cr 0, parity_r 1; 7<4 false → else-if true → cell_col 0+1=1. */
+int test_engine_camera_hover_par0_col_bump(void)
+{
+    int32_t grid[HOVER_GRID_N];
+    hover_grid_init(grid);
+    grid[0x42] = 21;
+    engine_camera_hover_in_t in = hover_base(grid, 30, 36, 0);
+    engine_camera_hover_out_t out = {0};
+    int r = engine_camera_cursor_to_cell(&in, &out);
+    T_ASSERT_EQ_I(r, 1);
+    T_ASSERT_EQ_I(out.cell_col, 1);
+    T_ASSERT_EQ_I(out.cell_row, 1);
+    T_ASSERT_EQ_I(out.cell_px_x, 16);
+    T_ASSERT_EQ_I(out.cell_px_y, 16);
+    T_ASSERT_EQ_I(out.tile_index, 21);
+    return 0;
+}
+
+/* parity_cr==1, y_step-1 <= y_frac+x_frac → cell_row += 1.  cursor (44,44):
+ *   col_raw 2, x_frac 6; row_span 28 → cell_row 1, y_frac 12; parity_cr 1;
+ *   15 <= 18 → cell_row 2 (col_raw even → no col bump). cell_col 1. */
+int test_engine_camera_hover_par1_row_bump(void)
+{
+    int32_t grid[HOVER_GRID_N];
+    hover_grid_init(grid);
+    grid[0x83] = 9;
+    engine_camera_hover_in_t in = hover_base(grid, 44, 44, 0);
+    engine_camera_hover_out_t out = {0};
+    int r = engine_camera_cursor_to_cell(&in, &out);
+    T_ASSERT_EQ_I(r, 1);
+    T_ASSERT_EQ_I(out.cell_col, 1);
+    T_ASSERT_EQ_I(out.cell_row, 2);
+    T_ASSERT_EQ_I(out.cell_px_x, 32);
+    T_ASSERT_EQ_I(out.cell_px_y, 32);
+    T_ASSERT_EQ_I(out.tile_index, 9);
+    return 0;
+}
+
+/* game_mode 2 adds a +0x10 cursor-Y bias.  cursor (40,40) game_mode 2:
+ *   cursor_y_b 56 → row_span 40 → cell_row 2, y_frac 8; col_raw 2,
+ *   x_frac 4; parity_cr 0; 4<8 → cell_row 3. cell_col 1.
+ *   px=(1*32-16, 16*3)=(16,48); grid[1 + 3*0x41]=grid[0xc4]. */
+int test_engine_camera_hover_game_mode2_bias(void)
+{
+    int32_t grid[HOVER_GRID_N];
+    hover_grid_init(grid);
+    grid[0xc4] = 11;
+    engine_camera_hover_in_t in = hover_base(grid, 40, 40, 2);
+    engine_camera_hover_out_t out = {0};
+    int r = engine_camera_cursor_to_cell(&in, &out);
+    T_ASSERT_EQ_I(r, 1);
+    T_ASSERT_EQ_I(out.cell_col, 1);
+    T_ASSERT_EQ_I(out.cell_row, 3);
+    T_ASSERT_EQ_I(out.cell_px_x, 16);
+    T_ASSERT_EQ_I(out.cell_px_y, 48);
+    T_ASSERT_EQ_I(out.tile_index, 11);
+    return 0;
+}
+
+/* Top-row edge flag: cell_row 0 → edge_row 2.  cursor (40,18):
+ *   row_span 2 → cell_row 0, y_frac 2; col_raw 2, x_frac 4; parity_cr 0;
+ *   4<2 false, col_raw even → no bump. cell (1,0); grid[1]. */
+int test_engine_camera_hover_edge_top(void)
+{
+    int32_t grid[HOVER_GRID_N];
+    hover_grid_init(grid);
+    grid[1] = 3;
+    engine_camera_hover_in_t in = hover_base(grid, 40, 18, 0);
+    engine_camera_hover_out_t out = {0};
+    int r = engine_camera_cursor_to_cell(&in, &out);
+    T_ASSERT_EQ_I(r, 1);
+    T_ASSERT_EQ_I(out.cell_col, 1);
+    T_ASSERT_EQ_I(out.cell_row, 0);
+    T_ASSERT_EQ_I(out.cell_px_x, 32);
+    T_ASSERT_EQ_I(out.cell_px_y, 0);
+    T_ASSERT_EQ_I(out.edge_row, 2);
+    T_ASSERT_EQ_I(out.edge_col, 0);
+    T_ASSERT_EQ_I(out.tile_index, 3);
+    return 0;
+}
+
+/* Bottom-row edge flag: cell_row reaches row_count(4) via a parity_cr==1
+ * bump → edge_row 1.  cursor (46,78): col_raw 2, x_frac 7; row_span 62 →
+ * cell_row 3, y_frac 14; parity_cr 1; 15 <= 21 → cell_row 4.  cell_col 1. */
+int test_engine_camera_hover_edge_bottom(void)
+{
+    int32_t grid[HOVER_GRID_N];
+    hover_grid_init(grid);
+    grid[0x105] = 13;
+    engine_camera_hover_in_t in = hover_base(grid, 46, 78, 0);
+    engine_camera_hover_out_t out = {0};
+    int r = engine_camera_cursor_to_cell(&in, &out);
+    T_ASSERT_EQ_I(r, 1);
+    T_ASSERT_EQ_I(out.cell_col, 1);
+    T_ASSERT_EQ_I(out.cell_row, 4);
+    T_ASSERT_EQ_I(out.cell_px_x, 32);
+    T_ASSERT_EQ_I(out.cell_px_y, 64);
+    T_ASSERT_EQ_I(out.edge_row, 1);
+    T_ASSERT_EQ_I(out.edge_col, 0);
+    T_ASSERT_EQ_I(out.tile_index, 13);
+    return 0;
+}
+
+/* Left col-edge on an ODD row: cell_col 0, cell_row 1 → edge_col 2.
+ * cursor (8,40): col_raw 0, x_frac 4; row_span 24 → cell_row 1, y_frac 8;
+ * parity_cr 1; 15 <= 12 false → no bump. odd-row X subtracts half_step:
+ * px=(0*32-16, 16)= (-16,16). cell (0,1) → grid[0 + 1*0x41]=grid[0x41]. */
+int test_engine_camera_hover_edge_left_odd_row(void)
+{
+    int32_t grid[HOVER_GRID_N];
+    hover_grid_init(grid);
+    grid[0x41] = 15;
+    engine_camera_hover_in_t in = hover_base(grid, 8, 40, 0);
+    engine_camera_hover_out_t out = {0};
+    int r = engine_camera_cursor_to_cell(&in, &out);
+    T_ASSERT_EQ_I(r, 1);
+    T_ASSERT_EQ_I(out.cell_col, 0);
+    T_ASSERT_EQ_I(out.cell_row, 1);
+    T_ASSERT_EQ_I(out.cell_px_x, -16);
+    T_ASSERT_EQ_I(out.cell_px_y, 16);
+    T_ASSERT_EQ_I(out.edge_row, 0);
+    T_ASSERT_EQ_I(out.edge_col, 2);
+    T_ASSERT_EQ_I(out.tile_index, 15);
+    return 0;
+}
+
+/* scroll offset shifts the grid lookup: same pick as valid_pick but
+ * scroll (2,3) → grid index (1+2) + (3+1)*0x41 = 3 + 0x104 = 0x107. */
+int test_engine_camera_hover_scroll_offset(void)
+{
+    int32_t grid[HOVER_GRID_N];
+    hover_grid_init(grid);
+    grid[0x107] = 99;
+    engine_camera_hover_in_t in = hover_base(grid, 40, 40, 0);
+    in.scroll_col = 2;
+    in.scroll_row = 3;
+    engine_camera_hover_out_t out = {0};
+    int r = engine_camera_cursor_to_cell(&in, &out);
+    T_ASSERT_EQ_I(r, 1);
+    T_ASSERT_EQ_I(out.cell_col, 1);     /* cell unchanged — scroll only moves the lookup */
+    T_ASSERT_EQ_I(out.cell_row, 1);
+    T_ASSERT_EQ_I(out.tile_index, 99);
+    return 0;
+}

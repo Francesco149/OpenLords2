@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **767** (31.3%) — tested 712, ported 55
-- code bytes touched: **40.3%** (337,708 / 838,629 B)
-- unported: **1680**
+- touched: **768** (31.4%) — tested 713, ported 55
+- code bytes touched: **40.4%** (338,586 / 838,629 B)
+- unported: **1679**
 - orphan refs (in src/, not in function table): 7
 
-## tested (712) — ported + host unit suite
+## tested (713) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -209,12 +209,13 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4296b5 | FUN_004296b5 | 319 | engine_army_move.c, engine_army_move.h, game_init.c |
 | 0x4298c1 | FUN_004298c1 | 604 | engine_map_init.c, engine_map_init.h, game_init.c (+1) |
 | 0x429b1d | FUN_00429b1d | 135 | engine.c, engine_camera.c, engine_camera.h (+1) |
+| 0x429ba4 | FUN_00429ba4 | 878 | engine_camera.c, engine_camera.h |
 | 0x42a15f | FUN_0042a15f | 206 | engine_camera.c, engine_camera.h |
 | 0x42dfe2 | FUN_0042dfe2 | 126 | main.c |
 | 0x42e3ba | FUN_0042e3ba | 164 | main.c |
 | 0x42ec91 | FUN_0042ec91 | 1207 | gfx.c, gfx.h, gfx_paint.h |
 | 0x42f1df | FUN_0042f1df | 295 | gfx.c, main.c |
-| 0x42ff10 | FUN_0042ff10 | 8140 | engine.c, engine_menu_input.c, engine_menu_input.h (+1) |
+| 0x42ff10 | FUN_0042ff10 | 8140 | engine.c, engine_camera.h, engine_menu_input.c (+2) |
 | 0x432746 | FUN_00432746 | 69 | engine_territory.c, engine_territory.h, game_init.c |
 | 0x43278b | FUN_0043278b | 223 | engine_territory.c, engine_territory.h |
 | 0x4329ec | FUN_004329ec | 281 | engine_load_pump.c, engine_load_pump.h, engine_menu_input.c (+4) |

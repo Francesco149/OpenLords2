@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 712,
+  "tested": 713,
   "ported": 55,
-  "unported": 1680,
+  "unported": 1679,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 767,
-  "pct_touched": 31.3,
+  "touched": 768,
+  "pct_touched": 31.4,
   "pct_tested": 29.1,
   "bytes_total": 838629,
-  "bytes_touched": 337708,
-  "pct_bytes_touched": 40.3
+  "bytes_touched": 338586,
+  "pct_bytes_touched": 40.4
  },
  "orphan_refs": [
   "0x004148",
@@ -4169,8 +4169,11 @@
    "name": "FUN_00429ba4",
    "size": 878,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_camera.c",
+    "src/engine_camera.h"
+   ]
   },
   {
    "va": "0x429f12",
@@ -4692,6 +4695,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_camera.h",
     "src/engine_menu_input.c",
     "src/engine_menu_input.h",
     "src/engine_title_render.c"

@@ -47,6 +47,8 @@
 #ifndef OPENLORDS2_ENGINE_CAMERA_H
 #define OPENLORDS2_ENGINE_CAMERA_H
 
+#include <stdint.h>
+
 /* Strategic-map cell-scroll clamp.  Bounds are derived from the
  * retail strategic-map dimensions:
  *
@@ -110,5 +112,67 @@ void engine_camera_compute_scroll_pixels(int map_ready,
                                          int x_origin,
                                          int y_step, int y_origin,
                                          int *out_scroll_x, int *out_scroll_y);
+
+/* ── Cursor → strategic-map cell resolver ──────────────────────────────
+ * Port of FUN_00429ba4 @ 0x429ba4 (878 B).  The INVERSE of
+ * engine_camera_compute_scroll_pixels: given the screen cursor and the
+ * live viewport geometry, it picks the staggered-row map cell under the
+ * cursor, looks up its tile index, and reports whether the cursor is over
+ * a valid map tile.  This is the producer of retail's DAT_005533b0
+ * ("map_ready"/cursor-over-map) gate and DAT_00568974 (the hovered-tile
+ * index) that the in-game input dispatcher (FUN_0042ff10) reads to route
+ * map clicks (army-select / terrain-info).
+ *
+ *   Retail global ↔ field (inputs):
+ *     cursor_x     DAT_004e65fc   screen cursor X
+ *     cursor_y     DAT_004e65f4   screen cursor Y
+ *     x_origin     DAT_0052afdc   map viewport X pixel origin
+ *     x_step       DAT_00568220   per-column pixel step
+ *     half_step    DAT_00567950   tile half-width (staggered-row offset)
+ *     y_origin     DAT_00553244   map viewport Y pixel origin
+ *     y_step       DAT_0053f65c   per-row pixel step
+ *     col_count    DAT_0053e8ac   visible columns
+ *     row_count    DAT_0056d67c   visible rows
+ *     scroll_col   DAT_005651b4   cell-scroll column
+ *     scroll_row   DAT_005651b8   cell-scroll row
+ *     game_mode    DAT_0057c8fc   game-mode enum (mode 2 → +0x10 cursor-Y bias)
+ *     tile_grid    &DAT_0055cea0  int32 tile-index grid, ROW STRIDE 0x41 ints
+ *
+ *   Retail global ↔ field (outputs — written ONLY when the cursor lies in
+ *   the viewport band; on a band miss the struct is left untouched,
+ *   mirroring retail's stale globals on an early return):
+ *     cell_col     DAT_00553f04   picked cell column
+ *     cell_row     DAT_005681f4   picked cell row
+ *     cell_px_x    _DAT_00553ff8  cell back-buffer pixel X
+ *     cell_px_y    _DAT_00553fe8  cell back-buffer pixel Y
+ *     tile_index   DAT_00568974   tile index at the picked cell
+ *     edge_row     DAT_0056d654   0 / 2(top) / 1(bottom) row-edge flag
+ *     edge_col     DAT_0057cab8   0 / 2(left) / 1(right) col-edge (odd rows only)
+ *
+ * Returns 1 iff the cursor is over a valid map tile (tile_index <
+ * 0xfff0000, signed compare per retail) — the value retail stores in
+ * DAT_005533b0.  Returns 0 outside the viewport band or over an invalid
+ * tile.  edge_row/edge_col are written only on the valid-tile (return 1)
+ * path; the other outputs are written whenever the cursor is in the band.
+ */
+typedef struct {
+    int            cursor_x, cursor_y;
+    int            x_origin, x_step, half_step;
+    int            y_origin, y_step;
+    int            col_count, row_count;
+    int            scroll_col, scroll_row;
+    int            game_mode;
+    const int32_t *tile_grid;   /* base &DAT_0055cea0, row stride 0x41 int32 */
+} engine_camera_hover_in_t;
+
+typedef struct {
+    int     cell_col, cell_row;
+    int     cell_px_x, cell_px_y;
+    int32_t tile_index;
+    int     edge_row, edge_col;
+} engine_camera_hover_out_t;
+
+int engine_camera_cursor_to_cell(const engine_camera_hover_in_t *in,
+                                 engine_camera_hover_out_t *out);
 
 #endif /* OPENLORDS2_ENGINE_CAMERA_H */
