@@ -169,10 +169,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x41a900 | FUN_0041a900 | 615 | engine_hud_menubar.c, engine_hud_menubar.h |
 | 0x41ab67 | FUN_0041ab67 | 215 | engine_hud_menubar.c, engine_hud_menubar.h |
 | 0x41ac3e | FUN_0041ac3e | 87 | engine_hud_panel.c |
-| 0x41b032 | FUN_0041b032 | 79 | engine_terrain_info.c, engine_terrain_info.h |
+| 0x41b032 | FUN_0041b032 | 79 | engine.c, engine_terrain_info.c, engine_terrain_info.h |
 | 0x41b19d | FUN_0041b19d | 3425 | engine_terrain_info.h |
 | 0x41befe | FUN_0041befe | 778 | engine_terrain_info.c, engine_terrain_info.h |
-| 0x41c208 | FUN_0041c208 | 1934 | engine_terrain_info.c, engine_terrain_info.h |
+| 0x41c208 | FUN_0041c208 | 1934 | engine_terrain_info.c, engine_terrain_info.h, gfx.c |
 | 0x41c996 | FUN_0041c996 | 420 | engine_terrain_info.c |
 | 0x41cb3a | FUN_0041cb3a | 1887 | engine_terrain_info.c, engine_terrain_info.h |
 | 0x41d299 | FUN_0041d299 | 1942 | engine_terrain_info.c, engine_terrain_info.h |
@@ -221,7 +221,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4296b5 | FUN_004296b5 | 319 | engine_army_move.c, engine_army_move.h, game_init.c |
 | 0x4298c1 | FUN_004298c1 | 604 | engine_map_init.c, engine_map_init.h, game_init.c (+1) |
 | 0x429b1d | FUN_00429b1d | 135 | engine.c, engine_camera.c, engine_camera.h (+1) |
-| 0x429ba4 | FUN_00429ba4 | 878 | engine_camera.c, engine_camera.h, engine_terrain_info.c (+1) |
+| 0x429ba4 | FUN_00429ba4 | 878 | engine.c, engine_camera.c, engine_camera.h (+3) |
 | 0x42a15f | FUN_0042a15f | 206 | engine_camera.c, engine_camera.h |
 | 0x42dfe2 | FUN_0042dfe2 | 126 | main.c |
 | 0x42e3ba | FUN_0042e3ba | 164 | main.c |
@@ -464,7 +464,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46d130 | FUN_0046d130 | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |
 | 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
 | 0x46d42c | FUN_0046d42c | 456 | engine_combat.c, engine_combat.h |
-| 0x46d5fe | FUN_0046d5fe | 502 | engine_map_query.c, engine_map_query.h, engine_terrain_info.c (+1) |
+| 0x46d5fe | FUN_0046d5fe | 502 | engine.c, engine_map_query.c, engine_map_query.h (+2) |
 | 0x46d7f4 | FUN_0046d7f4 | 486 | engine_army_move.c, engine_realm_events.h, engine_territory.c (+1) |
 | 0x46d9da | FUN_0046d9da | 113 | engine_territory.c, engine_territory.h |
 | 0x46da4b | FUN_0046da4b | 426 | engine_territory.c, engine_territory.h, main.c |
@@ -725,7 +725,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b49f7 | FUN_004b49f7 | 705 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b4cb8 | FUN_004b4cb8 | 1659 | gfx_sprite.c, gfx_sprite.h, gfx_sprite_render.c (+1) |
 | 0x4b5333 | FUN_004b5333 | 2997 | gfx_sprite.c, gfx_sprite.h |
-| 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+9) |
+| 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+10) |
 | 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_button.c, engine_button.h (+3) |
 | 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_ingame_input.h, engine_load_pump.h (+5) |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c |

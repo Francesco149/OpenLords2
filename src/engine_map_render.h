@@ -205,4 +205,19 @@ void engine_map_render_row_phase1(void);
  */
 void engine_map_render_tile(int phase);
 
+/* ── Live camera-geometry exposure (for the in-game cursor→cell resolver) ──
+ * The in-game input dispatcher needs the same viewport geometry this module
+ * renders with, to map the cursor onto a map cell each frame (retail
+ * FUN_004b99c0 line 63 calls FUN_00429ba4 with exactly this state). */
+#include "engine_camera.h"
+
+/* Fill the camera-geometry + tile-grid fields of `in` from the live bound
+ * camera (g_cam_*) + tile array.  The caller supplies cursor_x / cursor_y /
+ * game_mode (the per-frame mouse + game-mode globals). */
+void engine_map_render_fill_hover_in(engine_camera_hover_in_t *in);
+
+/* The bound 8-byte-per-cell descriptor grid (retail DAT_00522f90) — the
+ * terrain-info compute's `cell_grid`.  NULL until a map is loaded. */
+const uint8_t *engine_map_render_tile_descriptors(void);
+
 #endif /* OPENLORDS2_ENGINE_MAP_RENDER_H */

@@ -132,6 +132,11 @@ const uint8_t *gfx_load_misc_sheet(void);
  * or NULL. */
 const uint8_t *gfx_load_chrome_sheet(void);
 
+/* Load the terrain-info icon sheet (icon_tmp.pl8) — the small terrain-type
+ * pictures the screen-4 terrain-info panel stamps (engine_terrain_info_render).
+ * Cached; freed by gfx_shutdown.  Returns the blob or NULL. */
+const uint8_t *gfx_load_terrain_icon_sheet(void);
+
 /* The active 8-bit RGB palette mirror (retail DAT_004ea1b0[256*3]) the
  * page-7 roster dim (gfx_paint_darken_rect) keys off.  Valid after
  * gfx_load_palette / gfx_init.  Returns a pointer to the 768-byte

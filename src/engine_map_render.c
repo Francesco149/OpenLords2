@@ -201,6 +201,25 @@ void engine_map_render_bind_tile_descriptors(const uint8_t *descriptors)
     g_tile_descriptors = descriptors;
 }
 
+void engine_map_render_fill_hover_in(engine_camera_hover_in_t *in)
+{
+    in->x_origin   = g_cam_x0;
+    in->y_origin   = g_cam_y0;
+    in->x_step     = g_cam_x_step;
+    in->half_step  = g_cam_x_half_step;
+    in->y_step     = g_cam_y_step;
+    in->col_count  = g_cam_col_count;
+    in->row_count  = g_cam_row_count;
+    in->scroll_col = g_cam_col_start;
+    in->scroll_row = g_cam_row_start;
+    in->tile_grid  = g_tile_cells;
+}
+
+const uint8_t *engine_map_render_tile_descriptors(void)
+{
+    return g_tile_descriptors;
+}
+
 void engine_map_render_bind_blobs(const uint8_t *primary,
                                   const uint8_t *alt,
                                   const uint8_t *overlay)

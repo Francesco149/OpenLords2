@@ -3108,6 +3108,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_terrain_info.c",
     "src/engine_terrain_info.h"
    ]
@@ -3149,7 +3150,8 @@
    "status": "tested",
    "src": [
     "src/engine_terrain_info.c",
-    "src/engine_terrain_info.h"
+    "src/engine_terrain_info.h",
+    "src/gfx.c"
    ]
   },
   {
@@ -4209,8 +4211,10 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_camera.c",
     "src/engine_camera.h",
+    "src/engine_map_render.h",
     "src/engine_terrain_info.c",
     "src/engine_terrain_info.h"
    ]
@@ -12526,6 +12530,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_map_query.c",
     "src/engine_map_query.h",
     "src/engine_terrain_info.c",
@@ -19689,6 +19694,7 @@
     "src/engine.h",
     "src/engine_fps.c",
     "src/engine_ingame_input.h",
+    "src/engine_map_render.h",
     "src/engine_mp_render.c",
     "src/engine_screen_strat.c",
     "src/engine_tick_cadence.h",

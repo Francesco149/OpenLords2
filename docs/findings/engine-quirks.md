@@ -7096,3 +7096,31 @@ record 0x20, not record 0), while every later consumer of `DAT_005681e0` sees th
 reset-to-0 value.  A port that hoisted the reset above the army read would fetch the
 wrong record.  (0x20 is the "no real army / sentinel" head-link; the reset funnels
 later logic to record 0.)  Pinned by `test_map_query_terrain_head_link_reset`.
+
+## 207 — the terrain-info parchment box (FUN_00409397) is gfx_panel_draw with the chrome sheet baked in (no new blit code)
+
+`FUN_0041befe` opens the screen-4 panel by tiling a parchment box via
+`FUN_00409397(8, y, 0x1c, rows)` → `FUN_00409934(0,…)` (border) +
+`FUN_00409c93(…)` (interior fill).  Those two are NOT new functions: they are
+byte-for-byte twins of the already-ported `gfx_panel_draw_border` (FUN_0040946d)
+and `gfx_panel_fill_interior` (FUN_004097c5) with the chrome sprite-sheet
+`0x57d3d0` (panels.pl8) hard-baked as the asset instead of taken as a parameter,
+and the mode parameter folded in (FUN_00409934 param_1 = the 0/1/2 border style).
+So `FUN_00409397(x,y,c,r)` ≡ `gfx_panel_draw(gfx_load_chrome_sheet(), x, y, c, r)`
+— the same composition `gfx_panel_draw` (FUN_00409346) already does.  The port
+calls `gfx_panel_draw` directly; ~1.2 KB of blit code (00409934/9c93) needs no
+separate port.  (The clip-mode dispatch DAT_005cdd20/DAT_0058fe18 in 00409934 maps
+to gfx_panel.c's `blit_border_tile` clip_x_mode/clip_y_mode 1:1.)
+
+## 208 — FUN_00426216 inside the terrain-info render is a DirectSound SFX-cue seam, not a render/state mutation (a no-op under audio-off)
+
+`FUN_0041c208`'s army-stats arm (`flags&0x80 && terrain_type<0xd`) calls
+`FUN_00426216(10/8/9)`.  It is easy to read as part of the stat layout, but the
+decompile shows it indexes a COM-object table `&DAT_00522afc + arg*4` and invokes
+two vtable slots (+0x48 then +0x30) — an IDirectSoundBuffer status query / restore
+(the army-info UI sound cue).  It is the same `army_move_alert` seam the port maps
+FUN_00426216 to (it dispatches to the unbound `g_alert_fn`).  Because drop-in audio
+is off by default (feedback_mute_and_skip_intro), it is a no-op, so the port records
+the cue arg in the classifier (`alert_arg`) for fidelity but the draw driver elides
+the call — matching the project-wide deferred-SFX convention (cf. the event-scroll
+renderer's TODO(sfx) sites).  Not load-bearing for the panel pixels.

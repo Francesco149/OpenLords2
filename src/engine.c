@@ -17,6 +17,10 @@
 
 #include "call_trace.h"
 #include "engine_camera.h"
+#include "engine_ingame_input.h"   /* in-game input dispatcher (FUN_0042ff10) */
+#include "engine_terrain_info.h"   /* terrain-info opener + screen-4 panel render */
+#include "engine_map_query.h"      /* terrain-attribute compute (FUN_0046d5fe) */
+#include "engine_map_render.h"     /* live camera geometry + descriptor grid */
 #include "engine_overlay_render.h"
 #include "engine_screen_dispatch.h"
 #include "engine_title_render.h"
@@ -670,6 +674,238 @@ static engine_title_bg_reload_fn g_title_bg_reload_fn = title_bg_reload_stub;
  * rest inside one lock; the per-frame button refresh takes its own short
  * lock.  Non-title screens keep the plain (unlocked) demand-redraw seam —
  * their per-screen renderers are unported stubs that draw nothing. */
+
+/* ════════════════════════════════════════════════════════════════════════
+ * In-game input dispatch + terrain-info ("Here Be Dragons") live wiring.
+ *
+ * Replaces the bare open-scroll dismiss chip with the full ported
+ * dispatcher (engine_ingame_input_dispatch, FUN_0042ff10).  The dispatcher
+ * still calls the dismiss chip FIRST and returns on consume, so the
+ * welcome-series / event-scroll dismiss path is byte-for-byte unchanged;
+ * the new behavior — a map-tile right-click opening the screen-4
+ * terrain-info panel — fires only on the strategic screen with the cursor
+ * over a valid map cell while idle, conditions that never hold during a
+ * modal scroll.  The HUD sub-handlers (End-Turn, the right panel, etc.)
+ * stay NULL (deferred); only terrain-info open/close is wired live.
+ * ════════════════════════════════════════════════════════════════════════ */
+static int engine_popup_scroll_input_step(void);   /* fwd (defined below) */
+static int g_popup_auto_dismiss;                    /* fwd tentative def (setter below) */
+
+/* Per-frame cursor→cell resolve (retail FUN_004b99c0 line 63:
+ * DAT_005533b0 = FUN_00429ba4(0)).  Mirrors of map_ready (DAT_005533b0) +
+ * the hovered tile (DAT_00568974, a descriptor byte offset). */
+static int g_map_ready;
+static int g_hover_tile;
+
+/* The terrain attributes published by the opener's compute hook for the
+ * screen-4 panel render to read (the globals retail leaves in
+ * DAT_005440b0 / DAT_0057cb2c / …). */
+static engine_terrain_info_attr_t g_ti_attrs;
+static int g_ti_attrs_valid;
+
+static void engine_tick_resolve_hover(void)
+{
+    engine_camera_hover_in_t hin;
+    memset(&hin, 0, sizeof hin);
+    engine_map_render_fill_hover_in(&hin);
+    if (!hin.tile_grid || hin.x_step == 0 || hin.y_step == 0 ||
+        hin.half_step == 0) {
+        g_map_ready = 0;
+        return;
+    }
+    hin.cursor_x  = g_input_game_x;
+    hin.cursor_y  = g_input_game_y;
+    hin.game_mode = (int)s_slot_0057c8fc;
+
+    engine_camera_hover_out_t hout;
+    memset(&hout, 0, sizeof hout);
+    g_map_ready = engine_camera_cursor_to_cell(&hin, &hout);
+    if (g_map_ready) {
+        g_hover_tile = hout.tile_index;       /* DAT_00568974 */
+    }
+}
+
+/* Opener hooks (engine_terrain_info_open). */
+static void ti_resolve(const engine_terrain_info_open_in_t *in,
+                       engine_terrain_info_open_state_t *st)
+{
+    (void)in;
+    engine_tick_resolve_hover();              /* FUN_00429ba4(1) */
+    st->tile_index = g_hover_tile;
+}
+
+static void ti_compute(const engine_terrain_info_open_in_t *in,
+                       engine_terrain_info_open_state_t *st)
+{
+    (void)in;
+    engine_map_terrain_in_t cin;
+    cin.cell_grid = engine_map_render_tile_descriptors();
+    cin.army_recs = g_per_army_768;
+    cin.tile_off  = st->compute_tile;         /* DAT_0056795c */
+
+    engine_map_terrain_out_t cout;
+    memset(&cout, 0, sizeof cout);
+    if (cin.cell_grid) {
+        engine_map_query_terrain_info(&cin, &cout);
+    }
+    st->county_id = cout.county_id;           /* DAT_0052afbc */
+    st->head_link = cout.head_link;           /* DAT_005681e0 */
+
+    /* Publish for the screen-4 panel render. */
+    g_ti_attrs.flags        = cout.flags;
+    g_ti_attrs.terrain_type = cout.terrain_type;
+    g_ti_attrs.head_link    = cout.head_link;
+    g_ti_attrs.owner        = cout.army_byte5;
+    g_ti_attrs.derived_bit  = cout.derived_bit;
+    g_ti_attrs.player_id    = (int)s_slot_0057c8cc;
+    g_ti_attrs.f25c         = 0;
+    g_ti_attrs.army_block   = g_per_army_768;
+    g_ti_attrs.terr_table   = NULL;           /* special-feature table deferred */
+    g_ti_attrs_valid        = 1;
+}
+
+static void ti_panel_render(const engine_terrain_info_open_in_t *in,
+                            engine_terrain_info_open_state_t *st)
+{
+    (void)in; (void)st;
+    /* Demand a redraw so the screen-4 render arm paints the panel this
+     * tick (the render step runs after the input step). */
+    g_demand_redraw = 2;
+}
+
+/* Dispatcher hooks (engine_ingame_input_dispatch). */
+static int ti_dismiss_chip(const engine_ingame_input_in_t *in,
+                           engine_ingame_state_t *st)
+{
+    (void)in; (void)st;
+    return engine_popup_scroll_input_step();
+}
+
+static void ti_open(const engine_ingame_input_in_t *din,
+                    engine_ingame_state_t *dst)
+{
+    (void)din;
+    static const engine_terrain_info_hooks_t HOOKS = {
+        .resolve_hover   = ti_resolve,
+        .terrain_compute = ti_compute,
+        .panel_render    = ti_panel_render,
+        /* dismiss_scroll / mode2_jump / army_select / map_render / tail
+         * deferred (NULL) — the army-select + scroll-dismiss arms land with
+         * the army-select port. */
+    };
+    engine_terrain_info_open_in_t oin;
+    memset(&oin, 0, sizeof oin);
+    oin.game_mode         = (int)s_slot_0057c8fc;
+    oin.tile_stride       = 8;       /* DAT_0057d338 */
+    oin.map_width         = 0x40;    /* DAT_0052afd4 */
+    oin.view_mode         = (int)s_slot_0057cb18;
+    oin.scroll_open       = g_sim_extended_pause;
+    oin.army_active_plane = g_per_army_768 + 0x70;   /* &DAT_0053fa20 */
+
+    engine_terrain_info_open_state_t ost;
+    memset(&ost, 0, sizeof ost);
+    ost.screen     = dst->screen;    /* 4 — the dispatcher just set it */
+    ost.tile_index = g_hover_tile;
+
+    engine_terrain_info_open(&oin, &ost, &HOOKS);
+    dst->screen = ost.screen;        /* may flip back to 0 (view-mode-2 / pending) */
+}
+
+static void ti_close(const engine_ingame_input_in_t *din,
+                     engine_ingame_state_t *dst)
+{
+    (void)din; (void)dst;
+    g_ti_attrs_valid = 0;
+    g_demand_redraw  = 2;            /* re-render the map (panel cleared) */
+}
+
+/* Screen-4 render arm — draw the terrain-info panel over the retained map
+ * frame.  Mirrors the event-scroll renderer's asset plumbing. */
+static void engine_tick_terrain_info_render(void)
+{
+    if (!g_ti_attrs_valid) {
+        return;
+    }
+    const uint8_t *chrome = gfx_load_chrome_sheet();
+    const uint8_t *sys    = gfx_system_sheet_current();
+    const uint8_t *tfont  = gfx_load_title_font();
+    const uint8_t *mfont  = gfx_load_menu_font();
+    const uint8_t *icon   = gfx_load_terrain_icon_sheet();
+    size_t loc_size = 0;
+    const uint8_t *locblob = config_localization_data(&loc_size);
+    if (!chrome || !tfont || !mfont || !locblob) {
+        return;
+    }
+    localization_state_t loc;
+    loc.blob = (unsigned char *)locblob;
+    loc.walker_offset = 0;
+
+    engine_terrain_info_render_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.chrome        = chrome;
+    ctx.system_sheet  = sys;
+    ctx.title_font    = tfont;
+    ctx.menu_font     = mfont;
+    ctx.glyph_table   = gfx_glyph_render_map();
+    ctx.glyph_metrics = gfx_glyph_measure_map();
+    ctx.icon_sheet    = icon;
+    ctx.sel_sheet     = NULL;
+    ctx.map_id        = (int)s_slot_0053f034;
+    ctx.loc           = &loc;
+    engine_terrain_info_render(&g_ti_attrs, &ctx);
+}
+
+/* The in-game input step — replaces the bare dismiss chip in the tick. */
+static void engine_tick_ingame_input_step(void)
+{
+    /* Resolve the hovered cell first (retail FUN_004b99c0 line 63). */
+    engine_tick_resolve_hover();
+
+    /* Reactive auto-dismiss: synthesize the right-click edge while a popup
+     * is open so the dismiss chip closes it this frame (trace convenience). */
+    if (g_popup_auto_dismiss && g_sim_extended_pause != 0) {
+        g_input_rmb_newly_released = 1;       /* DAT_004e6900 */
+    }
+
+    engine_ingame_input_in_t in;
+    memset(&in, 0, sizeof in);
+    in.region_in.screen    = g_sim_current_screen;
+    in.region_in.cursor_x  = g_input_game_x;
+    in.region_in.cursor_y  = g_input_game_y;
+    in.region_in.game_mode = (int)s_slot_0057c8fc;
+    in.rmb_released   = g_input_rmb_newly_released;
+    in.lmb_released   = g_input_lmb_newly_released;
+    in.lmb_pressed    = g_input_lmb_newly_pressed;
+    in.rmb_pressed    = g_input_rmb_newly_pressed;
+    in.lmb_held       = g_input_lmb;
+    in.extended_pause = g_sim_extended_pause;
+    in.map_ready      = g_map_ready;
+    in.view_mode      = (int)s_slot_0057cb18;
+    in.game_mode      = (int)s_slot_0057c8fc;
+    in.turn_progress  = g_sim_turn_progress;
+    in.turn_busy      = 0;                     /* DAT_0055403c — idle while browsing */
+    in.timeout_reached= g_sim_turn_timeout_reached;
+
+    engine_ingame_state_t st;
+    memset(&st, 0, sizeof st);
+    st.screen = g_sim_current_screen;
+
+    static const engine_ingame_hooks_t HOOKS = {
+        .dismiss_chip       = ti_dismiss_chip,
+        .terrain_info_open  = ti_open,
+        .terrain_info_close = ti_close,
+        /* every other sub-handler deferred (NULL → inert) */
+    };
+    engine_ingame_input_dispatch(&in, &st, &HOOKS);
+
+    if (st.screen != g_sim_current_screen) {
+        engine_set_current_screen(st.screen);
+    }
+    if (st.demand_redraw) {
+        g_demand_redraw = st.demand_redraw;
+    }
+}
+
 static void engine_tick_title_render_step(void)
 {
     if (g_sim_current_screen != 0x1f) {
@@ -685,6 +921,14 @@ static void engine_tick_title_render_step(void)
                 if (gfx_lock_canvas()) {
                     engine_screen_dispatch(0, engine_title_render_page(),
                                            g_demand_redraw);
+                    gfx_unlock_canvas();
+                }
+            } else if (g_sim_current_screen == 4) {
+                /* Terrain-info panel (screen 4, retail FUN_0040f1a0 case 4 →
+                 * FUN_0041b032): drawn OVER the retained strategic-map frame,
+                 * so lock + paint the panel without clearing the canvas. */
+                if (gfx_lock_canvas()) {
+                    engine_tick_terrain_info_render();
                     gfx_unlock_canvas();
                 }
             } else {
@@ -2142,20 +2386,15 @@ void engine_tick(void)
      * the demand-redraw cookie the seam below consumes. */
     engine_tick_menu_input_step();
 
-    /* In-game open-scroll input — the dismiss chip retail runs FIRST in its
-     * per-state input dispatcher (FUN_0042ff10 → FUN_0047685d).  A no-op
-     * unless a modal event scroll is open; then a right-click or a click on
-     * the seal dismisses it and unfreezes the SP sim.  Gated to in-game like
-     * retail (0x42ff10 runs off the 0x1f title screen).  The consumed-click
-     * return is informational until the rest of the in-game input machine
-     * ports. */
+    /* In-game input dispatch (retail FUN_0042ff10) — the per-state UI
+     * dispatcher.  It runs the open-scroll dismiss chip (FUN_0047685d) FIRST
+     * and returns on consume, so the welcome-series / event-scroll dismiss
+     * path is unchanged; beyond that it now routes a map-tile right-click to
+     * the screen-4 terrain-info panel (the only HUD/map handler wired live —
+     * the rest stay deferred).  Gated to in-game like retail (0x42ff10 runs
+     * off the 0x1f title screen). */
     if (g_engine_state == 3) {
-        /* Reactive auto-dismiss: synthesize the right-click edge while a
-         * popup is open, so the dismiss handler below closes it this frame
-         * (no hand-timed clicks needed in the trace). */
-        if (g_popup_auto_dismiss && g_sim_extended_pause != 0)
-            g_input_rmb_newly_released = 1;       /* DAT_004e6900 */
-        (void)engine_popup_scroll_input_step();
+        engine_tick_ingame_input_step();
     }
 
     /* Title-menu file-load confirm pump (retail FUN_004ad9f0, run from

@@ -92,6 +92,7 @@ static uint8_t             *g_panel_sheet;    /* DAT_004eabec — panels2.pl8 bl
 static uint8_t             *g_system_sheet;    /* DAT_005bb540 — system2.pl8 blob */
 static uint8_t             *g_misc_sheet;      /* DAT_005530c8 — misc_sel.pl8 blob */
 static uint8_t             *g_chrome_sheet;    /* DAT_0057d3d0 — panels.pl8 blob */
+static uint8_t             *g_terrain_icon_sheet; /* icon_tmp.pl8 (terrain-info icons) */
 static uint8_t             *g_menu_font;       /* DAT_005af8f0 — fntl2_14.pl8 blob */
 static uint8_t             *g_title_font;      /* DAT_005b2fa0 — fntl2_22.pl8 blob */
 static uint8_t             *g_panel_name_font; /* DAT_005c9a90 — fntl2_9.pl8 blob */
@@ -287,6 +288,10 @@ void gfx_shutdown(void)
     if (g_chrome_sheet) {
         free(g_chrome_sheet);
         g_chrome_sheet = NULL;
+    }
+    if (g_terrain_icon_sheet) {
+        free(g_terrain_icon_sheet);
+        g_terrain_icon_sheet = NULL;
     }
     if (g_menu_font) {
         free(g_menu_font);
@@ -723,6 +728,28 @@ const uint8_t *gfx_load_chrome_sheet(void)
     }
     log_line("OK :Chrome sheet loaded (panels.pl8, %d bytes).", n);
     return g_chrome_sheet;
+}
+
+/* Load icon_tmp.pl8 — the terrain-info panel's terrain-type icon sheet
+ * (retail FUN_0041c208 reads it into the shared DAT_004eabec scratch via
+ * FUN_004af8d9 with a 160000-byte cap, then renders sprite[idx] from it).
+ * The drop-in gives it its own cached buffer so the panels2.pl8 scratch is
+ * not clobbered.  Returns the blob (cached; freed by gfx_shutdown), or NULL. */
+const uint8_t *gfx_load_terrain_icon_sheet(void)
+{
+    if (!g_terrain_icon_sheet) {
+        g_terrain_icon_sheet = (uint8_t *)malloc(160000);
+        if (!g_terrain_icon_sheet) {
+            log_line("gfx_load_terrain_icon_sheet: OOM");
+            return NULL;
+        }
+    }
+    int n = io_read_file_at("icon_tmp.pl8", g_terrain_icon_sheet, 160000, 0);
+    if (n < 1) {
+        log_line("gfx_load_terrain_icon_sheet: read icon_tmp.pl8 failed (%d)", n);
+        return NULL;
+    }
+    return g_terrain_icon_sheet;
 }
 
 const uint8_t *gfx_palette_rgb(void)
