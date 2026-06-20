@@ -1,0 +1,45 @@
+# END-TURN ADVANCE (port-only, run with OL2_NO_HINTS=1): load lastturn.sav,
+# dismiss the boot 256-colour warning with the SAME precise seal LEFT-click as
+# endturn_seal, then — with the help-hint welcome series suppressed (clean,
+# sim-unfrozen map) — LEFT-click the END-TURN button (game rect x[478,639)
+# y[460,479), the bottom-right HUD strip; click centre (558,469), packed
+# L=(469<<16)|558=30736942) and capture a WIDE window so the phases advance to
+# the rollover and the season/year change (the HUD season name + year tick over,
+# composited live by the every-frame map render).  Port-only: the welcome
+# suppression is a dev affordance (OL2_NO_HINTS), so this is NOT a port<->retail
+# parity trace — it verifies the port's turn-advance visual end-to-end.
+# Load prefix copied verbatim from endturn_seal.jsonl.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"capture": 0, "label": "flip0"}
+{"t": 3, "m": 512, "w": 0, "l": 22610335}
+{"t": 6, "m": 513, "w": 1, "l": 22610335}
+{"t": 9, "m": 514, "w": 0, "l": 22610335}
+{"capture": 16, "label": "clean"}
+{"t": 22, "m": 512, "w": 0, "l": 30736942}
+{"t": 26, "m": 513, "w": 1, "l": 30736942}
+{"t": 30, "m": 514, "w": 0, "l": 30736942}
+{"capture": 34, "label": "ended"}
+{"capture": 60, "label": "a060"}
+{"capture": 110, "label": "a110"}
+{"capture": 170, "label": "a170"}
+{"capture": 240, "label": "a240"}
+{"capture": 330, "label": "a330"}
+{"capture": 440, "label": "a440"}
+{"capture": 560, "label": "a560"}

@@ -25,6 +25,7 @@
 #include "engine_screen_dispatch.h"
 #include "engine_screen_strat.h"   /* every-frame map composite (FUN_004050c0) */
 #include "engine_map_scene.h"      /* anim-counter advance (FUN_004cfb08) */
+#include "engine_pl8.h"            /* season bank reload (FUN_004984dc) */
 #include "engine_title_render.h"
 #include "engine_menu_input.h"
 #include "engine_load_pump.h"
@@ -54,6 +55,7 @@
 #include <mmsystem.h>     /* timeGetTime — gfx.h transitively pulled in
                            * windows.h, but not mmsystem.h */
 #include <stdint.h>
+#include <stdlib.h>      /* getenv — OL2_NO_HINTS dev gate */
 
 int g_engine_state;
 int g_shutdown_request;
@@ -857,6 +859,74 @@ static void engine_tick_terrain_info_render(void)
     engine_terrain_info_render(&g_ti_attrs, &ctx);
 }
 
+/* ─── End-Turn button — port of FUN_0043ac23 @ 0x43ac23 (the action) +
+ *     FUN_00432967 @ 0x432967 / the End-Turn row of FUN_0040e3ee (hit-test).
+ *
+ * The right-HUD panel carries a 6-button row (table DAT_004dc680, origin
+ * 0x1de,0x1ae): five panel TABS (FUN_0043ae30 → the county/market/etc.
+ * sub-screens, still unported — deferred) and, below them, the END-TURN
+ * button (entry 5: rect [0,0x1e]-[0xa1,0x31], type 1 = LMB-press, action
+ * FUN_0043ac23).  This port wires ONLY End-Turn (the tabs flip to
+ * renderer-less screens); FUN_00432967 walks the full table, here narrowed
+ * to the one ported button via engine_menu_hotspot_click (= FUN_0040e3ee). */
+static void engine_endturn_action(int param)
+{
+    (void)param;   /* retail param_a=1; the SP arm ignores it */
+
+    /* FUN_0043ac23: the `if (DAT_0053e910) FUN_00476768()` scroll-dismiss is
+     * UNREACHABLE on the dispatcher path — the dismiss chip (run first) has
+     * already consumed the click when a scroll is open, so End-Turn only
+     * fires on a clean map (extended_pause == 0).  Omitted by design. */
+    int idx = (int)s_slot_0057c8cc;                  /* DAT_0057c8cc */
+    if (idx < 0 || idx >= 6)
+        return;
+    int32_t ready;
+    memcpy(&ready, &g_player_strategic_352[idx * 0x160], sizeof ready);
+    if (ready == 999)                                /* already ended */
+        return;
+
+    /* FUN_0043ad25 at screen 0 is a pure repaint (no sub-screen to close →
+     * no bank reload); the every-frame strat composite handles it, so just
+     * request the redraw below. */
+    if (g_sim_mp_active == 0) {                       /* DAT_00553030 == 0 → SP */
+        int32_t done = 999;
+        memcpy(&g_player_strategic_352[idx * 0x160], &done, sizeof done);
+    }
+    /* (MP arm — clear DAT_00515d60[0..9] + the 0x4eda0 broadcast — deferred.) */
+    g_combat_flag_530d0 = 1;                          /* DAT_005530d0 */
+    /* DAT_0056d6a0 (ranking redraw cookie), DAT_0055403c (turn-busy),
+     * _DAT_004ee8c0 (wall-clock stamp) are UI/timing affordances — deferred. */
+    g_demand_redraw = 2;
+}
+
+/* The End-Turn button row, narrowed to the one ported button (entry 5). */
+static const engine_menu_hotspot_t k_endturn_buttons[] = {
+    { .x0 = 0, .y0 = 0x1e, .x1 = 0xa1, .y1 = 0x31,
+      .action = engine_endturn_action, .button_type = 1, .param = 1 },
+};
+
+/* hud_btn_a hook (FUN_00432967): hit-test the End-Turn button row at the
+ * panel origin (0x1de,0x1ae) and fire its action.  Consumes the click. */
+static int engine_endturn_hit_test(const engine_ingame_input_in_t *in,
+                                   engine_ingame_state_t *st)
+{
+    engine_menu_click_in_t click;
+    memset(&click, 0, sizeof click);
+    click.cursor_x          = in->region_in.cursor_x;
+    click.cursor_y          = in->region_in.cursor_y;
+    click.lmb_newly_pressed = in->lmb_pressed;
+    click.lmb_newly_released= in->lmb_released;
+    click.lmb_held          = in->lmb_held;
+    if (engine_menu_hotspot_click(0x1de, 0x1ae, k_endturn_buttons,
+                                  (int)(sizeof k_endturn_buttons /
+                                        sizeof k_endturn_buttons[0]),
+                                  &click) != 0) {
+        st->demand_redraw = 2;
+        return 1;                                     /* consumed */
+    }
+    return 0;
+}
+
 /* The in-game input step — replaces the bare dismiss chip in the tick. */
 static void engine_tick_ingame_input_step(void)
 {
@@ -894,6 +964,7 @@ static void engine_tick_ingame_input_step(void)
 
     static const engine_ingame_hooks_t HOOKS = {
         .dismiss_chip       = ti_dismiss_chip,
+        .hud_btn_a          = engine_endturn_hit_test,   /* FUN_00432967 End-Turn */
         .terrain_info_open  = ti_open,
         .terrain_info_close = ti_close,
         /* every other sub-handler deferred (NULL → inert) */
@@ -1109,6 +1180,16 @@ void engine_turn_advance(void)
     engine_turn_run_passes(&g_turn_event_queue,
                            g_rng_7bit_b, g_rng_7bit_a,
                            g_sim_mp_active);
+
+    /* The season just rotated (engine_turn_advance_calendar at the top of the
+     * passes: s_slot_0057c934 = next).  Reload the strategic sprite banks so
+     * the new season's terrain shows — engine_pl8 keys the bank table off the
+     * season (engine_pl8.c season*8-8 offset).  Retail reloads lazily when the
+     * screen-0x22 year-rollover scroll closes (FUN_0043ad25 → FUN_004984dc);
+     * the port reloads eagerly here since that scroll isn't ported.  The
+     * every-frame strat composite re-binds the banks next frame, so the map
+     * picks up the new terrain with no extra redraw plumbing. */
+    engine_pl8_load_strategic_banks(NULL);
 }
 
 /* ─── Screen-substate-0 strategic turn-phase dispatcher ─────────────
@@ -1155,6 +1236,30 @@ static int32_t  g_sim_player_ticks[10];         /* DAT_0053e8d0[0..9] */
 /* The ten sub-step cadence counters (0x40490d/0x40489e state) — first
  * call of the substate-0 trio.  All .bss runtime, never saved. */
 static engine_tick_cadence_t g_tick_cadence;
+
+/* DEV (OL2_FORCE_AI_READY): park every active NON-current realm at the ready
+ * sentinel (999) each phase-4 tick, so a single human End-Turn click resolves
+ * the turn WITHOUT the AI brains completing — the per-tick brain FSM stalls
+ * (slot 84 parks at 4, slot 85 stays 5: a separate AI-completion frontier).
+ * Test-only: lets a port-only trace drive turn-advance → season change end to
+ * end.  Cached env read; never set in capture-parity runs. */
+static void engine_dev_force_ai_ready(void)
+{
+    static int en = -1;
+    if (en < 0)
+        en = getenv("OL2_FORCE_AI_READY") ? 1 : 0;
+    if (!en)
+        return;
+    int cur = (int)s_slot_0057c8cc;
+    for (int i = 1; i < 6; i++) {
+        if (i == cur)
+            continue;
+        if (g_player_strategic_352[i * 0x160 + 4] != 0) {  /* active realm */
+            int32_t done = 999;
+            memcpy(&g_player_strategic_352[i * 0x160], &done, sizeof done);
+        }
+    }
+}
 
 static void engine_turn_tick_substate0(void)
 {
@@ -1236,6 +1341,7 @@ static void engine_turn_tick_substate0(void)
          * (all precede the brain conditionally, 0x49a3a1; UI-only, not sim). */
         engine_army_ai_run_per_tick(&g_turn_event_queue,  /* FUN_0049a581 */
                                     g_sim_mp_active, g_rng_7bit_b);
+        engine_dev_force_ai_ready();   /* OL2_FORCE_AI_READY (test-only) */
         if (engine_sim_turn_resolved() != 0)          /* FUN_0049b762 */
             engine_turn_advance_phase();
     }
@@ -1820,6 +1926,17 @@ static void engine_tick_help_hint_step(void)
     CALL_TRACE_ENTER(0x00476aa7);
 
     if (g_help_hints_enabled == 0 || g_engine_state != 3)
+        return;
+
+    /* DEV: OL2_NO_HINTS suppresses the first-time tutorial scroll series
+     * (welcome 0xc8-0xca, etc.) so a port-only test reaches a clean,
+     * sim-unfrozen map without the dismiss-timing dance.  Not a retail
+     * behaviour (retail gates these on the saved "show help" option); the
+     * env read is cached and never set in capture-parity runs. */
+    static int g_no_hints = -1;
+    if (g_no_hints < 0)
+        g_no_hints = getenv("OL2_NO_HINTS") ? 1 : 0;
+    if (g_no_hints)
         return;
     if (g_screen27_cookie != 0) {
         g_screen27_cookie -= 1;                  /* DAT_004f0358 */

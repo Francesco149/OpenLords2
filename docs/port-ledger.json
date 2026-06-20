@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 745,
-  "ported": 53,
-  "unported": 1649,
+  "ported": 56,
+  "unported": 1646,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 798,
-  "pct_touched": 32.6,
+  "touched": 801,
+  "pct_touched": 32.7,
   "pct_tested": 30.4,
   "bytes_total": 838629,
-  "bytes_touched": 356865,
-  "pct_bytes_touched": 42.6
+  "bytes_touched": 357919,
+  "pct_bytes_touched": 42.7
  },
  "orphan_refs": [
   "0x004148",
@@ -2068,6 +2068,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_button.h",
     "src/engine_menu_input.c",
     "src/engine_menu_input.h"
@@ -4870,6 +4871,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_ingame_input.h"
    ]
   },
@@ -6625,16 +6627,20 @@
    "name": "FUN_0043ac23",
    "size": 258,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c"
+   ]
   },
   {
    "va": "0x43ad25",
    "name": "FUN_0043ad25",
    "size": 256,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c"
+   ]
   },
   {
    "va": "0x43ae25",
@@ -6649,8 +6655,10 @@
    "name": "FUN_0043ae30",
    "size": 540,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c"
+   ]
   },
   {
    "va": "0x43b04c",
@@ -15667,6 +15675,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_pl8.c",
     "src/engine_pl8.h",
     "src/game_init.c",

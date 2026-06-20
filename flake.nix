@@ -124,7 +124,11 @@
             # tells WSL to auto-translate /mnt/X/... to X:\... when crossing
             # into Windows, so the .exe gets a native Windows path with no
             # client-side translation needed.
-            export WSLENV="''${WSLENV:+$WSLENV:}OPENLORDS2_GAME_DIR/p:WSL_DISTRO_NAME"
+            # OL2_* are dev/test toggles read by getenv() inside the .exe
+            # (OL2_NO_HINTS suppresses the first-time tutorial scrolls;
+            # OL2_FORCE_AI_READY parks the AI realms ready so End-Turn alone
+            # advances the turn) — list them so they cross WSL→Windows too.
+            export WSLENV="''${WSLENV:+$WSLENV:}OPENLORDS2_GAME_DIR/p:WSL_DISTRO_NAME:OL2_NO_HINTS:OL2_FORCE_AI_READY"
 
             # mingw cross-compiler convenience aliases.
             export MINGW_CC=i686-w64-mingw32-gcc

@@ -7124,3 +7124,52 @@ is off by default (feedback_mute_and_skip_intro), it is a no-op, so the port rec
 the cue arg in the classifier (`alert_arg`) for fidelity but the draw driver elides
 the call — matching the project-wide deferred-SFX convention (cf. the event-scroll
 renderer's TODO(sfx) sites).  Not load-bearing for the panel pixels.
+
+## 209 — the strategic map needs the EVERY-FRAME composite (FUN_004050c0, tick line 42), not just the demand-redraw render (FUN_0040f1a0, line 36)
+
+Retail's in-game tick (FUN_004b99c0) composites the strategic map in TWO places:
+the demand-redraw seam (line 36, `if (DAT_0057d340) FUN_0040f1a0(redraw)` — the
+FULL screen incl. HUD, on a redraw request) AND, unconditionally every frame,
+line 42:
+
+```
+if (DAT_0056d650 == 0 && DAT_0057c8fc == 0 &&
+    (DAT_004eac50 == 0 || DAT_004eac50 == 0x10)) FUN_004050c0();
+```
+
+FUN_004050c0 (53 B) bumps the 0..3 redraw phase + calls FUN_004cfb08 (the 16 ms-
+gated anim-counter advance + the 3-cluster map-scene render).  The port had ONLY
+the demand-redraw seam, so the map was static between redraws and the anim
+counters were pinned at (0,0).  Consequences, all one root cause:
+
+* the boot 256-colour warning (a capture-host artifact) survived as stale
+  framebuffer BEHIND the welcome/report scroll on screen 0x27 — there was no
+  every-frame screen-0 composite to repaint the clean map before the 0x27 flip
+  (the welcome objectives render byte-exact; the map behind them was stale).
+  endturn_seal t030 index-diff was 14.82% (all of it the warning text below the
+  scroll); with the every-frame composite it is 0.08% (just the cattle/castle
+  anim speck).  THIS is what "port the 0x27 report renderer's map-behind pass"
+  reduced to — not a 0x27 dispatch arm (FUN_0040f1a0 has NO 0x27 case; the
+  report scroll renders via the popup pump FUN_00472e46, and the map behind it
+  is simply whatever the last screen-0 composite left).
+* the frozen cattle/castle/water animation (strat-map-render-gaps #1/#3): the
+  counters now free-run in live gameplay.
+* a season/bank change would never show live (the map kept its load-time
+  terrain) — the every-frame composite re-reads the season banks each frame, so
+  a bank reload shows on the next frame.
+
+Drop-in deviation: the port composes the FULL strat frame each in-game frame
+(engine_screen_strat_render) rather than retail's incremental map-scene-only
+(FUN_004050c0 leaves the HUD untouched).  The port already memset-clears +
+fully redraws each strategic frame, so a full repaint is simpler, has no
+map/HUD-overlap risk, and is equally correct; cost is a per-frame HUD redraw
+(trivial).  A LIVE/PINNED anim-mode flag (engine_screen_strat_set_anim_live)
+keeps the single-shot seats (--strat-map/--strat-load/--ti-cell) + the
+capture-parity harness at anim frame 0 for byte-exactness; only the in-game
+tick (g_engine_state==3) sets LIVE.
+
+Turbo-capture caveat: the 16 ms anim gate (FUN_004cfb08, now_ms delta) barely
+advances under --turbo on BOTH engines, so cattle/castle stay near frame 0 on
+both sides — which is exactly why grid_load_dense parity stays clean (0.055%
+mean).  The animation is a real-time-gameplay effect; a season change (a STATE
+change, not anim-gated) shows immediately on the next frame regardless.
