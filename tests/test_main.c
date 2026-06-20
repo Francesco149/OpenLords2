@@ -1436,6 +1436,14 @@ struct test_case {
     X(map_query_ring_out_of_range_returns_0) \
     X(map_query_ring_at_reports_matched_cell) \
     X(map_query_ring_at_miss_leaves_outputs) \
+    X(map_query_terrain_width1_simple) \
+    X(map_query_terrain_width2_bit6_walkback) \
+    X(map_query_terrain_width2_bit7_highterrain) \
+    X(map_query_terrain_width1_bit7_lowterrain) \
+    X(map_query_terrain_head_link_reset) \
+    X(map_query_terrain_flag_rule1) \
+    X(map_query_terrain_flag_rule2) \
+    X(map_query_terrain_derived_bit) \
     \
     X(strat_cost_water_blocked) \
     X(strat_cost_level_gate) \

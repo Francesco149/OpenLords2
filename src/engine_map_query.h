@@ -48,4 +48,58 @@ int engine_map_query_nearest_feature_ring(int col, int row);
 int engine_map_query_nearest_feature_ring_at(int col, int row,
                                              int *out_col, int *out_row);
 
+/* ── Terrain-info compute — port of FUN_0046d5fe @ 0x46d5fe (502 B) ─────
+ * Resolves the descriptor cell under the cursor into the attribute bundle
+ * the terrain-info popup ("Here Be Dragons / <terrain>") + the right-panel
+ * HUD read.  Pure (unlike the bound-grid predicates above, it takes both
+ * source arrays explicitly — fed by engine_camera_cursor_to_cell upstream,
+ * which produces the cell byte-offset in `tile_off`).
+ *
+ *   Inputs:
+ *     cell_grid  &DAT_00522f90  8-byte cell descriptors (the same grid the
+ *                               predicates above bind as g_cells)
+ *     army_recs  &DAT_0053f9b0  per-army/territory records, stride 0x300
+ *                               (the port's g_per_army_768)
+ *     tile_off   DAT_0056795c   cell BYTE offset under the cursor (cell*8),
+ *                               i.e. the hovered tile_index from the cursor
+ *                               resolver (the descriptor grid stores byte
+ *                               offsets, not cell indices)
+ *
+ * For a multi-tile feature (width 2) the low nibble of the cell's byte +4
+ * encodes the sub-tile position; the compute walks back to the feature's
+ * ORIGIN cell (one cell = 8 B, one row = 0x200 B) and reads the attributes
+ * there.  The flag byte is post-masked by two terrain-specific rules.
+ *
+ *   Outputs (retail global ↔ field):
+ *     head_link    DAT_005681e0  origin? no — the cursor cell's byte +7
+ *                                (army/head-link record index; 0x20 → 0)
+ *     army_byte5   DAT_005681d0  army_recs[head_link]+5 (read with the
+ *                                ORIGINAL head_link, before the 0x20 reset)
+ *     county_id    DAT_0052afbc  origin cell +5 (territory/county id)
+ *     terrain_type DAT_0057cb2c  origin cell +0
+ *     flags        _DAT_005440b0 origin cell +1, post-masked
+ *     cell3        _DAT_00553f78 origin cell +3
+ *     derived_bit  DAT_005651bc  1 iff flags&8 and (origin cell +2 & 0x1c)==4
+ *     origin_off   the resolved feature-origin cell byte offset (local_8)
+ */
+typedef struct engine_map_terrain_in {
+    const uint8_t *cell_grid;   /* DAT_00522f90, 8 bytes/cell */
+    const uint8_t *army_recs;   /* DAT_0053f9b0, stride 0x300 */
+    int            tile_off;    /* DAT_0056795c, cell byte offset */
+} engine_map_terrain_in_t;
+
+typedef struct engine_map_terrain_out {
+    int head_link;      /* DAT_005681e0 */
+    int army_byte5;     /* DAT_005681d0 */
+    int county_id;      /* DAT_0052afbc */
+    int terrain_type;   /* DAT_0057cb2c */
+    int flags;          /* _DAT_005440b0 */
+    int cell3;          /* _DAT_00553f78 */
+    int derived_bit;    /* DAT_005651bc */
+    int origin_off;     /* local_8 — resolved feature-origin byte offset */
+} engine_map_terrain_out_t;
+
+void engine_map_query_terrain_info(const engine_map_terrain_in_t *in,
+                                   engine_map_terrain_out_t *out);
+
 #endif /* OPENLORDS2_ENGINE_MAP_QUERY_H */

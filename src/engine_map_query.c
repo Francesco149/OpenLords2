@@ -162,3 +162,71 @@ int engine_map_query_nearest_feature_ring_at(int col, int row,
     }
     return 0;
 }
+
+/* Port of FUN_0046d5fe @ 0x46d5fe (502 B).  Verbatim branch shape.  See
+ * the header for the field/global mapping.  The descriptor grid + army
+ * record array are passed explicitly (pure) rather than via the module's
+ * g_cells binding — the data flows from engine_camera_cursor_to_cell,
+ * which produces tile_off as a cell BYTE offset (cell index * 8). */
+void engine_map_query_terrain_info(const engine_map_terrain_in_t *in,
+                                   engine_map_terrain_out_t *out)
+{
+    const uint8_t *cell = in->cell_grid;
+    int off = in->tile_off;
+
+    /* Cursor cell's head-link (byte +7); the army-record read uses the
+     * ORIGINAL value, the 0x20 → 0 reset happens after. */
+    int head_link  = cell[off + 7];
+    int army_byte5 = in->army_recs[head_link * 0x300 + 5];
+
+    /* Feature width (local_10): 1 or 2.  bit7 of the flag byte switches to
+     * the terrain-type test; else bit6 picks 1 vs 2. */
+    int width;
+    if ((cell[off + 1] & 0x80) == 0) {
+        width = (cell[off + 1] & 0x40) == 0 ? 1 : 2;
+    } else if (cell[off + 0] < 0x15) {
+        width = 1;
+    } else {
+        width = 2;
+    }
+
+    if (head_link == 0x20) {
+        head_link = 0;
+    }
+
+    /* For a width-2 feature, walk back to the origin cell using the low
+     * nibble of byte +4 (sub-tile position): 1 cell = 8 B, 1 row = 0x200 B. */
+    int origin;
+    if (width < 2) {
+        origin = off;
+    } else {
+        int nib = cell[off + 4] & 0xf;
+        origin = off - (nib % width) * 8 - (nib / width) * 0x200;
+    }
+
+    int flags        = cell[origin + 1];
+    int county_id    = cell[origin + 5];
+    int terrain_type = cell[origin + 0];
+    int cell3        = cell[origin + 3];
+    int derived_bit  = 0;
+
+    /* Two terrain-specific flag-clear rules, then the derived bit. */
+    if ((cell[origin + 1] & 0x80) != 0 && terrain_type == 0x14) {
+        flags = 0;
+    }
+    if ((flags & 0x10) != 0 && terrain_type == 0) {
+        flags = 0;
+    }
+    if ((flags & 8) != 0 && (cell[origin + 2] & 0x1c) == 4) {
+        derived_bit = 1;
+    }
+
+    out->head_link    = head_link;
+    out->army_byte5   = army_byte5;
+    out->county_id    = county_id;
+    out->terrain_type = terrain_type;
+    out->flags        = flags;
+    out->cell3        = cell3;
+    out->derived_bit  = derived_bit;
+    out->origin_off   = origin;
+}

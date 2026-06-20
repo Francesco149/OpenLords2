@@ -311,3 +311,152 @@ int test_map_query_ring_at_miss_leaves_outputs(void)
     T_ASSERT_EQ_I(row, 9);
     return 0;
 }
+
+/* ── terrain-info compute (FUN_0046d5fe) ─────────────────────────────────
+ * Cell bytes: +0 terrain_type, +1 flags, +2 (derived-bit mask), +3 cell3,
+ * +4 sub-tile nibble, +5 county_id, +7 head_link.  tile_off is a byte
+ * offset (cell index * 8).  The army record array is stride 0x300, byte +5
+ * read per record. */
+static uint8_t g_ti_cells[0x800];
+static uint8_t g_ti_army[0x40 * 0x300];   /* sized to cover a 0x20 head-link */
+
+static void ti_reset(void)
+{
+    memset(g_ti_cells, 0, sizeof g_ti_cells);
+    memset(g_ti_army, 0, sizeof g_ti_army);
+}
+
+static void ti_cell(int off, uint8_t b0, uint8_t b1, uint8_t b2,
+                    uint8_t b3, uint8_t b4, uint8_t b5, uint8_t b7)
+{
+    g_ti_cells[off + 0] = b0; g_ti_cells[off + 1] = b1; g_ti_cells[off + 2] = b2;
+    g_ti_cells[off + 3] = b3; g_ti_cells[off + 4] = b4; g_ti_cells[off + 5] = b5;
+    g_ti_cells[off + 7] = b7;
+}
+
+static engine_map_terrain_out_t ti_run(int off)
+{
+    engine_map_terrain_in_t in = {
+        .cell_grid = g_ti_cells, .army_recs = g_ti_army, .tile_off = off,
+    };
+    engine_map_terrain_out_t out;
+    memset(&out, 0, sizeof out);
+    engine_map_query_terrain_info(&in, &out);
+    return out;
+}
+
+/* width-1 single cell, simple terrain — origin == cursor cell. */
+int test_map_query_terrain_width1_simple(void)
+{
+    ti_reset();
+    ti_cell(0x40, /*t*/5, /*flags*/0, /*b2*/0, /*cell3*/9, /*nib*/0, /*county*/3, /*head*/2);
+    g_ti_army[2 * 0x300 + 5] = 77;
+    engine_map_terrain_out_t o = ti_run(0x40);
+    T_ASSERT_EQ_I(o.head_link, 2);
+    T_ASSERT_EQ_I(o.army_byte5, 77);
+    T_ASSERT_EQ_I(o.origin_off, 0x40);
+    T_ASSERT_EQ_I(o.terrain_type, 5);
+    T_ASSERT_EQ_I(o.county_id, 3);
+    T_ASSERT_EQ_I(o.cell3, 9);
+    T_ASSERT_EQ_I(o.flags, 0);
+    T_ASSERT_EQ_I(o.derived_bit, 0);
+    return 0;
+}
+
+/* width-2 via flag bit6: nibble 3 walks back one col (-8) + one row (-0x200);
+ * attributes read from the ORIGIN cell, not the cursor cell. */
+int test_map_query_terrain_width2_bit6_walkback(void)
+{
+    ti_reset();
+    /* cursor cell @ 0x600: width-2 (bit6), nib=3, head=4 */
+    ti_cell(0x600, /*t*/0x16, /*flags*/0x40, 0, 0, /*nib*/3, /*county*/0xff, /*head*/4);
+    /* origin @ 0x600 - 8 - 0x200 = 0x3F8 with distinct attrs */
+    ti_cell(0x3F8, /*t*/0x10, /*flags*/0x40, 0, /*cell3*/0x11, 0, /*county*/0x12, /*head*/0);
+    g_ti_army[4 * 0x300 + 5] = 88;
+    engine_map_terrain_out_t o = ti_run(0x600);
+    T_ASSERT_EQ_I(o.head_link, 4);
+    T_ASSERT_EQ_I(o.army_byte5, 88);
+    T_ASSERT_EQ_I(o.origin_off, 0x3F8);
+    T_ASSERT_EQ_I(o.terrain_type, 0x10);   /* from origin */
+    T_ASSERT_EQ_I(o.county_id, 0x12);      /* from origin */
+    T_ASSERT_EQ_I(o.cell3, 0x11);
+    T_ASSERT_EQ_I(o.flags, 0x40);
+    return 0;
+}
+
+/* width-2 via flag bit7 + terrain >= 0x15. */
+int test_map_query_terrain_width2_bit7_highterrain(void)
+{
+    ti_reset();
+    ti_cell(0x80, /*t*/0x20, /*flags*/0x80, 0, /*cell3*/7, /*nib*/0, /*county*/4, /*head*/1);
+    g_ti_army[1 * 0x300 + 5] = 5;
+    engine_map_terrain_out_t o = ti_run(0x80);
+    T_ASSERT_EQ_I(o.origin_off, 0x80);     /* nib 0 → no walk */
+    T_ASSERT_EQ_I(o.terrain_type, 0x20);
+    T_ASSERT_EQ_I(o.flags, 0x80);          /* rule1 needs terrain 0x14 → unchanged */
+    T_ASSERT_EQ_I(o.county_id, 4);
+    T_ASSERT_EQ_I(o.head_link, 1);
+    T_ASSERT_EQ_I(o.army_byte5, 5);
+    return 0;
+}
+
+/* width-1 via flag bit7 + terrain < 0x15. */
+int test_map_query_terrain_width1_bit7_lowterrain(void)
+{
+    ti_reset();
+    ti_cell(0xC0, /*t*/0x10, /*flags*/0x80, 0, /*cell3*/2, 0, /*county*/6, /*head*/3);
+    engine_map_terrain_out_t o = ti_run(0xC0);
+    T_ASSERT_EQ_I(o.origin_off, 0xC0);
+    T_ASSERT_EQ_I(o.terrain_type, 0x10);
+    T_ASSERT_EQ_I(o.flags, 0x80);
+    return 0;
+}
+
+/* head_link 0x20 → 0 reset, but the army-record read uses the ORIGINAL 0x20. */
+int test_map_query_terrain_head_link_reset(void)
+{
+    ti_reset();
+    ti_cell(0x100, /*t*/4, /*flags*/0, 0, /*cell3*/1, 0, /*county*/2, /*head*/0x20);
+    g_ti_army[0x20 * 0x300 + 5] = 0x55;
+    engine_map_terrain_out_t o = ti_run(0x100);
+    T_ASSERT_EQ_I(o.head_link, 0);         /* reset */
+    T_ASSERT_EQ_I(o.army_byte5, 0x55);     /* read at original 0x20 */
+    return 0;
+}
+
+/* flag-clear rule 1: origin flags bit7 set AND terrain == 0x14 → flags 0. */
+int test_map_query_terrain_flag_rule1(void)
+{
+    ti_reset();
+    ti_cell(0x140, /*t*/0x14, /*flags*/0x80, 0, /*cell3*/3, 0, /*county*/4, /*head*/1);
+    engine_map_terrain_out_t o = ti_run(0x140);
+    T_ASSERT_EQ_I(o.terrain_type, 0x14);
+    T_ASSERT_EQ_I(o.flags, 0);             /* cleared */
+    return 0;
+}
+
+/* flag-clear rule 2: flags bit4 (0x10) AND terrain == 0 → flags 0. */
+int test_map_query_terrain_flag_rule2(void)
+{
+    ti_reset();
+    ti_cell(0x180, /*t*/0, /*flags*/0x10, 0, /*cell3*/0, 0, /*county*/1, /*head*/2);
+    engine_map_terrain_out_t o = ti_run(0x180);
+    T_ASSERT_EQ_I(o.terrain_type, 0);
+    T_ASSERT_EQ_I(o.flags, 0);             /* cleared */
+    return 0;
+}
+
+/* derived_bit: flags bit3 (8) AND (cell+2 & 0x1c) == 4 → 1. */
+int test_map_query_terrain_derived_bit(void)
+{
+    ti_reset();
+    ti_cell(0x1C0, /*t*/5, /*flags*/8, /*b2*/4, /*cell3*/0, 0, /*county*/3, /*head*/0);
+    engine_map_terrain_out_t o = ti_run(0x1C0);
+    T_ASSERT_EQ_I(o.flags, 8);
+    T_ASSERT_EQ_I(o.derived_bit, 1);
+    /* same flags but b2 not matching the mask → no derived bit */
+    ti_cell(0x1C0, 5, 8, /*b2*/2, 0, 0, 3, 0);
+    o = ti_run(0x1C0);
+    T_ASSERT_EQ_I(o.derived_bit, 0);
+    return 0;
+}
