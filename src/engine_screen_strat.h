@@ -42,4 +42,11 @@
  * (engine_pl8_data_ready() == 0, retail's DAT_0053f050 == 1 gate). */
 void engine_screen_strat_render(int redraw_mode);
 
+/* Select the map-body animation mode (see engine_screen_strat.c).  0 (default)
+ * = PINNED at anim frame 0 — the byte-exact frame the single-shot bring-up
+ * seats + capture-parity harness expect.  1 = LIVE — the in-game loop owns the
+ * anim counters (advanced at the tick's FUN_004050c0 seam) so the map animates
+ * and reflects a season/bank change.  Set by the in-game tick; never by a seat. */
+void engine_screen_strat_set_anim_live(int live);
+
 #endif /* OPENLORDS2_ENGINE_SCREEN_STRAT_H */

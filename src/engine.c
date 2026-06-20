@@ -23,6 +23,8 @@
 #include "engine_map_render.h"     /* live camera geometry + descriptor grid */
 #include "engine_overlay_render.h"
 #include "engine_screen_dispatch.h"
+#include "engine_screen_strat.h"   /* every-frame map composite (FUN_004050c0) */
+#include "engine_map_scene.h"      /* anim-counter advance (FUN_004cfb08) */
 #include "engine_title_render.h"
 #include "engine_menu_input.h"
 #include "engine_load_pump.h"
@@ -2417,7 +2419,30 @@ void engine_tick(void)
      * --title-live bring-up does, ahead of the unported boot→title
      * transition 0x42b780).  See docs/plans/main-menu-render-chips.md
      * chip 5 + docs/findings/title-menu-screens.md. */
+    engine_screen_strat_set_anim_live(g_engine_state == 3);
     engine_tick_title_render_step();
+
+    /* Every-frame strategic map composite — retail FUN_004b99c0 line 42:
+     *   if (DAT_0056d650 == 0 && DAT_0057c8fc == 0 &&
+     *       (DAT_004eac50 == 0 || DAT_004eac50 == 0x10)) FUN_004050c0();
+     * runs the map scene EVERY in-game frame, distinct from the demand-redraw
+     * full render (line 36) above.  The drop-in composes the FULL strat frame
+     * here (not retail's incremental map-scene-only — the port already clears
+     * + fully redraws each strategic frame, so a full repaint is simpler and
+     * just as correct), with the anim counters advanced (FUN_004cfb08's 16 ms
+     * gate) so the map is ALIVE: cattle / castle / water animate, the new
+     * season's terrain shows after a bank reload, and the map repaints behind
+     * a dismissed scroll (erasing stale popup pixels — e.g. the boot 256-colour
+     * warning behind the welcome series).  Gated exactly like retail. */
+    if (g_engine_state == 3 && (int)s_slot_0057c8fc == 0 &&
+        (g_sim_current_screen == 0 || g_sim_current_screen == 0x10)) {
+        engine_map_scene_advance_frame_counters(engine_now_ms());  /* 0x4050c0/0x4cfb08 */
+        if (gfx_lock_canvas()) {
+            engine_screen_strat_render(1);
+            gfx_unlock_canvas();
+        }
+        g_demand_redraw = 0;   /* subsumed: the full frame just repainted */
+    }
 
     /* Help-hint pump (retail FUN_00476aa7, tick line 104 — immediately
      * before the consumer).  First-time-per-session tutorial scrolls:

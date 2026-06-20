@@ -1050,6 +1050,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_map_scene.c",
     "src/engine_map_scene.h",
     "src/engine_screen_strat.c",
@@ -22347,6 +22348,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_map_scene.c",
     "src/engine_map_scene.h"
    ]

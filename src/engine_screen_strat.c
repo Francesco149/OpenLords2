@@ -43,6 +43,18 @@
  * single full repaint, so the rect just spans the canvas). */
 static engine_dirty_rect_state_t g_strat_dirty;
 
+/* Animation mode.  0 (default) = PINNED: the map body renders at anim frame 0
+ * — the deterministic, byte-exact frame the single-shot bring-up seats
+ * (--strat-map / --strat-load / --ti-cell) and the capture-parity harness
+ * expect.  1 = LIVE: the live in-game loop owns the anim counters (advanced
+ * each frame by engine_map_scene_advance_frame_counters at the tick's
+ * FUN_004050c0 seam), so cattle/castle/water animate and the new-season
+ * terrain shows after a bank reload.  The in-game tick sets this; the seats
+ * never do. */
+static int g_strat_anim_live;
+
+void engine_screen_strat_set_anim_live(int live) { g_strat_anim_live = live; }
+
 /* FUN_0040a567 ×3 — the three misc_cty parchment blits that back the
  * right-edge HUD panel (sprite 0x36 body, 0x39 / 0x3b strips), drawn
  * before the map body. */
@@ -144,7 +156,12 @@ static void strat_draw_map_body(uint8_t *canvas, int cw, int ch)
     engine_map_render_set_error_count(0);
     engine_map_render_reset_call_count();
 
-    engine_map_scene_set_anim_counters(0, 0);
+    /* PINNED mode (seats / capture parity): force anim frame 0 each render.
+     * LIVE mode (in-game loop): leave the counters alone — the tick's
+     * every-frame FUN_004050c0 seam advances them, so the map animates and
+     * picks up a season/bank change. */
+    if (!g_strat_anim_live)
+        engine_map_scene_set_anim_counters(0, 0);
     engine_map_scene_render_body();
 }
 
