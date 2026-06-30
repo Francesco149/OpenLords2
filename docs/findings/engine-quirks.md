@@ -7173,3 +7173,60 @@ advances under --turbo on BOTH engines, so cattle/castle stay near frame 0 on
 both sides — which is exactly why grid_load_dense parity stays clean (0.055%
 mean).  The animation is a real-time-gameplay effect; a season change (a STATE
 change, not anim-gated) shows immediately on the next frame regardless.
+
+## 210 — the "+0x1c0/+0x1c1 dual-use byte" scare was a false alarm: it's one concept (keep level) read by two formulas, not two meanings
+
+Session 11 flagged a porting risk: `engine_realm.c`'s income functions
+(`engine_realm_accrue_income` / `engine_realm_recompute_realm_income`) call
+`g_per_army_768` row field `+0x1c0` the realm's tax "standing band", while
+`engine_territory.c`'s `engine_territory_stamp_secondary_keep` doc comment
+calls the SAME offset a "banner-level"/settlement tier — different enough
+wording to worry it was a genuine retail dual-use byte (one memory cell,
+two unrelated meanings depending on which code reads it), which would make
+porting the event-popup type-0x12 render arm (which also reads it) a guess
+without resolving which meaning applied there.
+
+An r2 byte-search for every direct reference to the row's `+0x1c0`/`+0x1c1`
+addresses (`/x` on the literal displacement, no full-binary `aa`) turned up
+the WRITER: `fcn.00436d02` (a "start a keep construction" handler, called
+from the build-menu click chain around 0x436a88-0x436d02) takes `(key,
+new_level)` and:
+
+```
+if (a[+0x1c0] != 0)            // realm already had SOME keep level
+    a[+0x1c1] = a[+0x1c0];     // snapshot the OLD level before overwriting
+a[+0x1c0] = new_level + 1;     // bump to the NEW target level
+a[+0x1c3] = 1;                 // construction-kind = "new" (vs 2 = "upgrade")
+...
+engine_realm_recompute_realm_income(key);   // called immediately after
+```
+
+So `+0x1c0` is the realm's current/target keep level, full stop — bumped the
+INSTANT construction starts, not when it completes.  `+0x1c1` is a snapshot
+of what that level was right before this construction began (skipped, i.e.
+left at 0, when there was no previous keep at all).  The income functions'
+"+0x1c3-gated cap using +0x1c1" is just: *while* a construction is in
+progress, income is computed off the OLD (still-functional) level instead of
+the new target you haven't finished building yet — the identical "keep
+level" concept, just consumed as a tax-rate-by-level lookup key in one
+formula and a population/garrison-by-level lookup key (`k_keep_tbl`,
+`engine_combat.c`) in another.  `engine_combat_settlement_find_slot`
+(already-ported `FUN_004a551b`) computes the EXACT same
+`k_keep_tbl[target] − k_keep_tbl[old]` delta for a different purpose
+(sizing the new garrison), confirming the reading independently.
+
+The real tell that should have killed the "dual-use" worry immediately: the
+popup's `g_popup_flag6` (the realm key it reads `+0x1c0/+0x1c1` from) is the
+SAME `key` the posting code (`engine_realm_complete_settlements`) was just
+iterating when it posted the event — i.e. the popup is reading the row the
+producer function itself just finished interpreting as a keep level.  When a
+field looks ambiguous across files, check whether the suspicious READER and
+a known-good WRITER/producer share the same call chain before assuming a
+genuine aliasing — most "dual-use" scares are a vocabulary mismatch between
+two porting sessions' comments, not a byte doing two jobs.  See
+`project_event_popup_arms` memory for the resulting type-0x12 port
+(commit history same day) — visually verified via `--force-popup`: a
+brand-new keep shows "50 troops assigned as a garrison" (`k_keep_tbl[1]`),
+an upgrade shows "50 extra troops sent to castle"
+(`k_keep_tbl[4]-k_keep_tbl[2]`), confirming `k_keep_tbl` is a garrison
+troop-count table, not population or gold as its old name guesses suggested.

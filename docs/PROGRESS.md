@@ -7,6 +7,71 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-30 (session 12) — event-popup type 0x12 (keep/settlement-upgrade complete) LANDED + verified; the "+0x1c0/+0x1c1 dual-use byte" worry was a false alarm. Autonomous session, same day as sessions 10-11.
+
+Picked up session 11's exact "next-session starting point": resolve the
+`g_per_army_768[+0x1c0]`/`[+0x1c1]` field-semantic ambiguity via an r2
+write-trace before porting the 0x12 render arm. Full archaeology in
+[`docs/findings/engine-quirks.md` #210](findings/engine-quirks.md); summary:
+
+- **Resolved, not ambiguous.** An r2 byte-search (`/x` on the literal
+  displacement bytes, no full-binary `aa`) for every reference to the row's
+  `+0x1c0`/`+0x1c1` found the WRITER — `fcn.00436d02`, the "start a keep
+  construction" handler. It bumps `+0x1c0` to the new target level the
+  INSTANT construction starts (not on completion), and snapshots the OLD
+  level into `+0x1c1` first (skipped — left 0 — if there was no previous
+  keep). It then immediately calls `engine_realm_recompute_realm_income`,
+  the very function whose "+0x1c0 = standing band, capped by +0x1c1" comment
+  triggered the original worry. Both readings are the SAME "keep level"
+  concept consumed by different per-level lookup tables (tax rate vs.
+  `k_keep_tbl` population/garrison figures) — not a genuine dual-use byte.
+  `engine_combat_settlement_find_slot` (already-ported `FUN_004a551b`)
+  independently computes the identical `k_keep_tbl[target] − k_keep_tbl[old]`
+  delta for a different purpose, confirming the reading. The clinching
+  detail: the popup's `g_popup_flag6` (the key it reads `+0x1c0/+0x1c1`
+  from) is the EXACT realm key `engine_realm_complete_settlements` was just
+  iterating when it posted the event — the popup reads the row its own
+  producer just finished interpreting as a keep level.
+- **Ported the render arm** (`engine.c`'s `engine_popup_scroll_render`,
+  `g_popup_type == 0x12`): 4 body variants — `payload_a==1` (upgrade of an
+  existing keep) renders a generic templated line; the other 3 compare
+  `+0x1c1` (built level) against `+0x1c0` (target level) to show either the
+  full `k_keep_tbl[target]` value (brand-new keep, no prior level), the
+  `k_keep_tbl[target]-k_keep_tbl[built]` delta (normal upgrade), or 0
+  (defensive built≥target fallback) — each matched against the retail
+  decompile line-for-line. Added `engine_combat_keep_value(level)` exposing
+  the already-baked-but-`static` `k_keep_tbl` (mirrors the existing
+  `engine_combat_garrison_cap` accessor), since the table was already landed
+  for `engine_combat_settlement_find_slot`/`engine_combat_place_garrison`
+  and needed no rebaking.
+- **Found + fixed a real verification-seat gap while visually checking it**:
+  `bringup_strat_map` (the `--strat-map`/`--force-popup` bring-up) slurps
+  `army_records.bin` into a LOCAL static buffer for explicit binds, but
+  never mirrors it into the LIVE `g_per_army_768` global — so the first
+  render attempt showed "0 troops" (reading an all-zero array) instead of
+  the real keep level. One-line fix: `memcpy(g_per_army_768, army, sizeof
+  g_per_army_768)` after the slurp succeeds (same class of gap as session
+  11's missing `gfx_load_system_sheet_select(1)` call — this seat keeps
+  needing small additions as render arms start reading more live state).
+  After the fix, `--force-popup 0x12:0xa3:KEY` against a poked scratch copy
+  of the `strat-terrain1` dump renders correctly: a brand-new keep shows
+  "50 troops assigned as a garrison" (`k_keep_tbl[1]`), an upgrade shows "50
+  extra troops sent to castle" (`k_keep_tbl[4]-k_keep_tbl[2]` = 200-150) —
+  confirming `k_keep_tbl` is a garrison troop-count table. Both pushed to
+  the feed.
+- **Host suite: 2188/2188 passed**, no regressions (this popup arm has no
+  dedicated unit tests, consistent with the rest of `engine_popup_scroll_
+  render`'s sibling arms — it's graphics/localization-asset-bound and
+  verified via the `--force-popup` visual seat + r2 byte-tracing instead).
+
+**Next candidate:** 0x11's producer (`FUN_004a9372`, an unported
+INTERACTIVE army-move handler needing fresh `g_per_army_768`
+`+0x1bc..+0x1c3` field archaeology — NOT a turn pass, so it needs a
+different verification approach than `--force-popup` alone), or back to
+[[project_next_chip_4485a5]]'s combat-init A/V wiring.
+
+---
+
 ## 2026-06-30 (session 11) — event-popup type 0x10 (unit-funding warning) LANDED + verified; corrected the "0x10/0x11/0x12 production report" framing. Autonomous session, same day as session 10.
 
 Followed session 10's natural-turn-advance fix straight into
