@@ -7,6 +7,49 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-30 (session 11) — event-popup type 0x10 (unit-funding warning) LANDED + verified; corrected the "0x10/0x11/0x12 production report" framing. Autonomous session, same day as session 10.
+
+Followed session 10's natural-turn-advance fix straight into
+[[project_event_popup_arms]]'s next gate: the 0x10/0x11/0x12 popup arms,
+previously believed blocked on "reaching a season boundary" (now proven to
+work). Scoping turned up a correction: these three types are NOT a themed
+"production/harvest/population report" family — each is an unrelated
+single-purpose notice that happens to reuse the same generic scroll
+template. Full detail in `project_event_popup_arms` memory; summary:
+
+- **0x10** (single-army-record notice) — producer `unit_morale_sweep`
+  (`engine_realm_upkeep.c`) was ALREADY live, only the render arm was
+  missing. Ported it (`engine.c`'s `engine_popup_scroll_render`), r2-verified
+  byte-exact against the call sequence at 0x4732ca-0x47342d.
+- **0x11** (garrison-merge-cap notice) — producer `FUN_004a9372` is an
+  unported INTERACTIVE army-move handler (not a turn pass); needs fresh
+  field archaeology in `g_per_army_768` (+0x1bc..+0x1c3, unnamed). Deferred.
+- **0x12** (keep/settlement-upgrade complete) — producer IS already live
+  (`engine_realm.c:engine_realm_complete_settlements`); only the render arm
+  is missing, and it cross-references already-named baked tables
+  (`k_keep_tbl`, `k_garrison_cap`). **Next clean chip**, similar scope to
+  0x10.
+
+**New verification seat: `--force-popup TYPE:CODE[:FLAG6]`** (mirrors
+`--ti-cell`) — paints any popup arm directly over a `--strat-map` render,
+bypassing the live event producer/consumer so the layout can be checked
+without constructing the triggering game state (e.g. a save with an
+underfunded mercenary). Caught a real gap while building it: the renderer
+reads the resident in-game system sheet
+(`gfx_system_sheet_current`/`DAT_005bb540`), which only gets loaded by
+`engine_tick`'s per-frame ensure call — a single-shot seat like
+`--strat-map` never runs that, so the popup silently no-op'd until the seat
+explicitly calls `gfx_load_system_sheet_select(1)` first. Visually confirmed
+both the warn tier (0x116, "Wiltshire / Unfed troops.") and disband tier
+(0x118, "Duchy of Cornwall / Army perishes.") — correct layout, varying
+body length, pushed to the feed.
+
+**Next candidate:** port the 0x12 render arm (producer already live,
+similar effort to 0x10). After that, 0x11's producer (`FUN_004a9372`) or
+back to [[project_next_chip_4485a5]]'s combat-init A/V wiring.
+
+---
+
 ## 2026-06-30 (session 10) — the "AI-brain completion stall" was a mis-diagnosis: natural turn advance PROVEN host-side AND live, no force-ready needed. Autonomous session.
 
 Picked up session 9's "LAST GATE for a NATURAL turn advance" — the per-tick
