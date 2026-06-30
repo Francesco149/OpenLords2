@@ -11579,6 +11579,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_army_state.c",
     "src/engine_army_state.h",
     "src/engine_combat.c",

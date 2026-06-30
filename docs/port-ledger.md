@@ -403,7 +403,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x45270a | FUN_0045270a | 43 | engine_dirty_rect.h, engine_ingame_input.h, save.h |
 | 0x452735 | FUN_00452735 | 53 | engine_dirty_rect.h |
 | 0x4527a6 | FUN_004527a6 | 101 | engine.c, engine_battlefield_render.h, engine_button.c (+5) |
-| 0x4650b0 | FUN_004650b0 | 265 | engine_army_state.c, engine_army_state.h, engine_combat.c (+2) |
+| 0x4650b0 | FUN_004650b0 | 265 | engine.c, engine_army_state.c, engine_army_state.h (+3) |
 | 0x4651b9 | FUN_004651b9 | 91 | engine.c, engine_territory.c, engine_territory.h |
 | 0x465214 | FUN_00465214 | 11 | engine_army_state.c |
 | 0x46521f | FUN_0046521f | 615 | engine_army_state.c, engine_combat.c, engine_combat.h |

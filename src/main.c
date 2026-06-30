@@ -647,6 +647,24 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
                  cum_secs);
     }
 
+    /* Final sim-state summary (in-game seats only) — turn/season/phase +
+     * each roster slot's ready value, so a --newgame-live/--turbo run's
+     * natural turn-advance progress (or stall) is greppable from the log
+     * without attaching a debugger or capturing pixels.  Ready values:
+     * 0 = brain-uninitialised, 1..14 = AI brain ladder, 999 = parked/done. */
+    if (g_engine_state == 3) {
+        int32_t ready[6] = {0};
+        for (int s = 1; s < 6; s++)
+            memcpy(&ready[s], &g_player_strategic_352[s * 0x160], sizeof ready[s]);
+        log_line("sim-state: turn=%u phase=%u season(prev/cur/next)=%u/%u/%u "
+                 "year=%u ai_cursor=%u not_ready=%u ready=[%d,%d,%d,%d,%d]",
+                 (unsigned)s_slot_00553240, (unsigned)s_slot_00569584,
+                 (unsigned)s_slot_00554470, (unsigned)s_slot_0057c934,
+                 (unsigned)s_slot_0057c92c, (unsigned)s_slot_00553edc,
+                 (unsigned)s_slot_0057c944, (unsigned)s_slot_00554004,
+                 ready[1], ready[2], ready[3], ready[4], ready[5]);
+    }
+
     if (g_audio_active) {
         audio_shutdown();
         g_audio_active = 0;

@@ -1,0 +1,49 @@
+# END-TURN ADVANCE — LONG WINDOW (port-only, run with OL2_NO_HINTS=1, NO
+# OL2_FORCE_AI_READY): identical prefix to endturn_advance.jsonl (load
+# lastturn.sav, dismiss the boot 256-colour warning, click End-Turn) but with
+# a much longer capture tail — verifies the per-tick AI brain dispatcher
+# (FUN_0049a581) + movement executor (FUN_004650b0) converge ALL AI realms to
+# ready=999 on their own over the LIVE engine.c tick loop, not just that the
+# season HUD repaints.  See tests/test_game_init.c's
+# test_game_init_ai_brain_converges_full_turn for the host-side proof
+# (~224 sub-step iterations with both systems driven); this is the live-port
+# corroboration that engine.c's sub-step trio (engine_tick_cadence_step →
+# engine_turn_tick_substate0 → engine_army_state_run) actually runs every
+# qualifying tick once in-game.  Verification surface: main.c's "sim-state"
+# exit log (turn/phase/season/ai_cursor/not_ready/ready[]), not pixels — no
+# need to inspect the captures below; they just keep the trace (and hence the
+# run) alive long enough under --frames.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"capture": 0, "label": "flip0"}
+{"t": 3, "m": 512, "w": 0, "l": 22610335}
+{"t": 6, "m": 513, "w": 1, "l": 22610335}
+{"t": 9, "m": 514, "w": 0, "l": 22610335}
+{"capture": 16, "label": "clean"}
+{"t": 22, "m": 512, "w": 0, "l": 30736942}
+{"t": 26, "m": 513, "w": 1, "l": 30736942}
+{"t": 30, "m": 514, "w": 0, "l": 30736942}
+{"capture": 34, "label": "ended"}
+{"capture": 60, "label": "a060"}
+{"capture": 200, "label": "a200"}
+{"capture": 500, "label": "a500"}
+{"capture": 900, "label": "a900"}
+{"capture": 1400, "label": "a1400"}
+{"capture": 2000, "label": "a2000"}
+{"capture": 2700, "label": "a2700"}

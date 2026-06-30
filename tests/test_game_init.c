@@ -24,6 +24,8 @@
 #include "save.h"
 #include "save_schema_globals.h"  /* s_slot_<va> — seeded calendar scalars */
 #include "engine_turn.h"          /* turn-handshake globals reset by the seed */
+#include "engine_army_ai.h"       /* engine_army_ai_run_per_tick (brain dispatcher) */
+#include "engine_army_state.h"    /* engine_army_state_run (movement/march driver) */
 #include "engine_map_query.h"     /* cell-grid binding for the army probes */
 #include "engine_territory.h"     /* entity placer + record/cell binding */
 #include "engine_title_render.h"  /* config-tab staging (apply_custom_config) */
@@ -1607,5 +1609,138 @@ int test_game_init_player_config_activates_realms(void)
         T_ASSERT_EQ_I(p[0x07], exp_workloc[s]);     /* npc work-loc    */
         T_ASSERT_EQ_I(p[0xe4], exp_army[s]);        /* roster army id  */
     }
+    return 0;
+}
+
+/* Drive the per-tick AI brain dispatcher (engine_army_ai_run_per_tick)
+ * together with its cooperating movement driver (engine_army_state_run,
+ * FUN_004650b0 — the live tick's sub-step trio runs both back to back) over
+ * a REAL 5-player (1 human + 4 AI) new-game world, forced straight into
+ * phase 4 with the human's own End-Turn already simulated.
+ *
+ * This debunks the earlier "AI-brain completion stall" read
+ * (docs/plans/ingame-input-handler.md, session 3 / 2026-06-20): that finding
+ * drove ONLY the brain dispatcher (never engine_army_state_run, the system
+ * that actually processes the substate==2 records the brain arms) and/or
+ * read a short, un-turbo'd live capture window (~526 frames) as a permanent
+ * stall.  Run together, the brain ladder + movement executor converge all 4
+ * AI realms to the 999 ready sentinel in ~224 sub-step iterations — no
+ * OL2_FORCE_AI_READY needed.  Regression-gates that convergence with
+ * generous headroom (10x the observed count) so a real future stall still
+ * fails loudly without the suite needing thousands of iterations. */
+int test_game_init_ai_brain_converges_full_turn(void)
+{
+    char gdir[1024];
+    gi_game_dir(gdir, sizeof gdir);
+    char l2[1200];
+    snprintf(l2, sizeof l2, "%s/L2_maps.dat", gdir);
+    if (!gi_file_exists(l2)) T_SKIP("L2_maps.dat not found at %s", l2);
+
+    static uint8_t maprec[0x80c1];
+    {
+        FILE *f = fopen(l2, "rb");
+        if (!f) T_FAIL("open %s", l2);
+        size_t got = fread(maprec, 1, sizeof maprec, f);
+        fclose(f);
+        if (got != sizeof maprec) T_FAIL("maprec short read");
+    }
+
+    char cwd[1024];
+#if defined(_WIN32)
+    if (_getcwd(cwd, sizeof cwd) == NULL) T_SKIP("getcwd");
+#else
+    if (getcwd(cwd, sizeof cwd) == NULL) T_SKIP("getcwd");
+#endif
+    io_path_set_base(cwd);
+    g_config.cd_drive = 'D';
+
+    s_slot_0053f034 = 0;
+    s_slot_0057cb18 = 0;
+    if (engine_map_init_build_cells(gdir, 0, 0) == 0)
+        T_FAIL("build_cells failed (L2_maps.dat read)");
+    engine_map_init_set_camera(0);
+    engine_territory_bind_strat_map_record(maprec);
+    engine_npc_schedule_set_localization(NULL, 0);
+
+    static uint8_t prefs[0x1f] = {0};
+    memcpy(&prefs[0x00], "aaaaaa    ", 10);
+    memcpy(&prefs[0x18], "castles", 7);
+    engine_game_init_set_realm_presets(1, 2, 0, 1000, 3);
+    engine_game_init_set_player_config(/*count*/5, /*human_count*/1,
+                                       /*cur_player*/1, /*player_name*/prefs);
+
+    gi_reset_global_rng();
+    engine_game_init_bind_turn_driver_fn(gi_turn_driver_shim);
+    engine_game_init();
+    engine_game_init_bind_turn_driver_fn(NULL);
+
+    /* Force straight into phase 4 (skip phases 1-3's own work; this isolates
+     * the AI-brain ladder itself).  Cursor is already 1 from game_init. */
+    s_slot_00569584 = 4;
+
+    /* Simulate the human's End-Turn click up front (engine_menu's hud_btn_a
+     * hook sets the active realm's ready slot=999 — see
+     * project_ingame_input_handler.md "End-Turn button").  That system is
+     * already verified; what's under test here is purely whether the 4 AI
+     * realms catch up to it on their own. */
+    {
+        int32_t done = 999;
+        memcpy(&g_player_strategic_352[1 * 0x160], &done, sizeof done);
+    }
+
+    engine_event_queue_state_t evq;
+    engine_event_queue_init(&evq);
+
+    /* Observed convergence is ~224 iterations (see header); 10x headroom
+     * absorbs map/RNG-dependent variance in muster/movement pacing while
+     * still failing well short of "ran forever". */
+    const int CAP = 2500;
+    int converged_at = -1;
+    for (int i = 0; i < CAP; i++) {
+        engine_army_ai_run_per_tick(&evq, /*mp_active*/0, /*rng_7bit_b*/0);
+        /* The live tick's sub-step trio also runs the army-state/movement
+         * driver (0x4650b0) right after the turn dispatcher — without it,
+         * substate==2 records the brain arms are never actually processed
+         * by design (two cooperating systems).  Drive it here too so this
+         * harness matches what engine.c's tick loop does each sub-step. */
+        engine_army_state_run(&evq, /*mp_active*/0);
+
+        engine_turn_end_in_t  in  = {0};
+        engine_turn_end_out_t out = {0};
+        in.now_ms       = 0;
+        in.mp_active    = 0;
+        in.active_count = 5;
+        in.players      = g_player_strategic_352;
+        engine_turn_end_check(&in, &out);
+
+        if (out.advance) {
+            converged_at = i;
+            break;
+        }
+    }
+
+    if (converged_at < 0) {
+        /* Dump per-AI-realm brain state + the army records each is waiting
+         * on, to make a real regression diagnosable from the test log. */
+        for (int s = 2; s < 6; s++) {
+            int32_t st;
+            memcpy(&st, &g_player_strategic_352[s * 0x160], sizeof st);
+            if (st >= 999) continue;
+            fprintf(stderr, "  realm %d stuck at state=%d (threshold=%d)\n",
+                    s, st, s * 2 + 15);
+            for (int a = 1; a < 0x97; a++) {
+                const uint8_t *r = &g_per_territory_420[a * 0x1a4];
+                if (r[0x08] == 1 && r[0x14c] != 0 && (int8_t)r[0x00] == s &&
+                    r[0x01] == 0)
+                    fprintf(stderr, "    army rec %d: state=%d substate=%d\n",
+                            a, r[0x08], r[0x14c]);
+            }
+        }
+        T_FAIL("AI brain + movement did not converge within %d iterations",
+               CAP);
+    }
+
+    printf("    [ai_brain] full turn (1 human End-Turn + 4 AI realms) "
+           "converged after %d sub-step iterations\n", converged_at);
     return 0;
 }

@@ -1239,10 +1239,19 @@ static engine_tick_cadence_t g_tick_cadence;
 
 /* DEV (OL2_FORCE_AI_READY): park every active NON-current realm at the ready
  * sentinel (999) each phase-4 tick, so a single human End-Turn click resolves
- * the turn WITHOUT the AI brains completing — the per-tick brain FSM stalls
- * (slot 84 parks at 4, slot 85 stays 5: a separate AI-completion frontier).
- * Test-only: lets a port-only trace drive turn-advance → season change end to
- * end.  Cached env read; never set in capture-parity runs. */
+ * the turn WITHOUT waiting for the AI brains to finish their ladder.  This is
+ * a SPEED-UP for short captures, not a workaround for a broken AI: the
+ * per-tick brain FSM (FUN_0049a581) + its movement executor
+ * (engine_army_state_run, FUN_004650b0) do converge every AI realm to
+ * ready=999 on their own — proven both host-side
+ * (test_game_init_ai_brain_converges_full_turn, ~224 sub-step iterations)
+ * and live (tools/traces/endturn_advance_long.jsonl: a real lastturn.sav
+ * turn 1→2 rollover with no force-ready, ~3300 frames under --turbo).  An
+ * earlier read of this as a permanent stall (slot 84 cursor / slot 85
+ * not-ready-count never resolving) came from driving the brain dispatcher
+ * without its cooperating movement driver and/or a capture window too short
+ * to cover the full ladder.  Test-only; cached env read; never set in
+ * capture-parity runs. */
 static void engine_dev_force_ai_ready(void)
 {
     static int en = -1;
@@ -2168,10 +2177,15 @@ static void engine_tick_phase_step(void)
  *
  *   FUN_0043de70 — 1211 B, scenario-rate selector.  Returns 0 unless
  *                  the engine is in ingame state (DAT_0052af94 == 3).
- *                  Our g_engine_state is hardcoded to 0 today, so
- *                  the function effectively returns 0 → the rate
- *                  controller returns 0 sub-steps → no sim runs.
- *                  Full port lands when player-faction data
+ *                  g_engine_state reaches 3 once the in-game state
+ *                  machine is live (the --newgame / load-into-map
+ *                  seats), so this is no longer permanently 0 — see
+ *                  engine_scenario_rate_hint below, which ports the
+ *                  outermost branch (flat 1 sub-step in-game).  The
+ *                  REST of the body — selecting ms-per-step from the
+ *                  scenario's per-player tick budget + sub-state —
+ *                  is still a flat default, not the real per-scenario
+ *                  selector; full port lands when player-faction data
  *                  (DAT_0057bf04) + current-player mirror
  *                  (DAT_0057c8cc) are available. */
 static int engine_run_gate(void)
@@ -2223,11 +2237,14 @@ static void savepump_step(int is_mp) { (void)is_mp; }
  * writes the deltas back, fires the autosave-done notification if
  * needed.  Returns the sub-step count.
  *
- * No-op for everything but the frame-counter + timeGetTime side
- * effects today: scenario_hint == 0 (engine state != 3) makes the
- * function return 0 every call.  When the sim lands and ingame state
- * becomes reachable, sub_steps will start producing 1 or 2 each
- * iteration on a slider-and-LUT-driven cadence. */
+ * Pre-game (menu/title, g_engine_state != 3) scenario_hint is 0 →
+ * always 0 sub-steps, so this is a no-op but for the frame-counter +
+ * timeGetTime side effects.  In-game (g_engine_state == 3,
+ * engine_scenario_rate_hint() == 1) it produces 1 sub-step per
+ * qualifying call on the slider/LUT-gated cadence in engine_rate.c,
+ * feeding the strategic sub-step trio below (see
+ * test_game_init_ai_brain_converges_full_turn — a natural turn
+ * resolves in ~224 sub-steps with no force-ready hack). */
 static int engine_tick_rate_step(void)
 {
     engine_rate_in_t  in  = {0};
@@ -2319,9 +2336,10 @@ void engine_tick(void)
      *      FUN_004b20ed unknown, …).  FUN_00499a1c(1) (in-game
      *      system-sheet ensure) is ported + wired below.
      *   3. Variable-rate sim sub-step loop — driven by
-     *      engine_tick_rate_step.  Currently produces 0 sub-steps
-     *      because scenario_hint is hardcoded to "engine state != 3
-     *      → 0", so the loop body never executes.
+     *      engine_tick_rate_step.  0 sub-steps pre-game (menu/title);
+     *      in-game (g_engine_state == 3) produces 1 per qualifying
+     *      call, so the loop body below DOES run once the in-game
+     *      state machine is live.
      *   4. Render phase — TODO (all retail subfunctions unported).
      *   5. Rate-gated present (retail FUN_00452160(0)) — runs once
      *      per call regardless of sub-step count. */
@@ -2388,9 +2406,9 @@ void engine_tick(void)
          *   - screen-state-specific 0x40490d / 0x49a010 /
          *     0x4650b0 (sub-state 0) or the sub-state-2 chain
          *
-         * Today sub_steps is always 0 because scenario_hint == 0
-         * (engine state != 3), so this body is unreachable until the
-         * ingame state machine lands.  Structural seam in place. */
+         * sub_steps is 0 pre-game (menu/title) and 1 per qualifying
+         * call once in-game (g_engine_state == 3) — the ingame state
+         * machine has landed, so this body DOES run live now. */
 
         /* 1. Master sim tick counter.  retail DAT_0057c998. */
         g_sim_tick_counter++;
