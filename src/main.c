@@ -1665,6 +1665,13 @@ static void bringup_strat_map(const char *dir)
         log_line("strat-map: missing captured map state in %s — aborting", dir);
         return;
     }
+    /* Also mirror the per-army rows into the LIVE g_per_army_768 global
+     * (unlike cells/descr/terr/army above, which feed explicit binds —
+     * see bringup_strat_load's analogous self-check copy).  Code that
+     * reads g_per_army_768 directly rather than through a bind (e.g. the
+     * --force-popup verification seat's event-popup render arms) would
+     * otherwise see an all-zero array in this lighter-weight bring-up. */
+    memcpy(g_per_army_768, army, sizeof g_per_army_768);
 
     /* Captured strat-terrain1 camera scalars (globals_dump.json). */
     enum { CAM_X0 = 0, CAM_Y0 = 9, COL_START = 31, ROW_START = 78,

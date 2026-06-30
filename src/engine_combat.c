@@ -1244,6 +1244,16 @@ int engine_combat_garrison_cap(int keeplvl)
     return k_garrison_cap[keeplvl];
 }
 
+/* Value of `k_keep_tbl[level]` (retail base 0x4d8a3c, indexed directly by a
+ * keep-level byte — see the table comment above).  Exposed for the event-
+ * popup type-0x12 render arm (engine.c), which shows the garrison troop-
+ * count delta between a realm's target and pre-construction keep levels
+ * (r2/visual-verified: renders as "<N> troops assigned/sent to..."). */
+int engine_combat_keep_value(int level)
+{
+    return k_keep_tbl[level];
+}
+
 /* Port of FUN_004a9f18 (90 B) — debit the owner's just-staged garrison size
  * (muster pool row +0x70) from realm `key`'s two provision figures
  * (+0x24 / +0x38).  Pool row selected by the realm's race (+0x05). */

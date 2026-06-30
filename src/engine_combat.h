@@ -178,6 +178,10 @@ int engine_combat_pick_best_unit(int owner, int region, int min_head);
  * Exposed for the AI movement planner (brain step 0xb, FUN_004a6270). */
 int engine_combat_garrison_cap(int keeplvl);
 
+/* Keep-capacity table value for `level` (k_keep_tbl[level], retail 0x4d8a3c).
+ * Exposed for the event-popup type-0x12 render arm (engine.c). */
+int engine_combat_keep_value(int level);
+
 /* Port of FUN_004a07f2 (293 B).  Find the first realm owned by `owner` whose
  * keep has spare garrison capacity (keep cap minus the pending garrison's head)
  * to hold occupant `unit`.  Returns the realm index, or 0 if none. */

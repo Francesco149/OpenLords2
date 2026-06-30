@@ -44,6 +44,7 @@
 #include "gfx_panel.h"            /* scroll backdrop (004093e0) */
 #include "gfx_wrap.h"             /* localized line/wrap draws (00402c5e/0040328e) */
 #include "gfx_text.h"             /* raw name line + uppercase-highlight flag */
+#include "gfx_text_label.h"       /* numeric label render (00402f64, popup 0x12) */
 #include "gfx_sprite_render.h"    /* continue-seal draw (0040d1bc) */
 #include "gfx_glyph_table.h"      /* char→glyph render/measure maps */
 #include "audio.h"                /* audio_cue_release (00427d19) */
@@ -1399,6 +1400,14 @@ static uint8_t g_popup_flag7;             /* DAT_0057c8ac ← rec +0x13 */
 static uint8_t g_popup_type;              /* DAT_005440a4 ← rec +0x11 */
 static int32_t g_popup_target;            /* DAT_00553ee0 ← rec +0x04 */
 
+/* g_per_army_768 fields the type-0x12 render arm reads (same offsets as
+ * engine_realm.c's S_KEEPLVL/S_BUILTLVL and engine_combat.c's A_KEEPLVL/
+ * A_BUILTLVL — kept as a local alias here rather than a shared header
+ * since this is the only per-army field access in this file). */
+#define ARMY_POPUP_ROW_STRIDE  0x300
+#define ARMY_POPUP_KEEPLVL     0x1c0   /* target/current keep level (u8) */
+#define ARMY_POPUP_BUILTLVL    0x1c1   /* pre-construction keep level (u8) */
+
 /* Open-scroll geometry + render bookkeeping (runtime .bss; written by
  * the renderer each frame, read by the dismiss hit-test when the
  * scroll-input chip lands). */
@@ -1859,18 +1868,109 @@ static void engine_popup_scroll_render(void)
                            gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
         gfx_sprite_seal_draw(sys_sheet, g_popup_x + g_popup_w - 0x30,
                              g_popup_h + g_popup_y - 0x30, 0);
+    } else if (g_popup_type == 0x12) {
+        /* ── Type 0x12: keep/settlement-upgrade complete ──────────────
+         * Producer: engine_realm.c's engine_realm_complete_settlements,
+         * event code 0xa3, posted with flag6 = the completing realm's key
+         * and payload_a = 1 iff this completion was an UPGRADE (the
+         * realm's construction-kind byte was 2) rather than a brand-new
+         * keep (kind 1).
+         *
+         * +0x1c0/+0x1c1 field semantics (resolved 2026-06-30 via an r2
+         * write-trace of fcn.00436d02, the construction-START handler —
+         * see project_event_popup_arms memory): +0x1c0 is the realm's
+         * current/target keep level; +0x1c1 is a SNAPSHOT of the level it
+         * had right before this construction started (only taken if it
+         * already had a keep — i.e. skipped for a brand-new level-0→1
+         * build, which is exactly the "+0x1c1 == 0" branch below).  Both
+         * are read via the SAME g_popup_flag6 key the settlement pass
+         * just finished, so this is the identical "keep level" concept
+         * engine_combat.c's k_keep_tbl consumers (A_KEEPLVL/A_BUILTLVL)
+         * already use — not a genuine dual-use byte. */
+        if (cooldown == 0x7c6)
+            engine_popup_speak_event(g_sim_extended_pause, g_popup_payload_a);
+        g_popup_x = 0x20;  g_popup_y = 0x90;
+        g_popup_w = 0x1a0; g_popup_h = 0xf0;
+        gfx_panel_draw_bevel(chrome, g_popup_x, g_popup_y,
+                             g_popup_w / 16, g_popup_h / 16);
+        gfx_wrap_localized_line_centered(&loc, g_sim_extended_pause, 0,
+            g_popup_x + 0x10, g_popup_y + 0x18, g_popup_w - 0x20,
+            title_font, gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
+        /* Realm/county name — uses menu_font here (retail quirk: the
+         * sibling types 0/0x10/0x11 use title_font for this same kind of
+         * line; 0x12 does not). */
+        gfx_wrap_localized_line_centered(&loc, 100,
+            (int)s_slot_0053f034 * 0x14 + g_popup_flag6,
+            g_popup_x + 0x10, g_popup_y + 0x34, g_popup_w - 0x20,
+            menu_font, gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
+        gfx_wrap_localized(&loc, g_sim_extended_pause, 1,
+                           g_popup_x + 0x20, g_popup_y + 0x50,
+                           g_popup_w - 0x40, 400, 0, 0, menu_font,
+                           gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
+        gfx_text_set_line_x_acc(0);
+        {
+            const uint8_t *rec = g_per_army_768 + (size_t)g_popup_flag6 * ARMY_POPUP_ROW_STRIDE;
+            int keeplvl  = rec[ARMY_POPUP_KEEPLVL];
+            int builtlvl = rec[ARMY_POPUP_BUILTLVL];
+            if (g_popup_payload_a == 1) {
+                /* Upgrade of an already-existing keep: generic line, no
+                 * computed capacity number. */
+                gfx_wrap_localized(&loc, g_sim_extended_pause, 7,
+                                   g_popup_x + 0x20, g_popup_y + 0x80,
+                                   g_popup_w - 0x40, 400, 0, 0, menu_font,
+                                   gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
+            } else if (builtlvl == 0) {
+                /* Brand-new keep (no prior level): show the FULL
+                 * capacity value for the new level. */
+                gfx_text_label_render_dec(engine_combat_keep_value(keeplvl),
+                    '@', " ", g_popup_x + 0x20, g_popup_y + 0x80,
+                    menu_font, gfx_glyph_render_map(), 0x3f);
+                gfx_wrap_localized_line(&loc, g_sim_extended_pause, 5,
+                    g_popup_x + gfx_text_line_x_acc() + 0x20, g_popup_y + 0x80,
+                    menu_font, gfx_glyph_render_map(), 0x3f);
+                gfx_wrap_localized(&loc, g_sim_extended_pause, 2,
+                                   g_popup_x + 0x20, g_popup_y + 0xa0,
+                                   g_popup_w - 0x40, 400, 0, 0, menu_font,
+                                   gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
+            } else if (builtlvl < keeplvl) {
+                /* Upgrade past an existing level: show the capacity
+                 * DELTA between the new and old levels. */
+                gfx_text_label_render_dec(
+                    engine_combat_keep_value(keeplvl) - engine_combat_keep_value(builtlvl),
+                    '@', " ", g_popup_x + 0x20, g_popup_y + 0x80,
+                    menu_font, gfx_glyph_render_map(), 0x3f);
+                gfx_wrap_localized_line(&loc, g_sim_extended_pause, 6,
+                    g_popup_x + gfx_text_line_x_acc() + 0x20, g_popup_y + 0x80,
+                    menu_font, gfx_glyph_render_map(), 0x3f);
+                gfx_wrap_localized(&loc, g_sim_extended_pause, 3,
+                                   g_popup_x + 0x20, g_popup_y + 0xa0,
+                                   g_popup_w - 0x40, 400, 0, 0, menu_font,
+                                   gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
+            } else {
+                /* Defensive fallback (built >= target): no gain to show. */
+                gfx_text_label_render_dec(0, '@', " ",
+                    g_popup_x + 0x20, g_popup_y + 0x80,
+                    menu_font, gfx_glyph_render_map(), 0x3f);
+                gfx_wrap_localized_line(&loc, g_sim_extended_pause, 5,
+                    g_popup_x + gfx_text_line_x_acc() + 0x20, g_popup_y + 0x80,
+                    menu_font, gfx_glyph_render_map(), 0x3f);
+                gfx_wrap_localized(&loc, g_sim_extended_pause, 4,
+                                   g_popup_x + 0x20, g_popup_y + 0xa0,
+                                   g_popup_w - 0x40, 400, 0, 0, menu_font,
+                                   gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
+            }
+        }
+        gfx_sprite_seal_draw(sys_sheet, g_popup_x + g_popup_w - 0x30,
+                             g_popup_h + g_popup_y - 0x30, 0);
     } else {
-        /* TODO(popup-arms): types 0x11/0x12 (garrison-merge cap notice /
-         * keep-upgrade complete — producers FUN_004a9372 unported /
-         * engine_realm.c:engine_realm_complete_settlements already posts
-         * 0xa3+0x12 but the render arm itself is still TODO), 1/2
-         * (capture w/ portrait), 3, 4 (tooltip-sized, position-tracking),
-         * 0x13 (table-driven rect ladder), 10/0xb (portrait + accept),
-         * 0xc (0x475e07), 0x14 (0x476488), 0xd/0xe (smk-playing victory /
-         * ownership arms — call the dismiss inline), 0xf (event-detail
-         * ladder).  Each lands with its event producer; the shared tail
-         * below still runs so the state effects (seal commit + highlight
-         * clear) stay faithful. */
+        /* TODO(popup-arms): type 0x11 (garrison-merge cap notice — producer
+         * FUN_004a9372 unported), 1/2 (capture w/ portrait), 3, 4 (tooltip-
+         * sized, position-tracking), 0x13 (table-driven rect ladder), 10/0xb
+         * (portrait + accept), 0xc (0x475e07), 0x14 (0x476488), 0xd/0xe
+         * (smk-playing victory / ownership arms — call the dismiss inline),
+         * 0xf (event-detail ladder).  Each lands with its event producer;
+         * the shared tail below still runs so the state effects (seal
+         * commit + highlight clear) stay faithful. */
     }
 
     /* ── Common tail (0x475ae8) ───────────────────────────────── */
