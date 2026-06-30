@@ -25,10 +25,16 @@ template. Full detail in `project_event_popup_arms` memory; summary:
   unported INTERACTIVE army-move handler (not a turn pass); needs fresh
   field archaeology in `g_per_army_768` (+0x1bc..+0x1c3, unnamed). Deferred.
 - **0x12** (keep/settlement-upgrade complete) — producer IS already live
-  (`engine_realm.c:engine_realm_complete_settlements`); only the render arm
-  is missing, and it cross-references already-named baked tables
-  (`k_keep_tbl`, `k_garrison_cap`). **Next clean chip**, similar scope to
-  0x10.
+  (`engine_realm.c:engine_realm_complete_settlements`), but the render arm
+  is NOT a quick follow-up: it has 4 body variants, 2 of which render a
+  number via fields `g_per_army_768`'s per-realm rows `+0x1c0`/`+0x1c1`
+  that are AMBIGUOUSLY documented elsewhere in the port — `engine_realm.c`
+  calls +0x1c0 the realm's tax-rate "standing band", `engine_territory.c`'s
+  `engine_territory_stamp_secondary_keep` calls the SAME offset a
+  "banner-level"/settlement tier. Possibly a genuine retail dual-use byte
+  (precedent: the AI round-robin cursor / redraw-cookie alias from session
+  10), but needs an r2 write-trace to confirm before porting — see
+  `project_event_popup_arms` memory for the precise next step.
 
 **New verification seat: `--force-popup TYPE:CODE[:FLAG6]`** (mirrors
 `--ti-cell`) — paints any popup arm directly over a `--strat-map` render,
@@ -44,9 +50,10 @@ both the warn tier (0x116, "Wiltshire / Unfed troops.") and disband tier
 (0x118, "Duchy of Cornwall / Army perishes.") — correct layout, varying
 body length, pushed to the feed.
 
-**Next candidate:** port the 0x12 render arm (producer already live,
-similar effort to 0x10). After that, 0x11's producer (`FUN_004a9372`) or
-back to [[project_next_chip_4485a5]]'s combat-init A/V wiring.
+**Next candidate:** resolve the 0x12 field ambiguity above (r2 write-trace
+of `g_per_army_768[key*0x300+0x1c0/0x1c1]`), then port its render arm.
+Otherwise 0x11's producer (`FUN_004a9372`) or back to
+[[project_next_chip_4485a5]]'s combat-init A/V wiring.
 
 ---
 
