@@ -187,6 +187,9 @@ static const char *g_title_type;
  * --capture-to. */
 static const char *g_strat_map_dir;
 static int         g_ti_cell = -1;     /* --ti-cell N: forced terrain-info render */
+static int         g_force_popup_type  = -1;  /* --force-popup TYPE:CODE[:FLAG6] */
+static int         g_force_popup_code  = 0;
+static int         g_force_popup_flag6 = 0;
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 static int         g_strat_load_live;  /* --strat-load-live: drive the live
                                         * load pump from the title menu */
@@ -1864,6 +1867,22 @@ static void bringup_strat_map(const char *dir)
 
     gfx_unlock_canvas();
 
+    /* Forced popup-arm render (verification seat, --force-popup) — paints
+     * over the just-rendered map.  Self-contained lock/unlock (the
+     * renderer takes its own gfx_lock_canvas), so it must run after the
+     * block above has released its lock.  The renderer reads the
+     * resident in-game system sheet (gfx_system_sheet_current, retail
+     * DAT_005bb540) — engine_tick's per-frame "ensure resident" call
+     * (FUN_00499a1c(1)) never ran in this single-shot seat, so load it
+     * explicitly or the renderer bails silently on a NULL asset. */
+    if (g_force_popup_type >= 0) {
+        gfx_load_system_sheet_select(1);
+        engine_dev_force_popup_render(g_force_popup_type, g_force_popup_code,
+                                      (uint8_t)g_force_popup_flag6);
+        log_line("strat-map: forced popup type=%d code=%d flag6=%d",
+                 g_force_popup_type, g_force_popup_code, g_force_popup_flag6);
+    }
+
     /* Present + capture a BMP (surface palette → may be off-color; the
      * authoritative diff uses the raw dump + the captured retail .pal). */
     gfx_tick_present(1);
@@ -3097,6 +3116,20 @@ static void parse_cmdline(LPSTR lpCmd)
             g_gfx_init = 1;
         } else if (!strcmp(a, "--ti-cell") && i + 1 < ntok) {
             g_ti_cell = (int)strtol(tokens[++i], NULL, 0);
+        } else if (!strcmp(a, "--force-popup") && i + 1 < ntok) {
+            /* TYPE:CODE[:FLAG6] — e.g. 16:278 (0x10:0x116) for the
+             * unit-funding-warning arm.  Verification seat: paints the
+             * popup over the --strat-map render, bypassing the live
+             * event producer/consumer so the layout can be eyeballed
+             * without constructing the triggering game state. */
+            const char *spec = tokens[++i];
+            char *end = NULL;
+            g_force_popup_type = (int)strtol(spec, &end, 0);
+            if (end && *end == ':') {
+                g_force_popup_code = (int)strtol(end + 1, &end, 0);
+                if (end && *end == ':')
+                    g_force_popup_flag6 = (int)strtol(end + 1, NULL, 0);
+            }
         } else if (!strcmp(a, "--save-sandbox") && i + 1 < ntok) {
             g_save_sandbox = tokens[++i];
         } else if (!strncmp(a, "--save-sandbox=", 15)) {

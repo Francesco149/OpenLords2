@@ -1673,10 +1673,14 @@ static int engine_popup_scroll_input_step(void)
  * 2000 = first open frame (fanfare cues), 0x7c6/0x776/0x708 = speak /
  * camera-jump beats ~16-90 frames in.
  *
- * Ported arm: type 0 — generic event scroll (the load route's event
- * 0x12a "Non 256 colour display" posts with type 0; r2-verified
- * byte-exact against 0x4730d2..0x4732c5 + the tail 0x475ae8).  The
- * remaining arms are skeleton TODOs (bare-hex ranges in the arm
+ * Ported arms:
+ *   - type 0 — generic event scroll (the load route's event 0x12a "Non
+ *     256 colour display" posts with type 0; r2-verified byte-exact
+ *     against 0x4730d2..0x4732c5 + the tail 0x475ae8).
+ *   - types 5-9 — multi-line generic scroll (welcome series + combat hints).
+ *   - type 0x10 — single-army-record notice (unit_morale_sweep's
+ *     funding warnings, codes 0x116/0x117/0x118).
+ * The remaining arms are skeleton TODOs (bare-hex ranges in the arm
  * ladder below); each lands with its event producer.
  *
  * Drop-in deviations (structure-preserving):
@@ -1828,15 +1832,45 @@ static void engine_popup_scroll_render(void)
         }
         gfx_sprite_seal_draw(sys_sheet, g_popup_x + g_popup_w - 0x30,
                              g_popup_h + g_popup_y - 0x30, 0);
+    } else if (g_popup_type == 0x10) {
+        /* ── Type 0x10: single-army-record notice ─────────────────────
+         * Producer: engine_realm_upkeep.c's unit_morale_sweep
+         * (FUN_004ace5e, codes 0x116/0x117/0x118 — a mercenary/unit
+         * the realm can no longer afford warns, decays, then disbands).
+         * Layout: realm/county name line, then the event headline (loc
+         * entry keyed by the event code itself, sub 0), then a
+         * word-wrapped body (same code, sub 1). */
+        if (cooldown == 0x7c6)
+            engine_popup_speak_event(g_sim_extended_pause, g_popup_payload_a);
+        g_popup_x = 0x20;  g_popup_y = 0xa0;
+        g_popup_w = 0x1a0; g_popup_h = 0xf0;
+        gfx_panel_draw_bevel(chrome, g_popup_x, g_popup_y,
+                             g_popup_w / 16, g_popup_h / 16);
+        gfx_wrap_localized_line_centered(&loc, 100,
+            (int)s_slot_0053f034 * 0x14 + g_popup_flag6,
+            g_popup_x + 0x10, g_popup_y + 0x20, g_popup_w - 0x20,
+            title_font, gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
+        gfx_wrap_localized_line_centered(&loc, g_sim_extended_pause, 0,
+            g_popup_x + 0x10, g_popup_y + 0x40, g_popup_w - 0x20,
+            title_font, gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
+        gfx_wrap_localized(&loc, g_sim_extended_pause, 1,
+                           g_popup_x + 0x20, g_popup_y + 0x60,
+                           g_popup_w - 0x40, 400, 0, 0, menu_font,
+                           gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
+        gfx_sprite_seal_draw(sys_sheet, g_popup_x + g_popup_w - 0x30,
+                             g_popup_h + g_popup_y - 0x30, 0);
     } else {
-        /* TODO(popup-arms): types 0x10/0x11/0x12 (production/harvest
-         * reports), 1/2 (capture w/ portrait), 3, 4 (tooltip-sized,
-         * position-tracking), 0x13 (table-driven rect ladder), 10/0xb
-         * (portrait + accept), 0xc (0x475e07), 0x14 (0x476488), 0xd/0xe
-         * (smk-playing victory / ownership arms — call the dismiss inline),
-         * 0xf (event-detail ladder).  Each lands with its event producer; the
-         * shared tail below still runs so the state effects (seal commit +
-         * highlight clear) stay faithful. */
+        /* TODO(popup-arms): types 0x11/0x12 (garrison-merge cap notice /
+         * keep-upgrade complete — producers FUN_004a9372 unported /
+         * engine_realm.c:engine_realm_complete_settlements already posts
+         * 0xa3+0x12 but the render arm itself is still TODO), 1/2
+         * (capture w/ portrait), 3, 4 (tooltip-sized, position-tracking),
+         * 0x13 (table-driven rect ladder), 10/0xb (portrait + accept),
+         * 0xc (0x475e07), 0x14 (0x476488), 0xd/0xe (smk-playing victory /
+         * ownership arms — call the dismiss inline), 0xf (event-detail
+         * ladder).  Each lands with its event producer; the shared tail
+         * below still runs so the state effects (seal commit + highlight
+         * clear) stay faithful. */
     }
 
     /* ── Common tail (0x475ae8) ───────────────────────────────── */
@@ -1846,6 +1880,23 @@ static void engine_popup_scroll_render(void)
      * the unlock's mark-all-dirty (see header note). */
     gfx_unlock_canvas();
     gfx_text_set_uppercase_highlight(0);             /* DAT_0058fe2c = 0 */
+}
+
+/* DEV verification seat (--force-popup): paint a popup arm directly,
+ * bypassing the live event producer/consumer.  Sets exactly the state
+ * engine_tick_event_popup_step's consumer branch would have written, then
+ * runs the renderer once.  consumer_cooldown is pinned away from the
+ * speak/fanfare one-shot values (2000/0x7c6/0x776) so the call stays
+ * deterministic without an audio device. */
+void engine_dev_force_popup_render(int type, int32_t code, uint8_t flag6)
+{
+    g_popup_type          = (uint8_t)type;   /* DAT_005440a4 */
+    g_sim_extended_pause   = code;            /* DAT_0053e910 */
+    g_popup_payload_a     = 0;                /* DAT_005440ac */
+    g_popup_flag6         = flag6;            /* DAT_0055ce54 */
+    g_popup_flag7         = 0;                /* DAT_0057c8ac */
+    g_turn_event_queue.consumer_cooldown = 1;
+    engine_popup_scroll_render();
 }
 
 /* ─── Help-hint pump + report opener ────────────────────────────────

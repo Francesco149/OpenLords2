@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **801** (32.7%) — tested 745, ported 56
-- code bytes touched: **42.7%** (357,919 / 838,629 B)
-- unported: **1646**
+- touched: **802** (32.8%) — tested 746, ported 56
+- code bytes touched: **42.8%** (358,588 / 838,629 B)
+- unported: **1645**
 - orphan refs (in src/, not in function table): 7
 
-## tested (745) — ported + host unit suite
+## tested (746) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -517,6 +517,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x498270 | FUN_00498270 | 327 | engine_map_init.c, engine_map_init.h, main.c |
 | 0x4984dc | FUN_004984dc | 731 | engine.c, engine_pl8.c, engine_pl8.h (+4) |
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h |
+| 0x499a1c | FUN_00499a1c | 174 | engine.c, gfx.c, gfx.h (+1) |
 | 0x499aca | FUN_00499aca | 487 | engine_combat.c, engine_combat.h, main.c |
 | 0x499d7d | FUN_00499d7d | 26 | main.c |
 | 0x499dc3 | FUN_00499dc3 | 154 | engine_menu_input.c, engine_menu_input.h, game_init.c (+2) |
@@ -658,7 +659,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4aca2b | FUN_004aca2b | 297 | engine.c, engine_combat.c, engine_combat.h |
 | 0x4acb54 | FUN_004acb54 | 128 | engine_combat.c |
 | 0x4acbd4 | FUN_004acbd4 | 650 | engine_realm_upkeep.c, engine_realm_upkeep.h |
-| 0x4ace5e | FUN_004ace5e | 650 | engine_realm_upkeep.c, engine_realm_upkeep.h |
+| 0x4ace5e | FUN_004ace5e | 650 | engine.c, engine_realm_upkeep.c, engine_realm_upkeep.h |
 | 0x4ad0e8 | FUN_004ad0e8 | 132 | engine_realm_upkeep.c |
 | 0x4ad16c | FUN_004ad16c | 196 | engine_realm_upkeep.c |
 | 0x4ad230 | FUN_004ad230 | 230 | engine_realm_upkeep.c |
@@ -809,9 +810,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4978ad | FUN_004978ad | 129 | engine.c, engine.h |
 | 0x498458 | FUN_00498458 | 132 | engine.c |
 | 0x499859 | FUN_00499859 | 451 | gfx.c |
-| 0x499a1c | FUN_00499a1c | 174 | engine.c, gfx.c, gfx.h |
 | 0x49a3e6 | FUN_0049a3e6 | 109 | engine.c |
 | 0x49b8b0 | FUN_0049b8b0 | 195 | engine.c |
+| 0x4a9372 | FUN_004a9372 | 669 | engine.c |
 | 0x4ae310 | FUN_004ae310 | 553 | engine.c |
 | 0x4b0aaa | FUN_004b0aaa | 11 | engine.c |
 | 0x4b0ab5 | FUN_004b0ab5 | 212 | engine_screen_strat.h, gfx.c, gfx.h |
