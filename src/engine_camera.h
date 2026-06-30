@@ -49,6 +49,8 @@
 
 #include <stdint.h>
 
+#include "engine_dirty_rect.h"
+
 /* Strategic-map cell-scroll clamp.  Bounds are derived from the
  * retail strategic-map dimensions:
  *
@@ -174,5 +176,82 @@ typedef struct {
 
 int engine_camera_cursor_to_cell(const engine_camera_hover_in_t *in,
                                  engine_camera_hover_out_t *out);
+
+/* ── Map edge-scroll (cursor parked at the window edge) ────────────────
+ * Port of FUN_00432221 @ 0x432221 (477 B, the `edge_scroll` dispatcher
+ * hook) + its two callees FUN_00431f59 @ 0x431f59 (712 B, apply one
+ * directional step) and FUN_004bbbe3 @ 0x4bbbe3 (157 B, the step's
+ * rate-limit gate).  Fires every in-game tick while the cursor sits in the
+ * 1-px-from-edge band; an internal timer (engine_camera_edge_scroll_state_t
+ * ::last_tick_ms) throttles actual movement to roughly one step per
+ * `12*(10-speed_pct/10)+2` ms (per-mille of the UI scroll-speed slider —
+ * permanently disabled at speed_pct == 0; +2 "notches" slower while screen
+ * 0x10, the army-move/merge-confirm screen, is open).
+ *
+ * Two independent camera representations are stepped depending on
+ * `game_mode`: mode 0 moves the strategic-map CELL SCROLL (scroll_col/row,
+ * the same pair engine_camera_clamp_scroll bounds every frame in the
+ * render tail); any other mode moves the CAMERA ANCHOR (anchor_x/y, the
+ * same pair engine_camera_clamp_anchor bounds).  Both already-ported clamps
+ * run unconditionally every frame, so an edge-scroll step here never needs
+ * to self-clamp — it composes for free with the existing render-tail call.
+ *
+ * `step` (retail DAT_0055cd48) is a per-view-mode magnitude (1 normal / 2 /
+ * 4 zoomed-out) set by the view-mode switcher FUN_00451fcc — NOT YET
+ * PORTED, so callers must supply a value (no live producer in the port
+ * yet; mirrors the RECENTER_VISIBLE_* "no producer today" pattern in
+ * engine_territory.c). */
+typedef struct {
+    int      cursor_x, cursor_y;   /* DAT_004e6594 / DAT_004e6598 (window-relative) */
+    int      window_w, window_h;   /* DAT_004e65a0 / DAT_004ea838 */
+    int      extended_pause;       /* DAT_0053e910 — a modal scroll is open */
+    int      game_mode;            /* DAT_0057c8fc — 0 = cell-scroll mode, else anchor mode */
+    int      view_mode;            /* DAT_0057cb18 — 2 = alt strategic view */
+    int      screen;               /* DAT_004eac50 — rate-gate slows on screen 0x10 */
+    int      speed_pct;            /* DAT_0053f234 — UI scroll-speed slider, 0..100 */
+    int      step;                 /* DAT_0055cd48 — per-view-mode step magnitude */
+    uint32_t now_ms;               /* timeGetTime() (turbo-clock-safe: virtual clock ok) */
+} engine_camera_edge_scroll_in_t;
+
+typedef struct {
+    int      scroll_col, scroll_row;  /* DAT_005651b4 / DAT_005651b8 (mode-0 path) */
+    int      anchor_x, anchor_y;      /* DAT_0055ce70 / DAT_005678a0 (mode-2+ path) */
+    uint32_t last_tick_ms;            /* _DAT_004e5b14 — persistent rate-gate timer */
+    int      cursor_cache_dirty;      /* DAT_0057cac4 */
+    int      below_status_redraw;     /* DAT_0053e9ac */
+    int      direction;               /* DAT_005533a4 — out; 0..7 compass, 8 = none (diagnostic) */
+} engine_camera_edge_scroll_state_t;
+
+/* Port of FUN_004bbbe3.  Returns 1 (and advances st->last_tick_ms to
+ * in->now_ms) once the per-step interval has elapsed since the last
+ * accepted step, else 0.  A backward clock jump (now_ms before
+ * last_tick_ms) is treated as a large elapsed time, matching retail's
+ * `if (delta < 0) delta = 10000;` guard. */
+int engine_camera_edge_scroll_rate_ready(const engine_camera_edge_scroll_in_t *in,
+                                         engine_camera_edge_scroll_state_t *st);
+
+/* Port of FUN_00431f59.  Apply one `direction` (0=N,1=NE,2=E,3=SE,4=S,
+ * 5=SW,6=W,7=NW) step of magnitude in->step to the mode-appropriate camera
+ * pair, gated through engine_camera_edge_scroll_rate_ready: on a rate-gate
+ * miss the step is reverted (both pairs restored) and nothing else changes;
+ * on a hit it commits, sets cursor_cache_dirty + below_status_redraw, and
+ * marks the dirty-rect state (NULL-safe — pass NULL to skip, matching the
+ * other dirty-rect-state consumers). `direction == 8` is a caller error
+ * (no-op); the dispatcher only calls this for 0..7. */
+void engine_camera_edge_scroll_step(int direction,
+                                    const engine_camera_edge_scroll_in_t *in,
+                                    engine_camera_edge_scroll_state_t *st,
+                                    engine_dirty_rect_state_t *dirty);
+
+/* Port of FUN_00432221 — the `edge_scroll` dispatcher hook body.  Returns 0
+ * (not consumed) while a modal scroll is open (extended_pause), in the
+ * view-mode-2-over-strategic combo (game_mode==0 && view_mode==2 — that
+ * combo's clicks are handled by special_mode2_jump instead), or while the
+ * cursor sits away from all four window edges.  Otherwise classifies the
+ * edge/corner under the cursor into a compass direction, steps the camera
+ * (engine_camera_edge_scroll_step), and returns 1 (consumed). */
+int engine_camera_edge_scroll(const engine_camera_edge_scroll_in_t *in,
+                              engine_camera_edge_scroll_state_t *st,
+                              engine_dirty_rect_state_t *dirty);
 
 #endif /* OPENLORDS2_ENGINE_CAMERA_H */

@@ -1227,6 +1227,25 @@ struct test_case {
     X(engine_camera_anchor_both_axes_independent) \
     X(engine_camera_anchor_asymmetric_bounds_pinned) \
     X(engine_camera_anchor_idempotent) \
+    X(engine_camera_edge_rate_ready_first_call) \
+    X(engine_camera_edge_rate_gated_too_soon) \
+    X(engine_camera_edge_rate_speed_zero_permanently_gated) \
+    X(engine_camera_edge_rate_screen_0x10_slower) \
+    X(engine_camera_edge_rate_backward_clock_treated_as_elapsed) \
+    X(engine_camera_edge_scroll_inside_no_scroll) \
+    X(engine_camera_edge_scroll_extended_pause_inert) \
+    X(engine_camera_edge_scroll_mode2_view2_inert) \
+    X(engine_camera_edge_scroll_north) \
+    X(engine_camera_edge_scroll_south) \
+    X(engine_camera_edge_scroll_east) \
+    X(engine_camera_edge_scroll_west) \
+    X(engine_camera_edge_scroll_nw_corner) \
+    X(engine_camera_edge_scroll_ne_corner) \
+    X(engine_camera_edge_scroll_se_corner) \
+    X(engine_camera_edge_scroll_sw_corner) \
+    X(engine_camera_edge_scroll_rate_gated_reverts_delta) \
+    X(engine_camera_edge_scroll_mode2_steps_anchor) \
+    X(engine_camera_edge_scroll_other_mode_no_delta_but_consumes) \
     X(roster_add_writes_pair_and_bumps_count) \
     X(roster_add_seat_zero_does_not_bump_count) \
     X(roster_add_max_seat_index) \

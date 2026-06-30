@@ -190,3 +190,126 @@ int engine_camera_cursor_to_cell(const engine_camera_hover_in_t *in,
     }
     return 0;
 }
+
+int engine_camera_edge_scroll_rate_ready(const engine_camera_edge_scroll_in_t *in,
+                                         engine_camera_edge_scroll_state_t *st)
+{
+    CALL_TRACE_ENTER(0x004bbbe3);
+    int32_t elapsed = (int32_t)(in->now_ms - st->last_tick_ms);
+    if (elapsed < 0) {
+        elapsed = 10000;
+    }
+
+    int notches = (100 - in->speed_pct) / 10;     /* local_c */
+    if (notches >= 10) {
+        return 0;                                  /* speed_pct == 0 → permanently gated */
+    }
+    if (in->screen == 0x10) {
+        notches += 2;
+    }
+    if (elapsed < notches * 0xc + 2) {
+        return 0;
+    }
+    st->last_tick_ms = in->now_ms;
+    return 1;
+}
+
+void engine_camera_edge_scroll_step(int direction,
+                                    const engine_camera_edge_scroll_in_t *in,
+                                    engine_camera_edge_scroll_state_t *st,
+                                    engine_dirty_rect_state_t *dirty)
+{
+    CALL_TRACE_ENTER(0x00431f59);
+    int prev_anchor_x = st->anchor_x,  prev_anchor_y = st->anchor_y;
+    int prev_col      = st->scroll_col, prev_row      = st->scroll_row;
+
+    /* Retail: `if (game_mode == 0) {...} else if (game_mode == 2) {...}` —
+     * no trailing else.  A THIRD game_mode value applies no delta at all
+     * but still falls through to the dirty/rate-gate tail below (a faithful
+     * no-op step: cursor_cache_dirty flips, the gate may still commit a
+     * "nothing changed" redraw). Only modes 0 and 2 mutate the camera. */
+    if (in->game_mode == 0) {
+        switch (direction) {
+        case 0: st->scroll_row -= in->step * 2; break;                      /* N  */
+        case 1: st->scroll_row -= in->step * 2; st->scroll_col += in->step; break; /* NE */
+        case 2: st->scroll_col += in->step; break;                          /* E  */
+        case 3: st->scroll_row += in->step * 2; st->scroll_col += in->step; break; /* SE */
+        case 4: st->scroll_row += in->step * 2; break;                      /* S  */
+        case 5: st->scroll_row += in->step * 2; st->scroll_col -= in->step; break; /* SW */
+        case 6: st->scroll_col -= in->step; break;                          /* W  */
+        case 7: st->scroll_row -= in->step * 2; st->scroll_col -= in->step; break; /* NW */
+        default: return;
+        }
+    } else if (in->game_mode == 2) {
+        switch (direction) {
+        case 0: st->anchor_y -= 1; break;
+        case 1: st->anchor_y -= 1; st->anchor_x += 1; break;
+        case 2: st->anchor_x += 1; break;
+        case 3: st->anchor_y += 1; st->anchor_x += 1; break;
+        case 4: st->anchor_y += 1; break;
+        case 5: st->anchor_y += 1; st->anchor_x -= 1; break;
+        case 6: st->anchor_x -= 1; break;
+        case 7: st->anchor_y -= 1; st->anchor_x -= 1; break;
+        default: return;
+        }
+    }
+
+    st->cursor_cache_dirty = 1;
+    if (engine_camera_edge_scroll_rate_ready(in, st)) {
+        st->below_status_redraw = 1;
+        if (dirty != NULL) {
+            engine_dirty_rect_mark_below_status_bar(dirty);
+        }
+    } else {
+        st->cursor_cache_dirty = 0;
+        st->anchor_x = prev_anchor_x;  st->anchor_y = prev_anchor_y;
+        st->scroll_col = prev_col;     st->scroll_row = prev_row;
+    }
+}
+
+int engine_camera_edge_scroll(const engine_camera_edge_scroll_in_t *in,
+                              engine_camera_edge_scroll_state_t *st,
+                              engine_dirty_rect_state_t *dirty)
+{
+    CALL_TRACE_ENTER(0x00432221);
+    st->direction = 8;
+    if (in->extended_pause != 0) {
+        return 0;
+    }
+    if (in->game_mode == 0 && in->view_mode == 2) {
+        return 0;
+    }
+
+    int away_left   = 0 < in->cursor_x;
+    int away_right  = in->cursor_x < in->window_w - 1;
+    int away_top    = 0 < in->cursor_y;
+    int away_bottom = in->cursor_y < in->window_h - 1;
+
+    int dir;
+    if (!away_left && !away_top) {
+        dir = 7;                                   /* NW corner */
+    } else if (!away_left && !away_bottom) {
+        dir = 5;                                   /* SW corner */
+    } else if (!away_right && !away_top) {
+        dir = 1;                                   /* NE corner */
+    } else if (!away_right && !away_bottom) {
+        dir = 3;                                   /* SE corner */
+    } else if (!away_left) {
+        dir = 6;                                   /* W  */
+    } else if (!away_top) {
+        dir = 0;                                   /* N  */
+    } else if (!away_bottom) {
+        dir = 4;                                   /* S  */
+    } else if (!away_right) {
+        dir = 2;                                   /* E  */
+    } else {
+        dir = 8;                                   /* fully inside → no scroll */
+    }
+    st->direction = dir;
+
+    if (dir == 8) {
+        return 0;
+    }
+    engine_camera_edge_scroll_step(dir, in, st, dirty);
+    return 1;
+}

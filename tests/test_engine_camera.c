@@ -640,3 +640,251 @@ int test_engine_camera_hover_scroll_offset(void)
     T_ASSERT_EQ_I(out.tile_index, 99);
     return 0;
 }
+
+/* ─── edge scroll (FUN_004bbbe3 / FUN_00431f59 / FUN_00432221) ───────
+ *
+ * Rate gate: speed_pct 50 → notches=(100-50)/10=5 → threshold 5*12+2=62ms
+ * (screen != 0x10).  Direction codes verified exhaustively against the
+ * retail nested-if truth table during porting (16/16 combos); the tests
+ * below sample the 9 outcomes (8 directions + "no scroll"), not all 16
+ * raw edge-boolean combos. */
+
+static engine_camera_edge_scroll_in_t edge_in_base(int cx, int cy)
+{
+    engine_camera_edge_scroll_in_t in = {0};
+    in.cursor_x = cx;       in.cursor_y = cy;
+    in.window_w = 100;      in.window_h = 100;
+    in.extended_pause = 0;
+    in.game_mode = 0;       in.view_mode = 0;
+    in.screen = 0;
+    in.speed_pct = 50;      /* threshold 62ms */
+    in.step = 4;
+    in.now_ms = 100000;
+    return in;
+}
+
+int test_engine_camera_edge_rate_ready_first_call(void)
+{
+    engine_camera_edge_scroll_in_t in = edge_in_base(0, 50);
+    engine_camera_edge_scroll_state_t st = {0};
+    st.last_tick_ms = 0;
+    in.now_ms = 100;                    /* elapsed 100 >= 62 → ready */
+    T_ASSERT_EQ_I(engine_camera_edge_scroll_rate_ready(&in, &st), 1);
+    T_ASSERT_EQ_U(st.last_tick_ms, 100u);
+    return 0;
+}
+
+int test_engine_camera_edge_rate_gated_too_soon(void)
+{
+    engine_camera_edge_scroll_in_t in = edge_in_base(0, 50);
+    engine_camera_edge_scroll_state_t st = {0};
+    st.last_tick_ms = 1000;
+    in.now_ms = 1010;                   /* elapsed 10 < 62 → gated */
+    T_ASSERT_EQ_I(engine_camera_edge_scroll_rate_ready(&in, &st), 0);
+    T_ASSERT_EQ_U(st.last_tick_ms, 1000u);   /* unchanged on a miss */
+    return 0;
+}
+
+int test_engine_camera_edge_rate_speed_zero_permanently_gated(void)
+{
+    engine_camera_edge_scroll_in_t in = edge_in_base(0, 50);
+    in.speed_pct = 0;
+    in.now_ms = 999999;
+    engine_camera_edge_scroll_state_t st = {0};
+    st.last_tick_ms = 0;
+    T_ASSERT_EQ_I(engine_camera_edge_scroll_rate_ready(&in, &st), 0);
+    return 0;
+}
+
+int test_engine_camera_edge_rate_screen_0x10_slower(void)
+{
+    /* notches 5+2=7 → threshold 7*12+2=86ms.  70ms elapsed: ready at
+     * screen 0, gated at screen 0x10. */
+    engine_camera_edge_scroll_in_t in = edge_in_base(0, 50);
+    in.now_ms = 70;
+    engine_camera_edge_scroll_state_t st = {0};
+    st.last_tick_ms = 0;
+    T_ASSERT_EQ_I(engine_camera_edge_scroll_rate_ready(&in, &st), 1);
+
+    in.screen = 0x10;
+    st.last_tick_ms = 0;
+    T_ASSERT_EQ_I(engine_camera_edge_scroll_rate_ready(&in, &st), 0);
+    return 0;
+}
+
+int test_engine_camera_edge_rate_backward_clock_treated_as_elapsed(void)
+{
+    engine_camera_edge_scroll_in_t in = edge_in_base(0, 50);
+    engine_camera_edge_scroll_state_t st = {0};
+    st.last_tick_ms = 5000;
+    in.now_ms = 100;                    /* now before last tick (turbo rewind) */
+    T_ASSERT_EQ_I(engine_camera_edge_scroll_rate_ready(&in, &st), 1);
+    return 0;
+}
+
+/* Classify: fully inside → no scroll, hook returns 0, state untouched. */
+int test_engine_camera_edge_scroll_inside_no_scroll(void)
+{
+    engine_camera_edge_scroll_in_t in = edge_in_base(50, 50);
+    engine_camera_edge_scroll_state_t st = {0};
+    T_ASSERT_EQ_I(engine_camera_edge_scroll(&in, &st, NULL), 0);
+    T_ASSERT_EQ_I(st.direction, 8);
+    T_ASSERT_EQ_I(st.scroll_col, 0);
+    T_ASSERT_EQ_I(st.scroll_row, 0);
+    return 0;
+}
+
+int test_engine_camera_edge_scroll_extended_pause_inert(void)
+{
+    engine_camera_edge_scroll_in_t in = edge_in_base(0, 0);  /* NW corner */
+    in.extended_pause = 1;
+    engine_camera_edge_scroll_state_t st = {0};
+    T_ASSERT_EQ_I(engine_camera_edge_scroll(&in, &st, NULL), 0);
+    T_ASSERT_EQ_I(st.direction, 8);
+    return 0;
+}
+
+int test_engine_camera_edge_scroll_mode2_view2_inert(void)
+{
+    /* game_mode==0 && view_mode==2 is the view-mode-2 LMB-jump combo,
+     * handled elsewhere — edge_scroll must not consume it. */
+    engine_camera_edge_scroll_in_t in = edge_in_base(0, 50);  /* W edge */
+    in.view_mode = 2;
+    engine_camera_edge_scroll_state_t st = {0};
+    T_ASSERT_EQ_I(engine_camera_edge_scroll(&in, &st, NULL), 0);
+    return 0;
+}
+
+/* One sample per compass direction + the 4 corners, each driving a
+ * rate-gate-ready step (now_ms=100, last_tick_ms=0 → elapsed 100 >= 62). */
+static int edge_step_dir(int cx, int cy, int *out_col, int *out_row)
+{
+    engine_camera_edge_scroll_in_t in = edge_in_base(cx, cy);
+    in.now_ms = 100;
+    engine_camera_edge_scroll_state_t st = {0};
+    int consumed = engine_camera_edge_scroll(&in, &st, NULL);
+    T_ASSERT_EQ_I(consumed, 1);
+    *out_col = st.scroll_col;
+    *out_row = st.scroll_row;
+    return st.direction;
+}
+
+int test_engine_camera_edge_scroll_north(void)
+{
+    int col, row;
+    T_ASSERT_EQ_I(edge_step_dir(50, 0, &col, &row), 0);
+    T_ASSERT_EQ_I(col, 0);
+    T_ASSERT_EQ_I(row, -8);             /* -step*2 */
+    return 0;
+}
+
+int test_engine_camera_edge_scroll_south(void)
+{
+    int col, row;
+    T_ASSERT_EQ_I(edge_step_dir(50, 99, &col, &row), 4);
+    T_ASSERT_EQ_I(col, 0);
+    T_ASSERT_EQ_I(row, 8);
+    return 0;
+}
+
+int test_engine_camera_edge_scroll_east(void)
+{
+    int col, row;
+    T_ASSERT_EQ_I(edge_step_dir(99, 50, &col, &row), 2);
+    T_ASSERT_EQ_I(col, 4);
+    T_ASSERT_EQ_I(row, 0);
+    return 0;
+}
+
+int test_engine_camera_edge_scroll_west(void)
+{
+    int col, row;
+    T_ASSERT_EQ_I(edge_step_dir(0, 50, &col, &row), 6);
+    T_ASSERT_EQ_I(col, -4);
+    T_ASSERT_EQ_I(row, 0);
+    return 0;
+}
+
+int test_engine_camera_edge_scroll_nw_corner(void)
+{
+    int col, row;
+    T_ASSERT_EQ_I(edge_step_dir(0, 0, &col, &row), 7);
+    T_ASSERT_EQ_I(col, -4);
+    T_ASSERT_EQ_I(row, -8);
+    return 0;
+}
+
+int test_engine_camera_edge_scroll_ne_corner(void)
+{
+    int col, row;
+    T_ASSERT_EQ_I(edge_step_dir(99, 0, &col, &row), 1);
+    T_ASSERT_EQ_I(col, 4);
+    T_ASSERT_EQ_I(row, -8);
+    return 0;
+}
+
+int test_engine_camera_edge_scroll_se_corner(void)
+{
+    int col, row;
+    T_ASSERT_EQ_I(edge_step_dir(99, 99, &col, &row), 3);
+    T_ASSERT_EQ_I(col, 4);
+    T_ASSERT_EQ_I(row, 8);
+    return 0;
+}
+
+int test_engine_camera_edge_scroll_sw_corner(void)
+{
+    int col, row;
+    T_ASSERT_EQ_I(edge_step_dir(0, 99, &col, &row), 5);
+    T_ASSERT_EQ_I(col, -4);
+    T_ASSERT_EQ_I(row, 8);
+    return 0;
+}
+
+/* A rate-gate miss reverts the delta but the direction classification
+ * still reports (and the hook still reports "consumed"). */
+int test_engine_camera_edge_scroll_rate_gated_reverts_delta(void)
+{
+    engine_camera_edge_scroll_in_t in = edge_in_base(0, 50);  /* W edge */
+    engine_camera_edge_scroll_state_t st = {0};
+    st.last_tick_ms = 1000;
+    in.now_ms = 1010;                   /* elapsed 10 < 62 → gated */
+    int consumed = engine_camera_edge_scroll(&in, &st, NULL);
+    T_ASSERT_EQ_I(consumed, 1);          /* still consumed: classified as W */
+    T_ASSERT_EQ_I(st.direction, 6);
+    T_ASSERT_EQ_I(st.scroll_col, 0);     /* reverted */
+    T_ASSERT_EQ_I(st.scroll_row, 0);
+    T_ASSERT_EQ_I(st.cursor_cache_dirty, 0);
+    return 0;
+}
+
+/* game_mode 2 steps the anchor pair instead of the scroll pair. */
+int test_engine_camera_edge_scroll_mode2_steps_anchor(void)
+{
+    engine_camera_edge_scroll_in_t in = edge_in_base(99, 50);  /* E edge */
+    in.game_mode = 2;
+    in.now_ms = 100;
+    engine_camera_edge_scroll_state_t st = {0};
+    T_ASSERT_EQ_I(engine_camera_edge_scroll(&in, &st, NULL), 1);
+    T_ASSERT_EQ_I(st.anchor_x, 1);
+    T_ASSERT_EQ_I(st.anchor_y, 0);
+    T_ASSERT_EQ_I(st.scroll_col, 0);    /* scroll pair untouched in mode 2 */
+    return 0;
+}
+
+/* A THIRD game_mode (neither 0 nor 2) applies no delta to either pair but
+ * still runs the dirty/rate-gate tail — faithful to retail's missing
+ * trailing `else`. */
+int test_engine_camera_edge_scroll_other_mode_no_delta_but_consumes(void)
+{
+    engine_camera_edge_scroll_in_t in = edge_in_base(99, 50);  /* E edge */
+    in.game_mode = 1;
+    in.now_ms = 100;
+    engine_camera_edge_scroll_state_t st = {0};
+    T_ASSERT_EQ_I(engine_camera_edge_scroll(&in, &st, NULL), 1);
+    T_ASSERT_EQ_I(st.direction, 2);
+    T_ASSERT_EQ_I(st.scroll_col, 0);
+    T_ASSERT_EQ_I(st.anchor_x, 0);
+    T_ASSERT_EQ_I(st.cursor_cache_dirty, 1);    /* gate ready → still flips dirty */
+    return 0;
+}

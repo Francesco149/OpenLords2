@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 746,
+  "tested": 748,
   "ported": 56,
-  "unported": 1645,
+  "unported": 1643,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 802,
-  "pct_touched": 32.8,
-  "pct_tested": 30.5,
+  "touched": 804,
+  "pct_touched": 32.9,
+  "pct_tested": 30.6,
   "bytes_total": 838629,
-  "bytes_touched": 358588,
-  "pct_bytes_touched": 42.8
+  "bytes_touched": 359457,
+  "pct_bytes_touched": 42.9
  },
  "orphan_refs": [
   "0x004148",
@@ -4755,8 +4755,10 @@
    "name": "FUN_00431f59",
    "size": 712,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_camera.h"
+   ]
   },
   {
    "va": "0x432221",
@@ -4765,6 +4767,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
+    "src/engine_camera.h",
     "src/engine_ingame_input.h"
    ]
   },
@@ -4824,6 +4828,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_terrain_info.c",
     "src/engine_terrain_info.h",
     "src/engine_territory.c",
@@ -10938,6 +10943,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
+    "src/engine_camera.h",
     "src/engine_map_init.c",
     "src/engine_map_init.h",
     "src/main.c"
@@ -19779,8 +19786,10 @@
    "name": "FUN_004bbbe3",
    "size": 157,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_camera.h"
+   ]
   },
   {
    "va": "0x4bbc80",

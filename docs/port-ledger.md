@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **802** (32.8%) — tested 746, ported 56
-- code bytes touched: **42.8%** (358,588 / 838,629 B)
-- unported: **1645**
+- touched: **804** (32.9%) — tested 748, ported 56
+- code bytes touched: **42.9%** (359,457 / 838,629 B)
+- unported: **1643**
 - orphan refs (in src/, not in function table): 7
 
-## tested (746) — ported + host unit suite
+## tested (748) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -228,11 +228,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42ec91 | FUN_0042ec91 | 1207 | gfx.c, gfx.h, gfx_paint.h |
 | 0x42f1df | FUN_0042f1df | 295 | gfx.c, main.c |
 | 0x42ff10 | FUN_0042ff10 | 8140 | engine.c, engine_camera.h, engine_ingame_input.c (+5) |
-| 0x432221 | FUN_00432221 | 477 | engine_ingame_input.h |
+| 0x431f59 | FUN_00431f59 | 712 | engine_camera.h |
+| 0x432221 | FUN_00432221 | 477 | engine.c, engine_camera.h, engine_ingame_input.h |
 | 0x4323fe | FUN_004323fe | 64 | engine_ingame_input.h |
 | 0x432640 | FUN_00432640 | 262 | engine_ingame_input.c, engine_ingame_input.h |
 | 0x432746 | FUN_00432746 | 69 | engine_territory.c, engine_territory.h, game_init.c |
-| 0x43278b | FUN_0043278b | 223 | engine_terrain_info.c, engine_terrain_info.h, engine_territory.c (+1) |
+| 0x43278b | FUN_0043278b | 223 | engine.c, engine_terrain_info.c, engine_terrain_info.h (+2) |
 | 0x43292d | FUN_0043292d | 58 | engine_ingame_input.h |
 | 0x432967 | FUN_00432967 | 61 | engine.c, engine_ingame_input.h |
 | 0x4329ec | FUN_004329ec | 281 | engine_load_pump.c, engine_load_pump.h, engine_menu_input.c (+4) |
@@ -388,7 +389,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x451f1a | FUN_00451f1a | 81 | engine.c, engine.h, engine_anim_cycle.c |
 | 0x451f70 | FUN_00451f70 | 26 | gfx.c, main.c |
 | 0x451f8a | FUN_00451f8a | 66 | engine_load_pump.c, engine_load_pump.h, game_init.c (+1) |
-| 0x451fcc | FUN_00451fcc | 385 | engine_map_init.c, engine_map_init.h, main.c |
+| 0x451fcc | FUN_00451fcc | 385 | engine.c, engine_camera.h, engine_map_init.c (+2) |
 | 0x452160 | FUN_00452160 | 422 | engine.c, engine_screen_strat.h, gfx.c (+2) |
 | 0x452306 | FUN_00452306 | 224 | engine_dirty_rect.c, engine_dirty_rect.h, gfx.c (+1) |
 | 0x4523e6 | FUN_004523e6 | 36 | engine_dirty_rect.h |
@@ -731,6 +732,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_ingame_input.h, engine_load_pump.h (+5) |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c |
 | 0x4bb978 | FUN_004bb978 | 614 | engine.c, engine.h, engine_rate.c |
+| 0x4bbbe3 | FUN_004bbbe3 | 157 | engine_camera.h |
 | 0x4bbc80 | FUN_004bbc80 | 465 | engine.c, engine.h, engine_phase.c |
 | 0x4bc020 | FUN_004bc020 | 231 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4bc107 | FUN_004bc107 | 59 | engine_battlefield_render.c, engine_battlefield_render.h |

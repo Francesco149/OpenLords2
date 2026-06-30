@@ -408,31 +408,25 @@ static int g_phase_tick_2560ms;                /* DAT_005aeb30 */
 
 /* ─── Strategic-map camera mirrors (FUN_00429b1d + FUN_0047ed34 state) ─
  *
- * Two pairs of integer state for two related clamps run unconditionally
- * at the head of retail's render-phase tail (decompile lines
- * 88725-88726, gated on DAT_005c9274 == 0).  No producer in our port
- * today — both pairs stay 0 — but the clamps are harmless idempotent
- * no-ops when the values are already in range, so we wire the wrappers
- * unconditionally to match retail's call shape.
+ * Two pairs of clamps run unconditionally at the head of retail's
+ * render-phase tail (decompile lines 88725-88726, gated on
+ * DAT_005c9274 == 0).  The scroll/anchor pairs themselves are the
+ * CANONICAL save-schema externs (s_slot_005651b4/b8, save entries
+ * 16/17; s_slot_0055ce70/005678a0, entries 61/62) — engine_territory_
+ * recenter_on_tile (capital re-center, army re-select) and
+ * engine_camera_edge_scroll (cursor-at-window-edge scroll) both write
+ * them directly, so the clamp here must read/write the SAME storage
+ * or their writes go unclamped/unobserved by the tail.  (Prior to
+ * 2026-07-01 this wrapper kept its own disconnected `g_cam_scroll_col`
+ * etc. mirrors that no producer ever touched — a leftover from before
+ * those writers existed; replaced with the externs directly per
+ * [[project_shared_save_globals]].)
  *
- * Scroll pair (FUN_00429b1d) — strategic-map cell-scroll position +
- * the per-frame visible-row/col counts that bound it.  Bounds are
- * variable: max valid scroll is `0x40 - col_count` / `0x80 - row_count`.
- * Writers in retail: keyboard arrow handler (FUN_0042xxxx camera-pan),
- * scrolled-into-view re-centering paths.  Today no writer.
- *
- * Anchor pair (FUN_0047ed34) — strategic-map / battlefield camera
- * anchor.  Hardcoded bounds [0, 0x41] / [0, 0x42] — independent of
- * the visible-cells count.  Writers: same keyboard-arrow handler,
- * entity-centering (FUN_0042xxxx), castle-table-driven re-centering
- * (decompile line 27137).  Today no writer.
- */
-static int g_cam_scroll_col;           /* DAT_005651b4 */
-static int g_cam_scroll_row;           /* DAT_005651b8 */
+ * Visible-row/col counts are NOT save state (they're per-view-mode
+ * constants FUN_00451fcc derives, view-mode switch unported) — those
+ * two stay local statics, "no producer yet". */
 static int g_cam_visible_cols;         /* DAT_0053e8ac (col_count this frame) */
 static int g_cam_visible_rows;         /* DAT_0056d67c (row_count this frame) */
-static int g_cam_anchor_x;             /* DAT_0055ce70 */
-static int g_cam_anchor_y;             /* DAT_005678a0 */
 
 /* Win32 wrapper around engine_compute_frame_delta — reads
  * timeGetTime, bundles into the input struct, calls the pure
@@ -786,6 +780,17 @@ static int ti_dismiss_chip(const engine_ingame_input_in_t *in,
     return engine_popup_scroll_input_step();
 }
 
+/* army_select hook (FUN_0043278b, recenter-the-camera-on-the-hovered-army
+ * sub-step of terrain-info open): thin wrapper over
+ * engine_territory_recenter_on_tile, already ported + live for the
+ * new-game capital re-center.  Retail discards the hit/miss return here. */
+static void ti_recenter_on_army(const engine_terrain_info_open_in_t *in,
+                                engine_terrain_info_open_state_t *st)
+{
+    (void)in;
+    engine_territory_recenter_on_tile(st->army_ptr);
+}
+
 static void ti_open(const engine_ingame_input_in_t *din,
                     engine_ingame_state_t *dst)
 {
@@ -794,9 +799,9 @@ static void ti_open(const engine_ingame_input_in_t *din,
         .resolve_hover   = ti_resolve,
         .terrain_compute = ti_compute,
         .panel_render    = ti_panel_render,
-        /* dismiss_scroll / mode2_jump / army_select / map_render / tail
-         * deferred (NULL) — the army-select + scroll-dismiss arms land with
-         * the army-select port. */
+        .army_select     = ti_recenter_on_army,
+        /* dismiss_scroll / mode2_jump / map_render / tail deferred (NULL) —
+         * land with the scroll-dismiss arm / map_render's wider wiring. */
     };
     engine_terrain_info_open_in_t oin;
     memset(&oin, 0, sizeof oin);
@@ -928,6 +933,54 @@ static int engine_endturn_hit_test(const engine_ingame_input_in_t *in,
     return 0;
 }
 
+/* Persistent rate-gate timer for engine_camera_edge_scroll_rate_ready
+ * (retail _DAT_004e5b14) — pure runtime timing state, not saved. */
+static uint32_t g_edge_scroll_last_tick_ms;
+
+/* edge_scroll hook (FUN_00432221): cursor-at-window-edge map/anchor scroll.
+ * speed_pct (DAT_0053f234, the UI scroll-speed slider) and step
+ * (DAT_0055cd48, the per-view-mode step magnitude FUN_00451fcc sets) have
+ * no producer in the port yet — defaulted to mid-speed / mode-0's
+ * magnitude, matching the "no producer yet" pattern elsewhere
+ * (RECENTER_VISIBLE_COLS/ROWS in engine_territory.c). */
+static int ti_edge_scroll(const engine_ingame_input_in_t *in,
+                          engine_ingame_state_t *st)
+{
+    engine_camera_edge_scroll_in_t ein;
+    memset(&ein, 0, sizeof ein);
+    ein.cursor_x       = g_input_raw_cursor_x;
+    ein.cursor_y       = g_input_raw_cursor_y;
+    ein.window_w       = (int)(g_client_screen.right  - g_client_screen.left);
+    ein.window_h       = (int)(g_client_screen.bottom - g_client_screen.top);
+    ein.extended_pause = in->extended_pause;
+    ein.game_mode      = in->region_in.game_mode;
+    ein.view_mode      = in->view_mode;
+    ein.screen         = st->screen;
+    ein.speed_pct      = 50;     /* no producer yet — mid-speed default */
+    ein.step           = 1;      /* no producer yet — mode-0's magnitude */
+    ein.now_ms         = engine_now_ms();
+
+    engine_camera_edge_scroll_state_t est;
+    memset(&est, 0, sizeof est);
+    est.scroll_col    = (int)s_slot_005651b4;
+    est.scroll_row    = (int)s_slot_005651b8;
+    est.anchor_x      = (int)s_slot_0055ce70;
+    est.anchor_y      = (int)s_slot_005678a0;
+    est.last_tick_ms  = g_edge_scroll_last_tick_ms;
+
+    int consumed = engine_camera_edge_scroll(&ein, &est, NULL);
+
+    s_slot_005651b4 = (uint32_t)est.scroll_col;
+    s_slot_005651b8 = (uint32_t)est.scroll_row;
+    s_slot_0055ce70 = (uint32_t)est.anchor_x;
+    s_slot_005678a0 = (uint32_t)est.anchor_y;
+    g_edge_scroll_last_tick_ms = est.last_tick_ms;
+    if (est.below_status_redraw) {
+        st->demand_redraw = 2;
+    }
+    return consumed;
+}
+
 /* The in-game input step — replaces the bare dismiss chip in the tick. */
 static void engine_tick_ingame_input_step(void)
 {
@@ -965,6 +1018,7 @@ static void engine_tick_ingame_input_step(void)
 
     static const engine_ingame_hooks_t HOOKS = {
         .dismiss_chip       = ti_dismiss_chip,
+        .edge_scroll        = ti_edge_scroll,            /* FUN_00432221 edge-scroll */
         .hud_btn_a          = engine_endturn_hit_test,   /* FUN_00432967 End-Turn */
         .terrain_info_open  = ti_open,
         .terrain_info_close = ti_close,
@@ -1040,23 +1094,25 @@ static void engine_tick_title_render_step(void)
 
 /* Wrappers around engine_camera_clamp_scroll / engine_camera_clamp_anchor.
  * Both run in the render-phase tail before the FPS counter — same
- * order as retail (decompile lines 88725-88726).  Bundle the file-
- * static mirrors into pointer args, run the pure clamps, write back.
- *
- * Today there are no producers for any of these mirrors, so each
- * call is an idempotent no-op (everything stays 0).  Wiring the
- * structural seam now so future scroll-/anchor-mutating ports
- * (keyboard arrow handler, entity-centering, castle-table re-center)
- * can land without having to also wire the tail. */
+ * order as retail (decompile lines 88725-88726).  Bridge the uint32_t
+ * save-schema externs through int locals (same idiom
+ * engine_territory_recenter_on_tile uses) and write back. */
 static void engine_tick_camera_scroll_clamp(void)
 {
-    engine_camera_clamp_scroll(&g_cam_scroll_col, &g_cam_scroll_row,
-                                g_cam_visible_cols, g_cam_visible_rows);
+    int col = (int)s_slot_005651b4;
+    int row = (int)s_slot_005651b8;
+    engine_camera_clamp_scroll(&col, &row, g_cam_visible_cols, g_cam_visible_rows);
+    s_slot_005651b4 = (uint32_t)col;
+    s_slot_005651b8 = (uint32_t)row;
 }
 
 static void engine_tick_camera_anchor_clamp(void)
 {
-    engine_camera_clamp_anchor(&g_cam_anchor_x, &g_cam_anchor_y);
+    int x = (int)s_slot_0055ce70;
+    int y = (int)s_slot_005678a0;
+    engine_camera_clamp_anchor(&x, &y);
+    s_slot_0055ce70 = (uint32_t)x;
+    s_slot_005678a0 = (uint32_t)y;
 }
 
 /* Win32 wrapper around engine_compute_fps — reads timeGetTime twice
