@@ -64,11 +64,29 @@ write-trace before porting the 0x12 render arm. Full archaeology in
   render`'s sibling arms — it's graphics/localization-asset-bound and
   verified via the `--force-popup` visual seat + r2 byte-tracing instead).
 
-**Next candidate:** 0x11's producer (`FUN_004a9372`, an unported
-INTERACTIVE army-move handler needing fresh `g_per_army_768`
-`+0x1bc..+0x1c3` field archaeology — NOT a turn pass, so it needs a
-different verification approach than `--force-popup` alone), or back to
-[[project_next_chip_4485a5]]'s combat-init A/V wiring.
+**Next candidate — re-scoped, both options are bigger than they look:**
+checked both remaining popup-arm leads before stopping for the day; neither
+is a quick chip.
+- **0x11's producer** (`FUN_004a9372`, 669 B, now mostly legible field-wise)
+  is only reachable from the INTERACTIVE army-select/move click path, which
+  is unported: the dispatcher's `army_select` hook is still NULL, and its
+  handler `FUN_0043ce1a` (1263 B) pulls in five more unported callees
+  (~3.1 KB total) — issue-move-order, hover/select feedback, camera-center,
+  etc. The underlying move EXECUTOR is already ported and proven (AI-brain
+  convergence test), so this is likely "arm a move" not "build pathing from
+  scratch", but it's still a multi-function interactive frontier wanting
+  its own scoping doc first (mirror `docs/plans/ingame-input-handler.md`).
+- **0x10's second producer** (`FUN_004a8aab`, 753 B, the phase-2 TODO at
+  engine.c ~1320) turned out to be a siege-ASSAULT cutscene launcher
+  (battle-screen transition + SFX cues), not a small second event-post — an
+  entry point into the SAME "combat-init INTERACTIVE A/V wiring" frontier
+  [[project_next_chip_4485a5]] already separately flagged as needing battle
+  SFX + battlefield render + ownership popups.
+
+Both scoped read-only this session (no code changed for either); see
+`project_event_popup_arms` memory for the per-function breakdown. Pick
+whichever frontier (army-move interaction, or battle/siege A/V) next session
+has the most context for — they don't block each other.
 
 ---
 
