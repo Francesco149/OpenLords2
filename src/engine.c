@@ -19,6 +19,7 @@
 #include "engine_camera.h"
 #include "engine_ingame_input.h"   /* in-game input dispatcher (FUN_0042ff10) */
 #include "engine_terrain_info.h"   /* terrain-info opener + screen-4 panel render */
+#include "engine_army_select.h"    /* army-select / move dispatcher (FUN_0043ce1a) */
 #include "engine_map_query.h"      /* terrain-attribute compute (FUN_0046d5fe) */
 #include "engine_map_render.h"     /* live camera geometry + descriptor grid */
 #include "engine_overlay_render.h"
@@ -688,7 +689,10 @@ static engine_title_bg_reload_fn g_title_bg_reload_fn = title_bg_reload_stub;
  * stay NULL (deferred); only terrain-info open/close is wired live.
  * ════════════════════════════════════════════════════════════════════════ */
 static int engine_popup_scroll_input_step(void);   /* fwd (defined below) */
+static void engine_popup_scroll_dismiss(void);      /* fwd (defined below) */
 static int g_popup_auto_dismiss;                    /* fwd tentative def (setter below) */
+static uint8_t g_popup_type;                        /* fwd tentative def (real def below) */
+static engine_event_queue_state_t g_turn_event_queue;  /* fwd tentative def (real def below) */
 
 /* Per-frame cursor→cell resolve (retail FUN_004b99c0 line 63:
  * DAT_005533b0 = FUN_00429ba4(0)).  Mirrors of map_ready (DAT_005533b0) +
@@ -827,6 +831,77 @@ static void ti_close(const engine_ingame_input_in_t *din,
     (void)din; (void)dst;
     g_ti_attrs_valid = 0;
     g_demand_redraw  = 2;            /* re-render the map (panel cleared) */
+}
+
+/* army_select hook (FUN_0043ce1a): map LMB on screen 0.  Re-resolves the
+ * hover + terrain compute itself (mirrors ti_compute — retail re-resolves
+ * on every click independent of terrain-info's own last resolve).
+ *
+ * Persistent state with no home in engine_ingame_state_t: the screen-0x10
+ * handoff cooldown (DAT_00553ecc) and the screen-8 HUD outcome
+ * (DAT_00553c64) — both module statics here, mirroring how g_ti_attrs
+ * holds terrain-info's own no-home state. */
+static int g_army_select_handoff_cooldown;
+static int g_army_select_hud_outcome;
+
+static void ti_army_select(const engine_ingame_input_in_t *din,
+                           engine_ingame_state_t *dst)
+{
+    engine_tick_resolve_hover();              /* FUN_00429ba4(1) */
+
+    engine_map_terrain_in_t cin;
+    cin.cell_grid = engine_map_render_tile_descriptors();
+    cin.army_recs = g_per_army_768;
+    cin.tile_off  = g_hover_tile;
+
+    engine_map_terrain_out_t cout;
+    memset(&cout, 0, sizeof cout);
+    if (cin.cell_grid) {
+        engine_map_query_terrain_info(&cin, &cout);
+    }
+
+    engine_army_select_in_t in;
+    memset(&in, 0, sizeof in);
+    in.game_mode         = din->region_in.game_mode;
+    in.turn_progress     = din->turn_progress;
+    in.turn_busy         = din->turn_busy;
+    in.timeout_reached   = din->timeout_reached;
+    in.game_active        = 0;       /* no producer wired yet (mirrors ti_open) */
+    in.view_mode          = din->view_mode;
+    in.extended_pause     = din->extended_pause;
+    in.local_player        = (int)s_slot_0057c8cc;
+    in.popup_type          = g_popup_type;
+    in.tile_stride          = 8;      /* DAT_0057d338 */
+    in.map_width            = 0x40;   /* DAT_0052afd4 */
+    in.season_event_mode  = (int)s_slot_0057c934;
+    in.season_map           = (int)s_slot_0057c92c;
+    in.now_ms                = engine_now_ms();
+    in.head_link            = cout.head_link;
+    in.county_id            = cout.county_id;
+    in.terrain_type         = cout.terrain_type;
+    in.flags                  = cout.flags;
+
+    engine_army_select_state_t st;
+    memset(&st, 0, sizeof st);
+    st.screen           = dst->screen;
+    st.hold_pending      = dst->hold_56d64c;
+    st.handoff_cooldown  = g_army_select_handoff_cooldown;
+    st.hud_outcome       = g_army_select_hud_outcome;
+
+    static const engine_army_select_hooks_t HOOKS = {
+        .dismiss_on_paused_click = engine_popup_scroll_dismiss,
+        .map_scene_tick          = engine_map_scene_tick,
+        /* workforce_render deferred — see engine_workforce_hud.h */
+    };
+    engine_army_select_dispatch(&in, &st, &HOOKS, &g_turn_event_queue);
+
+    dst->screen          = st.screen;
+    dst->hold_56d64c     = st.hold_pending;
+    if (st.demand_redraw) {
+        dst->demand_redraw = st.demand_redraw;
+    }
+    g_army_select_handoff_cooldown = st.handoff_cooldown;
+    g_army_select_hud_outcome      = st.hud_outcome;
 }
 
 /* Screen-4 render arm — draw the terrain-info panel over the retained map
@@ -1022,6 +1097,7 @@ static void engine_tick_ingame_input_step(void)
         .hud_btn_a          = engine_endturn_hit_test,   /* FUN_00432967 End-Turn */
         .terrain_info_open  = ti_open,
         .terrain_info_close = ti_close,
+        .army_select        = ti_army_select,            /* FUN_0043ce1a army select/move */
         /* every other sub-handler deferred (NULL → inert) */
     };
     engine_ingame_input_dispatch(&in, &st, &HOOKS);

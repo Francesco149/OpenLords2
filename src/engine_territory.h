@@ -74,6 +74,10 @@ void engine_territory_clear_cell_field(uint8_t field);
  * cell, then mark the full screen dirty (if a dirty state is bound). */
 void engine_territory_clear_cell_render_flags(void);
 
+/* Port of FUN_0046c6ba.  Clear bit 0x40 of byte +2 of every overworld cell
+ * (the render-flags byte's sibling bit) — no trailing repaint request. */
+void engine_territory_clear_cell_path_overlay(void);
+
 /* Port of FUN_0046e067.  Set bit 0x20 of byte +2 (the alternate-draw
  * flag clear_cell_render_flags wipes) on every cell of the
  * (2*radius+1)-square box centred at (col, row), CLAMPED to the 0..63

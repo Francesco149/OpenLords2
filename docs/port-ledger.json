@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 748,
+  "tested": 761,
   "ported": 56,
-  "unported": 1643,
+  "unported": 1630,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 804,
-  "pct_touched": 32.9,
-  "pct_tested": 30.6,
+  "touched": 817,
+  "pct_touched": 33.4,
+  "pct_tested": 31.1,
   "bytes_total": 838629,
-  "bytes_touched": 359457,
-  "pct_bytes_touched": 42.9
+  "bytes_touched": 362609,
+  "pct_bytes_touched": 43.2
  },
  "orphan_refs": [
   "0x004148",
@@ -1051,6 +1051,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_army_select.h",
     "src/engine_map_scene.c",
     "src/engine_map_scene.h",
     "src/engine_screen_strat.c",
@@ -2098,8 +2099,11 @@
    "name": "FUN_0040e6f2",
    "size": 111,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_select.c",
+    "src/engine_army_select.h"
+   ]
   },
   {
    "va": "0x40e761",
@@ -2430,8 +2434,10 @@
    "name": "FUN_00412143",
    "size": 734,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_select.h"
+   ]
   },
   {
    "va": "0x412421",
@@ -3111,6 +3117,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_army_select.c",
     "src/engine_terrain_info.c",
     "src/engine_terrain_info.h"
    ]
@@ -4741,6 +4748,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_army_select.h",
     "src/engine_camera.h",
     "src/engine_ingame_input.c",
     "src/engine_ingame_input.h",
@@ -6134,16 +6142,21 @@
    "name": "FUN_004371ce",
    "size": 108,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_select.h"
+   ]
   },
   {
    "va": "0x43723a",
    "name": "FUN_0043723a",
    "size": 245,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_select.c",
+    "src/engine_army_select.h"
+   ]
   },
   {
    "va": "0x43732f",
@@ -7039,6 +7052,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_select.h",
     "src/engine_ingame_input.h"
    ]
   },
@@ -7089,6 +7103,10 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
+    "src/engine_army_select.c",
+    "src/engine_army_select.h",
+    "src/engine_combat.h",
     "src/engine_ingame_input.h"
    ]
   },
@@ -7097,8 +7115,11 @@
    "name": "FUN_0043d309",
    "size": 675,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_select.c",
+    "src/engine_army_select.h"
+   ]
   },
   {
    "va": "0x43d5ac",
@@ -7358,6 +7379,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_select.c",
     "src/engine_ranking.c",
     "src/engine_ranking.h"
    ]
@@ -9789,8 +9811,11 @@
    "name": "FUN_00448648",
    "size": 97,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_select.c",
+    "src/engine_army_select.h"
+   ]
   },
   {
    "va": "0x4486a9",
@@ -12424,8 +12449,11 @@
    "name": "FUN_0046c6ba",
    "size": 322,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_territory.c",
+    "src/engine_territory.h"
+   ]
   },
   {
    "va": "0x46c7fc",
@@ -12975,8 +13003,12 @@
    "name": "FUN_0046f68e",
    "size": 114,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_select.c",
+    "src/engine_army_select.h",
+    "src/engine_territory.c"
+   ]
   },
   {
    "va": "0x46f700",
@@ -13303,8 +13335,11 @@
    "name": "FUN_00476710",
    "size": 88,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_select.c",
+    "src/engine_army_select.h"
+   ]
   },
   {
    "va": "0x476768",
@@ -13314,6 +13349,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_army_select.h",
     "src/engine_ingame_input.h",
     "src/engine_terrain_info.c",
     "src/engine_terrain_info.h"
@@ -17198,8 +17234,10 @@
    "name": "FUN_004a8426",
    "size": 148,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_select.h"
+   ]
   },
   {
    "va": "0x4a84ba",
@@ -17238,8 +17276,11 @@
    "name": "FUN_004a8d9c",
    "size": 111,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_select.c",
+    "src/engine_army_select.h"
+   ]
   },
   {
    "va": "0x4a8e0b",
@@ -17262,8 +17303,10 @@
    "name": "FUN_004a9252",
    "size": 288,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_select.h"
+   ]
   },
   {
    "va": "0x4a9372",
@@ -19002,8 +19045,10 @@
    "name": "FUN_004b3e51",
    "size": 111,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_select.c"
+   ]
   },
   {
    "va": "0x4b3ec0",

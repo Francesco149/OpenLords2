@@ -475,6 +475,8 @@ int             g_combat_flag_553210;    /* DAT_00553210 — UI dirty: a local-o
                                           * Shared: the help-hint pump (engine.c)
                                           * consumes-and-clears it for hint 0xd3 */
 static int      g_combat_flag_567d0c;    /* DAT_00567d0c */
+
+void engine_combat_set_flag_567d0c(int v) { g_combat_flag_567d0c = v; }
 static int      g_combat_flag_53f284;    /* DAT_0053f284 — quick-anim suppressor */
 static uint32_t g_combat_anim_t0;        /* DAT_0053e994 — animation start time */
 static uint32_t g_combat_anim_deadline;  /* _DAT_00568d9c */

@@ -293,6 +293,28 @@ int test_territory_clear_cell_render_flags_unbound_is_noop(void)
     return 0;
 }
 
+/* clear_cell_path_overlay clears only bit 0x40 of byte +2 — the render-
+ * flags sibling bit — with no repaint request. */
+int test_territory_clear_cell_path_overlay_clears_bit40_byte2(void)
+{
+    cells_fill(0xff);
+    engine_territory_clear_cell_path_overlay();
+    for (int i = 0; i < N_CELLS; i++) {
+        T_ASSERT_EQ_I(g_cells[i * CELL_STRIDE + 2], 0xbf);   /* 0xff & ~0x40 */
+        for (int b = 0; b < CELL_STRIDE; b++)
+            if (b != 2)
+                T_ASSERT_EQ_I(g_cells[i * CELL_STRIDE + b], 0xff);
+    }
+    return 0;
+}
+
+int test_territory_clear_cell_path_overlay_unbound_is_noop(void)
+{
+    engine_territory_bind_cells(NULL);
+    engine_territory_clear_cell_path_overlay();   /* must not crash */
+    return 0;
+}
+
 /* ── Alternate-draw box stamp (port of FUN_0046e067) ───────────────── */
 
 /* 1 iff cell (col,row) has bit 0x20 set on byte +2. */

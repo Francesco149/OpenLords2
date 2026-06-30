@@ -95,6 +95,13 @@ extern int g_combat_flag_553210;    /* DAT_00553210 — region-relationship UI
                                      * dirty; the help-hint pump (0x476aa7)
                                      * consumes-and-clears it (hint 0xd3). */
 
+/* Set the file-static combat-redraw flag (retail DAT_00567d0c) — written 1
+ * by engine_combat_transfer_ownership, written 2 by the army-select
+ * "claim an empty county" branch (FUN_0043ce1a).  No reader found in either
+ * decompiled corpus searched so far; kept file-static + setter (not a bare
+ * extern) so a future reader stays the single source of truth on meaning. */
+void engine_combat_set_flag_567d0c(int v);
+
 /* Bind the optional battle-cue hook (retail FUN_00427990 ff_batl.wav); NULL
  * (the default) skips the cue.  The cue-playback path is deferred. */
 void engine_combat_bind_battle_sfx(void (*fn)(void));

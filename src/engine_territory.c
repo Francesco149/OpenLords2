@@ -209,6 +209,22 @@ void engine_territory_clear_cell_render_flags(void)
         engine_dirty_rect_mark_full_screen(g_dirty_state);
 }
 
+/* Port of FUN_0046c6ba.  Clear bit 6 (0x40) of byte +2 of every overworld
+ * cell — the sibling of engine_territory_clear_cell_render_flags' bit 0x20
+ * (SAME byte, different flag), called by the army-select move/merge
+ * handoff (FUN_0046f68e, via engine_army_select_open_handoff) right before
+ * a fresh path-field flood, clearing whatever the PREVIOUS flood's overlay
+ * left set.  No reader of bit 0x40 found in the corpus searched so far
+ * (unlike bit 0x20's draw-helper consumers); no trailing repaint request
+ * either (retail doesn't call FUN_0045240a here) — faithfully omitted. */
+void engine_territory_clear_cell_path_overlay(void)
+{
+    if (g_cells == NULL) return;
+
+    for (int i = 0; i < CELL_GRID_CELLS; i++)
+        g_cells[i * CELL_STRIDE + 2] &= 0xbf;
+}
+
 /* Mark the whole screen dirty through the bound dirty state (retail
  * FUN_0045240a — engine_dirty_rect_mark_full_screen).  Exposed so callers in
  * other modules (e.g. the settlement-spawn view refresh) can request a full

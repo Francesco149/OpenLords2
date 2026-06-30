@@ -1515,6 +1515,34 @@ struct test_case {
     X(territory_clear_cell_render_flags_clears_bit20_byte2) \
     X(territory_clear_cell_render_flags_marks_full_screen) \
     X(territory_clear_cell_render_flags_unbound_is_noop) \
+    X(territory_clear_cell_path_overlay_clears_bit40_byte2) \
+    X(territory_clear_cell_path_overlay_unbound_is_noop) \
+    X(army_select_link_check_clears_when_target_zero) \
+    X(army_select_link_check_clears_when_backref_mismatches) \
+    X(army_select_link_check_preserves_valid_mutual_link) \
+    X(army_select_assign_task_garrison_toggle_on) \
+    X(army_select_assign_task_garrison_toggle_off) \
+    X(army_select_assign_task_class_toggle_flips_flag) \
+    X(army_select_assign_task_not_owned_posts_no_event) \
+    X(army_select_open_handoff_not_ready_resets_screen) \
+    X(army_select_open_handoff_ready_arms_screen_and_cooldown) \
+    X(army_select_confirm_or_open_no_link_opens_directly) \
+    X(army_select_confirm_or_open_has_link_defers) \
+    X(army_select_dispatch_wrong_game_mode_is_noop) \
+    X(army_select_dispatch_turn_not_idle_is_noop) \
+    X(army_select_dispatch_view_mode2_is_noop) \
+    X(army_select_dispatch_hold_pending_consumed) \
+    X(army_select_dispatch_extended_pause_dismisses_unlisted_popup) \
+    X(army_select_dispatch_extended_pause_keeps_listed_popup) \
+    X(army_select_dispatch_empty_cell_own_army_bit20_opens_terrain_info) \
+    X(army_select_dispatch_empty_cell_own_army_bit40_arms_workforce_screen) \
+    X(army_select_dispatch_reclick_picks_task_by_terrain_type) \
+    X(army_select_dispatch_reclick_high_terrain_is_noop) \
+    X(army_select_dispatch_click_other_owner_army_posts_notice) \
+    X(army_select_dispatch_own_county_no_link_opens_handoff) \
+    X(army_select_dispatch_own_county_with_link_screen_0x1d) \
+    X(army_select_dispatch_other_owner_county_posts_notice) \
+    X(army_select_dispatch_null_hooks_safe) \
     X(territory_mark_draw_box_interior_3x3) \
     X(territory_mark_draw_box_preserves_other_bits) \
     X(territory_mark_draw_box_clamps_at_corner) \

@@ -7,6 +7,94 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-07-01 (session 13) — the army_select + edge_scroll hooks LANDED + wired live; session 12's "5 unported callees, ~3.1 KB" estimate corrected to the true closure (32 functions, ~9.3 KB, fully scoped). Autonomous session.
+
+Picked up session 12's re-scoped popup-arm leads (army-move click path vs.
+combat A/V wiring — see [[project_event_popup_arms]]).  Chose the army-move
+click path: the underlying move/economy primitives are already proven, so
+it offered more autonomous runway before needing human A/V verification.
+Full archaeology + the resulting scope correction is in
+`docs/plans/army-select-move.md`; summary here.
+
+**Scope correction.** Session 12's grep-based estimate for `FUN_0043ce1a`
+("army select/move", the map-LMB handler) missed that `FUN_0043278b` was
+already ported (`engine_territory_recenter_on_tile`, predates session 12).
+Full closure tracing (not just direct callees) found the REAL picture is
+bigger but fully tractable: **32 unported functions (~9.3 KB) across the
+army_select hook, the edge_scroll hook, and the screen-0x10 move/merge-
+confirm chain that actually produces the 0x11 popup** — every one of them
+small (max 1263 B) and self-contained once mapped; no remaining unknowns.
+Two corrections to the prior framing: `FUN_0043d309` is a **worker-task
+toggle**, not "issue move order" (the real move executor is reached a
+different way, already proven); `FUN_00412143` is a **render** function
+(a per-county workforce icon-grid overlay), not "hover/select feedback".
+
+**LANDED + wired live this session:**
+- **`edge_scroll` hook** (`FUN_00432221` + `FUN_00431f59` + `FUN_004bbbe3`,
+  engine_camera.c) — cursor-at-window-edge map/anchor scroll, rate-limited
+  by a UI speed slider.  19 host tests (rate gate, all 8 compass directions
+  + 4 corners, the mode-2 anchor path, and the "third game_mode" no-delta
+  fallthrough retail's missing trailing `else` implies).
+- **Real bug found + fixed along the way**: engine.c's render-tail camera
+  clamp was mutating its OWN disconnected `g_cam_scroll_col/row` +
+  `g_cam_anchor_x/y` statics instead of the canonical save-schema externs
+  (`s_slot_005651b4/b8`, `s_slot_0055ce70/005678a0`) that
+  `engine_territory_recenter_on_tile` already writes — a leftover from
+  before any real producer existed, predating this session.  Fixed to use
+  the externs directly so the new edge-scroll AND the existing recenter-on-
+  select both compose with the existing clamp instead of writing to dead
+  storage.  Also wired the terrain-info opener's own `army_select` sub-hook
+  (a DIFFERENT, smaller thing than the army_select TOP-LEVEL hook below,
+  despite the name collision — see the header note) to the already-ported
+  recenter function, closing a gap its own comment had flagged as
+  "lands with the army-select port."
+- **`army_select` hook** (`FUN_0043ce1a` + `FUN_0043d309` task-toggle +
+  `FUN_004a8426` territory-link sanity check + `FUN_0043723a`/`FUN_004371ce`
+  reselect-handoff, new module `engine_army_select.c`) — the map-LMB
+  dispatcher: select/reassign an owned army's workforce task (auto-picked
+  by the clicked tile's terrain type), open terrain-info on a flagged
+  empty cell, arm the screen-0x10 move/merge handoff on an owned county,
+  or post a "not yours" notice (code 0x70) on someone else's.  26 host
+  tests covering the full branch tree (game-mode/turn-idle/view-mode/hold-
+  pending gates, the paused-click dismiss keep-list, all the flag-byte
+  sub-branches, the terrain-type→task threshold ladder, both owned/foreign
+  outcomes).  A genuine NULL-deref test catch along the way: `engine_map_
+  scene_tick` (called for the recenter side-effect) turns out to trigger a
+  FULL unguarded render pass, not a cheap counter tick — converted to a
+  hook (NULL = inert) rather than a direct call, so this logic module stays
+  host-testable without standing up the whole render pipeline.
+- New `engine_territory_clear_cell_path_overlay` (`FUN_0046c6ba`, the
+  render-flags byte's bit-0x40 sibling) and `engine_combat_set_flag_567d0c`
+  setter, both small additions to existing modules rather than new ones —
+  the army-select handoff and the screen-8 HUD-outcome path needed them.
+
+**DEFERRED, fully scoped, no remaining unknowns:**
+- **Workforce icon-grid render** (`FUN_00412143` + 9 leaves) — modeled as
+  a hook (`engine_army_select_hooks_t.workforce_render`, NULL today).
+  Wants its own render-parity pass (the `villani1/villani2/vill.pl8`
+  sprite sheets + an 8-row icon grid) — semantics are faithfully portable
+  now, but "what does this actually look like" wants the zoom-diff loop
+  before calling it done, per [[feedback_zoom_dont_sample]].
+- **The screen-0x10 move/merge-confirm chain** (`FUN_004a9252` +
+  `FUN_0040e6f2` + 4 confirm-siblings, one of which —
+  `FUN_004a9372` — is the 0x11 popup producer) — this is where the
+  REAL trigger for the 0x11 popup lives, reached by a two-click flow
+  (army_select arms screen 0x10 on a re-click of an already-selected
+  army; a second click resolves the target).  Not wired live: the
+  confirm-dialog "Yes clicked" flag (`DAT_0059151c`) has no traced
+  producer in this session's call graph — it's a generic dialog-click
+  system, not specific to army-select, and tracing it is its own
+  frontier.  The 0x11 popup's RENDER arm doesn't need this chain live to
+  verify, though — `--force-popup` bypasses the producer entirely, same
+  as 0x10/0x12 — so that's still a reachable next step on its own.
+
+**Next candidate:** port the `g_popup_type == 0x11` render arm (mirrors
+0x10/0x12) and verify via `--force-popup 0x11:0xa6:KEY`; OR pick up the
+workforce-render zoom-diff pass; OR trace the confirm-dialog click system
+to make the screen-0x10 chain live end-to-end.  None block each other.
+
+---
+
 ## 2026-06-30 (session 12) — event-popup type 0x12 (keep/settlement-upgrade complete) LANDED + verified; the "+0x1c0/+0x1c1 dual-use byte" worry was a false alarm. Autonomous session, same day as sessions 10-11.
 
 Picked up session 11's exact "next-session starting point": resolve the
