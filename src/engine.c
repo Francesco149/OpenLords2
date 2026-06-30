@@ -20,6 +20,7 @@
 #include "engine_ingame_input.h"   /* in-game input dispatcher (FUN_0042ff10) */
 #include "engine_terrain_info.h"   /* terrain-info opener + screen-4 panel render */
 #include "engine_army_select.h"    /* army-select / move dispatcher (FUN_0043ce1a) */
+#include "engine_button.h"         /* button-strip renderer (FUN_0040cfd2) */
 #include "engine_map_query.h"      /* terrain-attribute compute (FUN_0046d5fe) */
 #include "engine_map_render.h"     /* live camera geometry + descriptor grid */
 #include "engine_overlay_render.h"
@@ -2094,9 +2095,104 @@ static void engine_popup_scroll_render(void)
         }
         gfx_sprite_seal_draw(sys_sheet, g_popup_x + g_popup_w - 0x30,
                              g_popup_h + g_popup_y - 0x30, 0);
+    } else if (g_popup_type == 0x11) {
+        /* ── Type 0x11: garrison-merge-cap notice ──────────────────────
+         * Producer: FUN_004a9372 (the screen-0x10 move/merge-confirm
+         * chain's garrison-capacity branch, code 0xa6) — NOT wired live
+         * yet (needs the untraced confirm-dialog click system; see
+         * [[project_event_popup_arms]] / docs/plans/army-select-move.md),
+         * but the render arm itself needs no live producer to verify —
+         * same as 0x10/0x12, exercised via --force-popup.
+         *
+         * g_popup_flag6 = the merging army's key (ARMY_REC index);
+         * g_popup_payload_a = the TARGET territory's key (TERR_REC index)
+         * — confirmed by the producer's engine_event_queue_post argument
+         * order (payload32a → g_popup_payload_a, flag6 → g_popup_flag6,
+         * flag5 → g_popup_type itself, see the drain site below ~line
+         * 2347).  Two embedded numbers: the remaining garrison capacity
+         * (k_garrison_cap[ARMY_REC(flag6)'s keep level] minus the troop
+         * count at the army's OWN linked territory, ARMY_REC[+0x1bc] —
+         * 0 if it has none) on one line, and the troop count already AT
+         * the target territory on another.  A 2-icon button-list (system
+         * sheet, sprites 0x1d/0x1f, fixed absolute position — r2-read
+         * from 0x4ddb50) closes it out; the two number-format "suffix"
+         * pointers (0x4d700c/0x4d7010) are literal " " strings, the same
+         * pattern session 12 resolved for 0x12's templates.
+         *
+         * VISUALLY CONFIRMED (session 13) via `--force-popup
+         * 0x11:0xa6:4:4` (army 4, keeplvl 1, no linked territory;
+         * territory 4, 47 troops) on the strat-terrain1 dump: "Cannot
+         * garrison castle. / This castle does not have the capacity to
+         * barrack this number of troops. / 150 more troops can be
+         * stationed here. / Your army contains 47 / Do you want to
+         * split your army?" — both numbers, all 5 sub-strings, and the
+         * icon pair render correctly.  Caught + fixed a real seat gap
+         * along the way: bringup_strat_map mirrored army_records.bin
+         * into the live g_per_army_768 (session 12's fix) but never did
+         * the same for territory_records.bin → g_per_territory_420, so
+         * the first attempt showed "Your army contains 0" — same class
+         * of gap as session 11/12's. */
+        if (cooldown == 0x7c6)
+            engine_popup_speak_event(g_sim_extended_pause, g_popup_payload_a);
+        g_popup_x = 0x20;  g_popup_y = 0x90;
+        g_popup_w = 0x1a0; g_popup_h = 0xf0;
+        gfx_panel_draw_bevel(chrome, g_popup_x, g_popup_y,
+                             g_popup_w / 16, g_popup_h / 16);
+        gfx_wrap_localized_line_centered(&loc, g_sim_extended_pause, 0,
+            g_popup_x + 0x10, g_popup_y + 0x20, g_popup_w - 0x20,
+            title_font, gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
+        gfx_wrap_localized(&loc, g_sim_extended_pause, 1,
+                           g_popup_x + 0x20, g_popup_y + 0x40,
+                           g_popup_w - 0x40, 400, 0, 0, menu_font,
+                           gfx_glyph_render_map(), gfx_glyph_measure_map(), 0x3f);
+        gfx_text_set_line_x_acc(0);
+        {
+            const uint8_t *army = g_per_army_768 + (size_t)g_popup_flag6 * ARMY_POPUP_ROW_STRIDE;
+            int32_t linked_terr;
+            memcpy(&linked_terr, &army[0x1bc], sizeof linked_terr);
+            int linked_troops = 0;
+            if (linked_terr != 0) {
+                const uint8_t *lt = g_per_territory_420 + (size_t)linked_terr * 0x1a4;
+                memcpy(&linked_troops, &lt[0x168], sizeof linked_troops);
+            }
+            int cap = engine_combat_garrison_cap(army[ARMY_POPUP_KEEPLVL]);
+            gfx_text_label_render_dec(cap - linked_troops, '@', " ",
+                g_popup_x + 0x20, g_popup_y + 0x70,
+                menu_font, gfx_glyph_render_map(), 0x3f);
+            gfx_wrap_localized_line(&loc, g_sim_extended_pause, 2,
+                g_popup_x + gfx_text_line_x_acc() + 0x20, g_popup_y + 0x70,
+                menu_font, gfx_glyph_render_map(), 0x3f);
+
+            gfx_text_set_line_x_acc(0);
+            gfx_wrap_localized_line(&loc, g_sim_extended_pause, 3,
+                g_popup_x + 0x20, g_popup_y + 0x80,
+                menu_font, gfx_glyph_render_map(), 0x3f);
+            const uint8_t *target = g_per_territory_420 + (size_t)g_popup_payload_a * 0x1a4;
+            int32_t target_troops;
+            memcpy(&target_troops, &target[0x168], sizeof target_troops);
+            gfx_text_label_render_dec(target_troops, '@', " ",
+                g_popup_x + gfx_text_line_x_acc() + 0x20, g_popup_y + 0x80,
+                menu_font, gfx_glyph_render_map(), 0x3f);
+        }
+        gfx_wrap_localized_line(&loc, g_sim_extended_pause, 4,
+            g_popup_x + 0x20, g_popup_y + 0xb0,
+            menu_font, gfx_glyph_render_map(), 0x3f);
+        {
+            static const engine_button_rec_t k_popup_0x11_icons[2] = {
+                { .x = 0x140, .y = 0x138, .sprite = 0x1d, .kind = 0x20,
+                  .action = 0x4376bb, .state = 0, .pressed = 0, .pad_e = 0,
+                  .type = 4, .param0 = 1, .param1 = 0 },
+                { .x = 0x164, .y = 0x13c, .sprite = 0x1f, .kind = 0x20,
+                  .action = 0x4376bb, .state = 0, .pressed = 0, .pad_e = 0,
+                  .type = 4, .param0 = 0, .param1 = 0 },
+            };
+            engine_button_render_list(0, 0, k_popup_0x11_icons, 2,
+                                      NULL, sys_sheet, NULL);
+        }
+        gfx_sprite_seal_draw(sys_sheet, g_popup_x + g_popup_w - 0x30,
+                             g_popup_h + g_popup_y - 0x30, 0);
     } else {
-        /* TODO(popup-arms): type 0x11 (garrison-merge cap notice — producer
-         * FUN_004a9372 unported), 1/2 (capture w/ portrait), 3, 4 (tooltip-
+        /* TODO(popup-arms): 1/2 (capture w/ portrait), 3, 4 (tooltip-
          * sized, position-tracking), 0x13 (table-driven rect ladder), 10/0xb
          * (portrait + accept), 0xc (0x475e07), 0x14 (0x476488), 0xd/0xe
          * (smk-playing victory / ownership arms — call the dismiss inline),
@@ -2120,11 +2216,12 @@ static void engine_popup_scroll_render(void)
  * runs the renderer once.  consumer_cooldown is pinned away from the
  * speak/fanfare one-shot values (2000/0x7c6/0x776) so the call stays
  * deterministic without an audio device. */
-void engine_dev_force_popup_render(int type, int32_t code, uint8_t flag6)
+void engine_dev_force_popup_render(int type, int32_t code, uint8_t flag6,
+                                   int32_t payload_a)
 {
     g_popup_type          = (uint8_t)type;   /* DAT_005440a4 */
     g_sim_extended_pause   = code;            /* DAT_0053e910 */
-    g_popup_payload_a     = 0;                /* DAT_005440ac */
+    g_popup_payload_a     = payload_a;        /* DAT_005440ac */
     g_popup_flag6         = flag6;            /* DAT_0055ce54 */
     g_popup_flag7         = 0;                /* DAT_0057c8ac */
     g_turn_event_queue.consumer_cooldown = 1;

@@ -187,9 +187,10 @@ static const char *g_title_type;
  * --capture-to. */
 static const char *g_strat_map_dir;
 static int         g_ti_cell = -1;     /* --ti-cell N: forced terrain-info render */
-static int         g_force_popup_type  = -1;  /* --force-popup TYPE:CODE[:FLAG6] */
+static int         g_force_popup_type  = -1;  /* --force-popup TYPE:CODE[:FLAG6[:PAYLOAD_A]] */
 static int         g_force_popup_code  = 0;
 static int         g_force_popup_flag6 = 0;
+static int         g_force_popup_payload_a = 0;
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 static int         g_strat_load_live;  /* --strat-load-live: drive the live
                                         * load pump from the title menu */
@@ -1665,13 +1666,18 @@ static void bringup_strat_map(const char *dir)
         log_line("strat-map: missing captured map state in %s — aborting", dir);
         return;
     }
-    /* Also mirror the per-army rows into the LIVE g_per_army_768 global
-     * (unlike cells/descr/terr/army above, which feed explicit binds —
-     * see bringup_strat_load's analogous self-check copy).  Code that
-     * reads g_per_army_768 directly rather than through a bind (e.g. the
-     * --force-popup verification seat's event-popup render arms) would
-     * otherwise see an all-zero array in this lighter-weight bring-up. */
+    /* Also mirror the per-army AND per-territory rows into the LIVE
+     * g_per_army_768 / g_per_territory_420 globals (unlike cells/descr/
+     * terr/army above, which feed explicit binds — see bringup_strat_
+     * load's analogous self-check copy).  Code that reads these globals
+     * directly rather than through a bind (e.g. the --force-popup
+     * verification seat's event-popup render arms — the army mirror was
+     * added for the 0x12 arm, session 12; the territory mirror for the
+     * 0x11 arm, session 13, which reads TERR_REC(payload_a) directly)
+     * would otherwise see an all-zero array in this lighter-weight
+     * bring-up. */
     memcpy(g_per_army_768, army, sizeof g_per_army_768);
+    memcpy(g_per_territory_420, terr, sizeof g_per_territory_420);
 
     /* Captured strat-terrain1 camera scalars (globals_dump.json). */
     enum { CAM_X0 = 0, CAM_Y0 = 9, COL_START = 31, ROW_START = 78,
@@ -1885,7 +1891,8 @@ static void bringup_strat_map(const char *dir)
     if (g_force_popup_type >= 0) {
         gfx_load_system_sheet_select(1);
         engine_dev_force_popup_render(g_force_popup_type, g_force_popup_code,
-                                      (uint8_t)g_force_popup_flag6);
+                                      (uint8_t)g_force_popup_flag6,
+                                      g_force_popup_payload_a);
         log_line("strat-map: forced popup type=%d code=%d flag6=%d",
                  g_force_popup_type, g_force_popup_code, g_force_popup_flag6);
     }
@@ -3124,8 +3131,8 @@ static void parse_cmdline(LPSTR lpCmd)
         } else if (!strcmp(a, "--ti-cell") && i + 1 < ntok) {
             g_ti_cell = (int)strtol(tokens[++i], NULL, 0);
         } else if (!strcmp(a, "--force-popup") && i + 1 < ntok) {
-            /* TYPE:CODE[:FLAG6] — e.g. 16:278 (0x10:0x116) for the
-             * unit-funding-warning arm.  Verification seat: paints the
+            /* TYPE:CODE[:FLAG6[:PAYLOAD_A]] — e.g. 16:278 (0x10:0x116) for
+             * the unit-funding-warning arm.  Verification seat: paints the
              * popup over the --strat-map render, bypassing the live
              * event producer/consumer so the layout can be eyeballed
              * without constructing the triggering game state. */
@@ -3134,8 +3141,11 @@ static void parse_cmdline(LPSTR lpCmd)
             g_force_popup_type = (int)strtol(spec, &end, 0);
             if (end && *end == ':') {
                 g_force_popup_code = (int)strtol(end + 1, &end, 0);
-                if (end && *end == ':')
-                    g_force_popup_flag6 = (int)strtol(end + 1, NULL, 0);
+                if (end && *end == ':') {
+                    g_force_popup_flag6 = (int)strtol(end + 1, &end, 0);
+                    if (end && *end == ':')
+                        g_force_popup_payload_a = (int)strtol(end + 1, NULL, 0);
+                }
             }
         } else if (!strcmp(a, "--save-sandbox") && i + 1 < ntok) {
             g_save_sandbox = tokens[++i];

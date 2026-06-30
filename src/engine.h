@@ -131,11 +131,12 @@ void engine_virtual_clock_enable(uint32_t step_ms);
 void engine_set_popup_auto_dismiss(int on);
 int  engine_popup_is_open(void);
 
-/* DEV verification seat (--force-popup TYPE:CODE[:FLAG6]): paint a popup
- * arm directly over whatever's already on the canvas, bypassing the live
- * event producer/consumer.  See engine.c's engine_popup_scroll_render for
- * the arm ladder. */
-void engine_dev_force_popup_render(int type, int32_t code, uint8_t flag6);
+/* DEV verification seat (--force-popup TYPE:CODE[:FLAG6[:PAYLOAD_A]]): paint
+ * a popup arm directly over whatever's already on the canvas, bypassing the
+ * live event producer/consumer.  See engine.c's engine_popup_scroll_render
+ * for the arm ladder. */
+void engine_dev_force_popup_render(int type, int32_t code, uint8_t flag6,
+                                   int32_t payload_a);
 
 /* Render-fast-skip dispatcher — port of retail FUN_0040e890.
  *   1. call engine_tick

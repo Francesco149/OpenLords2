@@ -7,7 +7,7 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
-## 2026-07-01 (session 13) — the army_select + edge_scroll hooks LANDED + wired live; session 12's "5 unported callees, ~3.1 KB" estimate corrected to the true closure (32 functions, ~9.3 KB, fully scoped). Autonomous session.
+## 2026-07-01 (session 13) — the army_select + edge_scroll hooks LANDED + wired live; the 0x11 event-popup render arm LANDED + visually verified. Session 12's "5 unported callees, ~3.1 KB" estimate corrected to the true closure (32 functions, ~9.3 KB, fully scoped). Autonomous session.
 
 Picked up session 12's re-scoped popup-arm leads (army-move click path vs.
 combat A/V wiring — see [[project_event_popup_arms]]).  Chose the army-move
@@ -84,14 +84,45 @@ different way, already proven); `FUN_00412143` is a **render** function
   confirm-dialog "Yes clicked" flag (`DAT_0059151c`) has no traced
   producer in this session's call graph — it's a generic dialog-click
   system, not specific to army-select, and tracing it is its own
-  frontier.  The 0x11 popup's RENDER arm doesn't need this chain live to
-  verify, though — `--force-popup` bypasses the producer entirely, same
-  as 0x10/0x12 — so that's still a reachable next step on its own.
+  frontier.  Confirmed the RENDER arm doesn't need this chain live to
+  verify (below) — exactly the loophole 0x10/0x12 also used.
 
-**Next candidate:** port the `g_popup_type == 0x11` render arm (mirrors
-0x10/0x12) and verify via `--force-popup 0x11:0xa6:KEY`; OR pick up the
-workforce-render zoom-diff pass; OR trace the confirm-dialog click system
-to make the screen-0x10 chain live end-to-end.  None block each other.
+**Also LANDED this session: the `g_popup_type == 0x11` render arm**
+(garrison-merge-cap notice, mirrors 0x10/0x12's pattern in
+`engine_popup_scroll_render`) — 5 localized sub-strings + 2 embedded
+numbers (remaining garrison capacity; troops already at the target
+territory) + a 2-icon button-list, all r2-cross-checked against the
+retail decompile (`FUN_0047309e`'s 0x11 arm) for the exact pixel offsets,
+font choices, and the two number-format "suffix" pointers (confirmed
+literal `" "` strings, same as 0x12's). Extended `--force-popup` to
+accept an optional 4th `:PAYLOAD_A` field (it was hardcoded to 0
+before — fine for 0x10/0x12, which don't read it from a record array,
+but 0x11 needs a real territory key there).
+
+**VISUALLY CONFIRMED** via `--force-popup 0x11:0xa6:4:4` on the
+strat-terrain1 dump: "Cannot garrison castle. / This castle does not
+have the capacity to barrack this number of troops. / 150 more troops
+can be stationed here. / Your army contains 47 / Do you want to split
+your army?" — fully legible, both numbers correct, icon pair renders.
+Caught + fixed a real seat gap along the way, same class as session
+12's: `bringup_strat_map` mirrors `army_records.bin` into the live
+`g_per_army_768` (the session-12 fix) but never did the analogous
+mirror for `territory_records.bin` → `g_per_territory_420` — 0x11 is
+the first force-popup arm to read the territory array directly, so the
+first render attempt showed "Your army contains 0" instead of 47.
+One-line fix, same shape as the session-12 one.
+
+**0x11 popup arm is now DONE** (host-test-free like its siblings —
+graphics/localization-bound, verified via the visual seat — but the
+underlying producer chain is logic-tested through engine_army_select's
+26 tests). Matches 0x10/0x12's bar exactly.
+
+**Next candidate:** pick up the workforce-render zoom-diff pass
+(FUN_00412143, scoped, no unknowns); OR trace the confirm-dialog click
+system to make the screen-0x10 chain — and thus the 0x11 popup's actual
+LIVE trigger — reachable end-to-end in a real game; OR start a fresh
+frontier entirely (the combat-init A/V wiring from
+[[project_next_chip_4485a5]] is still open). None block each other.
 
 ---
 
