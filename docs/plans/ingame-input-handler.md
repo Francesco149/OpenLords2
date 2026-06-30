@@ -299,3 +299,57 @@ trace's injected cursor reaches the game via the WM_MOUSEMOVE cache (1:1 at the
 pinned 640×480 client) — position-INDEPENDENT input (scroll dismiss) worked
 before without this, but the End-Turn HIT-TEST is the first capture-verified
 position-DEPENDENT click.
+
+## 2026-06-30 (session 4) — the "AI-brain completion stall" was a mis-diagnosis; natural turn advance PROVEN, no force-ready needed
+
+Investigated session 3's "LAST GATE" as the next task.  It was not a sim bug.
+
+**Root cause of the session-3 finding:** `engine_army_ai_run_per_tick`
+(FUN_0049a581) advances a realm's brain-state ladder, then — once the ladder
+is done — waits for `engine_army_state_arm_movement_owned` to report no
+pending owned movement before parking the realm at 999.  That function only
+RE-ARMS the army records' substate for the movement executor; it never drains
+them itself.  The actual drain is `engine_army_state_run` (FUN_004650b0) +
+its movement executor (`engine_army_move_run`, FUN_00465d28) — a SEPARATE
+system, called right after the brain dispatcher in engine.c's live sub-step
+trio.  Session 3's finding drove the brain dispatcher without that
+cooperating system (and/or read a capture window too short to cover the
+ladder), so it looked like a permanent stall when it wasn't one.
+
+**Proved convergence two ways:**
+1. **Host** — new regression test
+   `tests/test_game_init.c:test_game_init_ai_brain_converges_full_turn`:
+   builds a real 5-player (1 human + 4 AI) new-game world, drives
+   `engine_army_ai_run_per_tick` + `engine_army_state_run` together (matching
+   the live tick), simulates the human's own End-Turn (ready=999). All 4 AI
+   realms reach ready=999 in **~224 sub-step iterations** — bounded, no
+   force-ready. (An isolated first run — brain dispatcher alone — reproduced
+   the ORIGINAL symptom exactly: all 4 realms parked at state=801, each
+   blocked on one never-draining army record. That run confirmed the
+   diagnosis before the fix-shaped test was written.)
+2. **Live**, on the real compiled port — `tools/traces/endturn_advance_long.jsonl`
+   (the proven `endturn_advance.jsonl` prefix — load lastturn.sav, dismiss the
+   boot 256-colour warning, click End-Turn — with a much longer capture
+   tail), run via `--turbo --input-segtrace ... OL2_NO_HINTS=1` and
+   **no OL2_FORCE_AI_READY**, ~3300 frames.  A new "sim-state" exit log in
+   main.c (turn/phase/season/ai_cursor/not_ready/ready[]) showed a genuine
+   **turn 1→2 rollover**: `ready=[1,1000,1000,1000,1000]` — all 4 AI realms
+   self-parked; only the human (no 2nd End-Turn click sent) still pending.
+
+**OL2_FORCE_AI_READY is a capture speed-up, not a workaround** — its doc
+comment in engine.c (and 3 other stale "sub_steps is always 0" comments left
+over from before the in-game state machine landed) corrected accordingly.
+
+**Known gap, not fixed (low priority):** `--newgame-live` and
+`--input-segtrace` are mutually exclusive in main.c's bringup dispatch
+(combining them silently runs 1 frame and exits rc=0, no error — the
+trace-consumption code sees a never-loaded trace as "exhausted"). The live
+proof above therefore used the LOAD route (`lastturn.sav`) rather than a
+truly fresh new-game; the fresh-game path is host-proven only. Fix the
+dispatch exclusivity (or add an explicit error when a trace never loads) if
+a `--newgame-live` + `--input-segtrace` combination is needed later.
+
+**This closes the "LAST GATE for a NATURAL turn advance" framing.** Natural
+turn advance (no dev flags except OL2_NO_HINTS, which dodges the unrelated
+welcome-scroll sim-freeze) works end to end: human End-Turn click + AI
+brain/movement convergence + season rollover.

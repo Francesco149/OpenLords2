@@ -7,6 +7,60 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-06-30 (session 10) — the "AI-brain completion stall" was a mis-diagnosis: natural turn advance PROVEN host-side AND live, no force-ready needed. Autonomous session.
+
+Picked up session 9's "LAST GATE for a NATURAL turn advance" — the per-tick
+AI brain dispatcher (FUN_0049a581) was believed to permanently stall without
+`OL2_FORCE_AI_READY` (round-robin cursor parks, not-ready-count never hits
+0). It doesn't. Full writeup in
+[`docs/plans/ingame-input-handler.md`](plans/ingame-input-handler.md)
+session 4; summary here.
+
+**Root cause:** the brain dispatcher's terminal park waits on
+`engine_army_state_arm_movement_owned`, which only RE-ARMS pending army
+records for the actual movement executor (`engine_army_state_run` /
+FUN_004650b0 + `engine_army_move_run` / FUN_00465d28) — a separate system
+that has to run on the SAME tick for the records to ever drain. The
+session-9 finding evidently drove the brain dispatcher without that
+cooperating system (or read too short a capture window) and mistook "needs
+more sub-steps" for "stalled forever".
+
+**Proved convergence two ways, no product code logic changed (this was a
+diagnosis correction, not a bug fix):**
+- New regression test `test_game_init_ai_brain_converges_full_turn`
+  (`tests/test_game_init.c`) builds a real 5-player/4-AI new-game world and
+  drives the brain dispatcher + movement driver together: all 4 AI realms
+  reach ready=999 in ~224 bounded sub-step iterations.
+- Live, on the actual mingw-compiled port: a new trace
+  (`tools/traces/endturn_advance_long.jsonl`) drove a real `lastturn.sav`
+  through End-Turn under `--turbo`, **no** `OL2_FORCE_AI_READY`, for ~3300
+  frames. A new "sim-state" exit-log line in `main.c` showed a genuine
+  **turn 1→2 rollover** with all 4 AI realms naturally parked at
+  ready=1000.
+
+**Housekeeping that rode along:** corrected `OL2_FORCE_AI_READY`'s doc
+comment in `engine.c` (it's a capture speed-up, not a stall workaround) and
+four other engine.c comments that still claimed `sub_steps` is "always 0" —
+stale since the in-game state machine landed and `g_engine_state == 3`
+became reachable.
+
+**Gotchas worth remembering:** `--newgame-live` and `--input-segtrace` are
+mutually exclusive in main.c's bringup dispatch (silently runs 1 frame and
+exits cleanly when combined — no error); `--input-segtrace` paths must be
+absolute (the exe chdirs into the game dir first); the capture-directory
+flag is `--capture-to`, not `--capture-dir`. None fixed (low-priority, the
+LOAD route already gave a clean live proof).
+
+**Next candidate:** the live proof used a loaded save, not a truly fresh
+`--newgame-live` start (blocked by the segtrace gap above) — low priority
+given host coverage already exercises the fresh-game path. Otherwise the
+strategic in-game frontier's remaining work is back to
+[[project_event_popup_arms]] (production reports 0x10-12, capture
+popups) and the combat-init A/V wiring noted in
+[[project_next_chip_4485a5]].
+
+---
+
 ## 2026-06-20 (session 9) — IN-GAME INPUT-HANDLER SPINE: the dispatcher (FUN_0042ff10) + cursor→cell resolver (FUN_00429ba4) + terrain-info compute (FUN_0046d5fe) ported as pure/tested modules (49 tests). Autonomous session; live wiring + render deferred to a verification session.
 
 Picked up the in-game input-handler frontier ([[project_ingame_input_handler]],
