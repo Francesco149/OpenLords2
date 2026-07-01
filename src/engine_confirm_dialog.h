@@ -75,6 +75,13 @@ void engine_confirm_dialog_open(int msg_id, int ox, int oy, int prev_screen,
  * before the callback fires). */
 int engine_confirm_dialog_answer(void);
 
+/* Force the answer flag directly, for callers that invoke a would-be
+ * dialog callback WITHOUT actually opening the dialog (retail's own
+ * "no confirmation needed" fast path — e.g. FUN_004a9252 sets
+ * DAT_0059151c = 1 unconditionally before deciding whether to call a
+ * sibling directly or route it through engine_confirm_dialog_open). */
+void engine_confirm_dialog_force_answer(int answer);
+
 /* Port of the DAT_0057c90c global — the screen stashed by the most
  * recent engine_confirm_dialog_open call. */
 int engine_confirm_dialog_prev_screen(void);

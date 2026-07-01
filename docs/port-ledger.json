@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 764,
-  "ported": 56,
-  "unported": 1627,
+  "tested": 772,
+  "ported": 55,
+  "unported": 1620,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 820,
-  "pct_touched": 33.5,
-  "pct_tested": 31.2,
+  "touched": 827,
+  "pct_touched": 33.8,
+  "pct_tested": 31.5,
   "bytes_total": 838629,
-  "bytes_touched": 362824,
-  "pct_bytes_touched": 43.3
+  "bytes_touched": 365408,
+  "pct_bytes_touched": 43.6
  },
  "orphan_refs": [
   "0x004148",
@@ -4757,6 +4757,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_army_move_confirm.h",
     "src/engine_army_select.h",
     "src/engine_camera.h",
     "src/engine_ingame_input.c",
@@ -7391,6 +7392,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_army_move_confirm.h",
     "src/engine_army_select.c",
     "src/engine_ranking.c",
     "src/engine_ranking.h"
@@ -12244,7 +12246,9 @@
    "status": "tested",
    "src": [
     "src/engine_army_move.c",
-    "src/engine_army_move.h"
+    "src/engine_army_move.h",
+    "src/engine_army_move_confirm.c",
+    "src/engine_army_move_confirm.h"
    ]
   },
   {
@@ -13065,8 +13069,10 @@
    "name": "FUN_00470678",
    "size": 326,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move_confirm.c"
+   ]
   },
   {
    "va": "0x4707be",
@@ -17299,16 +17305,22 @@
    "name": "FUN_004a8e0b",
    "size": 943,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move_confirm.c",
+    "src/engine_army_move_confirm.h"
+   ]
   },
   {
    "va": "0x4a91ba",
    "name": "FUN_004a91ba",
    "size": 152,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move_confirm.c",
+    "src/engine_army_move_confirm.h"
+   ]
   },
   {
    "va": "0x4a9252",
@@ -17317,7 +17329,10 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_select.h"
+    "src/engine_army_move_confirm.c",
+    "src/engine_army_move_confirm.h",
+    "src/engine_army_select.h",
+    "src/engine_confirm_dialog.h"
    ]
   },
   {
@@ -17325,9 +17340,11 @@
    "name": "FUN_004a9372",
    "size": 669,
    "is_thunk": false,
-   "status": "ported",
+   "status": "tested",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/engine_army_move_confirm.c",
+    "src/engine_army_move_confirm.h"
    ]
   },
   {
@@ -17335,32 +17352,44 @@
    "name": "FUN_004a960f",
    "size": 334,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move_confirm.c",
+    "src/engine_army_move_confirm.h"
+   ]
   },
   {
    "va": "0x4a975d",
    "name": "FUN_004a975d",
    "size": 222,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move_confirm.c",
+    "src/engine_army_move_confirm.h"
+   ]
   },
   {
    "va": "0x4a983b",
    "name": "FUN_004a983b",
    "size": 195,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move_confirm.c",
+    "src/engine_army_move_confirm.h"
+   ]
   },
   {
    "va": "0x4a98fe",
    "name": "FUN_004a98fe",
    "size": 412,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_move_confirm.c",
+    "src/engine_army_move_confirm.h"
+   ]
   },
   {
    "va": "0x4a9a9a",
@@ -19795,6 +19824,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_army_move_confirm.h",
     "src/engine_button.c",
     "src/engine_button.h",
     "src/engine_confirm_dialog.h",

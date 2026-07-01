@@ -1550,6 +1550,13 @@ struct test_case {
     X(army_select_dispatch_own_county_with_link_screen_0x1d) \
     X(army_select_dispatch_other_owner_county_posts_notice) \
     X(army_select_dispatch_null_hooks_safe) \
+    \
+    X(army_move_hover_invalid_disarms) \
+    X(army_move_hover_too_close_disarms) \
+    X(army_move_hover_decrements_cooldown) \
+    X(army_move_hover_arms_on_reachable_cell_and_direct_dispatches) \
+    X(army_move_hover_not_armed_click_resolve_is_noop) \
+    X(army_move_click_garrison_opens_dialog_then_posts_0x11_on_yes) \
     X(territory_mark_draw_box_interior_3x3) \
     X(territory_mark_draw_box_preserves_other_bits) \
     X(territory_mark_draw_box_clamps_at_corner) \

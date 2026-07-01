@@ -64,6 +64,11 @@ int engine_confirm_dialog_answer(void)
     return g_answer;
 }
 
+void engine_confirm_dialog_force_answer(int answer)
+{
+    g_answer = answer;
+}
+
 int engine_confirm_dialog_prev_screen(void)
 {
     return g_prev_screen;
