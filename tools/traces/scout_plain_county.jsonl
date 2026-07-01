@@ -1,0 +1,28 @@
+# One-off recon trace for project_event_popup_arms' organic screen-0x10
+# verification gap: no clicks, just reach MAP_FREEROAM and let main.c's
+# temporary SCOUT log_line diagnostic (main.c, input-segtrace anchor-edge
+# block) dump local_player + camera scroll + every kind==1 (county) territory
+# record's owner/col/row/link to log.txt. Read the log, pick an
+# owner==local_player, link==0 county, compute its screen coordinate, then
+# build the real click trace. Load prefix copied verbatim from
+# click_county.jsonl / screen27_dismiss_regress.jsonl.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "scout"}

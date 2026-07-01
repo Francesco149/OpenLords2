@@ -1,0 +1,66 @@
+# Organic click-driven test of the screen-0x10 army-move/merge confirm
+# chain (project_event_popup_arms) against a PLAIN owned county's keep tile
+# — the gap sessions 14/16 left open (the only previously-known-clickable
+# coordinate (260,250) resolves to an army, not a kind-1 county).
+#
+# Requires --save-ref pointing at a fixture built from the game dir's
+# old_turn.sav/test.sav (map 17): those saves have exactly one kind==1
+# territory record (k=4, col=30(mc), row=46(mr)) but it's owned by player 2,
+# not local_player(1) — patched the owner byte to 1. Screen click reuses the
+# EXISTING (260,250)/lParam 16384260 coordinate every other trace in this
+# dir already uses (click_county.jsonl etc): that pixel resolves to screen-
+# diamond cell (cell_col=4, cell_row=15) at ANY scroll, so patched the
+# fixture's scroll to (col=20,row=62) — chosen by inverting engine_map_
+# init_build_cells' rotation-0 diamond projection (sr=1+mr+mc, sc=(0x40-mr+
+# mc)/2 => sr=77,sc=24 for (mc=30,mr=46); scroll = (sc-cell_col, sr-
+# cell_row) = (20,62)) so that cell lands exactly on the target county.
+#
+# IMPORTANT gotcha hit while building this trace: the naive "TERR_REC col/
+# row = scroll + screen cell" model (simple addition) is WRONG — g_tile_
+# cells (the cursor's tile-index lookup) is indexed in ISOMETRIC DIAMOND
+# space (build_cells' sr/sc2 sweep), not map (col,row) space directly, and
+# the two only coincide for special cases. Naive addition landed on an
+# unfilled diamond gap (non-integer inverse mc), silently resolving to
+# county_id=0 every time despite engine_camera_cursor_to_cell reporting
+# ready=1 — verified+fixed by reimplementing engine_camera_cursor_to_cell
+# AND engine_map_init_build_cells' projection in Python and cross-checking
+# against the already-known-working (260,250) click (which independently
+# resolves to TERR_REC k=3, col=4 row=12 on the default reference save —
+# matches the SCOUT dump exactly, confirming the corrected math).
+#
+# Load prefix copied verbatim from click_county.jsonl / screen27_dismiss_
+# regress.jsonl (menu nav -> Load -> lastturn.sav).
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "before_clicks"}
+# click 1 on the plain county's keep tile (mc=30,mr=46) at screen (260,250)
+# (resolves to screen-diamond cell (4,15) at the fixture's patched scroll
+# (20,62)): owned, kind==1, no link -> should arm the screen-0x10 handoff
+# directly (engine_army_select_confirm_or_open's has_link==0 branch).
+{"t": 900, "m": 512, "w": 0, "l": 16384260}
+{"t": 904, "m": 513, "w": 1, "l": 16384260}
+{"t": 908, "m": 514, "w": 0, "l": 16384260}
+{"capture": 930, "label": "after_click1_armed_0x10"}
+# click 2 (same cell, ~1s later): screen-0x10's click resolver
+# (FUN_004a9252 / engine_army_move_confirm_click_resolve) should fire.
+{"t": 970, "m": 513, "w": 1, "l": 16384260}
+{"t": 974, "m": 514, "w": 0, "l": 16384260}
+{"capture": 1000, "label": "after_click2_resolved"}
+{"capture": 1030, "label": "settled"}

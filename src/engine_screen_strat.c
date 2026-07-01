@@ -177,7 +177,6 @@ static void strat_draw_menu_bar(void)
     if (!chrome || !font || !locblob)
         return;
 
-    engine_set_current_screen(0);
     gfx_dispatch_set_alt_clip(0, 0, 0);
     localization_state_t loc;
     loc.blob = (unsigned char *)locblob;

@@ -1279,6 +1279,32 @@ static void engine_tick_ingame_input_step(void)
 static void engine_tick_title_render_step(void)
 {
     if (g_sim_current_screen != 0x1f) {
+        /* Screens 0x10 / 0x1e are retail FUN_004ba26e arms — the per-frame
+         * UI refresh that runs UNCONDITIONALLY every tick (same category as
+         * the title screen's own per-frame button refresh below), NOT the
+         * demand-redraw seam (FUN_0040f1a0, screens 0/4/other below).
+         * Bug fixed here: these two used to live INSIDE the `g_demand_redraw
+         * != 0` gate, so on an idle frame (no redraw pending) neither ran —
+         * engine_tick_army_move_hover_step never decremented the screen-0x10
+         * handoff cooldown, so a second click to resolve an armed army-move
+         * would silently never fire unless something UNRELATED happened to
+         * also request a redraw in between. Caught by an organic (non-
+         * --force-popup) click test: army_select armed screen 0x10 for
+         * real, but the follow-up click never reached army_move_click_
+         * resolve. */
+        if (g_sim_current_screen == 0x10) {
+            /* Army-move/merge handoff: pure hover reclassification, no
+             * pixels — the strategic map underneath keeps rendering as-is. */
+            engine_tick_army_move_hover_step();
+        } else if (g_sim_current_screen == ENGINE_CONFIRM_DIALOG_SCREEN) {
+            /* Yes/No confirm modal: drawn OVER the retained frame beneath
+             * it (hover-highlight tracking, like the title page's buttons). */
+            if (gfx_lock_canvas()) {
+                engine_tick_confirm_dialog_render();
+                gfx_unlock_canvas();
+            }
+        }
+
         if (g_demand_redraw != 0) {
             if (g_sim_current_screen == 0) {
                 /* Strategic map (FUN_0040f5fd): the ported arm composes
@@ -1301,19 +1327,8 @@ static void engine_tick_title_render_step(void)
                     engine_tick_terrain_info_render();
                     gfx_unlock_canvas();
                 }
-            } else if (g_sim_current_screen == 0x10) {
-                /* Army-move/merge handoff (screen 0x10, retail FUN_004ba26e's
-                 * 0x10 arm): pure hover reclassification, no pixels — the
-                 * strategic map underneath keeps rendering as-is. */
-                engine_tick_army_move_hover_step();
-            } else if (g_sim_current_screen == ENGINE_CONFIRM_DIALOG_SCREEN) {
-                /* Yes/No confirm modal (screen 0x1e, retail FUN_004ba26e's
-                 * 0x1e arm): drawn OVER the retained frame beneath it. */
-                if (gfx_lock_canvas()) {
-                    engine_tick_confirm_dialog_render();
-                    gfx_unlock_canvas();
-                }
-            } else {
+            } else if (g_sim_current_screen != 0x10 &&
+                      g_sim_current_screen != ENGINE_CONFIRM_DIALOG_SCREEN) {
                 /* Other screens: generic demand-redraw seam.  The
                  * renderers are stubs (the other-fn hook), so no canvas
                  * lock is needed yet. */
