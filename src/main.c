@@ -2670,6 +2670,11 @@ static void bringup_input_segtrace(void)
     seed_page3_state();                            /* file list ready for page 3 */
     engine_set_current_screen(0x1f);               /* DAT_004eac50 = 0x1f */
     engine_set_demand_redraw(2);
+    /* No real mouse drives this hidden window — bypass GetCursorPos in
+     * engine_tick_input_step so edge-scroll's raw-cursor hit-test reads
+     * the trace's synthesized WM_MOUSEMOVE position instead of whatever
+     * the real desktop cursor happens to be (project_headless_cursor_gap). */
+    engine_set_input_cursor_override(1);
     log_line("input-segtrace: replaying '%s' (%d ops) through the live tick.",
              g_input_segtrace, input_trace_op_count());
 }

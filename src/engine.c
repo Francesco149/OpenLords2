@@ -386,6 +386,18 @@ static int g_input_cursor_cache_enabled;    /* DAT_0057cac4 */
  * cleared by engine_compute_input_state on release-into-click. */
 static int g_input_click_eligible;          /* DAT_004e65f0 */
 
+/* --input-segtrace cursor seat (see engine_set_input_cursor_override):
+ * when set, engine_tick_input_step substitutes g_mouse_x/y for the real
+ * GetCursorPos() poll.  Not a retail concept — a headless-seat-only
+ * bypass, off by default so every other seat keeps polling the real
+ * cursor exactly like retail. */
+static int g_input_cursor_override_enabled;
+
+void engine_set_input_cursor_override(int enable)
+{
+    g_input_cursor_override_enabled = enable;
+}
+
 static uint32_t g_phase_last_base_tick_ms;     /* _DAT_004e5b10 */
 static uint32_t g_phase_base_tick_counter;     /* DAT_005aeb2c */
 static uint32_t g_phase_counter_2;             /* DAT_0058feb4 */
@@ -520,7 +532,20 @@ int engine_sim_turn_resolved(void)
 static void engine_tick_input_step(void)
 {
     POINT cursor;
-    GetCursorPos(&cursor);
+    if (g_input_cursor_override_enabled) {
+        /* Headless seat: no real mouse drives the hidden window, so
+         * GetCursorPos() would return the actual (arbitrary) desktop
+         * cursor position instead of the trace's synthesized coordinate.
+         * g_mouse_x/y are already correctly driven by the real WndProc's
+         * WM_MOUSEMOVE handler this same frame (main.c), in the same
+         * client-space coords GetCursorPos() would report if this window
+         * were positioned at the screen origin (true for retail's real
+         * fullscreen window) — substitute them. */
+        cursor.x = g_mouse_x;
+        cursor.y = g_mouse_y;
+    } else {
+        GetCursorPos(&cursor);
+    }
 
     /* g_client_screen is a RECT — { LONG left, top, right, bottom }.
      * Reach in through the forward-declared struct with a local cast

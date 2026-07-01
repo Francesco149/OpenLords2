@@ -131,6 +131,17 @@ void engine_virtual_clock_enable(uint32_t step_ms);
 void engine_set_popup_auto_dismiss(int on);
 int  engine_popup_is_open(void);
 
+/* --input-segtrace cursor seat: bypass the real GetCursorPos() poll in
+ * engine_tick_input_step, substituting the WM_MOUSEMOVE-cached client
+ * coords (g_mouse_x/y) instead.  Retail's raw-cursor edge-scroll gate
+ * only works because retail runs fullscreen at screen-origin (0,0), so
+ * GetCursorPos() naturally coincides with client-space coords; a hidden
+ * headless window has no real mouse driving it, so GetCursorPos()
+ * returns an arbitrary desktop position instead of the trace's
+ * synthesized coordinate. Call once at startup when segtrace is
+ * driving input (see project memory project_headless_cursor_gap). */
+void engine_set_input_cursor_override(int enable);
+
 /* DEV verification seat (--force-popup TYPE:CODE[:FLAG6[:PAYLOAD_A]]): paint
  * a popup arm directly over whatever's already on the canvas, bypassing the
  * live event producer/consumer.  See engine.c's engine_popup_scroll_render

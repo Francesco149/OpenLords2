@@ -7,6 +7,94 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-07-01 (session 16) — FIXED the headless raw-cursor-position gap session 15 found: organic/scripted clicks now reach `engine_army_select` for the first time. Autonomous session, direct continuation of session 15.
+
+Picked up session 15's own next-candidate: the raw-cursor gap blocking ALL
+scripted/organic click-testing of the strategic map (`[[project_headless_
+cursor_gap]]`) — the most direct continuation since it was flagged in two
+consecutive sessions and unblocks verification for every future map-click
+feature, not just this one.
+
+**Root cause (already scoped by session 15, confirmed unchanged):**
+`engine_tick_input_step` (engine.c) calls the real Win32 `GetCursorPos()`
+every tick and feeds it straight into `g_input_raw_cursor_x/y`, which
+`ti_edge_scroll` uses for its cursor-at-window-edge hit-test. Retail's own
+raw-cursor invariant only holds because retail runs fullscreen at
+screen-origin (0,0) — `GetCursorPos()`'s desktop-absolute coordinates
+coincide with client-space coordinates. The port's hidden/headless test
+window has no real mouse driving it, so `GetCursorPos()` returns whatever
+the actual (arbitrary) desktop cursor happens to be, making edge-scroll's
+hit-test permanently read "cursor past the window edge" and consume every
+scripted click before the map-click chain (`army_select`, terrain-info,
+minimap-drag, screen-0x10) ever runs — confirmed **not a port bug**
+(`engine_camera_edge_scroll` itself is correct; its own 30 host tests
+pass).
+
+**Fix** — exactly the approach session 15's memory already scoped:
+`engine_set_input_cursor_override(1)`, a new one-line setter
+(`engine.h`/`engine.c`), called once from `bringup_input_segtrace`
+(main.c). When enabled, `engine_tick_input_step` substitutes
+`g_mouse_x/y` (already correctly driven by the real WndProc's
+`WM_MOUSEMOVE` handler from the trace's synthesized lParam, in the same
+client-space coords `GetCursorPos()` would report if the window sat at
+the screen origin) instead of polling the real OS cursor. Off by default —
+every other seat (`--title-live`, `--interactive`, etc.) keeps polling the
+real cursor exactly like retail; this is a headless-seat-only bypass, not
+a retail behavior change. 3-file, ~20-line diff (`engine.c`/`.h`,
+`main.c`).
+
+**Verification (live, `tools/traces/screen27_dismiss_regress.jsonl` —
+engine.c/main.c aren't part of the host suite, same as every prior
+engine.c-only session):**
+- Gotcha hit while sizing the run: the trace's bare `"t"` fields are
+  relative to the FIRST `MAP_FREEROAM` anchor occurrence (frame 641 this
+  run), not the run's absolute frame count or the anchor's last re-fire —
+  needed `--frames 2000`, not the 1200 first guessed, for the 3 scripted
+  clicks (t=900-1070) to actually fire.
+- Temporary diagnostic `log_line` calls in `ti_edge_scroll` +
+  `ti_army_select` (added, used, then fully reverted — committed diff is
+  the clean 1-behavior fix only, no scaffolding left) showed: edge-scroll
+  now returns `consumed=0` on all 905 in-game ticks of the run (previously
+  it would have swallowed every one), and `ti_army_select` fired — for
+  the FIRST time ever in this environment — with real resolved values
+  (`county_id=3 head_link=13 terrain=0`), producing a genuine state
+  transition (`screen 0→8`, `hud_outcome=3`, `demand_redraw=1`). Host
+  suite stayed 2253/2253 green throughout (this fix touches only the
+  Win32 integration layer).
+- The specific clicked cell (260,250 from the pre-existing trace, picked
+  by an earlier session before this bug was even diagnosable) turns out
+  to be **army-occupied** (kind-3 in `engine_army_select`'s dispatch —
+  "an army stands on this county" — which recenters the camera and opens
+  screen 8), not a plain kind-1 owned county — so this run demonstrates
+  the map-click pipeline working end-to-end, but doesn't itself organically
+  exercise the screen-0x10 confirm chain from
+  [[project_event_popup_arms]]. That specific chain still has only the
+  `--force-popup`/host-test verification bar from sessions 13-14.
+- Tried a 15-point coordinate-sweep probe (same save, same camera
+  position) looking for a plain county to click instead: 4 points never
+  reached `ti_army_select` at all (early ones plausibly still inside the
+  post-load welcome-series settle window per session 15's fix; a couple
+  later ones unexplained — not chased further) and all 11 that did reach
+  it resolved `county_id=0` (no county under the cursor at all). Take-away:
+  a county click apparently has to land on that territory's specific
+  keep/capital tile, not anywhere within its borders — the ONE working
+  coordinate in the existing trace was reverse-engineered by an earlier
+  session specifically for this purpose, blind guessing doesn't reproduce
+  it. Screenshots + state-schema slot diffs of both runs pushed to the
+  feed.
+
+**Next candidate:** a fully organic screen-0x10 verification needs either
+(a) an edge-scroll pass (now provably working) to bring a DIFFERENT
+county's keep into view and a computed screen coordinate for it, or (b) a
+direct read of the save's territory/army records to locate a plain
+kind-1 county's keep tile up front — either is a well-scoped follow-up,
+not attempted further this session to avoid an open-ended coordinate hunt.
+Otherwise back to the standing list: the workforce-render zoom-diff pass
+(`FUN_00412143`) or the combat-init A/V wiring
+([[project_next_chip_4485a5]]).
+
+---
+
 ## 2026-07-01 (session 15) — FIXED the screen-0x27 auto-dismiss gap session 14 found: a real out-of-band-global-write bug in the in-game dispatcher's dismiss hook, not a rendering issue. Autonomous session, direct continuation of session 14.
 
 Picked up session 14's own next-candidate: the screen-0x27 report/welcome
