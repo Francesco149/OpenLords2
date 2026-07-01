@@ -62,6 +62,7 @@
 #include "config.h"
 #include "dev_hooks.h"
 #include "engine.h"
+#include "engine_workforce_hud.h"
 #include "engine_dirty_rect.h"
 #include "engine_hud_menubar.h"
 #include "engine_map_init.h"
@@ -191,6 +192,7 @@ static int         g_force_popup_type  = -1;  /* --force-popup TYPE:CODE[:FLAG6[
 static int         g_force_popup_code  = 0;
 static int         g_force_popup_flag6 = 0;
 static int         g_force_popup_payload_a = 0;
+static int         g_force_workforce_key = -1;  /* --force-workforce KEY */
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 static int         g_strat_load_live;  /* --strat-load-live: drive the live
                                         * load pump from the title menu */
@@ -1897,6 +1899,34 @@ static void bringup_strat_map(const char *dir)
                  g_force_popup_type, g_force_popup_code, g_force_popup_flag6);
     }
 
+    /* Forced workforce icon-grid render (verification seat,
+     * --force-workforce) — same self-contained lock/unlock shape as the
+     * --force-popup block above (engine_workforce_hud_render takes its
+     * own gfx_lock_canvas via the paint/sprite primitives it calls). */
+    if (g_force_workforce_key >= 0) {
+        int key = g_force_workforce_key;
+        /* g_per_army_768, NOT the local `army` buffer above — the memcpy
+         * mirroring `army` into it already ran earlier in this function,
+         * and engine_workforce_hud_render reads g_per_army_768 directly. */
+        uint8_t *rec = &g_per_army_768[key * 0x300];
+        /* No known live producer for these fields yet (see
+         * engine_workforce_hud.h) — inject plausible synthetic values so
+         * the grid shows something regardless of what's in the captured
+         * save data. category 0 -> row 5 -> scale/cur/min/max below;
+         * every other category's row defaults to 0/0/0/0 (scale==0 ->
+         * that row renders empty, which is a real, faithfully-modeled
+         * state, not a bug). */
+        *(int32_t *)(rec + 0xb8) = 10;    /* ARMY_WF_SCALE, row-independent */
+        *(int32_t *)(rec + 0xc4 + 5 * 0xc) = 60;   /* ARMY_WF_CUR(5) */
+        *(int32_t *)(rec + 0xc8 + 5 * 0xc) = 0;    /* ARMY_WF_MIN(5) */
+        *(int32_t *)(rec + 0xcc + 5 * 0xc) = 100;  /* ARMY_WF_MAX(5) */
+        gfx_lock_canvas();
+        engine_workforce_hud_set_panel_mode(1);
+        engine_workforce_hud_render(key, 0, 0);
+        gfx_unlock_canvas();
+        log_line("strat-map: forced workforce render army_key=%d", key);
+    }
+
     /* Present + capture a BMP (surface palette → may be off-color; the
      * authoritative diff uses the raw dump + the captured retail .pal). */
     gfx_tick_present(1);
@@ -3152,6 +3182,13 @@ static void parse_cmdline(LPSTR lpCmd)
                         g_force_popup_payload_a = (int)strtol(end + 1, NULL, 0);
                 }
             }
+        } else if (!strcmp(a, "--force-workforce") && i + 1 < ntok) {
+            /* KEY — verification seat: force the workforce icon-grid
+             * overlay for army KEY over the --strat-map render, injecting
+             * synthetic ARMY_WF_SCALE/CUR/MIN/MAX (no known live producer
+             * yet — see engine_workforce_hud.h) so the grid shows
+             * something regardless of what the captured save data has. */
+            g_force_workforce_key = (int)strtol(tokens[++i], NULL, 0);
         } else if (!strcmp(a, "--save-sandbox") && i + 1 < ntok) {
             g_save_sandbox = tokens[++i];
         } else if (!strncmp(a, "--save-sandbox=", 15)) {

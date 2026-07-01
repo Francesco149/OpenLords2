@@ -20,6 +20,7 @@
 #include "engine_ingame_input.h"   /* in-game input dispatcher (FUN_0042ff10) */
 #include "engine_terrain_info.h"   /* terrain-info opener + screen-4 panel render */
 #include "engine_army_select.h"    /* army-select / move dispatcher (FUN_0043ce1a) */
+#include "engine_workforce_hud.h"  /* workforce icon-grid overlay (FUN_00412143) */
 #include "engine_army_move_confirm.h" /* screen-0x10 hover classifier + click resolver */
 #include "engine_confirm_dialog.h" /* generic Yes/No modal (screen 0x1e) */
 #include "engine_button.h"         /* button-strip renderer (FUN_0040cfd2) */
@@ -889,6 +890,16 @@ static int g_army_select_armed_county;   /* DAT_0057c8c4 — which county the
                                           * resolver below read it back on
                                           * later frames. */
 
+/* army_select's workforce_render hook (FUN_00412143's real live call
+ * site — "an empty cell your own army occupies, bit 0x40 set" arms
+ * screen 2 and calls this).  full_redraw is hardcoded 1: the one retail
+ * call site this closure's plan doc traced always passes param_1==1. */
+static void ti_workforce_render(int army_key)
+{
+    engine_workforce_hud_set_panel_mode(1);
+    engine_workforce_hud_render(army_key, engine_now_ms(), 1);
+}
+
 static void ti_army_select(const engine_ingame_input_in_t *din,
                            engine_ingame_state_t *dst)
 {
@@ -937,7 +948,7 @@ static void ti_army_select(const engine_ingame_input_in_t *din,
     static const engine_army_select_hooks_t HOOKS = {
         .dismiss_on_paused_click = engine_popup_scroll_dismiss,
         .map_scene_tick          = engine_map_scene_tick,
-        /* workforce_render deferred — see engine_workforce_hud.h */
+        .workforce_render        = ti_workforce_render,
     };
     engine_army_select_dispatch(&in, &st, &HOOKS, &g_turn_event_queue);
 

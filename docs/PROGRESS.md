@@ -7,6 +7,87 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-07-01 (session 17) — the workforce icon-grid overlay (`FUN_00412143` + 9 leaves) LANDED + wired live + visually verified. Autonomous session, same day as session 16.
+
+Picked up the standing "workforce icon-grid render" deferred item
+(`docs/plans/army-select-move.md`'s Tier 2, first scoped session 13) —
+already fully mapped (10 functions, all small, clear bottom-up port
+order, only baked-table extraction and a couple of ancestor-owned globals
+outstanding) once re-surveyed. A genuinely bigger, less-bounded
+alternative (the combat-init A/V wiring) was surveyed first this session
+and deliberately deferred without writing any code — see
+[[project_next_chip_4485a5]] for the full re-scoping (TL;DR: army-vs-army
+combat is currently a silent no-op live, there's no WAV-playback
+infrastructure anywhere in the project yet, and the battlefield renderer
+has ~50 bind calls with no "build from territory" shortcut — comparable
+in size to the whole strategic-map-render milestone, not a quick wire-up).
+
+**Landed** (new module `engine_workforce_hud.c/.h`, 10 functions):
+`engine_workforce_row_sprite_index` (`FUN_004517ca`), `..._ensure_buffers`
+(`FUN_004997bf`), `..._capture_backdrop` (`FUN_004b3f0a`),
+`..._fill_row_linear`/`..._fill_row_dual` (`FUN_004519ca`/`FUN_00451a5d`),
+`..._compute_row`/`..._compute_rows` (`FUN_004518a5`/`FUN_0045161e`),
+`..._draw_row`/`..._draw_all_rows` (`FUN_004126c9`/`FUN_00412666`), and
+the entry point `..._hud_render` (`FUN_00412143`, core path). Renders an
+8-category × 25-cell icon grid (little worker sprites from
+villani1/villani2.pl8) for the selected army's home county, each row's
+fill/colour driven by a per-army stock vs. a `[min,max]` band (deficit/
+surplus indicator when outside it). 8 baked rdata tables r2-extracted and
+cross-checked via two independent methods (raw `p8` hex dump parsed in
+Python, plus r2's own `pf` struct-print) after an initial hand-transcription
+of one table from ANSI-colored terminal output turned out wrong twice —
+**lesson: never hand-parse colorized r2 output for byte-exact tables,
+always re-extract with `-e scr.color=false` and parse programmatically.**
+22 host tests, all green (2278/2278 total).
+
+**Deliberate scope cuts, documented in engine_workforce_hud.h:**
+- The "standings" decoration sub-branch (a 4th sheet + castle icon + 3
+  wrapped tax/population numbers, gated on a separate flag) — a
+  self-contained cosmetic add-on, not the icon-grid itself.
+- `engine_dirty_rect_mark_below_status_bar`'s call — needs a live
+  `engine_dirty_rect_state_t` this call path doesn't have (affects
+  redraw-scheduling only, not pixel output).
+- The two ancestor-owned globals (the "manage county" screen this panel
+  is one part of isn't ported): the icon sheet now **defaults to the
+  villani1.pl8 bank this render already loads for itself** (works
+  standalone; a real ancestor can still override via
+  `engine_workforce_hud_bind_icon_sheet` before calling), and the
+  panel-mode gate is exposed as a plain setter, default 0 (off).
+
+**Wired live**: `engine_army_select_dispatch`'s `workforce_render` hook
+(NULL since session 13) now points at a real `ti_workforce_render`
+wrapper in engine.c. Its trigger condition was already pinned by an
+existing host test (`test_engine_army_select.c`): an EMPTY cell your own
+army occupies, click flags bit 0x40 set → arms screen 2 and fires this
+hook with the army key.
+
+**Verified live** via a new `--force-workforce KEY` dev seat (mirrors
+`--force-popup`/`--ti-cell`) on the `--strat-map` seat: injects synthetic
+per-army stock/band values (no live producer for those fields exists yet
+— genuinely unknown, not a gap this session could close) so the grid
+renders regardless of what the captured dump's real bytes say, then
+captures a screenshot. Diffing the before/after render showed new little
+worker sprites appearing at the exact computed grid positions (extra
+farmers near the crop rows and wooden structures), in the correct
+in-game sprite style — confirmed the load→compute→draw pipeline works
+end-to-end. Caught + fixed one dev-seat bug during this verification:
+the injection first wrote into `bringup_strat_map`'s local `army` buffer,
+but the `memcpy` mirroring it into the live `g_per_army_768` (what the
+render actually reads) had already run earlier in that function — fixed
+by injecting into `g_per_army_768` directly. Screenshots pushed to the
+feed.
+
+**Next candidate**: a fully composited panel needs the ancestor "manage
+county" screen (tab state machine + the icon sheet's real producer) —
+out of scope for a single session (see the ~50-bind-call battlefield-
+renderer-sized estimate in [[project_next_chip_4485a5]] for the shape
+this kind of ancestor-screen wiring tends to take). Otherwise the
+standing list: the screen-0x10 chain's own fully-organic verification
+(needs a plain county's keep-tile coordinate — see
+[[project_headless_cursor_gap]]), or the combat-init A/V wiring.
+
+---
+
 ## 2026-07-01 (session 16) — FIXED the headless raw-cursor-position gap session 15 found: organic/scripted clicks now reach `engine_army_select` for the first time. Autonomous session, direct continuation of session 15.
 
 Picked up session 15's own next-candidate: the raw-cursor gap blocking ALL

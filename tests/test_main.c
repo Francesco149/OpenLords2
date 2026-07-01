@@ -1563,6 +1563,33 @@ struct test_case {
     X(army_move_hover_arms_on_reachable_cell_and_direct_dispatches) \
     X(army_move_hover_not_armed_click_resolve_is_noop) \
     X(army_move_click_garrison_opens_dialog_then_posts_0x11_on_yes) \
+    \
+    X(workforce_row_sprite_index_table_lookup) \
+    X(workforce_row_sprite_index_special_case_overrides_category0) \
+    X(workforce_row_sprite_index_special_case_needs_both_conditions) \
+    X(workforce_fill_row_linear_default_color_below_threshold) \
+    X(workforce_fill_row_linear_override_color) \
+    X(workforce_fill_row_linear_category6_forces_fill_code_2) \
+    X(workforce_fill_row_linear_full_count_fills_all_cells) \
+    X(workforce_fill_row_dual_small_values_uses_graduated_tables) \
+    X(workforce_fill_row_dual_category6_forces_both_bytes) \
+    X(workforce_fill_row_dual_large_values_linear_fallback) \
+    X(workforce_compute_row_zero_position_and_magnitude_clears_row) \
+    X(workforce_compute_row_position_only_uses_default_colors) \
+    X(workforce_compute_row_negative_magnitude_only) \
+    X(workforce_compute_row_positive_magnitude_only) \
+    X(workforce_compute_rows_zero_scale_is_noop) \
+    X(workforce_compute_rows_within_band_is_flat_fill) \
+    X(workforce_compute_rows_below_min_is_deficit) \
+    X(workforce_compute_rows_above_max_is_surplus) \
+    X(workforce_ensure_buffers_succeeds) \
+    X(workforce_capture_backdrop_copies_canvas_rect) \
+    X(workforce_capture_backdrop_null_canvas_is_noop) \
+    X(workforce_hud_render_panel_mode_gate) \
+    X(workforce_hud_render_mode1_runs_compute_pass) \
+    X(workforce_hud_render_defaults_icon_sheet_when_unbound) \
+    X(workforce_hud_render_respects_pre_bound_icon_sheet) \
+    \
     X(territory_mark_draw_box_interior_3x3) \
     X(territory_mark_draw_box_preserves_other_bits) \
     X(territory_mark_draw_box_clamps_at_corner) \
