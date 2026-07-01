@@ -1,0 +1,70 @@
+# Organic click-driven test of engine_army_move_confirm's g_classify_claim
+# branch (CELL[+1] bit 0x10 + enemy occupant) -> confirm msg 4 "Slaughter
+# villagers?" -> sibling_983b -> Yes -> silent execute (army marches).
+# First organic exercise of sibling_983b ([[project_event_popup_arms]]
+# session-20 "2 siblings remain" follow-up).
+#
+# Requires --save-ref tools/make_enemy_target_fixture.py's output:
+# county A owned + claim flag 0x10 on map cell (32,46), whose baseline
+# occupant stamp already points at the real enemy-owned ARMY_REC[2].
+# See that script's docstring for the derivation.
+#
+# Load prefix copied verbatim from garrison_county_click.jsonl.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "before_clicks"}
+# click 1: arm county A's (mc=30,mr=46) handoff -- screen 0 -> 0x10.
+# The first-time "Army Movement" tutorial hint (code 0xd2) posts ~20+
+# ticks after this arm ON BOTH ENGINES (runtime-only g_hint_shown, fires
+# every fresh launch).  auto_dismiss stays ON through a generous settling
+# window so both sides dismiss it whenever it lands -- turning it off
+# right after click 1 (the session-20-era pattern) races retail's hint
+# phase and leaves the hint scroll eating the later clicks.
+{"t": 900, "m": 512, "w": 0, "l": 16384260}
+{"t": 904, "m": 513, "w": 1, "l": 16384260}
+{"t": 908, "m": 514, "w": 0, "l": 16384260}
+{"capture": 930, "label": "after_click1_hint_window"}
+{"capture": 1000, "label": "hint_settled_still_0x10"}
+# hint long dismissed on both sides by now -- reactive dismiss OFF (t-gated:
+# the bare form fires when the op-cursor reaches it, which the agent hits
+# ~t910 since captures are pre-armed out-of-band -- racing the hint) so the
+# outcome below stays visible.
+{"t": 1040, "auto_dismiss": 0}
+# hover onto the claim target (mc=32,mr=46) -- pixel (320,280) -- lets the
+# hover tick reclassify before the click below resolves it.
+{"t": 1050, "m": 512, "w": 0, "l": 18350400}
+{"capture": 1065, "label": "after_hover_target"}
+# click 2: resolve -- opens confirm msg 4 "Slaughter villagers?" (0x10 -> 0x1e).
+{"t": 1080, "m": 513, "w": 1, "l": 18350400}
+{"t": 1084, "m": 514, "w": 0, "l": 18350400}
+{"capture": 1110, "label": "after_click2_dialog_open"}
+# click 3: press "Yes" -- pixel (240,222); type-5 press-flash arms ~20
+# ticks before the sibling callback fires.
+{"t": 1150, "m": 512, "w": 0, "l": 14549232}
+{"t": 1154, "m": 513, "w": 1, "l": 14549232}
+{"t": 1158, "m": 514, "w": 0, "l": 14549232}
+{"capture": 1162, "label": "after_click3_pressed"}
+{"capture": 1172, "label": "settle_1172"}
+{"capture": 1176, "label": "settle_1176"}
+{"capture": 1180, "label": "settle_1180"}
+{"capture": 1184, "label": "settle_1184"}
+{"capture": 1190, "label": "settle_1190"}
+{"capture": 1210, "label": "settle_1210"}
+{"capture": 1280, "label": "settle_1280"}
