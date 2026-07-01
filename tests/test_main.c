@@ -1533,7 +1533,8 @@ struct test_case {
     X(army_select_open_handoff_not_ready_resets_screen) \
     X(army_select_open_handoff_ready_arms_screen_and_cooldown) \
     X(army_select_confirm_or_open_no_link_opens_directly) \
-    X(army_select_confirm_or_open_has_link_defers) \
+    X(army_select_confirm_or_open_has_link_opens_confirm_dialog) \
+    X(army_select_confirm_or_open_yes_answer_arms_via_poll) \
     X(army_select_dispatch_wrong_game_mode_is_noop) \
     X(army_select_dispatch_turn_not_idle_is_noop) \
     X(army_select_dispatch_view_mode2_is_noop) \

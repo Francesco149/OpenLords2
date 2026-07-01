@@ -12,6 +12,7 @@
 
 #include "t.h"
 #include "engine_army_select.h"
+#include "engine_confirm_dialog.h"
 #include "engine_path_field.h"
 #include "engine_territory.h"
 #include "engine_event_queue.h"
@@ -137,11 +138,13 @@ int test_army_select_assign_task_not_owned_posts_no_event(void)
 int test_army_select_open_handoff_not_ready_resets_screen(void)
 {
     army_select_reset();
-    int screen = -1, redraw = -1, cooldown = -1, col = -1, row = -1;
+    int screen = -1, redraw = -1, cooldown = -1, col = -1, row = -1, armed = -1;
     engine_army_select_open_handoff(3, /*ready=*/0, 1, 8, 0x40,
-                                    &screen, &redraw, &cooldown, &col, &row);
+                                    &screen, &redraw, &cooldown, &col, &row,
+                                    &armed);
     T_ASSERT_EQ_I(screen, 0);
     T_ASSERT_EQ_I(redraw, 2);
+    T_ASSERT_EQ_I(armed, -1);   /* untouched on the not-ready path */
     return 0;
 }
 
@@ -153,12 +156,14 @@ int test_army_select_open_handoff_ready_arms_screen_and_cooldown(void)
     AI32(TREC(3), 0x0c) = 0x50;   /* cell byte offset */
     TREC(3)[0x14e] = 0xAA;
 
-    int screen = -1, redraw = -1, cooldown = -1, col = -1, row = -1;
+    int screen = -1, redraw = -1, cooldown = -1, col = -1, row = -1, armed = -1;
     engine_army_select_open_handoff(3, /*ready=*/1, /*local_player=*/1,
                                     /*tile_stride=*/8, /*map_width=*/0x40,
-                                    &screen, &redraw, &cooldown, &col, &row);
+                                    &screen, &redraw, &cooldown, &col, &row,
+                                    &armed);
     T_ASSERT_EQ_I(screen, 0x10);
     T_ASSERT_EQ_I(cooldown, 0x28);
+    T_ASSERT_EQ_I(armed, 3);
     T_ASSERT_EQ_I(TREC(3)[0x14e], 0);
     T_ASSERT_EQ_I(col, (0x50 / 8) % 0x40);
     T_ASSERT_EQ_I(row, (0x50 / 8) / 0x40);
@@ -175,25 +180,69 @@ int test_army_select_confirm_or_open_no_link_opens_directly(void)
     TREC(4)[0x199] = 0;
     TREC(4)[0x0a] = 1;
     TREC(4)[0x0b] = 1;
-    int screen, redraw, cooldown, col, row;
+    int screen, redraw, cooldown, col, row, armed = -1;
     int fired = engine_army_select_confirm_or_open(4, 1, 8, 0x40,
                                                    &screen, &redraw, &cooldown,
-                                                   &col, &row, NULL);
+                                                   &col, &row, &armed, NULL);
     T_ASSERT_EQ_I(fired, 1);
     T_ASSERT_EQ_I(screen, 0x10);
+    T_ASSERT_EQ_I(armed, 4);
     return 0;
 }
 
-int test_army_select_confirm_or_open_has_link_defers(void)
+int test_army_select_confirm_or_open_has_link_opens_confirm_dialog(void)
 {
     army_select_reset();
     TREC(4)[0x199] = 9;             /* a pending link */
-    int screen = -1, redraw, cooldown, col, row;
+    int screen = -1, redraw = -1, cooldown = -1, col, row, armed = -1;
     int fired = engine_army_select_confirm_or_open(4, 1, 8, 0x40,
                                                    &screen, &redraw, &cooldown,
-                                                   &col, &row, NULL);
+                                                   &col, &row, &armed, NULL);
     T_ASSERT_EQ_I(fired, 0);
-    T_ASSERT_EQ_I(screen, 0);
+    T_ASSERT_EQ_I(screen, ENGINE_CONFIRM_DIALOG_SCREEN);
+    T_ASSERT_EQ_I(redraw, 2);
+    T_ASSERT_EQ_I(armed, -1);   /* the real handoff hasn't resolved yet */
+    T_ASSERT_EQ_I(engine_army_select_poll_confirm_result(&screen, &redraw,
+                                                          &cooldown, &armed), 0);
+    return 0;
+}
+
+/* Full round-trip: has-link opens the dialog, "Yes" (drive the type-5
+ * press animation to completion the way engine_confirm_dialog's own
+ * tests do) re-arms the SAME county's handoff, poll picks it up. */
+int test_army_select_confirm_or_open_yes_answer_arms_via_poll(void)
+{
+    army_select_reset();
+    TREC(4)[0x199] = 9;
+    TREC(4)[0x0a] = 2;
+    TREC(4)[0x0b] = 3;
+    int screen = -1, redraw = -1, cooldown = -1, col, row, armed = -1;
+    int fired = engine_army_select_confirm_or_open(4, 1, 8, 0x40,
+                                                   &screen, &redraw, &cooldown,
+                                                   &col, &row, &armed, NULL);
+    T_ASSERT_EQ_I(fired, 0);
+
+    /* Yes button: x in [0xa0+64, +32), y in [0xa0+46, +32) (see
+     * test_engine_confirm_dialog.c for the geometry provenance). */
+    engine_menu_click_in_t press;
+    memset(&press, 0, sizeof press);
+    press.cursor_x = 0xa0 + 64 + 4;
+    press.cursor_y = 0xa0 + 46 + 4;
+    press.lmb_newly_pressed = 1;
+    engine_confirm_dialog_input_step(&press);
+    press.lmb_newly_pressed = 0;
+    for (int i = 0; i < 20; i++) {
+        engine_confirm_dialog_input_step(&press);
+    }
+
+    T_ASSERT_EQ_I(engine_army_select_poll_confirm_result(&screen, &redraw,
+                                                          &cooldown, &armed), 1);
+    T_ASSERT_EQ_I(screen, 0x10);
+    T_ASSERT_EQ_I(cooldown, 0x28);
+    T_ASSERT_EQ_I(armed, 4);
+    /* Draining again returns 0 until the next dialog resolves. */
+    T_ASSERT_EQ_I(engine_army_select_poll_confirm_result(&screen, &redraw,
+                                                          &cooldown, &armed), 0);
     return 0;
 }
 

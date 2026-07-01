@@ -91,12 +91,19 @@ void engine_army_select_assign_task(int army_key, int task,
  * territory's (+0x0a,+0x0b) position, and re-derives a shared cell-index/
  * col/row scratch from its +0x0c cell offset (out params; no traced
  * consumer in this scope beyond the values themselves). */
+/* `*out_armed_county` is set to `county_key` whenever `ready` actually
+ * arms the handoff (retail DAT_0057c8c4 = DAT_0052afbc) — the screen-0x10
+ * hover classifier / click resolver (engine_army_move_confirm.h) read
+ * this back across later frames to know which county the pending move
+ * targets.  Left untouched on the not-ready path (retail doesn't write
+ * DAT_0057c8c4 there either). */
 void engine_army_select_open_handoff(int county_key, int ready,
                                      int local_player, int tile_stride,
                                      int map_width,
                                      int *out_screen, int *out_demand_redraw,
                                      int *out_handoff_cooldown,
-                                     int *out_cell_col, int *out_cell_row);
+                                     int *out_cell_col, int *out_cell_row,
+                                     int *out_armed_county);
 
 /* Port of FUN_004371ce.  The county-click "no pending link" branch: marks
  * a below-status repaint (FUN_0043cc56 → engine_dirty_rect_mark_below_
@@ -105,20 +112,40 @@ void engine_army_select_open_handoff(int county_key, int ready,
  * DIRECTLY with ready FORCED to 1 (retail sets DAT_0059151c = 1
  * unconditionally just before this branch, and nothing resets it before
  * FUN_0043723a runs synchronously in the same call — so "ready" is not an
- * external unknown on this path, unlike the confirm-dialog path below).
- * Has a link → SHOULD open a Yes/No confirm dialog first (FUN_0040e6f2,
- * which immediately resets ready to 0 — deferred, see
- * engine_army_move_confirm.h) and only open the handoff once confirmed.
- * Returns 1 if the handoff fired directly, 0 if a confirm dialog should
- * have opened (the caller can't act on a 0 yet — confirm-dialog click-
- * through isn't wired; documented so the gap is visible, not silent). */
+ * external unknown on this path).  Has a link → opens a Yes/No confirm
+ * dialog (engine_confirm_dialog_open, msg_id 0xd) with a callback that
+ * re-invokes engine_army_select_open_handoff reading the user's answer as
+ * `ready` — mirrors retail's FUN_0040e6f2(0xd,0xa0,0xa0,FUN_0043723a)
+ * exactly.  Because the callback can fire many frames later (after the
+ * confirm dialog's press-animation settles), its outcome can't flow back
+ * through THIS call's out-params — it's staged instead and must be
+ * drained via engine_army_select_poll_confirm_result() on a later tick
+ * (see that function's doc).  Returns 1 if the handoff fired directly
+ * (out-params valid immediately), 0 if a confirm dialog was opened
+ * instead (out-params still set to the dialog's screen/redraw; the
+ * REAL handoff outcome arrives later via the poll function). */
 int engine_army_select_confirm_or_open(int county_key,
                                        int local_player, int tile_stride,
                                        int map_width,
                                        int *out_screen, int *out_demand_redraw,
                                        int *out_handoff_cooldown,
                                        int *out_cell_col, int *out_cell_row,
+                                       int *out_armed_county,
                                        engine_dirty_rect_state_t *dirty);
+
+/* Drain a confirm-dialog result staged by the callback registered in
+ * engine_army_select_confirm_or_open (see its doc).  Call once per input
+ * tick (e.g. right after the ui_router hook fires) while a confirm
+ * dialog might be resolving.  Returns 1 and fills the out-params if a
+ * result is pending (clearing the pending flag); returns 0 (out-params
+ * untouched) otherwise.  The caller is expected to apply *out_screen /
+ * *out_demand_redraw to its dispatch state and persist *out_handoff_
+ * cooldown / *out_armed_county the same way it does for the direct-open
+ * path (mirrors engine.c's g_army_select_handoff_cooldown convention). */
+int engine_army_select_poll_confirm_result(int *out_screen,
+                                           int *out_demand_redraw,
+                                           int *out_handoff_cooldown,
+                                           int *out_armed_county);
 
 /* ── Main dispatcher — FUN_0043ce1a ───────────────────────────────────── */
 
@@ -163,6 +190,13 @@ typedef struct engine_army_select_state {
     int handoff_cooldown;     /* DAT_00553ecc (out — set by the screen-0x10
                               * handoff; the gate FUN_0042ff10's screen-0x10
                               * case checks before calling FUN_004a9252) */
+    int armed_county;         /* DAT_0057c8c4 (in/out, like handoff_cooldown
+                              * — the county key the screen-0x10 handoff
+                              * was armed on; only written when this call
+                              * actually arms/re-arms a handoff, so the
+                              * caller must seed it from its own persisted
+                              * copy and it passes through unchanged
+                              * otherwise) */
 } engine_army_select_state_t;
 
 typedef void (*engine_army_select_workforce_render_fn)(int army_key);

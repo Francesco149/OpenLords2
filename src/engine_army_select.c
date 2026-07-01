@@ -19,6 +19,7 @@
 #include "engine_path_field.h"     /* fill / clear_slot */
 #include "engine_combat.h"         /* g_combat_flag_530d0 / set_flag_567d0c */
 #include "engine_dirty_rect.h"
+#include "engine_confirm_dialog.h" /* the has-link Yes/No confirm modal */
 
 #define ARMY_REC(key)  (&g_per_army_768[(key) * 0x300])
 #define TERR_REC(key)  (&g_per_territory_420[(key) * 0x1a4])
@@ -148,7 +149,8 @@ void engine_army_select_open_handoff(int county_key, int ready,
                                      int map_width,
                                      int *out_screen, int *out_demand_redraw,
                                      int *out_handoff_cooldown,
-                                     int *out_cell_col, int *out_cell_row)
+                                     int *out_cell_col, int *out_cell_row,
+                                     int *out_armed_county)
 {
     *out_demand_redraw = 2;
     if (!ready) {
@@ -159,6 +161,7 @@ void engine_army_select_open_handoff(int county_key, int ready,
     engine_strat_cost_rebuild(g_overworld_map);
     *out_screen = 0x10;
     *out_handoff_cooldown = 0x28;
+    *out_armed_county = county_key;
 
     uint8_t *t = TERR_REC(county_key);
     int col = (int8_t)t[0x0a];
@@ -175,12 +178,47 @@ void engine_army_select_open_handoff(int county_key, int ready,
     *out_cell_row = map_width ? idx / map_width : 0;
 }
 
+/* Staged result of a confirm-dialog callback firing on a later tick than
+ * engine_army_select_confirm_or_open's own call — see the header doc for
+ * both functions.  Zero-initialized statics: no result pending until the
+ * first confirm dialog resolves. */
+static int g_confirm_result_pending;
+static int g_confirm_result_screen;
+static int g_confirm_result_redraw;
+static int g_confirm_result_cooldown;
+static int g_confirm_result_armed_county;
+
+/* The confirm-dialog's callback (retail FUN_0043723a called via
+ * FUN_0040e6f2(0xd,...)).  Zero-arg per engine_confirm_dialog_callback_fn
+ * — reads the answer + the county/player/geometry the opener stashed. */
+static int g_confirm_county_key;
+static int g_confirm_local_player;
+static int g_confirm_tile_stride;
+static int g_confirm_map_width;
+
+static void army_select_confirm_move_cb(void)
+{
+    int ready = engine_confirm_dialog_answer();
+    int screen = 0, redraw = 0, cooldown = 0, col = 0, row = 0, armed = 0;
+    engine_army_select_open_handoff(g_confirm_county_key, ready,
+                                    g_confirm_local_player,
+                                    g_confirm_tile_stride, g_confirm_map_width,
+                                    &screen, &redraw, &cooldown, &col, &row,
+                                    &armed);
+    g_confirm_result_pending      = 1;
+    g_confirm_result_screen       = screen;
+    g_confirm_result_redraw       = redraw;
+    g_confirm_result_cooldown     = cooldown;
+    g_confirm_result_armed_county = armed;
+}
+
 int engine_army_select_confirm_or_open(int county_key,
                                        int local_player, int tile_stride,
                                        int map_width,
                                        int *out_screen, int *out_demand_redraw,
                                        int *out_handoff_cooldown,
                                        int *out_cell_col, int *out_cell_row,
+                                       int *out_armed_county,
                                        engine_dirty_rect_state_t *dirty)
 {
     if (dirty != NULL) {
@@ -199,12 +237,37 @@ int engine_army_select_confirm_or_open(int county_key,
                                         tile_stride, map_width,
                                         out_screen, out_demand_redraw,
                                         out_handoff_cooldown,
-                                        out_cell_col, out_cell_row);
+                                        out_cell_col, out_cell_row,
+                                        out_armed_county);
         return 1;
     }
 
-    /* Confirm-dialog path (FUN_0040e6f2) — deferred; see header doc. */
+    /* Confirm-dialog path (FUN_0040e6f2(0xd,0xa0,0xa0,FUN_0043723a)).  The
+     * callback fires later (see header doc); stash what it needs. */
+    g_confirm_county_key   = county_key;
+    g_confirm_local_player = local_player;
+    g_confirm_tile_stride  = tile_stride;
+    g_confirm_map_width    = map_width;
+    engine_confirm_dialog_open(/*msg_id=*/0xd, 0xa0, 0xa0, /*prev_screen=*/0,
+                               army_select_confirm_move_cb,
+                               out_screen, out_demand_redraw);
     return 0;
+}
+
+int engine_army_select_poll_confirm_result(int *out_screen,
+                                           int *out_demand_redraw,
+                                           int *out_handoff_cooldown,
+                                           int *out_armed_county)
+{
+    if (!g_confirm_result_pending) {
+        return 0;
+    }
+    g_confirm_result_pending = 0;
+    *out_screen           = g_confirm_result_screen;
+    *out_demand_redraw    = g_confirm_result_redraw;
+    *out_handoff_cooldown = g_confirm_result_cooldown;
+    *out_armed_county     = g_confirm_result_armed_county;
+    return 1;
 }
 
 void engine_army_select_dispatch(const engine_army_select_in_t *in,
@@ -318,13 +381,15 @@ void engine_army_select_dispatch(const engine_army_select_in_t *in,
         }
         if (terr[0x199] == 0) {
             int screen, redraw, cooldown, col, row;
+            int armed = st->armed_county;
             engine_army_select_confirm_or_open(county_id, in->local_player,
                                                in->tile_stride, in->map_width,
                                                &screen, &redraw, &cooldown,
-                                               &col, &row, NULL);
+                                               &col, &row, &armed, NULL);
             st->screen = screen;
             st->demand_redraw = redraw;
             st->handoff_cooldown = cooldown;
+            st->armed_county = armed;
         } else {
             st->screen = 0x1d;
             st->demand_redraw = 2;
