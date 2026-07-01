@@ -1211,6 +1211,12 @@ struct test_case {
     X(ingame_screen4_generic_click_closes) \
     X(ingame_screen4_subhandler_consumes_no_close) \
     X(ingame_screen4_idle_no_click_stays_open) \
+    X(ingame_screen10_turn_busy_closes) \
+    X(ingame_screen10_edge_scroll_short_circuits) \
+    X(ingame_screen10_fresh_click_resolves_when_cooldown_elapsed) \
+    X(ingame_screen10_fresh_click_gated_by_cooldown) \
+    X(ingame_screen10_rmb_closes) \
+    X(ingame_screen10_idle_stays_open) \
     X(ingame_tail_tab_strip_resets_screen) \
     X(ingame_tail_tab_strip_not_run_without_press) \
     X(ingame_null_hooks_safe) \

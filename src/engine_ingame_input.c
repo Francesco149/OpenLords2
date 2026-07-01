@@ -1,14 +1,16 @@
 /*
  * OpenLords2 — in-game (strategic) input dispatcher.
  *
- * Port of FUN_0042ff10 @ 0x42ff10 (the strategic + terrain-info screens)
- * and FUN_00432640 @ 0x432640 (the cursor region classifier).  See
- * engine_ingame_input.h for the design + scope notes, and
- * docs/plans/ingame-input-handler.md for the frontier plan.
+ * Port of FUN_0042ff10 @ 0x42ff10 (the strategic + terrain-info + army-move
+ * handoff screens) and FUN_00432640 @ 0x432640 (the cursor region
+ * classifier).  See engine_ingame_input.h for the design + scope notes, and
+ * docs/plans/ingame-input-handler.md / army-select-move.md for the frontier
+ * plans.
  *
  * Branch shape + sub-handler call order are verbatim from the decompile
  * (docs/decompiled/by-address/42ff10.c lines 23-63 strategic, 174-200
- * terrain-info, 935-957 the shared tail + edge latch).
+ * terrain-info, 553-572 army-move handoff, 935-957 the shared tail + edge
+ * latch).
  */
 
 #include "engine_ingame_input.h"
@@ -158,6 +160,31 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                 } else if (in->rmb_released != 0) {
                     st->screen = 0;
                     call_action(hooks->terrain_info_close, in, st);
+                    consumed = 1;
+                }
+            } else if (st->screen == 0x10) {
+                /* ───────── ARMY-MOVE/MERGE HANDOFF SCREEN (DAT_004eac50 == 0x10) ─────────
+                 * Armed by army_select's re-click handoff (engine_army_
+                 * select_open_handoff); the SECOND click here resolves
+                 * the move/merge target (engine_army_move_confirm_
+                 * click_resolve).  No HUD sub-handlers on this screen —
+                 * just edge-scroll, then the fresh-click resolve gated by
+                 * the handoff cooldown (so the SAME click that armed the
+                 * handoff can't also resolve as the destination click). */
+                if (!turn_idle) {
+                    st->screen = 0;
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                } else if (call_consume(hooks->edge_scroll, in, st) != 0) {
+                    consumed = 1;
+                } else if (in->lmb_pressed != 0 && in->handoff_cooldown < 1) {
+                    st->screen = 0;
+                    st->hold_56d64c = 1;
+                    call_action(hooks->army_move_click_resolve, in, st);
+                    consumed = 1;
+                } else if (in->rmb_released != 0) {
+                    st->screen = 0;
+                    st->demand_redraw = 2;
                     consumed = 1;
                 }
             }

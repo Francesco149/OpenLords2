@@ -24,11 +24,15 @@
  *     (turn-busy / edge-scroll / generic-click / RMB) closes the popup
  *     (screen → 0 + FUN_0043cc56 cleanup) — the close half of the strategic
  *     RMB-open, so the port has the full open↔close pair
+ *   - the ARMY-MOVE/MERGE HANDOFF screen (DAT_004eac50 == 0x10): edge-
+ *     scroll, then a fresh LMB press (gated on the handoff cooldown)
+ *     resolves the move/merge target via engine_army_move_confirm_
+ *     click_resolve — see docs/plans/army-select-move.md's tier-5 table
  *   - the shared tail (right-panel tab strip + the screen-0x0f commit) and
  *     the tail edge latch.
- * The ~30 OTHER screen cases (army-move/battle sub-modes, county/market/
- * report sub-screens) are deferred — they belong to screens the port does
- * not render yet; each lands with its screen.  See the plan doc.
+ * The ~29 OTHER screen cases (battle sub-modes, county/market/report
+ * sub-screens) are deferred — they belong to screens the port does not
+ * render yet; each lands with its screen.  See the plan doc.
  *
  * DESIGN.  The dispatcher is a state machine over many retail globals, and
  * its sub-handlers mutate the same state it reads.  Modeled as: a per-frame
@@ -78,6 +82,10 @@ typedef struct engine_ingame_input_in {
     int turn_progress;    /* DAT_00553fc8 — turn handshake 0/1/2 */
     int turn_busy;        /* DAT_0055403c — turn-processing busy flag */
     int timeout_reached;  /* DAT_00553018 — turn-timer expired */
+    int handoff_cooldown; /* DAT_00553ecc — the screen-0x10 handoff's "not
+                           * yet" gate (engine_army_select_state_t.
+                           * handoff_cooldown, persisted by the caller);
+                           * only read on the screen-0x10 arm. */
 } engine_ingame_input_in_t;
 
 /* ── Mutable engine state the dispatcher + its handlers read/write ─────
@@ -133,6 +141,10 @@ typedef struct engine_ingame_hooks {
     engine_ingame_action_fn  terrain_info_open;  /* FUN_0043caf4 terrain-info open (map RMB) */
     engine_ingame_action_fn  terrain_info_close; /* FUN_0043cc56 terrain-info cleanup (screen-4 close) */
     engine_ingame_action_fn  screen0f_commit;    /* FUN_00427d19 + FUN_0041438c (tail, screen 0xf) */
+    engine_ingame_action_fn  army_move_click_resolve; /* FUN_004a9252 screen-0x10
+                                                        * click resolve (map LMB,
+                                                        * fresh press + cooldown
+                                                        * elapsed) */
 } engine_ingame_hooks_t;
 
 /* Run one in-game input frame (retail FUN_0042ff10).  Reads `in`, mutates

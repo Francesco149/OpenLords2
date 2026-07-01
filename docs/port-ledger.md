@@ -651,7 +651,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a8d9c | FUN_004a8d9c | 111 | engine_army_select.c, engine_army_select.h |
 | 0x4a8e0b | FUN_004a8e0b | 943 | engine_army_move_confirm.c, engine_army_move_confirm.h |
 | 0x4a91ba | FUN_004a91ba | 152 | engine_army_move_confirm.c, engine_army_move_confirm.h |
-| 0x4a9252 | FUN_004a9252 | 288 | engine_army_move_confirm.c, engine_army_move_confirm.h, engine_army_select.h (+1) |
+| 0x4a9252 | FUN_004a9252 | 288 | engine_army_move_confirm.c, engine_army_move_confirm.h, engine_army_select.h (+2) |
 | 0x4a9372 | FUN_004a9372 | 669 | engine.c, engine_army_move_confirm.c, engine_army_move_confirm.h |
 | 0x4a960f | FUN_004a960f | 334 | engine_army_move_confirm.c, engine_army_move_confirm.h |
 | 0x4a975d | FUN_004a975d | 222 | engine_army_move_confirm.c, engine_army_move_confirm.h |

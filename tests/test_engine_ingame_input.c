@@ -21,6 +21,7 @@ enum {
     H_EDGE = 1, H_DRAG, H_HUDA, H_KBD, H_HUDB, H_GRID, H_SCROLL, H_PANEL,
     H_TAB, H_GENERIC, H_TISUB, H_DISMISSCHIP, H_UIROUTER,
     A_DISMISSMAP, A_MODE2, A_ARMY, A_TIOPEN, A_TICLOSE, A_0FCOMMIT,
+    A_ARMYMOVE,
     H_MAX
 };
 
@@ -63,6 +64,7 @@ DEF_ACTION(hk_army,       A_ARMY)
 DEF_ACTION(hk_tiopen,     A_TIOPEN)
 DEF_ACTION(hk_ticlose,    A_TICLOSE)
 DEF_ACTION(hk_0fcommit,   A_0FCOMMIT)
+DEF_ACTION(hk_armymove,   A_ARMYMOVE)
 
 static const engine_ingame_hooks_t REC_HOOKS = {
     .dismiss_chip       = hk_dismissc,
@@ -84,6 +86,7 @@ static const engine_ingame_hooks_t REC_HOOKS = {
     .terrain_info_open  = hk_tiopen,
     .terrain_info_close = hk_ticlose,
     .screen0f_commit    = hk_0fcommit,
+    .army_move_click_resolve = hk_armymove,
 };
 
 static void rec_reset(void)
@@ -449,6 +452,89 @@ int test_ingame_screen4_idle_no_click_stays_open(void)
     engine_ingame_input_dispatch(&in, &st, &REC_HOOKS);
     T_ASSERT_EQ_I(st.screen, 4);
     T_ASSERT_EQ_I(log_has(A_TICLOSE), 0);
+    return 0;
+}
+
+/* ── screen 0x10 (army-move/merge handoff) ───────────────────────────── */
+
+int test_ingame_screen10_turn_busy_closes(void)
+{
+    rec_reset();
+    engine_ingame_input_in_t in = base_in();
+    in.turn_progress = 1;
+    engine_ingame_state_t st = base_st(0x10);
+    engine_ingame_input_dispatch(&in, &st, &REC_HOOKS);
+    T_ASSERT_EQ_I(st.screen, 0);
+    T_ASSERT_EQ_I(st.demand_redraw, 2);
+    T_ASSERT_EQ_I(log_has(H_EDGE), 0);       /* busy closes before edge-scroll */
+    T_ASSERT_EQ_I(log_has(A_ARMYMOVE), 0);
+    return 0;
+}
+
+int test_ingame_screen10_edge_scroll_short_circuits(void)
+{
+    rec_reset();
+    g_prog[H_EDGE] = 1;
+    engine_ingame_input_in_t in = base_in();
+    in.lmb_pressed = 1;   /* would otherwise resolve — edge-scroll wins first */
+    engine_ingame_state_t st = base_st(0x10);
+    engine_ingame_input_dispatch(&in, &st, &REC_HOOKS);
+    T_ASSERT_EQ_I(st.screen, 0x10);          /* untouched: edge-scroll consumed */
+    T_ASSERT_EQ_I(log_has(A_ARMYMOVE), 0);
+    return 0;
+}
+
+int test_ingame_screen10_fresh_click_resolves_when_cooldown_elapsed(void)
+{
+    rec_reset();
+    engine_ingame_input_in_t in = base_in();
+    in.lmb_pressed = 1;
+    in.handoff_cooldown = 0;
+    engine_ingame_state_t st = base_st(0x10);
+    engine_ingame_input_dispatch(&in, &st, &REC_HOOKS);
+    T_ASSERT_EQ_I(st.screen, 0);
+    T_ASSERT_EQ_I(st.hold_56d64c, 1);
+    T_ASSERT_EQ_I(log_has(A_ARMYMOVE), 1);
+    T_ASSERT_EQ_I(g_screen_at[A_ARMYMOVE], 0);   /* screen already reset before the call */
+    return 0;
+}
+
+int test_ingame_screen10_fresh_click_gated_by_cooldown(void)
+{
+    /* Same click that just armed the handoff must not also resolve it —
+     * the cooldown (still running) blocks the resolve this frame. */
+    rec_reset();
+    engine_ingame_input_in_t in = base_in();
+    in.lmb_pressed = 1;
+    in.handoff_cooldown = 5;
+    engine_ingame_state_t st = base_st(0x10);
+    engine_ingame_input_dispatch(&in, &st, &REC_HOOKS);
+    T_ASSERT_EQ_I(st.screen, 0x10);
+    T_ASSERT_EQ_I(log_has(A_ARMYMOVE), 0);
+    return 0;
+}
+
+int test_ingame_screen10_rmb_closes(void)
+{
+    rec_reset();
+    engine_ingame_input_in_t in = base_in();
+    in.rmb_released = 1;
+    engine_ingame_state_t st = base_st(0x10);
+    engine_ingame_input_dispatch(&in, &st, &REC_HOOKS);
+    T_ASSERT_EQ_I(st.screen, 0);
+    T_ASSERT_EQ_I(st.demand_redraw, 2);
+    T_ASSERT_EQ_I(log_has(A_ARMYMOVE), 0);
+    return 0;
+}
+
+int test_ingame_screen10_idle_stays_open(void)
+{
+    rec_reset();
+    engine_ingame_input_in_t in = base_in();   /* idle, no click */
+    engine_ingame_state_t st = base_st(0x10);
+    engine_ingame_input_dispatch(&in, &st, &REC_HOOKS);
+    T_ASSERT_EQ_I(st.screen, 0x10);
+    T_ASSERT_EQ_I(log_has(A_ARMYMOVE), 0);
     return 0;
 }
 

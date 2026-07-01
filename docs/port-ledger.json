@@ -17332,7 +17332,8 @@
     "src/engine_army_move_confirm.c",
     "src/engine_army_move_confirm.h",
     "src/engine_army_select.h",
-    "src/engine_confirm_dialog.h"
+    "src/engine_confirm_dialog.h",
+    "src/engine_ingame_input.h"
    ]
   },
   {
