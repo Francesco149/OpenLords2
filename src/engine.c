@@ -783,8 +783,20 @@ static void ti_panel_render(const engine_terrain_info_open_in_t *in,
 static int ti_dismiss_chip(const engine_ingame_input_in_t *in,
                            engine_ingame_state_t *st)
 {
-    (void)in; (void)st;
-    return engine_popup_scroll_input_step();
+    (void)in;
+    int consumed = engine_popup_scroll_input_step();
+    /* engine_popup_scroll_input_step can dismiss the open scroll, which
+     * (for one opened over the 0x27 report screen) restores the screen
+     * via engine_set_current_screen() directly — an out-of-band global
+     * write the dispatcher's own st->screen snapshot (taken before this
+     * hook ran) doesn't know about.  Without this resync, engine_tick_
+     * ingame_input_step's post-dispatch write-back
+     * (`if (st.screen != g_sim_current_screen) engine_set_current_screen
+     * (st.screen)`) stomps the fresh restore right back to the stale
+     * pre-dismiss value, in the SAME frame — the screen never actually
+     * leaves 0x27 and every later hint/click is silently dropped. */
+    st->screen = g_sim_current_screen;
+    return consumed;
 }
 
 /* army_select hook (FUN_0043278b, recenter-the-camera-on-the-hovered-army

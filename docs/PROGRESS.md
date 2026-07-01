@@ -7,6 +7,77 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-07-01 (session 15) — FIXED the screen-0x27 auto-dismiss gap session 14 found: a real out-of-band-global-write bug in the in-game dispatcher's dismiss hook, not a rendering issue. Autonomous session, direct continuation of session 14.
+
+Picked up session 14's own next-candidate: the screen-0x27 report/welcome
+scroll getting permanently stuck open on a loaded-save scenario, blocking
+ANY scripted/organic click-testing reached via "Load a game". Root-caused
+via a `--input-segtrace` reproduction (`tools/traces/screen27_dismiss_
+regress.jsonl`, promoted from the scratch trace that first caught it) with
+temporary frame-by-frame diagnostics (added, used, then fully reverted —
+the committed diff is the one-function fix, no debug scaffolding left).
+
+**Root cause.** `ti_dismiss_chip` (engine.c, bound as the in-game
+dispatcher's FIRST-checked hook) calls `engine_popup_scroll_input_step()`,
+which can dismiss the open scroll. When the scroll was opened over the
+0x27 report screen, the dismiss chain (`engine_popup_scroll_dismiss` →
+`engine_popup_screen27_restore`) restores the screen via `engine_set_
+current_screen()` — a direct, out-of-band write to the global `g_sim_
+current_screen`, bypassing the dispatcher's own `engine_ingame_state_t`
+struct entirely (this hook never touched `st->screen`). `engine_tick_
+ingame_input_step`'s post-dispatch write-back
+(`if (st.screen != g_sim_current_screen) engine_set_current_screen(st.
+screen)`) then compares the FRESH global against `st.screen` — which
+still holds its STALE pre-dispatch snapshot (39, captured before this
+frame's dismiss ran) — sees a mismatch, and re-applies the stale value,
+undoing the restore in the SAME frame. Net effect: the very first welcome
+hint (0xc8) opens, dismisses, and the screen instantly flips right back
+to 0x27 — permanently, since nothing else ever touches `g_sim_current_
+screen` again once the event queue drains.
+
+Confirmed via frame-by-frame instrumentation of the dismiss/restore call
+chain: `engine_popup_screen27_restore` genuinely called `engine_set_
+current_screen(0)` and its own local read confirmed screen==0 — but by
+the time the SAME frame's tick finished, screen was back to 39. Traced
+directly to `engine_set_current_screen(39)` firing again, 2 lines later,
+from `engine_tick_ingame_input_step`'s write-back — not a different
+producer, not a race, just a stale-snapshot bug.
+
+**Fix**: `ti_dismiss_chip` now resyncs `st->screen = g_sim_current_screen`
+after calling `engine_popup_scroll_input_step()`, so the dispatcher's own
+bookkeeping (and the caller's write-back decision) sees the restore that
+already happened. One function, ~10 lines. Confirmed via the reproduction
+trace: the welcome series (0xc8/0xc9/0xca) now cycles cleanly — screen
+0→39→0→39→0→39→0 — and stays at 0 (the strategic map) afterward, instead
+of getting stuck at 39 forever. Screenshot of the settled map pushed to
+the feed. 2253/2253 host tests still green (this is a pure engine.c
+integration-layer bug — not part of the host suite, same as main.c/gfx.c
+— verified live instead).
+
+**A SEPARATE, deeper blocker found while finishing the reproduction**: the
+3 scripted clicks in the trace still don't reach `engine_army_select` in
+this environment. `ti_edge_scroll` reads `g_input_raw_cursor_x/y`, which
+come from a REAL `GetCursorPos()` poll — in this headless/WSL test
+environment that returns the actual (and essentially arbitrary) desktop
+mouse position, completely disconnected from the trace's synthesized
+WM_LBUTTONDOWN lParam. The garbage raw position (observed: (1520, 502)
+against a 640×480 client rect) makes `engine_camera_edge_scroll`'s
+"cursor near window edge" hit-test see the cursor as permanently past an
+edge, so it consumes every click before army_select ever runs. This is a
+genuinely different, deeper issue (a testing-environment/mouse-polling
+gap, not a screen-state bug) — documented in the regression trace's own
+header rather than chased further this session. Would need either real
+mouse control in the test environment or a headless-seat rework that
+feeds the synthesized coordinate into the raw-cursor pipeline too.
+
+**Next candidate**: the raw-cursor-position gap above (its own frontier —
+blocks organic click-testing of ANY map-area feature, not just army-
+select) is the most direct continuation. Otherwise back to the standing
+list: the workforce-render zoom-diff pass (`FUN_00412143`) or the
+combat-init A/V wiring ([[project_next_chip_4485a5]]).
+
+---
+
 ## 2026-07-01 (session 14) — the screen-0x10 army-move/merge confirm chain LANDED + wired live: the 0x11 popup's real producer is finally reachable from a click, not just `--force-popup`. Autonomous session.
 
 Picked up PROGRESS.md's own "next candidate" from session 13: traced the

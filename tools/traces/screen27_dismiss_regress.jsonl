@@ -1,0 +1,76 @@
+# Regression trace for the screen-0x27 auto-dismiss bug (session 14 of
+# project_event_popup_arms): load a save, let the post-load welcome/report
+# series (0xc8/0xc9/0xca) run with {"auto_dismiss":1}, then click a map cell
+# 3x well after it should have settled.  Load prefix + first click
+# coordinate copied verbatim from click_county.jsonl (already proven to
+# land on a clickable map cell).
+#
+# What this caught: ti_dismiss_chip (engine.c) called engine_popup_scroll_
+# input_step() without resyncing its `st->screen` from the global after —
+# a dismissed scroll opened over screen 0x27 restores the screen via
+# engine_set_current_screen() directly (an out-of-band global write), but
+# engine_tick_ingame_input_step's post-dispatch write-back
+# (`if (st.screen != g_sim_current_screen) engine_set_current_screen(st.
+# screen)`) used to stomp that fresh restore right back to the STALE
+# pre-dismiss value in the SAME frame — the screen never actually left
+# 0x27 and every later hint/click silently dropped.  Fixed by resyncing
+# st->screen = g_sim_current_screen at the end of ti_dismiss_chip.
+#
+# How to check: watch engine_set_current_screen's caller
+# (engine_tick_ingame_input_step / engine.c) — before the fix the screen
+# gets stuck at 39 (0x27) forever after the first welcome hint; after the
+# fix it cycles cleanly through all 3 hints and settles at screen 0. No
+# built-in assertion here (this is a live/manual trace, not a host test —
+# engine.c isn't part of the host suite) — diff the 'settled' capture's
+# screen value, or re-add a temporary printf in engine_set_current_screen
+# to watch the transitions.
+#
+# STILL BLOCKED (separate, deeper issue, not this bug): the 3 clicks below
+# don't actually reach engine_army_select in this environment — ti_edge_
+# scroll reads g_input_raw_cursor_x/y (populated by a real GetCursorPos()
+# poll), which in this headless/WSL environment returns a real desktop
+# mouse position disconnected from this trace's synthesized WM_LBUTTONDOWN
+# lParam (i.e. the intended (260,250) click coordinate never reaches the
+# raw-cursor pipeline), so edge-scroll's "cursor near window edge" hit-
+# test sees garbage and consumes every click before army_select ever
+# runs. A future frontier: needs either real mouse control in the test
+# environment, or reworking the headless seat to feed the synthesized
+# coordinate into g_input_raw_cursor_x/y too.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "before_clicks"}
+# click 1, well past the welcome/report-series auto-dismiss window (the
+# t=24-104 and t=150-254 attempts both landed while screen was still 39 —
+# the loaded save's report chain runs longer than a fresh new-game's ~t90):
+# select whatever is at (260,250)
+{"t": 900, "m": 512, "w": 0, "l": 16384260}
+{"t": 904, "m": 513, "w": 1, "l": 16384260}
+{"t": 908, "m": 514, "w": 0, "l": 16384260}
+{"capture": 930, "label": "after_click1"}
+# click 2 (same cell, ~1s later): re-click an owned county with no link ->
+# should arm the screen-0x10 handoff per engine_army_select_confirm_or_open
+{"t": 970, "m": 513, "w": 1, "l": 16384260}
+{"t": 974, "m": 514, "w": 0, "l": 16384260}
+{"capture": 1000, "label": "after_click2_armed_0x10"}
+# click 3 (same cell again): screen-0x10's click resolver should fire
+{"t": 1010, "m": 513, "w": 1, "l": 16384260}
+{"t": 1014, "m": 514, "w": 0, "l": 16384260}
+{"capture": 1040, "label": "after_click3_resolved"}
+{"capture": 1070, "label": "settled"}
