@@ -7,6 +7,104 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-07-01 (session 14) — the screen-0x10 army-move/merge confirm chain LANDED + wired live: the 0x11 popup's real producer is finally reachable from a click, not just `--force-popup`. Autonomous session.
+
+Picked up PROGRESS.md's own "next candidate" from session 13: traced the
+confirm-dialog click system session 13 flagged as "a generic dialog-click
+system... its own frontier". Turned out to be the SAME generic Yes/No modal
+the title-menu already partially uses (`FUN_004ba9c8`'s 0x1f arm), just
+needing its own screen-0x1e arm — r2-verified the 2-button table byte-for-
+byte (`r2 -q -c 'pxr 128 @ 0x4dd2e0' vendor/original/Lords2.exe`) and found
+the underlying hit-test/render primitives (`engine_menu_button_dispatch`/
+`engine_button_render_list`) were already ported and directly reusable.
+
+**Landed, in order:**
+1. **`engine_confirm_dialog.c/h`** (new module) — the generic Yes/No modal
+   itself: `FUN_0040e6f2` (opener) + `FUN_0040ccfa` (render) + `FUN_00434e1f`
+   (button-fire handler). 5 host tests.
+2. **Wired into `engine_army_select_confirm_or_open`'s "has a pending link"
+   branch** — previously stubbed `return 0` with a TODO; now actually opens
+   the dialog, with a staged-result/poll mechanism (`engine_army_select_
+   poll_confirm_result`) since the callback can fire many frames later than
+   the original call (the type-5 button needs its ~20-frame press animation
+   to settle). Also threaded `DAT_0057c8c4` (which county a handoff is armed
+   on) out of `engine_army_select_open_handoff` for the first time.
+3. **`engine_army_move_confirm.c/h`** (new module) — the actual screen-0x10
+   machinery: `FUN_004a8e0b` (per-frame hover classifier, render-tick side)
+   + `FUN_004a9252` (click resolver, input-tick side) + its 4 confirm-dialog
+   siblings (`FUN_004a983b/4a960f/4a975d/4a9372` — the last one posts code
+   0xa6, **the 0x11 popup itself**) + `FUN_004a98fe` (the merge/move EXECUTE
+   primitive). All 5 resolver-side functions share retail's identical
+   shape, so each sibling is written once as a bare zero-arg confirm-dialog
+   callback, reused for BOTH the direct-call path (answer forced to 1) and
+   the dialog path — mirrors retail's own DAT_0059151c reuse exactly, no
+   invented parameter passing. 6 host tests, including one full end-to-end
+   run: synthetic garrison-cap scenario → hover classify arms it → click
+   resolve opens the dialog → clicking "Yes" (driving the real press-
+   animation to completion) → the actual 0xa6/0x11 event posts with correct
+   audience/payload/flag6 fields.
+4. **Screen-0x10 dispatcher case** added to `engine_ingame_input.c` (mirrors
+   the raw retail shape at `docs/decompiled/by-address/42ff10.c:553-572`
+   exactly: turn-busy bail, edge-scroll first, fresh-click-gated-by-
+   cooldown resolve, RMB bail, fall through to the shared tail otherwise).
+   6 host tests.
+5. **engine.c wiring**: `g_army_select_armed_county` (new no-home-in-struct
+   static, mirrors the existing `g_army_select_handoff_cooldown`/
+   `hud_outcome` pattern); `ti_army_move_click_resolve` + `ti_ui_router`
+   hooks (the latter was NULL — "0 in-game" — since session 9's skeleton);
+   the screen-0x10 (pure reclassify) and screen-0x1e (panel+text+buttons)
+   render-tick arms.
+
+**A genuine surprise mid-session:** `FUN_004a8e0b`'s hover-range gate reads
+retail `DAT_00500c30`, which LOOKED like a producer-less table at first (a
+`static int16_t` array, all-zero in the binary's initialized data, no
+writer found by grepping the decompile) — engine_overlay_render.h's OWN
+doc names a DIFFERENT-looking table at the same base address ("per-cell
+sprite-size... indexed by cell/8"), which briefly looked like a genuine
+dual-use-byte situation worth flagging as unresolved. Turned out to be
+neither: `engine_path_field.h`'s OWN header comment already names it
+directly — "the persistent field 0x500c30" — it's simply `engine_path_
+field_fill`'s ALREADY-FLOODED cost field for the local player's slot
+(flooded by `engine_army_select_open_handoff` when arming the handoff),
+exposed via the already-tested `engine_path_field_cost()` accessor. No new
+binding needed, just a direct call — a reminder to check a data address's
+OTHER existing consumers/doc comments before assuming "no producer found"
+from a decompile grep alone.
+
+**Verification:** `--force-popup 0x11:0xa6:4:4` regression-checked (still
+renders correctly, screenshot pushed to the feed) — the render arm itself
+wasn't touched this session. 2253/2253 host tests green throughout (28 new:
+5 confirm-dialog, 2 army-select wiring, 6 hover/click-resolve, 6 dispatcher,
+plus updates to 2 existing army-select tests). Cross-compile clean.
+
+**Live organic-click verification attempted, blocked on an UNRELATED
+pre-existing gap, not reverted:** built a scripted `--input-segtrace` trace
+(load a save → click an owned county 3×) to drive the chain with a real
+click sequence. The load succeeds and reaches the strategic map, but the
+loaded save's post-load report/welcome sequence flips to screen 0x27 and
+**never returns** — `{"auto_dismiss": 1}`'s reactive RMB-synthesis only
+fires while `g_sim_extended_pause != 0`, which this particular screen
+apparently doesn't set, so nothing ever dismisses it and every subsequent
+click lands on screen 39, never reaching the screen-0 map-click branch.
+This is the ALREADY-DOCUMENTED gap from [[project_loadflip_rng_clarified]]
+("unported report-screen 0x27 scroll renderer... port posts welcome 0xc8 +
+flips to 0x27 but renders nothing") — not something this session
+introduced, and not something that should block calling THIS session's
+chain done, given 0x10/0x11/0x12's own precedent (host tests + `--force-
+popup`, no full organic click run) already sets the verification bar this
+codebase uses for popup arms. Temporary diagnostic `printf`s added while
+narrowing this down were reverted (`git checkout -- src/engine.c`) before
+committing — the committed engine.c has no debug scaffolding.
+
+**Next candidate:** the screen-0x27 report/welcome-dismiss gap itself is
+now a concretely scoped, separate frontier (blocks organic-click testing
+of ANY in-game feature reached via a loaded save, not just this one) —
+worth a session of its own. Otherwise: the workforce-render zoom-diff pass
+(`FUN_00412143`, still deferred from session 13) or the combat-init A/V
+wiring ([[project_next_chip_4485a5]]).
+
+---
+
 ## 2026-07-01 (session 13) — the army_select + edge_scroll hooks LANDED + wired live; the 0x11 event-popup render arm LANDED + visually verified. Session 12's "5 unported callees, ~3.1 KB" estimate corrected to the true closure (32 functions, ~9.3 KB, fully scoped). Autonomous session.
 
 Picked up session 12's re-scoped popup-arm leads (army-move click path vs.
