@@ -7,6 +7,105 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-07-01 (session 18) — fully organic screen-0x10 click-driven verification, closing the gap sessions 13/14/16 left open — and it found 2 real bugs. Autonomous session, same day as session 17.
+
+Picked up the standing next-step from [[project_event_popup_arms]] /
+[[project_headless_cursor_gap]]: the screen-0x10 army-move/merge confirm
+chain (landed session 14) had only been verified via `--force-popup` +
+host tests; the one reliably-clickable coordinate in the regression trace
+(260,250) resolves to an ARMY (kind-3), not a plain owned county
+(kind-1), so the "click an owned county → arm screen 0x10 → click again
+→ resolve" path had never actually run through the real dispatch code
+end-to-end. Session 16 flagged two ways to close this: scroll to a
+different county's keep, or read the save's territory records directly
+to find one up front. Took the second path.
+
+**Finding #1 — the default pinned reference save has ZERO ownable
+counties.** Added a temporary diagnostic dump of `g_per_territory_420`
+(kind/col/row/link per record) at the `MAP_FREEROAM` anchor: the fresh
+map-0 new-game save (`_ol2_reference/lastturn.sav`, pinned since
+[[project_save_redirect_reproducibility]]) has exactly 6 records, all
+kind==3 (the starting armies) — no player has built a keep yet at turn 1,
+so `engine_army_select_dispatch`'s "owned county" branch (kind==1) is
+*structurally unreachable* from this save. Session 16's blind coordinate
+sweep could never have found a plain county, independent of tile-sampling
+technique — retroactively explains that session's dead end.
+
+Found older backup saves in the game dir (`old_turn.sav`/`test.sav`,
+map 17, from a pre-save-redirect session) with one kind==1 record (county
+key 4, map cell col=30/row=46) — but it's owned by player 2, not
+`local_player`(1), **and** `g_overworld_map`'s own reciprocal stamp at
+that cell is 0 (the array `g_per_territory_420` and the array
+`g_overworld_map` disagree about whether anything is placed there —
+i.e. the two arrays were never fully synced for this specific backup,
+independent of anything this session touched). Built a byte-patch fixture
+(`tools/make_owned_county_fixture.py`, new script) that copies the save,
+fixes the owner byte + the reciprocal stamp, and overrides the carried
+camera scroll so the county sits at screen-diamond cell (4,15) — the
+SAME cell the existing (260,250)/`lParam 16384260` coordinate (used by
+`click_county.jsonl` etc.) already resolves to at any scroll. New trace
+`tools/traces/plain_county_click.jsonl` documents the full derivation
+(had to invert `engine_map_init_build_cells`'s rotation-0 diamond
+projection — naive "screen cell + scroll = map col/row" addition is
+WRONG, landed on an unfilled diamond gap and silently produced
+`county_id=0` despite `engine_camera_cursor_to_cell` reporting `ready=1`;
+verified by reimplementing the projection in Python and cross-checking
+against the *other* already-known-working coordinate).
+
+**Finding #2 (real bug, FIXED) — screen 0x10/0x1e's per-frame refresh was
+wrongly demand-redraw-gated.** `engine_tick_title_render_step` (engine.c)
+had the screen-0x10 hover-reclassify step (`engine_tick_army_move_hover_
+step`, which decrements the handoff cooldown gating the second click) and
+the screen-0x1e confirm-dialog refresh nested inside `if (g_demand_redraw
+!= 0)` — but retail's equivalent (`FUN_004ba26e`) runs these arms
+UNCONDITIONALLY every frame (same category as the title screen's own
+per-frame button-hover refresh, already handled correctly elsewhere in
+this same function). Net effect: once nothing else requested a redraw,
+the handoff cooldown froze forever and a second click could never resolve
+— a real interactive soft-lock on the just-landed army-move feature under
+normal idle-mouse play, invisible to `--force-popup`/host-test coverage
+since neither exercises the live per-frame tick loop across idle frames.
+Fixed by hoisting both arms out of the demand-redraw gate.
+
+**Finding #3 (real bug, FIXED) — `strat_draw_menu_bar`'s leftover
+`engine_set_current_screen(0)`.** Added in commit 8c2eb01 when this
+render path only ever served screen 0 (retail's own `FUN_00419c78`
+*reads* the screen id for its own gating but never writes it — confirmed
+via the decompile, so this was never a faithful-port requirement). Once
+commit d7cc930 wired the every-frame map composite to also fire on screen
+0x10, this call started stomping screen 0x10 back to 0 on literally the
+first frame after arming — the army-move handoff screen was unreachable
+in real play the instant it was entered, every time, regardless of the
+demand-redraw fix above. Confirmed redundant everywhere else (both
+bring-up seats and the live load path already set the screen themselves
+before rendering) and removed.
+
+With both fixes, the full click-driven sequence now runs for real: click
+1 arms screen 0->16 via `engine_army_select_dispatch` ->
+`engine_army_select_confirm_or_open` -> `engine_army_select_open_
+handoff`; retail's own first-time tutorial hint (code 0xd2, "entering the
+army-move screen") correctly fires, flips to screen 0x27, auto-dismisses,
+and correctly RESTORES to 16 (not 0) via `engine_popup_screen27_restore`
+— a nice confirmation that path is also right; click 2 reaches
+`ti_army_move_click_resolve` -> `engine_army_move_confirm_click_resolve`
+for the first time via a real click (screen back to 0, no notice posted
+since the click retargeted the same already-armed county — a plausible
+no-op classification, not chased further). Screenshots of all 3 stages
+pushed to the feed. 2278/2278 host tests still green throughout (this
+frontier is entirely engine.c/engine_screen_strat.c, outside the host
+suite, consistent with every prior session touching these files).
+
+**Next candidate**: click a *different* target on the second click (e.g.
+another owned army, or across an enemy border) to organically exercise
+one of `FUN_004a9252`'s 4 sibling outcome codes (0xa4/0xa5/0xa6/0xa7 family
+already verified via `--force-popup`, but never via a real 2-distinct-
+target click) — a smaller, well-scoped follow-up now that the fixture +
+trace infrastructure exists. Otherwise back to the standing list: the
+cow/castle anim-phase residual ([[project_strat_map_render_gaps]]) or the
+combat-init A/V wiring ([[project_next_chip_4485a5]]).
+
+---
+
 ## 2026-07-01 (session 17) — the workforce icon-grid overlay (`FUN_00412143` + 9 leaves) LANDED + wired live + visually verified. Autonomous session, same day as session 16.
 
 Picked up the standing "workforce icon-grid render" deferred item

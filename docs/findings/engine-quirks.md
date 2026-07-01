@@ -7230,3 +7230,75 @@ brand-new keep shows "50 troops assigned as a garrison" (`k_keep_tbl[1]`),
 an upgrade shows "50 extra troops sent to castle"
 (`k_keep_tbl[4]-k_keep_tbl[2]`), confirming `k_keep_tbl` is a garrison
 troop-count table, not population or gold as its old name guesses suggested.
+
+## 211 — screen 0x10/0x1e's per-frame refresh was nested inside the demand-redraw gate, freezing the handoff cooldown under idle-mouse play
+
+`engine_tick_title_render_step` (engine.c) is the port's stand-in for
+retail's two DISTINCT per-frame render actions inside `FUN_004b99c0`: the
+demand-redraw seam (`FUN_0040f1a0`, a full repaint only when a state
+handler explicitly asked for one) and the unconditional per-frame UI
+refresh (`FUN_004ba26e`, which runs EVERY tick regardless — the mechanism
+that keeps a hover highlight tracking the mouse smoothly). The title
+screen's own code already modeled this split correctly (a `full` vs
+per-frame-buttons branch). The screen-0x10 (`engine_tick_army_move_hover_
+step`) and screen-0x1e (`engine_tick_confirm_dialog_render`) arms — both
+explicitly commented as "`FUN_004ba26e`'s arm" — were nevertheless nested
+INSIDE the `if (g_demand_redraw != 0)` block alongside the screen-0/4
+demand-gated arms (a plain copy-paste-shape mistake, not a deliberate
+choice).
+
+Consequence: `engine_tick_army_move_hover_step` calls `engine_army_move_
+confirm_hover_tick`, which decrements the screen-0x10 handoff cooldown
+(`DAT_00553ecc`, starts at 0x28=40) that gates the SECOND click of the
+army-move two-click flow (`in->lmb_pressed != 0 && in->handoff_cooldown
+< 1` in `engine_ingame_input.c`). With the hover step demand-gated, once
+nothing else in a given session happened to also request a redraw, the
+cooldown froze above 0 forever and the second click could never resolve
+— a real soft-lock on the just-landed (session 14) army-move feature
+under ordinary idle-mouse play. `--force-popup`-style verification never
+exercises the live per-frame tick loop across idle frames, so this was
+invisible to every prior verification pass on this feature. Caught only
+by scripting a fully organic two-click test and watching it silently fail
+to reach the resolver on the second click. Fixed by hoisting both arms
+out of the demand-redraw gate to run unconditionally, matching retail's
+`FUN_004ba26e` semantics; the screen-0/4/other arms stayed gated (those
+really do correspond to retail's separate `FUN_0040f1a0` demand seam).
+
+## 212 — `strat_draw_menu_bar`'s `engine_set_current_screen(0)` was a screen-0-only-render-era assumption that broke once screen 0x10 shared the same composite
+
+`engine_screen_strat.c`'s `strat_draw_menu_bar` (part of `engine_screen_
+strat_render`, retail `FUN_00419c78`) called `engine_set_current_screen(0)`
+unconditionally at its top. Added in commit 8c2eb01 (2026-06-02) when this
+whole render path was ONLY ever invoked for the screen-id-0 dispatch arm —
+retail's actual `FUN_00419c78` (checked via the decompile,
+`docs/decompiled/by-address/419c78.c`) only READS `DAT_004eac50` for its
+own internal gating and never writes it, so this call was never a
+faithful-port requirement; it was a defensive "make sure the screen mirror
+(`gfx_text`'s shadow-color-pair selector) reads 0" leftover from a period
+when 0 was the only value this path could ever see.
+
+Commit d7cc930 (2026-06-19, "every-frame strategic-map composite") wired
+the SAME `engine_screen_strat_render` call to ALSO fire every frame while
+`g_sim_current_screen == 0x10` (the army-move handoff screen) — at which
+point this call started stomping the screen back to 0 on literally the
+FIRST render tick after `engine_army_select_open_handoff` armed it,
+independent of finding #211 above (fixing #211 alone still left this bug:
+the hover-tick would finally run, but the SAME tick's map-composite render
+would immediately reset the screen it just correctly set). The army-move
+handoff screen was unreachable in real play from the moment commit d7cc930
+landed, for over two weeks of sessions, because nothing had yet tried a
+fully organic (non-`--force-popup`) two-click test through the live tick
+loop.
+
+Confirmed safe to delete outright (not just special-case for screen 0x10):
+every current caller of this render path already sets the screen itself
+before rendering — `bringup_strat_map` (its own inline duplicate menu-bar
+code, main.c), `engine_map_post_load` (the real load path, main.c), and
+the live tick's own input-dispatch write-back all independently establish
+`g_sim_current_screen` before this function ever runs. Zero behavior change
+for every screen this path already served correctly; only screen 0x10
+(and any future non-zero screen sharing this composite) benefits.
+
+Both #211 and #212 were found by the SAME session's fixture (`tools/make_
+owned_county_fixture.py` + `tools/traces/plain_county_click.jsonl`) — see
+`project_event_popup_arms` memory for the full click-chain writeup.
