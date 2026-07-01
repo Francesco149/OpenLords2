@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 761,
+  "tested": 764,
   "ported": 56,
-  "unported": 1630,
+  "unported": 1627,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 817,
-  "pct_touched": 33.4,
-  "pct_tested": 31.1,
+  "touched": 820,
+  "pct_touched": 33.5,
+  "pct_tested": 31.2,
   "bytes_total": 838629,
-  "bytes_touched": 362609,
-  "pct_bytes_touched": 43.2
+  "bytes_touched": 362824,
+  "pct_bytes_touched": 43.3
  },
  "orphan_refs": [
   "0x004148",
@@ -587,6 +587,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_confirm_dialog.h",
     "src/engine_hud_menubar.c",
     "src/engine_hud_menubar.h",
     "src/gfx_wrap.c",
@@ -1872,8 +1873,11 @@
    "name": "FUN_0040ccfa",
    "size": 94,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_confirm_dialog.c",
+    "src/engine_confirm_dialog.h"
+   ]
   },
   {
    "va": "0x40cd58",
@@ -1909,6 +1913,8 @@
     "src/engine.c",
     "src/engine_button.c",
     "src/engine_button.h",
+    "src/engine_confirm_dialog.c",
+    "src/engine_confirm_dialog.h",
     "src/engine_menu_input.h",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
@@ -1991,6 +1997,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_confirm_dialog.h",
     "src/engine_delta.c",
     "src/engine_menu_input.c",
     "src/engine_menu_input.h",
@@ -2103,7 +2110,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_select.c",
-    "src/engine_army_select.h"
+    "src/engine_army_select.h",
+    "src/engine_confirm_dialog.h"
    ]
   },
   {
@@ -5599,8 +5607,11 @@
    "name": "FUN_00434e1f",
    "size": 37,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_confirm_dialog.c",
+    "src/engine_confirm_dialog.h"
+   ]
   },
   {
    "va": "0x434e44",
@@ -18583,6 +18594,8 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_confirm_dialog.c",
+    "src/engine_confirm_dialog.h",
     "src/engine_hud_menubar.c",
     "src/engine_hud_panel.h"
    ]
@@ -18929,8 +18942,10 @@
    "name": "FUN_004b36c0",
    "size": 84,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_confirm_dialog.c"
+   ]
   },
   {
    "va": "0x4b3714",
@@ -19782,6 +19797,7 @@
     "src/engine.c",
     "src/engine_button.c",
     "src/engine_button.h",
+    "src/engine_confirm_dialog.h",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
     "src/main.c"
@@ -19795,6 +19811,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_confirm_dialog.h",
     "src/engine_ingame_input.h",
     "src/engine_load_pump.h",
     "src/engine_menu_input.c",

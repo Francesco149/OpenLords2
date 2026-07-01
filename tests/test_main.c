@@ -1405,6 +1405,12 @@ struct test_case {
     X(menu_page3_scroll_autorepeat_gated_by_delay) \
     X(menu_page3_editor_streams_into_filename) \
     \
+    X(confirm_dialog_open_sets_screen_and_redraw) \
+    X(confirm_dialog_yes_button_fires_answer_1) \
+    X(confirm_dialog_no_button_fires_answer_0) \
+    X(confirm_dialog_click_outside_buttons_does_not_fire) \
+    X(confirm_dialog_reopen_resets_button_animation_state) \
+    \
     X(engine_button_kind20_blits_32x32_at_origin) \
     X(engine_button_kind18_blits_24x24) \
     X(engine_button_kind_below_0x18_uses_misc_sheet) \

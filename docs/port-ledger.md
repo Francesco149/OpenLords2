@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **817** (33.4%) — tested 761, ported 56
-- code bytes touched: **43.2%** (362,609 / 838,629 B)
-- unported: **1630**
+- touched: **820** (33.5%) — tested 764, ported 56
+- code bytes touched: **43.3%** (362,824 / 838,629 B)
+- unported: **1627**
 - orphan refs (in src/, not in function table): 7
 
-## tested (761) — ported + host unit suite
+## tested (764) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -68,7 +68,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x402a14 | FUN_00402a14 | 514 | gfx_dispatch.c, gfx_dispatch.h, gfx_glyph.h (+1) |
 | 0x402c16 | FUN_00402c16 | 72 | gfx_text.c, gfx_text.h |
 | 0x402c5e | FUN_00402c5e | 217 | engine_title_render.c, gfx_wrap.c, gfx_wrap.h |
-| 0x402d37 | FUN_00402d37 | 213 | engine_hud_menubar.c, engine_hud_menubar.h, gfx_wrap.c (+1) |
+| 0x402d37 | FUN_00402d37 | 213 | engine_confirm_dialog.h, engine_hud_menubar.c, engine_hud_menubar.h (+2) |
 | 0x402e0c | FUN_00402e0c | 344 | gfx_text_label.c, gfx_text_label.h |
 | 0x402f64 | FUN_00402f64 | 177 | gfx_text_label.c, gfx_text_label.h |
 | 0x403015 | FUN_00403015 | 177 | gfx_text_label.c, gfx_text_label.h |
@@ -136,13 +136,14 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40a9b0 | FUN_0040a9b0 | 439 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40acce | FUN_0040acce | 324 | engine_title_render.c, gfx_caret.c, gfx_caret.h (+2) |
 | 0x40c5b0 | FUN_0040c5b0 | 373 | engine_hud_menubar.c, engine_hud_menubar.h |
-| 0x40cfd2 | FUN_0040cfd2 | 490 | engine.c, engine_button.c, engine_button.h (+4) |
+| 0x40ccfa | FUN_0040ccfa | 94 | engine_confirm_dialog.c, engine_confirm_dialog.h |
+| 0x40cfd2 | FUN_0040cfd2 | 490 | engine.c, engine_button.c, engine_button.h (+6) |
 | 0x40d1bc | FUN_0040d1bc | 181 | engine_terrain_info.c, gfx_sprite_render.c, gfx_sprite_render.h |
-| 0x40da1e | FUN_0040da1e | 869 | engine.c, engine_delta.c, engine_menu_input.c (+2) |
+| 0x40da1e | FUN_0040da1e | 869 | engine.c, engine_confirm_dialog.h, engine_delta.c (+3) |
 | 0x40deca | FUN_0040deca | 152 | engine_ingame_input.h |
 | 0x40e3ee | FUN_0040e3ee | 505 | engine.c, engine_button.h, engine_menu_input.c (+1) |
 | 0x40e5e7 | FUN_0040e5e7 | 153 | engine_menu_input.c, engine_menu_input.h |
-| 0x40e6f2 | FUN_0040e6f2 | 111 | engine_army_select.c, engine_army_select.h |
+| 0x40e6f2 | FUN_0040e6f2 | 111 | engine_army_select.c, engine_army_select.h, engine_confirm_dialog.h |
 | 0x40e7e4 | FUN_0040e7e4 | 87 | engine_ingame_input.h |
 | 0x40e890 | FUN_0040e890 | 43 | engine.c, engine.h, main.c |
 | 0x40e8bb | FUN_0040e8bb | 240 | engine.c, engine.h, main.c |
@@ -258,6 +259,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x434308 | FUN_00434308 | 62 | engine_menu_input.c |
 | 0x434346 | FUN_00434346 | 178 | engine_menu_input.c, engine_title_render.c, engine_title_render.h |
 | 0x4343f8 | FUN_004343f8 | 36 | main.c |
+| 0x434e1f | FUN_00434e1f | 37 | engine_confirm_dialog.c, engine_confirm_dialog.h |
 | 0x4350a1 | FUN_004350a1 | 232 | engine_ingame_input.h, engine_terrain_info.h |
 | 0x436d02 | FUN_00436d02 | 768 | engine_army_ai.c, engine_army_ai.h |
 | 0x437002 | FUN_00437002 | 261 | engine_ingame_input.h |
@@ -708,7 +710,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b13ed | FUN_004b13ed | 274 | gfx_paint.c, gfx_paint.h |
 | 0x4b18f8 | FUN_004b18f8 | 38 | game_init.c |
 | 0x4b191e | FUN_004b191e | 981 | engine.c, engine.h, engine_input.c (+2) |
-| 0x4b1de0 | FUN_004b1de0 | 11 | engine.c, engine_hud_menubar.c, engine_hud_panel.h |
+| 0x4b1de0 | FUN_004b1de0 | 11 | engine.c, engine_confirm_dialog.c, engine_confirm_dialog.h (+2) |
 | 0x4b20ed | FUN_004b20ed | 68 | engine.c, engine.h, engine_delta.c |
 | 0x4b2258 | FUN_004b2258 | 797 | audio.h, engine.c, engine.h (+2) |
 | 0x4b2636 | FUN_004b2636 | 130 | engine.c, engine.h, engine_fps.c (+1) |
@@ -718,6 +720,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b28cd | FUN_004b28cd | 85 | gfx.c, main.c |
 | 0x4b2922 | FUN_004b2922 | 156 | gfx.c, gfx.h, main.c |
 | 0x4b29be | FUN_004b29be | 2545 | engine_minimap.c, main.c |
+| 0x4b36c0 | FUN_004b36c0 | 84 | engine_confirm_dialog.c |
 | 0x4b37bc | FUN_004b37bc | 388 | engine_terrain_info.c, engine_terrain_info.h |
 | 0x4b3e51 | FUN_004b3e51 | 111 | engine_army_select.c |
 | 0x4b3f54 | FUN_004b3f54 | 38 | gfx_paint.h |
@@ -741,8 +744,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b4cb8 | FUN_004b4cb8 | 1659 | gfx_sprite.c, gfx_sprite.h, gfx_sprite_render.c (+1) |
 | 0x4b5333 | FUN_004b5333 | 2997 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+10) |
-| 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_button.c, engine_button.h (+3) |
-| 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_ingame_input.h, engine_load_pump.h (+5) |
+| 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_button.c, engine_button.h (+4) |
+| 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_confirm_dialog.h, engine_ingame_input.h (+6) |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c |
 | 0x4bb978 | FUN_004bb978 | 614 | engine.c, engine.h, engine_rate.c |
 | 0x4bbbe3 | FUN_004bbbe3 | 157 | engine_camera.h |
