@@ -7,6 +7,74 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-07-02 (session 21) — the LAST two confirm-dialog siblings fired organically (claim/slaughter, attack/field, direct/besiege) with retail pixel-parity — and the session-20 "Army Movement hint gap" mystery is RESOLVED: a harness scheduling race, now fixed (quirk #213)
+
+Picked up session 20's "2 siblings remain" next-candidate from
+[[project_event_popup_arms]] — `sibling_983b` (claim + attack dialog arms)
+and `sibling_960f` (direct) had never fired via a real click.
+
+**The "harder to stage" assumption was wrong.** Session 20 predicted these
+needed a fabricated enemy-owned record.  A save dump showed `test.sav`
+already carries everything: `ARMY_REC[2]` is a real owner-2 record and the
+map's uniform baseline occupant stamp (2) points AT it — so the "enemy army
+under the cursor" condition holds at any baseline cell once county A is
+owned.  (33,47) is a naturally 0x20-flagged enemy FIELD tile (attack
+classifies with zero patches), and the keep-adjacent (31,46) — the cell
+session 20 patched friendly for garrison — classifies DIRECT when left
+alone.  `tools/make_enemy_target_fixture.py` patches only: the standard
+county-A ownership pair, movement-spent 5→0 (the field floods at cost 14
+vs the source save's 10 headroom — the classifier's final gate zeroes ALL
+classifications over headroom), and TWO bytes on (32,46) for claim
+(flags|=0x10 AND type=0x10 — `engine_strat_cost_rebuild` maps flag-0x10
+cells to cost-0 IMPASSABLE unless type==0x10; found empirically when the
+flags-only fixture fell through to the plain-move path).
+
+**The localization table renamed the whole classification family**: msg 4
+(claim) = "Slaughter villagers?", msg 10 (attack) = "Destroy field?", msg 8
+(direct) = "Besiege castle?" — bit 0x10 is villages, 0x20 fields, 0x80
+castles.  The port's comment names (claim/attack/direct) date from before
+the strings were read; the dialogs confirm the real semantics.
+
+**Retail comparison exposed the session-20 mystery — and it was the
+HARNESS, not the port.**  Retail kept showing the first-time "Army
+Movement" hint (0xd2) eating clicks 2/3 while the port ran clean.  A
+`--watch ep/scr/hint_d2` run proved retail's hint fires 1-2 frames after
+the screen-0x10 arm WITH ep=0xd2 set (dismissable) — but the trace's bare
+`{"auto_dismiss":0}` op executed at ~t910 on retail vs ~t1000 on the port:
+the port drains {capture} ops in-order (later ops wait), the agent pre-arms
+them out-of-band (later ops don't).  The toggle-off landed before retail's
+hint and after the port's.  Session 20's retracted "hint gap" + its wrong
+sandbox-state theory were exactly this race.  Fix: optional anchor-relative
+gate `{"t":N,"auto_dismiss":M}` honoured by all four parsers (port C
+parser, agent, frida_capture loader, trace_ops compiler); bare form keeps
+immediate-drain semantics.  Quirk #213.
+
+**Result: all three dialogs port-vs-retail pixel-identical** in the
+dialog/map region (only the documented right-panel gap + sprite
+animation-phase diffs remain, both present at the before-clicks baseline),
+Yes → silent-execute on all three (claim/attack: merge==0 branch;
+besiege: link=4 → TERR_REC[4]+0x19a==0 branch), and the save-schema state
+ribbon shows ONLY the pre-existing documented divergence set (slots
+0/18/19/71/74 + AI-brain cursor 84, the open phase-4 FSM chip) at every
+capture before AND after the clicks — the confirm chain adds zero new sim
+divergence.  Host suite 2278/2278 green (src changed only in
+input_trace.c, the harness op).
+
+**Every arm of `FUN_004a9252`'s confirm-dialog family is now organically
+click-verified**: plain-move (s18), swap (s19), garrison (s20), claim +
+attack + direct (s21).  Remaining sub-branches only reachable with
+different data: sibling_983b's 0x11e (merge with link), sibling_960f's
+0x11d/0x11c (link==0) and 0x113 (link with siege flag), sibling_975d's
+0x112 (merge over cap) — all event-post paths already host-tested.
+
+**Next candidate**: with the whole screen-0x10 chain closed, return to the
+frontier list (docs/port-frontier.md regenerated this session: 258
+frontier, 136 leaves) — or the AI-brain cursor slot-84 divergence
+(phase-4 FSM), the last stable sim-state gap the state ribbon shows on
+every in-game trace.
+
+---
+
 ## 2026-07-01 (session 20) — organically fired `sibling_9372`, the LIVE producer of the 0x11 event popup, via a real click for the first time. Also found a new (unfixed) gap. Autonomous session, same day as session 19.
 
 Continued straight from session 19's own "next candidate": of `FUN_004a9252`'s 4 confirm-dialog siblings, `sibling_9372` (garrison-merge-cap) is the most valuable one still unexercised organically — it's the actual live producer of the 0x11 event popup, previously only reached via host tests (session 14, the 0xa6 sub-branch) or `--force-popup`.
