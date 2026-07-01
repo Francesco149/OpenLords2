@@ -1,0 +1,73 @@
+# Organic click-driven test of engine_army_move_confirm's g_classify_swap
+# branch (project_event_popup_arms's session-18 "next candidate": exercise
+# a DIFFERENT one of FUN_004a9252's 4 confirm-dialog siblings for the first
+# time via a real click, not --force-popup -- session 18 itself only ever
+# reached the no-classification fallback by re-targeting the SAME county
+# it had just armed).
+#
+# Requires --save-ref tools/make_swap_county_fixture.py's output: TWO owned
+# counties reachable at the same fixed scroll (col=20,row=62) -- county A
+# (key 4, real game data, keep at map cell col=30/row=46) and county B (key
+# 5, a byte-for-byte copy of A's record relocated to col=32/row=46, an
+# empty/unflagged cell 2 plain-terrain tiles east). See that script's
+# docstring for the full derivation (coordinate math cross-verified against
+# a faithful Python port of engine_camera_cursor_to_cell +
+# engine_map_init_build_cells).
+#
+# Load prefix copied verbatim from click_county.jsonl / plain_county_click.jsonl.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "before_clicks"}
+# click 1: arm county A's (mc=30,mr=46) handoff -- screen 0 -> 0x10.
+# pixel (260,250) / lParam 16384260, the same coordinate every other
+# trace in this dir already uses.
+{"t": 900, "m": 512, "w": 0, "l": 16384260}
+{"t": 904, "m": 513, "w": 1, "l": 16384260}
+{"t": 908, "m": 514, "w": 0, "l": 16384260}
+{"capture": 930, "label": "after_click1_armed_0x10"}
+# hover onto county B's DIFFERENT keep tile (mc=32,mr=46) -- pixel
+# (320,280) / lParam 18350400 -- lets engine_army_move_confirm_hover_tick
+# (a RENDER step) reclassify the new cell (g_classify_swap) before the
+# click below resolves it.
+{"t": 970, "m": 512, "w": 0, "l": 18350400}
+{"capture": 985, "label": "after_hover_county_b"}
+# click 2: resolve on county B -- should set g_classify_swap and open the
+# generic Yes/No confirm dialog (screen 0x10 -> 0x1e, msg_id 5).
+{"t": 1000, "m": 513, "w": 1, "l": 18350400}
+{"t": 1004, "m": 514, "w": 0, "l": 18350400}
+{"capture": 1030, "label": "after_click2_dialog_open"}
+# click 3: press "Yes" on the confirm dialog.  Button hitbox is
+# [ox+64, ox+64+32) x [oy+46, oy+46+32) with ox=oy=0xa0 (the swap dialog's
+# own engine_confirm_dialog_open(5, 0xa0, 0xa0, ...) call site) -- pixel
+# (240,222) / lParam 14549232, well inside [224,256)x[206,238).  Type-5
+# buttons only ARM a 20-frame press-flash on this click
+# (engine_menu_button_dispatch); the actual callback (sibling_975d, the
+# swap resolver) fires ~20 ticks later once that countdown reaches 0 in a
+# later frame's pass-1 -- captured at several settle points below since
+# the exact tick/frame mapping isn't pinned down independently here.
+{"t": 1070, "m": 512, "w": 0, "l": 14549232}
+{"t": 1074, "m": 513, "w": 1, "l": 14549232}
+{"t": 1078, "m": 514, "w": 0, "l": 14549232}
+{"capture": 1090, "label": "after_click3_pressed"}
+{"capture": 1110, "label": "settle_a"}
+{"capture": 1130, "label": "settle_b"}
+{"capture": 1160, "label": "settle_c"}
+{"capture": 1200, "label": "settle_d"}
+{"capture": 1260, "label": "settle_e"}

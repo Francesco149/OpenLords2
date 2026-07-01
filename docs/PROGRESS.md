@@ -7,6 +7,91 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-07-01 (session 19) — organically exercised the `g_classify_swap` sibling of the screen-0x10 confirm chain for the first time via a real click. Autonomous session, same day as session 18.
+
+Picked up session 18's own "next candidate" from [[project_event_popup_arms]]:
+click a genuinely DIFFERENT second-click target (not the same county
+session 18 re-clicked, which fell through to a no-classification no-op)
+to organically exercise one of `FUN_004a9252`'s 4 confirm-dialog siblings
+for the first time via a real click, not `--force-popup`.
+
+Read `engine_army_move_confirm.c`'s hover classifier closely: of the six
+classification flags, `g_classify_swap` is the cleanest target — it's
+set purely from `TERR_REC(head_terr)[0]==local_player &&
+armed_county!=head_terr && TERR_REC(head_terr)[8]!=4`, where `head_terr`
+is `g_overworld_map[cell]+5`, the SAME reciprocal stamp
+`tools/make_owned_county_fixture.py` already knows how to write. No
+dependency on the cell's own flag byte (unlike merge/claim/attack/
+garrison/direct, which all need specific `+1` bits set) — so it's
+isolable by clicking a plain, unflagged empty cell.
+
+**Built `tools/make_swap_county_fixture.py`.** Confirmed (via a direct
+save dump) that every available save has exactly ONE real kind==1
+territory record (county key 4, `test.sav`'s keep at map cell
+col=30/row=46 — same one session 18 used) and that county key 5 is
+fully unused (all-zero) in the same save. Fabricated a second owned
+county at key 5 by copying key 4's record byte-for-byte (already
+self-consistent real game data — the swap gate never reads the record's
+own col/row, only owner/kind) and relocating its reciprocal stamp to map
+cell (32,46): confirmed via direct save inspection to be empty
+(`head_terr==0`) and unflagged (descriptor `+1` byte `==0`), 2 plain-cost
+tiles east of the first keep — comfortably inside county 4's
+presence-accumulator headroom (`+0x154-+0x153` = 10) that gates whether
+the hover classifier arms anything at all.
+
+Derived screen coordinates for both keep tiles by writing a faithful
+Python port of `engine_camera_cursor_to_cell` +
+`engine_map_init_build_cells`'s rotation-0 diamond projection, then
+round-trip-verifying candidate pixels against it (same rigor session 18
+established) — reused the ALREADY-VALIDATED (260,250)→cell(4,15) click
+for county 4, and derived (320,280)→cell(5,17) for county 5 at the same
+fixed scroll (20,62), so no camera scroll is needed between the two
+clicks. Also worked out the confirm dialog's "Yes" button hitbox
+(`engine_confirm_dialog.c`'s button table: x=64,y=46,kind=0x20, offset by
+the swap call site's `ox=oy=0xa0`) → pixel (240,222).
+
+New trace `tools/traces/swap_county_click.jsonl`: click county 4 (arms
+screen 0x10) → hover + click county 5 (should set `g_classify_swap` and
+open the generic Yes/No dialog, screen 0x10→0x1e) → click "Yes" (type-5
+buttons only ARM a 20-frame press-flash; the actual callback fires later,
+so the trace captures several settle points after the click rather than
+assuming a fixed frame offset).
+
+**Result: clean, on the first attempt — no bugs found this session.**
+The dialog opened showing "Combine armies?" (localization group 10,
+sub-index 5 — the exact, only-reachable-via-`g_classify_swap` message),
+both engines' rendering pixel-identical in the map/dialog region when
+run side-by-side through `olv3_capture.py` on both port and retail
+against the same fixture. The Yes button visibly showed the type-5
+press-flash (darkened) after the third click; by the final settle capture
+the dialog had closed back to the map and both counties' idle-army flag
+markers had disappeared, consistent with `army_move_confirm_execute`
+committing (headcount 47+47=94, well under the 0x5dd merge cap, so the
+silent-execute sub-branch fired rather than the 0x112 event-post
+sub-branch — a smaller follow-up if the event-post path is wanted
+later). The only pixel diffs vs retail were in the right-side info panel
+(the already-documented deferred "manage county" portrait gap, see
+[[project_workforce_hud]]) and army-sprite animation-frame phase — both
+present already at the `before_clicks` baseline capture (a consequence of
+this trace's `{"auto_dismiss":1}`, which is documented to desync
+port/retail timing by a few frames — see [[project_loadflip_rng_clarified]]),
+not anything introduced this session. Host suite 2278/2278 green
+throughout (no src/ changes — this session only added tooling).
+
+**Next candidate for this specific chain**: the remaining 3 siblings
+(`sibling_983b` claim/attack, `sibling_960f` direct/empty-cell,
+`sibling_9372` garrison-merge-cap, the actual 0x11 popup producer) are
+still only host-tested/`--force-popup`-verified, not organically
+click-driven. `sibling_9372` is the most interesting (it's the live
+0x11 popup producer) but needs a target cell with descriptor flag `+1`
+bit 0x80 set and a FRIENDLY-owned army/keep under it — doable with the
+same fixture technique (the neighborhood dump this session pulled from
+`test.sav` already shows several naturally-occurring 0x80-flagged cells
+near the existing keep) but wasn't attempted this session; scope
+separately rather than tacking on.
+
+---
+
 ## 2026-07-01 (session 18) — fully organic screen-0x10 click-driven verification, closing the gap sessions 13/14/16 left open — and it found 2 real bugs. Autonomous session, same day as session 17.
 
 Picked up the standing next-step from [[project_event_popup_arms]] /
