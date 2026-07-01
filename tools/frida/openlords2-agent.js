@@ -2729,8 +2729,14 @@ function segtraceTick(frame) {
         }
 
         if (op.kind === 'auto_dismiss') {
-            // State toggle — applied immediately (no frame gate), like the
-            // port's input-trace op.  The per-tick hook does the dismissing.
+            // State toggle.  Timed form ({"t":N}) gates at seg_base+N like an
+            // input op — REQUIRED whenever the toggle must land after other
+            // t-stamped activity, because captures are pre-armed out-of-band
+            // here (g_capture_at_frames) while the port drains them in-order:
+            // a bare toggle after a {capture} fires at different times on the
+            // two engines (session-21 hint-dismiss race).  Bare form applies
+            // as soon as the cursor reaches it, as before.
+            if (op.t >= 0 && (g_seg_base + op.t) > frame) break;
             g_auto_dismiss = (op.n | 0);
             log('segtrace: auto_dismiss = ' + g_auto_dismiss + ' @ frame ' + frame);
             g_seg_idx++;
@@ -5587,7 +5593,10 @@ rpc.exports = {
                                                   val: o.val};
                   if (k === 'capture')    return {kind: 'capture', n: (o.n | 0),
                                                   label: String(o.label || '')};
-                  if (k === 'auto_dismiss') return {kind: 'auto_dismiss', n: (o.n | 0)};
+                  if (k === 'auto_dismiss') {
+                      return {kind: 'auto_dismiss', n: (o.n | 0),
+                              t: (o.t === undefined || o.t === null) ? -1 : (o.t | 0)};
+                  }
                   return {kind: 'nop'};
               })
             : [];

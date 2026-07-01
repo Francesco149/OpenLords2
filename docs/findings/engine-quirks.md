@@ -7302,3 +7302,36 @@ for every screen this path already served correctly; only screen 0x10
 Both #211 and #212 were found by the SAME session's fixture (`tools/make_
 owned_county_fixture.py` + `tools/traces/plain_county_click.jsonl`) — see
 `project_event_popup_arms` memory for the full click-chain writeup.
+
+## 213 — harness: bare `{"auto_dismiss":N}` segtrace ops fired at DIFFERENT frames on port vs retail (capture-scheduling asymmetry), racing the first-time hint — the real cause of session 20's retracted "Army Movement hint gap"
+
+Not an engine quirk — a trace-HARNESS asymmetry that masqueraded as an
+engine divergence across two sessions.
+
+Both segtrace drivers drain the op list in order, EXCEPT captures:
+
+- the **port** (`src/input_trace.c`) keeps `{capture:N}` ops in the
+  sequential queue — an op after a capture waits until that capture's
+  frame passes;
+- the **retail agent** (`openlords2-agent.js`) pre-arms all captures
+  out-of-band into `g_capture_at_frames` at wait-resolution — captures
+  never block the queue.
+
+So a bare `{"auto_dismiss":0}` placed after `{"capture":1000}` fired at
+~t1000 on the port but ~t910 on retail (right after the preceding click's
+t:908 input op posted).  The first-time "Army Movement" hint (code 0xd2,
+runtime-only `g_hint_shown`, fires ~1-2 frames after the screen-0x10 arm
+on BOTH engines with ep=0xd2 set — confirmed via `--watch
+ep=0x53e910:u32 scr=0x4eac50:u8 hint_d2=0x4f036a:u8`) then landed inside
+the port's still-on window but outside retail's: the port dismissed it,
+retail's stayed open eating every later click.  Session 20 saw exactly
+this, suspected a port hint gap, retracted the claim, and left it
+unresolved; the sandbox-state theory recorded there was wrong — it was
+this scheduling race all along.
+
+Fix (session 21): the op now takes an optional anchor-relative gate —
+`{"t":N,"auto_dismiss":M}` — honoured identically by all four parsers
+(src/input_trace.c, openlords2-agent.js, frida_capture.py `_load_segtrace`,
+trace_studio_v3/trace_ops.py).  The bare form keeps the old
+immediate-drain semantics for existing traces.  Any trace that must order
+an auto_dismiss toggle against t-stamped activity MUST use the timed form.

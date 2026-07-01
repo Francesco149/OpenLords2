@@ -119,11 +119,21 @@ static void parse_line(const char *line)
     if (strstr(line, "\"auto_dismiss\"")) {
         /* Reactive mode toggle: while on, the engine dismisses any open
          * modal popup each tick (right-click path, position-independent).
-         * Drains immediately (not anchor-relative).  Value 1 = on, 0 = off. */
-        long v = 1;
+         * Value 1 = on, 0 = off.
+         *
+         * Optional {"t":N} gates the toggle at seg_floor+N like an input op.
+         * Without it the toggle drains as soon as the cursor reaches it —
+         * and since captures are drained in-order HERE but pre-armed
+         * out-of-band by the retail agent, a bare toggle placed after a
+         * {capture} fires at DIFFERENT times on the two engines (the
+         * session-21 hint-dismiss race; see engine-quirks).  Timed form
+         * fires identically on both. */
+        long v = 1, t = -1;
         op->kind = OP_AUTODISMISS;
         extract_int(line, "\"auto_dismiss\"", &v);   /* default on */
+        extract_int(line, "\"t\"", &t);              /* optional gate */
         op->n = (int)v;
+        op->t = (int)t;
         g_op_count++;
         return;
     }
@@ -246,8 +256,11 @@ void input_trace_step(int frame, const char *anchor_edge,
         }
 
         if (op->kind == OP_AUTODISMISS) {
-            /* Mode toggle — drains immediately (no t-gate); the caller
-             * applies it to the engine's reactive-dismiss flag. */
+            /* Mode toggle — t-gated when the op carries {"t":N} (t >= 0),
+             * else drains immediately; the caller applies it to the
+             * engine's reactive-dismiss flag. */
+            if (op->t >= 0 && frame < g_seg_floor + op->t)
+                break;
             out->set_auto_dismiss = op->n;
             g_cursor++;
             continue;

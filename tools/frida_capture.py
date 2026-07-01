@@ -443,11 +443,14 @@ def _load_segtrace(path: Path) -> list[dict[str, Any]]:
                             "label": str(obj.get("label", ""))})
             elif "auto_dismiss" in obj:
                 # Reactive popup auto-dismiss toggle (mirrors the port's
-                # {"auto_dismiss":N} op): applied immediately when the cursor
-                # reaches it (no frame gate).  The agent's per-tick hook then
+                # {"auto_dismiss":N} op).  Optional {"t":N} gates it at
+                # anchor+N (like an input op) so it lands at the SAME frame
+                # on both engines; the bare form applies immediately when
+                # the cursor reaches it.  The agent's per-tick hook then
                 # dismisses any open modal scroll while it's on.
                 ops.append({"kind": "auto_dismiss",
-                            "n": int(obj["auto_dismiss"])})
+                            "n": int(obj["auto_dismiss"]),
+                            "t": int(obj["t"]) if "t" in obj else -1})
             elif "m" in obj:
                 # w/l default to 0 when omitted — same leniency as the port's
                 # C parser (src/input_trace.c), so one trace parses on both.

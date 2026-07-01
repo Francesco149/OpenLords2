@@ -114,7 +114,16 @@ def compile_ops(ops: list[dict]) -> tuple[list[str], list[dict]]:
         elif k == "auto_dismiss":
             # Reactive mode toggle — passes through verbatim; both engine
             # parsers (src/input_trace.c, openlords2-agent.js) honour it.
-            out.append(json.dumps({"auto_dismiss": int(op["auto_dismiss"])}))
+            # Optional {"t":N} (anchor-relative gate) passes through too —
+            # REQUIRED when the toggle must order against t-stamped ops
+            # (captures are drained in-order by the port but pre-armed
+            # out-of-band by the agent, so a bare toggle placed after a
+            # {capture} fires at different times on the two engines).
+            if "t" in op:
+                out.append(json.dumps({"t": int(op["t"]),
+                                       "auto_dismiss": int(op["auto_dismiss"])}))
+            else:
+                out.append(json.dumps({"auto_dismiss": int(op["auto_dismiss"])}))
         elif k == "input":
             # Maximally explicit primitives — every engine parser sees all
             # four fields regardless of its own default-handling.
