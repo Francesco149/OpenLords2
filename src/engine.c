@@ -20,6 +20,8 @@
 #include "engine_ingame_input.h"   /* in-game input dispatcher (FUN_0042ff10) */
 #include "engine_terrain_info.h"   /* terrain-info opener + screen-4 panel render */
 #include "engine_army_select.h"    /* army-select / move dispatcher (FUN_0043ce1a) */
+#include "engine_army_move_confirm.h" /* screen-0x10 hover classifier + click resolver */
+#include "engine_confirm_dialog.h" /* generic Yes/No modal (screen 0x1e) */
 #include "engine_button.h"         /* button-strip renderer (FUN_0040cfd2) */
 #include "engine_map_query.h"      /* terrain-attribute compute (FUN_0046d5fe) */
 #include "engine_map_render.h"     /* live camera geometry + descriptor grid */
@@ -844,6 +846,11 @@ static void ti_close(const engine_ingame_input_in_t *din,
  * holds terrain-info's own no-home state. */
 static int g_army_select_handoff_cooldown;
 static int g_army_select_hud_outcome;
+static int g_army_select_armed_county;   /* DAT_0057c8c4 — which county the
+                                          * screen-0x10 handoff is armed on;
+                                          * the hover classifier + click
+                                          * resolver below read it back on
+                                          * later frames. */
 
 static void ti_army_select(const engine_ingame_input_in_t *din,
                            engine_ingame_state_t *dst)
@@ -888,6 +895,7 @@ static void ti_army_select(const engine_ingame_input_in_t *din,
     st.hold_pending      = dst->hold_56d64c;
     st.handoff_cooldown  = g_army_select_handoff_cooldown;
     st.hud_outcome       = g_army_select_hud_outcome;
+    st.armed_county      = g_army_select_armed_county;
 
     static const engine_army_select_hooks_t HOOKS = {
         .dismiss_on_paused_click = engine_popup_scroll_dismiss,
@@ -903,6 +911,112 @@ static void ti_army_select(const engine_ingame_input_in_t *din,
     }
     g_army_select_handoff_cooldown = st.handoff_cooldown;
     g_army_select_hud_outcome      = st.hud_outcome;
+    g_army_select_armed_county     = st.armed_county;
+}
+
+/* army_move_click_resolve hook (FUN_004a9252 + siblings): the screen-0x10
+ * second click.  dst->screen is already 0 by the time this fires (the
+ * dispatcher resets it just before calling, matching retail's own
+ * DAT_004eac50 = '\0' ahead of FUN_004a9252) — engine_army_move_confirm_
+ * click_resolve may override it to the confirm-dialog screen instead. */
+static void ti_army_move_click_resolve(const engine_ingame_input_in_t *din,
+                                       engine_ingame_state_t *dst)
+{
+    (void)din;
+    engine_army_move_click_state_t cst;
+    cst.screen        = dst->screen;
+    cst.demand_redraw = dst->demand_redraw;
+    engine_army_move_confirm_click_resolve((int)s_slot_0057c8cc,
+                                           g_army_select_armed_county,
+                                           &cst, &g_turn_event_queue);
+    dst->screen = cst.screen;
+    if (cst.demand_redraw) {
+        dst->demand_redraw = cst.demand_redraw;
+    }
+}
+
+/* ui_router hook (FUN_004ba9c8's 0x1e arm): the generic Yes/No dialog's
+ * own input step.  Runs FIRST in the dispatcher (before any per-screen
+ * case), self-gated on the dialog actually being open — the other screen
+ * cases never match while it is (DAT_004eac50 == 0x1e), so this mirrors
+ * retail's dispatch-order fidelity without needing the other ~29 unrelated
+ * FUN_004ba9c8 arms.  Also drains both confirm-dialog callbacks that can
+ * fire asynchronously (many frames after the click that opened the
+ * dialog — see engine_confirm_dialog.h) rather than through this frame's
+ * own click_resolve/army-select call: engine_army_select_poll_confirm_
+ * result (the has-link re-target flow) and engine_army_move_confirm_
+ * poll_screen_reset (the screen-0x10 siblings). */
+static int ti_ui_router(const engine_ingame_input_in_t *din,
+                        engine_ingame_state_t *dst)
+{
+    if (dst->screen != ENGINE_CONFIRM_DIALOG_SCREEN) {
+        return 0;
+    }
+
+    engine_menu_click_in_t click;
+    memset(&click, 0, sizeof click);
+    click.cursor_x           = g_input_game_x;
+    click.cursor_y           = g_input_game_y;
+    click.lmb_newly_pressed  = din->lmb_pressed;
+    click.lmb_newly_released = din->lmb_released;
+    click.lmb_held           = din->lmb_held;
+    int fired = engine_confirm_dialog_input_step(&click);
+
+    int screen, redraw, cooldown, armed;
+    if (engine_army_select_poll_confirm_result(&screen, &redraw, &cooldown,
+                                               &armed)) {
+        dst->screen = screen;
+        if (redraw) {
+            dst->demand_redraw = redraw;
+        }
+        g_army_select_handoff_cooldown = cooldown;
+        g_army_select_armed_county     = armed;
+    }
+    if (engine_army_move_confirm_poll_screen_reset(&redraw)) {
+        dst->screen        = 0;
+        dst->demand_redraw = redraw;
+    }
+    return fired;
+}
+
+/* Screen-0x10 render arm (FUN_004ba26e's 0x10 arm: FUN_004a8e0b()) — pure
+ * hover reclassification, no pixels.  Re-resolves the hovered cell itself
+ * (mirrors ti_army_select's own re-resolve). */
+static void engine_tick_army_move_hover_step(void)
+{
+    engine_tick_resolve_hover();               /* FUN_00429ba4(1) */
+
+    engine_army_move_hover_in_t hin;
+    memset(&hin, 0, sizeof hin);
+    hin.hover_valid  = g_hover_tile < 0xfff0000;
+    hin.hover_cell   = g_hover_tile / 8;        /* DAT_0057d338 tile_stride */
+    hin.local_player = (int)s_slot_0057c8cc;
+    hin.armed_county = g_army_select_armed_county;
+    hin.tile_stride  = 8;
+    hin.map_width    = 0x40;                    /* DAT_0052afd4 */
+
+    engine_army_move_hover_state_t hst;
+    hst.handoff_cooldown = g_army_select_handoff_cooldown;
+    engine_army_move_confirm_hover_tick(&hin, &hst);
+    g_army_select_handoff_cooldown = hst.handoff_cooldown;
+}
+
+/* Screen-0x1e render arm (FUN_004ba26e's 0x1e arm: FUN_0040ccfa +
+ * FUN_0040cfd2) — the confirm dialog's panel/text/buttons. */
+static void engine_tick_confirm_dialog_render(void)
+{
+    const uint8_t *chrome = gfx_load_chrome_sheet();
+    const uint8_t *sys    = gfx_system_sheet_current();
+    const uint8_t *mfont  = gfx_load_menu_font();
+    size_t loc_size = 0;
+    const uint8_t *locblob = config_localization_data(&loc_size);
+    if (!chrome || !sys || !mfont || !locblob) {
+        return;
+    }
+    localization_state_t loc;
+    loc.blob = (unsigned char *)locblob;
+    loc.walker_offset = 0;
+    engine_confirm_dialog_render(&loc, chrome, mfont, sys, NULL);
 }
 
 /* Screen-4 render arm — draw the terrain-info panel over the retained map
@@ -1087,6 +1201,7 @@ static void engine_tick_ingame_input_step(void)
     in.turn_progress  = g_sim_turn_progress;
     in.turn_busy      = 0;                     /* DAT_0055403c — idle while browsing */
     in.timeout_reached= g_sim_turn_timeout_reached;
+    in.handoff_cooldown = g_army_select_handoff_cooldown;
 
     engine_ingame_state_t st;
     memset(&st, 0, sizeof st);
@@ -1094,11 +1209,13 @@ static void engine_tick_ingame_input_step(void)
 
     static const engine_ingame_hooks_t HOOKS = {
         .dismiss_chip       = ti_dismiss_chip,
+        .ui_router          = ti_ui_router,               /* FUN_004ba9c8 0x1e arm */
         .edge_scroll        = ti_edge_scroll,            /* FUN_00432221 edge-scroll */
         .hud_btn_a          = engine_endturn_hit_test,   /* FUN_00432967 End-Turn */
         .terrain_info_open  = ti_open,
         .terrain_info_close = ti_close,
         .army_select        = ti_army_select,            /* FUN_0043ce1a army select/move */
+        .army_move_click_resolve = ti_army_move_click_resolve, /* FUN_004a9252 */
         /* every other sub-handler deferred (NULL → inert) */
     };
     engine_ingame_input_dispatch(&in, &st, &HOOKS);
@@ -1134,6 +1251,18 @@ static void engine_tick_title_render_step(void)
                  * so lock + paint the panel without clearing the canvas. */
                 if (gfx_lock_canvas()) {
                     engine_tick_terrain_info_render();
+                    gfx_unlock_canvas();
+                }
+            } else if (g_sim_current_screen == 0x10) {
+                /* Army-move/merge handoff (screen 0x10, retail FUN_004ba26e's
+                 * 0x10 arm): pure hover reclassification, no pixels — the
+                 * strategic map underneath keeps rendering as-is. */
+                engine_tick_army_move_hover_step();
+            } else if (g_sim_current_screen == ENGINE_CONFIRM_DIALOG_SCREEN) {
+                /* Yes/No confirm modal (screen 0x1e, retail FUN_004ba26e's
+                 * 0x1e arm): drawn OVER the retained frame beneath it. */
+                if (gfx_lock_canvas()) {
+                    engine_tick_confirm_dialog_render();
                     gfx_unlock_canvas();
                 }
             } else {

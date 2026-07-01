@@ -136,7 +136,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40a9b0 | FUN_0040a9b0 | 439 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40acce | FUN_0040acce | 324 | engine_title_render.c, gfx_caret.c, gfx_caret.h (+2) |
 | 0x40c5b0 | FUN_0040c5b0 | 373 | engine_hud_menubar.c, engine_hud_menubar.h |
-| 0x40ccfa | FUN_0040ccfa | 94 | engine_confirm_dialog.c, engine_confirm_dialog.h |
+| 0x40ccfa | FUN_0040ccfa | 94 | engine.c, engine_confirm_dialog.c, engine_confirm_dialog.h |
 | 0x40cfd2 | FUN_0040cfd2 | 490 | engine.c, engine_button.c, engine_button.h (+6) |
 | 0x40d1bc | FUN_0040d1bc | 181 | engine_terrain_info.c, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40da1e | FUN_0040da1e | 869 | engine.c, engine_confirm_dialog.h, engine_delta.c (+3) |
@@ -649,9 +649,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a8507 | FUN_004a8507 | 1444 | engine_army_state.c, engine_army_state.h |
 | 0x4a8aab | FUN_004a8aab | 753 | engine_army_state.h |
 | 0x4a8d9c | FUN_004a8d9c | 111 | engine_army_select.c, engine_army_select.h |
-| 0x4a8e0b | FUN_004a8e0b | 943 | engine_army_move_confirm.c, engine_army_move_confirm.h |
+| 0x4a8e0b | FUN_004a8e0b | 943 | engine.c, engine_army_move_confirm.c, engine_army_move_confirm.h |
 | 0x4a91ba | FUN_004a91ba | 152 | engine_army_move_confirm.c, engine_army_move_confirm.h |
-| 0x4a9252 | FUN_004a9252 | 288 | engine_army_move_confirm.c, engine_army_move_confirm.h, engine_army_select.h (+2) |
+| 0x4a9252 | FUN_004a9252 | 288 | engine.c, engine_army_move_confirm.c, engine_army_move_confirm.h (+3) |
 | 0x4a9372 | FUN_004a9372 | 669 | engine.c, engine_army_move_confirm.c, engine_army_move_confirm.h |
 | 0x4a960f | FUN_004a960f | 334 | engine_army_move_confirm.c, engine_army_move_confirm.h |
 | 0x4a975d | FUN_004a975d | 222 | engine_army_move_confirm.c, engine_army_move_confirm.h |

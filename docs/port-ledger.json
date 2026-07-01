@@ -1875,6 +1875,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_confirm_dialog.c",
     "src/engine_confirm_dialog.h"
    ]
@@ -17307,6 +17308,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_army_move_confirm.c",
     "src/engine_army_move_confirm.h"
    ]
@@ -17329,6 +17331,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_army_move_confirm.c",
     "src/engine_army_move_confirm.h",
     "src/engine_army_select.h",
