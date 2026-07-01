@@ -1,0 +1,76 @@
+# Organic click-driven test of engine_army_move_confirm's g_classify_garrison
+# branch -> sibling_9372, the LIVE producer of the 0x11 event popup
+# (project_event_popup_arms's session-19 continuation past the swap
+# branch closed in swap_county_click.jsonl).
+#
+# Requires --save-ref tools/make_garrison_county_fixture.py's output:
+# county A (key 4, real game data, keep at map cell col=30/row=46) plus a
+# fabricated friendly army record (key 6, a copy of ARMY_REC[4] with keep
+# level forced to 6 so engine_combat_garrison_cap(6)==0) referenced from
+# map cell (31,46) -- one tile east of the keep, which already naturally
+# carries the type/flags the hover classifier's garrison gate needs.
+# See that script's docstring for the full derivation.
+#
+# Load prefix copied verbatim from swap_county_click.jsonl / click_county.jsonl.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "before_clicks"}
+# click 1: arm county A's (mc=30,mr=46) handoff -- screen 0 -> 0x10.
+# pixel (260,250) / lParam 16384260.
+{"t": 900, "m": 512, "w": 0, "l": 16384260}
+{"t": 904, "m": 513, "w": 1, "l": 16384260}
+{"t": 908, "m": 514, "w": 0, "l": 16384260}
+{"capture": 930, "label": "after_click1_armed_0x10"}
+# turn reactive auto-dismiss back OFF here: the boot-time welcome series
+# is long clear by now (session 18: "clears by ~t90"), and the OUTCOME
+# this trace is testing (sibling_9372's event post) can itself open a
+# type-0 generic scroll (flag5==0 for every branch except 0xa6) that
+# auto_dismiss would otherwise clear again within a tick or two, before
+# any capture below catches it.
+{"auto_dismiss": 0}
+# hover onto the garrison target (mc=31,mr=46) -- pixel (290,265) /
+# lParam 17367330 -- lets engine_army_move_confirm_hover_tick reclassify
+# the new cell (g_classify_garrison) before the click below resolves it.
+{"t": 970, "m": 512, "w": 0, "l": 17367330}
+{"capture": 985, "label": "after_hover_garrison_cell"}
+# click 2: resolve -- should set g_classify_garrison and open the
+# generic Yes/No confirm dialog (screen 0x10 -> 0x1e, msg_id 7).
+{"t": 1000, "m": 513, "w": 1, "l": 17367330}
+{"t": 1004, "m": 514, "w": 0, "l": 17367330}
+{"capture": 1030, "label": "after_click2_dialog_open"}
+# click 3: press "Yes" -- same button hitbox as the swap dialog (both
+# call engine_confirm_dialog_open with ox=oy=0xa0), pixel (240,222) /
+# lParam 14549232.  Type-5 buttons only ARM a 20-frame press-flash on
+# this click; the callback (sibling_9372) fires ~20 ticks later.
+{"t": 1070, "m": 512, "w": 0, "l": 14549232}
+{"t": 1074, "m": 513, "w": 1, "l": 14549232}
+{"t": 1078, "m": 514, "w": 0, "l": 14549232}
+{"capture": 1082, "label": "after_click3_pressed"}
+# dense captures spanning the predicted ~20-tick press-flash countdown
+# (armed ~t1074 -> fires ~t1094) to catch the 0x11b popup before this
+# trace's auto_dismiss clears it again.
+{"capture": 1088, "label": "settle_1088"}
+{"capture": 1092, "label": "settle_1092"}
+{"capture": 1096, "label": "settle_1096"}
+{"capture": 1100, "label": "settle_1100"}
+{"capture": 1104, "label": "settle_1104"}
+{"capture": 1110, "label": "settle_1110"}
+{"capture": 1130, "label": "settle_1130"}
+{"capture": 1200, "label": "settle_1200"}
