@@ -7459,3 +7459,33 @@ popup-timing story can't explain.  No fix needed; severity cosmetic.
 > 📍 `src/state_dump.c` (`lane8`/`f2bits`), `tools/frida/openlords2-agent.js`
 > (`stateDumpOnce`), `tools/traces/slot_triage_probe.jsonl`, Ghidra
 > `FUN_00467770` (plane unpack) / `FUN_004063c1` (dirty-bit render).
+
+## 217 — the trade grid (0x0c) computes its figures ONLY on the open render; the per-frame refresh redraws content+arrows with NO compute, so a purchase in progress survives the redraws its own arrows drive
+
+`FUN_00428daf` (the trade-figure compute) unconditionally zeroes the running
+buy/sell net (`DAT_00554170`), total (`DAT_00553f64`), and ale delta
+(`DAT_0053e8c0`) at its top.  Retail runs it exactly once per grid open — from
+`FUN_0043530e` → `FUN_00416308` (the OPEN render) — and then never again while
+the grid is up: the per-tick refresh is `FUN_004ba26e`'s 0x0c arm, which draws
+`FUN_0041635f` (content) + `FUN_0040cfd2(0x30,0x50,…)` (the arrow strip) but
+does NOT call the compute.  So the arrows (`FUN_00435339` etc.) mutate the net,
+and every subsequent frame repaints the new figure without wiping it.
+
+The trap for a drop-in that folds the render into a single demand-redraw arm:
+if that arm calls the compute, then clicking an arrow (which requests a
+redraw) recomputes → net snaps back to 0 → the panel is frozen at "Buying 0 /
+Total 0" no matter how many times you click.  The port splits it exactly like
+retail: `engine_trade_render` (open, computes once behind a one-shot guard) +
+`engine_trade_refresh` (the per-frame content+arrows, no compute), the latter
+run from the UNCONDITIONAL per-frame render seam (same tier as the county
+0x15/0x19 arrow refresh), and the arrow actions request no redraw at all.
+
+Corollary — the merchant zone hit-test `FUN_004357a6` (screen 8) also runs
+every frame in the router and sets the hovered good (`DAT_0056d8ac =
+mercgrid[cursor]`) UNCONDITIONALLY, opening the grid only on an LMB press over
+a rug good; porting it as click-only leaves the good stale after a trade.
+
+> 📍 `src/engine_trade.c` (`engine_trade_render` / `engine_trade_refresh` /
+> the arrow arms), `src/engine.c` (`ti_ui_router` trade arm, the per-frame
+> `engine_tick_trade_render(0)` seam, `ti_merchant_zone` hover), Ghidra
+> `FUN_00416308` / `FUN_00428daf` / `FUN_004ba26e` (0x0c) / `FUN_004357a6`.

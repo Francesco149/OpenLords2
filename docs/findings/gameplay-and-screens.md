@@ -95,7 +95,7 @@ exists in src/ today (session 22).
 | 0x09 | FUN_00416925 | 0x46 | **Treasury/Court** (Gold/Arms/Iron/Stone/Wood, "Court of") | unported |
 | 0x0a | FUN_00417ea7 | 0x45 | **Armory** — conscript/mercenaries | unported |
 | 0x0b | FUN_00416cf3 | — | **Noble faces** (diplomacy partner select, faces.pl8) | unported |
-| 0x0c | FUN_00416308 | 0x44 | **Trade grid** (merchant.pl8/icontrad.pl8; buy/sell goods) | PORTED (s27, byte-exact; buy/sell interaction deferred) |
+| 0x0c | FUN_00416308 | 0x44 | **Trade grid** (merchant.pl8/icontrad.pl8; buy/sell goods) | PORTED (s28, byte-exact + buy/sell interaction: arrows/confirm/commit, quirk #217) |
 | 0x0f | FUN_00412b33 | 0x4a | **Labor allocation** (workforce commit via screen0f_commit) | PORTED (s25) |
 | 0x10 | (map) | — | army-move/merge handoff | PORTED |
 | 0x11 | FUN_004192b1 | 0x11 | **Split army** ("Army Division.") | unported |
