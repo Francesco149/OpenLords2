@@ -234,6 +234,14 @@ def _ingest_by_label(side_dir, out, pairs, locate, need_tick=False,
         if not got:
             continue
         pal, px, present, w, h = got
+        # Retail raws embed the capture ORDER as `present` (the agent's frame
+        # counter), not the engine tick — but the state dumps are keyed by
+        # tick (state_{tick:05d}.json), so the tick from captures.jsonl is
+        # the real `present` for pairing/state/display.  The port embeds its
+        # own tick already.  (Latent since v3: every prior view.json paired
+        # retail state off the order index and silently found nothing.)
+        if need_tick:
+            present = tick
         base, draws = None, None
         if locate_draws is not None:
             dp = locate_draws(lbl, tick) if need_tick else locate_draws(lbl)

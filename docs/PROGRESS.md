@@ -7,6 +7,54 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-07-02 (session 23) — the retail-seat input-scale gap ROOT-CAUSED + fixed (quirk #215: truncated-percent cursor mapping, not a client-rect size) — and the v3 STATE oracle turns out to have been retail-blind since day one, now repaired
+
+Session 22's queued-first task, run to ground the way its writeup
+demanded (watch retail's own cursor mirrors, don't infer).
+
+**The "(6,2-3) px short" clicks — quirk #215.**  Session 22 guessed the
+retail window's client rect (~646×486) scaled injected clicks down.
+Wrong mechanism: on the headless seat the viewport rect is the whole
+DESKTOP (1920×1080, quirk #120 branch), and the engine's cursor→game
+mapping truncates twice (`scale = 64000/1920 = 33`, not 33.33; then
+`game = client*33/100`).  The agent's lParam pre-scale inverted the
+IDEAL ratio, so the truncated divide landed ~1% short: x=599→593,
+y=226→223.  Fixed `rescaleMouseLParamToClient` to invert the quantized
+form exactly (`cx = ceil(gx*100/scale)`).  Verified empirically: a
+`--watch` on `DAT_004e65fc/f4` through county_panels_click — all 10
+authored coordinates now reproduce EXACTLY in retail's believed cursor.
+
+**The tooltip x-offset flag — RESOLVED, and it wasn't the seat.**  The
+re-captured retail side is byte-identical to session 22's (grid-button
+tooltips anchor to the classified HOTSPOT, not the raw cursor; every
+trace hit-box is ≥24 px, so the 1% cursor error changed no pixels).
+The user's "too far left" scrub flag (06:01) predated the quirk-#214
+stale-backdrop fix (06:09): the pre-#214 ghost polluted both the visual
+and the x=380-vs-374 box measurement.  Current containers: tooltip
+region ZERO-diff; population/happiness settled residue is 102/36 px of
+cow-sprite animation fringe (the known anim-counter gap).
+
+**HARNESS FIND: the v3 state panel has been retail-blind since v3
+began.**  Retail `.raw` headers embed the agent's capture ORDER as
+`present`, but `_read_state` keys retail state off `present` →
+`state_{tick}.json` never matched — EVERY view.json ever built (39
+sessions audited) had `retail-state=0`.  One-line ingest fix (retail
+`present` ← the captures.jsonl tick, symmetric with the port).  The
+county-panels view now pairs state on all 15 columns and shows: LFSR
+slots 18/19 + popup flag 74 (the KNOWN load-flip divergences), plus
+newly-visible mismatches to triage — slots 0 (0x522c90 hash), 3
+(0x57bf00 hash), 84 (0x57c944: port 2 vs retail 1), sub-blocks
+0:[2,3,4] and 3:[3,5,8,13].  Likely the same reactive-dismiss-timing
+family (retail's welcome scroll is still OPEN at the before_clicks
+capture tick; the port's already dismissed), but now they're
+measurable instead of invisible.
+
+**Next candidates:** triage the newly-visible state-slot mismatches;
+then continue the playthrough trace — labor screen 0x0f, armory
+0x0a/0x17, End-Turn season reports.
+
+---
+
 ## 2026-07-02 (session 22) — PLAYTHROUGH-DRIVEN PORTING begins: game knowledge researched, the county control-panel family (population/tax/happiness/rations + steppers + slider) and the TOOLTIP subsystem ported, all verified via one organic click-trace — and the trace exposed a retail-seat input-scale calibration gap
 
 New working mode (user-directed): research how the game is actually
