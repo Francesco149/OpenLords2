@@ -19,7 +19,9 @@
 #include "engine_camera.h"
 #include "engine_ingame_input.h"   /* in-game input dispatcher (FUN_0042ff10) */
 #include "engine_terrain_info.h"   /* terrain-info opener + screen-4 panel render */
+#include "engine_army_economy.h"   /* engine_army_economy_prod_scale (labor grain) */
 #include "engine_county_panels.h"  /* county detail panels (screens 0x14/15/16/19) */
+#include "engine_labor.h"          /* labor-allocation detail screen (0x0f) */
 #include "engine_tooltip.h"        /* tooltip subsystem (FUN_00476e95) */
 #include "engine_army_select.h"    /* army-select / move dispatcher (FUN_0043ce1a) */
 #include "engine_workforce_hud.h"  /* workforce icon-grid overlay (FUN_00412143) */
@@ -1242,6 +1244,46 @@ static void engine_tick_county_panel_render(int screen)
     }
 }
 
+/* ─── Labor-allocation detail screen (0x0f) ────────────────────────────
+ * See engine_labor.h.  Opened from the workforce icon grid (0x02); the
+ * renderer paints an opaque parchment panel + task readouts over the
+ * retained frame.  Retail's per-frame dispatch (FUN_0040f1a0) draws this
+ * screen with a bare FUN_00412b33 — NO map recomposite — so the seam
+ * mirrors that (unlike the county panels). */
+static void engine_tick_labor_render(void)
+{
+    const uint8_t *chrome = gfx_load_chrome_sheet();
+    const uint8_t *tfont  = gfx_load_title_font();
+    const uint8_t *mfont  = gfx_load_menu_font();
+    size_t loc_size = 0;
+    const uint8_t *locblob = config_localization_data(&loc_size);
+    if (!chrome || !tfont || !mfont || !locblob) {
+        return;
+    }
+    localization_state_t loc;
+    loc.blob = (unsigned char *)locblob;
+    loc.walker_offset = 0;
+
+    engine_labor_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.county_block  = g_per_army_768;
+    ctx.county        = (int)s_slot_0057c93c;
+    ctx.task          = engine_labor_task();
+    ctx.advanced_mode = (int)s_slot_0053f25c;
+    ctx.season        = (int)s_slot_0057c92c;
+    ctx.prod_scale    = engine_army_economy_prod_scale();
+    ctx.chrome        = chrome;
+    ctx.misc_sheet    = engine_pl8_misc_cty();       /* DAT_005530c8 */
+    ctx.system_sheet  = gfx_system_sheet_current();
+    ctx.title_font    = tfont;
+    ctx.menu_font     = mfont;
+    ctx.glyph_table   = gfx_glyph_render_map();
+    ctx.glyph_metrics = gfx_glyph_measure_map();
+    ctx.loc           = &loc;
+
+    engine_labor_render(&ctx);
+}
+
 /* ─── Tooltip tick (FUN_00476e95, tick line 112) ───────────────────────
  * The state instance + the live-globals ctx builder.  The dynamic
  * list-row inputs (labor/production rows on the right panel) have no
@@ -1678,6 +1720,18 @@ static void engine_tick_title_render_step(void)
                 if (gfx_lock_canvas()) {
                     engine_screen_strat_render(1);
                     engine_tick_county_panel_render(g_sim_current_screen);
+                    gfx_unlock_canvas();
+                    g_canvas_repainted_this_tick = 1;
+                }
+            } else if (g_sim_current_screen == 0x0f) {
+                /* Labor detail (screen 0x0f, FUN_00412b33): retail's
+                 * FUN_0040f1a0 arm draws it with NO map recomposite — the
+                 * opaque parchment panel covers the workforce grid it was
+                 * opened over, and the surrounding HUD/map is retained from
+                 * the 0x02 frame.  Mirror that: paint the panel over the
+                 * retained frame in one canvas lock. */
+                if (gfx_lock_canvas()) {
+                    engine_tick_labor_render();
                     gfx_unlock_canvas();
                     g_canvas_repainted_this_tick = 1;
                 }
@@ -2772,6 +2826,19 @@ void engine_dev_force_popup_render(int type, int32_t code, uint8_t flag6,
     g_popup_flag7         = 0;                /* DAT_0057c8ac */
     g_turn_event_queue.consumer_cooldown = 1;
     engine_popup_scroll_render();
+}
+
+/* Verification seat (--force-labor TASK): latch the selected task and
+ * paint the labor panel over the just-rendered strat frame, exactly as
+ * the demand seam's 0x0f arm does.  Self-contained lock/unlock like the
+ * forced-popup renderer above. */
+void engine_dev_force_labor_render(int task)
+{
+    engine_labor_set_task(task);
+    if (gfx_lock_canvas()) {
+        engine_tick_labor_render();
+        gfx_unlock_canvas();
+    }
 }
 
 /* ─── Help-hint pump + report opener ────────────────────────────────

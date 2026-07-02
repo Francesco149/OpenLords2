@@ -50,6 +50,11 @@ void gfx_glyph_set_glyph_h(int glyph_h)
     g_glyph_h = glyph_h;
 }
 
+void gfx_glyph_set_glyph_w(int glyph_w)
+{
+    g_glyph_w = glyph_w;
+}
+
 void gfx_glyph_set_clip(int clipped_w, int src_stride_pad, int dst_stride_pad)
 {
     g_clipped_w       = clipped_w;

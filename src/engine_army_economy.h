@@ -70,6 +70,11 @@ int engine_army_economy_units_c(int key, int cost);
 void engine_army_economy_set_production_tuning(int scale, int max_level,
                                                int divisor_lo, int divisor_hi);
 
+/* The live production scale (DAT_0057c8e0, g_prod_scale = 12 default).  The
+ * labor grain panel multiplies per-field seed by it for the season-1 total
+ * harvest readout (FUN_00413590). */
+int engine_army_economy_prod_scale(void);
+
 /* Port of FUN_0044cfe1 (377 B).  Solve army `key`'s sustainable production
  * output under two budget caps.  The army's per-resource-cell rate (record
  * +0x201, the census TYPE-0x02..0x0e bucket) times a candidate level (max_level

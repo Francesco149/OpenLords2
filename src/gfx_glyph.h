@@ -96,6 +96,11 @@ void gfx_glyph_set_glyph(int glyph_offset, int glyph_w, int glyph_h);
  * the per-glyph advance byte with the visible (post-clip) row count
  * without disturbing the source offset / column count. */
 void gfx_glyph_set_glyph_h(int glyph_h);
+/* Mutate ONLY the column count (DAT_005c9258).  Retail seeds glyph_w as
+ * scratch to pass an icon-cell size to the solid-block fill
+ * (gfx_sprite_fill_block reads glyph_w*16 as the block width) — see the
+ * labor screen's blacksmith arm (FUN_00413155). */
+void gfx_glyph_set_glyph_w(int glyph_w);
 void gfx_glyph_set_clip(int clipped_w, int src_stride_pad, int dst_stride_pad);
 /* Single-field dst_stride_pad write (opaque-blit wrapper FUN_0040a567). */
 void gfx_glyph_set_dst_stride_pad(int dst_stride_pad);

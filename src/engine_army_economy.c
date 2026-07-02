@@ -213,6 +213,11 @@ int engine_army_economy_units_c(int key, int cost)
     return units_for_cost(cost, g_price_c);
 }
 
+int engine_army_economy_prod_scale(void)
+{
+    return g_prod_scale;
+}
+
 void engine_army_economy_set_production_tuning(int scale, int max_level,
                                                int divisor_lo, int divisor_hi)
 {

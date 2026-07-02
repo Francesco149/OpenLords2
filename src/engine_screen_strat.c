@@ -196,6 +196,14 @@ static void strat_draw_menu_bar(void)
                                      font, gfx_glyph_render_map(), &loc);
 }
 
+/* Public entry — the labor screen's blacksmith arm (FUN_00413155 via
+ * FUN_00412b33) redraws the top menu bar over its full-screen smithy
+ * background, exactly as retail calls FUN_00419c78 there. */
+void engine_screen_strat_render_menubar(void)
+{
+    strat_draw_menu_bar();
+}
+
 /* FUN_0040f7d3(1) + FUN_0041a734(1) — the right-edge territory-info panel
  * (name / population / approval / tax / ration / resources) and the
  * "End turn" button strip below it. */

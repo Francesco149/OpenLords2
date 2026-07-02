@@ -193,6 +193,7 @@ static int         g_force_popup_code  = 0;
 static int         g_force_popup_flag6 = 0;
 static int         g_force_popup_payload_a = 0;
 static int         g_force_workforce_key = -1;  /* --force-workforce KEY */
+static int         g_force_labor_task     = -1;  /* --force-labor TASK */
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 static int         g_strat_load_live;  /* --strat-load-live: drive the live
                                         * load pump from the title menu */
@@ -1927,6 +1928,17 @@ static void bringup_strat_map(const char *dir)
         log_line("strat-map: forced workforce render army_key=%d", key);
     }
 
+    /* Forced labor-allocation detail render (verification seat,
+     * --force-labor TASK) — paints the per-task panel over the strat
+     * frame from the real loaded county record.  The renderer needs the
+     * resident in-game system sheet for the continue-seal, same as the
+     * forced-popup seat above. */
+    if (g_force_labor_task >= 0) {
+        gfx_load_system_sheet_select(1);
+        engine_dev_force_labor_render(g_force_labor_task);
+        log_line("strat-map: forced labor render task=%d", g_force_labor_task);
+    }
+
     /* Present + capture a BMP (surface palette → may be off-color; the
      * authoritative diff uses the raw dump + the captured retail .pal). */
     gfx_tick_present(1);
@@ -3189,6 +3201,11 @@ static void parse_cmdline(LPSTR lpCmd)
              * yet — see engine_workforce_hud.h) so the grid shows
              * something regardless of what the captured save data has. */
             g_force_workforce_key = (int)strtol(tokens[++i], NULL, 0);
+        } else if (!strcmp(a, "--force-labor") && i + 1 < ntok) {
+            /* TASK (1..9) — verification seat: paint the labor-allocation
+             * detail panel for TASK over the --strat-map render, reading
+             * the real per-county economy fields from the loaded save. */
+            g_force_labor_task = (int)strtol(tokens[++i], NULL, 0);
         } else if (!strcmp(a, "--save-sandbox") && i + 1 < ntok) {
             g_save_sandbox = tokens[++i];
         } else if (!strncmp(a, "--save-sandbox=", 15)) {

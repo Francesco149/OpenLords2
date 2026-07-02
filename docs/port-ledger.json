@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 813,
-  "ported": 54,
-  "unported": 1580,
+  "tested": 815,
+  "ported": 63,
+  "unported": 1569,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 867,
-  "pct_touched": 35.4,
-  "pct_tested": 33.2,
+  "touched": 878,
+  "pct_touched": 35.9,
+  "pct_tested": 33.3,
   "bytes_total": 838629,
-  "bytes_touched": 377324,
-  "pct_bytes_touched": 45.0
+  "bytes_touched": 384322,
+  "pct_bytes_touched": 45.8
  },
  "orphan_refs": [
   "0x004148",
@@ -591,6 +591,7 @@
     "src/engine_confirm_dialog.h",
     "src/engine_hud_menubar.c",
     "src/engine_hud_menubar.h",
+    "src/engine_labor.c",
     "src/gfx_wrap.c",
     "src/gfx_wrap.h"
    ]
@@ -758,6 +759,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_labor.c",
     "src/engine_tooltip.c",
     "src/gfx_line.c",
     "src/gfx_line.h"
@@ -1059,6 +1061,7 @@
     "src/engine_army_select.h",
     "src/engine_county_panels.c",
     "src/engine_county_panels.h",
+    "src/engine_labor.h",
     "src/engine_map_scene.c",
     "src/engine_map_scene.h",
     "src/engine_screen_strat.c",
@@ -1421,6 +1424,7 @@
    "status": "tested",
    "src": [
     "src/engine_county_panels.c",
+    "src/engine_labor.c",
     "src/engine_terrain_info.c"
    ]
   },
@@ -1585,6 +1589,7 @@
    "status": "tested",
    "src": [
     "src/engine_county_panels.c",
+    "src/engine_labor.c",
     "src/gfx_dispatch.h",
     "src/gfx_sprite_render.c",
     "src/gfx_sprite_render.h"
@@ -1941,6 +1946,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_labor.c",
     "src/engine_terrain_info.c",
     "src/engine_workforce_hud.c",
     "src/gfx_sprite_render.c",
@@ -2227,6 +2233,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_labor.h",
     "src/engine_screen_dispatch.c",
     "src/engine_screen_dispatch.h",
     "src/engine_screen_strat.h",
@@ -2530,24 +2537,37 @@
    "name": "FUN_00412b33",
    "size": 824,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_labor.c",
+    "src/engine_labor.h",
+    "src/engine_screen_strat.c"
+   ]
   },
   {
    "va": "0x412e6b",
    "name": "FUN_00412e6b",
    "size": 746,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_labor.c",
+    "src/engine_labor.h"
+   ]
   },
   {
    "va": "0x413155",
    "name": "FUN_00413155",
    "size": 977,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_labor.c",
+    "src/engine_labor.h",
+    "src/engine_screen_strat.c",
+    "src/gfx_glyph.h"
+   ]
   },
   {
    "va": "0x413526",
@@ -2562,32 +2582,45 @@
    "name": "FUN_00413590",
    "size": 1440,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_army_economy.h",
+    "src/engine_labor.c",
+    "src/engine_labor.h"
+   ]
   },
   {
    "va": "0x413b30",
    "name": "FUN_00413b30",
    "size": 1475,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_labor.c",
+    "src/engine_labor.h"
+   ]
   },
   {
    "va": "0x4140f3",
    "name": "FUN_004140f3",
    "size": 301,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_labor.c",
+    "src/engine_labor.h"
+   ]
   },
   {
    "va": "0x414220",
    "name": "FUN_00414220",
    "size": 31,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_labor.c",
+    "src/engine_labor.h"
+   ]
   },
   {
    "va": "0x41423f",
@@ -3045,6 +3078,7 @@
    "src": [
     "src/engine_hud_menubar.c",
     "src/engine_hud_menubar.h",
+    "src/engine_labor.c",
     "src/engine_screen_strat.c",
     "src/engine_screen_strat.h",
     "src/main.c"
@@ -3116,7 +3150,9 @@
    "src": [
     "src/engine_county_panels.c",
     "src/engine_hud_menubar.c",
-    "src/engine_hud_menubar.h"
+    "src/engine_hud_menubar.h",
+    "src/engine_labor.c",
+    "src/engine_labor.h"
    ]
   },
   {
@@ -3265,8 +3301,11 @@
    "name": "FUN_0041dedb",
    "size": 770,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_labor.c",
+    "src/engine_labor.h"
+   ]
   },
   {
    "va": "0x41e1dd",
@@ -3914,6 +3953,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_move.c",
+    "src/engine_labor.c",
+    "src/engine_labor.h",
     "src/engine_terrain_info.c",
     "src/engine_terrain_info.h"
    ]
@@ -4013,7 +4054,9 @@
     "src/engine.c",
     "src/engine_combat.c",
     "src/engine_combat.h",
-    "src/engine_county_panels.h"
+    "src/engine_county_panels.h",
+    "src/engine_labor.c",
+    "src/engine_labor.h"
    ]
   },
   {
@@ -6468,8 +6511,10 @@
    "name": "FUN_004398f5",
    "size": 187,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_labor.c"
+   ]
   },
   {
    "va": "0x4399b0",
@@ -6524,8 +6569,11 @@
    "name": "FUN_0043a123",
    "size": 145,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_labor.c",
+    "src/engine_labor.h"
+   ]
   },
   {
    "va": "0x43a1b4",
@@ -10989,6 +11037,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_labor.c",
     "src/engine_workforce_hud.h"
    ]
   },
@@ -10997,8 +11046,10 @@
    "name": "FUN_0045183a",
    "size": 102,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_labor.c"
+   ]
   },
   {
    "va": "0x4518a5",
@@ -11147,6 +11198,7 @@
     "src/engine_combat.c",
     "src/engine_county_panels.c",
     "src/engine_dirty_rect.h",
+    "src/engine_labor.c",
     "src/engine_territory.c",
     "src/engine_territory.h",
     "src/engine_title_render.h",
@@ -18278,6 +18330,7 @@
    "status": "tested",
    "src": [
     "src/engine_county_panels.c",
+    "src/engine_labor.c",
     "src/io_path.c",
     "src/io_path.h"
    ]
@@ -18370,6 +18423,7 @@
    "src": [
     "src/config.c",
     "src/engine_county_panels.c",
+    "src/engine_labor.c",
     "src/engine_pl8.h",
     "src/gfx.c",
     "src/gfx.h",
@@ -18763,7 +18817,8 @@
     "src/engine_confirm_dialog.h",
     "src/engine_county_panels.c",
     "src/engine_hud_menubar.c",
-    "src/engine_hud_panel.h"
+    "src/engine_hud_panel.h",
+    "src/engine_labor.c"
    ]
   },
   {
@@ -19336,6 +19391,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_labor.c",
     "src/engine_tooltip.c",
     "src/gfx_sprite.c",
     "src/gfx_sprite.h"

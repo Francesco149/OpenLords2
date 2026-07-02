@@ -42,6 +42,11 @@
  * (engine_pl8_data_ready() == 0, retail's DAT_0053f050 == 1 gate). */
 void engine_screen_strat_render(int redraw_mode);
 
+/* FUN_00419c78 — the top menu bar (File/Options/Help parchment + realm
+ * status tail).  Exposed for the labor screen's blacksmith arm, which
+ * repaints it over the smithy background. */
+void engine_screen_strat_render_menubar(void);
+
 /* Select the map-body animation mode (see engine_screen_strat.c).  0 (default)
  * = PINNED at anim frame 0 — the byte-exact frame the single-shot bring-up
  * seats + capture-parity harness expect.  1 = LIVE — the in-game loop owns the
