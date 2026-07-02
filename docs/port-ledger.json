@@ -4,13 +4,13 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 818,
-  "ported": 68,
+  "tested": 819,
+  "ported": 67,
   "unported": 1561,
   "orphan_refs_not_in_function_table": 7,
   "touched": 886,
   "pct_touched": 36.2,
-  "pct_tested": 33.4,
+  "pct_tested": 33.5,
   "bytes_total": 838629,
   "bytes_touched": 387652,
   "pct_bytes_touched": 46.2
@@ -1944,6 +1944,7 @@
     "src/engine_menu_input.h",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
+    "src/engine_trade.c",
     "src/gfx_sprite.h"
    ]
   },
@@ -5936,6 +5937,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine.c",
     "src/engine_trade.c",
     "src/engine_trade.h"
    ]
@@ -5993,8 +5995,13 @@
    "name": "FUN_004357a6",
    "size": 132,
    "is_thunk": false,
-   "status": "ported",
+   "status": "tested",
    "src": [
+    "src/engine.c",
+    "src/engine_ingame_input.c",
+    "src/engine_ingame_input.h",
+    "src/engine_merchant.c",
+    "src/engine_merchant.h",
     "src/engine_trade.h"
    ]
   },
@@ -20090,6 +20097,7 @@
     "src/engine_county_panels.h",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
+    "src/engine_trade.c",
     "src/main.c"
    ]
   },

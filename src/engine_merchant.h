@@ -10,10 +10,11 @@
  *
  * The render is a full-screen backdrop: merchant.256 palette + the
  * merchant.pl8 640×480 indexed scene into the back buffer + the bottom-
- * right "continue" seal.  mercgrid.pl8 (the click-region grid, whose data
- * at +0x18 is the labor region grid) is loaded by retail for hit-testing;
- * the baked engine_labor_region_grid.h already carries that payload, so the
- * render path does not need it. */
+ * right "continue" seal.  mercgrid.pl8 (the market-rug click grid) is loaded
+ * for hit-testing: its +0x18 payload is an 80×60 (stride 0x50) byte map of
+ * GOOD ids (1..14) — distinct from the workforce CATEGORY grid the labor
+ * screen bakes (a common address, different data per screen).  Clicking a
+ * good zone opens the trade grid (screen 0x0c, engine_trade.c). */
 
 #ifndef OPENLORDS2_ENGINE_MERCHANT_H
 #define OPENLORDS2_ENGINE_MERCHANT_H
@@ -24,5 +25,11 @@
  * frame regardless), so the value is accepted for dispatch-signature parity
  * and otherwise unused. */
 void engine_merchant_render(int redraw_mode);
+
+/* The good id (1..14) under the cursor on the market rug, or 0 for no zone
+ * (or the grid not yet loaded).  Port of FUN_004357a6's grid lookup —
+ * indexes mercgrid.pl8's 80×60 payload at (cursor_x>>3, cursor_y>>3).
+ * cursor_x/y are the game-space cursor (DAT_004e65fc / DAT_004e65f4). */
+int engine_merchant_zone_at(int cursor_x, int cursor_y);
 
 #endif /* OPENLORDS2_ENGINE_MERCHANT_H */

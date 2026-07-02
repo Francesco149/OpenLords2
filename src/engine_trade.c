@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "engine_button.h"          /* engine_button_render_list (FUN_0040cfd2) */
 #include "engine_dirty_rect.h"      /* (dirty marks are seam-owned; see notes) */
 #include "gfx.h"                    /* load_background_image, lock/unlock canvas */
 #include "gfx_line.h"               /* gfx_line_rect_bevel_dark_tl / _br */
@@ -154,6 +155,22 @@ static void trade_loc(const engine_trade_ctx_t *ctx, int grp, int sub,
     gfx_wrap_localized_line(ctx->loc, grp, sub, x, y,
                             font, ctx->glyph_table, color);
 }
+
+/* The trade grid's up/down buy/sell arrow widgets — retail's button table
+ * DAT_004dd838, r2-extracted byte-exact.  Painted every frame by the
+ * per-frame refresh (FUN_004ba26e case 0x0c: FUN_0040cfd2(0x30,0x50,
+ * &DAT_004dd838, DAT_00553f58)).  Buy mode shows the first 4 (up / down /
+ * buy-all / sell-all, kind 0x18 = 24×24 system sprites); sell mode adds
+ * two more (kind 0x20 = 32×32).  action/params drive the deferred click
+ * router; the renderer reads only x/y/sprite/kind/state/type. */
+static const engine_button_rec_t k_trade_buttons[6] = {
+    { 0x60, 0x88, 0x15, 0x18, 0x435339, 0, 0, 0, 4, 0, 0 },
+    { 0x78, 0x88, 0x17, 0x18, 0x43543d, 0, 0, 0, 4, 0, 0 },
+    { 0x98, 0x88, 0x48, 0x18, 0x4355db, 0, 0, 0, 4, 0, 0 },
+    { 0xb0, 0x88, 0x46, 0x18, 0x435541, 0, 0, 0, 4, 0, 0 },
+    { 0x110, 0xa8, 0x1d, 0x20, 0x435286, 0, 0, 0, 4, 0, 0 },
+    { 0x138, 0xa8, 0x1f, 0x20, 0x4352f2, 0, 0, 0, 4, 0, 0 },
+};
 
 /* iVar1 per good: DAT_004d2b80 first-int, stride 0x14, index good-1
  * (r2-extracted byte-exact).  The secondary icon drawn beside the "and N"
@@ -312,9 +329,15 @@ void engine_trade_render(const engine_trade_ctx_t *ctx)
     }
     io_read_file_at("icontrad.pl8", g_trade_scratch, TRADE_SCRATCH_LEN, 0);
 
-    /* FUN_0041635f — the grid content, over the locked back buffer. */
+    /* FUN_0041635f — the grid content, over the locked back buffer, then the
+     * per-frame arrow widgets (FUN_004ba26e case 0x0c) so the redraw frame
+     * carries them.  trade_content set g_trade_widget_count (4 buy / 6 sell);
+     * kind 0x18/0x20 read the system sheet, so misc is unused (NULL). */
     if (gfx_lock_canvas()) {
         trade_content(ctx);
+        engine_button_render_list(0x30, 0x50, k_trade_buttons,
+                                  g_trade_widget_count,
+                                  NULL, ctx->system_sheet, NULL);
         gfx_unlock_canvas();
     }
     /* DAT_004eb260 = 1 — scene flag with no ported consumer (as merchant). */

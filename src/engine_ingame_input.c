@@ -284,6 +284,14 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                     st->screen = 0;
                     st->demand_redraw = 1;
                     consumed = 1;
+                } else if (call_consume(hooks->merchant_zone, in, st) != 0) {
+                    /* Good-zone LMB → trade grid (screen 0x0c).  Runs BEFORE
+                     * the generic-click close (retail's widget router
+                     * FUN_004ba9c8 fires FUN_004357a6 before the per-screen
+                     * case), so a click on a rug good opens the grid and any
+                     * OTHER click still closes to the map. */
+                    st->demand_redraw = 1;       /* screen set in the hook */
+                    consumed = 1;
                 } else if (call_consume(hooks->generic_click, in, st) != 0) {
                     st->screen = 0;
                     st->demand_redraw = 1;
@@ -291,6 +299,24 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                 } else if (in->rmb_released != 0) {
                     st->screen = 0;
                     st->demand_redraw = 1;
+                    consumed = 1;
+                }
+            } else if (st->screen == 0x0c) {
+                /* ───────── MERCHANT TRADE GRID (DAT_004eac50 == 0x0c) ─────────
+                 * 42ff10.c:386-404.  The buy/sell face (engine_trade.c).  The
+                 * interactive up/down arrows (router table DAT_004dd838) are
+                 * deferred; turn-busy closes back to the merchant scene
+                 * unconditionally, else a generic click (seal/RMB) closes to
+                 * the merchant (screen 8) — NOT the map (the grid is nested
+                 * inside the merchant county-interior). */
+                if (!turn_idle) {
+                    st->screen = 8;
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                } else if (call_consume(hooks->generic_click, in, st) != 0 ||
+                           in->rmb_released != 0) {
+                    st->screen = 8;
+                    st->demand_redraw = 2;
                     consumed = 1;
                 }
             }

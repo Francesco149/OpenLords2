@@ -152,6 +152,10 @@ typedef struct engine_ingame_hooks {
                                                     * detail open (screen 0x02); sets the
                                                     * task + flips to 0x0f when a task cell
                                                     * is hit */
+    engine_ingame_consume_fn merchant_zone;       /* FUN_004357a6 merchant good-zone →
+                                                    * trade grid (screen 0x08); sets the
+                                                    * good + flips to 0x0c when a rug zone
+                                                    * is LMB-clicked */
     engine_ingame_action_fn  screen0f_commit;    /* FUN_00427d19 + FUN_0041438c (tail, screen 0xf) */
     engine_ingame_action_fn  army_move_click_resolve; /* FUN_004a9252 screen-0x10
                                                         * click resolve (map LMB,

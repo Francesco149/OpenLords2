@@ -8,13 +8,13 @@
 ## Port coverage (non-thunk engine functions)
 
 ```
-███████░░░░░░░░░░░░░  36.2% touched   (33.4% host-tested, 46.2% of code bytes)
+███████░░░░░░░░░░░░░  36.2% touched   (33.5% host-tested, 46.2% of code bytes)
 ```
 
 | status      | count | what it means                                          |
 |-------------|------:|--------------------------------------------------------|
-| tested      |   818 | ported + module covered by the host unit suite       |
-| ported      |    68 | reimplemented in src/, no host test for that module  |
+| tested      |   819 | ported + module covered by the host unit suite       |
+| ported      |    67 | reimplemented in src/, no host test for that module  |
 | **touched** | **886** | tested + ported (FUN_ provenance ref in src/)    |
 | unported    |  1561 | exists in engine, never referenced from src/         |
 | **total**   | **2447** | non-thunk engine functions (of 2452 incl. thunks) |

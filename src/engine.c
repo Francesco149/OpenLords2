@@ -931,6 +931,27 @@ static int ti_labor_open(const engine_ingame_input_in_t *in,
     return 0;
 }
 
+/* merchant_zone hook (FUN_004357a6): on the merchant scene (screen 8), an
+ * LMB on a good's rug zone latches the good (s_slot_0056d8ac / DAT_0056d8ac)
+ * and opens the trade grid (screen 0x0c, FUN_0043530e).  The good id comes
+ * from mercgrid.pl8 (engine_merchant_zone_at); the cursor is the game-space
+ * cursor (in->cursor_x/y = DAT_004e65fc/f4), the press is DAT_004eafb4. */
+static int ti_merchant_zone(const engine_ingame_input_in_t *in,
+                            engine_ingame_state_t *st)
+{
+    if (in->lmb_pressed == 0) {
+        return 0;
+    }
+    int good = engine_merchant_zone_at(g_input_game_x, g_input_game_y);
+    if (good == 0) {
+        return 0;
+    }
+    s_slot_0056d8ac = (uint32_t)good;
+    engine_trade_on_open();          /* FUN_0043530e: buy mode, no error */
+    st->screen = 0x0c;
+    return 1;
+}
+
 /* screen0f_commit hook (FUN_00427d19 + FUN_0041438c): the labor-close tail
  * — release the pending audio cue.  The border repaint (FUN_0041438c, the
  * bottom status-bar rows) is deferred: the demand-redraw the close requests
@@ -1697,6 +1718,7 @@ static void engine_tick_ingame_input_step(void)
         .terrain_info_close = ti_close,
         .army_select        = ti_army_select,            /* FUN_0043ce1a army select/move */
         .labor_open         = ti_labor_open,             /* FUN_0043a123 workforce → labor */
+        .merchant_zone      = ti_merchant_zone,          /* FUN_004357a6 merchant → trade grid */
         .screen0f_commit    = ti_screen0f_commit,        /* FUN_00427d19 labor-close tail */
         .army_move_click_resolve = ti_army_move_click_resolve, /* FUN_004a9252 */
         /* every other sub-handler deferred (NULL → inert) */

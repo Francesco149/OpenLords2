@@ -4,12 +4,41 @@
 #include "engine_merchant.h"
 
 #include <stdint.h>
+#include <stdlib.h>
 
 #include "gfx.h"                 /* gfx_load_palette / _background_image,
                                  * gfx_lock_canvas, gfx_system_sheet_current,
                                  * GFX_RENDER_W/H */
 #include "gfx_sprite_render.h"   /* gfx_sprite_seal_draw (FUN_0040d1bc) */
+#include "io.h"                  /* io_read_file_at (FUN_004af8d9) */
 #include "io_path.h"             /* io_path_chdir_base (FUN_004af502) */
+
+/* mercgrid.pl8: the merchant click-region grid (retail DAT_00542ce0, 0x12d8
+ * bytes).  Its +0x18 payload is an 80×60 (stride 0x50) byte map of GOOD ids
+ * (1..14; 0 = no zone; 3/5 = sheep/wool absent) — the market-rug hit map,
+ * NOT the workforce CATEGORY grid the labor screen bakes (different data at
+ * the same runtime address, loaded by different screens).  Loaded on the
+ * merchant open, read every input frame by the zone hit-test. */
+#define MERCGRID_LEN   0x12d8
+#define MERCGRID_HDR   0x18
+#define MERCGRID_W     0x50
+#define MERCGRID_H     0x3c
+static uint8_t *g_mercgrid;
+
+int engine_merchant_zone_at(int cursor_x, int cursor_y)
+{
+    if (!g_mercgrid) {
+        return 0;
+    }
+    if (cursor_x < 0 || cursor_x >= MERCGRID_W * 8 ||
+        cursor_y < 0 || cursor_y >= MERCGRID_H * 8) {
+        return 0;
+    }
+    /* FUN_004357a6: grid[(x>>3) + (y>>3)*0x50] — the round-toward-zero
+     * shift is a no-op for the (guarded) non-negative cursor. */
+    int idx = (cursor_x >> 3) + (cursor_y >> 3) * MERCGRID_W;
+    return g_mercgrid[MERCGRID_HDR + idx];
+}
 
 /* Retail FUN_00415fb7 body, verbatim order:
  *
@@ -60,6 +89,17 @@ void engine_merchant_render(int redraw_mode)
     /* merchant.pl8: 24-byte PL8 header + 640×480 raw indexed backdrop,
      * straight into the back buffer (FUN_00408fcb). */
     gfx_load_background_image("merchant.pl8");
+
+    /* mercgrid.pl8 → the resident click-region grid (FUN_004af8d9), read by
+     * the zone hit-test while this screen is up.  Retail loads it here on
+     * every merchant redraw; a persistent buffer is enough (the payload is
+     * a constant hit map). */
+    if (!g_mercgrid) {
+        g_mercgrid = malloc(MERCGRID_LEN);
+    }
+    if (g_mercgrid) {
+        io_read_file_at("mercgrid.pl8", g_mercgrid, MERCGRID_LEN, 0);
+    }
 
     /* The "continue" seal at the bottom-right corner (FUN_0040d1bc(W-0x1c,
      * H-0x1c, 1) — mode 1 → the 24×24 sprite 0x10 from the system sheet). */
