@@ -33,6 +33,7 @@ stale-backdrop fix (06:09): the pre-#214 ghost polluted both the visual
 and the x=380-vs-374 box measurement.  Current containers: tooltip
 region ZERO-diff; population/happiness settled residue is 102/36 px of
 cow-sprite animation fringe (the known anim-counter gap).
+**USER-CONFIRMED (viewer scrub): "tooltips match."**
 
 **HARNESS FIND: the v3 state panel has been retail-blind since v3
 began.**  Retail `.raw` headers embed the agent's capture ORDER as
@@ -42,14 +43,23 @@ sessions audited) had `retail-state=0`.  One-line ingest fix (retail
 `present` ← the captures.jsonl tick, symmetric with the port).  The
 county-panels view now pairs state on all 15 columns and shows: LFSR
 slots 18/19 + popup flag 74 (the KNOWN load-flip divergences), plus
-newly-visible mismatches to triage — slots 0 (0x522c90 hash), 3
-(0x57bf00 hash), 84 (0x57c944: port 2 vs retail 1), sub-blocks
-0:[2,3,4] and 3:[3,5,8,13].  Likely the same reactive-dismiss-timing
-family (retail's welcome scroll is still OPEN at the before_clicks
-capture tick; the port's already dismissed), but now they're
-measurable instead of invisible.
+newly-visible mismatches to triage — slot 0 `g_overworld_map`
+(sub-chunks 2,3,4), slot 3 `g_player_strategic_352` (sub-chunks
+3,5,8,13), slot 84 `s_slot_0057c944` (redraw cookie / AI round-robin
+cursor: port 2 vs retail 1), and slot 4 `g_per_army_768` on
+before_clicks ONLY (converges after the popups clear).  First-pass
+read: retail's welcome scroll is still OPEN at the before_clicks
+capture tick while the port has already dismissed (reactive-dismiss
+lag), so the engines run the early sim phases offset — the army table
+re-converges, but a single offset RNG draw / AI pass leaves the map
+plane + strategic records + round-robin cursor permanently hashed
+apart, exactly like the known +1 LFSR pull.  Discriminating
+experiment for next session: run a trace with the welcome series
+force-dismissed BEFORE the anchor (or a save with no boot popups) —
+if slots 0/3/84 go clean, the whole cluster is the popup-timing
+family; if not, there's a real sim divergence to chase.
 
-**Next candidates:** triage the newly-visible state-slot mismatches;
+**Next candidates:** the state-slot discriminating experiment above;
 then continue the playthrough trace — labor screen 0x0f, armory
 0x0a/0x17, End-Turn season reports.
 
