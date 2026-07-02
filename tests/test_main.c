@@ -1605,6 +1605,10 @@ struct test_case {
     X(county_ration_set_simple_write) \
     X(county_ration_set_snap_walks_to_clamp_when_outcome_never_flips) \
     X(county_ration_set_dead_drag_reverts) \
+    X(county_tax_step_clamps) \
+    X(county_wanted_step_clamps) \
+    X(county_button_tables_shape) \
+    X(county_slider_render_null_safe) \
     X(county_graph_ring_max_and_wrap) \
     X(county_panel_population_renders) \
     X(county_panel_tax_renders) \

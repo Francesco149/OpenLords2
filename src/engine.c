@@ -995,9 +995,77 @@ static void ti_army_move_click_resolve(const engine_ingame_input_in_t *din,
  * own click_resolve/army-select call: engine_army_select_poll_confirm_
  * result (the has-link re-target flow) and engine_army_move_confirm_
  * poll_screen_reset (the screen-0x10 siblings). */
+/* The county-panel arrow actions (FUN_004ba9c8's 0x15/0x19 arms'
+ * dispatch target).  Action codes are the retail callee addresses baked
+ * into the button tables (engine_county_panels.c).  The outer gates
+ * (rate < 50, level < 5, …) live in the retail wrappers FUN_0043aa32/
+ * aad5/a1e9/a2b2 and are reproduced here; the redraw flag mirrors their
+ * unconditional panel re-render + DAT_005530d0 raise. */
+static int g_cp_router_redraw;   /* set by the action, read by the arm */
+
+static void cp_button_action(uint32_t action, int param0, int param1)
+{
+    (void)param0; (void)param1;
+    int county = (int)s_slot_0057c93c;
+    const uint8_t *rec = g_per_army_768 + (size_t)county * 0x300;
+    switch (action) {
+    case 0x43aa32:                 /* tax rate +1 (gate: rate < 50) */
+        if (rec[0xb9] < 0x32) {
+            engine_county_tax_step(county, 1);
+            g_cp_router_redraw = 1;
+        }
+        break;
+    case 0x43aad5:                 /* tax rate −1 (gate: rate != 0) */
+        if (rec[0xb9] != 0) {
+            engine_county_tax_step(county, -1);
+            g_cp_router_redraw = 1;
+        }
+        break;
+    case 0x43a1e9:                 /* wanted ration level +1 (gate < 5) */
+        if ((int)(int8_t)rec[0x15e] < 5) {
+            engine_county_wanted_step(county, 1);
+            g_cp_router_redraw = 1;
+        }
+        break;
+    case 0x43a2b2:                 /* wanted ration level −1 (gate > 0) */
+        if ((int)(int8_t)rec[0x15e] > 0) {
+            engine_county_wanted_step(county, -1);
+            g_cp_router_redraw = 1;
+        }
+        break;
+    default:
+        break;
+    }
+    /* (MP: FUN_0043eda0 broadcast — deferred, SP drop-in.) */
+}
+
 static int ti_ui_router(const engine_ingame_input_in_t *din,
                         engine_ingame_state_t *dst)
 {
+    /* FUN_004ba9c8's 0x15 / 0x19 arms: the tax / wanted-ration arrow
+     * buttons, dispatched over the same tables the per-frame refresh
+     * paints (FUN_0040da1e semantics: press + hold-to-auto-repeat). */
+    if (dst->screen == 0x15 || dst->screen == 0x19) {
+        engine_menu_click_in_t bclick;
+        memset(&bclick, 0, sizeof bclick);
+        bclick.cursor_x           = g_input_game_x;
+        bclick.cursor_y           = g_input_game_y;
+        bclick.lmb_newly_pressed  = din->lmb_pressed;
+        bclick.lmb_newly_released = din->lmb_released;
+        bclick.lmb_held           = din->lmb_held;
+        g_cp_router_redraw = 0;
+        int hit = engine_menu_button_dispatch(
+            0, 0,
+            dst->screen == 0x15 ? engine_county_tax_buttons()
+                                : engine_county_wanted_buttons(),
+            2, &bclick, cp_button_action);
+        if (g_cp_router_redraw) {
+            g_combat_flag_530d0 = 1;           /* DAT_005530d0 */
+            dst->demand_redraw = 2;            /* panel re-render */
+        }
+        return hit ? 1 : 0;
+    }
+
     if (dst->screen != ENGINE_CONFIRM_DIALOG_SCREEN) {
         return 0;
     }
@@ -1151,6 +1219,34 @@ static void engine_tick_county_panel_render(int screen)
     case 0x19: engine_county_panel_rations(&ctx);    break;
     default: break;
     }
+
+    /* The interactive widgets retail paints per-frame (FUN_004ba26e's
+     * 0x15/0x19 arms) also paint here, AFTER the panel, so the redraw
+     * frame itself carries them (the port's per-frame arm runs before
+     * the demand seam — without this the recomposite would erase the
+     * buttons for one frame). */
+    if (screen == 0x15 || screen == 0x19) {
+        engine_button_render_list(0, 0,
+                                  screen == 0x15
+                                      ? engine_county_tax_buttons()
+                                      : engine_county_wanted_buttons(),
+                                  2, ctx.misc_sheet, ctx.system_sheet, NULL);
+        if (screen == 0x19) {
+            engine_county_ration_slider_render(&ctx);
+        }
+    }
+}
+
+/* The 0x19 per-frame slider repaint (knob follows the live percent). */
+static void engine_tick_county_slider_render(void)
+{
+    engine_county_panels_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.county_block = g_per_army_768;
+    ctx.county       = (int)s_slot_0057c93c;
+    ctx.chrome       = gfx_load_chrome_sheet();
+    ctx.system_sheet = gfx_system_sheet_current();
+    engine_county_ration_slider_render(&ctx);
 }
 
 /* action_grid hook (FUN_00438ceb + the FUN_0043a8f2/a939/a922/a846
@@ -1460,6 +1556,25 @@ static void engine_tick_title_render_step(void)
              * it (hover-highlight tracking, like the title page's buttons). */
             if (gfx_lock_canvas()) {
                 engine_tick_confirm_dialog_render();
+                gfx_unlock_canvas();
+            }
+        } else if (g_sim_current_screen == 0x15 ||
+                   g_sim_current_screen == 0x19) {
+            /* Tax / rations panels: retail's per-frame refresh
+             * (FUN_004ba26e 0x15/0x19 arms) repaints the arrow buttons
+             * (press-frame animation) and — on 0x19 — the percent
+             * slider (FUN_00411fde) over the retained panel frame. */
+            if (gfx_lock_canvas()) {
+                engine_button_render_list(
+                    0, 0,
+                    g_sim_current_screen == 0x15
+                        ? engine_county_tax_buttons()
+                        : engine_county_wanted_buttons(),
+                    2, engine_pl8_misc_cty(), gfx_system_sheet_current(),
+                    NULL);
+                if (g_sim_current_screen == 0x19) {
+                    engine_tick_county_slider_render();
+                }
                 gfx_unlock_canvas();
             }
         }

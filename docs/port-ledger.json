@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 795,
+  "tested": 805,
   "ported": 54,
-  "unported": 1598,
+  "unported": 1588,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 849,
-  "pct_touched": 34.7,
-  "pct_tested": 32.5,
+  "touched": 859,
+  "pct_touched": 35.1,
+  "pct_tested": 32.9,
   "bytes_total": 838629,
-  "bytes_touched": 373529,
-  "pct_bytes_touched": 44.5
+  "bytes_touched": 374885,
+  "pct_bytes_touched": 44.7
  },
  "orphan_refs": [
   "0x004148",
@@ -1477,8 +1477,10 @@
    "name": "FUN_00409c93",
    "size": 374,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_county_panels.c"
+   ]
   },
   {
    "va": "0x409e09",
@@ -1924,6 +1926,7 @@
     "src/engine_button.h",
     "src/engine_confirm_dialog.c",
     "src/engine_confirm_dialog.h",
+    "src/engine_county_panels.h",
     "src/engine_menu_input.h",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
@@ -2008,6 +2011,7 @@
    "src": [
     "src/engine.c",
     "src/engine_confirm_dialog.h",
+    "src/engine_county_panels.h",
     "src/engine_delta.c",
     "src/engine_menu_input.c",
     "src/engine_menu_input.h",
@@ -2450,8 +2454,11 @@
    "name": "FUN_00411fde",
    "size": 258,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine.c",
+    "src/engine_county_panels.h"
+   ]
   },
   {
    "va": "0x4120e0",
@@ -6548,32 +6555,40 @@
    "name": "FUN_0043a1e9",
    "size": 86,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_county_panels.h"
+   ]
   },
   {
    "va": "0x43a23f",
    "name": "FUN_0043a23f",
    "size": 115,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_county_panels.h"
+   ]
   },
   {
    "va": "0x43a2b2",
    "name": "FUN_0043a2b2",
    "size": 85,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_county_panels.h"
+   ]
   },
   {
    "va": "0x43a307",
    "name": "FUN_0043a307",
    "size": 114,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_county_panels.h"
+   ]
   },
   {
    "va": "0x43a379",
@@ -6683,32 +6698,41 @@
    "name": "FUN_0043aa32",
    "size": 81,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine.c",
+    "src/engine_county_panels.h"
+   ]
   },
   {
    "va": "0x43aa83",
    "name": "FUN_0043aa83",
    "size": 82,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_county_panels.h"
+   ]
   },
   {
    "va": "0x43aad5",
    "name": "FUN_0043aad5",
    "size": 80,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_county_panels.h"
+   ]
   },
   {
    "va": "0x43ab25",
    "name": "FUN_0043ab25",
    "size": 81,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_county_panels.h"
+   ]
   },
   {
    "va": "0x43ab76",
@@ -19922,6 +19946,7 @@
     "src/engine_button.c",
     "src/engine_button.h",
     "src/engine_confirm_dialog.h",
+    "src/engine_county_panels.h",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
     "src/main.c"
@@ -19936,6 +19961,7 @@
    "src": [
     "src/engine.c",
     "src/engine_confirm_dialog.h",
+    "src/engine_county_panels.h",
     "src/engine_ingame_input.h",
     "src/engine_load_pump.h",
     "src/engine_menu_input.c",

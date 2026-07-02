@@ -15,6 +15,7 @@
 #include "call_trace.h"
 #include "engine_army_economy.h"
 #include "engine_math.h"
+#include "engine_realm.h"
 #include "engine_territory.h"
 #include "gfx_dispatch.h"
 #include "gfx_line.h"
@@ -663,6 +664,93 @@ int engine_county_rations_input(const engine_county_rations_in_t *in,
     *out_is_drag = is_drag;
     *out_changed = 1;
     return 1;
+}
+
+/* ── The panel arrow-button tables (see header) ─────────────────────────
+ * Mutable like retail's .data tables — engine_menu_button_dispatch
+ * animates state/pressed/repeat in place. */
+static engine_button_rec_t k_county_tax_buttons[2] = {
+    { 0x0c0, 0xa2, 0x15, 0x18, 0x43aa32, 0, 0, 0, 4, 0, 0 },
+    { 0x0e0, 0xa2, 0x17, 0x18, 0x43aad5, 0, 0, 0, 4, 0, 0 },
+};
+static engine_button_rec_t k_county_wanted_buttons[2] = {
+    { 0x158, 0x82, 0x15, 0x18, 0x43a1e9, 0, 0, 0, 4, 0, 0 },
+    { 0x170, 0x82, 0x17, 0x18, 0x43a2b2, 0, 0, 0, 4, 0, 0 },
+};
+
+engine_button_rec_t *engine_county_tax_buttons(void)
+{
+    return k_county_tax_buttons;
+}
+
+engine_button_rec_t *engine_county_wanted_buttons(void)
+{
+    return k_county_wanted_buttons;
+}
+
+void engine_county_tax_step(int county, int dir)
+{
+    CALL_TRACE_ENTER(dir > 0 ? 0x0043aa83 : 0x0043ab25);
+    uint8_t *rec = g_per_army_768 + (size_t)county * 0x300;
+    if (dir > 0) {
+        if (rec[0xb9] < 0x32) {
+            rec[0xb9] += 1;
+        }
+    } else {
+        if (rec[0xb9] != 0) {
+            rec[0xb9] -= 1;
+        }
+    }
+    engine_realm_recompute_realm_income(county);            /* 44b80b */
+    /* FUN_0041152f() re-render + DAT_005530d0/DAT_004eb260 — caller. */
+}
+
+void engine_county_wanted_step(int county, int dir)
+{
+    CALL_TRACE_ENTER(dir > 0 ? 0x0043a23f : 0x0043a307);
+    uint8_t *rec = g_per_army_768 + (size_t)county * 0x300;
+    if (dir > 0) {
+        if ((int8_t)rec[0x15e] < 5) {
+            rec[0x15e] += 1;
+        }
+    } else {
+        if ((int8_t)rec[0x15e] > 0) {
+            rec[0x15e] -= 1;
+        }
+    }
+    engine_army_economy_provision(county, (int)s_slot_0057c934); /* 44df5f */
+    engine_army_economy_plan_realm(county, (int)s_slot_0057c92c); /* 4485a5 */
+    /* FUN_00411b72() re-render + the redraw flags — caller. */
+}
+
+void engine_county_ration_slider_render(const engine_county_panels_ctx_t *ctx)
+{
+    CALL_TRACE_ENTER(0x00411fde);
+    const uint8_t *rec = ctx->county_block
+                             ? COUNTY(ctx->county_block, ctx->county)
+                             : (const uint8_t *)0;
+
+    /* FUN_00409c93(0xdc, 0xd8, 8, 2) — repaint the parchment interior
+     * under the slider band (erases the previous knob position).  The
+     * plain interior-tile fill, NOT a bevel frame. */
+    if (ctx->chrome) {
+        gfx_panel_fill_interior(ctx->chrome, 0xdc, 0xd8, 8, 2);
+    }
+    /* Side arrows off the SYSTEM sheet (0x5bb540) at the FUN_0043a379
+     * hit rects. */
+    if (ctx->system_sheet) {
+        gfx_dispatch_sprite(ctx->system_sheet, 0x4a, 200, 0xdc);
+        gfx_dispatch_sprite(ctx->system_sheet, 0x4b, 0x144, 0xdc);
+    }
+    /* The 100-px track: dark top rule, light fill, pale bottom rule. */
+    gfx_line_draw(0xe0, 0xe5, 0x143, 0xe5, 0x10);
+    gfx_line_fill_rect(0xe0, 0xe6, 100, 4, 0x3f);
+    gfx_line_draw(0xe0, 0xea, 0x143, 0xea, 0x1f);
+    /* The knob at wanted-percent (+0x15f). */
+    if (ctx->system_sheet && rec) {
+        gfx_dispatch_sprite(ctx->system_sheet, 0x4c,
+                            (int)(int8_t)rec[0x15f] + 0xdc, 0xd8);
+    }
 }
 
 /* ── FUN_0043a5a9 — apply the ration change ──────────────────────────── */

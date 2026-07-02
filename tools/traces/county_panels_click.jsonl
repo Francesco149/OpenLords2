@@ -1,0 +1,99 @@
+# COUNTY PANELS (session 22, playthrough-driven port): open all four county
+# control-panel detail screens ORGANICALLY via the 2x2 action grid
+# (FUN_00438ceb): population 0x14 -> happiness 0x16 (direct panel->panel
+# switch through the grid) -> tax 0x15 -> rations 0x19, then exercise the
+# rations stepper (+1 / -1 arrows, FUN_0043a379 -> FUN_0043a5a9 economy
+# reruns on BOTH engines), then RMB-close back to the strategic map.
+# First organic exercise of the county-panel family (engine_county_panels.c,
+# docs/findings/gameplay-and-screens.md).
+#
+# Seat: the default lastturn.sav reference (the current county at load is
+# the player's own, so the action grid's owner gate passes -- no fixture).
+# auto_dismiss stays ON for the WHOLE trace: the boot welcome series (and
+# any first-run hint) dismisses reactively on both engines, and the county
+# panels themselves are NOT scrolls (extended_pause never set), so the
+# reactive dismiss cannot touch them -- no toggle-timing race (quirk #213).
+#
+# Grid geometry (FUN_00438ceb): x in (0x1e7,0x276) split at 0x224/0x237,
+# y in (0xb5,0xf1) split at 0xd4.  Button centres used below:
+#   population (517,196)  happiness (599,196)  tax (517,226)  rations (599,226)
+# Rations stepper (FUN_0043a379): + arrow (337,232), - arrow (212,232).
+#
+# Load prefix copied verbatim from endturn_seal.jsonl.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "before_clicks"}
+# click 1: action grid top-left -> POPULATION report (screen 0x14).
+# l = (196<<16)|517 = 12845573
+{"t": 900, "m": 512, "w": 0, "l": 12845573}
+{"t": 904, "m": 512, "w": 0, "l": 12845573}
+{"t": 908, "m": 513, "w": 1, "l": 12845573}
+{"t": 912, "m": 514, "w": 0, "l": 12845573}
+{"capture": 925, "label": "population_open"}
+{"capture": 990, "label": "population_settled"}
+# click 2: grid top-right WHILE the population panel is open -- the grid
+# runs inside the panel's own input case, switching directly to the
+# HAPPINESS report (screen 0x16).  l = (196<<16)|599 = 12845655
+{"t": 1040, "m": 512, "w": 0, "l": 12845655}
+{"t": 1044, "m": 512, "w": 0, "l": 12845655}
+{"t": 1048, "m": 513, "w": 1, "l": 12845655}
+{"t": 1052, "m": 514, "w": 0, "l": 12845655}
+{"capture": 1065, "label": "happiness_open"}
+{"capture": 1130, "label": "happiness_settled"}
+# click 3: grid bottom-left -> TAX panel (screen 0x15).
+# l = (226<<16)|517 = 14811653
+{"t": 1180, "m": 512, "w": 0, "l": 14811653}
+{"t": 1184, "m": 512, "w": 0, "l": 14811653}
+{"t": 1188, "m": 513, "w": 1, "l": 14811653}
+{"t": 1192, "m": 514, "w": 0, "l": 14811653}
+{"capture": 1205, "label": "tax_open"}
+{"capture": 1270, "label": "tax_settled"}
+# click 4: grid bottom-right -> RATIONS panel (screen 0x19).
+# l = (226<<16)|599 = 14811735
+{"t": 1320, "m": 512, "w": 0, "l": 14811735}
+{"t": 1324, "m": 512, "w": 0, "l": 14811735}
+{"t": 1328, "m": 513, "w": 1, "l": 14811735}
+{"t": 1332, "m": 514, "w": 0, "l": 14811735}
+{"capture": 1345, "label": "rations_open"}
+{"capture": 1410, "label": "rations_settled"}
+# click 5: the rations + arrow (rect 0x145,0xdc,0x18,0x18; centre 337,232)
+# -- FUN_0043a379 steps wanted% +1 and FUN_0043a5a9 reruns the economy
+# passes on BOTH engines (provision -> allocate -> plan_realm x2), then
+# the panel re-renders.  l = (232<<16)|337 = 15204689
+{"t": 1460, "m": 512, "w": 0, "l": 15204689}
+{"t": 1464, "m": 512, "w": 0, "l": 15204689}
+{"t": 1468, "m": 513, "w": 1, "l": 15204689}
+{"t": 1472, "m": 514, "w": 0, "l": 15204689}
+{"capture": 1485, "label": "rations_plus"}
+{"capture": 1550, "label": "rations_plus_settled"}
+# click 6: the rations - arrow (centre 212,232) -- step back down.
+# l = (232<<16)|212 = 15204564
+{"t": 1600, "m": 512, "w": 0, "l": 15204564}
+{"t": 1604, "m": 512, "w": 0, "l": 15204564}
+{"t": 1608, "m": 513, "w": 1, "l": 15204564}
+{"t": 1612, "m": 514, "w": 0, "l": 15204564}
+{"capture": 1625, "label": "rations_minus"}
+{"capture": 1690, "label": "rations_minus_settled"}
+# click 7: RMB anywhere -> close back to the strategic map (screen 0).
+{"t": 1740, "m": 512, "w": 0, "l": 14811735}
+{"t": 1744, "m": 516, "w": 0, "l": 14811735}
+{"t": 1748, "m": 517, "w": 0, "l": 14811735}
+{"capture": 1760, "label": "closed"}
+{"capture": 1830, "label": "final"}

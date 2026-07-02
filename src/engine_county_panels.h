@@ -80,6 +80,7 @@
 
 #include <stdint.h>
 
+#include "engine_button.h"
 #include "localization.h"
 
 /* ── Shared render context ─────────────────────────────────────────────
@@ -179,6 +180,43 @@ typedef struct engine_county_rations_in {
 int engine_county_rations_input(const engine_county_rations_in_t *in,
                                 int *out_value, int *out_is_drag,
                                 int *out_changed);
+
+/* ── The panel arrow-button widgets (session-22 second pass) ───────────
+ * The up/down steppers on the tax + rations panels are NOT drawn by the
+ * flip renderers: retail's per-frame UI refresh (FUN_004ba26e) paints
+ * them every frame via the button-strip renderer —
+ *     screen 0x15: FUN_0040cfd2(0, 0, &DAT_004dd790, 2)
+ *     screen 0x19: FUN_0040cfd2(0, 0, &DAT_004dd7c0, 2) + FUN_00411fde()
+ * — and the UI router (FUN_004ba9c8) dispatches their clicks via
+ * FUN_0040da1e over the SAME tables.  Both tables are 2 type-4
+ * (press + hold-to-auto-repeat) kind-0x18 (system-sheet 24 px) records,
+ * extracted from .rdata:
+ *   0x4dd790: up (0xc0,0xa2) spr 0x15 → FUN_0043aa32 (tax rate +1, cap 50)
+ *             down (0xe0,0xa2) spr 0x17 → FUN_0043aad5 (tax rate −1, floor 0)
+ *   0x4dd7c0: up (0x158,0x82) spr 0x15 → FUN_0043a1e9 (wanted level +1, cap 5)
+ *             down (0x170,0x82) spr 0x17 → FUN_0043a2b2 (wanted level −1)
+ * The tables are exposed MUTABLE (the dispatch animates state/pressed in
+ * place, exactly like retail's .data tables).  The `action` field holds
+ * the retail callee address as an opaque code for the dispatch callback. */
+engine_button_rec_t *engine_county_tax_buttons(void);      /* DAT_004dd790 */
+engine_button_rec_t *engine_county_wanted_buttons(void);   /* DAT_004dd7c0 */
+
+/* FUN_0043aa83 / FUN_0043ab25 — step the county's tax rate (+0xb9) by
+ * dir (+1/−1), clamped to [0, 0x32], then recompute the realm's projected
+ * income (engine_realm_recompute_realm_income).  The caller re-renders. */
+void engine_county_tax_step(int county, int dir);
+
+/* FUN_0043a23f / FUN_0043a307 — step the county's WANTED ration level
+ * (+0x15e, the loc-grp-0x15 name index) by dir, clamped to [0, 5], then
+ * rerun provision + plan_realm.  The caller re-renders. */
+void engine_county_wanted_step(int county, int dir);
+
+/* FUN_00411fde — the rations panel's percent slider, drawn per-frame
+ * after the wanted-arrow buttons: chrome bevel trough, system-sheet side
+ * arrows (0x4a/0x4b at the FUN_0043a379 hit rects), the 100-px track
+ * (dark top line / 0x3f fill / light bottom line), and the knob (0x4c)
+ * at x = wanted-percent + 0xdc. */
+void engine_county_ration_slider_render(const engine_county_panels_ctx_t *ctx);
 
 /* ── FUN_0043a5a9 — apply a ration change ──────────────────────────────
  * Writes the wanted percent, reruns the provisioning pass, and — for an

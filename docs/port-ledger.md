@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **849** (34.7%) — tested 795, ported 54
-- code bytes touched: **44.5%** (373,529 / 838,629 B)
-- unported: **1598**
+- touched: **859** (35.1%) — tested 805, ported 54
+- code bytes touched: **44.7%** (374,885 / 838,629 B)
+- unported: **1588**
 - orphan refs (in src/, not in function table): 7
 
-## tested (795) — ported + host unit suite
+## tested (805) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -126,6 +126,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4093e0 | FUN_004093e0 | 73 | gfx_panel.c, gfx_panel.h |
 | 0x40946d | FUN_0040946d | 856 | gfx_panel.c, gfx_panel.h |
 | 0x4097c5 | FUN_004097c5 | 367 | gfx_panel.c, gfx_panel.h |
+| 0x409c93 | FUN_00409c93 | 374 | engine_county_panels.c |
 | 0x409e09 | FUN_00409e09 | 368 | engine_hud_menubar.c, engine_hud_menubar.h |
 | 0x40a01d | FUN_0040a01d | 261 | engine_minimap.c, gfx_dispatch.h, gfx_sprite_render.c (+1) |
 | 0x40a21a | FUN_0040a21a | 433 | engine_county_panels.c, engine_hud_menubar.c, engine_hud_menubar.h (+4) |
@@ -137,9 +138,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40acce | FUN_0040acce | 324 | engine_title_render.c, gfx_caret.c, gfx_caret.h (+2) |
 | 0x40c5b0 | FUN_0040c5b0 | 373 | engine_hud_menubar.c, engine_hud_menubar.h |
 | 0x40ccfa | FUN_0040ccfa | 94 | engine.c, engine_confirm_dialog.c, engine_confirm_dialog.h |
-| 0x40cfd2 | FUN_0040cfd2 | 490 | engine.c, engine_button.c, engine_button.h (+6) |
+| 0x40cfd2 | FUN_0040cfd2 | 490 | engine.c, engine_button.c, engine_button.h (+7) |
 | 0x40d1bc | FUN_0040d1bc | 181 | engine_terrain_info.c, engine_workforce_hud.c, gfx_sprite_render.c (+1) |
-| 0x40da1e | FUN_0040da1e | 869 | engine.c, engine_confirm_dialog.h, engine_delta.c (+3) |
+| 0x40da1e | FUN_0040da1e | 869 | engine.c, engine_confirm_dialog.h, engine_county_panels.h (+4) |
 | 0x40deca | FUN_0040deca | 152 | engine_ingame_input.h |
 | 0x40e3ee | FUN_0040e3ee | 505 | engine.c, engine_button.h, engine_menu_input.c (+1) |
 | 0x40e5e7 | FUN_0040e5e7 | 153 | engine_menu_input.c, engine_menu_input.h |
@@ -167,6 +168,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x41152f | FUN_0041152f | 460 | engine_county_panels.c, engine_county_panels.h |
 | 0x4116fb | FUN_004116fb | 1143 | engine_county_panels.c, engine_county_panels.h |
 | 0x411b72 | FUN_00411b72 | 1132 | engine_county_panels.c, engine_county_panels.h |
+| 0x411fde | FUN_00411fde | 258 | engine.c, engine_county_panels.h |
 | 0x412143 | FUN_00412143 | 734 | engine.c, engine_army_select.h, engine_workforce_hud.h |
 | 0x412666 | FUN_00412666 | 99 | engine_workforce_hud.h |
 | 0x4126c9 | FUN_004126c9 | 204 | engine_workforce_hud.h |
@@ -281,12 +283,20 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x438e3b | FUN_00438e3b | 574 | engine_ingame_input.h |
 | 0x439079 | FUN_00439079 | 169 | engine_ingame_input.h |
 | 0x439122 | FUN_00439122 | 537 | engine_ingame_input.h |
+| 0x43a1e9 | FUN_0043a1e9 | 86 | engine_county_panels.h |
+| 0x43a23f | FUN_0043a23f | 115 | engine_county_panels.h |
+| 0x43a2b2 | FUN_0043a2b2 | 85 | engine_county_panels.h |
+| 0x43a307 | FUN_0043a307 | 114 | engine_county_panels.h |
 | 0x43a379 | FUN_0043a379 | 560 | engine.c, engine_county_panels.c, engine_county_panels.h (+2) |
 | 0x43a5a9 | FUN_0043a5a9 | 647 | engine.c, engine_county_panels.c, engine_county_panels.h |
 | 0x43a846 | FUN_0043a846 | 172 | engine_county_panels.c, engine_county_panels.h |
 | 0x43a8f2 | FUN_0043a8f2 | 48 | engine.c, engine_county_panels.c, engine_county_panels.h |
 | 0x43a922 | FUN_0043a922 | 23 | engine_county_panels.c, engine_county_panels.h |
 | 0x43a939 | FUN_0043a939 | 23 | engine_county_panels.c, engine_county_panels.h |
+| 0x43aa32 | FUN_0043aa32 | 81 | engine.c, engine_county_panels.h |
+| 0x43aa83 | FUN_0043aa83 | 82 | engine_county_panels.h |
+| 0x43aad5 | FUN_0043aad5 | 80 | engine_county_panels.h |
+| 0x43ab25 | FUN_0043ab25 | 81 | engine_county_panels.h |
 | 0x43b917 | FUN_0043b917 | 115 | engine_combat.c, engine_combat.h |
 | 0x43caf4 | FUN_0043caf4 | 354 | engine_ingame_input.h, engine_terrain_info.c, engine_terrain_info.h |
 | 0x43cc56 | FUN_0043cc56 | 16 | engine_army_select.h, engine_ingame_input.h |
@@ -775,8 +785,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b4cb8 | FUN_004b4cb8 | 1659 | gfx_sprite.c, gfx_sprite.h, gfx_sprite_render.c (+1) |
 | 0x4b5333 | FUN_004b5333 | 2997 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+10) |
-| 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_army_move_confirm.h, engine_button.c (+5) |
-| 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_confirm_dialog.h, engine_ingame_input.h (+6) |
+| 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_army_move_confirm.h, engine_button.c (+6) |
+| 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_confirm_dialog.h, engine_county_panels.h (+7) |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c |
 | 0x4bb978 | FUN_004bb978 | 614 | engine.c, engine.h, engine_rate.c |
 | 0x4bbbe3 | FUN_004bbbe3 | 157 | engine_camera.h |

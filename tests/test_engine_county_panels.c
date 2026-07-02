@@ -361,6 +361,67 @@ int test_county_ration_set_dead_drag_reverts(void)
     return 0;
 }
 
+/* ─── The arrow-button steppers (FUN_0043aa83/ab25, FUN_0043a23f/a307) ── */
+
+int test_county_tax_step_clamps(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    CREC(4)[0xb9] = 0x31;
+    engine_county_tax_step(4, 1);
+    T_ASSERT_EQ_I(CREC(4)[0xb9], 0x32);
+    engine_county_tax_step(4, 1);               /* at cap — stays */
+    T_ASSERT_EQ_I(CREC(4)[0xb9], 0x32);
+    CREC(4)[0xb9] = 0;
+    engine_county_tax_step(4, -1);              /* at floor — stays */
+    T_ASSERT_EQ_I(CREC(4)[0xb9], 0);
+    CREC(4)[0xb9] = 5;
+    engine_county_tax_step(4, -1);
+    T_ASSERT_EQ_I(CREC(4)[0xb9], 4);
+    return 0;
+}
+
+int test_county_wanted_step_clamps(void)
+{
+    memset(g_per_army_768, 0, sizeof g_per_army_768);
+    CREC(4)[0x15e] = 4;
+    engine_county_wanted_step(4, 1);
+    T_ASSERT_EQ_I((int)(int8_t)CREC(4)[0x15e], 5);
+    engine_county_wanted_step(4, 1);            /* at cap — stays */
+    T_ASSERT_EQ_I((int)(int8_t)CREC(4)[0x15e], 5);
+    CREC(4)[0x15e] = 0;
+    engine_county_wanted_step(4, -1);           /* at floor — stays */
+    T_ASSERT_EQ_I((int)(int8_t)CREC(4)[0x15e], 0);
+    return 0;
+}
+
+int test_county_button_tables_shape(void)
+{
+    /* The .rdata extraction pins (r2 pxw @ 0x4dd790 / 0x4dd7c0). */
+    engine_button_rec_t *t = engine_county_tax_buttons();
+    T_ASSERT_EQ_I(t[0].x, 0xc0);  T_ASSERT_EQ_I(t[0].y, 0xa2);
+    T_ASSERT_EQ_I(t[0].sprite, 0x15);
+    T_ASSERT_EQ_I(t[0].kind, 0x18);
+    T_ASSERT_EQ_I(t[0].type, 4);
+    T_ASSERT_EQ_I((int)t[0].action, 0x43aa32);
+    T_ASSERT_EQ_I(t[1].x, 0xe0);
+    T_ASSERT_EQ_I((int)t[1].action, 0x43aad5);
+    engine_button_rec_t *w = engine_county_wanted_buttons();
+    T_ASSERT_EQ_I(w[0].x, 0x158); T_ASSERT_EQ_I(w[0].y, 0x82);
+    T_ASSERT_EQ_I((int)w[0].action, 0x43a1e9);
+    T_ASSERT_EQ_I(w[1].x, 0x170);
+    T_ASSERT_EQ_I((int)w[1].action, 0x43a2b2);
+    return 0;
+}
+
+int test_county_slider_render_null_safe(void)
+{
+    engine_county_panels_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    gfx_paint_bind_canvas(NULL, 0, 0);
+    engine_county_ration_slider_render(&ctx);   /* all sheets NULL */
+    return 0;
+}
+
 /* ─── FUN_004156a7 — history graph ──────────────────────────────────── */
 
 int test_county_graph_ring_max_and_wrap(void)
