@@ -7,6 +7,63 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-07-02 (session 24) — state-slot triage RESOLVED: the s23 divergences are load-flip bookkeeping, NOT a real sim divergence; map geography is byte-identical (new lane8 + f2bits state-dump diagnostics)
+
+Ran the s23 discriminating experiment and took it further with two new
+byte-granular state-dump diagnostics.  Verdict: **no real sim
+divergence — the whole cluster is load-flip-baked render/RNG/cursor
+bookkeeping, and the actual map geography matches bit-for-bit.**  The
+s23 popup-dismiss-timing hypothesis is DISPROVEN.
+
+**New tooling (both engines, matched format — state_dump.c + agent
+stateDumpOnce + frida_capture persist + olv3 passthrough):**
+- `lane8` — per-8-byte-lane FNV hashes for every 8 B/cell block.  The
+  overworld map is 8 B/cell (+0 terrain, +1 flags, +5 army head-link,
+  +7 region), so a lane mismatch localizes a divergence to a cell
+  FIELD instead of a 2 KB byte range.
+- `f2bits` — per-BIT hashes of map cell field +2 (a render/autotile
+  flags byte: 0x1c autotile code, 0x20 render-dirty, 0x40/0x80 edge).
+  Localizes to a single flag bit.
+
+**What the county_panels + a lean `slot_triage_probe` capture show:**
+- Two families.  **Transient** (self-heals by the first panel open):
+  slot 4 g_per_army_768 (all lanes), map field +5 army head-links,
+  part of slot 3 — fine sub-tick SETTLE-phase misalignment right after
+  load (the anchor cancels the gross load-stretch, not the per-tick
+  settle).  Benign; converges.  This — not the persistent core — was
+  the timing-sensitive part, so the "reactive-dismiss lag" intuition
+  was pointing at the wrong slots.
+- **Persistent core** (never heals, incl. at `final` = MAP_FREEROAM
+  +1830): map field +2 **bit 0x01 ONLY**; slot 3 strategic RNG-scratch;
+  slot 84 AI round-robin cursor (port 2 / retail 1); + the KNOWN LFSR
+  18/19 and popup-flag 74.
+- **Map geography is byte-identical**: terrain (lane +0) and region
+  (lane +7) MATCH on every capture.  The only persistent map diff is
+  field +2 bit 0x01 = the per-cell **redraw-request / dirty flag**
+  (FUN_004063c1: `if (cell[2]&1) { cell[2]&=0xfe; FUN_00452628(x>>4,
+  y>>4); }` — set → renderer repaints that tile and clears it).  It is
+  invisible in the composited output (the pixel render was already
+  verified byte-exact) and is the same family as the known dirty-rect
+  "panel-switch scraps" divergence (gameplay-and-screens.md).
+
+**Why the s23 "permanent hash-apart" was a red herring:** nothing
+writes the map during idle browsing, so the stable byte band was baked
+in at load — before any dismiss — which the popup-timing story can't
+explain.  Bit-level: it's a redraw bookkeeping bit, not geography.
+
+**Severity: LOW / cosmetic.**  slots 0/3/84 are all downstream of
+load-flip bookkeeping (redraw flags, RNG-scratch, AI-cursor phase),
+not a sim-state divergence.  slot 84 (AI round-robin start offset) is
+the only one worth a second glance IF a turn-order divergence ever
+surfaces — it's stable (both cycle all realms), so likely benign too.
+Recorded as engine-quirk #216.
+
+**Next candidates:** continue the playthrough trace — labor screen
+0x0f (FUN_00412b33 + 6 task sub-renderers, reached from workforce grid
+0x02 via FUN_0043a123), armory 0x0a/0x17, End-Turn season reports.
+
+---
+
 ## 2026-07-02 (session 23) — the retail-seat input-scale gap ROOT-CAUSED + fixed (quirk #215: truncated-percent cursor mapping, not a client-rect size) — and the v3 STATE oracle turns out to have been retail-blind since day one, now repaired
 
 Session 22's queued-first task, run to ground the way its writeup

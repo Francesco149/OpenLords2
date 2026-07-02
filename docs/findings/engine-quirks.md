@@ -7422,3 +7422,40 @@ cursor-anchored tooltips.
 > 📍 `tools/frida/openlords2-agent.js` (`rescaleMouseLParamToClient`),
 > `src/engine_input.c` (`percent_ratio`/`apply_percent`), Ghidra
 > `FUN_004b191e` / `FUN_00404dc1` / `FUN_00404d6b`.
+
+## 216 — the post-load state-slot "divergences" (map slot 0 / strategic slot 3 / AI-cursor slot 84) are load-flip bookkeeping, not a sim divergence — map geography is byte-identical
+
+When the v3 state oracle was repaired (quirk-adjacent, s23) it surfaced
+slots 0/3/84 hashing apart on every county-panel column.  s23 feared a
+real sim divergence and hypothesised popup-dismiss timing.  Session-24
+byte-granular diagnostics (`lane8` per-cell-field + `f2bits` per-bit,
+added to `state_dump.c` + the agent) settle it:
+
+- The overworld map (`g_overworld_map`, 8 B/cell) matches bit-for-bit
+  on **terrain (+0)** and **region (+7)** — the actual geography is
+  identical.  The ONLY persistent map diff is field **+2 bit 0x01**,
+  the per-cell **redraw-request/dirty flag**: `FUN_004063c1` does
+  `if (cell[2] & 1) { cell[2] &= 0xfe; FUN_00452628(x>>4, y>>4); }` —
+  set means "repaint this tile", cleared once repainted.  The two
+  engines flag different cells dirty because the port repaints clean/
+  full while retail is dirty-rect-gated (the same root as the known
+  "panel-switch scraps", gameplay-and-screens.md).  It is invisible in
+  the composited frame — the pixel render is already verified
+  byte-exact.
+- A separate TRANSIENT layer (slot 4 `g_per_army_768`, map field +5
+  army head-links, part of slot 3) self-heals by the first panel open:
+  a fine sub-tick settle-phase offset right after load.  This — not
+  the persistent core — was the timing-sensitive part.
+- slot 3 residue = RNG-scratch strategic fields; slot 84 = the AI
+  round-robin cursor start offset (port 2 / retail 1, stable — both
+  cycle all realms, so benign unless a turn-order divergence appears).
+  All downstream of the load-flip's KNOWN +1 LFSR pull (slots 18/19) +
+  popup flag (74).
+
+Takeaway: nothing writes the map during idle browsing, so a stable
+divergent band was baked in at LOAD (before any dismiss) — which the
+popup-timing story can't explain.  No fix needed; severity cosmetic.
+
+> 📍 `src/state_dump.c` (`lane8`/`f2bits`), `tools/frida/openlords2-agent.js`
+> (`stateDumpOnce`), `tools/traces/slot_triage_probe.jsonl`, Ghidra
+> `FUN_00467770` (plane unpack) / `FUN_004063c1` (dirty-bit render).

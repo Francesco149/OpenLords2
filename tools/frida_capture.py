@@ -857,7 +857,9 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             sdir.mkdir(exist_ok=True)
             (sdir / f"state_{frame:05d}.json").write_text(
                 json.dumps({"slots": p.get("slots") or [],
-                            "sub": p.get("sub") or {}}) + "\n")
+                            "sub": p.get("sub") or {},
+                            "lane8": p.get("lane8") or {},
+                            "f2bits": p.get("f2bits") or {}}) + "\n")
             f_log.write(f"[state_dump] frame {frame} "
                         f"({len(p.get('slots') or [])} slots)\n")
             return

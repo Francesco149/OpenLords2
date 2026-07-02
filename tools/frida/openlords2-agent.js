@@ -2601,10 +2601,22 @@ function stateFnv1a(u8) {
     return h >>> 0;
 }
 
+function stateFnv1aLane(u8, lane) {
+    // FNV-1a over bytes lane, lane+8, lane+16, … (mirrors state_dump.c lane8).
+    let h = 0x811c9dc5;
+    for (let o = lane; o < u8.length; o += 8) {
+        h ^= u8[o];
+        h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+}
+
 function stateDumpOnce(frame) {
     if (!g_state_dump_slots) return;
     const out = new Array(g_state_dump_slots.length);
     const sub = {};   // per-block 16-range sub-hashes (mirrors state_dump.c)
+    const lane8 = {};  // per-8-byte-lane hashes for 8 B/cell blocks (map field diff)
+    const f2bits = {}; // per-bit hashes of cell field +2 (map render/autotile flags)
     for (let i = 0; i < g_state_dump_slots.length; i++) {
         const s = g_state_dump_slots[i];
         try {
@@ -2623,13 +2635,33 @@ function stateDumpOnce(frame) {
                     ranges[r] = 'h:' + ('0000000' +
                         stateFnv1a(u8.subarray(off, off + len)).toString(16)).slice(-8);
                 }
-                sub[String(s.i !== undefined ? s.i : i)] = ranges;
+                const key = String(s.i !== undefined ? s.i : i);
+                sub[key] = ranges;
+                if ((s.size % 8) === 0) {
+                    const lanes = new Array(8);
+                    for (let lane = 0; lane < 8; lane++)
+                        lanes[lane] = 'h:' + ('0000000' +
+                            stateFnv1aLane(u8, lane).toString(16)).slice(-8);
+                    lane8[key] = lanes;
+                    // per-bit hashes of cell field +2 (map render/autotile
+                    // flags) — mirrors state_dump.c f2bits.
+                    const bits = new Array(8);
+                    for (let bit = 0; bit < 8; bit++) {
+                        let h = 0x811c9dc5;
+                        for (let o = 2; o < u8.length; o += 8) {
+                            h ^= (u8[o] >> bit) & 1;
+                            h = Math.imul(h, 16777619);
+                        }
+                        bits[bit] = 'h:' + ('0000000' + (h >>> 0).toString(16)).slice(-8);
+                    }
+                    f2bits[key] = bits;
+                }
             }
         } catch (e) {
             out[i] = null;              // region not mapped — surfaced as null
         }
     }
-    send({kind: 'state_dump', frame: frame, slots: out, sub: sub});
+    send({kind: 'state_dump', frame: frame, slots: out, sub: sub, lane8: lane8, f2bits: f2bits});
 }
 
 // ─── per-frame state watch (--watch NAME=0xVA:type, TAS framework) ───────

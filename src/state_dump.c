@@ -66,6 +66,69 @@ int state_dump_write(const char *path)
         }
         fputc(']', f);
     }
+    fputc('}', f);
+    /* Per-8-byte-lane sub-hashes for cell-structured blocks (the overworld
+     * map g_overworld_map is 8 B/cell): lane L hashes bytes L, L+8, L+16, …
+     * so a divergence localizes to a cell FIELD (+0 terrain, +1 flag, +5
+     * army-occupancy head-link, …) instead of a byte range.  Emitted for
+     * every block whose size is a multiple of 8 (only truly meaningful for
+     * the 8 B/cell map, harmless noise elsewhere).  The agent's
+     * stateDumpOnce emits the identical structure. */
+    fputs(",\"lane8\":{", f);
+    first = 1;
+    for (int i = 0; i < SAVE_SCHEMA_COUNT; i++) {
+        const save_entry_t *e = &g_save_schema[i];
+        if (e->size <= 4 || (e->size % 8) != 0)
+            continue;
+        if (!first)
+            fputc(',', f);
+        first = 0;
+        fprintf(f, "\"%d\":[", i);
+        const unsigned char *b = (const unsigned char *)e->ptr;
+        for (int lane = 0; lane < 8; lane++) {
+            uint32_t h = 2166136261u;
+            for (uint32_t o = (uint32_t)lane; o < e->size; o += 8) {
+                h ^= b[o];
+                h *= 16777619u;
+            }
+            if (lane)
+                fputc(',', f);
+            fprintf(f, "\"h:%08lx\"", (unsigned long)h);
+        }
+        fputc(']', f);
+    }
+    fputc('}', f);
+    /* Per-BIT hashes of the overworld-map cell field +2 (a per-cell render/
+     * autotile flags byte: 0x1c = border-autotile code, 0x20 = render-dirty,
+     * 0x40/0x80 = edge flags).  Session-24 triage: field +2 is the persistent
+     * slot-0 divergence; bit b hashes ((cell[2]>>b)&1) across every cell, so a
+     * mismatch localizes to a SINGLE flag bit — distinguishing a benign
+     * render-dirty (0x20) or RNG special-tile divergence from a real autotile
+     * (0x1c) bug.  Emitted for every 8 B/cell block (only meaningful for the
+     * map).  The agent's stateDumpOnce emits the identical structure. */
+    fputs(",\"f2bits\":{", f);
+    first = 1;
+    for (int i = 0; i < SAVE_SCHEMA_COUNT; i++) {
+        const save_entry_t *e = &g_save_schema[i];
+        if (e->size <= 4 || (e->size % 8) != 0)
+            continue;
+        if (!first)
+            fputc(',', f);
+        first = 0;
+        fprintf(f, "\"%d\":[", i);
+        const unsigned char *b = (const unsigned char *)e->ptr;
+        for (int bit = 0; bit < 8; bit++) {
+            uint32_t h = 2166136261u;
+            for (uint32_t o = 2; o < e->size; o += 8) {
+                h ^= (uint32_t)((b[o] >> bit) & 1u);
+                h *= 16777619u;
+            }
+            if (bit)
+                fputc(',', f);
+            fprintf(f, "\"h:%08lx\"", (unsigned long)h);
+        }
+        fputc(']', f);
+    }
     fputs("}}\n", f);
     fclose(f);
     return 0;

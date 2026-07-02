@@ -1,0 +1,48 @@
+# SLOT-TRIAGE PROBE (session 24): decisively characterize the load-baked
+# state-slot divergences (slots 0 g_overworld_map, 3 g_player_strategic_352,
+# 84 s_slot_0057c944) that the repaired v3 state oracle (s23) surfaced.
+#
+# The s23 hypothesis was popup-dismiss timing; but the county_panels capture
+# shows slot 0 differs in a STABLE byte band [4096:10240] across EVERY column
+# incl. `final` (+1830) — nothing writes the map during idle browsing, so it
+# is baked in at LOAD, not caused by any post-load dismiss.  This probe adds
+# the new lane8 per-cell-FIELD hashes (state_dump.c / agent) to localize the
+# map divergence to a cell field: +0 terrain (real map) vs +5 army head-link
+# (occupancy list order) vs an RNG-scratch field (+1 LFSR-pull family).
+#
+# Captures kept minimal (retail-side is the bottleneck): the load state at
+# two early offsets (map should already differ + be stable), then one
+# population-panel open (slot 3 recompute) + settle.
+#
+# Load prefix copied verbatim from county_panels_click.jsonl (lastturn.sav
+# seat via the save sandbox).
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+# earliest reachable post-load state, then a later idle state — the map
+# lane8 must be identical between these two (idle browsing writes nothing).
+{"capture": 8, "label": "load_early"}
+{"capture": 40, "label": "load_late"}
+# open the POPULATION report (action grid top-left, centre 517,196) — this
+# recomputes g_player_strategic (slot 3); watch its lane8 shift.
+{"t": 900, "m": 512, "w": 0, "l": 12845573}
+{"t": 904, "m": 512, "w": 0, "l": 12845573}
+{"t": 908, "m": 513, "w": 1, "l": 12845573}
+{"t": 912, "m": 514, "w": 0, "l": 12845573}
+{"capture": 990, "label": "population_settled"}
