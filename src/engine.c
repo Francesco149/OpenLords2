@@ -1246,8 +1246,18 @@ static void engine_tick_county_panel_render(int screen)
  * The state instance + the live-globals ctx builder.  The dynamic
  * list-row inputs (labor/production rows on the right panel) have no
  * port producer yet — zeros leave those classifier branches inert,
- * matching retail with an empty list. */
+ * matching retail with an empty list.
+ *
+ * g_canvas_repainted_this_tick (quirk #214): retail dispatches input at
+ * the tick END (4b99c0 line 192, after the renders at 36/42 and the
+ * tooltip at 112), so a click-flip's repaint always lands the NEXT
+ * tick; the port dispatches input FIRST, so a flip repaints before the
+ * tooltip tick and the saved backdrop goes stale the same frame.  The
+ * full-repaint arms raise this flag; the tooltip treats a raised flag
+ * as "backdrop invalid" (skip restore on clear / re-capture while
+ * shown), reproducing retail's visible pixels. */
 static engine_tooltip_state_t g_tooltip_state;
+static int g_canvas_repainted_this_tick;
 
 static void engine_tick_tooltip_step(void)
 {
@@ -1275,6 +1285,7 @@ static void engine_tick_tooltip_step(void)
     ctx.enabled       = g_tooltips_enabled;
     ctx.screen        = g_sim_current_screen;
     ctx.mouse_event   = g_input_mouse_event;
+    ctx.canvas_repainted = g_canvas_repainted_this_tick;
     ctx.now_ms        = engine_now_ms();
     ctx.cin           = &cin;
     ctx.loc           = locblob ? &loc : NULL;
@@ -1643,6 +1654,7 @@ static void engine_tick_title_render_step(void)
                     engine_screen_dispatch(0, engine_title_render_page(),
                                            g_demand_redraw);
                     gfx_unlock_canvas();
+                    g_canvas_repainted_this_tick = 1;
                 }
             } else if (g_sim_current_screen == 4) {
                 /* Terrain-info panel (screen 4, retail FUN_0040f1a0 case 4 →
@@ -1651,6 +1663,7 @@ static void engine_tick_title_render_step(void)
                 if (gfx_lock_canvas()) {
                     engine_tick_terrain_info_render();
                     gfx_unlock_canvas();
+                    g_canvas_repainted_this_tick = 1;
                 }
             } else if (g_sim_current_screen == 0x14 ||
                        g_sim_current_screen == 0x15 ||
@@ -1666,6 +1679,7 @@ static void engine_tick_title_render_step(void)
                     engine_screen_strat_render(1);
                     engine_tick_county_panel_render(g_sim_current_screen);
                     gfx_unlock_canvas();
+                    g_canvas_repainted_this_tick = 1;
                 }
             } else if (g_sim_current_screen != 0x10 &&
                       g_sim_current_screen != ENGINE_CONFIRM_DIALOG_SCREEN) {
@@ -3466,6 +3480,7 @@ void engine_tick(void)
      * --title-live bring-up does, ahead of the unported boot→title
      * transition 0x42b780).  See docs/plans/main-menu-render-chips.md
      * chip 5 + docs/findings/title-menu-screens.md. */
+    g_canvas_repainted_this_tick = 0;    /* consumed by the tooltip tick */
     engine_screen_strat_set_anim_live(g_engine_state == 3);
     engine_tick_title_render_step();
 
@@ -3487,6 +3502,7 @@ void engine_tick(void)
         if (gfx_lock_canvas()) {
             engine_screen_strat_render(1);
             gfx_unlock_canvas();
+            g_canvas_repainted_this_tick = 1;
         }
         g_demand_redraw = 0;   /* subsumed: the full frame just repainted */
     }

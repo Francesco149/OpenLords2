@@ -82,6 +82,21 @@ typedef struct engine_tooltip_ctx {
     int enabled;                   /* DAT_0053f250 — the "Tool tips" option */
     int screen;                    /* DAT_004eac50 */
     int mouse_event;               /* DAT_004ea4b0 — any activity this frame */
+    int canvas_repainted;          /* PORT-ONLY compensation (quirk #214):
+                                    * 1 = a full-frame repaint ran earlier
+                                    * THIS tick.  Retail's tick order is
+                                    * renders (line 36/42) → tooltip (112)
+                                    * → INPUT DISPATCH (192), so a click
+                                    * that flips the screen repaints only
+                                    * NEXT tick and the clear's backdrop
+                                    * restore always lands on the frame the
+                                    * backdrop came from.  The port runs
+                                    * input first; when the repaint has
+                                    * already replaced the frame, the saved
+                                    * backdrop is stale — the clear SKIPS
+                                    * the restore (the repaint already
+                                    * erased the box) and a shown tip
+                                    * RE-CAPTURES before re-rendering. */
     uint32_t now_ms;               /* timeGetTime() */
     const engine_tooltip_classify_in_t *cin;
     localization_state_t *loc;     /* l2.eng (group 0xdc = tip strings) */

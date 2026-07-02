@@ -227,6 +227,93 @@ int test_tooltip_tick_arms_after_idle_and_clears_on_activity(void)
     return 0;
 }
 
+int test_tooltip_repaint_invalidates_backdrop(void)
+{
+    /* Quirk #214: the port dispatches input before the render seam, so
+     * a click-flip repaints the frame BEFORE the tooltip clear runs —
+     * the saved backdrop is stale.  The clear must SKIP the restore
+     * when canvas_repainted is set (else old-screen pixels stamp onto
+     * the fresh frame — the "65♥ rectangle" the user flagged), and a
+     * tip shown through a repaint must RE-CAPTURE. */
+    if (!tt_load_loc() || !tt_load_font())
+        T_SKIP("retail l2.eng / fntl2_14.pl8 not available");
+
+    memset(tt_canvas, 7, sizeof tt_canvas);      /* "happiness frame" */
+    gfx_paint_bind_canvas(tt_canvas, CV_W, CV_H);
+    gfx_text_set_screen_byte(0);
+    gfx_dispatch_set_alt_clip(0, 0, 0);
+    gfx_dispatch_set_default_font(tt_font);
+
+    localization_state_t loc;
+    loc.blob = tt_locbuf;
+    loc.walker_offset = 0;
+
+    engine_tooltip_classify_in_t cin;
+    memset(&cin, 0, sizeof cin);
+    cin.cursor_x = 0x205; cin.cursor_y = 0xc4;
+    cin.county_owner = 3; cin.current_realm = 3;
+
+    engine_tooltip_state_t st;
+    memset(&st, 0, sizeof st);
+
+    engine_tooltip_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.enabled = 1;
+    ctx.screen = 0;
+    ctx.cin = &cin;
+    ctx.loc = &loc;
+    ctx.menu_font = tt_font;
+    ctx.glyph_table = gfx_glyph_render_map();
+    ctx.glyph_metrics = gfx_glyph_measure_map();
+
+    /* Arm on the "happiness frame" (backdrop = 7s). */
+    ctx.now_ms = 1500;
+    engine_tooltip_tick(&st, &ctx);
+    T_ASSERT_EQ_I(st.tip, 6);
+
+    /* CASE 1 — clear on a repainted frame: repaint to 9s, then a click
+     * (mouse_event) with canvas_repainted set.  The stale 7s backdrop
+     * must NOT be written back. */
+    memset(tt_canvas, 9, sizeof tt_canvas);      /* the fresh "tax frame" */
+    ctx.mouse_event = 1;
+    ctx.canvas_repainted = 1;
+    ctx.now_ms = 1600;
+    engine_tooltip_tick(&st, &ctx);
+    T_ASSERT_EQ_I(st.tip, 0);
+    for (int y = st.y; y < st.y + 0x28; y++)
+        for (int x = st.x; x < st.x + 0x30 * 4; x++)
+            if (tt_canvas[x + y * CV_W] != 9)
+                T_FAIL("stale backdrop restored at (%d,%d)", x, y);
+
+    /* CASE 2 — shown through a repaint (no mouse event): the backdrop
+     * re-captures from the fresh frame, so the NEXT clear restores the
+     * new content, not the arm-time content. */
+    memset(tt_canvas, 7, sizeof tt_canvas);
+    ctx.mouse_event = 0;
+    ctx.canvas_repainted = 0;
+    ctx.now_ms = 3000;
+    engine_tooltip_tick(&st, &ctx);              /* re-arm on 7s */
+    T_ASSERT_EQ_I(st.tip, 6);
+    memset(tt_canvas, 9, sizeof tt_canvas);      /* repaint (erases box) */
+    ctx.canvas_repainted = 1;
+    ctx.now_ms = 3100;
+    engine_tooltip_tick(&st, &ctx);              /* re-capture + re-render */
+    T_ASSERT_EQ_I(st.tip, 6);
+    ctx.mouse_event = 1;
+    ctx.canvas_repainted = 0;                    /* plain hover-off frame */
+    ctx.now_ms = 3200;
+    engine_tooltip_tick(&st, &ctx);              /* clear → restore NEW */
+    T_ASSERT_EQ_I(st.tip, 0);
+    for (int y = st.y; y < st.y + 0x28; y++)
+        for (int x = st.x; x < st.x + 0x30 * 4; x++)
+            if (tt_canvas[x + y * CV_W] != 9)
+                T_FAIL("restore used the stale pre-repaint backdrop at "
+                       "(%d,%d)", x, y);
+
+    gfx_paint_bind_canvas(NULL, 0, 0);
+    return 0;
+}
+
 int test_tooltip_tick_disabled_and_activity_reset(void)
 {
     engine_tooltip_state_t st;

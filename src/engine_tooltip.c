@@ -182,7 +182,25 @@ void engine_tooltip_tick(engine_tooltip_state_t *st,
         if (ctx->mouse_event != 0) {
             st->tip = 0;
             tooltip_clamp(st);
-            engine_workforce_hud_restore_backdrop(st->backdrop, st->x, st->y,
+            /* Quirk #214 (port order compensation, see header): when a
+             * full repaint already replaced the frame this tick, the
+             * saved backdrop is STALE and the box is already gone —
+             * restoring would stamp old-screen pixels onto the fresh
+             * frame (the "65♥ rectangle" artifact).  Retail never hits
+             * this: its input dispatch runs AFTER the tooltip tick, so
+             * the flip's repaint lands next tick. */
+            if (ctx->canvas_repainted == 0) {
+                engine_workforce_hud_restore_backdrop(st->backdrop,
+                                                      st->x, st->y,
+                                                      0x30, 0x28,
+                                                      gfx_paint_canvas_width());
+            }
+        } else if (ctx->canvas_repainted != 0) {
+            /* Shown through a repaint (no mouse activity): the box was
+             * erased and the saved backdrop no longer matches the frame
+             * — re-capture from the fresh canvas before the re-render
+             * below, so the eventual clear restores CURRENT pixels. */
+            engine_workforce_hud_capture_backdrop(st->backdrop, st->x, st->y,
                                                   0x30, 0x28,
                                                   gfx_paint_canvas_width());
         }

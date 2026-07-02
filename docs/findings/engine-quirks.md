@@ -7335,3 +7335,43 @@ Fix (session 21): the op now takes an optional anchor-relative gate —
 trace_studio_v3/trace_ops.py).  The bare form keeps the old
 immediate-drain semantics for existing traces.  Any trace that must order
 an auto_dismiss toggle against t-stamped activity MUST use the timed form.
+
+## 214 — retail dispatches in-game input at the tick END (4b99c0 line 192), AFTER the renders and the tooltip tick — the port's input-first order makes tooltip backdrop restores go stale on click-flips
+
+Discovered session 22 via the county-panels trace (user-flagged: the
+happiness panel's "Last season 65♥" persisted as a rectangle, plus
+UI-scrap patches over terrain, on the port's tax_open frame only).
+
+Retail's per-tick order in FUN_004b99c0:
+
+```
+line  36  FUN_0040f1a0(DAT_0057d340)   demand-redraw seam
+line  42  FUN_004050c0()               every-frame map composite
+line  99  FUN_004ba26e()               per-frame UI refresh (widgets)
+line 112  FUN_00476e95()               tooltip tick
+line 192  FUN_0042ff10()               ★ INPUT DISPATCH — near the END
+```
+
+(The ingame-input plan doc's "called before the render phase" claim was
+wrong.)  Consequence: a click that flips the screen sets the redraw at
+the tick END and the repaint lands NEXT tick — so retail's tooltip
+clear (mouse activity → FUN_004770b8 → FUN_004b3ec0 backdrop restore)
+always writes onto the SAME frame the backdrop was captured from: a
+correct box-erase, never visible.
+
+The port dispatches input FIRST (engine_tick_ingame_input_step early in
+the tick), so a click-flip repaints the frame BEFORE the tooltip tick
+runs; the clear then restored a backdrop captured on the PREVIOUS
+screen onto the fresh frame — stamping old-panel pixels (the 65♥
+rectangle) over the new panel.
+
+Port compensation (kept local, same pattern as the widget-repaint
+note): `g_canvas_repainted_this_tick` — raised by every full-frame
+paint arm (screen-0 / screen-4 / county-panel demand arms + the
+every-frame composite), reset at the tick top.  The tooltip treats a
+raised flag as "backdrop invalid": the clear SKIPS the restore (the
+repaint already erased the box) and a tip shown through a repaint
+RE-CAPTURES before re-rendering.  Visible pixels match retail.  If the
+port's input dispatch is ever moved to retail's tick position, this
+compensation becomes inert (the flag is never set when the clear runs)
+and can be removed.
