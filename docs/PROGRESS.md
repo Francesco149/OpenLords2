@@ -78,11 +78,20 @@ scraps (its flip recomposite is dirty-rect-gated; the port paints a
 clean map — deliberate divergence until the dirty-rect-gated composite
 is ported).
 
+**USER-CONFIRMED (viewer scrub): "trace matches."**  One flag to carry
+into the seat investigation: the tooltip boxes (e.g. "View happiness
+report") are a few px off in X on the port — the user reads the port as
+too far LEFT, while the container measurement put the port box RIGHT of
+retail's (x=380 vs 374).  Don't assume a direction when picking this
+up: watch retail's own cursor mirrors (DAT_004e65fc/f4) during the
+capture and compare each engine's box against the cursor IT believes,
+rather than inferring from the injected coordinates.
+
 **Suite: 2310/2310 green** (+32 this session).  Next candidates: the
-seat calibration fix; then continue the playthrough trace into the
-labor-allocation screen 0x0f (workforce commit hook already stubbed),
-the blacksmith/armory chain (0x0a/0x17), or End-Turn → season-report
-verification on the same trace.
+seat calibration fix (+ the tooltip-offset flag above); then continue
+the playthrough trace into the labor-allocation screen 0x0f (workforce
+commit hook already stubbed), the blacksmith/armory chain (0x0a/0x17),
+or End-Turn → season-report verification on the same trace.
 
 ---
 
