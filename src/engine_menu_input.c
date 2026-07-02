@@ -568,6 +568,15 @@ static int button_rec_contains(const engine_button_rec_t *r, int ox, int oy,
            r->y + oy <= cy && cy < r->y + r->kind + oy;
 }
 
+/* DAT_00591554 — the press-repeat accel counter retail latches right before
+ * each type-4 action fires (0 on the initial press, the record's held-repeat
+ * counter `pad_e` on an auto-repeat).  An action reads it to scale its step
+ * (the trade buy/sell arrows go by 1 until it reaches 0x2c, then by 10).
+ * Write-only for callers that don't read it (the county steppers), so it is
+ * inert for every existing dispatch. */
+static int s_menu_button_accel;
+int engine_menu_button_accel(void) { return s_menu_button_accel; }
+
 int engine_menu_button_dispatch(int ox, int oy,
                                 engine_button_rec_t *recs, int count,
                                 const engine_menu_click_in_t *in,
@@ -610,6 +619,7 @@ int engine_menu_button_dispatch(int ox, int oy,
                 r->pressed = 3;
                 r->pad_e   = 0;
                 r->state   = 1;
+                s_menu_button_accel = 0;         /* DAT_00591554 = 0 */
                 if (dispatch)
                     dispatch(r->action, r->param0, r->param1);
                 return i + 1;
@@ -628,6 +638,7 @@ int engine_menu_button_dispatch(int ox, int oy,
                 } else {
                     r->pad_e = 0x2f;
                 }
+                s_menu_button_accel = r->pad_e;  /* DAT_00591554 = repeat count */
                 if (dispatch)
                     dispatch(r->action, r->param0, r->param1);
                 return i + 1;

@@ -103,6 +103,12 @@ int engine_menu_button_dispatch(int ox, int oy,
                                 const engine_menu_click_in_t *in,
                                 engine_menu_button_action_fn dispatch);
 
+/* DAT_00591554 — the press-repeat accel counter dispatch latches just before
+ * a type-4 action fires (0 on the initial press, the record's held-repeat
+ * counter on an auto-repeat).  An action reads it to scale its step (the
+ * trade buy/sell arrows step by 1 until it reaches 0x2c, then by 10). */
+int engine_menu_button_accel(void);
+
 /* ── per-page dispatcher ──────────────────────────────────────────── */
 
 /* Port of FUN_004ba9c8's 0x1f arm for the two rendered pages.  Runs the

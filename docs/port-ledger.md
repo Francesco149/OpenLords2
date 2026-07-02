@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **886** (36.2%) — tested 819, ported 67
-- code bytes touched: **46.2%** (387,652 / 838,629 B)
-- unported: **1561**
+- touched: **892** (36.5%) — tested 819, ported 73
+- code bytes touched: **46.4%** (388,882 / 838,629 B)
+- unported: **1555**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (819) — ported + host unit suite
@@ -225,7 +225,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4280e9 | FUN_004280e9 | 904 | engine.c, engine_army_state.c, engine_army_state.h (+1) |
 | 0x428471 | FUN_00428471 | 11 | engine_turn.c, engine_turn.h |
 | 0x42847c | FUN_0042847c | 82 | game_init.c, game_init.h |
-| 0x4284ce | FUN_004284ce | 1858 | engine_army_ai.c, engine_army_ai.h |
+| 0x4284ce | FUN_004284ce | 1858 | engine_army_ai.c, engine_army_ai.h, engine_trade.c |
 | 0x428c42 | FUN_00428c42 | 365 | engine_army_ai.c, engine_army_ai.h |
 | 0x4290d0 | FUN_004290d0 | 131 | engine_category_buckets.c, engine_category_buckets.h, engine_territory.c (+1) |
 | 0x429153 | FUN_00429153 | 96 | engine_category_buckets.h, engine_territory.c |
@@ -313,7 +313,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43e433 | FUN_0043e433 | 218 | engine.h, engine_rate.c |
 | 0x43e50d | FUN_0043e50d | 180 | engine.h, engine_rate.c |
 | 0x43e9e2 | FUN_0043e9e2 | 223 | engine_roster.c, engine_roster.h, main.c |
-| 0x43eda0 | FUN_0043eda0 | 637 | engine.c, engine_army_move_confirm.h, engine_army_select.c (+3) |
+| 0x43eda0 | FUN_0043eda0 | 637 | engine.c, engine_army_move_confirm.h, engine_army_select.c (+4) |
 | 0x43f4b7 | FUN_0043f4b7 | 270 | engine.h, engine_state_hash.c, main.c |
 | 0x43fd2a | FUN_0043fd2a | 413 | main.c |
 | 0x43ffc3 | FUN_0043ffc3 | 117 | engine_state_hash.c |
@@ -799,7 +799,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b4cb8 | FUN_004b4cb8 | 1659 | gfx_sprite.c, gfx_sprite.h, gfx_sprite_render.c (+1) |
 | 0x4b5333 | FUN_004b5333 | 2997 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+11) |
-| 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_army_move_confirm.h, engine_button.c (+7) |
+| 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_army_move_confirm.h, engine_button.c (+8) |
 | 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_confirm_dialog.h, engine_county_panels.h (+10) |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c |
 | 0x4bb978 | FUN_004bb978 | 614 | engine.c, engine.h, engine_rate.c |
@@ -841,7 +841,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (67) — reimplemented, no host test yet
+## ported (73) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -869,7 +869,13 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42eb7c | FUN_0042eb7c | 277 | gfx.c, gfx.h |
 | 0x42f306 | FUN_0042f306 | 323 | gfx.c, gfx.h |
 | 0x42f449 | FUN_0042f449 | 323 | gfx.c, gfx.h |
+| 0x435286 | FUN_00435286 | 108 | engine_trade.c, engine_trade.h |
 | 0x43530e | FUN_0043530e | 43 | engine.c, engine_trade.c, engine_trade.h |
+| 0x435339 | FUN_00435339 | 260 | engine_trade.c, engine_trade.h |
+| 0x43543d | FUN_0043543d | 260 | engine_trade.c, engine_trade.h |
+| 0x435541 | FUN_00435541 | 154 | engine_trade.c, engine_trade.h |
+| 0x4355db | FUN_004355db | 152 | engine_trade.c, engine_trade.h |
+| 0x435673 | FUN_00435673 | 296 | engine_trade.c |
 | 0x4398f5 | FUN_004398f5 | 187 | engine_labor.c, engine_labor_region_grid.h |
 | 0x43ac23 | FUN_0043ac23 | 258 | engine.c |
 | 0x43ad25 | FUN_0043ad25 | 256 | engine.c |

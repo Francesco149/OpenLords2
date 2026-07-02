@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 819,
-  "ported": 67,
-  "unported": 1561,
+  "ported": 73,
+  "unported": 1555,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 886,
-  "pct_touched": 36.2,
+  "touched": 892,
+  "pct_touched": 36.5,
   "pct_tested": 33.5,
   "bytes_total": 838629,
-  "bytes_touched": 387652,
-  "pct_bytes_touched": 46.2
+  "bytes_touched": 388882,
+  "pct_bytes_touched": 46.4
  },
  "orphan_refs": [
   "0x004148",
@@ -4203,7 +4203,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_ai.c",
-    "src/engine_army_ai.h"
+    "src/engine_army_ai.h",
+    "src/engine_trade.c"
    ]
   },
   {
@@ -5919,8 +5920,11 @@
    "name": "FUN_00435286",
    "size": 108,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_trade.c",
+    "src/engine_trade.h"
+   ]
   },
   {
    "va": "0x4352f2",
@@ -5947,40 +5951,54 @@
    "name": "FUN_00435339",
    "size": 260,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_trade.c",
+    "src/engine_trade.h"
+   ]
   },
   {
    "va": "0x43543d",
    "name": "FUN_0043543d",
    "size": 260,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_trade.c",
+    "src/engine_trade.h"
+   ]
   },
   {
    "va": "0x435541",
    "name": "FUN_00435541",
    "size": 154,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_trade.c",
+    "src/engine_trade.h"
+   ]
   },
   {
    "va": "0x4355db",
    "name": "FUN_004355db",
    "size": 152,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_trade.c",
+    "src/engine_trade.h"
+   ]
   },
   {
    "va": "0x435673",
    "name": "FUN_00435673",
    "size": 296,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_trade.c"
+   ]
   },
   {
    "va": "0x43579b",
@@ -7585,7 +7603,8 @@
     "src/engine_army_select.c",
     "src/engine_county_panels.h",
     "src/engine_ranking.c",
-    "src/engine_ranking.h"
+    "src/engine_ranking.h",
+    "src/engine_trade.c"
    ]
   },
   {
@@ -20098,6 +20117,7 @@
     "src/engine_title_render.c",
     "src/engine_title_render.h",
     "src/engine_trade.c",
+    "src/engine_trade.h",
     "src/main.c"
    ]
   },
