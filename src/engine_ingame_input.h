@@ -148,6 +148,10 @@ typedef struct engine_ingame_hooks {
     engine_ingame_action_fn  army_select;        /* FUN_0043ce1a army select/move (map LMB) */
     engine_ingame_action_fn  terrain_info_open;  /* FUN_0043caf4 terrain-info open (map RMB) */
     engine_ingame_action_fn  terrain_info_close; /* FUN_0043cc56 terrain-info cleanup (screen-4 close) */
+    engine_ingame_consume_fn labor_open;          /* FUN_0043a123 workforce-grid → labor
+                                                    * detail open (screen 0x02); sets the
+                                                    * task + flips to 0x0f when a task cell
+                                                    * is hit */
     engine_ingame_action_fn  screen0f_commit;    /* FUN_00427d19 + FUN_0041438c (tail, screen 0xf) */
     engine_ingame_action_fn  army_move_click_resolve; /* FUN_004a9252 screen-0x10
                                                         * click resolve (map LMB,

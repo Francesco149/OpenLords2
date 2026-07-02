@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 815,
-  "ported": 63,
-  "unported": 1569,
+  "tested": 818,
+  "ported": 62,
+  "unported": 1567,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 878,
-  "pct_touched": 35.9,
-  "pct_tested": 33.3,
+  "touched": 880,
+  "pct_touched": 36.0,
+  "pct_tested": 33.4,
   "bytes_total": 838629,
-  "bytes_touched": 384322,
-  "pct_bytes_touched": 45.8
+  "bytes_touched": 384899,
+  "pct_bytes_touched": 45.9
  },
  "orphan_refs": [
   "0x004148",
@@ -2653,6 +2653,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
+    "src/engine_ingame_input.c",
     "src/engine_ingame_input.h"
    ]
   },
@@ -4077,6 +4079,7 @@
     "src/audio.c",
     "src/audio.h",
     "src/engine.c",
+    "src/engine_ingame_input.c",
     "src/engine_ingame_input.h",
     "src/main.c"
    ]
@@ -6479,8 +6482,10 @@
    "name": "FUN_004393eb",
    "size": 342,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.c"
+   ]
   },
   {
    "va": "0x439541",
@@ -6513,7 +6518,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_labor.c"
+    "src/engine_labor.c",
+    "src/engine_labor_region_grid.h"
    ]
   },
   {
@@ -6545,8 +6551,10 @@
    "name": "FUN_00439df0",
    "size": 235,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.c"
+   ]
   },
   {
    "va": "0x439edb",
@@ -6569,8 +6577,10 @@
    "name": "FUN_0043a123",
    "size": 145,
    "is_thunk": false,
-   "status": "ported",
+   "status": "tested",
    "src": [
+    "src/engine.c",
+    "src/engine_ingame_input.h",
     "src/engine_labor.c",
     "src/engine_labor.h"
    ]

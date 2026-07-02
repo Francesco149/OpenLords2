@@ -908,6 +908,39 @@ static void ti_workforce_render(int army_key)
     engine_workforce_hud_render(army_key, engine_now_ms(), 1);
 }
 
+/* labor_open hook (FUN_0043a123): on the workforce grid (screen 2), a
+ * task-cell LMB latches the task (engine_labor_set_task) + opens the labor
+ * detail (screen 0x0f).  camera_y matches the workforce panel top the hud
+ * renders at (advanced 0x84 / normal 0x40). */
+static int ti_labor_open(const engine_ingame_input_in_t *in,
+                         engine_ingame_state_t *st)
+{
+    engine_labor_open_in_t lin;
+    lin.lmb_click_fired = g_input_lmb_click_fired;
+    lin.cursor_x        = g_input_game_x;
+    lin.cursor_y        = g_input_game_y;
+    lin.camera_y        = (s_slot_0053f25c == 1) ? 0x84 : 0x40;
+    lin.county_block    = g_per_army_768;
+    lin.county          = (int)s_slot_0057c93c;
+    if (engine_labor_open_hit_test(&lin)) {
+        st->screen = 0x0f;
+        return 1;
+    }
+    return 0;
+}
+
+/* screen0f_commit hook (FUN_00427d19 + FUN_0041438c): the labor-close tail
+ * — release the pending audio cue.  The border repaint (FUN_0041438c, the
+ * bottom status-bar rows) is deferred: the demand-redraw the close requests
+ * repaints the frame. */
+static void ti_screen0f_commit(const engine_ingame_input_in_t *in,
+                               engine_ingame_state_t *st)
+{
+    (void)in;
+    (void)st;
+    audio_cue_release();
+}
+
 static void ti_army_select(const engine_ingame_input_in_t *din,
                            engine_ingame_state_t *dst)
 {
@@ -1622,6 +1655,8 @@ static void engine_tick_ingame_input_step(void)
         .terrain_info_open  = ti_open,
         .terrain_info_close = ti_close,
         .army_select        = ti_army_select,            /* FUN_0043ce1a army select/move */
+        .labor_open         = ti_labor_open,             /* FUN_0043a123 workforce → labor */
+        .screen0f_commit    = ti_screen0f_commit,        /* FUN_00427d19 labor-close tail */
         .army_move_click_resolve = ti_army_move_click_resolve, /* FUN_004a9252 */
         /* every other sub-handler deferred (NULL → inert) */
     };

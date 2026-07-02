@@ -10,6 +10,7 @@
  */
 
 #include "engine_labor.h"
+#include "engine_labor_region_grid.h"   /* k_labor_panel_region_grid (DAT_00542cf8) */
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -730,13 +731,15 @@ int engine_labor_open_hit_test(const engine_labor_open_in_t *in)
     if (in->lmb_click_fired == 0) {                /* DAT_004eabf0 == 0 */
         return 0;
     }
-    /* FUN_004398f5(cursor_x, cursor_y) — which grid cell (0..8), 0 = miss. */
+    /* FUN_004398f5(cursor_x, cursor_y) — which panel category cell (0..8),
+     * 0 = miss.  Indexes the baked task-region grid (retail DAT_00542cf8)
+     * with panel-relative, camera-shifted coords. */
     int cell = 0;
-    if (in->cursor_x >= 0x40 && in->cursor_x < 0x1a8 && in->region_grid) {
+    if (in->cursor_x >= 0x40 && in->cursor_x < 0x1a8) {
         if (in->cursor_y >= in->camera_y && in->cursor_y < in->camera_y + 0x140) {
             int col = (in->cursor_x - 0x40) >> 3;
             int row = (in->cursor_y - in->camera_y) >> 3;
-            cell = in->region_grid[col + row * 0x2d];
+            cell = k_labor_panel_region_grid[col + row * LABOR_PANEL_GRID_W];
             if (cell > 7) {
                 cell = 8;
             }

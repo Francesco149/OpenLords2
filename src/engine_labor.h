@@ -114,18 +114,14 @@ void engine_labor_render(const engine_labor_ctx_t *ctx);
  * present for the current county returns 1 and latches g_labor_task to
  * that task (task index + 1); else 0.  `lmb_click_fired` is DAT_004eabf0
  * (the delayed-click gate, g_input_lmb_click_fired); cursor is the
- * game-space cursor; the region grid + camera come from the workforce hud.
+ * game-space cursor; camera_y is the workforce panel top (DAT_0057c908).
  *
- * NOT WIRED to a live producer yet: the region grid DAT_00542cf8 (the
- * task-cell map this hit-test indexes) has no port builder in the
- * extracted decompiles, so the organic 0x02→0x0f open must wait on
- * porting that builder.  The renderer is complete + verified independently
- * (the --force-labor seat). */
+ * The task-cell map the hit-test indexes (retail DAT_00542cf8) is a
+ * CONSTANT baked in engine_labor_region_grid.h — see that header. */
 typedef struct engine_labor_open_in {
     int lmb_click_fired;           /* DAT_004eabf0 (g_input_lmb_click_fired) */
     int cursor_x, cursor_y;        /* DAT_004eac04 / DAT_004eac08 */
     int camera_y;                  /* DAT_0057c908 — workforce panel top */
-    const uint8_t *region_grid;    /* DAT_00542cf8 — 0x2d-stride cell map */
     const uint8_t *county_block;   /* g_per_army_768 */
     int county;                    /* s_slot_0057c93c */
 } engine_labor_open_in_t;

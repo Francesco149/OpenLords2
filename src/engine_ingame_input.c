@@ -221,6 +221,52 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                         st->demand_redraw = 2;
                     }
                 }
+            } else if (st->screen == 2) {
+                /* ───────── WORKFORCE ICON GRID (DAT_004eac50 == 2) ─────────
+                 * 42ff10.c:65-113.  Turn-busy closes to the map; else run the
+                 * HUD sub-handlers, then a seal click (generic_click) or RMB
+                 * closes the grid, and a task-cell LMB opens the labor detail
+                 * (labor_open → screen 0x0f).  FUN_004393eb (→ screen 5) and
+                 * FUN_00439df0 are deferred.  If nothing consumes, the click
+                 * falls through to the shared tail (retail's DAT_004e65f0=1
+                 * "unconsumed" latch). */
+                if (!turn_idle) {
+                    st->screen = 0;
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                } else if (call_consume(hooks->hud_btn_b, in, st) != 0 ||
+                           call_consume(hooks->hud_btn_a, in, st) != 0 ||
+                           call_consume(hooks->action_grid, in, st) != 0 ||
+                           call_consume(hooks->scrollbar, in, st) != 0 ||
+                           call_consume(hooks->panel_toggles, in, st) != 0 ||
+                           call_consume(hooks->minimap_drag, in, st) != 0) {
+                    consumed = 1;
+                } else if (call_consume(hooks->generic_click, in, st) != 0) {
+                    st->screen = 0;              /* seal click → close grid */
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                } else if (call_consume(hooks->labor_open, in, st) != 0) {
+                    st->demand_redraw = 2;       /* task cell → 0x0f (set in hook) */
+                    consumed = 1;
+                } else if (in->rmb_released != 0) {
+                    st->screen = 0;              /* RMB → close grid */
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                }
+            } else if (st->screen == 0x0f) {
+                /* ───────── LABOR DETAIL (DAT_004eac50 == 0x0f) ─────────
+                 * 42ff10.c:114-128.  A seal click (generic_click) or RMB
+                 * closes back to the workforce grid (the came-from flag
+                 * DAT_005533f4 is always 0 for the only opener, screen 2),
+                 * then the commit tail (FUN_00427d19 + FUN_0041438c border
+                 * repaint). */
+                if (call_consume(hooks->generic_click, in, st) != 0 ||
+                    in->rmb_released != 0) {
+                    st->screen = 2;
+                    st->demand_redraw = 2;
+                    call_action(hooks->screen0f_commit, in, st);
+                    consumed = 1;
+                }
             }
             /* (other screen cases deferred — see header) */
 

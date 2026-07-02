@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **878** (35.9%) — tested 815, ported 63
-- code bytes touched: **45.8%** (384,322 / 838,629 B)
-- unported: **1569**
+- touched: **880** (36.0%) — tested 818, ported 62
+- code bytes touched: **45.9%** (384,899 / 838,629 B)
+- unported: **1567**
 - orphan refs (in src/, not in function table): 7
 
-## tested (815) — ported + host unit suite
+## tested (818) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -174,7 +174,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4126c9 | FUN_004126c9 | 204 | engine_workforce_hud.h |
 | 0x413155 | FUN_00413155 | 977 | engine_labor.c, engine_labor.h, engine_screen_strat.c (+1) |
 | 0x413590 | FUN_00413590 | 1440 | engine_army_economy.h, engine_labor.c, engine_labor.h |
-| 0x41438c | FUN_0041438c | 446 | engine_ingame_input.h |
+| 0x41438c | FUN_0041438c | 446 | engine.c, engine_ingame_input.c, engine_ingame_input.h |
 | 0x4148e4 | FUN_004148e4 | 264 | engine_title_render.c, engine_title_render.h, main.c |
 | 0x4149ec | FUN_004149ec | 1050 | engine_title_render.c, engine_title_render.h, gfx_sprite.c (+1) |
 | 0x4156a7 | FUN_004156a7 | 627 | engine_county_panels.c, engine_county_panels.h, gfx.c |
@@ -218,7 +218,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x425d35 | FUN_00425d35 | 184 | audio.c, main.c |
 | 0x426216 | FUN_00426216 | 185 | engine_army_move.c, engine_labor.c, engine_labor.h (+2) |
 | 0x427990 | FUN_00427990 | 779 | audio.h, engine.c, engine_combat.c (+4) |
-| 0x427d19 | FUN_00427d19 | 89 | audio.c, audio.h, engine.c (+2) |
+| 0x427d19 | FUN_00427d19 | 89 | audio.c, audio.h, engine.c (+3) |
 | 0x427ed0 | FUN_00427ed0 | 311 | engine_map_query.c, engine_territory.c, game_init.c (+1) |
 | 0x428007 | FUN_00428007 | 113 | engine_army_ai.c, engine_army_state.c, engine_army_state.h (+3) |
 | 0x428078 | FUN_00428078 | 113 | engine_army_ai.c, engine_combat.c, game_init.c (+1) |
@@ -285,6 +285,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x438e3b | FUN_00438e3b | 574 | engine_ingame_input.h |
 | 0x439079 | FUN_00439079 | 169 | engine_ingame_input.h |
 | 0x439122 | FUN_00439122 | 537 | engine_ingame_input.h |
+| 0x4393eb | FUN_004393eb | 342 | engine_ingame_input.c |
+| 0x439df0 | FUN_00439df0 | 235 | engine_ingame_input.c |
+| 0x43a123 | FUN_0043a123 | 145 | engine.c, engine_ingame_input.h, engine_labor.c (+1) |
 | 0x43a1e9 | FUN_0043a1e9 | 86 | engine_county_panels.h |
 | 0x43a23f | FUN_0043a23f | 115 | engine_county_panels.h |
 | 0x43a2b2 | FUN_0043a2b2 | 85 | engine_county_panels.h |
@@ -837,7 +840,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (63) — reimplemented, no host test yet
+## ported (62) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -861,8 +864,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42eb7c | FUN_0042eb7c | 277 | gfx.c, gfx.h |
 | 0x42f306 | FUN_0042f306 | 323 | gfx.c, gfx.h |
 | 0x42f449 | FUN_0042f449 | 323 | gfx.c, gfx.h |
-| 0x4398f5 | FUN_004398f5 | 187 | engine_labor.c |
-| 0x43a123 | FUN_0043a123 | 145 | engine_labor.c, engine_labor.h |
+| 0x4398f5 | FUN_004398f5 | 187 | engine_labor.c, engine_labor_region_grid.h |
 | 0x43ac23 | FUN_0043ac23 | 258 | engine.c |
 | 0x43ad25 | FUN_0043ad25 | 256 | engine.c |
 | 0x43ae30 | FUN_0043ae30 | 540 | engine.c |
