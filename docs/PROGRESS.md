@@ -87,6 +87,22 @@ up: watch retail's own cursor mirrors (DAT_004e65fc/f4) during the
 capture and compare each engine's box against the cursor IT believes,
 rather than inferring from the injected coordinates.
 
+**Second user flag → FIXED same session (commit 92f7809, quirk #214).**
+The happiness panel's "Last season 65♥" persisted as a rectangle (plus
+UI-scrap patches over terrain) on the port's tax_open frame.  Root
+cause was an ORDER fact that also corrects the plan doc: retail
+dispatches in-game input at the tick END (4b99c0 line 192, AFTER the
+renders at 36/42 and the tooltip at 112) — a click-flip repaints next
+tick, so retail's tooltip-clear backdrop restore always lands on the
+frame it was captured from.  The port dispatches input first, so the
+flip's repaint preceded the clear and the restore stamped stale
+previous-screen pixels onto the fresh frame.  Compensation: a
+canvas-repainted-this-tick flag invalidates the backdrop (clear skips
+the restore; a tip shown through a repaint re-captures).  Re-captured:
+the ghost went 5465 px → 36 px (sprite-anim noise); tax_open back to
+the 1.10% retail-scraps baseline, rations frames to 0.53%.  Suite
+2311/2311.
+
 **Suite: 2310/2310 green** (+32 this session).  Next candidates: the
 seat calibration fix (+ the tooltip-offset flag above); then continue
 the playthrough trace into the labor-allocation screen 0x0f (workforce
