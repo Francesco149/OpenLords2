@@ -91,12 +91,12 @@ exists in src/ today (session 22).
 | 0x02 | FUN_00412143 | — | workforce icon-grid overlay | PORTED (s17) |
 | 0x04 | FUN_0041b032 | 0x64 | terrain info ("Here Be Dragons") | PORTED |
 | 0x05/0x06 | — | — | army-move sub-modes (dispatcher-only) | partial |
-| 0x08 | FUN_00415fb7 | — | **Merchant screen** (merchant.pl8/mercgrid.pl8) | unported |
+| 0x08 | FUN_00415fb7 | — | **Merchant screen** (merchant.pl8/mercgrid.pl8) | PORTED (s26, byte-exact) |
 | 0x09 | FUN_00416925 | 0x46 | **Treasury/Court** (Gold/Arms/Iron/Stone/Wood, "Court of") | unported |
 | 0x0a | FUN_00417ea7 | 0x45 | **Armory** — conscript/mercenaries | unported |
 | 0x0b | FUN_00416cf3 | — | **Noble faces** (diplomacy partner select, faces.pl8) | unported |
-| 0x0c | FUN_00416308 | — | **Trade grid** (icontrad.pl8; transitions to 0x08) | unported |
-| 0x0f | FUN_00412b33 | 0x4a | **Labor allocation** (workforce commit via screen0f_commit) | unported — full analysis + port plan in labor-screen.md (s24) |
+| 0x0c | FUN_00416308 | 0x44 | **Trade grid** (merchant.pl8/icontrad.pl8; buy/sell goods) | PORTED (s27, byte-exact; buy/sell interaction deferred) |
+| 0x0f | FUN_00412b33 | 0x4a | **Labor allocation** (workforce commit via screen0f_commit) | PORTED (s25) |
 | 0x10 | (map) | — | army-move/merge handoff | PORTED |
 | 0x11 | FUN_004192b1 | 0x11 | **Split army** ("Army Division.") | unported |
 | 0x12/0x13 | FUN_00422d22/FUN_00422ff1 | — | battle screens | unported |
