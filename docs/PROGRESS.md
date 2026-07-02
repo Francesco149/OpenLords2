@@ -58,9 +58,29 @@ the only one worth a second glance IF a turn-order divergence ever
 surfaces — it's stable (both cycle all realms), so likely benign too.
 Recorded as engine-quirk #216.
 
-**Next candidates:** continue the playthrough trace — labor screen
-0x0f (FUN_00412b33 + 6 task sub-renderers, reached from workforce grid
-0x02 via FUN_0043a123), armory 0x0a/0x17, End-Turn season reports.
+**Also this session — labor screen 0x0f fully analyzed (execution-ready).**
+Wrote `docs/findings/labor-screen.md`: the complete decompile analysis +
+port plan for FUN_00412b33 + its 6 task sub-renderers.  Key de-risking
+findings: (1) ALL 20 render helpers are already ported; (2) every .rdata
+table extracted via r2 (per-task icon/bar/cue maps, blacksmith weapon
+rate/cost tables, string constants); (3) every county field is a
+mechanical `DAT_0053fXXX − 0x53f9b0` offset over g_per_army_768.  The
+only real risk left is pixel transcription (the olv3 index-diff loop +
+a human scrub resolve it) and the main renderer's sprite-state globals
+(DAT_005c9258/005aeb70/00591524-8 — the last is the very dirty-mark
+position from quirk #216's FUN_00452628), which want a quick verify.
+Deliberately did NOT ship blind unverified rendering code (byte-exact
+project; the verify loop is the deferred human step).
+
+**Port sequencing (helper-coverage scan):** labor 0x0f has ZERO unported
+helper deps → port it FIRST.  Armory 0x0a/0x17 has only 3 unported
+internal helpers (FUN_004181eb / FUN_00418426 / FUN_004996c8) → second.
+
+**Next candidates (execution):** 1. port labor 0x0f per labor-screen.md
+(engine_labor.c/.h + render-arm wiring + a `--force-labor` seat mirroring
+`--force-workforce`, then capture + index-diff each task panel + human
+scrub).  2. armory 0x0a/0x17 (port the 3 helpers first).  3. End-Turn
+season reports.
 
 ---
 
