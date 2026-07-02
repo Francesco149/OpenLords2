@@ -96,7 +96,7 @@ exists in src/ today (session 22).
 | 0x0a | FUN_00417ea7 | 0x45 | **Armory** — conscript/mercenaries | unported |
 | 0x0b | FUN_00416cf3 | — | **Noble faces** (diplomacy partner select, faces.pl8) | unported |
 | 0x0c | FUN_00416308 | — | **Trade grid** (icontrad.pl8; transitions to 0x08) | unported |
-| 0x0f | FUN_00412b33 | 0x4a | **Labor allocation** (workforce commit via screen0f_commit) | unported |
+| 0x0f | FUN_00412b33 | 0x4a | **Labor allocation** (workforce commit via screen0f_commit) | unported — full analysis + port plan in labor-screen.md (s24) |
 | 0x10 | (map) | — | army-move/merge handoff | PORTED |
 | 0x11 | FUN_004192b1 | 0x11 | **Split army** ("Army Division.") | unported |
 | 0x12/0x13 | FUN_00422d22/FUN_00422ff1 | — | battle screens | unported |
