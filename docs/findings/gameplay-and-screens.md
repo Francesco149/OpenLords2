@@ -146,6 +146,49 @@ closes back to screen 0 with demand_redraw=2; turn-busy also closes.
 Because the action grid runs INSIDE the open panel, clicking another grid
 cell switches panels directly.
 
+### The per-frame widget arms + the UI router pair (session 22)
+
+Interactive widgets on a panel screen are NOT drawn by its flip
+renderer.  Retail splits every such screen three ways:
+
+1. **flip/demand renderer** (FUN_0040f1a0 dispatch) — the static panel.
+2. **per-frame refresh** (FUN_004ba26e) — the animated widgets, painted
+   every frame over the retained panel: screen 0x15 →
+   `FUN_0040cfd2(0,0,&DAT_004dd790,2)` (tax up/down arrows); 0x19 →
+   same over `DAT_004dd7c0` + `FUN_00411fde` (the ration percent
+   slider: interior-tile repaint 0x409c93, system-sheet arrows
+   0x4a/0x4b, black track, the FORK sprite 0x4c as the knob).
+3. **UI router** (FUN_004ba9c8, the dispatcher's second gate) — the
+   SAME button tables click-dispatched via FUN_0040da1e (type-4
+   hold-to-auto-repeat).  Tax arrows → FUN_0043aa32/aad5 (rate ±1,
+   clamp [0,50], FUN_0044b80b income recompute); wanted-ration arrows
+   → FUN_0043a1e9/a2b2 (LEVEL +0x15e ±1, clamp [0,5], provision +
+   plan_realm).
+
+When a panel screen shows a stray widget gap, check FUN_004ba26e /
+FUN_004ba9c8 for that screen id FIRST.
+
+### The tooltip subsystem (ported session 22 — engine_tooltip.c)
+
+Strings = loc group 0xdc ("Null tool tip", …).  Tick = FUN_00476e95
+(retail tick line 112, AFTER all renders): 1000 ms mouse-idle arm
+(FUN_00477131) → classify via k_tooltip_mode[screen] (0x4d6fb8; 1 =
+strategic family FUN_00477320, 2 = battle FUN_004777aa unported) →
+white box (fill 0x20, outline 0x3f, menu font, box width from the
+wrap measure pass) right+below the cursor with edge flips + [0,0x1b8]
+clamp, backdrop saved (FUN_004b3f0a) and restored on any mouse
+activity (FUN_004770b8/FUN_004b3ec0).  Gated on DAT_0053f250 (the
+Help-Options "Tool tips" checkbox, default ON).
+
+### Known parity residue: retail's panel-switch scraps
+
+Switching panels DIRECTLY through the action grid leaves scraps of the
+PREVIOUS panel on retail (its FUN_004050c0 recomposite at flip time is
+dirty-rect-gated and skips regions the old panel covered); the port's
+full recomposite paints a clean map.  Deliberate divergence for now —
+reproducing it needs the dirty-rect-gated map-scene composite.  Shows
+up as a stable ~0.5-1% index diff on panel frames after a grid switch.
+
 ### Minimap county-select (FUN_0043253a, the "tab strip" hook's mode-0 arm)
 
 Not a tab strip: on RMB-press-free frames, cursor in x∈[0x1e0,0x25f],

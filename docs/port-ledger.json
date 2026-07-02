@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 805,
+  "tested": 813,
   "ported": 54,
-  "unported": 1588,
+  "unported": 1580,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 859,
-  "pct_touched": 35.1,
-  "pct_tested": 32.9,
+  "touched": 867,
+  "pct_touched": 35.4,
+  "pct_tested": 33.2,
   "bytes_total": 838629,
-  "bytes_touched": 374885,
-  "pct_bytes_touched": 44.7
+  "bytes_touched": 377324,
+  "pct_bytes_touched": 45.0
  },
  "orphan_refs": [
   "0x004148",
@@ -758,6 +758,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_tooltip.c",
     "src/gfx_line.c",
     "src/gfx_line.h"
    ]
@@ -11303,7 +11304,8 @@
     "src/engine_dirty_rect.h",
     "src/engine_hud_menubar.c",
     "src/engine_hud_panel.h",
-    "src/engine_title_render.c"
+    "src/engine_title_render.c",
+    "src/engine_tooltip.c"
    ]
   },
   {
@@ -13532,8 +13534,11 @@
    "name": "FUN_00476e95",
    "size": 421,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine.c",
+    "src/engine_tooltip.h"
+   ]
   },
   {
    "va": "0x47703a",
@@ -13548,48 +13553,68 @@
    "name": "FUN_004770b8",
    "size": 121,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_tooltip.c",
+    "src/engine_tooltip.h",
+    "src/engine_workforce_hud.c",
+    "src/engine_workforce_hud.h"
+   ]
   },
   {
    "va": "0x477131",
    "name": "FUN_00477131",
    "size": 280,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_tooltip.c",
+    "src/engine_tooltip.h"
+   ]
   },
   {
    "va": "0x477249",
    "name": "FUN_00477249",
    "size": 109,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_tooltip.c",
+    "src/engine_tooltip.h"
+   ]
   },
   {
    "va": "0x4772b6",
    "name": "FUN_004772b6",
    "size": 106,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_tooltip.c",
+    "src/engine_tooltip.h"
+   ]
   },
   {
    "va": "0x477320",
    "name": "FUN_00477320",
    "size": 1082,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_tooltip.c",
+    "src/engine_tooltip.h"
+   ]
   },
   {
    "va": "0x4777aa",
    "name": "FUN_004777aa",
    "size": 246,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_tooltip.c",
+    "src/engine_tooltip.h"
+   ]
   },
   {
    "va": "0x4778a0",
@@ -19216,8 +19241,11 @@
    "name": "FUN_004b3ec0",
    "size": 74,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_workforce_hud.c",
+    "src/engine_workforce_hud.h"
+   ]
   },
   {
    "va": "0x4b3f0a",
@@ -19308,6 +19336,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_tooltip.c",
     "src/gfx_sprite.c",
     "src/gfx_sprite.h"
    ]
@@ -19930,6 +19959,7 @@
     "src/engine_tick_cadence.h",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
+    "src/engine_tooltip.h",
     "src/gfx.c",
     "src/main.c"
    ]

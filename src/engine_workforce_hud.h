@@ -111,6 +111,12 @@ void engine_workforce_hud_capture_backdrop(uint32_t *dest, int x, int y,
                                            int width_dwords, int height,
                                            int src_stride);
 
+/* Port of FUN_004b3ec0 — the write-back sibling (restore the captured
+ * rect into the canvas).  Used by the tooltip clear (FUN_004770b8). */
+void engine_workforce_hud_restore_backdrop(const uint32_t *src, int x, int y,
+                                           int width_dwords, int height,
+                                           int dst_stride);
+
 /* Port of FUN_004519ca.  Fill icon-grid row `category`'s cells (up to 25)
  * whose baked threshold (k_workforce_cell_threshold) is <= `count`: with
  * `fill_code` if nonzero, else with that cell's own default colour

@@ -1616,6 +1616,14 @@ struct test_case {
     X(county_panel_rations_renders) \
     X(county_panel_render_null_assets_safe) \
     \
+    X(tooltip_mode_table) \
+    X(tooltip_classify_regions) \
+    X(tooltip_classify_action_grid) \
+    X(tooltip_classify_bottom_rows) \
+    X(tooltip_classify_dynamic_lists) \
+    X(tooltip_tick_arms_after_idle_and_clears_on_activity) \
+    X(tooltip_tick_disabled_and_activity_reset) \
+    \
     X(territory_mark_draw_box_interior_3x3) \
     X(territory_mark_draw_box_preserves_other_bits) \
     X(territory_mark_draw_box_clamps_at_corner) \

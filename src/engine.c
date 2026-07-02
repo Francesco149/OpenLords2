@@ -20,6 +20,7 @@
 #include "engine_ingame_input.h"   /* in-game input dispatcher (FUN_0042ff10) */
 #include "engine_terrain_info.h"   /* terrain-info opener + screen-4 panel render */
 #include "engine_county_panels.h"  /* county detail panels (screens 0x14/15/16/19) */
+#include "engine_tooltip.h"        /* tooltip subsystem (FUN_00476e95) */
 #include "engine_army_select.h"    /* army-select / move dispatcher (FUN_0043ce1a) */
 #include "engine_workforce_hud.h"  /* workforce icon-grid overlay (FUN_00412143) */
 #include "engine_army_move_confirm.h" /* screen-0x10 hover classifier + click resolver */
@@ -153,6 +154,10 @@ static int g_sim_game_speed = 90;
  * (0x434787) toggles.  Not a schema slot.  Gates the per-frame
  * help-hint pump (0x476aa7) below. */
 static int g_help_hints_enabled = 1;
+/* Tool-tips option (retail DAT_0053f250).  FUN_004ae310 seeds 1;
+ * the Help-Options checkbox toggles.  Not a schema slot.  Gates the
+ * per-frame tooltip tick (0x476e95). */
+static int g_tooltips_enabled = 1;
 /* Pause lock — non-zero freezes the sim.  retail DAT_0053f238.
  * Today no UI sets it, so always 0. */
 static int g_sim_pause_lock;
@@ -1234,6 +1239,52 @@ static void engine_tick_county_panel_render(int screen)
         if (screen == 0x19) {
             engine_county_ration_slider_render(&ctx);
         }
+    }
+}
+
+/* ─── Tooltip tick (FUN_00476e95, tick line 112) ───────────────────────
+ * The state instance + the live-globals ctx builder.  The dynamic
+ * list-row inputs (labor/production rows on the right panel) have no
+ * port producer yet — zeros leave those classifier branches inert,
+ * matching retail with an empty list. */
+static engine_tooltip_state_t g_tooltip_state;
+
+static void engine_tick_tooltip_step(void)
+{
+    if (g_engine_state != 3) {
+        return;                     /* in-game frames only */
+    }
+    int county = (int)s_slot_0057c93c;
+
+    engine_tooltip_classify_in_t cin;
+    memset(&cin, 0, sizeof cin);
+    cin.cursor_x      = g_input_game_x;
+    cin.cursor_y      = g_input_game_y;
+    cin.panel_mode    = (int)s_slot_0057a0c4;
+    cin.county_owner  = g_per_army_768[(size_t)county * 0x300 + 0x05];
+    cin.current_realm = (int)s_slot_0057c8cc;
+
+    size_t loc_size = 0;
+    const uint8_t *locblob = config_localization_data(&loc_size);
+    localization_state_t loc;
+    loc.blob = (unsigned char *)locblob;
+    loc.walker_offset = 0;
+
+    engine_tooltip_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.enabled       = g_tooltips_enabled;
+    ctx.screen        = g_sim_current_screen;
+    ctx.mouse_event   = g_input_mouse_event;
+    ctx.now_ms        = engine_now_ms();
+    ctx.cin           = &cin;
+    ctx.loc           = locblob ? &loc : NULL;
+    ctx.menu_font     = gfx_load_menu_font();
+    ctx.glyph_table   = gfx_glyph_render_map();
+    ctx.glyph_metrics = gfx_glyph_measure_map();
+
+    if (gfx_lock_canvas()) {
+        engine_tooltip_tick(&g_tooltip_state, &ctx);
+        gfx_unlock_canvas();
     }
 }
 
@@ -3457,6 +3508,11 @@ void engine_tick(void)
      * sim until dismissed — and renders the open scroll every frame.
      * No-op off the scroll-capable screens. */
     engine_tick_event_popup_step();
+
+    /* Tooltip tick (retail FUN_00476e95, tick line 112 — after every
+     * per-screen render, so the white box paints over the finished
+     * frame and the backdrop save/restore sees final pixels). */
+    engine_tick_tooltip_step();
 
     /* TODO(render): the remaining ~30 per-subsystem renders (the screen-0
      * in-game path 0x4050c0, the strategic-map / sprite renders, …)

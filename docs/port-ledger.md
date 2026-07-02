@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **859** (35.1%) — tested 805, ported 54
-- code bytes touched: **44.7%** (374,885 / 838,629 B)
-- unported: **1588**
+- touched: **867** (35.4%) — tested 813, ported 54
+- code bytes touched: **45.0%** (377,324 / 838,629 B)
+- unported: **1580**
 - orphan refs (in src/, not in function table): 7
 
-## tested (805) — ported + host unit suite
+## tested (813) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -83,7 +83,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x403a2c | FUN_00403a2c | 99 | gfx_paint.h |
 | 0x403a8f | FUN_00403a8f | 442 | gfx_line.c, gfx_line.h |
 | 0x403c49 | FUN_00403c49 | 171 | gfx_line.c, gfx_line.h, gfx_paint.h |
-| 0x403cf4 | FUN_00403cf4 | 247 | gfx_line.c, gfx_line.h |
+| 0x403cf4 | FUN_00403cf4 | 247 | engine_tooltip.c, gfx_line.c, gfx_line.h |
 | 0x403deb | FUN_00403deb | 249 | engine_county_panels.c, engine_terrain_info.c, gfx_line.c (+1) |
 | 0x403ee4 | FUN_00403ee4 | 249 | gfx_line.c, gfx_line.h |
 | 0x403fdd | FUN_00403fdd | 249 | engine_hud_menubar.c, engine_hud_menubar.h, gfx_line.c (+1) |
@@ -440,7 +440,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4526b3 | FUN_004526b3 | 87 | engine_dirty_rect.c, engine_dirty_rect.h |
 | 0x45270a | FUN_0045270a | 43 | engine_dirty_rect.h, engine_ingame_input.h, engine_workforce_hud.c (+1) |
 | 0x452735 | FUN_00452735 | 53 | engine_dirty_rect.h |
-| 0x4527a6 | FUN_004527a6 | 101 | engine.c, engine_battlefield_render.h, engine_button.c (+5) |
+| 0x4527a6 | FUN_004527a6 | 101 | engine.c, engine_battlefield_render.h, engine_button.c (+6) |
 | 0x4650b0 | FUN_004650b0 | 265 | engine.c, engine_army_state.c, engine_army_state.h (+3) |
 | 0x4651b9 | FUN_004651b9 | 91 | engine.c, engine_territory.c, engine_territory.h |
 | 0x465214 | FUN_00465214 | 11 | engine_army_state.c |
@@ -546,6 +546,13 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x476710 | FUN_00476710 | 88 | engine_army_select.c, engine_army_select.h |
 | 0x476768 | FUN_00476768 | 245 | engine.c, engine_army_select.h, engine_ingame_input.h (+2) |
 | 0x47685d | FUN_0047685d | 512 | engine.c, engine_ingame_input.h |
+| 0x476e95 | FUN_00476e95 | 421 | engine.c, engine_tooltip.h |
+| 0x4770b8 | FUN_004770b8 | 121 | engine_tooltip.c, engine_tooltip.h, engine_workforce_hud.c (+1) |
+| 0x477131 | FUN_00477131 | 280 | engine_tooltip.c, engine_tooltip.h |
+| 0x477249 | FUN_00477249 | 109 | engine_tooltip.c, engine_tooltip.h |
+| 0x4772b6 | FUN_004772b6 | 106 | engine_tooltip.c, engine_tooltip.h |
+| 0x477320 | FUN_00477320 | 1082 | engine_tooltip.c, engine_tooltip.h |
+| 0x4777aa | FUN_004777aa | 246 | engine_tooltip.c, engine_tooltip.h |
 | 0x47ed34 | FUN_0047ed34 | 103 | engine.c, engine_camera.c, engine_camera.h |
 | 0x48ee46 | FUN_0048ee46 | 87 | engine_tile.c, engine_tile.h |
 | 0x4917dd | FUN_004917dd | 599 | engine_tile.c, engine_tile.h, save.c |
@@ -763,12 +770,13 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b3768 | FUN_004b3768 | 84 | engine.c, engine_county_panels.h |
 | 0x4b37bc | FUN_004b37bc | 388 | engine_terrain_info.c, engine_terrain_info.h |
 | 0x4b3e51 | FUN_004b3e51 | 111 | engine_army_select.c |
+| 0x4b3ec0 | FUN_004b3ec0 | 74 | engine_workforce_hud.c, engine_workforce_hud.h |
 | 0x4b3f0a | FUN_004b3f0a | 74 | engine_workforce_hud.h |
 | 0x4b3f54 | FUN_004b3f54 | 38 | gfx_paint.h |
 | 0x4b3f7a | FUN_004b3f7a | 41 | gfx_paint.h |
 | 0x4b3fa3 | FUN_004b3fa3 | 61 | gfx_paint.h |
 | 0x4b4056 | FUN_004b4056 | 47 | engine_overlay_render.c |
-| 0x4b414a | FUN_004b414a | 109 | gfx_sprite.c, gfx_sprite.h |
+| 0x4b414a | FUN_004b414a | 109 | engine_tooltip.c, gfx_sprite.c, gfx_sprite.h |
 | 0x4b41b7 | FUN_004b41b7 | 165 | gfx_glyph.h |
 | 0x4b425c | FUN_004b425c | 105 | gfx_glyph.c, gfx_glyph.h |
 | 0x4b42c5 | FUN_004b42c5 | 105 | gfx_glyph.c, gfx_glyph.h |
@@ -784,7 +792,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b49f7 | FUN_004b49f7 | 705 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b4cb8 | FUN_004b4cb8 | 1659 | gfx_sprite.c, gfx_sprite.h, gfx_sprite_render.c (+1) |
 | 0x4b5333 | FUN_004b5333 | 2997 | gfx_sprite.c, gfx_sprite.h |
-| 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+10) |
+| 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+11) |
 | 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_army_move_confirm.h, engine_button.c (+6) |
 | 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_confirm_dialog.h, engine_county_panels.h (+7) |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c |

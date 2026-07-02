@@ -75,6 +75,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_army_move_confirm.c \
                    ../src/engine_workforce_hud.c \
                    ../src/engine_county_panels.c \
+                   ../src/engine_tooltip.c \
                    ../src/engine_mp_render.c \
                    ../src/engine_screen_dispatch.c \
                    ../src/engine_load_pump.c \
@@ -156,6 +157,7 @@ SRCS_TESTS      := test_main.c test_strutil.c test_config.c \
                    test_engine_army_move_confirm.c \
                    test_engine_workforce_hud.c \
                    test_engine_county_panels.c \
+                   test_engine_tooltip.c \
                    test_engine_mp_render.c \
                    test_engine_screen_dispatch.c \
                    test_engine_load_pump.c \

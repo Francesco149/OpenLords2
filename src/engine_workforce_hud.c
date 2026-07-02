@@ -173,14 +173,34 @@ void engine_workforce_hud_capture_backdrop(uint32_t *dest, int x, int y,
     const uint8_t *canvas = gfx_paint_canvas_pixels();
     if (!canvas || !dest) return;
     int canvas_width = gfx_paint_canvas_width();
-    const uint32_t *src =
-        (const uint32_t *)(canvas + x + y * canvas_width);
+    const uint8_t *src = canvas + x + y * canvas_width;
+
+    /* Retail copies dwords regardless of alignment (fine on x86); the
+     * port copies the same bytes via memcpy so the host sanitizers
+     * don't trip on an odd x. */
+    for (int row = 0; row < height; row++) {
+        memcpy(dest, src, (size_t)width_dwords * 4);
+        dest += width_dwords;
+        src += src_stride;
+    }
+}
+
+/* Port of FUN_004b3ec0 — the write-back sibling of the capture above
+ * (identical walk, copy direction reversed).  Retail's tooltip clear
+ * (FUN_004770b8) restores the saved under-box pixels through it. */
+void engine_workforce_hud_restore_backdrop(const uint32_t *src, int x, int y,
+                                           int width_dwords, int height,
+                                           int dst_stride)
+{
+    uint8_t *canvas = gfx_paint_canvas_pixels();
+    if (!canvas || !src) return;
+    int canvas_width = gfx_paint_canvas_width();
+    uint8_t *dst = canvas + x + y * canvas_width;
 
     for (int row = 0; row < height; row++) {
-        for (int col = 0; col < width_dwords; col++)
-            dest[col] = src[col];
-        dest += width_dwords;
-        src = (const uint32_t *)((const uint8_t *)src + src_stride);
+        memcpy(dst, src, (size_t)width_dwords * 4);
+        src += width_dwords;
+        dst += dst_stride;
     }
 }
 
