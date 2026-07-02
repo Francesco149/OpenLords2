@@ -133,6 +133,22 @@ same split as the tax/rations panels — find the 0x0f button table there.
 
 ## Port plan (next session, WITH the render-parity loop)
 
+0. **KNOWN TRICKY BIT (verify first):** the main renderer FUN_00412b33's
+   "sprite-state globals" are actually the GLYPH-RENDERER state, and it
+   pokes them as scratch before FUN_00409397 (the icon-cell bevel rect):
+     DAT_005c9258 = g_glyph_w            (gfx_glyph.c static)
+     DAT_005aeb70 = glyph_height_short   (gfx_dispatch.c static)
+     DAT_00591524 = glyph cursor_x       (gfx_glyph.c static)
+     DAT_00591528 = glyph cursor_y       (gfx_glyph.c static)
+   Retail does `g_glyph_w=0x19; glyph_h=k_task_bar[task]; cursor=(0x30,
+   0x60); FUN_00409397(0x30,0x60,g_glyph_w,glyph_h)` — i.e. it reuses the
+   glyph w/h globals to pass the icon-cell size, and seeds the glyph
+   cursor (which the redraw-dirty FUN_00452628 later reads — quirk #216).
+   These are gfx_glyph/gfx_dispatch STATICS: porting needs
+   setter accessors (add gfx_glyph_set_cursor / _set_glyph_dims etc. if
+   absent) AND care that seeding them doesn't corrupt the following text
+   draws.  Verify this block's pixels FIRST with the index-diff — it's
+   the only non-mechanical part of the whole screen.
 1. engine_labor.h — ctx struct (mirror engine_county_panels_ctx_t:
    county_block, fonts DAT_005af8f0/005b2fa0, glyph table, loc, sheets
    iconvill/hearth/smithy) + function map + this field table.
