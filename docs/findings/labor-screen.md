@@ -144,10 +144,12 @@ same split as the tax/rations panels — find the 0x0f button table there.
    0x60); FUN_00409397(0x30,0x60,g_glyph_w,glyph_h)` — i.e. it reuses the
    glyph w/h globals to pass the icon-cell size, and seeds the glyph
    cursor (which the redraw-dirty FUN_00452628 later reads — quirk #216).
-   These are gfx_glyph/gfx_dispatch STATICS: porting needs
-   setter accessors (add gfx_glyph_set_cursor / _set_glyph_dims etc. if
-   absent) AND care that seeding them doesn't corrupt the following text
-   draws.  Verify this block's pixels FIRST with the index-diff — it's
+   These are gfx_glyph/gfx_dispatch STATICS: porting needs setter
+   accessors AND care that seeding them doesn't corrupt the following
+   text draws.  `gfx_dispatch_set_glyph_height_short(int)` ALREADY exists
+   (for DAT_005aeb70); a glyph_w (005c9258) + cursor_x/y (00591524/8)
+   setter needs adding to gfx_glyph.h (only gfx_glyph_set_color is there
+   today).  Verify this block's pixels FIRST with the index-diff — it's
    the only non-mechanical part of the whole screen.
 1. engine_labor.h — ctx struct (mirror engine_county_panels_ctx_t:
    county_block, fonts DAT_005af8f0/005b2fa0, glyph table, loc, sheets
