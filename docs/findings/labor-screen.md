@@ -1,5 +1,33 @@
 # Labor-allocation screen 0x0f — full port analysis (session 24)
 
+> **PORTED session 25** (commit 9742025 + follow-ups): `engine_labor.c/.h`
+> — the dispatcher (FUN_00412b33), all 6 sub-renderers, `labor_num_units`
+> (FUN_0041ab67), the castle block (FUN_0041dedb), and the open hit-test
+> (FUN_0043a123, not yet wired). Seam: engine.c 0x0f arm draws over the
+> retained frame with NO map recomposite (mirrors FUN_0040f1a0).
+> **All 6 sub-renderers VISUALLY VERIFIED** via a new `--force-labor TASK`
+> seat (grain/cattle/castle/iron/blacksmith): layout, fonts, panel tiling,
+> icon cell, centered caption, fill-block, RLE anvil, and the reused strat
+> menubar all correct; blacksmith cost/rate 10/6 and castle "2500" match
+> the r2 tables. The .rdata below had **several hand-transcription errors**
+> (task-icon indices, hearth y-offsets, weapon rate/cost) — the .c uses the
+> re-verified r2 values, not the table in this doc.
+>
+> **Two follow-ups remain (both OUT of the labor-render scope):**
+> 1. **Organic 0x02→0x0f open** — blocked on the region grid `DAT_00542cf8`
+>    (the task-cell map the hit-test indexes); no port builder exists in
+>    the extracted decompiles. Needs porting before a live click opens the
+>    screen (and thus before an organic olv3 byte-exact diff). The 0x0f
+>    close case is likewise unwired (trivial once the open lands).
+> 2. **Data parity** — under `--force-labor` on a live-loaded save the
+>    panel renders REAL county data faithfully, but the labor economy
+>    fields (+0xc4 worker triple, +0x224 grain, +0x2a8 stock, …) read 0
+>    because the port's economy doesn't populate them (same "+0xc4 no live
+>    producer" gap the workforce hud flagged, s17). Whether that matches
+>    retail at turn-1 load is a HUMAN/retail question, and byte-exact data
+>    parity is gated on the broader economy-parity frontier, not this port.
+
+
 > Complete decompile analysis + port plan for the labor-allocation detail
 > screen (`g_sim_current_screen` = 0x0f, renderer `FUN_00412b33`).  All
 > render helpers are ALREADY ported; every `.rdata` table is extracted

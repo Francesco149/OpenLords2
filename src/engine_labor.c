@@ -727,7 +727,7 @@ static void labor_panel_smithy(const engine_labor_ctx_t *ctx, const uint8_t *rec
 int engine_labor_open_hit_test(const engine_labor_open_in_t *in)
 {
     CALL_TRACE_ENTER(0x0043a123);
-    if (in->grid_active == 0) {                    /* DAT_004eabf0 == 0 */
+    if (in->lmb_click_fired == 0) {                /* DAT_004eabf0 == 0 */
         return 0;
     }
     /* FUN_004398f5(cursor_x, cursor_y) — which grid cell (0..8), 0 = miss. */

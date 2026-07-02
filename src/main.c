@@ -672,6 +672,26 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
                  ready[1], ready[2], ready[3], ready[4], ready[5]);
     }
 
+    /* Forced labor-panel render on the LIVE-loaded save (--force-labor
+     * TASK together with --strat-load-live + --capture-to): paint the
+     * panel over a fresh strat composite so the per-county economy
+     * readouts carry REAL data.  (The bringup_strat_map force block uses
+     * captured .bin dumps, whose labor fields may be zeroed.) */
+    if (g_engine_state == 3 && g_force_labor_task >= 0 && g_capture_dir) {
+        gfx_load_system_sheet_select(1);
+        if (gfx_lock_canvas()) {
+            engine_screen_strat_render(1);
+            gfx_unlock_canvas();
+        }
+        engine_dev_force_labor_render(g_force_labor_task);
+        gfx_tick_present(1);
+        char path[MAX_PATH];
+        wsprintfA(path, "%s\\port_labor.bmp", g_capture_dir);
+        gfx_capture_backbuffer(path);
+        log_line("labor: forced task=%d render (live save) → %s",
+                 g_force_labor_task, path);
+    }
+
     if (g_audio_active) {
         audio_shutdown();
         g_audio_active = 0;
