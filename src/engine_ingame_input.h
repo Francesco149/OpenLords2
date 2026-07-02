@@ -28,11 +28,16 @@
  *     scroll, then a fresh LMB press (gated on the handoff cooldown)
  *     resolves the move/merge target via engine_army_move_confirm_
  *     click_resolve — see docs/plans/army-select-move.md's tier-5 table
+ *   - the four COUNTY DETAIL PANEL screens (0x14 population / 0x15 tax /
+ *     0x16 happiness / 0x19 rations — engine_county_panels.h): the shared
+ *     HUD chain + any-click-closes shape of 42ff10.c:445-560, with the
+ *     rations stepper (FUN_0043a379) slotted third on 0x19 only
  *   - the shared tail (right-panel tab strip + the screen-0x0f commit) and
  *     the tail edge latch.
- * The ~29 OTHER screen cases (battle sub-modes, county/market/report
+ * The ~25 OTHER screen cases (battle sub-modes, market/report
  * sub-screens) are deferred — they belong to screens the port does not
- * render yet; each lands with its screen.  See the plan doc.
+ * render yet; each lands with its screen.  See the plan doc +
+ * docs/findings/gameplay-and-screens.md for the full map.
  *
  * DESIGN.  The dispatcher is a state machine over many retail globals, and
  * its sub-handlers mutate the same state it reads.  Modeled as: a per-frame
@@ -128,6 +133,9 @@ typedef struct engine_ingame_hooks {
     engine_ingame_consume_fn kbd_table;          /* FUN_0040deca(&DAT_004dc428,3) */
     engine_ingame_consume_fn hud_btn_b;          /* FUN_0043292d HUD button hit-test */
     engine_ingame_consume_fn action_grid;        /* FUN_00438ceb 4-button action grid */
+    engine_ingame_consume_fn rations_arrows;     /* FUN_0043a379 rations-panel stepper
+                                                  * (screen 0x19 only, third in its
+                                                  * chain — see the county-panel case) */
     engine_ingame_consume_fn scrollbar;          /* FUN_00439122 right-panel scrollbar */
     engine_ingame_consume_fn panel_toggles;      /* FUN_00438e3b right-panel toggles */
     engine_ingame_consume_fn tab_strip;          /* FUN_004323fe right-panel tab strip (tail) */

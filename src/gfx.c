@@ -93,6 +93,7 @@ static uint8_t             *g_system_sheet;    /* DAT_005bb540 — system2.pl8 b
 static uint8_t             *g_misc_sheet;      /* DAT_005530c8 — misc_sel.pl8 blob */
 static uint8_t             *g_chrome_sheet;    /* DAT_0057d3d0 — panels.pl8 blob */
 static uint8_t             *g_terrain_icon_sheet; /* icon_tmp.pl8 (terrain-info icons) */
+static uint8_t             *g_graphs_sheet;    /* graphs.pl8 (county history graphs) */
 static uint8_t             *g_menu_font;       /* DAT_005af8f0 — fntl2_14.pl8 blob */
 static uint8_t             *g_title_font;      /* DAT_005b2fa0 — fntl2_22.pl8 blob */
 static uint8_t             *g_panel_name_font; /* DAT_005c9a90 — fntl2_9.pl8 blob */
@@ -292,6 +293,10 @@ void gfx_shutdown(void)
     if (g_terrain_icon_sheet) {
         free(g_terrain_icon_sheet);
         g_terrain_icon_sheet = NULL;
+    }
+    if (g_graphs_sheet) {
+        free(g_graphs_sheet);
+        g_graphs_sheet = NULL;
     }
     if (g_menu_font) {
         free(g_menu_font);
@@ -750,6 +755,30 @@ const uint8_t *gfx_load_terrain_icon_sheet(void)
         return NULL;
     }
     return g_terrain_icon_sheet;
+}
+
+/* Load graphs.pl8 — the county population/happiness history-graph sheet
+ * (background sprites 0/1 + the per-bucket bar columns).  Retail reloads
+ * it into the shared DAT_004eabec scratch on EVERY graph render
+ * (FUN_004156a7 head, 200000-byte cap); the drop-in caches it in its own
+ * buffer like the terrain-icon sheet, so the panels2.pl8 scratch is not
+ * clobbered.  On-disk file is 151404 bytes and fits.  Returns the blob
+ * (cached; freed by gfx_shutdown), or NULL. */
+const uint8_t *gfx_load_graphs_sheet(void)
+{
+    if (!g_graphs_sheet) {
+        g_graphs_sheet = (uint8_t *)malloc(200000);
+        if (!g_graphs_sheet) {
+            log_line("gfx_load_graphs_sheet: OOM");
+            return NULL;
+        }
+    }
+    int n = io_read_file_at("graphs.pl8", g_graphs_sheet, 200000, 0);
+    if (n < 1) {
+        log_line("gfx_load_graphs_sheet: read graphs.pl8 failed (%d)", n);
+        return NULL;
+    }
+    return g_graphs_sheet;
 }
 
 const uint8_t *gfx_palette_rgb(void)

@@ -187,6 +187,40 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                     st->demand_redraw = 2;
                     consumed = 1;
                 }
+            } else if (st->screen == 0x14 || st->screen == 0x15 ||
+                       st->screen == 0x16 || st->screen == 0x19) {
+                /* ───────── COUNTY DETAIL PANELS (population 0x14 / tax
+                 * 0x15 / happiness 0x16 / rations 0x19) ─────────
+                 * One shared shape (42ff10.c:445-560): while turn-idle,
+                 * run hud_btn_b → hud_btn_a → [0x19 only: the rations
+                 * stepper FUN_0043a379] → action-grid → scrollbar →
+                 * panel-toggles → minimap-drag; if none consume, ANY
+                 * click closes back to the strategic screen (RMB
+                 * directly; LMB via the generic-click test).  Turn-busy
+                 * closes too.  NOTE the retail case bodies end in
+                 * `goto LAB_00431f25` unconditionally — the shared
+                 * tab-strip tail below never runs on these screens,
+                 * hence `consumed = 1` on every path. */
+                consumed = 1;
+                if (!turn_idle) {
+                    st->screen = 0;
+                    st->demand_redraw = 2;
+                } else if (call_consume(hooks->hud_btn_b, in, st) == 0 &&
+                           call_consume(hooks->hud_btn_a, in, st) == 0 &&
+                           (st->screen != 0x19 ||
+                            call_consume(hooks->rations_arrows, in, st) == 0) &&
+                           call_consume(hooks->action_grid, in, st) == 0 &&
+                           call_consume(hooks->scrollbar, in, st) == 0 &&
+                           call_consume(hooks->panel_toggles, in, st) == 0 &&
+                           call_consume(hooks->minimap_drag, in, st) == 0) {
+                    if (in->rmb_released != 0) {
+                        st->screen = 0;
+                        st->demand_redraw = 2;
+                    } else if (call_consume(hooks->generic_click, in, st) != 0) {
+                        st->screen = 0;
+                        st->demand_redraw = 2;
+                    }
+                }
             }
             /* (other screen cases deferred — see header) */
 

@@ -1590,6 +1590,28 @@ struct test_case {
     X(workforce_hud_render_defaults_icon_sheet_when_unbound) \
     X(workforce_hud_render_respects_pre_bound_icon_sheet) \
     \
+    X(county_grid_quadrants_map_to_screens) \
+    X(county_grid_gutter_and_bounds_not_consumed) \
+    X(county_grid_owner_gate) \
+    X(county_panel_case_rmb_closes) \
+    X(county_panel_case_chain_order_and_no_tail) \
+    X(county_panel_case_rations_hook_only_on_0x19) \
+    X(county_panel_case_action_grid_switches_panels) \
+    X(county_panel_case_turn_busy_closes) \
+    X(county_panel_case_generic_click_closes) \
+    X(county_rations_arrows_step) \
+    X(county_rations_band_absolute_and_clamp) \
+    X(county_rations_gates) \
+    X(county_ration_set_simple_write) \
+    X(county_ration_set_snap_walks_to_clamp_when_outcome_never_flips) \
+    X(county_ration_set_dead_drag_reverts) \
+    X(county_graph_ring_max_and_wrap) \
+    X(county_panel_population_renders) \
+    X(county_panel_tax_renders) \
+    X(county_panel_happiness_renders) \
+    X(county_panel_rations_renders) \
+    X(county_panel_render_null_assets_safe) \
+    \
     X(territory_mark_draw_box_interior_3x3) \
     X(territory_mark_draw_box_preserves_other_bits) \
     X(territory_mark_draw_box_clamps_at_corner) \

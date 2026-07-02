@@ -19,6 +19,7 @@
 #include "engine_camera.h"
 #include "engine_ingame_input.h"   /* in-game input dispatcher (FUN_0042ff10) */
 #include "engine_terrain_info.h"   /* terrain-info opener + screen-4 panel render */
+#include "engine_county_panels.h"  /* county detail panels (screens 0x14/15/16/19) */
 #include "engine_army_select.h"    /* army-select / move dispatcher (FUN_0043ce1a) */
 #include "engine_workforce_hud.h"  /* workforce icon-grid overlay (FUN_00412143) */
 #include "engine_army_move_confirm.h" /* screen-0x10 hover classifier + click resolver */
@@ -1103,6 +1104,161 @@ static void engine_tick_terrain_info_render(void)
     engine_terrain_info_render(&g_ti_attrs, &ctx);
 }
 
+/* ─── County detail panels (screens 0x14/0x15/0x16/0x19) ───────────────
+ * See engine_county_panels.h.  Three seams here: the render-arm ctx
+ * builder, the action-grid hook (FUN_00438ceb + the four flip stubs),
+ * and the rations-stepper hook (FUN_0043a379 → FUN_0043a5a9). */
+static void engine_tick_county_panel_render(int screen)
+{
+    const uint8_t *chrome = gfx_load_chrome_sheet();
+    const uint8_t *tfont  = gfx_load_title_font();
+    const uint8_t *mfont  = gfx_load_menu_font();
+    size_t loc_size = 0;
+    const uint8_t *locblob = config_localization_data(&loc_size);
+    if (!chrome || !tfont || !mfont || !locblob) {
+        return;
+    }
+    localization_state_t loc;
+    loc.blob = (unsigned char *)locblob;
+    loc.walker_offset = 0;
+
+    engine_county_panels_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.county_block    = g_per_army_768;
+    ctx.realm_block     = g_player_strategic_352;
+    ctx.history         = g_realm_history;
+    ctx.hist_head       = (int)s_slot_00568da8;
+    ctx.hist_count      = (int)s_slot_00553f30;
+    ctx.hist_start_year = (int)s_slot_00553228;
+    ctx.year            = (int)s_slot_00553edc;
+    ctx.county          = (int)s_slot_0057c93c;
+    ctx.map_id          = (int)s_slot_0053f034;
+    ctx.advanced_mode   = (int)s_slot_0053f260;
+    ctx.chrome          = chrome;
+    ctx.misc_sheet      = engine_pl8_misc_cty();     /* DAT_005530c8 */
+    ctx.graphs          = gfx_load_graphs_sheet();
+    ctx.system_sheet    = gfx_system_sheet_current();
+    ctx.title_font      = tfont;
+    ctx.menu_font       = mfont;
+    ctx.glyph_table     = gfx_glyph_render_map();
+    ctx.glyph_metrics   = gfx_glyph_measure_map();
+    ctx.loc             = &loc;
+
+    switch (screen) {
+    case 0x14: engine_county_panel_population(&ctx); break;
+    case 0x15: engine_county_panel_tax(&ctx);        break;
+    case 0x16: engine_county_panel_happiness(&ctx);  break;
+    case 0x19: engine_county_panel_rations(&ctx);    break;
+    default: break;
+    }
+}
+
+/* action_grid hook (FUN_00438ceb + the FUN_0043a8f2/a939/a922/a846
+ * flips): an LMB press on the control panel's 2×2 grid flips to the
+ * matching detail screen.  Retail renders the panel inside the flip;
+ * the port requests the redraw and lets the demand seam paint (same
+ * pixels — the seam composites the map + panel this same tick).  The
+ * county voice cues (s020_0N / s021_0N.wav) are DOCUMENTED no-ops: the
+ * WAV cue-playback path (FUN_00427990) has no port yet, but the cue
+ * latch (_DAT_005533f0) is raised like retail. */
+static int cp_action_grid(const engine_ingame_input_in_t *in,
+                          engine_ingame_state_t *st)
+{
+    int county = (int)s_slot_0057c93c;
+    const uint8_t *rec = g_per_army_768 + (size_t)county * 0x300;
+
+    engine_county_grid_in_t gin;
+    memset(&gin, 0, sizeof gin);
+    gin.lmb_pressed   = in->lmb_pressed;
+    gin.cursor_x      = in->region_in.cursor_x;
+    gin.cursor_y      = in->region_in.cursor_y;
+    gin.county_owner  = rec[0x05];
+    gin.current_realm = (int)s_slot_0057c8cc;
+    gin.spectate      = 0;            /* DAT_0053f684 — no producer yet */
+
+    int screen = engine_county_action_grid_classify(&gin);
+    if (screen == 0) {
+        return 0;
+    }
+    st->screen = screen;
+    st->demand_redraw = 2;
+    if (screen == 0x14) {
+        /* FUN_0043a8f2 → FUN_004b3768(health byte): county voice cue. */
+        int v = (int)(int8_t)rec[0x09];
+        if (v >= 0 && v < 8) {
+            g_combat_audio_latch = 1;             /* _DAT_005533f0 */
+        }
+    } else if (screen == 0x19) {
+        int cue = engine_county_rations_voice_cue(rec);
+        if (cue != 0) {
+            g_combat_audio_latch = 1;
+        }
+    }
+    return 1;
+}
+
+/* rations_arrows hook (FUN_0043a379): the −/+ steppers + absolute band
+ * on the rations panel.  A committed change routes through
+ * engine_county_ration_set (FUN_0043a5a9), which reruns the economy
+ * passes; when it lands on the current county, retail re-renders the
+ * panel + raises the redraw flags — the port requests the demand
+ * redraw (the seam repaints map + panel). */
+static int cp_rations_arrows(const engine_ingame_input_in_t *in,
+                             engine_ingame_state_t *st)
+{
+    int county = (int)s_slot_0057c93c;
+    const uint8_t *rec = g_per_army_768 + (size_t)county * 0x300;
+
+    engine_county_rations_in_t rin;
+    memset(&rin, 0, sizeof rin);
+    rin.lmb_released     = in->lmb_released;
+    rin.lmb_pressed      = in->lmb_pressed;
+    rin.click_repeat     = g_input_lmb_dblclk;       /* DAT_004eabc5 */
+    rin.lmb_held         = in->lmb_held;
+    rin.hold_repeat_gate = g_input_mouse_event;      /* DAT_004ea4b0 */
+    rin.cursor_x         = in->region_in.cursor_x;
+    rin.cursor_y         = in->region_in.cursor_y;
+    rin.county_owner     = rec[0x05];
+    rin.current_realm    = (int)s_slot_0057c8cc;
+    rin.ration_pct       = (int)(int8_t)rec[0x15f];
+
+    int value = 0, is_drag = 0, changed = 0;
+    int consumed = engine_county_rations_input(&rin, &value, &is_drag,
+                                               &changed);
+    if (changed) {
+        /* DAT_0059154c / DAT_00591550 mirrors — no ported consumer. */
+        if (g_sim_mp_active == 0) {                  /* DAT_00553030 */
+            if (engine_county_ration_set(county, value, is_drag)) {
+                g_combat_flag_530d0 = 1;             /* DAT_005530d0 */
+                st->demand_redraw = 2;
+            }
+        }
+        /* (MP arm FUN_0043eda0(0x31,0) — deferred.) */
+    }
+    return consumed;
+}
+
+/* generic_click hook (FUN_0040e7e4): LMB-release on the "click to
+ * continue" seal (the 0x18×0x18 rect at the last seal-draw position).
+ * Closes the county panels (and serves screen 4's LMB-close).  On a
+ * hit retail clears the LMB hold-timer latch (FUN_004b18e3). */
+static int cp_generic_click(const engine_ingame_input_in_t *in,
+                            engine_ingame_state_t *st)
+{
+    (void)st;
+    if (in->lmb_released == 0) {
+        return 0;
+    }
+    int sx = gfx_sprite_seal_x();                    /* DAT_0055ce78 */
+    int sy = gfx_sprite_seal_y();                    /* DAT_0057c8a0 */
+    if (in->region_in.cursor_x < sx || sx + 0x18 <= in->region_in.cursor_x ||
+        in->region_in.cursor_y < sy || sy + 0x18 <= in->region_in.cursor_y) {
+        return 0;
+    }
+    g_input_lmb_timer_armed = 0;                     /* FUN_004b18e3 */
+    return 1;
+}
+
 /* ─── End-Turn button — port of FUN_0043ac23 @ 0x43ac23 (the action) +
  *     FUN_00432967 @ 0x432967 / the End-Turn row of FUN_0040e3ee (hit-test).
  *
@@ -1260,6 +1416,9 @@ static void engine_tick_ingame_input_step(void)
         .ui_router          = ti_ui_router,               /* FUN_004ba9c8 0x1e arm */
         .edge_scroll        = ti_edge_scroll,            /* FUN_00432221 edge-scroll */
         .hud_btn_a          = engine_endturn_hit_test,   /* FUN_00432967 End-Turn */
+        .action_grid        = cp_action_grid,            /* FUN_00438ceb 2×2 grid */
+        .rations_arrows     = cp_rations_arrows,         /* FUN_0043a379 stepper */
+        .generic_click      = cp_generic_click,          /* FUN_0040e7e4 seal click */
         .terrain_info_open  = ti_open,
         .terrain_info_close = ti_close,
         .army_select        = ti_army_select,            /* FUN_0043ce1a army select/move */
@@ -1325,6 +1484,21 @@ static void engine_tick_title_render_step(void)
                  * so lock + paint the panel without clearing the canvas. */
                 if (gfx_lock_canvas()) {
                     engine_tick_terrain_info_render();
+                    gfx_unlock_canvas();
+                }
+            } else if (g_sim_current_screen == 0x14 ||
+                       g_sim_current_screen == 0x15 ||
+                       g_sim_current_screen == 0x16 ||
+                       g_sim_current_screen == 0x19) {
+                /* County detail panels: retail's renderers recomposite the
+                 * map scene (FUN_004050c0) then paint the parchment panel
+                 * over it — the recomposite is what erases a PREVIOUS
+                 * panel when the action grid switches panels directly.
+                 * Mirror that split here: full strat frame, then the
+                 * panel, in one canvas lock. */
+                if (gfx_lock_canvas()) {
+                    engine_screen_strat_render(1);
+                    engine_tick_county_panel_render(g_sim_current_screen);
                     gfx_unlock_canvas();
                 }
             } else if (g_sim_current_screen != 0x10 &&

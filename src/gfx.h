@@ -137,6 +137,11 @@ const uint8_t *gfx_load_chrome_sheet(void);
  * Cached; freed by gfx_shutdown.  Returns the blob or NULL. */
 const uint8_t *gfx_load_terrain_icon_sheet(void);
 
+/* Load the county history-graph sheet (graphs.pl8) — the population/
+ * happiness panel graphs (engine_county_graph_render).  Cached; freed by
+ * gfx_shutdown.  Returns the blob or NULL. */
+const uint8_t *gfx_load_graphs_sheet(void);
+
 /* The active 8-bit RGB palette mirror (retail DAT_004ea1b0[256*3]) the
  * page-7 roster dim (gfx_paint_darken_rect) keys off.  Valid after
  * gfx_load_palette / gfx_init.  Returns a pointer to the 768-byte
