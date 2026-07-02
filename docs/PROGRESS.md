@@ -7,6 +7,85 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-07-02 (session 22) — PLAYTHROUGH-DRIVEN PORTING begins: game knowledge researched, the county control-panel family (population/tax/happiness/rations + steppers + slider) and the TOOLTIP subsystem ported, all verified via one organic click-trace — and the trace exposed a retail-seat input-scale calibration gap
+
+New working mode (user-directed): research how the game is actually
+played, then extend a playthrough trace turn-by-turn, stopping to port
+whatever unported code each step hits.
+
+**Game knowledge + screen map
+([docs/findings/gameplay-and-screens.md](findings/gameplay-and-screens.md)).**
+Synthesized the strategy-guide corpus (manual, GameFAQs, Steam guide,
+openlotr2 docs) into the seasonal turn loop + the standard opening a
+trace should follow, and derived the COMPLETE `DAT_004eac50` screen-ID
+map by pairing FUN_0040f1a0's render dispatch with each renderer's
+L2.eng string group (dump recipe in the doc): merchant 0x08, treasury
+0x09, armory 0x0a/0x17, labor 0x0f, split 0x11, population 0x14, tax
+0x15, happiness 0x16, supplies 0x18, rations 0x19, diplomacy 0x0b/0x1a,
+castle 0x1b, siege 0x1d, rankings 0x20, ….
+
+**Port 1 — the county-panel family (commit d7d864b).**  The 2×2 action
+grid (FUN_00438ceb) + all four detail panels (FUN_004110b1/0041152f/
+004116fb/00411b72), the seasonal history bar graph (FUN_004156a7 —
+g_realm_history ring, base-quirk block−8, bucket/yscale/barw tables
+r2-extracted), the "(±N♥)" delta label (FUN_0041ac95), the rations
+stepper + absolute band (FUN_0043a379, arrow-priority on the 0x145
+overlap pinned by test) and the ration-set snap loop (FUN_0043a5a9,
+dead-drag revert + 100-try clamp walk pinned), the shared dispatcher
+case (42ff10.c:445-560 — NO shared tail, retail goto), engine.c hooks
+(action grid / rations / generic-click-on-seal, the last also giving
+screen 4 its LMB close) + the render-seam arm (full recomposite THEN
+panel — erases the previous panel on grid switches).
+
+**Port 2 — the panel widgets (commit 3ded58f).**  The trace diff showed
+the flip renderers DON'T draw the interactive widgets: retail paints
+them per-frame (FUN_004ba26e 0x15/0x19 → FUN_0040cfd2 over .rdata
+button tables 0x4dd790/0x4dd7c0 + FUN_00411fde) and dispatches their
+clicks in the UI router (FUN_004ba9c8 0x15/0x19 → FUN_0040da1e over the
+SAME tables → FUN_0043aa32/aad5 tax ±1 → income recompute;
+FUN_0043a1e9/a2b2 wanted-level ±1 → provision+plan_realm).  The 4×-zoom
+loop caught FUN_00409c93 = the plain interior-tile fill (NOT a bevel)
+and the FORK sprite (0x4c) as the slider knob.  Slider region now
+ZERO-diff; rations frames 2.07%→0.53%.
+
+**Port 3 — tooltips (commit 82b8831).**  The settled-frame residue was
+retail's tooltips — a complete unported subsystem.  Ported it whole
+(engine_tooltip.c): 1s-idle arm + backdrop save, activity clear +
+restore (new engine_workforce_hud_restore_backdrop = FUN_004b3ec0),
+mode table 0x4d6fb8, the full strategic hotspot classifier
+FUN_00477320 (battle classifier FUN_004777aa deferred), white-box
+render off loc group 0xdc.  Both engines now draw the SAME tooltip at
+the grid buttons; population/happiness settled 2.09%→0.78-0.80%.
+
+**Verification: `tools/traces/county_panels_click.jsonl`** — one
+organic trace on the default lastturn.sav seat: open all four panels
+via real grid clicks (including a direct panel→panel grid switch),
+click the rations +/− steppers (both engines run the ported economy
+recompute in LOCKSTEP), RMB-close.  15 paired captures; comparisons on
+the feed; viewer launched on the session for scrubbing.
+
+**HARNESS FINDING (next session's first task): the retail seat lands
+every positioned click ~(6,2-3) px short.**  Tooltips are the first
+cursor-DERIVED render, and the box offset exposed it: the agent's
+windowed-input scale fix overwrites DAT_004ea180..18c with the REAL
+client rect each tick, and the retail window's client is ~646×486 (not
+640×480), so injected client coords get scaled by game/client.  Every
+prior positioned click silently tolerated this (hit-boxes ≥ 24 px).
+Fix = pin the retail client to exactly 640×480 (or pre-scale injected
+lParams), then re-capture county_panels_click — the tooltip boxes
+should snap to zero-offset.  Also documented: retail's OWN panel-switch
+scraps (its flip recomposite is dirty-rect-gated; the port paints a
+clean map — deliberate divergence until the dirty-rect-gated composite
+is ported).
+
+**Suite: 2310/2310 green** (+32 this session).  Next candidates: the
+seat calibration fix; then continue the playthrough trace into the
+labor-allocation screen 0x0f (workforce commit hook already stubbed),
+the blacksmith/armory chain (0x0a/0x17), or End-Turn → season-report
+verification on the same trace.
+
+---
+
 ## 2026-07-02 (session 21) — the LAST two confirm-dialog siblings fired organically (claim/slaughter, attack/field, direct/besiege) with retail pixel-parity — and the session-20 "Army Movement hint gap" mystery is RESOLVED: a harness scheduling race, now fixed (quirk #213)
 
 Picked up session 20's "2 siblings remain" next-candidate from
