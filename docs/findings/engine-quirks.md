@@ -7375,3 +7375,50 @@ RE-CAPTURES before re-rendering.  Visible pixels match retail.  If the
 port's input dispatch is ever moved to retail's tick position, this
 compensation becomes inert (the flag is never set when the clear runs)
 and can be removed.
+
+---
+
+## 215 — the cursor→game mapping is a TRUNCATED percent compose, so a harness that inverts the ideal ratio lands every injected click ~1% short
+
+`FUN_004b191e` maps the cached client-space cursor to game coords not as
+`game = cached * game_extent / viewport_extent` but as two truncating
+integer helpers composed (`FUN_00404dc1` then `FUN_00404d6b`):
+
+```
+scale = (game_extent * 100) / viewport_extent     ← C division, truncates
+game  = (cached * scale) / 100                    ← truncates again
+```
+
+On the headless capture seat the viewport rect `DAT_004ea180..18c` holds
+the DESKTOP metrics (quirk #120's `DAT_0053f228 != 0` branch — 1920×1080
+here), so `scale_x = 64000/1920 = 33` — truncated from 33.33.  The
+effective mapping is `game = client * 33/100`, NOT `client/3`: a whole
+percent smaller than the true ratio.  Consequences:
+
+- An injector that pre-scales authored game coords by the *ideal* ratio
+  (`cx = round(gx * vp/gw)`, the agent's historical form) gets undone by
+  the truncated divide ~1% short: authored x=599 resolved to 593, y=226
+  to 223 — session 22's "(6,2-3) px short" finding.  (That session's
+  writeup guessed the cause was a ~646×486 client rect; the real killer
+  is the percent truncation — the rect is the full desktop.)
+- Whole bands of game coords become UNREACHABLE by any client coord
+  (at scale 33, game x ∈ {634..639} has no preimage inside the client),
+  but `PostMessage` lParams may lie PAST the window edge, so an exact
+  inverse can still hit them.
+- The exact inverse of the quantized form is `cx = ceil(gx*100/scale)`
+  (smallest client coord mapping back to `gx`; exact whenever
+  scale ≤ 100).  `rescaleMouseLParamToClient` now does this.
+
+Verified empirically (the way the s22 flag demanded): a watch on
+retail's own cursor mirrors `DAT_004e65fc/f4` through the
+county_panels_click trace — all 10 authored coordinates reproduce
+EXACTLY post-fix.  Notably the fix changes no pixels on that trace:
+every hit-box is ≥24 px and the grid-button tooltips anchor to the
+CLASSIFIED HOTSPOT, not the raw cursor (the s22 "tooltip x-offset" flag
+was quirk #214's stale backdrop, already fixed).  The fix matters for
+anything genuinely cursor-derived: slider drags, tight hit-boxes,
+cursor-anchored tooltips.
+
+> 📍 `tools/frida/openlords2-agent.js` (`rescaleMouseLParamToClient`),
+> `src/engine_input.c` (`percent_ratio`/`apply_percent`), Ghidra
+> `FUN_004b191e` / `FUN_00404dc1` / `FUN_00404d6b`.

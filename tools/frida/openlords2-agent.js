@@ -2434,11 +2434,26 @@ function resolvePostMessageA() {
 
 // Rescale a mouse-message lParam from game space (640x480, the authored
 // trace space) to the current window-client space, so the engine's
-// cached→game divide (game = cached * game_extent / viewport_screen_extent,
-// FUN_004b191e) reproduces the authored game coord regardless of the capture
-// display resolution.  lParam packs signed 16-bit client coords: lo=x, hi=y.
+// cached→game mapping (FUN_004b191e) reproduces the authored game coord
+// regardless of the capture display resolution.  lParam packs signed 16-bit
+// client coords: lo=x, hi=y.
+//
+// The engine does NOT compute the ideal ratio — it composes two truncating
+// integer helpers (FUN_00404dc1 + FUN_00404d6b):
+//     scale = (game_extent * 100) / viewport_extent      ← truncates
+//     game  = (cached_client * scale) / 100              ← truncates
+// e.g. a 646×486 client gives scale_x = 64000/646 = 99 (not 99.07) and
+// scale_y = 48000/486 = 98 (not 98.76), so inverting the *ideal* ratio
+// leaves every click a few px short of the authored coord, growing with the
+// coordinate (the s22 tooltip x-offset).  Invert the exact quantized form
+// instead: cx = ceil(gx*100/scale) is the smallest client coord the engine
+// maps back to gx — exact whenever scale <= 100 (client >= game extent),
+// nearest-above otherwise.  PostMessage happily carries client coords past
+// the real window edge, so game coords the truncated scale makes unreachable
+// by a physical cursor (e.g. x >= 634 at scale 99) still reproduce.
+//
 // Returns the input unchanged when any extent is unreadable / non-positive
-// (degrades to the historical 1:1 assumption).
+// or a coord is negative (degrades to the historical 1:1 assumption).
 function rescaleMouseLParamToClient(l) {
     let vpw, vph, gw, gh;
     try {
@@ -2448,11 +2463,15 @@ function rescaleMouseLParamToClient(l) {
         gh  = rva(0x4eac4c).readS32();                            // game extent h
     } catch (e) { return l; }
     if (vpw <= 0 || vph <= 0 || gw <= 0 || gh <= 0) return l;
-    if (vpw === gw && vph === gh) return l;                       // already 1:1
+    const scaleX = Math.floor(gw * 100 / vpw);   // FUN_00404dc1, truncating
+    const scaleY = Math.floor(gh * 100 / vph);
+    if (scaleX <= 0 || scaleY <= 0) return l;
+    if (scaleX === 100 && scaleY === 100) return l;               // already 1:1
     let gx = l & 0xffff;          if (gx & 0x8000) gx -= 0x10000;
     let gy = (l >>> 16) & 0xffff; if (gy & 0x8000) gy -= 0x10000;
-    const cx = Math.round(gx * vpw / gw) & 0xffff;
-    const cy = Math.round(gy * vph / gh) & 0xffff;
+    if (gx < 0 || gy < 0) return l;   // off-client coords: leave untouched
+    const cx = Math.ceil(gx * 100 / scaleX) & 0xffff;
+    const cy = Math.ceil(gy * 100 / scaleY) & 0xffff;
     return ((cy << 16) | cx) >>> 0;
 }
 
