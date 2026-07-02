@@ -1,0 +1,50 @@
+# MERCHANT TRADE GRID (screen 0x0c) — playthrough-driven port, session 27.
+# Extends merchant_click.jsonl: after the merchant county-interior opens
+# (castle click), click a GOOD zone on the market rug -> the trade grid
+# (engine_trade.c, port of FUN_00416308/428daf/41635f).  The zone hit-test
+# (FUN_004357a6 -> engine_merchant_zone_at) indexes mercgrid.pl8's 80x60
+# goods map at (cursor>>3); a click on a rug good sets DAT_0056d8ac + flips
+# to screen 0x0c.  Then RMB closes back to the merchant (screen 8), and a
+# second RMB closes to the map.
+#
+# Castle cell (260,250) = the player's own castle (county 3 "Lancashire").
+# Iron zone centroid = pixel (180,436) -> lparam 180 + 436*65536 = 28573876
+# (mercgrid.pl8 value 6 = Iron; matches --force-trade 6).  Verifies the
+# STRATEGIC-record good path (stock at strat +0x120) that Grain (county
+# record) does not exercise — port shows "50 Iron", byte-exact vs retail.
+#
+# Load prefix copied verbatim from merchant_click.jsonl (menu -> load
+# lastturn).  See project_playthrough_porting + docs/findings/gameplay-and-screens.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "before_click"}
+{"t": 24, "m": 512, "w": 0, "l": 16384260}
+{"t": 28, "m": 513, "w": 1, "l": 16384260}
+{"t": 32, "m": 514, "w": 0, "l": 16384260}
+{"capture": 60, "label": "merchant_settled"}
+{"t": 90, "m": 512, "w": 0, "l": 28573876}
+{"t": 94, "m": 513, "w": 1, "l": 28573876}
+{"t": 98, "m": 514, "w": 0, "l": 28573876}
+{"capture": 112, "label": "trade_open"}
+{"capture": 150, "label": "trade_settled"}
+{"t": 180, "m": 512, "w": 0, "l": 28573876}
+{"t": 184, "m": 516, "w": 0, "l": 28573876}
+{"t": 188, "m": 517, "w": 0, "l": 28573876}
+{"capture": 210, "label": "trade_closed_merchant"}
