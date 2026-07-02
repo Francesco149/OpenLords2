@@ -5,14 +5,14 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 818,
-  "ported": 62,
-  "unported": 1567,
+  "ported": 63,
+  "unported": 1566,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 880,
+  "touched": 881,
   "pct_touched": 36.0,
   "pct_tested": 33.4,
   "bytes_total": 838629,
-  "bytes_touched": 384899,
+  "bytes_touched": 385111,
   "pct_bytes_touched": 45.9
  },
  "orphan_refs": [
@@ -1369,6 +1369,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine_merchant.c",
     "src/gfx.c",
     "src/gfx.h"
    ]
@@ -1947,6 +1948,7 @@
    "status": "tested",
    "src": [
     "src/engine_labor.c",
+    "src/engine_merchant.c",
     "src/engine_terrain_info.c",
     "src/engine_workforce_hud.c",
     "src/gfx_sprite_render.c",
@@ -2234,6 +2236,7 @@
    "src": [
     "src/engine.c",
     "src/engine_labor.h",
+    "src/engine_merchant.h",
     "src/engine_screen_dispatch.c",
     "src/engine_screen_dispatch.h",
     "src/engine_screen_strat.h",
@@ -2868,8 +2871,12 @@
    "name": "FUN_00415fb7",
    "size": 212,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_merchant.c",
+    "src/engine_merchant.h"
+   ]
   },
   {
    "va": "0x41608b",
@@ -7268,7 +7275,8 @@
     "src/engine_army_select.c",
     "src/engine_army_select.h",
     "src/engine_combat.h",
-    "src/engine_ingame_input.h"
+    "src/engine_ingame_input.h",
+    "src/engine_merchant.h"
    ]
   },
   {
@@ -11168,6 +11176,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_merchant.c",
     "src/engine_screen_strat.h",
     "src/gfx.c",
     "src/gfx.h",
@@ -11209,6 +11218,7 @@
     "src/engine_county_panels.c",
     "src/engine_dirty_rect.h",
     "src/engine_labor.c",
+    "src/engine_merchant.c",
     "src/engine_territory.c",
     "src/engine_territory.h",
     "src/engine_title_render.h",
@@ -18341,6 +18351,7 @@
    "src": [
     "src/engine_county_panels.c",
     "src/engine_labor.c",
+    "src/engine_merchant.c",
     "src/io_path.c",
     "src/io_path.h"
    ]
@@ -18434,6 +18445,7 @@
     "src/config.c",
     "src/engine_county_panels.c",
     "src/engine_labor.c",
+    "src/engine_merchant.c",
     "src/engine_pl8.h",
     "src/gfx.c",
     "src/gfx.h",
@@ -18561,6 +18573,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine.c",
+    "src/engine_merchant.c",
     "src/engine_screen_strat.h",
     "src/gfx.c",
     "src/gfx.h"
@@ -18639,6 +18653,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine_merchant.c",
     "src/engine_screen_strat.h",
     "src/gfx.c"
    ]
@@ -20058,10 +20073,12 @@
     "src/engine.c",
     "src/engine_confirm_dialog.h",
     "src/engine_county_panels.h",
+    "src/engine_ingame_input.c",
     "src/engine_ingame_input.h",
     "src/engine_load_pump.h",
     "src/engine_menu_input.c",
     "src/engine_menu_input.h",
+    "src/engine_merchant.h",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
     "src/main.c"

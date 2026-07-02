@@ -267,6 +267,32 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                     call_action(hooks->screen0f_commit, in, st);
                     consumed = 1;
                 }
+            } else if (st->screen == 8) {
+                /* ───────── MERCHANT county-interior (DAT_004eac50 == 8) ─────────
+                 * 42ff10.c:222.  The DEFAULT county-interior view (opened by
+                 * army_select's castle click).  Turn-busy, or any seal
+                 * (generic_click) / RMB click, closes back to the strategic
+                 * map.  The county-interior TAB switches (→ workforce grid 2,
+                 * armory 0x0a, …) are handled earlier by the widget router
+                 * (FUN_004ba9c8), not in this screen case.
+                 *
+                 * Retail also reloads the workforce-grid buffer on close
+                 * (vill_gd8.pl8 → DAT_00542ce0, three turn-state variants) —
+                 * DEFERRED: the port's workforce grid reads the baked region
+                 * grid, and the merchant trade state isn't ported yet. */
+                if (!turn_idle) {
+                    st->screen = 0;
+                    st->demand_redraw = 1;
+                    consumed = 1;
+                } else if (call_consume(hooks->generic_click, in, st) != 0) {
+                    st->screen = 0;
+                    st->demand_redraw = 1;
+                    consumed = 1;
+                } else if (in->rmb_released != 0) {
+                    st->screen = 0;
+                    st->demand_redraw = 1;
+                    consumed = 1;
+                }
             }
             /* (other screen cases deferred — see header) */
 

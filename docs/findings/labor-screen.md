@@ -14,11 +14,17 @@
 > re-verified r2 values, not the table in this doc.
 >
 > **Two follow-ups remain (both OUT of the labor-render scope):**
-> 1. **Organic 0x02→0x0f open** — blocked on the region grid `DAT_00542cf8`
->    (the task-cell map the hit-test indexes); no port builder exists in
->    the extracted decompiles. Needs porting before a live click opens the
->    screen (and thus before an organic olv3 byte-exact diff). The 0x0f
->    close case is likewise unwired (trivial once the open lands).
+> 1. **Organic 0x02→0x0f open** — the region grid `DAT_00542cf8` was
+>    RESOLVED (baked constant, commit ad4d679). **s26 update:** the real
+>    gate to an organic open is the county-interior ENTRY. Clicking your
+>    castle opens screen **8 = MERCHANT** (FUN_00415fb7, merchant.pl8 +
+>    mercgrid.pl8), UNPORTED — the port has no screen-8 render arm. The
+>    workforce grid (screen 2, PORTED) is a *sibling* county-interior
+>    screen reached by tabbing within the interior (widget router
+>    FUN_004ba9c8), not by the castle click. So: port the merchant entry +
+>    tab nav first, THEN the organic 2→0x0f click + olv3 pixel-diff lands.
+>    The prior "army_select cell-attribute 0x80/0x40 blocker" was a phantom
+>    — measured port==retail (both →screen 8). See [[project_playthrough_porting]].
 > 2. **Data parity** — under `--force-labor` on a live-loaded save the
 >    panel renders REAL county data faithfully, but the labor economy
 >    fields (+0xc4 worker triple, +0x224 grain, +0x2a8 stock, …) read 0

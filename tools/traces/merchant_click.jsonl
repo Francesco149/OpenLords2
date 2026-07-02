@@ -1,0 +1,46 @@
+# MERCHANT county-interior screen (session 26, playthrough-driven port):
+# click the player's own castle on the strategic map -> army_select (kind==3
+# branch, FUN_0043ce1a) hard-sets screen 8 -> the merchant scene renders
+# (engine_merchant.c, port of FUN_00415fb7: merchant.256 palette + merchant.pl8
+# 640x480 backdrop + the bottom-right seal). Then RMB closes back to the map
+# (engine_ingame_input.c screen-8 case, 42ff10.c:222) and the strat map
+# re-renders. First organic exercise of the merchant screen — the county-
+# interior ENTRY (gateway to workforce grid 2 -> labor 0x0f).
+#
+# Cell (260,250) = the player's own castle (county 3 "Lancashire", garrison
+# head 13); measured identical on both engines (county=3/head=13/flags=0x01 ->
+# screen 8). See docs/findings/labor-screen.md + project_playthrough_porting.
+#
+# Load prefix copied verbatim from click_county.jsonl (menu -> load lastturn).
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "before_click"}
+# move to the castle cell (260,250) then LMB down/up there -> open merchant (screen 8)
+{"t": 24, "m": 512, "w": 0, "l": 16384260}
+{"t": 28, "m": 513, "w": 1, "l": 16384260}
+{"t": 32, "m": 514, "w": 0, "l": 16384260}
+{"capture": 44, "label": "merchant_open"}
+{"capture": 80, "label": "merchant_settled"}
+# RMB anywhere -> close the merchant back to the strategic map (screen 0)
+{"t": 110, "m": 512, "w": 0, "l": 16384260}
+{"t": 114, "m": 516, "w": 0, "l": 16384260}
+{"t": 118, "m": 517, "w": 0, "l": 16384260}
+{"capture": 132, "label": "merchant_closed"}
+{"capture": 170, "label": "map_resettled"}

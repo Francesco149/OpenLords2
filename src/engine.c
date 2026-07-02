@@ -25,6 +25,7 @@
 #include "engine_tooltip.h"        /* tooltip subsystem (FUN_00476e95) */
 #include "engine_army_select.h"    /* army-select / move dispatcher (FUN_0043ce1a) */
 #include "engine_workforce_hud.h"  /* workforce icon-grid overlay (FUN_00412143) */
+#include "engine_merchant.h"       /* merchant county-interior scene (FUN_00415fb7) */
 #include "engine_army_move_confirm.h" /* screen-0x10 hover classifier + click resolver */
 #include "engine_confirm_dialog.h" /* generic Yes/No modal (screen 0x1e) */
 #include "engine_button.h"         /* button-strip renderer (FUN_0040cfd2) */
@@ -1733,6 +1734,15 @@ static void engine_tick_title_render_step(void)
                     gfx_unlock_canvas();
                     g_canvas_repainted_this_tick = 1;
                 }
+                /* FUN_0040f5fd tail: FUN_004b0ab5(0x5691f0) when param_1 < 3 —
+                 * reapply the strategic palette (base01.256 → DAT_005691f0).
+                 * Idempotent for a normal map redraw (base01.256 is already
+                 * active); RESTORES the palette after a county-interior screen
+                 * that swapped it — the merchant loads merchant.256, so without
+                 * this the map returns with the merchant palette. */
+                if (g_demand_redraw < 3) {
+                    gfx_load_palette("base01.256");
+                }
             } else if (g_sim_current_screen == 4) {
                 /* Terrain-info panel (screen 4, retail FUN_0040f1a0 case 4 →
                  * FUN_0041b032): drawn OVER the retained strategic-map frame,
@@ -1770,6 +1780,14 @@ static void engine_tick_title_render_step(void)
                     gfx_unlock_canvas();
                     g_canvas_repainted_this_tick = 1;
                 }
+            } else if (g_sim_current_screen == 8) {
+                /* Merchant county-interior (screen 8, FUN_00415fb7): a full-
+                 * screen backdrop reload.  The backdrop loader self-locks the
+                 * back buffer (and the seal blit takes its own canvas lock), so
+                 * — like the title full-scene path — this arm calls the render
+                 * directly rather than wrapping it in gfx_lock_canvas. */
+                engine_merchant_render(g_demand_redraw);
+                g_canvas_repainted_this_tick = 1;
             } else if (g_sim_current_screen != 0x10 &&
                       g_sim_current_screen != ENGINE_CONFIRM_DIALOG_SCREEN) {
                 /* Other screens: generic demand-redraw seam.  The
