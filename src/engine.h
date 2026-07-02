@@ -147,6 +147,7 @@ void engine_set_input_cursor_override(int enable);
  * live event producer/consumer.  See engine.c's engine_popup_scroll_render
  * for the arm ladder. */
 void engine_dev_force_labor_render(int task);
+void engine_dev_force_trade_render(int good);
 void engine_dev_force_popup_render(int type, int32_t code, uint8_t flag6,
                                    int32_t payload_a);
 

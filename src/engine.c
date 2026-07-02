@@ -26,6 +26,7 @@
 #include "engine_army_select.h"    /* army-select / move dispatcher (FUN_0043ce1a) */
 #include "engine_workforce_hud.h"  /* workforce icon-grid overlay (FUN_00412143) */
 #include "engine_merchant.h"       /* merchant county-interior scene (FUN_00415fb7) */
+#include "engine_trade.h"          /* merchant trade grid (screen 0x0c, FUN_00416308) */
 #include "engine_army_move_confirm.h" /* screen-0x10 hover classifier + click resolver */
 #include "engine_confirm_dialog.h" /* generic Yes/No modal (screen 0x1e) */
 #include "engine_button.h"         /* button-strip renderer (FUN_0040cfd2) */
@@ -1318,6 +1319,45 @@ static void engine_tick_labor_render(void)
     engine_labor_render(&ctx);
 }
 
+/* Build the trade-grid ctx from the save-schema externs + gfx loaders and
+ * render screen 0x0c (mirrors engine_tick_labor_render).  The trade county
+ * is the merchant's county — g_army_select_hud_outcome (DAT_00553c64), set
+ * by the screen-8 open in engine_army_select_dispatch. */
+static void engine_tick_trade_render(void)
+{
+    const uint8_t *chrome = gfx_load_chrome_sheet();
+    const uint8_t *tfont  = gfx_load_title_font();
+    const uint8_t *mfont  = gfx_load_menu_font();
+    size_t loc_size = 0;
+    const uint8_t *locblob = config_localization_data(&loc_size);
+    if (!chrome || !tfont || !mfont || !locblob) {
+        return;
+    }
+    localization_state_t loc;
+    loc.blob = (unsigned char *)locblob;
+    loc.walker_offset = 0;
+
+    engine_trade_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.county_block     = g_per_army_768;           /* DAT_0053f9b0 */
+    ctx.strategic_block  = g_player_strategic_352;   /* DAT_0057bf00 */
+    ctx.territory_block  = g_per_territory_420;      /* DAT_0052f0b0 */
+    ctx.merchant_offers  = s_slot_005532a0;          /* slot 82 (stride 0x10) */
+    ctx.county           = (int)s_slot_0057c93c;
+    ctx.trade_county     = g_army_select_hud_outcome; /* DAT_00553c64 */
+    ctx.local_player     = (int)s_slot_0057c8cc;
+    ctx.good             = (int)s_slot_0056d8ac;      /* DAT_0056d8ac (1..14) */
+    ctx.chrome           = chrome;
+    ctx.system_sheet     = gfx_system_sheet_current();
+    ctx.title_font       = tfont;
+    ctx.menu_font        = mfont;
+    ctx.glyph_table      = gfx_glyph_render_map();
+    ctx.glyph_metrics    = gfx_glyph_measure_map();
+    ctx.loc              = &loc;
+
+    engine_trade_render(&ctx);
+}
+
 /* ─── Tooltip tick (FUN_00476e95, tick line 112) ───────────────────────
  * The state instance + the live-globals ctx builder.  The dynamic
  * list-row inputs (labor/production rows on the right panel) have no
@@ -1787,6 +1827,15 @@ static void engine_tick_title_render_step(void)
                  * — like the title full-scene path — this arm calls the render
                  * directly rather than wrapping it in gfx_lock_canvas. */
                 engine_merchant_render(g_demand_redraw);
+                g_canvas_repainted_this_tick = 1;
+            } else if (g_sim_current_screen == 0x0c) {
+                /* Merchant trade grid (screen 0x0c, FUN_00416308): reloads
+                 * the merchant.pl8 backdrop (self-locking) then paints the
+                 * grid content under its own canvas lock.  NO palette swap —
+                 * the grid inherits merchant.256 from the merchant scene it
+                 * was opened from (same reason the merchant restores base01
+                 * on close, above). */
+                engine_tick_trade_render();
                 g_canvas_repainted_this_tick = 1;
             } else if (g_sim_current_screen != 0x10 &&
                       g_sim_current_screen != ENGINE_CONFIRM_DIALOG_SCREEN) {
@@ -2892,6 +2941,21 @@ void engine_dev_force_labor_render(int task)
         engine_tick_labor_render();
         gfx_unlock_canvas();
     }
+}
+
+/* Verification seat (--force-trade GOOD): open the trade grid for the good
+ * (1..14) as reaching it from the merchant would.  The grid loads its own
+ * merchant.pl8 backdrop but does NOT swap the palette, so seed merchant.256
+ * here (a cold seat still has the strategic base01 active).  The trade
+ * county defaults to the current county (the markup source); engine_tick_
+ * trade_render self-manages the backdrop + content lock. */
+void engine_dev_force_trade_render(int good)
+{
+    s_slot_0056d8ac = (uint32_t)good;
+    g_army_select_hud_outcome = (int)s_slot_0057c93c;
+    engine_trade_on_open();
+    gfx_load_palette("merchant.256");
+    engine_tick_trade_render();
 }
 
 /* ─── Help-hint pump + report opener ────────────────────────────────

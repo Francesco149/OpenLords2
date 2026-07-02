@@ -194,6 +194,7 @@ static int         g_force_popup_flag6 = 0;
 static int         g_force_popup_payload_a = 0;
 static int         g_force_workforce_key = -1;  /* --force-workforce KEY */
 static int         g_force_labor_task     = -1;  /* --force-labor TASK */
+static int         g_force_trade_good      = -1;  /* --force-trade GOOD (1..14) */
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 static int         g_strat_load_live;  /* --strat-load-live: drive the live
                                         * load pump from the title menu */
@@ -690,6 +691,23 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
         gfx_capture_backbuffer(path);
         log_line("labor: forced task=%d render (live save) → %s",
                  g_force_labor_task, path);
+    }
+
+    /* Forced trade-grid render on the LIVE-loaded save (--force-trade GOOD
+     * together with --strat-load-live + --capture-to): the grid's merchant
+     * offer + resource figures come from real save state (slot 82 + the
+     * strategic record), which the bringup .bin dumps don't carry.  The
+     * grid loads its own merchant.pl8 backdrop, so no strat composite is
+     * needed underneath (it would be fully overpainted). */
+    if (g_engine_state == 3 && g_force_trade_good >= 0 && g_capture_dir) {
+        gfx_load_system_sheet_select(1);
+        engine_dev_force_trade_render(g_force_trade_good);
+        gfx_tick_present(1);
+        char path[MAX_PATH];
+        wsprintfA(path, "%s\\port_trade.bmp", g_capture_dir);
+        gfx_capture_backbuffer(path);
+        log_line("trade: forced good=%d render (live save) → %s",
+                 g_force_trade_good, path);
     }
 
     if (g_audio_active) {
@@ -1959,6 +1977,16 @@ static void bringup_strat_map(const char *dir)
         log_line("strat-map: forced labor render task=%d", g_force_labor_task);
     }
 
+    /* Forced trade-grid render (verification seat, --force-trade GOOD) — the
+     * grid loads its own merchant.pl8 backdrop + merchant.256 palette, so it
+     * fully overpaints the strat frame.  Merchant offer figures are only
+     * meaningful on a live-loaded save (see the --strat-load-live block). */
+    if (g_force_trade_good >= 0) {
+        gfx_load_system_sheet_select(1);
+        engine_dev_force_trade_render(g_force_trade_good);
+        log_line("strat-map: forced trade render good=%d", g_force_trade_good);
+    }
+
     /* Present + capture a BMP (surface palette → may be off-color; the
      * authoritative diff uses the raw dump + the captured retail .pal). */
     gfx_tick_present(1);
@@ -3226,6 +3254,11 @@ static void parse_cmdline(LPSTR lpCmd)
              * detail panel for TASK over the --strat-map render, reading
              * the real per-county economy fields from the loaded save. */
             g_force_labor_task = (int)strtol(tokens[++i], NULL, 0);
+        } else if (!strcmp(a, "--force-trade") && i + 1 < ntok) {
+            /* GOOD (1..14) — verification seat: paint the merchant trade
+             * grid for GOOD over the --strat-map render, reading the real
+             * merchant offer (slot 82) + resource stocks from the save. */
+            g_force_trade_good = (int)strtol(tokens[++i], NULL, 0);
         } else if (!strcmp(a, "--save-sandbox") && i + 1 < ntok) {
             g_save_sandbox = tokens[++i];
         } else if (!strncmp(a, "--save-sandbox=", 15)) {
