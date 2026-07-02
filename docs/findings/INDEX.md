@@ -39,6 +39,7 @@ session — they outlive the conversation context.
 
 | doc | covers |
 |-----|--------|
+| [gameplay-and-screens.md](gameplay-and-screens.md) | How the game is played (strategy-guide synthesis for trace authoring) + the complete `DAT_004eac50` screen-ID map with per-screen renderer/string-group/port status |
 | [save-format.md](save-format.md) | Save-file format (first map) |
 | [save-schema-table.csv](save-schema-table.csv) | Save-record schema table (derived; feeds `tools/gen_save_schema.py`) |
 
