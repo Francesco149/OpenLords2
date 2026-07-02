@@ -889,11 +889,13 @@ static void ti_close(const engine_ingame_input_in_t *din,
  * on every click independent of terrain-info's own last resolve).
  *
  * Persistent state with no home in engine_ingame_state_t: the screen-0x10
- * handoff cooldown (DAT_00553ecc) and the screen-8 HUD outcome
- * (DAT_00553c64) — both module statics here, mirroring how g_ti_attrs
- * holds terrain-info's own no-home state. */
+ * handoff cooldown (DAT_00553ecc), a module static here (mirroring how
+ * g_ti_attrs holds terrain-info's own no-home state).  The screen-8 HUD
+ * outcome — the merchant's county, retail DAT_00553c64 — is a shared save-
+ * schema scalar (slot 83), so it lives in the s_slot_ extern (the trade
+ * markup + the state oracle both read it) rather than a private copy
+ * ([[project_shared_save_globals]]). */
 static int g_army_select_handoff_cooldown;
-static int g_army_select_hud_outcome;
 static int g_army_select_armed_county;   /* DAT_0057c8c4 — which county the
                                           * screen-0x10 handoff is armed on;
                                           * the hover classifier + click
@@ -939,14 +941,18 @@ static int ti_labor_open(const engine_ingame_input_in_t *in,
 static int ti_merchant_zone(const engine_ingame_input_in_t *in,
                             engine_ingame_state_t *st)
 {
-    if (in->lmb_pressed == 0) {
+    /* FUN_004357a6 sets the hovered good EVERY frame (good = mercgrid[cursor],
+     * DAT_0056d8ac), not just on click — so the merchant's selected-good state
+     * tracks the cursor over the rug (matching retail's save state).  It then
+     * opens the grid only when a rug good (good != 0) is under an LMB press. */
+    s_slot_0056d8ac =
+        (uint32_t)engine_merchant_zone_at(g_input_game_x, g_input_game_y);
+    if (s_slot_0056d8ac == 0) {      /* off-rug → not consumed */
         return 0;
     }
-    int good = engine_merchant_zone_at(g_input_game_x, g_input_game_y);
-    if (good == 0) {
+    if (in->lmb_pressed == 0) {      /* hovering a good, not clicked */
         return 0;
     }
-    s_slot_0056d8ac = (uint32_t)good;
     engine_trade_on_open();          /* FUN_0043530e: buy mode, no error */
     st->screen = 0x0c;
     return 1;
@@ -1006,7 +1012,7 @@ static void ti_army_select(const engine_ingame_input_in_t *din,
     st.screen           = dst->screen;
     st.hold_pending      = dst->hold_56d64c;
     st.handoff_cooldown  = g_army_select_handoff_cooldown;
-    st.hud_outcome       = g_army_select_hud_outcome;
+    st.hud_outcome       = (int)s_slot_00553c64;
     st.armed_county      = g_army_select_armed_county;
 
     static const engine_army_select_hooks_t HOOKS = {
@@ -1022,7 +1028,7 @@ static void ti_army_select(const engine_ingame_input_in_t *din,
         dst->demand_redraw = st.demand_redraw;
     }
     g_army_select_handoff_cooldown = st.handoff_cooldown;
-    g_army_select_hud_outcome      = st.hud_outcome;
+    s_slot_00553c64                = (uint32_t)st.hud_outcome;
     g_army_select_armed_county     = st.armed_county;
 }
 
@@ -1102,6 +1108,30 @@ static void cp_button_action(uint32_t action, int param0, int param1)
     /* (MP: FUN_0043eda0 broadcast — deferred, SP drop-in.) */
 }
 
+/* The merchant trade-grid arrow actions (FUN_004ba9c8's 0x0c arm's dispatch
+ * target).  Action codes are the retail callee addresses baked into the
+ * button table (engine_trade.c).  The four arrows re-figure the running
+ * net/total; the "Complete?" seal (0x435286) commits the transaction and the
+ * cancel seal (0x4352f2) abandons it — both then return to the merchant
+ * scene (flag read by the arm below). */
+static int g_trade_router_close;   /* set by the confirm/cancel seals */
+
+static void trade_button_action(uint32_t action, int param0, int param1)
+{
+    (void)param0; (void)param1;
+    switch (action) {
+    case 0x435339: engine_trade_arrow_up();    break;   /* net +step   */
+    case 0x43543d: engine_trade_arrow_down();  break;   /* net −step   */
+    case 0x4355db: engine_trade_buy_all();     break;   /* net = afford*/
+    case 0x435541: engine_trade_sell_all();    break;   /* net = −held */
+    case 0x435286: engine_trade_confirm();               /* commit */
+                   g_trade_router_close = 1;
+                   break;
+    case 0x4352f2: g_trade_router_close = 1;  break;    /* cancel */
+    default: break;
+    }
+}
+
 static int ti_ui_router(const engine_ingame_input_in_t *din,
                         engine_ingame_state_t *dst)
 {
@@ -1126,6 +1156,36 @@ static int ti_ui_router(const engine_ingame_input_in_t *din,
             g_combat_flag_530d0 = 1;           /* DAT_005530d0 */
             dst->demand_redraw = 2;            /* panel re-render */
         }
+        return hit ? 1 : 0;
+    }
+
+    if (dst->screen == 0x0c) {
+        /* FUN_004ba9c8's 0x0c arm: the merchant trade grid's buy/sell arrows,
+         * dispatched over the same 6-record table the renderer paints
+         * (FUN_0040da1e(0x30,0x50,&DAT_004dd838,DAT_00553f58)).  A hit that is
+         * a confirm/cancel seal returns to the merchant scene (screen 8); any
+         * hit re-renders so the panel reflects the new net/total. */
+        engine_menu_click_in_t bclick;
+        memset(&bclick, 0, sizeof bclick);
+        bclick.cursor_x           = g_input_game_x;
+        bclick.cursor_y           = g_input_game_y;
+        bclick.lmb_newly_pressed  = din->lmb_pressed;
+        bclick.lmb_newly_released = din->lmb_released;
+        bclick.lmb_held           = din->lmb_held;
+        g_trade_router_close = 0;
+        int hit = engine_menu_button_dispatch(0x30, 0x50,
+                                              engine_trade_buttons(),
+                                              engine_trade_widget_count(),
+                                              &bclick, trade_button_action);
+        if (hit && g_trade_router_close) {
+            /* Confirm/cancel seal → back to the merchant scene (retail sets
+             * DAT_0057d340 = 2); the merchant demand-redraw arm repaints it. */
+            dst->screen = 8;
+            dst->demand_redraw = 2;
+        }
+        /* Arrow hits only re-figure the net/total — retail's arrow actions
+         * request NO redraw; the per-frame refresh (screen-0x0c arm) repaints
+         * the content + press-flash next tick. */
         return hit ? 1 : 0;
     }
 
@@ -1342,9 +1402,9 @@ static void engine_tick_labor_render(void)
 
 /* Build the trade-grid ctx from the save-schema externs + gfx loaders and
  * render screen 0x0c (mirrors engine_tick_labor_render).  The trade county
- * is the merchant's county — g_army_select_hud_outcome (DAT_00553c64), set
+ * is the merchant's county — s_slot_00553c64 (DAT_00553c64), set
  * by the screen-8 open in engine_army_select_dispatch. */
-static void engine_tick_trade_render(void)
+static void engine_tick_trade_render(int full)
 {
     const uint8_t *chrome = gfx_load_chrome_sheet();
     const uint8_t *tfont  = gfx_load_title_font();
@@ -1365,7 +1425,7 @@ static void engine_tick_trade_render(void)
     ctx.territory_block  = g_per_territory_420;      /* DAT_0052f0b0 */
     ctx.merchant_offers  = s_slot_005532a0;          /* slot 82 (stride 0x10) */
     ctx.county           = (int)s_slot_0057c93c;
-    ctx.trade_county     = g_army_select_hud_outcome; /* DAT_00553c64 */
+    ctx.trade_county     = (int)s_slot_00553c64;      /* DAT_00553c64 */
     ctx.local_player     = (int)s_slot_0057c8cc;
     ctx.good             = (int)s_slot_0056d8ac;      /* DAT_0056d8ac (1..14) */
     ctx.chrome           = chrome;
@@ -1376,7 +1436,11 @@ static void engine_tick_trade_render(void)
     ctx.glyph_metrics    = gfx_glyph_measure_map();
     ctx.loc              = &loc;
 
-    engine_trade_render(&ctx);
+    if (full) {
+        engine_trade_render(&ctx);      /* FUN_00416308 open render (compute) */
+    } else {
+        engine_trade_refresh(&ctx);     /* FUN_004ba26e per-frame (no compute) */
+    }
 }
 
 /* ─── Tooltip tick (FUN_00476e95, tick line 112) ───────────────────────
@@ -1779,6 +1843,13 @@ static void engine_tick_title_render_step(void)
                 }
                 gfx_unlock_canvas();
             }
+        } else if (g_sim_current_screen == 0x0c) {
+            /* Merchant trade grid: retail's per-frame refresh (FUN_004ba26e
+             * 0x0c arm) redraws the content + buy/sell arrows over the
+             * retained grid frame every tick — so the running net/total the
+             * arrows drive and the press-flash animate WITHOUT re-running the
+             * net-resetting compute (that stays on the open render below). */
+            engine_tick_trade_render(0);
         }
 
         if (g_demand_redraw != 0) {
@@ -1856,8 +1927,10 @@ static void engine_tick_title_render_step(void)
                  * grid content under its own canvas lock.  NO palette swap —
                  * the grid inherits merchant.256 from the merchant scene it
                  * was opened from (same reason the merchant restores base01
-                 * on close, above). */
-                engine_tick_trade_render();
+                 * on close, above).  This is the OPEN render (FUN_00416308,
+                 * which computes); the per-frame refresh below carries the
+                 * arrow-driven net/total after that. */
+                engine_tick_trade_render(1);
                 g_canvas_repainted_this_tick = 1;
             } else if (g_sim_current_screen != 0x10 &&
                       g_sim_current_screen != ENGINE_CONFIRM_DIALOG_SCREEN) {
@@ -2974,10 +3047,10 @@ void engine_dev_force_labor_render(int task)
 void engine_dev_force_trade_render(int good)
 {
     s_slot_0056d8ac = (uint32_t)good;
-    g_army_select_hud_outcome = (int)s_slot_0057c93c;
+    s_slot_00553c64 = s_slot_0057c93c;
     engine_trade_on_open();
     gfx_load_palette("merchant.256");
-    engine_tick_trade_render();
+    engine_tick_trade_render(1);            /* full open render (computes) */
 }
 
 /* ─── Help-hint pump + report opener ────────────────────────────────

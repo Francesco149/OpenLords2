@@ -1,0 +1,61 @@
+# MERCHANT TRADE GRID — BUY/SELL INTERACTION (screen 0x0c), session 28.
+# Extends trade_click.jsonl: after the Grain trade grid opens, drive the
+# up-arrow (net +1 each press) to enter BUY mode, then hit the "Complete
+# this Purchase?" seal to COMMIT the transaction (FUN_004284ce) and return
+# to the merchant scene.  Verifies the router-dispatched arrow actions
+# (FUN_00435339 up / 004284ce commit) drive the port's net/total/mode/error
+# figures + the sell-mode render branch byte-exact against retail, and that
+# the committed save state (gold − cost, county grain + N) matches.
+#
+# Trade-grid arrow buttons paint at origin (0x30,0x50); centres (game space):
+#   up   (0x60,0x88)+org = (144,216), kind 0x18 → centre (156,228)
+#          l = 156 + 228*65536 = 14942364
+#   confirm (0x110,0xa8)+org = (320,248), kind 0x20 → centre (336,264)
+#          l = 336 + 264*65536 = 17301840
+# Castle cell (260,250) = own castle (Lancashire); Grain zone (212,340).
+#
+# Load prefix copied verbatim from trade_click.jsonl (menu → load lastturn).
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "before_click"}
+{"t": 24, "m": 512, "w": 0, "l": 16384260}
+{"t": 28, "m": 513, "w": 1, "l": 16384260}
+{"t": 32, "m": 514, "w": 0, "l": 16384260}
+{"capture": 60, "label": "merchant"}
+{"t": 90, "m": 512, "w": 0, "l": 22282452}
+{"t": 94, "m": 513, "w": 1, "l": 22282452}
+{"t": 98, "m": 514, "w": 0, "l": 22282452}
+{"capture": 132, "label": "trade_open"}
+{"t": 160, "m": 512, "w": 0, "l": 14942364}
+{"t": 164, "m": 513, "w": 1, "l": 14942364}
+{"t": 168, "m": 514, "w": 0, "l": 14942364}
+{"capture": 210, "label": "trade_buy1"}
+{"t": 240, "m": 512, "w": 0, "l": 14942364}
+{"t": 244, "m": 513, "w": 1, "l": 14942364}
+{"t": 248, "m": 514, "w": 0, "l": 14942364}
+{"capture": 300, "label": "trade_buy2"}
+{"t": 330, "m": 512, "w": 0, "l": 17301840}
+{"t": 334, "m": 513, "w": 1, "l": 17301840}
+{"t": 338, "m": 514, "w": 0, "l": 17301840}
+{"capture": 390, "label": "trade_committed"}
+{"t": 420, "m": 512, "w": 0, "l": 22282452}
+{"t": 424, "m": 513, "w": 1, "l": 22282452}
+{"t": 428, "m": 514, "w": 0, "l": 22282452}
+{"capture": 470, "label": "trade_reopened"}

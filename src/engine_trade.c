@@ -14,8 +14,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "engine.h"                 /* g_sim_mp_active (DAT_00553030) */
+#include "engine_army_ai.h"         /* engine_army_ai_execute_trade (FUN_004284ce) */
 #include "engine_button.h"          /* engine_button_render_list (FUN_0040cfd2) */
 #include "engine_dirty_rect.h"      /* (dirty marks are seam-owned; see notes) */
+#include "engine_menu_input.h"      /* engine_menu_button_accel (DAT_00591554) */
 #include "gfx.h"                    /* load_background_image, lock/unlock canvas */
 #include "gfx_line.h"               /* gfx_line_rect_bevel_dark_tl / _br */
 #include "gfx_panel.h"              /* gfx_panel_draw_bevel / _fill_interior */
@@ -25,6 +28,8 @@
 #include "gfx_wrap.h"               /* gfx_wrap_localized_line / _localized */
 #include "io.h"                     /* io_read_file_at (FUN_004af8d9) */
 #include "io_path.h"                /* io_path_chdir_base (FUN_004af502) */
+#include "save.h"                   /* g_per_army_768 (DAT_0053f9b0) */
+#include "save_schema_globals.h"    /* s_slot_0056d8ac / 0057c8cc / 0057c93c */
 
 #define ARMY_REC(base, key)  ((base) + (size_t)(key) * 0x300)   /* g_per_army_768 */
 #define STRAT_REC(base, key) ((base) + (size_t)(key) * 0x160)   /* strategic */
@@ -64,16 +69,25 @@ static int g_trade_total;     /* DAT_00553f64 — running total cost / receipt *
 static int g_trade_ale;       /* DAT_0053e8c0 — the ale-gift delta (good 4) */
 static int g_trade_category;  /* DAT_00568948 — 0 food / 1 raw / 2 weapon */
 
-/* Set by the merchant→grid transition (FUN_0043530e: both 0) and the
- * arrows; default 0 = buy mode, no error notice. */
-static int g_trade_mode;      /* DAT_0053e9bc — 0 buy, !=0 sell */
+/* Set by the merchant→grid transition (FUN_0043530e: both 0) and the arrows;
+ * default 0 = buy mode, no error notice.  The buy/sell MODE is retail's
+ * DAT_0053e9bc — a shared save-schema scalar (slot 80), so it uses the
+ * s_slot_ extern (never a private copy) to keep the state oracle + any save
+ * in sync ([[project_shared_save_globals]]). */
 static int g_trade_error;     /* DAT_0057c994 — 0 none / 1 no-crowns / -1 no-goods */
 static int g_trade_widget_count;  /* DAT_00553f58 — router table entry count */
 
+/* One-shot: engine_trade_compute (FUN_00428daf) resets the running net/total,
+ * so — like retail — it runs ONLY on the open render (FUN_00416308), never in
+ * the per-frame refresh (FUN_004ba26e).  Set on open, cleared by the first
+ * full render; guards a purchase-in-progress against a stray demand-redraw. */
+static int g_trade_needs_compute;
+
 void engine_trade_on_open(void)   /* FUN_0043530e's DAT_0053e9bc/0057c994 = 0 */
 {
-    g_trade_mode = 0;
+    s_slot_0053e9bc = 0;
     g_trade_error = 0;
+    g_trade_needs_compute = 1;
 }
 
 /* ── FUN_00428daf — compute the per-good trade figures ────────────────── */
@@ -129,6 +143,106 @@ void engine_trade_compute(const engine_trade_ctx_t *ctx)
     g_trade_afford = (g_trade_max == 0) ? 0 : gold / g_trade_max;   /* DAT_0057a0fc */
 }
 
+/* ── FUN_00435673 — recompute the ale-gift happiness delta ──────────────
+ * Runs after every arrow.  Tiers the running total (0..5) against a tenth of
+ * the county's field +0x24, then clamps to the happiness headroom
+ * (5 − county[+0x219]).  Computed for every good; only DRAWN for good 4
+ * (ale), where trade_content shows it as the "(±N☺)" gift preview. */
+static void engine_trade_ale_delta_recompute(void)
+{
+    const uint8_t *cty = g_per_army_768 + (size_t)s_slot_0057c93c * 0x300;
+
+    g_trade_ale = 0;                                /* DAT_0053e8c0 */
+    if (g_trade_total != 0) {
+        int step = rec_i32(cty, 0x24) / 10;         /* DAT_0053f9d4 = base+0x24 */
+        int t = g_trade_total;                      /* DAT_00553f64 */
+        if      (t >= step * 5) g_trade_ale = 5;
+        else if (t >= step * 4) g_trade_ale = 4;
+        else if (t >= step * 3) g_trade_ale = 3;
+        else if (t >= step * 2) g_trade_ale = 2;
+        else if (t >= step)     g_trade_ale = 1;
+        else                    g_trade_ale = 0;
+    }
+    int headroom = 5 - cty[0x219];                  /* DAT_0053fbc9 (byte) */
+    if (headroom < g_trade_ale) {
+        g_trade_ale = headroom;
+    }
+}
+
+/* Recompute the running total + mode from the net (shared by all 4 arrows):
+ * sell (net<0) receipts at the merchant offer, buy at the county-marked max. */
+static void trade_refresh_total(void)
+{
+    g_trade_total = (g_trade_net < 0) ? -(g_trade_net * g_trade_offer)  /* DAT_00553f64 */
+                                      :  (g_trade_max * g_trade_net);
+    s_slot_0053e9bc = (uint32_t)(g_trade_net != 0);                                 /* DAT_0053e9bc */
+    /* audio: a 0→positive net crossing plays s068_0N.wav (deferred). */
+    engine_trade_ale_delta_recompute();                                /* FUN_00435673 */
+}
+
+/* ── FUN_00435339 — up arrow: raise the net by the accel step ───────────
+ * Steps by 1 until the press-repeat accel (DAT_00591554) reaches 0x2c, then
+ * by 10; clamps to the affordable quantity (error 1 = "not enough crowns"). */
+void engine_trade_arrow_up(void)
+{
+    g_trade_error = 0;                                          /* DAT_0057c994 */
+    g_trade_net += (engine_menu_button_accel() < 0x2c) ? 1 : 10;
+    if (g_trade_afford < g_trade_net) {
+        g_trade_net = g_trade_afford;
+        if (g_trade_afford == 0) {
+            g_trade_error = 1;
+        }
+    }
+    trade_refresh_total();
+}
+
+/* ── FUN_0043543d — down arrow: lower the net by the accel step ──────────
+ * Clamps to the amount held (negated); error −1 = "no goods to sell". */
+void engine_trade_arrow_down(void)
+{
+    g_trade_error = 0;
+    g_trade_net -= (engine_menu_button_accel() < 0x2c) ? 1 : 10;
+    if (g_trade_net < g_trade_amount) {
+        g_trade_net = g_trade_amount;
+        if (g_trade_amount == 0) {
+            g_trade_error = -1;
+        }
+    }
+    trade_refresh_total();
+}
+
+/* ── FUN_004355db — "buy all": net = the affordable quantity ──────────── */
+void engine_trade_buy_all(void)
+{
+    g_trade_error = 0;
+    g_trade_net = g_trade_afford;
+    trade_refresh_total();
+}
+
+/* ── FUN_00435541 — "sell all": net = the amount held (negated) ───────── */
+void engine_trade_sell_all(void)
+{
+    g_trade_error = 0;
+    g_trade_net = g_trade_amount;
+    trade_refresh_total();
+}
+
+/* ── FUN_00435286 — commit the transaction (the "Complete?" seal) ───────
+ * Single-player applies the buy/sell directly through the shared executor
+ * (FUN_004284ce, the same the AI trades through); the caller then returns to
+ * the merchant scene.  The multiplayer send (FUN_0043eda0(0x28,0)) is
+ * deferred.  Returns nothing — the screen flip is the input hook's job. */
+void engine_trade_confirm(void)
+{
+    if (g_sim_mp_active == 0) {
+        engine_army_ai_execute_trade((int)s_slot_0053e9bc, g_trade_net,
+                                     (int)s_slot_0056d8ac, g_trade_max,
+                                     g_trade_offer, (int)s_slot_0057c8cc,
+                                     (int)s_slot_0057c93c);     /* FUN_004284ce */
+    }
+    /* else: MP command FUN_0043eda0(0x28,0) — deferred. */
+}
+
 /* ── FUN_0041ab67 — decimal value + its grp-8 unit noun ─────────────────
  * (singular sub for ±1, else plural sub+1).  Preserves the caller's
  * line-x accumulator around the pair.  Identical to labor_num_units, but
@@ -161,9 +275,12 @@ static void trade_loc(const engine_trade_ctx_t *ctx, int grp, int sub,
  * per-frame refresh (FUN_004ba26e case 0x0c: FUN_0040cfd2(0x30,0x50,
  * &DAT_004dd838, DAT_00553f58)).  Buy mode shows the first 4 (up / down /
  * buy-all / sell-all, kind 0x18 = 24×24 system sprites); sell mode adds
- * two more (kind 0x20 = 32×32).  action/params drive the deferred click
- * router; the renderer reads only x/y/sprite/kind/state/type. */
-static const engine_button_rec_t k_trade_buttons[6] = {
+ * two more (kind 0x20 = 32×32).  The action field is the retail callee
+ * address, dispatched by trade_button_action (engine.c); the renderer reads
+ * only x/y/sprite/kind/state/type.  MUTABLE like retail's .data table —
+ * engine_menu_button_dispatch animates state/pressed/repeat in place and the
+ * renderer reads them back for the press flash (both walk THIS one array). */
+static engine_button_rec_t k_trade_buttons[6] = {
     { 0x60, 0x88, 0x15, 0x18, 0x435339, 0, 0, 0, 4, 0, 0 },
     { 0x78, 0x88, 0x17, 0x18, 0x43543d, 0, 0, 0, 4, 0, 0 },
     { 0x98, 0x88, 0x48, 0x18, 0x4355db, 0, 0, 0, 4, 0, 0 },
@@ -171,6 +288,9 @@ static const engine_button_rec_t k_trade_buttons[6] = {
     { 0x110, 0xa8, 0x1d, 0x20, 0x435286, 0, 0, 0, 4, 0, 0 },
     { 0x138, 0xa8, 0x1f, 0x20, 0x4352f2, 0, 0, 0, 4, 0, 0 },
 };
+
+engine_button_rec_t *engine_trade_buttons(void) { return k_trade_buttons; }
+int engine_trade_widget_count(void) { return g_trade_widget_count; }
 
 /* iVar1 per good: DAT_004d2b80 first-int, stride 0x14, index good-1
  * (r2-extracted byte-exact).  The secondary icon drawn beside the "and N"
@@ -207,7 +327,7 @@ static void trade_content(const engine_trade_ctx_t *ctx)
     gfx_text_set_line_x_acc(0);              /* DAT_005cd404 = 0 */
 
     /* Header verb (grp 0x44): buy → "Trading", sell → "Selling"/"Buying". */
-    if (g_trade_mode == 0) {
+    if (s_slot_0053e9bc == 0) {
         trade_loc(ctx, 0x44, 2, 0x88, 0x68, tf, 0x3f);          /* Trading */
     } else if (g_trade_net < 0) {
         trade_loc(ctx, 0x44, 6, 0x88, 0x68, tf, 0x3f);          /* Selling */
@@ -225,7 +345,7 @@ static void trade_content(const engine_trade_ctx_t *ctx)
     gfx_text_set_line_x_acc(0);
 
     /* Sell-mode price line (buy mode skips it). */
-    if (g_trade_mode != 0) {
+    if (s_slot_0053e9bc != 0) {
         if (g_trade_net < 1) {
             trade_loc(ctx, 0x44, 0xa, 0x88, 0x88, mf, 0x3f);    /* Selling price */
             trade_num_units(ctx, g_trade_offer, 0,
@@ -265,7 +385,7 @@ static void trade_content(const engine_trade_ctx_t *ctx)
     }
     gfx_line_rect_bevel_dark_br(0x50, 0xd0, 0x1d0, 0x4c);            /* FUN_00403deb */
 
-    if (g_trade_mode == 0) {
+    if (s_slot_0053e9bc == 0) {
         /* Buy mode — the router has 4 arrow widgets; a wrapped prompt. */
         g_trade_widget_count = 4;                                   /* DAT_00553f58 */
         int sub;
@@ -304,14 +424,46 @@ static void trade_content(const engine_trade_ctx_t *ctx)
     }
 }
 
-/* ── FUN_00416308 — render the trade grid (screen 0x0c) ───────────────── */
+/* ── FUN_004ba26e case 0x0c — the per-frame grid refresh ────────────────
+ * Redraws the content (FUN_0041635f) + the buy/sell arrow strip
+ * (FUN_0040cfd2(0x30,0x50,…)) over the RETAINED grid frame — NO compute, NO
+ * backdrop reload.  Retail runs this every tick while the grid is open, so
+ * the running net/total the arrows set (and the press-flash) stay current;
+ * the content's own panel fills erase the previous frame's figures.  Skips
+ * until the icon sheet is loaded (the first-open full render loads it). */
+void engine_trade_refresh(const engine_trade_ctx_t *ctx)
+{
+    if (!ctx->loc || !g_trade_scratch) {
+        return;
+    }
+    if (gfx_lock_canvas()) {
+        trade_content(ctx);
+        engine_button_render_list(0x30, 0x50, k_trade_buttons,
+                                  g_trade_widget_count,
+                                  NULL, ctx->system_sheet, NULL);
+        gfx_unlock_canvas();
+    }
+}
+
+/* ── FUN_00416308 — the OPEN render of the trade grid (screen 0x0c) ──────
+ * The full render retail runs from FUN_0043530e (the merchant→grid open):
+ * compute the figures + reset the running net (FUN_00428daf), reload the
+ * merchant.pl8 backdrop + icontrad.pl8 icon sheet, then the shared content +
+ * arrow draw.  The per-frame refresh above takes over from the next tick. */
 void engine_trade_render(const engine_trade_ctx_t *ctx)
 {
     if (!ctx->loc) {
         return;
     }
 
-    engine_trade_compute(ctx);              /* FUN_00428daf */
+    /* FUN_00428daf resets the running net/total, so retail runs it ONLY here
+     * (the open render), never in the per-frame refresh — a purchase in
+     * progress must survive the redraws the arrows drive.  The one-shot flag
+     * also stops a stray demand-redraw from wiping it. */
+    if (g_trade_needs_compute) {
+        engine_trade_compute(ctx);          /* FUN_00428daf */
+        g_trade_needs_compute = 0;
+    }
 
     io_path_chdir_base();                   /* FUN_004af502 */
     /* FUN_004b1de0() verified no-op; FUN_0045240a() full-screen dirty mark
@@ -329,16 +481,6 @@ void engine_trade_render(const engine_trade_ctx_t *ctx)
     }
     io_read_file_at("icontrad.pl8", g_trade_scratch, TRADE_SCRATCH_LEN, 0);
 
-    /* FUN_0041635f — the grid content, over the locked back buffer, then the
-     * per-frame arrow widgets (FUN_004ba26e case 0x0c) so the redraw frame
-     * carries them.  trade_content set g_trade_widget_count (4 buy / 6 sell);
-     * kind 0x18/0x20 read the system sheet, so misc is unused (NULL). */
-    if (gfx_lock_canvas()) {
-        trade_content(ctx);
-        engine_button_render_list(0x30, 0x50, k_trade_buttons,
-                                  g_trade_widget_count,
-                                  NULL, ctx->system_sheet, NULL);
-        gfx_unlock_canvas();
-    }
+    engine_trade_refresh(ctx);
     /* DAT_004eb260 = 1 — scene flag with no ported consumer (as merchant). */
 }

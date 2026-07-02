@@ -50,6 +50,7 @@
 
 #include <stdint.h>
 
+#include "engine_button.h"
 #include "localization.h"
 
 /* ── Render context ────────────────────────────────────────────────────
@@ -93,5 +94,32 @@ void engine_trade_compute(const engine_trade_ctx_t *ctx);
  * Paints over the whole frame (opaque backdrop); the caller locks the
  * canvas.  Does NOT touch the palette (inherits merchant.256). */
 void engine_trade_render(const engine_trade_ctx_t *ctx);
+
+/* ── FUN_004ba26e case 0x0c — the per-frame grid refresh ─────────────────
+ * Redraws the content + arrow strip over the retained frame with NO compute
+ * / NO backdrop reload, so the arrows' running net/total and the button
+ * press-flash animate.  Called every tick while screen 0x0c is open (the
+ * unconditional per-frame render seam), alongside engine_trade_render (which
+ * runs only on the open/demand redraw). */
+void engine_trade_refresh(const engine_trade_ctx_t *ctx);
+
+/* ── Buy/sell interaction (router table DAT_004dd838, FUN_004ba9c8 case 0xc) ──
+ * The up/down/buy-all/sell-all arrows drive the running net (DAT_00554170),
+ * total (DAT_00553f64), buy/sell mode (DAT_0053e9bc), and error notice
+ * (DAT_0057c994); the "Complete?" seal commits.  Dispatched by the input
+ * seam (engine.c ti_ui_router) over these records via
+ * engine_menu_button_dispatch, then re-rendered by engine_trade_render.
+ *
+ * engine_trade_buttons()      the mutable 6-record widget table (shared with
+ *                             the renderer; index 4/5 are the sell-mode seal).
+ * engine_trade_widget_count() the live count (4 buy-neutral / 6 with a net). */
+engine_button_rec_t *engine_trade_buttons(void);
+int  engine_trade_widget_count(void);
+
+void engine_trade_arrow_up(void);     /* FUN_00435339 */
+void engine_trade_arrow_down(void);   /* FUN_0043543d */
+void engine_trade_buy_all(void);      /* FUN_004355db */
+void engine_trade_sell_all(void);     /* FUN_00435541 */
+void engine_trade_confirm(void);      /* FUN_00435286 (commit; caller flips screen) */
 
 #endif /* OPENLORDS2_ENGINE_TRADE_H */
