@@ -7489,3 +7489,45 @@ a rug good; porting it as click-only leaves the good stale after a trade.
 > the arrow arms), `src/engine.c` (`ti_ui_router` trade arm, the per-frame
 > `engine_tick_trade_render(0)` seam, `ti_merchant_zone` hover), Ghidra
 > `FUN_00416308` / `FUN_00428daf` / `FUN_004ba26e` (0x0c) / `FUN_004357a6`.
+
+## 218 — the Court/Treasury (0x09) opens over the MAP from the strategic bottom-right tab strip, NOT the merchant; and its .rdata "button table" 0x4dc680 is a short[] HOTSPOT table, not a sprite-button record table
+
+Two scouting facts recorded before this port were WRONG, and both fall out of
+one mis-read.  `FUN_00416925` (the Court render) loads no backdrop and no
+palette — `FUN_0040f1a0` case 9 is a bare `FUN_00416925()` — so it draws over
+whatever is retained.  The early guess (from assuming the Court is a
+county-interior screen) was that it reuses `merchant.pl8` / `merchant.256`.
+
+It doesn't.  The Court is reached from the strategic map's **bottom-right
+county-action button strip** — retail hotspot table **`0x4dc680`**, rendered +
+click-dispatched at origin `(0x1de,0x1ae)` by `FUN_00432967 → FUN_0040e3ee` —
+whose rec1 (`FUN_0043ae30` param 2) flips to screen 9.  So the Court draws over
+the retained **strategic map** (`base01.256`), leaving the whole right HUD
+panel visible; the right ~200 px of the frame is untouched map/HUD.  Proven
+against retail: driven to the real screen 9 via the map tab, the ported panel
+is **0/107548 px** diff over its interior (the whole parchment, every
+text/icon/value row).
+
+The second mis-read: `0x4dc680` is NOT the `0x18`-byte `engine_button_rec_t`
+layout (x/y/sprite/kind/action/…).  It is the **short[] HOTSPOT** layout —
+`short[0..3] = x0,y0,x1,y1` (the box), `+0x8` action, `+0xf` type, `+0x10`
+param → `DAT_0059154c`.  Extracting it as sprite-buttons makes rec1 look like
+`sprite=0x41 kind=0x1d`; read as a hotspot it is the box `[0x22,0]-[0x41,0x1d]`
+= screen `(512..543, 430..459)`, which is exactly where a click lands the
+Court.  (The genuinely-merchant tab table `DAT_004dd808`, by contrast, is the
+`0x18`-byte layout, and its first two "tabs" are no-op stubs — a separate dead
+end that also fed the wrong model.)
+
+Consequence for a drop-in: seed the Court seat over the strat frame with NO
+merchant/palette load (the port's `engine_dev_force_treasury_render` just
+paints over the retained map), and wire the organic open by un-narrowing the
+already-ported End-Turn strip hit-test (`engine_endturn_hit_test` = the
+`0x4dc680` walker) to also fire the Court tab.  The seal's real exit is Rankings
+`0x20` (`FUN_004351c4`), not the map — deferred until 0x20 renders; RMB closes
+to the map in the meantime (retail's own close arm, `42ff10` @ `0x430757`).
+
+> 📍 `src/engine_treasury.c` (`FUN_00416925`), `src/engine.c`
+> (`engine_tick_treasury_render`, the screen-9 demand + per-frame seams,
+> `k_treasury_tab` in `engine_endturn_hit_test`, `engine_dev_force_treasury_render`),
+> `src/engine_ingame_input.c` (screen-9 close), Ghidra `FUN_00416925` /
+> `FUN_0040f1a0` case 9 / `FUN_0043ae30` / `FUN_00432967` / table `0x4dc680`.
