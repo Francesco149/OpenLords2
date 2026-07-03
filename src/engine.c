@@ -1148,6 +1148,152 @@ static void treasury_button_action(uint32_t action, int param0, int param1)
     }
 }
 
+/* ─── The Armory family actions (FUN_004ba9c8's '\n' / '\r' / 0x17 arms) ───
+ * Forward decls for the pieces defined further down the file. */
+static void engine_tick_armory_render(void);
+static void engine_tick_armory_overlay_render(void);
+static void engine_tick_armory_assign_render(void);
+static int  engine_armory_build_ctx(engine_armory_ctx_t *ctx,
+                                    localization_state_t *loc);
+static void armory_post_event(int32_t code);
+
+/* FUN_004aa90a at the current conscript count — the 0x17-confirm / 0x17-RMB
+ * re-seed and the tab-entry seed share this shape. */
+static void armory_remuster_now(void)
+{
+    int county = (int)s_slot_0057c93c;
+    const uint8_t *county_rec = g_per_army_768 + (size_t)county * 0x300;
+    int owner = county_rec[0x05];
+    engine_armory_muster_init(owner, engine_armory_conscripts(),
+                              g_player_strategic_352 + (size_t)owner * 0x160);
+}
+
+/* The 0x17 overlay button actions (table DAT_004dd340): the confirm seal
+ * (FUN_00435cbf) + the mercenary Yes/No toggle (FUN_00435c89).  Both are
+ * type-5 press-latches — they fire from dispatch pass 1 on a frame where the
+ * dispatch RETURNS 0 (quirk #219), so the arm below drives the outcomes off
+ * these flags, not the hit. */
+static int g_armory_confirm_fired;     /* FUN_00435cbf → back to the 0x0a view */
+static int g_armory_toggle_fired;      /* FUN_00435c89 → overlay repaint */
+
+static void armory_overlay_button_action(uint32_t action, int param0,
+                                         int param1)
+{
+    (void)param1;
+    if (action == 0x435cbf) {
+        g_armory_confirm_fired = 1;
+    } else if (action == 0x435c89) {
+        engine_armory_set_merc(param0 == 1);   /* DAT_0055446c = (param == 1) */
+        g_armory_toggle_fired = 1;             /* retail: DAT_0057d340 = 2 */
+    }
+}
+
+/* The 0x0d assign gauntlet actions (table DAT_004dd8c8) — keyed on the
+ * LOCAL player's muster row (retail reads DAT_0057c8cc directly here;
+ * entry is owner-gated so owner == local organically). */
+static void armory_assign_button_action(uint32_t action, int param0,
+                                        int param1)
+{
+    (void)param0; (void)param1;
+    uint8_t *row = engine_game_init_troop_pool_row((int)s_slot_0057c8cc);
+    switch (action) {
+    case 0x43593a: engine_armory_assign_plus(row);  break;
+    case 0x4359bc: engine_armory_assign_minus(row); break;
+    case 0x435a0c: engine_armory_assign_none(row);  break;
+    case 0x435a61: engine_armory_assign_all(row);   break;
+    default: break;
+    }
+    /* No redraw request — the 0x0d per-frame refresh repaints the
+     * readouts next tick (retail shape, same as the trade arrows). */
+}
+
+/* FUN_00435b4d — the Create ("muster this army") / Cancel commit.  Both
+ * close to the map; Create validates the pool total then spawns the army
+ * via the ALREADY-PORTED engine_combat_spawn_unit (FUN_004a9a9a), posting
+ * the retail failure scrolls on the reject paths. */
+static void armory_commit(int create, engine_ingame_state_t *dst)
+{
+    if (create) {
+        int player = (int)s_slot_0057c8cc;
+        const uint8_t *row = engine_game_init_troop_pool_row(player);
+        int32_t total;
+        memcpy(&total, row + 0x70, sizeof total);      /* pool entry 7 */
+        if (total == 0 && engine_armory_merc() == 0) {
+            armory_post_event(0xa8);                   /* "no men mustered" */
+        } else if (total < 0x32 && engine_armory_merc() == 0) {
+            armory_post_event(0x94);                   /* "army too small" */
+        } else if (g_sim_mp_active == 0) {             /* SP arm */
+            if (engine_combat_spawn_unit(player, (int)s_slot_0057c93c,
+                                         engine_armory_merc(),
+                                         engine_armory_happy_cost()) == 0) {
+                armory_post_event(0xdd);               /* "no room to form" */
+            }
+        }
+        /* (MP 0x43eda0(0x2a) broadcast — deferred, SP drop-in.) */
+    }
+    /* Both paths: close to the map.  FUN_004984dc (season-bank reload) is
+     * skipped by design — the port never freed the banks (see the 0x0a
+     * close arm note). */
+    dst->screen = 0;
+    dst->demand_redraw = 1;
+}
+
+/* FUN_004358b0 via the router — a muster figure / tally readout click:
+ * select the weapon (march-trigger the previous one) and open the assign
+ * overlay.  Retail renders 0x0d DIRECTLY from the click (FUN_0040f1a0 has
+ * no 0x0d case), so the port renders here too. */
+static void armory_zone_action(int zone, engine_ingame_state_t *dst)
+{
+    engine_armory_ctx_t ctx;
+    localization_state_t loc;
+    if (!engine_armory_build_ctx(&ctx, &loc)) {
+        return;
+    }
+    if (engine_armory_zone_select(zone, &ctx)) {
+        dst->screen = 0x0d;
+        engine_tick_armory_assign_render();            /* FUN_004184c6 */
+    }
+}
+
+/* FUN_00435ae8 — the Create / Change / Cancel label clicks. */
+static void armory_ccc_action(int param, engine_ingame_state_t *dst)
+{
+    if (param == 1) {
+        armory_commit(1, dst);                         /* DAT_0059151c = 1 */
+    } else if (param == 2) {
+        dst->screen = 0x17;                            /* → the overlay */
+        dst->demand_redraw = 2;
+    } else if (param == 3) {
+        armory_commit(0, dst);                         /* DAT_0059151c = 0 */
+    }
+}
+
+/* armory_slider hook (FUN_00435cef): the 0x17 conscription slider — arrows
+ * step on a fresh press / click-repeat, the track is an LMB-held drag. */
+static int ti_armory_slider(const engine_ingame_input_in_t *in,
+                            engine_ingame_state_t *st)
+{
+    const uint8_t *county_rec =
+        g_per_army_768 + (size_t)(int)s_slot_0057c93c * 0x300;
+    int hit = engine_armory_slider_click(county_rec,
+                                         g_input_game_x, g_input_game_y,
+                                         in->lmb_pressed,
+                                         g_input_lmb_dblclk,   /* DAT_004eabc5 */
+                                         in->lmb_held);
+    if (hit) {
+        st->demand_redraw = 2;             /* retail: DAT_0057d340 = 2 */
+    }
+    return hit;
+}
+
+/* armory_remuster hook (FUN_004aa90a on the 0x17 RMB → 0x0a path). */
+static void ti_armory_remuster(const engine_ingame_input_in_t *in,
+                               engine_ingame_state_t *st)
+{
+    (void)in; (void)st;
+    armory_remuster_now();
+}
+
 static int ti_ui_router(const engine_ingame_input_in_t *din,
                         engine_ingame_state_t *dst)
 {
@@ -1244,6 +1390,91 @@ static int ti_ui_router(const engine_ingame_input_in_t *din,
             return 1;
         }
         return hit ? 1 : 0;
+    }
+
+    if (dst->screen == 0x17) {
+        /* FUN_004ba9c8's 0x17 arm: the create/change overlay strip —
+         * FUN_0040da1e(0, army?0x10:0, &DAT_004dd340, DAT_00522f58).  The
+         * confirm seal + merc toggle are type-5 press-latches; both fire
+         * from pass 1 where the dispatch returns 0 (quirk #219) — drive
+         * the outcomes off the action flags. */
+        engine_menu_click_in_t bclick;
+        memset(&bclick, 0, sizeof bclick);
+        bclick.cursor_x           = g_input_game_x;
+        bclick.cursor_y           = g_input_game_y;
+        bclick.lmb_newly_pressed  = din->lmb_pressed;
+        bclick.lmb_newly_released = din->lmb_released;
+        bclick.lmb_held           = din->lmb_held;
+        int yoff = g_per_army_768[(size_t)(int)s_slot_0057c93c * 0x300
+                                  + 0x1ad] != 0 ? 0x10 : 0;
+        g_armory_confirm_fired = 0;
+        g_armory_toggle_fired  = 0;
+        int hit = engine_menu_button_dispatch(0, yoff,
+                                              engine_armory_overlay_buttons(),
+                                              engine_armory_overlay_mode(),
+                                              &bclick,
+                                              armory_overlay_button_action);
+        if (g_armory_confirm_fired) {
+            /* FUN_00435cbf: back to the 0x0a view with the muster pool
+             * re-seeded from the conscripts; demand 2. */
+            armory_remuster_now();
+            dst->screen = 0x0a;
+            dst->demand_redraw = 2;
+            return 1;
+        }
+        if (g_armory_toggle_fired) {
+            dst->demand_redraw = 2;        /* the Yes/No text repaint */
+            return 1;
+        }
+        return hit ? 1 : 0;
+    }
+
+    if (dst->screen == 0x0a || dst->screen == 0x0d) {
+        /* FUN_004ba9c8's '\n' / '\r' arms: the muster-figure zone click
+         * (FUN_0043582a over the arm_grid.pl8 map) first, then the tally /
+         * Create / Change / Cancel hotspot walk (FUN_0040e3ee over
+         * DAT_004dc938 — 9 recs on the view, 7 on the assign overlay),
+         * then — 0x0d only — the four assign gauntlets. */
+        if (din->lmb_pressed != 0) {
+            int zone = engine_armory_zone_at(g_input_game_x, g_input_game_y);
+            if (zone != 0) {
+                armory_zone_action(zone, dst);   /* FUN_004358b0 */
+                return 1;                        /* consumed even when gated */
+            }
+            int count = (dst->screen == 0x0a) ? 9 : 7;
+            int idx = engine_menu_hotspot_hover(0, 0,
+                                                engine_armory_view_hotspots(),
+                                                count,
+                                                g_input_game_x,
+                                                g_input_game_y);
+            if (idx != 0) {
+                const engine_menu_hotspot_t *h =
+                    engine_armory_view_hotspots() + (idx - 1);
+                if (idx <= 6) {
+                    armory_zone_action(h->param, dst);   /* tally readout */
+                } else {
+                    armory_ccc_action(h->param, dst);    /* FUN_00435ae8 */
+                }
+                return 1;
+            }
+        }
+        if (dst->screen == 0x0d) {
+            engine_menu_click_in_t bclick;
+            memset(&bclick, 0, sizeof bclick);
+            bclick.cursor_x           = g_input_game_x;
+            bclick.cursor_y           = g_input_game_y;
+            bclick.lmb_newly_pressed  = din->lmb_pressed;
+            bclick.lmb_newly_released = din->lmb_released;
+            bclick.lmb_held           = din->lmb_held;
+            int hit = engine_menu_button_dispatch(0x60, 4,
+                                                  engine_armory_assign_buttons(),
+                                                  4, &bclick,
+                                                  armory_assign_button_action);
+            if (hit) {
+                return 1;
+            }
+        }
+        return 0;
     }
 
     if (dst->screen != ENGINE_CONFIRM_DIALOG_SCREEN) {
@@ -1572,45 +1803,119 @@ static void engine_tick_rankings_render(void)
     engine_rankings_render(&ctx);       /* FUN_0041593b full scene */
 }
 
-/* Build the Armory ctx (screen 0x0a) from the save-schema externs + gfx
- * loaders and render the army-muster view.  Like Rankings this is a FULL-
+/* Build the Armory ctx (screens 0x0a / 0x17 / 0x0d) from the save-schema
+ * externs + gfx loaders.  `loc` is caller-provided storage the ctx points
+ * into (the render call is synchronous).  Returns 0 when a required asset
+ * is missing. */
+static int engine_armory_build_ctx(engine_armory_ctx_t *ctx,
+                                   localization_state_t *loc)
+{
+    const uint8_t *mfont  = gfx_load_menu_font();
+    const uint8_t *tfont  = gfx_load_title_font();
+    const uint8_t *chrome = gfx_load_chrome_sheet();
+    size_t loc_size = 0;
+    const uint8_t *locblob = config_localization_data(&loc_size);
+    if (!mfont || !locblob) {
+        return 0;
+    }
+    loc->blob = (unsigned char *)locblob;
+    loc->walker_offset = 0;
+
+    memset(ctx, 0, sizeof *ctx);
+    ctx->strategic_block = g_player_strategic_352;   /* DAT_0057bf00 */
+    ctx->troop_pool      = engine_game_init_troop_pool_row(0); /* 0x53f6a0 */
+    ctx->local_player    = (int)s_slot_0057c8cc;
+    ctx->county          = (int)s_slot_0057c93c;
+    ctx->county_rec      = g_per_army_768 +
+                           (size_t)(int)s_slot_0057c93c * 0x300;
+    ctx->map_id          = (int)s_slot_0053f034;
+    ctx->unit_table      = g_unit_table_20;          /* 0x568dc0 */
+    ctx->system_sheet    = gfx_system_sheet_current();
+    ctx->chrome          = chrome;
+    ctx->menu_font       = mfont;
+    ctx->title_font      = tfont;
+    ctx->glyph_table     = gfx_glyph_render_map();
+    ctx->glyph_metrics   = gfx_glyph_measure_map();
+    ctx->loc             = loc;
+    return 1;
+}
+
+/* The army-muster view render (screen 0x0a).  Like Rankings this is a FULL-
  * SCREEN scene: engine_armory_render loads its own armoury.pl8 backdrop +
  * armoury.256 palette + the heraldry-colored arm_it_r<c>.pl8 interior sheet
  * (no retained frame).  The muster counts read g_troop_pool, which the entry
  * (engine_armory_muster_init) fills — there is no compute at render time. */
 static void engine_tick_armory_render(void)
 {
-    const uint8_t *mfont  = gfx_load_menu_font();
-    size_t loc_size = 0;
-    const uint8_t *locblob = config_localization_data(&loc_size);
-    if (!mfont || !locblob) {
+    engine_armory_ctx_t ctx;
+    localization_state_t loc;
+    if (!engine_armory_build_ctx(&ctx, &loc)) {
         return;
     }
-    localization_state_t loc;
-    loc.blob = (unsigned char *)locblob;
-    loc.walker_offset = 0;
-
-    engine_armory_ctx_t ctx;
-    memset(&ctx, 0, sizeof ctx);
-    ctx.strategic_block = g_player_strategic_352;   /* DAT_0057bf00 */
-    ctx.troop_pool      = engine_game_init_troop_pool_row(0); /* g_troop_pool base (0x53f6a0) */
-    ctx.local_player    = (int)s_slot_0057c8cc;
-    ctx.system_sheet    = gfx_system_sheet_current();
-    ctx.menu_font       = mfont;
-    ctx.glyph_table     = gfx_glyph_render_map();
-    ctx.glyph_metrics   = gfx_glyph_measure_map();
-    ctx.loc             = &loc;
-
     engine_armory_render(&ctx);         /* FUN_00417ea7 full scene */
 }
 
-/* The per-frame torch-flame refresh (FUN_004ba26e case '\n'): redraw the two
- * animated wall torches over the retained armory backdrop at the shared phase
- * frame (g_phase_counter_13 = retail DAT_005aea54).  NO ctx needed — the torch
- * sheet is resident in engine_armory.c (loaded by the open render). */
-static void engine_tick_armory_refresh(void)
+/* The army create/change overlay (screen 0x17, FUN_00418653) — drawn over
+ * the retained 0x0a scene (the demand-1 path re-renders the scene first;
+ * the caller mirrors retail's `if (demand == 1) FUN_00417ea7(1);
+ * FUN_00418653();`). */
+static void engine_tick_armory_overlay_render(void)
 {
-    engine_armory_refresh((int)g_phase_counter_13);
+    engine_armory_ctx_t ctx;
+    localization_state_t loc;
+    if (!engine_armory_build_ctx(&ctx, &loc)) {
+        return;
+    }
+    engine_armory_overlay_render(&ctx);
+}
+
+/* The weapon-assign overlay (screen 0x0d, FUN_004184c6 + the immediate
+ * FUN_00418e2d refresh) — retail renders it DIRECTLY from the figure click
+ * (no demand-redraw case for 0x0d exists in FUN_0040f1a0). */
+static void engine_tick_armory_assign_render(void)
+{
+    engine_armory_ctx_t ctx;
+    localization_state_t loc;
+    if (!engine_armory_build_ctx(&ctx, &loc)) {
+        return;
+    }
+    engine_armory_assign_render(&ctx);
+    if (gfx_lock_canvas()) {
+        engine_armory_assign_refresh(&ctx, (int)g_phase_counter_24);
+        gfx_unlock_canvas();
+    }
+}
+
+/* The per-frame armory refresh (FUN_004ba26e cases '\n' and '\r'): the march
+ * strip restore + the two animated wall torches (shared phase frame
+ * g_phase_counter_13 = retail DAT_005aea54) + — on the assign screen — the
+ * muster tally + the assign readouts (demo-figure frame g_phase_counter_24 =
+ * DAT_005aea48) — then the marching troop.  One canvas lock around the whole
+ * retail sequence. */
+static void engine_tick_armory_refresh(int assign_screen)
+{
+    engine_armory_ctx_t ctx;
+    localization_state_t loc;
+    int have_ctx = engine_armory_build_ctx(&ctx, &loc);
+    if (!gfx_lock_canvas()) {
+        return;
+    }
+    engine_armory_march_restore();                 /* FUN_00418fc5 */
+    engine_armory_refresh((int)g_phase_counter_13);/* FUN_00419243 */
+    if (assign_screen && have_ctx) {
+        engine_armory_counts_render(&ctx);         /* FUN_004181eb */
+        engine_armory_assign_refresh(&ctx,         /* FUN_00418e2d */
+                                     (int)g_phase_counter_24);
+    }
+    engine_armory_march_step(g_phase_tick_20ms,    /* FUN_004190db */
+                             g_phase_tick_80ms);
+    if (assign_screen) {
+        /* FUN_0040cfd2(0x60, 4, &DAT_004dd8c8, 4) — the assign gauntlets. */
+        engine_button_render_list(0x60, 4, engine_armory_assign_buttons(), 4,
+                                  engine_pl8_misc_cty(),
+                                  gfx_system_sheet_current(), NULL);
+    }
+    gfx_unlock_canvas();
 }
 
 /* ─── Tooltip tick (FUN_00476e95, tick line 112) ───────────────────────
@@ -1836,16 +2141,46 @@ static const engine_menu_hotspot_t k_endturn_buttons[] = {
 
 /* The Court/Treasury tab of the same strip (retail 0x4dc680 rec1: box
  * [0x22,0]-[0x41,0x1d] relative to the strip origin, type 1, FUN_0043ae30
- * param 2 → screen 9).  Only this ported tab is wired; the sibling tabs
- * (armory/send-supplies/…, params 1/3/4/5) open renderer-less screens, so —
- * like the four skipped tabs above — they are left for their own ports.  The
- * flip sets st->screen directly (not via the hotspot action, which can't
- * reach st); param-2's FUN_0043ae30 arm is a bare screen set (no owner gate,
- * no backdrop load — the Court draws over the retained map). */
+ * param 2 → screen 9).  The sibling tabs (send-supplies/…, params 3/4/5)
+ * open renderer-less screens, so — like the four skipped tabs above — they
+ * are left for their own ports.  The flip sets st->screen directly (not via
+ * the hotspot action, which can't reach st); param-2's FUN_0043ae30 arm is
+ * a bare screen set (no owner gate, no backdrop load — the Court draws over
+ * the retained map). */
 static const engine_menu_hotspot_t k_treasury_tab[] = {
     { .x0 = 0x22, .y0 = 0, .x1 = 0x41, .y1 = 0x1d,
       .action = NULL, .button_type = 1, .param = 2 },
 };
+
+/* The Armory tab (retail 0x4dc680 rec0: box [0,0]-[0x21,0x1d], type 1,
+ * FUN_0043ae30 param 1).  OWNER-GATED: only the selected county's owner
+ * opens the armory; a foreign county posts the "not your county" scroll
+ * (FUN_00472bc5 code 0x70). */
+static const engine_menu_hotspot_t k_armory_tab[] = {
+    { .x0 = 0, .y0 = 0, .x1 = 0x21, .y1 = 0x1d,
+      .action = NULL, .button_type = 1, .param = 1 },
+};
+
+/* FUN_0043ae30's param-1 arm — the armory entry: compute the conscripts at
+ * the persisted slider %, seed the muster pool, reset the merc toggle, and
+ * open the create/change overlay (screen 0x17, demand 1 = full scene +
+ * overlay).  The existing-army WAV cue (0x4b3714 → S016_xx.wav) is
+ * audio — deferred like every other cue. */
+static void armory_tab_entry(engine_ingame_state_t *st)
+{
+    int county = (int)s_slot_0057c93c;
+    const uint8_t *county_rec = g_per_army_768 + (size_t)county * 0x300;
+    if (county_rec[0x05] != (uint8_t)s_slot_0057c8cc) {
+        armory_post_event(0x70);               /* "not your county" */
+        return;
+    }
+    engine_armory_conscript_update(county_rec, engine_armory_pct());
+    armory_remuster_now();                     /* FUN_004aa90a */
+    engine_armory_set_merc(0);                 /* DAT_0055446c = 0 */
+    /* DAT_005679d0 = 0 (march off) — muster_init's tail already did. */
+    st->screen        = 0x17;
+    st->demand_redraw = 1;
+}
 
 /* hud_btn_a hook (FUN_00432967): hit-test the End-Turn button row at the
  * panel origin (0x1de,0x1ae) and fire its action.  Consumes the click. */
@@ -1867,6 +2202,13 @@ static int engine_endturn_hit_test(const engine_ingame_input_in_t *in,
                                   click.cursor_x, click.cursor_y) != 0) {
         st->screen        = 9;
         st->demand_redraw = 1;
+        return 1;                                     /* consumed */
+    }
+    /* Armory tab (rec0 of the same strip) → the create/change overlay. */
+    if (in->lmb_pressed != 0 &&
+        engine_menu_hotspot_hover(0x1de, 0x1ae, k_armory_tab, 1,
+                                  click.cursor_x, click.cursor_y) != 0) {
+        armory_tab_entry(st);                         /* FUN_0043ae30 param 1 */
         return 1;                                     /* consumed */
     }
     if (engine_menu_hotspot_click(0x1de, 0x1ae, k_endturn_buttons,
@@ -1978,6 +2320,8 @@ static void engine_tick_ingame_input_step(void)
         .merchant_zone      = ti_merchant_zone,          /* FUN_004357a6 merchant → trade grid */
         .screen0f_commit    = ti_screen0f_commit,        /* FUN_00427d19 labor-close tail */
         .army_move_click_resolve = ti_army_move_click_resolve, /* FUN_004a9252 */
+        .armory_slider      = ti_armory_slider,          /* FUN_00435cef slider */
+        .armory_remuster    = ti_armory_remuster,        /* FUN_004aa90a re-seed */
         /* every other sub-handler deferred (NULL → inert) */
     };
     engine_ingame_input_dispatch(&in, &st, &HOOKS);
@@ -2052,12 +2396,32 @@ static void engine_tick_title_render_step(void)
         } else if (g_sim_current_screen == 0x0a) {
             /* Armory view (screen 0x0a): retail's per-frame refresh
              * (FUN_004ba26e case '\n' = FUN_00418fc5 + FUN_00419243 +
-             * FUN_004190db) redraws the two animated torch flames over the
-             * retained backdrop every tick.  On this view the sweep + its
-             * restore (FUN_004190db/FUN_00418fc5, gated DAT_005679d0>0) are
-             * inert — only FUN_00419243 draws.  The open render draws no
-             * flames; they arrive on this first refresh, exactly as retail. */
-            engine_tick_armory_refresh();
+             * FUN_004190db): the march strip restore, the two animated torch
+             * flames, and the marching troop (live after men were assigned
+             * on the 0x0d overlay).  The open render draws no flames; they
+             * arrive on this first refresh, exactly as retail. */
+            engine_tick_armory_refresh(0);
+        } else if (g_sim_current_screen == 0x0d) {
+            /* Weapon-assign overlay (screen 0x0d): retail's case '\r' =
+             * the 0x0a sequence + the muster tally (FUN_004181eb) + the
+             * assign readouts/demo figure (FUN_00418e2d) + the four assign
+             * gauntlets (FUN_0040cfd2 over DAT_004dd8c8 at (0x60,4)). */
+            engine_tick_armory_refresh(1);
+        } else if (g_sim_current_screen == 0x17) {
+            /* Army create/change overlay (screen 0x17): retail's per-frame
+             * arm repaints ONLY the button strip (FUN_0040cfd2 over
+             * DAT_004dd340, y-offset 0x10 in change mode, count = the mode)
+             * — the torches freeze while the overlay is up. */
+            if (gfx_lock_canvas()) {
+                int yoff = g_per_army_768[(size_t)(int)s_slot_0057c93c * 0x300
+                                          + 0x1ad] != 0 ? 0x10 : 0;
+                engine_button_render_list(0, yoff,
+                                          engine_armory_overlay_buttons(),
+                                          engine_armory_overlay_mode(),
+                                          engine_pl8_misc_cty(),
+                                          gfx_system_sheet_current(), NULL);
+                gfx_unlock_canvas();
+            }
         }
 
         if (g_demand_redraw != 0) {
@@ -2170,6 +2534,18 @@ static void engine_tick_title_render_step(void)
                  * render directly.  The screen-0 arm restores base01.256 on
                  * close (armoury swaps the palette). */
                 engine_tick_armory_render();
+                g_canvas_repainted_this_tick = 1;
+            } else if (g_sim_current_screen == 0x17) {
+                /* Army create/change overlay (screen 0x17, FUN_0040f1a0 case
+                 * 0x17): `if (param == 1) FUN_00417ea7(1); FUN_00418653();`
+                 * — a demand-1 (fresh entry from the county-action tab)
+                 * re-renders the full armory scene first; a demand-2 (slider
+                 * / toggle repaint) redraws just the overlay parchment over
+                 * the retained frame. */
+                if (g_demand_redraw == 1) {
+                    engine_tick_armory_render();
+                }
+                engine_tick_armory_overlay_render();
                 g_canvas_repainted_this_tick = 1;
             } else if (g_sim_current_screen != 0x10 &&
                       g_sim_current_screen != ENGINE_CONFIRM_DIALOG_SCREEN) {
@@ -2611,6 +2987,26 @@ static int     g_screen27_cookie = 0x14;  /* DAT_004f0358 — the hint-
 static void evq_sync_save_mirror(void)
 {
     memcpy(g_misc_128, g_turn_event_queue.ring, sizeof(g_misc_128));
+}
+
+/* One local-player notification scroll (the armory reject codes 0x70 /
+ * 0x94 / 0xa8 / 0xdd) — retail FUN_00472bc5(0, DAT_0057c8cc, code,
+ * 0,0,0,0,0).  Same producer shape as the depth-warning post above. */
+static void armory_post_event(int32_t code)
+{
+    if (!g_turn_event_queue_inited) {
+        engine_event_queue_init_wrapper(&g_turn_event_queue);
+        g_turn_event_queue_inited = 1;
+    }
+    uint8_t has_data[7];
+    for (int i = 0; i < 6; i++)
+        has_data[i] = g_player_strategic_352[i * 0x160 + 0x05];
+    has_data[6] = 0;
+    engine_event_queue_post(&g_turn_event_queue,
+                            0, (int32_t)s_slot_0057c8cc,
+                            code, 0, 0, 0, 0, 0,
+                            has_data, (int)s_slot_0057c8cc);
+    evq_sync_save_mirror();
 }
 
 /* Load-route seeding — the inverse mirror.  save_load fills g_misc_128
@@ -3335,7 +3731,34 @@ void engine_dev_force_armory_render(void)
     /* The open render draws no torch flames (retail's FUN_00417ea7 leaves them
      * to the per-frame refresh).  Paint them once here so the single captured
      * seat frame shows the lit torches at the current phase frame. */
-    engine_tick_armory_refresh();                      /* FUN_00419243 flames */
+    engine_tick_armory_refresh(0);                     /* FUN_00419243 flames */
+}
+
+/* Verification seat (--force-armory-overlay): the army create/change overlay
+ * (screen 0x17) over the freshly rendered 0x0a scene, as the county-action
+ * tab entry draws it (demand-1 path).  Mirrors the FUN_0043ae30 param-1 arm:
+ * conscript compute at the persisted % + the muster seed, then scene +
+ * overlay. */
+void engine_dev_force_armory_overlay_render(void)
+{
+    int county = (int)s_slot_0057c93c;
+    const uint8_t *county_rec = g_per_army_768 + (size_t)county * 0x300;
+    int owner = county_rec[0x05];
+    engine_armory_conscript_update(county_rec, engine_armory_pct());
+    engine_armory_muster_init(owner, engine_armory_conscripts(),
+                              g_player_strategic_352 + (size_t)owner * 0x160);
+    engine_tick_armory_render();
+    engine_tick_armory_refresh(0);
+    engine_tick_armory_overlay_render();
+    /* The button strip (per-frame arm) — one frame so the seat shows it. */
+    if (gfx_lock_canvas()) {
+        engine_button_render_list(0, county_rec[0x1ad] != 0 ? 0x10 : 0,
+                                  engine_armory_overlay_buttons(),
+                                  engine_armory_overlay_mode(),
+                                  engine_pl8_misc_cty(),
+                                  gfx_system_sheet_current(), NULL);
+        gfx_unlock_canvas();
+    }
 }
 
 /* ─── Help-hint pump + report opener ────────────────────────────────

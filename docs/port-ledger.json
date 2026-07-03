@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 821,
-  "ported": 89,
-  "unported": 1537,
+  "tested": 824,
+  "ported": 102,
+  "unported": 1521,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 910,
-  "pct_touched": 37.2,
-  "pct_tested": 33.6,
+  "touched": 926,
+  "pct_touched": 37.8,
+  "pct_tested": 33.7,
   "bytes_total": 838629,
-  "bytes_touched": 396530,
-  "pct_bytes_touched": 47.3
+  "bytes_touched": 399896,
+  "pct_bytes_touched": 47.7
  },
  "orphan_refs": [
   "0x004148",
@@ -970,6 +970,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_armory.c",
     "src/engine_army_ai.c",
     "src/engine_input.c",
     "src/engine_math.c",
@@ -1437,6 +1438,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_armory.c",
     "src/engine_county_panels.c",
     "src/engine_labor.c",
     "src/engine_terrain_info.c"
@@ -1500,6 +1502,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_armory.c",
     "src/engine_county_panels.c",
     "src/engine_trade.c"
    ]
@@ -1575,6 +1578,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_armory.c",
     "src/engine_terrain_info.c",
     "src/gfx_sprite_render.c",
     "src/gfx_sprite_render.h",
@@ -2125,6 +2129,8 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_armory.c",
+    "src/engine_armory.h",
     "src/engine_button.h",
     "src/engine_menu_input.c",
     "src/engine_menu_input.h"
@@ -2259,6 +2265,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_armory.h",
     "src/engine_labor.h",
     "src/engine_merchant.h",
     "src/engine_screen_dispatch.c",
@@ -3029,8 +3036,11 @@
    "name": "FUN_004180f6",
    "size": 245,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_armory.h",
+    "src/engine_ingame_input.c"
+   ]
   },
   {
    "va": "0x4181eb",
@@ -3039,6 +3049,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine.c",
     "src/engine_armory.c",
     "src/engine_armory.h"
    ]
@@ -3050,8 +3061,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_armory.c",
-    "src/engine_armory.h"
+    "src/engine_armory.c"
    ]
   },
   {
@@ -3059,8 +3069,12 @@
    "name": "FUN_004184c6",
    "size": 397,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_armory.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x418653",
@@ -3069,6 +3083,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine.c",
     "src/engine_armory.c",
     "src/engine_armory.h"
    ]
@@ -3078,8 +3093,12 @@
    "name": "FUN_00418e2d",
    "size": 408,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_armory.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x418fc5",
@@ -3228,6 +3247,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_armory.c",
     "src/engine_county_panels.c",
     "src/engine_hud_menubar.c",
     "src/engine_hud_menubar.h",
@@ -3244,6 +3264,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_armory.c",
     "src/engine_hud_panel.c"
    ]
   },
@@ -6094,96 +6115,134 @@
    "name": "FUN_0043582a",
    "size": 134,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_armory.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x4358b0",
    "name": "FUN_004358b0",
    "size": 138,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_armory.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x43593a",
    "name": "FUN_0043593a",
    "size": 130,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_armory.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x4359bc",
    "name": "FUN_004359bc",
    "size": 80,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x435a0c",
    "name": "FUN_00435a0c",
    "size": 85,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x435a61",
    "name": "FUN_00435a61",
    "size": 135,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x435ae8",
    "name": "FUN_00435ae8",
    "size": 101,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x435b4d",
    "name": "FUN_00435b4d",
    "size": 316,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x435c89",
    "name": "FUN_00435c89",
    "size": 54,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x435cbf",
    "name": "FUN_00435cbf",
    "size": 48,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x435cef",
    "name": "FUN_00435cef",
    "size": 456,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine.c",
+    "src/engine_armory.c",
+    "src/engine_armory.h",
+    "src/engine_ingame_input.c",
+    "src/engine_ingame_input.h"
+   ]
   },
   {
    "va": "0x435ebc",
    "name": "FUN_00435ebc",
    "size": 336,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_armory.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x43600c",
@@ -16066,6 +16125,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_ingame_input.c",
     "src/engine_pl8.c",
     "src/engine_pl8.h",
     "src/game_init.c",
@@ -17735,6 +17795,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
+    "src/engine_armory.h",
     "src/engine_combat.c",
     "src/engine_combat.h"
    ]
@@ -17817,11 +17879,13 @@
    "name": "FUN_004aa90a",
    "size": 374,
    "is_thunk": false,
-   "status": "ported",
+   "status": "tested",
    "src": [
     "src/engine.c",
     "src/engine_armory.c",
-    "src/engine_armory.h"
+    "src/engine_armory.h",
+    "src/engine_ingame_input.c",
+    "src/engine_ingame_input.h"
    ]
   },
   {
@@ -17840,8 +17904,11 @@
    "name": "FUN_004aabd8",
    "size": 303,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_armory.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x4aad07",
@@ -18983,6 +19050,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_armory.c",
     "src/engine_confirm_dialog.c",
     "src/engine_confirm_dialog.h",
     "src/engine_county_panels.c",
@@ -19471,6 +19539,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_armory.c",
     "src/engine_workforce_hud.c",
     "src/engine_workforce_hud.h"
    ]
@@ -19483,6 +19552,7 @@
    "status": "tested",
    "src": [
     "src/engine_armory.c",
+    "src/engine_armory.h",
     "src/engine_workforce_hud.h"
    ]
   },
@@ -20202,6 +20272,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_armory.c",
     "src/engine_armory.h",
     "src/engine_army_move_confirm.h",
     "src/engine_button.c",

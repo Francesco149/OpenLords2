@@ -339,6 +339,66 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                     st->demand_redraw = 2;
                     consumed = 1;
                 }
+            } else if (st->screen == 0x0a) {
+                /* ───────── ARMORY VIEW (DAT_004eac50 == 0x0a) ─────────
+                 * The muster-figure zone clicks + the tally/Create/Change/
+                 * Cancel hotspots are handled earlier by the widget router
+                 * (FUN_004ba9c8's '\n' arm).  Turn-busy, seal (generic_click)
+                 * or RMB closes to the strategic map (retail: screen = 0 +
+                 * FUN_004984dc season-bank reload + demand 1; the port never
+                 * freed the banks — the reload is skipped by design, see the
+                 * screen-8 close note). */
+                if (!turn_idle) {
+                    st->screen = 0;
+                    st->demand_redraw = 1;
+                    consumed = 1;
+                } else if (call_consume(hooks->generic_click, in, st) != 0 ||
+                           in->rmb_released != 0) {
+                    st->screen = 0;
+                    st->demand_redraw = 1;
+                    consumed = 1;
+                }
+            } else if (st->screen == 0x17) {
+                /* ───────── ARMY CREATE/CHANGE OVERLAY (== 0x17) ─────────
+                 * The confirm seal + merc toggle are router widgets (handled
+                 * earlier).  The conscription slider (FUN_00435cef) runs
+                 * first; then retail branches on the RMB flag: no RMB → a
+                 * seal click (generic) closes to the MAP; RMB → back to the
+                 * 0x0a view with the muster pool re-seeded from the
+                 * conscripts (FUN_004aa90a). */
+                if (!turn_idle) {
+                    st->screen = 0;
+                    st->demand_redraw = 1;
+                    consumed = 1;
+                } else if (call_consume(hooks->armory_slider, in, st) != 0) {
+                    consumed = 1;
+                } else if (in->rmb_released == 0) {
+                    if (call_consume(hooks->generic_click, in, st) != 0) {
+                        st->screen = 0;
+                        st->demand_redraw = 1;
+                        consumed = 1;
+                    }
+                } else {
+                    st->screen = 0x0a;
+                    call_action(hooks->armory_remuster, in, st);
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                }
+            } else if (st->screen == 0x0d) {
+                /* ───────── WEAPON ASSIGN OVERLAY (== 0x0d) ─────────
+                 * The tally/zone clicks + the four assign gauntlets are
+                 * router widgets (the '\r' arm).  Any seal click (generic)
+                 * or RMB closes back to the 0x0a view — retail re-renders it
+                 * DIRECTLY (FUN_004180f6, no muster re-seed); the port's
+                 * demand-2 path runs the byte-equivalent full scene render.
+                 * The pool edits persist (that's the point). */
+                if (!turn_idle ||
+                    call_consume(hooks->generic_click, in, st) != 0 ||
+                    in->rmb_released != 0) {
+                    st->screen = 0x0a;
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                }
             } else if (st->screen == 0x20) {
                 /* ───────── RANKINGS / GREATEST NOBLES (DAT_004eac50 == 0x20) ─────
                  * 42ff10.c:202-221.  Reached from the Court seal; the seal's

@@ -161,6 +161,13 @@ typedef struct engine_ingame_hooks {
                                                         * click resolve (map LMB,
                                                         * fresh press + cooldown
                                                         * elapsed) */
+    engine_ingame_consume_fn armory_slider;      /* FUN_00435cef conscription
+                                                  * slider (screen 0x17, checked
+                                                  * before the close arms) */
+    engine_ingame_action_fn  armory_remuster;    /* FUN_004aa90a on the 0x17
+                                                  * RMB → 0x0a path (re-seed the
+                                                  * muster pool with the
+                                                  * conscripts) */
 } engine_ingame_hooks_t;
 
 /* Run one in-game input frame (retail FUN_0042ff10).  Reads `in`, mutates

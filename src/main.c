@@ -198,6 +198,7 @@ static int         g_force_trade_good      = -1;  /* --force-trade GOOD (1..14) 
 static int         g_force_treasury        = 0;   /* --force-treasury (screen 0x09) */
 static int         g_force_rankings        = 0;   /* --force-rankings (screen 0x20) */
 static int         g_force_armory          = 0;   /* --force-armory (screen 0x0a) */
+static int         g_force_armory_overlay  = 0;   /* --force-armory-overlay (0x17) */
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 static int         g_strat_load_live;  /* --strat-load-live: drive the live
                                         * load pump from the title menu */
@@ -758,6 +759,22 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
         wsprintfA(path, "%s\\port_armory.raw", g_capture_dir);
         gfx_capture_backbuffer_raw(path, 0);
         log_line("armory: forced render (live save) → %s", path);
+    }
+
+    /* Forced army create/change overlay (--force-armory-overlay with
+     * --strat-load-live + --capture-to): the 0x0a scene + the 0x17 overlay
+     * parchment as the county-action tab entry draws them, reading the
+     * county population/happiness + weapon stocks from the loaded save. */
+    if (g_engine_state == 3 && g_force_armory_overlay && g_capture_dir) {
+        gfx_load_system_sheet_select(1);
+        engine_dev_force_armory_overlay_render();
+        gfx_tick_present(1);
+        char path[MAX_PATH];
+        wsprintfA(path, "%s\\port_armory17.bmp", g_capture_dir);
+        gfx_capture_backbuffer(path);
+        wsprintfA(path, "%s\\port_armory17.raw", g_capture_dir);
+        gfx_capture_backbuffer_raw(path, 0);
+        log_line("armory: forced overlay render (live save) → %s", path);
     }
 
     if (g_audio_active) {
@@ -2068,6 +2085,15 @@ static void bringup_strat_map(const char *dir)
         log_line("strat-map: forced armory render");
     }
 
+    /* Forced army create/change overlay (--force-armory-overlay) — the 0x0a
+     * scene + the 0x17 overlay parchment (bringup variant; live-save seat in
+     * the --strat-load-live block). */
+    if (g_force_armory_overlay) {
+        gfx_load_system_sheet_select(1);
+        engine_dev_force_armory_overlay_render();
+        log_line("strat-map: forced armory overlay render");
+    }
+
     /* Present + capture a BMP (surface palette → may be off-color; the
      * authoritative diff uses the raw dump + the captured retail .pal). */
     gfx_tick_present(1);
@@ -3355,6 +3381,11 @@ static void parse_cmdline(LPSTR lpCmd)
              * screen, reading the owned-weapon racks + heraldry interior +
              * muster tally from the loaded save.  No argument. */
             g_force_armory = 1;
+        } else if (!strcmp(a, "--force-armory-overlay")) {
+            /* Verification seat: the 0x0a scene + the army create/change
+             * overlay (screen 0x17) as the county-action tab draws them.
+             * No argument. */
+            g_force_armory_overlay = 1;
         } else if (!strcmp(a, "--save-sandbox") && i + 1 < ntok) {
             g_save_sandbox = tokens[++i];
         } else if (!strncmp(a, "--save-sandbox=", 15)) {
