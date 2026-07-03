@@ -29,6 +29,7 @@
 #include "engine_trade.h"          /* merchant trade grid (screen 0x0c, FUN_00416308) */
 #include "engine_treasury.h"       /* Court/Treasury report (screen 0x09, FUN_00416925) */
 #include "engine_rankings.h"       /* Rankings/Greatest-Nobles (screen 0x20, FUN_0041593b) */
+#include "engine_armory.h"         /* Armory / army-muster view (screen 0x0a, FUN_00417ea7) */
 #include "engine_army_move_confirm.h" /* screen-0x10 hover classifier + click resolver */
 #include "engine_confirm_dialog.h" /* generic Yes/No modal (screen 0x1e) */
 #include "engine_button.h"         /* button-strip renderer (FUN_0040cfd2) */
@@ -1571,6 +1572,38 @@ static void engine_tick_rankings_render(void)
     engine_rankings_render(&ctx);       /* FUN_0041593b full scene */
 }
 
+/* Build the Armory ctx (screen 0x0a) from the save-schema externs + gfx
+ * loaders and render the army-muster view.  Like Rankings this is a FULL-
+ * SCREEN scene: engine_armory_render loads its own armoury.pl8 backdrop +
+ * armoury.256 palette + the heraldry-colored arm_it_r<c>.pl8 interior sheet
+ * (no retained frame).  The muster counts read g_troop_pool, which the entry
+ * (engine_armory_muster_init) fills — there is no compute at render time. */
+static void engine_tick_armory_render(void)
+{
+    const uint8_t *mfont  = gfx_load_menu_font();
+    size_t loc_size = 0;
+    const uint8_t *locblob = config_localization_data(&loc_size);
+    if (!mfont || !locblob) {
+        return;
+    }
+    localization_state_t loc;
+    loc.blob = (unsigned char *)locblob;
+    loc.walker_offset = 0;
+
+    engine_armory_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.strategic_block = g_player_strategic_352;   /* DAT_0057bf00 */
+    ctx.troop_pool      = engine_game_init_troop_pool_row(0); /* g_troop_pool base (0x53f6a0) */
+    ctx.local_player    = (int)s_slot_0057c8cc;
+    ctx.system_sheet    = gfx_system_sheet_current();
+    ctx.menu_font       = mfont;
+    ctx.glyph_table     = gfx_glyph_render_map();
+    ctx.glyph_metrics   = gfx_glyph_measure_map();
+    ctx.loc             = &loc;
+
+    engine_armory_render(&ctx);         /* FUN_00417ea7 full scene */
+}
+
 /* ─── Tooltip tick (FUN_00476e95, tick line 112) ───────────────────────
  * The state instance + the live-globals ctx builder.  The dynamic
  * list-row inputs (labor/production rows on the right panel) have no
@@ -2108,6 +2141,17 @@ static void engine_tick_title_render_step(void)
                  * screen-0 arm restores base01.256 on close (grtnoble swaps the
                  * palette, same as merchant). */
                 engine_tick_rankings_render();
+                g_canvas_repainted_this_tick = 1;
+            } else if (g_sim_current_screen == 0x0a) {
+                /* Armory view (screen 0x0a, FUN_00417ea7): a full-screen
+                 * county-interior scene reached by RMB-ing out of the army
+                 * create/change overlay (0x17).  Loads its own armoury.pl8
+                 * backdrop (self-locking) + armoury.256 palette + the
+                 * heraldry arm_it_r<c>.pl8 interior sheet and self-locks for
+                 * the draws, so — like the merchant/rankings arms — call the
+                 * render directly.  The screen-0 arm restores base01.256 on
+                 * close (armoury swaps the palette). */
+                engine_tick_armory_render();
                 g_canvas_repainted_this_tick = 1;
             } else if (g_sim_current_screen != 0x10 &&
                       g_sim_current_screen != ENGINE_CONFIRM_DIALOG_SCREEN) {
@@ -3253,6 +3297,23 @@ void engine_dev_force_treasury_render(void)
 void engine_dev_force_rankings_render(void)
 {
     engine_tick_rankings_render();          /* full scene (FUN_0041593b) */
+}
+
+/* Verification seat (--force-armory): open the Armory view (screen 0x0a) as
+ * RMB-ing out of the army create/change overlay would.  A full-screen scene —
+ * engine_tick_armory_render loads its own armoury.pl8 backdrop + armoury.256
+ * palette + the heraldry arm_it_r<c>.pl8 interior sheet, so NO seeding of the
+ * frame is needed.  It DOES need the muster pool populated first: replicate
+ * the on-entry FUN_004aa90a with the conscript % at its first-entry value 0
+ * (so the men count is 0 and each owned weapon shows "0"), keyed on the local
+ * player (== the owner-gated current county).  The weapon stocks + heraldry
+ * come from the live-loaded strategic block. */
+void engine_dev_force_armory_render(void)
+{
+    int player = (int)s_slot_0057c8cc;
+    const uint8_t *owner_rec = g_player_strategic_352 + (size_t)player * 0x160;
+    engine_armory_muster_init(player, 0, owner_rec);   /* FUN_004aa90a, pct=0 */
+    engine_tick_armory_render();                       /* FUN_00417ea7 scene */
 }
 
 /* ─── Help-hint pump + report opener ────────────────────────────────

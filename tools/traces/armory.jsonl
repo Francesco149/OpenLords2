@@ -1,0 +1,46 @@
+# ARMORY / ARMY-MUSTER (screens 0x17 + 0x0a) — playthrough-driven port.
+# Reuses the menu→load prefix (title → single player → load → lastturn →
+# confirm), reaches the loaded strategic map, then:
+#   1. clicks the ARMORY tab of the map's bottom-right county-action strip
+#      (retail table 0x4dc680 rec0, box [0,0]-[0x21,0x1d] at origin
+#      (0x1de,0x1ae) → screen (478..511, 430..459); FUN_0043ae30 param 1 →
+#      screen 0x17 = the army create/change overlay, drawn OVER the armory
+#      backdrop FUN_00417ea7).  Owner-gated (own county).
+#   2. RMB on the backdrop (game (200,200)) drops from 0x17 to the bare
+#      ARMORY VIEW (screen 0x0a, engine_armory.c FUN_00417ea7): stone room +
+#      heraldry interior + owned-weapon racks + muster tally + Create/Change/
+#      Cancel + seal.  (42ff10.c screen-0x17 arm: RMB → 0x0a + FUN_004aa90a.)
+#   3. RMB again closes screen 0x0a back to the strategic map (screen 0).
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "map_before"}
+{"t": 24, "m": 512, "w": 0, "l": 29098478}
+{"t": 28, "m": 513, "w": 1, "l": 29098478}
+{"t": 32, "m": 514, "w": 0, "l": 29098478}
+{"capture": 52, "label": "armory17_open"}
+{"capture": 90, "label": "armory17_settled"}
+{"t": 118, "m": 512, "w": 0, "l": 13107400}
+{"t": 122, "m": 516, "w": 0, "l": 13107400}
+{"t": 126, "m": 517, "w": 0, "l": 13107400}
+{"capture": 158, "label": "armory0a_view"}
+{"t": 188, "m": 512, "w": 0, "l": 13107400}
+{"t": 192, "m": 516, "w": 0, "l": 13107400}
+{"t": 196, "m": 517, "w": 0, "l": 13107400}
+{"capture": 228, "label": "map_resettled"}

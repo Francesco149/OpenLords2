@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 821,
-  "ported": 80,
-  "unported": 1546,
+  "ported": 88,
+  "unported": 1538,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 901,
-  "pct_touched": 36.8,
+  "touched": 909,
+  "pct_touched": 37.1,
   "pct_tested": 33.6,
   "bytes_total": 838629,
-  "bytes_touched": 391832,
-  "pct_bytes_touched": 46.7
+  "bytes_touched": 396420,
+  "pct_bytes_touched": 47.3
  },
  "orphan_refs": [
   "0x004148",
@@ -1379,6 +1379,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine_armory.c",
     "src/engine_merchant.c",
     "src/engine_rankings.c",
     "src/engine_trade.c",
@@ -1966,6 +1967,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_armory.c",
     "src/engine_labor.c",
     "src/engine_merchant.c",
     "src/engine_rankings.c",
@@ -3015,8 +3017,12 @@
    "name": "FUN_00417ea7",
    "size": 591,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_armory.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x4180f6",
@@ -3031,16 +3037,22 @@
    "name": "FUN_004181eb",
    "size": 571,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_armory.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x418426",
    "name": "FUN_00418426",
    "size": 160,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_armory.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x4184c6",
@@ -3055,8 +3067,11 @@
    "name": "FUN_00418653",
    "size": 2010,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_armory.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x418e2d",
@@ -3071,16 +3086,20 @@
    "name": "FUN_00418fc5",
    "size": 278,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x4190db",
    "name": "FUN_004190db",
    "size": 360,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x419243",
@@ -6935,6 +6954,7 @@
    "status": "ported",
    "src": [
     "src/engine.c",
+    "src/engine_armory.h",
     "src/engine_treasury.h"
    ]
   },
@@ -11269,6 +11289,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_armory.c",
     "src/engine_merchant.c",
     "src/engine_screen_strat.h",
     "src/gfx.c",
@@ -11307,6 +11328,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_armory.c",
     "src/engine_combat.c",
     "src/engine_county_panels.c",
     "src/engine_dirty_rect.h",
@@ -11466,6 +11488,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_armory.c",
     "src/engine_battlefield_render.h",
     "src/engine_button.c",
     "src/engine_button.h",
@@ -16132,8 +16155,10 @@
    "name": "FUN_004996c8",
    "size": 244,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_armory.c"
+   ]
   },
   {
    "va": "0x4997bf",
@@ -17784,8 +17809,12 @@
    "name": "FUN_004aa90a",
    "size": 374,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_armory.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x4aaa80",
@@ -18447,6 +18476,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_armory.c",
     "src/engine_county_panels.c",
     "src/engine_labor.c",
     "src/engine_merchant.c",
@@ -18543,6 +18573,7 @@
    "status": "tested",
    "src": [
     "src/config.c",
+    "src/engine_armory.c",
     "src/engine_county_panels.c",
     "src/engine_labor.c",
     "src/engine_merchant.c",
@@ -18676,6 +18707,7 @@
    "status": "ported",
    "src": [
     "src/engine.c",
+    "src/engine_armory.c",
     "src/engine_merchant.c",
     "src/engine_rankings.c",
     "src/engine_screen_strat.h",
@@ -18756,6 +18788,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine_armory.c",
     "src/engine_merchant.c",
     "src/engine_rankings.c",
     "src/engine_screen_strat.h",
@@ -19441,6 +19474,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_armory.c",
     "src/engine_workforce_hud.h"
    ]
   },

@@ -197,6 +197,7 @@ static int         g_force_labor_task     = -1;  /* --force-labor TASK */
 static int         g_force_trade_good      = -1;  /* --force-trade GOOD (1..14) */
 static int         g_force_treasury        = 0;   /* --force-treasury (screen 0x09) */
 static int         g_force_rankings        = 0;   /* --force-rankings (screen 0x20) */
+static int         g_force_armory          = 0;   /* --force-armory (screen 0x0a) */
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 static int         g_strat_load_live;  /* --strat-load-live: drive the live
                                         * load pump from the title menu */
@@ -740,6 +741,23 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
         wsprintfA(path, "%s\\port_rankings.bmp", g_capture_dir);
         gfx_capture_backbuffer(path);
         log_line("rankings: forced render (live save) → %s", path);
+    }
+
+    /* Forced Armory-view render on the LIVE-loaded save (--force-armory with
+     * --strat-load-live + --capture-to): the owned-weapon racks + heraldry
+     * interior + muster tally come from the real strategic block, which the
+     * bringup dumps don't carry.  Full-screen scene — loads its own armoury
+     * backdrop/palette + arm_it_r<c>.pl8 interior. */
+    if (g_engine_state == 3 && g_force_armory && g_capture_dir) {
+        gfx_load_system_sheet_select(1);
+        engine_dev_force_armory_render();
+        gfx_tick_present(1);
+        char path[MAX_PATH];
+        wsprintfA(path, "%s\\port_armory.bmp", g_capture_dir);
+        gfx_capture_backbuffer(path);
+        wsprintfA(path, "%s\\port_armory.raw", g_capture_dir);
+        gfx_capture_backbuffer_raw(path, 0);
+        log_line("armory: forced render (live save) → %s", path);
     }
 
     if (g_audio_active) {
@@ -2039,6 +2057,17 @@ static void bringup_strat_map(const char *dir)
         log_line("strat-map: forced rankings render");
     }
 
+    /* Forced Armory-view render (verification seat, --force-armory) — the
+     * full-screen county-interior army-muster scene (screen 0x0a).  Loads its
+     * own armoury backdrop/palette + heraldry interior; the owned-weapon racks
+     * + muster tally are only meaningful on a live-loaded save (see the
+     * --strat-load-live block). */
+    if (g_force_armory) {
+        gfx_load_system_sheet_select(1);
+        engine_dev_force_armory_render();
+        log_line("strat-map: forced armory render");
+    }
+
     /* Present + capture a BMP (surface palette → may be off-color; the
      * authoritative diff uses the raw dump + the captured retail .pal). */
     gfx_tick_present(1);
@@ -3321,6 +3350,11 @@ static void parse_cmdline(LPSTR lpCmd)
              * (screen 0x20) full-screen, reading the per-player standings from
              * the loaded save.  The category is s_slot_0055ce7c.  No argument. */
             g_force_rankings = 1;
+        } else if (!strcmp(a, "--force-armory")) {
+            /* Verification seat: render the Armory view (screen 0x0a) full-
+             * screen, reading the owned-weapon racks + heraldry interior +
+             * muster tally from the loaded save.  No argument. */
+            g_force_armory = 1;
         } else if (!strcmp(a, "--save-sandbox") && i + 1 < ntok) {
             g_save_sandbox = tokens[++i];
         } else if (!strncmp(a, "--save-sandbox=", 15)) {
