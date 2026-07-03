@@ -1,0 +1,83 @@
+# ARMORY FAMILY organic loop (screens 0x17 / 0x0a / 0x0d) — s32.
+# Menu→load prefix (title → single player → load → lastturn → confirm),
+# then on the loaded strategic map:
+#   1. ARMORY tab (county-action strip rec0, screen (478..511,430..459),
+#      FUN_0043ae30 param 1, owner-gated) → the army create/change overlay
+#      (screen 0x17) over the armoury backdrop.
+#   2. Conscription slider: track click at game (216,184) → pct 20 (the
+#      track is an LMB-held drag target; y 184 lands in the track band in
+#      BOTH create (0xb0..0xe0) and change (0x90..0xc0) modes), then one
+#      left-arrow press (150,184) → pct 19.
+#   3. RMB → the ARMORY VIEW (screen 0x0a) with the muster pool re-seeded
+#      from the pct-19 conscripts (FUN_004aa90a).
+#   4. Tally box 3 (237..310, 396..480) = weapon 4 (owned in lastturn.sav;
+#      weapons 1/2 have zero stock — a first run proved the stock gate
+#      holds identically on both engines) → the ASSIGN overlay (0x0d).
+#   5. Two +1 gauntlet presses (272..304, 48..80) — move 2 men to weapon 4.
+#   6. Tally box 5 (387..461) = weapon 5: weapon switch → triggers the
+#      troop MARCH for weapon 4 (it gained men) + re-renders 0x0d for
+#      weapon 5.
+#   7. RMB → back to the 0x0a view (the march keeps playing there).
+#   8. CREATE label (542..634, 396..424) → FUN_00435b4d commit: spawns the
+#      army via engine_combat_spawn_unit (or posts the reject scroll —
+#      auto_dismiss clears it) and closes to the strategic map.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "map_before"}
+{"t": 24, "m": 512, "w": 0, "l": 29098478}
+{"t": 28, "m": 513, "w": 1, "l": 29098478}
+{"t": 32, "m": 514, "w": 0, "l": 29098478}
+{"capture": 60, "label": "armory17_open"}
+{"t": 70, "m": 512, "w": 0, "l": 12058840}
+{"t": 74, "m": 513, "w": 1, "l": 12058840}
+{"t": 78, "m": 512, "w": 1, "l": 12058840}
+{"t": 82, "m": 514, "w": 0, "l": 12058840}
+{"capture": 110, "label": "armory17_pct20"}
+{"t": 120, "m": 512, "w": 0, "l": 12058774}
+{"t": 124, "m": 513, "w": 1, "l": 12058774}
+{"t": 128, "m": 514, "w": 0, "l": 12058774}
+{"capture": 156, "label": "armory17_pct19"}
+{"t": 166, "m": 512, "w": 0, "l": 13107400}
+{"t": 170, "m": 516, "w": 0, "l": 13107400}
+{"t": 174, "m": 517, "w": 0, "l": 13107400}
+{"capture": 204, "label": "armory0a_mustered"}
+{"t": 214, "m": 512, "w": 0, "l": 28180750}
+{"t": 218, "m": 513, "w": 1, "l": 28180750}
+{"t": 222, "m": 514, "w": 0, "l": 28180750}
+{"capture": 252, "label": "armory0d_w4"}
+{"t": 262, "m": 512, "w": 0, "l": 3932440}
+{"t": 266, "m": 513, "w": 1, "l": 3932440}
+{"t": 270, "m": 514, "w": 0, "l": 3932440}
+{"t": 282, "m": 513, "w": 1, "l": 3932440}
+{"t": 286, "m": 514, "w": 0, "l": 3932440}
+{"capture": 314, "label": "armory0d_plus2"}
+{"t": 324, "m": 512, "w": 0, "l": 28180900}
+{"t": 328, "m": 513, "w": 1, "l": 28180900}
+{"t": 332, "m": 514, "w": 0, "l": 28180900}
+{"capture": 344, "label": "armory0d_w5_march_early"}
+{"capture": 400, "label": "armory0d_march_mid"}
+{"t": 410, "m": 512, "w": 0, "l": 13107400}
+{"t": 414, "m": 516, "w": 0, "l": 13107400}
+{"t": 418, "m": 517, "w": 0, "l": 13107400}
+{"capture": 448, "label": "armory0a_march"}
+{"t": 470, "m": 512, "w": 0, "l": 26542640}
+{"t": 474, "m": 513, "w": 1, "l": 26542640}
+{"t": 478, "m": 514, "w": 0, "l": 26542640}
+{"capture": 520, "label": "map_after_create"}

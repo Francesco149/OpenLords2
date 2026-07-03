@@ -96,16 +96,17 @@ exists in src/ today (session 22).
 | 0x0a | FUN_00417ea7 | 0x45 | **Armory VIEW** — army-muster scene (backdrop + heraldry interior + owned-weapon racks + muster tally + animated torches) | PORTED (s31, byte-exact + animated torch flames FUN_00419243; quirk #220 — opened via 0x17 RMB-out, NOT the strip directly) |
 | 0x0b | FUN_00416cf3 | — | **Noble faces** (diplomacy partner select, faces.pl8) | unported |
 | 0x0c | FUN_00416308 | 0x44 | **Trade grid** (merchant.pl8/icontrad.pl8; buy/sell goods) | PORTED (s28, byte-exact + buy/sell interaction: arrows/confirm/commit, quirk #217) |
+| 0x0d | FUN_004184c6/FUN_00418e2d (over 0x0a) | 0x45 | **Weapon assign overlay** (+1/−1/none/all gauntlets, demo figure, troop march on switch) | PORTED (s32, organic; NO demand arm in retail — direct render from the zone click, quirk #221) |
 | 0x0f | FUN_00412b33 | 0x4a | **Labor allocation** (workforce commit via screen0f_commit) | PORTED (s25) |
 | 0x10 | (map) | — | army-move/merge handoff | PORTED |
 | 0x11 | FUN_004192b1 | 0x11 | **Split army** ("Army Division.") | unported |
 | 0x12/0x13 | FUN_00422d22/FUN_00422ff1 | — | battle screens | unported |
-| 0x14 | FUN_004110b1 | 0x49 | **Population report** | unported |
-| 0x15 | FUN_0041152f | 0x56 | **Tax panel** | unported |
-| 0x16 | FUN_004116fb | 0x55 | **Happiness report** | unported |
-| 0x17 | FUN_00418653 (over 0x0a) | 0x45 | **Army create/change overlay** | unported |
+| 0x14 | FUN_004110b1 | 0x49 | **Population report** | PORTED (s22, engine_county_panels) |
+| 0x15 | FUN_0041152f | 0x56 | **Tax panel** | PORTED (s22, engine_county_panels) |
+| 0x16 | FUN_004116fb | 0x55 | **Happiness report** | PORTED (s22, engine_county_panels) |
+| 0x17 | FUN_00418653 (over 0x0a) | 0x45 | **Army create/change overlay** (conscription slider + confirm seal + merc toggle) | PORTED (s32, BYTE-EXACT organic — 3 olv3 frames idxdiff 0 incl. two slider clicks; quirk #221) |
 | 0x18 | FUN_0041ad5d | 0x21 | **Send supplies** | unported |
-| 0x19 | FUN_00411b72 | 0x57 | **Rations panel** (own arrow handler FUN_0043a379) | unported |
+| 0x19 | FUN_00411b72 | 0x57 | **Rations panel** (own arrow handler FUN_0043a379) | PORTED (s22, engine_county_panels) |
 | 0x1a | FUN_0041789b | 0x48 | **Diplomacy actions** (gift/compliment/insult/alliance) | unported |
 | 0x1b | FUN_00419789 | — | **Castle screen** (cas_back/caspics/cas_bits.pl8) | unported |
 | 0x1c | FUN_0041e1dd | 0x24 | victory/defeat | unported |

@@ -7609,3 +7609,63 @@ it back.
 > `engine_armory_muster_init`), `src/engine.c` (screen-0x0a demand + per-frame
 > arms, `engine_endturn_hit_test` for the strip), Ghidra `FUN_00417ea7` /
 > `FUN_00419243` / `FUN_004aa90a` / `FUN_0043ae30` / `FUN_004ba26e` case '\n'.
+
+## 221 — armory 0x0d has NO demand-redraw case: it renders DIRECTLY from the click; the troop march fires on weapon SWITCH, not on assign; and the whole family's residual diff is anim-PHASE, not pixels
+
+Port traps from making the armory family (0x17 create/change + 0x0d assign +
+the troop march) organic (s32):
+
+**(a) Screen 0x0d is invisible to the demand-redraw seam.**  `FUN_0040f1a0`
+has NO `'\r'` case — the assign overlay is painted DIRECTLY by the zone click
+(`FUN_004358b0` tail-calls `FUN_004184c6`) and the 0x0d→0x0a close re-renders
+the view directly (`FUN_004180f6`, a reduced `FUN_00417ea7` with no muster
+re-seed / no reloads / no strip re-capture — byte-equivalent to the full
+render, which the port reuses).  Everything else on 0x0d is carried by the
+per-frame arm (`FUN_004ba26e` '\r' = sweep-restore + torches + tally
+`FUN_004181eb` + `FUN_00418e2d` readouts/demo-figure + sweep + the 4 gauntlets
+over `DAT_004dd8c8` at origin (0x60,4)).  A port that routes 0x0d through
+demand-redraw paints nothing (the generic stub) — render from the click, like
+retail.
+
+**(b) The troop-march trigger lives in the NEXT zone click, not in assign or
+close.**  `FUN_004aabd8(county, prev_weapon)` runs at the top of
+`FUN_004358b0` — i.e. when you click ANOTHER muster figure — and fires only
+when the previous weapon's count rose past its `+0xc` snapshot (taken when
+that weapon was selected).  Assigning men and RMB-ing straight out never
+marches; switch weapons and the marcher walks in (frames 0..7), salutes at
+the weapon's rack x (`0x4de6f0` table; frames 8..0xc via `DAT_005681f8`/3+8),
+then walks OUT (+0xd frames) until x ≥ 0x280.  The restore strips it walks
+over are captured by the 0x0a OPEN render (`FUN_004b3f0a` ×4: y 0xd8, 0x9e
+rows, segments x 0/0xa0/0x140/0x1e0 × 0x3c/0x3c/0x3c/0x28 dwords — buffer
+offsets are DWORD offsets, 0x2508 apart).  Movement gates on the 20 ms phase
+tick; the walk/salute cycle on the 80 ms tick.
+
+**(c) The tally/zone clicks are stock-gated and SILENTLY consumed.**
+`FUN_004358b0` returns after the `pool[zone*0x10+8] > 0` check — clicking a
+zero-stock weapon's figure/readout does nothing (but the router still ate the
+click).  lastturn.sav's Lancashire holds stock only in weapons 3/4/5 (swords/
+pikes/bows) — a trace clicking tally boxes 1/2 exercises only the gate (it
+holds identically on both engines).  Keying split worth knowing:
+`FUN_004aa90a` (muster seed) + `FUN_004aabd8` (march) key the pool row by the
+county OWNER byte (+5); `FUN_004358b0` / the assign gauntlets /
+`FUN_00418e2d` key by the LOCAL player (`DAT_0057c8cc`) — identical
+organically because the tab entry is owner-gated.
+
+**(d) After the port, the family's ONLY residual frame diff is animation
+PHASE.**  The armory_family olv3 (tab → 0x17 → slider ×2 → RMB → 0x0a →
+assign w4 +2 → switch w5 (march) → RMB → Create → map): the three 0x17
+frames are idxdiff **0**; every other frame's diff sits exactly inside the
+torch flames (`DAT_005aea54`), the 0x0d demo figure (`DAT_005aea48`), the
+marcher's x (phase-tick count), and the map flag-wave/cow frames.  Root
+cause: the shared phase counters are pure functions of engine-tick count
+since boot, and the two engines spend a DIFFERENT number of ticks inside the
+load stretch — the capture anchor cancels wall-time, not tick-phase.  Same
+cosmetic family as quirk #216; state parity is unaffected (the Create commit
+lands pop 435→353 / happiness 72→63 on BOTH engines, army flag in the same
+cells).
+
+> 📍 `src/engine_armory.c/.h`, `src/engine.c` (armory router arms /
+> `armory_zone_action` / `armory_commit` / per-frame 0x17/0x0d arms),
+> `src/engine_ingame_input.c` (0x0a/0x17/0x0d close arms),
+> `tools/traces/armory_family.jsonl`, Ghidra `FUN_004358b0` / `FUN_004aabd8` /
+> `FUN_004184c6` / `FUN_00418fc5` / `FUN_004190db` / `FUN_00435b4d`.
