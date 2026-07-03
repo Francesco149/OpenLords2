@@ -339,6 +339,25 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                     st->demand_redraw = 2;
                     consumed = 1;
                 }
+            } else if (st->screen == 0x20) {
+                /* ───────── RANKINGS / GREATEST NOBLES (DAT_004eac50 == 0x20) ─────
+                 * 42ff10.c:202-221.  Reached from the Court seal; the seal's
+                 * real exit is the MAP.  A generic click (seal/RMB) or a
+                 * turn-busy tick closes to screen 0 (demand=1, retail's value).
+                 * The category-tab cycle (FUN_004ba9c8's 0x20 arm over
+                 * DAT_004dc890 → FUN_0043524e) is deferred — a nice-to-have that
+                 * re-renders with a new category; the close is what the Court→
+                 * Rankings→map round-trip needs. */
+                if (!turn_idle) {
+                    st->screen = 0;
+                    st->demand_redraw = 1;
+                    consumed = 1;
+                } else if (call_consume(hooks->generic_click, in, st) != 0 ||
+                           in->rmb_released != 0) {
+                    st->screen = 0;
+                    st->demand_redraw = 1;
+                    consumed = 1;
+                }
             }
             /* (other screen cases deferred — see header) */
 

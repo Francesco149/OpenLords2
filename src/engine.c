@@ -28,6 +28,7 @@
 #include "engine_merchant.h"       /* merchant county-interior scene (FUN_00415fb7) */
 #include "engine_trade.h"          /* merchant trade grid (screen 0x0c, FUN_00416308) */
 #include "engine_treasury.h"       /* Court/Treasury report (screen 0x09, FUN_00416925) */
+#include "engine_rankings.h"       /* Rankings/Greatest-Nobles (screen 0x20, FUN_0041593b) */
 #include "engine_army_move_confirm.h" /* screen-0x10 hover classifier + click resolver */
 #include "engine_confirm_dialog.h" /* generic Yes/No modal (screen 0x1e) */
 #include "engine_button.h"         /* button-strip renderer (FUN_0040cfd2) */
@@ -1133,6 +1134,19 @@ static void trade_button_action(uint32_t action, int param0, int param1)
     }
 }
 
+/* The Court/Treasury continue-seal action (FUN_004ba9c8's screen-9 arm).  The
+ * single router widget's action code is FUN_004351c4 = advance to Rankings; the
+ * arm below runs the transition when the press-latch fires. */
+static int g_treasury_seal_to_rankings;   /* set by the seal action */
+
+static void treasury_button_action(uint32_t action, int param0, int param1)
+{
+    (void)param0; (void)param1;
+    if (action == 0x4351c4) {
+        g_treasury_seal_to_rankings = 1;
+    }
+}
+
 static int ti_ui_router(const engine_ingame_input_in_t *din,
                         engine_ingame_state_t *dst)
 {
@@ -1187,6 +1201,47 @@ static int ti_ui_router(const engine_ingame_input_in_t *din,
         /* Arrow hits only re-figure the net/total — retail's arrow actions
          * request NO redraw; the per-frame refresh (screen-0x0c arm) repaints
          * the content + press-flash next tick. */
+        return hit ? 1 : 0;
+    }
+
+    if (dst->screen == 9) {
+        /* FUN_004ba9c8's screen-9 arm (4ba9c8.c:153): the Court/Treasury
+         * continue seal — the single router widget (engine_treasury_buttons,
+         * retail DAT_004dd928, count DAT_00568468), dispatched over the same
+         * table the per-frame refresh paints.  A seal hit runs FUN_004351c4:
+         * advance to Rankings 0x20 (the seal's real exit), recomputing the
+         * standings first. */
+        engine_menu_click_in_t bclick;
+        memset(&bclick, 0, sizeof bclick);
+        bclick.cursor_x           = g_input_game_x;
+        bclick.cursor_y           = g_input_game_y;
+        bclick.lmb_newly_pressed  = din->lmb_pressed;
+        bclick.lmb_newly_released = din->lmb_released;
+        bclick.lmb_held           = din->lmb_held;
+        g_treasury_seal_to_rankings = 0;
+        int hit = engine_menu_button_dispatch(0, 0,
+                                              engine_treasury_buttons(),
+                                              engine_treasury_widget_count(),
+                                              &bclick, treasury_button_action);
+        if (g_treasury_seal_to_rankings) {
+            /* The type-5 seal fires from pass 1 (the press-flash latch reaches
+             * 0, ~0x14 frames after the click) — where the dispatch RETURNS 0
+             * (pass 2 sees no new press that frame).  So drive the transition
+             * off the action flag, NOT `hit`.
+             * FUN_004351c4: DAT_004eac50 = 0x20; DAT_0057d340 = 1.  The
+             * single-player branch runs FUN_00435211 = engine_ranking_recompute
+             * (FUN_0049aa0e) then the per-player aggregate (FUN_0049d1e0) for
+             * slots 1..5 — the source metrics the Rankings render reduces to
+             * bars.  FUN_004b3994 (the S035 page-turn WAV cue) is deferred
+             * (audio); the MP FUN_0043eda0 broadcast is deferred (SP drop-in). */
+            engine_ranking_recompute(&g_turn_event_queue);
+            for (int p = 1; p < 6; p++) {
+                engine_ranking_recompute_player_aggregate((unsigned)p);
+            }
+            dst->screen = 0x20;
+            dst->demand_redraw = 1;
+            return 1;
+        }
         return hit ? 1 : 0;
     }
 
@@ -1482,6 +1537,38 @@ static void engine_tick_treasury_render(int full)
     } else {
         engine_treasury_refresh(&ctx);  /* FUN_004ba26e case 9 per-frame (button) */
     }
+}
+
+/* Build the Rankings ctx (screen 0x20) from the save-schema externs + gfx
+ * loaders and render the "Greatest Nobles" standings.  Unlike the Court, this
+ * is a FULL-SCREEN scene: engine_rankings_render loads its own grtnoble
+ * backdrop/palette + flags sheet (no retained frame).  There is no per-frame
+ * refresh (FUN_004ba26e has no case 0x20) — a category-tab click just re-runs
+ * this render. */
+static void engine_tick_rankings_render(void)
+{
+    const uint8_t *mfont  = gfx_load_menu_font();
+    size_t loc_size = 0;
+    const uint8_t *locblob = config_localization_data(&loc_size);
+    if (!mfont || !locblob) {
+        return;
+    }
+    localization_state_t loc;
+    loc.blob = (unsigned char *)locblob;
+    loc.walker_offset = 0;
+
+    engine_rankings_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.strategic_block = g_player_strategic_352;   /* DAT_0057bf00 */
+    ctx.realm_names     = g_player_aux_44 + 4;       /* DAT_00553d54 (stride 0x2c) */
+    ctx.category        = (int)s_slot_0055ce7c;      /* DAT_0055ce7c (0..6) */
+    ctx.turn            = (int)s_slot_00553edc;      /* DAT_00553edc (year) */
+    ctx.system_sheet    = gfx_system_sheet_current();
+    ctx.menu_font       = mfont;
+    ctx.glyph_table     = gfx_glyph_render_map();
+    ctx.loc             = &loc;
+
+    engine_rankings_render(&ctx);       /* FUN_0041593b full scene */
 }
 
 /* ─── Tooltip tick (FUN_00476e95, tick line 112) ───────────────────────
@@ -2011,6 +2098,16 @@ static void engine_tick_title_render_step(void)
                  * continue-seal button (the per-frame refresh above carries
                  * the button on every subsequent tick). */
                 engine_tick_treasury_render(1);
+                g_canvas_repainted_this_tick = 1;
+            } else if (g_sim_current_screen == 0x20) {
+                /* Rankings / Greatest Nobles (screen 0x20, FUN_0041593b): a
+                 * full-screen scene reached from the Court seal.  It loads its
+                 * own grtnoble.pl8 backdrop (self-locking) + grtnoble.256
+                 * palette + flags.pl8 sheet and self-locks for the draws, so —
+                 * like the merchant arm — call the render directly.  The
+                 * screen-0 arm restores base01.256 on close (grtnoble swaps the
+                 * palette, same as merchant). */
+                engine_tick_rankings_render();
                 g_canvas_repainted_this_tick = 1;
             } else if (g_sim_current_screen != 0x10 &&
                       g_sim_current_screen != ENGINE_CONFIRM_DIALOG_SCREEN) {
@@ -3144,6 +3241,18 @@ void engine_dev_force_trade_render(int good)
 void engine_dev_force_treasury_render(void)
 {
     engine_tick_treasury_render(1);         /* Court panel over the strat frame (FUN_00416925) */
+}
+
+/* Verification seat (--force-rankings): open the Rankings / Greatest Nobles
+ * standings (screen 0x20) as reaching it from the Court seal would.  Unlike
+ * the Court, this is a FULL-SCREEN scene — engine_tick_rankings_render loads
+ * its own grtnoble.pl8 backdrop + grtnoble.256 palette + flags.pl8 banner
+ * sheet, so NO seeding is needed here.  The category (s_slot_0055ce7c) selects
+ * which ranking is shown; the per-player figures come from the live-loaded
+ * strategic block. */
+void engine_dev_force_rankings_render(void)
+{
+    engine_tick_rankings_render();          /* full scene (FUN_0041593b) */
 }
 
 /* ─── Help-hint pump + report opener ────────────────────────────────

@@ -196,6 +196,7 @@ static int         g_force_workforce_key = -1;  /* --force-workforce KEY */
 static int         g_force_labor_task     = -1;  /* --force-labor TASK */
 static int         g_force_trade_good      = -1;  /* --force-trade GOOD (1..14) */
 static int         g_force_treasury        = 0;   /* --force-treasury (screen 0x09) */
+static int         g_force_rankings        = 0;   /* --force-rankings (screen 0x20) */
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 static int         g_strat_load_live;  /* --strat-load-live: drive the live
                                         * load pump from the title menu */
@@ -725,6 +726,20 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
         wsprintfA(path, "%s\\port_treasury.bmp", g_capture_dir);
         gfx_capture_backbuffer(path);
         log_line("treasury: forced render (live save) → %s", path);
+    }
+
+    /* Forced Rankings render on the LIVE-loaded save (--force-rankings with
+     * --strat-load-live + --capture-to): the per-player standings come from the
+     * real strategic block, which the bringup dumps don't carry.  Full-screen
+     * scene — it loads its own grtnoble backdrop/palette + flags sheet. */
+    if (g_engine_state == 3 && g_force_rankings && g_capture_dir) {
+        gfx_load_system_sheet_select(1);
+        engine_dev_force_rankings_render();
+        gfx_tick_present(1);
+        char path[MAX_PATH];
+        wsprintfA(path, "%s\\port_rankings.bmp", g_capture_dir);
+        gfx_capture_backbuffer(path);
+        log_line("rankings: forced render (live save) → %s", path);
     }
 
     if (g_audio_active) {
@@ -2014,6 +2029,16 @@ static void bringup_strat_map(const char *dir)
         log_line("strat-map: forced treasury render");
     }
 
+    /* Forced Rankings render (verification seat, --force-rankings) — the full-
+     * screen "Greatest Nobles" scoreboard.  Loads its own grtnoble backdrop/
+     * palette + flags sheet; the per-player standings are only meaningful on a
+     * live-loaded save (see the --strat-load-live block). */
+    if (g_force_rankings) {
+        gfx_load_system_sheet_select(1);
+        engine_dev_force_rankings_render();
+        log_line("strat-map: forced rankings render");
+    }
+
     /* Present + capture a BMP (surface palette → may be off-color; the
      * authoritative diff uses the raw dump + the captured retail .pal). */
     gfx_tick_present(1);
@@ -3291,6 +3316,11 @@ static void parse_cmdline(LPSTR lpCmd)
              * the merchant scene, reading the real gold/resource/weapon
              * figures + realm name from the loaded save.  No argument. */
             g_force_treasury = 1;
+        } else if (!strcmp(a, "--force-rankings")) {
+            /* Verification seat: render the Rankings/Greatest-Nobles scoreboard
+             * (screen 0x20) full-screen, reading the per-player standings from
+             * the loaded save.  The category is s_slot_0055ce7c.  No argument. */
+            g_force_rankings = 1;
         } else if (!strcmp(a, "--save-sandbox") && i + 1 < ntok) {
             g_save_sandbox = tokens[++i];
         } else if (!strncmp(a, "--save-sandbox=", 15)) {

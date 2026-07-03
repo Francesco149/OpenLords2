@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 820,
-  "ported": 75,
-  "unported": 1552,
+  "tested": 821,
+  "ported": 80,
+  "unported": 1546,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 895,
-  "pct_touched": 36.6,
-  "pct_tested": 33.5,
+  "touched": 901,
+  "pct_touched": 36.8,
+  "pct_tested": 33.6,
   "bytes_total": 838629,
-  "bytes_touched": 390007,
-  "pct_bytes_touched": 46.5
+  "bytes_touched": 391832,
+  "pct_bytes_touched": 46.7
  },
  "orphan_refs": [
   "0x004148",
@@ -593,6 +593,7 @@
     "src/engine_hud_menubar.c",
     "src/engine_hud_menubar.h",
     "src/engine_labor.c",
+    "src/engine_rankings.c",
     "src/gfx_wrap.c",
     "src/gfx_wrap.h"
    ]
@@ -737,6 +738,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_rankings.c",
+    "src/engine_rankings.h",
     "src/gfx_line.c",
     "src/gfx_line.h"
    ]
@@ -998,6 +1001,8 @@
     "src/engine_input.c",
     "src/engine_math.h",
     "src/engine_ranking.c",
+    "src/engine_rankings.c",
+    "src/engine_rankings.h",
     "src/engine_title_render.c"
    ]
   },
@@ -1375,6 +1380,7 @@
    "status": "ported",
    "src": [
     "src/engine_merchant.c",
+    "src/engine_rankings.c",
     "src/engine_trade.c",
     "src/gfx.c",
     "src/gfx.h"
@@ -1600,6 +1606,7 @@
    "src": [
     "src/engine_county_panels.c",
     "src/engine_labor.c",
+    "src/engine_rankings.h",
     "src/engine_trade.c",
     "src/gfx_dispatch.h",
     "src/gfx_sprite_render.c",
@@ -1961,6 +1968,7 @@
    "src": [
     "src/engine_labor.c",
     "src/engine_merchant.c",
+    "src/engine_rankings.c",
     "src/engine_terrain_info.c",
     "src/engine_trade.c",
     "src/engine_treasury.c",
@@ -2862,24 +2870,34 @@
    "name": "FUN_0041593b",
    "size": 673,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_rankings.c",
+    "src/engine_rankings.h"
+   ]
   },
   {
    "va": "0x415bdc",
    "name": "FUN_00415bdc",
    "size": 614,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_rankings.c",
+    "src/engine_rankings.h"
+   ]
   },
   {
    "va": "0x415e42",
    "name": "FUN_00415e42",
    "size": 348,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_rankings.c",
+    "src/engine_rankings.h"
+   ]
   },
   {
    "va": "0x415fb7",
@@ -5901,7 +5919,9 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_ingame_input.c",
+    "src/engine_rankings.h",
     "src/engine_treasury.c",
     "src/engine_treasury.h"
    ]
@@ -5911,16 +5931,20 @@
    "name": "FUN_00435211",
    "size": 61,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c"
+   ]
   },
   {
    "va": "0x43524e",
    "name": "FUN_0043524e",
    "size": 45,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.c"
+   ]
   },
   {
    "va": "0x43527b",
@@ -11288,6 +11312,7 @@
     "src/engine_dirty_rect.h",
     "src/engine_labor.c",
     "src/engine_merchant.c",
+    "src/engine_rankings.c",
     "src/engine_territory.c",
     "src/engine_territory.h",
     "src/engine_title_render.h",
@@ -16512,6 +16537,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_combat.c",
     "src/engine_ranking.c",
     "src/engine_ranking.h"
@@ -18424,6 +18450,7 @@
     "src/engine_county_panels.c",
     "src/engine_labor.c",
     "src/engine_merchant.c",
+    "src/engine_rankings.c",
     "src/engine_trade.c",
     "src/io_path.c",
     "src/io_path.h"
@@ -18520,6 +18547,7 @@
     "src/engine_labor.c",
     "src/engine_merchant.c",
     "src/engine_pl8.h",
+    "src/engine_rankings.c",
     "src/engine_trade.c",
     "src/gfx.c",
     "src/gfx.h",
@@ -18649,6 +18677,7 @@
    "src": [
     "src/engine.c",
     "src/engine_merchant.c",
+    "src/engine_rankings.c",
     "src/engine_screen_strat.h",
     "src/gfx.c",
     "src/gfx.h"
@@ -18728,6 +18757,7 @@
    "status": "ported",
    "src": [
     "src/engine_merchant.c",
+    "src/engine_rankings.c",
     "src/engine_screen_strat.h",
     "src/gfx.c"
    ]
@@ -19312,8 +19342,10 @@
    "name": "FUN_004b3994",
    "size": 84,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c"
+   ]
   },
   {
    "va": "0x4b39e8",
@@ -20133,6 +20165,7 @@
     "src/engine_button.h",
     "src/engine_confirm_dialog.h",
     "src/engine_county_panels.h",
+    "src/engine_rankings.h",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
     "src/engine_trade.c",
