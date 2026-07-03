@@ -27,6 +27,7 @@
 #include "engine_workforce_hud.h"  /* workforce icon-grid overlay (FUN_00412143) */
 #include "engine_merchant.h"       /* merchant county-interior scene (FUN_00415fb7) */
 #include "engine_trade.h"          /* merchant trade grid (screen 0x0c, FUN_00416308) */
+#include "engine_treasury.h"       /* Court/Treasury report (screen 0x09, FUN_00416925) */
 #include "engine_army_move_confirm.h" /* screen-0x10 hover classifier + click resolver */
 #include "engine_confirm_dialog.h" /* generic Yes/No modal (screen 0x1e) */
 #include "engine_button.h"         /* button-strip renderer (FUN_0040cfd2) */
@@ -1443,6 +1444,46 @@ static void engine_tick_trade_render(int full)
     }
 }
 
+/* Build the Court/Treasury ctx (screen 0x09) from the save-schema externs +
+ * gfx loaders and render it.  Like the trade grid this draws over the
+ * retained merchant frame — full=1 paints the panel + seal button (the open
+ * render, FUN_00416925), full=0 repaints just the seal button per frame
+ * (FUN_004ba26e case 9).  NO backdrop/palette load. */
+static void engine_tick_treasury_render(int full)
+{
+    const uint8_t *chrome = gfx_load_chrome_sheet();
+    const uint8_t *tfont  = gfx_load_title_font();
+    const uint8_t *mfont  = gfx_load_menu_font();
+    size_t loc_size = 0;
+    const uint8_t *locblob = config_localization_data(&loc_size);
+    if (!chrome || !tfont || !mfont || !locblob) {
+        return;
+    }
+    localization_state_t loc;
+    loc.blob = (unsigned char *)locblob;
+    loc.walker_offset = 0;
+
+    engine_treasury_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.strategic_block = g_player_strategic_352;   /* DAT_0057bf00 */
+    ctx.realm_names     = g_player_aux_44 + 4;       /* DAT_00553d54 (stride 0x2c) */
+    ctx.local_player    = (int)s_slot_0057c8cc;
+    ctx.chrome          = chrome;
+    ctx.misc_sheet      = engine_pl8_misc_cty();     /* DAT_005530c8 */
+    ctx.system_sheet    = gfx_system_sheet_current();
+    ctx.title_font      = tfont;
+    ctx.menu_font       = mfont;
+    ctx.glyph_table     = gfx_glyph_render_map();
+    ctx.glyph_metrics   = gfx_glyph_measure_map();
+    ctx.loc             = &loc;
+
+    if (full) {
+        engine_treasury_render(&ctx);   /* FUN_00416925 open render (panel + button) */
+    } else {
+        engine_treasury_refresh(&ctx);  /* FUN_004ba26e case 9 per-frame (button) */
+    }
+}
+
 /* ─── Tooltip tick (FUN_00476e95, tick line 112) ───────────────────────
  * The state instance + the live-globals ctx builder.  The dynamic
  * list-row inputs (labor/production rows on the right panel) have no
@@ -1850,6 +1891,12 @@ static void engine_tick_title_render_step(void)
              * arrows drive and the press-flash animate WITHOUT re-running the
              * net-resetting compute (that stays on the open render below). */
             engine_tick_trade_render(0);
+        } else if (g_sim_current_screen == 9) {
+            /* Court/Treasury (screen 0x09): retail's per-frame refresh
+             * (FUN_004ba26e case 9) repaints the single continue-seal button
+             * over the retained panel every tick (press-flash), with NO panel
+             * redraw.  The panel itself is on the demand arm below. */
+            engine_tick_treasury_render(0);
         }
 
         if (g_demand_redraw != 0) {
@@ -1931,6 +1978,16 @@ static void engine_tick_title_render_step(void)
                  * which computes); the per-frame refresh below carries the
                  * arrow-driven net/total after that. */
                 engine_tick_trade_render(1);
+                g_canvas_repainted_this_tick = 1;
+            } else if (g_sim_current_screen == 9) {
+                /* Court/Treasury (screen 0x09, FUN_00416925): drawn OVER the
+                 * retained county-interior (merchant) frame with NO backdrop
+                 * reload — retail's FUN_0040f1a0 case 9 is a bare
+                 * FUN_00416925().  The render self-locks the canvas (like the
+                 * trade grid), so call it directly.  Paints the panel + the
+                 * continue-seal button (the per-frame refresh above carries
+                 * the button on every subsequent tick). */
+                engine_tick_treasury_render(1);
                 g_canvas_repainted_this_tick = 1;
             } else if (g_sim_current_screen != 0x10 &&
                       g_sim_current_screen != ENGINE_CONFIRM_DIALOG_SCREEN) {
@@ -3051,6 +3108,19 @@ void engine_dev_force_trade_render(int good)
     engine_trade_on_open();
     gfx_load_palette("merchant.256");
     engine_tick_trade_render(1);            /* full open render (computes) */
+}
+
+/* Verification seat (--force-treasury): open the Court/Treasury (screen 9)
+ * as reaching it from the strategic map would.  Retail opens it from the
+ * map's bottom-right county-action button strip (table 0x4dc680 rec1 →
+ * FUN_0043ae30 param 2), and its screen-9 render draws NO backdrop/palette —
+ * it overlays the retained strategic-map frame (base01.256), leaving the
+ * right HUD panel visible.  So paint the Court panel straight over the
+ * just-rendered strat frame (like the --force-labor seat), NO merchant
+ * backdrop / palette swap. */
+void engine_dev_force_treasury_render(void)
+{
+    engine_tick_treasury_render(1);         /* Court panel over the strat frame (FUN_00416925) */
 }
 
 /* ─── Help-hint pump + report opener ────────────────────────────────

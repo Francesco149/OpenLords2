@@ -1,0 +1,32 @@
+# TREASURY / COURT (screen 0x09) — probe to resolve the organic entry +
+# backdrop. Reuses merchant_click.jsonl's menu→load prefix (title → single
+# player → load → lastturn → confirm) to reach the loaded strategic map,
+# then clicks the county-action button strip (retail table 0x4dc680, rendered
+# at origin (0x1de,0x1ae)=(478,430) by FUN_0040e3ee; rec1 p0=2 = Court/Treasury
+# → FUN_0043ae30 param 2 → screen 9). If treasury opens over the MAP this
+# confirms base01.256; if nothing happens, the strip is a county-interior tab.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "map_before"}
+{"t": 24, "m": 512, "w": 0, "l": 28705286}
+{"t": 28, "m": 513, "w": 1, "l": 28705286}
+{"t": 32, "m": 514, "w": 0, "l": 28705286}
+{"capture": 60, "label": "after_click_open"}
+{"capture": 110, "label": "after_click_settled"}

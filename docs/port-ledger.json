@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 819,
-  "ported": 73,
-  "unported": 1555,
+  "ported": 76,
+  "unported": 1552,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 892,
-  "pct_touched": 36.5,
+  "touched": 895,
+  "pct_touched": 36.6,
   "pct_tested": 33.5,
   "bytes_total": 838629,
-  "bytes_touched": 388882,
-  "pct_bytes_touched": 46.4
+  "bytes_touched": 390007,
+  "pct_bytes_touched": 46.5
  },
  "orphan_refs": [
   "0x004148",
@@ -539,6 +539,7 @@
    "src": [
     "src/engine_county_panels.c",
     "src/engine_title_render.c",
+    "src/engine_treasury.c",
     "src/gfx_text.c",
     "src/gfx_text.h",
     "src/gfx_wrap.c",
@@ -775,6 +776,7 @@
     "src/engine_county_panels.c",
     "src/engine_terrain_info.c",
     "src/engine_trade.c",
+    "src/engine_treasury.c",
     "src/gfx_line.c",
     "src/gfx_line.h"
    ]
@@ -1441,6 +1443,7 @@
    "status": "tested",
    "src": [
     "src/engine_trade.c",
+    "src/engine_treasury.c",
     "src/gfx_panel.c",
     "src/gfx_panel.h"
    ]
@@ -1945,6 +1948,7 @@
     "src/engine_title_render.c",
     "src/engine_title_render.h",
     "src/engine_trade.c",
+    "src/engine_treasury.c",
     "src/gfx_sprite.h"
    ]
   },
@@ -1959,6 +1963,7 @@
     "src/engine_merchant.c",
     "src/engine_terrain_info.c",
     "src/engine_trade.c",
+    "src/engine_treasury.c",
     "src/engine_workforce_hud.c",
     "src/gfx_sprite_render.c",
     "src/gfx_sprite_render.h"
@@ -2249,7 +2254,8 @@
     "src/engine_screen_dispatch.c",
     "src/engine_screen_dispatch.h",
     "src/engine_screen_strat.h",
-    "src/engine_title_render.h"
+    "src/engine_title_render.h",
+    "src/engine_treasury.h"
    ]
   },
   {
@@ -2923,8 +2929,12 @@
    "name": "FUN_00416925",
    "size": 974,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_treasury.c",
+    "src/engine_treasury.h"
+   ]
   },
   {
    "va": "0x416cf3",
@@ -3178,7 +3188,8 @@
     "src/engine_hud_menubar.h",
     "src/engine_labor.c",
     "src/engine_labor.h",
-    "src/engine_trade.c"
+    "src/engine_trade.c",
+    "src/engine_treasury.c"
    ]
   },
   {
@@ -5888,8 +5899,11 @@
    "name": "FUN_004351c4",
    "size": 77,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_treasury.c",
+    "src/engine_treasury.h"
+   ]
   },
   {
    "va": "0x435211",
@@ -6148,8 +6162,10 @@
    "name": "FUN_00436141",
    "size": 74,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_treasury.c"
+   ]
   },
   {
    "va": "0x43618b",
@@ -6893,7 +6909,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/engine_treasury.h"
    ]
   },
   {
@@ -11274,6 +11291,7 @@
     "src/engine_territory.h",
     "src/engine_title_render.h",
     "src/engine_trade.c",
+    "src/engine_treasury.c",
     "src/gfx.c",
     "src/gfx.h",
     "src/main.c"
@@ -20118,6 +20136,8 @@
     "src/engine_title_render.h",
     "src/engine_trade.c",
     "src/engine_trade.h",
+    "src/engine_treasury.c",
+    "src/engine_treasury.h",
     "src/main.c"
    ]
   },

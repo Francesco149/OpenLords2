@@ -195,6 +195,7 @@ static int         g_force_popup_payload_a = 0;
 static int         g_force_workforce_key = -1;  /* --force-workforce KEY */
 static int         g_force_labor_task     = -1;  /* --force-labor TASK */
 static int         g_force_trade_good      = -1;  /* --force-trade GOOD (1..14) */
+static int         g_force_treasury        = 0;   /* --force-treasury (screen 0x09) */
 static const char *g_strat_load_dir;   /* --strat-load DIR (native data path) */
 static int         g_strat_load_live;  /* --strat-load-live: drive the live
                                         * load pump from the title menu */
@@ -708,6 +709,22 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
         gfx_capture_backbuffer(path);
         log_line("trade: forced good=%d render (live save) → %s",
                  g_force_trade_good, path);
+    }
+
+    /* Forced Court/Treasury render on the LIVE-loaded save (--force-treasury
+     * with --strat-load-live + --capture-to): the gold/resource/weapon
+     * figures + the realm name come from real save state (the strategic
+     * record + the aux name table), which the bringup dumps don't carry.
+     * The seat seeds the merchant scene backdrop underneath (screen 9 loads
+     * none itself). */
+    if (g_engine_state == 3 && g_force_treasury && g_capture_dir) {
+        gfx_load_system_sheet_select(1);
+        engine_dev_force_treasury_render();
+        gfx_tick_present(1);
+        char path[MAX_PATH];
+        wsprintfA(path, "%s\\port_treasury.bmp", g_capture_dir);
+        gfx_capture_backbuffer(path);
+        log_line("treasury: forced render (live save) → %s", path);
     }
 
     if (g_audio_active) {
@@ -1987,6 +2004,16 @@ static void bringup_strat_map(const char *dir)
         log_line("strat-map: forced trade render good=%d", g_force_trade_good);
     }
 
+    /* Forced Court/Treasury render (verification seat, --force-treasury) — the
+     * seat seeds the merchant scene (merchant.pl8 + merchant.256) then overlays
+     * the Court panel.  The gold/resource figures + realm name are only
+     * meaningful on a live-loaded save (see the --strat-load-live block). */
+    if (g_force_treasury) {
+        gfx_load_system_sheet_select(1);
+        engine_dev_force_treasury_render();
+        log_line("strat-map: forced treasury render");
+    }
+
     /* Present + capture a BMP (surface palette → may be off-color; the
      * authoritative diff uses the raw dump + the captured retail .pal). */
     gfx_tick_present(1);
@@ -3259,6 +3286,11 @@ static void parse_cmdline(LPSTR lpCmd)
              * grid for GOOD over the --strat-map render, reading the real
              * merchant offer (slot 82) + resource stocks from the save. */
             g_force_trade_good = (int)strtol(tokens[++i], NULL, 0);
+        } else if (!strcmp(a, "--force-treasury")) {
+            /* Verification seat: paint the Court/Treasury (screen 0x09) over
+             * the merchant scene, reading the real gold/resource/weapon
+             * figures + realm name from the loaded save.  No argument. */
+            g_force_treasury = 1;
         } else if (!strcmp(a, "--save-sandbox") && i + 1 < ntok) {
             g_save_sandbox = tokens[++i];
         } else if (!strncmp(a, "--save-sandbox=", 15)) {
