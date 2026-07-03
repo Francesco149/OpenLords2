@@ -105,7 +105,7 @@ exists in src/ today (session 22).
 | 0x15 | FUN_0041152f | 0x56 | **Tax panel** | PORTED (s22, engine_county_panels) |
 | 0x16 | FUN_004116fb | 0x55 | **Happiness report** | PORTED (s22, engine_county_panels) |
 | 0x17 | FUN_00418653 (over 0x0a) | 0x45 | **Army create/change overlay** (conscription slider + confirm seal + merc toggle) | PORTED (s32, BYTE-EXACT organic — 3 olv3 frames idxdiff 0 incl. two slider clicks; quirk #221) |
-| 0x18 | FUN_0041ad5d | 0x21 | **Send supplies** | unported |
+| 0x18 | FUN_0041ad5d | 0x21 | **Send supplies** (county thumbnail + From/To + Grain/Cattle have/to-send + Dispatch seal → spawns a supply caravan) | PORTED (s33, byte-exact + organic: map county-action tab → screen 0x18, quirk #223; arrows/all-toggle/target-select/commit; commit reuses the AI's caravan dispatcher) |
 | 0x19 | FUN_00411b72 | 0x57 | **Rations panel** (own arrow handler FUN_0043a379) | PORTED (s22, engine_county_panels) |
 | 0x1a | FUN_0041789b | 0x48 | **Diplomacy actions** (gift/compliment/insult/alliance) | unported |
 | 0x1b | FUN_00419789 | — | **Castle screen** (cas_back/caspics/cas_bits.pl8) | unported |

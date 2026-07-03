@@ -168,6 +168,10 @@ typedef struct engine_ingame_hooks {
                                                   * RMB → 0x0a path (re-seed the
                                                   * muster pool with the
                                                   * conscripts) */
+    engine_ingame_consume_fn sendsupplies_target; /* FUN_0043b412 send-supplies
+                                                   * county-thumbnail click →
+                                                   * retarget the shipment
+                                                   * (screen 0x18) */
 } engine_ingame_hooks_t;
 
 /* Run one in-game input frame (retail FUN_0042ff10).  Reads `in`, mutates

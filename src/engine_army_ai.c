@@ -2733,9 +2733,17 @@ void engine_army_ai_run_movement(int realm, engine_event_queue_state_t *evq, int
 /* Per-player staged goods-shipment order (retail DAT_005678c0, stride 0x18 = six
  * i32; the trade/gift UI shares it, indexed by the local player).  reinforce_realms
  * stages a realm's surplus into fields [1]/[5] (provisions/stock) and the caravan
- * dispatcher reads [1]/[3]/[5].  File-static until the (unported) trade UI forces
- * promotion to a shared global — same pattern as the find-settle scratch. */
+ * dispatcher reads [1]/[3]/[5].  The Send Supplies UI (engine_sendsupplies) now
+ * stages fields [0]/[4] (have) and moves them into [1]/[5] (to-send) via the
+ * arrows, then ships through engine_army_ai_dispatch_caravan — so the accessor
+ * below hands out the same array the AI uses (byte-identical player/AI paths). */
 static int32_t g_caravan_order[8][6];   /* DAT_005678c0 */
+
+/* Accessor for the shared staging order — see engine_sendsupplies.c. */
+int32_t *engine_army_ai_caravan_order(int player)
+{
+    return g_caravan_order[player];
+}
 
 /* Port of FUN_0049f73f (273 B) — sum the head-count of every live army standing
  * in realm `realm` that is owned neither by `player` nor by `player`'s lord (the
@@ -2778,7 +2786,7 @@ static int engine_army_ai_realm_own_strength(int player, int realm)
  * the shipped provisions/stock from `realm`.  No-op if no settle cell is found.
  * Retail ignores the placer's return and always stamps the current-slot record
  * (engine_territory_current_slot), as engine_game_init_place_army_starts does. */
-static void engine_army_ai_dispatch_caravan(int player, int realm, uint8_t dest)
+void engine_army_ai_dispatch_caravan(int player, int realm, uint8_t dest)
 {
     int col, row;
     if (!engine_army_state_find_settle_spot(realm, &col, &row) &&        /* FUN_00428007 */

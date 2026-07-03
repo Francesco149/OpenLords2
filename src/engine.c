@@ -30,6 +30,7 @@
 #include "engine_treasury.h"       /* Court/Treasury report (screen 0x09, FUN_00416925) */
 #include "engine_rankings.h"       /* Rankings/Greatest-Nobles (screen 0x20, FUN_0041593b) */
 #include "engine_armory.h"         /* Armory / army-muster view (screen 0x0a, FUN_00417ea7) */
+#include "engine_sendsupplies.h"   /* Send Supplies shipment screen (screen 0x18, FUN_0041ad5d) */
 #include "engine_army_move_confirm.h" /* screen-0x10 hover classifier + click resolver */
 #include "engine_confirm_dialog.h" /* generic Yes/No modal (screen 0x1e) */
 #include "engine_button.h"         /* button-strip renderer (FUN_0040cfd2) */
@@ -961,6 +962,17 @@ static int ti_merchant_zone(const engine_ingame_input_in_t *in,
     return 1;
 }
 
+/* sendsupplies_target hook (FUN_0043b412): on an LMB press over the county
+ * thumbnail, map the cursor to the region grid and retarget the shipment.
+ * Consumes the click when a county is selected (the caller then re-renders). */
+static int ti_sendsupplies_target(const engine_ingame_input_in_t *in,
+                                  engine_ingame_state_t *st)
+{
+    (void)st;
+    return engine_sendsupplies_target_select(g_input_game_x, g_input_game_y,
+                                             in->lmb_pressed);
+}
+
 /* screen0f_commit hook (FUN_00427d19 + FUN_0041438c): the labor-close tail
  * — release the pending audio cue.  The border repaint (FUN_0041438c, the
  * bottom status-bar rows) is deferred: the demand-redraw the close requests
@@ -1131,6 +1143,27 @@ static void trade_button_action(uint32_t action, int param0, int param1)
                    g_trade_router_close = 1;
                    break;
     case 0x4352f2: g_trade_router_close = 1;  break;    /* cancel */
+    default: break;
+    }
+}
+
+/* The Send Supplies arrow/seal actions (FUN_004ba9c8's 0x18 arm's dispatch
+ * target).  The four arrows move a good between the county's stock and the
+ * shipment (they re-figure only; the per-frame refresh repaints).  Both seals
+ * carry action 0x43b04c (FUN_0043b04c) with param0 = 1 (Send) / 0 (Cancel); the
+ * arm below runs the commit/close when the press-latch fires (quirk #219). */
+static int g_sendsupplies_seal_fired;   /* set by either seal (type 5, pass 1) */
+static int g_sendsupplies_seal_mode;    /* param0: 1 = send, 0 = cancel */
+
+static void sendsupplies_button_action(uint32_t action, int param0, int param1)
+{
+    (void)param1;
+    switch (action) {
+    case 0x43b1ca: engine_sendsupplies_arrow_down(param0); break;  /* to-send → have */
+    case 0x43b27a: engine_sendsupplies_arrow_up(param0);   break;  /* have → to-send */
+    case 0x43b04c: g_sendsupplies_seal_fired = 1;                  /* Send / Cancel  */
+                   g_sendsupplies_seal_mode  = param0;
+                   break;
     default: break;
     }
 }
@@ -1507,6 +1540,60 @@ static int ti_ui_router(const engine_ingame_input_in_t *din,
         return 0;
     }
 
+    if (dst->screen == 0x18) {
+        /* FUN_004ba9c8's 0x18 arm: the Send Supplies goods table.  First the two
+         * "send-all / return-all" hotspots over the grain/cattle rows
+         * (FUN_0040e3ee over DAT_004dc7e8 at origin 0x40,0x30, action
+         * FUN_0043b32a param = good), then the six-button strip
+         * (FUN_0040da1e over DAT_004dd538: two seals + grain/cattle down/up). */
+        if (din->lmb_pressed != 0) {
+            int idx = engine_menu_hotspot_hover(0x40, 0x30,
+                                                engine_sendsupplies_all_hotspots(),
+                                                2, g_input_game_x, g_input_game_y);
+            if (idx != 0) {
+                engine_sendsupplies_toggle_all(
+                    engine_sendsupplies_all_hotspots()[idx - 1].param);
+                return 1;
+            }
+        }
+        engine_menu_click_in_t bclick;
+        memset(&bclick, 0, sizeof bclick);
+        bclick.cursor_x           = g_input_game_x;
+        bclick.cursor_y           = g_input_game_y;
+        bclick.lmb_newly_pressed  = din->lmb_pressed;
+        bclick.lmb_newly_released = din->lmb_released;
+        bclick.lmb_held           = din->lmb_held;
+        g_sendsupplies_seal_fired = 0;
+        int hit = engine_menu_button_dispatch(0, 0,
+                                              engine_sendsupplies_buttons(),
+                                              6, &bclick,
+                                              sendsupplies_button_action);
+        if (g_sendsupplies_seal_fired) {
+            /* The type-5 seal fires from FUN_0040da1e pass 1 (the press-flash
+             * latch reaches 0), where the dispatch returns 0 — so drive the
+             * transition off the action flag, not `hit` (quirk #219). */
+            if (g_sendsupplies_seal_mode == 0) {
+                dst->screen = 0;                 /* Cancel → map */
+                dst->demand_redraw = 2;
+            } else {
+                int src = (int)s_slot_0057c93c;
+                int tgt = engine_sendsupplies_target();
+                if (tgt != src) {
+                    engine_sendsupplies_commit((int)s_slot_0057c8cc, src,
+                                               (uint8_t)tgt);  /* FUN_0043b145 */
+                    dst->screen = 0;             /* Send → dispatch caravan, map */
+                    dst->demand_redraw = 2;
+                }
+                /* tgt == src: retail pops "can't send to self" (FUN_0040e6f2 →
+                 * FUN_0043b101); that scroll is deferred — the screen stays. */
+            }
+            return 1;
+        }
+        /* Arrow hits only re-figure the staged amounts — retail's arrow actions
+         * request NO redraw; the per-frame refresh repaints next tick. */
+        return hit ? 1 : 0;
+    }
+
     if (dst->screen != ENGINE_CONFIRM_DIALOG_SCREEN) {
         return 0;
     }
@@ -1799,6 +1886,50 @@ static void engine_tick_treasury_render(int full)
     } else {
         engine_treasury_refresh(&ctx);  /* FUN_004ba26e case 9 per-frame (button) */
     }
+}
+
+/* Build the Send Supplies ctx (screen 0x18) and render it.  Like the county
+ * detail panels this draws over a recomposited MAP (the caller runs the strat
+ * composite first).  full=1 paints the panel (FUN_0041ad5d) then the goods
+ * table + arrows — the demand frame must carry the per-frame widgets or the
+ * recomposite would erase them for a frame (same reason the county 0x15/0x19
+ * arms repaint their buttons on the demand frame).  full=0 repaints just the
+ * per-frame goods table + arrows (FUN_004ba26e case 0x18 = FUN_0041aea2 +
+ * FUN_0040cfd2 over DAT_004dd538). */
+static void engine_tick_sendsupplies_render(int full)
+{
+    const uint8_t *chrome = gfx_load_chrome_sheet();
+    const uint8_t *tfont  = gfx_load_title_font();
+    const uint8_t *mfont  = gfx_load_menu_font();
+    size_t loc_size = 0;
+    const uint8_t *locblob = config_localization_data(&loc_size);
+    if (!chrome || !tfont || !mfont || !locblob) {
+        return;
+    }
+    localization_state_t loc;
+    loc.blob = (unsigned char *)locblob;
+    loc.walker_offset = 0;
+
+    engine_sendsupplies_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.county       = (int)s_slot_0057c93c;
+    ctx.target       = engine_sendsupplies_target();   /* DAT_00553c78 */
+    ctx.map_id       = (int)s_slot_0053f034;
+    ctx.local_player = (int)s_slot_0057c8cc;
+    ctx.chrome       = chrome;
+    ctx.misc_sheet   = engine_pl8_misc_cty();           /* DAT_005530c8 */
+    ctx.title_font   = tfont;
+    ctx.menu_font    = mfont;
+    ctx.glyph_table  = gfx_glyph_render_map();
+    ctx.glyph_metrics= gfx_glyph_measure_map();
+    ctx.loc          = &loc;
+
+    if (full) {
+        engine_sendsupplies_render(&ctx);    /* FUN_0041ad5d — the panel */
+    }
+    engine_sendsupplies_refresh(&ctx);       /* FUN_0041aea2 — the goods table */
+    engine_button_render_list(0, 0, engine_sendsupplies_buttons(), 6,
+                              ctx.misc_sheet, gfx_system_sheet_current(), NULL);
 }
 
 /* Build the Rankings ctx (screen 0x20) from the save-schema externs + gfx
@@ -2191,6 +2322,14 @@ static const engine_menu_hotspot_t k_armory_tab[] = {
       .action = NULL, .button_type = 1, .param = 1 },
 };
 
+/* The Send Supplies tab (retail 0x4dc680 rec2: box [0x42,0]-[0x61,0x1d], type
+ * 1, FUN_0043ae30 param 3).  OWNER-GATED like the armory — a foreign county
+ * posts the same 0x70 scroll. */
+static const engine_menu_hotspot_t k_sendsupplies_tab[] = {
+    { .x0 = 0x42, .y0 = 0, .x1 = 0x61, .y1 = 0x1d,
+      .action = NULL, .button_type = 1, .param = 3 },
+};
+
 /* FUN_0043ae30's param-1 arm — the armory entry: compute the conscripts at
  * the persisted slider %, seed the muster pool, reset the merc toggle, and
  * open the create/change overlay (screen 0x17, demand 1 = full scene +
@@ -2210,6 +2349,24 @@ static void armory_tab_entry(engine_ingame_state_t *st)
     /* DAT_005679d0 = 0 (march off) — muster_init's tail already did. */
     st->screen        = 0x17;
     st->demand_redraw = 1;
+}
+
+/* FUN_0043ae30's param-3 arm — the Send Supplies entry: owner-gate the county,
+ * stage its grain/cattle into the caravan order (to-send zeroed, target =
+ * source), and open screen 0x18 (demand 2 = recomposite map + panel, matching
+ * retail's DAT_0057d340 = 2).  The s033_01.wav confirmation cue is audio —
+ * deferred like every other. */
+static void sendsupplies_tab_entry(engine_ingame_state_t *st)
+{
+    int county = (int)s_slot_0057c93c;
+    const uint8_t *county_rec = g_per_army_768 + (size_t)county * 0x300;
+    if (county_rec[0x05] != (uint8_t)s_slot_0057c8cc) {
+        armory_post_event(0x70);               /* "not your county" (shared 0x70 scroll) */
+        return;
+    }
+    engine_sendsupplies_seed((int)s_slot_0057c8cc, county);   /* FUN_0043ae30 param-3 body */
+    st->screen        = 0x18;
+    st->demand_redraw = 2;
 }
 
 /* hud_btn_a hook (FUN_00432967): hit-test the End-Turn button row at the
@@ -2239,6 +2396,13 @@ static int engine_endturn_hit_test(const engine_ingame_input_in_t *in,
         engine_menu_hotspot_hover(0x1de, 0x1ae, k_armory_tab, 1,
                                   click.cursor_x, click.cursor_y) != 0) {
         armory_tab_entry(st);                         /* FUN_0043ae30 param 1 */
+        return 1;                                     /* consumed */
+    }
+    /* Send Supplies tab (rec2 of the same strip) → the shipment screen. */
+    if (in->lmb_pressed != 0 &&
+        engine_menu_hotspot_hover(0x1de, 0x1ae, k_sendsupplies_tab, 1,
+                                  click.cursor_x, click.cursor_y) != 0) {
+        sendsupplies_tab_entry(st);                   /* FUN_0043ae30 param 3 */
         return 1;                                     /* consumed */
     }
     if (engine_menu_hotspot_click(0x1de, 0x1ae, k_endturn_buttons,
@@ -2352,6 +2516,7 @@ static void engine_tick_ingame_input_step(void)
         .army_move_click_resolve = ti_army_move_click_resolve, /* FUN_004a9252 */
         .armory_slider      = ti_armory_slider,          /* FUN_00435cef slider */
         .armory_remuster    = ti_armory_remuster,        /* FUN_004aa90a re-seed */
+        .sendsupplies_target= ti_sendsupplies_target,     /* FUN_0043b412 thumbnail retarget */
         /* every other sub-handler deferred (NULL → inert) */
     };
     engine_ingame_input_dispatch(&in, &st, &HOOKS);
@@ -2408,6 +2573,18 @@ static void engine_tick_title_render_step(void)
                 if (g_sim_current_screen == 0x19) {
                     engine_tick_county_slider_render();
                 }
+                gfx_unlock_canvas();
+            }
+        } else if (g_sim_current_screen == 0x18) {
+            /* Send Supplies (screen 0x18): retail's per-frame refresh
+             * (FUN_004ba26e case 0x18) repaints the grain/cattle goods table
+             * (FUN_0041aea2) + the arrow/seal strip (FUN_0040cfd2 over
+             * DAT_004dd538) over the retained panel every tick — carrying the
+             * arrow-driven have/to-send figures + the press-flash.  The panel
+             * itself is on the demand arm below (drawn over a recomposited map,
+             * like the county detail panels). */
+            if (gfx_lock_canvas()) {
+                engine_tick_sendsupplies_render(0);
                 gfx_unlock_canvas();
             }
         } else if (g_sim_current_screen == 0x0c) {
@@ -2500,6 +2677,18 @@ static void engine_tick_title_render_step(void)
                 if (gfx_lock_canvas()) {
                     engine_screen_strat_render(1);
                     engine_tick_county_panel_render(g_sim_current_screen);
+                    gfx_unlock_canvas();
+                    g_canvas_repainted_this_tick = 1;
+                }
+            } else if (g_sim_current_screen == 0x18) {
+                /* Send Supplies (screen 0x18, FUN_0041ad5d): like the county
+                 * detail panels it opens with a map recomposite (FUN_004050c0)
+                 * then paints the parchment panel over it — so run the full
+                 * strat frame, then the panel + goods table + arrows, in one
+                 * canvas lock. */
+                if (gfx_lock_canvas()) {
+                    engine_screen_strat_render(1);
+                    engine_tick_sendsupplies_render(1);
                     gfx_unlock_canvas();
                     g_canvas_repainted_this_tick = 1;
                 }

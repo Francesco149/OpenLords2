@@ -13,6 +13,8 @@
 #ifndef OPENLORDS2_ENGINE_ARMY_AI_H
 #define OPENLORDS2_ENGINE_ARMY_AI_H
 
+#include <stdint.h>
+
 #include "engine_event_queue.h"   /* engine_event_queue_state_t (proposal posting) */
 
 /* Port of FUN_0045158b.  Seed the realm's eight workforce target ratios
@@ -243,5 +245,16 @@ void engine_army_ai_mark_build_affordable(int player, int realm);
  * to the secondary-settlement filter), then runs the workforce allocator and the
  * per-realm economy orchestrator for each owned realm. */
 void engine_army_ai_run_build_orders(int player);
+
+/* Port of FUN_004292af — dispatch a type-4 goods caravan for `player` from
+ * `realm` to `dest`, loaded from g_caravan_order[player] (retail DAT_005678c0)
+ * and debiting the shipped provisions/stock.  The AI and the Send Supplies UI
+ * (engine_sendsupplies) both ship through this single executor. */
+void engine_army_ai_dispatch_caravan(int player, int realm, uint8_t dest);
+
+/* Accessor for the shared per-player caravan-order staging array (retail
+ * DAT_005678c0, stride 0x18 = six int32: [0/1] grain have/to-send, [2/3] sheep,
+ * [4/5] cattle have/to-send).  The Send Supplies UI stages/edits it in place. */
+int32_t *engine_army_ai_caravan_order(int player);
 
 #endif /* OPENLORDS2_ENGINE_ARMY_AI_H */

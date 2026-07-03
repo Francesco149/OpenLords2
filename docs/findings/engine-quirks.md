@@ -7716,3 +7716,68 @@ PostMessage latency — measured inert here, kept for seat fidelity.)
 > `tools/frida/openlords2-agent.js` (`pinPhaseCounters`),
 > `tools/trace_studio_v3/olv3_capture.py` (default-on), Ghidra tick lines
 > 99/192, `src/engine_phase.c` for the counter map.
+
+## 223 — Send Supplies (0x18) doesn't transfer goods; it SPAWNS A CARAVAN through the AI's own dispatcher — and its staging array IS the AI's, so the two paths are byte-identical
+
+Porting the Send Supplies screen (0x18, FUN_0041ad5d) surfaced four traps, all
+now handled in `engine_sendsupplies.c` + `engine.c`:
+
+1. **The "Dispatch shipment?" seal does NOT move stock between counties** —
+   FUN_0043b04c → FUN_0043b145 → **FUN_004292af spawns a type-4 supply CARAVAN**
+   (an army-movement entity, via FUN_0046e1b0) at a settle cell near the source,
+   loaded with the staged goods and bound for the target; the grain/cattle are
+   debited from the source county immediately and the caravan walks them over.
+   The AI already ships caravans through the *same* FUN_004292af
+   (`engine_army_ai_dispatch_caravan`), so the port's commit just calls it — no
+   new executor, exactly as the trade grid reuses `engine_army_ai_execute_trade`.
+   FUN_0043b145's tail is a 1×provision + 2×(workforce/grade/plan) recompute of
+   the SOURCE county only (all already-ported economy helpers).
+
+2. **The staging array is shared with the AI, and the good index skips sheep** —
+   the have/to-send figures live in retail's `DAT_005678c0` (stride 0x18 = six
+   int32 per player), which is the port's `g_caravan_order[player]` (was
+   file-static in engine_army_ai.c; now exposed via
+   `engine_army_ai_caravan_order`).  Layout: [0/1] grain have/to-send, [2/3]
+   sheep (NO UI arm — "Sheep" is loc sub 4 but never rendered), [4/5] cattle
+   have/to-send.  The good index (retail DAT_0059154c, the button's `param`) is
+   **0 or 2** (never 1); have = ord[good*2], to-send = ord[good*2+1] — which is
+   why the arrow handlers stride by `idx*8` bytes and land on grain/cattle only.
+   The **player** seed (FUN_0043ae30 param 3) stages ord[0]/ord[4] (have) with
+   ord[1]/ord[5]=0; the **AI** seed stages ord[1]/ord[5] (to-send) directly —
+   different slots, same dispatcher, because the AI ships everything at once
+   while the player stages via the up/down arrows.
+
+3. **Both bottom seals carry the SAME action (0x43b04c); the param picks
+   send-vs-cancel** — DAT_004dd538 rec0 (sprite 0x1d) = param 1 = Send, rec1
+   (sprite 0x1f) = param 0 = Cancel.  Both are type-5 press-latch seals, so —
+   like the Court→Rankings seal (quirk #219) — the transition must be driven off
+   the action flag, not the dispatch's `hit` return (the latch fires from pass 1
+   where the dispatch returns 0).  Send with target==source pops a "can't send to
+   self" scroll (FUN_0040e6f2) — deferred; the port stays on the screen.  The 2
+   "send-all / return-all" boxes over the goods rows are a SEPARATE FUN_0040e3ee
+   hotspot table (DAT_004dc7e8 at origin 0x40,0x30 → FUN_0043b32a).
+
+4. **The wrapped instruction line needs the glyph-WIDTH map, not the render
+   map** — FUN_0040328e ("Click on a county to supply.") measures wrap points
+   with a distinct metrics table.  Passing the render glyph map for both args
+   wrapped "to" onto the wrong line (port broke before "to", retail after) — a
+   746→212 px panel diff that vanished once `gfx_glyph_measure_map()` was passed
+   as `char_glyph_table_metrics`.  Single-line draws (gfx_wrap_localized_line /
+   FUN_00402d37) take no metrics arg, so only the multi-line wrap tripped.
+
+**Verified byte-exact** (tools/traces/sendsupplies.jsonl, olv3 both engines: load
+→ Send Supplies tab → cattle-up arrow → RMB back).  The panel — title, county
+thumbnail (terrain raw-blit + political plot), "Supply from: Lancashire" /
+"To: Lancashire", the Grain/Cattle have/to-send table, "Dispatch shipment?" — is
+pixel-identical; the cattle-up arrow moves 10 head byte-exact (have 101→91,
+to-send 0→10).  The only residual diff is OUTSIDE the panel: the right-edge map
+anim and the **top HUD player-shield strip**, which retail repaints/animates and
+the port renders static (same frozen-anim-counter family as the cow/castle/flags,
+quirk #216/#222 — NOT a Send-Supplies pixel).
+
+> 📍 `src/engine_sendsupplies.c/.h`, `src/engine.c` (strip tab entry, router 0x18
+> arm, demand + per-frame arms, ctx builder, `ti_sendsupplies_target`),
+> `src/engine_army_ai.c` (`engine_army_ai_caravan_order` +
+> `engine_army_ai_dispatch_caravan` exposed), `src/engine_ingame_input.c` (0x18
+> close case).  Retail FUN_0041ad5d / FUN_0041aea2 / FUN_0043ae30 / FUN_0043b04c
+> / FUN_0043b145 / FUN_004292af / FUN_0043b1ca-b32a / FUN_0043b412.

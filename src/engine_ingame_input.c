@@ -339,6 +339,27 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                     st->demand_redraw = 2;
                     consumed = 1;
                 }
+            } else if (st->screen == 0x18) {
+                /* ───────── SEND SUPPLIES (DAT_004eac50 == 0x18) ─────────
+                 * 42ff10.c:20262.  Opened from the map's county-action strip
+                 * (engine_endturn_hit_test), draws over the retained MAP.  The
+                 * arrows / seals / send-all toggles are router widgets
+                 * (FUN_004ba9c8's 0x18 arm, run earlier).  Here, turn-idle: an
+                 * LMB press on the county thumbnail retargets the shipment
+                 * (FUN_0043b412 → sendsupplies_target, demand 2); otherwise RMB
+                 * closes to the MAP.  Turn-busy closes unconditionally. */
+                if (!turn_idle) {
+                    st->screen = 0;
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                } else if (call_consume(hooks->sendsupplies_target, in, st) != 0) {
+                    st->demand_redraw = 2;      /* target changed → re-render */
+                    consumed = 1;
+                } else if (in->rmb_released != 0) {
+                    st->screen = 0;
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                }
             } else if (st->screen == 0x0a) {
                 /* ───────── ARMORY VIEW (DAT_004eac50 == 0x0a) ─────────
                  * The muster-figure zone clicks + the tally/Create/Change/

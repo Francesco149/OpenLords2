@@ -1,0 +1,49 @@
+# SEND SUPPLIES (screen 0x18) — playthrough-driven port, organic round-trip.
+# Reuses the menu→load prefix (title → single player → load → lastturn →
+# confirm), reaches the loaded strategic map, then:
+#   1. clicks the SEND SUPPLIES tab of the map's bottom-right county-action
+#      strip (retail table 0x4dc680 rec2, box [0x42,0]-[0x61,0x1d] at origin
+#      (0x1de,0x1ae) → screen (544..575, 430..459); FUN_0043ae30 param 3 →
+#      screen 0x18).  Owner-gated (own county).  The panel (engine_sendsupplies.c,
+#      FUN_0041ad5d) draws over a recomposited map: county thumbnail + From/To
+#      county names + Grain/Cattle have/to-send table + "Dispatch shipment?".
+#      Game click ~ (559, 444) → l = (444<<16)|559 = 29098543.
+#   2. clicks the CATTLE up-arrow (retail DAT_004dd538 rec5, game (296,300)+12
+#      ≈ (308,312) → l = (312<<16)|308 = 20447540) once: moves cattle from the
+#      county's herd into the to-send column (FUN_0043b27a; +10 at stock ≥ 11).
+#   3. RMB on the map (game (200,200)) closes screen 0x18 back to the map
+#      (screen 0; retail 42ff10.c:20262 close arm — the seal's dispatch commit
+#      needs a distinct target, unexercised here since From==To at open).
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "map_before"}
+{"t": 24, "m": 512, "w": 0, "l": 29098543}
+{"t": 28, "m": 513, "w": 1, "l": 29098543}
+{"t": 32, "m": 514, "w": 0, "l": 29098543}
+{"capture": 52, "label": "sendsupplies_open"}
+{"capture": 90, "label": "sendsupplies_settled"}
+{"t": 120, "m": 512, "w": 0, "l": 20447540}
+{"t": 124, "m": 513, "w": 1, "l": 20447540}
+{"t": 128, "m": 514, "w": 0, "l": 20447540}
+{"capture": 160, "label": "sendsupplies_cattle"}
+{"t": 200, "m": 512, "w": 0, "l": 13107400}
+{"t": 204, "m": 516, "w": 0, "l": 13107400}
+{"t": 208, "m": 517, "w": 0, "l": 13107400}
+{"capture": 240, "label": "map_resettled"}
