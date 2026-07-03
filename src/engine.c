@@ -1604,6 +1604,15 @@ static void engine_tick_armory_render(void)
     engine_armory_render(&ctx);         /* FUN_00417ea7 full scene */
 }
 
+/* The per-frame torch-flame refresh (FUN_004ba26e case '\n'): redraw the two
+ * animated wall torches over the retained armory backdrop at the shared phase
+ * frame (g_phase_counter_13 = retail DAT_005aea54).  NO ctx needed — the torch
+ * sheet is resident in engine_armory.c (loaded by the open render). */
+static void engine_tick_armory_refresh(void)
+{
+    engine_armory_refresh((int)g_phase_counter_13);
+}
+
 /* ─── Tooltip tick (FUN_00476e95, tick line 112) ───────────────────────
  * The state instance + the live-globals ctx builder.  The dynamic
  * list-row inputs (labor/production rows on the right panel) have no
@@ -2040,6 +2049,15 @@ static void engine_tick_title_render_step(void)
              * over the retained panel every tick (press-flash), with NO panel
              * redraw.  The panel itself is on the demand arm below. */
             engine_tick_treasury_render(0);
+        } else if (g_sim_current_screen == 0x0a) {
+            /* Armory view (screen 0x0a): retail's per-frame refresh
+             * (FUN_004ba26e case '\n' = FUN_00418fc5 + FUN_00419243 +
+             * FUN_004190db) redraws the two animated torch flames over the
+             * retained backdrop every tick.  On this view the sweep + its
+             * restore (FUN_004190db/FUN_00418fc5, gated DAT_005679d0>0) are
+             * inert — only FUN_00419243 draws.  The open render draws no
+             * flames; they arrive on this first refresh, exactly as retail. */
+            engine_tick_armory_refresh();
         }
 
         if (g_demand_redraw != 0) {
@@ -3314,6 +3332,10 @@ void engine_dev_force_armory_render(void)
     const uint8_t *owner_rec = g_player_strategic_352 + (size_t)player * 0x160;
     engine_armory_muster_init(player, 0, owner_rec);   /* FUN_004aa90a, pct=0 */
     engine_tick_armory_render();                       /* FUN_00417ea7 scene */
+    /* The open render draws no torch flames (retail's FUN_00417ea7 leaves them
+     * to the per-frame refresh).  Paint them once here so the single captured
+     * seat frame shows the lit torches at the current phase frame. */
+    engine_tick_armory_refresh();                      /* FUN_00419243 flames */
 }
 
 /* ─── Help-hint pump + report opener ────────────────────────────────

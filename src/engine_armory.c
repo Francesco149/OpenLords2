@@ -53,6 +53,12 @@ static void put_i32(uint8_t *rec, int off, int32_t v)
  * load falls back to base1a.pl8. */
 #define ARMORY_INTERIOR_LEN 0x4b320
 static uint8_t *g_armory_interior;
+
+/* ── The torch-flame sheet (armtorch.pl8) ───────────────────────────────
+ * retail loads it into the shared scratch DAT_005533c4 (150000 B); we keep a
+ * persistent buffer loaded by the render, drawn by the per-frame refresh. */
+#define ARMORY_TORCH_LEN 150000
+static uint8_t *g_armory_torch;
 static const char *const k_interior_file[6] = {
     "arm_it_r.pl8",   /* 0 */
     "arm_it_r.pl8",   /* 1 */
@@ -210,6 +216,15 @@ void engine_armory_render(const engine_armory_ctx_t *ctx)
                         ARMORY_INTERIOR_LEN, 0);
     }
 
+    /* armtorch.pl8 → the resident torch sheet for the per-frame flame refresh
+     * (retail loads it into DAT_005533c4 here in FUN_00417ea7). */
+    if (!g_armory_torch) {
+        g_armory_torch = malloc(ARMORY_TORCH_LEN);
+    }
+    if (g_armory_torch) {
+        io_read_file_at("armtorch.pl8", g_armory_torch, ARMORY_TORCH_LEN, 0);
+    }
+
     if (gfx_lock_canvas()) {
         armory_scene(ctx);
         gfx_unlock_canvas();
@@ -219,4 +234,23 @@ void engine_armory_render(const engine_armory_ctx_t *ctx)
      * after the draws, so it lands on the settled frame; the screen-0 close
      * arm restores base01.256, same as merchant / rankings). */
     gfx_load_palette("armoury.256");
+}
+
+/* ── FUN_00419243 — the two animated torch flames ───────────────────────
+ * Drawn over the retained backdrop every tick.  The armtorch frames are
+ * self-covering (opaque within their bounding box), so redrawing frame N over
+ * N-1 replaces it — no backdrop restore needed (the sweep/restore path
+ * FUN_00418fc5/FUN_004190db is gated DAT_005679d0>0, inert on this view).
+ * The per-readout tooltip-hotspot registers (FUN_004527a6) are UI-only. */
+void engine_armory_refresh(int torch_frame)
+{
+    if (!g_armory_torch) {
+        return;
+    }
+    if (gfx_lock_canvas()) {
+        gfx_sprite_render_from_blob(g_armory_torch, torch_frame, 0x9a, 0x76);
+        gfx_sprite_render_from_blob(g_armory_torch, torch_frame + 0xd,
+                                    0x19a, 0x76);
+        gfx_unlock_canvas();
+    }
 }

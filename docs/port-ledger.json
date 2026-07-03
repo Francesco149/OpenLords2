@@ -5,14 +5,14 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 821,
-  "ported": 88,
-  "unported": 1538,
+  "ported": 89,
+  "unported": 1537,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 909,
-  "pct_touched": 37.1,
+  "touched": 910,
+  "pct_touched": 37.2,
   "pct_tested": 33.6,
   "bytes_total": 838629,
-  "bytes_touched": 396420,
+  "bytes_touched": 396530,
   "pct_bytes_touched": 47.3
  },
  "orphan_refs": [
@@ -3088,6 +3088,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine.c",
+    "src/engine_armory.c",
     "src/engine_armory.h"
    ]
   },
@@ -3098,6 +3100,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine.c",
+    "src/engine_armory.c",
     "src/engine_armory.h"
    ]
   },
@@ -3106,8 +3110,12 @@
    "name": "FUN_00419243",
    "size": 110,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_armory.c",
+    "src/engine_armory.h"
+   ]
   },
   {
    "va": "0x4192b1",
@@ -20194,6 +20202,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_armory.h",
     "src/engine_army_move_confirm.h",
     "src/engine_button.c",
     "src/engine_button.h",

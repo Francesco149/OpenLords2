@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **909** (37.1%) — tested 821, ported 88
-- code bytes touched: **47.3%** (396,420 / 838,629 B)
-- unported: **1538**
+- touched: **910** (37.2%) — tested 821, ported 89
+- code bytes touched: **47.3%** (396,530 / 838,629 B)
+- unported: **1537**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (821) — ported + host unit suite
@@ -801,7 +801,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b4cb8 | FUN_004b4cb8 | 1659 | gfx_sprite.c, gfx_sprite.h, gfx_sprite_render.c (+1) |
 | 0x4b5333 | FUN_004b5333 | 2997 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+11) |
-| 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_army_move_confirm.h, engine_button.c (+11) |
+| 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_armory.h, engine_army_move_confirm.h (+12) |
 | 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_confirm_dialog.h, engine_county_panels.h (+10) |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c |
 | 0x4bb978 | FUN_004bb978 | 614 | engine.c, engine.h, engine_rate.c |
@@ -843,7 +843,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (88) — reimplemented, no host test yet
+## ported (89) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -866,8 +866,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4181eb | FUN_004181eb | 571 | engine_armory.c, engine_armory.h |
 | 0x418426 | FUN_00418426 | 160 | engine_armory.c, engine_armory.h |
 | 0x418653 | FUN_00418653 | 2010 | engine_armory.c, engine_armory.h |
-| 0x418fc5 | FUN_00418fc5 | 278 | engine_armory.h |
-| 0x4190db | FUN_004190db | 360 | engine_armory.h |
+| 0x418fc5 | FUN_00418fc5 | 278 | engine.c, engine_armory.c, engine_armory.h |
+| 0x4190db | FUN_004190db | 360 | engine.c, engine_armory.c, engine_armory.h |
+| 0x419243 | FUN_00419243 | 110 | engine.c, engine_armory.c, engine_armory.h |
 | 0x41dedb | FUN_0041dedb | 770 | engine_labor.c, engine_labor.h |
 | 0x425b10 | FUN_00425b10 | 549 | audio.c, audio.h |
 | 0x425ded | FUN_00425ded | 94 | audio.c, audio.h |

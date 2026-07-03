@@ -14,11 +14,19 @@
  * (FUN_00418fc5 restore + FUN_004190db, gated DAT_005679d0>0) is a 0x17-only
  * animation, so the 0x0a render skips the four backdrop-save strips.
  *
+ * The two wall torches ARE animated on this view: retail's per-frame refresh
+ * (FUN_004ba26e case '\n') redraws them every tick from armtorch.pl8 at the
+ * shared phase frame (DAT_005aea54, cycles 0..0xc).  The open render draws no
+ * flames — they arrive on the first refresh tick (matching retail).
+ *
  * Retail address map:
  *   FUN_00417ea7 @ 0x417ea7 (591 B) → engine_armory_render (the scene:
  *                                     palette + backdrop + interior + racks
  *                                     (FUN_00418426) + counts (FUN_004181eb)
- *                                     + Create/Change/Cancel labels + seal)
+ *                                     + Create/Change/Cancel labels + seal;
+ *                                     loads armtorch.pl8 for the refresh)
+ *   FUN_00419243 @ 0x419243 ( 41 B) → engine_armory_refresh (per-frame: the
+ *                                     two animated torch flames)
  *   FUN_004aa90a @ 0x4aa90a (374 B) → engine_armory_muster_init (the on-entry
  *                                     muster-pool setup, run before the render)
  *
@@ -75,5 +83,13 @@ void engine_armory_muster_init(int county_owner, int population,
  * the active palette last (so it lands on the settled frame — the screen-0
  * close arm restores base01.256, same as the merchant/rankings scenes). */
 void engine_armory_render(const engine_armory_ctx_t *ctx);
+
+/* ── FUN_00419243 — the per-frame torch-flame refresh (screen 0x0a) ──────
+ * Redraws the two wall torches from armtorch.pl8 (loaded by the render) over
+ * the retained backdrop: sprite `torch_frame` at (0x9a,0x76) and sprite
+ * `torch_frame + 0xd` at (0x19a,0x76).  `torch_frame` is the shared phase
+ * counter (retail DAT_005aea54 / g_phase_counter_13, 0..0xc).  A no-op until
+ * the render has loaded the torch sheet. */
+void engine_armory_refresh(int torch_frame);
 
 #endif /* OPENLORDS2_ENGINE_ARMORY_H */
