@@ -5992,6 +5992,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine.c",
     "src/engine_ingame_input.c"
    ]
   },

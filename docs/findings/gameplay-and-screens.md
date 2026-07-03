@@ -113,8 +113,8 @@ exists in src/ today (session 22).
 | 0x1d | FUN_00421f14 | 0x53 | **Siege preparations** | unported |
 | 0x1e | (confirm dialog) | — | move/claim/attack/garrison/besiege confirms | PORTED |
 | 0x1f | FUN_0041e7e1 | — | (end-of-scenario family) | unported |
-| 0x20 | FUN_0041593b | 0x23 | **Rankings / Greatest Nobles** (a banner + score bar per player over grtnoble.pl8; "Most counties," … "Greatest noble,") | PORTED (s30, byte-exact + organic: Court seal → Rankings, FUN_004351c4; quirk #219) |
-| 0x22 | — | — | season-rollover scroll (lazy bank reload seam, s3) | unported |
+| 0x20 | FUN_0041593b | 0x23 | **Rankings / Greatest Nobles** (a banner + score bar per player over grtnoble.pl8; "Most counties," … "Greatest noble,") | PORTED (s30, byte-exact + organic: Court seal → Rankings, FUN_004351c4; quirk #219; s32: category-tab cycle DAT_004dc890/FUN_0043524e organic, cat-3/cat-5 clicks index-diff 0) |
+| 0x22 | FUN_0042d91b / FUN_0042e50d | — | **Smacker movie player** (season-change vignette on year rollover; any click → FUN_0042df30 skip, close reloads season banks FUN_0043ad25) | NOT A PORT TARGET (drop-in skips movies by design — the s31 memory's "season reports" label was a misread) |
 | 0x25 | FUN_0041543f | 0x3b | About box ("Release version 2.03") | unported |
 | 0x27 | (report scroll) | — | event/report scrolls | PORTED |
 | 0x28/0x29/0x2b | FUN_004233f7/FUN_00423241 | — | battle sub-screens | unported |

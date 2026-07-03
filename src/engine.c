@@ -1392,6 +1392,36 @@ static int ti_ui_router(const engine_ingame_input_in_t *din,
         return hit ? 1 : 0;
     }
 
+    if (dst->screen == 0x20) {
+        /* FUN_004ba9c8's screen-0x20 arm (case ' '): the Rankings category
+         * tab strip — FUN_0040e3ee(0,0,&DAT_004dc890,7): seven 38 px
+         * hotspot bands at y [0x1ac,0x1cf] over the baked-in category
+         * icons.  A hit runs FUN_0043524e: category (s_slot_0055ce7c) =
+         * param + demand 2 (the demand arm re-renders the scene with the
+         * new metric).  FUN_004b3994 (the S035_xx page WAV) is audio —
+         * deferred like every cue. */
+        static const engine_menu_hotspot_t k_rankings_tabs[7] = {
+            { 0x02e, 0x1ac, 0x053, 0x1cf, NULL, 1, 0 },
+            { 0x054, 0x1ac, 0x079, 0x1cf, NULL, 1, 1 },
+            { 0x07a, 0x1ac, 0x09f, 0x1cf, NULL, 1, 2 },
+            { 0x0a0, 0x1ac, 0x0c5, 0x1cf, NULL, 1, 3 },
+            { 0x0c6, 0x1ac, 0x0eb, 0x1cf, NULL, 1, 4 },
+            { 0x0ec, 0x1ac, 0x111, 0x1cf, NULL, 1, 5 },
+            { 0x112, 0x1ac, 0x138, 0x1cf, NULL, 1, 6 },
+        };
+        if (din->lmb_pressed != 0) {
+            int idx = engine_menu_hotspot_hover(0, 0, k_rankings_tabs, 7,
+                                                g_input_game_x,
+                                                g_input_game_y);
+            if (idx != 0) {
+                s_slot_0055ce7c = (uint32_t)k_rankings_tabs[idx - 1].param;
+                dst->demand_redraw = 2;
+                return 1;
+            }
+        }
+        return 0;
+    }
+
     if (dst->screen == 0x17) {
         /* FUN_004ba9c8's 0x17 arm: the create/change overlay strip —
          * FUN_0040da1e(0, army?0x10:0, &DAT_004dd340, DAT_00522f58).  The

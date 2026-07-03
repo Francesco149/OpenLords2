@@ -1,0 +1,58 @@
+# RANKINGS CATEGORY-TAB CYCLE (s32) — rankings.jsonl + two category clicks:
+# tab 3 (Most gold, band x 0xa0..0xc5 @ y 0x1ac..0x1cf → (176,440)) and
+# tab 5 (Most people, x 0xec..0x111 → (240,440)); FUN_0043524e sets
+# s_slot_0055ce7c + demand 2 → the scene re-renders with the new metric.
+# RANKINGS / GREATEST NOBLES (screen 0x20) — playthrough-driven port, organic
+# Court → seal → Rankings → map round-trip.  Reuses the treasury prefix (menu →
+# load lastturn → confirm → map → click the Court/Treasury county-action tab),
+# then:
+#   1. clicks the Court's continue SEAL (button at game (0x150,0x154), 32×32 →
+#      centre (352,356), l=(356<<16)|352=23331168).  Retail's seal action
+#      FUN_004351c4 recomputes the standings (FUN_00435211 = engine_ranking_
+#      recompute + per-player aggregate 1..5) and advances to Rankings 0x20 —
+#      the full-screen "Greatest Nobles" scoreboard (engine_rankings.c,
+#      FUN_0041593b): grtnoble.pl8 backdrop + one banner + score bar per player.
+#   2. RMB on the map (game (200,200), l=13107400) closes back to screen 0
+#      (42ff10.c:202-221 close arm, demand=1).
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "map_before"}
+{"t": 24, "m": 512, "w": 0, "l": 28705286}
+{"t": 28, "m": 513, "w": 1, "l": 28705286}
+{"t": 32, "m": 514, "w": 0, "l": 28705286}
+{"capture": 52, "label": "treasury_open"}
+{"capture": 90, "label": "treasury_settled"}
+{"t": 120, "m": 512, "w": 0, "l": 23331168}
+{"t": 124, "m": 513, "w": 1, "l": 23331168}
+{"t": 130, "m": 514, "w": 0, "l": 23331168}
+{"capture": 180, "label": "rankings_open"}
+{"capture": 215, "label": "rankings_settled"}
+{"t": 245, "m": 512, "w": 0, "l": 28836016}
+{"t": 249, "m": 513, "w": 1, "l": 28836016}
+{"t": 253, "m": 514, "w": 0, "l": 28836016}
+{"capture": 290, "label": "rankings_cat3_gold"}
+{"t": 320, "m": 512, "w": 0, "l": 28836080}
+{"t": 324, "m": 513, "w": 1, "l": 28836080}
+{"t": 328, "m": 514, "w": 0, "l": 28836080}
+{"capture": 365, "label": "rankings_cat5_people"}
+{"t": 395, "m": 512, "w": 0, "l": 13107400}
+{"t": 399, "m": 516, "w": 0, "l": 13107400}
+{"t": 403, "m": 517, "w": 0, "l": 13107400}
+{"capture": 450, "label": "map_resettled"}
