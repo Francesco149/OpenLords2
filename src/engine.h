@@ -259,6 +259,17 @@ void engine_event_queue_seed_from_save(void);
 void engine_rng_global_get(uint32_t *state_a, uint32_t *state_b);
 void engine_rng_global_set(uint32_t state_a, uint32_t state_b);
 
+/* Anim-phase pin (--phase-pin): zero the phase-cadence counters + re-base
+ * the 20 ms base-tick timestamp.  Called each pre-ingame tick (the anim
+ * sibling of the RNG pin) so both engines enter ingame with identical anim
+ * phase — see main_loop_body's pin block + the agent's pinPhaseCounters. */
+void engine_phase_pin_reset(void);
+
+/* --phase-pin armed flag (set once by main.c's CLI parse); the tick head
+ * consumes it each pre-ingame tick (post clock-advance, matching the
+ * retail agent's pin point). */
+extern int g_phase_pin_armed;
+
 /* ─── scenario-rate hint (port of FUN_0043de70) ────────────────────
  *
  * Computes the `scenario_hint` value that engine_compute_sim_sub_steps

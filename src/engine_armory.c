@@ -116,6 +116,7 @@ static int g_march_target;  /* DAT_00568228 */
 static int g_march_land;    /* DAT_005681f8 — salute frame counter        */
 static int g_march_sprite;  /* DAT_0052f008 */
 static int g_march_walk;    /* DAT_0057cb10 — walk-cycle 0..7             */
+static int g_march_skip_arm_tick;  /* port-order compensation, see trigger */
 
 int  engine_armory_overlay_mode(void) { return g_mode; }
 int  engine_armory_conscripts(void)   { return g_conscripts; }
@@ -875,6 +876,15 @@ void engine_armory_march_trigger(int prev_weapon,
     g_march_walk   = 0;
     /* _DAT_0057c8e4 = 0 — glint phase, write-only in this family. */
 
+    /* Port-order compensation (quirk #214 family): retail's per-frame
+     * refresh (FUN_004ba26e, tick line 99) runs BEFORE the input dispatch
+     * (FUN_0042ff10, line 192), so a march armed by this click first
+     * advances/draws on the NEXT tick's refresh.  The port's input step
+     * runs before its render seam, which would advance the march one
+     * refresh early — with the every-other-tick 20 ms move cadence that
+     * compounds to a permanent 8 px lead.  Skip the arm tick's step. */
+    g_march_skip_arm_tick = 1;
+
     if (!g_armory_troop) {
         g_armory_troop = malloc(ARMORY_TROOP_LEN);
     }
@@ -918,6 +928,12 @@ void engine_armory_march_restore(void)
 void engine_armory_march_step(int tick_20ms, int tick_80ms)
 {
     if (g_march_active <= 0) {
+        return;
+    }
+    if (g_march_skip_arm_tick) {
+        /* Retail never runs the step on the arm tick (its refresh already
+         * ran before the arming click) — no advance, no draw. */
+        g_march_skip_arm_tick = 0;
         return;
     }
     if (g_march_x >= 0x280) {

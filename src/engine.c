@@ -4013,6 +4013,26 @@ uint32_t engine_get_cumulative_fps(void)     { return g_fps_cumulative_fps; }
 uint32_t engine_get_cumulative_seconds(void) { return g_fps_cumulative_seconds; }
 uint32_t engine_get_frame_counter(void)      { return g_engine_frame_counter; }
 
+/* Anim-phase pin (--phase-pin, main_loop_body): zero every cadence counter
+ * and re-base the 20 ms base-tick timestamp to the current (virtual) clock.
+ * Called each pre-ingame tick so the counters start from 0, phase-aligned
+ * to the ingame flip, on BOTH engines (the retail agent's pinPhaseCounters
+ * mirrors this byte for byte). */
+int g_phase_pin_armed;   /* --phase-pin (main.c); consumed at the tick head */
+
+void engine_phase_pin_reset(void)
+{
+    g_phase_last_base_tick_ms = engine_now_ms();  /* _DAT_004e5b10 */
+    g_phase_base_tick_counter = 0;                /* DAT_005aeb2c */
+    g_phase_counter_2  = 0;                       /* DAT_0058feb4 */
+    g_phase_counter_4  = 0;                       /* DAT_0058feb0 */
+    g_phase_counter_8  = 0;                       /* DAT_0058feb8 */
+    g_phase_counter_13 = 0;                       /* DAT_005aea54 */
+    g_phase_counter_16 = 0;                       /* DAT_005aea44 */
+    g_phase_counter_24 = 0;                       /* DAT_005aea48 */
+    g_phase_counter_32 = 0;                       /* DAT_005aea4c */
+}
+
 static void engine_tick_phase_step(void)
 {
     engine_phase_in_t  in  = {0};
@@ -4265,6 +4285,16 @@ void engine_tick(void)
      * No-op (real time) unless engine_virtual_clock_enable() was called. */
     if (g_virtual_clock_enabled)
         g_virtual_clock_ms += g_virtual_clock_step;
+
+    /* Anim-phase pin (--phase-pin): hold the phase cadence at its canonical
+     * pre-ingame state each tick until state 3.  Runs AFTER the virtual
+     * clock advance, exactly like the retail agent's pinPhaseCounters
+     * (tick-entry hook, post-bump) — pinning with the PRE-advance clock
+     * value leaves the port's 20 ms accumulator one step ahead, which
+     * skews every 20 ms-granular animation by one tick (measured as a
+     * constant +4 px on the armory troop march). */
+    if (g_phase_pin_armed && g_engine_state != 3)
+        engine_phase_pin_reset();
 
     /* Open this frame's call-trace window (no-op unless --call-trace).
      * Uses the same per-tick counter the agent stamps on retail, so the

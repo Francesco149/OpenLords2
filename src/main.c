@@ -212,6 +212,9 @@ static int         g_playnow;          /* --playnow [IDX]: scenario config-apply
 static int         g_playnow_idx;      /* scenario row for --playnow (default 0) */
 static const char *g_input_segtrace;   /* --input-segtrace FILE: replay a TAS
                                         * input trace through the live tick */
+static int         g_phase_pin;        /* --phase-pin: pin the anim-phase
+                                          * cadence pre-ingame (see the
+                                          * main_loop_body pin block) */
 static int         g_rng_seed_pin;     /* --rng-seed: pin the double-LFSR to
                                         * the canonical InitInstance seeds each
                                         * PRE-INGAME tick, mirroring the retail
@@ -630,6 +633,14 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
      * barely advances — see engine.c's virtual-clock block). */
     if (g_turbo_clock)
         engine_virtual_clock_enable(g_turbo_step);
+
+    /* Anim-phase pin (--phase-pin): the anim sibling of the RNG pin — the
+     * tick head holds the phase cadence at its canonical state each
+     * pre-ingame tick (post clock-advance, matching the retail agent's
+     * pinPhaseCounters), so both engines enter state 3 with identical anim
+     * phase (torch flames, flag waves, demo figures, march cadence). */
+    if (g_phase_pin)
+        g_phase_pin_armed = 1;
 
     while (!g_shutdown && (g_max_frames == 0 || g_frame_counter < g_max_frames)) {
         main_loop_body();
@@ -2967,10 +2978,27 @@ static void main_loop_body(void)
         input_trace_step((int)g_frame_counter, edge, &g_seg_actions);
         if (g_seg_actions.set_auto_dismiss >= 0)
             engine_set_popup_auto_dismiss(g_seg_actions.set_auto_dismiss);
-        for (int i = 0; i < g_seg_actions.msg_count; i++)
-            PostMessageA(g_hwnd, g_seg_actions.msgs[i].msg,
-                         (WPARAM)g_seg_actions.msgs[i].wparam,
-                         (LPARAM)g_seg_actions.msgs[i].lparam);
+
+        /* Post the trace's WM_* ops one frame LATE (buffered) so they hit
+         * the input poll on the NEXT tick — the retail seat's latency: the
+         * agent PostMessages from the engine_tick entry hook, past that
+         * iteration's pump.  Same-frame posting makes the port process
+         * clicks one tick EARLIER than retail — invisible on settled
+         * captures but a constant skew on tick-precise animations (the
+         * armory troop march ran 4 px ahead).  Post the PREVIOUS frame's
+         * ops here (before this frame's pump, so the dispatch tick is
+         * deterministic), then buffer this frame's.  Captures/anchors/
+         * waits stay on their authored ticks (input_trace_step above). */
+        static input_trace_actions_t pending;
+        static int pending_valid;
+        if (pending_valid) {
+            for (int i = 0; i < pending.msg_count; i++)
+                PostMessageA(g_hwnd, pending.msgs[i].msg,
+                             (WPARAM)pending.msgs[i].wparam,
+                             (LPARAM)pending.msgs[i].lparam);
+        }
+        pending = g_seg_actions;
+        pending_valid = 1;
     }
 
     MSG msg;
@@ -3316,6 +3344,7 @@ static void parse_cmdline(LPSTR lpCmd)
             g_gfx_init = 1;                  /* needs DDraw */
         }
         else if (!strcmp(a, "--rng-seed"))   g_rng_seed_pin = 1;
+        else if (!strcmp(a, "--phase-pin"))  g_phase_pin = 1;
         else if (!strcmp(a, "--turbo"))      g_turbo_clock = 1;
         else if (!strcmp(a, "--turbo-step") && i + 1 < ntok) {
             if (!parse_uint(tokens[++i], &g_turbo_step) || g_turbo_step == 0) {

@@ -243,7 +243,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42e3ba | FUN_0042e3ba | 164 | main.c |
 | 0x42ec91 | FUN_0042ec91 | 1207 | gfx.c, gfx.h, gfx_paint.h |
 | 0x42f1df | FUN_0042f1df | 295 | gfx.c, main.c |
-| 0x42ff10 | FUN_0042ff10 | 8140 | engine.c, engine_army_move_confirm.h, engine_army_select.h (+7) |
+| 0x42ff10 | FUN_0042ff10 | 8140 | engine.c, engine_armory.c, engine_army_move_confirm.h (+8) |
 | 0x431f59 | FUN_00431f59 | 712 | engine_camera.h |
 | 0x432221 | FUN_00432221 | 477 | engine.c, engine_camera.h, engine_ingame_input.h |
 | 0x4323fe | FUN_004323fe | 64 | engine_ingame_input.h |

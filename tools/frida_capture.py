@@ -306,6 +306,11 @@ class CaptureConfig:
     # Forces the new-game map RNG so port↔retail comparisons generate the same
     # map (the two targets don't seed from the same wall-clock instant).
     rng_seed:          dict | None = None
+    # Anim-phase pin: hold the phase-cadence counters at 0 (+ re-base the
+    # 20 ms base-tick timestamp under --turbo) each pre-ingame tick, so both
+    # engines enter ingame with identical anim phase (torches/flags/demo
+    # figures/march cadence stay frame-exact at anchor+offset captures).
+    phase_pin:         bool = False
     exe_args:          list[str] = field(default_factory=list)
 
 
@@ -1085,6 +1090,7 @@ def _run_capture_impl(cfg: CaptureConfig, run_dir: Path) -> CaptureResult:
             "save_sandbox":              cfg.save_sandbox or "",
             "watch":                     cfg.watch or [],
             "rng_seed":                  cfg.rng_seed,
+            "phase_pin":                 bool(cfg.phase_pin),
             "heartbeat_timeout_ms":      HEARTBEAT_TIMEOUT_MS,
         }
         script.exports_sync.init(init_cfg)
@@ -1419,6 +1425,12 @@ def main(argv: list[str] | None = None) -> int:
                          "change → <run_dir>/watch.jsonl. TYPE in "
                          "u8/i8/u16/i16/u32/i32/f32. Repeatable. The state "
                          "oracle for authoring wait_until predicates.")
+    ap.add_argument("--phase-pin", action="store_true",
+                    help="pin the anim-phase cadence counters each pre-ingame "
+                         "tick (the anim sibling of --rng-seed) so shared anim "
+                         "frames (torch flames, flag waves, demo figures, "
+                         "marches) are frame-exact across targets at "
+                         "anchor+offset captures.")
     ap.add_argument("--rng-seed", nargs="?", const="canonical", default=None,
                     metavar="A[,B[,SINGLE]]",
                     help="pin the RNG seed each pre-ingame tick so the new-game "
@@ -1606,6 +1618,7 @@ def main(argv: list[str] | None = None) -> int:
         watch=watch_specs,
         state_dump_slots=state_dump_slots,
         rng_seed=rng_seed,
+        phase_pin=bool(args.phase_pin),
         exe_args=list(args.exe_arg),
     )
     print(f"[capture] run_dir = {run_dir}")

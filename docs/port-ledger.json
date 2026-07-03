@@ -4956,6 +4956,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_armory.c",
     "src/engine_army_move_confirm.h",
     "src/engine_army_select.h",
     "src/engine_camera.h",

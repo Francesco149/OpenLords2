@@ -143,6 +143,20 @@ const ADDR = {
     // Single-LFSR RNG state (FUN_00404b2c) — seeded 0x34518632 at InitInstance;
     // the new-game overworld randomisers (engine_territory_*) thread it.
     var_rng_state_single: 0x00591564, // DAT_00591564 — single-LFSR state
+
+    // Anim-phase cadence state (engine_phase.c mapping) — pinned pre-ingame
+    // by --phase-pin so both engines enter state 3 with identical counters
+    // and the shared anim frames (torches/flags/demo figures/marches) stay
+    // frame-exact at anchor+offset captures.
+    var_phase_last_base_ms:  0x004e5b10, // _DAT_004e5b10 — last 20ms base-tick timestamp
+    var_phase_base_counter:  0x005aeb2c, // DAT_005aeb2c — 20ms ticks 0..3 → 80ms
+    var_phase_counter_2:     0x0058feb4, // DAT_0058feb4 — 80ms ×2 → 160ms
+    var_phase_counter_4:     0x0058feb0, // DAT_0058feb0 — 80ms ×4 → 320ms
+    var_phase_counter_8:     0x0058feb8, // DAT_0058feb8 — 80ms ×8 → 640ms
+    var_phase_counter_13:    0x005aea54, // DAT_005aea54 — torch-flame frame 0..0xc
+    var_phase_counter_16:    0x005aea44, // DAT_005aea44 — 0..0xf
+    var_phase_counter_24:    0x005aea48, // DAT_005aea48 — demo-figure frame 0..0x17
+    var_phase_counter_32:    0x005aea4c, // DAT_005aea4c — 0..0x1f
     var_rng_15bit_a:     0x005aea58,  // DAT_005aea58 — state_a & 0x7fff
     var_rng_7bit_a:      0x0058fd7c,  // DAT_0058fd7c — state_a & 0x7f
     var_rng_3bit_a:      0x0058fd70,  // _DAT_0058fd70 — state_a & 0x7
@@ -2518,6 +2532,43 @@ function pinRngSeed() {
     } catch (e) { /* not mapped yet — retry next tick */ }
 }
 
+// Anim-phase pin (--phase-pin) — the anim-phase sibling of the RNG pin.
+// The shared phase counters (torch flames DAT_005aea54, demo figures
+// DAT_005aea48, flag waves, march cadence) are pure functions of the tick
+// count since boot, and port/retail spend a DIFFERENT number of ticks in the
+// boot/menu/load stretch — so at anchor+offset the two engines sample
+// different anim frames even when every pixel-producing byte matches.  Hold
+// all cadence counters at 0 AND re-base the 20 ms base-tick timestamp to the
+// current (virtual) clock every tick until the game goes ingame
+// (engine_state == 3); from the flip both engines advance the counters in
+// lockstep relative to the anchor.  Pre-ingame phase-gated cosmetics (caret
+// blink) freeze while pinned — symmetric on both engines, not captured.
+let g_phase_pin_enabled = false;
+
+function pinPhaseCounters() {
+    if (!g_phase_pin_enabled) return;
+    let state;
+    try { state = rva(ADDR.var_sim_game_state_phase).readS32(); }
+    catch (e) { return; }
+    if (state === 3) return;            // ingame — let the cadence run
+    try {
+        // Re-base the timestamp only under the virtual clock (--turbo, the
+        // only seat parity captures run on); without it the counters alone
+        // still pin, the cadence phase just isn't re-based.
+        if (g_clock_virtualised) {
+            rva(ADDR.var_phase_last_base_ms).writeU32(g_virtual_now_ms >>> 0);
+        }
+        rva(ADDR.var_phase_base_counter).writeU32(0);
+        rva(ADDR.var_phase_counter_2).writeU32(0);
+        rva(ADDR.var_phase_counter_4).writeU32(0);
+        rva(ADDR.var_phase_counter_8).writeU32(0);
+        rva(ADDR.var_phase_counter_13).writeU32(0);
+        rva(ADDR.var_phase_counter_16).writeU32(0);
+        rva(ADDR.var_phase_counter_24).writeU32(0);
+        rva(ADDR.var_phase_counter_32).writeU32(0);
+    } catch (e) { /* not mapped yet — retry next tick */ }
+}
+
 function fireAnchor(name, frame) {
     g_anchor_last[name] = frame >>> 0;
     if (g_anchor_enabled) {
@@ -3406,6 +3457,7 @@ function installEngineTickHook() {
             g_tick_count = (g_tick_count + 1) >>> 0;
             g_engine_in_tick = 1;
             pinRngSeed();
+            pinPhaseCounters();
             anchorTick(g_tick_count);
             segtraceTick(g_tick_count);
             autoDismissTick();   // reactive modal-scroll dismiss (mirror of port)
@@ -5683,6 +5735,9 @@ rpc.exports = {
             if (opts.rng_seed.b      !== undefined) g_rng_seed_b      = opts.rng_seed.b >>> 0;
             if (opts.rng_seed.single !== undefined) g_rng_seed_single = opts.rng_seed.single >>> 0;
         }
+
+        // Anim-phase pin (--phase-pin) — boolean; see pinPhaseCounters.
+        g_phase_pin_enabled = !!opts.phase_pin;
 
         g_skip_intro_enabled = !!opts.skip_intro;
         g_smack_in_open      = 0;

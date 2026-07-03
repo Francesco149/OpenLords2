@@ -306,7 +306,8 @@ def _read_state(side_dir: Path, label: str, retail: bool, tick: int) -> dict | N
 
 # ── drive (reuse the proven command shapes) ────────────────────────────────────
 def drive_port(compiled: Path, port_dir: Path, max_frames: int, timeout_ms: int,
-               rng_seed: bool, draws: bool = True, force_redraw: bool = False,
+               rng_seed: bool, phase_pin: bool = True, draws: bool = True,
+               force_redraw: bool = False,
                save_sandbox: str | None = None) -> int:
     port_dir.mkdir(parents=True, exist_ok=True)
     # The game APPENDS to captures.jsonl and reuses <label>.{raw,draws,bmp}; clear
@@ -325,6 +326,8 @@ def drive_port(compiled: Path, port_dir: Path, max_frames: int, timeout_ms: int,
         cmd.append("--capture-force-redraw")   # full map re-render on capture ticks
     if rng_seed:
         cmd.append("--rng-seed")
+    if phase_pin:
+        cmd.append("--phase-pin")
     if save_sandbox:
         cmd += ["--save-sandbox", save_sandbox]   # port self-translates /-paths
     env = dict(os.environ, OPENLORDS2_TIMEOUT_MS=str(timeout_ms))
@@ -335,7 +338,8 @@ def drive_port(compiled: Path, port_dir: Path, max_frames: int, timeout_ms: int,
 
 
 def drive_retail(compiled: Path, retail_dir: Path, remote: str, rng_seed: bool,
-                 slots: Path, draws: bool = True, force_redraw: bool = False,
+                 slots: Path, phase_pin: bool = True, draws: bool = True,
+                 force_redraw: bool = False,
                  save_sandbox: str | None = None) -> int:
     retail_dir.mkdir(parents=True, exist_ok=True)
     for pat in ("frame_*.raw", "frame_*.draws", "captures.jsonl", "anchors.jsonl"):
@@ -355,6 +359,8 @@ def drive_retail(compiled: Path, retail_dir: Path, remote: str, rng_seed: bool,
         cmd.append("--capture-force-redraw")   # full map re-render on capture ticks
     if rng_seed:
         cmd.append("--rng-seed")
+    if phase_pin:
+        cmd.append("--phase-pin")
     if save_sandbox:
         cmd += ["--save-sandbox", save_sandbox]   # Windows/UNC path for the agent
     with (retail_dir / "log.txt").open("w") as log:
@@ -384,6 +390,9 @@ def main() -> int:
     ap.add_argument("--session", help="session name (default: trace stem)")
     ap.add_argument("--only", choices=("port", "retail"), help="re-run one side (keep the other)")
     ap.add_argument("--remote", default=DEFAULT_REMOTE)
+    ap.add_argument("--no-phase-pin", action="store_true",
+                    help="disable the anim-phase cadence pin (on by default; "
+                         "the anim sibling of the RNG seed pin)")
     ap.add_argument("--no-rng-seed", action="store_true")
     ap.add_argument("--port-max-frames", type=int, default=4000)
     ap.add_argument("--port-timeout-ms", type=int, default=240_000)
@@ -410,6 +419,7 @@ def main() -> int:
     sess_dir.mkdir(parents=True, exist_ok=True)
     port_dir, retail_dir = sess_dir / "port", sess_dir / "retail"
     rng_seed = not args.no_rng_seed
+    phase_pin = not args.no_phase_pin
 
     # compile the trace (reuse the kept trace compiler)
     compiled = sess_dir / "trace.compiled.jsonl"
@@ -442,7 +452,8 @@ def main() -> int:
         _log("driving port…")
         try:
             rc = drive_port(compiled, port_dir, args.port_max_frames, args.port_timeout_ms,
-                            rng_seed, draws=args.draws, force_redraw=args.force_redraw,
+                            rng_seed, phase_pin=phase_pin, draws=args.draws,
+                            force_redraw=args.force_redraw,
                             save_sandbox=port_sandbox)
             _log(f"port rc={rc}")
         except subprocess.TimeoutExpired:
@@ -451,7 +462,8 @@ def main() -> int:
         _log("driving retail…")
         try:
             rc = drive_retail(compiled, retail_dir, args.remote, rng_seed, slots,
-                              draws=args.draws, force_redraw=args.force_redraw,
+                              phase_pin=phase_pin, draws=args.draws,
+                              force_redraw=args.force_redraw,
                               save_sandbox=retail_sandbox)
             _log(f"retail rc={rc}")
         except subprocess.TimeoutExpired:
