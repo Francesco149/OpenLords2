@@ -7781,3 +7781,78 @@ quirk #216/#222 — NOT a Send-Supplies pixel).
 > `engine_army_ai_dispatch_caravan` exposed), `src/engine_ingame_input.c` (0x18
 > close case).  Retail FUN_0041ad5d / FUN_0041aea2 / FUN_0043ae30 / FUN_0043b04c
 > / FUN_0043b145 / FUN_004292af / FUN_0043b1ca-b32a / FUN_0043b412.
+
+## 224 — Noble Faces (0x0b) is the 5th county-action tab (param 5, NOT owner-gated), draws over the retained map with NO recomposite, and is byte-exact only with BOTH the demand render AND the per-frame button strip
+
+Porting the Noble Faces / diplomacy partner-select screen (0x0b, FUN_00416cf3 +
+the per-noble cell FUN_004171ee) — the diplomacy roster reached from the map's
+county-action strip.  Five facts pinned it down, all handled in
+`engine_noble_faces.c` + `engine.c`:
+
+1. **It's rec4 of the SAME 0x4dc680 strip that opens Court/Armory/Send-Supplies**
+   — the strip is 6 records (5 action tabs + End-Turn), each 0x18 B:
+   {x0,y0,x1,y1 s16; action fn @0x08; type @0x0f; DAT_0059154c param @0x10}.  The
+   tabs dispatch through FUN_0043ae30(DAT_0059154c): param 1 → Armory 0x17, 2 →
+   Court 0x09, 3 → Send-Supplies 0x18, 4 → **Castle 0x1b** (still unported), 5 →
+   **Diplomacy 0x0b**.  Diplomacy's box is [0x82,0]-[0xa1,0x1d] at origin
+   (0x1de,0x1ae) → screen (608..639,430..459).  UNLIKE the armory/send-supplies
+   tabs (owner-gated, post a 0x70 scroll on a foreign county), FUN_0043611b is a
+   **bare screen set** — no gate; it just resets DAT_0057a0f8 and opens 0x0b.
+
+2. **Draws OVER the retained map, NO recomposite** — FUN_0040f1a0 case 0x0b is a
+   bare `FUN_00416cf3()`, and FUN_00416cf3 (unlike Send-Supplies' FUN_0041ad5d)
+   does NOT call FUN_004050c0.  So the demand arm must NOT run the strat composite
+   first (that would be the send-supplies pattern) — it locks the canvas and
+   paints the panel straight over the last map frame, exactly like the Court.
+   The entry still sets DAT_0057d340=2, but the "2" is just the request level;
+   the render is a retained-frame overlay either way.
+
+3. **Byte-exact needs BOTH tiers.**  The demand render (FUN_00416cf3) paints the
+   panel bevel + seal + the face grid + the partner name + the action-label TEXT
+   (grp 0x48, at x=0xe0).  A SEPARATE per-frame refresh (FUN_004ba26e case 0x0b)
+   draws the action-button SPRITE strip (FUN_0040cfd2 over DAT_004dd940 — 6 recs,
+   x=0x190, sprite 0x40, system sheet, type 5, count = the relationship-state
+   button count DAT_00553ee8).  The labels (x=0xe0) and the sprites (x=0x190) are
+   at different x — two halves of each row — so dropping the per-frame tier loses
+   the right-hand button sprites.  Mirror the send-supplies split: the demand
+   frame runs render THEN refresh; every later tick runs refresh only.
+
+4. **The face + status icons use the GLOBAL sprite blob (faces.pl8); only the
+   mood icon uses an explicit blob.**  FUN_00416cf3 loads faces.pl8 into the
+   shared DAT_004eabec (100000 B) and binds it as the global blob, then each cell
+   draws the personality portrait (FUN_0040a682, index personality*3-3, or the
+   generic 0xc for a non-AI slot) and the war/treaty/alliance status icons
+   (0xd/0xe/0xf) from that global blob; the mood icon alone comes from the
+   explicit misc_cty sheet (FUN_0040a21a, sprite mood+0x55).  The per-face mood
+   byte (+0x0a) is lazily normalized IN PLACE (0→1, clamp >5→5) — the render
+   mutates the strategic block, so its ctx pointer is non-const.
+
+5. **Relationship state DAT_00553f38 (save entry 142) + partner DAT_00553fbc
+   (143) are save slots; the default partner is picked by the already-ported
+   FUN_004a1e6c (player_first_active_nonlocal).**  The relation-state (0 no-lord /
+   1 partner-is-my-lord / 2 other-lord / 3 allied) selects which action set +
+   count is drawn; the per-noble relation METER (AI slots only) is a 61-segment
+   vertical bar filled top-down to the +0x84 relation value, one colour by
+   overall relation (red <-10, yellow <11, else green).
+
+**Verified byte-exact** (tools/traces/diplomacy.jsonl, olv3 both engines: load →
+Diplomacy tab → RMB back).  `diplomacy_open` + `diplomacy_settled` are BOTH
+index-diff 0 / RGB-diff 0 vs retail (the constant palette diff is only the
+non-rendered RGBA pad byte; R/G/B match exactly).  The port shows all four living
+opponents (Knight/Baron/Bishop/Countess) with faces, mood/relation meters, shield
++ status icons, the centered partner name "The Knight", and the state-0 action
+set (gift/compliment/insult/alliance) with the arrow sprites — pixel-identical to
+retail.  The action-button clicks (→ the 0x1a diplomacy-action screens,
+FUN_00436141…FUN_0043631e) are the widget-router's 0x0b arm — DEFERRED; they
+render but don't navigate (a button click at x=0x190 misses the seal test at
+x=0x1a8, so it neither acts nor closes).  Residual diff is only OUTSIDE the
+panel: `map_before` catches retail's Game-Objectives hint scroll still open
+(trace timing, quirk #222 tail), `map_resettled` is the load-flip cosmetic
+(quirk #216).
+
+> 📍 `src/engine_noble_faces.c/.h`, `src/engine.c` (diplomacy tab entry +
+> hit-test wire, demand + per-frame arms, ctx builder, `--force-diplomacy`
+> seat), `src/engine_ingame_input.c` (0x0b close case), `src/main.c` (seat
+> flag).  Retail FUN_00416cf3 / FUN_004171ee / FUN_0043611b / FUN_0043ae30
+> param 5 / FUN_004ba26e case 0x0b / FUN_0040cfd2 over DAT_004dd940 /
+> FUN_004a1e6c.

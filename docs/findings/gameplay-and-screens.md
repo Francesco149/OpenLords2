@@ -94,7 +94,7 @@ exists in src/ today (session 22).
 | 0x08 | FUN_00415fb7 | — | **Merchant screen** (merchant.pl8/mercgrid.pl8) | PORTED (s26, byte-exact) |
 | 0x09 | FUN_00416925 | 0x46 | **Treasury/Court** (Gold/Arms/Iron/Stone/Wood, "Court of") | PORTED (s29, byte-exact + organic: map county-action tab → Court over map, quirk #218; seal → Rankings 0x20 wired s30) |
 | 0x0a | FUN_00417ea7 | 0x45 | **Armory VIEW** — army-muster scene (backdrop + heraldry interior + owned-weapon racks + muster tally + animated torches) | PORTED (s31, byte-exact + animated torch flames FUN_00419243; quirk #220 — opened via 0x17 RMB-out, NOT the strip directly) |
-| 0x0b | FUN_00416cf3 | — | **Noble faces** (diplomacy partner select, faces.pl8) | unported |
+| 0x0b | FUN_00416cf3 | 0x48 | **Noble faces** (diplomacy partner select, faces.pl8) | PORTED (s34, byte-exact + organic: map county-action tab rec4/param 5 → screen 0x0b, quirk #224; face grid + relation meters + action labels + per-frame button strip; the 0x1a action screens the buttons open are DEFERRED) |
 | 0x0c | FUN_00416308 | 0x44 | **Trade grid** (merchant.pl8/icontrad.pl8; buy/sell goods) | PORTED (s28, byte-exact + buy/sell interaction: arrows/confirm/commit, quirk #217) |
 | 0x0d | FUN_004184c6/FUN_00418e2d (over 0x0a) | 0x45 | **Weapon assign overlay** (+1/−1/none/all gauntlets, demo figure, troop march on switch) | PORTED (s32, organic; NO demand arm in retail — direct render from the zone click, quirk #221) |
 | 0x0f | FUN_00412b33 | 0x4a | **Labor allocation** (workforce commit via screen0f_commit) | PORTED (s25) |
@@ -108,7 +108,7 @@ exists in src/ today (session 22).
 | 0x18 | FUN_0041ad5d | 0x21 | **Send supplies** (county thumbnail + From/To + Grain/Cattle have/to-send + Dispatch seal → spawns a supply caravan) | PORTED (s33, byte-exact + organic: map county-action tab → screen 0x18, quirk #223; arrows/all-toggle/target-select/commit; commit reuses the AI's caravan dispatcher) |
 | 0x19 | FUN_00411b72 | 0x57 | **Rations panel** (own arrow handler FUN_0043a379) | PORTED (s22, engine_county_panels) |
 | 0x1a | FUN_0041789b | 0x48 | **Diplomacy actions** (gift/compliment/insult/alliance) | unported |
-| 0x1b | FUN_00419789 | — | **Castle screen** (cas_back/caspics/cas_bits.pl8) | unported |
+| 0x1b | FUN_00419789 | — | **Castle screen** (cas_back/caspics/cas_bits.pl8) | unported — strip rec3/param 4 (FUN_00436a88); pulls in the castle-build subsystem (FUN_004996c8 allocates ~1 MB of edit buffers) |
 | 0x1c | FUN_0041e1dd | 0x24 | victory/defeat | unported |
 | 0x1d | FUN_00421f14 | 0x53 | **Siege preparations** | unported |
 | 0x1e | (confirm dialog) | — | move/claim/attack/garrison/besiege confirms | PORTED |

@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 825,
-  "ported": 111,
-  "unported": 1511,
+  "ported": 115,
+  "unported": 1507,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 936,
-  "pct_touched": 38.3,
+  "touched": 940,
+  "pct_touched": 38.4,
   "pct_tested": 33.7,
   "bytes_total": 838629,
-  "bytes_touched": 401817,
-  "pct_bytes_touched": 47.9
+  "bytes_touched": 404242,
+  "pct_bytes_touched": 48.2
  },
  "orphan_refs": [
   "0x004148",
@@ -538,6 +538,7 @@
    "status": "tested",
    "src": [
     "src/engine_county_panels.c",
+    "src/engine_noble_faces.c",
     "src/engine_title_render.c",
     "src/engine_treasury.c",
     "src/gfx_text.c",
@@ -663,6 +664,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_noble_faces.c",
     "src/engine_sendsupplies.c",
     "src/font_metrics.h",
     "src/gfx_wrap.c",
@@ -1457,6 +1459,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_noble_faces.c",
     "src/engine_sendsupplies.c",
     "src/engine_trade.c",
     "src/engine_treasury.c",
@@ -1967,6 +1970,8 @@
     "src/engine_confirm_dialog.h",
     "src/engine_county_panels.h",
     "src/engine_menu_input.h",
+    "src/engine_noble_faces.c",
+    "src/engine_noble_faces.h",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
     "src/engine_trade.c",
@@ -2196,6 +2201,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_ingame_input.c",
     "src/engine_ingame_input.h"
    ]
   },
@@ -2984,16 +2990,23 @@
    "name": "FUN_00416cf3",
    "size": 1275,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_noble_faces.c",
+    "src/engine_noble_faces.h"
+   ]
   },
   {
    "va": "0x4171ee",
    "name": "FUN_004171ee",
    "size": 1028,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_noble_faces.c",
+    "src/engine_noble_faces.h"
+   ]
   },
   {
    "va": "0x41789b",
@@ -6294,8 +6307,11 @@
    "name": "FUN_0043611b",
    "size": 38,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_noble_faces.h"
+   ]
   },
   {
    "va": "0x436141",
@@ -6304,6 +6320,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine_noble_faces.c",
+    "src/engine_noble_faces.h",
     "src/engine_treasury.c"
    ]
   },
@@ -6344,8 +6362,11 @@
    "name": "FUN_0043631e",
    "size": 84,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_noble_faces.c",
+    "src/engine_noble_faces.h"
+   ]
   },
   {
    "va": "0x436372",
@@ -7051,6 +7072,7 @@
    "src": [
     "src/engine.c",
     "src/engine_armory.h",
+    "src/engine_noble_faces.h",
     "src/engine_sendsupplies.c",
     "src/engine_sendsupplies.h",
     "src/engine_treasury.h"
@@ -11459,6 +11481,7 @@
     "src/engine_dirty_rect.h",
     "src/engine_labor.c",
     "src/engine_merchant.c",
+    "src/engine_noble_faces.c",
     "src/engine_rankings.c",
     "src/engine_sendsupplies.c",
     "src/engine_territory.c",
@@ -17112,6 +17135,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_noble_faces.c",
+    "src/engine_noble_faces.h",
     "src/engine_roster.c",
     "src/engine_roster.h",
     "src/game_init.c"
@@ -18615,6 +18640,7 @@
     "src/engine_county_panels.c",
     "src/engine_labor.c",
     "src/engine_merchant.c",
+    "src/engine_noble_faces.c",
     "src/engine_rankings.c",
     "src/engine_trade.c",
     "src/io_path.c",
@@ -18712,6 +18738,7 @@
     "src/engine_county_panels.c",
     "src/engine_labor.c",
     "src/engine_merchant.c",
+    "src/engine_noble_faces.c",
     "src/engine_pl8.h",
     "src/engine_rankings.c",
     "src/engine_trade.c",
@@ -20339,6 +20366,8 @@
     "src/engine_button.h",
     "src/engine_confirm_dialog.h",
     "src/engine_county_panels.h",
+    "src/engine_noble_faces.c",
+    "src/engine_noble_faces.h",
     "src/engine_rankings.h",
     "src/engine_sendsupplies.h",
     "src/engine_title_render.c",

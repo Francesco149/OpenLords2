@@ -149,6 +149,7 @@ void engine_set_input_cursor_override(int enable);
 void engine_dev_force_labor_render(int task);
 void engine_dev_force_trade_render(int good);
 void engine_dev_force_treasury_render(void);
+void engine_dev_force_diplomacy_render(void);
 void engine_dev_force_rankings_render(void);
 void engine_dev_force_armory_render(void);
 void engine_dev_force_armory_overlay_render(void);

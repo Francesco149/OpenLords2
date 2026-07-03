@@ -196,6 +196,7 @@ static int         g_force_workforce_key = -1;  /* --force-workforce KEY */
 static int         g_force_labor_task     = -1;  /* --force-labor TASK */
 static int         g_force_trade_good      = -1;  /* --force-trade GOOD (1..14) */
 static int         g_force_treasury        = 0;   /* --force-treasury (screen 0x09) */
+static int         g_force_diplomacy       = 0;   /* --force-diplomacy (screen 0x0b) */
 static int         g_force_rankings        = 0;   /* --force-rankings (screen 0x20) */
 static int         g_force_armory          = 0;   /* --force-armory (screen 0x0a) */
 static int         g_force_armory_overlay  = 0;   /* --force-armory-overlay (0x17) */
@@ -739,6 +740,22 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
         wsprintfA(path, "%s\\port_treasury.bmp", g_capture_dir);
         gfx_capture_backbuffer(path);
         log_line("treasury: forced render (live save) → %s", path);
+    }
+
+    /* Forced Noble-Faces / diplomacy render on the LIVE-loaded save
+     * (--force-diplomacy with --strat-load-live + --capture-to): the face grid,
+     * partner name, war/alliance icons and relation meters all come from real
+     * strategic state (relations, personalities, moods), which the bringup
+     * dumps don't carry.  Draws over the retained strat frame (screen 0x0b
+     * loads no backdrop). */
+    if (g_engine_state == 3 && g_force_diplomacy && g_capture_dir) {
+        gfx_load_system_sheet_select(1);
+        engine_dev_force_diplomacy_render();
+        gfx_tick_present(1);
+        char path[MAX_PATH];
+        wsprintfA(path, "%s\\port_diplomacy.bmp", g_capture_dir);
+        gfx_capture_backbuffer(path);
+        log_line("diplomacy: forced render (live save) → %s", path);
     }
 
     /* Forced Rankings render on the LIVE-loaded save (--force-rankings with
@@ -2075,6 +2092,16 @@ static void bringup_strat_map(const char *dir)
         log_line("strat-map: forced treasury render");
     }
 
+    /* Forced Noble-Faces / diplomacy render (verification seat, --force-
+     * diplomacy) — the roster panel (screen 0x0b) over the retained strat
+     * frame.  The face grid + relation meters are only meaningful on a live-
+     * loaded save (see the --strat-load-live block). */
+    if (g_force_diplomacy) {
+        gfx_load_system_sheet_select(1);
+        engine_dev_force_diplomacy_render();
+        log_line("strat-map: forced diplomacy render");
+    }
+
     /* Forced Rankings render (verification seat, --force-rankings) — the full-
      * screen "Greatest Nobles" scoreboard.  Loads its own grtnoble backdrop/
      * palette + flags sheet; the per-player standings are only meaningful on a
@@ -3400,6 +3427,11 @@ static void parse_cmdline(LPSTR lpCmd)
              * the merchant scene, reading the real gold/resource/weapon
              * figures + realm name from the loaded save.  No argument. */
             g_force_treasury = 1;
+        } else if (!strcmp(a, "--force-diplomacy")) {
+            /* Verification seat: paint the Noble Faces roster (screen 0x0b)
+             * over the strat frame, reading the face grid + relations + partner
+             * from the loaded save.  No argument. */
+            g_force_diplomacy = 1;
         } else if (!strcmp(a, "--force-rankings")) {
             /* Verification seat: render the Rankings/Greatest-Nobles scoreboard
              * (screen 0x20) full-screen, reading the per-player standings from

@@ -31,6 +31,7 @@
 #include "engine_rankings.h"       /* Rankings/Greatest-Nobles (screen 0x20, FUN_0041593b) */
 #include "engine_armory.h"         /* Armory / army-muster view (screen 0x0a, FUN_00417ea7) */
 #include "engine_sendsupplies.h"   /* Send Supplies shipment screen (screen 0x18, FUN_0041ad5d) */
+#include "engine_noble_faces.h"    /* Noble Faces / diplomacy select (screen 0x0b, FUN_00416cf3) */
 #include "engine_army_move_confirm.h" /* screen-0x10 hover classifier + click resolver */
 #include "engine_confirm_dialog.h" /* generic Yes/No modal (screen 0x1e) */
 #include "engine_button.h"         /* button-strip renderer (FUN_0040cfd2) */
@@ -1932,6 +1933,46 @@ static void engine_tick_sendsupplies_render(int full)
                               ctx.misc_sheet, gfx_system_sheet_current(), NULL);
 }
 
+/* Build the Noble Faces ctx (screen 0x0b) and render it.  Like the Court this
+ * draws OVER the retained MAP frame (FUN_00416cf3 does not recomposite — no
+ * FUN_004050c0 — so the caller must NOT run the strat composite first).  full=1
+ * paints the panel + face grid + partner name + action labels (FUN_00416cf3)
+ * then the action-button sprite strip; full=0 repaints just the strip
+ * (FUN_004ba26e case 0x0b = FUN_0040cfd2 over DAT_004dd940). */
+static void engine_tick_noble_faces_render(int full)
+{
+    const uint8_t *chrome = gfx_load_chrome_sheet();
+    const uint8_t *tfont  = gfx_load_title_font();
+    const uint8_t *mfont  = gfx_load_menu_font();
+    size_t loc_size = 0;
+    const uint8_t *locblob = config_localization_data(&loc_size);
+    if (!chrome || !tfont || !mfont || !locblob) {
+        return;
+    }
+    localization_state_t loc;
+    loc.blob = (unsigned char *)locblob;
+    loc.walker_offset = 0;
+
+    engine_noble_faces_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.strategic_block = g_player_strategic_352;   /* DAT_0057bf00 */
+    ctx.realm_names     = g_player_aux_44 + 4;       /* DAT_00553d54 (stride 0x2c) */
+    ctx.local_player    = (int)s_slot_0057c8cc;
+    ctx.chrome          = chrome;
+    ctx.misc_sheet      = engine_pl8_misc_cty();     /* DAT_005530c8 */
+    ctx.system_sheet    = gfx_system_sheet_current();
+    ctx.title_font      = tfont;
+    ctx.menu_font       = mfont;
+    ctx.glyph_table     = gfx_glyph_render_map();
+    ctx.glyph_metrics   = gfx_glyph_measure_map();
+    ctx.loc             = &loc;
+
+    if (full) {
+        engine_noble_faces_render(&ctx);    /* FUN_00416cf3 — panel + face grid */
+    }
+    engine_noble_faces_refresh(&ctx);       /* FUN_004ba26e case 0x0b — button strip */
+}
+
 /* Build the Rankings ctx (screen 0x20) from the save-schema externs + gfx
  * loaders and render the "Greatest Nobles" standings.  Unlike the Court, this
  * is a FULL-SCREEN scene: engine_rankings_render loads its own grtnoble
@@ -2330,6 +2371,15 @@ static const engine_menu_hotspot_t k_sendsupplies_tab[] = {
       .action = NULL, .button_type = 1, .param = 3 },
 };
 
+/* The Diplomacy tab (retail 0x4dc680 rec4: box [0x82,0]-[0xa1,0x1d], type 1,
+ * FUN_0043ae30 param 5 → screen 0x0b).  NOT owner-gated — FUN_0043611b is a
+ * bare screen set (any county selected opens the noble-faces roster).  (rec3,
+ * param 4 → Castle 0x1b, is still unported and left for its own tab.) */
+static const engine_menu_hotspot_t k_diplomacy_tab[] = {
+    { .x0 = 0x82, .y0 = 0, .x1 = 0xa1, .y1 = 0x1d,
+      .action = NULL, .button_type = 1, .param = 5 },
+};
+
 /* FUN_0043ae30's param-1 arm — the armory entry: compute the conscripts at
  * the persisted slider %, seed the muster pool, reset the merc toggle, and
  * open the create/change overlay (screen 0x17, demand 1 = full scene +
@@ -2369,6 +2419,18 @@ static void sendsupplies_tab_entry(engine_ingame_state_t *st)
     st->demand_redraw = 2;
 }
 
+/* FUN_0043ae30's param-5 arm — the Diplomacy entry (FUN_0043611b): a bare
+ * screen set, no owner gate.  Resets the gift-amount accumulator (DAT_0057a0f8,
+ * used by the deferred 0x1a action screens) and opens screen 0x0b (demand 2,
+ * matching retail's DAT_0057d340 = 2 — the render draws over the retained map,
+ * so no recomposite, but the request level is 2 like the other tabs). */
+static void diplomacy_tab_entry(engine_ingame_state_t *st)
+{
+    s_slot_0057a0f8   = 0;                        /* DAT_0057a0f8 = 0 */
+    st->screen        = 0x0b;
+    st->demand_redraw = 2;
+}
+
 /* hud_btn_a hook (FUN_00432967): hit-test the End-Turn button row at the
  * panel origin (0x1de,0x1ae) and fire its action.  Consumes the click. */
 static int engine_endturn_hit_test(const engine_ingame_input_in_t *in,
@@ -2403,6 +2465,13 @@ static int engine_endturn_hit_test(const engine_ingame_input_in_t *in,
         engine_menu_hotspot_hover(0x1de, 0x1ae, k_sendsupplies_tab, 1,
                                   click.cursor_x, click.cursor_y) != 0) {
         sendsupplies_tab_entry(st);                   /* FUN_0043ae30 param 3 */
+        return 1;                                     /* consumed */
+    }
+    /* Diplomacy tab (rec4 of the same strip) → the noble-faces roster. */
+    if (in->lmb_pressed != 0 &&
+        engine_menu_hotspot_hover(0x1de, 0x1ae, k_diplomacy_tab, 1,
+                                  click.cursor_x, click.cursor_y) != 0) {
+        diplomacy_tab_entry(st);                      /* FUN_0043ae30 param 5 */
         return 1;                                     /* consumed */
     }
     if (engine_menu_hotspot_click(0x1de, 0x1ae, k_endturn_buttons,
@@ -2600,6 +2669,15 @@ static void engine_tick_title_render_step(void)
              * over the retained panel every tick (press-flash), with NO panel
              * redraw.  The panel itself is on the demand arm below. */
             engine_tick_treasury_render(0);
+        } else if (g_sim_current_screen == 0x0b) {
+            /* Noble Faces (screen 0x0b): retail's per-frame refresh
+             * (FUN_004ba26e case 0x0b) repaints the diplomacy action-button
+             * strip (FUN_0040cfd2 over DAT_004dd940, count = the relationship-
+             * state button count) over the retained panel every tick. */
+            if (gfx_lock_canvas()) {
+                engine_tick_noble_faces_render(0);
+                gfx_unlock_canvas();
+            }
         } else if (g_sim_current_screen == 0x0a) {
             /* Armory view (screen 0x0a): retail's per-frame refresh
              * (FUN_004ba26e case '\n' = FUN_00418fc5 + FUN_00419243 +
@@ -2733,6 +2811,20 @@ static void engine_tick_title_render_step(void)
                  * the button on every subsequent tick). */
                 engine_tick_treasury_render(1);
                 g_canvas_repainted_this_tick = 1;
+            } else if (g_sim_current_screen == 0x0b) {
+                /* Noble Faces / diplomacy select (screen 0x0b, FUN_00416cf3):
+                 * drawn OVER the retained map frame with NO recomposite —
+                 * retail's FUN_0040f1a0 case 0x0b is a bare FUN_00416cf3(), and
+                 * FUN_00416cf3 (unlike FUN_0041ad5d) does not call FUN_004050c0.
+                 * NO backdrop/palette swap.  The render doesn't self-lock, so
+                 * wrap it (unlike the treasury arm).  Paints the panel + face
+                 * grid + the action-button strip (the per-frame refresh above
+                 * carries the strip on every subsequent tick). */
+                if (gfx_lock_canvas()) {
+                    engine_tick_noble_faces_render(1);
+                    gfx_unlock_canvas();
+                    g_canvas_repainted_this_tick = 1;
+                }
             } else if (g_sim_current_screen == 0x20) {
                 /* Rankings / Greatest Nobles (screen 0x20, FUN_0041593b): a
                  * full-screen scene reached from the Court seal.  It loads its
@@ -3918,6 +4010,20 @@ void engine_dev_force_trade_render(int good)
 void engine_dev_force_treasury_render(void)
 {
     engine_tick_treasury_render(1);         /* Court panel over the strat frame (FUN_00416925) */
+}
+
+/* Verification seat (--force-diplomacy): open the Noble Faces roster (screen
+ * 0x0b) as reaching it from the strategic map would.  Retail opens it from the
+ * map's county-action button strip (table 0x4dc680 rec4 → FUN_0043ae30 param 5),
+ * and its screen-0x0b render draws NO backdrop/palette — it overlays the
+ * retained strat frame (base01.256), leaving the right HUD visible.  So paint
+ * the roster panel straight over the just-rendered strat frame (like the
+ * --force-treasury seat), NO backdrop / palette swap.  The face grid + partner
+ * name + relation meters come from the live-loaded strategic block; faces.pl8
+ * is loaded by the render itself. */
+void engine_dev_force_diplomacy_render(void)
+{
+    engine_tick_noble_faces_render(1);      /* roster over the strat frame (FUN_00416cf3) */
 }
 
 /* Verification seat (--force-rankings): open the Rankings / Greatest Nobles

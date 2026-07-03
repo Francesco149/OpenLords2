@@ -339,6 +339,27 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                     st->demand_redraw = 2;
                     consumed = 1;
                 }
+            } else if (st->screen == 0x0b) {
+                /* ───────── NOBLE FACES / DIPLOMACY (DAT_004eac50 == 0x0b) ─────
+                 * 42ff10.c:0x4316xx.  Opened from the map's county-action strip
+                 * (engine_endturn_hit_test), the roster panel draws over the
+                 * retained MAP frame — so a seal click (generic_click =
+                 * FUN_0040e7e4) or RMB, or a turn-busy tick, closes back to the
+                 * MAP (screen 0, demand 2), matching retail's close arm.  The
+                 * action buttons (gift/insult/alliance/…) are the widget-router's
+                 * 0x0b arm (→ the 0x1a action screens) — DEFERRED; they render
+                 * but don't navigate yet (a button click at x=0x190 misses the
+                 * seal test at x=0x1a8, so it neither acts nor closes). */
+                if (!turn_idle) {
+                    st->screen = 0;
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                } else if (call_consume(hooks->generic_click, in, st) != 0 ||
+                           in->rmb_released != 0) {
+                    st->screen = 0;
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                }
             } else if (st->screen == 0x18) {
                 /* ───────── SEND SUPPLIES (DAT_004eac50 == 0x18) ─────────
                  * 42ff10.c:20262.  Opened from the map's county-action strip
