@@ -7669,3 +7669,50 @@ cells).
 > `src/engine_ingame_input.c` (0x0a/0x17/0x0d close arms),
 > `tools/traces/armory_family.jsonl`, Ghidra `FUN_004358b0` / `FUN_004aabd8` /
 > `FUN_004184c6` / `FUN_00418fc5` / `FUN_004190db` / `FUN_00435b4d`.
+
+## 222 — the anim-phase counters are tick-count-since-boot, so port↔retail anim frames NEVER align across the load stretch without a pin — and the pin must run POST-clock-advance on both engines
+
+The shared phase-cadence counters (`_DAT_004e5b10` last-base-timestamp +
+`DAT_005aeb2c` base 0..3 + the derived `DAT_0058feb4/b0/b8` and
+`DAT_005aea54/44/48/4c`) drive every ambient animation: torch flames
+(0..0xc), the armory demo figures (0..0x17), flag waves, the troop-march
+move/walk cadence (20 ms / 80 ms flags).  They are pure functions of the
+ENGINE-TICK COUNT since boot — and the two engines spend a different number
+of ticks inside boot/menu/load, so at anchor+offset captures every ambient
+animation samples a different frame even when all pixel-producing state is
+byte-identical.  The capture anchor cancels wall-time, not tick-phase.
+
+**Fix = `--phase-pin`** (on by default in olv3 captures), the anim sibling of
+`--rng-seed`: each pre-ingame tick, zero all cadence counters and re-base the
+20 ms base-tick timestamp to the current virtual clock; stop at state 3.
+Both engines then advance the cadence in lockstep relative to the ingame
+flip.  Three traps found calibrating it against the armory troop march
+(a 20 ms-granular +4 px/step animation — the most phase-sensitive probe yet):
+
+1. **The pin must run AFTER the tick's virtual-clock advance.**  The agent
+   pins inside the engine_tick entry hook (post `g_virtual_now_ms` bump); a
+   port pin in the pre-tick loop body wrote the PRE-advance clock into
+   `last_base`, leaving its 20 ms accumulator one 17 ms step ahead — the
+   port's first 20 ms tick fired one tick early, a permanent one-move
+   (+4 px) march lead.  The port pin now runs at the engine_tick head.
+2. **Retail's per-frame UI refresh runs BEFORE its input dispatch**
+   (FUN_004ba26e at tick line 99, FUN_0042ff10 at line 192) — a click-armed
+   animation first steps on the NEXT tick's refresh.  The port dispatches
+   input before its render seam, so a same-tick step must be skipped
+   (engine_armory.c's arm-tick skip latch) or the animation leads by one
+   move permanently.
+3. **The 20 ms base tick is an ACCUMULATOR, not a last=now timer** — at the
+   17 ms turbo step it fires ~6 of every 7 ticks (not every other), which is
+   why a one-tick skew shows up as a CONSTANT pixel offset instead of noise.
+
+With the pin + skip latch the armory_family olv3 lands 9 of 11 frames at
+index-diff 0 — including a mid-march frame — with only ~10 px of
+restore-boundary dust on the other two.  (The segtrace seat also now posts
+its WM ops one frame late, buffered, matching the agent's tick-entry
+PostMessage latency — measured inert here, kept for seat fidelity.)
+
+> 📍 `src/engine.c` (`engine_phase_pin_reset` + the tick-head pin),
+> `src/main.c` (`--phase-pin`, the buffered segtrace post),
+> `tools/frida/openlords2-agent.js` (`pinPhaseCounters`),
+> `tools/trace_studio_v3/olv3_capture.py` (default-on), Ghidra tick lines
+> 99/192, `src/engine_phase.c` for the counter map.
