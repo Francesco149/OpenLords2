@@ -42,9 +42,36 @@ import state_schema as ts_schema                      # noqa: E402  (save-schema
 SESS_ROOT = ROOT / "runs" / "olv3"
 DEFAULT_REMOTE = os.environ.get("OPENLORDS2_FRIDA_REMOTE", "cutestation.soy:27042")
 
+# ── Trace Studio shortcut pointer ───────────────────────────────────────────────
+# The desktop / Start-Menu "OpenLords2 Trace Studio" shortcut (install-studio-
+# shortcut.sh) always opens the LATEST trace we captured — no manual updating.  It
+# runs C:\openlords2-studio\open-studio.bat, which reads studio-current.txt (the
+# viewer arg, a \\wsl.localhost UNC path to this run's view.json).  We refresh that
+# pointer on every capture (mirrors openrecet's orv3_window.write_current_pointer).
+STUDIO_CURRENT = HERE / ".studio_current"          # WSL-side pointer (path + label)
+STUDIO_WIN_DIR = Path("/mnt/c/openlords2-studio")  # created by install-studio-shortcut.sh
+STUDIO_WIN_PTR = STUDIO_WIN_DIR / "studio-current.txt"
+
 
 def _log(m: str) -> None:
     print(f"olv3_capture: {m}", flush=True)
+
+
+def write_current_pointer(view_path: Path, label: str) -> None:
+    """Record the just-built view.json as the 'current working trace' for the
+    shortcut.  Two best-effort pointers: the WSL-side .studio_current (path +
+    label, for tooling/debug) and — once the shortcut is installed — the
+    Windows-side studio-current.txt (the UNC viewer arg open-studio.bat reads,
+    no trailing newline so cmd's `set /p` reads it clean).  Never fatal."""
+    try:
+        STUDIO_CURRENT.write_text(f"{view_path.resolve()}\n{label}\n")
+    except OSError as e:
+        _log(f"(couldn't update the WSL studio pointer: {e})")
+    if STUDIO_WIN_DIR.is_dir():   # only once the shortcut's been installed
+        try:
+            STUDIO_WIN_PTR.write_text(viewbuild.win_path(view_path))
+        except OSError as e:
+            _log(f"(couldn't update the Windows studio pointer: {e})")
 
 
 # ── save sandbox (reproducibility) ──────────────────────────────────────────────
@@ -502,6 +529,9 @@ def main() -> int:
         columns=cols, scenario=sess, anchor=src.stem if src else sess,
         verdict=f"{n_pair} paired / {len(cols)} cols", notes_path=sess_dir / "notes.json")
     _log(f"view.json → {view}  ({len(cols)} cols, {n_pair} paired)")
+
+    # Point the desktop / Start-Menu "OpenLords2 Trace Studio" shortcut at this run.
+    write_current_pointer(Path(view), sess)
 
     if args.no_view:
         return 0
