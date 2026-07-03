@@ -92,7 +92,7 @@ exists in src/ today (session 22).
 | 0x04 | FUN_0041b032 | 0x64 | terrain info ("Here Be Dragons") | PORTED |
 | 0x05/0x06 | — | — | army-move sub-modes (dispatcher-only) | partial |
 | 0x08 | FUN_00415fb7 | — | **Merchant screen** (merchant.pl8/mercgrid.pl8) | PORTED (s26, byte-exact) |
-| 0x09 | FUN_00416925 | 0x46 | **Treasury/Court** (Gold/Arms/Iron/Stone/Wood, "Court of") | PORTED (s29, byte-exact + organic: map county-action tab → Court over map, quirk #218) |
+| 0x09 | FUN_00416925 | 0x46 | **Treasury/Court** (Gold/Arms/Iron/Stone/Wood, "Court of") | PORTED (s29, byte-exact + organic: map county-action tab → Court over map, quirk #218; seal → Rankings 0x20 wired s30) |
 | 0x0a | FUN_00417ea7 | 0x45 | **Armory** — conscript/mercenaries | unported |
 | 0x0b | FUN_00416cf3 | — | **Noble faces** (diplomacy partner select, faces.pl8) | unported |
 | 0x0c | FUN_00416308 | 0x44 | **Trade grid** (merchant.pl8/icontrad.pl8; buy/sell goods) | PORTED (s28, byte-exact + buy/sell interaction: arrows/confirm/commit, quirk #217) |
@@ -112,7 +112,7 @@ exists in src/ today (session 22).
 | 0x1d | FUN_00421f14 | 0x53 | **Siege preparations** | unported |
 | 0x1e | (confirm dialog) | — | move/claim/attack/garrison/besiege confirms | PORTED |
 | 0x1f | FUN_0041e7e1 | — | (end-of-scenario family) | unported |
-| 0x20 | FUN_0041593b | 0x23 | **Rankings** ("Most counties, …") | unported |
+| 0x20 | FUN_0041593b | 0x23 | **Rankings / Greatest Nobles** (a banner + score bar per player over grtnoble.pl8; "Most counties," … "Greatest noble,") | PORTED (s30, byte-exact + organic: Court seal → Rankings, FUN_004351c4; quirk #219) |
 | 0x22 | — | — | season-rollover scroll (lazy bank reload seam, s3) | unported |
 | 0x25 | FUN_0041543f | 0x3b | About box ("Release version 2.03") | unported |
 | 0x27 | (report scroll) | — | event/report scrolls | PORTED |

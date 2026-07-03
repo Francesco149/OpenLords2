@@ -7531,3 +7531,48 @@ to the map in the meantime (retail's own close arm, `42ff10` @ `0x430757`).
 > `k_treasury_tab` in `engine_endturn_hit_test`, `engine_dev_force_treasury_render`),
 > `src/engine_ingame_input.c` (screen-9 close), Ghidra `FUN_00416925` /
 > `FUN_0040f1a0` case 9 / `FUN_0043ae30` / `FUN_00432967` / table `0x4dc680`.
+
+## 219 — a type-5 (press-latch) router seal FIRES from pass 1 of the button dispatch, ~0x14 frames after the click, on a frame where the dispatch RETURNS 0 — so a follow-up transition must key off the action flag, NOT the dispatch's `hit`
+
+The router button dispatcher `FUN_0040da1e` (port: `engine_menu_button_dispatch`)
+runs two passes.  For a **type-5** button (the "continue" seal on the Court 0x09,
+Rankings 0x20, trade-confirm 0x0c, …) the two passes split responsibility across
+DIFFERENT frames:
+
+- **press frame** — pass 2 hit-tests the cursor, sees the new LMB press, arms the
+  long press-flash (`pressed = 0x14`, `state = 1`), and returns `i+1` ("hit").
+  It does NOT run the action yet.
+- **~0x14 frames later** — pass 1 (which decrements every armed button's
+  `pressed` timer every call, cursor-independent) reaches 0 and THEN invokes the
+  action callback (`if (r->type == 5) dispatch(...)`).  But pass 2 that same frame
+  finds no new press, so the dispatch RETURNS **0**.
+
+The trap: a `ti_ui_router` arm that wires the seal's consequence as
+
+```c
+int hit = engine_menu_button_dispatch(…, seal_action);
+if (hit && g_flag) { …transition… }        // BUG: hit==0 on the firing frame
+```
+
+never fires the transition — on the only frame the callback sets `g_flag`, the
+dispatch return is 0.  (The count-down decrements once per dispatch CALL, so the
+router arm must also be reached every tick, which it is — `FUN_0042ff10` runs
+`FUN_004ba9c8` every tick.)  Correct shape: reset the flag before the dispatch,
+then act on the FLAG alone (ungated by `hit`), consuming the click when it fires:
+
+```c
+g_flag = 0;
+int hit = engine_menu_button_dispatch(…, seal_action);   // sets g_flag in pass 1
+if (g_flag) { …transition…; return 1; }
+return hit ? 1 : 0;
+```
+
+Found porting the Court-seal → Rankings 0x20 nav (s30): the seal painted its
+press-flash but the screen never advanced until the gate was moved off `hit`.
+(The trade-grid confirm seal `0x0c` uses the same `hit && flag` shape and
+happens to work only because its committed state is what the trace re-reads, not
+an immediate screen flip — worth revisiting if a trade close ever looks sticky.)
+
+> 📍 `src/engine.c` (`ti_ui_router` screen-9 arm, `treasury_button_action`),
+> `src/engine_menu_input.c` (`engine_menu_button_dispatch` passes 1/2), Ghidra
+> `FUN_0040da1e` / `FUN_004ba9c8` (screen-9 arm) / `FUN_004351c4`.
