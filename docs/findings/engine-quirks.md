@@ -7576,3 +7576,36 @@ an immediate screen flip — worth revisiting if a trade close ever looks sticky
 > 📍 `src/engine.c` (`ti_ui_router` screen-9 arm, `treasury_button_action`),
 > `src/engine_menu_input.c` (`engine_menu_button_dispatch` passes 1/2), Ghidra
 > `FUN_0040da1e` / `FUN_004ba9c8` (screen-9 arm) / `FUN_004351c4`.
+
+## 220 — the armory tab opens 0x17 (army create/change), NOT the bare 0x0a view; and the 0x0a "view" is NOT static — it has a per-frame torch refresh
+
+Two traps when porting the county armory (screen family 0x0a/0x17/0x0d):
+
+**(a) The map's county-action strip (table 0x4dc680) rec0 opens screen 0x17,
+not 0x0a.**  `FUN_00432967` → `FUN_0040e3ee(0x1de,0x1ae,&DAT_004dc680,6)` walks
+6 records (0x18 B each); rec0 = box [0,0]-[0x21,0x1d], type 1, param 1 →
+`FUN_0043ae30` param 1 → screen **0x17** (the interactive army create/change
+overlay, `FUN_00418653`, drawn OVER the armory backdrop `FUN_00417ea7`), owner-
+gated.  The bare **0x0a** VIEW is reached only by RMB-ing out of 0x17
+(42ff10.c screen-0x17 arm: RMB → 0x0a + `FUN_004aa90a`).  (rec1 → 9 Court,
+rec2 param 3 → 0x18 send-supplies, rec5 = End-Turn `FUN_0043ac23`.)  So an
+organic 0x0a olv3 must drive tab→0x17→RMB→0x0a.
+
+**(b) `FUN_00417ea7` (the 0x0a render) draws NO torches — but the view still
+shows lit torches, because the PER-FRAME refresh does.**  `FUN_004ba26e`
+case '\n' = `FUN_00418fc5` (sweep restore) + `FUN_00419243` (two flames) +
+`FUN_004190db` (sweep).  On the bare view `DAT_005679d0` is 0 (zeroed by
+`FUN_004aa90a`), so the sweep + its restore no-op; only `FUN_00419243` draws —
+two flames from armtorch.pl8 (`DAT_005533c4`) at (0x9a,0x76) and (0x19a,0x76),
+sprite = the shared phase frame `DAT_005aea54` (0..0xc) and +0xd for the right
+torch.  Chasing the "static scene" model leaves the torches dark; they belong
+to the per-frame seam, not the flip render.  The muster COUNTS come from the
+per-player troop pool `DAT_0053f6a0` (0x80 stride), which `FUN_004aa90a` seeds
+on entry from the strategic weapon stocks (rec +0x13c + t*4) + the conscript
+population (`DAT_00543fd8`, 0 at the pct=0 first entry) — the render only reads
+it back.
+
+> 📍 `src/engine_armory.c` (`engine_armory_render` / `engine_armory_refresh` /
+> `engine_armory_muster_init`), `src/engine.c` (screen-0x0a demand + per-frame
+> arms, `engine_endturn_hit_test` for the strip), Ghidra `FUN_00417ea7` /
+> `FUN_00419243` / `FUN_004aa90a` / `FUN_0043ae30` / `FUN_004ba26e` case '\n'.

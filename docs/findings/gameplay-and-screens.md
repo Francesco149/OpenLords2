@@ -93,7 +93,7 @@ exists in src/ today (session 22).
 | 0x05/0x06 | — | — | army-move sub-modes (dispatcher-only) | partial |
 | 0x08 | FUN_00415fb7 | — | **Merchant screen** (merchant.pl8/mercgrid.pl8) | PORTED (s26, byte-exact) |
 | 0x09 | FUN_00416925 | 0x46 | **Treasury/Court** (Gold/Arms/Iron/Stone/Wood, "Court of") | PORTED (s29, byte-exact + organic: map county-action tab → Court over map, quirk #218; seal → Rankings 0x20 wired s30) |
-| 0x0a | FUN_00417ea7 | 0x45 | **Armory** — conscript/mercenaries | unported |
+| 0x0a | FUN_00417ea7 | 0x45 | **Armory VIEW** — army-muster scene (backdrop + heraldry interior + owned-weapon racks + muster tally + animated torches) | PORTED (s31, byte-exact + animated torch flames FUN_00419243; quirk #220 — opened via 0x17 RMB-out, NOT the strip directly) |
 | 0x0b | FUN_00416cf3 | — | **Noble faces** (diplomacy partner select, faces.pl8) | unported |
 | 0x0c | FUN_00416308 | 0x44 | **Trade grid** (merchant.pl8/icontrad.pl8; buy/sell goods) | PORTED (s28, byte-exact + buy/sell interaction: arrows/confirm/commit, quirk #217) |
 | 0x0f | FUN_00412b33 | 0x4a | **Labor allocation** (workforce commit via screen0f_commit) | PORTED (s25) |
