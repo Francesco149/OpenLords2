@@ -4,8 +4,8 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 819,
-  "ported": 76,
+  "tested": 820,
+  "ported": 75,
   "unported": 1552,
   "orphan_refs_not_in_function_table": 7,
   "touched": 895,
@@ -5899,8 +5899,9 @@
    "name": "FUN_004351c4",
    "size": 77,
    "is_thunk": false,
-   "status": "ported",
+   "status": "tested",
    "src": [
+    "src/engine_ingame_input.c",
     "src/engine_treasury.c",
     "src/engine_treasury.h"
    ]

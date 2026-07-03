@@ -319,6 +319,26 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                     st->demand_redraw = 2;
                     consumed = 1;
                 }
+            } else if (st->screen == 9) {
+                /* ───────── COURT / TREASURY (DAT_004eac50 == 9) ─────────
+                 * 42ff10.c:0x430757.  Opened from the map's county-action
+                 * strip (engine_endturn_hit_test), the Court panel draws over
+                 * the retained MAP frame — so a generic click (seal/RMB) or a
+                 * turn-busy tick closes back to the MAP (screen 0), matching
+                 * the retail close arm (screen=0, demand=2).  Retail's seal
+                 * instead advances to Rankings (screen 0x20, FUN_004351c4);
+                 * that nav is deferred until 0x20 is ported, so the seal
+                 * falls through generic_click to the map for now. */
+                if (!turn_idle) {
+                    st->screen = 0;
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                } else if (call_consume(hooks->generic_click, in, st) != 0 ||
+                           in->rmb_released != 0) {
+                    st->screen = 0;
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                }
             }
             /* (other screen cases deferred — see header) */
 

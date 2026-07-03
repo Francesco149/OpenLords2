@@ -13,8 +13,8 @@
 
 | status      | count | what it means                                          |
 |-------------|------:|--------------------------------------------------------|
-| tested      |   819 | ported + module covered by the host unit suite       |
-| ported      |    76 | reimplemented in src/, no host test for that module  |
+| tested      |   820 | ported + module covered by the host unit suite       |
+| ported      |    75 | reimplemented in src/, no host test for that module  |
 | **touched** | **895** | tested + ported (FUN_ provenance ref in src/)    |
 | unported    |  1552 | exists in engine, never referenced from src/         |
 | **total**   | **2447** | non-thunk engine functions (of 2452 incl. thunks) |

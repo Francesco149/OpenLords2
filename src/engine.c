@@ -1705,6 +1705,19 @@ static const engine_menu_hotspot_t k_endturn_buttons[] = {
       .action = engine_endturn_action, .button_type = 1, .param = 1 },
 };
 
+/* The Court/Treasury tab of the same strip (retail 0x4dc680 rec1: box
+ * [0x22,0]-[0x41,0x1d] relative to the strip origin, type 1, FUN_0043ae30
+ * param 2 → screen 9).  Only this ported tab is wired; the sibling tabs
+ * (armory/send-supplies/…, params 1/3/4/5) open renderer-less screens, so —
+ * like the four skipped tabs above — they are left for their own ports.  The
+ * flip sets st->screen directly (not via the hotspot action, which can't
+ * reach st); param-2's FUN_0043ae30 arm is a bare screen set (no owner gate,
+ * no backdrop load — the Court draws over the retained map). */
+static const engine_menu_hotspot_t k_treasury_tab[] = {
+    { .x0 = 0x22, .y0 = 0, .x1 = 0x41, .y1 = 0x1d,
+      .action = NULL, .button_type = 1, .param = 2 },
+};
+
 /* hud_btn_a hook (FUN_00432967): hit-test the End-Turn button row at the
  * panel origin (0x1de,0x1ae) and fire its action.  Consumes the click. */
 static int engine_endturn_hit_test(const engine_ingame_input_in_t *in,
@@ -1717,6 +1730,16 @@ static int engine_endturn_hit_test(const engine_ingame_input_in_t *in,
     click.lmb_newly_pressed = in->lmb_pressed;
     click.lmb_newly_released= in->lmb_released;
     click.lmb_held          = in->lmb_held;
+    /* Court/Treasury tab (FUN_00432967 walks the whole strip; the port adds
+     * this tab beside End-Turn now that screen 9 renders).  A press inside
+     * its box flips to the Court, drawn over the retained map. */
+    if (in->lmb_pressed != 0 &&
+        engine_menu_hotspot_hover(0x1de, 0x1ae, k_treasury_tab, 1,
+                                  click.cursor_x, click.cursor_y) != 0) {
+        st->screen        = 9;
+        st->demand_redraw = 1;
+        return 1;                                     /* consumed */
+    }
     if (engine_menu_hotspot_click(0x1de, 0x1ae, k_endturn_buttons,
                                   (int)(sizeof k_endturn_buttons /
                                         sizeof k_endturn_buttons[0]),

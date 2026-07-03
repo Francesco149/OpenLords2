@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **895** (36.6%) — tested 819, ported 76
+- touched: **895** (36.6%) — tested 820, ported 75
 - code bytes touched: **46.5%** (390,007 / 838,629 B)
 - unported: **1552**
 - orphan refs (in src/, not in function table): 7
 
-## tested (819) — ported + host unit suite
+## tested (820) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -273,6 +273,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4343f8 | FUN_004343f8 | 36 | main.c |
 | 0x434e1f | FUN_00434e1f | 37 | engine_confirm_dialog.c, engine_confirm_dialog.h |
 | 0x4350a1 | FUN_004350a1 | 232 | engine_ingame_input.h, engine_terrain_info.h |
+| 0x4351c4 | FUN_004351c4 | 77 | engine_ingame_input.c, engine_treasury.c, engine_treasury.h |
 | 0x4357a6 | FUN_004357a6 | 132 | engine.c, engine_ingame_input.c, engine_ingame_input.h (+3) |
 | 0x436d02 | FUN_00436d02 | 768 | engine_army_ai.c, engine_army_ai.h |
 | 0x437002 | FUN_00437002 | 261 | engine_ingame_input.h |
@@ -841,7 +842,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (76) — reimplemented, no host test yet
+## ported (75) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -870,7 +871,6 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42eb7c | FUN_0042eb7c | 277 | gfx.c, gfx.h |
 | 0x42f306 | FUN_0042f306 | 323 | gfx.c, gfx.h |
 | 0x42f449 | FUN_0042f449 | 323 | gfx.c, gfx.h |
-| 0x4351c4 | FUN_004351c4 | 77 | engine_treasury.c, engine_treasury.h |
 | 0x435286 | FUN_00435286 | 108 | engine_trade.c, engine_trade.h |
 | 0x43530e | FUN_0043530e | 43 | engine.c, engine_trade.c, engine_trade.h |
 | 0x435339 | FUN_00435339 | 260 | engine_trade.c, engine_trade.h |
