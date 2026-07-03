@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 825,
-  "ported": 115,
-  "unported": 1507,
+  "tested": 828,
+  "ported": 118,
+  "unported": 1501,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 940,
-  "pct_touched": 38.4,
-  "pct_tested": 33.7,
+  "touched": 946,
+  "pct_touched": 38.7,
+  "pct_tested": 33.8,
   "bytes_total": 838629,
-  "bytes_touched": 404242,
-  "pct_bytes_touched": 48.2
+  "bytes_touched": 406546,
+  "pct_bytes_touched": 48.5
  },
  "orphan_refs": [
   "0x004148",
@@ -591,6 +591,7 @@
    "status": "tested",
    "src": [
     "src/engine_confirm_dialog.h",
+    "src/engine_diplomacy_action.c",
     "src/engine_hud_menubar.c",
     "src/engine_hud_menubar.h",
     "src/engine_labor.c",
@@ -1078,6 +1079,7 @@
     "src/engine_army_select.h",
     "src/engine_county_panels.c",
     "src/engine_county_panels.h",
+    "src/engine_diplomacy_action.h",
     "src/engine_labor.h",
     "src/engine_map_scene.c",
     "src/engine_map_scene.h",
@@ -1459,6 +1461,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_diplomacy_action.c",
     "src/engine_noble_faces.c",
     "src/engine_sendsupplies.c",
     "src/engine_trade.c",
@@ -1969,6 +1972,7 @@
     "src/engine_confirm_dialog.c",
     "src/engine_confirm_dialog.h",
     "src/engine_county_panels.h",
+    "src/engine_diplomacy_action.c",
     "src/engine_menu_input.h",
     "src/engine_noble_faces.c",
     "src/engine_noble_faces.h",
@@ -1987,6 +1991,7 @@
    "status": "tested",
    "src": [
     "src/engine_armory.c",
+    "src/engine_diplomacy_action.c",
     "src/engine_labor.c",
     "src/engine_merchant.c",
     "src/engine_rankings.c",
@@ -2285,6 +2290,7 @@
    "src": [
     "src/engine.c",
     "src/engine_armory.h",
+    "src/engine_diplomacy_action.h",
     "src/engine_labor.h",
     "src/engine_merchant.h",
     "src/engine_screen_dispatch.c",
@@ -3013,16 +3019,24 @@
    "name": "FUN_0041789b",
    "size": 197,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_diplomacy_action.c",
+    "src/engine_diplomacy_action.h"
+   ]
   },
   {
    "va": "0x417960",
    "name": "FUN_00417960",
    "size": 399,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_diplomacy_action.c",
+    "src/engine_diplomacy_action.h"
+   ]
   },
   {
    "va": "0x417aef",
@@ -3278,6 +3292,7 @@
    "src": [
     "src/engine_armory.c",
     "src/engine_county_panels.c",
+    "src/engine_diplomacy_action.c",
     "src/engine_hud_menubar.c",
     "src/engine_hud_menubar.h",
     "src/engine_labor.c",
@@ -6320,6 +6335,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine.c",
+    "src/engine_diplomacy_action.h",
     "src/engine_noble_faces.c",
     "src/engine_noble_faces.h",
     "src/engine_treasury.c"
@@ -6373,16 +6390,26 @@
    "name": "FUN_00436372",
    "size": 150,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine.c",
+    "src/engine_diplomacy_action.c",
+    "src/engine_diplomacy_action.h"
+   ]
   },
   {
    "va": "0x436408",
    "name": "FUN_00436408",
    "size": 1015,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine.c",
+    "src/engine_diplomacy.c",
+    "src/engine_diplomacy.h",
+    "src/engine_diplomacy_action.c",
+    "src/engine_diplomacy_action.h"
+   ]
   },
   {
    "va": "0x4367ff",
@@ -7162,8 +7189,10 @@
    "name": "FUN_0043b4cb",
    "size": 200,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_ingame_input.c"
+   ]
   },
   {
    "va": "0x43b593",
@@ -7807,6 +7836,7 @@
     "src/engine_army_move_confirm.h",
     "src/engine_army_select.c",
     "src/engine_county_panels.h",
+    "src/engine_diplomacy_action.c",
     "src/engine_ranking.c",
     "src/engine_ranking.h",
     "src/engine_trade.c"
@@ -11478,6 +11508,7 @@
     "src/engine_armory.c",
     "src/engine_combat.c",
     "src/engine_county_panels.c",
+    "src/engine_diplomacy_action.c",
     "src/engine_dirty_rect.h",
     "src/engine_labor.c",
     "src/engine_merchant.c",
@@ -11641,6 +11672,7 @@
     "src/engine_battlefield_render.h",
     "src/engine_button.c",
     "src/engine_button.h",
+    "src/engine_diplomacy_action.c",
     "src/engine_dirty_rect.h",
     "src/engine_hud_menubar.c",
     "src/engine_hud_panel.h",
@@ -17182,8 +17214,14 @@
    "name": "FUN_004a2621",
    "size": 343,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine.c",
+    "src/engine_diplomacy.c",
+    "src/engine_diplomacy.h",
+    "src/engine_diplomacy_action.c",
+    "src/engine_diplomacy_action.h"
+   ]
   },
   {
    "va": "0x4a277d",
@@ -20366,6 +20404,8 @@
     "src/engine_button.h",
     "src/engine_confirm_dialog.h",
     "src/engine_county_panels.h",
+    "src/engine_diplomacy_action.c",
+    "src/engine_diplomacy_action.h",
     "src/engine_noble_faces.c",
     "src/engine_noble_faces.h",
     "src/engine_rankings.h",

@@ -79,7 +79,7 @@ void engine_noble_faces_refresh(const engine_noble_faces_ctx_t *ctx);
  * sprite 0x40 (system sheet), type 5 (press-latch); the click actions are the
  * 0x1a-mode entry functions.  The live count (0/3/4/6, by relationship state)
  * is engine_noble_faces_button_count(), set by the render. */
-const engine_button_rec_t *engine_noble_faces_buttons(void);
+engine_button_rec_t *engine_noble_faces_buttons(void);
 int engine_noble_faces_button_count(void);
 
 #endif /* OPENLORDS2_ENGINE_NOBLE_FACES_H */

@@ -72,7 +72,10 @@ static engine_button_rec_t k_noble_buttons[6] = {
     { 0x190, 0x160, 0x40, 0x20, 0x43631e, 0, 0, 0, 5, 0, 0 },
 };
 
-const engine_button_rec_t *engine_noble_faces_buttons(void) { return k_noble_buttons; }
+/* Non-const: the widget-router 0x0b arm dispatches over this table, and
+ * engine_menu_button_dispatch animates each button's press-flash in place
+ * (the per-frame refresh then reads it back — same as every router widget). */
+engine_button_rec_t *engine_noble_faces_buttons(void) { return k_noble_buttons; }
 int engine_noble_faces_button_count(void) { return g_noble_action_count; }
 
 /* ── one action-label line (FUN_0040328e(0x48,sub,0xe0,y,0xa0,100,0,0,…)) ── */

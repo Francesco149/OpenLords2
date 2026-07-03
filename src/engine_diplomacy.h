@@ -79,4 +79,15 @@ int engine_diplomacy_best_ally_candidate(int player);
  * cleared both ways, each pinned as the other's lord, bond-break flag cleared. */
 void engine_diplomacy_form_alliance(int p1, int p2);
 
+/* Port of FUN_004a2621 @ 0x4a2621 (348 B, __cdecl void(int,int,int,int,int)).
+ * Producer for a player-issued diplomacy action: append (sender/type/target/i32
+ * value) to `partner`'s five-slot inbox (s_slot_0053f0f0, save entry 146 — the
+ * grid the AI brain's step-1 processor drains) at the first free slot, bump the
+ * per-pair compliment counter (+0x89) on type 1, raise the pending-scratch byte
+ * (+0x90), and — for a non-zero gift `value` — transfer that cash local→partner
+ * immediately (clamped to the giver's +0x118), the inbox keeping the original
+ * value.  Called by the diplomacy-action confirm seal (FUN_00436408). */
+void engine_diplomacy_queue_action(int local, int partner, int type,
+                                   int value, int target);
+
 #endif /* OPENLORDS2_ENGINE_DIPLOMACY_H */

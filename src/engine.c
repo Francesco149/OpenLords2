@@ -32,6 +32,7 @@
 #include "engine_armory.h"         /* Armory / army-muster view (screen 0x0a, FUN_00417ea7) */
 #include "engine_sendsupplies.h"   /* Send Supplies shipment screen (screen 0x18, FUN_0041ad5d) */
 #include "engine_noble_faces.h"    /* Noble Faces / diplomacy select (screen 0x0b, FUN_00416cf3) */
+#include "engine_diplomacy_action.h" /* Diplomacy actions / gift (screen 0x1a, FUN_0041789b) */
 #include "engine_army_move_confirm.h" /* screen-0x10 hover classifier + click resolver */
 #include "engine_confirm_dialog.h" /* generic Yes/No modal (screen 0x1e) */
 #include "engine_button.h"         /* button-strip renderer (FUN_0040cfd2) */
@@ -1328,6 +1329,42 @@ static void ti_armory_remuster(const engine_ingame_input_in_t *in,
     armory_remuster_now();
 }
 
+/* The Noble Faces (0x0b) action-button actions (retail DAT_004dd940 → the 0x1a
+ * entries FUN_00436141 … 0x43631e).  Only the gift entry (FUN_00436141,
+ * mode 0) is wired; the message / alliance entries (modes 1..6) are DEFERRED
+ * (they need the 0x53f1e0 message buffer / the 0x5530b0 target list), so their
+ * buttons press-flash but do not navigate yet. */
+static int g_noble_gift_fired;   /* set by the gift button (type 5, pass 1) */
+
+static void noble_button_action(uint32_t action, int param0, int param1)
+{
+    (void)param0; (void)param1;
+    if (action == 0x436141) {          /* FUN_00436141 — open the gift screen */
+        g_noble_gift_fired = 1;
+    }
+    /* 0x43618b / 0x4361da / 0x436229 / 0x4362ca / 0x43631e → modes 1..6, DEFERRED. */
+}
+
+/* The gift screen (0x1a) widget actions (retail DAT_004dd9d0): the two ±10
+ * amount arrows (FUN_00436372) and the Yes/No confirm seals (FUN_00436408).
+ * The seals are type-5 press-latches — they fire from dispatch pass 1 where the
+ * dispatch RETURNS 0 (quirk #219), so the arm drives the outcome off the flag. */
+static int g_diplo_seal_fired;   /* set by either Yes/No seal */
+static int g_diplo_seal_mode;    /* param0: 1 = Yes (confirm), 0 = No (cancel) */
+static int g_diplo_arrow_fired;  /* set by either amount arrow */
+
+static void diplo_action_button_action(uint32_t action, int param0, int param1)
+{
+    (void)param1;
+    if (action == 0x436372) {              /* FUN_00436372 — the amount arrow */
+        engine_diplomacy_action_arrow(param0);
+        g_diplo_arrow_fired = 1;
+    } else if (action == 0x436408) {       /* FUN_00436408 — the Yes/No seal */
+        g_diplo_seal_fired = 1;
+        g_diplo_seal_mode  = param0;
+    }
+}
+
 static int ti_ui_router(const engine_ingame_input_in_t *din,
                         engine_ingame_state_t *dst)
 {
@@ -1592,6 +1629,82 @@ static int ti_ui_router(const engine_ingame_input_in_t *din,
         }
         /* Arrow hits only re-figure the staged amounts — retail's arrow actions
          * request NO redraw; the per-frame refresh repaints next tick. */
+        return hit ? 1 : 0;
+    }
+
+    if (dst->screen == 0x0b) {
+        /* FUN_004ba9c8's 0x0b arm: dispatch the diplomacy action buttons
+         * (DAT_004dd940, count = the relationship-state button count) over the
+         * same table the per-frame refresh paints.  The gift button (mode 0) is
+         * a type-5 press-latch that fires from pass 1 where the dispatch returns
+         * 0 (quirk #219) — drive the open off the action flag, not `hit`.
+         * (The portrait partner-select 0x4369bd + the message/alliance
+         * entries are DEFERRED — see engine_diplomacy_action.h.) */
+        engine_menu_click_in_t bclick;
+        memset(&bclick, 0, sizeof bclick);
+        bclick.cursor_x           = g_input_game_x;
+        bclick.cursor_y           = g_input_game_y;
+        bclick.lmb_newly_pressed  = din->lmb_pressed;
+        bclick.lmb_newly_released = din->lmb_released;
+        bclick.lmb_held           = din->lmb_held;
+        g_noble_gift_fired = 0;
+        int hit = engine_menu_button_dispatch(0, 0,
+                                              engine_noble_faces_buttons(),
+                                              engine_noble_faces_button_count(),
+                                              &bclick, noble_button_action);
+        if (g_noble_gift_fired) {
+            /* FUN_00436141: mode 0, screen 0x1a.  Retail recomposites the map
+             * (FUN_004050c0, erasing the roster panel) in the entry; the port
+             * recomposites in the 0x1a demand arm (county-panel pattern), so
+             * just set the mode + demand 2 here. */
+            engine_diplomacy_action_set_mode(0);
+            dst->screen = 0x1a;
+            dst->demand_redraw = 2;
+            return 1;
+        }
+        return hit ? 1 : 0;
+    }
+
+    if (dst->screen == 0x1a) {
+        /* FUN_004ba9c8's 0x1a arm (mode 0): the gift widget strip
+         * (FUN_0040da1e over DAT_004dd9d0, 4 recs) — the ±10 amount arrows
+         * (FUN_00436372) and the Yes/No confirm seals (FUN_00436408).  The
+         * seals are type-5 press-latches (quirk #219) — drive the confirm /
+         * cancel off the action flag.  (Modes 1..6 dispatch DAT_004dda30 —
+         * DEFERRED, not yet reachable.) */
+        engine_menu_click_in_t bclick;
+        memset(&bclick, 0, sizeof bclick);
+        bclick.cursor_x           = g_input_game_x;
+        bclick.cursor_y           = g_input_game_y;
+        bclick.lmb_newly_pressed  = din->lmb_pressed;
+        bclick.lmb_newly_released = din->lmb_released;
+        bclick.lmb_held           = din->lmb_held;
+        g_diplo_seal_fired  = 0;
+        g_diplo_arrow_fired = 0;
+        int hit = engine_menu_button_dispatch(0, 0,
+                                              engine_diplomacy_action_buttons(),
+                                              engine_diplomacy_action_widget_count(),
+                                              &bclick, diplo_action_button_action);
+        if (g_diplo_seal_fired) {
+            if (g_diplo_seal_mode == 1) {
+                /* Yes: enqueue the gift + transfer the gold (FUN_004a2621),
+                 * then close to the map (retail FUN_00436408 sets DAT_0057d340
+                 * = 2 and DAT_004eac50 = 0). */
+                engine_diplomacy_action_confirm();
+                dst->screen = 0;
+                dst->demand_redraw = 2;
+            } else {
+                /* No: back to the Noble Faces roster (retail DAT_004eac50 =
+                 * 0x0b) — the roster panel redraws over the retained frame. */
+                dst->screen = 0x0b;
+                dst->demand_redraw = 2;
+            }
+            return 1;
+        }
+        if (g_diplo_arrow_fired) {
+            dst->demand_redraw = 2;   /* retail FUN_00436372 sets DAT_0057d340 = 2 */
+            return 1;
+        }
         return hit ? 1 : 0;
     }
 
@@ -1971,6 +2084,42 @@ static void engine_tick_noble_faces_render(int full)
         engine_noble_faces_render(&ctx);    /* FUN_00416cf3 — panel + face grid */
     }
     engine_noble_faces_refresh(&ctx);       /* FUN_004ba26e case 0x0b — button strip */
+}
+
+/* Build the diplomacy-action ctx (screen 0x1a) and render it.  full=1 paints
+ * the current mode's panel (FUN_0041789b → mode 0 = the gift panel FUN_00417960)
+ * over a freshly recomposited map; full=0 repaints just the widget strip
+ * (FUN_004ba26e case 0x1a).  Caller holds the canvas lock. */
+static void engine_tick_diplomacy_action_render(int full)
+{
+    const uint8_t *chrome = gfx_load_chrome_sheet();
+    const uint8_t *mfont  = gfx_load_menu_font();
+    size_t loc_size = 0;
+    const uint8_t *locblob = config_localization_data(&loc_size);
+    if (!chrome || !mfont || !locblob) {
+        return;
+    }
+    localization_state_t loc;
+    loc.blob = (unsigned char *)locblob;
+    loc.walker_offset = 0;
+
+    engine_diplomacy_action_ctx_t ctx;
+    memset(&ctx, 0, sizeof ctx);
+    ctx.strategic_block = g_player_strategic_352;   /* DAT_0057bf00 */
+    ctx.realm_names     = g_player_aux_44 + 4;       /* DAT_00553d54 (stride 0x2c) */
+    ctx.local_player    = (int)s_slot_0057c8cc;
+    ctx.chrome          = chrome;
+    ctx.misc_sheet      = engine_pl8_misc_cty();     /* DAT_005530c8 */
+    ctx.system_sheet    = gfx_system_sheet_current();
+    ctx.menu_font       = mfont;
+    ctx.glyph_table     = gfx_glyph_render_map();
+    ctx.glyph_metrics   = gfx_glyph_measure_map();
+    ctx.loc             = &loc;
+
+    if (full) {
+        engine_diplomacy_action_render(&ctx);   /* FUN_0041789b mode dispatch */
+    }
+    engine_diplomacy_action_refresh(&ctx);       /* FUN_004ba26e case 0x1a — strip */
 }
 
 /* Build the Rankings ctx (screen 0x20) from the save-schema externs + gfx
@@ -2678,6 +2827,16 @@ static void engine_tick_title_render_step(void)
                 engine_tick_noble_faces_render(0);
                 gfx_unlock_canvas();
             }
+        } else if (g_sim_current_screen == 0x1a) {
+            /* Diplomacy action / gift (screen 0x1a): retail's per-frame refresh
+             * (FUN_004ba26e case 0x1a) repaints the gift widget strip (the ±10
+             * amount arrows + Yes/No seals, FUN_0040cfd2 over DAT_004dd9d0) over
+             * the retained panel every tick — carrying the arrow-driven amount
+             * + the press-flash.  The panel itself is on the demand arm below. */
+            if (gfx_lock_canvas()) {
+                engine_tick_diplomacy_action_render(0);
+                gfx_unlock_canvas();
+            }
         } else if (g_sim_current_screen == 0x0a) {
             /* Armory view (screen 0x0a): retail's per-frame refresh
              * (FUN_004ba26e case '\n' = FUN_00418fc5 + FUN_00419243 +
@@ -2822,6 +2981,20 @@ static void engine_tick_title_render_step(void)
                  * carries the strip on every subsequent tick). */
                 if (gfx_lock_canvas()) {
                     engine_tick_noble_faces_render(1);
+                    gfx_unlock_canvas();
+                    g_canvas_repainted_this_tick = 1;
+                }
+            } else if (g_sim_current_screen == 0x1a) {
+                /* Diplomacy action / gift (screen 0x1a, FUN_0041789b → mode 0 =
+                 * FUN_00417960): opened from the Noble Faces roster, so — unlike
+                 * the roster, which draws over the retained clean map — this must
+                 * ERASE the roster panel first.  Retail's entry (FUN_00436141)
+                 * recomposites (FUN_004050c0); the port recomposites the strat
+                 * frame here (county-panel pattern), then paints the gift panel
+                 * over it in one canvas lock.  NO backdrop/palette swap. */
+                if (gfx_lock_canvas()) {
+                    engine_screen_strat_render(1);
+                    engine_tick_diplomacy_action_render(1);
                     gfx_unlock_canvas();
                     g_canvas_repainted_this_tick = 1;
                 }

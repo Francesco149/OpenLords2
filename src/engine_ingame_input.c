@@ -360,6 +360,27 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                     st->demand_redraw = 2;
                     consumed = 1;
                 }
+            } else if (st->screen == 0x1a) {
+                /* ───────── DIPLOMACY ACTION / GIFT (DAT_004eac50 == 0x1a) ─────
+                 * 42ff10.c:0x43089a.  Opened from the Noble Faces roster.  The
+                 * gift widgets (±10 arrows + Yes/No seals) are the widget
+                 * router's 0x1a arm (run earlier): Yes → enqueue + map, No →
+                 * roster.  Here — matching retail's dismiss tail — a generic
+                 * click OUTSIDE the widgets (generic_click = FUN_0040e7e4) or an
+                 * RMB (FUN_0042ff10's 0x4e6900 test), or a turn-busy tick, closes
+                 * to the MAP (screen 0, demand 2).  (The message-box "more"
+                 * gate FUN_0043b4cb + the 0x553fc8 pending flags apply to the
+                 * DEFERRED message modes 1..4 only.) */
+                if (!turn_idle) {
+                    st->screen = 0;
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                } else if (call_consume(hooks->generic_click, in, st) != 0 ||
+                           in->rmb_released != 0) {
+                    st->screen = 0;
+                    st->demand_redraw = 2;
+                    consumed = 1;
+                }
             } else if (st->screen == 0x18) {
                 /* ───────── SEND SUPPLIES (DAT_004eac50 == 0x18) ─────────
                  * 42ff10.c:20262.  Opened from the map's county-action strip

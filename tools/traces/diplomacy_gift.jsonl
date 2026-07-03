@@ -1,0 +1,59 @@
+# DIPLOMACY ACTION / GIFT (screen 0x1a mode 0) — playthrough-driven port, organic.
+# Extends the s34 diplomacy round-trip: title → single player → load → lastturn →
+# confirm → strategic map → DIPLOMACY tab (screen 0x0b), then the NEW gift flow:
+#   1. click the GIFT action button (top of the roster's action strip, retail
+#      DAT_004dd940 rec0 → FUN_00436141 → screen 0x1a mode 0).  Button sprite
+#      0x40 at (0x190,0x66)=(400,102); click game (412,114) → l=(114<<16)|412.
+#      Type-5 press-latch (quirk #219) → the port's 0x0b router arm opens the
+#      gift screen off the action flag.  The gift panel (engine_diplomacy_action.c
+#      FUN_00417960) draws over a recomposited map: "gift to <partner>", the
+#      partner's standing offer, the staged amount (0 Crowns), a prompt + the
+#      ±10 arrows and Yes/No seals.
+#   2. click the UP amount arrow (rec0 at (0xb8,0xf0)=(184,240), type 4,
+#      FUN_00436372 param 1) → stage +10 Crowns.  Click game (194,250).
+#   3. click the YES seal (rec2 at (0x120,0x118)=(288,280), sprite 0x1d, type 5,
+#      FUN_00436408 param 1) → enqueue the gift + transfer the gold
+#      (engine_diplomacy_queue_action = FUN_004a2621: local gold −10, partner
+#      +10, inbox entry) → close to the MAP.  Click game (300,292).
+# Verifies: gift_open/gift_settled/gift_amount render byte-exact vs retail; the
+# STATE oracle confirms the gold transfer + inbox entry match on the map_after
+# frame.
+{"wait": "TITLE"}
+{"t": 60, "m": 512, "w": 0, "l": 7012672}
+{"t": 66, "m": 512, "w": 0, "l": 7012672}
+{"t": 70, "m": 513, "w": 1, "l": 7012672}
+{"t": 76, "m": 514, "w": 0, "l": 7012672}
+{"t": 200, "m": 512, "w": 0, "l": 9109824}
+{"t": 206, "m": 512, "w": 0, "l": 9109824}
+{"t": 210, "m": 513, "w": 1, "l": 9109824}
+{"t": 216, "m": 514, "w": 0, "l": 9109824}
+{"t": 340, "m": 512, "w": 0, "l": 8257696}
+{"t": 346, "m": 512, "w": 0, "l": 8257696}
+{"t": 350, "m": 513, "w": 1, "l": 8257696}
+{"t": 356, "m": 514, "w": 0, "l": 8257696}
+{"t": 480, "m": 512, "w": 0, "l": 5898654}
+{"t": 486, "m": 512, "w": 0, "l": 5898654}
+{"t": 490, "m": 513, "w": 1, "l": 5898654}
+{"t": 496, "m": 514, "w": 0, "l": 5898654}
+{"wait": "MAP_FREEROAM"}
+{"auto_dismiss": 1}
+{"capture": 20, "label": "map_before"}
+{"t": 24, "m": 512, "w": 0, "l": 29098607}
+{"t": 28, "m": 513, "w": 1, "l": 29098607}
+{"t": 32, "m": 514, "w": 0, "l": 29098607}
+{"capture": 60, "label": "diplomacy_open"}
+{"capture": 90, "label": "diplomacy_settled"}
+{"t": 110, "m": 512, "w": 0, "l": 7471516}
+{"t": 114, "m": 513, "w": 1, "l": 7471516}
+{"t": 118, "m": 514, "w": 0, "l": 7471516}
+{"capture": 160, "label": "gift_open"}
+{"capture": 195, "label": "gift_settled"}
+{"t": 210, "m": 512, "w": 0, "l": 16384194}
+{"t": 214, "m": 513, "w": 1, "l": 16384194}
+{"t": 218, "m": 514, "w": 0, "l": 16384194}
+{"capture": 255, "label": "gift_amount"}
+{"t": 270, "m": 512, "w": 0, "l": 19136812}
+{"t": 274, "m": 513, "w": 1, "l": 19136812}
+{"t": 278, "m": 514, "w": 0, "l": 19136812}
+{"capture": 340, "label": "gift_committed"}
+{"capture": 375, "label": "map_after"}

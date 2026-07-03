@@ -30,6 +30,9 @@
 #define D_CONTACT     0x86   /* lord-contact counter (u8; + other*0x10)      */
 #define D_WARCNT      0x87   /* war-declaration escalation (u8; + other*0x10)*/
 #define D_WARFLAG     0x88   /* war-declared flag (u8; + other*0x10)         */
+#define D_COMPLIMENT  0x89   /* per-pair compliment counter (u8; + other*0x10) */
+#define D_PENDING     0x90   /* per-pair pending-message scratch (u8; + other*0x10) */
+#define D_CASH        0x118  /* DAT_0057c018 — player treasury (i32)         */
 #define D_FEUD        0xeb   /* primary feud target (u8)                     */
 #define D_MOODCYC     0x159  /* notification mood-cycle counter 0..3 (u8)    */
 
@@ -260,4 +263,57 @@ void engine_diplomacy_form_alliance(int p1, int p2)
     s2[D_LORD] = (uint8_t)p1;
     s1[D_FLAG_1E] = 0;
     s2[D_FLAG_1E] = 0;
+}
+
+/* Port of FUN_004a2621 @ 0x4a2621 (348 B, __cdecl void(int,int,int,int,int)).
+ * The PLAYER-side producer for a diplomacy action (the AI produces its own the
+ * same way): append the message to `partner`'s five-slot inbox
+ * (s_slot_0053f0f0, save entry 146 — the SAME grid the AI brain's step-1 inbox
+ * processor drains, engine_army_ai.c; row = partner*0x28 + slot*8, fields
+ * +0 sender / +1 type / +2 byte target / +4 i32 value) into the first free slot,
+ * then apply the immediate side effects:
+ *   - type 1 (compliment): bump the per-pair compliment counter (+0x89) the AI's
+ *     handler reads (the first two are welcomed, the third cools);
+ *   - always: raise the per-pair pending-scratch byte (+0x90) the AI resets after
+ *     draining;
+ *   - a non-zero `value` (a gift): transfer that cash local→partner immediately
+ *     (clamped to the giver's own cash +0x118) — the inbox still carries the
+ *     original, unclamped value, exactly as retail.
+ * Called by the diplomacy-action screen's confirm seal (FUN_00436408). */
+void engine_diplomacy_queue_action(int local, int partner, int type,
+                                   int value, int target)
+{
+    uint8_t *pr = STRAT_REC(partner);
+
+    for (int slot = 0; slot < 5; slot++) {
+        uint8_t *q = &s_slot_0053f0f0[partner * 0x28 + slot * 8];
+        if (q[0] != 0) {
+            continue;                       /* occupied — try the next slot */
+        }
+        q[0] = (uint8_t)local;
+        q[1] = (uint8_t)type;
+        q[2] = (uint8_t)target;
+        int32_t v = value;                  /* +4 keeps the ORIGINAL value */
+        __builtin_memcpy(q + 4, &v, sizeof v);
+
+        if (type == 1) {
+            pr[D_COMPLIMENT + local * 0x10] += 1;
+        }
+        pr[D_PENDING + local * 0x10] = 1;
+
+        if (value != 0) {
+            uint8_t *lr = STRAT_REC(local);
+            int32_t local_cash, partner_cash;
+            __builtin_memcpy(&local_cash,   lr + D_CASH, sizeof local_cash);
+            __builtin_memcpy(&partner_cash, pr + D_CASH, sizeof partner_cash);
+            if (value > local_cash) {
+                value = local_cash;         /* can't give more than you hold */
+            }
+            local_cash   -= value;
+            partner_cash += value;
+            __builtin_memcpy(lr + D_CASH, &local_cash,   sizeof local_cash);
+            __builtin_memcpy(pr + D_CASH, &partner_cash, sizeof partner_cash);
+        }
+        break;                              /* filled one slot — done */
+    }
 }

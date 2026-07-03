@@ -7856,3 +7856,66 @@ panel: `map_before` catches retail's Game-Objectives hint scroll still open
 > flag).  Retail FUN_00416cf3 / FUN_004171ee / FUN_0043611b / FUN_0043ae30
 > param 5 / FUN_004ba26e case 0x0b / FUN_0040cfd2 over DAT_004dd940 /
 > FUN_004a1e6c.
+
+## 225 — the diplomacy-action GIFT screen (0x1a mode 0) commits by ENQUEUING into the AI's own diplomacy inbox (not an instant effect) + transfers the gold immediately; and its panel text is byte-exact ONLY with the illuminated-drop-cap flag (DAT_0058fe2c) that colours every leading A..Z red
+
+Porting the first diplomacy-action sub-screen — the GIFT panel (screen 0x1a, the
+button-0 target of the s34 Noble Faces roster).  0x1a is a MODE dispatcher: the
+roster's action buttons (DAT_004dd940 → FUN_00436141…FUN_0043631e) set
+DAT_005651cc (0..6) and screen 0x1a, and the render dispatch FUN_0041789b
+switches on it — mode 0 = gift (FUN_00417960), 1..4 = message screens
+(FUN_00417aef, compliment/insult/…), 5..6 = ask-ally-to-attack (FUN_00417cef).
+Only mode 0 is self-contained; the others need the runtime message buffer
+(0x53f1e0, all-zero statically) / a target list (0x5530b0) and are DEFERRED.
+Three facts pinned the gift port:
+
+1. **The confirm is a PRODUCER, not an instant effect — the same shape as trade
+   (quirk #217) and Send-Supplies (quirk #223).**  FUN_00436408's Yes seal calls
+   FUN_004a2621(local, partner, mode, gift_amt, target), which appends
+   {sender,+1 type,+2 target,+4 i32 value} to `partner`'s five-slot inbox at
+   s_slot_0053f0f0 (save entry 146: partner*0x28 + slot*8) — the SAME grid the AI
+   brain's step-1 processor drains (engine_army_ai.c).  So the player issues a
+   diplomacy action exactly as the AI does; the AI reacts at end-turn.  A gift
+   ALSO moves the gold immediately inside FUN_004a2621 (local +0x118 −= amt,
+   partner += amt, clamped to the giver's cash), while the inbox keeps the
+   original (unclamped) value.  Ported as `engine_diplomacy_queue_action`.  (The
+   +0x89 compliment counter bump is mode-1 only; +0x90 is the pending scratch the
+   AI resets.)  The Yes seal is a type-5 latch → drive the transition off the
+   action flag, not `hit` (quirk #219); the No seal returns to the roster (0x0b),
+   NOT the map.
+
+2. **The illuminated drop-cap.**  FUN_00417960 brackets its whole text block with
+   DAT_0058fe2c = 1 / 0 — the uppercase-highlight flag: every leading A..Z of the
+   diplomacy strings renders in the red highlight colour (glyph index 1), not the
+   caller's 0x3f.  The port already had the feature (gfx_text.c line 220,
+   `gfx_text_set_uppercase_highlight`) but the gift render omitted the enable — an
+   olv3 diff caught it (the panel's capitals rendered black; ~700 px, dead-on the
+   drop-caps).  Restoring the bracket → panel interior 0 diff.  A trap because the
+   OTHER panels (treasury/rankings, grp 0x46/0x23) do NOT set it, so their text is
+   all one colour; the diplomacy strings (grp 0x48) are the first to use it.
+
+3. **Unlike the roster, the gift screen RECOMPOSITES the map.**  The 0x0b→0x1a
+   entry (FUN_00436141) calls FUN_004050c0, and the gift panel is smaller + lower
+   than the roster's, so the fresh map is EXPOSED where the roster panel had
+   covered it.  That exposes the load-flip map-anim divergence (quirk #216 — the
+   port renders the top-left AI army-banner / cursor-highlight tiles at a
+   different phase than retail) that the roster's retained-map overlay hid (0x0b
+   was 0 diff there).  So the gift panel is byte-exact but the frame carries a
+   ~3.7k-px map residual OUTSIDE the panel — the same family every
+   map-recompositing screen shows (Send-Supplies 212 px, etc.), just more exposed.
+
+**Verified byte-exact** (tools/traces/diplomacy_gift.jsonl, olv3 both engines:
+load → Diplomacy tab → GIFT button → up-arrow → Yes seal).  The gift PANEL
+interior is 0 diff on gift_open/gift_settled/gift_amount; "Gift of 10 Crowns"
+after the arrow matches; and — the conclusive interaction proof — the HUD "990
+Crowns" readout after confirm is byte-exact (0 diff in the whole HUD band), so the
+10-crown transfer landed identically on both engines.  All residual diff is the
+quirk-#216 map layer outside the panel.  Modes 1..6 (message / ally-attack) and
+the portrait partner-select (FUN_004369bd) are DEFERRED.
+
+> 📍 `src/engine_diplomacy_action.c/.h` (the 0x1a render + gift arrow + confirm),
+> `src/engine_diplomacy.c/.h` (`engine_diplomacy_queue_action` = FUN_004a2621),
+> `src/engine.c` (0x0b button router + 0x1a router/demand/per-frame arms, ctx
+> builder), `src/engine_ingame_input.c` (0x1a close case).  Retail FUN_0041789b /
+> FUN_00417960 / FUN_00436372 / FUN_00436408 / FUN_004a2621 / FUN_0040cfd2 over
+> DAT_004dd9d0.
