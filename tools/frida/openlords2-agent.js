@@ -5997,6 +5997,71 @@ rpc.exports = {
         }
     },
 
+    // ─── Interactive probe RPC (tools/probe_daemon.py) ───────────────────
+    // Live screenshot + input + memory against a running retail, WITHOUT a
+    // pre-authored segtrace — the exploratory front-end for discovering click
+    // coords + state signals before compiling a deterministic trace.  All are
+    // thin wrappers on the same internals the segtrace path uses (so a coord
+    // found here transfers 1:1 to a {t,m,w,l} trace line).
+    probeShot: function () {
+        // Grab the current back-surface + send it as a 'frame' message (same
+        // path as captureFrameOnce).  Returns the frame_idx attached, or -1.
+        try {
+            const idx = g_frame_capture_count;
+            captureFrameOnce();
+            return idx;
+        } catch (e) { err('probeShot', e.message); return -1; }
+    },
+    probePost: function (m, w, l) {
+        // Post one WM_ message to the cached main HWND; mouse lParams rescaled
+        // to the pinned 640x480 client exactly like segtraceTick's input op.
+        try {
+            const post = resolvePostMessageA();
+            if (!post) return false;
+            const hwnd = rva(ADDR.var_main_hwnd).readPointer();
+            if (hwnd.isNull()) return false;
+            let lp = (l >>> 0);
+            if (m >= WM_MOUSEMOVE && m <= WM_RBUTTONDBLCLK) {
+                lp = rescaleMouseLParamToClient(lp);
+            }
+            post(hwnd, m >>> 0, w >>> 0, lp >>> 0);
+            return true;
+        } catch (e) { err('probePost', e.message); return false; }
+    },
+    probeRead: function (va, type) {
+        try { return segReadTyped(va >>> 0, String(type || 'i32')); }
+        catch (e) { return null; }
+    },
+    probeReads: function (specs) {
+        // specs: [{name, va, type}] → {name: value}; unreadable → null.
+        const out = {};
+        const a = Array.isArray(specs) ? specs : [];
+        for (let i = 0; i < a.length; i++) {
+            const s = a[i];
+            try { out[String(s.name)] = segReadTyped((s.va >>> 0),
+                                                     String(s.type || 'i32')); }
+            catch (e) { out[String(s.name)] = null; }
+        }
+        return out;
+    },
+    probePoke: function (va, bytes) {
+        try {
+            const a = (Array.isArray(bytes) ? bytes : [])
+                          .map(function (b) { return b & 0xff; });
+            rva(va >>> 0).writeByteArray(a);
+            return true;
+        } catch (e) { err('probePoke', e.message); return false; }
+    },
+    probeAnchors: function () { return g_anchor_last || {}; },
+    probeAutoDismiss: function (n) {
+        // Toggle the reactive event-scroll dismiss (var_extended_pause != 0 →
+        // call the dismiss fn each tick).  Event scrolls (e.g. Flooding) set
+        // var_extended_pause but DON'T dismiss on RMB, unlike the 0x27 entry
+        // scrolls — this is the only thing that clears them.
+        g_auto_dismiss = (n | 0);
+        return g_auto_dismiss;
+    },
+
     // Controller liveness ping — resets the in-target watchdog timer.  If
     // these stop arriving for g_heartbeat_timeout_ms the agent self-terminates
     // retail so a dead controller can't leak an elevated process.
