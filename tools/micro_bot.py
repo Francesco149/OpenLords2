@@ -9,21 +9,21 @@ army through concentration/micro — which is exactly why the game rigs the auto
 shortcut (the defender-only 1.6x..4x multiplier).  So we MEASURE: same starting
 armies, our micro vs the AI's line-advance, and compare survivors to an auto-resolve.
 
-STATUS (2026-07-09): world model, order primitives, and run/pause/start gates are all
-RE'd + verified live. Orders queue CORRECTLY end to end: FUN_00479e90 (formation) and
-FUN_0047a814 (per unit) set the unit walking and populate the move-animation queue
-DAT_0057a108 with the right start/target pixels (verified: a clean straight-line walk
-entry). BUT the queue never advances — on a COLD enter_battle boot the per-tick unit-sim
-dispatch (state handlers via jump table PTR_FUN_004d9170 -> the animator FUN_00492c8b
-@0x492c8b) does not run. So units don't move and an unmanaged 28-v-28 doesn't resolve.
-Combat flags are all correct (quick-resolve 0x53e8fc==0, interactive 0x53e91c==0, role
-0x5533d0==1, battle-active 0x568964==1) — NOT a quick-resolve misconfig; the master
-battle-sim dispatch is gated OFF for the callq-stitched entry (likely no enemy battle-AI
-controller / a "both sides ready" latch the organic Fight path sets). CAVEATS proven
-this session: (1) capture "no frame" in combat = a stale/post-crash daemon -> reboot
-fixes it; (2) drive within ONE process — across separate invocations the deploy screen
-auto-starts and the fight auto-resolves. NEXT: breakpoint FUN_00492c8b during a REAL
-organic battle to capture the live caller + gating flag, then poke it under this fixture.
+STATUS (2026-07-09): WORKING — units move and execute orders. The earlier "sim doesn't
+run" scare was a MEASUREMENT bug: (a) I read the STATIC deploy pos +0x1a4 instead of the
+live pos at record -0xC/-0xA (fixed in units()), and (b) the old loop FROZE between 350ms
+bursts, but movement only advances while RUNNING and there is a ~1s form-up delay before
+units visibly move. Proven live (longrun): enter -> RMB start (0x28->0x29) -> formation
+move orders -> units walk across the field at ~2-3 hexes/sec; the idle enemy (no AI brain)
+holds. Combat: piling all units onto the enemy instant-resolves the even fight with the
+defender-buffed auto-calc (us 800 -> 0, enemy 800) = exactly beat #2. So the driving stack
+works; remaining tuning is the COMMANDER (order types + pacing for a played-out melee vs
+triggering instant-resolve) — do this live. CAVEATS: (1) capture "no frame" in combat = a
+stale/post-crash daemon -> reboot fixes it; (2) drive within ONE process AND let the prior
+battle end / reboot before re-entering (re-entering a still-running battle crashes the
+game). Trace tooling added for RE: daemon xcall / ctget / ctreset + agent
+installCallTrace/drainCallTrace. Full trace + state-machine map:
+docs/findings/combat-battlefield-input.md.
 
 Reverse-engineered driving model (docs/findings/combat-battlefield-input.md):
   * World model — unit record base 0x5544ac, stride 0x1b0:
@@ -50,7 +50,10 @@ import enter_battle as eb
 # ── VAs ──────────────────────────────────────────────────────────────────────
 UT, STRIDE = 0x5544ac, 0x1b0     # battlefield unit table (indices 1..0x50)
 O_TYPE, O_SIDE, O_FORM = 0x00, 0x02, 0x14c
-O_COL, O_ROW, O_TCOL, O_TROW, O_HP = 0x1a4, 0x1a6, 0x1a8, 0x1aa, 0x174
+O_HP, O_ACT = 0x174, 0x05
+# LIVE hex position is at record-relative -0xC / -0xA (== DAT_005544a0/a2, the field
+# the mover updates). +0x1a4 is a STATIC deploy field the mover ignores — do NOT use it.
+O_COL, O_ROW = -0xC, -0xA
 V_SCREEN = 0x4eac50              # 0x28 deploy / 0x29 fight
 V_PAUSE  = 0x53f238              # 0 = running, -1 = frozen
 V_BFREDRAW = 0x53e9ac
@@ -90,8 +93,8 @@ class Battle:
             specs += [{"name": f"t{i}", "va": b + O_TYPE, "type": "u8"},
                       {"name": f"s{i}", "va": b + O_SIDE, "type": "u8"},
                       {"name": f"f{i}", "va": b + O_FORM, "type": "u8"},
-                      {"name": f"c{i}", "va": b + O_COL, "type": "u8"},
-                      {"name": f"r{i}", "va": b + O_ROW, "type": "u8"},
+                      {"name": f"c{i}", "va": b + O_COL, "type": "i16"},
+                      {"name": f"r{i}", "va": b + O_ROW, "type": "i16"},
                       {"name": f"h{i}", "va": b + O_HP, "type": "u8"}]
         v = self.d.reads(specs)
         out = []
@@ -121,13 +124,13 @@ class Battle:
         # authentic deploy->fight start: inject an RMB on the field (sets 0x29 + pause 0).
         self.d.rpc({"cmd": "click", "x": 320, "y": 240, "button": "r"})
 
-    def step(self, ms):
-        """Run the sim for ~ms, then freeze again."""
+    def run(self, ms):
+        """Let the sim RUN for ~ms (screen 0x29, pause 0) — does NOT freeze after.
+        Movement/combat only advance while running; there is a ~1s form-up delay
+        after issuing orders before units visibly move, so keep windows >= ~1s."""
         self.d.poke(V_SCREEN, [0x29])
         self.d.poke(V_PAUSE, [0, 0, 0, 0])
         self.d.sleep(ms)
-        self.freeze()
-        self.d.poke(V_BFREDRAW, [8, 0, 0, 0])
 
     def over(self, units=None):
         """Battle over if a side has no HP left, or we've left the combat screens."""
@@ -184,32 +187,36 @@ def commander_focus(b: Battle, units):
 COMMANDERS = {"charge": commander_charge, "focus": commander_focus}
 
 
-def fight(d: Daemon, strategy="focus", burst_ms=350, max_bursts=60, verbose=True,
+def fight(d: Daemon, strategy="focus", round_ms=2000, max_rounds=20, verbose=True,
           enter=None):
+    """Drive the battle to completion. The sim runs CONTINUOUSLY (no freezing
+    between decisions — movement/combat only advance while running); each round we
+    re-read the live world, re-issue the commander's orders, then let it run
+    round_ms. Units take ~1s to form up and move at ~2-3 hexes/sec, so rounds of
+    ~2s are a reasonable re-plan cadence."""
     b = Battle(d)
-    if enter is not None:                     # (attacker, defender): enter fresh + freeze
+    if enter is not None:                      # (attacker, defender): enter fresh
         atk, dfn = enter
         eb.enter(eb.Daemon(d.port), atk, dfn)  # lands paused at 0x28
-    b.freeze()
     cmd = COMMANDERS[strategy]
+    b.start()                                  # RMB: deploy 0x28 -> fight 0x29 (running)
     log = []
-    for k in range(max_bursts):
+    for k in range(max_rounds):
         units = b.units()
         done, why = b.over(units)
         sides = Battle.summarize(units)
         s0 = sides.get(0, {}); s1 = sides.get(1, {})
-        rec = dict(burst=k, us_hp=s0.get("hp", 0), us_n=s0.get("units", 0),
+        rec = dict(rnd=k, us_hp=s0.get("hp", 0), us_n=s0.get("units", 0),
                    en_hp=s1.get("hp", 0), en_n=s1.get("units", 0))
         log.append(rec)
         if verbose:
-            print(f"burst {k:2d}: us hp={rec['us_hp']:4d} n={rec['us_n']:2d} | "
+            print(f"round {k:2d}: us hp={rec['us_hp']:4d} n={rec['us_n']:2d} | "
                   f"enemy hp={rec['en_hp']:4d} n={rec['en_n']:2d}")
         if done:
             if verbose: print(f"-> BATTLE OVER: {why}")
             break
-        cmd(b, units)          # (re)issue orders based on the current world
-        b.step(burst_ms)       # advance the sim
-    b.freeze()
+        cmd(b, units)          # (re)issue orders based on the live world
+        b.run(round_ms)        # let the sim advance (no freeze)
     final = Battle.summarize(b.units())
     return dict(strategy=strategy, log=log, final=_ser(final))
 
@@ -224,8 +231,8 @@ if __name__ == "__main__":
     sub = ap.add_subparsers(dest="cmd", required=True)
     pf = sub.add_parser("fight", help="run the micro commander to the end of the battle")
     pf.add_argument("--strategy", choices=list(COMMANDERS), default="focus")
-    pf.add_argument("--burst-ms", type=int, default=350)
-    pf.add_argument("--max-bursts", type=int, default=60)
+    pf.add_argument("--round-ms", type=int, default=2000)
+    pf.add_argument("--max-rounds", type=int, default=20)
     pf.add_argument("--enter", metavar="ATK:DEF", default=None,
                     help="enter a fresh battle first, e.g. 4:5 (attacker:defender)")
     sub.add_parser("world", help="dump the live world model")
@@ -240,5 +247,5 @@ if __name__ == "__main__":
         print("summary:", _ser(Battle.summarize(us)))
     elif args.cmd == "fight":
         enter = tuple(int(x) for x in args.enter.split(":")) if args.enter else None
-        res = fight(d, args.strategy, args.burst_ms, args.max_bursts, enter=enter)
+        res = fight(d, args.strategy, args.round_ms, args.max_rounds, enter=enter)
         print("\nFINAL:", json.dumps(res["final"]))

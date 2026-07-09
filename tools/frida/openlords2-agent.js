@@ -6175,6 +6175,18 @@ rpc.exports = {
                 n_vas:   g_call_trace_vas.length,
                 buffered: g_call_trace_buffer.length};
     },
+    // Drain the call-trace buffer synchronously (interactive probing): return
+    // per-VA call counts + distinct caller ret_vas (base-relative), then clear.
+    drainCallTrace: function () {
+        const ev = g_call_trace_buffer; g_call_trace_buffer = [];
+        const counts = {}, callers = {};
+        for (let i = 0; i < ev.length; i++) {
+            const va = ev[i].va >>> 0, rv = ev[i].ret_va >>> 0;
+            counts[va] = (counts[va] || 0) + 1;
+            (callers[va] = callers[va] || {})[rv] = (callers[va][rv] || 0) + 1;
+        }
+        return {total: ev.length, counts: counts, callers: callers};
+    },
 
     // Late-install the memory watch after init (e.g. once a scenario has
     // driven retail into the scene right before the region is written).

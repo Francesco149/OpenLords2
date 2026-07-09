@@ -119,6 +119,9 @@ class ProbeDaemon:
         # engine-thread call results, keyed by call id
         self._call_results = {}
         self._call_evt = threading.Event()
+        # accumulated call-trace events (agent flushes a batch every tick)
+        self._ct_lock = threading.Lock()
+        self._ct_events = []
 
     def _logline(self, s: str):
         self.log.write(s + "\n")
@@ -150,6 +153,10 @@ class ProbeDaemon:
         if kind == "call_result":
             self._call_results[p.get("id")] = p
             self._call_evt.set()
+            return
+        if kind == "call_trace_batch":
+            with self._ct_lock:
+                self._ct_events.extend(p.get("events", []))
             return
         if kind in ("log", "error"):
             self._logline(f"[agent] {p.get('msg') or p.get('where')}: "
@@ -531,6 +538,25 @@ class ProbeDaemon:
                 return self._callq(int(req["va"]), req.get("args", []),
                                    req.get("abi", "mscdecl"),
                                    float(req.get("timeout", 5.0)))
+            if cmd == "xcall":            # call any agent export by snake_case name
+                fn = getattr(self.script.exports_sync, req["fn"])
+                ret = fn(*req.get("args", []))
+                return {"ok": True, "ret": ret}
+            if cmd == "ctreset":          # clear accumulated call-trace events
+                with self._ct_lock:
+                    self._ct_events = []
+                return {"ok": True}
+            if cmd == "ctget":            # aggregate accumulated call-trace events
+                with self._ct_lock:
+                    evs = list(self._ct_events)
+                    if req.get("clear"):
+                        self._ct_events = []
+                counts, callers = {}, {}
+                for e in evs:
+                    va, rv = e.get("va"), e.get("ret_va")
+                    counts[va] = counts.get(va, 0) + 1
+                    callers.setdefault(va, {})[rv] = callers.setdefault(va, {}).get(rv, 0) + 1
+                return {"ok": True, "total": len(evs), "counts": counts, "callers": callers}
             if cmd == "anchors":
                 return {"ok": True, "anchors": self.script.exports_sync.probe_anchors()}
             if cmd == "autodismiss":
