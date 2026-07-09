@@ -143,6 +143,48 @@ before you can set quick-combat=Fight or Hard. So it's NOT a controllable captur
 Use `load_map_clean.jsonl` (clean map, nothing resolved), set `DAT_0053f284=1` (Fight) +
 sync the +0x01 human-flags first, then drive the attack.
 
+## Battlefield world model + order primitive + sim gate (2026-07-09, `tools/micro_bot.py`)
+Mapped the live battlefield from the paused 28-v-28 fixture (`enter_battle 4 5`), all
+grounded live. **Unit table**: base `DAT_005544ac`, stride `0x1b0`, live indices 1..0x50
+(type!=0). Fields (record-relative):
+- `-0x0c` i16 **current hex col**, `-0x0a` i16 **current hex row** (== `DAT_005544a0/a2`;
+  this is what the mover updates — NOT `+0x1a4`).
+- `+0x00` unit type (army-uniform), `+0x02` **side** (0=attacker/us, 1=defender/AI),
+  `+0x14c` **formation id** (== `DAT_005545f8`; our side = 1..6, enemy = 7..12; ~a row of
+  units each), `+0x174` **HP/strength** (32 = full stack), `+0x16c` troop count (first
+  ranks only), `+0x1a4/+0x1a6` a STATIC deploy/display col/row (looks like position but the
+  mover ignores it — do not poll it for movement).
+
+**Order primitive** — exactly what the RMB handler `FUN_0043c634` calls:
+`FUN_00479e90(formation, col, row, target_unit_or_0, e874=0, 0)` (@0x479e90). arg1 =
+formation id (`DAT_0053e984` selected, but the direct call takes it as a param), arg2/3 =
+target hex col/row (`param_3*0x50+param_2` terrain index), arg4 = enemy unit index to
+attack (0 = plain move). **Verified live**: the call queues correctly — formation table
+(`DAT_00566520` base, stride 0x34) entry gets `+0x22/+0x24` = target col/row, `+0x13` active
+=1, `+0x04/+0x06` = unit-index range. Local play required: `DAT_00553030`(net)==0.
+
+**Run/pause/start gates** (all grounded): the deploy screen `DAT_004eac50` 0x28 → fight
+0x29 transition is done by the 0x28 handler on RMB-release (`DAT_004e6900`): it sets
+screen=0x29, `DAT_0053f238`(pause)=0, `DAT_0053e9ac`(redraw)=1 — nothing else. Injecting a
+real RMB (`probe.py click 320 240 r`) triggers it authentically. `DAT_0053f238`: 0=run,
+-1=frozen.
+
+**⚠️ BLOCKER — the interactive per-tick battle SIM does not advance on a COLD boot.** With
+a fresh `enter_battle` + a queued move/attack order, at screen 0x29 / pause 0 units do NOT
+step toward their target, and an *unmanaged* 28-v-28 does NOT resolve (the earlier note that
+"a flip to 0x29 resolves the melee in 1-2s" and the movement seen in this session's first
+probes were on a WARM game instance left over from a prior driving session — NOT reproducible
+from a cold boot). Combat flags are all correct in the frozen fixture (`DAT_0053e8fc`
+quick-resolve==0, `DAT_0053e91c` interactive==0, `DAT_005533d0` role==1, `DAT_00568964`
+battle-active==1, mode==2), so it is **not** a quick-resolve misconfig. Leading hypothesis:
+the sim waits on a per-side controller / "both sides ready" gate the hacked callq entry never
+satisfies (the enemy side has no battle-AI brain attached). **Next attempts:** (a) drive via
+the authentic LMB-select + RMB-order INPUT path (pan camera `DAT_0055ce70/DAT_005678a0` to
+our units, click) — this sets the unit selected/active flags (`+0x13e` `DAT_005545ea`) the
+mover branch in `FUN_00479e90` reads and the real input may kick the sim; (b) RE the per-tick
+combat-sim step + its enable (the mover that consumes formation target `DAT_00566542/44` and
+steps `DAT_005544a0/a2` — FUN_00479558 is only the net-serializer, not it).
+
 ## ✅ SOLVED — driveable interactive battle entry (2026-07-09, `tools/enter_battle.py`)
 The deploy function is `FUN_0047efee` (@0x47efee: places units on the hex grid via
 `FUN_004801f8`/`FUN_0047fea7`→`FUN_00480662`→`FUN_0046e4c8`, reading troop counts from
