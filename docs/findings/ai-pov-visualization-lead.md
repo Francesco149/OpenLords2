@@ -20,5 +20,24 @@ per-realm STRAT reads (treasury +0x118, army counts) for the overlay data. Verif
 with the probe tool: poke the candidate, `probe.py shot`, see if the map redraws
 as the AI's territory.
 
-Prereq: the basic-action recipe (play a proper game first). See
-[[lotr2-retail-driving-poc]] + tools/probe_daemon.py.
+## Progress 2026-07-09 — the resource perspective is a one-liner; the map needs hooks
+
+**`DAT_0057c8cc` = the "local player" the HUD reads.** Poking it 1→2 (human→AI
+slot 2) flipped the on-screen treasury **1000 → 692 = the AI's real cash**, and
+restored cleanly (no crash). So the *stats/resource* half of the AI-POV — the
+hidden cheated-treasury reveal — is just: `poke 0x57c8cc <ai_slot>` (or read the
+STRAT records directly: cash `0x57bf00 + slot*0x160 + 0x118`, and overlay in
+slopstudio). Players are slots 1..4 (1 = human).
+
+**The MAP did NOT switch** (same fog / county ownership / camera) — only ~0.6% of
+pixels changed (the HUD treasury). So rendering the AI's *terrain/troops/fog*
+needs hooking the map-render + fog/ownership path to substitute the AI slot,
+NOT just the HUD global. Use the engine-thread substrate (drainCallQueue /
+Interceptor on the engine thread — see [[lotr2-retail-driving-poc]]): find the
+fog-of-war buffer + the per-owner map-render selector and force the AI slot for a
+capture, then restore. Candidate anchors: the map composite (screen 0 render
+FUN_0040f5fd), the fog/visibility globals, and `s_slot_0057c93c` (selected
+county). Owner: "we'll likely need to hook a bunch" — yes, for the map.
+
+Prereq for driving into a filmable state: the basic-action recipe (economic
+actions done via clicks + callq). See [[lotr2-retail-driving-poc]] + tools/probe_daemon.py.
