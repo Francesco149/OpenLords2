@@ -143,6 +143,28 @@ before you can set quick-combat=Fight or Hard. So it's NOT a controllable captur
 Use `load_map_clean.jsonl` (clean map, nothing resolved), set `DAT_0053f284=1` (Fight) +
 sync the +0x01 human-flags first, then drive the attack.
 
+## Battle-entry callq attempts (2026-07-09, live) — mode 2 reached, deploy NOT firing
+The assault entry chain is `FUN_004263ad(0x4d56c4,0,1)` (load battle scenario) →
+`FUN_0042b919()` (combat sub-mode init: sets `DAT_0053e91c=0` interactive, quick_resolve
+`DAT_0053e8fc=0`, calls `FUN_0042d389`/`FUN_0042d857`) → `FUN_0042b7f7()` (mode 2 + scratch
+recs 1/2 + `FUN_0042aa90`/`ac0c` deploy chain). Tried live (rec4 human vs rec5 enemy, muster
+via `FUN_00422c12(4,5)`, human-flags synced, `DAT_0053f284=1`, `DAT_0057c8cc=1`,
+`DAT_005533d0=1`): every sequence reaches `DAT_0057c8fc=2` (combat mode) but lands on a
+**results/intro screen (0x22 Battle Master ratings / 0x2e / 0x2f) with ZERO units in the
+0x50-record unit table** (`DAT_005544ac`, stride 0x1b0, all HP +0x174 == 0). I.e. the battle
+**instantly resolves instead of deploying** — the interactive UNIT-DEPLOY step (populate the
+hex grid from the muster and hold at screen 0x28 deploy / 0x29 fight) is NOT triggered by this
+callq stitch. **KEY REMAINING UNKNOWN:** the function that populates the `DAT_005544ac` unit
+records from the muster + gates the hold at 0x28/0x29 (likely inside `FUN_0042d389`/`FUN_0042d857`
+or a deploy fn they should call, gated on a precondition the callq path doesn't satisfy — e.g.
+the battle scenario map from `FUN_004263ad` didn't actually load, ret 0). **RECOMMENDED next
+attempt:** drive the ORGANIC Fight-decision flow instead (order the human army to attack an
+enemy KEEP/ARMY — not a field raid, which silent-auto-resolves — with `DAT_0053f284=1`, end
+turn → the game shows the 0x1f Fight/Auto decision → click Fight → the game runs the full
+deploy correctly). OR RE the deploy fn: trace where the 0x50 unit records (`DAT_005544ac`) get
+their class/-0x1a + HP/+0x174 WRITTEN during a real battle (grep writers; set a watch during an
+organic fight).
+
 ## LEADs — confirm live before relying (exe not on this disk → tables undumped)
 1. **`DAT_004dc710` control-panel table** (5×0x18 B @ VA 0x4dc710): per-button rects +
    which code-ptr = auto-resolve / retreat / formation / speed. Dump live.
