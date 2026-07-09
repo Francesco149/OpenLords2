@@ -33,6 +33,7 @@ session — they outlive the conversation context.
 | [overlay-render.md](overlay-render.md) | Strategic-mode overlay renderer — units + cities pass |
 | [battlefield-render.md](battlefield-render.md) | Combat-mode (battlefield) renderer — full draw-leaf survey |
 | [combat-battlefield-input.md](combat-battlefield-input.md) | Interactive battlefield INPUT model — screens 0x28/0x29/0x2a, select/order (LMB select + RMB attack), entry/exit, Frida driving recipe |
+| [combat-battlefield-ai.md](combat-battlefield-ai.md) | Tactical battlefield AI (sim driver, unit record, per-class behaviour) + exploit surface + kiting-bot spec |
 | [main-menu-parity.md](main-menu-parity.md) | Main-menu render parity — capture (`--skip-intro`), reach, compare |
 | [title-menu-screens.md](title-menu-screens.md) | Title page state machine (`DAT_005530f0`) + menu-navigation capture workflow |
 | [game-start.md](game-start.md) | Start button → new-game init (`FUN_00497ced`) → ingame; entry chain, closure scope, scalar-wall resolution, phased port plan |
