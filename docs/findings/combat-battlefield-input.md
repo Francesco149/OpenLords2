@@ -143,7 +143,33 @@ before you can set quick-combat=Fight or Hard. So it's NOT a controllable captur
 Use `load_map_clean.jsonl` (clean map, nothing resolved), set `DAT_0053f284=1` (Fight) +
 sync the +0x01 human-flags first, then drive the attack.
 
-## Battle-entry callq attempts (2026-07-09, live) — mode 2 reached, deploy NOT firing
+## ✅ SOLVED — driveable interactive battle entry (2026-07-09, `tools/enter_battle.py`)
+The deploy function is `FUN_0047efee` (@0x47efee: places units on the hex grid via
+`FUN_004801f8`/`FUN_0047fea7`→`FUN_00480662`→`FUN_0046e4c8`, reading troop counts from
+`g_per_territory_420[+0x16c/+0x168]`). It is reached ONLY through `FUN_004778a0` (@0x4778a0,
+the battle-SCENE entry). The raw `FUN_004263ad+FUN_0042b919+FUN_0042b7f7` sequence is the
+**AUTO-RESOLVE** path (`DAT_0055302c==3`) which musters + loads the map but never calls
+`FUN_004778a0` → 0 units. **WORKING recipe** (proven live, 56 units / 28-vs-28):
+```
+poke rec[atk]+0x01=1 (human), rec[def]+0x01=0 (AI); viewer 0x57c8cc=1; quickopt 0x53f284=1
+poke 0x568210=atk, 0x568218=def; callq 0x4aa89f(atk), 0x4aa89f(def); role 0x5533d0=1
+callq 0x422c12(atk,def)     # muster
+callq 0x42b919(); callq 0x42b7f7()   # sub-mode init + mode2/terrain/scratch recs 1/2
+callq 0x4778a0()           # THE DEPLOY -> units on grid, screen 0x29
+poke 0x4eac50=0x28         # PAUSE at deploy phase ("Battle Paused")
+```
+**PAUSE = hold screen at 0x28** (deploy phase): the sim runs only when `mode==2 &&
+DAT_004eac50 < 0x2b`, and at 0x28 units are placed but frozen ("Battle Paused" renders,
+56 units stable indefinitely). This is the **control window for a micro/kiting bot**: set
+orders at 0x28, flip to 0x29 for N ticks, flip back. Without driving, a flip to 0x29 lets the
+28-v-28 deterministic melee resolve in ~1-2s → ratings 0x22 → exit 0x2e/0x2f. NOTE: recs 1/2
+(the scratch combatants FUN_0047efee deploys from) are mustered to ~800 troops each from the
+army roster `DAT_00516ac0` by `FUN_0042bf46` (inside b7f7) — override rec1/rec2 +0x16c troops
+before `FUN_004778a0` for a specific composition. Battlefield camera = `DAT_0055ce70`(col)/
+`DAT_005678a0`(row), default (0x20,0x21); pan to the units for a framed shot. Unit record
+(base &`DAT_005544ac`, stride 0x1b0): +0x00 class, +0x02 owner(side 0/1), HP further out.
+
+## Battle-entry callq attempts (2026-07-09, live) — mode 2 reached, deploy NOT firing (superseded ↑)
 The assault entry chain is `FUN_004263ad(0x4d56c4,0,1)` (load battle scenario) →
 `FUN_0042b919()` (combat sub-mode init: sets `DAT_0053e91c=0` interactive, quick_resolve
 `DAT_0053e8fc=0`, calls `FUN_0042d389`/`FUN_0042d857`) → `FUN_0042b7f7()` (mode 2 + scratch
