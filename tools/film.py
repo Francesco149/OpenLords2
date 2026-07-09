@@ -27,6 +27,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ai_pov as A
 import cheat_data as C
 
+# passive-human keepalive (from film_survive.py) — re-assert a big home garrison +
+# flat treasury each turn so the game lasts long enough for an AI to reach level 3
+# (grant → 1800/turn), which a normal passive human dies before (~turn 25).
+HUMAN_SLOT, HUMAN_REGION, KNIGHT_IDX, GARRISON = 1, 13, 5, 6000
+
+
+def keepalive():
+    va_kn = C.rec(HUMAN_REGION, C.R_COUNTS + KNIGHT_IDX * 2)
+    A.send({"cmd": "poke", "va": va_kn, "bytes": [GARRISON & 0xFF, (GARRISON >> 8) & 0xFF]})
+    A.poke_i32(A.strat(HUMAN_SLOT, C.S_CASH), 1000)
+
 
 def open_tax_and_shot(path: str):
     """Open the Tax panel on the selected county and screenshot it (the
@@ -47,6 +58,8 @@ def main():
     ap.add_argument("--out-csv", default="runs/probe/film.csv")
     ap.add_argument("--frames", default="runs/probe/frames")
     ap.add_argument("--frame-every", type=int, default=3, help="capture POV frame every K turns (0=never)")
+    ap.add_argument("--survive", action="store_true",
+                    help="keep a passive human alive each turn so the AI can reach level 3 (the 1800 kink)")
     a = ap.parse_args()
 
     fdir = Path(a.frames); fdir.mkdir(parents=True, exist_ok=True)
@@ -66,6 +79,8 @@ def main():
         w = csv.DictWriter(fh, fieldnames=C.COLS); w.writeheader()
         for t in range(0, a.turns + 1):
             if t > 0:
+                if a.survive:
+                    keepalive()
                 r = A.send({"cmd": "endturn", "timeout": 25.0})
                 A.sleep_ms(300)
                 if not r.get("advanced"):
