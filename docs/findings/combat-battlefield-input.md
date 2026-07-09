@@ -169,21 +169,45 @@ screen=0x29, `DAT_0053f238`(pause)=0, `DAT_0053e9ac`(redraw)=1 — nothing else.
 real RMB (`probe.py click 320 240 r`) triggers it authentically. `DAT_0053f238`: 0=run,
 -1=frozen.
 
-**⚠️ BLOCKER — the interactive per-tick battle SIM does not advance on a COLD boot.** With
-a fresh `enter_battle` + a queued move/attack order, at screen 0x29 / pause 0 units do NOT
-step toward their target, and an *unmanaged* 28-v-28 does NOT resolve (the earlier note that
-"a flip to 0x29 resolves the melee in 1-2s" and the movement seen in this session's first
-probes were on a WARM game instance left over from a prior driving session — NOT reproducible
-from a cold boot). Combat flags are all correct in the frozen fixture (`DAT_0053e8fc`
-quick-resolve==0, `DAT_0053e91c` interactive==0, `DAT_005533d0` role==1, `DAT_00568964`
-battle-active==1, mode==2), so it is **not** a quick-resolve misconfig. Leading hypothesis:
-the sim waits on a per-side controller / "both sides ready" gate the hacked callq entry never
-satisfies (the enemy side has no battle-AI brain attached). **Next attempts:** (a) drive via
-the authentic LMB-select + RMB-order INPUT path (pan camera `DAT_0055ce70/DAT_005678a0` to
-our units, click) — this sets the unit selected/active flags (`+0x13e` `DAT_005545ea`) the
-mover branch in `FUN_00479e90` reads and the real input may kick the sim; (b) RE the per-tick
-combat-sim step + its enable (the mover that consumes formation target `DAT_00566542/44` and
-steps `DAT_005544a0/a2` — FUN_00479558 is only the net-serializer, not it).
+### Operational facts (2026-07-09 deep session — all live)
+- **Capture "no frame" in combat mode = a STALE / post-crash daemon**, NOT a code bug. On a
+  FRESH `probe_daemon` boot, `probe.py shot` captures the battlefield fine in mode 2. If a
+  battle crashed the game under an old daemon, the frida present-seat is dead → reboot the
+  daemon (`quit` + relaunch). Verified: fresh boot captures the ratings/field cleanly.
+- **All battle setup + driving MUST happen in ONE process / one daemon connection.** Across
+  separate `nix develop -c python3 …` invocations the game's main loop keeps running in the
+  multi-second gap and the DEPLOY screen (0x28) auto-starts → the fight auto-resolves → screen
+  drifts to 0x22 ratings / 0x2e. Held inside a single script, the screen stays put (no drift).
+- **Deploy→fight start**: inject a real RMB on the field (`click 320 240 r`) — the 0x28 handler
+  sets screen=0x29, `DAT_0053f238`(pause)=0, redraw=1. **Hourglass = `FUN_0043b9a1`** (@0x43b9a1):
+  toggles `DAT_0053f238` (0=run / ~0=-1 freeze), plays the pause sound, sets `DAT_00553ed8`=1.
+- **`DAT_004e59a8` (via `FUN_00423739`) increments every combat frame — but it's a UI/blink
+  timer, NOT the unit sim.** It cycling ≠ the fight advancing.
+
+### Order path fully traced — and where it dead-ends (the real BLOCKER)
+`FUN_00479e90(formation,…)` and the per-unit `FUN_0047a814(unit,col,row)` (@0x47a814) BOTH work
+as intended: they set the unit to walking (action byte `+0x05`→2) and **correctly populate the
+move-animation queue** `DAT_0057a108` (base, stride 0x4c: +0x00 unit, +0x02 cur-px-x, +0x04
+cur-px-y, +0x06 tgt-px-x, +0x08 tgt-px-y; pixel = hex<<5). Verified live: a move of unit1 to
+(49,60) wrote queue slot {cx=1568(=49<<5), cy=2304(=72<<5) → tx=1568, ty=1920(=60<<5)} — a
+straight walk up column 49. **But cx/cy NEVER advance** → the unit never moves. The animator
+that steps the queue is **`FUN_00492c8b`** (@0x492c8b), driven by the per-unit state handlers in
+the jump table **`PTR_FUN_004d9170`** (indexed by the action byte; dispatched by
+`FUN_004825d1`/`FUN_004826b0`/… and the unit loop `FUN_0048257c`→`FUN_00486209`). On the
+cold-boot hacked battle that per-tick unit-sim dispatch **does not run**, so the queue is frozen.
+Calling `FUN_00492c8b` standalone via `callq` (even 160×) does NOT advance it either — it steps
+the sim's own live index (`DAT_0056d5b4`/`DAT_00568990`), not an arbitrary slot. Combat flags are
+all correct (quick-resolve 0x53e8fc==0, interactive 0x53e91c==0, role 0x5533d0==1, battle-active
+0x568964==1, mode==2), so it's not a quick-resolve/flag misconfig — the master per-tick
+battle-sim dispatch is simply gated OFF for the callq-stitched entry (likely no enemy battle-AI
+controller / a "both sides ready" latch the organic Fight path sets).
+**NEXT (RE the sim harder — precise target):** boot a REAL organic battle (normal turn: order the
+human army to attack an enemy KEEP/ARMY → end turn → the 0x1f Fight decision `DAT_0059154c==5` →
+Fight), then set a Frida breakpoint on `FUN_00492c8b` (@0x492c8b) or the queue-cx writer
+(`DAT_0057a10a`) to capture the LIVE caller chain + the flag guarding it — then poke that flag to
+enable the sim under the fast `enter_battle` fixture. (The whole driving stack —
+`tools/micro_bot.py` world model + `FUN_00479e90`/`FUN_0047a814` orders + gates — is ready and
+correct; only this one sim-enable gate is missing.)
 
 ## ✅ SOLVED — driveable interactive battle entry (2026-07-09, `tools/enter_battle.py`)
 The deploy function is `FUN_0047efee` (@0x47efee: places units on the hex grid via

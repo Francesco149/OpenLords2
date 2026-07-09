@@ -9,19 +9,21 @@ army through concentration/micro — which is exactly why the game rigs the auto
 shortcut (the defender-only 1.6x..4x multiplier).  So we MEASURE: same starting
 armies, our micro vs the AI's line-advance, and compare survivors to an auto-resolve.
 
-STATUS (2026-07-09): the world model, the order primitive, and the run/pause gates
-below are all RE'd and verified live — orders queue correctly (formation target +
-active flag set), and the authentic RMB deploy->fight start works.  BUT on a COLD
-`enter_battle` boot the interactive per-tick battle SIM does not advance: units don't
-execute queued orders and an unmanaged 28-v-28 does not resolve (contrary to earlier
-notes — that movement was observed on a WARM prior-session game instance, not
-reproducible from a fresh boot).  Combat flags are correct (quick-resolve
-0x53e8fc==0, interactive 0x53e91c==0, role 0x5533d0==1, battle-active 0x568964==1),
-so the blocker is NOT quick-resolve mode.  Remaining lead: the battle sim likely
-waits on a per-side controller/"both sides ready" gate that the hacked callq entry
-(enter_battle) never satisfies — the enemy side has no battle-AI brain attached.
-Next: drive via the authentic LMB-select + RMB-order INPUT path (sets the unit
-selected/active flags the mover reads), or RE the per-tick combat-sim enable.
+STATUS (2026-07-09): world model, order primitives, and run/pause/start gates are all
+RE'd + verified live. Orders queue CORRECTLY end to end: FUN_00479e90 (formation) and
+FUN_0047a814 (per unit) set the unit walking and populate the move-animation queue
+DAT_0057a108 with the right start/target pixels (verified: a clean straight-line walk
+entry). BUT the queue never advances — on a COLD enter_battle boot the per-tick unit-sim
+dispatch (state handlers via jump table PTR_FUN_004d9170 -> the animator FUN_00492c8b
+@0x492c8b) does not run. So units don't move and an unmanaged 28-v-28 doesn't resolve.
+Combat flags are all correct (quick-resolve 0x53e8fc==0, interactive 0x53e91c==0, role
+0x5533d0==1, battle-active 0x568964==1) — NOT a quick-resolve misconfig; the master
+battle-sim dispatch is gated OFF for the callq-stitched entry (likely no enemy battle-AI
+controller / a "both sides ready" latch the organic Fight path sets). CAVEATS proven
+this session: (1) capture "no frame" in combat = a stale/post-crash daemon -> reboot
+fixes it; (2) drive within ONE process — across separate invocations the deploy screen
+auto-starts and the fight auto-resolves. NEXT: breakpoint FUN_00492c8b during a REAL
+organic battle to capture the live caller + gating flag, then poke it under this fixture.
 
 Reverse-engineered driving model (docs/findings/combat-battlefield-input.md):
   * World model — unit record base 0x5544ac, stride 0x1b0:
@@ -52,7 +54,9 @@ O_COL, O_ROW, O_TCOL, O_TROW, O_HP = 0x1a4, 0x1a6, 0x1a8, 0x1aa, 0x174
 V_SCREEN = 0x4eac50              # 0x28 deploy / 0x29 fight
 V_PAUSE  = 0x53f238              # 0 = running, -1 = frozen
 V_BFREDRAW = 0x53e9ac
-F_ORDER  = 0x479e90             # FUN_00479e90(form, col, row, target, 0, 0)
+F_ORDER  = 0x479e90             # FUN_00479e90(form, col, row, target, 0, 0)  formation order
+F_MOVE1  = 0x47a814             # FUN_0047a814(unit, col, row)  per-unit move-to-hex
+F_HGLASS = 0x43b9a1             # FUN_0043b9a1()  hourglass: toggle DAT_0053f238 (start/pause)
 GRID_MAX = 0x50
 
 
@@ -110,6 +114,12 @@ class Battle:
     def screen(self): return self.d.rd(V_SCREEN, "u8")
     def order(self, form, col, row, target=0):
         return self.d.callq(F_ORDER, form, col, row, target, 0, 0)
+    def move_unit(self, unit, col, row):
+        # per-unit move: sets action->walking + populates the move-anim queue (verified).
+        return self.d.callq(F_MOVE1, unit, col, row)
+    def start(self):
+        # authentic deploy->fight start: inject an RMB on the field (sets 0x29 + pause 0).
+        self.d.rpc({"cmd": "click", "x": 320, "y": 240, "button": "r"})
 
     def step(self, ms):
         """Run the sim for ~ms, then freeze again."""
