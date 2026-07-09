@@ -20,9 +20,24 @@ POV to a realm + screenshot — see the enemy economy) · `screenshot` · and ad
 - `tools/openlords2_mcp.py --play N` — dogfoods the handlers as a play-loop (set_tax → end N
   turns → watch the AI's free gold compound). Boot the daemon first.
 
-**Wiring into a client (owner, needs a client restart):** register as an MCP stdio server
-running `nix develop -c python3 tools/openlords2_mcp.py` with cwd = repo root, then restart
-the client. (Deferred per owner: can't restart this session's harness mid-run.)
+**Wiring into a client — DONE 2026-07-09.** Registered as a stdio MCP server `openlords2`
+under the `/opt/src/slopstudio` project (`~/.claude.json`, local scope, next to `yutu`);
+`claude mcp list` shows ✔ Connected. Restart the client to load its tools; the probe daemon
+must be running or every tool returns "GAME NOT REACHABLE".
+
+**GOTCHA — do NOT wire it as `nix develop -c python3 …`.** The dev-shell shellHook echoes its
+banner ("openlords2 dev shell ready …") to **stdout**, which corrupts the newline-delimited
+JSON-RPC stream (the client reads the banner as garbage and the handshake breaks). Invoke the
+interpreter DIRECTLY instead — the MCP server and `ai_pov` are stdlib-only, so a bare python
+needs none of the dev-shell env. Registered command:
+
+    /home/headpats/.local/state/openlords2/mcp-python/bin/python3 \
+        /opt/src/OpenLords2/tools/openlords2_mcp.py
+
+`mcp-python` is a GC-root pinning the flake's python3 so `nix-collect-garbage` can't delete it:
+`nix-store --realise <devshell-python-store-path> --add-root ~/.local/state/openlords2/mcp-python --indirect`.
+The script resolves the daemon (`runs/probe/daemon.json`) from `__file__`, so cwd is irrelevant.
+(Re-pin after a `nix flake update` for a newer interpreter — not needed for a stdlib script.)
 
 **Roadmap:** add the military moves below as tools; a `new_game(config)` tool (difficulty /
 player count / AI level) so a match is fully LLM-set-up; a turn-diff summarizer.
