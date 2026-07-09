@@ -114,6 +114,7 @@ class ProbeDaemon:
         self._frame_lock = threading.Lock()
         self._frame = None                # (idx, w, h, palette_bytes, pixels)
         self._frame_evt = threading.Event()
+        self._rec = None                  # active recording {proc, thread, stop, ...}
         self._shot_seq = 0
         # engine-thread call results, keyed by call id
         self._call_results = {}
@@ -136,9 +137,13 @@ class ProbeDaemon:
                 w, h, fi = struct.unpack("<III", data[:12])
                 pal = data[12:12 + 1024]
                 px = data[12 + 1024: 12 + 1024 + w * h]
-                with self._frame_lock:
-                    self._frame = (fi, w, h, pal, px)
-                self._frame_evt.set()
+                rec = self._rec
+                if rec is not None and rec.get("proc") is not None:
+                    self._rec_write(rec, w, h, pal, px)
+                else:
+                    with self._frame_lock:
+                        self._frame = (fi, w, h, pal, px)
+                    self._frame_evt.set()
             except Exception as e:  # noqa: BLE001
                 self._logline(f"[frame] decode failed: {e}")
             return
@@ -352,6 +357,87 @@ class ProbeDaemon:
         return self._panel_set((600, 218), 0x19, (357, 146), (384, 146),
                                6, level, "rations")
 
+    def _capture_raw(self, timeout=1.0, force_redraw=False):
+        """Trigger ONE frame capture and return (idx, w, h, pal, px), or None.
+        captureFrameOnce bumps its counter every call, so each probe_shot yields a
+        fresh frame_idx — no need to wait for the game to mark itself dirty."""
+        self._frame_evt.clear()
+        with self._frame_lock:
+            prev = self._frame[0] if self._frame else -1
+        if force_redraw:
+            try:
+                self.script.exports_sync.probe_poke(0x0057d340, [2])  # mark map dirty
+            except Exception:
+                pass
+        self.script.exports_sync.probe_shot()
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self._frame_evt.wait(0.05):
+                with self._frame_lock:
+                    if self._frame and self._frame[0] != prev:
+                        return self._frame
+                self._frame_evt.clear()
+        with self._frame_lock:
+            return self._frame
+
+    def _rec_write(self, rec, w, h, pal, px):
+        """Feed one streamed frame to the recording's ffmpeg (called from the
+        frida message thread).  Frames arrive AUTONOMOUSLY from the agent, so this
+        never blocks driving on the command channel."""
+        if w != rec["w"] or h != rec["h"]:
+            return
+        try:
+            rec["proc"].stdin.write(_pal_to_rgb_img(w, h, pal, px).tobytes())
+            rec["n"] += 1
+        except (BrokenPipeError, ValueError):
+            pass
+
+    def _record_start(self, path, fps=30):
+        """Record real gameplay: the AGENT streams a frame every ~1000/fps real ms
+        (decoupled from driving), the daemon pipes them to ffmpeg (rawvideo → h264).
+        Drive turns/camera/battles while it runs; in turbo the result is a real
+        fast-motion timelapse."""
+        import subprocess
+        if self._rec:
+            return {"ok": False, "err": "already recording"}
+        fr = self._capture_raw(timeout=2.0)          # one frame for the dims
+        if not fr:
+            return {"ok": False, "err": "no frame (is the game presenting?)"}
+        _, w, h, _, _ = fr
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        proc = subprocess.Popen(
+            ["ffmpeg", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
+             "-s", f"{w}x{h}", "-r", str(fps), "-i", "-",
+             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", str(path)],
+            stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self._rec = {"proc": proc, "path": str(path), "w": w, "h": h,
+                     "fps": fps, "n": 0, "t0": time.monotonic()}
+        interval = self.script.exports_sync.probe_stream_start(max(1, round(1000 / fps)))
+        return {"ok": True, "path": str(path), "w": w, "h": h, "fps": fps,
+                "interval_ms": interval}
+
+    def _record_stop(self):
+        if not self._rec:
+            return {"ok": False, "err": "not recording"}
+        try:
+            self.script.exports_sync.probe_stream_stop()
+        except Exception:
+            pass
+        time.sleep(0.25)                              # let in-flight frames drain
+        rec, self._rec = self._rec, None
+        try:
+            rec["proc"].stdin.close()
+        except Exception:
+            pass
+        try:
+            rec["proc"].wait(timeout=15)
+        except Exception:
+            rec["proc"].kill()
+        dur = time.monotonic() - rec["t0"]
+        return {"ok": True, "path": rec["path"], "frames": rec["n"],
+                "duration_s": round(dur, 2),
+                "avg_fps": round(rec["n"] / dur, 1) if dur > 0 else 0}
+
     def _shot(self, path=None):
         # Retry a few times: under the shown window / present seat the DDraw
         # back surface can be momentarily lost, so one probeShot may yield nothing.
@@ -391,6 +477,10 @@ class ProbeDaemon:
                 return {"ok": True, "pid": self.pid}
             if cmd == "shot":
                 return self._shot(req.get("path"))
+            if cmd == "record":
+                if req.get("action") == "start":
+                    return self._record_start(req["path"], int(req.get("fps", 30)))
+                return self._record_stop()
             if cmd == "click":
                 return self._click(req["x"], req["y"], req.get("button", "l"),
                                    float(req.get("gap", 0.05)))
@@ -498,17 +588,21 @@ class ProbeDaemon:
             self.stop()
 
 
-def _save_png(out: Path, w: int, h: int, palette: bytes, pixels: bytes):
+def _pal_to_rgb_img(w: int, h: int, palette: bytes, pixels: bytes):
+    """Palettized frame → a PIL RGB image (shared by shot-save + the recorder)."""
     from PIL import Image
-    # palette is 256 * (R,G,B,flags); PIL wants flat R,G,B.
-    rgb = bytearray(768)
+    rgb = bytearray(768)                       # palette is 256 * (R,G,B,flags)
     for i in range(256):
         rgb[i * 3 + 0] = palette[i * 4 + 0]
         rgb[i * 3 + 1] = palette[i * 4 + 1]
         rgb[i * 3 + 2] = palette[i * 4 + 2]
     img = Image.frombytes("P", (w, h), bytes(pixels))
     img.putpalette(bytes(rgb))
-    img.convert("RGB").save(out)
+    return img.convert("RGB")
+
+
+def _save_png(out: Path, w: int, h: int, palette: bytes, pixels: bytes):
+    _pal_to_rgb_img(w, h, palette, pixels).save(out)
 
 
 def main():

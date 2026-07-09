@@ -496,6 +496,15 @@ let g_gdi_seat_enabled     = false;
 // the window doesn't stay hidden after init.
 let g_agent_present_enabled    = false;
 let g_agent_present_every_ticks = 100;     // ~20 Hz at default turbo step
+
+// Continuous frame streaming for the recorder.  When on, engine_tick.onLeave
+// captures + sends a frame at most every g_stream_interval_ms REAL ms — decoupled
+// from the daemon's command channel (probe_read/click) so recording does NOT
+// starve driving the way a daemon-side probe_shot poll-loop does.  A real-time
+// gate keeps fps stable regardless of the (turbo-variable) tick rate.
+let g_stream_enabled     = false;
+let g_stream_interval_ms = 33;      // ~30 fps
+let g_last_stream_ms     = 0;
 let g_show_window_after_ms     = 0;        // 0 = never auto-show
 let g_show_window_client_w     = 640;      // post-show client size — engine's
 let g_show_window_client_h     = 480;      // native render res, 1:1 pixel-perfect
@@ -2152,6 +2161,16 @@ function tryAgentDrivenPresent() {
     presentBackToWindowViaGdi(back, palette, hwnd);
 }
 
+// Recorder stream: send a frame every g_stream_every_ticks ticks from inside the
+// engine tick (synchronized with the game's own render, no external lock race).
+function maybeStreamFrame() {
+    if (!g_stream_enabled) return;
+    const t = nowMs();
+    if ((t - g_last_stream_ms) < g_stream_interval_ms) return;
+    g_last_stream_ms = t;
+    try { captureFrameOnce(); } catch (e) { err('maybeStreamFrame', e.message); }
+}
+
 // Force the main-loop present gate open so the engine runs at full speed
 // and services input every iteration (see var_app_active note in ADDR).
 // A frida-spawned window rarely wins foreground, so WM_ACTIVATEAPP=TRUE
@@ -3596,6 +3615,7 @@ function installEngineTickHook() {
                 tryForceAppActive();
                 tryShowEngineWindow();
                 tryAgentDrivenPresent();
+                maybeStreamFrame();
             }
         },
     });
@@ -6036,6 +6056,13 @@ rpc.exports = {
             return idx;
         } catch (e) { err('probeShot', e.message); return -1; }
     },
+    probeStreamStart: function (intervalMs) {
+        g_stream_interval_ms = (intervalMs | 0) > 0 ? (intervalMs | 0) : 33;
+        g_last_stream_ms = 0;
+        g_stream_enabled = true;
+        return g_stream_interval_ms;
+    },
+    probeStreamStop: function () { g_stream_enabled = false; return true; },
     probePost: function (m, w, l) {
         // Post one WM_ message to the cached main HWND; mouse lParams rescaled
         // to the pinned 640x480 client exactly like segtraceTick's input op.
