@@ -120,6 +120,29 @@ daemon. Findings:
   playable fight. (Next: RE the deploy-phase init between FUN_0042b7f7 and screen 0x28, or
   just drive the organic attack→endturn→Fight sequence.)
 
+## The battle-SETUP chain (why a clean entry is fiddly) — FUN_0042b7f7 @17827
+`FUN_0042b7f7` (the combat-mode entry) does NOT battle the arbitrary DAT_00568210/218 you
+pass upstream — it **overwrites them to scratch records 1 and 2** (`DAT_00568210=1`,
+`DAT_00568218=2`; disbands recs 1/2 via `FUN_0046ead0(0x52f254/0x52f3f8)`), then runs the
+deploy/setup chain that populates the battlefield unit table (`DAT_005544ac`) from those
+scratch slots: `FUN_0042aa90`, `FUN_0042ac0c`, `FUN_00498dcb`, `FUN_0042b9c4`,
+`FUN_0042bf46` (+ camera to hex 0x20,0x21, mode 2). So the real combatants must be COPIED
+into scratch records 1/2 BEFORE `FUN_0042b7f7` — that copy is done by the normal entry
+(the "Fight" decision path), NOT by a bare callq. This is why `callq FUN_004a7158(4,5)` +
+`callq FUN_0042b7f7()` battled empty slots and showed a garbage 0x22 ratings screen.
+**To get a DRIVEABLE battle cleanly, either:** (a) drive the ORGANIC attack→endturn→Fight
+flow (the game copies the combatants + runs setup), or (b) pre-load recs 1/2 with the two
+armies' troop arrays (+0x16c) + owners + human-flags, THEN callq FUN_0042b7f7 — and hold
+the screen at 0x28/0x29 without clicking the 0x22 intro (a click there auto-exits). Trace
+which function copies the strategic combatants → scratch recs 1/2 in the Fight path (LEAD).
+
+### GOTCHA: the attack traces AUTO-RESOLVE on load
+`attack_field_click.jsonl` ("Destroy field?" → Yes → **silent execute**) fires the attack
+IMMEDIATELY during the trace and it AUTO-RESOLVES (human rec4 wiped, enemy rec5 50→5) —
+before you can set quick-combat=Fight or Hard. So it's NOT a controllable capture vehicle.
+Use `load_map_clean.jsonl` (clean map, nothing resolved), set `DAT_0053f284=1` (Fight) +
+sync the +0x01 human-flags first, then drive the attack.
+
 ## LEADs — confirm live before relying (exe not on this disk → tables undumped)
 1. **`DAT_004dc710` control-panel table** (5×0x18 B @ VA 0x4dc710): per-button rects +
    which code-ptr = auto-resolve / retreat / formation / speed. Dump live.
