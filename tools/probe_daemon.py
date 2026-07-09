@@ -287,6 +287,49 @@ class ProbeDaemon:
         return {"ok": True, "advanced": False, "season": rd(0x0057C934),
                 "year": rd(0x00553EDC), "scrolls_dismissed": dismissed}
 
+    def _to_map(self):
+        """Get back to the free-roam map (screen 0, no modal freeze)."""
+        rd = lambda va: self.script.exports_sync.probe_read(va, "i32")
+        for _ in range(6):
+            if rd(0x004EAC50) == 0 and rd(0x0053E910) == 0:
+                return True
+            self._click(*SCROLL_DISMISS_XY, "r")
+            time.sleep(0.3)
+        return rd(0x004EAC50) == 0
+
+    def _panel_set(self, open_xy, open_screen, up_xy, down_xy, floor_clicks,
+                   value, label):
+        """Open a HUD arrow-panel, floor it to 0/min, raise `value` steps, close.
+        Absolute setter with relative arrows (no need to read the field)."""
+        rd = lambda va: self.script.exports_sync.probe_read(va, "i32")
+        self._to_map()
+        self._click(*open_xy, "l")
+        time.sleep(0.4)
+        scr = rd(0x004EAC50)
+        if scr != open_screen:
+            return {"ok": False, "err": f"{label} panel not open (screen {scr})"}
+        for _ in range(floor_clicks):
+            self._click(*down_xy, "l")
+            time.sleep(0.1)
+        for _ in range(int(value)):
+            self._click(*up_xy, "l")
+            time.sleep(0.1)
+        self._click(*SCROLL_DISMISS_XY, "r")
+        time.sleep(0.3)
+        return {"ok": True, label: int(value)}
+
+    def _set_tax(self, pct):
+        # Tax panel 0x15: ↑ (197,178) / ↓ (243,178).  Floor 12 = down to 0%.
+        return self._panel_set((515, 218), 0x15, (197, 178), (243, 178),
+                               12, pct, "tax")
+
+    def _set_rations(self, level):
+        # Rations panel 0x19: level 0 None..5 Triple; "Wanted" ↑ (357,146) /
+        # ↓ (384,146) (validated live; FUN_0043a379 is the SEPARATE grain/meat
+        # mix slider at y=0xdc, not this level control).
+        return self._panel_set((600, 218), 0x19, (357, 146), (384, 146),
+                               6, level, "rations")
+
     def _shot(self, path=None):
         # Retry a few times: under the shown window / present seat the DDraw
         # back surface can be momentarily lost, so one probeShot may yield nothing.
@@ -358,6 +401,12 @@ class ProbeDaemon:
                 r = self._endturn(float(req.get("timeout", 10.0)))
                 r["state"] = self.script.exports_sync.probe_reads(_state_specs(5))
                 return r
+            if cmd == "tomap":
+                return {"ok": self._to_map()}
+            if cmd == "settax":
+                return self._set_tax(int(req["pct"]))
+            if cmd == "setrations":
+                return self._set_rations(int(req["level"]))
             if cmd == "poke":
                 ok = self.script.exports_sync.probe_poke(int(req["va"]),
                                                          req["bytes"])

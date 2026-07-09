@@ -98,6 +98,12 @@ def _build(argv: list[str]) -> dict:
         return {"cmd": "state", "nplayers": int(rest[0]) if rest else 5}
     if cmd == "endturn":
         return {"cmd": "endturn", "timeout": float(rest[0]) if rest else 10.0}
+    if cmd == "tomap":
+        return {"cmd": "tomap"}
+    if cmd == "settax":
+        return {"cmd": "settax", "pct": int(rest[0])}
+    if cmd == "setrations":
+        return {"cmd": "setrations", "level": int(rest[0])}
     if cmd == "poke":
         return {"cmd": "poke", "va": int(rest[0], 0),
                 "bytes": [int(b, 0) & 0xFF for b in rest[1].split(",")]}
