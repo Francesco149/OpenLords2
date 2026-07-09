@@ -76,6 +76,18 @@ FEASIBLE. Everything the game reads derives from injected cursor (`DAT_004e65fc/
 path at pinned 640×480 already drives these (proven by the strategic End-Turn hit-test).
 No keyboard needed for the core loop.
 
+### Owner's winning line for the EVEN fight (2026-07-09) — the Path-B driving plan
+Owner (real gameplay): *"win even with losing numbers — find a spot to camp and
+bottleneck the enemy while archers snipe them."* So the manual win is NOT "same army
+auto-wins" — it takes **skill**: hold a chokepoint (terrain funnel), keep archers back
+and snipe the enemy as they bunch at the bottleneck. This SHARPENS beat #2's honesty:
+the auto-calc buff matters precisely BECAUSE a skilled human would otherwise outplay an
+even AI — the game rigs the shortcut you'd take instead of fighting. Drive Path B as:
+(1) select archers, RMB-move them to a rear/high tile behind a terrain pinch; (2) let
+the melee/enemy funnel into the choke; (3) RMB-target (snipe) the bunched enemy with the
+archers each cooldown. LEAD: confirm ranged vs melee unit identity + attack range on the
+battlefield (unit class in the roster panel; class weights {2,16,8,13,9,13,22} index).
+
 **Minimal sequence (attacker stronger ⇒ just win the melee):**
 1. Pre-battle 0x1f: LMB the assault/fight button (`DAT_0059154c==5`) → enters 0x28.
    (Or LMB auto-resolve `==2` for the trivial no-battlefield path = Path A capture.)
