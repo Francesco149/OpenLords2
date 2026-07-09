@@ -115,6 +115,9 @@ class ProbeDaemon:
         self._frame = None                # (idx, w, h, palette_bytes, pixels)
         self._frame_evt = threading.Event()
         self._shot_seq = 0
+        # engine-thread call results, keyed by call id
+        self._call_results = {}
+        self._call_evt = threading.Event()
 
     def _logline(self, s: str):
         self.log.write(s + "\n")
@@ -138,6 +141,10 @@ class ProbeDaemon:
                 self._frame_evt.set()
             except Exception as e:  # noqa: BLE001
                 self._logline(f"[frame] decode failed: {e}")
+            return
+        if kind == "call_result":
+            self._call_results[p.get("id")] = p
+            self._call_evt.set()
             return
         if kind in ("log", "error"):
             self._logline(f"[agent] {p.get('msg') or p.get('where')}: "
@@ -287,6 +294,21 @@ class ProbeDaemon:
         return {"ok": True, "advanced": False, "season": rd(0x0057C934),
                 "year": rd(0x00553EDC), "scrolls_dismissed": dismissed}
 
+    def _callq(self, va, args, abi, timeout):
+        """Enqueue a fn call to run on the ENGINE thread (safe) and wait for its
+        result message.  Times out if the engine isn't ticking."""
+        self._call_evt.clear()
+        cid = self.script.exports_sync.probe_enqueue_call(va, args, abi)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if cid in self._call_results:
+                r = self._call_results.pop(cid)
+                return {"ok": "err" not in r, "ret": r.get("ret"),
+                        "err": r.get("err"), "id": cid}
+            self._call_evt.wait(0.2)
+            self._call_evt.clear()
+        return {"ok": False, "err": "call timed out (engine not ticking?)", "id": cid}
+
     def _to_map(self):
         """Get back to the free-roam map (screen 0, no modal freeze)."""
         rd = lambda va: self.script.exports_sync.probe_read(va, "i32")
@@ -411,6 +433,14 @@ class ProbeDaemon:
                 ok = self.script.exports_sync.probe_poke(int(req["va"]),
                                                          req["bytes"])
                 return {"ok": bool(ok)}
+            if cmd == "call":
+                ret = self.script.exports_sync.probe_call(
+                    int(req["va"]), req.get("args", []), req.get("abi", "mscdecl"))
+                return {"ok": ret is not None, "ret": ret}
+            if cmd == "callq":
+                return self._callq(int(req["va"]), req.get("args", []),
+                                   req.get("abi", "mscdecl"),
+                                   float(req.get("timeout", 5.0)))
             if cmd == "anchors":
                 return {"ok": True, "anchors": self.script.exports_sync.probe_anchors()}
             if cmd == "autodismiss":

@@ -107,6 +107,12 @@ def _build(argv: list[str]) -> dict:
     if cmd == "poke":
         return {"cmd": "poke", "va": int(rest[0], 0),
                 "bytes": [int(b, 0) & 0xFF for b in rest[1].split(",")]}
+    if cmd == "call":                          # call VA [intarg ...]  (hex ok)
+        return {"cmd": "call", "va": int(rest[0], 0),
+                "args": [int(x, 0) for x in rest[1:]]}
+    if cmd == "callq":                         # callq VA [intarg ...] — engine-thread
+        return {"cmd": "callq", "va": int(rest[0], 0),
+                "args": [int(x, 0) for x in rest[1:]]}
     if cmd in ("anchors", "ping", "quit"):
         return {"cmd": cmd}
     if cmd == "autodismiss":

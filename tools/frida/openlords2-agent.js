@@ -2856,6 +2856,29 @@ function segtraceTick(frame) {
     }
 }
 
+// Engine-thread command queue (owner idea).  probeEnqueueCall pushes a
+// {va,args} call; the per-tick hook drains it HERE — so the call runs in the
+// engine's OWN context (main thread, between ticks), no V8-vs-engine race.  A
+// naked call from the V8 thread crashed the game (FUN_0043ac23); this is the
+// safe path, and the same substrate the AI-POV render hooks will use.
+let g_call_queue = [];
+let g_call_seq   = 0;
+function drainCallQueue() {
+    if (g_call_queue.length === 0) return;
+    const q = g_call_queue; g_call_queue = [];
+    for (let i = 0; i < q.length; i++) {
+        const c = q[i];
+        try {
+            const fn = new NativeFunction(rva(c.va >>> 0), 'int32',
+                c.args.map(function () { return 'int32'; }), c.abi);
+            const ret = fn.apply(null, c.args);
+            send({kind: 'call_result', id: c.id, va: c.va, ret: (ret | 0)});
+        } catch (e) {
+            send({kind: 'call_result', id: c.id, va: c.va, err: e.message});
+        }
+    }
+}
+
 // Reactive popup auto-dismiss — the retail mirror of the port's engine.c:2098
 // chip.  Called from engine_tick.onEnter (before the tick body, so the freeze
 // is cleared before retail's rate controller checks it): while a modal scroll
@@ -3461,6 +3484,7 @@ function installEngineTickHook() {
             anchorTick(g_tick_count);
             segtraceTick(g_tick_count);
             autoDismissTick();   // reactive modal-scroll dismiss (mirror of port)
+            drainCallQueue();    // run queued action calls ON the engine thread
             watchTick(g_tick_count);
             // Arm draw capture BEFORE this tick renders, iff it's a scheduled
             // capture tick (segtraceTick above may have just added it for {capture:0}).
@@ -6053,6 +6077,33 @@ rpc.exports = {
         } catch (e) { err('probePoke', e.message); return false; }
     },
     probeAnchors: function () { return g_anchor_last || {}; },
+    probeCall: function (va, args, abi) {
+        // Call a retail function at a Ghidra VA with up to N int args.
+        // ⚠ UNSAFE for engine-context fns: called from the V8 thread it races the
+        // engine main thread — CRASHED the game on FUN_0043ac23 (end-turn) 2026-07-09.
+        // To drive actions this way SAFELY, schedule the call ON the engine thread
+        // (queue it in the per-tick hook / freeze the tick during the call, like
+        // diff_test's engine-tick-freeze).  OK today for pure/leaf reads.
+        // Returns the int retval or null.
+        try {
+            const a = (Array.isArray(args) ? args : []).map(function (x) { return x | 0; });
+            const fn = new NativeFunction(rva(va >>> 0), 'int32',
+                                          a.map(function () { return 'int32'; }),
+                                          String(abi || 'mscdecl'));
+            return fn.apply(null, a);
+        } catch (e) { err('probeCall', e.message); return null; }
+    },
+    probeEnqueueCall: function (va, args, abi) {
+        // SAFE direct call: enqueue a fn call to run on the ENGINE thread in the
+        // per-tick hook (drainCallQueue).  Returns a call id; the result comes
+        // back as a {kind:'call_result', id} message once the tick executes it.
+        g_call_seq = (g_call_seq + 1) | 0;
+        g_call_queue.push({
+            id: g_call_seq, va: (va >>> 0),
+            args: (Array.isArray(args) ? args : []).map(function (x) { return x | 0; }),
+            abi: String(abi || 'mscdecl')});
+        return g_call_seq;
+    },
     probeAutoDismiss: function (n) {
         // Toggle the reactive event-scroll dismiss (var_extended_pause != 0 →
         // call the dismiss fn each tick).  Event scrolls (e.g. Flooding) set
