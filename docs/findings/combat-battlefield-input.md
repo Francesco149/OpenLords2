@@ -96,6 +96,30 @@ battlefield (unit class in the roster panel; class weights {2,16,8,13,9,13,22} i
 4. RMB the enemy unit's hex → move-to-contact / attack. Repeat per unit until enemy routed.
 5. Result 0x1c: LMB once → back to strategic.
 
+## Live entry experiment (2026-07-09) — what callq-shortcuts DO and DON'T give
+Drove the fixture (human rec 4 @30,46 vs enemy rec 5 @30,48) on live retail via the
+daemon. Findings:
+- **Combat records need `+0x01` (owner human-flag) set BEFORE the entry** or the fight
+  silently AUTO-RESOLVES. `callq FUN_004a7158(4,5)` with rec4 `+0x01`==0 → `FUN_004a6a30`
+  saw "neither side human" → size 0 → auto-resolve (rec4 wiped, rec5 50→5 pyrrhic).
+  The `+0x01` byte is copied from the strat human-flag by the NORMAL attack setup
+  (all.c:17955), NOT by `FUN_004a7158` — so a direct callq skips it. Poke rec4 `+0x01`=1
+  first → `callq FUN_004a7158(4,5)` returns **1** (interactive branch), sets screen 0x12.
+- **Screen 0x12 does NOT auto-advance to the battlefield** (mode stays 0). It's a
+  transitional dispatch code; the game's own 0x12 handler must run the entry.
+- **`callq FUN_0042b7f7()` engages combat mode** (`DAT_0057c8fc`→2, zoom 32, ret 168) and
+  the **battlefield RENDERS** — but landing screen was **0x22 "Battle Master ratings"**
+  (a results/intro parchment over the field), and a click there EXITED to screen 0x2f
+  mode 0. So the stitched callq path reaches combat mode + a rendered field but **NOT a
+  driveable live tactical sim** — the real-time unit deployment/sim init (the 0x28 deploy
+  phase) is done by other functions in the natural entry chain that the shortcut skips.
+- **CONCLUSION:** to DRIVE an interactive battle (Path B footage + the kiting win), use the
+  **ORGANIC flow** — order the human army to attack (the attack-order click seq), end turn,
+  and take the game's "Fight" decision — which runs the full deploy init → a live 0x28/0x29
+  battlefield. The callq shortcut is good for REACHING combat mode / results but not for a
+  playable fight. (Next: RE the deploy-phase init between FUN_0042b7f7 and screen 0x28, or
+  just drive the organic attack→endturn→Fight sequence.)
+
 ## LEADs — confirm live before relying (exe not on this disk → tables undumped)
 1. **`DAT_004dc710` control-panel table** (5×0x18 B @ VA 0x4dc710): per-button rects +
    which code-ptr = auto-resolve / retreat / formation / speed. Dump live.
