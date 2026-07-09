@@ -86,12 +86,42 @@ cheats on upkeep" is only true on hard.
 on flip-back. (Video note: to show the real cheat, boot the game on hard —
 this seed is difficulty 0. A hard-difficulty new-game trace is the next step.)
 
-## Open (overlay enrichment, roadmap item 2)
+## Overlay data — extracted + cheats proven live (roadmap item 2, 2026-07-09)
 
-- Income **displayed-vs-collected** ("People pay N" on the tax screen vs the
-  actual treasury delta) — the headline income cheat; not yet wired into `data`.
-- The **≤1800 free-gold AI grant** and the **256-slot event deck** — still
-  host-tested only, need live-retail confirmation (slot 4 hit 1778 at turn 3,
-  suggestively near the 1800 ceiling — not yet confirmed as the grant).
-- Per-realm **army sizes** (troop-class counts, combat record `+0x16c`, 7×i16)
-  for the overlay.
+Driver: **`tools/cheat_data.py`** (`grant-table` / `snapshot` / `extract --turns N
+[--difficulty D] --out CSV`). Per realm per turn it logs treasury, income
+displayed vs collected, upkeep, grant, army strength + troop breakdown. A real
+county = a record whose index is in the minimap region grid (1..14); records 15..
+are armies / uninitialised **phantoms** whose `+5` byte can read as a bogus owner
+(the 0x05/0x07 fill pattern — e.g. record 18 "owner 7", record 19) — skip them.
+
+**The AI free-gold GRANT — the headline cheat, CONFIRMED per-turn.**
+`engine_army_ai_set_rations_and_grant` (`FUN_0049d638`, brain-FSM step 3, run
+every turn — the roster/brain state resets each turn cycle via
+`engine_turn_reset_roster` `FUN_0049b6d3`) does `treasury += g_ai_cash_grant[
+(level>=3?DC1E0:DC230) + diff*4 + pers*0x10]`, a `[personality][difficulty]`
+table. Retail tables at `0x4dc1e0`/`0x4dc230` **match the port byte-for-byte**.
+Values (free crowns/turn): weak AIs (level<3) 0..600; strong AIs (level>=3)
+0..**1800** (pers 4, hardest). Humans get 0. **Proven it fires EVERY turn** by a
+tracer (poked slot-4's grant entry to 50000 → its treasury jumped +~50000/turn,
+partly spent on a ballooning army). The starting cash 1040/1100 = 1000 + the
+difficulty-0 setup grant (40/100), so the grant runs at init too.
+20-turn Hard extract (level-1 AIs): human flat 1000; each AI pocketed **8.4k–12.6k
+free crowns**. **Difficulty-gated** — on Easy the grants are ~0.
+
+**Income displayed ≠ collected.** Projected income `+0xc0` (the tax screen's
+"People pay N", `engine_realm_recompute_realm_income` `FUN_0044b80b`) is ALWAYS
+computed; collected income `+0xbc` (added to treasury,
+`engine_realm_accrue_income` `FUN_0044b59b`) is **zeroed when the realm's event
+scratch `+0x1a8` is set** (income-suppression events, e.g. 0x13b). Live Hard
+extract shows every AI's displayed over-stating collected by ~150–500/game.
+
+**Upkeep cheat** (see above): strat `+0xfc` wage bill, human value/4 vs AI
+value/{3,5,10,10}; on Hard the AI pays value/10 = 41% of the human rate.
+
+**Army sizes:** county record troop counts `+0x16c` (7×i16), weights
+`{2,16,8,13,9,13,22}` → per-realm strength = Σ(count·weight) over owned counties.
+
+**Still open:** the 256-slot event deck (host-tested only); to *film* the real
+grant/upkeep cheats, a **hard-difficulty new-game trace** (with AI level ≥3 for the
+1800 grant) — this seed is difficulty 0 / level-1 AIs, so `--difficulty` pokes it.
