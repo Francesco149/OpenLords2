@@ -20,6 +20,7 @@ session — they outlive the conversation context.
 | [main-loop-tick.md](main-loop-tick.md) | Main loop & per-tick dispatch |
 | [per-realm-ai.md](per-realm-ai.md) | Per-realm AI economic-management subsystem (turn driver's first call, `FUN_0049a990`) |
 | [combat-resolution.md](combat-resolution.md) | Strategic-map combat casualty resolver (`FUN_004aad07` + leaves) |
+| [combat-battle-staging.md](combat-battle-staging.md) | Combat entry/routing (auto-calc `FUN_004a8aab` arms the defender buff; 0x13 quick-anim vs 0x12 interactive) + the two-outcomes-from-one-save staging recipe |
 | [render-rate-limiter.md](render-rate-limiter.md) | Render rate-limiter + dirty-rect tracker |
 
 ## Graphics / DDraw (PLAN §3, §5)
@@ -31,6 +32,7 @@ session — they outlive the conversation context.
 | [map-render.md](map-render.md) | Strategic map-tile renderer — territory-sprite walk |
 | [overlay-render.md](overlay-render.md) | Strategic-mode overlay renderer — units + cities pass |
 | [battlefield-render.md](battlefield-render.md) | Combat-mode (battlefield) renderer — full draw-leaf survey |
+| [combat-battlefield-input.md](combat-battlefield-input.md) | Interactive battlefield INPUT model — screens 0x28/0x29/0x2a, select/order (LMB select + RMB attack), entry/exit, Frida driving recipe |
 | [main-menu-parity.md](main-menu-parity.md) | Main-menu render parity — capture (`--skip-intro`), reach, compare |
 | [title-menu-screens.md](title-menu-screens.md) | Title page state machine (`DAT_005530f0`) + menu-navigation capture workflow |
 | [game-start.md](game-start.md) | Start button → new-game init (`FUN_00497ced`) → ingame; entry chain, closure scope, scalar-wall resolution, phased port plan |

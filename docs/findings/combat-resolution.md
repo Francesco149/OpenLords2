@@ -89,6 +89,13 @@ difficulty 0 → 160 %   1 → 200 %   2 → 250 %   3 → 320 %   else → 400 
 This can flip the outcome (e.g. an even matchup becomes a defender win on the
 hardest setting).
 
+**Which entry arms it:** the flag is set to 1 ONLY by the player-attack resolver
+`FUN_004a8aab` (all branches); the AI-turn dispatch `FUN_004a7158` and the siege
+twin `FUN_004a6c68` both CLEAR it to 0. So the buff is a property of the player's
+**auto-calc / quick-combat** resolution, not AI-vs-AI combat — precisely the
+"never auto-resolve an even fight" folklore. Full entry/routing map + the
+two-outcomes-from-one-save staging recipe: `combat-battle-staging.md`.
+
 ## Verification
 
 9 host unit tests (`tests/test_engine_combat.c`) cover the leaves + every
