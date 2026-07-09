@@ -60,7 +60,14 @@ def main():
     ap.add_argument("--frame-every", type=int, default=3, help="capture POV frame every K turns (0=never)")
     ap.add_argument("--survive", action="store_true",
                     help="keep a passive human alive each turn so the AI can reach level 3 (the 1800 kink)")
+    ap.add_argument("--name", default=None,
+                    help="rename the human's realm (placeholder 'aaaaaa') — e.g. 'Subscribe'")
     a = ap.parse_args()
+
+    if a.name:
+        NB, ST = 0x553d54, 0x2c            # realm-name string table (DAT_00553d54, stride 0x2c)
+        A.send({"cmd": "poke", "va": NB + HUMAN_SLOT * ST, "bytes": list(a.name.encode()[:0x2b]) + [0]})
+        print(f"renamed human realm -> {a.name!r}")
 
     fdir = Path(a.frames); fdir.mkdir(parents=True, exist_ok=True)
     outc = Path(a.out_csv); outc.parent.mkdir(parents=True, exist_ok=True)
