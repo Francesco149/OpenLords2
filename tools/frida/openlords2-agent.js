@@ -1920,6 +1920,74 @@ function captureFrameOnce() {
     }
 }
 
+// captureFrameDirect() — Lock-FREE capture: read the software framebuffer
+// (*DAT_004ea1a8, the back surface's SYSTEMMEMORY bits the engine renders
+// straight into) directly from process memory, instead of round-tripping the
+// DDraw back-surface Lock (which intermittently returns SURFACEBUSY/LOST right
+// after driving pokes → the "no frame" race).  Same bytes, same {kind:'frame'}
+// send format as captureFrameOnce, so the daemon parses it identically.
+//
+// This is mode-agnostic and does NOT need a present/vsync — it reads whatever
+// the engine last rendered.  Poke the redraw counter (battlefield DAT_0053e9ac /
+// map DAT_0057d340) before calling to force a fresh render of the current
+// (even frozen) state, then read.  Palette via GetEntries (a COM getter that
+// does not Lock the surface, so it's safe here too).  See render_capture.md
+// §"Action 2" — the stepped-capture unlock for battle footage.
+function captureFrameDirect() {
+    try {
+        const base = rva(0x004ea1a8).readPointer();   // *DAT_004ea1a8 = back-buffer base
+        const width  = rva(0x004eb274).readS32();     // DAT_004eb274 stride (== width, tight)
+        const height = rva(0x004eac4c).readS32();      // DAT_004eac4c
+        if (base.isNull() || width !== 640 || height !== 480) {
+            err('captureFrameDirect.dims',
+                'base=' + base + ' w=' + width + ' h=' + height);
+            return;
+        }
+        g_last_capture_w = width; g_last_capture_h = height;
+
+        // Palette via the COM getter (Lock-independent) — resolve lazily like
+        // captureFrameOnce does; skip gracefully if DDraw isn't up yet.
+        const palette = rva(ADDR.var_dd_palette).readPointer();
+        if (!g_nf_palette_get_entries && !palette.isNull()) {
+            g_nf_palette_get_entries = vfn(palette, 4, 'int32',
+                ['pointer', 'uint32', 'uint32', 'uint32', 'pointer']);
+        }
+
+        const payloadSz = FRAME_HEADER_SZ + PALETTE_BYTES + width * height;
+        if (!g_capture_scratch || g_capture_scratch._sz < payloadSz) {
+            g_capture_scratch = Memory.alloc(payloadSz);
+            g_capture_scratch._sz = payloadSz;
+        }
+        const scratch  = g_capture_scratch;
+        const palStart = scratch.add(FRAME_HEADER_SZ);
+        const pxStart  = scratch.add(FRAME_HEADER_SZ + PALETTE_BYTES);
+
+        scratch.writeU32(width);
+        scratch.add(4).writeU32(height);
+        scratch.add(8).writeU32(g_frame_capture_count);
+
+        if (g_nf_palette_get_entries && !palette.isNull()) {
+            const phr = g_nf_palette_get_entries(palette, 0, 0, 256, palStart);
+            if (phr !== 0) err('captureFrameDirect.GetEntries',
+                               '0x' + (phr >>> 0).toString(16));
+        }
+        // Tight framebuffer (stride == width) → one contiguous copy.
+        Memory.copy(pxStart, base, width * height);
+
+        const ab = scratch.readByteArray(payloadSz);
+        g_frame_capture_count++;
+        send({kind:    'frame',
+              frame_idx: g_frame_capture_count - 1,
+              width:    width,
+              height:   height,
+              pitch:    width,
+              virtual_now_ms: g_virtual_now_ms,
+              t_ms:     nowMs()}, ab);
+    } catch (e) {
+        err('captureFrameDirect', e.message);
+    }
+}
+
 // ─── DDraw → GDI present seat ──────────────────────────────────────────
 // Modern Windows DWM (Desktop Window Manager) intercepts windowed
 // DDraw NORMAL-mode Blts to the primary surface: the Blt returns
@@ -6055,6 +6123,16 @@ rpc.exports = {
             captureFrameOnce();
             return idx;
         } catch (e) { err('probeShot', e.message); return -1; }
+    },
+    probeShotDirect: function () {
+        // Lock-FREE shot: read *DAT_004ea1a8 directly (no DDraw Lock) → 'frame'
+        // message.  Robust while frozen / right after driving pokes; the stepped-
+        // capture path for battle footage.  Returns the frame_idx, or -1.
+        try {
+            const idx = g_frame_capture_count;
+            captureFrameDirect();
+            return idx;
+        } catch (e) { err('probeShotDirect', e.message); return -1; }
     },
     probeStreamStart: function (intervalMs) {
         g_stream_interval_ms = (intervalMs | 0) > 0 ? (intervalMs | 0) : 33;

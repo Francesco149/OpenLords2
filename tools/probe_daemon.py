@@ -445,15 +445,21 @@ class ProbeDaemon:
                 "duration_s": round(dur, 2),
                 "avg_fps": round(rec["n"] / dur, 1) if dur > 0 else 0}
 
-    def _shot(self, path=None):
+    def _shot(self, path=None, direct=False):
         # Retry a few times: under the shown window / present seat the DDraw
         # back surface can be momentarily lost, so one probeShot may yield nothing.
+        # direct=True reads *DAT_004ea1a8 straight from memory (no DDraw Lock) —
+        # robust while frozen / right after driving pokes (the stepped battle-
+        # capture path).  Poke the redraw counter before calling to force a fresh
+        # render of the current frame.
+        grab = (self.script.exports_sync.probe_shot_direct if direct
+                else self.script.exports_sync.probe_shot)
         got = None
         for _ in range(6):
             self._frame_evt.clear()
             with self._frame_lock:
                 prev = self._frame[0] if self._frame else -1
-            self.script.exports_sync.probe_shot()
+            grab()
             deadline = time.monotonic() + 1.0
             while time.monotonic() < deadline:
                 if self._frame_evt.wait(0.2):
@@ -483,7 +489,9 @@ class ProbeDaemon:
             if cmd == "ping":
                 return {"ok": True, "pid": self.pid}
             if cmd == "shot":
-                return self._shot(req.get("path"))
+                return self._shot(req.get("path"), bool(req.get("direct")))
+            if cmd == "shotd":            # Lock-free direct-framebuffer shot
+                return self._shot(req.get("path"), direct=True)
             if cmd == "record":
                 if req.get("action") == "start":
                     return self._record_start(req["path"], int(req.get("fps", 30)))
