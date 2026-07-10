@@ -76,6 +76,9 @@ def main():
     ap.add_argument("--settle-frames", type=int, default=8, help="frames of the settled map per turn")
     ap.add_argument("--turn-timeout", type=float, default=25.0)
     ap.add_argument("--out", default="runs/probe/strat/pov.mp4")
+    ap.add_argument("--csv", default=None, help="also log the cheat_data economy CSV (turn-synced)")
+    ap.add_argument("--turn-secs", type=float, default=1.6,
+                    help="on-screen seconds per turn (paces the assembled mp4 to a readable cadence)")
     ap.add_argument("--fps", type=int, default=60)
     ap.add_argument("--port", type=int, default=27099)
     a = ap.parse_args()
@@ -98,9 +101,22 @@ def main():
         nonlocal n
         if sk.shot(str(fdir / f"f{n:05d}.png")): n += 1
 
+    import csv as _csv
+    csv_fh = csv_w = None
+    if a.csv:
+        Path(a.csv).parent.mkdir(parents=True, exist_ok=True)
+        csv_fh = open(a.csv, "w", newline=""); csv_w = _csv.DictWriter(csv_fh, fieldnames=C.COLS); csv_w.writeheader()
+        gt = C.grant_table()
+
     for t in range(a.turns):
         set_pov(sk, a.pov, grid, owners)
         turnmap.append([t, n])
+        if csv_w:                          # economy snapshot at this turn's settled state
+            diff = sk.rd(A.DIFFICULTY)
+            year = sk.rd(V_YEAR); season = sk.rd(V_SEASON)
+            for s, row in sorted(C.realm_snapshot(gt, diff).items()):
+                csv_w.writerow({k: {"turn": t, "year": year, "season": season, **row}.get(k, "") for k in C.COLS})
+            csv_fh.flush()
         for _ in range(a.settle_frames):        # hold on the settled POV map
             grab(); time.sleep(a.step_ms / 1000)
         if a.survive:
@@ -136,14 +152,18 @@ def main():
         if not advanced:
             print("  stalled — stopping."); break
 
-    (fdir / "turnmap.json").write_text(json.dumps(turnmap))
+    # pace so each turn ≈ turn_secs on screen (readable); write the turnmap in SECONDS
+    # (footage time each turn first appears) so the overlay composer needs no fps bookkeeping.
+    pace = max(1.0, n / (max(1, len(turnmap)) * a.turn_secs)) if n else 1.0
+    (fdir / "turnmap.json").write_text(json.dumps([[t, round(fi / pace, 3)] for t, fi in turnmap]))
     print(f"captured {n} frames over {len(turnmap)} turns → {fdir}")
     if n:
-        subprocess.run(["ffmpeg", "-y", "-framerate", str(a.fps), "-i", str(fdir / "f%05d.png"),
-                        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20",
+        # assemble at the pace rate, then re-time to a smooth --fps output (frame-dup, same duration).
+        subprocess.run(["ffmpeg", "-y", "-framerate", f"{pace:.3f}", "-i", str(fdir / "f%05d.png"),
+                        "-vf", f"fps={a.fps}", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20",
                         "-movflags", "+faststart", a.out],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"assembled → {a.out}")
+        print(f"assembled → {a.out} ({n/pace:.1f}s, {len(turnmap)} turns @ ~{a.turn_secs}s, {a.fps}fps)")
 
 
 if __name__ == "__main__":
