@@ -107,6 +107,13 @@ def main():
     def grab():
         nonlocal n
         if sk.shot(str(fdir / f"f{n:05d}.png")): n += 1
+    def grab_pov():
+        # keep EVERY captured frame on the AI POV (never flash the human): re-assert viewer=pov
+        # + a redraw right before the shot. End-Turn needs viewer=human, but only for the click —
+        # this makes the resolution/scroll frames still read as the enemy's HUD, not ours.
+        sk.rpc({"cmd": "poke", "va": A.VIEWER, "bytes": list(int(a.pov).to_bytes(4, "little"))})
+        sk.rpc({"cmd": "poke", "va": A.REDRAW, "bytes": [2, 0, 0, 0]})
+        grab()
 
     import csv as _csv
     csv_fh = csv_w = None
@@ -131,11 +138,13 @@ def main():
             keepalive(sk)
         # End-Turn only fires for the HUMAN local-player, and only on the free-roam map
         # (screen 0). set_pov left viewer=AI on the county panel — restore + RMB out.
-        sk.rpc({"cmd": "poke", "va": A.VIEWER, "bytes": list(int(HUMAN_SLOT).to_bytes(4, "little"))})
+        def to_human():   # viewer=human ONLY for the End-Turn click (no capture in this window)
+            sk.rpc({"cmd": "poke", "va": A.VIEWER, "bytes": list(int(HUMAN_SLOT).to_bytes(4, "little"))})
+        to_human()
         for _ in range(4):
             if sk.rd(V_SCREEN, "u8") == 0: break
-            sk.click(*SCROLL_XY, "r"); grab(); time.sleep(0.12)
-        # end-turn, interleaving capture with the click/poll/dismiss
+            sk.click(*SCROLL_XY, "r"); time.sleep(0.12)     # RMB to the map — no grab (would show us)
+        # end-turn, interleaving capture with the click/poll/dismiss (every grab re-locks the AI POV)
         s0, y0 = sk.rd(V_SEASON), sk.rd(V_YEAR)
         sk.click(*END_TURN_XY, "l"); last_click = time.time()
         deadline = time.time() + a.turn_timeout
@@ -143,16 +152,16 @@ def main():
         while time.time() < deadline:
             scr = sk.rd(V_SCREEN, "u8")
             if scr == 0x27:                      # report/event scroll — capture it THEN dismiss
-                grab(); sk.click(*SCROLL_XY, "r")
+                grab_pov(); sk.click(*SCROLL_XY, "r")
             elif scr == 0 and time.time() - last_click > 4.0:
-                sk.click(*END_TURN_XY, "l"); last_click = time.time()
-            grab()
+                to_human(); sk.click(*END_TURN_XY, "l"); last_click = time.time()
+            grab_pov()
             s1, y1 = sk.rd(V_SEASON), sk.rd(V_YEAR)
             if s1 != s0 or y1 != y0:
                 advanced = True
                 for _ in range(6):               # trailing new-turn scrolls
                     if sk.rd(V_SCREEN, "u8") != 0x27: break
-                    grab(); sk.click(*SCROLL_XY, "r"); time.sleep(0.1)
+                    grab_pov(); sk.click(*SCROLL_XY, "r"); time.sleep(0.1)
                 break
             time.sleep(a.step_ms / 1000)
         cash = [sk.rd(A.strat(i, C.S_CASH)) for i in range(1, 5)]

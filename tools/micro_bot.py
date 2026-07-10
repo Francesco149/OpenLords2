@@ -188,17 +188,31 @@ class SmartCam:
         elif err < -self.dz: c += (err + self.dz) * self.lag
         return c                                                # inside the dead-zone → hold
 
-    def follow(self, units, side=None, ahead=(0.0, 0.0)):
-        tgt = self._target(units, side)
-        if tgt is None:
-            return
-        tx, ty = tgt[0] + ahead[0], tgt[1] + ahead[1]
+    def follow_point(self, tx, ty):
+        """Damp the camera toward a given map point (dead-zone + lag)."""
         if self.cx is None:                 # snap on the first frame, then always damp
             self.cx, self.cy = tx, ty
         else:
             self.cx = self._axis(self.cx, tx)
             self.cy = self._axis(self.cy, ty)
         self.b.center_on(self.cx, self.cy)
+
+    def follow(self, units, side=None, ahead=(0.0, 0.0), lead=0.0, toward_side=1):
+        """Follow `side`'s units. lead>0 → follow the LEADING EDGE: the centroid of the front
+        `lead` fraction of units (those closest to `toward_side`'s centroid) — keeps the first
+        clash on screen instead of framing the rear/centroid."""
+        live = [u for u in units if u["hp"] > 0 and (side is None or u["side"] == side)]
+        if not live:
+            return
+        if lead > 0:
+            foe = self._target(units, toward_side)
+            if foe:
+                live.sort(key=lambda u: (u["col"] - foe[0]) ** 2 + (u["row"] - foe[1]) ** 2)
+                k = max(1, int(len(live) * lead))
+                live = live[:k]
+        tx = sum(u["col"] for u in live) / len(live) + ahead[0]
+        ty = sum(u["row"] for u in live) / len(live) + ahead[1]
+        self.follow_point(tx, ty)
 
     def over(self, units=None):
         """Battle over if a side has no HP left, or we've left the combat screens."""

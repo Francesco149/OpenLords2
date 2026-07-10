@@ -89,6 +89,8 @@ def main():
                     help="which army to keep framed (staged default: enemy under fire)")
     ap.add_argument("--enemy-advance", action="store_true",
                     help="staged: stage the enemy FAR and march it into the archer fire (long dynamic kite)")
+    ap.add_argument("--follow-lead", type=float, default=0.35,
+                    help="follow the LEADING edge: fraction of the followed army (nearest the enemy) to frame (0 = whole-army centroid). Keeps the first clash on screen.")
     ap.add_argument("--attacker", type=int, default=4)
     ap.add_argument("--defender", type=int, default=5)
     ap.add_argument("--rounds", type=int, default=140)
@@ -155,7 +157,8 @@ def main():
         us = f.b.units(); sc = f.screen()
         s0, s1 = hp(us, 0), hp(us, 1)
         front = min((u["row"] for u in us if u["side"] == 0 and u["hp"] > 0), default=99)
-        cam.follow(us, side=follow_side, ahead=(0.0, -2.0))   # ease toward the action each frame
+        cam.follow(us, side=follow_side, ahead=(0.0, 0.0),    # ease toward the action each frame
+                   lead=a.follow_lead, toward_side=1 - follow_side)   # follow the LEADING edge (first clash)
         if f.shot(os.path.join(fdir, f"f{n:05d}.png")):
             n += 1
         if i % 5 == 0:
