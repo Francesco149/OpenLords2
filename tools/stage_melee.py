@@ -92,11 +92,12 @@ def main():
     a0 = curve[0]; aL = curve[-1]
     print(f"\nRESULT: {a.a} {a0[1]}→{aL[1]} (lost {a0[1]-aL[1]}) | {a.b} {a0[2]}→{aL[2]} (lost {a0[2]-aL[2]})")
     if fdir and n:
+        # FULL game screen — no crop (crop later in the edit).
         subprocess.run(["ffmpeg", "-y", "-framerate", str(a.fps), "-i", f"{fdir}/f%04d.png",
-                        "-vf", "crop=478:446:0:16", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p",
                         "-crf", "18", "-movflags", "+faststart", a.out],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"assembled {n} frames → {a.out} ({n/a.fps:.1f}s @ {a.fps}fps)")
+        print(f"assembled {n} frames → {a.out} ({n/a.fps:.1f}s @ {a.fps}fps, full frame)")
 
 if __name__ == "__main__":
     main()

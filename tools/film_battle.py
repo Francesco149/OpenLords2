@@ -96,7 +96,7 @@ def main():
     ap.add_argument("--recharge", type=int, default=6, help="re-issue the move-charge every N rounds")
     ap.add_argument("--cam-deadzone", type=float, default=5.0, help="tiles the action can drift before the cam eases (bigger = steadier)")
     ap.add_argument("--cam-lag", type=float, default=0.15, help="follow easing 0..1 (smaller = laggier/smoother)")
-    ap.add_argument("--crop", default="478:446:0:16", help="ffmpeg crop w:h:x:y to the battlefield viewport (drops the minimap trail); '' = full frame")
+    ap.add_argument("--crop", default="", help="ffmpeg crop w:h:x:y; default '' = FULL game screen (raw footage stays uncropped — crop later in the edit)")
     ap.add_argument("--budget-s", type=float, default=150, help="wall-clock cap")
     ap.add_argument("--target-secs", type=float, default=None, help="stretch/compress the clip to ~N seconds (needs enough distinct frames — use a MARCH)")
     ap.add_argument("--dedup", action="store_true", help="drop near-duplicate frames (timelapse static fights)")
