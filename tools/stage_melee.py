@@ -34,9 +34,11 @@ def rpc(req, t=20):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--a", default="swordsman"); ap.add_argument("--b", default="knight")
-    ap.add_argument("--n", type=int, default=20)
-    ap.add_argument("--rounds", type=int, default=30)
-    ap.add_argument("--row", type=int, default=40, help="contact row (on land, mid-lane)")
+    ap.add_argument("--n", type=int, default=28)
+    ap.add_argument("--rounds", type=int, default=60)
+    ap.add_argument("--row", type=int, default=68, help="contact row (on land, ~66-70; ~40 = water = death)")
+    ap.add_argument("--sleep-ms", type=int, default=170, help="sim-advance per captured frame")
+    ap.add_argument("--fps", type=int, default=15)
     ap.add_argument("--out", default=None, help="mp4 out (enables follow-cam capture)")
     ap.add_argument("--both", action="store_true", help="order BOTH sides to attack (default: A attacks)")
     a = ap.parse_args()
@@ -59,6 +61,7 @@ def main():
             if x.endswith(".png"): os.remove(os.path.join(fdir, x))
     n = 0
     print(f"MELEE {a.a}(A,side0) vs {a.b}(B,side1), {a.n} troops each, contact row {a.row}")
+    cam = mb.SmartCam(b, deadzone=3.5, lag=0.16)   # damped follow (no ±1-tile snap)
     curve = []
     for rnd in range(a.rounds):
         us = g.units(); A = [u for u in us if u["side"] == 0]; B = [u for u in us if u["side"] == 1]
@@ -81,20 +84,19 @@ def main():
             ta = kd.nearest({"col": 50, "row": a.row}, A)
             for fm in sorted({u["form"] for u in B}): b.order(fm, ta["col"], ta["row"], ta["idx"])
         if fdir:
-            live = [u for u in us if u["hp"] > 0]
-            if live:
-                b.center_on(sum(u["col"] for u in live)/len(live), sum(u["row"] for u in live)/len(live))
+            cam.follow(us)                                    # damped follow of the whole melee
             d.poke(0x53e9ac, [4, 0, 0, 0]); d.rpc({"cmd": "sleep", "ms": 60})
-            if rpc({"cmd": "shotd", "path": f"{fdir}/f{n:03d}.png"}): n += 1
-        d.poke(0x4eac50, [0x29]); d.poke(0x53f238, [0, 0, 0, 0]); d.rpc({"cmd": "sleep", "ms": 300})
+            if rpc({"cmd": "shotd", "path": f"{fdir}/f{n:04d}.png"}): n += 1
+        d.poke(0x4eac50, [0x29]); d.poke(0x53f238, [0, 0, 0, 0]); d.rpc({"cmd": "sleep", "ms": a.sleep_ms})
 
     a0 = curve[0]; aL = curve[-1]
     print(f"\nRESULT: {a.a} {a0[1]}→{aL[1]} (lost {a0[1]-aL[1]}) | {a.b} {a0[2]}→{aL[2]} (lost {a0[2]-aL[2]})")
     if fdir and n:
-        subprocess.run(["ffmpeg", "-y", "-framerate", "10", "-i", f"{fdir}/f%03d.png",
+        subprocess.run(["ffmpeg", "-y", "-framerate", str(a.fps), "-i", f"{fdir}/f%04d.png",
                         "-vf", "crop=478:446:0:16", "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                        "-crf", "18", a.out], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"assembled {n} frames → {a.out}")
+                        "-crf", "18", "-movflags", "+faststart", a.out],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print(f"assembled {n} frames → {a.out} ({n/a.fps:.1f}s @ {a.fps}fps)")
 
 if __name__ == "__main__":
     main()

@@ -45,7 +45,14 @@ class Sock:
         return json.loads(b.split(b"\n")[0]) if b else None
     def rd(self, va, ty="i32"): return self.rpc({"cmd": "read", "va": va, "type": ty}).get("val")
     def click(self, x, y, btn="l"): self.rpc({"cmd": "click", "x": x, "y": y, "button": btn})
-    def shot(self, path): return self.rpc({"cmd": "shotd", "path": path}, t=15)
+    def shot(self, path, mode="shots"):
+        # 'shots' = in-tick SYNCHRONISED capture → a fully-composited frame. Avoids the async
+        # 'shotd' race that catches the back-buffer mid-redraw (terrain drawn, sprites not yet →
+        # cows/flags flicker off for 1 frame). Falls back to shotd if shots errors.
+        r = self.rpc({"cmd": mode, "path": path}, t=15)
+        if mode == "shots" and not (r and r.get("ok")):
+            r = self.rpc({"cmd": "shotd", "path": path}, t=15)
+        return r
 
 
 def keepalive(sk):
@@ -110,6 +117,7 @@ def main():
 
     for t in range(a.turns):
         set_pov(sk, a.pov, grid, owners)
+        time.sleep(0.12)                    # let the forced full redraw finish before capturing
         turnmap.append([t, n])
         if csv_w:                          # economy snapshot at this turn's settled state
             diff = sk.rd(A.DIFFICULTY)

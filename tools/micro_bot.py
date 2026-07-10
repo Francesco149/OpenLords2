@@ -159,6 +159,47 @@ class Battle:
         self.d.poke(V_PAUSE, [0, 0, 0, 0])
         self.d.sleep(ms)
 
+
+class SmartCam:
+    """Damped follow camera: a DEAD-ZONE (camera holds still while the target stays
+    within a central box) + LAG (eases toward the target instead of snapping). Kills
+    the rigid ±1-tile snap-back you get from re-centring on a jittering centroid every
+    frame. Holds a float camera CENTRE; only the rounded tile is poked, and the dead-zone
+    absorbs sub-box drift so the poked value doesn't oscillate.
+
+        cam = SmartCam(battle, deadzone=4.0, lag=0.16)
+        cam.follow(units, side=0)   # each captured frame
+    """
+    def __init__(self, battle: "Battle", deadzone=4.0, lag=0.16):
+        self.b = battle; self.dz = float(deadzone); self.lag = float(lag)
+        self.cx = self.cy = None            # float camera centre (None = uninitialised)
+
+    @staticmethod
+    def _target(units, side=None):
+        live = [u for u in units if u["hp"] > 0 and (side is None or u["side"] == side)]
+        if not live:
+            return None
+        return (sum(u["col"] for u in live) / len(live),
+                sum(u["row"] for u in live) / len(live))
+
+    def _axis(self, c, t):
+        err = t - c
+        if err > self.dz:   c += (err - self.dz) * self.lag     # target left the box → ease in
+        elif err < -self.dz: c += (err + self.dz) * self.lag
+        return c                                                # inside the dead-zone → hold
+
+    def follow(self, units, side=None, ahead=(0.0, 0.0)):
+        tgt = self._target(units, side)
+        if tgt is None:
+            return
+        tx, ty = tgt[0] + ahead[0], tgt[1] + ahead[1]
+        if self.cx is None:                 # snap on the first frame, then always damp
+            self.cx, self.cy = tx, ty
+        else:
+            self.cx = self._axis(self.cx, tx)
+            self.cy = self._axis(self.cy, ty)
+        self.b.center_on(self.cx, self.cy)
+
     def over(self, units=None):
         """Battle over if a side has no HP left, or we've left the combat screens."""
         sc = self.screen()
