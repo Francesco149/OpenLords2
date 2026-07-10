@@ -57,10 +57,23 @@ O_COL, O_ROW = -0xC, -0xA
 V_SCREEN = 0x4eac50              # 0x28 deploy / 0x29 fight
 V_PAUSE  = 0x53f238              # 0 = running, -1 = frozen
 V_BFREDRAW = 0x53e9ac
+# Battlefield CAMERA scroll origin (top-left visible map cell), the two globals the
+# main tick passes to the combat render dispatch: FUN_004b99c0 → FUN_004bc142(col,row)
+# (@all.c/0x4b9d67).  The combat viewport is a plain rectangular tile grid (tile=0x20,
+# ~17 cols × 16 rows visible per FUN_004bd355), so screen_x=(mapcol-camcol)*32+xoff.
+# Poke these to frame the action precisely — the game's minimap "click to go to area"
+# pan is imprecise; this is exact.  center_on(col,row) → cam = (col-8, row-8).
+V_CAM_COL = 0x55ce70            # DAT_0055ce70  camera top-left col
+V_CAM_ROW = 0x5678a0            # DAT_005678a0  camera top-left row
+CAM_HALF_W, CAM_HALF_H = 8, 8   # half the visible window (17×16 cells → centre offset)
 F_ORDER  = 0x479e90             # FUN_00479e90(form, col, row, target, 0, 0)  formation order
 F_MOVE1  = 0x47a814             # FUN_0047a814(unit, col, row)  per-unit move-to-hex
 F_HGLASS = 0x43b9a1             # FUN_0043b9a1()  hourglass: toggle DAT_0053f238 (start/pause)
 GRID_MAX = 0x50
+
+
+def _i32(v):
+    return [v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff]
 
 
 class Daemon:
@@ -123,6 +136,20 @@ class Battle:
     def start(self):
         # authentic deploy->fight start: inject an RMB on the field (sets 0x29 + pause 0).
         self.d.rpc({"cmd": "click", "x": 320, "y": 240, "button": "r"})
+
+    # — camera —
+    def center_on(self, col, row):
+        """Point the battlefield camera so map cell (col,row) sits mid-screen."""
+        self.d.poke(V_CAM_COL, _i32(max(0, round(col) - CAM_HALF_W)))
+        self.d.poke(V_CAM_ROW, _i32(max(0, round(row) - CAM_HALF_H)))
+
+    def follow(self, units):
+        """Keep the camera on the live-unit centroid (the action)."""
+        live = [u for u in units if u["hp"] > 0]
+        if not live:
+            return
+        self.center_on(sum(u["col"] for u in live) / len(live),
+                       sum(u["row"] for u in live) / len(live))
 
     def run(self, ms):
         """Let the sim RUN for ~ms (screen 0x29, pause 0) — does NOT freeze after.
