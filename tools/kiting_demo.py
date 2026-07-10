@@ -36,6 +36,7 @@ import micro_bot as mb
 
 BASE, STRIDE, CLS = 0x52f0b0, 0x1a4, 0x52f21c
 UT, UST = 0x5544ac, 0x1b0
+GRID = 0x5440e5   # battlefield cell-occupancy grid: grid[(row*0x50+col)*8] = unit idx (all.c:55983)
 CLASS = {"peasant": 0, "crossbow": 1, "mace": 2, "swordsman": 3, "pike": 4, "archer": 5, "knight": 6}
 # INGAME GATES — the tactical per-tick action-dispatcher (FUN_004472ce, movement + combat
 # commits) BAILS unless master_switch(0x553030)!=0 AND game_state_phase(0x52af94)==3. A bare
@@ -99,14 +100,26 @@ class Demo:
                                 row=v[f"r{i}"], form=v[f"fm{i}"], hp=v[f"h{i}"]))
         return out
 
-    def setpos(self, idx, col, row):
+    def setpos(self, idx, col, row, grid=False):
         base = UT + idx * UST
+        if grid:
+            # clear the OLD occupancy cell (grid[old]==idx → 0) before moving. Melee needs
+            # this: the adjacency scanner reads grid @0x5440e5 indexed by the unit's cell-idx
+            # field (base-0x10) = (row*0x50+col)*8. Plain setpos moves col/row but leaves the
+            # cell-idx + grid at the deploy cell → the unit is melee-invisible / mis-placed.
+            old_ci = self.rd(base - 0x10, "i32") or 0
+            if 0 <= old_ci < 0x50 * 0x50 * 8 and (self.rd(GRID + old_ci, "u8") == idx):
+                self.d.poke(GRID + old_ci, [0])
         for off in (-0xC, -0x8):  # cur-col, dest-col
             self.d.poke(base + off, [col & 0xff, (col >> 8) & 0xff])
         for off in (-0xA, -0x6):  # cur-row, dest-row
             self.d.poke(base + off, [row & 0xff, (row >> 8) & 0xff])
         self.pi16(base + 0x184, (col << 5) & 0xffff)
         self.pi16(base + 0x186, (row << 5) & 0xffff)
+        if grid:
+            ci = (row * 0x50 + col) * 8            # register the NEW cell in the occupancy grid
+            self.pi32(base - 0x10, ci)             # cell-index field the scanner reads
+            self.d.poke(GRID + ci, [idx & 0xff])   # grid[cell] = unit idx
 
     def run(self, ms):
         self.d.poke(eb.V_SCREEN, [0x29]); self.d.poke(0x53f238, [0, 0, 0, 0])
