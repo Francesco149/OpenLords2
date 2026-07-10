@@ -505,6 +505,12 @@ let g_agent_present_every_ticks = 100;     // ~20 Hz at default turbo step
 let g_stream_enabled     = false;
 let g_stream_interval_ms = 33;      // ~30 fps
 let g_last_stream_ms     = 0;
+// One-shot SYNCHRONIZED capture: set by probeShotSync, consumed at the next
+// engine_tick.onLeave (after the full render+present, when the game thread is NOT
+// writing the framebuffer).  An async daemon-thread probeShotDirect can read
+// *DAT_004ea1a8 MID-render → torn/partial frames (dirty-rect trails, e.g. the
+// minimap camera-rect smear); capturing in-tick sidesteps that entirely.
+let g_oneshot_capture    = false;
 let g_show_window_after_ms     = 0;        // 0 = never auto-show
 let g_show_window_client_w     = 640;      // post-show client size — engine's
 let g_show_window_client_h     = 480;      // native render res, 1:1 pixel-perfect
@@ -2232,6 +2238,12 @@ function tryAgentDrivenPresent() {
 // Recorder stream: send a frame every g_stream_every_ticks ticks from inside the
 // engine tick (synchronized with the game's own render, no external lock race).
 function maybeStreamFrame() {
+    // One-shot synchronized capture (probeShotSync) — fires even when streaming is
+    // off. In-tick, so the framebuffer is a complete rendered+presented frame.
+    if (g_oneshot_capture) {
+        g_oneshot_capture = false;
+        try { captureFrameDirect(); } catch (e) { err('oneshotCapture', e.message); }
+    }
     if (!g_stream_enabled) return;
     const t = nowMs();
     if ((t - g_last_stream_ms) < g_stream_interval_ms) return;
@@ -6128,11 +6140,25 @@ rpc.exports = {
         // Lock-FREE shot: read *DAT_004ea1a8 directly (no DDraw Lock) → 'frame'
         // message.  Robust while frozen / right after driving pokes; the stepped-
         // capture path for battle footage.  Returns the frame_idx, or -1.
+        // WARNING: async (daemon-thread) → can read mid-render (torn frames) when
+        // the game is actively rendering. Use probeShotSync for clean live frames.
         try {
             const idx = g_frame_capture_count;
             captureFrameDirect();
             return idx;
         } catch (e) { err('probeShotDirect', e.message); return -1; }
+    },
+    probeShotSync: function () {
+        // Clean SYNCHRONIZED shot: request a one-shot capture at the next
+        // engine_tick.onLeave (after the full render+present, game thread idle) so
+        // the framebuffer is never read mid-render. The frame arrives asynchronously
+        // ~1 tick later; the daemon waits on the frame event. Returns the current
+        // frame_idx to wait past, or -1.
+        try {
+            const idx = g_frame_capture_count;
+            g_oneshot_capture = true;
+            return idx;
+        } catch (e) { err('probeShotSync', e.message); return -1; }
     },
     probeStreamStart: function (intervalMs) {
         g_stream_interval_ms = (intervalMs | 0) > 0 ? (intervalMs | 0) : 33;

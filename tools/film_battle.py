@@ -58,8 +58,11 @@ class Film:
             self.b.center_on(sum(u["col"] for u in live) / len(live) + ahead_col,
                              sum(u["row"] for u in live) / len(live) + ahead_row)
 
-    def shotd(self, path):
-        """Lock-free direct capture of the CURRENT running frame (bright palette)."""
+    def shot(self, path):
+        """Lock-free async capture during the run (bright palette, stable with combat).
+        Reads *DAT_004ea1a8 from the daemon thread — can catch a mid-render frame
+        (tear) when the battlefield is actively scrolling, so we hold the camera
+        steady between re-centres and CROP the minimap (its poke-pan rect trails)."""
         return self.d.rpc({"cmd": "shotd", "path": path}).get("ok")
 
 
@@ -77,6 +80,8 @@ def main():
     ap.add_argument("--rounds", type=int, default=120)
     ap.add_argument("--sleep-ms", type=int, default=230, help="sim-advance per captured frame")
     ap.add_argument("--recharge", type=int, default=6, help="re-issue the move-charge every N rounds")
+    ap.add_argument("--cam-hold", type=int, default=4, help="re-centre the camera only every N frames (steadier = fewer scroll tears)")
+    ap.add_argument("--crop", default="478:446:0:16", help="ffmpeg crop w:h:x:y to the battlefield viewport (drops the minimap trail); '' = full frame")
     ap.add_argument("--budget-s", type=float, default=95, help="wall-clock cap")
     ap.add_argument("--out", default="runs/probe/beat2/march.mp4")
     ap.add_argument("--fps", type=int, default=12)
@@ -122,8 +127,9 @@ def main():
         us = f.b.units(); sc = f.screen()
         s0, s1 = hp(us, 0), hp(us, 1)
         front = min((u["row"] for u in us if u["side"] == 0 and u["hp"] > 0), default=99)
-        f.follow_side(us, follow_side)
-        if f.shotd(os.path.join(fdir, f"f{n:03d}.png")):
+        if i % a.cam_hold == 0:                      # re-centre only every N frames so the
+            f.follow_side(us, follow_side)           # battlefield isn't scrolling at capture
+        if f.shot(os.path.join(fdir, f"f{n:03d}.png")):
             n += 1
         if i % 5 == 0:
             print(f"i{i:3d}: us={s0:4d} en={s1:4d} frontRow={front:2d} scr=0x{sc:x} f={n}")
@@ -136,11 +142,13 @@ def main():
         f.d.rpc({"cmd": "sleep", "ms": a.sleep_ms})
 
     if n:
+        vf = ["-vf", f"crop={a.crop}"] if a.crop else []
         subprocess.run(
             ["ffmpeg", "-y", "-framerate", str(a.fps), "-i", os.path.join(fdir, "f%03d.png"),
-             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", a.out],
+             *vf, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", a.out],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"assembled {n} frames → {a.out}")
+        print(f"assembled {n} frames → {a.out}"
+              + (f" (cropped {a.crop})" if a.crop else ""))
 
 
 if __name__ == "__main__":

@@ -445,15 +445,24 @@ class ProbeDaemon:
                 "duration_s": round(dur, 2),
                 "avg_fps": round(rec["n"] / dur, 1) if dur > 0 else 0}
 
-    def _shot(self, path=None, direct=False):
+    def _shot(self, path=None, direct=False, sync=False):
         # Retry a few times: under the shown window / present seat the DDraw
         # back surface can be momentarily lost, so one probeShot may yield nothing.
         # direct=True reads *DAT_004ea1a8 straight from memory (no DDraw Lock) —
         # robust while frozen / right after driving pokes (the stepped battle-
         # capture path).  Poke the redraw counter before calling to force a fresh
         # render of the current frame.
-        grab = (self.script.exports_sync.probe_shot_direct if direct
-                else self.script.exports_sync.probe_shot)
+        # sync=True requests a one-shot capture INSIDE engine_tick.onLeave (after
+        # the full render+present) so the framebuffer is never read mid-render —
+        # the clean path for LIVE moving frames (no torn/dirty-rect artifacts).
+        # Needs the tick running (a live battle at 0x29); the frame arrives ~1 tick
+        # later and we wait on the frame event below.
+        if sync:
+            grab = self.script.exports_sync.probe_shot_sync
+        elif direct:
+            grab = self.script.exports_sync.probe_shot_direct
+        else:
+            grab = self.script.exports_sync.probe_shot
         got = None
         for _ in range(6):
             self._frame_evt.clear()
@@ -490,8 +499,10 @@ class ProbeDaemon:
                 return {"ok": True, "pid": self.pid}
             if cmd == "shot":
                 return self._shot(req.get("path"), bool(req.get("direct")))
-            if cmd == "shotd":            # Lock-free direct-framebuffer shot
+            if cmd == "shotd":            # Lock-free direct-framebuffer shot (async, may tear)
                 return self._shot(req.get("path"), direct=True)
+            if cmd == "shots":            # clean in-tick synchronized shot (live frames)
+                return self._shot(req.get("path"), sync=True)
             if cmd == "record":
                 if req.get("action") == "start":
                     return self._record_start(req["path"], int(req.get("fps", 30)))
