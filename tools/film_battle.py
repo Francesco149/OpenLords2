@@ -5,10 +5,14 @@ tools/film_battle.py — film a played-out LoTR2 tactical battle for VIDEO beat 
 
 WORKING RECIPE (2026-07-10, produced the first clean 28v28 clip — no crash):
   • NATURAL 28v28 (enter_battle 4v5, 800 HP/side): the compelling, STABLE fight.
-  • Drive with a CHARGE of **move-orders** (FUN_00479e90 target=0). Move-orders are
-    stable for 100+ rounds; **attack-orders (target=enemy) and mass-`setpos` crash
-    frida**, and fast routs (peasant / close archers) crash it too — so the big
-    slow-attrition melee is the reliable one.
+  • THE CRASH FIX (root-caused 2026-07-10): arm the two INGAME GATES after start() via
+    kd.arm_ingame() — game_state_phase(0x52af94)=3 + master_switch(0x553030)=2. Without
+    them the tactical sim never ticks (units frozen, zero combat); driving live combat
+    with them INCONSISTENT is what made retail's per-tick action-dispatcher deref unmapped
+    pointers → the old "attack-orders / mass-setpos / fast-rout crash frida". With the
+    gates armed, attack-orders, mass-setpos, in-tick `shots`, capture-while-frozen and the
+    8-stack pile-on ALL run crash-free (verified tools/trigger_test.py, every trigger).
+  • Drive with attack-orders (target=enemy) OR a move-order charge (target=0) — both stable.
   • Capture DURING THE RUN (screen 0x29, present-active) with the LOCK-FREE direct
     framebuffer read (`shotd` → *DAT_004ea1a8). Running frames read the correct
     BRIGHT palette (frozen-mid-combat frames read a dark palette cycle-state — a game
@@ -81,6 +85,8 @@ def main():
     ap.add_argument("--staged", action="store_true", help="EXPERIMENTAL pure-archer kite (crash-prone); default = natural 28v28")
     ap.add_argument("--enemy", default="mace", choices=list(kd.CLASS), help="staged enemy class")
     ap.add_argument("--n", type=int, default=16, help="staged troops/side (small!)")
+    ap.add_argument("--follow", default=None, choices=["us", "enemy"],
+                    help="which army to keep framed (staged default: enemy under fire)")
     ap.add_argument("--attacker", type=int, default=4)
     ap.add_argument("--defender", type=int, default=5)
     ap.add_argument("--rounds", type=int, default=120)
@@ -108,6 +114,7 @@ def main():
         if not mine:
             print("deploy failed (try smaller --n)"); return
         f.b.start(); time.sleep(0.4)
+        kd.arm_ingame(f.d)                             # unfreeze combat + crash-proof capture
         for k, u in enumerate(mine):
             f.kd.setpos(u["idx"], 51 + k, 20)          # firing line (row 20 = stable distance)
         def order():
@@ -115,15 +122,16 @@ def main():
             for frm in sorted({u["form"] for u in f.b.units() if u["side"] == 0}):
                 tf = kd.nearest({"col": 55, "row": 20}, foe)
                 if tf:
-                    f.b.order(frm, tf["col"], tf["row"], tf["idx"])   # attack (crash-prone)
-        follow_side = 0
+                    f.b.order(frm, tf["col"], tf["row"], tf["idx"])   # attack (stable w/ gates armed)
+        follow_side = {"us": 0, "enemy": 1}.get(a.follow, 1)  # default: frame the enemy under fire
     else:
         eb.enter(f.d, a.attacker, a.defender); time.sleep(0.3)
         f.b.start(); time.sleep(0.4)                    # 0x29 → bright palette
+        kd.arm_ingame(f.d)                              # unfreeze combat + crash-proof capture
         mb.commander_charge(f.b, f.b.units())           # move-orders toward the enemy centroid
         def order():
             mb.commander_charge(f.b, f.b.units())
-        follow_side = 0
+        follow_side = {"us": 0, "enemy": 1}.get(a.follow, 0)
 
     n = ended = 0
     t0 = time.time()

@@ -37,9 +37,24 @@ import micro_bot as mb
 BASE, STRIDE, CLS = 0x52f0b0, 0x1a4, 0x52f21c
 UT, UST = 0x5544ac, 0x1b0
 CLASS = {"peasant": 0, "crossbow": 1, "mace": 2, "swordsman": 3, "pike": 4, "archer": 5, "knight": 6}
+# INGAME GATES — the tactical per-tick action-dispatcher (FUN_004472ce, movement + combat
+# commits) BAILS unless master_switch(0x553030)!=0 AND game_state_phase(0x52af94)==3. A bare
+# menu-spawn deploys+renders units but leaves these unset → the sim NEVER ticks (units frozen,
+# zero combat). Worse, driving live combat with these INCONSISTENT vs the real ingame state is
+# what made retail's dispatcher deref unmapped pointers → the "capture crashes" (agent line 733).
+# Setting them to a consistent ingame state (phase=3, master=2) both unfreezes combat AND makes
+# capture-during-combat stable across every mode. (root-caused 2026-07-10)
+V_GAME_PHASE  = 0x52af94   # DAT_0052af94 — game_state_phase (must be 3 ingame)
+V_MASTER_SW   = 0x553030   # DAT_00553030 — master_switch / mp_active (0 = dispatcher bails)
 
 def rec(i): return BASE + i * STRIDE
 def clsword(r, c): return CLS + r * STRIDE + c * 2
+
+def arm_ingame(d):
+    """Assert the two ingame gates so the tactical sim ticks AND capture stays stable.
+    Cheap; safe to re-call each run window. `d` is an eb.Daemon / mb.Daemon."""
+    d.poke(V_GAME_PHASE, [3, 0, 0, 0])
+    d.poke(V_MASTER_SW, [2, 0, 0, 0])
 
 class Demo:
     def __init__(self, port=27099):
@@ -62,6 +77,8 @@ class Demo:
             for c in range(11): self.pi16(clsword(r, c), comp.get(c, 0))
             self.pi32(rec(r) + 0x168, sum(comp.values()))
         d.callq(eb.F_DEPLOY)
+        # consistent ingame state: unfreezes the combat sim AND stops the crashes.
+        d.pi32(V_GAME_PHASE, 3); d.pi32(V_MASTER_SW, 2)
         d.poke(eb.V_SCREEN, [0x28]); time.sleep(0.3)
 
     def units(self):
