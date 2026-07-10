@@ -58,11 +58,17 @@ class Film:
             self.b.center_on(sum(u["col"] for u in live) / len(live) + ahead_col,
                              sum(u["row"] for u in live) / len(live) + ahead_row)
 
-    def shot(self, path):
+    def shot(self, path, settle_ms=70):
         """Lock-free async capture during the run (bright palette, stable with combat).
-        Reads *DAT_004ea1a8 from the daemon thread — can catch a mid-render frame
-        (tear) when the battlefield is actively scrolling, so we hold the camera
-        steady between re-centres and CROP the minimap (its poke-pan rect trails)."""
+        Forces a FULL terrain redraw first: the combat terrain pass (FUN_004bcbdc) only
+        redraws ALL cells while the redraw counter DAT_0053e9ac != 0 — otherwise it goes
+        incremental. The game's own scroll (FUN_00431f59) sets it on every move; panning
+        by raw camera-poke bypasses that, so stale terrain tiles persist for frames (the
+        'morphing'). Poking it high + settling a few ticks makes each capture a clean full
+        frame. (Still async, so a moving unit sprite can tear slightly, but the terrain is
+        solid.)"""
+        self.d.poke(0x53e9ac, [4, 0, 0, 0])          # force full terrain redraw
+        self.d.rpc({"cmd": "sleep", "ms": settle_ms})  # let a few ticks fully repaint
         return self.d.rpc({"cmd": "shotd", "path": path}).get("ok")
 
 
