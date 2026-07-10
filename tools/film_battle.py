@@ -101,6 +101,7 @@ def main():
     ap.add_argument("--crop", default="", help="ffmpeg crop w:h:x:y; default '' = FULL game screen (raw footage stays uncropped — crop later in the edit)")
     ap.add_argument("--budget-s", type=float, default=150, help="wall-clock cap")
     ap.add_argument("--target-secs", type=float, default=None, help="stretch/compress the clip to ~N seconds (needs enough distinct frames — use a MARCH)")
+    ap.add_argument("--enemy-n", type=int, default=0, help="staged: enemy troop count (0 = same as --n; bigger = a longer melt to film)")
     ap.add_argument("--dedup", action="store_true", help="drop near-duplicate frames (timelapse static fights)")
     ap.add_argument("--out", default="runs/probe/beat2/march.mp4")
     ap.add_argument("--fps", type=int, default=15)
@@ -116,7 +117,7 @@ def main():
 
     if a.staged:
         print(f"[staged/EXPERIMENTAL] {a.n} archers vs {a.n} {a.enemy}...")
-        f.kd.stage({kd.CLASS["archer"]: a.n}, {kd.CLASS[a.enemy]: a.n})
+        f.kd.stage({kd.CLASS["archer"]: a.n}, {kd.CLASS[a.enemy]: (a.enemy_n or a.n)})
         us = f.kd.units(); mine = [u for u in us if u["side"] == 0]
         if not mine:
             print("deploy failed (try smaller --n)"); return
@@ -180,8 +181,10 @@ def main():
         chain = []
         if a.crop:
             chain.append(f"crop={a.crop}")
-        if a.dedup:                    # drop near-duplicate frames (timelapse the static parts)
-            chain += ["mpdecimate", "setpts=N/(%g*TB)" % fps]
+        if a.dedup:                    # drop only NEAR-STATIC frames; frac low so a single unit
+            # dying (a small changed region) still counts as motion and is KEPT — the default
+            # frac=0.33 wrongly collapses a slow gradual melt into a few frames.
+            chain += ["mpdecimate=hi=768:lo=320:frac=0.008", "setpts=N/(%g*TB)" % fps]
         vf = ["-vf", ",".join(chain)] if chain else []
         subprocess.run(
             ["ffmpeg", "-y", "-framerate", f"{fps:.3f}", "-i", os.path.join(fdir, "f%05d.png"),
