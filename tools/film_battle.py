@@ -87,6 +87,8 @@ def main():
     ap.add_argument("--n", type=int, default=16, help="staged troops/side (small!)")
     ap.add_argument("--follow", default=None, choices=["us", "enemy"],
                     help="which army to keep framed (staged default: enemy under fire)")
+    ap.add_argument("--enemy-advance", action="store_true",
+                    help="staged: stage the enemy FAR and march it into the archer fire (long dynamic kite)")
     ap.add_argument("--attacker", type=int, default=4)
     ap.add_argument("--defender", type=int, default=5)
     ap.add_argument("--rounds", type=int, default=140)
@@ -96,6 +98,8 @@ def main():
     ap.add_argument("--cam-lag", type=float, default=0.15, help="follow easing 0..1 (smaller = laggier/smoother)")
     ap.add_argument("--crop", default="478:446:0:16", help="ffmpeg crop w:h:x:y to the battlefield viewport (drops the minimap trail); '' = full frame")
     ap.add_argument("--budget-s", type=float, default=150, help="wall-clock cap")
+    ap.add_argument("--target-secs", type=float, default=None, help="stretch/compress the clip to ~N seconds (needs enough distinct frames — use a MARCH)")
+    ap.add_argument("--dedup", action="store_true", help="drop near-duplicate frames (timelapse static fights)")
     ap.add_argument("--out", default="runs/probe/beat2/march.mp4")
     ap.add_argument("--fps", type=int, default=15)
     ap.add_argument("--port", type=int, default=27099)
@@ -116,14 +120,22 @@ def main():
             print("deploy failed (try smaller --n)"); return
         f.b.start(); time.sleep(0.4)
         kd.arm_ingame(f.d)                             # unfreeze combat + crash-proof capture
+        # grid-register archers on a firing line; a MOTION kite wants the enemy far so it
+        # marches DOWN into the fire (--enemy-advance) — long dynamic approach, archers untouched.
+        fire_row = 58 if a.enemy_advance else 20
         for k, u in enumerate(mine):
-            f.kd.setpos(u["idx"], 51 + k, 20)          # firing line (row 20 = stable distance)
+            f.kd.setpos(u["idx"], 45 + k, fire_row, grid=a.enemy_advance)
         def order():
-            foe = [u for u in f.b.units() if u["side"] == 1]
-            for frm in sorted({u["form"] for u in f.b.units() if u["side"] == 0}):
-                tf = kd.nearest({"col": 55, "row": 20}, foe)
+            us = f.b.units()
+            foe = [u for u in us if u["side"] == 1]
+            for frm in sorted({u["form"] for u in us if u["side"] == 0}):
+                tf = kd.nearest({"col": 50, "row": fire_row}, foe)
                 if tf:
-                    f.b.order(frm, tf["col"], tf["row"], tf["idx"])   # attack (stable w/ gates armed)
+                    f.b.order(frm, tf["col"], tf["row"], tf["idx"])   # archers fire (stable w/ gates)
+            if a.enemy_advance and foe:                                # drive the enemy INTO the fire
+                ac = (sum(u["col"] for u in mine) // len(mine), fire_row)
+                for frm in sorted({u["form"] for u in foe}):
+                    f.b.order(frm, ac[0], ac[1], 0)                    # move-order toward the archers
         follow_side = {"us": 0, "enemy": 1}.get(a.follow, 1)  # default: frame the enemy under fire
     else:
         eb.enter(f.d, a.attacker, a.defender); time.sleep(0.3)
@@ -144,7 +156,7 @@ def main():
         s0, s1 = hp(us, 0), hp(us, 1)
         front = min((u["row"] for u in us if u["side"] == 0 and u["hp"] > 0), default=99)
         cam.follow(us, side=follow_side, ahead=(0.0, -2.0))   # ease toward the action each frame
-        if f.shot(os.path.join(fdir, f"f{n:03d}.png")):
+        if f.shot(os.path.join(fdir, f"f{n:05d}.png")):
             n += 1
         if i % 5 == 0:
             print(f"i{i:3d}: us={s0:4d} en={s1:4d} frontRow={front:2d} scr=0x{sc:x} f={n}")
@@ -157,13 +169,24 @@ def main():
         f.d.rpc({"cmd": "sleep", "ms": a.sleep_ms})
 
     if n:
-        vf = ["-vf", f"crop={a.crop}"] if a.crop else []
+        # target-duration: pick the assembly fps so the clip runs ~target_secs (needs enough
+        # distinct frames — a MARCH supplies them; a static fight will look choppy, use --dedup).
+        fps = a.fps
+        if a.target_secs:
+            fps = max(1.0, n / a.target_secs)
+        chain = []
+        if a.crop:
+            chain.append(f"crop={a.crop}")
+        if a.dedup:                    # drop near-duplicate frames (timelapse the static parts)
+            chain += ["mpdecimate", "setpts=N/(%g*TB)" % fps]
+        vf = ["-vf", ",".join(chain)] if chain else []
         subprocess.run(
-            ["ffmpeg", "-y", "-framerate", str(a.fps), "-i", os.path.join(fdir, "f%03d.png"),
-             *vf, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", a.out],
+            ["ffmpeg", "-y", "-framerate", f"{fps:.3f}", "-i", os.path.join(fdir, "f%05d.png"),
+             *vf, "-r", f"{max(fps,12):.3f}", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+             "-crf", "18", "-movflags", "+faststart", a.out],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"assembled {n} frames → {a.out}"
-              + (f" (cropped {a.crop})" if a.crop else ""))
+        print(f"assembled {n} frames → {a.out} (~{n/fps:.1f}s @ {fps:.1f}fps"
+              + (", dedup" if a.dedup else "") + (f", cropped {a.crop}" if a.crop else "") + ")")
 
 
 if __name__ == "__main__":
