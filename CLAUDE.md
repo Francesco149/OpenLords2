@@ -52,3 +52,12 @@ contiguous window, anchored to a semantic event so the port↔retail load-stretc
 cancels (both capture at `anchor+offset`). `--turbo` on both sides matches
 retail's virtual clock so they run frame-exact up to a REAL divergence. The
 sibling ../openrecet `tools/trace_studio_v3/` is the reference; mirror it.
+
+## HARD RULE — stopping the live probe daemon
+NEVER `pkill -f probe_daemon.py` (or any broad pattern) — other projects may run their own
+probe daemons in parallel and a pattern kill takes them down too. Stop ONLY ours, targeted by
+the pid in `runs/probe/daemon.json` (our control file) via the clean quit RPC + exact-pid SIGTERM:
+
+    nix develop -c python3 tools/stop_probe.py          # stops the daemon in daemon.json (+ its game)
+
+Same for stray game processes: `tools/kill_retail.py` reaps Lords2.exe, not by broad match here.
