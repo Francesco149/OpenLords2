@@ -62,18 +62,26 @@ class Film:
             self.b.center_on(sum(u["col"] for u in live) / len(live) + ahead_col,
                              sum(u["row"] for u in live) / len(live) + ahead_row)
 
-    def shot(self, path, settle_ms=70):
-        """Lock-free async capture during the run (bright palette, stable with combat).
+    def shot(self, path, settle_ms=70, mode="direct"):
+        """Capture during the run after forcing a complete terrain redraw.
+
+        ``sync`` arms the daemon's in-tick one-shot, consumed after the engine tick
+        has finished writing the framebuffer.  This avoids the intermittent missing
+        or half-painted sprites produced by ``shotd``'s asynchronous framebuffer read.
+        It is currently diagnostic-only: in the synthetic natural-battle harness it
+        advances to screen 0x2e after roughly 15 frames. ``direct`` therefore remains
+        the default until that harness interaction is fixed.
+
         Forces a FULL terrain redraw first: the combat terrain pass (FUN_004bcbdc) only
         redraws ALL cells while the redraw counter DAT_0053e9ac != 0 — otherwise it goes
         incremental. The game's own scroll (FUN_00431f59) sets it on every move; panning
         by raw camera-poke bypasses that, so stale terrain tiles persist for frames (the
         'morphing'). Poking it high + settling a few ticks makes each capture a clean full
-        frame. (Still async, so a moving unit sprite can tear slightly, but the terrain is
-        solid.)"""
+        frame."""
         self.d.poke(0x53e9ac, [4, 0, 0, 0])          # force full terrain redraw
         self.d.rpc({"cmd": "sleep", "ms": settle_ms})  # let a few ticks fully repaint
-        return self.d.rpc({"cmd": "shotd", "path": path}).get("ok")
+        cmd = "shots" if mode == "sync" else "shotd"
+        return self.d.rpc({"cmd": cmd, "path": path}).get("ok")
 
 
 def hp(us, side):
@@ -105,6 +113,8 @@ def main():
     ap.add_argument("--dedup", action="store_true", help="drop near-duplicate frames (timelapse static fights)")
     ap.add_argument("--out", default="runs/probe/beat2/march.mp4")
     ap.add_argument("--fps", type=int, default=15)
+    ap.add_argument("--capture-mode", choices=["direct", "sync"], default="direct",
+                    help="direct = stable legacy asynchronous read; sync = experimental post-tick read (currently ends synthetic battles early)")
     ap.add_argument("--port", type=int, default=27099)
     a = ap.parse_args()
 
@@ -160,7 +170,7 @@ def main():
         front = min((u["row"] for u in us if u["side"] == 0 and u["hp"] > 0), default=99)
         cam.follow(us, side=follow_side, ahead=(0.0, 0.0),    # ease toward the action each frame
                    lead=a.follow_lead, toward_side=1 - follow_side)   # follow the LEADING edge (first clash)
-        if f.shot(os.path.join(fdir, f"f{n:05d}.png")):
+        if f.shot(os.path.join(fdir, f"f{n:05d}.png"), mode=a.capture_mode):
             n += 1
         if i % 5 == 0:
             print(f"i{i:3d}: us={s0:4d} en={s1:4d} frontRow={front:2d} scr=0x{sc:x} f={n}")
