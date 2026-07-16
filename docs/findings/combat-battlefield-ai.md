@@ -160,6 +160,33 @@ column of `0x4d96d0`.
 > spacing. YOUR archers can freely out-range and kite theirs; and you can bait their archers into
 > melee by walking a decoy into them.
 
+#### Presentation-safe ranged proof fixture (2026-07-16)
+
+`tools/film_unit_behavior.py` now separates a logic fixture from a filmable
+fixture. Overwriting the scratch combat records' class words after
+`FUN_0042b7f7` is sufficient to exercise combat logic, but it is **not**
+presentation-safe: battlefield entry has already selected the sprite/movie bank,
+palette, and map features. Replacement classes can therefore animate through
+stale resources, producing the dark palette and giant unrelated animation seen
+in the rejected b20 capture.
+
+The production preset instead enters a natural retail 28-v-28 battle, selects the
+already-loaded player archer formation and enemy mace formation, and moves those
+complete formations with their occupancy cells updated. Moving a single record
+is invalid for this proof because `FUN_00479e90` orders at formation scope; the
+remaining members and stale formation centroid keep the isolated record from
+executing a coherent volley. The selected formations are staged 8–10 hexes apart
+on the verified bright western meadow, inside the natural 15-hex bow range. Unit
+classes, sprite banks, health, stats, targets, and every unselected army record
+remain untouched.
+
+The checked capture contract requires at least 20 aligned `shotq` frames,
+observes action 3, enemy damage, zero archer return damage, and damage before
+contact, and stops before emitting empty-target telemetry. Retail occasionally
+clears the battle early; that short run now exits nonzero instead of becoming a
+technically true but editorially weak proof. The promoted run records 47 frames,
+archers 200→200 and maces 75→1 at separation 8–10.
+
 ### Attack resolution — deterministic, threshold casualties
 Impact resolves in `FUN_00492c8b` (damage block @70554-70658). `dmg = power / elevation_factor
 (÷5/÷3/÷2/>>2) − armor(+0x146)`, capped by weather bracket. Accrues into `+0x16e`; when it crosses

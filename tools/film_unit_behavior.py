@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Film a checked tactical unit interaction with frame-aligned telemetry.
 
-The ``archer-range`` preset stages an even retail battle, puts the player's
-archer line twelve hexes from an untouched AI mace formation, and records the
-real simulation/casualty path.  It is a deliberately narrow proof: ranged
-attacks remove enemy troops while the archers take no return damage.
+The ``archer-range`` preset enters a natural retail 28v28 battle, selects one
+already-loaded archer formation and one already-loaded mace formation, places
+them inside bow range, and records the real simulation/casualty path.  Starting
+from natural armies matters visually: the engine loads the correct unit sprite
+bank and bright battlefield palette before capture.  The older scratch-record
+class override proved the behavior but rendered replacement classes through a
+stale sprite/movie bank.
 
 The result JSON distinguishes fixture setup, player orders, and observations.
 The JSONL sidecar includes live positions, destinations, actions, weapon range,
@@ -21,7 +24,7 @@ Prerequisite: a clean probe daemon. Example:
 
 Use ``--present`` only when a live Windows preview is required.  Production
 ``shotq`` capture is headless; avoiding the preview's recurring DDraw Lock also
-makes small synthetic battles repeatable.
+makes natural presentation fixtures repeatable.
 """
 from __future__ import annotations
 
@@ -36,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import film_battle as fb  # noqa: E402
+import enter_battle as eb  # noqa: E402
 import kiting_demo as kd  # noqa: E402
 
 
@@ -57,8 +61,8 @@ def closest_gap(left: list[dict], right: list[dict]) -> int:
     return int(min(pairs, default=999))
 
 
-def side_units(snap: dict, side: int) -> list[dict]:
-    return [u for u in snap.get("units", []) if u["side"] == side and u["hp"] > 0]
+def selected_units(snap: dict, ids: set[int]) -> list[dict]:
+    return [u for u in snap.get("units", []) if u["idx"] in ids and u["hp"] > 0]
 
 
 def main() -> int:
@@ -70,8 +74,10 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=27099)
     ap.add_argument("--fps", type=int, default=20)
     ap.add_argument("--max-seconds", type=float, default=8.0)
-    ap.add_argument("--troops", type=int, default=16,
-                    help="troops per side; 16 gives four unit records per formation")
+    ap.add_argument("--attacker", type=int, default=4,
+                    help="natural strategic attacker record")
+    ap.add_argument("--defender", type=int, default=5,
+                    help="natural strategic defender record")
     args = ap.parse_args()
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -84,46 +90,56 @@ def main() -> int:
 
     g = kd.Demo(args.port)
     film = fb.Film(args.port)
-    g.stage({kd.CLASS["archer"]: args.troops},
-            {kd.CLASS["mace"]: args.troops})
-    # Read the compact deploy model before starting the battle.  A full
-    # telemetry sweep here would leave the tiny staged fight running while
-    # hundreds of fields are fetched, consuming most of its lifetime.
-    deploy_units = g.units()
-    archers = [u for u in deploy_units if u["side"] == 0]
-    melee = [u for u in deploy_units if u["side"] == 1]
+    eb.enter(g.d, args.attacker, args.defender)
+    deploy_units = film.b.telemetry()["units"]
+    archers = [u for u in deploy_units if u["side"] == 0 and u["unit_class"] == kd.CLASS["archer"]]
+    melee = [u for u in deploy_units if u["side"] == 1 and u["unit_class"] == kd.CLASS["mace"]]
     if not archers or not melee:
-        raise RuntimeError(f"fixture deploy mismatch: {len(archers)} vs {len(melee)}")
+        raise RuntimeError(f"natural fixture lacks archers/maces: {len(archers)} vs {len(melee)}")
+
+    # Use one complete natural formation per side. Orders are formation-level:
+    # relocating just one record leaves its formation centroid and the rest of
+    # its members at the deploy line, so the isolated record never executes a
+    # coherent volley. The rest of both armies stay at retail deployment.
+    archer_ids = {u["idx"] for u in archers}
+    melee_ids = {u["idx"] for u in melee}
     archer_forms = sorted({u["form"] for u in archers})
     melee_forms = sorted({u["form"] for u in melee})
-    melee_home = centroid(melee)
 
-    # This is a synthetic fixture, so enter its already-staged fight through the
-    # two verified simulation gates instead of injecting a deploy-screen click.
-    # The click path races retail's formation initializer in small battles and
-    # can end the process before the first capture.
+    film.b.start()
+    time.sleep(0.4)
     kd.arm_ingame(g.d)
     g.run(250)
 
-    # Match the proven kiting fixture: stage only the player line on live render
-    # coordinates, inside its 15-hex weapon range.  The defender's positions,
-    # occupancy grid, stats, targets, and health stay untouched.  Projectile
-    # combat does not use the attacker's melee-occupancy cell.
-    firing_row = 20
-    start_col = 45
-    for offset, unit in enumerate(archers):
-        g.setpos(unit["idx"], start_col + offset, firing_row, grid=False)
+    # Put the two selected formations on the verified bright western meadow.
+    # Camera column 32 contains a corrupt animated battlefield feature in this
+    # retail map; this region's palette is clean. Rows 73-74 also move the bridge
+    # mostly above the viewport while keeping the original armies offscreen.
+    # The closest pair starts ten hexes apart and the farthest archer at fifteen.
+    archer_cells = [(4, 73), (5, 73), (6, 73), (7, 73),
+                    (4, 74), (5, 74), (6, 74)]
+    melee_cells = [(17, 73), (18, 73), (19, 73)]
+    if len(archers) != len(archer_cells) or len(melee) != len(melee_cells):
+        raise RuntimeError(
+            f"natural formation shape changed: {len(archers)} archers, "
+            f"{len(melee)} maces")
+    for unit, (col, row) in zip(archers, archer_cells):
+        g.setpos(unit["idx"], col, row, grid=True)
+    for unit, (col, row) in zip(melee, melee_cells):
+        g.setpos(unit["idx"], col, row, grid=True)
     g.d.poke(0x53E9AC, [8, 0, 0, 0])
+    g.run(250)
 
     staged = film.b.telemetry()
-    archers = side_units(staged, 0)
-    melee = side_units(staged, 1)
+    archers = selected_units(staged, archer_ids)
+    melee = selected_units(staged, melee_ids)
     if any(u["weapon"] == 0 for u in archers):
         raise RuntimeError("attacker fixture is not all ranged")
     if any(u["weapon"] != 0 for u in melee):
         raise RuntimeError("defender fixture is not all melee")
     archer_range = max(u["range_hex"] for u in archers)
     archer_home = centroid(archers)
+    melee_home = centroid(melee)
     initial_gap = closest_gap(archers, melee)
     film.b.center_on((archer_home[0] + melee_home[0]) / 2,
                      (archer_home[1] + melee_home[1]) / 2)
@@ -135,18 +151,25 @@ def main() -> int:
     def order_volley() -> None:
         nonlocal attack_orders
         snap = film.b.telemetry()
-        live_melee = side_units(snap, 1)
-        if not live_melee:
+        live_archers = selected_units(snap, archer_ids)
+        live_melee = selected_units(snap, melee_ids)
+        if not live_archers or not live_melee:
             return
-        target = min(live_melee, key=lambda u: u["hp"])
+        archer_center = centroid(live_archers)
+        target = min(
+            live_melee,
+            key=lambda u: manhattan((u["col"], u["row"]), archer_center),
+        )
         for form in archer_forms:
             film.b.order(form, target["col"], target["row"], target["idx"])
         attack_orders += 1
 
     def grab() -> bool:
         snap = film.b.telemetry()
-        live_archers = side_units(snap, 0)
-        live_melee = side_units(snap, 1)
+        live_archers = selected_units(snap, archer_ids)
+        live_melee = selected_units(snap, melee_ids)
+        if not live_archers or not live_melee:
+            return False
         a_center = centroid(live_archers)
         m_center = centroid(live_melee)
         gap = closest_gap(live_archers, live_melee)
@@ -189,11 +212,11 @@ def main() -> int:
     while time.monotonic() < deadline:
         if film.b.screen() not in (0x28, 0x29, 0x2A):
             break
-        # Let the unassisted opening show for a few frames, then issue the same
-        # legal focus-fire order a player would use.  Ordering during the
-        # deploy->fight transition can trip retail's battle-end path before the
-        # first capture, so the first command is intentionally frame-gated.
-        if len(records) >= 8 and (len(records) - 8) % 8 == 0:
+        # Reassert the same legal formation-level focus-fire order periodically.
+        # The fixture is already through the deploy->fight transition here, so
+        # ordering before frame zero keeps the relocated formation from briefly
+        # following its stale retail deployment anchor.
+        if len(records) % 8 == 0:
             order_volley()
         if not grab():
             break
@@ -216,6 +239,7 @@ def main() -> int:
     }
     checks = {
         "capture_has_eight_frames": len(records) >= 8,
+        "capture_has_twenty_frames": len(records) >= 20,
         "starts_inside_archer_range": initial_gap <= archer_range,
         "ranged_attack_action_observed": 3 in ranged_actions,
         "enemy_melee_takes_damage": bool(melee_hp) and min(melee_hp) < melee_hp[0],
@@ -227,7 +251,10 @@ def main() -> int:
         "schema": "openlords2.unit-behavior-proof.v1",
         "captured_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "scenario": args.scenario,
-        "claim": "Archers inflict casualties from range before melee can return damage.",
+        "claim": (
+            "A natural archer formation inflicts casualties from range before "
+            "a natural mace formation can return damage."
+        ),
         "source": {
             "binary": "retail Lords2.exe",
             "ranged_handlers": ["FUN_00483337", "FUN_00484bf9"],
@@ -235,13 +262,17 @@ def main() -> int:
             "capture_mode": "shotq (lock-free post-render copy + daemon composite)",
         },
         "fixture": {
-            "attacker": f"{args.troops} archers",
-            "defender": f"{args.troops} maces",
+            "attacker": "one complete natural archer formation",
+            "defender": "one complete natural mace formation",
+            "natural_armies": [args.attacker, args.defender],
+            "selected_archer_ids": sorted(archer_ids),
+            "selected_melee_ids": sorted(melee_ids),
             "archer_forms": archer_forms,
             "melee_forms": melee_forms,
-            "player_live_positions_staged": True,
-            "player_occupancy_grid_modified": False,
-            "defender_state_injected": False,
+            "selected_live_positions_staged": True,
+            "selected_occupancy_grid_updated": True,
+            "unit_classes_or_sprite_banks_injected": False,
+            "unselected_army_records_modified": False,
             "targets_injected": False,
             "health_or_stats_injected": False,
             "player_attack_orders": attack_orders,
