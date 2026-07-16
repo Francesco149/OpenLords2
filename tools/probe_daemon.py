@@ -113,7 +113,11 @@ class ProbeDaemon:
         # Latest frame delivered by the agent (kind:'frame').
         self._frame_lock = threading.Lock()
         self._frame = None                # (idx, w, h, palette_bytes, pixels)
+        self._frame_meta = {}             # compositor diagnostics for latest idx
         self._frame_evt = threading.Event()
+        self._frame_composite = None       # persistent presented 8-bit canvas
+        self._frame_composite_dims = None
+        self._frame_composite_screen = None
         self._rec = None                  # active recording {proc, thread, stop, ...}
         self._shot_seq = 0
         # engine-thread call results, keyed by call id
@@ -140,6 +144,8 @@ class ProbeDaemon:
                 w, h, fi = struct.unpack("<III", data[:12])
                 pal = data[12:12 + 1024]
                 px = data[12 + 1024: 12 + 1024 + w * h]
+                px, comp_meta = self._compose_frame(w, h, pal, px, p.get("screen"))
+                self._frame_meta = {fi: comp_meta}
                 rec = self._rec
                 if rec is not None and rec.get("proc") is not None:
                     self._rec_write(rec, w, h, pal, px)
@@ -166,6 +172,67 @@ class ProbeDaemon:
         if kind in ("anchor", "segtrace_wait", "segtrace_done",
                     "messagebox_intercepted"):
             self._logline(f"[{kind}] {json.dumps(p)}")
+
+    def _compose_frame(self, w, h, palette, pixels, screen):
+        """Rebuild retail's persistent primary plane from dirty back frames.
+
+        Lords II often redraws only one or more dirty rectangles; untouched
+        back-buffer bytes are disposable and commonly index 0.  Treating that
+        transient plane as a complete frame causes the black flashes seen in
+        captures.  We retain the previous presented canvas and copy only 16px
+        tiles that contain rendered pixels.  Near-full frames replace the
+        canvas outright.  A screen-id transition also resets it, so genuinely
+        sparse/black menus do not inherit the prior scene.
+        """
+        raw = bytes(pixels)
+        if not getattr(self.args, "frame_composite", True):
+            return raw, {"mode": "disabled"}
+        dims = (w, h)
+        changed_screen = (self._frame_composite_screen is not None and
+                          screen is not None and screen != self._frame_composite_screen)
+        reset = (self._frame_composite is None or
+                 self._frame_composite_dims != dims or changed_screen)
+        tile = 16
+        active = []
+        total = 0
+        view = memoryview(raw)
+        # "Empty" dirty-plane pixels are not guaranteed to use palette index
+        # zero. Classify by the live RGB palette so a black-mapped nonzero index
+        # cannot make every tile look occupied.
+        visible_index = bytearray(256)
+        for i in range(256):
+            rgb = palette[i * 4:i * 4 + 3]
+            visible_index[i] = 1 if rgb and max(rgb) > 12 else 0
+        for y0 in range(0, h, tile):
+            y1 = min(h, y0 + tile)
+            for x0 in range(0, w, tile):
+                x1 = min(w, x0 + tile)
+                total += 1
+                dirty = any(any(visible_index[v] for v in view[y * w + x0:y * w + x1])
+                            for y in range(y0, y1))
+                if dirty:
+                    active.append((x0, y0, x1, y1))
+        coverage = len(active) / total if total else 1.0
+        # Full terrain/map frames light essentially every tile.  A conservative
+        # 90% threshold leaves modal scroll/HUD dirty planes in composite mode.
+        if reset or coverage >= 0.90:
+            canvas = bytearray(raw)
+            mode = "reset" if reset else "full"
+        else:
+            canvas = bytearray(self._frame_composite)
+            for x0, y0, x1, y1 in active:
+                for y in range(y0, y1):
+                    a, b = y * w + x0, y * w + x1
+                    canvas[a:b] = raw[a:b]
+            mode = "dirty_tiles"
+        self._frame_composite = canvas
+        self._frame_composite_dims = dims
+        self._frame_composite_screen = screen
+        return bytes(canvas), {
+            "mode": mode, "screen": screen, "tile_px": tile,
+            "active_tiles": len(active), "total_tiles": total,
+            "active_tile_fraction": round(coverage, 6),
+        }
 
     # ── lifecycle ─────────────────────────────────────────────────────────
     def start(self):
@@ -306,11 +373,15 @@ class ProbeDaemon:
         return {"ok": True, "advanced": False, "season": rd(0x0057C934),
                 "year": rd(0x00553EDC), "scrolls_dismissed": dismissed}
 
-    def _callq(self, va, args, abi, timeout):
-        """Enqueue a fn call to run on the ENGINE thread (safe) and wait for its
-        result message.  Times out if the engine isn't ticking."""
+    def _callq(self, va, args, abi, timeout, pokes=None):
+        """Enqueue an atomic poke(s)+call transaction on the ENGINE thread.
+
+        Applying volatile fixture inputs in the same between-ticks transaction
+        prevents the live sim from replacing them between a controller poke and
+        the call that is meant to consume them.
+        """
         self._call_evt.clear()
-        cid = self.script.exports_sync.probe_enqueue_call(va, args, abi)
+        cid = self.script.exports_sync.probe_enqueue_call(va, args, abi, pokes or [])
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if cid in self._call_results:
@@ -445,31 +516,38 @@ class ProbeDaemon:
                 "duration_s": round(dur, 2),
                 "avg_fps": round(rec["n"] / dur, 1) if dur > 0 else 0}
 
-    def _shot(self, path=None, direct=False, sync=False):
+    def _shot(self, path=None, direct=False, sync=False, stable=False):
         # Retry a few times: under the shown window / present seat the DDraw
         # back surface can be momentarily lost, so one probeShot may yield nothing.
         # direct=True reads *DAT_004ea1a8 straight from memory (no DDraw Lock) —
         # robust while frozen / right after driving pokes (the stepped battle-
         # capture path).  Poke the redraw counter before calling to force a fresh
         # render of the current frame.
+        # stable=True arms a lock-free software-framebuffer copy at the next
+        # engine_tick.onLeave.  It runs after a completed render on the engine
+        # thread: no async tear and no RPC-thread DDraw Lock (which crashes combat).
+        # The persistent compositor below fills any intentionally dirty-only tiles.
         # sync=True requests a one-shot capture INSIDE engine_tick.onLeave (after
         # the full render+present) so the framebuffer is never read mid-render —
         # the clean path for LIVE moving frames (no torn/dirty-rect artifacts).
         # Needs the tick running (a live battle at 0x29); the frame arrives ~1 tick
         # later and we wait on the frame event below.
-        if sync:
+        if stable:
+            grab = self.script.exports_sync.probe_shot_stable
+        elif sync:
             grab = self.script.exports_sync.probe_shot_sync
         elif direct:
             grab = self.script.exports_sync.probe_shot_direct
         else:
             grab = self.script.exports_sync.probe_shot
         got = None
-        for _ in range(6):
+        attempts = 8 if stable else 6
+        for _ in range(attempts):
             self._frame_evt.clear()
             with self._frame_lock:
                 prev = self._frame[0] if self._frame else -1
-            grab()
-            deadline = time.monotonic() + 1.0
+            rc = grab()
+            deadline = time.monotonic() + (0.75 if stable else 1.0)
             while time.monotonic() < deadline:
                 if self._frame_evt.wait(0.2):
                     with self._frame_lock:
@@ -479,7 +557,7 @@ class ProbeDaemon:
                     self._frame_evt.clear()
             if got is not None:
                 break
-            time.sleep(0.2)
+            time.sleep(0.01 if stable else 0.2)
         if got is None:
             return {"ok": False, "err": "no frame"}
         fi, w, h, pal, px = got
@@ -490,7 +568,8 @@ class ProbeDaemon:
             out = self.run_dir / "shots" / f"shot_{self._shot_seq:04d}.png"
         out.parent.mkdir(parents=True, exist_ok=True)
         _save_png(out, w, h, pal, px)
-        return {"ok": True, "path": str(out), "w": w, "h": h, "frame_idx": fi}
+        return {"ok": True, "path": str(out), "w": w, "h": h, "frame_idx": fi,
+                "frame_composite": self._frame_meta.get(fi, {})}
 
     def dispatch(self, req: dict) -> dict:
         cmd = req.get("cmd")
@@ -501,7 +580,9 @@ class ProbeDaemon:
                 return self._shot(req.get("path"), bool(req.get("direct")))
             if cmd == "shotd":            # Lock-free direct-framebuffer shot (async, may tear)
                 return self._shot(req.get("path"), direct=True)
-            if cmd == "shots":            # clean in-tick synchronized shot (live frames)
+            if cmd == "shotq":            # synchronized lock-free post-render shot
+                return self._shot(req.get("path"), stable=True)
+            if cmd == "shots":            # diagnostic in-tick DDraw-lock shot
                 return self._shot(req.get("path"), sync=True)
             if cmd == "record":
                 if req.get("action") == "start":
@@ -556,7 +637,8 @@ class ProbeDaemon:
             if cmd == "callq":
                 return self._callq(int(req["va"]), req.get("args", []),
                                    req.get("abi", "mscdecl"),
-                                   float(req.get("timeout", 5.0)))
+                                   float(req.get("timeout", 5.0)),
+                                   req.get("pokes", []))
             if cmd == "xcall":            # call any agent export by snake_case name
                 fn = getattr(self.script.exports_sync, req["fn"])
                 ret = fn(*req.get("args", []))
@@ -673,6 +755,9 @@ def main():
     ap.add_argument("--turbo", action="store_true",
                     help="fast-forward (off by default so you can watch)")
     ap.add_argument("--turbo-step-ms", type=int, default=17)
+    ap.add_argument("--no-frame-composite", dest="frame_composite", action="store_false",
+                    help="diagnostic: save transient dirty back planes without rebuilding the presented frame")
+    ap.set_defaults(frame_composite=True)
     args = ap.parse_args()
 
     d = ProbeDaemon(args)

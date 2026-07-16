@@ -90,6 +90,51 @@ frame_NNNNN.bmp`.  Same on-disk shape as
 `src/gfx.c:gfx_capture_backbuffer` so output is interchangeable for
 comparison diffs.
 
+## Probe/video capture modes (2026-07-16)
+
+The persistent probe daemon also exposes three one-shot paths.  They are not
+equivalent:
+
+| command | implementation | use |
+|---|---|---|
+| `shotq` | arm a direct software-framebuffer copy at the next `engine_tick.onLeave` | **production footage** |
+| `shotd` | direct software-framebuffer copy from the RPC thread | tear/flicker diagnosis only |
+| `shots` | DDraw `Lock` from the engine tick | surface/parity diagnosis only |
+
+`shotq` is the safe default used by `film_battle.py`,
+`film_unit_behavior.py`, and `film_events.py`.  The copy happens after a
+completed render on the game thread, so it cannot observe the half-painted
+frame that made sprites and terrain blink under `shotd`.  It also avoids the
+DDraw `Lock` that can destabilize live combat.
+
+Lords II deliberately leaves untouched areas of its software plane disposable
+while performing dirty-rectangle redraws.  Saving that transient plane as a
+complete image caused the remaining black flashes.  `probe_daemon.py` now
+retains a presented 8-bit canvas and copies only active 16-pixel tiles into it;
+near-full frames replace the canvas, and a screen-id change resets it.  Each
+reply includes `frame_composite` diagnostics (`mode`, `screen`, active-tile
+fraction), which lets film tools reject a menu or ratings frame that arrived
+during a battle transition.
+
+For unattended capture, start the daemon **without** `--present`.  `shotq`
+does not need a visible window.  `--present` is an interactive Windows preview
+seat that locks and blits the DDraw back surface every few ticks; it is useful
+for a person driving the game, but made tiny synthetic battles intermittently
+exit before their first capture.  Two consecutive headless runs of the checked
+archer fixture completed with 19 and 20 combat-only frames and all six behavior
+assertions passing.
+
+Production recipe:
+
+```sh
+nix develop -c python tools/probe_daemon.py \
+  --segtrace tools/traces/new_game_to_map.jsonl \
+  --rng-seed canonical --run-id archer-range
+nix develop -c python tools/film_unit_behavior.py \
+  --out runs/probe/archer-range/archer_range.mp4
+nix develop -c python tools/stop_probe.py
+```
+
 ## Why not capture every Blt?
 
 Two reasons.

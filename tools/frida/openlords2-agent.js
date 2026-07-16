@@ -510,7 +510,8 @@ let g_last_stream_ms     = 0;
 // writing the framebuffer).  An async daemon-thread probeShotDirect can read
 // *DAT_004ea1a8 MID-render → torn/partial frames (dirty-rect trails, e.g. the
 // minimap camera-rect smear); capturing in-tick sidesteps that entirely.
-let g_oneshot_capture    = false;
+let g_oneshot_capture          = false; // diagnostic: DDraw Lock on engine thread
+let g_oneshot_capture_direct   = false; // production: post-render software-buffer copy
 let g_show_window_after_ms     = 0;        // 0 = never auto-show
 let g_show_window_client_w     = 640;      // post-show client size — engine's
 let g_show_window_client_h     = 480;      // native render res, 1:1 pixel-perfect
@@ -1755,6 +1756,11 @@ function vfn(thisPtr, slotIdx, retType, argTypes) {
     return new NativeFunction(fn, retType, argTypes, 'stdcall');
 }
 
+function captureScreenId() {
+    try { return rva(ADDR.var_sim_current_screen).readS32(); }
+    catch (e) { return -1; }
+}
+
 function captureFrameOnce() {
     let back = NULL;
     let locked = false;
@@ -1835,7 +1841,6 @@ function captureFrameOnce() {
                         lpSurface.add(y * pitch),
                         width);
         }
-
         const ab = scratch.readByteArray(payloadSz);
         g_frame_capture_count++;
         send({kind:    'frame',
@@ -1843,6 +1848,7 @@ function captureFrameOnce() {
               width:    width,
               height:   height,
               pitch:    pitch,
+              screen:   captureScreenId(),
               virtual_now_ms: g_virtual_now_ms,
               t_ms:     nowMs()}, ab);
 
@@ -1987,6 +1993,7 @@ function captureFrameDirect() {
               width:    width,
               height:   height,
               pitch:    width,
+              screen:   captureScreenId(),
               virtual_now_ms: g_virtual_now_ms,
               t_ms:     nowMs()}, ab);
     } catch (e) {
@@ -2238,11 +2245,19 @@ function tryAgentDrivenPresent() {
 // Recorder stream: send a frame every g_stream_every_ticks ticks from inside the
 // engine tick (synchronized with the game's own render, no external lock race).
 function maybeStreamFrame() {
-    // One-shot synchronized capture (probeShotSync) — fires even when streaming is
-    // off. In-tick, so the framebuffer is a complete rendered+presented frame.
+    // Production one-shot: copy the software framebuffer after the render has
+    // completed, on the engine thread.  This avoids both async mid-render tearing
+    // and the combat crash caused by locking the DDraw surface from an RPC thread.
+    if (g_oneshot_capture_direct) {
+        g_oneshot_capture_direct = false;
+        try { captureFrameDirect(); }
+        catch (e) { err('oneshotCaptureDirect', e.message); }
+    }
+    // Diagnostic synchronized DDraw-lock capture — fires even when streaming is
+    // off.  Kept for parity work; the production shotq path above does not Lock.
     if (g_oneshot_capture) {
         g_oneshot_capture = false;
-        try { captureFrameDirect(); } catch (e) { err('oneshotCapture', e.message); }
+        try { captureFrameOnce(); } catch (e) { err('oneshotCapture', e.message); }
     }
     if (!g_stream_enabled) return;
     const t = nowMs();
@@ -2956,10 +2971,12 @@ function segtraceTick(frame) {
 }
 
 // Engine-thread command queue (owner idea).  probeEnqueueCall pushes a
-// {va,args} call; the per-tick hook drains it HERE — so the call runs in the
-// engine's OWN context (main thread, between ticks), no V8-vs-engine race.  A
-// naked call from the V8 thread crashed the game (FUN_0043ac23); this is the
-// safe path, and the same substrate the AI-POV render hooks will use.
+// {pokes,va,args} transaction; the per-tick hook drains it HERE — so both the
+// fixture writes and call run in the engine's OWN context (main thread,
+// between ticks), with no intervening tick able to replace a volatile input
+// such as an RNG mirror.  A naked call from the V8 thread crashed the game
+// (FUN_0043ac23); this is the safe path, and the same substrate the AI-POV
+// render hooks use.
 let g_call_queue = [];
 let g_call_seq   = 0;
 function drainCallQueue() {
@@ -2968,6 +2985,10 @@ function drainCallQueue() {
     for (let i = 0; i < q.length; i++) {
         const c = q[i];
         try {
+            for (let j = 0; j < c.pokes.length; j++) {
+                const p = c.pokes[j];
+                rva(p.va >>> 0).writeByteArray(p.bytes);
+            }
             const fn = new NativeFunction(rva(c.va >>> 0), 'int32',
                 c.args.map(function () { return 'int32'; }), c.abi);
             const ret = fn.apply(null, c.args);
@@ -6148,6 +6169,17 @@ rpc.exports = {
             return idx;
         } catch (e) { err('probeShotDirect', e.message); return -1; }
     },
+    probeShotStable: function () {
+        // Production synchronized shot: arm a lock-free software-framebuffer copy
+        // for engine_tick.onLeave, after retail has finished rendering.  Async
+        // probeShotDirect can tear; captureFrameOnce's DDraw Lock can crash live
+        // combat when called from an RPC thread.  This path does neither.
+        try {
+            const idx = g_frame_capture_count;
+            g_oneshot_capture_direct = true;
+            return idx;
+        } catch (e) { err('probeShotStable', e.message); return -1; }
+    },
     probeShotSync: function () {
         // Clean SYNCHRONIZED shot: request a one-shot capture at the next
         // engine_tick.onLeave (after the full render+present, game thread idle) so
@@ -6224,15 +6256,20 @@ rpc.exports = {
             return fn.apply(null, a);
         } catch (e) { err('probeCall', e.message); return null; }
     },
-    probeEnqueueCall: function (va, args, abi) {
-        // SAFE direct call: enqueue a fn call to run on the ENGINE thread in the
-        // per-tick hook (drainCallQueue).  Returns a call id; the result comes
-        // back as a {kind:'call_result', id} message once the tick executes it.
+    probeEnqueueCall: function (va, args, abi, pokes) {
+        // SAFE direct call: enqueue optional memory writes followed atomically
+        // by a fn call on the ENGINE thread.  Returns a call id; the result
+        // comes back as a {kind:'call_result', id} message once the tick runs it.
         g_call_seq = (g_call_seq + 1) | 0;
         g_call_queue.push({
             id: g_call_seq, va: (va >>> 0),
             args: (Array.isArray(args) ? args : []).map(function (x) { return x | 0; }),
-            abi: String(abi || 'mscdecl')});
+            abi: String(abi || 'mscdecl'),
+            pokes: (Array.isArray(pokes) ? pokes : []).map(function (p) {
+                return {va: p.va >>> 0,
+                        bytes: (Array.isArray(p.bytes) ? p.bytes : [])
+                            .map(function (x) { return x & 0xff; })};
+            })});
         return g_call_seq;
     },
     probeAutoDismiss: function (n) {

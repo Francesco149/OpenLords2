@@ -13,8 +13,10 @@ WORKING RECIPE (2026-07-10, produced the first clean 28v28 clip — no crash):
     gates armed, attack-orders, mass-setpos, in-tick `shots`, capture-while-frozen and the
     8-stack pile-on ALL run crash-free (verified tools/trigger_test.py, every trigger).
   • Drive with attack-orders (target=enemy) OR a move-order charge (target=0) — both stable.
-  • Capture DURING THE RUN (screen 0x29, present-active) with the LOCK-FREE direct
-    framebuffer read (`shotd` → *DAT_004ea1a8). Running frames read the correct
+  • Capture DURING THE RUN (screen 0x29) with the synchronized, lock-free
+    post-render read (`shotq`). For unattended filming, run the daemon without
+    `--present`; that flag is an interactive preview seat which continuously
+    locks the DDraw surface and is not needed by `shotq`. Running frames read the correct
     BRIGHT palette (frozen-mid-combat frames read a dark palette cycle-state — a game
     palette quirk both capture paths see, avoided by capturing while running). No
     freeze, no `record` streamer (that combo crashed frida).
@@ -26,17 +28,15 @@ WORKING RECIPE (2026-07-10, produced the first clean 28v28 clip — no crash):
 Result: our 28-stack army marches the whole field (frontRow 70→4), crosses the
 bridge chokepoint, and clashes — 120 bright frames → mp4, no crash.
 
-  STAGED kiting mode (--staged) is EXPERIMENTAL: pure archers vs a melee class via
-  kiting_demo staging + fire (attack) orders. Numerically proves the kite but is
-  crash-prone (attack-orders on an in-range/routing enemy drop frida). Kept for the
-  isolated-mechanic shot; drive gently, expect reboots.
+  For an assertion-backed staged ranged proof, prefer `film_unit_behavior.py`.
+  `--staged` remains a looser exploratory capture mode.
 
 Usage (daemon up, retail on cutestation):
     nix develop -c python3 tools/film_battle.py --out runs/probe/beat2/march.mp4
     nix develop -c python3 tools/film_battle.py --staged --enemy mace --n 16
 """
 from __future__ import annotations
-import argparse, os, subprocess, sys, time
+import argparse, json, os, subprocess, sys, time
 sys.path.insert(0, os.path.dirname(__file__))
 import enter_battle as eb
 import micro_bot as mb
@@ -50,6 +50,7 @@ class Film:
         self.d = eb.Daemon(port)
         self.b = mb.Battle(mb.Daemon(port))
         self.kd = kd.Demo(port)
+        self.last_shot = None
 
     def screen(self):
         return self.d.rd(V_SCREEN, "u8")
@@ -62,15 +63,14 @@ class Film:
             self.b.center_on(sum(u["col"] for u in live) / len(live) + ahead_col,
                              sum(u["row"] for u in live) / len(live) + ahead_row)
 
-    def shot(self, path, settle_ms=70, mode="direct"):
+    def shot(self, path, settle_ms=70, mode="stable", combat_only=False):
         """Capture during the run after forcing a complete terrain redraw.
 
-        ``sync`` arms the daemon's in-tick one-shot, consumed after the engine tick
-        has finished writing the framebuffer.  This avoids the intermittent missing
-        or half-painted sprites produced by ``shotd``'s asynchronous framebuffer read.
-        It is currently diagnostic-only: in the synthetic natural-battle harness it
-        advances to screen 0x2e after roughly 15 frames. ``direct`` therefore remains
-        the default until that harness interaction is fixed.
+        ``stable`` copies the software framebuffer on the engine thread immediately
+        after a completed render. It prevents half-painted reads without using the
+        DDraw Lock that can destabilize live combat. ``direct`` retains the old
+        asynchronous, potentially torn read for diagnostics. ``sync`` retains the
+        in-tick DDraw-lock path for parity diagnostics, not production footage.
 
         Forces a FULL terrain redraw first: the combat terrain pass (FUN_004bcbdc) only
         redraws ALL cells while the redraw counter DAT_0053e9ac != 0 — otherwise it goes
@@ -80,8 +80,20 @@ class Film:
         frame."""
         self.d.poke(0x53e9ac, [4, 0, 0, 0])          # force full terrain redraw
         self.d.rpc({"cmd": "sleep", "ms": settle_ms})  # let a few ticks fully repaint
-        cmd = "shots" if mode == "sync" else "shotd"
-        return self.d.rpc({"cmd": cmd, "path": path}).get("ok")
+        cmd = {"stable": "shotq", "sync": "shots", "direct": "shotd"}[mode]
+        reply = self.d.rpc({"cmd": cmd, "path": path})
+        self.last_shot = reply
+        if not reply.get("ok"):
+            return False
+        if combat_only:
+            captured_screen = (reply.get("frame_composite") or {}).get("screen")
+            if captured_screen not in (0x28, 0x29, 0x2A):
+                try:
+                    os.remove(path)
+                except FileNotFoundError:
+                    pass
+                return False
+        return True
 
 
 def hp(us, side):
@@ -90,7 +102,7 @@ def hp(us, side):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--staged", action="store_true", help="EXPERIMENTAL pure-archer kite (crash-prone); default = natural 28v28")
+    ap.add_argument("--staged", action="store_true", help="exploratory pure-archer kite; default = natural 28v28")
     ap.add_argument("--enemy", default="mace", choices=list(kd.CLASS), help="staged enemy class")
     ap.add_argument("--n", type=int, default=16, help="staged troops/side (small!)")
     ap.add_argument("--follow", default=None, choices=["us", "enemy"],
@@ -103,6 +115,8 @@ def main():
     ap.add_argument("--defender", type=int, default=5)
     ap.add_argument("--rounds", type=int, default=140)
     ap.add_argument("--sleep-ms", type=int, default=140, help="sim-advance per captured frame (smaller = denser/longer footage)")
+    ap.add_argument("--capture-settle-ms", type=int, default=70,
+                    help="full-redraw settling time before each synchronized capture")
     ap.add_argument("--recharge", type=int, default=6, help="re-issue the move-charge every N rounds")
     ap.add_argument("--cam-deadzone", type=float, default=5.0, help="tiles the action can drift before the cam eases (bigger = steadier)")
     ap.add_argument("--cam-lag", type=float, default=0.15, help="follow easing 0..1 (smaller = laggier/smoother)")
@@ -113,13 +127,19 @@ def main():
     ap.add_argument("--dedup", action="store_true", help="drop near-duplicate frames (timelapse static fights)")
     ap.add_argument("--out", default="runs/probe/beat2/march.mp4")
     ap.add_argument("--fps", type=int, default=15)
-    ap.add_argument("--capture-mode", choices=["direct", "sync"], default="direct",
-                    help="direct = stable legacy asynchronous read; sync = experimental post-tick read (currently ends synthetic battles early)")
+    ap.add_argument("--capture-mode", choices=["stable", "direct", "sync"], default="stable",
+                    help="stable = synchronized lock-free post-render read (default); direct = old async read; sync = diagnostic DDraw-lock read")
+    ap.add_argument("--telemetry", default=None,
+                    help="frame-aligned JSONL sidecar (default: <out stem>.telemetry.jsonl)")
+    ap.add_argument("--no-telemetry", action="store_true",
+                    help="disable the default frame-aligned unit/target/group-state sidecar")
     ap.add_argument("--port", type=int, default=27099)
     a = ap.parse_args()
 
     f = Film(a.port)
     fdir = a.out.rsplit(".", 1)[0] + "_frames"
+    telemetry_path = None if a.no_telemetry else (a.telemetry or a.out.rsplit(".", 1)[0] + ".telemetry.jsonl")
+    telemetry = open(telemetry_path, "w") if telemetry_path else None
     os.makedirs(fdir, exist_ok=True)
     for x in os.listdir(fdir):
         if x.endswith(".png"):
@@ -170,7 +190,17 @@ def main():
         front = min((u["row"] for u in us if u["side"] == 0 and u["hp"] > 0), default=99)
         cam.follow(us, side=follow_side, ahead=(0.0, 0.0),    # ease toward the action each frame
                    lead=a.follow_lead, toward_side=1 - follow_side)   # follow the LEADING edge (first clash)
-        if f.shot(os.path.join(fdir, f"f{n:05d}.png"), mode=a.capture_mode):
+        shot_name = f"f{n:05d}.png"
+        if f.shot(os.path.join(fdir, shot_name), settle_ms=a.capture_settle_ms,
+                  mode=a.capture_mode, combat_only=True):
+            if telemetry:
+                snap = f.b.telemetry(us)
+                snap.update(schema="openlords2.battle-telemetry.v2",
+                            frame=n, round=i, elapsed_s=round(time.time() - t0, 4),
+                            image=shot_name, capture_mode=a.capture_mode,
+                            hp_by_side={str(side): hp(us, side) for side in (0, 1)})
+                telemetry.write(json.dumps(snap, separators=(",", ":")) + "\n")
+                telemetry.flush()
             n += 1
         if i % 5 == 0:
             print(f"i{i:3d}: us={s0:4d} en={s1:4d} frontRow={front:2d} scr=0x{sc:x} f={n}")
@@ -181,6 +211,10 @@ def main():
         elif i % a.recharge == a.recharge - 1:
             order()
         f.d.rpc({"cmd": "sleep", "ms": a.sleep_ms})
+
+    if telemetry:
+        telemetry.close()
+        print(f"telemetry → {telemetry_path} ({n} frame-aligned records)")
 
     if n:
         # target-duration: pick the assembly fps so the clip runs ~target_secs (needs enough

@@ -14,8 +14,9 @@ Before running a staged battle, poke **both**:
 | `0x0052af94` | `game_state_phase` (`DAT_0052af94`) | **3** (ingame) | sim sub-steps + action dispatcher gate on it |
 | `0x00553030` | `master_switch` / `mp_active` (`DAT_00553030`) | **2** (≠0) | tactical per-tick action-dispatcher (`FUN_004472ce`) BAILS if 0 |
 
-Helper: `kiting_demo.arm_ingame(d)` — call once after `Battle.start()`. Baked into
-`kiting_demo.stage()`; wired into `film_battle.py` (both staged + natural paths).
+Helper: `kiting_demo.arm_ingame(d)`.  `kiting_demo.stage()` already applies the
+gates for synthetic fixtures; natural battles call the helper after
+`Battle.start()`.  Both paths are wired into `film_battle.py`.
 
 ## Two symptoms, one cause
 A **bare menu-spawn** (probe daemon spawns `Lords2.exe` fresh → main menu) can muster +
@@ -56,6 +57,11 @@ mp4, no crash. So **staged battle footage is capturable** — the numbers-overla
 is no longer forced.
 
 ## Notes / gotchas
+- The gates fix the half-initialized simulation crash; they do not make every
+  screenshot transport a production capture path.  Use lock-free post-render
+  `shotq` plus the daemon's persistent dirty-tile compositor for footage.  Keep
+  async `shotd`, DDraw-lock `shots`, and the daemon's `--present` seat for
+  diagnostics/interactive preview.  See `frame-capture.md`.
 - Gates HOLD once set post-`start()` (the engine does not re-stomp them mid-battle, unlike
   the AI-level `+0x29` refresh). `arm_ingame` is cheap; re-call per run-window if paranoid.
 - Re-staging on the SAME game boot works **after a battle ends naturally** (enemy wiped →

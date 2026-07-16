@@ -5,8 +5,10 @@ Sends one command to a running daemon (auto-discovered via
 runs/probe/daemon.json) and prints the JSON reply.  Game state persists in the
 daemon between calls, so you can click, screenshot, read memory, iterate.
 
-    tools/probe.py shot                 # screenshot the live screen -> PNG path
-    tools/probe.py shot /tmp/x.png      # ... to a specific path
+    tools/probe.py shot                 # screenshot via the DDraw lock path
+    tools/probe.py shotq /tmp/x.png     # synchronized post-render shot (recommended)
+    tools/probe.py shotd /tmp/x.png     # legacy async direct shot (may tear)
+    tools/probe.py shots /tmp/x.png     # diagnostic post-tick DDraw-lock shot
     tools/probe.py click 558 469        # left-click at GAME px (558,469)
     tools/probe.py click 320 107 r      # right-click
     tools/probe.py move 300 300         # move cursor only (hover)
@@ -70,8 +72,8 @@ def _build(argv: list[str]) -> dict:
         print(__doc__)
         sys.exit(2)
     cmd, rest = a[0], a[1:]
-    if cmd == "shot":
-        return {"cmd": "shot", "path": rest[0] if rest else None}
+    if cmd in ("shot", "shotq", "shotd", "shots"):
+        return {"cmd": cmd, "path": rest[0] if rest else None}
     if cmd == "click":
         return {"cmd": "click", "x": int(rest[0]), "y": int(rest[1]),
                 "button": (rest[2] if len(rest) > 2 else "l")}
@@ -112,6 +114,9 @@ def _build(argv: list[str]) -> dict:
                 "args": [int(x, 0) for x in rest[1:]]}
     if cmd == "callq":                         # callq VA [intarg ...] — engine-thread
         return {"cmd": "callq", "va": int(rest[0], 0),
+                "args": [int(x, 0) for x in rest[1:]]}
+    if cmd == "xcall":                         # xcall AGENT_EXPORT [intarg ...]
+        return {"cmd": "xcall", "fn": rest[0],
                 "args": [int(x, 0) for x in rest[1:]]}
     if cmd in ("anchors", "ping", "quit"):
         return {"cmd": cmd}

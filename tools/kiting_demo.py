@@ -21,12 +21,10 @@ STATUS (2026-07-09): mechanic PROVEN live. Staging 16 archers vs 16 melee deploy
 apart, inside archer range 15); ordering archers to attack fires from range — enemy
 HP drops (16→12) while archers stay at full 16 (ZERO return damage). vs peasants the
 enemy routs in ~4 rounds (the rout-cascade finding — a fine "archers break them
-untouched" clip); vs mace it lasts ~17 rounds (tougher morale). TWO footage caveats:
-(1) the battle ends (screen→0x2e) if you poke/order the DEFENDER — leave the enemy at
-spawn; (2) the combat-mode screenshot path grabs the wrong/stale (strategic) DDraw
-surface, so --shot frames are currently unreliable for the battlefield — the numeric
-proof is solid; polished footage needs the combat-capture surface fixed (separate
-tooling gap) or owner-captured in a real game.
+untouched" clip); vs mace it lasts ~17 rounds (tougher morale). The battle ends
+(screen→0x2e) if you poke/order the DEFENDER, so leave the enemy at spawn.  This
+legacy harness still uses the exploratory screenshot command; for production
+`shotq` footage plus frame-aligned assertions, use `film_unit_behavior.py`.
 """
 from __future__ import annotations
 import argparse, time, sys, os
