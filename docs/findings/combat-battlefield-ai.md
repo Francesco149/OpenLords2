@@ -52,24 +52,28 @@ Walks group records 1..0x50 (base `DAT_00566520`, stride **0x34**). Per live gro
 - **Stance dispatch** (@66549-66559) by stance byte `+0x08`=`DAT_00566528`, via one of three tables
   (phase-gated): `PTR_FUN_004d91b8` (stances 0-4, interactive/`DAT_0053e8fc==0`),
   `PTR_FUN_004d91f8` (0-0xb, auto-resolve), `PTR_FUN_004d91d0` (0-8). Table contents = **LEAD**.
-- **Retarget timer** `+0x14`=`DAT_00566534` decremented each tick; on `<1` → reset **500** and
-  `FUN_00489654`(gate) → `FUN_0048970e`(pick) (@66562-66570). This is the target-select cadence.
+- **Formation-refresh timer** `+0x14`=`DAT_00566534` decremented each tick; on `<1` → reset **500**
+  and `FUN_00489654`(gate) → `FUN_0048970e`(assign) (@66562-66570). The engine's debug label calls
+  it `re_targ`, but it does **not** universally hold one group target: the assignment function first
+  tries a formation layout and invokes the enemy-cell search only when that layout cannot fit.
 
-Debug label @15047 literally reads the string `"re_targ"` from this field — confirms it's the
-retarget countdown. Also set to **0x14 (20)** on a regroup (unit died/split; @60382/60983) and
-**0x32 (50)** mid-engagement (@65012). So lock length = 20..500 ticks by situation, 500 nominal.
+Debug label @15047 literally reads the string `"re_targ"` from this field. It is also set to
+**0x14 (20)** on a regroup (unit died/split; @60382/60983) and **0x32 (50)** mid-engagement
+(@65012), so the formation-assignment cadence varies with battle state.
 
-### 1c. Target selection (the AI "brain") — fully in-decompile
-`FUN_0048970e` → `FUN_00489f9d` (reachability/LOS) → one of
-`FUN_00489798`/`FUN_00489896`/`FUN_00489981` (assign members) →
-- **`FUN_0048a38e` (@66903):** spiral-search outward from the group centre, radius `0..0x14` (**20
-  hexes**), for an enemy-occupied *reachable* cell (per-cell test `FUN_0048a672` @66989). No enemy
-  within 20 → returns 0 → **group does nothing**.
-- **`FUN_00489a62` (@66713):** among the group's own members, pick the one **nearest by Manhattan
-  distance** (`FUN_00404ead` @2457 = |dx|+|dy|) to that enemy cell; excludes dead (subtype 2) &
-  already-assigned. `local_c` inits 1_000_000, keeps the min → **pure nearest-first**.
-- **`FUN_00489b8d` (@66742):** the AI **order issuer** — writes the target unit's fields DIRECTLY
-  (order subtype `+0x05`, dest hex `+0xf8/+0xfa`, path-reset flags). It does NOT go through the
+### 1c. Formation assignment + conditional enemy-cell search — fully in-decompile
+`FUN_0048970e` first calls `FUN_00489f9d`. A successful formation-fit takes
+`FUN_00489896` and assigns members to the generated layout. A failed fit takes
+`FUN_00489798`, which repeatedly calls the enemy-cell fallback below; stance 6 has a third branch.
+- **`FUN_0048a38e` (@66903):** scan expanding **squares** around the group anchor, with
+  `radius = 0; radius < 0x14` — radii **0..19**, not 20. Cells are visited in nested row/column
+  order; the first enemy-occupied reachable cell wins (`FUN_0048a672` @66989). This is conditional
+  fallback behavior, not a universal 20-hex vision system.
+- **`FUN_00489a62` (@66713):** among the group's own members, pick the one nearest by Manhattan
+  distance (`FUN_00404ead` = |dx|+|dy|) to the selected destination; excludes dead and already
+  assigned members. The Manhattan comparison chooses the **own assignee**, not the enemy cell.
+- **`FUN_00489b8d` (@66742):** the AI **order issuer** — writes that unit's fields directly
+  (order subtype `+0x05`, destination hex `-0x08/-0x06`, path-reset flags). It does not go through the
   player click path.
 
 ---
@@ -116,31 +120,28 @@ per-weapon `DAT_004d97b0` (stride 0x14). **Exact numeric range/reload/power per 
 
 ### Group record  (base `DAT_00566520`, stride 0x34)
 `+0x00` owner · `+0x02` member count · `+0x03` flag · `+0x08` **stance byte** · `+0x04/+0x06`
-member index range [first,last] · `+0x0f` group shot-cooldown · `+0x14` **retarget timer** ·
-`+0x16/+0x18` locked target hex · `+0x1e/+0x20` centroid · `+0x22/+0x24` **group anchor** ·
+member index range [first,last] · `+0x0f` group shot-cooldown · `+0x14` **formation refresh** ·
+`+0x16/+0x18` special high-morale **charge waypoint** (not a universal target) ·
+`+0x1e/+0x20` centroid · `+0x22/+0x24` **group anchor** ·
 `+0x2a` **routed flag** (`DAT_0056654a`).
 
 ---
 
 ## 3. Per-class AI behaviour + exploit hinges
 
-### Target selection — nearest enemy, Manhattan, LOCKED
-Spiral-find nearest enemy cell within **20 hexes** of group centre (`FUN_0048a38e`), assign the
-nearest own member (`FUN_00489a62`, Manhattan `FUN_00404ead`). **Re-picked only when the 500-tick
-retarget timer expires** (`FUN_00489401` @66562). Between picks the unit steers toward the locked
-target's position *as of the last pick*. When the locked target dies, the unit **clamps its dest
-to its own hex and idles** (`FUN_00484bf9` @65014-65020) — it does NOT re-pick until the group timer.
-> **HINGE:** blind nearest-Manhattan + 500-tick lock = the AI will not flip onto a closer decoy
-> mid-window, and will keep walking toward where your unit *was*. Kite by moving after each pick.
+### Assignment cadence — two clocks, not a 500-tick universal target lock
+The interactive stance handlers advance their own `+0x1c` clock and execute a canned stance step
+after 200 ticks. Separately, `+0x14` refreshes formation assignments at 500 nominal ticks (or 20/50
+after battle-state changes). Live telemetry plus the decompile showed that `+0x16/+0x18` remains
+zero for ordinary melee assignments; the actual destinations are per-unit `-0x08/-0x06`.
+> **CORRECTION (2026-07-16):** do not describe `+0x14` as a single locked target or
+> `+0x16/+0x18` as its coordinates. The attempted target-lock filming fixture exposed that bad
+> model before it reached the video.
 
 ### Movement / pursuit — no hard leash, but a reaction radius
-No max-pursuit-distance / return-home constant found. The effective leash is soft:
-(a) spiral radius **20** (>20 from group centre = invisible to the picker); (b) group-wide reaction
-radius **0x28=40** in the rout/engage proximity test `FUN_004956cc` (@71205, Manhattan scan). An
-advancing group chases a lone decoy at least until the next retarget, indefinitely if it stays
-nearest. Ranged/objective/defensive stances (below) sit and won't chase.
-> **HINGE:** stay >20 hexes from a group's centre and it never paths to you; a fast decoy inside
-> that ring drags an *advancing-stance* group wherever you walk.
+No max-pursuit-distance / return-home constant was found. There is a group-wide reaction radius
+**0x28=40** in `FUN_004956cc` (@71205), while `FUN_0048a38e` has a separate 0..19 square search
+used only when formation fitting fails. Do not combine those into a single visibility/leash claim.
 
 ### Ranged vs melee — the weapon field, and NO kiting
 Ranged iff `+0x13e`=`DAT_005545ea != 0`. Classes **7/8/9** are the ranged/siege engines (need line
@@ -203,15 +204,15 @@ human UI cannot do) is done by poking the unit record like `FUN_00489b8d`.
 **READ each tick** (per your units + visible enemies, over records base `DAT_005544ac` stride 0x1b0):
 - own/enemy: `+0x00` owner, `+0x05` order (skip 2=dead), `-0xc/-0xa` pos, `+0x174` troops.
 - weapon: `+0x13e` type (0=melee), `+0x144>>3` range, `+0x156` cooldown, `+0x13f` reload.
-- enemy group centroid `+0x1e/+0x20` (of `DAT_00566520` groups) and retarget timer `+0x14`.
+- enemy group centroid `+0x1e/+0x20`, formation-refresh timer `+0x14`, and each unit's live
+  destination `-0x08/-0x06`.
 
 **DECIDE:**
 1. **Kite:** keep each own archer at `dist_to_nearest_enemy ∈ (their_range, my_range]`. Since enemy
    ranged won't advance and enemy melee blind-chases, retreat one hex whenever an enemy melee unit
    closes to `my_range-1`; free-fire otherwise.
-2. **Decoy drag:** park one fast unit just inside the enemy advancing-group's 20-hex spiral ring;
-   after each 500-tick retarget, step it toward your chokepoint so the locked melee stack follows
-   across it while your archers free-fire the column (owner's Path-B plan).
+2. **Spacing:** use player-legal formation orders to keep archers at their verified weapon range;
+   do not depend on an unproven universal target-lock window.
 3. **Rout-farm:** concentrate archer fire on the lowest-morale (`+0x13e` band, peasant) enemy stack
    to trip the group cascade (`FUN_0048c974`), then mop up.
 
@@ -245,8 +246,8 @@ human UI cannot do) is done by poking the unit record like `FUN_00489b8d`.
 - `PTR_FUN_004d9140` / `d9170` / `d91b8` / `d91d0` / `d91f8` handler addresses (data-section).
 - `.rdata` stat tables `0x4d96d0` (per-class) + `0x4d97b0` (per-weapon) → exact range/reload/power,
   and **which class indices (3 & 5?) are archer vs crossbow**.
-- Exact **retarget cadence** in practice (500 nominal, 20 on regroup, 50 mid-fight) and whether a
-  fleeing decoy is chased past one window.
+- Map which stance handlers rewrite group anchors and per-unit destinations between the 200-tick
+  stance cadence and the 500/20/50 formation-refresh cadence.
 - **Ranges/cooldowns in real ticks** (range = `+0x144>>3` hexes; cooldown 0x78=120 ticks; reload
   `+0x13f`) — confirm tick rate for real-time seconds.
 - Morale order `0xc` semantics (charge vs something else) and the **panic-budget `DAT_00553070`**

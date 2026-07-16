@@ -18,8 +18,9 @@ move orders -> units walk across the field at ~2-3 hexes/sec; the idle enemy (no
 holds. Combat: piling all units onto the enemy instant-resolves the even fight with the
 defender-buffed auto-calc (us 800 -> 0, enemy 800) = exactly beat #2. So the driving stack
 works; remaining tuning is the COMMANDER (order types + pacing for a played-out melee vs
-triggering instant-resolve) — do this live. CAVEATS: (1) capture "no frame" in combat = a
-stale/post-crash daemon -> reboot fixes it; (2) drive within ONE process AND let the prior
+triggering instant-resolve) — do this live. Production footage uses the synchronized,
+lock-free `shotq` path; a "no frame" reply means the battle/process ended or the daemon is
+stale, not a frame to admit into a clip. Drive within ONE process AND let the prior
 battle end / reboot before re-entering (re-entering a still-running battle crashes the
 game). Trace tooling added for RE: daemon xcall / ctget / ctreset + agent
 installCallTrace/drainCallTrace. Full trace + state-machine map:
@@ -28,7 +29,7 @@ docs/findings/combat-battlefield-input.md.
 Reverse-engineered driving model (docs/findings/combat-battlefield-input.md):
   * World model — unit record base 0x5544ac, stride 0x1b0:
         +0x00 type   +0x02 side(0/1)   +0x14c formation-id   +0x174 HP/strength
-        +0x1a4 cur-col   +0x1a6 cur-row   +0x1a8/+0x1aa target-col/row
+        -0x0c/-0x0a live col/row   -0x08/-0x06 destination col/row
     Live units are indices 1..0x50 with type!=0.  Our side (attacker) = side 0
     (formations 1..6); enemy = side 1 (formations 7..12).
   * Order — FUN_00479e90(formation, col, row, target_unit_or_0, 0, 0) queues a
@@ -50,10 +51,13 @@ import enter_battle as eb
 # ── VAs ──────────────────────────────────────────────────────────────────────
 UT, STRIDE = 0x5544ac, 0x1b0     # battlefield unit table (indices 1..0x50)
 O_TYPE, O_SIDE, O_FORM = 0x00, 0x02, 0x14c
-O_HP, O_ACT = 0x174, 0x05
+O_OWNER, O_CLASS = -0x23, -0x1a
+O_HP, O_ACT, O_TARGET = 0x174, 0x05, 0x148
 # LIVE hex position is at record-relative -0xC / -0xA (== DAT_005544a0/a2, the field
 # the mover updates). +0x1a4 is a STATIC deploy field the mover ignores — do NOT use it.
 O_COL, O_ROW = -0xC, -0xA
+O_DEST_COL, O_DEST_ROW = -0x8, -0x6
+O_WEAPON, O_RELOAD, O_RANGE, O_COOLDOWN = 0x13e, 0x13f, 0x144, 0x156
 V_SCREEN = 0x4eac50              # 0x28 deploy / 0x29 fight
 V_PAUSE  = 0x53f238              # 0 = running, -1 = frozen
 V_BFREDRAW = 0x53e9ac
@@ -70,6 +74,7 @@ F_ORDER  = 0x479e90             # FUN_00479e90(form, col, row, target, 0, 0)  fo
 F_MOVE1  = 0x47a814             # FUN_0047a814(unit, col, row)  per-unit move-to-hex
 F_HGLASS = 0x43b9a1             # FUN_0043b9a1()  hourglass: toggle DAT_0053f238 (start/pause)
 GRID_MAX = 0x50
+GROUP_BASE, GROUP_STRIDE = 0x566520, 0x34
 
 
 def _i32(v):
@@ -99,23 +104,78 @@ class Battle:
 
     # — world model —
     def units(self):
-        """Return [{idx, side, form, col, row, hp, typ}] for every live unit."""
+        """Return capture-ready state for every live unit.
+
+        Besides position/strength, include the action, locked target and stale
+        destination.  These fields let footage-side overlays explain what a unit
+        is doing instead of merely drawing anonymous boxes over sprites.
+        """
         specs = []
         for i in range(1, GRID_MAX + 1):
             b = UT + i * STRIDE
             specs += [{"name": f"t{i}", "va": b + O_TYPE, "type": "u8"},
                       {"name": f"s{i}", "va": b + O_SIDE, "type": "u8"},
+                      {"name": f"o{i}", "va": b + O_OWNER, "type": "u8"},
+                      {"name": f"k{i}", "va": b + O_CLASS, "type": "u8"},
                       {"name": f"f{i}", "va": b + O_FORM, "type": "u8"},
                       {"name": f"c{i}", "va": b + O_COL, "type": "i16"},
                       {"name": f"r{i}", "va": b + O_ROW, "type": "i16"},
-                      {"name": f"h{i}", "va": b + O_HP, "type": "u8"}]
+                      {"name": f"h{i}", "va": b + O_HP, "type": "i16"},
+                      {"name": f"a{i}", "va": b + O_ACT, "type": "u8"},
+                      {"name": f"x{i}", "va": b + O_TARGET, "type": "u8"},
+                      {"name": f"dc{i}", "va": b + O_DEST_COL, "type": "i16"},
+                      {"name": f"dr{i}", "va": b + O_DEST_ROW, "type": "i16"},
+                      {"name": f"w{i}", "va": b + O_WEAPON, "type": "u8"},
+                      {"name": f"rl{i}", "va": b + O_RELOAD, "type": "u8"},
+                      {"name": f"rg{i}", "va": b + O_RANGE, "type": "i16"},
+                      {"name": f"cd{i}", "va": b + O_COOLDOWN, "type": "u8"}]
         v = self.d.reads(specs)
         out = []
         for i in range(1, GRID_MAX + 1):
             if v.get(f"t{i}", 0) != 0:
-                out.append(dict(idx=i, typ=v[f"t{i}"], side=v[f"s{i}"], form=v[f"f{i}"],
-                                col=v[f"c{i}"], row=v[f"r{i}"], hp=v[f"h{i}"]))
+                out.append(dict(idx=i, typ=v[f"t{i}"], side=v[f"s{i}"],
+                                owner=v[f"o{i}"], unit_class=v[f"k{i}"], form=v[f"f{i}"],
+                                col=v[f"c{i}"], row=v[f"r{i}"], hp=v[f"h{i}"],
+                                action=v[f"a{i}"], target=v[f"x{i}"],
+                                dest_col=v[f"dc{i}"], dest_row=v[f"dr{i}"],
+                                weapon=v[f"w{i}"], reload=v[f"rl{i}"],
+                                range_hex=max(0, v[f"rg{i}"] >> 3), cooldown=v[f"cd{i}"]))
         return out
+
+    def groups(self, forms):
+        """Return the AI state attached to the supplied live formation ids."""
+        fields = (("owner", 0x00, "u8"), ("member_count", 0x02, "u8"),
+                  ("stance", 0x08, "u8"), ("active", 0x13, "u8"),
+                  ("formation_refresh", 0x14, "i16"),
+                  # +0x16/+0x18 are written only by FUN_00489b8d's
+                  # high-morale charge branch.  They are not the group's
+                  # universal locked target; ordinary assignments live in each
+                  # unit's dest_col/dest_row fields.
+                  ("charge_col", 0x16, "i16"), ("charge_row", 0x18, "i16"),
+                  ("phase", 0x1a, "i16"),
+                  ("throttle", 0x1c, "i16"), ("centroid_col", 0x1e, "i16"),
+                  ("centroid_row", 0x20, "i16"), ("anchor_col", 0x22, "i16"),
+                  ("anchor_row", 0x24, "i16"), ("routed", 0x2a, "u8"))
+        forms = sorted({int(f) for f in forms if 0 < int(f) <= GRID_MAX})
+        specs = []
+        for f in forms:
+            base = GROUP_BASE + f * GROUP_STRIDE
+            specs.extend({"name": f"g{f}_{name}", "va": base + off, "type": typ}
+                         for name, off, typ in fields)
+        vals = self.d.reads(specs) if specs else {}
+        return [{"form": f, **{name: vals.get(f"g{f}_{name}", 0)
+                               for name, _, _ in fields}} for f in forms]
+
+    def telemetry(self, units=None):
+        """One JSON-serializable battlefield snapshot, aligned to a captured frame."""
+        units = self.units() if units is None else units
+        vals = self.d.reads([
+            {"name": "screen", "va": V_SCREEN, "type": "u8"},
+            {"name": "pause", "va": V_PAUSE, "type": "i32"},
+            {"name": "camera_col", "va": V_CAM_COL, "type": "i32"},
+            {"name": "camera_row", "va": V_CAM_ROW, "type": "i32"},
+        ])
+        return {**vals, "groups": self.groups(u["form"] for u in units), "units": units}
 
     @staticmethod
     def summarize(units):
