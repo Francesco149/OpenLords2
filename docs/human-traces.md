@@ -48,13 +48,24 @@ Batch 3 (`docs/findings/hybrid-batch3.md`, 196 hooks, 36 scenarios): of 47 new r
 | FUN_004aa6ca siege-equipment staging | a siege assault fought on the battlefield (bot2-s64-t28's assault took the quick path) | **A1** + A2 |
 | 22 of the 24 realm-event handlers FUN_00448e12 … FUN_00449826 (+ FUN_0044c77a / FUN_0044c80a) | the human owning counties after 1268 (≈10 % per county per season; ev_134 / ev_13c fire once each in the bot2 games). Shadowed under exploration (pokes) only | A3 / A5, or a longer bot game that keeps its counties |
 
+Batch 4 (`docs/findings/hybrid-batch4.md`, the economy / UI-action table, 22 rows): the bot games reach the trade
+grid, the gift / message / ally seals, the keep build and the county-action tabs; the authored `econ-tour` adds Send
+Supplies end to end (arrows, all-toggle, retarget, dispatch → the caravan FUN_004292af, its trip and unload), buy-all
+/ sell-all / cancel at the merchant. Never called by the corpus, or not hooked for want of a reaching scenario:
+
+| function | reached only via | list item |
+|---|---|---|
+| FUN_00438681 disband_into_realm | the player's "disband army" in a county (FUN_0043744f, confirm kind 6), MP FUN_00447d9d, or the AI's garrison order FUN_004a6270 when the keep is full | **B3** (or a bot that disbands) |
+| FUN_0043a123 labor open hit test (+ FUN_004398f5 / FUN_0045183a / FUN_004517ca), the labor drags FUN_004399b0 / FUN_00439df0 (unported) — not hooked | the workforce grid (screen 2) → a task cell → labor (0x0f); no corpus game opens either (coverage 0) | **B2** |
+| FUN_0043a5a9 county ration set (engine_county_panels, not hooked) | the rations panel's ◄ ► / slider changing the level (FUN_0043a379 runs in 29 scenarios but never changes it) | the bot (C: rations) |
+
 ## B. Medium — synthesizable with effort, a short human trace is cheaper
 
 | # | interaction | notes | status |
 |---|---|---|---|
 | B1 | Custom-game setup: map choice, opponents, difficulty, advanced options, title / shield / name entry | long click flows + text entry; one human pass per variant seeds the bot's starts | open |
 | B2 | Labor screen in detail (0x0f): per-task workers, field sowing (wheat / cattle / fallow), reclaiming | many small controls; the bot only uses the HUD farming↔industry arrows | open |
-| B3 | Army management: split (0x11), merge, arm troops (0x0d), hire mercenaries, garrisons, send supplies (0x18) | each a screen of its own | open |
+| B3 | Army management: split (0x11), merge, arm troops (0x0d), hire mercenaries, garrisons, send supplies (0x18), disband | each a screen of its own | partial — send supplies: `econ-tour`; merge / mercenaries / garrisons: bot2 games |
 | B4 | Keyboard: text entry (save names, lord name), hotkeys (F-keys, Alt-letters, Ctrl), Escape semantics | WM_CHAR / WM_SYSKEY paths | open |
 | B5 | Focus loss / Alt-Tab → WM_ACTIVATEAPP 0 → retail's paused / surface-restore path | rhost activates once and filters OS activation; needs synthetic trace events, or record-mode passthrough | open |
 | B6 | Tooltip hover dwell and edge-scrolling with real mouse movement | timing-driven UI | partial (bot edge-scrolls) |
@@ -67,6 +78,7 @@ Batch 3 (`docs/findings/hybrid-batch3.md`, 196 hooks, 36 scenarios): of 47 new r
 | tax, rations, HUD industry split, drafting, marching on a county's town, auto-resolved battles, defeat → restart | `tools/bot/` (bot-* games) | synth |
 | mercenary hire, garrison / leave a castle, combine armies, besiege (engines, Proceed / Lift), quick battles option, event popups, an AI alliance offer, a custom game (England, five lords) | `tools/bot/` v2 (`bot2-s61-t28`, `bot2-s64-t28`, `bot2cen-s72-t30`) | synth |
 | merchant trades, diplomacy gifts, castle construction start | `tools/bot/` | synth |
+| Send Supplies (arrows, all-toggle, retarget, dispatch, the cart's trip), the trade grid's buy all / sell all / cancel | `econ-tour` (authored over rhbot from `bot2-s61-t28` f7000) | synth |
 | File > Save / Load, Options panels, Court, population / happiness reports | menus-tour | synth |
 | boot with movies (intro, imptitle, credits) | boot-movies, newgame-movies | synth |
 

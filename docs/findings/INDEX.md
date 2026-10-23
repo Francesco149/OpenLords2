@@ -55,6 +55,7 @@ session — they outlive the conversation context.
 | [hybrid-pilot-ai.md](hybrid-pilot-ai.md) | **hybrid pilot** (2026-10-23): the AI realm turn under rhost — 88/89 verified, bugs #227/#228, binding cost, blockers, recommendation |
 | [hybrid-batch2-combat.md](hybrid-batch2-combat.md) | **hybrid batch 2** (2026-10-23): battle resolver + army movement under rhost — 50/59 reached, 0 divergences, hybrid 149 hooks PASS; #229–#231; shadow fidelity (host layers, stack residue) |
 | [hybrid-batch3.md](hybrid-batch3.md) | **hybrid batch 3** (2026-10-23): army-state machine, battle exits / siege assault, realm events + season passes under rhost — 196 hooks, 162 reached over 36 scenarios, 0 divergences, hybrid PASS; #232–#235; event handlers shadowed by exploration |
+| [hybrid-batch4.md](hybrid-batch4.md) | **hybrid batch 4** (2026-10-24): the economy / UI-action side under rhost — the trade grid, gift / message seals, Send Supplies + county-action tabs, keep build, caravan (models split from renders; entry-patched router actions) — 218 hooks, 201 reached over 43 scenarios, 0 divergences, hybrid PASS on the 37 blessed; #236; `econ-tour` |
 | [input-replay.md](input-replay.md) | Input recording & replay (JSONL trace format) |
 | [pure-function-diff.md](pure-function-diff.md) | Pure-function differential testing vs retail |
 | [ledger-provenance-audit.md](ledger-provenance-audit.md) | The FUN_-token gotcha — how the derived ledger over-counts, and `tools/audit_provenance.py` |
