@@ -12,7 +12,7 @@
    "va": "0x428c42"
   },
   "ai_balance_high_cells": {
-   "calls": 2134,
+   "calls": 939,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 3,
@@ -37,7 +37,7 @@
    "calls": 225,
    "corpus": 33,
    "date": "2026-10-23",
-   "depth": 4,
+   "depth": 5,
    "diverge": 0,
    "scenarios": 30,
    "skipped": 0,
@@ -56,10 +56,10 @@
    "va": "0x450ccd"
   },
   "ai_dispatch_compact": {
-   "calls": 1195,
+   "calls": 1194,
    "corpus": 33,
    "date": "2026-10-23",
-   "depth": 2,
+   "depth": 3,
    "diverge": 0,
    "scenarios": 31,
    "skipped": 0,
@@ -166,10 +166,10 @@
    "va": "0x4502ca"
   },
   "ai_reconcile_resources": {
-   "calls": 1195,
+   "calls": 1194,
    "corpus": 33,
    "date": "2026-10-23",
-   "depth": 3,
+   "depth": 4,
    "diverge": 0,
    "scenarios": 31,
    "skipped": 0,
@@ -265,12 +265,12 @@
    "va": "0x49a581"
   },
   "ai_run_player": {
-   "calls": 48,
+   "calls": 1011,
    "corpus": 33,
    "date": "2026-10-23",
-   "depth": 1,
+   "depth": 2,
    "diverge": 0,
-   "scenarios": 25,
+   "scenarios": 31,
    "skipped": 0,
    "target": "win",
    "va": "0x49dd01"
@@ -285,6 +285,17 @@
    "skipped": 0,
    "target": "win",
    "va": "0x49a990"
+  },
+  "ai_run_turn_twin": {
+   "calls": 32,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 23,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x49df48"
   },
   "ai_seed_buy_requests": {
    "calls": 499,
@@ -363,6 +374,193 @@
    "target": "win",
    "va": "0x4a4e3d"
   },
+  "combat_aftermath": {
+   "calls": 32,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 1,
+   "diverge": 0,
+   "scenarios": 23,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4ab383"
+  },
+  "combat_army_strength": {
+   "calls": 64,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 23,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4ab2aa"
+  },
+  "combat_begin_siege": {
+   "calls": 0,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 0,
+   "diverge": 0,
+   "scenarios": 0,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4a7ca2"
+  },
+  "combat_break_siege_link": {
+   "calls": 123,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 1,
+   "diverge": 0,
+   "scenarios": 24,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x43b917"
+  },
+  "combat_capital_defender": {
+   "calls": 0,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 0,
+   "diverge": 0,
+   "scenarios": 0,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x46d42c"
+  },
+  "combat_clear_result": {
+   "calls": 64,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 23,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4aa89f"
+  },
+  "combat_contest_region": {
+   "calls": 47,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 24,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4a6c68"
+  },
+  "combat_demolish_realm": {
+   "calls": 26,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 3,
+   "diverge": 0,
+   "scenarios": 24,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4ac3c6"
+  },
+  "combat_deploy_cell": {
+   "calls": 33,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 3,
+   "diverge": 0,
+   "scenarios": 5,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4a689d"
+  },
+  "combat_dispatch": {
+   "calls": 4,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 6,
+   "diverge": 0,
+   "scenarios": 4,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4a7158"
+  },
+  "combat_enter_region": {
+   "calls": 94,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 1,
+   "diverge": 0,
+   "scenarios": 25,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4abb36"
+  },
+  "combat_garrison_realm": {
+   "calls": 0,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 0,
+   "diverge": 0,
+   "scenarios": 0,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4a07f2"
+  },
+  "combat_halve_garrison": {
+   "calls": 0,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 0,
+   "diverge": 0,
+   "scenarios": 0,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4ad8cc"
+  },
+  "combat_load_muster": {
+   "calls": 0,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 0,
+   "diverge": 0,
+   "scenarios": 0,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x422c12"
+  },
+  "combat_merge_stack": {
+   "calls": 4,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 3,
+   "diverge": 0,
+   "scenarios": 4,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4aa181"
+  },
+  "combat_mp_resign_sweep": {
+   "calls": 512,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 1,
+   "diverge": 0,
+   "scenarios": 31,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x49b2a3"
+  },
+  "combat_muster_defender": {
+   "calls": 67,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 3,
+   "diverge": 0,
+   "scenarios": 25,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4a50ae"
+  },
   "combat_muster_garrison": {
    "calls": 101,
    "corpus": 33,
@@ -373,6 +571,17 @@
    "skipped": 0,
    "target": "win",
    "va": "0x4a5389"
+  },
+  "combat_notify_occupation": {
+   "calls": 94,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 25,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4abf77"
   },
   "combat_pick_best_unit": {
    "calls": 61,
@@ -385,8 +594,151 @@
    "target": "win",
    "va": "0x4a0917"
   },
+  "combat_place_garrison": {
+   "calls": 4,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 4,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4a79a3"
+  },
+  "combat_prime_muster": {
+   "calls": 173,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 4,
+   "diverge": 0,
+   "scenarios": 30,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4aaa80"
+  },
+  "combat_raise_region_unit": {
+   "calls": 5,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 3,
+   "diverge": 0,
+   "scenarios": 5,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4a5003"
+  },
+  "combat_recompute_condition": {
+   "calls": 32,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 23,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4a80db"
+  },
+  "combat_region_event_hi": {
+   "calls": 116,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 30,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4686a0"
+  },
+  "combat_reinforce_keep": {
+   "calls": 116,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 3,
+   "diverge": 0,
+   "scenarios": 30,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4a78ea"
+  },
+  "combat_resign_player": {
+   "calls": 0,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 0,
+   "diverge": 0,
+   "scenarios": 0,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x49cf20"
+  },
+  "combat_resolve": {
+   "calls": 32,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 1,
+   "diverge": 0,
+   "scenarios": 23,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4aad07"
+  },
+  "combat_rotate_merc_offers": {
+   "calls": 478,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 1,
+   "diverge": 0,
+   "scenarios": 29,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4aca2b"
+  },
+  "combat_settle_region": {
+   "calls": 4337,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 1,
+   "diverge": 0,
+   "scenarios": 2,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4abd0f"
+  },
+  "combat_settlement_slot": {
+   "calls": 4,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 4,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4a551b"
+  },
+  "combat_size_battle": {
+   "calls": 44,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 3,
+   "diverge": 0,
+   "scenarios": 24,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4a6a30"
+  },
+  "combat_spawn_rebellion": {
+   "calls": 26,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 24,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4ac185"
+  },
   "combat_spawn_unit": {
-   "calls": 102,
+   "calls": 58,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 1,
@@ -396,13 +748,46 @@
    "target": "win",
    "va": "0x4a9a9a"
   },
-  "diplo_should_engage": {
-   "calls": 4,
+  "combat_transfer_army": {
+   "calls": 0,
    "corpus": 33,
    "date": "2026-10-23",
-   "depth": 1,
+   "depth": 0,
    "diverge": 0,
-   "scenarios": 4,
+   "scenarios": 0,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x437535"
+  },
+  "combat_transfer_ownership": {
+   "calls": 15,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 3,
+   "diverge": 0,
+   "scenarios": 15,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4a72fe"
+  },
+  "diplo_battle_adjust": {
+   "calls": 32,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 23,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4a1ee1"
+  },
+  "diplo_should_engage": {
+   "calls": 30,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 3,
+   "diverge": 0,
+   "scenarios": 15,
    "skipped": 0,
    "target": "win",
    "va": "0x4a16f7"
@@ -419,7 +804,7 @@
    "va": "0x44ea92"
   },
   "eco_appraisal_value": {
-   "calls": 2350,
+   "calls": 1155,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 3,
@@ -441,7 +826,7 @@
    "va": "0x44c278"
   },
   "eco_eval_candidate": {
-   "calls": 6186930,
+   "calls": 5449267,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 2,
@@ -452,7 +837,7 @@
    "va": "0x44da99"
   },
   "eco_pick_fullest_cell": {
-   "calls": 2425,
+   "calls": 2378,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 2,
@@ -463,7 +848,7 @@
    "va": "0x44c53b"
   },
   "eco_plan_production": {
-   "calls": 21894,
+   "calls": 17612,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 2,
@@ -485,7 +870,7 @@
    "va": "0x4485a5"
   },
   "eco_plan_resource": {
-   "calls": 24856,
+   "calls": 24112,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 2,
@@ -507,7 +892,7 @@
    "va": "0x450e46"
   },
   "eco_production_output": {
-   "calls": 4772,
+   "calls": 4621,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 2,
@@ -551,7 +936,7 @@
    "va": "0x44e852"
   },
   "eco_resource_quota": {
-   "calls": 27166,
+   "calls": 17114,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 3,
@@ -573,7 +958,7 @@
    "va": "0x44c8ae"
   },
   "eco_seed_fullest_cell": {
-   "calls": 7886,
+   "calls": 7700,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 2,
@@ -617,7 +1002,7 @@
    "va": "0x44edc2"
   },
   "eco_stock_a_value": {
-   "calls": 64767,
+   "calls": 51921,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 2,
@@ -628,7 +1013,7 @@
    "va": "0x44e5bb"
   },
   "eco_stockpile_value": {
-   "calls": 21589,
+   "calls": 17307,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 2,
@@ -639,7 +1024,7 @@
    "va": "0x44e7b4"
   },
   "eco_sum_supply_pools": {
-   "calls": 5218,
+   "calls": 5093,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 4,
@@ -650,7 +1035,7 @@
    "va": "0x44f15b"
   },
   "eco_supply_target": {
-   "calls": 344961,
+   "calls": 171090,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 3,
@@ -661,7 +1046,7 @@
    "va": "0x44f248"
   },
   "eco_units_b": {
-   "calls": 43178,
+   "calls": 34614,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 2,
@@ -672,7 +1057,7 @@
    "va": "0x44e603"
   },
   "eco_units_c": {
-   "calls": 43178,
+   "calls": 34614,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 2,
@@ -704,13 +1089,178 @@
    "target": "win",
    "va": "0x44d15a"
   },
-  "rank_player_aggregate": {
-   "calls": 15,
+  "move_arrival": {
+   "calls": 12,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 9,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x467196"
+  },
+  "move_blocked_branch": {
+   "calls": 12,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 3,
+   "diverge": 0,
+   "scenarios": 3,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x46673c"
+  },
+  "move_classify_cell": {
+   "calls": 16516,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 4,
+   "diverge": 0,
+   "scenarios": 30,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x466c3c"
+  },
+  "move_classify_step": {
+   "calls": 149753,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 30,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x46634d"
+  },
+  "move_combat_engage": {
+   "calls": 47,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 24,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4296b5"
+  },
+  "move_commit_step": {
+   "calls": 16349,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 3,
+   "diverge": 0,
+   "scenarios": 30,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x466d84"
+  },
+  "move_decay_cell": {
+   "calls": 10,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 4,
+   "diverge": 0,
+   "scenarios": 3,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x469e5b"
+  },
+  "move_eval_dir": {
+   "calls": 16516,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 3,
+   "diverge": 0,
+   "scenarios": 30,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x466893"
+  },
+  "move_eval_occupied": {
+   "calls": 244,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 5,
+   "diverge": 0,
+   "scenarios": 30,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4658c1"
+  },
+  "move_region_event_lo": {
+   "calls": 0,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 0,
+   "diverge": 0,
+   "scenarios": 0,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x46873f"
+  },
+  "move_run": {
+   "calls": 135034,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 1,
    "diverge": 0,
-   "scenarios": 15,
+   "scenarios": 30,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x465d28"
+  },
+  "move_special_tile": {
+   "calls": 0,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 0,
+   "diverge": 0,
+   "scenarios": 0,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x468ae2"
+  },
+  "move_terrain_passable": {
+   "calls": 26,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 1,
+   "diverge": 0,
+   "scenarios": 18,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x469e0e"
+  },
+  "path_direction_8way": {
+   "calls": 151175,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 30,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x46f434"
+  },
+  "rank_check_elimination": {
+   "calls": 1009,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 30,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x49b42b"
+  },
+  "rank_player_aggregate": {
+   "calls": 1476,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 30,
    "skipped": 0,
    "target": "win",
    "va": "0x49d1e0"
@@ -804,7 +1354,7 @@
    "va": "0x44a6ba"
   },
   "realm_owner_tally": {
-   "calls": 5183,
+   "calls": 5093,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 2,
@@ -815,12 +1365,12 @@
    "va": "0x44b99a"
   },
   "realm_owns_neighbor": {
-   "calls": 15,
+   "calls": 106,
    "corpus": 33,
    "date": "2026-10-23",
-   "depth": 1,
+   "depth": 3,
    "diverge": 0,
-   "scenarios": 15,
+   "scenarios": 19,
    "skipped": 0,
    "target": "win",
    "va": "0x467eb0"
@@ -858,8 +1408,19 @@
    "target": "win",
    "va": "0x451061"
   },
+  "realm_refresh_wages": {
+   "calls": 32,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 23,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4ad426"
+  },
   "realm_replan_economies": {
-   "calls": 589,
+   "calls": 512,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 1,
@@ -903,7 +1464,7 @@
    "va": "0x44bd9f"
   },
   "realm_territory_income": {
-   "calls": 898,
+   "calls": 611,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 1,
@@ -968,6 +1529,17 @@
    "target": "win",
    "va": "0x44d913"
   },
+  "terr_mark_draw_box": {
+   "calls": 10035,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 1,
+   "diverge": 0,
+   "scenarios": 31,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x46e067"
+  },
   "terr_stamp_secondary_keep": {
    "calls": 77,
    "corpus": 33,
@@ -979,8 +1551,85 @@
    "target": "win",
    "va": "0x46826c"
   },
+  "unit_absorb": {
+   "calls": 1195,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 1,
+   "diverge": 0,
+   "scenarios": 29,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4aba5a"
+  },
+  "unit_clear_contract": {
+   "calls": 87,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 26,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4ac6fe"
+  },
+  "unit_disband": {
+   "calls": 2,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 1,
+   "diverge": 0,
+   "scenarios": 1,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4aa039"
+  },
+  "unit_map_link": {
+   "calls": 16349,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 4,
+   "diverge": 0,
+   "scenarios": 30,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x46eddf"
+  },
+  "unit_map_unlink": {
+   "calls": 87,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 26,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x46ec6e"
+  },
+  "unit_recompute_wage": {
+   "calls": 1348,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 2,
+   "diverge": 0,
+   "scenarios": 29,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x4ad52b"
+  },
+  "unit_remove": {
+   "calls": 24,
+   "corpus": 33,
+   "date": "2026-10-23",
+   "depth": 1,
+   "diverge": 0,
+   "scenarios": 22,
+   "skipped": 0,
+   "target": "win",
+   "va": "0x46f0a9"
+  },
   "unit_total_wage": {
-   "calls": 2774,
+   "calls": 2560,
    "corpus": 33,
    "date": "2026-10-23",
    "depth": 1,
@@ -995,7 +1644,7 @@
   "corpus": 33,
   "date": "2026-10-23",
   "failing": [],
-  "hooks": 90,
+  "hooks": 149,
   "target": "win"
  }
 }

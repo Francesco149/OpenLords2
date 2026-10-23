@@ -28,18 +28,18 @@ of the actual instruction volume is ported.
 
 ## Runtime verification (rhost — the truth axis since 2026-10-23)
 
-**89 function(s) rhost-verified** (shadow: 0 divergences over the corpus), 0 diverging, 1 never called, of 90 hooked. Depth = the shadow pass that reached the hook (a hook nested in another runs retail there).
+**139 function(s) rhost-verified** (shadow: 0 divergences over the corpus), 0 diverging, 10 never called, of 149 hooked. Depth = the shadow pass that reached the hook (a hook nested in another runs retail there).
 
-Hybrid (all 90 hooks replaced at once, win, 2026-10-23): corpus --check **PASS** on all 33 scenarios.
+Hybrid (all 149 hooks replaced at once, win, 2026-10-23): corpus --check **PASS** on all 33 scenarios.
 
 | hook | retail VA | depth | calls | scenarios | diverge | date |
 |---|---|---:|---:|---:|---:|---|
 | `ai_advance_tier` | `0x428c42` | 0 | 0 | 0 | 0 | 2026-10-23 |
-| `ai_balance_high_cells` | `0x4a4694` | 3 | 2134 | 31 | 0 | 2026-10-23 |
+| `ai_balance_high_cells` | `0x4a4694` | 3 | 939 | 31 | 0 | 2026-10-23 |
 | `ai_buy_order` | `0x4a4b12` | 2 | 605 | 17 | 0 | 2026-10-23 |
-| `ai_buy_order_scaled` | `0x4a4c41` | 4 | 225 | 30 | 0 | 2026-10-23 |
+| `ai_buy_order_scaled` | `0x4a4c41` | 5 | 225 | 30 | 0 | 2026-10-23 |
 | `ai_consume_build_demand` | `0x450ccd` | 2 | 164 | 19 | 0 | 2026-10-23 |
-| `ai_dispatch_compact` | `0x4a42e3` | 2 | 1195 | 31 | 0 | 2026-10-23 |
+| `ai_dispatch_compact` | `0x4a42e3` | 3 | 1194 | 31 | 0 | 2026-10-23 |
 | `ai_dispatch_indep_compact` | `0x4a3ed3` | 2 | 939 | 31 | 0 | 2026-10-23 |
 | `ai_execute_trade` | `0x4284ce` | 1 | 85 | 18 | 0 | 2026-10-23 |
 | `ai_first_owned_realm` | `0x49d5e0` | 3 | 439 | 30 | 0 | 2026-10-23 |
@@ -49,7 +49,7 @@ Hybrid (all 90 hooks replaced at once, win, 2026-10-23): corpus --check **PASS**
 | `ai_pick_muster_realms` | `0x4a0aaa` | 3 | 499 | 30 | 0 | 2026-10-23 |
 | `ai_propose_diplomacy` | `0x4a13a6` | 2 | 499 | 30 | 0 | 2026-10-23 |
 | `ai_rebalance_workforce` | `0x4502ca` | 1 | 9 | 7 | 0 | 2026-10-23 |
-| `ai_reconcile_resources` | `0x49e39b` | 3 | 1195 | 31 | 0 | 2026-10-23 |
+| `ai_reconcile_resources` | `0x49e39b` | 4 | 1194 | 31 | 0 | 2026-10-23 |
 | `ai_run_build_orders` | `0x49e77d` | 2 | 499 | 30 | 0 | 2026-10-23 |
 | `ai_run_campaign` | `0x49f977` | 2 | 499 | 30 | 0 | 2026-10-23 |
 | `ai_run_diplomacy` | `0x4a0c1d` | 2 | 499 | 30 | 0 | 2026-10-23 |
@@ -58,8 +58,9 @@ Hybrid (all 90 hooks replaced at once, win, 2026-10-23): corpus --check **PASS**
 | `ai_run_keep_builder` | `0x49edc7` | 2 | 499 | 30 | 0 | 2026-10-23 |
 | `ai_run_movement` | `0x4a5667` | 2 | 499 | 30 | 0 | 2026-10-23 |
 | `ai_run_per_tick` | `0x49a581` | 1 | 197444 | 30 | 0 | 2026-10-23 |
-| `ai_run_player` | `0x49dd01` | 1 | 48 | 25 | 0 | 2026-10-23 |
+| `ai_run_player` | `0x49dd01` | 2 | 1011 | 31 | 0 | 2026-10-23 |
 | `ai_run_turn` | `0x49a990` | 1 | 512 | 31 | 0 | 2026-10-23 |
+| `ai_run_turn_twin` | `0x49df48` | 2 | 32 | 23 | 0 | 2026-10-23 |
 | `ai_seed_buy_requests` | `0x49e1bf` | 2 | 499 | 30 | 0 | 2026-10-23 |
 | `ai_seed_workforce` | `0x45158b` | 2 | 216 | 18 | 0 | 2026-10-23 |
 | `ai_select_target` | `0x4a03f2` | 3 | 196 | 28 | 0 | 2026-10-23 |
@@ -67,38 +68,87 @@ Hybrid (all 90 hooks replaced at once, win, 2026-10-23): corpus --check **PASS**
 | `ai_step_noop` | `0x49f96c` | 2 | 499 | 30 | 0 | 2026-10-23 |
 | `ai_tax_sweep` | `0x4a4782` | 2 | 216 | 18 | 0 | 2026-10-23 |
 | `army_movement_owned` | `0x4a4e3d` | 1 | 1510 | 29 | 0 | 2026-10-23 |
+| `combat_aftermath` | `0x4ab383` | 1 | 32 | 23 | 0 | 2026-10-23 |
+| `combat_army_strength` | `0x4ab2aa` | 2 | 64 | 23 | 0 | 2026-10-23 |
+| `combat_begin_siege` | `0x4a7ca2` | 0 | 0 | 0 | 0 | 2026-10-23 |
+| `combat_break_siege_link` | `0x43b917` | 1 | 123 | 24 | 0 | 2026-10-23 |
+| `combat_capital_defender` | `0x46d42c` | 0 | 0 | 0 | 0 | 2026-10-23 |
+| `combat_clear_result` | `0x4aa89f` | 2 | 64 | 23 | 0 | 2026-10-23 |
+| `combat_contest_region` | `0x4a6c68` | 2 | 47 | 24 | 0 | 2026-10-23 |
+| `combat_demolish_realm` | `0x4ac3c6` | 3 | 26 | 24 | 0 | 2026-10-23 |
+| `combat_deploy_cell` | `0x4a689d` | 3 | 33 | 5 | 0 | 2026-10-23 |
+| `combat_dispatch` | `0x4a7158` | 6 | 4 | 4 | 0 | 2026-10-23 |
+| `combat_enter_region` | `0x4abb36` | 1 | 94 | 25 | 0 | 2026-10-23 |
+| `combat_garrison_realm` | `0x4a07f2` | 0 | 0 | 0 | 0 | 2026-10-23 |
+| `combat_halve_garrison` | `0x4ad8cc` | 0 | 0 | 0 | 0 | 2026-10-23 |
+| `combat_load_muster` | `0x422c12` | 0 | 0 | 0 | 0 | 2026-10-23 |
+| `combat_merge_stack` | `0x4aa181` | 3 | 4 | 4 | 0 | 2026-10-23 |
+| `combat_mp_resign_sweep` | `0x49b2a3` | 1 | 512 | 31 | 0 | 2026-10-23 |
+| `combat_muster_defender` | `0x4a50ae` | 3 | 67 | 25 | 0 | 2026-10-23 |
 | `combat_muster_garrison` | `0x4a5389` | 3 | 101 | 30 | 0 | 2026-10-23 |
+| `combat_notify_occupation` | `0x4abf77` | 2 | 94 | 25 | 0 | 2026-10-23 |
 | `combat_pick_best_unit` | `0x4a0917` | 3 | 61 | 28 | 0 | 2026-10-23 |
-| `combat_spawn_unit` | `0x4a9a9a` | 1 | 102 | 26 | 0 | 2026-10-23 |
-| `diplo_should_engage` | `0x4a16f7` | 1 | 4 | 4 | 0 | 2026-10-23 |
+| `combat_place_garrison` | `0x4a79a3` | 2 | 4 | 4 | 0 | 2026-10-23 |
+| `combat_prime_muster` | `0x4aaa80` | 4 | 173 | 30 | 0 | 2026-10-23 |
+| `combat_raise_region_unit` | `0x4a5003` | 3 | 5 | 5 | 0 | 2026-10-23 |
+| `combat_recompute_condition` | `0x4a80db` | 2 | 32 | 23 | 0 | 2026-10-23 |
+| `combat_region_event_hi` | `0x4686a0` | 2 | 116 | 30 | 0 | 2026-10-23 |
+| `combat_reinforce_keep` | `0x4a78ea` | 3 | 116 | 30 | 0 | 2026-10-23 |
+| `combat_resign_player` | `0x49cf20` | 0 | 0 | 0 | 0 | 2026-10-23 |
+| `combat_resolve` | `0x4aad07` | 1 | 32 | 23 | 0 | 2026-10-23 |
+| `combat_rotate_merc_offers` | `0x4aca2b` | 1 | 478 | 29 | 0 | 2026-10-23 |
+| `combat_settle_region` | `0x4abd0f` | 1 | 4337 | 2 | 0 | 2026-10-23 |
+| `combat_settlement_slot` | `0x4a551b` | 2 | 4 | 4 | 0 | 2026-10-23 |
+| `combat_size_battle` | `0x4a6a30` | 3 | 44 | 24 | 0 | 2026-10-23 |
+| `combat_spawn_rebellion` | `0x4ac185` | 2 | 26 | 24 | 0 | 2026-10-23 |
+| `combat_spawn_unit` | `0x4a9a9a` | 1 | 58 | 26 | 0 | 2026-10-23 |
+| `combat_transfer_army` | `0x437535` | 0 | 0 | 0 | 0 | 2026-10-23 |
+| `combat_transfer_ownership` | `0x4a72fe` | 3 | 15 | 15 | 0 | 2026-10-23 |
+| `diplo_battle_adjust` | `0x4a1ee1` | 2 | 32 | 23 | 0 | 2026-10-23 |
+| `diplo_should_engage` | `0x4a16f7` | 3 | 30 | 15 | 0 | 2026-10-23 |
 | `eco_apply_resource_quota` | `0x44ea92` | 2 | 8192 | 31 | 0 | 2026-10-23 |
-| `eco_appraisal_value` | `0x44e6a3` | 3 | 2350 | 31 | 0 | 2026-10-23 |
+| `eco_appraisal_value` | `0x44e6a3` | 3 | 1155 | 31 | 0 | 2026-10-23 |
 | `eco_distribute_stock` | `0x44c278` | 1 | 136 | 31 | 0 | 2026-10-23 |
-| `eco_eval_candidate` | `0x44da99` | 2 | 6186930 | 31 | 0 | 2026-10-23 |
-| `eco_pick_fullest_cell` | `0x44c53b` | 2 | 2425 | 31 | 0 | 2026-10-23 |
-| `eco_plan_production` | `0x44d374` | 2 | 21894 | 31 | 0 | 2026-10-23 |
+| `eco_eval_candidate` | `0x44da99` | 2 | 5449267 | 31 | 0 | 2026-10-23 |
+| `eco_pick_fullest_cell` | `0x44c53b` | 2 | 2378 | 31 | 0 | 2026-10-23 |
+| `eco_plan_production` | `0x44d374` | 2 | 17612 | 31 | 0 | 2026-10-23 |
 | `eco_plan_realm` | `0x4485a5` | 1 | 458 | 31 | 0 | 2026-10-23 |
-| `eco_plan_resource` | `0x44f318` | 2 | 24856 | 31 | 0 | 2026-10-23 |
+| `eco_plan_resource` | `0x44f318` | 2 | 24112 | 31 | 0 | 2026-10-23 |
 | `eco_plan_secondary` | `0x450e46` | 1 | 9 | 7 | 0 | 2026-10-23 |
-| `eco_production_output` | `0x44cfe1` | 2 | 4772 | 31 | 0 | 2026-10-23 |
+| `eco_production_output` | `0x44cfe1` | 2 | 4621 | 31 | 0 | 2026-10-23 |
 | `eco_provision` | `0x44df5f` | 1 | 585 | 31 | 0 | 2026-10-23 |
 | `eco_rate_class` | `0x44cf6f` | 2 | 2048 | 31 | 0 | 2026-10-23 |
 | `eco_resource_pass` | `0x44e852` | 1 | 512 | 31 | 0 | 2026-10-23 |
-| `eco_resource_quota` | `0x44ef4e` | 3 | 27166 | 31 | 0 | 2026-10-23 |
+| `eco_resource_quota` | `0x44ef4e` | 3 | 17114 | 31 | 0 | 2026-10-23 |
 | `eco_season_pass` | `0x44c8ae` | 1 | 512 | 31 | 0 | 2026-10-23 |
-| `eco_seed_fullest_cell` | `0x44c5fc` | 2 | 7886 | 31 | 0 | 2026-10-23 |
+| `eco_seed_fullest_cell` | `0x44c5fc` | 2 | 7700 | 31 | 0 | 2026-10-23 |
 | `eco_select_candidate` | `0x44dd4d` | 1 | 136 | 31 | 0 | 2026-10-23 |
 | `eco_settle_stock_a` | `0x44d60d` | 1 | 512 | 31 | 0 | 2026-10-23 |
 | `eco_stamp_resource_cell` | `0x44edc2` | 2 | 8192 | 31 | 0 | 2026-10-23 |
-| `eco_stock_a_value` | `0x44e5bb` | 2 | 64767 | 31 | 0 | 2026-10-23 |
-| `eco_stockpile_value` | `0x44e7b4` | 2 | 21589 | 31 | 0 | 2026-10-23 |
-| `eco_sum_supply_pools` | `0x44f15b` | 4 | 5218 | 30 | 0 | 2026-10-23 |
-| `eco_supply_target` | `0x44f248` | 3 | 344961 | 31 | 0 | 2026-10-23 |
-| `eco_units_b` | `0x44e603` | 2 | 43178 | 31 | 0 | 2026-10-23 |
-| `eco_units_c` | `0x44e653` | 2 | 43178 | 31 | 0 | 2026-10-23 |
+| `eco_stock_a_value` | `0x44e5bb` | 2 | 51921 | 31 | 0 | 2026-10-23 |
+| `eco_stockpile_value` | `0x44e7b4` | 2 | 17307 | 31 | 0 | 2026-10-23 |
+| `eco_sum_supply_pools` | `0x44f15b` | 4 | 5093 | 30 | 0 | 2026-10-23 |
+| `eco_supply_target` | `0x44f248` | 3 | 171090 | 31 | 0 | 2026-10-23 |
+| `eco_units_b` | `0x44e603` | 2 | 34614 | 31 | 0 | 2026-10-23 |
+| `eco_units_c` | `0x44e653` | 2 | 34614 | 31 | 0 | 2026-10-23 |
 | `eco_yield_phase4` | `0x44d1e5` | 2 | 600 | 31 | 0 | 2026-10-23 |
 | `eco_yield_standard` | `0x44d15a` | 2 | 952 | 28 | 0 | 2026-10-23 |
-| `rank_player_aggregate` | `0x49d1e0` | 1 | 15 | 15 | 0 | 2026-10-23 |
+| `move_arrival` | `0x467196` | 2 | 12 | 9 | 0 | 2026-10-23 |
+| `move_blocked_branch` | `0x46673c` | 3 | 12 | 3 | 0 | 2026-10-23 |
+| `move_classify_cell` | `0x466c3c` | 4 | 16516 | 30 | 0 | 2026-10-23 |
+| `move_classify_step` | `0x46634d` | 2 | 149753 | 30 | 0 | 2026-10-23 |
+| `move_combat_engage` | `0x4296b5` | 2 | 47 | 24 | 0 | 2026-10-23 |
+| `move_commit_step` | `0x466d84` | 3 | 16349 | 30 | 0 | 2026-10-23 |
+| `move_decay_cell` | `0x469e5b` | 4 | 10 | 3 | 0 | 2026-10-23 |
+| `move_eval_dir` | `0x466893` | 3 | 16516 | 30 | 0 | 2026-10-23 |
+| `move_eval_occupied` | `0x4658c1` | 5 | 244 | 30 | 0 | 2026-10-23 |
+| `move_region_event_lo` | `0x46873f` | 0 | 0 | 0 | 0 | 2026-10-23 |
+| `move_run` | `0x465d28` | 1 | 135034 | 30 | 0 | 2026-10-23 |
+| `move_special_tile` | `0x468ae2` | 0 | 0 | 0 | 0 | 2026-10-23 |
+| `move_terrain_passable` | `0x469e0e` | 1 | 26 | 18 | 0 | 2026-10-23 |
+| `path_direction_8way` | `0x46f434` | 2 | 151175 | 30 | 0 | 2026-10-23 |
+| `rank_check_elimination` | `0x49b42b` | 2 | 1009 | 30 | 0 | 2026-10-23 |
+| `rank_player_aggregate` | `0x49d1e0` | 2 | 1476 | 30 | 0 | 2026-10-23 |
 | `rank_player_total` | `0x4487a9` | 1 | 2560 | 31 | 0 | 2026-10-23 |
 | `realm_accrue_income` | `0x44b59b` | 1 | 512 | 31 | 0 | 2026-10-23 |
 | `realm_advance_population` | `0x449ef3` | 1 | 512 | 31 | 0 | 2026-10-23 |
@@ -107,23 +157,32 @@ Hybrid (all 90 hooks replaced at once, win, 2026-10-23): corpus --check **PASS**
 | `realm_complete_settlements` | `0x4508de` | 1 | 512 | 31 | 0 | 2026-10-23 |
 | `realm_escalate_unrest` | `0x44aa41` | 1 | 512 | 31 | 0 | 2026-10-23 |
 | `realm_migrate_population` | `0x44a6ba` | 1 | 512 | 31 | 0 | 2026-10-23 |
-| `realm_owner_tally` | `0x44b99a` | 2 | 5183 | 31 | 0 | 2026-10-23 |
-| `realm_owns_neighbor` | `0x467eb0` | 1 | 15 | 15 | 0 | 2026-10-23 |
+| `realm_owner_tally` | `0x44b99a` | 2 | 5093 | 31 | 0 | 2026-10-23 |
+| `realm_owns_neighbor` | `0x467eb0` | 3 | 106 | 19 | 0 | 2026-10-23 |
 | `realm_recompute_income` | `0x44b80b` | 1 | 753 | 26 | 0 | 2026-10-23 |
 | `realm_record_history` | `0x4ae7dd` | 1 | 512 | 31 | 0 | 2026-10-23 |
 | `realm_recount_armies` | `0x451061` | 1 | 512 | 31 | 0 | 2026-10-23 |
-| `realm_replan_economies` | `0x448545` | 1 | 589 | 31 | 0 | 2026-10-23 |
+| `realm_refresh_wages` | `0x4ad426` | 2 | 32 | 23 | 0 | 2026-10-23 |
+| `realm_replan_economies` | `0x448545` | 1 | 512 | 31 | 0 | 2026-10-23 |
 | `realm_settle_provisions` | `0x44bf04` | 1 | 512 | 31 | 0 | 2026-10-23 |
 | `realm_spread_development` | `0x44bf7a` | 1 | 512 | 31 | 0 | 2026-10-23 |
 | `realm_tax_approval` | `0x44bd9f` | 1 | 512 | 31 | 0 | 2026-10-23 |
-| `realm_territory_income` | `0x4ad6c0` | 1 | 898 | 31 | 0 | 2026-10-23 |
+| `realm_territory_income` | `0x4ad6c0` | 1 | 611 | 31 | 0 | 2026-10-23 |
 | `realm_update_mood` | `0x449889` | 1 | 512 | 31 | 0 | 2026-10-23 |
 | `rng_step` | `0x404a46` | 1 | 255001 | 31 | 0 | 2026-10-23 |
 | `terr_allocate_workforce` | `0x44f6e7` | 1 | 4578 | 31 | 0 | 2026-10-23 |
 | `terr_census_terrain` | `0x469b8d` | 1 | 2320 | 31 | 0 | 2026-10-23 |
 | `terr_grade_cells` | `0x44d913` | 1 | 272 | 31 | 0 | 2026-10-23 |
+| `terr_mark_draw_box` | `0x46e067` | 1 | 10035 | 31 | 0 | 2026-10-23 |
 | `terr_stamp_secondary_keep` | `0x46826c` | 1 | 77 | 31 | 0 | 2026-10-23 |
-| `unit_total_wage` | `0x4ad495` | 1 | 2774 | 31 | 0 | 2026-10-23 |
+| `unit_absorb` | `0x4aba5a` | 1 | 1195 | 29 | 0 | 2026-10-23 |
+| `unit_clear_contract` | `0x4ac6fe` | 2 | 87 | 26 | 0 | 2026-10-23 |
+| `unit_disband` | `0x4aa039` | 1 | 2 | 1 | 0 | 2026-10-23 |
+| `unit_map_link` | `0x46eddf` | 4 | 16349 | 30 | 0 | 2026-10-23 |
+| `unit_map_unlink` | `0x46ec6e` | 2 | 87 | 26 | 0 | 2026-10-23 |
+| `unit_recompute_wage` | `0x4ad52b` | 2 | 1348 | 29 | 0 | 2026-10-23 |
+| `unit_remove` | `0x46f0a9` | 1 | 24 | 22 | 0 | 2026-10-23 |
+| `unit_total_wage` | `0x4ad495` | 1 | 2560 | 31 | 0 | 2026-10-23 |
 
 "Touched" above counts `FUN_` references in `src/`; it is not evidence. Earlier "BYTE-EXACT" / "1:1"
 claims are unverified until rhost re-checks them (`docs/audits/2026-10-23-methodology-reset.md`).
