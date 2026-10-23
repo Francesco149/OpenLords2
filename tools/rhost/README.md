@@ -30,6 +30,16 @@ Results: `/mnt/ephemeral/openlords2/rhost-runs/<batch>/<run>/` (wine: `…/rhost
 `state_*.rhs`, `status.txt` (retail's own log), the saves retail wrote. The driver rebuilds + restages when
 `tools/rhost/*` or linked `src/` files change.
 
+## Sharing the Windows box
+
+Sibling projects run the same architecture there concurrently (openrecet `C:\orc-rhost` / `rhost.exe`,
+OpenSummoners `C:\oss-rhost` / `oss-rhost.exe`, OpenMare `om-rhost-runner`, DioramaEngine `C:\de-rhost`).
+Everything of ours is namespaced `ol2-` (`C:\ol2-rhost`, `ol2-rhost.exe`, task `ol2-rhost-runner`, its own
+queue). rhost.py never kills processes; staging swaps our exe by a rename; `prune` (and every batch, once, for
+dirs older than `RHOST_PRUNE_HOURS`=48) deletes only `C:\ol2-rhost\runs\*` (recordings kept). Windows batches
+default to `-j 3`; bot games and the pre-commit gate run on wine. `rhbot` sessions forward a port with
+`ssh -R … -o ExitOnForwardFailure=yes`, so a port a sibling holds makes our session fail, not theirs.
+
 ## Targets
 
 - **`win`** (default): `ssh win`, `C:\ol2-rhost\{bin,game,runs,queue}`. rhost's DirectDraw is software, so

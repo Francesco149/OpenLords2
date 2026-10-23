@@ -77,8 +77,16 @@ capture (the **viewer** stays for human eyes).
 - **Human verification:** never ask the human to reconstruct state; give one command and what to look for.
 
 ## Hard rules
+- **The Windows box is shared** with sibling projects running the same architecture right now: openrecet
+  (`C:\orc-rhost`, task `orc-rhost-runner`, `rhost.exe`), OpenSummoners (`C:\oss-rhost`, `oss-rhost.exe`),
+  OpenMare (`om-rhost-runner`), DioramaEngine (`C:\de-rhost`), their IDA dirs (`C:\orc-ida`, `C:\oss-ida`,
+  `C:\de-ida`). Ours: `C:\ol2-rhost`, `C:\ol2-ida`, `ol2-rhost.exe`, task `ol2-rhost-runner`. Never read-write
+  or delete outside ours, never kill by name (only a PID we started), never touch their tasks / queues.
+  Keep Windows batches small (`-j 3` default) — overlapping jobs stall their gates; heavy batches and the
+  pre-commit gate run on wine (identical results).
 - Never `pkill -f` broad patterns (other projects run their own daemons / rhost / IDA jobs in parallel).
-  The legacy Frida probe daemon stops only via `nix develop -c python3 tools/stop_probe.py`.
+  The legacy Frida probe daemon stops only via `nix develop -c python3 tools/stop_probe.py`; legacy
+  `tools/kill_retail.py` kills `Lords2.exe` by name — never pass it `--name`.
 - Background waiters poll an output marker, never `pgrep -f` their own pattern.
 - OpenRouter: only the project key `openlords2-bot` (read per process by `tools/bot/llm.py`; never print it).
 

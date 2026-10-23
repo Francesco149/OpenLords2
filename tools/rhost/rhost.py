@@ -308,10 +308,31 @@ def run_batch_wine(a, runs, tag):
     return batch, bdir, parse_out(out), out
 
 
+PRUNE_HOURS = float(os.environ.get("RHOST_PRUNE_HOURS", "48"))
+_pruned = False
+
+
+def prune_win(hours):
+    """delete OUR run dirs (C:\\ol2-rhost\\runs\\*) older than `hours` — never anything outside C:\\ol2-rhost"""
+    ps = (f"$cut = (Get-Date).AddHours(-{hours}); $n = 0; "
+          f"Get-ChildItem -Directory '{WROOT}\\runs' -ErrorAction SilentlyContinue | "
+          f"Where-Object {{ $_.LastWriteTime -lt $cut -and $_.FullName -like '{WROOT}\\runs\\*' -and $_.Name -notlike '*record*' }} | "
+          f"ForEach-Object {{ Remove-Item -Recurse -Force $_.FullName -ErrorAction SilentlyContinue; $n++ }}; \"pruned $n\"")
+    return ssh_win(ps, check=False).strip()
+
+
+def cmd_prune(a):
+    print(prune_win(a.hours))
+
+
 def run_batch(a, runs, tag, fetch=("rhost.log",), interactive=False):
+    global _pruned
     if getattr(a, "target", "win") == "wine":
         return run_batch_wine(a, runs, tag)
     ensure_staged()
+    if not _pruned and PRUNE_HOURS > 0:     # once per invocation: keep our run dirs bounded on the shared box
+        _pruned = True
+        prune_win(PRUNE_HOURS)
     batch, bdir = make_batch(a, runs, tag)
     scp(bdir, f"{WIN}:C:/ol2-rhost/runs/", recursive=True)
     t0 = time.time()
@@ -680,7 +701,8 @@ def main():
         sp.add_argument("--vbase", type=int)
         sp.add_argument("--fb-hash", dest="fb_hash", action="store_true")
         sp.add_argument("--show", action="store_true")
-        sp.add_argument("-j", "--jobs", type=int, default=8)
+        sp.add_argument("-j", "--jobs", type=int, default=None,
+                        help="parallel runs (default: 8 on wine, 3 on win — sibling projects share the Windows box)")
         sp.add_argument("--target", choices=("win", "wine"), default=os.environ.get("RHOST_TARGET", "win"))
         sp.add_argument("--extra")
     sub.add_parser("build").set_defaults(fn=cmd_build)
@@ -699,10 +721,13 @@ def main():
     sp = sub.add_parser("view"); common(sp); sp.add_argument("scenario"); sp.add_argument("--b"); sp.add_argument("--b-hook", dest="b_hook")
     sp.add_argument("--cap", required=True, help="FROM:COUNT frames"); sp.add_argument("--shot"); sp.add_argument("--col", type=int, default=0)
     sp.set_defaults(fn=cmd_view)
+    sp = sub.add_parser("prune"); sp.add_argument("--hours", type=float, default=PRUNE_HOURS); sp.set_defaults(fn=cmd_prune)
     sp = sub.add_parser("diff"); sp.add_argument("a"); sp.add_argument("b"); sp.add_argument("--show-n", type=int, default=40); sp.set_defaults(fn=cmd_diff)
     sp = sub.add_parser("record"); common(sp); sp.add_argument("name"); sp.add_argument("--from", dest="from_scen")
     sp.add_argument("--force", action="store_true"); sp.set_defaults(fn=cmd_record)
     a = p.parse_args()
+    if getattr(a, "jobs", 0) is None:
+        a.jobs = 3 if getattr(a, "target", "win") == "win" else 8
     r = a.fn(a)
     sys.exit(r or 0)
 
