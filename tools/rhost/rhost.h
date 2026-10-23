@@ -131,6 +131,8 @@ void rh_ds_report(void);
 void rh_ds_mix(void);          /* --audible: this frame's audio to waveOut (reads only) */
 void *rh_ds_meta_save(void);               /* serials, live registry, timers (free with free()) */
 void rh_ds_meta_restore(const void *m);
+void *rh_win_meta_save(void);              /* virtual queue + window state (free with free()) */
+void rh_win_meta_restore(const void *m);
 
 /* rh_win.c — virtual window, message queue, input trace, recorder, visible presenter */
 #define RH_FAKE_HWND 0x00020c2eu

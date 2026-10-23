@@ -43,6 +43,27 @@ static void q_put(HWND h, UINT m, WPARAM w, LPARAM l)
 }
 void rh_win_post(UINT m, WPARAM w, LPARAM l) { q_put((HWND)(uintptr_t)RH_FAKE_HWND, m, w, l); }
 
+/* shadow rollback (rh_state.c meta_t): the live queue entries and what retail's own window calls change, so a
+ * port that calls back into retail code which posts / focuses / sets the cursor starts from retail's pre-state */
+typedef struct { uint32_t qh, qt, nposted, ndispatched, focus, cursor_handle, nfake; int cx, cy, visible, activated;
+                 LONG style, exstyle; MSG m[]; } win_meta_t;
+void *rh_win_meta_save(void)
+{
+    win_meta_t *m = malloc(sizeof *m + (size_t)(g_qt - g_qh) * sizeof(MSG));
+    *m = (win_meta_t){ g_qh, g_qt, g_nposted, g_ndispatched, g_focus, g_cursor_handle, g_nfake, g_cx, g_cy, g_visible,
+                       g_activated, g_style, g_exstyle };
+    for (uint32_t k = g_qh; k != g_qt; k++) m->m[k - g_qh] = g_q[k % QN];
+    return m;
+}
+void rh_win_meta_restore(const void *p)
+{
+    const win_meta_t *m = p;
+    g_qh = m->qh; g_qt = m->qt; g_nposted = m->nposted; g_ndispatched = m->ndispatched; g_focus = m->focus;
+    g_cursor_handle = m->cursor_handle; g_nfake = m->nfake; g_cx = m->cx; g_cy = m->cy; g_visible = m->visible;
+    g_activated = m->activated; g_style = m->style; g_exstyle = m->exstyle;
+    for (uint32_t k = g_qh; k != g_qt; k++) g_q[k % QN] = m->m[k - g_qh];
+}
+
 static LRESULT call_retail(UINT m, WPARAM w, LPARAM l)
 {
     if (!g_retail_proc) return 0;
