@@ -44,6 +44,7 @@ typedef struct {
     int show;                   /* visible window (StretchDIBits of the presented frame) */
     int scale;                  /* window scale (show/record) */
     int movies;                 /* real smackw32 (default: SmackOpen fails → retail skips movies) */
+    int audible;                /* mix DirectSound to waveOut (--audible; implied by --record) */
     int no_arena, no_overlay;
     int log_files, log_heap, log_input, log_dd, log_ds, log_win;
     const char *coverage;
@@ -121,6 +122,7 @@ HRESULT WINAPI rh_DirectSoundCreate(GUID *g, void **out, void *outer);
 void rh_mm_install(void);
 void rh_mm_frame(void);        /* fire due timeSetEvent callbacks (main thread, frame boundary) */
 void rh_ds_report(void);
+void rh_ds_mix(void);          /* --audible: this frame's audio to waveOut (reads only) */
 
 /* rh_win.c — virtual window, message queue, input trace, recorder, visible presenter */
 #define RH_FAKE_HWND 0x00020c2eu

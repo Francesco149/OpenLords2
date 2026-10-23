@@ -382,6 +382,7 @@ static void __cdecl frame_wrap(void)
     g_frame++;
     g_vclock += O.step_ms; g_calls_since_frame = 0;
     rh_mm_frame();
+    rh_ds_mix();
     rh_win_frame();
     rh_bot_frame();
     if (O.realtime) {
@@ -454,7 +455,9 @@ static void parse(int argc, char **argv)
         else if (!strcmp(a, "--run")) O.rundir = ARG();
         else if (!strcmp(a, "--frames")) O.frames = strtoul(ARG(), 0, 0);
         else if (!strcmp(a, "--trace")) O.trace = ARG();
-        else if (!strcmp(a, "--record")) { O.record = ARG(); O.realtime = 1; O.show = 1; }
+        else if (!strcmp(a, "--record")) { O.record = ARG(); O.realtime = 1; O.show = 1; O.audible = 1; }
+        else if (!strcmp(a, "--audible")) O.audible = 1;
+        else if (!strcmp(a, "--silent")) O.audible = -1;
         else if (!strcmp(a, "--out-trace")) O.out_trace = ARG();
         else if (!strcmp(a, "--dump-at")) parse_list(ARG(), O.dump_at, &O.n_dump, 128);
         else if (!strcmp(a, "--shot-at")) parse_list(ARG(), O.shot_at, &O.n_shot, 64);
@@ -505,6 +508,7 @@ static void parse(int argc, char **argv)
     }
     if (!O.exe || !O.gamedir || !O.rundir) usage();
     if (O.scale < 1) O.scale = 1;
+    if (O.audible < 0) O.audible = 0;
     static char rec_abs[MAX_PATH], out_abs[MAX_PATH];
     if (O.record && !strchr(O.record, ':') && O.record[0] != '\\') { snprintf(rec_abs, sizeof rec_abs, "%s\\%s", O.rundir, O.record); O.record = rec_abs; }
     if (O.record && !O.out_trace) O.out_trace = O.record;

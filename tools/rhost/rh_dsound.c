@@ -7,10 +7,11 @@
  *     clock (rate = the buffer's format / SetFrequency), looping or stopping at the end;
  *   - timeSetEvent callbacks are fired on the MAIN thread at frame boundaries (rh_mm_frame),
  *     in id order, once per elapsed period — a deterministic serialization of the real thread.
- * Nothing is audible (yet): a mixer to a real output for --record is future work. */
+ * Silent by default; --audible (implied by --record) mixes the playing buffers to waveOut (rh_ds_mix). */
 #include "rhost.h"
 #include <mmsystem.h>
 #include <dsound.h>
+#include <math.h>
 
 #define LOGDS(...) do { if (O.log_ds) rh_log(__VA_ARGS__); } while (0)
 static long g_unimpl;
@@ -28,28 +29,40 @@ typedef struct ds_buf {
 typedef struct ds_obj { const void *vtbl; uint32_t refs; uint32_t coop, speaker; } ds_obj;
 
 static void *g_vt_ds, *g_vt_buf;
+/* host-side registry of live buffers (the --audible mixer walks it; never part of retail state) */
+#define MAXB 1024
+static ds_buf *g_live[MAXB]; static int g_nlive;
+static void live_add(ds_buf *b) { if (g_nlive < MAXB) g_live[g_nlive++] = b; }
+static void live_del(ds_buf *b) { for (int i = 0; i < g_nlive; i++) if (g_live[i] == b) { g_live[i] = g_live[--g_nlive]; return; } }
 static uint32_t g_serial, g_nplay, g_nlock;
 static ULONG WINAPI unk_AddRef(void *self) { return ++((uint32_t *)self)[1]; }
 
-static uint32_t bytes_per_sec(ds_buf *b)
+static uint32_t bytes_per_sec(const ds_buf *b)
 {
     uint32_t f = b->freq ? b->freq : b->fmt.nSamplesPerSec;
     return f * (b->fmt.nBlockAlign ? b->fmt.nBlockAlign : 1);
 }
-/* bring the play cursor up to the virtual now */
-static void advance(ds_buf *b)
+/* The play cursor is a pure function of the virtual clock: (pos, t0) is an ANCHOR set only by retail's
+ * own state-changing calls (Play / Stop / SetCurrentPosition / SetFrequency / SetFormat); every query
+ * computes the cursor from it. So extra observers (the --audible mixer) can never change what retail sees. */
+static void cur(const ds_buf *b, uint32_t now, uint32_t *pos, uint32_t *playing)
 {
-    uint32_t now = rh_vnow();
-    if (!b->playing || !b->mem->size) { b->t0 = now; return; }
+    *pos = b->pos; *playing = b->playing;
+    if (!b->playing || !b->mem->size) return;
     uint64_t adv = (uint64_t)(now - b->t0) * bytes_per_sec(b) / 1000u;
     uint32_t ba = b->fmt.nBlockAlign ? b->fmt.nBlockAlign : 1;
     adv -= adv % ba;
-    if (!adv) return;
-    b->t0 = now;
     uint64_t p = b->pos + adv;
-    if (b->looping) b->pos = (uint32_t)(p % b->mem->size);
-    else if (p >= b->mem->size) { b->pos = 0; b->playing = 0; }
-    else b->pos = (uint32_t)p;
+    if (b->looping) *pos = (uint32_t)(p % b->mem->size);
+    else if (p >= b->mem->size) { *pos = 0; *playing = 0; }
+    else *pos = (uint32_t)p;
+}
+/* re-anchor at the virtual now (before a state-changing call) */
+static void advance(ds_buf *b)
+{
+    uint32_t now = rh_vnow(), pos, playing;
+    cur(b, now, &pos, &playing);
+    b->pos = pos; b->playing = playing; b->t0 = now;
 }
 
 /* ---------------------------------------------------------------- buffers */
@@ -57,6 +70,7 @@ static HRESULT WINAPI b_QI(ds_buf *b, REFIID iid, void **out) { (void)iid; *out 
 static ULONG WINAPI b_Release(ds_buf *b)
 {
     if (--b->refs) return b->refs;
+    live_del(b);
     if (!--b->mem->refs) { rh_media_free(b->mem->p); rh_arena_free(b->mem); }
     rh_arena_free(b);
     return 0;
@@ -64,11 +78,12 @@ static ULONG WINAPI b_Release(ds_buf *b)
 static HRESULT WINAPI b_GetCaps(ds_buf *b, DSBCAPS *c) { c->dwFlags = b->flags; c->dwBufferBytes = b->mem->size; c->dwUnlockTransferRate = 0; c->dwPlayCpuOverhead = 0; return DS_OK; }
 static HRESULT WINAPI b_GetCurrentPosition(ds_buf *b, DWORD *play, DWORD *write)
 {
-    advance(b);
+    uint32_t pos, playing;
+    cur(b, rh_vnow(), &pos, &playing);
     uint32_t lead = bytes_per_sec(b) * 15u / 1000u, ba = b->fmt.nBlockAlign ? b->fmt.nBlockAlign : 1;
     lead -= lead % ba;
-    if (play) *play = b->pos;
-    if (write) *write = b->mem->size ? (b->playing ? (b->pos + lead) % b->mem->size : b->pos) : 0;
+    if (play) *play = pos;
+    if (write) *write = b->mem->size ? (playing ? (pos + lead) % b->mem->size : pos) : 0;
     return DS_OK;
 }
 static HRESULT WINAPI b_GetFormat(ds_buf *b, WAVEFORMATEX *f, DWORD n, DWORD *got)
@@ -81,12 +96,13 @@ static HRESULT WINAPI b_GetFormat(ds_buf *b, WAVEFORMATEX *f, DWORD n, DWORD *go
 static HRESULT WINAPI b_GetVolume(ds_buf *b, LONG *v) { *v = b->vol; return DS_OK; }
 static HRESULT WINAPI b_GetPan(ds_buf *b, LONG *p) { *p = b->pan; return DS_OK; }
 static HRESULT WINAPI b_GetFrequency(ds_buf *b, DWORD *f) { *f = b->freq ? b->freq : b->fmt.nSamplesPerSec; return DS_OK; }
-static HRESULT WINAPI b_GetStatus(ds_buf *b, DWORD *s) { advance(b); *s = (b->playing ? DSBSTATUS_PLAYING : 0) | (b->playing && b->looping ? DSBSTATUS_LOOPING : 0); return DS_OK; }
+static HRESULT WINAPI b_GetStatus(ds_buf *b, DWORD *s)
+{ uint32_t pos, playing; cur(b, rh_vnow(), &pos, &playing); *s = (playing ? DSBSTATUS_PLAYING : 0) | (playing && b->looping ? DSBSTATUS_LOOPING : 0); return DS_OK; }
 static HRESULT WINAPI b_Initialize(ds_buf *b, void *ds, DSBUFFERDESC *d) { (void)b; (void)ds; (void)d; return DSERR_ALREADYINITIALIZED; }
 static HRESULT WINAPI b_Lock(ds_buf *b, DWORD off, DWORD n, void **p1, DWORD *n1, void **p2, DWORD *n2, DWORD fl)
 {
     uint32_t size = b->mem->size;
-    if (fl & DSBLOCK_FROMWRITECURSOR) { DWORD w; b_GetCurrentPosition(b, NULL, &w); off = w; }
+    if (fl & DSBLOCK_FROMWRITECURSOR) { DWORD w; b_GetCurrentPosition(b, NULL, &w); off = w; }   /* pure: no re-anchor */
     if (fl & DSBLOCK_ENTIREBUFFER) n = size;
     if (!size || off >= size || n > size) return DSERR_INVALIDPARAM;
     g_nlock++;
@@ -122,6 +138,7 @@ static ds_buf *buf_new(ds_mem *m, const WAVEFORMATEX *f, uint32_t flags)
     else { b->fmt.wFormatTag = WAVE_FORMAT_PCM; b->fmt.nChannels = 2; b->fmt.nSamplesPerSec = 22050; b->fmt.wBitsPerSample = 8; b->fmt.nBlockAlign = 2; b->fmt.nAvgBytesPerSec = 44100; }
     b->fmt.cbSize = 0;
     b->t0 = rh_vnow(); b->serial = ++g_serial;
+    live_add(b);
     return b;
 }
 
@@ -234,6 +251,78 @@ void rh_mm_install(void)
     iat_override("timeBeginPeriod", my_timeBeginPeriod);
     iat_override("timeEndPeriod", my_timeEndPeriod);
 }
+/* ---------------------------------------------------------------- --audible: mix to waveOut (record mode)
+ * Reads each playing buffer between its cursor at the previous mix and now (cur(): pure), resamples to
+ * 22050 Hz stereo, applies volume / pan, queues the chunk. Retail state is never touched. */
+#define OUT_HZ 22050
+#define NHDR 32
+static HWAVEOUT g_wo; static WAVEHDR g_hdr[NHDR]; static int16_t *g_obuf[NHDR]; static int g_ohead;
+static uint32_t g_mix_last; static uint32_t g_mix_frac;
+static float db_gain(int32_t v) { return v <= -10000 ? 0.0f : powf(10.0f, (float)v / 2000.0f); }
+static int32_t sample(const ds_buf *b, uint32_t frame_idx, int ch)
+{
+    uint32_t ba = b->fmt.nBlockAlign ? b->fmt.nBlockAlign : 1, nch = b->fmt.nChannels ? b->fmt.nChannels : 1;
+    const uint8_t *p = b->mem->p + (frame_idx * ba) % b->mem->size;
+    int c = nch > 1 ? ch : 0;
+    if (b->fmt.wBitsPerSample == 16) return ((const int16_t *)p)[c];
+    return ((int32_t)p[c] - 128) << 8;
+}
+void rh_ds_mix(void)
+{
+    if (!O.audible) return;
+    uint32_t now = rh_vnow();
+    if (!g_wo) {
+        WAVEFORMATEX f = { WAVE_FORMAT_PCM, 2, OUT_HZ, OUT_HZ * 4, 4, 16, 0 };
+        if (waveOutOpen(&g_wo, WAVE_MAPPER, &f, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR) { rh_log("audible: no waveOut device\n"); O.audible = 0; return; }
+        for (int i = 0; i < NHDR; i++) { g_obuf[i] = calloc(8192, 4); }
+        g_mix_last = now;
+        rh_log("audible: mixing to waveOut %u Hz\n", OUT_HZ);
+        return;
+    }
+    uint32_t dt = now - g_mix_last;
+    if (!dt) return;
+    if (dt > 400) { g_mix_last = now; return; }                  /* a stall: drop, don't burst */
+    uint32_t total = dt * OUT_HZ + g_mix_frac, n = total / 1000;
+    g_mix_frac = total % 1000;
+    if (!n || n > 8192) { g_mix_last = now; return; }
+    static int32_t acc[8192 * 2];
+    memset(acc, 0, n * 8);
+    for (int k = 0; k < g_nlive; k++) {
+        const ds_buf *b = g_live[k];
+        if (!b->playing || (b->flags & DSBCAPS_PRIMARYBUFFER) || !b->mem->size) continue;
+        uint32_t ba = b->fmt.nBlockAlign ? b->fmt.nBlockAlign : 1, nframes = b->mem->size / ba;
+        uint32_t freq = b->freq ? b->freq : b->fmt.nSamplesPerSec;
+        if (!freq || !nframes) continue;
+        uint32_t start_t = (int32_t)(b->t0 - g_mix_last) > 0 ? b->t0 : g_mix_last;   /* Play inside this interval */
+        uint32_t p0, playing;
+        cur(b, start_t, &p0, &playing);
+        if (!playing) continue;
+        uint32_t first_out = (uint32_t)((uint64_t)(start_t - g_mix_last) * OUT_HZ / 1000u);
+        uint32_t f0 = p0 / ba;
+        float g = db_gain(b->vol), gl = g * (b->pan > 0 ? db_gain(-b->pan) : 1.0f), gr = g * (b->pan < 0 ? db_gain(b->pan) : 1.0f);
+        for (uint32_t i = first_out; i < n; i++) {
+            uint64_t src = (uint64_t)(i - first_out) * freq / OUT_HZ;     /* frames since start_t */
+            if (!b->looping && f0 + src >= nframes) break;
+            uint32_t fi = (uint32_t)((f0 + src) % nframes);
+            acc[2 * i] += (int32_t)(sample(b, fi, 0) * gl);
+            acc[2 * i + 1] += (int32_t)(sample(b, fi, 1) * gr);
+        }
+    }
+    g_mix_last = now;
+    WAVEHDR *h = &g_hdr[g_ohead];
+    if (h->dwFlags & WHDR_PREPARED) {
+        if (!(h->dwFlags & WHDR_DONE)) return;                       /* the device is behind: drop this chunk */
+        waveOutUnprepareHeader(g_wo, h, sizeof *h);
+    }
+    int16_t *o = g_obuf[g_ohead];
+    for (uint32_t i = 0; i < 2 * n; i++) { int32_t v = acc[i]; o[i] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v); }
+    memset(h, 0, sizeof *h);
+    h->lpData = (LPSTR)o; h->dwBufferLength = n * 4;
+    waveOutPrepareHeader(g_wo, h, sizeof *h);
+    waveOutWrite(g_wo, h, sizeof *h);
+    g_ohead = (g_ohead + 1) % NHDR;
+}
+
 void rh_ds_report(void)
 {
     rh_log("dsound: buffers=%u plays=%u locks=%u mmtimer-fires=%u unimpl=%ld\n", g_serial, g_nplay, g_nlock, g_nfire, g_unimpl);
