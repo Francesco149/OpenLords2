@@ -4,7 +4,8 @@
 - **Phase 0 — methodology reset (2026-10-23):** rhost is the verification foundation
   (`docs/audits/2026-10-23-methodology-reset.md`). Built + proven: deterministic boot → new game → turns,
   Windows ≡ wine bit for bit, control channel, porting loop (`rng_step`), IDA export, game-state reader,
-  **autoplay v1** (Jev plays through rhost: 7 bot games in the corpus; coverage 37.1% → 41.8%).
+  **autoplay** (Jev plays through rhost: 15 bot games in the corpus; retail coverage 37.1% → 44.6%),
+  deterministic Smacker (`--movies`: the real boot sequence plays).
   In flight: re-verification pilot (AI-turn subsystem).
 - **Top blocker:** none for logic parity. Smacker movies are skipped in rhost (retail tolerates it).
 <!-- status:end -->
@@ -18,8 +19,8 @@
    AI brain FSM, economy, combat resolver `FUN_004aad07`); one row in `rh_hooks.c` each; `verify` evidence.
 3. **Hybrid pilot** on one subsystem (suggest the AI brain FSM): measure wrapper cost and REPLACE coverage;
    decide hybrid vs standalone (audit §3).
-4. **rhost gaps**: deterministic Smacker (fixed-base smackw32, clock / heap / waveOut / threads redirected);
-   movies are rare in play (only intro.smk seen over 3 game years).
+4. **Movies in the corpus**: scenarios with `"movies": true` (rh_smack.c is deterministic) so the movie
+   paths (intro → title, jail, victory/defeat) are exercised as a real user sees them.
 5. **Port build `-std=gnu11`** after an x87 sweep (openrecet's c11 long-double literal finding).
 
 ## Phase 0 checklist

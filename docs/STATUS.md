@@ -56,7 +56,8 @@ claims are unverified until rhost re-checks them (`docs/audits/2026-10-23-method
 - **Phase 0 — methodology reset (2026-10-23):** rhost is the verification foundation
   (`docs/audits/2026-10-23-methodology-reset.md`). Built + proven: deterministic boot → new game → turns,
   Windows ≡ wine bit for bit, control channel, porting loop (`rng_step`), IDA export, game-state reader,
-  **autoplay v1** (Jev plays through rhost: 7 bot games in the corpus; coverage 37.1% → 41.8%).
+  **autoplay** (Jev plays through rhost: 15 bot games in the corpus; retail coverage 37.1% → 44.6%),
+  deterministic Smacker (`--movies`: the real boot sequence plays).
   In flight: re-verification pilot (AI-turn subsystem).
 - **Top blocker:** none for logic parity. Smacker movies are skipped in rhost (retail tolerates it).
 

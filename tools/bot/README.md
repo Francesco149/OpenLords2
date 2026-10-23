@@ -25,7 +25,7 @@ little between calls, so the seed fixes the sampling stream but not the game —
 | `llm.py` | OpenRouter: **Jev** decisions (`~typesafe/jev-latest`, `POST /api/alpha/decisions`) — typed questions in, probabilities out; `chat()` fallback |
 | `policy.py` | per county: tax (score), rations (score), industry split (score), draft (score); per army: march target (choice). **Samples** from Jev's probabilities (temperature, seeded) so games diverge |
 | `ui.py` | settle the map (report scrolls, battle prompt → decline to take the field = auto-resolve, result scroll), End turn, panels |
-| `actions.py` | raise an army, select + march an army on a county's town, set rations; timing per retail's mouse model |
+| `actions.py` | raise an army, select + march an army on a county's town, set rations, trade at the merchant, send a gift; timing per retail's mouse model |
 | `mapview.py` | cell ↔ screen from retail's own viewport geometry and tile grid (hover-confirmed), edge-scroll to a cell |
 | `play.py` | the turn loop + output |
 
@@ -46,12 +46,18 @@ repo). Games run at the speed of rhost: 8 turns ≈ 9 s wall under wine, several
 
 ## Measured value
 
-Retail coverage (`rhost.py coverage`): the 4 hand-made scenarios reach 661 functions / 37.1% of code
-bytes; adding 7 bot games (≈ 1 min of play, $0.08) reaches 759 / 41.8%.
+Retail coverage (`rhost.py coverage`, 2,611 IDA functions / 844 KB):
+
+| corpus | functions | code bytes |
+|---|---:|---:|
+| 4 hand-made scenarios | 661 | 37.1% |
+| + 7 bot v1 games (≈ 1 min of play, $0.08) | 759 | 41.8% |
+| + boot-movies + 8 bot v2 games (trade, gifts; 20 turns each, $0.04) | 817 | 44.6% |
 
 ## Not yet
 
-The bot plays badly on purpose-free sampling (over-drafts, starves, usually loses its county by turn
-6–15; it then plays the defeat out — the victory/defeat screen 0x1c, black while its movie is skipped — and
-continues in the scenario retail restarts); no merchant / castle / diplomacy / supply actions; interactive battles; custom-game setups
-(maps, opponents, difficulty); the defeat / victory screens after the last county.
+The bot plays badly on purpose-free sampling (over-drafts, starves, often loses its county; it then plays the
+defeat out — the victory/defeat screen 0x1c — and continues in the scenario retail restarts). Missing: castle
+building, send supplies, the labor grid and fields, alliances/insults, sieges; interactive battles; custom-game
+setups (maps, opponents, difficulty); games with `"movies": true` (the movie paths: jail, victory, defeat).
+`select_army` sometimes fails for an army stacked with another or inside a town.
