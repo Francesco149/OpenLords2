@@ -185,6 +185,19 @@ static HMMIO WINAPI my_mmioOpenA(LPSTR p, LPMMIOINFO info, DWORD fl)
     return h;
 }
 static UINT WINAPI my_GetDriveTypeA(LPCSTR root) { (void)root; return DRIVE_FIXED; }
+/* retail's asset-retry chain _chdir()s into subdirs that may not exist; the CRT stores the raw error in
+ * _doserrno (DAT_004e4534): Windows says ERROR_PATH_NOT_FOUND, wine ERROR_FILE_NOT_FOUND — answer it here */
+static BOOL WINAPI my_SetCurrentDirectoryA(LPCSTR p)
+{
+    DWORD a = p ? GetFileAttributesA(p) : INVALID_FILE_ATTRIBUTES;
+    if (a == INVALID_FILE_ATTRIBUTES || !(a & FILE_ATTRIBUTE_DIRECTORY)) {
+        if (O.log_files) rh_log("chdir %s = no such directory (f%u)\n", p ? p : "(null)", g_frame);
+        SetLastError(ERROR_PATH_NOT_FOUND);
+        return FALSE;
+    }
+    if (O.log_files) rh_log("chdir %s (f%u)\n", p, g_frame);
+    return SetCurrentDirectoryA(p);
+}
 
 void rh_files_install(void)
 {
@@ -202,5 +215,6 @@ void rh_files_install(void)
     iat_override("FindClose", my_FindClose);
     iat_override("mmioOpenA", my_mmioOpenA);
     iat_override("GetDriveTypeA", my_GetDriveTypeA);
+    iat_override("SetCurrentDirectoryA", my_SetCurrentDirectoryA);
     rh_log("overlay: game=%s run=%s\n", G, R);
 }
