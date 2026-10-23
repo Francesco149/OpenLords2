@@ -287,6 +287,13 @@ static void real_window(void)
                                  -8000, -8000, SCR_W, SCR_H, NULL, NULL, wc.hInstance, NULL);
     }
     if (!g_real) rh_fatal("cannot create rhost's window (err %lu)", GetLastError());
+    if (O.show || O.record) {   /* the launcher's STARTUPINFO (Start-Process -WindowStyle Hidden) eats the first ShowWindow */
+        ShowWindow(g_real, SW_SHOWNORMAL);
+        ShowWindow(g_real, SW_SHOWNORMAL);
+        UpdateWindow(g_real);
+        RECT r; GetClientRect(g_real, &r);
+        rh_log("win: rhost window visible=%d client %ldx%ld\n", IsWindowVisible(g_real), r.right, r.bottom);
+    }
 }
 
 void rh_win_present(void)
