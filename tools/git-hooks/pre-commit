@@ -42,13 +42,13 @@ if echo "$staged" | grep -qE '^(src/|tests/).*\.(c|h)$'; then
     echo "pre-commit: $(grep -oE '[0-9]+ passed' /tmp/ol2_tests.log | tail -1)"
 fi
 
-# --- 3. Remind to eyeball the frame-diff after render edits --------------
+# --- 3. Render edits: the proof is a hybrid replace + fb chain ---------------
 if echo "$staged" | grep -qE '^src/(gfx_|engine_.*_render|engine_overlay|engine_map|engine_battlefield).*\.(c|h)$'; then
-    echo "pre-commit: render files changed — remember to run the DDraw" >&2
-    echo "            frame-diff harness (tools/diff_test.py) and eyeball the overlay." >&2
+    echo "pre-commit: render files changed — prove them with rhost: corpus --check --hook replace:NAME" >&2
+    echo "            (every presented frame) and eyeball with rhost.py view … --b-hook replace:NAME." >&2
 fi
 
-# --- 3. rhost corpus gate (wine, local) --------------------------------------
+# --- 4. rhost corpus gate (wine, local) --------------------------------------
 if echo "$staged" | grep -qE '^(src/.*\.(c|h)|tools/rhost/.*\.(c|h|x|sh)|tests/scenarios/.*)$'; then
     echo "pre-commit: rhost corpus --check (wine)..."
     if ! python3 tools/rhost/rhost.py corpus --check --target wine >/tmp/ol2_rhost_gate.log 2>&1; then
