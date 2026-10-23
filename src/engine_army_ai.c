@@ -2366,8 +2366,8 @@ static int engine_army_ai_region_borders_enemy(int region)
 
 /* Port of FUN_004673b8 — find the nearest live, idle, enemy-owned army to `occ`
  * by Chebyshev (king-move) distance, leaving its index in g_combat_active_terr and
- * returning the distance (1000 if none).  The distance is FUN_00404f4c's
- * max(|dx|,|dy|) return, computed inline. */
+ * returning the distance (1000 if none).  The distance is FUN_00404f4c, which
+ * leaves |dx| / |dy| in its globals (quirks #226 / #235). */
 static int engine_army_ai_nearest_enemy_army(int occ)
 {
     int best = 1000, best_idx = 0;
@@ -2378,9 +2378,7 @@ static int engine_army_ai_nearest_enemy_army(int occ)
         if (OCC_REC(occ)[OCC_OWNER] == o[OCC_OWNER])          continue;
         if (o[OCC_ACTIVE] != 1)                               continue;
         if (o[OCC_IDLE] != 0)                                 continue;
-        int dx = ax - (int8_t)o[OCC_COL]; if (dx < 0) dx = -dx;
-        int dy = ay - (int8_t)o[OCC_ROW]; if (dy < 0) dy = -dy;
-        int d = dx > dy ? dx : dy;
+        int d = engine_path_dist_chebyshev(ax, ay, (int8_t)o[OCC_COL], (int8_t)o[OCC_ROW]);   /* FUN_00404f4c */
         if (d < best) { best_idx = g_combat_active_terr; best = d; }
     }
     g_combat_active_terr = best_idx;
@@ -2402,9 +2400,7 @@ static int engine_army_ai_nearest_engageable_army(int occ, unsigned region)
                                            (int8_t)o[OCC_OWNER]) == 0) continue;
         if (o[OCC_IDLE] != 0)                                 continue;
         if ((uint8_t)o[OCC_HOME_REGION] != region)            continue;
-        int dx = ax - (int8_t)o[OCC_COL]; if (dx < 0) dx = -dx;
-        int dy = ay - (int8_t)o[OCC_ROW]; if (dy < 0) dy = -dy;
-        int d = dx > dy ? dx : dy;
+        int d = engine_path_dist_chebyshev(ax, ay, (int8_t)o[OCC_COL], (int8_t)o[OCC_ROW]);   /* FUN_00404f4c */
         if (d < best) { best_idx = g_combat_active_terr; best = d; }
     }
     g_combat_active_terr = best_idx;

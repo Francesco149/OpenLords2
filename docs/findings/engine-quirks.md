@@ -8122,3 +8122,24 @@ cannot tell from live state.  Now `g_coalition_tbl` / `g_coalition_active_count`
 
 > 📍 `src/engine_realm.c/.h`, `src/engine_realm_globals.c`, `tests/Makefile`; evidence:
 > `tools/rhost/rh_hooks_events.c` row realm_coalition_pass.
+
+## 235 — two more #226 scratch writers: the capital-defender box scan counts in the cell cursor, the AI's nearest-army scanners go through the chebyshev helper
+
+Found by the rhost shadow on the bot v2 games (bot2-s61-t28 / bot2-s64-t28, the first corpus games that march on
+OWNED counties):
+
+* **FUN_0046d42c** (`engine_combat_find_capital_defender`) scans the 4×4 box at the capital with the shared cell
+  cursor DAT_00569570 (col) / DAT_00569578 (row) as its loop counters and leaves them at (cap_col+2, cap_row+2);
+  the port counted in locals (the old #130 reasoning).  `combat_capital_defender` diverged on both dwords (2 calls).
+* **FUN_004673b8 / FUN_00467532** (the AI order handlers' nearest enemy / engageable army scanners) call the
+  chebyshev helper FUN_00404f4c, which leaves |dx| / |dy| in DAT_00591560 / DAT_0058fea0; the port inlined the
+  distance.  `ai_run_per_tick` / `ai_run_movement` diverged on those dwords at f21264 / f21968 of bot2-s61-t28
+  (order handlers advance / lord-move / intercept → FUN_004a57ac → FUN_004a5667).
+
+Fixed: the box scan counts in `g_cell_cursor_col/row`, the scanners call `engine_path_dist_chebyshev`.  No gameplay
+change (nothing reads these without rewriting them first).  `rhost.py verify --only bot2` (3 scenarios): 0
+divergences, hybrid PASS.  Still inlined / unhooked: the battlefield's distance callers (FUN_0047a814, FUN_00489a62,
+FUN_0048b5fc … FUN_00497437, FUN_004843bc, FUN_00484bf9, FUN_0048ef45 …) and the castle-border placer FUN_0046902a.
+
+> 📍 `src/engine_combat.c` (engine_combat_find_capital_defender), `src/engine_army_ai.c`
+> (nearest_enemy_army / nearest_engageable_army); evidence: rows combat_capital_defender, ai_run_movement.

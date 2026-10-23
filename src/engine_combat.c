@@ -413,9 +413,9 @@ static uint32_t combat_clock(void) { return g_combat_clock_fn ? g_combat_clock_f
  * or no qualifying unit is present.  combat_b (FUN_004a6c68) parks the result in
  * the defender slot DAT_00568218.
  *
- * Retail reuses engine_path's find-nearest scratch DAT_00569570/78 as the loop
- * counters (a codegen artifact, quirk #130); the answer is the returned occupant
- * index, never the scratch, so we use locals rather than clobber those globals. */
+ * Retail counts the box in the shared cell cursor DAT_00569570 (col) / 78 (row)
+ * and leaves it at (cap_col+2, cap_row+2): written as retail writes it (quirks
+ * #226 / #235). */
 int engine_combat_find_capital_defender(int key)
 {
     uint8_t *reg = REGREC(key);
@@ -430,8 +430,8 @@ int engine_combat_find_capital_defender(int key)
     int region_owner = reg[R_OWNER];
     int best = 0, best_val = 0;
     int idx = ((cap_row - 2) * 0x40 + (cap_col - 2)) * 8;  /* byte offset of box origin */
-    for (int row = cap_row - 2; row < cap_row + 2; row++) {
-        for (int col = cap_col - 2; col < cap_col + 2; col++) {
+    for (g_cell_cursor_row = cap_row - 2; g_cell_cursor_row < cap_row + 2; g_cell_cursor_row++) {
+        for (g_cell_cursor_col = cap_col - 2; g_cell_cursor_col < cap_col + 2; g_cell_cursor_col++) {
             unsigned occ = g_overworld_map[idx + 5];          /* cell +5 head-link */
             if (occ != 0
                 && (int)(int8_t)CREC(occ)[C_OWNER] == region_owner
