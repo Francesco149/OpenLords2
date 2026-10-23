@@ -1,53 +1,58 @@
 """policy.py — turn decisions for the autoplay bot, asked of Jev as typed questions.
 
-Jev returns a probability per option; the bot SAMPLES from those (with a temperature) instead of taking
-the argmax, so every game explores a different path through the economy, war and diplomacy — the point
-is to exercise many situations for the scenario corpus, not to win. Sampling uses the game's own
-seeded RNG stream (`random.Random(seed)`), so a (seed, Jev answers) pair reproduces the same choices;
-the Jev answers themselves are logged with every decision.
+Jev (TypeSafe's decision model, OpenRouter Decisions API — llm.decide) gets the game state as JSON and
+typed questions, and returns a probability per option. The bot SAMPLES from those (temperature, seeded
+RNG) instead of taking the argmax, so every game explores a different path through economy and war:
+the goal is to exercise many situations for the scenario corpus, not to win. The Jev answers are logged
+with every decision, so a game's choices can be audited and re-derived.
 """
 import json
-import math
 import random
 
+import l2state
 import llm
 
-TAX_LEVELS = [0, 1, 3, 5, 8, 10, 15, 20, 30]                    # percent
-RATION_LEVELS = ["none", "quarter", "half", "normal", "double", "triple"]
-LABOR_BIAS = ["all farming", "mostly farming", "balanced", "mostly industry", "all industry"]
-ARMY_FRACTION = [0.0, 0.05, 0.10, 0.20, 0.35]                    # of a county's population
+TAX_LEVELS = [0, 3, 5, 8, 10, 15, 20, 30]                         # percent
+RATION_LEVELS = l2state.RATIONS                                   # none .. triple (index = retail value)
+INDUSTRY_PCT = [5, 15, 25, 40, 60]                                # HUD farming ↔ industry split, % industry
+ARMY_FRACTION = [0.0, 0.08, 0.15, 0.25, 0.40]                     # of a county's population, drafted now
 
-BRIEF = ("You are the lord of a realm in Lords of the Realm II (medieval England, 1268+). Each season (turn) you "
-         "set taxes and rations per county, split peasants between farming (grain, cattle) and industry (wood, "
-         "stone, iron, weapons), raise armies from the population, and march them on neighbouring counties. Food "
-         "keeps the population alive and happy; taxes fill the treasury (crowns) but cost happiness; armies need "
-         "weapons and food. Play to grow and conquer, but take varied, plausible decisions.")
+BRIEF = ("Lords of the Realm II, medieval England from 1268. Each season (turn) a lord sets taxes and rations "
+         "per county, splits peasants between farming (cattle, grain: food) and industry (wood, iron, stone, "
+         "weapons), drafts armies from the population and marches them on neighbouring counties: neutral "
+         "counties ('owner 0') are claimed by marching onto their town, but their own militia defends them; "
+         "rival lords' counties must be conquered. Food keeps peasants alive and happy; taxes fill the "
+         "treasury but cost happiness; drafting shrinks the workforce. Battles here are auto-resolved, and "
+         "the defender has an advantage, so attack only with clearly stronger armies. Take varied, plausible decisions.")
+
+
+def county_view(c):
+    keep = ("id", "name", "owner", "population", "happiness", "health", "tax", "tax_income", "ration", "food",
+            "industry_pct", "fields", "castle", "army_strength", "neighbors", "births", "deaths", "happiness_from")
+    return {k: c[k] for k in keep if k in c}
 
 
 def compact(st):
-    """the snapshot reduced to what a decision needs (Jev reads JSON state)"""
+    """the snapshot reduced to what a decision needs"""
     me = st.get("me")
-    out = {"brief": BRIEF, "date": st.get("date"), "me": me}
-    realms = st.get("realms") or []
-    out["realms"] = [{k: r.get(k) for k in ("id", "name", "crowns", "counties", "human", "active", "rank") if k in r} for r in realms]
-    counties = st.get("counties") or []
-    mine = [c for c in counties if c.get("owner") == me]
-    out["my_counties"] = mine
+    realms = [{k: r.get(k) for k in ("id", "name", "human", "crowns", "counties", "population", "troops", "weapons",
+                                     "iron", "stone", "wood", "relations") if k in r} for r in st.get("realms") or []]
+    mine = [county_view(c) for c in st.get("counties") or [] if c.get("owner") == me]
     near = set()
     for c in mine:
         near |= set(c.get("neighbors") or [])
-    out["neighbours"] = [{k: c.get(k) for k in ("id", "name", "owner", "population", "army_strength", "castle") if k in c}
-                         for c in counties if c.get("id") in near and c.get("owner") != me]
-    out["my_armies"] = [a for a in (st.get("armies") or []) if a.get("owner") == me]
-    return out
+    others = [county_view(c) for c in st.get("counties") or [] if c.get("owner") != me]
+    armies = [{k: a.get(k) for k in ("id", "owner", "county", "men", "troops", "strength", "moves_left", "dest")}
+              for a in st.get("armies") or [] if a.get("kind", "army") in ("army", "rebels")]
+    return {"brief": BRIEF, "date": st.get("date"), "me": me, "realms": realms, "my_counties": mine,
+            "other_counties": others, "neighbour_ids": sorted(near), "armies": armies}
 
 
 def sample(probs, rng, temperature):
     """probs: {key: p} → a key, sampled from p^(1/T)"""
-    keys = list(probs)
+    keys = sorted(probs, key=str)
     w = [max(1e-6, float(probs[k])) ** (1.0 / max(1e-3, temperature)) for k in keys]
-    tot = sum(w)
-    x = rng.random() * tot
+    x = rng.random() * sum(w)
     for k, wk in zip(keys, w):
         x -= wk
         if x <= 0:
@@ -56,47 +61,36 @@ def sample(probs, rng, temperature):
 
 
 def decide(st, rng, temperature=1.0, session_id=None):
-    """→ (plan, raw answers). plan = {"counties": {id: {...}}, "attack": target|None}"""
+    """→ (plan, raw answers). plan = {"counties": {id: {tax, ration, industry_pct, draft}}, "armies": {id: target county|None}}"""
     state = compact(st)
     me = st.get("me")
-    plan = {"counties": {}, "attack": None}
+    plan = {"counties": {}, "armies": {}}
     raw = {}
     for c in state["my_counties"]:
-        cid = c.get("id")
+        cid, name = c["id"], c.get("name", c["id"])
         q = {
-            "tax": {"type": "score", "instructions": f"Tax rate for county {c.get('name', cid)} this season?",
+            "tax": {"type": "score", "instructions": f"What tax rate should {name} pay this season?",
                     "criteria": [f"{t}%" for t in TAX_LEVELS]},
-            "rations": {"type": "score", "instructions": f"Ration level for county {c.get('name', cid)} this season?",
-                        "criteria": RATION_LEVELS},
-            "labor": {"type": "score", "instructions": f"How should {c.get('name', cid)}'s peasants be split between farming and industry?",
-                      "criteria": LABOR_BIAS},
-            "army": {"type": "score", "instructions": f"How much of {c.get('name', cid)}'s population should be drafted into an army now?",
-                     "criteria": ["none", "a token force (5%)", "a small army (10%)", "a real army (20%)", "a large army (35%)"]},
+            "ration": {"type": "score", "instructions": f"What food ration should {name}'s peasants get this season?",
+                       "criteria": RATION_LEVELS},
+            "industry": {"type": "score", "instructions": f"What share of {name}'s workforce should work in industry rather than farming?",
+                         "criteria": [f"{p}% industry" for p in INDUSTRY_PCT]},
+            "draft": {"type": "score", "instructions": f"How much of {name}'s population should be drafted into a new army now?",
+                      "criteria": ["nobody", "a token force (8%)", "a small army (15%)", "a real army (25%)", "a large army (40%)"]},
         }
-        a = llm.decide(dict(state, deciding_for=c), q, session_id=session_id)
+        a = llm.decide(dict(state, deciding_for=name), q, session_id=session_id)
         raw[cid] = a
         pick = {k: int(sample(a[k]["probabilities"], rng, temperature)) for k in q}
-        plan["counties"][cid] = {"tax": TAX_LEVELS[pick["tax"]], "rations": RATION_LEVELS[pick["rations"]],
-                                 "labor": pick["labor"], "army_fraction": ARMY_FRACTION[pick["army"]]}
-    targets = {str(n["id"]): f"attack {n.get('name', n['id'])} (owner {n.get('owner')}, population {n.get('population')})"
-               for n in state["neighbours"]}
-    if targets and state["my_armies"]:
-        targets["none"] = "do not attack anyone this season"
-        a = llm.decide(state, {"attack": {"type": "choice", "instructions": "Which neighbouring county should your armies attack this season?",
-                                          "criteria": targets}}, session_id=session_id)
-        raw["attack"] = a
-        t = sample(a["attack"]["probabilities"], rng, temperature)
-        plan["attack"] = None if t == "none" else int(t)
+        plan["counties"][cid] = {"tax": TAX_LEVELS[pick["tax"]], "ration": pick["ration"],
+                                 "industry_pct": INDUSTRY_PCT[pick["industry"]], "draft": ARMY_FRACTION[pick["draft"]]}
+    targets = {str(cid): f"march on {c.get('name', cid)} (owner {c.get('owner')}, population {c.get('population')})"
+               for c in state["other_counties"] for cid in [c["id"]] if cid in state["neighbour_ids"]}
+    for army in [x for x in state["armies"] if x["owner"] == me]:
+        opts = dict(targets, hold="stay and guard the realm this season")
+        a = llm.decide(dict(state, deciding_for_army=army),
+                       {"target": {"type": "choice", "instructions": f"Where should army {army['id']} ({army['men']} men, "
+                                   f"strength {army['strength']}) march this season?", "criteria": opts}}, session_id=session_id)
+        raw[f"army{army['id']}"] = a
+        t = sample(a["target"]["probabilities"], rng, temperature)
+        plan["armies"][army["id"]] = None if t == "hold" else int(t)
     return plan, raw
-
-
-if __name__ == "__main__":
-    demo = {"date": {"season": "Winter", "year": 1268}, "me": 1,
-            "realms": [{"id": 1, "name": "You", "crowns": 5000, "human": True}, {"id": 2, "name": "Yellow", "crowns": 4000}],
-            "counties": [{"id": 3, "name": "Raw Sienna", "owner": 1, "population": 435, "happiness": 72, "tax": 0,
-                          "rations": "normal", "grain": 101, "cattle": 10, "neighbors": [4]},
-                         {"id": 4, "name": "Neighbour", "owner": 2, "population": 400}],
-            "armies": []}
-    plan, raw = decide(demo, random.Random(1))
-    print(json.dumps(plan, indent=1))
-    print(llm.USAGE)

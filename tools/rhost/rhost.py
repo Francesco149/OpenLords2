@@ -104,6 +104,8 @@ def cmd_setup(a):
 
 
 def rhost_stale():
+    if os.environ.get("RHOST_NO_BUILD"):     # use the staged rhost as is (another agent's WIP in the shared tree)
+        return False
     exe = os.path.join(BUILD, "rhost.exe")
     if not os.path.exists(exe):
         return True
@@ -242,7 +244,8 @@ def wine_stage():
     for d in ("bin", "runs"):
         os.makedirs(os.path.join(WINE_ROOT, d), exist_ok=True)
     src, dst = os.path.join(BUILD, "rhost.exe"), os.path.join(WINE_ROOT, "bin", WEXE)
-    if not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(src):
+    if os.path.exists(src) and not os.environ.get("RHOST_NO_BUILD") and \
+            (not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(src)):
         tmp = f"{dst}.{os.getpid()}.new"
         shutil.copy2(src, tmp)
         os.replace(tmp, dst)
