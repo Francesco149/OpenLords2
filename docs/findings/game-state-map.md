@@ -161,6 +161,43 @@ Combat strength weights per class (DAT_004d4b98): 2 16 8 13 9 13 22 (`combat-res
 Minimap: 128x128 county-key grid at **0x52aff0**; pixel (x, y) is screen (480+x, 25+y) and an LMB
 there selects that county (FUN_0043253a) — live for all four Play Now counties.
 
+## Battlefield (screens 0x28–0x2b, game mode 2) — bot v3
+
+| field | VA | type | evidence |
+|---|---|---|---|
+| unit records 1..80 | 0x5544ac + i*0x1b0 | 432 B | live: +0 owner realm (6 = a county's militia), −0x0c / −0x0a i16 hex col / row (what the mover writes), −0x1a class (0 peasants … 5 archers), +5 action (5 idle at deploy, 3 marching, 8 charging after "Mop up"), +0x14c i16 formation |
+| camera col / row | 0x55ce70 / 0x5678a0 | i32 | live: (32,33) at entry; the minimap centres it on (hex − 7) |
+| grid origin x / y, hex size | 0x4e6558 / 0x4e6554, 0x4e656c | i32 | live: (0, 24), 32 px; 15 × 14 hexes visible (0x4e5d5c / 0x4e5d4c) |
+| paused | 0x53f238 | i32 | live: −1 on entering the field, 0 running (the hourglass FUN_0043b9a1 toggles it) |
+| men left, attacker / defender | 0x53f028 / 0x553c58 | i32 | live (83 / 179 → 0 / 146); attacker = piece 0x568210, defender = piece 0x568218 |
+| units selected | 0x553078 | i32 | live (21 after a box drag) |
+| enemy unit under the cursor | 0x5533b8 | i32 | decomp FUN_0047ed9b; an RMB then attacks it |
+| end-screen counter | 0x568470 | i32 | live: counts up on 0x2b, the exit at > 5000; an RMB sets 5001 |
+| siege battle | 0x53e8fc | i32 | decomp FUN_004a8aab (1 for an assault) |
+
+## Diplomacy and allies — bot v3
+
+| field | VA | type | evidence |
+|---|---|---|---|
+| realm +0x14 | 0x57bf14 + p*0x160 | i32 | avg troop strength (rankings); an ally helps only from 750 / 800 / 900 / 1000 by personality (table 0x4d8a88, FUN_004a3551) — live: the Countess 735 |
+| realm +0x81 | | u8 | alliance partner — live (1 ↔ 5 after the Countess's offer) |
+| realm +0x84 + q*0x10 | | i8 | attitude toward q; an ally answers a plea with the pay-for-help popup (type 10, msg 185) only from 10 up, and when 4·attitude ≤ the season's roll (0x58fd60, 0..127) — else 184 (help) / 183 (refused) |
+| realm +0x91 + q*0x10 | | u8 | gifts counter; the help price = it × 500/1000/1600/1500 by personality (0x4d8a64) — decomp |
+
+## Food (why bot games starve)
+
+`fed by dairy` = 5 × cattle (live: 505/101, 380/76, 325/65); a head eats 1 at normal rations (fed = population), ½
+at half, 2 at double. Retail covers any shortfall with meat — slaughtered cattle, at the default meat slider of 100 % —
+so a county whose population outgrows its herd's dairy eats the herd within a few seasons and starves (v2 bot2cen-s72:
+101 → 0 cattle in eight seasons at double rations; v3 bot3cen-s201 at normal: 65 → 4 once the population passed 650).
+
+## Realm events
+
+`engine_realm_roll_events` (0x448819): per county i after 1268, owner human, index v = (2 × the second RNG word's low 7
+bits (0x58fd60) + i) mod 256 into the event table 0x4d6108 (256 × u16; 26 non-zero entries, all at v ≡ 7 mod 8). So
+**only odd-numbered counties ever get an event** (~20 % a season each). Play Now's human county is 2 (Raw Sienna): it
+never rolls; the custom England start is county 13.
+
 ## Not found / gaps
 
 - Army morale (no field shown by the UI; piece +0x166 holds the origin county's happiness at
