@@ -175,6 +175,9 @@ should measure wrapper cost on one subsystem (suggest: the AI brain FSM, already
 
 ## 8. Checklist for you
 
+> **Owner, 2026-10-23 (after the pilot):** hybrid — easier to verify; once coverage is full or close, the
+> standalone happens automatically (`docs/findings/hybrid-pilot-ai.md`).
+>
 > **Owner, 2026-10-23:** audit approved — continue with this workflow; stop the idle decomp containers
 > (done: lords2-, sotes-, ys6-decomp); keep a list of interactions that need real UI play, hardest to
 > synthesize first (`docs/human-traces.md`).

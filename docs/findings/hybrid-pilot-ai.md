@@ -36,5 +36,7 @@ Commits `5e32afd`..`6d925ae`; wrappers `tools/rhost/rh_hooks_ai.c`.
 
 The binding is cheap once the save block is aliased, the shadow finds bugs the Frida-era claims missed, and
 replace mode already runs 89 port functions inside retail bit-exactly over the corpus. Standalone keeps the
-port's own data layout and would need a second set of adapters for every batch. **Owner decision** (audit
-§8 P1.1).
+port's own data layout and would need a second set of adapters for every batch.
+
+**Decision (owner, 2026-10-23): hybrid** — easier to verify; once coverage is full or close, the standalone
+port happens automatically.

@@ -135,6 +135,8 @@ claims are unverified until rhost re-checks them (`docs/audits/2026-10-23-method
   Windows ≡ wine bit for bit, control channel, porting loop (`rng_step`), IDA export, game-state reader,
   **autoplay** (Jev plays through rhost: 15 bot games in the corpus; retail coverage 37.1% → 44.6%),
   deterministic Smacker (`--movies`: the real boot sequence plays).
+  **Direction: hybrid** (owner, 2026-10-23) — port functions replace retail's inside rhost, verified one
+  by one; the standalone build falls out once coverage is (near) complete.
   **Hybrid pilot done** (`docs/findings/hybrid-pilot-ai.md`): 88/89 AI-realm-turn functions verified against
   retail (shadow + replace, 33 scenarios, 0 divergences); 2 real gameplay bugs fixed (#227, #228).
   `verify` now runs in nesting passes + a hybrid pass; shadow is page-tracked (cheap for hot leaves).

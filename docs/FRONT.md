@@ -6,6 +6,8 @@
   Windows ≡ wine bit for bit, control channel, porting loop (`rng_step`), IDA export, game-state reader,
   **autoplay** (Jev plays through rhost: 15 bot games in the corpus; retail coverage 37.1% → 44.6%),
   deterministic Smacker (`--movies`: the real boot sequence plays).
+  **Direction: hybrid** (owner, 2026-10-23) — port functions replace retail's inside rhost, verified one
+  by one; the standalone build falls out once coverage is (near) complete.
   **Hybrid pilot done** (`docs/findings/hybrid-pilot-ai.md`): 88/89 AI-realm-turn functions verified against
   retail (shadow + replace, 33 scenarios, 0 divergences); 2 real gameplay bugs fixed (#227, #228).
   `verify` now runs in nesting passes + a hybrid pass; shadow is page-tracked (cheap for hot leaves).
@@ -19,7 +21,7 @@
    Bless the best-coverage games; track `rhost.py coverage` as the bot's metric.
 2. **Re-verification batches**: extend the `rh_hooks_ai.c` closure, worst-first — combat resolver
    `FUN_004aad07` + army movement next, then realm events, trade / treasury, labor; `verify` evidence.
-3. ~~Hybrid pilot~~ done → owner decision below.
+3. ~~Hybrid pilot~~ done → hybrid chosen.
 4. **Movies in the corpus**: scenarios with `"movies": true` (rh_smack.c is deterministic) so the movie
    paths (intro → title, jail, victory/defeat) are exercised as a real user sees them.
 5. **Port build `-std=gnu11`** after an x87 sweep (openrecet's c11 long-double literal finding).
@@ -37,8 +39,6 @@
 - [ ] re-verify earlier "1:1" claims under rhost (batches)
 
 ## Human queue (ranked by what it unblocks)
-0. **Decide hybrid vs standalone** (audit §8 P1.1): the pilot recommends hybrid —
-   `docs/findings/hybrid-pilot-ai.md`. Re-verification batches proceed either way.
 1. **Record human traces** for what the bot can't reproduce — `docs/human-traces.md` §A first (interactive
    battles, sieges, a late-game campaign, the AI's diplomacy proposals, event decisions, natural mouse
    dynamics): `python3 tools/rhost/rhost.py record NAME [--from SCEN]` (normal window, never fullscreen;

@@ -18,6 +18,8 @@ python deps) — **every build/test command runs inside it**. **`ssh win`**: the
 on cutestation:2222, PowerShell) — rhost's `win` target, IDA 9.4. `ssh wslop` (WSL) is not needed.
 
 ## Methodology (2026-10-23 reset — `docs/audits/2026-10-23-methodology-reset.md`)
+**Product direction = hybrid** (owner, 2026-10-23): port functions replace retail's inside rhost, each
+verified on identical state; the standalone build falls out once coverage is (near) complete.
 **Verification foundation = rhost** (`tools/rhost/`, README): retail runs INSIDE our process with a
 software DirectDraw / DirectSound / window layer — deterministic, headless, never fullscreen. Same trace
 ⇒ same state hash, on Windows and wine alike (0 masked slots). No Frida, no anchors, no pins.
