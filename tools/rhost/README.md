@@ -14,7 +14,7 @@ python3 tools/rhost/rhost.py run endturn-2 --shot-every 300               # repl
 python3 tools/rhost/rhost.py det endturn-2 -n 3                           # determinism gate (dumps diffed)
 python3 tools/rhost/rhost.py corpus --check                               # every scenario vs expected.json
 python3 tools/rhost/rhost.py corpus --check --target wine                 # … on this host (expected.wine.json)
-python3 tools/rhost/rhost.py verify                                       # every scenario × every shadow hook
+python3 tools/rhost/rhost.py verify                                       # every hook, shadow by nesting pass + hybrid pass
 python3 tools/rhost/rhost.py corpus --check --hook replace:rng_step       # hybrid: port REPLACES retail
 python3 tools/rhost/rhost.py shots endturn-2 --at 1800:3600:300           # PNG + exact .idx index planes
 python3 tools/rhost/rhost.py record my-play [--from endturn-2]            # HUMAN PLAY on the Windows desktop
@@ -28,7 +28,9 @@ python3 tools/rhost/rhost.py coverage                                   # first-
 Results: `/mnt/ephemeral/openlords2/rhost-runs/<batch>/<run>/` (wine: `…/rhost-wine/root/runs/`) — `rhost.log`
 (last line `RESULT key=value …`), `shot_fNNNNNN.png`, `frame_fNNNNNN.idx` (640×480 index plane + palette),
 `state_*.rhs`, `status.txt` (retail's own log), the saves retail wrote. The driver rebuilds + restages when
-`tools/rhost/*` or linked `src/` files change.
+`tools/rhost/*` or linked `src/` files change (`RHOST_NO_BUILD=1`: never). Every batch runs its own copy of
+`build/rhost.exe` (in the batch dir), so a rebuild — another agent, the next `verify` pass — never swaps the
+binary under a running batch; `build.sh` holds a lock and renames the finished exe into place.
 
 ## Sharing the Windows box
 
@@ -85,11 +87,20 @@ Residual: **none measured** — `det` finds 0 differing dwords between runs (ful
 
 ## Hooks (`--hook shadow:NAME,replace:NAME` / `@file`)
 
-`rh_hooks.c` registry. **shadow**: snapshot (.data + arena + allocator metadata + virtual clock) → retail →
-restore → port → compare every state dword; retail's result is kept; a divergence logs the first differing
-VAs. **replace**: the port runs instead of retail (hybrid). Add a function = wrapper pair + table row +
-`VERIFY_HOOKS` in rhost.py. Port code is compiled with the port's own `-std` (build.sh `PORT_OBJS`).
+`rh_hooks.c` + `rh_hooks_*.c` tables (`rh_hooks.h`). **shadow**: retail and the port on the identical
+pre-state (.data + arena + allocator metadata + virtual clock), every state dword compared; retail's result
+is kept; a divergence logs the first differing VAs. The state is write-protected for the call and a vectored
+handler copies each page on its first write, so a call costs the pages it writes (`--shadow-full`: copy the
+whole ~5 MB instead; `--shadow-poison VA` plants a one-bit difference after every port call — both modes must
+report it). **replace**: the port runs instead of retail (hybrid). Add a function = adapter + table row
+(`rhost.py` reads the tables). Port code is compiled with the port's own `-std` (build.sh `PORT_OBJS`).
 A port function never calls its own retail VA.
+
+`verify`: a hook called inside another shadowed call runs retail there (`rh_in_shadow`), so the corpus is
+shadowed in passes — pass 1 every hook, pass N only the hooks no earlier pass reached (one nesting level
+each) — then the **hybrid pass**: every hook in replace mode at once, `corpus --check` against the blessed
+corpus. The whole corpus (no `--only`) writes `docs/rhost-evidence.json` (`depth` = the pass that reached
+the hook), which `tools/gen_port_ledger.py` renders into `docs/STATUS.md`.
 
 ## Control channel (`--bot HOST:PORT`, `rhbot.py`)
 

@@ -69,13 +69,20 @@ def evidence_block() -> str:
         ev = json.loads(EVIDENCE_JSON.read_text())
     except (OSError, ValueError):
         return "No rhost evidence recorded yet (`python3 tools/rhost/rhost.py verify`)."
-    ok = {k: v for k, v in ev.items() if v.get("calls", 0) > 0 and v.get("diverge", 1) == 0}
-    bad = {k: v for k, v in ev.items() if v.get("diverge", 0) > 0}
-    rows = [f"| `{k}` | `{v.get('va', '?')}` | {v['calls']} | {v['scenarios']} | {v['diverge']} | {v.get('date', '?')} |"
-            for k, v in sorted(ev.items())]
+    hooks, hyb = ev.get("hooks", ev), ev.get("hybrid")
+    ok = {k: v for k, v in hooks.items() if v.get("calls", 0) > 0 and v.get("diverge", 1) == 0}
+    bad = {k: v for k, v in hooks.items() if v.get("diverge", 0) > 0}
+    rows = [f"| `{k}` | `{v.get('va', '?')}` | {v.get('depth', '?')} | {v['calls']} | {v['scenarios']} | {v['diverge']} | "
+            f"{v.get('date', '?')} |" for k, v in sorted(hooks.items())]
+    hline = ""
+    if hyb:
+        hline = (f"Hybrid (all {hyb['hooks']} hooks replaced at once, {hyb['target']}, {hyb['date']}): corpus --check "
+                 + ("**PASS** on all " + str(hyb["corpus"]) + " scenarios." if not hyb["failing"]
+                    else f"**FAIL** on {', '.join(hyb['failing'])}.") + "\n\n")
     return (f"**{len(ok)} function(s) rhost-verified** (shadow: 0 divergences over the corpus), "
-            f"{len(bad)} diverging, of {len(ev)} hooked.\n\n"
-            "| hook | retail VA | calls | scenarios | diverge | date |\n|---|---|---:|---:|---:|---|\n" + "\n".join(rows))
+            f"{len(bad)} diverging, {len(hooks) - len(ok) - len(bad)} never called, of {len(hooks)} hooked. "
+            "Depth = the shadow pass that reached the hook (a hook nested in another runs retail there).\n\n" + hline +
+            "| hook | retail VA | depth | calls | scenarios | diverge | date |\n|---|---|---:|---:|---:|---:|---|\n" + "\n".join(rows))
 
 
 FUN_RE = re.compile(r"FUN_([0-9a-fA-F]{6,8})")

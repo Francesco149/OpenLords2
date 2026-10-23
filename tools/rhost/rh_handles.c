@@ -62,7 +62,8 @@ static DWORD WINAPI h_WaitForSingleObject(HANDLE h, DWORD ms) { return WaitForSi
 static BOOL WINAPI h_GetExitCodeThread(HANDLE h, LPDWORD c) { return GetExitCodeThread(real_of(h), c); }
 static BOOL WINAPI h_TerminateThread(HANDLE h, DWORD c) { return TerminateThread(real_of(h), c); }
 static BOOL WINAPI h_CloseHandle(HANDLE h) { BOOL r = CloseHandle(real_of(h)); rh_handle_forget(h); return r; }
-static BOOL WINAPI h_ReadFile(HANDLE h, LPVOID b, DWORD n, LPDWORD got, LPOVERLAPPED o) { return ReadFile(real_of(h), b, n, got, o); }
+static BOOL WINAPI h_ReadFile(HANDLE h, LPVOID b, DWORD n, LPDWORD got, LPOVERLAPPED o)
+{ rh_shadow_prewrite(b, n); rh_shadow_prewrite(got, 4); return ReadFile(real_of(h), b, n, got, o); }
 static BOOL WINAPI h_WriteFile(HANDLE h, LPCVOID b, DWORD n, LPDWORD put, LPOVERLAPPED o)
 {
     if (h == (HANDLE)(uintptr_t)1 || h == (HANDLE)(uintptr_t)2 || h == INVALID_HANDLE_VALUE) { if (put) *put = n; return TRUE; }
@@ -80,7 +81,7 @@ static BOOL WINAPI h_SetStdHandle(DWORD n, HANDLE h) { (void)n; (void)h; return 
 /* mmio: the HMMIO retail keeps in its stream records is a handle too */
 static HMMIO WINAPI h_mmioOpenA(LPSTR p, LPMMIOINFO info, DWORD fl) { return (HMMIO)fake_of((HANDLE)p_mmioOpenA(p, info, fl)); }
 static MMRESULT WINAPI h_mmioClose(HMMIO h, UINT fl) { MMRESULT r = mmioClose((HMMIO)real_of((HANDLE)h), fl); rh_handle_forget((HANDLE)h); return r; }
-static LONG WINAPI h_mmioRead(HMMIO h, HPSTR b, LONG n) { return mmioRead((HMMIO)real_of((HANDLE)h), b, n); }
+static LONG WINAPI h_mmioRead(HMMIO h, HPSTR b, LONG n) { rh_shadow_prewrite(b, n > 0 ? (size_t)n : 0); return mmioRead((HMMIO)real_of((HANDLE)h), b, n); }
 static LONG WINAPI h_mmioSeek(HMMIO h, LONG o, int org) { return mmioSeek((HMMIO)real_of((HANDLE)h), o, org); }
 static MMRESULT WINAPI h_mmioDescend(HMMIO h, LPMMCKINFO c, const MMCKINFO *p, UINT fl) { return mmioDescend((HMMIO)real_of((HANDLE)h), c, p, fl); }
 static MMRESULT WINAPI h_mmioAscend(HMMIO h, LPMMCKINFO c, UINT fl) { return mmioAscend((HMMIO)real_of((HANDLE)h), c, fl); }

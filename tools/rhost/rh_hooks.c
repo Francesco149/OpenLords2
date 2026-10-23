@@ -97,6 +97,7 @@ void rh_hooks_install(void)
 
 void rh_hooks_report(void)
 {
+    rh_shadow_report();
     for (int k = 0; k < NTAB; k++) for (int i = 0; i < TABLES[k].n; i++) {
         hook_t *h = &TABLES[k].t[i];
         if (h->mode == H_OFF) continue;

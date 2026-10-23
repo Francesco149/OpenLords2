@@ -49,6 +49,8 @@ typedef struct {
     int log_files, log_heap, log_input, log_dd, log_ds, log_win;
     const char *coverage;
     const char *hooks;
+    int shadow_full;            /* --shadow-full: shadow by copying the whole state (default: page-tracked) */
+    uint32_t shadow_poison;     /* --shadow-poison VA: flip a bit there after every shadowed port call (tests the diff) */
     uint32_t watch[16]; int n_watch;
     uint32_t step_ms;           /* virtual ms per frame */
     uint32_t creep_after;       /* clock reads without a frame before the clock creeps */
@@ -142,6 +144,9 @@ void rh_state_hash(rh_hash_t *h);
 int  rh_state_dump(const char *path);
 void rh_state_volatile_add(uint32_t va);
 int  rh_shadow_ex(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn);
+void rh_shadow_prewrite(const void *p, size_t n);   /* before a KERNEL write into retail memory (ReadFile, ...) */
+void rh_shadow_report(void);                         /* shadow-prof: per-phase cost per call */
+void rh_log_occupants(uint32_t lo, uint32_t hi);     /* what holds a fixed range (reservation failures) */
 
 /* rh_shot.c */
 void rh_shot(const char *tag);

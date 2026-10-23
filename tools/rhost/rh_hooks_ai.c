@@ -149,22 +149,25 @@ static void ai_sync_in(void)
     g_pf_cur_col = (int32_t)G32(0x507230u); g_pf_cur_row = (int32_t)G32(0x507234u);
     g_combat_active_terr = (int)G32(0x553f8cu); g_army_state_index = (int)G32(0x5533e8u);
 }
+/* store only what changed: an unchanged store is no state change, and under the page-tracked shadow every
+ * first write to a page is a fault (~30 us under wine) — sync_out alone touched ~15 pages a call */
+#define PUT(va, v) do { uint32_t v_ = (uint32_t)(v); if (G32(va) != v_) G32(va) = v_; } while (0)
 static void ai_sync_out(void)
 {
-    G32(0x55cd6cu) = (uint32_t)engine_army_economy_eval_cost();
-    G32(0x5656f0u) = (uint32_t)engine_army_economy_eval_revenue();
-    G32(0x57c904u) = (uint32_t)engine_army_economy_supply_pool_a();
-    G32(0x56d628u) = (uint32_t)engine_army_economy_supply_pool_b();
-    G32(0x591560u) = (uint32_t)g_path_dist_dx; G32(0x58fea0u) = (uint32_t)g_path_dist_dy;
-    G32(0x569570u) = (uint32_t)g_cell_cursor_col; G32(0x569578u) = (uint32_t)g_cell_cursor_row;
-    G32(0x52afe0u) = (uint32_t)engine_territory_current_slot();
-    G32(0x56d6a0u) = (uint32_t)engine_army_ai_ranking_dirty();
-    G32(0x50d09cu) = (uint32_t)s_dirty.dirty_mark; G32(0x50a4c4u) = (uint32_t)s_dirty.dirty_xmin; G32(0x50a4c8u) = (uint32_t)s_dirty.dirty_xmax;
-    G32(0x50a4bcu) = (uint32_t)s_dirty.dirty_ymin; G32(0x50a4c0u) = (uint32_t)s_dirty.dirty_ymax; G32(0x53e9acu) = (uint32_t)s_dirty.below_status_redraw;
-    G32(0x504020u) = (uint32_t)g_pf_src_col; G32(0x504024u) = (uint32_t)g_pf_src_row; G32(0x4f4070u) = (uint32_t)g_pf_src_cell;
-    G32(0x500c20u) = (uint32_t)g_pf_head; G32(0x4f2768u) = (uint32_t)g_pf_tail;
-    G32(0x507230u) = (uint32_t)g_pf_cur_col; G32(0x507234u) = (uint32_t)g_pf_cur_row;
-    G32(0x553f8cu) = (uint32_t)g_combat_active_terr; G32(0x5533e8u) = (uint32_t)g_army_state_index;
+    PUT(0x55cd6cu, (uint32_t)engine_army_economy_eval_cost());
+    PUT(0x5656f0u, (uint32_t)engine_army_economy_eval_revenue());
+    PUT(0x57c904u, (uint32_t)engine_army_economy_supply_pool_a());
+    PUT(0x56d628u, (uint32_t)engine_army_economy_supply_pool_b());
+    PUT(0x591560u, (uint32_t)g_path_dist_dx); PUT(0x58fea0u, (uint32_t)g_path_dist_dy);
+    PUT(0x569570u, (uint32_t)g_cell_cursor_col); PUT(0x569578u, (uint32_t)g_cell_cursor_row);
+    PUT(0x52afe0u, (uint32_t)engine_territory_current_slot());
+    PUT(0x56d6a0u, (uint32_t)engine_army_ai_ranking_dirty());
+    PUT(0x50d09cu, (uint32_t)s_dirty.dirty_mark); PUT(0x50a4c4u, (uint32_t)s_dirty.dirty_xmin); PUT(0x50a4c8u, (uint32_t)s_dirty.dirty_xmax);
+    PUT(0x50a4bcu, (uint32_t)s_dirty.dirty_ymin); PUT(0x50a4c0u, (uint32_t)s_dirty.dirty_ymax); PUT(0x53e9acu, (uint32_t)s_dirty.below_status_redraw);
+    PUT(0x504020u, (uint32_t)g_pf_src_col); PUT(0x504024u, (uint32_t)g_pf_src_row); PUT(0x4f4070u, (uint32_t)g_pf_src_cell);
+    PUT(0x500c20u, (uint32_t)g_pf_head); PUT(0x4f2768u, (uint32_t)g_pf_tail);
+    PUT(0x507230u, (uint32_t)g_pf_cur_col); PUT(0x507234u, (uint32_t)g_pf_cur_row);
+    PUT(0x553f8cu, (uint32_t)g_combat_active_terr); PUT(0x5533e8u, (uint32_t)g_army_state_index);
 }
 
 /* engine_event_queue: the port's queue is one struct; retail's is six globals (FUN_00472bc5 / FUN_00472ae0).
@@ -180,10 +183,12 @@ static engine_event_queue_state_t *evq_load(void)
 }
 static void evq_store(void)
 {
-    memcpy((void *)(uintptr_t)0x553510u, &s_evq.scratch, sizeof s_evq.scratch);
-    memcpy((void *)(uintptr_t)0x568480u, s_evq.ring, sizeof s_evq.ring);
-    G32(0x543fd0u) = (uint32_t)s_evq.write_idx; G32(0x553ec4u) = (uint32_t)s_evq.read_idx;
-    G32(0x565484u) = (uint32_t)s_evq.notify_flag; G32(0x57c954u) = (uint32_t)s_evq.consumer_cooldown;
+    if (memcmp((void *)(uintptr_t)0x553510u, &s_evq.scratch, sizeof s_evq.scratch))
+        memcpy((void *)(uintptr_t)0x553510u, &s_evq.scratch, sizeof s_evq.scratch);
+    if (memcmp((void *)(uintptr_t)0x568480u, s_evq.ring, sizeof s_evq.ring))
+        memcpy((void *)(uintptr_t)0x568480u, s_evq.ring, sizeof s_evq.ring);
+    PUT(0x543fd0u, (uint32_t)s_evq.write_idx); PUT(0x553ec4u, (uint32_t)s_evq.read_idx);
+    PUT(0x565484u, (uint32_t)s_evq.notify_flag); PUT(0x57c954u, (uint32_t)s_evq.consumer_cooldown);
 }
 #define EVQ(call) do { engine_event_queue_state_t *q = evq_load(); call; evq_store(); } while (0)
 #define MP_ACTIVE ((int)G32(0x553030u))   /* DAT_00553030 */

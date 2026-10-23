@@ -99,6 +99,26 @@ void *rh_fixed_alloc(size_t n)
     return memset(p, 0, n);
 }
 
+/* a fixed reservation failed: log what holds [lo, hi) — modules by path, private / mapped allocations by base
+ * (Windows places some per-process allocations at random; the log says which one got in the way) */
+void rh_log_occupants(uint32_t lo, uint32_t hi)
+{
+    for (uint32_t a = lo; a < hi; ) {
+        MEMORY_BASIC_INFORMATION mi;
+        if (!VirtualQuery((void *)(uintptr_t)a, &mi, sizeof mi)) break;
+        uint32_t b = (uint32_t)(uintptr_t)mi.BaseAddress, e = b + (uint32_t)mi.RegionSize;
+        if (mi.State != MEM_FREE) {
+            char path[MAX_PATH] = "";
+            if (mi.Type == MEM_IMAGE) GetModuleFileNameA((HMODULE)mi.AllocationBase, path, sizeof path);
+            rh_log("occupant %08x..%08x alloc %08x %s %s prot %08lx %s\n", b, e, (uint32_t)(uintptr_t)mi.AllocationBase,
+                   mi.State == MEM_COMMIT ? "commit" : "reserve",
+                   mi.Type == MEM_IMAGE ? "image" : mi.Type == MEM_MAPPED ? "mapped" : "private", (unsigned long)mi.Protect, path);
+        }
+        if (e <= a) break;
+        a = e;
+    }
+}
+
 /* ---- fixed-address main stack (retail stores stack addresses; TEB bounds for SEH) ---- */
 #define MAIN_STACK_LO 0x58000000u
 #define MAIN_STACK_HI 0x59000000u
@@ -106,7 +126,7 @@ void *rh_fixed_alloc(size_t n)
 static void stacks_init(void)
 {
     if (VirtualAlloc((void *)(uintptr_t)MAIN_STACK_LO, MAIN_STACK_HI - MAIN_STACK_LO, MEM_RESERVE, PAGE_READWRITE) != (void *)(uintptr_t)MAIN_STACK_LO)
-        rh_fatal("cannot reserve the fixed stack at %08x (err %lu)", MAIN_STACK_LO, GetLastError());
+        rh_log_occupants(MAIN_STACK_LO, MAIN_STACK_HI), rh_fatal("cannot reserve the fixed stack at %08x (err %lu)", MAIN_STACK_LO, GetLastError());
     if (!VirtualAlloc((void *)(uintptr_t)(MAIN_STACK_LO + STACK_GUARD), MAIN_STACK_HI - MAIN_STACK_LO - STACK_GUARD, MEM_COMMIT, PAGE_READWRITE))
         rh_fatal("cannot commit the fixed stack (err %lu)", GetLastError());
 }
@@ -436,7 +456,7 @@ static void usage(void)
     fprintf(stderr, "usage: rhost --exe Lords2.exe --game DIR --run DIR [--frames N] [--trace F] [--record F]\n"
                     "  [--dump-at F,..|end] [--shot-at F,..|end] [--shot-every N] [--fb-hash] [--hash-every N] [--log-every N]\n"
                     "  [--tail N] [--step-ms N] [--vbase MS] [--creep-after N] [--show] [--scale N] [--realtime] [--movies]\n"
-                    "  [--hook SPEC] [--coverage F] [--watch VA,..] [--trap VA,..] [--watch-write VA[@F],..] [--bot HOST:PORT] [--out-trace F]\n"
+                    "  [--hook SPEC] [--shadow-full] [--coverage F] [--watch VA,..] [--trap VA,..] [--watch-write VA[@F],..] [--bot HOST:PORT] [--out-trace F]\n"
                     "  [--log-files] [--log-heap] [--log-input] [--log-dd] [--log-ds] [--log-win]\n");
     ExitProcess(2);
 }
@@ -479,6 +499,8 @@ static void parse(int argc, char **argv)
         else if (!strcmp(a, "--realtime")) O.realtime = 1;
         else if (!strcmp(a, "--movies")) O.movies = 1;
         else if (!strcmp(a, "--hook")) O.hooks = ARG();
+        else if (!strcmp(a, "--shadow-full")) O.shadow_full = 1;
+        else if (!strcmp(a, "--shadow-poison")) O.shadow_poison = strtoul(ARG(), 0, 0);
         else if (!strcmp(a, "--coverage")) O.coverage = ARG();
         else if (!strcmp(a, "--bot")) O.bot = ARG();
         else if (!strcmp(a, "--no-arena")) O.no_arena = 1;
@@ -572,8 +594,8 @@ int main(int argc, char **argv)
     g_logf = fopen(lp, "w");
     g_log = stdout;
     g_vclock = O.vbase;
-    if (!O.no_arena && rh_heap_init()) rh_fatal("heap arena reservation failed");
-    if (rh_media_reserve()) rh_fatal("cannot reserve the media pool");
+    if (!O.no_arena && rh_heap_init()) rh_log_occupants(0x20000000u, 0x58000000u), rh_fatal("heap arena reservation failed");
+    if (rh_media_reserve()) rh_log_occupants(0x60000000u, 0x70000000u), rh_fatal("cannot reserve the media pool");
     stacks_init();
     GetFullPathNameA(O.gamedir, sizeof g_gamedir_abs, g_gamedir_abs, NULL);
     for (size_t l = strlen(g_gamedir_abs); l && g_gamedir_abs[l - 1] == '\\'; ) g_gamedir_abs[--l] = 0;

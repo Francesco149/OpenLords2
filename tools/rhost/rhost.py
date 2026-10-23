@@ -103,8 +103,11 @@ def cmd_setup(a):
     print(ssh_win(f"powershell -NoProfile -ExecutionPolicy Bypass -File {WROOT}\\install-runner.ps1"))
 
 
+_PINNED = False
+
+
 def rhost_stale():
-    if os.environ.get("RHOST_NO_BUILD"):     # use the staged rhost as is (another agent's WIP in the shared tree)
+    if os.environ.get("RHOST_NO_BUILD") or _PINNED:   # as is: another agent's WIP in the shared tree / a pinned exe
         return False
     exe = os.path.join(BUILD, "rhost.exe")
     if not os.path.exists(exe):
@@ -181,9 +184,18 @@ def rhost_args(a, run_win, trace_win, meta):
 
 def make_batch(a, runs, tag, root_local=None):
     """runs: list of (run_name, trace_path|None, meta).  Writes the batch dir + go.ps1 (Windows) / argv.json."""
-    batch = datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + tag
-    bdir = os.path.join(root_local or LOCAL_RUNS, batch)
-    os.makedirs(bdir)
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    for k in range(1000):   # parallel batches (agents) in the same second get -2, -3, ...
+        batch = f"{stamp}-{tag}" + (f"-{k + 1}" if k else "")
+        bdir = os.path.join(root_local or LOCAL_RUNS, batch)
+        try:
+            os.makedirs(bdir)
+            break
+        except FileExistsError:
+            continue
+    # the batch runs its OWN copy of the exe: a rebuild (another agent, the next pass) never swaps it mid-batch;
+    # a multi-batch command (verify) pins one exe for all its batches
+    shutil.copy2(getattr(a, "exe_pin", None) or os.path.join(BUILD, "rhost.exe"), os.path.join(bdir, WEXE))
     lines = ["$ErrorActionPreference = 'Continue'", f"$J = {max(1, a.jobs)}", "$procs = @()"]
     for name, trace, meta in runs:
         rdir = os.path.join(bdir, name)
@@ -211,7 +223,7 @@ def make_batch(a, runs, tag, root_local=None):
         open(os.path.join(rdir, "argv.json"), "w").write(json.dumps(args))
         ps_args = ",".join("'" + x.replace("'", "''") + "'" for x in args)
         lines.append(f"while (@($procs | Where-Object {{ !$_.HasExited }}).Count -ge $J) {{ Start-Sleep -Milliseconds 20 }}")
-        lines.append(f"$procs += Start-Process -FilePath '{WROOT}\\bin\\{WEXE}' -ArgumentList @({ps_args}) -PassThru "
+        lines.append(f"$procs += Start-Process -FilePath '{WROOT}\\runs\\{batch}\\{WEXE}' -ArgumentList @({ps_args}) -PassThru "
                      f"-WindowStyle Hidden -RedirectStandardOutput '{run_win}\\stdout.txt' -RedirectStandardError '{run_win}\\stderr.txt'")
     lines.append("$procs | ForEach-Object { $_.WaitForExit() }")
     for name, *_ in runs:
@@ -292,7 +304,7 @@ def run_batch_wine(a, runs, tag):
     def one(r):
         name = r[0]
         argv = json.load(open(os.path.join(bdir, name, "argv.json")))
-        out = subprocess.run(["wine", f"{WROOT}\\bin\\{WEXE}"] + argv, capture_output=True, text=True, env=env,
+        out = subprocess.run(["wine", f"{WROOT}\\runs\\{batch}\\{WEXE}"] + argv, capture_output=True, text=True, env=env,
                              timeout=getattr(a, "wine_timeout", 3600))
         open(os.path.join(bdir, name, "wine.out"), "w").write(out.stdout[-4000:] + out.stderr[-4000:])
         log = os.path.join(bdir, name, "rhost.log")
@@ -477,20 +489,16 @@ def cmd_corpus(a):
     print(f"CORPUS: {done}/{len(names)} complete; results in {bdir}")
     bad = 0
     tgt = getattr(a, "target", "win")
-    for n in names:
-        ep = os.path.join(SCEN, n, "expected.json" if tgt == "win" else f"expected.{tgt}.json")
-        r = res.get(n, {})
-        got = {k: r.get(k) for k in EXPECT_KEYS}
-        if a.bless:
+    if a.bless:
+        for n in names:
+            ep = os.path.join(SCEN, n, "expected.json" if tgt == "win" else f"expected.{tgt}.json")
+            r = res.get(n, {})
             if r.get("status") != "ok":
                 print(f"  {n}: not blessed (status {r.get('status')})"); bad += 1; continue
-            json.dump(got, open(ep, "w"), indent=1)
+            json.dump({k: r.get(k) for k in EXPECT_KEYS}, open(ep, "w"), indent=1)
             print(f"  {n}: blessed {os.path.relpath(ep, ROOT)}")
-        elif a.check:
-            if not os.path.exists(ep):
-                print(f"  {n}: NO expected.json (run --bless)"); bad += 1; continue
-            exp = json.load(open(ep))
-            diffs = [f"{k} {exp.get(k)}→{got.get(k)}" for k in EXPECT_KEYS if exp.get(k) != got.get(k)]
+    elif a.check:
+        for n, diffs in expected_diffs(names, res, tgt).items():
             print(f"  {n}: {'PASS' if not diffs else 'FAIL ' + '; '.join(diffs)}")
             bad += bool(diffs)
     if a.check:
@@ -510,39 +518,86 @@ def verify_hooks():
 VERIFY_HOOKS = verify_hooks()
 
 
+def expected_diffs(names, res, tgt):
+    """{scenario: ["key exp→got", ...]} against the blessed expected[.TARGET].json (missing file → one entry)"""
+    out = {}
+    for n in names:
+        ep = os.path.join(SCEN, n, "expected.json" if tgt == "win" else f"expected.{tgt}.json")
+        if not os.path.exists(ep):
+            out[n] = ["NO expected.json (run --bless)"]
+            continue
+        exp, r = json.load(open(ep)), res.get(n, {})
+        out[n] = [f"{k} {exp.get(k)}→{r.get(k)}" for k in EXPECT_KEYS if exp.get(k) != r.get(k)]
+    return out
+
+
 def cmd_verify(a):
+    """shadow every hook over the corpus, in passes: a hook called inside another shadowed call runs retail there
+    (rh_in_shadow), so pass 1 compares the outermost hooks, pass 2 shadows only the hooks pass 1 never reached
+    (the next nesting level), ... until a pass reaches nothing new. Then the hybrid pass: every hook in replace
+    mode at once must reproduce the blessed corpus bit-exactly (corpus --check)."""
+    global _PINNED
     names = all_scenarios(a.only)
     runs = resolve_runs(names)
-    a.hook = ",".join("shadow:" + h for h in VERIFY_HOOKS)
-    batch, bdir, res, out = run_batch(a, runs, "verify")
-    tot = {}
-    for n in names:
-        for note in res.get(n + "#notes", []):
-            m = re.match(r"hook-result (\S+) mode=\S+ calls=(\d+) diverge=(\d+) skipped=(\d+)", note)
-            if m:
-                t = tot.setdefault(m.group(1), [0, 0, 0, 0])
-                t[0] += int(m.group(2)); t[1] += int(m.group(3)); t[2] += int(m.group(4)); t[3] += int(m.group(2)) > 0
+    if rhost_stale():
+        cmd_build()
+    a.exe_pin = os.path.join(LOCAL_RUNS, f"verify-{os.getpid()}.exe")   # every pass runs this exact build
+    shutil.copy2(os.path.join(BUILD, "rhost.exe"), a.exe_pin)
+    _PINNED = True
+    tot, depth, todo, failed = {}, {}, list(VERIFY_HOOKS), []
+    for p in range(1, 17):
+        a.hook = ",".join("shadow:" + h for h in todo)
+        batch, bdir, res, out = run_batch(a, runs, f"verify{p}")
+        print(f"--- shadow pass {p}: {len(todo)} hook(s)")
+        print_results(res, names)
+        failed += [f"pass {p} {n}: {res.get(n, {}).get('status', 'NO RESULT')}" for n in names if res.get(n, {}).get("status") != "ok"]
+        # a shadow keeps retail's post-state: every pass must end exactly where the blessed corpus does
+        failed += [f"pass {p} {n}: end state ≠ corpus ({'; '.join(d)})" for n, d in expected_diffs(names, res, a.target).items()
+                   if [x for x in d if not x.startswith("fb ")]]
+        got = {}
+        for n in names:
+            for note in res.get(n + "#notes", []):
+                m = re.match(r"hook-result (\S+) mode=\S+ calls=(\d+) diverge=(\d+) skipped=(\d+)", note)
+                if m:
+                    t = got.setdefault(m.group(1), [0, 0, 0, 0])
+                    t[0] += int(m.group(2)); t[1] += int(m.group(3)); t[2] += int(m.group(4)); t[3] += int(m.group(2)) > 0
+        reached = [h for h in todo if got.get(h, [0])[0] > 0]
+        for h in reached:
+            tot[h], depth[h] = got[h], p
+        todo = [h for h in todo if h not in reached]
+        if not reached or not todo:
+            break
+    a.hook, a.fb_hash = ",".join("replace:" + h for h in VERIFY_HOOKS), True
+    batch, bdir, res, out = run_batch(a, runs, "verify-hybrid")
+    print(f"--- hybrid pass: {len(VERIFY_HOOKS)} hook(s) replaced, corpus --check")
     print_results(res, names)
-    print("\nhook                 calls  diverge  skipped  scenarios")
+    hyb = {n: d for n, d in expected_diffs(names, res, a.target).items() if d}
+    for n, d in hyb.items():
+        print(f"  {n}: FAIL {'; '.join(d)}")
+    print("\nhook                          depth    calls  diverge  skipped  scenarios")
     for h in VERIFY_HOOKS:
         t = tot.get(h, [0, 0, 0, 0])
-        print(f"{h:18s} {t[0]:8d} {t[1]:8d} {t[2]:8d} {t[3]:4d}/{len(names)}")
-    print("\nevidence lines:")
-    for h in VERIFY_HOOKS:
-        t = tot.get(h, [0, 0, 0, 0])
-        print(f"  {h}: rhost shadow: {t[0]} calls / {t[3]} scenarios, {t[1]} divergences")
-    if not a.only:   # the whole corpus: record the evidence (docs/STATUS.md's runtime axis)
+        print(f"{h:28s} {depth.get(h, '-'):>5} {t[0]:8d} {t[1]:8d} {t[2]:8d} {t[3]:4d}/{len(names)}")
+    for f in failed:
+        print(f"  RUN FAILED {f}")
+    print(f"\nVERIFY: {sum(1 for h in VERIFY_HOOKS if tot.get(h, [0, 0])[1] == 0 and h in tot)}/{len(VERIFY_HOOKS)} reached with "
+          f"0 divergences, {sum(1 for t in tot.values() if t[1])} diverging, {len(todo)} never called; "
+          f"hybrid {'PASS' if not hyb else f'FAIL ({len(hyb)})'}; {len(failed)} failed run(s)")
+    if not a.only and not failed:   # the whole corpus: record the evidence (docs/STATUS.md's runtime axis)
         src = "".join(open(os.path.join(HERE, f)).read() for f in os.listdir(HERE) if f.startswith("rh_hooks") and f.endswith(".c"))
         vas = dict(re.findall(r'\{\s*"(\w+)",\s*(0x[0-9a-fA-F]+)u', src))
         ep = os.path.join(ROOT, "docs", "rhost-evidence.json")
-        ev = json.load(open(ep)) if os.path.exists(ep) else {}
+        today = datetime.date.today().isoformat()
+        ev = {"hooks": {}, "hybrid": {"hooks": len(VERIFY_HOOKS), "corpus": len(names), "failing": sorted(hyb),
+                                      "target": a.target, "date": today}}
         for h in VERIFY_HOOKS:
             t = tot.get(h, [0, 0, 0, 0])
-            ev[h] = {"va": vas.get(h, "?"), "calls": t[0], "scenarios": t[3], "corpus": len(names), "diverge": t[1],
-                     "skipped": t[2], "target": a.target, "date": datetime.date.today().isoformat()}
+            ev["hooks"][h] = {"va": vas.get(h, "?"), "depth": depth.get(h, 0), "calls": t[0], "scenarios": t[3],
+                              "corpus": len(names), "diverge": t[1], "skipped": t[2], "target": a.target, "date": today}
         json.dump(ev, open(ep, "w"), indent=1, sort_keys=True)
         print(f"evidence → {os.path.relpath(ep, ROOT)}")
-    return 0 if all(tot.get(h, [0, 0])[1] == 0 for h in VERIFY_HOOKS) else 1
+    os.remove(a.exe_pin)
+    return 0 if not failed and not hyb and all(t[1] == 0 for t in tot.values()) else 1
 
 
 def function_table():

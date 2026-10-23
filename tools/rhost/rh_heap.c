@@ -47,6 +47,7 @@ typedef struct {
 } region_t;
 
 static CRITICAL_SECTION g_lk;
+static unsigned g_commit_gen;   /* bumped by every commit / free: rh_heap_ranges' cache key */
 static region_t R_SMALL = { SMALL_LO, SMALL_LO + SMALL_SZ, SMALL_LO, SMALL_LO, 0, 0, 0, 1 };
 static region_t R_LARGE = { LARGE_LO, LARGE_LO + LARGE_SZ, LARGE_LO, LARGE_LO, 0, 0, 0, 1 };
 static region_t R_VREG  = { VREG_LO,  VREG_LO + VREG_SZ,   VREG_LO,  VREG_LO,  0, 0, 0, 0 };
@@ -84,6 +85,7 @@ static void commit_to(region_t *r, uint32_t top)
     if (top <= r->committed) return;
     uint32_t want = (top + COMMIT_STEP - 1) & ~(COMMIT_STEP - 1);
     if (want > r->hi) want = r->hi;
+    g_commit_gen++;
     if (!VirtualAlloc((void *)(uintptr_t)r->committed, want - r->committed, MEM_COMMIT, PAGE_READWRITE))
         rh_fatal("rh_heap: commit %08x..%08x failed (err %lu)", r->committed, want, GetLastError());
     r->committed = want;
@@ -269,20 +271,25 @@ static LPVOID WINAPI my_VirtualAlloc(LPVOID a, SIZE_T n, DWORD type, DWORD prot)
         if (O.log_heap) rh_log("VirtualAlloc(NULL, %lu) = %08x caller %p (f%u)\n", (unsigned long)n, p, __builtin_return_address(0), g_frame);
         if (!p) return NULL;
         if (type & MEM_COMMIT) {
+            g_commit_gen++;
             if (!VirtualAlloc((void *)(uintptr_t)p, n, MEM_COMMIT, prot)) return NULL;
             memset((void *)(uintptr_t)p, 0, n);   /* recommitted pages may hold old data on some hosts */
         }
         return (void *)(uintptr_t)p;
     }
     if (in_region(&R_VREG, addr)) {
-        if (type & MEM_COMMIT) return VirtualAlloc(a, n, MEM_COMMIT, prot);
-        return a;
+        if (!(type & MEM_COMMIT)) return a;
+        g_commit_gen++;
+        rh_shadow_prewrite(a, n);   /* a recommit resets protection: open tracked pages first */
+        return VirtualAlloc(a, n, MEM_COMMIT, prot);
     }
+    g_commit_gen++;
     return VirtualAlloc(a, n, type, prot);
 }
 static BOOL WINAPI my_VirtualFree(LPVOID a, SIZE_T n, DWORD type)
 {
     uint32_t addr = (uint32_t)(uintptr_t)a;
+    g_commit_gen++;
     if (!in_region(&R_VREG, addr)) return VirtualFree(a, n, type);
     if (type & MEM_RELEASE) {
         lock();
@@ -364,8 +371,15 @@ void rh_heap_install(void)
  * allocation sequence) — for hashing / dumps / shadow snapshots */
 int rh_heap_ranges(uint32_t (*out)[2], int max)
 {
-    int n = 0;
+    /* the committed ranges change only where this file commits / frees: cache them per generation (the
+     * shadow asks twice a call, and the VirtualQuery walk costs ~50 us under wine) */
+    static uint32_t cache[4096][2]; static int ncache = -1, cmax; static unsigned cgen;
     if (!g_active) return 0;
+    if (ncache >= 0 && cgen == g_commit_gen && cmax == max && ncache <= 4096) {
+        memcpy(out, cache, ncache * sizeof *cache);
+        return ncache;
+    }
+    int n = 0;
     uint32_t a = ARENA_LO;
     while (a < ARENA_HI && n < max) {
         MEMORY_BASIC_INFORMATION mi;
@@ -378,6 +392,7 @@ int rh_heap_ranges(uint32_t (*out)[2], int max)
         }
         a = hi;
     }
+    if (n <= 4096) { memcpy(cache, out, n * sizeof *cache); ncache = n; cmax = max; cgen = g_commit_gen; }
     return n;
 }
 
