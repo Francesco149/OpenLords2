@@ -23,6 +23,25 @@ static uint32_t g_size;
 #define WQ 64
 static struct { LPWAVEHDR h; uint64_t due_us; } g_wq[WQ]; static int g_nwq;
 static uint32_t g_wo_avg = 11025; static uint64_t g_wo_tail_us;
+/* --audible: a copy of every buffer also goes to a real device (side channel; pacing stays virtual) */
+static HWAVEOUT g_real; static WAVEHDR g_rh[32]; static uint8_t *g_rbuf[32]; static int g_rhead;
+static void real_open(LPCWAVEFORMATEX f)
+{
+    if (!O.audible || !f) return;
+    if (g_real) { waveOutReset(g_real); waveOutClose(g_real); g_real = NULL; }
+    if (waveOutOpen(&g_real, WAVE_MAPPER, f, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR) { g_real = NULL; return; }
+    for (int i = 0; i < 32; i++) { if (!g_rbuf[i]) g_rbuf[i] = malloc(65536); memset(&g_rh[i], 0, sizeof g_rh[i]); }
+}
+static void real_write(const WAVEHDR *w)
+{
+    if (!g_real || w->dwBufferLength > 65536) return;
+    WAVEHDR *h = &g_rh[g_rhead];
+    if (h->dwFlags & WHDR_PREPARED) { if (!(h->dwFlags & WHDR_DONE)) return; waveOutUnprepareHeader(g_real, h, sizeof *h); }
+    memcpy(g_rbuf[g_rhead], w->lpData, w->dwBufferLength);
+    memset(h, 0, sizeof *h); h->lpData = (LPSTR)g_rbuf[g_rhead]; h->dwBufferLength = w->dwBufferLength;
+    waveOutPrepareHeader(g_real, h, sizeof *h); waveOutWrite(g_real, h, sizeof *h);
+    g_rhead = (g_rhead + 1) % 32;
+}
 static uint64_t now_us(void) { return (uint64_t)rh_vnow() * 1000u; }
 static void wo_complete(int all)
 {
@@ -40,6 +59,7 @@ static MMRESULT WINAPI wo_Open(LPHWAVEOUT h, UINT id, LPCWAVEFORMATEX f, DWORD_P
     if (fl & WAVE_FORMAT_QUERY) return MMSYSERR_NOERROR;
     g_wo_avg = f && f->nAvgBytesPerSec ? f->nAvgBytesPerSec : 11025;
     g_wo_tail_us = now_us(); g_nwq = 0;
+    real_open(f);
     if (h) *h = (HWAVEOUT)(uintptr_t)0x0a110001u;
     return MMSYSERR_NOERROR;
 }
@@ -56,9 +76,10 @@ static MMRESULT WINAPI wo_Write(HWAVEOUT h, LPWAVEHDR w, UINT n)
     g_wo_tail_us = start + (uint64_t)w->dwBufferLength * 1000000u / g_wo_avg;
     w->dwFlags = (w->dwFlags | WHDR_INQUEUE) & ~WHDR_DONE;
     g_wq[g_nwq].h = w; g_wq[g_nwq++].due_us = g_wo_tail_us;
+    real_write(w);
     return MMSYSERR_NOERROR;
 }
-static MMRESULT WINAPI wo_Reset(HWAVEOUT h) { (void)h; wo_complete(1); return MMSYSERR_NOERROR; }
+static MMRESULT WINAPI wo_Reset(HWAVEOUT h) { (void)h; wo_complete(1); if (g_real) waveOutReset(g_real); return MMSYSERR_NOERROR; }
 static MMRESULT WINAPI wo_SetVolume(HWAVEOUT h, DWORD v) { (void)h; (void)v; return MMSYSERR_NOERROR; }
 static MMRESULT WINAPI wo_GetID(HWAVEOUT h, LPUINT id) { (void)h; if (id) *id = 0; return MMSYSERR_NOERROR; }
 
