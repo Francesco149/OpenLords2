@@ -106,6 +106,8 @@ uint32_t rh_handles_issued(void);
 HANDLE rh_handle_fake(HANDLE real);
 HANDLE rh_handle_real(HANDLE h);
 void rh_handle_forget(HANDLE h);
+void *rh_handles_meta_save(void);          /* fake-handle sequence (free with free()) */
+void rh_handles_meta_restore(const void *m);
 
 /* rh_media.c — the fixed media pool (surfaces, sound buffers) */
 int  rh_media_reserve(void);
@@ -113,6 +115,8 @@ void *rh_media_alloc(uint32_t n);
 void rh_media_free(void *p);
 int  rh_media_in_pool(uint32_t v);
 uint32_t rh_media_used(void);
+void *rh_media_meta_save(void);            /* allocator state (free with free()) */
+void rh_media_meta_restore(const void *m);
 
 /* rh_ddraw.c — software DirectDraw (8 bpp) */
 HRESULT WINAPI rh_DirectDrawCreate(GUID *g, void **out, void *outer);
@@ -125,6 +129,8 @@ void rh_mm_install(void);
 void rh_mm_frame(void);        /* fire due timeSetEvent callbacks (main thread, frame boundary) */
 void rh_ds_report(void);
 void rh_ds_mix(void);          /* --audible: this frame's audio to waveOut (reads only) */
+void *rh_ds_meta_save(void);               /* serials, live registry, timers (free with free()) */
+void rh_ds_meta_restore(const void *m);
 
 /* rh_win.c — virtual window, message queue, input trace, recorder, visible presenter */
 #define RH_FAKE_HWND 0x00020c2eu

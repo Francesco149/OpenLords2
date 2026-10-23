@@ -330,3 +330,22 @@ void rh_ds_report(void)
 {
     rh_log("dsound: buffers=%u plays=%u locks=%u mmtimer-fires=%u unimpl=%ld\n", g_serial, g_nplay, g_nlock, g_nfire, g_unimpl);
 }
+
+/* host-side meta (buffer serials, the live-buffer registry, the virtual timers): see rh_media_meta_save */
+typedef struct { ds_buf *live[MAXB]; int nlive; uint32_t serial, nplay, nlock, tid, nfire; long ngcp, unimpl;
+                 __typeof__(g_t) t; } ds_meta_t;
+void *rh_ds_meta_save(void)
+{
+    ds_meta_t *m = malloc(sizeof *m);
+    memcpy(m->live, g_live, g_nlive * sizeof *g_live); m->nlive = g_nlive;
+    m->serial = g_serial; m->nplay = g_nplay; m->nlock = g_nlock; m->tid = g_tid; m->nfire = g_nfire;
+    m->ngcp = g_ngcp; m->unimpl = g_unimpl; memcpy(m->t, g_t, sizeof g_t);
+    return m;
+}
+void rh_ds_meta_restore(const void *p)
+{
+    const ds_meta_t *m = p;
+    memcpy(g_live, m->live, m->nlive * sizeof *g_live); g_nlive = m->nlive;
+    g_serial = m->serial; g_nplay = m->nplay; g_nlock = m->nlock; g_tid = m->tid; g_nfire = m->nfire;
+    g_ngcp = m->ngcp; g_unimpl = m->unimpl; memcpy(g_t, m->t, sizeof g_t);
+}

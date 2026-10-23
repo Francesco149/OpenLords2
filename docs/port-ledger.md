@@ -462,9 +462,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x465622 | FUN_00465622 | 319 | engine_army_state.c |
 | 0x465761 | FUN_00465761 | 319 | engine_army_state.c |
 | 0x4658c1 | FUN_004658c1 | 1112 | engine_army_move.c, engine_army_move.h |
-| 0x465d28 | FUN_00465d28 | 1441 | engine_army_move.c, engine_army_move.h, engine_army_state.c (+2) |
+| 0x465d28 | FUN_00465d28 | 1441 | engine_army_move.c, engine_army_move.h, engine_army_state.c (+3) |
 | 0x46634d | FUN_0046634d | 1002 | engine_army_move.c, engine_army_move.h |
-| 0x46673c | FUN_0046673c | 343 | engine_army_move.c |
+| 0x46673c | FUN_0046673c | 343 | engine_army_move.c, engine_army_move.h |
 | 0x466893 | FUN_00466893 | 900 | engine_army_move.c, engine_army_move.h, game_init.c |
 | 0x466c3c | FUN_00466c3c | 328 | engine_army_move.c, engine_army_move.h |
 | 0x466d84 | FUN_00466d84 | 995 | engine_army_move.c, engine_army_move.h |
@@ -503,7 +503,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x469b8d | FUN_00469b8d | 404 | engine_army_economy.c, engine_territory.c, engine_territory.h (+1) |
 | 0x469d21 | FUN_00469d21 | 237 | engine_territory.c, engine_territory.h |
 | 0x469e0e | FUN_00469e0e | 72 | engine_army_move.c, engine_army_move.h, engine_army_move_confirm.c (+1) |
-| 0x469e5b | FUN_00469e5b | 476 | engine_army_move.c |
+| 0x469e5b | FUN_00469e5b | 476 | engine_army_move.c, engine_army_move.h |
 | 0x46a037 | FUN_0046a037 | 202 | engine_minimap.c, engine_minimap.h, game_init.c (+1) |
 | 0x46ac22 | FUN_0046ac22 | 329 | engine_territory.c, engine_territory.h |
 | 0x46c080 | FUN_0046c080 | 199 | engine_territory.c, engine_territory.h |

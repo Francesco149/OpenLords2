@@ -132,3 +132,23 @@ void rh_handles_install(void)
 
 long rh_handles_live(void) { return g_live; }
 uint32_t rh_handles_issued(void) { return g_next; }
+
+/* handle-sequence meta (see rh_media_meta_save): the fake numbers issued so far and their real handles. A real
+ * handle opened by a discarded run is dropped (leaked to the OS), never closed twice. */
+typedef struct { uint32_t next; long live; HANDLE real[]; } handles_meta_t;
+void *rh_handles_meta_save(void)
+{
+    EnterCriticalSection(&g_lk);
+    handles_meta_t *m = malloc(sizeof *m + g_next * sizeof(HANDLE));
+    m->next = g_next; m->live = g_live; memcpy(m->real, g_real, g_next * sizeof(HANDLE));
+    LeaveCriticalSection(&g_lk);
+    return m;
+}
+void rh_handles_meta_restore(const void *p)
+{
+    const handles_meta_t *m = p;
+    EnterCriticalSection(&g_lk);
+    for (uint32_t k = m->next; k < g_next; k++) g_real[k] = NULL;
+    memcpy(g_real, m->real, m->next * sizeof(HANDLE)); g_next = m->next; g_live = m->live;
+    LeaveCriticalSection(&g_lk);
+}

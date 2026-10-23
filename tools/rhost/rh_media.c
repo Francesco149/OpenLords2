@@ -77,3 +77,24 @@ void rh_media_free(void *ptr)
         }
     LeaveCriticalSection(&g_lk);
 }
+
+/* allocator meta (the shadow: a port run that calls back into retail code which allocates media must start from
+ * the allocator state retail's run started from; rh_hooks_ai.c rh_port_run, like rh_heap_meta_*) */
+typedef struct { int nf, nl; uint32_t top, used; span_t sp[]; } media_meta_t;
+void *rh_media_meta_save(void)
+{
+    EnterCriticalSection(&g_lk);
+    media_meta_t *m = malloc(sizeof *m + (size_t)(g_nfree + g_nlive) * sizeof(span_t));
+    m->nf = g_nfree; m->nl = g_nlive; m->top = g_top; m->used = g_used;
+    memcpy(m->sp, g_free, g_nfree * sizeof(span_t)); memcpy(m->sp + g_nfree, g_live, g_nlive * sizeof(span_t));
+    LeaveCriticalSection(&g_lk);
+    return m;
+}
+void rh_media_meta_restore(const void *p)   /* g_committed stays: pages stay committed */
+{
+    const media_meta_t *m = p;
+    EnterCriticalSection(&g_lk);
+    g_nfree = m->nf; g_nlive = m->nl; g_top = m->top; g_used = m->used;
+    memcpy(g_free, m->sp, g_nfree * sizeof(span_t)); memcpy(g_live, m->sp + g_nfree, g_nlive * sizeof(span_t));
+    LeaveCriticalSection(&g_lk);
+}
