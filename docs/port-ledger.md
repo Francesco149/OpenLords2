@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **946** (38.7%) — tested 828, ported 118
-- code bytes touched: **48.5%** (406,546 / 838,629 B)
-- unported: **1501**
+- touched: **954** (39.0%) — tested 828, ported 126
+- code bytes touched: **48.7%** (408,626 / 838,629 B)
+- unported: **1493**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (828) — ported + host unit suite
@@ -850,7 +850,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (118) — reimplemented, no host test yet
+## ported (126) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -941,6 +941,14 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x456fd8 | FUN_00456fd8 | 4305 | drawb_stripb_456fd8.h |
 | 0x4580a9 | FUN_004580a9 | 4527 | drawb_stripb_4580a9.h |
 | 0x459258 | FUN_00459258 | 4377 | drawb_stripb_459258.h |
+| 0x463b42 | FUN_00463b42 | 196 | blit_table_463b42.h |
+| 0x463c06 | FUN_00463c06 | 92 | blit_table_463c06.h |
+| 0x463c62 | FUN_00463c62 | 92 | blit_table_463c62.h |
+| 0x463cbe | FUN_00463cbe | 467 | drawb_table_463cbe.h |
+| 0x463e91 | FUN_00463e91 | 276 | drawb_table_463e91.h |
+| 0x463fa5 | FUN_00463fa5 | 273 | drawb_table_463fa5.h |
+| 0x4640b6 | FUN_004640b6 | 339 | drawb_stripb_4640b6.h |
+| 0x464209 | FUN_00464209 | 345 | drawb_stripb_464209.h |
 | 0x472e46 | FUN_00472e46 | 595 | engine.c |
 | 0x47309e | FUN_0047309e | 10915 | engine.c |
 | 0x476a5d | FUN_00476a5d | 74 | engine.c |

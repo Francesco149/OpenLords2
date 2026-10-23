@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 828,
-  "ported": 118,
-  "unported": 1501,
+  "ported": 126,
+  "unported": 1493,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 946,
-  "pct_touched": 38.7,
+  "touched": 954,
+  "pct_touched": 39.0,
   "pct_tested": 33.8,
   "bytes_total": 838629,
-  "bytes_touched": 406546,
-  "pct_bytes_touched": 48.5
+  "bytes_touched": 408626,
+  "pct_bytes_touched": 48.7
  },
  "orphan_refs": [
   "0x004148",
@@ -11926,64 +11926,80 @@
    "name": "FUN_00463b42",
    "size": 196,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gen/blit_table_463b42.h"
+   ]
   },
   {
    "va": "0x463c06",
    "name": "FUN_00463c06",
    "size": 92,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gen/blit_table_463c06.h"
+   ]
   },
   {
    "va": "0x463c62",
    "name": "FUN_00463c62",
    "size": 92,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gen/blit_table_463c62.h"
+   ]
   },
   {
    "va": "0x463cbe",
    "name": "FUN_00463cbe",
    "size": 467,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gen/drawb_table_463cbe.h"
+   ]
   },
   {
    "va": "0x463e91",
    "name": "FUN_00463e91",
    "size": 276,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gen/drawb_table_463e91.h"
+   ]
   },
   {
    "va": "0x463fa5",
    "name": "FUN_00463fa5",
    "size": 273,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gen/drawb_table_463fa5.h"
+   ]
   },
   {
    "va": "0x4640b6",
    "name": "FUN_004640b6",
    "size": 339,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gen/drawb_stripb_4640b6.h"
+   ]
   },
   {
    "va": "0x464209",
    "name": "FUN_00464209",
    "size": 345,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/gen/drawb_stripb_464209.h"
+   ]
   },
   {
    "va": "0x464362",

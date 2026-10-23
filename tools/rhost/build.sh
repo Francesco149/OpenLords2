@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Build rhost.exe into build/rhost/. The host links at 0x200000 without ASLR so retail's 0x400000..
+# range is ours (a .bss hole reserves it; rhost.x puts .bss FIRST, so code growth never pushes it).
+# Port code for hooks is compiled with the port's own -std (src/Makefile CFLAGS).
+set -euo pipefail
+ROOT=$(cd "$(dirname "$0")/../.." && pwd); S=$ROOT/src; H=$ROOT/tools/rhost; B=$ROOT/build/rhost
+CC=${RHOST_CC:-i686-w64-mingw32-gcc}
+LDF=(-Wl,--image-base,0x200000 -Wl,--large-address-aware -Wl,--disable-dynamicbase -Wl,-T,"$H/rhost.x" -static-libgcc -static)
+PORT_STD=${PORT_STD:-$(sed -n 's/^CFLAGS *?= *\(-std=[a-z0-9]*\).*/\1/p' "$S/Makefile")}
+mkdir -p "$B"
+# port modules linked in for --hook (only pure / retail-layout ones: no Win32 side effects at load)
+PORT_OBJS=()
+for f in engine_rng; do
+    $CC $PORT_STD -O2 -fno-omit-frame-pointer -I"$S" -include "$H/rh_hostalloc.h" -DUNICODE=0 -D_UNICODE=0 -c -o "$B/$f.o" "$S/$f.c"
+    PORT_OBJS+=("$B/$f.o")
+done
+$CC -std=gnu11 -O2 -Wall -I"$H" -c -o "$B/rh_hostalloc.o" "$H/rh_hostalloc.c"
+LINK=($CC -std=gnu11 -O2 -g -Wall -Wno-unused-function -Wno-format-truncation -Wno-cast-function-type -Wno-misleading-indentation
+      -I"$S" -I"$H" -include "$H/rh_hostalloc.h" "${LDF[@]}" -o "$B/rhost.exe"
+      "$H"/rhost.c "$H"/rh_heap.c "$H"/rh_media.c "$H"/rh_files.c "$H"/rh_handles.c "$H"/rh_state.c "$H"/rh_shot.c
+      "$H"/rh_ddraw.c "$H"/rh_dsound.c "$H"/rh_win.c "$H"/rh_hooks.c "$H"/rh_bot.c
+      "$B/rh_hostalloc.o" "${PORT_OBJS[@]}" -luser32 -lgdi32 -lwinmm -lws2_32)
+"${LINK[@]}"
+# a FIXED SizeOfImage: the system allocations Windows / wine place right after the image must not
+# move when rhost grows — pad .bss up to IMG_SIZE, relink
+IMG_SIZE=0x1000000
+img_size() { python3 -c "import struct,sys; b=open(sys.argv[1],'rb').read(4096); pe=struct.unpack_from('<I',b,0x3c)[0]; print(struct.unpack_from('<I',b,pe+80)[0])" "$1"; }
+CUR=$(img_size "$B/rhost.exe")
+PAD=$(( IMG_SIZE - CUR ))
+if (( PAD < 0 )); then echo "rhost.exe SizeOfImage $(printf 0x%x $CUR) > $IMG_SIZE: raise IMG_SIZE" >&2; exit 1; fi
+if (( PAD > 0 )); then
+    for try in 1 2 3; do
+        echo "unsigned char rh_img_pad[$PAD] __attribute__((used, aligned(4096)));" > "$B/rh_pad.c"
+        $CC -c -o "$B/rh_pad.o" "$B/rh_pad.c"
+        "${LINK[@]}" "$B/rh_pad.o"
+        NOW=$(img_size "$B/rhost.exe")
+        (( NOW == IMG_SIZE )) && break
+        PAD=$(( PAD + IMG_SIZE - NOW ))
+    done
+    (( NOW == IMG_SIZE )) || { echo "rhost.exe: cannot pin SizeOfImage ($(printf 0x%x $NOW))" >&2; exit 1; }
+fi
+HOLE=$(i686-w64-mingw32-nm "$B/rhost.exe" | awk '$3=="_g_retail_hole"{print $1}')
+if (( 0x$HOLE > 0x400000 )); then echo "rhost.exe: .bss starts past 0x400000 (hole at 0x$HOLE): retail cannot map" >&2; exit 1; fi
+if (( 0x$HOLE + 0x480000 < 0x5e9000 )); then echo "rhost.exe: hole 0x$HOLE+0x480000 does not cover retail's image" >&2; exit 1; fi
+echo "built $B/rhost.exe (port std: $PORT_STD, SizeOfImage pinned $IMG_SIZE, retail hole from 0x$HOLE)"
