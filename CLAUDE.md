@@ -27,9 +27,11 @@ software DirectDraw / DirectSound / window layer — deterministic, headless, ne
    `docs/decompiled/all.c` (Ghidra) is secondary (drops x87 operands). Engine quirks:
    `docs/findings/engine-quirks.md`; per-subsystem RE: `docs/findings/INDEX.md`.
 2. **Write** the C port (retail semantics). An existing pure in/out port gets a retail-layout wrapper.
-3. **Verify vs retail on identical state:** wrapper + row in `tools/rhost/rh_hooks.c` (+ `VERIFY_HOOKS`
-   in rhost.py) → `rhost.py verify` (shadow) and `rhost.py corpus --check --hook replace:NAME` (hybrid,
-   state + every presented frame). A port function never calls its own retail VA.
+3. **Verify vs retail on identical state:** adapter + row in a `tools/rhost/rh_hooks*.c` table (rhost.py
+   reads the tables) → `rhost.py verify` (shadow per nesting pass, then the hybrid pass: every hook replaced,
+   `corpus --check` — state + every presented frame). Iterate with `--target wine --only RE` (no evidence
+   written). A port function never calls its own retail VA. Pattern + binding: `rh_hooks_ai.c`,
+   `docs/findings/hybrid-pilot-ai.md`.
 4. **Commit with an evidence line:** `rhost shadow: N calls / K scenarios, 0 divergences; replace:
    corpus --check PASS` (or the divergence + why).
 

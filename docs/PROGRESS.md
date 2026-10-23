@@ -7,6 +7,21 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-10-23 — Hybrid pilot: the AI realm turn verified against retail; verify tooling for batches
+
+`docs/findings/hybrid-pilot-ai.md`. 88 of 89 hooked AI-realm-turn functions (brain FSM + movement, economy
+model, realm passes) verified under rhost — shadow and replace, 33 scenarios, 0 divergences — and two real
+gameplay bugs the Frida-era "BYTE-EXACT" claims had missed are fixed: a spawned unit's roster slot keyed by
+the realm instead of the owner (#227), rebellions never firing (#228); retail's scratch globals are live state
+(#226). Binding cost ~3 lines a function once the save block is aliased at retail VAs. Recommendation:
+hybrid (owner decision pending).
+
+Tooling for the batches that follow: `verify` shadows in nesting passes (with every hook active, 47 of 89 were
+nested inside another shadowed call and never compared) and ends with a hybrid pass (all hooks replaced,
+`corpus --check`); shadow is page-tracked (write-protect, copy a page on first write) instead of copying ~5 MB
+four times a call; `--shadow-poison` proves both shadow paths report a planted difference; `build.sh` locks
+and renames the finished exe into place; every batch runs its own exe copy; batch names are unique.
+
 ## 2026-10-23 — METHODOLOGY RESET: retail runs in-process (rhost); autoplay with Jev
 
 The owner asked to bring the openrecet methodology here. Audit + plan: `docs/audits/2026-10-23-methodology-reset.md`.
