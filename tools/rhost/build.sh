@@ -14,10 +14,11 @@ OUT=$B/rhost.$$.exe   # linked aside, renamed over rhost.exe when complete: stag
 shopt -s nullglob
 SUB_HOOKS=("$H"/rh_hooks_*.c)   # subsystem hook tables (rh_hooks.h)
 # port modules linked in for --hook (only pure / retail-layout ones: no Win32 side effects at load)
-# engine_rng: rh_hooks.c. The AI realm turn closure (rh_hooks_ai.c) + battle / army movement (rh_hooks_combat.c):
-# engine_army_ai/_economy/realm/combat/army_move and what they reach, CUT at game_init / engine / main / engine_turn
-# (bridged in rh_hooks_ai.c / rh_hooks_combat.c); save.c, save_schema_globals.c, engine_combat_globals.c are NOT
-# linked — rh_hooks_ai.c / rh_hooks_combat.c alias their globals to retail's VAs.
+# engine_rng: rh_hooks.c. The hybrid closure (rh_hooks_ai / _combat / _state / _events / _battle.c): engine_army_ai/
+# _economy/realm/combat/army_move/army_state/realm_events and what they reach, CUT at game_init / engine / main /
+# engine_turn (bridged in the tables). Modules that only DEFINE retail globals — save.c, save_schema_globals.c,
+# engine_combat_globals.c, engine_realm_globals.c — are NOT linked: the tables alias those globals to retail's VAs
+# (and engine.c's g_engine_state → 0x52af94, rh_hooks_battle.c).
 PORT_OBJS=(); PIDS=()
 for f in engine_rng \
          engine_army_ai engine_army_economy engine_realm engine_combat engine_army_move call_trace engine_army_state engine_camera \

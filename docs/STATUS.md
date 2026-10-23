@@ -199,8 +199,11 @@ claims are unverified until rhost re-checks them (`docs/audits/2026-10-23-method
   **Hybrid pilot done** (`docs/findings/hybrid-pilot-ai.md`): 88/89 AI-realm-turn functions verified against
   retail (shadow + replace, 33 scenarios, 0 divergences); 2 real gameplay bugs fixed (#227, #228).
   `verify` now runs in nesting passes + a hybrid pass; shadow is page-tracked (cheap for hot leaves).
-  **Batch 2 done** (`docs/findings/hybrid-batch2-combat.md`): battle resolver + army movement, 50/59 reached,
-  0 divergences, #229–#231; hybrid pass = 149 hooks replaced, corpus bit-exact.
+  **Batches 2–3 done** (`docs/findings/hybrid-batch2-combat.md`, `hybrid-batch3.md`): battle resolver, army
+  movement, army-state machine, battle exits + siege assault, realm events + season passes — **196 hooks,
+  162 reached, 0 divergences** (36 scenarios), hybrid pass bit-exact; quirks #229–#235.
+  **Bot v2** (Jev, ~$0.19): sieges, quick battles, mercenaries, garrisons, AI alliance offers, event popups →
+  3 scenarios; coverage 46.4% → 48.8%.
 - **Top blocker:** none for logic parity. Smacker movies are skipped in rhost (retail tolerates it).
 
 ## Where to read next
