@@ -502,6 +502,63 @@ def cmd_verify(a):
     return 0 if all(tot.get(h, [0, 0])[1] == 0 for h in VERIFY_HOOKS) else 1
 
 
+def function_table():
+    """retail functions → {va: (name, size)}: the IDA export if present, else the Ghidra functions.csv"""
+    fn = {}
+    ida = os.path.join(EPH, "decompiled-ida", "functions_ida.tsv")
+    if os.path.exists(ida):
+        hdr = None
+        for line in open(ida):
+            parts = line.rstrip("\n").split("\t")
+            if hdr is None:
+                hdr = parts
+                continue
+            r = dict(zip(hdr, parts))
+            try:
+                fn[int(r.get("va") or r.get("ea"), 16)] = (r.get("name", ""), int(r.get("size", "0"), 0))
+            except (ValueError, TypeError):
+                pass
+        if fn:
+            return fn, "ida"
+    import csv
+    for r in csv.DictReader(open(os.path.join(ROOT, "docs", "decompiled", "functions.csv"))):
+        if r["is_thunk"] != "true":
+            fn[int(r["entry"], 16)] = (r["name"], int(r["size"]))
+    return fn, "ghidra"
+
+
+def cmd_coverage(a):
+    """first-hit coverage of every retail function over the corpus (or the given scenarios)"""
+    fn, src = function_table()
+    cov_in = os.path.join(LOCAL_RUNS, "coverage_in.txt")
+    os.makedirs(LOCAL_RUNS, exist_ok=True)
+    open(cov_in, "w").write("".join(f"{va:x}\n" for va in sorted(fn)))
+    a.coverage_file = cov_in
+    runs = resolve_runs(a.scenarios or all_scenarios(a.only))
+    names = [r[0] for r in runs]
+    batch, bdir, res, out = run_batch(a, runs, "coverage", fetch=("rhost.log", "coverage.txt"))
+    root = bdir
+    hit = {}
+    for n in names:
+        p = os.path.join(root, n, "coverage.txt")
+        if os.path.exists(p):
+            for line in open(p):
+                va, f = line.split()
+                hit.setdefault(int(va, 16), []).append(n)
+    tot_b = sum(sz for _, sz in fn.values())
+    hit_b = sum(fn[v][1] for v in hit if v in fn)
+    print(f"COVERAGE ({src} function table): {len(hit)}/{len(fn)} functions, {hit_b}/{tot_b} bytes "
+          f"({100.0 * hit_b / max(1, tot_b):.1f}%) over {len(names)} scenario(s)")
+    outp = os.path.join(bdir, "coverage_summary.tsv")
+    with open(outp, "w") as f:
+        f.write("va\tname\tsize\tscenarios\n")
+        for va in sorted(hit):
+            nm, sz = fn.get(va, ("?", 0))
+            f.write(f"{va:08x}\t{nm}\t{sz}\t{','.join(hit[va])}\n")
+    print(f"→ {outp}")
+    return 0
+
+
 def cmd_diff(a):
     import rhs
     rhs.diff(a.a, a.b, show=a.show_n)
@@ -562,6 +619,8 @@ def main():
     sp = sub.add_parser("corpus"); common(sp); sp.add_argument("--only"); sp.add_argument("--check", action="store_true")
     sp.add_argument("--bless", action="store_true"); sp.set_defaults(fn=cmd_corpus)
     sp = sub.add_parser("verify"); common(sp); sp.add_argument("--only"); sp.set_defaults(fn=cmd_verify)
+    sp = sub.add_parser("coverage"); common(sp); sp.add_argument("scenarios", nargs="*"); sp.add_argument("--only")
+    sp.set_defaults(fn=cmd_coverage)
     sp = sub.add_parser("diff"); sp.add_argument("a"); sp.add_argument("b"); sp.add_argument("--show-n", type=int, default=40); sp.set_defaults(fn=cmd_diff)
     sp = sub.add_parser("record"); common(sp); sp.add_argument("name"); sp.add_argument("--from", dest="from_scen")
     sp.add_argument("--force", action="store_true"); sp.set_defaults(fn=cmd_record)
