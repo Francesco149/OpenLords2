@@ -50,6 +50,8 @@ session — they outlive the conversation context.
 
 | doc | covers |
 |-----|--------|
+| [in-process-retail-host.md](in-process-retail-host.md) | **rhost** (2026-10-23): retail in-process, deterministic; Lords2's runtime surface, the GOG patch code past .text, measurements |
+| [game-state-map.md](game-state-map.md) | strategic game state VAs (realms, counties, armies, date) — the autoplay bot's reader |
 | [input-replay.md](input-replay.md) | Input recording & replay (JSONL trace format) |
 | [pure-function-diff.md](pure-function-diff.md) | Pure-function differential testing vs retail |
 | [ledger-provenance-audit.md](ledger-provenance-audit.md) | The FUN_-token gotcha — how the derived ledger over-counts, and `tools/audit_provenance.py` |

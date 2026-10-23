@@ -53,28 +53,24 @@ ghidra/       Ghidra projects (gitignored — derived from the original binary)
 runs/         test artifacts (gitignored)
 ```
 
-## Workflow
+## Workflow (methodology reset 2026-10-23)
 
-Heavy use of a Frida-based harness against the retail exe for
-ground-truth probing:
+Retail runs **inside our own process** — `tools/rhost/` ("rhost"): the user's `Lords2.exe` is mapped
+at its base address and run against a software DirectDraw / DirectSound / window layer, a virtual
+clock and a virtual message queue fed by an input trace. Runs are deterministic (identical state on
+every run, and on Windows and wine alike), headless (never fullscreen, no display needed) and fast
+(thousands of frames per second). Port functions are verified against retail **on identical state**:
+shadow execution per call, and hybrid runs where the port replaces retail's function.
 
-- **Hidden window + turbo + muted audio** from day 1 — the agent
-  rewrites `ShowWindow` → `SW_HIDE`, suppresses fullscreen mode-sets
-  (DDraw `SetCooperativeLevel` exclusive bits are stripped), clamps
-  DirectSound volumes to 0, and virtualises the wall-clock reader so
-  the engine ticks as fast as the host can churn through it.
-- **MessageBox capture** — every `MessageBox{A,W}` is intercepted,
-  the body + caption are dumped to stderr with a loud banner, and
-  IDOK is returned so the engine never blocks on a modal.
-- **Bit-exact frame diffs** between retail and our re-impl via DDraw
-  surface lock hooks, with red-tint overlay on mismatch.
-- **Input trace** sparse JSONL format the harness replays into both
-  targets for deterministic side-by-side runs.
+- `python3 tools/rhost/rhost.py corpus --check` — every scenario in `tests/scenarios/` vs its blessed hashes.
+- `python3 tools/rhost/rhost.py verify` — every ported-function hook shadowed over the corpus.
+- `python3 tools/rhost/rhost.py record NAME` — play on the Windows desktop; the input becomes a scenario.
+- `python3 tools/rhost/rhbot.py "run 600; click 320 107; …"` — drive a live run from a script.
+- `tools/bot/` — an LLM (TypeSafe's Jev decision model) plays the strategy game through rhost to
+  generate scenarios.
 
-The harness grows into a **TAS bot** that can drive a whole game
-session at inhuman speed, exercising different subsystems against
-retail and our re-impl in lock-step.  See
-[`docs/harness-roadmap.md`](docs/harness-roadmap.md).
+See [`docs/audits/2026-10-23-methodology-reset.md`](docs/audits/2026-10-23-methodology-reset.md) and
+[`tools/rhost/README.md`](tools/rhost/README.md). The earlier Frida-based harness is kept as legacy.
 
 ## Tests
 

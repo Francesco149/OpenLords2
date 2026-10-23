@@ -110,11 +110,19 @@ Companion binaries:
 
 ## 6. Workflow
 
+> **2026-10-23:** superseded by the rhost methodology — `docs/audits/2026-10-23-methodology-reset.md`,
+> `CLAUDE.md`. The text below is the original (Frida-era) plan.
+
+
 See [`docs/AGENT-WORKFLOW.md`](AGENT-WORKFLOW.md) for the
 day-to-day RE conventions: commits, findings docs, engine-quirks log,
 how to use the Frida harness, when to use Ghidra vs r2.
 
 ## 7. Subagent policy
+
+> **2026-10-23:** superseded — delegate mechanical / search work to subagents; keep RE interpretation
+> and parity adjudication (openrecet policy, `CLAUDE.md` Conventions).
+
 
 **Subagents are forbidden by default.**  RE work always involves
 complex code analysis — even things that look like simple mechanical
