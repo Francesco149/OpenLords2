@@ -4,6 +4,7 @@
     python3 tools/bot/play.py --turns 20 --seed 7                    # one game from newgame-playnow (wine, local)
     python3 tools/bot/play.py --turns 40 --seed 3 --target win       # on the Windows box
     python3 tools/bot/play.py --turns 12 --seeds 1-8 -j 4            # a batch of games, 4 at a time
+    python3 tools/bot/play.py --turns 30 --seed 72 --start custom:England --persona diplomat   # a custom game
 
 Per turn: settle the map → read the state (l2state.snapshot) → ask Jev typed questions (policy.decide) →
 sample a plan → apply it through the UI (per county: select via the minimap, tax, rations, industry
@@ -67,22 +68,32 @@ def apply_plan(s, ui, st, plan, log):
         if p.get("castle"):
             done.append(("castle", cid, p["castle"], actions.build_castle(s, ui, p["castle"])))
         pop = next((c["population"] for c in st["counties"] if c["id"] == cid), 0)
-        if p["draft"] > 0 and pop * p["draft"] >= 20:
-            a = actions.raise_army(s, ui, int(pop * p["draft"]))
-            done.append(("army", cid, a and {"id": a["id"], "men": a["men"]}))
+        men = int(pop * p["draft"]) if pop * p["draft"] >= 20 else 0
+        if men or p.get("hire"):
+            a = actions.raise_army(s, ui, men, hire=bool(p.get("hire")))
+            done.append(("army", cid, a and {"id": a["id"], "men": a["men"], "mercenaries": a.get("mercenaries")}))
     if plan.get("trade"):
         done.append(("trade", plan["trade"], actions.trade(s, ui, plan["trade"]["good"], plan["trade"]["qty"])))
     if plan.get("gift"):
         done.append(("gift", plan["gift"], actions.gift(s, ui, plan["gift"])))
     st = l2state.snapshot(s.read)
-    towns = {c["id"]: c.get("capital") for c in st["counties"]}
-    for aid, target in plan["armies"].items():
+    for aid, order in plan["armies"].items():
         army = next((a for a in st["armies"] if a["id"] == aid and a["owner"] == st["me"]), None)
-        if army is None or target is None or not towns.get(target):
+        if army is None or not order:
             continue
-        r = actions.march(s, ui, army, towns[target])
-        done.append(("march", aid, target, r))
+        if order["do"] == "leave":
+            r = actions.leave_castle(s, ui, army, order["cell"])
+        else:
+            if order["do"] == "combine":           # the other army may have moved this season
+                other = next((a for a in l2state.snapshot(s.read)["armies"] if a["id"] == order.get("army")), None)
+                if other is None:
+                    continue
+                order = dict(order, cell=other["pos"])
+            r = actions.march(s, ui, army, order["cell"],
+                              intent=order["do"] if order["do"] in ("besiege", "garrison", "combine") else None)
+        done.append(("order", aid, order, r))
         ui.settle(max_frames=1200)
+    return done
     return done
 
 
@@ -91,13 +102,15 @@ def summary(st):
     r = next((x for x in st["realms"] if x["id"] == me), {})
     mine = [c for c in st["counties"] if c["owner"] == me]
     return {"season": st["date"].get("season_name"), "year": st["date"].get("year"), "crowns": r.get("crowns"),
+            "owners": [c["owner"] for c in st["counties"]],
             "counties": len(mine), "population": sum(c.get("population", 0) for c in mine),
             "happiness": round(sum(c.get("happiness", 0) for c in mine) / max(1, len(mine))),
             "armies": sum(1 for a in st["armies"] if a["owner"] == me), "men": sum(a.get("men", 0) for a in st["armies"] if a["owner"] == me)}
 
 
-def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, start=START):
+def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, start=START, persona=None):
     rng = random.Random(seed)
+    persona = persona or rng.choice(sorted(policy.PERSONAS))
     name = name or f"bot-s{seed}-t{turns}"
     base, k = name, 1
     while os.path.exists(os.path.join(ROOT, "tests", "scenarios", name)):   # never overwrite a game: Jev's
@@ -106,11 +119,41 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
     t0 = time.time()
     decisions, rows = [], []
     stuck = None
-    with Session(name, target=target, trace=start) as s:
-        meta = json.loads(next(l for l in open(start) if '"meta"' in l))["meta"]
-        s.run(int(meta.get("frames", 1900)))
-        ui = UI(s, log=log)
-        ui.settle()
+    asked = []
+
+    def asker(kind, info):
+        """retail asks (a popup with a choice, a confirm dialog, the siege board): Jev answers"""
+        st_now = info.pop("state", None) or l2state.snapshot(s.read)
+        try:
+            ans, raw = policy.ask(kind, info, st_now, rng, temperature, session_id=name, persona=persona)
+        except RuntimeError as e:
+            log(f"[{name}] Jev failed on {kind} ({e}); default answer")
+            ans, raw = None, None
+        if ans is None:
+            from ui import default_ask
+            ans = default_ask(kind, info)
+        asked.append({"kind": kind, "info": {k: v for k, v in info.items() if k != "state"}, "answer": ans, "jev": raw})
+        return ans
+
+    custom = start.startswith("custom:") if isinstance(start, str) else False
+    with Session(name, target=target, trace=None if custom else start) as s:
+        if custom:                           # a custom game set up in-session: the trace starts at boot
+            meta = {}
+            ui = UI(s, log=log, ask=asker)
+            log(f"[{name}] custom game: {actions.custom_game(s, ui, start.split(':', 1)[1])}")
+        else:
+            meta = json.loads(next(l for l in open(start) if '"meta"' in l))["meta"]
+            s.run(int(meta.get("frames", 1900)))
+            ui = UI(s, log=log, ask=asker)
+            ui.settle()
+        orders = {}                          # army id → standing order (retail ends a march at the season's end)
+        try:
+            quick, raw = policy.quick_battles(l2state.snapshot(s.read), rng, temperature, session_id=name, persona=persona)
+        except RuntimeError as e:
+            quick, raw = False, {"error": str(e)}
+        quick = actions.quick_battles(s, ui, quick) if quick else False
+        decisions.append({"turn": -1, "frame": s.frame, "persona": persona, "quick_battles": quick, "jev": raw})
+        log(f"[{name}] persona {persona}, quick battles {quick}")
         for t in range(turns):
             st = l2state.snapshot(s.read)
             sm = summary(st)
@@ -122,11 +165,19 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
                 except Stuck as e:
                     stuck = str(e); log(f"[{name}] defeat flow STUCK: {e}"); break
                 continue
+            live = {a["id"] for a in st["armies"] if a["owner"] == st["me"]}
+            orders = {k: v for k, v in orders.items() if k in live}
             try:
-                plan, raw = policy.decide(st, rng, temperature=temperature, session_id=name)
+                plan, raw = policy.decide(st, rng, temperature=temperature, session_id=name, persona=persona, orders=orders)
             except RuntimeError as e:
                 log(f"[{name}] turn {t}: Jev failed ({e}); ending the turn without a plan")
                 plan, raw = {"counties": {}, "armies": {}, "trade": None, "gift": 0}, {}
+            for aid, order in plan["armies"].items():
+                if order and order["do"] in ("claim", "attack", "besiege"):
+                    orders[aid] = order
+                else:
+                    orders.pop(aid, None)
+            ev0, ask0 = len(ui.events), len(asked)
             try:
                 done = apply_plan(s, ui, st, plan, log)
                 ui.end_turn()
@@ -136,16 +187,20 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
                 log(f"[{name}] turn {t}: STUCK: {e}")
                 decisions.append({"turn": t, "frame": s.frame, "stuck": stuck})
                 break
-            decisions.append({"turn": t, "frame": s.frame, "date": st["date"], "summary": sm, "plan": plan, "done": done, "jev": raw})
+            decisions.append({"turn": t, "frame": s.frame, "date": st["date"], "summary": sm, "plan": plan, "done": done,
+                              "armies": [{k: a.get(k) for k in ("id", "owner", "pos", "county", "men", "strength", "dest",
+                                                                "garrisoned", "besieging")} for a in st["armies"]],
+                              "events": ui.events[ev0:], "asked": asked[ask0:], "jev": raw})
             log(f"[{name}] t{t:3d} {sm['season']:6s} {sm['year']} f{s.frame:6d} counties {sm['counties']} pop {sm['population']:5d} "
-                f"happy {sm['happiness']:3d} crowns {sm['crowns']:6d} armies {sm['armies']}/{sm['men']} battles {ui.battles} "
+                f"happy {sm['happiness']:3d} crowns {sm['crowns']:6d} armies {sm['armies']}/{sm['men']} battles {ui.battles}+{ui.quick} sieges {ui.sieges} "
                 f"plan {json.dumps(plan)[:110]}")
     out = os.path.join(ROOT, "tests", "scenarios", name)
     os.makedirs(out, exist_ok=True)
     lines = [l for l in open(s.out_trace).read().splitlines() if '"meta"' not in l]
-    hdr = [f"# {name}: autoplay (tools/bot/play.py), seed {seed}, {len(rows)} turns, Jev {llm.DECISIONS_MODEL} T={temperature};",
-           f"# starts from {os.path.basename(os.path.dirname(start))} (its events are the prefix). Decisions + Jev answers: decisions.jsonl;"
-           " per-turn state: turns.tsv." + (f" Ended STUCK: {stuck}" if stuck else ""),
+    hdr = [f"# {name}: autoplay (tools/bot/play.py), seed {seed}, {len(rows)} turns, persona {persona}, Jev {llm.DECISIONS_MODEL} T={temperature};",
+           (f"# a custom game ({start.split(':', 1)[1]}, defaults) set up from the title." if custom else
+            f"# starts from {os.path.basename(os.path.dirname(start))} (its events are the prefix).")
+           + " Decisions + Jev answers: decisions.jsonl; per-turn state: turns.tsv." + (f" Ended STUCK: {stuck}" if stuck else ""),
            json.dumps({"meta": dict({"step_ms": 17, "vbase": 1000000, "frames": int(s.result["frame"])},
                                     **({"movies": True} if meta.get("movies") else {}))})]
     open(os.path.join(out, "trace.jsonl"), "w").write("\n".join(hdr + lines) + "\n")
@@ -158,7 +213,12 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
             f.write("\t".join(keys) + "\n")
             for r in rows:
                 f.write("\t".join(str(r.get(k, "")) for k in keys) + "\n")
-    log(f"[{name}] {len(rows)} turns in {time.time() - t0:.0f}s, battles {ui.battles}, game overs {ui.game_overs}, unknown screens {sorted(hex(k) for k in ui.unknown)} "
+    kinds = {}
+    for e in ui.events:
+        k = e["what"] + (":" + e.get("text", "") if e["what"] == "confirm" else "")
+        kinds[k] = kinds.get(k, 0) + 1
+    log(f"[{name}] {len(rows)} turns in {time.time() - t0:.0f}s, battles {ui.battles} + quick {ui.quick}, sieges {ui.sieges}, game overs {ui.game_overs}, "
+        f"events {kinds}, unknown screens {sorted(hex(k) for k in ui.unknown)} "
         f"→ {os.path.relpath(out, ROOT)}  (Jev: {llm.USAGE})")
     return out
 
@@ -171,20 +231,24 @@ def main():
     ap.add_argument("-j", "--jobs", type=int, default=4)
     ap.add_argument("--target", default="wine", choices=("wine", "win"))
     ap.add_argument("--temperature", type=float, default=1.0)
-    ap.add_argument("--start", default="newgame-playnow", help="scenario the game starts from (newgame-movies: movies on)")
+    ap.add_argument("--start", default="newgame-playnow", help="scenario the game starts from (newgame-movies: movies on), "
+                    "or custom:MAP (England, Scotland, France: a custom game with five nobles, set up from the title)")
+    ap.add_argument("--prefix", default="bot2", help="scenario name prefix (bot2: autoplay v2 — war, sieges, events)")
+    ap.add_argument("--persona", choices=sorted(policy.PERSONAS), help="default: sampled from the seed")
     a = ap.parse_args()
-    start = os.path.join(ROOT, "tests", "scenarios", a.start, "trace.jsonl")
-    tag = "" if a.start == "newgame-playnow" else "m" if a.start == "newgame-movies" else "x"
+    start = a.start if a.start.startswith("custom:") else os.path.join(ROOT, "tests", "scenarios", a.start, "trace.jsonl")
+    tag = ("" if a.start == "newgame-playnow" else "m" if a.start == "newgame-movies" else
+           "c" + a.start.split(":", 1)[1][:2].lower() if a.start.startswith("custom:") else "x")
     seeds = [a.seed]
     if a.seeds:
         lo, hi = (int(x) for x in a.seeds.split("-"))
         seeds = list(range(lo, hi + 1))
-    name = lambda sd: f"bot{tag}-s{sd}-t{a.turns}"
+    name = lambda sd: f"{a.prefix}{tag}-s{sd}-t{a.turns}"
     if len(seeds) == 1:
-        play(seeds[0], a.turns, a.target, a.temperature, name=name(seeds[0]), start=start)
+        play(seeds[0], a.turns, a.target, a.temperature, name=name(seeds[0]), start=start, persona=a.persona)
         return
     with concurrent.futures.ThreadPoolExecutor(max_workers=a.jobs) as ex:
-        for out in ex.map(lambda sd: play(sd, a.turns, a.target, a.temperature, name=name(sd), start=start), seeds):
+        for out in ex.map(lambda sd: play(sd, a.turns, a.target, a.temperature, name=name(sd), start=start, persona=a.persona), seeds):
             print("done", out)
 
 
