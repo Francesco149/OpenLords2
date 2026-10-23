@@ -54,7 +54,8 @@ typedef struct {
     uint32_t vbase;             /* virtual clock origin (ms) — the run's "seed" */
     uint32_t stall_wall_ms;
     uint32_t trap_max;
-    uint32_t htrace_f0, htrace_f1;  /* --heap-trace A-B: every HeapAlloc / HeapFree in this frame window */
+    uint32_t htrace_f0, htrace_f1;
+    uint32_t cap_from, cap_count;   /* --cap FROM:COUNT */  /* --heap-trace A-B: every HeapAlloc / HeapFree in this frame window */
     const char *bot;           /* host:port of a decision server (bot mode) */
     const char *stop_on;        /* stop condition (e.g. "screen=0x13") */
 } rh_opts_t;
@@ -142,6 +143,8 @@ int  rh_shadow_ex(const char *name, void (*retail)(void *), void (*port)(void *)
 
 /* rh_shot.c */
 void rh_shot(const char *tag);
+void rh_cap_frame(void);       /* --cap FROM:COUNT → capture.olv3 (Trace Studio v3) */
+void rh_cap_finish(void);
 int  rh_fb_hash(uint64_t *out);
 
 /* rh_hooks.c */

@@ -358,6 +358,7 @@ static void end_of_frame(void)
     if (is_listed(O.dump_at, O.n_dump, g_frame)) { char p[MAX_PATH]; snprintf(p, sizeof p, "%s\\state_%s.rhs", O.rundir, t); rh_state_dump(p); }
     if (is_listed(O.shot_at, O.n_shot, g_frame) || (O.shot_every && g_frame % O.shot_every == 0)) rh_shot(t);
     if (O.fb_hash) { uint64_t fh; if (rh_fb_hash(&fh)) { g_fb_chain = (g_fb_chain ^ fh) * 0x100000001b3ull; g_fb_n++; } }
+    rh_cap_frame();
     if (O.log_every && g_frame % O.log_every == 0) {
         uint16_t cw; __asm__ volatile("fnstcw %0" : "=m"(cw));
         char wb[256]; watch_str(wb, sizeof wb);
@@ -395,6 +396,7 @@ static void finish(const char *why)
     if (g_finished) return;
     g_finished = 1;
     rh_trace_finish();
+    rh_cap_finish();
     cov_dump();
     rh_hooks_report();
     for (int i = 0; i < g_ntrap; i++) rh_log("trap-count %08x hits=%ld\n", g_tva[i], g_thits[i]);
@@ -458,6 +460,7 @@ static void parse(int argc, char **argv)
         else if (!strcmp(a, "--shot-at")) parse_list(ARG(), O.shot_at, &O.n_shot, 64);
         else if (!strcmp(a, "--shot-every")) O.shot_every = strtoul(ARG(), 0, 0);
         else if (!strcmp(a, "--fb-hash")) O.fb_hash = 1;
+        else if (!strcmp(a, "--cap")) { const char *v = ARG(); O.cap_from = strtoul(v, 0, 0); const char *c = strchr(v, ':'); O.cap_count = c ? strtoul(c + 1, 0, 0) : 1; }
         else if (!strcmp(a, "--hash-every")) O.hash_every = strtoul(ARG(), 0, 0);
         else if (!strcmp(a, "--log-every")) O.log_every = strtoul(ARG(), 0, 0);
         else if (!strcmp(a, "--tail")) O.tail = strtoul(ARG(), 0, 0);

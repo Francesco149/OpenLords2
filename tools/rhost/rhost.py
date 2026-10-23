@@ -559,6 +559,67 @@ def cmd_coverage(a):
     return 0
 
 
+VIEWER = os.path.join(ROOT, "tools", "trace_studio_v3", "viewer", "viewer.exe")
+
+
+def cmd_view(a):
+    """Trace Studio v3 on two rhost runs of a frame window, paired by frame number: A = retail (pure), B = the
+    "port" side — another scenario (--b) or the same one with hooks (--b-hook replace:NAME: hybrid vs pure).
+    Opens viewer.exe on the Windows desktop (the runner), or renders one column headless (--shot)."""
+    lo, n = (int(x) for x in a.cap.split(":"))
+    a.extra = ((a.extra or "") + f" --cap {lo}:{n}").strip()
+    ra = resolve_runs([a.scenario])[0]
+    rb = resolve_runs([a.b or a.scenario])[0]
+    runs = [("A-" + ra[0], ra[1], ra[2]), ("B-" + rb[0], rb[1], rb[2])]
+    saved = a.hook
+    a.hook = None
+    ensure_staged()
+    batch, bdir = make_batch(a, runs[:1], "view")
+    if a.b_hook:
+        a.hook = a.b_hook
+    # the B run goes into the same batch dir with its own hook spec
+    b_batch, b_dir = make_batch(a, runs[1:], "viewB")
+    a.hook = saved
+    shutil.move(os.path.join(b_dir, runs[1][0]), os.path.join(bdir, runs[1][0]))
+    go_b = open(os.path.join(b_dir, "go.ps1")).read().replace(b_batch, batch)
+    go_a = open(os.path.join(bdir, "go.ps1")).read()
+    open(os.path.join(bdir, "go.ps1"), "w").write(go_a + go_b)
+    shutil.rmtree(b_dir)
+    for r in runs:   # argv.json / hooks.txt inside the moved run dir still name viewB's batch
+        for f in ("argv.json",):
+            p = os.path.join(bdir, r[0], f)
+            open(p, "w").write(open(p).read().replace(b_batch, batch))
+    wrun = f"{WROOT}\\runs\\{batch}"
+    cols = [{"label": f"f{lo + i}", "offset": i, "port_idx": i, "retail_idx": i, "port_present": lo + i,
+             "retail_present": lo + i} for i in range(n)]
+    view = {"scenario": a.scenario + (f" vs {a.b}" if a.b else "") + (f" [{a.b_hook}]" if a.b_hook else ""),
+            "anchor": "frame", "verdict": "", "note": "rhost: A = retail (left/retail), B = the other run (port side)",
+            "has_state": False, "port_container": f"{wrun}\\{runs[1][0]}\\capture.olv3",
+            "retail_container": f"{wrun}\\{runs[0][0]}\\capture.olv3", "frames": cols,
+            "notes_path": f"{wrun}\\notes.json"}
+    open(os.path.join(bdir, "view.json"), "w").write(json.dumps(view, indent=1))
+    scp(bdir, f"{WIN}:C:/ol2-rhost/runs/", recursive=True)
+    out = ssh_win(f"powershell -NoProfile -ExecutionPolicy Bypass -File {wrun}\\go.ps1")
+    print_results(parse_out(out), [r[0] for r in runs])
+    if not os.path.exists(VIEWER):
+        sh(["nix", "develop", ROOT, "--command", "make", "-C", os.path.dirname(VIEWER)])
+    ssh_win(f"New-Item -ItemType Directory -Force {WROOT}\\viewer | Out-Null")
+    scp(VIEWER, f"{WIN}:C:/ol2-rhost/viewer/viewer.exe")
+    job = os.path.join(bdir, "viewer.ps1")
+    if a.shot:
+        open(job, "w").write(f"& '{WROOT}\\viewer\\viewer.exe' --shot '{wrun}\\view.bmp' --col {a.col} '{wrun}\\view.json'\r\n")
+    else:
+        open(job, "w").write(f"Start-Process -FilePath '{WROOT}\\viewer\\viewer.exe' -ArgumentList '{wrun}\\view.json'\r\n")
+    scp(job, f"{WIN}:C:/ol2-rhost/runs/{batch}/viewer.ps1")
+    print(win_job(batch + "-viewer", f"{wrun}\\viewer.ps1", timeout=600))
+    if a.shot:
+        scp(f"{WIN}:C:/ol2-rhost/runs/{batch}/view.bmp", a.shot, check=False)
+        print("shot →", a.shot)
+    else:
+        print(f"viewer opened on the Windows desktop: {wrun}\\view.json")
+    return 0
+
+
 def cmd_diff(a):
     import rhs
     rhs.diff(a.a, a.b, show=a.show_n)
@@ -621,6 +682,9 @@ def main():
     sp = sub.add_parser("verify"); common(sp); sp.add_argument("--only"); sp.set_defaults(fn=cmd_verify)
     sp = sub.add_parser("coverage"); common(sp); sp.add_argument("scenarios", nargs="*"); sp.add_argument("--only")
     sp.set_defaults(fn=cmd_coverage)
+    sp = sub.add_parser("view"); common(sp); sp.add_argument("scenario"); sp.add_argument("--b"); sp.add_argument("--b-hook", dest="b_hook")
+    sp.add_argument("--cap", required=True, help="FROM:COUNT frames"); sp.add_argument("--shot"); sp.add_argument("--col", type=int, default=0)
+    sp.set_defaults(fn=cmd_view)
     sp = sub.add_parser("diff"); sp.add_argument("a"); sp.add_argument("b"); sp.add_argument("--show-n", type=int, default=40); sp.set_defaults(fn=cmd_diff)
     sp = sub.add_parser("record"); common(sp); sp.add_argument("name"); sp.add_argument("--from", dest="from_scen")
     sp.add_argument("--force", action="store_true"); sp.set_defaults(fn=cmd_record)

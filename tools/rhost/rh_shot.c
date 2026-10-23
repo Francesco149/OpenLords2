@@ -87,3 +87,57 @@ int rh_fb_hash(uint64_t *out)
     *out = f;
     return 1;
 }
+
+/* ---- --cap FROM:COUNT: the presented frames of a window as a Trace Studio v3 container (capture.olv3) ----
+ * olv3 v2 (tools/trace_studio_v3/format/olv3_format.h): [MAGIC VERSION W H] then PALETTE / PIXELS resources
+ * (content-dedup'd: a static screen or a fixed palette is stored once) and a FRAME record per frame
+ * (present = the frame number, base = the plane, 0 draws), EOF. RAW pixels. */
+#define CAP_MAXU 65536
+static FILE *g_cap;
+static uint64_t *g_cap_pal, *g_cap_pix; static uint32_t g_cap_npal, g_cap_npix, g_cap_frames;
+static uint64_t fnv(const void *p, size_t n)
+{
+    const uint8_t *b = p; uint64_t f = 1469598103934665603ull;
+    size_t i = 0;
+    for (; i + 8 <= n; i += 8) { uint64_t v; memcpy(&v, b + i, 8); f ^= v; f *= 1099511628211ull; f ^= f >> 29; }
+    for (; i < n; i++) { f ^= b[i]; f *= 1099511628211ull; }
+    return f;
+}
+static uint32_t cap_id(uint64_t *tab, uint32_t *n, uint64_t h, int *fresh)
+{
+    for (uint32_t i = 0; i < *n; i++) if (tab[i] == h) { *fresh = 0; return i; }
+    if (*n >= CAP_MAXU) rh_fatal("--cap: more than %d distinct planes", CAP_MAXU);
+    tab[*n] = h; *fresh = 1;
+    return (*n)++;
+}
+static void wu(uint32_t v) { fwrite(&v, 4, 1, g_cap); }
+void rh_cap_frame(void)
+{
+    if (!O.cap_count || g_frame < O.cap_from || g_frame >= O.cap_from + O.cap_count) return;
+    const uint8_t *pix; int pitch, w, h; const PALETTEENTRY *pal;
+    if (rh_dd_present(&pix, &pitch, &w, &h, &pal) != 8) return;
+    if (!g_cap) {
+        char p[MAX_PATH]; snprintf(p, sizeof p, "%s\\capture.olv3", O.rundir);
+        g_cap = fopen(p, "wb");
+        if (!g_cap) rh_fatal("--cap: cannot write %s", p);
+        g_cap_pal = malloc(CAP_MAXU * 8); g_cap_pix = malloc(CAP_MAXU * 8);
+        wu(0x33564C4Fu); wu(2); wu((uint32_t)w); wu((uint32_t)h);
+    }
+    static uint8_t plane[640 * 480]; uint8_t pal4[1024];
+    if (w * h > (int)sizeof plane) rh_fatal("--cap: frame too large");
+    for (int y = 0; y < h; y++) memcpy(plane + y * w, pix + y * pitch, (size_t)w);
+    for (int i = 0; i < 256; i++) { pal4[4 * i] = pal[i].peRed; pal4[4 * i + 1] = pal[i].peGreen; pal4[4 * i + 2] = pal[i].peBlue; pal4[4 * i + 3] = pal[i].peFlags; }
+    int fresh;
+    uint32_t pid = cap_id(g_cap_pal, &g_cap_npal, fnv(pal4, sizeof pal4), &fresh);
+    if (fresh) { wu(2); wu(pid); fwrite(pal4, 1, sizeof pal4, g_cap); }
+    uint32_t xid = cap_id(g_cap_pix, &g_cap_npix, fnv(plane, (size_t)(w * h)), &fresh);
+    if (fresh) { wu(3); wu(xid); wu(0); wu((uint32_t)w); wu((uint32_t)h); wu((uint32_t)(w * h)); fwrite(plane, 1, (size_t)(w * h), g_cap); }
+    wu(10); wu(pid); wu(xid); wu(g_frame); wu(xid); wu(0);
+    g_cap_frames++;
+}
+void rh_cap_finish(void)
+{
+    if (!g_cap) return;
+    wu(99); fclose(g_cap); g_cap = NULL;
+    rh_log("cap: %u frames (%u palettes, %u planes) -> capture.olv3\n", g_cap_frames, g_cap_npal, g_cap_npix);
+}

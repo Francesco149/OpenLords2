@@ -21,6 +21,9 @@ python3 tools/rhost/rhost.py record my-play [--from endturn-2]            # HUMA
 python3 tools/rhost/rhost.py run X --extra "--watch-write 57c934@1800"    # who writes this dword (+ EBP callers)
 python3 tools/rhost/rhost.py run X --extra "--trap 404a46"                # registers + stack args at an instruction
 python3 tools/rhost/rhbot.py "run 600; click 320 107; run 100; shot m" --montage /tmp/m.png   # live control
+python3 tools/rhost/rhost.py view endturn-2 --b-hook replace:rng_step --cap 1800:300  # Trace Studio v3: pure | hybrid | diff
+python3 tools/rhost/rhost.py view endturn-2 --cap 1800:300 --shot out.bmp --col 150  # … one column, headless
+python3 tools/rhost/rhost.py coverage                                   # first-hit coverage of every retail function
 ```
 Results: `/mnt/ephemeral/openlords2/rhost-runs/<batch>/<run>/` (wine: `…/rhost-wine/root/runs/`) — `rhost.log`
 (last line `RESULT key=value …`), `shot_fNNNNNN.png`, `frame_fNNNNNN.idx` (640×480 index plane + palette),
@@ -84,6 +87,14 @@ A controller steps a live run frame by frame over TCP: `run N`, `post m w l`, `r
 exploration only, RESULT notes `poked=`), `shot`, `hash`, `dump`, `quit`. Every posted input is written to
 `--out-trace` (`bot.jsonl`), so a session replays bit-exactly without the controller. Windows runs connect
 back through `ssh -R`. Used for trace authoring, probes, and the autoplay bot (`tools/bot/`).
+
+## Trace Studio v3
+
+`--cap FROM:COUNT` writes the presented frames of a window as `capture.olv3` (the viewer's container: dedup'd
+palettes + 8 bpp index planes). `rhost.py view A [--b B | --b-hook SPEC]` runs both sides on Windows, pairs
+them by frame number (A = the retail column, B = the "port" column) and opens `viewer.exe` on the desktop
+through the runner — or renders one column headless with `--shot`. Pure vs hybrid is the visual check for a
+render port; two scenarios side by side for anything else.
 
 ## Probes
 
