@@ -16,7 +16,8 @@
  *   window  fake HWND, virtual message queue, input only from the trace (rh_win.c).
  *   heap    fixed-address arena (rh_heap.c); handles sequence-numbered (rh_handles.c).
  *   files   game dir read-only, writes copy-on-write into the run dir (rh_files.c).
- *   movies  SmackOpen fails (retail logs and skips the movie) unless --movies.
+ *   movies  SmackOpen fails (retail logs and skips the movie) unless --movies: then smackw32 is
+ *           mapped by rhost at a fixed base with its imports bound to these layers (rh_smack.c).
  *   x87     control word 0x027F at entry (what Windows gives a thread; mingw's CRT sets 0x037F).
  * Output: <rundir>\rhost.log; last line "RESULT key=value ..." (parsed by rhost.py). */
 #include "rhost.h"
@@ -197,6 +198,7 @@ void *rh_import_policy(const char *dll, const char *name, int ord, int *skip)
     if (!_stricmp(dll, "DDRAW.dll")) { *skip = 1; return name && !strcmp(name, "DirectDrawCreate") ? (void *)rh_DirectDrawCreate : NULL; }
     if (!_stricmp(dll, "DSOUND.dll")) { *skip = 1; return name && !strcmp(name, "DirectSoundCreate") ? (void *)rh_DirectSoundCreate : NULL; }
     if (!_stricmp(dll, "DPLAYX.dll")) { *skip = 1; return ord == 1 ? (void *)dp_Create : ord == 2 ? (void *)dp_Enumerate : NULL; }
+    if (!_stricmp(dll, "smackw32.DLL") && O.movies) { *skip = 1; return NULL; }   /* bound by rh_smack_install */
     if (!_stricmp(dll, "smackw32.DLL") && !O.movies) {
         *skip = 1;
         switch (ord) {
@@ -382,6 +384,7 @@ static void __cdecl frame_wrap(void)
     g_frame++;
     g_vclock += O.step_ms; g_calls_since_frame = 0;
     rh_mm_frame();
+    rh_smack_frame();
     rh_ds_mix();
     rh_win_frame();
     rh_bot_frame();
@@ -579,6 +582,7 @@ int main(int argc, char **argv)
     retail_image_t img;
     if (retail_map(exe_abs, &img)) rh_fatal("map %s failed", exe_abs);
     layout_from_pe();
+    AddVectoredExceptionHandler(0, crash_veh);   /* first in, last called: probes' handlers see theirs first */
     rh_log("rhost: mapped %s (imports: %d real, %d rhost, %d unresolved) entry=%08x text=%08x+%x data=%08x..%08x\n",
            exe_abs, img.n_imports_resolved, img.n_imports_host, img.n_imports_stubbed, img.entry, RT_TEXT_LO, RT_TEXT_SZ, RT_DATA_LO, RT_DATA_HI);
     iat_override("GetModuleHandleA", my_GetModuleHandleA);
@@ -618,13 +622,13 @@ int main(int argc, char **argv)
     rh_handles_install();                    /* after files: wraps their overrides */
     rh_mm_install();
     rh_win_install();
+    rh_smack_install();                      /* last: smackw32's imports bind to every layer above */
     int nf = redirect_calls(L2_FRAME_FN, (void *)frame_wrap);
     if (nf < 1) rh_fatal("frame driver %08x: no call sites", L2_FRAME_FN);
     rh_log("hooks: frame driver %08x <- %d call site(s)\n", L2_FRAME_FN, nf);
     load_volatile();
     rh_hooks_install();
     if (O.coverage) cov_install();
-    AddVectoredExceptionHandler(0, crash_veh);
     if (g_nw) AddVectoredExceptionHandler(1, watch_veh);
     if (g_ntrap) {
         AddVectoredExceptionHandler(1, trap_veh);

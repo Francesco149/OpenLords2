@@ -220,7 +220,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x426216 | FUN_00426216 | 185 | engine_army_move.c, engine_labor.c, engine_labor.h (+2) |
 | 0x427990 | FUN_00427990 | 779 | audio.h, engine.c, engine_combat.c (+4) |
 | 0x427d19 | FUN_00427d19 | 89 | audio.c, audio.h, engine.c (+3) |
-| 0x427ed0 | FUN_00427ed0 | 311 | engine_map_query.c, engine_territory.c, game_init.c (+1) |
+| 0x427ed0 | FUN_00427ed0 | 311 | engine_territory.c, game_init.c, game_init.h |
 | 0x428007 | FUN_00428007 | 113 | engine_army_ai.c, engine_army_state.c, engine_army_state.h (+3) |
 | 0x428078 | FUN_00428078 | 113 | engine_army_ai.c, engine_combat.c, game_init.c (+1) |
 | 0x4280e9 | FUN_004280e9 | 904 | engine.c, engine_army_state.c, engine_army_state.h (+1) |
@@ -628,8 +628,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a0015 | FUN_004a0015 | 469 | engine_army_ai.c, engine_army_ai.h, engine_combat.c |
 | 0x4a01ea | FUN_004a01ea | 287 | engine_army_ai.c |
 | 0x4a0309 | FUN_004a0309 | 233 | engine_army_ai.c, engine_army_ai.h |
-| 0x4a03f2 | FUN_004a03f2 | 599 | engine_army_ai.c, engine_army_ai.h |
-| 0x4a0649 | FUN_004a0649 | 425 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a03f2 | FUN_004a03f2 | 599 | engine_army_ai.c, engine_army_ai.h, engine_path.h |
+| 0x4a0649 | FUN_004a0649 | 425 | engine_army_ai.c, engine_army_ai.h, engine_path.h |
 | 0x4a07f2 | FUN_004a07f2 | 293 | engine_combat.c, engine_combat.h |
 | 0x4a0917 | FUN_004a0917 | 403 | engine_combat.c, engine_combat.h |
 | 0x4a0aaa | FUN_004a0aaa | 371 | engine_army_ai.c, engine_army_ai.h |
@@ -681,8 +681,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a60b9 | FUN_004a60b9 | 439 | engine_army_ai.c |
 | 0x4a6270 | FUN_004a6270 | 602 | engine_army_ai.c, engine_combat.c, engine_combat.h |
 | 0x4a64ca | FUN_004a64ca | 217 | engine_army_ai.c |
-| 0x4a65a3 | FUN_004a65a3 | 402 | engine_army_ai.c |
-| 0x4a6735 | FUN_004a6735 | 360 | engine_army_ai.c |
+| 0x4a65a3 | FUN_004a65a3 | 402 | engine_army_ai.c, engine_map_query.h |
+| 0x4a6735 | FUN_004a6735 | 360 | engine_army_ai.c, engine_map_query.h |
 | 0x4a689d | FUN_004a689d | 399 | engine_combat.c, engine_combat.h |
 | 0x4a6a30 | FUN_004a6a30 | 568 | engine_combat.c, engine_combat.h |
 | 0x4a6c68 | FUN_004a6c68 | 1264 | engine_army_move.c, engine_army_move.h, engine_combat.c (+2) |

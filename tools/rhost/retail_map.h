@@ -63,7 +63,7 @@ static int retail_map(const char *path, retail_image_t *out)
         uint32_t al = nt->OptionalHeader.SectionAlignment, raw = sec[i].SizeOfRawData;
         uint32_t vlim = (sec[i].Misc.VirtualSize + al - 1) & ~(al - 1);
         if (sec[i].Misc.VirtualSize && raw > vlim) raw = vlim;
-        if (raw) memcpy(base + sec[i].VirtualAddress, file + sec[i].PointerToRawData, raw);
+        if (raw && sec[i].PointerToRawData) memcpy(base + sec[i].VirtualAddress, file + sec[i].PointerToRawData, raw);
     }
     out->n_imports_resolved = out->n_imports_host = out->n_imports_stubbed = 0;
     IMAGE_DATA_DIRECTORY *idd = &nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];

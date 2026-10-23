@@ -76,10 +76,12 @@ static ULONG WINAPI b_Release(ds_buf *b)
     return 0;
 }
 static HRESULT WINAPI b_GetCaps(ds_buf *b, DSBCAPS *c) { c->dwFlags = b->flags; c->dwBufferBytes = b->mem->size; c->dwUnlockTransferRate = 0; c->dwPlayCpuOverhead = 0; return DS_OK; }
+static long g_ngcp;
 static HRESULT WINAPI b_GetCurrentPosition(ds_buf *b, DWORD *play, DWORD *write)
 {
     uint32_t pos, playing;
     cur(b, rh_vnow(), &pos, &playing);
+    if (O.log_ds && g_ngcp++ < 400) rh_log("dsound: buf #%u GetCurrentPosition -> %u playing=%u t=%u (f%u)\n", b->serial, pos, playing, rh_vnow(), g_frame);
     uint32_t lead = bytes_per_sec(b) * 15u / 1000u, ba = b->fmt.nBlockAlign ? b->fmt.nBlockAlign : 1;
     lead -= lead % ba;
     if (play) *play = pos;
@@ -106,6 +108,7 @@ static HRESULT WINAPI b_Lock(ds_buf *b, DWORD off, DWORD n, void **p1, DWORD *n1
     if (fl & DSBLOCK_ENTIREBUFFER) n = size;
     if (!size || off >= size || n > size) return DSERR_INVALIDPARAM;
     g_nlock++;
+    LOGDS("dsound: buf #%u Lock off %lu n %lu fl %lx (f%u)\n", b->serial, (unsigned long)off, (unsigned long)n, (unsigned long)fl, g_frame);
     *p1 = b->mem->p + off;
     if (off + n <= size) { *n1 = n; if (p2) *p2 = NULL; if (n2) *n2 = 0; }
     else { *n1 = size - off; if (p2) *p2 = b->mem->p; if (n2) *n2 = n - (size - off); }

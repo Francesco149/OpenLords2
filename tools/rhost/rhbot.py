@@ -53,6 +53,8 @@ class Session:
             args += ["--step-ms", str(step_ms or meta["step_ms"])]
         if vbase or meta.get("vbase"):
             args += ["--vbase", str(vbase or meta["vbase"])]
+        if meta.get("movies"):
+            args += ["--movies"]
         if trace:
             args += ["--trace", f"{win_run}\\trace.jsonl"]
         args += list(extra)

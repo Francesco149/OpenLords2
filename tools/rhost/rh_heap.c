@@ -65,7 +65,7 @@ static int in_region(const region_t *r, uint32_t a) { return a >= r->lo && a < r
 int rh_is_det_addr(uint32_t v)
 {
     return (v >= RT_IMG_LO && v < RT_IMG_HI) || (v >= g_host_lo && v < g_host_hi) ||
-           (g_active && v >= ARENA_LO && v < ARENA_HI) || rh_media_in_pool(v) || rh_host_in(v) ||
+           (g_active && v >= ARENA_LO && v < ARENA_HI) || rh_media_in_pool(v) || rh_host_in(v) || rh_smack_in(v) ||
            (v >= 0x58000000u && v < 0x59000000u) || (v >= 0x5f000000u && v < 0x5f100000u);
 }
 

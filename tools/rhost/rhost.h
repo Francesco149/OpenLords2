@@ -149,6 +149,11 @@ void rh_cap_frame(void);       /* --cap FROM:COUNT → capture.olv3 (Trace Studi
 void rh_cap_finish(void);
 int  rh_fb_hash(uint64_t *out);
 
+/* rh_smack.c — deterministic Smacker (--movies) */
+void rh_smack_install(void);
+void rh_smack_frame(void);      /* waveOut completions on the virtual clock */
+int  rh_smack_in(uint32_t v);
+
 /* rh_hooks.c */
 void rh_hooks_install(void);
 void rh_hooks_report(void);

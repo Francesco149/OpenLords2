@@ -159,6 +159,8 @@ def rhost_args(a, run_win, trace_win, meta):
             v = meta.get(k)
         if v is not None:
             args += [flag, str(v)]
+    if meta.get("movies"):                      # recorded with deterministic Smacker (rh_smack.c)
+        args += ["--movies"]
     if getattr(a, "frames", None) is None and meta.get("frames"):
         args += ["--frames", str(meta["frames"])]
     for k, flag in (("frames", "--frames"), ("dump_at", "--dump-at"), ("hash_every", "--hash-every"),

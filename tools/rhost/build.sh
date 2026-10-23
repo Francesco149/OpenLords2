@@ -11,16 +11,24 @@ mkdir -p "$B"
 shopt -s nullglob
 SUB_HOOKS=("$H"/rh_hooks_*.c)   # subsystem hook tables (rh_hooks.h)
 # port modules linked in for --hook (only pure / retail-layout ones: no Win32 side effects at load)
-PORT_OBJS=()
-for f in engine_rng; do
-    $CC $PORT_STD -O2 -fno-omit-frame-pointer -I"$S" -include "$H/rh_hostalloc.h" -DUNICODE=0 -D_UNICODE=0 -c -o "$B/$f.o" "$S/$f.c"
-    PORT_OBJS+=("$B/$f.o")
+# engine_rng: rh_hooks.c. The AI realm turn closure (rh_hooks_ai.c): engine_army_ai/_economy/realm/combat and what
+# they reach, CUT at game_init / engine / main / engine_turn / engine_army_move (bridged in rh_hooks_ai.c); save.c +
+# save_schema_globals.c are NOT linked — rh_hooks_ai.c aliases their globals to retail's VAs.
+PORT_OBJS=(); PIDS=()
+for f in engine_rng \
+         engine_army_ai engine_army_economy engine_realm engine_combat call_trace engine_army_state engine_camera \
+         engine_category_buckets engine_diplomacy engine_dirty_rect engine_event_queue engine_map_query engine_map_render \
+         engine_math engine_path engine_path_field engine_ranking engine_realm_upkeep engine_roster engine_territory \
+         gfx_dispatch gfx_drawcap gfx_glyph gfx_paint gfx_sprite gfx_sprite_rle strutil; do
+    $CC $PORT_STD -O2 -fno-omit-frame-pointer -I"$S" -include "$H/rh_hostalloc.h" -DUNICODE=0 -D_UNICODE=0 -c -o "$B/$f.o" "$S/$f.c" &
+    PIDS+=($!); PORT_OBJS+=("$B/$f.o")
 done
+for p in "${PIDS[@]}"; do wait "$p"; done
 $CC -std=gnu11 -O2 -Wall -I"$H" -c -o "$B/rh_hostalloc.o" "$H/rh_hostalloc.c"
 LINK=($CC -std=gnu11 -O2 -g -Wall -Wno-unused-function -Wno-format-truncation -Wno-cast-function-type -Wno-misleading-indentation
       -I"$S" -I"$H" -include "$H/rh_hostalloc.h" "${LDF[@]}" -o "$B/rhost.exe"
       "$H"/rhost.c "$H"/rh_heap.c "$H"/rh_media.c "$H"/rh_files.c "$H"/rh_handles.c "$H"/rh_state.c "$H"/rh_shot.c
-      "$H"/rh_ddraw.c "$H"/rh_dsound.c "$H"/rh_win.c "$H"/rh_hooks.c "$H"/rh_bot.c "${SUB_HOOKS[@]}"
+      "$H"/rh_ddraw.c "$H"/rh_dsound.c "$H"/rh_win.c "$H"/rh_hooks.c "$H"/rh_bot.c "$H"/rh_smack.c "${SUB_HOOKS[@]}"
       "$B/rh_hostalloc.o" "${PORT_OBJS[@]}" -luser32 -lgdi32 -lwinmm -lws2_32)
 "${LINK[@]}"
 # a FIXED SizeOfImage: the system allocations Windows / wine place right after the image must not

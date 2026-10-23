@@ -60,7 +60,8 @@ def is_det(v):
     # host image (incl. the retail image inside its hole), heap arena + fixed stack, the fixed object page,
     # the media pool (rh_media.c), the host heap (rh_hostalloc.c) — addresses that are a pure function of the run
     return (0x200000 <= v < 0x1200000) or (0x20000000 <= v < 0x59000000) or \
-        (0x5f000000 <= v < 0x5f100000) or (0x60000000 <= v < 0x70000000) or (0xb0000000 <= v < 0xe8000000)
+        (0x5f000000 <= v < 0x5f100000) or (0x60000000 <= v < 0x70000000) or (0xb0000000 <= v < 0xe8000000) or \
+        (0x18000000 <= v < 0x1b000000)
 
 
 def diff(pa, pb, show=40, out=sys.stdout):

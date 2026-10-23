@@ -4255,7 +4255,6 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_map_query.c",
     "src/engine_territory.c",
     "src/game_init.c",
     "src/game_init.h"
@@ -17027,7 +17026,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_ai.c",
-    "src/engine_army_ai.h"
+    "src/engine_army_ai.h",
+    "src/engine_path.h"
    ]
   },
   {
@@ -17038,7 +17038,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_ai.c",
-    "src/engine_army_ai.h"
+    "src/engine_army_ai.h",
+    "src/engine_path.h"
    ]
   },
   {
@@ -17616,7 +17617,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/engine_map_query.h"
    ]
   },
   {
@@ -17626,7 +17628,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/engine_map_query.h"
    ]
   },
   {
