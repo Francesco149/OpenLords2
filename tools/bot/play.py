@@ -93,6 +93,10 @@ def summary(st):
 def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, start=START):
     rng = random.Random(seed)
     name = name or f"bot-s{seed}-t{turns}"
+    base, k = name, 1
+    while os.path.exists(os.path.join(ROOT, "tests", "scenarios", name)):   # never overwrite a game: Jev's
+        k += 1                                                               # answers vary run to run, so a
+        name = f"{base}-{k}"                                                 # seed does not reproduce one
     t0 = time.time()
     decisions, rows = [], []
     stuck = None
@@ -105,8 +109,13 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
             st = l2state.snapshot(s.read)
             sm = summary(st)
             rows.append(dict(turn=t, frame=s.frame, **sm))
-            if sm["counties"] == 0:
-                log(f"[{name}] turn {t}: no counties left — game over"); break
+            if sm["counties"] == 0:          # lost: End turn plays the defeat out; retail restarts the scenario
+                log(f"[{name}] turn {t}: no counties left — playing out the defeat")
+                try:
+                    ui.end_turn()
+                except Stuck as e:
+                    stuck = str(e); log(f"[{name}] defeat flow STUCK: {e}"); break
+                continue
             try:
                 plan, raw = policy.decide(st, rng, temperature=temperature, session_id=name)
             except RuntimeError as e:
@@ -142,7 +151,7 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
             f.write("\t".join(keys) + "\n")
             for r in rows:
                 f.write("\t".join(str(r.get(k, "")) for k in keys) + "\n")
-    log(f"[{name}] {len(rows)} turns in {time.time() - t0:.0f}s, battles {ui.battles}, unknown screens {sorted(hex(k) for k in ui.unknown)} "
+    log(f"[{name}] {len(rows)} turns in {time.time() - t0:.0f}s, battles {ui.battles}, game overs {ui.game_overs}, unknown screens {sorted(hex(k) for k in ui.unknown)} "
         f"→ {os.path.relpath(out, ROOT)}  (Jev: {llm.USAGE})")
     return out
 

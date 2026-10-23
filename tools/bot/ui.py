@@ -15,6 +15,8 @@ DISMISS_RMB = {0x27, 0x22, 0x2e, 0x2f}             # scrolls, movie player, batt
 BATTLE_PROMPT, BATTLE_RESULT = 0x12, 0x13           # "A Battle is to be fought. Will you take the field?" / "decided"
 AUTO_RESOLVE = (383, 128)                           # the right gauntlet: don't take the field → auto-calc
 RESULT_CONTINUE = (410, 412)                        # the hand on "The Battle is decided."
+GAME_OVER = 0x1c                                    # victory / defeat (black while its movie is skipped): a click
+                                                    # continues — after a defeat retail restarts the scenario
 
 
 class Stuck(RuntimeError):
@@ -26,6 +28,7 @@ class UI:
         self.s, self.log = s, log
         self.unknown = {}          # screen id → first frame seen (for the run report)
         self.battles = 0
+        self.game_overs = 0
 
     def season(self):
         return self.s.u32(SEASON_VA)
@@ -54,6 +57,10 @@ class UI:
                 self.s.move(*AUTO_RESOLVE, frames=6)
                 self.s.click(*AUTO_RESOLVE)
                 self.s.run(20)
+            elif sc == GAME_OVER:
+                self.game_overs += 1
+                self.s.click(320, 240)
+                self.s.run(40)
             elif sc == BATTLE_RESULT:
                 self.s.click(*RESULT_CONTINUE)
                 self.s.run(20)

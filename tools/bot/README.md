@@ -12,7 +12,8 @@ python3 tools/bot/l2state.py endturn-2 --compact | tail -1    # the state the bo
 python3 tools/rhost/rhost.py corpus --bless --only bot-s3     # adopt a game into the corpus (+ --target wine)
 python3 tools/rhost/rhost.py coverage                         # what the corpus exercises in retail
 ```
-Each game writes `tests/scenarios/bot-s<seed>-t<turns>/`: `trace.jsonl` (all input; the scenario),
+Each game writes `tests/scenarios/bot-s<seed>-t<turns>[-k]/` (never overwritten: Jev's probabilities vary a
+little between calls, so the seed fixes the sampling stream but not the game — the trace is the artifact): `trace.jsonl` (all input; the scenario),
 `decisions.jsonl` (per turn: state summary, plan, what the UI actions achieved, Jev's raw answers),
 `turns.tsv` (crowns, counties, population, happiness, armies per turn).
 
@@ -51,5 +52,6 @@ bytes; adding 7 bot games (≈ 1 min of play, $0.08) reaches 759 / 41.8%.
 ## Not yet
 
 The bot plays badly on purpose-free sampling (over-drafts, starves, usually loses its county by turn
-6–15); no merchant / castle / diplomacy / supply actions; interactive battles; custom-game setups
+6–15; it then plays the defeat out — the victory/defeat screen 0x1c, black while its movie is skipped — and
+continues in the scenario retail restarts); no merchant / castle / diplomacy / supply actions; interactive battles; custom-game setups
 (maps, opponents, difficulty); the defeat / victory screens after the last county.
