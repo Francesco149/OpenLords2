@@ -33,7 +33,8 @@ software DirectDraw / DirectSound / window layer — deterministic, headless, ne
 4. **Commit with an evidence line:** `rhost shadow: N calls / K scenarios, 0 divergences; replace:
    corpus --check PASS` (or the divergence + why).
 
-**Gates.** `rhost.py det SCEN -n 3` (0 differing dwords); `rhost.py corpus --check` (and `--target wine`);
+**Gates.** `rhost.py det SCEN -n 3` (0 differing dwords; run it on Windows too — a host can be nondeterministic where
+wine is not); `rhost.py corpus --check` (and `--target wine`; `--bless` runs each scenario twice and refuses a mismatch);
 `rhost.py verify`. Port host tests: `nix develop -c make -C tests run -j16`.
 
 **Scenarios** `tests/scenarios/<s>/trace.jsonl` (`{"f","m","w","l"}` input events, 640×480 coords):

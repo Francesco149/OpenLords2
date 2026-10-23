@@ -463,8 +463,16 @@ def cmd_corpus(a):
     if a.bless or a.check:
         a.fb_hash = True
     runs = resolve_runs(names)
+    if a.bless:   # bless only what reproduces: every scenario twice, both runs must agree
+        runs = runs + [(n + "__again", tr, meta) for n, tr, meta in runs]
     batch, bdir, res, out = run_batch(a, runs, "corpus")
     print_results(res, names)
+    if a.bless:
+        for n in names:
+            r1, r2 = res.get(n, {}), res.get(n + "__again", {})
+            if any(r1.get(k) != r2.get(k) for k in EXPECT_KEYS):
+                print(f"  {n}: NOT REPRODUCIBLE — {', '.join(f'{k} {r1.get(k)}/{r2.get(k)}' for k in EXPECT_KEYS if r1.get(k) != r2.get(k))}")
+                res[n] = dict(r1, status="nondeterministic")
     done = sum(1 for n in names if res.get(n, {}).get("complete") == "1")
     print(f"CORPUS: {done}/{len(names)} complete; results in {bdir}")
     bad = 0
