@@ -220,7 +220,12 @@ static DWORD WINAPI my_GetModuleFileNameA(HMODULE h, LPSTR buf, DWORD n)
     if (!h || h == (HMODULE)0x400000) { snprintf(buf, n, "%s\\Lords2.exe", g_gamedir_abs); return (DWORD)strlen(buf); }
     return GetModuleFileNameA(h, buf, n);
 }
-static LPTOP_LEVEL_EXCEPTION_FILTER WINAPI my_SetUnhandledExceptionFilter(LPTOP_LEVEL_EXCEPTION_FILTER f) { SetUnhandledExceptionFilter(f); return NULL; }
+/* retail's CRT installs a top-level filter; an unhandled fault then reached the default handler — wine's
+ * auto-debugger / Windows error reporting suspended every thread (the watchdog too) and the run hung until
+ * the driver's timeout. rhost keeps its own last-chance filter (rh_crash_filter) and only records retail's. */
+static LPTOP_LEVEL_EXCEPTION_FILTER g_retail_filter;
+static LPTOP_LEVEL_EXCEPTION_FILTER WINAPI my_SetUnhandledExceptionFilter(LPTOP_LEVEL_EXCEPTION_FILTER f)
+{ LPTOP_LEVEL_EXCEPTION_FILTER old = g_retail_filter; g_retail_filter = f; return old; }
 static void WINAPI my_GlobalMemoryStatus(LPMEMORYSTATUS m)
 {
     memset(m, 0, sizeof *m); m->dwLength = sizeof *m; m->dwMemoryLoad = 25;
@@ -388,6 +393,13 @@ static LONG CALLBACK crash_veh(EXCEPTION_POINTERS *e)
            e->ExceptionRecord->ExceptionInformation[0] ? "write" : "read", (unsigned long)e->ExceptionRecord->ExceptionInformation[1],
            c->Eax, c->Ebx, c->Ecx, c->Edx, c->Esi, c->Edi, c->Esp, c->Ebp, b);
     return EXCEPTION_CONTINUE_SEARCH;
+}
+
+static LONG WINAPI rh_crash_filter(EXCEPTION_POINTERS *e)
+{
+    rh_log("RESULT status=crash reason=%08lx frame=%u tick=%u screen=%02x at=%08x\n", e->ExceptionRecord->ExceptionCode, g_frame,
+           G32(L2_SIM_TICK), G8(L2_SCREEN), (unsigned)(uintptr_t)e->ExceptionRecord->ExceptionAddress);
+    ExitProcess(5);
 }
 
 /* ---- the frame ---- */
@@ -635,6 +647,8 @@ int main(int argc, char **argv)
     retail_image_t img;
     if (retail_map(exe_abs, &img)) rh_fatal("map %s failed", exe_abs);
     layout_from_pe();
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+    SetUnhandledExceptionFilter(rh_crash_filter);
     AddVectoredExceptionHandler(0, crash_veh);   /* first in, last called: probes' handlers see theirs first */
     rh_log("rhost: mapped %s (imports: %d real, %d rhost, %d unresolved) entry=%08x text=%08x+%x data=%08x..%08x\n",
            exe_abs, img.n_imports_resolved, img.n_imports_host, img.n_imports_stubbed, img.entry, RT_TEXT_LO, RT_TEXT_SZ, RT_DATA_LO, RT_DATA_HI);
