@@ -114,6 +114,14 @@ extern int g_siege_sel_attacker;    /* DAT_0055cd58 */
 extern int g_siege_sel_region;      /* DAT_0052f0a8 */
 extern int g_siege_besieger;        /* DAT_00568ed0 */
 extern int g_siege_region;          /* DAT_00554000 */
+/* Battlefield end / result-screen state (FUN_00477dfc and its callees). */
+extern int      g_combat_owner_5656f8;   /* DAT_005656f8 — on a surrender (DAT_0056d5c8)
+                                          * the side this player owns loses */
+extern int      g_combat_ctrl_52afac;    /* DAT_0052afac — > 1 skips a siege's result
+                                          * panel (straight to the end count) */
+extern int      g_combat_flag_53f248;    /* DAT_0053f248 — result movies on */
+extern int      g_combat_result_row;     /* DAT_00553fb8 — result movie row 0..5 */
+extern uint32_t g_combat_msg_clock;      /* DAT_004eeae8 — last "battle over" message */
 
 /* Set the combat-redraw flag (retail DAT_00567d0c) — written 1 by
  * engine_combat_transfer_ownership, written 2 by the army-select "claim an
@@ -449,5 +457,46 @@ void engine_combat_break_siege_link(int occ);
  * the realm's mustered-unit scratch (g_per_army_768 +0x1ad, A_F1AD) — 0 when no
  * slot is.  Pure scalar/record bookkeeping; pool-slot count is s_slot_00554030. */
 void engine_combat_rotate_merc_offers(void);
+
+/* ===================================================================== *
+ *  The battlefield's exits and the siege assault.  The battlefield (screen
+ *  0x12) and the result screens stay unported: bound seams, default NULL. *
+ * ===================================================================== */
+
+/* Bind the battlefield / result-screen callees: siege_result FUN_0042c64f,
+ * return_to_map FUN_004788c6, writeback FUN_0047f474 (casualties → records),
+ * result_panel FUN_00423241, stop_stream FUN_00426d11(slot), result_movie
+ * FUN_0042d91b(k_combat_result_movies[siege][index / 4][index % 4], x, y, z,
+ * screen), message FUN_0043eda0(id, arg). */
+void engine_combat_bind_battlefield_fns(void (*siege_result)(void), void (*return_to_map)(void),
+                                        void (*writeback)(void), void (*result_panel)(void),
+                                        void (*stop_stream)(int slot),
+                                        void (*result_movie)(int siege, int index, int x, int y,
+                                                             int z, int screen),
+                                        void (*message)(int id, int arg));
+/* Retail's result-movie names (0x4d9278 field / 0x4d93f8 siege, 6 rows × 4). */
+extern const char *const k_combat_result_movies[2][6][4];
+
+/* Port of FUN_004aa6ca — stage battle side `rec`'s siege equipment in its
+ * result accumulators (+0x17a..+0x180): side 4 the besieger's engine counts,
+ * side 0 the defender's castle class from DAT_0055401c. */
+void engine_combat_stage_siege_side(int rec, int side);
+/* Port of FUN_00478419 — the result movie row (g_combat_result_row) from the
+ * outcome (field / siege, local win / loss, attacker / defender). */
+void engine_combat_pick_result_row(void);
+/* Port of FUN_0043b622 — the battlefield's AUTO_RESOLVE button (screen 0x12
+ * only): resolve, aftermath, quick-anim result screen 0x13. */
+void engine_combat_auto_resolve_button(engine_event_queue_state_t *evq, int mp_active);
+/* Port of FUN_0043be65 — leave the battlefield: resolve; a siege → the siege
+ * result screen 0x2e, a field battle → rendered aftermath, 0x13, the map. */
+void engine_combat_battlefield_end(engine_event_queue_state_t *evq, int mp_active);
+/* Port of FUN_00477dfc — the battlefield's per-frame end check (frame driver,
+ * DAT_0057c8fc == 2): decide the outcome, show the result panel + movie, count
+ * to 5000 frames, then leave like engine_combat_battlefield_end. */
+void engine_combat_battlefield_end_tick(engine_event_queue_state_t *evq, int mp_active);
+/* Port of FUN_004a8aab — the siege assault by besieger `occ` (turn driver
+ * phase 2 / the assault button): repelled by a strong castle without engines,
+ * else sized and resolved / played back / fought on the battlefield. */
+void engine_combat_siege_assault(int occ, engine_event_queue_state_t *evq, int mp_active);
 
 #endif /* OPENLORDS2_ENGINE_COMBAT_H */

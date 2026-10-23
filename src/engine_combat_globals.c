@@ -37,6 +37,11 @@ int      g_siege_sel_attacker;       /* DAT_0055cd58 */
 int      g_siege_sel_region;         /* DAT_0052f0a8 */
 int      g_siege_besieger;           /* DAT_00568ed0 */
 int      g_siege_region;             /* DAT_00554000 */
+int      g_combat_owner_5656f8;      /* DAT_005656f8 */
+int      g_combat_ctrl_52afac;       /* DAT_0052afac */
+int      g_combat_flag_53f248;       /* DAT_0053f248 */
+int      g_combat_result_row;        /* DAT_00553fb8 */
+uint32_t g_combat_msg_clock;         /* DAT_004eeae8 */
 
 /* engine_army_move.c */
 uint8_t  g_army_move_cell_flags;     /* DAT_0050a4a4 */

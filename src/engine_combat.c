@@ -2151,3 +2151,325 @@ void engine_combat_rotate_merc_offers(void)
     for (int v = 1; v <= (int)s_slot_0056d5dc; v++)
         REGREC(v)[A_F1AD] = (uint8_t)merc_offer_holder((unsigned)v);
 }
+
+/* ===================================================================== *
+ *  The battlefield's exits and the siege assault (FUN_0043b622 /         *
+ *  FUN_0043be65 / FUN_00477dfc / FUN_004a8aab / FUN_004aa6ca /           *
+ *  FUN_00478419).  The battlefield itself (screen 0x12) and the result    *
+ *  screens stay retail: their entry points are bound seams.               *
+ * ===================================================================== */
+
+/* Realm-record castle fields the assault reads (g_per_army_768). */
+#define R_CASTLE_STAGE  0x1c1   /* castle under construction: stage + 1 (u8)   */
+#define R_CASTLE_KIND   0x1c3   /* 1 building / 2 complete (u8)                */
+#define R_CASTLE_LEVEL  0x1f9   /* completed castle's defence level (u8)       */
+
+/* Unported battlefield / result-screen callees (default NULL: no-op). */
+static void (*g_bf_siege_result_fn)(void);           /* FUN_0042c64f */
+static void (*g_bf_return_to_map_fn)(void);          /* FUN_004788c6 */
+static void (*g_bf_writeback_fn)(void);              /* FUN_0047f474 */
+static void (*g_bf_result_panel_fn)(void);           /* FUN_00423241 */
+static void (*g_bf_stop_stream_fn)(int slot);        /* FUN_00426d11 */
+static void (*g_bf_result_movie_fn)(int siege, int index, int x, int y, int z, int screen);  /* FUN_0042d91b */
+static void (*g_bf_message_fn)(int id, int arg);     /* FUN_0043eda0 */
+
+void engine_combat_bind_battlefield_fns(void (*siege_result)(void), void (*return_to_map)(void),
+                                        void (*writeback)(void), void (*result_panel)(void),
+                                        void (*stop_stream)(int),
+                                        void (*result_movie)(int, int, int, int, int, int),
+                                        void (*message)(int, int))
+{
+    g_bf_siege_result_fn = siege_result;  g_bf_return_to_map_fn = return_to_map;
+    g_bf_writeback_fn    = writeback;     g_bf_result_panel_fn  = result_panel;
+    g_bf_stop_stream_fn  = stop_stream;   g_bf_result_movie_fn  = result_movie;
+    g_bf_message_fn      = message;
+}
+
+static void bf_siege_result(void)  { if (g_bf_siege_result_fn) g_bf_siege_result_fn(); }
+static void bf_return_to_map(void) { if (g_bf_return_to_map_fn) g_bf_return_to_map_fn(); }
+
+/* The result movies FUN_00477dfc plays: retail's two 6 × 4 name tables
+ * (0x4d9278 field battle, 0x4d93f8 siege; 16-byte stride), row = the result
+ * kind g_combat_result_row, column = the rotating DAT_0053f084. */
+const char *const k_combat_result_movies[2][6][4] = {
+    { { "bat_win1.smk", "bat_win2.smk", "bat_win3.smk", "bat_win4.smk" },
+      { "bat_los1.smk", "bat_los2.smk", "bat_los3.smk", "bat_los4.smk" },
+      { "cas_win1.smk", "cas_win2.smk", "cas_win1.smk", "cas_win2.smk" },
+      { "cas_los1.smk", "cas_los2.smk", "cas_los1.smk", "cas_los2.smk" },
+      { "sge_win1.smk", "sge_win2.smk", "sge_win1.smk", "sge_win2.smk" },
+      { "sge_los1.smk", "sge_los2.smk", "sge_los1.smk", "sge_los2.smk" } },
+    { { "bat_win5.smk", "bat_win6.smk", "bat_win3.smk", "bat_win4.smk" },
+      { "bat_los5.smk", "bat_los6.smk", "bat_los3.smk", "bat_los4.smk" },
+      { "cas_win3.smk", "cas_win2.smk", "cas_win3.smk", "cas_win1.smk" },
+      { "cas_los3.smk", "cas_los2.smk", "cas_los3.smk", "cas_los1.smk" },
+      { "sge_win1.smk", "sge_win2.smk", "sge_win1.smk", "sge_win2.smk" },
+      { "sge_los1.smk", "sge_los2.smk", "sge_los1.smk", "sge_los2.smk" } },
+};
+
+/* DAT_004d4a58: per castle class (DAT_0056d590), does a completed siege count
+ * as the defender's win when the attacker has not broken in (14 entries; the
+ * two after it are the next table's zeros). */
+static const int32_t k_siege_holds[16] = { 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0 };
+
+/* Port of FUN_004aa6ca (469 B) — stage a battle side's siege equipment in the
+ * result accumulators (+0x17a..+0x180, i16).  Clears all four; side 4 (the
+ * besieger) copies its three equipment counts (+0x182 / +0x188 / +0x18e); side
+ * 0 (the defender) gets the castle class from the defence level DAT_0055401c:
+ * 0 → 1, 1 → 2, 2 → 3, 3 → 4, 4 → 6 (other levels: 0). */
+void engine_combat_stage_siege_side(int rec, int side)
+{
+    uint8_t *r = CREC(rec);
+    int16_t *acc = (int16_t *)(r + C_RESULT);
+    acc[0] = 0; acc[1] = 0; acc[2] = 0; acc[3] = 0;
+    if (side == 4) {
+        acc[0] = rd_i16(r, C_COND_CNT + 0);
+        acc[1] = rd_i16(r, C_COND_CNT + 6);
+        acc[2] = rd_i16(r, C_COND_CNT + 12);
+    } else if (side == 0) {
+        switch ((int)s_slot_0055401c) {
+        case 0: acc[3] = 1; break;
+        case 1: acc[3] = 2; break;
+        case 2: acc[3] = 3; break;
+        case 3: acc[3] = 4; break;
+        case 4: acc[3] = 6; break;
+        default: break;
+        }
+    }
+}
+
+/* Port of FUN_00478419 (177 B) — pick the result movie row
+ * (g_combat_result_row, DAT_00553fb8) from the outcome: field battle 0 local
+ * win / 1 loss; siege (DAT_0053e8fc) 2 / 4 local win as attacker / defender,
+ * 5 / 3 local loss as defender / attacker. */
+void engine_combat_pick_result_row(void)
+{
+    if (s_slot_0053e8fc == 0) {
+        g_combat_result_row = ((int)s_slot_0057c8cc != g_combat_winner_owner);
+        return;
+    }
+    if ((int)s_slot_0057c8cc == g_combat_winner_owner)
+        g_combat_result_row = (s_slot_0057c924 == s_slot_00568210) ? 2 : 4;
+    else
+        g_combat_result_row = (s_slot_0057c924 == s_slot_00568210) ? 5 : 3;
+}
+
+/* Port of FUN_0043b622 (95 B) — the battlefield's AUTO_RESOLVE button: on the
+ * battlefield (screen 0x12) resolve the fight head-less, run the aftermath and
+ * hand over to the quick-anim result screen (0x13). */
+void engine_combat_auto_resolve_button(engine_event_queue_state_t *evq, int mp_active)
+{
+    if (engine_current_screen() != 0x12)
+        return;
+    engine_combat_resolve();                                   /* FUN_004aad07 */
+    engine_combat_aftermath(0, evq, mp_active);                /* FUN_004ab383 */
+    engine_set_current_screen(0x13);                           /* DAT_004eac50 */
+    g_combat_anim_clock = combat_clock();                      /* DAT_005689a0 */
+    s_slot_00553c70     = s_slot_00568210;
+    s_slot_00553d20     = s_slot_00568218;
+    engine_set_demand_redraw(2);                               /* DAT_0057d340 */
+}
+
+/* Port of FUN_0043be65 (129 B) — leave the battlefield (the end-battle
+ * buttons): resolve what is left; a siege battle (DAT_0057a0f0) goes to the
+ * siege result screen (0x2e) and back to the strategic state (DAT_0057c8fc 0,
+ * engine state 2), a field battle to the 0x13 result after the rendered
+ * aftermath, then back to the map. */
+void engine_combat_battlefield_end(engine_event_queue_state_t *evq, int mp_active)
+{
+    engine_combat_resolve();                                   /* FUN_004aad07 */
+    if (s_slot_0057a0f0 != 0) {
+        engine_set_current_screen(0x2e);
+        bf_siege_result();                                     /* FUN_0042c64f */
+        s_slot_0057c8fc = 0;
+        g_engine_state  = 2;                                   /* DAT_0052af94 */
+    } else {
+        engine_set_current_screen(0x13);
+        g_combat_anim_clock = combat_clock();                  /* DAT_005689a0 */
+        engine_combat_aftermath(1, evq, mp_active);            /* FUN_004ab383 */
+        s_slot_00553c70 = s_slot_00568210;
+        s_slot_00553d20 = s_slot_00568218;
+        bf_return_to_map();                                    /* FUN_004788c6 */
+    }
+    engine_set_demand_redraw(2);                               /* DAT_0057d340 */
+}
+
+/* Declare the winner on the battlefield: screen 0x2b (the result panel), the
+ * winning occupant DAT_0057c924 and its owner DAT_005440cc. */
+static void bf_declare(int winner)
+{
+    engine_set_current_screen(0x2b);
+    s_slot_0057c924       = (uint32_t)winner;
+    g_combat_winner_owner = (int8_t)CREC(winner)[C_OWNER];
+}
+
+/* Port of FUN_00477dfc (1225 B) — the battlefield's per-frame end check (frame
+ * driver, sub-state DAT_0057c8fc == 2).  A local battle (role DAT_005533d0 == 1)
+ * or a siege (DAT_0057a0f0): until the result panel is up (screen 0x2b),
+ * decide whether the battle is over — a surrender (DAT_0056d5c8: the side
+ * DAT_005656f8 does not own wins), an army wiped out (attacker head
+ * DAT_0053f028, defender DAT_00553c58), or in a siege (DAT_0053e8fc) the
+ * attacker broken (DAT_00553f3c) / the walls holding with no breach left
+ * (DAT_0053e990 / DAT_00553ff0 both 0: the castle class table for a siege,
+ * else defence level > 2; otherwise both breach timers restart at 4) — and on
+ * an outcome pick the result movie row, show the result panel and play its
+ * movie (or skip straight to the end, counter 5000, for a later assault of a
+ * multi-wave siege).  With the panel up, count frames to 5000, then write the
+ * casualties back and leave (siege result screen, or aftermath + map).
+ * Anyone else's battle only posts the "battle over" message every 2 s. */
+void engine_combat_battlefield_end_tick(engine_event_queue_state_t *evq, int mp_active)
+{
+    if (s_slot_005533d0 != 1 && s_slot_0057a0f0 == 0) {
+        int over = 0;
+        if ((int)s_slot_0053f028 <= 0) over = 1;
+        if ((int)s_slot_00553c58 <= 0) over = 1;
+        if (s_slot_0053e8fc != 0) {
+            if (s_slot_00553f3c != 0) over = 1;
+            if (s_slot_0053e990 == 0 && s_slot_00553ff0 == 0 && (int)s_slot_0055401c > 2) over = 1;
+        }
+        if (over >= 1) {
+            uint32_t now = combat_clock();
+            if ((int)(now - g_combat_msg_clock) >= 2000) {
+                g_combat_msg_clock = now;                      /* DAT_004eeae8 */
+                if (g_bf_message_fn) g_bf_message_fn(0x30, 0); /* FUN_0043eda0 */
+            }
+        }
+        return;
+    }
+
+    if (engine_current_screen() == 0x2b) {
+        if ((int)++s_slot_00568470 <= 5000)
+            return;
+        if (g_bf_writeback_fn) g_bf_writeback_fn();            /* FUN_0047f474 */
+        if (s_slot_0057a0f0 != 0) {
+            engine_set_current_screen(0x2e);
+            bf_siege_result();                                 /* FUN_0042c64f */
+            s_slot_0057c8fc = 0;
+            g_engine_state  = 2;                               /* DAT_0052af94 */
+        } else {
+            engine_combat_aftermath(1, evq, mp_active);        /* FUN_004ab383 */
+            if (engine_current_screen() != 0x13) {
+                engine_set_current_screen(0x13);
+                g_combat_anim_clock = combat_clock();          /* DAT_005689a0 */
+                s_slot_00553c70 = s_slot_00568210;
+                s_slot_00553d20 = s_slot_00568218;
+            }
+            bf_return_to_map();                                /* FUN_004788c6 */
+        }
+        engine_set_demand_redraw(2);                           /* DAT_0057d340 */
+        return;
+    }
+
+    int a = (int)s_slot_00568210, d = (int)s_slot_00568218;
+    if (g_combat_render_active != 0) {
+        if ((int8_t)CREC(a)[C_OWNER] == g_combat_owner_5656f8) bf_declare(d);
+        else                                                   bf_declare(a);
+    } else if ((int)s_slot_0053f028 <= 0) {
+        bf_declare(d);
+    } else if ((int)s_slot_00553c58 <= 0) {
+        bf_declare(a);
+    } else if (s_slot_0053e8fc != 0) {
+        if (s_slot_00553f3c != 0)
+            bf_declare(a);
+        if (s_slot_0053e990 == 0 && s_slot_00553ff0 == 0) {
+            int holds = s_slot_0057a0f0 != 0 ? k_siege_holds[s_slot_0056d590]
+                                             : (int)s_slot_0055401c > 2;
+            if (holds != 0) {
+                bf_declare(d);
+            } else {
+                s_slot_0053e990 = 4;
+                s_slot_00553fb0 = 4;
+            }
+        }
+    }
+
+    if (engine_current_screen() != 0x2b)
+        return;
+    engine_combat_pick_result_row();                           /* FUN_00478419 */
+    if (s_slot_0057a0f0 != 0)
+        s_slot_00568470 = 0;
+    if (g_combat_ctrl_52afac > 1 && s_slot_0053e8fc != 0 && s_slot_0057a0f0 == 0) {
+        s_slot_00568470 = 5000;
+        return;
+    }
+    if (g_bf_result_panel_fn) g_bf_result_panel_fn();          /* FUN_00423241 */
+    if (g_combat_flag_53f248 != 0 && s_slot_005533d0 != 0) {
+        if (g_bf_stop_stream_fn) g_bf_stop_stream_fn(0);       /* FUN_00426d11(0) */
+        if (g_bf_result_movie_fn)                              /* FUN_0042d91b */
+            g_bf_result_movie_fn(s_slot_0057a0f0 != 0, g_combat_result_row * 4 + (int)s_slot_0053f084,
+                                 0x27, 0x49, 0, engine_current_screen());
+        if ((int)++s_slot_0053f084 >= 4)
+            s_slot_0053f084 = 0;
+    }
+}
+
+/* Port of FUN_004a8aab (753 B) — the siege assault on besieger `occ`'s keep
+ * (turn driver phase 2 once the siege engines are built; the "assault" button
+ * FUN_0043b98a).  The defence level DAT_0055401c comes from the besieged
+ * realm's castle (a castle under construction: its stage; a complete one: its
+ * level; else the keep level - 1); DAT_0057c910 = level >= 2.  A strong castle
+ * (level >= 3) the besieger has no engines for repels the assault (event 0x119
+ * to the besieger's owner, siege lifted).  Otherwise the realm's pending
+ * defender meets the besieger: sized (FUN_004a6a30) and, as a siege
+ * (DAT_0053e8fc = 1), resolved head-less, played back (0x13), or fought on the
+ * battlefield (0x12, both sides' siege equipment staged, s080 cue). */
+void engine_combat_siege_assault(int occ, engine_event_queue_state_t *evq, int mp_active)
+{
+    uint8_t *b      = CREC(occ);
+    int      region = b[C_F199];
+    uint8_t *reg    = REGREC(region);
+
+    s_slot_0056822c = (uint32_t)region;
+    if (reg[R_CASTLE_KIND] == 1 && reg[R_CASTLE_STAGE] != 0)
+        s_slot_0055401c = (uint32_t)(reg[R_CASTLE_STAGE] - 1);
+    else if (reg[R_CASTLE_KIND] == 2)
+        s_slot_0055401c = reg[R_CASTLE_LEVEL];
+    else
+        s_slot_0055401c = (uint32_t)(reg[R_KEEPLVL] - 1);
+    s_slot_0057c910 = (int)s_slot_0055401c >= 2;
+
+    int engines = 0;
+    for (int i = 0; i < 3; i++)
+        engines += rd_i16(b, C_COND_CNT + i * 6);
+
+    if ((int)s_slot_0055401c >= 3 && engines <= 0) {
+        uint8_t hd[7]; build_has_data(hd);
+        engine_event_queue_post(evq, 0, (int8_t)b[C_OWNER], 0x119, 0, 0x10, (uint8_t)region, 0, 0,
+                                hd, (int)s_slot_0057c8cc);
+        engine_combat_break_siege_link(occ);                  /* FUN_0043b917 */
+        return;
+    }
+
+    s_slot_00568210 = (uint32_t)occ;
+    s_slot_00568218 = (uint32_t)rd_i32(reg, R_PENDING);
+    if (engine_combat_size_battle((int)s_slot_00568210, (int)s_slot_00568218,
+                                  (int)s_slot_0057c8cc) == 0) {  /* FUN_004a6a30 */
+        s_slot_0053e8fc = 1;
+        engine_combat_resolve();
+        engine_combat_aftermath(0, evq, mp_active);
+        return;
+    }
+    if (g_combat_flag_53f284 == 0 && g_combat_both_garrison == 0) {
+        s_slot_0053e8fc = 1;
+        engine_combat_resolve();
+        engine_combat_aftermath(0, evq, mp_active);
+        engine_set_current_screen(0x13);
+        g_combat_anim_clock = combat_clock();                  /* DAT_005689a0 */
+        s_slot_00553c70 = s_slot_00568210;
+        s_slot_00553d20 = s_slot_00568218;
+        engine_set_demand_redraw(2);
+        return;
+    }
+    s_slot_0053e8fc = 1;
+    engine_combat_stage_siege_side((int)s_slot_00568210, 4);   /* FUN_004aa6ca */
+    engine_combat_stage_siege_side((int)s_slot_00568218, 0);
+    engine_set_current_screen(0x12);
+    g_combat_battle_clock = combat_clock();                    /* DAT_0057a0d0 */
+    g_combat_audio_latch  = 1;
+    if (s_slot_005533d0 == 1)
+        combat_wav("s080_03.wav", 1, 0);
+    else if (s_slot_005533d0 == 2)
+        combat_wav("s080_01.wav", 1, 0);
+    else
+        combat_wav("s080_02.wav", 1, 0);
+    engine_set_demand_redraw(2);
+}
