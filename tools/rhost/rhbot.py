@@ -39,8 +39,12 @@ class Session:
     def __init__(self, name="bot", target="wine", trace=None, extra=(), port=None, step_ms=None, vbase=None,
                  hold=2, log=None):
         self.name, self.target, self.hold = name, target, hold
-        self.port = port or (27100 + os.getpid() % 800)
-        self.batch = datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "-bot-" + name
+        self.srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.srv.bind(("127.0.0.1", port or 0))          # 0: a free port (parallel sessions in one process)
+        self.srv.listen(1)
+        self.port = self.srv.getsockname()[1]
+        self.batch = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:-3] + "-bot-" + name
         meta = rhost.trace_meta(trace) if trace else {}
         win_run = f"{rhost.WROOT}\\runs\\{self.batch}\\{name}"
         args = ["--exe", f"{rhost.WROOT}\\game\\Lords2.exe", "--game", f"{rhost.WROOT}\\game", "--run", win_run,
@@ -52,10 +56,6 @@ class Session:
         if trace:
             args += ["--trace", f"{win_run}\\trace.jsonl"]
         args += list(extra)
-        self.srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.srv.bind(("127.0.0.1", self.port))
-        self.srv.listen(1)
         if target == "wine":
             if rhost.rhost_stale():
                 rhost.cmd_build()
