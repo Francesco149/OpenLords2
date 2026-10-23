@@ -29,6 +29,18 @@ smackw32 (10 ordinals), DPLAYX (ordinals 1, 2). No registry, no DirectInput, no 
   DAT_005ceff8 >= 0x10 { DAT_0057d378++; … }` — a 16 ms animation pacer added by the patch. A loader that
   copies only VirtualSize bytes runs into zeros on the first in-game frame (AV f1321). Windows maps the
   whole last page. IDA/Ghidra exports must include it.
+- **smackw32.dll is a Watcom PE**: every section's VirtualSize is 0 and `.bss` has a raw size with no raw
+  data (PointerToRawData 0) — a mapper must zero-fill it (copying "from offset 0" puts the DOS header there:
+  its `free()` then walks a garbage heap list). Its preferred base is 0x400000 (= retail's), so it is always
+  relocated. Exports by ordinal; Lords2 imports 10 (SmackOpen 14, SoundOnOff 17, Close 18, DoFrame 19,
+  NextFrame 21, ToBuffer 23, Goto 27, ToBufferRect 28, Wait 32, SetDirectSoundHWND 37).
+- **Smacker plays the soundtrack through waveOut with CALLBACK_NULL and paces video by polling WHDR_DONE**
+  (no timer, no DirectSound buffer): a waveOut fake that completes buffers instantly — or never — makes the
+  intro crawl at ~1/6 speed; completing each buffer when the virtual clock has played its bytes gives the
+  movie's own 12 fps. Retail's movie step (FUN_0042dbc7) returns early while SmackWait (ordinal 32) says wait.
+- **The boot sequence with movies**: intro.smk (1,578 frames, 2:15), imptitle.smk, credits.smk, each to a
+  "natural end" in status.txt, then the title at ~frame 11,000. In play: jail.smk (the lord captured);
+  the victory/defeat screen 0x1c stays black and waits for a click when its movie is skipped.
 - **Retail tolerates a failed SmackOpen**: FUN_0042da18 logs `ERR:SMK Could not open intro.smk` and
   returns 0; the game continues to the title. rhost skips every movie this way.
 - **Report scrolls dismiss with RMB, the "Non 256 colour display" scroll appears** on any non-8 bpp

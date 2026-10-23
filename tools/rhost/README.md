@@ -67,7 +67,7 @@ k-th call of `FUN_004b99c0` (the sim + render driver). Coordinates are 640×480 
 | stack addresses, x87 control word | fixed stack 0x58000000..0x59000000, TEB bounds set; CW 0x027F at entry (what Windows gives a thread) |
 | command line, environment, version, memory status, code pages, cursors/icons, stock objects | constants |
 | the user's saves / any game-dir write; save-list timestamps | `rh_files.c`: game dir read-only, writes copy-on-write into the run dir; `FindFirstFile` merges both, sorted, fixed timestamps |
-| Smacker movies (smackw32's own threads and clock) | not loaded: `SmackOpen` fails, retail logs `ERR:SMK` and skips the movie (`--movies` reserved for a deterministic Smacker later) |
+| Smacker movies (smackw32: its own CRT heap, clock, file handles, waveOut soundtrack) | default: not loaded, `SmackOpen` fails, retail logs `ERR:SMK` and skips the movie. `--movies` (trace meta `"movies": true`): `rh_smack.c` maps smackw32 itself at 0x18000000, binds its imports to these layers (its heap on a fixed region outside the hashed arena), and runs its waveOut soundtrack on the virtual clock (Smacker paces video by polling WHDR_DONE) — the real boot plays intro / imptitle / credits to their natural ends, Windows ≡ wine |
 | DirectPlay (multiplayer) | stubbed: unavailable |
 
 Residual: **none measured** — `det` finds 0 differing dwords between runs (full hash identical), no
@@ -104,5 +104,5 @@ render port; two scenarios side by side for anything else.
 
 ## Speed (2026-10-23)
 
-Title screen: ~11k fps Windows, ~8–11k fps wine (single run). In game with `--fb-hash`: ~2–3k fps. A
+Boot with movies (12,000 frames, ~3.5 min of game time): < 1 s. Title screen: ~11k fps Windows, ~8–11k fps wine (single run). In game with `--fb-hash`: ~2–3k fps. A
 3700-frame two-turn scenario replays in < 2 s; a whole batch round trip to Windows ≈ 3 s.
