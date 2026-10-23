@@ -385,7 +385,13 @@ const char *rh_trace_status(void)
     snprintf(b, sizeof b, "trace_events=%u/%u complete=%d posted=%u dispatched=%u", g_iev, g_nev, g_iev >= g_nev, g_nposted, g_ndispatched);
     return b;
 }
-void rh_trace_finish(void) { if (g_recf) { fclose(g_recf); g_recf = NULL; rh_log("trace written to %s\n", O.out_trace); } }
+void rh_trace_finish(void)
+{
+    if (!g_recf) return;
+    fprintf(g_recf, "{\"meta\": {\"frames\": %u}}\n", g_frame);   /* replay runs to where this run ended */
+    fclose(g_recf); g_recf = NULL;
+    rh_log("trace written to %s\n", O.out_trace);
+}
 
 void rh_win_install(void)
 {
