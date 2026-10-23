@@ -84,11 +84,21 @@ def decide(st, rng, temperature=1.0, session_id=None):
             "draft": {"type": "score", "instructions": f"How much of {name}'s population should be drafted into a new army now?",
                       "criteria": ["nobody", "a token force (8%)", "a small army (15%)", "a real army (25%)", "a large army (40%)"]},
         }
+        castle = c.get("castle") or {}
+        if not castle.get("building") and castle.get("level", 0) < 5:
+            q["castle"] = {"type": "noul", "instructions": f"Should {name} start building a stronger castle "
+                           f"(it has a {castle.get('name', 'none')}; building needs wood, stone and builders)?",
+                           "criteria": {"true": "yes, start the next castle design now", "false": "no, not this season"}}
         a = llm.decide(dict(state, deciding_for=name), q, session_id=session_id)
         raw[cid] = a
-        pick = {k: int(sample(a[k]["probabilities"], rng, temperature)) for k in q}
+        pick = {k: int(sample(a[k]["probabilities"], rng, temperature)) for k in q if k != "castle"}
         plan["counties"][cid] = {"tax": TAX_LEVELS[pick["tax"]], "ration": pick["ration"],
                                  "industry_pct": INDUSTRY_PCT[pick["industry"]], "draft": ARMY_FRACTION[pick["draft"]]}
+        if "castle" in q:
+            p_yes = float(a["castle"].get("noul", 0)) ** (1.0 / max(1e-3, temperature))
+            p_no = (1.0 - float(a["castle"].get("noul", 0))) ** (1.0 / max(1e-3, temperature))
+            if rng.random() * (p_yes + p_no) < p_yes:
+                plan["counties"][cid]["castle"] = (castle.get("level", 0) or 0) + 1
     if state["my_counties"]:
         q = {"trade": {"type": "choice", "instructions": "Should the lord trade with the merchant this season, and what?", "criteria": TRADES},
              "qty": {"type": "score", "instructions": "How much should be traded?", "criteria": [f"{n} units" for n in TRADE_QTY]},

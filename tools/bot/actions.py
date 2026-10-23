@@ -164,3 +164,30 @@ def gift(s, ui, crowns):
         s.click(*BACK, right=True); s.run(GAP)
     ui.settle(max_frames=600)
     return "sent"
+
+
+# ---- castles (screen 0x1b): the design strip, then "Start construction?" yes (verified 2026-10-23) ----
+CASTLE_ICON = (592, 447)
+CASTLE_DESIGNS = [(60, 340), (145, 345), (250, 320), (360, 360), (530, 330)]   # palisade .. royal castle
+BUILD_YES = (447, 455)
+
+
+def build_castle(s, ui, level):
+    """start building castle design `level` (1 palisade .. 5 royal) in the selected county"""
+    if not 1 <= level <= 5:
+        return "no such design"
+    s.click(*CASTLE_ICON); s.run(40)
+    _dismiss_hint(s)
+    if s.screen != 0x1b:
+        ui.settle(max_frames=600)
+        return f"castle screen did not open ({s.screen:#x})"
+    s.click(*CASTLE_DESIGNS[level - 1]); s.run(30)
+    s.move(*BUILD_YES, frames=6); s.click(*BUILD_YES); s.run(40)
+    for _ in range(3):
+        if s.screen == 0:
+            break
+        s.click(*BACK, right=True); s.run(GAP)
+    ui.settle(max_frames=600)
+    st = l2state.snapshot(s.read)
+    c = next((x for x in st["counties"] if x["id"] == st["selected_county"]), {})
+    return "started " + c.get("castle", {}).get("building", "?") if c.get("castle", {}).get("building") else "not started"

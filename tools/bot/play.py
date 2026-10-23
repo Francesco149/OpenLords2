@@ -64,6 +64,8 @@ def apply_plan(s, ui, st, plan, log):
         rat = actions.set_rations(s, ui, p["ration"], lambda: s.read(CB + cid * CS + 0x15E, 1)[0])
         ind = set_industry(s, ui, cid, p["industry_pct"])
         done.append(("county", cid, {"tax": tax, "ration": rat, "industry_pct": ind}))
+        if p.get("castle"):
+            done.append(("castle", cid, p["castle"], actions.build_castle(s, ui, p["castle"])))
         pop = next((c["population"] for c in st["counties"] if c["id"] == cid), 0)
         if p["draft"] > 0 and pop * p["draft"] >= 20:
             a = actions.raise_army(s, ui, int(pop * p["draft"]))
