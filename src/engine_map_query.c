@@ -21,16 +21,18 @@ void engine_map_query_bind_cell_descriptors(const uint8_t *cells)
     g_cells = cells;
 }
 
+int32_t g_cell_cursor_col;   /* DAT_00569570 */
+int32_t g_cell_cursor_row;   /* DAT_00569578 */
+
 /* Port of FUN_0046d2a3.  Returns 1 iff every cell in the `size`×`size`
  * square anchored at (col, row) is "clear" — i.e. both the raw-flag
  * byte (cell + 1) and the head-link byte (cell + 5) are zero.  Returns
  * 0 if any cell is occupied OR the square would leave the 0..63 grid.
  *
- * Retail reuses the find-nearest scratch globals DAT_00569570 /
- * DAT_00569578 as the inner/outer loop counters (a codegen artifact —
- * they save a couple of stack slots).  The loop-exit values are never
- * consumed, so we use locals here rather than clobber engine_path's
- * nearest-result globals.  See quirk noted in the commit.
+ * Retail uses the shared cell cursor DAT_00569570 / DAT_00569578 as the
+ * inner/outer loop counters; nothing consumes the exit values, but they are
+ * live process state, so the port counts in g_cell_cursor_col/row too
+ * (in-process shadow, docs/findings/engine-quirks.md #226).
  */
 int engine_map_query_region_clear(int col, int row, int size)
 {
@@ -42,8 +44,8 @@ int engine_map_query_region_clear(int col, int row, int size)
     if (g_cells == NULL) return 0;
 
     int idx = (row * 0x40 + col) * 8;   /* byte offset of cell (col,row) */
-    for (int r = row; r < row + size; r++) {
-        for (int c = col; c < col + size; c++) {
+    for (g_cell_cursor_row = row; g_cell_cursor_row < row + size; g_cell_cursor_row++) {
+        for (g_cell_cursor_col = col; g_cell_cursor_col < col + size; g_cell_cursor_col++) {
             if (g_cells[idx + 5] != 0) return 0;   /* head-link byte */
             if (g_cells[idx + 1] != 0) return 0;   /* raw-flag byte  */
             idx += 8;
@@ -61,15 +63,12 @@ int engine_map_query_region_clear(int col, int row, int size)
  * (flag & mask) == expect, else 0.
  *
  * On a hit the matching cell's (col, row) is written to *out_col /
- * *out_row when those pointers are non-NULL.  Retail does not need an
- * out-param: it reuses engine_path's find-nearest scratch globals
- * DAT_00569570 (col) / DAT_00569578 (row) as the loop counters (a
- * codegen artifact), so on the return-1 path those globals already
- * hold the matched cell.  We surface the cell explicitly instead of
- * clobbering engine_path's result globals; callers that ignore the
- * position (the ring finder, region_clear) pass NULL.  This is what
- * lets FUN_00427ed0 place an entity AT the found cell — see
- * docs/findings/engine-quirks.md quirk #130. */
+ * *out_row when those pointers are non-NULL.  Retail has no out-param:
+ * its loop counters ARE the shared cell cursor DAT_00569570 (col) /
+ * DAT_00569578 (row), so on the return-1 path they hold the matched
+ * cell (quirk #130) and on a miss the scan's end position.  The port
+ * counts in g_cell_cursor_col/row exactly the same way (quirk #226) and
+ * also surfaces the hit through the out-params its callers use. */
 static int box_scan(int col, int row, int radius,
                     unsigned mask, unsigned expect,
                     int *out_col, int *out_row)
@@ -90,12 +89,12 @@ static int box_scan(int col, int row, int radius,
     else                        { yext = side; }
 
     int idx = (y * 0x40 + x) * 8;
-    for (int r = y; r < y + yext; r++) {
-        for (int c = x; c < x + xext; c++) {
+    for (g_cell_cursor_row = y; g_cell_cursor_row < y + yext; g_cell_cursor_row++) {
+        for (g_cell_cursor_col = x; g_cell_cursor_col < x + xext; g_cell_cursor_col++) {
             if (g_cells[idx + 5] == 0 &&
                 ((unsigned)g_cells[idx + 1] & mask) == expect) {
-                if (out_col) *out_col = c;
-                if (out_row) *out_row = r;
+                if (out_col) *out_col = g_cell_cursor_col;
+                if (out_row) *out_row = g_cell_cursor_row;
                 return 1;
             }
             idx += 8;

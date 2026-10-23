@@ -751,6 +751,7 @@ void engine_army_economy_plan_secondary(int key)
 
 int engine_army_economy_eval_cost(void)    { return g_eval_cost; }
 int engine_army_economy_eval_revenue(void) { return g_eval_revenue; }
+void engine_army_economy_set_eval_scratch(int cost, int revenue) { g_eval_cost = cost; g_eval_revenue = revenue; }
 
 /* FUN_0044da99 */
 void engine_army_economy_eval_candidate(int key, int budget, int level,
@@ -1155,6 +1156,7 @@ void engine_army_economy_bind_resource_pool(uint8_t *pool)
 
 int engine_army_economy_supply_pool_a(void) { return g_supply_pool_a; }
 int engine_army_economy_supply_pool_b(void) { return g_supply_pool_b; }
+void engine_army_economy_set_supply_pools(int pool_a, int pool_b) { g_supply_pool_a = pool_a; g_supply_pool_b = pool_b; }
 
 /* FUN_0044f15b */
 void engine_army_economy_sum_supply_pools(int group)

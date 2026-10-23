@@ -65,6 +65,8 @@ int engine_territory_place_entity(int kind, int col, int row, int type);
  * DAT_0052afe0).  Callers read it to stamp extra fields into the fresh
  * record; undefined before the first placement. */
 int engine_territory_current_slot(void);
+/* Set it (the in-process verifier loads retail's DAT_0052afe0 before a port call). */
+void engine_territory_set_current_slot(int slot);
 
 /* Port of FUN_0046c5b8.  Zero byte `field` (0..5 at the call sites) of
  * every overworld cell descriptor (all 4096 cells). */

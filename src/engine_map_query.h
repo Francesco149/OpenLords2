@@ -13,6 +13,14 @@
  * byte +1 (raw-flag) and byte +5 (head-link). */
 void engine_map_query_bind_cell_descriptors(const uint8_t *cells);
 
+/* Retail's shared cell-cursor pair: DAT_00569570 (col) / DAT_00569578 (row).
+ * region_clear and the box scans use them as their loop counters (so a hit
+ * leaves the matching cell in them, a miss the scan's end position), and the
+ * AI cell finders (FUN_004a65a3 / FUN_004a6735) leave their result in them.
+ * One pair of process globals, written exactly where retail writes them. */
+extern int32_t g_cell_cursor_col;   /* DAT_00569570 */
+extern int32_t g_cell_cursor_row;   /* DAT_00569578 */
+
 /* Port of FUN_0046d2a3.  1 iff the `size`×`size` square at (col, row)
  * is entirely clear (raw-flag and head-link bytes zero in every cell)
  * and fits within the 0..63 grid; 0 otherwise. */
@@ -28,8 +36,8 @@ int engine_map_query_region_clear(int col, int row, int size);
  *   _only_bit1  — (flag & 0xfd) == 0      (flag is 0 or 2)  ← FUN_0046d130
  *
  * On a hit the matching cell's (col, row) is written to *out_col /
- * *out_row; pass NULL for either to ignore it.  (Retail leaves the cell
- * in engine_path's scratch globals DAT_00569570/78 — see the .c.) */
+ * *out_row; pass NULL for either to ignore it.  The scan cursor itself is
+ * g_cell_cursor_col/row (DAT_00569570/78), as in retail. */
 int engine_map_query_box_any_rawflag_bit0(int col, int row, int radius,
                                           int *out_col, int *out_row);
 int engine_map_query_box_any_rawflag_only_bit1(int col, int row, int radius,

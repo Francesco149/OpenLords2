@@ -7919,3 +7919,47 @@ the portrait partner-select (FUN_004369bd) are DEFERRED.
 > builder), `src/engine_ingame_input.c` (0x1a close case).  Retail FUN_0041789b /
 > FUN_00417960 / FUN_00436372 / FUN_00436408 / FUN_004a2621 / FUN_0040cfd2 over
 > DAT_004dd9d0.
+
+## 226 — retail's scratch globals are live state: the distance helpers' |dx|/|dy| (DAT_00591560 / DAT_0058fea0) and the shared cell cursor (DAT_00569570 / DAT_00569578) must be written where retail writes them
+
+Found by the in-process shadow (tools/rhost, `rh_hooks_ai.c`), which compares EVERY
+state dword after retail and after the port run on identical pre-state.  Two retail
+"scratch register" pairs that the port had deliberately dropped (quirk #130's
+out-param convention, and "only the distance is consumed, so it is inlined"):
+
+* **FUN_00404f4c / FUN_00404ead** (chebyshev / manhattan) store |x1−x2| in
+  DAT_00591560 and |y1−y2| in DAT_0058fea0 on every call.  The AI target scorers
+  (FUN_004a0649 / FUN_004a03f2) and the cell finders (FUN_004a65a3 / FUN_004a6735 /
+  FUN_004a689d) inlined the distance → `ai_select_target`, `ai_run_campaign`,
+  `ai_run_garrison` diverged on exactly those two dwords.
+* **DAT_00569570 / DAT_00569578** is ONE cursor pair shared by ~55 retail functions:
+  the box scans (FUN_0046cfbd / FUN_0046d130) and FUN_0046d2a3 use it as their loop
+  counters (a hit leaves the cell, a miss the scan's end position), the AI cell
+  finders and FUN_004a689d leave their result in it, and FUN_004a65a3's caller
+  (garrison step, FUN_0049f12f) reads it back.  The port had four private copies
+  (box-scan locals + out-params, `s_ai_find_col/row`, `s_settle_col/row`, combat
+  out-params).
+
+Port: `engine_path_dist_chebyshev/_manhattan` + `g_path_dist_dx/dy` (engine_path.c)
+and `g_cell_cursor_col/row` (engine_map_query.c), written exactly where retail
+writes them; the AI finders and the deploy-cell finder use them (out-params kept).
+Nothing in retail reads these values without re-writing them first, so no gameplay
+changed — but the shadow cannot tell dead state from live state, and neither should
+the port.  The other ~45 retail writers of the cursor pair (territory / render loops)
+still count in locals; each needs the same treatment when it is shadow-verified.
+
+## 227 — the spawned occupant's roster slot (FUN_004a9f72) is keyed by the OWNER, not the realm
+
+FUN_004a9a9a (`engine_combat_spawn_unit(owner, army, …)`) stamps
+`occupant +0x14f = FUN_004a9f72(a1)` — `a1` is the owner player, whose 24-byte
+roster-load array (strategic +0x2d) gets the least-loaded entry bumped by 2.  The
+port passed `army` (the realm key), so it bumped the load of player #realm (when
+realm ≤ 5) or none at all, and stamped a slot index from the wrong array.  The
+rhost shadow of AI brain step 7 (`ai_run_garrison`, FUN_0049f93d → FUN_0049f12f →
+muster → spawn) showed it as player 2's +0x2d (retail) vs player 4's (port) at f1752
+of endturn-2.  Fixed: `spawn_pick_roster_slot(owner)`.
+
+> 📍 `src/engine_combat.c` (spawn_unit, find_deploy_cell), `src/engine_path.c/.h`,
+> `src/engine_map_query.c/.h`, `src/engine_army_ai.c` (target scorers, cell finders);
+> evidence: `tools/rhost/rh_hooks_ai.c` rows ai_run_garrison / ai_select_target /
+> ai_run_campaign.

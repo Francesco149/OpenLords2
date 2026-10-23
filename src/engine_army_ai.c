@@ -30,6 +30,7 @@
 #include "engine_realm.h"          /* engine_realm_player_owns_neighbor (FUN_00467eb0) */
 #include "engine_combat.h"         /* raise_region_unit / find_deploy_cell (step-0xa attack) */
 #include "engine_path_field.h"     /* cost-field fill/trace/copy (brain step 0xb deployment) */
+#include "engine_path.h"           /* engine_path_dist_chebyshev (FUN_00404f4c + its dx/dy globals) */
 #include "engine_realm_upkeep.h"   /* unit_disband / clear_contract / total_wage (step-0xb disband) */
 #include "engine_army_state.h"     /* arm_movement_owned (FUN_004a4e3d — brain terminal check) */
 #include "game_init.h"             /* army_near_rawflag_only_bit1 (step-7 caravan settle probe) */
@@ -1555,8 +1556,8 @@ void engine_army_ai_pick_muster_realms(int player)
  * `player` that `player` would engage (engine_diplomacy_should_engage) and that
  * borders one of `player`'s realms (engine_realm_player_owns_neighbor).  Its
  * score starts at the king-move distance from `from_realm`'s capital to the
- * target's (retail FUN_00404f4c, engine_path_chebyshev_distance — only the
- * distance is used, so it is inlined), then: +0x28 if the target is a defended
+ * target's (retail FUN_00404f4c — engine_path_dist_chebyshev, which also leaves
+ * |dx|/|dy| in DAT_00591560/0058fea0 as retail does), then: +0x28 if the target is a defended
  * keep (+0x1c0 set and a pending garrison +0x1bc); −0x14 if its stock (+0x250) is
  * ≥ 0xc9 else −0xa if > 100; −0xa if its provision (+0x224) is ≥ 0x3e9 else −5 if
  * > 500.  The lowest-scoring candidate below the 0x80 ceiling wins (richer,
@@ -1580,9 +1581,8 @@ int engine_army_ai_pick_attack_target(int player, int from_realm)
         if (!engine_realm_player_owns_neighbor((unsigned)player, realm))
             continue;
 
-        int dx = home_col - r[ARMY_CAP_COL]; if (dx < 0) dx = -dx;
-        int dy = home_row - r[ARMY_CAP_ROW]; if (dy < 0) dy = -dy;
-        int score = (dx < dy) ? dy : dx;          /* chebyshev */
+        int score = engine_path_dist_chebyshev(home_col, home_row,        /* FUN_00404f4c */
+                                               r[ARMY_CAP_COL], r[ARMY_CAP_ROW]);
 
         if (r[ARMY_KEEP_LEVEL] != 0 && I32(r + ARMY_PENDING) != 0)
             score += 0x28;
@@ -1624,7 +1624,7 @@ int engine_army_ai_pick_attack_target(int player, int from_realm)
  *     (engine_realm_player_owns_neighbor); when `gate_owner` is set, additionally
  *     restrict to realms owned by the stored owner gate +0x48.
  *
- * Score = chebyshev distance (FUN_00404f4c, inlined) + 0x28 for a defended keep
+ * Score = chebyshev distance (FUN_00404f4c, engine_path_dist_chebyshev) + 0x28 for a defended keep
  * (+0x1c0 set & pending +0x1bc), − stock bonus (+0x250: ≥0xc9 −0x14, >100 −0xa),
  * − provision bonus (+0x224: ≥0x9c5 −0x14, ≥0x4b1 −0xa, >500 −5).  Lowest score
  * under the 0x80 ceiling wins; the winner is stored in +0x4b. */
@@ -1655,9 +1655,8 @@ int engine_army_ai_select_target(int player, int from_realm, int gate_owner,
         if (!eligible)
             continue;
 
-        int dx = home_col - r[ARMY_CAP_COL]; if (dx < 0) dx = -dx;
-        int dy = home_row - r[ARMY_CAP_ROW]; if (dy < 0) dy = -dy;
-        int score = (dx < dy) ? dy : dx;          /* chebyshev */
+        int score = engine_path_dist_chebyshev(home_col, home_row,        /* FUN_00404f4c */
+                                               r[ARMY_CAP_COL], r[ARMY_CAP_ROW]);
 
         if (r[ARMY_KEEP_LEVEL] != 0 && I32(r + ARMY_PENDING) != 0)
             score += 0x28;
@@ -2059,8 +2058,8 @@ static void engine_army_ai_step1_process_inbox(int self,
  * (retail DAT_00569570 col / DAT_00569578 row — shared scalar globals); the
  * deployment assigner copies it into the army's destination fields immediately
  * after.  File-static because every consumer lives in this TU. */
-static int s_ai_find_col;   /* DAT_00569570 */
-static int s_ai_find_row;   /* DAT_00569578 */
+/* The finders leave their result in retail's shared cell cursor DAT_00569570 /
+ * DAT_00569578 — engine_map_query's g_cell_cursor_col/row. */
 
 /* Per-player strategic-record fields step 9 adds (offsets into g_player_strategic_352). */
 #define STRAT_CAMPAIGN_TICK   0x045  /* DAT_0057bf45 — patience counter toward the next campaign */
@@ -2099,8 +2098,8 @@ static int s_ai_find_row;   /* DAT_00569578 */
  * bit 0x40, by Manhattan distance to occupant `occ`'s current seat (OCC +0xa/+0xb).
  * Leaves the chosen column/row in the find-nearest scratch; on no match falls
  * back to the region's capital cell (ARMY +0x6c/+0x6d).  The distance is the
- * |dx|+|dy| return of FUN_00404ead, computed inline (its dx/dy side-effect
- * globals go unread here, as in engine_combat_find_deploy_cell).  retail decodes
+ * |dx|+|dy| return of FUN_00404ead (engine_path_dist_manhattan — which also
+ * leaves |dx|/|dy| in DAT_00591560/0058fea0, as retail does).  retail decodes
  * the winning byte offset with signed gymnastics that reduce to a plain
  * (ofs>>3)&0x3f / (ofs>>3)>>6 for the always-non-negative offset. */
 static void engine_army_ai_find_owned_cell(int occ, unsigned region)
@@ -2113,19 +2112,17 @@ static void engine_army_ai_find_owned_cell(int occ, unsigned region)
         for (int col = 0; col < 0x40; col++, ofs += 8) {
             if ((uint8_t)g_overworld_map[ofs + CELL_REGION] != region)  continue;
             if ((g_overworld_map[ofs + CELL_FLAGS] & 0x40) == 0)        continue;
-            int dx = ax - col; if (dx < 0) dx = -dx;
-            int dy = ay - row; if (dy < 0) dy = -dy;
-            int dist = dx + dy;
+            int dist = engine_path_dist_manhattan(ax, ay, col, row);   /* FUN_00404ead */
             if (dist < best_dist) { best_dist = dist; best_ofs = ofs; }
         }
     }
     if (best_ofs == 0) {
-        s_ai_find_col = (uint8_t)ARMY_REC(region)[ARMY_CAP_COL];
-        s_ai_find_row = (uint8_t)ARMY_REC(region)[ARMY_CAP_ROW];
+        g_cell_cursor_col = (uint8_t)ARMY_REC(region)[ARMY_CAP_COL];
+        g_cell_cursor_row = (uint8_t)ARMY_REC(region)[ARMY_CAP_ROW];
     } else {
         int idx = best_ofs >> 3;
-        s_ai_find_col = idx & 0x3f;
-        s_ai_find_row = idx >> 6;
+        g_cell_cursor_col = idx & 0x3f;
+        g_cell_cursor_row = idx >> 6;
     }
 }
 
@@ -2144,19 +2141,17 @@ static void engine_army_ai_find_settled_cell(int occ, unsigned region)
             if ((g_overworld_map[ofs + CELL_FLAGS] & 0x80) == 0)        continue;
             int terr = (uint8_t)g_overworld_map[ofs + CELL_TERRAIN];
             if (terr <= 0x14 || terr >= 0x1a)                           continue;
-            int dx = ax - col; if (dx < 0) dx = -dx;
-            int dy = ay - row; if (dy < 0) dy = -dy;
-            int dist = dx + dy;
+            int dist = engine_path_dist_manhattan(ax, ay, col, row);   /* FUN_00404ead */
             if (dist < best_dist) { best_dist = dist; best_ofs = ofs; }
         }
     }
     if (best_ofs == 0) {
-        s_ai_find_col = (uint8_t)ARMY_REC(region)[ARMY_SETTLE_COL];
-        s_ai_find_row = (uint8_t)ARMY_REC(region)[ARMY_SETTLE_ROW];
+        g_cell_cursor_col = (uint8_t)ARMY_REC(region)[ARMY_SETTLE_COL];
+        g_cell_cursor_row = (uint8_t)ARMY_REC(region)[ARMY_SETTLE_ROW];
     } else {
         int idx = best_ofs >> 3;
-        s_ai_find_col = idx & 0x3f;
-        s_ai_find_row = idx >> 6;
+        g_cell_cursor_col = idx & 0x3f;
+        g_cell_cursor_row = idx >> 6;
     }
 }
 
@@ -2187,8 +2182,8 @@ static void engine_army_ai_assign_deployment(int player, int occ)
         engine_army_ai_find_owned_cell(occ, region);    /* FUN_004a6735 */
     else
         engine_army_ai_find_settled_cell(occ, region);  /* FUN_004a65a3 */
-    c[OCC_DEST_COL] = (uint8_t)s_ai_find_col;
-    c[OCC_DEST_ROW] = (uint8_t)s_ai_find_row;
+    c[OCC_DEST_COL] = (uint8_t)g_cell_cursor_col;
+    c[OCC_DEST_ROW] = (uint8_t)g_cell_cursor_row;
 }
 
 /* Port of FUN_0049ff71 — validate a committed campaign target `target` for
@@ -2428,8 +2423,8 @@ static void engine_army_ai_set_deploy_cell(int occ, unsigned region)
         engine_army_ai_find_owned_cell(occ, region);
     else
         engine_army_ai_find_settled_cell(occ, region);
-    OCC_REC(occ)[OCC_DEST_COL] = (uint8_t)s_ai_find_col;
-    OCC_REC(occ)[OCC_DEST_ROW] = (uint8_t)s_ai_find_row;
+    OCC_REC(occ)[OCC_DEST_COL] = (uint8_t)g_cell_cursor_col;
+    OCC_REC(occ)[OCC_DEST_ROW] = (uint8_t)g_cell_cursor_row;
 }
 
 /* Port of FUN_00438681 — disband occupant `occ` back into a realm: pour its
@@ -2622,14 +2617,14 @@ static int engine_army_ai_order_garrison(int occ)
             OCC_REC(occ)[OCC_TARGET] = (uint8_t)realm;
             OCC_REC(occ)[OCC_PLACED] = 0;
             engine_army_ai_find_settled_cell(occ, (unsigned)realm);
-            OCC_REC(occ)[OCC_DEST_COL] = (uint8_t)s_ai_find_col;
-            OCC_REC(occ)[OCC_DEST_ROW] = (uint8_t)s_ai_find_row;
+            OCC_REC(occ)[OCC_DEST_COL] = (uint8_t)g_cell_cursor_col;
+            OCC_REC(occ)[OCC_DEST_ROW] = (uint8_t)g_cell_cursor_row;
         }
     } else {
         OCC_REC(occ)[OCC_PLACED] = 0;
         engine_army_ai_find_settled_cell(occ, region);
-        OCC_REC(occ)[OCC_DEST_COL] = (uint8_t)s_ai_find_col;
-        OCC_REC(occ)[OCC_DEST_ROW] = (uint8_t)s_ai_find_row;
+        OCC_REC(occ)[OCC_DEST_COL] = (uint8_t)g_cell_cursor_col;
+        OCC_REC(occ)[OCC_DEST_ROW] = (uint8_t)g_cell_cursor_row;
     }
     return 1;
 }
@@ -2654,8 +2649,8 @@ static int engine_army_ai_order_siege(int occ, engine_event_queue_state_t *evq, 
         engine_combat_transfer_army((unsigned)occ, (int)region, evq, mp_active);
         OCC_REC(occ)[OCC_PLACED] = 0;
         engine_army_ai_find_owned_cell(occ, region);
-        OCC_REC(occ)[OCC_DEST_COL] = (uint8_t)s_ai_find_col;
-        OCC_REC(occ)[OCC_DEST_ROW] = (uint8_t)s_ai_find_row;
+        OCC_REC(occ)[OCC_DEST_COL] = (uint8_t)g_cell_cursor_col;
+        OCC_REC(occ)[OCC_DEST_ROW] = (uint8_t)g_cell_cursor_row;
         return 1;
     }
     engine_combat_transfer_army((unsigned)occ, (int)region, evq, mp_active);
@@ -2861,8 +2856,8 @@ static void engine_army_ai_garrison_keeps(int player)
         c[OCC_PLACED] = 0;
         c[OCC_TARGET] = (uint8_t)realm;
         engine_army_ai_find_settled_cell(cur, realm);   /* FUN_004a65a3 */
-        c[OCC_DEST_COL] = (uint8_t)s_ai_find_col;
-        c[OCC_DEST_ROW] = (uint8_t)s_ai_find_row;
+        c[OCC_DEST_COL] = (uint8_t)g_cell_cursor_col;
+        c[OCC_DEST_ROW] = (uint8_t)g_cell_cursor_row;
     }
 }
 
@@ -3176,6 +3171,8 @@ void engine_army_ai_run_keep_builder(int player)
  * the port has no consumer yet, so it is a faithful write-only mirror.
  * TODO(render): wire the dirty-rect repaint that consumes it. */
 static int g_ai_ranking_dirty;   /* _DAT_0056d6a0 */
+int  engine_army_ai_ranking_dirty(void)       { return g_ai_ranking_dirty; }
+void engine_army_ai_set_ranking_dirty(int v)  { g_ai_ranking_dirty = v; }
 
 /* Port of FUN_0049a581 (1039 B) — the per-tick AI "brain" FSM dispatcher,
  * reached from the strategic sub-step driver (engine_turn_tick_substate0,

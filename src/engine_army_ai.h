@@ -257,4 +257,9 @@ void engine_army_ai_dispatch_caravan(int player, int realm, uint8_t dest);
  * [4/5] cattle have/to-send).  The Send Supplies UI stages/edits it in place. */
 int32_t *engine_army_ai_caravan_order(int player);
 
+/* The brain's ranking-changed redraw cookie (retail DAT_0056d6a0; no port consumer
+ * yet) — accessors for the in-process verifier (tools/rhost/rh_hooks_ai.c). */
+int  engine_army_ai_ranking_dirty(void);
+void engine_army_ai_set_ranking_dirty(int v);
+
 #endif /* OPENLORDS2_ENGINE_ARMY_AI_H */

@@ -151,6 +151,16 @@ int engine_path_chebyshev_distance(engine_path_state_t *state,
 int engine_path_manhattan_distance(engine_path_state_t *state,
                                    int x1, int y1, int x2, int y2);
 
+/* The same two helpers for callers that use the distance as a plain value (the AI
+ * target scorers FUN_004a0649 / FUN_004a03f2): retail has no state struct — every
+ * distance call leaves |dx| / |dy| in the process globals DAT_00591560 /
+ * DAT_0058fea0, which these mirror (g_path_dist_dx / g_path_dist_dy).  Retail's
+ * readers always re-run a distance helper first, but the bytes are live state. */
+extern int32_t g_path_dist_dx;   /* DAT_00591560 */
+extern int32_t g_path_dist_dy;   /* DAT_0058fea0 */
+int engine_path_dist_chebyshev(int x1, int y1, int x2, int y2);   /* FUN_00404f4c */
+int engine_path_dist_manhattan(int x1, int y1, int x2, int y2);   /* FUN_00404ead */
+
 /* Port of FUN_0046f434.  Returns the 8-way direction code (see
  * header docstring for the encoding) pointing FROM (from_x, from_y)
  * TOWARD (to_x, to_y).  Returns 8 if the two points are equal.

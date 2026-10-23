@@ -402,6 +402,11 @@ int engine_territory_current_slot(void)
     return g_current_slot;
 }
 
+void engine_territory_set_current_slot(int slot)
+{
+    g_current_slot = slot;
+}
+
 /* Port of FUN_004651b9.  Zero the +0x14c and +0x153 bytes of every
  * territory record 1..150 (slot 0 skipped).  Part of the new-game /
  * scenario init sequence (state-7 branch of the game-state driver). */

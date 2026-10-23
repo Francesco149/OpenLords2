@@ -60,6 +60,27 @@ int engine_path_manhattan_distance(engine_path_state_t *s,
     return s->last_dx + s->last_dy;
 }
 
+int32_t g_path_dist_dx;   /* DAT_00591560 */
+int32_t g_path_dist_dy;   /* DAT_0058fea0 */
+
+static void store_global_deltas(int x1, int y1, int x2, int y2)
+{
+    g_path_dist_dx = (x2 < x1) ? x1 - x2 : (x1 < x2) ? x2 - x1 : 0;
+    g_path_dist_dy = (y2 < y1) ? y1 - y2 : (y1 < y2) ? y2 - y1 : 0;
+}
+
+int engine_path_dist_chebyshev(int x1, int y1, int x2, int y2)
+{
+    store_global_deltas(x1, y1, x2, y2);
+    return (g_path_dist_dx < g_path_dist_dy) ? g_path_dist_dy : g_path_dist_dx;
+}
+
+int engine_path_dist_manhattan(int x1, int y1, int x2, int y2)
+{
+    store_global_deltas(x1, y1, x2, y2);
+    return g_path_dist_dx + g_path_dist_dy;
+}
+
 int engine_path_direction_8way(int from_x, int from_y,
                                int to_x, int to_y)
 {

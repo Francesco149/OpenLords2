@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "engine_path.h"
 #include "engine_combat.h"
 #include "save.h"                 /* g_per_territory_420, g_per_army_768, … */
 #include "save_schema_globals.h"  /* s_slot_* combat / season / player scalars */
@@ -1375,7 +1376,7 @@ int engine_combat_spawn_unit(int owner, int army, int attach_unit, int supply_co
         wr_i16(c, C_COUNTS + k * 2,
                (int16_t)*(const int32_t *)(pool + k * 0x10 + M_SLOT));
 
-    c[C_F14F] = (uint8_t)spawn_pick_roster_slot(army);       /* FUN_004a9f72 */
+    c[C_F14F] = (uint8_t)spawn_pick_roster_slot(owner);      /* FUN_004a9f72(a1 = owner) */
     spawn_debit_cashflow(owner);                             /* FUN_004a9eb1 */
 
     if (attach_unit != 0)
@@ -1881,17 +1882,16 @@ int engine_combat_muster_garrison(int region, int pct)
  * passable terrain (cell +0 in [3, 0x16]), nearest by Manhattan distance to the
  * army's current seat (territory record +0xa/+0xb).  On no match, fall back to
  * the region's capital cell (+0x6c/+0x6d).  Retail leaves the chosen col/row in
- * the find-nearest scratch DAT_00569570/78, which both callers (step 0xa and
- * FUN_004a58f4) copy straight into the army's destination fields; we return them
- * via out-params instead — the scratch globals are never read between the call
- * and that copy, mirroring how engine_combat_find_capital_defender avoids
- * clobbering them.
+ * the shared cell cursor DAT_00569570/78, which both callers (step 0xa and
+ * FUN_004a58f4) copy straight into the army's destination fields; the port
+ * returns them via out-params AND leaves them in g_cell_cursor_col/row, so the
+ * process state matches retail's (quirk #226).
  *
  * NB: a match at cell (0,0) has byte offset 0, indistinguishable from the
  * "no match" sentinel, so the grid origin can never be selected — retail's
  * behaviour.  retail computes the distance via FUN_00404ead
- * (engine_path_manhattan_distance); only its |dx|+|dy| return is consumed here
- * (the dx/dy side-effect globals go unread), so it is computed inline. */
+ * (engine_path_dist_manhattan, which leaves |dx|/|dy| in DAT_00591560/0058fea0 as
+ * retail does); the chosen cell is also left in the shared cell cursor. */
 void engine_combat_find_deploy_cell(int army, int region, int *out_col, int *out_row)
 {
     int army_x = (int8_t)CREC(army)[C_COL];
@@ -1910,9 +1910,7 @@ void engine_combat_find_deploy_cell(int army, int region, int *out_col, int *out
             if (terrain < 3 || terrain > 0x16)
                 continue;
 
-            int dx = army_x - col; if (dx < 0) dx = -dx;
-            int dy = army_y - row; if (dy < 0) dy = -dy;
-            int dist = dx + dy;
+            int dist = engine_path_dist_manhattan(army_x, army_y, col, row);   /* FUN_00404ead */
             if (dist < best_dist) {
                 best_dist = dist;
                 best_ofs  = ofs;
@@ -1928,6 +1926,8 @@ void engine_combat_find_deploy_cell(int army, int region, int *out_col, int *out
         *out_col = REGREC(region)[R_CAP_COL];
         *out_row = REGREC(region)[R_CAP_ROW];
     }
+    g_cell_cursor_col = *out_col;       /* retail leaves the cell in DAT_00569570/78 */
+    g_cell_cursor_row = *out_row;
 }
 
 /* Port of FUN_004a0917 (403 B, __cdecl int(int owner, uint region, int min_head)).

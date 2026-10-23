@@ -219,6 +219,9 @@ void engine_army_economy_plan_secondary(int key);
  * DAT_005656f0).  Exposed for tests and for the eventual FUN_0044d60d port,
  * which is the third sharer of the same two globals. */
 int engine_army_economy_eval_cost(void);
+/* Set the eval scratch pair (retail DAT_0055cd6c / DAT_005656f0) — a host seam: the
+ * in-process verifier (tools/rhost/rh_hooks_ai.c) loads retail's values before a port call. */
+void engine_army_economy_set_eval_scratch(int cost, int revenue);
 int engine_army_economy_eval_revenue(void);
 
 /* Port of FUN_0044da99 (692 B).  Value a candidate for army `key` at a gold
@@ -350,6 +353,8 @@ void engine_army_economy_bind_resource_pool(uint8_t *pool);
  * tests.  Each is floored at 1. */
 int engine_army_economy_supply_pool_a(void);
 int engine_army_economy_supply_pool_b(void);
+/* Set both pools (retail DAT_0057c904 / DAT_0056d628) — the same host seam. */
+void engine_army_economy_set_supply_pools(int pool_a, int pool_b);
 
 /* Port of FUN_0044f15b (237 B).  Sum the two per-race production multipliers
  * (the baked 6-entry race table, retail DAT_004d8990 / DAT_004d8994) across
