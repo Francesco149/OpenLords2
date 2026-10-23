@@ -53,6 +53,7 @@ session — they outlive the conversation context.
 | [in-process-retail-host.md](in-process-retail-host.md) | **rhost** (2026-10-23): retail in-process, deterministic; Lords2's runtime surface, the GOG patch code past .text, measurements |
 | [game-state-map.md](game-state-map.md) | strategic game state VAs (realms, counties, armies, date) — the autoplay bot's reader |
 | [hybrid-pilot-ai.md](hybrid-pilot-ai.md) | **hybrid pilot** (2026-10-23): the AI realm turn under rhost — 88/89 verified, bugs #227/#228, binding cost, blockers, recommendation |
+| [hybrid-batch2-combat.md](hybrid-batch2-combat.md) | **hybrid batch 2** (2026-10-23): battle resolver + army movement under rhost — 50/59 reached, 0 divergences, hybrid 149 hooks PASS; #229–#231; shadow fidelity (host layers, stack residue) |
 | [input-replay.md](input-replay.md) | Input recording & replay (JSONL trace format) |
 | [pure-function-diff.md](pure-function-diff.md) | Pure-function differential testing vs retail |
 | [ledger-provenance-audit.md](ledger-provenance-audit.md) | The FUN_-token gotcha — how the derived ledger over-counts, and `tools/audit_provenance.py` |

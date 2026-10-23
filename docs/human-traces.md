@@ -22,6 +22,23 @@ Status: **open** = no trace yet · **partial** = some coverage · **synth** = th
 | A5 | **Event decisions** — plague, rebellion, bandits, the lord captured (jail.smk → ransom), knights / mercenaries offering service | rare, random-timed, choice dialogs the bot does not recognize (they show as "unknown screen" and get RMB'd) | open |
 | A6 | **Natural mouse dynamics** — drags (sliders dragged rather than clicked, labor icons dragged on the labor grid 0x0f / 0x02, minimap drag), held buttons, double-clicks, quick click sequences racing retail's 300 ms delayed-click arbitration | the input path's held-button / motion / dblclk branches; synthesizable in principle but a human's timing covers the cases nobody thought of | open |
 
+### Evidence: what the corpus never reaches in the battle / movement code (rhost verify, batch 2, 2026-10-23)
+
+`docs/findings/hybrid-batch2-combat.md`: of 59 battle / movement hooks, these 9 are never called by the 33-scenario
+corpus. The bots always auto-resolve (screen 0x12 → AUTO_RESOLVE, FUN_0043b622), march only on neutral counties and
+never besiege.
+
+| function | reached only via | list item |
+|---|---|---|
+| FUN_004ad8cc halve_garrison; FUN_004ab383's `render` branch (anim deadline, scratch clear) and its captured-loser branch (<50 head → notice 0x120) | the battlefield: aftermath(1) from FUN_0043be65 / FUN_00477dfc (end screen 0x2b); DAT_0056d5c8 = 1 is set only by the battlefield's unit logic (FUN_0048d9ce, battle-hex records) | **A1** |
+| FUN_004a7ca2 begin_siege (+ FUN_004a7e0a / FUN_004a7eb5, the siege board) | a stack stepping onto an ENEMY keep cell (executor region-event hi) | A2 |
+| FUN_00437535 transfer_army | demolishing a realm that has a pending garrison; the AI's siege order FUN_004a60b9; delayed actions FUN_00447f82 | A2 / A3 |
+| FUN_0046d42c capital_defender | marching on a county another player OWNS (the bots only take neutral ones) | A3 (or the bot) |
+| FUN_00422c12 load_muster | the 0x13 quick-animation path: the Options battle toggle DAT_0053f284 = 0 (FUN_0043470d / FUN_00447e0b) and not both sides garrisoned | B (an Options toggle) |
+| FUN_004a07f2 find_garrison_realm | AI movement planner FUN_004a6270 (an AI keep with spare garrison room) | A3 |
+| FUN_0049cf20 resign_player | multiplayer resign / the resign UI | out of scope (MP) |
+| FUN_00468ae2 special_tile, FUN_0046873f region_event_lo | a march across a foreign county's untouched special tile / undeveloped resource tile | the bot (route choice) |
+
 ## B. Medium — synthesizable with effort, a short human trace is cheaper
 
 | # | interaction | notes | status |
