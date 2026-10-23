@@ -69,7 +69,8 @@ container idles (`sleep infinity`). Archived today (README/AGENTS banner, commit
 | `rh_state.c`, `rhs.py`, `rh_shot.c` | state hash / dumps / shadow execution; PNG + exact `.idx` frames; frame hash chain |
 | `rh_hooks.c` | shadow / replace registry (first row: `rng_step`) |
 | `rh_bot.c`, `rhbot.py` | control channel + Python controller (+ an action-script CLI) |
-| `rhost.py` | build / stage / setup / run / boot / det / corpus (bless/check) / verify / shots / record / diff, targets `win` and `wine` |
+| `rhost.py` | build / stage / setup / run / boot / det / corpus (bless/check) / verify / coverage / view / shots / record / diff, targets `win` and `wine` |
+| `rh_smack.c` | deterministic Smacker (`--movies`): smackw32 mapped by rhost at a fixed base, imports bound to the virtual layers, its waveOut soundtrack on the virtual clock — the real boot sequence (intro, imptitle, credits) plays |
 
 Found on the way: **the GOG patch put code past `.text`'s VirtualSize** (FUN_004cfb08, a timeGetTime-paced
 animation counter called by FUN_004050c0). A loader that honours VirtualSize runs into zeros on the first
@@ -85,6 +86,8 @@ in-game frame; rhost now maps whole pages like Windows. (Also matters for IDA / 
 | `verify` (shadow rng_step) | 2,814 calls / 2 scenarios, 0 divergences; end states unchanged |
 | `corpus --check --hook replace:rng_step` | PASS |
 | speed | title ~11k fps (Win), 8–11k (wine); in game 2–3k fps with `--fb-hash` |
+| `det boot -n 2 --movies` (12,000 f, three movies) | 0 dwords on both hosts; same hash on both |
+| retail coverage of the corpus (`rhost.py coverage`) | 4 hand-made scenarios 37.1% of code bytes → 20 scenarios (with 15 bot games) 44.6% |
 
 ## 3. Methodology from here
 
@@ -127,8 +130,12 @@ should measure wrapper cost on one subsystem (suggest: the AI brain FSM, already
   coordinates), checked against the state reader after each action; every input lands in the trace.
 - **Battles**: always auto-resolve at first; the interactive battlefield is a later stage.
 - **Output**: each game = `tests/scenarios/bot-<seed>-<n>/trace.jsonl` + a decision log; replays need
-  no LLM and no network. Variety comes from sampling and from the virtual-clock origin (`--vbase`).
-- **Cost**: ~$0.00002 per decision request; the key is capped at $3/month (expires 2026-12-22).
+  no LLM and no network. Variety comes from sampling (the virtual-clock origin does not change Play Now's map).
+- **Cost**: ~$0.0001 per decision request; a 20-turn game ≈ $0.005; the key is capped at $3/month
+  (expires 2026-12-22).
+- **Measured (same day)**: 15 bot games in the corpus (economy, drafts, marches, auto-resolved battles,
+  trades, gifts, defeats and restarts), every one replaying bit-exactly on both hosts; retail coverage of
+  the corpus 37.1% → 44.6% of code bytes for ~$0.12 of Jev and a few minutes of compute.
 
 ## 5. Legacy (keep for reference, don't extend)
 
@@ -142,10 +149,10 @@ should measure wrapper cost on one subsystem (suggest: the AI brain FSM, already
 
 ## 6. Risks and unknowns (honest)
 
-- **Smacker movies are skipped** (SmackOpen fails; retail handles it). Movie-gated logic is unexercised
-  until a deterministic Smacker path exists (load smackw32 at a fixed base, IAT-redirect its clock, heap,
-  waveOut and threads).
-- **Sound is silent**: fine for logic parity; `record` has no audio for the human yet.
+- **Movies are opt-in** (`--movies` / trace meta): the existing corpus was recorded without them (SmackOpen
+  fails, retail skips the movie). Deterministic Smacker exists (`rh_smack.c`); movie scenarios are next.
+- **Sound** is silent in replays; `record` / `--audible` mix DirectSound and movie audio to the real device
+  (a side channel that cannot touch retail state).
 - **The fake DirectDraw implements what retail uses today** (no stretch Blt, no dest color keys): an
   unimplemented path logs `UNIMPL` loudly rather than guessing. Battle screens are not yet exercised.
 - **Multiplayer / SierraNW** are out of scope (DirectPlay stubbed).
