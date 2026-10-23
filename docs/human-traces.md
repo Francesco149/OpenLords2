@@ -39,6 +39,15 @@ corpus (v1 bots auto-resolve every battle, march only on neutral counties, never
 | FUN_0049cf20 resign_player | multiplayer resign / the resign UI | out of scope (MP) |
 | FUN_00468ae2 special_tile, FUN_0046873f region_event_lo | a march across a foreign county's untouched special tile / undeveloped resource tile | the bot (route choice) |
 
+Batch 3 (`docs/findings/hybrid-batch3.md`, 196 hooks, 36 scenarios): of 47 new rows 19 are reached by the corpus
+(the siege assault FUN_004a8aab by `bot2-s64-t28`), 24 more only under exploration; never called by the corpus:
+
+| function | reached only via | list item |
+|---|---|---|
+| FUN_00477dfc battlefield end check (+ FUN_00478419 result row), FUN_0043be65 battlefield end | "take the field" at the 0x12 choice (DAT_0057c8fc = 2): the end check runs every battlefield frame, the end buttons call FUN_0043be65; the bots always auto-resolve (FUN_0043b622: 32 calls) | **A1** |
+| FUN_004aa6ca siege-equipment staging | a siege assault fought on the battlefield (bot2-s64-t28's assault took the quick path) | **A1** + A2 |
+| 22 of the 24 realm-event handlers FUN_00448e12 … FUN_00449826 (+ FUN_0044c77a / FUN_0044c80a) | the human owning counties after 1268 (≈10 % per county per season; ev_134 / ev_13c fire once each in the bot2 games). Shadowed under exploration (pokes) only | A3 / A5, or a longer bot game that keeps its counties |
+
 ## B. Medium — synthesizable with effort, a short human trace is cheaper
 
 | # | interaction | notes | status |
