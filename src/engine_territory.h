@@ -439,4 +439,7 @@ void engine_territory_setup_overworld(engine_rng_single_in_t *rng);
  * block is unbound. */
 void engine_territory_update_village_tiles(int key, int active);
 
+/* DAT_0053e974 — the cell sweeps' per-cell counter (engine_territory_globals.c; quirk #237) */
+extern int32_t g_cell_sweep_counter;
+
 #endif /* OPENLORDS2_ENGINE_TERRITORY_H */

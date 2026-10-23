@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "io.h"
+#include "engine_territory.h"   /* g_cell_sweep_counter (DAT_0053e974) */
 
 /* tile_cells (retail DAT_0055cea0).  int view over the 0x81×0x104 extent. */
 static int32_t g_tile_cells[ENGINE_MAP_INIT_CELLS_BYTES / 4];
@@ -72,11 +73,11 @@ static int seed_terrain_layer(const char *map_dir, int map_id)
         return 0;
     }
 
-    int counter = 0;                 /* DAT_0053e974 */
+    g_cell_sweep_counter = 0;        /* DAT_0053e974: retail's index here */
     for (int r = 0; r < 0x81; r++) {
         for (int c = 0; c < 0x41; c++) {
-            *cell(r, c) = (int32_t)(0xfff0000u + block[counter + 0x6000]);
-            counter++;
+            *cell(r, c) = (int32_t)(0xfff0000u + block[g_cell_sweep_counter + 0x6000]);
+            g_cell_sweep_counter++;
         }
     }
     return 1;

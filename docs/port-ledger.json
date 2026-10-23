@@ -12424,6 +12424,7 @@
    "src": [
     "src/engine_territory.c",
     "src/engine_territory.h",
+    "src/engine_territory_globals.c",
     "src/engine_title_render.c",
     "src/game_init.c",
     "src/game_init.h",
@@ -13193,6 +13194,7 @@
    "src": [
     "src/engine_territory.c",
     "src/engine_territory.h",
+    "src/engine_territory_globals.c",
     "src/main.c"
    ]
   },
@@ -13238,7 +13240,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/engine_territory_globals.c"
    ]
   },
   {

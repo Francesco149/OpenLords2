@@ -71,6 +71,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_map_query.c \
                    ../src/engine_strat_cost.c \
                    ../src/engine_territory.c \
+                   ../src/engine_territory_globals.c \
                    ../src/engine_army_select.c \
                    ../src/engine_army_move_confirm.c \
                    ../src/engine_workforce_hud.c \

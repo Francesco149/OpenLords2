@@ -480,7 +480,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4673b8 | FUN_004673b8 | 378 | engine_army_ai.c |
 | 0x467532 | FUN_00467532 | 426 | engine_army_ai.c |
 | 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c, engine_territory.h |
-| 0x467770 | FUN_00467770 | 525 | engine_territory.c, engine_territory.h, engine_title_render.c (+3) |
+| 0x467770 | FUN_00467770 | 525 | engine_territory.c, engine_territory.h, engine_territory_globals.c (+4) |
 | 0x46797d | FUN_0046797d | 185 | engine_map_init.c, engine_map_init.h |
 | 0x467a36 | FUN_00467a36 | 624 | engine_territory.c, engine_territory.h |
 | 0x467ca6 | FUN_00467ca6 | 385 | engine_territory.c, engine_territory.h |
@@ -527,11 +527,11 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46d7f4 | FUN_0046d7f4 | 486 | engine_army_move.c, engine_realm_events.h, engine_territory.c (+1) |
 | 0x46d9da | FUN_0046d9da | 113 | engine_territory.c, engine_territory.h |
 | 0x46da4b | FUN_0046da4b | 426 | engine_territory.c, engine_territory.h, main.c |
-| 0x46dbf5 | FUN_0046dbf5 | 319 | engine_territory.c, engine_territory.h, main.c |
+| 0x46dbf5 | FUN_0046dbf5 | 319 | engine_territory.c, engine_territory.h, engine_territory_globals.c (+1) |
 | 0x46dd34 | FUN_0046dd34 | 209 | engine_territory.c, engine_territory.h, main.c |
 | 0x46de05 | FUN_0046de05 | 143 | engine_territory.c, engine_territory.h |
 | 0x46de94 | FUN_0046de94 | 189 | engine_territory.c, engine_territory.h |
-| 0x46df51 | FUN_0046df51 | 132 | engine_territory.c, engine_territory.h |
+| 0x46df51 | FUN_0046df51 | 132 | engine_territory.c, engine_territory.h, engine_territory_globals.c |
 | 0x46dfd5 | FUN_0046dfd5 | 146 | engine_combat.c, engine_territory.c, engine_territory.h (+1) |
 | 0x46e067 | FUN_0046e067 | 317 | engine_territory.c, engine_territory.h |
 | 0x46e1b0 | FUN_0046e1b0 | 792 | engine_army_ai.c, engine_combat.c, engine_territory.c (+2) |

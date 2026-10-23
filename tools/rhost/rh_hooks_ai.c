@@ -45,6 +45,8 @@ A(g_misc_1360,0x53ea00) A(g_footprint_storage_160,0x553c80) A(g_player_roster,0x
 A(g_path_scratch,0x507250) A(g_stage_scratch,0x4f7d80)
 /* engine.c */
 A(g_sim_mp_active,0x553030)
+/* engine_territory_globals.c: the cell sweeps' counter (quirk #237) */
+A(g_cell_sweep_counter,0x53e974)
 /* save_schema_globals.c: every s_slot_<VA> is retail VA <VA> */
 A(s_slot_004eafb0,0x4eafb0) A(s_slot_004eb2ac,0x4eb2ac) A(s_slot_00522d30,0x522d30) A(s_slot_00522d90,0x522d90) A(s_slot_00522f54,0x522f54)
 A(s_slot_00522f5c,0x522f5c) A(s_slot_00522f60,0x522f60) A(s_slot_00522f68,0x522f68) A(s_slot_00522f6c,0x522f6c) A(s_slot_00522f70,0x522f70)
@@ -107,7 +109,7 @@ void rh_port_bind_once(void)
         if (rs[2 * i] != (uint32_t)(uintptr_t)g_save_schema[i].ptr || rs[2 * i + 1] != g_save_schema[i].size)
             rh_fatal("rh_port: save-schema entry %d: retail %08x+%u, port alias %08x+%u", i, rs[2 * i], rs[2 * i + 1],
                      (uint32_t)(uintptr_t)g_save_schema[i].ptr, g_save_schema[i].size);
-    /* engine_game_init_bind_runtime_tables, minus what the port derives itself (terrain tiles, strat cost) */
+    /* engine_game_init_bind_runtime_tables, minus what the port derives itself (strat cost) */
     engine_army_economy_bind_army_records(g_per_army_768);
     engine_army_economy_bind_cell_roster((const int32_t *)g_misc_1360);
     engine_army_economy_bind_cells(g_overworld_map);
@@ -115,6 +117,10 @@ void rh_port_bind_once(void)
     engine_territory_bind_records(g_per_territory_420);
     engine_territory_bind_cells(g_overworld_map);
     engine_territory_bind_cell_roster((int32_t *)g_misc_1360);
+    /* the AI score table DAT_0053fa40 lives INSIDE the county records (+0x90, 0x180 i16 a row): unbound, the
+     * score clear of FUN_0046d9da was a silent no-op under rhost (move_decay_cell diverged in bot3cen-s207/209) */
+    engine_territory_bind_cell_score_table((int16_t *)(g_per_army_768 + 0x90));
+    engine_territory_bind_terrain_tiles((int32_t *)(uintptr_t)0x55cea0u);   /* DAT_0055cea0: 129×65 tile grid */
     engine_territory_bind_army_records(g_per_army_768);
     engine_map_query_bind_cell_descriptors(g_overworld_map);
     engine_army_state_bind_cells(g_overworld_map);

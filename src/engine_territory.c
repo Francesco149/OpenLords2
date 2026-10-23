@@ -206,8 +206,9 @@ void engine_territory_clear_cell_field(uint8_t field)
  * route the repaint through the bound dirty state if any. */
 void engine_territory_clear_cell_render_flags(void)
 {
+    g_cell_sweep_counter = 0;                           /* DAT_0053e974 */
     if (g_cells != NULL) {
-        for (int i = 0; i < CELL_GRID_CELLS; i++)
+        for (int i = 0; i < CELL_GRID_CELLS; i++, g_cell_sweep_counter++)
             g_cells[i * CELL_STRIDE + 2] &= 0xdf;
     }
 
@@ -297,9 +298,10 @@ void engine_territory_mark_draw_box(int col, int row, int radius)
  * 255 never matches (the byte can only hold 0..255). */
 void engine_territory_highlight_key_cells(unsigned key)
 {
+    g_cell_sweep_counter = 0;                           /* DAT_0053e974 */
     if (g_cells != NULL) {
         for (int row = 0; row < 0x40; row++) {
-            for (int col = 0; col < 0x40; col++) {
+            for (int col = 0; col < 0x40; col++, g_cell_sweep_counter++) {
                 int off = (row * 0x40 + col) * CELL_STRIDE;
                 if ((unsigned)g_cells[off + 7] == key)   /* DAT_00522f97 */
                     engine_territory_mark_draw_box(col, row, 1);
@@ -673,8 +675,9 @@ void engine_territory_randomise_special_tiles(engine_rng_single_in_t *rng)
 {
     if (g_terrain_tiles == NULL || rng == NULL) return;
 
+    g_cell_sweep_counter = 0;                           /* DAT_0053e974 */
     for (int row = 0; row < TERRAIN_GRID_ROWS; row++) {
-        for (int col = 0; col < TERRAIN_GRID_COLS; col++) {
+        for (int col = 0; col < TERRAIN_GRID_COLS; col++, g_cell_sweep_counter++) {
             int32_t *cell = &g_terrain_tiles[row * TERRAIN_GRID_COLS + col];
             if ((uint32_t)*cell == TERRAIN_TILE_RANDOMISE_SENTINEL) {
                 uint32_t mirror = rng_next_single_7bit(rng);
@@ -884,8 +887,9 @@ void engine_territory_classify_feature_tiles(engine_rng_single_in_t *rng)
 {
     if (g_terrain_tiles == NULL || rng == NULL) return;
 
+    g_cell_sweep_counter = 0;                           /* DAT_0053e974 */
     for (int row = 0; row < TERRAIN_GRID_ROWS; row++) {
-        for (int col = 0; col < TERRAIN_GRID_COLS; col++) {
+        for (int col = 0; col < TERRAIN_GRID_COLS; col++, g_cell_sweep_counter++) {
             int32_t *cell = &g_terrain_tiles[row * TERRAIN_GRID_COLS + col];
             uint32_t v = (uint32_t)*cell;
 
@@ -2194,8 +2198,9 @@ void engine_territory_load_strat_map(void)
 
     const uint8_t *rec = g_strat_map_record;
     int lin = 0;   /* DAT_0053e974 — cell-linear offset, row*0x40 + col */
+    g_cell_sweep_counter = 0;
     for (int row = 0; row < 0x40; row++) {
-        for (int col = 0; col < 0x40; col++, lin++) {
+        for (int col = 0; col < 0x40; col++, lin++, g_cell_sweep_counter++) {
             uint8_t p0 = rec[lin];                              /* +0x0000 */
             uint8_t p1 = rec[lin + 1 * STRAT_MAP_PLANE_STRIDE]; /* +0x1000 */
             uint8_t p2 = rec[lin + 2 * STRAT_MAP_PLANE_STRIDE]; /* +0x2000 */

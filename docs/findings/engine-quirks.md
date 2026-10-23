@@ -8169,3 +8169,19 @@ Read from the disassembly while moving them (the corpus reaches none of these ed
 
 > 📍 `src/engine_economy_globals.c`, `src/engine_trade_model.c`, `src/engine_army_ai.c` (g_caravan_order),
 > `src/engine_diplomacy.c` (engine_diplomacy_queue_action); evidence: `tools/rhost/rh_hooks_economy.c`.
+
+## 237 — the cell sweeps' "write-only" counter DAT_0053e974 is state: the sweeps leave it at 0x1000 / 8385
+
+Found by the shadow on bot v3's long custom games (`bot3cen-s210-t44`, frame 63100):
+`combat_contest_region` diverged on one dword, `0053e974 r00001000/p000020c1`. Retail's cell sweeps reset
+DAT_0053e974 and bump it once per visited cell — FUN_0046df51 (clear render flags) and FUN_0046dfd5 (highlight
+key cells) over the 64×64 grid (→ 0x1000), FUN_0046dbf5 / FUN_0046dd34 / FUN_0046797d over the 129×65 tile grid
+(→ 8385; FUN_0046797d also indexes with it), and the strategic-map loader FUN_00467770. Nothing reads it across
+calls, so the port had modelled it as a local (#130's out-param habit, retired by #226) — but it is .data, the
+shadow compares it, and a hybrid run's state hash includes it.
+
+Not yet written: the feature picker's scratch DAT_0057c8a4 and the variant register DAT_00568200 (FUN_0046dbf5 /
+FUN_0046dd34) — new-game map setup only, which no hook reaches; write them when those functions are hooked.
+
+> 📍 `src/engine_territory_globals.c` (`g_cell_sweep_counter`, aliased at 0x53e974 by `tools/rhost/rh_hooks_ai.c`),
+> `src/engine_territory.c`, `src/engine_map_init.c`.
