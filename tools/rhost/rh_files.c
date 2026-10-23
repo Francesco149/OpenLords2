@@ -106,7 +106,11 @@ static void norm(WIN32_FIND_DATAA *d)
     static const FILETIME ft = { 0x92810000u, 0x01dc7ab1u };   /* 2026-01-01, every file: no host clock leaks */
     d->ftCreationTime = d->ftLastAccessTime = d->ftLastWriteTime = ft;
     d->dwFileAttributes = (d->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_ARCHIVE;
-    d->cAlternateFileName[0] = 0;
+    /* the bytes after the name's NUL are whatever the OS's buffer held (differs per run / host): retail's save
+     * list copies the whole 260-byte field into its globals (0x4e87c0..), so they are zeroed */
+    size_t n = strnlen(d->cFileName, sizeof d->cFileName);
+    memset(d->cFileName + n, 0, sizeof d->cFileName - n);
+    memset(d->cAlternateFileName, 0, sizeof d->cAlternateFileName);
     d->dwReserved0 = d->dwReserved1 = 0;
 }
 static void add_dir(find_t *f, const char *pattern, int cap_hint, int from_run, const char *reldir)
