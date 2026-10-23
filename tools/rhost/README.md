@@ -92,7 +92,9 @@ pre-state (.data + arena + allocator metadata + virtual clock), every state dwor
 is kept; a divergence logs the first differing VAs. The state is write-protected for the call and a vectored
 handler copies each page on its first write, so a call costs the pages it writes (`--shadow-full`: copy the
 whole ~5 MB instead; `--shadow-poison VA` plants a one-bit difference after every port call — both modes must
-report it). **replace**: the port runs instead of retail (hybrid). Add a function = adapter + table row
+report it). **replace**: the port runs instead of retail (hybrid). A hook redirects retail's call sites;
+a function no call site reaches (a pointer table) gets its entry patched instead — `jmp wrapper`, the displaced
+prologue in a trampoline the retail side calls (`--hook-entry` forces this for every hook, as a test). Add a function = adapter + table row
 (`rhost.py` reads the tables). Port code is compiled with the port's own `-std` (build.sh `PORT_OBJS`).
 A port function never calls its own retail VA.
 
