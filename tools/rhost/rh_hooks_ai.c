@@ -1,26 +1,22 @@
 /* rh_hooks_ai.c — the AI realm turn (src/engine_army_ai.c, engine_army_economy.c, engine_realm.c) vs
- * retail, on identical state (rh_hooks.h contract; pattern = rh_hooks.c w_rng).
+ * retail, on identical state (rh_hooks.h contract; shared plumbing: rh_port.h).
+ *
+ * This file also holds the plumbing every port-hook table shares (rh_port.h), one copy for rhost.exe:
  *
  * BINDING.  The port's save-block globals (save.c / save_schema_globals.c: g_per_army_768,
  * g_player_strategic_352, every s_slot_<VA>, ...) are NOT linked: the asm block below defines each one as an
  * ABSOLUTE symbol at its retail VA, so every linked port module reads and writes retail's own memory —
- * no copies, no sync (these aliases are global to rhost.exe: no other table may link save.c). ai_bind_once()
+ * no copies, no sync (these aliases are global to rhost.exe: no other table may link save.c). rh_port_bind_once()
  * checks the aliases against retail's own save-schema table (DAT_004de960: 225 (ptr, size) pairs) and points
  * the modules' runtime pointer seams (*_bind_*) at the retail tables. What remains are the modules'
- * FILE-STATIC / module mirrors of retail globals (config scalars, scratch registers): ai_sync_in() loads them
- * from retail before every port call (setters), ai_sync_out() stores them back after it. Functions that take
+ * FILE-STATIC / module mirrors of retail globals (config scalars, scratch registers): rh_port_sync_in() loads
+ * them from retail before every port call, rh_port_sync_out() stores them back after it. Functions that take
  * the event queue get a port queue loaded from / stored to retail's six queue globals (EVQ).
  *
- * WRAPPERS.  Every hooked function is __cdecl (IDA/Ghidra agree). One generic body (ai_run) serves all
- * rows: the retail side calls the original VA with the caller's arguments (seven are always passed —
- * cdecl, the caller pops, extras are ignored) and keeps its EAX; the port side calls a per-row adapter.
- * A non-void function's return values are compared too (a mismatch is a divergence). Shadow mode returns
- * retail's EAX (so even "void" rows are transparent); replace mode returns the port's value.
- *
  * LINK.  build.sh PORT_OBJS links the AI closure minus the modules that drag in the whole engine (game_init,
- * engine, main, engine_turn, engine_army_move, ...); the few symbols that cross that cut are bridged at
- * the bottom of this file. */
-#include "rh_hooks.h"
+ * engine, main, engine_turn, ...); the few symbols that cross that cut are bridged at the bottom of this file
+ * (game_init) and of rh_hooks_combat.c (engine / engine_turn). */
+#include "rh_port.h"
 #include "save.h"
 #include "save_schema_globals.h"
 #include "engine_army_ai.h"
@@ -34,6 +30,7 @@
 #include "engine_path.h"
 #include "engine_ranking.h"
 #include "engine_combat.h"
+#include "engine_army_move.h"
 #include "engine_realm_upkeep.h"
 #include "engine_diplomacy.h"
 #include "game_init.h"
@@ -97,7 +94,8 @@ A(s_slot_0058fe28,0x58fe28)
 /* ---------------------------------------------------------------- binding: runtime pointer seams */
 /* engine_dirty_rect: retail keeps the dirty rectangle in six scattered globals (engine_dirty_rect.h) */
 static engine_dirty_rect_state_t s_dirty;
-static void ai_bind_once(void)
+void rh_combat_bind_seams(void);   /* rh_hooks_combat.c */
+void rh_port_bind_once(void)
 {
     static int done;
     if (done) return;
@@ -105,7 +103,7 @@ static void ai_bind_once(void)
     const uint32_t *rs = (const uint32_t *)(uintptr_t)0x4de960u;   /* retail DAT_004de960: (ptr, size) × 225 */
     for (int i = 0; i < SAVE_SCHEMA_COUNT; i++)
         if (rs[2 * i] != (uint32_t)(uintptr_t)g_save_schema[i].ptr || rs[2 * i + 1] != g_save_schema[i].size)
-            rh_fatal("rh_hooks_ai: save-schema entry %d: retail %08x+%u, port alias %08x+%u", i, rs[2 * i], rs[2 * i + 1],
+            rh_fatal("rh_port: save-schema entry %d: retail %08x+%u, port alias %08x+%u", i, rs[2 * i], rs[2 * i + 1],
                      (uint32_t)(uintptr_t)g_save_schema[i].ptr, g_save_schema[i].size);
     /* engine_game_init_bind_runtime_tables, minus what the port derives itself (terrain tiles, strat cost) */
     engine_army_economy_bind_army_records(g_per_army_768);
@@ -124,14 +122,16 @@ static void ai_bind_once(void)
     engine_path_field_bind_storage((int16_t *)(uintptr_t)0x500c30u, (int16_t *)(uintptr_t)0x4f0380u,
                                    (int32_t *)(uintptr_t)0x4f9820u, (int32_t *)(uintptr_t)0x503020u,
                                    (uint8_t *)(uintptr_t)0x53f070u, (uint8_t *)(uintptr_t)0x553550u);
-    rh_log("rh_hooks_ai: %d save-schema aliases match retail's table; seams bound\n", SAVE_SCHEMA_COUNT);
+    engine_army_move_bind_cells(g_overworld_map);
+    rh_combat_bind_seams();
+    rh_log("rh_port: %d save-schema aliases match retail's table; seams bound\n", SAVE_SCHEMA_COUNT);
 }
 
 /* ---------------------------------------------------------------- syncing: file-static mirrors */
 /* file-static mirrors: engine_army_economy config scalars + eval / supply scratch (setters), engine_path's distance
  * globals, engine_map_query's cell cursor, engine_territory's current slot + dirty rect, engine_army_ai's ranking cookie, engine_path_field's bookkeeping,
- * engine_combat's active-territory register, engine_army_state's record cursor */
-static void ai_sync_in(void)
+ * engine_army_state's record cursor + abort flag (engine_combat's runtime globals are aliased: rh_hooks_combat.c) */
+void rh_port_sync_in(void)
 {
     engine_army_economy_set_prices((int)G32(0x553f60u), (int)G32(0x567594u), (int)G32(0x57cb30u));
     engine_army_economy_set_production_tuning((int)G32(0x57c8e0u), (int)G32(0x552ffcu), (int)G32(0x57d34cu), (int)G32(0x5533bcu));
@@ -147,12 +147,11 @@ static void ai_sync_in(void)
     g_pf_src_col = (int32_t)G32(0x504020u); g_pf_src_row = (int32_t)G32(0x504024u); g_pf_src_cell = (int32_t)G32(0x4f4070u);
     g_pf_head = (int32_t)G32(0x500c20u); g_pf_tail = (int32_t)G32(0x4f2768u);
     g_pf_cur_col = (int32_t)G32(0x507230u); g_pf_cur_row = (int32_t)G32(0x507234u);
-    g_combat_active_terr = (int)G32(0x553f8cu); g_army_state_index = (int)G32(0x5533e8u);
+    g_army_state_index = (int)G32(0x5533e8u); g_army_state_abort = G8(0x50a49eu);
 }
-/* store only what changed: an unchanged store is no state change, and under the page-tracked shadow every
- * first write to a page is a fault (~30 us under wine) — sync_out alone touched ~15 pages a call */
-#define PUT(va, v) do { uint32_t v_ = (uint32_t)(v); if (G32(va) != v_) G32(va) = v_; } while (0)
-static void ai_sync_out(void)
+/* store only what changed (PUT): under the page-tracked shadow every first write to a page is a fault (~30 us
+ * under wine) — sync_out alone touched ~15 pages a call */
+void rh_port_sync_out(void)
 {
     PUT(0x55cd6cu, (uint32_t)engine_army_economy_eval_cost());
     PUT(0x5656f0u, (uint32_t)engine_army_economy_eval_revenue());
@@ -167,22 +166,25 @@ static void ai_sync_out(void)
     PUT(0x504020u, (uint32_t)g_pf_src_col); PUT(0x504024u, (uint32_t)g_pf_src_row); PUT(0x4f4070u, (uint32_t)g_pf_src_cell);
     PUT(0x500c20u, (uint32_t)g_pf_head); PUT(0x4f2768u, (uint32_t)g_pf_tail);
     PUT(0x507230u, (uint32_t)g_pf_cur_col); PUT(0x507234u, (uint32_t)g_pf_cur_row);
-    PUT(0x553f8cu, (uint32_t)g_combat_active_terr); PUT(0x5533e8u, (uint32_t)g_army_state_index);
+    PUT(0x5533e8u, (uint32_t)g_army_state_index); PUT8(0x50a49eu, g_army_state_abort);
 }
 
 /* engine_event_queue: the port's queue is one struct; retail's is six globals (FUN_00472bc5 / FUN_00472ae0).
  * Functions that post take a queue: the adapter loads it from retail, calls, and stores it back. */
 static engine_event_queue_state_t s_evq;
-static engine_event_queue_state_t *evq_load(void)
+static int s_evq_open;   /* an EVQ row is running: a call back into retail stores / reloads the queue too */
+engine_event_queue_state_t *rh_evq_load(void)
 {
+    s_evq_open = 1;
     memcpy(&s_evq.scratch, (const void *)(uintptr_t)0x553510u, sizeof s_evq.scratch);   /* DAT_00553510: 24 B staging */
     memcpy(s_evq.ring, (const void *)(uintptr_t)0x568480u, sizeof s_evq.ring);           /* DAT_00568480: 50 × 24 B */
     s_evq.write_idx = (int)G32(0x543fd0u); s_evq.read_idx = (int)G32(0x553ec4u);
     s_evq.notify_flag = (int)G32(0x565484u); s_evq.consumer_cooldown = (int)G32(0x57c954u);
     return &s_evq;
 }
-static void evq_store(void)
+void rh_evq_store(void)
 {
+    s_evq_open = 0;
     if (memcmp((void *)(uintptr_t)0x553510u, &s_evq.scratch, sizeof s_evq.scratch))
         memcpy((void *)(uintptr_t)0x553510u, &s_evq.scratch, sizeof s_evq.scratch);
     if (memcmp((void *)(uintptr_t)0x568480u, s_evq.ring, sizeof s_evq.ring))
@@ -190,72 +192,128 @@ static void evq_store(void)
     PUT(0x543fd0u, (uint32_t)s_evq.write_idx); PUT(0x553ec4u, (uint32_t)s_evq.read_idx);
     PUT(0x565484u, (uint32_t)s_evq.notify_flag); PUT(0x57c954u, (uint32_t)s_evq.consumer_cooldown);
 }
-#define EVQ(call) do { engine_event_queue_state_t *q = evq_load(); call; evq_store(); } while (0)
-#define MP_ACTIVE ((int)G32(0x553030u))   /* DAT_00553030 */
+void rh_port_retail_enter(void)
+{
+    rh_port_sync_out();
+    if (s_evq_open) { rh_evq_store(); s_evq_open = 1; }
+}
+void rh_port_retail_leave(void)
+{
+    if (s_evq_open) rh_evq_load();
+    rh_port_sync_in();
+}
 
 /* ---------------------------------------------------------------- the generic wrapper body */
-extern hook_t RH_HOOKS_AI[];
-typedef uint32_t (*ai_port_fn)(const uint32_t *a);
-typedef struct { hook_t *h; const uint32_t *a; ai_port_fn port; uint32_t ret_r, ret_p; } ai_ctx_t;
-typedef uint32_t (__cdecl *retail7_t)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
+/* rhost's host layers (media pool, DirectSound serials / registry / timers, the fake-handle sequence) are not
+ * retail memory, so the shadow does not roll them back: a port run that calls back into RETAIL code which uses
+ * them (an audio cue loads a WAV and creates a buffer — FUN_00427990) would see them already advanced by retail's
+ * run. They are rolled like the heap meta: the port run starts from the host state retail's run started from,
+ * and retail's post-state is put back after the comparison. */
+typedef struct { void *media, *ds, *hnd; } host_meta_t;
+static void host_save(host_meta_t *m) { m->media = rh_media_meta_save(); m->ds = rh_ds_meta_save(); m->hnd = rh_handles_meta_save(); }
+static void host_restore(const host_meta_t *m)
+{
+    if (m->media) rh_media_meta_restore(m->media);
+    if (m->ds) rh_ds_meta_restore(m->ds);
+    if (m->hnd) rh_handles_meta_restore(m->hnd);
+}
+static void host_free(host_meta_t *m) { free(m->media); free(m->ds); free(m->hnd); m->media = m->ds = m->hnd = NULL; }
 
-static void ai_retail(void *c)
+/* the retail side, at the caller's own stack position: esp = e0 + 4 (its pushed arguments), `call` puts the
+ * return address at e0 — the frame retail would have had; the caller's return address is put back after */
+uint32_t rh_c_floor;   /* esp of the hook machinery that is running retail through rh_call_at (0: none) */
+__attribute__((naked)) uint32_t rh_call_at(uint32_t va, uint32_t e0)
 {
-    ai_ctx_t *x = c;
-    const uint32_t *a = x->a;
-    x->ret_r = ((retail7_t)(uintptr_t)x->h->va)(a[0], a[1], a[2], a[3], a[4], a[5], a[6]);
+    __asm__("pushl %ebp\n\tmovl %esp, %ebp\n\tpushl %ebx\n\tpushl %esi\n\tpushl %edi\n\t"
+            "pushl _rh_c_floor\n\t"
+            "movl 12(%ebp), %edi\n\t"       /* e0 */
+            "movl (%edi), %ebx\n\t"         /* the caller's return address */
+            "movl %esp, %esi\n\t"
+            "movl %esp, _rh_c_floor\n\t"
+            "movl 8(%ebp), %ecx\n\t"
+            "leal 4(%edi), %esp\n\t"
+            "call *%ecx\n\t"
+            "movl %esi, %esp\n\t"
+            "movl %ebx, (%edi)\n\t"
+            "popl _rh_c_floor\n\t"
+            "popl %edi\n\tpopl %esi\n\tpopl %ebx\n\tpopl %ebp\n\tret");
 }
-static void ai_port(void *c)
+
+#define RES_N 16   /* residue window: the 16 dwords below e0 */
+typedef struct port_ctx {
+    hook_t *h; uint32_t e0; uint32_t a[8]; rh_port_fn port; uint32_t ret_r, ret_p;
+    host_meta_t pre, post; int shadow;
+    uint32_t res[RES_N]; int nput; int put_off[4]; uint32_t put_v[4];
+    struct port_ctx *outer;
+} port_ctx_t;
+static port_ctx_t *g_cur;   /* the port side running now (adapters read / write the residue through it) */
+
+uint32_t rh_res_get(int off)
 {
-    ai_ctx_t *x = c;
-    ai_bind_once();
-    ai_sync_in();
+    if (!g_cur || off < 4 || off > 4 * RES_N || (off & 3)) rh_fatal("rh_res_get(0x%x): no hook / bad offset", off);
+    return g_cur->res[RES_N - off / 4];
+}
+void rh_res_put(int off, uint32_t v)
+{
+    if (!g_cur || off < 4 || off > 4 * RES_N || (off & 3) || g_cur->nput == 4) rh_fatal("rh_res_put(0x%x): no hook / bad offset", off);
+    g_cur->put_off[g_cur->nput] = off; g_cur->put_v[g_cur->nput++] = v;
+}
+
+static void ctx_retail(void *c)
+{
+    port_ctx_t *x = c;
+    if (x->shadow) host_save(&x->pre);
+    x->ret_r = rh_call_at(x->h->va, x->e0);
+    if (x->shadow) host_save(&x->post);
+}
+static void ctx_port(void *c)
+{
+    port_ctx_t *x = c;
+    if (x->shadow) host_restore(&x->pre);
+    rh_port_bind_once();
+    rh_port_sync_in();
+    x->nput = 0; x->outer = g_cur; g_cur = x;
     x->ret_p = x->port(x->a);
-    ai_sync_out();
+    g_cur = x->outer;
+    rh_port_sync_out();
 }
-static uint32_t ai_run(int idx, void *self, ai_port_fn port, int has_ret, const uint32_t *a)
+uint32_t rh_port_run(hook_t *h, void *self, rh_port_fn port, int has_ret, uint32_t e0)
 {
-    hook_t *h = &RH_HOOKS_AI[idx];
-    if (h->wrapper != self) rh_fatal("rh_hooks_ai: row %d (%s) is not its wrapper's — enum and table out of order", idx, h->name);
-    ai_ctx_t x = { h, a, port, 0, 0 };
-    if (h->mode == H_REPLACE) { h->calls++; ai_port(&x); return x.ret_p; }
-    if (rh_in_shadow()) { ai_retail(&x); return x.ret_r; }
+    if (h->wrapper != self) rh_fatal("rh_port: row %s is not its wrapper's — enum and table out of order", h->name);
+    port_ctx_t x = { .h = h, .e0 = e0, .port = port };
+    memcpy(x.a, (const void *)(uintptr_t)(e0 + 4), 7 * 4);              /* retail may reuse its argument slots */
+    memcpy(x.res, (const void *)(uintptr_t)(e0 - 4 * RES_N), sizeof x.res);
+    if (h->mode == H_REPLACE) {
+        h->calls++; ctx_port(&x);
+        for (int i = 0; i < x.nput; i++) G32(e0 - (uint32_t)x.put_off[i]) = x.put_v[i];
+        return x.ret_p;
+    }
+    if (rh_in_shadow()) { ctx_retail(&x); return x.ret_r; }
     char why[400];
-    int r = rh_shadow_ex(h->name, ai_retail, ai_port, &x, why, sizeof why);
-    if (r >= 0 && has_ret && x.ret_r != x.ret_p) {
+    x.shadow = 1;
+    int r = rh_shadow_ex(h->name, ctx_retail, ctx_port, &x, why, sizeof why);
+    host_restore(&x.post);
+    host_free(&x.pre); host_free(&x.post);
+    if (r >= 0) {   /* the return value and the residue the port models: retail's are the reference */
         size_t n = r ? strlen(why) : (size_t)snprintf(why, sizeof why, "%s:", h->name);
-        if (n < sizeof why) snprintf(why + n, sizeof why - n, " ret r%08x/p%08x", x.ret_r, x.ret_p);
-        r = 1;
+        if (has_ret && x.ret_r != x.ret_p && n < sizeof why) {
+            n += (size_t)snprintf(why + n, sizeof why - n, " ret r%08x/p%08x", x.ret_r, x.ret_p);
+            r = 1;
+        }
+        for (int i = 0; i < x.nput; i++) {
+            uint32_t rv = G32(e0 - (uint32_t)x.put_off[i]);
+            if (rv != x.put_v[i] && n < sizeof why) {
+                n += (size_t)snprintf(why + n, sizeof why - n, " res e0-%x r%08x/p%08x", x.put_off[i], rv, x.put_v[i]);
+                r = 1;
+            }
+        }
     }
     rh_hook_count(h, r, why);
     return x.ret_r;
 }
 
-/* one row = an index, a port adapter (args → port call) and a wrapper with retail's arity */
-#define ARGS0 void
-#define ARGS1 uint32_t a0
-#define ARGS2 uint32_t a0, uint32_t a1
-#define ARGS3 uint32_t a0, uint32_t a1, uint32_t a2
-#define ARGS4 uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3
-#define ARGS5 uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4
-#define ARGS6 uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5
-#define ARGS7 uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5, uint32_t a6
-#define VALS0 0
-#define VALS1 a0
-#define VALS2 a0, a1
-#define VALS3 a0, a1, a2
-#define VALS4 a0, a1, a2, a3
-#define VALS5 a0, a1, a2, a3, a4
-#define VALS6 a0, a1, a2, a3, a4, a5
-#define VALS7 a0, a1, a2, a3, a4, a5, a6
-#define I(k) ((int)a[k])
-/* HOOK_R: the port returns a value (compared); HOOK_V: void (retail's EAX passed through in shadow mode) */
-#define HOOK_R(NAME, N, CALL) \
-    static uint32_t p_##NAME(const uint32_t *a) { (void)a; return (uint32_t)(CALL); } \
-    static uint32_t __cdecl w_##NAME(ARGS##N) { const uint32_t a[8] = { VALS##N }; return ai_run(X_##NAME, (void *)w_##NAME, p_##NAME, 1, a); }
-#define HOOK_V(NAME, N, CALL) \
-    static uint32_t p_##NAME(const uint32_t *a) { (void)a; CALL; return 0; } \
-    static uint32_t __cdecl w_##NAME(ARGS##N) { const uint32_t a[8] = { VALS##N }; return ai_run(X_##NAME, (void *)w_##NAME, p_##NAME, 0, a); }
+#define RH_TABLE RH_HOOKS_AI
+extern hook_t RH_HOOKS_AI[];
 
 /* row indices (must follow RH_HOOKS_AI's order) */
 enum {

@@ -84,12 +84,21 @@ void engine_army_move_bind_special_fn(engine_army_move_cell_fn fn);
 void engine_army_move_bind_redraw_fn(engine_army_move_redraw_fn fn);
 
 /* Outcome scratch latched by the evaluator from the cell it classified (retail
- * runtime scalars).  The movement executor (FUN_00465d28, later chip) consumes
+ * runtime scalars, defined in engine_combat_globals.c — the hybrid host binds
+ * them to retail's addresses).  The movement executor (FUN_00465d28) consumes
  * them to drive arrival / region-event / combat-engage.  Not save state. */
 extern uint8_t g_army_move_cell_flags;    /* DAT_0050a4a4 — cell +1 movement flags */
 extern uint8_t g_army_move_cell_region;   /* DAT_0050a49c — cell +7 region key      */
 extern uint8_t g_army_move_cell_terrain;  /* DAT_0050a49d — cell +0 terrain/owner    */
 extern int     g_army_move_cell_off;      /* DAT_0050a4a0 — byte offset of the cell  */
+
+/* The executor's current waypoint (FUN_00465d28's locals [ebp-0xc] col /
+ * [ebp-0x10] row): retail never initializes them, so a pass with the step-eval
+ * disarmed reads whatever the previous call left in those stack slots (quirk
+ * #229).  The port keeps them across calls; the hybrid host loads them from
+ * retail's stack residue before each call and stores them back after. */
+extern uint32_t g_army_move_wp_col;
+extern uint32_t g_army_move_wp_row;
 
 /* Port of FUN_00466893 @ 0x466893 (900 B, __cdecl int(int)).  Evaluate the
  * cell one step away from the current occupant (engine_army_state's
@@ -102,6 +111,27 @@ extern int     g_army_move_cell_off;      /* DAT_0050a4a0 — byte offset of the
  * so `evq` / `mp_active` are threaded through to the combat callees. */
 int engine_army_move_eval_dir(int dir, engine_event_queue_state_t *evq,
                               int mp_active);
+
+/* Port of FUN_00466c3c @ 0x466c3c (328 B, __cdecl int(int)): latch the cell at
+ * byte offset `cell_off` into the outcome scratch above (+ its occupant into
+ * g_combat_active_terr, DAT_00553f8c) and map its movement flags to an outcome
+ * code; an occupied cell defers to engine_army_move_eval_occupied. */
+int engine_army_move_classify_cell(int cell_off, engine_event_queue_state_t *evq,
+                                   int mp_active);
+
+/* Port of FUN_004658c1 @ 0x4658c1 (1127 B, void → int): resolve a step into the
+ * cell holding stack g_combat_active_terr — merge (same owner), fight
+ * (engine_combat_dispatch) or overrun an idle hostile stack.  Returns the
+ * outcome code (10 when the mover was destroyed / the target overrun). */
+int engine_army_move_eval_occupied(engine_event_queue_state_t *evq, int mp_active);
+
+/* Port of FUN_0046673c @ 0x46673c (343 B, void): the blocked-step branch of the
+ * classifier (relation hit, scorched-earth decay, alert cue). */
+void engine_army_move_blocked_branch(engine_event_queue_state_t *evq);
+
+/* Port of FUN_00469e5b @ 0x469e5b (476 B, __cdecl void(int)): scorched-earth
+ * decay of the region cell at byte offset `cell_off`. */
+void engine_army_move_decay_region_cell(int cell_off);
 
 /* Port of FUN_00466d84 @ 0x466d84 (995 B, __stdcall void).  Commit the current
  * occupant's move into the neighbour cell in the direction latched at record

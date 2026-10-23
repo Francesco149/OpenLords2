@@ -93,6 +93,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_realm_upkeep.c \
                    ../src/engine_army_ai.c \
                    ../src/engine_combat.c \
+                   ../src/engine_combat_globals.c \
                    ../src/engine_diplomacy.c \
                    ../src/engine_turn.c \
                    ../src/save.c \

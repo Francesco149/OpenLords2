@@ -31,11 +31,10 @@
 #include <stdint.h>
 
 /* Per-combatant muster scratch — the 7 troop-class counts copied out of each
- * combatant's record for the battle UI.  Retail keeps these at 0x568420
- * (attacker) and 0x56843c (defender).  Owned by this module; written by
- * engine_combat_load_muster, read only by the (not-yet-ported) battle UI. */
-extern int32_t g_combat_muster_a[7];   /* retail 0x568420 — attacker */
-extern int32_t g_combat_muster_b[7];   /* retail 0x56843c — defender */
+ * combatant's record for the battle UI: save slot DAT_00568420 (s_slot_00568420,
+ * 56 B) holds the attacker's 7 × i32 at +0x00 and the defender's at +0x1c.
+ * Written by engine_combat_load_muster; read back with engine_combat_muster(). */
+int32_t engine_combat_muster(int side, int klass);   /* side 0 attacker, 1 defender */
 
 /* Result of a resolved fight (retail writes these to scalar globals). */
 typedef struct {
@@ -74,17 +73,23 @@ void engine_combat_resolve_casualties(int attacker, int defender,
                                       int difficulty, int quick_resolve,
                                       engine_combat_result_t *out);
 
-/* Battle-setup outputs filled by engine_combat_size_battle for the
- * not-yet-ported battlefield UI / render (retail combat-UI scalars). */
+/* FUN_004aad07 in retail layout (__cdecl void): resolve the parked combatants
+ * (s_slot_00568210 attacker / s_slot_00568218 defender; difficulty
+ * s_slot_0055401c, quick-resolve s_slot_0053e8fc), clear the render-handoff flag
+ * (DAT_0056d5c8) and publish the winner (s_slot_0057c924) and its owner
+ * (DAT_005440cc). */
+void engine_combat_resolve(void);
+
+/* Battle-setup outputs filled by engine_combat_size_battle (retail combat-UI
+ * scalars).  The local role (DAT_005533d0), battle sizes (DAT_00568934 / 38) and
+ * owners (DAT_005681ec / d8) are save slots: the port writes s_slot_005533d0,
+ * s_slot_00568934 / 38, s_slot_005681ec / d8.  The rest are runtime globals
+ * (defined in engine_combat_globals.c — the hybrid host binds them to retail's
+ * addresses). */
 extern int g_combat_both_garrison;  /* DAT_004ee89c — both combatants garrisons */
-extern int g_combat_local_role;     /* DAT_005533d0 — 0 none/1 local attacks/2 defends */
 extern int g_combat_ctrl_408;       /* DAT_00554408 — 2 when the local player attacks */
 extern int g_combat_ctrl_5b0;       /* DAT_0056d5b0 — 2 when the local player attacks */
-extern int g_combat_size_a;         /* DAT_00568934 — attacker battle size (≥1, 6 if 0)*/
-extern int g_combat_size_b;         /* DAT_00568938 — defender battle size */
-extern int g_combat_owner_a;        /* DAT_005681ec — attacker owner (signed) */
-extern int g_combat_owner_b;        /* DAT_005681d8 — defender owner (signed) */
-extern int g_combat_audio_latch;    /* _DAT_005533f0 — voice/cue-active flag.
+extern int g_combat_audio_latch;    /* DAT_005533f0 — voice/cue-active flag.
                                      * Combat raises it around battle cues; the
                                      * event-scroll renderer (engine.c) clears
                                      * it before a capture-event cue and the
@@ -94,12 +99,25 @@ extern int g_combat_flag_530d0;     /* DAT_005530d0 — combat-focus flag; the
 extern int g_combat_flag_553210;    /* DAT_00553210 — region-relationship UI
                                      * dirty; the help-hint pump (0x476aa7)
                                      * consumes-and-clears it (hint 0xd3). */
+extern int g_combat_flag_567d0c;    /* DAT_00567d0c — combat-redraw flag */
+extern int g_combat_flag_53f284;    /* DAT_0053f284 — quick-anim suppressor */
+extern int g_combat_render_dirty;   /* DAT_0052afcc */
+extern int g_combat_winner_owner;   /* DAT_005440cc — the resolver's winner owner */
+/* Battle-render handoff clocks / scratch (retail timeGetTime stamps). */
+extern uint32_t g_combat_anim_clock;     /* DAT_005689a0 — 0x13 quick-anim start */
+extern uint32_t g_combat_battle_clock;   /* DAT_0057a0d0 — 0x12 battlefield start */
+extern uint32_t g_combat_anim_t0;        /* DAT_0053e994 */
+extern uint32_t g_combat_anim_deadline;  /* DAT_00568d9c */
+extern int      g_combat_anim_scratch[10]; /* DAT_00515d60 */
+/* Siege / keep-reinforce selection latches. */
+extern int g_siege_sel_attacker;    /* DAT_0055cd58 */
+extern int g_siege_sel_region;      /* DAT_0052f0a8 */
+extern int g_siege_besieger;        /* DAT_00568ed0 */
+extern int g_siege_region;          /* DAT_00554000 */
 
-/* Set the file-static combat-redraw flag (retail DAT_00567d0c) — written 1
- * by engine_combat_transfer_ownership, written 2 by the army-select
- * "claim an empty county" branch (FUN_0043ce1a).  No reader found in either
- * decompiled corpus searched so far; kept file-static + setter (not a bare
- * extern) so a future reader stays the single source of truth on meaning. */
+/* Set the combat-redraw flag (retail DAT_00567d0c) — written 1 by
+ * engine_combat_transfer_ownership, written 2 by the army-select "claim an
+ * empty county" branch (FUN_0043ce1a). */
 void engine_combat_set_flag_567d0c(int v);
 
 /* Bind the optional battle-cue hook (retail FUN_00427990 ff_batl.wav); NULL

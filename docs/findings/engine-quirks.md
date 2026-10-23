@@ -7997,3 +7997,66 @@ occupant.  Fixed: the pass calls `engine_combat_spawn_rebellion` directly and ta
 
 > 📍 `src/engine_realm.c/.h` (escalate_unrest), `src/engine_turn.c` (caller);
 > evidence: `tools/rhost/rh_hooks_ai.c` row realm_escalate_unrest.
+
+## 229 — the army-move executor reads its waypoint from stack garbage on a disarmed pass: an army standing on the cell the PREVIOUS army just stepped into "arrives" and stops
+
+FUN_00465d28 (`engine_army_move_run`, the per-tick movement-step executor) keeps the
+current waypoint in two locals, `[ebp-0xc]` col / `[ebp-0x10]` row, and assigns them
+only on a pass where the step-eval is armed (record +0x14b bit0).  On a disarmed pass
+it still computes `FUN_0046f434(col, row, wp_col, wp_row)` from whatever those stack
+slots hold, and a result of 8 ("standing on the waypoint") ends the walk: +0x14c = 0,
++0x150 = 1 — the army stops.  The slots hold the residue of the previous call at the
+same depth, in practice the previous `move_run` — usually for ANOTHER army — so an army
+standing on the cell that army just entered stops for the tick (rhost `--trap 466116`,
+bot-s15-t20 f16450: army 2 at (0x25,0x23) reads (0x25,0x23) left by the previous army's
+step, arrives; the port's zero-initialized locals let it step east).
+
+The port had zero-initialized them ("a real stack is never at (0,0)").  Now the
+waypoint is explicit state, `g_army_move_wp_col / _row`, kept across calls; the hybrid
+host loads it from retail's stack residue before each call and stores the port's final
+values back where retail's frame would have left them (rh_port.h STACK RESIDUE).  The
+shadow compares them with the residue retail's run leaves: 135k calls, 0 divergences.
+
+Found because the shadow itself perturbed it: a C wrapper frame at the call site
+overwrites the residue retail reads, so a shadowed run took different decisions than a
+pure one with 0 divergences reported (14 of 33 scenarios ended off the blessed state).
+The wrappers now run retail AT the caller's stack position and the machinery 256 KB
+below (rh_port.h WRAPPERS).
+
+> 📍 `src/engine_army_move.c/.h` (engine_army_move_run, g_army_move_wp_col/_row),
+> `src/engine_combat_globals.c`; evidence: `tools/rhost/rh_hooks_combat.c` row move_run.
+
+## 230 — an overrun of an idle hostile stack hits the VICTIM's relation toward the mover, not the other way round
+
+FUN_004658c1 (the step evaluator's occupied-cell resolver), target in state 4 with a
+hostile owner the mover may engage: `FUN_004a1ee1(owner(target), owner(mover), 5)` —
+the same (victim, aggressor) order as the battle aftermath's `(loser, winner, 0x14)`.
+The port passed (mover, target): the overrunning player's opinion of its victim dropped
+instead of the victim's opinion of the overrunner.  Fixed (read from the disassembly at
+0x465c63..0x465c97; the corpus never overruns an idle stack, so no shadow call yet).
+Same pass: FUN_00468ae2 (special-tile plunder) takes the aggressor from the army-state
+cursor DAT_005533e8, not its argument — identical from its only caller, now exact.
+
+> 📍 `src/engine_army_move.c` (engine_army_move_eval_occupied, engine_army_move_special_tile).
+
+## 231 — the battle-setup outputs are SAVE slots, and the battle screens are the engine's own screen byte
+
+FUN_004a6a30 (battle sizing) writes the local player's combat role DAT_005533d0, the
+two battle sizes DAT_00568934 / 38 and owners DAT_005681ec / d8 — save-schema entries
+65 and 94..97; FUN_00422c12 writes the muster scratch DAT_00568420 (entry 193, 56 B:
+attacker 7 × i32, defender at +0x1c); the quick-anim path writes the combatants to
+DAT_00553c70 / DAT_00553d20 (entries 180 / 181).  The port wrote private copies
+(`g_combat_size_a`, `g_combat_muster_a`, ...), so a save taken after a battle lost them
+and anything reading the slots saw stale values.  The dispatch / contest / siege paths
+also set the screen byte DAT_004eac50 (0x12 battlefield, 0x13 quick-anim, 0x1d siege),
+the demand-redraw mode DAT_0057d340 and (aftermath) DAT_00553fc8 — engine.c's screen,
+redraw mode and engine_turn.c's g_sim_turn_progress — through file-static mirrors that
+nothing read, so the executor's "battle screen up → abort the walk" check never fired.
+The two battle clocks are distinct: the battlefield stamps DAT_0057a0d0, the quick-anim
+DAT_005689a0.  Fixed: the slots / engine setters / g_sim_turn_progress are written
+directly; the remaining battle / movement runtime globals live in
+`src/engine_combat_globals.c` (rhost binds them to retail's VAs).
+
+> 📍 `src/engine_combat.c/.h`, `src/engine_combat_globals.c`, `src/engine_army_move.c/.h`;
+> evidence: `tools/rhost/rh_hooks_combat.c` rows combat_size_battle / combat_contest_region /
+> combat_dispatch / combat_aftermath.

@@ -161,11 +161,8 @@ static void army_move_region_hi(int self, int off, engine_event_queue_state_t *e
 static void army_move_special(int self, int off, engine_event_queue_state_t *e, int mp)
 { if (g_special_fn) g_special_fn(self, off, e, mp); }
 
-/* Outcome scratch latched per classified cell (retail runtime scalars). */
-uint8_t g_army_move_cell_flags;           /* DAT_0050a4a4 */
-uint8_t g_army_move_cell_region;          /* DAT_0050a49c */
-uint8_t g_army_move_cell_terrain;         /* DAT_0050a49d */
-int     g_army_move_cell_off;             /* DAT_0050a4a0 */
+/* Outcome scratch latched per classified cell (retail runtime scalars
+ * DAT_0050a4a4 / 0050a49c / 0050a49d / 0050a4a0): engine_combat_globals.c. */
 
 void engine_army_move_bind_cells(const uint8_t *cells) { g_cells = cells; }
 
@@ -180,7 +177,7 @@ static void build_has_data(uint8_t hd[7])
 
 /* --- FUN_004658c1 @ 0x4658c1: resolve a destination cell already holding a
  * stack (1112 B, __stdcall) ------------------------------------------------- */
-static int eval_occupied(engine_event_queue_state_t *evq, int mp_active)
+int engine_army_move_eval_occupied(engine_event_queue_state_t *evq, int mp_active)
 {
     int self  = g_army_state_index;       /* DAT_005533e8 */
     int other = g_combat_active_terr;      /* DAT_00553f8c (cell +5, latched)   */
@@ -232,13 +229,15 @@ static int eval_occupied(engine_event_queue_state_t *evq, int mp_active)
     }
 
     /* Target is a garrison/region stack (state 4) of a hostile owner →
-     * overrun it: relation hit, both owners notified (0xa2 / 0xa1), remove it. */
+     * overrun it: the TARGET's owner takes the relation hit toward the mover
+     * (battle_adjust(victim, aggressor) — quirk #230), both owners notified
+     * (0xa2 / 0xa1), remove it. */
     if (ro[M_STATE] == 4 && rs[M_OWNER] != ro[M_OWNER] &&
         engine_diplomacy_should_engage((int8_t)rs[M_OWNER],
                                        (int8_t)ro[M_OWNER]) != 0) {
         uint8_t hd[7]; build_has_data(hd);
         int local = (int)s_slot_0057c8cc;
-        engine_diplomacy_battle_adjust((int8_t)rs[M_OWNER], (int8_t)ro[M_OWNER],
+        engine_diplomacy_battle_adjust((int8_t)ro[M_OWNER], (int8_t)rs[M_OWNER],
                                        5, evq);
         engine_event_queue_post(evq, 0, (int8_t)rs[M_OWNER], 0xa2, 0, 0, 0, 0, 0,
                                 hd, local);
@@ -252,8 +251,8 @@ static int eval_occupied(engine_event_queue_state_t *evq, int mp_active)
 
 /* --- FUN_00466c3c @ 0x466c3c: classify a destination cell by byte offset
  * (328 B, __cdecl) ---------------------------------------------------------- */
-static int classify_cell(int cell_off, engine_event_queue_state_t *evq,
-                         int mp_active)
+int engine_army_move_classify_cell(int cell_off, engine_event_queue_state_t *evq,
+                                   int mp_active)
 {
     const uint8_t *cell = &g_cells[cell_off];
 
@@ -283,7 +282,7 @@ static int classify_cell(int cell_off, engine_event_queue_state_t *evq,
         if (f & 0x20) return 8;
         return 1;
     }
-    return eval_occupied(evq, mp_active);
+    return engine_army_move_eval_occupied(evq, mp_active);
 }
 
 /* --- FUN_00466893: evaluate the neighbour cell in a compass direction ------ */
@@ -319,7 +318,7 @@ int engine_army_move_eval_dir(int dir, engine_event_queue_state_t *evq,
     if ((guard & G_ROW_MIN) && !(row >= 1))   return 0;
 
     int cell_off = *(int32_t *)(r + M_CELL) + k_dir[dir].delta;
-    return classify_cell(cell_off, evq, mp_active);
+    return engine_army_move_classify_cell(cell_off, evq, mp_active);
 }
 
 /* --- FUN_00466d84 @ 0x466d84: commit the move into the chosen neighbour
@@ -385,7 +384,7 @@ int engine_army_move_terrain_passable(int cell_off)
  *        move a 1/census fraction of the load +0x250 into the scratch sink +0x27c
  *        and decrement the high census.
  * Then set the cell type to 0 (FUN_0046d7f4). */
-static void decay_region_cell(int cell_off)
+void engine_army_move_decay_region_cell(int cell_off)
 {
     unsigned region   = g_cells[cell_off + C_REGION];   /* DAT_00522f97 = grid+7 */
     uint8_t  terrain  = g_cells[cell_off + C_TERRAIN];  /* DAT_00522f90 = grid+0 */
@@ -423,7 +422,7 @@ static void decay_region_cell(int cell_off)
  * mover is an active player), scorch-decays the cell, and plays the blocked
  * cue.  Idle stacks (state 3/4) never reach this.  `evq` carries the relation
  * notification. */
-static void blocked_branch(engine_event_queue_state_t *evq)
+void engine_army_move_blocked_branch(engine_event_queue_state_t *evq)
 {
     uint8_t *r = MREC(g_army_state_index);
 
@@ -440,7 +439,7 @@ static void blocked_branch(engine_event_queue_state_t *evq)
         engine_army_move_terrain_passable(g_army_move_cell_off) != 0) {
         if (g_player_strategic_352[(uint8_t)mover_owner * PSTRIDE + P_ACTIVE] != 0)
             engine_diplomacy_battle_adjust(region_owner, mover_owner, 10, evq);
-        decay_region_cell(g_army_move_cell_off);
+        engine_army_move_decay_region_cell(g_army_move_cell_off);
         army_move_alert(3);                            /* FUN_00426216(3) */
     }
 }
@@ -506,7 +505,7 @@ int engine_army_move_classify_step(int dir, engine_event_queue_state_t *evq,
     if (result == 3) {
         r[M_ROUGH] = 1;
     } else if (result == 8) {
-        blocked_branch(evq);
+        engine_army_move_blocked_branch(evq);
         result = 1;
     } else if (result > 4) {
         return result;
@@ -527,12 +526,14 @@ void engine_army_move_run(engine_event_queue_state_t *evq, int mp_active)
     int      self = g_army_state_index;          /* DAT_005533e8 */
     uint8_t *r    = MREC(self);
 
-    /* Retail leaves these uninitialised on the first (step-eval disarmed) pass;
-     * the disarmed classifier ignores the direction computed from them, so the
-     * only observable use is the dir==8 grid-arrival guard.  We zero-init for a
-     * defined first pass — a real stack is never at the (0,0) corner where that
-     * differs (engine-quirk: retail-UB first-pass waypoint). */
-    unsigned wp_col = 0, wp_row = 0;
+    /* The current waypoint lives in two locals retail never initializes: on a
+     * pass with the step-eval disarmed they still hold what the previous call
+     * left in that stack slot — in practice the previous move_run's last
+     * waypoint, often for ANOTHER army.  The direction toward it decides the
+     * dir == 8 "standing on the waypoint" exit, which stops this army (quirk
+     * #229).  They are g_army_move_wp_col / _row (the hybrid host loads them
+     * from retail's stack residue and stores them back). */
+    uint32_t wp_col = g_army_move_wp_col, wp_row = g_army_move_wp_row;
 
     *(int32_t *)(r + M_TIMER) = 4;               /* +0x160 reset per entry */
 
@@ -576,8 +577,8 @@ void engine_army_move_run(engine_event_queue_state_t *evq, int mp_active)
             }
             if (r[M_WP_COUNT] != 0)
                 r[M_WP_COUNT]--;
-            wp_col = r[M_WP_LIST + r[M_WP_COUNT] * 2 + 0];   /* +0x1d */
-            wp_row = r[M_WP_LIST + r[M_WP_COUNT] * 2 + 1];   /* +0x1e */
+            wp_col = g_army_move_wp_col = r[M_WP_LIST + r[M_WP_COUNT] * 2 + 0];   /* +0x1d */
+            wp_row = g_army_move_wp_row = r[M_WP_LIST + r[M_WP_COUNT] * 2 + 1];   /* +0x1e */
         }
 
         /* Direction toward the current waypoint; 8 == already standing on it. */
@@ -654,7 +655,9 @@ void engine_army_move_special_tile(int self, int cell_off,
     int32_t *stock = (int32_t *)(g_per_army_768 + region * RSTRIDE + R_STOCK_24);
     *stock -= *stock / 4;
 
-    engine_diplomacy_battle_adjust(region_owner, mover_owner, 0x14, evq);
+    /* retail takes the aggressor from the army-state cursor (DAT_005533e8), not
+     * its argument — the same record from the executor, its only caller */
+    engine_diplomacy_battle_adjust(region_owner, (int8_t)MREC(g_army_state_index)[M_OWNER], 0x14, evq);
     army_move_alert(3);                          /* FUN_00426216(3) */
 }
 

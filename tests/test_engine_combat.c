@@ -89,8 +89,8 @@ int test_engine_combat_load_muster(void)
     engine_combat_load_muster(1, 2);
 
     for (int c = 0; c < 7; c++) {
-        T_ASSERT_EQ_I(g_combat_muster_a[c], ac[c] + (c == 2 ? 5 : 0));
-        T_ASSERT_EQ_I(g_combat_muster_b[c], dc[c] + (c == 6 ? 9 : 0));
+        T_ASSERT_EQ_I(engine_combat_muster(0, c), ac[c] + (c == 2 ? 5 : 0));
+        T_ASSERT_EQ_I(engine_combat_muster(1, c), dc[c] + (c == 6 ? 9 : 0));
     }
     return 0;
 }
@@ -270,7 +270,7 @@ int test_engine_combat_size_no_garrison(void)
     cb_reset();
     CREC(1)[C_OWNER] = 1; CREC(2)[C_OWNER] = 2;
     T_ASSERT_EQ_I(engine_combat_size_battle(1, 2, 1), 0);
-    T_ASSERT_EQ_I(g_combat_local_role, 0);
+    T_ASSERT_EQ_I((int)s_slot_005533d0, 0);
     return 0;
 }
 
@@ -281,14 +281,14 @@ int test_engine_combat_size_local_attacks(void)
     CREC(1)[C_OWNER] = 1; CREC(1)[C_GARRISON] = 1; CREC(1)[C_COUNT] = 4;
     CREC(2)[C_OWNER] = 2; CREC(2)[C_GARRISON] = 0; CREC(2)[C_COUNT] = 0;
     T_ASSERT_EQ_I(engine_combat_size_battle(1, 2, 1), 1);
-    T_ASSERT_EQ_I(g_combat_local_role, 1);
+    T_ASSERT_EQ_I((int)s_slot_005533d0, 1);
     T_ASSERT_EQ_I(g_combat_ctrl_408, 2);
     T_ASSERT_EQ_I(g_combat_ctrl_5b0, 2);
     T_ASSERT_EQ_I(g_combat_both_garrison, 0);
-    T_ASSERT_EQ_I(g_combat_size_a, 4);
-    T_ASSERT_EQ_I(g_combat_size_b, 6);          /* 0 count floored to 6 */
-    T_ASSERT_EQ_I(g_combat_owner_a, 1);
-    T_ASSERT_EQ_I(g_combat_owner_b, 2);
+    T_ASSERT_EQ_I((int)s_slot_00568934, 4);
+    T_ASSERT_EQ_I((int)s_slot_00568938, 6);          /* 0 count floored to 6 */
+    T_ASSERT_EQ_I((int)s_slot_005681ec, 1);
+    T_ASSERT_EQ_I((int)s_slot_005681d8, 2);
     return 0;
 }
 
@@ -300,10 +300,10 @@ int test_engine_combat_size_local_defends(void)
     CREC(2)[C_OWNER] = 1; CREC(2)[C_GARRISON] = 1; CREC(2)[C_COUNT] = 3;
     T_ASSERT_EQ_I(engine_combat_size_battle(1, 2, 1), 1);
     T_ASSERT_EQ_I(g_combat_both_garrison, 1);
-    T_ASSERT_EQ_I(g_combat_local_role, 2);
+    T_ASSERT_EQ_I((int)s_slot_005533d0, 2);
     T_ASSERT_EQ_I(g_combat_ctrl_408, 0);
-    T_ASSERT_EQ_I(g_combat_size_a, 9);
-    T_ASSERT_EQ_I(g_combat_size_b, 3);
+    T_ASSERT_EQ_I((int)s_slot_00568934, 9);
+    T_ASSERT_EQ_I((int)s_slot_00568938, 3);
     return 0;
 }
 
@@ -314,7 +314,7 @@ int test_engine_combat_size_defender_local_open_attacker(void)
     CREC(1)[C_OWNER] = 2; CREC(1)[C_GARRISON] = 0;
     CREC(2)[C_OWNER] = 1; CREC(2)[C_GARRISON] = 1;
     T_ASSERT_EQ_I(engine_combat_size_battle(1, 2, 1), 1);
-    T_ASSERT_EQ_I(g_combat_local_role, 1);
+    T_ASSERT_EQ_I((int)s_slot_005533d0, 1);
     T_ASSERT_EQ_I(g_combat_both_garrison, 0);
     return 0;
 }

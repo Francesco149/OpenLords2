@@ -31,6 +31,8 @@
 #include "engine_diplomacy.h"     /* battle_adjust */
 #include "engine_army_ai.h"       /* run_turn (FUN_0049df48 ≡ FUN_0049a990) */
 #include "game_init.h"            /* troop_pool_row / army_near_rawflag probes */
+#include "engine.h"                /* engine_set_current_screen / _set_demand_redraw */
+#include "engine_turn.h"           /* g_sim_turn_progress (DAT_00553fc8) */
 
 /* --- per-territory occupant ("army") record fields (stride 0x1a4) ---------
  * Shared with engine_realm_upkeep.c's UNIT_* layout; named here for the
@@ -74,8 +76,14 @@ static const int k_casualty_table[20] = {
     270, 65,  360, 80,  500, 90,  700, 95,  900, 98,
 };
 
-int32_t g_combat_muster_a[7];   /* retail 0x568420 */
-int32_t g_combat_muster_b[7];   /* retail 0x56843c */
+/* The muster scratch is save slot DAT_00568420: attacker 7 × i32, defender at +0x1c. */
+static void muster_put(int side, int c, int32_t v) { memcpy(s_slot_00568420 + side * 0x1c + c * 4, &v, 4); }
+int32_t engine_combat_muster(int side, int klass)
+{
+    int32_t v;
+    memcpy(&v, s_slot_00568420 + side * 0x1c + klass * 4, 4);
+    return v;
+}
 
 static int16_t  rd_i16(const uint8_t *r, int off) { return *(const int16_t *)(r + off); }
 static int32_t  rd_i32(const uint8_t *r, int off) { return *(const int32_t *)(r + off); }
@@ -101,12 +109,12 @@ void engine_combat_load_muster(int attacker, int defender)
         int va = rd_i16(a, C_COUNTS + c * 2);
         if (a[C_CON_CLASS] == c)
             va += a[C_CON_AMT];
-        g_combat_muster_a[c] = va;
+        muster_put(0, c, va);
 
         int vd = rd_i16(d, C_COUNTS + c * 2);
         if (d[C_CON_CLASS] == c)
             vd += d[C_CON_AMT];
-        g_combat_muster_b[c] = vd;
+        muster_put(1, c, vd);
     }
 }
 
@@ -205,14 +213,9 @@ void engine_combat_resolve_casualties(int attacker, int defender,
  *  Battle sizing / setup (FUN_004a6a30) — see engine_combat.h.           *
  * ===================================================================== */
 
-int g_combat_both_garrison;   /* DAT_004ee89c */
-int g_combat_local_role;      /* DAT_005533d0 */
-int g_combat_ctrl_408;        /* DAT_00554408 */
-int g_combat_ctrl_5b0;        /* DAT_0056d5b0 */
-int g_combat_size_a;          /* DAT_00568934 */
-int g_combat_size_b;          /* DAT_00568938 */
-int g_combat_owner_a;         /* DAT_005681ec */
-int g_combat_owner_b;         /* DAT_005681d8 */
+/* Outputs: g_combat_both_garrison / _ctrl_408 / _ctrl_5b0 (engine_combat_globals.c)
+ * and the save slots s_slot_005533d0 (local role), s_slot_00568934 / 38 (battle
+ * sizes), s_slot_005681ec / d8 (owners). */
 
 /* Optional battle-cue hook standing in for retail FUN_00427990(ff_batl.wav).
  * The cue-playback path is deferred project-wide (see audio.c), so this is
@@ -228,7 +231,7 @@ int engine_combat_size_battle(int attacker, int defender, int local_player)
     uint8_t *d = CREC(defender);
 
     g_player_strategic_352[5]  = 0;   /* retail DAT_0057bf05 (neutral slot +5) */
-    g_combat_local_role        = 0;
+    s_slot_005533d0            = 0;   /* local role */
     g_combat_ctrl_408          = 0;
     g_combat_ctrl_5b0          = 0;
     g_combat_both_garrison     = 0;
@@ -247,19 +250,19 @@ int engine_combat_size_battle(int attacker, int defender, int local_player)
      * still "attacks" (role 1) when the attacker has no garrison; otherwise it
      * is the defending side (role 2). */
     if ((int8_t)a[C_OWNER] == local_player)
-        g_combat_local_role = 1;
+        s_slot_005533d0 = 1;
     if ((int8_t)d[C_OWNER] == local_player)
-        g_combat_local_role = (a[C_GARRISON] == 0) ? 1 : 2;
+        s_slot_005533d0 = (a[C_GARRISON] == 0) ? 1 : 2;
 
-    if (g_combat_local_role == 1) {
+    if (s_slot_005533d0 == 1) {
         g_combat_ctrl_408 = 2;
         g_combat_ctrl_5b0 = 2;
     }
 
-    g_combat_size_a = a[C_COUNT]; if (g_combat_size_a == 0) g_combat_size_a = 6;
-    g_combat_size_b = d[C_COUNT]; if (g_combat_size_b == 0) g_combat_size_b = 6;
-    g_combat_owner_a = (int8_t)a[C_OWNER];
-    g_combat_owner_b = (int8_t)d[C_OWNER];
+    s_slot_00568934 = a[C_COUNT]; if (s_slot_00568934 == 0) s_slot_00568934 = 6;
+    s_slot_00568938 = d[C_COUNT]; if (s_slot_00568938 == 0) s_slot_00568938 = 6;
+    s_slot_005681ec = (uint32_t)(int8_t)a[C_OWNER];
+    s_slot_005681d8 = (uint32_t)(int8_t)d[C_OWNER];
     return 1;
 }
 
@@ -453,44 +456,12 @@ int engine_combat_find_capital_defender(int key)
 static void (*g_resign_ui_fn)(int player);
 void engine_combat_bind_resign_ui_fn(void (*fn)(int player)) { g_resign_ui_fn = fn; }
 
-int g_combat_render_active;      /* DAT_0056d5c8 */
-int g_combat_active_terr;        /* DAT_00553f8c */
-int g_combat_winner_owner;       /* DAT_005440cc — winner owner (UI, not save) */
-
-/* Interactive battlefield-render handoff scalars (retail runtime globals; not
- * save state).  Written on the interactive/animation path, read by the future
- * battle-UI wiring; inert on the headless auto-resolve path the diff exercises. */
-static int      g_combat_screen_state;   /* DAT_004eac50 0x12 interactive / 0x13 anim */
-static int      g_combat_screen_mode;    /* DAT_0057d340 */
-static int      g_combat_anim_a;         /* DAT_00553c70 */
-static int      g_combat_anim_b;         /* DAT_00553d20 */
-static uint32_t g_combat_anim_clock;     /* _DAT_005689a0 / _DAT_0057a0d0 */
-int             g_combat_audio_latch;    /* _DAT_005533f0 — shared: the event-
-                                          * scroll renderer/dismiss (engine.c)
-                                          * clear/set it around voice cues */
-static int      g_combat_render_dirty;   /* DAT_0052afcc */
-int             g_combat_flag_530d0;     /* DAT_005530d0 — shared: the scroll
-                                          * dismiss (engine.c) raises it */
-int             g_combat_flag_553210;    /* DAT_00553210 — UI dirty: a local-owned
-                                          * army's region relationship changed.
-                                          * Shared: the help-hint pump (engine.c)
-                                          * consumes-and-clears it for hint 0xd3 */
-static int      g_combat_flag_567d0c;    /* DAT_00567d0c */
-
+/* Runtime globals (render handoff, UI flags, anim clocks, siege latches): defined
+ * in engine_combat_globals.c, declared in engine_combat.h.  The screen byte
+ * (DAT_004eac50) and the demand-redraw mode (DAT_0057d340) belong to engine.c
+ * (engine_set_current_screen / engine_set_demand_redraw); DAT_00553fc8 is
+ * engine_turn.c's g_sim_turn_progress. */
 void engine_combat_set_flag_567d0c(int v) { g_combat_flag_567d0c = v; }
-static int      g_combat_flag_53f284;    /* DAT_0053f284 — quick-anim suppressor */
-static uint32_t g_combat_anim_t0;        /* DAT_0053e994 — animation start time */
-static uint32_t g_combat_anim_deadline;  /* _DAT_00568d9c */
-static int      g_combat_anim_scratch[10]; /* DAT_00515d60[10] */
-static int      g_combat_anim_53fc8;     /* DAT_00553fc8 */
-
-/* Siege-initiation selection scalars (retail runtime globals; not save state).
- * Latched when an army enters a keep region so the siege/garrison UI knows the
- * pending pair; inert on the headless diff path. */
-static int      g_siege_sel_attacker;    /* DAT_0055cd58 — reinforce-keep latch */
-static int      g_siege_sel_region;      /* DAT_0052f0a8 — reinforce-keep latch */
-static int      g_siege_besieger;        /* DAT_00568ed0 — begin-siege besieger */
-static int      g_siege_region;          /* DAT_00554000 — begin-siege region   */
 
 /* Build the per-player has-data filter table the event queue post() consults
  * (retail (&DAT_0057bf05)[i*0x160], one byte per slot, last slot inert). */
@@ -505,7 +476,7 @@ static void build_has_data(uint8_t hd[7])
  * publish its winner outputs (DAT_0057c924 winner / DAT_005440cc owner), the
  * way retail's resolver writes them in-line.  Clears the render-handoff flag
  * (DAT_0056d5c8) exactly as the resolver does at entry. */
-static void resolve_combat(void)
+void engine_combat_resolve(void)
 {
     g_combat_render_active = 0;
     engine_combat_result_t res;
@@ -656,7 +627,7 @@ int engine_combat_dispatch(int attacker, int defender,
     int sized = engine_combat_size_battle((int)s_slot_00568210, (int)s_slot_00568218,
                                           (int)s_slot_0057c8cc);    /* FUN_004a6a30 */
     if (sized == 0) {
-        resolve_combat();                                          /* FUN_004aad07 */
+        engine_combat_resolve();                                   /* FUN_004aad07 */
         engine_combat_aftermath(0, evq, mp_active);                /* FUN_004ab383 */
         return 0;
     }
@@ -664,24 +635,24 @@ int engine_combat_dispatch(int attacker, int defender,
     if (g_combat_flag_53f284 == 0 && g_combat_both_garrison == 0) {
         /* Quick-anim path: resolve head-less, then play back the result. */
         engine_combat_load_muster((int)s_slot_00568210, (int)s_slot_00568218);
-        resolve_combat();
+        engine_combat_resolve();
         engine_combat_aftermath(0, evq, mp_active);
-        g_combat_screen_state = 0x13;
-        g_combat_anim_clock   = combat_clock();
-        g_combat_anim_a       = (int)s_slot_00568210;
-        g_combat_anim_b       = (int)s_slot_00568218;
-        g_combat_screen_mode  = 2;
+        engine_set_current_screen(0x13);                           /* DAT_004eac50 */
+        g_combat_anim_clock   = combat_clock();                    /* DAT_005689a0 */
+        s_slot_00553c70       = s_slot_00568210;
+        s_slot_00553d20       = s_slot_00568218;
+        engine_set_demand_redraw(2);                               /* DAT_0057d340 */
         return 0;
     }
 
     /* Fully interactive battlefield: hand off to the renderer (s080 cue). */
-    g_combat_screen_state = 0x12;
-    g_combat_anim_clock   = combat_clock();
-    g_combat_screen_mode  = 2;
+    engine_set_current_screen(0x12);                               /* DAT_004eac50 */
+    g_combat_battle_clock = combat_clock();                        /* DAT_0057a0d0 */
+    engine_set_demand_redraw(2);                                   /* DAT_0057d340 */
     g_combat_audio_latch  = 1;
-    if (g_combat_local_role == 1)
+    if (s_slot_005533d0 == 1)
         combat_wav("s080_03.wav", 1, 0);
-    else if (g_combat_local_role == 2)
+    else if (s_slot_005533d0 == 2)
         combat_wav("s080_01.wav", 1, 0);
     else
         combat_wav("s080_02.wav", 1, 0);
@@ -739,7 +710,7 @@ void engine_combat_aftermath(int render, engine_event_queue_state_t *evq, int mp
         s_slot_005440c8        = g_combat_anim_t0;
         for (int i = 0; i < 10; i++)
             g_combat_anim_scratch[i] = 0;
-        g_combat_anim_53fc8 = 0;
+        g_sim_turn_progress = 0;                                  /* DAT_00553fc8 */
     }
 
     if (CREC(a)[C_GARRISON] != 0 || CREC(d)[C_GARRISON] != 0)
@@ -1147,7 +1118,7 @@ void engine_combat_resign_player(int player, engine_event_queue_state_t *evq,
     aux[0x25] = 0;
     aux[0x27] = 1;
 
-    g_combat_screen_mode = 2;                          /* DAT_0057d340 */
+    engine_set_demand_redraw(2);                       /* DAT_0057d340 */
 }
 
 /* Port of FUN_0049b2a3 — multiplayer player-resignation sweep. */
@@ -1583,8 +1554,8 @@ static void engine_combat_siege_setup(int occ, int region)
     engine_combat_siege_build_board(occ);              /* FUN_004a7eb5 */
 
     if ((int8_t)CREC(occ)[C_OWNER] == (int)s_slot_0057c8cc) {
-        g_combat_screen_state = 0x1d;                  /* DAT_004eac50 = siege */
-        g_combat_screen_mode  = 2;                     /* DAT_0057d340 */
+        engine_set_current_screen(0x1d);               /* DAT_004eac50 = siege */
+        engine_set_demand_redraw(2);                   /* DAT_0057d340 */
         g_siege_besieger      = occ;                   /* DAT_00568ed0 */
     }
 }
@@ -2109,26 +2080,26 @@ void engine_combat_contest_region(int attacker, unsigned region,
 
     int sized = engine_combat_size_battle(attacker, defender, (int)s_slot_0057c8cc);
     if (sized == 0) {
-        resolve_combat();
+        engine_combat_resolve();
         engine_combat_aftermath(0, evq, mp_active);
         engine_unit_absorb(defender);                  /* FUN_004aba5a */
     } else if (g_combat_flag_53f284 == 0 && g_combat_both_garrison == 0) {
         engine_combat_load_muster(attacker, defender);
-        resolve_combat();
+        engine_combat_resolve();
         engine_combat_aftermath(0, evq, mp_active);
-        g_combat_screen_state = 0x13;
-        g_combat_anim_clock   = combat_clock();
-        g_combat_anim_a       = attacker;
-        g_combat_anim_b       = defender;
-        g_combat_screen_mode  = 2;
+        engine_set_current_screen(0x13);           /* DAT_004eac50 */
+        g_combat_anim_clock   = combat_clock();    /* DAT_005689a0 */
+        s_slot_00553c70       = (uint32_t)attacker;
+        s_slot_00553d20       = (uint32_t)defender;
+        engine_set_demand_redraw(2);               /* DAT_0057d340 */
     } else {
-        g_combat_screen_state = 0x12;
-        g_combat_anim_clock   = combat_clock();
-        g_combat_screen_mode  = 2;
+        engine_set_current_screen(0x12);           /* DAT_004eac50 */
+        g_combat_battle_clock = combat_clock();    /* DAT_0057a0d0 */
+        engine_set_demand_redraw(2);               /* DAT_0057d340 */
         g_combat_audio_latch  = 1;
-        if (g_combat_local_role == 1)
+        if (s_slot_005533d0 == 1)
             combat_wav("s080_03.wav", 1, 0);
-        else if (g_combat_local_role == 2)
+        else if (s_slot_005533d0 == 2)
             combat_wav("s080_01.wav", 1, 0);
         else
             combat_wav("s080_02.wav", 1, 0);
