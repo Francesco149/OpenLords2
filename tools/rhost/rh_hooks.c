@@ -1,22 +1,17 @@
-/* rh_hooks.c — port functions vs retail on identical state.
+/* rh_hooks.c — port functions vs retail on identical state (the registry; core rows here,
+ * subsystem rows in rh_hooks_<subsystem>.c — see rh_hooks.h).
  *
  *   --hook shadow:NAME[,…]   every retail call of NAME runs retail, then the PORT on the identical
  *                            pre-state (rh_shadow_ex), compares every state dword; retail's
  *                            result is kept. Divergences are logged with the first differing VAs.
  *   --hook replace:NAME      the port runs INSTEAD of retail (hybrid mode).
  *   --hook @FILE             the spec read from a file (rhost.py always passes one).
- * Add a port function = a retail/port wrapper pair + one row in HOOKS (+ VERIFY_HOOKS in rhost.py).
+ * Add a port function = a retail/port wrapper pair + one table row (rhost.py derives VERIFY_HOOKS).
  * Rule: a port function never calls its own retail VA. */
-#include "rhost.h"
+#include "rh_hooks.h"
 #include "engine.h"
 
-enum { H_OFF, H_SHADOW, H_REPLACE };
-typedef struct {
-    const char *name; uint32_t va; void *wrapper;
-    int mode; long calls, diverge, skipped; char first[400];
-} hook_t;
-
-static void count(hook_t *h, int r, const char *why)
+void rh_hook_count(hook_t *h, int r, const char *why)
 {
     h->calls++;
     if (r < 0) { h->skipped++; return; }
@@ -44,17 +39,39 @@ static void __cdecl w_rng(void)
     if (H_RNG->mode == H_REPLACE) { H_RNG->calls++; rng_port(NULL); return; }
     if (rh_in_shadow()) { rng_retail(NULL); return; }
     char why[400];
-    count(H_RNG, rh_shadow_ex("rng_step", rng_retail, rng_port, NULL, why, sizeof why), why);
+    rh_hook_count(H_RNG, rh_shadow_ex("rng_step", rng_retail, rng_port, NULL, why, sizeof why), why);
 }
 
-static hook_t HOOKS[] = {
+static hook_t CORE_HOOKS[] = {
     { "rng_step", 0x404a46u, (void *)w_rng, 0, 0, 0, 0, "" },
 };
-#define NHOOKS ((int)(sizeof HOOKS / sizeof *HOOKS))
+
+/* every table: core + one per subsystem file (rh_hooks.h RH_HOOK_TABLES) */
+#define T(name) extern hook_t name[]; extern const int name##_N;
+RH_HOOK_TABLES(T)
+#undef T
+static struct { hook_t *t; int n; } TABLES[] = {
+    { CORE_HOOKS, (int)(sizeof CORE_HOOKS / sizeof *CORE_HOOKS) },
+#define T(name) { name, 0 },
+    RH_HOOK_TABLES(T)
+#undef T
+};
+#define NTAB ((int)(sizeof TABLES / sizeof *TABLES))
+static hook_t *find_hook(const char *name)
+{
+    for (int k = 0; k < NTAB; k++) for (int i = 0; i < TABLES[k].n; i++) if (!strcmp(TABLES[k].t[i].name, name)) return &TABLES[k].t[i];
+    return NULL;
+}
 
 void rh_hooks_install(void)
 {
-    H_RNG = &HOOKS[0];
+    H_RNG = &CORE_HOOKS[0];
+    {   int k = 1;
+#define T(name) TABLES[k++].n = name##_N;
+        RH_HOOK_TABLES(T)
+#undef T
+        (void)k;
+    }
     if (!O.hooks || !*O.hooks) return;
     char spec[8192] = "";
     if (O.hooks[0] == '@') {
@@ -68,8 +85,7 @@ void rh_hooks_install(void)
         *c = 0;
         int mode = !strcmp(t, "shadow") ? H_SHADOW : !strcmp(t, "replace") ? H_REPLACE : !strcmp(t, "off") ? H_OFF : -1;
         if (mode < 0) rh_fatal("hook mode '%s'", t);
-        hook_t *h = NULL;
-        for (int i = 0; i < NHOOKS; i++) if (!strcmp(HOOKS[i].name, c + 1)) h = &HOOKS[i];
+        hook_t *h = find_hook(c + 1);
         if (!h) rh_fatal("unknown hook '%s'", c + 1);
         h->mode = mode;
         if (mode == H_OFF) continue;
@@ -81,8 +97,8 @@ void rh_hooks_install(void)
 
 void rh_hooks_report(void)
 {
-    for (int i = 0; i < NHOOKS; i++) {
-        hook_t *h = &HOOKS[i];
+    for (int k = 0; k < NTAB; k++) for (int i = 0; i < TABLES[k].n; i++) {
+        hook_t *h = &TABLES[k].t[i];
         if (h->mode == H_OFF) continue;
         rh_log("hook-result %s mode=%s calls=%ld diverge=%ld skipped=%ld%s%s\n", h->name, h->mode == H_SHADOW ? "shadow" : "replace",
                h->calls, h->diverge, h->skipped, h->diverge ? " first: " : "", h->diverge ? h->first : "");

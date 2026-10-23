@@ -8,6 +8,8 @@ CC=${RHOST_CC:-i686-w64-mingw32-gcc}
 LDF=(-Wl,--image-base,0x200000 -Wl,--large-address-aware -Wl,--disable-dynamicbase -Wl,-T,"$H/rhost.x" -static-libgcc -static)
 PORT_STD=${PORT_STD:-$(sed -n 's/^CFLAGS *?= *\(-std=[a-z0-9]*\).*/\1/p' "$S/Makefile")}
 mkdir -p "$B"
+shopt -s nullglob
+SUB_HOOKS=("$H"/rh_hooks_*.c)   # subsystem hook tables (rh_hooks.h)
 # port modules linked in for --hook (only pure / retail-layout ones: no Win32 side effects at load)
 PORT_OBJS=()
 for f in engine_rng; do
@@ -18,7 +20,7 @@ $CC -std=gnu11 -O2 -Wall -I"$H" -c -o "$B/rh_hostalloc.o" "$H/rh_hostalloc.c"
 LINK=($CC -std=gnu11 -O2 -g -Wall -Wno-unused-function -Wno-format-truncation -Wno-cast-function-type -Wno-misleading-indentation
       -I"$S" -I"$H" -include "$H/rh_hostalloc.h" "${LDF[@]}" -o "$B/rhost.exe"
       "$H"/rhost.c "$H"/rh_heap.c "$H"/rh_media.c "$H"/rh_files.c "$H"/rh_handles.c "$H"/rh_state.c "$H"/rh_shot.c
-      "$H"/rh_ddraw.c "$H"/rh_dsound.c "$H"/rh_win.c "$H"/rh_hooks.c "$H"/rh_bot.c
+      "$H"/rh_ddraw.c "$H"/rh_dsound.c "$H"/rh_win.c "$H"/rh_hooks.c "$H"/rh_bot.c "${SUB_HOOKS[@]}"
       "$B/rh_hostalloc.o" "${PORT_OBJS[@]}" -luser32 -lgdi32 -lwinmm -lws2_32)
 "${LINK[@]}"
 # a FIXED SizeOfImage: the system allocations Windows / wine place right after the image must not

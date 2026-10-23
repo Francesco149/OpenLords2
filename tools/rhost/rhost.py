@@ -464,7 +464,16 @@ def cmd_corpus(a):
     return 1 if bad else 0
 
 
-VERIFY_HOOKS = ["rng_step"]
+def verify_hooks():
+    """every row of every hook table (rh_hooks.c + rh_hooks_*.c): {"name", 0xVAu, ...}"""
+    out = []
+    for f in sorted(os.listdir(HERE)):
+        if f.startswith("rh_hooks") and f.endswith(".c"):
+            out += re.findall(r'\{\s*"(\w+)",\s*0x[0-9a-fA-F]+u,', open(os.path.join(HERE, f)).read())
+    return out
+
+
+VERIFY_HOOKS = verify_hooks()
 
 
 def cmd_verify(a):
@@ -489,7 +498,7 @@ def cmd_verify(a):
         t = tot.get(h, [0, 0, 0, 0])
         print(f"  {h}: rhost shadow: {t[0]} calls / {t[3]} scenarios, {t[1]} divergences")
     if not a.only:   # the whole corpus: record the evidence (docs/STATUS.md's runtime axis)
-        src = open(os.path.join(HERE, "rh_hooks.c")).read()
+        src = "".join(open(os.path.join(HERE, f)).read() for f in os.listdir(HERE) if f.startswith("rh_hooks") and f.endswith(".c"))
         vas = dict(re.findall(r'\{\s*"(\w+)",\s*(0x[0-9a-fA-F]+)u', src))
         ep = os.path.join(ROOT, "docs", "rhost-evidence.json")
         ev = json.load(open(ep)) if os.path.exists(ep) else {}
