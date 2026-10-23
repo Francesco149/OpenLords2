@@ -140,6 +140,8 @@ claims are unverified until rhost re-checks them (`docs/audits/2026-10-23-method
   **Hybrid pilot done** (`docs/findings/hybrid-pilot-ai.md`): 88/89 AI-realm-turn functions verified against
   retail (shadow + replace, 33 scenarios, 0 divergences); 2 real gameplay bugs fixed (#227, #228).
   `verify` now runs in nesting passes + a hybrid pass; shadow is page-tracked (cheap for hot leaves).
+  **Batch 2 done** (`docs/findings/hybrid-batch2-combat.md`): battle resolver + army movement, 50/59 reached,
+  0 divergences, #229–#231; hybrid pass = 149 hooks replaced, corpus bit-exact.
 - **Top blocker:** none for logic parity. Smacker movies are skipped in rhost (retail tolerates it).
 
 ## Where to read next

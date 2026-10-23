@@ -11,6 +11,8 @@
   **Hybrid pilot done** (`docs/findings/hybrid-pilot-ai.md`): 88/89 AI-realm-turn functions verified against
   retail (shadow + replace, 33 scenarios, 0 divergences); 2 real gameplay bugs fixed (#227, #228).
   `verify` now runs in nesting passes + a hybrid pass; shadow is page-tracked (cheap for hot leaves).
+  **Batch 2 done** (`docs/findings/hybrid-batch2-combat.md`): battle resolver + army movement, 50/59 reached,
+  0 divergences, #229–#231; hybrid pass = 149 hooks replaced, corpus bit-exact.
 - **Top blocker:** none for logic parity. Smacker movies are skipped in rhost (retail tolerates it).
 <!-- status:end -->
 
@@ -19,8 +21,13 @@
 1. **Autoplay v2** (`tools/bot/README.md` §Not yet): play into defeat/victory screens; merchant, castle,
    diplomacy, supply actions; custom-game setups; steer toward longer games (coverage of later content).
    Bless the best-coverage games; track `rhost.py coverage` as the bot's metric.
-2. **Re-verification batches**: extend the `rh_hooks_ai.c` closure, worst-first — combat resolver
-   `FUN_004aad07` + army movement next, then realm events, trade / treasury, labor; `verify` evidence.
+2. **Re-verification batches** (extend the closure; `rh_port.h` pattern): the battle path's unported
+   pieces — AUTO_RESOLVE button `0x43b622`, battlefield end `0x43be65` / `0x477dfc`, siege assault
+   `0x4a8aab`, the army-state machine `0x4650b0` (ported in engine_army_state.c, not hooked) — then realm
+   events, trade / treasury, labor.
+2b. **Bot reaches what batch 2 could not**: march on OWNED counties (capital_defender), besiege enemy keeps
+   (begin_siege, transfer_army), toggle Options → quick battles (load_muster) — `docs/human-traces.md`
+   evidence table; each becomes synth instead of a human trace.
 3. ~~Hybrid pilot~~ done → hybrid chosen.
 4. **Movies in the corpus**: scenarios with `"movies": true` (rh_smack.c is deterministic) so the movie
    paths (intro → title, jail, victory/defeat) are exercised as a real user sees them.

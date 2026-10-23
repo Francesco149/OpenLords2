@@ -204,21 +204,6 @@ void rh_port_retail_leave(void)
 }
 
 /* ---------------------------------------------------------------- the generic wrapper body */
-/* rhost's host layers (media pool, DirectSound serials / registry / timers, the fake-handle sequence) are not
- * retail memory, so the shadow does not roll them back: a port run that calls back into RETAIL code which uses
- * them (an audio cue loads a WAV and creates a buffer — FUN_00427990) would see them already advanced by retail's
- * run. They are rolled like the heap meta: the port run starts from the host state retail's run started from,
- * and retail's post-state is put back after the comparison. */
-typedef struct { void *media, *ds, *hnd; } host_meta_t;
-static void host_save(host_meta_t *m) { m->media = rh_media_meta_save(); m->ds = rh_ds_meta_save(); m->hnd = rh_handles_meta_save(); }
-static void host_restore(const host_meta_t *m)
-{
-    if (m->media) rh_media_meta_restore(m->media);
-    if (m->ds) rh_ds_meta_restore(m->ds);
-    if (m->hnd) rh_handles_meta_restore(m->hnd);
-}
-static void host_free(host_meta_t *m) { free(m->media); free(m->ds); free(m->hnd); m->media = m->ds = m->hnd = NULL; }
-
 /* the retail side, at the caller's own stack position: esp = e0 + 4 (its pushed arguments), `call` puts the
  * return address at e0 — the frame retail would have had; the caller's return address is put back after */
 uint32_t rh_c_floor;   /* esp of the hook machinery that is running retail through rh_call_at (0: none) */
@@ -242,7 +227,6 @@ __attribute__((naked)) uint32_t rh_call_at(uint32_t va, uint32_t e0)
 #define RES_N 16   /* residue window: the 16 dwords below e0 */
 typedef struct port_ctx {
     hook_t *h; uint32_t e0; uint32_t a[8]; rh_port_fn port; uint32_t ret_r, ret_p;
-    host_meta_t pre, post; int shadow;
     uint32_t res[RES_N]; int nput; int put_off[4]; uint32_t put_v[4];
     struct port_ctx *outer;
 } port_ctx_t;
@@ -262,14 +246,11 @@ void rh_res_put(int off, uint32_t v)
 static void ctx_retail(void *c)
 {
     port_ctx_t *x = c;
-    if (x->shadow) host_save(&x->pre);
     x->ret_r = rh_call_at(x->h->va, x->e0);
-    if (x->shadow) host_save(&x->post);
 }
 static void ctx_port(void *c)
 {
     port_ctx_t *x = c;
-    if (x->shadow) host_restore(&x->pre);
     rh_port_bind_once();
     rh_port_sync_in();
     x->nput = 0; x->outer = g_cur; g_cur = x;
@@ -290,10 +271,7 @@ uint32_t rh_port_run(hook_t *h, void *self, rh_port_fn port, int has_ret, uint32
     }
     if (rh_in_shadow()) { ctx_retail(&x); return x.ret_r; }
     char why[400];
-    x.shadow = 1;
-    int r = rh_shadow_ex(h->name, ctx_retail, ctx_port, &x, why, sizeof why);
-    host_restore(&x.post);
-    host_free(&x.pre); host_free(&x.post);
+    int r = rh_shadow_ex(h->name, ctx_retail, ctx_port, &x, why, sizeof why);   /* rolls the host layers too */
     if (r >= 0) {   /* the return value and the residue the port models: retail's are the reference */
         size_t n = r ? strlen(why) : (size_t)snprintf(why, sizeof why, "%s:", h->name);
         if (has_ret && x.ret_r != x.ret_p && n < sizeof why) {

@@ -112,6 +112,27 @@ void rh_shadow_report(void)
     rh_log("%s\n", b);
 }
 static void poison(void) { if (O.shadow_poison) *(volatile uint32_t *)(uintptr_t)O.shadow_poison ^= 1; }
+/* host-side state retail's code advances that is not retail memory: the allocator metadata and rhost's own
+ * layers (media pool, DirectSound serials / registry / timers, the fake-handle sequence). Saved and rolled
+ * with the state: the port run starts from the host state retail's run started from (a port that calls back
+ * into retail — an audio cue loads a WAV and creates a buffer, FUN_00427990 — would otherwise see it
+ * advanced), and retail's post-state is put back after the comparison. */
+typedef struct { void *heap, *media, *ds, *hnd; } meta_t;
+static meta_t *meta_save(void)
+{
+    meta_t *m = malloc(sizeof *m);
+    m->heap = rh_heap_meta_save(); m->media = rh_media_meta_save(); m->ds = rh_ds_meta_save(); m->hnd = rh_handles_meta_save();
+    return m;
+}
+static void meta_restore(const meta_t *m)
+{
+    rh_heap_meta_restore(m->heap);
+    if (m->media) rh_media_meta_restore(m->media);
+    if (m->ds) rh_ds_meta_restore(m->ds);
+    if (m->hnd) rh_handles_meta_restore(m->hnd);
+}
+static void meta_free(meta_t *m) { rh_heap_meta_free(m->heap); free(m->media); free(m->ds); free(m->hnd); free(m); }
+
 static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn)
 {
     static uint32_t r[MAXR][2], r2[MAXR][2];
@@ -125,7 +146,7 @@ static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(vo
     #define COPY_IN(buf)  { size_t o = 0; for (int i = 0; i < n; i++) { size_t l = r[i][1] - r[i][0]; memcpy((void *)(uintptr_t)r[i][0], (buf) + o, l); o += l; } }
     uint16_t cw; __asm__ volatile("fnstcw %0" : "=m"(cw));
     uint32_t clk0[3], clk1[3]; rh_clock_save(clk0);
-    void *meta = rh_heap_meta_save();
+    meta_t *meta = meta_save();
     COPY_OUT(g_pre);
     sp_mark(SP_SNAP);
     g_shadow_depth++;
@@ -135,14 +156,14 @@ static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(vo
     int n2 = state_ranges(r2);
     if (n2 != n || memcmp(r, r2, n * 8)) {
         snprintf(why, whyn, "%s: arena commit changed during call (ranges %d->%d); not compared", name, n, n2);
-        rh_heap_meta_free(meta);
+        meta_free(meta);
         return -1;
     }
     COPY_OUT(g_ret);
-    void *meta_ret = rh_heap_meta_save();
+    meta_t *meta_ret = meta_save();
     rh_clock_save(clk1);
     COPY_IN(g_pre);
-    rh_heap_meta_restore(meta);
+    meta_restore(meta);
     rh_clock_restore(clk0);
     __asm__ volatile("fldcw %0" : : "m"(cw));
     sp_mark(SP_SWAP);
@@ -168,10 +189,10 @@ static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(vo
     }
     sp_mark(SP_CMP);
     if (diff) { COPY_IN(g_ret); if (w < (int)whyn - 24) snprintf(why + w, whyn - w, " (%ld differ)", diff); }
-    rh_heap_meta_restore(meta_ret);
+    meta_restore(meta_ret);
     rh_clock_restore(clk1);
     __asm__ volatile("fldcw %0" : : "m"(cw));
-    rh_heap_meta_free(meta); rh_heap_meta_free(meta_ret);
+    meta_free(meta); meta_free(meta_ret);
     sp_mark(SP_DONE);
     return diff ? 1 : 0;
     #undef COPY_OUT
@@ -300,9 +321,9 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
     }
     uint16_t cw; __asm__ volatile("fnstcw %0" : "=m"(cw));
     uint32_t clk0[3], clk1[3]; rh_clock_save(clk0);
-    void *meta = rh_heap_meta_save();
+    meta_t *meta = meta_save();
     if (!protect_ranges(r, n, 1)) {
-        g_paged_off = 1; rh_heap_meta_free(meta);
+        g_paged_off = 1; meta_free(meta);
         return shadow_copy(name, retail, port, ctx, why, whyn);
     }
     g_armed = 1;
@@ -315,7 +336,7 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
     if (n2 != n || memcmp(r, r2, n * 8)) {
         disarm(r, n);
         snprintf(why, whyn, "%s: arena commit changed during call (ranges %d->%d); not compared", name, n, n2);
-        rh_heap_meta_free(meta);
+        meta_free(meta);
         return -1;
     }
     int n1 = g_nsp;   /* the pages retail wrote: keep its post-state, put the pre-state back */
@@ -331,9 +352,9 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
             rh_fatal("shadow: %s: cannot re-protect page %08x (%lu)", name, pg << 12, GetLastError());
         PCLR(g_open, pg);
     }
-    void *meta_ret = rh_heap_meta_save();
+    meta_t *meta_ret = meta_save();
     rh_clock_save(clk1);
-    rh_heap_meta_restore(meta);
+    meta_restore(meta);
     rh_clock_restore(clk0);
     __asm__ volatile("fldcw %0" : : "m"(cw));
     sp_mark(SP_SWAP);
@@ -371,10 +392,10 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
     }
     for (int i = 0; i < g_nsp; i++) { g_spix[g_spg[i]] = -1; PCLR(g_open, g_spg[i]); }
     g_nsp = 0;
-    rh_heap_meta_restore(meta_ret);
+    meta_restore(meta_ret);
     rh_clock_restore(clk1);
     __asm__ volatile("fldcw %0" : : "m"(cw));
-    rh_heap_meta_free(meta); rh_heap_meta_free(meta_ret);
+    meta_free(meta); meta_free(meta_ret);
     sp_mark(SP_DONE);
     return diff ? 1 : 0;
 }
