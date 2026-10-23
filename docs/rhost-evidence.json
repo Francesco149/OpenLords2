@@ -1,12 +1,902 @@
 {
- "rng_step": {
-  "calls": 2814,
-  "corpus": 3,
+ "ai_advance_tier": {
+  "calls": 0,
+  "corpus": 33,
   "date": "2026-10-23",
   "diverge": 0,
-  "scenarios": 2,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x428c42"
+ },
+ "ai_balance_high_cells": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a4694"
+ },
+ "ai_buy_order": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a4b12"
+ },
+ "ai_buy_order_scaled": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a4c41"
+ },
+ "ai_consume_build_demand": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x450ccd"
+ },
+ "ai_dispatch_compact": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a42e3"
+ },
+ "ai_dispatch_indep_compact": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a3ed3"
+ },
+ "ai_execute_trade": {
+  "calls": 85,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 18,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4284ce"
+ },
+ "ai_first_owned_realm": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49d5e0"
+ },
+ "ai_launch_attack": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a0015"
+ },
+ "ai_mark_build_affordable": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49ed13"
+ },
+ "ai_most_hostile": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a0309"
+ },
+ "ai_pick_muster_realms": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a0aaa"
+ },
+ "ai_propose_diplomacy": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a13a6"
+ },
+ "ai_rebalance_workforce": {
+  "calls": 9,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 7,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4502ca"
+ },
+ "ai_reconcile_resources": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49e39b"
+ },
+ "ai_run_build_orders": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49e77d"
+ },
+ "ai_run_campaign": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49f977"
+ },
+ "ai_run_diplomacy": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a0c1d"
+ },
+ "ai_run_garrison": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49f93d"
+ },
+ "ai_run_independent": {
+  "calls": 500,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49dfc6"
+ },
+ "ai_run_keep_builder": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49edc7"
+ },
+ "ai_run_movement": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a5667"
+ },
+ "ai_run_per_tick": {
+  "calls": 197444,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 30,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49a581"
+ },
+ "ai_run_player": {
+  "calls": 48,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 25,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49dd01"
+ },
+ "ai_run_turn": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49a990"
+ },
+ "ai_seed_buy_requests": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49e1bf"
+ },
+ "ai_seed_workforce": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x45158b"
+ },
+ "ai_select_target": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a03f2"
+ },
+ "ai_set_rations_grant": {
+  "calls": 509,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49d638"
+ },
+ "ai_step_noop": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49f96c"
+ },
+ "ai_tax_sweep": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a4782"
+ },
+ "army_movement_owned": {
+  "calls": 1510,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 29,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a4e3d"
+ },
+ "combat_muster_garrison": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a5389"
+ },
+ "combat_pick_best_unit": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a0917"
+ },
+ "combat_spawn_unit": {
+  "calls": 102,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 26,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a9a9a"
+ },
+ "diplo_should_engage": {
+  "calls": 4,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 4,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4a16f7"
+ },
+ "eco_apply_resource_quota": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44ea92"
+ },
+ "eco_appraisal_value": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44e6a3"
+ },
+ "eco_distribute_stock": {
+  "calls": 136,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44c278"
+ },
+ "eco_eval_candidate": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44da99"
+ },
+ "eco_pick_fullest_cell": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44c53b"
+ },
+ "eco_plan_production": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44d374"
+ },
+ "eco_plan_realm": {
+  "calls": 458,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4485a5"
+ },
+ "eco_plan_resource": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44f318"
+ },
+ "eco_plan_secondary": {
+  "calls": 9,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 7,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x450e46"
+ },
+ "eco_production_output": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44cfe1"
+ },
+ "eco_provision": {
+  "calls": 585,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44df5f"
+ },
+ "eco_rate_class": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44cf6f"
+ },
+ "eco_resource_pass": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44e852"
+ },
+ "eco_resource_quota": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44ef4e"
+ },
+ "eco_season_pass": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44c8ae"
+ },
+ "eco_seed_fullest_cell": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44c5fc"
+ },
+ "eco_select_candidate": {
+  "calls": 136,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44dd4d"
+ },
+ "eco_settle_stock_a": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44d60d"
+ },
+ "eco_stamp_resource_cell": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44edc2"
+ },
+ "eco_stock_a_value": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44e5bb"
+ },
+ "eco_stockpile_value": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44e7b4"
+ },
+ "eco_sum_supply_pools": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44f15b"
+ },
+ "eco_supply_target": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44f248"
+ },
+ "eco_units_b": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44e603"
+ },
+ "eco_units_c": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44e653"
+ },
+ "eco_yield_phase4": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44d1e5"
+ },
+ "eco_yield_standard": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44d15a"
+ },
+ "rank_player_aggregate": {
+  "calls": 15,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 15,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x49d1e0"
+ },
+ "rank_player_total": {
+  "calls": 2560,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4487a9"
+ },
+ "realm_accrue_income": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44b59b"
+ },
+ "realm_advance_population": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x449ef3"
+ },
+ "realm_advance_rating": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44baea"
+ },
+ "realm_clear_turn_scratch": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x448d16"
+ },
+ "realm_complete_settlements": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4508de"
+ },
+ "realm_escalate_unrest": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44aa41"
+ },
+ "realm_migrate_population": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44a6ba"
+ },
+ "realm_owner_tally": {
+  "calls": 0,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 0,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44b99a"
+ },
+ "realm_owns_neighbor": {
+  "calls": 15,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 15,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x467eb0"
+ },
+ "realm_recompute_income": {
+  "calls": 753,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 26,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44b80b"
+ },
+ "realm_record_history": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4ae7dd"
+ },
+ "realm_recount_armies": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x451061"
+ },
+ "realm_replan_economies": {
+  "calls": 589,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x448545"
+ },
+ "realm_settle_provisions": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44bf04"
+ },
+ "realm_spread_development": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44bf7a"
+ },
+ "realm_tax_approval": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44bd9f"
+ },
+ "realm_territory_income": {
+  "calls": 898,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4ad6c0"
+ },
+ "realm_update_mood": {
+  "calls": 512,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x449889"
+ },
+ "rng_step": {
+  "calls": 255001,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
   "skipped": 0,
   "target": "win",
   "va": "0x404a46"
+ },
+ "terr_allocate_workforce": {
+  "calls": 4578,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44f6e7"
+ },
+ "terr_census_terrain": {
+  "calls": 2320,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x469b8d"
+ },
+ "terr_grade_cells": {
+  "calls": 272,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x44d913"
+ },
+ "terr_stamp_secondary_keep": {
+  "calls": 77,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x46826c"
+ },
+ "unit_total_wage": {
+  "calls": 2774,
+  "corpus": 33,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 31,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x4ad495"
  }
 }
