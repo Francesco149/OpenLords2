@@ -367,10 +367,15 @@ def resolve_runs(names):
     return out
 
 
-def all_scenarios(only=None):
+def all_scenarios(only=None, tracked=False):
+    """scenario dirs with a trace.jsonl; tracked: only those git tracks (or has staged) — the pre-commit gate,
+    so another agent's untracked, not-yet-blessed games in the shared tree do not block every commit"""
     if not os.path.isdir(SCEN):
         return []
     names = sorted(d for d in os.listdir(SCEN) if os.path.exists(os.path.join(SCEN, d, "trace.jsonl")))
+    if tracked:
+        ls = subprocess.run(["git", "-C", ROOT, "ls-files", "--", "tests/scenarios/*/trace.jsonl"], capture_output=True, text=True).stdout
+        names = [n for n in names if f"tests/scenarios/{n}/trace.jsonl" in ls.split()]
     return [n for n in names if not only or re.search(only, n)]
 
 
@@ -469,7 +474,7 @@ EXPECT_KEYS = ("frame", "tick", "screen", "rng", "state_sem", "fb")
 
 
 def cmd_corpus(a):
-    names = all_scenarios(a.only)
+    names = all_scenarios(a.only, getattr(a, "tracked", False))
     if not names:
         raise SystemExit("no scenarios under tests/scenarios/")
     if a.bless or a.check:
@@ -777,7 +782,9 @@ def main():
     sp = sub.add_parser("det"); common(sp); sp.add_argument("scenario"); sp.add_argument("-n", type=int, default=3)
     sp.add_argument("--calibrate", action="store_true"); sp.set_defaults(fn=cmd_det)
     sp = sub.add_parser("corpus"); common(sp); sp.add_argument("--only"); sp.add_argument("--check", action="store_true")
-    sp.add_argument("--bless", action="store_true"); sp.set_defaults(fn=cmd_corpus)
+    sp.add_argument("--bless", action="store_true")
+    sp.add_argument("--tracked", action="store_true", help="only scenarios git tracks (the pre-commit gate)")
+    sp.set_defaults(fn=cmd_corpus)
     sp = sub.add_parser("verify"); common(sp); sp.add_argument("--only"); sp.set_defaults(fn=cmd_verify)
     sp = sub.add_parser("coverage"); common(sp); sp.add_argument("scenarios", nargs="*"); sp.add_argument("--only")
     sp.set_defaults(fn=cmd_coverage)
