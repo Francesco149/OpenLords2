@@ -1,0 +1,55 @@
+# tools/bot — autoplay: an LLM plays Lords of the Realm II through rhost
+
+Goal: exercise many game situations against **retail**, quickly, and keep each game as a deterministic
+scenario for the corpus. The bot plays the strategy layer; battles auto-resolve. A game's trace replays
+with no LLM and no network (`rhost.py run bot-s3-t16`), bit-identically on Windows and wine.
+
+```sh
+python3 tools/bot/play.py --turns 16 --seed 3                 # one game (wine, local) → tests/scenarios/bot-s3-t16/
+python3 tools/bot/play.py --turns 16 --seeds 2-7 -j 6         # six games in parallel (~1 min)
+python3 tools/bot/play.py --turns 40 --seed 9 --target win    # on the Windows box
+python3 tools/bot/l2state.py endturn-2 --compact | tail -1    # the state the bot reads, as JSON
+python3 tools/rhost/rhost.py corpus --bless --only bot-s3     # adopt a game into the corpus (+ --target wine)
+python3 tools/rhost/rhost.py coverage                         # what the corpus exercises in retail
+```
+Each game writes `tests/scenarios/bot-s<seed>-t<turns>/`: `trace.jsonl` (all input; the scenario),
+`decisions.jsonl` (per turn: state summary, plan, what the UI actions achieved, Jev's raw answers),
+`turns.tsv` (crowns, counties, population, happiness, armies per turn).
+
+## How it works
+
+| piece | role |
+|---|---|
+| `l2state.py` | reads realms / counties / armies / merchants / prices from retail memory (`docs/findings/game-state-map.md`) |
+| `llm.py` | OpenRouter: **Jev** decisions (`~typesafe/jev-latest`, `POST /api/alpha/decisions`) — typed questions in, probabilities out; `chat()` fallback |
+| `policy.py` | per county: tax (score), rations (score), industry split (score), draft (score); per army: march target (choice). **Samples** from Jev's probabilities (temperature, seeded) so games diverge |
+| `ui.py` | settle the map (report scrolls, battle prompt → decline to take the field = auto-resolve, result scroll), End turn, panels |
+| `actions.py` | raise an army, select + march an army on a county's town, set rations; timing per retail's mouse model |
+| `mapview.py` | cell ↔ screen from retail's own viewport geometry and tile grid (hover-confirmed), edge-scroll to a cell |
+| `play.py` | the turn loop + output |
+
+Retail's input model, as the bot learned it (all through rhost's virtual queue, so all in the trace):
+- an in-game LMB click **fires 300 ms after release** and only if no UI element consumed the press
+  (`engine_input.c`, `DAT_004e65f0`) → map clicks are spaced ≥ 25 frames;
+- a move order needs the cursor to **rest on the destination** first (retail computes the path preview on
+  mouse idle; a destination click without one is ignored);
+- the minimap recentres on a **county**, not a point; arbitrary cells come into view by parking the cursor
+  on the 1-px window border (retail's edge scroll, also in army-move mode);
+- the first use of a feature pops a hint scroll (0x27; RMB dismisses).
+
+## Cost and speed (2026-10-23)
+
+Jev: ~0.2–0.4 s and ~$0.0001 per decision request (output tokens are free); a 16-turn game ≈ 100
+requests ≈ $0.015. The key is the project's own `openlords2-bot` ($3/month cap; `infra keys` in the work
+repo). Games run at the speed of rhost: 8 turns ≈ 9 s wall under wine, several in parallel.
+
+## Measured value
+
+Retail coverage (`rhost.py coverage`): the 4 hand-made scenarios reach 661 functions / 37.1% of code
+bytes; adding 7 bot games (≈ 1 min of play, $0.08) reaches 759 / 41.8%.
+
+## Not yet
+
+The bot plays badly on purpose-free sampling (over-drafts, starves, usually loses its county by turn
+6–15); no merchant / castle / diplomacy / supply actions; interactive battles; custom-game setups
+(maps, opponents, difficulty); the defeat / victory screens after the last county.
