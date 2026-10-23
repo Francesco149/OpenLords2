@@ -157,6 +157,8 @@ def rhost_args(a, run_win, trace_win, meta):
             v = meta.get(k)
         if v is not None:
             args += [flag, str(v)]
+    if getattr(a, "frames", None) is None and meta.get("frames"):
+        args += ["--frames", str(meta["frames"])]
     for k, flag in (("frames", "--frames"), ("dump_at", "--dump-at"), ("hash_every", "--hash-every"),
                     ("shot_at", "--shot-at"), ("shot_every", "--shot-every"), ("log_every", "--log-every")):
         v = getattr(a, k, None)
