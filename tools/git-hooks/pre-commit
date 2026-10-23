@@ -48,8 +48,6 @@ if echo "$staged" | grep -qE '^src/(gfx_|engine_.*_render|engine_overlay|engine_
     echo "            frame-diff harness (tools/diff_test.py) and eyeball the overlay." >&2
 fi
 
-exit 0
-
 # --- 3. rhost corpus gate (wine, local) --------------------------------------
 if echo "$staged" | grep -qE '^(src/.*\.(c|h)|tools/rhost/.*\.(c|h|x|sh)|tests/scenarios/.*)$'; then
     echo "pre-commit: rhost corpus --check (wine)..."
@@ -61,3 +59,5 @@ if echo "$staged" | grep -qE '^(src/.*\.(c|h)|tools/rhost/.*\.(c|h|x|sh)|tests/s
     fi
     echo "pre-commit: $(grep -E 'CORPUS CHECK' /tmp/ol2_rhost_gate.log | tail -1)"
 fi
+
+exit 0
