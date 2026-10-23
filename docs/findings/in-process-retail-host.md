@@ -24,11 +24,12 @@ smackw32 (10 ordinals), DPLAYX (ordinals 1, 2). No registry, no DirectInput, no 
 
 ## Findings made while building it
 
-- **GOG patch code past `.text` VirtualSize.** `.text` vsize 0xceb06, rawsize 0xcec00; FUN_004cfb08
-  (called by FUN_004050c0, the per-tick animation counter bump) lives at 0x4cfb08: `if timeGetTime() -
-  DAT_005ceff8 >= 0x10 { DAT_0057d378++; … }` — a 16 ms animation pacer added by the patch. A loader that
-  copies only VirtualSize bytes runs into zeros on the first in-game frame (AV f1321). Windows maps the
-  whole last page. IDA/Ghidra exports must include it.
+- **GOG patch code past `.text` VirtualSize.** `.text` vsize 0xceb06, rawsize 0xcec00; the patch put a
+  detour at 0x4cfb08..0x4cfb48: 0x4050f0 (inside FUN_004050c0, the per-tick animation bump) `jmp`s there,
+  the stub gates `DAT_0057d378++` on `GetTickCount() - DAT_005ceff8 >= 0x10` (a 16 ms animation pacer; IAT
+  slot 0x5cf3d8, read twice) and `jmp`s back to 0x4050f6. A loader that copies only VirtualSize bytes runs
+  into zeros on the first in-game frame (AV f1321); Windows maps the whole last page. The IDA export keeps
+  the stub as a chunk of 0x4050c0 (tools/ida/README.md).
 - **smackw32.dll is a Watcom PE**: every section's VirtualSize is 0 and `.bss` has a raw size with no raw
   data (PointerToRawData 0) — a mapper must zero-fill it (copying "from offset 0" puts the DOS header there:
   its `free()` then walks a garbage heap list). Its preferred base is 0x400000 (= retail's), so it is always
