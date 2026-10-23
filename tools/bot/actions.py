@@ -13,6 +13,8 @@ DWELL = 25                                 # frames the cursor rests on a destin
                                            # computes the move-path preview on mouse idle and ignores
                                            # a destination click without one
 RAISE_ICON, SLIDER_MORE, CONTINUE, CREATE = (492, 447), (310, 201), (490, 346), (588, 410)
+MERC_SLIDER_MORE, MERC_CONTINUE, MERC_HIRE = (305, 170), (490, 362), (370, 290)
+DRAFTED = 0x543FD8                         # the raise screen's soldier count (FUN_00418653 draws it at x 325) [live]
 RATION_UP, RATION_DOWN = (356, 141), (380, 141)
 BACK = (300, 240)
 
@@ -28,17 +30,31 @@ def _mine(s):
     return st, [a for a in st["armies"] if a["owner"] == st["me"] and a.get("kind", "army") == "army"]
 
 
-def raise_army(s, ui, men):
-    """draft about `men` peasants in the selected county (slider ~4-5 men a click) → the new army or None"""
+def raise_army(s, ui, men, hire=False):
+    """draft about `men` peasants in the selected county (slider ~4-5 men a click), and hire the mercenary band
+    offered there when `hire` → the new army or None. With an offer the panel grows a mercenary box and the
+    slider / Continue move (slider (305,170), thumbs (370,290) / (415,290), Continue (490,362)) [live: 100
+    Scottish Pikemen hired for 1800 crowns, turn 6]."""
     st0, before = _mine(s)
+    sel = st0["selected_county"]
+    offer = next((c.get("merc_offer") for c in st0["counties"] if c["id"] == sel), 0)
     s.click(*RAISE_ICON); s.run(30)
     _dismiss_hint(s)
     if s.screen != 0x17:
         ui.settle()
         return None
-    for _ in range(max(1, min(120, round(men / 4.4)))):
-        s.click(*SLIDER_MORE, frames=2)
-    s.click(*CONTINUE); s.run(30)
+    slider, cont = (MERC_SLIDER_MORE, MERC_CONTINUE) if offer else (SLIDER_MORE, CONTINUE)
+    for _ in range(120 if men > 0 else 0):     # the step varies (~1-4 % of the county a click): read it back
+        if s.i32(DRAFTED) >= men:
+            break
+        s.click(*slider, frames=2)
+    if offer and hire:
+        s.click(*MERC_HIRE); s.run(10)
+    if men <= 0 and not (offer and hire):
+        s.click(*BACK, right=True); s.run(GAP)
+        ui.settle()
+        return None
+    s.click(*cont); s.run(30)
     _dismiss_hint(s)
     s.click(*CREATE); s.run(40)
     ui.settle()
@@ -47,8 +63,20 @@ def raise_army(s, ui, men):
     return new[0] if new else None
 
 
-def select_army(s, army, st):
-    """make `army` visible and click it → True when retail entered move mode (screen 0x10)"""
+def select_army(s, army, st, ui=None):
+    """make `army` visible and click it → True when retail entered move mode (screen 0x10). An event scroll that
+    arrives meanwhile (an AI's reply to a gift lands a few seconds after it) eats the click: answer it, retry."""
+    for attempt in range(2):
+        if ui is not None and s.screen == 0 and ui.modal():
+            ui.popup()
+        if _select_army(s, army, st):
+            return True
+        if ui is None or not ui.modal():
+            return False
+    return False
+
+
+def _select_army(s, army, st):
     home = next((c for c in st["counties"] if c["id"] == army["county"]), None)
     pt = mapview.locate(s, *army["pos"])
     if pt is None and home is not None:
@@ -58,17 +86,25 @@ def select_army(s, army, st):
         pt = mapview.locate(s, *army["pos"])
     if pt is None:
         return False
-    s.click(*pt); s.run(GAP)
-    if s.screen == 0x27:                   # the one-time "Army Movement" hint
-        _dismiss_hint(s)
-        s.click(*pt); s.run(GAP)
+    for _ in range(3):                     # a click right after an event scroll was dismissed over the map is
+        s.click(*pt); s.run(GAP)           # swallowed (FUN_0047685d sets DAT_0052afa4) [live: after a gift reply]
+        if s.screen == 0x27:               # the one-time "Army Movement" hint
+            _dismiss_hint(s)
+            continue
+        if s.screen == 0x10:
+            return True
+        if s.screen != 0:
+            return False
     return s.screen == 0x10
 
 
-def march(s, ui, army, target_cell):
-    """order `army` toward logical cell `target_cell` (a county's town to claim / attack it)"""
+def march(s, ui, army, target_cell, intent=None):
+    """order `army` toward logical cell `target_cell` (a county's town to claim / attack it, an enemy castle to
+    besiege it, our castle to garrison it, another of our armies to combine with it). Those destinations pop the
+    confirm dialog 0x1e ("Besiege castle?" / "Garrison castle?" / "Combine armies?"): answered yes when it matches
+    `intent` ("besiege" / "garrison" / "combine"), else no."""
     st = l2state.snapshot(s.read)
-    if not select_army(s, army, st):
+    if not select_army(s, army, st, ui):
         return "cannot select"
     if not mapview.scroll_to(s, *target_cell):
         s.click(*BACK, right=True); s.run(GAP)
@@ -76,14 +112,72 @@ def march(s, ui, army, target_cell):
     pt = mapview.locate(s, *target_cell)
     s.move(*pt, frames=DWELL)
     s.click(*pt); s.run(GAP)
+    confirmed = None
+    if s.screen == 0x1e:
+        kind = s.i32(l2state.CONFIRM_KIND)
+        confirmed = ui.confirm(want=(intent == "besiege" and kind == 8) or (intent == "garrison" and kind == 7)
+                               or (intent == "combine" and kind == 5))
+        if not confirmed["answer"]:
+            ui.settle(max_frames=600)
+            return f"declined {confirmed['text']}"
     if s.screen == 0x10:                   # still selected: the destination was refused (no path?)
         s.click(*BACK, right=True); s.run(GAP)
         return "refused"
+    if s.screen == 0x1d or confirmed:      # arrived at once: the siege board / the garrison
+        ui.settle(max_frames=1200)
+        return intent or "confirmed"
     st2, mine = _mine(s)
     a2 = next((x for x in mine if x["id"] == army["id"]), None)
     if a2 is not None and list(a2["dest"]) == list(target_cell):
         return "ordered"
     return f"screen {s.screen:#x}"
+
+
+# ---- garrison: an army in a castle leaves it (RMB the castle → "View these troops?" → the first button of
+# the army panel FUN_0041b19d: list 0x4dc5a8, handler FUN_004374c4 → engine_combat_transfer_army) [live]
+VIEW_TROOPS, PANEL_ROW = (355, 425), 0x553D2C
+
+
+def leave_castle(s, ui, army, castle_cell):
+    ui.settle(max_frames=200)
+    pt = mapview.locate(s, *castle_cell)
+    if pt is None and mapview.scroll_to(s, *castle_cell):
+        pt = mapview.locate(s, *castle_cell)
+    if pt is None:
+        return "castle not on screen"
+    s.move(*pt, frames=6); s.click(*pt, right=True); s.run(30)
+    if s.screen != 0x04:
+        ui.settle(max_frames=600)
+        return f"no castle panel ({s.screen:#x})"
+    s.move(*VIEW_TROOPS, frames=6); s.click(*VIEW_TROOPS); s.run(30)
+    y = 372 + 16 * s.i32(PANEL_ROW)
+    if s.screen != 0x04 or not 300 < y < 470:
+        ui.settle(max_frames=600)
+        return "no troop panel"
+    s.move(68, y, frames=6); s.click(68, y); s.run(40)
+    ui.settle(max_frames=600)
+    st, mine = _mine(s)
+    a2 = next((x for x in mine if x["id"] == army["id"]), None)
+    return "left" if a2 and not a2.get("garrisoned") else "still inside"
+
+
+# ---- Options > Advanced > "Fight humans only?" (DAT_0053f284: 1 = No, the default; 0 = Yes → battles against
+# the AI skip the "take the field?" prompt and play the quick animation 0x13, FUN_00422c12) [live]
+OPTIONS_MENU, OPTIONS_ADVANCED, FIGHT_HUMANS_ONLY = (115, 10), (140, 40), (292, 262)
+QUICK_BATTLES = 0x53F284
+
+
+def quick_battles(s, ui, on=True):
+    if (s.i32(QUICK_BATTLES) == 0) == on:
+        return on
+    s.click(*OPTIONS_MENU); s.run(30)
+    s.click(*OPTIONS_ADVANCED); s.run(40)
+    _dismiss_hint(s)                       # the first visit: "Advanced Game Options:" help scroll
+    if s.screen == 0x39:
+        s.click(*FIGHT_HUMANS_ONLY); s.run(30)
+    s.click(*BACK, right=True); s.run(30)
+    ui.settle(max_frames=600)
+    return s.i32(QUICK_BATTLES) == 0
 
 
 def set_rations(s, ui, level, read_level, max_clicks=8):
@@ -162,6 +256,7 @@ def gift(s, ui, crowns):
         if s.screen == 0:
             break
         s.click(*BACK, right=True); s.run(GAP)
+    s.run(200)                             # the noble's reply scroll arrives a few seconds later
     ui.settle(max_frames=600)
     return "sent"
 
@@ -191,3 +286,22 @@ def build_castle(s, ui, level):
     st = l2state.snapshot(s.read)
     c = next((x for x in st["counties"] if x["id"] == st["selected_county"]), {})
     return "started " + c.get("castle", {}).get("building", "?") if c.get("castle", {}).get("building") else "not started"
+
+
+# ---- a custom game (title → Single player → Custom game → title/shield page → the setup page 7 → Start) with
+# the defaults (five nobles, easy, 1000 crowns) on a chosen map [live 2026-10-23: England 14 counties,
+# Scotland 10, France 16; each lord starts with one county]
+CUSTOM_MAPS = {"England": 148, "Scotland": 163, "France": 196}     # y of the map list entry (x 548)
+SINGLE_PLAYER, CUSTOM_GAME, TITLE_CONTINUE, CUSTOM_START = (320, 107), (320, 211), (432, 227), (275, 204)
+
+
+def custom_game(s, ui, map_name="England"):
+    s.run(max(0, 600 - (s.frame or 0)))    # the title menu
+    s.click(*SINGLE_PLAYER); s.run(100)
+    s.click(*CUSTOM_GAME); s.run(150)
+    s.click(*TITLE_CONTINUE); s.run(150)
+    if map_name != "England":
+        s.click(548, CUSTOM_MAPS[map_name]); s.run(40)
+    s.click(*CUSTOM_START); s.run(300)
+    ui.settle()
+    return l2state.snapshot(s.read)["map"]
