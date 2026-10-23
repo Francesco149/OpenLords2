@@ -83,6 +83,60 @@ int redirect_calls(uint32_t va, void *hook)
     return n;
 }
 
+/* entry hook: for a function no E8 call site reaches (only a pointer table — PTR_FUN_004d6a50's handlers — or a
+ * host seam), its first instructions become `jmp hook`; they move to a trampoline that jumps back, and the hook's
+ * retail side calls the trampoline (hook_t.entry). .text is not state: hashes do not change. Prologue
+ * instructions only — an unknown opcode is fatal, never a guess; the displaced tail bytes become int3. */
+static uint8_t g_tramp[0x8000] __attribute__((aligned(4096)));
+static size_t g_ntramp;
+static int modrm_len(const uint8_t *p)          /* ModRM (+ SIB + displacement) */
+{
+    int mod = p[0] >> 6, rm = p[0] & 7, n = 1;
+    if (mod != 3 && rm == 4) { n++; if (mod == 0 && (p[1] & 7) == 5) n += 4; }
+    if (mod == 0 && rm == 5) n += 4;
+    else if (mod == 1) n += 1;
+    else if (mod == 2) n += 4;
+    return n;
+}
+static int insn_len(const uint8_t *p, int *rel)  /* *rel: offset of a rel32 to relocate, else -1 */
+{
+    *rel = -1;
+    uint8_t o = p[0];
+    if ((o >= 0x50 && o <= 0x5f) || o == 0x90) return 1;                  /* push / pop r32, nop */
+    if (o == 0x6a || (o >= 0xb0 && o <= 0xb7)) return 2;                   /* push imm8, mov r8, imm8 */
+    if (o == 0x68 || (o >= 0xb8 && o <= 0xbf) || o == 0xa1 || o == 0xa3) return 5;   /* imm32 / moffs32 */
+    if (o == 0xe8 || o == 0xe9) { *rel = 1; return 5; }                   /* call / jmp rel32 */
+    if (o == 0x0f && (p[1] == 0xb6 || p[1] == 0xb7 || p[1] == 0xbe || p[1] == 0xbf)) return 2 + modrm_len(p + 2);
+    switch (o) {
+    case 0x01: case 0x03: case 0x09: case 0x0b: case 0x21: case 0x23: case 0x29: case 0x2b: case 0x31: case 0x33:
+    case 0x39: case 0x3b: case 0x85: case 0x88: case 0x89: case 0x8a: case 0x8b: case 0x8d: case 0xd9: case 0xdd:
+        return 1 + modrm_len(p + 1);
+    case 0x80: case 0x83: case 0xc6: return 2 + modrm_len(p + 1);         /* imm8 */
+    case 0x81: case 0xc7: return 5 + modrm_len(p + 1);                    /* imm32 */
+    }
+    return 0;
+}
+uint32_t rh_patch_entry(uint32_t va, void *hook)
+{
+    if (!g_ntramp) { DWORD old; VirtualProtect(g_tramp, sizeof g_tramp, PAGE_EXECUTE_READWRITE, &old); }
+    if (g_ntramp + 32 > sizeof g_tramp) rh_fatal("entry hook %08x: trampoline pool exhausted", va);
+    uint8_t *f = (uint8_t *)(uintptr_t)va, *t = g_tramp + g_ntramp;
+    int n = 0;
+    while (n < 5) {
+        int rel, l = insn_len(f + n, &rel);
+        if (!l) rh_fatal("entry hook %08x: unknown instruction %02x %02x %02x at +%d", va, f[n], f[n + 1], f[n + 2], n);
+        memcpy(t + n, f + n, l);
+        if (rel >= 0) *(int32_t *)(t + n + rel) += (int32_t)((uint32_t)(uintptr_t)(f + n) - (uint32_t)(uintptr_t)(t + n));
+        n += l;
+    }
+    t[n] = 0xe9; *(int32_t *)(t + n + 1) = (int32_t)(va + n - ((uint32_t)(uintptr_t)(t + n) + 5));
+    g_ntramp += (size_t)(n + 5 + 15) & ~(size_t)15;
+    f[0] = 0xe9; *(int32_t *)(f + 1) = (int32_t)((uint32_t)(uintptr_t)hook - (va + 5));
+    for (int i = 5; i < n; i++) f[i] = 0xcc;
+    FlushInstructionCache(GetCurrentProcess(), f, (SIZE_T)n);
+    return (uint32_t)(uintptr_t)t;
+}
+
 /* ---- fixed-address host objects (vtables, command line, environment) ---- */
 #define FIXED_LO 0x5f080000u
 #define FIXED_SZ 0x10000u
@@ -540,6 +594,7 @@ static void parse(int argc, char **argv)
         else if (!strcmp(a, "--movies")) O.movies = 1;
         else if (!strcmp(a, "--hook")) O.hooks = ARG();
         else if (!strcmp(a, "--shadow-full")) O.shadow_full = 1;
+        else if (!strcmp(a, "--hook-entry")) O.hook_entry = 1;
         else if (!strcmp(a, "--shadow-poison")) O.shadow_poison = strtoul(ARG(), 0, 0);
         else if (!strcmp(a, "--coverage")) O.coverage = ARG();
         else if (!strcmp(a, "--bot")) O.bot = ARG();

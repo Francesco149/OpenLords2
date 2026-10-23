@@ -984,7 +984,7 @@
     "src/engine_math.h",
     "src/engine_territory.c",
     "src/engine_title_render.c",
-    "src/engine_trade.c"
+    "src/engine_trade_model.c"
    ]
   },
   {
@@ -2965,7 +2965,8 @@
    "src": [
     "src/engine.c",
     "src/engine_trade.c",
-    "src/engine_trade.h"
+    "src/engine_trade.h",
+    "src/engine_trade_model.c"
    ]
   },
   {
@@ -4217,7 +4218,9 @@
     "src/engine_combat.h",
     "src/engine_county_panels.h",
     "src/engine_labor.c",
-    "src/engine_labor.h"
+    "src/engine_labor.h",
+    "src/engine_trade.h",
+    "src/engine_trade_model.c"
    ]
   },
   {
@@ -4337,7 +4340,7 @@
    "src": [
     "src/engine_army_ai.c",
     "src/engine_army_ai.h",
-    "src/engine_trade.c"
+    "src/engine_trade_model.c"
    ]
   },
   {
@@ -4358,8 +4361,10 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
+    "src/engine_economy_globals.c",
     "src/engine_trade.c",
-    "src/engine_trade.h"
+    "src/engine_trade.h",
+    "src/engine_trade_model.c"
    ]
   },
   {
@@ -6076,8 +6081,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_trade.c",
-    "src/engine_trade.h"
+    "src/engine_trade.h",
+    "src/engine_trade_model.c"
    ]
   },
   {
@@ -6097,7 +6102,8 @@
    "src": [
     "src/engine.c",
     "src/engine_trade.c",
-    "src/engine_trade.h"
+    "src/engine_trade.h",
+    "src/engine_trade_model.c"
    ]
   },
   {
@@ -6107,8 +6113,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_trade.c",
-    "src/engine_trade.h"
+    "src/engine_trade.h",
+    "src/engine_trade_model.c"
    ]
   },
   {
@@ -6118,8 +6124,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_trade.c",
-    "src/engine_trade.h"
+    "src/engine_trade.h",
+    "src/engine_trade_model.c"
    ]
   },
   {
@@ -6129,8 +6135,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_trade.c",
-    "src/engine_trade.h"
+    "src/engine_trade.h",
+    "src/engine_trade_model.c"
    ]
   },
   {
@@ -6140,8 +6146,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_trade.c",
-    "src/engine_trade.h"
+    "src/engine_trade.h",
+    "src/engine_trade_model.c"
    ]
   },
   {
@@ -6151,7 +6157,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_trade.c"
+    "src/engine_trade.h",
+    "src/engine_trade_model.c"
    ]
   },
   {
@@ -6634,7 +6641,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/engine_army_ai.h"
    ]
   },
   {
@@ -7859,7 +7867,7 @@
     "src/engine_diplomacy_action.c",
     "src/engine_ranking.c",
     "src/engine_ranking.h",
-    "src/engine_trade.c"
+    "src/engine_trade_model.c"
    ]
   },
   {
@@ -20480,6 +20488,7 @@
     "src/engine_title_render.h",
     "src/engine_trade.c",
     "src/engine_trade.h",
+    "src/engine_trade_model.c",
     "src/engine_treasury.c",
     "src/engine_treasury.h",
     "src/main.c"

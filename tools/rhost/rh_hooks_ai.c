@@ -254,7 +254,7 @@ void rh_res_set(int off, uint32_t v) { res_put(off, v, 0); }
 static void ctx_retail(void *c)
 {
     port_ctx_t *x = c;
-    x->ret_r = rh_call_at(x->h->va, x->e0);
+    x->ret_r = rh_call_at(x->h->entry, x->e0);
 }
 static void ctx_port(void *c)
 {

@@ -23,7 +23,7 @@ void rh_hook_count(hook_t *h, int r, const char *why)
 
 /* ---------------------------------------------------------------- rng_step: FUN_00404a46 (src/engine_rng.c) */
 static hook_t *H_RNG;
-static void rng_retail(void *c) { (void)c; ((void (__cdecl *)(void))0x404a46u)(); }
+static void rng_retail(void *c) { (void)c; ((void (__cdecl *)(void))(uintptr_t)H_RNG->entry)(); }
 static void rng_port(void *c)
 {
     (void)c;
@@ -72,6 +72,7 @@ void rh_hooks_install(void)
 #undef T
         (void)k;
     }
+    for (int k = 0; k < NTAB; k++) for (int i = 0; i < TABLES[k].n; i++) TABLES[k].t[i].entry = TABLES[k].t[i].va;
     if (!O.hooks || !*O.hooks) return;
     char spec[8192] = "";
     if (O.hooks[0] == '@') {
@@ -89,9 +90,10 @@ void rh_hooks_install(void)
         if (!h) rh_fatal("unknown hook '%s'", c + 1);
         h->mode = mode;
         if (mode == H_OFF) continue;
-        int n = redirect_calls(h->va, h->wrapper);
-        rh_log("hook %s:%s %08x <- %d call site(s)\n", t, h->name, h->va, n);
-        if (!n) rh_fatal("hook %s: no call sites", h->name);
+        int n = O.hook_entry ? 0 : redirect_calls(h->va, h->wrapper);
+        if (n) { rh_log("hook %s:%s %08x <- %d call site(s)\n", t, h->name, h->va, n); continue; }
+        h->entry = rh_patch_entry(h->va, h->wrapper);   /* no call site (a pointer table) or --hook-entry */
+        rh_log("hook %s:%s %08x <- entry patch (trampoline %08x)\n", t, h->name, h->va, h->entry);
     }
 }
 

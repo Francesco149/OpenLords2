@@ -50,6 +50,7 @@ typedef struct {
     const char *coverage;
     const char *hooks;
     int shadow_full;            /* --shadow-full: shadow by copying the whole state (default: page-tracked) */
+    int hook_entry;             /* --hook-entry: patch every hooked function's entry, not its call sites (tests) */
     uint32_t shadow_poison;     /* --shadow-poison VA: flip a bit there after every shadowed port call (tests the diff) */
     uint32_t watch[16]; int n_watch;
     uint32_t step_ms;           /* virtual ms per frame */
@@ -76,6 +77,7 @@ void iat_override(const char *name, void *fn);
 int  iat_try(const char *name, void *fn);
 void *iat_lookup(const char *name);
 int  redirect_calls(uint32_t va, void *hook);
+uint32_t rh_patch_entry(uint32_t va, void *hook);   /* jmp hook at va; returns the trampoline that runs the original */
 void *rh_fixed_alloc(size_t n);
 int  rh_in_shadow(void);
 
