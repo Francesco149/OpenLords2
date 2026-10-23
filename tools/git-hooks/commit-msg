@@ -7,7 +7,7 @@
 # of drift impossible going forward).
 #
 # Behaviour:
-#   - rewrites any "Claude Opus 4.<N>" co-author line to the current model
+#   - rewrites any "Claude Opus" co-author line to the current model
 #   - if no Claude co-author trailer exists, appends one
 #   - opt out for a genuinely human-only commit with SKIP_CLAUDE_TRAILER=1
 #
@@ -15,7 +15,7 @@
 
 set -euo pipefail
 
-CLAUDE_MODEL="Claude Opus 4.8 (1M context)"
+CLAUDE_MODEL="Claude Opus 5.5"
 TRAILER="Co-Authored-By: ${CLAUDE_MODEL} <noreply@anthropic.com>"
 
 msg_file="$1"
