@@ -18,8 +18,9 @@ Common opts: --frames N --hook SPEC --dump-at F,..|end --shot-at F,..|end --shot
              --step-ms N --vbase MS -j J --target win|wine --extra "raw rhost args"
 Targets: `win` (default) = the Windows box over `ssh win`: headless runs need no desktop (rhost's
 DirectDraw is software), so they run straight from the ssh session; --show / record go through the
-interactive-session queue runner `ol2-rhost-runner`. `wine` = this host, headless, under a prefix
-whose C:\\ol2-rhost is the same layout (retail sees identical paths on both).
+interactive-session queue runner `ol2-rhost-runner`. `wine` = this host, headless (wine's null display
+driver, no X server), under a prefix whose C:\\ol2-rhost is the same layout: retail sees identical paths,
+and the state hashes match Windows bit for bit.
 Results: /mnt/ephemeral/openlords2/rhost-runs/<batch>/<run>/ (rhost.log; last line RESULT k=v ...).
 """
 import argparse
@@ -261,6 +262,16 @@ def wine_stage():
     link = os.path.join(WINE_PREFIX, "drive_c", "ol2-rhost")
     if not os.path.islink(link):
         os.symlink(WINE_ROOT, link)
+        # wine's null display driver: rhost's DirectDraw is software, so no X server is needed at all
+        subprocess.run(["wine", "reg", "add", "HKCU\\Software\\Wine\\Drivers", "/v", "Graphics", "/d", "null", "/f"],
+                       env=wine_env(), capture_output=True)
+
+
+def wine_env():
+    env = dict(os.environ, WINEPREFIX=WINE_PREFIX, WINEDEBUG="-all")
+    env.pop("DISPLAY", None)
+    env.pop("WAYLAND_DISPLAY", None)
+    return env
 
 
 def run_batch_wine(a, runs, tag):
@@ -269,14 +280,7 @@ def run_batch_wine(a, runs, tag):
         cmd_build()
     wine_stage()
     batch, bdir = make_batch(a, runs, tag, root_local=os.path.join(WINE_ROOT, "runs"))
-    disp = 400 + os.getpid() % 500
-    while os.path.exists(f"/tmp/.X{disp}-lock") or os.path.exists(f"/tmp/.X11-unix/X{disp}"):
-        disp += 1
-    xvfb = subprocess.Popen(["Xvfb", f":{disp}", "-screen", "0", "1024x768x24", "-nolisten", "tcp"],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(0.5)
-    env = dict(os.environ, WINEPREFIX=WINE_PREFIX, WINEDEBUG="-all", DISPLAY=f":{disp}")
-    env.pop("WAYLAND_DISPLAY", None)
+    env = wine_env()
 
     def one(r):
         name = r[0]
@@ -288,13 +292,10 @@ def run_batch_wine(a, runs, tag):
         return name, open(log, errors="replace").read() if os.path.exists(log) else ""
     t0 = time.time()
     out_lines = []
-    try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
-            for name, log in ex.map(one, runs):
-                out_lines.append(f"=== {name}")
-                out_lines += [l for l in log.splitlines() if re.search(r"RESULT|FATAL|DIVERGE|hook-result|MessageBox|UNIMPL|STALL|AV f", l)]
-    finally:
-        xvfb.terminate()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
+        for name, log in ex.map(one, runs):
+            out_lines.append(f"=== {name}")
+            out_lines += [l for l in log.splitlines() if re.search(r"RESULT|FATAL|DIVERGE|hook-result|MessageBox|UNIMPL|STALL|AV f", l)]
     out = "\n".join(out_lines)
     print(f"[wine batch {batch}: {len(runs)} run(s) in {time.time() - t0:.1f}s (-j{a.jobs}) → {bdir}]")
     return batch, bdir, parse_out(out), out

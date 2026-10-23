@@ -413,6 +413,7 @@ static void finish(const char *why)
            !strcmp(why, "game-exit") ? "exit" : "ok", why, g_frame, G32(L2_SIM_TICK), G8(L2_SCREEN), G32(L2_ENGINE_STATE),
            G32(L2_RNG_A), G32(L2_RNG_B), (unsigned long long)h.full, (unsigned long long)h.semantic, h.masked, h.bytes, ms,
            ms > 0 ? g_frame * 1000.0 / ms : 0.0, g_creep_total, rh_trace_status(), fb);
+    if (rh_bot_poked()) rh_log("RESULT-NOTE poked=%u (memory writes over the control channel: not a pure replay)\n", rh_bot_poked());
     if (g_logf) fclose(g_logf);
     ExitProcess(0);
 }
@@ -429,7 +430,7 @@ static void usage(void)
     fprintf(stderr, "usage: rhost --exe Lords2.exe --game DIR --run DIR [--frames N] [--trace F] [--record F]\n"
                     "  [--dump-at F,..|end] [--shot-at F,..|end] [--shot-every N] [--fb-hash] [--hash-every N] [--log-every N]\n"
                     "  [--tail N] [--step-ms N] [--vbase MS] [--creep-after N] [--show] [--scale N] [--realtime] [--movies]\n"
-                    "  [--hook SPEC] [--coverage F] [--watch VA,..] [--trap VA,..] [--watch-write VA[@F],..] [--bot HOST:PORT]\n"
+                    "  [--hook SPEC] [--coverage F] [--watch VA,..] [--trap VA,..] [--watch-write VA[@F],..] [--bot HOST:PORT] [--out-trace F]\n"
                     "  [--log-files] [--log-heap] [--log-input] [--log-dd] [--log-ds] [--log-win]\n");
     ExitProcess(2);
 }
@@ -452,6 +453,7 @@ static void parse(int argc, char **argv)
         else if (!strcmp(a, "--frames")) O.frames = strtoul(ARG(), 0, 0);
         else if (!strcmp(a, "--trace")) O.trace = ARG();
         else if (!strcmp(a, "--record")) { O.record = ARG(); O.realtime = 1; O.show = 1; }
+        else if (!strcmp(a, "--out-trace")) O.out_trace = ARG();
         else if (!strcmp(a, "--dump-at")) parse_list(ARG(), O.dump_at, &O.n_dump, 128);
         else if (!strcmp(a, "--shot-at")) parse_list(ARG(), O.shot_at, &O.n_shot, 64);
         else if (!strcmp(a, "--shot-every")) O.shot_every = strtoul(ARG(), 0, 0);
@@ -500,8 +502,10 @@ static void parse(int argc, char **argv)
     }
     if (!O.exe || !O.gamedir || !O.rundir) usage();
     if (O.scale < 1) O.scale = 1;
-    static char rec_abs[MAX_PATH];
+    static char rec_abs[MAX_PATH], out_abs[MAX_PATH];
     if (O.record && !strchr(O.record, ':') && O.record[0] != '\\') { snprintf(rec_abs, sizeof rec_abs, "%s\\%s", O.rundir, O.record); O.record = rec_abs; }
+    if (O.record && !O.out_trace) O.out_trace = O.record;
+    if (O.out_trace && !strchr(O.out_trace, ':') && O.out_trace[0] != '\\') { snprintf(out_abs, sizeof out_abs, "%s\\%s", O.rundir, O.out_trace); O.out_trace = out_abs; }
 }
 
 static void load_volatile(void)
@@ -609,7 +613,6 @@ int main(int argc, char **argv)
     rh_log("hooks: frame driver %08x <- %d call site(s)\n", L2_FRAME_FN, nf);
     load_volatile();
     rh_hooks_install();
-    rh_bot_install();
     if (O.coverage) cov_install();
     AddVectoredExceptionHandler(0, crash_veh);
     if (g_nw) AddVectoredExceptionHandler(1, watch_veh);
@@ -617,10 +620,11 @@ int main(int argc, char **argv)
         AddVectoredExceptionHandler(1, trap_veh);
         for (int i = 0; i < g_ntrap; i++) { g_torig[i] = G8(g_tva[i]); G8(g_tva[i]) = 0xCC; }
     }
-    if (!O.frames) O.frames = O.record ? 0xfffffff0u : O.trace ? rh_trace_last_frame() + O.tail : 3000u;
+    if (!O.frames) O.frames = (O.record || O.bot) ? 0xfffffff0u : O.trace ? rh_trace_last_frame() + O.tail : 3000u;
     rh_log("rhost: frames<=%u step=%ums vbase=%u creep_after=%u realtime=%d show=%d movies=%d arena=%d overlay=%d\n",
            O.frames, O.step_ms, O.vbase, O.creep_after, O.realtime, O.show, O.movies, !O.no_arena, !O.no_overlay);
-    if (!O.record && !O.show && O.stall_wall_ms) CloseHandle(CreateThread(NULL, 0, watchdog, NULL, 0, NULL));
+    rh_bot_install();                        /* bot mode: serves the controller until its first `run` */
+    if (!O.record && !O.show && !O.bot && O.stall_wall_ms) CloseHandle(CreateThread(NULL, 0, watchdog, NULL, 0, NULL));
     call_on_stack((void *)(uintptr_t)img.entry, MAIN_STACK_LO, MAIN_STACK_HI - 192);   /* CRT entry: never returns */
     finish("entry-returned");
     return 0;

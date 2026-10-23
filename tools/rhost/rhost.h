@@ -34,7 +34,8 @@ typedef struct {
     const char *exe, *gamedir, *rundir;
     uint32_t frames;            /* stop after this many frames (0 = trace end + tail, else 3000) */
     const char *trace;          /* input trace (.jsonl) */
-    const char *record;         /* human play → flat trace */
+    const char *record;         /* human play → flat trace (= --out-trace + visible realtime window + real input) */
+    const char *out_trace;      /* write every injected input event (the replayable record of the run) */
     uint32_t dump_at[128]; int n_dump;
     uint32_t shot_at[64]; int n_shot; uint32_t shot_every;
     int fb_hash;                /* chain a hash of every presented frame (index plane + palette) */
@@ -129,7 +130,8 @@ HWND rh_win_real(HWND h);
 uint32_t rh_trace_last_frame(void);
 const char *rh_trace_status(void);
 void rh_trace_finish(void);
-void rh_win_post(UINT m, WPARAM w, LPARAM l);   /* append to the virtual queue (bot, tests) */
+void rh_win_post(UINT m, WPARAM w, LPARAM l);   /* append to the virtual queue (not recorded) */
+void rh_win_inject(UINT m, uint32_t w, uint32_t l);   /* input event at this frame boundary (recorded) */
 
 /* rh_state.c */
 typedef struct { uint64_t full, semantic; uint32_t masked, ranges, bytes; } rh_hash_t;
@@ -149,3 +151,4 @@ void rh_hooks_report(void);
 /* rh_bot.c — decision-server link (bot mode) */
 void rh_bot_install(void);
 void rh_bot_frame(void);
+uint32_t rh_bot_poked(void);

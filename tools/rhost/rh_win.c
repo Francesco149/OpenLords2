@@ -346,6 +346,8 @@ static void inject(uint32_t f, UINT m, uint32_t w, uint32_t l)
     q_put((HWND)(uintptr_t)RH_FAKE_HWND, m, (WPARAM)w, (LPARAM)l);
     rec_write(f, m, w, l);
 }
+/* the control channel's input (rh_bot.c): same path, same record */
+void rh_win_inject(UINT m, uint32_t w, uint32_t l) { inject(g_frame, m, w, l); }
 
 /* frame boundary: g_frame was just incremented — post every event of frame g_frame */
 void rh_win_frame(void)
@@ -376,7 +378,7 @@ const char *rh_trace_status(void)
     snprintf(b, sizeof b, "trace_events=%u/%u complete=%d posted=%u dispatched=%u", g_iev, g_nev, g_iev >= g_nev, g_nposted, g_ndispatched);
     return b;
 }
-void rh_trace_finish(void) { if (g_recf) { fclose(g_recf); g_recf = NULL; rh_log("record: trace written to %s\n", O.record); } }
+void rh_trace_finish(void) { if (g_recf) { fclose(g_recf); g_recf = NULL; rh_log("trace written to %s\n", O.out_trace); } }
 
 void rh_win_install(void)
 {
@@ -432,11 +434,13 @@ void rh_win_install(void)
     if (O.trace) trace_load(O.trace);
     if (O.record) {
         g_rec = calloc(REC_MAX, sizeof *g_rec);
-        g_recf = fopen(O.record, "w");
-        if (!g_recf) rh_fatal("cannot write %s", O.record);
-        fprintf(g_recf, "{\"meta\": {\"game\": \"lords2\", \"step_ms\": %u, \"vbase\": %u, \"from_trace\": %s}}\n",
-                O.step_ms, O.vbase, O.trace ? "true" : "false");
         g_rec_live = g_nev == 0;
+    }
+    if (O.out_trace) {   /* every injected event (trace prefix, human, bot): the replayable record of this run */
+        g_recf = fopen(O.out_trace, "w");
+        if (!g_recf) rh_fatal("cannot write %s", O.out_trace);
+        fprintf(g_recf, "{\"meta\": {\"game\": \"lords2\", \"step_ms\": %u, \"vbase\": %u, \"source\": \"%s\"}}\n",
+                O.step_ms, O.vbase, O.record ? "human" : O.bot ? "bot" : "replay");
     }
     /* frame-0 events: queued before retail starts (dispatched by its first pump) */
     while (g_iev < g_nev && g_ev[g_iev].f == 0) { ev_t *e = &g_ev[g_iev++]; inject(0, e->m, e->w, e->l); }
