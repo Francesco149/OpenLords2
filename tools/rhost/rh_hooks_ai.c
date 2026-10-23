@@ -32,6 +32,10 @@
 #include "engine_army_state.h"
 #include "engine_path_field.h"
 #include "engine_path.h"
+#include "engine_ranking.h"
+#include "engine_combat.h"
+#include "engine_realm_upkeep.h"
+#include "engine_diplomacy.h"
 #include "game_init.h"
 
 /* ---------------------------------------------------------------- binding: save globals = retail memory */
@@ -91,6 +95,8 @@ A(s_slot_0058fe28,0x58fe28)
 #include "save_schema_table.h"   /* g_save_schema: the port's (ptr, size) table — checked against retail's */
 
 /* ---------------------------------------------------------------- binding: runtime pointer seams */
+/* engine_dirty_rect: retail keeps the dirty rectangle in six scattered globals (engine_dirty_rect.h) */
+static engine_dirty_rect_state_t s_dirty;
 static void ai_bind_once(void)
 {
     static int done;
@@ -112,12 +118,19 @@ static void ai_bind_once(void)
     engine_territory_bind_army_records(g_per_army_768);
     engine_map_query_bind_cell_descriptors(g_overworld_map);
     engine_army_state_bind_cells(g_overworld_map);
+    engine_territory_bind_cursor_cache_flag((int *)(uintptr_t)0x57cac4u);   /* DAT_0057cac4 */
+    engine_territory_set_dirty_state(&s_dirty);                           /* synced: six scattered globals */
+    engine_path_field_bind_terrain((const int16_t *)(uintptr_t)0x4f3ffeu);  /* the strategic move-cost grid */
+    engine_path_field_bind_storage((int16_t *)(uintptr_t)0x500c30u, (int16_t *)(uintptr_t)0x4f0380u,
+                                   (int32_t *)(uintptr_t)0x4f9820u, (int32_t *)(uintptr_t)0x503020u,
+                                   (uint8_t *)(uintptr_t)0x53f070u, (uint8_t *)(uintptr_t)0x553550u);
     rh_log("rh_hooks_ai: %d save-schema aliases match retail's table; seams bound\n", SAVE_SCHEMA_COUNT);
 }
 
 /* ---------------------------------------------------------------- syncing: file-static mirrors */
 /* file-static mirrors: engine_army_economy config scalars + eval / supply scratch (setters), engine_path's distance
- * globals, engine_map_query's cell cursor, engine_territory's current slot, engine_army_ai's ranking cookie */
+ * globals, engine_map_query's cell cursor, engine_territory's current slot + dirty rect, engine_army_ai's ranking cookie, engine_path_field's bookkeeping,
+ * engine_combat's active-territory register, engine_army_state's record cursor */
 static void ai_sync_in(void)
 {
     engine_army_economy_set_prices((int)G32(0x553f60u), (int)G32(0x567594u), (int)G32(0x57cb30u));
@@ -129,6 +142,12 @@ static void ai_sync_in(void)
     g_cell_cursor_col = (int32_t)G32(0x569570u); g_cell_cursor_row = (int32_t)G32(0x569578u); /* engine_map_query */
     engine_territory_set_current_slot((int)G32(0x52afe0u));
     engine_army_ai_set_ranking_dirty((int)G32(0x56d6a0u));
+    s_dirty.dirty_mark = (int)G32(0x50d09cu); s_dirty.dirty_xmin = (int)G32(0x50a4c4u); s_dirty.dirty_xmax = (int)G32(0x50a4c8u);
+    s_dirty.dirty_ymin = (int)G32(0x50a4bcu); s_dirty.dirty_ymax = (int)G32(0x50a4c0u); s_dirty.below_status_redraw = (int)G32(0x53e9acu);
+    g_pf_src_col = (int32_t)G32(0x504020u); g_pf_src_row = (int32_t)G32(0x504024u); g_pf_src_cell = (int32_t)G32(0x4f4070u);
+    g_pf_head = (int32_t)G32(0x500c20u); g_pf_tail = (int32_t)G32(0x4f2768u);
+    g_pf_cur_col = (int32_t)G32(0x507230u); g_pf_cur_row = (int32_t)G32(0x507234u);
+    g_combat_active_terr = (int)G32(0x553f8cu); g_army_state_index = (int)G32(0x5533e8u);
 }
 static void ai_sync_out(void)
 {
@@ -140,6 +159,12 @@ static void ai_sync_out(void)
     G32(0x569570u) = (uint32_t)g_cell_cursor_col; G32(0x569578u) = (uint32_t)g_cell_cursor_row;
     G32(0x52afe0u) = (uint32_t)engine_territory_current_slot();
     G32(0x56d6a0u) = (uint32_t)engine_army_ai_ranking_dirty();
+    G32(0x50d09cu) = (uint32_t)s_dirty.dirty_mark; G32(0x50a4c4u) = (uint32_t)s_dirty.dirty_xmin; G32(0x50a4c8u) = (uint32_t)s_dirty.dirty_xmax;
+    G32(0x50a4bcu) = (uint32_t)s_dirty.dirty_ymin; G32(0x50a4c0u) = (uint32_t)s_dirty.dirty_ymax; G32(0x53e9acu) = (uint32_t)s_dirty.below_status_redraw;
+    G32(0x504020u) = (uint32_t)g_pf_src_col; G32(0x504024u) = (uint32_t)g_pf_src_row; G32(0x4f4070u) = (uint32_t)g_pf_src_cell;
+    G32(0x500c20u) = (uint32_t)g_pf_head; G32(0x4f2768u) = (uint32_t)g_pf_tail;
+    G32(0x507230u) = (uint32_t)g_pf_cur_col; G32(0x507234u) = (uint32_t)g_pf_cur_row;
+    G32(0x553f8cu) = (uint32_t)g_combat_active_terr; G32(0x5533e8u) = (uint32_t)g_army_state_index;
 }
 
 /* engine_event_queue: the port's queue is one struct; retail's is six globals (FUN_00472bc5 / FUN_00472ae0).
@@ -183,9 +208,10 @@ static void ai_port(void *c)
     x->ret_p = x->port(x->a);
     ai_sync_out();
 }
-static uint32_t ai_run(int idx, ai_port_fn port, int has_ret, const uint32_t *a)
+static uint32_t ai_run(int idx, void *self, ai_port_fn port, int has_ret, const uint32_t *a)
 {
     hook_t *h = &RH_HOOKS_AI[idx];
+    if (h->wrapper != self) rh_fatal("rh_hooks_ai: row %d (%s) is not its wrapper's — enum and table out of order", idx, h->name);
     ai_ctx_t x = { h, a, port, 0, 0 };
     if (h->mode == H_REPLACE) { h->calls++; ai_port(&x); return x.ret_p; }
     if (rh_in_shadow()) { ai_retail(&x); return x.ret_r; }
@@ -221,10 +247,10 @@ static uint32_t ai_run(int idx, ai_port_fn port, int has_ret, const uint32_t *a)
 /* HOOK_R: the port returns a value (compared); HOOK_V: void (retail's EAX passed through in shadow mode) */
 #define HOOK_R(NAME, N, CALL) \
     static uint32_t p_##NAME(const uint32_t *a) { (void)a; return (uint32_t)(CALL); } \
-    static uint32_t __cdecl w_##NAME(ARGS##N) { const uint32_t a[8] = { VALS##N }; return ai_run(X_##NAME, p_##NAME, 1, a); }
+    static uint32_t __cdecl w_##NAME(ARGS##N) { const uint32_t a[8] = { VALS##N }; return ai_run(X_##NAME, (void *)w_##NAME, p_##NAME, 1, a); }
 #define HOOK_V(NAME, N, CALL) \
     static uint32_t p_##NAME(const uint32_t *a) { (void)a; CALL; return 0; } \
-    static uint32_t __cdecl w_##NAME(ARGS##N) { const uint32_t a[8] = { VALS##N }; return ai_run(X_##NAME, p_##NAME, 0, a); }
+    static uint32_t __cdecl w_##NAME(ARGS##N) { const uint32_t a[8] = { VALS##N }; return ai_run(X_##NAME, (void *)w_##NAME, p_##NAME, 0, a); }
 
 /* row indices (must follow RH_HOOKS_AI's order) */
 enum {
@@ -245,7 +271,10 @@ enum {
     X_realm_owner_tally, X_realm_advance_rating, X_realm_tax_approval, X_realm_settle_provisions,
     X_realm_spread_development, X_realm_complete_settlements, X_realm_recount_armies, X_realm_owns_neighbor,
     X_realm_territory_income, X_realm_record_history,
-    X_ai_run_diplomacy, X_ai_propose_diplomacy,
+    X_ai_run_per_tick, X_ai_run_movement, X_ai_run_diplomacy, X_ai_propose_diplomacy,
+    X_terr_census_terrain, X_terr_grade_cells, X_terr_allocate_workforce, X_terr_stamp_secondary_keep,
+    X_rank_player_total, X_rank_player_aggregate, X_combat_muster_garrison, X_combat_spawn_unit,
+    X_combat_pick_best_unit, X_unit_total_wage, X_diplo_should_engage, X_army_movement_owned,
 };
 
 /* engine_army_economy.c */
@@ -313,7 +342,7 @@ HOOK_V(realm_clear_turn_scratch, 0, engine_realm_clear_turn_scratch())
 HOOK_V(realm_update_mood,       0, EVQ(engine_realm_update_mood(G32(0x58fd60u), G32(0x58fd7cu), q)))
 HOOK_V(realm_advance_population, 0, engine_realm_advance_population())
 HOOK_V(realm_migrate_population, 0, engine_realm_migrate_population())
-HOOK_V(realm_escalate_unrest,   0, EVQ(engine_realm_escalate_unrest(q)))
+HOOK_V(realm_escalate_unrest,   0, EVQ(engine_realm_escalate_unrest(q, MP_ACTIVE)))
 HOOK_V(realm_accrue_income,     0, engine_realm_accrue_income())
 HOOK_V(realm_recompute_income,  1, engine_realm_recompute_realm_income(I(0)))
 HOOK_V(realm_owner_tally,       1, engine_realm_recompute_owner_tally(I(0)))
@@ -326,12 +355,24 @@ HOOK_V(realm_recount_armies,    0, engine_realm_recount_armies())
 HOOK_R(realm_owns_neighbor,     2, engine_realm_player_owns_neighbor((unsigned)a[0], I(1)))
 HOOK_V(realm_territory_income,  0, engine_realm_collect_territory_income())
 HOOK_V(realm_record_history,    0, engine_realm_record_history())
-/* engine_army_ai.c — the brain's queue-posting steps.  NOT hooked yet: the per-tick FSM FUN_0049a581 and its step
- * 0xb FUN_004a5667 (army movement) — engine_path_field keeps retail's cost fields / ring queues / waypoint scratch
- * (0x500c30, 0x4f0380, 0x4f9820, 0x503020, 0x53f070, 0x553550) as file-static arrays with no bind seam, and its
- * flood/trace counters (0x504020/24, 0x4f4070, 0x500c20, 0x4f2768, 0x507230/34) as locals. */
+/* engine_army_ai.c — the per-tick brain FSM and its queue-posting steps (the brain's RNG byte is the global's value) */
+HOOK_V(ai_run_per_tick,         0, EVQ(engine_army_ai_run_per_tick(q, MP_ACTIVE, G32(0x58fd60u))))
+HOOK_V(ai_run_movement,         1, EVQ(engine_army_ai_run_movement(I(0), q, MP_ACTIVE)))
 HOOK_V(ai_run_diplomacy,        1, EVQ(engine_army_ai_run_diplomacy(I(0), q)))
 HOOK_V(ai_propose_diplomacy,    1, EVQ(engine_army_ai_propose_diplomacy(I(0), q)))
+/* the AI turn's callees in the neighbouring modules (territory, ranking, combat, upkeep, diplomacy, army state) */
+HOOK_V(terr_census_terrain,     1, engine_territory_census_army_terrain(I(0)))
+HOOK_V(terr_grade_cells,        1, engine_territory_grade_feature_cells(I(0)))
+HOOK_V(terr_allocate_workforce, 1, engine_territory_allocate_realm_workforce(I(0)))
+HOOK_V(terr_stamp_secondary_keep, 2, engine_territory_stamp_secondary_keep(I(0), I(1)))
+HOOK_V(rank_player_total,       1, engine_ranking_recompute_player_total(I(0)))
+HOOK_V(rank_player_aggregate,   1, engine_ranking_recompute_player_aggregate(a[0]))
+HOOK_R(combat_muster_garrison,  2, engine_combat_muster_garrison(I(0), I(1)))
+HOOK_R(combat_spawn_unit,       4, engine_combat_spawn_unit(I(0), I(1), I(2), I(3)))
+HOOK_R(combat_pick_best_unit,   3, engine_combat_pick_best_unit(I(0), I(1), I(2)))
+HOOK_R(unit_total_wage,         1, engine_unit_total_wage(I(0)))
+HOOK_R(diplo_should_engage,     2, engine_diplomacy_should_engage(I(0), I(1)))
+HOOK_R(army_movement_owned,     2, engine_army_state_arm_movement_owned(a[0], I(1)))
 
 hook_t RH_HOOKS_AI[] = {
     { "eco_stock_a_value", 0x44e5bbu, (void *)w_eco_stock_a_value, 0, 0, 0, 0, "" },
@@ -407,8 +448,22 @@ hook_t RH_HOOKS_AI[] = {
     { "realm_owns_neighbor", 0x467eb0u, (void *)w_realm_owns_neighbor, 0, 0, 0, 0, "" },
     { "realm_territory_income", 0x4ad6c0u, (void *)w_realm_territory_income, 0, 0, 0, 0, "" },
     { "realm_record_history", 0x4ae7ddu, (void *)w_realm_record_history, 0, 0, 0, 0, "" },
+    { "ai_run_per_tick", 0x49a581u, (void *)w_ai_run_per_tick, 0, 0, 0, 0, "" },
+    { "ai_run_movement", 0x4a5667u, (void *)w_ai_run_movement, 0, 0, 0, 0, "" },
     { "ai_run_diplomacy", 0x4a0c1du, (void *)w_ai_run_diplomacy, 0, 0, 0, 0, "" },
     { "ai_propose_diplomacy", 0x4a13a6u, (void *)w_ai_propose_diplomacy, 0, 0, 0, 0, "" },
+    { "terr_census_terrain", 0x469b8du, (void *)w_terr_census_terrain, 0, 0, 0, 0, "" },
+    { "terr_grade_cells", 0x44d913u, (void *)w_terr_grade_cells, 0, 0, 0, 0, "" },
+    { "terr_allocate_workforce", 0x44f6e7u, (void *)w_terr_allocate_workforce, 0, 0, 0, 0, "" },
+    { "terr_stamp_secondary_keep", 0x46826cu, (void *)w_terr_stamp_secondary_keep, 0, 0, 0, 0, "" },
+    { "rank_player_total", 0x4487a9u, (void *)w_rank_player_total, 0, 0, 0, 0, "" },
+    { "rank_player_aggregate", 0x49d1e0u, (void *)w_rank_player_aggregate, 0, 0, 0, 0, "" },
+    { "combat_muster_garrison", 0x4a5389u, (void *)w_combat_muster_garrison, 0, 0, 0, 0, "" },
+    { "combat_spawn_unit", 0x4a9a9au, (void *)w_combat_spawn_unit, 0, 0, 0, 0, "" },
+    { "combat_pick_best_unit", 0x4a0917u, (void *)w_combat_pick_best_unit, 0, 0, 0, 0, "" },
+    { "unit_total_wage", 0x4ad495u, (void *)w_unit_total_wage, 0, 0, 0, 0, "" },
+    { "diplo_should_engage", 0x4a16f7u, (void *)w_diplo_should_engage, 0, 0, 0, 0, "" },
+    { "army_movement_owned", 0x4a4e3du, (void *)w_army_movement_owned, 0, 0, 0, 0, "" },
 };
 const int RH_HOOKS_AI_N = sizeof RH_HOOKS_AI / sizeof *RH_HOOKS_AI;
 
