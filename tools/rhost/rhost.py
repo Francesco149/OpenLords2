@@ -83,7 +83,7 @@ def win_job(job_id, ps_path_win, timeout=14400):
 
 # ---------------------------------------------------------------- build / stage
 def cmd_build(a=None):
-    sh(["nix", "develop", ROOT, "--command", "bash", os.path.join(HERE, "build.sh")])
+    sh([os.path.join(ROOT, "tools", "dev"), "bash", os.path.join(HERE, "build.sh")])   # no resident nix evaluator
 
 
 def cmd_stage(a=None):
@@ -700,7 +700,7 @@ def cmd_view(a):
     out = ssh_win(f"powershell -NoProfile -ExecutionPolicy Bypass -File {wrun}\\go.ps1")
     print_results(parse_out(out), [r[0] for r in runs])
     if not os.path.exists(VIEWER):
-        sh(["nix", "develop", ROOT, "--command", "make", "-C", os.path.dirname(VIEWER)])
+        sh([os.path.join(ROOT, "tools", "dev"), "make", "-C", os.path.dirname(VIEWER)])
     ssh_win(f"New-Item -ItemType Directory -Force {WROOT}\\viewer | Out-Null")
     scp(VIEWER, f"{WIN}:C:/ol2-rhost/viewer/viewer.exe")
     job = os.path.join(bdir, "viewer.ps1")

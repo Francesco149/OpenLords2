@@ -13,8 +13,9 @@ holds pointers only.
 2. `docs/FRONT.md` — the active front, ★ next micro-task, human queue.
 3. At session end: report pending human items (FRONT §Human queue).
 
-**Hosts.** **maximus** (this Arch box): agent host; `nix develop -c …` = the pinned devshell (mingw,
-python deps) — **every build/test command runs inside it**. **`ssh win`**: the Windows 11 box (OpenSSH
+**Hosts.** **maximus** (this Arch box): agent host; **`tools/dev CMD`** = the pinned devshell (mingw, python
+deps) — **every build/test command runs inside it**. It sources a cached `nix print-dev-env`; `nix develop -c`
+works too but keeps a ~370 MB evaluator resident per command (22 of them were 8 GB of the 2026-10-23 OOM). **`ssh win`**: the Windows 11 box (OpenSSH
 on cutestation:2222, PowerShell) — rhost's `win` target, IDA 9.4. `ssh wslop` (WSL) is not needed.
 
 ## Methodology (2026-10-23 reset — `docs/audits/2026-10-23-methodology-reset.md`)
@@ -39,7 +40,7 @@ software DirectDraw / DirectSound / window layer — deterministic, headless, ne
 
 **Gates.** `rhost.py det SCEN -n 3` (0 differing dwords; run it on Windows too — a host can be nondeterministic where
 wine is not); `rhost.py corpus --check` (and `--target wine`; `--bless` runs each scenario twice and refuses a mismatch);
-`rhost.py verify`. Port host tests: `nix develop -c make -C tests run -j16`.
+`rhost.py verify`. Port host tests: `tools/dev make -C tests run -j16`.
 
 **Scenarios** `tests/scenarios/<s>/trace.jsonl` (`{"f","m","w","l"}` input events, 640×480 coords):
 human play `rhost.py record NAME [--from S]` (visible window on the Windows desktop), authored with
@@ -63,7 +64,7 @@ capture (the **viewer** stays for human eyes).
 - **If a tool can't show you something, improve the tool.** Never hand-wave a diff.
 
 ## Build / run / test
-- Port: `nix develop -c make -C src -j16` → `build/openlords2.exe`.
+- Port: `tools/dev make -C src -j16` → `build/openlords2.exe`.
 - rhost: `python3 tools/rhost/rhost.py …` (auto build + stage). Results `/mnt/ephemeral/openlords2/rhost-runs/`.
 - Windows: `C:\ol2-rhost\` (separate from the siblings' `C:\orc-rhost`, `C:\oss-rhost`, `C:\de-rhost`); kill only
   our own processes by full path / PID, never by name. Interactive jobs (record, --show) go through the
@@ -82,6 +83,9 @@ capture (the **viewer** stays for human eyes).
 - **Human verification:** never ask the human to reconstruct state; give one command and what to look for.
 
 ## Hard rules
+- **maximus has 31 GB, no swap, shared with the owner's desktop apps.** Wrap commands in `tools/dev`, not
+  `nix develop -c`. At most one whole-corpus `verify` / `corpus` per agent at a time; with two agents
+  working, wine `-j 8` each. Leave nothing running when you report (stop your own batches by PID).
 - **The Windows box is shared** with sibling projects running the same architecture right now: openrecet
   (`C:\orc-rhost`, task `orc-rhost-runner`, `rhost.exe`), OpenSummoners (`C:\oss-rhost`, `oss-rhost.exe`),
   OpenMare (`om-rhost-runner`), DioramaEngine (`C:\de-rhost`), their IDA dirs (`C:\orc-ida`, `C:\oss-ida`,

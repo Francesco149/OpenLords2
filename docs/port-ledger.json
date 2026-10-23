@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 828,
-  "ported": 126,
-  "unported": 1493,
+  "tested": 840,
+  "ported": 125,
+  "unported": 1482,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 954,
-  "pct_touched": 39.0,
-  "pct_tested": 33.8,
+  "touched": 965,
+  "pct_touched": 39.4,
+  "pct_tested": 34.3,
   "bytes_total": 838629,
-  "bytes_touched": 408626,
-  "pct_bytes_touched": 48.7
+  "bytes_touched": 413697,
+  "pct_bytes_touched": 49.3
  },
  "orphan_refs": [
   "0x004148",
@@ -3910,8 +3910,11 @@
    "name": "FUN_00423241",
    "size": 438,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x4233f7",
@@ -4186,9 +4189,11 @@
    "name": "FUN_00426d11",
    "size": 196,
    "is_thunk": false,
-   "status": "ported",
+   "status": "tested",
    "src": [
-    "src/audio.c"
+    "src/audio.c",
+    "src/engine_combat.c",
+    "src/engine_combat.h"
    ]
   },
   {
@@ -4694,8 +4699,11 @@
    "name": "FUN_0042c64f",
    "size": 1531,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x42cc4a",
@@ -4782,8 +4790,11 @@
    "name": "FUN_0042d91b",
    "size": 83,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x42d96e",
@@ -7206,8 +7217,11 @@
    "name": "FUN_0043b622",
    "size": 95,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x43b681",
@@ -7257,8 +7271,10 @@
    "name": "FUN_0043b98a",
    "size": 23,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c"
+   ]
   },
   {
    "va": "0x43b9a1",
@@ -7337,8 +7353,11 @@
    "name": "FUN_0043be65",
    "size": 129,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x43bee6",
@@ -7834,6 +7853,8 @@
     "src/engine.c",
     "src/engine_army_move_confirm.h",
     "src/engine_army_select.c",
+    "src/engine_combat.c",
+    "src/engine_combat.h",
     "src/engine_county_panels.h",
     "src/engine_diplomacy_action.c",
     "src/engine_ranking.c",
@@ -10336,7 +10357,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_realm_events.c"
+    "src/engine_realm_events.c",
+    "src/engine_realm_events.h"
    ]
   },
   {
@@ -10566,7 +10588,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_realm_events.c"
+    "src/engine_realm_events.c",
+    "src/engine_realm_events.h"
    ]
   },
   {
@@ -10644,7 +10667,8 @@
    "status": "tested",
    "src": [
     "src/engine_realm.c",
-    "src/engine_realm.h"
+    "src/engine_realm.h",
+    "src/engine_realm_globals.c"
    ]
   },
   {
@@ -10655,7 +10679,8 @@
    "status": "tested",
    "src": [
     "src/engine_realm.c",
-    "src/engine_realm.h"
+    "src/engine_realm.h",
+    "src/engine_realm_globals.c"
    ]
   },
   {
@@ -10861,7 +10886,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_realm_events.c"
+    "src/engine_realm_events.c",
+    "src/engine_realm_events.h"
    ]
   },
   {
@@ -10871,7 +10897,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_realm_events.c"
+    "src/engine_realm_events.c",
+    "src/engine_realm_events.h"
    ]
   },
   {
@@ -14037,8 +14064,11 @@
    "name": "FUN_00477dfc",
    "size": 1225,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x4782c5",
@@ -14055,8 +14085,11 @@
    "name": "FUN_00478419",
    "size": 177,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x4784ca",
@@ -14079,8 +14112,11 @@
    "name": "FUN_004788c6",
    "size": 140,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x478952",
@@ -14475,8 +14511,11 @@
    "name": "FUN_0047f474",
    "size": 761,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x47f76d",
@@ -17825,7 +17864,9 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_state.h"
+    "src/engine_army_state.h",
+    "src/engine_combat.c",
+    "src/engine_combat.h"
    ]
   },
   {
@@ -18006,8 +18047,11 @@
    "name": "FUN_004aa6ca",
    "size": 469,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_combat.c",
+    "src/engine_combat.h"
+   ]
   },
   {
    "va": "0x4aa89f",

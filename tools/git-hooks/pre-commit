@@ -17,8 +17,9 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-# nix wrapper — python3/make live in the dev shell on this host.
-run() { nix develop --command "$@"; }
+# dev-shell wrapper — python3/make live in the dev shell on this host. tools/dev sources a cached
+# `nix print-dev-env` instead of keeping a `nix develop` evaluator (~370 MB) resident per command.
+run() { tools/dev "$@"; }
 
 # --- 1. Regenerate + stage the derived ledger ----------------------------
 if run python3 tools/gen_port_ledger.py >/tmp/ol2_ledger.log 2>&1; then
