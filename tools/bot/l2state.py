@@ -55,6 +55,14 @@ DIFFICULTY = 0x53F23C           # 0.. (tools/cheat_data.py upkeep-divisor table)
 NOT_READY = 0x554004            # players still mid-turn (FUN_0049b762) [live]
 CAMERA = 0x5651B4               # i32 col, +4 row: strategic scroll origin (tools/ai_pov.py) [notes]
 SEL_PIECE = 0x52AFBC            # piece index under the last map query / selection [notes]
+# event popups (engine_tick_event_popup_step FUN_00472e46; queue of 50 x 24 B at 0x568480)
+POPUP_TYPE = 0x5440A4           # i32 popup type: 0/2/3/13/14/18 notices, 1 AI message, 10 pay-for-help,
+                                # 11 AI alliance offer, 17 garrison capacity (yes/no) [live 3; decomp FUN_0047685d]
+POPUP_FROM = 0x553EE0           # i32 sending realm (AI messages) [decomp FUN_0047309e]
+POPUP_ARG = 0x5440AC            # i32 the message line: loc grp id, sub arg+1 [decomp FUN_0047309e]
+SEAL_X, SEAL_Y = 0x5681DC, 0x56950C   # i32 the popup seal's sprite origin; a click in its 48-px box at -12 dismisses [decomp]
+CONFIRM_KIND = 0x57CB14         # i32 confirm dialog 0x1e line: loc grp 10 (7 garrison, 8 besiege, 13 lift siege ...) [live 7/8]
+MERC_BANDS, MERC_BASE = 0x554030, 0x568DC0   # band count; 20 B records (FUN_004ac904, FUN_004aca2b) [live]
 
 SEASONS = {1: "Spring", 2: "Summer", 3: "Autumn", 4: "Winter"}
 SCREENS = {0x00: "map", 0x02: "workforce", 0x04: "terrain_info", 0x08: "merchant", 0x09: "court",
@@ -133,6 +141,11 @@ def _loc_group(mem, group, first, count):
     return [parts[i].decode("latin-1") if i < len(parts) else None for i in range(first, first + count)]
 
 
+def loc(read, group, i=0):
+    """one L2.eng string (group, index) from retail memory"""
+    return (_loc_group(_Mem(read), group, i, 1)[0] or "").strip()
+
+
 def _field_class(t):
     """map-cell type of a field (cell +0, flags&0x20) -> (category, detail); table DAT_004d2ec8 / grp 0x1e"""
     if t == 0:
@@ -178,7 +191,7 @@ def snapshot(read, fair=None):
 
     screen = mem.u8(SCREEN)
     me_ready = _i32(R(me), 0) if 1 <= me <= N_REALMS else None
-    modal = mem.u8(MODAL)
+    modal = mem.i32(MODAL)          # the event id = its loc group (dword; ids reach 0x120)
     st = {
         "screen": screen, "screen_name": SCREENS.get(screen, f"0x{screen:02x}"),
         "engine_state": scal(ENGINE_STATE),                         # 2 boot/title, 3 in game [live]
@@ -234,7 +247,9 @@ def snapshot(read, fair=None):
                 "order": r[0x1A],                                  # +0x1a order code (AI brain step 0xb), 5 = garrison [port]
                 "formed": _i16(r, 0x164),                          # +0x164 year formed [live: 1268 AD]
                 "health": r[0x155],                                # +0x155 0 healthy .. 4 dying (grp 0x1f sub 0x1b+) [decomp: FUN_0041b19d]
-                "besieging": r[0x199],                             # +0x199 siege link, 0 = not besieging [port: engine_army_state]
+                "besieging": r[0x199],                             # +0x199 siege link = county besieged, 0 = not besieging [live]
+                "siege_seasons": r[0x19C],                         # +0x19c seasons until the assault (engines being built) [live: 5 -> 4 ..]
+                "garrisoned": r[0x198] != 0,                       # +0x198 in a castle (2 = own garrison) [live: garrison / leave]
             })
             if merc_n:
                 pc["mercenaries"] = {"count": merc_n, "class": TROOPS[merc_cls] if merc_cls < 7 else merc_cls,
@@ -310,6 +325,7 @@ def snapshot(read, fair=None):
         castle = {"level": prev if building else lvl}               # +0x1c0 level, +0x1c1 prior while building [live]
         castle["name"] = CASTLES[castle["level"]] if castle["level"] < len(CASTLES) else castle["level"]
         castle["cell"] = [r[0x74], r[0x75]]                        # +0x74/+0x75 castle 2x2 anchor [live: flag-0x80 cells]
+        castle["garrison"] = _i32(r, 0x1BC)                        # +0x1bc garrison piece, 0 = none [live: garrison 5 / leave 0]
         if building:                                               # +0x1c3 1 new / 2 upgrade [live]
             castle.update({"building": CASTLES[lvl] if lvl < len(CASTLES) else lvl,
                            "labor_left": _i32(r, 0x1CC), "labor_total": _i32(r, 0x1D8),   # [live]
@@ -322,6 +338,7 @@ def snapshot(read, fair=None):
             "castle": castle,
             "armies_here": [p["id"] for p in here if p["kind"] in ("army", "rebels")],
             "merchant": any(p["kind"] == "merchant" for p in here),
+            "merc_offer": r[0x1AD],                                # +0x1ad mercenary band offered here (FUN_004acb54) [live]
             "fields": fields,
         }
         if fair is None or owner == fair:                          # the HUD shows these for own counties only
@@ -423,6 +440,24 @@ def snapshot(read, fair=None):
                     for p in pieces if p["kind"] in ("army", "rebels")]
     st["merchants"] = [p for p in pieces if p["kind"] == "merchant"]
     st["supplies"] = [p for p in pieces if p["kind"] == "supplies"]
+    # mercenary bands (g_unit_table_20): +0x00 u16 hired-by piece (0 = free), +0x03 county offered in now,
+    # +0x05 troop class (name: loc grp 8 sub 2*class+52), +0x08 men, +0x0c hire cost, +0x10 a wage figure whose /4
+    # approximates the panel's seasonal wage (300 → 75 matches; 180 → the panel says 50) [live: the raise-army
+    # panel of Raw Sienna, turn 6: "100 Scottish Pikemen, 1800 crowns to hire, 50 crowns seasonal wages"]
+    st["mercenaries"] = []
+    nb = max(0, min(12, scal(MERC_BANDS)))
+    blk = mem.bytes(MERC_BASE, 20 * (nb + 1))
+    for i in range(1, nb + 1):
+        r = blk[20 * i:20 * (i + 1)]
+        cls = r[5]
+        st["mercenaries"].append({"band": i, "nation": MERCS[i] if i < len(MERCS) else i,   # loc grp 16 sub band
+                                  "hired": struct.unpack_from("<H", r, 0)[0], "offered_in": r[3],
+                                  "troops": TROOPS[cls] if 0 <= cls < 7 else cls, "men": _i32(r, 8),
+                                  "cost": _i32(r, 0xC), "wages_approx": _i32(r, 0x10) // 4})
+    st["popup"] = None
+    if modal:
+        st["popup"] = {"id": mem.i32(MODAL), "type": scal(POPUP_TYPE), "from": scal(POPUP_FROM),
+                       "title": (_loc_group(mem, mem.i32(MODAL), 0, 1)[0] or "").strip()}
     # trade prices (FUN_00428daf): sell = the base price table; buy = base + max(1, base*markup/100)
     # (ale: no markup) with the serving merchant's markup [live: grain 2/4, cattle 12/24, swords 23/46]
     here = [m for m in st["merchants"] if m["county"] == st["selected_county"]] or st["merchants"]
