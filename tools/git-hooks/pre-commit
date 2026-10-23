@@ -7,6 +7,9 @@
 #      and stage it so it always tracks HEAD with zero manual steps.
 #   2. If any C source/header or test changed, build + run the host
 #      ASan/UBSan unit suite and abort the commit on failure.
+#   3. If rhost, the port sources or a scenario changed, run the rhost corpus
+#      gate on wine (local, ~15 s): every scenario must still match its blessed
+#      expected.wine.json (state hash + every presented frame).
 #
 # Bypass for an emergency / WIP commit:  git commit --no-verify
 # Installed via core.hooksPath=tools/git-hooks.
@@ -46,3 +49,15 @@ if echo "$staged" | grep -qE '^src/(gfx_|engine_.*_render|engine_overlay|engine_
 fi
 
 exit 0
+
+# --- 3. rhost corpus gate (wine, local) --------------------------------------
+if echo "$staged" | grep -qE '^(src/.*\.(c|h)|tools/rhost/.*\.(c|h|x|sh)|tests/scenarios/.*)$'; then
+    echo "pre-commit: rhost corpus --check (wine)..."
+    if ! python3 tools/rhost/rhost.py corpus --check --target wine >/tmp/ol2_rhost_gate.log 2>&1; then
+        echo "pre-commit: rhost corpus gate FAILED — commit aborted:" >&2
+        grep -E "FAIL|NO expected|NO RESULT|FATAL" /tmp/ol2_rhost_gate.log | tail -20 >&2
+        echo "(an intended change: re-bless with rhost.py corpus --bless [--target wine]; bypass: git commit --no-verify)" >&2
+        exit 1
+    fi
+    echo "pre-commit: $(grep -E 'CORPUS CHECK' /tmp/ol2_rhost_gate.log | tail -1)"
+fi

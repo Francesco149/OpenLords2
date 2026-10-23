@@ -149,13 +149,13 @@
             # Override if you run a separate instance for OpenLords2.
             export OPENLORDS2_FRIDA_REMOTE="''${OPENLORDS2_FRIDA_REMOTE:-cutestation.soy:27042}"
 
-            echo "openlords2 dev shell ready"
-            echo "  game dir:    $OPENLORDS2_GAME_DIR"
-            echo "  mingw cc:    $(command -v $MINGW_CC || echo '(missing)')"
-            echo "  frida:       $OPENLORDS2_FRIDA_REMOTE (Windows host)"
-            echo "  exe runs via WSLInterop (no wine)"
-            echo ""
-            echo "Bootstrap: ./tools/setup.sh"
+            # banner on stderr: `nix develop -c CMD` output stays clean for tools
+            {
+              echo "openlords2 dev shell — retail runs in rhost: python3 tools/rhost/rhost.py (README there)"
+              echo "  mingw cc: $(command -v $MINGW_CC || echo '(missing)')"
+              echo "  targets:  ssh win (C:\\ol2-rhost) · wine headless (/mnt/ephemeral/openlords2/rhost-wine)"
+              echo "  legacy:   Frida drive (OPENLORDS2_FRIDA_REMOTE=$OPENLORDS2_FRIDA_REMOTE, WSL paths)"
+            } >&2
           '';
         };
 
