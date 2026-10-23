@@ -7,6 +7,32 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-10-23 — METHODOLOGY RESET: retail runs in-process (rhost); autoplay with Jev
+
+The owner asked to bring the openrecet methodology here. Audit + plan: `docs/audits/2026-10-23-methodology-reset.md`.
+
+- **rhost** (`tools/rhost/`): Lords2.exe mapped at 0x400000 inside our process, against a software
+  DirectDraw (8 bpp, never fullscreen), a silent DirectSound + main-thread multimedia timer, a fake HWND
+  and virtual message queue fed by the input trace, a virtual clock (frame = FUN_004b99c0), fixed heap /
+  handles / stack, a copy-on-write file overlay, and deterministic Smacker (`--movies`). Runs headless
+  from the Windows ssh session or under wine with no X server; **0 differing dwords between runs, and
+  Windows ≡ wine in state and in every presented frame**. 2–30k fps.
+- Found on the way: the GOG patch's detour at 0x4cfb08 lives past `.text` VirtualSize; smackw32 is a
+  Watcom PE (VirtualSize 0, raw-less .bss); Smacker paces video by polling waveOut WHDR_DONE; retail's
+  `_chdir` errno differs Windows/wine (overlay answers it); an in-game click fires 300 ms after release
+  and a move order needs the cursor to rest on the destination (path preview on idle).
+- **Gates**: `det`, `corpus --check` (25 scenarios, both hosts, pre-commit on wine), `verify`
+  (`docs/rhost-evidence.json` → STATUS runtime axis). Porting loop proven on `rng_step`.
+- **Tools**: control channel + `rhbot.py` (replaces the Frida probe/MCP), `coverage`, Trace Studio v3 on
+  rhost captures (`rhost.py view`), human `record` (visible window, sound), IDA 9.4 export (`tools/ida/`).
+- **Autoplay** (`tools/bot/`): l2state reader + Jev (TypeSafe decision model, OpenRouter Decisions API)
+  plays economy, drafts, marches, trade, gifts; battles auto-resolve. 19 bot games in the corpus; retail
+  coverage 37.1% (hand-made) → 44.7%. ~$0.15 of Jev in total.
+- `../lords2-decomp` archived read-only. Earlier "BYTE-EXACT" / "1:1" claims are unverified until rhost
+  re-checks them; the first re-verification batch (AI-turn subsystem) is in flight.
+
+---
+
 ## 2026-07-02 (session 24) — state-slot triage RESOLVED: the s23 divergences are load-flip bookkeeping, NOT a real sim divergence; map geography is byte-identical (new lane8 + f2bits state-dump diagnostics)
 
 Ran the s23 discriminating experiment and took it further with two new
