@@ -28,11 +28,25 @@ of the actual instruction volume is ported.
 
 ## Runtime verification (rhost — the truth axis since 2026-10-23)
 
-**1 function(s) rhost-verified** (shadow: 0 divergences over the corpus), 0 diverging, of 1 hooked.
+**15 function(s) rhost-verified** (shadow: 0 divergences over the corpus), 0 diverging, of 15 hooked.
 
 | hook | retail VA | calls | scenarios | diverge | date |
 |---|---|---:|---:|---:|---|
-| `rng_step` | `0x404a46` | 2814 | 2 | 0 | 2026-10-23 |
+| `ai_consume_build_demand` | `0x450ccd` | 13 | 3 | 0 | 2026-10-23 |
+| `ai_first_owned_realm` | `0x49d5e0` | 17 | 3 | 0 | 2026-10-23 |
+| `ai_most_hostile` | `0x4a0309` | 17 | 3 | 0 | 2026-10-23 |
+| `ai_seed_workforce` | `0x45158b` | 68 | 3 | 0 | 2026-10-23 |
+| `ai_step_noop` | `0x49f96c` | 17 | 3 | 0 | 2026-10-23 |
+| `eco_appraisal_value` | `0x44e6a3` | 68 | 3 | 0 | 2026-10-23 |
+| `eco_production_output` | `0x44cfe1` | 98498 | 3 | 0 | 2026-10-23 |
+| `eco_rate_class` | `0x44cf6f` | 68 | 3 | 0 | 2026-10-23 |
+| `eco_stock_a_value` | `0x44e5bb` | 23156 | 3 | 0 | 2026-10-23 |
+| `eco_stockpile_value` | `0x44e7b4` | 7713 | 3 | 0 | 2026-10-23 |
+| `eco_units_b` | `0x44e603` | 15392 | 3 | 0 | 2026-10-23 |
+| `eco_units_c` | `0x44e653` | 15392 | 3 | 0 | 2026-10-23 |
+| `eco_yield_phase4` | `0x44d1e5` | 60254 | 3 | 0 | 2026-10-23 |
+| `eco_yield_standard` | `0x44d15a` | 138784 | 2 | 0 | 2026-10-23 |
+| `rng_step` | `0x404a46` | 5384 | 3 | 0 | 2026-10-23 |
 
 "Touched" above counts `FUN_` references in `src/`; it is not evidence. Earlier "BYTE-EXACT" / "1:1"
 claims are unverified until rhost re-checks them (`docs/audits/2026-10-23-methodology-reset.md`).
