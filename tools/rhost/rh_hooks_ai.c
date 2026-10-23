@@ -130,7 +130,8 @@ void rh_port_bind_once(void)
 /* ---------------------------------------------------------------- syncing: file-static mirrors */
 /* file-static mirrors: engine_army_economy config scalars + eval / supply scratch (setters), engine_path's distance
  * globals, engine_map_query's cell cursor, engine_territory's current slot + dirty rect, engine_army_ai's ranking cookie, engine_path_field's bookkeeping,
- * engine_army_state's record cursor + abort flag (engine_combat's runtime globals are aliased: rh_hooks_combat.c) */
+ * engine_army_state's record cursor + abort flag + live count + raider cursor (engine_combat's runtime globals are aliased:
+ * rh_hooks_combat.c) */
 void rh_port_sync_in(void)
 {
     engine_army_economy_set_prices((int)G32(0x553f60u), (int)G32(0x567594u), (int)G32(0x57cb30u));
@@ -148,6 +149,7 @@ void rh_port_sync_in(void)
     g_pf_head = (int32_t)G32(0x500c20u); g_pf_tail = (int32_t)G32(0x4f2768u);
     g_pf_cur_col = (int32_t)G32(0x507230u); g_pf_cur_row = (int32_t)G32(0x507234u);
     g_army_state_index = (int)G32(0x5533e8u); g_army_state_abort = G8(0x50a49eu);
+    g_army_state_live_count = (int)G32(0x553f08u); g_raider_target_cursor = (int)G32(0x4e59dcu);
 }
 /* store only what changed (PUT): under the page-tracked shadow every first write to a page is a fault (~30 us
  * under wine) — sync_out alone touched ~15 pages a call */
@@ -167,6 +169,7 @@ void rh_port_sync_out(void)
     PUT(0x500c20u, (uint32_t)g_pf_head); PUT(0x4f2768u, (uint32_t)g_pf_tail);
     PUT(0x507230u, (uint32_t)g_pf_cur_col); PUT(0x507234u, (uint32_t)g_pf_cur_row);
     PUT(0x5533e8u, (uint32_t)g_army_state_index); PUT8(0x50a49eu, g_army_state_abort);
+    PUT(0x553f08u, (uint32_t)g_army_state_live_count); PUT(0x4e59dcu, (uint32_t)g_raider_target_cursor);
 }
 
 /* engine_event_queue: the port's queue is one struct; retail's is six globals (FUN_00472bc5 / FUN_00472ae0).
@@ -225,9 +228,10 @@ __attribute__((naked)) uint32_t rh_call_at(uint32_t va, uint32_t e0)
 }
 
 #define RES_N 16   /* residue window: the 16 dwords below e0 */
+#define PUT_N 8    /* residue values one port call may put */
 typedef struct port_ctx {
     hook_t *h; uint32_t e0; uint32_t a[8]; rh_port_fn port; uint32_t ret_r, ret_p;
-    uint32_t res[RES_N]; int nput; int put_off[4]; uint32_t put_v[4];
+    uint32_t res[RES_N]; int nput; int put_off[PUT_N]; uint32_t put_v[PUT_N]; int put_cmp[PUT_N];
     struct port_ctx *outer;
 } port_ctx_t;
 static port_ctx_t *g_cur;   /* the port side running now (adapters read / write the residue through it) */
@@ -237,11 +241,13 @@ uint32_t rh_res_get(int off)
     if (!g_cur || off < 4 || off > 4 * RES_N || (off & 3)) rh_fatal("rh_res_get(0x%x): no hook / bad offset", off);
     return g_cur->res[RES_N - off / 4];
 }
-void rh_res_put(int off, uint32_t v)
+static void res_put(int off, uint32_t v, int cmp)
 {
-    if (!g_cur || off < 4 || off > 4 * RES_N || (off & 3) || g_cur->nput == 4) rh_fatal("rh_res_put(0x%x): no hook / bad offset", off);
-    g_cur->put_off[g_cur->nput] = off; g_cur->put_v[g_cur->nput++] = v;
+    if (!g_cur || off < 4 || off > 4 * RES_N || (off & 3) || g_cur->nput == PUT_N) rh_fatal("rh_res_put(0x%x): no hook / bad offset", off);
+    g_cur->put_off[g_cur->nput] = off; g_cur->put_cmp[g_cur->nput] = cmp; g_cur->put_v[g_cur->nput++] = v;
 }
+void rh_res_put(int off, uint32_t v) { res_put(off, v, 1); }
+void rh_res_set(int off, uint32_t v) { res_put(off, v, 0); }
 
 static void ctx_retail(void *c)
 {
@@ -280,7 +286,7 @@ uint32_t rh_port_run(hook_t *h, void *self, rh_port_fn port, int has_ret, uint32
         }
         for (int i = 0; i < x.nput; i++) {
             uint32_t rv = G32(e0 - (uint32_t)x.put_off[i]);
-            if (rv != x.put_v[i] && n < sizeof why) {
+            if (x.put_cmp[i] && rv != x.put_v[i] && n < sizeof why) {
                 n += (size_t)snprintf(why + n, sizeof why - n, " res e0-%x r%08x/p%08x", x.put_off[i], rv, x.put_v[i]);
                 r = 1;
             }

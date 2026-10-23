@@ -30,6 +30,12 @@ extern int     g_army_state_index;        /* DAT_005533e8 */
 extern int     g_army_state_live_count;    /* DAT_00553f08 — live occupants this walk */
 extern uint8_t g_army_state_abort;         /* DAT_0050a49e — seam-set early-exit flag */
 
+/* The movement executor's stack residue as the driver's handlers see it: the
+ * dword at (driver entry esp) - 0x30 - 4k, k = 0..4 (engine_army_state.c,
+ * quirks #229 / #232).  Kept across calls; the hybrid host loads it from
+ * retail's stack before each driver call and stores it back after. */
+extern uint32_t g_army_state_res[5];
+
 /* Port of FUN_004650b0 (265 B, __cdecl void).  Walk all 150 occupant records
  * (g_per_territory_420, stride 0x1a4, index 1..150) and, for each live one
  * (owner +0x00 != 0), dispatch by its state byte (+0x08) through the
@@ -96,13 +102,14 @@ int engine_army_state_scan_siege_built(void);
 extern int g_raider_target_cursor;
 
 /* Port of FUN_004ac5ba (324 B, __cdecl bool).  Assign roving stack `idx` a
- * target realm and point its destination (+0x116/+0x117) at that realm's
+ * target realm and point its path-trace goal (+0x16/+0x17) at that realm's
  * capital cell.  When the global planner is in force-mode 2 (s_slot_0057c934)
  * or the stack has no target yet (+0x151 == 0), step the shared realm cursor
  * g_raider_target_cursor (wrapping at the realm count s_slot_0056d5dc) and, if
  * it lands on the stack's own region (+0x10), advance once more; store it as the
  * target.  Then copy the target realm's capital (g_per_army_768 +0x6c/+0x6d, via
- * the shared cursor) into the destination and clear the retry flag (+0x150).
+ * the shared cursor) into the path-trace goal (+0x16/+0x17) and clear the retry
+ * flag (+0x150).
  * Returns non-zero when a target is set.  Pure record/scalar bookkeeping. */
 int engine_army_state_raid_assign_target(int idx);
 

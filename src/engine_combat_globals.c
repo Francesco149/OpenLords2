@@ -45,3 +45,5 @@ uint8_t  g_army_move_cell_terrain;   /* DAT_0050a49d */
 int      g_army_move_cell_off;       /* DAT_0050a4a0 */
 uint32_t g_army_move_wp_col;         /* FUN_00465d28 [ebp-0xc]: stack residue, not a global */
 uint32_t g_army_move_wp_row;         /* FUN_00465d28 [ebp-0x10] */
+uint32_t g_army_move_dir;            /* FUN_00465d28 [ebp-0x4] */
+uint32_t g_army_move_code;           /* FUN_00465d28 [ebp-0x8] */

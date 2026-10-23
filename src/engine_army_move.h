@@ -99,6 +99,13 @@ extern int     g_army_move_cell_off;      /* DAT_0050a4a0 — byte offset of the
  * retail's stack residue before each call and stores them back after. */
 extern uint32_t g_army_move_wp_col;
 extern uint32_t g_army_move_wp_row;
+/* Its other two locals, [ebp-4] the step direction (zero-extended byte) and
+ * [ebp-8] the classifier's outcome code: always assigned before use, but what
+ * they leave in their slots is the residue a later executor call reads as its
+ * waypoint when it runs from a frame 4 bytes shallower (engine_army_state.c,
+ * quirk #232).  Assigned where retail assigns them, untouched otherwise. */
+extern uint32_t g_army_move_dir;
+extern uint32_t g_army_move_code;
 
 /* Port of FUN_00466893 @ 0x466893 (900 B, __cdecl int(int)).  Evaluate the
  * cell one step away from the current occupant (engine_army_state's

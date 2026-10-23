@@ -48,6 +48,7 @@
 #include "save_schema_globals.h"   /* s_slot_0057cad4 — siege-scan cursor        */
 #include "engine_path_field.h"     /* fill / trace / copy_record (raid planning) */
 #include "engine_map_query.h"      /* box_any_rawflag_bit0 (FUN_0046cfbd)        */
+#include "engine_army_move.h"      /* the executor's residue locals (#229 / #232) */
 
 /* --- per-territory occupant record (g_per_territory_420, stride 0x1a4) ----- */
 #define ASTRIDE      0x1a4
@@ -64,8 +65,8 @@
 #define A_CELL       0x0c     /* byte offset of the occupant's cell (i32)       */
 #define A_REGION     0x10     /* effective-region colour key (u8)               */
 #define A_FACING     0x1b     /* facing 0..7 → facing-frame table index (u8)    */
-#define A_DEST_COL   0x116    /* planned destination column (u8)                */
-#define A_DEST_ROW   0x117    /* planned destination row (u8)                   */
+#define A_DEST_COL   0x16     /* path-trace goal column (u8) — the raider's dest */
+#define A_DEST_ROW   0x17     /* path-trace goal row (u8)                        */
 #define A_RAID_FLAG  0x150    /* raider path-retry flag, cleared on retarget(u8)*/
 #define A_RAID_DEST  0x151    /* raider target realm id (u8)                    */
 #define A_PLAN_PEND  0x14e    /* path-planning pending flag, cleared pre-plan(u8)*/
@@ -99,10 +100,34 @@ int     g_army_state_index;        /* DAT_005533e8 */
 int     g_army_state_live_count;    /* DAT_00553f08 */
 uint8_t g_army_state_abort;         /* DAT_0050a49e */
 
+/* The executor's stack residue (quirk #229) seen from the driver.  FUN_00465d28
+ * never initializes its waypoint locals, and the handlers call it from frames
+ * of two depths: the state-1/2 handlers reserve one local (sub esp,4), the
+ * state-3/4 handlers none.  Relative to the driver's entry esp the executor's
+ * locals [ebp-4] dir / [ebp-8] code / [ebp-0xc] wp col / [ebp-0x10] wp row sit
+ * at -0x34/-0x38/-0x3c/-0x40 under a state-1/2 handler and -0x30/-0x34/-0x38/
+ * -0x3c under a state-3/4 one: an idle stack after a marching one reads the
+ * marcher's outcome code and waypoint column as its waypoint (quirk #232).
+ * g_army_state_res[k] = the dword at (driver entry esp) - 0x30 - 4k; the
+ * executor's four locals move through it around each call.  What the other
+ * callees' frames (enter / settle region, income, unit remove) leave in these
+ * slots is not modelled. */
+uint32_t g_army_state_res[5];
+static engine_army_move_fn g_move_fn;
+
+static void run_move(int shallow, engine_event_queue_state_t *evq, int mp_active)
+{
+    uint32_t *w = &g_army_state_res[shallow ? 0 : 1];
+    g_army_move_dir = w[0]; g_army_move_code = w[1];
+    g_army_move_wp_col = w[2]; g_army_move_wp_row = w[3];
+    g_move_fn(evq, mp_active);                     /* FUN_00465d28 seam */
+    w[0] = g_army_move_dir; w[1] = g_army_move_code;
+    w[2] = g_army_move_wp_col; w[3] = g_army_move_wp_row;
+}
+
 /* Per-cell descriptor grid (retail DAT_00522f90); the region key is byte +7 of
  * each 8-byte cell, so g_cells[A_CELL + 7] is the cell's region key. */
 static const uint8_t      *g_cells;
-static engine_army_move_fn  g_move_fn;
 
 void engine_army_state_bind_cells(const uint8_t *cells)   { g_cells = cells; }
 void engine_army_state_bind_move_fn(engine_army_move_fn f) { g_move_fn = f;  }
@@ -142,7 +167,7 @@ static void handler_march(engine_event_queue_state_t *evq, int mp_active)
         (*(int32_t *)(r + A_TIMER))--;
 
     if ((int8_t)r[A_SUBSTATE] == 2) {
-        if (g_move_fn) g_move_fn(evq, mp_active);   /* FUN_00465d28 seam */
+        if (g_move_fn) run_move(0, evq, mp_active);
     } else if (r[A_READY] == 0) {
         r[A_SUBSTATE] = 2;
     }
@@ -172,7 +197,7 @@ static void handler_settle(engine_event_queue_state_t *evq, int mp_active)
         (*(int32_t *)(r + A_TIMER))--;
 
     if ((int8_t)r[A_SUBSTATE] == 2 && g_move_fn)
-        g_move_fn(evq, mp_active);                  /* FUN_00465d28 seam */
+        run_move(0, evq, mp_active);
 }
 
 /* --- states 3 & 4: idle / in-transit (FUN_00465622 ≡ FUN_00465761) -------- */
@@ -190,7 +215,7 @@ static void handler_idle(engine_event_queue_state_t *evq, int mp_active)
         (*(int32_t *)(r + A_TIMER))--;
 
     if ((int8_t)r[A_SUBSTATE] == 2 && g_move_fn)
-        g_move_fn(evq, mp_active);                  /* FUN_00465d28 seam */
+        run_move(1, evq, mp_active);
 }
 
 /* Handler dispatch table (PTR_FUN_004d6a50).  Index 0 is the no-op stub (never
@@ -444,9 +469,9 @@ void engine_army_state_plan_raids(void)
 }
 
 /* Move-executor destination + path-trace goal fields used by the phase-3/6
- * march planners.  Distinct from the raider planner's +0x116/+0x117 pair: these
- * are the executor's own final-destination bytes (retail M_DEST_COL/ROW) plus a
- * separate path-trace goal pair the planner floods toward. */
+ * march planners: the executor's own final-destination bytes (retail
+ * M_DEST_COL/ROW) plus the path-trace goal pair the planner floods toward —
+ * the same +0x16/+0x17 the raider planner targets (A_DEST_COL/ROW). */
 #define A_MOVE_DEST_COL 0x14   /* executor final destination col (u8; M_DEST_COL)*/
 #define A_MOVE_DEST_ROW 0x15   /* executor final destination row (u8; M_DEST_ROW)*/
 #define A_PATH_COL      0x16   /* path-trace goal col (u8)                        */

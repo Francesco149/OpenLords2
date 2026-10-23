@@ -43,8 +43,9 @@ A(g_sim_turn_progress,0x553fc8)
 );
 #undef A
 
-/* not retail globals: FUN_00465d28's uninitialized waypoint locals, moved through the stack residue (rh_port.h) */
-uint32_t g_army_move_wp_col, g_army_move_wp_row;
+/* not retail globals: FUN_00465d28's uninitialized waypoint locals (+ its direction / outcome locals), moved through
+ * the stack residue (rh_port.h) */
+uint32_t g_army_move_wp_col, g_army_move_wp_row, g_army_move_dir, g_army_move_code;
 
 /* ---------------------------------------------------------------- bridges across the link cut (engine.c) */
 int  engine_current_screen(void)          { return G8(L2_SCREEN); }               /* DAT_004eac50 (byte) */
@@ -93,11 +94,14 @@ static int eval_dir_q(int dir)            { int r; EVQ(r = engine_army_move_eval
 static int classify_cell_q(int off)       { int r; EVQ(r = engine_army_move_classify_cell(off, q, MP_ACTIVE)); return r; }
 static int eval_occupied_q(void)          { int r; EVQ(r = engine_army_move_eval_occupied(q, MP_ACTIVE)); return r; }
 static void deploy_cell(int army, int region) { int c, r; engine_combat_find_deploy_cell(army, region, &c, &r); }
-/* FUN_00465d28 keeps its waypoint in [ebp-0xc] / [ebp-0x10] = e0-0x10 / e0-0x14, never initialized (quirk #229) */
+/* FUN_00465d28 keeps its waypoint in [ebp-0xc] / [ebp-0x10] = e0-0x10 / e0-0x14, never initialized (quirk #229); its
+ * direction / outcome locals [ebp-4] / [ebp-8] = e0-8 / e0-0xc are residue for a shallower later call (quirk #232) */
 static void move_run_res(void)
 {
+    g_army_move_dir = rh_res_get(0x8); g_army_move_code = rh_res_get(0xc);
     g_army_move_wp_col = rh_res_get(0x10); g_army_move_wp_row = rh_res_get(0x14);
     EVQ(engine_army_move_run(q, MP_ACTIVE));
+    rh_res_put(0x8, g_army_move_dir); rh_res_put(0xc, g_army_move_code);
     rh_res_put(0x10, g_army_move_wp_col); rh_res_put(0x14, g_army_move_wp_row);
 }
 

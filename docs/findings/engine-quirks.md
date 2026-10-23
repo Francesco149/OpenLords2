@@ -8060,3 +8060,47 @@ directly; the remaining battle / movement runtime globals live in
 > 📍 `src/engine_combat.c/.h`, `src/engine_combat_globals.c`, `src/engine_army_move.c/.h`;
 > evidence: `tools/rhost/rh_hooks_combat.c` rows combat_size_battle / combat_contest_region /
 > combat_dispatch / combat_aftermath.
+
+## 232 — the army-state handlers call the move executor from two stack depths: an idle stack reads the previous marcher's outcome code / waypoint column as its waypoint
+
+FUN_004650b0 (the per-tick army-state driver) dispatches through PTR_FUN_004d6a50 to
+four handlers that all end in the movement executor FUN_00465d28 — whose waypoint
+locals `[ebp-0xc]` / `[ebp-0x10]` are stack residue on a disarmed pass (quirk #229).
+The state-1/2 handlers (FUN_0046521f / FUN_00465486) reserve one local (`sub esp,4`),
+the state-3/4 handlers (FUN_00465622 / FUN_00465761) none, so the executor's frame sits
+4 bytes higher under an idle handler.  Relative to the driver's entry esp, the
+executor's `[ebp-4]` direction / `[ebp-8]` outcome code / `[ebp-0xc]` wp col /
+`[ebp-0x10]` wp row are at −0x34/−0x38/−0x3c/−0x40 for states 1/2 and
+−0x30/−0x34/−0x38/−0x3c for states 3/4: an idle stack after a marching one takes the
+marcher's outcome code as its waypoint column and the marcher's waypoint column as
+its row (and vice versa one slot down).  `[ebp-4]` is written twice — the step
+direction AND, on the budget-spent / turn-commit exit, the direction toward the
+final destination.
+
+Port: the executor keeps all four locals as explicit state (`g_army_move_dir /
+_code / _wp_col / _wp_row`, assigned where retail assigns them); the driver keeps the
+residue window `g_army_state_res[5]` (driver esp −0x30..−0x40) and moves the
+executor's locals through it at the handler's depth.  Not modelled: what the other
+handler callees' frames (enter / settle region, territory income, unit remove) leave
+in those slots.  Evidence (rhost, wine, 33 scenarios): `state_run` shadow 241,671
+calls, 0 divergences, replace corpus --check PASS; with the idle handlers moved to
+the deep slots the shadow diverges in 5 scenarios (bot-s12-t20 f16358: record 6
+stops — +0x14c 0, facing not bumped — where retail keeps stalling); `move_run`
+shadow now compares all four residue slots: 135,034 calls, 0 divergences (it caught
+the second `[ebp-4]` write).
+
+> 📍 `src/engine_army_state.c/.h` (run_move, g_army_state_res), `src/engine_army_move.c/.h`
+> (g_army_move_dir / _code), `src/engine_combat_globals.c`; evidence:
+> `tools/rhost/rh_hooks_state.c` row state_run, `tools/rhost/rh_hooks_combat.c` row move_run.
+
+## 233 — the raid planner's target is the path-trace goal +0x16/+0x17, not +0x116/+0x117
+
+FUN_004ac5ba (raid target) writes the target realm's capital to `byte_52F0C6 /
+byte_52F0C7` — record +0x16/+0x17, the path-trace goal the march planners also use —
+and FUN_004ac499 traces to the same pair.  The port used +0x116/+0x117 for both
+(self-consistent, so the route was right, but it left +0x16/+0x17 stale and
+scribbled two bytes inside the record's waypoint area).  Fixed (read from the
+disassembly, 0x4ac6bd / 0x4ac6e1); rhost shadow of `state_raid_assign_target` after
+the fix: 16 calls / 2 scenarios, 0 divergences.
+
+> 📍 `src/engine_army_state.c` (A_DEST_COL / A_DEST_ROW); `tests/test_engine_army_state.c`.

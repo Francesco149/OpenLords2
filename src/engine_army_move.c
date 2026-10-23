@@ -556,6 +556,7 @@ void engine_army_move_run(engine_event_queue_state_t *evq, int mp_active)
                 int d = engine_path_direction_8way((int8_t)r[M_COL], (int8_t)r[M_ROW],
                                                    (int8_t)r[M_DEST_COL],
                                                    (int8_t)r[M_DEST_ROW]);
+                g_army_move_dir = (uint32_t)(d & 0xff);   /* also [ebp-4] (quirk #232) */
                 if ((d & 0xff) == 8)
                     r[M_ARRIVED] = 1;
                 r[M_SUBSTATE] = 0;
@@ -584,6 +585,7 @@ void engine_army_move_run(engine_event_queue_state_t *evq, int mp_active)
         /* Direction toward the current waypoint; 8 == already standing on it. */
         int dir = engine_path_direction_8way((int8_t)r[M_COL], (int8_t)r[M_ROW],
                                              (int)wp_col, (int)wp_row);
+        g_army_move_dir = (uint32_t)(dir & 0xff);  /* [ebp-4]: residue (quirk #232) */
         if ((dir & 0xff) == 8) {
             r[M_SUBSTATE] = 0;
             r[M_ARRIVED]  = 1;
@@ -591,6 +593,7 @@ void engine_army_move_run(engine_event_queue_state_t *evq, int mp_active)
         }
 
         int code = engine_army_move_classify_step(dir & 0xff, evq, mp_active);
+        g_army_move_code = (uint32_t)code;       /* [ebp-8]: residue (quirk #232) */
         if (code == 10)
             return;                              /* arrival / walk aborted */
         if (code == 2)

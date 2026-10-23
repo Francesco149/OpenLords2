@@ -526,8 +526,8 @@ int test_engine_army_state_scan_siege_built(void)
 /* --- raider targeting + movement planning (FUN_004ac5ba / FUN_004ac499) ---- */
 
 #define A_REGION_O   0x10
-#define A_DEST_COL_O 0x116
-#define A_DEST_ROW_O 0x117
+#define A_DEST_COL_O 0x16   /* path-trace goal (retail byte_52F0C6; was 0x116, quirk #233) */
+#define A_DEST_ROW_O 0x17
 #define A_RAID_FLAG_O 0x150
 #define A_RAID_DEST_O 0x151
 #define A_PLAN_PEND_O 0x14e

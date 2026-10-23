@@ -56,6 +56,8 @@ uint32_t rh_port_run(hook_t *h, void *self, rh_port_fn port, int has_ret, uint32
 uint32_t rh_call_at(uint32_t va, uint32_t e0);   /* call retail `va` with esp = e0 at its entry (rh_hooks_ai.c) */
 uint32_t rh_res_get(int off);                    /* the dword at e0 - off when the hook was entered (off 4..0x40) */
 void     rh_res_put(int off, uint32_t v);        /* the port's final value for it (replace: written; shadow: compared) */
+void     rh_res_set(int off, uint32_t v);        /* … a modelled value retail's other frames may overwrite (replace: written;
+                                                    shadow: not compared — the state dwords still are) */
 
 /* one row = an index, a port adapter (a copy of the caller's arguments → port call) and a naked entry stub */
 /* the stub: C machinery at min(e0 - 256 KB, the floor of a hook machinery already running - 1 KB) — a hook
