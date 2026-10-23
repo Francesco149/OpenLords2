@@ -16,6 +16,12 @@ TAX_LEVELS = [0, 3, 5, 8, 10, 15, 20, 30]                         # percent
 RATION_LEVELS = l2state.RATIONS                                   # none .. triple (index = retail value)
 INDUSTRY_PCT = [5, 15, 25, 40, 60]                                # HUD farming ↔ industry split, % industry
 ARMY_FRACTION = [0.0, 0.08, 0.15, 0.25, 0.40]                     # of a county's population, drafted now
+TRADES = {"none": "no trade this season", "buy grain": "buy grain (food)", "buy cattle": "buy cattle (food, dairy)",
+          "sell cattle": "sell some cattle for crowns", "sell grain": "sell some grain for crowns",
+          "buy swords": "buy swords to arm troops", "buy bows": "buy bows", "buy maces": "buy maces",
+          "buy armour": "buy armour", "buy wood": "buy timber", "buy stone": "buy stone", "buy iron": "buy iron"}
+TRADE_QTY = [5, 20, 60]
+GIFTS = [0, 50, 200]
 
 BRIEF = ("Lords of the Realm II, medieval England from 1268. Each season (turn) a lord sets taxes and rations "
          "per county, splits peasants between farming (cattle, grain: food) and industry (wood, iron, stone, "
@@ -64,7 +70,7 @@ def decide(st, rng, temperature=1.0, session_id=None):
     """→ (plan, raw answers). plan = {"counties": {id: {tax, ration, industry_pct, draft}}, "armies": {id: target county|None}}"""
     state = compact(st)
     me = st.get("me")
-    plan = {"counties": {}, "armies": {}}
+    plan = {"counties": {}, "armies": {}, "trade": None, "gift": 0}
     raw = {}
     for c in state["my_counties"]:
         cid, name = c["id"], c.get("name", c["id"])
@@ -83,6 +89,17 @@ def decide(st, rng, temperature=1.0, session_id=None):
         pick = {k: int(sample(a[k]["probabilities"], rng, temperature)) for k in q}
         plan["counties"][cid] = {"tax": TAX_LEVELS[pick["tax"]], "ration": pick["ration"],
                                  "industry_pct": INDUSTRY_PCT[pick["industry"]], "draft": ARMY_FRACTION[pick["draft"]]}
+    if state["my_counties"]:
+        q = {"trade": {"type": "choice", "instructions": "Should the lord trade with the merchant this season, and what?", "criteria": TRADES},
+             "qty": {"type": "score", "instructions": "How much should be traded?", "criteria": [f"{n} units" for n in TRADE_QTY]},
+             "gift": {"type": "score", "instructions": "Should the lord send a gift of crowns to a rival lord to improve relations?",
+                      "criteria": ["no gift", "a small gift (50 crowns)", "a generous gift (200 crowns)"]}}
+        a = llm.decide(state, q, session_id=session_id)
+        raw["realm"] = a
+        t = sample(a["trade"]["probabilities"], rng, temperature)
+        n = TRADE_QTY[int(sample(a["qty"]["probabilities"], rng, temperature))]
+        plan["trade"] = None if t == "none" else {"good": t.split()[1], "qty": n if t.startswith("buy") else -n}
+        plan["gift"] = GIFTS[int(sample(a["gift"]["probabilities"], rng, temperature))]
     targets = {str(cid): f"march on {c.get('name', cid)} (owner {c.get('owner')}, population {c.get('population')})"
                for c in state["other_counties"] for cid in [c["id"]] if cid in state["neighbour_ids"]}
     for army in [x for x in state["armies"] if x["owner"] == me]:

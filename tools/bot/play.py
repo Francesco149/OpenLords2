@@ -68,6 +68,10 @@ def apply_plan(s, ui, st, plan, log):
         if p["draft"] > 0 and pop * p["draft"] >= 20:
             a = actions.raise_army(s, ui, int(pop * p["draft"]))
             done.append(("army", cid, a and {"id": a["id"], "men": a["men"]}))
+    if plan.get("trade"):
+        done.append(("trade", plan["trade"], actions.trade(s, ui, plan["trade"]["good"], plan["trade"]["qty"])))
+    if plan.get("gift"):
+        done.append(("gift", plan["gift"], actions.gift(s, ui, plan["gift"])))
     st = l2state.snapshot(s.read)
     towns = {c["id"]: c.get("capital") for c in st["counties"]}
     for aid, target in plan["armies"].items():
@@ -120,7 +124,7 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
                 plan, raw = policy.decide(st, rng, temperature=temperature, session_id=name)
             except RuntimeError as e:
                 log(f"[{name}] turn {t}: Jev failed ({e}); ending the turn without a plan")
-                plan, raw = {"counties": {}, "armies": {}}, {}
+                plan, raw = {"counties": {}, "armies": {}, "trade": None, "gift": 0}, {}
             try:
                 done = apply_plan(s, ui, st, plan, log)
                 ui.end_turn()
