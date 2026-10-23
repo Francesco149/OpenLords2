@@ -25,7 +25,12 @@ rations-panel food grid, not troops (troops are piece +0x16c).
 | screen id | 0x4eac50 | u8 | live (0 map, 0x27 scroll, 0x23 turn processing, 0x14/15/16/19 county panels, 0x17 raise army, 0x0a armory, 0x09 court, 0x18 supplies, 0x1b castle, 0x0b/0x1a diplomacy, 0x08 merchant, 0x0c trade, 0x04 terrain/army info, 0x10 army move) |
 | engine state | 0x52af94 | i32 | live: 2 boot/title, 3 in game |
 | game mode | 0x57c8fc | i32 | live 0 = strategic; 2 = tactical combat per FUN_00440231 (notes) |
-| modal event scroll | 0x53e910 | u8 | notes (ui-action-anchors: event scrolls at screen 0 that ignore RMB) |
+| modal event scroll | 0x53e910 | i32 | notes (ui-action-anchors: event scrolls at screen 0 that ignore RMB); the event id = its loc group (ids reach 0x120) — bot v2 |
+| popup type | 0x5440a4 | i32 | 0/2/3/13/14/18 notices, 1 AI message, 10 pay-for-help, 11 AI alliance offer, 17 garrison capacity (yes/no) — live 3; decomp FUN_0047685d |
+| popup sender / line | 0x553ee0 / 0x5440ac | i32 | sending realm (AI messages); message line = loc grp id, sub arg+1 — decomp FUN_0047309e |
+| popup seal origin x / y | 0x5681dc / 0x56950c | i32 | a click in its 48-px box at −12 dismisses — decomp |
+| confirm dialog (0x1e) line | 0x57cb14 | i32 | loc grp 10: 7 garrison, 8 besiege, 13 lift siege … — live 7/8 |
+| mercenary bands | 0x554030 (count) / 0x568dc0 + b*20 | i32 / 20 B | +0x00 u16 hired-by piece (0 free), +0x03 county offered in, +0x05 troop class, +0x08 men, +0x0c hire cost, +0x10 wage figure (/4 ≈ the panel's seasonal wage) — live (FUN_004ac904, FUN_004aca2b) |
 | season | 0x57c934 | i32 | live: 1 Spring .. 4 Winter |
 | year | 0x553edc | i32 | live: AD; Winter 1268 → Spring 1268 → Summer 1268 (rolls entering Winter) |
 | turn counter | 0x553240 | i32 | live: 1 at Winter 1268, 3 at the end of endturn-2 (FUN_00448440 ++) |
@@ -107,6 +112,8 @@ rations-panel food grid, not troops (troops are piece +0x16c).
 | +0x294 + L*0x18 | lane | industry lane L: 0 wood 1 iron 2 smithy 3 stone. +0 s8 efficiency %, +1 exists, +3 operating, +0x14 i32 output next season | live (+3/+0x14 = HUD wood +86/+115); +0/+1 port |
 | +0x280 / +0x284 / +0x288 / +0x28c | i32 | wood for smiths / iron for smiths / wood for builders / stone for builders | port (labor panel), +0x288 live (350) |
 | +0x290 | u8 | smithy weapon (w order above) | port (labor panel) |
+| +0x1ad | u8 | mercenary band offered here | live (FUN_004acb54) — bot v2 |
+| +0x1bc | i32 | castle garrison piece (0 = none) | live (garrison 5 / leave 0) — bot v2 |
 
 Field list: county k's 20 i32 cell byte-offsets at **0x53ea00 + k*0x50** (0 = none); the field state is
 the cell type byte (cell +0) — table DAT_004d2ec8 / loc grp 0x1e: 0 barren, 1 fallow, 2 wheat unused,
@@ -135,7 +142,9 @@ the census bytes for all four counties and the map).
 | +0x168 | i32 | total men | live (60) |
 | +0x16c + c*2 | i16 | troops c: 0 peasants 1 crossbowmen 2 macemen 3 swordsmen 4 pikemen 5 archers 6 knights (cart: +0x16c grain, +0x170 cattle) | live (info panel); class = weapon w + 1 |
 | +0x195 / +0x196 / +0x197 | u8 | mercenary class / count / nation (loc grp 0x10) | decomp FUN_004224e7 |
-| +0x199 | u8 | siege link (0 = not besieging) | port (engine_army_state) |
+| +0x198 | u8 | in a castle (2 = own garrison) | live (garrison / leave) — bot v2 |
+| +0x199 | u8 | siege link = county besieged (0 = not besieging) | port (engine_army_state); live — bot v2 |
+| +0x19c | u8 | seasons until the assault (engines being built) | live (5 → 4 …) — bot v2 |
 | +0x1a | u8 | order code (5 = garrison) | port |
 
 Combat strength weights per class (DAT_004d4b98): 2 16 8 13 9 13 22 (`combat-resolution.md`).
