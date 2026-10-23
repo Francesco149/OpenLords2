@@ -415,13 +415,6 @@ void engine_realm_coalition_pass(engine_event_queue_state_t *evq, int mp_active)
  * path to decide whether a conquered realm borders the conqueror. */
 int engine_realm_player_owns_neighbor(unsigned owner, int realm);
 
-/* Bind the optional rebellion-spawn hook used by engine_realm_escalate_unrest
- * (retail FUN_004ac185).  It returns nonzero when a rebellion is spawned for
- * the realm, which resets that realm's unrest.  The real function reaches the
- * deferred combat-init chokepoint FUN_004ac3c6, so this is a seam — NULL (the
- * default) means no rebellion fires. */
-void engine_realm_bind_rebellion_fn(int (*fn)(int realm));
-
 /* Port of FUN_0044aa41 @ 0x44aa41 (1019 B, void) — the per-realm unrest /
  * rebellion-escalation turn pass of the turn-advance engine (0x448440).  For
  * every realm 1..s_slot_0056d5dc it advances the realm's unrest level (+0x20,
@@ -438,7 +431,8 @@ void engine_realm_bind_rebellion_fn(int (*fn)(int realm));
  *     order (0).
  *
  *   Whenever unrest is RAISED, a realm now at the top band (>3) may erupt into
- *   a rebellion via the bound rebellion hook (FUN_004ac185), which resets it.
+ *   a rebellion (FUN_004ac185, engine_combat_spawn_rebellion — `mp_active` is
+ *   forwarded to it), which resets it.
  *
  * Notifications route through engine_event_queue_post (audience = the realm's
  * owner).  Touches only g_per_army_768 / g_player_strategic_352 + the realm
@@ -446,7 +440,7 @@ void engine_realm_bind_rebellion_fn(int (*fn)(int realm));
  * thresholds and branch structure are ported byte-faithfully from the decompile
  * (its unreachable approval<1→band-4 arm under the approval<25 gate is elided).
  * The rebellion hook is a deferred bound seam (combat-init). */
-void engine_realm_escalate_unrest(engine_event_queue_state_t *evq);
+void engine_realm_escalate_unrest(engine_event_queue_state_t *evq, int mp_active);
 
 /* Port of FUN_004508de (1007 B).  The turn driver's settlement /
  * construction-completion pass: advances each realm's keep-construction

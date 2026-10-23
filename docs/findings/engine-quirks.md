@@ -7946,7 +7946,17 @@ writes them; the AI finders and the deploy-cell finder use them (out-params kept
 Nothing in retail reads these values without re-writing them first, so no gameplay
 changed — but the shadow cannot tell dead state from live state, and neither should
 the port.  The other ~45 retail writers of the cursor pair (territory / render loops)
-still count in locals; each needs the same treatment when it is shadow-verified.
+still count in locals; each needs the same treatment when it is shadow-verified
+(done so far: the box scans, FUN_0046d2a3, FUN_0046e067 `mark_draw_box`, the AI and
+deploy-cell finders).
+
+The cost-field pathfinder (FUN_0046f700 fill / FUN_004701ac trace, AI brain step 0xb)
+is the same story at a larger scale: retail keeps its source cell (DAT_00504020 /
+DAT_00504024 / DAT_004f4070), its ring-queue head/tail (DAT_00500c20 / DAT_004f2768)
+and its trace cursor (DAT_00507230 / DAT_00507234) in globals; `engine_path_field`
+now counts in `g_pf_*` the same way, and its fields / queues / waypoint scratch are
+bindable (`engine_path_field_bind_storage`) so the verifier points them at retail's
+0x500c30 / 0x4f0380 / 0x4f9820 / 0x503020 / 0x53f070 / 0x553550.
 
 ## 227 — the spawned occupant's roster slot (FUN_004a9f72) is keyed by the OWNER, not the realm
 
@@ -7960,6 +7970,24 @@ muster → spawn) showed it as player 2's +0x2d (retail) vs player 4's (port) at
 of endturn-2.  Fixed: `spawn_pick_roster_slot(owner)`.
 
 > 📍 `src/engine_combat.c` (spawn_unit, find_deploy_cell), `src/engine_path.c/.h`,
-> `src/engine_map_query.c/.h`, `src/engine_army_ai.c` (target scorers, cell finders);
+> `src/engine_map_query.c/.h`, `src/engine_army_ai.c` (target scorers, cell finders),
+> `src/engine_territory.c` (mark_draw_box), `src/engine_path_field.c/.h`;
 > evidence: `tools/rhost/rh_hooks_ai.c` rows ai_run_garrison / ai_select_target /
-> ai_run_campaign.
+> ai_run_campaign / combat_spawn_unit / ai_run_movement / ai_run_per_tick.
+
+## 228 — top-band unrest never rebelled in the port: the escalation pass reached FUN_004ac185 only through a seam nothing bound
+
+FUN_0044aa41 (`engine_realm_escalate_unrest`) raises a realm's unrest band and, at
+the top band (>3), calls FUN_004ac185 — the rebellion spawn (a type-6 rebel occupant
+with 30% of the realm's capacity; the realm's economy is demolished).  The port
+reached it through `engine_realm_bind_rebellion_fn`, written when FUN_004ac185 was
+unported; FUN_004ac185 was later ported as `engine_combat_spawn_rebellion(region,
+evq, mp_active)` (a different signature) and the seam was never bound — so in the
+port a starving realm sat at band 4 forever.  rhost replace (`realm_escalate_unrest`)
+failed 24 of 33 corpus scenarios (the bot games, where realms starve); the shadow
+showed retail allocating a record slot (DAT_0052afe0 9 vs 8) and stamping the rebel
+occupant.  Fixed: the pass calls `engine_combat_spawn_rebellion` directly and takes
+`mp_active` (forwarded to the demolish path); the seam is gone.
+
+> 📍 `src/engine_realm.c/.h` (escalate_unrest), `src/engine_turn.c` (caller);
+> evidence: `tools/rhost/rh_hooks_ai.c` row realm_escalate_unrest.

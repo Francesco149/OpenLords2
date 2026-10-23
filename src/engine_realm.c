@@ -1322,28 +1322,20 @@ void engine_realm_coalition_pass(engine_event_queue_state_t *evq, int mp_active)
  *  Unrest / rebellion escalation pass (FUN_0044aa41).                     *
  * ===================================================================== */
 
-/* Optional rebellion-spawn hook (retail FUN_004ac185): returns nonzero when a
- * rebellion is spawned for the realm (which resets its unrest level).  The real
- * function reaches the combat-init chokepoint FUN_004ac3c6 (deferred), so this
- * is a bound seam — NULL (the default) means "no rebellion this turn". */
-static int (*g_rebellion_fn)(int realm);
-
-void engine_realm_bind_rebellion_fn(int (*fn)(int realm))
-{
-    g_rebellion_fn = fn;
-}
-
 /* Shared escalation tail (retail LAB_0044adf3): a realm whose unrest has just
- * been raised to the top band (>3) may erupt into a rebellion, which resets the
- * level back to 0. */
-static void unrest_maybe_rebel(int realm, uint8_t *r)
+ * been raised to the top band (>3) may erupt into a rebellion
+ * (FUN_004ac185, engine_combat_spawn_rebellion), which resets the level back to 0.
+ * (This used to be an optional seam that nothing bound, so the port never spawned
+ * a rebellion — quirk #228.) */
+static void unrest_maybe_rebel(int realm, uint8_t *r, engine_event_queue_state_t *evq,
+                               int mp_active)
 {
-    if (r[0x20] > 3 && g_rebellion_fn != NULL && g_rebellion_fn(realm) != 0)
+    if (r[0x20] > 3 && engine_combat_spawn_rebellion(realm, evq, mp_active) != 0)
         r[0x20] = 0;
 }
 
 /* Port of FUN_0044aa41 — see engine_realm.h. */
-void engine_realm_escalate_unrest(engine_event_queue_state_t *evq)
+void engine_realm_escalate_unrest(engine_event_queue_state_t *evq, int mp_active)
 {
     /* Notification filter table — each player's strategic +0x05 (active/human). */
     uint8_t has_data[7];
@@ -1373,7 +1365,7 @@ void engine_realm_escalate_unrest(engine_event_queue_state_t *evq)
                 r[0x20] = 0;                   /* >= 41: content */
             }
             if (old < r[0x20])
-                unrest_maybe_rebel(realm, r);
+                unrest_maybe_rebel(realm, r, evq, mp_active);
         } else {
             /* --- Human-owned realm: warn the player, then escalate --- */
             if (approval > 0x1d)               /* > 29 clears the one-shot warning latch */
@@ -1399,7 +1391,7 @@ void engine_realm_escalate_unrest(engine_event_queue_state_t *evq)
                     engine_event_queue_post(evq, 0, owner, code, 0,
                                             3, (uint8_t)realm, 0, 0,
                                             has_data, (int)s_slot_0057c8cc);
-                    unrest_maybe_rebel(realm, r);
+                    unrest_maybe_rebel(realm, r, evq, mp_active);
                 }
             }
         }

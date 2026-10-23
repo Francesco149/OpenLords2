@@ -26,6 +26,7 @@
 #include <string.h>
 
 #include "engine.h"            /* engine_rng_step_single, engine_rng_single_* */
+#include "engine_map_query.h"   /* g_cell_cursor_col/row (DAT_00569570/78) */
 #include "engine_territory.h"
 #include "engine_dirty_rect.h"
 #include "engine_category_buckets.h"  /* clear / append (FUN_004290d0/429153) */
@@ -243,12 +244,11 @@ void engine_territory_mark_full_screen_dirty(void)
  * difference is this writes rather than reads, and touches byte +2
  * (the alternate-draw flag) rather than the +1/+5 predicate bytes.
  *
- * Retail drives the two loops with the engine_path nearest-result
- * globals (DAT_00569570 col / DAT_00569578 row) as write-only loop
- * counters — never read afterwards — so we use plain locals and leave
- * those globals alone, the same choice the box scans and the cell-field
- * clears make.  No repaint here; the sole caller (FUN_0046dfd5) stamps
- * a whole key's worth of cells, then marks the screen once. */
+ * Retail drives the two loops with the shared cell cursor
+ * (DAT_00569570 col / DAT_00569578 row) as loop counters; nothing reads
+ * the exit values, but they are live state, so the port counts in
+ * g_cell_cursor_col/row too (quirk #226).  No repaint here; the callers
+ * (FUN_0046dfd5, FUN_004a9a9a) stamp, then mark the screen once. */
 void engine_territory_mark_draw_box(int col, int row, int radius)
 {
     if (g_cells == NULL) return;
@@ -267,8 +267,8 @@ void engine_territory_mark_draw_box(int col, int row, int radius)
     else                        { yext = side; }
 
     int idx = (y * 0x40 + x) * CELL_STRIDE;
-    for (int r = y; r < y + yext; r++) {
-        for (int c = x; c < x + xext; c++) {
+    for (g_cell_cursor_row = y; g_cell_cursor_row < y + yext; g_cell_cursor_row++) {
+        for (g_cell_cursor_col = x; g_cell_cursor_col < x + xext; g_cell_cursor_col++) {
             g_cells[idx + 2] |= 0x20;       /* DAT_00522f92 */
             idx += CELL_STRIDE;
         }

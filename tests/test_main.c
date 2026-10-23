@@ -2061,6 +2061,7 @@ struct test_case {
     X(engine_realm_unrest_ai_drift) \
     X(engine_realm_unrest_human_warning) \
     X(engine_realm_unrest_human_escalate) \
+    X(engine_realm_unrest_rebellion_no_cell) \
     X(engine_realm_unrest_rebellion_resets) \
     X(engine_realm_player_owns_neighbor) \
     X(engine_realm_player_owns_neighbor_terminator) \

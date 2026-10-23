@@ -36,6 +36,22 @@
  * + 0x82) int16 entries. */
 void engine_path_field_bind_terrain(const int16_t *terrain_4f3ffe);
 
+/* Point the module's working storage at another copy (default: module statics):
+ * the two cost fields (retail 0x500c30 local player / 0x4f0380 others, 0x1000 i16),
+ * the two ring queues (0x4f9820 / 0x503020, 0x400 i32), the per-slot waypoint
+ * counts (DAT_0053f070, SLOTS bytes) and lists (DAT_00553550, SLOTS × 300 bytes). */
+void engine_path_field_bind_storage(int16_t *field_persistent, int16_t *field_transient,
+                                    int32_t *queue_persistent, int32_t *queue_transient,
+                                    uint8_t *wp_count, uint8_t *wp_list);
+
+/* The flood / trace bookkeeping retail keeps in globals: the source cell
+ * (DAT_00504020 col, DAT_00504024 row, DAT_004f4070 index), the flood queue's
+ * head / tail (DAT_00500c20 / DAT_004f2768) and the trace cursor (DAT_00507230
+ * col, DAT_00507234 row) — written exactly as retail leaves them. */
+extern int32_t g_pf_src_col, g_pf_src_row, g_pf_src_cell;
+extern int32_t g_pf_head, g_pf_tail;
+extern int32_t g_pf_cur_col, g_pf_cur_row;
+
 /* FUN_0046f700: flood a cost field outward from (col,row).  `slot` selects the
  * field/queue pair (the local player's id → the persistent field 0x500c30,
  * anything else → the transient field 0x4f0380).  When `blocked_mode` is set,

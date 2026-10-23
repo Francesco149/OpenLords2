@@ -194,7 +194,7 @@ void engine_turn_run_passes(engine_event_queue_state_t *evq,
     engine_realm_settle_provisions();                  /* 0044bf04 */
     engine_realm_apply_tax_approval();                 /* 0044bd9f */
     engine_realm_advance_rating();                     /* 0044baea */
-    engine_realm_escalate_unrest(evq);                 /* 0044aa41 */
+    engine_realm_escalate_unrest(evq, mp_active);      /* 0044aa41 */
     engine_realm_coalition_pass(evq, mp_active);       /* 0044ae3c */
     engine_territory_census_all_realms();              /* 00469b51 */
     engine_realm_spread_development();                 /* 0044bf7a */

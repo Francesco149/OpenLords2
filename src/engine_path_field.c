@@ -53,19 +53,47 @@ static const int16_t *g_terrain;   /* DAT_004f3ffe (move-cost grid)            *
 
 /* Two cost fields + two BFS ring queues (recompute scratch).  field_persistent
  * is the local player's (retail 0x500c30); field_transient covers everyone else
- * (retail 0x4f0380). */
-static int16_t g_field_persistent[ENGINE_PATH_FIELD_CELLS];
-static int16_t g_field_transient[ENGINE_PATH_FIELD_CELLS];
-static int32_t g_queue_persistent[QUEUE_MASK + 1];
-static int32_t g_queue_transient[QUEUE_MASK + 1];
+ * (retail 0x4f0380).  Module storage by default; engine_path_field_bind_storage
+ * can point them at another copy (the in-process verifier binds retail's). */
+static int16_t s_field_persistent[ENGINE_PATH_FIELD_CELLS];
+static int16_t s_field_transient[ENGINE_PATH_FIELD_CELLS];
+static int32_t s_queue_persistent[QUEUE_MASK + 1];
+static int32_t s_queue_transient[QUEUE_MASK + 1];
+static int16_t *g_field_persistent = s_field_persistent;
+static int16_t *g_field_transient  = s_field_transient;
+static int32_t *g_queue_persistent = s_queue_persistent;
+static int32_t *g_queue_transient  = s_queue_transient;
 
 /* Per-slot waypoint scratch (retail DAT_0053f070 count, DAT_00553550 list). */
-static uint8_t g_wp_count[ENGINE_PATH_FIELD_SLOTS];
-static uint8_t g_wp_list[ENGINE_PATH_FIELD_SLOTS][ENGINE_PATH_FIELD_MAX_WP * 2];
+static uint8_t s_wp_count[ENGINE_PATH_FIELD_SLOTS];
+static uint8_t s_wp_list[ENGINE_PATH_FIELD_SLOTS][ENGINE_PATH_FIELD_MAX_WP * 2];
+static uint8_t *g_wp_count = s_wp_count;
+static uint8_t (*g_wp_list)[ENGINE_PATH_FIELD_MAX_WP * 2] = s_wp_list;
+
+/* Retail keeps the flood / trace bookkeeping in globals too (see the .h). */
+int32_t g_pf_src_col;    /* DAT_00504020 */
+int32_t g_pf_src_row;    /* DAT_00504024 */
+int32_t g_pf_src_cell;   /* DAT_004f4070 */
+int32_t g_pf_head;       /* DAT_00500c20 */
+int32_t g_pf_tail;       /* DAT_004f2768 */
+int32_t g_pf_cur_col;    /* DAT_00507230 */
+int32_t g_pf_cur_row;    /* DAT_00507234 */
 
 void engine_path_field_bind_terrain(const int16_t *terrain_4f3ffe)
 {
     g_terrain = terrain_4f3ffe;
+}
+
+void engine_path_field_bind_storage(int16_t *field_persistent, int16_t *field_transient,
+                                    int32_t *queue_persistent, int32_t *queue_transient,
+                                    uint8_t *wp_count, uint8_t *wp_list)
+{
+    g_field_persistent = field_persistent;
+    g_field_transient  = field_transient;
+    g_queue_persistent = queue_persistent;
+    g_queue_transient  = queue_transient;
+    g_wp_count = wp_count;
+    g_wp_list  = (uint8_t (*)[ENGINE_PATH_FIELD_MAX_WP * 2])wp_list;
 }
 
 /* Pick the (field, queue) pair for a slot.  Mirrors `slot == DAT_0057c8cc`. */
@@ -112,31 +140,35 @@ void engine_path_field_fill(int slot, int col, int row, int blocked_mode)
 
     memset(field, 0, ENGINE_PATH_FIELD_CELLS * sizeof *field);  /* retail 0x4b3e51 */
 
-    int src = row * ENGINE_PATH_FIELD_DIM + col;
-    field[src] = 1;
-    queue[0] = src;
+    g_pf_src_col  = col;
+    g_pf_src_row  = row;
+    g_pf_src_cell = row * ENGINE_PATH_FIELD_DIM + col;
+    field[g_pf_src_cell] = 1;
+    queue[0] = g_pf_src_cell;
 
-    int head = 0, tail = 1;
-    while (tail != head) {
-        int cell    = queue[head];
+    g_pf_head = 0;
+    g_pf_tail = 1;
+    int *tail = &g_pf_tail;
+    while (g_pf_tail != g_pf_head) {
+        int cell    = queue[g_pf_head];
         int curcost = field[cell];
         int diag    = g_terrain[cell + COST_DIAG];
 
         /* Cardinals always; diagonals only when the cell does not forbid them. */
-        pf_step(field, queue, &tail, cell, curcost, D_N, COST_N, blocked_mode);
-        pf_step(field, queue, &tail, cell, curcost, D_E, COST_E, blocked_mode);
-        pf_step(field, queue, &tail, cell, curcost, D_S, COST_S, blocked_mode);
-        pf_step(field, queue, &tail, cell, curcost, D_W, COST_W, blocked_mode);
+        pf_step(field, queue, tail, cell, curcost, D_N, COST_N, blocked_mode);
+        pf_step(field, queue, tail, cell, curcost, D_E, COST_E, blocked_mode);
+        pf_step(field, queue, tail, cell, curcost, D_S, COST_S, blocked_mode);
+        pf_step(field, queue, tail, cell, curcost, D_W, COST_W, blocked_mode);
         if (diag != 1) {
-            pf_step(field, queue, &tail, cell, curcost, D_NE, COST_NE, blocked_mode);
-            pf_step(field, queue, &tail, cell, curcost, D_SE, COST_SE, blocked_mode);
-            pf_step(field, queue, &tail, cell, curcost, D_SW, COST_SW, blocked_mode);
-            pf_step(field, queue, &tail, cell, curcost, D_NW, COST_NW, blocked_mode);
+            pf_step(field, queue, tail, cell, curcost, D_NE, COST_NE, blocked_mode);
+            pf_step(field, queue, tail, cell, curcost, D_SE, COST_SE, blocked_mode);
+            pf_step(field, queue, tail, cell, curcost, D_SW, COST_SW, blocked_mode);
+            pf_step(field, queue, tail, cell, curcost, D_NW, COST_NW, blocked_mode);
         }
 
-        head += 1;
-        if (head > QUEUE_MASK)
-            head = 0;
+        g_pf_head += 1;
+        if (g_pf_head > QUEUE_MASK)
+            g_pf_head = 0;
     }
 }
 
@@ -161,22 +193,23 @@ int engine_path_field_trace(int slot, int col, int row)
     engine_path_field_clear_slot(slot);              /* FUN_004708d0 */
 
     int n       = 0;
-    int curcol  = col;
-    int currow  = row;
-    int cell    = row * ENGINE_PATH_FIELD_DIM + col;
+    g_pf_src_col = g_pf_cur_col = col;   /* the cursor lives in retail's globals */
+    g_pf_src_row = g_pf_cur_row = row;
+    g_pf_src_cell = row * ENGINE_PATH_FIELD_DIM + col;
+    int cell    = g_pf_src_cell;
     int best    = field[cell];
 
     /* Retail pre-seeds waypoint 0 with the start cell before the loop. */
-    wp[0] = (uint8_t)curcol;
-    wp[1] = (uint8_t)currow;
+    wp[0] = (uint8_t)g_pf_cur_col;
+    wp[1] = (uint8_t)g_pf_cur_row;
 
     for (;;) {
         if (best < 2) {                              /* reached the source */
             g_wp_count[slot] = (uint8_t)n;
             return 1;
         }
-        wp[n * 2 + 0] = (uint8_t)curcol;
-        wp[n * 2 + 1] = (uint8_t)currow;
+        wp[n * 2 + 0] = (uint8_t)g_pf_cur_col;
+        wp[n * 2 + 1] = (uint8_t)g_pf_cur_row;
 
         best = field[cell];
         int chosen = -1;
@@ -195,8 +228,8 @@ int engine_path_field_trace(int slot, int col, int row)
         if (chosen == -1)
             break;                                   /* stalled */
 
-        curcol += TRACE_DIR[chosen].col_d;
-        currow += TRACE_DIR[chosen].row_d;
+        g_pf_cur_col += TRACE_DIR[chosen].col_d;
+        g_pf_cur_row += TRACE_DIR[chosen].row_d;
         cell   += TRACE_DIR[chosen].fdelta;
         n      += 1;
     }

@@ -725,7 +725,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4abd0f | FUN_004abd0f | 616 | engine_army_state.c, engine_combat.c, engine_combat.h |
 | 0x4abf77 | FUN_004abf77 | 526 | engine_combat.c, engine_combat.h |
 | 0x4ac185 | FUN_004ac185 | 577 | engine_combat.c, engine_combat.h, engine_realm.c (+1) |
-| 0x4ac3c6 | FUN_004ac3c6 | 211 | engine_combat.c, engine_combat.h, engine_realm.c (+1) |
+| 0x4ac3c6 | FUN_004ac3c6 | 211 | engine_combat.c, engine_combat.h, engine_realm.h |
 | 0x4ac499 | FUN_004ac499 | 289 | engine.c, engine_army_state.c, engine_army_state.h |
 | 0x4ac5ba | FUN_004ac5ba | 324 | engine_army_state.c, engine_army_state.h |
 | 0x4ac6fe | FUN_004ac6fe | 245 | engine_army_ai.c, engine_combat.c, engine_combat.h (+2) |

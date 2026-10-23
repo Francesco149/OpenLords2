@@ -16,6 +16,7 @@
 #include "engine_army_economy.h"   /* NULL the provision bind to isolate copies */
 #include "engine_territory.h"      /* engine_territory_bind_cells */
 #include "engine_event_queue.h"    /* engine_event_queue_init / state */
+#include "engine_map_query.h"      /* the rebellion probe's cell grid */
 #include "save.h"
 #include "save_schema_globals.h"
 
@@ -1765,7 +1766,7 @@ static void unrest_reset(void)
     memset(g_player_strategic_352, 0, sizeof g_player_strategic_352);
     s_slot_0056d5dc = 1;
     s_slot_0057c8cc = 1;
-    engine_realm_bind_rebellion_fn(NULL);
+    engine_map_query_bind_cell_descriptors(NULL);   /* no placeable cell → no rebellion */
 }
 
 /* Unowned realm: unrest forced to 0 regardless of prior level. */
@@ -1773,7 +1774,7 @@ int test_engine_realm_unrest_unowned_cleared(void)
 {
     unrest_reset();
     AREC(1)[0x05] = 0; AREC(1)[0x20] = 3;
-    engine_realm_escalate_unrest(NULL);
+    engine_realm_escalate_unrest(NULL, 0);
     T_ASSERT_EQ_I(AREC(1)[0x20], 0);
     return 0;
 }
@@ -1787,15 +1788,15 @@ int test_engine_realm_unrest_ai_drift(void)
     AREC(1)[0x05] = 1;
 
     AREC(1)[0x0c] = 0;  AREC(1)[0x20] = 0;     /* starving → climb */
-    engine_realm_escalate_unrest(NULL);
+    engine_realm_escalate_unrest(NULL, 0);
     T_ASSERT_EQ_I(AREC(1)[0x20], 1);
 
     AREC(1)[0x0c] = 20; AREC(1)[0x20] = 2;     /* moderate → ease */
-    engine_realm_escalate_unrest(NULL);
+    engine_realm_escalate_unrest(NULL, 0);
     T_ASSERT_EQ_I(AREC(1)[0x20], 1);
 
     AREC(1)[0x0c] = 50; AREC(1)[0x20] = 3;     /* content → reset */
-    engine_realm_escalate_unrest(NULL);
+    engine_realm_escalate_unrest(NULL, 0);
     T_ASSERT_EQ_I(AREC(1)[0x20], 0);
     return 0;
 }
@@ -1811,7 +1812,7 @@ int test_engine_realm_unrest_human_warning(void)
 
     engine_event_queue_state_t evq;
     engine_event_queue_init(&evq);
-    engine_realm_escalate_unrest(&evq);
+    engine_realm_escalate_unrest(&evq, 0);
 
     T_ASSERT_EQ_I(AREC(1)[0x21], 1);          /* latched */
     T_ASSERT_EQ_I(AREC(1)[0x20], 0);          /* no escalation yet */
@@ -1820,7 +1821,7 @@ int test_engine_realm_unrest_human_warning(void)
 
     /* recovery above 29 clears the latch */
     AREC(1)[0x0c] = 40;
-    engine_realm_escalate_unrest(NULL);
+    engine_realm_escalate_unrest(NULL, 0);
     T_ASSERT_EQ_I(AREC(1)[0x21], 0);
     return 0;
 }
@@ -1836,36 +1837,61 @@ int test_engine_realm_unrest_human_escalate(void)
 
     engine_event_queue_state_t evq;
     engine_event_queue_init(&evq);
-    engine_realm_escalate_unrest(&evq);
+    engine_realm_escalate_unrest(&evq, 0);
 
     T_ASSERT_EQ_I(AREC(1)[0x20], 1);          /* climbed one band */
     T_ASSERT_EQ_I(evq.ring[0].code, 0x96);    /* band-1 notification */
 
     AREC(1)[0x0c] = 28;                        /* >= 25 → order restored */
-    engine_realm_escalate_unrest(NULL);
+    engine_realm_escalate_unrest(NULL, 0);
     T_ASSERT_EQ_I(AREC(1)[0x20], 0);
     return 0;
 }
 
-static int g_rebel_seen;
-static int rebel_always(int realm) { g_rebel_seen = realm; return 1; }
-
-/* When unrest is raised to the top band, the rebellion hook fires and resets
- * the level. */
-int test_engine_realm_unrest_rebellion_resets(void)
+/* When unrest is raised to the top band the realm may rebel (FUN_004ac185,
+ * engine_combat_spawn_rebellion).  With no placeable cell near its seat the
+ * spawn fails and the realm stays at the top band... */
+int test_engine_realm_unrest_rebellion_no_cell(void)
 {
     unrest_reset();
     PREC(1)[0x05] = 0;                  /* AI realm */
     AREC(1)[0x05] = 1;
     AREC(1)[0x0c] = 0; AREC(1)[0x20] = 3;     /* starving, one band from the top */
-    g_rebel_seen = 0;
-    engine_realm_bind_rebellion_fn(rebel_always);
 
-    engine_realm_escalate_unrest(NULL);
+    engine_realm_escalate_unrest(NULL, 0);
 
-    T_ASSERT_EQ_I(g_rebel_seen, 1);           /* hook saw realm 1 */
-    T_ASSERT_EQ_I(AREC(1)[0x20], 0);          /* rebellion reset unrest */
-    engine_realm_bind_rebellion_fn(NULL);
+    T_ASSERT_EQ_I(AREC(1)[0x20], 4);
+    return 0;
+}
+
+/* ...and with one, a rebel occupant (type 6) is placed there and the unrest
+ * resets — the escalation pass used to reach the spawn only through a seam
+ * nothing bound, so the port never rebelled (quirk #228). */
+static uint8_t g_rebel_cells[64 * 64 * 8];
+int test_engine_realm_unrest_rebellion_resets(void)
+{
+    unrest_reset();
+    memset(g_per_territory_420, 0, sizeof g_per_territory_420);
+    memset(g_rebel_cells, 0, sizeof g_rebel_cells);
+    engine_army_economy_bind_army_records(NULL);     /* neuter the demolish re-plan */
+    engine_territory_bind_cells(g_rebel_cells);
+    engine_territory_bind_records(g_per_territory_420);
+    engine_map_query_bind_cell_descriptors(g_rebel_cells);
+
+    PREC(1)[0x05] = 0;                  /* AI realm */
+    AREC(1)[0x05] = 1;
+    AREC(1)[0x0c] = 0; AREC(1)[0x20] = 3;
+    AREC(1)[0x6c] = 10; AREC(1)[0x6d] = 10;          /* seat (col,row) */
+    *(int32_t *)&AREC(1)[0x24] = 100;                /* capacity → 30 rebels */
+    g_rebel_cells[(10 * 64 + 10) * 8 + 1] = 0x01;    /* free rawflag-bit0 cell */
+
+    engine_realm_escalate_unrest(NULL, 0);
+
+    T_ASSERT_EQ_I(AREC(1)[0x20], 0);                  /* rebellion reset unrest */
+    T_ASSERT_EQ_U(g_per_territory_420[1 * 0x1a4 + 0x00], 6);   /* rebel occupant  */
+    T_ASSERT_EQ_I(*(int32_t *)&AREC(1)[0x24], 70);   /* capacity debited     */
+    engine_map_query_bind_cell_descriptors(NULL);
+    engine_territory_bind_cells(NULL);
     return 0;
 }
 
