@@ -97,7 +97,7 @@ static void cancel_event(uint8_t *a)
  * returns 1 on a hit, 0 if no eligible cell.  The flip routes through the
  * territory module's set-cell-type (which no-ops when the cell grid is
  * unbound); the eligibility read is on g_overworld_map directly, as retail. */
-static int territory_claim_empty(int realm)
+int engine_realm_events_claim_empty(int realm)
 {
     int32_t *row = roster_row(realm);
     for (int col = 0; col < ROSTER_COLS; col++) {
@@ -112,7 +112,7 @@ static int territory_claim_empty(int realm)
 
 /* Probe the roster for the first cell whose type is in the band (2, 0xf) and
  * vacate it (type 0).  Port of FUN_0044c80a — returns 1 on a hit, 0 if none. */
-static int territory_vacate_owned(int realm)
+int engine_realm_events_vacate_owned(int realm)
 {
     int32_t *row = roster_row(realm);
     for (int col = 0; col < ROSTER_COLS; col++) {
@@ -204,7 +204,7 @@ static void ev_12e(int r) {  /* FUN_004492e7 */
 
 static void ev_12f(int r) {  /* FUN_0044934a */
     uint8_t *a = ARMY_REC(r);
-    if (territory_claim_empty(r) == 0) cancel_event(a);
+    if (engine_realm_events_claim_empty(r) == 0) cancel_event(a);
 }
 
 static void ev_130(int r) {  /* FUN_0044938c */
@@ -242,7 +242,7 @@ static void ev_135(int r) {  /* FUN_004494fe */
 
 static void ev_136(int r) {  /* FUN_00449533 */
     uint8_t *a = ARMY_REC(r);
-    if (territory_vacate_owned(r) == 0) cancel_event(a);
+    if (engine_realm_events_vacate_owned(r) == 0) cancel_event(a);
 }
 
 static void ev_137(int r) {  /* FUN_00449575 */
@@ -289,7 +289,7 @@ static void ev_13d(int r) {  /* FUN_00449826 */
     a[A_STAT_0C] = (uint8_t)((int8_t)a[A_STAT_0C] - 7);
 }
 
-static void dispatch_event(int realm, int eid)
+void engine_realm_event_apply(int realm, int eid)
 {
     switch (eid) {
     case 0x87:  ev_87(realm);  break;
@@ -343,7 +343,7 @@ void engine_realm_roll_events(uint32_t rng_7bit)
             EVENT_DECK[cursor] != 0) {
             a[A_EV_ACTIVE] = 1;
             *(int16_t *)(a + A_EV_ID) = (int16_t)EVENT_DECK[cursor];
-            dispatch_event(r, EVENT_DECK[cursor]);
+            engine_realm_event_apply(r, EVENT_DECK[cursor]);
         }
     }
 }

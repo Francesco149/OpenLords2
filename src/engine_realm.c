@@ -1082,24 +1082,17 @@ void engine_realm_advance_population(void)
  *   +0x00  i32 total strength (sum of member +0x24 populations)
  *   +0x04  owner key byte (the per-army owner +0x05 the group is keyed on)
  *   +0x05.. 20 member army-id bytes (0 = empty slot).
- * Backed by an i32-aligned union so the +0x00 strength reads/writes are
- * naturally aligned (the 0x1c stride is a multiple of 4). */
+ * g_coalition_tbl / g_coalition_active_count (retail _DAT_00553ef4) live in
+ * engine_realm_globals.c, so the hybrid host binds them to retail's memory
+ * (quirk #234: a private copy left retail's table stale). */
 #define COALITION_GROUPS   0x11   /* 17 */
 #define COALITION_STRIDE   0x1c
 #define COALITION_MEMBERS  0x14   /* 20 member slots per group */
 
-static union {
-    int32_t align_;
-    uint8_t b[COALITION_GROUPS * COALITION_STRIDE];
-} g_coalition_tbl;
-
-#define COAL_BASE          (g_coalition_tbl.b)
+#define COAL_BASE          ((uint8_t *)g_coalition_tbl)
 #define COAL_STRENGTH(g)   (*(int32_t *)&COAL_BASE[(g) * COALITION_STRIDE])
 #define COAL_KEY(g)        (COAL_BASE[(g) * COALITION_STRIDE + 4])
 #define COAL_MEMBER(g, m)  (COAL_BASE[(g) * COALITION_STRIDE + 5 + (m)])
-
-/* Active (non-empty) coalition group count — retail _DAT_00553ef4. */
-static int32_t g_coalition_active_count;
 
 /* Port of FUN_00467e2c — is army `other` named in army `a`'s adjacency list
  * (per-army +0x5c, up to 16 bytes, 0-terminated)?  The adjacency relation is

@@ -62,4 +62,15 @@
  * trigger + every handler branch directly. */
 void engine_realm_roll_events(uint32_t rng_7bit);
 
+/* The per-event handler for event id `eid` on realm `realm` (FUN_00448e12 …
+ * FUN_00449826, the 24 switch targets of the roll; an unmapped id is a no-op):
+ * commit the event or cancel it (id +0x1aa and active +0x00 back to 0). */
+void engine_realm_event_apply(int realm, int eid);
+
+/* The two territory probes (FUN_0044c77a / FUN_0044c80a): claim the realm's
+ * first empty roster cell (type 0 → 1) / vacate its first developed one
+ * (type 3..0xe → 0).  1 on a hit, 0 if none. */
+int engine_realm_events_claim_empty(int realm);
+int engine_realm_events_vacate_owned(int realm);
+
 #endif /* OPENLORDS2_ENGINE_REALM_EVENTS_H */

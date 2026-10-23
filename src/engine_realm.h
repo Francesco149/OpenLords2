@@ -451,4 +451,10 @@ void engine_realm_escalate_unrest(engine_event_queue_state_t *evq, int mp_active
  * g_per_territory_420 + the overworld cell grid. */
 void engine_realm_complete_settlements(engine_event_queue_state_t *evq);
 
+/* The coalition pass's runtime scratch (retail .data, not save state; defined
+ * in engine_realm_globals.c): the 17 × 0x1c-byte group table at 0x568240 and
+ * the active-group count DAT_00553ef4. */
+extern int32_t g_coalition_tbl[0x11 * 0x1c / 4];
+extern int32_t g_coalition_active_count;
+
 #endif /* OPENLORDS2_ENGINE_REALM_H */

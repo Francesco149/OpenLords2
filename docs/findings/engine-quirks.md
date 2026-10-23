@@ -8104,3 +8104,21 @@ disassembly, 0x4ac6bd / 0x4ac6e1); rhost shadow of `state_raid_assign_target` af
 the fix: 16 calls / 2 scenarios, 0 divergences.
 
 > 📍 `src/engine_army_state.c` (A_DEST_COL / A_DEST_ROW); `tests/test_engine_army_state.c`.
+
+## 234 — the coalition pass builds its group table in retail's .data (0x568240, count DAT_00553ef4): a private copy is a divergence
+
+FUN_0044ae3c (the season pass's coalition step) = FUN_0044b042 (build the
+adjacency-connected groups of each owner's counties: 17 × 0x1c-byte records at
+0x568240 — strength, owner key, 20 member ids — and the active-group count
+DAT_00553ef4) + FUN_0044ae51 (demolish all but each player's strongest group).
+The port kept the table and the count as file-statics in engine_realm.c, so retail's
+copy went stale: the rhost shadow of `realm_coalition_pass` diverged on every call
+(523 / 32 scenarios: 0x553ef4 r2/p0, 0x568240.. strengths and keys).  Only the
+coalition functions read the table and it is rebuilt every call, so no gameplay
+changed — but like #226 it is retail state the shadow (and a save-compatible port)
+cannot tell from live state.  Now `g_coalition_tbl` / `g_coalition_active_count` in
+`src/engine_realm_globals.c` (rhost aliases them to 0x568240 / 0x553ef4): 512 calls /
+31 scenarios, 0 divergences.
+
+> 📍 `src/engine_realm.c/.h`, `src/engine_realm_globals.c`, `tests/Makefile`; evidence:
+> `tools/rhost/rh_hooks_events.c` row realm_coalition_pass.
