@@ -1,63 +1,88 @@
-# OpenLords2 — agent operating notes
+# OpenLords2 — agent entry point
 
-Most project knowledge lives in the auto-memory at
-`~/.claude/projects/-opt-src-OpenLords2/memory/` (indexed by `MEMORY.md`,
-loaded each session). This file holds only must-not-forget operational rules.
+C reimplementation of **Lords of the Realm II** (Impressions / Sierra, 1996) as a drop-in for the
+user's `Lords2.exe` (GOG 2.0.0.3, sha256 6fec043e…). Goal: **full behavioral parity with retail**,
+proven against the user's own exe — not byte-identical, not an MVP. Legal line: **never redistribute
+game assets or decompiled code** (gitignored: `vendor/`, `docs/decompiled/`, IDA output, saves, shots).
 
-## Always run inside `nix develop`
-Every build/test/tool command must run in the dev shell (commonly forgotten).
-Prefix with `nix develop -c …` or open the shell first.
+Dense on purpose; auto-loads every session. **The repo is the source of truth**; `~/.claude` memory
+holds pointers only.
 
-## frida / retail host — never treat as "down", never ask to start it
-- The Windows-host frida-server is **normally up** at `cutestation.soy:27042`
-  (shared with the sibling RE projects). It serves all capture/parity tooling.
-- **If it is down, start it YOURSELF — UAC is auto-approved. Do NOT ask the
-  user.** The tooling already does this: `frida_capture.ensure_frida_server`
-  (used by `trace_studio capture` by default, `auto_start_server=True`) runs
-  `Start-Process -Verb runAs …` to launch it. Just run the capture; the
-  spawn-and-attach handles a cold host. You may also launch it directly via
-  `powershell.exe -NoProfile -Command "Start-Process -Verb runAs -FilePath
-  '<win path to frida-server.exe>' -ArgumentList '-l','0.0.0.0:27042'"`.
-- The game itself does NOT need to be pre-running — `frida_capture` SPAWNS
-  `retail.exe` and attaches; an idle host with no Lords process is normal.
-- **Do not probe reachability with bash `/dev/tcp/cutestation.soy/27042`** —
-  it gives false negatives here. Use the real client:
-  `frida.get_device_manager().add_remote_device('cutestation.soy:27042')
-  .enumerate_processes()`, or just run the capture and trust the tooling.
+## Session start
+1. `git log -n 5 --oneline`
+2. `docs/FRONT.md` — the active front, ★ next micro-task, human queue.
+3. At session end: report pending human items (FRONT §Human queue).
 
-## Trace Studio v3 is the workhorse (see [[project_trace_studio_v3]])
-`tools/trace_studio_v3/` — a NATIVE viewer (no web, no PNG bake). One trace
-drives BOTH engines through a contiguous capture WINDOW; each frame is stored as
-its 8bpp index plane + palette (dedup'd) in a compact `.olv3` container, and the
-viewer reconstructs any frame on demand (sub-ms, pure CPU). It diffs at the
-INDEX level (blitter output), the PALETTE level (palette builder), and RGB, plus
-the save-schema STATE panel — and scrubs the window port|retail|diff. The old
-web studio (`tools/trace_studio` + `_web`, the `:8780` server) is RETIRED.
+**Hosts.** **maximus** (this Arch box): agent host; `nix develop -c …` = the pinned devshell (mingw,
+python deps) — **every build/test command runs inside it**. **`ssh win`**: the Windows 11 box (OpenSSH
+on cutestation:2222, PowerShell) — rhost's `win` target, IDA 9.4. `ssh wslop` (WSL) is not needed.
 
-Daily loop:
-```
-# drive both engines through a trace → containers + view.json → launch viewer
-nix develop -c python3 tools/trace_studio_v3/olv3_capture.py --trace grid_load_dense
-# fast port-only re-capture against cached retail (don't relaunch):
-nix develop -c python3 tools/trace_studio_v3/olv3_capture.py --trace <t> --only port --no-view
-```
-The viewer is `tools/trace_studio_v3/viewer/viewer.exe` (a Windows process via
-WSLInterop). **The user verifies in-game work by scrubbing this viewer** — after
-a capture, launch it for them (or `--shot out.bmp --col N view.json` headless,
-then push the BMP to the llm-feed). Build it with
-`nix develop -c make -C tools/trace_studio_v3/viewer`.
+## Methodology (2026-10-23 reset — `docs/audits/2026-10-23-methodology-reset.md`)
+**Verification foundation = rhost** (`tools/rhost/`, README): retail runs INSIDE our process with a
+software DirectDraw / DirectSound / window layer — deterministic, headless, never fullscreen. Same trace
+⇒ same state hash, on Windows and wine alike (0 masked slots). No Frida, no anchors, no pins.
 
-Bespoke traces beat generic capture; `{caprange:[START,COUNT]}` gives the
-contiguous window, anchored to a semantic event so the port↔retail load-stretch
-cancels (both capture at `anchor+offset`). `--turbo` on both sides matches
-retail's virtual clock so they run frame-exact up to a REAL divergence. The
-sibling ../openrecet `tools/trace_studio_v3/` is the reference; mirror it.
+**Porting loop (per function):**
+1. **Read** IDA pseudocode + disasm: `/mnt/ephemeral/openlords2/decompiled-ida/` (`tools/ida/`).
+   `docs/decompiled/all.c` (Ghidra) is secondary (drops x87 operands). Engine quirks:
+   `docs/findings/engine-quirks.md`; per-subsystem RE: `docs/findings/INDEX.md`.
+2. **Write** the C port (retail semantics). An existing pure in/out port gets a retail-layout wrapper.
+3. **Verify vs retail on identical state:** wrapper + row in `tools/rhost/rh_hooks.c` (+ `VERIFY_HOOKS`
+   in rhost.py) → `rhost.py verify` (shadow) and `rhost.py corpus --check --hook replace:NAME` (hybrid,
+   state + every presented frame). A port function never calls its own retail VA.
+4. **Commit with an evidence line:** `rhost shadow: N calls / K scenarios, 0 divergences; replace:
+   corpus --check PASS` (or the divergence + why).
 
-## HARD RULE — stopping the live probe daemon
-NEVER `pkill -f probe_daemon.py` (or any broad pattern) — other projects may run their own
-probe daemons in parallel and a pattern kill takes them down too. Stop ONLY ours, targeted by
-the pid in `runs/probe/daemon.json` (our control file) via the clean quit RPC + exact-pid SIGTERM:
+**Gates.** `rhost.py det SCEN -n 3` (0 differing dwords); `rhost.py corpus --check` (and `--target wine`);
+`rhost.py verify`. Port host tests: `nix develop -c make -C tests run -j16`.
 
-    nix develop -c python3 tools/stop_probe.py          # stops the daemon in daemon.json (+ its game)
+**Scenarios** `tests/scenarios/<s>/trace.jsonl` (`{"f","m","w","l"}` input events, 640×480 coords):
+human play `rhost.py record NAME [--from S]` (visible window on the Windows desktop), authored with
+`tools/rhost/rhbot.py "run 600; click 320 107; …"`, or played by the autoplay bot (`tools/bot/`).
 
-Same for stray game processes: `tools/kill_retail.py` reaps Lords2.exe, not by broad match here.
+**Live probing** = `rhbot.py` (control channel: step frames, post input, read memory, shots) — it
+replaces the old Frida probe daemon / MCP. Probes: `--watch-write VA@F`, `--trap VA`, `--coverage`.
+
+**Legacy — superseded, keep for reference, don't extend:** the Frida retail drive (`tools/frida/`,
+`frida_capture.py`, `probe_daemon.py`, `probe.py`, `openlords2_mcp.py`, `play_*.py`, film tools),
+anchor-segmented traces in `tools/traces/` (click coordinates still useful), Trace Studio v3's Frida
+capture (the **viewer** stays for human eyes).
+
+## Parity rules
+- **Earlier "BYTE-EXACT" / "1:1" claims are UNVERIFIED** until re-checked under rhost.
+- **Attribute a divergence before suspecting logic:** upstream inputs → RNG → phase → logic. rhost pins
+  all of these for retail; a shadow compares on identical state, so a divergence there IS logic.
+- **x87:** in-game CW 0x027F (53-bit). The port builds `-std=c11` (float literals evaluate as long double
+  — openrecet found that diverges; prefer `gnu11` after a sweep).
+- Engine quirks (retail ground truth only) → `docs/findings/engine-quirks.md`.
+- **If a tool can't show you something, improve the tool.** Never hand-wave a diff.
+
+## Build / run / test
+- Port: `nix develop -c make -C src -j16` → `build/openlords2.exe`.
+- rhost: `python3 tools/rhost/rhost.py …` (auto build + stage). Results `/mnt/ephemeral/openlords2/rhost-runs/`.
+- Windows: `C:\ol2-rhost\` (separate from the siblings' `C:\orc-rhost`, `C:\oss-rhost`, `C:\de-rhost`); kill only
+  our own processes by full path / PID, never by name. Interactive jobs (record, --show) go through the
+  scheduled task `ol2-rhost-runner`.
+- Game data: maximus `vendor/original` → `/mnt/ephemeral/gog/Lords of the Realm II`; rhost uses pristine copies
+  (`C:\ol2-rhost\game`, `/mnt/ephemeral/openlords2/rhost-wine/game`) without saves or harness leftovers.
+
+## Conventions
+- **Terse prose** in docs and commits; identifiers, hex, paths, numbers verbatim.
+- **Batch** independent tool calls. **Delegate** mechanical / search work (wrapper batches, sweeps, exports)
+  to subagents; keep RE interpretation and parity adjudication.
+- **Commits**: logical units, without being asked; master only; push only when asked. The pre-commit hook
+  (`tools/git-hooks`) regenerates STATUS / port-ledger.
+- **Knowledge in `docs/`.** `docs/FRONT.md` holds only open work; resolved arcs → `docs/PROGRESS.md` or findings.
+- **Ledger footgun:** any `FUN_<va>` token in `src/` counts as "ported" — name unported callees by bare VA.
+- **Human verification:** never ask the human to reconstruct state; give one command and what to look for.
+
+## Hard rules
+- Never `pkill -f` broad patterns (other projects run their own daemons / rhost / IDA jobs in parallel).
+  The legacy Frida probe daemon stops only via `nix develop -c python3 tools/stop_probe.py`.
+- Background waiters poll an output marker, never `pgrep -f` their own pattern.
+- OpenRouter: only the project key `openlords2-bot` (read per process by `tools/bot/llm.py`; never print it).
+
+## Where to read next
+`docs/FRONT.md` · `docs/audits/2026-10-23-methodology-reset.md` · `tools/rhost/README.md` ·
+`docs/findings/in-process-retail-host.md` · `docs/findings/INDEX.md` · `docs/STATUS.md` (derived) ·
+`docs/PROGRESS.md`.

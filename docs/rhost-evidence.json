@@ -1,0 +1,12 @@
+{
+ "rng_step": {
+  "calls": 2814,
+  "corpus": 3,
+  "date": "2026-10-23",
+  "diverge": 0,
+  "scenarios": 2,
+  "skipped": 0,
+  "target": "win",
+  "va": "0x404a46"
+ }
+}

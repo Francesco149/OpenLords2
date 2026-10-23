@@ -488,6 +488,17 @@ def cmd_verify(a):
     for h in VERIFY_HOOKS:
         t = tot.get(h, [0, 0, 0, 0])
         print(f"  {h}: rhost shadow: {t[0]} calls / {t[3]} scenarios, {t[1]} divergences")
+    if not a.only:   # the whole corpus: record the evidence (docs/STATUS.md's runtime axis)
+        src = open(os.path.join(HERE, "rh_hooks.c")).read()
+        vas = dict(re.findall(r'\{\s*"(\w+)",\s*(0x[0-9a-fA-F]+)u', src))
+        ep = os.path.join(ROOT, "docs", "rhost-evidence.json")
+        ev = json.load(open(ep)) if os.path.exists(ep) else {}
+        for h in VERIFY_HOOKS:
+            t = tot.get(h, [0, 0, 0, 0])
+            ev[h] = {"va": vas.get(h, "?"), "calls": t[0], "scenarios": t[3], "corpus": len(names), "diverge": t[1],
+                     "skipped": t[2], "target": a.target, "date": datetime.date.today().isoformat()}
+        json.dump(ev, open(ep, "w"), indent=1, sort_keys=True)
+        print(f"evidence → {os.path.relpath(ep, ROOT)}")
     return 0 if all(tot.get(h, [0, 0])[1] == 0 for h in VERIFY_HOOKS) else 1
 
 

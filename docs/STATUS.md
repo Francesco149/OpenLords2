@@ -26,10 +26,24 @@ of the actual instruction volume is ported.
 7 VAs are referenced in src/ but absent from the function table
 (indirect/vtable targets or sub-helper labels) — see `port-ledger.json` `orphan_refs`.
 
-## Current front
+## Runtime verification (rhost — the truth axis since 2026-10-23)
 
-- **Phase:** Phase 5 — Renderer.  Battlefield / strategic-map / overlay draw leaves landed; asset-load IO helper cluster (0x4af*) in progress (see PLAN.md §5).
-- **Top blocker:** No pixel blocker.  IO retry chain (tier-2/3 subdir chdir, FUN_004af116/312) is deliberately deferred until a partitioned-install asset-miss path forces it — today's flat vendor/original/ layout makes tier-1 always hit.  See PROGRESS 2026-05-26.
+**1 function(s) rhost-verified** (shadow: 0 divergences over the corpus), 0 diverging, of 1 hooked.
+
+| hook | retail VA | calls | scenarios | diverge | date |
+|---|---|---:|---:|---:|---|
+| `rng_step` | `0x404a46` | 2814 | 2 | 0 | 2026-10-23 |
+
+"Touched" above counts `FUN_` references in `src/`; it is not evidence. Earlier "BYTE-EXACT" / "1:1"
+claims are unverified until rhost re-checks them (`docs/audits/2026-10-23-methodology-reset.md`).
+
+## Current front (from `docs/FRONT.md`)
+
+- **Phase 0 — methodology reset (2026-10-23):** rhost is the verification foundation
+  (`docs/audits/2026-10-23-methodology-reset.md`). Built + proven: deterministic boot → new game → turns,
+  Windows ≡ wine bit for bit, control channel, porting loop (`rng_step`). In flight: IDA export,
+  game-state reader, autoplay bot (Jev).
+- **Top blocker:** none for logic parity. Smacker movies are skipped in rhost (retail tolerates it).
 
 ## Where to read next
 

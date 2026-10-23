@@ -49,19 +49,34 @@ LEDGER_JSON = REPO / "docs" / "port-ledger.json"
 LEDGER_MD = REPO / "docs" / "port-ledger.md"
 STATUS_MD = REPO / "docs" / "STATUS.md"
 
-# Kept out of band so STATUS stays a 60-second read.  Edit these two strings
-# when the active front moves; everything else is derived.
-CURRENT_PHASE = (
-    "Phase 5 — Renderer.  Battlefield / strategic-map / overlay draw "
-    "leaves landed; asset-load IO helper cluster (0x4af*) in progress "
-    "(see PLAN.md §5)."
-)
-CURRENT_BLOCKER = (
-    "No pixel blocker.  IO retry chain (tier-2/3 subdir chdir, "
-    "FUN_004af116/312) is deliberately deferred until a partitioned-install "
-    "asset-miss path forces it — today's flat vendor/original/ layout makes "
-    "tier-1 always hit.  See PROGRESS 2026-05-26."
-)
+FRONT_MD = REPO / "docs" / "FRONT.md"
+EVIDENCE_JSON = REPO / "docs" / "rhost-evidence.json"
+
+
+def front_block() -> str:
+    """docs/FRONT.md's status block (between the status:begin / status:end markers), verbatim."""
+    try:
+        t = FRONT_MD.read_text()
+        a, b = t.index("<!-- status:begin -->"), t.index("<!-- status:end -->")
+        return t[a + len("<!-- status:begin -->"):b].strip()
+    except (OSError, ValueError):
+        return "(docs/FRONT.md has no status block)"
+
+
+def evidence_block() -> str:
+    """the runtime axis: functions proven against retail on identical state (rhost.py verify)."""
+    try:
+        ev = json.loads(EVIDENCE_JSON.read_text())
+    except (OSError, ValueError):
+        return "No rhost evidence recorded yet (`python3 tools/rhost/rhost.py verify`)."
+    ok = {k: v for k, v in ev.items() if v.get("calls", 0) > 0 and v.get("diverge", 1) == 0}
+    bad = {k: v for k, v in ev.items() if v.get("diverge", 0) > 0}
+    rows = [f"| `{k}` | `{v.get('va', '?')}` | {v['calls']} | {v['scenarios']} | {v['diverge']} | {v.get('date', '?')} |"
+            for k, v in sorted(ev.items())]
+    return (f"**{len(ok)} function(s) rhost-verified** (shadow: 0 divergences over the corpus), "
+            f"{len(bad)} diverging, of {len(ev)} hooked.\n\n"
+            "| hook | retail VA | calls | scenarios | diverge | date |\n|---|---|---:|---:|---:|---|\n" + "\n".join(rows))
+
 
 FUN_RE = re.compile(r"FUN_([0-9a-fA-F]{6,8})")
 
@@ -202,10 +217,16 @@ of the actual instruction volume is ported.
 {c['orphan_refs_not_in_function_table']} VAs are referenced in src/ but absent from the function table
 (indirect/vtable targets or sub-helper labels) — see `port-ledger.json` `orphan_refs`.
 
-## Current front
+## Runtime verification (rhost — the truth axis since 2026-10-23)
 
-- **Phase:** {CURRENT_PHASE}
-- **Top blocker:** {CURRENT_BLOCKER}
+{evidence_block()}
+
+"Touched" above counts `FUN_` references in `src/`; it is not evidence. Earlier "BYTE-EXACT" / "1:1"
+claims are unverified until rhost re-checks them (`docs/audits/2026-10-23-methodology-reset.md`).
+
+## Current front (from `docs/FRONT.md`)
+
+{front_block()}
 
 ## Where to read next
 
