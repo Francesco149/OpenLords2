@@ -11,7 +11,10 @@ What retail asks the player while the bot waits for an idle map goes through `UI
             kinds (type 11 the AI offers an alliance, 10 an ally asks to be paid, 17 garrison capacity) → bool
   "confirm" the confirm dialog 0x1e (loc grp 10: "Besiege castle?", "Garrison castle?", ...) → bool
   "siege"   siege preparations 0x1d → {"catapults": n, "towers": n, "rams": n, "proceed": bool}
+  "battle"  the pre-battle scroll 0x12 → "auto" (the right gauntlet: auto-calculate) or a battle.fight tactic
+            ("attack", "mopup", "retreat", "autocalc"): take the field and play it on the battlefield
 """
+import battle
 import l2state
 SEASON_VA, YEAR_VA = 0x57c934, 0x553edc        # 1 Spr .. 4 Win; year
 END_TURN = (558, 469)
@@ -23,6 +26,7 @@ DISMISS_RMB = {0x27, 0x22, 0x2e, 0x2f}             # scrolls, movie player, batt
 BATTLE_PROMPT, BATTLE_RESULT = 0x12, 0x13           # "A Battle is to be fought. Will you take the field?" / "decided"
 AUTO_RESOLVE = (383, 128)                           # the right gauntlet: don't take the field → auto-calc
 RESULT_CONTINUE = (410, 412)                        # the hand on "The Battle is decided."
+TITLE_MENU = 0x1f                                   # the title's menus (engine state 2): a custom game's defeat ends here
 GAME_OVER = 0x1c                                    # victory / defeat (black while its movie is skipped): a click
                                                     # continues — after a defeat retail restarts the scenario
 # event scrolls (engine_popup_scroll_input_step FUN_0047685d): yes / no buttons per popup type (button lists
@@ -48,11 +52,17 @@ def default_ask(kind, info):
         return CONFIRM_DEFAULT.get(info.get("kind"), False)
     if kind == "siege":
         return {"catapults": 0, "towers": 0, "rams": 0, "proceed": True}
+    if kind == "battle":
+        return "auto"
     return None
 
 
 class Stuck(RuntimeError):
     pass
+
+
+class GameEnded(RuntimeError):
+    """retail left the game: the title menu after a custom game's defeat (Play Now restarts the scenario instead)"""
 
 
 class UI:
@@ -65,6 +75,7 @@ class UI:
         self.events = []           # popups / confirms / sieges answered (play.py logs them per turn)
         self.sieges = 0
         self.quick = 0             # battles shown as the quick animation 0x13 (no "take the field?" prompt)
+        self.fields = 0            # battles taken to the field (battle.fight)
 
     def modal(self):
         return self.s.i32(l2state.MODAL)
@@ -132,6 +143,32 @@ class UI:
         self.log(f"  ui: siege of county {ev['county']} → {ev['answer']} (seasons {ev['seasons']})")
         return ev
 
+    def battle_prompt(self):
+        """the pre-battle scroll 0x12: ask, then auto-resolve or take the field and fight it out"""
+        s = self.s
+        st = l2state.snapshot(s.read)
+        by_id = {a["id"]: a for a in st["armies"]}
+        atk, dfn = by_id.get(s.i32(battle.ATK_PIECE), {}), by_id.get(s.i32(battle.DEF_PIECE), {})
+        we_attack = atk.get("owner") == st["me"]
+        ours, theirs = (atk, dfn) if we_attack else (dfn, atk)
+        info = {"frame": s.frame, "what": "battle", "we_attack": we_attack, "siege": bool(s.i32(0x53E8FC)),
+                "ours": {k: ours.get(k) for k in ("id", "men", "troops", "strength")},
+                "theirs": {k: theirs.get(k) for k in ("id", "owner", "men", "troops", "strength")},
+                "county": (atk or dfn).get("county")}
+        tactic = self.ask("battle", dict(info, state=st)) or "auto"
+        if tactic == "auto":
+            s.move(*AUTO_RESOLVE, frames=6)
+            s.click(*AUTO_RESOLVE)
+            s.run(20)
+            self.events.append(dict(info, tactic="auto"))
+            return
+        s.move(*battle.TAKE_FIELD, frames=6)
+        s.click(*battle.TAKE_FIELD)
+        s.run(30)
+        rec = battle.fight(s, self, tactic, log=self.log)
+        self.fields += 1
+        self.events.append(dict(info, **rec))
+
     def season(self):
         return self.s.u32(SEASON_VA)
 
@@ -164,11 +201,11 @@ class UI:
                 self.siege()
             elif sc in DISMISS_RMB:
                 self.s.click(*BACK, right=True)
-            elif sc == BATTLE_PROMPT:          # real-time battles are out of scope: always auto-resolve
+            elif sc == BATTLE_PROMPT:          # take the field (battle.fight) or auto-resolve
                 self.battles += 1
-                self.s.move(*AUTO_RESOLVE, frames=6)
-                self.s.click(*AUTO_RESOLVE)
-                self.s.run(20)
+                self.battle_prompt()
+            elif sc == TITLE_MENU and self.s.i32(l2state.ENGINE_STATE) == 2:
+                raise GameEnded(f"title menu at frame {self.s.frame}")
             elif sc == GAME_OVER:
                 self.game_overs += 1
                 self.s.click(320, 240)
@@ -205,14 +242,17 @@ class UI:
         raise Stuck(f"season did not advance after End turn ({s0}/{y0}); screens {[hex(x) for x in seen[-12:]]}")
 
     def _panel(self, opener, want_screen, frames=20):
-        self.s.click(*opener)
-        self.s.run(frames)
-        if self.s.screen != want_screen:
+        for attempt in range(2):
+            self.s.click(*opener)
+            self.s.run(frames)
             if self.s.screen == 0x27:        # a first-time hint scroll over the panel
                 self.s.click(*BACK, right=True)
                 self.s.run(frames)
-            if self.s.screen != want_screen:
-                raise Stuck(f"panel {want_screen:#x} did not open (screen {self.s.screen:#x})")
+            if self.s.screen == want_screen:
+                return
+            if attempt == 0 and self.s.screen != 0:   # something came up meanwhile (a battle prompt as an army
+                self.settle(max_frames=4000)          # arrives mid-season [v3 s207]): deal with it, try again
+        raise Stuck(f"panel {want_screen:#x} did not open (screen {self.s.screen:#x})")
 
     def close(self):
         self.s.click(*BACK, right=True)

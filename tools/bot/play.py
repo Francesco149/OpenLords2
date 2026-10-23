@@ -8,7 +8,8 @@
 
 Per turn: settle the map → read the state (l2state.snapshot) → ask Jev typed questions (policy.decide) →
 sample a plan → apply it through the UI (per county: select via the minimap, tax, rations, industry
-split, draft an army; per army: march on a target county's town) → End turn. Battles auto-resolve.
+split, draft an army; per army: march on a target county's town) → End turn. A battle is auto-resolved or
+fought on the battlefield (battle.py), as Jev chooses at the "take the field?" scroll.
 Every input lands in the session's trace, so a game is a scenario: tests/scenarios/bot-s<seed>-t<turns>/
 {trace.jsonl, decisions.jsonl, turns.tsv} replays with no LLM and no network.
 """
@@ -29,7 +30,7 @@ import l2state  # noqa: E402
 import llm  # noqa: E402
 import policy  # noqa: E402
 from rhbot import Session  # noqa: E402
-from ui import UI, Stuck  # noqa: E402
+from ui import UI, GameEnded, Stuck  # noqa: E402
 
 START = os.path.join(ROOT, "tests", "scenarios", "newgame-playnow", "trace.jsonl")
 CB, CS = l2state.COUNTY_BASE, l2state.COUNTY_STRIDE
@@ -76,6 +77,9 @@ def apply_plan(s, ui, st, plan, log):
         done.append(("trade", plan["trade"], actions.trade(s, ui, plan["trade"]["good"], plan["trade"]["qty"])))
     if plan.get("gift"):
         done.append(("gift", plan["gift"], actions.gift(s, ui, plan["gift"])))
+    if plan.get("diplo"):
+        d = plan["diplo"]
+        done.append(("diplo", d, actions.diplomacy(s, ui, d["action"], d["realm"], crowns=d.get("crowns", 0), county=d.get("county"))))
     st = l2state.snapshot(s.read)
     for aid, order in plan["armies"].items():
         army = next((a for a in st["armies"] if a["id"] == aid and a["owner"] == st["me"]), None)
@@ -83,6 +87,8 @@ def apply_plan(s, ui, st, plan, log):
             continue
         if order["do"] == "leave":
             r = actions.leave_castle(s, ui, army, order["cell"])
+        elif order["do"] == "disband":
+            r = actions.disband(s, ui, army, order["cell"])
         else:
             if order["do"] == "combine":           # the other army may have moved this season
                 other = next((a for a in l2state.snapshot(s.read)["armies"] if a["id"] == order.get("army")), None)
@@ -93,7 +99,6 @@ def apply_plan(s, ui, st, plan, log):
                               intent=order["do"] if order["do"] in ("besiege", "garrison", "combine") else None)
         done.append(("order", aid, order, r))
         ui.settle(max_frames=1200)
-    return done
     return done
 
 
@@ -108,7 +113,7 @@ def summary(st):
             "armies": sum(1 for a in st["armies"] if a["owner"] == me), "men": sum(a.get("men", 0) for a in st["armies"] if a["owner"] == me)}
 
 
-def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, start=START, persona=None):
+def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, start=START, persona=None, quick="off"):
     rng = random.Random(seed)
     persona = persona or rng.choice(sorted(policy.PERSONAS))
     name = name or f"bot-s{seed}-t{turns}"
@@ -118,7 +123,7 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
         name = f"{base}-{k}"                                                 # seed does not reproduce one
     t0 = time.time()
     decisions, rows = [], []
-    stuck = None
+    stuck = ended = None
     asked = []
 
     def asker(kind, info):
@@ -147,10 +152,14 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
             ui = UI(s, log=log, ask=asker)
             ui.settle()
         orders = {}                          # army id → standing order (retail ends a march at the season's end)
-        try:
-            quick, raw = policy.quick_battles(l2state.snapshot(s.read), rng, temperature, session_id=name, persona=persona)
-        except RuntimeError as e:
-            quick, raw = False, {"error": str(e)}
+        raw = None
+        if quick == "jev":                   # v2: Jev chooses; v3 default "off": every battle offers the field
+            try:
+                quick, raw = policy.quick_battles(l2state.snapshot(s.read), rng, temperature, session_id=name, persona=persona)
+            except RuntimeError as e:
+                quick, raw = False, {"error": str(e)}
+        else:
+            quick = quick == "on"
         quick = actions.quick_battles(s, ui, quick) if quick else False
         decisions.append({"turn": -1, "frame": s.frame, "persona": persona, "quick_battles": quick, "jev": raw})
         log(f"[{name}] persona {persona}, quick battles {quick}")
@@ -162,6 +171,8 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
                 log(f"[{name}] turn {t}: no counties left — playing out the defeat")
                 try:
                     ui.end_turn()
+                except GameEnded as e:
+                    ended = str(e); log(f"[{name}] game over: {e}"); break
                 except Stuck as e:
                     stuck = str(e); log(f"[{name}] defeat flow STUCK: {e}"); break
                 continue
@@ -181,6 +192,11 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
             try:
                 done = apply_plan(s, ui, st, plan, log)
                 ui.end_turn()
+            except GameEnded as e:
+                ended = str(e)
+                log(f"[{name}] turn {t}: game over: {e}")
+                decisions.append({"turn": t, "frame": s.frame, "ended": ended})
+                break
             except Stuck as e:
                 stuck = str(e)
                 s.shot(f"stuck_t{t}")
@@ -192,7 +208,8 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
                                                                 "garrisoned", "besieging")} for a in st["armies"]],
                               "events": ui.events[ev0:], "asked": asked[ask0:], "jev": raw})
             log(f"[{name}] t{t:3d} {sm['season']:6s} {sm['year']} f{s.frame:6d} counties {sm['counties']} pop {sm['population']:5d} "
-                f"happy {sm['happiness']:3d} crowns {sm['crowns']:6d} armies {sm['armies']}/{sm['men']} battles {ui.battles}+{ui.quick} sieges {ui.sieges} "
+                f"happy {sm['happiness']:3d} crowns {sm['crowns']:6d} armies {sm['armies']}/{sm['men']} battles {ui.battles}+{ui.quick} "
+                f"field {ui.fields} sieges {ui.sieges} "
                 f"plan {json.dumps(plan)[:110]}")
     out = os.path.join(ROOT, "tests", "scenarios", name)
     os.makedirs(out, exist_ok=True)
@@ -200,7 +217,8 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
     hdr = [f"# {name}: autoplay (tools/bot/play.py), seed {seed}, {len(rows)} turns, persona {persona}, Jev {llm.DECISIONS_MODEL} T={temperature};",
            (f"# a custom game ({start.split(':', 1)[1]}, defaults) set up from the title." if custom else
             f"# starts from {os.path.basename(os.path.dirname(start))} (its events are the prefix).")
-           + " Decisions + Jev answers: decisions.jsonl; per-turn state: turns.tsv." + (f" Ended STUCK: {stuck}" if stuck else ""),
+           + " Decisions + Jev answers: decisions.jsonl; per-turn state: turns.tsv." + (f" Ended STUCK: {stuck}" if stuck else "")
+           + (f" Game over: {ended}" if ended else ""),
            json.dumps({"meta": dict({"step_ms": 17, "vbase": 1000000, "frames": int(s.result["frame"])},
                                     **({"movies": True} if meta.get("movies") else {}))})]
     open(os.path.join(out, "trace.jsonl"), "w").write("\n".join(hdr + lines) + "\n")
@@ -217,7 +235,8 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
     for e in ui.events:
         k = e["what"] + (":" + e.get("text", "") if e["what"] == "confirm" else "")
         kinds[k] = kinds.get(k, 0) + 1
-    log(f"[{name}] {len(rows)} turns in {time.time() - t0:.0f}s, battles {ui.battles} + quick {ui.quick}, sieges {ui.sieges}, game overs {ui.game_overs}, "
+    log(f"[{name}] {len(rows)} turns in {time.time() - t0:.0f}s, battles {ui.battles} (field {ui.fields}) + quick {ui.quick}, "
+        f"sieges {ui.sieges}, game overs {ui.game_overs}, "
         f"events {kinds}, unknown screens {sorted(hex(k) for k in ui.unknown)} "
         f"→ {os.path.relpath(out, ROOT)}  (Jev: {llm.USAGE})")
     return out
@@ -233,8 +252,10 @@ def main():
     ap.add_argument("--temperature", type=float, default=1.0)
     ap.add_argument("--start", default="newgame-playnow", help="scenario the game starts from (newgame-movies: movies on), "
                     "or custom:MAP (England, Scotland, France: a custom game with five nobles, set up from the title)")
-    ap.add_argument("--prefix", default="bot2", help="scenario name prefix (bot2: autoplay v2 — war, sieges, events)")
+    ap.add_argument("--prefix", default="bot3", help="scenario name prefix (bot3: autoplay v3 — battlefield, long games)")
     ap.add_argument("--persona", choices=sorted(policy.PERSONAS), help="default: sampled from the seed")
+    ap.add_argument("--quick", choices=("off", "on", "jev"), default="off",
+                    help="Options > 'Fight humans only?': off = every battle offers the field (v3), jev = Jev chooses (v2)")
     a = ap.parse_args()
     start = a.start if a.start.startswith("custom:") else os.path.join(ROOT, "tests", "scenarios", a.start, "trace.jsonl")
     tag = ("" if a.start == "newgame-playnow" else "m" if a.start == "newgame-movies" else
@@ -245,10 +266,11 @@ def main():
         seeds = list(range(lo, hi + 1))
     name = lambda sd: f"{a.prefix}{tag}-s{sd}-t{a.turns}"
     if len(seeds) == 1:
-        play(seeds[0], a.turns, a.target, a.temperature, name=name(seeds[0]), start=start, persona=a.persona)
+        play(seeds[0], a.turns, a.target, a.temperature, name=name(seeds[0]), start=start, persona=a.persona, quick=a.quick)
         return
     with concurrent.futures.ThreadPoolExecutor(max_workers=a.jobs) as ex:
-        for out in ex.map(lambda sd: play(sd, a.turns, a.target, a.temperature, name=name(sd), start=start, persona=a.persona), seeds):
+        for out in ex.map(lambda sd: play(sd, a.turns, a.target, a.temperature, name=name(sd), start=start, persona=a.persona,
+                                          quick=a.quick), seeds):
             print("done", out)
 
 

@@ -138,7 +138,8 @@ def march(s, ui, army, target_cell, intent=None):
 VIEW_TROOPS, PANEL_ROW = (355, 425), 0x553D2C
 
 
-def leave_castle(s, ui, army, castle_cell):
+def leave_castle(s, ui, army, castle_cell, button=68):
+    """the garrison marches out (the troop panel's first button); button=132: disband it instead"""
     ui.settle(max_frames=200)
     pt = mapview.locate(s, *castle_cell)
     if pt is None and mapview.scroll_to(s, *castle_cell):
@@ -154,11 +155,24 @@ def leave_castle(s, ui, army, castle_cell):
     if s.screen != 0x04 or not 300 < y < 470:
         ui.settle(max_frames=600)
         return "no troop panel"
-    s.move(68, y, frames=6); s.click(68, y); s.run(40)
+    s.move(button, y, frames=6); s.click(button, y); s.run(40)
+    if button == DISBAND and s.screen == 0x1e:   # "Disband army?" (confirm kind 6)
+        ui.confirm(want=True)
     ui.settle(max_frames=600)
     st, mine = _mine(s)
     a2 = next((x for x in mine if x["id"] == army["id"]), None)
+    if button == DISBAND:
+        return "disbanded" if a2 is None else "still there"
     return "left" if a2 and not a2.get("garrisoned") else "still inside"
+
+
+# the troop panel's second button (table 0x4dc5a8 entry 1, FUN_0043733a) → confirm 6 → FUN_0043744f →
+# FUN_00438681: the army's men go back to the county [live 2026-10-24: bot3-s103-t36's garrison]
+DISBAND = 132
+
+
+def disband(s, ui, army, castle_cell):
+    return leave_castle(s, ui, army, castle_cell, button=DISBAND)
 
 
 # ---- Options > Advanced > "Fight humans only?" (DAT_0053f284: 1 = No, the default; 0 = Yes → battles against
@@ -236,29 +250,65 @@ def trade(s, ui, good, qty):
     return "done"
 
 
-# ---- diplomacy: a gift to a noble (Noble Faces → the noble → +10 crowns a click → dispatch) ----
+# ---- diplomacy (screen 0x0b): the other lords' portraits down the left in realm order (x 90, y 90 + 100 k; the first
+# is selected on opening), the selected lord's actions on the right: gift (415,118) → +10 crowns a click (200,255) →
+# dispatch (303,293); compliment (415,168); insult (415,218); for an ally also terminate the alliance (415,268), ask
+# for help (415,318) and ask to attack (415,368) → screen 0x1a "Plead for help from …": pick the county on its map
+# (the minimap grid at (96,176): a county's minimap pixel - (384,-151)), then the thumbs up (335,262)
+# [live 2026-10-24: bot2cen-s72-t30 turn 11, "Help in Lancashire" dispatched, the Countess's reply next turn]
 DIPLOMACY_ICON, NOBLE, GIFT_MORE, DISPATCH = (622, 447), (415, 118), (200, 255), (303, 293)
+DIPLO_ACTION = {"gift": (415, 118), "compliment": (415, 168), "insult": (415, 218), "terminate": (415, 268),
+                "help": (415, 318), "attack": (415, 368)}
+PLEA_YES = (335, 262)
 
 
-def gift(s, ui, crowns):
+def _portrait(st, realm):
+    others = [r["id"] for r in st["realms"] if r["id"] != st["me"] and r.get("active")]
+    return (90, 90 + 100 * others.index(realm)) if realm in others else None
+
+
+def diplomacy(s, ui, action, realm=None, crowns=0, county=None):
+    """one diplomatic act toward `realm` (default: the first lord listed): gift `crowns`, compliment, insult, or for
+    an ally ask for help in / ask to attack `county` → what happened"""
+    st = l2state.snapshot(s.read)
     s.click(*DIPLOMACY_ICON); s.run(30)
     _dismiss_hint(s)
     if s.screen != 0x0b:
         ui.settle(max_frames=600)
         return f"diplomacy did not open ({s.screen:#x})"
-    s.click(*NOBLE); s.run(30)
+    if realm is not None:
+        pt = _portrait(st, realm)
+        if pt is None:
+            s.click(*BACK, right=True); s.run(GAP); ui.settle(max_frames=600)
+            return "no such lord"
+        s.click(*pt); s.run(20)
+    s.click(*DIPLO_ACTION[action]); s.run(30)
     _dismiss_hint(s)
-    for _ in range(max(1, min(50, crowns // 10))):
-        s.click(*GIFT_MORE, frames=3)
-    s.run(10)
-    s.click(*DISPATCH); s.run(30)
+    result = "sent"
+    if action == "gift":
+        for _ in range(max(1, min(50, crowns // 10))):
+            s.click(*GIFT_MORE, frames=3)
+        s.run(10)
+        s.click(*DISPATCH); s.run(30)
+    elif action in ("help", "attack"):
+        c = next((x for x in st["counties"] if x["id"] == county), None)
+        if s.screen != 0x1a or c is None or not c.get("minimap_click"):
+            result = f"no plea screen ({s.screen:#x})"
+        else:
+            mx, my = c["minimap_click"]
+            s.click(mx - 384, my + 151); s.run(20)
+            s.move(*PLEA_YES, frames=4); s.click(*PLEA_YES); s.run(30)
     for _ in range(3):
         if s.screen == 0:
             break
         s.click(*BACK, right=True); s.run(GAP)
-    s.run(200)                             # the noble's reply scroll arrives a few seconds later
+    s.run(200)                             # a reply scroll arrives a few seconds later
     ui.settle(max_frames=600)
-    return "sent"
+    return result
+
+
+def gift(s, ui, crowns, realm=None):
+    return diplomacy(s, ui, "gift", realm, crowns=crowns)
 
 
 # ---- castles (screen 0x1b): the design strip, then "Start construction?" yes (verified 2026-10-23) ----

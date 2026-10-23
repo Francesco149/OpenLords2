@@ -418,6 +418,8 @@ def snapshot(read, fair=None):
                 "iron": _i32(r, 0x120), "stone": _i32(r, 0x128), "wood": _i32(r, 0x130),  # [live: court]
                 "weapons": {WEAPONS[w]: _i32(r, 0x140 + 4 * w) for w in range(6)},       # [live: court]
                 "score": _i32(r, 0x50),                            # +0x50 composite score [port]
+                "troop_strength": _i32(r, 0x14),                   # +0x14 avg troop strength (rankings); an ally helps
+                                                                   # from 750/800/900/1000 by personality (FUN_004a3551) [decomp]
                 "ally": r[0x81],                                   # +0x81 alliance partner (D_LORD) [port: form_alliance]
             })
             rel = {}
