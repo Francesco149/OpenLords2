@@ -251,6 +251,11 @@ claims are unverified until rhost re-checks them (`docs/audits/2026-10-23-method
   162 reached, 0 divergences** (36 scenarios), hybrid pass bit-exact; quirks #229–#235.
   **Bot v2** (Jev, ~$0.19): sieges, quick battles, mercenaries, garrisons, AI alliance offers, event popups →
   3 scenarios; coverage 46.4% → 48.8%.
+  **Batch 4** (`hybrid-batch4.md`): the economy / UI-action side (merchant, diplomacy, send supplies, county
+  actions) — 218 hooks; `econ-tour` scenario; #236. **Bot v3** (~$0.32): **fights on the battlefield**
+  (`tools/bot/battle.py`), long custom games (events roll only for odd counties) → 11 scenarios; coverage
+  49.1% → **63.5%**. Its games exposed a binding gap (the AI score table) and #237 — fixed, 0 divergences.
+  Pointer-table hooks (entry patch + trampoline) landed.
 - **Top blocker:** none for logic parity. Smacker movies are skipped in rhost (retail tolerates it).
 
 ## Where to read next

@@ -7,6 +7,24 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-10-24 — Hybrid batches 2–4 (218 hooks), bot v2–v3 (fights on the battlefield; coverage 63.5%)
+
+Direction: hybrid (owner). Batches by subagents, adjudicated here; findings `docs/findings/hybrid-batch2-combat.md`,
+`hybrid-batch3.md`, `hybrid-batch4.md`.
+- **Hooks**: battle resolver + army movement (59), army-state machine (9), battle exits + siege assault (6),
+  realm events + season passes (32), economy / UI actions (22) — 218 in all, 0 divergences on identical state,
+  every hook replaced at once reproduces the corpus bit-exactly. Port bugs fixed: #229–#237 (stack residue
+  read as an uninitialized waypoint, a +0x100 field offset, owner/realm swaps, private copies of retail
+  .data — coalition table, economy scratch, the cell sweeps' counter).
+- **Bots**: v2 (sieges, quick battles, mercenaries, garrisons, alliance offers, event popups) and v3 (takes the
+  field and fights — select, attack, mop up; long "steward" games: realm events roll only for odd counties)
+  → 14 scenarios; retail coverage 46.4% → 63.5% (the battlefield). ~$0.51 of Jev.
+- **Tooling**: shadow rolls back rhost's host layers (media, DirectSound, handles, the message queue);
+  pointer-table hooks (entry patch + trampoline, `--hook-entry` test); a crash ends the run; a taken fixed
+  range relaunches (apphelp.dll on Windows); the corpus gate checks tracked scenarios only.
+- **OOM (2026-10-23 22:12)**: 22 resident `nix develop` evaluators (8 GB) under two agents' verifies →
+  `tools/dev` (cached `nix print-dev-env`, nothing resident) + a memory rule in CLAUDE.md.
+
 ## 2026-10-23 — Hybrid pilot: the AI realm turn verified against retail; verify tooling for batches
 
 `docs/findings/hybrid-pilot-ai.md`. 88 of 89 hooked AI-realm-turn functions (brain FSM + movement, economy
