@@ -36,8 +36,9 @@
 - [ ] re-verify earlier "1:1" claims under rhost (batches)
 
 ## Human queue (ranked by what it unblocks)
-1. **Approve the direction** (audit §8 P1): rhost foundation, per-function loop, hybrid pilot.
-2. **Play a few turns in rhost** (visible window on your desktop, never fullscreen; close it to finish):
-   `python3 tools/rhost/rhost.py record try-me` → `tests/scenarios/try-me/`. Look for: the game behaves like
-   the real one (menus, map, turns); the window shows every frame. A human trace seeds the corpus.
-3. lords2/sotes/ys6-decomp podman containers idle (`sleep infinity`): stop or keep?
+1. **Record human traces** for what the bot can't reproduce — `docs/human-traces.md` §A first (interactive
+   battles, sieges, a late-game campaign, the AI's diplomacy proposals, event decisions, natural mouse
+   dynamics): `python3 tools/rhost/rhost.py record NAME [--from SCEN]` (normal window, never fullscreen;
+   close it to finish).
+
+Resolved 2026-10-23: direction approved (audit §8 P1); lords2/sotes/ys6-decomp containers stopped.

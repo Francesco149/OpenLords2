@@ -708,7 +708,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a975d | FUN_004a975d | 222 | engine_army_move_confirm.c, engine_army_move_confirm.h |
 | 0x4a983b | FUN_004a983b | 195 | engine_army_move_confirm.c, engine_army_move_confirm.h |
 | 0x4a98fe | FUN_004a98fe | 412 | engine_army_move_confirm.c, engine_army_move_confirm.h |
-| 0x4a9a9a | FUN_004a9a9a | 1047 | engine.c, engine_armory.h, engine_combat.c (+1) |
+| 0x4a9a9a | FUN_004a9a9a | 1047 | engine.c, engine_armory.h, engine_combat.c (+2) |
 | 0x4a9eb1 | FUN_004a9eb1 | 103 | engine_combat.c |
 | 0x4a9f18 | FUN_004a9f18 | 90 | engine_combat.c |
 | 0x4a9f72 | FUN_004a9f72 | 199 | engine_combat.c |

@@ -175,6 +175,10 @@ should measure wrapper cost on one subsystem (suggest: the AI brain FSM, already
 
 ## 8. Checklist for you
 
+> **Owner, 2026-10-23:** audit approved — continue with this workflow; stop the idle decomp containers
+> (done: lords2-, sotes-, ys6-decomp); keep a list of interactions that need real UI play, hardest to
+> synthesize first (`docs/human-traces.md`).
+
 **P1 — decisions**
 1. **Direction**: approve rhost as the verification foundation and the per-function loop (§3); approve a
    hybrid pilot on one already-ported subsystem before deciding hybrid vs standalone.

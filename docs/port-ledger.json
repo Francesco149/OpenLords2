@@ -17940,7 +17940,8 @@
     "src/engine.c",
     "src/engine_armory.h",
     "src/engine_combat.c",
-    "src/engine_combat.h"
+    "src/engine_combat.h",
+    "src/engine_territory.c"
    ]
   },
   {
