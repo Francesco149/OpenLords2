@@ -971,7 +971,7 @@ static int ti_sendsupplies_target(const engine_ingame_input_in_t *in,
                                   engine_ingame_state_t *st)
 {
     (void)st;
-    return engine_sendsupplies_target_select(g_input_game_x, g_input_game_y,
+    return engine_sendsupplies_target_select(0x60, 0x68, g_input_game_x, g_input_game_y,
                                              in->lmb_pressed);
 }
 

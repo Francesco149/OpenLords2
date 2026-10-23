@@ -26,6 +26,7 @@ void engine_territory_bind_cells(uint8_t *cells);
  * marks full-screen.  Optional — leave unbound (NULL) and the repaint
  * request is skipped (host/headless). */
 void engine_territory_set_dirty_state(engine_dirty_rect_state_t *state);
+engine_dirty_rect_state_t *engine_territory_dirty_state(void);   /* the bound state (NULL: none) */
 
 /* Bind the per-key cell roster (retail `DAT_0053ea00` = save entry 12,
  * g_misc_1360 — 17 rows × 20 i32) that engine_territory_rebuild_cell_roster

@@ -90,6 +90,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/game_init.c \
                    ../src/engine_realm.c \
                    ../src/engine_realm_globals.c \
+                   ../src/engine_economy_globals.c \
                    ../src/engine_realm_events.c \
                    ../src/engine_realm_upkeep.c \
                    ../src/engine_army_ai.c \

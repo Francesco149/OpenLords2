@@ -8,6 +8,8 @@
  *     caller's, exactly as engine_county_panels);
  *   - engine_sendsupplies_refresh (FUN_0041aea2)  — the per-frame goods table;
  *   - the button/hotspot tables below, click-dispatched by engine.c's router.
+ * The model (staging, arrows, retarget, commit, the county-action tabs) is
+ * engine_sendsupplies_model.c.
  */
 
 #include <stdint.h>
@@ -16,8 +18,6 @@
 #include "engine_sendsupplies.h"
 
 #include "engine_army_ai.h"        /* dispatch_caravan / caravan_order (FUN_004292af, DAT_005678c0) */
-#include "engine_army_economy.h"   /* provision / plan_realm (FUN_0044df5f / FUN_004485a5) */
-#include "engine_territory.h"      /* workforce / grade cells (FUN_0044f6e7 / FUN_0044d913) */
 #include "engine_minimap.h"        /* type/region grids + plot (FUN_0040a01d / FUN_00410cbd) */
 #include "save.h"                  /* g_per_army_768 (county records) */
 #include "save_schema_globals.h"   /* s_slot_0057c8cc / _0057c934 / _0057c92c */
@@ -29,101 +29,6 @@
 #include "gfx_text_label.h"        /* decimal figures (FUN_00402f64) */
 #include "gfx_dispatch.h"          /* icon sprites (FUN_0040a21a) */
 
-/* County record stride/offsets (retail DAT_0053f9b0 family, stride 0x300). */
-#define CTY_REC(k)          (&g_per_army_768[(size_t)(k) * 0x300])
-#define CTY_GRAIN_STOCK     0x224   /* DAT_0053fbd4 — grain (ARMY_PROVISION_RAW) */
-#define CTY_CATTLE_STOCK    0x250   /* DAT_0053fc00 — cattle (ARMY_STOCK_A)      */
-
-/* Destination county — retail DAT_00553c78 (transient UI state, not save-
- * tracked; seeded to the source on entry, re-pointed by target_select). */
-static int g_send_target;
-
-int engine_sendsupplies_target(void) { return g_send_target; }
-
-static int32_t cty_i32(int county, int off)
-{
-    int32_t v;
-    memcpy(&v, CTY_REC(county) + off, sizeof v);
-    return v;
-}
-
-/* ── FUN_0043ae30 param-3 body — stage the county's stock ──────────────── */
-void engine_sendsupplies_seed(int player, int source_county)
-{
-    int32_t *ord = engine_army_ai_caravan_order(player);
-    ord[0] = cty_i32(source_county, CTY_GRAIN_STOCK);   /* grain have  */
-    ord[1] = 0;                                         /* grain send  */
-    ord[4] = cty_i32(source_county, CTY_CATTLE_STOCK);  /* cattle have */
-    ord[5] = 0;                                         /* cattle send */
-    g_send_target = source_county;                      /* DAT_00553c78 */
-}
-
-/* ── Arrows / all-toggle (retail FUN_0043b27a / b1ca / b32a) ────────────
- * `good` is retail DAT_0059154c (0 = grain, 2 = cattle); have = ord[good*2],
- * to-send = ord[good*2+1].  Steps ±1 below 11, ±10 at 11+ (retail's `< 0xb`
- * branch).  All operate on the LOCAL player's staging order (DAT_0057c8cc). */
-void engine_sendsupplies_arrow_up(int good)     /* have → to-send */
-{
-    int32_t *ord = engine_army_ai_caravan_order((int)s_slot_0057c8cc);
-    int h = good * 2, s = good * 2 + 1;
-    if (ord[h] < 0xb) {
-        if (ord[h] != 0) { ord[h] -= 1;  ord[s] += 1;  }
-    } else {             ord[h] -= 10; ord[s] += 10; }
-}
-
-void engine_sendsupplies_arrow_down(int good)   /* to-send → have */
-{
-    int32_t *ord = engine_army_ai_caravan_order((int)s_slot_0057c8cc);
-    int h = good * 2, s = good * 2 + 1;
-    if (ord[s] < 0xb) {
-        if (ord[s] != 0) { ord[s] -= 1;  ord[h] += 1;  }
-    } else {             ord[s] -= 10; ord[h] += 10; }
-}
-
-void engine_sendsupplies_toggle_all(int good)   /* send-all / return-all */
-{
-    int32_t *ord = engine_army_ai_caravan_order((int)s_slot_0057c8cc);
-    int h = good * 2, s = good * 2 + 1;
-    if (ord[s] == 0) {
-        if (ord[h] != 0) { ord[s] += ord[h]; ord[h] = 0; }
-    } else {             ord[h] += ord[s]; ord[s] = 0; }
-}
-
-/* ── FUN_0043b412 — retarget the shipment by clicking the thumbnail ─────── */
-int engine_sendsupplies_target_select(int cursor_x, int cursor_y, int lmb_pressed)
-{
-    /* Retail gates on DAT_004eafb4 (the LMB-press edge). */
-    if (!lmb_pressed) {
-        return 0;
-    }
-    const int ox = 0x60, oy = 0x68;                 /* FUN_0043b412(0x60,0x68) */
-    if (cursor_x < ox || cursor_x >= ox + 0x80) {
-        return 0;
-    }
-    if (cursor_y < oy || cursor_y >= oy + 0x80) {
-        return 0;
-    }
-    /* retail index: DAT_004e65fc + ((DAT_004e65f4 - oy) * 0x80 - ox). */
-    uint8_t cell = g_minimap_region_grid[cursor_x + (cursor_y - oy) * 0x80 - ox];
-    if (cell == 0) {
-        return 0;
-    }
-    g_send_target = cell;
-    return 1;
-}
-
-/* ── FUN_0043b145 — commit: dispatch the caravan + recompute the source ─── */
-void engine_sendsupplies_commit(int player, int source, uint8_t target)
-{
-    engine_army_ai_dispatch_caravan(player, source, target);      /* FUN_004292af */
-    engine_army_economy_provision(source, (int)s_slot_0057c934);  /* FUN_0044df5f */
-    engine_territory_allocate_realm_workforce(source);            /* FUN_0044f6e7 */
-    engine_territory_grade_feature_cells(source);                 /* FUN_0044d913 */
-    engine_army_economy_plan_realm(source, (int)s_slot_0057c92c); /* FUN_004485a5 */
-    engine_territory_allocate_realm_workforce(source);            /* (retail repeats */
-    engine_territory_grade_feature_cells(source);                 /*  the recompute  */
-    engine_army_economy_plan_realm(source, (int)s_slot_0057c92c); /*  triplet twice) */
-}
 
 /* ── one localized single-line render bound to the ctx (FUN_00402d37) ───── */
 static void ss_loc(const engine_sendsupplies_ctx_t *ctx, int grp, int sub,

@@ -5,7 +5,8 @@
  * Every draw mirrors FUN_00417960 (the gift panel) 1:1 — coordinates, fonts,
  * colours, and the line-x-accumulator chaining.  Nothing here computes: the
  * figures are saved-state reads (the partner's standing offer, the staged gift
- * amount).  Modes 1..6 (message / ally-attack) are DEFERRED — they need the
+ * amount).  The model (mode, arrow, seal) is engine_diplomacy_action_model.c.
+ * Modes 1..6' renders (message / ally-attack) are DEFERRED — they need the
  * runtime message buffer (0x53f1e0) / the target list (0x5530b0) respectively.
  */
 
@@ -14,7 +15,6 @@
 #include <stdint.h>
 
 #include "engine_button.h"          /* engine_button_render_list (FUN_0040cfd2) */
-#include "engine_diplomacy.h"       /* engine_diplomacy_queue_action (FUN_004a2621) */
 #include "save.h"                   /* g_player_strategic_352 */
 #include "save_schema_globals.h"    /* s_slot_0057c8cc / _00553fbc / _0057a0f8 */
 
@@ -29,7 +29,6 @@
 
 /* Per-pair offsets into the strategic record (row p, stride 0x10 by other). */
 #define F_BEST_OFFER 0x8c   /* i32 — the partner's cached best offer from us   */
-#define F_CASH       0x118  /* i32 — a player's treasury (DAT_0057c018)        */
 
 static int32_t rec_i32(const uint8_t *rec, int off)
 {
@@ -37,19 +36,6 @@ static int32_t rec_i32(const uint8_t *rec, int off)
     __builtin_memcpy(&v, rec + off, sizeof v);
     return v;
 }
-
-/* DAT_005651cc — the current action mode (0..6).  Transient UI, NOT save-
- * tracked (the queued action itself lives in the save-schema inbox).  Written
- * by the 0x0b button entries (via engine_diplomacy_action_set_mode). */
-static int g_diplo_action_mode;
-
-/* DAT_0052afa4 — "a diplomacy action was issued this frame" latch, set by the
- * confirm (FUN_00436408).  Transient; no live consumer in the port yet (retail
- * reads it in the end-turn diplomacy pass), kept for fidelity. */
-static int g_diplo_action_taken;
-
-int  engine_diplomacy_action_mode(void)          { return g_diplo_action_mode; }
-void engine_diplomacy_action_set_mode(int mode)  { g_diplo_action_mode = mode; }
 
 /* ── The gift screen's 4 widgets (retail DAT_004dd9d0, r2-extracted) ──────
  * two amount arrows (type 4, action FUN_00436372, param 1 = up / 0 = down) and
@@ -181,43 +167,4 @@ void engine_diplomacy_action_refresh(const engine_diplomacy_action_ctx_t *ctx)
     engine_button_render_list(0, 0, engine_diplomacy_action_buttons(),
                               engine_diplomacy_action_widget_count(),
                               ctx->misc_sheet, ctx->system_sheet, NULL);
-}
-
-/* ── FUN_00436372 — the gift amount arrow (param0: 1 = up, 0 = down) ─────── */
-void engine_diplomacy_action_arrow(int param0)
-{
-    int amt = (int)s_slot_0057a0f8;
-    if (param0 == 1) {
-        amt += 0xa;
-    } else if (param0 == 0) {
-        amt -= 0xa;
-    }
-    if (amt < 0) {
-        amt = 0;
-    }
-    int32_t cash = rec_i32(SREC(g_player_strategic_352, (int)s_slot_0057c8cc),
-                           F_CASH);
-    if (cash < amt) {
-        amt = cash;                             /* can't stage more than we hold */
-    }
-    s_slot_0057a0f8 = (uint32_t)amt;
-    /* retail sets DAT_0057d340 = 2 (demand redraw) — the router does it. */
-}
-
-/* ── FUN_00436408 confirm side (mode 0) ─────────────────────────────────── */
-void engine_diplomacy_action_confirm(void)
-{
-    g_diplo_action_taken = 1;                   /* DAT_0052afa4 = 1 */
-
-    if (g_diplo_action_mode != 0) {
-        /* Non-gift modes zero the staged amount before the apply, then enqueue
-         * the message / validate the ally-attack target — DEFERRED (modes 1..6
-         * are not yet wired to navigate here). */
-        return;
-    }
-    /* mode 0 (gift): keep the staged amount, enqueue the action + transfer the
-     * gold to the partner (target 0).  Single-player only — the retail MP
-     * broadcast (FUN_0043eda0, gated on DAT_00553030) is a drop-in deferral. */
-    engine_diplomacy_queue_action((int)s_slot_0057c8cc, (int)s_slot_00553fbc,
-                                  0, (int)s_slot_0057a0f8, 0);
 }

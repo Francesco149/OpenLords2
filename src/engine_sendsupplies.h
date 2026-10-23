@@ -29,6 +29,10 @@
  *   FUN_0043b412 @ 0x43b412         → target_select (click the thumbnail → county)
  *   FUN_0043b145 @ 0x43b145 (133 B) → commit (dispatch caravan + recompute source)
  *   FUN_0043ae30 param 3            → seed (stage the county's grain/cattle)
+ *   FUN_0043ae30 @ 0x43ae30 (540 B) → engine_county_action_open (the whole tab
+ *                                     strip, retail layout)
+ * The model (all but the two renders + the button tables) is
+ * engine_sendsupplies_model.c.
  *
  * The staging array g_caravan_order[player] (retail &DAT_005678c0, stride 0x18
  * = 6 int32) holds, per player: [0/1] grain have/to-send, [2/3] sheep (unused —
@@ -42,8 +46,14 @@
 #include <stdint.h>
 
 #include "engine_button.h"
+#include "engine_event_queue.h"
 #include "engine_menu_input.h"
 #include "localization.h"
+
+/* Retail globals (engine_economy_globals.c), driven by the model
+ * (engine_sendsupplies_model.c). */
+extern int32_t g_send_target;   /* DAT_00553c78 — the shipment's destination county */
+extern int32_t g_castle_tier;   /* DAT_0056d898 — the castle screen's selected tier (the castle tab) */
 
 /* ── Render context ────────────────────────────────────────────────────
  * Built by engine.c's render seam from the save-schema externs + gfx
@@ -79,10 +89,24 @@ void engine_sendsupplies_toggle_all(int good);   /* FUN_0043b32a: all / none */
  * zero the to-send columns, and default the target to the source county. */
 void engine_sendsupplies_seed(int player, int source_county);
 
-/* FUN_0043b412(0x60,0x68): on an LMB press inside the 0x80×0x80 thumbnail,
- * map the cursor to the region grid and, if it names a county, retarget the
- * shipment.  Returns 1 when a target was selected (consumes the click). */
-int engine_sendsupplies_target_select(int cursor_x, int cursor_y, int lmb_pressed);
+/* FUN_0043b412(ox, oy) (the caller: 0x60, 0x68): on an LMB press inside the
+ * 0x80×0x80 thumbnail at (ox, oy), map the cursor to the region grid and, if it
+ * names a county, retarget the shipment.  Returns 1 when a target was selected
+ * (consumes the click). */
+int engine_sendsupplies_target_select(int ox, int oy, int cursor_x, int cursor_y,
+                                      int lmb_pressed);
+
+/* FUN_0043ae30 — the county-action tab strip's action (`action` = the tab's
+ * param, retail DAT_0059154c): 1 armory, 2 treasury, 3 send supplies, 4 castle,
+ * 5 diplomacy; owner-gated tabs post notice 0x70 through `q`.  Retail layout
+ * (sets the screen byte / demand redraw); engine.c's tab arms are the port's
+ * own router.  Seams (default none): the WAV cue (FUN_00427990), the army voice
+ * cue (0x4b3714), the armory's entry (conscripts FUN_00435ebc, muster pool
+ * FUN_004aa90a, march / merc off DAT_005679d0 / DAT_0055446c). */
+void engine_county_action_open(int action, engine_event_queue_state_t *q);
+void engine_county_action_bind_wav_fn(void (*fn)(const char *, int, int));
+void engine_county_action_bind_voice_fn(void (*fn)(int));
+void engine_county_action_bind_armory_fn(void (*fn)(int county));
 
 /* FUN_0043b145: dispatch the staged caravan from `source` to `target` and
  * recompute the source county's economy (the same 6-step recompute retail

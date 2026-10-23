@@ -27,10 +27,9 @@
  * per-player strategic record; the county's grain/cattle are the county
  * record.  The compute is a handful of reads + a percentage.
  *
- * The interactive part (the up/down buy/sell arrows in the router table
- * DAT_004dd838, FUN_004ba9c8 case 0x0c) is DEFERRED — this ports the
- * RENDER.  On a fresh open the trade UI state is all zero (buy mode, net
- * 0, no error), which is the path the arrows later drive.
+ * The model — the figures, the up/down buy/sell arrows in the router table
+ * DAT_004dd838 (FUN_004ba9c8 case 0x0c), the commit — is
+ * engine_trade_model.c; the render is engine_trade.c.
  *
  * Per-record field offsets (all read-only here):
  *   county  (g_per_army_768,        stride 0x300, key = s_slot_0057c93c)
@@ -77,10 +76,35 @@ typedef struct engine_trade_ctx {
     localization_state_t *loc;
 } engine_trade_ctx_t;
 
+/* ── The trade figures (retail globals; engine_economy_globals.c) ──────────
+ * Written by the model (engine_trade_model.c), read back by the content draw. */
+extern int32_t g_trade_amount;     /* DAT_0053e9e4 — -(how much of the good you hold) */
+extern int32_t g_trade_offer;      /* DAT_0057c8c0 — the merchant's per-good offer */
+extern int32_t g_trade_max;        /* DAT_0055cd70 — offer + county markup */
+extern int32_t g_trade_afford;     /* DAT_0057a0fc — gold / max (affordable qty) */
+extern int32_t g_trade_net;        /* DAT_00554170 — running buy(+)/sell(-) amount */
+extern int32_t g_trade_total;      /* DAT_00553f64 — running total cost / receipt */
+extern int32_t g_trade_ale;        /* DAT_0053e8c0 — the ale-gift delta (good 4) */
+extern int32_t g_trade_category;   /* DAT_00568948 — 0 food / 1 raw / 2 weapon */
+extern int32_t g_trade_error;      /* DAT_0057c994 — 0 none / 1 no-crowns / -1 no-goods */
+extern int g_trade_needs_compute;  /* port-only: the open render runs the compute once */
+
+/* The arrows' 0 → positive net cue (retail FUN_00427990("s068_0N.wav", 1, 0)
+ * after DAT_005533f0 = 1); unbound = silent. */
+void engine_trade_bind_wav_fn(void (*fn)(const char *, int, int));
+
 /* ── FUN_0043530e — the merchant→grid transition's UI reset ─────────────
  * Resets buy/sell mode + the error notice to their neutral (buy) state.
  * Called when a merchant good-zone click opens the grid. */
 void engine_trade_on_open(void);
+/* … in retail layout: the reset, screen 0x0c, the open render (a seam:
+ * FUN_00416308; unbound = none) */
+void engine_trade_open(void);
+void engine_trade_bind_open_render_fn(void (*fn)(void));
+/* FUN_004357a6 in retail layout: latch the good under the cursor from the
+ * mercgrid payload `grid` (DAT_00542cf8) into DAT_0056d8ac; on an LMB press over
+ * a good, engine_trade_open and return 1. */
+int engine_merchant_zone_click(const uint8_t *grid, int cursor_x, int cursor_y, int lmb_pressed);
 
 /* ── FUN_00428daf — compute the per-good trade figures ──────────────────
  * Reads the ctx's saved state, writes the module-static trade figures
@@ -88,6 +112,13 @@ void engine_trade_on_open(void);
  * transient trade UI state (net = 0, etc.) — retail does this on every
  * (re)entry to the grid. */
 void engine_trade_compute(const engine_trade_ctx_t *ctx);
+/* … in retail layout: the ctx from the save globals (current county / player /
+ * good, trade county DAT_00553c64, offers slot 82). */
+void engine_trade_compute_current(void);
+
+/* ── FUN_00435673 — the ale-gift happiness delta (g_trade_ale) from the
+ * running total, clamped to the county's happiness headroom. */
+void engine_trade_ale_delta_recompute(void);
 
 /* ── FUN_00416308 — render the trade grid (screen 0x0c) ─────────────────
  * compute → merchant.pl8 backdrop → icontrad.pl8 icon sheet → content.
@@ -121,5 +152,9 @@ void engine_trade_arrow_down(void);   /* FUN_0043543d */
 void engine_trade_buy_all(void);      /* FUN_004355db */
 void engine_trade_sell_all(void);     /* FUN_00435541 */
 void engine_trade_confirm(void);      /* FUN_00435286 (commit; caller flips screen) */
+/* … in retail layout (the seals): commit + back to the merchant (screen 8,
+ * demand redraw 2); cancel = the flip alone */
+void engine_trade_seal_confirm(void); /* FUN_00435286 */
+void engine_trade_seal_cancel(void);  /* FUN_004352f2 */
 
 #endif /* OPENLORDS2_ENGINE_TRADE_H */

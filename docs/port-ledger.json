@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 840,
-  "ported": 125,
-  "unported": 1482,
+  "ported": 127,
+  "unported": 1480,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 965,
-  "pct_touched": 39.4,
+  "touched": 967,
+  "pct_touched": 39.5,
   "pct_tested": 34.3,
   "bytes_total": 838629,
-  "bytes_touched": 413697,
-  "pct_bytes_touched": 49.3
+  "bytes_touched": 413879,
+  "pct_bytes_touched": 49.4
  },
  "orphan_refs": [
   "0x004148",
@@ -63,6 +63,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_diplomacy_action_model.c",
     "src/engine_event_queue.c",
     "src/engine_event_queue.h",
     "src/engine_npc_schedule.c",
@@ -464,6 +465,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_diplomacy_action_model.c",
     "src/save.h",
     "src/text_input.h"
    ]
@@ -4219,6 +4221,8 @@
     "src/engine_county_panels.h",
     "src/engine_labor.c",
     "src/engine_labor.h",
+    "src/engine_sendsupplies.h",
+    "src/engine_sendsupplies_model.c",
     "src/engine_trade.h",
     "src/engine_trade_model.c"
    ]
@@ -4424,7 +4428,8 @@
     "src/engine_army_ai.h",
     "src/engine_army_state.c",
     "src/engine_sendsupplies.c",
-    "src/engine_sendsupplies.h"
+    "src/engine_sendsupplies.h",
+    "src/engine_sendsupplies_model.c"
    ]
   },
   {
@@ -6090,8 +6095,11 @@
    "name": "FUN_004352f2",
    "size": 28,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_trade.h",
+    "src/engine_trade_model.c"
+   ]
   },
   {
    "va": "0x43530e",
@@ -6181,7 +6189,8 @@
     "src/engine_ingame_input.h",
     "src/engine_merchant.c",
     "src/engine_merchant.h",
-    "src/engine_trade.h"
+    "src/engine_trade.h",
+    "src/engine_trade_model.c"
    ]
   },
   {
@@ -6315,7 +6324,9 @@
    "status": "ported",
    "src": [
     "src/engine_armory.c",
-    "src/engine_armory.h"
+    "src/engine_armory.h",
+    "src/engine_sendsupplies.h",
+    "src/engine_sendsupplies_model.c"
    ]
   },
   {
@@ -6342,7 +6353,8 @@
    "status": "ported",
    "src": [
     "src/engine.c",
-    "src/engine_noble_faces.h"
+    "src/engine_noble_faces.h",
+    "src/engine_sendsupplies_model.c"
    ]
   },
   {
@@ -6411,7 +6423,8 @@
    "src": [
     "src/engine.c",
     "src/engine_diplomacy_action.c",
-    "src/engine_diplomacy_action.h"
+    "src/engine_diplomacy_action.h",
+    "src/engine_diplomacy_action_model.c"
    ]
   },
   {
@@ -6425,7 +6438,8 @@
     "src/engine_diplomacy.c",
     "src/engine_diplomacy.h",
     "src/engine_diplomacy_action.c",
-    "src/engine_diplomacy_action.h"
+    "src/engine_diplomacy_action.h",
+    "src/engine_diplomacy_action_model.c"
    ]
   },
   {
@@ -6473,8 +6487,10 @@
    "name": "FUN_00436a88",
    "size": 154,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_sendsupplies_model.c"
+   ]
   },
   {
    "va": "0x436b22",
@@ -7118,8 +7134,8 @@
     "src/engine.c",
     "src/engine_armory.h",
     "src/engine_noble_faces.h",
-    "src/engine_sendsupplies.c",
     "src/engine_sendsupplies.h",
+    "src/engine_sendsupplies_model.c",
     "src/engine_treasury.h"
    ]
   },
@@ -7151,8 +7167,8 @@
    "status": "ported",
    "src": [
     "src/engine.c",
-    "src/engine_sendsupplies.c",
-    "src/engine_sendsupplies.h"
+    "src/engine_sendsupplies.h",
+    "src/engine_sendsupplies_model.c"
    ]
   },
   {
@@ -7162,7 +7178,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_sendsupplies.h"
+    "src/engine_sendsupplies.h",
+    "src/engine_sendsupplies_model.c"
    ]
   },
   {
@@ -7172,8 +7189,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_sendsupplies.c",
-    "src/engine_sendsupplies.h"
+    "src/engine_sendsupplies.h",
+    "src/engine_sendsupplies_model.c"
    ]
   },
   {
@@ -7185,7 +7202,8 @@
    "src": [
     "src/engine.c",
     "src/engine_sendsupplies.c",
-    "src/engine_sendsupplies.h"
+    "src/engine_sendsupplies.h",
+    "src/engine_sendsupplies_model.c"
    ]
   },
   {
@@ -7198,8 +7216,8 @@
     "src/engine.c",
     "src/engine_ingame_input.c",
     "src/engine_ingame_input.h",
-    "src/engine_sendsupplies.c",
-    "src/engine_sendsupplies.h"
+    "src/engine_sendsupplies.h",
+    "src/engine_sendsupplies_model.c"
    ]
   },
   {
@@ -7864,7 +7882,7 @@
     "src/engine_combat.c",
     "src/engine_combat.h",
     "src/engine_county_panels.h",
-    "src/engine_diplomacy_action.c",
+    "src/engine_diplomacy_action_model.c",
     "src/engine_ranking.c",
     "src/engine_ranking.h",
     "src/engine_trade_model.c"
@@ -10290,7 +10308,7 @@
     "src/engine_combat.c",
     "src/engine_realm.c",
     "src/engine_realm.h",
-    "src/engine_sendsupplies.c"
+    "src/engine_sendsupplies_model.c"
    ]
   },
   {
@@ -11017,7 +11035,7 @@
     "src/engine_army_economy.c",
     "src/engine_army_economy.h",
     "src/engine_army_move.c",
-    "src/engine_sendsupplies.c",
+    "src/engine_sendsupplies_model.c",
     "src/engine_territory.c",
     "src/engine_territory.h",
     "src/game_init.c"
@@ -11060,7 +11078,7 @@
     "src/engine_combat.c",
     "src/engine_realm.c",
     "src/engine_realm.h",
-    "src/engine_sendsupplies.c"
+    "src/engine_sendsupplies_model.c"
    ]
   },
   {
@@ -11226,7 +11244,7 @@
     "src/engine_army_economy.h",
     "src/engine_army_move.c",
     "src/engine_combat.c",
-    "src/engine_sendsupplies.c",
+    "src/engine_sendsupplies_model.c",
     "src/engine_territory.c",
     "src/engine_territory.h",
     "src/game_init.c"
@@ -13809,12 +13827,14 @@
     "src/engine_army_ai.c",
     "src/engine_army_move.c",
     "src/engine_diplomacy.c",
+    "src/engine_diplomacy_action_model.c",
     "src/engine_event_queue.c",
     "src/engine_event_queue.h",
     "src/engine_ranking.h",
     "src/engine_realm.c",
     "src/engine_realm_upkeep.c",
-    "src/engine_realm_upkeep.h"
+    "src/engine_realm_upkeep.h",
+    "src/engine_sendsupplies_model.c"
    ]
   },
   {
@@ -17286,8 +17306,8 @@
     "src/engine.c",
     "src/engine_diplomacy.c",
     "src/engine_diplomacy.h",
-    "src/engine_diplomacy_action.c",
-    "src/engine_diplomacy_action.h"
+    "src/engine_diplomacy_action.h",
+    "src/engine_diplomacy_action_model.c"
    ]
   },
   {
@@ -18083,7 +18103,9 @@
     "src/engine_armory.c",
     "src/engine_armory.h",
     "src/engine_ingame_input.c",
-    "src/engine_ingame_input.h"
+    "src/engine_ingame_input.h",
+    "src/engine_sendsupplies.h",
+    "src/engine_sendsupplies_model.c"
    ]
   },
   {

@@ -144,6 +144,11 @@ void engine_territory_set_dirty_state(engine_dirty_rect_state_t *state)
     g_dirty_state = state;
 }
 
+engine_dirty_rect_state_t *engine_territory_dirty_state(void)
+{
+    return g_dirty_state;
+}
+
 void engine_territory_bind_cursor_cache_flag(int *flag)
 {
     g_cursor_cache_flag = flag;

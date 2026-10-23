@@ -8143,3 +8143,29 @@ FUN_0048b5fc … FUN_00497437, FUN_004843bc, FUN_00484bf9, FUN_0048ef45 …) and
 
 > 📍 `src/engine_combat.c` (engine_combat_find_capital_defender), `src/engine_army_ai.c`
 > (nearest_enemy_army / nearest_engageable_army); evidence: rows combat_capital_defender, ai_run_movement.
+
+## 236 — the economy screens' scratch is retail .data too: the caravan staging order and the trade grid's figures
+
+Batch 4 (`docs/findings/hybrid-batch4.md`), like #234: retail keeps the per-player goods-shipment order in
+DAT_005678c0 (stride 0x18; the AI's reinforce pass FUN_0049f431 stages it, the caravan executor FUN_004292af and the
+Send Supplies screen read it) and the trade grid's figures in nine scattered globals (DAT_0053e9e4 held, DAT_0057c8c0
+offer, DAT_0055cd70 max, DAT_0057a0fc affordable, DAT_00554170 net, DAT_00553f64 total, DAT_0053e8c0 ale delta,
+DAT_00568948 category, DAT_0057c994 error).  The port kept them as `engine_army_ai.c` / `engine_trade.c` statics —
+a hooked FUN_004292af would have shipped the port's private (empty) order.  Now `src/engine_economy_globals.c`
+(rhost aliases them), and the trade model is `src/engine_trade_model.c` (linkable without the gfx / io closure).
+The diplomacy-action mode DAT_005651cc / latch DAT_0052afa4 and the Send Supplies target DAT_00553c78 were statics
+too; they moved with them (plus the castle tab's tier DAT_0056d898, which the port had not modelled).
+
+Read from the disassembly while moving them (the corpus reaches none of these edges):
+
+* FUN_00428daf has no case for goods 3 / 5 (sheep, wool): DAT_0053e9e4 keeps its previous value and the negate flips
+  it; the port zeroed it.
+* "buy all" FUN_004355db / "sell all" FUN_00435541 compute the total with no sign branch (afford × max / −(offer ×
+  held)); the port's shared tail picked the price by the net's sign (differs only for a negative treasury / stock).
+* all four arrows play `s068_01.wav` (up / buy all) or `s068_02.wav` (down / sell all) after DAT_005533f0 = 1 when
+  the net crosses 0 → positive; the port was silent (now `engine_trade_bind_wav_fn`, rhost binds FUN_00427990).
+* FUN_004a2621 debits the giver, then credits the partner, in memory — a self-gift nets 0; the port read both
+  treasuries first (+value).  Unreachable from the UI (the partner is never the local player).
+
+> 📍 `src/engine_economy_globals.c`, `src/engine_trade_model.c`, `src/engine_army_ai.c` (g_caravan_order),
+> `src/engine_diplomacy.c` (engine_diplomacy_queue_action); evidence: `tools/rhost/rh_hooks_economy.c`.

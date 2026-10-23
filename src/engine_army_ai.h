@@ -256,6 +256,12 @@ void engine_army_ai_dispatch_caravan(int player, int realm, uint8_t dest);
  * DAT_005678c0, stride 0x18 = six int32: [0/1] grain have/to-send, [2/3] sheep,
  * [4/5] cattle have/to-send).  The Send Supplies UI stages/edits it in place. */
 int32_t *engine_army_ai_caravan_order(int player);
+extern int32_t g_caravan_order[8][6];   /* DAT_005678c0 (engine_economy_globals.c); retail's rows 0..5 */
+
+/* Port of FUN_00438681 — disband occupant `occ` back into a realm: its carried goods
+ * into the owner's reserves, its troops into the chosen region's population; the
+ * occupant is destroyed and the realm re-planned. */
+void engine_army_ai_disband_into_realm(int occ);
 
 /* The brain's ranking-changed redraw cookie (retail DAT_0056d6a0; no port consumer
  * yet) — accessors for the in-process verifier (tools/rhost/rh_hooks_ai.c). */

@@ -19,4 +19,5 @@ typedef struct {
 void rh_hook_count(hook_t *h, int r, const char *why);   /* tally one rh_shadow_ex result */
 
 /* X-macro: one entry per subsystem table (T(RH_HOOKS_<SUB>)) */
-#define RH_HOOK_TABLES(T) T(RH_HOOKS_AI) T(RH_HOOKS_COMBAT) T(RH_HOOKS_STATE) T(RH_HOOKS_EVENTS) T(RH_HOOKS_BATTLE)
+#define RH_HOOK_TABLES(T) T(RH_HOOKS_AI) T(RH_HOOKS_COMBAT) T(RH_HOOKS_STATE) T(RH_HOOKS_EVENTS) T(RH_HOOKS_BATTLE) \
+                             T(RH_HOOKS_ECONOMY)

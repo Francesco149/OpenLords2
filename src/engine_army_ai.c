@@ -2428,7 +2428,7 @@ static void engine_army_ai_set_deploy_cell(int occ, unsigned region)
  * region's population, recompute that realm's economy, destroy the occupant, and
  * re-plan twice.  The destination region is the army's secondary region (+0x11)
  * if the owner holds it, else its home region (+0x10). */
-static void engine_army_ai_disband_into_realm(int occ)
+void engine_army_ai_disband_into_realm(int occ)
 {
     int owner = (int8_t)OCC_REC(occ)[OCC_OWNER];
     engine_unit_clear_contract(occ);                        /* FUN_004ac6fe */
@@ -2728,7 +2728,7 @@ void engine_army_ai_run_movement(int realm, engine_event_queue_state_t *evq, int
  * stages fields [0]/[4] (have) and moves them into [1]/[5] (to-send) via the
  * arrows, then ships through engine_army_ai_dispatch_caravan — so the accessor
  * below hands out the same array the AI uses (byte-identical player/AI paths). */
-static int32_t g_caravan_order[8][6];   /* DAT_005678c0 */
+/* g_caravan_order — DAT_005678c0, defined in engine_economy_globals.c (the hybrid host aliases it at retail's VA) */
 
 /* Accessor for the shared staging order — see engine_sendsupplies.c. */
 int32_t *engine_army_ai_caravan_order(int player)

@@ -302,17 +302,18 @@ void engine_diplomacy_queue_action(int local, int partner, int type,
         pr[D_PENDING + local * 0x10] = 1;
 
         if (value != 0) {
+            /* debit, then credit, in memory (retail's order: a self-gift nets 0) */
             uint8_t *lr = STRAT_REC(local);
-            int32_t local_cash, partner_cash;
-            __builtin_memcpy(&local_cash,   lr + D_CASH, sizeof local_cash);
-            __builtin_memcpy(&partner_cash, pr + D_CASH, sizeof partner_cash);
-            if (value > local_cash) {
-                value = local_cash;         /* can't give more than you hold */
+            int32_t cash;
+            __builtin_memcpy(&cash, lr + D_CASH, sizeof cash);
+            if (value > cash) {
+                value = cash;               /* can't give more than you hold */
             }
-            local_cash   -= value;
-            partner_cash += value;
-            __builtin_memcpy(lr + D_CASH, &local_cash,   sizeof local_cash);
-            __builtin_memcpy(pr + D_CASH, &partner_cash, sizeof partner_cash);
+            cash -= value;
+            __builtin_memcpy(lr + D_CASH, &cash, sizeof cash);
+            __builtin_memcpy(&cash, pr + D_CASH, sizeof cash);
+            cash += value;
+            __builtin_memcpy(pr + D_CASH, &cash, sizeof cash);
         }
         break;                              /* filled one slot — done */
     }
