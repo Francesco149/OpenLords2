@@ -201,14 +201,63 @@ class Session:
             self.quit()
 
 
+def script(s, text, out=print):
+    """run an action script: `;`-separated steps —  run N | click X Y | rclick X Y | move X Y | key VK [CHAR] |
+    type TEXT | shot TAG | read VA N | u32 VA | wait SCREEN [MAX] (run until the screen id changes to SCREEN)"""
+    shots = []
+    for step in [x.strip() for x in text.replace("\n", ";").split(";") if x.strip()]:
+        w = step.split()
+        op, args = w[0], w[1:]
+        if op == "run": s.run(int(args[0]))
+        elif op in ("click", "rclick"): s.click(int(args[0]), int(args[1]), right=op == "rclick")
+        elif op == "move": s.move(int(args[0]), int(args[1]))
+        elif op == "key": s.key(int(args[0], 0), args[1] if len(args) > 1 else None)
+        elif op == "type": s.type(" ".join(args))
+        elif op == "shot": shots.append(s.shot(args[0]))
+        elif op == "read": out(f"  {args[0]}: {s.read(int(args[0], 16), int(args[1], 0)).hex()}")
+        elif op == "u32": out(f"  {args[0]} = {s.u32(int(args[0], 16)):#x}")
+        elif op == "wait":
+            want, mx = int(args[0], 0), int(args[1]) if len(args) > 1 else 3000
+            for _ in range(mx // 10):
+                if s.screen == want: break
+                s.run(10)
+        else: raise SystemExit(f"unknown step {step!r}")
+        out(f"{step:28s} -> frame {s.frame} screen {s.screen:#x} tick {s.status.get('tick')}")
+    return shots
+
+
+def montage(paths, out_path, cols=3, scale=0.5):
+    from PIL import Image
+    ims = [Image.open(p) for p in paths if os.path.exists(p)]
+    if not ims: return None
+    w, h = int(ims[0].width * scale), int(ims[0].height * scale)
+    rows = (len(ims) + cols - 1) // cols
+    M = Image.new("RGB", (w * min(cols, len(ims)), h * rows))
+    for k, im in enumerate(ims):
+        M.paste(im.resize((w, h)), ((k % cols) * w, (k // cols) * h))
+    M.save(out_path)
+    return out_path
+
+
 if __name__ == "__main__":
-    # smoke: boot, click Single player, shot
-    with Session("smoke", target=sys.argv[1] if len(sys.argv) > 1 else "wine") as s:
-        s.run(600)
-        print("title:", s.status)
-        print(s.shot("title"))
-        s.click(320, 107)
-        s.run(200)
-        print("after click:", s.status)
-        print(s.shot("after"))
-    print(s.result, s.out_trace)
+    import argparse
+    ap = argparse.ArgumentParser(description="drive a live rhost run with an action script (see script())")
+    ap.add_argument("steps", help='e.g. "run 600; click 320 107; run 100; shot menu"')
+    ap.add_argument("--target", default="wine", choices=("wine", "win"))
+    ap.add_argument("--trace", help="replay this trace first (its events are the prefix)")
+    ap.add_argument("--name", default="rhx")
+    ap.add_argument("--montage", help="write the shots as one image here")
+    ap.add_argument("--save-trace", help="copy the session's recorded trace here")
+    a = ap.parse_args()
+    s = Session(a.name, target=a.target, trace=a.trace)
+    try:
+        shots = script(s, a.steps)
+    finally:
+        r = s.quit()
+    print("RESULT", {k: r.get(k) for k in ("frame", "tick", "screen", "rng", "state_sem")} if r else None)
+    print("rundir", s.rundir)
+    if a.montage and shots:
+        print("montage", montage(shots, a.montage))
+    if a.save_trace:
+        shutil.copy(s.out_trace, a.save_trace)
+        print("trace", a.save_trace)

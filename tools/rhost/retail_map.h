@@ -58,8 +58,11 @@ static int retail_map(const char *path, retail_image_t *out)
     memcpy(base, file, nt->OptionalHeader.SizeOfHeaders);
     IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(nt);
     for (int i = 0; i < nt->FileHeader.NumberOfSections; i++) {
-        uint32_t raw = sec[i].SizeOfRawData;
-        if (raw > sec[i].Misc.VirtualSize && sec[i].Misc.VirtualSize) raw = sec[i].Misc.VirtualSize;
+        /* the loader maps whole pages: raw bytes past VirtualSize but inside its last page are code too
+         * (Lords2's GOG patch appended FUN_004cfb08 there without growing .text's VirtualSize) */
+        uint32_t al = nt->OptionalHeader.SectionAlignment, raw = sec[i].SizeOfRawData;
+        uint32_t vlim = (sec[i].Misc.VirtualSize + al - 1) & ~(al - 1);
+        if (sec[i].Misc.VirtualSize && raw > vlim) raw = vlim;
         if (raw) memcpy(base + sec[i].VirtualAddress, file + sec[i].PointerToRawData, raw);
     }
     out->n_imports_resolved = out->n_imports_host = out->n_imports_stubbed = 0;

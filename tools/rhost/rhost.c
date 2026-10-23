@@ -524,7 +524,10 @@ static void layout_from_pe(void)
     IMAGE_SECTION_HEADER *s = IMAGE_FIRST_SECTION(nt);
     for (int i = 0; i < nt->FileHeader.NumberOfSections; i++) {
         uint32_t lo = 0x400000u + s[i].VirtualAddress;
-        if (!memcmp(s[i].Name, ".text", 6)) { RT_TEXT_LO = lo; RT_TEXT_SZ = s[i].Misc.VirtualSize; }
+        if (!memcmp(s[i].Name, ".text", 6)) {   /* VirtualSize, or the raw size if bigger: the GOG patch's code lies past it */
+            RT_TEXT_LO = lo; RT_TEXT_SZ = s[i].Misc.VirtualSize;
+            if (s[i].SizeOfRawData > RT_TEXT_SZ && s[i].SizeOfRawData <= ((RT_TEXT_SZ + 0xfffu) & ~0xfffu)) RT_TEXT_SZ = s[i].SizeOfRawData;
+        }
         if (!memcmp(s[i].Name, ".data", 6)) { RT_DATA_LO = lo; RT_DATA_HI = (lo + s[i].Misc.VirtualSize + 3u) & ~3u; }
     }
     if (nt->OptionalHeader.SizeOfImage != L2_IMAGE_SIZE || 0x400000u + nt->OptionalHeader.AddressOfEntryPoint != L2_ENTRY)
