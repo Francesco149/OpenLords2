@@ -77,9 +77,11 @@ int rh_fb_hash(uint64_t *out)
     const uint8_t *pix; int pitch, w, h; const PALETTEENTRY *pal;
     if (rh_dd_present(&pix, &pitch, &w, &h, &pal) != 8) return 0;
     uint64_t f = 1469598103934665603ull;
-    for (int y = 0; y < h; y++) {
+    for (int y = 0; y < h; y++) {           /* 8 index bytes per step (w is a multiple of 8: 640) */
         const uint8_t *l = pix + y * pitch;
-        for (int x = 0; x < w; x++) { f ^= l[x]; f *= 1099511628211ull; }
+        int x = 0;
+        for (; x + 8 <= w; x += 8) { uint64_t v; memcpy(&v, l + x, 8); f ^= v; f *= 1099511628211ull; f ^= f >> 29; }
+        for (; x < w; x++) { f ^= l[x]; f *= 1099511628211ull; }
     }
     for (int i = 0; i < 256; i++) { f ^= (uint32_t)pal[i].peRed | (uint32_t)pal[i].peGreen << 8 | (uint32_t)pal[i].peBlue << 16; f *= 1099511628211ull; }
     *out = f;
