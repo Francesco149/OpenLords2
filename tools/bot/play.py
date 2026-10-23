@@ -142,9 +142,10 @@ def play(seed, turns, target="wine", temperature=1.0, name=None, log=print, star
     os.makedirs(out, exist_ok=True)
     lines = [l for l in open(s.out_trace).read().splitlines() if '"meta"' not in l]
     hdr = [f"# {name}: autoplay (tools/bot/play.py), seed {seed}, {len(rows)} turns, Jev {llm.DECISIONS_MODEL} T={temperature};",
-           "# starts from newgame-playnow (its events are the prefix). Decisions + Jev answers: decisions.jsonl; per-turn state: turns.tsv."
-           + (f" Ended STUCK: {stuck}" if stuck else ""),
-           json.dumps({"meta": {"step_ms": 17, "vbase": 1000000, "frames": int(s.result["frame"])}})]
+           f"# starts from {os.path.basename(os.path.dirname(start))} (its events are the prefix). Decisions + Jev answers: decisions.jsonl;"
+           " per-turn state: turns.tsv." + (f" Ended STUCK: {stuck}" if stuck else ""),
+           json.dumps({"meta": dict({"step_ms": 17, "vbase": 1000000, "frames": int(s.result["frame"])},
+                                    **({"movies": True} if meta.get("movies") else {}))})]
     open(os.path.join(out, "trace.jsonl"), "w").write("\n".join(hdr + lines) + "\n")
     with open(os.path.join(out, "decisions.jsonl"), "w") as f:
         for d in decisions:
@@ -168,16 +169,20 @@ def main():
     ap.add_argument("-j", "--jobs", type=int, default=4)
     ap.add_argument("--target", default="wine", choices=("wine", "win"))
     ap.add_argument("--temperature", type=float, default=1.0)
+    ap.add_argument("--start", default="newgame-playnow", help="scenario the game starts from (newgame-movies: movies on)")
     a = ap.parse_args()
+    start = os.path.join(ROOT, "tests", "scenarios", a.start, "trace.jsonl")
+    tag = "" if a.start == "newgame-playnow" else "m" if a.start == "newgame-movies" else "x"
     seeds = [a.seed]
     if a.seeds:
         lo, hi = (int(x) for x in a.seeds.split("-"))
         seeds = list(range(lo, hi + 1))
+    name = lambda sd: f"bot{tag}-s{sd}-t{a.turns}"
     if len(seeds) == 1:
-        play(seeds[0], a.turns, a.target, a.temperature)
+        play(seeds[0], a.turns, a.target, a.temperature, name=name(seeds[0]), start=start)
         return
     with concurrent.futures.ThreadPoolExecutor(max_workers=a.jobs) as ex:
-        for out in ex.map(lambda sd: play(sd, a.turns, a.target, a.temperature), seeds):
+        for out in ex.map(lambda sd: play(sd, a.turns, a.target, a.temperature, name=name(sd), start=start), seeds):
             print("done", out)
 
 
