@@ -119,6 +119,34 @@ void rh_log_occupants(uint32_t lo, uint32_t hi)
     }
 }
 
+/* a fixed range is taken: log the occupants, then relaunch this same command (up to 3 times) and exit with the
+ * child's code. Windows' compatibility engine (apphelp.dll) sometimes loads into a FRESH exe's process before
+ * main, at its per-boot base — 0x67030000 this boot, inside the media pool; the next launch finds the
+ * compatibility cache warm. The child rewrites rhost.log; the occupants go to stdout. */
+static void fixed_range_taken(const char *what, uint32_t lo, uint32_t hi)
+{
+    char v[16] = "";
+    GetEnvironmentVariableA("RHOST_RELAUNCH", v, sizeof v);
+    int k = atoi(v);
+    if (g_logf) { fclose(g_logf); g_logf = NULL; }
+    rh_log_occupants(lo, hi);
+    if (k < 3) {
+        snprintf(v, sizeof v, "%d", k + 1);
+        SetEnvironmentVariableA("RHOST_RELAUNCH", v);
+        rh_log("%s: fixed range %08x..%08x taken: relaunching (%d/3)\n", what, lo, hi, k + 1);
+        fflush(stdout);
+        STARTUPINFOA si = { .cb = sizeof si, .dwFlags = STARTF_USESTDHANDLES, .hStdInput = GetStdHandle(STD_INPUT_HANDLE),
+                            .hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE), .hStdError = GetStdHandle(STD_ERROR_HANDLE) };
+        PROCESS_INFORMATION pi; DWORD code = 1;
+        if (CreateProcessA(NULL, GetCommandLineA(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+            WaitForSingleObject(pi.hProcess, INFINITE);
+            GetExitCodeProcess(pi.hProcess, &code);
+            ExitProcess(code);
+        }
+    }
+    rh_fatal("%s: fixed range %08x..%08x taken (err %lu)", what, lo, hi, GetLastError());
+}
+
 /* ---- fixed-address main stack (retail stores stack addresses; TEB bounds for SEH) ---- */
 #define MAIN_STACK_LO 0x58000000u
 #define MAIN_STACK_HI 0x59000000u
@@ -126,7 +154,7 @@ void rh_log_occupants(uint32_t lo, uint32_t hi)
 static void stacks_init(void)
 {
     if (VirtualAlloc((void *)(uintptr_t)MAIN_STACK_LO, MAIN_STACK_HI - MAIN_STACK_LO, MEM_RESERVE, PAGE_READWRITE) != (void *)(uintptr_t)MAIN_STACK_LO)
-        rh_log_occupants(MAIN_STACK_LO, MAIN_STACK_HI), rh_fatal("cannot reserve the fixed stack at %08x (err %lu)", MAIN_STACK_LO, GetLastError());
+        fixed_range_taken("stack", MAIN_STACK_LO, MAIN_STACK_HI);
     if (!VirtualAlloc((void *)(uintptr_t)(MAIN_STACK_LO + STACK_GUARD), MAIN_STACK_HI - MAIN_STACK_LO - STACK_GUARD, MEM_COMMIT, PAGE_READWRITE))
         rh_fatal("cannot commit the fixed stack (err %lu)", GetLastError());
 }
@@ -594,8 +622,11 @@ int main(int argc, char **argv)
     g_logf = fopen(lp, "w");
     g_log = stdout;
     g_vclock = O.vbase;
-    if (!O.no_arena && rh_heap_init()) rh_log_occupants(0x20000000u, 0x58000000u), rh_fatal("heap arena reservation failed");
-    if (rh_media_reserve()) rh_log_occupants(0x60000000u, 0x70000000u), rh_fatal("cannot reserve the media pool");
+    char occ[16] = "", rl[4] = "";   /* RHOST_TEST_OCCUPY=VA: take 64 KB there in the first launch (tests the relaunch) */
+    if (GetEnvironmentVariableA("RHOST_TEST_OCCUPY", occ, sizeof occ) && !GetEnvironmentVariableA("RHOST_RELAUNCH", rl, sizeof rl))
+        VirtualAlloc((void *)(uintptr_t)strtoul(occ, 0, 0), 0x10000, MEM_RESERVE, PAGE_NOACCESS);
+    if (!O.no_arena && rh_heap_init()) fixed_range_taken("heap arena", 0x20000000u, 0x58000000u);
+    if (rh_media_reserve()) fixed_range_taken("media pool", 0x60000000u, 0x70000000u);
     stacks_init();
     GetFullPathNameA(O.gamedir, sizeof g_gamedir_abs, g_gamedir_abs, NULL);
     for (size_t l = strlen(g_gamedir_abs); l && g_gamedir_abs[l - 1] == '\\'; ) g_gamedir_abs[--l] = 0;
