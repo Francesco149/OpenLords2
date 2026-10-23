@@ -7958,6 +7958,12 @@ now counts in `g_pf_*` the same way, and its fields / queues / waypoint scratch 
 bindable (`engine_path_field_bind_storage`) so the verifier points them at retail's
 0x500c30 / 0x4f0380 / 0x4f9820 / 0x503020 / 0x53f070 / 0x553550.
 
+Same for **DAT_00553f8c**: the combat occupied-cell register (`g_combat_active_terr`)
+that the AI's step-0xb nearest-army scanners (FUN_00467f2e family) use as their loop
+variable and result.  The AI kept a private `s_nearest_occ`; it now counts in the
+shared global (the shadow of `ai_run_per_tick` / `ai_run_movement` showed retail
+leaving 5/6 there in 30 of 33 scenarios).
+
 ## 227 — the spawned occupant's roster slot (FUN_004a9f72) is keyed by the OWNER, not the realm
 
 FUN_004a9a9a (`engine_combat_spawn_unit(owner, army, …)`) stamps

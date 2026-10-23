@@ -2344,10 +2344,10 @@ void engine_army_ai_run_campaign(int player)
 #define STRAT_RESERVE_148 0x148 /* DAT_0057c048 — funding reserve (i32) */
 #define STRAT_RESERVE_154 0x154 /* DAT_0057c054 — funding reserve (i32) */
 
-/* Find-nearest-army scratch (retail reuses DAT_00553f8c — the combat occupied-cell
- * register — as the scanner's loop var + result index; those uses are in disjoint
- * sim phases, so a private file-static is faithful here). */
-static int s_nearest_occ;   /* DAT_00553f8c (step-0xb scanner result) */
+/* Find-nearest-army scratch: retail reuses DAT_00553f8c — the combat occupied-cell
+ * register, engine_combat's g_combat_active_terr — as the scanner's loop var +
+ * result index.  The uses are in disjoint sim phases, but the value the scan
+ * leaves is live state, so the AI counts in the same global (quirk #226). */
 
 /* Port of FUN_00467f2e — does region `region` border a region owned by someone
  * other than its own owner? (a frontier check; walks the +0x5c adjacency list). */
@@ -2365,15 +2365,15 @@ static int engine_army_ai_region_borders_enemy(int region)
 }
 
 /* Port of FUN_004673b8 — find the nearest live, idle, enemy-owned army to `occ`
- * by Chebyshev (king-move) distance, leaving its index in s_nearest_occ and
+ * by Chebyshev (king-move) distance, leaving its index in g_combat_active_terr and
  * returning the distance (1000 if none).  The distance is FUN_00404f4c's
  * max(|dx|,|dy|) return, computed inline. */
 static int engine_army_ai_nearest_enemy_army(int occ)
 {
     int best = 1000, best_idx = 0;
     int ax = (int8_t)OCC_REC(occ)[OCC_COL], ay = (int8_t)OCC_REC(occ)[OCC_ROW];
-    for (s_nearest_occ = 1; s_nearest_occ < 0x97; s_nearest_occ++) {
-        uint8_t *o = OCC_REC(s_nearest_occ);
+    for (g_combat_active_terr = 1; g_combat_active_terr < 0x97; g_combat_active_terr++) {
+        uint8_t *o = OCC_REC(g_combat_active_terr);
         if (o[OCC_OWNER] == 0)                                continue;
         if (OCC_REC(occ)[OCC_OWNER] == o[OCC_OWNER])          continue;
         if (o[OCC_ACTIVE] != 1)                               continue;
@@ -2381,21 +2381,21 @@ static int engine_army_ai_nearest_enemy_army(int occ)
         int dx = ax - (int8_t)o[OCC_COL]; if (dx < 0) dx = -dx;
         int dy = ay - (int8_t)o[OCC_ROW]; if (dy < 0) dy = -dy;
         int d = dx > dy ? dx : dy;
-        if (d < best) { best_idx = s_nearest_occ; best = d; }
+        if (d < best) { best_idx = g_combat_active_terr; best = d; }
     }
-    s_nearest_occ = best_idx;
+    g_combat_active_terr = best_idx;
     return best;
 }
 
 /* Port of FUN_00467532 — find the nearest live, idle, engageable army whose home
- * region is `region` to `occ` (Chebyshev), leaving its index in s_nearest_occ and
+ * region is `region` to `occ` (Chebyshev), leaving its index in g_combat_active_terr and
  * returning the distance.  Engageability is engine_diplomacy_should_engage. */
 static int engine_army_ai_nearest_engageable_army(int occ, unsigned region)
 {
     int best = 1000, best_idx = 0;
     int ax = (int8_t)OCC_REC(occ)[OCC_COL], ay = (int8_t)OCC_REC(occ)[OCC_ROW];
-    for (s_nearest_occ = 1; s_nearest_occ < 0x97; s_nearest_occ++) {
-        uint8_t *o = OCC_REC(s_nearest_occ);
+    for (g_combat_active_terr = 1; g_combat_active_terr < 0x97; g_combat_active_terr++) {
+        uint8_t *o = OCC_REC(g_combat_active_terr);
         if (o[OCC_OWNER] == 0)                                continue;
         if (o[OCC_ACTIVE] != 1)                               continue;
         if (engine_diplomacy_should_engage((int8_t)OCC_REC(occ)[OCC_OWNER],
@@ -2405,9 +2405,9 @@ static int engine_army_ai_nearest_engageable_army(int occ, unsigned region)
         int dx = ax - (int8_t)o[OCC_COL]; if (dx < 0) dx = -dx;
         int dy = ay - (int8_t)o[OCC_ROW]; if (dy < 0) dy = -dy;
         int d = dx > dy ? dx : dy;
-        if (d < best) { best_idx = s_nearest_occ; best = d; }
+        if (d < best) { best_idx = g_combat_active_terr; best = d; }
     }
-    s_nearest_occ = best_idx;
+    g_combat_active_terr = best_idx;
     return best;
 }
 
@@ -2492,7 +2492,7 @@ static int engine_army_ai_order_advance(int occ)
     int owner = (int8_t)OCC_REC(occ)[OCC_OWNER];
 
     if (engine_army_ai_nearest_enemy_army(occ) < 6) {
-        uint8_t *n = OCC_REC(s_nearest_occ);
+        uint8_t *n = OCC_REC(g_combat_active_terr);
         if ((n[OCC_ORDER] != 2 || (int8_t)OCC_REC(occ)[OCC_COL] < (int8_t)n[OCC_COL]) &&
             (uint8_t)STRAT_REC(owner)[STRAT_LORD] != (uint8_t)n[OCC_OWNER]) {
             OCC_REC(occ)[OCC_PLACED]   = 0;
@@ -2561,8 +2561,8 @@ static int engine_army_ai_order_lord_move(int occ)
     }
     if (engine_army_ai_nearest_engageable_army(occ, (uint8_t)OCC_REC(occ)[OCC_CAMPAIGN]) < 0x15) {
         OCC_REC(occ)[OCC_PLACED]   = 0;
-        OCC_REC(occ)[OCC_DEST_COL] = OCC_REC(s_nearest_occ)[OCC_COL];
-        OCC_REC(occ)[OCC_DEST_ROW] = OCC_REC(s_nearest_occ)[OCC_ROW];
+        OCC_REC(occ)[OCC_DEST_COL] = OCC_REC(g_combat_active_terr)[OCC_COL];
+        OCC_REC(occ)[OCC_DEST_ROW] = OCC_REC(g_combat_active_terr)[OCC_ROW];
         return 1;
     }
     return 0;
@@ -2579,7 +2579,7 @@ static int engine_army_ai_order_intercept(int occ)
     unsigned region = (uint8_t)OCC_REC(occ)[OCC_TARGET_REGION];
     int owner = (int8_t)OCC_REC(occ)[OCC_OWNER];
     if (engine_army_ai_nearest_engageable_army(occ, region) < 0x1f) {
-        uint8_t *n = OCC_REC(s_nearest_occ);
+        uint8_t *n = OCC_REC(g_combat_active_terr);
         if ((n[OCC_ORDER] != 2 || (int8_t)OCC_REC(occ)[OCC_COL] < (int8_t)n[OCC_COL]) &&
             (uint8_t)STRAT_REC(owner)[STRAT_LORD] != (uint8_t)n[OCC_OWNER]) {
             OCC_REC(occ)[OCC_PLACED]   = 0;
