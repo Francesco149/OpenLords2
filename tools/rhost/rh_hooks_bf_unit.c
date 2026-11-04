@@ -15,6 +15,7 @@
 #include "engine_bf.h"
 
 extern uint32_t bf_unit_res_488793, bf_unit_res_488436[2], bf_unit_res_48895e, bf_unit_res_48804a;
+extern uint32_t bf_unit_e0_4822ed, bf_unit_e0_state;
 
 #define RH_TABLE RH_HOOKS_BF_UNIT
 extern hook_t RH_HOOKS_BF_UNIT[];
@@ -28,21 +29,32 @@ enum {
     X_bf_488436, X_bf_488793, X_bf_48895e, X_bf_49459a,
 };
 
-HOOK_V(bf_4822ed, 0, bf_4822ed())
+/* E0 rows: the per-unit driver and the state handlers note their retail entry esp (b_ → s_e0) for the siege
+ * orders' residue model (src/engine_bf_unit.c bf_unit_e0_*: the order handler's ebp) */
+static uint32_t s_e0;
+#define HOOK_V_E0(NAME, SEAM) \
+    static uint32_t p_##NAME(const uint32_t *a) { (void)a; SEAM = s_e0; NAME(); return 0; } \
+    static void w_##NAME(void); \
+    static __attribute__((used, noinline)) uint32_t __cdecl b_##NAME(uint32_t e0) \
+    { uint32_t o = s_e0, r; s_e0 = e0; r = rh_port_run(&RH_TABLE[X_##NAME], (void *)w_##NAME, p_##NAME, 0, e0); \
+      s_e0 = o; return r; } \
+    RH_ENTRY(w_##NAME, b_##NAME)
+
+HOOK_V_E0(bf_4822ed, bf_unit_e0_4822ed)
 HOOK_R(bf_46ebe4, 1, bf_46ebe4(I(0)))
 HOOK_R(bf_46eb3f, 1, bf_46eb3f(I(0)))
 
-HOOK_V(bf_4825d1, 0, bf_4825d1())
-HOOK_V(bf_4826b0, 0, bf_4826b0())
-HOOK_V(bf_482789, 0, bf_482789())
-HOOK_V(bf_482862, 0, bf_482862())
-HOOK_V(bf_48293b, 0, bf_48293b())
-HOOK_V(bf_482a14, 0, bf_482a14())
-HOOK_V(bf_482aed, 0, bf_482aed())
-HOOK_V(bf_482bc6, 0, bf_482bc6())
-HOOK_V(bf_482ca8, 0, bf_482ca8())
-HOOK_V(bf_482d8a, 0, bf_482d8a())
-HOOK_V(bf_482e6c, 0, bf_482e6c())
+HOOK_V_E0(bf_4825d1, bf_unit_e0_state)
+HOOK_V_E0(bf_4826b0, bf_unit_e0_state)
+HOOK_V_E0(bf_482789, bf_unit_e0_state)
+HOOK_V_E0(bf_482862, bf_unit_e0_state)
+HOOK_V_E0(bf_48293b, bf_unit_e0_state)
+HOOK_V_E0(bf_482a14, bf_unit_e0_state)
+HOOK_V_E0(bf_482aed, bf_unit_e0_state)
+HOOK_V_E0(bf_482bc6, bf_unit_e0_state)
+HOOK_V_E0(bf_482ca8, bf_unit_e0_state)
+HOOK_V_E0(bf_482d8a, bf_unit_e0_state)
+HOOK_V_E0(bf_482e6c, bf_unit_e0_state)
 HOOK_R(bf_481abb, 1, bf_481abb(I(0)))
 
 HOOK_V(bf_4861e9, 0, bf_4861e9())

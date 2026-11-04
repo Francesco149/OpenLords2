@@ -61,7 +61,7 @@ int bf_477b2f(void)
 #include "save_schema_globals.h"
 #include "engine_bf_extern_globals.h"
 
-static int read_file_at(const void *name, void *buf, uint32_t n)   /* FUN_004af8d9 — TODO(rl-link): io_read_file_at */
+static int read_file_at(const void *name, void *buf, uint32_t n)   /* 0x4af8d9 — TODO(rl-link): io_read_file_at */
 { return (int)engine_retail_call(0x4af8d9u, 4, (uint32_t)(uintptr_t)name, (uint32_t)(uintptr_t)buf, n, 0u); }
 
 /* Port of FUN_004987b7 (1556 B) — load the battlefield's sprite sheets: the base dir (0x4af502), the panel sheet

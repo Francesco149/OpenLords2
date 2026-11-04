@@ -23,6 +23,14 @@ uint32_t bf_unit_res_488793;      /* 0x488793 [ebp-4] = e0-8 */
 uint32_t bf_unit_res_488436[2];   /* 0x488436 [ebp-4] = e0-8, [ebp-8] = e0-0xc */
 uint32_t bf_unit_res_48895e;      /* 0x48895e [ebp-4] = e0-8 */
 uint32_t bf_unit_res_48804a;      /* 0x48804a [ebp-0xc] = e0-0x10 */
+/* the retail entry esp (e0) of the per-unit driver 0x4822ed / of the current movement-state handler: the siege orders'
+ * residue model (engine_bf_action.c) needs the order handler's ebp — a 1-argument call leaves it in the sequencers'
+ * slot, and a unit the path step removed then gets its low byte as the sprite frame. Fixed depths: driver e0 - 0x18 =
+ * the state handler's e0 (push ebp, a local, ebx / esi / edi, the call); state e0 - 0x14 = the order handler's e0
+ * (push ebp / ebx / esi / edi, the call), its ebp 4 lower. Set by the hook adapters (0 in the standalone). */
+uint32_t bf_unit_e0_4822ed;
+uint32_t bf_unit_e0_state;
+extern uint32_t bf_action_res_ebp;   /* engine_bf_action.c */
 
 /* the retail tables the sequencers read (in the g_bf_4d98c8 / 4d9ac8 / 4d9c08 blocks; any VA through AT) */
 #define T32_4D98C8(va) AT(int32_t,  g_bf_4d98c8, 0x4d98c8, (va))   /* dword_4D9A00 / 4D9A28 / 4D9A50 */
@@ -77,8 +85,10 @@ int bf_4822ed(void)
             BU8(u, 0x5545f5)--;
         if (BU8(u, 0x554602) != 0)
             BU8(u, 0x554602)--;
-        if (BU8(u, 0x554492) < 11)
+        if (BU8(u, 0x554492) < 11) {
+            bf_unit_e0_state = bf_unit_e0_4822ed - 0x18;
             k_bf_state[BU8(u, 0x554492)]();
+        }
         else
             bf_46ebe4(u);
         u = g_bf_53e8f8;
@@ -116,8 +126,10 @@ static void unit_run_order(void)
     int o = BS8(g_bf_53e8f8, 0x5544b1);
     if (o < 0 || o > 0x11)
         bf_46ebe4(g_bf_53e8f8);
-    else
+    else {
+        bf_action_res_ebp = bf_unit_e0_state - 0x18;   /* the order handler's ebp (above) */
         k_bf_order[o]();
+    }
 }
 
 /* states 0..6: the troop band first (0x481abb), then the step parameters +0x18a / +0x18b / +0x198 and the

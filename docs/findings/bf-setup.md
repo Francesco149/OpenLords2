@@ -75,6 +75,20 @@ FUN_0047ed9b per-frame cursor probe (engine_tick)
 - `TODO(bf-extern)` — unported, non-battlefield: 0x481b9a (1399 B; the ledger calls it "ported" only because engine.c's
   comment names it), the debug log 0x4afab9, the multiplayer sync 0x43f4b7 / 0x43fd2a.
 
+## Shadow cost: the sampled neighbour tests (2026-11-04)
+
+FUN_00497024 / FUN_00497247 / FUN_0049719e (and strike's FUN_00496f72) are 4- / 8-neighbour kind tests the terrain
+setup calls per cell, several passes over the 80 × 80 field: ~800k calls in the one frame a siege battlefield is
+built (siege-defence f1182, skirmish-tour f6660, field-orders f7096; the whole-corpus verify's bot3-s103-t36
+f41176). Shadowed at depth 4 (verify pass 4), at ~100 µs a shadow that one frame ran past rhost's 60 s wall
+watchdog under -j 3 — `STALL: no frame for 60000 ms`.
+No loop: a lone `run` of siege-defence with the same 101 pass-4 rows passes f1182 (152 s for 1400 frames, 534k
+FUN_00496f72 / 271k FUN_00497024 / 266k FUN_00497247 shadows, 0 divergences). Their rows are `RH_SH_SAMPLE` (the
+first 64 calls per caller / screen and every power-of-two-th one shadowed; the hybrid pass runs every call): the
+three scenarios' pass 4 then runs 91 / 299 / 497 s (skirmish-tour / field-orders / siege-defence); the whole-corpus
+verify's pass-4 set (182 rows) completes bot3-s103-t36 in 224 s. Over the three, FUN_00497024 1326 shadowed /
+2381099 sampled calls; over bot3* 432 / 181322.
+
 ## Standalone notes (rhost exact; the standalone must reconcile)
 
 - The pattern tables g_bf_4d7550 / 4d75c8 / 4d7610 / 4d7860 are 1-byte symbols in engine_bf_globals.h; they are 10 (+1) / 6 /

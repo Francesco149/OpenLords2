@@ -19915,7 +19915,6 @@
    "src": [
     "src/config.c",
     "src/engine_armory.c",
-    "src/engine_bf_extern.c",
     "src/engine_county_panels.c",
     "src/engine_labor.c",
     "src/engine_merchant.c",

@@ -87,6 +87,15 @@ target into range; room for the group).
     (or the return address for k = 3). The port carries both
     slots in `bf_action_res[2]` through each handler; the six rows' adapters load them and e0 (a custom hook
     body records e0) and put slot 1's final value back (compared in shadow).
+    **Called from the port's state handler** (no order-handler adapter: the shadow of a state handler / the per-unit
+    driver, and the hybrid pass) the handler's ebp comes from partition `unit`'s `bf_unit_e0_state` (the state
+    handler's retail e0, set by its row or by 0x4822ed's port from its own row's e0: driver e0 − 0x18; the order
+    handler's ebp = state e0 − 0x18). It reaches state when the path step removes an engine unit (field-orders
+    f8789: order 10, 0x48f1dd(0) → 0x490616 → 0x491492 (a siege tower docks: it becomes terrain) → 0x46ebe4 zeroes unit 15 (class 8), then the stand thunk 0x488793 stores slot 1 —
+    the handler's ebp, low byte 0x88 — as the dead record's +0x10: `DIVERGE bf_482ca8 … 00555de0 r00000088/p00000000`).
+    The slots' entry values stay stale in port-to-port calls: an engine unit's first sequencer sets them (class 8
+    both, 7 / 9 / 10 slot 1; slot 2 never reaches state); only a non-engine unit with orders 10..15 would show it.
+    The setup pass (0x4778a0 → 0x4822ed, driver e0 = 0x4778a0's e0 − 0x1c) does not set `bf_unit_e0_4822ed`.
 
 ## Seams
 
