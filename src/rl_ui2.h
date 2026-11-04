@@ -78,4 +78,4 @@ int rl_4af70c(int a0);                           /* 91 B, coverage 1 */
 int rl_4b14ff(void);                             /* 872 B, coverage 49 */
 int rl_4b3994(int a0);                           /* 84 B, coverage 1 */
 int rl_4b7250(void);                             /* 491 B, coverage 1 */
-int rl_4b7585(int a0);                           /* 1118 B, coverage 1 */
+int rl_4b7585(int a0, int a1, int a2, int a3);   /* 1118 B, coverage 1 — retail takes the session GUID by value: 4 dwords (4 pushes, add esp 10h at 0x4b72b4) */
