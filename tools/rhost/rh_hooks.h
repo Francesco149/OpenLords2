@@ -29,7 +29,7 @@ int  rh_hook_sample(hook_t *h, uint32_t ret);              /* shadow this call? 
                              T(RH_HOOKS_BF_MOVE) T(RH_HOOKS_BF_STRIKE) T(RH_HOOKS_BF_UNIT) T(RH_HOOKS_BF_ACTION) \
                              T(RH_HOOKS_BF_GROUP) T(RH_HOOKS_BF_STANCE) T(RH_HOOKS_BF_SETUP) T(RH_HOOKS_BF_INPUT) T(RH_HOOKS_BF_EXTERN) \
                              T(RH_HOOKS_RL_IO) T(RH_HOOKS_RL_GLUE) T(RH_HOOKS_RL_RENDER) T(RH_HOOKS_RL_MISC) T(RH_HOOKS_RL_SKIRMISH) T(RH_HOOKS_RL_UI2) T(RH_HOOKS_RL_UI3) \
-                             T(RH_HOOKS_RL_UI4) T(RH_HOOKS_RL_CTL) T(RH_HOOKS_RL_TERR) T(RH_HOOKS_RL_TURN) T(RH_HOOKS_RL_HOST) T(RH_HOOKS_RL_QUIT) \
+                             T(RH_HOOKS_RL_UI4) T(RH_HOOKS_RL_CTL) T(RH_HOOKS_RL_TERR) T(RH_HOOKS_RL_TURN) T(RH_HOOKS_RL_HOST) T(RH_HOOKS_RL_QUIT) T(RH_HOOKS_RL_COV3) \
                              T(RH_HOOKS_TILE) \
                              T(RH_HOOKS_GFX) \
                              T(RH_HOOKS_MAPVIEW) \

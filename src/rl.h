@@ -18,3 +18,4 @@
 #include "rl_turn.h"
 #include "rl_host.h"
 #include "rl_quit.h"
+#include "rl_cov3.h"

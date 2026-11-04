@@ -115,13 +115,17 @@ PARTS = {
           "4ace5e 4ad0e8 4ad16c 4ad230 4ad316 4ad39a 4ad9f0 4ade93 4adfe6 4ae310 4ae74d 4ae8a9 4aef7e 4af502 "
           "4af54a 4af62c 4af675 4af8d9 4b0ab5 4b1867 4b18e3 4b191e 4b1de0 4b1deb 4b20ed 4b25b0 4b27bf 4b284e "
           "4b2922 4b29be 4b35c1 4b3768 4b3e51 4b495a 4b99c0 4ba26e 4ba9c8 4bb8c0 4bb978 4bbbe3 4bbc80 4bc020"),
+    # what coverage round 3's scenarios newly reach (custom-strong, siege-castles, movie-skip, custom-garrison): the movie
+    # skip, the load box's Cancel, the paid ally answer, the siege-preparation "-", the divide placement search, the
+    # castle damage read-back on the field, the AI campaign check / gift / plea for help, the castle scenario write / read
+    "cov3": _h("42df30 434308 4367ff 43b741 46d130 4917dd 49ff71 4a1b29 4a3551 4ae968 4aea70"),
     # the game's exit (scenario game-quit): WM_DESTROY's movie / sound teardown, WinMain's exit (lords2.inf, the
     # sprite frees), the DirectDraw / DirectSound / DirectPlay releases, the exit log
     "quit": _h("42dfe2 425d35 4ae15f 49767d 42eaa6 4b7180 4b2636 43f43e"),
     # retail seams the battlefield calls that stay out of scope (audio streams, sprite loads): stubs only
     "extern": _h("43f304 477b2f 4987b7 499d97"),
 }
-FAMILY = {"io": "rl", "glue": "rl", "render": "rl", "misc": "rl", "skirmish": "rl", "ui2": "rl", "ui3": "rl", "ui4": "rl", "ctl": "rl", "terr": "rl", "turn": "rl", "host": "rl", "quit": "rl"}   # default "bf"
+FAMILY = {"io": "rl", "glue": "rl", "render": "rl", "misc": "rl", "skirmish": "rl", "ui2": "rl", "ui3": "rl", "ui4": "rl", "ctl": "rl", "terr": "rl", "turn": "rl", "host": "rl", "quit": "rl", "cov3": "rl"}   # default "bf"
 OWNER = {}
 for _p, _vs in PARTS.items():
     for _v in _vs:
