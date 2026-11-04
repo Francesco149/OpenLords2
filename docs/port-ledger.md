@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1087** (44.4%) — tested 785, ported 302
-- code bytes touched: **57.1%** (479,057 / 838,629 B)
-- unported: **1360**
+- touched: **1115** (45.6%) — tested 785, ported 330
+- code bytes touched: **58.3%** (489,210 / 838,629 B)
+- unported: **1332**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (785) — ported + host unit suite
@@ -807,7 +807,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (302) — reimplemented, no host test yet
+## ported (330) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -997,7 +997,19 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x481878 | FUN_00481878 | 142 | engine_bf_setup.c |
 | 0x481906 | FUN_00481906 | 198 | engine_bf_setup.c |
 | 0x4819cc | FUN_004819cc | 239 | engine_bf_group.c |
+| 0x481abb | FUN_00481abb | 223 | engine_bf_unit.c |
 | 0x4822ed | FUN_004822ed | 644 | engine_bf_unit.c |
+| 0x4825d1 | FUN_004825d1 | 223 | engine_bf_unit.c |
+| 0x4826b0 | FUN_004826b0 | 217 | engine_bf_unit.c |
+| 0x482789 | FUN_00482789 | 217 | engine_bf_unit.c |
+| 0x482862 | FUN_00482862 | 217 | engine_bf_unit.c |
+| 0x48293b | FUN_0048293b | 217 | engine_bf_unit.c |
+| 0x482a14 | FUN_00482a14 | 217 | engine_bf_unit.c |
+| 0x482aed | FUN_00482aed | 217 | engine_bf_unit.c |
+| 0x482bc6 | FUN_00482bc6 | 226 | engine_bf_unit.c |
+| 0x482ca8 | FUN_00482ca8 | 226 | engine_bf_unit.c |
+| 0x482d8a | FUN_00482d8a | 226 | engine_bf_unit.c |
+| 0x482e6c | FUN_00482e6c | 282 | engine_bf_unit.c |
 | 0x483337 | FUN_00483337 | 1873 | engine_bf_strike.c |
 | 0x48551d | FUN_0048551d | 344 | engine_bf_strike.c |
 | 0x485675 | FUN_00485675 | 492 | engine_bf_strike.c |
@@ -1005,6 +1017,21 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4859e5 | FUN_004859e5 | 354 | engine_bf_group.c |
 | 0x485b47 | FUN_00485b47 | 106 | engine_bf_strike.c |
 | 0x485bb1 | FUN_00485bb1 | 1592 | engine_bf_group.c |
+| 0x4861e9 | FUN_004861e9 | 16 | engine_bf_unit.c |
+| 0x4861f9 | FUN_004861f9 | 16 | engine_bf_unit.c |
+| 0x486209 | FUN_00486209 | 16 | engine_bf_unit.c |
+| 0x486219 | FUN_00486219 | 16 | engine_bf_unit.c |
+| 0x486229 | FUN_00486229 | 16 | engine_bf_unit.c |
+| 0x486239 | FUN_00486239 | 16 | engine_bf_unit.c |
+| 0x486249 | FUN_00486249 | 1411 | engine_bf_unit.c |
+| 0x486d83 | FUN_00486d83 | 684 | engine_bf_unit.c |
+| 0x4872ae | FUN_004872ae | 841 | engine_bf_unit.c |
+| 0x487908 | FUN_00487908 | 494 | engine_bf_unit.c |
+| 0x487ce4 | FUN_00487ce4 | 456 | engine_bf_unit.c |
+| 0x48804a | FUN_0048804a | 502 | engine_bf_unit.c |
+| 0x488436 | FUN_00488436 | 861 | engine_bf_unit.c |
+| 0x488793 | FUN_00488793 | 459 | engine_bf_unit.c |
+| 0x48895e | FUN_0048895e | 763 | engine_bf_unit.c |
 | 0x488dfe | FUN_00488dfe | 943 | engine_bf_group.c |
 | 0x4891ad | FUN_004891ad | 596 | engine_bf_group.c |
 | 0x489401 | FUN_00489401 | 595 | engine_bf_group.c |
@@ -1087,6 +1114,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x494125 | FUN_00494125 | 160 | engine_bf_strike.c |
 | 0x4941c5 | FUN_004941c5 | 160 | engine_bf_strike.c |
 | 0x494265 | FUN_00494265 | 821 | engine_bf_strike.c |
+| 0x49459a | FUN_0049459a | 878 | engine_bf_unit.c |
 | 0x494d08 | FUN_00494d08 | 241 | engine_bf_move.c |
 | 0x494df9 | FUN_00494df9 | 70 | engine_bf_move.c |
 | 0x4956cc | FUN_004956cc | 650 | engine_bf_strike.c |
