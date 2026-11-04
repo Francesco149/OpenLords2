@@ -84,6 +84,8 @@ HWND rl_plat_GetForegroundWindow(void)
 { return IMP(GetForegroundWindow, HWND (WINAPI *)(void), GetForegroundWindow)(); }
 INT_PTR rl_plat_DialogBoxParamA(HINSTANCE inst, const char *tmpl, HWND parent, DLGPROC proc, LPARAM init)
 { return IMP(DialogBoxParamA, INT_PTR (WINAPI *)(HINSTANCE, LPCSTR, HWND, DLGPROC, LPARAM), DialogBoxParamA)(inst, tmpl, parent, proc, init); }
+BOOL rl_plat_WinHelpA(HWND w, const char *file, UINT cmd, ULONG_PTR data)
+{ return IMP(WinHelpA, BOOL (WINAPI *)(HWND, LPCSTR, UINT, ULONG_PTR), WinHelpA)(w, file, cmd, data); }
 HCURSOR rl_plat_SetCursor(HCURSOR c)
 { return IMP(SetCursor, HCURSOR (WINAPI *)(HCURSOR), SetCursor)(c); }
 

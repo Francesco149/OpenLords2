@@ -32,7 +32,7 @@
     X(SmackOpen, 0x5cf5ecu) X(SmackToBuffer, 0x5cf5f0u) X(SmackClose, 0x5cf5f4u) X(SmackNextFrame, 0x5cf5f8u)    \
     X(SmackDoFrame, 0x5cf5fcu)                                                                                   \
     X(PostMessageA, 0x5cf514u) X(GetForegroundWindow, 0x5cf550u) X(SetCursor, 0x5cf578u)                     \
-    X(DialogBoxParamA, 0x5cf52cu)
+    X(DialogBoxParamA, 0x5cf52cu) X(WinHelpA, 0x5cf518u)
 
 /* X(name, retail VA) — retail's CRT functions with state */
 #define RL_PLAT_CRT(X)                                                                                           \
@@ -73,6 +73,7 @@ BOOL     rl_plat_PostMessageA(HWND w, UINT m, WPARAM wp, LPARAM lp);
 HWND     rl_plat_GetForegroundWindow(void);
 HCURSOR  rl_plat_SetCursor(HCURSOR c);
 INT_PTR  rl_plat_DialogBoxParamA(HINSTANCE inst, const char *tmpl, HWND parent, DLGPROC proc, LPARAM init);
+BOOL     rl_plat_WinHelpA(HWND w, const char *file, UINT cmd, ULONG_PTR data);   /* rhost: a stub (rh_win.c) */
 /* smackw32 (__stdcall, by ordinal): the Smack struct is opaque to the shim (retail reads its fields itself) */
 uint32_t rl_plat_SmackOpen(const char *name, uint32_t flags, uint32_t extrabuf);      /* #14 */
 void     rl_plat_SmackClose(uint32_t smk);                                            /* #18 */
