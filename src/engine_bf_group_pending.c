@@ -40,7 +40,3 @@ int bf_48c4bd(int a0) { return (int)engine_retail_call(0x48c4bdu, 1, (uint32_t)a
 int bf_48c56f(int a0) { return (int)engine_retail_call(0x48c56fu, 1, (uint32_t)a0); }
 int bf_48c8af(int a0) { return (int)engine_retail_call(0x48c8afu, 1, (uint32_t)a0); }
 int bf_48c974(int a0) { return (int)engine_retail_call(0x48c974u, 1, (uint32_t)a0); }
-int bf_488dfe(void) { return (int)engine_retail_call(0x488dfeu, 0); }
-int bf_485bb1(void) { return (int)engine_retail_call(0x485bb1u, 0); }
-int bf_46ef3c(void) { return (int)engine_retail_call(0x46ef3cu, 0); }
-int bf_4859e5(void) { return (int)engine_retail_call(0x4859e5u, 0); }
