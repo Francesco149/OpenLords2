@@ -69,6 +69,8 @@ Supplies end to end (arrows, all-toggle, retarget, dispatch → the caravan FUN_
 | B4 | Keyboard: text entry (save names, lord name), hotkeys (F-keys, Alt-letters, Ctrl), Escape semantics | WM_CHAR / WM_SYSKEY paths | open |
 | B5 | Focus loss / Alt-Tab → WM_ACTIVATEAPP 0 → retail's paused / surface-restore path | rhost activates once and filters OS activation; needs synthetic trace events, or record-mode passthrough | open |
 | B6 | Tooltip hover dwell and edge-scrolling with real mouse movement | timing-driven UI | partial (bot edge-scrolls) |
+| B7 | Battlefield orders beyond select / RMB attack / Mop up: an **LMB order** with a selection while running (FUN_0043c57d → FUN_0043c634, its target marker DAT_00553f84 → late_leaf_draw_selection_marker 0x4be33f), siege engines worked on the field (unit order table 0x4d9170 entries 7 / 9 / 12 / 14: 0x483ce1, 0x483fe1 moat / tile work, 0x4843bc, 0x484a0c), the lord captured | authored 2026-11-04: an LMB click with a selection is taken by the box-select path FUN_0043bf07 (screen 0x2a) before FUN_0043c57d sees it; a skirmish siege of Bodiam Castle as the attacker with Mop up (4,000 frames) reached one new function (0x48c06f) — the engines need ordering by hand | open |
+| B8 | Not reachable from the UI at all (no human trace helps): view mode 1, the far zoom (DAT_0057cb18 = 1: FUN_00451fcc is only called with 0 / 2 or the saved slot; its 8 renderers 0x460501 / 0x46079d / 0x4608de / 0x460a1c / 0x4611ef / 0x461623 / 0x461a54 / 0x461efb); the DirectDraw Lock-failure path 0x42f60e (rhost's software surfaces never fail); multiplayer (DialogBoxParamA → -1 under rhost: the DirectPlay dialogs, the net-message handlers under FUN_0043eda0, the typed diplomacy messages 0x4361da / 0x436229 / 0x4362ca, popup types 12 / 20 0x475e07 / 0x476488) | — | out of scope |
 
 ## C. Synthesized — covered without a human
 
@@ -82,6 +84,9 @@ Supplies end to end (arrows, all-toggle, retarget, dispatch → the caravan FUN_
 | Send Supplies (arrows, all-toggle, retarget, dispatch, the cart's trip), the trade grid's buy all / sell all / cancel | `econ-tour` (authored over rhbot from `bot2-s61-t28` f7000) | synth |
 | File > Save / Load, Options panels, Court, population / happiness reports | menus-tour | synth |
 | boot with movies (intro, imptitle, credits) | boot-movies, newgame-movies | synth |
+| the Town Center (0x02) and every labor panel (0x0f), the blacksmith's weapon picks, drag-box worker moves, a double-click (B2); the armoury's weapon assign (0x0d) on bows / swords (B3); field use (Farmland panel icons), an industry building off / on, the rations level + grain/meat slider; New Game / Quit / Esc confirms; F2, Alt+1, Enter; Greatest nobles + tabs; Help Options / how-tos / About; the minimap overlays and the kingdom overview; Save under a typed name, New Game, Load a game from the title | `strat-tour` (authored over rhbot from `newgame-playnow`, 2026-11-04) | synth |
+| the Skirmish mode: name box editing + shields, the setup page (battle list, modes, sides, advantage), the custom armies page, three field battles (groups Ctrl+1 / 1, h / v, Mop up, Retreat, Autocalc), a user .skr file, a siege skirmish, Battle Master ratings + the skirmish masters | `skirmish-tour` (authored from boot, 2026-11-04) | synth |
+| Multiple players (no dialog under rhost), Load a game from the title, the custom setup's 12 options (all drop-downs picked), the map list, a 30-second turn limit running out (B1) | `custom-tour` (authored from boot, 2026-11-04) | synth |
 
 Keep this list current: when a human trace lands, link it in the status column; when the bot learns an
 interaction, move it to C.
