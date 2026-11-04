@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 840,
-  "ported": 133,
-  "unported": 1474,
+  "ported": 138,
+  "unported": 1469,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 973,
-  "pct_touched": 39.8,
+  "touched": 978,
+  "pct_touched": 40.0,
   "pct_tested": 34.3,
   "bytes_total": 838629,
-  "bytes_touched": 416008,
-  "pct_bytes_touched": 49.6
+  "bytes_touched": 403623,
+  "pct_bytes_touched": 48.1
  },
  "orphan_refs": [
   "0x004148",
@@ -4106,8 +4106,10 @@
    "name": "FUN_00426120",
    "size": 246,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x426216",
@@ -4128,8 +4130,10 @@
    "name": "FUN_004262cf",
    "size": 28,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x4262eb",
@@ -11752,8 +11756,7 @@
    "status": "ported",
    "src": [
     "src/engine_map_terrain.c",
-    "src/engine_map_terrain.h",
-    "src/gen/blit_table_452820.h"
+    "src/engine_map_terrain.h"
    ]
   },
   {
@@ -11764,8 +11767,7 @@
    "status": "ported",
    "src": [
     "src/engine_map_terrain.c",
-    "src/engine_map_terrain.h",
-    "src/gen/blit_table_45337b.h"
+    "src/engine_map_terrain.h"
    ]
   },
   {
@@ -11776,8 +11778,7 @@
    "status": "ported",
    "src": [
     "src/engine_map_terrain.c",
-    "src/engine_map_terrain.h",
-    "src/gen/blit_table_4538f6.h"
+    "src/engine_map_terrain.h"
    ]
   },
   {
@@ -11785,10 +11786,8 @@
    "name": "FUN_00453e71",
    "size": 8339,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/gen/drawb_table_453e71.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x455f04",
@@ -11797,8 +11796,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_455f04.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -11806,30 +11804,24 @@
    "name": "FUN_00456fd8",
    "size": 4305,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/gen/drawb_stripb_456fd8.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4580a9",
    "name": "FUN_004580a9",
    "size": 4527,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/gen/drawb_stripb_4580a9.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x459258",
    "name": "FUN_00459258",
    "size": 4377,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/gen/drawb_stripb_459258.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x45a371",
@@ -11980,80 +11972,64 @@
    "name": "FUN_00463b42",
    "size": 196,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/gen/blit_table_463b42.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x463c06",
    "name": "FUN_00463c06",
    "size": 92,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/gen/blit_table_463c06.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x463c62",
    "name": "FUN_00463c62",
    "size": 92,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/gen/blit_table_463c62.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x463cbe",
    "name": "FUN_00463cbe",
    "size": 467,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/gen/drawb_table_463cbe.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x463e91",
    "name": "FUN_00463e91",
    "size": 276,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/gen/drawb_table_463e91.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x463fa5",
    "name": "FUN_00463fa5",
    "size": 273,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/gen/drawb_table_463fa5.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4640b6",
    "name": "FUN_004640b6",
    "size": 339,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/gen/drawb_stripb_4640b6.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x464209",
    "name": "FUN_00464209",
    "size": 345,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/gen/drawb_stripb_464209.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x464362",
@@ -13305,8 +13281,10 @@
    "name": "FUN_0046e767",
    "size": 531,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x46e97a",
@@ -13387,8 +13365,10 @@
    "name": "FUN_0046eb78",
    "size": 54,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x46ebae",
@@ -13447,8 +13427,10 @@
    "name": "FUN_0046efbe",
    "size": 235,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x46f0a9",
@@ -13561,6 +13543,7 @@
    "status": "tested",
    "src": [
     "src/engine_army_move.c",
+    "src/engine_bf_strike.c",
     "src/engine_path.c",
     "src/engine_path.h"
    ]
@@ -13570,8 +13553,10 @@
    "name": "FUN_0046f525",
    "size": 336,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x46f68e",
@@ -14879,8 +14864,10 @@
    "name": "FUN_00483337",
    "size": 1873,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x483a88",
@@ -14991,16 +14978,20 @@
    "name": "FUN_00485675",
    "size": 492,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x485861",
    "name": "FUN_00485861",
    "size": 388,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x4859e5",
@@ -15939,56 +15930,70 @@
    "name": "FUN_00492c8b",
    "size": 3793,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x493b61",
    "name": "FUN_00493b61",
    "size": 344,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x493cb9",
    "name": "FUN_00493cb9",
    "size": 956,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x494075",
    "name": "FUN_00494075",
    "size": 176,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x494125",
    "name": "FUN_00494125",
    "size": 160,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x4941c5",
    "name": "FUN_004941c5",
    "size": 160,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x494265",
    "name": "FUN_00494265",
    "size": 821,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x49459a",
@@ -16045,8 +16050,10 @@
    "name": "FUN_004956cc",
    "size": 650,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x495956",
@@ -16347,7 +16354,6 @@
     "src/engine_pl8.h",
     "src/game_init.c",
     "src/game_init.h",
-    "src/gen/pl8_table.h",
     "src/main.c"
    ]
   },
