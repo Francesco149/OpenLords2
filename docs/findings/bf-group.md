@@ -97,6 +97,21 @@ callers reach it): the drivers 0x489401 / 0x488dfe / 0x485bb1 / 0x4859e5 / 0x46e
 0x48b9c1 330, 0x48b37b 252, 0x48c8af 227, 0x48bac4 200, 0x48c56f 122, 0x48bbe2 115, 0x47fc01 1391,
 0x48bff9 / 0x48c363 27; one call each: 0x48b386, 0x48b5fc, 0x48c4bd. All 0 divergences.
 
-Never called in the corpus (ported from the disasm, hybrid-replaced but never executed — UNVERIFIED):
-`FUN_00489981`, `FUN_0048a9c7` (empty), `FUN_0048b546`, `FUN_0048b7fc`, `FUN_0048bcfb`, `FUN_0048becd`,
-`FUN_0048c06f`, `FUN_0048c3fe`, `FUN_0048c974`. The fire pass body (DAT_0053e9d0 > 0) never runs either.
+Never called in the corpus: `FUN_00489981`, `FUN_0048a9c7` (empty), `FUN_0048b546`, `FUN_0048b7fc`,
+`FUN_0048bcfb`, `FUN_0048becd`, `FUN_0048c06f`, `FUN_0048c3fe`, `FUN_0048c974`; the fire pass body
+(DAT_0053e9d0 > 0) never runs either.
+
+**Poke exploration** (rhbot sessions replaying `bot3-s103-t36` with the rows in shadow mode and the group state
+poked so the branches run — port vs retail on identical, poked, state; not corpus evidence): all 0 divergences —
+`FUN_00489981` 611 (stance 6, DAT_00553fb0 = 7, an origin at column 0 so the formation cannot fit),
+`FUN_0048a9c7` 5189, `FUN_0048b546` 20 (stance 7 + group +3, the d0 table), `FUN_0048b7fc` 7 (DAT_0056d89c),
+`FUN_0048bcfb` 23, `FUN_0048becd` 34, `FUN_0048c06f` 12 (stance 10, DAT_00542cd4), `FUN_0048c3fe` 22 (stance 3
+with a FUN_0048ed95 footprint pair DAT_00553c80 / DAT_00553c84 planted), `FUN_0048c974` 15, `FUN_0048b5fc` 6,
+`FUN_0048c4bd` 5, `FUN_0048b386` 5; `FUN_0048a9d2` 761 / `FUN_0048acd2` 1522 on poked state; the fire pass
+`FUN_004859e5` 3961 calls with DAT_0053e9d0 = 1 and kind-16 / -17 cells planted beside kind-15 ones (its
+sweep cursor DAT_00569570 / DAT_00569578 written directly — the engine_map_query mirror no longer clobbers it).
+Scripts: the auto table (DAT_0053e8fc != 0) runs only in s103's frames 41200..44500.
+
+Tooling note: an rhbot `Session` runs `rhost-wine/root/bin/ol2-rhost.exe`, which `wine_stage` replaces only
+when it is OLDER than this worktree's build — with parallel worktrees a session can run another worktree's exe
+("FATAL unknown hook"). The poke scripts set `rhost.WEXE` to a per-worktree name.
