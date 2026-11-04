@@ -5,13 +5,9 @@
  * with itself). Router-table actions (no E8 call site: the button routers 0x40e3ee / 0x40da1e / the menu bar
  * call them through a pointer and drop EAX) are entry-patched, HOOK_V.
  *
- * No row (ported, verified through their callers or not at all — docs/findings/rl-glue.md):
- *   rl_47f474  rhost's call-site scan (rhost.c redirect_calls: any E8 rel32 aimed at the VA) finds a FALSE site
- *              inside FUN_0047efee's `mov dword_4EE8E8, 0` (bytes E8 4E 00 00 00 at 0x47f421 → 0x47f474) and
- *              rewrites it: retail crashes at 0x47f41e. Its port runs under rl_4782c5's shadow (and bf_43bdcd's
- *              seam when that is relinked).
- *   rl_42f148  IDirectDraw::CreateSurface is a host side effect the shadow does not roll back (retail's run made
- *              surface 2, the port's 3: ret r00000002/p00000003); replace mode passed corpus --check. */
+ * Rows added later: rl_47f474 (its false E8 site at 0x47f421 — rhost now patches only real call instructions),
+ *   rl_42f148 (IDirectDraw::CreateSurface: the shadow now rolls rh_ddraw's surface serial / count back —
+ *   rh_dd_meta_save; before, retail's run made surface 2 and the port's 3). */
 #include "rh_port.h"
 #include "rl.h"
 #include "rl_glue_globals.h"
@@ -36,7 +32,7 @@ enum {
     X_rl_4323fe, X_rl_432443, X_rl_43253a, X_rl_432893, X_rl_43292d, X_rl_4329a4, X_rl_437002, X_rl_438990, X_rl_438a91, X_rl_43933b, X_rl_439122, X_rl_40deca, X_rl_40dd92, X_rl_40c8d1, X_rl_40c928, X_rl_40e761, X_rl_434cbe, X_rl_434cee,
     X_rl_433e93, X_rl_433f49, X_rl_4344f2, X_rl_43470d, X_rl_43618b, X_rl_43631e, X_rl_436872, X_rl_4369bd, X_rl_436b22, X_rl_436b59, X_rl_43733a, X_rl_43744f, X_rl_4374c4, X_rl_4376bb, X_rl_438acc,
     X_rl_43b593, X_rl_43b681, X_rl_43b7c4, X_rl_43b848, X_rl_43b98a, X_rl_4782c5, X_rl_47f474, X_rl_472a31, X_rl_498458, X_rl_448d7e, X_rl_47703a,
-    X_rl_440666, X_rl_49b8b0, X_rl_481b9a, X_rl_482111, X_rl_4a82b9, X_rl_43eda0, X_rl_40ae12, X_rl_42a8d1, X_rl_42a9ab, X_rl_42d179, X_rl_4b1310, X_rl_409429, X_rl_40f10f, X_rl_475b41, X_rl_475d73,
+    X_rl_440666, X_rl_49b8b0, X_rl_481b9a, X_rl_482111, X_rl_4a82b9, X_rl_43eda0, X_rl_40ae12, X_rl_42a8d1, X_rl_42a9ab, X_rl_42d179, X_rl_4b1310, X_rl_409429, X_rl_40f10f, X_rl_475b41, X_rl_475d73, X_rl_42f148,
 };
 
 HOOK_V(rl_41423f, 0, rl_41423f())
@@ -113,6 +109,7 @@ HOOK_V(rl_4b1310, 0, rl_4b1310())
 HOOK_V(rl_409429, 4, rl_409429(I(0), I(1), I(2), I(3)))
 HOOK_V(rl_40f10f, 0, rl_40f10f())
 HOOK_V(rl_475b41, 2, rl_475b41(I(0), I(1)))
+HOOK_R(rl_42f148, 3, rl_42f148(I(0), I(1), I(2)))
 HOOK_V(rl_475d73, 1, rl_475d73(I(0)))
 
 hook_t RH_HOOKS_RL_GLUE[] = {
@@ -191,5 +188,6 @@ hook_t RH_HOOKS_RL_GLUE[] = {
     { "rl_40f10f", 0x40f10fu, (void *)w_rl_40f10f, 0, 0, 0, 0, "" },
     { "rl_475b41", 0x475b41u, (void *)w_rl_475b41, 0, 0, 0, 0, "" },
     { "rl_475d73", 0x475d73u, (void *)w_rl_475d73, 0, 0, 0, 0, "" },
+    { "rl_42f148", 0x42f148u, (void *)w_rl_42f148, 0, 0, 0, 0, "" },
 };
 const int RH_HOOKS_RL_GLUE_N = sizeof RH_HOOKS_RL_GLUE / sizeof *RH_HOOKS_RL_GLUE;

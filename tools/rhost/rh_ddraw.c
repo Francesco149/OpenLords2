@@ -376,6 +376,21 @@ static HRESULT WINAPI dd_CreatePalette(dd_obj *o, DWORD fl, PALETTEENTRY *e, dd_
     LOGDD("ddraw: CreatePalette flags %08lx (f%u)\n", (unsigned long)fl, g_frame);
     return DD_OK;
 }
+/* host-side meta the shadow rolls (rh_state.c meta_t): the surface serial / count and the primary pointer — the objects
+ * themselves live in the hashed heap arena. Unrolled, a port side that creates a surface after retail's run numbers it
+ * one higher (FUN_0042f148: retail's surface #2, the port's #3). */
+typedef struct { uint32_t serial, nsurf; dd_surf *primary; } dd_meta_t;
+void *rh_dd_meta_save(void)
+{
+    dd_meta_t *m = malloc(sizeof *m);
+    m->serial = g_serial; m->nsurf = g_nsurf; m->primary = g_primary;
+    return m;
+}
+void rh_dd_meta_restore(const void *p)
+{
+    const dd_meta_t *m = p;
+    g_serial = m->serial; g_nsurf = m->nsurf; g_primary = m->primary;
+}
 static HRESULT WINAPI dd_CreateSurface(dd_obj *o, DDSURFACEDESC *d, dd_surf **out, void *outer)
 {
     (void)outer;
