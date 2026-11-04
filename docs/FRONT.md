@@ -21,10 +21,11 @@
   (`tools/bot/battle.py`), long custom games (events roll only for odd counties) → 11 scenarios; coverage
   49.1% → **63.5%**. Its games exposed a binding gap (the AI score table) and #237 — fixed, 0 divergences.
   Pointer-table hooks (entry patch + trampoline) landed.
-  **2026-11-04 (overnight, parallel agents):** the **battlefield ported — 260/260** (`battlefield-sim-port.md`,
-  `bf-<part>.md`): all 260 replaced at once, corpus --check PASS (51 scenarios); **render verifiable under rhost**
-  (`render-under-rhost.md`: gfx layer on retail's layout, pixel shadow, 64 rows); ledger honest (FUN_-token
-  pollution removed: 47.2% touched / 60.9% of bytes). rl partitions (io, glue) and render batches in flight.
+  **2026-11-04 (overnight, parallel agents):** the **battlefield ported — 260/260**; rl partitions io / glue / render /
+  misc / skirmish — **every function the corpus reaches is ported** (ui2 in flight); render verifiable under rhost
+  (gfx layer on retail's layout, pixel shadow; mapview 64 + screens 104 renderer rows, 42 port bugs fixed). Coverage
+  63.5% → 74.9% (8 authored scenarios). **924 hooks: 841 verified (0 divergences, 54 scenarios), all 924 replaced
+  at once PASS.** Ledger (honest) 57.5% touched / 72.5% of bytes.
 - **Top blocker:** none for logic parity. Smacker movies are skipped in rhost (retail tolerates it). The
   standalone's UI is far behind the hybrid (engine_screen_dispatch: title + strategic map only) — the battlefield
   cannot be wired into the standalone until the battle prompt / battlefield screens' dispatch is.

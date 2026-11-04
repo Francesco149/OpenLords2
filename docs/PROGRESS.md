@@ -7,34 +7,37 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
-## 2026-11-04 — The battlefield ported (260 functions), render verifiable under rhost, the ledger made honest
+## 2026-11-04 — The battlefield ported (260 functions); every reached function ported; render verifiable; 924 hooks
 
-Overnight, coordinator + parallel agents in git worktrees (one partition each; merged here). Design:
-`docs/findings/battlefield-sim-port.md` — canonical `bf_<va>` names, a partition's unported functions are retail
-stubs through `engine_retail_call` (rhost runs retail's code; the standalone stops with the VA), generated
-`g_bf_<va>` globals aliased at retail VAs, record accessors by field VA (`BU8(i, 0x5544ac)`), `tools/bf/`
-(parts / gen_skeleton / status / fix_tokens).
-- **Battlefield: 260 of 260 ported** — move (26), strike (22), unit (31), action (36), group (42), stance (28), setup
-  (50), input (25); findings `bf-<part>.md`. Each shadowed by its owner over `bot3*` (14 scenarios, 0 divergences;
-  bf_48f1dd 2.6 M calls, the unit rows 21 M); **all 260 replaced at once: `corpus --check` PASS on all 51
-  scenarios** (state + every frame). ~45 never reached by the corpus (3×3 siege engines, the defender stance
-  table, orders 0 / 7 / 9 / 12–16, wall breaks): ported from the asm, many shadowed on poked state (exploration).
-  Quirks: a full projectile table writes record 101 over player 0's strategic record; FUN_004928a3 is empty;
-  FUN_0047095e clears 4096 of 6400 wait counters; stack residue as a foot unit's sprite frame; the per-unit loop
-  index clobbered by FUN_00479e90; FUN_0047ed9b counts with a stale index.
-- **Render under rhost** (`render-under-rhost.md`): the gfx layer's 69 retail globals aliased (src/gfx_globals.c),
-  the canvas = retail's back buffer, pixel-level shadow (RH_SH_MEDIA, a planted 1-pixel difference caught), 64
-  render rows verified; port bugs fixed (RLE 3-run spill, the rect's line order as state, shared measurer caches).
-- **rhost**: a stale file-static mirror no longer overwrites a port's direct write (sync_out stores only what the
-  port changed); the wine runner no longer hangs (a wineserver inherited its pipe); the hook-spec buffer (it
-  silently truncated at 8 KB); `verify --hooks RE`; RHOST_JOBS; rhbot runs its own tree's build; engine_tile linked.
-- **Ledger honesty**: FUN_ tokens in comments counted unported callees as ported — 90 demoted (audit_provenance;
-  the battlefield merges ran fix_tokens.py: ~370 callee tokens). Headline before the session 39.5% / 49.4% of
-  bytes (inflated) → after the audit 37.7% / 46.9% → now **47.2% / 60.9%**.
-- **Corpus**: +3 bot games (sieges; Jev ~$0.11), coverage 63.5% → 64.1%.
-- **In flight** at this entry: rl partitions `io` (70: loaders, WAV / music, movies, log + a platform shim through
-  retail's imports) and `glue` (76: UI actions, input sub-handlers, pre-tick), render batches `mapview` / `screens`
-  (the existing screen renderers on retail's layout, pixel-verified), the whole-corpus verify for the evidence file.
+Overnight, coordinator + ~20 parallel agents in git worktrees (one partition / batch each; merged here). Design:
+`docs/findings/battlefield-sim-port.md` — canonical `bf_<va>` / `rl_<va>` names, a partition's unported functions are
+retail stubs through `engine_retail_call` (rhost runs retail's code; the standalone stops with the VA), generated
+`g_bf_<va>` / `g_rl_<va>` globals aliased at retail VAs, record accessors by field VA, `tools/bf/` (parts /
+gen_skeleton / status / fix_tokens / dedup_globals).
+- **Battlefield: 260/260 ported** (move, strike, unit, action, group, stance, setup, input; `bf-<part>.md`); all 260
+  replaced at once reproduce the corpus. **rl partitions** (retail-layout ports outside it): io 70 (the platform layer
+  + a shim through retail's imports / CRT), glue 76, render 47, misc 18, skirmish 35 — every function the corpus
+  reached is ported. **Render under rhost** (`render-under-rhost.md`): the gfx layer on retail's layout, a pixel
+  shadow; then the existing renderers re-verified on retail's layout: mapview (64 rows, 14 port bugs fixed) and
+  screens (104 rows, 28 port bugs fixed — e.g. the armoury overlay showed the cost halved where retail halves the size).
+- **Evidence** (whole-corpus verify, 924 hooks, 54 scenarios, wine): **841 reached, 0 divergences**, 83 never called;
+  **all 924 replaced at once: corpus --check PASS** (state + every frame). Two runs stalled in shadow pass 4 (the
+  bot3-s103 siege: a nested port loops on siege state) — so docs/rhost-evidence.json was not rewritten; fix in flight.
+- **Coverage**: 8 authored scenarios (UI tours rounds 1–2: labor, armoury, kingdom overview, save / load, skirmish
+  mode, custom setup, options, diplomacy, battlefield LMB orders, sieges as attacker / defender) + 3 bot games:
+  **63.5% → 74.9%** of retail code bytes (1209 → 1492 functions). What remains: multiplayer (~42 KB, DirectPlay
+  stubbed), ~91 KB with no references (dead), ~6–8 KB luck / real-time micro (docs/human-traces.md B7–B9).
+- **rhost fixes**: a stale mirror overwrote direct writes; the wine runner hung (a wineserver held its pipe); the
+  hook spec truncated at 8 KB; E8 bytes inside other instructions were patched as calls (crashed a battle); retail's
+  side of a hook ran with the machinery's ebp (stack residue); a shadowed save wrote twice (files now rolled back);
+  table binds ran lazily per table; movie rows' smackw32 rollback shared (rh_hook_smk.h); `verify --hooks`, RHOST_JOBS.
+- **Ledger honesty**: FUN_ tokens in comments had counted ~90 unported functions as ported (audit + fix_tokens).
+  Headline 39.5% / 49.4% of bytes (inflated) → **57.5% touched / 72.5% of code bytes** (honest).
+- **Found**: the autoplay bot's battlefield "RMB attack" never gave an order (LMB orders); many retail quirks (per
+  partition docs: a full projectile table writes over player 0's record; score.dat overlays the battle list's text;
+  the year-end save gate 0x49a3e6 IS reached).
+- **In flight** at this entry: rl partition ui2 (labor model, kingdom overview, armoury assign …), the battlefield's
+  siege-path divergences the new scenarios exposed (defender stances, state 8's residue, the pass-4 stall).
 
 ## 2026-10-24 — Hybrid batches 2–4 (218 hooks), bot v2–v3 (fights on the battlefield; coverage 63.5%)
 
