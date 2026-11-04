@@ -70,16 +70,28 @@ void iat_override(const char *name, void *fn)
 }
 int iat_try(const char *name, void *fn) { uint32_t *s = iat_slot(name); if (s) *s = (uint32_t)(uintptr_t)fn; return s != NULL; }
 void *iat_lookup(const char *name) { uint32_t *s = iat_slot(name); return s ? (void *)(uintptr_t)*s : NULL; }
+#include "rh_callsites.h"   /* build dir: tools/rhost/gen_callsites.py */
+static int is_callsite(uint32_t a)
+{
+    unsigned lo = 0, hi = k_callsites_n;
+    while (lo < hi) { unsigned m = (lo + hi) / 2; if (k_callsites[m] < a) lo = m + 1; else hi = m; }
+    return lo < k_callsites_n && k_callsites[lo] == a;
+}
+/* redirect every E8 call of `va` to `hook`: only at real call instructions (the IDA export's list) — an E8 byte inside
+ * another instruction (an immediate, a displacement) aimed at va by chance is left alone (it crashed retail once:
+ * 0x47f421 inside FUN_0047efee's `mov dword_4EE8E8, 0`). Without the list: the raw scan. */
 int redirect_calls(uint32_t va, void *hook)
 {
-    int n = 0;
+    int n = 0, false_hits = 0;
     for (uint8_t *p = (uint8_t *)(uintptr_t)RT_TEXT_LO, *e = p + RT_TEXT_SZ - 5; p < e; p++) {
         if (*p != 0xE8) continue;
         uint32_t tgt = (uint32_t)(uintptr_t)p + 5 + *(int32_t *)(p + 1);
         if (tgt != va) continue;
+        if (k_callsites_n && !is_callsite((uint32_t)(uintptr_t)p)) { false_hits++; continue; }
         *(int32_t *)(p + 1) = (int32_t)((uint32_t)(uintptr_t)hook - ((uint32_t)(uintptr_t)p + 5));
         n++;
     }
+    if (false_hits) rh_log("redirect_calls %08x: %d E8 byte(s) inside other instructions left alone\n", va, false_hits);
     return n;
 }
 

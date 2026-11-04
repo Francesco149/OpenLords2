@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1225** (50.1%) — tested 790, ported 435
-- code bytes touched: **63.4%** (531,567 / 838,629 B)
-- unported: **1222**
+- touched: **1300** (53.1%) — tested 790, ported 510
+- code bytes touched: **65.2%** (546,853 / 838,629 B)
+- unported: **1147**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (790) — ported + host unit suite
@@ -733,7 +733,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4af6c9 | FUN_004af6c9 | 67 | strutil.h |
 | 0x4af8d9 | FUN_004af8d9 | 381 | config.c, engine_armory.c, engine_county_panels.c (+11) |
 | 0x4afab9 | FUN_004afab9 | 897 | engine_hud_menubar.c, gfx_panel.c, gfx_sprite_render.h (+1) |
-| 0x4b1310 | FUN_004b1310 | 221 | gfx_paint.c |
+| 0x4b1310 | FUN_004b1310 | 221 | gfx_paint.c, rl_glue.c |
 | 0x4b13ed | FUN_004b13ed | 274 | gfx_globals.c, gfx_globals.h, gfx_paint.c (+1) |
 | 0x4b14ff | FUN_004b14ff | 872 | gfx_paint.c |
 | 0x4b191e | FUN_004b191e | 981 | engine.c, engine.h, engine_input.c (+2) |
@@ -812,7 +812,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (435) — reimplemented, no host test yet
+## ported (510) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -820,12 +820,24 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4063c1 | FUN_004063c1 | 690 | engine_map_terrain.c, engine_map_terrain.h |
 | 0x406673 | FUN_00406673 | 1351 | engine_map_terrain.c |
 | 0x408fcb | FUN_00408fcb | 96 | engine_armory.c, engine_merchant.c, engine_rankings.c (+3) |
+| 0x409429 | FUN_00409429 | 68 | rl_glue.c |
+| 0x40ae12 | FUN_0040ae12 | 175 | rl_glue.c |
+| 0x40c8d1 | FUN_0040c8d1 | 87 | rl_glue.c |
+| 0x40c928 | FUN_0040c928 | 68 | rl_glue.c |
+| 0x40dd92 | FUN_0040dd92 | 312 | rl_glue.c |
+| 0x40deca | FUN_0040deca | 152 | rl_glue.c |
+| 0x40dfcd | FUN_0040dfcd | 61 | rl_glue.c |
+| 0x40e00a | FUN_0040e00a | 143 | rl_glue.c |
+| 0x40e099 | FUN_0040e099 | 149 | rl_glue.c |
+| 0x40e761 | FUN_0040e761 | 131 | rl_glue.c |
+| 0x40f10f | FUN_0040f10f | 145 | rl_glue.c |
 | 0x410a5d | FUN_00410a5d | 76 | engine_sendsupplies.c |
 | 0x412b33 | FUN_00412b33 | 824 | engine.c, engine_labor.c, engine_labor.h (+1) |
 | 0x412e6b | FUN_00412e6b | 746 | engine_labor.c, engine_labor.h |
 | 0x413b30 | FUN_00413b30 | 1475 | engine_labor.c, engine_labor.h |
 | 0x4140f3 | FUN_004140f3 | 301 | engine_labor.c, engine_labor.h |
 | 0x414220 | FUN_00414220 | 31 | engine_labor.c, engine_labor.h |
+| 0x41423f | FUN_0041423f | 11 | rl_glue.c |
 | 0x41593b | FUN_0041593b | 673 | engine.c, engine_rankings.c, engine_rankings.h |
 | 0x415bdc | FUN_00415bdc | 614 | engine_rankings.c, engine_rankings.h |
 | 0x415e42 | FUN_00415e42 | 348 | engine_rankings.c, engine_rankings.h |
@@ -869,20 +881,41 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x427c9b | FUN_00427c9b | 126 | rl_io.c |
 | 0x428daf | FUN_00428daf | 801 | engine_economy_globals.c, engine_trade.c, engine_trade.h (+1) |
 | 0x42a7f1 | FUN_0042a7f1 | 224 | engine_map_terrain.c, engine_map_terrain.h, engine_screen_strat.c |
+| 0x42a8d1 | FUN_0042a8d1 | 218 | rl_glue.c |
+| 0x42a9ab | FUN_0042a9ab | 218 | rl_glue.c |
+| 0x42d179 | FUN_0042d179 | 157 | rl_glue.c |
 | 0x42d806 | FUN_0042d806 | 81 | engine_bf_setup.c |
 | 0x42d91b | FUN_0042d91b | 83 | rl_io.c |
 | 0x42da18 | FUN_0042da18 | 431 | rl_io.c |
 | 0x42dbc7 | FUN_0042dbc7 | 868 | rl_io.c |
+| 0x42e26f | FUN_0042e26f | 41 | rl_glue.c |
 | 0x42e298 | FUN_0042e298 | 136 | rl_io.c |
 | 0x42e320 | FUN_0042e320 | 66 | rl_io.c |
 | 0x42e362 | FUN_0042e362 | 31 | rl_io.c |
 | 0x42e5c0 | FUN_0042e5c0 | 1249 | gfx.c, gfx.h |
 | 0x42eaa6 | FUN_0042eaa6 | 214 | gfx.c |
 | 0x42eb7c | FUN_0042eb7c | 277 | gfx.c, gfx.h |
+| 0x42f148 | FUN_0042f148 | 151 | rl_glue.c |
 | 0x42f306 | FUN_0042f306 | 323 | gfx.c, gfx.h |
 | 0x42f449 | FUN_0042f449 | 323 | gfx.c, gfx.h |
 | 0x42f58c | FUN_0042f58c | 130 | rl_io.c |
+| 0x4323fe | FUN_004323fe | 64 | rl_glue.c |
+| 0x432443 | FUN_00432443 | 247 | rl_glue.c |
+| 0x43253a | FUN_0043253a | 262 | rl_glue.c |
+| 0x432893 | FUN_00432893 | 154 | rl_glue.c |
+| 0x43292d | FUN_0043292d | 58 | rl_glue.c |
+| 0x4329a4 | FUN_004329a4 | 61 | rl_glue.c |
+| 0x4330c6 | FUN_004330c6 | 143 | rl_glue.c |
+| 0x433a70 | FUN_00433a70 | 251 | rl_glue.c |
 | 0x433cc1 | FUN_00433cc1 | 35 | rl_io.c |
+| 0x433e93 | FUN_00433e93 | 182 | rl_glue.c |
+| 0x433f49 | FUN_00433f49 | 194 | rl_glue.c |
+| 0x4344f2 | FUN_004344f2 | 100 | rl_glue.c |
+| 0x43470d | FUN_0043470d | 122 | rl_glue.c |
+| 0x43496c | FUN_0043496c | 28 | rl_glue.c |
+| 0x434988 | FUN_00434988 | 28 | rl_glue.c |
+| 0x434cbe | FUN_00434cbe | 48 | rl_glue.c |
+| 0x434cee | FUN_00434cee | 48 | rl_glue.c |
 | 0x435211 | FUN_00435211 | 61 | engine.c |
 | 0x435286 | FUN_00435286 | 108 | engine_trade.h, engine_trade_model.c |
 | 0x4352f2 | FUN_004352f2 | 28 | engine_trade.h, engine_trade_model.c |
@@ -903,10 +936,29 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x435c89 | FUN_00435c89 | 54 | engine.c, engine_armory.h |
 | 0x435cbf | FUN_00435cbf | 48 | engine.c, engine_armory.h |
 | 0x435ebc | FUN_00435ebc | 336 | engine_armory.c, engine_armory.h, engine_sendsupplies.h (+1) |
+| 0x4360f2 | FUN_004360f2 | 41 | rl_glue.c |
 | 0x43611b | FUN_0043611b | 38 | engine.c, engine_noble_faces.h, engine_sendsupplies_model.c |
 | 0x436141 | FUN_00436141 | 74 | engine.c, engine_diplomacy_action.h, engine_noble_faces.c (+2) |
+| 0x43618b | FUN_0043618b | 79 | rl_glue.c |
+| 0x43631e | FUN_0043631e | 84 | rl_glue.c |
 | 0x436372 | FUN_00436372 | 150 | engine.c, engine_diplomacy_action.c, engine_diplomacy_action.h (+1) |
+| 0x436872 | FUN_00436872 | 139 | rl_glue.c |
+| 0x4369bd | FUN_004369bd | 203 | rl_glue.c |
 | 0x436a88 | FUN_00436a88 | 154 | engine_sendsupplies_model.c |
+| 0x436b22 | FUN_00436b22 | 55 | rl_glue.c |
+| 0x436b59 | FUN_00436b59 | 415 | rl_glue.c |
+| 0x437002 | FUN_00437002 | 261 | rl_glue.c |
+| 0x43733a | FUN_0043733a | 277 | rl_glue.c |
+| 0x43744f | FUN_0043744f | 117 | rl_glue.c |
+| 0x4374c4 | FUN_004374c4 | 113 | rl_glue.c |
+| 0x4376bb | FUN_004376bb | 504 | rl_glue.c |
+| 0x438990 | FUN_00438990 | 257 | rl_glue.c |
+| 0x438a91 | FUN_00438a91 | 59 | rl_glue.c |
+| 0x438acc | FUN_00438acc | 54 | rl_glue.c |
+| 0x439079 | FUN_00439079 | 169 | rl_glue.c |
+| 0x439122 | FUN_00439122 | 537 | rl_glue.c |
+| 0x43933b | FUN_0043933b | 176 | rl_glue.c |
+| 0x4393eb | FUN_004393eb | 342 | rl_glue.c |
 | 0x4398f5 | FUN_004398f5 | 187 | engine_labor.c, engine_labor_region_grid.h |
 | 0x43ac23 | FUN_0043ac23 | 258 | engine.c |
 | 0x43ad25 | FUN_0043ad25 | 256 | engine.c |
@@ -916,6 +968,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43b1ca | FUN_0043b1ca | 176 | engine_sendsupplies.h, engine_sendsupplies_model.c |
 | 0x43b27a | FUN_0043b27a | 176 | engine_sendsupplies.h, engine_sendsupplies_model.c |
 | 0x43b32a | FUN_0043b32a | 232 | engine.c, engine_sendsupplies.c, engine_sendsupplies.h (+1) |
+| 0x43b4cb | FUN_0043b4cb | 200 | rl_glue.c |
+| 0x43b593 | FUN_0043b593 | 143 | rl_glue.c |
+| 0x43b681 | FUN_0043b681 | 192 | rl_glue.c |
+| 0x43b7c4 | FUN_0043b7c4 | 132 | rl_glue.c |
+| 0x43b848 | FUN_0043b848 | 207 | rl_glue.c |
+| 0x43b98a | FUN_0043b98a | 23 | rl_glue.c |
 | 0x43b9a1 | FUN_0043b9a1 | 136 | engine_bf_input.c |
 | 0x43ba29 | FUN_0043ba29 | 208 | engine_bf_input.c |
 | 0x43bb68 | FUN_0043bb68 | 111 | engine_bf_input.c |
@@ -930,8 +988,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43c55c | FUN_0043c55c | 33 | engine_bf_input.c |
 | 0x43c57d | FUN_0043c57d | 183 | engine_bf_input.c |
 | 0x43c634 | FUN_0043c634 | 326 | engine_bf_input.c |
+| 0x43eda0 | FUN_0043eda0 | 637 | rl_glue.c |
+| 0x440666 | FUN_00440666 | 383 | rl_glue.c |
+| 0x448d7e | FUN_00448d7e | 148 | rl_glue.c |
 | 0x45183a | FUN_0045183a | 102 | engine_labor.c |
 | 0x451f70 | FUN_00451f70 | 26 | rl_io.c |
+| 0x451f8a | FUN_00451f8a | 66 | rl_glue.c |
 | 0x45280b | FUN_0045280b | 11 | rl_io.c |
 | 0x452820 | FUN_00452820 | 2907 | engine_map_terrain.c, engine_map_terrain.h, blit_table_452820.h |
 | 0x45337b | FUN_0045337b | 1403 | engine_map_terrain.c, engine_map_terrain.h, blit_table_45337b.h |
@@ -951,6 +1013,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x464209 | FUN_00464209 | 345 | drawb_stripb_464209.h |
 | 0x46a101 | FUN_0046a101 | 165 | rl_io.c |
 | 0x46c40c | FUN_0046c40c | 57 | engine_bf_setup.c |
+| 0x46c4a3 | FUN_0046c4a3 | 277 | rl_glue.c |
 | 0x46c7fc | FUN_0046c7fc | 182 | engine_bf_setup.c |
 | 0x46e4c8 | FUN_0046e4c8 | 582 | engine_bf_setup.c |
 | 0x46e70e | FUN_0046e70e | 89 | engine_bf_setup.c |
@@ -975,14 +1038,20 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x471da6 | FUN_00471da6 | 415 | engine_bf_action.c |
 | 0x471f45 | FUN_00471f45 | 738 | engine_bf_move.c |
 | 0x472227 | FUN_00472227 | 363 | engine_bf_move.c |
+| 0x472986 | FUN_00472986 | 63 | rl_glue.c |
+| 0x472a31 | FUN_00472a31 | 152 | rl_glue.c |
 | 0x472e46 | FUN_00472e46 | 595 | engine.c |
 | 0x47309e | FUN_0047309e | 10915 | engine.c |
+| 0x475b41 | FUN_00475b41 | 562 | rl_glue.c |
+| 0x475d73 | FUN_00475d73 | 148 | rl_glue.c |
 | 0x476a5d | FUN_00476a5d | 74 | engine.c |
 | 0x476aa7 | FUN_00476aa7 | 770 | engine.c |
 | 0x476da9 | FUN_00476da9 | 120 | engine.c |
 | 0x476e21 | FUN_00476e21 | 116 | engine.c |
+| 0x47703a | FUN_0047703a | 126 | rl_glue.c |
 | 0x4778a0 | FUN_004778a0 | 655 | engine_bf_setup.c |
 | 0x477c89 | FUN_00477c89 | 371 | engine_bf_setup.c |
+| 0x4782c5 | FUN_004782c5 | 340 | rl_glue.c |
 | 0x4784ca | FUN_004784ca | 730 | engine_bf_input.c |
 | 0x4787a4 | FUN_004787a4 | 290 | engine_bf_setup.c |
 | 0x478952 | FUN_00478952 | 53 | engine_bf_group.c |
@@ -1022,6 +1091,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x47ed9b | FUN_0047ed9b | 590 | engine_bf_setup.c |
 | 0x47efee | FUN_0047efee | 1087 | engine_bf_setup.c |
 | 0x47f42d | FUN_0047f42d | 71 | engine_bf_setup.c |
+| 0x47f474 | FUN_0047f474 | 761 | rl_glue.c |
 | 0x47f76d | FUN_0047f76d | 458 | engine_bf_input.c |
 | 0x47fc01 | FUN_0047fc01 | 522 | engine_bf_group.c |
 | 0x47fea7 | FUN_0047fea7 | 849 | engine_bf_setup.c |
@@ -1037,6 +1107,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x481906 | FUN_00481906 | 198 | engine_bf_setup.c |
 | 0x4819cc | FUN_004819cc | 239 | engine_bf_group.c |
 | 0x481abb | FUN_00481abb | 223 | engine_bf_unit.c |
+| 0x481b9a | FUN_00481b9a | 1399 | rl_glue.c |
+| 0x482111 | FUN_00482111 | 476 | rl_glue.c |
 | 0x4822ed | FUN_004822ed | 644 | engine_bf_unit.c |
 | 0x4825d1 | FUN_004825d1 | 223 | engine_bf_unit.c |
 | 0x4826b0 | FUN_004826b0 | 217 | engine_bf_unit.c |
@@ -1202,6 +1274,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4978ad | FUN_004978ad | 129 | rl_io.c |
 | 0x497a34 | FUN_00497a34 | 697 | rl_io.c |
 | 0x4983b7 | FUN_004983b7 | 161 | rl_io.c |
+| 0x498458 | FUN_00498458 | 132 | rl_glue.c |
 | 0x4990f9 | FUN_004990f9 | 101 | rl_io.c |
 | 0x49915e | FUN_0049915e | 259 | rl_io.c |
 | 0x499261 | FUN_00499261 | 261 | rl_io.c |
@@ -1213,7 +1286,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x499aca | FUN_00499aca | 487 | rl_io.c |
 | 0x499cb1 | FUN_00499cb1 | 204 | engine_bf_input.c |
 | 0x499d7d | FUN_00499d7d | 26 | rl_io.c |
+| 0x49b8b0 | FUN_0049b8b0 | 195 | rl_glue.c |
 | 0x49c995 | FUN_0049c995 | 157 | rl_io.c |
+| 0x4a82b9 | FUN_004a82b9 | 365 | rl_glue.c |
 | 0x4aabd8 | FUN_004aabd8 | 303 | engine_armory.c, engine_armory.h |
 | 0x4ae1b8 | FUN_004ae1b8 | 243 | rl_io.c |
 | 0x4ae2ab | FUN_004ae2ab | 18 | rl_io.c |

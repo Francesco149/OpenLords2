@@ -2,6 +2,7 @@
  * layout: engine_bf.h (record accessors, globals). Each function: "Port of FUN_00xxxxxx" + what it does. */
 #include "engine_bf.h"
 #include "engine_bf_input_globals.h"
+#include "rl.h"
 #include "engine.h"
 #include "engine_combat.h"
 #include "engine_territory.h"
@@ -258,7 +259,7 @@ int bf_478987(int p)
 
 /* Port of FUN_0043c247 (98 B) — apply a box selection for player `p`: deselect all (0x479a71), box-select the
  * rectangle (0x479b58, camera cell (col0, row0)), and with `regroup` (single player) regroup the selection into
- * one group (0x478987 / 0x478f0b) and refresh the panel (0x481b9a, unported: TODO(bf-extern)). */
+ * one group (0x478987 / 0x478f0b) and refresh the panel (0x481b9a). */
 int bf_43c247(int p, int regroup, int col0, int row0, int x0, int y0, int x1, int y1)
 {
     bf_479a71(p);
@@ -266,14 +267,14 @@ int bf_43c247(int p, int regroup, int col0, int row0, int x0, int y0, int x1, in
     if (regroup == 1) {
         bf_478987(p);
         bf_478f0b(p);
-        return (int)engine_retail_call(0x481b9au, 0);   /* TODO(bf-extern): 0x481b9a */
+        return rl_481b9a();
     }
     return r;
 }
 
 /* ---------------------------------------------------------------- seams: retail functions this partition calls */
 #define MP_ON (g_sim_mp_active != 0)   /* DAT_00553030 */
-static int mp_message(int id)  { return (int)engine_retail_call(0x43eda0u, 2, (uint32_t)id, 0u); }   /* TODO(bf-extern) */
+static int mp_message(int id)  { return rl_43eda0(id, 0); }
 static int wav(const void *name) { return (int)engine_retail_call(0x427990u, 3, (uint32_t)(uintptr_t)name, 1u, 0u); }   /* TODO(bf-link) */
 /* the confirm dialog 0x40e6f2(msg, x, y, callback VA): retail keeps the callback's ADDRESS — retail's VA here
  * (engine_confirm_dialog.c takes a port function pointer instead: TODO(bf-link)) */
@@ -538,7 +539,7 @@ int bf_43bdcd(void)
     int r = g_bf_59151c[0];
     if (g_bf_59151c[0] == 1) {
         if (MP_ON) {
-            engine_retail_call(0x47f474u, 0);   /* TODO(bf-link): 0x47f474 (engine_combat.c's writeback seam) */
+            rl_47f474();
             AT(int32_t, g_bf_59154c, 0x59154cu, 0x59154cu) = 0;
             bf_47f76d();
             mp_message(51);

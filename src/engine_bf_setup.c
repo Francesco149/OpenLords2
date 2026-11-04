@@ -2,6 +2,7 @@
  * layout: engine_bf.h (record accessors, globals). Each function: "Port of FUN_00xxxxxx" + what it does.
  * Findings: docs/findings/bf-setup.md. */
 #include "engine_bf.h"
+#include "rl.h"
 #include "engine.h"             /* engine_rng_step_single (0x404b2c), g_sim_mp_active, the screen / redraw bridges */
 #include "engine_combat.h"      /* g_combat_render_active / _anim_t0 / _msg_clock: DAT_0056d5c8 / 0053e994 / 004eeae8 */
 #include "engine_map_query.h"   /* g_cell_cursor_col / _row: DAT_00569570 / DAT_00569578 (rhost: a synced mirror) */
@@ -484,7 +485,7 @@ int bf_47efee(void)
     else
         bf_47fea7(S32(s_slot_00568218), S32(s_slot_00543fc0), 0);
     bf_480f2e();
-    engine_retail_call(0x481b9au, 0);   /* TODO(bf-extern): 0x481b9a (1399 B, not battlefield, unported) */
+    rl_481b9a();
     bf_488dfe();
     s_slot_0056897c = s_slot_0053f028;
     s_slot_00542cc8 = s_slot_00553c58;
