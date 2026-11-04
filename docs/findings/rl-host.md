@@ -63,12 +63,15 @@ or nobody reads it. Special rows:
 
 ## Evidence
 
-`rhost.py verify --target wine -j 3 --hooks '^rl_(<the 70>)$'` over the whole corpus (64 scenarios, master 5a18dce
-merged; 22:18–23:17): **70/70 reached; 13.36 M shadowed calls; hybrid PASS** (all 70 replaced, `corpus --check`:
-every state hash and presented frame). One divergence in that run, rl_4ba9c8 in movie-skip (the SMACK handle above);
-its row was then made host-level under `--movies` and re-verified on movie-skip / boot-movies / newgame-movies /
-bot-s1-t8 (8751 calls shadowed, 25903 sampled, 0 divergences, hybrid PASS). The three RH_SH_HOST rows (0x4b284e, 0x4b2922,
-0x4b29be) ran retail in the shadow passes (sampled 64 / 64 / 89928) and are proven by the hybrid. Least reached:
+Final (the committed rows): `rhost.py verify --target wine -j 3 --hooks '^rl_(<the 70>)$'` over the whole corpus
+(64 scenarios, master 5a18dce merged; 2026-11-05 00:04–00:53): **VERIFY: 70/70 reached with 0 divergences, 0 never
+called; hybrid PASS; 0 failed runs** — 13.25 M calls shadowed (state + pixels where flagged), 9.6 M more sampled out
+(RH_SH_SAMPLE rows, the RH_SH_HOST rows, rl_4ba9c8 under --movies); passes 1–3 + the hybrid (all 70 replaced,
+`corpus --check`: every state hash and presented frame). The run before it (22:18–23:17, the same rows but 0x4ba9c8
+shadowed in the movie runs too) had its one divergence there (movie-skip, the SMACK handle above). The three
+RH_SH_HOST rows (0x4b284e, 0x4b2922, 0x4b29be) ran retail in the shadow passes (sampled 64 / 64 / 89928) and are
+proven by the hybrid. Seams (commit b8bd0c2): every rl_ / bf_ row at once (687) replaced, `corpus --check` over the 64
+scenarios: PASS. Least reached:
 0x4b3768 (1 scenario), 0x4aabd8 (2), 0x4af62c / 0x4af675 / 0x4adfe6 / 0x4bc020 (3), 0x4ad316 (4), 0x4a5f0a / 0x4a960f /
 0x4ad9f0 (5), 0x4a7e0a / 0x4a7eb5 / 0x4a8426 / 0x4ad0e8 / 0x4ad16c (6). Never exercised (no corpus path; ported from the asm): the MP
 arms (0x4b99c0's link cadence, 0x4ad9f0's MP load / save, 0x4bb978's MP pause, the move-confirm's MP messages), the
