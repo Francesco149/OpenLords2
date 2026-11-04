@@ -226,7 +226,7 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                  * 42ff10.c:65-113.  Turn-busy closes to the map; else run the
                  * HUD sub-handlers, then a seal click (generic_click) or RMB
                  * closes the grid, and a task-cell LMB opens the labor detail
-                 * (labor_open → screen 0x0f).  FUN_004393eb (→ screen 5) and
+                 * (labor_open → screen 0x0f).  0x4393eb (→ screen 5) and
                  * FUN_00439df0 are deferred.  If nothing consumes, the click
                  * falls through to the shared tail (retail's DAT_004e65f0=1
                  * "unconsumed" latch). */
@@ -258,7 +258,7 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                  * 42ff10.c:114-128.  A seal click (generic_click) or RMB
                  * closes back to the workforce grid (the came-from flag
                  * DAT_005533f4 is always 0 for the only opener, screen 2),
-                 * then the commit tail (FUN_00427d19 + FUN_0041438c border
+                 * then the commit tail (FUN_00427d19 + 0x41438c border
                  * repaint). */
                 if (call_consume(hooks->generic_click, in, st) != 0 ||
                     in->rmb_released != 0) {
@@ -369,7 +369,7 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                  * click OUTSIDE the widgets (generic_click = FUN_0040e7e4) or an
                  * RMB (FUN_0042ff10's 0x4e6900 test), or a turn-busy tick, closes
                  * to the MAP (screen 0, demand 2).  (The message-box "more"
-                 * gate FUN_0043b4cb + the 0x553fc8 pending flags apply to the
+                 * gate 0x43b4cb + the 0x553fc8 pending flags apply to the
                  * DEFERRED message modes 1..4 only.) */
                 if (!turn_idle) {
                     st->screen = 0;

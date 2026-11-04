@@ -64,7 +64,7 @@ void engine_sendsupplies_seed(int player, int source_county)
 }
 
 /* ── the county-action tabs' seams (default: none) ────────────────────── */
-static void (*g_ca_wav_fn)(const char *, int, int);   /* FUN_00427990 */
+static void (*g_ca_wav_fn)(const char *, int, int);   /* 0x427990 */
 static void (*g_ca_voice_fn)(int);                     /* 0x4b3714: the s016_NN army cue */
 static void (*g_ca_armory_fn)(int);                    /* the armory's entry (below) */
 void engine_county_action_bind_wav_fn(void (*fn)(const char *, int, int)) { g_ca_wav_fn = fn; }

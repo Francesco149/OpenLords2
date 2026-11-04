@@ -84,7 +84,7 @@ int engine_army_state_arm_movement_owned(unsigned state, int owner);
 int engine_army_state_siege_build_step(int idx);
 
 /* Port of FUN_004a84ba (77 B, __cdecl uint).  Resume the persistent siege-scan
- * cursor (s_slot_0057cad4, reset to 1 at phase-2 entry by retail FUN_004a82b9)
+ * cursor (s_slot_0057cad4, reset to 1 at phase-2 entry by retail 0x4a82b9)
  * and step it forward one record at a time, advancing each one's siege
  * construction (engine_army_state_siege_build_step); stop on the first stack
  * that finishes building this pass, leaving the cursor parked on it and

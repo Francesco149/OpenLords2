@@ -200,7 +200,7 @@ void engine_rankings_render(const engine_rankings_ctx_t *ctx)
     }
 
     io_path_chdir_base();                       /* FUN_004af502 */
-    /* DAT_0053f050 = 0 (leave the strategic view) + FUN_004b11ce (transient
+    /* DAT_0053f050 = 0 (leave the strategic view) + 0x4b11ce (transient
      * palette/canvas prep) are DEFERRED — both superseded by the backdrop
      * load + the final grtnoble palette apply, exactly as engine_merchant. */
 

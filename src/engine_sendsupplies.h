@@ -100,7 +100,7 @@ int engine_sendsupplies_target_select(int ox, int oy, int cursor_x, int cursor_y
  * param, retail DAT_0059154c): 1 armory, 2 treasury, 3 send supplies, 4 castle,
  * 5 diplomacy; owner-gated tabs post notice 0x70 through `q`.  Retail layout
  * (sets the screen byte / demand redraw); engine.c's tab arms are the port's
- * own router.  Seams (default none): the WAV cue (FUN_00427990), the army voice
+ * own router.  Seams (default none): the WAV cue (0x427990), the army voice
  * cue (0x4b3714), the armory's entry (conscripts FUN_00435ebc, muster pool
  * FUN_004aa90a, march / merc off DAT_005679d0 / DAT_0055446c). */
 void engine_county_action_open(int action, engine_event_queue_state_t *q);

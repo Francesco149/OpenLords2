@@ -45,7 +45,7 @@
  * parchment-texture tiles 0xc4..0xcb.  The blit is the already-ported
  * fixed 24×24 raw copy (gfx_sprite_blit_24x24_raw) staged off the sheet
  * directory (sheet + 8 + idx*0x10).  Aborts on an out-of-range source
- * offset, exactly like retail (FUN_004afab9 log + FUN_00408fb0(1) latch,
+ * offset, exactly like retail (0x4afab9 log + FUN_00408fb0(1) latch,
  * elided — a valid sheet never trips it). */
 void engine_hud_menubar_tile_strip(const uint8_t *chrome_sheet,
                                     int x, int y, int cols, int rows);

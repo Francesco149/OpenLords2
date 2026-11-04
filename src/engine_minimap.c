@@ -28,7 +28,7 @@ uint8_t g_minimap_type_grid[0x4000];
 #define ARMY_COUNT    (13056 / ARMY_STRIDE)   /* 17 records (slot 0 reserved) */
 
 /* retail DAT_00553e60 — a global food-detail toggle written by the
- * options screen (FUN_004b29be) and reset by init (FUN_00497500).  Not
+ * options screen (FUN_004b29be) and reset by init (0x497500).  Not
  * save-backed; default 0.  Only gates the mode-2 (food) band detail in
  * engine_minimap_compute_bands, so it has no effect on the political
  * (mode 0) render.  Defined here as the first porter of a reader; a

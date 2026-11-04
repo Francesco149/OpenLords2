@@ -335,7 +335,7 @@ void engine_ranking_recompute(engine_event_queue_state_t *evq)
 }
 
 /* Optional game-over-screen hook for engine_ranking_check_elimination — retail
- * FUN_0043eda0(0x24, 0), the local-player defeat screen.  NULL (the default)
+ * 0x43eda0(0x24, 0), the local-player defeat screen.  NULL (the default)
  * means no screen change, so the elimination logic + notifications run headless
  * (the diff / host tests bind it to NULL).  It is the function's only side
  * effect outside the save-state globals + the event ring. */

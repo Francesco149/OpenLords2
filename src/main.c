@@ -659,7 +659,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdSh
      * the harness can verify the per-tick driver is alive without
      * polling internal state mid-run.  Average FPS is the
      * cumulative-FPS / cumulative-seconds ratio retail's session-diag
-     * uses (FUN_004b2636); skipped if no second boundary has elapsed
+     * uses (0x4b2636); skipped if no second boundary has elapsed
      * yet (e.g. very short --frames runs). */
     {
         uint32_t cum_secs = engine_get_cumulative_seconds();
@@ -847,9 +847,9 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
     /* --- WM_PAINT (0x0f) -------------------------------------------
      * Retail: if a Smacker movie is playing (DAT_00516a4c != 0), call
-     *   FUN_0042e3ba which black-fills the dirty rect and SmackGotos
+     *   0x42e3ba which black-fills the dirty rect and SmackGotos
      *   to the current frame.  Otherwise plain Begin/EndPaint, and if
-     *   not focused, repaint via FUN_00451f70.  Returns 1, bypassing
+     *   not focused, repaint via 0x451f70.  Returns 1, bypassing
      *   DefWindowProcA.  We have neither Smacker nor the full
      *   surface-blit path yet, so just satisfy the OS's invalidation
      *   bookkeeping with a Begin/EndPaint pair. */
@@ -883,8 +883,8 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
      * yet — just PostQuitMessage and let the main loop exit. */
     case WM_DESTROY:
         /* TODO(subsys-teardown): once DSound/DPlay/Smacker are ported,
-         * call the equivalents of FUN_0042dfe2, FUN_004b28cd(1),
-         * FUN_00425d35, 0x4b7180(1) before PostQuitMessage. */
+         * call the equivalents of FUN_0042dfe2, 0x4b28cd(1),
+         * 0x425d35, 0x4b7180(1) before PostQuitMessage. */
         PostQuitMessage(0);
         g_shutdown = 1;
         return 0;
@@ -897,7 +897,7 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_SIZE:
         if (!IsIconic(hwnd)) {
             g_focused = 1;
-            /* Retail logs "OK :Unpaused." here via FUN_004b26f8 when
+            /* Retail logs "OK :Unpaused." here via 0x4b26f8 when
              * the foreground window is ours.  Clears surface-LOST. */
             g_surface_lost = 0;
         } else {
@@ -918,7 +918,7 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         log_line("OK :Window moved.");
         engine_set_demand_redraw(2);
-        /* TODO(sim): retail re-blits / calls FUN_00451f70 here based
+        /* TODO(sim): retail re-blits / calls 0x451f70 here based
          * on engine state — wire in once the render path exists. */
         return 0;
 
@@ -994,7 +994,7 @@ static LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             break;
         case VK_ESCAPE:
             /* Retail: outside ingame, VK_ESCAPE sets DAT_005aeb68 = 1
-             * directly (FUN_004343f8 is the ingame-menu hook we
+             * directly (0x4343f8 is the ingame-menu hook we
              * don't have yet).  The main-loop tail then PostMessages
              * WM_CLOSE to escalate to DefWindowProc → DestroyWindow.
              * No inline DestroyWindow — the escalator does the
@@ -2206,8 +2206,8 @@ static int strat_check_dump(const char *dir, const char *name,
  *     bit flags (game state the loaded save already carries);
  *   - the immediate render FUN_0040f5fd(1) — the caller renders via the
  *     screen-0 dispatch arm (engine_screen_strat_render);
- *   - post-load audio cues FUN_00427d19 / FUN_00499d7d / FUN_00499aca;
- *   - the DAT_00553030 multiplayer tail (FUN_0043f4b7 / FUN_0043fd2a);
+ *   - post-load audio cues FUN_00427d19 / 0x499d7d / 0x499aca;
+ *   - the DAT_00553030 multiplayer tail (0x43f4b7 / 0x43fd2a);
  *   - the dirty-rect full mark FUN_0045240a and DAT_0056d6a0 = 1 (the
  *     drop-in presents the whole back buffer, so the present region is
  *     moot — the caller sets demand-redraw to drive the live repaint).
@@ -2689,7 +2689,7 @@ static void bringup_newgame(int map_id)
     /* Two more config-screen substate scalars the headless seat skips.
      * Both are set by the new-game screen entry the live menu path runs but
      * this seat doesn't, and both persist to the save:
-     *   - entry 207 (0x53f0d4) = 0xa — retail FUN_00497a34 @ 0x497abc.
+     *   - entry 207 (0x53f0d4) = 0xa — retail 0x497a34 @ 0x497abc.
      *   - entry 197 (0x55302c) =  2  — the SP "full-game" substate the live
      *     menu path (engine_menu_input.c) latches on entry. */
     s_slot_0053f0d4 = 0xa;

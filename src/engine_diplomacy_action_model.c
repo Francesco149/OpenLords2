@@ -75,7 +75,7 @@ void engine_diplomacy_action_confirm(void)
     }
     /* mode 0 (gift): keep the staged amount, enqueue the action + transfer the
      * gold to the partner (target 0).  Single-player only — the retail MP
-     * broadcast (FUN_0043eda0, gated on DAT_00553030) is a drop-in deferral. */
+     * broadcast (0x43eda0, gated on DAT_00553030) is a drop-in deferral. */
     engine_diplomacy_queue_action((int)s_slot_0057c8cc, (int)s_slot_00553fbc,
                                   0, (int)s_slot_0057a0f8, 0);
 }
@@ -103,7 +103,7 @@ static void diplo_notice(engine_event_queue_state_t *q, int code)
  *         attack) refuses ours / our liege's 0xf4 — each a notice, no action;
  *   3     to a partner who is in the game and has a liege: notice 0xdb;
  * then queue the action (FUN_004a2621) — single player; the MP send
- * FUN_0043eda0(0x48 / 0x49, 0) is deferred (rhost: DirectPlay is stubbed). */
+ * 0x43eda0(0x48 / 0x49, 0) is deferred (rhost: DirectPlay is stubbed). */
 void engine_diplomacy_action_seal(int yes, text_input_state_t *ed,
                                   engine_event_queue_state_t *q)
 {

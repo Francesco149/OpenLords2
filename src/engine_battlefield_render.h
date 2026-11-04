@@ -644,7 +644,7 @@ void engine_battlefield_render_bind_creature_slot_shift(int amount, int sign);
 void engine_battlefield_render_bind_selection_marker(int x, int y, int gate);
 
 /* Bind the world-map dirty hook called by the selection marker leaf
- * (retail FUN_0046c4a3).  Retail ORs bit 1 into the per-cell collision-
+ * (retail 0x46c4a3).  Retail ORs bit 1 into the per-cell collision-
  * grid byte at &DAT_005440e2 + (y*0x50+x)*8 for each cell of the box.
  *
  * The port leaves the actual world-map subsystem out of the battlefield

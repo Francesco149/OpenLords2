@@ -128,23 +128,23 @@ typedef struct engine_ingame_hooks {
     engine_ingame_consume_fn dismiss_chip;       /* FUN_0047685d open-scroll dismiss */
     engine_ingame_consume_fn ui_router;          /* FUN_004ba9c8 dialog/UI router (0 in-game) */
     engine_ingame_consume_fn edge_scroll;        /* FUN_00432221 edge-scroll */
-    engine_ingame_consume_fn minimap_drag;       /* FUN_00439079 minimap drag/rclick */
+    engine_ingame_consume_fn minimap_drag;       /* 0x439079 minimap drag/rclick */
     engine_ingame_consume_fn hud_btn_a;          /* FUN_00432967 HUD button hit-test */
-    engine_ingame_consume_fn kbd_table;          /* FUN_0040deca(&DAT_004dc428,3) */
-    engine_ingame_consume_fn hud_btn_b;          /* FUN_0043292d HUD button hit-test */
+    engine_ingame_consume_fn kbd_table;          /* 0x40deca(&DAT_004dc428,3) */
+    engine_ingame_consume_fn hud_btn_b;          /* 0x43292d HUD button hit-test */
     engine_ingame_consume_fn action_grid;        /* FUN_00438ceb 4-button action grid */
     engine_ingame_consume_fn rations_arrows;     /* FUN_0043a379 rations-panel stepper
                                                   * (screen 0x19 only, third in its
                                                   * chain — see the county-panel case) */
-    engine_ingame_consume_fn scrollbar;          /* FUN_00439122 right-panel scrollbar */
-    engine_ingame_consume_fn panel_toggles;      /* FUN_00438e3b right-panel toggles */
-    engine_ingame_consume_fn tab_strip;          /* FUN_004323fe right-panel tab strip (tail) */
+    engine_ingame_consume_fn scrollbar;          /* 0x439122 right-panel scrollbar */
+    engine_ingame_consume_fn panel_toggles;      /* 0x438e3b right-panel toggles */
+    engine_ingame_consume_fn tab_strip;          /* 0x4323fe right-panel tab strip (tail) */
     engine_ingame_consume_fn generic_click;      /* FUN_0040e7e4 generic click-consumed test (screen 4) */
-    engine_ingame_consume_fn ti_subhandlers;     /* FUN_00438990 / FUN_00438a91 / FUN_00437002
+    engine_ingame_consume_fn ti_subhandlers;     /* 0x438990 / 0x438a91 / 0x437002
                                                   * (screen-4 sub-interactions, checked as a unit;
                                                   *  grouped here, all deferred — split when ported) */
     engine_ingame_action_fn  dismiss_on_map;     /* FUN_00476768 + FUN_0045270a */
-    engine_ingame_action_fn  special_mode2_jump; /* FUN_004350a1 (view-mode-2 LMB jump) */
+    engine_ingame_action_fn  special_mode2_jump; /* 0x4350a1 (view-mode-2 LMB jump) */
     engine_ingame_action_fn  army_select;        /* FUN_0043ce1a army select/move (map LMB) */
     engine_ingame_action_fn  terrain_info_open;  /* FUN_0043caf4 terrain-info open (map RMB) */
     engine_ingame_action_fn  terrain_info_close; /* FUN_0043cc56 terrain-info cleanup (screen-4 close) */
@@ -156,7 +156,7 @@ typedef struct engine_ingame_hooks {
                                                     * trade grid (screen 0x08); sets the
                                                     * good + flips to 0x0c when a rug zone
                                                     * is LMB-clicked */
-    engine_ingame_action_fn  screen0f_commit;    /* FUN_00427d19 + FUN_0041438c (tail, screen 0xf) */
+    engine_ingame_action_fn  screen0f_commit;    /* FUN_00427d19 + 0x41438c (tail, screen 0xf) */
     engine_ingame_action_fn  army_move_click_resolve; /* FUN_004a9252 screen-0x10
                                                         * click resolve (map LMB,
                                                         * fresh press + cooldown

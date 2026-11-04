@@ -37,7 +37,7 @@
  * the user clicked.  So each sibling is written ONCE, as a zero-arg
  * function matching engine_confirm_dialog_callback_fn exactly, and reads
  * engine_confirm_dialog_answer() itself — exactly mirroring retail
- * (FUN_0043eda0's `DAT_0059151c` reads), rather than inventing a
+ * (0x43eda0's `DAT_0059151c` reads), rather than inventing a
  * boolean-parameter signature retail doesn't have.  The direct-call path
  * uses engine_confirm_dialog_force_answer(1) to set the SAME flag
  * retail's FUN_004a9252 sets unconditionally before branching.

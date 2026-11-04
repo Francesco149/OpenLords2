@@ -44,10 +44,10 @@
  * DEFERRED / not ported here:
  *   - The county voice cues (FUN_004b3768 s020_0N.wav on the population
  *     flip; s021_01/02.wav on the rations flip): the WAV cue-playback
- *     path (FUN_00427990) has no port yet (audio.h) — the flips document
+ *     path (0x427990) has no port yet (audio.h) — the flips document
  *     the cue + set the g_combat_audio_latch flag, playback is a no-op
  *     (drop-in audio is off by default anyway).
- *   - The multiplayer arm of the ration set (FUN_0043eda0(0x31,0) when
+ *   - The multiplayer arm of the ration set (0x43eda0(0x31,0) when
  *     DAT_00553030 != 0) — SP drop-in.
  *
  * Per-county record fields (COUNTY(key) = g_per_army_768 + key*0x300,

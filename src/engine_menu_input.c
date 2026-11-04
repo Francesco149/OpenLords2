@@ -357,7 +357,7 @@ static void menu_action_p7_button(int param)
          * reads the config tabs via apply_custom_config, builds the world, runs
          * engine_game_start, and sets the in-game-active flag DAT_0052afa4).
          * NOTE: the roster count DAT_0053e8a4 is populated by the deferred
-         * roster recompute (FUN_00433cc1); the live seat seeds it so the gate
+         * roster recompute (0x433cc1); the live seat seeds it so the gate
          * passes (see main.c). */
         if (s_slot_00553f98 <= s_slot_0053e8a4) {
             g_redraw_fn(2);
@@ -367,14 +367,14 @@ static void menu_action_p7_button(int param)
         /* Defaults — re-apply the default option values (FUN_004ae539) and
          * clamp the player count to the live roster size (FUN_004ae5e2),
          * then mark the tab strip dirty so the refresh repaints the new
-         * value caps.  Retail's roster/preview recompute tail (FUN_00433cc1
+         * value caps.  Retail's roster/preview recompute tail (0x433cc1
          * → DAT_0053f268 + 0x49caaa) is deferred with the roster subsystem;
          * the multiplayer-only sound cue (0x43eda0) is likewise deferred. */
         engine_title_render_setup_apply_defaults();        /* FUN_004ae539 */
         engine_title_render_setup_clamp_player_count((int)s_slot_0053e8a4); /* FUN_004ae5e2 */
         engine_title_render_setup_mark_tabs_dirty();       /* DAT_0055ce94 = 1 */
         g_redraw_fn(2);
-        /* TODO(roster): FUN_00433cc1 recompute (DAT_0053f268 + 0x49caaa). */
+        /* TODO(roster): 0x433cc1 recompute (DAT_0053f268 + 0x49caaa). */
     }
 }
 

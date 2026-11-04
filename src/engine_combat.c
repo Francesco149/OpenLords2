@@ -217,7 +217,7 @@ void engine_combat_resolve_casualties(int attacker, int defender,
  * and the save slots s_slot_005533d0 (local role), s_slot_00568934 / 38 (battle
  * sizes), s_slot_005681ec / d8 (owners). */
 
-/* Optional battle-cue hook standing in for retail FUN_00427990(ff_batl.wav).
+/* Optional battle-cue hook standing in for retail 0x427990(ff_batl.wav).
  * The cue-playback path is deferred project-wide (see audio.c), so this is
  * NULL by default and the cue is silently skipped. */
 static void (*g_battle_sfx_fn)(void);
@@ -782,7 +782,7 @@ void engine_combat_transfer_ownership(unsigned new_owner, unsigned key,
         uint8_t hd[7]; build_has_data(hd);
 
         if ((int)new_owner == local) {
-            if (g_combat_click_fn) g_combat_click_fn();             /* FUN_00499aca */
+            if (g_combat_click_fn) g_combat_click_fn();             /* 0x499aca */
             if ((unsigned)no[P_CONQ] == (unsigned)s_slot_0056d5dc - 1U)
                 engine_event_queue_post(evq, 0, local, 0x7b, 0, 0xd, key_lo, region_owner, 0, hd, local);
             else if (no[P_CONQMAX] < no[P_CONQ]) {
@@ -2165,13 +2165,13 @@ void engine_combat_rotate_merc_offers(void)
 #define R_CASTLE_LEVEL  0x1f9   /* completed castle's defence level (u8)       */
 
 /* Unported battlefield / result-screen callees (default NULL: no-op). */
-static void (*g_bf_siege_result_fn)(void);           /* FUN_0042c64f */
-static void (*g_bf_return_to_map_fn)(void);          /* FUN_004788c6 */
-static void (*g_bf_writeback_fn)(void);              /* FUN_0047f474 */
-static void (*g_bf_result_panel_fn)(void);           /* FUN_00423241 */
+static void (*g_bf_siege_result_fn)(void);           /* 0x42c64f */
+static void (*g_bf_return_to_map_fn)(void);          /* 0x4788c6 */
+static void (*g_bf_writeback_fn)(void);              /* 0x47f474 */
+static void (*g_bf_result_panel_fn)(void);           /* 0x423241 */
 static void (*g_bf_stop_stream_fn)(int slot);        /* FUN_00426d11 */
-static void (*g_bf_result_movie_fn)(int siege, int index, int x, int y, int z, int screen);  /* FUN_0042d91b */
-static void (*g_bf_message_fn)(int id, int arg);     /* FUN_0043eda0 */
+static void (*g_bf_result_movie_fn)(int siege, int index, int x, int y, int z, int screen);  /* 0x42d91b */
+static void (*g_bf_message_fn)(int id, int arg);     /* 0x43eda0 */
 
 void engine_combat_bind_battlefield_fns(void (*siege_result)(void), void (*return_to_map)(void),
                                         void (*writeback)(void), void (*result_panel)(void),
@@ -2279,7 +2279,7 @@ void engine_combat_battlefield_end(engine_event_queue_state_t *evq, int mp_activ
     engine_combat_resolve();                                   /* FUN_004aad07 */
     if (s_slot_0057a0f0 != 0) {
         engine_set_current_screen(0x2e);
-        bf_siege_result();                                     /* FUN_0042c64f */
+        bf_siege_result();                                     /* 0x42c64f */
         s_slot_0057c8fc = 0;
         g_engine_state  = 2;                                   /* DAT_0052af94 */
     } else {
@@ -2288,7 +2288,7 @@ void engine_combat_battlefield_end(engine_event_queue_state_t *evq, int mp_activ
         engine_combat_aftermath(1, evq, mp_active);            /* FUN_004ab383 */
         s_slot_00553c70 = s_slot_00568210;
         s_slot_00553d20 = s_slot_00568218;
-        bf_return_to_map();                                    /* FUN_004788c6 */
+        bf_return_to_map();                                    /* 0x4788c6 */
     }
     engine_set_demand_redraw(2);                               /* DAT_0057d340 */
 }
@@ -2330,7 +2330,7 @@ void engine_combat_battlefield_end_tick(engine_event_queue_state_t *evq, int mp_
             uint32_t now = combat_clock();
             if ((int)(now - g_combat_msg_clock) >= 2000) {
                 g_combat_msg_clock = now;                      /* DAT_004eeae8 */
-                if (g_bf_message_fn) g_bf_message_fn(0x30, 0); /* FUN_0043eda0 */
+                if (g_bf_message_fn) g_bf_message_fn(0x30, 0); /* 0x43eda0 */
             }
         }
         return;
@@ -2339,10 +2339,10 @@ void engine_combat_battlefield_end_tick(engine_event_queue_state_t *evq, int mp_
     if (engine_current_screen() == 0x2b) {
         if ((int)++s_slot_00568470 <= 5000)
             return;
-        if (g_bf_writeback_fn) g_bf_writeback_fn();            /* FUN_0047f474 */
+        if (g_bf_writeback_fn) g_bf_writeback_fn();            /* 0x47f474 */
         if (s_slot_0057a0f0 != 0) {
             engine_set_current_screen(0x2e);
-            bf_siege_result();                                 /* FUN_0042c64f */
+            bf_siege_result();                                 /* 0x42c64f */
             s_slot_0057c8fc = 0;
             g_engine_state  = 2;                               /* DAT_0052af94 */
         } else {
@@ -2353,7 +2353,7 @@ void engine_combat_battlefield_end_tick(engine_event_queue_state_t *evq, int mp_
                 s_slot_00553c70 = s_slot_00568210;
                 s_slot_00553d20 = s_slot_00568218;
             }
-            bf_return_to_map();                                /* FUN_004788c6 */
+            bf_return_to_map();                                /* 0x4788c6 */
         }
         engine_set_demand_redraw(2);                           /* DAT_0057d340 */
         return;
@@ -2391,10 +2391,10 @@ void engine_combat_battlefield_end_tick(engine_event_queue_state_t *evq, int mp_
         s_slot_00568470 = 5000;
         return;
     }
-    if (g_bf_result_panel_fn) g_bf_result_panel_fn();          /* FUN_00423241 */
+    if (g_bf_result_panel_fn) g_bf_result_panel_fn();          /* 0x423241 */
     if (g_combat_flag_53f248 != 0 && s_slot_005533d0 != 0) {
         if (g_bf_stop_stream_fn) g_bf_stop_stream_fn(0);       /* FUN_00426d11(0) */
-        if (g_bf_result_movie_fn)                              /* FUN_0042d91b */
+        if (g_bf_result_movie_fn)                              /* 0x42d91b */
             g_bf_result_movie_fn(s_slot_0057a0f0 != 0, g_combat_result_row * 4 + (int)s_slot_0053f084,
                                  0x27, 0x49, 0, engine_current_screen());
         if ((int)++s_slot_0053f084 >= 4)
@@ -2404,7 +2404,7 @@ void engine_combat_battlefield_end_tick(engine_event_queue_state_t *evq, int mp_
 
 /* Port of FUN_004a8aab (753 B) — the siege assault on besieger `occ`'s keep
  * (turn driver phase 2 once the siege engines are built; the "assault" button
- * FUN_0043b98a).  The defence level DAT_0055401c comes from the besieged
+ * 0x43b98a).  The defence level DAT_0055401c comes from the besieged
  * realm's castle (a castle under construction: its stage; a complete one: its
  * level; else the keep level - 1); DAT_0057c910 = level >= 2.  A strong castle
  * (level >= 3) the besieger has no engines for repels the assault (event 0x119

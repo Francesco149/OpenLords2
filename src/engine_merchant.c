@@ -42,7 +42,7 @@ int engine_merchant_zone_at(int cursor_x, int cursor_y)
 
 /* Retail FUN_00415fb7 body, verbatim order:
  *
- *   if (param_1 == 1) FUN_004b11ce();                    // canvas full-redraw prep
+ *   if (param_1 == 1) 0x4b11ce();                    // canvas full-redraw prep
  *   FUN_004af502();                                      // io cwd-revert
  *   DAT_0053f050 = 0;                                    // leave the strategic view
  *   FUN_004af8d9("merchant.256", &DAT_004ea8a0, 0x300, 0);  // read the 256-col palette

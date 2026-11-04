@@ -42,7 +42,7 @@
  *      come with the SFX/music playback path.  Mirrored as TODOs.
  *
  *   3. Retail's error log uses an HRESULT→small-code mapping
- *      (`FUN_00427d72`) and logs the small code.  We log the raw
+ *      (`0x427d72`) and logs the small code.  We log the raw
  *      HRESULT instead — easier to look up.  Log prefix strings
  *      ("ERR:DS failed open <code>", etc.) still match retail's
  *      so diff'd transcripts line up modulo the trailing number.
@@ -156,7 +156,7 @@ void audio_shutdown(void)
      * once those subsystems exist.  The one-shot cue buffer
      * (FUN_00427d19, ported below as audio_cue_release) is torn down
      * by the gameplay cue path, NOT from shutdown — retail's own
-     * FUN_00425d35 does not call it.  Once the cue-create path lands,
+     * 0x425d35 does not call it.  Once the cue-create path lands,
      * releasing any still-live cue buffer here would be the
      * belt-and-braces leak guard. */
 

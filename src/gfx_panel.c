@@ -33,7 +33,7 @@
  *   +4  int    src_offset   +0xc byte  flag_a   (staged, unused by blit)
  *   +0xd byte  row_count    +0xe byte  flag_b   (staged, unused by blit)
  *
- * Deviation: on a bad src_offset retail logs via FUN_004afab9 and sets
+ * Deviation: on a bad src_offset retail logs via 0x4afab9 and sets
  * the error latch to 1 via FUN_00408fb0(1) before aborting.  We abort
  * (early return) faithfully but elide the latch write — there is no
  * public setter for an arbitrary latch value and nothing in the panel
