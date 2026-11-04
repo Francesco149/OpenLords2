@@ -43,9 +43,9 @@ def width_of(name):
     return WIDTH.get(name.split("_")[0], 1)
 
 
-def globals_blocks(funcs=None, include_bf=False):
+def globals_blocks(funcs=None, include_bf=False, exclude=()):
     funcs = set(OWNER) if funcs is None else set(funcs)
-    owners = G.port_owners(include_bf=include_bf)
+    owners = G.port_owners(include_bf=include_bf, exclude=exclude)
 
     def owned(v):
         for lo, hi, n, k in owners:
@@ -110,8 +110,9 @@ def globals_blocks(funcs=None, include_bf=False):
 def gen_globals(part=None):
     """part=None: engine_bf_globals.{h,c} + rh_bf_alias.h for every partition; part=NAME: the globals that partition
     needs beyond those (and beyond every port symbol): engine_bf_NAME_globals.{h,c} + rh_bf_NAME_alias.h"""
-    blocks, owners = globals_blocks(PARTS[part] if part else None, include_bf=bool(part))
     nm = N(part) if part else N("x")
+    blocks, owners = globals_blocks(PARTS[part] if part else None, include_bf=bool(part),
+                                    exclude=(nm["alias"],) if part else ())   # its own aliases are not owners
     stem, macro = (f"{nm['stem']}_globals", f"RH_{nm['fam'].upper()}_{part.upper()}_ALIASES") if part else ("engine_bf_globals", "RH_BF_ALIASES")
     alias_h = nm["alias"] if part else "rh_bf_alias.h"
     gpre = nm["g"]

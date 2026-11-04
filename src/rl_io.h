@@ -12,7 +12,7 @@ int rl_4263ad(int a0, int a1, int a2);           /* 255 B, coverage 54 */
 int rl_426529(void);                             /* 11 B, coverage 54 */
 int rl_426534(int a0, int a1);                   /* 1630 B, coverage 54 */
 int rl_426b92(int a0);                           /* 383 B, coverage 54 */
-int rl_426dd5(void);                             /* 3003 B, coverage 54 */
+int rl_426dd5(int a0, int a1, int a2, int a3, int a4); /* 3003 B, coverage 54 — a __stdcall TIMECALLBACK in retail (id, msg, dwUser, dw1, dw2): the generated 0-arg signature was wrong; no code calls it (timeSetEvent does) */
 int rl_427990(int a0, int a1, int a2);           /* 779 B, coverage 54 */
 int rl_427c9b(void);                             /* 126 B, coverage 54 */
 int rl_42d91b(int a0, int a1, int a2, int a3, int a4); /* 83 B, coverage 54 */

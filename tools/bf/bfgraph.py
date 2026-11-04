@@ -145,7 +145,7 @@ def _symsize(name, texts):
     return None
 
 
-def port_owners(include_bf=False):
+def port_owners(include_bf=False, exclude=()):
     """[(lo, hi, symbol, kind)] — the save block (save_schema_table.h) and every runtime global the rhost tables
     alias to a retail VA (asm `A(name,0xVA)` lines; size from the port's declaration, else 4)"""
     out = []
@@ -157,6 +157,8 @@ def port_owners(include_bf=False):
     texts = [open(f, errors="replace").read() for f in glob.glob(os.path.join(SRC, "*.[ch]"))]
     for fn in glob.glob(os.path.join(ROOT, "tools", "rhost", "rh_*.[ch]")):
         if not include_bf and os.path.basename(fn).startswith("rh_bf_alias"):
+            continue
+        if os.path.basename(fn) in exclude:
             continue
         for n, v in re.findall(r"A\((\w+),\s*(0x[0-9a-fA-F]+)\)", open(fn).read()):
             v = int(v, 16)

@@ -64,6 +64,7 @@ session — they outlive the conversation context.
 | [bf-group.md](bf-group.md) | battlefield partition 'group': the group AI driver FUN_00489401, formation / re-target chain, interactive stances, the group aggregator, projectiles pass, fire pass (42 functions); quirks |
 | [bf-unit.md](bf-unit.md) | battlefield partition 'unit': the per-unit driver, movement-state table DAT_004d9140, the animation sequencers, the troop band, terrain attrition (31 functions); stack-residue seams; quirks |
 | [bf-action.md](bf-action.md) | battlefield partition 'action': the unit order table DAT_004d9170 (18 handlers) + helpers (36 functions); the siege orders' stack residue; quirks |
+| [rl-io.md](rl-io.md) | rl partition 'io': the platform layer — asset / file loaders, WAV cues + music streams, movies, the debug log, sprite / palette loads, the debug-CRT free (70 functions); the platform shim through retail's imports / CRT; quirks |
 | [render-under-rhost.md](render-under-rhost.md) | **render under rhost** (2026-11-04): the gfx layer on retail's layout (`src/gfx_globals.c`, 69 globals at their VAs; the canvas = retail's back buffer DAT_004ea1a8), the media (pixel) shadow `RH_SH_MEDIA`, hot-leaf sampling `RH_SH_SAMPLE`, the gfx / panel / text / wrap / menu-bar / button rows; the RLE 3-run spill, the rect's line order, the measurers' shared cache |
 | [input-replay.md](input-replay.md) | Input recording & replay (JSONL trace format) |
 | [pure-function-diff.md](pure-function-diff.md) | Pure-function differential testing vs retail |
