@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1010** (41.3%) — tested 840, ported 170
-- code bytes touched: **49.3%** (413,500 / 838,629 B)
-- unported: **1437**
+- touched: **1037** (42.4%) — tested 840, ported 197
+- code bytes touched: **50.7%** (425,449 / 838,629 B)
+- unported: **1410**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (840) — ported + host unit suite
@@ -103,7 +103,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404e03 | FUN_00404e03 | 72 | engine_army_economy.c, engine_math.h |
 | 0x404e4b | FUN_00404e4b | 98 | engine_math.h |
 | 0x404ead | FUN_00404ead | 159 | engine_army_ai.c, engine_bf_group.c, engine_combat.c (+2) |
-| 0x404f4c | FUN_00404f4c | 180 | engine_army_ai.c, engine_path.h, engine_territory.c |
+| 0x404f4c | FUN_00404f4c | 180 | engine_army_ai.c, engine_bf_group.c, engine_path.h (+1) |
 | 0x4050c0 | FUN_004050c0 | 53 | engine.c, engine_army_select.h, engine_county_panels.c (+11) |
 | 0x4050f6 | FUN_004050f6 | 376 | engine_map_scene.c, engine_map_scene.h, main.c |
 | 0x40526e | FUN_0040526e | 537 | engine_map_scene.c, engine_map_scene.h, engine_map_terrain.c (+1) |
@@ -862,7 +862,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (170) — reimplemented, no host test yet
+## ported (197) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -985,6 +985,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x479a71 | FUN_00479a71 | 231 | engine_bf_input.c |
 | 0x479b58 | FUN_00479b58 | 415 | engine_bf_input.c |
 | 0x479cf7 | FUN_00479cf7 | 277 | engine_bf_input.c |
+| 0x479e90 | FUN_00479e90 | 2269 | engine_bf_group.c |
 | 0x47a76d | FUN_0047a76d | 167 | engine_bf_input.c |
 | 0x47f76d | FUN_0047f76d | 458 | engine_bf_input.c |
 | 0x47fc01 | FUN_0047fc01 | 522 | engine_bf_group.c |
@@ -1009,9 +1010,35 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x48a1c9 | FUN_0048a1c9 | 453 | engine_bf_group.c |
 | 0x48a38e | FUN_0048a38e | 735 | engine_bf_group.c |
 | 0x48a672 | FUN_0048a672 | 359 | engine_bf_group.c |
+| 0x48a9c7 | FUN_0048a9c7 | 11 | engine_bf_group.c |
+| 0x48a9d2 | FUN_0048a9d2 | 768 | engine_bf_group.c |
+| 0x48acd2 | FUN_0048acd2 | 857 | engine_bf_group.c |
+| 0x48b02b | FUN_0048b02b | 848 | engine_bf_group.c |
+| 0x48b37b | FUN_0048b37b | 11 | engine_bf_group.c |
+| 0x48b386 | FUN_0048b386 | 182 | engine_bf_group.c |
+| 0x48b546 | FUN_0048b546 | 182 | engine_bf_group.c |
+| 0x48b5fc | FUN_0048b5fc | 512 | engine_bf_group.c |
+| 0x48b7fc | FUN_0048b7fc | 453 | engine_bf_group.c |
+| 0x48b9c1 | FUN_0048b9c1 | 259 | engine_bf_group.c |
+| 0x48bac4 | FUN_0048bac4 | 286 | engine_bf_group.c |
+| 0x48bbe2 | FUN_0048bbe2 | 281 | engine_bf_group.c |
+| 0x48bcfb | FUN_0048bcfb | 466 | engine_bf_group.c |
+| 0x48becd | FUN_0048becd | 300 | engine_bf_group.c |
+| 0x48bff9 | FUN_0048bff9 | 118 | engine_bf_group.c |
+| 0x48c06f | FUN_0048c06f | 330 | engine_bf_group.c |
+| 0x48c363 | FUN_0048c363 | 155 | engine_bf_group.c |
+| 0x48c3fe | FUN_0048c3fe | 191 | engine_bf_group.c |
+| 0x48c4bd | FUN_0048c4bd | 178 | engine_bf_group.c |
+| 0x48c56f | FUN_0048c56f | 832 | engine_bf_group.c |
+| 0x48c8af | FUN_0048c8af | 197 | engine_bf_group.c |
+| 0x48c974 | FUN_0048c974 | 283 | engine_bf_group.c |
+| 0x48ef45 | FUN_0048ef45 | 308 | engine_bf_group.c |
 | 0x491f17 | FUN_00491f17 | 359 | engine_bf_unit.c |
 | 0x492c8b | FUN_00492c8b | 3793 | engine_bf_group.c |
 | 0x49459a | FUN_0049459a | 878 | engine_bf_unit.c |
+| 0x4956cc | FUN_004956cc | 650 | engine_bf_group.c |
+| 0x496566 | FUN_00496566 | 514 | engine_bf_group.c |
+| 0x496d76 | FUN_00496d76 | 508 | engine_bf_group.c |
 | 0x496f72 | FUN_00496f72 | 178 | engine_bf_group.c |
 | 0x4978ad | FUN_004978ad | 129 | engine.c, engine.h |
 | 0x498458 | FUN_00498458 | 132 | engine.c |

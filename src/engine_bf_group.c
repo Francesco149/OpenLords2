@@ -600,3 +600,465 @@ int bf_4819cc(int g)
     g_bf_56d8a8 = K_4D96D8(cls);
     return 0;
 }
+
+/* ---------------------------------------------------------------- the interactive stances and the stance helpers */
+
+/* the current group of the stance handlers: retail's driver loop index DAT_00568458 (re-read at every use, as
+ * retail does) */
+#define CG g_bf_568458
+/* the stance helpers' waypoint tables (save block): DAT_00544050 / DAT_00544070 (side 0 / side +3) 4 × (x, y);
+ * DAT_00522d30 / DAT_00522d60 [DAT_0053f654] 3 × (x, y); DAT_00554180 [16 rows of 16 (x, y)]; DAT_0055cd90
+ * [a][4 (x, y)] and its +0x40 pair DAT_0055cdd0 / DAT_0055cdd4 */
+#define T_544050(o) AT(int32_t, s_slot_00544050, 0x544050, 0x544050 + (o))
+#define T_522D30(o) AT(int32_t, s_slot_00522d30, 0x522d30, 0x522d30 + (o))
+#define T_554180(o) AT(int32_t, s_slot_00554180, 0x554180, 0x554180 + (o))
+#define T_55CD90(o) AT(int32_t, s_slot_0055cd90, 0x55cd90, 0x55cd90 + (o))
+
+/* every helper ends by ordering the current group to its anchor: FUN_00479e90(g, +0x22, +0x24, 0, 0, 0) */
+static void bf_group_go(void)
+{
+    bf_479e90(CG, BG16(CG, 0x566542), BG16(CG, 0x566544), 0, 0, 0);
+}
+
+/* Port of FUN_0048ef45 (308 B) — the nearest enemy group to group g: another side's (+0 differs) live group with
+ * at least `minn` members (+2) whose centre (+0x1e / +0x20) is within Chebyshev `range` (FUN_00404f4c — it
+ * leaves |dx| / |dy| in its globals) of g's; ties keep the first. 0 when none. */
+int bf_48ef45(int g, int range, int minn)
+{
+    int best = 0, bd = 160000;
+    for (int i = 1; i < 81; i++) {
+        if (BG8(i, 0x566520) == 0 || BG8(g, 0x566520) == BG8(i, 0x566520) || (int)BG8(i, 0x566522) < minn)
+            continue;
+        int d = engine_path_dist_chebyshev(BG16(g, 0x56653e), BG16(g, 0x566540), BG16(i, 0x56653e), BG16(i, 0x566540));
+        if (d > range)
+            continue;
+        if (bd > d) {
+            bd = d;
+            best = i;
+        }
+    }
+    return best;
+}
+
+/* Port of FUN_0048a9c7 (11 B) — the no-op stance (stance 0, and the unused slots of the auto tables). */
+int bf_48a9c7(void)
+{
+    return 0;
+}
+
+/* Port of FUN_0048b37b (11 B) — the no-op stance step ("hold": the early ticks of a stance). */
+int bf_48b37b(void)
+{
+    return 0;
+}
+
+/* Port of FUN_0048a9d2 (768 B) — interactive stance 1 (aggressive). Every 200th tick (+0x1c; not while a member
+ * is in melee, +0xd) with the step counter +0x1a: the nearest enemy group within 80 of >= 1 member
+ * (FUN_0048ef45). Stronger than the threshold (DAT_004eea98 > DAT_0057c8b4): hit recently (+0xc) by a live
+ * group → strike back at the nearest (FUN_0048c974); else steps 0..9 hold, 10..17 advance halfway
+ * (FUN_0048c56f), 18..20 regroup on the centre (FUN_0048b386), later advance on a live nearest. Weaker:
+ * the pursuit flag DAT_00553070 → advance; hit by a live attacker (+0xa) → strike back at it; the recall flag
+ * DAT_0056d89c → back toward the remembered point (FUN_0048b7fc); every 4th step the side's objective 0
+ * (FUN_0048bac4); then, hit > 10 times (+0x12) by a live attacker and not yet withdrawing (+0xf / +0x10),
+ * withdraw from it (FUN_0048b5fc). The step counter +0x1a advances. */
+int bf_48a9d2(void)
+{
+    BG16(CG, 0x56653c)++;
+    if (BG16(CG, 0x56653c) < 200)
+        return 0;
+    if (BG8(CG, 0x56652d) != 0)
+        return 0;
+    BG16(CG, 0x56653c) = 0;
+    int att = BG16(CG, 0x56652a);
+    int near = bf_48ef45(CG, 80, 1);
+    if (g_bf_4eea98 > g_bf_57c8b4) {
+        if (BG8(CG, 0x56652c) != 0 && BG8(near, 0x566520) != 0)
+            bf_48c974(near);
+        else if (BG16(CG, 0x56653a) <= 9)
+            bf_48b37b();
+        else if (BG16(CG, 0x56653a) <= 17)
+            bf_48c56f(near);
+        else if (BG16(CG, 0x56653a) <= 20)
+            bf_48b386();
+        else if (BG8(near, 0x566520) != 0)
+            bf_48c56f(near);
+    } else {
+        if (s_slot_00553070 != 0)
+            bf_48c56f(near);
+        else if (BG8(CG, 0x56652c) != 0 && BG8(att, 0x566520) != 0)
+            bf_48c974(att);
+        else if (s_slot_0056d89c != 0)
+            bf_48b7fc();
+        else if (BG16(CG, 0x56653a) % 4 == 0)
+            bf_48bac4(0);
+        if (BG8(CG, 0x566532) > 10 && BG8(att, 0x566520) != 0 && BG8(CG, 0x56652f) == 0 && BG8(CG, 0x566530) == 0)
+            bf_48b5fc(att);
+    }
+    BG16(CG, 0x56653a)++;
+    return 0;
+}
+
+/* the shared body of interactive stances 2 and 3 (FUN_0048acd2 / FUN_0048b02b): they differ in the step bounds
+ * (hold below `lo`, the waypoint walk below `hi`), the threat range of the rout check (8 / 9), the objective
+ * cadence (every 5th step with no withdrawal yet / every 8th with fewer than 2) and stance 2's counters
+ * DAT_00569510 / DAT_00569514 */
+static void bf_stance_hold(int lo, int hi, int range, int st2)
+{
+    BG16(CG, 0x56653c)++;
+    if (BG16(CG, 0x56653c) < 200)
+        return;
+    if (BG8(CG, 0x56652d) != 0)
+        return;
+    BG16(CG, 0x56653c) = 0;
+    int att = BG16(CG, 0x56652a);
+    if (g_bf_4eea98 > g_bf_57c8b4) {
+        if (BG8(CG, 0x56652c) != 0 && BG8(att, 0x566520) != 0)
+            bf_48c4bd(att);
+        else if (BG16(CG, 0x56653a) >= hi)
+            bf_48c8af(CG);
+        else if (BG16(CG, 0x56653a) <= lo)
+            bf_48b37b();
+        else if (s_slot_0057c934 & 1)
+            bf_48b9c1((int)s_slot_0056d6b0);
+        else
+            bf_48b9c1(((CG & 1) + (int)s_slot_0056d6b0) & 3);
+    } else {
+        if (BG8(CG, 0x56652c) != 0 && BG8(att, 0x566520) != 0) {
+            s_slot_00553f28++;
+            if ((int)AT(uint8_t, s_slot_00553080, 0x553080, 0x553080 + (int32_t)s_slot_005653f8) < (int32_t)s_slot_00553f28) {
+                s_slot_00553070 += 3;
+            } else if ((int32_t)s_slot_00553f74 / 8 > (int32_t)s_slot_0056d6ac) {
+                s_slot_00553070 += 20;
+            } else {
+                s_slot_0056d89c = 1;
+                s_slot_00522f70 = (uint32_t)(int32_t)BG16(att, 0x56653e);
+                s_slot_00522f74 = (uint32_t)(int32_t)BG16(att, 0x566540);
+                bf_48b5fc(att);
+            }
+        } else if (s_slot_00553070 != 0) {
+            s_slot_00553070--;
+        }
+        if ((int32_t)s_slot_00553070 <= 0)
+            BG8(CG, 0x56654a) = 0;
+        if (st2)
+            g_bf_569510++;
+        int near = bf_48ef45(CG, range, 3);
+        if (s_slot_00553070 != 0)
+            bf_48c8af(CG);
+        else if (near != 0)
+            bf_48c8af(CG);
+        else if (st2 ? BG16(CG, 0x56653a) % 5 == 0 && BG8(CG, 0x56654b) == 0
+                     : BG16(CG, 0x56653a) % 8 == 0 && BG8(CG, 0x56654b) < 2) {
+            if (st2)
+                g_bf_569514++;
+            bf_48bac4(st2 ? 2 : 1);
+        }
+    }
+    BG16(CG, 0x56653a)++;
+}
+
+/* Port of FUN_0048acd2 (857 B) — interactive stance 2 (hold the line). Every 200th tick (+0x1c; not in melee,
+ * +0xd). Stronger than the threshold (DAT_004eea98 > DAT_0057c8b4): hit (+0xc) by a live attacker (+0xa) → onto
+ * it (FUN_0048c4bd); step (+0x1a) >= 10 → charge (FUN_0048c8af); <= 1 hold; else the side's waypoint
+ * DAT_0056d6b0 (odd DAT_0057c934) or it + (g & 1) mod 4 (FUN_0048b9c1). Weaker: hit by a live attacker →
+ * DAT_00553f28 + 1; past the side's limit DAT_00553080[DAT_005653f8] the pursuit flag DAT_00553070 += 3; supply
+ * DAT_00553f74 / 8 above DAT_0056d6ac → += 20; else recall (DAT_0056d89c = 1, the attacker's centre remembered
+ * in DAT_00522f70 / DAT_00522f74) and withdraw from it (FUN_0048b5fc); not hit: DAT_00553070 runs down. At <= 0
+ * the rout flag +0x2a clears; DAT_00569510 + 1; pursuit or an enemy group of >= 3 within 8 → charge; else every
+ * 5th step with no withdrawal yet (+0x2b) DAT_00569514 + 1 and the side's objective 2 (FUN_0048bac4). The step
+ * counter advances. */
+int bf_48acd2(void)
+{
+    bf_stance_hold(1, 10, 8, 1);
+    return 0;
+}
+
+/* Port of FUN_0048b02b (848 B) — interactive stances 3 and 4: FUN_0048acd2 with the step bounds 3 / 13, the
+ * threat range 9, no DAT_00569510 / DAT_00569514 counts, and the objective 1 every 8th step while fewer than 2
+ * withdrawals (+0x2b). */
+int bf_48b02b(void)
+{
+    bf_stance_hold(3, 13, 9, 0);
+    return 0;
+}
+
+/* Port of FUN_0048b386 (182 B) — regroup: the current group's anchor (+0x22 / +0x24) = its centre (+0x1e / +0x20),
+ * not withdrawing (+0x10 = 0), ordered there. */
+int bf_48b386(void)
+{
+    BG8(CG, 0x566530) = 0;
+    BG16(CG, 0x566542) = BG16(CG, 0x56653e);
+    BG16(CG, 0x566544) = BG16(CG, 0x566540);
+    bf_group_go();
+    return 0;
+}
+
+/* Port of FUN_0048b546 (182 B) — back to the deployment point: anchor = +0x26 / +0x28, ordered there. */
+int bf_48b546(void)
+{
+    BG8(CG, 0x566530) = 0;
+    BG16(CG, 0x566542) = BG16(CG, 0x566546);
+    BG16(CG, 0x566544) = BG16(CG, 0x566548);
+    bf_group_go();
+    return 0;
+}
+
+/* Port of FUN_0048b5fc (512 B) — withdraw the current group from group a: Manhattan(a's centre, ours)
+ * (FUN_00404ead's |dx| / |dy|) picks the axis — the longer one (y on a tie) steps 2 away from a; an axis more
+ * than 5 apart steps too. Marks the withdrawal (+0x10 = 1, +0x2b + 1) and orders the shifted anchor. */
+int bf_48b5fc(int a)
+{
+    int ax = BG16(a, 0x56653e), ay = BG16(a, 0x566540);
+    int gx = BG16(CG, 0x56653e), gy = BG16(CG, 0x566540);
+    int dy = 0, dx = 0;
+    engine_path_dist_manhattan(ax, ay, gx, gy);
+    if (g_path_dist_dy < g_path_dist_dx)
+        dx = gx > ax ? 2 : -2;
+    else
+        dy = gy > ay ? 2 : -2;
+    if (g_path_dist_dx > 5)
+        dx = gx > ax ? 2 : -2;
+    if (g_path_dist_dy > 5)
+        dy = gy > ay ? 2 : -2;
+    BG8(CG, 0x566530) = 1;
+    BG8(CG, 0x56654b)++;
+    BG16(CG, 0x566542) = (int16_t)(BG16(CG, 0x566542) + dx);
+    BG16(CG, 0x566544) = (int16_t)(BG16(CG, 0x566544) + dy);
+    bf_group_go();
+    return 0;
+}
+
+/* Port of FUN_0048b7fc (453 B) — recall: clears DAT_0056d89c and steps the current group's anchor 2 toward the
+ * remembered point DAT_00522f70 / DAT_00522f74 (FUN_0048b5fc's axis rule, the other direction), ordered there. */
+int bf_48b7fc(void)
+{
+    s_slot_0056d89c = 0;
+    int px = (int32_t)s_slot_00522f70, py = (int32_t)s_slot_00522f74;
+    int gx = BG16(CG, 0x56653e), gy = BG16(CG, 0x566540);
+    int dy = 0, dx = 0;
+    engine_path_dist_manhattan(px, py, gx, gy);
+    if (g_path_dist_dy < g_path_dist_dx)
+        dx = gx > px ? -2 : 2;
+    else
+        dy = gy > py ? -2 : 2;
+    if (g_path_dist_dx > 5)
+        dx = gx > px ? -2 : 2;
+    if (g_path_dist_dy > 5)
+        dy = gy > py ? -2 : 2;
+    BG16(CG, 0x566542) = (int16_t)(BG16(CG, 0x566542) + dx);
+    BG16(CG, 0x566544) = (int16_t)(BG16(CG, 0x566544) + dy);
+    bf_group_go();
+    return 0;
+}
+
+/* Port of FUN_0048b9c1 (259 B) — to the side's waypoint k: DAT_00544050[k] (a group flagged +3: DAT_00544070[k]),
+ * (x, y) dwords stored as words into the anchor; ordered there. */
+int bf_48b9c1(int k)
+{
+    BG8(CG, 0x566530) = 0;
+    int o = BG8(CG, 0x566523) != 0 ? 0x20 : 0;
+    BG16(CG, 0x566542) = (int16_t)T_544050(o + 8 * k);
+    BG16(CG, 0x566544) = (int16_t)T_544050(o + 8 * k + 4);
+    bf_group_go();
+    return 0;
+}
+
+/* Port of FUN_0048bac4 (286 B) — to the side's objective k of the current layout DAT_0053f654: DAT_00522d30
+ * [layout][k] (a group flagged +3: DAT_00522d60), into the anchor; ordered there. Leaves +0x10 alone. */
+int bf_48bac4(int k)
+{
+    int o = (BG8(CG, 0x566523) != 0 ? 0x30 : 0) + 24 * (int32_t)s_slot_0053f654 + 8 * k;
+    BG16(CG, 0x566542) = (int16_t)T_522D30(o);
+    BG16(CG, 0x566544) = (int16_t)T_522D30(o + 4);
+    bf_group_go();
+    return 0;
+}
+
+/* Port of FUN_0048bbe2 (281 B) — to the first set point of row r of DAT_00554180 (16 (x, y) dwords) from column c
+ * on, wrapping (17 tries; none: the last tried), offset (-1, -2); ordered there. */
+int bf_48bbe2(int r, int c)
+{
+    int n = 16;
+    BG8(CG, 0x566530) = 0;
+    for (;;) {
+        int t = n--;
+        if (t < 0 || (T_554180(128 * r + 8 * c) != 0 && T_554180(128 * r + 8 * c + 4) != 0))
+            break;
+        if (++c >= 16)
+            c = 0;
+    }
+    BG16(CG, 0x566542) = (int16_t)(T_554180(128 * r + 8 * c) - 1);
+    BG16(CG, 0x566544) = (int16_t)(T_554180(128 * r + 8 * c + 4) - 2);
+    bf_group_go();
+    return 0;
+}
+
+/* Port of FUN_0048bcfb (466 B) — to siege point a: DAT_0055cd90[a][DAT_0056d6b0] (stance 7 always; else when
+ * DAT_004eeb6c is clear); with DAT_004eeb6c set, the gate point DAT_0055cdd0 / DAT_0055cdd4 + (10, 10) for
+ * stance 1, + (2, 15) otherwise; ordered there. */
+int bf_48bcfb(int a)
+{
+    BG8(CG, 0x566530) = 0;
+    if (BG8(CG, 0x566528) != 7 && g_bf_4eeb6c != 0) {
+        if (BG8(CG, 0x566528) == 1) {
+            BG16(CG, 0x566542) = (int16_t)(T_55CD90(0x40) + 10);
+            BG16(CG, 0x566544) = (int16_t)(T_55CD90(0x44) + 10);
+        } else {
+            BG16(CG, 0x566542) = (int16_t)(T_55CD90(0x40) + 2);
+            BG16(CG, 0x566544) = (int16_t)(T_55CD90(0x44) + 15);
+        }
+    } else {
+        BG16(CG, 0x566542) = (int16_t)T_55CD90(32 * a + 8 * (int32_t)s_slot_0056d6b0);
+        BG16(CG, 0x566544) = (int16_t)T_55CD90(32 * a + 8 * (int32_t)s_slot_0056d6b0 + 4);
+    }
+    bf_group_go();
+    return 0;
+}
+
+/* Port of FUN_0048becd (300 B) — the siege corner by DAT_004eeb64: 1 → (6, 74), 2 → (74, 74), ordered there;
+ * else siege point a (FUN_0048bcfb). */
+int bf_48becd(int a)
+{
+    BG8(CG, 0x566530) = 0;
+    if (g_bf_4eeb64 == 1) {
+        BG16(CG, 0x566542) = 6;
+        BG16(CG, 0x566544) = 74;
+        bf_group_go();
+    } else if (g_bf_4eeb64 == 2) {
+        BG16(CG, 0x566542) = 74;
+        BG16(CG, 0x566544) = 74;
+        bf_group_go();
+    } else {
+        bf_48bcfb(a);
+    }
+    return 0;
+}
+
+/* Port of FUN_0048bff9 (118 B) — to the castle cell: DAT_00553274 when a == 1, DAT_0055307c >= 1 or DAT_0056d590
+ * == 13, else DAT_00553ee4 (FUN_0048c363). */
+int bf_48bff9(int a)
+{
+    if (a == 1 || (int32_t)s_slot_0055307c >= 1 || s_slot_0056d590 == 13)
+        bf_48c363((int)s_slot_00553274);
+    else
+        bf_48c363((int)s_slot_00553ee4);
+    return 0;
+}
+
+/* Port of FUN_0048c06f (330 B) — 4 rows below the cell DAT_00553274 (a cell byte offset): a free spot near it
+ * (FUN_00496566(x, y, 5, 4) → DAT_0057d328 / DAT_0057d324) becomes the anchor, ordered there; the anchor keeps the
+ * probe point otherwise. */
+int bf_48c06f(void)
+{
+    int c = (int32_t)s_slot_00553274 / 8;
+    BG16(CG, 0x566542) = (int16_t)(c % 80);
+    BG16(CG, 0x566544) = (int16_t)(c / 80);
+    BG16(CG, 0x566544) = (int16_t)(BG16(CG, 0x566544) + 4);
+    if (bf_496566(BG16(CG, 0x566542), BG16(CG, 0x566544), 5, 4) != 0) {
+        BG16(CG, 0x566542) = (int16_t)g_bf_57d328;
+        BG16(CG, 0x566544) = (int16_t)g_bf_57d324;
+        bf_group_go();
+    }
+    return 0;
+}
+
+/* Port of FUN_0048c363 (155 B) — to the cell at byte offset `off` (off / 8 = row × 80 + col), ordered there. */
+int bf_48c363(int off)
+{
+    int c = off / 8;
+    BG16(CG, 0x566542) = (int16_t)(c % 80);
+    BG16(CG, 0x566544) = (int16_t)(c / 80);
+    bf_group_go();
+    return 0;
+}
+
+/* Port of FUN_0048c3fe (191 B) — to a cell near the one at byte offset `off`: FUN_00496d76(col, row, 5) finds it
+ * (→ DAT_00569570 / DAT_00569578), ordered there; nothing when it fails. */
+int bf_48c3fe(int off)
+{
+    int c = off / 8;
+    if (bf_496d76(c % 80, c / 80, 5) != 0) {
+        BG16(CG, 0x566542) = (int16_t)g_bf_569570;
+        BG16(CG, 0x566544) = (int16_t)g_bf_569578;
+        bf_group_go();
+    }
+    return 0;
+}
+
+/* Port of FUN_0048c4bd (178 B) — onto group a: the current group's anchor = a's centre, ordered there. */
+int bf_48c4bd(int a)
+{
+    BG8(CG, 0x566530) = 0;
+    BG16(CG, 0x566542) = BG16(a, 0x56653e);
+    BG16(CG, 0x566544) = BG16(a, 0x566540);
+    bf_group_go();
+    return 0;
+}
+
+/* Port of FUN_0048c56f (832 B) — advance halfway toward group a: per axis half the centre distance (truncating);
+ * nothing when both halves are <= 3; else from the own centre an axis whose half is > 2 moves by it toward a;
+ * ordered there. */
+int bf_48c56f(int a)
+{
+    BG8(CG, 0x566530) = 0;
+    int hx = BG16(CG, 0x56653e) < BG16(a, 0x56653e) ? (BG16(a, 0x56653e) - BG16(CG, 0x56653e)) / 2
+                                                    : (BG16(CG, 0x56653e) - BG16(a, 0x56653e)) / 2;
+    int hy = BG16(CG, 0x566540) < BG16(a, 0x566540) ? (BG16(a, 0x566540) - BG16(CG, 0x566540)) / 2
+                                                    : (BG16(CG, 0x566540) - BG16(a, 0x566540)) / 2;
+    if (hx <= 3 && hy <= 3)
+        return 0;
+    BG16(CG, 0x566544) = BG16(CG, 0x566540);
+    BG16(CG, 0x566542) = BG16(CG, 0x56653e);
+    if (hx > 2) {
+        if (BG16(CG, 0x56653e) < BG16(a, 0x56653e))
+            BG16(CG, 0x566542) = (int16_t)(BG16(CG, 0x56653e) + hx);
+        else
+            BG16(CG, 0x566542) = (int16_t)(BG16(CG, 0x56653e) - hx);
+    }
+    if (hy > 2) {
+        if (BG16(CG, 0x566540) < BG16(a, 0x566540))
+            BG16(CG, 0x566544) = (int16_t)(BG16(CG, 0x566540) + hy);
+        else
+            BG16(CG, 0x566544) = (int16_t)(BG16(CG, 0x566540) - hy);
+    }
+    bf_group_go();
+    return 0;
+}
+
+/* Port of FUN_0048c8af (197 B) — charge: the current group stops withdrawing (+0x10 = 0); group g is flagged
+ * routed-for-the-driver (+0x2a = 1) and every live member gets order 8 with its path latches +0x164 / +0x176
+ * cleared. */
+int bf_48c8af(int g)
+{
+    BG8(CG, 0x566530) = 0;
+    BG8(g, 0x56654a) = 1;
+    for (int u = 1; u < 81; u++)
+        if (BU8(u, 0x5544ac) != 0 && BS16(u, 0x5545f8) == g) {
+            BU8(u, 0x5544b1) = 8;
+            BU8(u, 0x5545e4) = 0;
+            BU8(u, 0x5545f6) = 0;
+        }
+    return 0;
+}
+
+/* Port of FUN_0048c974 (283 B) — strike back at group a: every live member of the current group that
+ * FUN_004956cc(40, u, a) finds a target for (→ DAT_0052eff4) gets order 17 on it — unless the member stands on a
+ * kind-1 cell and the target on a kind-5 one; 1 when every member found one, else 0. */
+int bf_48c974(int a)
+{
+    int all = 1;
+    for (int u = 1; u < 81; u++) {
+        if (BU8(u, 0x5544ac) == 0 || BS16(u, 0x5545f8) != CG)
+            continue;
+        if (bf_4956cc(40, u, a) == 0) {
+            all = 0;
+            continue;
+        }
+        int ku = BCELL8(BS32(u, 0x55449c), 0x5440e7), kt = BCELL8(BS32(g_bf_52eff4, 0x55449c), 0x5440e7);
+        if (ku == 1 && kt == 5)
+            continue;
+        BU8(u, 0x5544b1) = 17;
+        BU8(u, 0x5545f4) = (uint8_t)g_bf_52eff4;
+    }
+    return all;
+}
