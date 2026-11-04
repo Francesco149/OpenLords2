@@ -525,7 +525,7 @@ int bf_47dfe0(int off)
 /* Port of FUN_00492c8b (3798 B) — one flight tick of projectile DAT_0056d5b4 (shot by unit +0x06, of its group
  * +0x5545f8; missile kind +0x09: 1 arrow, 2 bolt, 3 stone, 4 spent stone, 5 effect).
  *  - on a kind-15 cell (the gate) with a gate target +0x44: a flash (FUN_00485861), DAT_0053e9d0 = 1, the record
- *    cleared, the group's +0x30 = 0 and unit 0's side byte cleared — unless the shooter is a defender (+0x13) and
+ *    cleared, the group's +0x30 = 0 and unit 0's side byte cleared — unless the shooter has +0x13 set and
  *    the projectile is not yet AT the target cell.
  *  - a climb past the start height (+0x2f + 1 < the cell's height +4; or a cell height < 0: then 99) marks it
  *    falling (+0x3a); a falling arrow / bolt / stone ages +0x30 and dies at > 32 or on reaching that height — the
@@ -537,8 +537,8 @@ int bf_47dfe0(int off)
  *    A stone on a wall (kind 4, overlay +3 > 2, height 1..3) damages it (the cell's +0 counter; at 16 the wall
  *    breaks, FUN_0047dfe0; cue 15) or, taller, just bounces (cue 16); either way the stone is spent (kind 4, one
  *    sub-step, life + 1000, cooldown 120, drawn 16 up-left). An arrow / bolt / stone on a live enemy (cell +5 =
- *    DAT_0052eff4) hits it: damage +0x40 cut by the climb (defenders /4 · /2, else /5 · /3), minus the target's
- *    armour +0x172; siege targets (+0x12 >= 7): /2 · /3 for bolts, arrows floor at 6 / 4, capped at
+ *    DAT_0052eff4) hits it: damage +0x40 cut by the climb (targets with +0x13 set /4 · /2, else /5 · /3), minus
+ *    the target's armour +0x172; siege targets (+0x12 >= 7): /2 · /3 for bolts, arrows floor at 6 / 4, capped at
  *    2·(5·DAT_00522f6c + 10 / + 5); at least 2. The wound accumulator +0x19a converts 100 (siege 160) per troop
  *    (1..4 at once) out of +0x1a0; at 0 the unit is dead (+0x31 = 2, cue 13). Cues: bolt 10, arrow 8. */
 int bf_492c8b(void)
