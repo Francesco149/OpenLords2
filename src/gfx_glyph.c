@@ -10,56 +10,47 @@
  */
 
 #include "gfx_glyph.h"
+#include "gfx_globals.h"
 #include "gfx_paint.h"
 
-/* State globals — mirror retail DAT_* names in comments. */
-static uint8_t g_color;             /* DAT_0057d3bc */
-static int     g_cursor_x;          /* DAT_00591524 */
-static int     g_cursor_y;          /* DAT_00591528 */
-static int     g_glyph_offset;      /* DAT_0058fe04 */
-static int     g_glyph_w;           /* DAT_005c9258 */
-static int     g_glyph_h;           /* DAT_005bb478 */
-static int     g_clipped_w;         /* DAT_00591514 */
-static int     g_src_stride_pad;    /* DAT_0059150c */
-static int     g_dst_stride_pad;    /* _DAT_005cd400 */
-static int     g_color_modulation;  /* DAT_005cd40c */
+/* State: the staged glyph / sprite, retail globals (gfx_globals.h). */
 
 void gfx_glyph_set_color(uint8_t color)
 {
-    g_color = color;
+    g_gfx_color = color;
 }
 
 void gfx_glyph_set_dest(int cursor_x, int cursor_y)
 {
-    g_cursor_x = cursor_x;
-    g_cursor_y = cursor_y;
+    g_gfx_cursor_x = cursor_x;
+    g_gfx_cursor_y = cursor_y;
 }
 
-void gfx_glyph_set_cursor_x(int cursor_x) { g_cursor_x = cursor_x; }
-void gfx_glyph_set_cursor_y(int cursor_y) { g_cursor_y = cursor_y; }
+void gfx_glyph_set_cursor_x(int cursor_x) { g_gfx_cursor_x = cursor_x; }
+void gfx_glyph_set_cursor_y(int cursor_y) { g_gfx_cursor_y = cursor_y; }
 
 void gfx_glyph_set_glyph(int glyph_offset, int glyph_w, int glyph_h)
 {
-    g_glyph_offset = glyph_offset;
-    g_glyph_w      = glyph_w;
-    g_glyph_h      = glyph_h;
+    g_gfx_glyph_offset = glyph_offset;
+    g_gfx_glyph_w      = glyph_w;
+    g_gfx_glyph_h      = glyph_h;
 }
 
 void gfx_glyph_set_glyph_h(int glyph_h)
 {
-    g_glyph_h = glyph_h;
+    g_gfx_glyph_h = glyph_h;
 }
 
 void gfx_glyph_set_glyph_w(int glyph_w)
 {
-    g_glyph_w = glyph_w;
+    g_gfx_glyph_w = glyph_w;
 }
 
 void gfx_glyph_set_clip(int clipped_w, int src_stride_pad, int dst_stride_pad)
 {
-    g_clipped_w       = clipped_w;
-    g_src_stride_pad  = src_stride_pad;
-    g_dst_stride_pad  = dst_stride_pad;
+    g_gfx_clipped_w       = clipped_w;
+    g_gfx_src_stride_pad  = src_stride_pad;
+    g_gfx_dst_stride_pad  = dst_stride_pad;
 }
 
 /* Standalone dst_stride_pad write — mirrors the opaque-blit wrapper
@@ -67,26 +58,26 @@ void gfx_glyph_set_clip(int clipped_w, int src_stride_pad, int dst_stride_pad)
  * touches neither clipped_w nor src_stride_pad. */
 void gfx_glyph_set_dst_stride_pad(int dst_stride_pad)
 {
-    g_dst_stride_pad = dst_stride_pad;
+    g_gfx_dst_stride_pad = dst_stride_pad;
 }
 
 void gfx_glyph_set_color_modulation(int mode)
 {
-    g_color_modulation = mode;
+    g_gfx_color_modulation = mode;
 }
 
-int gfx_glyph_cursor_x(void) { return g_cursor_x; }
-int gfx_glyph_cursor_y(void) { return g_cursor_y; }
-int gfx_glyph_glyph_w(void)  { return g_glyph_w; }
-int gfx_glyph_glyph_h(void)  { return g_glyph_h; }
+int gfx_glyph_cursor_x(void) { return g_gfx_cursor_x; }
+int gfx_glyph_cursor_y(void) { return g_gfx_cursor_y; }
+int gfx_glyph_glyph_w(void)  { return g_gfx_glyph_w; }
+int gfx_glyph_glyph_h(void)  { return g_gfx_glyph_h; }
 
 /* Read-only accessors used by the sprite blitter (gfx_sprite.c), which
  * consumes the same staged state but writes via copy-byte instead of
  * the color/silhouette modes the glyph blitter supports. */
-int gfx_glyph_glyph_offset(void)   { return g_glyph_offset; }
-int gfx_glyph_clipped_w(void)      { return g_clipped_w; }
-int gfx_glyph_src_stride_pad(void) { return g_src_stride_pad; }
-int gfx_glyph_dst_stride_pad(void) { return g_dst_stride_pad; }
+int gfx_glyph_glyph_offset(void)   { return g_gfx_glyph_offset; }
+int gfx_glyph_clipped_w(void)      { return g_gfx_clipped_w; }
+int gfx_glyph_src_stride_pad(void) { return g_gfx_src_stride_pad; }
+int gfx_glyph_dst_stride_pad(void) { return g_gfx_dst_stride_pad; }
 
 /* Shared dest-pointer computation: pixels + cursor_x + cursor_y*width.
  * Retail formula at the top of every blitter:
@@ -97,7 +88,7 @@ static uint8_t *dest_origin(void)
     uint8_t *pixels = gfx_paint_canvas_pixels();
     if (!pixels) return 0;
     int      width  = gfx_paint_canvas_width();
-    return pixels + g_cursor_x + g_cursor_y * width;
+    return pixels + g_gfx_cursor_x + g_gfx_cursor_y * width;
 }
 
 /* Faithful translation of the retail inner-loop shape.  The
@@ -120,14 +111,14 @@ void gfx_glyph_blit(const uint8_t *font_base)
     uint8_t *dst = dest_origin();
     if (!dst) return;
 
-    const uint8_t *src = font_base + g_glyph_offset;
-    int rows = g_glyph_h;
+    const uint8_t *src = font_base + g_gfx_glyph_offset;
+    int rows = g_gfx_glyph_h;
 
-    if (g_color_modulation == 1) {
+    if (g_gfx_color_modulation == 1) {
         /* Copy-byte mode: each non-zero source pixel keeps its own
          * palette index in dest.  Used for pre-shaded glyphs. */
         do {
-            int cols = g_glyph_w;
+            int cols = g_gfx_glyph_w;
             do {
                 if (*src != 0) *dst = *src;
                 src++;
@@ -137,7 +128,7 @@ void gfx_glyph_blit(const uint8_t *font_base)
                 cols = next;
                 if (!(next != 0 && gt)) break;
             } while (1);
-            dst += g_dst_stride_pad;
+            dst += g_gfx_dst_stride_pad;
             int next = rows - 1;
             int gt   = (0 < rows);
             rows = next;
@@ -147,9 +138,9 @@ void gfx_glyph_blit(const uint8_t *font_base)
         /* Color-fill mode: every non-zero source pixel becomes the
          * bound color.  Used for normal text rendering. */
         do {
-            int cols = g_glyph_w;
+            int cols = g_gfx_glyph_w;
             do {
-                if (*src != 0) *dst = g_color;
+                if (*src != 0) *dst = g_gfx_color;
                 src++;
                 dst++;
                 int next = cols - 1;
@@ -157,7 +148,7 @@ void gfx_glyph_blit(const uint8_t *font_base)
                 cols = next;
                 if (!(next != 0 && gt)) break;
             } while (1);
-            dst += g_dst_stride_pad;
+            dst += g_gfx_dst_stride_pad;
             int next = rows - 1;
             int gt   = (0 < rows);
             rows = next;
@@ -174,13 +165,13 @@ static void glyph_blit_clipped(const uint8_t *font_base)
     uint8_t *dst = dest_origin();
     if (!dst) return;
 
-    const uint8_t *src = font_base + g_glyph_offset;
-    int rows = g_glyph_h;
+    const uint8_t *src = font_base + g_gfx_glyph_offset;
+    int rows = g_gfx_glyph_h;
 
     do {
-        int cols = g_clipped_w;
+        int cols = g_gfx_clipped_w;
         do {
-            if (*src != 0) *dst = g_color;
+            if (*src != 0) *dst = g_gfx_color;
             src++;
             dst++;
             int next = cols - 1;
@@ -188,8 +179,8 @@ static void glyph_blit_clipped(const uint8_t *font_base)
             cols = next;
             if (!(next != 0 && gt)) break;
         } while (1);
-        src += g_src_stride_pad;
-        dst += g_dst_stride_pad;
+        src += g_gfx_src_stride_pad;
+        dst += g_gfx_dst_stride_pad;
         int next = rows - 1;
         int gt   = (0 < rows);
         rows = next;

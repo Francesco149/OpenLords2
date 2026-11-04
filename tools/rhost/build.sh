@@ -20,7 +20,9 @@ SUB_HOOKS=("$H"/rh_hooks_*.c)   # subsystem hook tables (rh_hooks.h)
 # engine_turn / engine_menu_input / config (bridged in the tables). Modules that only DEFINE retail globals —
 # save.c, save_schema_globals.c, engine_combat_globals.c, engine_realm_globals.c, engine_economy_globals.c — are NOT
 # linked: the tables alias those globals to retail's VAs (and engine.c's g_engine_state → 0x52af94,
-# rh_hooks_battle.c; engine_minimap.c's g_minimap_region_grid → 0x52aff0, rh_hooks_economy.c).
+# rh_hooks_battle.c; engine_minimap.c's g_minimap_region_grid → 0x52aff0, rh_hooks_economy.c; gfx_globals.c's render
+# globals — the canvas, the staged glyph, the text state — rh_hooks_gfx.c). The gfx closure (gfx_*, font_metrics,
+# localization) is pure: it draws into the canvas retail's own globals point at.
 PORT_OBJS=(); PIDS=()
 for f in engine_rng \
          engine_army_ai engine_army_economy engine_realm engine_combat engine_army_move call_trace engine_army_state engine_camera \
@@ -28,7 +30,8 @@ for f in engine_rng \
          engine_category_buckets engine_diplomacy engine_dirty_rect engine_event_queue engine_map_query engine_map_render \
          engine_math engine_path engine_path_field engine_ranking engine_realm_events engine_realm_upkeep engine_roster engine_territory \
          gfx_dispatch gfx_drawcap gfx_glyph gfx_paint gfx_sprite gfx_sprite_rle strutil \
-         engine_retail_call $(cd "$S" && ls engine_bf_*.c rl_*.c | grep -v '_globals\.c$' | sed 's/\.c$//'); do
+         engine_retail_call $(cd "$S" && ls engine_bf_*.c rl_*.c | grep -v '_globals\.c$' | sed 's/\.c$//') \
+         gfx_line gfx_text gfx_text_label gfx_wrap gfx_sprite_render gfx_panel gfx_caret font_metrics localization engine_hud_menubar engine_button; do
     $CC $PORT_STD -O2 -fno-omit-frame-pointer -I"$S" -include "$H/rh_hostalloc.h" -DUNICODE=0 -D_UNICODE=0 -c -o "$B/$f.o" "$S/$f.c" &
     PIDS+=($!); PORT_OBJS+=("$B/$f.o")
 done

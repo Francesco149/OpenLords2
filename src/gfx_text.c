@@ -7,6 +7,7 @@
  */
 
 #include "gfx_text.h"
+#include "gfx_globals.h"
 
 #include "font_metrics.h"
 #include "gfx_dispatch.h"
@@ -15,48 +16,22 @@
 #include <string.h>
 
 /* ──────────────────────────────────────────────────────────────────
- * Renderer-private state.  Each block is grouped by which retail DAT_*
- * symbol it shadows.  All zero-initialized at startup — matches the
- * BSS layout retail relies on.
+ * Renderer state: retail globals (gfx_globals.h) — the render-mode
+ * flags, the substitution stream, the first-position hook, the running
+ * accumulators.
  * ────────────────────────────────────────────────────────────────── */
-
-/* Render-mode flags. */
-static int g_no_shadow;             /* DAT_005aea40 */
-static int g_outline;               /* DAT_0058fe9c */
-static int g_tight_shadow;          /* DAT_005aeb90 */
-static int g_uppercase_highlight;   /* DAT_0058fe2c */
-static int g_collapse_spaces;       /* DAT_005aeb7c */
-static int g_screen_byte;           /* DAT_004eac50 — current screen id */
-
-/* Substitution stream. */
-#define GFX_TEXT_SUBSTITUTION_BUF_LEN 256
-static uint8_t g_substitution_buf[GFX_TEXT_SUBSTITUTION_BUF_LEN]; /* DAT_005bb4d0 */
-static int     g_substitution_idx;                                /* DAT_005bb4b4 */
-static int     g_substitution_on;                                 /* DAT_005bb4c4 */
-static int     g_collapse_active;                                 /* DAT_005c925a */
-
-/* First-position hook. */
-static int g_first_pos_target;      /* DAT_005bb4a8 */
-static int g_first_pos_latch;       /* DAT_005aeb64 */
-static int g_first_pos_x;           /* DAT_0058fd58 */
-static int g_first_pos_y;           /* DAT_0058fd54 */
-
-/* Running accumulators. */
-static int g_line_x_acc;            /* DAT_005cd404 */
-static int g_line_y_acc;            /* DAT_005cd4f8 */
-static int g_char_counter;          /* DAT_0058fd78 */
 
 /* ──────────────────────────────────────────────────────────────────
  * Render-mode setters
  * ────────────────────────────────────────────────────────────────── */
 
-void gfx_text_set_no_shadow(int enabled)           { g_no_shadow = enabled; }
-void gfx_text_set_outline(int enabled)             { g_outline = enabled; }
-void gfx_text_set_tight_shadow(int enabled)        { g_tight_shadow = enabled; }
-void gfx_text_set_uppercase_highlight(int enabled) { g_uppercase_highlight = enabled; }
-void gfx_text_set_collapse_spaces(int enabled)     { g_collapse_spaces = enabled; }
-void gfx_text_set_collapse_active(int enabled)     { g_collapse_active = enabled; }
-void gfx_text_set_screen_byte(int screen)          { g_screen_byte = screen; }
+void gfx_text_set_no_shadow(int enabled)           { g_gfx_no_shadow = enabled; }
+void gfx_text_set_outline(int enabled)             { g_gfx_outline = enabled; }
+void gfx_text_set_tight_shadow(int enabled)        { g_gfx_tight_shadow = enabled; }
+void gfx_text_set_uppercase_highlight(int enabled) { g_gfx_uppercase_highlight = enabled; }
+void gfx_text_set_collapse_spaces(int enabled)     { g_gfx_collapse_spaces = enabled; }
+void gfx_text_set_collapse_active(int enabled)     { g_gfx_collapse_active = enabled; }
+void gfx_text_set_screen_byte(int screen)          { g_gfx_screen_byte = screen; }
 
 /* ──────────────────────────────────────────────────────────────────
  * Substitution-stream setters
@@ -65,51 +40,51 @@ void gfx_text_set_screen_byte(int screen)          { g_screen_byte = screen; }
 void gfx_text_load_substitution_stream(const char *bytes)
 {
     if (!bytes) {
-        g_substitution_on = 0;
+        g_gfx_substitution_on = 0;
         return;
     }
     int n = 0;
     while (bytes[n] != '\0' && n < GFX_TEXT_SUBSTITUTION_BUF_LEN - 1) {
-        g_substitution_buf[n] = (uint8_t)bytes[n];
+        g_gfx_substitution_buf[n] = (uint8_t)bytes[n];
         n++;
     }
-    g_substitution_buf[n] = 0;
-    g_substitution_idx = 0;
+    g_gfx_substitution_buf[n] = 0;
+    g_gfx_substitution_idx = 0;
 }
 
 void gfx_text_enable_substitution(int enabled)
 {
-    g_substitution_on = enabled;
+    g_gfx_substitution_on = enabled;
 }
 
-int gfx_text_substitution_cursor(void) { return g_substitution_idx; }
+int gfx_text_substitution_cursor(void) { return g_gfx_substitution_idx; }
 
 /* ──────────────────────────────────────────────────────────────────
  * First-position hook
  * ────────────────────────────────────────────────────────────────── */
 
-void gfx_text_set_first_pos_target(int target_char_index) { g_first_pos_target = target_char_index; }
-void gfx_text_clear_first_pos_latch(void)                 { g_first_pos_latch = 0; }
-int  gfx_text_first_pos_latched(void)                     { return g_first_pos_latch; }
-int  gfx_text_first_pos_x(void)                           { return g_first_pos_x; }
-int  gfx_text_first_pos_y(void)                           { return g_first_pos_y; }
+void gfx_text_set_first_pos_target(int target_char_index) { g_gfx_first_pos_target = target_char_index; }
+void gfx_text_clear_first_pos_latch(void)                 { g_gfx_first_pos_latch = 0; }
+int  gfx_text_first_pos_latched(void)                     { return g_gfx_first_pos_latch; }
+int  gfx_text_first_pos_x(void)                           { return g_gfx_first_pos_x; }
+int  gfx_text_first_pos_y(void)                           { return g_gfx_first_pos_y; }
 /* Direct anchor writes — the text-input field renderer (FUN_0041f321)
  * pokes DAT_0058fd58 / DAT_0058fd54 explicitly after the line render
  * (caret x = first_pos_x + box offset; caret y = fixed 0x52). */
-void gfx_text_set_first_pos_x(int x)                      { g_first_pos_x = x; }
-void gfx_text_set_first_pos_y(int y)                      { g_first_pos_y = y; }
+void gfx_text_set_first_pos_x(int x)                      { g_gfx_first_pos_x = x; }
+void gfx_text_set_first_pos_y(int y)                      { g_gfx_first_pos_y = y; }
 
 /* ──────────────────────────────────────────────────────────────────
  * Running accumulators
  * ────────────────────────────────────────────────────────────────── */
 
-void gfx_text_set_line_x_acc(int x) { g_line_x_acc = x; }
-void gfx_text_set_line_y_acc(int y) { g_line_y_acc = y; }
-int  gfx_text_line_x_acc(void)      { return g_line_x_acc; }
-int  gfx_text_line_y_acc(void)      { return g_line_y_acc; }
+void gfx_text_set_line_x_acc(int x) { g_gfx_line_x_acc = x; }
+void gfx_text_set_line_y_acc(int y) { g_gfx_line_y_acc = y; }
+int  gfx_text_line_x_acc(void)      { return g_gfx_line_x_acc; }
+int  gfx_text_line_y_acc(void)      { return g_gfx_line_y_acc; }
 
-int  gfx_text_char_counter(void)    { return g_char_counter; }
-void gfx_text_set_char_counter(int n) { g_char_counter = n; }
+int  gfx_text_char_counter(void)    { return g_gfx_char_counter; }
+void gfx_text_set_char_counter(int n) { g_gfx_char_counter = n; }
 
 /* ──────────────────────────────────────────────────────────────────
  * Port of FUN_00402c16 — pull one byte from the substitution stream
@@ -117,15 +92,15 @@ void gfx_text_set_char_counter(int n) { g_char_counter = n; }
 
 static uint8_t substitution_next(void)
 {
-    uint8_t c = g_substitution_buf[g_substitution_idx];
+    uint8_t c = g_gfx_substitution_buf[g_gfx_substitution_idx];
     if (c == 0) {
         /* NUL → wrap cursor to 0 and yield space.  Subsequent reads
          * would restart from buf[0] (caller can reload the buffer to
          * change the substitution mid-render). */
-        g_substitution_idx = 0;
+        g_gfx_substitution_idx = 0;
         c = ' ';
     } else {
-        g_substitution_idx++;
+        g_gfx_substitution_idx++;
     }
     return c;
 }
@@ -165,7 +140,7 @@ void gfx_text_render_line(const uint8_t *buf,
      * once per call. */
     uint8_t shadow_color_a = 0x10;
     uint8_t shadow_color_b = 0x1f;
-    if (g_screen_byte == 0x1f || g_screen_byte == 0x1c) {
+    if (g_gfx_screen_byte == 0x1f || g_gfx_screen_byte == 0x1c) {
         shadow_color_a = 0x36;
         shadow_color_b = 0x2c;
     }
@@ -200,7 +175,7 @@ void gfx_text_render_line(const uint8_t *buf,
         /* '#' macro — pull next byte from the substitution stream when
          * armed.  Otherwise render as space. */
         if (ch == '#') {
-            if (g_substitution_on == 1) {
+            if (g_gfx_substitution_on == 1) {
                 ch = substitution_next();
             } else {
                 ch = ' ';
@@ -217,7 +192,7 @@ void gfx_text_render_line(const uint8_t *buf,
         /* Uppercase-highlight override.  Reset to caller's color on the
          * default branch — `local_8 = param_5` in retail.  Only active
          * when the highlight flag is set AND the char is A..Z. */
-        if (g_uppercase_highlight != 0 && ch > 0x40 && ch < 0x5b) {
+        if (g_gfx_uppercase_highlight != 0 && ch > 0x40 && ch < 0x5b) {
             effective_color = 1;
         } else {
             effective_color = color;
@@ -233,10 +208,10 @@ void gfx_text_render_line(const uint8_t *buf,
              * when char_counter matches the target and the latch is
              * clear.  Tests against the PRE-DISPATCH accumulator
              * values (matches retail). */
-            if (g_char_counter == g_first_pos_target && g_first_pos_latch == 0) {
-                g_first_pos_x = g_line_x_acc;
-                g_first_pos_y = g_line_y_acc;
-                g_first_pos_latch = 1;
+            if (g_gfx_char_counter == g_gfx_first_pos_target && g_gfx_first_pos_latch == 0) {
+                g_gfx_first_pos_x = g_gfx_line_x_acc;
+                g_gfx_first_pos_y = g_gfx_line_y_acc;
+                g_gfx_first_pos_latch = 1;
             }
 
             int width = 0;
@@ -245,13 +220,13 @@ void gfx_text_render_line(const uint8_t *buf,
                 /* No glyph for this char — retail emits the fixed 4-pixel
                  * advance.  Dispatcher is NOT called. */
                 width = 4;
-            } else if (g_no_shadow == 0) {
+            } else if (g_gfx_no_shadow == 0) {
                 /* Shadow / outline / tight-shadow paths.  All three pre-
                  * write effective_color into the dispatcher's color
                  * slot.  Cursor_x is left at the running value; cursor_y
                  * varies per pass. */
-                if (g_outline == 0) {
-                    if (g_tight_shadow == 0) {
+                if (g_gfx_outline == 0) {
+                    if (g_gfx_tight_shadow == 0) {
                         /* Drop-shadow path — 3 passes. */
                         dispatch_pass(cursor_y - 1, shadow_color_a,
                                       font_base, char_glyph_table, glyph_idx);
@@ -289,7 +264,7 @@ void gfx_text_render_line(const uint8_t *buf,
              * returned (or 4 for the no-glyph fallback).  Dispatcher
              * returns `glyph_w + 1` per char. */
             gfx_glyph_set_cursor_x(gfx_glyph_cursor_x() + width);
-            g_line_x_acc += width;
+            g_gfx_line_x_acc += width;
             last_width = width;
         }
 
@@ -298,14 +273,14 @@ void gfx_text_render_line(const uint8_t *buf,
          * the stream cursor has been engaged.  Once the stream is
          * engaged (idx != 0), it stays the source until the NUL
          * terminator wraps the cursor back to 0. */
-        if (g_substitution_idx == 0) {
+        if (g_gfx_substitution_idx == 0) {
             buf++;
             ch = *buf;
         } else {
             ch = substitution_next();
         }
 
-        g_char_counter++;
+        g_gfx_char_counter++;
 
         /* Consecutive-space collapse.  Triggered when:
          *   - collapse_active (DAT_005c925a) is clear,
@@ -314,9 +289,9 @@ void gfx_text_render_line(const uint8_t *buf,
          *   - the next char is ' ' or '_'.
          * Effect: rewind the running cursors by the last width.  Keeps
          * adjacent spaces from accumulating in word-wrap text. */
-        if (g_collapse_active == 0 && g_collapse_spaces != 0
+        if (g_gfx_collapse_active == 0 && g_gfx_collapse_spaces != 0
             && prev_ch == ch && (ch == ' ' || ch == '_')) {
-            g_line_x_acc -= last_width;
+            g_gfx_line_x_acc -= last_width;
             gfx_glyph_set_cursor_x(gfx_glyph_cursor_x() - last_width);
         }
     }
@@ -324,15 +299,15 @@ void gfx_text_render_line(const uint8_t *buf,
     /* Per-line padding — adds 4 to the running X accumulator regardless
      * of whether anything was drawn.  Lets word-wrap callers chain
      * fragments without breaking layout. */
-    g_line_x_acc += 4;
+    g_gfx_line_x_acc += 4;
 
     /* End-of-call resets.  The substitution stream stays loaded — only
      * the cursor and the on-flag are cleared.  The collapse_active flag
      * is also cleared.  The dispatcher's alt_clip flag is disarmed
      * (rect coords stay intact for the next caller that re-enables). */
-    g_substitution_on  = 0;
-    g_substitution_idx = 0;
-    g_collapse_active  = 0;
+    g_gfx_substitution_on  = 0;
+    g_gfx_substitution_idx = 0;
+    g_gfx_collapse_active  = 0;
     gfx_dispatch_set_alt_clip_enabled(0);
 }
 
@@ -350,15 +325,19 @@ void gfx_text_render_line_centered(const uint8_t *buf,
                                    uint8_t color)
 {
     /* Pre-measure via font_metrics — retail calls FUN_004014f0 which is
-     * our font_metrics_buffer_width_bounded.  The measurer needs its own
-     * state struct; we instantiate a temporary one since retail also
-     * threads the call through a shared global the renderer doesn't
-     * read. */
+     * our font_metrics_buffer_width_bounded. */
     font_metrics_state_t mstate;
     memset(&mstate, 0, sizeof mstate);
     mstate.char_glyph_index = char_glyph_table_metrics;
+    /* Retail's measurer caches into the SHARED globals: the last glyph
+     * index DAT_005c9288 (the dispatcher's too) and its descriptor offset
+     * DAT_0058fd88 — run it on them (rhost shadow). */
+    mstate.last_glyph_index  = g_gfx_last_glyph_index;
+    mstate.last_glyph_offset = g_gfx_last_glyph_offset;
 
     int text_width = font_metrics_buffer_width_bounded(&mstate, buf, font_base);
+    g_gfx_last_glyph_index  = mstate.last_glyph_index;
+    g_gfx_last_glyph_offset = mstate.last_glyph_offset;
     int offset = (width - text_width) / 2;
     if (offset < 0) {
         offset = 0;

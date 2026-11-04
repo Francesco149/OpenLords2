@@ -9,21 +9,18 @@
  */
 
 #include "gfx_text_label.h"
+#include "gfx_globals.h"
 
 #include "gfx_dispatch.h"
 #include "gfx_text.h"
 
 /* ──────────────────────────────────────────────────────────────────
- * Shared 8000-byte format buffer (retail DAT_0058fda0).  Zero-
- * initialized at startup — matches retail's BSS layout.  Used by the
- * two formatters here and (eventually) by the save-name copy paths
+ * Shared format buffer (retail DAT_0058fda0, gfx_globals.h).  Used by
+ * the two formatters here and (eventually) by the save-name copy paths
  * (0x4afab9 / 0x4afeed) when those land.
  * ────────────────────────────────────────────────────────────────── */
 
-enum { GFX_TEXT_LABEL_BUFFER_LEN = 8000 };
-static uint8_t g_format_buffer[GFX_TEXT_LABEL_BUFFER_LEN];
-
-uint8_t *gfx_text_label_buffer(void)        { return g_format_buffer; }
+uint8_t *gfx_text_label_buffer(void)        { return g_gfx_format_buffer; }
 size_t   gfx_text_label_buffer_size(void)   { return GFX_TEXT_LABEL_BUFFER_LEN; }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -36,16 +33,16 @@ static int format_zero_and_sign(int *value_ref, int offset, int with_plus)
     /* Retail zeros only the FIRST 100 bytes of the 8000-byte buffer.
      * Bytes 100+ retain prior caller state — quirk #43. */
     for (int i = 0; i < 100; i++) {
-        g_format_buffer[i] = 0;
+        g_gfx_format_buffer[i] = 0;
     }
 
     int v = *value_ref;
     if (v < 0) {
         v = -v;
-        g_format_buffer[offset] = '-';
+        g_gfx_format_buffer[offset] = '-';
         offset++;
     } else if (with_plus != 0) {
-        g_format_buffer[offset] = '+';
+        g_gfx_format_buffer[offset] = '+';
         offset++;
     }
     *value_ref = v;
@@ -87,7 +84,7 @@ void gfx_text_label_format_dec(int value, int offset, int with_plus)
      * thing relative to buffer base 0x58fda0 — i.e. buffer[offset +
      * local_8 - 1]. */
     while (digit_count - 1 >= 0) {
-        g_format_buffer[offset + digit_count - 1] = (uint8_t)((v % 10) + '0');
+        g_gfx_format_buffer[offset + digit_count - 1] = (uint8_t)((v % 10) + '0');
         v /= 10;
         digit_count--;
     }
@@ -128,7 +125,7 @@ void gfx_text_label_format_hex(int value, int offset, int with_plus)
     while (digit_count - 1 >= 0) {
         uint8_t nibble = (uint8_t)(v & 0xf);
         /* '0'..'9' for 0..9; 'A'..'F' for 10..15 (0x37 + 10 = 0x41). */
-        g_format_buffer[offset + digit_count - 1] =
+        g_gfx_format_buffer[offset + digit_count - 1] =
             (nibble < 10) ? (uint8_t)(nibble + '0') : (uint8_t)(nibble + 0x37);
         v >>= 4;
         digit_count--;
@@ -143,7 +140,7 @@ void gfx_text_label_format_hex(int value, int offset, int with_plus)
 static void apply_prefix(char prefix)
 {
     if (prefix != 0) {
-        g_format_buffer[0] = (uint8_t)prefix;
+        g_gfx_format_buffer[0] = (uint8_t)prefix;
     }
 }
 
@@ -157,15 +154,15 @@ static void apply_prefix(char prefix)
 static void append_suffix(const char *suffix)
 {
     int dst = 0;
-    while (g_format_buffer[dst] != 0) {
+    while (g_gfx_format_buffer[dst] != 0) {
         dst++;
     }
     while (*suffix != 0) {
-        g_format_buffer[dst] = (uint8_t)*suffix;
+        g_gfx_format_buffer[dst] = (uint8_t)*suffix;
         dst++;
         suffix++;
     }
-    g_format_buffer[dst] = 0;
+    g_gfx_format_buffer[dst] = 0;
 }
 
 /* Suffix-append for the do-while strlen pattern.  Walks one byte past
@@ -179,17 +176,17 @@ static void append_suffix_off_by_one(const char *suffix)
      * still advance to dst+1 then exit.  Equivalent to "scan to first
      * zero, then advance one more". */
     do {
-        uint8_t b = g_format_buffer[dst];
+        uint8_t b = g_gfx_format_buffer[dst];
         dst++;
         if (b == 0) break;
     } while (1);
 
     while (*suffix != 0) {
-        g_format_buffer[dst] = (uint8_t)*suffix;
+        g_gfx_format_buffer[dst] = (uint8_t)*suffix;
         dst++;
         suffix++;
     }
-    g_format_buffer[dst] = 0;
+    g_gfx_format_buffer[dst] = 0;
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -207,7 +204,7 @@ void gfx_text_label_render_dec(int value,
     gfx_text_label_format_dec(value, 1, 0);
     apply_prefix(prefix);
     append_suffix(suffix);
-    gfx_text_render_line(g_format_buffer, cursor_x, cursor_y,
+    gfx_text_render_line(g_gfx_format_buffer, cursor_x, cursor_y,
                          font_base, char_glyph_table, color);
     /* Retail's `DAT_005aeb84 = 0;` — the renderer already clears
      * alt_clip_enabled in its epilogue, but retail emits the write
@@ -230,7 +227,7 @@ void gfx_text_label_render_hex(int value,
     gfx_text_label_format_hex(value, 1, 0);
     apply_prefix(prefix);
     append_suffix(suffix);
-    gfx_text_render_line(g_format_buffer, cursor_x, cursor_y,
+    gfx_text_render_line(g_gfx_format_buffer, cursor_x, cursor_y,
                          font_base, char_glyph_table, color);
     gfx_dispatch_set_alt_clip_enabled(0);
 }
@@ -257,7 +254,7 @@ void gfx_text_label_render_dec_centered(int value,
     gfx_text_label_format_dec(value, 1, 0);
     apply_prefix(prefix);
     append_suffix_off_by_one(suffix);
-    gfx_text_render_line_centered(g_format_buffer, cursor_x, cursor_y, width,
+    gfx_text_render_line_centered(g_gfx_format_buffer, cursor_x, cursor_y, width,
                                   font_base, char_glyph_table,
                                   char_glyph_table_metrics, color);
     gfx_dispatch_set_alt_clip_enabled(0);
@@ -297,7 +294,7 @@ void gfx_text_label_render_dec_signed(int value,
     gfx_text_label_format_dec(value, 1, 1);
     apply_prefix(prefix);
     append_suffix_off_by_one(suffix);
-    gfx_text_render_line_centered(g_format_buffer, cursor_x, cursor_y, width,
+    gfx_text_render_line_centered(g_gfx_format_buffer, cursor_x, cursor_y, width,
                                   font_base, char_glyph_table,
                                   char_glyph_table_metrics, color);
     gfx_dispatch_set_alt_clip_enabled(0);
