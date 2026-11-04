@@ -748,7 +748,7 @@ int engine_labor_open_hit_test(const engine_labor_open_in_t *in)
     if (cell == 0) {
         return 0;
     }
-    /* FUN_0045183a(county, cell-1) — is that task present for the county? */
+    /* Inlined port of FUN_0045183a(county, cell-1) — is that task present for the county? */
     int idx = cell - 1;
     const uint8_t *rec = COUNTY(in->county_block, in->county);
     int present = 1;
