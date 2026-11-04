@@ -802,7 +802,7 @@ def main():
     sp.add_argument("--force", action="store_true"); sp.set_defaults(fn=cmd_record)
     a = p.parse_args()
     if getattr(a, "jobs", 0) is None:
-        a.jobs = 3 if getattr(a, "target", "win") == "win" else 8
+        a.jobs = int(os.environ.get("RHOST_JOBS", "0") or 0) or (3 if getattr(a, "target", "win") == "win" else 8)   # RHOST_JOBS: parallel agents
     r = a.fn(a)
     sys.exit(r or 0)
 
