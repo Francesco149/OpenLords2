@@ -37,9 +37,26 @@ PARTS = {
     # the battlefield's input (screens 0x28..0x2a: select, order, the control panel) and its HUD panels
     "input": _h("4238b8 4239d5 43b9a1 43ba29 43bb68 43bbd7 43bd02 43bd67 43bdcd 43bf07 43c247 43c2a9 43c4c6 43c55c "
                 "43c57d 43c634 4784ca 478987 478f0b 479a71 479b58 479cf7 47a76d 47f76d 499cb1"),
+    # --- family 'rl' (retail-layout ports outside the battlefield: rl_<va>, src/rl_<part>.c) ---
+    # the platform layer: asset / file loaders, the WAV cues and music streams, movies + screen transitions, the
+    # debug log, the sprite / palette loads (reached by every scenario)
+    "io": _h("41b013 425e4b 426216 4262eb 426360 4263ad 426529 426534 426b92 426dd5 427990 427c9b 42d91b 42da18 "
+             "42dbc7 42e298 42e320 42e362 42f58c 433cc1 451f70 45280b 46a101 46ea9a 46f21f 46f267 497500 4975d3 "
+             "4978ad 497a34 4983b7 4990f9 49915e 499261 499366 499619 49964c 4996c8 499aca 499d7d 49c995 4ae1b8 "
+             "4ae2ab 4ae2bd 4aecf0 4aee3e 4af116 4af312 4af767 4af841 4afab9 4afe3a 4b049b 4b0aaa 4b11ce 4b2575 "
+             "4b36c0 4b3714 4b37bc 4b3940 4b3acd 4b3b92 4b8c3a 4b92e0 4b95ba 4b9652 4b97f9 4b984f 4c0580 4c05a0"),
+    # the UI's logic glue: the strategic screen's button / router actions, the per-screen input sub-handlers of
+    # 0x42ff10, the frame driver's pre-tick steps, the MP message sender's SP arm
+    "glue": _h("409429 40ae12 40c8d1 40c928 40dd92 40deca 40dfcd 40e00a 40e099 40e761 40f10f 41423f 42a8d1 42a9ab "
+               "42d179 42e26f 42f148 4323fe 432443 43253a 432893 43292d 4329a4 4330c6 433a70 433e93 433f49 4344f2 "
+               "43470d 43496c 434988 434cbe 434cee 4360f2 43618b 43631e 436872 4369bd 436b22 436b59 437002 43733a "
+               "43744f 4374c4 4376bb 438990 438a91 438acc 439079 439122 43933b 4393eb 43b4cb 43b593 43b681 43b7c4 "
+               "43b848 43b98a 43eda0 440666 448d7e 451f8a 46c4a3 472986 472a31 475b41 475d73 47703a 4782c5 47f474 "
+               "481b9a 482111 498458 49b8b0 4a82b9 4b1310"),
     # retail seams the battlefield calls that stay out of scope (audio streams, sprite loads): stubs only
     "extern": _h("43f304 477b2f 4987b7 499d97"),
 }
+FAMILY = {"io": "rl", "glue": "rl"}   # default "bf"
 OWNER = {}
 for _p, _vs in PARTS.items():
     for _v in _vs:

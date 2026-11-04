@@ -8,7 +8,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 import bfgraph as G
-from parts import PARTS
+from parts import PARTS, FAMILY
 
 cov = G.coverage()
 hooked = G.hooked()
@@ -17,9 +17,10 @@ for p in PARTS:
     def rd(f):
         f = os.path.join(G.SRC, f)
         return open(f).read() if os.path.exists(f) else ""
-    defined = {int(v, 16) for v in re.findall(r"^int bf_([0-9a-f]{6})\(", rd(f"engine_bf_{p}.c"), re.M)} | \
-              {int(v, 16) for v in re.findall(r"^(?:void|int|unsigned|uint32_t|int32_t) bf_([0-9a-f]{6})\(", rd(f"engine_bf_{p}.c"), re.M)}
-    pending = {int(v, 16) for v in re.findall(r"^int bf_([0-9a-f]{6})\(", rd(f"engine_bf_{p}_pending.c"), re.M)}
+    fam = FAMILY.get(p, "bf")
+    stem = f"engine_bf_{p}" if fam == "bf" else f"rl_{p}"
+    defined = {int(v, 16) for v in re.findall(r"^(?:void|int|unsigned|uint32_t|int32_t) %s_([0-9a-f]{6})\(" % fam, rd(f"{stem}.c"), re.M)}
+    pending = {int(v, 16) for v in re.findall(r"^int %s_([0-9a-f]{6})\(" % fam, rd(f"{stem}_pending.c"), re.M)}
     src[p] = (defined, pending)
 tot = [0] * 6
 print(f"{'part':8s} {'funcs':>5s} {'ported':>6s} {'hooked':>6s} {'pending':>7s} {'bytes left':>10s} {'left reached':>12s}")

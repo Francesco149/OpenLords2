@@ -22,4 +22,5 @@ void rh_hook_count(hook_t *h, int r, const char *why);   /* tally one rh_shadow_
 #define RH_HOOK_TABLES(T) T(RH_HOOKS_AI) T(RH_HOOKS_COMBAT) T(RH_HOOKS_STATE) T(RH_HOOKS_EVENTS) T(RH_HOOKS_BATTLE) \
                              T(RH_HOOKS_ECONOMY) \
                              T(RH_HOOKS_BF_MOVE) T(RH_HOOKS_BF_STRIKE) T(RH_HOOKS_BF_UNIT) T(RH_HOOKS_BF_ACTION) \
-                             T(RH_HOOKS_BF_GROUP) T(RH_HOOKS_BF_STANCE) T(RH_HOOKS_BF_SETUP) T(RH_HOOKS_BF_INPUT)
+                             T(RH_HOOKS_BF_GROUP) T(RH_HOOKS_BF_STANCE) T(RH_HOOKS_BF_SETUP) T(RH_HOOKS_BF_INPUT) \
+                             T(RH_HOOKS_RL_IO) T(RH_HOOKS_RL_GLUE)
