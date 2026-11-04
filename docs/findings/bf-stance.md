@@ -7,10 +7,17 @@
 
 0x489401 (the group AI driver, partition 'group') walks the groups with its loop index **DAT_00568458 as a
 global** — every handler here takes the current group from it. Non-siege: stance (+8) ≤ 4 through
-DAT_004d91b8 (partition 'group'). Siege (DAT_0053e8fc): group +3 != 0 (the defending side) → DAT_004d91d0
-(stance ≤ 8), else DAT_004d91f8 (stance ≤ 10).
+DAT_004d91b8 (partition 'group'). Siege (DAT_0053e8fc): group +3 != 0 (the ATTACKING side) → DAT_004d91d0
+(stance ≤ 8), else DAT_004d91f8 (the defenders, stance ≤ 10).
 
-| stance | defenders (DAT_004d91d0) | attackers (DAT_004d91f8) |
+**Correction (2026-11-04)**: this file's first version (and the port's comments) had the two sides swapped. The siege
+scenarios settle it: siege-defence (the player defends Castle Acre / River Island, the drawbridge button; the AI
+attacks, fills the moat, rams the gate) runs only DAT_004d91d0 (0x48d16e, 0x48d9ce, 0x48ce81 — 0x48ce81 sends the
+group to the moat cells / the side's wall point), field-orders (the player attacks with engines, the AI defends)
+only DAT_004d91f8 (0x48e097); in bot3-s103-t36 / bot3s-s404-t36 the bot assaults and the player's groups have
++3 = 4. Below, "attacker" / "defender" follow the correction.
+
+| stance | attackers (DAT_004d91d0) | defenders (DAT_004d91f8) |
 |---:|---|---|
 | 0 | 0x48a9c7 (group) | 0x48a9c7 |
 | 1 | FUN_0048d16e | FUN_0048e097 |
@@ -56,15 +63,20 @@ DAT_00553e64 the units on a kind-5 cell in formation slot 4 (FUN_004822ed); DAT_
 - **FUN_0048ed95** — the footprint list DAT_00553c80 (save.h `g_footprint_list`, 20 × [cell offset, group]): the
   group's claimed cell, else claim the first unclaimed one.
 - FUN_0048ea95 / FUN_0048ebf1 (enemies near / standing on the wall), FUN_0048cba9 / FUN_0048cce3 (a member's
-  enemy → the nearest wall cell, kind 4), FUN_0048ce1d, FUN_0048ce81 (man the wall), FUN_0048d013 (fall back).
+  enemy → the nearest wall cell, kind 4), FUN_0048ce1d, FUN_0048ce81 (to the moat cells / the side's wall point), FUN_0048d013 (fall back).
 
 ## Quirks (retail behaviour a naive port misses)
 
 1. **Search loop indices are globals.** FUN_00495f3d, FUN_00496566, FUN_00496d76 and FUN_00496b9f run their row
    / column loops on DAT_00569578 / DAT_00569570 (also engine_map_query's cell cursor mirror), FUN_00495956 on
    DAT_0056d5d0: the final values are state, and results (FUN_00496d76, and 0x496768 whose DAT_00569570 /
-   DAT_00569578 FUN_0048ce81 orders the group to). The standalone must keep g_bf_569570 / g_bf_569578 the one
-   copy (engine_map_query's g_cell_cursor_col / _row mirror the same VAs: DUP).
+   DAT_00569578 FUN_0048ce81 orders the group to). **One copy: engine_map_query's `g_cell_cursor_col` / `_row`**
+   (2026-11-04 fix): this partition and `group` used the generated alias `g_bf_569570` / `g_bf_569578` while
+   `action` (0x496768), `strike`, `setup`, `move` use the mirror. Under rhost the mirror is the live copy inside a
+   port call, so FUN_0048ce81's read of the alias after 0x496768 saw the pre-call cursor — siege-defence f12373:
+   `DIVERGE bf_48d412 … 005665dc r004c0040/p004e0040` (group 3's anchor +0x22, from 0x48ce81 at depth 3) and the
+   +0x13 / +0x22 of the groups it ordered after; in the standalone the two are separate variables. Every bf
+   partition now uses the mirror; `g_bf_569570` / `8` stay generated, unused (DUP).
 2. **FUN_00496d76 measures from the window corner.** Retail clips the window by rewriting its own arguments
    (`sub [ebp+arg_0]`), then both "skip the centre" (`a1 != x0 || a2 != y0`) and the Manhattan distance use the
    CLIPPED top-left corner, not the centre: with r > 0 and the window inside the grid nothing is skipped and the
@@ -73,7 +85,7 @@ DAT_00553e64 the units on a kind-5 cell in formation slot 4 (FUN_004822ed); DAT_
    linearly and every later row re-finds the same cell at once: the loop globals end at (80, 0), not at the
    found cell. The 4 × 7 block is written from the found cell with no bounds check.
 4. **The busy wait keeps the clock** (above): a handler's step is late, not skipped.
-5. **Defender cycle counters** DAT_004d9c74 / 9c80 / 9c84 / 9c88 are shared by ALL groups of that stance (one
+5. **Attacker-table cycle counters** DAT_004d9c74 / 9c80 / 9c84 / 9c88 are shared by ALL groups of that stance (one
    global per handler): with n groups the cycle advances n per round. The reset is `> 2 || < 0` (`> 5` for 9c84),
    signed.
 6. **FUN_0048d412 / FUN_0048d6fc jump the step to 100** in one band when the kit flag is set — the band chain then
@@ -84,16 +96,16 @@ DAT_00553e64 the units on a kind-5 cell in formation slot 4 (FUN_004822ed); DAT_
 ## Evidence
 
 **Corpus** — `rhost.py verify --target wine --only bot3 --hooks '^bf_'` (2026-11-04): the siege scenarios
-bot3-s103-t36 and bot3s-s404-t36 reach the attacker table — 16 of the 28 hooks, 131.8k calls, 0 divergences;
-hybrid PASS over the 14 bot3* scenarios. In both sieges the AI is the ATTACKER (its groups +3 = 0); the player's
-groups (+1 = 1, side +3 = 4) are skipped by 0x489401, so the defender table never runs in the corpus.
+bot3-s103-t36 and bot3s-s404-t36 reach the defender table DAT_004d91f8 — 16 of the 28 hooks, 131.8k calls, 0
+divergences; hybrid PASS over the 14 bot3* scenarios. In both sieges the AI DEFENDS (its groups +3 = 0); the player's
+groups (+1 = 1, side +3 = 4) are skipped by 0x489401, so the attacker table DAT_004d91d0 never runs in bot3*.
 
-**Probe (poked state)** — not in the corpus: the defender table, FUN_0048ce1d / 0048ce81 / 0048d013, FUN_0048e774,
+**Probe (poked state)** — not in the corpus: the attacker table (`def` below = DAT_004d91d0), FUN_0048ce1d / 0048ce81 / 0048d013, FUN_0048e774,
 FUN_00496d76. A `rhbot.py` Session replays bot3-s103-t36 to frame 41400 (the siege battle runs 41200..44800),
 pokes the AI groups g5..g12 and shadows the hooks to the end of the trace:
-- `def`: +3 = 1 (defender table), stances 1..7 round robin; `defhi`: the steps +0x1a started at 12..98 (the
+- `def`: +3 = 1 (the attacker table DAT_004d91d0), stances 1..7 round robin; `defhi`: the steps +0x1a started at 12..98 (the
   later bands); `b`: both breach counters poked (DAT_00553fb0 = 6, DAT_0053e990 = 4) for the breach branches;
-- `att4`: attacker stance 4 on half the groups, stance 3 aimed at a player group (+0xa / +0xc) on the others, and
+- `att4`: DAT_004d91f8 (defender) stance 4 on half the groups, stance 3 aimed at a player group (+0xa / +0xc) on the others, and
   4 footprint cells (DAT_00553c80) planted near that group (the list is empty in this siege).
 
 | run | shadowed | calls | diverge |
@@ -106,8 +118,15 @@ pokes the AI groups g5..g12 and shadows the hooks to the end of the trace:
 
 Hybrid on the poked runs: all 28 stance hooks in replace mode end at the same state hash as the pure run
 (state_sem def 426011a4526ca055, defhi + b 6f584ae8352e4aed, defhi 588ab64efb191c45, att4 0414d9d2af29719c).
-bot3s-s404-t36 (siege battle 45800..60800, AI attacking again) poked at 46000 with `defhi + b`: 0x48d013 /
+bot3s-s404-t36 (siege battle 45800..60800, the AI defending again) poked at 46000 with `defhi + b`: 0x48d013 /
 0x496566 12 / 331 calls, 0 divergences.
+
+**Corpus, the siege scenarios** — `verify --target wine --only '^(field-orders|siege-defence|skirmish-tour)$'
+--hooks '^bf_'` (2026-11-04, after the cursor fix, quirk 1): field-orders (the AI defends) runs the defender table
+DAT_004d91f8, siege-defence and skirmish-tour's Bodiam siege (the AI attacks) the attacker table DAT_004d91d0: 0x48d16e 27689, 0x48d412 39125, 0x48d6fc 40166, 0x48d9ce 6139, 0x48db84 24954,
+0x48ddc7 978, 0x48dfbb 7117, 0x48e097 44965, 0x48e39c 8993, 0x48e8b8 26979, 0x48ce81 102, 0x48d013 40, 0x48ea95 132,
+0x495f3d 122 calls, 0 divergences; hybrid PASS (all 260 bf rows). Still never called: FUN_0048ce1d, FUN_0048e4cc,
+FUN_0048e774, FUN_0048ed95, FUN_00496b9f, FUN_00496d76.
 
 **Unverified**: FUN_0048ce1d (100 B: 0x496566(centroid, 40, 4) → 0x48c363) — only FUN_0048d16e's breach branch
 calls it, with DAT_00553f74 > DAT_0056d6ac (0x481b9a recomputes both); no probe reached it (also tried with the

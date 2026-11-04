@@ -4,6 +4,7 @@
 #include "engine.h"        /* g_sim_mp_active (DAT_00553030) */
 #include "engine_math.h"   /* engine_math_percent_div (0x404dc1) */
 #include "engine_path.h"   /* engine_path_dist_manhattan (0x404ead; |dx| / |dy| → DAT_00591560 / DAT_0058fea0) */
+#include "engine_map_query.h" /* g_cell_cursor_col / _row (DAT_00569570 / DAT_00569578): the one copy (g_bf_569570 / 8 are DUPs) */
 
 /* DAT_00567968 (the formation origin row, the target-search result row) sits inside the economy's staging
  * array g_caravan_order (retail 0x5678c0, engine_economy_globals.c) — its owner symbol */
@@ -34,20 +35,20 @@ int bf_4859e5(void)
     if ((int32_t)s_slot_0053e9d0 <= 0)
         return 0;
     s_slot_0053e9d0 = 0;
-    g_bf_569578 = 0;
+    g_cell_cursor_row = 0;
     g_bf_5533cc = 0;
-    for (; g_bf_569578 < 80; g_bf_569578++)
-        for (g_bf_569570 = 0; g_bf_569570 < 80; g_bf_569570++, g_bf_5533cc += 8)
+    for (; g_cell_cursor_row < 80; g_cell_cursor_row++)
+        for (g_cell_cursor_col = 0; g_cell_cursor_col < 80; g_cell_cursor_col++, g_bf_5533cc += 8)
             if (BCELL8(g_bf_5533cc, 0x5440e7) == 16) {
                 BCELL8(g_bf_5533cc, 0x5440e7) = 17;
                 s_slot_0053e9d0 = 1;
             }
-    g_bf_569578 = 0;
+    g_cell_cursor_row = 0;
     g_bf_5533cc = 0;
-    for (; g_bf_569578 < 80; g_bf_569578++)
-        for (g_bf_569570 = 0; g_bf_569570 < 80; g_bf_569570++, g_bf_5533cc += 8)
-            if (BCELL8(g_bf_5533cc, 0x5440e7) == 15 && bf_496f72(g_bf_569570, g_bf_569578, g_bf_5533cc, 17) != 0)
-                bf_485861(g_bf_569570, g_bf_569578);
+    for (; g_cell_cursor_row < 80; g_cell_cursor_row++)
+        for (g_cell_cursor_col = 0; g_cell_cursor_col < 80; g_cell_cursor_col++, g_bf_5533cc += 8)
+            if (BCELL8(g_bf_5533cc, 0x5440e7) == 15 && bf_496f72(g_cell_cursor_col, g_cell_cursor_row, g_bf_5533cc, 17) != 0)
+                bf_485861(g_cell_cursor_col, g_cell_cursor_row);
     return 0;
 }
 
@@ -978,8 +979,8 @@ int bf_48c3fe(int off)
 {
     int c = off / 8;
     if (bf_496d76(c % 80, c / 80, 5) != 0) {
-        BG16(CG, 0x566542) = (int16_t)g_bf_569570;
-        BG16(CG, 0x566544) = (int16_t)g_bf_569578;
+        BG16(CG, 0x566542) = (int16_t)g_cell_cursor_col;
+        BG16(CG, 0x566544) = (int16_t)g_cell_cursor_row;
         bf_group_go();
     }
     return 0;
