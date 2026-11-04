@@ -16,8 +16,10 @@ Learned live in rhost 2026-10-23 (bot v3; tools/bot/README.md "Retail's input mo
   nothing is selected or the battle is paused, and otherwise ORDERS the selection to march to that hex;
 - selection: an LMB drag over the field (> 24 px, FUN_00479cf7) box-selects (screen 0x2a while held) — it works
   while paused; DAT_00553078 = units selected;
-- an order: RMB over a hex (FUN_0043c57d → FUN_0043c634 → FUN_00479e90), only while running (not paused); an
-  enemy under the cursor (DAT_005533b8) makes it an attack on that unit;
+- an order: an LMB press + release over a hex WITH a selection (FUN_0043c57d → FUN_0043c634 → FUN_00479e90), only
+  while running (not paused); an enemy under the cursor (DAT_005533b8) makes it an attack on that unit (missile
+  units fire at it: 0x479e90 → 0x48143b). An RMB release DESELECTS (bot v3 sent RMB orders: none was ever given —
+  found authoring tests/scenarios/field-orders, 2026-11-04);
 - the end: men left per side DAT_0053f028 (attacker = piece DAT_00568210) / DAT_00553c58 (defender = piece
   DAT_00568218); FUN_00477dfc checks every frame and at 0 switches to 0x2b ("The Battle is won/lost" scroll,
   FUN_00478419 picks the line); an RMB there ends it at once (else ~2500 frames), then aftermath → 0x13.
@@ -34,7 +36,7 @@ PAUSED = 0x53F238                  # 0 running, -1 frozen
 MEN_ATK, MEN_DEF = 0x53F028, 0x553C58
 ATK_PIECE, DEF_PIECE = 0x568210, 0x568218
 SELECTED = 0x553078
-UNDER_CURSOR = 0x5533B8            # enemy unit under the cursor (an RMB attacks it)
+UNDER_CURSOR = 0x5533B8            # enemy unit under the cursor (an LMB with a selection attacks it)
 FIELD_SCREENS = (0x28, 0x29, 0x2A, 0x2B)
 TAKE_FIELD = (345, 128)            # 0x12: the left gauntlet
 HOURGLASS, RETREAT, SIEGE_ACT, MOP_UP, AUTOCALC = (496, 464), (528, 464), (560, 464), (592, 464), (624, 464)
@@ -141,7 +143,8 @@ def select_all(s, me):
 
 
 def attack_nearest(s, me):
-    """recentre on the nearest enemy (paused), run, put the cursor on it and RMB → 'attack' / 'move' / None"""
+    """recentre on the nearest enemy (paused), run, put the cursor on it and LMB (the selection is ordered) →
+    'attack' / 'move' / None"""
     us = units(s)
     mine = [u for u in us if u["owner"] == me]
     foes = [u for u in us if u["owner"] != me]
@@ -161,13 +164,13 @@ def attack_nearest(s, me):
             break
         s.move(*p, frames=4)
         if s.i32(UNDER_CURSOR):
-            s.click(*p, right=True)
+            s.click(*p)
             s.run(6)
             return "attack"
     p = to_screen(s, foe["col"], foe["row"])     # no unit under the cursor: a move order onto its hex
     if on_view(p):
         s.move(*p, frames=4)
-        s.click(*p, right=True)
+        s.click(*p)
         s.run(6)
         return "move"
     return None
