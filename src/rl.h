@@ -17,3 +17,4 @@
 #include "rl_terr.h"
 #include "rl_turn.h"
 #include "rl_host.h"
+#include "rl_quit.h"

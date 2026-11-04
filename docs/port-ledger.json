@@ -5,14 +5,14 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 788,
-  "ported": 721,
-  "unported": 938,
+  "ported": 727,
+  "unported": 932,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1509,
-  "pct_touched": 61.7,
+  "touched": 1515,
+  "pct_touched": 61.9,
   "pct_tested": 32.2,
   "bytes_total": 838629,
-  "bytes_touched": 633591,
+  "bytes_touched": 634308,
   "pct_bytes_touched": 75.6
  },
  "orphan_refs": [
@@ -4247,8 +4247,10 @@
    "name": "FUN_00425d35",
    "size": 184,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_quit.c"
+   ]
   },
   {
    "va": "0x425ded",
@@ -5073,7 +5075,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/main.c"
+    "src/main.c",
+    "src/rl_quit.c"
    ]
   },
   {
@@ -5176,7 +5179,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/gfx.c"
+    "src/gfx.c",
+    "src/rl_quit.c"
    ]
   },
   {
@@ -8383,8 +8387,10 @@
    "name": "FUN_0043f43e",
    "size": 70,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_quit.c"
+   ]
   },
   {
    "va": "0x43f484",
@@ -17205,8 +17211,10 @@
    "name": "FUN_0049767d",
    "size": 36,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_quit.c"
+   ]
   },
   {
    "va": "0x4976a1",
@@ -19535,8 +19543,10 @@
    "name": "FUN_004ae15f",
    "size": 89,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_quit.c"
+   ]
   },
   {
    "va": "0x4ae1b8",
@@ -20543,8 +20553,10 @@
    "name": "FUN_004b2636",
    "size": 130,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_quit.c"
+   ]
   },
   {
    "va": "0x4b26b8",
@@ -21336,8 +21348,10 @@
    "name": "FUN_004b7180",
    "size": 208,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_quit.c"
+   ]
   },
   {
    "va": "0x4b7250",

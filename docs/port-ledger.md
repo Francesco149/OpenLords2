@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1509** (61.7%) — tested 788, ported 721
-- code bytes touched: **75.6%** (633,591 / 838,629 B)
-- unported: **938**
+- touched: **1515** (61.9%) — tested 788, ported 727
+- code bytes touched: **75.6%** (634,308 / 838,629 B)
+- unported: **932**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -229,7 +229,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x429b1d | FUN_00429b1d | 135 | engine.c, engine_camera.c, engine_camera.h (+1) |
 | 0x429ba4 | FUN_00429ba4 | 878 | engine.c, engine_camera.c, engine_camera.h (+3) |
 | 0x42a15f | FUN_0042a15f | 206 | engine_camera.c, engine_camera.h |
-| 0x42dfe2 | FUN_0042dfe2 | 126 | main.c |
+| 0x42dfe2 | FUN_0042dfe2 | 126 | main.c, rl_quit.c |
 | 0x42ec91 | FUN_0042ec91 | 1207 | engine_mapview_globals.h, gfx.c, gfx.h (+2) |
 | 0x42f1df | FUN_0042f1df | 295 | gfx.c, main.c |
 | 0x42ff10 | FUN_0042ff10 | 8140 | engine.c, engine_armory.c, engine_army_move_confirm.h (+8) |
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (721) — reimplemented, no host test yet
+## ported (727) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -930,6 +930,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x425314 | FUN_00425314 | 371 | rl_skirmish.c |
 | 0x425487 | FUN_00425487 | 437 | rl_skirmish.c |
 | 0x425b10 | FUN_00425b10 | 549 | audio.c, audio.h |
+| 0x425d35 | FUN_00425d35 | 184 | rl_quit.c |
 | 0x425ded | FUN_00425ded | 94 | audio.c, audio.h |
 | 0x425e4b | FUN_00425e4b | 725 | rl_io.c |
 | 0x426120 | FUN_00426120 | 246 | engine_bf_strike.c |
@@ -980,7 +981,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42e320 | FUN_0042e320 | 66 | rl_io.c |
 | 0x42e362 | FUN_0042e362 | 31 | rl_io.c |
 | 0x42e5c0 | FUN_0042e5c0 | 1249 | gfx.c, gfx.h |
-| 0x42eaa6 | FUN_0042eaa6 | 214 | gfx.c |
+| 0x42eaa6 | FUN_0042eaa6 | 214 | gfx.c, rl_quit.c |
 | 0x42eb7c | FUN_0042eb7c | 277 | gfx.c, gfx.h |
 | 0x42f148 | FUN_0042f148 | 151 | rl_glue.c |
 | 0x42f306 | FUN_0042f306 | 323 | gfx.c, gfx.h |
@@ -1150,6 +1151,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43f24b | FUN_0043f24b | 185 | rl_ui2.c |
 | 0x43f304 | FUN_0043f304 | 78 | engine_bf_extern.c |
 | 0x43f352 | FUN_0043f352 | 236 | rl_ui2.c |
+| 0x43f43e | FUN_0043f43e | 70 | rl_quit.c |
 | 0x43f484 | FUN_0043f484 | 51 | rl_ui2.c |
 | 0x440666 | FUN_00440666 | 383 | rl_glue.c |
 | 0x44098f | FUN_0044098f | 595 | rl_render.c |
@@ -1452,6 +1454,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x497437 | FUN_00497437 | 191 | engine_bf_action.c |
 | 0x497500 | FUN_00497500 | 211 | rl_io.c |
 | 0x4975d3 | FUN_004975d3 | 170 | rl_io.c |
+| 0x49767d | FUN_0049767d | 36 | rl_quit.c |
 | 0x497879 | FUN_00497879 | 52 | rl_misc.c |
 | 0x4978ad | FUN_004978ad | 129 | rl_io.c |
 | 0x497a34 | FUN_00497a34 | 697 | rl_io.c |
@@ -1478,6 +1481,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a82b9 | FUN_004a82b9 | 365 | rl_glue.c |
 | 0x4aabd8 | FUN_004aabd8 | 303 | engine_armory.c, engine_armory.h |
 | 0x4adcf6 | FUN_004adcf6 | 413 | rl_ui2.c |
+| 0x4ae15f | FUN_004ae15f | 89 | rl_quit.c |
 | 0x4ae1b8 | FUN_004ae1b8 | 243 | rl_io.c |
 | 0x4ae2ab | FUN_004ae2ab | 18 | rl_io.c |
 | 0x4ae2bd | FUN_004ae2bd | 83 | rl_io.c |
@@ -1509,6 +1513,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b2575 | FUN_004b2575 | 59 | rl_io.c |
 | 0x4b25b0 | FUN_004b25b0 | 76 | gfx.c, gfx.h |
 | 0x4b25fc | FUN_004b25fc | 58 | rl_misc.c |
+| 0x4b2636 | FUN_004b2636 | 130 | rl_quit.c |
 | 0x4b26f8 | FUN_004b26f8 | 56 | rl_misc.c |
 | 0x4b284e | FUN_004b284e | 122 | gfx.h |
 | 0x4b28cd | FUN_004b28cd | 85 | rl_misc.c |
@@ -1522,6 +1527,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b3acd | FUN_004b3acd | 197 | rl_io.c |
 | 0x4b3b92 | FUN_004b3b92 | 89 | rl_io.c |
 | 0x4b3dcd | FUN_004b3dcd | 132 | engine_bf_move.c |
+| 0x4b7180 | FUN_004b7180 | 208 | rl_quit.c |
 | 0x4b7250 | FUN_004b7250 | 491 | rl_ui2.c |
 | 0x4b7585 | FUN_004b7585 | 1113 | rl_ui2.c |
 | 0x4b8c3a | FUN_004b8c3a | 1202 | rl_io.c |
