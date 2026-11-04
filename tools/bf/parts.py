@@ -63,10 +63,22 @@ PARTS = {
     # the last reached leftovers: palette fades, the cursor, MP timeouts, empty stubs, window probes
     "misc": _h("45242b 497879 49a3e6 4b0cb4 4b0e03 4b12fb 4b1897 4b18f8 4b1cf3 4b1dd5 4b209a 4b25fc 4b26f8 4b28cd "
                "4b3571 4bbe51 4bbea7 4bbf15"),
+    # skirmish mode (reached by skirmish-tour): the setup pages, the .skr list, the Battle Master ratings, score.dat
+    "skirmish": _h("420147 42051c 4207c3 4209c1 420d40 420de4 421005 421231 42130f 42150b 421707 421d09 425314 425487 42aa90 "
+                 "42ab15 42ab82 42ac0c 42b780 42b7f7 42b919 42b9c4 42ba40 42bf46 42c476 42c4e2 42c5ad 42c5fe 42c64f 42cc4a "
+                 "42d216 42d2dc 42d389 42d4aa 42d857"),
+    # what the UI tours reach besides: the labor model (worker drags), the kingdom overview, the armoury's weapon
+    # assignment, custom-setup options, the county panels' rarer arms
+    "ui2": _h("401c5b 408ea4 408f1a 413526 41424a 414e06 41543f 4154ea 41cb3a 41ef42 433dbd 433deb 434174 4343f8 43441c "
+                 "434787 4347c7 43484a 434888 4348c6 434904 434d33 434d60 434fa1 434fd5 43505a 4350a1 43600c 438b02 438bec "
+                 "439541 43958a 4399b0 439b52 439cc2 439edb 439f6a 43a950 43a997 43ab76 43c77a 43c885 43c910 43d5b7 43d649 "
+                 "43d6a7 43d6c3 43d78b 43d7a7 43d882 43d8b9 43d929 43d9cd 43da9e 43daf3 43dbac 43dc1d 43dd83 43ddf4 43f24b "
+                 "43f352 43f484 44ff4a 450000 450639 46d421 479276 47935b 498dcb 498fb3 4adcf6 4af70c 4b14ff 4b3994 4b7250 "
+                 "4b7585"),
     # retail seams the battlefield calls that stay out of scope (audio streams, sprite loads): stubs only
     "extern": _h("43f304 477b2f 4987b7 499d97"),
 }
-FAMILY = {"io": "rl", "glue": "rl", "render": "rl", "misc": "rl"}   # default "bf"
+FAMILY = {"io": "rl", "glue": "rl", "render": "rl", "misc": "rl", "skirmish": "rl", "ui2": "rl"}   # default "bf"
 OWNER = {}
 for _p, _vs in PARTS.items():
     for _v in _vs:
