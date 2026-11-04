@@ -11,3 +11,4 @@
 #include "rl_misc.h"
 #include "rl_skirmish.h"
 #include "rl_ui2.h"
+#include "rl_ui3.h"

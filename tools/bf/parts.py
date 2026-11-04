@@ -75,10 +75,14 @@ PARTS = {
                  "43d6a7 43d6c3 43d78b 43d7a7 43d882 43d8b9 43d929 43d9cd 43da9e 43daf3 43dbac 43dc1d 43dd83 43ddf4 43f24b "
                  "43f352 43f484 44ff4a 450000 450639 46d421 479276 47935b 498dcb 498fb3 4adcf6 4af70c 4b14ff 4b3994 4b7250 "
                  "4b7585"),
+    # what round-2 scenarios reach besides: the options menu's handlers, the noble faces' insult / alliance buttons, the
+    # army split (Divide), 0x43bbe7, 0x4477e7, 0x40df62
+    "ui3": _h("40df62 434556 4345d0 434693 43480c 434942 4349a4 434a29 434a9a 434ad5 434b10 434e9e 434ec9 4361da "
+              "436229 4362ca 4378b3 437afb 437d65 437e9e 437fd7 43bbe7 4477e7"),
     # retail seams the battlefield calls that stay out of scope (audio streams, sprite loads): stubs only
     "extern": _h("43f304 477b2f 4987b7 499d97"),
 }
-FAMILY = {"io": "rl", "glue": "rl", "render": "rl", "misc": "rl", "skirmish": "rl", "ui2": "rl"}   # default "bf"
+FAMILY = {"io": "rl", "glue": "rl", "render": "rl", "misc": "rl", "skirmish": "rl", "ui2": "rl", "ui3": "rl"}   # default "bf"
 OWNER = {}
 for _p, _vs in PARTS.items():
     for _v in _vs:
