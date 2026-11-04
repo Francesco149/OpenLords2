@@ -60,6 +60,7 @@ session — they outlive the conversation context.
 | [bf-setup.md](bf-setup.md) | battlefield partition 'setup': entering the battlefield — terrain build, siege / custom maps, deployment + spawn, the per-frame cursor probe (50 functions); quirks |
 | [bf-move.md](bf-move.md) | battlefield partition 'move': the move order FUN_0048f1dd, the path search, the 1×1 / 3×3 steps (26 functions); quirks |
 | [bf-strike.md](bf-strike.md) | battlefield partition 'strike': the fire order, a projectile's flight tick (hits, damage), impact effects (22 functions); the projectile/effect record map; quirks |
+| [bf-stance.md](bf-stance.md) | battlefield partition 'stance': the siege group AI — the defender table DAT_004d91d0 and attacker table DAT_004d91f8 handlers + helpers (28 functions); quirks, probe evidence |
 | [input-replay.md](input-replay.md) | Input recording & replay (JSONL trace format) |
 | [pure-function-diff.md](pure-function-diff.md) | Pure-function differential testing vs retail |
 | [ledger-provenance-audit.md](ledger-provenance-audit.md) | The FUN_-token gotcha — how the derived ledger over-counts, and `tools/audit_provenance.py` |

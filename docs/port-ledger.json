@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 785,
-  "ported": 233,
-  "unported": 1429,
+  "ported": 261,
+  "unported": 1401,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1018,
-  "pct_touched": 41.6,
+  "touched": 1046,
+  "pct_touched": 42.7,
   "pct_tested": 32.1,
   "bytes_total": 838629,
-  "bytes_touched": 449827,
-  "pct_bytes_touched": 53.6
+  "bytes_touched": 461962,
+  "pct_bytes_touched": 55.1
  },
  "orphan_refs": [
   "0x004148",
@@ -15558,168 +15558,210 @@
    "name": "FUN_0048cba9",
    "size": 314,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48cce3",
    "name": "FUN_0048cce3",
    "size": 314,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48ce1d",
    "name": "FUN_0048ce1d",
    "size": 100,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48ce81",
    "name": "FUN_0048ce81",
    "size": 402,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48d013",
    "name": "FUN_0048d013",
    "size": 347,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48d16e",
    "name": "FUN_0048d16e",
    "size": 676,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48d412",
    "name": "FUN_0048d412",
    "size": 746,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48d6fc",
    "name": "FUN_0048d6fc",
    "size": 722,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48d9ce",
    "name": "FUN_0048d9ce",
    "size": 438,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48db84",
    "name": "FUN_0048db84",
    "size": 574,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48ddc7",
    "name": "FUN_0048ddc7",
    "size": 500,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48dfbb",
    "name": "FUN_0048dfbb",
    "size": 220,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48e097",
    "name": "FUN_0048e097",
    "size": 413,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48e234",
    "name": "FUN_0048e234",
    "size": 148,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48e2c8",
    "name": "FUN_0048e2c8",
    "size": 212,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48e39c",
    "name": "FUN_0048e39c",
    "size": 304,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48e4cc",
    "name": "FUN_0048e4cc",
    "size": 680,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48e774",
    "name": "FUN_0048e774",
    "size": 324,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48e8b8",
    "name": "FUN_0048e8b8",
    "size": 477,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48ea95",
    "name": "FUN_0048ea95",
    "size": 348,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48ebf1",
    "name": "FUN_0048ebf1",
    "size": 184,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48eca9",
@@ -15734,8 +15776,10 @@
    "name": "FUN_0048ed95",
    "size": 177,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x48ee46",
@@ -16134,16 +16178,20 @@
    "name": "FUN_00495956",
    "size": 747,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x495c41",
    "name": "FUN_00495c41",
    "size": 739,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x495f24",
@@ -16158,8 +16206,10 @@
    "name": "FUN_00495f3d",
    "size": 536,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x496155",
@@ -16192,8 +16242,10 @@
    "name": "FUN_00496566",
    "size": 514,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x496768",
@@ -16216,16 +16268,20 @@
    "name": "FUN_00496b9f",
    "size": 471,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x496d76",
    "name": "FUN_00496d76",
    "size": 508,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_stance.c"
+   ]
   },
   {
    "va": "0x496f72",
