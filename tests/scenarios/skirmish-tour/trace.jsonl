@@ -1,7 +1,7 @@
 # skirmish-tour: the Skirmish mode (title page 12, DAT_0057a0f0 = 1), authored over rhbot from boot (a Session driver).
 # Title → Single player → Skirmish! → the name box (Backspace / Home / Delete / End, typed "Tester": WM_KEYDOWN +
 # WM_CHAR) and the five shields → Continue → the setup page: the battle list rows, its scroll arrows, the four modes
-# (Siege / Unequal / user.skr / Equal), Attacker / Defender, the advantage arrows; Cust. (page 13 armies): every
+# (Siege / Unequal / user.skr / Equal), Attacker / Defender, the advantage arrows; Cust. (the custom armies): every
 # troop row's buttons, the engines, both difficulty buttons, the side toggle, Norm. Go: A Bridge Too Far on the field
 # (0x29): box-select, Ctrl+1 stores the group, 1 recalls it, WM_CHAR h / v, attack, Mop up, Retreat → Battle Master
 # ratings (0x2e) → the skirmish masters (0x2f) → setup. user.skr → its file box → the .skr list (title page 13),
