@@ -31,14 +31,16 @@
     X(SmackWait, 0x5cf5d8u) X(SmackSoundUseDirectSound, 0x5cf5e4u) X(SmackToBufferRect, 0x5cf5e8u)               \
     X(SmackOpen, 0x5cf5ecu) X(SmackToBuffer, 0x5cf5f0u) X(SmackClose, 0x5cf5f4u) X(SmackNextFrame, 0x5cf5f8u)    \
     X(SmackDoFrame, 0x5cf5fcu)                                                                                   \
-    X(PostMessageA, 0x5cf514u) X(GetForegroundWindow, 0x5cf550u) X(SetCursor, 0x5cf578u)
+    X(PostMessageA, 0x5cf514u) X(GetForegroundWindow, 0x5cf550u) X(SetCursor, 0x5cf578u)                     \
+    X(DialogBoxParamA, 0x5cf52cu)
 
 /* X(name, retail VA) — retail's CRT functions with state */
 #define RL_PLAT_CRT(X)                                                                                           \
     X(open, 0x4cea00u) X(close, 0x4ce640u) X(read, 0x4ceff0u) X(write, 0x4cc0b0u) X(lseek, 0x4cc3b0u)            \
     X(chdir, 0x4cf550u) X(time, 0x4c2740u) X(localtime, 0x4c24e0u) X(asctime, 0x4c2340u) X(malloc, 0x4bfa00u)    \
     X(exit, 0x4bf6f0u) X(CrtCheckMemory, 0x4c0cf0u) X(CrtIsValidHeapPointer, 0x4c1170u)                          \
-    X(CrtDbgReport, 0x4c3950u) X(CheckBytes, 0x4c0c60u) X(free_base, 0x4c4370u)
+    X(CrtDbgReport, 0x4c3950u) X(CheckBytes, 0x4c0c60u) X(free_base, 0x4c4370u)                              \
+    X(filelength, 0x4cf490u)
 
 void rl_plat_bind_retail(void);   /* rhost: every shim call goes through retail's IAT slot / retail's CRT */
 int  rl_plat_bound(void);
@@ -70,6 +72,7 @@ DWORD    rl_plat_timeGetTime(void);
 BOOL     rl_plat_PostMessageA(HWND w, UINT m, WPARAM wp, LPARAM lp);
 HWND     rl_plat_GetForegroundWindow(void);
 HCURSOR  rl_plat_SetCursor(HCURSOR c);
+INT_PTR  rl_plat_DialogBoxParamA(HINSTANCE inst, const char *tmpl, HWND parent, DLGPROC proc, LPARAM init);
 /* smackw32 (__stdcall, by ordinal): the Smack struct is opaque to the shim (retail reads its fields itself) */
 uint32_t rl_plat_SmackOpen(const char *name, uint32_t flags, uint32_t extrabuf);      /* #14 */
 void     rl_plat_SmackClose(uint32_t smk);                                            /* #18 */
@@ -96,6 +99,7 @@ int32_t  rl_plat_time(int32_t *t);
 void    *rl_plat_localtime(const int32_t *t);    /* a struct tm (retail's static one when bound) */
 char    *rl_plat_asctime(const void *tm);
 void    *rl_plat_malloc(uint32_t n);
+int      rl_plat_filelength(int fd);
 void     rl_plat_exit(int code);
 /* the debug heap's helpers (0x4c05a0's callees) */
 int      rl_plat_CrtCheckMemory(void);

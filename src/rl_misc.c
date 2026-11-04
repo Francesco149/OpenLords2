@@ -156,7 +156,7 @@ int rl_497879(void)
 
 /* Port of FUN_004b0cb4 (314 B) — start a palette fade to the 256-entry RGB table `pal` (6-bit components; mode 1:
  * ×4/4, else ×4) from DAT_004e65c8 = the screen to return to; the fade's step count DAT_004e65e0 = 256; target table
- * DAT_004ea530; the palette's darken / restore 0x4b14ff (unported: TODO(rl-extern)), the full-screen redraw, screen 35. */
+ * DAT_004ea530; the palette's darken / restore 0x4b14ff (partition ui2), the full-screen redraw, screen 35. */
 int rl_4b0cb4(int ret_screen, int mode, int pal)
 {
     const uint8_t *p = (const uint8_t *)(uintptr_t)pal;
@@ -173,7 +173,7 @@ int rl_4b0cb4(int ret_screen, int mode, int pal)
             g_rl_4ea530[3 * i + 2] = (uint8_t)(4 * p[3 * i + 2]);
         }
     }
-    engine_retail_call(0x4b14ffu, 0);   /* TODO(rl-extern) */
+    rl_4b14ff();   /* partition ui2 */
     engine_territory_mark_full_screen_dirty();
     engine_set_current_screen(35);
     return 0;
@@ -236,7 +236,7 @@ int rl_49a3e6(void)
         g_rl_57c968 = 1;
         engine_retail_call(0x4984dcu, 0);
         engine_retail_call(0x40f5fdu, 1, 3u);
-        engine_retail_call(0x4b14ffu, 0);
+        rl_4b14ff();
         engine_retail_call(0x452160u, 1, 1u);
         engine_army_ai_set_ranking_dirty(1);
         engine_territory_mark_full_screen_dirty();

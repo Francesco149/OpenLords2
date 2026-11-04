@@ -24,15 +24,11 @@ int32_t g_rl_544024;
 int32_t g_rl_5440bc;
 int32_t g_rl_55324c;
 int32_t g_rl_5533b4;
-int32_t g_rl_5533e0[2];
-int32_t g_rl_55cd34;
 int32_t g_rl_55ce8c;
 int32_t g_rl_55ce94;
-int32_t g_rl_5653e8;
 int32_t g_rl_5681e8;
 int32_t g_rl_568214;
 int32_t g_rl_568988;
-int32_t g_rl_56899c;
 int32_t g_rl_57c948;
 int32_t g_rl_57c95c;
 uint8_t g_rl_53f5fc[0x44];   /* (hand) */

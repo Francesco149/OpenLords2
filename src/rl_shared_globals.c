@@ -44,3 +44,7 @@ uint8_t g_rl_58fe24[4] __attribute__((aligned(4)));
 uint8_t g_rl_5aeb74[4] __attribute__((aligned(4)));
 uint8_t g_rl_5cd410[4] __attribute__((aligned(4)));
 uint8_t g_rl_5c9270[4] __attribute__((aligned(4)));   /* render: a pointer; glue: a dword */
+uint8_t g_rl_5533e0[8] __attribute__((aligned(4)));
+uint8_t g_rl_55cd34[4] __attribute__((aligned(4)));
+uint8_t g_rl_5653e8[4] __attribute__((aligned(4)));
+uint8_t g_rl_56899c[4] __attribute__((aligned(4)));

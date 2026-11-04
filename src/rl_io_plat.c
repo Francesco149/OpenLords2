@@ -13,6 +13,7 @@ _CRTIMP int __cdecl _close(int fd);
 _CRTIMP int __cdecl _read(int fd, void *buf, unsigned n);
 _CRTIMP int __cdecl _write(int fd, const void *buf, unsigned n);
 _CRTIMP long __cdecl _lseek(int fd, long off, int origin);
+_CRTIMP long __cdecl _filelength(int fd);
 
 static int s_bound;
 #define SLOT(n, va) static const uint32_t k_slot_##n = va;
@@ -81,6 +82,8 @@ BOOL rl_plat_PostMessageA(HWND w, UINT m, WPARAM wp, LPARAM lp)
 { return IMP(PostMessageA, BOOL (WINAPI *)(HWND, UINT, WPARAM, LPARAM), PostMessageA)(w, m, wp, lp); }
 HWND rl_plat_GetForegroundWindow(void)
 { return IMP(GetForegroundWindow, HWND (WINAPI *)(void), GetForegroundWindow)(); }
+INT_PTR rl_plat_DialogBoxParamA(HINSTANCE inst, const char *tmpl, HWND parent, DLGPROC proc, LPARAM init)
+{ return IMP(DialogBoxParamA, INT_PTR (WINAPI *)(HINSTANCE, LPCSTR, HWND, DLGPROC, LPARAM), DialogBoxParamA)(inst, tmpl, parent, proc, init); }
 HCURSOR rl_plat_SetCursor(HCURSOR c)
 { return IMP(SetCursor, HCURSOR (WINAPI *)(HCURSOR), SetCursor)(c); }
 
@@ -156,6 +159,8 @@ int rl_plat_write(int fd, const void *buf, unsigned n)
 { return s_bound ? CRT(write, int (__cdecl *)(int, const void *, unsigned))(fd, buf, n) : _write(fd, buf, n); }
 int rl_plat_lseek(int fd, int off, int origin)
 { return s_bound ? CRT(lseek, int (__cdecl *)(int, int, int))(fd, off, origin) : (int)_lseek(fd, off, origin); }
+int rl_plat_filelength(int fd)
+{ return s_bound ? CRT(filelength, int (__cdecl *)(int))(fd) : (int)_filelength(fd); }
 int rl_plat_chdir(const char *path)
 { return s_bound ? CRT(chdir, int (__cdecl *)(const char *))(path) : _chdir(path); }
 int32_t rl_plat_time(int32_t *t)
