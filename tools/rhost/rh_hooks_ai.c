@@ -477,7 +477,7 @@ hook_t RH_HOOKS_AI[] = {
     { "ai_first_owned_realm", 0x49d5e0u, (void *)w_ai_first_owned_realm, 0, 0, 0, 0, "" },
     { "ai_step_noop", 0x49f96cu, (void *)w_ai_step_noop, 0, 0, 0, 0, "" },
     { "ai_most_hostile", 0x4a0309u, (void *)w_ai_most_hostile, 0, 0, 0, 0, "" },
-    { "eco_eval_candidate", 0x44da99u, (void *)w_eco_eval_candidate, 0, 0, 0, 0, "" },
+    { "eco_eval_candidate", 0x44da99u, (void *)w_eco_eval_candidate, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },   /* ~130k calls in one frame of a custom game start (custom-tour f3388): shadowed every call, that frame passed the 60 s stall watchdog */
     { "eco_select_candidate", 0x44dd4du, (void *)w_eco_select_candidate, 0, 0, 0, 0, "" },
     { "eco_settle_stock_a", 0x44d60du, (void *)w_eco_settle_stock_a, 0, 0, 0, 0, "" },
     { "eco_plan_production", 0x44d374u, (void *)w_eco_plan_production, 0, 0, 0, 0, "" },
