@@ -1809,7 +1809,7 @@ static void adjust_rel(int p1, int p2, int delta)
 /* Port of FUN_004a1b29 — transfer `amount` cash p2→p1 (a no-op when amount is
  * 0, as the tribute handlers call it), bump the pair gift counter, sour the
  * relation by 4 (low clamp only), and stash the giver byte. */
-static void ai_diplomacy_gift(int p1, int p2, uint8_t giver, int amount)
+void ai_diplomacy_gift(int p1, int p2, uint8_t giver, int amount)   /* rl_4a1b29 wraps it (route a) */
 {
     uint8_t *s2 = STRAT_REC(p2);
     if (amount <= I32(s2 + STRAT_CASH)) {
@@ -2190,7 +2190,7 @@ static void engine_army_ai_assign_deployment(int player, int occ)
  * `player`.  Drops the target (returns 0) when the player has no lord, when the
  * target realm belongs to the player's lord and is undefended (overhead-lo == 0),
  * or when the target realm is the player's own; otherwise keeps it. */
-static int engine_army_ai_validate_campaign_target(int target, int player)
+int engine_army_ai_validate_campaign_target(int target, int player)   /* rl_49ff71 wraps it (route a) */
 {
     uint8_t *s = STRAT_REC(player);
     if (s[STRAT_LORD] == 0)

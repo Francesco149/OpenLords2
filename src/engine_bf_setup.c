@@ -1324,8 +1324,7 @@ int bf_4787a4(void)
         S32(s_slot_00553fb0) = ARMY(int32_t, 0x53fb9c);
         s_slot_0055307c = ARMY(uint8_t, 0x53fba0);
         s_slot_00569588 = ARMY(uint8_t, 0x53fba1);
-        /* TODO(bf-link): castles_read_scenario (save.c, not linked in rhost; the port takes a path) */
-        return (int)engine_retail_call(0x4aea70u, 1, s_slot_0056822c);
+        return rl_4aea70(S32(s_slot_0056822c));   /* castles_read_scenario */
     }
     ARMY(int16_t, 0x53fb94) = 0;
     ARMY(int16_t, 0x53fb96) = 0;
