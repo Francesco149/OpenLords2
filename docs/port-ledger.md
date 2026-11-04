@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **967** (39.5%) — tested 840, ported 127
-- code bytes touched: **49.4%** (413,879 / 838,629 B)
-- unported: **1480**
+- touched: **973** (39.8%) — tested 840, ported 133
+- code bytes touched: **49.6%** (416,008 / 838,629 B)
+- unported: **1474**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (840) — ported + host unit suite
@@ -94,7 +94,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40477b | FUN_0040477b | 291 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h (+1) |
 | 0x40489e | FUN_0040489e | 111 | engine_tick_cadence.h |
 | 0x40490d | FUN_0040490d | 313 | engine_tick_cadence.h |
-| 0x404a46 | FUN_00404a46 | 230 | engine.c, engine.h, engine_menu_input.c (+3) |
+| 0x404a46 | FUN_00404a46 | 230 | engine.c, engine.h, engine_bf.h (+5) |
 | 0x404b2c | FUN_00404b2c | 109 | engine.h, engine_rng.c, engine_territory.c |
 | 0x404b99 | FUN_00404b99 | 466 | engine.c, engine.h, engine_rng.c |
 | 0x404d6b | FUN_00404d6b | 43 | engine_armory.c, engine_army_ai.c, engine_input.c (+5) |
@@ -862,7 +862,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (127) — reimplemented, no host test yet
+## ported (133) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -962,6 +962,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x463fa5 | FUN_00463fa5 | 273 | drawb_table_463fa5.h |
 | 0x4640b6 | FUN_004640b6 | 339 | drawb_stripb_4640b6.h |
 | 0x464209 | FUN_00464209 | 345 | drawb_stripb_464209.h |
+| 0x46eb3f | FUN_0046eb3f | 57 | engine_bf_unit.c |
+| 0x46ebe4 | FUN_0046ebe4 | 138 | engine_bf_unit.c |
 | 0x472e46 | FUN_00472e46 | 595 | engine.c |
 | 0x47309e | FUN_0047309e | 10915 | engine.c |
 | 0x476a5d | FUN_00476a5d | 74 | engine.c |
@@ -969,8 +971,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x476da9 | FUN_00476da9 | 120 | engine.c |
 | 0x476e21 | FUN_00476e21 | 116 | engine.c |
 | 0x4782c5 | FUN_004782c5 | 340 | engine.c |
+| 0x478952 | FUN_00478952 | 53 | engine_bf_group.c |
 | 0x481b9a | FUN_00481b9a | 1399 | engine.c |
 | 0x482111 | FUN_00482111 | 476 | engine.c |
+| 0x4822ed | FUN_004822ed | 644 | engine_bf_unit.c |
+| 0x491f17 | FUN_00491f17 | 359 | engine_bf_unit.c |
+| 0x49459a | FUN_0049459a | 878 | engine_bf_unit.c |
 | 0x4978ad | FUN_004978ad | 129 | engine.c, engine.h |
 | 0x498458 | FUN_00498458 | 132 | engine.c |
 | 0x4996c8 | FUN_004996c8 | 244 | engine_armory.c |

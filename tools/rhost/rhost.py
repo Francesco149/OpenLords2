@@ -549,7 +549,10 @@ def cmd_verify(a):
     a.exe_pin = os.path.join(LOCAL_RUNS, f"verify-{os.getpid()}.exe")   # every pass runs this exact build
     shutil.copy2(os.path.join(BUILD, "rhost.exe"), a.exe_pin)
     _PINNED = True
-    tot, depth, todo, failed = {}, {}, list(VERIFY_HOOKS), []
+    sel = [h for h in VERIFY_HOOKS if not a.hooks or re.search(a.hooks, h)]   # --hooks RE: a subset (no evidence)
+    if not sel:
+        raise SystemExit(f"--hooks {a.hooks!r}: no hook rows match")
+    tot, depth, todo, failed = {}, {}, list(sel), []
     for p in range(1, 17):
         a.hook = ",".join("shadow:" + h for h in todo)
         batch, bdir, res, out = run_batch(a, runs, f"verify{p}")
@@ -572,23 +575,23 @@ def cmd_verify(a):
         todo = [h for h in todo if h not in reached]
         if not reached or not todo:
             break
-    a.hook, a.fb_hash = ",".join("replace:" + h for h in VERIFY_HOOKS), True
+    a.hook, a.fb_hash = ",".join("replace:" + h for h in sel), True
     batch, bdir, res, out = run_batch(a, runs, "verify-hybrid")
-    print(f"--- hybrid pass: {len(VERIFY_HOOKS)} hook(s) replaced, corpus --check")
+    print(f"--- hybrid pass: {len(sel)} hook(s) replaced, corpus --check")
     print_results(res, names)
     hyb = {n: d for n, d in expected_diffs(names, res, a.target).items() if d}
     for n, d in hyb.items():
         print(f"  {n}: FAIL {'; '.join(d)}")
     print("\nhook                          depth    calls  diverge  skipped  scenarios")
-    for h in VERIFY_HOOKS:
+    for h in sel:
         t = tot.get(h, [0, 0, 0, 0])
         print(f"{h:28s} {depth.get(h, '-'):>5} {t[0]:8d} {t[1]:8d} {t[2]:8d} {t[3]:4d}/{len(names)}")
     for f in failed:
         print(f"  RUN FAILED {f}")
-    print(f"\nVERIFY: {sum(1 for h in VERIFY_HOOKS if tot.get(h, [0, 0])[1] == 0 and h in tot)}/{len(VERIFY_HOOKS)} reached with "
+    print(f"\nVERIFY: {sum(1 for h in sel if tot.get(h, [0, 0])[1] == 0 and h in tot)}/{len(sel)} reached with "
           f"0 divergences, {sum(1 for t in tot.values() if t[1])} diverging, {len(todo)} never called; "
           f"hybrid {'PASS' if not hyb else f'FAIL ({len(hyb)})'}; {len(failed)} failed run(s)")
-    if not a.only and not failed:   # the whole corpus: record the evidence (docs/STATUS.md's runtime axis)
+    if not a.only and not a.hooks and not failed:   # the whole corpus: record the evidence (docs/STATUS.md's runtime axis)
         src = "".join(open(os.path.join(HERE, f)).read() for f in os.listdir(HERE) if f.startswith("rh_hooks") and f.endswith(".c"))
         vas = dict(re.findall(r'\{\s*"(\w+)",\s*(0x[0-9a-fA-F]+)u', src))
         ep = os.path.join(ROOT, "docs", "rhost-evidence.json")
@@ -785,7 +788,9 @@ def main():
     sp.add_argument("--bless", action="store_true")
     sp.add_argument("--tracked", action="store_true", help="only scenarios git tracks (the pre-commit gate)")
     sp.set_defaults(fn=cmd_corpus)
-    sp = sub.add_parser("verify"); common(sp); sp.add_argument("--only"); sp.set_defaults(fn=cmd_verify)
+    sp = sub.add_parser("verify"); common(sp); sp.add_argument("--only")
+    sp.add_argument("--hooks", help="regex: verify only the matching hook rows (iteration; writes no evidence)")
+    sp.set_defaults(fn=cmd_verify)
     sp = sub.add_parser("coverage"); common(sp); sp.add_argument("scenarios", nargs="*"); sp.add_argument("--only")
     sp.set_defaults(fn=cmd_coverage)
     sp = sub.add_parser("view"); common(sp); sp.add_argument("scenario"); sp.add_argument("--b"); sp.add_argument("--b-hook", dest="b_hook")

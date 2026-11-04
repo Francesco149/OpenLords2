@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 840,
-  "ported": 127,
-  "unported": 1480,
+  "ported": 133,
+  "unported": 1474,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 967,
-  "pct_touched": 39.5,
+  "touched": 973,
+  "pct_touched": 39.8,
   "pct_tested": 34.3,
   "bytes_total": 838629,
-  "bytes_touched": 413879,
-  "pct_bytes_touched": 49.4
+  "bytes_touched": 416008,
+  "pct_bytes_touched": 49.6
  },
  "orphan_refs": [
   "0x004148",
@@ -942,6 +942,8 @@
    "src": [
     "src/engine.c",
     "src/engine.h",
+    "src/engine_bf.h",
+    "src/engine_bf_common.c",
     "src/engine_menu_input.c",
     "src/engine_rng.c",
     "src/engine_turn.h",
@@ -13375,8 +13377,10 @@
    "name": "FUN_0046eb3f",
    "size": 57,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_unit.c"
+   ]
   },
   {
    "va": "0x46eb78",
@@ -13399,8 +13403,10 @@
    "name": "FUN_0046ebe4",
    "size": 138,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_unit.c"
+   ]
   },
   {
    "va": "0x46ec6e",
@@ -14154,8 +14160,10 @@
    "name": "FUN_00478952",
    "size": 53,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x478987",
@@ -14709,8 +14717,10 @@
    "name": "FUN_004822ed",
    "size": 644,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_unit.c"
+   ]
   },
   {
    "va": "0x482571",
@@ -15852,8 +15862,10 @@
    "name": "FUN_00491f17",
    "size": 359,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_unit.c"
+   ]
   },
   {
    "va": "0x49207e",
@@ -15983,8 +15995,10 @@
    "name": "FUN_0049459a",
    "size": 878,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_unit.c"
+   ]
   },
   {
    "va": "0x494908",

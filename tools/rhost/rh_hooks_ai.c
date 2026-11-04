@@ -99,6 +99,7 @@ static engine_dirty_rect_state_t s_dirty;
 void rh_combat_bind_seams(void);   /* rh_hooks_combat.c */
 void rh_battle_bind_seams(void);   /* rh_hooks_battle.c */
 void rh_economy_bind_seams(void);  /* rh_hooks_economy.c */
+void rh_bf_bind_seams(void);       /* rh_hooks_bf.c */
 void rh_port_bind_once(void)
 {
     static int done;
@@ -134,6 +135,7 @@ void rh_port_bind_once(void)
     rh_combat_bind_seams();
     rh_battle_bind_seams();
     rh_economy_bind_seams();
+    rh_bf_bind_seams();
     rh_log("rh_port: %d save-schema aliases match retail's table; seams bound\n", SAVE_SCHEMA_COUNT);
 }
 
