@@ -89,6 +89,67 @@ BOOL rl_plat_WinHelpA(HWND w, const char *file, UINT cmd, ULONG_PTR data)
 HCURSOR rl_plat_SetCursor(HCURSOR c)
 { return IMP(SetCursor, HCURSOR (WINAPI *)(HCURSOR), SetCursor)(c); }
 
+/* ui4: dsound / ddraw are loaded on first use in the standalone (rhost.exe links neither) */
+static FARPROC dll_proc(const char *dll, const char *name)
+{
+    HMODULE m = LoadLibraryA(dll);
+    return m ? GetProcAddress(m, name) : NULL;
+}
+HRESULT rl_plat_DirectSoundCreate(const GUID *g, void **ds, void *outer)
+{
+    typedef HRESULT (WINAPI *f_t)(const GUID *, void **, void *);
+    f_t f = s_bound ? (f_t)(uintptr_t)*(volatile uint32_t *)(uintptr_t)k_slot_DirectSoundCreate
+                    : (f_t)(uintptr_t)dll_proc("dsound.dll", "DirectSoundCreate");
+    return f ? f(g, ds, outer) : (HRESULT)0x80004005;
+}
+HRESULT rl_plat_DirectDrawCreate(GUID *g, void **dd, void *outer)
+{
+    typedef HRESULT (WINAPI *f_t)(GUID *, void **, void *);
+    f_t f = s_bound ? (f_t)(uintptr_t)*(volatile uint32_t *)(uintptr_t)k_slot_DirectDrawCreate
+                    : (f_t)(uintptr_t)dll_proc("ddraw.dll", "DirectDrawCreate");
+    return f ? f(g, dd, outer) : (HRESULT)0x80004005;
+}
+MMRESULT rl_plat_timeKillEvent(UINT id)
+{ return IMP(timeKillEvent, MMRESULT (WINAPI *)(UINT), timeKillEvent)(id); }
+BOOL rl_plat_UpdateWindow(HWND w)
+{ return IMP(UpdateWindow, BOOL (WINAPI *)(HWND), UpdateWindow)(w); }
+HDC rl_plat_GetDC(HWND w)
+{ return IMP(GetDC, HDC (WINAPI *)(HWND), GetDC)(w); }
+int rl_plat_ReleaseDC(HWND w, HDC dc)
+{ return IMP(ReleaseDC, int (WINAPI *)(HWND, HDC), ReleaseDC)(w, dc); }
+int rl_plat_GetDeviceCaps(HDC dc, int index)
+{ return IMP(GetDeviceCaps, int (WINAPI *)(HDC, int), GetDeviceCaps)(dc, index); }
+UINT rl_plat_GetPaletteEntries(HPALETTE pal, UINT start, UINT n, PALETTEENTRY *e)
+{ return IMP(GetPaletteEntries, UINT (WINAPI *)(HPALETTE, UINT, UINT, PALETTEENTRY *), GetPaletteEntries)(pal, start, n, e); }
+UINT rl_plat_SetSystemPaletteUse(HDC dc, UINT use)
+{ return IMP(SetSystemPaletteUse, UINT (WINAPI *)(HDC, UINT), SetSystemPaletteUse)(dc, use); }
+int rl_plat_GetSystemMetrics(int index)
+{ return IMP(GetSystemMetrics, int (WINAPI *)(int), GetSystemMetrics)(index); }
+LONG rl_plat_GetWindowLongA(HWND w, int index)
+{ return IMP(GetWindowLongA, LONG (WINAPI *)(HWND, int), GetWindowLongA)(w, index); }
+LONG rl_plat_SetWindowLongA(HWND w, int index, LONG v)
+{ return IMP(SetWindowLongA, LONG (WINAPI *)(HWND, int, LONG), SetWindowLongA)(w, index, v); }
+BOOL rl_plat_SetRect(RECT *r, int l, int t, int ri, int b)
+{ return IMP(SetRect, BOOL (WINAPI *)(RECT *, int, int, int, int), SetRect)(r, l, t, ri, b); }
+HMENU rl_plat_GetMenu(HWND w)
+{ return IMP(GetMenu, HMENU (WINAPI *)(HWND), GetMenu)(w); }
+BOOL rl_plat_AdjustWindowRectEx(RECT *r, DWORD style, BOOL menu, DWORD ex)
+{ return IMP(AdjustWindowRectEx, BOOL (WINAPI *)(RECT *, DWORD, BOOL, DWORD), AdjustWindowRectEx)(r, style, menu, ex); }
+BOOL rl_plat_SetWindowPos(HWND w, HWND after, int x, int y, int cx, int cy, UINT fl)
+{ return IMP(SetWindowPos, BOOL (WINAPI *)(HWND, HWND, int, int, int, int, UINT), SetWindowPos)(w, after, x, y, cx, cy, fl); }
+BOOL rl_plat_SystemParametersInfoA(UINT a, UINT ui, void *pv, UINT win)
+{ return IMP(SystemParametersInfoA, BOOL (WINAPI *)(UINT, UINT, void *, UINT), SystemParametersInfoA)(a, ui, pv, win); }
+BOOL rl_plat_GetWindowRect(HWND w, RECT *r)
+{ return IMP(GetWindowRect, BOOL (WINAPI *)(HWND, RECT *), GetWindowRect)(w, r); }
+BOOL rl_plat_PeekMessageA(MSG *m, HWND w, UINT lo, UINT hi, UINT rm)
+{ return IMP(PeekMessageA, BOOL (WINAPI *)(MSG *, HWND, UINT, UINT, UINT), PeekMessageA)(m, w, lo, hi, rm); }
+BOOL rl_plat_GetMessageA(MSG *m, HWND w, UINT lo, UINT hi)
+{ return IMP(GetMessageA, BOOL (WINAPI *)(MSG *, HWND, UINT, UINT), GetMessageA)(m, w, lo, hi); }
+BOOL rl_plat_TranslateMessage(const MSG *m)
+{ return IMP(TranslateMessage, BOOL (WINAPI *)(const MSG *), TranslateMessage)(m); }
+LRESULT rl_plat_DispatchMessageA(const MSG *m)
+{ return IMP(DispatchMessageA, LRESULT (WINAPI *)(const MSG *), DispatchMessageA)(m); }
+
 /* smackw32: the standalone loads it on first use (none = every call fails / does nothing) */
 static FARPROC smack(int ord)
 {

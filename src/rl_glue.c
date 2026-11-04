@@ -800,7 +800,7 @@ int rl_436b59(void)
     }
     if (g_combat_flag_53f248 == 0)
         goto map;
-    engine_retail_call(0x426d11u, 1, 0u);   /* TODO(rl-extern): 0x426d11 (stop the music stream) */
+    rl_426d11(0);   /* 0x426d11 (stop the music stream; rl ui4) */
     {
         int r = rl_42d91b((int)(uintptr_t)(g_rl_4d5590 + 16 * g_castle_tier), 158, 20, 0, 0);
         if (r == 0) {

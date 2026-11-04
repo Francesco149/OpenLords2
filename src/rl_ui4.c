@@ -1191,3 +1191,1156 @@ int rl_42847c(void)
     }
     return 0xf0;
 }
+
+/* ================================================================ DirectSound init, the stream stop, the cue release;
+ * DirectDraw init, surfaces, the palette */
+
+/* other partitions' globals (declared as in their headers) */
+extern int32_t g_rl_53f22c;          /* DAT_0053f22c (rl_ui3_globals.h): the desktop's bits per pixel */
+extern int32_t g_rl_4e65a0;          /* DAT_004e65a0 (rl_ui3_globals.h): the screen width */
+extern int32_t g_rl_4e6974;          /* DAT_004e6974 (rl_glue_globals.h): the IDirectDraw */
+extern uint8_t g_rl_4ea1b0[0x300];   /* DAT_004ea1b0 (rl_glue_globals.h): the screen palette (3 B a colour) */
+extern uint8_t g_rl_4d50f0[0x40];    /* DAT_004d50f0 (rl_ui2_globals.h): the palette's fixed ends */
+extern uint8_t g_rl_4e5a00[4];       /* hWndMain (rl_misc_globals.h) */
+
+/* COM through the object's own vtable (as rl_io.c) */
+#define VT(obj, off) (*(void **)(uintptr_t)(*(volatile uint32_t *)(uintptr_t)(obj) + (off)))
+typedef HRESULT (WINAPI *rl_com0_t)(uint32_t self);
+typedef HRESULT (WINAPI *rl_com1_t)(uint32_t self, uint32_t a);
+typedef HRESULT (WINAPI *rl_com2_t)(uint32_t self, uint32_t a, uint32_t b);
+typedef HRESULT (WINAPI *rl_com3_t)(uint32_t self, uint32_t a, uint32_t b, uint32_t c);
+typedef HRESULT (WINAPI *rl_com4_t)(uint32_t self, uint32_t a, uint32_t b, uint32_t c, uint32_t d);
+typedef HRESULT (WINAPI *rl_com5_t)(uint32_t self, uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t e);
+#define COM0(o, off)                ((rl_com0_t)VT(o, off))((uint32_t)(o))
+#define COM1(o, off, a)             ((rl_com1_t)VT(o, off))((uint32_t)(o), (uint32_t)(a))
+#define COM2(o, off, a, b)          ((rl_com2_t)VT(o, off))((uint32_t)(o), (uint32_t)(a), (uint32_t)(b))
+#define COM3(o, off, a, b, c)       ((rl_com3_t)VT(o, off))((uint32_t)(o), (uint32_t)(a), (uint32_t)(b), (uint32_t)(c))
+#define COM4(o, off, a, b, c, d)    ((rl_com4_t)VT(o, off))((uint32_t)(o), (uint32_t)(a), (uint32_t)(b), (uint32_t)(c), (uint32_t)(d))
+#define COM5(o, off, a, b, c, d, e) ((rl_com5_t)VT(o, off))((uint32_t)(o), (uint32_t)(a), (uint32_t)(b), (uint32_t)(c), (uint32_t)(d), (uint32_t)(e))
+
+#define PPDS      (*(volatile uint32_t *)g_bf_4d4760)                           /* ppDS: the IDirectSound */
+#define DS_HR     g_bf_522b58                                                   /* DAT_00522b58: the last HRESULT */
+#define DS_PRIM   AT(uint32_t, g_rl_522aec, 0x522aecu, 0x522af0u)               /* DAT_00522af0: the primary buffer */
+#define DS_CUE    AT(uint32_t, g_rl_522aec, 0x522aecu, 0x522aecu)               /* DAT_00522aec: the one cue buffer */
+#define DS_SFX(i) g_rl_522b00[i]                                                /* DAT_00522b00[i]: the effect bank (20) */
+#define DS_TIMER(k) g_rl_522b00[20 + (k)]                                       /* uTimerID[k] */
+#define DS_STREAM(k) AT(uint32_t, g_rl_522b60, 0x522b60u, 0x522b80u + 4u * (uint32_t)(k))   /* DAT_00522b80[k] */
+#define DS_PERIOD AT(uint32_t, g_rl_4d4754, 0x4d4754u, 0x4d4758u)               /* uPeriod */
+#define WFX(off)  (&AT(uint8_t, g_rl_522b90, 0x522b90u, 0x522b90u + (off)))     /* the primary's WAVEFORMATEX */
+#define HWNDMAIN  AT(uint32_t, g_rl_4e5a00, 0x4e5a00u, 0x4e5a00u)               /* hWndMain */
+#define S4D47(va) STRV(g_rl_4d4768, 0x4d4768u, va)
+static int ds_err(int hr) { return (int)engine_retail_call(0x427d72u, 1, (uint32_t)hr); }   /* TODO(rl-extern): 0x427d72 (the DS error's index) */
+static int ds_close(void) { return (int)engine_retail_call(0x425d35u, 0); }                 /* TODO(rl-extern): 0x425d35 (DirectSound off) */
+
+/* Port of FUN_00425ded (94 B) — the primary buffer's format DAT_00522b90: PCM, 2 channels, 11025 Hz, block 2, 22050
+ * B/s (the block x the rate), 8 bits, cbSize 0. EAX = the byte rate. Route (b): audio.c is not linked. */
+int rl_425ded(void)
+{
+    memset(WFX(0), 0, 0x12);
+    *(int16_t *)WFX(0) = 1;
+    *(int16_t *)WFX(2) = 2;
+    *(int32_t *)WFX(4) = 11025;
+    *(int16_t *)WFX(0xc) = 2;
+    *(int32_t *)WFX(8) = (uint16_t)*(int16_t *)WFX(0xc) * *(int32_t *)WFX(4);
+    *(int16_t *)WFX(0xe) = 8;
+    return *(int32_t *)WFX(8);
+}
+
+/* Port of FUN_00425b10 (549 B) — DirectSound on (once: ppDS set → 1): DirectSoundCreate (fails: its error index
+ * 0x427d72 logged + 1, EAX 0), the format (0x425ded), co-operative level 2 (DSSCL_PRIORITY) on hWndMain, the primary
+ * buffer (DSBUFFERDESC 20 B, DSBCAPS_PRIMARYBUFFER) into DAT_00522af0 and its format set (a failure logs the HRESULT
+ * + 1, DirectSound off 0x425d35, EAX 0); the effect bank DAT_00522b00[20], the two streams DAT_00522b80 and their
+ * timers zeroed; "OK :DS Installed.", EAX 1. Every HRESULT in DAT_00522b58. Route (b). */
+int rl_425b10(void)
+{
+    if (PPDS != 0) return 1;
+    DS_HR = (int32_t)rl_plat_DirectSoundCreate(NULL, (void **)g_bf_4d4760, NULL);
+    if (DS_HR != 0) {
+        DS_HR = ds_err(DS_HR);
+        rl_4afab9(S4D47(0x4d4768), 0, DS_HR + 1);   /* "ERR:DS failed open " */
+        return 0;
+    }
+    rl_425ded();
+    uint32_t desc[5] = { 20, 1, 0, 0, 0 };   /* dwSize, DSBCAPS_PRIMARYBUFFER, 0 bytes, reserved, no format */
+    DS_HR = (int32_t)COM2(PPDS, 0x18, HWNDMAIN, 2);   /* SetCooperativeLevel */
+    if (DS_HR != 0) {
+        rl_4afab9(S4D47(0x4d477c), 0, DS_HR + 1);   /* "ERR:DS failed set co-op " */
+        ds_close();
+        return 0;
+    }
+    DS_HR = (int32_t)COM3(PPDS, 0x0c, (uintptr_t)desc, (uintptr_t)&DS_PRIM, 0);   /* CreateSoundBuffer */
+    if (DS_HR != 0) {
+        rl_4afab9(S4D47(0x4d4798), 0, DS_HR + 1);   /* "ERR:DS failed setup primary buffer " */
+        ds_close();
+        return 0;
+    }
+    DS_HR = (int32_t)COM1(DS_PRIM, 0x38, (uintptr_t)WFX(0));   /* SetFormat */
+    if (DS_HR != 0) {
+        rl_4afab9(S4D47(0x4d47bc), 0, DS_HR + 1);   /* "ERR:DS failed to change primary buffer format " */
+        ds_close();
+        return 0;
+    }
+    for (int i = 0; i < 20; i++) DS_SFX(i) = 0;
+    for (int i = 0; i < 2; i++) DS_STREAM(i) = 0;
+    for (int i = 0; i < 2; i++) DS_TIMER(i) = 0;
+    rl_4afab9(S4D47(0x4d47ec), 0, 0);   /* "OK :DS Installed." */
+    return 1;
+}
+
+/* Port of FUN_00426d11 (196 B) — stop stream k (0 music, 1 speech) when DirectSound, its timer and its buffer are
+ * all live: kill the timer (timeEndPeriod uPeriod), clear it, Stop the buffer (HRESULT in DAT_00522b58) and close the
+ * stream's file (0x4b97f9 on the stream record DAT_00522bb0 + 84 k: its HMMIO at +4, its format at +0). Route (b). */
+#define ST_ADDR(k, off) ((int)(uintptr_t)&AT(uint32_t, g_rl_522bb0, 0x522bb0u, 0x522bb0u + 84u * (uint32_t)(k) + (off)))
+int rl_426d11(int k)
+{
+    if (PPDS == 0 || DS_TIMER(k) == 0 || DS_STREAM(k) == 0) return 0;
+    rl_plat_timeKillEvent((UINT)DS_TIMER(k));
+    rl_plat_timeEndPeriod(DS_PERIOD);
+    DS_TIMER(k) = 0;
+    DS_HR = (int32_t)COM0(DS_STREAM(k), 0x48);   /* Stop */
+    rl_4b97f9(ST_ADDR(k, 4), ST_ADDR(k, 0));
+    return 0;
+}
+
+/* Port of FUN_00427d19 (89 B) — release the cue buffer DAT_00522aec (Stop, Release, cleared). EAX: Release's (the
+ * caller's when there is none). Route (b): audio.c's audio_cue_release keeps its own buffer. */
+int rl_427d19(void)
+{
+    if (PPDS == 0 || DS_CUE == 0) return 0;
+    COM0(DS_CUE, 0x48);
+    int r = (int)COM0(DS_CUE, 0x08);
+    DS_CUE = 0;
+    return r;
+}
+
+/* ---------------------------------------------------------------- DirectDraw (gfx.c, not linked: route (b)) */
+#define DD_OBJ     g_rl_4e6974                                  /* DAT_004e6974: the IDirectDraw */
+#define DD_PRIMARY AT(uint32_t, g_rl_4eabd0, 0x4eabd0u, 0x4eabd0u)   /* DAT_004eabd0: the primary surface */
+#define DD_BACK    g_rl_4eafac                                  /* DAT_004eafac: the composition surface */
+#define DD_FULL    g_rl_53f228                                  /* DAT_0053f228: full screen (0: a window) */
+#define S4D51(va)  STRV(g_rl_4d5130, 0x4d5130u, va)
+#define S4D52(va)  STRV(g_rl_4d51f0, 0x4d51f0u, va)
+static int dd_err(int hr) { return (int)engine_retail_call(0x42f60eu, 1, (uint32_t)hr); }   /* TODO(rl-extern): 0x42f60e (the DD error's index) */
+static int pal_window(void) { return (int)engine_retail_call(0x42f449u, 0); }               /* TODO(rl-extern): 0x42f449 (the windowed palette) */
+
+/* Port of FUN_0042f306 (323 B) — the full-screen palette's PALETTEENTRYs DAT_005165b0: entry 0 from DAT_004d50f0,
+ * 1..254 from the screen palette DAT_004ea1b0 (flags 4: PC_NOCOLLAPSE), 255 from DAT_004d512b (IDA's byte_4D4E2E
+ * [3 x 255]); EAX 255. Route (b). */
+int rl_42f306(void)
+{
+    uint8_t *e = g_rl_5165b0;
+    for (int i = 0; i < 1; i++) {
+        e[4 * i + 0] = AT(uint8_t, g_rl_4d50f0, 0x4d50f0u, 0x4d50f0 + 3 * i);
+        e[4 * i + 1] = AT(uint8_t, g_rl_4d50f0, 0x4d50f0u, 0x4d50f1 + 3 * i);
+        e[4 * i + 2] = AT(uint8_t, g_rl_4d50f0, 0x4d50f0u, 0x4d50f2 + 3 * i);
+        e[4 * i + 3] = 0;
+    }
+    for (int j = 1; j < 255; j++) {
+        e[4 * j + 0] = g_rl_4ea1b0[3 * j];
+        e[4 * j + 1] = g_rl_4ea1b0[3 * j + 1];
+        e[4 * j + 2] = g_rl_4ea1b0[3 * j + 2];
+        e[4 * j + 3] = 4;
+    }
+    for (int k = 255; k < 256; k++) {
+        e[4 * k + 0] = AT(uint8_t, g_rl_4d50f0, 0x4d50f0u, 0x4d4e2e + 3 * k);
+        e[4 * k + 1] = AT(uint8_t, g_rl_4d50f0, 0x4d50f0u, 0x4d4e2f + 3 * k);
+        e[4 * k + 2] = AT(uint8_t, g_rl_4d50f0, 0x4d50f0u, 0x4d4e30 + 3 * k);
+        e[4 * k + 3] = 0;
+    }
+    return 255;
+}
+
+/* Port of FUN_0042eb7c (277 B) — clear the screen: UpdateWindow, then a colour-0 fill Blt (DDBLT_COLORFILL |
+ * DDBLT_WAIT; a 100-byte DDBLTFX whose other fields are stack residue) of the composition surface and the primary
+ * (full screen), or of the primary's client rect DAT_004ea180 (a window); a failure logs (1 / 2 / the HRESULT), EAX 0;
+ * else 1. */
+int rl_42eb7c(void)
+{
+    uint32_t fx[25];
+    memset(fx, 0, sizeof fx);   /* retail: only dwSize and dwFillColor are set; the rest is residue no Blt reads */
+    rl_plat_UpdateWindow((HWND)(uintptr_t)HWNDMAIN);
+    fx[0] = 100;
+    fx[20] = 0;
+    if (DD_FULL != 0) {
+        if (COM5(DD_BACK, 0x14, 0, 0, 0, 0x1000400u, (uintptr_t)fx) != 0) {
+            rl_4afab9(S4D52(0x4d51f0), 0, 1);   /* "ERR:DD Clearing Fill failed no:" */
+            return 0;
+        }
+        if (COM5(DD_PRIMARY, 0x14, 0, 0, 0, 0x1000400u, (uintptr_t)fx) != 0) {
+            rl_4afab9(S4D52(0x4d5210), 0, 2);
+            return 0;
+        }
+    } else {
+        HRESULT hr = COM5(DD_PRIMARY, 0x14, (uintptr_t)g_rl_4ea180, 0, 0, 0x1000400u, (uintptr_t)fx);
+        if (hr != 0) {
+            rl_4afab9(S4D52(0x4d5230), 0, (int)hr);   /* "ERR:DD Clearing(W) Fill failed ddrval:" */
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* Port of FUN_0042e5c0 (1254 B) — DirectDraw on: the desktop's colour depth DAT_0053f22c (BITSPIXEL x PLANES; 16 when
+ * NUMCOLORS is -1); not 8 bpp forces full screen DAT_0053f228 (the system palette then saved, GetPaletteEntries on a
+ * NULL palette into DAT_00515d90); the screen size DAT_004e65a0 / DAT_004ea838; the IDirectDraw DAT_004e6974 (or
+ * DirectDrawCreate: fails → log, EAX 0) and its co-operative level (0x13 full screen, 8 a window). Full screen: the
+ * window's style made a popup, the mode xRight x yBottom x 8 set. A window: the style made overlapped, sized to the
+ * canvas and centred (DAT_004eabb8 / DAT_004eabb0), "OK :DD Kept resolution.". Then the pending messages are pumped;
+ * EAX 1. HOST-LEVEL (it creates the DirectDraw object, styles the window, pumps the message queue): no row. */
+int rl_42e5c0(void)
+{
+    HWND w = (HWND)(uintptr_t)HWNDMAIN;
+    HDC dc = rl_plat_GetDC(NULL);
+    int numcolors = rl_plat_GetDeviceCaps(dc, 24);
+    int bits = rl_plat_GetDeviceCaps(dc, 12);
+    g_rl_53f22c = rl_plat_GetDeviceCaps(dc, 14) * bits;
+    if (numcolors == -1) g_rl_53f22c = 16;
+    rl_plat_ReleaseDC(NULL, dc);
+    if (DD_FULL == 0) DD_FULL = g_rl_53f22c != 8;
+    if (DD_FULL != 0) rl_plat_GetPaletteEntries(NULL, 0, 0x100, (PALETTEENTRY *)g_rl_515d90);
+    g_rl_4e65a0 = rl_plat_GetSystemMetrics(0);
+    g_rl_4ea838 = rl_plat_GetSystemMetrics(1);
+    uint32_t dd;
+    HRESULT hr;
+    if (DD_OBJ != 0) {
+        dd = (uint32_t)DD_OBJ;
+        hr = 0;
+    } else
+        hr = rl_plat_DirectDrawCreate(NULL, (void **)&dd, NULL);
+    if (hr != 0) {
+        rl_4afab9(S4D51(0x4d5130), 0, (int)hr);   /* "ERR:DD Enable error level:" */
+        return 0;
+    }
+    if (DD_OBJ == 0) {
+        hr = COM2(dd, 0x50, (uintptr_t)w, DD_FULL != 0 ? 0x13 : 8);   /* SetCooperativeLevel */
+        if (hr != 0) {
+            rl_4afab9(S4D51(0x4d514c), 0, (int)hr);
+            return 0;
+        }
+        rl_4afab9(S4D51(0x4d5170), 0, 0);
+    }
+    if (DD_FULL != 0) {
+        LONG st = rl_plat_GetWindowLongA(w, -16) | (LONG)0x90000000u;
+        rl_plat_SetWindowLongA(w, -16, st & (LONG)0xff3bffffu);
+        hr = COM3(dd, 0x54, g_gfx_canvas_width, g_gfx_canvas_height, 8);   /* SetDisplayMode */
+        if (hr != 0) {
+            rl_4afab9(S4D51(0x4d5190), 0, (int)hr);
+            return 0;
+        }
+        rl_4afab9(S4D51(0x4d51ac), 0, 0);
+    } else {
+        LONG st = (rl_plat_GetWindowLongA(w, -16) & 0x7f30ffff) | 0xcf0000;
+        rl_plat_SetWindowLongA(w, -16, st);
+        RECT rc, work;
+        rl_plat_SetRect(&rc, 0, 0, g_gfx_canvas_width, g_gfx_canvas_height);
+        LONG ex = rl_plat_GetWindowLongA(w, -20);
+        BOOL menu = rl_plat_GetMenu(w) != NULL;
+        rl_plat_AdjustWindowRectEx(&rc, (DWORD)rl_plat_GetWindowLongA(w, -16), menu, (DWORD)ex);
+        g_rl_4eabb8 = (g_rl_4e65a0 - 640) / 2;
+        int x = (g_rl_4e65a0 - 640) / 2;
+        g_rl_4eabb0 = (g_rl_4ea838 - 480) / 2;
+        int y = (g_rl_4ea838 - 480) / 2;
+        rl_plat_SetWindowPos(w, NULL, 0, 0, rc.right - rc.left, rc.bottom - rc.top, 0x16);
+        rl_plat_SetWindowPos(w, (HWND)(intptr_t)-2, 0, 0, 0, 0, 0x13);
+        rl_plat_SystemParametersInfoA(0x30, 0, &work, 0);
+        rl_plat_GetWindowRect(w, &rc);
+        if (rc.left < work.left) rc.left = work.left;   /* (dead: rc is not used after) */
+        if (rc.top < work.top) rc.top = work.top;
+        rl_plat_SetWindowPos(w, NULL, x, y, 0, 0, 0x15);
+        rl_4afab9(S4D51(0x4d51c4), 0, 0);
+    }
+    MSG msg;
+    while (rl_plat_PeekMessageA(&msg, NULL, 0, 0, 0) && rl_plat_GetMessageA(&msg, NULL, 0, 0)) {
+        rl_plat_TranslateMessage(&msg);
+        rl_plat_DispatchMessageA(&msg);
+    }
+    DD_OBJ = (int32_t)dd;
+    return 1;
+}
+
+/* Port of FUN_0042ec91 (1207 B) — the surfaces: the primary (DDSD_CAPS, DDSCAPS_PRIMARYSURFACE) into DAT_004eabd0 (a
+ * failure logs, EAX 0); a test Lock / Unlock of it (DAT_004df28c = 0; a failed lock logs its index 0x42f60e + 1); the
+ * composition surface DAT_004eafac = 0x42f148(xRight, yBottom, 1) (none: log, EAX 0), Locked once for its pixels Buf
+ * DAT_004ea1a8 (the DDSURFACEDESC's lpSurface) and Unlocked. A window also gets a clipper DAT_004ea12c on hWndMain set
+ * on the primary (each failure logs, EAX 0). Then the primary's pixel format (a 32-byte DDPIXELFORMAT, discarded);
+ * EAX 1. HOST-LEVEL (it creates the surfaces and the clipper): no row. */
+int rl_42ec91(void)
+{
+    uint32_t sd[27];   /* DDSURFACEDESC (0x6c B) */
+    uint32_t pf[8];    /* DDPIXELFORMAT (32 B) */
+    int full = DD_FULL != 0;
+    memset(sd, 0, 0x6c);
+    sd[0] = 108;
+    rl_4afab9(full ? S4D52(0x4d5258) : S4D52(0x4d5324), 0, 0);   /* "OK :DD Creating one Vram only." / "… and one system surface." */
+    sd[1] = 1;
+    sd[26] = 512;
+    HRESULT hr = COM3(DD_OBJ, 0x18, (uintptr_t)sd, (uintptr_t)g_rl_4eabd0, 0);   /* CreateSurface */
+    if (hr != 0) {
+        rl_4afab9(full ? S4D52(0x4d5278) : S4D52(0x4d5358), 0, (int)hr);
+        return 0;
+    }
+    g_rl_4df28c = 0;
+    memset(sd, 0, 0x6c);
+    sd[0] = 108;
+    hr = COM4(DD_PRIMARY, 0x64, 0, (uintptr_t)sd, 1, 0);   /* Lock */
+    if (hr != 0)
+        rl_4afab9(full ? S4D52(0x4d52cc) : S4D52(0x4d53ac), 0, dd_err((int)hr) + 1);
+    else {
+        rl_4afab9(full ? S4D52(0x4d5298) : S4D52(0x4d5378), 0, 0);   /* "OK :DD can lock primary surface - but not going to" */
+        g_rl_4df28c = 0;
+        COM1(DD_PRIMARY, 0x80, 0);   /* Unlock */
+    }
+    DD_BACK = rl_42f148(g_gfx_canvas_width, g_gfx_canvas_height, 1);
+    if (DD_BACK == 0) {
+        rl_4afab9(full ? S4D52(0x4d52e8) : S4D52(0x4d53c8), 0, 0);
+        return 0;
+    }
+    hr = COM4(DD_BACK, 0x64, 0, (uintptr_t)sd, 1, 0);
+    if (hr == 0) {
+        g_gfx_canvas_pixels = (uint8_t *)(uintptr_t)sd[9];
+        COM1(DD_BACK, 0x80, 0);
+    }
+    if (full)
+        rl_4afab9(S4D52(0x4d530c), 0, 0);   /* "OK :DD Surface created." */
+    else {
+        if (COM3(DD_OBJ, 0x10, 0, (uintptr_t)&g_rl_4ea12c, 0) != 0) {   /* CreateClipper */
+            rl_4afab9(S4D52(0x4d53ec), 0, 0);
+            return 0;
+        }
+        if (COM2(g_rl_4ea12c, 0x20, 0, HWNDMAIN) != 0) {   /* SetHWnd */
+            rl_4afab9(S4D52(0x4d5408), 0, 0);
+            return 0;
+        }
+        if (COM1(DD_PRIMARY, 0x70, g_rl_4ea12c) != 0) {   /* SetClipper */
+            rl_4afab9(S4D52(0x4d5430), 0, 0);
+            return 0;
+        }
+        rl_4afab9(S4D52(0x4d545c), 0, 0);
+    }
+    memset(pf, 0, sizeof pf);
+    pf[0] = 32;
+    COM1(DD_PRIMARY, 0x54, (uintptr_t)pf);   /* GetPixelFormat */
+    return 1;
+}
+
+/* Port of FUN_0042f1df (295 B) — the palette: a window with a != 0 toggles the system palette use (SYSPAL_NOSTATIC
+ * then SYSPAL_STATIC); the entries (full screen 0x42f306 → DAT_005165b0, else 0x42f449 → DAT_00515d90); the old
+ * IDirectDrawPalette DAT_004df288 released; a new one (DDPCAPS_8BIT | DDPCAPS_ALLOW256) set on the primary (EAX: its
+ * HRESULT), or "ERR:Palette create failed." HOST-LEVEL (it creates a DirectDraw palette object): no row. */
+int rl_42f1df(int a)
+{
+    if (a != 0 && DD_FULL == 0) {
+        HDC dc = rl_plat_GetDC(NULL);
+        rl_plat_SetSystemPaletteUse(dc, 2);
+        rl_plat_SetSystemPaletteUse(dc, 1);
+        rl_plat_ReleaseDC(NULL, dc);
+    }
+    if (DD_FULL != 0)
+        rl_42f306();
+    else
+        pal_window();
+    if (g_rl_4df288 != 0) {
+        COM0(g_rl_4df288, 0x08);   /* Release */
+        g_rl_4df288 = 0;
+    }
+    if (DD_FULL != 0)
+        COM4(DD_OBJ, 0x14, 0x44, (uintptr_t)g_rl_5165b0, (uintptr_t)&g_rl_4df288, 0);   /* CreatePalette */
+    else
+        COM4(DD_OBJ, 0x14, 0x44, (uintptr_t)g_rl_515d90, (uintptr_t)&g_rl_4df288, 0);
+    if (g_rl_4df288 != 0) return (int)COM1(DD_PRIMARY, 0x7c, g_rl_4df288);   /* SetPalette */
+    return rl_4afab9(STRV(g_rl_4d54a8, 0x4d54a8u, 0x4d54a8u), 0, 0);
+}
+
+/* ================================================================ the panel renders: the menu bar's chrome, the labour
+ * screen, the rankings, the merchant, the diplomacy gift, the armoury, the shipment, the title backdrop / option list */
+#include "gfx_line.h"
+#include "gfx_text.h"
+#include "gfx_text_label.h"
+#include "gfx_sprite.h"
+#include "engine_hud_menubar.h"
+#include "engine_combat.h"             /* g_combat_flag_530d0 / _567d0c (DAT_005530d0 / DAT_00567d0c) */
+#include "engine_sendsupplies.h"       /* g_send_target (DAT_00553c78) */
+#include "engine_armory.h"             /* g_arm_weapon (DAT_00553f20) */
+#include "engine_diplomacy_action.h"   /* g_diplo_action_mode (DAT_005651cc) */
+#include "engine_title_render.h"       /* g_tr_p9_tab / g_tr_p9_count / g_tr_selected_button */
+
+/* other partitions' globals (declared here as in their headers) */
+extern int32_t g_rl_522cb4;          /* DAT_00522cb4 (rl_render_globals.h): the menu bar's hovered item */
+extern int32_t g_rl_56899c;          /* DAT_0056899c (rl_skirmish_globals.h): the custom skirmish backdrop */
+extern int32_t g_rl_553e5c;          /* DAT_00553e5c (rl_ui2_globals.h): the title's option page */
+
+/* ---------------------------------------------------------------- records, blobs */
+#define P5_SYSTEM    ((const uint8_t *)g_rl_5bb540)      /* &DAT_005bb540: system2.pl8 (the seal) */
+#define P5_LOCAL     ((int)s_slot_0057c8cc)              /* DAT_0057c8cc: the local player */
+#define P5_COUNTY    ((int)s_slot_0057c93c)              /* DAT_0057c93c: the current county */
+#define P5_SUBSTATE  ((int32_t)s_slot_0057c8fc)          /* DAT_0057c8fc: the frame driver's sub-state */
+#define P5_ADV       ((int32_t)s_slot_0053f25c)          /* DAT_0053f25c: the advanced readouts */
+#define P5_PL8(p, va)  AT(uint8_t, g_player_strategic_352, 0x57bf00u, (int32_t)(va) + 352 * (p))   /* realm record */
+#define P5_PL32(p, va) AT(int32_t, g_player_strategic_352, 0x57bf00u, (int32_t)(va) + 352 * (p))
+#define P5_CO8(c, va)  AT(uint8_t, g_per_army_768, 0x53f9b0u, (int32_t)(va) + 768 * (c))          /* county record */
+#define P5_COS8(c, va) AT(int8_t, g_per_army_768, 0x53f9b0u, (int32_t)(va) + 768 * (c))
+#define P5_CO16(c, va) AT(int16_t, g_per_army_768, 0x53f9b0u, (int32_t)(va) + 768 * (c))
+#define P5_CO32(c, va) AT(int32_t, g_per_army_768, 0x53f9b0u, (int32_t)(va) + 768 * (c))
+#define P5_T32(blk, blkva, va) AT(int32_t, blk, blkva, va)                                         /* a retail table */
+#define P5_NAME(p)   (&AT(uint8_t, g_player_aux_44, 0x553d50u, 0x553d54 + 44 * (p)))             /* DAT_00553d50 + 4: a realm's name */
+#define P5_PAL       g_rl_4ea8a0                         /* DAT_004ea8a0: the screen's palette (0x300 B) */
+#define P5_SHEET     PTRV(g_gfx_current_blob)            /* DAT_004eabec: the current sprite sheet / scratch */
+#define P5_S3E(va)   STRV(g_rl_4d3e58, 0x4d3e58u, va)    /* the labour screen's strings */
+#define P5_S3EC(va)  STR(g_rl_4d3e58, 0x4d3e58u, va)
+
+/* ---------------------------------------------------------------- the gfx layer (the walker loaded / stored) */
+static void p5_wrap_c(int idx, int skip, int x, int y, int w, const uint8_t *font, int color)   /* 0x402c5e */
+{
+    gfx_wrap_localized_line_centered(loc_in(), idx, skip, x, y, w, font, GLYPHS, METRICS, (uint8_t)color);
+    loc_out();
+}
+static void p5_wrap_loc(int idx, int skip, int x, int y, int w1, int n1, int x2, int w2, const uint8_t *font,
+                        int color)   /* 0x40328e */
+{
+    gfx_wrap_localized(loc_in(), idx, skip, x, y, w1, n1, x2, w2, font, GLYPHS, METRICS, (uint8_t)color);
+    loc_out();
+}
+static void p5_text(const uint8_t *buf, int x, int y, const uint8_t *font, int color)   /* 0x402637 */
+{
+    gfx_text_render_line(buf, x, y, font, GLYPHS, (uint8_t)color);
+}
+static void p5_label(int v, int pad, const char *suffix, int x, int y, const uint8_t *font, int color)   /* 0x402f64 */
+{
+    gfx_text_label_render_dec(v, (char)pad, suffix, x, y, font, GLYPHS, (uint8_t)color);
+}
+static void p5_label_ls(int v, int mode, const char *lab, const char *suffix, int x, int y, const uint8_t *font,
+                        int cpos, int cneg)   /* 0x402e0c */
+{
+    gfx_text_label_render_labeled_signed(v, mode, (const uint8_t *)lab, suffix, x, y, font, GLYPHS, (uint8_t)cpos,
+                                         (uint8_t)cneg);
+}
+static void p5_seal(int x, int y, int mode) { gfx_sprite_seal_draw(P5_SYSTEM, x, y, mode); }   /* 0x40d1bc */
+
+/* ---------------------------------------------------------------- seams */
+/* ported, not on retail's layout (a context struct) — TODO(rl-link) */
+static int p5_num_units(int v, int mode, int x, int y, const uint8_t *font, int color)   /* TODO(rl-link): labor_num_units 0x41ab67 (engine_county_panels: a ctx) */
+{
+    return (int)engine_retail_call(0x41ab67u, 6, (uint32_t)v, (uint32_t)mode, (uint32_t)x, (uint32_t)y,
+                                   (uint32_t)(uintptr_t)font, (uint32_t)color);
+}
+static int p5_castle_block(int county, int x, int y, int row)   /* TODO(rl-link): labor_castle_block 0x41dedb (engine_labor: a ctx) */
+{ return (int)engine_retail_call(0x41dedbu, 4, (uint32_t)county, (uint32_t)x, (uint32_t)y, (uint32_t)row); }
+static int p5_armory_racks(void) { return (int)engine_retail_call(0x418426u, 0); }    /* TODO(rl-link): armory_racks 0x418426 (engine_armory: a ctx) */
+static int p5_armory_counts(void) { return (int)engine_retail_call(0x4181ebu, 0); }   /* TODO(rl-link): engine_armory_counts_render 0x4181eb */
+static int p5_minimap_plot(int county, int x, int y, int mode)   /* TODO(rl-link): engine_minimap_plot 0x410cbd */
+{ return (int)engine_retail_call(0x410cbdu, 4, (uint32_t)county, (uint32_t)x, (uint32_t)y, (uint32_t)mode); }
+static int p5_title_setup(int tab) { return (int)engine_retail_call(0x41f6c7u, 1, (uint32_t)tab); }   /* TODO(rl-link): engine_title_render_setup_screen 0x41f6c7 */
+static int p5_title_41f77a(int tab) { return (int)engine_retail_call(0x41f77au, 1, (uint32_t)tab); }  /* TODO(rl-link): 0x41f77a (engine_title_render) */
+/* unported — TODO(rl-extern) */
+static int p5_title_420630(int tab) { return (int)engine_retail_call(0x420630u, 1, (uint32_t)tab); }  /* TODO(rl-extern): 0x420630 */
+
+/* ================================================================ the menu bar */
+
+/* Port of FUN_00419c78 (1262 B) — the menu bar's chrome: off the full-screen panels (screens 8..0xd, 0x17, 0x1b..0x20,
+ * 0x22, 0x2c..0x2f), when the rankings are dirty (DAT_0056d6a0) or the local realm's +0x118 (its crowns) changed
+ * since DAT_004e59c4: the parchment strips (25 + 2 tiles), the 640 x 24 bevel, in the sub-state 0 game the live
+ * realms' shields (misc 85 + the realm's +0xa, 16 px apart from x 270), the File / Options / Help labels (the table
+ * DAT_004dc428, hovered DAT_00522cb4), the year and its season string (29 / DAT_0057c934), the crowns at (500, 6);
+ * the bar's centre marked dirty. (Its head — three debug readouts behind unconditional jumps — is dead code.) EAX:
+ * the screen byte / a callee's (no caller reads it). Route (b): engine_hud_menubar.c's port is only the state-free
+ * front and takes its sheets as arguments. */
+int rl_419c78(void)
+{
+    unsigned s = SCREEN;
+    if ((s >= 8 && s <= 0xd) || s == 0x17 || (s >= 0x1b && s <= 0x20) || s == 0x22 || (s >= 0x2c && s <= 0x2f))
+        return 0;
+    int redraw = 0;
+    if (engine_army_ai_ranking_dirty() != 0) redraw = 1;
+    if (P5_PL32(P5_LOCAL, 0x57c018) != g_rl_4e59c4) redraw = 1;
+    if (!redraw) return 0;
+    engine_army_ai_set_ranking_dirty(0);
+    g_rl_4e59c4 = P5_PL32(P5_LOCAL, 0x57c018);
+    engine_hud_menubar_tile_strip(CHROME, 0, 0, 25, 1);
+    engine_hud_menubar_tile_strip(CHROME, 592, 0, 2, 1);
+    gfx_line_rect_bevel_dark_tl(0, 0, 640, 24);
+    if (P5_SUBSTATE == 0) {
+        int n = 0;
+        for (int p = 1; p < 6; p++)
+            if (P5_PL8(p, 0x57bf04) != 0 && P5_PL32(p, 0x57bf00) < 999)
+                gfx_sprite_render_from_blob(MISC, P5_PL8(p, 0x57bf0a) + 85, 16 * n++ + 270, 4);
+    }
+    engine_hud_menubar_labels((int16_t *)&g_rl_4dc428, 3, g_rl_522cb4, FONT, GLYPHS, METRICS, loc_in(), 0x3f, DIRTY);
+    loc_out();
+    if (P5_SUBSTATE == 0) {
+        g_gfx_line_x_acc = 0;
+        year_number((int32_t)s_slot_00553edc, 360, 6, 3);
+        wrap_line(29, (int32_t)s_slot_0057c934, g_gfx_line_x_acc + 364, 6, FONT, 63);
+    }
+    p5_num_units(P5_PL32(P5_LOCAL, 0x57c018), 0, 500, 6, FONT, 63);
+    rl_4527a6(235, 0, 26, 2, 1);
+    return 0;
+}
+
+/* ================================================================ the labour screen (screen 0x0f; the task DAT_00553f54
+ * 1 grain, 2 cattle, 3 reclaim, 4 castle, 5..7 the mines, 8 the smithy, 9 …) */
+
+/* Port of FUN_00412b33 (824 B) — the labour screen: base dir, all dirty; with a task: iconvill.pl8 into the sheet,
+ * the glyph width 25; the smithy (8) relights the menu bar (rankings dirty) and the fire (combat flags, fire.wav, cue
+ * 8); any other task cues DAT_004d2950[task], a 25 x DAT_004d29a0[task] chrome panel at (48, 96), the 50 x 50 icon box
+ * with icon DAT_004d2974[task] (task 9: 16), the task's title (74 / task) and its workers (the county's +0xc4 + 12
+ * (task - 1); 249 below its wanted +0xc8, 252 above its cap +0xcc, else 63); then the task's panel and the continue
+ * seal; the menu-redraw byte. EAX: a callee's (no caller reads it). Route (b): engine_labor.c takes a context and
+ * keeps the task in a file-static. (Its 0x4b1de0 call is an empty function: elided.) */
+int rl_412b33(void)
+{
+    rl_4af502();
+    rl_45240a();
+    int t = g_rl_553f54;
+    if (t == 0) return 0;
+    rl_4af8d9(P5_S3E(0x4d3e58), P5_SHEET, 0x27100, 0);   /* "iconvill.pl8" */
+    g_gfx_glyph_w = 25;
+    if (g_rl_553f54 == 8) {
+        engine_army_ai_set_ranking_dirty(1);
+        rl_419c78();
+        g_combat_flag_530d0 = 1;
+        g_combat_flag_567d0c = 1;
+        rl_427990(P5_S3E(0x4d3e68), 0, 0);                  /* "fire.wav" */
+        rl_426216(8);
+    } else {
+        t = g_rl_553f54;
+        if (P5_T32(g_rl_4d2950, 0x4d2950u, 0x4d2950 + 4 * t) != 0)
+            rl_426216(P5_T32(g_rl_4d2950, 0x4d2950u, 0x4d2950 + 4 * g_rl_553f54));
+        t = g_rl_553f54;
+        g_gfx_glyph_height_short = (int16_t)P5_T32(g_rl_4d2950, 0x4d2950u, 0x4d29a0 + 4 * t);
+        g_gfx_cursor_x = 48;
+        g_gfx_cursor_y = 96;
+        panel_box(g_gfx_cursor_x, g_gfx_cursor_y, g_gfx_glyph_w, g_gfx_glyph_height_short);
+        gfx_line_rect(64, 104, 50, 50, 63);
+        int icon = P5_T32(g_rl_4d2950, 0x4d2950u, 0x4d2974 + 4 * g_rl_553f54);
+        if (g_rl_553f54 == 9) icon = 16;
+        gfx_sprite_render(icon, 65, 105);
+        wrap_line(74, g_rl_553f54, 128, 106, FONT_TALL, 63);
+        int c = P5_COUNTY;
+        t = g_rl_553f54;
+        int color = 63;
+        if (P5_CO32(c, 0x53fa78 + 12 * t - 12) > P5_CO32(c, 0x53fa74 + 12 * t - 12))
+            color = 249;
+        else if (P5_CO32(c, 0x53fa7c + 12 * t - 12) < P5_CO32(c, 0x53fa74 + 12 * t - 12))
+            color = 252;
+        p5_num_units(P5_CO32(P5_COUNTY, 0x53fa74 + 12 * g_rl_553f54 - 12), 2 * g_rl_553f54 + 30, 128, 136, FONT, color);
+    }
+    t = g_rl_553f54;
+    if (t >= 5 && t <= 7)
+        rl_412e6b();
+    else if (t == 1)
+        rl_413590();
+    else if (t == 2)
+        rl_413b30();
+    else if (t == 3)
+        rl_4140f3();
+    else if (t == 4)
+        rl_414220();
+    else if (t == 8)
+        rl_413155();
+    if (g_rl_553f54 == 8)
+        p5_seal(448, 448, 0);
+    else
+        p5_seal(420, 16 * P5_T32(g_rl_4d2950, 0x4d2950u, 0x4d29a0 + 4 * g_rl_553f54) + 68, 0);
+    g_gfx_menu_redraw_a = 1;
+    return 0;
+}
+
+/* Port of FUN_00412e6b (746 B) — the mine panels (tasks 5 / 6 / 7 = the county's mineral slots 1 / 3 / 0; the smithy's
+ * 8 slot 2 with the unit noun DAT_004d29c8[+0x290]): advanced mode the slot's yield % (the signed byte +0x294 + 24
+ * slot); its output (+0x2a8 + 24 slot, noun 12 / 14 / 16) and string 76 / 1; then the stock lines: iron +0x284 (5),
+ * stone +0x28c (6), or wood +0x280 and +0x288 (7). EAX: the last wrap's (no caller reads it). (b). The slot / noun are
+ * uninitialized for a task outside 5..8 (no caller passes one). */
+int rl_412e6b(void)
+{
+    int k = g_rl_553f54 - 1;
+    int slot = 0, noun = 0;
+    if (k == 4) { slot = 1; noun = 12; }
+    else if (k == 5) { slot = 3; noun = 14; }
+    else if (k == 6) { slot = 0; noun = 16; }
+    else if (k == 7) { slot = 2; noun = P5_T32(g_rl_4d2950, 0x4d2950u, 0x4d29c8 + 4 * P5_CO8(P5_COUNTY, 0x53fc40)); }
+    if (P5_ADV == 1) {
+        g_gfx_line_x_acc = 0;
+        wrap_line(76, 0, g_gfx_line_x_acc + 64, 160, FONT, 63);
+        p5_label(P5_COS8(P5_COUNTY, 0x53fc44 + 24 * slot), 64, P5_S3EC(0x4d3e74), g_gfx_line_x_acc + 64, 160, FONT, 63);
+    }
+    g_gfx_line_x_acc = 0;
+    p5_num_units(P5_CO32(P5_COUNTY, 0x53fc58 + 24 * slot), noun, 64, 176, FONT, 63);
+    wrap_line(76, 1, g_gfx_line_x_acc + 64, 176, FONT, 63);
+    if (k == 4) {
+        g_gfx_line_x_acc = 0;
+        p5_num_units(P5_CO32(P5_COUNTY, 0x53fc34), noun, 64, 192, FONT, 63);
+        wrap_line(76, 2, g_gfx_line_x_acc + 64, 192, FONT, 63);
+    } else if (k == 5) {
+        g_gfx_line_x_acc = 0;
+        p5_num_units(P5_CO32(P5_COUNTY, 0x53fc3c), noun, 64, 192, FONT, 63);
+        wrap_line(76, 3, g_gfx_line_x_acc + 64, 192, FONT, 63);
+    } else if (k == 6) {
+        g_gfx_line_x_acc = 0;
+        p5_num_units(P5_CO32(P5_COUNTY, 0x53fc30), noun, 64, 192, FONT, 63);
+        wrap_line(76, 2, g_gfx_line_x_acc + 64, 192, FONT, 63);
+        g_gfx_line_x_acc = 0;
+        p5_num_units(P5_CO32(P5_COUNTY, 0x53fc38), noun, 64, 208, FONT, 63);
+        wrap_line(76, 3, g_gfx_line_x_acc + 64, 208, FONT, 63);
+    }
+    return 0;
+}
+
+/* Port of FUN_00413155 (977 B) — the smithy panel: smithy.pl8 into the sheet and drawn at (0, 24); a 30 x 56-glyph
+ * block cleared at (0, 424); hearth.pl8 and the hearth frame 11 + the county's smithy level +0x290 (RLE) at y 424 -
+ * DAT_004d29e0[level]; a 30 x 6 chrome panel at (0, 384), the title (74 / 8, tall font) and the centred caption 75;
+ * the weapon output (+0x118; advanced mode with its rate %, the signed byte +0x2c4, strings 76 / 4, 5 — else 76 / 8),
+ * the stock line (76 / 6, +0x2d8 with the level's noun DAT_004d29c8, 76 / 7); the price box: bevel at (320, 390), the
+ * gold / wood icons 44 / 46 and the level's DAT_004d8994 / DAT_004d8990 (8 B a level). All dirty. EAX: 0x45240a's
+ * (0x43a997 discards it). (b). */
+int rl_413155(void)
+{
+    rl_4af502();
+    rl_4af8d9(P5_S3E(0x4d3e78), P5_SHEET, 0x30d40, 0);   /* "smithy.pl8" */
+    gfx_sprite_render(0, 0, 24);
+    g_gfx_glyph_w = 30;
+    g_gfx_glyph_height_short = 56;
+    gfx_sprite_fill_block(0, 424, 0);
+    rl_4af8d9(P5_S3E(0x4d3e84), P5_SHEET, 0x30d40, 0);   /* "hearth.pl8" */
+    int y = 424 - P5_T32(g_rl_4d2950, 0x4d2950u, 0x4d29e0 + 4 * P5_CO8(P5_COUNTY, 0x53fc40));
+    gfx_sprite_render_rle_from_blob(g_gfx_current_blob, P5_CO8(P5_COUNTY, 0x53fc40) + 11, 0, y);
+    panel_box(0, 384, 30, 6);
+    g_gfx_line_x_acc = 0;
+    wrap_line(74, 8, 16, 390, FONT_TALL, 63);
+    p5_wrap_c(75, 0, 0, 460, 460, FONT, 63);
+    int noun = P5_T32(g_rl_4d2950, 0x4d2950u, 0x4d29c8 + 4 * P5_CO8(P5_COUNTY, 0x53fc40));
+    if (P5_ADV == 1) {
+        g_gfx_line_x_acc = 0;
+        p5_label(P5_CO32(P5_COUNTY, 0x53fac8), 64, P5_S3EC(0x4d3e90), g_gfx_line_x_acc + 16, 420, FONT, 63);
+        wrap_line(76, 4, g_gfx_line_x_acc + 16, 420, FONT, 63);
+        p5_label(P5_COS8(P5_COUNTY, 0x53fc74), 64, P5_S3EC(0x4d3e94), g_gfx_line_x_acc + 16, 420, FONT, 63);
+        wrap_line(76, 5, g_gfx_line_x_acc + 16, 420, FONT, 63);
+    } else {
+        g_gfx_line_x_acc = 0;
+        p5_label(P5_CO32(P5_COUNTY, 0x53fac8), 64, P5_S3EC(0x4d3e98), g_gfx_line_x_acc + 16, 420, FONT, 63);
+        wrap_line(76, 8, g_gfx_line_x_acc + 16, 420, FONT, 63);
+    }
+    g_gfx_line_x_acc = 0;
+    wrap_line(76, 6, g_gfx_line_x_acc + 16, 436, FONT, 63);
+    p5_num_units(P5_CO32(P5_COUNTY, 0x53fc88), noun, g_gfx_line_x_acc + 16, 436, FONT, 63);
+    wrap_line(76, 7, g_gfx_line_x_acc + 16, 436, FONT, 63);
+    gfx_line_rect_bevel_dark_br(320, 390, 142, 32);
+    gfx_sprite_render_from_blob(MISC, 44, 326, 391);
+    p5_label(P5_T32(g_rl_4d8910, 0x4d8910u, 0x4d8994 + 8 * P5_CO8(P5_COUNTY, 0x53fc40)), 64, P5_S3EC(0x4d3e9c), 362, 398,
+             FONT, 63);
+    gfx_sprite_render_from_blob(MISC, 46, 393, 394);
+    p5_label(P5_T32(g_rl_4d8910, 0x4d8910u, 0x4d8990 + 8 * P5_CO8(P5_COUNTY, 0x53fc40)), 64, P5_S3EC(0x4d3ea0), 436, 398,
+             FONT, 63);
+    return rl_45240a();
+}
+
+/* Port of FUN_00413590 (1440 B) — the grain panel: the fields' grain (+0x224) at (304, 136); advanced mode the yield
+ * word 22 / (+0x208 + 100) / 29; the sown fields (+0x278, by the county's crop +0x1aa: 135 / 139 → 77 / 25, 26; none
+ * → 77 / 24); advanced mode the change (+0x24c: > 0 → 77 / 16, < 0 → its magnitude + 77 / 17, 0 → 77 / 18); the
+ * season DAT_0057c92c 1: the harvest (+0x230, 77 / 1) and its yield x DAT_0057c8e0 (77 / 2), else the stock (+0x248
+ * in winter (4), else +0x2fc; 77 / 3), the seasons left (4 - season... 3 / 2 / 1 for 2 / 3 / other) and the
+ * consumption (+0x240, 77 / 0, 4); the eaten (77 / 27: -(+0x178) signed, or "0") and the rotted (77 / 28: +0x22c).
+ * EAX: the last label's (no caller reads it). (b). */
+int rl_413590(void)
+{
+    p5_num_units(P5_CO32(P5_COUNTY, 0x53fbd4), 2, 304, 136, FONT, 63);
+    if (P5_ADV == 1) wrap_line(22, (P5_CO32(P5_COUNTY, 0x53fbb8) + 100) / 29, 128, 152, FONT, 63);
+    g_gfx_line_x_acc = 0;
+    if (P5_CO32(P5_COUNTY, 0x53fc28) == 0)
+        wrap_line(77, 24, 64, 176, FONT, 63);
+    else {
+        p5_num_units(P5_CO32(P5_COUNTY, 0x53fc28), 2, 64, 176, FONT, 63);
+        if (P5_CO16(P5_COUNTY, 0x53fb5a) == 135)
+            wrap_line(77, 25, g_gfx_line_x_acc + 64, 176, FONT, 63);
+        else if (P5_CO16(P5_COUNTY, 0x53fb5a) == 139)
+            wrap_line(77, 26, g_gfx_line_x_acc + 64, 176, FONT, 63);
+    }
+    if (P5_ADV == 1) {
+        g_gfx_line_x_acc = 0;
+        if (P5_CO32(P5_COUNTY, 0x53fbfc) > 0) {
+            p5_num_units(P5_CO32(P5_COUNTY, 0x53fbfc), 2, g_gfx_line_x_acc + 64, 192, FONT, 63);
+            wrap_line(77, 16, g_gfx_line_x_acc + 64, 192, FONT, 63);
+        } else if (P5_CO32(P5_COUNTY, 0x53fbfc) < 0) {
+            p5_num_units(-P5_CO32(P5_COUNTY, 0x53fbfc), 2, g_gfx_line_x_acc + 64, 192, FONT, 63);
+            wrap_line(77, 17, g_gfx_line_x_acc + 64, 192, FONT, 63);
+        } else
+            wrap_line(77, 18, g_gfx_line_x_acc + 64, 192, FONT, 63);
+    }
+    if ((int32_t)s_slot_0057c92c == 1) {
+        g_gfx_line_x_acc = 0;
+        p5_num_units(P5_CO32(P5_COUNTY, 0x53fbe0), 2, 64, 216, FONT, 63);
+        wrap_line(77, 1, g_gfx_line_x_acc + 64, 216, FONT, 63);
+        g_gfx_line_x_acc = 0;
+        p5_num_units(P5_CO32(P5_COUNTY, 0x53fbe0) * g_rl_57c8e0, 2, 64, 232, FONT, 63);
+        wrap_line(77, 2, g_gfx_line_x_acc + 64, 232, FONT, 63);
+    } else {
+        int left = (int32_t)s_slot_0057c92c == 2 ? 3 : (int32_t)s_slot_0057c92c == 3 ? 2 : 1;
+        int stock = (int32_t)s_slot_0057c92c == 4 ? P5_CO32(P5_COUNTY, 0x53fbf8) : P5_CO32(P5_COUNTY, 0x53fcac);
+        g_gfx_line_x_acc = 0;
+        p5_num_units(stock, 2, 64, 216, FONT, 63);
+        wrap_line(77, 3, g_gfx_line_x_acc + 64, 216, FONT, 63);
+        p5_num_units(left, 66, g_gfx_line_x_acc + 64, 216, FONT, 63);
+        g_gfx_line_x_acc = 0;
+        wrap_line(77, 0, 64, 232, FONT, 63);
+        p5_num_units(P5_CO32(P5_COUNTY, 0x53fbf0), 2, g_gfx_line_x_acc + 64, 232, FONT, 63);
+        wrap_line(77, 4, g_gfx_line_x_acc + 64, 232, FONT, 63);
+    }
+    wrap_line(77, 27, 64, 264, FONT, 63);
+    if (P5_CO32(P5_COUNTY, 0x53fb28) == 0)
+        p5_label(0, 64, P5_S3EC(0x4d3ea4), 304, 264, FONT, 63);
+    else
+        p5_label_ls(-P5_CO32(P5_COUNTY, 0x53fb28), 0, P5_S3EC(0x4d3eac), P5_S3EC(0x4d3ea8), 296, 264, FONT, 63, 249);
+    wrap_line(77, 28, 64, 280, FONT, 63);
+    if (P5_CO32(P5_COUNTY, 0x53fbdc) == 0)
+        p5_label(0, 64, P5_S3EC(0x4d3eb0), 304, 280, FONT, 63);
+    else
+        p5_label_ls(P5_CO32(P5_COUNTY, 0x53fbdc), 0, P5_S3EC(0x4d3eb8), P5_S3EC(0x4d3eb4), 296, 280, FONT, 63, 249);
+    return 0;
+}
+
+/* Port of FUN_00413b30 (1475 B) — the cattle panel: the herd (+0x250) at (304, 136); the pasture quality (+0x25c: 10 /
+ * 20 / 30 → 77 / 8, 9, 10, else 11); the grazing fields (+0x274, by the crop +0x1aa: 136 / 137 / 140 / 141 → 77 / 20
+ * .. 23; none → 77 / 19); advanced mode the change (+0x270, as the grain's); the births (77 / 5, +0x268), the deaths
+ * (77 / 6, +0x26c) and their balance (77 / 7: signed, or "0"); the eaten (77 / 27, -(+0x17c)) and the slaughtered
+ * (77 / 28, +0x258). EAX: the last label's (no caller reads it). (b). */
+int rl_413b30(void)
+{
+    p5_num_units(P5_CO32(P5_COUNTY, 0x53fc00), 4, 304, 136, FONT, 63);
+    int q = P5_CO32(P5_COUNTY, 0x53fc0c);
+    wrap_line(77, q == 10 ? 8 : q == 20 ? 9 : q == 30 ? 10 : 11, 64, 160, FONT, 63);
+    g_gfx_line_x_acc = 0;
+    if (P5_CO32(P5_COUNTY, 0x53fc24) == 0)
+        wrap_line(77, 19, 64, 176, FONT, 63);
+    else {
+        p5_num_units(P5_CO32(P5_COUNTY, 0x53fc24), 4, 64, 176, FONT, 63);
+        int crop = P5_CO16(P5_COUNTY, 0x53fb5a);
+        if (crop == 136) wrap_line(77, 20, g_gfx_line_x_acc + 64, 176, FONT, 63);
+        else if (P5_CO16(P5_COUNTY, 0x53fb5a) == 137) wrap_line(77, 21, g_gfx_line_x_acc + 64, 176, FONT, 63);
+        else if (P5_CO16(P5_COUNTY, 0x53fb5a) == 140) wrap_line(77, 22, g_gfx_line_x_acc + 64, 176, FONT, 63);
+        else if (P5_CO16(P5_COUNTY, 0x53fb5a) == 141) wrap_line(77, 23, g_gfx_line_x_acc + 64, 176, FONT, 63);
+    }
+    if (P5_ADV == 1) {
+        g_gfx_line_x_acc = 0;
+        if (P5_CO32(P5_COUNTY, 0x53fc20) > 0) {
+            p5_num_units(P5_CO32(P5_COUNTY, 0x53fc20), 4, g_gfx_line_x_acc + 64, 192, FONT, 63);
+            wrap_line(77, 16, g_gfx_line_x_acc + 64, 192, FONT, 63);
+        } else if (P5_CO32(P5_COUNTY, 0x53fc20) < 0) {
+            p5_num_units(-P5_CO32(P5_COUNTY, 0x53fc20), 4, g_gfx_line_x_acc + 64, 192, FONT, 63);
+            wrap_line(77, 17, g_gfx_line_x_acc + 64, 192, FONT, 63);
+        } else
+            wrap_line(77, 18, g_gfx_line_x_acc + 64, 192, FONT, 63);
+    }
+    wrap_line(77, 5, 64, 216, FONT, 63);
+    p5_num_units(P5_CO32(P5_COUNTY, 0x53fc18), 4, 304, 216, FONT, 63);
+    wrap_line(77, 6, 64, 232, FONT, 63);
+    p5_num_units(P5_CO32(P5_COUNTY, 0x53fc1c), 4, 304, 232, FONT, 63);
+    wrap_line(77, 7, 64, 248, FONT, 63);
+    if (P5_CO32(P5_COUNTY, 0x53fc18) == P5_CO32(P5_COUNTY, 0x53fc1c))
+        p5_label(0, 64, P5_S3EC(0x4d3ebc), 304, 248, FONT, 63);
+    else
+        p5_label_ls(P5_CO32(P5_COUNTY, 0x53fc18) - P5_CO32(P5_COUNTY, 0x53fc1c), 0, P5_S3EC(0x4d3ec4), P5_S3EC(0x4d3ec0),
+                    296, 248, FONT, 63, 249);
+    wrap_line(77, 27, 64, 264, FONT, 63);
+    if (P5_CO32(P5_COUNTY, 0x53fb2c) == 0)
+        p5_label(0, 64, P5_S3EC(0x4d3ec8), 304, 264, FONT, 63);
+    else
+        p5_label_ls(-P5_CO32(P5_COUNTY, 0x53fb2c), 0, P5_S3EC(0x4d3ed0), P5_S3EC(0x4d3ecc), 296, 264, FONT, 63, 249);
+    wrap_line(77, 28, 64, 280, FONT, 63);
+    if (P5_CO32(P5_COUNTY, 0x53fc08) == 0)
+        p5_label(0, 64, P5_S3EC(0x4d3ed4), 304, 280, FONT, 63);
+    else
+        p5_label_ls(P5_CO32(P5_COUNTY, 0x53fc08), 0, P5_S3EC(0x4d3edc), P5_S3EC(0x4d3ed8), 296, 280, FONT, 63, 249);
+    return 0;
+}
+
+/* Port of FUN_004140f3 (301 B) — the reclaim panel: the swamp count (the byte +0x204; 1 → 77 / 12, else 13); the
+ * reclaimed so far (+0x214: 0 → 77 / 15, else 77 / 14 + the count with noun 66). EAX: the last call's (no caller
+ * reads it). (b). */
+int rl_4140f3(void)
+{
+    g_gfx_line_x_acc = 0;
+    p5_label(P5_CO8(P5_COUNTY, 0x53fbb4), 64, P5_S3EC(0x4d3ee0), 64, 184, FONT, 63);
+    if (P5_CO8(P5_COUNTY, 0x53fbb4) == 1)
+        wrap_line(77, 12, g_gfx_line_x_acc + 64, 184, FONT, 63);
+    else
+        wrap_line(77, 13, g_gfx_line_x_acc + 64, 184, FONT, 63);
+    if (P5_CO32(P5_COUNTY, 0x53fbc4) == 0) {
+        wrap_line(77, 15, 64, 200, FONT, 63);
+        return 0;
+    }
+    g_gfx_line_x_acc = 0;
+    wrap_line(77, 14, 64, 200, FONT, 63);
+    p5_num_units(P5_CO32(P5_COUNTY, 0x53fbc4), 66, g_gfx_line_x_acc + 64, 200, FONT, 63);
+    return 0;
+}
+
+/* Port of FUN_00414220 (31 B) — the castle panel: the county's castle block 0x41dedb(county, -32, 64, 0). EAX: its
+ * (no caller reads it). (b). */
+int rl_414220(void) { return p5_castle_block(P5_COUNTY, -32, 64, 0); }
+
+/* ================================================================ the rankings (screen 0x20) */
+
+/* Port of FUN_00415e42 (373 B) — a realm's score on the ranking DAT_0055ce7c: 0 for a dead realm (+4 clear); 0 the
+ * byte +0x29, 1 the byte +0x4c, 2 +0x54, 3 +0x118, 4 the byte +0xc, 5 +0x10; any other ranking 2 before 1270, else 6 -
+ * the byte +0x2b. (b): engine_rankings.c is not linked. */
+int rl_415e42(int p)
+{
+    if (P5_PL8(p, 0x57bf04) == 0) return 0;
+    switch ((int32_t)s_slot_0055ce7c) {
+    case 0: return P5_PL8(p, 0x57bf29);
+    case 1: return P5_PL8(p, 0x57bf4c);
+    case 2: return P5_PL32(p, 0x57bf54);
+    case 3: return P5_PL32(p, 0x57c018);
+    case 4: return P5_PL8(p, 0x57bf0c);
+    case 5: return P5_PL32(p, 0x57bf10);
+    default: break;
+    }
+    if ((int32_t)s_slot_00553edc > 1269) return 6 - P5_PL8(p, 0x57bf2b);
+    return 2;
+}
+
+/* Port of FUN_00415bdc (614 B) — the rankings: the leader (the LAST realm 1..5 with the highest score), each realm's
+ * percentage of the leader DAT_00522c60[p] (0x404dc1), clamped 0..100; all live realms equal → DAT_00522c78 = 1 and
+ * every live realm 50; else DAT_00522c94 = 1 when another live realm ties the leader. EAX: the leader. (b). */
+int rl_415bdc(void)
+{
+    int lead = 1, best = 0;
+    for (int i = 1; i < 6; i++) {
+        int v = rl_415e42(i);
+        if (v >= best) { best = v; lead = i; }
+    }
+    for (int j = 1; j < 6; j++) g_rl_522c60[j] = rl_404dc1(rl_415e42(j), best);
+    int first = 999;
+    g_rl_522c78 = 1;
+    for (int k = 1; k < 6; k++) {
+        if (g_rl_522c60[k] < 0) g_rl_522c60[k] = 0;
+        if (g_rl_522c60[k] > 100) g_rl_522c60[k] = 100;
+        if (P5_PL8(k, 0x57bf04) != 0) {
+            if (first == 999)
+                first = g_rl_522c60[k];
+            else if (g_rl_522c60[k] != first)
+                g_rl_522c78 = 0;
+        }
+    }
+    if (g_rl_522c78 != 0) {
+        for (int m = 1; m < 6; m++)
+            if (P5_PL8(m, 0x57bf04) != 0) g_rl_522c60[m] = 50;
+        return lead;
+    }
+    int top = g_rl_522c60[lead];
+    g_rl_522c94 = 0;
+    for (int n = 1; n < 6; n++)
+        if (P5_PL8(n, 0x57bf04) != 0 && lead != n && g_rl_522c60[n] == top) g_rl_522c94 = 1;
+    return lead;
+}
+
+/* Port of FUN_0041593b (673 B) — the rankings screen: base dir, the workforce panel off (DAT_0053f050 = 0), mode 1
+ * 0x4b11ce; grtnoble.256 / grtnoble.pl8 / flags.pl8; the rankings (0x415bdc); per slot i 1..5 the realm
+ * DAT_004d2b58[i]'s flag (its +0xa - 1) at (DAT_004d2b40[i], 2 (100 - pct) + 45) on a four-line pole to y 344; the
+ * ranking's marker (sprite 5 at DAT_004d2b20[ranking], 371), its name (35 / ranking) and the leader's name — or 35 /
+ * 7 when all equal / tied; the seal, all dirty, presented (0x452160(1)), the palette applied. EAX: 0x45240a's (no
+ * caller reads it). (b). */
+int rl_41593b(int a)
+{
+#define S3F(va) STRV(g_rl_4d3efc, 0x4d3efcu, va)
+    rl_4af502();
+    g_bf_53f050 = 0;
+    if (a == 1) rl_4b11ce();
+    rl_4af8d9(S3F(0x4d3efc), PTRV(P5_PAL), 0x300, 0);   /* "grtnoble.256" */
+    rl_408fcb(S3F(0x4d3f0c), 480);                      /* "grtnoble.pl8" */
+    rl_4af8d9(S3F(0x4d3f1c), P5_SHEET, 0x27100, 0);     /* "flags.pl8" */
+#undef S3F
+    int lead = rl_415bdc();
+    for (int i = 1; i < 6; i++) {
+        int p = P5_T32(g_rl_4d2b20, 0x4d2b20u, 0x4d2b58 + 4 * i);
+        if (P5_PL8(p, 0x57bf04) == 0) continue;
+        int x = P5_T32(g_rl_4d2b20, 0x4d2b20u, 0x4d2b40 + 4 * i);
+        int y = 2 * (100 - g_rl_522c60[p]) + 45;
+        gfx_sprite_render(P5_PL8(p, 0x57bf0a) - 1, x, y);
+        int y2 = y + 92;
+        gfx_line_draw(x + 23, y2, x + 23, 344, 16);
+        gfx_line_draw(x + 24, y2, x + 24, 344, 18);
+        gfx_line_draw(x + 25, y2, x + 25, 344, 20);
+        gfx_line_draw(x + 26, y2, x + 26, 344, 18);
+    }
+    gfx_sprite_render(5, P5_T32(g_rl_4d2b20, 0x4d2b20u, 0x4d2b20 + 4 * (int32_t)s_slot_0055ce7c), 371);
+    g_gfx_line_x_acc = 0;
+    wrap_line(35, (int32_t)s_slot_0055ce7c, 328, 446, FONT, 63);
+    if (g_rl_522c78 != 0 || g_rl_522c94 != 0)
+        wrap_line(35, 7, g_gfx_line_x_acc + 330, 446, FONT, 63);
+    else
+        p5_text(P5_NAME(lead), g_gfx_line_x_acc + 330, 446, FONT, 63);
+    p5_seal(g_gfx_canvas_width - 28, g_gfx_canvas_height - 28, 1);
+    rl_45240a();
+    rl_452160(1);
+    rl_4b0ab5(PTRV(P5_PAL));
+    return rl_45240a();
+}
+
+/* ================================================================ the merchant, the diplomacy gift */
+
+/* Port of FUN_00415fb7 (212 B) — the merchant screen: mode 1 0x4b11ce; base dir, the workforce panel off;
+ * merchant.256 / merchant.pl8 and the click grid mercgrid.pl8 (0x12d8 B into DAT_00542ce0); the seal; the deal state
+ * DAT_00569500 / DAT_0055cd68 / the good DAT_0056d8ac cleared, the price step DAT_0053ef54 = 500; all dirty,
+ * presented, the palette applied, the menu-redraw byte. EAX: 0x4b0ab5's (no caller reads it). (b): engine_merchant.c
+ * is not linked. */
+int rl_415fb7(int a)
+{
+#define S3F(va) STRV(g_rl_4d3efc, 0x4d3efcu, va)
+    if (a == 1) rl_4b11ce();
+    rl_4af502();
+    g_bf_53f050 = 0;
+    rl_4af8d9(S3F(0x4d3f28), PTRV(P5_PAL), 0x300, 0);          /* "merchant.256" */
+    rl_408fcb(S3F(0x4d3f38), 480);                             /* "merchant.pl8" */
+    rl_4af8d9(S3F(0x4d3f48), PTRV(g_bf_542ce0), 0x12d8, 0);     /* "mercgrid.pl8" */
+#undef S3F
+    p5_seal(g_gfx_canvas_width - 28, g_gfx_canvas_height - 28, 1);
+    g_rl_569500 = 0;
+    g_rl_55cd68 = 0;
+    s_slot_0056d8ac = 0;
+    g_rl_53ef54 = 500;
+    rl_45240a();
+    rl_452160(1);
+    int r = rl_4b0ab5(PTRV(P5_PAL));
+    g_gfx_menu_redraw_a = 1;
+    return r;
+}
+
+/* Port of FUN_0041789b (197 B) — the diplomacy screen by its mode DAT_005651cc: 0 the gift (0x417960), 1..4 the
+ * message pages 0x417aef(0..3), 5 / 6 0x417cef(0 / 1). EAX: the page's (no caller reads it). (b):
+ * engine_diplomacy_action.c is not linked. */
+int rl_41789b(void)
+{
+    switch (g_diplo_action_mode) {
+    case 0: return rl_417960();
+    case 1: return rl_417aef(0);
+    case 2: return rl_417aef(1);
+    case 3: return rl_417aef(2);
+    case 4: return rl_417aef(3);
+    case 5: return rl_417cef(0);
+    case 6: return rl_417cef(1);
+    default: return 0;
+    }
+}
+
+/* Port of FUN_00417960 (399 B) — the gift box: the menu-redraw bytes (0, then 2; DAT_004e65f8 = 1), the uppercase
+ * highlight on; a 22 x 11 bevel at (64, 160) marked dirty (23 x 12, mode 2), the seal at (376, 294), all dirty; "to"
+ * (72 / 10) + the target realm DAT_00553fbc's name; 72 / 23 + the local player's gold held by the target (its record
+ * +0x8c + 16 local); 72 / 18 + the gift DAT_0057a0f8 at 256; 72 / 17 at (160, 288); the highlight off. EAX: the last
+ * wrap's (no caller reads it). (b). (Its 0x4b1de0 call is an empty function: elided.) */
+int rl_417960(void)
+{
+    g_gfx_menu_redraw_a = 0;
+    g_gfx_menu_redraw_a = 2;
+    g_gfx_menu_redraw_b = 1;
+    g_gfx_uppercase_highlight = 1;
+    gfx_panel_draw_bevel(CHROME, 64, 160, 22, 11);
+    rl_4527a6(64, 160, 23, 12, 2);
+    p5_seal(376, 294, 0);
+    rl_45240a();
+    g_gfx_line_x_acc = 0;
+    wrap_line(72, 10, 96, 184, FONT, 63);
+    p5_text(P5_NAME((int32_t)s_slot_00553fbc), g_gfx_line_x_acc + 96, 184, FONT, 63);
+    g_gfx_line_x_acc = 0;
+    wrap_line(72, 23, 96, 216, FONT, 63);
+    p5_num_units(P5_PL32((int32_t)s_slot_00553fbc, 0x57bf8c + 16 * P5_LOCAL), 0, g_gfx_line_x_acc + 96, 216, FONT, 63);
+    wrap_line(72, 18, 96, 248, FONT, 63);
+    p5_num_units((int32_t)s_slot_0057a0f8, 0, 256, 248, FONT, 63);
+    wrap_line(72, 17, 160, 288, FONT, 63);
+    g_gfx_uppercase_highlight = 0;
+    return 0;
+}
+
+/* ================================================================ the armoury */
+
+/* Port of FUN_004180f6 (245 B) — the armoury screen: base dir, armoury.256 / armoury.pl8, the seal at (w - 28, h -
+ * 112), the racks (0x418426) and the counts (0x4181eb); outlined, the three centred captions 69 / 6, 7, 8 at x 542 (y
+ * 404 / 430 / 456, width 100, colour 55); all dirty, presented, the palette applied, the menu-redraw byte. EAX:
+ * 0x4b0ab5's (no caller reads it). (b): engine_ingame_input.c is not linked; engine_armory.c takes a context. */
+int rl_4180f6(void)
+{
+    rl_4af502();
+    rl_4af8d9(STRV(g_rl_4d4024, 0x4d4024u, 0x4d4024), PTRV(P5_PAL), 0x300, 0);   /* "armoury.256" */
+    rl_408fcb(STRV(g_rl_4d4024, 0x4d4024u, 0x4d4030), 480);                     /* "armoury.pl8" */
+    p5_seal(g_gfx_canvas_width - 28, g_gfx_canvas_height - 112, 1);
+    p5_armory_racks();
+    p5_armory_counts();
+    g_gfx_outline = 1;
+    p5_wrap_c(69, 6, 542, 404, 100, FONT, 55);
+    p5_wrap_c(69, 7, 542, 430, 100, FONT, 55);
+    p5_wrap_c(69, 8, 542, 456, 100, FONT, 55);
+    g_gfx_outline = 0;
+    rl_45240a();
+    rl_452160(1);
+    int r = rl_4b0ab5(PTRV(P5_PAL));
+    g_gfx_menu_redraw_a = 1;
+    return r;
+}
+
+/* Port of FUN_00418e2d (408 B) — the weapon assignment's numbers: the weapon's frame DAT_005aea48 of the sheet
+ * DAT_0053e918 at (102, 10) (dirty 7 x 7); the local player's muster rows DAT_0053f6a0 (128 B a player, 16 B a row):
+ * the weapon's stock (row w +0) in the tall font at (236, 13) with its noun 2 w + 52 over a 15 x 2 chrome fill; the
+ * men who can still take it, min(row w +8 - row w +0, row 0 +0), "+ 69 / 5" at (216, 84) over a 16 x 2 fill; both
+ * marked dirty. EAX: the last mark's (no caller reads it). (b): engine_armory.c takes a context. */
+#define P5_MUSTER(p, w, off) AT(int32_t, g_rl_53f690, 0x53f690u, 0x53f6a0 + 128 * (p) + 16 * (w) + (off))
+int rl_418e2d(void)
+{
+    gfx_sprite_render_from_blob(BYTES(g_rl_53e918), g_rl_5aea48, 102, 10);
+    rl_4527a6(102, 10, 7, 7, 1);
+    int free_ = P5_MUSTER(P5_LOCAL, g_arm_weapon, 8) - P5_MUSTER(P5_LOCAL, g_arm_weapon, 0);
+    int men = P5_MUSTER(P5_LOCAL, 0, 0);
+    if (men < free_) free_ = men;
+    g_gfx_line_x_acc = 0;
+    gfx_panel_fill_interior_chrome(CHROME, 236, 12, 15, 2);
+    p5_num_units(P5_MUSTER(P5_LOCAL, g_arm_weapon, 0), 2 * g_arm_weapon + 52, 236, 13, FONT_TALL, 63);
+    rl_4527a6(236, 12, 20, 3, 1);
+    g_gfx_line_x_acc = 0;
+    gfx_panel_fill_interior_chrome(CHROME, 216, 76, 16, 2);
+    p5_label(free_, 64, STR(g_rl_4d40d4, 0x4d40d4u, 0x4d40d4), 216, 84, FONT, 63);
+    wrap_line(69, 5, g_gfx_line_x_acc + 216, 84, FONT, 63);
+    return rl_4527a6(216, 76, 20, 3, 1);
+}
+
+/* Port of FUN_004184c6 (397 B) — the weapon assignment screen: base dir, all dirty; the weapon DAT_00553f20's sheet
+ * (1 crossbow, 2 mace, 3 sword, 4 pike, 5 bow, 6 mail, else crossbow) into DAT_0053e918; a 26 x 7 chrome panel at (96,
+ * 4), the seal at (484, 88), the bevel and frame 0 at (102, 10); the numbers (0x418e2d); the menu-redraw byte. EAX:
+ * 0x418e2d's (no caller reads it). (b). (Its 0x4b1de0 call is an empty function: elided.) */
+int rl_4184c6(void)
+{
+    static const uint32_t k_sheet[7] = { 0x4d40a0u, 0x4d4044u, 0x4d4054u, 0x4d4064u, 0x4d4074u, 0x4d4084u, 0x4d4090u };
+    rl_4af502();
+    rl_45240a();
+    int w = g_arm_weapon;
+    uint32_t name = (w >= 1 && w <= 6) ? k_sheet[w] : k_sheet[0];
+    rl_4af8d9(STRV(g_rl_4d4044, 0x4d4044u, name), g_rl_53e918, 0x3d090, 0);
+    panel_box(96, 4, 26, 7);
+    p5_seal(484, 88, 0);
+    gfx_line_rect_bevel_dark_br(101, 9, 102, 102);
+    gfx_sprite_render_from_blob(BYTES(g_rl_53e918), 0, 102, 10);
+    int r = rl_418e2d();
+    g_gfx_menu_redraw_a = 1;
+    return r;
+}
+
+/* ================================================================ the shipment (screen 0x18) */
+
+/* Port of FUN_00410a5d (76 B) — the county map at (x - 2, y + 3): the 128 x 128 raw map DAT_00569590 and county c's
+ * outline (0x410cbd(c, x - 2, y + 3, 0)). EAX: 0x410cbd's (no caller reads it). (b): engine_sendsupplies.c is not
+ * linked. */
+int rl_410a5d(int c, int x, int y)
+{
+    gfx_sprite_render_raw(g_rl_569590, x - 2, y + 3, 128, 128);
+    return p5_minimap_plot(c, x - 2, y + 3, 0);
+}
+
+/* Port of FUN_0041ad5d (325 B) — the shipment box: the map scene ticked, all dirty; a 22 x 22 bevel at (64, 48); the
+ * target county DAT_00553c78's map (else the current county's) at (96, 104); the title (33 / 0, tall), the wrapped
+ * instructions (33 / 7 at (240, 112), 176 wide, 100 lines), "from" (33 / 1) + the county's name (100 / county + 20
+ * map), "to" (33 / 2) + the target's, 33 / 6 at (96, 352). EAX: the last wrap's (no caller reads it). (b). */
+int rl_41ad5d(void)
+{
+    engine_map_scene_tick_frame();
+    rl_45240a();
+    gfx_panel_draw_bevel(CHROME, 64, 48, 22, 22);
+    if (g_send_target != 0)
+        rl_410a5d(g_send_target, 96, 104);
+    else
+        rl_410a5d(P5_COUNTY, 96, 104);
+    wrap_line(33, 0, 80, 68, FONT_TALL, 63);
+    p5_wrap_loc(33, 7, 240, 112, 176, 100, 0, 0, FONT, 63);
+    wrap_line(33, 1, 240, 158, FONT, 63);
+    wrap_line(100, P5_COUNTY + 20 * (int32_t)s_slot_0053f034, 240, 176, FONT, 63);
+    wrap_line(33, 2, 240, 194, FONT, 63);
+    wrap_line(100, g_send_target + 20 * (int32_t)s_slot_0053f034, 240, 212, FONT, 63);
+    wrap_line(33, 6, 96, 352, FONT, 63);
+    return 0;
+}
+
+/* Port of FUN_0041aea2 (369 B) — the shipment's goods: a 20 x 5 chrome fill at (80, 256) marked dirty (21 x 6), the
+ * bevel 320 x 80; the local player's caravan order DAT_005678c0 (24 B a player): 33 / 3 + its +0 at 160 and +4 at 336
+ * (the gold icon 33 at (250, 264)); 33 / 5 + its +0x10 / +0x14 (the grain icon 38 at (248, 300)). EAX: the last
+ * label's (0x4ba26e discards it). (b). */
+int rl_41aea2(void)
+{
+#define S42(va) STR(g_rl_4d4208, 0x4d4208u, va)
+#define ORDER(off) AT(int32_t, g_caravan_order, 0x5678c0u, 0x5678c0 + 24 * P5_LOCAL + (off))
+    gfx_panel_fill_interior_chrome(CHROME, 80, 256, 20, 5);
+    rl_4527a6(80, 256, 21, 6, 1);
+    gfx_line_rect_bevel_dark_br(80, 256, 320, 80);
+    wrap_line(33, 3, 88, 268, FONT, 63);
+    p5_label(ORDER(0), 32, S42(0x4d4208), 160, 268, FONT, 63);
+    gfx_sprite_render_from_blob(MISC, 33, 250, 264);
+    p5_label(ORDER(4), 32, S42(0x4d420c), 336, 268, FONT, 63);
+    wrap_line(33, 5, 88, 304, FONT, 63);
+    p5_label(ORDER(0x10), 32, S42(0x4d4210), 160, 304, FONT, 63);
+    gfx_sprite_render_from_blob(MISC, 38, 248, 300);
+    p5_label(ORDER(0x14), 32, S42(0x4d4214), 336, 304, FONT, 63);
+    return 0;
+#undef ORDER
+#undef S42
+}
+
+/* ================================================================ the title screens */
+
+/* Port of FUN_0041e61d (452 B) — the title backdrop by page DAT_005530f0: base dir (page 1 first 0x4b1897 / 0x4b11ce);
+ * page >= 11 skirmish.256 + skircust.pl8 (DAT_0056899c) / skirmish.pl8; page 10 or < 7 gateway.256 / gateway.pl8, the
+ * panel sheet grown to 220000 (0x4b25b0) when Size DAT_004eabcc is smaller, panels2.pl8 into it; 7..9 custom.256 /
+ * custom.pl8; page 1 presents (0x452160(1)); the palette applied, all dirty. EAX: 0x45240a's (no caller reads it).
+ * (b): the linked engine_title_render binds it as a seam (retail's), gfx.c is not linked. */
+int rl_41e61d(void)
+{
+#define S43(va) STRV(g_rl_4d42e4, 0x4d42e4u, va)
+#define SIZE AT(int32_t, g_rl_4eabcc, 0x4eabccu, 0x4eabccu)
+    rl_4af502();
+    if (g_rl_5530f0 == 1) {
+        rl_4b1897();
+        rl_4b11ce();
+    }
+    if (g_rl_5530f0 >= 11) {
+        rl_4af8d9(S43(0x4d42e4), PTRV(P5_PAL), 0x300, 0);                    /* "skirmish.256" */
+        rl_408fcb(g_rl_56899c != 0 ? S43(0x4d4304) : S43(0x4d42f4), 480);    /* "skircust.pl8" / "skirmish.pl8" */
+    } else if (g_rl_5530f0 == 10) {
+        rl_4af8d9(S43(0x4d4314), PTRV(P5_PAL), 0x300, 0);                    /* "gateway.256" */
+        rl_408fcb(S43(0x4d4320), 480);                                       /* "gateway.pl8" */
+        if (SIZE < 220000) rl_4b25b0(220000);
+        rl_4af8d9(S43(0x4d432c), P5_SHEET, 0x27100, 0);                      /* "panels2.pl8" */
+    } else if (g_rl_5530f0 >= 7) {
+        rl_4af8d9(S43(0x4d4338), PTRV(P5_PAL), 0x300, 0);                    /* "custom.256" */
+        rl_408fcb(S43(0x4d4344), 480);                                       /* "custom.pl8" */
+    } else {
+        rl_4af8d9(S43(0x4d4350), PTRV(P5_PAL), 0x300, 0);                    /* "gateway.256" */
+        rl_408fcb(S43(0x4d435c), 480);                                       /* "gateway.pl8" */
+        if (SIZE < 220000) rl_4b25b0(220000);
+        rl_4af8d9(S43(0x4d4368), P5_SHEET, 0x27100, 0);                      /* "panels2.pl8" */
+    }
+    if (g_rl_5530f0 == 1) rl_452160(1);
+    rl_4b0ab5(PTRV(P5_PAL));
+    return rl_45240a();
+#undef SIZE
+#undef S43
+}
+
+/* Port of FUN_0041fdd6 (415 B) — an option page's drop-down list: the page DAT_00553e5c redraws first (7 the setup
+ * 0x41f6c7, 8 0x41f77a, 12 0x42051c, 11 0x420630, each with the tab DAT_0055306c); then at the tab's anchor
+ * (DAT_004d3158 / DAT_004d315c[3 tab]; tab 2 moves up 16 (count - 1)) a 6 x (count + 2) bevel without shadow and the
+ * DAT_00553fb4 entries (103 / DAT_004d3128[tab] + i, centred in 96 at 16 px a row; the hovered DAT_00553114 in 249);
+ * marked dirty. EAX: the mark's (no caller reads it). (b): engine_title_render.c draws it through a context. */
+int rl_41fdd6(void)
+{
+    if (g_rl_553e5c == 7) p5_title_setup(g_tr_p9_tab);
+    else if (g_rl_553e5c == 8) p5_title_41f77a(g_tr_p9_tab);
+    else if (g_rl_553e5c == 12) rl_42051c(g_tr_p9_tab);
+    else if (g_rl_553e5c == 11) p5_title_420630(g_tr_p9_tab);
+    int tab = g_tr_p9_tab;
+    int x = P5_T32(g_rl_4d3128, 0x4d3128u, 0x4d3158 + 12 * tab);
+    int y = P5_T32(g_rl_4d3128, 0x4d3128u, 0x4d315c + 12 * g_tr_p9_tab);
+    if (g_tr_p9_tab == 2) y -= 16 * (g_tr_p9_count - 1);
+    int rows = g_tr_p9_count + 2;
+    g_gfx_no_shadow = 1;
+    gfx_panel_draw_bevel(CHROME, x, y, 6, rows);
+    for (int i = 0; i < g_tr_p9_count; i++) {
+        int k = P5_T32(g_rl_4d3128, 0x4d3128u, 0x4d3128 + 4 * g_tr_p9_tab) + i;
+        p5_wrap_c(103, k, x + 1, 16 * i + y + 16, 96, FONT, i + 1 == g_tr_selected_button ? 249 : 63);
+    }
+    g_gfx_no_shadow = 0;
+    return rl_4527a6(x, y, 6, rows, 1);
+}

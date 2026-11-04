@@ -131,7 +131,7 @@ static int  map_options_redraw(void) { return (int)engine_retail_call(0x476a5du,
 static void text_input_open(const void *init, int n, int x, int y)   /* text_input_init 0x402009 (rl ui4) */
 { rl_402009((int)(uintptr_t)init, n, x, y); }
 static int  text_recompute_length(void) { return rl_401f49(); }   /* text_input_recompute_length 0x401f49 (rl ui4) */
-static int  smithy_panel(void) { return (int)engine_retail_call(0x413155u, 0); }   /* TODO(rl-link): labor_panel_smithy 0x413155 (engine_labor.c) */
+static int  smithy_panel(void) { return rl_413155(); }   /* labor_panel_smithy 0x413155 (rl ui4) */
 static int  title_filelist(int page) { return (int)engine_retail_call(0x4148e4u, 1, (uint32_t)page); }   /* TODO(rl-link): engine_title_render_filelist 0x4148e4 */
 /* unported — TODO(rl-extern) */
 static int  mp_quit_session(void) { return (int)engine_retail_call(0x4b74ceu, 0); }   /* TODO(rl-extern): 0x4b74ce */

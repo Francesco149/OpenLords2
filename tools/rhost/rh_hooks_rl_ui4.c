@@ -7,6 +7,9 @@
  * No row (docs/findings/rl-ui4.md):
  *   rl_40e890 / rl_40e8bb  host-level: they run a frame (0x4b99c0), rhost's frame boundary (rhost.c frame_wrap
  *              advances the frame counter, the virtual clock and the input queue) — a shadow would run two frames.
+ *   rl_42e5c0 / rl_42ec91 / rl_42f1df  host-level: they create the DirectDraw object / the surfaces + clipper / a
+ *              palette (rhost's DirectDraw objects are not retail memory: the shadow cannot roll them back), and 0x42e5c0
+ *              styles the window and pumps the message queue.
  */
 #include "rh_port.h"
 #include "rl.h"
@@ -28,7 +31,10 @@ enum {
     X_rl_404dc1, X_rl_404e03, X_rl_404e4b, X_rl_404ead, X_rl_404f4c, X_rl_408fcb, X_rl_40ccfa, X_rl_40da1e,
     X_rl_40e3ee, X_rl_40e5e7, X_rl_40e6f2, X_rl_40e7e4, X_rl_40ecc4, X_rl_40f1a0, X_rl_40f5fd, X_rl_429b1d,
     X_rl_429ba4, X_rl_42a15f, X_rl_4290d0, X_rl_429153, X_rl_42925e, X_rl_4291b3, X_rl_4298c1, X_rl_427ed0,
-    X_rl_428471, X_rl_42847c,
+    X_rl_428471, X_rl_42847c, X_rl_425ded, X_rl_425b10, X_rl_426d11, X_rl_427d19, X_rl_42f306, X_rl_42eb7c,
+    X_rl_419c78, X_rl_412b33, X_rl_412e6b, X_rl_413155, X_rl_413590, X_rl_413b30, X_rl_4140f3, X_rl_414220,
+    X_rl_41593b, X_rl_415bdc, X_rl_415e42, X_rl_415fb7, X_rl_41789b, X_rl_417960, X_rl_4180f6, X_rl_4184c6,
+    X_rl_418e2d, X_rl_410a5d, X_rl_41ad5d, X_rl_41aea2, X_rl_41e61d, X_rl_41fdd6,
 };
 
 HOOK_R(rl_401000, 3, rl_401000(I(0), I(1), I(2)))
@@ -97,6 +103,34 @@ HOOK_R(rl_4298c1, 1, rl_4298c1(I(0)))
 HOOK_V(rl_427ed0, 0, rl_427ed0())
 HOOK_V(rl_428471, 0, rl_428471())
 HOOK_R(rl_42847c, 0, rl_42847c())
+HOOK_R(rl_425ded, 0, rl_425ded())
+HOOK_R(rl_425b10, 0, rl_425b10())
+HOOK_V(rl_426d11, 1, rl_426d11(I(0)))
+HOOK_V(rl_427d19, 0, rl_427d19())   /* EAX: Release's (the caller's with no cue) */
+HOOK_R(rl_42f306, 0, rl_42f306())
+HOOK_R(rl_42eb7c, 0, rl_42eb7c())
+HOOK_V(rl_419c78, 0, rl_419c78())   /* the menu bar's chrome (EAX: the screen byte / a callee's) */
+HOOK_V(rl_412b33, 0, rl_412b33())   /* the labour screen */
+HOOK_V(rl_412e6b, 0, rl_412e6b())   /* the mine panels */
+HOOK_V(rl_413155, 0, rl_413155())   /* the smithy panel (EAX: 0x45240a's; 0x412b33 / 0x43a997 discard it) */
+HOOK_V(rl_413590, 0, rl_413590())   /* the grain panel */
+HOOK_V(rl_413b30, 0, rl_413b30())   /* the cattle panel */
+HOOK_V(rl_4140f3, 0, rl_4140f3())   /* the reclaim panel */
+HOOK_V(rl_414220, 0, rl_414220())   /* the castle panel (0x41dedb's EAX) */
+HOOK_V(rl_41593b, 1, rl_41593b(I(0)))   /* the rankings screen */
+HOOK_R(rl_415bdc, 0, rl_415bdc())   /* the rankings (EAX: the leader; 0x41593b reads it) */
+HOOK_R(rl_415e42, 1, rl_415e42(I(0)))   /* a realm's score (EAX read by 0x415bdc) */
+HOOK_V(rl_415fb7, 1, rl_415fb7(I(0)))   /* the merchant screen */
+HOOK_V(rl_41789b, 0, rl_41789b())   /* the diplomacy screen by mode (a mode > 6 returns the caller's EAX) */
+HOOK_V(rl_417960, 0, rl_417960())   /* the gift box */
+HOOK_V(rl_4180f6, 0, rl_4180f6())   /* the armoury screen */
+HOOK_V(rl_4184c6, 0, rl_4184c6())   /* the weapon assignment screen */
+HOOK_V(rl_418e2d, 0, rl_418e2d())   /* the weapon assignment's numbers */
+HOOK_V(rl_410a5d, 3, rl_410a5d(I(0), I(1), I(2)))   /* the county map (0x410cbd's EAX) */
+HOOK_V(rl_41ad5d, 0, rl_41ad5d())   /* the shipment box */
+HOOK_V(rl_41aea2, 0, rl_41aea2())   /* the shipment's goods */
+HOOK_V(rl_41e61d, 0, rl_41e61d())   /* the title backdrop */
+HOOK_V(rl_41fdd6, 0, rl_41fdd6())   /* an option page's drop-down list */
 
 hook_t RH_HOOKS_RL_UI4[] = {
     { "rl_401000", 0x401000u, (void *)w_rl_401000, 0, 0, 0, 0, "" },
@@ -165,5 +199,33 @@ hook_t RH_HOOKS_RL_UI4[] = {
     { "rl_427ed0", 0x427ed0u, (void *)w_rl_427ed0, 0, 0, 0, 0, "" },
     { "rl_428471", 0x428471u, (void *)w_rl_428471, 0, 0, 0, 0, "" },
     { "rl_42847c", 0x42847cu, (void *)w_rl_42847c, 0, 0, 0, 0, "" },
+    { "rl_425ded", 0x425dedu, (void *)w_rl_425ded, 0, 0, 0, 0, "" },
+    { "rl_425b10", 0x425b10u, (void *)w_rl_425b10, 0, 0, 0, 0, "" },
+    { "rl_426d11", 0x426d11u, (void *)w_rl_426d11, 0, 0, 0, 0, "" },
+    { "rl_427d19", 0x427d19u, (void *)w_rl_427d19, 0, 0, 0, 0, "" },
+    { "rl_42f306", 0x42f306u, (void *)w_rl_42f306, 0, 0, 0, 0, "" },
+    { "rl_42eb7c", 0x42eb7cu, (void *)w_rl_42eb7c, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_419c78", 0x419c78u, (void *)w_rl_419c78, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_412b33", 0x412b33u, (void *)w_rl_412b33, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_412e6b", 0x412e6bu, (void *)w_rl_412e6b, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_413155", 0x413155u, (void *)w_rl_413155, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_413590", 0x413590u, (void *)w_rl_413590, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_413b30", 0x413b30u, (void *)w_rl_413b30, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_4140f3", 0x4140f3u, (void *)w_rl_4140f3, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_414220", 0x414220u, (void *)w_rl_414220, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_41593b", 0x41593bu, (void *)w_rl_41593b, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_415bdc", 0x415bdcu, (void *)w_rl_415bdc, 0, 0, 0, 0, "" },
+    { "rl_415e42", 0x415e42u, (void *)w_rl_415e42, 0, 0, 0, 0, "" },
+    { "rl_415fb7", 0x415fb7u, (void *)w_rl_415fb7, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_41789b", 0x41789bu, (void *)w_rl_41789b, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_417960", 0x417960u, (void *)w_rl_417960, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_4180f6", 0x4180f6u, (void *)w_rl_4180f6, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_4184c6", 0x4184c6u, (void *)w_rl_4184c6, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_418e2d", 0x418e2du, (void *)w_rl_418e2d, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_410a5d", 0x410a5du, (void *)w_rl_410a5d, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_41ad5d", 0x41ad5du, (void *)w_rl_41ad5d, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_41aea2", 0x41aea2u, (void *)w_rl_41aea2, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_41e61d", 0x41e61du, (void *)w_rl_41e61d, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_41fdd6", 0x41fdd6u, (void *)w_rl_41fdd6, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
 };
 const int RH_HOOKS_RL_UI4_N = sizeof RH_HOOKS_RL_UI4 / sizeof *RH_HOOKS_RL_UI4;

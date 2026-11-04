@@ -32,7 +32,14 @@
     X(SmackOpen, 0x5cf5ecu) X(SmackToBuffer, 0x5cf5f0u) X(SmackClose, 0x5cf5f4u) X(SmackNextFrame, 0x5cf5f8u)    \
     X(SmackDoFrame, 0x5cf5fcu)                                                                                   \
     X(PostMessageA, 0x5cf514u) X(GetForegroundWindow, 0x5cf550u) X(SetCursor, 0x5cf578u)                     \
-    X(DialogBoxParamA, 0x5cf52cu) X(WinHelpA, 0x5cf518u)
+    X(DialogBoxParamA, 0x5cf52cu) X(WinHelpA, 0x5cf518u)                                                       \
+    /* ui4 */ X(DirectSoundCreate, 0x5cf370u) X(DirectDrawCreate, 0x5cf35cu) X(timeKillEvent, 0x5cf5b4u)       \
+    X(UpdateWindow, 0x5cf574u) X(GetDC, 0x5cf584u) X(ReleaseDC, 0x5cf588u) X(GetDeviceCaps, 0x5cf388u)         \
+    X(GetPaletteEntries, 0x5cf378u) X(SetSystemPaletteUse, 0x5cf37cu) X(GetSystemMetrics, 0x5cf580u)           \
+    X(GetWindowLongA, 0x5cf51cu) X(SetWindowLongA, 0x5cf4ecu) X(SetRect, 0x5cf594u) X(GetMenu, 0x5cf4fcu)       \
+    X(AdjustWindowRectEx, 0x5cf508u) X(SetWindowPos, 0x5cf4f8u) X(SystemParametersInfoA, 0x5cf504u)            \
+    X(GetWindowRect, 0x5cf500u) X(PeekMessageA, 0x5cf4f0u) X(GetMessageA, 0x5cf58cu)                           \
+    X(TranslateMessage, 0x5cf590u) X(DispatchMessageA, 0x5cf510u)
 
 /* X(name, retail VA) — retail's CRT functions with state */
 #define RL_PLAT_CRT(X)                                                                                           \
@@ -74,6 +81,30 @@ HWND     rl_plat_GetForegroundWindow(void);
 HCURSOR  rl_plat_SetCursor(HCURSOR c);
 INT_PTR  rl_plat_DialogBoxParamA(HINSTANCE inst, const char *tmpl, HWND parent, DLGPROC proc, LPARAM init);
 BOOL     rl_plat_WinHelpA(HWND w, const char *file, UINT cmd, ULONG_PTR data);   /* rhost: a stub (rh_win.c) */
+/* ui4: DirectSound / DirectDraw creation (the standalone loads dsound / ddraw on first use), the stream timer kill,
+ * the DirectDraw init's window and message calls */
+HRESULT  rl_plat_DirectSoundCreate(const GUID *g, void **ds, void *outer);
+HRESULT  rl_plat_DirectDrawCreate(GUID *g, void **dd, void *outer);
+MMRESULT rl_plat_timeKillEvent(UINT id);
+BOOL     rl_plat_UpdateWindow(HWND w);
+HDC      rl_plat_GetDC(HWND w);
+int      rl_plat_ReleaseDC(HWND w, HDC dc);
+int      rl_plat_GetDeviceCaps(HDC dc, int index);
+UINT     rl_plat_GetPaletteEntries(HPALETTE pal, UINT start, UINT n, PALETTEENTRY *e);
+UINT     rl_plat_SetSystemPaletteUse(HDC dc, UINT use);
+int      rl_plat_GetSystemMetrics(int index);
+LONG     rl_plat_GetWindowLongA(HWND w, int index);
+LONG     rl_plat_SetWindowLongA(HWND w, int index, LONG v);
+BOOL     rl_plat_SetRect(RECT *r, int l, int t, int ri, int b);
+HMENU    rl_plat_GetMenu(HWND w);
+BOOL     rl_plat_AdjustWindowRectEx(RECT *r, DWORD style, BOOL menu, DWORD ex);
+BOOL     rl_plat_SetWindowPos(HWND w, HWND after, int x, int y, int cx, int cy, UINT fl);
+BOOL     rl_plat_SystemParametersInfoA(UINT a, UINT ui, void *pv, UINT win);
+BOOL     rl_plat_GetWindowRect(HWND w, RECT *r);
+BOOL     rl_plat_PeekMessageA(MSG *m, HWND w, UINT lo, UINT hi, UINT rm);
+BOOL     rl_plat_GetMessageA(MSG *m, HWND w, UINT lo, UINT hi);
+BOOL     rl_plat_TranslateMessage(const MSG *m);
+LRESULT  rl_plat_DispatchMessageA(const MSG *m);
 /* smackw32 (__stdcall, by ordinal): the Smack struct is opaque to the shim (retail reads its fields itself) */
 uint32_t rl_plat_SmackOpen(const char *name, uint32_t flags, uint32_t extrabuf);      /* #14 */
 void     rl_plat_SmackClose(uint32_t smk);                                            /* #18 */

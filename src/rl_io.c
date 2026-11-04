@@ -1016,8 +1016,8 @@ static volatile int32_t *sfx(int k) { return k == 0 ? &g_bf_522afc : &AT(int32_t
 /* DSBUFFERDESC (20 B): dwSize, dwFlags, dwBufferBytes, dwReserved, lpwfxFormat */
 typedef struct { uint32_t size, flags, bytes, reserved, wfx; } dsbdesc_t;
 
-/* the cue release 0x427d19 (audio.c's audio_cue_release keeps its own buffer) — TODO(rl-link): audio_cue_release */
-static void cue_release(void) { engine_retail_call(0x427d19u, 0); }
+/* the cue release 0x427d19 (rl ui4) */
+static void cue_release(void) { rl_427d19(); }
 
 /* Port of FUN_00427c9b (126 B) — is the cue playing: ppDS and the cue buffer set, GetStatus succeeds (HRESULT in
  * DAT_00522b58) and says DSBSTATUS_PLAYING alone (== 1, not & 1: a looping cue reads 5 = not playing, quirk). */
@@ -1339,7 +1339,7 @@ enum { S_WFX = 0x00, S_HMMIO = 0x04, S_DATA = 0x08, S_RIFF = 0x1c, S_BUF = 0x30,
 #define ST_TIMER(k) g_rl_522b00[20 + (k)]                                                    /* uTimerID[k] */
 #define U_RES    AT(uint32_t, g_rl_4d4754, 0x4d4754u, 0x4d4754u)   /* uResolution */
 #define U_PERIOD AT(uint32_t, g_rl_4d4754, 0x4d4754u, 0x4d4758u)   /* uPeriod */
-static int stream_stop(int k) { return (int)engine_retail_call(0x426d11u, 1, (uint32_t)k); }   /* TODO(rl-extern): 0x426d11 */
+static int stream_stop(int k) { return rl_426d11(k); }   /* 0x426d11 (rl ui4) */
 static uint16_t wfx_bits(int k) { return *(uint16_t *)(uintptr_t)(ST(k, S_WFX) + 14); }   /* wBitsPerSample */
 
 /* Port of FUN_00426534 (1630 B) — set stream `k` up: open the WAV named DAT_00522b60 + 16 k (0x4b92e0: 1), PCM only
@@ -1670,7 +1670,7 @@ int rl_42f58c(int first, int last)
 {
     (void)first; (void)last;
     if (g_rl_53f228 != 0)
-        engine_retail_call(0x42f306u, 0);   /* TODO(rl-extern) */
+        rl_42f306();   /* (rl ui4) */
     else
         engine_retail_call(0x42f449u, 0);   /* TODO(rl-extern) */
     void *e = g_rl_53f228 != 0 ? (void *)&g_rl_5165b0 : (void *)&g_rl_515d90;

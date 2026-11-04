@@ -64,13 +64,13 @@ static int evq_post(int a, int b, int code, int d, int e, int f, int g, int h)  
 static void editor_open(const void *buf, int max, int w, int flag)   /* text_input_init 0x402009 (a port struct) */
 { rl_402009((int)(uintptr_t)buf, max, w, flag); }
 static void editor_length(void) { rl_401f49(); }   /* text_input_recompute_length 0x401f49 (rl ui4) */
-static int  cue_release(void) { return (int)engine_retail_call(0x427d19u, 0); }   /* audio_cue_release 0x427d19 (audio.c) */
+static int  cue_release(void) { return rl_427d19(); }   /* audio_cue_release 0x427d19 (rl ui4) */
 static int  palette_full(void) { return (int)engine_retail_call(0x4b2922u, 0); }  /* gfx_set_palette_full_range 0x4b2922 (gfx.c) */
 static int  read_file_at(int name, void *buf, int n, int off)   /* io_read_file_at 0x4af8d9 (io.c) */
 { return (int)engine_retail_call(0x4af8d9u, 4, (uint32_t)name, (uint32_t)(uintptr_t)buf, (uint32_t)n, (uint32_t)off); }
 static int  roster_slot(int p) { return (int)engine_retail_call(0x4a9f72u, 1, (uint32_t)p); }   /* spawn_pick_roster_slot 0x4a9f72 (engine_combat.c: static) */
 /* unported — TODO(rl-extern) */
-static int  stream_stop(int a) { return (int)engine_retail_call(0x426d11u, 1, (uint32_t)a); }   /* 0x426d11: the music stream stop */
+static int  stream_stop(int a) { return rl_426d11(a); }   /* 0x426d11: the music stream stop (rl ui4) */
 
 /* ================================================================ the options menu */
 

@@ -489,7 +489,7 @@ static void load_season(void) { engine_retail_call(0x4984dcu, 0); }   /* TODO(rl
 static int  strat_render(int full) { return rl_40f5fd(full); }   /* engine_screen_strat_render (rl ui4) */
 static void filelist_content(int a, int b) { engine_retail_call(0x4149ecu, 2, (uint32_t)a, (uint32_t)b); }   /* TODO(rl-link): engine_title_render_filelist_content */
 static void bf_minimap_scroll(int a) { engine_retail_call(0x4bc1d1u, 1, (uint32_t)a); }   /* TODO(rl-link): engine_battlefield_render_minimap_scroll */
-static void menubar_chrome(void) { engine_retail_call(0x419c78u, 0); }   /* TODO(rl-link): engine_hud_menubar_render_chrome (the linked port takes its state as arguments) */
+static void menubar_chrome(void) { rl_419c78(); }   /* engine_hud_menubar_render_chrome (rl ui4) */
 static void present(int full) { engine_retail_call(0x452160u, 1, (uint32_t)full); }   /* TODO(rl-link): gfx.c's present 0x452160 */
 /* 0x4b1de0 is an empty function (11 B: no state, EAX passes through): its calls are elided */
 
@@ -953,7 +953,7 @@ int rl_4233f7(int a1)
 static void caspics_load(const void *name, const void *dst, int idx)   /* rl_40ae12 (glue): the caspics.pl8 frame loader */
 { rl_40ae12((int)(uintptr_t)name, (int)(uintptr_t)dst, idx); }
 static void popup_scroll_dismiss(void) { engine_retail_call(0x476768u, 0); }   /* TODO(rl-link): engine_popup_scroll_dismiss */
-static void labor_render(void) { engine_retail_call(0x412b33u, 0); }   /* TODO(rl-link): engine_labor_render */
+static void labor_render(void) { rl_412b33(); }   /* engine_labor_render (rl ui4) */
 static void fill4(int x, int y, int c) { engine_retail_call(0x4b4056u, 3, (uint32_t)x, (uint32_t)y, (uint32_t)c); }   /* TODO(rl-link): engine_overlay_render's 4-byte fill 0x4b4056 */
 static void movie_text_box(int x, int y, int w, int h)   /* TODO(rl-extern): 0x42e45e */
 { engine_retail_call(0x42e45eu, 4, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h); }
