@@ -425,7 +425,7 @@ void engine_army_economy_set_yield_divisors(int divisor_std, int divisor_phase4)
  * multiply by (num/den) as a percentage; otherwise leave it.  Both fields are
  * unsigned bytes, so num < den implies den > 0 (percent_div's /0 guard is never
  * reached on this path). */
-static int prod_capacity_clamp(int key, int value)
+int prod_capacity_clamp(int key, int value)   /* extern: rl_44d281 (rl_ctl.c) */
 {
     const uint8_t *row = g_army_records + key * ARMY_ROW_STRIDE;
     unsigned num = row[ARMY_PROD_RATE];
@@ -442,7 +442,7 @@ static int prod_capacity_clamp(int key, int value)
  * halved: returns value + value*(bonus/2)/100.  (Retail computes the bonus
  * through a `field < 1 ? field : field` branch whose two arms are identical —
  * a decompiler-flattened no-op clamp; we read the field directly.) */
-static int prod_yield_bonus(int key, int value)
+int prod_yield_bonus(int key, int value)   /* extern: rl_44d303 */
 {
     int bonus = *(const int32_t *)(g_army_records + key * ARMY_ROW_STRIDE + ARMY_YIELD_BONUS);
     bonus /= 2;
