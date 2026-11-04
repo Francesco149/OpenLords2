@@ -1051,7 +1051,7 @@ int rl_4782c5(void)
     if (s_slot_0057a0f0 != 0) {
         rl_47f474();
         engine_set_current_screen(46);
-        r = (int)engine_retail_call(0x42c64fu, 0);   /* TODO(rl-extern): 0x42c64f (the siege result) */
+        r = rl_42c64f();   /* the siege result (partition skirmish) */
         s_slot_0057c8fc = 0;
         g_engine_state = 2;
     } else {   /* TODO(rl-link): engine_combat_aftermath (takes a port event queue) */

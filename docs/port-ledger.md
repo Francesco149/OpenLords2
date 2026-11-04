@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1371** (56.0%) — tested 788, ported 583
-- code bytes touched: **70.2%** (589,135 / 838,629 B)
-- unported: **1076**
+- touched: **1406** (57.5%) — tested 788, ported 618
+- code bytes touched: **72.5%** (607,759 / 838,629 B)
+- unported: **1041**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (583) — reimplemented, no host test yet
+## ported (618) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -889,7 +889,19 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x41dedb | FUN_0041dedb | 770 | engine_labor.c, engine_labor.h |
 | 0x41e1dd | FUN_0041e1dd | 1011 | rl_render.c |
 | 0x41ff75 | FUN_0041ff75 | 466 | rl_render.c |
+| 0x420147 | FUN_00420147 | 463 | rl_skirmish.c |
 | 0x420316 | FUN_00420316 | 274 | rl_render.c |
+| 0x42051c | FUN_0042051c | 276 | rl_skirmish.c |
+| 0x4207c3 | FUN_004207c3 | 510 | rl_skirmish.c |
+| 0x4209c1 | FUN_004209c1 | 895 | rl_skirmish.c |
+| 0x420d40 | FUN_00420d40 | 164 | rl_skirmish.c |
+| 0x420de4 | FUN_00420de4 | 545 | rl_skirmish.c |
+| 0x421005 | FUN_00421005 | 556 | rl_skirmish.c |
+| 0x421231 | FUN_00421231 | 222 | rl_skirmish.c |
+| 0x42130f | FUN_0042130f | 508 | rl_skirmish.c |
+| 0x42150b | FUN_0042150b | 508 | rl_skirmish.c |
+| 0x421707 | FUN_00421707 | 1538 | rl_skirmish.c |
+| 0x421d09 | FUN_00421d09 | 523 | rl_skirmish.c |
 | 0x421f14 | FUN_00421f14 | 1491 | rl_render.c |
 | 0x4224e7 | FUN_004224e7 | 1835 | rl_render.c |
 | 0x422d22 | FUN_00422d22 | 719 | rl_render.c |
@@ -904,6 +916,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42476b | FUN_0042476b | 138 | rl_render.c |
 | 0x4248a3 | FUN_004248a3 | 239 | rl_render.c |
 | 0x424992 | FUN_00424992 | 2434 | rl_render.c |
+| 0x425314 | FUN_00425314 | 371 | rl_skirmish.c |
+| 0x425487 | FUN_00425487 | 437 | rl_skirmish.c |
 | 0x425b10 | FUN_00425b10 | 549 | audio.c, audio.h |
 | 0x425ded | FUN_00425ded | 94 | audio.c, audio.h |
 | 0x425e4b | FUN_00425e4b | 725 | rl_io.c |
@@ -923,8 +937,29 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42a7f1 | FUN_0042a7f1 | 224 | engine_map_terrain.c, engine_map_terrain.h, engine_screen_strat.c |
 | 0x42a8d1 | FUN_0042a8d1 | 218 | engine_map_terrain.c, engine_map_terrain.h, rl_glue.c |
 | 0x42a9ab | FUN_0042a9ab | 218 | engine_map_terrain.c, engine_map_terrain.h, rl_glue.c |
+| 0x42aa90 | FUN_0042aa90 | 133 | rl_skirmish.c |
+| 0x42ab15 | FUN_0042ab15 | 109 | rl_skirmish.c |
+| 0x42ab82 | FUN_0042ab82 | 138 | rl_skirmish.c |
+| 0x42ac0c | FUN_0042ac0c | 2932 | rl_skirmish.c |
+| 0x42b780 | FUN_0042b780 | 119 | rl_skirmish.c |
+| 0x42b7f7 | FUN_0042b7f7 | 290 | rl_skirmish.c |
+| 0x42b919 | FUN_0042b919 | 171 | rl_skirmish.c |
+| 0x42b9c4 | FUN_0042b9c4 | 124 | rl_skirmish.c |
+| 0x42ba40 | FUN_0042ba40 | 1286 | rl_skirmish.c |
+| 0x42bf46 | FUN_0042bf46 | 935 | rl_skirmish.c |
+| 0x42c476 | FUN_0042c476 | 108 | rl_skirmish.c |
+| 0x42c4e2 | FUN_0042c4e2 | 203 | rl_skirmish.c |
+| 0x42c5ad | FUN_0042c5ad | 81 | rl_skirmish.c |
+| 0x42c5fe | FUN_0042c5fe | 81 | rl_skirmish.c |
+| 0x42c64f | FUN_0042c64f | 1531 | rl_skirmish.c |
+| 0x42cc4a | FUN_0042cc4a | 1327 | rl_skirmish.c |
 | 0x42d179 | FUN_0042d179 | 157 | rl_glue.c |
+| 0x42d216 | FUN_0042d216 | 198 | rl_skirmish.c |
+| 0x42d2dc | FUN_0042d2dc | 173 | rl_skirmish.c |
+| 0x42d389 | FUN_0042d389 | 130 | rl_skirmish.c |
+| 0x42d4aa | FUN_0042d4aa | 860 | rl_skirmish.c |
 | 0x42d806 | FUN_0042d806 | 81 | engine_bf_setup.c |
+| 0x42d857 | FUN_0042d857 | 179 | rl_skirmish.c |
 | 0x42d91b | FUN_0042d91b | 83 | rl_io.c |
 | 0x42da18 | FUN_0042da18 | 431 | rl_io.c |
 | 0x42dbc7 | FUN_0042dbc7 | 868 | rl_io.c |

@@ -1844,7 +1844,7 @@ int rl_497a34(int fresh)
     rl_49964c();
     if (s_slot_0057a0f0 == 1) {
         rl_4263ad((int)(uintptr_t)RS(g_rl_4dbc2c, 0x4dbc2cu, 0x4dbc2cu), 0, 1);   /* "setup3.wav" */
-        r = (int)engine_retail_call(0x42b780u, 0);   /* TODO(rl-extern) */
+        r = rl_42b780();   /* partition skirmish */
         g_rl_5c9274 = 0;
         return r;
     }
