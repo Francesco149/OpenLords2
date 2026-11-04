@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **996** (40.7%) — tested 785, ported 211
-- code bytes touched: **52.1%** (436,864 / 838,629 B)
-- unported: **1451**
+- touched: **1018** (41.6%) — tested 785, ported 233
+- code bytes touched: **53.6%** (449,827 / 838,629 B)
+- unported: **1429**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (785) — ported + host unit suite
@@ -807,7 +807,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (211) — reimplemented, no host test yet
+## ported (233) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -847,6 +847,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4239d5 | FUN_004239d5 | 378 | engine_bf_input.c |
 | 0x425b10 | FUN_00425b10 | 549 | audio.c, audio.h |
 | 0x425ded | FUN_00425ded | 94 | audio.c, audio.h |
+| 0x426120 | FUN_00426120 | 246 | engine_bf_strike.c |
+| 0x4262cf | FUN_004262cf | 28 | engine_bf_strike.c |
 | 0x428daf | FUN_00428daf | 801 | engine_economy_globals.c, engine_trade.c, engine_trade.h (+1) |
 | 0x42a7f1 | FUN_0042a7f1 | 224 | engine_map_terrain.c, engine_map_terrain.h, engine_screen_strat.c |
 | 0x42d806 | FUN_0042d806 | 81 | engine_bf_setup.c |
@@ -923,11 +925,15 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46c7fc | FUN_0046c7fc | 182 | engine_bf_setup.c |
 | 0x46e4c8 | FUN_0046e4c8 | 582 | engine_bf_setup.c |
 | 0x46e70e | FUN_0046e70e | 89 | engine_bf_setup.c |
+| 0x46e767 | FUN_0046e767 | 531 | engine_bf_strike.c |
 | 0x46eb3f | FUN_0046eb3f | 57 | engine_bf_unit.c |
+| 0x46eb78 | FUN_0046eb78 | 54 | engine_bf_strike.c |
 | 0x46ebe4 | FUN_0046ebe4 | 138 | engine_bf_unit.c |
+| 0x46efbe | FUN_0046efbe | 235 | engine_bf_strike.c |
 | 0x46f0f0 | FUN_0046f0f0 | 78 | engine_bf_setup.c |
 | 0x46f13e | FUN_0046f13e | 79 | engine_bf_setup.c |
 | 0x46f18d | FUN_0046f18d | 79 | engine_bf_setup.c |
+| 0x46f525 | FUN_0046f525 | 336 | engine_bf_strike.c |
 | 0x47095e | FUN_0047095e | 1940 | engine_bf_move.c |
 | 0x4710f2 | FUN_004710f2 | 1574 | engine_bf_move.c |
 | 0x471718 | FUN_00471718 | 1287 | engine_bf_move.c |
@@ -962,8 +968,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x47d6fe | FUN_0047d6fe | 158 | engine_bf_setup.c |
 | 0x47d79c | FUN_0047d79c | 122 | engine_bf_setup.c |
 | 0x47d816 | FUN_0047d816 | 574 | engine_bf_setup.c |
+| 0x47da54 | FUN_0047da54 | 584 | engine_bf_strike.c |
 | 0x47dc9c | FUN_0047dc9c | 50 | engine_bf_setup.c |
 | 0x47dcce | FUN_0047dcce | 184 | engine_bf_setup.c |
+| 0x47dfe0 | FUN_0047dfe0 | 508 | engine_bf_strike.c |
 | 0x47e1dc | FUN_0047e1dc | 84 | engine_bf_setup.c |
 | 0x47e230 | FUN_0047e230 | 51 | engine_bf_setup.c |
 | 0x47e263 | FUN_0047e263 | 292 | engine_bf_setup.c |
@@ -987,6 +995,11 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x481878 | FUN_00481878 | 142 | engine_bf_setup.c |
 | 0x481906 | FUN_00481906 | 198 | engine_bf_setup.c |
 | 0x4822ed | FUN_004822ed | 644 | engine_bf_unit.c |
+| 0x483337 | FUN_00483337 | 1873 | engine_bf_strike.c |
+| 0x48551d | FUN_0048551d | 344 | engine_bf_strike.c |
+| 0x485675 | FUN_00485675 | 492 | engine_bf_strike.c |
+| 0x485861 | FUN_00485861 | 388 | engine_bf_strike.c |
+| 0x485b47 | FUN_00485b47 | 106 | engine_bf_strike.c |
 | 0x48eefd | FUN_0048eefd | 72 | engine_bf_setup.c |
 | 0x48f079 | FUN_0048f079 | 356 | engine_bf_move.c |
 | 0x48f1dd | FUN_0048f1dd | 3704 | engine_bf_move.c |
@@ -1004,9 +1017,18 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x491f17 | FUN_00491f17 | 359 | engine_bf_move.c |
 | 0x49207e | FUN_0049207e | 359 | engine_bf_move.c |
 | 0x4928a3 | FUN_004928a3 | 19 | engine_bf_move.c |
+| 0x492c8b | FUN_00492c8b | 3793 | engine_bf_strike.c |
+| 0x493b61 | FUN_00493b61 | 344 | engine_bf_strike.c |
+| 0x493cb9 | FUN_00493cb9 | 956 | engine_bf_strike.c |
+| 0x494075 | FUN_00494075 | 176 | engine_bf_strike.c |
+| 0x494125 | FUN_00494125 | 160 | engine_bf_strike.c |
+| 0x4941c5 | FUN_004941c5 | 160 | engine_bf_strike.c |
+| 0x494265 | FUN_00494265 | 821 | engine_bf_strike.c |
 | 0x494d08 | FUN_00494d08 | 241 | engine_bf_move.c |
 | 0x494df9 | FUN_00494df9 | 70 | engine_bf_move.c |
+| 0x4956cc | FUN_004956cc | 650 | engine_bf_strike.c |
 | 0x496155 | FUN_00496155 | 374 | engine_bf_move.c |
+| 0x496f72 | FUN_00496f72 | 178 | engine_bf_strike.c |
 | 0x497024 | FUN_00497024 | 378 | engine_bf_setup.c |
 | 0x49719e | FUN_0049719e | 169 | engine_bf_setup.c |
 | 0x497247 | FUN_00497247 | 178 | engine_bf_setup.c |
