@@ -12,7 +12,7 @@ static int (*const k_bf_state[11])(void) = {
 /* Port of FUN_004822ed (644 B) — the battlefield's per-unit sim driver (combat cluster, once per sub-step).
  * Recounts the class 7..9 units (DAT_00553ff0), the units on a kind-5 cell (cell +7) in formation slot 4
  * (DAT_00553e64) and the units with +0x13 set on a kind-15 cell (DAT_005530e8); a unit on a kind-10 or -17
- * cell goes through FUN_0049459a first. Then per unit: tick counter +0x1a8 + 1, latch +0x35 cleared, the
+ * cell goes through 0x49459a first. Then per unit: tick counter +0x1a8 + 1, latch +0x35 cleared, the
  * cooldowns +0x175 / +0x182 run down, the movement-state handler (+0x12 through DAT_004d9140; >= 11: the unit
  * is removed) and the troop snapshot +0x1a2 = +0x1a0. The loop index is retail's global DAT_0053e8f8 (the
  * handlers read it as the current unit; re-read after every call). */
@@ -54,7 +54,7 @@ int bf_4822ed(void)
 }
 
 /* Port of FUN_0046ebe4 (138 B) — remove battlefield unit `u`: its cell's occupant byte (+5) cleared, the
- * blocked-ring around a unit flagged +0x194 released (FUN_00491f17 at its position), the record zeroed. */
+ * blocked-ring around a unit flagged +0x194 released (0x491f17 at its position), the record zeroed. */
 int bf_46ebe4(int u)
 {
     BCELL8(BS32(u, 0x55449c), 0x5440e5) = 0;

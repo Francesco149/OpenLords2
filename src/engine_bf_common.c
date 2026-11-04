@@ -4,7 +4,7 @@
 
 #include <windows.h>
 
-/* FUN_00404a46 on retail's globals (the port: engine_rng_step): the LFSR pair DAT_0058fe28 / DAT_0058fe08 and its
+/* 0x404a46 on retail's globals (the port: engine_rng_step): the LFSR pair DAT_0058fe28 / DAT_0058fe08 and its
  * six masked outputs. A battlefield function that calls the RNG calls this. */
 void bf_rng_step(void)
 {

@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **922** (37.7%) — tested 785, ported 137
-- code bytes touched: **46.9%** (393,078 / 838,629 B)
-- unported: **1525**
+- touched: **970** (39.6%) — tested 785, ported 185
+- code bytes touched: **49.8%** (417,916 / 838,629 B)
+- unported: **1477**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (785) — ported + host unit suite
@@ -94,7 +94,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40477b | FUN_0040477b | 291 | engine_battlefield_render.h, gfx_dispatch.c, gfx_dispatch.h (+1) |
 | 0x40489e | FUN_0040489e | 111 | engine_tick_cadence.h |
 | 0x40490d | FUN_0040490d | 313 | engine_tick_cadence.h |
-| 0x404a46 | FUN_00404a46 | 230 | engine.c, engine.h, engine_bf.h (+5) |
+| 0x404a46 | FUN_00404a46 | 230 | engine.c, engine.h, engine_bf.h (+4) |
 | 0x404b2c | FUN_00404b2c | 109 | engine.h, engine_rng.c, engine_territory.c |
 | 0x404d6b | FUN_00404d6b | 43 | engine_armory.c, engine_army_ai.c, engine_input.c (+5) |
 | 0x404d96 | FUN_00404d96 | 43 | engine_math.h |
@@ -807,7 +807,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (137) — reimplemented, no host test yet
+## ported (185) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -849,6 +849,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x425ded | FUN_00425ded | 94 | audio.c, audio.h |
 | 0x428daf | FUN_00428daf | 801 | engine_economy_globals.c, engine_trade.c, engine_trade.h (+1) |
 | 0x42a7f1 | FUN_0042a7f1 | 224 | engine_map_terrain.c, engine_map_terrain.h, engine_screen_strat.c |
+| 0x42d806 | FUN_0042d806 | 81 | engine_bf_setup.c |
 | 0x42e5c0 | FUN_0042e5c0 | 1249 | gfx.c, gfx.h |
 | 0x42eaa6 | FUN_0042eaa6 | 214 | gfx.c |
 | 0x42eb7c | FUN_0042eb7c | 277 | gfx.c, gfx.h |
@@ -918,26 +919,73 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x463fa5 | FUN_00463fa5 | 273 | drawb_table_463fa5.h |
 | 0x4640b6 | FUN_004640b6 | 339 | drawb_stripb_4640b6.h |
 | 0x464209 | FUN_00464209 | 345 | drawb_stripb_464209.h |
+| 0x46c40c | FUN_0046c40c | 57 | engine_bf_setup.c |
+| 0x46c7fc | FUN_0046c7fc | 182 | engine_bf_setup.c |
+| 0x46e4c8 | FUN_0046e4c8 | 582 | engine_bf_setup.c |
+| 0x46e70e | FUN_0046e70e | 89 | engine_bf_setup.c |
 | 0x46eb3f | FUN_0046eb3f | 57 | engine_bf_unit.c |
 | 0x46ebe4 | FUN_0046ebe4 | 138 | engine_bf_unit.c |
+| 0x46f0f0 | FUN_0046f0f0 | 78 | engine_bf_setup.c |
+| 0x46f13e | FUN_0046f13e | 79 | engine_bf_setup.c |
+| 0x46f18d | FUN_0046f18d | 79 | engine_bf_setup.c |
 | 0x472e46 | FUN_00472e46 | 595 | engine.c |
 | 0x47309e | FUN_0047309e | 10915 | engine.c |
 | 0x476a5d | FUN_00476a5d | 74 | engine.c |
 | 0x476aa7 | FUN_00476aa7 | 770 | engine.c |
 | 0x476da9 | FUN_00476da9 | 120 | engine.c |
 | 0x476e21 | FUN_00476e21 | 116 | engine.c |
+| 0x4778a0 | FUN_004778a0 | 655 | engine_bf_setup.c |
+| 0x477c89 | FUN_00477c89 | 371 | engine_bf_setup.c |
 | 0x4784ca | FUN_004784ca | 730 | engine_bf_input.c |
+| 0x4787a4 | FUN_004787a4 | 290 | engine_bf_setup.c |
 | 0x478952 | FUN_00478952 | 53 | engine_bf_group.c |
 | 0x478987 | FUN_00478987 | 1412 | engine_bf_input.c |
 | 0x478f0b | FUN_00478f0b | 392 | engine_bf_input.c |
+| 0x479473 | FUN_00479473 | 229 | engine_bf_setup.c |
 | 0x479a71 | FUN_00479a71 | 231 | engine_bf_input.c |
 | 0x479b58 | FUN_00479b58 | 415 | engine_bf_input.c |
 | 0x479cf7 | FUN_00479cf7 | 277 | engine_bf_input.c |
 | 0x47a76d | FUN_0047a76d | 167 | engine_bf_input.c |
+| 0x47aaa3 | FUN_0047aaa3 | 3599 | engine_bf_setup.c |
+| 0x47b8b2 | FUN_0047b8b2 | 3080 | engine_bf_setup.c |
+| 0x47c4ba | FUN_0047c4ba | 2567 | engine_bf_setup.c |
+| 0x47cec1 | FUN_0047cec1 | 1459 | engine_bf_setup.c |
+| 0x47d474 | FUN_0047d474 | 68 | engine_bf_setup.c |
+| 0x47d4b8 | FUN_0047d4b8 | 140 | engine_bf_setup.c |
+| 0x47d5ec | FUN_0047d5ec | 196 | engine_bf_setup.c |
+| 0x47d6b0 | FUN_0047d6b0 | 78 | engine_bf_setup.c |
+| 0x47d6fe | FUN_0047d6fe | 158 | engine_bf_setup.c |
+| 0x47d79c | FUN_0047d79c | 122 | engine_bf_setup.c |
+| 0x47d816 | FUN_0047d816 | 574 | engine_bf_setup.c |
+| 0x47dc9c | FUN_0047dc9c | 50 | engine_bf_setup.c |
+| 0x47dcce | FUN_0047dcce | 184 | engine_bf_setup.c |
+| 0x47e1dc | FUN_0047e1dc | 84 | engine_bf_setup.c |
+| 0x47e230 | FUN_0047e230 | 51 | engine_bf_setup.c |
+| 0x47e263 | FUN_0047e263 | 292 | engine_bf_setup.c |
+| 0x47e387 | FUN_0047e387 | 422 | engine_bf_setup.c |
+| 0x47e52d | FUN_0047e52d | 315 | engine_bf_setup.c |
+| 0x47e668 | FUN_0047e668 | 330 | engine_bf_setup.c |
+| 0x47e7b2 | FUN_0047e7b2 | 367 | engine_bf_setup.c |
+| 0x47e926 | FUN_0047e926 | 284 | engine_bf_setup.c |
+| 0x47ed9b | FUN_0047ed9b | 590 | engine_bf_setup.c |
+| 0x47efee | FUN_0047efee | 1087 | engine_bf_setup.c |
+| 0x47f42d | FUN_0047f42d | 71 | engine_bf_setup.c |
 | 0x47f76d | FUN_0047f76d | 458 | engine_bf_input.c |
+| 0x47fea7 | FUN_0047fea7 | 849 | engine_bf_setup.c |
+| 0x4801f8 | FUN_004801f8 | 929 | engine_bf_setup.c |
+| 0x480599 | FUN_00480599 | 201 | engine_bf_setup.c |
+| 0x480662 | FUN_00480662 | 2252 | engine_bf_setup.c |
+| 0x480f2e | FUN_00480f2e | 93 | engine_bf_setup.c |
+| 0x480f8b | FUN_00480f8b | 1200 | engine_bf_setup.c |
+| 0x48169e | FUN_0048169e | 91 | engine_bf_setup.c |
+| 0x4816f9 | FUN_004816f9 | 383 | engine_bf_setup.c |
+| 0x481878 | FUN_00481878 | 142 | engine_bf_setup.c |
+| 0x481906 | FUN_00481906 | 198 | engine_bf_setup.c |
 | 0x4822ed | FUN_004822ed | 644 | engine_bf_unit.c |
-| 0x491f17 | FUN_00491f17 | 359 | engine_bf_unit.c |
-| 0x49459a | FUN_0049459a | 878 | engine_bf_unit.c |
+| 0x48eefd | FUN_0048eefd | 72 | engine_bf_setup.c |
+| 0x497024 | FUN_00497024 | 378 | engine_bf_setup.c |
+| 0x49719e | FUN_0049719e | 169 | engine_bf_setup.c |
+| 0x497247 | FUN_00497247 | 178 | engine_bf_setup.c |
 | 0x499859 | FUN_00499859 | 451 | gfx.c |
 | 0x499cb1 | FUN_00499cb1 | 204 | engine_bf_input.c |
 | 0x4aabd8 | FUN_004aabd8 | 303 | engine_armory.c, engine_armory.h |
