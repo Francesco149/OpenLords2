@@ -15,7 +15,9 @@ an rhost row (`tools/rhost/rh_hooks_mapview.c`) whose shadow compares state AND 
 - `RHOST_JOBS=3 rhost.py verify --target wine -j 3 --hooks '^mv_'` over the whole corpus (51 scenarios): **45 reached,
   0 divergences** — 442,524 calls compared on identical state AND identical pixels, 799,817,316 more run retail-only by
   sampled-out passes; 19 never called (§6). Four shadow passes (301 / 96 / 92 / 91 s), the hybrid 149 s.
-- **Hybrid PASS**: the 64 rows replaced at once, `corpus --check` (state hash + every presented frame) on all 51.
+- **Hybrid PASS**: the 64 rows replaced at once, `corpus --check` (state hash + every presented frame) on all 51; and
+  **every row of every table at once (606: AI, combat, battle, events, economy, the battlefield partitions, rl, gfx,
+  mapview)** — `corpus --check --fb-hash` PASS on all 51.
 - The pixel compare is live for these rows: `--shadow-poison-px 100,100` on endturn-2 makes every shadowed call of
   `mv_blit_452820` / `mv_feature_tile` / `mv_overlay_army` diverge (142/142, 858/858, 170/170 —
   `px(100,100)@6005aa64 r00/p01 (1 px differ)`); without the poison 0.
@@ -180,7 +182,7 @@ Rows at depth `-` are never called by the corpus (in the hybrid either); §6.
     there), with no empty cell and no overhang sprite on screen (drawer A draws nothing in view 1);
   - view mode 2 (the kingdom overview): the corpus never presses the minimap's magnifier. An ad-hoc probe (endturn-2
     + a click at (623, 144) = FUN_0043ab76 button 4 → FUN_00434fd5, kept out of the corpus) reaches
-    FUN_00463b42 / 00463c06 / 00463c62 and the strips FUN_00463cbe / 004640b6 / 00464209: 378 calls shadowed (137 / 28 / 20 / 65 / 64 / 64), 0 divergences — and every other mapview row on the same run, 0 divergences. The edge kind-2
+    FUN_00463b42 / 00463c06 / 00463c62 and the strips FUN_00463cbe / 004640b6 / 00464209: 378 calls shadowed (137 / 28 / 20 / 65 / 64 / 64), 0 divergences — and every other mapview row on the same run, 0 divergences; the 64 rows replaced: the same final state and frame-hash chain as the pure run (`fb=d30eacffd73b7965`). To repeat: append to endturn-2's trace a click at (623, 144) at f 3710 and 4100 (with hovers at the map edges between), frames 4600, in a scratch `tests/scenarios/<name>/` (not committed). The edge kind-2
     strips FUN_00463e91 / 00463fa5 stay unreached;
   - the county panel's q1 type 2 (FUN_004103c5), q2 type 4 (FUN_00410502) and type 7 (FUN_004106c4) — counties
     showing those resource columns.
