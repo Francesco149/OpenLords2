@@ -65,6 +65,8 @@
 
 /* engine_bf_common.c */
 void bf_rng_step(void);   /* FUN_00404a46 on retail's globals (engine_rng_step) */
+void bf_sleep(uint32_t ms);                        /* Sleep, as retail calls it (rhost: its virtual clock) */
+void bf_bind_sleep_fn(void (*fn)(uint32_t ms));
 
 /* the partitions (tools/bf/parts.py) */
 #include "engine_bf_move.h"
@@ -74,4 +76,5 @@ void bf_rng_step(void);   /* FUN_00404a46 on retail's globals (engine_rng_step) 
 #include "engine_bf_group.h"
 #include "engine_bf_stance.h"
 #include "engine_bf_setup.h"
+#include "engine_bf_input.h"
 #include "engine_bf_extern.h"
