@@ -77,11 +77,14 @@ g_ai_personality), the keep tiers' costs 0x4d8a3c (7 dwords). The generator's NE
 ## Rows
 
 HOOK_R where a caller reads EAX (compared): 0x47685d (took the input), 0x49b762 (the turn resolved), the loaders
-0x4984dc / 0x499859 / 0x499034 / 0x499a1c / 0x4997bf, and 0x4a1241 / 0x49f73f / 0x49f850 / 0x49fcc5 / 0x4a0649. HOOK_V
+0x4984dc / 0x499859 / 0x499034 / 0x499a1c / 0x4997bf, 0x49caaa (rl_io's 0x4978ad returns it), and 0x4a1241 / 0x49f73f /
+0x49f850 / 0x49fcc5 / 0x4a0649. HOOK_V
 elsewhere (the ports return retail's EAX where a path defines it: 0x476a5d 19, 0x476e21 the screen byte, 0x49ce51 the
-next phase, 0x499dc3 option 11 …). RH_SH_MEDIA on 0x47309e (the render) and on the rows whose calls can draw:
-0x47685d / 0x476768 / 0x476710 (the dismiss's chain), 0x476aa7 / 0x476da9, 0x4976a1 (the strategic render 0x40f5fd),
-0x497ced, 0x49a010 (the End-turn strip 0x41a734).
+next phase, 0x499dc3 option 11 …). RH_SH_MEDIA on 0x47309e (the render) and on the rare rows whose calls can draw:
+0x476768 / 0x476710 (the dismiss's chain), 0x4976a1 (the strategic render 0x40f5fd), 0x497ced. The first evidence run
+also had it on the per-frame rows 0x47685d / 0x476aa7 / 0x49a010 and on 0x476da9 (0 divergences, 1.3 M + 1.3 M + 0.76 M
+calls pixel-compared); they draw nothing themselves (retail drawers with state-compared inputs, every presented frame
+checked by the hybrid pass) and run without it now: it doubled the shadow's cost.
 
 ## Quirks (retail ground truth)
 
@@ -107,6 +110,17 @@ next phase, 0x499dc3 option 11 …). RH_SH_MEDIA on 0x47309e (the render) and on
 13. 0x4984dc: DAT_0057c968 1 (a reload) skips vill_gd8.pl8 and the "Data loaded OK" log; every exit clears it.
 14. 0x47309e kind 19 keeps the box's size in TILES in DAT_00553024 / DAT_00552ff8 (the other kinds: pixels), so the
     shared tail's dirty mark (0x4527a6(x, y, w / 16 + 1, h / 16 + 1, 2)) covers only 2 × 2 tiles of a help page.
+
+## Seams replaced
+
+The other rl partitions' one-line engine_retail_call seams for this partition's VAs now call rl_<va> by name: rl_glue
+(0x476768, 0x4984dc), rl_io (0x49caaa, 0x4984dc, 0x499859, 0x499a1c, 0x498270, 0x499034), rl_ui2 (0x4984dc, 0x476a5d,
+0x499034, 0x499a1c), rl_misc (0x499e5d, 0x4984dc, 0x49a453), rl_skirmish (0x499a1c), rl_render (0x4984dc, 0x476768).
+
+A seam hands the caller the callee's EAX: the first `--hooks '^rl_'` run after the swap diverged in rl_io's HOOK_R row
+0x4978ad (`ret r000006f0/p00000000`, 85 calls) — it returns 0x49caaa's EAX, which the stub passed through from retail
+and the port returned as 0. 0x49caaa's EAX is now modelled (0x600 | realm 5's +9 byte: the last record offset 5 · 352
+with AL the last store; its row HOOK_R), and so are 0x476768's (0x476e21's screen byte or 0x497879's) and 0x476710's.
 
 ## Seams left
 
@@ -148,7 +162,9 @@ SmackOpen), 4 with the cursor at (300, 10) (the clamps), 11 with a lord (the vas
 10 / 11 / 17 / 12 (events 0xf8 / 0xfa / 0xfb) open (1382 calls each: the button tables); 0x476aa7 with the hints on
 and the screens 0x17 / 0x0f (panel 8) / 2 / 0x39 / 0x1b / 0x10 and DAT_00553210 (1352 calls each); a poked inbox for
 realm 2 (an alliance, a demand, a compliment, a break, an offer of 500 from realm 1): 0x4a277d (5 calls) and, in a
-second run, each handler shadowed alone (0x4a29b2 / 0x4a2cd6 / 0x4a2f61 / 0x4a30f6 / 0x4a38db one call each).
+second run, each handler shadowed alone (0x4a29b2 / 0x4a2cd6 / 0x4a2f61 / 0x4a30f6 / 0x4a38db one call each);
+endturn-12 with DAT_00553030 1 (MP: 0x49b762's vote, 234 calls; 0x49a453's .svb names, 2) and with the MP host
+DAT_00553248 1 + DAT_00553260 1 (the .sva names, the rotation skipped; 0x49a010 285 calls).
 
 ## Evidence
 
@@ -158,3 +174,7 @@ second run, each handler shadowed alone (0x4a29b2 / 0x4a2cd6 / 0x4a2f61 / 0x4a30
   57 scenarios); depth 1..3 (the AI's helpers nest in their callers). 0x4984dc: 72 calls skipped (its retail run grows
   the heap arena; rh_state.c does not compare those), 1931 compared; the hybrid pass runs every call.
 - Iterations before it: every re-port matched on its first shadow; no wrapped port needed a fix.
+- After the seams and the EAX models: `rhost.py verify --target wine -j 3 --hooks '^rl_'` over the whole corpus (59
+  scenarios, 2026-11-04 23:02 – 11-05 00:48, with the other merged rl partitions' rows): **406/406 reached with 0
+  divergences, 0 never called; hybrid PASS; 0 failed runs** — 63,634,834 calls shadowed, 6,668,006 of them the 62 turn
+  rows (0x47309e 100,032 with pixels); depth up to 5.

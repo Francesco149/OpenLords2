@@ -149,7 +149,7 @@ int rl_497879(void)
     if (g_rl_53f0c4 == 10)
         s_slot_0053f258++;
     g_rl_553e78 = (int32_t)s_slot_0053f034;
-    int r = (int)engine_retail_call(0x499e5du, 0);
+    int r = rl_499e5d();
     engine_set_current_screen(28);
     return r;
 }
@@ -234,14 +234,14 @@ int rl_49a3e6(void)
     int r = engine_current_screen();
     if (r == 36) {
         g_rl_57c968 = 1;
-        engine_retail_call(0x4984dcu, 0);
+        rl_4984dc();
         engine_retail_call(0x40f5fdu, 1, 3u);
         rl_4b14ff();
         engine_retail_call(0x452160u, 1, 1u);
         engine_army_ai_set_ranking_dirty(1);
         engine_territory_mark_full_screen_dirty();
         rl_4b0cb4(0, 0, (int)(uintptr_t)g_rl_5691f0);
-        return (int)engine_retail_call(0x49a453u, 0);
+        return rl_49a453();
     }
     return r;
 }

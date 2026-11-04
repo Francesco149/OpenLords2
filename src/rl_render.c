@@ -485,7 +485,7 @@ static void load_background(const void *name, int h)   /* TODO(rl-link): gfx_loa
 static void load_panel_sheet(int n) { engine_retail_call(0x4b25b0u, 1, (uint32_t)n); }   /* TODO(rl-link): gfx_load_panel_sheet */
 static int  set_palette(const void *pal) { return (int)engine_retail_call(0x4b0ab5u, 1, (uint32_t)(uintptr_t)pal); }   /* TODO(rl-link): gfx.c's palette set 0x4b0ab5 */
 static void clear_back_buffer(void) { engine_retail_call(0x4b1867u, 0); }   /* TODO(rl-link): engine_screen_strat.c's 0x4b1867 */
-static void load_season(void) { engine_retail_call(0x4984dcu, 0); }   /* TODO(rl-link): engine_pl8.c's season loader 0x4984dc */
+static void load_season(void) { rl_4984dc(); }   /* the season loader 0x4984dc (rl turn) */
 static int  strat_render(int full) { return (int)engine_retail_call(0x40f5fdu, 1, (uint32_t)full); }   /* TODO(rl-link): engine_screen_strat_render */
 static void filelist_content(int a, int b) { engine_retail_call(0x4149ecu, 2, (uint32_t)a, (uint32_t)b); }   /* TODO(rl-link): engine_title_render_filelist_content */
 static void bf_minimap_scroll(int a) { engine_retail_call(0x4bc1d1u, 1, (uint32_t)a); }   /* TODO(rl-link): engine_battlefield_render_minimap_scroll */
@@ -952,7 +952,7 @@ int rl_4233f7(int a1)
 
 static void caspics_load(const void *name, const void *dst, int idx)   /* rl_40ae12 (glue): the caspics.pl8 frame loader */
 { rl_40ae12((int)(uintptr_t)name, (int)(uintptr_t)dst, idx); }
-static void popup_scroll_dismiss(void) { engine_retail_call(0x476768u, 0); }   /* TODO(rl-link): engine_popup_scroll_dismiss */
+static void popup_scroll_dismiss(void) { rl_476768(); }   /* engine_popup_scroll_dismiss (rl turn) */
 static void labor_render(void) { engine_retail_call(0x412b33u, 0); }   /* TODO(rl-link): engine_labor_render */
 static void fill4(int x, int y, int c) { engine_retail_call(0x4b4056u, 3, (uint32_t)x, (uint32_t)y, (uint32_t)c); }   /* TODO(rl-link): engine_overlay_render's 4-byte fill 0x4b4056 */
 static void movie_text_box(int x, int y, int w, int h)   /* TODO(rl-extern): 0x42e45e */

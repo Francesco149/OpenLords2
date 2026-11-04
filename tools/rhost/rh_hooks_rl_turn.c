@@ -1,7 +1,9 @@
 /* rh_hooks_rl_turn.c — a retail-layout port, partition 'turn' (src/rl_turn.c) vs retail, on identical state
  * (rh_hooks.h contract; plumbing rh_port.h; the shared binding: rh_hooks_bf.c). One row per ported
  * function: HOOK_V(rl_<va>, N, rl_<va>(I(0), ...)) (void, or a return no caller reads) / HOOK_R (a return a
- * caller reads: compared). Rows that draw (or call a drawer) carry RH_SH_MEDIA. Findings: docs/findings/rl-turn.md.
+ * caller reads: compared). Rows that draw (or call a drawer with computed arguments) carry RH_SH_MEDIA; the per-frame
+ * rows 0x47685d / 0x476aa7 / 0x49a010 (and 0x476da9) draw nothing themselves (retail drawers with state-compared inputs;
+ * the hybrid pass checks every presented frame) and go without it. Findings: docs/findings/rl-turn.md.
  *
  * Route (a) rows run a linked old port (engine_army_ai.c, engine_diplomacy.c, engine_roster.c, engine_camera.c,
  * engine_combat.c) through its rl_<va> wrapper; their mirrors are synced by rh_port_run (rh_hooks_ai.c). */
@@ -95,7 +97,7 @@ HOOK_V(rl_49a453, 0, rl_49a453())
 HOOK_V(rl_497e65, 0, rl_497e65())
 HOOK_V(rl_497ced, 0, rl_497ced())
 HOOK_V(rl_4976a1, 0, rl_4976a1())
-HOOK_V(rl_49caaa, 0, rl_49caaa())
+HOOK_R(rl_49caaa, 0, rl_49caaa())
 HOOK_V(rl_49a010, 0, rl_49a010())
 HOOK_V(rl_476aa7, 0, rl_476aa7())
 HOOK_V(rl_4a277d, 1, rl_4a277d(I(0)))
@@ -137,9 +139,9 @@ hook_t RH_HOOKS_RL_TURN[] = {
     { "rl_476e21", 0x476e21u, (void *)w_rl_476e21, 0, 0, 0, 0, "" },
     { "rl_476768", 0x476768u, (void *)w_rl_476768, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
     { "rl_476710", 0x476710u, (void *)w_rl_476710, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
-    { "rl_47685d", 0x47685du, (void *)w_rl_47685d, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_47685d", 0x47685du, (void *)w_rl_47685d, 0, 0, 0, 0, "" },
     { "rl_476a5d", 0x476a5du, (void *)w_rl_476a5d, 0, 0, 0, 0, "" },
-    { "rl_476da9", 0x476da9u, (void *)w_rl_476da9, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_476da9", 0x476da9u, (void *)w_rl_476da9, 0, 0, 0, 0, "" },
     { "rl_4a2584", 0x4a2584u, (void *)w_rl_4a2584, 0, 0, 0, 0, "" },
     { "rl_4a1c53", 0x4a1c53u, (void *)w_rl_4a1c53, 0, 0, 0, 0, "" },
     { "rl_49b35e", 0x49b35eu, (void *)w_rl_49b35e, 0, 0, 0, 0, "" },
@@ -160,8 +162,8 @@ hook_t RH_HOOKS_RL_TURN[] = {
     { "rl_497ced", 0x497cedu, (void *)w_rl_497ced, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
     { "rl_4976a1", 0x4976a1u, (void *)w_rl_4976a1, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
     { "rl_49caaa", 0x49caaau, (void *)w_rl_49caaa, 0, 0, 0, 0, "" },
-    { "rl_49a010", 0x49a010u, (void *)w_rl_49a010, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
-    { "rl_476aa7", 0x476aa7u, (void *)w_rl_476aa7, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_49a010", 0x49a010u, (void *)w_rl_49a010, 0, 0, 0, 0, "" },
+    { "rl_476aa7", 0x476aa7u, (void *)w_rl_476aa7, 0, 0, 0, 0, "" },
     { "rl_4a277d", 0x4a277du, (void *)w_rl_4a277d, 0, 0, 0, 0, "" },
     { "rl_4a29b2", 0x4a29b2u, (void *)w_rl_4a29b2, 0, 0, 0, 0, "" },
     { "rl_4a2cd6", 0x4a2cd6u, (void *)w_rl_4a2cd6, 0, 0, 0, 0, "" },

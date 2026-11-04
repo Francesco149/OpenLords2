@@ -118,7 +118,7 @@ static void plan_owner(int owner)   /* TODO(rl-link): 0x448648 (engine_army_sele
 static int workforce_hud_render(int a)   /* TODO(rl-link): engine_workforce_hud_render 0x412143 */
 { return (int)engine_retail_call(0x412143u, 1, (uint32_t)a); }
 static void set_camera(int mode) { engine_retail_call(0x451fccu, 1, (uint32_t)mode); }   /* TODO(rl-link): engine_map_init_set_camera 0x451fcc */
-static int  load_season(void) { return (int)engine_retail_call(0x4984dcu, 0); }   /* TODO(rl-link): engine_pl8.c's season loader 0x4984dc */
+static int  load_season(void) { return rl_4984dc(); }   /* the season loader 0x4984dc (rl turn) */
 static int  present(int full) { return (int)engine_retail_call(0x452160u, 1, (uint32_t)full); }   /* TODO(rl-link): gfx.c's present 0x452160 */
 static int  confirm_open(int kind, int x, int y, uint32_t cb)   /* TODO(rl-link): engine_confirm_dialog_open 0x40e6f2 (retail keeps the callback VA) */
 { return (int)engine_retail_call(0x40e6f2u, 4, (uint32_t)kind, (uint32_t)x, (uint32_t)y, cb); }
@@ -127,7 +127,7 @@ static int  evq_post(int a, int b, int code, int d, int e, int f, int g, int h) 
     return (int)engine_retail_call(0x472bc5u, 8, (uint32_t)a, (uint32_t)b, (uint32_t)code, (uint32_t)d, (uint32_t)e,
                                    (uint32_t)f, (uint32_t)g, (uint32_t)h);
 }
-static int  map_options_redraw(void) { return (int)engine_retail_call(0x476a5du, 0); }   /* TODO(rl-link): 0x476a5d (engine.c) */
+static int  map_options_redraw(void) { return rl_476a5d(); }   /* 0x476a5d (rl turn) */
 static void text_input_open(const void *init, int n, int x, int y)   /* TODO(rl-link): text_input_init 0x402009 */
 { engine_retail_call(0x402009u, 4, (uint32_t)(uintptr_t)init, (uint32_t)n, (uint32_t)x, (uint32_t)y); }
 static int  text_recompute_length(void) { return (int)engine_retail_call(0x401f49u, 0); }   /* TODO(rl-link): text_input_recompute_length 0x401f49 */
@@ -972,8 +972,8 @@ int rl_41ef42(void)
 
 /* seams of the setup actions */
 static void evq_init(void) { engine_retail_call(0x472ae0u, 0); }   /* TODO(rl-link): engine_event_queue_init 0x472ae0 (a port struct) */
-static int  load_misc_sheet(void) { return (int)engine_retail_call(0x499034u, 0); }   /* TODO(rl-link): gfx_load_misc_sheet 0x499034 */
-static int  load_system_sheet(int k) { return (int)engine_retail_call(0x499a1cu, 1, (uint32_t)k); }   /* TODO(rl-link): gfx_load_system_sheet_select 0x499a1c */
+static int  load_misc_sheet(void) { return rl_499034(); }   /* gfx_load_misc_sheet 0x499034 (rl turn) */
+static int  load_system_sheet(int k) { return rl_499a1c(k); }   /* gfx_load_system_sheet_select 0x499a1c (rl turn) */
 static int  chdir_base(void) { return (int)engine_retail_call(0x4af502u, 0); }   /* TODO(rl-link): io_path_chdir_base 0x4af502 */
 static int  load_panel_sheet(int n) { return (int)engine_retail_call(0x4b25b0u, 1, (uint32_t)n); }   /* TODO(rl-link): gfx_load_panel_sheet 0x4b25b0 */
 static int  read_file_at(const void *name, void *dst, uint32_t n, uint32_t off)   /* TODO(rl-link): io_read_file_at 0x4af8d9 */

@@ -217,18 +217,18 @@ int rl_476768(void)
     if (POPUP_MSG != 0xc2)
         rl_427d19();
     rl_45240a();
-    rl_476e21();
+    int ret = rl_476e21();
     g_rl_57c954 = 0;
     POPUP_MSG = 0;
     g_rl_55cd78 = 2;
     BELOW_STATUS() = 1;
     g_combat_flag_530d0 = 1;
     if (g_rl_53f0c4 == 11 || g_rl_53f0c4 == 10) {
-        rl_497879();
+        ret = rl_497879();
         SET_SCREEN(0x1c);
         REDRAW(1);
     }
-    return 0;
+    return ret;   /* EAX: 0x476e21's (the screen byte), or 0x497879's */
 }
 
 /* Port of FUN_00476710 (88 B) — dismiss the popup unless the open message panel (DAT_005440a4) is 17 / 10 / 11 / 12
@@ -236,8 +236,8 @@ int rl_476768(void)
 int rl_476710(void)
 {
     if (g_rl_5440a4 != 0x11 && g_rl_5440a4 != 0x0a && g_rl_5440a4 != 0x0b && g_rl_5440a4 != 0x0c)
-        rl_476768();
-    return 0;
+        return rl_476768();
+    return 0;   /* retail: the caller's EAX */
 }
 
 /* Port of FUN_0047685d (512 B) — the popup's input step (the in-game dispatcher): count the scroll gate
@@ -1211,7 +1211,7 @@ int rl_4976a1(void)
  * the first free job slot (+0x0a) and the first free personality (+0x07) of its slot's row (MP / DAT_0055302c 1:
  * the table 0x4dc17c, else 0x4dc180 by the map DAT_0053f034 & 3), its name from the localization (section 7, the
  * personality) into aux +4 (16 B); past the count the realm is inactive (+4 = 0). Every realm: +0x2a = +0x29 = 1,
- * +8 / +9 the slot's pair DAT_004dc1ce. */
+ * +8 / +9 the slot's pair DAT_004dc1ce. EAX: 0x600 | realm 5's +9 byte (the last record offset, AL the last store). */
 int rl_49caaa(void)
 {
     uint8_t slot_taken[8], pers_taken[8];
@@ -1258,7 +1258,8 @@ int rl_49caaa(void)
         PL8(j, 0x57bf08) = AT(uint8_t, g_rl_4dc1ce, 0x4dc1ceu, 0x4dc1ce + 2 * PL8(j, 0x57bf0a));
         PL8(j, 0x57bf09) = AT(uint8_t, g_rl_4dc1ce, 0x4dc1ceu, 0x4dc1cf + 2 * PL8(j, 0x57bf0a));
     }
-    return 0;
+    /* EAX: the last record offset 5 * 352 (0x6e0) with AL = the byte just stored (rl_io's 0x4978ad returns it) */
+    return (int)((352u * 5u) & ~0xffu) | PL8(5, 0x57bf09);
 }
 
 /* Port of FUN_0049a010 (982 B) — the frame driver's sub-state 0 tick (the strategic turn): DAT_0053f658 counts
