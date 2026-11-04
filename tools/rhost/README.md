@@ -98,6 +98,13 @@ prologue in a trampoline the retail side calls (`--hook-entry` forces this for e
 (`rhost.py` reads the tables). Port code is compiled with the port's own `-std` (build.sh `PORT_OBJS`).
 A port function never calls its own retail VA.
 
+**Render rows** (`hook_t.flags`, `docs/findings/render-under-rhost.md`): `RH_SH_MEDIA` — the shadow also rolls back and
+compares the pixels of every live DirectDraw surface (the media pool's surface blocks), reporting the first differing
+pixel `px(X,Y)@VA rRR/pPP` (`--shadow-media`: every row; `--shadow-poison-px X,Y` plants a 1-pixel difference after
+every media-compared port call). `RH_SH_SAMPLE` — a hot leaf (~1 µs a call against ~400 µs a shadow): per (row,
+caller, screen id) the first 64 calls and every power-of-two-th one are shadowed, the rest run retail and count in
+`hook-result … sampled=N` (`--shadow-all`: every call); the hybrid pass still runs every call.
+
 `verify`: a hook called inside another shadowed call runs retail there (`rh_in_shadow`), so the corpus is
 shadowed in passes — pass 1 every hook, pass N only the hooks no earlier pass reached (one nesting level
 each) — then the **hybrid pass**: every hook in replace mode at once, `corpus --check` against the blessed
