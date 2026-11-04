@@ -521,7 +521,7 @@ int rl_40dd92(int titles, int n)
             engine_retail_call(*(const uint32_t *)(uintptr_t)(g_rl_522ca8 + 4), 0);   /* the item's action */
             rl_40dfcd();
         } else {
-            engine_retail_call(0x40df62u, 0);   /* TODO(rl-extern): 0x40df62 (close the menu) */
+            rl_40df62();   /* close the menu (partition ui3) */
         }
         return 1;
     }

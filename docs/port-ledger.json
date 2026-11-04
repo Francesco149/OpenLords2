@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 788,
-  "ported": 697,
-  "unported": 962,
+  "ported": 720,
+  "unported": 939,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1485,
-  "pct_touched": 60.7,
+  "touched": 1508,
+  "pct_touched": 61.6,
   "pct_tested": 32.2,
   "bytes_total": 838629,
-  "bytes_touched": 626025,
-  "pct_bytes_touched": 74.6
+  "bytes_touched": 632055,
+  "pct_bytes_touched": 75.4
  },
  "orphan_refs": [
   "0x004148",
@@ -2143,8 +2143,10 @@
    "name": "FUN_0040df62",
    "size": 107,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x40dfcd",
@@ -5803,24 +5805,30 @@
    "name": "FUN_00434556",
    "size": 122,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x4345d0",
    "name": "FUN_004345d0",
    "size": 195,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x434693",
    "name": "FUN_00434693",
    "size": 122,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x43470d",
@@ -5857,8 +5865,10 @@
    "name": "FUN_0043480c",
    "size": 62,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x43484a",
@@ -5905,8 +5915,10 @@
    "name": "FUN_00434942",
    "size": 42,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x43496c",
@@ -5933,40 +5945,50 @@
    "name": "FUN_004349a4",
    "size": 133,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x434a29",
    "name": "FUN_00434a29",
    "size": 113,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x434a9a",
    "name": "FUN_00434a9a",
    "size": 59,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x434ad5",
    "name": "FUN_00434ad5",
    "size": 59,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x434b10",
    "name": "FUN_00434b10",
    "size": 281,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x434c29",
@@ -6216,16 +6238,20 @@
    "name": "FUN_00434e9e",
    "size": 43,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x434ec9",
    "name": "FUN_00434ec9",
    "size": 48,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x434ef9",
@@ -6682,24 +6708,30 @@
    "name": "FUN_004361da",
    "size": 79,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x436229",
    "name": "FUN_00436229",
    "size": 161,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x4362ca",
    "name": "FUN_004362ca",
    "size": 84,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x43631e",
@@ -6928,40 +6960,50 @@
    "name": "FUN_004378b3",
    "size": 584,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x437afb",
    "name": "FUN_00437afb",
    "size": 618,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x437d65",
    "name": "FUN_00437d65",
    "size": 313,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x437e9e",
    "name": "FUN_00437e9e",
    "size": 313,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x437fd7",
    "name": "FUN_00437fd7",
    "size": 1706,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x438681",
@@ -7706,8 +7748,10 @@
    "name": "FUN_0043bbe7",
    "size": 283,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x43bd02",
@@ -10253,8 +10297,10 @@
    "name": "FUN_004477e7",
    "size": 503,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui3.c"
+   ]
   },
   {
    "va": "0x4479de",
