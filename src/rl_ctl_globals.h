@@ -17,7 +17,7 @@ extern uint8_t g_rl_4d57ac[0x18];            /* .data 0x4d57ac..0x4d57c4: aS0210
 extern int32_t g_rl_4d5c90;                  /* .data 0x4d5c90..0x4d5c94: dword_4D5C90(rw)  DUP 4d5c90 */
 extern int32_t g_rl_4d5c98[50];              /* .data 0x4d5c98..0x4d5d60: funcs_4476BB(r)  DUP 4d5c98 */
 extern int32_t g_rl_4d6a78[5];               /* .data 0x4d6a78..0x4d6a8c: dword_4D6A78(r)  DUP 4d6a78 */
-extern int16_t g_rl_4dc428;                  /* .data 0x4dc428..0x4dc42a: word_4DC428(o)  DUP 4dc428 */
+extern uint8_t g_rl_4dc428[48];              /* .data 0x4dc428..0x4dc458: word_4DC428(o) — hand: the menu bar's 3 x 16-B title records  DUP 4dc428 */
 extern uint8_t g_rl_4dc680[144];             /* .data 0x4dc680..0x4dc710: unk_4DC680(o)  DUP 4dc680 */
 extern int32_t g_rl_4e6594;                  /* .data 0x4e6594..0x4e6598: dword_4E6594(r)  DUP 4e6594 */
 extern int32_t g_rl_4e6598;                  /* .data 0x4e6598..0x4e659c: dword_4E6598(r)  DUP 4e6598 */

@@ -5282,7 +5282,8 @@
     "src/engine_menu_input.c",
     "src/engine_menu_input.h",
     "src/engine_terrain_info.h",
-    "src/engine_title_render.c"
+    "src/engine_title_render.c",
+    "src/rl_ctl.c"
    ]
   },
   {
@@ -7223,7 +7224,8 @@
    "status": "ported",
    "src": [
     "src/engine_labor.c",
-    "src/engine_labor_region_grid.h"
+    "src/engine_labor_region_grid.h",
+    "src/rl_ctl.c"
    ]
   },
   {
@@ -7263,7 +7265,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_ingame_input.c"
+    "src/engine_ingame_input.c",
+    "src/rl_ctl.c"
    ]
   },
   {
@@ -7296,7 +7299,8 @@
     "src/engine.c",
     "src/engine_ingame_input.h",
     "src/engine_labor.c",
-    "src/engine_labor.h"
+    "src/engine_labor.h",
+    "src/rl_ctl.c"
    ]
   },
   {
@@ -8290,7 +8294,8 @@
    "src": [
     "src/engine.c",
     "src/engine.h",
-    "src/engine_rate.c"
+    "src/engine_rate.c",
+    "src/rl_ctl.c"
    ]
   },
   {
@@ -10324,7 +10329,8 @@
    "src": [
     "src/engine.c",
     "src/engine_delayed_action.c",
-    "src/engine_delayed_action.h"
+    "src/engine_delayed_action.h",
+    "src/rl_ctl.c"
    ]
   },
   {
@@ -11947,7 +11953,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_labor.c"
+    "src/engine_labor.c",
+    "src/rl_ctl.c"
    ]
   },
   {
@@ -12788,7 +12795,8 @@
    "src": [
     "src/engine_army_state.c",
     "src/engine_combat.c",
-    "src/engine_combat.h"
+    "src/engine_combat.h",
+    "src/rl_ctl.c"
    ]
   },
   {

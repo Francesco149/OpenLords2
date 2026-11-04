@@ -232,7 +232,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x42dfe2 | FUN_0042dfe2 | 126 | main.c |
 | 0x42ec91 | FUN_0042ec91 | 1207 | engine_mapview_globals.h, gfx.c, gfx.h (+2) |
 | 0x42f1df | FUN_0042f1df | 295 | gfx.c, main.c |
-| 0x42ff10 | FUN_0042ff10 | 8140 | engine.c, engine_armory.c, engine_army_move_confirm.h (+8) |
+| 0x42ff10 | FUN_0042ff10 | 8140 | engine.c, engine_armory.c, engine_army_move_confirm.h (+9) |
 | 0x431f59 | FUN_00431f59 | 712 | engine_camera.h, rl_ctl.c |
 | 0x432221 | FUN_00432221 | 477 | engine.c, engine_camera.h, engine_ingame_input.h (+1) |
 | 0x432640 | FUN_00432640 | 262 | engine_ingame_input.c, engine_ingame_input.h, rl_ctl.c |
@@ -269,8 +269,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x437535 | FUN_00437535 | 390 | engine_combat.c, engine_combat.h, engine_map_query.c |
 | 0x438681 | FUN_00438681 | 699 | engine_army_ai.c, engine_army_ai.h |
 | 0x438ceb | FUN_00438ceb | 326 | engine.c, engine_county_panels.c, engine_county_panels.h (+1) |
-| 0x439df0 | FUN_00439df0 | 235 | engine_ingame_input.c |
-| 0x43a123 | FUN_0043a123 | 145 | engine.c, engine_ingame_input.h, engine_labor.c (+1) |
+| 0x439df0 | FUN_00439df0 | 235 | engine_ingame_input.c, rl_ctl.c |
+| 0x43a123 | FUN_0043a123 | 145 | engine.c, engine_ingame_input.h, engine_labor.c (+2) |
 | 0x43a1e9 | FUN_0043a1e9 | 86 | engine_county_panels.h, rl_ctl.c |
 | 0x43a23f | FUN_0043a23f | 115 | engine_county_panels.c, engine_county_panels.h |
 | 0x43a2b2 | FUN_0043a2b2 | 85 | engine_county_panels.h, rl_ctl.c |
@@ -293,7 +293,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43cc56 | FUN_0043cc56 | 16 | engine_army_select.h, engine_ingame_input.h, rl_ctl.c |
 | 0x43ce1a | FUN_0043ce1a | 1263 | engine.c, engine_army_select.c, engine_army_select.h (+4) |
 | 0x43d309 | FUN_0043d309 | 675 | engine_army_select.c, engine_army_select.h, rl_ctl.c |
-| 0x43de70 | FUN_0043de70 | 1211 | engine.c, engine.h, engine_rate.c |
+| 0x43de70 | FUN_0043de70 | 1211 | engine.c, engine.h, engine_rate.c (+1) |
 | 0x43e330 | FUN_0043e330 | 259 | engine.c, engine.h, engine_rate.c (+1) |
 | 0x43e433 | FUN_0043e433 | 218 | engine.h, engine_rate.c |
 | 0x43e50d | FUN_0043e50d | 180 | engine.h, engine_rate.c |
@@ -301,7 +301,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43ffc3 | FUN_0043ffc3 | 117 | engine_state_hash.c |
 | 0x44015a | FUN_0044015a | 96 | engine.h, engine_state_hash.c |
 | 0x440231 | FUN_00440231 | 1077 | engine.h, engine_state_hash.c |
-| 0x4472ce | FUN_004472ce | 1046 | engine.c, engine_delayed_action.c, engine_delayed_action.h |
+| 0x4472ce | FUN_004472ce | 1046 | engine.c, engine_delayed_action.c, engine_delayed_action.h (+1) |
 | 0x4479de | FUN_004479de | 11 | engine_handlers_da.h |
 | 0x447ddb | FUN_00447ddb | 11 | engine_handlers_da.h |
 | 0x4483f0 | FUN_004483f0 | 11 | engine_handlers_da.h |
@@ -429,7 +429,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4650b0 | FUN_004650b0 | 265 | engine.c, engine_army_state.c, engine_army_state.h (+3) |
 | 0x4651b9 | FUN_004651b9 | 91 | engine.c, engine_territory.c, engine_territory.h (+1) |
 | 0x465214 | FUN_00465214 | 11 | engine_army_state.c |
-| 0x46521f | FUN_0046521f | 615 | engine_army_state.c, engine_combat.c, engine_combat.h |
+| 0x46521f | FUN_0046521f | 615 | engine_army_state.c, engine_combat.c, engine_combat.h (+1) |
 | 0x465486 | FUN_00465486 | 412 | engine_army_state.c |
 | 0x465622 | FUN_00465622 | 319 | engine_army_state.c |
 | 0x465761 | FUN_00465761 | 319 | engine_army_state.c |
@@ -1089,7 +1089,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4393eb | FUN_004393eb | 342 | rl_glue.c |
 | 0x439541 | FUN_00439541 | 73 | rl_ui2.c |
 | 0x43958a | FUN_0043958a | 674 | rl_ui2.c |
-| 0x4398f5 | FUN_004398f5 | 187 | engine_labor.c, engine_labor_region_grid.h |
+| 0x4398f5 | FUN_004398f5 | 187 | engine_labor.c, engine_labor_region_grid.h, rl_ctl.c |
 | 0x4399b0 | FUN_004399b0 | 418 | rl_ui2.c |
 | 0x439b52 | FUN_00439b52 | 368 | rl_ui2.c |
 | 0x439cc2 | FUN_00439cc2 | 302 | rl_ui2.c |
@@ -1158,7 +1158,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x44ff4a | FUN_0044ff4a | 182 | rl_ui2.c |
 | 0x450000 | FUN_00450000 | 714 | rl_ui2.c |
 | 0x450639 | FUN_00450639 | 677 | rl_ui2.c |
-| 0x45183a | FUN_0045183a | 102 | engine_labor.c |
+| 0x45183a | FUN_0045183a | 102 | engine_labor.c, rl_ctl.c |
 | 0x451f70 | FUN_00451f70 | 26 | rl_io.c |
 | 0x451f8a | FUN_00451f8a | 66 | rl_glue.c |
 | 0x45242b | FUN_0045242b | 11 | rl_misc.c |

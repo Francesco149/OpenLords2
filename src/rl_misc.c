@@ -237,7 +237,7 @@ int rl_49a3e6(void)
         engine_retail_call(0x4984dcu, 0);
         engine_retail_call(0x40f5fdu, 1, 3u);
         rl_4b14ff();
-        engine_retail_call(0x452160u, 1, 1u);
+        rl_452160(1);
         engine_army_ai_set_ranking_dirty(1);
         engine_territory_mark_full_screen_dirty();
         rl_4b0cb4(0, 0, (int)(uintptr_t)g_rl_5691f0);

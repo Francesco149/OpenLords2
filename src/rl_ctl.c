@@ -22,6 +22,8 @@
 #include "engine_map_scene.h"          /* engine_map_scene_tick_frame (0x4050c0) */
 #include "engine_turn.h"               /* g_sim_turn_progress (DAT_00553fc8) */
 #include "engine_armory.h"             /* the muster screen's globals (DAT_00553f20, DAT_0055446c …) */
+#include "engine_workforce_hud.h"       /* g_wf_y_origin (DAT_0057c908), 0x4517ca */
+#include "engine_army_state.h"         /* g_army_state_index (DAT_005533e8, a mirror) */
 #include "engine_sendsupplies.h"       /* g_castle_tier (DAT_0056d898), g_send_target (DAT_00553c78), 0x43b145 */
 #include "engine_bf_input_globals.h"   /* the cursor (DAT_0053e98c / 9c), DAT_00553e68, DAT_0059151c, the router param */
 
@@ -358,12 +360,15 @@ int rl_451fcc(int mode)
  * flag DAT_005651ac is up); at 50 (and not while DAT_0056d650 with DAT_00553008 > 0) it resets both and, while
  * the dirty mark is up, copies the back surface DAT_004eafac to the primary over the WHOLE rect Point
  * (BltFast at (0, 0) full screen, Blt DDBLT_WAIT windowed) — retail stages the dirty rect into a local and never
- * passes it (quirk) — and counts the mark down; at 0 the rect is reset to empty (canvas − 1, 0). */
+ * passes it (quirk) — and counts the mark down; at 0 the rect is reset to empty (canvas − 1, 0).
+ * EAX (0x451f70 returns it): 0x42e26f's, the step, Point.bottom, the blit's HRESULT or canvas height − 1. */
 int rl_452160(int force)
 {
-    if (rl_42e26f() != 0 && g_rl_4df28c != 0)
-        return 0;
-    g_rl_4eabe8 += rl_4b27bf();
+    int r = rl_42e26f();
+    if (r != 0 && g_rl_4df28c != 0)
+        return r;
+    r = rl_4b27bf();
+    g_rl_4eabe8 += r;
     if (g_rl_4eabe8 < 0)
         g_rl_4eabe8 = 0;
     if (force != 0)
@@ -371,22 +376,22 @@ int rl_452160(int force)
     if (g_tr_scene_flag_a != 0)
         g_rl_4eabe8 = 50;
     if (g_rl_4eabe8 < 50)
-        return 0;
+        return r;
     if (g_rl_56d650 != 0 && g_rl_553008 > 0)
-        return 0;
+        return r;
     g_rl_4eabe8 = 0;
     g_tr_scene_flag_a = 0;
+    RECT *pt = (RECT *)(void *)g_rl_4ea180;
     engine_dirty_rect_state_t *d = DIRTY;
     if (d->dirty_mark <= 0)
-        return 0;
+        return (int)pt->bottom;
     uint32_t prim = AT(uint32_t, g_rl_4eabd0, 0x4eabd0u, 0x4eabd0u);
-    RECT *pt = (RECT *)(void *)g_rl_4ea180;
     if (g_rl_53f228 != 0) {
         typedef HRESULT (WINAPI *bltfast_t)(uint32_t, DWORD, DWORD, uint32_t, RECT *, DWORD);
-        ((bltfast_t)VT(prim, 0x1c))(prim, 0, 0, (uint32_t)g_rl_4eafac, pt, 0x10);   /* DDBLTFAST_WAIT */
+        r = (int)((bltfast_t)VT(prim, 0x1c))(prim, 0, 0, (uint32_t)g_rl_4eafac, pt, 0x10);   /* DDBLTFAST_WAIT */
     } else {
         typedef HRESULT (WINAPI *blt_t)(uint32_t, RECT *, uint32_t, RECT *, DWORD, void *);
-        ((blt_t)VT(prim, 0x14))(prim, pt, (uint32_t)g_rl_4eafac, NULL, 0x1000000, NULL);   /* DDBLT_WAIT */
+        r = (int)((blt_t)VT(prim, 0x14))(prim, pt, (uint32_t)g_rl_4eafac, NULL, 0x1000000, NULL);   /* DDBLT_WAIT */
     }
     if (--d->dirty_mark <= 0) {
         d->dirty_mark = 0;
@@ -394,8 +399,9 @@ int rl_452160(int force)
         d->dirty_ymin = g_gfx_canvas_height - 1;
         d->dirty_xmax = 0;
         d->dirty_ymax = 0;
+        return g_gfx_canvas_height - 1;
     }
-    return 0;
+    return r;
 }
 
 /* ================================================================ the in-game input's helpers */
@@ -1799,4 +1805,803 @@ int rl_43b04c(void)
     engine_set_current_screen(0);
     BELOW_STATUS() = 1;
     return 0;
+}
+
+/* ================================================================ the in-game input dispatch */
+extern uint8_t g_rl_4eabe0;          /* DAT_004eabe0 (rl_glue_globals.h): a fresh RMB */
+extern int32_t g_rl_5533b0;          /* DAT_005533b0 (rl_glue_globals.h): the cursor over the map */
+extern int32_t g_rl_5533f4;          /* DAT_005533f4 (rl_render_globals.h): the labor screen came from the map */
+extern int32_t g_rl_565408;          /* DAT_00565408 (rl_render_globals.h): the workforce drag mode */
+extern int32_t g_rl_56d894;          /* DAT_0056d894 (rl_glue_globals.h): the screen a help / message page returns to */
+extern int32_t g_rl_57c920;          /* DAT_0057c920 (rl_io_globals.h): screen 58's return */
+extern uint8_t g_rl_5c9274;          /* DAT_005c9274 (rl_io_globals.h): leave to the title */
+extern int32_t g_rl_5c9278;          /* DAT_005c9278 (rl_glue_globals.h): screen 33's return */
+extern uint8_t g_rl_53e9a0[4];       /* DAT_0053e9a0 (rl_ui2_globals.h): the workforce hover category */
+#define TURN_IDLE() (g_sim_turn_progress == 0 && (g_bf_55403c == 0 || g_rl_553018 != 0))   /* DAT_00553fc8, DAT_0055403c */
+#define LMB_UP   g_bf_4e6900   /* DAT_004e6900: an RMB / cancel click (the "close" edge) */
+#define LMB_DOWN g_bf_4eafb4   /* DAT_004eafb4: a fresh LMB */
+#define HUD_MENU ((int)(uintptr_t)g_rl_4dc428)    /* word_4DC428: the menu bar's 3 pull-downs (16-B records) */
+
+/* the closing tail every unhandled click reaches (0x431ea8): a press on the minimap (0x4323fe, not screen 18)
+ * leaves the screen for the map (screen 15 first drops its cue and the labor sheets 0x41438c), the
+ * below-status flag 2 */
+static void dispatch_tail(void)
+{
+    if ((LMB_DOWN != 0 || g_rl_4eabe0 != 0) && engine_current_screen() != 18 && rl_4323fe() != 0) {
+        if (engine_current_screen() == 15) {
+            rl_427d19();
+            rl_41438c();
+        }
+        if (s_slot_0057c8fc == 0)
+            engine_set_current_screen(0);
+        BELOW_STATUS() = 2;
+    }
+}
+
+/* the county panels' common buttons: the HUD hotspots (0x43292d, 0x432967), the county action grid (0x438ceb),
+ * the tax slider (0x439122), the portraits (0x438e3b), the route overlay (0x439079) */
+static int county_buttons(void)
+{
+    return rl_43292d() != 0 || rl_432967() != 0
+        || engine_retail_call(0x438cebu, 0) != 0     /* TODO(rl-link): engine_county_action_grid_classify (the panel env) */
+        || rl_439122() != 0 || rl_438e3b() != 0 || rl_439079() != 0;
+}
+
+/* a "close on RMB / the close button" screen: back to `to` with redraw `mode` */
+static int close_to(int to, int mode)
+{
+    if (!TURN_IDLE() || LMB_UP != 0 || rl_40e7e4() != 0) {
+        engine_set_current_screen(to);
+        engine_set_demand_redraw(mode);
+        return 1;
+    }
+    return 0;
+}
+
+/* Port of FUN_0042ff10 (8265 B) — the in-game input dispatch, once a frame: the cursor-cache flag saved
+ * (DAT_0052afa0) and cleared, DAT_00565488 = 0, the edge direction 8, the cursor region (0x432640); the popup
+ * scroll (0x47685d) or the title menus (0x4ba9c8) take the input first; a pending swallow (DAT_0052afa8) eats
+ * an RMB. Then per screen (DAT_004eac50) its buttons, its close edge (RMB DAT_004e6900 / the close button
+ * 0x40e7e4 / the turn running) and the minimap tail (0x431ea8 above). Last: DAT_00565488 = 1 when the cursor
+ * cache flag dropped from 1, the fresh-key latch DAT_004eabb4 cleared (both skipped by the mid view's map click,
+ * which returns 0x4350a1's EAX). */
+int rl_42ff10(void)
+{
+    g_rl_52afa0 = g_rl_57cac4;
+    g_rl_57cac4 = 0;
+    g_rl_565488 = 0;
+    g_rl_5533a4 = 8;
+    rl_432640();
+    if (rl_47685d() != 0 || rl_4ba9c8() != 0)
+        goto done;
+    if (g_rl_52afa8 != 0 && LMB_UP != 0) {
+        g_rl_52afa8 = 0;
+        engine_set_demand_redraw(2);
+        goto done;
+    }
+    switch (engine_current_screen()) {
+    case 0:
+        if (rl_432221() != 0 || rl_439079() != 0 || rl_432967() != 0)
+            break;
+        if (TURN_IDLE()) {
+            if (rl_40deca(HUD_MENU, 3) != 0 || rl_43292d() != 0
+                || engine_retail_call(0x438cebu, 0) != 0   /* TODO(rl-link): engine_county_action_grid_classify */
+                || rl_439122() != 0 || rl_438e3b() != 0)
+                break;
+            if (g_rl_53e910 != 0 && LMB_UP != 0) {
+                rl_476768();
+                rl_45270a();
+                break;
+            }
+            if (g_rl_5533b0 != 0 && LMB_DOWN != 0 && s_slot_0057cb18 == 2) {
+                engine_set_current_screen(0);
+                return rl_4350a1();
+            }
+            if (g_rl_5533b0 != 0 && g_bf_4e65d8 != 0) {
+                rl_43ce1a();
+                break;
+            }
+            if (g_rl_5533b0 != 0 && LMB_UP != 0) {
+                engine_set_current_screen(4);
+                rl_43caf4();
+                break;
+            }
+            if (g_rl_5533b0 == 0 || g_bf_4e65cc == 0)
+                g_rl_56d64c = 0;
+        }
+        dispatch_tail();
+        break;
+    case 2:
+        if (TURN_IDLE()) {
+            if (rl_43292d() != 0 || rl_432967() != 0
+                || engine_retail_call(0x438cebu, 0) != 0   /* TODO(rl-link): engine_county_action_grid_classify */
+                || rl_439122() != 0 || rl_438e3b() != 0 || rl_439079() != 0)
+                break;
+            if (rl_40e7e4() == 0) {
+                if (rl_4393eb() != 0) {
+                    engine_set_current_screen(5);
+                    break;
+                }
+                if (rl_439df0() != 0)
+                    break;
+                if (rl_43a123() != 0) {
+                    engine_set_current_screen(15);
+                    rl_476768();
+                    g_rl_5533f4 = 0;
+                    rl_412b33();
+                    break;
+                }
+                if (LMB_UP == 0) {
+                    g_rl_4e65f0 = 1;
+                    dispatch_tail();
+                    break;
+                }
+            }
+        }
+        engine_set_current_screen(0);
+        engine_army_ai_set_ranking_dirty(1);
+        engine_set_demand_redraw(2);
+        rl_432893(1);
+        rl_41438c();
+        break;
+    case 15:
+        if (rl_40e7e4() == 0 && LMB_UP == 0) {
+            dispatch_tail();
+            break;
+        }
+        engine_set_current_screen(g_rl_5533f4 != 0 ? 0 : 2);
+        g_rl_5533f4 = 0;
+        rl_427d19();
+        engine_set_demand_redraw(2);
+        rl_41438c();
+        break;
+    case 5:
+        g_rl_565408 = 2;
+        if (TURN_IDLE() && rl_439541() != 1) {
+            if (rl_439541() == 2) {
+                engine_set_current_screen(6);
+                rl_432893(1);
+                break;
+            }
+            rl_43958a();
+            dispatch_tail();
+            break;
+        }
+        engine_set_current_screen(2);
+        rl_432893(1);
+        break;
+    case 6:
+        if (TURN_IDLE()) {
+            g_rl_565408 = 2;
+            if (rl_4399b0() == 1) {
+                engine_set_current_screen(2);
+                rl_432893(1);
+                break;
+            }
+            if (LMB_UP == 0) {
+                dispatch_tail();
+                break;
+            }
+        }
+        engine_set_current_screen(2);
+        g_rl_53e9a0[0] = 0;
+        rl_4120e0();
+        rl_432893(1);
+        break;
+    case 4:
+        if (TURN_IDLE() && rl_432221() == 0 && rl_40e7e4() == 0) {
+            if (rl_438990() != 0 || rl_438a91() != 0 || rl_437002() != 0)
+                break;
+            if (LMB_UP == 0) {
+                dispatch_tail();
+                break;
+            }
+        }
+        engine_set_current_screen(0);
+        rl_43cc56();
+        break;
+    case 32:
+        close_to(0, 1);
+        break;
+    case 8:
+        if (!TURN_IDLE() || LMB_UP != 0 || rl_40e7e4() != 0) {
+            /* the three arms read the same vill_gd8.pl8 (three copies of the name: 0x4d5620 / 30 / 40) */
+            uint32_t name = !TURN_IDLE() ? 0x4d5620u : LMB_UP != 0 ? 0x4d5630u : 0x4d5640u;
+            engine_set_current_screen(0);
+            rl_4af502();
+            rl_4af8d9(S4D5620(name), (int)(uintptr_t)g_bf_542ce0, 0x12d8, 0);
+            engine_set_demand_redraw(1);
+        }
+        break;
+    case 9:
+    case 11:
+        close_to(0, 2);
+        break;
+    case 26:
+        if (!TURN_IDLE()) {
+            engine_set_current_screen(0);
+            engine_set_demand_redraw(2);
+        } else if (rl_43b4cb(96, 176) != 0) {
+            engine_set_demand_redraw(2);
+        } else if (LMB_UP != 0 || rl_40e7e4() != 0) {
+            engine_set_current_screen(0);
+            engine_set_demand_redraw(2);
+        }
+        break;
+    case 10:
+    case 27:
+        if (TURN_IDLE() && LMB_UP == 0 && rl_40e7e4() == 0)
+            break;
+        engine_set_current_screen(0);
+        rl_4984dc();
+        engine_set_demand_redraw(1);
+        break;
+    case 23:
+        if (TURN_IDLE()) {
+            if (engine_retail_call(0x435cefu, 0) != 0)   /* TODO(rl-link): engine_armory_slider_click (the screen env) */
+                break;
+            if (LMB_UP != 0) {
+                engine_set_current_screen(10);
+                engine_retail_call(0x4aa90au, 2, s_slot_0057c93c, (uint32_t)g_arm_conscripts);   /* TODO(rl-link): engine_armory_muster_init */
+                engine_set_demand_redraw(2);
+                break;
+            }
+            if (rl_40e7e4() == 0)
+                break;
+        }
+        engine_set_current_screen(0);
+        rl_4984dc();
+        engine_set_demand_redraw(1);
+        break;
+    case 12:
+        close_to(8, 2);
+        break;
+    case 13:
+        if (!TURN_IDLE() || LMB_UP != 0 || rl_40e7e4() != 0) {
+            engine_set_current_screen(10);
+            rl_4180f6();
+        }
+        break;
+    case 24:
+        if (!TURN_IDLE()) {
+            engine_set_current_screen(0);
+            engine_set_demand_redraw(2);
+        } else if (engine_retail_call(0x43b412u, 2, 96u, 104u) != 0) {   /* TODO(rl-link): engine_sendsupplies_target_select */
+            engine_set_demand_redraw(2);
+        } else if (LMB_UP != 0) {
+            engine_set_current_screen(0);
+            engine_set_demand_redraw(2);
+        }
+        break;
+    case 20:
+    case 22:
+    case 21:
+        if (!TURN_IDLE()) {
+            engine_set_current_screen(0);
+            engine_set_demand_redraw(2);
+        } else if (!county_buttons()) {
+            if (LMB_UP != 0 || rl_40e7e4() != 0) {
+                engine_set_current_screen(0);
+                engine_set_demand_redraw(2);
+            }
+        }
+        break;
+    case 25:
+        if (!TURN_IDLE()) {
+            engine_set_current_screen(0);
+            engine_set_demand_redraw(2);
+        } else if (rl_43292d() == 0 && rl_432967() == 0
+                   && engine_retail_call(0x43a379u, 0) == 0   /* TODO(rl-link): engine_county_rations_input (the panel env) */
+                   && engine_retail_call(0x438cebu, 0) == 0   /* TODO(rl-link): engine_county_action_grid_classify */
+                   && rl_439122() == 0 && rl_438e3b() == 0 && rl_439079() == 0) {
+            if (LMB_UP != 0 || rl_40e7e4() != 0) {
+                engine_set_current_screen(0);
+                engine_set_demand_redraw(2);
+            }
+        }
+        break;
+    case 16:
+        if (!TURN_IDLE()) {
+            engine_set_current_screen(0);
+            engine_set_demand_redraw(2);
+            break;
+        }
+        if (rl_432221() != 0)
+            break;
+        if (LMB_DOWN != 0 && g_rl_553ecc <= 0) {
+            engine_set_current_screen(0);
+            g_rl_56d64c = 1;
+            rl_4a9252();
+            break;
+        }
+        if (LMB_UP != 0) {
+            engine_set_current_screen(0);
+            engine_set_demand_redraw(2);
+            break;
+        }
+        dispatch_tail();
+        break;
+    case 29:
+        if (!TURN_IDLE() || LMB_UP != 0) {
+            engine_set_current_screen(0);
+            engine_set_demand_redraw(2);
+            break;
+        }
+        dispatch_tail();
+        break;
+    case 17:
+        if (!close_to(4, 2))
+            dispatch_tail();
+        break;
+    case 18:
+        if (g_sim_turn_progress != 0 || rl_4bbea7() != 0) {
+            engine_retail_call(0x43b622u, 0);        /* TODO(rl-link): engine_combat_auto_resolve_button (a port queue) */
+            engine_set_demand_redraw(2);
+            break;
+        }
+        dispatch_tail();
+        break;
+    case 19:
+        if (!TURN_IDLE() || rl_4bbf15() != 0 || LMB_UP != 0 || rl_40e7e4() != 0) {
+            engine_set_current_screen(0);
+            engine_set_demand_redraw(2);
+        }
+        break;
+    case 40:
+        rl_432221();
+        if (LMB_UP != 0) {
+            engine_set_current_screen(41);
+            g_bf_53f238 = 0;
+            BELOW_STATUS() = 1;
+            break;
+        }
+        dispatch_tail();
+        break;
+    case 41:
+        if (rl_40deca(HUD_MENU, 3) != 0 || rl_432221() != 0 || rl_4329a4() != 0 || bf_43bf07() != 0
+            || bf_43c57d() != 0 || bf_43c2a9() != 0)
+            break;
+        dispatch_tail();
+        break;
+    case 42:
+        if (bf_43bf07() != 0 || bf_43c57d() != 0)
+            break;
+        if (LMB_UP != 0 || g_bf_5651d0 == 0) {
+            engine_set_current_screen(41);
+            break;
+        }
+        dispatch_tail();
+        break;
+    case 43:
+        if (LMB_UP != 0) {
+            s_slot_00568470 = 5001;
+            break;
+        }
+        dispatch_tail();
+        break;
+    case 31:
+        if (g_rl_53f648 != g_tr_selected_button) {
+            g_rl_53f648 = g_tr_selected_button;
+            break;
+        }
+        if (g_tr_page == 10) {
+            if (LMB_UP != 0) {
+                rl_4aef7e();
+                g_rl_58fd84 = g_rl_5c9a74;
+                g_tr_page = 1;
+                engine_set_demand_redraw(2);
+            }
+            break;
+        }
+        if (g_tr_page == 9 && LMB_UP != 0) {
+            g_tr_page = g_tr_p9_bookmark;
+            engine_set_demand_redraw(2);
+            break;
+        }
+        if (g_tr_page == 3) {
+            if (rl_43400b(1) != 0)
+                break;
+            if (LMB_UP != 0) {
+                g_tr_page = g_tr_p9_bookmark;
+                engine_set_demand_redraw(2);
+                break;
+            }
+        }
+        if (g_tr_page == 13) {
+            if (rl_434174(0) != 0)
+                break;
+            if (LMB_UP != 0 || rl_40e7e4() != 0) {
+                g_tr_page = g_tr_p9_bookmark;
+                engine_set_demand_redraw(2);
+                break;
+            }
+        }
+        if ((g_tr_page == 8 && g_rl_5cd41c != 0) || (g_tr_page == 11 && g_rl_5cd41c != 0)) {
+            g_rl_5cd41c = 0;
+            rl_43eda0(6, 0);
+        }
+        break;
+    case 46:
+        if (LMB_DOWN != 0) {
+            engine_set_current_screen(47);
+            engine_set_demand_redraw(2);
+        }
+        if (g_rl_4eabe0 != 0) {
+            engine_set_current_screen(47);
+            engine_set_demand_redraw(2);
+        }
+        dispatch_tail();
+        break;
+    case 47:
+        if (g_rl_4eabe0 != 0) {
+            rl_4263ad(S4D5620(0x4d5650), 0, 1);
+            rl_42b780();
+        }
+        if (LMB_DOWN != 0) {
+            rl_4263ad(S4D5620(0x4d565c), 0, 1);
+            rl_42b780();
+        }
+        dispatch_tail();
+        break;
+    case 28:
+        if (s_slot_0055302c == 2) {
+            engine_set_current_screen(0);
+            g_rl_5c9274 = 1;
+            dispatch_tail();
+            break;
+        }
+        if (LMB_UP != 0 || g_bf_4e65d8 != 0) {
+            if ((int)s_slot_0053f258 < 8) {
+                rl_4329ec();
+            } else {
+                engine_set_current_screen(0);
+                g_rl_5c9274 = 1;
+            }
+            break;
+        }
+        dispatch_tail();
+        break;
+    case 50:
+        if (rl_40dd92(HUD_MENU, 3) == 0 && LMB_UP != 0)
+            rl_40df62();
+        break;
+    case 53:
+    case 54:
+        if (TURN_IDLE() || s_slot_0057c8fc != 0) {
+            if (rl_43400b(0) == 0 && LMB_UP != 0) {
+                engine_set_demand_redraw(2);
+                engine_set_current_screen(g_bf_57c90c);
+            }
+        } else {
+            engine_set_demand_redraw(2);
+            engine_set_current_screen(g_bf_57c90c);
+        }
+        break;
+    case 57:
+        if ((!TURN_IDLE() && s_slot_0057c8fc == 0) || LMB_UP != 0 || rl_40e7e4() != 0) {
+            engine_set_demand_redraw(2);
+            engine_set_current_screen(g_rl_56d894);
+            break;
+        }
+        dispatch_tail();
+        break;
+    case 66:
+    case 67:
+    case 49:
+    case 37:
+        if (LMB_UP != 0 || rl_40e7e4() != 0) {
+            engine_set_demand_redraw(2);
+            engine_set_current_screen(g_rl_56d894);
+            break;
+        }
+        dispatch_tail();
+        break;
+    case 38:
+        if (!TURN_IDLE() || LMB_UP != 0) {
+            rl_497a34(0);
+            break;
+        }
+        dispatch_tail();
+        break;
+    case 33:
+        if (LMB_UP != 0 || rl_40e7e4() != 0) {
+            engine_set_demand_redraw(2);
+            engine_set_current_screen(g_rl_5c9278);
+        }
+        break;
+    case 34:
+        if (g_sim_turn_progress != 0)
+            engine_retail_call(0x42df30u, 0);        /* TODO(rl-extern): the screen-34 movie stop */
+        if (LMB_UP != 0)
+            engine_retail_call(0x42df30u, 0);
+        if (g_bf_4e65d8 != 0)
+            engine_retail_call(0x42df30u, 0);
+        if (g_rl_4eabb4 != 0)
+            engine_retail_call(0x42df30u, 0);
+        break;
+    case 35:
+        break;
+    case 58:
+        if (g_bf_4e65d8 != 0 || LMB_UP != 0) {
+            engine_set_current_screen(g_rl_57c920);
+            engine_set_demand_redraw(1);
+        }
+        break;
+    case 60:
+        if (g_bf_4e65d8 != 0 || LMB_UP != 0) {
+            engine_set_current_screen(61);
+            engine_retail_call(0x40902bu, 2, (uint32_t)S4D5620(0x4d5674), (uint32_t)S4D5620(0x4d5668));   /* TODO(rl-extern): the demo screen's sheet + palette */
+        }
+        break;
+    case 61:
+    case 69:
+        if (g_bf_4e65d8 != 0 || LMB_UP != 0)
+            g_gfx_last_error = 1;
+        break;
+    default:
+        dispatch_tail();
+        break;
+    }
+done:
+    if (g_rl_57cac4 != g_rl_52afa0 && g_rl_52afa0 == 1)
+        g_rl_565488 = 1;
+    g_rl_4eabb4 = 0;
+    return g_rl_52afa0;
+}
+
+/* ---------------------------------------------------------------- the workforce screen's grid */
+extern int32_t g_rl_553f54;          /* DAT_00553f54 (rl_render_globals.h): the labor screen's sprite row */
+
+/* Port of FUN_004398f5 (187 B) — the workforce grid's category (0..8) at (x, y): the click map DAT_00542cf8
+ * (45 × 8-px cells from (64, DAT_0057c908)), 0 outside [64, 424) × [y0, y0 + 320), clamped to 8. */
+int rl_4398f5(int x, int y)
+{
+    if (x < 64 || x >= 424)
+        return 0;
+    if (g_wf_y_origin > y || g_wf_y_origin + 320 <= y)
+        return 0;
+    unsigned v = g_rl_542cf8[45 * ((y - g_wf_y_origin) / 8) + (x - 64) / 8];
+    return v >= 8 ? 8 : (int)v;
+}
+
+/* Port of FUN_0045183a (107 B) — is task `cat` shown for county `c`: any but 0, or category 0 with +0x2dd or
+ * +0x2ad set. */
+int rl_45183a(int c, int cat)
+{
+    if (cat != 0)
+        return 1;
+    if (CO8(c, 0x53fc8d) != 0)
+        return 1;
+    return CO8(c, 0x53fc5d) != 0;
+}
+
+/* Port of FUN_00439df0 (235 B) — a press on the workforce grid (DAT_004eabc5, inside [64, 512) ×
+ * [y0, y0 + 376)): its category (DAT_0053f0d8, 0x4398f5) reassigned — MP message 38, else 0x439edb for the
+ * county: 1; else 0. */
+int rl_439df0(void)
+{
+    if (g_bf_4eabc5 == 0)
+        return 0;
+    if (g_bf_4e65fc < 64 || g_bf_4e65fc >= 512)
+        return 0;
+    if (g_wf_y_origin > g_bf_4e65f4 || g_wf_y_origin + 376 <= g_bf_4e65f4)
+        return 0;
+    g_rl_53f0d8 = rl_4398f5(g_bf_4e65fc, g_bf_4e65f4);
+    if (g_rl_53f0d8 == 0)
+        return 0;
+    if (MP_ON)
+        rl_43eda0(38, 0);
+    else
+        rl_439edb(SELC, g_rl_53f0d8 - 1);
+    return 1;
+}
+
+/* Port of FUN_0043a123 (145 B) — a release on the workforce grid (DAT_004eabf0 at DAT_004eac04 / 08) over a
+ * shown task opens its labor screen: the sprite row DAT_00553f54 = 0x4517ca + 1; 1, else 0. */
+int rl_43a123(void)
+{
+    if (g_rl_4eabf0 == 0)
+        return 0;
+    int cat = rl_4398f5(g_rl_4eac04, g_rl_4eac08);
+    if (cat == 0)
+        return 0;
+    if (rl_45183a(SELC, cat - 1) == 0)
+        return 0;
+    g_rl_553f54 = engine_workforce_row_sprite_index(SELC, cat - 1) + 1;   /* 0x4517ca */
+    return 1;
+}
+
+/* ================================================================ the multiplayer pacing, the delayed actions */
+extern int32_t g_rl_4d2160;          /* DAT_004d2160 (rl_render_globals.h): the MP rate base */
+extern int32_t g_rl_512fa8;          /* DAT_00512fa8 (rl_render_globals.h): the largest lead seen */
+extern int32_t g_rl_515908;          /* DAT_00515908 (rl_render_globals.h): the mean lead */
+extern int32_t g_rl_512f6c;          /* DAT_00512f6c (rl_render_globals.h): the delayed actions pending */
+extern uint8_t g_rl_50d7c0[0x5780];  /* DAT_0050d7c0 (rl_ui3_globals.h): the delayed-action records, 400 × 56 B */
+#define DA32(j, va) AT(int32_t, g_rl_50d7c0, 0x50d7c0u, (int32_t)(va) + 56 * (j))
+#define DA8(j, va)  AT(uint8_t, g_rl_50d7c0, 0x50d7c0u, (int32_t)(va) + 56 * (j))
+#define DQ(k)       AT(int32_t, g_rl_515990, 0x515990u, 0x515990 + 4 * (k))   /* the due list, 100 entries (0xffff: none) */
+
+/* Port of FUN_0043de70 (1216 B) — the scenario / MP pacing hint for the frame driver: 0 unless the engine runs
+ * (state 3); single player (or the local realm out) 1. MP: with few allies active (0x43e433) the local tick's lead
+ * over the slowest (0x43e50d) picks 90 / 70 / 30 / 1 (-1 when not ahead), at least 3 · DAT_004d2160; else the lead
+ * over the filtered slowest (0x43e330(0)): 1 while DAT_0053f068 == 1; ahead → a rate by the lead (two tables:
+ * the battle mode 5's and the map's) + DAT_004d2160, the lead statistics kept (DAT_00512fa8 / 515914 / 515908;
+ * 100 frames at the top rate send message 10); behind → -2 … -10 by how far. */
+int rl_43de70(void)
+{
+    if (g_engine_state != 3)
+        return 0;
+    if (!MP_ON)
+        return 1;
+    if (PL8(LOCAL, 0x57bf04) == 0)
+        return 1;
+    if (engine_retail_call(0x43e433u, 0) != 0) {   /* TODO(rl-extern): count_active_allies_low */
+        int lo = (int)engine_retail_call(0x43e50du, 0);   /* TODO(rl-extern): min_tick_all */
+        int lead = AT(int32_t, &g_bf_53e8d0, 0x53e8d0u, 0x53e8d0 + 4 * LOCAL) - lo;
+        int v;
+        if (lead > 800)      v = 90;
+        else if (lead > 400) v = 70;
+        else if (lead > 50)  v = 30;
+        else if (lead > 0)   v = 1;
+        else                 return -1;
+        return 3 * g_rl_4d2160 > v ? 3 * g_rl_4d2160 : v;
+    }
+    int lo = (int)engine_retail_call(0x43e330u, 1, 0u);   /* TODO(rl-extern): min_tick_filtered */
+    if (g_rl_53f068 == 1)
+        return 1;
+    g_rl_515b20++;
+    int lead = AT(int32_t, &g_bf_53e8d0, 0x53e8d0u, 0x53e8d0 + 4 * LOCAL) - lo;
+    if (lead <= 0) {
+        int behind = (int)engine_retail_call(0x43e330u, 1, (uint32_t)LOCAL)   /* TODO(rl-extern): min_tick_filtered */
+                     - AT(int32_t, &g_bf_53e8d0, 0x53e8d0u, 0x53e8d0 + 4 * LOCAL);
+        if (behind < 20)    return -2;
+        if (behind < 50)    return -3;
+        if (behind < 100)   return -4;
+        if (behind < 200)   return -5;
+        if (behind < 400)   return -6;
+        if (behind < 1000)  return -7;
+        if (behind < 10000) return -8;
+        return -10;
+    }
+    static const int16_t k_lim5[13] = { 709, 609, 509, 409, 309, 209, 169, 129, 100, 89, 49, 29, 9 };
+    static const int16_t k_lim[8] = { 400, 200, 59, 49, 39, 29, 19, 9 };
+    static const uint8_t k_v[8] = { 140, 130, 120, 110, 100, 80, 60, 40 };
+    int v;
+    if (s_slot_0057c8fc == 5) {
+        int k = 0;
+        while (k < 13 && lead <= k_lim5[k])
+            k++;
+        v = 140 - 10 * k;
+    } else {
+        int k = 0;
+        while (k < 8 && lead <= k_lim[k])
+            k++;
+        v = k < 8 ? k_v[k] : 20;
+    }
+    if (g_rl_512fa8 < lead)
+        g_rl_512fa8 = lead;
+    g_rl_515914 += lead;
+    if (g_rl_515b20 != 0)
+        g_rl_515908 = g_rl_515914 / g_rl_515b20;
+    if (v < 140) {
+        g_rl_4d5c90 = 0;
+    } else if (++g_rl_4d5c90 > 100) {
+        rl_43eda0(10, 0);
+        g_rl_4d5c90 = 0;
+    }
+    return v + g_rl_4d2160;
+}
+
+/* Port of FUN_004472ce (1046 B) — MP only: run the delayed actions due by tick `now` (records with +0x36 == 1
+ * and +0 ≤ now, in record order; in the battle with several due, the moves 0x21..0x23 of other realms than
+ * DAT_005681ec go last); each loads its ten arguments into DAT_005158e8 … DAT_0050d7bc (DAT_0051590c = the
+ * record), runs its handler (the table DAT_004d5c98 by +0x37) and is retired (DAT_00512f6c counts down). EAX:
+ * the caller's in single player (nobody reads it). */
+int rl_4472ce(int now)
+{
+    if (!MP_ON)
+        return 0;
+    for (int i = 0; i < 100; i++)
+        DQ(i) = 0xffff;
+    g_rl_512f58 = 0;
+    g_rl_515910 = 0;
+    for (int j = 0; j < 400; j++)
+        if (DA8(j, 0x50d7f6) == 1 && DA32(j, 0x50d7c0) <= now)
+            DQ(g_rl_515910++) = j;
+    if (g_rl_515910 <= 0)
+        return 0;
+    if (g_rl_515910 > 1 && s_slot_0057c8fc == 2) {
+        for (int k = 0; g_rl_515910 > k; k++) {
+            int r = DQ(k);
+            if (DA8(r, 0x50d7f7) >= 0x21 && DA8(r, 0x50d7f7) <= 0x23 && DA32(r, 0x50d7c4) != (int)s_slot_005681ec) {
+                g_rl_50d620[g_rl_512f58++] = r;
+                DQ(k) = 0xffff;
+            }
+        }
+        for (int m = 0; m < 10; m++)
+            for (int n = 0; g_rl_515910 > n; n++)
+                if (DQ(n) == 0xffff)
+                    for (int ii = n; g_rl_515910 > ii; ii++)
+                        DQ(ii) = DQ(ii + 1);
+        int jj = 0;
+        while (jj < 100 && DQ(jj) < 0xffff)
+            jj++;
+        for (int kk = 0; g_rl_512f58 > kk; kk++)
+            DQ(jj + kk) = g_rl_50d620[kk];
+    }
+    for (int mm = 0; mm < 100; mm++) {
+        int r = DQ(mm);
+        if (r >= 0xffff)
+            break;
+        g_rl_5158e8 = DA32(r, 0x50d7c4);
+        g_rl_5158a8 = DA32(r, 0x50d7c8);
+        g_rl_5158a4 = DA32(r, 0x50d7cc);
+        g_rl_5158b0 = DA32(r, 0x50d7d0);
+        g_rl_5158ac = DA32(r, 0x50d7d4);
+        g_rl_5158bc = DA32(r, 0x50d7d8);
+        g_rl_5158b4 = DA32(r, 0x50d7dc);
+        g_rl_5158c4 = DA32(r, 0x50d7e0);
+        g_rl_5158c0 = DA32(r, 0x50d7e4);
+        g_rl_50d7bc = DA32(r, 0x50d7e8);
+        g_rl_51590c = r;
+        engine_retail_call((uint32_t)g_rl_4d5c98[DA8(r, 0x50d7f7)], 0);   /* TODO(rl-extern): the 50 delayed-action handlers */
+        DA8(r, 0x50d7f6) = 0;
+        --g_rl_512f6c;
+    }
+    return 0;
+}
+
+/* ================================================================ the army state machine's march */
+/* The executor 0x465d28 never initializes four locals (dir, outcome code, waypoint col / row: quirk #229); called
+ * from this handler they sit 0x20..0x2c below its entry esp. They hold what the previous handler's executor left —
+ * or, after a region change, the four locals of 0x4ad6c0 (sub esp, 0x10 at the same depth: its loop counters j = 151
+ * and k = 17, army 150's owner (+0, signed) and its county's owner), which overwrite them last. The port models them
+ * as rl_46521f_res[] (in and out; rhost moves them: rh_res_get / rh_res_put). s_move_run is the executor with those
+ * locals (rhost: the linked engine_army_move_run with its queue; unbound: retail's, which then sees the C stack —
+ * the standalone's TODO). */
+uint32_t rl_46521f_res[4];
+int rl_46521f_moved;                 /* the executor ran this call */
+static void (*s_move_run)(uint32_t *res);
+void rl_ctl_bind_move_run(void (*fn)(uint32_t *res)) { s_move_run = fn; }
+
+/* Port of FUN_0046521f (615 B) — army state 1, marching / occupying (the army DAT_005533e8, a mirror): ticks
+ * 15; the sprite by head count (≤ 300 72, ≤ 600 96, else 120, + 3 · ((anim + 1) & 7)) plus the facing's offset
+ * DAT_004d6a78[+0x1b, signed]; a new region under it entered (0x4abb36) and the income recollected (0x4ad6c0);
+ * the timer +0x160 down; then the executor (substate +0x14c == 2), or substate 2 once not ready (+0x06 == 0). */
+int rl_46521f(void)
+{
+    int a = g_army_state_index;
+    rl_46521f_moved = 0;
+    AR8(a, 0x52f204) = 15;
+    int anim = 3 * (((int8_t)AR8(a, 0x52f0b9) + 1) & 7);
+    if (AR32(a, 0x52f218) <= 300)
+        AR8(a, 0x52f0b7) = (uint8_t)(anim + 72);
+    else if (AR32(a, 0x52f218) <= 600)
+        AR8(a, 0x52f0b7) = (uint8_t)(anim + 96);
+    else
+        AR8(a, 0x52f0b7) = (uint8_t)(anim + 120);
+    AR8(a, 0x52f0b7) = (uint8_t)(AT(int32_t, g_rl_4d6a78, 0x4d6a78u, 0x4d6a78 + 4 * (int8_t)AR8(a, 0x52f0cb)) + AR8(a, 0x52f0b7));
+    int region = AT(uint8_t, g_overworld_map, 0x522f90u, 0x522f97 + AR32(a, 0x52f0bc));
+    if (AR8(a, 0x52f0c0) != region) {
+        engine_retail_call(0x4abb36u, 2, (uint32_t)a, (uint32_t)region);   /* TODO(rl-link): engine_combat_army_enter_region (a port queue) */
+        engine_realm_collect_territory_income();                          /* 0x4ad6c0 */
+        rl_46521f_res[0] = 151;                                           /* 0x4ad6c0's locals, left below this frame */
+        rl_46521f_res[1] = (uint32_t)(int32_t)(int8_t)AR8(150, 0x52f0b0);
+        rl_46521f_res[2] = 17;
+        rl_46521f_res[3] = CO8(AR8(150, 0x52f0c0), 0x53f9b5);
+        a = g_army_state_index;
+    }
+    if (AR32(a, 0x52f210) > 0)
+        --AR32(a, 0x52f210);
+    if ((int8_t)AR8(a, 0x52f1fc) == 2) {
+        rl_46521f_moved = 1;
+        if (s_move_run)
+            s_move_run(rl_46521f_res);
+        else
+            engine_retail_call(0x465d28u, 0);   /* TODO(rl-link): engine_army_move_run (a port queue; the locals' residue) */
+        return 0;
+    }
+    if (AR8(a, 0x52f0b6) == 0)
+        AR8(a, 0x52f1fc) = 2;
+    return 84 * a;
 }

@@ -490,7 +490,7 @@ static int  strat_render(int full) { return (int)engine_retail_call(0x40f5fdu, 1
 static void filelist_content(int a, int b) { engine_retail_call(0x4149ecu, 2, (uint32_t)a, (uint32_t)b); }   /* TODO(rl-link): engine_title_render_filelist_content */
 static void bf_minimap_scroll(int a) { engine_retail_call(0x4bc1d1u, 1, (uint32_t)a); }   /* TODO(rl-link): engine_battlefield_render_minimap_scroll */
 static void menubar_chrome(void) { engine_retail_call(0x419c78u, 0); }   /* TODO(rl-link): engine_hud_menubar_render_chrome (the linked port takes its state as arguments) */
-static void present(int full) { engine_retail_call(0x452160u, 1, (uint32_t)full); }   /* TODO(rl-link): gfx.c's present 0x452160 */
+static void present(int full) { rl_452160(full); }   /* 0x452160 (rl_ctl) */
 /* 0x4b1de0 is an empty function (11 B: no state, EAX passes through): its calls are elided */
 
 /* Port of FUN_00414819 (203 B) — the save / load file box (screens 0x2f / 0x30): a 28x20 chrome panel at (16, 144),
@@ -959,7 +959,7 @@ static void movie_text_box(int x, int y, int w, int h)   /* TODO(rl-extern): 0x4
 { engine_retail_call(0x42e45eu, 4, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h); }
 static void mp_session_end(void) { engine_retail_call(0x4b743bu, 0); }   /* TODO(rl-extern): 0x4b743b */
 static void map_build_cells(int a) { engine_retail_call(0x4298c1u, 1, (uint32_t)a); }   /* TODO(rl-link): engine_map_init_build_cells */
-static void map_set_camera(int a) { engine_retail_call(0x451fccu, 1, (uint32_t)a); }   /* TODO(rl-link): engine_map_init_set_camera */
+static void map_set_camera(int a) { rl_451fcc(a); }   /* 0x451fcc (rl_ctl) */
 static void classify_feature_tiles(void) { engine_retail_call(0x46dbf5u, 0); }   /* TODO(rl-link): engine_territory_classify_feature_tiles (the linked port takes the rng) */
 static void randomise_special_tiles(void) { engine_retail_call(0x46dd34u, 0); }   /* TODO(rl-link): engine_territory_randomise_special_tiles */
 

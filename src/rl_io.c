@@ -19,7 +19,7 @@
 /* ---------------------------------------------------------------- seams (callees outside the partition) */
 /* engine_npc_schedule.c / engine_map_init.c ports are not linked in rhost — TODO(rl-link) */
 static int npc_schedule_init(void) { return (int)engine_retail_call(0x49caaau, 0); }   /* TODO(rl-link): engine_npc_schedule_init */
-static void map_init_set_camera(int mode) { engine_retail_call(0x451fccu, 1, (uint32_t)mode); }   /* TODO(rl-link): engine_map_init_set_camera */
+static void map_init_set_camera(int mode) { rl_451fcc(mode); }   /* 0x451fcc (rl_ctl) */
 
 /* ---------------------------------------------------------------- the game's init / reset stores */
 
@@ -162,7 +162,7 @@ int rl_433cc1(void)
 int rl_451f70(void)
 {
     engine_territory_mark_full_screen_dirty();
-    return (int)engine_retail_call(0x452160u, 1, 1u);   /* TODO(rl-extern) */
+    return rl_452160(1);
 }
 
 /* Port of FUN_004b11ce (34 B) — 0x4b0ab5(DAT_004e6600), 0x4b1867, then the full-screen redraw 0x451f70. */

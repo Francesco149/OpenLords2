@@ -23,6 +23,7 @@ enum {
     X_rl_43caf4, X_rl_43723a, X_rl_4371ce, X_rl_43d309, X_rl_43ce1a,
     X_rl_432b05, X_rl_432cc8, X_rl_432fab, X_rl_432ee6, X_rl_433155, X_rl_433461, X_rl_4335f0, X_rl_4337b4, X_rl_433905, X_rl_433998, X_rl_433ba2, X_rl_433a23, X_rl_433ce4, X_rl_43400b, X_rl_4342f3, X_rl_434346,
     X_rl_434e1f, X_rl_435211, X_rl_4351c4, X_rl_43524e, X_rl_4358b0, X_rl_43582a, X_rl_43593a, X_rl_4359bc, X_rl_435a0c, X_rl_435a61, X_rl_435b4d, X_rl_435ae8, X_rl_435c89, X_rl_435cbf, X_rl_43611b, X_rl_436141, X_rl_436a88, X_rl_43a1e9, X_rl_43a2b2, X_rl_43aa32, X_rl_43aad5, X_rl_43a8f2, X_rl_43a922, X_rl_43a939, X_rl_43a846, X_rl_43a5a9, X_rl_43b04c,
+    X_rl_42ff10, X_rl_4398f5, X_rl_45183a, X_rl_439df0, X_rl_43a123, X_rl_43de70, X_rl_4472ce, X_rl_46521f,
 };
 
 /* the dirty-rect marks: EAX modelled (0x452306's fourth argument) */
@@ -57,7 +58,7 @@ HOOK_R(rl_432746, 1, rl_432746(I(0)))
 
 HOOK_V(rl_451f1a, 0, rl_451f1a())
 HOOK_R(rl_451fcc, 1, rl_451fcc(I(0)))
-HOOK_V(rl_452160, 1, rl_452160(I(0)))
+HOOK_R(rl_452160, 1, rl_452160(I(0)))   /* 0x451f70 returns its EAX */
 HOOK_V(rl_432640, 0, rl_432640())
 HOOK_R(rl_432967, 0, rl_432967())
 HOOK_V(rl_431f59, 0, rl_431f59())
@@ -122,6 +123,35 @@ HOOK_V(rl_43a939, 0, rl_43a939())
 HOOK_V(rl_43a846, 0, rl_43a846())
 HOOK_V(rl_43a5a9, 3, rl_43a5a9(I(0), I(1), I(2)))
 HOOK_V(rl_43b04c, 0, rl_43b04c())
+
+HOOK_V(rl_42ff10, 0, rl_42ff10())
+HOOK_R(rl_4398f5, 2, rl_4398f5(I(0), I(1)))
+HOOK_R(rl_45183a, 2, rl_45183a(I(0), I(1)))
+HOOK_R(rl_439df0, 0, rl_439df0())
+HOOK_R(rl_43a123, 0, rl_43a123())
+HOOK_R(rl_43de70, 0, rl_43de70())
+HOOK_V(rl_4472ce, 1, rl_4472ce(I(0)))
+/* 0x46521f's residue (rl_ctl.c §the army state machine's march): the executor's four uninitialized locals, 0x20..0x2c
+ * below the handler's entry esp — below its own frame, so in a shadow they are not retail's to compare: the retail
+ * side's page faults (the copy-on-write shadow) push exception frames there. In: rh_res_get; out (unchanged, 0x4ad6c0's
+ * locals after a region change, or the executor's): rh_res_set — written in replace, not compared in shadow (the
+ * state the executor derives from them is). The executor itself = the linked engine_army_move_run with those locals
+ * in its globals and the event queue (as rh_hooks_combat.c's move_run row). */
+#include "engine_army_move.h"
+static void ctl_move_run(uint32_t *res)
+{
+    g_army_move_dir = res[0]; g_army_move_code = res[1]; g_army_move_wp_col = res[2]; g_army_move_wp_row = res[3];
+    EVQ(engine_army_move_run(q, MP_ACTIVE));
+    res[0] = g_army_move_dir; res[1] = g_army_move_code; res[2] = g_army_move_wp_col; res[3] = g_army_move_wp_row;
+}
+__attribute__((constructor)) static void rl_ctl_bind(void) { rl_ctl_bind_move_run(ctl_move_run); }
+static void res_46521f(void)
+{
+    for (int k = 0; k < 4; k++) rl_46521f_res[k] = rh_res_get(0x20 + 4 * k);
+    rl_46521f();
+    for (int k = 0; k < 4; k++) rh_res_set(0x20 + 4 * k, rl_46521f_res[k]);   /* rh_res_put under --shadow-full: 0 divergences (docs/findings/rl-ctl.md) */
+}
+HOOK_V(rl_46521f, 0, res_46521f())   /* a pointer-table handler (DAT_004d6a50): entry-patched */
 
 hook_t RH_HOOKS_RL_CTL[] = {
     { "rl_452306", 0x452306u, (void *)w_rl_452306, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },
@@ -214,5 +244,13 @@ hook_t RH_HOOKS_RL_CTL[] = {
     { "rl_43a846", 0x43a846u, (void *)w_rl_43a846, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
     { "rl_43a5a9", 0x43a5a9u, (void *)w_rl_43a5a9, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
     { "rl_43b04c", 0x43b04cu, (void *)w_rl_43b04c, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_42ff10", 0x42ff10u, (void *)w_rl_42ff10, 0, 0, 0, 0, "" },
+    { "rl_4398f5", 0x4398f5u, (void *)w_rl_4398f5, 0, 0, 0, 0, "" },
+    { "rl_45183a", 0x45183au, (void *)w_rl_45183a, 0, 0, 0, 0, "" },
+    { "rl_439df0", 0x439df0u, (void *)w_rl_439df0, 0, 0, 0, 0, "" },
+    { "rl_43a123", 0x43a123u, (void *)w_rl_43a123, 0, 0, 0, 0, "" },
+    { "rl_43de70", 0x43de70u, (void *)w_rl_43de70, 0, 0, 0, 0, "" },
+    { "rl_4472ce", 0x4472ceu, (void *)w_rl_4472ce, 0, 0, 0, 0, "" },
+    { "rl_46521f", 0x46521fu, (void *)w_rl_46521f, 0, 0, 0, 0, "" },
 };
 const int RH_HOOKS_RL_CTL_N = sizeof RH_HOOKS_RL_CTL / sizeof *RH_HOOKS_RL_CTL;
