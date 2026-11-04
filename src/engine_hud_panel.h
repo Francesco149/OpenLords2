@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "localization.h"
+#include "engine_dirty_rect.h"
 
 /*
  * OpenLords2 — strategic-map right-edge territory-info panel.
@@ -31,7 +32,9 @@
  *   - NOT-OWNED branch: title sprite 0x3a, the territory name, and (if
  *       the territory has an owner) the owning realm's colour + name.
  *
- * State-free: every input is passed in.  All render leaves are already
+ * Retail layout (2026-11-04): the panel reads the save slots and records directly and keeps its queues / rows /
+ * heights in retail's globals (engine_mapview_globals.h).  The standalone entries below fill the environment.
+ * (Was: state-free, every input passed in.)  All render leaves are already
  * ported — the sprite dispatch (gfx_sprite_render_from_blob = 0x40a21a,
  * gfx_sprite_render_opaque_from_blob = 0x40a567), the text label
  * renderers (gfx_text_label_render_dec = 0x402f64, _dec_centered =
@@ -60,6 +63,36 @@ typedef struct {
     int map_id;                /* DAT_0053f034 (s_slot_0053f034) — name index */
 } engine_hud_panel_state_t;
 
+/* The panel's environment (not retail globals — retail reads the fonts / sheet / walker from fixed globals):
+ * the misc sheet (DAT_005530c8), fntl2_9 (&DAT_005c9a90), font_10 (&DAT_005aeba0), fntl2_14 (&DAT_005af8f0), the
+ * render / measure char maps (DAT_004d71f0 / DAT_004d71d0), the localization walker, the dirty state the right-half /
+ * box marks expand (NULL: none), and the screen-2 workforce refresh (FUN_0045161e(county) and 0x4120e0; NULL: none). */
+typedef struct {
+    const uint8_t *chrome, *font_name, *font_res, *font_menu, *glyph;
+    const unsigned char *metrics;
+    localization_state_t *loc;
+    engine_dirty_rect_state_t *dirty;
+    void (*workforce_rows)(int county);
+    void (*workforce_redraw)(void);
+} engine_hud_panel_env_t;
+void engine_hud_panel_bind_env(const engine_hud_panel_env_t *env);
+
+/* Retail-layout ports (rhost rows): FUN_0040f7d3(a1) with its gates, FUN_0040fec1(county), the subdrawers
+ * FUN_004100af (q1 type 1) / 0041023a (type 0) / 004103c5 (type 2) / 00410502 (q2 type 4) / 00410598 (5) /
+ * 0041062e (6) / 004106c4 (7) / 004107d1 (3), FUN_0041a734(a1).  They read the county / realm / map id from the save
+ * slots and draw through the bound environment. */
+void engine_hud_panel_draw(int a1);
+void engine_hud_panel_build_queues(int county);
+void engine_hud_panel_draw_q1_type1(void);
+void engine_hud_panel_draw_q1_type0(void);
+void engine_hud_panel_draw_q1_type2(void);
+void engine_hud_panel_draw_q2_type4(void);
+void engine_hud_panel_draw_q2_type5(void);
+void engine_hud_panel_draw_q2_type6(void);
+void engine_hud_panel_draw_q2_type7(void);
+void engine_hud_panel_draw_q2_type3(void);
+void engine_hud_panel_endturn(int a1);
+
 /* Fonts + glyph maps (one render map shared across fonts, see
  * engine-quirks #32).  font_name = fntl2_9.pl8 (retail DAT_005c9a90),
  * font_res = font_10.pl8 (DAT_005aeba0), font_menu = fntl2_14.pl8
@@ -86,9 +119,10 @@ void engine_hud_panel_render(const engine_hud_panel_state_t *st,
  * realm's strategic-record field +0 is below 999, centres the localized
  * "End turn" label (loc group 4 sub 0) over it in colour 0x16.
  *
- * Elided (no pixel content, matching the rest of this module): the empty
- * FUN_004b1de0, the FUN_004527a6 dirty-rect mark, and the DAT_004eb260
- * render-flag write — all present-time bookkeeping.
+ * engine_hud_panel_render_endturn is the standalone's forced body; the
+ * retail-layout engine_hud_panel_endturn adds the gate, FUN_004527a6's
+ * 11×2 forced dirty box (through the bound dirty state) and the
+ * DAT_004eb260 menu redraw latch (2026-11-04: these were elided).
  *
  * chrome = misc_cty (DAT_005530c8); font = fntl2_9 (DAT_005c9a90);
  * realm_block = g_player_strategic_352 (DAT_0057bf00, 0x160 stride);

@@ -37,10 +37,15 @@
  * s_slot_0056d5dc, per-territory records g_per_army_768).
  */
 
+/* The grids are retail globals (definitions: engine_minimap_globals.c; rhost aliases them at their VAs). */
 /* DAT_0052aff0 — 128x128 per-cell region/territory-id grid. */
 extern uint8_t g_minimap_region_grid[0x4000];
 /* DAT_00569590 — 128x128 per-cell terrain-type grid. */
 extern uint8_t g_minimap_type_grid[0x4000];
+
+/* Point the colour lookup at another copy of retail's tables (the band colours DAT_004d28f8, the owner colours
+ * DAT_004d2900 = +8; rhost: retail's own).  NULL: the module's copy. */
+void engine_minimap_bind_color_tables(const uint8_t *band_colors);
 
 /* Port of FUN_0046a037.  Load both grids from map0{(map_id>>2)+1}.pl8,
  * sub-map (map_id & 3), found in `game_dir`.  Returns 1 on success,

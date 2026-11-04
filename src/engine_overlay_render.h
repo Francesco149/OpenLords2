@@ -73,6 +73,7 @@
 #include <stdint.h>
 
 #include "engine_dirty_rect.h"
+#include "gfx_sprite_render.h"   /* gfx_sprite_render_log_fn */
 
 /* ─────────────────────────────────────────────────────────────────
  * Bindings — install retail globals into this module's statics
@@ -193,6 +194,14 @@ void engine_overlay_render_bind_debug_font(const uint8_t *font_base,
 /* Bind the dirty-rect state pointer the per-tile drawers mark.  Same
  * singleton the primary pass binds. */
 void engine_overlay_render_set_dirty_state(engine_dirty_rect_state_t *state);
+
+/* The army label's / dev overlay's text: the default font (&DAT_005af8f0) and the render / measure char maps
+ * (DAT_004d71f0 / DAT_004d71d0).  NULL font: the text is skipped (a host test without fonts). */
+void engine_overlay_render_bind_text_tables(const uint8_t *font, const uint8_t *render_map,
+                                            const unsigned char *measure_map);
+
+/* The army drawer's error log (retail 0x4afab9(fmt, 0, sprite + 1); fmt = the retail string's VA). */
+void engine_overlay_render_set_log(gfx_sprite_render_log_fn fn);
 
 /* Set the view mode discriminator (retail `DAT_0057cb18` ∈ {0,1,2}).
  * View-mode 1 triggers the pre-clear of the left 4-pixel strip and
@@ -353,5 +362,11 @@ void engine_overlay_render_tile_army(int phase);
  * and dispatches gfx_text_label_render_dec at a mode-specific offset
  * from the current cursor. */
 void engine_overlay_render_debug_text(void);
+
+/* Port of FUN_00407f82 — the army label: sprite 130 at (dx, dy) + the garrison number (view mode 0). */
+void engine_overlay_render_army_label(int value, int dx, int dy);
+
+/* Port of FUN_004b4056 — four pixels of `color` at (x, y) in the canvas (the view-mode-1 strip clear). */
+void engine_overlay_render_fill4(int x, int y, int color);
 
 #endif /* OPENLORDS2_ENGINE_OVERLAY_RENDER_H */

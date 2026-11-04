@@ -82,6 +82,8 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_screen_dispatch.c \
                    ../src/engine_load_pump.c \
                    ../src/engine_minimap.c \
+                   ../src/engine_minimap_globals.c \
+                   ../src/engine_mapview_globals.c \
                    ../src/engine_hud_panel.c \
                    ../src/engine_battlefield_render.c \
                    ../src/engine_camera.c \

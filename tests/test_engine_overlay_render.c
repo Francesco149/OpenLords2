@@ -1135,9 +1135,14 @@ int test_engine_overlay_render_army_src_offset_above_70000_errors(void)
     /* src_off = 80000 (= 0x13880) — > 70000, < 310000. */
     slot[4] = 0x80; slot[5] = 0x38; slot[6] = 0x01; slot[7] = 0x00;
 
+    /* Retail FUN_004071a0 does NOT count it in DAT_0058fea8: it logs
+     * aErrTopItBadDat (0x4d2064, sprite + 1) through FUN_004afab9 and
+     * latches DAT_005aeb68 = 1, then returns without drawing. */
+    gfx_sprite_render_clear_error();
     run_army_with_descriptor(0x30, /*first=*/0x13, /*raw=*/0x10,
                              /*disp=*/0x80, /*d4=*/0);
-    T_ASSERT_EQ_I(engine_overlay_render_error_count(), 1);
+    T_ASSERT_EQ_I(engine_overlay_render_error_count(), 0);
+    T_ASSERT_EQ_I(gfx_sprite_render_last_error(), 1);
     return 0;
 }
 

@@ -35,14 +35,12 @@
  * The other six sub-phases are written for fidelity but no ported code
  * reads them yet.
  *
- * DEFERRED (next-frame-only, no effect on the rendered frame): the
- * column-height accumulator DAT_0052f020[0..0x20] and the resulting
- * camera-follow-row update DAT_0057c93c.  Those are filled by the
- * pass-1 row iterators FUN_00405ae9 / FUN_00405c2f, which the ported
- * pass-1 collapses, so the accumulator stays empty and the follow-row
- * computation is inert.  It is computed AFTER the clusters draw and
- * only steers the NEXT frame's camera, so omitting it does not change
- * this frame's pixels.  See docs/findings/map-render.md.
+ * The county votes (was "deferred" here; ported 2026-11-04): the
+ * terrain rows FUN_00405ae9 / FUN_00405c2f count each drawn cell into
+ * DAT_0052f020[descriptor +7] (5 for a flag-0x40 cell); after the passes
+ * the county with the most votes (the current one starts at 30) becomes
+ * the current county DAT_0057c93c (save slot) in view mode 0 — game
+ * state, not a camera detail.  docs/findings/render-mapview.md.
  *
  * This module performs NO binding — exactly like FUN_004050f6, which
  * assumes the clusters' tile arrays / blobs / camera are already bound
@@ -54,6 +52,20 @@
 #define OPENLORDS2_ENGINE_MAP_SCENE_H
 
 #include <stdint.h>
+
+/* Port of FUN_004050c0 (+ the pacer stub FUN_004cfb08): reset the error
+ * counter, advance the redraw phase and (16 ms gate) the two frame
+ * counters, derive the sub-phases, cast the county votes (DAT_0052f020,
+ * the current county DAT_0057c93c seeded with 30), draw the three passes,
+ * decay the empty-cell redraw gate DAT_0053e9ac, and (view mode 0) make
+ * the county with the most drawn cells current.  The two GetTickCount
+ * reads go through the bound clock. */
+void engine_map_scene_tick_frame(void);
+
+/* The clock the pacer reads (retail GetTickCount; rhost binds the host's).
+ * NULL: the now_ms the standalone entry points below pass in. */
+typedef uint32_t (*engine_map_scene_clock_fn)(void);
+void engine_map_scene_bind_clock(engine_map_scene_clock_fn fn);
 
 /* Reset the animation state to retail's initial values (both frame
  * counters 0, anim-tick phase 0, rate-limiter "first call"). */
@@ -81,9 +93,10 @@ void engine_map_scene_tick(uint32_t now_ms);
  * Does NOT touch the canvas. */
 void engine_map_scene_advance_animation(void);
 
-/* FUN_004050f6: advance the animation, then draw the three clusters in
- * retail order (pass 1 terrain → pass 2 overlay → pass 3 features) and
- * decrement the sky gate.  Assumes the clusters are already bound. */
+/* FUN_004050f6: advance the animation, then cast the county votes, draw
+ * the three clusters in retail order (pass 1 terrain → pass 2 overlay →
+ * pass 3 features), decrement the redraw gate and follow the county with
+ * the most drawn cells (view mode 0).  Assumes the clusters are bound. */
 void engine_map_scene_render_body(void);
 
 /* Accessors for the derived sub-phases (testing / introspection). */

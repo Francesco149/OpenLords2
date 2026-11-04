@@ -405,3 +405,175 @@ void engine_terrain_info_render(const engine_terrain_info_attr_t *a,
 
     /* if (flags & 0x20) 0x41c996() — sub-feature stamp, deferred. */
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Retail layout (2026-11-04, docs/findings/render-mapview.md): the screen-4 panel on retail's globals — the compute's
+ * outputs (engine_mapview_globals.h g_mv_ti_*), the county records, the save slots, the gfx state — with the
+ * unported sub-renderers / the sound cue / the icon file read / the present as environment seams.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+#include <string.h>
+#include "engine_mapview_globals.h"
+#include "save.h"
+
+static engine_terrain_info_env_t g_ti_env;
+
+void engine_terrain_info_bind_env(const engine_terrain_info_env_t *env)
+{
+    if (env) g_ti_env = *env;
+    else memset(&g_ti_env, 0, sizeof g_ti_env);
+}
+
+static const uint8_t *ti_rec(void) { return g_per_army_768 + (size_t)g_mv_ti_head * 0x300; }
+static int32_t ti_i32(int off) { int32_t v; memcpy(&v, ti_rec() + off, 4); return v; }
+static void ti_call(void (*fn)(void)) { if (fn) fn(); }
+
+/* Port of FUN_00409397 — the chrome parchment: the border (mode 0) and its interior (16 px in, 2 tiles smaller). */
+void engine_terrain_info_parchment(int x, int y, int cols, int rows)
+{
+    gfx_panel_draw_border_chrome(g_ti_env.chrome, 0, x, y, cols, rows);
+    gfx_panel_fill_interior_chrome(g_ti_env.chrome, x + 16, y + 16, cols - 2, rows - 2);
+}
+
+/* Port of FUN_0041c996 — the special-feature stamp (flags 0x20): the owner's three / two resource sprites. */
+void engine_terrain_info_stamp(void)
+{
+    if (g_mv_ti_type == 23 || g_mv_ti_type == 24) return;
+    if ((int32_t)s_slot_0057c8cc != g_mv_ti_owner) return;
+    int r = g_mv_ti_row;
+    if (g_mv_ti_type != 0 && g_mv_ti_type < 25) {
+        gfx_line_rect_bevel_dark_tl(40, 16 * (r + 7) + 176, 384, 64);
+        gfx_sprite_render(1, 240, 16 * (r + 7) + 184);
+        gfx_sprite_render(13, 304, 16 * (r + 7) + 184);
+        gfx_sprite_render(22, 368, 16 * (r + 7) + 184);
+        gfx_wrap_localized(g_ti_env.loc, 30, 52, 48, 16 * (r + 7) + 194, 0xc0, 100, 48, 0x80, g_ti_env.menu_font,
+                           g_ti_env.glyph, g_ti_env.metrics, 63);
+    } else {
+        gfx_line_rect_bevel_dark_tl(40, 16 * r + 176, 384, 64);
+        gfx_sprite_render(17, 304, 16 * r + 184);
+        gfx_sprite_render(0, 368, 16 * r + 184);
+        gfx_wrap_localized(g_ti_env.loc, 30, 52, 48, 16 * r + 194, 0xc0, 100, 48, 0x80, g_ti_env.menu_font,
+                           g_ti_env.glyph, g_ti_env.metrics, 63);
+    }
+}
+
+/* Port of FUN_0041c208 — the title / county name / body / sub-info / icon of the simple panel. */
+void engine_terrain_info_text(void)
+{
+    int f = g_mv_ti_flags, t = g_mv_ti_type;
+    int v1 = 0, v2 = 0, v3 = 0, v6 = 0, v7 = 0;   /* (retail: uninitialized for a flags-0x80 type > 25) */
+    if (f & 1)           { v1 = 1; v2 = 23; v7 = 24; v6 = 0; }
+    else if (f & 4)      { v1 = 3; v2 = 24; v7 = 29; v6 = 0; }
+    else if (f & 0x10)   { if (t == 16) { v1 = 48; v2 = 49; } else { v1 = 50; v2 = 51; } v7 = 27; v6 = 0; }
+    else if (f & 8)      { if (g_mv_ti_derived != 0) { v1 = 4; v2 = 25; v7 = 25; } else { v1 = 5; v2 = 26; v7 = 26; } v6 = 0; }
+    else if (f & 0x20) {
+        const int32_t *row = g_ti_env.special_table + 4 * t;   /* DAT_004d2ec8 */
+        v1 = row[0]; v2 = row[1]; v7 = row[2]; v6 = row[3];
+        if (v6 == 18) v2 = (s_slot_0053f25c != 0) ? 34 : 58;
+    } else if (f & 0x40) { v1 = 7; v2 = 27; v7 = 27; v6 = 0; }
+    else if ((f & 0x80) == 0) { v1 = 0; v2 = 22; v7 = 23; v6 = 0; }
+    else if (t > 12) {
+        if (t <= 25) {
+            uint8_t b = ti_rec()[0x1c3];
+            v1 = (b == 1) ? 14 : (b == 2) ? 15 : 8;
+            v2 = t + 7; v7 = 28; v6 = 0;
+        }
+    } else {
+        int alert;
+        if (t > 3) {
+            if (t > 6) {
+                if (t > 9) { v1 = 11; v3 = 0; v2 = 69; v7 = 32; alert = 9; }
+                else       { v1 = 82; v3 = 2; v2 = 83; v7 = 18; alert = 8; }
+            } else         { v1 = 10; v3 = 3; v2 = 61; v7 = 31; alert = 8; }
+        } else             { v1 = 9;  v3 = 1; v2 = 53; v7 = 30; alert = 10; }
+        v6 = 0;
+        if (g_ti_env.alert) g_ti_env.alert(alert);   /* 0x426216 */
+        int v5 = ti_i32(0x2a0 + 24 * v3) - ti_i32(0x2a4 + 24 * v3);
+        if (ti_rec()[0x296 + 24 * v3] != 0) v2 += 4;
+        else if (v5 >= 10) { if (v5 >= 25) v2 += (v5 >= 50) ? 3 : 2; else ++v2; }
+    }
+    int r = g_mv_ti_row;
+    g_gfx_line_x_acc = 0;
+    gfx_wrap_localized_line(g_ti_env.loc, 30, v1, 40, 16 * r + 64, g_ti_env.title_font, g_ti_env.glyph, 63);
+    if (v6 != 0)
+        gfx_wrap_localized_line(g_ti_env.loc, 30, v6, g_gfx_line_x_acc + 40, 16 * r + 64, g_ti_env.title_font,
+                                g_ti_env.glyph, 63);
+    if (g_mv_ti_off != 0)
+        gfx_wrap_localized_line_centered(g_ti_env.loc, 100, g_mv_ti_head + 20 * (int)s_slot_0053f034, 8, 16 * r + 24,
+                                         448, g_ti_env.title_font, g_ti_env.glyph, g_ti_env.metrics, 63);
+    switch (v6) {
+    case 19: ti_call(g_ti_env.roster_a); break;   /* 0x41cb3a */
+    case 21: ti_call(g_ti_env.roster_b); break;   /* 0x41d299 */
+    case 18:
+        if ((int32_t)s_slot_0057c8cc == g_mv_ti_owner)
+            gfx_wrap_localized(g_ti_env.loc, 30, v2, 72, 16 * r + 176, 0x150, 100, 40, 0x170, g_ti_env.menu_font,
+                               g_ti_env.glyph, g_ti_env.metrics, 63);
+        else
+            gfx_wrap_localized(g_ti_env.loc, 30, v2, 104, 16 * r + 96, 0x130, 100, 40, 0x170, g_ti_env.menu_font,
+                               g_ti_env.glyph, g_ti_env.metrics, 63);
+        break;
+    default:
+        gfx_wrap_localized(g_ti_env.loc, 30, v2, 104, 16 * r + 100, 0x130, 64, 40, 0x170, g_ti_env.menu_font,
+                           g_ti_env.glyph, g_ti_env.metrics, 63);
+        break;
+    }
+    if ((f & 0x80) == 0) {
+        if ((f & 0x40) != 0 && ti_rec()[0x1ad] != 0) {
+            gfx_sprite_render_rle_from_blob(g_mv_overlay_blob, 129, 50, 16 * r + 156);
+            gfx_wrap_localized(g_ti_env.loc, 30, 59, 104, 16 * r + 160, 0x140, 100, 40, 0x170, g_ti_env.menu_font,
+                               g_ti_env.glyph, g_ti_env.metrics, 63);
+        }
+    } else if (t > 12) {
+        if (t <= 25) ti_call(g_ti_env.roster_c);   /* 0x41da2f */
+    } else {
+        int v4;
+        if (t > 3) {
+            if (t > 6) v4 = (t > 9) ? ti_rec()[0x297] : ti_rec()[0x2c7];
+            else v4 = ti_rec()[0x2df];
+        } else v4 = ti_rec()[0x2af];
+        gfx_wrap_localized_line(g_ti_env.loc, 30, v4 > 0 ? 78 : 77, 104, 16 * r + 116, g_ti_env.menu_font,
+                                g_ti_env.glyph, 63);
+    }
+    ti_call(g_ti_env.load_icons);   /* io_read_file_at("icon_tmp.pl8", DAT_004eabec, 0x27100, 0) */
+    gfx_sprite_render(v7, 40, 16 * r + 96);
+}
+
+/* Port of FUN_0041befe — the simple panel: size it, parchment + seal + bevel, the text, the stamp. */
+void engine_terrain_info_simple(void)
+{
+    int f = g_mv_ti_flags, t = g_mv_ti_type;
+    int mine = (int32_t)s_slot_0057c8cc == g_mv_ti_owner;
+    if (f & 0x20) {
+        if (t == 23 || t == 24) { g_mv_ti_row = 17; g_mv_ti_off = 2; }
+        else if (mine) { g_mv_ti_row = (t != 0) ? (t < 25 ? 5 : 12) : 12; g_mv_ti_off = 2; }
+        else { g_mv_ti_row = 17; g_mv_ti_off = 2; }
+    } else if (f & 4)    { g_mv_ti_row = 17; g_mv_ti_off = 0; }
+    else if (f & 0x10)   { g_mv_ti_row = 16; g_mv_ti_off = 0; }
+    else if (f & 0x40)   { g_mv_ti_row = ti_rec()[0x1ad] != 0 ? 15 : 17; g_mv_ti_off = 2; }
+    else if ((f & 0x80) == 0) { g_mv_ti_row = 17; g_mv_ti_off = 2; }
+    else if (t > 12) {
+        if (ti_rec()[0x1c3] != 0) g_mv_ti_row = mine ? 10 : 17;
+        else g_mv_ti_row = ti_rec()[0x1c2] != 0 ? 17 : 14;
+        g_mv_ti_off = 2;
+    } else { g_mv_ti_row = 17; g_mv_ti_off = 2; }
+    engine_terrain_info_parchment(8, 16 * (g_mv_ti_row - g_mv_ti_off) + 32, 28, g_mv_ti_off + 27 - g_mv_ti_row);
+    gfx_sprite_seal_draw(g_ti_env.system_sheet, 428, 438, 0);
+    gfx_line_rect_bevel_dark_br(32, 16 * g_mv_ti_row + 56, 400, 16 * (24 - g_mv_ti_row));
+    engine_terrain_info_text();
+    if (g_mv_ti_flags & 0x20)
+        engine_terrain_info_stamp();
+}
+
+/* Port of FUN_0041b032 — the screen-4 panel: full-screen dirty, the county / army panel (0x41b19d) or the simple
+ * one, the present (0x452160(1)), the menu redraw latch. */
+void engine_terrain_info_panel(void)
+{
+    /* 0x4b1de0: empty */
+    if (g_ti_env.dirty) engine_dirty_rect_mark_full_screen(g_ti_env.dirty);
+    if (g_mv_ti_county != 0 || g_mv_ti_52afb4 != 0)
+        ti_call(g_ti_env.county_panel);   /* 0x41b19d */
+    else
+        engine_terrain_info_simple();
+    ti_call(g_ti_env.present);            /* 0x452160(1) */
+    g_gfx_menu_redraw_a = 1;
+}

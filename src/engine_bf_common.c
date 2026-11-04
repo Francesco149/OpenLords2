@@ -35,8 +35,8 @@ void bf_sleep(uint32_t ms)
 }
 
 /* engine_tile's ports on retail's arrays (the cell grid g_castles_state, the path / stage scratches, the footprint
- * list), with retail's EAX: FUN_00471c1f leaves the last cell index (6399), FUN_00471d30 the last cell's offset
- * 0xc7f8 with its stage byte in AL, FUN_0048ee46 its argument. */
+ * list), with retail's EAX: 0x471c1f leaves the last cell index (6399), 0x471d30 the last cell's offset
+ * 0xc7f8 with its stage byte in AL, 0x48ee46 its argument. */
 int bf_tile_refresh_path(void)
 {
     engine_tile_refresh_path_scratch(g_castles_state, g_path_scratch);
