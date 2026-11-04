@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1482** (60.6%) — tested 788, ported 694
-- code bytes touched: **74.6%** (625,575 / 838,629 B)
-- unported: **965**
+- touched: **1485** (60.7%) — tested 788, ported 697
+- code bytes touched: **74.6%** (626,025 / 838,629 B)
+- unported: **962**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (694) — reimplemented, no host test yet
+## ported (697) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -1126,6 +1126,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43ddf4 | FUN_0043ddf4 | 114 | rl_ui2.c |
 | 0x43eda0 | FUN_0043eda0 | 637 | rl_glue.c |
 | 0x43f24b | FUN_0043f24b | 185 | rl_ui2.c |
+| 0x43f304 | FUN_0043f304 | 78 | engine_bf_extern.c |
 | 0x43f352 | FUN_0043f352 | 236 | rl_ui2.c |
 | 0x43f484 | FUN_0043f484 | 51 | rl_ui2.c |
 | 0x440666 | FUN_00440666 | 383 | rl_glue.c |
@@ -1203,6 +1204,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x476e21 | FUN_00476e21 | 116 | engine.c |
 | 0x47703a | FUN_0047703a | 126 | rl_glue.c |
 | 0x4778a0 | FUN_004778a0 | 655 | engine_bf_setup.c |
+| 0x477b2f | FUN_00477b2f | 346 | engine_bf_extern.c |
 | 0x477c89 | FUN_00477c89 | 371 | engine_bf_setup.c |
 | 0x4782c5 | FUN_004782c5 | 340 | rl_glue.c |
 | 0x4784ca | FUN_004784ca | 730 | engine_bf_input.c |
@@ -1445,6 +1447,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x499aca | FUN_00499aca | 487 | rl_io.c |
 | 0x499cb1 | FUN_00499cb1 | 204 | engine_bf_input.c |
 | 0x499d7d | FUN_00499d7d | 26 | rl_io.c |
+| 0x499d97 | FUN_00499d97 | 26 | engine_bf_extern.c |
 | 0x49a3e6 | FUN_0049a3e6 | 109 | rl_misc.c |
 | 0x49b8b0 | FUN_0049b8b0 | 195 | rl_glue.c |
 | 0x49c995 | FUN_0049c995 | 157 | rl_io.c |
