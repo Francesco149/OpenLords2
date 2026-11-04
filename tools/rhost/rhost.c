@@ -77,6 +77,13 @@ static int is_callsite(uint32_t a)
     while (lo < hi) { unsigned m = (lo + hi) / 2; if (k_callsites[m] < a) lo = m + 1; else hi = m; }
     return lo < k_callsites_n && k_callsites[lo] == a;
 }
+/* a function whose address retail takes (a pointer table, a stored callback): its call sites alone miss those calls */
+int rh_is_addr_taken(uint32_t va)
+{
+    unsigned lo = 0, hi = k_addrtaken_n;
+    while (lo < hi) { unsigned m = (lo + hi) / 2; if (k_addrtaken[m] < va) lo = m + 1; else hi = m; }
+    return lo < k_addrtaken_n && k_addrtaken[lo] == va;
+}
 /* redirect every E8 call of `va` to `hook`: only at real call instructions (the IDA export's list) — an E8 byte inside
  * another instruction (an immediate, a displacement) aimed at va by chance is left alone (it crashed retail once:
  * 0x47f421 inside FUN_0047efee's `mov dword_4EE8E8, 0`). Without the list: the raw scan. */

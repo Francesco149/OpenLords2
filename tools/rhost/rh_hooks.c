@@ -117,6 +117,11 @@ void rh_hooks_install(void)
         h->mode = mode;
         if (mode == H_OFF) continue;
         int n = O.hook_entry ? 0 : redirect_calls(h->va, h->wrapper);
+        if (n && rh_is_addr_taken(h->va)) {   /* also reached through a pointer: patch the entry too (retail side: trampoline) */
+            h->entry = rh_patch_entry(h->va, h->wrapper);
+            rh_log("hook %s:%s %08x <- %d call site(s) + entry patch (address taken; trampoline %08x)\n", t, h->name, h->va, n, h->entry);
+            continue;
+        }
         if (n) { rh_log("hook %s:%s %08x <- %d call site(s)\n", t, h->name, h->va, n); continue; }
         h->entry = rh_patch_entry(h->va, h->wrapper);   /* no call site (a pointer table) or --hook-entry */
         rh_log("hook %s:%s %08x <- entry patch (trampoline %08x)\n", t, h->name, h->va, h->entry);

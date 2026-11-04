@@ -142,6 +142,7 @@ void rh_ds_mix(void);          /* --audible: this frame's audio to waveOut (read
 void *rh_ds_meta_save(void);               /* serials, live registry, timers (free with free()) */
 void rh_ds_meta_restore(const void *m);
 void *rh_win_meta_save(void);              /* virtual queue + window state (free with free()) */
+int rh_is_addr_taken(uint32_t va);         /* IDA: the function's address is taken (rh_hooks.c: entry-patch it too) */
 void *rh_files_meta_save(void);            /* the run dir's files a shadowed call touched (rh_files_meta_free) */
 void rh_files_meta_restore(const void *m);
 void rh_files_meta_free(void *m);
