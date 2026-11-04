@@ -83,8 +83,12 @@ rl_render's DAT_00553f54 / DAT_00569590, rl_io's DAT_004d6af8, the battlefield's
   uninitialized waypoint locals (quirk #229) from just below the handler's esp: in the shadow, retail's run reads the
   fault frame instead of the pure run's residue. bot3-s104-t32 f19934: rl_465622 retail moved army 2 east, the port
   did not; a pure run's dump at f19934 matches the port (0x52f3fc / 0x52f400 / 0x52f404); the shadow pass then left
-  the corpus (rng 7c9b6556 vs 5929ac9d). Under `--shadow-full` (copy shadow, no faults): see §Evidence. Shared-file
-  need: a per-row copy-shadow flag (or pre-faulting the row's pages before the retail side runs).
+  the corpus (rng 7c9b6556 vs 5929ac9d). Under `--shadow-full` (copy shadow, no faults) all three verify over the
+  corpus (§Evidence), so the table carries no row for them. Shared-file need: a per-row copy-shadow flag (rh_hooks.h /
+  rh_state.c), or pre-faulting a row's pages before its retail side runs.
+- **A row nested under another row is shadowed in one pass only** (its first depth): the 54 scenarios that reach
+  0x46dbf5 / 0x46dd34 / 0x46da4b under 0x4676e0 verify them through 0x4676e0's shadow, the row itself in the 3 where it
+  is reached at depth 1 (the per-table iterations shadowed each at its own depth).
 
 ## Evidence
 
@@ -99,8 +103,9 @@ rl_render's DAT_00553f54 / DAT_00569590, rl_io's DAT_004d6af8, the battlefield's
   hybrid PASS.
 - Thinnest reach: 0x46965a (grain-and-save, 1 call), 0x46958f (4 scenarios), 0x467532 (5), 0x46921d (15),
   0x47265d (13), 0x472392 / 0x472875 (16).
-- The handlers, `--extra=--shadow-full --hooks '^rl_465(486|622|761)$'` (a build with their rows): bot3-s104-t32:
-  rl_465622 77 361 calls, 0 divergences, hybrid PASS, 0 failed runs.
+- The handlers, `--extra=--shadow-full --hooks '^rl_465(486|622|761)$'` (a build with their rows; the copy shadow takes
+  no page faults), whole corpus 2026-11-04 22:36 – 11-05 00:20: **VERIFY: 3/3 reached with 0 divergences; hybrid
+  PASS; 0 failed run(s)** — rl_465486 4 374 calls / 35 scenarios, rl_465622 2 990 187 / 54, rl_465761 2 953 / 3.
 
 ## Seams switched to the ports
 
