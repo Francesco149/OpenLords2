@@ -46,6 +46,13 @@ if echo "$staged" | grep -qE '^(src/|tests/).*\.(c|h)$'; then
         exit 1
     fi
     echo "pre-commit: $(grep -oE '[0-9]+ passed' "$LOGD/tests.log" | tail -1)"
+    # the standalone links every src/*.c (partitions' generated globals can collide: tools/bf/dedup_globals.py)
+    if ! run make -C src -j8 >"$LOGD/standalone.log" 2>&1; then
+        echo "pre-commit: the standalone build FAILED — commit aborted:" >&2
+        grep -E "error|multiple definition" "$LOGD/standalone.log" | head -10 >&2
+        exit 1
+    fi
+    echo "pre-commit: standalone build OK"
 fi
 
 # --- 3. Render edits: the proof is a hybrid replace + fb chain ---------------
