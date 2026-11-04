@@ -353,7 +353,7 @@ void engine_army_select_dispatch(const engine_army_select_in_t *in,
                 engine_army_select_assign_task(head_link, task, in->local_player,
                                                in->season_event_mode,
                                                in->season_map, evq);
-                /* FUN_0043eda0(0x3a,0) — multiplayer-only command echo,
+                /* 0x43eda0(0x3a,0) — multiplayer-only command echo,
                  * dead in SP (g_sim_mp_active == 0); not ported. */
             } else {
                 post_wrong_owner_notice(evq, in->local_player);

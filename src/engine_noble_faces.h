@@ -17,7 +17,7 @@
  * a relation meter bar), the current partner's realm name, and a set of
  * diplomacy-action buttons whose membership depends on the standing relation
  * (no-lord / I-am-lord / has-other-lord / allied).  Selecting an action opens
- * the diplomacy-action screen 0x1a (FUN_00436141 … FUN_0043631e) — DEFERRED
+ * the diplomacy-action screen 0x1a (FUN_00436141 … 0x43631e) — DEFERRED
  * to a later port; this screen renders byte-exact and closes back to the map.
  *
  * Retail address map:

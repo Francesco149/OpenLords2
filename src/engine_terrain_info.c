@@ -112,7 +112,7 @@ void engine_terrain_info_open(const engine_terrain_info_open_in_t *in,
     }
 
     call_hook(hooks->panel_render, in, st);         /* FUN_0041b032 */
-    call_hook(hooks->tail, in, st);                 /* FUN_004b37bc */
+    call_hook(hooks->tail, in, st);                 /* 0x4b37bc */
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -205,7 +205,7 @@ engine_terrain_info_classify_panel(const engine_terrain_info_attr_t *a)
  * Branch shape verbatim from docs/decompiled/by-address/41c208.c lines
  * 14-154.  The army-stats arm (flags&0x80, type<0xd) reads the per-unit
  * stat fields to bump the body sub-index and records the SFX-cue arg
- * (FUN_00426216 — deferred, audio-off).  The flags&0x20 arm reads the
+ * (0x426216 — deferred, audio-off).  The flags&0x20 arm reads the
  * special-feature table (a->terr_table; NULL ⇒ zeroes = deferred). */
 engine_terrain_info_text_class_t
 engine_terrain_info_classify_text(const engine_terrain_info_attr_t *a)
@@ -290,8 +290,8 @@ engine_terrain_info_classify_text(const engine_terrain_info_attr_t *a)
 }
 
 /* The text/sprite draw sequence of FUN_0041c208 (after the classifier).
- * The three army-roster sub-renderers (FUN_0041cb3a local_c==0x13,
- * FUN_0041d299 local_c==0x15, FUN_0041da2f type 0xd..0x19) and the
+ * The three army-roster sub-renderers (0x41cb3a local_c==0x13,
+ * 0x41d299 local_c==0x15, 0x41da2f type 0xd..0x19) and the
  * selection-blob sprite (FUN_0040a3d0, flags&0x40) are DEFERRED — guarded
  * exactly where retail branches, so the common terrain paths render. */
 static void render_text(const engine_terrain_info_attr_t *a,
@@ -305,7 +305,7 @@ static void render_text(const engine_terrain_info_attr_t *a,
     const int owned = (a->player_id == a->owner);
 
     engine_terrain_info_text_class_t r = engine_terrain_info_classify_text(a);
-    /* r.alert_arg → FUN_00426216(n): a UI SFX cue, deferred (audio-off). */
+    /* r.alert_arg → 0x426216(n): a UI SFX cue, deferred (audio-off). */
 
     /* Title line(s): the terrain name, title font, two-segment when idxc. */
     gfx_text_set_line_x_acc(0);                            /* DAT_005cd404 = 0 */
@@ -328,9 +328,9 @@ static void render_text(const engine_terrain_info_attr_t *a,
     /* Body block: word-wrapped, menu font.  local_c selects the layout;
      * 0x13/0x15 route to the deferred army-roster renderers. */
     if (r.idxc == 0x13) {
-        /* FUN_0041cb3a — army roster A (deferred). */
+        /* 0x41cb3a — army roster A (deferred). */
     } else if (r.idxc == 0x15) {
-        /* FUN_0041d299 — army roster B (deferred). */
+        /* 0x41d299 — army roster B (deferred). */
     } else if (r.idxc == 0x12) {
         if (owned) {
             gfx_wrap_localized(loc, 0x1e, r.idx1c, 0x48, row * 0x10 + 0xb0,
@@ -370,7 +370,7 @@ static void render_text(const engine_terrain_info_attr_t *a,
                                 row * 0x10 + 0x74, ctx->menu_font,
                                 ctx->glyph_table, 0x3f);
     } else if (t < 0x1a) {
-        /* FUN_0041da2f — army roster C (deferred). */
+        /* 0x41da2f — army roster C (deferred). */
     }
 
     /* Terrain icon sprite from icon_tmp.pl8 (retail loads it into the shared

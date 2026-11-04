@@ -68,7 +68,7 @@ static void build_filename(void)
  * retail enters with DAT_005aeb8c == 1, so the new-game initialiser
  * FUN_00497ced and the DAT_004eac50 = 0 reset are SKIPPED (the screen
  * state was already set to 0 by FUN_004976a1 / engine_map_post_load).
- * It then sets the engine phase to 3 (ingame), runs FUN_00451f8a (a
+ * It then sets the engine phase to 3 (ingame), runs 0x451f8a (a
  * dirty-rect full mark + render-neutral UI flags — deferred), and raises
  * the demand-redraw cookie to 2.  The timing scalars (DAT_005440c8 /
  * _DAT_00568d9c) it also sets are deferred (non-deterministic). */
@@ -90,7 +90,7 @@ void engine_load_pump_tick(void)
                 if (engine_current_screen() == 0x1f) {
                     /* SP title-load: deserialise + run the map setup via
                      * the bound hook (retail FUN_004adfe6 → FUN_004976a1).
-                     * FUN_004adcf6 is a no-op for SP (returns 1), so retail
+                     * 0x4adcf6 is a no-op for SP (returns 1), so retail
                      * always takes the transition branch. */
                     g_inflight = (char)g_load_fn(g_fname);
                     transition_to_ingame_sp();
@@ -105,7 +105,7 @@ void engine_load_pump_tick(void)
     /* Block 2 — the Load request latch (retail's second block).  The
      * page-3 Load button sets the request (DAT_005cd41c = 100); arm the
      * ~150-frame confirm timer and build the filename.  The missing-file
-     * retry (FUN_004af767) + the load sound (s040_01.wav) are deferred. */
+     * retry (0x4af767) + the load sound (s040_01.wav) are deferred. */
     if (engine_menu_input_filelist_load_request() != 0) {
         engine_menu_input_set_filelist_load_request(0);   /* DAT_005cd41c = 0 */
         g_timer = 0x96;                                    /* 150 frames */

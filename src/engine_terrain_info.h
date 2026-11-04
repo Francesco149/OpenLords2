@@ -91,7 +91,7 @@ typedef struct engine_terrain_info_hooks {
     engine_terrain_info_hook_fn army_select;     /* FUN_0043278b(army_ptr)        */
     engine_terrain_info_hook_fn map_render;      /* FUN_004050c0                  */
     engine_terrain_info_hook_fn panel_render;    /* FUN_0041b032 (the panel)      */
-    engine_terrain_info_hook_fn tail;            /* FUN_004b37bc                  */
+    engine_terrain_info_hook_fn tail;            /* 0x4b37bc                  */
 } engine_terrain_info_hooks_t;
 
 /* Run the terrain-info open (retail FUN_0043caf4).  Reads `in`, mutates
@@ -105,8 +105,8 @@ void engine_terrain_info_open(const engine_terrain_info_open_in_t *in,
  * Screen-4 terrain-info PANEL RENDER — port of FUN_0041befe (778 B, the
  * simple-terrain arm of FUN_0041b032) + FUN_0041c208 (1934 B, the
  * string/sprite classifier + draws).  The complex county/army panel
- * FUN_0041b19d and the three army-roster sub-renderers (FUN_0041cb3a /
- * FUN_0041d299 / FUN_0041da2f, each fired only for armies / special
+ * 0x41b19d and the three army-roster sub-renderers (0x41cb3a /
+ * 0x41d299 / 0x41da2f, each fired only for armies / special
  * features) are DEFERRED — guarded behind the same flag/type branches
  * retail uses, so the common terrain tiles ("Here Be Dragons" / named
  * terrain) render and the deferred arms are visibly stubbed.
@@ -146,7 +146,7 @@ typedef struct engine_terrain_info_text_class {
     int idx18;          /* local_18 — army stat slot (0..3)                */
     int idx8;           /* local_8  — terrain icon sprite index            */
     int idxc;           /* local_c  — secondary title / body-mode selector */
-    int alert_arg;      /* FUN_00426216(n) arg, 0 = none                   */
+    int alert_arg;      /* 0x426216(n) arg, 0 = none                   */
 } engine_terrain_info_text_class_t;
 
 /* Pure classifiers — port the index logic of FUN_0041befe / FUN_0041c208

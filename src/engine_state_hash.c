@@ -4,7 +4,7 @@
  * 96 B) and FUN_0043ffc3 (clear 600 bytes, 117 B).
  *
  * Called from retail's per-tick driver as the input to the MP desync
- * detector (FUN_00440dd2 — compares bucket[0]/bucket[9] across players).
+ * detector (0x440dd2 — compares bucket[0]/bucket[9] across players).
  *
  * Pure-function shape: every input explicit (mode, player_slot, sim
  * tick counter, six source-array pointers); every state mutation in
@@ -172,7 +172,7 @@ void engine_compute_state_hash(const engine_state_hash_in_t *in,
      * sequence anyway. */
     out->bucket[9] = (uint8_t)((((uint8_t)in->sim_tick_counter) & 0x7f) + 1u);
 
-    /* Combat-mode tail — retail calls FUN_0043f4b7 which conditionally
+    /* Combat-mode tail — retail calls 0x43f4b7 which conditionally
      * memcpys three combat byte arrays into a malloc'd scratch (the
      * snapshot-for-MP-rollback machinery).  We surface this as a flag
      * rather than perform the snapshot — the scratch pointers aren't

@@ -19,10 +19,10 @@
  *
  * After the advance, six output mirrors are produced — three for
  * each state, masked at 15 / 7 / 3 bits.  Retail consumers
- * (FUN_00404b99 is the bounded-bitmask sampler; the wider call sites
+ * (0x404b99 is the bounded-bitmask sampler; the wider call sites
  * read the 7-bit and 3-bit fields for cheap categorical rolls) read
  * these directly rather than running the LFSR themselves; one call
- * site (FUN_00404b99) reruns the advance up to 10 times if the
+ * site (0x404b99) reruns the advance up to 10 times if the
  * 15-bit value is above its bit-mask ceiling.
  *
  * Pure function: every input explicit, every state mutation returned

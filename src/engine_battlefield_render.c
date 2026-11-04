@@ -252,7 +252,7 @@ static int g_selection_marker_x;                        /* DAT_00553f14 */
 static int g_selection_marker_y;                        /* DAT_00553f18 */
 static int g_selection_marker_gate;                     /* DAT_00553f84 */
 
-/* World-map dirty hook (substitute for retail FUN_0046c4a3 direct call). */
+/* World-map dirty hook (substitute for retail 0x46c4a3 direct call). */
 static engine_battlefield_world_dirty_hook_t g_world_dirty_hook;
 
 /* Late-pass counters. */

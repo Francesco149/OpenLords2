@@ -161,7 +161,7 @@ void engine_title_render_bind_background_fn(engine_title_render_background_fn fn
 
 /* Page-renderer hook for the menu pages OTHER than the main menu
  * (page 1, which routes to engine_title_render_main_menu).  The unported
- * page renderers (FUN_0041ec8a … FUN_0042150b for pages 2..0xd) are
+ * page renderers (FUN_0041ec8a … 0x42150b for pages 2..0xd) are
  * funnelled through this single hook, which receives the page number.
  * Default is a no-op-plus-counter stub. */
 typedef void (*engine_title_render_page_fn)(int page);
@@ -434,7 +434,7 @@ int engine_title_render_tab_value(int tab);
 int engine_title_render_option_detail_hover(int cx, int cy);
 
 /* Port of FUN_00433ba2 — write `value` (0-based) back to the currently
- * open option tab.  The roster/preview recompute (FUN_00433cc1) is
+ * open option tab.  The roster/preview recompute (0x433cc1) is
  * deferred; the page-7 value cap reflects the pick immediately. */
 void engine_title_render_option_detail_pick(int value);
 

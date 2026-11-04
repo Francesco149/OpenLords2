@@ -38,7 +38,7 @@
  * Indexed by task (1..9) unless noted; the code guards the task range so
  * the slot-0 padding entry is never read for the per-task arrays. */
 /* DAT_004d2950 sound/anim cue { 0,7,4,6,0,10,8,9,0,0 } per task drives
- * FUN_00426216 — audio playback is deferred (audio.h no-op), so the
+ * 0x426216 — audio playback is deferred (audio.h no-op), so the
  * table is intentionally not read here. */
 static const int k_labor_task_icon[11] =   /* DAT_004d2974 (task 9 → 0x10) */
     { 0, 0, 2, 3, 5, 6, 7, 8, 9, 0x0a, 0x0a };
@@ -156,11 +156,11 @@ void engine_labor_render(const engine_labor_ctx_t *ctx)
         /* Blacksmith: the top menu bar redraws over the smithy scene
          * (FUN_00419c78), then the smithy sub-renderer paints the rest.
          * DAT_0056d6a0/005530d0/00567d0c are redraw/menubar-active flags
-         * owned by the seam here; the fire.wav + cue-8 (FUN_00427990 /
-         * FUN_00426216) are audio no-ops. */
+         * owned by the seam here; the fire.wav + cue-8 (0x427990 /
+         * 0x426216) are audio no-ops. */
         engine_screen_strat_render_menubar();
     } else {
-        /* k_labor_sound_cue[task] via FUN_00426216 — audio no-op. */
+        /* k_labor_sound_cue[task] via 0x426216 — audio no-op. */
 
         /* FUN_00409397(0x30, 0x60, 0x19, rows) — the parchment panel;
          * proven equivalent to gfx_panel_draw(chrome, ...) (county panels,
@@ -748,7 +748,7 @@ int engine_labor_open_hit_test(const engine_labor_open_in_t *in)
     if (cell == 0) {
         return 0;
     }
-    /* 0x45183a(county, cell-1) — is that task present for the county? */
+    /* Inlined port of FUN_0045183a(county, cell-1) — is that task present for the county? */
     int idx = cell - 1;
     const uint8_t *rec = COUNTY(in->county_block, in->county);
     int present = 1;

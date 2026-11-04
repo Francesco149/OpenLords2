@@ -353,7 +353,7 @@ void engine_game_init_bind_runtime_tables(int32_t *tile_cells);
 
 /* Port of FUN_004329ec @ 0x4329ec single-player new-game branch: run
  * engine_game_init(), set the in-game screen (DAT_004eac50 = 0) and engine
- * state (DAT_0052af94 = 3), then FUN_00451f8a (timer reset, in engine_load_
+ * state (DAT_0052af94 = 3), then 0x451f8a (timer reset, in engine_load_
  * pump.c).  The multiplayer / load branches are not ported. */
 void engine_game_start(void);
 

@@ -28,7 +28,7 @@
  * arm: lock the canvas (gfx_lock_canvas), call this, unlock + present
  * (gfx_tick_present).  FUN_0040f5fd's own present tail (FUN_00452160 /
  * FUN_004b0ab5) maps to the loop's present step; its full-redraw prep
- * (FUN_004b1897 / FUN_004b11ce) maps to the gfx layer's lock path.
+ * (0x4b1897 / 0x4b11ce) maps to the gfx layer's lock path.
  */
 
 #ifndef OPENLORDS2_ENGINE_SCREEN_STRAT_H

@@ -59,8 +59,8 @@ extern int g_shutdown_request;
 /* Save/load pump request.  Mirror of retail DAT_005c9274.  Set by
  * engine_tick_dispatch when g_engine_state > 8; consumed by
  * engine_tick_guard which dispatches the SP or MP save-pump.  Both
- * pump paths are stubs today (FUN_004978ad / FUN_0049792e /
- * FUN_00497a34 are the level-load chain — many KB across most
+ * pump paths are stubs today (0x4978ad / FUN_0049792e /
+ * 0x497a34 are the level-load chain — many KB across most
  * subsystems).  No behavioural difference until g_engine_state can
  * actually transition above 8, which today it can't. */
 extern int g_savepump_request;
@@ -379,7 +379,7 @@ void engine_compute_scenario_hint(const engine_scenario_hint_in_t *in,
  * Computes a per-player 10-byte rolling "state hash" + a 600-byte
  * per-record byte-hash region.  Called every engine tick by retail's
  * per-tick driver as the input to the MP desync detector
- * (FUN_00440dd2 compares bucket[0] / bucket[9] across players,
+ * (0x440dd2 compares bucket[0] / bucket[9] across players,
  * setting a divergence latch on mismatch — that's how the engine
  * notices simulation drift between MP peers).
  *
@@ -407,7 +407,7 @@ void engine_compute_scenario_hint(const engine_scenario_hint_in_t *in,
  * `bucket[0] = sum(bucket[1..8])` and `bucket[9] = (sim_tick_counter
  * & 0x7f) + 1` fire unconditionally.
  *
- * Side-effect surface: combat mode (==2) tail calls FUN_0043f4b7
+ * Side-effect surface: combat mode (==2) tail calls 0x43f4b7
  * (a snapshot/swap of three combat byte arrays into a malloc'd
  * scratch).  Surfaced as `notify_combat_snapshot` flag; the orchestrator
  * pins the snapshot-target pointer null retail-side so the memcpy
@@ -467,7 +467,7 @@ typedef struct {
      * within its 200-byte chunk; other bytes stay 0. */
     uint8_t  hash_region[600];
 
-    /* 1 iff mode == 2 (retail's combat-mode tail call to FUN_0043f4b7
+    /* 1 iff mode == 2 (retail's combat-mode tail call to 0x43f4b7
      * would have fired).  The combat snapshot itself is NOT performed
      * by the port — it touches scratch pointers we haven't ported. */
     int      notify_combat_snapshot;
@@ -712,7 +712,7 @@ void engine_compute_input_state(const engine_input_in_t *in,
  * Rolling 1-second FPS measurement.  Bumps frames-this-second on every
  * call; once the window elapses (> 1000 ms), publishes the current FPS
  * and rolls the cumulative-FPS / cumulative-seconds counters used by
- * retail's session-diag (FUN_004b2636 — reports average FPS).
+ * retail's session-diag (0x4b2636 — reports average FPS).
  *
  * Also returns ms since the previous frame (delta_ms) — retail's
  * caller discards this, but the value is computed regardless because
@@ -761,7 +761,7 @@ void engine_compute_fps(const engine_fps_in_t *in, engine_fps_out_t *out);
  * words (taps at bits 0 and 4, feedback injected into bit 30).
  * Produces six bit-masked outputs per call (15/7/3 bits for each
  * state).  Consumers read the output mirrors directly; the bounded
- * bitmask sampler (retail FUN_00404b99) re-runs this advance up to
+ * bitmask sampler (retail 0x404b99) re-runs this advance up to
  * 10 times if the 15-bit value lands above the requested ceiling.
  *
  * Retail seeds (FUN_004b2258 / InitInstance @ lines 83635-83636):

@@ -89,7 +89,7 @@ extern int32_t g_trade_category;   /* DAT_00568948 — 0 food / 1 raw / 2 weapon
 extern int32_t g_trade_error;      /* DAT_0057c994 — 0 none / 1 no-crowns / -1 no-goods */
 extern int g_trade_needs_compute;  /* port-only: the open render runs the compute once */
 
-/* The arrows' 0 → positive net cue (retail FUN_00427990("s068_0N.wav", 1, 0)
+/* The arrows' 0 → positive net cue (retail 0x427990("s068_0N.wav", 1, 0)
  * after DAT_005533f0 = 1); unbound = silent. */
 void engine_trade_bind_wav_fn(void (*fn)(const char *, int, int));
 

@@ -228,7 +228,7 @@ static uint8_t sim_player_human_active(void)
     return g_player_strategic_352[(s_slot_0057c8cc & 7) * 0x160 + 0x04];
 }
 
-/* "Turn end pending" latch.  Retail DAT_0056d6a4.  Set by FUN_0049b8b0
+/* "Turn end pending" latch.  Retail DAT_0056d6a4.  Set by 0x49b8b0
  * (turn-timeout subsystem); consumed by the sub-step body's SP-only
  * branch to break out of the sub-step loop (forces local_c = 0).  No
  * producer in our port today. */
@@ -273,7 +273,7 @@ static int      g_sim_turn_ready_flags[10];    /* DAT_00515d60[10] — per-playe
  * is in a non-degenerate state from the first call.
  *
  * Output mirrors are write-only from our side today — no consumer in
- * the drop-in yet.  Retail's bounded-bitmask sampler (FUN_00404b99,
+ * the drop-in yet.  Retail's bounded-bitmask sampler (0x404b99,
  * unported) is the primary reader. */
 static uint32_t g_rng_state_a    = 0x54657687u;   /* DAT_0058fe28 */
 static uint32_t g_rng_state_b    = 0x72641663u;   /* DAT_0058fe08 */
@@ -326,7 +326,7 @@ static int g_anim_cycle_counter;               /* DAT_0053e9a4 */
  *
  * `g_fps_current` is write-only today — retail's on-screen FPS
  * overlay (UI subsystem, unported) is the reader.  Cumulative pair is
- * read by retail's session-diag (FUN_004b2636, unported), and also by
+ * read by retail's session-diag (0x4b2636, unported), and also by
  * our smoke-print at shutdown so the harness can verify the counter
  * is alive. */
 static uint32_t g_fps_last_render_ms;          /* _DAT_004e59e0 */
@@ -975,8 +975,8 @@ static int ti_sendsupplies_target(const engine_ingame_input_in_t *in,
                                              in->lmb_pressed);
 }
 
-/* screen0f_commit hook (FUN_00427d19 + FUN_0041438c): the labor-close tail
- * — release the pending audio cue.  The border repaint (FUN_0041438c, the
+/* screen0f_commit hook (FUN_00427d19 + 0x41438c): the labor-close tail
+ * — release the pending audio cue.  The border repaint (0x41438c, the
  * bottom status-bar rows) is deferred: the demand-redraw the close requests
  * repaints the frame. */
 static void ti_screen0f_commit(const engine_ingame_input_in_t *in,
@@ -1085,7 +1085,7 @@ static void ti_army_move_click_resolve(const engine_ingame_input_in_t *din,
  * dispatch target).  Action codes are the retail callee addresses baked
  * into the button tables (engine_county_panels.c).  The outer gates
  * (rate < 50, level < 5, …) live in the retail wrappers FUN_0043aa32/
- * aad5/a1e9/a2b2 and are reproduced here; the redraw flag mirrors their
+ * aad5/a1e9/a2b2 (ported here: this function is their port); the redraw flag mirrors their
  * unconditional panel re-render + DAT_005530d0 raise. */
 static int g_cp_router_redraw;   /* set by the action, read by the arm */
 
@@ -1122,7 +1122,7 @@ static void cp_button_action(uint32_t action, int param0, int param1)
     default:
         break;
     }
-    /* (MP: FUN_0043eda0 broadcast — deferred, SP drop-in.) */
+    /* (MP: 0x43eda0 broadcast — deferred, SP drop-in.) */
 }
 
 /* The merchant trade-grid arrow actions (FUN_004ba9c8's 0x0c arm's dispatch
@@ -1451,7 +1451,7 @@ static int ti_ui_router(const engine_ingame_input_in_t *din,
              * (FUN_0049aa0e) then the per-player aggregate (FUN_0049d1e0) for
              * slots 1..5 — the source metrics the Rankings render reduces to
              * bars.  0x4b3994 (the S035 page-turn WAV cue) is deferred
-             * (audio); the MP FUN_0043eda0 broadcast is deferred (SP drop-in). */
+             * (audio); the MP 0x43eda0 broadcast is deferred (SP drop-in). */
             engine_ranking_recompute(&g_turn_event_queue);
             for (int p = 1; p < 6; p++) {
                 engine_ranking_recompute_player_aggregate((unsigned)p);
@@ -1623,7 +1623,7 @@ static int ti_ui_router(const engine_ingame_input_in_t *din,
                     dst->demand_redraw = 2;
                 }
                 /* tgt == src: retail pops "can't send to self" (FUN_0040e6f2 →
-                 * FUN_0043b101); that scroll is deferred — the screen stays. */
+                 * 0x43b101); that scroll is deferred — the screen stays. */
             }
             return 1;
         }
@@ -2344,7 +2344,7 @@ static void engine_tick_county_slider_render(void)
  * the port requests the redraw and lets the demand seam paint (same
  * pixels — the seam composites the map + panel this same tick).  The
  * county voice cues (s020_0N / s021_0N.wav) are DOCUMENTED no-ops: the
- * WAV cue-playback path (FUN_00427990) has no port yet, but the cue
+ * WAV cue-playback path (0x427990) has no port yet, but the cue
  * latch (_DAT_005533f0) is raised like retail. */
 static int cp_action_grid(const engine_ingame_input_in_t *in,
                           engine_ingame_state_t *st)
@@ -2418,7 +2418,7 @@ static int cp_rations_arrows(const engine_ingame_input_in_t *in,
                 st->demand_redraw = 2;
             }
         }
-        /* (MP arm FUN_0043eda0(0x31,0) — deferred.) */
+        /* (MP arm 0x43eda0(0x31,0) — deferred.) */
     }
     return consumed;
 }
@@ -3844,7 +3844,7 @@ static void engine_popup_scroll_render(void)
          * Objectives popup" vs retail. */
         if (cooldown == 0x7c6)
             engine_popup_speak_event(g_sim_extended_pause, g_popup_payload_a);
-        /* else cooldown < 0x780 → FUN_004b3acd ambient cue — deferred (audio.c). */
+        /* else cooldown < 0x780 → 0x4b3acd ambient cue — deferred (audio.c). */
         int n_extra = g_popup_type - 5;                /* retail iVar3 */
         g_popup_x = 0x10; g_popup_y = 0x40; g_popup_w = 0x1c0;
         /* Body sub-strings 1..(type-4) are word-wrapped blocks, one per
@@ -4644,9 +4644,9 @@ static int engine_scenario_rate_hint(void)
 /* TODO(savepump): retail's save/load pump.
  *
  * The chain is:
- *   FUN_004978ad  — SP "begin save/load" hook
+ *   0x4978ad  — SP "begin save/load" hook
  *   FUN_0049792e  — MP "begin save/load" hook
- *   FUN_00497a34  — the pump step itself (SP=0, MP=1 arg)
+ *   0x497a34  — the pump step itself (SP=0, MP=1 arg)
  *
  * Together they drive level loading, savefile (de)serialisation, the
  * mid-game state-transition cinematics, and the menu→ingame /
@@ -4763,7 +4763,7 @@ void engine_tick(void)
      * Today's scaffold has the structural skeleton in place:
      *   1. Bump the wall-clock frame counter (retail _DAT_005bb4c8).
      *   2. Pre-tick block — TODO (remaining retail subfunctions:
-     *      FUN_004b0aaa input poll, FUN_00498458 unknown,
+     *      0x4b0aaa input poll, 0x498458 unknown,
      *      FUN_004b20ed unknown, …).  FUN_00499a1c(1) (in-game
      *      system-sheet ensure) is ported + wired below.
      *   3. Variable-rate sim sub-step loop — driven by
@@ -4814,10 +4814,10 @@ void engine_tick(void)
         gfx_load_system_sheet_select(1);     /* FUN_00499a1c(1) */
     }
 
-    /* Pre-tick block — retail does (in order): FUN_004b0aaa input
-     * poll, FUN_00498458, FUN_004b20ed (← ported), FUN_004bbc80
+    /* Pre-tick block — retail does (in order): 0x4b0aaa input
+     * poll, 0x498458, FUN_004b20ed (← ported), FUN_004bbc80
      * (← ported), 0x481b9a,
-     * FUN_00482111, FUN_004782c5, FUN_00451f1a (← ported).  Order
+     * 0x482111, 0x4782c5, FUN_00451f1a (← ported).  Order
      * between independent state updates doesn't matter for
      * behavior, but we keep them in retail order so future bisection
      * against retail traces stays apples-to-apples.  Note:
@@ -4843,7 +4843,7 @@ void engine_tick(void)
          * step work in SP is:
          *   - master tick counter bump
          *   - FUN_00404a46 (LFSR advance — ported as engine_rng_step)
-         *   - FUN_0049b8b0 (turn-timeout, unported)
+         *   - 0x49b8b0 (turn-timeout, unported)
          *   - screen-state-specific 0x40490d / 0x49a010 /
          *     0x4650b0 (sub-state 0) or the sub-state-2 chain
          *
@@ -4863,8 +4863,8 @@ void engine_tick(void)
                 /* TODO(sim): MP sub-state 2 path.
                  *   - tick % 0x82 == 0    → 0x43eda0(0xc, 0)  // MP-only, no-op in SP
                  *   - else tick % 10 == 0 → 0x43eda0(10, 0)   // MP-only, no-op in SP
-                 *   - else tick % 0x82 == 0x2d → local_c = FUN_00440666()
-                 *     (FUN_00440666 is 383 B, unported — manipulates
+                 *   - else tick % 0x82 == 0x2d → local_c = 0x440666()
+                 *     (0x440666 is 383 B, unported — manipulates
                  *      the deferred-action selection).  Today the
                  *      sub_steps loop sees local_c as the rate-step
                  *      output (constant for the iter), so this write
@@ -4873,12 +4873,12 @@ void engine_tick(void)
                  *      contract. */
             } else {
                 /* SP path: 0x43eda0(10, 0) is MP-only no-op.
-                 * The real work here is FUN_0049b8b0() (turn-timeout
+                 * The real work here is 0x49b8b0() (turn-timeout
                  * subsystem — 195 B, gated on DAT_00553fc8 != 0 &&
                  * DAT_00553248 != 0; both are 0 today so the function
                  * itself is a no-op anyway) and the turn-end-pending
                  * consumer. */
-                /* TODO(sim): FUN_0049b8b0 turn-timeout subsystem. */
+                /* TODO(sim): 0x49b8b0 turn-timeout subsystem. */
 
                 if (g_sim_turn_end_pending) {
                     if (g_sim_turn_progress == 0) {
@@ -4886,7 +4886,7 @@ void engine_tick(void)
                     }
                     /* retail also sets local_c = 0 here — same
                      * mid-iter loop-termination shape as the sub-
-                     * state-2 path above.  Deferred until FUN_00440666
+                     * state-2 path above.  Deferred until 0x440666
                      * etc land. */
                 }
             }
@@ -4943,11 +4943,11 @@ void engine_tick(void)
     }
 
     /* Render-phase head — retail calls (in order):
-     *   FUN_0049a3e6  surveyed: gated on DAT_004eac50 == 0x24, which
+     *   0x49a3e6  surveyed: gated on DAT_004eac50 == 0x24, which
      *                 is never written anywhere in retail.  Dead
      *                 branch.  Not ported.  See findings doc.
      *   FUN_004b1de0  surveyed: empty body (`return;`).  Not ported —
-     *                 same disposition as FUN_004b0aaa from pre-tick.
+     *                 same disposition as 0x4b0aaa from pre-tick.
      *   FUN_004b191e  ported.  Mouse-input state resolver — runs
      *                 GetCursorPos, edge-detects the WndProc-mirrored
      *                 button bits, fires 300 ms delayed-single-click
@@ -5061,13 +5061,13 @@ void engine_tick(void)
      *   FUN_0047ed34  ported.  Strategic / battlefield camera-anchor
      *                 clamp (hardcoded [0, 0x41] × [0, 0x42]).  Same
      *                 disposition — idempotent no-op today.
-     *   FUN_00426529  surveyed: empty body (debug hook optimised out)
+     *   0x426529  surveyed: empty body (debug hook optimised out)
      *   FUN_004b27bf  ported.  Rolling 1-second FPS counter.  Bumps
      *                 frame counts, computes ms/frame, publishes
      *                 current FPS at second boundaries.
-     *   FUN_004b12fb  surveyed: stub `return 1` in retail (likely
+     *   0x4b12fb  surveyed: stub `return 1` in retail (likely
      *                 debug-build gate optimised out)
-     *   FUN_004b0e03  surveyed: palette-fade machine, gated on screen
+     *   0x4b0e03  surveyed: palette-fade machine, gated on screen
      *                 0x23 (Smacker/intro), blocked on intro screen
      *
      * After that retail has a deferred-shutdown trigger gated on
@@ -5115,7 +5115,7 @@ int engine_tick_guard(void)
      * for our purposes.  Documented in gfx.c. */
     if (gfx_surface_lost()) {
         if (!gfx_restore()) {
-            /* Retail also calls FUN_004b26b8 here (logs "OK :Paused."
+            /* Retail also calls 0x4b26b8 here (logs "OK :Paused."
              * + InvalidateRect(hwnd, NULL, TRUE)).  Skipping for
              * now — we don't have the structured log channel for
              * that string yet, and the InvalidateRect would

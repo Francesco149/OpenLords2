@@ -17,7 +17,7 @@
  * Shared 8000-byte format buffer (retail DAT_0058fda0).  Zero-
  * initialized at startup — matches retail's BSS layout.  Used by the
  * two formatters here and (eventually) by the save-name copy paths
- * (0x4afab9 / FUN_004afeed) when those land.
+ * (0x4afab9 / 0x4afeed) when those land.
  * ────────────────────────────────────────────────────────────────── */
 
 enum { GFX_TEXT_LABEL_BUFFER_LEN = 8000 };

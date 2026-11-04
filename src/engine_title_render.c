@@ -1096,7 +1096,7 @@ void engine_title_render_setup_mark_tabs_dirty(void)    { g_p7_tabs_dirty = 1; }
  * The per-country reload it also runs — stage load 0x4c (0x43eda0),
  * country-data binds (0x46a037 / FUN_00467770), camera reset
  * (0x4298c1), and the AI-roster/preview recompute (FUN_004ae5e2 /
- * FUN_00433cc1) — is deferred until those subsystems land; the scroll
+ * 0x433cc1) — is deferred until those subsystems land; the scroll
  * offset, selected id, and dirty flags are faithful, so the visible list
  * scroll + scrollbar thumb track exactly. */
 int engine_title_render_country_scroll(int dir)

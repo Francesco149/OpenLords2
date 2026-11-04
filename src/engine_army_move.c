@@ -440,7 +440,7 @@ void engine_army_move_blocked_branch(engine_event_queue_state_t *evq)
         if (g_player_strategic_352[(uint8_t)mover_owner * PSTRIDE + P_ACTIVE] != 0)
             engine_diplomacy_battle_adjust(region_owner, mover_owner, 10, evq);
         engine_army_move_decay_region_cell(g_army_move_cell_off);
-        army_move_alert(3);                            /* FUN_00426216(3) */
+        army_move_alert(3);                            /* 0x426216(3) */
     }
 }
 
@@ -661,7 +661,7 @@ void engine_army_move_special_tile(int self, int cell_off,
     /* retail takes the aggressor from the army-state cursor (DAT_005533e8), not
      * its argument — the same record from the executor, its only caller */
     engine_diplomacy_battle_adjust(region_owner, (int8_t)MREC(g_army_state_index)[M_OWNER], 0x14, evq);
-    army_move_alert(3);                          /* FUN_00426216(3) */
+    army_move_alert(3);                          /* 0x426216(3) */
 }
 
 /* --- FUN_0046873f @ 0x46873f: region-event low-terrain develop (931 B) ------
@@ -735,7 +735,7 @@ void engine_army_move_region_event_lo(int self, int cell_off,
     *(int32_t *)(rg + b->node_wm1) = -1;
     *(int32_t *)(rg + b->node_w0b) = 0;
 
-    army_move_alert(3);                          /* FUN_00426216(3) */
+    army_move_alert(3);                          /* 0x426216(3) */
     r[M_PROGRESS] += 7;
 }
 

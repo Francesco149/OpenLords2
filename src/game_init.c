@@ -1357,7 +1357,7 @@ void engine_game_start(void)
     engine_game_init();                               /* 497ced */
     engine_set_current_screen(0);                     /* DAT_004eac50 = 0 (ingame map) */
     g_engine_state = 3;                               /* DAT_0052af94 = 3 (ingame) */
-    /* FUN_00451f8a's render-relevant flag: force a full empty-cell redraw on
+    /* 0x451f8a's render-relevant flag: force a full empty-cell redraw on
      * the first frame (DAT_0053e9ac = 1; the others it sets are render-neutral
      * UI flags the live tick re-establishes). */
     engine_map_terrain_set_empty_redraw_gate(1);

@@ -50,7 +50,7 @@ void engine_sendsupplies_render(const engine_sendsupplies_ctx_t *ctx)
         gfx_panel_draw_bevel(ctx->chrome, 0x40, 0x30, 0x16, 0x16);
     }
 
-    /* 0x410a5d(county, 0x60, 0x68) — the county thumbnail (source until a
+    /* Inlined port of FUN_00410a5d(county, 0x60, 0x68) — the county thumbnail (source until a
      * target is chosen, else the target): the terrain grid raw-blit backdrop
      * (FUN_0040a01d) + the political plot (FUN_00410cbd mode 0), both at the
      * internal (−2,+3) offset retail applies. */
