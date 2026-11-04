@@ -4816,7 +4816,7 @@ void engine_tick(void)
 
     /* Pre-tick block — retail does (in order): FUN_004b0aaa input
      * poll, FUN_00498458, FUN_004b20ed (← ported), FUN_004bbc80
-     * (← ported), FUN_00481b9a,
+     * (← ported), 0x481b9a,
      * FUN_00482111, FUN_004782c5, FUN_00451f1a (← ported).  Order
      * between independent state updates doesn't matter for
      * behavior, but we keep them in retail order so future bisection

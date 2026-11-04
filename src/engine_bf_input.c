@@ -9,7 +9,7 @@
 
 /* the selection mask of player p's units: realm record byte +0xee (DAT_0057bfee) */
 #define SEL_MASK(p) AT(uint8_t, g_player_strategic_352, 0x57bf00u, 0x57bfeeu + 352 * (p))
-/* retail's battlefield pixel → cell quantizers (engine_battlefield_render.c: FUN_004bc2e5 / 4bc346 / 4bc3ac / 4bc40d;
+/* retail's battlefield pixel → cell quantizers (engine_battlefield_render.c: 0x4bc2e5 / 4bc346 / 4bc3ac / 4bc40d;
  * that module's viewport globals are runtime-bound, not on retail's layout) — TODO(bf-link) */
 static int px_col_right(int px) { return (int)engine_retail_call(0x4bc2e5u, 1, (uint32_t)px); }
 static int px_col_left(int px)  { return (int)engine_retail_call(0x4bc346u, 1, (uint32_t)px); }
@@ -38,7 +38,7 @@ int bf_479a71(int p)
     return r;
 }
 
-/* Port of FUN_0043c55c (33 B) — deselect all (FUN_00479a71) and gate a panel redraw. */
+/* Port of FUN_0043c55c (33 B) — deselect all (0x479a71) and gate a panel redraw. */
 int bf_43c55c(int p)
 {
     int r = bf_479a71(p);
@@ -47,7 +47,7 @@ int bf_43c55c(int p)
 }
 
 /* Port of FUN_0043c4c6 (150 B) — drop unit `u` from its owner's selection: its selection bit (+0xa) and its
- * selector (+9) cleared, then the owner's selection regrouped (FUN_00478987). */
+ * selector (+9) cleared, then the owner's selection regrouped (0x478987). */
 int bf_43c4c6(int u)
 {
     int owner = BU8(u, 0x5544ac);
@@ -169,9 +169,9 @@ int bf_478f0b(int p)
  * 8: DAT_005533c0, 9: DAT_00569504, 10: DAT_0053e8bc + its cell kind DAT_00568968, else DAT_00565404) and the
  * counts zeroed when more than one kind is present. The first group's retarget clock (+0x14) restarts at 20. If the
  * selection is not exactly that whole group (another unit of the group unselected, or a selected unit of another
- * group), a new group is made (FUN_0046e97a from the first unit's owner / +0x13) for the selection: retarget 20, the
+ * group), a new group is made (0x46e97a from the first unit's owner / +0x13) for the selection: retarget 20, the
  * side flag +3 copied, member range +4/+6, stance 1 (ranged first unit +0x13e) else 3, each member's group set;
- * then the group aggregate (FUN_00488dfe). */
+ * then the group aggregate (0x488dfe). */
 int bf_478987(int p)
 {
     s_slot_00553ef0 = 0;
@@ -256,9 +256,9 @@ int bf_478987(int p)
     return r;
 }
 
-/* Port of FUN_0043c247 (98 B) — apply a box selection for player `p`: deselect all (FUN_00479a71), box-select the
- * rectangle (FUN_00479b58, camera cell (col0, row0)), and with `regroup` (single player) regroup the selection into
- * one group (FUN_00478987 / FUN_00478f0b) and refresh the panel (FUN_00481b9a, unported: TODO(bf-extern)). */
+/* Port of FUN_0043c247 (98 B) — apply a box selection for player `p`: deselect all (0x479a71), box-select the
+ * rectangle (0x479b58, camera cell (col0, row0)), and with `regroup` (single player) regroup the selection into
+ * one group (0x478987 / 0x478f0b) and refresh the panel (0x481b9a, unported: TODO(bf-extern)). */
 int bf_43c247(int p, int regroup, int col0, int row0, int x0, int y0, int x1, int y1)
 {
     bf_479a71(p);
@@ -275,10 +275,10 @@ int bf_43c247(int p, int regroup, int col0, int row0, int x0, int y0, int x1, in
 #define MP_ON (g_sim_mp_active != 0)   /* DAT_00553030 */
 static int mp_message(int id)  { return (int)engine_retail_call(0x43eda0u, 2, (uint32_t)id, 0u); }   /* TODO(bf-extern) */
 static int wav(const void *name) { return (int)engine_retail_call(0x427990u, 3, (uint32_t)(uintptr_t)name, 1u, 0u); }   /* TODO(bf-link) */
-/* the confirm dialog FUN_0040e6f2(msg, x, y, callback VA): retail keeps the callback's ADDRESS — retail's VA here
+/* the confirm dialog 0x40e6f2(msg, x, y, callback VA): retail keeps the callback's ADDRESS — retail's VA here
  * (engine_confirm_dialog.c takes a port function pointer instead: TODO(bf-link)) */
 static int confirm(int msg, uint32_t cb_va) { return (int)engine_retail_call(0x40e6f2u, 4, (uint32_t)msg, 160u, 160u, cb_va); }
-static int cursor_in(int x, int y, int w, int h)   /* FUN_004b1deb — TODO(bf-link) */
+static int cursor_in(int x, int y, int w, int h)   /* 0x4b1deb — TODO(bf-link) */
 { return (int)engine_retail_call(0x4b1debu, 4, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h); }
 
 /* Port of FUN_00499cb1 (204 B) — a unit voice cue for player `p`'s nation (DAT_0055408c): kind `k` (0 selected,
@@ -298,8 +298,8 @@ int bf_499cb1(int k)
 
 /* Port of FUN_0043bf07 (832 B) — the battlefield's left button (screen 0x29 / 0x2a): a press over the field starts a
  * drag (screen 0x2a: the press cell DAT_0055ce60/64, the press pixel DAT_0057a0f4/e8, the cell's unit → the panel
- * unit DAT_00553e68); while held a box drag reselects live (FUN_0043c247, no regroup); the release (screen back to
- * 0x29) classifies the drag (FUN_00479cf7): a click with a target (2) selects 8 px around the cursor, a box (1)
+ * unit DAT_00553e68); while held a box drag reselects live (0x43c247, no regroup); the release (screen back to
+ * 0x29) classifies the drag (0x479cf7): a click with a target (2) selects 8 px around the cursor, a box (1)
  * selects the box — regrouped in single player — with a "selected" voice cue when anything was selected.
  * Gated on the battle running (DAT_00568964 == 1) and no pending order (DAT_00553c6c). */
 int bf_43bf07(void)
@@ -364,7 +364,7 @@ int bf_43bf07(void)
 /* Port of FUN_0043c2a9 (541 B) — the battlefield's right button outside an order: a right press (DAT_004e6900)
  * deselects all unless over the minimap (480.. × 24..183); a left press over the unit roster (the panel's slots:
  * the table at 0x4d31f0, 7 dwords a slot, page offset DAT_00553220 = 0 / 12 / 30 by the selection size
- * DAT_00553078) picks the roster slot's unit (DAT_0056d5d0) and drops it from the selection (FUN_0043c4c6; MP:
+ * DAT_00553078) picks the roster slot's unit (DAT_0056d5d0) and drops it from the selection (0x43c4c6; MP:
  * message 66). */
 int bf_43c2a9(void)
 {
@@ -404,7 +404,7 @@ int bf_43c2a9(void)
 /* Port of FUN_0043c634 (326 B) — an order click at cell (col, row): the voice cue (attack when an enemy is hovered
  * DAT_005533b8, kind 3 for DAT_00553eec == 2, else move), the order marker (DAT_00553f84 = 30, MP 10; at
  * DAT_00553f14/18), the order serial (DAT_00591550 = ++DAT_00553100[player]; DAT_0059154c = 0), then the order
- * itself: FUN_00479e90(group DAT_0053e984, col, row, target, DAT_0053e874, 0), or MP message 67 ×3. Not while an
+ * itself: 0x479e90(group DAT_0053e984, col, row, target, DAT_0053e874, 0), or MP message 67 ×3. Not while an
  * order is pending (DAT_00553c6c). Returns retail's EAX (garbage when it does nothing: 0 here). */
 int bf_43c634(int col, int row)
 {
@@ -434,7 +434,7 @@ int bf_43c634(int col, int row)
     return bf_479e90((int)s_slot_0053e984, col, row, g_bf_5533b8, g_bf_53e874[0], 0);
 }
 
-/* Port of FUN_0043c57d (183 B) — the battlefield's right release: an order at the cursor cell (FUN_0043c634) when
+/* Port of FUN_0043c57d (183 B) — the battlefield's right release: an order at the cursor cell (0x43c634) when
  * the battle runs, a selection exists (DAT_00553078), nothing is hovered on the panel (DAT_0057cac8 / DAT_00553f90),
  * the game is not paused (DAT_0053f238) and no order is pending. */
 int bf_43c57d(void)
@@ -476,7 +476,7 @@ int bf_43b9a1(void)
 }
 
 /* Port of FUN_0043bd02 (101 B) — "Mop up enemy troops", once a battle (DAT_0055322c): every foot unit of the local
- * player charges (FUN_0047a76d); MP: message 64. */
+ * player charges (0x47a76d); MP: message 64. */
 int bf_43bd02(void)
 {
     if (s_slot_005533d0 != 0 && s_slot_0055322c == 0) {
@@ -488,13 +488,13 @@ int bf_43bd02(void)
     return 0;
 }
 
-/* Port of FUN_0043bbd7 (16 B) — the retreat confirm's yes (IDA: 2 arguments from its call site, unused): leave the battlefield (FUN_0043be65, ported in
+/* Port of FUN_0043bbd7 (16 B) — the retreat confirm's yes (IDA: 2 arguments from its call site, unused): leave the battlefield (0x43be65, ported in
  * engine_combat.c with an event-queue argument: TODO(bf-link)). */
 int bf_43bbd7(int a0, int a1) { (void)a0; (void)a1; return (int)engine_retail_call(0x43be65u, 0); }
 
 /* Port of FUN_0043bb68 (111 B) — the retreat confirm's callback: back to the screen before the dialog
  * (DAT_0057c90c), DAT_00553ed8 = 1; on yes (DAT_0059151c) the retreat flag DAT_005653f4 = 1 and the battle ends
- * (FUN_0043bbd7; MP: message 62). */
+ * (0x43bbd7; MP: message 62). */
 int bf_43bb68(void)
 {
     engine_set_current_screen(g_bf_57c90c);
@@ -511,7 +511,7 @@ int bf_43bb68(void)
 
 /* Port of FUN_0043ba29 (208 B) — the retreat button: on the player's own battlefield (DAT_005533d0 == 1; in an MP
  * siege only for the side that is not the besieger DAT_0053ef5c), confirm "Surrender castle?" (11, callback
- * FUN_0043baf9) when the local player defends a siege, else "Retreat from field?" (12, FUN_0043bb68). Returns
+ * 0x43baf9) when the local player defends a siege, else "Retreat from field?" (12, 0x43bb68). Returns
  * retail's EAX: the defender county's owner byte when nothing opens. */
 int bf_43ba29(void)
 {
@@ -530,15 +530,15 @@ int bf_43ba29(void)
 }
 
 /* Port of FUN_0043bdcd (152 B) — the autocalc confirm's callback: back to the previous screen; on yes leave the
- * battlefield (FUN_0043be65) — MP: write the casualties back (FUN_0047f474), stage the result block
- * (FUN_0047f76d) and send messages 51, 51, 63, 63 with Sleeps between. */
+ * battlefield (0x43be65) — MP: write the casualties back (0x47f474), stage the result block
+ * (0x47f76d) and send messages 51, 51, 63, 63 with Sleeps between. */
 int bf_43bdcd(void)
 {
     engine_set_current_screen(g_bf_57c90c);
     int r = g_bf_59151c[0];
     if (g_bf_59151c[0] == 1) {
         if (MP_ON) {
-            engine_retail_call(0x47f474u, 0);   /* TODO(bf-link): FUN_0047f474 (engine_combat.c's writeback seam) */
+            engine_retail_call(0x47f474u, 0);   /* TODO(bf-link): 0x47f474 (engine_combat.c's writeback seam) */
             AT(int32_t, g_bf_59154c, 0x59154cu, 0x59154cu) = 0;
             bf_47f76d();
             mp_message(51);
@@ -549,12 +549,12 @@ int bf_43bdcd(void)
             bf_sleep(50);
             return mp_message(63);
         }
-        return (int)engine_retail_call(0x43be65u, 0);   /* FUN_0043be65 — TODO(bf-link): engine_combat_battlefield_end */
+        return (int)engine_retail_call(0x43be65u, 0);   /* 0x43be65 — TODO(bf-link): engine_combat_battlefield_end */
     }
     return r;
 }
 
-/* Port of FUN_0043bd67 (102 B) — the autocalc button: confirm "Autocalc battle?" (9, callback FUN_0043bdcd) on the
+/* Port of FUN_0043bd67 (102 B) — the autocalc button: confirm "Autocalc battle?" (9, callback 0x43bdcd) on the
  * player's own battlefield (DAT_005533d0 == 1), in an MP siege only for the side that is not the besieger. */
 int bf_43bd67(void)
 {
@@ -578,7 +578,7 @@ int bf_43bd67(void)
  * breach timers (DAT_0053e990 / DAT_00553fb0) and DAT_0055307c / DAT_00569588; add (state +0x1c3 == 1) or set the
  * damage figures by the defence level DAT_0055401c (< 2: 10 per engine on +0x1d4 / +0x1e0, else 15 on +0x1d0 /
  * +0x1dc; always 15 / engine + 5 / ram on +0x1cc / +0x1d8); level → +0x1f9; state 2, +0x1c4 = 0; then the castle
- * file is written (FUN_004ae968 — save.c's castles_write_scenario takes a path: TODO(bf-link)). */
+ * file is written (0x4ae968 — save.c's castles_write_scenario takes a path: TODO(bf-link)). */
 #define CASTLE(T, va) REC(T, g_per_army_768, 0x53f9b0u, 768, s_slot_0056822c, va)
 int bf_4784ca(void)
 {
@@ -640,9 +640,9 @@ int bf_47f76d(void)
 /* ---------------------------------------------------------------- the unit roster (the panel's HUD) */
 /* the roster slot table at 0x4d31f0: 7 dwords a slot (sprite base, x, y, w, h, …), pages of 12 / 18 / 30 */
 #define ROSTER(slot, k) (((const int32_t *)g_bf_4d31f0)[7 * (slot) + (k)])
-static int sprite_opaque(int blob, int frame, int x, int y)   /* FUN_0040a567 — TODO(bf-link): gfx_sprite_render_opaque_from_blob */
+static int sprite_opaque(int blob, int frame, int x, int y)   /* 0x40a567 — TODO(bf-link): gfx_sprite_render_opaque_from_blob */
 { return (int)engine_retail_call(0x40a567u, 4, (uint32_t)blob, (uint32_t)frame, (uint32_t)x, (uint32_t)y); }
-static int label_dec(int v, int pad, const void *suffix, int x, int y, const void *font, int color)   /* FUN_00402f64 — TODO(bf-link) */
+static int label_dec(int v, int pad, const void *suffix, int x, int y, const void *font, int color)   /* 0x402f64 — TODO(bf-link) */
 { return (int)engine_retail_call(0x402f64u, 7, (uint32_t)v, (uint32_t)pad, (uint32_t)(uintptr_t)suffix, (uint32_t)x,
                                  (uint32_t)y, (uint32_t)(uintptr_t)font, (uint32_t)color); }
 
