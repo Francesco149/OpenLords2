@@ -144,6 +144,23 @@ void rh_port_bind_once(void)
  * globals, engine_map_query's cell cursor, engine_territory's current slot + dirty rect, engine_army_ai's ranking cookie, engine_path_field's bookkeeping,
  * engine_army_state's record cursor + abort flag + live count + raider cursor (engine_combat's runtime globals are aliased:
  * rh_hooks_combat.c) */
+/* the mirrored VAs, and their values when sync_in loaded the mirrors: sync_out stores a mirror only when the PORT
+ * changed it (PUTM), so a port module that writes the same retail global directly (an alias: the battlefield port's
+ * g_bf_<va>, src/engine_bf_globals.h) is not overwritten by a stale mirror */
+static const uint32_t k_mirror_va[] = {
+    0x55cd6cu, 0x5656f0u, 0x57c904u, 0x56d628u, 0x591560u, 0x58fea0u, 0x569570u, 0x569578u, 0x52afe0u, 0x56d6a0u,
+    0x50d09cu, 0x50a4c4u, 0x50a4c8u, 0x50a4bcu, 0x50a4c0u, 0x53e9acu, 0x504020u, 0x504024u, 0x4f4070u, 0x500c20u,
+    0x4f2768u, 0x507230u, 0x507234u, 0x5533e8u, 0x50a49eu, 0x553f08u, 0x4e59dcu,
+};
+static uint32_t s_mirror_in[sizeof k_mirror_va / sizeof *k_mirror_va];
+static int mirror_changed(uint32_t va, uint32_t v, uint32_t mask)
+{
+    for (int k = 0; k < (int)(sizeof k_mirror_va / sizeof *k_mirror_va); k++)
+        if (k_mirror_va[k] == va) return (v & mask) != (s_mirror_in[k] & mask);
+    return 1;
+}
+#define PUTM(va, v)  do { uint32_t m_ = (uint32_t)(v); if (mirror_changed(va, m_, 0xffffffffu)) PUT(va, m_); } while (0)
+#define PUTM8(va, v) do { uint8_t m_ = (uint8_t)(v); if (mirror_changed(va, m_, 0xffu)) PUT8(va, m_); } while (0)
 void rh_port_sync_in(void)
 {
     engine_army_economy_set_prices((int)G32(0x553f60u), (int)G32(0x567594u), (int)G32(0x57cb30u));
@@ -162,26 +179,27 @@ void rh_port_sync_in(void)
     g_pf_cur_col = (int32_t)G32(0x507230u); g_pf_cur_row = (int32_t)G32(0x507234u);
     g_army_state_index = (int)G32(0x5533e8u); g_army_state_abort = G8(0x50a49eu);
     g_army_state_live_count = (int)G32(0x553f08u); g_raider_target_cursor = (int)G32(0x4e59dcu);
+    for (int k = 0; k < (int)(sizeof k_mirror_va / sizeof *k_mirror_va); k++) s_mirror_in[k] = G32(k_mirror_va[k]);
 }
 /* store only what changed (PUT): under the page-tracked shadow every first write to a page is a fault (~30 us
  * under wine) — sync_out alone touched ~15 pages a call */
 void rh_port_sync_out(void)
 {
-    PUT(0x55cd6cu, (uint32_t)engine_army_economy_eval_cost());
-    PUT(0x5656f0u, (uint32_t)engine_army_economy_eval_revenue());
-    PUT(0x57c904u, (uint32_t)engine_army_economy_supply_pool_a());
-    PUT(0x56d628u, (uint32_t)engine_army_economy_supply_pool_b());
-    PUT(0x591560u, (uint32_t)g_path_dist_dx); PUT(0x58fea0u, (uint32_t)g_path_dist_dy);
-    PUT(0x569570u, (uint32_t)g_cell_cursor_col); PUT(0x569578u, (uint32_t)g_cell_cursor_row);
-    PUT(0x52afe0u, (uint32_t)engine_territory_current_slot());
-    PUT(0x56d6a0u, (uint32_t)engine_army_ai_ranking_dirty());
-    PUT(0x50d09cu, (uint32_t)s_dirty.dirty_mark); PUT(0x50a4c4u, (uint32_t)s_dirty.dirty_xmin); PUT(0x50a4c8u, (uint32_t)s_dirty.dirty_xmax);
-    PUT(0x50a4bcu, (uint32_t)s_dirty.dirty_ymin); PUT(0x50a4c0u, (uint32_t)s_dirty.dirty_ymax); PUT(0x53e9acu, (uint32_t)s_dirty.below_status_redraw);
-    PUT(0x504020u, (uint32_t)g_pf_src_col); PUT(0x504024u, (uint32_t)g_pf_src_row); PUT(0x4f4070u, (uint32_t)g_pf_src_cell);
-    PUT(0x500c20u, (uint32_t)g_pf_head); PUT(0x4f2768u, (uint32_t)g_pf_tail);
-    PUT(0x507230u, (uint32_t)g_pf_cur_col); PUT(0x507234u, (uint32_t)g_pf_cur_row);
-    PUT(0x5533e8u, (uint32_t)g_army_state_index); PUT8(0x50a49eu, g_army_state_abort);
-    PUT(0x553f08u, (uint32_t)g_army_state_live_count); PUT(0x4e59dcu, (uint32_t)g_raider_target_cursor);
+    PUTM(0x55cd6cu, (uint32_t)engine_army_economy_eval_cost());
+    PUTM(0x5656f0u, (uint32_t)engine_army_economy_eval_revenue());
+    PUTM(0x57c904u, (uint32_t)engine_army_economy_supply_pool_a());
+    PUTM(0x56d628u, (uint32_t)engine_army_economy_supply_pool_b());
+    PUTM(0x591560u, (uint32_t)g_path_dist_dx); PUTM(0x58fea0u, (uint32_t)g_path_dist_dy);
+    PUTM(0x569570u, (uint32_t)g_cell_cursor_col); PUTM(0x569578u, (uint32_t)g_cell_cursor_row);
+    PUTM(0x52afe0u, (uint32_t)engine_territory_current_slot());
+    PUTM(0x56d6a0u, (uint32_t)engine_army_ai_ranking_dirty());
+    PUTM(0x50d09cu, (uint32_t)s_dirty.dirty_mark); PUTM(0x50a4c4u, (uint32_t)s_dirty.dirty_xmin); PUTM(0x50a4c8u, (uint32_t)s_dirty.dirty_xmax);
+    PUTM(0x50a4bcu, (uint32_t)s_dirty.dirty_ymin); PUTM(0x50a4c0u, (uint32_t)s_dirty.dirty_ymax); PUTM(0x53e9acu, (uint32_t)s_dirty.below_status_redraw);
+    PUTM(0x504020u, (uint32_t)g_pf_src_col); PUTM(0x504024u, (uint32_t)g_pf_src_row); PUTM(0x4f4070u, (uint32_t)g_pf_src_cell);
+    PUTM(0x500c20u, (uint32_t)g_pf_head); PUTM(0x4f2768u, (uint32_t)g_pf_tail);
+    PUTM(0x507230u, (uint32_t)g_pf_cur_col); PUTM(0x507234u, (uint32_t)g_pf_cur_row);
+    PUTM(0x5533e8u, (uint32_t)g_army_state_index); PUTM8(0x50a49eu, g_army_state_abort);
+    PUTM(0x553f08u, (uint32_t)g_army_state_live_count); PUTM(0x4e59dcu, (uint32_t)g_raider_target_cursor);
 }
 
 /* engine_event_queue: the port's queue is one struct; retail's is six globals (FUN_00472bc5 / FUN_00472ae0).
@@ -280,7 +298,7 @@ uint32_t rh_port_run(hook_t *h, void *self, rh_port_fn port, int has_ret, uint32
 {
     if (h->wrapper != self) rh_fatal("rh_port: row %s is not its wrapper's — enum and table out of order", h->name);
     port_ctx_t x = { .h = h, .e0 = e0, .port = port };
-    memcpy(x.a, (const void *)(uintptr_t)(e0 + 4), 7 * 4);              /* retail may reuse its argument slots */
+    memcpy(x.a, (const void *)(uintptr_t)(e0 + 4), 8 * 4);              /* retail may reuse its argument slots */
     memcpy(x.res, (const void *)(uintptr_t)(e0 - 4 * RES_N), sizeof x.res);
     if (h->mode == H_REPLACE) {
         h->calls++; ctx_port(&x);

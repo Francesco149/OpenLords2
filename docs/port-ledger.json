@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 840,
-  "ported": 138,
-  "unported": 1469,
+  "ported": 167,
+  "unported": 1440,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 978,
-  "pct_touched": 40.0,
+  "touched": 1007,
+  "pct_touched": 41.2,
   "pct_tested": 34.3,
   "bytes_total": 838629,
-  "bytes_touched": 399988,
-  "pct_bytes_touched": 47.7
+  "bytes_touched": 411418,
+  "pct_bytes_touched": 49.1
  },
  "orphan_refs": [
   "0x004148",
@@ -622,6 +622,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_bf_input.c",
     "src/engine_sendsupplies.c",
     "src/gfx_text_label.c",
     "src/gfx_text_label.h"
@@ -1612,6 +1613,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_bf_input.c",
     "src/engine_screen_strat.c",
     "src/engine_screen_strat.h",
     "src/gfx_glyph.c",
@@ -2191,6 +2193,7 @@
     "src/engine.c",
     "src/engine_army_select.c",
     "src/engine_army_select.h",
+    "src/engine_bf_input.c",
     "src/engine_confirm_dialog.h"
    ]
   },
@@ -3950,16 +3953,20 @@
    "name": "FUN_004238b8",
    "size": 285,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x4239d5",
    "name": "FUN_004239d5",
    "size": 378,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x423b4f",
@@ -7309,40 +7316,50 @@
    "name": "FUN_0043b9a1",
    "size": 136,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43ba29",
    "name": "FUN_0043ba29",
    "size": 208,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43baf9",
    "name": "FUN_0043baf9",
    "size": 111,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43bb68",
    "name": "FUN_0043bb68",
    "size": 111,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43bbd7",
    "name": "FUN_0043bbd7",
    "size": 16,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43bbe7",
@@ -7357,24 +7374,30 @@
    "name": "FUN_0043bd02",
    "size": 101,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43bd67",
    "name": "FUN_0043bd67",
    "size": 102,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43bdcd",
    "name": "FUN_0043bdcd",
    "size": 152,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43be65",
@@ -7383,6 +7406,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_bf_input.c",
     "src/engine_combat.c",
     "src/engine_combat.h"
    ]
@@ -7416,56 +7440,70 @@
    "name": "FUN_0043bf07",
    "size": 827,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43c247",
    "name": "FUN_0043c247",
    "size": 98,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43c2a9",
    "name": "FUN_0043c2a9",
    "size": 541,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43c4c6",
    "name": "FUN_0043c4c6",
    "size": 150,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43c55c",
    "name": "FUN_0043c55c",
    "size": 33,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43c57d",
    "name": "FUN_0043c57d",
    "size": 183,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43c634",
    "name": "FUN_0043c634",
    "size": 326,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43c77a",
@@ -13285,8 +13323,10 @@
    "name": "FUN_0046e97a",
    "size": 174,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x46ea28",
@@ -14108,8 +14148,10 @@
    "name": "FUN_004784ca",
    "size": 730,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x4787a4",
@@ -14145,16 +14187,20 @@
    "name": "FUN_00478987",
    "size": 1412,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x478f0b",
    "name": "FUN_00478f0b",
    "size": 392,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x479093",
@@ -14217,24 +14263,30 @@
    "name": "FUN_00479a71",
    "size": 231,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x479b58",
    "name": "FUN_00479b58",
    "size": 415,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x479cf7",
    "name": "FUN_00479cf7",
    "size": 277,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x479e0c",
@@ -14249,16 +14301,20 @@
    "name": "FUN_00479e90",
    "size": 2269,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x47a76d",
    "name": "FUN_0047a76d",
    "size": 167,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x47a814",
@@ -14527,6 +14583,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_bf_input.c",
     "src/engine_combat.c",
     "src/engine_combat.h"
    ]
@@ -14536,8 +14593,10 @@
    "name": "FUN_0047f76d",
    "size": 458,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x47f937",
@@ -14674,7 +14733,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/engine_bf_input.c"
    ]
   },
   {
@@ -15184,8 +15244,10 @@
    "name": "FUN_00488dfe",
    "size": 943,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x4891ad",
@@ -16501,8 +16563,10 @@
    "name": "FUN_00499cb1",
    "size": 204,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x499d7d",
@@ -18652,6 +18716,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_bf_input.c",
     "src/save.c",
     "src/save.h"
    ]
@@ -19311,6 +19376,7 @@
    "status": "tested",
    "src": [
     "src/engine.c",
+    "src/engine_bf_input.c",
     "src/engine_county_panels.c"
    ]
   },
@@ -20729,7 +20795,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_battlefield_render.h"
+    "src/engine_battlefield_render.h",
+    "src/engine_bf_input.c"
    ]
   },
   {
