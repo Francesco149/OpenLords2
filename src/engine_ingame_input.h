@@ -130,7 +130,7 @@ typedef struct engine_ingame_hooks {
     engine_ingame_consume_fn edge_scroll;        /* FUN_00432221 edge-scroll */
     engine_ingame_consume_fn minimap_drag;       /* FUN_00439079 minimap drag/rclick */
     engine_ingame_consume_fn hud_btn_a;          /* FUN_00432967 HUD button hit-test */
-    engine_ingame_consume_fn kbd_table;          /* FUN_0040deca(&DAT_004dc428,3) */
+    engine_ingame_consume_fn kbd_table;          /* 0x40deca(&DAT_004dc428,3) */
     engine_ingame_consume_fn hud_btn_b;          /* FUN_0043292d HUD button hit-test */
     engine_ingame_consume_fn action_grid;        /* FUN_00438ceb 4-button action grid */
     engine_ingame_consume_fn rations_arrows;     /* FUN_0043a379 rations-panel stepper
@@ -144,7 +144,7 @@ typedef struct engine_ingame_hooks {
                                                   * (screen-4 sub-interactions, checked as a unit;
                                                   *  grouped here, all deferred — split when ported) */
     engine_ingame_action_fn  dismiss_on_map;     /* FUN_00476768 + FUN_0045270a */
-    engine_ingame_action_fn  special_mode2_jump; /* FUN_004350a1 (view-mode-2 LMB jump) */
+    engine_ingame_action_fn  special_mode2_jump; /* 0x4350a1 (view-mode-2 LMB jump) */
     engine_ingame_action_fn  army_select;        /* FUN_0043ce1a army select/move (map LMB) */
     engine_ingame_action_fn  terrain_info_open;  /* FUN_0043caf4 terrain-info open (map RMB) */
     engine_ingame_action_fn  terrain_info_close; /* FUN_0043cc56 terrain-info cleanup (screen-4 close) */

@@ -192,9 +192,9 @@ int engine_county_rations_input(const engine_county_rations_in_t *in,
  * (press + hold-to-auto-repeat) kind-0x18 (system-sheet 24 px) records,
  * extracted from .rdata:
  *   0x4dd790: up (0xc0,0xa2) spr 0x15 → FUN_0043aa32 (tax rate +1, cap 50)
- *             down (0xe0,0xa2) spr 0x17 → FUN_0043aad5 (tax rate −1, floor 0)
- *   0x4dd7c0: up (0x158,0x82) spr 0x15 → FUN_0043a1e9 (wanted level +1, cap 5)
- *             down (0x170,0x82) spr 0x17 → FUN_0043a2b2 (wanted level −1)
+ *             down (0xe0,0xa2) spr 0x17 → 0x43aad5 (tax rate −1, floor 0)
+ *   0x4dd7c0: up (0x158,0x82) spr 0x15 → 0x43a1e9 (wanted level +1, cap 5)
+ *             down (0x170,0x82) spr 0x17 → 0x43a2b2 (wanted level −1)
  * The tables are exposed MUTABLE (the dispatch animates state/pressed in
  * place, exactly like retail's .data tables).  The `action` field holds
  * the retail callee address as an opaque code for the dispatch callback. */

@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 840,
-  "ported": 157,
-  "unported": 1450,
+  "tested": 830,
+  "ported": 153,
+  "unported": 1464,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 997,
-  "pct_touched": 40.7,
-  "pct_tested": 34.3,
+  "touched": 983,
+  "pct_touched": 40.2,
+  "pct_tested": 33.9,
   "bytes_total": 838629,
-  "bytes_touched": 422542,
-  "pct_bytes_touched": 50.4
+  "bytes_touched": 420051,
+  "pct_bytes_touched": 50.1
  },
  "orphan_refs": [
   "0x004148",
@@ -2092,10 +2092,8 @@
    "name": "FUN_0040deca",
    "size": 152,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_ingame_input.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x40df62",
@@ -2434,10 +2432,8 @@
    "name": "FUN_00410a5d",
    "size": 76,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/engine_sendsupplies.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x410aa9",
@@ -3419,10 +3415,8 @@
    "name": "FUN_0041c996",
    "size": 420,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_terrain_info.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x41cb3a",
@@ -3740,10 +3734,8 @@
    "name": "FUN_0041ff75",
    "size": 466,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_title_render.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x420147",
@@ -6004,11 +5996,8 @@
    "name": "FUN_004350a1",
    "size": 232,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_ingame_input.h",
-    "src/engine_terrain_info.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x435189",
@@ -6783,10 +6772,8 @@
    "name": "FUN_004393eb",
    "size": 342,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_ingame_input.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x439541",
@@ -6915,10 +6902,8 @@
    "name": "FUN_0043a1e9",
    "size": 86,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_county_panels.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x43a23f",
@@ -6935,10 +6920,8 @@
    "name": "FUN_0043a2b2",
    "size": 85,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_county_panels.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x43a307",
@@ -7079,10 +7062,8 @@
    "name": "FUN_0043aad5",
    "size": 80,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_county_panels.h"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x43ab25",
@@ -11440,10 +11421,8 @@
    "name": "FUN_0045183a",
    "size": 102,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/engine_labor.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4518a5",
@@ -16486,10 +16465,8 @@
    "name": "FUN_004996c8",
    "size": 244,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/engine_armory.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4997bf",
@@ -19293,10 +19270,8 @@
    "name": "FUN_004b18f8",
    "size": 38,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/game_init.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4b191e",
@@ -19689,10 +19664,8 @@
    "name": "FUN_004b36c0",
    "size": 84,
    "is_thunk": false,
-   "status": "tested",
-   "src": [
-    "src/engine_confirm_dialog.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4b3714",
@@ -19737,10 +19710,8 @@
    "name": "FUN_004b3994",
    "size": 84,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/engine.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x4b39e8",

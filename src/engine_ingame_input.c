@@ -226,7 +226,7 @@ void engine_ingame_input_dispatch(const engine_ingame_input_in_t *in,
                  * 42ff10.c:65-113.  Turn-busy closes to the map; else run the
                  * HUD sub-handlers, then a seal click (generic_click) or RMB
                  * closes the grid, and a task-cell LMB opens the labor detail
-                 * (labor_open → screen 0x0f).  FUN_004393eb (→ screen 5) and
+                 * (labor_open → screen 0x0f).  0x4393eb (→ screen 5) and
                  * FUN_00439df0 are deferred.  If nothing consumes, the click
                  * falls through to the shared tail (retail's DAT_004e65f0=1
                  * "unconsumed" latch). */

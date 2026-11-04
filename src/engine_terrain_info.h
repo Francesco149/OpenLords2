@@ -87,7 +87,7 @@ typedef struct engine_terrain_info_hooks {
     engine_terrain_info_hook_fn resolve_hover;   /* FUN_00429ba4(1)  → tile_index */
     engine_terrain_info_hook_fn terrain_compute; /* FUN_0046d5fe → county_id/head */
     engine_terrain_info_hook_fn dismiss_scroll;  /* FUN_00476768 (scroll up)      */
-    engine_terrain_info_hook_fn mode2_jump;      /* FUN_004350a1 (view-mode 2)    */
+    engine_terrain_info_hook_fn mode2_jump;      /* 0x4350a1 (view-mode 2)    */
     engine_terrain_info_hook_fn army_select;     /* FUN_0043278b(army_ptr)        */
     engine_terrain_info_hook_fn map_render;      /* FUN_004050c0                  */
     engine_terrain_info_hook_fn panel_render;    /* FUN_0041b032 (the panel)      */
