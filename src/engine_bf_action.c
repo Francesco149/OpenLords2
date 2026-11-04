@@ -261,16 +261,61 @@ int bf_483fe1(void)
     return 0;
 }
 
-/* Port of FUN_004842c6 (184 B) — order 10: siege move. Siege walk thunk bf_488436, a path step
- * (bf_48f1dd(0); failed: the siege stand thunk bf_488793); arrived (+0x34 bit 1): stand, the bit cleared,
- * order 11. The aim point +0x28 / +0x2a is cleared. */
+/* ------------------------------------------------------------------- the siege orders' stack residue
+ * The class 7..10 sequencers 0x488793 / 0x488436 / 0x48895e store an UNSET local into the sprite frame for a unit
+ * of another class (partition 'unit' models the slot as the seams bf_unit_res_*: value in, final value out), and
+ * the siege orders call them for every unit. The value is what retail's stack holds at the sequencer's
+ * [ebp-4] / [ebp-8] — two fixed slots below the order handler's entry esp e0 (slot 1 = e0 - 0x1c - 4 × the
+ * handler's locals, slot 2 four bytes lower) — i.e. what the handler's previous call left there:
+ *   a sequencer        its own final local (the seam out)
+ *   a 1-argument call  its saved ebp = the handler's ebp, e0 - 4 (slot 2: the callee's first local — unknown)
+ *   a 3 / 4 / 5 / 6-argument call  its arguments 0 / 1 / 2 / 3 (slot 2: its return address / arguments 0 / 1 / 2)
+ *                      as the callee left them (0x49694f clips its x argument in place: max(x - r, 0))
+ *   a 0-argument non-sequencer      unknown (only 0x492c8b, always followed by a 1-argument call)
+ * bf_action_res[] carries the two slots through a handler; the hook adapter loads them (rh_res_get) and the
+ * handler's ebp (bf_action_res_ebp) at entry, and puts slot 1's final value back. Called from port code (the
+ * port's per-unit driver) the slots are not retail's: only a non-siege unit with a siege order would show it. */
+extern uint32_t bf_unit_res_488793, bf_unit_res_488436[2], bf_unit_res_48895e;   /* engine_bf_unit.c */
+uint32_t bf_action_res[2];
+uint32_t bf_action_res_ebp;
+
+static void bf_action_seq_488793(void)
+{
+    bf_unit_res_488793 = bf_action_res[0];
+    bf_488793();
+    bf_action_res[0] = bf_unit_res_488793;
+}
+static void bf_action_seq_488436(void)
+{
+    bf_unit_res_488436[0] = bf_action_res[0];
+    bf_unit_res_488436[1] = bf_action_res[1];
+    bf_488436();
+    bf_action_res[0] = bf_unit_res_488436[0];
+    bf_action_res[1] = bf_unit_res_488436[1];
+}
+static void bf_action_seq_48895e(void)
+{
+    bf_unit_res_48895e = bf_action_res[0];
+    bf_48895e();
+    bf_action_res[0] = bf_unit_res_48895e;
+}
+/* after a k-argument call from the handler */
+#define RES_CALL1()           (bf_action_res[0] = bf_action_res_ebp)
+#define RES_ARGS(s1, s2)      (bf_action_res[0] = (uint32_t)(s1), bf_action_res[1] = (uint32_t)(s2))
+
+/* Port of FUN_004842c6 (184 B) — order 10: siege move. Siege walk thunk 0x488436, a path step
+ * (0x48f1dd(0); failed: the siege stand thunk 0x488793); arrived (+0x34 bit 1): stand, the bit cleared,
+ * order 11. The aim point +0x28 / +0x2a is cleared. (Sequencer residue: above.) */
 int bf_4842c6(void)
 {
-    bf_488436();
-    if (bf_48f1dd(0) == 0)
-        bf_488793();
+    int moved;
+    bf_action_seq_488436();
+    moved = bf_48f1dd(0);
+    RES_CALL1();
+    if (moved == 0)
+        bf_action_seq_488793();
     if (BU8(CU, 0x5544b4) & 2) {
-        bf_488793();
+        bf_action_seq_488793();
         BU8(CU, 0x5544b4) &= 0xfd;
         BU8(CU, 0x5544b1) = 11;
     }
@@ -279,11 +324,11 @@ int bf_4842c6(void)
     return 0;
 }
 
-/* Port of FUN_0048437e (62 B) — order 11: siege idle. Siege stand thunk bf_488793; the aim point +0x28 / +0x2a
+/* Port of FUN_0048437e (62 B) — order 11: siege idle. Siege stand thunk 0x488793; the aim point +0x28 / +0x2a
  * cleared. */
 int bf_48437e(void)
 {
-    bf_488793();
+    bf_action_seq_488793();
     BS16(CU, 0x5544a8) = 0;
     BS16(CU, 0x5544aa) = 0;
     return 0;
@@ -301,24 +346,31 @@ int bf_48437e(void)
  * +0x34, cue bf_426120(14); at 180 the counter restarts. Then the siege fire thunk bf_48895e. */
 int bf_4843bc(void)
 {
-    int g = BS16(CU, 0x5545f8), i;
+    int g = BS16(CU, 0x5545f8), i, d, moved, ty, ux, uy;
     if (BS16(CU, 0x5544a8) == 0 && BS16(CU, 0x5544aa) == 0) {
         BS16(CU, 0x5544a8) = BG16(g, 0x566536);
         BS16(CU, 0x5544aa) = BG16(g, 0x566538);
     }
     if (BS8(CU, 0x5544b2) != 0) {
-        bf_488436();
-        if (bf_48f1dd(1) == 0)
-            bf_488793();
+        bf_action_seq_488436();
+        moved = bf_48f1dd(1);
+        RES_CALL1();
+        if (moved == 0)
+            bf_action_seq_488793();
         return 0;
     }
-    if (BS16(CU, 0x5545f0) / 8 <
-        engine_path_dist_chebyshev(BS16(CU, 0x5544a0), BS16(CU, 0x5544a2), BS16(CU, 0x5544a8), BS16(CU, 0x5544aa))) {
+    ux = BS16(CU, 0x5544a0);
+    uy = BS16(CU, 0x5544a2);
+    d = engine_path_dist_chebyshev(ux, uy, BS16(CU, 0x5544a8), BS16(CU, 0x5544aa));
+    RES_ARGS(uy, ux);
+    if (BS16(CU, 0x5545f0) / 8 < d) {
         BS16(CU, 0x5544a4) = BS16(CU, 0x5544a8);
         BS16(CU, 0x5544a6) = BS16(CU, 0x5544aa);
-        bf_488436();
-        if (bf_48f1dd(0) == 0)
-            bf_488793();
+        bf_action_seq_488436();
+        moved = bf_48f1dd(0);
+        RES_CALL1();
+        if (moved == 0)
+            bf_action_seq_488793();
         return 0;
     }
     if (BU8(CU, 0x554603) != 0 && BU8(CU, 0x554493) == 0) {
@@ -327,16 +379,24 @@ int bf_4843bc(void)
         BG8(g, 0x566530) = 0;
         BG16(g, 0x566542) = (int16_t)AT(int32_t, s_slot_0055cd90, 0x55cd90, 0x55ce30 + 8 * side);
         BG16(g, 0x566544) = (int16_t)AT(int32_t, s_slot_0055cd90, 0x55cd90, 0x55ce34 + 8 * (int)s_slot_0056d6b0);
-        bf_479e90(g, BG16(g, 0x566542), BG16(g, 0x566544), 0, 0, 0);
+        ty = BG16(g, 0x566544);
+        bf_479e90(g, BG16(g, 0x566542), ty, 0, 0, 0);
+        RES_ARGS(0, ty);
         BG16(g, 0x56653a) = 27;
         return 0;
     }
-    BU8(CU, 0x554498) = (uint8_t)bf_46f525(BS16(CU, 0x5544a0), BS16(CU, 0x5544a2), BS16(CU, 0x5544a8), BS16(CU, 0x5544aa));
+    ux = BS16(CU, 0x5544a0);
+    uy = BS16(CU, 0x5544a2);
+    BU8(CU, 0x554498) = (uint8_t)bf_46f525(ux, uy, BS16(CU, 0x5544a8), BS16(CU, 0x5544aa));
+    RES_ARGS(uy, ux);
     BS16(CU, 0x554600)++;
     if (BS16(CU, 0x554600) == 100) {
         BU8(CU, 0x554602) = 120;
         BG8(g, 0x56652f) = 120;
-        bf_46e767(BU8(CU, 0x5544ac), BS16(CU, 0x5544a0), BS16(CU, 0x5544a2), BS16(CU, 0x5544a8), BS16(CU, 0x5544aa));
+        ux = BS16(CU, 0x5544a0);
+        uy = BS16(CU, 0x5544a2);
+        bf_46e767(BU8(CU, 0x5544ac), ux, uy, BS16(CU, 0x5544a8), BS16(CU, 0x5544aa));
+        RES_ARGS(uy, ux);
         BC16(g_bf_568990, 0x57a106) = (int16_t)CU;
         BC8(g_bf_568990, 0x57a109) = BU8(CU, 0x5545ea);
         BC16(g_bf_568990, 0x57a134) = BS16(CU, 0x5545ee);
@@ -351,19 +411,21 @@ int bf_4843bc(void)
         for (i = 0; i < 8; i++)
             bf_492c8b();
         bf_46efbe(g_bf_56d5b4);
+        RES_CALL1();
         BC16(g_bf_56d5b4, 0x57a112) = BC16(g_bf_56d5b4, 0x57a134);
         bf_426120(14);
+        RES_CALL1();
     }
     if (BS16(CU, 0x554600) >= 180)
         BS16(CU, 0x554600) = 0;
-    bf_48895e();
+    bf_action_seq_48895e();
     return 0;
 }
 
-/* Port of FUN_004849fc (16 B) — order 13: the siege fire thunk bf_48895e alone. */
+/* Port of FUN_004849fc (16 B) — order 13: the siege fire thunk 0x48895e alone. */
 int bf_4849fc(void)
 {
-    bf_48895e();
+    bf_action_seq_48895e();
     return 0;
 }
 
@@ -373,21 +435,25 @@ int bf_4849fc(void)
  * (DAT_00569588) end the order (11). */
 int bf_484a0c(void)
 {
-    int kind;
-    bf_48895e();
+    int kind, ux;
+    bf_action_seq_48895e();
     kind = BCELL8(BS32(CU, 0x55449c), 0x5440e7);
     if (kind == 5)
         s_slot_00554034 += 20;
     else
         s_slot_00568da4 += 20;
     if (DIG_WALL > 5000) {
-        bf_49694f(BS16(CU, 0x5544a0), BS16(CU, 0x5544a2), 4);
+        ux = BS16(CU, 0x5544a0);
+        bf_49694f(ux, BS16(CU, 0x5544a2), 4);
+        RES_ARGS(ux - 4 < 0 ? 0 : ux - 4, 0x484a99u);   /* its x argument, which it clips in place; the return address */
         s_slot_0055307c++;
         s_slot_00554034 = 0;
         BU8(CU, 0x5544b1) = 11;
     }
     if (DIG_GATE > 20000 && s_slot_00569588 == 0) {
-        bf_49694f(BS16(CU, 0x5544a0), BS16(CU, 0x5544a2), 4);
+        ux = BS16(CU, 0x5544a0);
+        bf_49694f(ux, BS16(CU, 0x5544a2), 4);
+        RES_ARGS(ux - 4 < 0 ? 0 : ux - 4, 0x484b11u);
         s_slot_00569588 = 1;
         s_slot_0053e990 += 4;
         s_slot_00553fb0 += 4;
@@ -403,11 +469,12 @@ int bf_484a0c(void)
  * +0x173 counts up; past 120 it sticks and the unit is removed (bf_46ebe4). */
 int bf_484b89(void)
 {
-    bf_48895e();
+    bf_action_seq_48895e();
     BU8(CU, 0x5545f3)++;
     if (BS8(CU, 0x5545f3) > 120) {
         BU8(CU, 0x5545f3) = 120;
         bf_46ebe4(CU);
+        RES_CALL1();
     }
     return 0;
 }
@@ -966,7 +1033,8 @@ int bf_405000(int x1, int y1, int x2, int y2)
  *   +9 = a6 - 1 and the target = the centre. The aggregator bf_488dfe; a target on kind 2 (moat) for a group
  *   without +1 clears +0x13.
  * Returns retail's EAX (IDA: void; a caller in partition 'input' returns it): g for g = 0 (every call site loads g into
- * EAX to push it), 13 × g for a group without +2 or a moat target, else bf_488dfe's. */
+ * EAX to push it), 13 × g for a group without +2 or a moat target, else 0x488dfe's (retail: 0x410 = 13 × 80, its
+ * last loop index; the group port returns 0 — no call site reads it, the row is HOOK_V). */
 int bf_479e90(int g, int x, int y, int a4, int a5, int a6)
 {
     int side, best = 1000, foot = 0, missile = 0, i, v, kind, ck, r;

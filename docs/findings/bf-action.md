@@ -71,8 +71,22 @@ target into range; room for the group).
 12. **FUN_004832ea loads +0x178 into a dead local** (stack residue only).
 13. **FUN_00479e90 is `void` to IDA but its EAX escapes**: partition `input` returns it. The port models it: g
     for g = 0 (all 29 call sites do `mov eax, g; push eax`), 13 × g for a group without +2 or a moat target (the
-    group-record index left in EAX), else FUN_00488dfe's value. Likewise FUN_0048143b returns 13 × g,
+    group-record index left in EAX), else FUN_00488dfe's value (retail 0x410 = 13 × 80, its last loop index; the
+    group port returns 0, so the row is HOOK_V — no call site reads it). Likewise FUN_0048143b returns 13 × g,
     FUN_00497437 the last cursor axis written (or range − 3), FUN_00471da6 its last loaded value.
+
+14. **The siege orders feed stack garbage to the sequencers.** Orders 10..15 (FUN_004842c6, FUN_0048437e,
+    FUN_004843bc, FUN_004849fc, FUN_00484a0c, FUN_00484b89) call the class 7..10 sequencers 0x488793 / 0x488436 /
+    0x48895e for any unit; for another class those store their unset `[ebp-4]` into the sprite frame
+    (bf-unit.md quirk 1, seams `bf_unit_res_*`). That slot is a fixed spot below the handler's entry esp e0:
+    e0 − 0x1c − 4 × the handler's locals (0x1c; FUN_00484a0c 0x20, FUN_004843bc 0x28), `[ebp-8]` 4 lower. Its
+    value is what the handler's previous call left there — a sequencer: its own final local; a 1-argument call
+    (0x48f1dd, 0x46ebe4, 0x46efbe, 0x426120): its saved ebp = the handler's ebp (e0 − 4); a k-argument call
+    (k = 3..6): argument k − 3 AS THE CALLEE LEFT IT (FUN_0049694f clips its x argument in place: max(x − 4, 0);
+    the Chebyshev helper / 0x46f525 (x, y, …) → y; 0x46e767 → y; FUN_00479e90 → 0), slot 2 the next lower push
+    (or the return address for k = 3). The port carries both
+    slots in `bf_action_res[2]` through each handler; the six rows' adapters load them and e0 (a custom hook
+    body records e0) and put slot 1's final value back (compared in shadow).
 
 ## Seams
 
@@ -98,6 +112,19 @@ bf_48314e 1231612/13, bf_4831d8 786904/13, bf_494908 784460/13, bf_482f91 230440
 bf_4830e9 52369/13, bf_483a88 12217/2, bf_48437e 8266/2, bf_484bf9 5058/3, bf_46ebae 3040/13, bf_4954dd 2635/13,
 bf_4842c6 974/2, bf_479e90 819/13 (its modelled EAX compared), bf_46e97a 265/13, bf_471da6 38/13, bf_47a814 2/2.
 Later runs: the commit messages (`rhost shadow: …`).
+
+**Poke exploration** (not corpus evidence: rhbot sessions replaying `bot3-s103-t36` with rows in shadow mode and
+the battle's foot units' orders / cells poked so the branches run — port vs retail on identical, poked state;
+scripts were scratch): all 0 divergences after one fix. Orders 7 / 9 / 12..15 on foot units (the siege orders'
+residue path, slot 1 compared): FUN_00483ce1 12, FUN_00483fe1 8916 (kind-2 cells planted around the units, one
+filling at a full cell), FUN_004843bc 2673, FUN_004849fc 3472, FUN_00484a0c 1006, FUN_00484b89 243,
+FUN_0048437e 2889; orders 0 / 16 / 10 / 11: FUN_00482f86 9475, FUN_00484bee 9060, FUN_004842c6 5081,
+FUN_0048437e 8004; the helpers alone: FUN_00494e3f 12, FUN_004926fb 7506, FUN_004927fa 5117, FUN_00496768
+5248, FUN_00405000 5626, FUN_0049694f 1 (DAT_00554034 poked to 4990 under order 14), FUN_0047dd86 4. The fix:
+FUN_00484a0c's slot 1 after FUN_0049694f is the x argument as the callee clipped it in place (x − 4), not x
+(`DIVERGE bf_484a0c … res e0-20 r00000036/p0000003a`). Not reached even poked: FUN_00479e90's attack / area
+branches (FUN_0048143b, FUN_00497437, FUN_0048a7d9) — the AI stances pass a4 = a5 = 0, and the bot's order
+clicks never reached the interactive attack path with planted archers, hover targets or a kind-15 cell.
 
 Coverage c0 functions (no corpus evidence): FUN_00482f86,
 FUN_00483ce1, FUN_00483fe1, FUN_004843bc, FUN_004849fc, FUN_00484a0c, FUN_00484b89, FUN_00484bee, FUN_0049694f,

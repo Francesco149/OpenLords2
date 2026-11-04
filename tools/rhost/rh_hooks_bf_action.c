@@ -18,6 +18,25 @@ enum {
     X_bf_48a672, X_bf_497437,
 };
 
+/* STACK RESIDUE (src/engine_bf_action.c, "the siege orders' stack residue"): the six siege-order handlers feed
+ * the sequencers' unset local from two slots below their entry esp e0 — slot 1 at e0 - 0x1c - 4 × the handler's
+ * locals (0x1c; 0x20 for 0x484a0c, 0x28 for 0x4843bc), slot 2 four bytes lower — and a 1-argument call leaves the
+ * handler's ebp (e0 - 4) in slot 1. A SEQ row's body notes e0 (b_ → s_e0) for the adapter: slot 1's final value
+ * is put back (replace: written; shadow: compared). */
+extern uint32_t bf_action_res[2], bf_action_res_ebp;
+static uint32_t s_e0;
+#define HOOK_BODY_E0(NAME) \
+    static void w_##NAME(void); \
+    static __attribute__((used, noinline)) uint32_t __cdecl b_##NAME(uint32_t e0) \
+    { uint32_t o = s_e0, r; s_e0 = e0; r = rh_port_run(&RH_TABLE[X_##NAME], (void *)w_##NAME, p_##NAME, 0, e0); \
+      s_e0 = o; return r; } \
+    RH_ENTRY(w_##NAME, b_##NAME)
+#define HOOK_SEQ(NAME, OFF) \
+    static uint32_t p_##NAME(const uint32_t *a) \
+    { (void)a; bf_action_res_ebp = s_e0 - 4; bf_action_res[0] = rh_res_get(OFF); bf_action_res[1] = rh_res_get((OFF) + 4); \
+      NAME(); rh_res_put(OFF, bf_action_res[0]); return 0; } \
+    HOOK_BODY_E0(NAME)
+
 /* the order handlers (DAT_004d9170, unit +0x31 = 0..17): the movement-state handlers return their EAX,
  * FUN_004822ed drops it */
 HOOK_V(bf_482f86, 0, bf_482f86())
@@ -30,12 +49,12 @@ HOOK_V(bf_483a88, 0, bf_483a88())
 HOOK_V(bf_483ce1, 0, bf_483ce1())
 HOOK_V(bf_483e55, 0, bf_483e55())
 HOOK_V(bf_483fe1, 0, bf_483fe1())
-HOOK_V(bf_4842c6, 0, bf_4842c6())
-HOOK_V(bf_48437e, 0, bf_48437e())
-HOOK_V(bf_4843bc, 0, bf_4843bc())
-HOOK_V(bf_4849fc, 0, bf_4849fc())
-HOOK_V(bf_484a0c, 0, bf_484a0c())
-HOOK_V(bf_484b89, 0, bf_484b89())
+HOOK_SEQ(bf_4842c6, 0x1c)
+HOOK_SEQ(bf_48437e, 0x1c)
+HOOK_SEQ(bf_4843bc, 0x28)
+HOOK_SEQ(bf_4849fc, 0x1c)
+HOOK_SEQ(bf_484a0c, 0x20)
+HOOK_SEQ(bf_484b89, 0x1c)
 HOOK_V(bf_484bee, 0, bf_484bee())
 HOOK_V(bf_484bf9, 0, bf_484bf9())
 /* helpers (a value-returning helper is HOOK_R even where no caller reads it: the port models retail's EAX) */
@@ -50,7 +69,9 @@ HOOK_R(bf_4926fb, 1, bf_4926fb(I(0)))
 HOOK_R(bf_4927fa, 1, bf_4927fa(I(0)))
 HOOK_R(bf_496768, 3, bf_496768(I(0), I(1), I(2)))
 HOOK_R(bf_405000, 4, bf_405000(I(0), I(1), I(2), I(3)))
-HOOK_R(bf_479e90, 6, bf_479e90(I(0), I(1), I(2), I(3), I(4), I(5)))
+/* FUN_00479e90: void to IDA; no call site reads its EAX (the input partition's 0x478987 passes it on, a HOOK_V
+ * row). Its modelled EAX includes 0x488dfe's, which the group port does not model (retail: 0x410) — HOOK_V. */
+HOOK_V(bf_479e90, 6, bf_479e90(I(0), I(1), I(2), I(3), I(4), I(5)))
 HOOK_R(bf_46e97a, 2, bf_46e97a(I(0), I(1)))
 HOOK_R(bf_46ebae, 1, bf_46ebae(I(0)))
 HOOK_R(bf_48143b, 1, bf_48143b(I(0)))
