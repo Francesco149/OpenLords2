@@ -304,9 +304,16 @@ def run_batch_wine(a, runs, tag):
     def one(r):
         name = r[0]
         argv = json.load(open(os.path.join(bdir, name, "argv.json")))
-        out = subprocess.run(["wine", f"{WROOT}\\runs\\{batch}\\{WEXE}"] + argv, capture_output=True, text=True, env=env,
-                             timeout=getattr(a, "wine_timeout", 3600))
-        open(os.path.join(bdir, name, "wine.out"), "w").write(out.stdout[-4000:] + out.stderr[-4000:])
+        # wine's output goes to a FILE, not a pipe: a wine launch that has to start the prefix's wineserver hands it
+        # our stdio, and the wineserver (shared with every other wine job in the prefix) would hold a pipe's write
+        # end open long after the run — communicate() then never sees EOF and the batch hangs (2026-11-04)
+        wout = os.path.join(bdir, name, "wine.out")
+        with open(wout, "w") as f:
+            subprocess.run(["wine", f"{WROOT}\\runs\\{batch}\\{WEXE}"] + argv, stdin=subprocess.DEVNULL, stdout=f,
+                           stderr=subprocess.STDOUT, env=env, timeout=getattr(a, "wine_timeout", 3600))
+        txt = open(wout, errors="replace").read()
+        if len(txt) > 8000:
+            open(wout, "w").write(txt[-8000:])
         log = os.path.join(bdir, name, "rhost.log")
         return name, open(log, errors="replace").read() if os.path.exists(log) else ""
     t0 = time.time()
@@ -540,19 +547,21 @@ def cmd_verify(a):
     """shadow every hook over the corpus, in passes: a hook called inside another shadowed call runs retail there
     (rh_in_shadow), so pass 1 compares the outermost hooks, pass 2 shadows only the hooks pass 1 never reached
     (the next nesting level), ... until a pass reaches nothing new. Then the hybrid pass: every hook in replace
-    mode at once must reproduce the blessed corpus bit-exactly (corpus --check)."""
+    mode at once must reproduce the blessed corpus bit-exactly (corpus --check).
+    --hooks RE: only the rows matching RE (shadow passes + a hybrid pass with just those replaced; no evidence).
+    RH_SH_SAMPLE rows report `sampled` (calls not shadowed: retail ran), not counted in `calls`."""
     global _PINNED
     names = all_scenarios(a.only)
+    rows = [h for h in VERIFY_HOOKS if not getattr(a, "hooks", None) or re.search(a.hooks, h)]
+    if not rows:
+        raise SystemExit(f"--hooks {a.hooks!r}: no hook row matches")
     runs = resolve_runs(names)
     if rhost_stale():
         cmd_build()
     a.exe_pin = os.path.join(LOCAL_RUNS, f"verify-{os.getpid()}.exe")   # every pass runs this exact build
     shutil.copy2(os.path.join(BUILD, "rhost.exe"), a.exe_pin)
     _PINNED = True
-    sel = [h for h in VERIFY_HOOKS if not a.hooks or re.search(a.hooks, h)]   # --hooks RE: a subset (no evidence)
-    if not sel:
-        raise SystemExit(f"--hooks {a.hooks!r}: no hook rows match")
-    tot, depth, todo, failed = {}, {}, list(sel), []
+    tot, depth, todo, failed = {}, {}, list(rows), []
     for p in range(1, 17):
         a.hook = ",".join("shadow:" + h for h in todo)
         batch, bdir, res, out = run_batch(a, runs, f"verify{p}")
@@ -565,30 +574,31 @@ def cmd_verify(a):
         got = {}
         for n in names:
             for note in res.get(n + "#notes", []):
-                m = re.match(r"hook-result (\S+) mode=\S+ calls=(\d+) diverge=(\d+) skipped=(\d+)", note)
-                if m:
-                    t = got.setdefault(m.group(1), [0, 0, 0, 0])
+                m = re.match(r"hook-result (\S+) mode=\S+ calls=(\d+) diverge=(\d+) skipped=(\d+)(?: sampled=(\d+))?", note)
+                if m:   # sampled: RH_SH_SAMPLE calls not shadowed (retail ran), not in calls
+                    t = got.setdefault(m.group(1), [0, 0, 0, 0, 0])
                     t[0] += int(m.group(2)); t[1] += int(m.group(3)); t[2] += int(m.group(4)); t[3] += int(m.group(2)) > 0
+                    t[4] += int(m.group(5) or 0)
         reached = [h for h in todo if got.get(h, [0])[0] > 0]
         for h in reached:
             tot[h], depth[h] = got[h], p
         todo = [h for h in todo if h not in reached]
         if not reached or not todo:
             break
-    a.hook, a.fb_hash = ",".join("replace:" + h for h in sel), True
+    a.hook, a.fb_hash = ",".join("replace:" + h for h in rows), True
     batch, bdir, res, out = run_batch(a, runs, "verify-hybrid")
-    print(f"--- hybrid pass: {len(sel)} hook(s) replaced, corpus --check")
+    print(f"--- hybrid pass: {len(rows)} hook(s) replaced, corpus --check")
     print_results(res, names)
     hyb = {n: d for n, d in expected_diffs(names, res, a.target).items() if d}
     for n, d in hyb.items():
         print(f"  {n}: FAIL {'; '.join(d)}")
-    print("\nhook                          depth    calls  diverge  skipped  scenarios")
-    for h in sel:
-        t = tot.get(h, [0, 0, 0, 0])
-        print(f"{h:28s} {depth.get(h, '-'):>5} {t[0]:8d} {t[1]:8d} {t[2]:8d} {t[3]:4d}/{len(names)}")
+    print("\nhook                          depth    calls  diverge  skipped  scenarios   sampled")
+    for h in rows:
+        t = tot.get(h, [0, 0, 0, 0, 0])
+        print(f"{h:28s} {depth.get(h, '-'):>5} {t[0]:8d} {t[1]:8d} {t[2]:8d} {t[3]:4d}/{len(names)} {t[4] or '':>9}")
     for f in failed:
         print(f"  RUN FAILED {f}")
-    print(f"\nVERIFY: {sum(1 for h in sel if tot.get(h, [0, 0])[1] == 0 and h in tot)}/{len(sel)} reached with "
+    print(f"\nVERIFY: {sum(1 for h in rows if tot.get(h, [0, 0])[1] == 0 and h in tot)}/{len(rows)} reached with "
           f"0 divergences, {sum(1 for t in tot.values() if t[1])} diverging, {len(todo)} never called; "
           f"hybrid {'PASS' if not hyb else f'FAIL ({len(hyb)})'}; {len(failed)} failed run(s)")
     if not a.only and not a.hooks and not failed:   # the whole corpus: record the evidence (docs/STATUS.md's runtime axis)
@@ -596,12 +606,14 @@ def cmd_verify(a):
         vas = dict(re.findall(r'\{\s*"(\w+)",\s*(0x[0-9a-fA-F]+)u', src))
         ep = os.path.join(ROOT, "docs", "rhost-evidence.json")
         today = datetime.date.today().isoformat()
-        ev = {"hooks": {}, "hybrid": {"hooks": len(VERIFY_HOOKS), "corpus": len(names), "failing": sorted(hyb),
+        ev = {"hooks": {}, "hybrid": {"hooks": len(rows), "corpus": len(names), "failing": sorted(hyb),
                                       "target": a.target, "date": today}}
-        for h in VERIFY_HOOKS:
-            t = tot.get(h, [0, 0, 0, 0])
+        for h in rows:
+            t = tot.get(h, [0, 0, 0, 0, 0])
             ev["hooks"][h] = {"va": vas.get(h, "?"), "depth": depth.get(h, 0), "calls": t[0], "scenarios": t[3],
                               "corpus": len(names), "diverge": t[1], "skipped": t[2], "target": a.target, "date": today}
+            if t[4]:
+                ev["hooks"][h]["sampled"] = t[4]
         json.dump(ev, open(ep, "w"), indent=1, sort_keys=True)
         print(f"evidence → {os.path.relpath(ep, ROOT)}")
     os.remove(a.exe_pin)
@@ -773,7 +785,7 @@ def main():
         sp.add_argument("--fb-hash", dest="fb_hash", action="store_true")
         sp.add_argument("--show", action="store_true")
         sp.add_argument("-j", "--jobs", type=int, default=None,
-                        help="parallel runs (default: 8 on wine, 3 on win — sibling projects share the Windows box)")
+                        help="parallel runs (default: $RHOST_JOBS, else 8 on wine, 3 on win — sibling projects share the Windows box)")
         sp.add_argument("--target", choices=("win", "wine"), default=os.environ.get("RHOST_TARGET", "win"))
         sp.add_argument("--extra")
     sub.add_parser("build").set_defaults(fn=cmd_build)

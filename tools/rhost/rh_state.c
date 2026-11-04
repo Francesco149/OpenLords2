@@ -2,7 +2,8 @@
  *
  * "State" = retail .data/.bss (RT_DATA_LO..HI from the PE: 0x4d2000..) + the committed heap arena
  * (retail's heap, and rhost's fake DirectDraw / DirectSound objects). Surface pixels and sound
- * bytes (the media pool) are not state: the presented frame has its own hash (rh_shot.c).
+ * bytes (the media pool) are not state: the presented frame has its own hash (rh_shot.c) — but a render row's
+ * shadow (RH_SH_MEDIA) also rolls back and compares every live surface's pixels (below).
  *   full hash     : every byte.
  *   semantic hash : every dword except those at VOLATILE ADDRESSES (<rundir>\volatile.txt).
  *                   With rhost's fake HWND / DirectDraw / DirectSound / handles there should be
@@ -111,7 +112,43 @@ void rh_shadow_report(void)
     for (int k = 0; k < SP_N; k++) w += snprintf(b + w, sizeof b - w, " %s=%.1f", g_spn[k], 1e6 * g_spt[k] / f.QuadPart / g_spcalls);
     rh_log("%s\n", b);
 }
-static void poison(void) { if (O.shadow_poison) *(volatile uint32_t *)(uintptr_t)O.shadow_poison ^= 1; }
+static void poison(int media)
+{
+    if (O.shadow_poison) *(volatile uint32_t *)(uintptr_t)O.shadow_poison ^= 1;
+    if (media && O.poison_px) {   /* --shadow-poison-px X,Y: one bit of the canvas pixel (X,Y), when the call compares the media */
+        uint32_t p = G32(L2_CANVAS) + (uint32_t)O.poison_y * G32(L2_PITCH) + (uint32_t)O.poison_x;
+        if (G32(L2_CANVAS) && rh_media_in_pool(p)) *(volatile uint8_t *)(uintptr_t)p ^= 1;
+    }
+}
+/* ---- the media shadow: a render row (RH_SH_MEDIA; --shadow-media: every row) also compares the pixels of every live
+ * DirectDraw surface (rh_media: the surface blocks), rolled back and compared like the state — a render divergence is
+ * caught AT the call, with its first differing pixel, not at the next presented frame */
+static int add_media(uint32_t (*r)[2], int n, int media) { return media ? n + rh_media_surface_ranges(r + n, MAXR - n) : n; }
+/* one differing dword: state → " VA rRRRRRRRR/pPPPPPPPP"; a surface's → its first differing pixel " px(X,Y)@VA rRR/pPP".
+ * Returns the differing units: 1 for a state dword, the differing bytes (pixels) for a surface dword. */
+static int diff_note(char *why, size_t whyn, int *w, int *k, uint32_t va, uint32_t a, uint32_t b)
+{
+    uint32_t pitch = 0, lo = rh_media_in_pool(va) ? rh_media_surface_at(va, &pitch) : 0;
+    if (!lo) {
+        if ((*k)++ < 6 && *w < (int)whyn - 48) *w += snprintf(why + *w, whyn - *w, " %08x r%08x/p%08x", va, a, b);
+        return 1;
+    }
+    int n = 0, first = -1;
+    for (int j = 0; j < 4; j++) if ((a >> 8 * j & 0xff) != (b >> 8 * j & 0xff)) { n++; if (first < 0) first = j; }
+    if ((*k)++ < 6 && *w < (int)whyn - 56) {
+        uint32_t off = va + (uint32_t)first - lo;
+        *w += snprintf(why + *w, whyn - *w, " px(%u,%u)@%08x r%02x/p%02x", off % pitch, off / pitch, va + (uint32_t)first,
+                       a >> 8 * first & 0xff, b >> 8 * first & 0xff);
+    }
+    return -n;   /* negative: pixels */
+}
+static void diff_total(char *why, size_t whyn, int w, long st, long px)
+{
+    if (w >= (int)whyn - 40) return;
+    if (st && px) snprintf(why + w, whyn - w, " (%ld differ, %ld px)", st, px);
+    else if (px) snprintf(why + w, whyn - w, " (%ld px differ)", px);
+    else snprintf(why + w, whyn - w, " (%ld differ)", st);
+}
 /* host-side state retail's code advances that is not retail memory: the allocator metadata and rhost's own
  * layers (media pool, DirectSound serials / registry / timers, the fake-handle sequence, the virtual message
  * queue + window state). File I/O is not rolled back: a shadowed call that writes a file writes it twice. Saved and rolled
@@ -136,11 +173,11 @@ static void meta_restore(const meta_t *m)
 }
 static void meta_free(meta_t *m) { rh_heap_meta_free(m->heap); free(m->media); free(m->ds); free(m->hnd); free(m->win); free(m); }
 
-static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn)
+static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn, int media)
 {
     static uint32_t r[MAXR][2], r2[MAXR][2];
     sp_mark(-1); g_spcalls++;
-    int n = state_ranges(r);
+    int n = add_media(r, state_ranges(r), media);
     sp_mark(SP_RANGES);
     size_t tot = 0;
     for (int i = 0; i < n; i++) tot += r[i][1] - r[i][0];
@@ -156,7 +193,7 @@ static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(vo
     retail(ctx);
     g_shadow_depth--;
     sp_mark(SP_RETAIL);
-    int n2 = state_ranges(r2);
+    int n2 = add_media(r2, state_ranges(r2), media);
     if (n2 != n || memcmp(r, r2, n * 8)) {
         snprintf(why, whyn, "%s: arena commit changed during call (ranges %d->%d); not compared", name, n, n2);
         meta_free(meta);
@@ -173,9 +210,9 @@ static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(vo
     g_shadow_depth++;
     port(ctx);
     g_shadow_depth--;
-    poison();
+    poison(media);
     sp_mark(SP_PORT);
-    long diff = 0; int k = 0;
+    long diff = 0, px = 0; int k = 0;
     int w = snprintf(why, whyn, "%s:", name);
     size_t o = 0;
     for (int i = 0; i < n; i++) {
@@ -184,20 +221,19 @@ static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(vo
         if (memcmp(a, b, l))
             for (size_t q = 0; q < l / 4; q++)
                 if (a[q] != b[q]) {
-                    if (k++ < 6 && w < (int)whyn - 48)
-                        w += snprintf(why + w, whyn - w, " %08x r%08x/p%08x", r[i][0] + (uint32_t)q * 4, a[q], b[q]);
-                    diff++;
+                    int u = diff_note(why, whyn, &w, &k, r[i][0] + (uint32_t)q * 4, a[q], b[q]);
+                    if (u > 0) diff += u; else px -= u;
                 }
         o += l;
     }
     sp_mark(SP_CMP);
-    if (diff) { COPY_IN(g_ret); if (w < (int)whyn - 24) snprintf(why + w, whyn - w, " (%ld differ)", diff); }
+    if (diff || px) { COPY_IN(g_ret); diff_total(why, whyn, w, diff, px); }
     meta_restore(meta_ret);
     rh_clock_restore(clk1);
     __asm__ volatile("fldcw %0" : : "m"(cw));
     meta_free(meta); meta_free(meta_ret);
     sp_mark(SP_DONE);
-    return diff ? 1 : 0;
+    return diff || px ? 1 : 0;
     #undef COPY_OUT
     #undef COPY_IN
 }
@@ -303,7 +339,7 @@ static void disarm(uint32_t (*r)[2], int n)
     g_nsp = 0;
 }
 static int cmp_spg(const void *a, const void *b) { uint32_t x = g_spg[*(const int *)a], y = g_spg[*(const int *)b]; return x < y ? -1 : x > y; }
-static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn)
+static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn, int media)
 {
     static uint32_t r[MAXR][2], r2[MAXR][2];
     static int *ord;
@@ -312,7 +348,7 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
         AddVectoredExceptionHandler(1, shadow_veh);
     }
     sp_mark(-1); g_spcalls++;
-    int n = state_ranges(r);
+    int n = add_media(r, state_ranges(r), media);
     sp_mark(SP_RANGES);
     int pages = 0;
     for (int i = 0; i < n; i++) pages += (int)((((r[i][1] + 0xfffu) & ~0xfffu) - (r[i][0] & ~0xfffu)) >> 12);
@@ -327,7 +363,7 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
     meta_t *meta = meta_save();
     if (!protect_ranges(r, n, 1)) {
         g_paged_off = 1; meta_free(meta);
-        return shadow_copy(name, retail, port, ctx, why, whyn);
+        return shadow_copy(name, retail, port, ctx, why, whyn, media);
     }
     g_armed = 1;
     sp_mark(SP_SNAP);
@@ -335,7 +371,7 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
     retail(ctx);
     g_shadow_depth--;
     sp_mark(SP_RETAIL);
-    int n2 = state_ranges(r2);
+    int n2 = add_media(r2, state_ranges(r2), media);
     if (n2 != n || memcmp(r, r2, n * 8)) {
         disarm(r, n);
         snprintf(why, whyn, "%s: arena commit changed during call (ranges %d->%d); not compared", name, n, n2);
@@ -364,7 +400,7 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
     g_shadow_depth++;
     port(ctx);
     g_shadow_depth--;
-    poison();
+    poison(media);
     sp_mark(SP_PORT);
     g_armed = 0;
     protect_ranges(r, n, 0);
@@ -372,7 +408,7 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
     for (int i = 0; i < g_nsp; i++) ord[i] = i;
     qsort(ord, g_nsp, sizeof *ord, cmp_spg);   /* report differences in address order, like shadow_copy */
     uint32_t data_end = RT_DATA_HI & ~3u;
-    long diff = 0; int k = 0;
+    long diff = 0, px = 0; int k = 0;
     int w = snprintf(why, whyn, "%s:", name);
     for (int j = 0; j < g_nsp; j++) {
         int i = ord[j];
@@ -382,16 +418,15 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
         if (memcmp(a, b, len))
             for (uint32_t q = 0; q < len / 4; q++)
                 if (a[q] != b[q]) {
-                    if (k++ < 6 && w < (int)whyn - 48)
-                        w += snprintf(why + w, whyn - w, " %08x r%08x/p%08x", base + q * 4, a[q], b[q]);
-                    diff++;
+                    int u = diff_note(why, whyn, &w, &k, base + q * 4, a[q], b[q]);
+                    if (u > 0) diff += u; else px -= u;
                 }
     }
     sp_mark(SP_CMP);
-    if (diff) {   /* keep retail's post-state */
+    if (diff || px) {   /* keep retail's post-state */
         for (int i = 0; i < g_nsp; i++)
             memcpy((void *)(uintptr_t)(g_spg[i] << 12), (g_sdone[i] ? g_sret : g_spre) + (size_t)i * 4096, 4096);
-        if (w < (int)whyn - 24) snprintf(why + w, whyn - w, " (%ld differ)", diff);
+        diff_total(why, whyn, w, diff, px);
     }
     for (int i = 0; i < g_nsp; i++) { g_spix[g_spg[i]] = -1; PCLR(g_open, g_spg[i]); }
     g_nsp = 0;
@@ -400,11 +435,16 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
     __asm__ volatile("fldcw %0" : : "m"(cw));
     meta_free(meta); meta_free(meta_ret);
     sp_mark(SP_DONE);
-    return diff ? 1 : 0;
+    return diff || px ? 1 : 0;
 }
 
+int rh_shadow_ex_f(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn, int flags)
+{
+    int media = (flags & RH_SH_MEDIA) || O.shadow_media;
+    return O.shadow_full || g_paged_off ? shadow_copy(name, retail, port, ctx, why, whyn, media)
+                                        : shadow_paged(name, retail, port, ctx, why, whyn, media);
+}
 int rh_shadow_ex(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn)
 {
-    return O.shadow_full || g_paged_off ? shadow_copy(name, retail, port, ctx, why, whyn)
-                                        : shadow_paged(name, retail, port, ctx, why, whyn);
+    return rh_shadow_ex_f(name, retail, port, ctx, why, whyn, 0);
 }

@@ -8,7 +8,7 @@
 #define POOL_SZ 0x10000000u            /* 256 MB */
 #define GRAN    0x1000u
 
-typedef struct { uint32_t lo, sz; } span_t;
+typedef struct { uint32_t lo, sz, tag; } span_t;   /* tag (live blocks): a surface's pitch, 0 = not a surface */
 static span_t g_free[4096]; static int g_nfree;
 static span_t g_live[4096]; static int g_nlive;
 static uint32_t g_top = POOL_LO, g_committed = POOL_LO, g_used;
@@ -22,7 +22,7 @@ int rh_media_reserve(void)
 int rh_media_in_pool(uint32_t v) { return v >= POOL_LO && v < POOL_LO + POOL_SZ; }
 uint32_t rh_media_used(void) { return g_used; }
 
-void *rh_media_alloc(uint32_t n)
+static void *media_alloc(uint32_t n, uint32_t tag)
 {
     uint32_t sz = (n + GRAN - 1) & ~(GRAN - 1), p = 0;
     if (!sz) sz = GRAN;
@@ -44,10 +44,37 @@ void *rh_media_alloc(uint32_t n)
         }
     }
     if (g_nlive == 4096) rh_fatal("media pool: too many live blocks");
-    g_live[g_nlive].lo = p; g_live[g_nlive++].sz = sz;
+    g_live[g_nlive].lo = p; g_live[g_nlive].tag = tag; g_live[g_nlive++].sz = sz;
     g_used += sz;
     LeaveCriticalSection(&g_lk);
     return memset((void *)(uintptr_t)p, 0, sz);
+}
+void *rh_media_alloc(uint32_t n) { return media_alloc(n, 0); }
+void *rh_media_alloc_surface(uint32_t n, uint32_t pitch) { return media_alloc(n, pitch ? pitch : 1); }
+
+/* the media shadow (rh_state.c): every live surface block [lo, lo+sz) — page-granular — in address order */
+int rh_media_surface_ranges(uint32_t (*r)[2], int max)
+{
+    int n = 0;
+    EnterCriticalSection(&g_lk);
+    for (int i = 0; i < g_nlive && n < max; i++)
+        if (g_live[i].tag) {
+            int k = n++;
+            while (k > 0 && r[k - 1][0] > g_live[i].lo) { r[k][0] = r[k - 1][0]; r[k][1] = r[k - 1][1]; k--; }
+            r[k][0] = g_live[i].lo; r[k][1] = g_live[i].lo + g_live[i].sz;
+        }
+    LeaveCriticalSection(&g_lk);
+    return n;
+}
+/* the surface block holding v: its base (0: none) and pitch */
+uint32_t rh_media_surface_at(uint32_t v, uint32_t *pitch)
+{
+    uint32_t lo = 0;
+    EnterCriticalSection(&g_lk);
+    for (int i = 0; i < g_nlive; i++)
+        if (g_live[i].tag && v >= g_live[i].lo && v - g_live[i].lo < g_live[i].sz) { lo = g_live[i].lo; *pitch = g_live[i].tag; break; }
+    LeaveCriticalSection(&g_lk);
+    return lo;
 }
 
 void rh_media_free(void *ptr)

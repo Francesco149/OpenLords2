@@ -937,9 +937,8 @@ int bf_47aaa3(int a0)
             break;
         }
     }
-    /* TODO(bf-link): engine_tile_refresh_path_scratch / _stage_scratch (engine_tile.c, not linked in rhost) */
-    engine_retail_call(0x471c1fu, 0);
-    engine_retail_call(0x471d30u, 0);
+    bf_tile_refresh_path();
+    bf_tile_refresh_stage();
     bf_471da6();
     return bf_46c7fc(0);
 }
@@ -1482,9 +1481,8 @@ int bf_47c4ba(int castle)
             break;
         }
     }
-    /* TODO(bf-link): engine_tile_refresh_path_scratch / _stage_scratch (engine_tile.c, not linked in rhost) */
-    engine_retail_call(0x471c1fu, 0);
-    engine_retail_call(0x471d30u, 0);
+    bf_tile_refresh_path();
+    bf_tile_refresh_stage();
     if (g_bf_57cb48 != 0)
         s_slot_00553fb0 = 500;
     g_bf_57cb48 = 0;
@@ -1509,7 +1507,7 @@ int bf_47c4ba(int castle)
     g_bf_4eeb6c = g_bf_58fd7c < roll;
     bf_471da6();
     bf_4787a4();
-    return (int)engine_retail_call(0x471c1fu, 0);
+    return (int)bf_tile_refresh_path();
 }
 
 /* ------------------------------------------------------------------ the custom-battle field (map set 3) */
@@ -1696,9 +1694,8 @@ int bf_47b8b2(int a0)
             break;
         }
     }
-    /* TODO(bf-link): engine_tile_refresh_path_scratch / _stage_scratch (engine_tile.c, not linked in rhost) */
-    engine_retail_call(0x471c1fu, 0);
-    engine_retail_call(0x471d30u, 0);
+    bf_tile_refresh_path();
+    bf_tile_refresh_stage();
     bf_471da6();
     return bf_46c7fc(0);
 }
@@ -1822,9 +1819,8 @@ int bf_477c89(void)
         s_slot_0057c910 = S32(s_slot_0055401c) >= 2;
     g_combat_render_active = 0;
     bf_4987b7();
-    /* TODO(bf-link): engine_tile_refresh_path_scratch / _stage_scratch (engine_tile.c, not linked in rhost) */
-    engine_retail_call(0x471c1fu, 0);
-    engine_retail_call(0x471d30u, 0);
+    bf_tile_refresh_path();
+    bf_tile_refresh_stage();
     bf_471da6();
     bf_log(&AT(uint8_t, g_bf_4d9c90, 0x4d9c90, 0x4d9eb0));   /* "OK :setup_battle reloaded." */
     bf_480f8b();

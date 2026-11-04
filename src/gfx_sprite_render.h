@@ -144,6 +144,8 @@ enum {
 typedef void (*gfx_sprite_render_log_fn)(uint32_t fmt_addr,
                                          int      sprite_index_plus_one);
 void gfx_sprite_render_set_log(gfx_sprite_render_log_fn fn);
+/* Fire the hook (retail FUN_004afab9(fmt, 0, n)) — the panel passes log through it too. */
+void gfx_sprite_render_log_error(uint32_t fmt_addr, int sprite_index_plus_one);
 
 /* Read / clear the error-code byte latch (DAT_005aeb68).  Retail
  * FUN_00408fb0 stores `param_1` here; readers consult this to learn

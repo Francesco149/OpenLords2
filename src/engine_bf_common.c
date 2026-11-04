@@ -1,6 +1,7 @@
 /* engine_bf_common.c — helpers every battlefield partition shares (docs/findings/battlefield-sim-port.md). */
 #include "engine_bf.h"
 #include "engine.h"
+#include "engine_tile.h"
 
 #include <windows.h>
 
@@ -31,4 +32,28 @@ void bf_sleep(uint32_t ms)
         s_sleep_fn(ms);
     else
         Sleep(ms);
+}
+
+/* engine_tile's ports on retail's arrays (the cell grid g_castles_state, the path / stage scratches, the footprint
+ * list), with retail's EAX: FUN_00471c1f leaves the last cell index (6399), FUN_00471d30 the last cell's offset
+ * 0xc7f8 with its stage byte in AL, FUN_0048ee46 its argument. */
+int bf_tile_refresh_path(void)
+{
+    engine_tile_refresh_path_scratch(g_castles_state, g_path_scratch);
+    return 6399;
+}
+int bf_tile_refresh_stage(void)
+{
+    engine_tile_refresh_stage_scratch(g_castles_state, g_stage_scratch);
+    return 0xc700 | g_stage_scratch[6399];
+}
+int bf_tile_push_footprint(int off)
+{
+    engine_tile_push_footprint_record(g_footprint_list, &g_last_footprint_tile, off);
+    return off;
+}
+int bf_tile_neighbor_flags(int col, int row, int orient)
+{
+    engine_tile_set_footprint_neighbor_flags(g_castles_state, col, row, orient);
+    return 0;
 }

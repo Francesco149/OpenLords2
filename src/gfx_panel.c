@@ -33,79 +33,73 @@
  *   +4  int    src_offset   +0xc byte  flag_a   (staged, unused by blit)
  *   +0xd byte  row_count    +0xe byte  flag_b   (staged, unused by blit)
  *
- * Deviation: on a bad src_offset retail logs via 0x4afab9 and sets
- * the error latch to 1 via FUN_00408fb0(1) before aborting.  We abort
- * (early return) faithfully but elide the latch write — there is no
- * public setter for an arbitrary latch value and nothing in the panel
- * path consumes latch==1.  A valid asset never trips this gate.
+ * Retail shape (rhost shadow, render-under-rhost.md): both passes save
+ * the glyph cursor in DAT_00591508 / DAT_00591504 on entry and put it
+ * back on exit; every tile writes the last-glyph index DAT_005c9288, the
+ * cursor and the WHOLE descriptor (incl. the two flag bytes) before the
+ * src_offset gate; a bad offset logs (FUN_004afab9, the pass's own
+ * message) and latches error 1 (FUN_00408fb0) and returns WITHOUT
+ * restoring the cursor.  The chrome twins FUN_00409934 / FUN_00409c93
+ * are the same bodies with the chrome sheet (DAT_0057d3d0) baked in and
+ * their own messages: gfx_panel_draw_border_chrome / _fill_interior_chrome.
  */
 
 #include <stddef.h>
 
 #include "gfx_panel.h"
+#include "gfx_globals.h"
 #include "gfx_glyph.h"
 #include "gfx_dispatch.h"
 #include "gfx_sprite.h"
+#include "gfx_sprite_render.h"   /* gfx_sprite_render_log_error (FUN_004afab9) */
 
 /* Panel asset descriptor accessors (16-byte stride, 8-byte header). */
 #define DESC(asset, idx) ((asset) + 8 + (idx) * 0x10)
 
-/* Stage a tile descriptor into the gfx_glyph/gfx_dispatch sprite state,
- * apply the upstream clip, and return 0 on success or -1 if the
- * descriptor's src_offset is out of range (caller aborts). */
-static int stage_tile(const uint8_t *asset, int idx, int cursor_x, int cursor_y)
+/* The four retail bodies' error messages (FUN_004afab9's format VA:
+ * offset > 310000, offset < 1). */
+typedef struct { uint32_t hi, lo; } panel_msgs_t;
+static const panel_msgs_t k_border_msgs        = { 0x4d21e4, 0x4d21fc };   /* FUN_0040946d */
+static const panel_msgs_t k_fill_msgs          = { 0x4d2214, 0x4d222c };   /* FUN_004097c5 */
+static const panel_msgs_t k_border_chrome_msgs = { 0x4d2244, 0x4d225c };   /* FUN_00409934 */
+static const panel_msgs_t k_fill_chrome_msgs   = { 0x4d2274, 0x4d228c };   /* FUN_00409c93 */
+
+/* Stage tile `idx` at the cursor (cursor_x, cursor_y) the way retail does
+ * — last-glyph index, cursor, every descriptor field — then gate its
+ * src_offset.  Returns 0, or -1 after logging + latching error 1 (the
+ * caller aborts without restoring the cursor). */
+static int stage_tile(const uint8_t *asset, int idx, int cursor_x, int cursor_y, const panel_msgs_t *m)
 {
+    g_gfx_last_glyph_index = idx;
+    g_gfx_cursor_x = cursor_x;
+    g_gfx_cursor_y = cursor_y;
     const uint8_t *d = DESC(asset, idx);
-    int width  = (int)(int16_t)(d[0] | (d[1] << 8));
-    int hshort = (int)(int16_t)(d[2] | (d[3] << 8));
-    int offset = (int)((uint32_t)d[4] | ((uint32_t)d[5] << 8) |
-                       ((uint32_t)d[6] << 16) | ((uint32_t)d[7] << 24));
-    int rows   = d[0xd];
+    g_gfx_glyph_w            = (int16_t)(d[0] | (d[1] << 8));
+    g_gfx_glyph_height_short = (int16_t)(d[2] | (d[3] << 8));
+    g_gfx_glyph_offset       = (int32_t)((uint32_t)d[4] | ((uint32_t)d[5] << 8) |
+                                         ((uint32_t)d[6] << 16) | ((uint32_t)d[7] << 24));
+    g_gfx_flag_a             = d[0xc];
+    g_gfx_glyph_h            = d[0xd];
+    g_gfx_flag_b             = d[0xe];
 
-    if (offset > 310000 || offset < 1) {
-        return -1;   /* retail logs + latches error 1, then aborts */
-    }
-
-    gfx_glyph_set_dest(cursor_x, cursor_y);
-    gfx_glyph_set_glyph(offset, width, rows);
-    gfx_dispatch_set_glyph_height_short(hshort);
-    return 0;
-}
-
-/* Common tail for the BORDER tiles: stage, clip, adjust source offset by
- * the clip skips, then dispatch the clip-appropriate transparent blit. */
-static int blit_border_tile(const uint8_t *asset, int idx,
-                            int cursor_x, int cursor_y)
-{
-    if (stage_tile(asset, idx, cursor_x, cursor_y) != 0) {
+    if (g_gfx_glyph_offset > 310000) {
+        gfx_sprite_render_log_error(m->hi, g_gfx_last_glyph_index + 1);
+        g_gfx_last_error = 1;
         return -1;
     }
-
-    gfx_dispatch_clip_x(0, 0x280);
-    gfx_dispatch_clip_y(0, 0x1e0);
-
-    /* offset += width * top_skip + left_skip  (skips are the clip-induced
-     * source advance; both 0 for a fully on-screen tile). */
-    int width  = gfx_glyph_glyph_w();
-    int offset = gfx_glyph_glyph_offset();
-    int rows   = gfx_glyph_glyph_h();
-    offset += width * gfx_dispatch_top_skip() + gfx_dispatch_left_skip();
-    gfx_glyph_set_glyph(offset, width, rows);
-
-    if (gfx_dispatch_clip_x_mode() == 1) {
-        gfx_sprite_blit_left_clipped(asset);
-    } else if (gfx_dispatch_clip_x_mode() == 2) {
-        gfx_sprite_blit_right_clipped(asset);
-    } else if (gfx_dispatch_clip_y_mode() != 5) {
-        gfx_sprite_blit(asset);
+    if (g_gfx_glyph_offset < 1) {
+        gfx_sprite_render_log_error(m->lo, g_gfx_last_glyph_index + 1);
+        g_gfx_last_error = 1;
+        return -1;
     }
     return 0;
 }
 
-/* Port of FUN_0040946d. */
-void gfx_panel_draw_border(const uint8_t *asset, int mode,
-                           int x, int y, int cols, int rows)
+/* FUN_0040946d / FUN_00409934. */
+static void draw_border(const uint8_t *asset, int mode, int x, int y, int cols, int rows, const panel_msgs_t *m)
 {
+    g_gfx_saved_cursor_x = g_gfx_cursor_x;
+    g_gfx_saved_cursor_y = g_gfx_cursor_y;
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
             int idx;
@@ -134,27 +128,71 @@ void gfx_panel_draw_border(const uint8_t *asset, int mode,
                 idx += 0xcc;                             /* second style */
             }
 
-            if (blit_border_tile(asset, idx,
-                                 c * 0x10 + x, r * 0x10 + y) != 0) {
+            if (stage_tile(asset, idx, c * 0x10 + x, r * 0x10 + y, m) != 0) {
                 return;                                  /* bad offset → abort */
+            }
+
+            gfx_dispatch_clip_x(0, 0x280);
+            gfx_dispatch_clip_y(0, 0x1e0);
+
+            /* offset += width * top_skip + left_skip (the clip-induced
+             * source advance; both 0 for a fully on-screen tile). */
+            g_gfx_glyph_offset += g_gfx_top_skip * g_gfx_glyph_w;
+            g_gfx_glyph_offset += g_gfx_left_skip;
+
+            if (g_gfx_x_clip_mode == 1) {
+                gfx_sprite_blit_left_clipped(asset);
+            } else if (g_gfx_x_clip_mode == 2) {
+                gfx_sprite_blit_right_clipped(asset);
+            } else if (g_gfx_y_clip_mode != 5) {
+                gfx_sprite_blit(asset);
             }
         }
     }
+    g_gfx_cursor_x = g_gfx_saved_cursor_x;
+    g_gfx_cursor_y = g_gfx_saved_cursor_y;
 }
 
-/* Port of FUN_004097c5. */
-void gfx_panel_fill_interior(const uint8_t *asset, int x, int y,
-                             int cols, int rows)
+/* FUN_004097c5 / FUN_00409c93. */
+static void fill_interior(const uint8_t *asset, int x, int y, int cols, int rows, const panel_msgs_t *m)
 {
+    g_gfx_saved_cursor_x = g_gfx_cursor_x;
+    g_gfx_saved_cursor_y = g_gfx_cursor_y;
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
             int idx = c % 0xc + (r % 0xc) * 0xc + 0x34;
-            if (stage_tile(asset, idx, c * 0x10 + x, r * 0x10 + y) != 0) {
+            if (stage_tile(asset, idx, c * 0x10 + x, r * 0x10 + y, m) != 0) {
                 return;                                  /* bad offset → abort */
             }
             gfx_sprite_blit_16x16_raw(asset);
         }
     }
+    g_gfx_cursor_x = g_gfx_saved_cursor_x;
+    g_gfx_cursor_y = g_gfx_saved_cursor_y;
+}
+
+/* Port of FUN_0040946d. */
+void gfx_panel_draw_border(const uint8_t *asset, int mode, int x, int y, int cols, int rows)
+{
+    draw_border(asset, mode, x, y, cols, rows, &k_border_msgs);
+}
+
+/* Port of FUN_004097c5. */
+void gfx_panel_fill_interior(const uint8_t *asset, int x, int y, int cols, int rows)
+{
+    fill_interior(asset, x, y, cols, rows, &k_fill_msgs);
+}
+
+/* Port of FUN_00409934 — FUN_0040946d with the chrome sheet baked in. */
+void gfx_panel_draw_border_chrome(const uint8_t *chrome, int mode, int x, int y, int cols, int rows)
+{
+    draw_border(chrome, mode, x, y, cols, rows, &k_border_chrome_msgs);
+}
+
+/* Port of FUN_00409c93 — FUN_004097c5 with the chrome sheet baked in. */
+void gfx_panel_fill_interior_chrome(const uint8_t *chrome, int x, int y, int cols, int rows)
+{
+    fill_interior(chrome, x, y, cols, rows, &k_fill_chrome_msgs);
 }
 
 /* Port of FUN_00409346. */
@@ -165,14 +203,12 @@ void gfx_panel_draw(const uint8_t *asset, int x, int y, int cols, int rows)
 }
 
 /* Port of FUN_004093e0 @ 0x4093e0 (73 B).  The raised "bevel" frame the
- * chrome UI (button caps, the page-7 option tabs) draws from panels.pl8.
- * Identical composition to gfx_panel_draw except the border is mode 1 —
- * which shifts every sprite index by +0xcc, selecting the second
- * (raised/chrome) style block in the sheet.  Retail hardcodes the chrome
- * sheet 0x57d3d0 (0x409934/0x409c93 are the 0040946d/004097c5
- * twins with that asset baked in); the caller passes the bound blob. */
-void gfx_panel_draw_bevel(const uint8_t *asset, int x, int y, int cols, int rows)
+ * chrome UI (button caps, the page-7 option tabs) draws from panels.pl8:
+ * the chrome twins FUN_00409934 (mode 1 — every sprite index +0xcc, the
+ * second / raised style block) and FUN_00409c93.  Retail hardcodes the
+ * chrome sheet DAT_0057d3d0; the caller passes the bound blob. */
+void gfx_panel_draw_bevel(const uint8_t *chrome, int x, int y, int cols, int rows)
 {
-    gfx_panel_draw_border(asset, 1, x, y, cols, rows);
-    gfx_panel_fill_interior(asset, x + 0x10, y + 0x10, cols - 2, rows - 2);
+    gfx_panel_draw_border_chrome(chrome, 1, x, y, cols, rows);
+    gfx_panel_fill_interior_chrome(chrome, x + 0x10, y + 0x10, cols - 2, rows - 2);
 }

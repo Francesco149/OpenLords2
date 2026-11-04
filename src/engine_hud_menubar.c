@@ -8,7 +8,9 @@
 
 #include <stddef.h>
 
+#include "gfx_globals.h"
 #include "gfx_glyph.h"
+#include "gfx_sprite_render.h"   /* gfx_sprite_render_log_error (FUN_004afab9) */
 #include "gfx_dispatch.h"
 #include "gfx_sprite.h"
 #include "gfx_line.h"
@@ -31,50 +33,73 @@ static uint32_t rd32(const uint8_t *p)
          | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
-/* Port of FUN_00409e09 @ 0x409e09. */
+/* Port of FUN_00409e09 @ 0x409e09 — retail's shape (rhost shadow): the
+ * glyph cursor is saved in DAT_00591508 / DAT_00591504 and put back on
+ * exit; every tile writes the last-glyph index, the cursor and the whole
+ * descriptor (incl. the flag bytes) before the src_offset gate; a bad
+ * offset logs (FUN_004afab9: 0x4d22a4 / 0x4d22c0, tile index + 1) and
+ * latches error 1, returning WITHOUT the restore.  Retail bakes in the
+ * chrome sheet DAT_0057d3d0; the caller passes the bound blob. */
 void engine_hud_menubar_tile_strip(const uint8_t *chrome_sheet,
                                    int x, int y, int cols, int rows)
 {
     if (!chrome_sheet) {
-        return;
+        return;                                  /* drop-in guard: retail's sheet is resident */
     }
 
-    /* Retail snapshots the running cursor (DAT_00591508/504 ← 524/528)
-     * and restores it on exit; the menu-bar caller rewrites the cursor
-     * before every later draw, so the save/restore is inert here. */
+    g_gfx_saved_cursor_x = g_gfx_cursor_x;
+    g_gfx_saved_cursor_y = g_gfx_cursor_y;
     for (int row = 0; row < rows; row++) {
         for (int col = 0; col < cols; col++) {
-            int idx = (col & 7) + 0xc4;          /* parchment tiles 0xc4..0xcb */
-            const uint8_t *d = DESC(chrome_sheet, idx);
-            int width  = (int)rd16(d + 0);       /* DAT_005c9258 */
-            int hshort = (int)rd16(d + 2);       /* DAT_005aeb70 */
-            int offset = (int)rd32(d + 4);       /* DAT_0058fe04 */
-            int rowc   = d[0xd];                 /* DAT_005bb478 (glyph_h) */
+            int k = col % 8;                     /* parchment tiles 0xc4..0xcb */
+            g_gfx_last_glyph_index = k + 0xc4;
+            g_gfx_cursor_x = col * 0x18 + x;
+            g_gfx_cursor_y = row * 0x18 + y;
+            const uint8_t *d = DESC(chrome_sheet, g_gfx_last_glyph_index);
+            g_gfx_glyph_w            = (int16_t)rd16(d + 0);
+            g_gfx_glyph_height_short = (int16_t)rd16(d + 2);
+            g_gfx_glyph_offset       = (int32_t)rd32(d + 4);
+            g_gfx_flag_a             = d[0xc];
+            g_gfx_glyph_h            = d[0xd];
+            g_gfx_flag_b             = d[0xe];
 
-            if (offset > 310000 || offset < 1) {
-                return;                          /* retail logs + latches, aborts */
+            if (g_gfx_glyph_offset > 310000) {
+                gfx_sprite_render_log_error(0x4d22a4, k + 0xc5);
+                g_gfx_last_error = 1;
+                return;
             }
-
-            gfx_dispatch_set_last_glyph_index(idx);        /* DAT_005c9288 */
-            gfx_glyph_set_dest(col * 0x18 + x, row * 0x18 + y);
-            gfx_glyph_set_glyph(offset, width, rowc);
-            gfx_dispatch_set_glyph_height_short(hshort);
+            if (g_gfx_glyph_offset < 1) {
+                gfx_sprite_render_log_error(0x4d22c0, k + 0xc5);
+                g_gfx_last_error = 1;
+                return;
+            }
             gfx_sprite_blit_24x24_raw(chrome_sheet);
         }
     }
+    g_gfx_cursor_x = g_gfx_saved_cursor_x;
+    g_gfx_cursor_y = g_gfx_saved_cursor_y;
 }
 
-/* Port of FUN_0040c5b0 @ 0x40c5b0. */
+/* Port of FUN_0040c5b0 @ 0x40c5b0 — retail's shape (rhost shadow): it
+ * raises the two redraw latches DAT_004eb260 / DAT_004e65f8 (after the
+ * empty FUN_004b1de0), measures the hovered label on the SHARED
+ * measurer cache (DAT_005c9288 / DAT_0058fd88), stages only the
+ * highlight's width / height (DAT_005c9258 / DAT_005aeb70 — not the
+ * offset or row count), and tails with the dirty mark FUN_004527a6
+ * (item0.x - 2, the last item's y - 1, 20 × 2 tiles, force 2) when a
+ * dirty state is given.  `hovered` is retail's DAT_00522cb4. */
 void engine_hud_menubar_labels(int16_t *table, int count, int hovered,
                                const uint8_t *font,
                                const uint8_t *glyph_table,
                                const unsigned char *glyph_metrics,
-                               localization_state_t *loc, uint8_t color)
+                               localization_state_t *loc, uint8_t color,
+                               engine_dirty_rect_state_t *dirty)
 {
-    /* FUN_004b1de0() is empty; the DAT_004eb260 / DAT_004e65f8 redraw
-     * latches it sets have no consumer in the offscreen compose path. */
+    g_gfx_menu_redraw_a = 1;                     /* DAT_004eb260 */
+    g_gfx_menu_redraw_b = 1;                     /* DAT_004e65f8 */
     int16_t *rec = table;
-    int y = rec[2];
+    int x0 = rec[0];
+    int y = 0;
 
     gfx_text_set_line_x_acc(rec[0]);             /* DAT_005cd404 = item0.x */
 
@@ -91,15 +116,18 @@ void engine_hud_menubar_labels(int16_t *table, int count, int hovered,
 
         if (i == hovered) {
             /* Highlight box sized from the measured label width. */
-            font_metrics_state_t fm;
-            fm.char_glyph_index = glyph_metrics;
+            font_metrics_state_t fm = { 0 };
+            fm.char_glyph_index  = glyph_metrics;
+            fm.last_glyph_index  = g_gfx_last_glyph_index;
+            fm.last_glyph_offset = g_gfx_last_glyph_offset;
             int w = font_metrics_buffer_width_bounded(
                         &fm, loc->blob + loc->walker_offset, font);
-            int glyph_w = ((w + 4) >> 4) + 2;    /* 16-px column groups + 2 */
+            g_gfx_last_glyph_index  = fm.last_glyph_index;
+            g_gfx_last_glyph_offset = fm.last_glyph_offset;
 
             gfx_text_set_no_shadow(1);           /* DAT_005aea40 = 1 */
-            gfx_glyph_set_glyph(0, glyph_w, 0);  /* stage glyph_w (DAT_005c9258) */
-            gfx_dispatch_set_glyph_height_short(0x12);
+            g_gfx_glyph_w = (int16_t)((w + 4) / 16 + 2);   /* 16-px column groups + 2 */
+            g_gfx_glyph_height_short = 0x12;
             gfx_sprite_fill_block(x - 2, y - 3, 0x3f);
             gfx_wrap_localized_line(loc, textid, 0, x, y, font, glyph_table, 0x18);
             gfx_text_set_no_shadow(0);
@@ -112,10 +140,9 @@ void engine_hud_menubar_labels(int16_t *table, int count, int hovered,
         rec += 8;
     }
 
-    (void)y;
-    /* Retail tails with FUN_004527a6(item0.x-2, y-1, 0x14, 2, 2) — a
-     * dirty-rect mark; the offscreen compose path tracks dirty regions at
-     * the shim level, so it is elided here. */
+    if (dirty) {
+        engine_dirty_rect_mark_box_tiled(dirty, x0 - 2, y - 1, 0x14, 2, 2);   /* FUN_004527a6 */
+    }
 }
 
 void engine_hud_menubar_render_chrome(const uint8_t *chrome_sheet,
@@ -132,7 +159,7 @@ void engine_hud_menubar_render_chrome(const uint8_t *chrome_sheet,
 
     /* The File/Options/Help labels (no item hovered in the static frame). */
     engine_hud_menubar_labels(menu_table, 3, 0,
-                              menu_font, glyph_table, glyph_metrics, loc, 0x3f);
+                              menu_font, glyph_table, glyph_metrics, loc, 0x3f, NULL);
 }
 
 /* Per-realm record layout inside g_player_strategic_352 (retail

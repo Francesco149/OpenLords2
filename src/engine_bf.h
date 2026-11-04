@@ -67,6 +67,10 @@
 void bf_rng_step(void);   /* FUN_00404a46 on retail's globals (engine_rng_step) */
 void bf_sleep(uint32_t ms);                        /* Sleep, as retail calls it (rhost: its virtual clock) */
 void bf_bind_sleep_fn(void (*fn)(uint32_t ms));
+int  bf_tile_refresh_path(void);                    /* 0x471c1f (engine_tile) on retail's arrays */
+int  bf_tile_refresh_stage(void);                   /* 0x471d30 */
+int  bf_tile_push_footprint(int off);               /* 0x48ee46 */
+int  bf_tile_neighbor_flags(int col, int row, int orient);   /* 0x4921e5 */
 
 /* the partitions (tools/bf/parts.py) */
 #include "engine_bf_move.h"

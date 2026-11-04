@@ -4,6 +4,9 @@
  *   FUN_0040946d @ 0x40946d → gfx_panel_draw_border
  *   FUN_004097c5 @ 0x4097c5 → gfx_panel_fill_interior
  *   FUN_00409346 @ 0x409346 → gfx_panel_draw
+ *   FUN_00409934 @ 0x409934 → gfx_panel_draw_border_chrome   (chrome twins:
+ *   FUN_00409c93 @ 0x409c93 → gfx_panel_fill_interior_chrome  sheet DAT_0057d3d0)
+ *   FUN_004093e0 @ 0x4093e0 → gfx_panel_draw_bevel
  *
  * All take the panel sprite-sheet `asset` (retail DAT_004eabec etc) and
  * drive the shared gfx_glyph/gfx_dispatch sprite state; bind the canvas
@@ -33,6 +36,14 @@ void gfx_panel_draw(const uint8_t *asset, int x, int y, int cols, int rows);
 /* Raised "bevel" frame (FUN_004093e0): like gfx_panel_draw but the
  * border is mode 1 (+0xcc index shift → the chrome style block).  Used
  * with the panels.pl8 chrome sheet for button caps + option tabs. */
-void gfx_panel_draw_bevel(const uint8_t *asset, int x, int y, int cols, int rows);
+void gfx_panel_draw_bevel(const uint8_t *chrome, int x, int y, int cols, int rows);
+
+/* The chrome twins (FUN_00409934 / FUN_00409c93): the same bodies as
+ * draw_border / fill_interior, for the chrome sheet (retail bakes in
+ * DAT_0057d3d0), with their own error messages. */
+void gfx_panel_draw_border_chrome(const uint8_t *chrome, int mode,
+                                  int x, int y, int cols, int rows);
+void gfx_panel_fill_interior_chrome(const uint8_t *chrome, int x, int y,
+                                    int cols, int rows);
 
 #endif /* OPENLORDS2_GFX_PANEL_H */

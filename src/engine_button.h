@@ -60,6 +60,11 @@ typedef struct engine_button_rec {
  * A button whose chosen sheet is NULL is skipped (retail assumes both
  * are bound when the screen is active; the drop-in only binds the
  * sheet a screen actually needs). */
+/* FUN_00452775 — the pressed button's escalating dirty mark (x, y, w_tiles, h_tiles, force); unported.  Unbound
+ * (NULL, the default), a pressed button takes the plain FUN_004527a6 mark. */
+typedef void (*engine_button_pressed_mark_fn)(int x, int y, int w_tiles, int h_tiles, int force);
+void engine_button_bind_pressed_mark(engine_button_pressed_mark_fn fn);
+
 void engine_button_render_list(int origin_x, int origin_y,
                                const engine_button_rec_t *recs, int count,
                                const uint8_t *misc_sheet,

@@ -475,25 +475,24 @@ int bf_47dfe0(int off)
     BCELL8(off, 0x5440e4) = 0;
     BCELL8(off, 0x5440e2) &= 0xe3;
     BCELL8(off, 0x5440e2) |= 4;
-    /* TODO(bf-link): engine_tile_push_footprint_record (0x48ee46) — engine_tile.c is not linked in rhost */
     if (BCELL8(off, 0x543e67) == 5) {
         s_slot_0053e990++;
-        engine_retail_call(0x48ee46u, 1, (uint32_t)(off - 640));
+        bf_tile_push_footprint((off - 640));
         s_slot_0056d648++;
     }
     if (BCELL8(off, 0x5440ef) == 5) {
         s_slot_0053e990++;
-        engine_retail_call(0x48ee46u, 1, (uint32_t)(off + 8));
+        bf_tile_push_footprint((off + 8));
         s_slot_0056d648++;
     }
     if (BCELL8(off, 0x544367) == 5) {
         s_slot_0053e990++;
-        engine_retail_call(0x48ee46u, 1, (uint32_t)(off + 640));
+        bf_tile_push_footprint((off + 640));
         s_slot_0056d648++;
     }
     if (BCELL8(off, 0x5440df) == 5) {
         s_slot_0053e990++;
-        engine_retail_call(0x48ee46u, 1, (uint32_t)(off - 8));
+        bf_tile_push_footprint((off - 8));
         s_slot_0056d648++;
     }
     g_cell_cursor_row = 0;
@@ -512,9 +511,8 @@ int bf_47dfe0(int off)
                 BCELL8(g_bf_5533cc, 0x5440e3) = (uint8_t)(g_bf_57c8a4 + g_bf_568200);
         }
     }
-    /* TODO(bf-link): engine_tile_refresh_path_scratch (0x471c1f) / engine_tile_refresh_stage_scratch (0x471d30) */
-    engine_retail_call(0x471c1fu, 0);
-    return (int)engine_retail_call(0x471d30u, 0);
+    bf_tile_refresh_path();
+    return (int)bf_tile_refresh_stage();
 }
 
 /* ------------------------------------------------------------------------------------------------ the strike */

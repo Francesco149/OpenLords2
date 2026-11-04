@@ -8,6 +8,7 @@
  */
 
 #include "gfx_wrap.h"
+#include "gfx_globals.h"
 
 #include "font_metrics.h"
 #include "gfx_dispatch.h"
@@ -17,25 +18,18 @@
 #include <string.h>
 
 /* ──────────────────────────────────────────────────────────────────
- * Module-private state.  Each block is grouped by which retail DAT_*
- * symbol it shadows.  All zero-initialized at startup — matches the
- * BSS layout retail relies on.
+ * State: retail globals (gfx_globals.h) — the max line x, and the two
+ * intermediate line buffers DAT_005c92a0 (2000 bytes, used by
+ * gfx_wrap_localized) and DAT_005aea60 (200 bytes, used by
+ * gfx_wrap_buffer).  Not re-entrant.  The tall-font marker is the
+ * port's binding: retail compares the font argument against the
+ * address of its tall font blob (&DAT_005b2fa0).
  * ────────────────────────────────────────────────────────────────── */
 
-static int            g_max_line_x;          /* DAT_005aeb88 */
-static const uint8_t *g_tall_font_marker;    /* DAT_005b2fa0 */
+static const uint8_t *g_tall_font_marker;    /* == &DAT_005b2fa0 in retail */
 
-/* Two intermediate line buffers — direct mirrors of retail's
- * DAT_005c92a0 (2000 bytes, used by gfx_wrap_localized) and
- * DAT_005aea60 (200 bytes, used by gfx_wrap_buffer).  Engine is
- * single-threaded; these aren't re-entrant. */
-#define GFX_WRAP_LARGE_LINE_BUF_LEN  2000
-#define GFX_WRAP_SMALL_LINE_BUF_LEN   200
-static uint8_t g_large_line_buf[GFX_WRAP_LARGE_LINE_BUF_LEN];
-static uint8_t g_small_line_buf[GFX_WRAP_SMALL_LINE_BUF_LEN];
-
-int  gfx_wrap_max_line_x(void)             { return g_max_line_x; }
-void gfx_wrap_set_max_line_x(int v)        { g_max_line_x = v; }
+int  gfx_wrap_max_line_x(void)             { return g_gfx_max_line_x; }
+void gfx_wrap_set_max_line_x(int v)        { g_gfx_max_line_x = v; }
 void gfx_wrap_set_tall_font_marker(const uint8_t *m) { g_tall_font_marker = m; }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -74,8 +68,8 @@ static void arm_line(void)
 static void track_max_line_x(void)
 {
     int line_x = gfx_text_line_x_acc();
-    if (g_max_line_x < line_x) {
-        g_max_line_x = line_x;
+    if (g_gfx_max_line_x < line_x) {
+        g_gfx_max_line_x = line_x;
     }
 }
 
@@ -83,6 +77,23 @@ static void track_max_line_x(void)
  * line_y_acc by the per-line Y step.  Retail does both writes
  * inline; pulling them into one helper keeps the wrap bodies
  * readable. */
+/* Retail's word measurer (FUN_004036f9) and the char measurer it calls
+ * (FUN_004015b9) cache into SHARED globals — the consumed-byte count
+ * DAT_005c9a7c, the last glyph index DAT_005c9288 (the dispatcher's
+ * too) and its offset DAT_0058fd88 — so each measurement runs on them
+ * (rhost shadow; render-under-rhost.md). */
+static int word_width(font_metrics_state_t *m, const uint8_t *p, const uint8_t *font)
+{
+    m->last_glyph_index  = g_gfx_last_glyph_index;
+    m->last_glyph_offset = g_gfx_last_glyph_offset;
+    m->chars_consumed    = g_gfx_word_chars;
+    int w = font_metrics_word_width(m, p, font);
+    g_gfx_last_glyph_index  = m->last_glyph_index;
+    g_gfx_last_glyph_offset = m->last_glyph_offset;
+    g_gfx_word_chars        = m->chars_consumed;
+    return w;
+}
+
 static int advance_y(int local_y, const uint8_t *font_base)
 {
     int step = line_height_for(font_base);
@@ -227,13 +238,13 @@ void gfx_wrap_buffer(const uint8_t *buf,
     while (continue_outer && (++safety < 100)) {
         /* Zero the 200-byte intermediate buffer.  Retail walks
          * 0..199 unconditionally. */
-        memset(g_small_line_buf, 0, GFX_WRAP_SMALL_LINE_BUF_LEN);
+        memset(g_gfx_wrap_small_buf, 0, GFX_WRAP_SMALL_LINE_BUF_LEN);
 
         int line_pixel = 0;
         int line_cursor = 0;
 
         while (continue_outer && line_pixel < line_width) {
-            int word_w = font_metrics_word_width(&mstate, buf, font_base);
+            int word_w = word_width(&mstate, buf, font_base);
             line_pixel += word_w;
 
             if (line_pixel < line_width) {
@@ -241,7 +252,7 @@ void gfx_wrap_buffer(const uint8_t *buf,
                 for (int i = 0; i < mstate.chars_consumed; i++) {
                     uint8_t b = *buf++;
                     if (line_cursor < GFX_WRAP_SMALL_LINE_BUF_LEN) {
-                        g_small_line_buf[line_cursor] = b;
+                        g_gfx_wrap_small_buf[line_cursor] = b;
                     }
                     line_cursor++;
                 }
@@ -260,7 +271,7 @@ void gfx_wrap_buffer(const uint8_t *buf,
 
         /* Per-line arm + render. */
         arm_line();
-        gfx_text_render_line(g_small_line_buf, cursor_x, local_y,
+        gfx_text_render_line(g_gfx_wrap_small_buf, cursor_x, local_y,
                              font_base, char_glyph_table, color);
 
         track_max_line_x();
@@ -290,7 +301,7 @@ void gfx_wrap_localized(localization_state_t *loc,
     /* Top-of-call: reset BOTH the wrap module's max_line_x AND the
      * dispatcher's alt-clip flag.  Retail emits the writes in this
      * order. */
-    g_max_line_x = 0;
+    g_gfx_max_line_x = 0;
     gfx_dispatch_set_alt_clip_enabled(0);
 
     const uint8_t *walker = seek_localized(loc, loc_index, skip_strings);
@@ -312,7 +323,7 @@ void gfx_wrap_localized(localization_state_t *loc,
 
     while (continue_outer && (++safety < 100)) {
         /* Zero the 2000-byte intermediate buffer. */
-        memset(g_large_line_buf, 0, GFX_WRAP_LARGE_LINE_BUF_LEN);
+        memset(g_gfx_wrap_large_buf, 0, GFX_WRAP_LARGE_LINE_BUF_LEN);
 
         int line_pixel  = 0;
         int line_cursor = 0;
@@ -323,7 +334,7 @@ void gfx_wrap_localized(localization_state_t *loc,
         int leading_skip = 1;
 
         while (continue_outer && line_pixel < active_width) {
-            int word_w = font_metrics_word_width(&mstate, walker, font_base);
+            int word_w = word_width(&mstate, walker, font_base);
             line_pixel += word_w;
 
             if (line_pixel < active_width) {
@@ -331,7 +342,7 @@ void gfx_wrap_localized(localization_state_t *loc,
                     uint8_t b = *walker++;
                     if (!leading_skip || b != 0x20) {
                         if (line_cursor < GFX_WRAP_LARGE_LINE_BUF_LEN) {
-                            g_large_line_buf[line_cursor] = b;
+                            g_gfx_wrap_large_buf[line_cursor] = b;
                         }
                         line_cursor++;
                         leading_skip = 0;
@@ -346,7 +357,7 @@ void gfx_wrap_localized(localization_state_t *loc,
         }
 
         arm_line();
-        gfx_text_render_line(g_large_line_buf, active_x, local_y,
+        gfx_text_render_line(g_gfx_wrap_large_buf, active_x, local_y,
                              font_base, char_glyph_table, color);
 
         track_max_line_x();

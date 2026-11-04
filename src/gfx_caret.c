@@ -6,16 +6,16 @@
  */
 
 #include "gfx_caret.h"
+#include "gfx_globals.h"
 
 #include "gfx_text.h"   /* gfx_text_first_pos_x / _y — the caret anchor */
 #include "gfx_line.h"   /* gfx_line_fill_rect (FUN_0040437d)            */
 
 /* DAT_004e5998 — blink counter.  Advances by one per render; wraps
  * past 0x10 to 0; caret visible while > 8. */
-static int g_caret_blink;
 
-void gfx_caret_reset(void)  { g_caret_blink = 0; }
-int  gfx_caret_blink(void)  { return g_caret_blink; }
+void gfx_caret_reset(void)  { g_gfx_caret_blink = 0; }
+int  gfx_caret_blink(void)  { return g_gfx_caret_blink; }
 
 void gfx_caret_render(const text_input_state_t *editor,
                       font_metrics_state_t *fm,
@@ -23,9 +23,9 @@ void gfx_caret_render(const text_input_state_t *editor,
                       uint8_t color)
 {
     /* Blink advance + wrap (DAT_004e5998). */
-    g_caret_blink++;
-    if (g_caret_blink > 0x10) {
-        g_caret_blink = 0;
+    g_gfx_caret_blink++;
+    if (g_gfx_caret_blink > 0x10) {
+        g_gfx_caret_blink = 0;
     }
 
     int caret_y = gfx_text_first_pos_y();   /* DAT_0058fd54 */
@@ -40,7 +40,7 @@ void gfx_caret_render(const text_input_state_t *editor,
     unsigned char cursor_char = editor->buf[editor->cursor];
     int char_w = font_metrics_char_width(fm, cursor_char, font);
 
-    if (g_caret_blink <= 8) {
+    if (g_gfx_caret_blink <= 8) {
         return;     /* off-phase — measured but not drawn */
     }
 
