@@ -960,8 +960,8 @@ static void movie_text_box(int x, int y, int w, int h)   /* TODO(rl-extern): 0x4
 static void mp_session_end(void) { engine_retail_call(0x4b743bu, 0); }   /* TODO(rl-extern): 0x4b743b */
 static void map_build_cells(int a) { engine_retail_call(0x4298c1u, 1, (uint32_t)a); }   /* TODO(rl-link): engine_map_init_build_cells */
 static void map_set_camera(int a) { rl_451fcc(a); }   /* 0x451fcc (rl_ctl) */
-static void classify_feature_tiles(void) { engine_retail_call(0x46dbf5u, 0); }   /* TODO(rl-link): engine_territory_classify_feature_tiles (the linked port takes the rng) */
-static void randomise_special_tiles(void) { engine_retail_call(0x46dd34u, 0); }   /* TODO(rl-link): engine_territory_randomise_special_tiles */
+static void classify_feature_tiles(void) { rl_46dbf5(); }
+static void randomise_special_tiles(void) { rl_46dd34(); }
 
 /* Port of FUN_0041608b (637 B) — the workforce category tooltip (screen 0xc): every 500th frame (DAT_0053ef54
  * counts down) when the hovered category DAT_0056d8ac changed (DAT_0055cd68 = the shown one): the old box's 32x64

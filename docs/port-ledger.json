@@ -12835,7 +12835,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_state.c"
+    "src/engine_army_state.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -12845,7 +12846,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_state.c"
+    "src/engine_army_state.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -12855,7 +12857,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_state.c"
+    "src/engine_army_state.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -12995,7 +12998,8 @@
     "src/engine_army_move.c",
     "src/engine_combat.c",
     "src/engine_map_query.c",
-    "src/engine_map_query.h"
+    "src/engine_map_query.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13005,7 +13009,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13015,7 +13020,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13026,7 +13032,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13042,7 +13049,8 @@
     "src/engine_title_render.c",
     "src/game_init.c",
     "src/game_init.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13053,7 +13061,8 @@
    "status": "tested",
    "src": [
     "src/engine_map_init.c",
-    "src/engine_map_init.h"
+    "src/engine_map_init.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13064,7 +13073,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13075,7 +13085,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13086,7 +13097,8 @@
    "status": "tested",
    "src": [
     "src/engine_realm.c",
-    "src/engine_realm.h"
+    "src/engine_realm.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13109,7 +13121,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13120,7 +13133,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13131,7 +13145,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13161,7 +13176,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13172,7 +13188,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13220,7 +13237,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13232,7 +13250,8 @@
    "src": [
     "src/engine_territory.c",
     "src/engine_territory.h",
-    "src/game_init.c"
+    "src/game_init.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13243,7 +13262,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13254,7 +13274,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13266,7 +13287,8 @@
    "src": [
     "src/engine_army_move.c",
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13293,7 +13315,8 @@
    "status": "tested",
    "src": [
     "src/engine_realm.c",
-    "src/engine_realm.h"
+    "src/engine_realm.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13312,7 +13335,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13323,7 +13347,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13334,7 +13359,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13345,7 +13371,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13364,7 +13391,8 @@
    "status": "tested",
    "src": [
     "src/engine_realm.c",
-    "src/engine_realm.h"
+    "src/engine_realm.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13399,7 +13427,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13436,7 +13465,8 @@
     "src/engine_minimap.c",
     "src/engine_minimap.h",
     "src/game_init.c",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13513,7 +13543,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13564,7 +13595,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13575,7 +13607,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13586,7 +13619,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13625,7 +13659,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13636,7 +13671,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13700,7 +13736,8 @@
     "src/engine_map_query.c",
     "src/engine_map_query.h",
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13725,7 +13762,8 @@
    "status": "tested",
    "src": [
     "src/engine_map_query.c",
-    "src/engine_map_query.h"
+    "src/engine_map_query.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13768,7 +13806,8 @@
     "src/engine_map_query.c",
     "src/engine_map_query.h",
     "src/engine_terrain_info.c",
-    "src/engine_terrain_info.h"
+    "src/engine_terrain_info.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13781,7 +13820,8 @@
     "src/engine_army_move.c",
     "src/engine_realm_events.h",
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13792,7 +13832,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13804,7 +13845,8 @@
    "src": [
     "src/engine_territory.c",
     "src/engine_territory.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13817,7 +13859,8 @@
     "src/engine_territory.c",
     "src/engine_territory.h",
     "src/engine_territory_globals.c",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13829,7 +13872,8 @@
    "src": [
     "src/engine_territory.c",
     "src/engine_territory.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13840,7 +13884,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13851,7 +13896,8 @@
    "status": "tested",
    "src": [
     "src/engine_territory.c",
-    "src/engine_territory.h"
+    "src/engine_territory.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13863,7 +13909,8 @@
    "src": [
     "src/engine_territory.c",
     "src/engine_territory.h",
-    "src/engine_territory_globals.c"
+    "src/engine_territory_globals.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13876,7 +13923,8 @@
     "src/engine_combat.c",
     "src/engine_territory.c",
     "src/engine_territory.h",
-    "src/game_init.c"
+    "src/game_init.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13901,7 +13949,8 @@
     "src/engine_combat.c",
     "src/engine_territory.c",
     "src/engine_territory.h",
-    "src/game_init.c"
+    "src/game_init.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13952,7 +14001,8 @@
    "status": "tested",
    "src": [
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13963,7 +14013,8 @@
    "status": "tested",
    "src": [
     "src/engine_combat.c",
-    "src/game_init.c"
+    "src/game_init.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13988,7 +14039,8 @@
     "src/engine_realm_upkeep.c",
     "src/engine_territory.c",
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -13999,7 +14051,8 @@
    "status": "tested",
    "src": [
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14139,7 +14192,8 @@
    "status": "tested",
    "src": [
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14170,7 +14224,8 @@
    "status": "tested",
    "src": [
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14190,7 +14245,8 @@
    "src": [
     "src/engine_map_init.c",
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14232,7 +14288,8 @@
    "src": [
     "src/engine_army_select.c",
     "src/engine_army_select.h",
-    "src/engine_territory.c"
+    "src/engine_territory.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14245,7 +14302,8 @@
     "src/engine_army_ai.c",
     "src/engine_army_move.c",
     "src/engine_path_field.c",
-    "src/engine_path_field.h"
+    "src/engine_path_field.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14258,7 +14316,8 @@
     "src/engine.c",
     "src/engine_strat_cost.c",
     "src/engine_strat_cost.h",
-    "src/game_init.c"
+    "src/game_init.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14270,7 +14329,8 @@
    "src": [
     "src/engine_army_ai.c",
     "src/engine_path_field.c",
-    "src/engine_path_field.h"
+    "src/engine_path_field.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14280,7 +14340,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_move_confirm.c"
+    "src/engine_army_move_confirm.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14292,7 +14353,8 @@
    "src": [
     "src/engine_army_ai.c",
     "src/engine_path_field.c",
-    "src/engine_path_field.h"
+    "src/engine_path_field.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14303,7 +14365,8 @@
    "status": "tested",
    "src": [
     "src/engine_path_field.c",
-    "src/engine_path_field.h"
+    "src/engine_path_field.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14397,7 +14460,8 @@
    "src": [
     "src/engine_path.c",
     "src/engine_path.h",
-    "src/engine_path_field.h"
+    "src/engine_path_field.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14407,7 +14471,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_path.h"
+    "src/engine_path.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14417,7 +14482,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_path.h"
+    "src/engine_path.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14465,7 +14531,8 @@
    "src": [
     "src/engine_event_queue.c",
     "src/engine_event_queue.h",
-    "src/game_init.c"
+    "src/game_init.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14476,7 +14543,8 @@
    "status": "tested",
    "src": [
     "src/engine_event_queue.c",
-    "src/engine_event_queue.h"
+    "src/engine_event_queue.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14488,7 +14556,8 @@
    "src": [
     "src/engine.c",
     "src/engine_event_queue.c",
-    "src/engine_event_queue.h"
+    "src/engine_event_queue.h",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14509,7 +14578,8 @@
     "src/engine_realm.c",
     "src/engine_realm_upkeep.c",
     "src/engine_realm_upkeep.h",
-    "src/engine_sendsupplies_model.c"
+    "src/engine_sendsupplies_model.c",
+    "src/rl_terr.c"
    ]
   },
   {
@@ -14530,7 +14600,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/rl_terr.c"
    ]
   },
   {

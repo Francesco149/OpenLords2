@@ -56,11 +56,7 @@ extern uint8_t g_rl_4e5a00[4];       /* hWndMain (rl_misc_globals.h) */
 
 /* ---------------------------------------------------------------- seams (callees outside the partition) */
 /* ported, not on retail's layout / not linked in rhost — TODO(rl-link) */
-static int evq_post(int a, int b, int code, int d, int e, int f, int g, int h)   /* engine_event_queue_post 0x472bc5 (a port struct) */
-{
-    return (int)engine_retail_call(0x472bc5u, 8, (uint32_t)a, (uint32_t)b, (uint32_t)code, (uint32_t)d, (uint32_t)e,
-                                   (uint32_t)f, (uint32_t)g, (uint32_t)h);
-}
+static int evq_post(int a, int b, int code, int d, int e, int f, int g, int h) { return rl_472bc5(a, b, code, d, e, f, g, h); }
 static void editor_open(const void *buf, int max, int w, int flag)   /* text_input_init 0x402009 (a port struct) */
 { engine_retail_call(0x402009u, 4, (uint32_t)(uintptr_t)buf, (uint32_t)max, (uint32_t)w, (uint32_t)flag); }
 static void editor_length(void) { engine_retail_call(0x401f49u, 0); }   /* text_input_recompute_length 0x401f49 */

@@ -49,3 +49,6 @@ uint8_t g_rl_55cd34[4] __attribute__((aligned(4)));
 uint8_t g_rl_5653e8[4] __attribute__((aligned(4)));
 uint8_t g_rl_56899c[4] __attribute__((aligned(4)));
 uint8_t g_rl_4eafac[4] __attribute__((aligned(4)));
+uint8_t g_rl_4d6a78[32] __attribute__((aligned(4))) = {0,0,0,0,1,0,0,0,2,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,2,0,0,0,1,0,0,0};
+uint8_t g_rl_53e910[4] __attribute__((aligned(4)));
+uint8_t g_rl_5533e8[4] __attribute__((aligned(4)));
