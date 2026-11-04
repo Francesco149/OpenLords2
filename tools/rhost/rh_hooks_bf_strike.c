@@ -11,7 +11,8 @@ extern hook_t RH_HOOKS_BF_STRIKE[];
 /* row indices (must follow the table's order) */
 enum {
     X_bf_426120, X_bf_4262cf, X_bf_46eb78, X_bf_46efbe, X_bf_46e767, X_bf_493cb9, X_bf_493b61, X_bf_494075,
-    X_bf_494125, X_bf_4941c5, X_bf_494265, X_bf_46f525, X_bf_4956cc,
+    X_bf_494125, X_bf_4941c5, X_bf_494265, X_bf_46f525, X_bf_4956cc, X_bf_496f72, X_bf_485b47, X_bf_485675,
+    X_bf_485861, X_bf_48551d, X_bf_47da54, X_bf_47dfe0, X_bf_492c8b, X_bf_483337,
 };
 
 HOOK_V(bf_426120, 1, bf_426120(I(0)))              /* callers ignore EAX (FUN_004262cf passes it on: ignored too) */
@@ -28,6 +29,15 @@ HOOK_V(bf_494265, 0, bf_494265())
 /* the facing is AL; retail's EAX upper bytes are y0's (every path loads arg 2 into EAX before `mov al, N`) */
 HOOK_R(bf_46f525, 4, ((uint32_t)bf_46f525(I(0), I(1), I(2), I(3)) & 0xffu) | (a[1] & 0xffffff00u))
 HOOK_R(bf_4956cc, 3, bf_4956cc(I(0), I(1), I(2)))
+HOOK_R(bf_496f72, 4, bf_496f72(I(0), I(1), I(2), I(3)))
+HOOK_V(bf_485b47, 2, bf_485b47(I(0), I(1)))
+HOOK_V(bf_485675, 3, bf_485675(I(0), I(1), I(2)))
+HOOK_R(bf_485861, 2, bf_485861(I(0), I(1)))
+HOOK_V(bf_48551d, 2, bf_48551d(I(0), I(1)))
+HOOK_V(bf_47da54, 3, bf_47da54(I(0), I(1), I(2)))
+HOOK_V(bf_47dfe0, 1, bf_47dfe0(I(0)))
+HOOK_V(bf_492c8b, 0, bf_492c8b())
+HOOK_V(bf_483337, 0, bf_483337())                 /* FUN_004832ea passes EAX on; the state handlers drop it */
 
 hook_t RH_HOOKS_BF_STRIKE[] = {
     { "bf_426120", 0x426120u, (void *)w_bf_426120, 0, 0, 0, 0, "" },
@@ -43,5 +53,14 @@ hook_t RH_HOOKS_BF_STRIKE[] = {
     { "bf_494265", 0x494265u, (void *)w_bf_494265, 0, 0, 0, 0, "" },
     { "bf_46f525", 0x46f525u, (void *)w_bf_46f525, 0, 0, 0, 0, "" },
     { "bf_4956cc", 0x4956ccu, (void *)w_bf_4956cc, 0, 0, 0, 0, "" },
+    { "bf_496f72", 0x496f72u, (void *)w_bf_496f72, 0, 0, 0, 0, "" },
+    { "bf_485b47", 0x485b47u, (void *)w_bf_485b47, 0, 0, 0, 0, "" },
+    { "bf_485675", 0x485675u, (void *)w_bf_485675, 0, 0, 0, 0, "" },
+    { "bf_485861", 0x485861u, (void *)w_bf_485861, 0, 0, 0, 0, "" },
+    { "bf_48551d", 0x48551du, (void *)w_bf_48551d, 0, 0, 0, 0, "" },
+    { "bf_47da54", 0x47da54u, (void *)w_bf_47da54, 0, 0, 0, 0, "" },
+    { "bf_47dfe0", 0x47dfe0u, (void *)w_bf_47dfe0, 0, 0, 0, 0, "" },
+    { "bf_492c8b", 0x492c8bu, (void *)w_bf_492c8b, 0, 0, 0, 0, "" },
+    { "bf_483337", 0x483337u, (void *)w_bf_483337, 0, 0, 0, 0, "" },
 };
 const int RH_HOOKS_BF_STRIKE_N = sizeof RH_HOOKS_BF_STRIKE / sizeof *RH_HOOKS_BF_STRIKE;

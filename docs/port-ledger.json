@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 840,
-  "ported": 138,
-  "unported": 1469,
+  "ported": 143,
+  "unported": 1464,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 978,
-  "pct_touched": 40.0,
+  "touched": 983,
+  "pct_touched": 40.2,
   "pct_tested": 34.3,
   "bytes_total": 838629,
-  "bytes_touched": 403623,
-  "pct_bytes_touched": 48.1
+  "bytes_touched": 405343,
+  "pct_bytes_touched": 48.3
  },
  "orphan_refs": [
   "0x004148",
@@ -13543,7 +13543,6 @@
    "status": "tested",
    "src": [
     "src/engine_army_move.c",
-    "src/engine_bf_strike.c",
     "src/engine_path.c",
     "src/engine_path.h"
    ]
@@ -14379,8 +14378,10 @@
    "name": "FUN_0047da54",
    "size": 584,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x47dc9c",
@@ -14411,8 +14412,10 @@
    "name": "FUN_0047dfe0",
    "size": 508,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x47e1dc",
@@ -14970,8 +14973,10 @@
    "name": "FUN_0048551d",
    "size": 344,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x485675",
@@ -15006,8 +15011,10 @@
    "name": "FUN_00485b47",
    "size": 106,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x485bb1",
@@ -16156,8 +16163,10 @@
    "name": "FUN_00496f72",
    "size": 178,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_strike.c"
+   ]
   },
   {
    "va": "0x497024",
