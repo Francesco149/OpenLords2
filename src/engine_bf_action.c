@@ -853,8 +853,7 @@ int bf_49694f(int x, int y, int r)
             }
         }
     }
-    /* TODO(bf-link): engine_tile_refresh_path_scratch (engine_tile.c, not linked in rhost) */
-    engine_retail_call(0x471c1fu, 0);
+    bf_tile_refresh_path();
     return bf_471da6();
 }
 
@@ -927,8 +926,7 @@ int bf_47dd86(int off)
                 BCELL8(g_bf_5533cc, 0x5440e3) = (uint8_t)(g_bf_57c8a4 + g_bf_568200);
         }
     }
-    /* TODO(bf-link): engine_tile_refresh_path_scratch (engine_tile.c, not linked in rhost) */
-    return (int)engine_retail_call(0x471c1fu, 0);
+    return (int)bf_tile_refresh_path();
 }
 
 /* Port of FUN_004926fb (255 B) — a moat cell for unit `u` to fill: its destination +0x24 / +0x26 if that is one

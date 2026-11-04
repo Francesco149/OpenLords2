@@ -517,8 +517,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x470678 | FUN_00470678 | 326 | engine_army_move_confirm.c |
 | 0x4707be | FUN_004707be | 274 | engine_army_ai.c, engine_path_field.c, engine_path_field.h |
 | 0x4708d0 | FUN_004708d0 | 142 | engine_path_field.c, engine_path_field.h |
-| 0x471c1f | FUN_00471c1f | 273 | engine_tile.c, engine_tile.h |
-| 0x471d30 | FUN_00471d30 | 118 | engine_tile.c, engine_tile.h |
+| 0x471c1f | FUN_00471c1f | 273 | engine_bf_common.c, engine_tile.c, engine_tile.h |
+| 0x471d30 | FUN_00471d30 | 118 | engine_bf_common.c, engine_tile.c, engine_tile.h |
 | 0x472392 | FUN_00472392 | 715 | engine_path.c, engine_path.h, engine_path_field.h |
 | 0x47265d | FUN_0047265d | 536 | engine_path.h |
 | 0x472875 | FUN_00472875 | 151 | engine_path.h |
@@ -540,7 +540,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x477dfc | FUN_00477dfc | 1225 | engine_combat.c, engine_combat.h |
 | 0x478419 | FUN_00478419 | 177 | engine_combat.c, engine_combat.h |
 | 0x47ed34 | FUN_0047ed34 | 103 | engine.c, engine_camera.c, engine_camera.h |
-| 0x48ee46 | FUN_0048ee46 | 87 | engine_tile.c, engine_tile.h |
+| 0x48ee46 | FUN_0048ee46 | 87 | engine_bf_common.c, engine_tile.c, engine_tile.h |
 | 0x4917dd | FUN_004917dd | 599 | engine_tile.c, engine_tile.h, save.c |
 | 0x4921e5 | FUN_004921e5 | 451 | engine_tile.c, engine_tile.h |
 | 0x4976a1 | FUN_004976a1 | 472 | engine_load_pump.c, engine_load_pump.h, engine_map_init.c (+2) |

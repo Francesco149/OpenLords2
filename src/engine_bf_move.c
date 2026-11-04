@@ -495,8 +495,7 @@ int bf_491492(int u)
         return 0;
     BCELL8(dock, 0x5440e1) = 0;
     bf_46ebe4(u);
-    /* TODO(bf-link): engine_tile_set_footprint_neighbor_flags (engine_tile.c, not linked in rhost) */
-    engine_retail_call(0x4921e5u, 3, (uint32_t)x, (uint32_t)y, (uint32_t)d);
+    bf_tile_neighbor_flags(x, y, d);
     int t = 0;
     for (int j = y - 1; y + 1 >= j; j++)
         for (int k = x - 1; x + 1 >= k; k++) {
@@ -522,10 +521,9 @@ int bf_491492(int u)
         BCELL8(dock, 0x5440dc) = 2;   /* dock - 1 col */
     else if (d == 6)
         BCELL8(dock, 0x5440ec) = 2;   /* dock + 1 col */
-    /* TODO(bf-link): engine_tile_refresh_path_scratch / _stage_scratch / _push_footprint_record (engine_tile.c) */
-    engine_retail_call(0x471c1fu, 0);
-    engine_retail_call(0x471d30u, 0);
-    engine_retail_call(0x48ee46u, 1, (uint32_t)dock);
+    bf_tile_refresh_path();
+    bf_tile_refresh_stage();
+    bf_tile_push_footprint(dock);
     s_slot_0053e990 += 3;
     s_slot_00553fb0 += 4;
     bf_4262cf(17);

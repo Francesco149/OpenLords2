@@ -283,8 +283,8 @@ int bf_496b9f(void)
     s_slot_0052af9c = 1;
     s_slot_00553fb0 += 4;
     s_slot_0053e990 += 4;
-    engine_retail_call(0x471c1fu, 0);   /* TODO(bf-link): engine_tile_refresh_path_scratch (engine_tile, not linked) */
-    engine_retail_call(0x471d30u, 0);   /* TODO(bf-link): engine_tile_refresh_stage_scratch */
+    bf_tile_refresh_path();
+    bf_tile_refresh_stage();
     return 0;
 }
 

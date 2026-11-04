@@ -30,7 +30,7 @@ for f in engine_rng \
          engine_category_buckets engine_diplomacy engine_dirty_rect engine_event_queue engine_map_query engine_map_render \
          engine_math engine_path engine_path_field engine_ranking engine_realm_events engine_realm_upkeep engine_roster engine_territory \
          gfx_dispatch gfx_drawcap gfx_glyph gfx_paint gfx_sprite gfx_sprite_rle strutil \
-         engine_retail_call $(cd "$S" && ls engine_bf_*.c rl_*.c | grep -v '_globals\.c$' | sed 's/\.c$//') \
+         engine_retail_call engine_tile $(cd "$S" && ls engine_bf_*.c rl_*.c | grep -v '_globals\.c$' | sed 's/\.c$//') \
          gfx_line gfx_text gfx_text_label gfx_wrap gfx_sprite_render gfx_panel gfx_caret font_metrics localization engine_hud_menubar engine_button; do
     $CC $PORT_STD -O2 -fno-omit-frame-pointer -I"$S" -include "$H/rh_hostalloc.h" -DUNICODE=0 -D_UNICODE=0 -c -o "$B/$f.o" "$S/$f.c" &
     PIDS+=($!); PORT_OBJS+=("$B/$f.o")

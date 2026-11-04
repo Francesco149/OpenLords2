@@ -13643,6 +13643,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_bf_common.c",
     "src/engine_tile.c",
     "src/engine_tile.h"
    ]
@@ -13654,6 +13655,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_bf_common.c",
     "src/engine_tile.c",
     "src/engine_tile.h"
    ]
@@ -15993,6 +15995,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_bf_common.c",
     "src/engine_tile.c",
     "src/engine_tile.h"
    ]
