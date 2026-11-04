@@ -83,7 +83,7 @@ void engine_sendsupplies_refresh(const engine_sendsupplies_ctx_t *ctx)
     /* FUN_00409c93(0x50,0x100,0x14,5) — repaint the goods-table interior;
      * FUN_004527a6 (dirty-hotspot register) is UI-only, omitted. */
     if (ctx->chrome) {
-        gfx_panel_fill_interior(ctx->chrome, 0x50, 0x100, 0x14, 5);
+        gfx_panel_fill_interior_chrome(ctx->chrome, 0x50, 0x100, 0x14, 5);
     }
     /* FUN_00403deb(0x50,0x100,0x140,0x50) — the sunken table frame. */
     gfx_line_rect_bevel_dark_br(0x50, 0x100, 0x140, 0x50);

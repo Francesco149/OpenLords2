@@ -260,7 +260,7 @@ __attribute__((naked)) uint32_t rh_call_at(uint32_t va, uint32_t e0)
 #define RES_N 16   /* residue window: the 16 dwords below e0 */
 #define PUT_N 8    /* residue values one port call may put */
 typedef struct port_ctx {
-    hook_t *h; uint32_t e0; uint32_t a[8]; rh_port_fn port; uint32_t ret_r, ret_p;
+    hook_t *h; uint32_t e0; uint32_t a[10]; rh_port_fn port; uint32_t ret_r, ret_p;
     uint32_t res[RES_N]; int nput; int put_off[PUT_N]; uint32_t put_v[PUT_N]; int put_cmp[PUT_N];
     struct port_ctx *outer;
 } port_ctx_t;
@@ -298,7 +298,7 @@ uint32_t rh_port_run(hook_t *h, void *self, rh_port_fn port, int has_ret, uint32
 {
     if (h->wrapper != self) rh_fatal("rh_port: row %s is not its wrapper's — enum and table out of order", h->name);
     port_ctx_t x = { .h = h, .e0 = e0, .port = port };
-    memcpy(x.a, (const void *)(uintptr_t)(e0 + 4), 8 * 4);              /* retail may reuse its argument slots */
+    memcpy(x.a, (const void *)(uintptr_t)(e0 + 4), 10 * 4);             /* retail may reuse its argument slots */
     memcpy(x.res, (const void *)(uintptr_t)(e0 - 4 * RES_N), sizeof x.res);
     if (h->mode == H_REPLACE) {
         h->calls++; ctx_port(&x);
@@ -306,8 +306,9 @@ uint32_t rh_port_run(hook_t *h, void *self, rh_port_fn port, int has_ret, uint32
         return x.ret_p;
     }
     if (rh_in_shadow()) { ctx_retail(&x); return x.ret_r; }
+    if (!rh_hook_sample(h, G32(e0))) { ctx_retail(&x); return x.ret_r; }   /* RH_SH_SAMPLE rows: not this call */
     char why[400];
-    int r = rh_shadow_ex(h->name, ctx_retail, ctx_port, &x, why, sizeof why);   /* rolls the host layers too */
+    int r = rh_shadow_ex_f(h->name, ctx_retail, ctx_port, &x, why, sizeof why, h->flags);   /* rolls the host layers too */
     if (r >= 0) {   /* the return value and the residue the port models: retail's are the reference */
         size_t n = r ? strlen(why) : (size_t)snprintf(why, sizeof why, "%s:", h->name);
         if (has_ret && x.ret_r != x.ret_p && n < sizeof why) {

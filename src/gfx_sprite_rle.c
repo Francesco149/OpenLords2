@@ -115,7 +115,14 @@ void gfx_sprite_rle_blit(const uint8_t *sprite_blob)
                 src += 3; dst += 2; pixels -= 2;
                 break;
             case 0x03:
-                dst[0] = src[1]; dst[1] = src[2]; dst[2] = src[3];
+                /* Retail copies a 3-run as TWO words (`mov ax,[esi+1];
+                 * mov [edi],ax; mov ax,[esi+3]; mov [edi+2],ax`): 4 bytes,
+                 * so dst[3] gets src[4] — the NEXT opcode byte — before dst
+                 * advances by 3.  A following literal overwrites it; a
+                 * following skip (opcode 0x00) leaves a 0 pixel there, and a
+                 * 3-run that ends the row leaves the next row's opcode one
+                 * pixel past the row (rhost media shadow, f1321 endturn-2). */
+                dst[0] = src[1]; dst[1] = src[2]; dst[2] = src[3]; dst[3] = src[4];
                 src += 4; dst += 3; pixels -= 3;
                 break;
             case 0x04:

@@ -734,7 +734,7 @@ void engine_county_ration_slider_render(const engine_county_panels_ctx_t *ctx)
      * under the slider band (erases the previous knob position).  The
      * plain interior-tile fill, NOT a bevel frame. */
     if (ctx->chrome) {
-        gfx_panel_fill_interior(ctx->chrome, 0xdc, 0xd8, 8, 2);
+        gfx_panel_fill_interior_chrome(ctx->chrome, 0xdc, 0xd8, 8, 2);
     }
     /* Side arrows off the SYSTEM sheet (0x5bb540) at the FUN_0043a379
      * hit rects. */

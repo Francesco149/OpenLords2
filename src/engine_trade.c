@@ -199,7 +199,7 @@ static void trade_content(const engine_trade_ctx_t *ctx)
 
     /* The lower prompt box: parchment interior + bottom bevel. */
     if (ctx->chrome) {
-        gfx_panel_fill_interior(ctx->chrome, 0x50, 0xd0, 0x1d, 5);   /* FUN_00409c93 */
+        gfx_panel_fill_interior_chrome(ctx->chrome, 0x50, 0xd0, 0x1d, 5);   /* FUN_00409c93 */
     }
     gfx_line_rect_bevel_dark_br(0x50, 0xd0, 0x1d0, 0x4c);            /* FUN_00403deb */
 

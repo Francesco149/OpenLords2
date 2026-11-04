@@ -4,16 +4,16 @@
  "counts": {
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
-  "tested": 785,
+  "tested": 790,
   "ported": 366,
-  "unported": 1296,
+  "unported": 1291,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1151,
-  "pct_touched": 47.0,
-  "pct_tested": 32.1,
+  "touched": 1156,
+  "pct_touched": 47.2,
+  "pct_tested": 32.3,
   "bytes_total": 838629,
-  "bytes_touched": 507675,
-  "pct_bytes_touched": 60.5
+  "bytes_touched": 510577,
+  "pct_bytes_touched": 60.9
  },
  "orphan_refs": [
   "0x004148",
@@ -196,6 +196,7 @@
     "src/font_metrics.h",
     "src/gfx_caret.h",
     "src/gfx_glyph_table.h",
+    "src/gfx_wrap.c",
     "src/text_input.h"
    ]
   },
@@ -693,7 +694,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/font_metrics.h"
+    "src/font_metrics.h",
+    "src/gfx_wrap.c"
    ]
   },
   {
@@ -1379,6 +1381,8 @@
    "status": "tested",
    "src": [
     "src/engine_hud_menubar.h",
+    "src/gfx_globals.c",
+    "src/gfx_globals.h",
     "src/gfx_panel.c",
     "src/gfx_sprite_render.c",
     "src/gfx_sprite_render.h"
@@ -1506,8 +1510,11 @@
    "name": "FUN_00409934",
    "size": 863,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_panel.c",
+    "src/gfx_panel.h"
+   ]
   },
   {
    "va": "0x409c93",
@@ -1519,7 +1526,9 @@
     "src/engine_armory.c",
     "src/engine_county_panels.c",
     "src/engine_sendsupplies.c",
-    "src/engine_trade.c"
+    "src/engine_trade.c",
+    "src/gfx_panel.c",
+    "src/gfx_panel.h"
    ]
   },
   {
@@ -1849,7 +1858,8 @@
    "status": "tested",
    "src": [
     "src/engine_hud_menubar.c",
-    "src/engine_hud_menubar.h"
+    "src/engine_hud_menubar.h",
+    "src/gfx_globals.h"
    ]
   },
   {
@@ -4913,6 +4923,7 @@
    "src": [
     "src/gfx.c",
     "src/gfx.h",
+    "src/gfx_globals.h",
     "src/gfx_paint.h"
    ]
   },
@@ -11621,8 +11632,11 @@
    "name": "FUN_00452775",
    "size": 49,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_button.c",
+    "src/engine_button.h"
+   ]
   },
   {
    "va": "0x4527a6",
@@ -11639,6 +11653,7 @@
     "src/engine_diplomacy_action.c",
     "src/engine_dirty_rect.h",
     "src/engine_hud_menubar.c",
+    "src/engine_hud_menubar.h",
     "src/engine_hud_panel.h",
     "src/engine_sendsupplies.c",
     "src/engine_title_render.c",
@@ -19242,8 +19257,12 @@
    "name": "FUN_004afab9",
    "size": 897,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/engine_hud_menubar.c",
+    "src/gfx_panel.c",
+    "src/gfx_sprite_render.h"
+   ]
   },
   {
    "va": "0x4afe3a",
@@ -19458,8 +19477,10 @@
    "name": "FUN_004b1310",
    "size": 221,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_paint.c"
+   ]
   },
   {
    "va": "0x4b13ed",
@@ -19468,6 +19489,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/gfx_globals.c",
+    "src/gfx_globals.h",
     "src/gfx_paint.c",
     "src/gfx_paint.h"
    ]
@@ -19477,8 +19500,10 @@
    "name": "FUN_004b14ff",
    "size": 872,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "tested",
+   "src": [
+    "src/gfx_paint.c"
+   ]
   },
   {
    "va": "0x4b1867",

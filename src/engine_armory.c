@@ -743,14 +743,14 @@ void engine_armory_assign_refresh(const engine_armory_ctx_t *ctx,
 
     gfx_text_set_line_x_acc(0);
     if (ctx->chrome) {                     /* FUN_00409c93(0xec,0xc,0xf,2) */
-        gfx_panel_fill_interior(ctx->chrome, 0xec, 0xc, 0xf, 2);
+        gfx_panel_fill_interior_chrome(ctx->chrome, 0xec, 0xc, 0xf, 2);
     }
     armory_num_units(ctx, cur, g_weapon * 2 + 0x34, 0xec, 0xd,
                      ctx->title_font, 0x3f);
 
     gfx_text_set_line_x_acc(0);
     if (ctx->chrome) {                     /* FUN_00409c93(0xd8,0x4c,0x10,2) */
-        gfx_panel_fill_interior(ctx->chrome, 0xd8, 0x4c, 0x10, 2);
+        gfx_panel_fill_interior_chrome(ctx->chrome, 0xd8, 0x4c, 0x10, 2);
     }
     gfx_text_label_render_dec(avail, '@', "", 0xd8, 0x54,
                               ctx->menu_font, ctx->glyph_table, 0x3f);

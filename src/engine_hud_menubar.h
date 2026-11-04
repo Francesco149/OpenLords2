@@ -38,6 +38,7 @@
 #include <stdint.h>
 
 #include "localization.h"
+#include "engine_dirty_rect.h"
 
 /* Port of FUN_00409e09.  Tile a `cols`×`rows` grid of 24×24 opaque
  * sprites from the chrome sheet starting at (x, y); each tile uses
@@ -65,12 +66,14 @@ void engine_hud_menubar_tile_strip(const uint8_t *chrome_sheet,
  *
  * `loc` is the localization state (over the l2.eng blob); `font` is the
  * menu font (DAT_005af8f0); `glyph_table` / `glyph_metrics` are the
- * char→glyph render / measure maps (DAT_004d71f0 / DAT_004d71d0). */
+ * char→glyph render / measure maps (DAT_004d71f0 / DAT_004d71d0).
+ * `dirty` (NULL: skipped) takes retail's tail mark FUN_004527a6. */
 void engine_hud_menubar_labels(int16_t *table, int count, int hovered,
                                const uint8_t *font,
                                const uint8_t *glyph_table,
                                const unsigned char *glyph_metrics,
-                               localization_state_t *loc, uint8_t color);
+                               localization_state_t *loc, uint8_t color,
+                               engine_dirty_rect_state_t *dirty);
 
 /* Compose the state-free menu-bar chrome: the two parchment strips, the
  * bevel frame, and the File/Options/Help labels — the no-game-state front

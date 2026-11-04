@@ -22,6 +22,8 @@
 #define L2_SIM_TICK     0x57c998u   /* DAT_0057c998: master sim tick */
 #define L2_ENGINE_STATE 0x52af94u   /* DAT_0052af94: 3 ingame, 10 save, 0xb load */
 #define L2_SCREEN       0x4eac50u   /* DAT_004eac50: current screen id (byte) */
+#define L2_CANVAS       0x4ea1a8u   /* DAT_004ea1a8 (Buf): the back buffer the gfx primitives draw into */
+#define L2_PITCH        0x4eb274u   /* DAT_004eb274 (xRight): its row pitch */
 #define L2_SUBSTATE     0x57c8fcu   /* DAT_0057c8fc: sub-state */
 #define L2_RNG_A        0x58fe28u   /* DAT_0058fe28: LFSR A (FUN_00404a46; seeded 0x54657687 in FUN_004b2258) */
 #define L2_RNG_B        0x58fe08u   /* DAT_0058fe08: LFSR B (seeded 0x72641663) */
@@ -52,6 +54,9 @@ typedef struct {
     int shadow_full;            /* --shadow-full: shadow by copying the whole state (default: page-tracked) */
     int hook_entry;             /* --hook-entry: patch every hooked function's entry, not its call sites (tests) */
     uint32_t shadow_poison;     /* --shadow-poison VA: flip a bit there after every shadowed port call (tests the diff) */
+    int shadow_all;             /* --shadow-all: shadow every call of an RH_SH_SAMPLE row too */
+    int shadow_media;           /* --shadow-media: every shadow also compares the surfaces' pixels (default: RH_SH_MEDIA rows) */
+    int poison_px, poison_x, poison_y;   /* --shadow-poison-px X,Y: flip bit 0 of canvas pixel (X,Y) after every media-compared port call */
     uint32_t watch[16]; int n_watch;
     uint32_t step_ms;           /* virtual ms per frame */
     uint32_t creep_after;       /* clock reads without a frame before the clock creeps */
@@ -114,6 +119,9 @@ void rh_handles_meta_restore(const void *m);
 /* rh_media.c — the fixed media pool (surfaces, sound buffers) */
 int  rh_media_reserve(void);
 void *rh_media_alloc(uint32_t n);
+void *rh_media_alloc_surface(uint32_t n, uint32_t pitch);   /* a DirectDraw surface's pixels (tagged with its pitch) */
+int  rh_media_surface_ranges(uint32_t (*r)[2], int max);   /* live surface blocks, address order (the media shadow) */
+uint32_t rh_media_surface_at(uint32_t v, uint32_t *pitch);  /* base of the surface block holding v (0: none) */
 void rh_media_free(void *p);
 int  rh_media_in_pool(uint32_t v);
 uint32_t rh_media_used(void);
@@ -154,6 +162,10 @@ void rh_state_hash(rh_hash_t *h);
 int  rh_state_dump(const char *path);
 void rh_state_volatile_add(uint32_t va);
 int  rh_shadow_ex(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn);
+/* … with flags: RH_SH_MEDIA also compares every DirectDraw surface's pixels (a render row; O.shadow_media: every row) */
+#define RH_SH_MEDIA 1
+#define RH_SH_SAMPLE 2   /* (hook rows) a hot leaf: shadow a sample of its calls (rh_hooks.c rh_hook_sample; --shadow-all: every call) */
+int  rh_shadow_ex_f(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn, int flags);
 void rh_shadow_prewrite(const void *p, size_t n);   /* before a KERNEL write into retail memory (ReadFile, ...) */
 void rh_shadow_report(void);                         /* shadow-prof: per-phase cost per call */
 void rh_log_occupants(uint32_t lo, uint32_t hi);     /* what holds a fixed range (reservation failures) */

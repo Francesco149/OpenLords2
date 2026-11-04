@@ -12,12 +12,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1151** (47.0%) — tested 785, ported 366
-- code bytes touched: **60.5%** (507,675 / 838,629 B)
-- unported: **1296**
+- touched: **1156** (47.2%) — tested 790, ported 366
+- code bytes touched: **60.9%** (510,577 / 838,629 B)
+- unported: **1291**
 - orphan refs (in src/, not in function table): 7
 
-## tested (785) — ported + host unit suite
+## tested (790) — ported + host unit suite
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -36,7 +36,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4013bc | FUN_004013bc | 89 | strutil.h |
 | 0x401415 | FUN_00401415 | 219 | strutil.h |
 | 0x4014f0 | FUN_004014f0 | 201 | font_metrics.h, gfx_text.c |
-| 0x4015b9 | FUN_004015b9 | 173 | engine_title_render.c, font_metrics.c, font_metrics.h (+3) |
+| 0x4015b9 | FUN_004015b9 | 173 | engine_title_render.c, font_metrics.c, font_metrics.h (+4) |
 | 0x401666 | FUN_00401666 | 141 | strutil.h |
 | 0x4016f3 | FUN_004016f3 | 204 | localization.c, localization.h |
 | 0x4017bf | FUN_004017bf | 187 | localization.c, localization.h |
@@ -76,7 +76,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x403190 | FUN_00403190 | 254 | gfx_text_label.c, gfx_text_label.h |
 | 0x40328e | FUN_0040328e | 673 | engine_noble_faces.c, engine_sendsupplies.c, font_metrics.h (+2) |
 | 0x40352f | FUN_0040352f | 458 | font_metrics.h, gfx_wrap.c, gfx_wrap.h |
-| 0x4036f9 | FUN_004036f9 | 235 | font_metrics.h |
+| 0x4036f9 | FUN_004036f9 | 235 | font_metrics.h, gfx_wrap.c |
 | 0x4037ee | FUN_004037ee | 347 | gfx_line.c, gfx_line.h |
 | 0x403949 | FUN_00403949 | 126 | gfx_line.c, gfx_line.h |
 | 0x4039c7 | FUN_004039c7 | 101 | engine_minimap.c, gfx_paint.h |
@@ -119,13 +119,14 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4081a6 | FUN_004081a6 | 658 | engine_overlay_render.c, engine_overlay_render.h |
 | 0x408438 | FUN_00408438 | 2072 | engine_map_render.c, engine_map_render.h |
 | 0x408c50 | FUN_00408c50 | 390 | engine_overlay_render.c, engine_overlay_render.h |
-| 0x408fb0 | FUN_00408fb0 | 27 | engine_hud_menubar.h, gfx_panel.c, gfx_sprite_render.c (+1) |
+| 0x408fb0 | FUN_00408fb0 | 27 | engine_hud_menubar.h, gfx_globals.c, gfx_globals.h (+3) |
 | 0x409346 | FUN_00409346 | 81 | gfx_panel.c, gfx_panel.h |
 | 0x409397 | FUN_00409397 | 73 | engine_armory.c, engine_county_panels.c, engine_labor.c (+1) |
 | 0x4093e0 | FUN_004093e0 | 73 | engine_diplomacy_action.c, engine_noble_faces.c, engine_sendsupplies.c (+4) |
 | 0x40946d | FUN_0040946d | 856 | gfx_panel.c, gfx_panel.h |
 | 0x4097c5 | FUN_004097c5 | 367 | gfx_panel.c, gfx_panel.h |
-| 0x409c93 | FUN_00409c93 | 374 | engine_armory.c, engine_county_panels.c, engine_sendsupplies.c (+1) |
+| 0x409934 | FUN_00409934 | 863 | gfx_panel.c, gfx_panel.h |
+| 0x409c93 | FUN_00409c93 | 374 | engine_armory.c, engine_county_panels.c, engine_sendsupplies.c (+3) |
 | 0x409e09 | FUN_00409e09 | 368 | engine_hud_menubar.c, engine_hud_menubar.h |
 | 0x40a01d | FUN_0040a01d | 261 | engine_minimap.c, engine_sendsupplies.c, gfx_dispatch.h (+2) |
 | 0x40a21a | FUN_0040a21a | 433 | engine_county_panels.c, engine_hud_menubar.c, engine_hud_menubar.h (+5) |
@@ -135,7 +136,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x40a80e | FUN_0040a80e | 413 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40a9b0 | FUN_0040a9b0 | 439 | gfx_dispatch.h, gfx_sprite_render.c, gfx_sprite_render.h |
 | 0x40acce | FUN_0040acce | 324 | engine_title_render.c, gfx_caret.c, gfx_caret.h (+2) |
-| 0x40c5b0 | FUN_0040c5b0 | 373 | engine_hud_menubar.c, engine_hud_menubar.h |
+| 0x40c5b0 | FUN_0040c5b0 | 373 | engine_hud_menubar.c, engine_hud_menubar.h, gfx_globals.h |
 | 0x40ccfa | FUN_0040ccfa | 94 | engine.c, engine_confirm_dialog.c, engine_confirm_dialog.h |
 | 0x40cfd2 | FUN_0040cfd2 | 490 | engine.c, engine_button.c, engine_button.h (+12) |
 | 0x40d1bc | FUN_0040d1bc | 181 | engine_armory.c, engine_diplomacy_action.c, engine_labor.c (+8) |
@@ -228,7 +229,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x429ba4 | FUN_00429ba4 | 878 | engine.c, engine_camera.c, engine_camera.h (+3) |
 | 0x42a15f | FUN_0042a15f | 206 | engine_camera.c, engine_camera.h |
 | 0x42dfe2 | FUN_0042dfe2 | 126 | main.c |
-| 0x42ec91 | FUN_0042ec91 | 1207 | gfx.c, gfx.h, gfx_paint.h |
+| 0x42ec91 | FUN_0042ec91 | 1207 | gfx.c, gfx.h, gfx_globals.h (+1) |
 | 0x42f1df | FUN_0042f1df | 295 | gfx.c, main.c |
 | 0x42ff10 | FUN_0042ff10 | 8140 | engine.c, engine_armory.c, engine_army_move_confirm.h (+8) |
 | 0x431f59 | FUN_00431f59 | 712 | engine_camera.h |
@@ -423,7 +424,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4526b3 | FUN_004526b3 | 87 | engine_dirty_rect.c, engine_dirty_rect.h |
 | 0x45270a | FUN_0045270a | 43 | engine_dirty_rect.h, engine_ingame_input.h, engine_workforce_hud.c (+1) |
 | 0x452735 | FUN_00452735 | 53 | engine_dirty_rect.h |
-| 0x4527a6 | FUN_004527a6 | 101 | engine.c, engine_armory.c, engine_battlefield_render.h (+10) |
+| 0x452775 | FUN_00452775 | 49 | engine_button.c, engine_button.h |
+| 0x4527a6 | FUN_004527a6 | 101 | engine.c, engine_armory.c, engine_battlefield_render.h (+11) |
 | 0x4650b0 | FUN_004650b0 | 265 | engine.c, engine_army_state.c, engine_army_state.h (+3) |
 | 0x4651b9 | FUN_004651b9 | 91 | engine.c, engine_territory.c, engine_territory.h |
 | 0x465214 | FUN_00465214 | 11 | engine_army_state.c |
@@ -730,7 +732,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4af675 | FUN_004af675 | 84 | engine_load_pump.c, strutil.h |
 | 0x4af6c9 | FUN_004af6c9 | 67 | strutil.h |
 | 0x4af8d9 | FUN_004af8d9 | 381 | config.c, engine_armory.c, engine_county_panels.c (+11) |
-| 0x4b13ed | FUN_004b13ed | 274 | gfx_paint.c, gfx_paint.h |
+| 0x4afab9 | FUN_004afab9 | 897 | engine_hud_menubar.c, gfx_panel.c, gfx_sprite_render.h |
+| 0x4b1310 | FUN_004b1310 | 221 | gfx_paint.c |
+| 0x4b13ed | FUN_004b13ed | 274 | gfx_globals.c, gfx_globals.h, gfx_paint.c (+1) |
+| 0x4b14ff | FUN_004b14ff | 872 | gfx_paint.c |
 | 0x4b191e | FUN_004b191e | 981 | engine.c, engine.h, engine_input.c (+2) |
 | 0x4b1de0 | FUN_004b1de0 | 11 | engine.c, engine_armory.c, engine_confirm_dialog.c (+6) |
 | 0x4b1deb | FUN_004b1deb | 92 | engine.c, engine_county_panels.c |

@@ -31,6 +31,7 @@
  */
 
 #include "gfx_sprite_render.h"
+#include "gfx_globals.h"
 
 #include "gfx_dispatch.h"
 #include "gfx_glyph.h"
@@ -41,8 +42,6 @@
  * Module state
  * ────────────────────────────────────────────────────────────────── */
 
-static const uint8_t            *g_current_blob;   /* DAT_004eabec */
-static uint8_t                   g_last_error;     /* DAT_005aeb68 */
 static gfx_sprite_render_log_fn  g_log_fn;         /* hook → 0x4afab9 */
 
 /* The sentinel range for descriptor.src_offset — retail checks
@@ -56,7 +55,7 @@ static gfx_sprite_render_log_fn  g_log_fn;         /* hook → 0x4afab9 */
  * structure of each wrapper still reads like the retail decomp. */
 static void latch_error(uint8_t code)
 {
-    g_last_error = code;
+    g_gfx_last_error = code;
 }
 
 static void log_error(uint32_t fmt_addr, int sprite_index_plus_one)
@@ -71,10 +70,11 @@ static void log_error(uint32_t fmt_addr, int sprite_index_plus_one)
  * ────────────────────────────────────────────────────────────────── */
 
 void gfx_sprite_render_set_log(gfx_sprite_render_log_fn fn) { g_log_fn = fn; }
-uint8_t gfx_sprite_render_last_error(void) { return g_last_error; }
-void gfx_sprite_render_clear_error(void)   { g_last_error = 0; }
-void gfx_sprite_render_set_blob(const uint8_t *blob) { g_current_blob = blob; }
-const uint8_t *gfx_sprite_render_blob(void) { return g_current_blob; }
+void gfx_sprite_render_log_error(uint32_t fmt_addr, int n) { log_error(fmt_addr, n); }
+uint8_t gfx_sprite_render_last_error(void) { return g_gfx_last_error; }
+void gfx_sprite_render_clear_error(void)   { g_gfx_last_error = 0; }
+void gfx_sprite_render_set_blob(const uint8_t *blob) { g_gfx_current_blob = blob; }
+const uint8_t *gfx_sprite_render_blob(void) { return g_gfx_current_blob; }
 
 /* ──────────────────────────────────────────────────────────────────
  * Shared post-descriptor pipeline
@@ -270,24 +270,21 @@ void gfx_sprite_render_opaque_from_blob(const uint8_t *blob,
  * Port of FUN_0040d1bc — continue/dismiss seal draw
  * ────────────────────────────────────────────────────────────────── */
 
-/* Seal-position globals.  Retail parks the most recent seal draw's
+/* Seal-position globals (gfx_globals.h).  Retail parks the most recent seal draw's
  * coordinates here; the event-scroll renderer copies them into its
  * "committed" pair at the end of every popup frame and the dismiss
  * hit-test reads them to bound the click region. */
-static int g_seal_x;      /* DAT_0055ce78 */
-static int g_seal_y;      /* DAT_0057c8a0 */
-static int g_seal_mode;   /* DAT_0056956c */
 
-int gfx_sprite_seal_x(void)    { return g_seal_x; }
-int gfx_sprite_seal_y(void)    { return g_seal_y; }
-int gfx_sprite_seal_mode(void) { return g_seal_mode; }
+int gfx_sprite_seal_x(void)    { return g_gfx_seal_x; }
+int gfx_sprite_seal_y(void)    { return g_gfx_seal_y; }
+int gfx_sprite_seal_mode(void) { return g_gfx_seal_mode; }
 
 void gfx_sprite_seal_draw(const uint8_t *system_sheet,
                           int x, int y, int mode)
 {
-    g_seal_x    = x;
-    g_seal_y    = y;
-    g_seal_mode = mode;
+    g_gfx_seal_x    = x;
+    g_gfx_seal_y    = y;
+    g_gfx_seal_mode = mode;
 
     /* Sprite select: mode 0 = the wax-seal "continue" stamp (0x33);
      * any other mode = the small variant (0x10). */
@@ -312,7 +309,7 @@ void gfx_sprite_seal_draw(const uint8_t *system_sheet,
 void gfx_sprite_render(int sprite_index, int x, int y)
 {
     gfx_dispatch_set_last_glyph_index(sprite_index);
-    gfx_dispatch_stage_sprite_descriptor(g_current_blob, sprite_index);
+    gfx_dispatch_stage_sprite_descriptor(g_gfx_current_blob, sprite_index);
 
     if (!descriptor_offset_in_range(sprite_index + 1,
                                     GFX_SPRITE_RENDER_ERR_GLOBAL_INDEX_TOO_LOW,
@@ -321,7 +318,7 @@ void gfx_sprite_render(int sprite_index, int x, int y)
     }
 
     gfx_glyph_set_dest(x, y);
-    canvas_clip_and_dispatch(g_current_blob);
+    canvas_clip_and_dispatch(g_gfx_current_blob);
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -333,7 +330,7 @@ void gfx_sprite_render_truncate_bottom(int sprite_index,
                                        int16_t trim_rows)
 {
     gfx_dispatch_set_last_glyph_index(sprite_index);
-    gfx_dispatch_stage_sprite_descriptor(g_current_blob, sprite_index);
+    gfx_dispatch_stage_sprite_descriptor(g_gfx_current_blob, sprite_index);
 
     if (!descriptor_offset_in_range(sprite_index + 1,
                                     GFX_SPRITE_RENDER_ERR_TRUNCATE_BOTTOM_INDEX_TOO_LOW,
@@ -349,7 +346,7 @@ void gfx_sprite_render_truncate_bottom(int sprite_index,
     gfx_dispatch_set_glyph_height_short(h_short);
 
     gfx_glyph_set_dest(x, y);
-    canvas_clip_and_dispatch(g_current_blob);
+    canvas_clip_and_dispatch(g_gfx_current_blob);
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -361,7 +358,7 @@ void gfx_sprite_render_truncate_top(int sprite_index,
                                     int skip_rows)
 {
     gfx_dispatch_set_last_glyph_index(sprite_index);
-    gfx_dispatch_stage_sprite_descriptor(g_current_blob, sprite_index);
+    gfx_dispatch_stage_sprite_descriptor(g_gfx_current_blob, sprite_index);
 
     if (!descriptor_offset_in_range(sprite_index + 1,
                                     GFX_SPRITE_RENDER_ERR_TRUNCATE_TOP_INDEX_TOO_LOW,
@@ -387,5 +384,5 @@ void gfx_sprite_render_truncate_top(int sprite_index,
     gfx_glyph_set_glyph(new_src_off, sprite_w, row_count);
 
     gfx_glyph_set_dest(x, y + skip_rows);
-    canvas_clip_and_dispatch(g_current_blob);
+    canvas_clip_and_dispatch(g_gfx_current_blob);
 }

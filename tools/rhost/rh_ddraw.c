@@ -87,7 +87,7 @@ static dd_surf *surf_new(uint32_t w, uint32_t h, uint32_t bpp, uint32_t caps)
     s->vtbl = g_vt_surf; s->refs = 1;
     s->w = w; s->h = h; s->bpp = bpp; s->caps = caps;
     s->pitch = (w * (bpp / 8) + 3) & ~3u;
-    s->pix = rh_media_alloc(s->pitch * h);
+    s->pix = rh_media_alloc_surface(s->pitch * h, s->pitch);   /* tagged: the media shadow compares surfaces */
     s->serial = ++g_serial; g_nsurf++;
     return s;
 }

@@ -9,25 +9,15 @@
  */
 
 #include "gfx_line.h"
+#include "gfx_globals.h"
 
 #include "gfx_paint.h"
 
 /* ──────────────────────────────────────────────────────────────────
- * Module-private state.  Each block shadows a retail DAT_* symbol.
- * Zero-initialized at startup — matches retail's BSS layout.  Note:
- * abs_dx / abs_dy are MUTATED by the line-draw loop (decremented per
- * iteration) — see quirk #38.
+ * State: the nine Bresenham registers, retail globals (gfx_globals.h,
+ * DAT_005aeb40..60 + DAT_0058fd5c).  Note: abs_dx / abs_dy are MUTATED
+ * by the line-draw loop (decremented per iteration) — see quirk #38.
  * ────────────────────────────────────────────────────────────────── */
-
-static int g_abs_dx;     /* DAT_005aeb40 */
-static int g_abs_dy;     /* DAT_005aeb44 */
-static int g_x_end;      /* DAT_005aeb48 */
-static int g_y_end;      /* DAT_005aeb4c */
-static int g_x_step;     /* DAT_005aeb54  (+1 or -1) */
-static int g_y_step;     /* DAT_005aeb58  (+1 or -1) */
-static int g_x_start;    /* DAT_005aeb5c */
-static int g_y_start;    /* DAT_005aeb60 */
-static int g_bres_err;   /* DAT_0058fd5c */
 
 /* ──────────────────────────────────────────────────────────────────
  * Port of FUN_004037ee — Bresenham setup
@@ -53,32 +43,32 @@ static int g_bres_err;   /* DAT_0058fd5c */
  * ────────────────────────────────────────────────────────────────── */
 static void bres_setup(int x1, int y1, int x2, int y2)
 {
-    g_y_step = 1;
-    g_x_step = 1;
-    g_abs_dx = (x2 < x1) ? (x1 - x2) : (x2 - x1);
-    g_abs_dy = (y2 < y1) ? (y1 - y2) : (y2 - y1);
+    g_gfx_y_step = 1;
+    g_gfx_x_step = 1;
+    g_gfx_abs_dx = (x2 < x1) ? (x1 - x2) : (x2 - x1);
+    g_gfx_abs_dy = (y2 < y1) ? (y1 - y2) : (y2 - y1);
 
-    if (g_abs_dx < g_abs_dy) {
+    if (g_gfx_abs_dx < g_gfx_abs_dy) {
         /* Steep — sort by y. */
         if (y2 < y1) {
-            g_y_start = y2;  g_y_end = y1;
-            g_x_start = x2;  g_x_end = x1;
+            g_gfx_y_start = y2;  g_gfx_y_end = y1;
+            g_gfx_x_start = x2;  g_gfx_x_end = x1;
         } else {
-            g_y_start = y1;  g_y_end = y2;
-            g_x_start = x1;  g_x_end = x2;
+            g_gfx_y_start = y1;  g_gfx_y_end = y2;
+            g_gfx_x_start = x1;  g_gfx_x_end = x2;
         }
     } else if (x2 < x1) {
         /* Shallow, second endpoint to the left — swap. */
-        g_y_start = y2;  g_y_end = y1;
-        g_x_start = x2;  g_x_end = x1;
+        g_gfx_y_start = y2;  g_gfx_y_end = y1;
+        g_gfx_x_start = x2;  g_gfx_x_end = x1;
     } else {
         /* Shallow, already in order. */
-        g_y_start = y1;  g_y_end = y2;
-        g_x_start = x1;  g_x_end = x2;
+        g_gfx_y_start = y1;  g_gfx_y_end = y2;
+        g_gfx_x_start = x1;  g_gfx_x_end = x2;
     }
 
-    if (g_x_end < g_x_start) g_x_step = -1;
-    if (g_y_end < g_y_start) g_y_step = -1;
+    if (g_gfx_x_end < g_gfx_x_start) g_gfx_x_step = -1;
+    if (g_gfx_y_end < g_gfx_y_start) g_gfx_y_step = -1;
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -103,15 +93,15 @@ static void bres_setup(int x1, int y1, int x2, int y2)
 static void bres_err_update(int steep_mode)
 {
     if (steep_mode == 0) {
-        int add = g_abs_dy;
-        if (g_bres_err >= 0) {
-            add = g_abs_dy - g_abs_dx;
+        int add = g_gfx_abs_dy;
+        if (g_gfx_bres_err >= 0) {
+            add = g_gfx_abs_dy - g_gfx_abs_dx;
         }
-        g_bres_err += add * 2;
-    } else if (g_bres_err < 0) {
-        g_bres_err += g_abs_dx * 2;
+        g_gfx_bres_err += add * 2;
+    } else if (g_gfx_bres_err < 0) {
+        g_gfx_bres_err += g_gfx_abs_dx * 2;
     } else {
-        g_bres_err += (g_abs_dx - g_abs_dy) * 2;
+        g_gfx_bres_err += (g_gfx_abs_dx - g_gfx_abs_dy) * 2;
     }
 }
 
@@ -139,41 +129,41 @@ static void bres_err_update(int steep_mode)
 void gfx_line_draw(int x1, int y1, int x2, int y2, uint8_t color)
 {
     bres_setup(x1, y1, x2, y2);
-    int local_y = g_y_start;
-    int local_x = g_x_start;
+    int local_y = g_gfx_y_start;
+    int local_x = g_gfx_x_start;
 
     if (x2 == x1) {
         /* Pure vertical. */
-        for (; local_y <= g_y_end; local_y++) {
+        for (; local_y <= g_gfx_y_end; local_y++) {
             gfx_paint_pixel_clipped(x1, local_y, color);
         }
     } else if (y2 == y1) {
         /* Pure horizontal. */
-        for (; local_x <= g_x_end; local_x++) {
+        for (; local_x <= g_gfx_x_end; local_x++) {
             gfx_paint_pixel_clipped(local_x, y2, color);
         }
-    } else if (g_abs_dx < g_abs_dy) {
+    } else if (g_gfx_abs_dx < g_gfx_abs_dy) {
         /* Steep — iterate over y. */
-        g_bres_err = g_abs_dx * 2 - g_abs_dy;
-        for (; local_y <= g_y_end; local_y++) {
+        g_gfx_bres_err = g_gfx_abs_dx * 2 - g_gfx_abs_dy;
+        for (; local_y <= g_gfx_y_end; local_y++) {
             gfx_paint_pixel_clipped(local_x, local_y, color);
             bres_err_update(1);
-            g_abs_dy -= 1;
-            if (g_bres_err > 0) {
-                g_abs_dx -= 1;
-                local_x += g_x_step;
+            g_gfx_abs_dy -= 1;
+            if (g_gfx_bres_err > 0) {
+                g_gfx_abs_dx -= 1;
+                local_x += g_gfx_x_step;
             }
         }
     } else {
         /* Shallow — iterate over x. */
-        g_bres_err = g_abs_dy * 2 - g_abs_dx;
-        for (; local_x <= g_x_end; local_x++) {
+        g_gfx_bres_err = g_gfx_abs_dy * 2 - g_gfx_abs_dx;
+        for (; local_x <= g_gfx_x_end; local_x++) {
             gfx_paint_pixel_clipped(local_x, local_y, color);
             bres_err_update(0);
-            g_abs_dx -= 1;
-            if (g_bres_err > 0) {
-                g_abs_dy -= 1;
-                local_y += g_y_step;
+            g_gfx_abs_dx -= 1;
+            if (g_gfx_bres_err > 0) {
+                g_gfx_abs_dy -= 1;
+                local_y += g_gfx_y_step;
             }
         }
     }
@@ -194,15 +184,15 @@ void gfx_line_draw(int x1, int y1, int x2, int y2, uint8_t color)
 void gfx_line_draw_dotted(int x1, int y1, int x2, int y2, uint8_t color)
 {
     bres_setup(x1, y1, x2, y2);
-    int local_y = g_y_start;
-    int local_x = g_x_start;
+    int local_y = g_gfx_y_start;
+    int local_x = g_gfx_x_start;
 
     if (x2 == x1) {
-        for (; local_y <= g_y_end; local_y += 2) {
+        for (; local_y <= g_gfx_y_end; local_y += 2) {
             gfx_paint_pixel_clipped(x1, local_y, color);
         }
     } else if (y2 == y1) {
-        for (; local_x <= g_x_end; local_x += 2) {
+        for (; local_x <= g_gfx_x_end; local_x += 2) {
             gfx_paint_pixel_clipped(local_x, y2, color);
         }
     }
@@ -276,15 +266,21 @@ static void draw_rect_4lines(int x, int y, int w, int h,
  *   FUN_00403a8f(x,        y,        x,        bottom,   color);
  *   FUN_00403a8f(right,    y,        right,    bottom,   color);
  *
- * Our port via draw_rect_4lines reorders to top→right→bottom→left;
- * since all 4 lines use the same color, the visible result is
- * identical.  We keep this single helper for the solid + bevel paths
- * to reduce the line-drawer-call duplication.
+ * The order matters beyond the pixels: the LAST line leaves its
+ * endpoints in the Bresenham registers (DAT_005aeb48 / DAT_005aeb5c …),
+ * which are retail state — drawing top→right→bottom→left (the bevel
+ * order) left the bottom edge's x_end / x_start there instead of the
+ * right edge's (rhost shadow, render-under-rhost.md).
  * ────────────────────────────────────────────────────────────────── */
 void gfx_line_rect(int x, int y, int w, int h, uint8_t color)
 {
     clamp_solid(&x, &w, &y, &h);
-    draw_rect_4lines(x, y, w, h, color, color);
+    int right  = w - 1 + x;
+    int bottom = h - 1 + y;
+    gfx_line_draw(x,     y,      right, y,      color);  /* top    */
+    gfx_line_draw(x,     bottom, right, bottom, color);  /* bottom */
+    gfx_line_draw(x,     y,      x,     bottom, color);  /* left   */
+    gfx_line_draw(right, y,      right, bottom, color);  /* right  */
 }
 
 /* Port of FUN_0040437d @ 0x40437d (197 B).  Solid FILLED axis-aligned

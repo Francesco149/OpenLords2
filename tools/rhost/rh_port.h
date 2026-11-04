@@ -72,7 +72,7 @@ extern uint32_t rh_c_floor;
               "call _" #B "\n\taddl $4, %esp\n\tpopl %esp\n\tret"); }
 #define I(k) ((int)a[k])
 /* HOOK_R: the port returns a value (compared); HOOK_V: void (retail's EAX passed through in shadow mode).
- * N (retail's arity) documents the row; the adapter sees all eight argument slots. */
+ * N (retail's arity) documents the row; the adapter sees ten argument slots (a[0..9]). */
 #define HOOK_BODY(NAME, HAS_RET) \
     static void w_##NAME(void); \
     static __attribute__((used, noinline)) uint32_t __cdecl b_##NAME(uint32_t e0) \

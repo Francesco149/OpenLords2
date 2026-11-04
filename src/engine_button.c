@@ -23,15 +23,18 @@
  *   desc+0xd byte  → glyph_h        (DAT_005bb478)
  *   desc+0xe byte  → flag_b         (DAT_0057d3c0)
  * The fixed-size raw leaves below read only glyph_offset + the cursor;
- * glyph_w / height_short / glyph_h are staged for fidelity but the blit
- * dimensions are baked in, and flag_a / flag_b have no consumer (same
- * status the glyph dispatcher documents) so they are left unstaged.
+ * the rest is retail state all the same (the shared staging globals,
+ * gfx_globals.h), so every field is staged — flag_a / flag_b too (rhost
+ * shadow).  A PRESSED button marks its box through FUN_00452775 (the
+ * escalating mark: unported; engine_button_bind_pressed_mark), an
+ * unpressed one through FUN_004527a6 (engine_dirty_rect_mark_box_tiled).
  */
 
 #include "engine_button.h"
 
 #include <stddef.h>
 
+#include "gfx_globals.h"
 #include "gfx_glyph.h"
 #include "gfx_dispatch.h"
 #include "gfx_sprite.h"
@@ -39,6 +42,9 @@
 /* PL8 sprite directory: 8-byte header, then 16-byte descriptors. */
 #define DESC_STRIDE 0x10
 #define DESC_HEADER 8
+
+static engine_button_pressed_mark_fn g_pressed_mark;   /* FUN_00452775; NULL: fold into the plain mark */
+void engine_button_bind_pressed_mark(engine_button_pressed_mark_fn fn) { g_pressed_mark = fn; }
 
 static uint16_t rd16(const uint8_t *p)
 {
@@ -95,6 +101,8 @@ void engine_button_render_list(int origin_x, int origin_y,
         gfx_glyph_set_dest(cursor_x, cursor_y);             /* cursor x/y   */
         gfx_glyph_set_glyph(glyph_off, glyph_w, glyph_h);   /* off/w/h      */
         gfx_dispatch_set_glyph_height_short(height_short);  /* DAT_005aeb70 */
+        g_gfx_flag_a = desc[0xc];                           /* DAT_00591568 */
+        g_gfx_flag_b = desc[0xe];                           /* DAT_0057d3c0 */
 
         switch (kind) {
         case 0x10: gfx_sprite_blit_16x16_raw(sheet); break;
@@ -106,11 +114,12 @@ void engine_button_render_list(int origin_x, int origin_y,
 
         /* Per-button dirty mark — a 3×3-tile (48×48 px) box at the button
          * origin.  Retail's pressed path (0x452775, unported) additionally
-         * raises the full-redraw scene flag (DAT_005651ac) before marking;
-         * the title scene already raises that flag every full render and
-         * these buttons are never drawn pressed, so the pressed/unpressed
-         * paths fold into the one mark here (FUN_004527a6, force=2). */
-        if (dirty) {
+         * raises the full-redraw scene flag (DAT_005651ac) before marking:
+         * bound (rhost: retail's), it runs; unbound, the pressed path folds
+         * into the plain mark (FUN_004527a6, force=2). */
+        if (r->pressed != 0 && g_pressed_mark) {
+            g_pressed_mark(cursor_x, cursor_y, 3, 3, 2);
+        } else if (dirty) {
             engine_dirty_rect_mark_box_tiled(dirty, cursor_x, cursor_y,
                                              3, 3, 2);
         }

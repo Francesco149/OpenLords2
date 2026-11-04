@@ -550,7 +550,7 @@ static void usage(void)
     fprintf(stderr, "usage: rhost --exe Lords2.exe --game DIR --run DIR [--frames N] [--trace F] [--record F]\n"
                     "  [--dump-at F,..|end] [--shot-at F,..|end] [--shot-every N] [--fb-hash] [--hash-every N] [--log-every N]\n"
                     "  [--tail N] [--step-ms N] [--vbase MS] [--creep-after N] [--show] [--scale N] [--realtime] [--movies]\n"
-                    "  [--hook SPEC] [--shadow-full] [--coverage F] [--watch VA,..] [--trap VA,..] [--watch-write VA[@F],..] [--bot HOST:PORT] [--out-trace F]\n"
+                    "  [--hook SPEC] [--shadow-full] [--shadow-media] [--shadow-all] [--shadow-poison VA] [--shadow-poison-px X,Y] [--coverage F] [--watch VA,..] [--trap VA,..] [--watch-write VA[@F],..] [--bot HOST:PORT] [--out-trace F]\n"
                     "  [--log-files] [--log-heap] [--log-input] [--log-dd] [--log-ds] [--log-win]\n");
     ExitProcess(2);
 }
@@ -596,6 +596,9 @@ static void parse(int argc, char **argv)
         else if (!strcmp(a, "--shadow-full")) O.shadow_full = 1;
         else if (!strcmp(a, "--hook-entry")) O.hook_entry = 1;
         else if (!strcmp(a, "--shadow-poison")) O.shadow_poison = strtoul(ARG(), 0, 0);
+        else if (!strcmp(a, "--shadow-media")) O.shadow_media = 1;
+        else if (!strcmp(a, "--shadow-all")) O.shadow_all = 1;
+        else if (!strcmp(a, "--shadow-poison-px")) { const char *v = ARG(); O.poison_px = 1; O.poison_x = (int)strtol(v, 0, 0); const char *c = strchr(v, ','); O.poison_y = c ? (int)strtol(c + 1, 0, 0) : 0; }
         else if (!strcmp(a, "--coverage")) O.coverage = ARG();
         else if (!strcmp(a, "--bot")) O.bot = ARG();
         else if (!strcmp(a, "--no-arena")) O.no_arena = 1;
