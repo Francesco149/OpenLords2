@@ -527,9 +527,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x472b40 | FUN_00472b40 | 133 | engine.c, engine_event_queue.c, engine_event_queue.h (+1) |
 | 0x472bc5 | FUN_00472bc5 | 560 | engine.c, engine_army_ai.c, engine_army_move.c (+10) |
 | 0x472df5 | FUN_00472df5 | 81 | engine_event_queue.c, engine_event_queue.h |
-| 0x476710 | FUN_00476710 | 88 | engine_army_select.c, engine_army_select.h |
-| 0x476768 | FUN_00476768 | 245 | engine.c, engine_army_select.h, engine_ingame_input.h (+2) |
-| 0x47685d | FUN_0047685d | 512 | engine.c, engine_ingame_input.h |
+| 0x476710 | FUN_00476710 | 88 | engine_army_select.c, engine_army_select.h, rl_turn.c |
+| 0x476768 | FUN_00476768 | 245 | engine.c, engine_army_select.h, engine_ingame_input.h (+3) |
+| 0x47685d | FUN_0047685d | 512 | engine.c, engine_ingame_input.h, rl_turn.c |
 | 0x476e95 | FUN_00476e95 | 421 | engine.c, engine_tooltip.h |
 | 0x4770b8 | FUN_004770b8 | 121 | engine_tooltip.c, engine_tooltip.h, engine_workforce_hud.c (+1) |
 | 0x477131 | FUN_00477131 | 280 | engine_tooltip.c, engine_tooltip.h |
@@ -539,39 +539,39 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4777aa | FUN_004777aa | 246 | engine_tooltip.c, engine_tooltip.h |
 | 0x477dfc | FUN_00477dfc | 1225 | engine_combat.c, engine_combat.h |
 | 0x478419 | FUN_00478419 | 177 | engine_combat.c, engine_combat.h |
-| 0x47ed34 | FUN_0047ed34 | 103 | engine.c, engine_camera.c, engine_camera.h |
+| 0x47ed34 | FUN_0047ed34 | 103 | engine.c, engine_camera.c, engine_camera.h (+1) |
 | 0x48ee46 | FUN_0048ee46 | 87 | engine_tile.c, engine_tile.h |
 | 0x4917dd | FUN_004917dd | 599 | engine_tile.c, engine_tile.h, rl_cov3.c (+1) |
 | 0x4921e5 | FUN_004921e5 | 451 | engine_tile.c, engine_tile.h |
-| 0x4976a1 | FUN_004976a1 | 472 | engine_load_pump.c, engine_load_pump.h, engine_map_init.c (+2) |
+| 0x4976a1 | FUN_004976a1 | 472 | engine_load_pump.c, engine_load_pump.h, engine_map_init.c (+3) |
 | 0x49792e | FUN_0049792e | 262 | engine.c, engine.h, game_init.c (+1) |
-| 0x497ced | FUN_00497ced | 376 | engine_load_pump.c, engine_territory.c, engine_territory.h (+3) |
-| 0x497e65 | FUN_00497e65 | 1025 | engine.c, engine.h, game_init.c (+1) |
-| 0x498270 | FUN_00498270 | 327 | engine_map_init.c, engine_map_init.h, main.c |
-| 0x4984dc | FUN_004984dc | 731 | engine.c, engine_ingame_input.c, engine_pl8.c (+5) |
-| 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h |
-| 0x4997bf | FUN_004997bf | 151 | engine_workforce_hud.c, engine_workforce_hud.h |
-| 0x499a1c | FUN_00499a1c | 174 | engine.c, gfx.c, gfx.h (+1) |
-| 0x499dc3 | FUN_00499dc3 | 154 | engine_menu_input.c, engine_menu_input.h, game_init.c (+2) |
-| 0x499e5d | FUN_00499e5d | 421 | engine_menu_input.c, game_init.c, game_init.h (+1) |
-| 0x49a010 | FUN_0049a010 | 982 | engine.c, engine_tick_cadence.h |
-| 0x49a453 | FUN_0049a453 | 302 | game_init.c, game_init.h, save.c (+1) |
+| 0x497ced | FUN_00497ced | 376 | engine_load_pump.c, engine_territory.c, engine_territory.h (+4) |
+| 0x497e65 | FUN_00497e65 | 1025 | engine.c, engine.h, game_init.c (+2) |
+| 0x498270 | FUN_00498270 | 327 | engine_map_init.c, engine_map_init.h, main.c (+1) |
+| 0x4984dc | FUN_004984dc | 731 | engine.c, engine_ingame_input.c, engine_pl8.c (+6) |
+| 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h (+1) |
+| 0x4997bf | FUN_004997bf | 151 | engine_workforce_hud.c, engine_workforce_hud.h, rl_turn.c |
+| 0x499a1c | FUN_00499a1c | 174 | engine.c, gfx.c, gfx.h (+2) |
+| 0x499dc3 | FUN_00499dc3 | 154 | engine_menu_input.c, engine_menu_input.h, game_init.c (+3) |
+| 0x499e5d | FUN_00499e5d | 421 | engine_menu_input.c, game_init.c, game_init.h (+2) |
+| 0x49a010 | FUN_0049a010 | 982 | engine.c, engine_tick_cadence.h, rl_turn.c |
+| 0x49a453 | FUN_0049a453 | 302 | game_init.c, game_init.h, rl_turn.c (+2) |
 | 0x49a581 | FUN_0049a581 | 1039 | engine.c, engine_army_ai.c, engine_army_ai.h |
 | 0x49a990 | FUN_0049a990 | 126 | engine_army_ai.c, engine_army_ai.h, engine_combat.c (+1) |
-| 0x49aa0e | FUN_0049aa0e | 2197 | engine.c, engine_ranking.c, engine_ranking.h (+1) |
+| 0x49aa0e | FUN_0049aa0e | 2197 | engine.c, engine_ranking.c, engine_ranking.h (+2) |
 | 0x49b2a3 | FUN_0049b2a3 | 187 | engine_combat.c, engine_combat.h |
-| 0x49b35e | FUN_0049b35e | 205 | game_init.c, game_init.h |
+| 0x49b35e | FUN_0049b35e | 205 | game_init.c, game_init.h, rl_turn.c |
 | 0x49b42b | FUN_0049b42b | 680 | engine_combat.c, engine_ranking.c, engine_ranking.h |
-| 0x49b6d3 | FUN_0049b6d3 | 143 | engine_turn.c, engine_turn.h |
-| 0x49b762 | FUN_0049b762 | 334 | engine.c, engine.h, engine_turn.c (+1) |
-| 0x49bae9 | FUN_0049bae9 | 180 | engine_menu_input.c, engine_roster.c, engine_roster.h |
-| 0x49bbe8 | FUN_0049bbe8 | 53 | engine_roster.c, engine_roster.h, engine_territory.c |
-| 0x49bc1d | FUN_0049bc1d | 66 | engine_roster.c, engine_roster.h, engine_territory.c |
-| 0x49bc5f | FUN_0049bc5f | 314 | engine_roster.c, engine_roster.h |
-| 0x49bd99 | FUN_0049bd99 | 3063 | game_init.c, game_init.h |
-| 0x49ca32 | FUN_0049ca32 | 46 | engine_roster.c, engine_roster.h, main.c |
-| 0x49caaa | FUN_0049caaa | 935 | engine_menu_input.c, engine_npc_schedule.c, engine_npc_schedule.h (+4) |
-| 0x49ce51 | FUN_0049ce51 | 109 | engine.c, engine_turn.c, engine_turn.h |
+| 0x49b6d3 | FUN_0049b6d3 | 143 | engine_turn.c, engine_turn.h, rl_turn.c |
+| 0x49b762 | FUN_0049b762 | 334 | engine.c, engine.h, engine_turn.c (+2) |
+| 0x49bae9 | FUN_0049bae9 | 180 | engine_menu_input.c, engine_roster.c, engine_roster.h (+1) |
+| 0x49bbe8 | FUN_0049bbe8 | 53 | engine_roster.c, engine_roster.h, engine_territory.c (+1) |
+| 0x49bc1d | FUN_0049bc1d | 66 | engine_roster.c, engine_roster.h, engine_territory.c (+1) |
+| 0x49bc5f | FUN_0049bc5f | 314 | engine_roster.c, engine_roster.h, rl_turn.c |
+| 0x49bd99 | FUN_0049bd99 | 3063 | game_init.c, game_init.h, rl_turn.c |
+| 0x49ca32 | FUN_0049ca32 | 46 | engine_roster.c, engine_roster.h, main.c (+1) |
+| 0x49caaa | FUN_0049caaa | 935 | engine_menu_input.c, engine_npc_schedule.c, engine_npc_schedule.h (+5) |
+| 0x49ce51 | FUN_0049ce51 | 109 | engine.c, engine_turn.c, engine_turn.h (+1) |
 | 0x49cf20 | FUN_0049cf20 | 704 | engine_combat.c, engine_combat.h |
 | 0x49d1e0 | FUN_0049d1e0 | 1024 | engine.c, engine_combat.c, engine_ranking.c (+1) |
 | 0x49d5e0 | FUN_0049d5e0 | 88 | engine_army_ai.c, engine_army_ai.h |
@@ -584,54 +584,54 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49e77d | FUN_0049e77d | 1430 | engine_army_ai.c, engine_army_ai.h |
 | 0x49ed13 | FUN_0049ed13 | 180 | engine_army_ai.c, engine_army_ai.h |
 | 0x49edc7 | FUN_0049edc7 | 872 | engine_army_ai.c, engine_army_ai.h |
-| 0x49f12f | FUN_0049f12f | 765 | engine_army_ai.c, engine_army_ai.h, engine_combat.h |
-| 0x49f431 | FUN_0049f431 | 782 | engine_army_ai.c, engine_army_ai.h |
-| 0x49f73f | FUN_0049f73f | 273 | engine_army_ai.c |
-| 0x49f850 | FUN_0049f850 | 237 | engine_army_ai.c |
+| 0x49f12f | FUN_0049f12f | 765 | engine_army_ai.c, engine_army_ai.h, engine_combat.h (+1) |
+| 0x49f431 | FUN_0049f431 | 782 | engine_army_ai.c, engine_army_ai.h, rl_turn.c |
+| 0x49f73f | FUN_0049f73f | 273 | engine_army_ai.c, rl_turn.c |
+| 0x49f850 | FUN_0049f850 | 237 | engine_army_ai.c, rl_turn.c |
 | 0x49f93d | FUN_0049f93d | 47 | engine_army_ai.c, engine_army_ai.h |
 | 0x49f96c | FUN_0049f96c | 11 | engine_army_ai.c, engine_army_ai.h |
 | 0x49f977 | FUN_0049f977 | 841 | engine_army_ai.c, engine_army_ai.h |
-| 0x49fcc5 | FUN_0049fcc5 | 224 | engine_army_ai.c |
-| 0x49fda5 | FUN_0049fda5 | 460 | engine_army_ai.c |
+| 0x49fcc5 | FUN_0049fcc5 | 224 | engine_army_ai.c, rl_turn.c |
+| 0x49fda5 | FUN_0049fda5 | 460 | engine_army_ai.c, rl_turn.c |
 | 0x49ff71 | FUN_0049ff71 | 164 | engine_army_ai.c, rl_cov3.c |
 | 0x4a0015 | FUN_004a0015 | 469 | engine_army_ai.c, engine_army_ai.h, engine_combat.c |
-| 0x4a01ea | FUN_004a01ea | 287 | engine_army_ai.c |
+| 0x4a01ea | FUN_004a01ea | 287 | engine_army_ai.c, rl_turn.c |
 | 0x4a0309 | FUN_004a0309 | 233 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a03f2 | FUN_004a03f2 | 599 | engine_army_ai.c, engine_army_ai.h, engine_path.h |
-| 0x4a0649 | FUN_004a0649 | 425 | engine_army_ai.c, engine_army_ai.h, engine_path.h |
+| 0x4a0649 | FUN_004a0649 | 425 | engine_army_ai.c, engine_army_ai.h, engine_path.h (+1) |
 | 0x4a07f2 | FUN_004a07f2 | 293 | engine_combat.c, engine_combat.h |
 | 0x4a0917 | FUN_004a0917 | 403 | engine_combat.c, engine_combat.h |
 | 0x4a0aaa | FUN_004a0aaa | 371 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a0c1d | FUN_004a0c1d | 1572 | engine_army_ai.c, engine_army_ai.h |
-| 0x4a1241 | FUN_004a1241 | 357 | engine_diplomacy.c, engine_diplomacy.h |
+| 0x4a1241 | FUN_004a1241 | 357 | engine_diplomacy.c, engine_diplomacy.h, rl_turn.c |
 | 0x4a13a6 | FUN_004a13a6 | 849 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a16f7 | FUN_004a16f7 | 125 | engine_army_move.h, engine_diplomacy.c, engine_diplomacy.h |
-| 0x4a1774 | FUN_004a1774 | 211 | engine_army_ai.c, engine_diplomacy.c, engine_diplomacy.h |
-| 0x4a1847 | FUN_004a1847 | 525 | engine.c, engine_diplomacy.c, engine_diplomacy.h |
-| 0x4a1a54 | FUN_004a1a54 | 213 | engine_army_ai.c, engine_diplomacy.c, engine_diplomacy.h |
+| 0x4a1774 | FUN_004a1774 | 211 | engine_army_ai.c, engine_diplomacy.c, engine_diplomacy.h (+1) |
+| 0x4a1847 | FUN_004a1847 | 525 | engine.c, engine_diplomacy.c, engine_diplomacy.h (+1) |
+| 0x4a1a54 | FUN_004a1a54 | 213 | engine_army_ai.c, engine_diplomacy.c, engine_diplomacy.h (+1) |
 | 0x4a1b29 | FUN_004a1b29 | 298 | engine_army_ai.c, rl_cov3.c |
-| 0x4a1c53 | FUN_004a1c53 | 537 | game_init.c, game_init.h |
-| 0x4a1e6c | FUN_004a1e6c | 117 | engine_noble_faces.c, engine_noble_faces.h, engine_roster.c (+2) |
+| 0x4a1c53 | FUN_004a1c53 | 537 | game_init.c, game_init.h, rl_turn.c |
+| 0x4a1e6c | FUN_004a1e6c | 117 | engine_noble_faces.c, engine_noble_faces.h, engine_roster.c (+3) |
 | 0x4a1ee1 | FUN_004a1ee1 | 1520 | engine_combat.c, engine_diplomacy.c, engine_diplomacy.h |
-| 0x4a24d1 | FUN_004a24d1 | 179 | engine_diplomacy.c, engine_diplomacy.h |
-| 0x4a2584 | FUN_004a2584 | 157 | engine_army_ai.c, game_init.c, game_init.h |
+| 0x4a24d1 | FUN_004a24d1 | 179 | engine_diplomacy.c, engine_diplomacy.h, rl_turn.c |
+| 0x4a2584 | FUN_004a2584 | 157 | engine_army_ai.c, game_init.c, game_init.h (+1) |
 | 0x4a2621 | FUN_004a2621 | 343 | engine.c, engine_diplomacy.c, engine_diplomacy.h (+2) |
-| 0x4a277d | FUN_004a277d | 565 | engine_army_ai.c |
-| 0x4a29b2 | FUN_004a29b2 | 804 | engine_army_ai.c |
-| 0x4a2cd6 | FUN_004a2cd6 | 651 | engine_army_ai.c |
-| 0x4a2f61 | FUN_004a2f61 | 405 | engine_army_ai.c |
-| 0x4a30f6 | FUN_004a30f6 | 895 | engine_army_ai.c |
-| 0x4a3475 | FUN_004a3475 | 220 | engine_army_ai.c |
+| 0x4a277d | FUN_004a277d | 565 | engine_army_ai.c, rl_turn.c |
+| 0x4a29b2 | FUN_004a29b2 | 804 | engine_army_ai.c, rl_turn.c |
+| 0x4a2cd6 | FUN_004a2cd6 | 651 | engine_army_ai.c, rl_turn.c |
+| 0x4a2f61 | FUN_004a2f61 | 405 | engine_army_ai.c, rl_turn.c |
+| 0x4a30f6 | FUN_004a30f6 | 895 | engine_army_ai.c, rl_turn.c |
+| 0x4a3475 | FUN_004a3475 | 220 | engine_army_ai.c, rl_turn.c |
 | 0x4a3551 | FUN_004a3551 | 906 | engine_army_ai.c, rl_cov3.c |
-| 0x4a38db | FUN_004a38db | 908 | engine_army_ai.c |
-| 0x4a3c67 | FUN_004a3c67 | 620 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a38db | FUN_004a38db | 908 | engine_army_ai.c, rl_turn.c |
+| 0x4a3c67 | FUN_004a3c67 | 620 | engine_army_ai.c, engine_army_ai.h, rl_turn.c |
 | 0x4a3ed3 | FUN_004a3ed3 | 383 | engine_army_ai.c, engine_army_ai.h |
-| 0x4a4052 | FUN_004a4052 | 657 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a4052 | FUN_004a4052 | 657 | engine_army_ai.c, engine_army_ai.h, rl_turn.c |
 | 0x4a42e3 | FUN_004a42e3 | 300 | engine_army_ai.c |
-| 0x4a440f | FUN_004a440f | 645 | engine_army_ai.c |
+| 0x4a440f | FUN_004a440f | 645 | engine_army_ai.c, rl_turn.c |
 | 0x4a4694 | FUN_004a4694 | 238 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a4782 | FUN_004a4782 | 701 | engine_army_ai.c, engine_army_ai.h, engine_army_economy.c (+1) |
-| 0x4a4a3f | FUN_004a4a3f | 211 | engine_army_ai.c, engine_army_ai.h |
+| 0x4a4a3f | FUN_004a4a3f | 211 | engine_army_ai.c, engine_army_ai.h, rl_turn.c |
 | 0x4a4b12 | FUN_004a4b12 | 298 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a4c41 | FUN_004a4c41 | 311 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a4e3d | FUN_004a4e3d | 286 | engine_army_ai.c, engine_army_state.c, engine_army_state.h |
@@ -639,7 +639,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4a5003 | FUN_004a5003 | 171 | engine_combat.c, engine_combat.h |
 | 0x4a50ae | FUN_004a50ae | 731 | engine_combat.c, engine_combat.h |
 | 0x4a5389 | FUN_004a5389 | 214 | engine_combat.c, engine_combat.h |
-| 0x4a545f | FUN_004a545f | 188 | engine_combat.c |
+| 0x4a545f | FUN_004a545f | 188 | engine_combat.c, rl_turn.c |
 | 0x4a551b | FUN_004a551b | 332 | engine_combat.c, engine_combat.h |
 | 0x4a5667 | FUN_004a5667 | 325 | engine_army_ai.c, engine_army_ai.h |
 | 0x4a57ac | FUN_004a57ac | 328 | engine_army_ai.c |
@@ -1223,13 +1223,13 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x472986 | FUN_00472986 | 63 | rl_glue.c |
 | 0x472a31 | FUN_00472a31 | 152 | rl_glue.c |
 | 0x472e46 | FUN_00472e46 | 595 | engine.c, rl_terr.c |
-| 0x47309e | FUN_0047309e | 10915 | engine.c |
+| 0x47309e | FUN_0047309e | 10915 | engine.c, rl_turn.c |
 | 0x475b41 | FUN_00475b41 | 562 | rl_glue.c |
 | 0x475d73 | FUN_00475d73 | 148 | rl_glue.c |
-| 0x476a5d | FUN_00476a5d | 74 | engine.c |
-| 0x476aa7 | FUN_00476aa7 | 770 | engine.c |
-| 0x476da9 | FUN_00476da9 | 120 | engine.c |
-| 0x476e21 | FUN_00476e21 | 116 | engine.c |
+| 0x476a5d | FUN_00476a5d | 74 | engine.c, rl_turn.c |
+| 0x476aa7 | FUN_00476aa7 | 770 | engine.c, rl_turn.c |
+| 0x476da9 | FUN_00476da9 | 120 | engine.c, rl_turn.c |
+| 0x476e21 | FUN_00476e21 | 116 | engine.c, rl_turn.c |
 | 0x47703a | FUN_0047703a | 126 | rl_glue.c |
 | 0x4778a0 | FUN_004778a0 | 655 | engine_bf_setup.c |
 | 0x477b2f | FUN_00477b2f | 346 | engine_bf_extern.c |
@@ -1473,7 +1473,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x499619 | FUN_00499619 | 51 | rl_io.c |
 | 0x49964c | FUN_0049964c | 124 | rl_io.c |
 | 0x4996c8 | FUN_004996c8 | 244 | rl_io.c |
-| 0x499859 | FUN_00499859 | 451 | gfx.c |
+| 0x499859 | FUN_00499859 | 451 | gfx.c, rl_turn.c |
 | 0x499aca | FUN_00499aca | 487 | rl_io.c |
 | 0x499cb1 | FUN_00499cb1 | 204 | engine_bf_input.c |
 | 0x499d7d | FUN_00499d7d | 26 | rl_io.c |

@@ -297,3 +297,10 @@ int rl_plat_alloc_hook(uint32_t hook, int type, void *data, int size, int use, i
     if (!s_bound && hook == 0x4c4070u) return 1;   /* the standalone: retail's default _CrtDefaultAllocHook */
     return ((int (__cdecl *)(int, void *, int, int, int, const char *, int))(uintptr_t)hook)(type, data, size, use, req, file, line);
 }
+
+/* turn */
+#include <stdio.h>
+int rl_plat_remove(const char *path)
+{ return s_bound ? CRT(remove, int (__cdecl *)(const char *))(path) : remove(path); }
+int rl_plat_rename(const char *from, const char *to)
+{ return s_bound ? CRT(rename, int (__cdecl *)(const char *, const char *))(from, to) : rename(from, to); }

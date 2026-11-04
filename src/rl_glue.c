@@ -611,10 +611,10 @@ static void editor_open(const void *buf, int max, int w, int flag)
 static void editor_length(void) { rl_401f49(); }
 /* unported or unlinked retail helpers */
 static int map_scene_tick(void) { return (int)engine_retail_call(0x4050c0u, 0); }   /* TODO(rl-link): engine_map_scene_tick */
-static int popup_dismiss(void) { return (int)engine_retail_call(0x476768u, 0); }    /* TODO(rl-link): engine_popup_scroll_dismiss */
+static int popup_dismiss(void) { return rl_476768(); }    /* engine_popup_scroll_dismiss (rl turn) */
 static int cursor_in(int x, int y, int w, int h)   /* 0x4b1deb — TODO(rl-link): engine_popup_cursor_in_rect */
 { return (int)engine_retail_call(0x4b1debu, 4, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h); }
-static int strategic_view(void) { return (int)engine_retail_call(0x4984dcu, 0); }  /* TODO(rl-link): engine.c's 0x4984dc */
+static int strategic_view(void) { return rl_4984dc(); }  /* the season's sheets 0x4984dc (rl turn) */
 
 /* the save / load dialogs' file mask (DAT_004d5710..: *.sva / *.svb / *.sav, twice) */
 #define MASK(k) (g_rl_4d5710 + 8 * (k))

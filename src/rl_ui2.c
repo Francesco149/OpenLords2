@@ -118,12 +118,12 @@ static void plan_owner(int owner)   /* 0x448648 (rl_ctl) */
 static int workforce_hud_render(int a)   /* TODO(rl-link): engine_workforce_hud_render 0x412143 */
 { return (int)engine_retail_call(0x412143u, 1, (uint32_t)a); }
 static void set_camera(int mode) { rl_451fcc(mode); }   /* 0x451fcc (rl_ctl) */
-static int  load_season(void) { return (int)engine_retail_call(0x4984dcu, 0); }   /* TODO(rl-link): engine_pl8.c's season loader 0x4984dc */
+static int  load_season(void) { return rl_4984dc(); }   /* the season loader 0x4984dc (rl turn) */
 static int  present(int full) { return rl_452160(full); }   /* 0x452160 (rl_ctl) */
 static int  confirm_open(int kind, int x, int y, uint32_t cb)   /* engine_confirm_dialog_open 0x40e6f2 (rl ui4; retail keeps the callback VA) */
 { return rl_40e6f2(kind, x, y, (int)cb); }
 static int  evq_post(int a, int b, int code, int d, int e, int f, int g, int h) { return rl_472bc5(a, b, code, d, e, f, g, h); }
-static int  map_options_redraw(void) { return (int)engine_retail_call(0x476a5du, 0); }   /* TODO(rl-link): 0x476a5d (engine.c) */
+static int  map_options_redraw(void) { return rl_476a5d(); }   /* 0x476a5d (rl turn) */
 static void text_input_open(const void *init, int n, int x, int y)   /* text_input_init 0x402009 (rl ui4) */
 { rl_402009((int)(uintptr_t)init, n, x, y); }
 static int  text_recompute_length(void) { return rl_401f49(); }   /* text_input_recompute_length 0x401f49 (rl ui4) */
@@ -968,8 +968,8 @@ int rl_41ef42(void)
 
 /* seams of the setup actions */
 static void evq_init(void) { rl_472ae0(); }
-static int  load_misc_sheet(void) { return (int)engine_retail_call(0x499034u, 0); }   /* TODO(rl-link): gfx_load_misc_sheet 0x499034 */
-static int  load_system_sheet(int k) { return (int)engine_retail_call(0x499a1cu, 1, (uint32_t)k); }   /* TODO(rl-link): gfx_load_system_sheet_select 0x499a1c */
+static int  load_misc_sheet(void) { return rl_499034(); }   /* gfx_load_misc_sheet 0x499034 (rl turn) */
+static int  load_system_sheet(int k) { return rl_499a1c(k); }   /* gfx_load_system_sheet_select 0x499a1c (rl turn) */
 static int  chdir_base(void) { return (int)engine_retail_call(0x4af502u, 0); }   /* TODO(rl-link): io_path_chdir_base 0x4af502 */
 static int  load_panel_sheet(int n) { return (int)engine_retail_call(0x4b25b0u, 1, (uint32_t)n); }   /* TODO(rl-link): gfx_load_panel_sheet 0x4b25b0 */
 static int  read_file_at(const void *name, void *dst, uint32_t n, uint32_t off)   /* TODO(rl-link): io_read_file_at 0x4af8d9 */

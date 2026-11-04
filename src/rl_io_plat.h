@@ -47,7 +47,8 @@
     X(chdir, 0x4cf550u) X(time, 0x4c2740u) X(localtime, 0x4c24e0u) X(asctime, 0x4c2340u) X(malloc, 0x4bfa00u)    \
     X(exit, 0x4bf6f0u) X(CrtCheckMemory, 0x4c0cf0u) X(CrtIsValidHeapPointer, 0x4c1170u)                          \
     X(CrtDbgReport, 0x4c3950u) X(CheckBytes, 0x4c0c60u) X(free_base, 0x4c4370u)                              \
-    X(filelength, 0x4cf490u)
+    X(filelength, 0x4cf490u)                                                                                     \
+    /* turn */ X(remove, 0x4c22c0u) X(rename, 0x4c2260u)
 
 void rl_plat_bind_retail(void);   /* rhost: every shim call goes through retail's IAT slot / retail's CRT */
 int  rl_plat_bound(void);
@@ -141,4 +142,7 @@ int      rl_plat_CrtDbgReport(int type, const char *file, int line, const char *
 int      rl_plat_CheckBytes(const void *p, int c, int n);
 void     rl_plat_free_base(void *block);
 int      rl_plat_alloc_hook(uint32_t hook, int type, void *data, int size, int use, int req, const char *file,
-                            int line);   /* call _pfnAllocHook DAT_004e4610 (retail's default hook = 1) */
+                            int line);
+/* turn */
+int      rl_plat_remove(const char *path);
+int      rl_plat_rename(const char *from, const char *to);   /* call _pfnAllocHook DAT_004e4610 (retail's default hook = 1) */

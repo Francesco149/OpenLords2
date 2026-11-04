@@ -35,8 +35,6 @@
     BFA(g_rl_522c94,0x522c94) \
     BFA(g_rl_52af90,0x52af90) \
     BFA(g_rl_52af98,0x52af98) \
-    BFA(g_rl_52afc8,0x52afc8) \
-    BFA(g_rl_53e980,0x53e980) \
     BFA(g_rl_53f5dc,0x53f5dc) \
     BFA(g_rl_53f5e0,0x53f5e0) \
     BFA(g_rl_53f5e4,0x53f5e4) \
@@ -48,7 +46,6 @@
     BFA(g_rl_553fe8,0x553fe8) \
     BFA(g_rl_553ff8,0x553ff8) \
     BFA(g_rl_5681f4,0x5681f4) \
-    BFA(g_rl_5694f8,0x5694f8) \
     BFA(g_rl_569500,0x569500) \
     BFA(g_rl_569530,0x569530) \
     BFA(g_rl_56d654,0x56d654) \

@@ -18,7 +18,7 @@
 
 /* ---------------------------------------------------------------- seams (callees outside the partition) */
 /* engine_npc_schedule.c / engine_map_init.c ports are not linked in rhost — TODO(rl-link) */
-static int npc_schedule_init(void) { return (int)engine_retail_call(0x49caaau, 0); }   /* TODO(rl-link): engine_npc_schedule_init */
+static int npc_schedule_init(void) { return rl_49caaa(); }   /* engine_npc_schedule_init (rl turn) */
 static void map_init_set_camera(int mode) { rl_451fcc(mode); }   /* 0x451fcc (rl_ctl) */
 
 /* ---------------------------------------------------------------- the game's init / reset stores */
@@ -180,7 +180,7 @@ int rl_497500(void)
     rl_4990f9();
     rl_499261();
     rl_499619();
-    if (engine_retail_call(0x4984dcu, 0) == 0)   /* TODO(rl-extern) */
+    if (rl_4984dc() == 0)   /* the season's sheets (rl turn) */
         return 0;
     rl_4983b7();
     s_slot_005653f8 = 0;
@@ -213,7 +213,7 @@ int rl_4975d3(void)
     g_rl_53f684 = 0;
     g_rl_553ed4 = 0;
     g_rl_55402c = 0;
-    if (engine_retail_call(0x499859u, 0) == 0)   /* TODO(rl-extern) */
+    if (rl_499859() == 0)   /* the system files (rl turn) */
         return 0;
     map_init_set_camera(0);
     rl_45280b();
@@ -1848,7 +1848,7 @@ int rl_497a34(int fresh)
         g_rl_5c9274 = 0;
         return r;
     }
-    engine_retail_call(0x499a1cu, 1, 0u);   /* TODO(rl-link): gfx_load_system_sheet_select */
+    rl_499a1c(0);   /* gfx_load_system_sheet_select (rl turn) */
     s_slot_0053f034 = 0;
     rl_46a101();
     g_rl_53e90c = 0;
@@ -1869,7 +1869,7 @@ int rl_497a34(int fresh)
     s_slot_0053f268 = 4;
     engine_retail_call(0x4ae5e2u, 1, s_slot_0053e8a4);   /* TODO(rl-link): engine_title_render_setup_clamp_player_count */
     rl_433cc1();
-    engine_retail_call(0x498270u, 0);                    /* TODO(rl-link): engine_map_init_strategic */
+    rl_498270();                                         /* engine_map_init_strategic (rl turn) */
     r = g_gfx_last_error;   /* DAT_005aeb68 */
     if (g_gfx_last_error != 0)
         return r;
@@ -1882,7 +1882,7 @@ int rl_497a34(int fresh)
     }
     engine_territory_mark_full_screen_dirty();
     g_engine_state = 2;
-    engine_retail_call(0x499034u, 0);   /* TODO(rl-link): gfx_load_misc_sheet */
+    rl_499034();   /* gfx_load_misc_sheet (rl turn) */
     if (g_sim_mp_active != 0) {
         engine_set_current_screen(0x1f);
         engine_retail_call(0x4b756bu, 0);   /* TODO(rl-extern) */

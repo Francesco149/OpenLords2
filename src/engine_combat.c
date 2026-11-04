@@ -1802,7 +1802,7 @@ int engine_combat_raise_region_unit(int region)
  * Moves min(available, reserve), then debits both the reserve and the slot-0
  * pool.  A no-op when the class reserve is empty.  muster_garrison runs it over
  * classes 5/1/3/2/6 to fill the garrison from the owner's cashflow categories. */
-static void engine_combat_pool_commit(int owner, int klass)
+void engine_combat_pool_commit(int owner, int klass)
 {
     uint8_t *pool   = engine_game_init_troop_pool_row(owner);
     int32_t  demand = *(int32_t *)(pool + klass * 0x10 + M_RES_B);
