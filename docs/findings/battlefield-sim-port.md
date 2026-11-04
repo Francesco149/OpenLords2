@@ -82,4 +82,5 @@ hybrid PASS.
 | group | group AI FUN_00489401 + interactive stances DAT_004d91b8, aggregator, projectiles, fire | 42 | 17158 |
 | stance | the other stance tables DAT_004d91f8 / DAT_004d91d0 | 28 | 12140 |
 | setup | entering the battlefield: terrain, deployment, spawn (FUN_004778a0) | 50 | 26085 |
+| input | the battlefield input (screens 0x28..0x2a: select, order, control panel) + HUD panels (FUN_0043bf07 …) | 25 | 7856 |
 | extern | retail seams out of scope (audio streams, sprite loads): stubs only | 4 | 2006 |

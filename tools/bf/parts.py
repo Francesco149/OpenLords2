@@ -34,6 +34,9 @@ PARTS = {
                 "47e230 47e263 47e387 47e52d 47e668 47e7b2 47e926 48eefd 497024 497247 49719e 47efee 46f0f0 46f13e "
                 "46f18d 47f42d 47fea7 480599 480662 46e4c8 46e70e 479473 48169e 4816f9 481878 481906 4801f8 480f2e "
                 "480f8b 46c40c 46c7fc 47d6fe 47d79c 47d816 42d806 47ed9b"),
+    # the battlefield's input (screens 0x28..0x2a: select, order, the control panel) and its HUD panels
+    "input": _h("4238b8 4239d5 43b9a1 43ba29 43bb68 43bbd7 43bd02 43bd67 43bdcd 43bf07 43c247 43c2a9 43c4c6 43c55c "
+                "43c57d 43c634 4784ca 478987 478f0b 479a71 479b58 479cf7 47a76d 47f76d 499cb1"),
     # retail seams the battlefield calls that stay out of scope (audio streams, sprite loads): stubs only
     "extern": _h("43f304 477b2f 4987b7 499d97"),
 }

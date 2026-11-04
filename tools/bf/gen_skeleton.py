@@ -9,7 +9,8 @@ Writes, once (never over an existing partition file — the owners edit those):
   src/engine_bf_<part>_pending.c    a retail stub per function (engine_retail_call): delete one as you port it
   src/engine_bf_<part>.c            the partition's ports (empty)
   tools/rhost/rh_hooks_bf_<part>.c  the partition's hook table (empty)
---globals-only regenerates only the first two (the partition files stay).
+--globals-only regenerates only the first two (the partition files stay); --new-parts only the partitions that
+have no files yet (the globals stay — once partitions use them, regenerate only with every owner's consent).
 """
 import collections
 import os
@@ -200,6 +201,9 @@ def gen_parts():
 
 
 if __name__ == "__main__":
+    if "--new-parts" in sys.argv:   # only partitions without files yet (the globals stay as they are: agents use them)
+        gen_parts()
+        sys.exit(0)
     gen_globals()
     if "--globals-only" not in sys.argv:
         gen_parts()

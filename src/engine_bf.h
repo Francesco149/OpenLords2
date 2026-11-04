@@ -74,4 +74,5 @@ void bf_rng_step(void);   /* FUN_00404a46 on retail's globals (engine_rng_step) 
 #include "engine_bf_group.h"
 #include "engine_bf_stance.h"
 #include "engine_bf_setup.h"
+#include "engine_bf_input.h"
 #include "engine_bf_extern.h"
