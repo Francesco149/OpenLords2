@@ -443,7 +443,7 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
 int rh_shadow_ex_f(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn, int flags)
 {
     int media = (flags & RH_SH_MEDIA) || O.shadow_media;
-    return O.shadow_full || g_paged_off ? shadow_copy(name, retail, port, ctx, why, whyn, media)
+    return O.shadow_full || g_paged_off || (flags & RH_SH_FULL) ? shadow_copy(name, retail, port, ctx, why, whyn, media)
                                         : shadow_paged(name, retail, port, ctx, why, whyn, media);
 }
 int rh_shadow_ex(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn)

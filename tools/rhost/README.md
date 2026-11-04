@@ -106,7 +106,10 @@ caller, screen id) the first 64 calls and every power-of-two-th one are shadowed
 `hook-result … sampled=N` (`--shadow-all`: every call); the hybrid pass still runs every call. `RH_SH_HOST` — a
 host-level function (it creates host objects — the window class, the DirectDraw object — or releases them): never
 shadowed (every call runs retail and counts in `sampled`), so its only evidence is the hybrid pass (`verify` counts it
-reached when sampled > 0).
+reached when sampled > 0). `RH_SH_FULL` — shadow the row with the full state copy instead of the page-tracked one:
+the paged shadow's write faults push exception frames onto the stack just below the faulting esp, so a function whose
+subtree reads stale locals there (stack residue below its own frame — the army-state handlers and the march executor
+0x465d28) runs differently inside the shadow than in a pure run. Costly per call: pair it with `RH_SH_SAMPLE`.
 
 `verify`: a hook called inside another shadowed call runs retail there (`rh_in_shadow`), so the corpus is
 shadowed in passes — pass 1 every hook, pass N only the hooks no earlier pass reached (one nesting level

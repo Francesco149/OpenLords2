@@ -174,6 +174,9 @@ int  rh_shadow_ex(const char *name, void (*retail)(void *), void (*port)(void *)
 #define RH_SH_HOST 4     /* (hook rows) a host-level function (it creates host objects: the window class, the DirectDraw
                             * object …): the shadow cannot run it twice. Shadow passes leave every call to retail (counted
                             * in `sampled`); the hybrid pass replaces it — corpus --check (state + every frame) proves it */
+#define RH_SH_FULL 8     /* (hook rows) shadow this row with the full state copy, not the page-tracked one: its retail side
+                            * reads stack residue below its own frame, where the paged shadow's write faults push exception
+                            * frames (retail's own run perturbed: rl_46521f). Costly: pair with RH_SH_SAMPLE on a hot row */
 int  rh_shadow_ex_f(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn, int flags);
 void rh_shadow_prewrite(const void *p, size_t n);   /* before a KERNEL write into retail memory (ReadFile, ...) */
 void rh_shadow_report(void);                         /* shadow-prof: per-phase cost per call */
