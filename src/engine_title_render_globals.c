@@ -28,3 +28,9 @@ int32_t g_tr_tabs_dirty;                 /* DAT_0055ce94 */
 int32_t g_tr_p9_tab;                     /* DAT_0055306c */
 int32_t g_tr_p9_count;                   /* DAT_00553fb4 */
 int32_t g_tr_p9_bookmark = 7;            /* DAT_00553e5c */
+int32_t g_tr_fl_count;                   /* DAT_004eb25c */
+int32_t g_tr_fl_first;                   /* DAT_004ea1a0 */
+int32_t g_tr_fl_selected = 999;          /* DAT_004e65dc */
+uint8_t g_tr_fl_name[0x42];              /* DAT_004ea130 */
+int32_t g_tr_fl_show_status;             /* DAT_0057d3c4 */
+uint8_t g_tr_fl_flag;                    /* DAT_00591548 */

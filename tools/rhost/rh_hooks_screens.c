@@ -32,6 +32,8 @@
 #include "engine_battlefield_render.h"
 #include "engine_trade.h"
 #include "engine_armory.h"
+#include "engine_labor.h"
+#include "engine_screen_strat.h"
 #include "gfx.h"
 #include "gfx_panel.h"
 #include "text_input.h"
@@ -49,7 +51,9 @@ A(g_tr_p4_gate_b,0x553248) A(g_tr_p4_continue_disabled,0x57c940) A(g_tr_p4_shiel
 A(g_tr_p4_selected_shield,0x57c8cc) A(g_tr_p4_shield_flash,0x57d354) A(g_tr_p4_flash_timer,0x568984)
 A(g_tr_p4_name_buf,0x53f1e0) A(g_tr_options,0x53f288) A(g_tr_misc_sheet,0x5530c8) A(g_tr_country_scroll,0x53e90c)
 A(g_tr_country_sel,0x57cacc) A(g_tr_country_count,0x554018) A(g_tr_country_dirty,0x57c948) A(g_tr_tabs_dirty,0x55ce94)
-A(g_tr_p9_tab,0x55306c) A(g_tr_p9_count,0x553fb4) A(g_tr_p9_bookmark,0x553e5c)
+A(g_tr_p9_tab,0x55306c) A(g_tr_p9_count,0x553fb4) A(g_tr_p9_bookmark,0x553e5c) A(g_tr_fl_count,0x4eb25c)
+A(g_tr_fl_first,0x4ea1a0) A(g_tr_fl_selected,0x4e65dc) A(g_tr_fl_name,0x4ea130) A(g_tr_fl_show_status,0x57d3c4)
+A(g_tr_fl_flag,0x591548)
 /* engine_battlefield_render_globals.c */
 A(g_bfr_camera_x,0x4e657c) A(g_bfr_camera_y,0x4e6580) A(g_bfr_zoom,0x4e656c) A(g_bfr_desc_base,0x4e6574)
 A(g_bfr_desc_stride,0x4e5d50) A(g_bfr_desc_cursor,0x4e6588) A(g_bfr_grid_cols,0x4e5d5c) A(g_bfr_grid_rows,0x4e5d4c)
@@ -139,6 +143,9 @@ int gfx_load_palette(const char *path)
     scr_retail_leave();
     return 1;
 }
+/* engine_screen_strat.c is not linked: the menu bar FUN_00419c78 (the labor screen's head) is retail's */
+void engine_screen_strat_render_menubar(void)
+{ scr_retail_enter(); ((void (__cdecl *)(void))(uintptr_t)0x419c78u)(); scr_retail_leave(); }
 int  gfx_lock_canvas(void)   { return 1; }
 void gfx_unlock_canvas(void) { }
 
@@ -153,7 +160,7 @@ static void seam_title_background(void)
 static void seam_title_page(int page)
 {
     static const struct { uint32_t va; int arg; } k[14] = {
-        [3] = { 0x41ef42u, -1 }, [6] = { 0x41f3e9u, -1 }, [8] = { 0x41f77au, 999 },
+        [6] = { 0x41f3e9u, -1 }, [8] = { 0x41f77au, 999 },
         [9] = { 0x41fdd6u, -1 }, [10] = { 0x420428u, -1 }, [11] = { 0x420630u, 999 }, [12] = { 0x42051cu, 999 },
         [13] = { 0x42150bu, -1 },
     };
@@ -219,6 +226,7 @@ static void scr_bind(void)
     engine_title_render_bind_chrome_asset(CHROME_SHEET);
     engine_title_render_bind_palette((const uint8_t *)(uintptr_t)0x4ea1b0u);   /* DAT_004ea1b0: the darken's palette */
     engine_title_render_bind_country_values((const uint8_t *)(uintptr_t)0x50a460u);
+    engine_title_render_bind_filelist_entries((const uint8_t *)(uintptr_t)0x4e8790u);
     engine_title_render_bind_preview_fn(seam_title_preview);
     engine_title_render_bind_roster_prep(seam_title_roster_prep);
     /* the battlefield renderer's fixed retail tables + seams (its state is aliased) */
@@ -312,8 +320,8 @@ static const engine_noble_faces_ctx_t *nf_ctx(void)
 #define TR(call) do { scr_bind(); ed_load(); seats_load(); loc_load(); call; loc_store(); } while (0)
 
 /* ---------------------------------------------------------------- engine_county_panels: the context over retail's */
-static void seam_map_scene(void)   /* FUN_004050c0: the map recomposite the panels open with (unported here) */
-{ scr_retail_enter(); ((void (__cdecl *)(void))(uintptr_t)0x4050c0u)(); scr_retail_leave(); }
+static int seam_map_scene(void)   /* FUN_004050c0: the map recomposite the panels open with — it may re-pick DAT_0057c93c */
+{ scr_retail_enter(); ((void (__cdecl *)(void))(uintptr_t)0x4050c0u)(); scr_retail_leave(); return (int)s_slot_0057c93c; }
 static engine_county_panels_ctx_t s_cp;
 static engine_county_panels_ctx_t *cp_ctx(void)
 {
@@ -415,6 +423,20 @@ static int arm_slider(void)
                                       (int)G32(0x4e65f4u), G8(0x4eafb4u), G8(0x4eabc5u), G8(0x4e65ccu));
 }
 
+/* ---------------------------------------------------------------- engine_labor: the context over retail's */
+static engine_labor_ctx_t s_lb;
+static engine_labor_ctx_t *lb_ctx(void)
+{
+    scr_bind();
+    s_lb.county_block = g_per_army_768; s_lb.county = (int)s_slot_0057c93c;
+    s_lb.advanced_mode = (int)s_slot_0053f25c; s_lb.season = (int)s_slot_0057c92c;
+    s_lb.chrome = CHROME_SHEET; s_lb.misc_sheet = MISC_SHEET; s_lb.system_sheet = SYSTEM_SHEET;
+    s_lb.title_font = FONT_TALL; s_lb.menu_font = FONT_DEFAULT; s_lb.glyph_table = GLYPH_TABLE;
+    s_lb.glyph_metrics = METRICS_TABLE; s_lb.loc = loc_load();
+    return &s_lb;
+}
+#define LB(call) do { engine_labor_ctx_t *lb = lb_ctx(); call; loc_store(); } while (0)
+
 #define RH_TABLE RH_HOOKS_SCREENS
 extern hook_t RH_HOOKS_SCREENS[];
 
@@ -443,6 +465,8 @@ enum {
     X_scr_title_setup, X_scr_title_tabs, X_scr_title_country, X_scr_title_roster,
     X_scr_county_grid, X_scr_county_rations_in,
     X_scr_county_population, X_scr_county_happiness, X_scr_county_graph,
+    X_scr_labor_castle,
+    X_scr_title_filelist, X_scr_title_filelist_content,
 };
 
 /* engine_tooltip.c */
@@ -553,6 +577,11 @@ HOOK_V(scr_county_population,   0, CP(engine_county_panel_population(cp)))
 HOOK_V(scr_county_happiness,    0, CP(engine_county_panel_happiness(cp)))
 static int county_graph_row(const uint32_t *a) { int r; CP(r = engine_county_graph_render(cp, I(0), I(1), I(2))); return r; }
 HOOK_R(scr_county_graph,        3, county_graph_row(a))
+/* engine_labor.c — FUN_0041dedb(county, x, y, row) */
+HOOK_V(scr_labor_castle,        4, LB(engine_labor_castle_block(lb, I(0), I(1), I(2), I(3))))
+/* engine_title_render.c — the save-file list (page 3; FUN_004149ec's second argument: 1 = the title layout) */
+HOOK_V(scr_title_filelist,      1, TR(engine_title_render_filelist(I(0))))
+HOOK_V(scr_title_filelist_content, 2, TR(engine_title_render_filelist_content(I(0), I(1))))
 
 hook_t RH_HOOKS_SCREENS[] = {
     { "scr_tooltip_tick", 0x476e95u, (void *)w_scr_tooltip_tick, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
@@ -647,5 +676,8 @@ hook_t RH_HOOKS_SCREENS[] = {
     { "scr_county_population", 0x4110b1u, (void *)w_scr_county_population, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
     { "scr_county_happiness", 0x4116fbu, (void *)w_scr_county_happiness, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
     { "scr_county_graph", 0x4156a7u, (void *)w_scr_county_graph, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "scr_labor_castle", 0x41dedbu, (void *)w_scr_labor_castle, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "scr_title_filelist", 0x4148e4u, (void *)w_scr_title_filelist, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "scr_title_filelist_content", 0x4149ecu, (void *)w_scr_title_filelist_content, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
 };
 const int RH_HOOKS_SCREENS_N = sizeof RH_HOOKS_SCREENS / sizeof *RH_HOOKS_SCREENS;

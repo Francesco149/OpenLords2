@@ -108,7 +108,8 @@ typedef struct engine_county_panels_ctx {
     const uint8_t *glyph_table;
     const unsigned char *glyph_metrics;
     localization_state_t *loc;
-    void (*map_scene)(void);       /* FUN_004050c0, the panels' map recomposite (rhost: retail's); NULL → none */
+    int (*map_scene)(void);        /* FUN_004050c0, the panels' map recomposite (rhost: retail's) — it may re-pick
+                                    * the current county (DAT_0057c93c): returns it; NULL → none */
     int graphs_load;               /* 1: the graph loads graphs.pl8 into `graphs` itself (retail; rhost) */
     engine_dirty_rect_state_t *dirty; /* FUN_0045240a's rectangle; NULL → no mark */
 } engine_county_panels_ctx_t;

@@ -64,7 +64,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4022bd | FUN_004022bd | 394 | gfx_text_label.c, gfx_text_label.h |
 | 0x402447 | FUN_00402447 | 400 | gfx_text_label.c, gfx_text_label.h |
 | 0x4025d7 | FUN_004025d7 | 96 | gfx_text.c, gfx_text.h |
-| 0x402637 | FUN_00402637 | 989 | engine_county_panels.c, engine_noble_faces.c, engine_title_render.c (+5) |
+| 0x402637 | FUN_00402637 | 989 | engine_county_panels.c, engine_noble_faces.c, engine_treasury.c (+4) |
 | 0x402a14 | FUN_00402a14 | 514 | gfx_dispatch.c, gfx_dispatch.h, gfx_glyph.h (+1) |
 | 0x402c16 | FUN_00402c16 | 72 | gfx_text.c, gfx_text.h |
 | 0x402c5e | FUN_00402c5e | 217 | engine_title_render.c, gfx_wrap.c, gfx_wrap.h |
@@ -124,9 +124,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x409397 | FUN_00409397 | 73 | engine_armory.c, engine_county_panels.c, engine_county_panels.h (+2) |
 | 0x4093e0 | FUN_004093e0 | 73 | engine_diplomacy_action.c, engine_noble_faces.c, engine_sendsupplies.c (+4) |
 | 0x40946d | FUN_0040946d | 856 | gfx_panel.c, gfx_panel.h |
-| 0x4097c5 | FUN_004097c5 | 367 | gfx_panel.c, gfx_panel.h |
+| 0x4097c5 | FUN_004097c5 | 367 | engine_title_render.c, gfx_panel.c, gfx_panel.h |
 | 0x409934 | FUN_00409934 | 863 | engine_county_panels.c, gfx_panel.c, gfx_panel.h |
-| 0x409c93 | FUN_00409c93 | 374 | engine_armory.c, engine_county_panels.c, engine_sendsupplies.c (+3) |
+| 0x409c93 | FUN_00409c93 | 374 | engine_armory.c, engine_county_panels.c, engine_sendsupplies.c (+4) |
 | 0x409e09 | FUN_00409e09 | 368 | engine_hud_menubar.c, engine_hud_menubar.h |
 | 0x40a01d | FUN_0040a01d | 261 | engine_minimap.c, engine_sendsupplies.c, gfx_dispatch.h (+2) |
 | 0x40a21a | FUN_0040a21a | 433 | engine_county_panels.c, engine_hud_menubar.c, engine_hud_menubar.h (+5) |
@@ -736,7 +736,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b13ed | FUN_004b13ed | 274 | gfx_globals.c, gfx_globals.h, gfx_paint.c (+1) |
 | 0x4b14ff | FUN_004b14ff | 872 | gfx_paint.c |
 | 0x4b191e | FUN_004b191e | 981 | engine.c, engine.h, engine_input.c (+2) |
-| 0x4b1de0 | FUN_004b1de0 | 11 | engine.c, engine_armory.c, engine_confirm_dialog.c (+6) |
+| 0x4b1de0 | FUN_004b1de0 | 11 | engine.c, engine_armory.c, engine_confirm_dialog.c (+7) |
 | 0x4b1deb | FUN_004b1deb | 92 | engine.c, engine_county_panels.c |
 | 0x4b20ed | FUN_004b20ed | 68 | engine.c, engine.h, engine_delta.c |
 | 0x4b2258 | FUN_004b2258 | 797 | audio.h, engine.c, engine.h (+2) |

@@ -94,6 +94,11 @@ typedef struct engine_labor_ctx {
     localization_state_t *loc;
 } engine_labor_ctx_t;
 
+/* ── FUN_0041dedb — one castle-status block (the castle panel's, and the terrain-info county summary's 0x41da2f):
+ * the wall strength / cost tables DAT_004d8a24 / DAT_004d8a0c by the county's castle kind (+0x1c0), the stone /
+ * labour stocks, the build progress; at (bx + 0x60, by + 0x10·row + 0x68 …). */
+void engine_labor_castle_block(const engine_labor_ctx_t *ctx, int county, int bx, int by, int row);
+
 /* ── The selected-task global (retail DAT_00553f54) ────────────────────
  * UI state, not saved: set by the open hit-test / the labor steppers,
  * read by the renderer.  Owned here so the input seam and the render

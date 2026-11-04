@@ -174,27 +174,26 @@ static const unsigned char *g_caret_metrics_table;
  * first-visible index (DAT_004ea1a0).  Names render in a 3-column grid. */
 static const uint8_t *g_fl_entries;
 static int            g_fl_entry_stride = 0x41;
-static int            g_fl_count;
-static int            g_fl_first_visible;
+
 
 /* The highlighted grid entry (DAT_004e65dc).  999 = no selection — the
  * full-scene draw (FUN_004148e4) resets it; a grid hover/click
  * (FUN_0043400b) sets it; the per-frame refresh (FUN_004ba26e page-3
  * arm) renders the list with this entry highlighted. */
-static int            g_fl_selected = 999;
+
 
 /* The selected-name field shown above the grid (DAT_004ea130).  A
  * renderer-owned mutable buffer (like g_tr_p4_name_buf) so the page-3
  * editor tail's per-frame copy-out (FUN_0040210c, &DAT_004ea130, 0x40)
  * can stream the live editor text into it; set_filelist_topname seeds
  * it.  0x42 bytes covers the 0x40-char copy-out plus its terminator. */
-static uint8_t g_fl_name_buf[0x42];
+
 
 /* The page-3 filename field shares the one title editor (g_title_editor);
  * there is no separate file-list editor — see the g_title_editor note. */
 
 /* Bottom status-line gate (DAT_0057d3c4): 0 → no status line drawn. */
-static int g_fl_show_status;
+
 
 /* ─── binders ───────────────────────────────────────────────────── */
 
@@ -236,6 +235,7 @@ void engine_title_render_bind_retail_pages(engine_title_render_page_fn fn)
 
 void engine_title_render_bind_preview_fn(void (*fn)(int mode, int x, int y)) { g_preview_fn = fn; }
 void engine_title_render_bind_country_values(const uint8_t *values) { g_p7_country_values = values; }
+void engine_title_render_bind_filelist_entries(const uint8_t *entries) { g_fl_entries = entries; g_fl_entry_stride = 0x41; }
 void engine_title_render_bind_roster_prep(void (*fn)(void)) { g_roster_prep_fn = fn; }
 
 /* FUN_0040acce over the shared title editor: its cursor-char measure caches into the measurers' globals
@@ -420,18 +420,18 @@ void engine_title_render_set_filelist(const uint8_t *entries, int entry_stride,
 {
     g_fl_entries       = entries;
     g_fl_entry_stride  = entry_stride ? entry_stride : 0x41;
-    g_fl_count         = count;
-    g_fl_first_visible = first_visible;
+    g_tr_fl_count         = count;
+    g_tr_fl_first = first_visible;
 }
 
 void engine_title_render_set_filelist_topname(const uint8_t *name)
 {
     size_t i = 0;
     if (name) {
-        for (; name[i] && i < sizeof g_fl_name_buf - 1; i++)
-            g_fl_name_buf[i] = name[i];
+        for (; name[i] && i < sizeof g_tr_fl_name - 1; i++)
+            g_tr_fl_name[i] = name[i];
     }
-    g_fl_name_buf[i] = 0;
+    g_tr_fl_name[i] = 0;
 }
 
 void engine_title_render_set_filelist_editor(text_input_state_t *editor)
@@ -455,27 +455,27 @@ void engine_title_render_filelist_name_tail(void)
         return;
     g_title_editor->enabled = 1;
     text_input_recompute_length(g_title_editor);
-    text_input_copy_out(g_title_editor, (char *)g_fl_name_buf, 0x40);
+    text_input_copy_out(g_title_editor, (char *)g_tr_fl_name, 0x40);
 }
 
 void engine_title_render_set_filelist_show_status(int show)
 {
-    g_fl_show_status = show;
+    g_tr_fl_show_status = show;
 }
 
 int engine_title_render_filelist_first_visible(void)
 {
-    return g_fl_first_visible;
+    return g_tr_fl_first;
 }
 
 const uint8_t *engine_title_render_filelist_name(void)
 {
-    return g_fl_name_buf;
+    return g_tr_fl_name;
 }
 
 int engine_title_render_filelist_selected(void)
 {
-    return g_fl_selected;
+    return g_tr_fl_selected;
 }
 
 /* Port of FUN_0043400b — the file-list grid hit-test/selection.  Lives
@@ -485,7 +485,7 @@ int engine_title_render_filelist_selected(void)
  * page-3 (x0=0x60, y0=10), 0 = in-game dialog (x0=0x10, y0=0x90).
  *
  * Behaviour: while the cursor is over the 3-column × 0x10-row grid the
- * hovered entry is latched into g_fl_selected (DAT_004e65dc) — so the
+ * hovered entry is latched into g_tr_fl_selected (DAT_004e65dc) — so the
  * highlight follows the mouse — and ON a left-button press edge the
  * entry's 13-byte filename is copied into the selected-name field
  * (DAT_004ea130) and the shared title editor is re-initialised on it
@@ -511,28 +511,28 @@ int engine_title_render_filelist_grid_pick(int param_1, int cursor_x,
     /* Column from x (3 columns, 0x78 px wide), then row from y (0x10 px
      * tall) advancing 3 entries each — the iso-grid index arithmetic
      * verbatim from FUN_0043400b. */
-    if      (cursor_x < x0 + 0x78) g_fl_selected = g_fl_first_visible;
-    else if (cursor_x < x0 + 0xf0) g_fl_selected = g_fl_first_visible + 1;
-    else                           g_fl_selected = g_fl_first_visible + 2;
+    if      (cursor_x < x0 + 0x78) g_tr_fl_selected = g_tr_fl_first;
+    else if (cursor_x < x0 + 0xf0) g_tr_fl_selected = g_tr_fl_first + 1;
+    else                           g_tr_fl_selected = g_tr_fl_first + 2;
     {
         int dy = cursor_y - (y0 + 0x6c);
-        g_fl_selected += ((dy + ((dy >> 31) & 0xf)) >> 4) * 3;
+        g_tr_fl_selected += ((dy + ((dy >> 31) & 0xf)) >> 4) * 3;
     }
 
     if (!lmb_pressed)               /* hover only — highlight, no commit */
         return 0;
-    if (g_fl_selected >= g_fl_count) /* press over an empty slot */
+    if (g_tr_fl_selected >= g_tr_fl_count) /* press over an empty slot */
         return 0;
 
     /* Commit the clicked entry's filename into the name field + re-init
      * the editor on it (FUN_00401136 13-byte copy, FUN_00402009). */
     if (g_fl_entries) {
-        const uint8_t *src = g_fl_entries + g_fl_selected * g_fl_entry_stride;
+        const uint8_t *src = g_fl_entries + g_tr_fl_selected * g_fl_entry_stride;
         for (int i = 0; i < 0xd; i++)
-            g_fl_name_buf[i] = src[i];
+            g_tr_fl_name[i] = src[i];
     }
     if (g_title_editor) {
-        text_input_init(g_title_editor, (const char *)g_fl_name_buf,
+        text_input_init(g_title_editor, (const char *)g_tr_fl_name,
                         8, 0xa0, 1);
     }
     return 1;
@@ -548,19 +548,19 @@ int engine_title_render_filelist_grid_pick(int param_1, int cursor_x,
  * dispatcher, not here. */
 void engine_title_render_filelist_scroll(int delta, int mode)
 {
-    g_fl_first_visible += delta;
-    if (g_fl_first_visible < 0)
-        g_fl_first_visible = 0;
+    g_tr_fl_first += delta;
+    if (g_tr_fl_first < 0)
+        g_tr_fl_first = 0;
     if (mode == 1) {
-        if (g_fl_count - 0xf < g_fl_first_visible)
-            g_fl_first_visible -= 3;
-        if (g_fl_count < 0x1e)
-            g_fl_first_visible = 0;
+        if (g_tr_fl_count - 0xf < g_tr_fl_first)
+            g_tr_fl_first -= 3;
+        if (g_tr_fl_count < 0x1e)
+            g_tr_fl_first = 0;
     } else if (mode == 2) {
-        if (g_fl_count - 5 < g_fl_first_visible)
-            g_fl_first_visible -= 1;
-        if (g_fl_count < 10)
-            g_fl_first_visible = 0;
+        if (g_tr_fl_count - 5 < g_tr_fl_first)
+            g_tr_fl_first -= 1;
+        if (g_tr_fl_count < 10)
+            g_tr_fl_first = 0;
     }
 }
 
@@ -908,97 +908,124 @@ void engine_title_render_choose_title(void)
  * selected entry on a 96×16 highlight bar), and the bottom box inset.
  * `selected` is the entry index to highlight (999 = none, matching the
  * draw-pass call).  base = (0x60, 10). */
-static void engine_title_render_filelist_content(int selected)
+void engine_title_render_filelist_content(int selected, int title)
 {
-    const int bx = 0x60, by = 10;   /* retail local_1c / local_20 */
+    int bx, by;                             /* the title variant (96, 10); the in-game dialog's (16, 144) */
+    if (title != 0) {
+        bx = 0x60;
+        by = 10;
+    } else {
+        bx = 0x10;
+        by = 0x90;
+    }
 
-    /* Top-field caret-anchor reset (retail DAT_005aeb64 / DAT_0058fd58 /
-     * DAT_0058fd78 / DAT_005c925a / DAT_005cd404). */
-    gfx_text_clear_first_pos_latch();
-    gfx_text_set_first_pos_x(0);
-    gfx_text_set_char_counter(0);
-    gfx_text_set_first_pos_y(by + 0x48);
-    gfx_text_set_collapse_active(1);
-    gfx_text_set_line_x_acc(0);
-    /* Latch the caret x at the editor's cursor char (retail's full editor
-     * renderer FUN_00402637 does this internally; the port splits it into
-     * a text-line render + a caret render, so seed the target here as the
-     * page-4 name box does). */
+    /* Top-field caret-anchor reset (retail DAT_005aeb64 / DAT_0058fd58 / DAT_0058fd78 / DAT_0058fd54 /
+     * DAT_005c925a / DAT_005cd404). */
+    g_gfx_first_pos_latch = 0;
+    g_gfx_first_pos_x = 0;
+    g_gfx_char_counter = 0;
+    g_gfx_first_pos_y = by + 0x48;
+    g_gfx_collapse_active = 1;
+    g_gfx_line_x_acc = 0;
+    /* The caret x latches at the editor's cursor char: its cursor IS the first-pos target DAT_005bb4a8 in retail;
+     * the standalone's editor keeps its own. */
     if (g_title_editor) {
         gfx_text_set_first_pos_target(g_title_editor->cursor);
     }
 
-    /* Two tiled-border strips lining the selected-name field. */
-    gfx_panel_fill_interior(title_sheet(), bx + 0x1c, by + 0x42, 10, 1);
-    gfx_panel_fill_interior(title_sheet(), bx + 0x1c, by + 0x4c, 10, 1);
+    /* Two tiled-border strips lining the selected-name field (the title sheet's interior FUN_004097c5; the in-game
+     * dialog's the chrome FUN_00409c93). */
+    if (title != 0) {
+        gfx_panel_fill_interior(title_sheet(), bx + 0x1c, by + 0x42, 10, 1);
+        gfx_panel_fill_interior(title_sheet(), bx + 0x1c, by + 0x4c, 10, 1);
+    } else {
+        gfx_panel_fill_interior_chrome(g_chrome_asset, bx + 0x1c, by + 0x42, 10, 1);
+        gfx_panel_fill_interior_chrome(g_chrome_asset, bx + 0x1c, by + 0x4c, 10, 1);
+    }
 
-    /* Selected-name text. */
-    if (g_fl_name_buf[0]) {
-        gfx_text_render_line(g_fl_name_buf, bx + 0x20, by + 0x48, g_menu_font,
-                             g_glyph_table, 0x3f);
+    /* The selected-name text (DAT_004ea130). */
+    gfx_text_render_line(g_tr_fl_name, bx + 0x20, by + 0x48, g_menu_font, g_glyph_table, 0x3f);
+    if (g_gfx_first_pos_latch == 0) {
+        g_gfx_first_pos_x = g_gfx_line_x_acc;
+        g_gfx_first_pos_latch = 1;
     }
-    if (gfx_text_first_pos_latched() == 0) {
-        gfx_text_set_first_pos_x(gfx_text_line_x_acc());
-    }
-    gfx_text_set_first_pos_x(gfx_text_first_pos_x() + bx + 0x20);
-    gfx_text_set_first_pos_y(by + 0x48);
+    g_gfx_first_pos_x += bx + 0x20;
+    g_gfx_first_pos_y = by + 0x48;
     if (g_title_editor) {
         title_caret(0x3f);
     }
-    engine_dirty_rect_mark_box_tiled(g_dirty_state, bx + 0x18, by + 0x40, 0xb, 3, 1);
+    if (g_dirty_state) {
+        engine_dirty_rect_mark_box_tiled(g_dirty_state, bx + 0x18, by + 0x40, 0xb, 3, 1);
+    }
 
     /* The list-box tiled border. */
-    gfx_panel_fill_interior(title_sheet(), bx + 0x1e, by + 0x6a, 0x15, 10);
-    engine_dirty_rect_mark_box_tiled(g_dirty_state, bx + 0x1c, by + 0x68, 0x16, 0xb, 1);
+    if (title != 0) {
+        gfx_panel_fill_interior(title_sheet(), bx + 0x1e, by + 0x6a, 0x15, 10);
+    } else {
+        gfx_panel_fill_interior_chrome(g_chrome_asset, bx + 0x1e, by + 0x6a, 0x15, 10);
+    }
+    if (g_dirty_state) {
+        engine_dirty_rect_mark_box_tiled(g_dirty_state, bx + 0x1c, by + 0x68, 0x16, 0xb, 1);
+    }
 
-    /* File-list grid — 3 columns (step 0x78), rows step 0x10. */
+    /* File-list grid (DAT_004e8790, 0x41 a record) — 3 columns (step 0x78), rows step 0x10, at most 30. */
     int lx = bx + 0x20;
     int ly = by + 0x6c;
-    int col = 0, shown = 0;
-    for (int i = g_fl_first_visible; i < g_fl_count; i++) {
-        const uint8_t *name = g_fl_entries
-            ? g_fl_entries + i * g_fl_entry_stride : 0;
-        if (i == selected) {
-            /* Highlight bar: 6 column-groups (96 px) × 0x10 rows. */
-            gfx_glyph_set_glyph(0, 6, 0);
-            gfx_dispatch_set_glyph_height_short(0x10);
+    int col = 0;
+    for (int i = 0, v = g_tr_fl_first; v < g_tr_fl_count; i++) {
+        const uint8_t *name = g_fl_entries ? g_fl_entries + v * g_fl_entry_stride : 0;
+        if (v == selected) {
+            /* Highlight bar: 6 column groups (96 px) × 0x10 rows (DAT_005c9258 / DAT_005aeb70). */
+            g_gfx_glyph_w = 6;
+            g_gfx_glyph_height_short = 0x10;
             gfx_sprite_fill_block(lx - 2, ly - 1, 0x3f);
-            if (name) gfx_text_render_line(name, lx, ly, g_menu_font,
-                                           g_glyph_table, 0x20);
+            if (name) gfx_text_render_line(name, lx, ly, g_menu_font, g_glyph_table, 0x20);
         } else if (name) {
             gfx_text_render_line(name, lx, ly, g_menu_font, g_glyph_table, 0x3f);
         }
-        if (col == 2) { lx = bx + 0x20; ly += 0x10; col = -1; }
-        else          { lx += 0x78; }
-        if (0x1c < shown) break;
-        col++; shown++;
+        if (col == 2) {
+            lx = bx + 0x20;
+            ly += 0x10;
+            col = -1;
+        } else {
+            lx += 0x78;
+        }
+        if (i >= 29) break;
+        v++;
+        col++;
     }
 
     /* Bottom-box tiled border. */
-    gfx_panel_fill_interior(title_sheet(), bx + 0x20, by + 0x118, 0x15, 1);
-    gfx_text_set_line_x_acc(0);
+    if (title != 0) {
+        gfx_panel_fill_interior(title_sheet(), bx + 0x20, by + 0x118, 0x15, 1);
+    } else {
+        gfx_panel_fill_interior_chrome(g_chrome_asset, bx + 0x20, by + 0x118, 0x15, 1);
+    }
+    g_gfx_line_x_acc = 0;
 
-    /* Bottom status line — only when armed (retail DAT_0057d3c4 != 0). */
-    if (g_fl_show_status) {
-        gfx_wrap_localized_line(g_loc, 0x28, 2, bx + 0x20, by + 0x11a,
-                                g_menu_font, g_glyph_table, 0x3f);
+    /* The status line — only while armed (DAT_0057d3c4): sub 4 while DAT_00591548, else 2 on the title / screen
+     * 0x35, 3 elsewhere. */
+    if (g_tr_fl_show_status) {
+        int s2 = g_tr_fl_flag != 0 ? 4 : (g_gfx_screen_byte == 0x35 || g_gfx_screen_byte == 0x1f) ? 2 : 3;
+        gfx_wrap_localized_line(g_loc, 0x28, s2, bx + 0x20, by + 0x11a, g_menu_font, g_glyph_table, 0x3f);
     }
 }
 
-/* Port of FUN_004148e4 (the save/load-list frame, mode-1 / title
- * variant).  Panel + clip-reset + large-font title (entry 0x28 sub
- * `title_sub`) + the action-button bevel rect + three box outlines +
- * the list content.  Page 3 ("Loading a game.") passes title_sub 5. */
 void engine_title_render_filelist(int title_sub)
 {
+    /* FUN_004b1de0 — an empty function. */
     g_panel_fn(title_sheet(), 0x60, 10, 0x1c, 0x15);
+    if (g_dirty_state) {
+        engine_dirty_rect_mark_full_screen(g_dirty_state);   /* FUN_0045240a */
+    }
     menu_text_entry(0x28, title_sub, 0x60, 0x22, 0x1c0, g_title_font, 0x3f);
     gfx_line_rect_bevel_palette_b(0x70, 0x42, 400, 0x100);
     gfx_line_rect(0x78, 0x4a, 0xc0, 0x20, 0x3f);
     gfx_line_rect(0x78, 0x72, 0x160, 0xa4, 0x3f);
     gfx_line_rect(0x78, 0x11e, 0x180, 0x1c, 0x3f);
-    g_fl_selected = 999;                 /* retail FUN_004148e4: DAT_004e65dc = 999 */
-    engine_title_render_filelist_content(999);
+    g_tr_fl_selected = 999;              /* DAT_004e65dc */
+    engine_title_render_filelist_content(999, 1);
+    g_gfx_menu_redraw_a = 1;             /* DAT_004eb260 */
 }
 
 /* Page-3 button strip — retail DAT_004ddd78, the table the per-frame
@@ -1052,7 +1079,7 @@ engine_button_rec_t *engine_title_render_filelist_button_table(int *count)
  * 10). */
 void engine_title_render_filelist_buttons(void)
 {
-    engine_title_render_filelist_content(g_fl_selected);
+    engine_title_render_filelist_content(g_tr_fl_selected, 1);
     engine_button_render_list(0x60, 10, g_filelist_buttons, 4,
                               /*misc=*/NULL, g_system_asset, g_dirty_state);
 }
@@ -1530,12 +1557,12 @@ void engine_title_render_scene(int screen_state, int page)
         engine_title_render_play_now();
     } else if (page == 7) {
         engine_title_render_setup_screen(g_p7_active_tab < 0 ? 999 : g_p7_active_tab);
+    } else if (page == 3) {
+        engine_title_render_filelist(5);    /* 0x41ef42: FUN_004148e4(5) */
     } else if (g_retail_pages_fn) {
         if (page >= 3 && page <= 0xd) {
             g_retail_pages_fn(page);
         }
-    } else if (page == 3) {
-        engine_title_render_filelist(5);
     } else if (page == 9) {
         engine_title_render_option_detail();
     } else if (page >= 3 && page <= 0xd) {

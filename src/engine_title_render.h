@@ -90,6 +90,12 @@ extern int32_t g_tr_tabs_dirty;             /* DAT_0055ce94 the option tabs' red
 extern int32_t g_tr_p9_tab;                 /* DAT_0055306c */
 extern int32_t g_tr_p9_count;               /* DAT_00553fb4 */
 extern int32_t g_tr_p9_bookmark;            /* DAT_00553e5c */
+extern int32_t g_tr_fl_count;               /* DAT_004eb25c the save-file list's length */
+extern int32_t g_tr_fl_first;               /* DAT_004ea1a0 its first visible entry */
+extern int32_t g_tr_fl_selected;            /* DAT_004e65dc the highlighted entry (999: none) */
+extern uint8_t g_tr_fl_name[0x42];          /* DAT_004ea130 the selected-name field */
+extern int32_t g_tr_fl_show_status;         /* DAT_0057d3c4 the status line's gate */
+extern uint8_t g_tr_fl_flag;                /* DAT_00591548 the status line's variant */
 
 /* Per-seat fields the page-7 roster pass reads from the 0x160-stride
  * player record at retail DAT_0057bf05 (plus the separate enabled flag
@@ -197,7 +203,7 @@ void engine_title_render_bind_background_fn(engine_title_render_background_fn fn
 typedef void (*engine_title_render_page_fn)(int page);
 void engine_title_render_bind_page_fn(engine_title_render_page_fn fn);
 
-/* The hybrid host's page renderer: when bound, every page other than 1 / 2 / 4 / 5 / 7 (the ports on retail's layout)
+/* The hybrid host's page renderer: when bound, every page other than 1 / 2 / 3 / 4 / 5 / 7 (the ports on retail's layout)
  * renders through it (retail's own page functions).  NULL (the standalone) → the module's dispatch. */
 void engine_title_render_bind_retail_pages(engine_title_render_page_fn fn);
 
@@ -209,6 +215,9 @@ void engine_title_render_bind_roster_prep(void (*fn)(void));
 /* The country selector's value bytes alone (retail &DAT_0050a460); engine_title_render_set_country_list also sets the
  * scroll / selection / count globals. */
 void engine_title_render_bind_country_values(const uint8_t *values);
+/* The save-file list's records alone (retail &DAT_004e8790, 0x41 each); engine_title_render_set_filelist also sets
+ * the count / first-visible globals. */
+void engine_title_render_bind_filelist_entries(const uint8_t *entries);
 
 /* ─────────────────────────────────────────────────────────────────
  * Instrumentation (test-only; not retail globals)
@@ -241,6 +250,10 @@ void engine_title_render_main_menu(void);
 
 /* Ports of FUN_0041f321 (the name / title box), FUN_0041f1dd (the five-shield row), FUN_0041f01f (Back / Continue,
  * drawn only in the tall layout) — page 4's parts. */
+/* FUN_004149ec — the save-file list's content: the name field + caret, the 3-column grid (`selected` highlighted;
+ * 999: none), the status line; `title` 1 = the title page's layout (96, 10; the title sheet's interior), 0 = the
+ * in-game dialog's (16, 144; the chrome interior). */
+void engine_title_render_filelist_content(int selected, int title);
 void engine_title_render_choose_title_name_box(void);
 void engine_title_render_choose_title_shields(void);
 void engine_title_render_choose_title_buttons(void);

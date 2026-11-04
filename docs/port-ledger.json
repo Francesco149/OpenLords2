@@ -542,7 +542,6 @@
    "src": [
     "src/engine_county_panels.c",
     "src/engine_noble_faces.c",
-    "src/engine_title_render.c",
     "src/engine_treasury.c",
     "src/gfx_text.c",
     "src/gfx_text.h",
@@ -1504,6 +1503,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_title_render.c",
     "src/gfx_panel.c",
     "src/gfx_panel.h"
    ]
@@ -1530,6 +1530,7 @@
     "src/engine_armory.c",
     "src/engine_county_panels.c",
     "src/engine_sendsupplies.c",
+    "src/engine_title_render.c",
     "src/engine_trade.c",
     "src/gfx_panel.c",
     "src/gfx_panel.h"
@@ -19618,6 +19619,7 @@
     "src/engine_hud_menubar.c",
     "src/engine_hud_panel.h",
     "src/engine_labor.c",
+    "src/engine_title_render.c",
     "src/engine_trade.c"
    ]
   },

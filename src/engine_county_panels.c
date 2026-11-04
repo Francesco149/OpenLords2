@@ -42,17 +42,16 @@ void engine_county_chrome_panel(const uint8_t *chrome, int x, int y, int cols, i
 /* The four panels' common head: FUN_004b1de0() (an empty function), the map recomposite FUN_004050c0 (bound:
  * ctx->map_scene; NULL — the standalone — the caller has composed it), the chrome panel, the full-screen dirty mark
  * FUN_0045240a (ctx->dirty; NULL → none). */
-static void county_panel_open(const engine_county_panels_ctx_t *ctx, int x, int y, int cols, int rows)
+static int county_panel_open(const engine_county_panels_ctx_t *ctx, int x, int y, int cols, int rows)
 {
-    if (ctx->map_scene) {
-        ctx->map_scene();
-    }
+    int county = ctx->map_scene ? ctx->map_scene() : ctx->county;
     if (ctx->chrome) {
         engine_county_chrome_panel(ctx->chrome, x, y, cols, rows);
     }
     if (ctx->dirty) {
         engine_dirty_rect_mark_full_screen(ctx->dirty);
     }
+    return county;
 }
 
 /* ── FUN_004156a7's baked tables (extracted from .rdata, r2 pxw) ────────
@@ -249,11 +248,12 @@ void engine_county_panel_population(const engine_county_panels_ctx_t *ctx)
     if (!ctx->county_block || !ctx->loc) {
         return;
     }
-    const uint8_t *rec = COUNTY(ctx->county_block, ctx->county);
-
+    engine_county_panels_ctx_t rescan = *ctx;
     if (ctx->map_scene) {
-        ctx->map_scene();                                  /* FUN_004050c0 */
+        rescan.county = ctx->map_scene();                  /* FUN_004050c0 (may re-pick DAT_0057c93c) */
     }
+    ctx = &rescan;
+    const uint8_t *rec = COUNTY(ctx->county_block, ctx->county);
     g_gfx_cursor_x = 0x10;                                 /* DAT_00591524 / DAT_00591528 */
     g_gfx_cursor_y = 0x30;
     if (ctx->chrome) {
@@ -366,10 +366,9 @@ void engine_county_panel_tax(const engine_county_panels_ctx_t *ctx)
     if (!ctx->county_block || !ctx->loc) {
         return;
     }
-    const uint8_t *rec = COUNTY(ctx->county_block, ctx->county);
+    int county = county_panel_open(ctx, 0x50, 0x90, 0x14, 9);
+    const uint8_t *rec = COUNTY(ctx->county_block, county);
     int owner = rec[0x05];
-
-    county_panel_open(ctx, 0x50, 0x90, 0x14, 9);
     /* FUN_0040a21a(misc, 0x3e, 0x140, 0xa0) — the tax-chest icon. */
     if (ctx->misc_sheet) {
         gfx_sprite_render_from_blob(ctx->misc_sheet, 0x3e, 0x140, 0xa0);
@@ -418,11 +417,12 @@ void engine_county_panel_happiness(const engine_county_panels_ctx_t *ctx)
     if (!ctx->county_block || !ctx->loc) {
         return;
     }
-    const uint8_t *rec = COUNTY(ctx->county_block, ctx->county);
-
+    engine_county_panels_ctx_t rescan = *ctx;
     if (ctx->map_scene) {
-        ctx->map_scene();                                  /* FUN_004050c0 */
+        rescan.county = ctx->map_scene();                  /* FUN_004050c0 (may re-pick DAT_0057c93c) */
     }
+    ctx = &rescan;
+    const uint8_t *rec = COUNTY(ctx->county_block, ctx->county);
     g_gfx_cursor_x = 0x10;                                 /* DAT_00591524 / DAT_00591528 */
     g_gfx_cursor_y = 0x30;
     if (ctx->chrome) {
@@ -514,10 +514,9 @@ void engine_county_panel_rations(const engine_county_panels_ctx_t *ctx)
     if (!ctx->county_block || !ctx->loc) {
         return;
     }
-    const uint8_t *rec = COUNTY(ctx->county_block, ctx->county);
     int extra = (ctx->advanced_mode == 1) ? 2 : 0;
-
-    county_panel_open(ctx, 0x80, 0x60, 0x12, extra + 0xf);
+    int county = county_panel_open(ctx, 0x80, 0x60, 0x12, extra + 0xf);
+    const uint8_t *rec = COUNTY(ctx->county_block, county);
 
     /* Centered "Ration" title across the panel. */
     gfx_wrap_localized_line_centered(ctx->loc, 0x57, 0, 0x80, 0x68, 0x120,
