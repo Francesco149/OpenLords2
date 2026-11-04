@@ -22,12 +22,16 @@ cd "$(git rev-parse --show-toplevel)"
 # `nix print-dev-env` instead of keeping a `nix develop` evaluator (~370 MB) resident per command.
 run() { tools/dev "$@"; }
 
+# per-invocation logs: parallel agents (worktrees) commit at the same time
+LOGD=$(mktemp -d /tmp/ol2_precommit.XXXXXX)
+trap 'rm -rf "$LOGD"' EXIT
+
 # --- 1. Regenerate + stage the derived ledger ----------------------------
-if run python3 tools/gen_port_ledger.py >/tmp/ol2_ledger.log 2>&1; then
+if run python3 tools/gen_port_ledger.py >"$LOGD/ledger.log" 2>&1; then
     git add docs/STATUS.md docs/port-ledger.json docs/port-ledger.md 2>/dev/null || true
 else
     echo "pre-commit: port-ledger generation failed:" >&2
-    tail -20 /tmp/ol2_ledger.log >&2
+    tail -20 "$LOGD/ledger.log" >&2
     exit 1
 fi
 
@@ -35,13 +39,13 @@ fi
 staged="$(git diff --cached --name-only)"
 if echo "$staged" | grep -qE '^(src/|tests/).*\.(c|h)$'; then
     echo "pre-commit: C sources changed → building + running host suite..."
-    if ! run make -C tests run >/tmp/ol2_tests.log 2>&1; then
+    if ! run make -C tests run >"$LOGD/tests.log" 2>&1; then
         echo "pre-commit: host test suite FAILED — commit aborted:" >&2
-        tail -30 /tmp/ol2_tests.log >&2
+        tail -30 "$LOGD/tests.log" >&2
         echo "(bypass with: git commit --no-verify)" >&2
         exit 1
     fi
-    echo "pre-commit: $(grep -oE '[0-9]+ passed' /tmp/ol2_tests.log | tail -1)"
+    echo "pre-commit: $(grep -oE '[0-9]+ passed' "$LOGD/tests.log" | tail -1)"
 fi
 
 # --- 3. Render edits: the proof is a hybrid replace + fb chain ---------------
@@ -53,13 +57,13 @@ fi
 # --- 4. rhost corpus gate (wine, local) --------------------------------------
 if echo "$staged" | grep -qE '^(src/.*\.(c|h)|tools/rhost/.*\.(c|h|x|sh)|tools/rhost/rhost\.py|tests/scenarios/.*)$'; then
     echo "pre-commit: rhost corpus --check (wine)..."
-    if ! python3 tools/rhost/rhost.py corpus --check --tracked --target wine >/tmp/ol2_rhost_gate.log 2>&1; then
+    if ! python3 tools/rhost/rhost.py corpus --check --tracked --target wine >"$LOGD/rhost_gate.log" 2>&1; then
         echo "pre-commit: rhost corpus gate FAILED — commit aborted:" >&2
-        grep -E "FAIL|NO expected|NO RESULT|FATAL" /tmp/ol2_rhost_gate.log | tail -20 >&2
+        grep -E "FAIL|NO expected|NO RESULT|FATAL" "$LOGD/rhost_gate.log" | tail -20 >&2
         echo "(an intended change: re-bless with rhost.py corpus --bless [--target wine]; bypass: git commit --no-verify)" >&2
         exit 1
     fi
-    echo "pre-commit: $(grep -E 'CORPUS CHECK' /tmp/ol2_rhost_gate.log | tail -1)"
+    echo "pre-commit: $(grep -E 'CORPUS CHECK' "$LOGD/rhost_gate.log" | tail -1)"
 fi
 
 exit 0
