@@ -76,7 +76,9 @@ that draws or calls a drawer.
    (61, 116).
 8. 0x43d9cd: a scroll past either end clamps the list top and returns without re-selecting the battle (no redraw).
 9. 0x43daf3: the advantage bytes are clamped as UNSIGNED (a 0 − 1 wraps to 255 → 3, not 1).
-10. 0x4b14ff remaps the 20 Windows system colours of the back buffer to the nearest of the live palette's 10..245
+10. 0x41424a (the view-mode-1 strip clear) is dead from its only caller: 0x434fd5 sets view mode 2 (0x451fcc stores
+   DAT_0057cb18) right before it, and it draws only in mode 1.
+11. 0x4b14ff remaps the 20 Windows system colours of the back buffer to the nearest of the live palette's 10..245
    (city-block RGB distance, the first minimum) — reached in 49 scenarios (after the palette fades).
 
 ## Seams left
@@ -110,6 +112,24 @@ that draws or calls a drawer.
   driver + the File menu's entry) sees only its key paths. Verified with `--extra=--hook-entry` (every installed row
   entry-patched): §Evidence. Fix: patch the entry too when the function's address is taken (functions_ida.tsv
   addr_taken), or always (the entry patch catches the call sites as well).
+
+## Path coverage (block level) and exploration
+
+First-hit coverage of every basic-block start of the 76 functions (jump targets + conditional fall-throughs from
+all_ida.asm: 738 blocks; `rhost.py coverage` with that list as its function table, retail only, ~1 min for the
+corpus): **512 / 738 blocks reached by the corpus**. Exploration probes (rhbot: replay a tour with every ui2 row in
+shadow, poke retail memory at a frame, run on — poked state, NOT a pure replay; evidence for paths the corpus never
+takes) add 46: **558 / 738**, all at 0 divergences:
+- 0x450639's off arm + the remainder fix-up (5 → 20 / 24): county 2's shares poked (AE8 30 / AE4 70) before the
+  Farmland click f4541. The on arm needs the census to set +0x204 (the cell feature it counts) — not found.
+- 0x439f6a's fill arm (13 → 18 / 19): 60 idle workers for county 2 before the rebalance (f3514).
+- 0x41cb3a (14 → 37 / 38, pixels compared): the season 1..4, Advanced farming, the stock / trend / change rows'
+  signs, the 249 / 252 colours, poked before its one draw (f4719).
+- 0x434174's copy + user-map load (11 → 13 / 17): another current name before the .skr list click (skirmish-tour
+  f5342).
+Not covered (beyond the MP arms below): 0x450639's on arm, 0x439cc2's rows 5 / 6 / 7 with their resource, 0x43441c's
+yes arms (the answer byte is set in the click's own frame: a poke before it is overwritten), 0x433deb's skirmish arm,
+0x41424a's draw (dead, quirk 10), 0x438b02's cue for uses 0 / 1 / 25.
 
 ## Evidence
 
