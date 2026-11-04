@@ -39,6 +39,9 @@
 #define PUT8(va, v) do { uint8_t v_ = (uint8_t)(v); if (G8(va) != v_) G8(va) = v_; } while (0)
 
 void rh_port_bind_once(void);
+/* a table's own binds (lazy per table before): registered from a constructor, run by rh_port_bind_once before the first
+ * port call of ANY table — a port of one table calls into another table's modules (screens → map terrain) */
+void rh_port_register_bind(void (*fn)(void));
 void rh_port_sync_in(void);
 void rh_port_sync_out(void);
 void rh_port_retail_enter(void);   /* port → retail: store the mirrors (and an open EVQ) */

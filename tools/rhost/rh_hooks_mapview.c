@@ -65,11 +65,8 @@ A(g_mv_ti_52afb4,0x52afb4)
 );
 #undef A
 
-/* ---------------------------------------------------------------- bridges across the link cut (io.c) */
-/* engine_minimap_load_grids (FUN_0046a037: the map file reader, no row) is linked with the minimap's renderers but
- * never run under rhost: retail loads the grids */
-int io_read_file_at(const char *path, void *buf, size_t len, long offset)
-{ (void)buf; (void)len; (void)offset; rh_fatal("rh_hooks_mapview: io_read_file_at(%s) reached (no file layer here)", path); return -1; }
+/* (io_read_file_at — the minimap's map file reader engine_minimap_load_grids, never run under rhost — is bridged to
+ * retail's loader 0x4af8d9 in rh_hooks_screens.c) */
 
 /* ---------------------------------------------------------------- the port's own bindings */
 static void seam_log(uint32_t fmt, int n)   /* FUN_004afab9(fmt, 0, n) (unported: status.txt) */
@@ -101,6 +98,7 @@ static void mv_bind(void)
     gfx_sprite_render_set_log(seam_log);
     gfx_wrap_set_tall_font_marker((const uint8_t *)(uintptr_t)0x5b2fa0u);   /* &DAT_005b2fa0 */
 }
+__attribute__((constructor)) static void mv_bind_register(void) { rh_port_register_bind(mv_bind); }
 
 /* the county panel's environment: retail's sheet pointer / fonts / char maps, the localization walker (the port's
  * localization_state_t over retail's blob &DAT_00591580 and walker DAT_005c9270, loaded / stored around the call

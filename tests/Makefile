@@ -62,6 +62,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_map_scene.c \
                    ../src/engine_overlay_render.c \
                    ../src/engine_title_render.c \
+                   ../src/engine_title_render_globals.c \
                    ../src/engine_button.c \
                    ../src/engine_hud_menubar.c \
                    ../src/engine_map_init.c \
@@ -76,6 +77,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_army_select.c \
                    ../src/engine_army_move_confirm.c \
                    ../src/engine_workforce_hud.c \
+                   ../src/engine_workforce_hud_globals.c \
                    ../src/engine_county_panels.c \
                    ../src/engine_tooltip.c \
                    ../src/engine_mp_render.c \
@@ -86,6 +88,7 @@ SRCS_UNDER_TEST := ../src/call_trace.c ../src/strutil.c ../src/config.c \
                    ../src/engine_mapview_globals.c \
                    ../src/engine_hud_panel.c \
                    ../src/engine_battlefield_render.c \
+                   ../src/engine_battlefield_render_globals.c \
                    ../src/engine_camera.c \
                    ../src/engine_roster.c \
                    ../src/engine_ranking.c \

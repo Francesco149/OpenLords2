@@ -28,19 +28,22 @@
 
 #include "engine_mp_render.h"
 #include "localization.h"
-#include "gfx_text.h"
+#include "gfx_globals.h"
 #include "gfx_wrap.h"
 #include "gfx_sprite_render.h"
 
-/* ─── bound assets / fonts ──────────────────────────────────────── */
+/* ─── bound assets / fonts (not retail globals: retail passes these addresses as literals) ── */
 
-static const uint8_t *g_menu_asset;     /* DAT_004eabec (player indicator) */
-static const uint8_t *g_status_asset;   /* DAT_005bb540 (status sprite)    */
-static const uint8_t *g_title_font;     /* DAT_005b2fa0 */
-static const uint8_t *g_glyph_table;    /* DAT_004d71f0 */
-static localization_state_t g_loc;      /* DAT_00591580 */
+static const uint8_t *g_status_asset;   /* &DAT_005bb540 (status sprite)    */
+static const uint8_t *g_title_font;     /* &DAT_005b2fa0 */
+static const uint8_t *g_glyph_table;    /* &DAT_004d71f0 */
+static localization_state_t g_loc_own;  /* &DAT_00591580 + the walker DAT_005c9270 */
+static localization_state_t *g_loc = &g_loc_own;
+static uint32_t (*g_clock)(void);       /* timeGetTime(); NULL → the caller's now_ms */
 
-void engine_mp_render_bind_menu_asset(const uint8_t *asset)   { g_menu_asset = asset; }
+/* The player indicator draws from the CURRENT sprite sheet (DAT_004eabec, g_gfx_current_blob): binding the
+ * "menu asset" sets that global. */
+void engine_mp_render_bind_menu_asset(const uint8_t *asset)   { g_gfx_current_blob = asset; }
 void engine_mp_render_bind_status_asset(const uint8_t *asset) { g_status_asset = asset; }
 void engine_mp_render_bind_text(const uint8_t *title_font,
                                 const uint8_t *glyph_table,
@@ -48,21 +51,25 @@ void engine_mp_render_bind_text(const uint8_t *title_font,
 {
     g_title_font = title_font;
     g_glyph_table = glyph_table;
-    g_loc.blob = loc_blob;
-    g_loc.walker_offset = 0;
+    g_loc_own.blob = loc_blob;
+    g_loc_own.walker_offset = 0;
+    g_loc = &g_loc_own;
 }
+void engine_mp_render_bind_loc(localization_state_t *loc) { g_loc = loc ? loc : &g_loc_own; }
+void engine_mp_render_bind_clock(uint32_t (*clock)(void)) { g_clock = clock; }
 
 /* ─── render ────────────────────────────────────────────────────── */
 
-/* Port of FUN_0041f15a. */
+/* Port of FUN_0041f15a.  Retail reads timeGetTime() only inside the gate (the bound clock; else now_ms). */
 void engine_mp_render_player_indicator(int mp_active, int *timer_ms,
                                        uint32_t now_ms, int slot)
 {
     if (mp_active != 0 && *timer_ms != 0) {
+        if (g_clock) now_ms = g_clock();
         if (10000 < (int)(now_ms - (uint32_t)*timer_ms)) {
             *timer_ms = 0;
         }
-        gfx_sprite_render_from_blob(g_menu_asset, 0xd7,
+        gfx_sprite_render_from_blob(g_gfx_current_blob, 0xd7,
                                     (slot - 1) * 0x58 + 0x74, 0x70);
     }
 }
@@ -70,10 +77,10 @@ void engine_mp_render_player_indicator(int mp_active, int *timer_ms,
 /* Port of FUN_00423b4f. */
 void engine_mp_render_status_line(void)
 {
-    gfx_text_set_no_shadow(1);
-    gfx_wrap_localized_line(&g_loc, /*loc_index=*/0x20, /*skip=*/0,
+    g_gfx_no_shadow = 1;                   /* DAT_005aea40 */
+    gfx_wrap_localized_line(g_loc, /*loc_index=*/0x20, /*skip=*/0,
                             /*x=*/0x10e, /*y=*/0x1ae,
                             g_title_font, g_glyph_table, /*color=*/0x20);
     gfx_sprite_render_from_blob(g_status_asset, 0x4d, 400, 0x1c4);
-    gfx_text_set_no_shadow(0);
+    g_gfx_no_shadow = 0;
 }

@@ -132,6 +132,77 @@
 #include "engine_dirty_rect.h"
 
 /* ─────────────────────────────────────────────────────────────────
+ * Retail-layout globals (engine_battlefield_render_globals.c; the hybrid host aliases each at its VA).  The
+ * binders below write them; the passes read them as retail reads its globals.
+ * ───────────────────────────────────────────────────────────────── */
+#define BFR_VISIBLE_CAP 0x52   /* (id, y) pairs: 0x50 entities + the sentinel (+1 spare) */
+extern int32_t        g_bfr_camera_x, g_bfr_camera_y, g_bfr_zoom;          /* DAT_004e657c / 4e6580 / 4e656c */
+extern uint8_t       *g_bfr_desc_base;                                     /* DAT_004e6574 */
+extern int32_t        g_bfr_desc_stride, g_bfr_desc_cursor;                /* DAT_004e5d50 / 4e6588 */
+extern int32_t        g_bfr_grid_cols, g_bfr_grid_rows, g_bfr_row_wrap;    /* DAT_004e5d5c / 4e5d4c / 4e5d70 */
+extern int32_t        g_bfr_viewport_x, g_bfr_viewport_y;                  /* DAT_004e6558 / 4e6554 */
+extern int32_t        g_bfr_row_stride, g_bfr_total_rows;                  /* DAT_004e6578 / 4e6570 */
+extern int32_t        g_bfr_band_width, g_bfr_scroll_pad, g_bfr_zoom_sq;   /* DAT_004e5d3c / 4e5d44 / 4e6550 */
+extern int32_t        g_bfr_cell_counter;                                  /* DAT_004e5d64 */
+extern const uint8_t *g_bfr_blob_primary, *g_bfr_blob_alt;                 /* DAT_004e5d78 / 4e6560 */
+extern int32_t        g_bfr_clip_left, g_bfr_clip_right, g_bfr_clip_top, g_bfr_clip_bottom;  /* 4e6564 / 4e5d54 / 4e5d48 / 4e5d6c */
+extern int16_t        g_bfr_visible[BFR_VISIBLE_CAP * 2];                  /* DAT_004e5d80 (id, y) pairs */
+extern int32_t        g_bfr_visible_count, g_bfr_sort_passes;              /* DAT_004e5d38 / 4e655c */
+extern int32_t        g_bfr_marker_frame, g_bfr_effect_frame, g_bfr_effect_id;   /* DAT_004e5b18 / 4e5b1c / 568994 */
+extern const uint8_t *g_bfr_mm_blob_primary, *g_bfr_mm_blob_alt, *g_bfr_mm_default;  /* DAT_004e6584 / 4e6568 / 4e5d40 */
+extern int32_t        g_bfr_mm_origin_x, g_bfr_mm_y_offset, g_bfr_mm_mode, g_bfr_mm_scan_pos;  /* 4e5d68 / 60 / 58 / 74 */
+extern const uint8_t *g_bfr_marker_blob;                                   /* DAT_00566518 */
+extern int32_t        g_bfr_marker_player, g_bfr_marker_advance;           /* DAT_00568218 / 591510 */
+extern const uint8_t *g_bfr_unit_key_blob;                                 /* DAT_00553250 */
+extern const uint8_t *g_bfr_type7_blob_low, *g_bfr_type7_blob_high;        /* DAT_00553f6c / 522f78 */
+extern const uint8_t *g_bfr_creature_blob;                                 /* DAT_005530c8 */
+extern int32_t        g_bfr_late_player;                                   /* DAT_0057c8cc */
+extern int32_t        g_bfr_slot_shift, g_bfr_slot_shift_sign;             /* DAT_00566514 / 56651c */
+extern int32_t        g_bfr_sel_x, g_bfr_sel_y, g_bfr_sel_gate;            /* DAT_00553f14 / 553f18 / 553f84 */
+extern uint8_t        g_bfr_debug_label;                                   /* DAT_005bb4a5 */
+extern int32_t        g_bfr_engine_state;                                  /* DAT_0052af94 */
+
+/* The passes and leaves, one per retail function (the hybrid host's rows; the frame driver composes them):
+ *   FUN_004bc8fc terrain_zoom16   FUN_004bcbdc terrain_zoom32   FUN_004bcbd1 overlay_zoom16  FUN_004bd07f overlay_zoom32
+ *   FUN_004bd355 middle           FUN_004bd938 build_list       FUN_004bda92 sort_list       FUN_004bdb95 render_list
+ *   FUN_004bdc31 entity           FUN_004be4df entity_type6     FUN_004be7be entity_type7    FUN_004beab9 entity_type9e
+ *   FUN_004bd574 player_marker    FUN_004bd759 unit_key         FUN_004beed4 effect_chain
+ *   FUN_004bd233 late             FUN_004be070 creature         FUN_004be33f selection_marker FUN_004bf1f9 final
+ *   FUN_004bc51a minimap_strip */
+void engine_battlefield_render_terrain_zoom16(void);
+void engine_battlefield_render_terrain_zoom32(void);
+void engine_battlefield_render_overlay_zoom16(void);
+void engine_battlefield_render_overlay_zoom32(void);
+void engine_battlefield_render_middle(void);
+void engine_battlefield_render_build_list(void);
+void engine_battlefield_render_sort_list(void);
+void engine_battlefield_render_render_list(void);
+void engine_battlefield_render_entity(int id);
+void engine_battlefield_render_entity_type6(int id);
+void engine_battlefield_render_entity_type7(int id);
+void engine_battlefield_render_entity_type9e(int id);
+void engine_battlefield_render_player_marker(void);
+void engine_battlefield_render_unit_key(int key);
+void engine_battlefield_render_effect_chain(int head);
+void engine_battlefield_render_late(void);
+void engine_battlefield_render_creature(int id);
+void engine_battlefield_render_selection_marker(void);
+void engine_battlefield_render_final(void);
+void engine_battlefield_render_minimap_strip(int start_row, int count);
+
+/* The "tile map show" error log the per-entity draw raises for an entity without a sprite sheet (retail
+ * FUN_004afab9("ERR: …", 0, type + 1)); NULL → none. */
+void engine_battlefield_render_bind_log(void (*log)(uint32_t fmt, int n));
+/* The late pass's visibility table alone (&DAT_0057bfee, 0x160 a player) — the player is DAT_0057c8cc
+ * (g_bfr_late_player), which engine_battlefield_render_bind_late_player_visibility_mask also sets. */
+void engine_battlefield_render_bind_late_visibility_table(const uint8_t *base, int stride);
+/* The force-redraw counter DAT_0053e9ac (the dirty rectangle's below_status_redraw); NULL → the module's own
+ * (engine_battlefield_render_set_force_redraw). */
+void engine_battlefield_render_bind_force_redraw(int *counter);
+/* The effect chain's camera (retail DAT_0055ce70 / DAT_005678a0, in cells); NULL → the frame's camera. */
+void engine_battlefield_render_bind_effect_camera(const int32_t *col, const int32_t *row);
+
+/* ─────────────────────────────────────────────────────────────────
  * Bindings — install retail globals into this module's statics
  * ───────────────────────────────────────────────────────────────── */
 

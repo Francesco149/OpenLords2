@@ -7,6 +7,7 @@
  * the text editor + measurer cache of the caret, the dirty rectangle; the helpers below load them from retail's
  * globals and store them back around the call. Findings: docs/findings/rl-render.md. */
 #include "rl.h"
+#include "engine_battlefield_render.h"
 #include "rl_render_globals.h"
 #include "rl_io_globals.h"
 #include "engine_bf_input_globals.h"
@@ -143,9 +144,9 @@ static void minimap_plot(int a, int x, int y, int b)   /* TODO(rl-link): engine_
 static void workforce_restore(const uint8_t *blob, int w) { engine_retail_call(0x4b3ec0u, 2, (uint32_t)(uintptr_t)blob, (uint32_t)w); }   /* TODO(rl-link): engine_workforce_hud_restore_backdrop */
 static void workforce_capture(const uint8_t *blob, int w) { engine_retail_call(0x4b3f0au, 2, (uint32_t)(uintptr_t)blob, (uint32_t)w); }   /* TODO(rl-link): engine_workforce_hud_capture_backdrop */
 static void workforce_rows(void) { engine_retail_call(0x412666u, 0); }   /* TODO(rl-link): engine_workforce_draw_all_rows */
-static int  bf_px_col(int px) { return (int)engine_retail_call(0x4bc2a5u, 1, (uint32_t)px); }   /* TODO(rl-link): engine_battlefield_render_pixel_to_col */
-static int  bf_px_row(int py) { return (int)engine_retail_call(0x4bc2c5u, 1, (uint32_t)py); }   /* TODO(rl-link): engine_battlefield_render_pixel_to_row */
-static int  bf_zoom(void) { return (int)engine_retail_call(0x4bc505u, 0); }   /* TODO(rl-link): engine_battlefield_render_get_zoom */
+static int  bf_px_col(int px) { return engine_battlefield_render_pixel_to_col(px); }   /* 0x4bc2a5 */
+static int  bf_px_row(int py) { return engine_battlefield_render_pixel_to_row(py); }   /* 0x4bc2c5 */
+static int  bf_zoom(void) { return engine_battlefield_render_get_zoom(); }   /* 0x4bc505 */
 static void text_recompute_length(void) { engine_retail_call(0x401f49u, 0); }   /* TODO(rl-link): text_input_recompute_length */
 static void text_copy_out(uint8_t *dst, int n) { engine_retail_call(0x40210cu, 2, (uint32_t)(uintptr_t)dst, (uint32_t)n); }   /* TODO(rl-link): text_input_copy_out */
 static int  state_hash(const void *p, int n, int salt)   /* TODO(rl-link): engine_state_hash 0x44015a */

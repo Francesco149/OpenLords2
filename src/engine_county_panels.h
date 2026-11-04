@@ -81,6 +81,7 @@
 #include <stdint.h>
 
 #include "engine_button.h"
+#include "engine_dirty_rect.h"
 #include "localization.h"
 
 /* ── Shared render context ─────────────────────────────────────────────
@@ -107,7 +108,25 @@ typedef struct engine_county_panels_ctx {
     const uint8_t *glyph_table;
     const unsigned char *glyph_metrics;
     localization_state_t *loc;
+    int (*map_scene)(void);        /* FUN_004050c0, the panels' map recomposite (rhost: retail's) — it may re-pick
+                                    * the current county (DAT_0057c93c): returns it; NULL → none */
+    int graphs_load;               /* 1: the graph loads graphs.pl8 into `graphs` itself (retail; rhost) */
+    engine_dirty_rect_state_t *dirty; /* FUN_0045240a's rectangle; NULL → no mark */
 } engine_county_panels_ctx_t;
+
+/* FUN_00409397 — the chrome panel (border mode 0 + interior one tile in), the sheet DAT_0057d3d0. */
+void engine_county_chrome_panel(const uint8_t *chrome, int x, int y, int cols, int rows);
+
+/* FUN_0041a900 — a signed number with its era word (modes 0..3, see the .c); FUN_0041ab67 — "N <noun>" (loc grp 8). */
+void engine_county_year_number(const engine_county_panels_ctx_t *ctx, int value, int x, int y, int mode);
+void engine_county_num_units(const engine_county_panels_ctx_t *ctx, int value, int sub, int x, int y,
+                             const uint8_t *font, uint8_t color);
+
+/* FUN_0043aa83 / 0043ab25 (tax ±1) and FUN_0043a23f / 0043a307 (wanted ±1) whole: the step on ctx->county, the
+ * panel's re-render, the redraw flags.  (engine_county_tax_step / _wanted_step: the step alone — the standalone's
+ * router re-renders itself.) */
+void engine_county_tax_step_render(const engine_county_panels_ctx_t *ctx, int dir);
+void engine_county_wanted_step_render(const engine_county_panels_ctx_t *ctx, int dir);
 
 /* ── FUN_004156a7 — seasonal history bar graph ─────────────────────────
  * Draw the graph frame + background sprite (`mode` 0 = population sheet
@@ -180,6 +199,13 @@ typedef struct engine_county_rations_in {
 int engine_county_rations_input(const engine_county_rations_in_t *in,
                                 int *out_value, int *out_is_drag,
                                 int *out_changed);
+
+/* The whole retail functions (the hybrid host's rows): FUN_00438ceb — the hit-test + its flip; FUN_0043a379 — the
+ * decision + DAT_00591550 / DAT_0059154c + the change (FUN_0043a5a9 whole: engine_county_ration_set_render). */
+int engine_county_action_grid_click(const engine_county_grid_in_t *in, void (*flip)(int screen));
+int engine_county_rations_click(const struct engine_county_panels_ctx *ctx, const engine_county_rations_in_t *in,
+                                int32_t *drag_out, int32_t *value_out, int mp_active, void (*mp_notify)(void));
+int engine_county_ration_set_render(const struct engine_county_panels_ctx *ctx, int county, int value, int is_drag);
 
 /* ── The panel arrow-button widgets (session-22 second pass) ───────────
  * The up/down steppers on the tax + rations panels are NOT drawn by the

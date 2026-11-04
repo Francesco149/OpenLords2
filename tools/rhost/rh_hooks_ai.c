@@ -100,6 +100,9 @@ void rh_combat_bind_seams(void);   /* rh_hooks_combat.c */
 void rh_battle_bind_seams(void);   /* rh_hooks_battle.c */
 void rh_economy_bind_seams(void);  /* rh_hooks_economy.c */
 void rh_bf_bind_seams(void);       /* rh_hooks_bf.c */
+static void (*s_binds[32])(void);
+static int s_nbinds;
+void rh_port_register_bind(void (*fn)(void)) { if (s_nbinds < 32) s_binds[s_nbinds++] = fn; }
 void rh_port_bind_once(void)
 {
     static int done;
@@ -136,7 +139,8 @@ void rh_port_bind_once(void)
     rh_battle_bind_seams();
     rh_economy_bind_seams();
     rh_bf_bind_seams();
-    rh_log("rh_port: %d save-schema aliases match retail's table; seams bound\n", SAVE_SCHEMA_COUNT);
+    for (int i = 0; i < s_nbinds; i++) s_binds[i]();   /* the tables' own binds (mapview, gfx, screens …) */
+    rh_log("rh_port: %d save-schema aliases match retail's table; seams bound (%d table binds)\n", SAVE_SCHEMA_COUNT, s_nbinds);
 }
 
 /* ---------------------------------------------------------------- syncing: file-static mirrors */

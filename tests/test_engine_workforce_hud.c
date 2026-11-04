@@ -7,6 +7,7 @@
 
 #include "t.h"
 #include "engine_workforce_hud.h"
+#include "gfx_globals.h"
 #include "save.h"
 #include "save_schema_globals.h"
 #include "gfx_paint.h"
@@ -286,9 +287,10 @@ int test_workforce_capture_backdrop_copies_canvas_rect(void)
     gfx_paint_bind_canvas(canvas, 64, 8);
 
     uint32_t dest[2 * 4] = {0};
-    /* 2 dwords wide, 4 rows tall, starting at (0,0), src_stride 64
-     * (one full canvas row). */
-    engine_workforce_hud_capture_backdrop(dest, 0, 0, 2, 4, 64);
+    /* 2 dwords wide, 4 rows tall, starting at (0,0), staged in the gfx globals; the residual stride 56
+     * (64 - 8: the rest of one canvas row). */
+    g_gfx_cursor_x = 0; g_gfx_cursor_y = 0; g_gfx_glyph_w = 2; g_gfx_glyph_height_short = 4;
+    engine_workforce_hud_capture_backdrop(dest, 56);
 
     uint32_t expect0, expect1;
     memcpy(&expect0, canvas, 4);
@@ -308,7 +310,8 @@ int test_workforce_capture_backdrop_null_canvas_is_noop(void)
 {
     gfx_paint_bind_canvas(NULL, 0, 0);
     uint32_t dest[4] = { 1, 2, 3, 4 };
-    engine_workforce_hud_capture_backdrop(dest, 0, 0, 4, 1, 16);
+    g_gfx_cursor_x = 0; g_gfx_cursor_y = 0; g_gfx_glyph_w = 4; g_gfx_glyph_height_short = 1;
+    engine_workforce_hud_capture_backdrop(dest, 0);
     T_ASSERT_EQ_U(dest[0], 1);
     return 0;
 }

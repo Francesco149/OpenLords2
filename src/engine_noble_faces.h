@@ -25,7 +25,7 @@
  *                                      bevel, seal, faces.pl8 load, the face
  *                                      grid, the partner name, the action
  *                                      labels + relation-state button count)
- *   FUN_004171ee @ 0x4171ee (1028 B) → per-noble portrait cell (static)
+ *   FUN_004171ee @ 0x4171ee (1709 B) → engine_noble_faces_draw_face (one portrait cell)
  *   FUN_004ba26e case 0x0b           → engine_noble_faces_refresh (the per-
  *                                      frame action-button sprite strip,
  *                                      FUN_0040cfd2 over DAT_004dd940)
@@ -37,7 +37,7 @@
  * The relationship state (retail DAT_00553f38, save entry 142) and the current
  * partner (DAT_00553fbc, entry 143) are save-schema globals threaded via the
  * shared externs, so both engines stay save-identical; the action-button count
- * (DAT_00553ee8) is transient UI (a file-static here).
+ * (DAT_00553ee8) is transient UI (engine_noble_faces_globals.c).
  */
 
 #ifndef OPENLORDS2_ENGINE_NOBLE_FACES_H
@@ -46,6 +46,7 @@
 #include <stdint.h>
 
 #include "engine_button.h"
+#include "engine_dirty_rect.h"
 #include "localization.h"
 
 /* ── Render context ────────────────────────────────────────────────────
@@ -67,7 +68,16 @@ typedef struct engine_noble_faces_ctx {
     const uint8_t *glyph_table;         /* render map (gfx_glyph_render_map) */
     const unsigned char *glyph_metrics; /* measure map (gfx_glyph_measure_map) — action wrap */
     localization_state_t *loc;
+    uint8_t       *faces_scratch;     /* the scratch DAT_004eabec points at (rhost); NULL → the port's own */
+    engine_dirty_rect_state_t *dirty; /* FUN_0045240a's rectangle; NULL → no mark */
 } engine_noble_faces_ctx_t;
+
+/* Retail-layout globals (engine_noble_faces_globals.c; rhost aliases them at their VAs). */
+extern engine_button_rec_t g_noble_buttons[6];   /* DAT_004dd940: the 6 diplomacy-action buttons */
+extern int32_t g_noble_action_count;             /* DAT_00553ee8: how many of them show */
+
+/* ── FUN_004171ee — one noble's portrait cell (player p, grid row) ─────── */
+void engine_noble_faces_draw_face(const engine_noble_faces_ctx_t *ctx, int p, int row);
 
 /* ── FUN_00416cf3 — the OPEN render (drawn over the recomposited map) ──── */
 void engine_noble_faces_render(const engine_noble_faces_ctx_t *ctx);

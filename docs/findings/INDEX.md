@@ -70,6 +70,7 @@ session — they outlive the conversation context.
 | (rl partition 'misc') | the last reached leftovers (18: palette fade 0x4b0cb4 / 0x4b0e03, the cursor, MP timeouts, the year-end save gate 0x49a3e6, empty stubs) — see the commit |
 | [render-under-rhost.md](render-under-rhost.md) | **render under rhost** (2026-11-04): the gfx layer on retail's layout (`src/gfx_globals.c`, 69 globals at their VAs; the canvas = retail's back buffer DAT_004ea1a8), the media (pixel) shadow `RH_SH_MEDIA`, hot-leaf sampling `RH_SH_SAMPLE`, the gfx / panel / text / wrap / menu-bar / button rows; the RLE 3-run spill, the rect's line order, the measurers' shared cache |
 | [render-mapview.md](render-mapview.md) | render batch 'mapview': the strategic map view's renderers on retail's layout, pixel-verified (64 rows: terrain blitters translated from the asm by tools/gen_mapblit.py, overlay, minimap, scene driver, HUD panel, terrain info); 14 port bugs fixed |
+| [render-screens.md](render-screens.md) | render batch 'screens': the battlefield renderer, title / menus, tooltip, county panels, noble faces, workforce HUD, armoury / trade / labor / treasury renders on retail's layout, pixel-verified (104 rows); 28 port bugs fixed |
 | [input-replay.md](input-replay.md) | Input recording & replay (JSONL trace format) |
 | [pure-function-diff.md](pure-function-diff.md) | Pure-function differential testing vs retail |
 | [ledger-provenance-audit.md](ledger-provenance-audit.md) | The FUN_-token gotcha — how the derived ledger over-counts, and `tools/audit_provenance.py` |

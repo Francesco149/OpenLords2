@@ -15,9 +15,12 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "engine_button.h"          /* engine_button_render_list (FUN_0040cfd2) */
-#include "engine_dirty_rect.h"      /* (dirty marks are seam-owned; see notes) */
+#include "engine_county_panels.h"   /* the delta label FUN_0041ac95, "N Crowns" FUN_0041ab67 */
+#include "engine_dirty_rect.h"      /* FUN_004527a6 / FUN_0045240a */
+#include "gfx_globals.h"            /* DAT_004eb260 */
 #include "gfx.h"                    /* load_background_image, lock/unlock canvas */
 #include "gfx_line.h"               /* gfx_line_rect_bevel_dark_tl / _br */
 #include "gfx_panel.h"              /* gfx_panel_draw_bevel / _fill_interior */
@@ -39,45 +42,39 @@ static int32_t rec_i32(const uint8_t *rec, int off)
     return v;
 }
 
-/* ── icontrad.pl8 icon-sheet scratch (retail's shared DAT_004eabec) ─────
- * A persistent 160000-byte buffer, reloaded on each render — the same
- * pattern engine_labor.c uses for iconvill.pl8.  (Labor + trade never
- * render the same frame, but each keeps its own buffer for clarity.) */
+/* ── icontrad.pl8 icon-sheet scratch: retail's shared DAT_004eabec (ctx->scratch under rhost — the current sprite
+ * sheet); the standalone keeps a persistent 160000-byte buffer of its own, reloaded on each render. */
 #define TRADE_SCRATCH_LEN 160000
 static uint8_t *g_trade_scratch;
-static int trade_ensure_scratch(void)
+static uint8_t *trade_scratch(const engine_trade_ctx_t *ctx)
 {
+    if (ctx->scratch) {
+        return ctx->scratch;
+    }
     if (!g_trade_scratch) {
         g_trade_scratch = malloc(TRADE_SCRATCH_LEN);
     }
-    return g_trade_scratch != NULL;
+    return g_trade_scratch;
 }
 
-/* The trade UI figures (g_trade_*: retail globals, engine_economy_globals.c)
- * are computed and driven by the model (engine_trade_model.c: FUN_00428daf
- * and the arrows); the content draw reads them back.  The buy/sell MODE is
- * retail's DAT_0053e9bc — a shared save-schema scalar (slot 80), so it uses
- * the s_slot_ extern (never a private copy) to keep the state oracle + any
- * save in sync ([[project_shared_save_globals]]). */
-static int g_trade_widget_count;  /* DAT_00553f58 — router table entry count */
+/* The trade UI figures (g_trade_*: retail globals, engine_economy_globals.c) are computed and driven by the model
+ * (engine_trade_model.c: FUN_00428daf and the arrows); the content draw reads them back.  The buy/sell MODE is
+ * retail's DAT_0053e9bc — a shared save-schema scalar (slot 80), the s_slot_ extern.  The router's widget count
+ * DAT_00553f58 and the arrow table DAT_004dd838: engine_trade_globals.c. */
 
-/* ── FUN_0041ab67 — decimal value + its grp-8 unit noun ─────────────────
- * (singular sub for ±1, else plural sub+1).  Preserves the caller's
- * line-x accumulator around the pair.  Identical to labor_num_units, but
- * bound to this screen's ctx. */
-static void trade_num_units(const engine_trade_ctx_t *ctx, int value,
-                            int unit_sub, int x, int y,
-                            const uint8_t *font, uint8_t color)
+/* The county-panel helpers the content shares (FUN_0041ac95 / FUN_0041ab67) take a panel context: the fonts, the
+ * loc state and the misc sheet DAT_005530c8 (the delta label's face icon). */
+static engine_county_panels_ctx_t trade_panel_ctx(const engine_trade_ctx_t *ctx)
 {
-    int saved = gfx_text_line_x_acc();
-    gfx_text_set_line_x_acc(0);
-    gfx_text_label_render_dec(value, '@', "", x, y,
-                              font, ctx->glyph_table, color);
-    int sub = (value == 1 || value == -1) ? unit_sub : unit_sub + 1;
-    gfx_wrap_localized_line(ctx->loc, 8, sub,
-                            x + gfx_text_line_x_acc(), y,
-                            font, ctx->glyph_table, color);
-    gfx_text_set_line_x_acc(gfx_text_line_x_acc() + saved);
+    engine_county_panels_ctx_t c;
+    memset(&c, 0, sizeof c);
+    c.menu_font = ctx->menu_font;
+    c.title_font = ctx->title_font;
+    c.glyph_table = ctx->glyph_table;
+    c.glyph_metrics = ctx->glyph_metrics;
+    c.loc = ctx->loc;
+    c.misc_sheet = ctx->misc_sheet;
+    return c;
 }
 
 /* Convenience: one localized single-line render bound to the ctx. */
@@ -88,26 +85,11 @@ static void trade_loc(const engine_trade_ctx_t *ctx, int grp, int sub,
                             font, ctx->glyph_table, color);
 }
 
-/* The trade grid's up/down buy/sell arrow widgets — retail's button table
- * DAT_004dd838, r2-extracted byte-exact.  Painted every frame by the
- * per-frame refresh (FUN_004ba26e case 0x0c: FUN_0040cfd2(0x30,0x50,
- * &DAT_004dd838, DAT_00553f58)).  Buy mode shows the first 4 (up / down /
- * buy-all / sell-all, kind 0x18 = 24×24 system sprites); sell mode adds
- * two more (kind 0x20 = 32×32).  The action field is the retail callee
- * address, dispatched by trade_button_action (engine.c); the renderer reads
- * only x/y/sprite/kind/state/type.  MUTABLE like retail's .data table —
- * engine_menu_button_dispatch animates state/pressed/repeat in place and the
- * renderer reads them back for the press flash (both walk THIS one array). */
-static engine_button_rec_t k_trade_buttons[6] = {
-    { 0x60, 0x88, 0x15, 0x18, 0x435339, 0, 0, 0, 4, 0, 0 },
-    { 0x78, 0x88, 0x17, 0x18, 0x43543d, 0, 0, 0, 4, 0, 0 },
-    { 0x98, 0x88, 0x48, 0x18, 0x4355db, 0, 0, 0, 4, 0, 0 },
-    { 0xb0, 0x88, 0x46, 0x18, 0x435541, 0, 0, 0, 4, 0, 0 },
-    { 0x110, 0xa8, 0x1d, 0x20, 0x435286, 0, 0, 0, 4, 0, 0 },
-    { 0x138, 0xa8, 0x1f, 0x20, 0x4352f2, 0, 0, 0, 4, 0, 0 },
-};
-
-engine_button_rec_t *engine_trade_buttons(void) { return k_trade_buttons; }
+/* The trade grid's up/down buy/sell arrow widgets — retail's button table DAT_004dd838 (g_trade_buttons,
+ * engine_trade_globals.c).  Painted every frame by the per-frame refresh (FUN_004ba26e case 0x0c:
+ * FUN_0040cfd2(0x30,0x50, &DAT_004dd838, DAT_00553f58)).  MUTABLE like retail's .data table — the menu button
+ * dispatch animates state/pressed/repeat in place and the renderer reads them back for the press flash. */
+engine_button_rec_t *engine_trade_buttons(void) { return g_trade_buttons; }
 int engine_trade_widget_count(void) { return g_trade_widget_count; }
 
 /* iVar1 per good: DAT_004d2b80 first-int, stride 0x14, index good-1
@@ -116,13 +98,11 @@ int engine_trade_widget_count(void) { return g_trade_widget_count; }
 static const int k_trade_good_icon[14] =
     { 0x0e, 0x0f, 0, 0, 0, 0x10, 0x11, 0x12, 0x16, 0x17, 0x14, 0x13, 0x15, 0x18 };
 
-/* ── FUN_0041635f — the trade-grid content draw ─────────────────────────
- * dirty-rect marks (FUN_004527a6) are OMITTED — seam-owned, as in
- * engine_labor / engine_county_panels (the port repaints the full frame,
- * so per-widget marks are inert for pixels). */
-static void trade_content(const engine_trade_ctx_t *ctx)
+/* ── FUN_0041635f — the trade-grid content draw ───────────────────────── */
+void engine_trade_content(const engine_trade_ctx_t *ctx)
 {
     int good = ctx->good;
+    engine_county_panels_ctx_t pc = trade_panel_ctx(ctx);
     const uint8_t *tf = ctx->title_font;
     const uint8_t *mf = ctx->menu_font;
     const uint8_t *strat = STRAT_REC(ctx->strategic_block, ctx->local_player);
@@ -138,7 +118,7 @@ static void trade_content(const engine_trade_ctx_t *ctx)
     /* FUN_00403fdd(0x44,0x66,0x32,0x32) — the good-icon frame. */
     gfx_line_rect_bevel_dark_tl(0x44, 0x66, 0x32, 0x32);
     /* FUN_0040a682(good-1,0x45,0x67) — the good icon from icontrad.pl8. */
-    gfx_sprite_render_set_blob(g_trade_scratch);
+    gfx_sprite_render_set_blob(trade_scratch(ctx));
     gfx_sprite_render(good - 1, 0x45, 0x67);
 
     gfx_text_set_uppercase_highlight(1);     /* DAT_0058fe2c = 1 */
@@ -155,10 +135,13 @@ static void trade_content(const engine_trade_ctx_t *ctx)
     /* The good name (grp 6, 1-indexed) chained past the verb. */
     trade_loc(ctx, 6, good, gfx_text_line_x_acc() + 0x88, 0x68, tf, 0x3f);
 
-    /* Ale gift delta (good 4) — DEFERRED: g_trade_ale is always 0 on the
-     * ported (fresh-open) path, so FUN_0041ac95 never fires here.  Drawing
-     * it would need the county-panels delta-label ctx; faithfully omitted
-     * until the ale buy arm lands. */
+    /* The ale gift's happiness delta (good 4, DAT_0053e8c0). */
+    if (good == 4 && g_trade_ale != 0) {
+        engine_county_delta_label(&pc, g_trade_ale, gfx_text_line_x_acc() + 0x90, 0x6e, mf, 0x3f, 0xf9);
+    }
+    if (ctx->dirty) {
+        engine_dirty_rect_mark_box_tiled(ctx->dirty, 0x90, 0x6c, 0x14, 4, 1);   /* FUN_004527a6 */
+    }
 
     gfx_text_set_line_x_acc(0);
 
@@ -166,11 +149,11 @@ static void trade_content(const engine_trade_ctx_t *ctx)
     if (s_slot_0053e9bc != 0) {
         if (g_trade_net < 1) {
             trade_loc(ctx, 0x44, 0xa, 0x88, 0x88, mf, 0x3f);    /* Selling price */
-            trade_num_units(ctx, g_trade_offer, 0,
+            engine_county_num_units(&pc, g_trade_offer, 0,
                             gfx_text_line_x_acc() + 0x88, 0x88, mf, 0x3f);
         } else {
             trade_loc(ctx, 0x44, 9, 0x88, 0x88, mf, 0x3f);      /* Buying price */
-            trade_num_units(ctx, g_trade_max, 0,
+            engine_county_num_units(&pc, g_trade_max, 0,
                             gfx_text_line_x_acc() + 0x88, 0x88, mf, 0x3f);
         }
     }
@@ -180,7 +163,7 @@ static void trade_content(const engine_trade_ctx_t *ctx)
     /* "You have." + your gold, then "and" + the good holdings + its icon,
      * then "my Lord." — the holdings readout line. */
     trade_loc(ctx, 0x44, 0xc, 0x58, 0xb0, mf, 0x3f);            /* You have. */
-    trade_num_units(ctx, rec_i32(strat, 0x118), 0,             /* gold + Crowns */
+    engine_county_num_units(&pc, rec_i32(strat, 0x118), 0,             /* gold + Crowns */
                     gfx_text_line_x_acc() + 0x58, 0xb0, mf, 0x3f);
 
     int icon = k_trade_good_icon[good - 1];
@@ -189,7 +172,6 @@ static void trade_content(const engine_trade_ctx_t *ctx)
         gfx_text_label_render_dec(-g_trade_amount, '@', "",
                                   gfx_text_line_x_acc() + 0x58, 0xb0,
                                   mf, ctx->glyph_table, 0x3f);
-        gfx_sprite_render_set_blob(g_trade_scratch);
         gfx_sprite_render(icon, gfx_text_line_x_acc() + 0x58, 0xaa);
         gfx_text_set_line_x_acc(gfx_text_line_x_acc() + 0x24);
     }
@@ -200,6 +182,9 @@ static void trade_content(const engine_trade_ctx_t *ctx)
     /* The lower prompt box: parchment interior + bottom bevel. */
     if (ctx->chrome) {
         gfx_panel_fill_interior_chrome(ctx->chrome, 0x50, 0xd0, 0x1d, 5);   /* FUN_00409c93 */
+    }
+    if (ctx->dirty) {
+        engine_dirty_rect_mark_box_tiled(ctx->dirty, 0x50, 0xd0, 0x1e, 6, 1);
     }
     gfx_line_rect_bevel_dark_br(0x50, 0xd0, 0x1d0, 0x4c);            /* FUN_00403deb */
 
@@ -237,7 +222,7 @@ static void trade_content(const engine_trade_ctx_t *ctx)
         } else {
             trade_loc(ctx, 0x44, 8, 0x100, 0xe0, mf, 0x3f);        /* Total cost of */
         }
-        trade_num_units(ctx, g_trade_total, 0,
+        engine_county_num_units(&pc, g_trade_total, 0,
                         gfx_text_line_x_acc() + 0x100, 0xe0, mf, 0x3f);
     }
 }
@@ -251,12 +236,12 @@ static void trade_content(const engine_trade_ctx_t *ctx)
  * until the icon sheet is loaded (the first-open full render loads it). */
 void engine_trade_refresh(const engine_trade_ctx_t *ctx)
 {
-    if (!ctx->loc || !g_trade_scratch) {
+    if (!ctx->loc || (!ctx->scratch && !g_trade_scratch)) {
         return;
     }
     if (gfx_lock_canvas()) {
-        trade_content(ctx);
-        engine_button_render_list(0x30, 0x50, k_trade_buttons,
+        engine_trade_content(ctx);
+        engine_button_render_list(0x30, 0x50, g_trade_buttons,
                                   g_trade_widget_count,
                                   NULL, ctx->system_sheet, NULL);
         gfx_unlock_canvas();
@@ -284,8 +269,10 @@ void engine_trade_render(const engine_trade_ctx_t *ctx)
     }
 
     io_path_chdir_base();                   /* FUN_004af502 */
-    /* FUN_004b1de0() verified no-op; FUN_0045240a() full-screen dirty mark
-     * is redraw bookkeeping owned by the caller's seam (as in labor). */
+    /* FUN_004b1de0() — an empty function. */
+    if (ctx->dirty) {
+        engine_dirty_rect_mark_full_screen(ctx->dirty);   /* FUN_0045240a */
+    }
 
     /* merchant.pl8: the same 640×480 backdrop as the merchant scene, into
      * the back buffer (FUN_00408fcb — self-locks).  NO palette load: the
@@ -293,12 +280,17 @@ void engine_trade_render(const engine_trade_ctx_t *ctx)
      * merchant. */
     gfx_load_background_image("merchant.pl8");
 
-    /* icontrad.pl8: the trade icon sheet, into scratch (FUN_004af8d9). */
-    if (!trade_ensure_scratch()) {
+    /* icontrad.pl8: the trade icon sheet, into the scratch (FUN_004af8d9). */
+    uint8_t *scratch = trade_scratch(ctx);
+    if (!scratch) {
         return;
     }
-    io_read_file_at("icontrad.pl8", g_trade_scratch, TRADE_SCRATCH_LEN, 0);
+    io_read_file_at("icontrad.pl8", scratch, TRADE_SCRATCH_LEN, 0);
 
-    engine_trade_refresh(ctx);
-    /* DAT_004eb260 = 1 — scene flag with no ported consumer (as merchant). */
+    if (ctx->scratch) {
+        engine_trade_content(ctx);   /* retail: the content alone; the arrow strip is the per-frame refresh's */
+    } else {
+        engine_trade_refresh(ctx);   /* the standalone paints the strip on the open frame too */
+    }
+    g_gfx_menu_redraw_a = 1;         /* DAT_004eb260 */
 }

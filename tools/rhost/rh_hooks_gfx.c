@@ -110,6 +110,7 @@ static void gfx_bind(void)
     gfx_wrap_set_tall_font_marker((const uint8_t *)(uintptr_t)0x5b2fa0u);   /* &DAT_005b2fa0: the tall (24 px) font blob */
     engine_button_bind_pressed_mark(seam_pressed_mark);
 }
+__attribute__((constructor)) static void gfx_bind_register(void) { rh_port_register_bind(gfx_bind); }
 #define G(call) do { gfx_bind(); call; } while (0)
 #define P(k) ((const uint8_t *)(uintptr_t)a[k])
 #define C(k) ((uint8_t)a[k])

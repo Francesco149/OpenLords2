@@ -30,4 +30,5 @@ int  rh_hook_sample(hook_t *h, uint32_t ret);              /* shadow this call? 
                              T(RH_HOOKS_RL_IO) T(RH_HOOKS_RL_GLUE) T(RH_HOOKS_RL_RENDER) T(RH_HOOKS_RL_MISC) T(RH_HOOKS_RL_SKIRMISH) T(RH_HOOKS_RL_UI2) \
                              T(RH_HOOKS_TILE) \
                              T(RH_HOOKS_GFX) \
-                             T(RH_HOOKS_MAPVIEW)
+                             T(RH_HOOKS_MAPVIEW) \
+                             T(RH_HOOKS_SCREENS)

@@ -87,8 +87,40 @@
 #include <stdint.h>
 
 #include "engine_button.h"
+#include "engine_dirty_rect.h"
 #include "engine_menu_input.h"
 #include "localization.h"
+
+/* ── Retail-layout globals (engine_armory_globals.c; the hybrid host aliases each at its VA) ── */
+extern int32_t g_arm_pct;            /* DAT_0056d65c conscription % (persists) */
+extern int32_t g_arm_conscripts;     /* DAT_00543fd8 men at the current % */
+extern int32_t g_arm_happy_cost;     /* DAT_00565400 */
+extern int32_t g_arm_mode;           /* DAT_00522f58 overlay button count (1 / 3) */
+extern int32_t g_arm_merc;           /* DAT_0055446c hire-mercenaries toggle */
+extern int32_t g_arm_weapon;         /* DAT_00553f20 assign-screen weapon (1..6) */
+extern int32_t g_arm_march_active;   /* DAT_005679d0 */
+extern int32_t g_arm_march_x;        /* DAT_0056d630 */
+extern int32_t g_arm_march_y;        /* DAT_0056d62c */
+extern int32_t g_arm_march_target;   /* DAT_00568228 */
+extern int32_t g_arm_march_land;     /* DAT_005681f8 salute frame counter */
+extern int32_t g_arm_march_sprite;   /* DAT_0052f008 */
+extern int32_t g_arm_march_walk;     /* DAT_0057cb10 walk cycle 0..7 */
+extern int32_t g_arm_glint;          /* DAT_0057c8e4 */
+extern uint8_t *g_arm_interior;      /* DAT_0056d5b8 the interior sheet (arm_it_<c>.pl8) */
+extern uint8_t *g_arm_torch;         /* DAT_005533c4 the torch sheet (armtorch.pl8) */
+extern uint8_t *g_arm_troop;         /* DAT_0057a0c0 the marching troop sheet */
+extern engine_button_rec_t g_arm_overlay_buttons[3];   /* DAT_004dd340 the overlay's confirm + merc Yes/No */
+
+/* The hybrid host: the march strips live in the buffer DAT_004eabec points at and the click grid is retail's
+ * &DAT_00542ce0 (the standalone keeps buffers of its own); the dirty rectangle the readouts mark. */
+void engine_armory_bind_retail_buffers(uint8_t *grid);
+void engine_armory_set_dirty_state(engine_dirty_rect_state_t *dirty);
+
+struct engine_armory_ctx;
+/* FUN_00418426 — the owned-weapon wall racks; FUN_0041ac3e — the loc-group-8 unit noun (sub / sub+1). */
+void engine_armory_racks(const struct engine_armory_ctx *ctx);
+void engine_armory_unit_noun(const struct engine_armory_ctx *ctx, int value, int unit_sub, int x, int y,
+                             const uint8_t *font, uint8_t color);
 
 /* ── Render context ────────────────────────────────────────────────────
  * Built by engine.c's render seam from the save-schema externs + gfx
@@ -96,6 +128,17 @@
  * a NULL pointer skips the draw that needs it).  The heraldry-colored
  * interior sheet is loaded by the render itself (indexed off the strategic
  * block), so it is NOT carried here. */
+/* The open render's retail-only steps (the hybrid host binds retail's; NULL — the standalone — skips them and loads
+ * the palette in one step at the end). */
+typedef struct engine_armory_retail {
+    void (*palette_prep)(void);                  /* 0x4b11ce (open arg 1) */
+    void (*teardown_alloc)(void);                /* 0x4996c8: the map teardown + the sheets' allocation */
+    void (*input_tick)(int arg);                 /* FUN_00452160(1) */
+    void (*palette_apply)(const uint8_t *pal);   /* FUN_004b0ab5 */
+    uint8_t *palette_mirror;                     /* &DAT_004ea8a0 */
+    const char *interior_names;                  /* &DAT_004d2c88: the arm_it_<c>.pl8 names, 16 bytes each */
+} engine_armory_retail_t;
+
 typedef struct engine_armory_ctx {
     const uint8_t *strategic_block;    /* g_player_strategic_352 (0x57bf00) */
     const uint8_t *troop_pool;         /* g_troop_pool (retail 0x53f6a0, stride 0x80) */
@@ -113,6 +156,8 @@ typedef struct engine_armory_ctx {
     const uint8_t *glyph_table;
     const unsigned char *glyph_metrics;
     localization_state_t *loc;
+    int open_arg;                      /* FUN_00417ea7's argument (1: the palette prep) */
+    const engine_armory_retail_t *retail;   /* NULL: the standalone */
 } engine_armory_ctx_t;
 
 /* ── FUN_004aa90a — the on-entry muster-pool setup ──────────────────────

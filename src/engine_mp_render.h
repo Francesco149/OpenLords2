@@ -7,8 +7,10 @@
 
 #include <stdint.h>
 
-/* Bind the menu sprite asset (retail DAT_004eabec) used by the player
- * indicator. */
+#include "localization.h"
+
+/* Bind the menu sprite asset used by the player indicator: retail draws from the CURRENT sprite sheet
+ * DAT_004eabec (g_gfx_current_blob), which this sets. */
 void engine_mp_render_bind_menu_asset(const uint8_t *asset);
 
 /* Bind the status sprite asset (retail DAT_005bb540) used by the status
@@ -21,6 +23,13 @@ void engine_mp_render_bind_status_asset(const uint8_t *asset);
 void engine_mp_render_bind_text(const uint8_t *title_font,
                                 const uint8_t *glyph_table,
                                 unsigned char *loc_blob);
+
+/* Point the status line at an external localization state (the hybrid host's: retail's blob + walker); NULL →
+ * the module's own (engine_mp_render_bind_text). */
+void engine_mp_render_bind_loc(localization_state_t *loc);
+
+/* Bind the indicator's clock (timeGetTime, read inside the gate as retail does); NULL → the `now_ms` argument. */
+void engine_mp_render_bind_clock(uint32_t (*clock)(void));
 
 /* Port of FUN_0041f15a.  While `mp_active` and `*timer_ms != 0`, blit
  * the per-slot indicator sprite; clear `*timer_ms` once 10 s elapsed

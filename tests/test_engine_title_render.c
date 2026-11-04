@@ -1040,6 +1040,7 @@ int test_title_setup_country_list_fills_and_selection(void)
     /* count 8, scroll 0, select visible row 2. */
     engine_title_render_set_country_list((const uint8_t *)"\0\1\2\3\4\5\6\7",
                                          0, 2, 8);
+    engine_title_render_setup_mark_country_dirty();   /* DAT_0057c948: the list draws only when dirtied */
     engine_title_render_setup_country_list();
 
     /* Row 2 (y = 2*0x10 + 0x8d = 0xad) interior is the bright fill 0x3f. */
@@ -1059,6 +1060,7 @@ int test_title_setup_country_list_scrollbar_tracks_scroll(void)
     p7_setup();
     engine_title_render_set_country_list((const uint8_t *)"\0\1\2\3\4\5\6\7",
                                          0, 0, 8);
+    engine_title_render_setup_mark_country_dirty();   /* DAT_0057c948: the list draws only when dirtied */
     engine_title_render_setup_country_list();
     /* scroll 0 → no top filler (0x20) above the thumb start row 0xa3. */
     int top0 = 0;
@@ -1069,6 +1071,7 @@ int test_title_setup_country_list_scrollbar_tracks_scroll(void)
     p7_setup();
     engine_title_render_set_country_list((const uint8_t *)"\0\1\2\3\4\5\6\7",
                                          3, 0, 8);  /* scrolled to 3/8 */
+    engine_title_render_setup_mark_country_dirty();   /* DAT_0057c948: the list draws only when dirtied */
     engine_title_render_setup_country_list();
     /* scroll 3/8 of 0x2c ≈ 16 px of 0x20 top filler at the track top. */
     T_ASSERT(row_color_count_x(0xa3, 0x20, 0x25c, 0x25c + 0x14) > 0);
@@ -1110,7 +1113,8 @@ int test_title_setup_tabs_value_label_skips_active(void)
     p7_setup();
     int vals[12] = { 0 };
     engine_title_render_set_tab_values(vals, /*active=*/4);
-    engine_title_render_setup_tabs();
+    engine_title_render_setup_mark_tabs_dirty();      /* DAT_0055ce94 */
+    engine_title_render_setup_tabs(4);
 
     /* Tab 4 geometry: x=0x122, value label at y = 0x161 + 0x10 = 0x171.
      * No 0xf9 pixels there (active tab → value label skipped). */
@@ -1280,7 +1284,7 @@ int test_title_refresh_setup_gated_by_dirty(void)
     engine_title_render_set_country_list((const uint8_t *)"\0\1\2\3\4\5\6\7",
                                          0, 0, 8);
     /* A full render draws everything and clears the dirty flags. */
-    engine_title_render_setup_screen();
+    engine_title_render_setup_screen(999);
 
     /* Clean → refresh paints no country-row fills. */
     canvas_init();

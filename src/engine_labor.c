@@ -499,7 +499,7 @@ static void labor_panel_reclaim(const engine_labor_ctx_t *ctx, const uint8_t *re
 /* ─── FUN_0041dedb — one castle-status block ────────────────────────────
  * Shared with the county summary; here `county` = the current county,
  * `bx / by / row` = (-0x20, 0x40, 0). */
-static void labor_castle_block(const engine_labor_ctx_t *ctx, int county,
+void engine_labor_castle_block(const engine_labor_ctx_t *ctx, int county,
                                int bx, int by, int row)
 {
     CALL_TRACE_ENTER(0x0041dedb);
@@ -562,7 +562,7 @@ static void labor_castle_block(const engine_labor_ctx_t *ctx, int county,
 static void labor_panel_castle(const engine_labor_ctx_t *ctx)
 {
     CALL_TRACE_ENTER(0x00414220);
-    labor_castle_block(ctx, ctx->county, -0x20, 0x40, 0);
+    engine_labor_castle_block(ctx, ctx->county, -0x20, 0x40, 0);
 }
 
 /* ─── FUN_00412e6b — iron / stone / wood mining (tasks 5/6/7) ────────── */

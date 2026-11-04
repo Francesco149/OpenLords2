@@ -3,6 +3,7 @@
 #include "engine_bf.h"
 #include "engine_bf_input_globals.h"
 #include "rl.h"
+#include "engine_battlefield_render.h"
 #include "engine.h"
 #include "engine_combat.h"
 #include "engine_territory.h"
@@ -10,12 +11,11 @@
 
 /* the selection mask of player p's units: realm record byte +0xee (DAT_0057bfee) */
 #define SEL_MASK(p) AT(uint8_t, g_player_strategic_352, 0x57bf00u, 0x57bfeeu + 352 * (p))
-/* retail's battlefield pixel → cell quantizers (engine_battlefield_render.c: 0x4bc2e5 / 4bc346 / 4bc3ac / 4bc40d;
- * that module's viewport globals are runtime-bound, not on retail's layout) — TODO(bf-link) */
-static int px_col_right(int px) { return (int)engine_retail_call(0x4bc2e5u, 1, (uint32_t)px); }
-static int px_col_left(int px)  { return (int)engine_retail_call(0x4bc346u, 1, (uint32_t)px); }
-static int px_row_bottom(int py) { return (int)engine_retail_call(0x4bc3acu, 1, (uint32_t)py); }
-static int px_row_top(int py)    { return (int)engine_retail_call(0x4bc40du, 1, (uint32_t)py); }
+/* the battlefield pixel → cell quantizers (engine_battlefield_render.c: retail-layout since the screens render batch) */
+static int px_col_right(int px) { return engine_battlefield_render_pixel_to_col_right_biased(px); }   /* 0x4bc2e5 */
+static int px_col_left(int px)  { return engine_battlefield_render_pixel_to_col_left_biased(px); }    /* 0x4bc346 */
+static int px_row_bottom(int py) { return engine_battlefield_render_pixel_to_row_bottom_biased(py); } /* 0x4bc3ac */
+static int px_row_top(int py)    { return engine_battlefield_render_pixel_to_row_top_biased(py); }    /* 0x4bc40d */
 
 /* Port of FUN_00479a71 (231 B) — deselect everything player `p` holds: every unit selected by p (+9 == p) loses
  * it, every unit's selection bit for p (+0xa, mask realm +0xee) is cleared; the panel redraw gate DAT_0053e9ac = 1

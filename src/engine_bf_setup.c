@@ -3,6 +3,7 @@
  * Findings: docs/findings/bf-setup.md. */
 #include "engine_bf.h"
 #include "rl.h"
+#include "engine_battlefield_render.h"
 #include "engine.h"             /* engine_rng_step_single (0x404b2c), g_sim_mp_active, the screen / redraw bridges */
 #include "engine_combat.h"      /* g_combat_render_active / _anim_t0 / _msg_clock: DAT_0056d5c8 / 0053e994 / 004eeae8 */
 #include "engine_map_query.h"   /* g_cell_cursor_col / _row: DAT_00569570 / DAT_00569578 (rhost: a synced mirror) */
@@ -552,11 +553,11 @@ int bf_47ed9b(void)
     g_bf_57cac8 = 0;
     g_bf_553f90 = 0;
     /* TODO(bf-link): engine_battlefield_render_screen_in_grid / _pixel_to_col / _pixel_to_row (not linked in rhost) */
-    if (engine_retail_call(0x4bc222u, 2, (uint32_t)g_bf_4e65fc, (uint32_t)g_bf_4e65f4) == 0)
+    if (engine_battlefield_render_screen_in_grid(g_bf_4e65fc, g_bf_4e65f4) == 0)
         return 0;
     g_bf_5651d0 = 1;
-    g_bf_553f88 = (int32_t)engine_retail_call(0x4bc2a5u, 1, (uint32_t)g_bf_4e65fc) + S32(s_slot_0055ce70);
-    g_bf_553f94 = (int32_t)engine_retail_call(0x4bc2c5u, 1, (uint32_t)g_bf_4e65f4) + S32(s_slot_005678a0);
+    g_bf_553f88 = (int32_t)engine_battlefield_render_pixel_to_col(g_bf_4e65fc) + S32(s_slot_0055ce70);
+    g_bf_553f94 = (int32_t)engine_battlefield_render_pixel_to_row(g_bf_4e65f4) + S32(s_slot_005678a0);
     if (g_bf_553f94 >= 80)
         g_bf_553f94 = 79;
     g_bf_553f68 = 8 * (g_bf_553f88 + 80 * g_bf_553f94);
