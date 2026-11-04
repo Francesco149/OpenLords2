@@ -122,11 +122,7 @@ static int  load_season(void) { return (int)engine_retail_call(0x4984dcu, 0); } 
 static int  present(int full) { return (int)engine_retail_call(0x452160u, 1, (uint32_t)full); }   /* TODO(rl-link): gfx.c's present 0x452160 */
 static int  confirm_open(int kind, int x, int y, uint32_t cb)   /* TODO(rl-link): engine_confirm_dialog_open 0x40e6f2 (retail keeps the callback VA) */
 { return (int)engine_retail_call(0x40e6f2u, 4, (uint32_t)kind, (uint32_t)x, (uint32_t)y, cb); }
-static int  evq_post(int a, int b, int code, int d, int e, int f, int g, int h)   /* TODO(rl-link): engine_event_queue_post 0x472bc5 (posts into a port struct) */
-{
-    return (int)engine_retail_call(0x472bc5u, 8, (uint32_t)a, (uint32_t)b, (uint32_t)code, (uint32_t)d, (uint32_t)e,
-                                   (uint32_t)f, (uint32_t)g, (uint32_t)h);
-}
+static int  evq_post(int a, int b, int code, int d, int e, int f, int g, int h) { return rl_472bc5(a, b, code, d, e, f, g, h); }
 static int  map_options_redraw(void) { return (int)engine_retail_call(0x476a5du, 0); }   /* TODO(rl-link): 0x476a5d (engine.c) */
 static void text_input_open(const void *init, int n, int x, int y)   /* TODO(rl-link): text_input_init 0x402009 */
 { engine_retail_call(0x402009u, 4, (uint32_t)(uintptr_t)init, (uint32_t)n, (uint32_t)x, (uint32_t)y); }
@@ -971,7 +967,7 @@ int rl_41ef42(void)
 #define PAUX8(p, va) AT(uint8_t, g_player_aux_44, 0x553d50u, (va) + 44 * (p))
 
 /* seams of the setup actions */
-static void evq_init(void) { engine_retail_call(0x472ae0u, 0); }   /* TODO(rl-link): engine_event_queue_init 0x472ae0 (a port struct) */
+static void evq_init(void) { rl_472ae0(); }
 static int  load_misc_sheet(void) { return (int)engine_retail_call(0x499034u, 0); }   /* TODO(rl-link): gfx_load_misc_sheet 0x499034 */
 static int  load_system_sheet(int k) { return (int)engine_retail_call(0x499a1cu, 1, (uint32_t)k); }   /* TODO(rl-link): gfx_load_system_sheet_select 0x499a1c */
 static int  chdir_base(void) { return (int)engine_retail_call(0x4af502u, 0); }   /* TODO(rl-link): io_path_chdir_base 0x4af502 */

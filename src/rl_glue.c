@@ -602,12 +602,8 @@ int rl_434cee(void)
 }
 
 /* ---------------------------------------------------------------- more seams */
-/* the event queue post 0x472bc5 (engine_event_queue.c posts into a port struct: TODO(rl-link)) */
-static int evq_post(int a, int b, int code, int d, int e, int f, int g, int h)
-{
-    return (int)engine_retail_call(0x472bc5u, 8, (uint32_t)a, (uint32_t)b, (uint32_t)code, (uint32_t)d, (uint32_t)e,
-                                   (uint32_t)f, (uint32_t)g, (uint32_t)h);
-}
+/* the event queue post 0x472bc5 */
+static int evq_post(int a, int b, int code, int d, int e, int f, int g, int h) { return rl_472bc5(a, b, code, d, e, f, g, h); }
 /* the line editor 0x402009(buf, max, width px, flag) / 0x401f49() on retail's editor globals (text_input.c works on a
  * port struct: TODO(rl-link)) */
 static void editor_open(const void *buf, int max, int w, int flag)

@@ -629,9 +629,7 @@ static void bf_rng_single(void)
  * pattern's rotating variant +0xb); returns index + 1 (0: none). */
 static int bf_pick_feature(const void *tab, int n)
 {
-    /* TODO(bf-link): engine_territory_pick_feature (engine_territory.c) runs the strategic map's own 48-entry
-     * table with a file-static counter; the battlefield needs the (table, n) form on retail's 0x543fe0 mask */
-    return (int)engine_retail_call(0x46c2deu, 2, (uint32_t)(uintptr_t)tab, (uint32_t)n);
+    return rl_46c2de((int)(uintptr_t)tab, n);   /* 0x46c2de (rl_terr): the (table, n) form on retail's 0x543fe0 mask */
 }
 
 /* Port of FUN_0047d79c (122 B) — a w × h block of cells from the cell cursor offset DAT_005533cc gets kind

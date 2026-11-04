@@ -59,8 +59,8 @@ int rl_46ea9a(int p)
 int rl_46f21f(void)
 {
     int r = 0;
-    for (int i = 0; i <= 6; i++)   /* TODO(rl-extern): 0x46ea61 */
-        r = (int)engine_retail_call(0x46ea61u, 1, (uint32_t)(uintptr_t)(g_player_strategic_352 + 352 * i));
+    for (int i = 0; i <= 6; i++)
+        r = rl_46ea61((int)(uintptr_t)(g_player_strategic_352 + 352 * i));
     return r;
 }
 
@@ -1863,8 +1863,8 @@ int rl_497a34(int fresh)
     g_rl_553ef8 = 0;
     s_slot_0057a0f0 = 0;
     g_rl_5aeb8c = 0;
-    engine_retail_call(0x46a037u, 1, s_slot_0053f034);   /* TODO(rl-link): engine_minimap_load_grids */
-    engine_retail_call(0x467770u, 1, s_slot_0053f034);   /* TODO(rl-link): engine_territory_load_strat_map */
+    rl_46a037((int)s_slot_0053f034);
+    rl_467770((int)s_slot_0053f034);
     engine_retail_call(0x4298c1u, 1, 0u);                /* TODO(rl-link): engine_map_init_build_cells */
     s_slot_0053f268 = 4;
     engine_retail_call(0x4ae5e2u, 1, s_slot_0053e8a4);   /* TODO(rl-link): engine_title_render_setup_clamp_player_count */

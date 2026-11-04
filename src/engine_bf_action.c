@@ -6,6 +6,7 @@
  * DAT_0052eff4 (g_bf_52eff4): retail re-reads both at every access, and callees change them, so the ports read the
  * globals, never a cached copy across a call. docs/findings/bf-action.md. */
 #include "engine_bf.h"
+#include "rl_terr.h"            /* rl_46c2de */
 #include "engine_path.h"        /* engine_path_dist_chebyshev / _manhattan (0x404f4c / 0x404ead) */
 #include "engine_map_query.h"   /* g_cell_cursor_col / _row (DAT_00569570 / DAT_00569578) */
 
@@ -920,9 +921,8 @@ int bf_47dd86(int off)
             if (BCELL8(g_bf_5533cc, 0x5440e7) != 2)
                 continue;
             bf_47da54(2, 1, 1);
-            /* TODO(bf-link): engine_territory_pick_feature is not retail-layout (its own table copy and counters);
-             * retail's 0x46c2de on the table DAT_004d7610 */
-            if (engine_retail_call(0x46c2deu, 2, (uint32_t)(uintptr_t)&g_bf_4d7610, 49u) != 0)
+            /* 0x46c2de (rl_terr) on the table DAT_004d7610 */
+            if (rl_46c2de((int)(uintptr_t)&g_bf_4d7610, 49) != 0)
                 BCELL8(g_bf_5533cc, 0x5440e3) = (uint8_t)(g_bf_57c8a4 + g_bf_568200);
         }
     }

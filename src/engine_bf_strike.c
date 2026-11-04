@@ -12,6 +12,7 @@
  * DAT_00569570 / DAT_00569578) go through their owning port symbols (engine_path.h g_path_dist_*,
  * engine_map_query.h g_cell_cursor_*), never through their g_bf_ aliases. */
 #include "engine_bf.h"
+#include "rl_terr.h"            /* rl_46c2de */
 #include "engine_map_query.h"
 #include "engine_path.h"
 
@@ -505,9 +506,8 @@ int bf_47dfe0(int off)
             bf_47da54(3, 1, 0);
             bf_47da54(1, 1, 0);
             bf_47da54(5, 1, 0);
-            /* TODO(bf-link): engine_territory_pick_feature (0x46c2de) is not retail-layout (its own table, the
-             * counters file-static): retail's, on the battlefield table DAT_004d7930 */
-            if (engine_retail_call(0x46c2deu, 2, (uint32_t)(uintptr_t)g_bf_4d7930, 49u) != 0)
+            /* 0x46c2de (rl_terr) on the battlefield table DAT_004d7930 */
+            if (rl_46c2de((int)(uintptr_t)g_bf_4d7930, 49) != 0)
                 BCELL8(g_bf_5533cc, 0x5440e3) = (uint8_t)(g_bf_57c8a4 + g_bf_568200);
         }
     }

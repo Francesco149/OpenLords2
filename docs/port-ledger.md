@@ -430,9 +430,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4651b9 | FUN_004651b9 | 91 | engine.c, engine_territory.c, engine_territory.h |
 | 0x465214 | FUN_00465214 | 11 | engine_army_state.c |
 | 0x46521f | FUN_0046521f | 615 | engine_army_state.c, engine_combat.c, engine_combat.h |
-| 0x465486 | FUN_00465486 | 412 | engine_army_state.c |
-| 0x465622 | FUN_00465622 | 319 | engine_army_state.c |
-| 0x465761 | FUN_00465761 | 319 | engine_army_state.c |
+| 0x465486 | FUN_00465486 | 412 | engine_army_state.c, rl_terr.c |
+| 0x465622 | FUN_00465622 | 319 | engine_army_state.c, rl_terr.c |
+| 0x465761 | FUN_00465761 | 319 | engine_army_state.c, rl_terr.c |
 | 0x4658c1 | FUN_004658c1 | 1112 | engine_army_move.c, engine_army_move.h |
 | 0x465d28 | FUN_00465d28 | 1441 | engine_army_move.c, engine_army_move.h, engine_army_state.c (+3) |
 | 0x46634d | FUN_0046634d | 1002 | engine_army_move.c, engine_army_move.h |
@@ -441,91 +441,91 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x466c3c | FUN_00466c3c | 328 | engine_army_move.c, engine_army_move.h |
 | 0x466d84 | FUN_00466d84 | 995 | engine_army_move.c, engine_army_move.h |
 | 0x467196 | FUN_00467196 | 422 | engine_army_ai.c, engine_army_move.c, engine_army_move.h |
-| 0x46733c | FUN_0046733c | 124 | engine_army_ai.c, engine_army_move.c, engine_combat.c (+2) |
-| 0x4673b8 | FUN_004673b8 | 378 | engine_army_ai.c |
-| 0x467532 | FUN_00467532 | 426 | engine_army_ai.c |
-| 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c, engine_territory.h |
-| 0x467770 | FUN_00467770 | 525 | engine_territory.c, engine_territory.h, engine_territory_globals.c (+4) |
-| 0x46797d | FUN_0046797d | 185 | engine_map_init.c, engine_map_init.h |
-| 0x467a36 | FUN_00467a36 | 624 | engine_territory.c, engine_territory.h |
-| 0x467ca6 | FUN_00467ca6 | 385 | engine_territory.c, engine_territory.h |
-| 0x467e2c | FUN_00467e2c | 127 | engine_realm.c, engine_realm.h |
+| 0x46733c | FUN_0046733c | 124 | engine_army_ai.c, engine_army_move.c, engine_combat.c (+3) |
+| 0x4673b8 | FUN_004673b8 | 378 | engine_army_ai.c, rl_terr.c |
+| 0x467532 | FUN_00467532 | 426 | engine_army_ai.c, rl_terr.c |
+| 0x4676e0 | FUN_004676e0 | 144 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x467770 | FUN_00467770 | 525 | engine_territory.c, engine_territory.h, engine_territory_globals.c (+5) |
+| 0x46797d | FUN_0046797d | 185 | engine_map_init.c, engine_map_init.h, rl_terr.c |
+| 0x467a36 | FUN_00467a36 | 624 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x467ca6 | FUN_00467ca6 | 385 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x467e2c | FUN_00467e2c | 127 | engine_realm.c, engine_realm.h, rl_terr.c |
 | 0x467eb0 | FUN_00467eb0 | 126 | engine_army_ai.c, engine_combat.c, engine_realm.c (+1) |
-| 0x467f2e | FUN_00467f2e | 163 | engine_army_ai.c |
-| 0x467fd1 | FUN_00467fd1 | 336 | engine_territory.c, engine_territory.h |
-| 0x468121 | FUN_00468121 | 331 | engine_territory.c, engine_territory.h |
+| 0x467f2e | FUN_00467f2e | 163 | engine_army_ai.c, rl_terr.c |
+| 0x467fd1 | FUN_00467fd1 | 336 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x468121 | FUN_00468121 | 331 | engine_territory.c, engine_territory.h, rl_terr.c |
 | 0x46826c | FUN_0046826c | 221 | engine_army_ai.c, engine_territory.c, engine_territory.h |
-| 0x46841c | FUN_0046841c | 170 | engine_army_ai.c |
-| 0x4684c6 | FUN_004684c6 | 474 | engine_territory.c, engine_territory.h |
+| 0x46841c | FUN_0046841c | 170 | engine_army_ai.c, rl_terr.c |
+| 0x4684c6 | FUN_004684c6 | 474 | engine_territory.c, engine_territory.h, rl_terr.c |
 | 0x4686a0 | FUN_004686a0 | 159 | engine_army_move.c, engine_army_move.h, engine_combat.c (+1) |
 | 0x46873f | FUN_0046873f | 931 | engine_army_move.c, engine_army_move.h, game_init.c |
 | 0x468ae2 | FUN_00468ae2 | 351 | engine_army_move.c, engine_army_move.h, game_init.c |
-| 0x468c41 | FUN_00468c41 | 270 | engine_territory.c, engine_territory.h |
-| 0x468d4f | FUN_00468d4f | 274 | engine_territory.c, engine_territory.h, game_init.c |
-| 0x468e61 | FUN_00468e61 | 457 | engine_territory.c, engine_territory.h |
-| 0x46902a | FUN_0046902a | 499 | engine_territory.c, engine_territory.h |
-| 0x46921d | FUN_0046921d | 138 | engine_army_move.c, engine_territory.c, engine_territory.h |
-| 0x46942c | FUN_0046942c | 147 | engine_realm.c, engine_realm.h |
-| 0x46958f | FUN_0046958f | 203 | engine_territory.c, engine_territory.h |
-| 0x46965a | FUN_0046965a | 371 | engine_territory.c, engine_territory.h |
-| 0x4697cd | FUN_004697cd | 192 | engine_territory.c, engine_territory.h |
-| 0x46988d | FUN_0046988d | 274 | engine_territory.c, engine_territory.h |
-| 0x469a9c | FUN_00469a9c | 176 | engine_realm.c, engine_realm.h |
+| 0x468c41 | FUN_00468c41 | 270 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x468d4f | FUN_00468d4f | 274 | engine_territory.c, engine_territory.h, game_init.c (+1) |
+| 0x468e61 | FUN_00468e61 | 457 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x46902a | FUN_0046902a | 499 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x46921d | FUN_0046921d | 138 | engine_army_move.c, engine_territory.c, engine_territory.h (+1) |
+| 0x46942c | FUN_0046942c | 147 | engine_realm.c, engine_realm.h, rl_terr.c |
+| 0x46958f | FUN_0046958f | 203 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x46965a | FUN_0046965a | 371 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x4697cd | FUN_004697cd | 192 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x46988d | FUN_0046988d | 274 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x469a9c | FUN_00469a9c | 176 | engine_realm.c, engine_realm.h, rl_terr.c |
 | 0x469b51 | FUN_00469b51 | 60 | engine_territory.c, engine_territory.h |
 | 0x469b8d | FUN_00469b8d | 404 | engine_army_economy.c, engine_territory.c, engine_territory.h (+1) |
-| 0x469d21 | FUN_00469d21 | 237 | engine_territory.c, engine_territory.h |
+| 0x469d21 | FUN_00469d21 | 237 | engine_territory.c, engine_territory.h, rl_terr.c |
 | 0x469e0e | FUN_00469e0e | 72 | engine_army_move.c, engine_army_move.h, engine_army_move_confirm.c (+1) |
 | 0x469e5b | FUN_00469e5b | 476 | engine_army_move.c, engine_army_move.h |
-| 0x46a037 | FUN_0046a037 | 202 | engine_minimap.c, engine_minimap.h, game_init.c (+1) |
-| 0x46ac22 | FUN_0046ac22 | 329 | engine_territory.c, engine_territory.h |
-| 0x46c080 | FUN_0046c080 | 199 | engine_territory.c, engine_territory.h |
-| 0x46c147 | FUN_0046c147 | 407 | engine_territory.c, engine_territory.h |
-| 0x46c2de | FUN_0046c2de | 292 | engine_territory.c, engine_territory.h |
-| 0x46c5b8 | FUN_0046c5b8 | 258 | engine_territory.c, engine_territory.h |
-| 0x46c6ba | FUN_0046c6ba | 322 | engine_territory.c, engine_territory.h |
-| 0x46cfbd | FUN_0046cfbd | 371 | engine_army_state.c, engine_map_query.c, engine_map_query.h (+2) |
+| 0x46a037 | FUN_0046a037 | 202 | engine_minimap.c, engine_minimap.h, game_init.c (+2) |
+| 0x46ac22 | FUN_0046ac22 | 329 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x46c080 | FUN_0046c080 | 199 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x46c147 | FUN_0046c147 | 407 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x46c2de | FUN_0046c2de | 292 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x46c5b8 | FUN_0046c5b8 | 258 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x46c6ba | FUN_0046c6ba | 322 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x46cfbd | FUN_0046cfbd | 371 | engine_army_state.c, engine_map_query.c, engine_map_query.h (+3) |
 | 0x46d130 | FUN_0046d130 | 371 | engine_map_query.c, engine_map_query.h, game_init.c (+1) |
-| 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h |
+| 0x46d2a3 | FUN_0046d2a3 | 301 | engine_map_query.c, engine_map_query.h, rl_terr.c |
 | 0x46d42c | FUN_0046d42c | 456 | engine_combat.c, engine_combat.h |
-| 0x46d5fe | FUN_0046d5fe | 502 | engine.c, engine_map_query.c, engine_map_query.h (+2) |
-| 0x46d7f4 | FUN_0046d7f4 | 486 | engine_army_move.c, engine_realm_events.h, engine_territory.c (+1) |
-| 0x46d9da | FUN_0046d9da | 113 | engine_territory.c, engine_territory.h |
-| 0x46da4b | FUN_0046da4b | 426 | engine_territory.c, engine_territory.h, main.c |
-| 0x46dbf5 | FUN_0046dbf5 | 319 | engine_territory.c, engine_territory.h, engine_territory_globals.c (+1) |
-| 0x46dd34 | FUN_0046dd34 | 209 | engine_territory.c, engine_territory.h, main.c |
-| 0x46de05 | FUN_0046de05 | 143 | engine_territory.c, engine_territory.h |
-| 0x46de94 | FUN_0046de94 | 189 | engine_territory.c, engine_territory.h |
-| 0x46df51 | FUN_0046df51 | 132 | engine_territory.c, engine_territory.h, engine_territory_globals.c |
-| 0x46dfd5 | FUN_0046dfd5 | 146 | engine_combat.c, engine_territory.c, engine_territory.h (+1) |
+| 0x46d5fe | FUN_0046d5fe | 502 | engine.c, engine_map_query.c, engine_map_query.h (+3) |
+| 0x46d7f4 | FUN_0046d7f4 | 486 | engine_army_move.c, engine_realm_events.h, engine_territory.c (+2) |
+| 0x46d9da | FUN_0046d9da | 113 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x46da4b | FUN_0046da4b | 426 | engine_territory.c, engine_territory.h, main.c (+1) |
+| 0x46dbf5 | FUN_0046dbf5 | 319 | engine_territory.c, engine_territory.h, engine_territory_globals.c (+2) |
+| 0x46dd34 | FUN_0046dd34 | 209 | engine_territory.c, engine_territory.h, main.c (+1) |
+| 0x46de05 | FUN_0046de05 | 143 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x46de94 | FUN_0046de94 | 189 | engine_territory.c, engine_territory.h, rl_terr.c |
+| 0x46df51 | FUN_0046df51 | 132 | engine_territory.c, engine_territory.h, engine_territory_globals.c (+1) |
+| 0x46dfd5 | FUN_0046dfd5 | 146 | engine_combat.c, engine_territory.c, engine_territory.h (+2) |
 | 0x46e067 | FUN_0046e067 | 317 | engine_territory.c, engine_territory.h |
-| 0x46e1b0 | FUN_0046e1b0 | 792 | engine_army_ai.c, engine_combat.c, engine_territory.c (+2) |
-| 0x46ea28 | FUN_0046ea28 | 57 | game_init.c, game_init.h |
-| 0x46ea61 | FUN_0046ea61 | 57 | engine_combat.c, game_init.c |
-| 0x46ead0 | FUN_0046ead0 | 57 | engine_army_state.c, engine_map_init.c, engine_realm_upkeep.c (+3) |
-| 0x46eb09 | FUN_0046eb09 | 54 | game_init.c, game_init.h |
+| 0x46e1b0 | FUN_0046e1b0 | 792 | engine_army_ai.c, engine_combat.c, engine_territory.c (+3) |
+| 0x46ea28 | FUN_0046ea28 | 57 | game_init.c, game_init.h, rl_terr.c |
+| 0x46ea61 | FUN_0046ea61 | 57 | engine_combat.c, game_init.c, rl_terr.c |
+| 0x46ead0 | FUN_0046ead0 | 57 | engine_army_state.c, engine_map_init.c, engine_realm_upkeep.c (+4) |
+| 0x46eb09 | FUN_0046eb09 | 54 | game_init.c, game_init.h, rl_terr.c |
 | 0x46ec6e | FUN_0046ec6e | 369 | engine_army_move.c, engine_combat.c, engine_realm_upkeep.c (+1) |
 | 0x46eddf | FUN_0046eddf | 349 | engine_army_move.c, engine_combat.c, engine_realm_upkeep.c (+1) |
 | 0x46f0a9 | FUN_0046f0a9 | 71 | engine_army_move.c, engine_army_state.c, engine_realm_upkeep.c (+1) |
-| 0x46f1dc | FUN_0046f1dc | 67 | game_init.c, game_init.h |
-| 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h |
-| 0x46f3cd | FUN_0046f3cd | 78 | engine_map_init.c, game_init.c, game_init.h |
+| 0x46f1dc | FUN_0046f1dc | 67 | game_init.c, game_init.h, rl_terr.c |
+| 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h, rl_terr.c |
+| 0x46f3cd | FUN_0046f3cd | 78 | engine_map_init.c, game_init.c, game_init.h (+1) |
 | 0x46f434 | FUN_0046f434 | 216 | engine_army_move.c, engine_path.c, engine_path.h |
-| 0x46f68e | FUN_0046f68e | 114 | engine_army_select.c, engine_army_select.h, engine_territory.c |
-| 0x46f700 | FUN_0046f700 | 2115 | engine_army_ai.c, engine_army_move.c, engine_path_field.c (+1) |
-| 0x46ff43 | FUN_0046ff43 | 617 | engine.c, engine_strat_cost.c, engine_strat_cost.h (+1) |
-| 0x4701ac | FUN_004701ac | 1228 | engine_army_ai.c, engine_path_field.c, engine_path_field.h |
-| 0x470678 | FUN_00470678 | 326 | engine_army_move_confirm.c |
-| 0x4707be | FUN_004707be | 274 | engine_army_ai.c, engine_path_field.c, engine_path_field.h |
-| 0x4708d0 | FUN_004708d0 | 142 | engine_path_field.c, engine_path_field.h |
+| 0x46f68e | FUN_0046f68e | 114 | engine_army_select.c, engine_army_select.h, engine_territory.c (+1) |
+| 0x46f700 | FUN_0046f700 | 2115 | engine_army_ai.c, engine_army_move.c, engine_path_field.c (+2) |
+| 0x46ff43 | FUN_0046ff43 | 617 | engine.c, engine_strat_cost.c, engine_strat_cost.h (+2) |
+| 0x4701ac | FUN_004701ac | 1228 | engine_army_ai.c, engine_path_field.c, engine_path_field.h (+1) |
+| 0x470678 | FUN_00470678 | 326 | engine_army_move_confirm.c, rl_terr.c |
+| 0x4707be | FUN_004707be | 274 | engine_army_ai.c, engine_path_field.c, engine_path_field.h (+1) |
+| 0x4708d0 | FUN_004708d0 | 142 | engine_path_field.c, engine_path_field.h, rl_terr.c |
 | 0x471c1f | FUN_00471c1f | 273 | engine_tile.c, engine_tile.h |
 | 0x471d30 | FUN_00471d30 | 118 | engine_tile.c, engine_tile.h |
-| 0x472392 | FUN_00472392 | 715 | engine_path.c, engine_path.h, engine_path_field.h |
-| 0x47265d | FUN_0047265d | 536 | engine_path.h |
-| 0x472875 | FUN_00472875 | 151 | engine_path.h |
-| 0x472ad0 | FUN_00472ad0 | 16 | engine_event_queue.c, engine_event_queue.h, game_init.c |
-| 0x472ae0 | FUN_00472ae0 | 96 | engine_event_queue.c, engine_event_queue.h |
-| 0x472b40 | FUN_00472b40 | 133 | engine.c, engine_event_queue.c, engine_event_queue.h |
-| 0x472bc5 | FUN_00472bc5 | 560 | engine.c, engine_army_ai.c, engine_army_move.c (+9) |
+| 0x472392 | FUN_00472392 | 715 | engine_path.c, engine_path.h, engine_path_field.h (+1) |
+| 0x47265d | FUN_0047265d | 536 | engine_path.h, rl_terr.c |
+| 0x472875 | FUN_00472875 | 151 | engine_path.h, rl_terr.c |
+| 0x472ad0 | FUN_00472ad0 | 16 | engine_event_queue.c, engine_event_queue.h, game_init.c (+1) |
+| 0x472ae0 | FUN_00472ae0 | 96 | engine_event_queue.c, engine_event_queue.h, rl_terr.c |
+| 0x472b40 | FUN_00472b40 | 133 | engine.c, engine_event_queue.c, engine_event_queue.h (+1) |
+| 0x472bc5 | FUN_00472bc5 | 560 | engine.c, engine_army_ai.c, engine_army_move.c (+10) |
 | 0x472df5 | FUN_00472df5 | 81 | engine_event_queue.c, engine_event_queue.h |
 | 0x476710 | FUN_00476710 | 88 | engine_army_select.c, engine_army_select.h |
 | 0x476768 | FUN_00476768 | 245 | engine.c, engine_army_select.h, engine_ingame_input.h (+2) |
@@ -548,7 +548,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x497ced | FUN_00497ced | 376 | engine_load_pump.c, engine_territory.c, engine_territory.h (+3) |
 | 0x497e65 | FUN_00497e65 | 1025 | engine.c, engine.h, game_init.c (+1) |
 | 0x498270 | FUN_00498270 | 327 | engine_map_init.c, engine_map_init.h, main.c |
-| 0x4984dc | FUN_004984dc | 731 | engine.c, engine_ingame_input.c, engine_pl8.c (+5) |
+| 0x4984dc | FUN_004984dc | 731 | engine.c, engine_ingame_input.c, engine_pl8.c (+4) |
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h |
 | 0x4997bf | FUN_004997bf | 151 | engine_workforce_hud.c, engine_workforce_hud.h |
 | 0x499a1c | FUN_00499a1c | 174 | engine.c, gfx.c, gfx.h (+1) |
@@ -1163,14 +1163,14 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x451f8a | FUN_00451f8a | 66 | rl_glue.c |
 | 0x45242b | FUN_0045242b | 11 | rl_misc.c |
 | 0x45280b | FUN_0045280b | 11 | rl_io.c |
-| 0x452820 | FUN_00452820 | 2907 | engine_map_terrain.c, blit_table_452820.h |
-| 0x45337b | FUN_0045337b | 1403 | engine_map_terrain.c, blit_table_45337b.h |
-| 0x4538f6 | FUN_004538f6 | 1403 | engine_map_terrain.c, blit_table_4538f6.h |
-| 0x453e71 | FUN_00453e71 | 8339 | engine_map_terrain.c, drawb_table_453e71.h |
-| 0x455f04 | FUN_00455f04 | 4308 | engine_map_terrain.c, drawb_stripb_455f04.h |
-| 0x456fd8 | FUN_00456fd8 | 4305 | engine_map_terrain.c, drawb_stripb_456fd8.h |
-| 0x4580a9 | FUN_004580a9 | 4527 | engine_map_terrain.c, drawb_stripb_4580a9.h |
-| 0x459258 | FUN_00459258 | 4377 | engine_map_terrain.c, drawb_stripb_459258.h |
+| 0x452820 | FUN_00452820 | 2907 | engine_map_terrain.c |
+| 0x45337b | FUN_0045337b | 1403 | engine_map_terrain.c |
+| 0x4538f6 | FUN_004538f6 | 1403 | engine_map_terrain.c |
+| 0x453e71 | FUN_00453e71 | 8339 | engine_map_terrain.c |
+| 0x455f04 | FUN_00455f04 | 4308 | engine_map_terrain.c |
+| 0x456fd8 | FUN_00456fd8 | 4305 | engine_map_terrain.c |
+| 0x4580a9 | FUN_004580a9 | 4527 | engine_map_terrain.c |
+| 0x459258 | FUN_00459258 | 4377 | engine_map_terrain.c |
 | 0x460501 | FUN_00460501 | 668 | engine_map_terrain.c |
 | 0x46079d | FUN_0046079d | 321 | engine_map_terrain.c |
 | 0x4608de | FUN_004608de | 318 | engine_map_terrain.c |
@@ -1179,14 +1179,14 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x461623 | FUN_00461623 | 1073 | engine_map_terrain.c |
 | 0x461a54 | FUN_00461a54 | 1191 | engine_map_terrain.c |
 | 0x461efb | FUN_00461efb | 1145 | engine_map_terrain.c |
-| 0x463b42 | FUN_00463b42 | 196 | engine_map_terrain.c, blit_table_463b42.h |
-| 0x463c06 | FUN_00463c06 | 92 | engine_map_terrain.c, blit_table_463c06.h |
-| 0x463c62 | FUN_00463c62 | 92 | engine_map_terrain.c, blit_table_463c62.h |
-| 0x463cbe | FUN_00463cbe | 467 | engine_map_terrain.c, drawb_table_463cbe.h |
-| 0x463e91 | FUN_00463e91 | 276 | engine_map_terrain.c, drawb_table_463e91.h |
-| 0x463fa5 | FUN_00463fa5 | 273 | engine_map_terrain.c, drawb_table_463fa5.h |
-| 0x4640b6 | FUN_004640b6 | 339 | engine_map_terrain.c, drawb_stripb_4640b6.h |
-| 0x464209 | FUN_00464209 | 345 | engine_map_terrain.c, drawb_stripb_464209.h |
+| 0x463b42 | FUN_00463b42 | 196 | engine_map_terrain.c |
+| 0x463c06 | FUN_00463c06 | 92 | engine_map_terrain.c |
+| 0x463c62 | FUN_00463c62 | 92 | engine_map_terrain.c |
+| 0x463cbe | FUN_00463cbe | 467 | engine_map_terrain.c |
+| 0x463e91 | FUN_00463e91 | 276 | engine_map_terrain.c |
+| 0x463fa5 | FUN_00463fa5 | 273 | engine_map_terrain.c |
+| 0x4640b6 | FUN_004640b6 | 339 | engine_map_terrain.c |
+| 0x464209 | FUN_00464209 | 345 | engine_map_terrain.c |
 | 0x46a101 | FUN_0046a101 | 165 | rl_io.c |
 | 0x46c40c | FUN_0046c40c | 57 | engine_bf_setup.c |
 | 0x46c4a3 | FUN_0046c4a3 | 277 | rl_glue.c |
@@ -1217,7 +1217,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x472227 | FUN_00472227 | 363 | engine_bf_move.c |
 | 0x472986 | FUN_00472986 | 63 | rl_glue.c |
 | 0x472a31 | FUN_00472a31 | 152 | rl_glue.c |
-| 0x472e46 | FUN_00472e46 | 595 | engine.c |
+| 0x472e46 | FUN_00472e46 | 595 | engine.c, rl_terr.c |
 | 0x47309e | FUN_0047309e | 10915 | engine.c |
 | 0x475b41 | FUN_00475b41 | 562 | rl_glue.c |
 | 0x475d73 | FUN_00475d73 | 148 | rl_glue.c |
