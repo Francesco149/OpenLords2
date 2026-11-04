@@ -106,7 +106,7 @@ int test_tooltip_classify_dynamic_lists(void)
     engine_tooltip_classify_in_t in = tip_at(0x200, 0x140);
     T_ASSERT_EQ_I(engine_tooltip_classify_strategic(&in), 0);
 
-    static const uint8_t labor[3] = { 1, 0, 2 };
+    static const int32_t labor[3] = { 1, 0, 2 };
     in = tip_at(0x200, 0x130 + 0);               /* row 0, kind 1 → cattle */
     in.labor_row_h = 0x10; in.labor_count = 3; in.labor_kinds = labor;
     T_ASSERT_EQ_I(engine_tooltip_classify_strategic(&in), 0xf);
@@ -117,7 +117,7 @@ int test_tooltip_classify_dynamic_lists(void)
     in.cursor_y = 0x130 + 0x30;                  /* past the list */
     T_ASSERT_EQ_I(engine_tooltip_classify_strategic(&in), 0);
 
-    static const uint8_t prod[5] = { 6, 5, 4, 7, 3 };
+    static const int32_t prod[5] = { 6, 5, 4, 7, 3 };
     in = tip_at(0x240, 0x130);
     in.prod_row_h = 0x10; in.prod_count = 5; in.prod_kinds = prod;
     T_ASSERT_EQ_I(engine_tooltip_classify_strategic(&in), 0x12);

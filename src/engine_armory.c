@@ -20,12 +20,17 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
+#include "engine.h"                  /* engine_set_demand_redraw (DAT_0057d340) */
+#include "engine_county_panels.h"    /* FUN_00409397, FUN_0041ab67 */
+#include "engine_dirty_rect.h"
 #include "engine_math.h"             /* engine_math_percent_of (FUN_00404d6b) */
 #include "engine_workforce_hud.h"    /* backdrop strip capture/restore
                                         (FUN_004b3f0a / FUN_004b3ec0) */
 #include "game_init.h"               /* engine_game_init_troop_pool_row */
 #include "gfx.h"                     /* backdrop/palette/lock, GFX_RENDER_W/H */
+#include "gfx_globals.h"             /* the staged cursor / glyph dims of the backdrop strips */
 #include "gfx_line.h"                /* gfx_line_rect_bevel_dark_br */
 #include "gfx_panel.h"               /* gfx_panel_draw / fill_interior */
 #include "gfx_sprite_render.h"       /* gfx_sprite_render_from_blob, seal */
@@ -58,13 +63,11 @@ static void put_i32(uint8_t *rec, int off, int32_t v)
  * table (retail 0x4d2c88, 0x10-byte entries) selects the color; a failed
  * load falls back to base1a.pl8. */
 #define ARMORY_INTERIOR_LEN 0x4b320
-static uint8_t *g_armory_interior;
 
 /* ── The torch-flame sheet (armtorch.pl8) ───────────────────────────────
  * retail loads it into the shared scratch DAT_005533c4 (150000 B); we keep a
  * persistent buffer loaded by the render, drawn by the per-frame refresh. */
 #define ARMORY_TORCH_LEN 150000
-static uint8_t *g_armory_torch;
 
 /* ── The muster-figure click-zone grid (arm_grid.pl8) ───────────────────
  * retail loads it into the shared grid slot DAT_00542ce0 (0x12d8 B: 0x18
@@ -84,7 +87,6 @@ static uint8_t *g_armory_weapon_sheet;
 /* ── The troop-march sprite sheet (trp_<w>_<c>.pl8) ─────────────────────
  * retail scratch DAT_0057a0c0 (0x4b320 B), loaded by the march trigger. */
 #define ARMORY_TROOP_LEN 0x4b320
-static uint8_t *g_armory_troop;
 
 /* ── The four march backdrop strips (retail reuses DAT_004eabec) ────────
  * Captured by the open render (FUN_004b3f0a ×4) over the march band
@@ -102,30 +104,56 @@ static const struct { int x; int w_dwords; int off_dwords; } k_strip_seg[4] = {
     { 0x1e0, 0x28, 0x6f18 },
 };
 
-/* ── Armory scratch state (retail globals; none are save-schema slots) ── */
-static int g_pct;           /* DAT_0056d65c — conscription % (persists)   */
-static int g_conscripts;    /* DAT_00543fd8 — men at the current %        */
-static int g_happy_cost;    /* DAT_00565400 — happiness cost              */
-static int g_mode;          /* DAT_00522f58 — overlay button count (1/3)  */
-static int g_merc;          /* DAT_0055446c — hire-mercenaries toggle     */
-static int g_weapon;        /* DAT_00553f20 — assign-screen weapon (1..6) */
-static int g_march_active;  /* DAT_005679d0 */
-static int g_march_x;       /* DAT_0056d630 */
-static int g_march_y;       /* DAT_0056d62c */
-static int g_march_target;  /* DAT_00568228 */
-static int g_march_land;    /* DAT_005681f8 — salute frame counter        */
-static int g_march_sprite;  /* DAT_0052f008 */
-static int g_march_walk;    /* DAT_0057cb10 — walk-cycle 0..7             */
+/* ── Armory scratch state: retail globals (engine_armory_globals.c; none are save-schema slots) ── */
 static int g_march_skip_arm_tick;  /* port-order compensation, see trigger */
 
-int  engine_armory_overlay_mode(void) { return g_mode; }
-int  engine_armory_conscripts(void)   { return g_conscripts; }
-int  engine_armory_pct(void)          { return g_pct; }
-void engine_armory_set_merc(int on)   { g_merc = on ? 1 : 0; }
-int  engine_armory_merc(void)         { return g_merc; }
-int  engine_armory_happy_cost(void)   { return g_happy_cost; }
-int  engine_armory_weapon(void)       { return g_weapon; }
-int  engine_armory_march_active(void) { return g_march_active; }
+/* the strips + the grid + the chdir'd sheets: under the hybrid host retail's own buffers (bound once) */
+static int g_strips_in_blob;       /* 1: the strips live in the buffer DAT_004eabec points at (retail) */
+static uint32_t *armory_strips(void)
+{
+    if (g_strips_in_blob) {
+        return (uint32_t *)(uintptr_t)g_gfx_current_blob;
+    }
+    if (!g_armory_strips) {
+        g_armory_strips = malloc(ARMORY_STRIPS_DWORDS * sizeof(uint32_t));
+    }
+    return g_armory_strips;
+}
+static engine_dirty_rect_state_t *g_arm_dirty;   /* FUN_004527a6 / FUN_0045240a's rectangle; NULL → no marks */
+static void arm_mark(int x, int y, int w, int h)
+{
+    if (g_arm_dirty) {
+        engine_dirty_rect_mark_box_tiled(g_arm_dirty, x, y, w, h, 1);
+    }
+}
+void engine_armory_bind_retail_buffers(uint8_t *grid)
+{
+    g_strips_in_blob = 1;
+    g_armory_grid = grid;
+}
+void engine_armory_set_dirty_state(engine_dirty_rect_state_t *dirty) { g_arm_dirty = dirty; }
+
+/* FUN_0041ab67 / FUN_0041ac3e take a panel context (the loc state + the fonts) */
+static engine_county_panels_ctx_t armory_panel_ctx(const engine_armory_ctx_t *ctx)
+{
+    engine_county_panels_ctx_t c;
+    memset(&c, 0, sizeof c);
+    c.menu_font = ctx->menu_font;
+    c.title_font = ctx->title_font;
+    c.glyph_table = ctx->glyph_table;
+    c.glyph_metrics = ctx->glyph_metrics;
+    c.loc = ctx->loc;
+    return c;
+}
+
+int  engine_armory_overlay_mode(void) { return g_arm_mode; }
+int  engine_armory_conscripts(void)   { return g_arm_conscripts; }
+int  engine_armory_pct(void)          { return g_arm_pct; }
+void engine_armory_set_merc(int on)   { g_arm_merc = on ? 1 : 0; }
+int  engine_armory_merc(void)         { return g_arm_merc; }
+int  engine_armory_happy_cost(void)   { return g_arm_happy_cost; }
+int  engine_armory_weapon(void)       { return g_arm_weapon; }
+int  engine_armory_march_active(void) { return g_arm_march_active; }
 static const char *const k_interior_file[6] = {
     "arm_it_r.pl8",   /* 0 */
     "arm_it_r.pl8",   /* 1 */
@@ -183,41 +211,50 @@ void engine_armory_muster_init(int county_owner, int population,
     /* Retail tail: deselect the assign weapon + kill any live march
      * (DAT_00553f20 = 0; DAT_005679d0 = 0; _DAT_0057c8e4 = 0 — the glint
      * phase is write-only in this family, not mirrored). */
-    g_weapon = 0;
-    g_march_active = 0;
+    g_arm_weapon = 0;
+    g_arm_march_active = 0;
+    g_arm_glint = 0;                           /* DAT_0057c8e4 */
 }
 
 /* ── FUN_00418426 — the owned-weapon wall racks ─────────────────────────*/
-static void armory_racks(const engine_armory_ctx_t *ctx)
+void engine_armory_racks(const engine_armory_ctx_t *ctx)
 {
     const uint8_t *strat =
         ctx->strategic_block + (size_t)ctx->local_player * STRAT_STRIDE;
     for (int t = 1; t < 7; t++) {
         if (rec_i32(strat, 0x13c + t * 4) > 0) {
-            gfx_sprite_render_from_blob(g_armory_interior, k_rack[t - 1][0],
+            gfx_sprite_render_from_blob(g_arm_interior, k_rack[t - 1][0],
                                         k_rack[t - 1][1], k_rack[t - 1][2]);
         }
     }
 }
 
 /* ── FUN_004181eb — the bottom muster tally ─────────────────────────────
- * Entry 0 (men) always draws; entries 1..6 draw only when their stock gate
- * (pool +e*0x10 +4) is > 0.  The count is pool +e*0x10 +0 (the merc
- * contingent add is deferred — inert at the loaded save).  The
- * per-readout tooltip-hotspot register (FUN_004527a6) is UI-only, omitted. */
+ * Entry 0 (men) always draws; entries 1..6 draw when their stock gate (pool +e*0x10 +4) is > 0 — or when the hired
+ * mercenary contingent (the county's army +0x1ad while DAT_0055446c) is of that weapon (the unit table's +5).  The
+ * count is pool +e*0x10 +0, plus the contingent's size (+8) on its weapon's entry; a 8×6 mark per readout. */
 void engine_armory_counts_render(const engine_armory_ctx_t *ctx)
 {
-    const uint8_t *row =
-        ctx->troop_pool + (size_t)ctx->local_player * POOL_STRIDE;
-    for (int e = 0; e <= 6; e++) {
-        if (e != 0 && rec_i32(row, e * 0x10 + 4) <= 0) {
-            continue;
+    const uint8_t *row = ctx->troop_pool + (size_t)ctx->local_player * POOL_STRIDE;
+    int merc = g_arm_merc ? ctx->county_rec[0x1ad] : 0;
+    for (int e = 0; e < 7; e++) {
+        int extra = 0;
+        if (e > 0) {
+            int merc_here = merc != 0 && ctx->unit_table[(size_t)merc * 0x14 + 5] == e;
+            if (rec_i32(row, e * 0x10 + 4) > 0) {
+                if (merc_here) {
+                    extra = rec_i32(ctx->unit_table, merc * 0x14 + 8);
+                }
+            } else if (merc_here) {
+                extra = rec_i32(ctx->unit_table, merc * 0x14 + 8);
+            } else {
+                continue;
+            }
         }
-        gfx_sprite_render_from_blob(g_armory_interior, k_count[e][0],
-                                    k_count[e][1], k_count[e][2]);
-        gfx_text_label_render_dec(rec_i32(row, e * 0x10 + 0), '@', "",
-                                  k_count[e][3], k_count[e][4],
+        gfx_sprite_render_from_blob(g_arm_interior, k_count[e][0], k_count[e][1], k_count[e][2]);
+        gfx_text_label_render_dec(extra + rec_i32(row, e * 0x10 + 0), '@', "", k_count[e][3], k_count[e][4],
                                   ctx->menu_font, ctx->glyph_table, 0x3f);
+        arm_mark(k_count[e][3], k_count[e][4], 8, 6);
     }
 }
 
@@ -228,27 +265,20 @@ void engine_armory_counts_render(const engine_armory_ctx_t *ctx)
  * frame), as in engine_rankings / engine_treasury. */
 static void armory_scene(const engine_armory_ctx_t *ctx)
 {
-    /* FUN_0040d1bc(W-0x1c,H-0x70,1) — the continue seal (drawn first, over
-     * the backdrop, exactly as retail). */
-    if (ctx->system_sheet) {
-        gfx_sprite_seal_draw(ctx->system_sheet,
-                             GFX_RENDER_W - 0x1c, GFX_RENDER_H - 0x70, 1);
-    }
-
-    armory_racks(ctx);       /* FUN_00418426 */
+    engine_armory_racks(ctx);   /* FUN_00418426 */
 
     /* Capture the four troop-march backdrop strips (FUN_004b3f0a ×4) —
      * retail snapshots the muster band (y 0xd8, 0x9e rows) right after the
      * racks, before the counts/labels (which draw below the band anyway). */
-    if (!g_armory_strips) {
-        g_armory_strips = malloc(ARMORY_STRIPS_DWORDS * sizeof(uint32_t));
-    }
-    if (g_armory_strips) {
+    uint32_t *strips = armory_strips();
+    if (strips) {
+        g_gfx_cursor_y = ARMORY_STRIP_Y;
+        g_gfx_glyph_height_short = ARMORY_STRIP_ROWS;
         for (int s = 0; s < 4; s++) {
-            engine_workforce_hud_capture_backdrop(
-                g_armory_strips + k_strip_seg[s].off_dwords,
-                k_strip_seg[s].x, ARMORY_STRIP_Y,
-                k_strip_seg[s].w_dwords, ARMORY_STRIP_ROWS, GFX_RENDER_W);
+            g_gfx_cursor_x = k_strip_seg[s].x;
+            g_gfx_glyph_w = (int16_t)k_strip_seg[s].w_dwords;
+            engine_workforce_hud_capture_backdrop(strips + k_strip_seg[s].off_dwords,
+                                                  GFX_RENDER_W - 4 * k_strip_seg[s].w_dwords);
         }
     }
 
@@ -272,53 +302,68 @@ void engine_armory_render(const engine_armory_ctx_t *ctx)
     if (!ctx->loc) {
         return;
     }
+    const engine_armory_retail_t *rt = ctx->retail;
 
     io_path_chdir_base();                       /* FUN_004af502 */
-    /* 0x4b11ce (transient palette/canvas prep) + 0x4996c8 (the
-     * strategic-map teardown + armory buffer alloc) are DEFERRED — the port
-     * keeps the map resident and uses the persistent scratch below, exactly
-     * as engine_merchant / engine_rankings defer the retail free/malloc. */
+    if (rt && ctx->open_arg == 1 && rt->palette_prep) {
+        rt->palette_prep();                     /* 0x4b11ce */
+    }
+    /* armoury.256 → the palette mirror DAT_004ea8a0 (applied by FUN_004b0ab5 at the end); the standalone's
+     * gfx_load_palette reads + applies it there in one step. */
+    if (rt && rt->palette_mirror) {
+        io_read_file_at("armoury.256", rt->palette_mirror, 0x300, 0);
+    }
 
-    /* armoury.pl8: the 640×480 backdrop straight into the back buffer
-     * (FUN_00408fcb — self-locks). */
+    /* armoury.pl8: the 640×480 backdrop straight into the back buffer (FUN_00408fcb). */
     gfx_load_background_image("armoury.pl8");
 
-    /* arm_grid.pl8 → the muster-figure click zones (input only, retail
-     * loads it into the shared DAT_00542ce0 slot right after the backdrop). */
+    /* arm_grid.pl8 → the muster-figure click zones (retail's shared slot DAT_00542ce0). */
     if (!g_armory_grid) {
         g_armory_grid = malloc(ARMORY_GRID_LEN);
     }
     if (g_armory_grid &&
-        !io_read_file_at("arm_grid.pl8", g_armory_grid, ARMORY_GRID_LEN, 0)) {
+        !io_read_file_at("arm_grid.pl8", g_armory_grid, ARMORY_GRID_LEN, 0) && !rt) {
         free(g_armory_grid);
         g_armory_grid = NULL;
     }
 
-    /* arm_it_r<c>.pl8 → the resident interior sheet, color-indexed by the
-     * player's heraldry (strat +0x0a); base1a.pl8 on a failed load. */
-    if (!g_armory_interior) {
-        g_armory_interior = malloc(ARMORY_INTERIOR_LEN);
+    /* FUN_0040d1bc(xRight - 0x1c, yBottom - 0x70, 1) — the continue seal, over the backdrop. */
+    if (ctx->system_sheet && gfx_lock_canvas()) {
+        gfx_sprite_seal_draw(ctx->system_sheet, GFX_RENDER_W - 0x1c, GFX_RENDER_H - 0x70, 1);
+        gfx_unlock_canvas();
     }
-    if (!g_armory_interior) {
+
+    /* 0x4996c8: the strategic-map teardown + the armory sheets' allocation (retail); the standalone allocates
+     * its own on first use. */
+    if (rt && rt->teardown_alloc) {
+        rt->teardown_alloc();
+    }
+
+    /* arm_it_r<c>.pl8 → the interior sheet, by the player's heraldry (strat +0x0a: retail indexes its 16-byte name
+     * table DAT_004d2c88 with it unclamped); base1a.pl8 on a failed load. */
+    if (!g_arm_interior) {
+        g_arm_interior = malloc(ARMORY_INTERIOR_LEN);
+    }
+    if (!g_arm_interior) {
         return;
     }
     int color = ctx->strategic_block[(size_t)ctx->local_player * STRAT_STRIDE + 0x0a];
-    if (color < 0 || color > 5) {
-        color = 0;
+    const char *name;
+    if (rt && rt->interior_names) {
+        name = rt->interior_names + 16 * color;
+    } else {
+        name = k_interior_file[(color < 0 || color > 5) ? 0 : color];
     }
-    if (!io_read_file_at(k_interior_file[color], g_armory_interior,
-                         ARMORY_INTERIOR_LEN, 0)) {
-        io_read_file_at("base1a.pl8", g_armory_interior,
-                        ARMORY_INTERIOR_LEN, 0);
+    if (!io_read_file_at(name, g_arm_interior, ARMORY_INTERIOR_LEN, 0)) {
+        io_read_file_at("base1a.pl8", g_arm_interior, ARMORY_INTERIOR_LEN, 0);
     }
 
-    /* armtorch.pl8 → the resident torch sheet for the per-frame flame refresh
-     * (retail loads it into DAT_005533c4 here in FUN_00417ea7). */
-    if (!g_armory_torch) {
-        g_armory_torch = malloc(ARMORY_TORCH_LEN);
+    /* armtorch.pl8 → the torch sheet for the per-frame flame refresh (DAT_005533c4). */
+    if (!g_arm_torch) {
+        g_arm_torch = malloc(ARMORY_TORCH_LEN);
     }
-    if (g_armory_torch) {
-        io_read_file_at("armtorch.pl8", g_armory_torch, ARMORY_TORCH_LEN, 0);
+    if (g_arm_torch) {
+        io_read_file_at("armtorch.pl8", g_arm_torch, ARMORY_TORCH_LEN, 0);
     }
 
     if (gfx_lock_canvas()) {
@@ -326,10 +371,22 @@ void engine_armory_render(const engine_armory_ctx_t *ctx)
         gfx_unlock_canvas();
     }
 
-    /* armoury.256 → the active palette last (retail applies FUN_004b0ab5
-     * after the draws, so it lands on the settled frame; the screen-0 close
-     * arm restores base01.256, same as merchant / rankings). */
-    gfx_load_palette("armoury.256");
+    if (g_arm_dirty) {
+        engine_dirty_rect_mark_full_screen(g_arm_dirty);   /* FUN_0045240a */
+    }
+    if (rt) {
+        if (rt->input_tick) {
+            rt->input_tick(1);                  /* FUN_00452160(1) */
+        }
+        if (rt->palette_apply) {
+            rt->palette_apply(rt->palette_mirror);   /* FUN_004b0ab5(&DAT_004ea8a0) */
+        }
+        g_gfx_menu_redraw_a = 1;                /* DAT_004eb260 */
+    } else {
+        /* armoury.256 → the active palette last (the standalone: read + apply; the screen-0 close arm restores
+         * base01.256, same as merchant / rankings). */
+        gfx_load_palette("armoury.256");
+    }
 }
 
 /* ── FUN_00419243 — the two animated torch flames ───────────────────────
@@ -342,45 +399,25 @@ void engine_armory_render(const engine_armory_ctx_t *ctx)
  * (FUN_004527a6) are UI-only. */
 void engine_armory_refresh(int torch_frame)
 {
-    if (!g_armory_torch) {
+    if (!g_arm_torch) {
         return;
     }
-    gfx_sprite_render_from_blob(g_armory_torch, torch_frame, 0x9a, 0x76);
-    gfx_sprite_render_from_blob(g_armory_torch, torch_frame + 0xd,
+    gfx_sprite_render_from_blob(g_arm_torch, torch_frame, 0x9a, 0x76);
+    arm_mark(0x9a, 0x76, 8, 6);
+    gfx_sprite_render_from_blob(g_arm_torch, torch_frame + 0xd,
                                 0x19a, 0x76);
+    arm_mark(0x19a, 0x76, 8, 6);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
  * Screen 0x17 — the army create/change overlay
  * ═══════════════════════════════════════════════════════════════════════ */
 
-/* ── FUN_0041ab67 — a decimal value + its loc-group-8 unit noun ─────────
- * (same replica as engine_labor's labor_num_units; kept file-local, the
- * retail original is a shared leaf).  Preserves the caller's line-x
- * accumulator around the pair. */
-static void armory_num_units(const engine_armory_ctx_t *ctx, int value,
-                             int unit_sub, int x, int y,
+/* ── FUN_0041ac3e — the loc-group-8 unit noun alone (sub for exactly 1, else sub+1) ───────*/
+void engine_armory_unit_noun(const engine_armory_ctx_t *ctx, int value, int unit_sub, int x, int y,
                              const uint8_t *font, uint8_t color)
 {
-    int saved = gfx_text_line_x_acc();          /* iVar1 = DAT_005cd404 */
-    gfx_text_set_line_x_acc(0);
-    gfx_text_label_render_dec(value, '@', "", x, y,   /* &DAT_004d41f4 = "" */
-                              font, ctx->glyph_table, color);
-    int sub = (value == 1 || value == -1) ? unit_sub : unit_sub + 1;
-    gfx_wrap_localized_line(ctx->loc, 8, sub,
-                            x + gfx_text_line_x_acc(), y,
-                            font, ctx->glyph_table, color);
-    gfx_text_set_line_x_acc(gfx_text_line_x_acc() + saved);
-}
-
-/* ── FUN_0041ac3e — the loc-group-8 unit noun alone (sing./plural) ───────*/
-static void armory_unit_noun(const engine_armory_ctx_t *ctx, int value,
-                             int unit_sub, int x, int y,
-                             const uint8_t *font, uint8_t color)
-{
-    gfx_wrap_localized_line(ctx->loc, 8,
-                            (value == 1) ? unit_sub : unit_sub + 1,
-                            x, y, font, ctx->glyph_table, color);
+    gfx_wrap_localized_line(ctx->loc, 8, (value == 1) ? unit_sub : unit_sub + 1, x, y, font, ctx->glyph_table, color);
 }
 
 /* ── DAT_004d8778 — happiness cost per conscription % (r2-extracted) ─────*/
@@ -401,32 +438,32 @@ static const int k_conscript_happy[101] = {
 /* ── FUN_00435ebc — conscription % → men + happiness cost ────────────────*/
 void engine_armory_conscript_update(const uint8_t *county_rec, int pct)
 {
-    g_conscripts = engine_math_percent_of(rec_i32(county_rec, 0x24), pct);
-    g_happy_cost = k_conscript_happy[pct];
+    g_arm_conscripts = engine_math_percent_of(rec_i32(county_rec, 0x24), pct);
+    g_arm_happy_cost = k_conscript_happy[pct];
     if (pct != 0) {
-        g_happy_cost += rec_i32(county_rec, 0x2f4);
+        g_arm_happy_cost += rec_i32(county_rec, 0x2f4);
     }
-    if (g_happy_cost > 100) g_happy_cost = 100;
-    if (g_happy_cost < 0)   g_happy_cost = 0;
+    if (g_arm_happy_cost > 100) g_arm_happy_cost = 100;
+    if (g_arm_happy_cost < 0)   g_arm_happy_cost = 0;
 
     if ((int8_t)county_rec[0x0c] < 1) {
         /* A county already at rock-bottom happiness conscripts nothing. */
-        g_conscripts = 0;
-        g_happy_cost = 0;
+        g_arm_conscripts = 0;
+        g_arm_happy_cost = 0;
         return;
     }
     /* Step the EFFECTIVE pct down until happiness stays >= 1.  The slider
-     * global (g_pct) is NOT written back — retail leaves the knob where
+     * global (g_arm_pct) is NOT written back — retail leaves the knob where
      * the user put it. */
-    while ((int8_t)county_rec[0x0c] - g_happy_cost < 1) {
+    while ((int8_t)county_rec[0x0c] - g_arm_happy_cost < 1) {
         pct = pct - 1;
-        g_conscripts = engine_math_percent_of(rec_i32(county_rec, 0x24), pct);
-        g_happy_cost = k_conscript_happy[pct];
+        g_arm_conscripts = engine_math_percent_of(rec_i32(county_rec, 0x24), pct);
+        g_arm_happy_cost = k_conscript_happy[pct];
         if (pct != 0) {
-            g_happy_cost += rec_i32(county_rec, 0x2f4);
+            g_arm_happy_cost += rec_i32(county_rec, 0x2f4);
         }
-        if (g_happy_cost > 100) g_happy_cost = 100;
-        if (g_happy_cost < 0)   g_happy_cost = 0;
+        if (g_arm_happy_cost > 100) g_arm_happy_cost = 100;
+        if (g_arm_happy_cost < 0)   g_arm_happy_cost = 0;
     }
 }
 
@@ -446,35 +483,29 @@ int engine_armory_slider_click(const uint8_t *county_rec,
         if (lmb_pressed == 0 && lmb_repeat == 0) {
             return 0;
         }
-        g_pct = g_pct - 1;
+        g_arm_pct = g_arm_pct - 1;
     } else if (cursor_x < 0x129) {
         if (lmb_held == 0) {
             return 0;                     /* the track is a DRAG target */
         }
-        g_pct = cursor_x - 0xc4;
+        g_arm_pct = cursor_x - 0xc4;
     } else {
         if (lmb_pressed == 0 && lmb_repeat == 0) {
             return 0;
         }
-        g_pct = g_pct + 1;
+        g_arm_pct = g_arm_pct + 1;
     }
-    if (g_pct < 0)   g_pct = 0;
-    if (g_pct > 100) g_pct = 100;
-    engine_armory_conscript_update(county_rec, g_pct);
-    return 1;                             /* caller: demand_redraw = 2 */
+    if (g_arm_pct < 0)   g_arm_pct = 0;
+    if (g_arm_pct > 100) g_arm_pct = 100;
+    engine_armory_conscript_update(county_rec, g_arm_pct);
+    engine_set_demand_redraw(2);          /* DAT_0057d340 = 2 */
+    return 1;
 }
 
-/* The overlay button strip (retail DAT_004dd340, r2-extracted): the confirm
- * seal (type 5 press-latch) + the mercenary Yes/No gauntlets. */
-static engine_button_rec_t k_overlay_buttons[3] = {
-    { 0x1e0, 0x150, 0x21, 0x18, 0x435cbf, 0, 0, 0, 5, 0, 0 },
-    { 0x160, 0x100, 0x1d, 0x20, 0x435c89, 0, 0, 0, 5, 1, 0 },
-    { 0x190, 0x104, 0x1f, 0x20, 0x435c89, 0, 0, 0, 5, 0, 0 },
-};
-
+/* The overlay button strip: retail's DAT_004dd340 (g_arm_overlay_buttons, engine_armory_globals.c). */
 engine_button_rec_t *engine_armory_overlay_buttons(void)
 {
-    return k_overlay_buttons;
+    return g_arm_overlay_buttons;
 }
 
 /* ── FUN_00418653 — the create/change overlay render ─────────────────────*/
@@ -486,7 +517,7 @@ void engine_armory_overlay_render(const engine_armory_ctx_t *ctx)
     int rows, ybase;
 
     if (army == 0) {
-        g_mode = 1;                             /* DAT_00522f58 — confirm only */
+        g_arm_mode = 1;                             /* DAT_00522f58 — confirm only */
         rows   = 0xd;
         ybase  = 0xa0;
     } else {
@@ -494,20 +525,23 @@ void engine_armory_overlay_render(const engine_armory_ctx_t *ctx)
         ybase = 0x80;
         if (rec_i32(strat, 0x118) <
             rec_i32(ctx->unit_table, army * 0x14 + 0xc)) {
-            g_mode = 1;                         /* can't afford the change */
+            g_arm_mode = 1;                         /* can't afford the change */
         } else {
-            g_mode = 3;                         /* + the merc Yes/No pair */
+            g_arm_mode = 3;                         /* + the merc Yes/No pair */
         }
     }
 
     if (!gfx_lock_canvas()) {
         return;
     }
-    /* FUN_004b1de0 — verified no-op.  FUN_0045240a — dirty mark, seam-owned. */
+    /* FUN_004b1de0 — an empty function. */
+    if (g_arm_dirty) {
+        engine_dirty_rect_mark_full_screen(g_arm_dirty);   /* FUN_0045240a */
+    }
 
     /* FUN_00409397(0x50, ybase-0x10, 0x1e, rows+1) — the parchment panel. */
     if (ctx->chrome) {
-        gfx_panel_draw(ctx->chrome, 0x50, ybase - 0x10, 0x1e, rows + 1);
+        engine_county_chrome_panel(ctx->chrome, 0x50, ybase - 0x10, 0x1e, rows + 1);
     }
 
     /* Title: "Muster troops in " + the county name (grp 100). */
@@ -525,22 +559,22 @@ void engine_armory_overlay_render(const engine_armory_ctx_t *ctx)
     if (ctx->system_sheet) {
         gfx_sprite_render_from_blob(ctx->system_sheet, 0x51, 0x80, ybase + 0x10);
         gfx_sprite_render_from_blob(ctx->system_sheet, 0x4e, 0xb9, ybase + 0x21);
-        gfx_sprite_render_from_blob(ctx->system_sheet, 0x50, g_pct + 0xc4,
+        gfx_sprite_render_from_blob(ctx->system_sheet, 0x50, g_arm_pct + 0xc4,
                                     ybase + 0x1a);
         gfx_sprite_render_from_blob(ctx->system_sheet, 0x4f, 0x132, ybase + 0x21);
         gfx_sprite_render_from_blob(ctx->system_sheet, 0x52, 0x145, ybase + 0x10);
     }
 
     /* Population remaining (left) / conscripts (right). */
-    gfx_text_label_render_dec(rec_i32(ctx->county_rec, 0x24) - g_conscripts,
+    gfx_text_label_render_dec(rec_i32(ctx->county_rec, 0x24) - g_arm_conscripts,
                               '@', "", 0x80, ybase + 0x44,
                               ctx->menu_font, ctx->glyph_table, 0x3f);
-    gfx_text_label_render_dec(g_conscripts, '@', "", 0x145, ybase + 0x44,
+    gfx_text_label_render_dec(g_arm_conscripts, '@', "", 0x145, ybase + 0x44,
                               ctx->menu_font, ctx->glyph_table, 0x3f);
 
     /* The six weapon stocks (interior-sheet icons 0xf..0x14). */
     for (int i = 0; i < 6; i++) {
-        gfx_sprite_render_from_blob(g_armory_interior, i + 0xf,
+        gfx_sprite_render_from_blob(g_arm_interior, i + 0xf,
                                     i * 0x48 + 0x70,
                                     (rows - 4) * 0x10 + ybase - 4);
         gfx_text_label_render_dec(rec_i32(strat, 0x140 + i * 4), ' ', " ",
@@ -550,7 +584,7 @@ void engine_armory_overlay_render(const engine_armory_ctx_t *ctx)
 
     /* Happiness readout: cost < 1 → the "stays at N" pair (subs 0xc/0xd),
      * else the "drops to N" pair (subs 0xa/0xb). */
-    if (g_happy_cost < 1) {
+    if (g_arm_happy_cost < 1) {
         gfx_text_set_line_x_acc(0);
         gfx_wrap_localized_line(ctx->loc, 0x45, 0xc, 0x188, ybase + 0x18,
                                 ctx->menu_font, ctx->glyph_table, 0x3f);
@@ -568,7 +602,7 @@ void engine_armory_overlay_render(const engine_armory_ctx_t *ctx)
         gfx_wrap_localized_line(ctx->loc, 0x45, 0xb, 0x188, ybase + 0x30,
                                 ctx->menu_font, ctx->glyph_table, 0x3f);
         gfx_text_label_render_dec((int)(int8_t)ctx->county_rec[0x0c] -
-                                  g_happy_cost, '@', "",
+                                  g_arm_happy_cost, '@', "",
                                   gfx_text_line_x_acc() + 0x188, ybase + 0x30,
                                   ctx->menu_font, ctx->glyph_table, 0x3f);
     }
@@ -597,7 +631,7 @@ void engine_armory_overlay_render(const engine_armory_ctx_t *ctx)
         gfx_wrap_localized_line(ctx->loc, 0x10, army,
                                 gfx_text_line_x_acc() + 0x70, ybase + 0x60,
                                 ctx->title_font, ctx->glyph_table, 0x3f);
-        armory_unit_noun(ctx, size, unit[5] * 2 + 0x34,
+        engine_armory_unit_noun(ctx, size, unit[5] * 2 + 0x34,
                          gfx_text_line_x_acc() + 0x70, ybase + 0x60,
                          ctx->title_font, 0x3f);
 
@@ -608,7 +642,7 @@ void engine_armory_overlay_render(const engine_armory_ctx_t *ctx)
         gfx_wrap_localized_line(ctx->loc, 0x45, 0,
                                 gfx_text_line_x_acc() + 0x70, ybase + 0x7c,
                                 ctx->menu_font, ctx->glyph_table, 0x3f);
-        gfx_text_label_render_dec(cost / 2, '@', "",
+        gfx_text_label_render_dec(size / 2, '@', "",   /* the army SIZE halved (dword_568DC8), not the cost */
                                   gfx_text_line_x_acc() + 0x70, ybase + 0x7c,
                                   ctx->menu_font, ctx->glyph_table, 0x3f);
         gfx_wrap_localized_line(ctx->loc, 0x45, 1,
@@ -623,12 +657,12 @@ void engine_armory_overlay_render(const engine_armory_ctx_t *ctx)
             gfx_text_set_line_x_acc(0);
             gfx_wrap_localized_line(ctx->loc, 0x45, 0xf, 0x72, ybase + 0x92,
                                     ctx->menu_font, ctx->glyph_table, 0x3f);
-            armory_num_units(ctx, rec_i32(strat, 0x118), 0,
-                             gfx_text_line_x_acc() + 0x72, ybase + 0x92,
-                             ctx->menu_font, 0x3f);
+            engine_county_panels_ctx_t pc = armory_panel_ctx(ctx);
+            engine_county_num_units(&pc, rec_i32(strat, 0x118), 0,
+                                    gfx_text_line_x_acc() + 0x72, ybase + 0x92, ctx->menu_font, 0x3f);
             gfx_wrap_localized_line(ctx->loc, 0x45, 2, 0x92, ybase + 0xa4,
                                     ctx->menu_font, ctx->glyph_table, 0x3f);
-            gfx_wrap_localized_line(ctx->loc, 0x12, g_merc == 0 ? 1 : 0,
+            gfx_wrap_localized_line(ctx->loc, 0x12, g_arm_merc == 0 ? 1 : 0,
                                     0x1d0, ybase + 0x98,
                                     ctx->title_font, ctx->glyph_table, 0x3f);
         }
@@ -646,7 +680,7 @@ void engine_armory_overlay_render(const engine_armory_ctx_t *ctx)
     gfx_wrap_localized_line(ctx->loc, 0x45, 9, 0x180,
                             (rows - 2) * 0x10 + ybase + 4,
                             ctx->menu_font, ctx->glyph_table, 0x3f);
-    /* DAT_004eb260 = 1 — seam-owned redraw bookkeeping. */
+    g_gfx_menu_redraw_a = 1;                /* DAT_004eb260 */
 
     gfx_unlock_canvas();
 }
@@ -677,8 +711,8 @@ int engine_armory_zone_select(int zone, const engine_armory_ctx_t *ctx)
     }
     /* Commit the march check for the PREVIOUSLY selected weapon, then
      * select the new one and snapshot its count (the next compare). */
-    engine_armory_march_trigger(g_weapon, ctx);
-    g_weapon = zone;
+    engine_armory_march_trigger(g_arm_weapon, ctx);
+    g_arm_weapon = zone;
     put_i32(row, zone * 0x10 + 0xc, rec_i32(row, zone * 0x10 + 0));
     return 1;                              /* caller: screen 0x0d + render */
 }
@@ -700,7 +734,7 @@ void engine_armory_assign_render(const engine_armory_ctx_t *ctx)
         g_armory_weapon_sheet = malloc(ARMORY_WEAPON_LEN);
     }
     if (g_armory_weapon_sheet) {
-        int w = (g_weapon >= 1 && g_weapon <= 6) ? g_weapon : 0;
+        int w = (g_arm_weapon >= 1 && g_arm_weapon <= 6) ? g_arm_weapon : 0;
         io_read_file_at(k_weapon_sheet_file[w], g_armory_weapon_sheet,
                         ARMORY_WEAPON_LEN, 0);
     }
@@ -709,7 +743,7 @@ void engine_armory_assign_render(const engine_armory_ctx_t *ctx)
         return;
     }
     if (ctx->chrome) {                     /* FUN_00409397(0x60,4,0x1a,7) */
-        gfx_panel_draw(ctx->chrome, 0x60, 4, 0x1a, 7);
+        engine_county_chrome_panel(ctx->chrome, 0x60, 4, 0x1a, 7);
     }
     if (ctx->system_sheet) {               /* FUN_0040d1bc(0x1e4,0x58,0) */
         gfx_sprite_seal_draw(ctx->system_sheet, 0x1e4, 0x58, 0);
@@ -735,8 +769,8 @@ void engine_armory_assign_refresh(const engine_armory_ctx_t *ctx,
     }
     int owner = ctx->county_rec[0x05];
     const uint8_t *row = ctx->troop_pool + (size_t)owner * POOL_STRIDE;
-    int cur = rec_i32(row, g_weapon * 0x10 + 0);
-    int avail = rec_i32(row, g_weapon * 0x10 + 8) - cur;
+    int cur = rec_i32(row, g_arm_weapon * 0x10 + 0);
+    int avail = rec_i32(row, g_arm_weapon * 0x10 + 8) - cur;
     if (rec_i32(row, 0) < avail) {
         avail = rec_i32(row, 0);           /* capped by the unassigned men */
     }
@@ -745,8 +779,8 @@ void engine_armory_assign_refresh(const engine_armory_ctx_t *ctx,
     if (ctx->chrome) {                     /* FUN_00409c93(0xec,0xc,0xf,2) */
         gfx_panel_fill_interior_chrome(ctx->chrome, 0xec, 0xc, 0xf, 2);
     }
-    armory_num_units(ctx, cur, g_weapon * 2 + 0x34, 0xec, 0xd,
-                     ctx->title_font, 0x3f);
+    engine_county_panels_ctx_t pc = armory_panel_ctx(ctx);
+    engine_county_num_units(&pc, cur, g_arm_weapon * 2 + 0x34, 0xec, 0xd, ctx->title_font, 0x3f);
 
     gfx_text_set_line_x_acc(0);
     if (ctx->chrome) {                     /* FUN_00409c93(0xd8,0x4c,0x10,2) */
@@ -777,29 +811,29 @@ engine_button_rec_t *engine_armory_assign_buttons(void)
 /* ── the four assign actions (FUN_0043593a / 4359bc / 435a0c / 435a61) ───*/
 void engine_armory_assign_plus(uint8_t *pool_row)
 {
-    if (rec_i32(pool_row, g_weapon * 0x10) <
-            rec_i32(pool_row, g_weapon * 0x10 + 8) &&
+    if (rec_i32(pool_row, g_arm_weapon * 0x10) <
+            rec_i32(pool_row, g_arm_weapon * 0x10 + 8) &&
         rec_i32(pool_row, 0) != 0) {
-        put_i32(pool_row, g_weapon * 0x10,
-                rec_i32(pool_row, g_weapon * 0x10) + 1);
+        put_i32(pool_row, g_arm_weapon * 0x10,
+                rec_i32(pool_row, g_arm_weapon * 0x10) + 1);
         put_i32(pool_row, 0, rec_i32(pool_row, 0) - 1);
     }
 }
 
 void engine_armory_assign_minus(uint8_t *pool_row)
 {
-    if (rec_i32(pool_row, g_weapon * 0x10) > 0) {
-        put_i32(pool_row, g_weapon * 0x10,
-                rec_i32(pool_row, g_weapon * 0x10) - 1);
+    if (rec_i32(pool_row, g_arm_weapon * 0x10) > 0) {
+        put_i32(pool_row, g_arm_weapon * 0x10,
+                rec_i32(pool_row, g_arm_weapon * 0x10) - 1);
         put_i32(pool_row, 0, rec_i32(pool_row, 0) + 1);
     }
 }
 
 void engine_armory_assign_none(uint8_t *pool_row)
 {
-    while (rec_i32(pool_row, g_weapon * 0x10) > 0) {
-        put_i32(pool_row, g_weapon * 0x10,
-                rec_i32(pool_row, g_weapon * 0x10) - 1);
+    while (rec_i32(pool_row, g_arm_weapon * 0x10) > 0) {
+        put_i32(pool_row, g_arm_weapon * 0x10,
+                rec_i32(pool_row, g_arm_weapon * 0x10) - 1);
         put_i32(pool_row, 0, rec_i32(pool_row, 0) + 1);
     }
 }
@@ -807,10 +841,10 @@ void engine_armory_assign_none(uint8_t *pool_row)
 void engine_armory_assign_all(uint8_t *pool_row)
 {
     while (rec_i32(pool_row, 0) != 0 &&
-           rec_i32(pool_row, g_weapon * 0x10) <
-               rec_i32(pool_row, g_weapon * 0x10 + 8)) {
-        put_i32(pool_row, g_weapon * 0x10,
-                rec_i32(pool_row, g_weapon * 0x10) + 1);
+           rec_i32(pool_row, g_arm_weapon * 0x10) <
+               rec_i32(pool_row, g_arm_weapon * 0x10 + 8)) {
+        put_i32(pool_row, g_arm_weapon * 0x10,
+                rec_i32(pool_row, g_arm_weapon * 0x10) + 1);
         put_i32(pool_row, 0, rec_i32(pool_row, 0) - 1);
     }
 }
@@ -864,16 +898,16 @@ void engine_armory_march_trigger(int prev_weapon,
         rec_i32(row, prev_weapon * 0x10 + 0)) {
         return;                            /* no men added — no march */
     }
-    if (g_march_active >= 1) {
+    if (g_arm_march_active >= 1) {
         return;                            /* one troop at a time */
     }
-    g_march_active = 1;
-    g_march_target = k_march_target[prev_weapon];
-    g_march_land   = 1;
-    g_march_x      = -0x50;
-    g_march_y      = 0xd8;
-    g_march_sprite = 0;
-    g_march_walk   = 0;
+    g_arm_march_active = 1;
+    g_arm_march_target = k_march_target[prev_weapon];
+    g_arm_march_land   = 1;
+    g_arm_march_x      = -0x50;
+    g_arm_march_y      = 0xd8;
+    g_arm_march_sprite = 0;
+    g_arm_march_walk   = 0;
     /* _DAT_0057c8e4 = 0 — glint phase, write-only in this family. */
 
     /* Port-order compensation (quirk #214 family): retail's per-frame
@@ -885,11 +919,11 @@ void engine_armory_march_trigger(int prev_weapon,
      * compounds to a permanent 8 px lead.  Skip the arm tick's step. */
     g_march_skip_arm_tick = 1;
 
-    if (!g_armory_troop) {
-        g_armory_troop = malloc(ARMORY_TROOP_LEN);
+    if (!g_arm_troop) {
+        g_arm_troop = malloc(ARMORY_TROOP_LEN);
     }
-    if (!g_armory_troop) {
-        g_march_active = 0;
+    if (!g_arm_troop) {
+        g_arm_march_active = 0;
         return;
     }
     int color = ctx->strategic_block[(size_t)ctx->local_player * STRAT_STRIDE
@@ -900,8 +934,8 @@ void engine_armory_march_trigger(int prev_weapon,
     char name[16];
     snprintf(name, sizeof name, "trp_%s_%c.pl8",
              k_troop_tag[prev_weapon], k_troop_color[color]);
-    if (!io_read_file_at(name, g_armory_troop, ARMORY_TROOP_LEN, 0)) {
-        io_read_file_at("trp_xb_b.pl8", g_armory_troop, ARMORY_TROOP_LEN, 0);
+    if (!io_read_file_at(name, g_arm_troop, ARMORY_TROOP_LEN, 0)) {
+        io_read_file_at("trp_xb_b.pl8", g_arm_troop, ARMORY_TROOP_LEN, 0);
     }
 }
 
@@ -909,25 +943,26 @@ void engine_armory_march_trigger(int prev_weapon,
  * CALLER holds the canvas lock. */
 void engine_armory_march_restore(void)
 {
-    if (g_march_active <= 0 || !g_armory_strips) {
+    uint32_t *strips = armory_strips();
+    if (g_arm_march_active <= 0 || !strips) {
         return;
     }
     int seg;
-    if (g_march_x < 0xa0)        seg = 0;
-    else if (g_march_x < 0x140)  seg = 1;
-    else if (g_march_x < 0x1e0)  seg = 2;
+    if (g_arm_march_x < 0xa0)        seg = 0;
+    else if (g_arm_march_x < 0x140)  seg = 1;
+    else if (g_arm_march_x < 0x1e0)  seg = 2;
     else                         seg = 3;
-    engine_workforce_hud_restore_backdrop(
-        g_armory_strips + k_strip_seg[seg].off_dwords,
-        k_strip_seg[seg].x, ARMORY_STRIP_Y,
-        k_strip_seg[seg].w_dwords, ARMORY_STRIP_ROWS, GFX_RENDER_W);
+    g_gfx_cursor_x = k_strip_seg[seg].x; g_gfx_cursor_y = ARMORY_STRIP_Y;
+    g_gfx_glyph_w = (int16_t)k_strip_seg[seg].w_dwords; g_gfx_glyph_height_short = ARMORY_STRIP_ROWS;
+    engine_workforce_hud_restore_backdrop(strips + k_strip_seg[seg].off_dwords,
+                                          GFX_RENDER_W - 4 * k_strip_seg[seg].w_dwords);
 }
 
 /* ── FUN_004190db — advance + draw the marching troop ────────────────────
  * CALLER holds the canvas lock. */
 void engine_armory_march_step(int tick_20ms, int tick_80ms)
 {
-    if (g_march_active <= 0) {
+    if (g_arm_march_active <= 0) {
         return;
     }
     if (g_march_skip_arm_tick) {
@@ -936,41 +971,41 @@ void engine_armory_march_step(int tick_20ms, int tick_80ms)
         g_march_skip_arm_tick = 0;
         return;
     }
-    if (g_march_x >= 0x280) {
-        g_march_active = 0;                /* walked off — despawn */
+    if (g_arm_march_x >= 0x280) {
+        g_arm_march_active = 0;                /* walked off — despawn */
         return;
     }
     if (tick_20ms != 0) {
         if (tick_80ms != 0) {
-            if (g_march_target <= g_march_x && g_march_land != 0) {
-                g_march_land = g_march_land + 1;
+            if (g_arm_march_target <= g_arm_march_x && g_arm_march_land != 0) {
+                g_arm_march_land = g_arm_march_land + 1;
             }
-            g_march_walk = g_march_walk + 1;
-            if (g_march_walk > 7) {
-                g_march_walk = 0;
+            g_arm_march_walk = g_arm_march_walk + 1;
+            if (g_arm_march_walk > 7) {
+                g_arm_march_walk = 0;
             }
         }
-        if (g_march_x < g_march_target || g_march_land == 0) {
+        if (g_arm_march_x < g_arm_march_target || g_arm_march_land == 0) {
             /* Walking: frames 0..7 inbound, +0xd outbound (past the rack). */
-            if (g_march_x < g_march_target) {
-                g_march_x += 4;
-                g_march_sprite = g_march_walk;
+            if (g_arm_march_x < g_arm_march_target) {
+                g_arm_march_x += 4;
+                g_arm_march_sprite = g_arm_march_walk;
             } else {
-                g_march_x += 4;
-                g_march_sprite = g_march_walk + 0xd;
+                g_arm_march_x += 4;
+                g_arm_march_sprite = g_arm_march_walk + 0xd;
             }
         } else {
             /* Saluting at the rack: frames 8..0xc, then walk out. */
-            g_march_sprite = g_march_land / 3 + 8;
-            if (g_march_sprite > 0xc) {
-                g_march_walk = 0;
-                g_march_land = 0;
+            g_arm_march_sprite = g_arm_march_land / 3 + 8;
+            if (g_arm_march_sprite > 0xc) {
+                g_arm_march_walk = 0;
+                g_arm_march_land = 0;
             }
         }
     }
-    if (g_armory_troop) {                  /* FUN_0040a3d0 */
-        gfx_sprite_render_rle_from_blob(g_armory_troop, g_march_sprite,
-                                        g_march_x, g_march_y);
+    if (g_arm_troop) {                  /* FUN_0040a3d0 */
+        gfx_sprite_render_rle_from_blob(g_arm_troop, g_arm_march_sprite,
+                                        g_arm_march_x, g_arm_march_y);
     }
-    /* FUN_004527a6 dirty mark — seam-owned. */
+    arm_mark(g_arm_march_x - 2, g_arm_march_y, 7, 0xb);
 }

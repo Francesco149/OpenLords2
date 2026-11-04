@@ -63,7 +63,33 @@
 #include <stdint.h>
 
 #include "engine_dirty_rect.h"
+#include "localization.h"
 #include "text_input.h"
+
+/* ─────────────────────────────────────────────────────────────────
+ * Retail-layout globals (engine_title_render_globals.c; the hybrid host aliases each at its VA)
+ * ───────────────────────────────────────────────────────────────── */
+extern int32_t g_tr_selected_button;        /* DAT_00553114 the hovered / selected button (1-based) */
+extern int32_t g_tr_page;                   /* DAT_005530f0 the title page */
+extern int32_t g_tr_scene_flag_a;           /* DAT_005651ac set by every 0x1f scene render */
+extern int32_t g_tr_p4_gate_a;              /* DAT_00553030 */
+extern int32_t g_tr_p4_gate_b;              /* DAT_00553248 */
+extern int32_t g_tr_p4_continue_disabled;   /* DAT_0057c940 */
+extern uint8_t g_tr_p4_shield_slots[6];     /* DAT_0057cb40 per-slot shield owner (bytes, 1..5) */
+extern int32_t g_tr_p4_selected_shield;     /* DAT_0057c8cc the current player's shield id */
+extern int32_t g_tr_p4_shield_flash;        /* DAT_0057d354 */
+extern int32_t g_tr_p4_flash_timer;         /* DAT_00568984 */
+extern uint8_t g_tr_p4_name_buf[32];        /* DAT_0053f1e0 the title / name text */
+extern int32_t g_tr_options[12];            /* DAT_0053f288..DAT_0053f2b4 the 12 setup options (scalar order) */
+extern const uint8_t *g_tr_misc_sheet;      /* DAT_005530c8 the mode's misc_*.pl8 (misc_sel on the setup pages) */
+extern int32_t g_tr_country_scroll;         /* DAT_0053e90c */
+extern int32_t g_tr_country_sel;            /* DAT_0057cacc */
+extern int32_t g_tr_country_count;          /* DAT_00554018 */
+extern int32_t g_tr_country_dirty;          /* DAT_0057c948 the country list's redraw gate */
+extern int32_t g_tr_tabs_dirty;             /* DAT_0055ce94 the option tabs' redraw gate */
+extern int32_t g_tr_p9_tab;                 /* DAT_0055306c */
+extern int32_t g_tr_p9_count;               /* DAT_00553fb4 */
+extern int32_t g_tr_p9_bookmark;            /* DAT_00553e5c */
 
 /* Per-seat fields the page-7 roster pass reads from the 0x160-stride
  * player record at retail DAT_0057bf05 (plus the separate enabled flag
@@ -110,6 +136,10 @@ void engine_title_render_bind_glyph_tables(const uint8_t *glyph_table,
 /* Bind the localization blob (retail `DAT_00591580`, 120000 B, loaded
  * by config from l2_eng).  Menu strings are entry 0xb's sub-strings. */
 void engine_title_render_bind_localization(unsigned char *blob);
+
+/* Point the renders at an external localization state (the hybrid host's: retail's blob + walker); NULL → the
+ * module's own (engine_title_render_bind_localization). */
+void engine_title_render_bind_loc_state(localization_state_t *loc);
 
 /* Bind the dirty-rect state the button boxes mark.  Same singleton the
  * map / overlay passes bind. */
@@ -167,6 +197,19 @@ void engine_title_render_bind_background_fn(engine_title_render_background_fn fn
 typedef void (*engine_title_render_page_fn)(int page);
 void engine_title_render_bind_page_fn(engine_title_render_page_fn fn);
 
+/* The hybrid host's page renderer: when bound, every page other than 1 / 2 / 4 / 5 / 7 (the ports on retail's layout)
+ * renders through it (retail's own page functions).  NULL (the standalone) → the module's dispatch. */
+void engine_title_render_bind_retail_pages(engine_title_render_page_fn fn);
+
+/* The setup page's retail-only steps (the hybrid host binds retail's): the preview blit 0x410c71(mode, x, y)
+ * (NULL → the raw blit of the bound preview buffer) and the roster's seat setup FUN_0049caaa (NULL → none: the
+ * standalone binds the seats via engine_title_render_set_players). */
+void engine_title_render_bind_preview_fn(void (*fn)(int mode, int x, int y));
+void engine_title_render_bind_roster_prep(void (*fn)(void));
+/* The country selector's value bytes alone (retail &DAT_0050a460); engine_title_render_set_country_list also sets the
+ * scroll / selection / count globals. */
+void engine_title_render_bind_country_values(const uint8_t *values);
+
 /* ─────────────────────────────────────────────────────────────────
  * Instrumentation (test-only; not retail globals)
  * ───────────────────────────────────────────────────────────────── */
@@ -195,6 +238,12 @@ void engine_title_render_set_scene_flag_b(int v);
 /* Port of FUN_0041ea14.  Render the main menu: panel, title text,
  * subtitle text, and the four buttons. */
 void engine_title_render_main_menu(void);
+
+/* Ports of FUN_0041f321 (the name / title box), FUN_0041f1dd (the five-shield row), FUN_0041f01f (Back / Continue,
+ * drawn only in the tall layout) — page 4's parts. */
+void engine_title_render_choose_title_name_box(void);
+void engine_title_render_choose_title_shields(void);
+void engine_title_render_choose_title_buttons(void);
 
 /* Port of FUN_0041eaa3.  Render the four menu buttons (bevel rect +
  * dirty mark + highlighted label). */
@@ -398,9 +447,9 @@ void engine_title_render_refresh_setup(void);
 /* The 128×128 preview buffer shown top-right (retail DAT_00569590). */
 void engine_title_render_set_preview(const uint8_t *buf);
 
-/* The 12 option-tab selected values in tab order (retail's permuted
- * scalars at 0x53f288..0x53f2b4, resolved by 0x433a70), plus the
- * tab currently being edited (-1 = none; that tab shows no bevel). */
+/* The 12 option-tab selected values, given in tab order (stored in retail's permuted scalars g_tr_options,
+ * DAT_0053f288..DAT_0053f2b4, as 0x433a70 resolves them), plus the tab currently being edited (-1 = none; that tab
+ * shows no bevel). */
 void engine_title_render_set_tab_values(const int values[12], int active_tab);
 
 /* The roster seats (index 1..5; index 0 unused) and the seat-name blob
@@ -409,7 +458,7 @@ void engine_title_render_set_players(const engine_title_setup_player_t players[6
                                      const uint8_t *names);
 
 /* Port of FUN_0041f6c7.  Render the whole page-7 setup screen. */
-void engine_title_render_setup_screen(void);
+void engine_title_render_setup_screen(int active);
 
 /* Set the page-9 option-detail dropdown state (retail DAT_0055306c /
  * DAT_00553fb4 / DAT_00553e5c, written by the page-7 option-tab click
@@ -423,8 +472,8 @@ int engine_title_render_option_detail_tab(void);
 int engine_title_render_option_detail_count(void);
 int engine_title_render_option_detail_bookmark(void);
 
-/* The selected value for option tab 0..11 (retail's permuted option
- * scalars, held in tab order).  For tests + the page-9 pick writeback. */
+/* The selected value for option tab 0..11 (its scalar in g_tr_options, 0x433a70's mapping).  For tests + the
+ * page-9 pick writeback. */
 int engine_title_render_tab_value(int tab);
 
 /* Port of FUN_00433ce4 — page-9 dropdown hover hit-test.  Returns the
@@ -456,7 +505,7 @@ void engine_title_render_option_detail(void);
  * grid).  Exposed for the per-frame refresh + tests. */
 void engine_title_render_setup_country_list(void);
 void engine_title_render_setup_roster(void);
-void engine_title_render_setup_tabs(void);
+void engine_title_render_setup_tabs(int active);
 
 /* Port of FUN_0041e7e1.  Title-scene dispatch: when `screen_state` is
  * 0x1f (the title screen), render the background, then the page named by

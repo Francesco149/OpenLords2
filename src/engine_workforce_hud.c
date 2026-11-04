@@ -13,6 +13,7 @@
 #include "engine_map_scene.h"      /* engine_map_scene_tick */
 #include "io_path.h"               /* io_path_chdir_base */
 #include "io.h"                    /* io_read_file_at */
+#include "gfx_globals.h"            /* the staged cursor / glyph dims the backdrop walk reads */
 #include "gfx_paint.h"              /* gfx_paint_canvas_pixels/width */
 #include "gfx_sprite_render.h"     /* gfx_sprite_render, gfx_sprite_render_
                                        opaque_from_blob, gfx_sprite_render_
@@ -166,42 +167,36 @@ int engine_workforce_row_sprite_index(int army_key, int category)
     return row;
 }
 
-void engine_workforce_hud_capture_backdrop(uint32_t *dest, int x, int y,
-                                           int width_dwords, int height,
-                                           int src_stride)
+/* Port of FUN_004b3f0a.  Retail's walk: src = Buf + cursor_x + cursor_y * xRight (DAT_00591524 / DAT_00591528,
+ * the canvas pitch DAT_004eb274); per row `rep movsd` of glyph_w (DAT_005c9258, movsx) dwords, then src += the
+ * residual stride; the row count is the descriptor height DAT_005aeb70 (movsx), a do-while (one row at least). */
+void engine_workforce_hud_capture_backdrop(uint32_t *dest, int residual_stride)
 {
-    const uint8_t *canvas = gfx_paint_canvas_pixels();
-    if (!canvas || !dest) return;
-    int canvas_width = gfx_paint_canvas_width();
-    const uint8_t *src = canvas + x + y * canvas_width;
-
-    /* Retail copies dwords regardless of alignment (fine on x86); the
-     * port copies the same bytes via memcpy so the host sanitizers
-     * don't trip on an odd x. */
-    for (int row = 0; row < height; row++) {
-        memcpy(dest, src, (size_t)width_dwords * 4);
-        dest += width_dwords;
-        src += src_stride;
-    }
+    const uint8_t *src = gfx_paint_canvas_pixels();
+    if (!src || !dest) return;
+    src += g_gfx_cursor_x + (uint32_t)g_gfx_cursor_y * (uint32_t)g_gfx_canvas_width;
+    int w = g_gfx_glyph_w, rows = g_gfx_glyph_height_short;
+    do {
+        /* retail copies dwords regardless of alignment (fine on x86); memcpy keeps the host sanitizers quiet */
+        memcpy(dest, src, (size_t)w * 4);
+        dest += w;
+        src += (size_t)w * 4 + residual_stride;
+    } while (--rows > 0);
 }
 
-/* Port of FUN_004b3ec0 — the write-back sibling of the capture above
- * (identical walk, copy direction reversed).  Retail's tooltip clear
- * (FUN_004770b8) restores the saved under-box pixels through it. */
-void engine_workforce_hud_restore_backdrop(const uint32_t *src, int x, int y,
-                                           int width_dwords, int height,
-                                           int dst_stride)
+/* Port of FUN_004b3ec0 — the write-back sibling (the same walk, the copy reversed).  The tooltip clear
+ * (FUN_004770b8) and the armory march restore put the saved under-box pixels back through it. */
+void engine_workforce_hud_restore_backdrop(const uint32_t *src, int residual_stride)
 {
-    uint8_t *canvas = gfx_paint_canvas_pixels();
-    if (!canvas || !src) return;
-    int canvas_width = gfx_paint_canvas_width();
-    uint8_t *dst = canvas + x + y * canvas_width;
-
-    for (int row = 0; row < height; row++) {
-        memcpy(dst, src, (size_t)width_dwords * 4);
-        src += width_dwords;
-        dst += dst_stride;
-    }
+    uint8_t *dst = gfx_paint_canvas_pixels();
+    if (!dst || !src) return;
+    dst += g_gfx_cursor_x + (uint32_t)g_gfx_cursor_y * (uint32_t)g_gfx_canvas_width;
+    int w = g_gfx_glyph_w, rows = g_gfx_glyph_height_short;
+    do {
+        memcpy(dst, src, (size_t)w * 4);
+        src += w;
+        dst += (size_t)w * 4 + residual_stride;
+    } while (--rows > 0);
 }
 
 void engine_workforce_fill_row_linear(int category, int fill_code, int count)
@@ -388,10 +383,9 @@ void engine_workforce_hud_render(int army_key, uint32_t now_ms,
         gfx_sprite_render_opaque_from_blob(g_workforce_villani2_buf,
                                            0x2b, 0x4c, y_origin + 0xc);
 
-    engine_workforce_hud_capture_backdrop(
-        (uint32_t *)g_workforce_scratch_buf,
-        /*x=*/0, /*y=*/y_origin, /*width_dwords=*/0x78, /*height=*/0x140,
-        /*src_stride=*/0xa0);
+    /* stage (0, y_origin) / 0x78 dwords × 0x140 rows, residual stride 0xa0 (480 + 160 = the 640 pitch) */
+    g_gfx_cursor_x = 0; g_gfx_cursor_y = y_origin; g_gfx_glyph_w = 0x78; g_gfx_glyph_height_short = 0x140;
+    engine_workforce_hud_capture_backdrop((uint32_t *)g_workforce_scratch_buf, 0xa0);
 
     engine_workforce_compute_rows(army_key);
     engine_workforce_draw_all_rows(y_origin);

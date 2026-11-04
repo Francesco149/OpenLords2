@@ -41,41 +41,28 @@
 #define F_WARFLAG  0x88   /* war-declared flag toward other (+ other*0x10)    */
 #define F_ALLY     0x90   /* alliance/met flag toward other (+ other*0x10)    */
 
-/* DAT_00553ee8 — action-button count (transient UI, not save-tracked). */
-static int g_noble_action_count;
-
-/* faces.pl8 sprite sheet.  Retail loads it into the shared scratch DAT_004eabec
- * at 100000 bytes and binds it as the global sprite blob (portraits + the
- * war/alliance status icons 0xc..0xf); we keep a persistent buffer, reloaded
- * per render — the same pattern as engine_rankings' flags.pl8. */
+/* faces.pl8 sprite sheet.  Retail loads it into the shared scratch DAT_004eabec points at (100000 bytes) — the
+ * current sprite blob (portraits + the war/alliance status icons 0xc..0xf).  The standalone has no such scratch:
+ * ctx->faces_scratch NULL → a persistent buffer of its own, bound as the blob (under rhost the scratch IS the
+ * bound blob, so the rebind stores the value already there). */
 #define FACES_SCRATCH_LEN 100000
 static uint8_t *g_faces_scratch;
 
-static int faces_scratch_ready(void)
+static uint8_t *faces_scratch(const engine_noble_faces_ctx_t *ctx)
 {
+    if (ctx->faces_scratch) {
+        return ctx->faces_scratch;
+    }
     if (!g_faces_scratch) {
         g_faces_scratch = malloc(FACES_SCRATCH_LEN);
     }
-    return g_faces_scratch != NULL;
+    return g_faces_scratch;
 }
 
-/* ── The 6 diplomacy-action buttons (retail DAT_004dd940, r2-extracted) ──
- * x=0x190, y=0x66+i*0x32, sprite 0x40, kind 0x20 (system sheet), type 5
- * (press-latch); the actions are the 0x1a-mode entry functions FUN_00436141
- * … 0x43631e (wired when the diplomacy-action screen is ported). */
-static engine_button_rec_t k_noble_buttons[6] = {
-    { 0x190, 0x066, 0x40, 0x20, 0x436141, 0, 0, 0, 5, 0, 0 },
-    { 0x190, 0x098, 0x40, 0x20, 0x43618b, 0, 0, 0, 5, 0, 0 },
-    { 0x190, 0x0ca, 0x40, 0x20, 0x4361da, 0, 0, 0, 5, 0, 0 },
-    { 0x190, 0x0fc, 0x40, 0x20, 0x436229, 0, 0, 0, 5, 0, 0 },
-    { 0x190, 0x12e, 0x40, 0x20, 0x4362ca, 0, 0, 0, 5, 0, 0 },
-    { 0x190, 0x160, 0x40, 0x20, 0x43631e, 0, 0, 0, 5, 0, 0 },
-};
-
-/* Non-const: the widget-router 0x0b arm dispatches over this table, and
- * engine_menu_button_dispatch animates each button's press-flash in place
- * (the per-frame refresh then reads it back — same as every router widget). */
-engine_button_rec_t *engine_noble_faces_buttons(void) { return k_noble_buttons; }
+/* The 6 diplomacy-action buttons (retail DAT_004dd940) and the live count (DAT_00553ee8):
+ * engine_noble_faces_globals.c.  Non-const: the widget-router 0x0b arm dispatches over this table, and the
+ * menu button dispatch animates each button's press-flash in place (the per-frame refresh then reads it back). */
+engine_button_rec_t *engine_noble_faces_buttons(void) { return g_noble_buttons; }
 int engine_noble_faces_button_count(void) { return g_noble_action_count; }
 
 /* ── one action-label line (FUN_0040328e(0x48,sub,0xe0,y,0xa0,100,0,0,…)) ── */
@@ -86,7 +73,7 @@ static void nf_action_label(const engine_noble_faces_ctx_t *ctx, int sub, int y)
 }
 
 /* ── FUN_004171ee — one noble's portrait cell (player p, grid row) ──────── */
-static void noble_face_draw(const engine_noble_faces_ctx_t *ctx, int p, int row)
+void engine_noble_faces_draw_face(const engine_noble_faces_ctx_t *ctx, int p, int row)
 {
     uint8_t *pr   = SREC(p);
     int      base = row * 100;
@@ -181,11 +168,12 @@ void engine_noble_faces_render(const engine_noble_faces_ctx_t *ctx)
     }
     gfx_sprite_seal_draw(ctx->system_sheet, 0x1a8, 0x1a6, 0);
 
-    /* Load faces.pl8 into the global sprite blob (portraits + status icons). */
-    if (faces_scratch_ready()) {
-        io_path_chdir_base();
-        io_read_file_at("faces.pl8", g_faces_scratch, FACES_SCRATCH_LEN, 0);
-        gfx_sprite_render_set_blob(g_faces_scratch);
+    /* Load faces.pl8 into the scratch the sprite blob points at (portraits + status icons). */
+    io_path_chdir_base();
+    uint8_t *scratch = faces_scratch(ctx);
+    if (scratch) {
+        io_read_file_at("faces.pl8", scratch, FACES_SCRATCH_LEN, 0);
+        gfx_sprite_render_set_blob(scratch);
     }
 
     /* One portrait cell per living non-local player. */
@@ -193,7 +181,7 @@ void engine_noble_faces_render(const engine_noble_faces_ctx_t *ctx)
     for (int p = 1; p < 6; p++) {
         if (p != loc &&
             ctx->strategic_block[(size_t)p * STRAT_STRIDE + F_ACTIVE] != 0) {
-            noble_face_draw(ctx, p, row);
+            engine_noble_faces_draw_face(ctx, p, row);
             row++;
         }
     }
@@ -233,13 +221,15 @@ void engine_noble_faces_render(const engine_noble_faces_ctx_t *ctx)
         nf_action_label(ctx, 0x18, 0xa2);
         gfx_sprite_render_from_blob(ctx->misc_sheet, 0x1d, 0x140, 0x140);
     }
-    /* FUN_0045240a (dirty mark) is seam-owned; omitted like every panel. */
+    if (ctx->dirty) {
+        engine_dirty_rect_mark_full_screen(ctx->dirty);   /* FUN_0045240a */
+    }
 }
 
 /* ── FUN_004ba26e case 0x0b — the per-frame action-button sprite strip ─── */
 void engine_noble_faces_refresh(const engine_noble_faces_ctx_t *ctx)
 {
     /* FUN_0040cfd2(0,0,&DAT_004dd940, DAT_00553ee8). */
-    engine_button_render_list(0, 0, k_noble_buttons, g_noble_action_count,
+    engine_button_render_list(0, 0, g_noble_buttons, g_noble_action_count,
                               ctx->misc_sheet, ctx->system_sheet, NULL);
 }

@@ -6,6 +6,7 @@
  *
  *   FUN_004997bf @ 0x4997bf ( 151 B) → engine_workforce_hud_ensure_buffers
  *   FUN_004b3f0a @ 0x4b3f0a (  74 B) → engine_workforce_hud_capture_backdrop
+ *   FUN_004b3ec0 @ 0x4b3ec0 (  74 B) → engine_workforce_hud_restore_backdrop
  *   FUN_004517ca @ 0x4517ca ( 107 B) → engine_workforce_row_sprite_index
  *   FUN_004519ca @ 0x4519ca ( 147 B) → engine_workforce_fill_row_linear
  *   FUN_00451a5d @ 0x451a5d ( 349 B) → engine_workforce_fill_row_dual
@@ -100,22 +101,16 @@ int engine_workforce_row_sprite_index(int army_key, int category);
  * the port logs and returns instead of calling _exit). */
 int engine_workforce_hud_ensure_buffers(void);
 
-/* Port of FUN_004b3f0a.  Copy a `width_dwords`-by-`height` rectangle out of
- * the bound gfx_paint canvas at (x, y) into `dest`, advancing the canvas
- * read pointer by `src_stride` bytes after each row.  Retail reads (x, y,
- * width, height) from shared scratch globals other blit primitives
- * (gfx_glyph/gfx_dispatch) also use; ported with them as explicit
- * parameters instead — this is the only call site, and it avoids
- * coupling this module to gfx_glyph's cursor state for no benefit. */
-void engine_workforce_hud_capture_backdrop(uint32_t *dest, int x, int y,
-                                           int width_dwords, int height,
-                                           int src_stride);
+/* Port of FUN_004b3f0a.  Copy the staged rectangle out of the canvas into `dest`: retail reads its origin and size
+ * from the gfx globals the blitters share — the cursor (g_gfx_cursor_x / _y, DAT_00591524 / DAT_00591528), the
+ * width in DWORDS (g_gfx_glyph_w, DAT_005c9258) and the row count (g_gfx_glyph_height_short, DAT_005aeb70; a
+ * do-while: one row at least) — and advances the canvas pointer by `residual_stride` bytes after each row's
+ * copy (the pitch minus the row's 4 * width).  Callers stage those globals first, as retail's do. */
+void engine_workforce_hud_capture_backdrop(uint32_t *dest, int residual_stride);
 
-/* Port of FUN_004b3ec0 — the write-back sibling (restore the captured
- * rect into the canvas).  Used by the tooltip clear (FUN_004770b8). */
-void engine_workforce_hud_restore_backdrop(const uint32_t *src, int x, int y,
-                                           int width_dwords, int height,
-                                           int dst_stride);
+/* Port of FUN_004b3ec0 — the write-back sibling (the staged rectangle from `src` back into the canvas).  The
+ * tooltip clear (FUN_004770b8) and the armory march restore use it. */
+void engine_workforce_hud_restore_backdrop(const uint32_t *src, int residual_stride);
 
 /* Port of FUN_004519ca.  Fill icon-grid row `category`'s cells (up to 25)
  * whose baked threshold (k_workforce_cell_threshold) is <= `count`: with

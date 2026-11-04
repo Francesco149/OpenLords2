@@ -28,6 +28,7 @@
 #include "engine_math.h"
 #include "font_metrics.h"
 #include "text_input.h"
+#include "gfx_globals.h"
 
 /* ─── bound retail globals ──────────────────────────────────────── */
 
@@ -36,14 +37,13 @@ static const uint8_t *g_menu_font;      /* DAT_005af8f0 */
 static const uint8_t *g_glyph_table;    /* DAT_004d71f0 (render map) */
 static const uint8_t *g_glyph_metrics;  /* DAT_004d71d0 (measure map) */
 
-static localization_state_t g_loc;      /* over DAT_00591580 */
+static localization_state_t g_loc_own; /* over DAT_00591580 */
+static localization_state_t *g_loc = &g_loc_own;   /* engine_title_render_bind_loc_state: an external one (rhost) */
 
 static engine_dirty_rect_state_t *g_dirty_state;
 
-static const uint8_t *g_panel_asset;    /* DAT_004eabec */
+static const uint8_t *g_panel_asset;    /* the standalone's title sheet; NULL → DAT_004eabec (g_gfx_current_blob) */
 static const uint8_t *g_system_asset;   /* DAT_005bb540 — system2.pl8 */
-static const uint8_t *g_misc_asset;     /* DAT_005530c8 — misc_sel.pl8 */
-static int g_selected_button = 1;       /* DAT_00553114 */
 
 /* ─── page-7 (game-setup) state ─────────────────────────────────── */
 
@@ -54,23 +54,23 @@ static const uint8_t *g_palette_rgb;        /* DAT_004ea1b0 — for darken */
  * selected visible row (0..4) + total count, plus the 128×128 preview
  * buffer (DAT_00569590) shown top-right. */
 static const uint8_t *g_p7_country_values;  /* DAT_0050a460 */
-static int g_p7_country_scroll;             /* DAT_0053e90c */
-static int g_p7_country_sel;                /* DAT_0057cacc */
-static int g_p7_country_count;              /* DAT_00554018 */
 static const uint8_t *g_p7_preview;         /* DAT_00569590 */
+/* 0x410c71(0, x, y) — the preview blit (the hybrid host: retail's); NULL → the raw blit of g_p7_preview */
+static void (*g_preview_fn)(int mode, int x, int y);
+/* FUN_0049caaa — the roster's seat setup (the hybrid host: retail's); NULL → the bound players */
+static void (*g_roster_prep_fn)(void);
 
 /* The two page-7 sub-pass dirty flags (DAT_0057c948 = country list,
  * DAT_0055ce94 = option tabs).  On the full-scene render the subs draw
  * unconditionally (setup_screen clears these to 0 afterward); these gate
  * only the per-frame refresh (engine_title_render_refresh_setup), which
  * re-renders just the sub a page-7 input action dirtied. */
-static int g_p7_country_dirty;              /* DAT_0057c948 */
-static int g_p7_tabs_dirty;                 /* DAT_0055ce94 */
 
-/* Option-tab selected values, in tab order 0..11 (0x433a70 output —
- * retail reads 12 permuted scalars at 0x53f288..0x53f2b4; we bind the
- * resolved values in tab order so the permutation lives in the caller). */
-static int g_p7_tab_values[12];
+/* Option-tab selected values: retail's 12 scalars DAT_0053f288..DAT_0053f2b4 (g_tr_options, scalar order); tab t
+ * reads scalar k_tab_slot[t] (0x433a70's switch: tab 0→53f29c 1→53f2a4 2→53f288 3→53f2a0 4→53f290 5→53f298 6→53f2b0
+ * 7→53f294 8→53f2a8 9→53f2ac 10→53f28c 11→53f2b4). */
+static const int k_tab_slot[12] = { 5, 7, 0, 6, 2, 4, 10, 3, 8, 9, 1, 11 };
+#define TABV(t) g_tr_options[k_tab_slot[t]]
 static int g_p7_active_tab = -1;            /* the tab being edited; -1 none */
 
 /* Roster (FUN_0041fbcb): per-seat fields the render reads from the
@@ -107,19 +107,16 @@ static const int g_p9_panel_geom[12][2] = {
 
 /* Page-9 (per-option detail dropdown) state.  Set by the page-7 option-tab
  * click (FUN_00433998 → menu_action_p7_tab); read by the page-9 render.
- *   g_p9_tab         retail DAT_0055306c — the tab being edited (0..11)
- *   g_p9_value_count retail DAT_00553fb4 — its number of value rows
- *   g_p9_bookmark    retail DAT_00553e5c — the page to redraw underneath */
-static int g_p9_tab         = 0;
-static int g_p9_value_count = 0;
-static int g_p9_bookmark    = 7;
+ *   g_tr_p9_tab         retail DAT_0055306c — the tab being edited (0..11)
+ *   g_tr_p9_count retail DAT_00553fb4 — its number of value rows
+ *   g_tr_p9_bookmark    retail DAT_00553e5c — the page to redraw underneath */
 
-/* Title/menu page selector (retail DAT_005530f0).  Written by the menu
- * state tick (0x42ff10, unported) — page 1 = main menu — and read by
- * the render seam to pass to engine_title_render_scene.  0 until a tick
- * sets it, so the scene draws nothing visible until the state tick lands
- * (or a bring-up shortcut forces it). */
-static int g_title_page;
+/* Title/menu page selector: g_tr_page (retail DAT_005530f0, engine_title_render_globals.c).  Written by the menu
+ * state tick (0x42ff10) — page 1 = main menu — and read by the render seam to pass to engine_title_render_scene. */
+
+/* The hybrid host's page renderer (engine_title_render_bind_retail_pages): pages whose ports are not on retail's
+ * layout yet, and the unported ones, render through it.  NULL → the module's own dispatch. */
+static engine_title_render_page_fn g_retail_pages_fn;
 
 /* ─── deferred panel hook (0x409346) ────────────────────────── */
 
@@ -145,37 +142,15 @@ static int g_last_page;
 static void page_stub(int page) { g_last_page = page; }
 static engine_title_render_page_fn g_page_fn = page_stub;
 
-/* Scene flags set after a 0x1f render (DAT_005651ac / DAT_004eb260). */
-static int g_scene_flag_a;
-static int g_scene_flag_b;
+/* Scene flags set after a 0x1f render: g_tr_scene_flag_a (DAT_005651ac) and g_gfx_menu_redraw_a (DAT_004eb260, a
+ * byte the menu bar raises too). */
 
-/* ─── page-4 ("Choose your title and your shield") bound state ──── */
-
-/* Gating (DAT_00553030 / DAT_00553248).  When (gate_a == 0 || gate_b
- * != 0) the panel is one tile taller and the Back/Continue button row
- * is drawn.  For the Custom-game entry both are 0 → condition true. */
-static int g_p4_gate_a;          /* DAT_00553030 */
-static int g_p4_gate_b;          /* DAT_00553248 */
-
-/* Continue-button enable inverse (DAT_0057c940): 0 → label normal
- * (0x3f), non-zero → dimmed (0x20).  (A valid name leaves it 0.) */
-static int g_p4_continue_disabled;   /* DAT_0057c940 */
-
-/* Shield selector state.  slots[1..5] (DAT_0057cb40) hold per-slot
- * shield ids (0 = the slot's default design); selected (DAT_0057c8cc)
- * is the chosen shield id; flash (DAT_0057d354) + flash_timer
- * (DAT_00568984) drive the selected-slot highlight-ring blink. */
-static unsigned char g_p4_shield_slots[6];   /* DAT_0057cb40 */
-static int g_p4_selected_shield;             /* DAT_0057c8cc */
-static int g_p4_shield_flash;                /* DAT_0057d354 */
-static int g_p4_flash_timer;                 /* DAT_00568984 */
-
-/* The name/title text rendered in the box (DAT_0053f1e0).  Owned here
- * as a mutable buffer so the page-4 input arm's per-frame copy-out
- * (FUN_0040210c, &DAT_0053f1e0, 0x1f) can stream the live editor text
- * into it; set_choose_title_name copies a seed in.  32 bytes covers
- * the 0x1f-char copy-out plus its terminator. */
-static uint8_t g_p4_name_buf[32];
+/* ─── page-4 ("Choose your title and your shield") state ─────────
+ * Retail globals (engine_title_render_globals.c): the gates g_tr_p4_gate_a / _b (DAT_00553030 / DAT_00553248: when
+ * gate_a == 0 || gate_b != 0 the panel is one tile taller and the Back/Continue row is drawn), the Continue dim
+ * g_tr_p4_continue_disabled (DAT_0057c940), the shield slots g_tr_p4_shield_slots[1..5] (DAT_0057cb40, bytes), the
+ * chosen shield id g_tr_p4_selected_shield (DAT_0057c8cc), the ring blink g_tr_p4_shield_flash / _flash_timer
+ * (DAT_0057d354 / DAT_00568984), the name text g_tr_p4_name_buf (DAT_0053f1e0). */
 
 /* The live editor (DAT_005cd550 buffer + cursor + insert mode), read
  * by the caret and driven by the WM_CHAR route.  NULL → the caret is
@@ -189,8 +164,8 @@ static uint8_t g_p4_name_buf[32];
  * copies it out to the right field. */
 static text_input_state_t *g_title_editor;
 
-/* Font-metrics scratch for the caret's cursor-char width measure. */
-static font_metrics_state_t g_p4_fm;
+/* The caret's char→glyph metrics table (DAT_004d71d0); its measure cache is the gfx globals'. */
+static const unsigned char *g_caret_metrics_table;
 
 /* ─── page-3 ("Loading a game." save/load list) bound state ─────── */
 
@@ -209,7 +184,7 @@ static int            g_fl_first_visible;
 static int            g_fl_selected = 999;
 
 /* The selected-name field shown above the grid (DAT_004ea130).  A
- * renderer-owned mutable buffer (like g_p4_name_buf) so the page-3
+ * renderer-owned mutable buffer (like g_tr_p4_name_buf) so the page-3
  * editor tail's per-frame copy-out (FUN_0040210c, &DAT_004ea130, 0x40)
  * can stream the live editor text into it; set_filelist_topname seeds
  * it.  0x42 bytes covers the 0x40-char copy-out plus its terminator. */
@@ -244,8 +219,42 @@ void engine_title_render_bind_glyph_tables(const uint8_t *glyph_table,
 
 void engine_title_render_bind_localization(unsigned char *blob)
 {
-    g_loc.blob = blob;
-    g_loc.walker_offset = 0;
+    g_loc_own.blob = blob;
+    g_loc_own.walker_offset = 0;
+    g_loc = &g_loc_own;
+}
+
+void engine_title_render_bind_loc_state(localization_state_t *loc)
+{
+    g_loc = loc ? loc : &g_loc_own;
+}
+
+void engine_title_render_bind_retail_pages(engine_title_render_page_fn fn)
+{
+    g_retail_pages_fn = fn;
+}
+
+void engine_title_render_bind_preview_fn(void (*fn)(int mode, int x, int y)) { g_preview_fn = fn; }
+void engine_title_render_bind_country_values(const uint8_t *values) { g_p7_country_values = values; }
+void engine_title_render_bind_roster_prep(void (*fn)(void)) { g_roster_prep_fn = fn; }
+
+/* FUN_0040acce over the shared title editor: its cursor-char measure caches into the measurers' globals
+ * (DAT_005c9288 / DAT_0058fd88). */
+static void title_caret(uint8_t color)
+{
+    font_metrics_state_t fm = { .char_glyph_index = g_caret_metrics_table,
+                                .last_glyph_index = g_gfx_last_glyph_index,
+                                .last_glyph_offset = g_gfx_last_glyph_offset };
+    gfx_caret_render(g_title_editor, &fm, g_menu_font, color);
+    g_gfx_last_glyph_index = fm.last_glyph_index;
+    g_gfx_last_glyph_offset = fm.last_glyph_offset;
+}
+
+/* The title sheet the panels / shields / name box draw from: retail's DAT_004eabec (the current sprite sheet the
+ * background loader fills), unless the standalone bound its own. */
+static const uint8_t *title_sheet(void)
+{
+    return g_panel_asset ? g_panel_asset : g_gfx_current_blob;
 }
 
 void engine_title_render_set_dirty_state(engine_dirty_rect_state_t *state)
@@ -265,30 +274,30 @@ void engine_title_render_bind_system_asset(const uint8_t *asset)
 
 void engine_title_render_bind_misc_asset(const uint8_t *asset)
 {
-    g_misc_asset = asset;
+    g_tr_misc_sheet = asset;
 }
 
 void engine_title_render_set_selected_button(int index)
 {
-    g_selected_button = index;
+    g_tr_selected_button = index;
 }
 
-int engine_title_render_selected_button(void) { return g_selected_button; }
+int engine_title_render_selected_button(void) { return g_tr_selected_button; }
 
-void engine_title_render_set_page(int page) { g_title_page = page; }
-int  engine_title_render_page(void)         { return g_title_page; }
+void engine_title_render_set_page(int page) { g_tr_page = page; }
+int  engine_title_render_page(void)         { return g_tr_page; }
 
 /* ─── page-4 state binders ──────────────────────────────────────── */
 
 void engine_title_render_set_choose_title_gates(int gate_a, int gate_b)
 {
-    g_p4_gate_a = gate_a;
-    g_p4_gate_b = gate_b;
+    g_tr_p4_gate_a = gate_a;
+    g_tr_p4_gate_b = gate_b;
 }
 
 void engine_title_render_set_choose_title_continue_disabled(int disabled)
 {
-    g_p4_continue_disabled = disabled;
+    g_tr_p4_continue_disabled = disabled;
 }
 
 void engine_title_render_set_choose_title_shields(const unsigned char slots[6],
@@ -296,25 +305,25 @@ void engine_title_render_set_choose_title_shields(const unsigned char slots[6],
                                                   int flash,
                                                   int flash_timer)
 {
-    for (int i = 0; i < 6; i++) g_p4_shield_slots[i] = slots ? slots[i] : 0;
-    g_p4_selected_shield = selected;
-    g_p4_shield_flash    = flash;
-    g_p4_flash_timer     = flash_timer;
+    for (int i = 0; i < 6; i++) g_tr_p4_shield_slots[i] = slots ? slots[i] : 0;
+    g_tr_p4_selected_shield = selected;
+    g_tr_p4_shield_flash    = flash;
+    g_tr_p4_flash_timer     = flash_timer;
 }
 
 void engine_title_render_set_choose_title_name(const uint8_t *name)
 {
     size_t i = 0;
     if (name) {
-        for (; name[i] && i < sizeof g_p4_name_buf - 1; i++)
-            g_p4_name_buf[i] = name[i];
+        for (; name[i] && i < sizeof g_tr_p4_name_buf - 1; i++)
+            g_tr_p4_name_buf[i] = name[i];
     }
-    g_p4_name_buf[i] = 0;
+    g_tr_p4_name_buf[i] = 0;
 }
 
 const uint8_t *engine_title_render_choose_title_name(void)
 {
-    return g_p4_name_buf;
+    return g_tr_p4_name_buf;
 }
 
 void engine_title_render_set_choose_title_editor(text_input_state_t *editor)
@@ -341,7 +350,7 @@ void engine_title_render_choose_title_name_tail(void)
         return;
     g_title_editor->enabled = 1;
     text_input_recompute_length(g_title_editor);
-    text_input_copy_out(g_title_editor, (char *)g_p4_name_buf, 0x1f);
+    text_input_copy_out(g_title_editor, (char *)g_tr_p4_name_buf, 0x1f);
 }
 
 /* Top-of-dispatch reset — FUN_004ba9c8 line 9 `DAT_005aeb78 = 0` (run
@@ -356,7 +365,7 @@ void engine_title_render_title_editor_disable(void)
 
 /* Port of FUN_00432fab — assign a shield slot to the current player.
  * `slot` is 1..5 (the clicked shield).  If that slot is still unowned,
- * release whatever slot the current player (g_p4_selected_shield, retail
+ * release whatever slot the current player (g_tr_p4_selected_shield, retail
  * DAT_0057c8cc) already holds and claim `slot`, so the single flashing
  * shield jumps to the clicked design.  An already-owned slot is a no-op
  * (you cannot steal another player's shield in this screen).
@@ -370,30 +379,30 @@ void engine_title_render_title_editor_disable(void)
 void engine_title_render_choose_title_assign_shield(int slot)
 {
     if (slot < 1 || slot > 5) return;
-    if (g_p4_shield_slots[slot] != 0) return;   /* already owned */
+    if (g_tr_p4_shield_slots[slot] != 0) return;   /* already owned */
 
     for (int i = 1; i < 6; i++) {
-        if (g_p4_shield_slots[i] == g_p4_selected_shield)
-            g_p4_shield_slots[i] = 0;
+        if (g_tr_p4_shield_slots[i] == g_tr_p4_selected_shield)
+            g_tr_p4_shield_slots[i] = 0;
     }
-    g_p4_shield_slots[slot] = (unsigned char)g_p4_selected_shield;
+    g_tr_p4_shield_slots[slot] = (unsigned char)g_tr_p4_selected_shield;
 }
 
-/* The shield slot's owner (g_p4_shield_slots[slot]); 0 == unowned.
+/* The shield slot's owner (g_tr_p4_shield_slots[slot]); 0 == unowned.
  * For the input arm's tests + any live consumer. */
 int engine_title_render_choose_title_slot_owner(int slot)
 {
     if (slot < 0 || slot > 5) return 0;
-    return g_p4_shield_slots[slot];
+    return g_tr_p4_shield_slots[slot];
 }
 
 /* Whether the Back/Continue button row is shown — the same gate the
- * page-4 render uses (g_p4_gate_a == 0 || g_p4_gate_b != 0).  The input
+ * page-4 render uses (g_tr_p4_gate_a == 0 || g_tr_p4_gate_b != 0).  The input
  * arm hit-tests 7 hotspots (5 shields + 2 buttons) when true, else just
  * the 5 shields. */
 int engine_title_render_choose_title_buttons_shown(void)
 {
-    return g_p4_gate_a == 0 || g_p4_gate_b != 0;
+    return g_tr_p4_gate_a == 0 || g_tr_p4_gate_b != 0;
 }
 
 /* Bind the char→glyph metrics table the caret's width measure walks
@@ -401,7 +410,7 @@ int engine_title_render_choose_title_buttons_shown(void)
  * bound for the centered-text measurer. */
 void engine_title_render_bind_caret_metrics_table(const uint8_t *table)
 {
-    g_p4_fm.char_glyph_index = table;
+    g_caret_metrics_table = table;
 }
 
 /* ─── page-3 file-list state binders ────────────────────────────── */
@@ -573,17 +582,17 @@ void engine_title_render_bind_page_fn(engine_title_render_page_fn fn)
 int  engine_title_render_panel_call_count(void)      { return g_panel_calls; }
 int  engine_title_render_background_call_count(void) { return g_background_calls; }
 int  engine_title_render_last_page(void)             { return g_last_page; }
-int  engine_title_render_scene_flag_a(void)          { return g_scene_flag_a; }
-int  engine_title_render_scene_flag_b(void)          { return g_scene_flag_b; }
-void engine_title_render_set_scene_flag_b(int v)     { g_scene_flag_b = v; }
+int  engine_title_render_scene_flag_a(void)          { return g_tr_scene_flag_a; }
+int  engine_title_render_scene_flag_b(void)          { return g_gfx_menu_redraw_a; }
+void engine_title_render_set_scene_flag_b(int v)     { g_gfx_menu_redraw_a = (uint8_t)v; }
 
 void engine_title_render_reset_counters(void)
 {
     g_panel_calls = 0;
     g_background_calls = 0;
     g_last_page = 0;
-    g_scene_flag_a = 0;
-    g_scene_flag_b = 0;
+    g_tr_scene_flag_a = 0;
+    g_gfx_menu_redraw_a = 0;
 }
 
 /* ─── render ────────────────────────────────────────────────────── */
@@ -596,7 +605,7 @@ void engine_title_render_reset_counters(void)
 static void menu_text_entry(int loc_entry, int skip, int x, int y, int width,
                             const uint8_t *font, uint8_t color)
 {
-    gfx_wrap_localized_line_centered(&g_loc, loc_entry, skip, x, y, width,
+    gfx_wrap_localized_line_centered(g_loc, loc_entry, skip, x, y, width,
                                      font, g_glyph_table, g_glyph_metrics,
                                      color);
 }
@@ -616,7 +625,7 @@ static void menu_text(int skip, int x, int y, int width,
  * (DAT_005aea40 no-shadow) is the caller's responsibility. */
 static void render_menu_button(int y, int label_skip, int select_id)
 {
-    uint8_t color = (g_selected_button == select_id) ? 0xf9 : 0x3f;
+    uint8_t color = (g_tr_selected_button == select_id) ? 0xf9 : 0x3f;
     gfx_line_rect_bevel_palette_b(0xe0, y, 0xc0, 0x18);
     engine_dirty_rect_mark_box_tiled(g_dirty_state, 0xe0, y, 0xe, 3, 1);
     menu_text(label_skip, 0xe0, y + 5, 0xc0, g_menu_font, color);
@@ -677,7 +686,7 @@ void engine_title_render_main_menu(void)
 
     /* Gray stone panel — deferred to the bound panel fn (0x409346).
      * retail args: (DAT_004eabec, 0xa0, 10, 0x14, 0xf). */
-    g_panel_fn(g_panel_asset, 0xa0, 10, 0x14, 0xf);
+    g_panel_fn(title_sheet(), 0xa0, 10, 0x14, 0xf);
 
     /* Title — large font, sub-string 0, centered in 0x180 at (0x80, 0x1e). */
     menu_text(0, 0x80, 0x1e, 0x180, g_title_font, 0x3f);
@@ -704,7 +713,7 @@ void engine_title_render_options(void)
      * panel (the panel ignores it). */
     gfx_text_set_uppercase_highlight(1);
 
-    g_panel_fn(g_panel_asset, 0xb0, 10, 0x12, 0x12);
+    g_panel_fn(title_sheet(), 0xb0, 10, 0x12, 0x12);
 
     /* Title — large font, sub-string 5, centered in 0x120 at (0xb0, 0x2d). */
     menu_text(5, 0xb0, 0x2d, 0x120, g_title_font, 0x3f);
@@ -727,12 +736,12 @@ void engine_title_render_play_now_buttons(void)
     gfx_text_set_no_shadow(1);
 
     /* Left button — "Original campaign" (entry 0x27 sub 4), select id 1. */
-    uint8_t col1 = (g_selected_button == 1) ? 0xf9 : 0x3f;
+    uint8_t col1 = (g_tr_selected_button == 1) ? 0xf9 : 0x3f;
     gfx_line_rect_bevel_palette_b(0x6e, 0x74, 0xa4, 0x18);
     menu_text_entry(0x27, 4, 0x70, 0x7a, 0xa0, g_menu_font, col1);
 
     /* Right button — "The new campaign" (entry 0x27 sub 5), select id 2. */
-    uint8_t col2 = (g_selected_button == 2) ? 0xf9 : 0x3f;
+    uint8_t col2 = (g_tr_selected_button == 2) ? 0xf9 : 0x3f;
     gfx_line_rect_bevel_palette_b(0x16e, 0x74, 0xa4, 0x18);
     menu_text_entry(0x27, 5, 0x170, 0x7a, 0xa0, g_menu_font, col2);
 
@@ -752,7 +761,7 @@ void engine_title_render_play_now(void)
 {
     /* Gray stone panel — deferred panel hook.  retail args
      * (DAT_004eabec, 0x40, 0x32, 0x20, 8). */
-    g_panel_fn(g_panel_asset, 0x40, 0x32, 0x20, 8);
+    g_panel_fn(title_sheet(), 0x40, 0x32, 0x20, 8);
 
     /* Title — large font, entry 0x27 sub 0, centered in 0x200 at
      * (0x40, 0x50), uppercase-highlight armed (DAT_0058fe2c=1). */
@@ -773,7 +782,7 @@ void engine_title_render_play_now(void)
  * target, and — if the render never latched (cursor past the text) —
  * fall back to the line's end X; then shift the caret to the box
  * origin and pin its Y at 0x52. */
-static void engine_title_render_choose_title_name_box(void)
+void engine_title_render_choose_title_name_box(void)
 {
     /* Caret-anchor reset (DAT_005aeb64 / DAT_0058fd58 / DAT_0058fd78 /
      * DAT_005c925a / DAT_005cd404). */
@@ -787,24 +796,26 @@ static void engine_title_render_choose_title_name_box(void)
     }
 
     /* Box frame — opaque sprite 0xcc at (0xd0, 0x48). */
-    gfx_sprite_render_opaque_from_blob(g_panel_asset, 0xcc, 0xd0, 0x48);
+    gfx_sprite_render_opaque_from_blob(title_sheet(), 0xcc, 0xd0, 0x48);
 
     /* Name text — menu font, color 0x3f, at (0xd6, 0x50). */
-    gfx_text_render_line(g_p4_name_buf, 0xd6, 0x50, g_menu_font,
+    gfx_text_render_line(g_tr_p4_name_buf, 0xd6, 0x50, g_menu_font,
                          g_glyph_table, 0x3f);
 
     /* Caret anchor: if the render didn't latch a first-pos, use the
      * line's end X (DAT_005cd404); then shift to the box origin and
      * pin Y. */
-    if (gfx_text_first_pos_latched() == 0) {
-        gfx_text_set_first_pos_x(gfx_text_line_x_acc());
+    if (g_gfx_first_pos_latch == 0) {
+        g_gfx_first_pos_x = g_gfx_line_x_acc;   /* DAT_0058fd58 = DAT_005cd404 */
+        g_gfx_first_pos_latch = 1;              /* DAT_005aeb64 = 1 */
     }
-    gfx_text_set_first_pos_x(gfx_text_first_pos_x() + 0xd6);
-    gfx_text_set_first_pos_y(0x52);
+    g_gfx_first_pos_x += 0xd6;
+    g_gfx_first_pos_y = 0x52;
 
-    /* Caret (FUN_0040acce).  Off in a single static render (blink → 1). */
+    /* Caret (FUN_0040acce).  Its cursor-char measure caches into the measurers' globals (DAT_005c9288 /
+     * DAT_0058fd88).  Off in a single static render (blink → 1). */
     if (g_title_editor) {
-        gfx_caret_render(g_title_editor, &g_p4_fm, g_menu_font, 0x3f);
+        title_caret(0x3f);
     }
 
     engine_dirty_rect_mark_box_tiled(g_dirty_state, 0xd0, 0x48, 0x16, 3, 1);
@@ -816,22 +827,22 @@ static void engine_title_render_choose_title_name_box(void)
  * any other filled slot uses i*2+0xcc.  The selected slot, while
  * flashing and outside the blink-off window, also gets the highlight
  * ring (sprite 0xd7) behind it at (..+0x74, 0x70). */
-static void engine_title_render_choose_title_shields(void)
+void engine_title_render_choose_title_shields(void)
 {
     for (int i = 1; i < 6; i++) {
         int x = (i - 1) * 0x58 + 0x70;
-        if (g_p4_shield_slots[i] == 0) {
-            gfx_sprite_render_from_blob(g_panel_asset, i * 2 + 0xcb, x, 0x8c);
-        } else if (g_p4_shield_slots[i] == g_p4_selected_shield
-                   && g_p4_shield_flash != 0) {
-            if (g_p4_flash_timer == 0) {
-                gfx_sprite_render_from_blob(g_panel_asset, 0xd7,
+        if (g_tr_p4_shield_slots[i] == 0) {
+            gfx_sprite_render_from_blob(title_sheet(), i * 2 + 0xcb, x, 0x8c);
+        } else if (g_tr_p4_shield_slots[i] == g_tr_p4_selected_shield
+                   && g_tr_p4_shield_flash != 0) {
+            if (g_tr_p4_flash_timer == 0) {
+                gfx_sprite_render_from_blob(title_sheet(), 0xd7,
                                             (i - 1) * 0x58 + 0x74, 0x70);
-                gfx_sprite_render_from_blob(g_panel_asset, i * 2 + 0xcb,
+                gfx_sprite_render_from_blob(title_sheet(), i * 2 + 0xcb,
                                             x, 0x8c);
             }
         } else {
-            gfx_sprite_render_from_blob(g_panel_asset, i * 2 + 0xcc, x, 0x8c);
+            gfx_sprite_render_from_blob(title_sheet(), i * 2 + 0xcc, x, 0x8c);
         }
     }
 }
@@ -840,24 +851,24 @@ static void engine_title_render_choose_title_shields(void)
  * when the panel is in its tall layout (gate_a == 0 || gate_b != 0).
  * Back is select id 6, Continue id 7 (DAT_00553114 highlight).
  * Continue dims to 0x20 when disabled (DAT_0057c940 != 0), else 0x3f. */
-static void engine_title_render_choose_title_buttons(void)
+void engine_title_render_choose_title_buttons(void)
 {
-    if (!(g_p4_gate_a == 0 || g_p4_gate_b != 0)) {
+    if (!(g_tr_p4_gate_a == 0 || g_tr_p4_gate_b != 0)) {
         return;
     }
 
     gfx_text_set_no_shadow(1);
 
     /* Back. (entry 0xb sub 9), select id 6. */
-    uint8_t back_col = (g_selected_button == 6) ? 0xf9 : 0x3f;
+    uint8_t back_col = (g_tr_selected_button == 6) ? 0xf9 : 0x3f;
     gfx_line_rect_bevel_palette_b(0x70, 0xd7, 0xc0, 0x18);
     engine_dirty_rect_mark_box_tiled(g_dirty_state, 0x70, 0xd7, 0xe, 3, 1);
     menu_text(9, 0x70, 0xdc, 0xc0, g_menu_font, back_col);
 
     /* Continue (entry 0xb sub 0xb), select id 7. */
     uint8_t cont_col;
-    if (g_selected_button == 7)            cont_col = 0xf9;
-    else if (g_p4_continue_disabled == 0)  cont_col = 0x3f;
+    if (g_tr_selected_button == 7)            cont_col = 0xf9;
+    else if (g_tr_p4_continue_disabled == 0)  cont_col = 0x3f;
     else                                   cont_col = 0x20;
     gfx_line_rect_bevel_palette_b(0x150, 0xd7, 0xc0, 0x18);
     engine_dirty_rect_mark_box_tiled(g_dirty_state, 0x150, 0xd7, 0xe, 3, 1);
@@ -872,10 +883,10 @@ static void engine_title_render_choose_title_buttons(void)
  * no-shadow bracket) + the conditional button row. */
 void engine_title_render_choose_title(void)
 {
-    int tall = (g_p4_gate_a == 0 || g_p4_gate_b != 0);
+    int tall = (g_tr_p4_gate_a == 0 || g_tr_p4_gate_b != 0);
 
     gfx_text_set_uppercase_highlight(1);
-    g_panel_fn(g_panel_asset, 0x50, 10, 0x1e, tall ? 0x10 : 0xe);
+    g_panel_fn(title_sheet(), 0x50, 10, 0x1e, tall ? 0x10 : 0xe);
     menu_text(10, 0x50, 0x23, 0x1e0, g_title_font, 0x3f);
     gfx_text_set_uppercase_highlight(0);
 
@@ -918,8 +929,8 @@ static void engine_title_render_filelist_content(int selected)
     }
 
     /* Two tiled-border strips lining the selected-name field. */
-    gfx_panel_fill_interior(g_panel_asset, bx + 0x1c, by + 0x42, 10, 1);
-    gfx_panel_fill_interior(g_panel_asset, bx + 0x1c, by + 0x4c, 10, 1);
+    gfx_panel_fill_interior(title_sheet(), bx + 0x1c, by + 0x42, 10, 1);
+    gfx_panel_fill_interior(title_sheet(), bx + 0x1c, by + 0x4c, 10, 1);
 
     /* Selected-name text. */
     if (g_fl_name_buf[0]) {
@@ -932,12 +943,12 @@ static void engine_title_render_filelist_content(int selected)
     gfx_text_set_first_pos_x(gfx_text_first_pos_x() + bx + 0x20);
     gfx_text_set_first_pos_y(by + 0x48);
     if (g_title_editor) {
-        gfx_caret_render(g_title_editor, &g_p4_fm, g_menu_font, 0x3f);
+        title_caret(0x3f);
     }
     engine_dirty_rect_mark_box_tiled(g_dirty_state, bx + 0x18, by + 0x40, 0xb, 3, 1);
 
     /* The list-box tiled border. */
-    gfx_panel_fill_interior(g_panel_asset, bx + 0x1e, by + 0x6a, 0x15, 10);
+    gfx_panel_fill_interior(title_sheet(), bx + 0x1e, by + 0x6a, 0x15, 10);
     engine_dirty_rect_mark_box_tiled(g_dirty_state, bx + 0x1c, by + 0x68, 0x16, 0xb, 1);
 
     /* File-list grid — 3 columns (step 0x78), rows step 0x10. */
@@ -964,12 +975,12 @@ static void engine_title_render_filelist_content(int selected)
     }
 
     /* Bottom-box tiled border. */
-    gfx_panel_fill_interior(g_panel_asset, bx + 0x20, by + 0x118, 0x15, 1);
+    gfx_panel_fill_interior(title_sheet(), bx + 0x20, by + 0x118, 0x15, 1);
     gfx_text_set_line_x_acc(0);
 
     /* Bottom status line — only when armed (retail DAT_0057d3c4 != 0). */
     if (g_fl_show_status) {
-        gfx_wrap_localized_line(&g_loc, 0x28, 2, bx + 0x20, by + 0x11a,
+        gfx_wrap_localized_line(g_loc, 0x28, 2, bx + 0x20, by + 0x11a,
                                 g_menu_font, g_glyph_table, 0x3f);
     }
 }
@@ -980,7 +991,7 @@ static void engine_title_render_filelist_content(int selected)
  * the list content.  Page 3 ("Loading a game.") passes title_sub 5. */
 void engine_title_render_filelist(int title_sub)
 {
-    g_panel_fn(g_panel_asset, 0x60, 10, 0x1c, 0x15);
+    g_panel_fn(title_sheet(), 0x60, 10, 0x1c, 0x15);
     menu_text_entry(0x28, title_sub, 0x60, 0x22, 0x1c0, g_title_font, 0x3f);
     gfx_line_rect_bevel_palette_b(0x70, 0x42, 400, 0x100);
     gfx_line_rect(0x78, 0x4a, 0xc0, 0x20, 0x3f);
@@ -1077,13 +1088,13 @@ void engine_title_render_set_country_list(const uint8_t *values, int scroll,
                                           int selected_row, int count)
 {
     g_p7_country_values = values;
-    g_p7_country_scroll = scroll;
-    g_p7_country_sel    = selected_row;
-    g_p7_country_count  = count;
+    g_tr_country_scroll = scroll;
+    g_tr_country_sel    = selected_row;
+    g_tr_country_count  = count;
 }
 
-void engine_title_render_setup_mark_country_dirty(void) { g_p7_country_dirty = 1; }
-void engine_title_render_setup_mark_tabs_dirty(void)    { g_p7_tabs_dirty = 1; }
+void engine_title_render_setup_mark_country_dirty(void) { g_tr_country_dirty = 1; }
+void engine_title_render_setup_mark_tabs_dirty(void)    { g_tr_tabs_dirty = 1; }
 
 /* Port of FUN_004337b4 — the country-selector scrollbar.  `dir` < 0 scrolls
  * up (toward 0, the up-arrow's DAT_0059154c = -1), `dir` >= 0 scrolls down
@@ -1102,22 +1113,22 @@ void engine_title_render_setup_mark_tabs_dirty(void)    { g_p7_tabs_dirty = 1; }
 int engine_title_render_country_scroll(int dir)
 {
     if (dir < 0) {
-        if (g_p7_country_scroll <= 0) {
+        if (g_tr_country_scroll <= 0) {
             return 0;
         }
-        g_p7_country_scroll--;
+        g_tr_country_scroll--;
     } else {
-        if (g_p7_country_scroll >= g_p7_country_count - 5) {
+        if (g_tr_country_scroll >= g_tr_country_count - 5) {
             return 0;
         }
-        g_p7_country_scroll++;
+        g_tr_country_scroll++;
     }
     if (g_p7_country_values) {
         s_slot_0053f034 =
-            g_p7_country_values[g_p7_country_scroll + g_p7_country_sel];
+            g_p7_country_values[g_tr_country_scroll + g_tr_country_sel];
     }
-    g_p7_country_dirty = 1;
-    g_p7_tabs_dirty    = 1;
+    g_tr_country_dirty = 1;
+    g_tr_tabs_dirty    = 1;
     return 1;
 }
 
@@ -1127,12 +1138,12 @@ int engine_title_render_country_scroll(int dir)
  * sub-passes dirty.  The per-country reload is deferred (see above). */
 void engine_title_render_country_select(int row)
 {
-    g_p7_country_sel = row;
+    g_tr_country_sel = row;
     if (g_p7_country_values) {
-        s_slot_0053f034 = g_p7_country_values[g_p7_country_scroll + row];
+        s_slot_0053f034 = g_p7_country_values[g_tr_country_scroll + row];
     }
-    g_p7_country_dirty = 1;
-    g_p7_tabs_dirty    = 1;
+    g_tr_country_dirty = 1;
+    g_tr_tabs_dirty    = 1;
 }
 
 void engine_title_render_set_preview(const uint8_t *buf)
@@ -1143,7 +1154,7 @@ void engine_title_render_set_preview(const uint8_t *buf)
 void engine_title_render_set_tab_values(const int values[12], int active_tab)
 {
     for (int i = 0; i < 12; i++) {
-        g_p7_tab_values[i] = values ? values[i] : 0;
+        TABV(i) = values ? values[i] : 0;
     }
     g_p7_active_tab = active_tab;
 }
@@ -1155,18 +1166,18 @@ void engine_title_render_set_tab_values(const int values[12], int active_tab)
 void engine_title_render_set_option_detail(int tab, int value_count,
                                            int bookmark)
 {
-    g_p9_tab         = tab;
-    g_p9_value_count = value_count;
-    g_p9_bookmark    = bookmark;
+    g_tr_p9_tab         = tab;
+    g_tr_p9_count = value_count;
+    g_tr_p9_bookmark    = bookmark;
 }
 
-int engine_title_render_option_detail_tab(void)   { return g_p9_tab; }
-int engine_title_render_option_detail_count(void) { return g_p9_value_count; }
-int engine_title_render_option_detail_bookmark(void) { return g_p9_bookmark; }
+int engine_title_render_option_detail_tab(void)   { return g_tr_p9_tab; }
+int engine_title_render_option_detail_count(void) { return g_tr_p9_count; }
+int engine_title_render_option_detail_bookmark(void) { return g_tr_p9_bookmark; }
 
 int engine_title_render_tab_value(int tab)
 {
-    return (tab >= 0 && tab < 12) ? g_p7_tab_values[tab] : 0;
+    return (tab >= 0 && tab < 12) ? TABV(tab) : 0;
 }
 
 /* Port of FUN_00433ce4 — the page-9 dropdown hover hit-test.  Walks the
@@ -1179,8 +1190,8 @@ int engine_title_render_tab_value(int tab)
  * the same space the panel geometry is expressed in. */
 int engine_title_render_option_detail_hover(int cx, int cy)
 {
-    int tab   = g_p9_tab;
-    int count = g_p9_value_count;
+    int tab   = g_tr_p9_tab;
+    int count = g_tr_p9_count;
     int x     = g_p9_panel_geom[tab][0];
 
     for (int i = 0; i < count; i++) {
@@ -1196,11 +1207,8 @@ int engine_title_render_option_detail_hover(int cx, int cy)
 }
 
 /* Port of FUN_00433ba2 (+ the 0x433cc1 tail) — write the picked value back
- * to the open tab's option.  Retail keeps the 12 option values as permuted
- * scalars (DAT_0053f288..0053f2b4); the drop-in holds them in tab order in
- * g_p7_tab_values, so the writeback is a direct index store — the page-7
- * value cap (sub-string base[tab] + value) then shows the new pick once the
- * dropdown closes.
+ * to the open tab's option (its scalar, k_tab_slot) — the page-7 value cap (sub-string base[tab] + value) then
+ * shows the new pick once the dropdown closes.
  *
  * Deferred: retail's recompute tail (0x433cc1) also recomputes DAT_0053f268
  * from the tab-2 player count and rebuilds the AI seat roster + map preview
@@ -1208,41 +1216,36 @@ int engine_title_render_option_detail_hover(int cx, int cy)
  * updates the visible cap but does not yet re-seat the roster. */
 void engine_title_render_option_detail_pick(int value)
 {
-    if (g_p9_tab >= 0 && g_p9_tab < 12) {
-        g_p7_tab_values[g_p9_tab] = value;
+    if (g_tr_p9_tab >= 0 && g_tr_p9_tab < 12) {
+        TABV(g_tr_p9_tab) = value;
     }
     /* TODO(roster): 0x433cc1 → DAT_0053f268 recompute + 0x49caaa
      * roster/preview rebuild (deferred with the MP/roster subsystem). */
 }
 
-/* Port of FUN_004ae539 — reset the 12 option tabs to their default values
- * (the Defaults button).  Retail writes the permuted scalars
- * DAT_0053f288..0053f2b4; the drop-in holds the values in tab order in
- * g_p7_tab_values, so the defaults are mapped through FUN_00433ba2's
- * tab→scalar permutation:
- *
- *   tab  0→53f29c  1→53f2a4  2→53f288  3→53f2a0  4→53f290  5→53f298
- *        6→53f2b0  7→53f294  8→53f2a8  9→53f2ac 10→53f28c 11→53f2b4
- *
- * Tab 10 (game length) and tab 11 (a single-player-only toggle) take a
- * different default in a multiplayer setup (retail keys both off
- * DAT_00553030 == 0).  The resulting tab-order vector for single player is
- * {0,0,3,0,0,0,3,2,2,1,6,1} — identical to the captured page-7 seed in
- * main.c, confirming this is the setup screen's defaults source. */
+/* Port of FUN_004ae539 — reset the 12 setup options to their default values (the Defaults button), in retail's
+ * scalar layout (DAT_0053f288..DAT_0053f2b4).  Tab 10 (game length) and tab 11 (a single-player-only toggle) take
+ * a different default in a multiplayer setup (DAT_00553030).  The single-player tab-order vector is
+ * {0,0,3,0,0,0,3,2,2,1,6,1} — the captured page-7 seed in main.c. */
 void engine_title_render_setup_apply_defaults(void)
 {
-    g_p7_tab_values[0]  = 0;   /* DAT_0053f29c */
-    g_p7_tab_values[1]  = 0;   /* DAT_0053f2a4 */
-    g_p7_tab_values[2]  = 3;   /* DAT_0053f288 — player count */
-    g_p7_tab_values[3]  = 0;   /* DAT_0053f2a0 */
-    g_p7_tab_values[4]  = 0;   /* DAT_0053f290 */
-    g_p7_tab_values[5]  = 0;   /* DAT_0053f298 */
-    g_p7_tab_values[6]  = 3;   /* DAT_0053f2b0 */
-    g_p7_tab_values[7]  = 2;   /* DAT_0053f294 */
-    g_p7_tab_values[8]  = 2;   /* DAT_0053f2a8 */
-    g_p7_tab_values[9]  = 1;   /* DAT_0053f2ac */
-    g_p7_tab_values[10] = (g_sim_mp_active == 0) ? 6 : 3;  /* DAT_0053f28c */
-    g_p7_tab_values[11] = (g_sim_mp_active == 0) ? 1 : 0;  /* DAT_0053f2b4 */
+    g_tr_options[0]  = 3;   /* DAT_0053f288 — tab 2, player count */
+    g_tr_options[2]  = 0;   /* DAT_0053f290 — tab 4 */
+    g_tr_options[3]  = 2;   /* DAT_0053f294 — tab 7 */
+    g_tr_options[4]  = 0;   /* DAT_0053f298 — tab 5 */
+    g_tr_options[5]  = 0;   /* DAT_0053f29c — tab 0 */
+    g_tr_options[6]  = 0;   /* DAT_0053f2a0 — tab 3 */
+    g_tr_options[7]  = 0;   /* DAT_0053f2a4 — tab 1 */
+    g_tr_options[8]  = 2;   /* DAT_0053f2a8 — tab 8 */
+    g_tr_options[9]  = 1;   /* DAT_0053f2ac — tab 9 */
+    g_tr_options[10] = 3;   /* DAT_0053f2b0 — tab 6 */
+    if (g_sim_mp_active != 0) {   /* DAT_00553030 */
+        g_tr_options[1]  = 3;     /* DAT_0053f28c — tab 10, game length */
+        g_tr_options[11] = 0;     /* DAT_0053f2b4 — tab 11 */
+    } else {
+        g_tr_options[1]  = 6;
+        g_tr_options[11] = 1;
+    }
 }
 
 /* Port of FUN_004ae5e2 — clamp the player-count tab (tab 2 / DAT_0053f288)
@@ -1256,7 +1259,7 @@ void engine_title_render_setup_clamp_player_count(int roster_size)
     else if (roster_size < 4) v = 1;
     else if (roster_size < 5) v = 2;
     else                      v = 3;
-    g_p7_tab_values[2] = v;
+    TABV(2) = v;
 }
 
 void engine_title_render_set_players(const engine_title_setup_player_t players[6],
@@ -1285,28 +1288,34 @@ void engine_title_render_set_players(const engine_title_setup_player_t players[6
  * yet modelled). */
 void engine_title_render_setup_country_list(void)
 {
-    /* Parchment frame for the selector + preview (misc sprite 0x10). */
-    gfx_sprite_render_from_blob(g_misc_asset, 0x10, 0x1f0, 9);
+    if (g_tr_country_dirty <= 0) {
+        return;                                 /* DAT_0057c948: drawn only when dirtied */
+    }
+    g_tr_country_dirty = 0;
 
-    /* Map / coat-of-arms preview (0x410c71(0, 0x1f0, 9) → raw blit
-     * inset by (-2, +3)). */
-    if (g_p7_preview) {
+    /* Parchment frame for the selector + preview (misc sprite 0x10). */
+    gfx_sprite_render_from_blob(g_tr_misc_sheet, 0x10, 0x1f0, 9);
+
+    /* Map / coat-of-arms preview: 0x410c71(0, 0x1f0, 9) (the standalone: the raw blit inset by (-2, +3)). */
+    if (g_preview_fn) {
+        g_preview_fn(0, 0x1f0, 9);
+    } else if (g_p7_preview) {
         gfx_sprite_render_raw(g_p7_preview, 0x1f0 - 2, 9 + 3, 0x80, 0x80);
     }
 
     gfx_text_set_no_shadow(1);
     for (int row = 0; row < 5; row++) {
         unsigned v = g_p7_country_values
-                   ? g_p7_country_values[g_p7_country_scroll + row] : 0;
+                   ? g_p7_country_values[g_tr_country_scroll + row] : 0;
         uint8_t color;
-        if (row == g_p7_country_sel) {
+        if (row == g_tr_country_sel) {
             color = 0x20;                       /* dark text on bright fill */
             gfx_line_fill_rect(0x1f0, row * 0x10 + 0x8d, 0x69, 0x10, 0x3f);
         } else {
             color = 0x3f;                       /* bright text on dark fill */
             gfx_line_fill_rect(0x1f0, row * 0x10 + 0x8d, 0x69, 0x10, 0x20);
         }
-        gfx_wrap_localized_line(&g_loc, 0x65, (int)v, 0x1f2,
+        gfx_wrap_localized_line(g_loc, 0x65, (int)v, 0x1f2,
                                 row * 0x10 + 0x8e, g_menu_font,
                                 g_glyph_table, color);
     }
@@ -1318,12 +1327,12 @@ void engine_title_render_setup_country_list(void)
      * filler, sized by the visible window's position in the full list
      * (retail FUN_00404dc1 = percent_div, FUN_00404d6b = percent_of). */
     int top = engine_math_percent_of(0x2c,
-                  engine_math_percent_div(g_p7_country_scroll, g_p7_country_count));
+                  engine_math_percent_div(g_tr_country_scroll, g_tr_country_count));
     int mid = engine_math_percent_of(0x2c,
-                  engine_math_percent_div(5, g_p7_country_count));
+                  engine_math_percent_div(5, g_tr_country_count));
     int bot = engine_math_percent_of(0x2c,
-                  engine_math_percent_div(g_p7_country_count - g_p7_country_scroll - 5,
-                                          g_p7_country_count));
+                  engine_math_percent_div(g_tr_country_count - g_tr_country_scroll - 5,
+                                          g_tr_country_count));
     mid = mid + (((0x2c - top) - mid) - bot);
     if (top != 0) gfx_line_fill_rect(0x25c, 0xa3, 0x14, top, 0x20);
     if (mid != 0) gfx_line_fill_rect(0x25c, top + 0xa3, 0x14, mid, 0x3f);
@@ -1338,6 +1347,9 @@ void engine_title_render_setup_country_list(void)
  * than recomputing it here. */
 void engine_title_render_setup_roster(void)
 {
+    if (g_roster_prep_fn) {
+        g_roster_prep_fn();                     /* FUN_0049caaa */
+    }
     int row = 0;
     for (int seat = 1; seat <= 5; seat++) {
         const engine_title_setup_player_t *p = &g_p7_players[seat];
@@ -1359,8 +1371,8 @@ void engine_title_render_setup_roster(void)
         }
 
         int ry = row * 0x5e;
-        gfx_sprite_render_from_blob(g_misc_asset, p->shield * 2 - 2, 10, ry + 6);
-        gfx_sprite_render_from_blob(g_misc_asset, portrait_idx, 0x54, ry + 10);
+        gfx_sprite_render_from_blob(g_tr_misc_sheet, p->shield * 2 - 2, 10, ry + 6);
+        gfx_sprite_render_from_blob(g_tr_misc_sheet, portrait_idx, 0x54, ry + 10);
         const uint8_t *name = g_p7_names ? g_p7_names + seat * 0x2c : NULL;
         gfx_text_render_line_centered(name, 0, ry + 0x50, 0xa0, g_menu_font,
                                       g_glyph_table, g_glyph_metrics,
@@ -1377,27 +1389,31 @@ void engine_title_render_setup_roster(void)
  * a wrapped header (entry 0x66 sub `tab`); every tab except the one
  * being edited (`active`) also gets a raised bevel frame and a centered
  * red value label (entry 0x67 sub base+selected). */
-void engine_title_render_setup_tabs(void)
+void engine_title_render_setup_tabs(int active)
 {
-    gfx_text_set_no_shadow(1);
+    if (g_tr_tabs_dirty <= 0) {
+        return;                                 /* DAT_0055ce94: drawn only when dirtied */
+    }
+    g_tr_tabs_dirty = 0;
     for (int t = 0; t < 12; t++) {
         int x  = g_p7_tab_geom[t][0];
         int by = g_p7_tab_geom[t][1];
         int hy = g_p7_tab_geom[t][2];
 
-        gfx_wrap_localized(&g_loc, 0x66, t, x, hy, 100, 100, 0, 0,
+        g_gfx_no_shadow = 1;                    /* DAT_005aea40, per tab */
+        gfx_wrap_localized(g_loc, 0x66, t, x, hy, 100, 100, 0, 0,
                            g_menu_font, g_glyph_table, g_glyph_metrics, 0x3f);
 
-        if (g_p7_active_tab != t) {
+        if (active != t) {
             gfx_panel_draw_bevel(g_chrome_asset, x, by, 6, 3);
-            int sub = g_p7_tab_value_base[t] + g_p7_tab_values[t];
-            gfx_wrap_localized_line_centered(&g_loc, 0x67, sub, x + 1,
+            int sub = g_p7_tab_value_base[t] + TABV(t);
+            gfx_wrap_localized_line_centered(g_loc, 0x67, sub, x + 1,
                                              by + 0x10, 0x60, g_menu_font,
                                              g_glyph_table, g_glyph_metrics,
                                              0xf9);
         }
     }
-    gfx_text_set_no_shadow(0);
+    g_gfx_no_shadow = 0;
 }
 
 /* Port of FUN_0041f6c7 — the page-7 root: the central carved panel
@@ -1407,27 +1423,21 @@ void engine_title_render_setup_tabs(void)
  * to 1 here, which the subs check-and-clear; on the full-render path the
  * flags are always freshly set so the subs always draw (the flags only
  * gate the not-yet-wired per-frame refresh). */
-void engine_title_render_setup_screen(void)
+void engine_title_render_setup_screen(int active)
 {
-    gfx_sprite_render_from_blob(g_misc_asset, 0xf, 0xa0, 0);
+    gfx_sprite_render_from_blob(g_tr_misc_sheet, 0xf, 0xa0, 0);
 
-    gfx_text_set_no_shadow(1);
+    g_gfx_no_shadow = 1;
     menu_text_entry(0xb, 0xc, 0xa5, 0xc6, 0x4c, g_menu_font, 0x3f);  /* Cancel   */
     menu_text_entry(0xb, 0xd, 0xf3, 0xc6, 0x4c, g_menu_font, 0x3f);  /* Start    */
     menu_text_entry(0xb, 0xe, 0x141, 0xc6, 0x4c, g_menu_font, 0x3f); /* Defaults */
-    /* no-shadow stays armed; setup_country_list re-arms then clears it. */
+    /* no-shadow stays armed; the country list re-arms then clears it. */
 
+    g_tr_country_dirty = 1;                     /* DAT_0057c948 */
+    g_tr_tabs_dirty    = 1;                     /* DAT_0055ce94 */
     engine_title_render_setup_country_list();
     engine_title_render_setup_roster();
-    engine_title_render_setup_tabs();
-
-    /* Retail FUN_0041f6c7 sets DAT_0057c948 / DAT_0055ce94 to 1, then the
-     * subs (FUN_0041f98b / FUN_0041f86d) draw and clear them — so after a
-     * full render both land at 0.  Our subs draw unconditionally; mirror the
-     * end-state so the per-frame refresh has nothing pending until an input
-     * action dirties a sub. */
-    g_p7_country_dirty = 0;
-    g_p7_tabs_dirty    = 0;
+    engine_title_render_setup_tabs(active);
 }
 
 /* Port of the page-7 arm of FUN_004ba26e (the per-frame UI-refresh
@@ -1442,14 +1452,8 @@ void engine_title_render_setup_screen(void)
  * path needs that), so the gate is hoisted to this caller instead. */
 void engine_title_render_refresh_setup(void)
 {
-    if (g_p7_country_dirty > 0) {
-        g_p7_country_dirty = 0;
-        engine_title_render_setup_country_list();
-    }
-    if (g_p7_tabs_dirty > 0) {
-        g_p7_tabs_dirty = 0;
-        engine_title_render_setup_tabs();
-    }
+    engine_title_render_setup_country_list();   /* each gates itself (DAT_0057c948 / DAT_0055ce94) */
+    engine_title_render_setup_tabs(999);
 }
 
 /* Render the page-7 setup screen as the page-9 backdrop, with `active_tab`
@@ -1459,10 +1463,7 @@ void engine_title_render_refresh_setup(void)
  * setup screen reads it from g_p7_active_tab, so override-and-restore. */
 static void render_setup_backdrop(int active_tab)
 {
-    int saved = g_p7_active_tab;
-    g_p7_active_tab = active_tab;
-    engine_title_render_setup_screen();
-    g_p7_active_tab = saved;
+    engine_title_render_setup_screen(active_tab);
 }
 
 /* Port of FUN_0041fdd6 — the page-9 per-option detail dropdown.  Reached by
@@ -1475,13 +1476,13 @@ static void render_setup_backdrop(int active_tab)
  * pinned at the tab. */
 void engine_title_render_option_detail(void)
 {
-    int tab   = g_p9_tab;
-    int count = g_p9_value_count;
+    int tab   = g_tr_p9_tab;
+    int count = g_tr_p9_count;
 
     /* Backdrop: redraw the page we came from, with the edited tab hidden.
      * Only bookmark 7 (the page-7 setup screen) is ported; the page-8 MP
      * setup (FUN_0041f77a) and the 0xb/0xc flows are deferred. */
-    if (g_p9_bookmark == 7) {
+    if (g_tr_p9_bookmark == 7) {
         render_setup_backdrop(tab);
     }
 
@@ -1495,8 +1496,8 @@ void engine_title_render_option_detail(void)
     gfx_text_set_no_shadow(1);
     gfx_panel_draw_bevel(g_chrome_asset, x, y, 6, rows);
     for (int i = 0; i < count; i++) {
-        uint8_t color = (i + 1 == g_selected_button) ? 0xf9 : 0x3f;
-        gfx_wrap_localized_line_centered(&g_loc, 0x67,
+        uint8_t color = (i + 1 == g_tr_selected_button) ? 0xf9 : 0x3f;
+        gfx_wrap_localized_line_centered(g_loc, 0x67,
                                          g_p7_tab_value_base[tab] + i, x + 1,
                                          i * 0x10 + y + 0x10, 0x60, g_menu_font,
                                          g_glyph_table, g_glyph_metrics, color);
@@ -1516,21 +1517,25 @@ void engine_title_render_scene(int screen_state, int page)
     /* Background first (deferred — FUN_0041e61d long pole). */
     g_background_fn();
 
-    /* Page dispatch.  Page 1 = main menu, page 2 = "Your options", page 5
-     * = "Play Now!" campaign chooser; the remaining 3..0xd route to the
-     * (still-unported) page renderers via the page hook. */
+    /* Page dispatch: 1 main menu, 2 "Your options", 4 the title / shield page, 5 "Play Now!", 7 the game setup (retail
+     * passes 999: no tab suppressed); the rest through the hybrid host's retail pages when bound, else the module's
+     * own (3 the file list, 9 the option dropdown) or the page hook. */
     if (page == 1) {
         engine_title_render_main_menu();
     } else if (page == 2) {
         engine_title_render_options();
-    } else if (page == 3) {
-        engine_title_render_filelist(5);
     } else if (page == 4) {
         engine_title_render_choose_title();
     } else if (page == 5) {
         engine_title_render_play_now();
     } else if (page == 7) {
-        engine_title_render_setup_screen();
+        engine_title_render_setup_screen(g_p7_active_tab < 0 ? 999 : g_p7_active_tab);
+    } else if (g_retail_pages_fn) {
+        if (page >= 3 && page <= 0xd) {
+            g_retail_pages_fn(page);
+        }
+    } else if (page == 3) {
+        engine_title_render_filelist(5);
     } else if (page == 9) {
         engine_title_render_option_detail();
     } else if (page >= 3 && page <= 0xd) {
@@ -1538,9 +1543,11 @@ void engine_title_render_scene(int screen_state, int page)
     }
 
     /* Full-screen dirty finalize + the two "scene rendered" flags. */
-    engine_dirty_rect_mark_full_screen(g_dirty_state);
-    g_scene_flag_a = 1;   /* DAT_005651ac */
-    g_scene_flag_b = 1;   /* DAT_004eb260 */
+    if (g_dirty_state) {
+        engine_dirty_rect_mark_full_screen(g_dirty_state);   /* FUN_0045240a */
+    }
+    g_tr_scene_flag_a = 1;     /* DAT_005651ac */
+    g_gfx_menu_redraw_a = 1;   /* DAT_004eb260 */
 }
 
 /* Port of the 0x1f arm of FUN_004ba26e (the per-frame UI refresh

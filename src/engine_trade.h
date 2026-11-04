@@ -50,6 +50,7 @@
 #include <stdint.h>
 
 #include "engine_button.h"
+#include "engine_dirty_rect.h"
 #include "localization.h"
 
 /* ── Render context ────────────────────────────────────────────────────
@@ -74,7 +75,17 @@ typedef struct engine_trade_ctx {
     const uint8_t *glyph_table;
     const unsigned char *glyph_metrics;
     localization_state_t *loc;
+    uint8_t *scratch;                  /* the icon-sheet scratch DAT_004eabec points at (rhost); NULL → the port's own */
+    const uint8_t *misc_sheet;         /* DAT_005530c8 — the delta label's face icon */
+    engine_dirty_rect_state_t *dirty;  /* FUN_004527a6 / FUN_0045240a's rectangle; NULL → no marks */
 } engine_trade_ctx_t;
+
+/* Retail-layout globals (engine_trade_globals.c; rhost aliases them at their VAs). */
+extern engine_button_rec_t g_trade_buttons[6];   /* DAT_004dd838 the buy/sell arrow widgets */
+extern int32_t g_trade_widget_count;             /* DAT_00553f58 how many of them show (4 buy / 6 sell) */
+
+/* ── FUN_0041635f — the trade-grid content draw (the panel, the good, the holdings, the prompt) ── */
+void engine_trade_content(const engine_trade_ctx_t *ctx);
 
 /* ── The trade figures (retail globals; engine_economy_globals.c) ──────────
  * Written by the model (engine_trade_model.c), read back by the content draw. */

@@ -14,20 +14,46 @@
 
 #include "call_trace.h"
 #include "engine_army_economy.h"
+#include "engine_combat.h"            /* g_combat_flag_530d0 (DAT_005530d0), g_combat_flag_567d0c */
 #include "engine_math.h"
 #include "engine_realm.h"
 #include "engine_territory.h"
-#include "gfx_dispatch.h"
+#include "gfx_globals.h"
 #include "gfx_line.h"
 #include "gfx_panel.h"
 #include "gfx_sprite_render.h"
 #include "gfx_text.h"
 #include "gfx_text_label.h"
 #include "gfx_wrap.h"
+#include "io.h"
+#include "io_path.h"
 #include "save.h"
 #include "save_schema_globals.h"
 
 #define COUNTY(base, key) ((base) + (size_t)(key) * 0x300)
+
+/* ── FUN_00409397 — the chrome panel: the chrome border (mode 0) + the chrome interior inset one tile ─── */
+void engine_county_chrome_panel(const uint8_t *chrome, int x, int y, int cols, int rows)
+{
+    gfx_panel_draw_border_chrome(chrome, 0, x, y, cols, rows);        /* FUN_00409934(0, …) */
+    gfx_panel_fill_interior_chrome(chrome, x + 0x10, y + 0x10, cols - 2, rows - 2);   /* FUN_00409c93 */
+}
+
+/* The four panels' common head: FUN_004b1de0() (an empty function), the map recomposite FUN_004050c0 (bound:
+ * ctx->map_scene; NULL — the standalone — the caller has composed it), the chrome panel, the full-screen dirty mark
+ * FUN_0045240a (ctx->dirty; NULL → none). */
+static void county_panel_open(const engine_county_panels_ctx_t *ctx, int x, int y, int cols, int rows)
+{
+    if (ctx->map_scene) {
+        ctx->map_scene();
+    }
+    if (ctx->chrome) {
+        engine_county_chrome_panel(ctx->chrome, x, y, cols, rows);
+    }
+    if (ctx->dirty) {
+        engine_dirty_rect_mark_full_screen(ctx->dirty);
+    }
+}
 
 /* ── FUN_004156a7's baked tables (extracted from .rdata, r2 pxw) ────────
  * k_county_graph_bucket @ 0x4d29f8: seasons-recorded → bucket (threshold
@@ -73,8 +99,12 @@ int engine_county_graph_render(const engine_county_panels_ctx_t *ctx,
                                int x, int y, int mode)
 {
     CALL_TRACE_ENTER(0x004156a7);
-    /* FUN_004af502() + FUN_004af8d9("graphs.pl8", DAT_004eabec, 200000, 0)
-     * — the caller supplies the loaded blob (ctx->graphs). */
+    /* FUN_004af502() + FUN_004af8d9("graphs.pl8", DAT_004eabec, 200000, 0): with ctx->graphs_load the graph loads the
+     * sheet into ctx->graphs (the hybrid host: the buffer DAT_004eabec points at); else the caller has. */
+    if (ctx->graphs_load && ctx->graphs) {
+        io_path_chdir_base();
+        io_read_file_at("graphs.pl8", (void *)ctx->graphs, 0x30d40, 0);
+    }
 
     /* FUN_00403deb(x, y, 0x192, 0x9b) — the sunken graph frame. */
     gfx_line_rect_bevel_dark_br(x, y, 0x192, 0x9b);
@@ -146,7 +176,7 @@ void engine_county_delta_label(const engine_county_panels_ctx_t *ctx,
                                          color_pos, color_neg);
     /* FUN_0040a21a(misc, 0x17, x+acc, y-2) — the happiness face icon. */
     if (ctx->misc_sheet) {
-        gfx_dispatch_sprite(ctx->misc_sheet, 0x17,
+        gfx_sprite_render_from_blob(ctx->misc_sheet, 0x17,
                             x + gfx_text_line_x_acc(), y - 2);
     }
     /* FUN_00402637(")", x+acc+0x14, y, font, 0x3f) */
@@ -156,34 +186,48 @@ void engine_county_delta_label(const engine_county_panels_ctx_t *ctx,
     gfx_text_set_line_x_acc(gfx_text_line_x_acc() + saved);
 }
 
-/* FUN_0041a900 mode 3 — |value| with a one-space suffix, menu font.
- * (The panels only use mode 3; the other modes live in the menubar's
- * composed port.)  Zeroes the accumulator at entry like retail. */
-static void county_year_number(const engine_county_panels_ctx_t *ctx,
-                               int value, int x, int y)
+/* ── FUN_0041a900 — a year (or any signed number) with its era word ──────
+ * Every mode zeroes the line accumulator first; the number takes the one-space suffix " " (DAT_004d41d4…f0, all
+ * " ").  mode 0 / 2: |value| then the era word (loc grp 0x1a sub 1 for value >= 0, else 0) at the number's advance,
+ * menu font; mode 1: the era word first, then the number, the title font — the number one pixel higher when value
+ * >= 0; mode 3: |value| only, menu font; any other mode draws nothing. */
+void engine_county_year_number(const engine_county_panels_ctx_t *ctx, int value, int x, int y, int mode)
 {
-    gfx_text_set_line_x_acc(0);
-    gfx_text_label_render_dec(value < 0 ? -value : value, ' ', " ",
-                              x, y, ctx->menu_font, ctx->glyph_table, 0x3f);
+    CALL_TRACE_ENTER(0x0041a900);
+    g_gfx_line_x_acc = 0;
+    int pos = value >= 0, mag = pos ? value : -value;
+    switch (mode) {
+    case 0:
+    case 2:
+        gfx_text_label_render_dec(mag, ' ', " ", x, y, ctx->menu_font, ctx->glyph_table, 0x3f);
+        gfx_wrap_localized_line(ctx->loc, 0x1a, pos, g_gfx_line_x_acc + x, y, ctx->menu_font, ctx->glyph_table, 0x3f);
+        break;
+    case 1:
+        gfx_wrap_localized_line(ctx->loc, 0x1a, pos, x, y, ctx->title_font, ctx->glyph_table, 0x3f);
+        gfx_text_label_render_dec(mag, ' ', " ", g_gfx_line_x_acc + x, pos ? y - 1 : y, ctx->title_font,
+                                  ctx->glyph_table, 0x3f);
+        break;
+    case 3:
+        gfx_text_label_render_dec(mag, ' ', " ", x, y, ctx->menu_font, ctx->glyph_table, 0x3f);
+        break;
+    default:
+        break;
+    }
 }
 
-/* FUN_0041ab67 with group-base 0 — the "N Crowns." readout: the number
- * ('@' blank sign slot), then loc group 8 sub 0 ("Crown.") for ±1 / sub 1
- * ("Crowns.") otherwise, at the number's advance.  Preserves the caller's
- * accumulator around the pair (retail saves/restores DAT_005cd404). */
-static void county_crowns_label(const engine_county_panels_ctx_t *ctx,
-                                int value, int x, int y,
-                                const uint8_t *font)
+/* ── FUN_0041ab67 — "N <noun>" (loc grp 8, sub `sub` for ±1, else sub+1): the number ('@' blank sign slot), then the
+ * noun at its advance; the caller's line accumulator is preserved around the pair (retail saves / restores
+ * DAT_005cd404). */
+void engine_county_num_units(const engine_county_panels_ctx_t *ctx, int value, int sub, int x, int y,
+                             const uint8_t *font, uint8_t color)
 {
-    int saved = gfx_text_line_x_acc();
-    gfx_text_set_line_x_acc(0);
-    gfx_text_label_render_dec(value, '@', "", x, y,
-                              font, ctx->glyph_table, 0x3f);
-    int sub = (value == 1 || value == -1) ? 0 : 1;
-    gfx_wrap_localized_line(ctx->loc, 8, sub,
-                            x + gfx_text_line_x_acc(), y,
-                            font, ctx->glyph_table, 0x3f);
-    gfx_text_set_line_x_acc(gfx_text_line_x_acc() + saved);
+    CALL_TRACE_ENTER(0x0041ab67);
+    int saved = g_gfx_line_x_acc;
+    g_gfx_line_x_acc = 0;
+    gfx_text_label_render_dec(value, '@', "", x, y, font, ctx->glyph_table, color);
+    int s2 = (value == 1 || value == -1) ? sub : sub + 1;
+    gfx_wrap_localized_line(ctx->loc, 8, s2, g_gfx_line_x_acc + x, y, font, ctx->glyph_table, color);
+    g_gfx_line_x_acc += saved;
 }
 
 /* Field accessors over the county record. */
@@ -207,15 +251,17 @@ void engine_county_panel_population(const engine_county_panels_ctx_t *ctx)
     }
     const uint8_t *rec = COUNTY(ctx->county_block, ctx->county);
 
-    /* FUN_004b1de0() — verified no-op.  FUN_004050c0() — the map
-     * composite, done by the caller (see header).  DAT_00591524/28 =
-     * 0x10/0x30 — seal-scratch stores with no port consumer (the seal
-     * draw below re-writes them). */
-    if (ctx->chrome) {                                     /* FUN_00409397 */
-        gfx_panel_draw(ctx->chrome, 0x10, 0x30, 0x1c, 0x17);
+    if (ctx->map_scene) {
+        ctx->map_scene();                                  /* FUN_004050c0 */
     }
-    /* FUN_0045240a() — dirty-rect full-screen mark; redraw bookkeeping
-     * owned by the caller's seam (port repaints the full frame). */
+    g_gfx_cursor_x = 0x10;                                 /* DAT_00591524 / DAT_00591528 */
+    g_gfx_cursor_y = 0x30;
+    if (ctx->chrome) {
+        engine_county_chrome_panel(ctx->chrome, 0x10, 0x30, 0x1c, 0x17);
+    }
+    if (ctx->dirty) {
+        engine_dirty_rect_mark_full_screen(ctx->dirty);   /* FUN_0045240a */
+    }
 
     /* Title: "Population in" + the county name (loc grp 100, entry
      * map_id*0x14 + county), both in the large title font. */
@@ -229,11 +275,11 @@ void engine_county_panel_population(const engine_county_panels_ctx_t *ctx)
 
     /* The population history graph + its year axis labels. */
     int max = engine_county_graph_render(ctx, 0x20, 0x54, 0);
-    county_year_number(ctx, ctx->hist_start_year, 0x20, 0xf0);
+    engine_county_year_number(ctx, ctx->hist_start_year, 0x20, 0xf0, 3);
     gfx_text_render_line((const uint8_t *)"-",       /* &DAT_004d3d88 */
                          gfx_text_line_x_acc() + 0x20, 0xf0,
                          ctx->menu_font, ctx->glyph_table, 0x3f);
-    county_year_number(ctx, ctx->year, 0x58, 0xf0);
+    engine_county_year_number(ctx, ctx->year, 0x58, 0xf0, 3);
 
     /* "Greatest population N people." */
     gfx_text_set_line_x_acc(0);
@@ -310,7 +356,7 @@ void engine_county_panel_population(const engine_county_panels_ctx_t *ctx)
     gfx_text_label_render_dec(cty_i32(rec, 0x24), '@', "", 0x150, 0x182,
                               ctx->title_font, ctx->glyph_table, 0x3f);
     gfx_sprite_seal_draw(ctx->system_sheet, 0x1b4, 0x184, 0);
-    /* DAT_004eb260 = 1 — scene flag with no ported consumer. */
+    g_gfx_menu_redraw_a = 1;                               /* DAT_004eb260 */
 }
 
 /* ── FUN_0041152f — the tax panel (screen 0x15, loc grp 0x56) ────────── */
@@ -323,12 +369,10 @@ void engine_county_panel_tax(const engine_county_panels_ctx_t *ctx)
     const uint8_t *rec = COUNTY(ctx->county_block, ctx->county);
     int owner = rec[0x05];
 
-    if (ctx->chrome) {                                     /* FUN_00409397 */
-        gfx_panel_draw(ctx->chrome, 0x50, 0x90, 0x14, 9);
-    }
+    county_panel_open(ctx, 0x50, 0x90, 0x14, 9);
     /* FUN_0040a21a(misc, 0x3e, 0x140, 0xa0) — the tax-chest icon. */
     if (ctx->misc_sheet) {
-        gfx_dispatch_sprite(ctx->misc_sheet, 0x3e, 0x140, 0xa0);
+        gfx_sprite_render_from_blob(ctx->misc_sheet, 0x3e, 0x140, 0xa0);
     }
 
     /* "Tax rate  N%" */
@@ -342,8 +386,8 @@ void engine_county_panel_tax(const engine_county_panels_ctx_t *ctx)
     gfx_text_set_line_x_acc(0);
     gfx_wrap_localized_line(ctx->loc, 0x56, 2, 0x60, 0xc8,
                             ctx->menu_font, ctx->glyph_table, 0x3f);
-    county_crowns_label(ctx, (int)cty_i32(rec, 0xc0),
-                        gfx_text_line_x_acc() + 0x60, 0xc8, ctx->menu_font);
+    engine_county_num_units(ctx, (int)cty_i32(rec, 0xc0), 0,
+                            gfx_text_line_x_acc() + 0x60, 0xc8, ctx->menu_font, 0x3f);
 
     /* "This county (±N☺)" — realm base (+0x28 of the realm record) plus
      * the county's own tax-happiness delta (+0x0f). */
@@ -364,6 +408,7 @@ void engine_county_panel_tax(const engine_county_panels_ctx_t *ctx)
                               0xf0, 0x100, ctx->menu_font, 0x3f, 0xf9);
 
     gfx_sprite_seal_draw(ctx->system_sheet, 0x174, 0x104, 0);
+    g_gfx_menu_redraw_a = 1;                               /* DAT_004eb260 */
 }
 
 /* ── FUN_004116fb — the happiness report (screen 0x16, loc grp 0x55) ── */
@@ -375,8 +420,16 @@ void engine_county_panel_happiness(const engine_county_panels_ctx_t *ctx)
     }
     const uint8_t *rec = COUNTY(ctx->county_block, ctx->county);
 
+    if (ctx->map_scene) {
+        ctx->map_scene();                                  /* FUN_004050c0 */
+    }
+    g_gfx_cursor_x = 0x10;                                 /* DAT_00591524 / DAT_00591528 */
+    g_gfx_cursor_y = 0x30;
     if (ctx->chrome) {
-        gfx_panel_draw(ctx->chrome, 0x10, 0x30, 0x1c, 0x18);
+        engine_county_chrome_panel(ctx->chrome, 0x10, 0x30, 0x1c, 0x18);   /* FUN_00409397 */
+    }
+    if (ctx->dirty) {
+        engine_dirty_rect_mark_full_screen(ctx->dirty);   /* FUN_0045240a */
     }
 
     /* Title: "Happiness in <county>". */
@@ -390,11 +443,11 @@ void engine_county_panel_happiness(const engine_county_panels_ctx_t *ctx)
 
     /* The happiness history graph (mode 1) + year axis. */
     engine_county_graph_render(ctx, 0x20, 0x54, 1);
-    county_year_number(ctx, ctx->hist_start_year, 0x20, 0xf0);
+    engine_county_year_number(ctx, ctx->hist_start_year, 0x20, 0xf0, 3);
     gfx_text_render_line((const uint8_t *)"-",       /* &DAT_004d3dc4 */
                          gfx_text_line_x_acc() + 0x20, 0xf0,
                          ctx->menu_font, ctx->glyph_table, 0x3f);
-    county_year_number(ctx, ctx->year, 0x58, 0xf0);
+    engine_county_year_number(ctx, ctx->year, 0x58, 0xf0, 3);
 
     /* "Average happiness N☺". */
     gfx_text_set_line_x_acc(0);
@@ -404,7 +457,7 @@ void engine_county_panel_happiness(const engine_county_panels_ctx_t *ctx)
                               gfx_text_line_x_acc() + 0xb0, 0xf1,
                               ctx->menu_font, ctx->glyph_table, 0x3f);
     if (ctx->misc_sheet) {
-        gfx_dispatch_sprite(ctx->misc_sheet, 0x17,
+        gfx_sprite_render_from_blob(ctx->misc_sheet, 0x17,
                             gfx_text_line_x_acc() + 0xb0, 0xef);
     }
 
@@ -415,7 +468,7 @@ void engine_county_panel_happiness(const engine_county_panels_ctx_t *ctx)
     gfx_text_label_render_dec(cty_s8(rec, 0x0d), '@', "", 0x150, 0x10c,
                               ctx->title_font, ctx->glyph_table, 0x3f);
     if (ctx->misc_sheet) {
-        gfx_dispatch_sprite(ctx->misc_sheet, 0x17,
+        gfx_sprite_render_from_blob(ctx->misc_sheet, 0x17,
                             gfx_text_line_x_acc() + 0x150, 0x10f);
     }
 
@@ -447,10 +500,11 @@ void engine_county_panel_happiness(const engine_county_panels_ctx_t *ctx)
     gfx_text_label_render_dec(cty_s8(rec, 0x0c), '@', "", 0x150, 0x192,
                               ctx->title_font, ctx->glyph_table, 0x3f);
     if (ctx->misc_sheet) {
-        gfx_dispatch_sprite(ctx->misc_sheet, 0x17,
+        gfx_sprite_render_from_blob(ctx->misc_sheet, 0x17,
                             gfx_text_line_x_acc() + 0x150, 0x195);
     }
     gfx_sprite_seal_draw(ctx->system_sheet, 0x1b4, 0x194, 0);
+    g_gfx_menu_redraw_a = 1;                               /* DAT_004eb260 */
 }
 
 /* ── FUN_00411b72 — the rations panel (screen 0x19, loc grp 0x57) ────── */
@@ -463,9 +517,7 @@ void engine_county_panel_rations(const engine_county_panels_ctx_t *ctx)
     const uint8_t *rec = COUNTY(ctx->county_block, ctx->county);
     int extra = (ctx->advanced_mode == 1) ? 2 : 0;
 
-    if (ctx->chrome) {
-        gfx_panel_draw(ctx->chrome, 0x80, 0x60, 0x12, extra + 0xf);
-    }
+    county_panel_open(ctx, 0x80, 0x60, 0x12, extra + 0xf);
 
     /* Centered "Ration" title across the panel. */
     gfx_wrap_localized_line_centered(ctx->loc, 0x57, 0, 0x80, 0x68, 0x120,
@@ -500,12 +552,12 @@ void engine_county_panel_rations(const engine_county_panels_ctx_t *ctx)
     /* The arrow / band chrome (sprites off misc_cty): the ration stepper
      * row at y=0xdc and the grain↔beef balance row at y=0x100. */
     if (ctx->misc_sheet) {
-        gfx_dispatch_sprite(ctx->misc_sheet, 0x21, 0x90, 0xdc);
-        gfx_dispatch_sprite(ctx->misc_sheet, 0x26, 0x172, 0xdc);
-        gfx_dispatch_sprite(ctx->misc_sheet, 0x21, 0xe0, 0x100);
-        gfx_dispatch_sprite(ctx->misc_sheet, 0x26, 0x11c, 0x100);
-        gfx_dispatch_sprite(ctx->misc_sheet, 0x2a, 0x158, 0x100);
-        gfx_dispatch_sprite(ctx->misc_sheet, 0x18, 0x90, 0x11a);
+        gfx_sprite_render_from_blob(ctx->misc_sheet, 0x21, 0x90, 0xdc);
+        gfx_sprite_render_from_blob(ctx->misc_sheet, 0x26, 0x172, 0xdc);
+        gfx_sprite_render_from_blob(ctx->misc_sheet, 0x21, 0xe0, 0x100);
+        gfx_sprite_render_from_blob(ctx->misc_sheet, 0x26, 0x11c, 0x100);
+        gfx_sprite_render_from_blob(ctx->misc_sheet, 0x2a, 0x158, 0x100);
+        gfx_sprite_render_from_blob(ctx->misc_sheet, 0x18, 0x90, 0x11a);
     }
 
     /* The food grid: "Fed" / "Eaten" rows, centered numbers (width 0x40).
@@ -547,6 +599,7 @@ void engine_county_panel_rations(const engine_county_panels_ctx_t *ctx)
                                 gfx_text_line_x_acc() + 0x88, 0x150,
                                 ctx->menu_font, ctx->glyph_table, 0x3f);
     }
+    g_gfx_menu_redraw_a = 1;                               /* DAT_004eb260 */
 }
 
 /* ── FUN_00438ceb — the 2×2 action-grid hit-test ─────────────────────── */
@@ -652,6 +705,7 @@ int engine_county_rations_input(const engine_county_rations_in_t *in,
         }
         is_drag = 0;
     }
+    *out_is_drag = is_drag;                    /* written on every hit (retail: before the no-change return) */
     if (value < 0) {
         value = 0;
     } else if (value > 100) {
@@ -723,6 +777,25 @@ void engine_county_wanted_step(int county, int dir)
     /* FUN_00411b72() re-render + the redraw flags — caller. */
 }
 
+/* FUN_0043aa83 / FUN_0043ab25 and FUN_0043a23f / FUN_0043a307 whole: the step, the panel's re-render, the redraw
+ * flags (DAT_005530d0 and — the rations — DAT_00567d0c, then DAT_004eb260). */
+void engine_county_tax_step_render(const engine_county_panels_ctx_t *ctx, int dir)
+{
+    engine_county_tax_step(ctx->county, dir);
+    engine_county_panel_tax(ctx);
+    g_combat_flag_530d0 = 1;
+    g_gfx_menu_redraw_a = 1;
+}
+
+void engine_county_wanted_step_render(const engine_county_panels_ctx_t *ctx, int dir)
+{
+    engine_county_wanted_step(ctx->county, dir);
+    engine_county_panel_rations(ctx);
+    g_combat_flag_530d0 = 1;
+    g_combat_flag_567d0c = 1;
+    g_gfx_menu_redraw_a = 1;
+}
+
 void engine_county_ration_slider_render(const engine_county_panels_ctx_t *ctx)
 {
     CALL_TRACE_ENTER(0x00411fde);
@@ -739,8 +812,8 @@ void engine_county_ration_slider_render(const engine_county_panels_ctx_t *ctx)
     /* Side arrows off the SYSTEM sheet (0x5bb540) at the FUN_0043a379
      * hit rects. */
     if (ctx->system_sheet) {
-        gfx_dispatch_sprite(ctx->system_sheet, 0x4a, 200, 0xdc);
-        gfx_dispatch_sprite(ctx->system_sheet, 0x4b, 0x144, 0xdc);
+        gfx_sprite_render_from_blob(ctx->system_sheet, 0x4a, 200, 0xdc);
+        gfx_sprite_render_from_blob(ctx->system_sheet, 0x4b, 0x144, 0xdc);
     }
     /* The 100-px track: dark top rule, light fill, pale bottom rule. */
     gfx_line_draw(0xe0, 0xe5, 0x143, 0xe5, 0x10);
@@ -748,9 +821,59 @@ void engine_county_ration_slider_render(const engine_county_panels_ctx_t *ctx)
     gfx_line_draw(0xe0, 0xea, 0x143, 0xea, 0x1f);
     /* The knob at wanted-percent (+0x15f). */
     if (ctx->system_sheet && rec) {
-        gfx_dispatch_sprite(ctx->system_sheet, 0x4c,
+        gfx_sprite_render_from_blob(ctx->system_sheet, 0x4c,
                             (int)(int8_t)rec[0x15f] + 0xdc, 0xd8);
     }
+}
+
+/* FUN_00438ceb whole: the hit-test, then the flip (FUN_0043a8f2 population / 0043a939 tax / 0043a922 happiness /
+ * 0043a846 rations — `flip`, by screen code; NULL → none); 1 when a flip ran. */
+int engine_county_action_grid_click(const engine_county_grid_in_t *in, void (*flip)(int screen))
+{
+    int screen = engine_county_action_grid_classify(in);
+    if (screen == 0) {
+        return 0;
+    }
+    if (flip) {
+        flip(screen);
+    }
+    return 1;
+}
+
+/* FUN_0043a5a9 whole: the change, then — the current county — the panel's re-render (FUN_00411b72) and the redraw
+ * flags DAT_005530d0 / DAT_004eb260. */
+int engine_county_ration_set_render(const engine_county_panels_ctx_t *ctx, int county, int value, int is_drag)
+{
+    int cur = engine_county_ration_set(county, value, is_drag);
+    if (cur) {
+        engine_county_panel_rations(ctx);
+        g_combat_flag_530d0 = 1;
+        g_gfx_menu_redraw_a = 1;
+    }
+    return cur;
+}
+
+/* FUN_0043a379 whole: the decision (engine_county_rations_input), the drag flag DAT_00591550 on every hit, the new
+ * value DAT_0059154c and the change itself — in multiplayer the broadcast 0x43eda0(0x31, 0) instead (`mp_notify`). */
+int engine_county_rations_click(const engine_county_panels_ctx_t *ctx, const engine_county_rations_in_t *in,
+                                int32_t *drag_out, int32_t *value_out, int mp_active, void (*mp_notify)(void))
+{
+    int value = 0, is_drag = -1, changed = 0;
+    int r = engine_county_rations_input(in, &value, &is_drag, &changed);
+    if (is_drag >= 0) {
+        *drag_out = is_drag;
+    }
+    if (changed) {
+        *value_out = value;
+        if (mp_active) {
+            if (mp_notify) {
+                mp_notify();
+            }
+        } else {
+            engine_county_ration_set_render(ctx, ctx->county, value, is_drag);
+        }
+    }
+    return r;
 }
 
 /* ── FUN_0043a5a9 — apply the ration change ──────────────────────────── */

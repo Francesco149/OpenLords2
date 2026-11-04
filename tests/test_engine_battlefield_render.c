@@ -4682,14 +4682,13 @@ static void run_final_only(int cam_x, int cam_y)
     engine_battlefield_render_run_pass_final_for_test(cam_x, cam_y);
 }
 
-/* Helper: place an entity record whose first 0x19e bytes sum (as
- * signed char) to exactly `target_sum`.  Achieved by zeroing the
- * first 0x19d bytes and writing `target_sum` into byte 0. */
+/* Helper: place an entity record whose 0x19e bytes from +0x12 (retail FUN_004bf1f9 passes rec + 0x12 to
+ * 0x440089) sum, as an unsigned byte, to exactly `target_sum`: zero them and write `target_sum` at +0x12. */
 static void final_set_entity_sum(int id, int target_sum)
 {
     uint8_t *rec = g_entity_table + id * ENT_STRIDE;
-    memset(rec, 0, 0x19e);
-    rec[0] = (uint8_t)target_sum;
+    memset(rec + 0x12, 0, 0x19e);
+    rec[0x12] = (uint8_t)target_sum;
 }
 
 /* Reset entity table to zeros for the (max_id+1) records — avoids
