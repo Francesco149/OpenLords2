@@ -30,6 +30,7 @@ void rh_hook_count(hook_t *h, int r, const char *why)
 static struct { hook_t *h; uint32_t ret; uint32_t n; uint8_t scr; } g_smp[SAMPLE_N];
 int rh_hook_sample(hook_t *h, uint32_t ret)
 {
+    if (h->flags & RH_SH_HOST) { h->sampled++; return 0; }   /* host level: retail runs in shadow passes */
     if (!(h->flags & RH_SH_SAMPLE) || O.shadow_all) return 1;
     uint8_t scr = G8(L2_SCREEN);
     uint32_t k = ((uint32_t)(uintptr_t)h * 2654435761u ^ ret * 40503u ^ scr * 97u) & (SAMPLE_N - 1);

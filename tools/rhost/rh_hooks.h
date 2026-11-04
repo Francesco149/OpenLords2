@@ -15,8 +15,9 @@ typedef struct {
     int mode; long calls, diverge, skipped; char first[400];
     uint32_t entry;             /* where the retail side calls: va, or the trampoline when the entry itself is patched */
     int flags;                  /* RH_SH_MEDIA (rhost.h): the shadow also compares the surfaces' pixels (a render row);
-                                   RH_SH_SAMPLE: a hot leaf — only a sample of its calls is shadowed (rh_hook_sample) */
-    long sampled;               /* RH_SH_SAMPLE: calls not shadowed (retail ran; not in `calls`) */
+                                   RH_SH_SAMPLE: a hot leaf — only a sample of its calls is shadowed (rh_hook_sample);
+                                   RH_SH_HOST: never shadowed (host side effects) — proven by the hybrid pass only */
+    long sampled;               /* RH_SH_SAMPLE / RH_SH_HOST: calls not shadowed (retail ran; not in `calls`) */
 } hook_t;
 
 void rh_hook_count(hook_t *h, int r, const char *why);   /* tally one rh_shadow_ex result */

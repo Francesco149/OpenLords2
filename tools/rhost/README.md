@@ -103,7 +103,10 @@ compares the pixels of every live DirectDraw surface (the media pool's surface b
 pixel `px(X,Y)@VA rRR/pPP` (`--shadow-media`: every row; `--shadow-poison-px X,Y` plants a 1-pixel difference after
 every media-compared port call). `RH_SH_SAMPLE` — a hot leaf (~1 µs a call against ~400 µs a shadow): per (row,
 caller, screen id) the first 64 calls and every power-of-two-th one are shadowed, the rest run retail and count in
-`hook-result … sampled=N` (`--shadow-all`: every call); the hybrid pass still runs every call.
+`hook-result … sampled=N` (`--shadow-all`: every call); the hybrid pass still runs every call. `RH_SH_HOST` — a
+host-level function (it creates host objects — the window class, the DirectDraw object — or releases them): never
+shadowed (every call runs retail and counts in `sampled`), so its only evidence is the hybrid pass (`verify` counts it
+reached when sampled > 0).
 
 `verify`: a hook called inside another shadowed call runs retail there (`rh_in_shadow`), so the corpus is
 shadowed in passes — pass 1 every hook, pass N only the hooks no earlier pass reached (one nesting level

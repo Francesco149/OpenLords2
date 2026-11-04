@@ -171,6 +171,9 @@ int  rh_shadow_ex(const char *name, void (*retail)(void *), void (*port)(void *)
 /* … with flags: RH_SH_MEDIA also compares every DirectDraw surface's pixels (a render row; O.shadow_media: every row) */
 #define RH_SH_MEDIA 1
 #define RH_SH_SAMPLE 2   /* (hook rows) a hot leaf: shadow a sample of its calls (rh_hooks.c rh_hook_sample; --shadow-all: every call) */
+#define RH_SH_HOST 4     /* (hook rows) a host-level function (it creates host objects: the window class, the DirectDraw
+                            * object …): the shadow cannot run it twice. Shadow passes leave every call to retail (counted
+                            * in `sampled`); the hybrid pass replaces it — corpus --check (state + every frame) proves it */
 int  rh_shadow_ex_f(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn, int flags);
 void rh_shadow_prewrite(const void *p, size_t n);   /* before a KERNEL write into retail memory (ReadFile, ...) */
 void rh_shadow_report(void);                         /* shadow-prof: per-phase cost per call */

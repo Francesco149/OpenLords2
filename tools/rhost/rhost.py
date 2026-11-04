@@ -550,7 +550,8 @@ def cmd_verify(a):
     (the next nesting level), ... until a pass reaches nothing new. Then the hybrid pass: every hook in replace
     mode at once must reproduce the blessed corpus bit-exactly (corpus --check).
     --hooks RE: only the rows matching RE (shadow passes + a hybrid pass with just those replaced; no evidence).
-    RH_SH_SAMPLE rows report `sampled` (calls not shadowed: retail ran), not counted in `calls`."""
+    RH_SH_SAMPLE rows report `sampled` (calls not shadowed: retail ran), not counted in `calls`; RH_SH_HOST rows (host
+    level: never shadowed) only `sampled` — the hybrid pass is their evidence."""
     global _PINNED
     names = all_scenarios(a.only)
     rows = [h for h in VERIFY_HOOKS if not getattr(a, "hooks", None) or re.search(a.hooks, h)]
@@ -578,9 +579,11 @@ def cmd_verify(a):
                 m = re.match(r"hook-result (\S+) mode=\S+ calls=(\d+) diverge=(\d+) skipped=(\d+)(?: sampled=(\d+))?", note)
                 if m:   # sampled: RH_SH_SAMPLE calls not shadowed (retail ran), not in calls
                     t = got.setdefault(m.group(1), [0, 0, 0, 0, 0])
-                    t[0] += int(m.group(2)); t[1] += int(m.group(3)); t[2] += int(m.group(4)); t[3] += int(m.group(2)) > 0
+                    t[0] += int(m.group(2)); t[1] += int(m.group(3)); t[2] += int(m.group(4))
+                    t[3] += int(m.group(2)) + int(m.group(5) or 0) > 0
                     t[4] += int(m.group(5) or 0)
-        reached = [h for h in todo if got.get(h, [0])[0] > 0]
+        # reached: shadowed calls, or (RH_SH_HOST rows: never shadowed — the hybrid pass proves them) sampled ones
+        reached = [h for h in todo if got.get(h, [0])[0] > 0 or got.get(h, [0, 0, 0, 0, 0])[4] > 0]
         for h in reached:
             tot[h], depth[h] = got[h], p
         todo = [h for h in todo if h not in reached]
