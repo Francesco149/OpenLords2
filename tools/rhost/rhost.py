@@ -410,7 +410,7 @@ def cmd_run(a):
     runs = resolve_runs(a.scenarios)
     batch, bdir, res, out = run_batch(a, runs, "run", fetch=fetch_list(a), interactive=getattr(a, "show", False))
     print_results(res, [r[0] for r in runs])
-    return 0 if all(res.get(r[0], {}).get("status") == "ok" for r in runs) else 1
+    return 0 if all(res.get(r[0], {}).get("status") in FINISHED for r in runs) else 1
 
 
 def cmd_boot(a):
@@ -478,6 +478,7 @@ def cmd_det(a):
 
 
 EXPECT_KEYS = ("frame", "tick", "screen", "rng", "state_sem", "fb")
+FINISHED = ("ok", "exit")   # a run ends at its trace's end, or in retail's own ExitProcess (File > Quit): both complete
 
 
 def cmd_corpus(a):
@@ -505,7 +506,7 @@ def cmd_corpus(a):
         for n in names:
             ep = os.path.join(SCEN, n, "expected.json" if tgt == "win" else f"expected.{tgt}.json")
             r = res.get(n, {})
-            if r.get("status") != "ok":
+            if r.get("status") not in FINISHED:
                 print(f"  {n}: not blessed (status {r.get('status')})"); bad += 1; continue
             json.dump({k: r.get(k) for k in EXPECT_KEYS}, open(ep, "w"), indent=1)
             print(f"  {n}: blessed {os.path.relpath(ep, ROOT)}")
@@ -567,7 +568,7 @@ def cmd_verify(a):
         batch, bdir, res, out = run_batch(a, runs, f"verify{p}")
         print(f"--- shadow pass {p}: {len(todo)} hook(s)")
         print_results(res, names)
-        failed += [f"pass {p} {n}: {res.get(n, {}).get('status', 'NO RESULT')}" for n in names if res.get(n, {}).get("status") != "ok"]
+        failed += [f"pass {p} {n}: {res.get(n, {}).get('status', 'NO RESULT')}" for n in names if res.get(n, {}).get("status") not in FINISHED]
         # a shadow keeps retail's post-state: every pass must end exactly where the blessed corpus does
         failed += [f"pass {p} {n}: end state ≠ corpus ({'; '.join(d)})" for n, d in expected_diffs(names, res, a.target).items()
                    if [x for x in d if not x.startswith("fb ")]]
