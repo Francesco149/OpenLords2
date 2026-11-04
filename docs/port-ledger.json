@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 785,
-  "ported": 261,
-  "unported": 1401,
+  "ported": 302,
+  "unported": 1360,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1046,
-  "pct_touched": 42.7,
+  "touched": 1087,
+  "pct_touched": 44.4,
   "pct_tested": 32.1,
   "bytes_total": 838629,
-  "bytes_touched": 461962,
-  "pct_bytes_touched": 55.1
+  "bytes_touched": 479057,
+  "pct_bytes_touched": 57.1
  },
  "orphan_refs": [
   "0x004148",
@@ -13356,8 +13356,10 @@
    "name": "FUN_0046ef3c",
    "size": 130,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x46efbe",
@@ -14582,8 +14584,10 @@
    "name": "FUN_0047fc01",
    "size": 522,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x47fe0b",
@@ -14706,8 +14710,10 @@
    "name": "FUN_004819cc",
    "size": 239,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x481abb",
@@ -15036,8 +15042,10 @@
    "name": "FUN_004859e5",
    "size": 354,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x485b47",
@@ -15054,8 +15062,10 @@
    "name": "FUN_00485bb1",
    "size": 1592,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x4861e9",
@@ -15238,104 +15248,130 @@
    "name": "FUN_00488dfe",
    "size": 943,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x4891ad",
    "name": "FUN_004891ad",
    "size": 596,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x489401",
    "name": "FUN_00489401",
    "size": 595,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x489654",
    "name": "FUN_00489654",
    "size": 186,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48970e",
    "name": "FUN_0048970e",
    "size": 138,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x489798",
    "name": "FUN_00489798",
    "size": 254,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x489896",
    "name": "FUN_00489896",
    "size": 235,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x489981",
    "name": "FUN_00489981",
    "size": 225,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x489a62",
    "name": "FUN_00489a62",
    "size": 299,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x489b8d",
    "name": "FUN_00489b8d",
    "size": 1035,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x489f9d",
    "name": "FUN_00489f9d",
    "size": 556,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48a1c9",
    "name": "FUN_0048a1c9",
    "size": 453,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48a38e",
    "name": "FUN_0048a38e",
    "size": 735,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48a672",
@@ -15358,48 +15394,60 @@
    "name": "FUN_0048a9c7",
    "size": 11,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48a9d2",
    "name": "FUN_0048a9d2",
    "size": 768,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48acd2",
    "name": "FUN_0048acd2",
    "size": 857,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48b02b",
    "name": "FUN_0048b02b",
    "size": 848,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48b37b",
    "name": "FUN_0048b37b",
    "size": 11,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48b386",
    "name": "FUN_0048b386",
    "size": 182,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48b43c",
@@ -15414,80 +15462,100 @@
    "name": "FUN_0048b546",
    "size": 182,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48b5fc",
    "name": "FUN_0048b5fc",
    "size": 512,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48b7fc",
    "name": "FUN_0048b7fc",
    "size": 453,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48b9c1",
    "name": "FUN_0048b9c1",
    "size": 259,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48bac4",
    "name": "FUN_0048bac4",
    "size": 286,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48bbe2",
    "name": "FUN_0048bbe2",
    "size": 281,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48bcfb",
    "name": "FUN_0048bcfb",
    "size": 466,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48becd",
    "name": "FUN_0048becd",
    "size": 300,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48bff9",
    "name": "FUN_0048bff9",
    "size": 118,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48c06f",
    "name": "FUN_0048c06f",
    "size": 330,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48c1b9",
@@ -15502,48 +15570,60 @@
    "name": "FUN_0048c363",
    "size": 155,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48c3fe",
    "name": "FUN_0048c3fe",
    "size": 191,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48c4bd",
    "name": "FUN_0048c4bd",
    "size": 178,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48c56f",
    "name": "FUN_0048c56f",
    "size": 832,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48c8af",
    "name": "FUN_0048c8af",
    "size": 197,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48c974",
    "name": "FUN_0048c974",
    "size": 283,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48ca8f",
@@ -15815,8 +15895,10 @@
    "name": "FUN_0048ef45",
    "size": 308,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_group.c"
+   ]
   },
   {
    "va": "0x48f079",
