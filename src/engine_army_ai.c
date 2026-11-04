@@ -2162,7 +2162,7 @@ static void engine_army_ai_find_settled_cell(int occ, unsigned region)
  * target (+0x4b) is recorded at +0x151, and the destination cell is chosen by
  * one of the two finders: the settled-cell finder when the muster realm holds a
  * keep with a pending garrison, otherwise the owned-cell finder. */
-static void engine_army_ai_assign_deployment(int player, int occ)
+void engine_army_ai_assign_deployment(int player, int occ)
 {
     uint8_t *s = STRAT_REC(player);
     uint8_t  target = s[STRAT_ATTACK_TARGET];
@@ -2208,7 +2208,7 @@ static int engine_army_ai_validate_campaign_target(int target, int player)
  * the field leader(s) (rank < 2) and adopt one as the target owner, bailing if
  * the leader is the player itself, inactive, or below the diplomacy-gauge floor
  * (+0x60 < 40). */
-static void engine_army_ai_pick_target_owner(int player)
+void engine_army_ai_pick_target_owner(int player)
 {
     uint8_t *s = STRAT_REC(player);
     s[STRAT_TARGET_OWNER] = 0;
@@ -2231,7 +2231,7 @@ static void engine_army_ai_pick_target_owner(int player)
  * cutoff (turn counter < 0x4f9), and only for personalities 3 and 4: personality
  * 4 banks +100 into reserves B and C, personality 3 banks +100 into reserve A.
  * Returns 1 when it funded, 0 otherwise. */
-static int engine_army_ai_fund_campaign(int player)
+int engine_army_ai_fund_campaign(int player)
 {
     uint8_t *s = STRAT_REC(player);
     if ((uint8_t)s[STRAT_AI_LEVEL] >= 2)   return 0;
@@ -2739,7 +2739,7 @@ int32_t *engine_army_ai_caravan_order(int player)
 /* Port of FUN_0049f73f (273 B) — sum the head-count of every live army standing
  * in realm `realm` that is owned neither by `player` nor by `player`'s lord (the
  * enemy strength bearing on the realm). */
-static int engine_army_ai_realm_enemy_strength(int player, int realm)
+int engine_army_ai_realm_enemy_strength(int player, int realm)
 {
     uint8_t *s = STRAT_REC(player);
     int total = 0;
@@ -2757,7 +2757,7 @@ static int engine_army_ai_realm_enemy_strength(int player, int realm)
 
 /* Port of FUN_0049f850 (237 B) — sum the head-count of `player`'s own live armies
  * standing in realm `realm` (the friendly strength already defending it). */
-static int engine_army_ai_realm_own_strength(int player, int realm)
+int engine_army_ai_realm_own_strength(int player, int realm)
 {
     int total = 0;
     for (int occ = 1; occ < 0x97; occ++) {
@@ -2808,7 +2808,7 @@ void engine_army_ai_dispatch_caravan(int player, int realm, uint8_t dest)
  * as the keep's head cap minus any pending garrison, scale it down by how large a
  * fraction of the realm's population it would consume, muster that force, and
  * stamp it order 4 (garrison) bound for a settled cell in the realm. */
-static void engine_army_ai_garrison_keeps(int player)
+void engine_army_ai_garrison_keeps(int player)
 {
     uint8_t *s     = STRAT_REC(player);
     int      count = (int)s_slot_0056d5dc;
@@ -2865,7 +2865,7 @@ static void engine_army_ai_garrison_keeps(int player)
  * (its target region) and the realm consolidates — shipping its surplus
  * provisions/stock to the muster realm as a caravan, or (if a trade gate is set)
  * selling them. */
-static void engine_army_ai_reinforce_realms(int player)
+void engine_army_ai_reinforce_realms(int player)
 {
     uint8_t *s     = STRAT_REC(player);
     int      count = (int)s_slot_0056d5dc;

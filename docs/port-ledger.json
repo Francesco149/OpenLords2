@@ -12227,8 +12227,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_452820.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12238,8 +12237,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_45337b.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12249,8 +12247,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_4538f6.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12260,8 +12257,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_453e71.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12271,8 +12267,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_455f04.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12282,8 +12277,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_456fd8.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12293,8 +12287,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_4580a9.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12304,8 +12297,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_459258.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12475,8 +12467,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_463b42.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12486,8 +12477,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_463c06.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12497,8 +12487,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_463c62.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12508,8 +12497,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_463cbe.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12519,8 +12507,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_463e91.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12530,8 +12517,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_463fa5.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12541,8 +12527,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_4640b6.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12552,8 +12537,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_464209.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -14428,7 +14412,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -14475,7 +14460,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_select.c",
-    "src/engine_army_select.h"
+    "src/engine_army_select.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -14489,7 +14475,8 @@
     "src/engine_army_select.h",
     "src/engine_ingame_input.h",
     "src/engine_terrain_info.c",
-    "src/engine_terrain_info.h"
+    "src/engine_terrain_info.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -14500,7 +14487,8 @@
    "status": "tested",
    "src": [
     "src/engine.c",
-    "src/engine_ingame_input.h"
+    "src/engine_ingame_input.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -14510,7 +14498,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -14520,7 +14509,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -14530,7 +14520,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -14540,7 +14531,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine.c"
+    "src/engine.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -15157,7 +15149,8 @@
    "src": [
     "src/engine.c",
     "src/engine_camera.c",
-    "src/engine_camera.h"
+    "src/engine_camera.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17219,7 +17212,8 @@
     "src/engine_load_pump.h",
     "src/engine_map_init.c",
     "src/engine_roster.c",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17277,7 +17271,8 @@
     "src/engine_territory.h",
     "src/game_init.c",
     "src/game_init.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17290,7 +17285,8 @@
     "src/engine.c",
     "src/engine.h",
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17302,7 +17298,8 @@
    "src": [
     "src/engine_map_init.c",
     "src/engine_map_init.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17338,8 +17335,8 @@
     "src/engine_pl8.h",
     "src/game_init.c",
     "src/game_init.h",
-    "src/gen/pl8_table.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17381,7 +17378,8 @@
    "src": [
     "src/engine_menu_input.c",
     "src/gfx.c",
-    "src/gfx.h"
+    "src/gfx.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17462,7 +17460,8 @@
    "status": "tested",
    "src": [
     "src/engine_workforce_hud.c",
-    "src/engine_workforce_hud.h"
+    "src/engine_workforce_hud.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17472,7 +17471,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/gfx.c"
+    "src/gfx.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17485,7 +17485,8 @@
     "src/engine.c",
     "src/gfx.c",
     "src/gfx.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17547,7 +17548,8 @@
     "src/engine_menu_input.h",
     "src/game_init.c",
     "src/game_init.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17560,7 +17562,8 @@
     "src/engine_menu_input.c",
     "src/game_init.c",
     "src/game_init.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17571,7 +17574,8 @@
    "status": "tested",
    "src": [
     "src/engine.c",
-    "src/engine_tick_cadence.h"
+    "src/engine_tick_cadence.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17593,6 +17597,7 @@
    "src": [
     "src/game_init.c",
     "src/game_init.h",
+    "src/rl_turn.c",
     "src/save.c",
     "src/save.h"
    ]
@@ -17632,7 +17637,8 @@
     "src/engine.c",
     "src/engine_ranking.c",
     "src/engine_ranking.h",
-    "src/game_init.c"
+    "src/game_init.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17654,7 +17660,8 @@
    "status": "tested",
    "src": [
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17677,7 +17684,8 @@
    "status": "tested",
    "src": [
     "src/engine_turn.c",
-    "src/engine_turn.h"
+    "src/engine_turn.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17690,7 +17698,8 @@
     "src/engine.c",
     "src/engine.h",
     "src/engine_turn.c",
-    "src/engine_turn.h"
+    "src/engine_turn.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17720,7 +17729,8 @@
    "src": [
     "src/engine_menu_input.c",
     "src/engine_roster.c",
-    "src/engine_roster.h"
+    "src/engine_roster.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17740,7 +17750,8 @@
    "src": [
     "src/engine_roster.c",
     "src/engine_roster.h",
-    "src/engine_territory.c"
+    "src/engine_territory.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17752,7 +17763,8 @@
    "src": [
     "src/engine_roster.c",
     "src/engine_roster.h",
-    "src/engine_territory.c"
+    "src/engine_territory.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17763,7 +17775,8 @@
    "status": "tested",
    "src": [
     "src/engine_roster.c",
-    "src/engine_roster.h"
+    "src/engine_roster.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17774,7 +17787,8 @@
    "status": "tested",
    "src": [
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17796,7 +17810,8 @@
    "src": [
     "src/engine_roster.c",
     "src/engine_roster.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17820,7 +17835,8 @@
     "src/engine_title_render.c",
     "src/engine_title_render.h",
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17832,7 +17848,8 @@
    "src": [
     "src/engine.c",
     "src/engine_turn.c",
-    "src/engine_turn.h"
+    "src/engine_turn.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -17989,7 +18006,8 @@
    "src": [
     "src/engine_army_ai.c",
     "src/engine_army_ai.h",
-    "src/engine_combat.h"
+    "src/engine_combat.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18000,7 +18018,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_ai.c",
-    "src/engine_army_ai.h"
+    "src/engine_army_ai.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18010,7 +18029,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18020,7 +18040,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18063,7 +18084,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18073,7 +18095,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18105,7 +18128,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18140,7 +18164,8 @@
    "src": [
     "src/engine_army_ai.c",
     "src/engine_army_ai.h",
-    "src/engine_path.h"
+    "src/engine_path.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18195,7 +18220,8 @@
    "status": "tested",
    "src": [
     "src/engine_diplomacy.c",
-    "src/engine_diplomacy.h"
+    "src/engine_diplomacy.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18230,7 +18256,8 @@
    "src": [
     "src/engine_army_ai.c",
     "src/engine_diplomacy.c",
-    "src/engine_diplomacy.h"
+    "src/engine_diplomacy.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18242,7 +18269,8 @@
    "src": [
     "src/engine.c",
     "src/engine_diplomacy.c",
-    "src/engine_diplomacy.h"
+    "src/engine_diplomacy.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18254,7 +18282,8 @@
    "src": [
     "src/engine_army_ai.c",
     "src/engine_diplomacy.c",
-    "src/engine_diplomacy.h"
+    "src/engine_diplomacy.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18275,7 +18304,8 @@
    "status": "tested",
    "src": [
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18289,7 +18319,8 @@
     "src/engine_noble_faces.h",
     "src/engine_roster.c",
     "src/engine_roster.h",
-    "src/game_init.c"
+    "src/game_init.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18312,7 +18343,8 @@
    "status": "tested",
    "src": [
     "src/engine_diplomacy.c",
-    "src/engine_diplomacy.h"
+    "src/engine_diplomacy.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18324,7 +18356,8 @@
    "src": [
     "src/engine_army_ai.c",
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18348,7 +18381,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18358,7 +18392,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18368,7 +18403,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18378,7 +18414,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18388,7 +18425,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18398,7 +18436,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18418,7 +18457,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18429,7 +18469,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_ai.c",
-    "src/engine_army_ai.h"
+    "src/engine_army_ai.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18451,7 +18492,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_ai.c",
-    "src/engine_army_ai.h"
+    "src/engine_army_ai.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18471,7 +18513,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_ai.c"
+    "src/engine_army_ai.c",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18506,7 +18549,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_ai.c",
-    "src/engine_army_ai.h"
+    "src/engine_army_ai.h",
+    "src/rl_turn.c"
    ]
   },
   {
@@ -18603,7 +18647,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_combat.c"
+    "src/engine_combat.c",
+    "src/rl_turn.c"
    ]
   },
   {
