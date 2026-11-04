@@ -53,10 +53,17 @@ PARTS = {
                "43744f 4374c4 4376bb 438990 438a91 438acc 439079 439122 43933b 4393eb 43b4cb 43b593 43b681 43b7c4 "
                "43b848 43b98a 43eda0 440666 448d7e 451f8a 46c4a3 472986 472a31 475b41 475d73 47703a 4782c5 47f474 "
                "481b9a 482111 498458 49b8b0 4a82b9 4b1310"),
+    # the screen renders not ported yet (the screen dispatcher 0x40f1a0's arms, terrain info, the frame driver's HUD
+    # draws, the MP debug HUD, the movie / screen transition draw) — verifiable since the gfx layer runs on retail's
+    # layout (docs/findings/render-under-rhost.md)
+    "render": _h("40c725 40cd58 410c71 410f4b 4120e0 412421 412795 41298a 41438c 414819 414f68 41515c 4152ea 41608b "
+                 "417aef 417bd3 417cef 4192b1 419354 419789 4198aa 41a166 41a639 41a844 41b19d 41c996 41d299 41da2f "
+                 "41e1dd 41ff75 420316 421f14 4224e7 422d22 422ff1 423241 4233f7 423530 423739 423ba4 42476b 4248a3 "
+                 "424992 42e060 438e3b 44098f 4788c6"),
     # retail seams the battlefield calls that stay out of scope (audio streams, sprite loads): stubs only
     "extern": _h("43f304 477b2f 4987b7 499d97"),
 }
-FAMILY = {"io": "rl", "glue": "rl"}   # default "bf"
+FAMILY = {"io": "rl", "glue": "rl", "render": "rl"}   # default "bf"
 OWNER = {}
 for _p, _vs in PARTS.items():
     for _v in _vs:

@@ -7,3 +7,4 @@
 
 #include "rl_io.h"
 #include "rl_glue.h"
+#include "rl_render.h"
