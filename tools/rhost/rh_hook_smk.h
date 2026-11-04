@@ -3,7 +3,8 @@
  * decodes / closes a movie after retail's run gets another heap block for the SMACK (DAT_004d4d58 differs), finds the
  * frame decoded or frees the movie twice. HOOK_SMK / HOOK_SMK_V snapshot smackw32's committed writable pages and every
  * live faked disk file's position at entry and put both back before the port side (from rh_hooks_rl_io.c; include it
- * once per table file, after RH_TABLE is defined). Not covered: rh_smack's waveOut queue / span bump pointer. */
+ * once per table file, after RH_TABLE is defined). The spans retail's run decommitted are committed again, the heap's
+ * bump pointer is put back (rh_smack_heap_top_set). Not covered: rh_smack's waveOut queue. */
 #pragma once
 #include <windows.h>
 #include <stdlib.h>
@@ -11,11 +12,11 @@
 #define SMK_LO 0x18000000u
 #define SMK_HI 0x1b000000u
 typedef struct { uint32_t lo, n; } smk_span_t;
-typedef struct smk_ctx { int nspan; smk_span_t span[64]; uint8_t *buf; size_t len; int nfh; HANDLE fh[32]; LONG fpos[32]; } smk_ctx_t;
+typedef struct smk_ctx { int nspan; smk_span_t span[64]; uint8_t *buf; size_t len; int nfh; HANDLE fh[32]; LONG fpos[32]; uint32_t top; } smk_ctx_t;
 static int smk_writable(DWORD p) { return p == PAGE_READWRITE || p == PAGE_EXECUTE_READWRITE || p == PAGE_WRITECOPY || p == PAGE_EXECUTE_WRITECOPY; }
 static void smk_enter(smk_ctx_t *c)
 {
-    c->nspan = 0; c->len = 0; c->buf = NULL; c->nfh = 0;
+    c->nspan = 0; c->len = 0; c->buf = NULL; c->nfh = 0; c->top = rh_smack_heap_top();
     for (uint32_t a = SMK_LO; a < SMK_HI; ) {
         MEMORY_BASIC_INFORMATION mi;
         if (!VirtualQuery((void *)(uintptr_t)a, &mi, sizeof mi)) break;
@@ -47,11 +48,17 @@ static void smk_rewind(const smk_ctx_t *c)
     size_t o = 0;
     for (int i = 0; i < c->nspan; i++) {
         MEMORY_BASIC_INFORMATION mi;
-        if (VirtualQuery((void *)(uintptr_t)c->span[i].lo, &mi, sizeof mi) && mi.State == MEM_COMMIT)
+        /* a span retail's run freed (SmackClose: smackw32's VirtualFree → decommit) is committed again first — else
+         * the port side's smackw32 reads its rewound heap through decommitted pages (movie-skip: lom.smk) */
+        if (VirtualQuery((void *)(uintptr_t)c->span[i].lo, &mi, sizeof mi) && mi.State != MEM_FREE) {
+            if (mi.State != MEM_COMMIT || mi.RegionSize < c->span[i].n)
+                VirtualAlloc((void *)(uintptr_t)c->span[i].lo, c->span[i].n, MEM_COMMIT, PAGE_READWRITE);
             memcpy((void *)(uintptr_t)c->span[i].lo, c->buf + o, c->span[i].n);
+        }
         o += c->span[i].n;
     }
     for (int i = 0; i < c->nfh; i++) SetFilePointer(c->fh[i], c->fpos[i], NULL, FILE_BEGIN);
+    if (c->nspan) rh_smack_heap_top_set(c->top);   /* the port side's new spans land where retail's did */
 }
 static smk_ctx_t *s_smk;
 #define HOOK_SMK(NAME, N, CALL) \

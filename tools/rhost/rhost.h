@@ -141,6 +141,8 @@ void rh_ds_report(void);
 void rh_ds_mix(void);          /* --audible: this frame's audio to waveOut (reads only) */
 void *rh_ds_meta_save(void);               /* serials, live registry, timers (free with free()) */
 void rh_ds_meta_restore(const void *m);
+uint32_t rh_smack_heap_top(void);          /* smackw32's heap bump pointer (a movie row's shadow rolls it: rh_hook_smk.h) */
+void rh_smack_heap_top_set(uint32_t top);
 void *rh_dd_meta_save(void);               /* DirectDraw surface serial / count / primary (free with free()) */
 void rh_dd_meta_restore(const void *m);
 void *rh_win_meta_save(void);              /* virtual queue + window state (free with free()) */

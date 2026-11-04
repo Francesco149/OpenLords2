@@ -88,6 +88,8 @@ static MMRESULT WINAPI wo_GetID(HWAVEOUT h, LPUINT id) { (void)h; if (id) *id = 
 #define SHEAP_LO 0x19000000u
 #define SHEAP_HI 0x1b000000u
 static uint32_t g_stop = SHEAP_LO;
+uint32_t rh_smack_heap_top(void) { return g_stop; }
+void rh_smack_heap_top_set(uint32_t top) { g_stop = top; }
 static LPVOID WINAPI sm_VirtualAlloc(LPVOID a, SIZE_T n, DWORD type, DWORD prot)
 {
     if (a) {
@@ -98,7 +100,12 @@ static LPVOID WINAPI sm_VirtualAlloc(LPVOID a, SIZE_T n, DWORD type, DWORD prot)
     uint32_t sz = ((uint32_t)n + 0xffffu) & ~0xffffu;
     if (g_stop + sz > SHEAP_HI) rh_fatal("movie: smackw32 heap region exhausted");
     uint32_t p = g_stop; g_stop += sz;
-    if (!VirtualAlloc((void *)(uintptr_t)p, sz, MEM_RESERVE, PAGE_READWRITE)) rh_fatal("movie: cannot reserve %08x", p);
+    if (!VirtualAlloc((void *)(uintptr_t)p, sz, MEM_RESERVE, PAGE_READWRITE)) {
+        /* a movie row's shadow rewound the bump pointer (rh_smack_heap_top_set): the span is still reserved from
+         * retail's run — reuse it (the port side gets retail's addresses) */
+        MEMORY_BASIC_INFORMATION mi;
+        if (!VirtualQuery((void *)(uintptr_t)p, &mi, sizeof mi) || mi.State == MEM_FREE) rh_fatal("movie: cannot reserve %08x", p);
+    }
     if ((type & MEM_COMMIT) && !VirtualAlloc((void *)(uintptr_t)p, n, MEM_COMMIT, prot)) return NULL;
     return (void *)(uintptr_t)p;
 }
