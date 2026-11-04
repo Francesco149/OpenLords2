@@ -32,11 +32,14 @@
  * per-territory record format, the per-tile-bytecode descriptor
  * format, and the palette table layout.
  *
- * State model: this module holds its own statics for the camera,
- * view-mode, render-mode, table-binding, and blob bases.  The
- * binding setters install pointers + parameters; the four render
- * functions consume that state plus the dispatcher state held by
- * gfx_dispatch / gfx_glyph / gfx_paint / engine_dirty_rect.
+ * State model (retail layout, docs/findings/render-mapview.md): the
+ * camera, walker, view / render mode, rotation, overlay frame, the three
+ * blob pointers and the error counter are the shared retail-layout
+ * globals of engine_mapview_globals.h; the staged descriptor, cursor and
+ * cursor save slot are gfx_globals.h's.  The setters below write those
+ * globals.  Port bindings (not retail globals): the tile array, the
+ * descriptor table (default g_overworld_map), the feature records
+ * (default g_per_territory_420), the palette tables and the dirty state.
  */
 
 #ifndef OPENLORDS2_ENGINE_MAP_RENDER_H
@@ -129,6 +132,10 @@ void engine_map_render_bind_camera(int x0,
  * setter is exposed for tests that drive the inner functions
  * directly. */
 void engine_map_render_set_y_accumulator(int y_acc);
+
+/* Point the palette lookup at another copy of the six tables (retail's
+ * own at 0x4d8108 under rhost; NULL = the module's copy). */
+void engine_map_render_bind_palette(const int8_t *tables);
 
 /* Bind the view-mode discriminator (retail `DAT_0057cb18` ∈ {0,1,2}). */
 void engine_map_render_set_view_mode(int view_mode);

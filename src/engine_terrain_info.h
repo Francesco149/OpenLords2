@@ -34,6 +34,9 @@
 
 #include <stdint.h>
 
+#include "engine_dirty_rect.h"
+#include "localization.h"
+
 /* ── Opener input snapshot (read-only within an open) ─────────────────── */
 typedef struct engine_terrain_info_open_in {
     int game_mode;          /* DAT_0057c8fc — campaign (0) gate; else no-op   */
@@ -177,5 +180,34 @@ typedef struct engine_terrain_info_render_ctx {
  * (void* to keep this header free of the localization include). */
 void engine_terrain_info_render(const engine_terrain_info_attr_t *a,
                                 const engine_terrain_info_render_ctx_t *ctx);
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Retail-layout ports (rhost rows; docs/findings/render-mapview.md): the screen-4 panel on retail's globals — the
+ * compute's outputs (engine_mapview_globals.h: flags DAT_005440b0, type DAT_0057cb2c, record DAT_005681e0, owner
+ * DAT_005681d0, derived bit DAT_005651bc, row DAT_00553d2c, offset DAT_005651c8, county DAT_0052afbc), the county
+ * records, the save slots — through a bound environment: the chrome / system sheets, the title (fntl2_22) / menu
+ * fonts, the char maps, the localization walker, the special-feature table (DAT_004d2ec8), the dirty state, and the
+ * seams for what is unported: the county / army panel 0x41b19d, the army rosters 0x41cb3a / 0x41d299 / 0x41da2f,
+ * the sound cue 0x426216, the icon_tmp.pl8 read into DAT_004eabec, the present 0x452160(1).  NULL seam: no-op.
+ * ════════════════════════════════════════════════════════════════════════ */
+typedef struct {
+    const uint8_t *chrome, *system_sheet, *title_font, *menu_font, *glyph;
+    const unsigned char *metrics;
+    localization_state_t *loc;
+    const int32_t *special_table;
+    engine_dirty_rect_state_t *dirty;
+    void (*county_panel)(void);
+    void (*roster_a)(void), (*roster_b)(void), (*roster_c)(void);
+    void (*alert)(int cue);
+    void (*load_icons)(void);
+    void (*present)(void);
+} engine_terrain_info_env_t;
+void engine_terrain_info_bind_env(const engine_terrain_info_env_t *env);
+
+void engine_terrain_info_panel(void);      /* FUN_0041b032 */
+void engine_terrain_info_simple(void);     /* FUN_0041befe */
+void engine_terrain_info_text(void);       /* FUN_0041c208 */
+void engine_terrain_info_stamp(void);      /* FUN_0041c996 */
+void engine_terrain_info_parchment(int x, int y, int cols, int rows);   /* FUN_00409397 */
 
 #endif /* OPENLORDS2_ENGINE_TERRAIN_INFO_H */
