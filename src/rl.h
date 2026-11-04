@@ -12,3 +12,8 @@
 #include "rl_skirmish.h"
 #include "rl_ui2.h"
 #include "rl_ui3.h"
+#include "rl_ui4.h"
+#include "rl_ctl.h"
+#include "rl_terr.h"
+#include "rl_turn.h"
+#include "rl_host.h"

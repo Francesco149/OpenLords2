@@ -79,10 +79,46 @@ PARTS = {
     # army split (Divide), 0x43bbe7, 0x4477e7, 0x40df62
     "ui3": _h("40df62 434556 4345d0 434693 43480c 434942 4349a4 434a29 434a9a 434ad5 434b10 434e9e 434ec9 4361da "
               "436229 4362ca 4378b3 437afb 437d65 437e9e 437fd7 43bbe7 4477e7"),
+    # round 3 — the 0x401000..0x42ff0f band the corpus reaches whose old ports are not on retail's layout: strutil, text input, font metrics, localization, the menu hotspots, config defaults, the screen dispatch 0x40f1a0, the labor / rankings / armoury / send-supplies / diplomacy panels, the HUD chrome, audio init, the category buckets, the camera
+    "ui4": _h("401000 401085 4010da 401136 4011b0 4011ea 401246 4012a2 401303 401333 4013bc 4014f0 4015b9 401666 "
+          "4017bf 40187a 4018d7 401984 401a20 401c70 401c93 401ca3 401cbc 401cda 401cfc 401d11 401d26 401dc8 "
+          "401f49 401f8f 402009 4020ae 40210c 4036f9 4037ee 40489e 40490d 404b2c 404d6b 404d96 404dc1 404e03 "
+          "404e4b 404ead 404f4c 408fcb 40ccfa 40da1e 40e3ee 40e5e7 40e6f2 40e7e4 40e890 40e8bb 40ecc4 40f1a0 "
+          "40f5fd 410a5d 412b33 412e6b 413155 413590 413b30 4140f3 414220 41593b 415bdc 415e42 415fb7 41789b "
+          "417960 4180f6 4184c6 418e2d 419c78 41ad5d 41aea2 41e61d 41fdd6 425b10 425ded 426d11 427d19 427ed0 "
+          "428471 42847c 4290d0 429153 4291b3 42925e 4298c1 429b1d 429ba4 42a15f 42e5c0 42eb7c 42ec91 "
+          "42f1df 42f306"),
+    # round 3 — the 0x42ff10..0x465485 band: the in-game input dispatch 0x42ff10, edge scroll, the title menu actions, the armoury zones, the army select, the county rations, end turn, the scenario hint, delayed actions, coalitions, realm development, the army baseline seed, the dirty-rect marks
+    "ctl": _h("42ff10 431f59 432221 432640 432746 43278b 432967 4329ec 432b05 432cc8 432ee6 432fab 433155 433461 "
+          "4335f0 4337b4 433905 433998 433a23 433ba2 433ce4 43400b 4342f3 434346 434e1f 4351c4 435211 43524e "
+          "43582a 4358b0 43593a 4359bc 435a0c 435a61 435ae8 435b4d 435c89 435cbf 43611b 436141 436a88 4371ce "
+          "43723a 4398f5 439df0 43a123 43a1e9 43a2b2 43a5a9 43a846 43a8f2 43a922 43a939 43aa32 43aad5 43ac23 "
+          "43ad25 43b04c 43caf4 43cc56 43ce1a 43d309 43de70 43e9e2 4472ce 448440 448648 449d6e 44ae51 44b042 "
+          "44b302 44b391 44b4d0 44ba35 44bfd5 44c093 44c6c4 44d281 44d303 450fb4 451150 4514f8 45183a 451f1a "
+          "451fcc 452160 452306 4523e6 45240a 452436 452489 4524dc 452628 45270a 452775 4527a6 4651b9 46521f"),
+    # round 3 — the 0x465486..0x47309d band: the strategic map's territory build and cell edits, the map queries, the path field fill / trace, the greedy path search, the event queue, the event-popup step
+    "terr": _h("465486 465622 465761 46733c 4673b8 467532 4676e0 467770 46797d 467a36 467ca6 467e2c 467f2e 467fd1 "
+          "468121 46841c 4684c6 468c41 468d4f 468e61 46902a 46921d 46942c 46958f 46965a 4697cd 46988d 469a9c "
+          "469d21 46a037 46ac22 46c080 46c147 46c2de 46c5b8 46c6ba 46cfbd 46d2a3 46d5fe 46d7f4 46d9da 46da4b "
+          "46dbf5 46dd34 46de05 46de94 46df51 46dfd5 46e1b0 46ea28 46ea61 46ead0 46eb09 46f1dc 46f2ae 46f3cd "
+          "46f68e 46f700 46ff43 4701ac 470678 4707be 4708d0 472392 47265d 472875 472ad0 472ae0 472b40 472bc5 "
+          "472e46"),
+    # round 3 — the 0x47309e..0x4a57ab band: the popup scroll render 0x47309e, the help hints, game init (seat shuffle, realms setup, NPC schedule), the turn substate 0, the rankings recompute, the roster, the AI's realm passes, diplomacy reconcile
+    "turn": _h("47309e 476710 476768 47685d 476a5d 476aa7 476da9 476e21 47ed34 4976a1 497ced 497e65 498270 4984dc "
+          "499034 4997bf 499859 499a1c 499dc3 499e5d 49a010 49a453 49aa0e 49b35e 49b6d3 49b762 49bae9 49bbe8 "
+          "49bc1d 49bc5f 49bd99 49ca32 49caaa 49ce51 49f12f 49f431 49f73f 49f850 49fcc5 49fda5 4a01ea 4a0649 "
+          "4a1241 4a1774 4a1847 4a1a54 4a1c53 4a1e6c 4a24d1 4a2584 4a277d 4a29b2 4a2cd6 4a2f61 4a30f6 4a3475 "
+          "4a38db 4a3c67 4a4052 4a440f 4a4a3f 4a545f"),
+    # round 3 — the 0x4a57ac.. band: the AI's army orders, the siege board, the move-confirm hover, spawn / mercenary / unit sweeps, the load pump, save write / load, the io path helpers, the input state, the wndproc, the frame tick 0x4b99c0, the diplomacy refresh, the title input, the sim sub-steps
+    "host": _h("4a57ac 4a58f4 4a5b1f 4a5f0a 4a60b9 4a6270 4a64ca 4a65a3 4a6735 4a7e0a 4a7eb5 4a8426 4a8d9c 4a8e0b "
+          "4a91ba 4a9252 4a9372 4a960f 4a975d 4a983b 4a98fe 4a9eb1 4a9f18 4a9f72 4aabd8 4ac7f3 4ac904 4acb54 "
+          "4ace5e 4ad0e8 4ad16c 4ad230 4ad316 4ad39a 4ad9f0 4ade93 4adfe6 4ae310 4ae74d 4ae8a9 4aef7e 4af502 "
+          "4af54a 4af62c 4af675 4af8d9 4b0ab5 4b1867 4b18e3 4b191e 4b1de0 4b1deb 4b20ed 4b25b0 4b27bf 4b284e "
+          "4b2922 4b29be 4b35c1 4b3768 4b3e51 4b495a 4b99c0 4ba26e 4ba9c8 4bb8c0 4bb978 4bbbe3 4bbc80 4bc020"),
     # retail seams the battlefield calls that stay out of scope (audio streams, sprite loads): stubs only
     "extern": _h("43f304 477b2f 4987b7 499d97"),
 }
-FAMILY = {"io": "rl", "glue": "rl", "render": "rl", "misc": "rl", "skirmish": "rl", "ui2": "rl", "ui3": "rl"}   # default "bf"
+FAMILY = {"io": "rl", "glue": "rl", "render": "rl", "misc": "rl", "skirmish": "rl", "ui2": "rl", "ui3": "rl", "ui4": "rl", "ctl": "rl", "terr": "rl", "turn": "rl", "host": "rl"}   # default "bf"
 OWNER = {}
 for _p, _vs in PARTS.items():
     for _v in _vs:
