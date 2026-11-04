@@ -84,7 +84,7 @@ DAT_00553e64 the units on a kind-5 cell in formation slot 4 (FUN_004822ed); DAT_
 ## Evidence
 
 **Corpus** — `rhost.py verify --target wine --only bot3 --hooks '^bf_'` (2026-11-04): the siege scenarios
-bot3-s103-t36 and bot3s-s404-t36 reach the attacker table — 16 of the 28 hooks, 151.0k calls, 0 divergences;
+bot3-s103-t36 and bot3s-s404-t36 reach the attacker table — 16 of the 28 hooks, 131.8k calls, 0 divergences;
 hybrid PASS over the 14 bot3* scenarios. In both sieges the AI is the ATTACKER (its groups +3 = 0); the player's
 groups (+1 = 1, side +3 = 4) are skipped by 0x489401, so the defender table never runs in the corpus.
 
