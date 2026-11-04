@@ -610,7 +610,7 @@ int bf_4784ca(void)
         CASTLE(uint8_t, 0x53fba9) = (uint8_t)s_slot_0055401c;
         CASTLE(uint8_t, 0x53fb73) = 2;
         CASTLE(uint8_t, 0x53fb74) = 0;
-        return (int)engine_retail_call(0x4ae968u, 1, s_slot_0056822c);
+        return rl_4ae968((int)s_slot_0056822c);
     }
     return 0;
 }
