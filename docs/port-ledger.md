@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **971** (39.7%) — tested 840, ported 131
-- code bytes touched: **47.8%** (400,539 / 838,629 B)
-- unported: **1476**
+- touched: **986** (40.3%) — tested 840, ported 146
+- code bytes touched: **48.5%** (406,966 / 838,629 B)
+- unported: **1461**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (840) — ported + host unit suite
@@ -99,10 +99,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x404b99 | FUN_00404b99 | 466 | engine.c, engine.h, engine_rng.c |
 | 0x404d6b | FUN_00404d6b | 43 | engine_armory.c, engine_army_ai.c, engine_input.c (+5) |
 | 0x404d96 | FUN_00404d96 | 43 | engine_math.h |
-| 0x404dc1 | FUN_00404dc1 | 66 | engine_army_state.c, engine_combat.c, engine_input.c (+5) |
+| 0x404dc1 | FUN_00404dc1 | 66 | engine_army_state.c, engine_bf_group.c, engine_combat.c (+6) |
 | 0x404e03 | FUN_00404e03 | 72 | engine_army_economy.c, engine_math.h |
 | 0x404e4b | FUN_00404e4b | 98 | engine_math.h |
-| 0x404ead | FUN_00404ead | 159 | engine_army_ai.c, engine_combat.c, engine_math.h (+1) |
+| 0x404ead | FUN_00404ead | 159 | engine_army_ai.c, engine_bf_group.c, engine_combat.c (+2) |
 | 0x404f4c | FUN_00404f4c | 180 | engine_army_ai.c, engine_path.h, engine_territory.c |
 | 0x4050c0 | FUN_004050c0 | 53 | engine.c, engine_army_select.h, engine_county_panels.c (+11) |
 | 0x4050f6 | FUN_004050f6 | 376 | engine_map_scene.c, engine_map_scene.h, main.c |
@@ -862,7 +862,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (131) — reimplemented, no host test yet
+## ported (146) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -963,6 +963,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x476e21 | FUN_00476e21 | 116 | engine.c |
 | 0x4782c5 | FUN_004782c5 | 340 | engine.c |
 | 0x478952 | FUN_00478952 | 53 | engine_bf_group.c |
+| 0x47fc01 | FUN_0047fc01 | 522 | engine_bf_group.c |
+| 0x4819cc | FUN_004819cc | 239 | engine_bf_group.c |
 | 0x481b9a | FUN_00481b9a | 1399 | engine.c |
 | 0x482111 | FUN_00482111 | 476 | engine.c |
 | 0x4822ed | FUN_004822ed | 644 | engine_bf_unit.c |
@@ -971,6 +973,19 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4859e5 | FUN_004859e5 | 354 | engine_bf_group.c |
 | 0x485bb1 | FUN_00485bb1 | 1592 | engine_bf_group.c |
 | 0x488dfe | FUN_00488dfe | 943 | engine_bf_group.c |
+| 0x4891ad | FUN_004891ad | 596 | engine_bf_group.c |
+| 0x489401 | FUN_00489401 | 595 | engine_bf_group.c |
+| 0x489654 | FUN_00489654 | 186 | engine_bf_group.c |
+| 0x48970e | FUN_0048970e | 138 | engine_bf_group.c |
+| 0x489798 | FUN_00489798 | 254 | engine_bf_group.c |
+| 0x489896 | FUN_00489896 | 235 | engine_bf_group.c |
+| 0x489981 | FUN_00489981 | 225 | engine_bf_group.c |
+| 0x489a62 | FUN_00489a62 | 299 | engine_bf_group.c |
+| 0x489b8d | FUN_00489b8d | 1035 | engine_bf_group.c |
+| 0x489f9d | FUN_00489f9d | 556 | engine_bf_group.c |
+| 0x48a1c9 | FUN_0048a1c9 | 453 | engine_bf_group.c |
+| 0x48a38e | FUN_0048a38e | 735 | engine_bf_group.c |
+| 0x48a672 | FUN_0048a672 | 359 | engine_bf_group.c |
 | 0x491f17 | FUN_00491f17 | 359 | engine_bf_unit.c |
 | 0x492c8b | FUN_00492c8b | 3793 | engine_bf_group.c |
 | 0x49459a | FUN_0049459a | 878 | engine_bf_unit.c |

@@ -3,20 +3,6 @@
  * engine_bf_group.c, add its row to tools/rhost/rh_hooks_bf_group.c. */
 #include "engine_bf.h"
 
-int bf_489401(void) { return (int)engine_retail_call(0x489401u, 0); }
-int bf_4891ad(int a0) { return (int)engine_retail_call(0x4891adu, 1, (uint32_t)a0); }
-int bf_489654(int a0) { return (int)engine_retail_call(0x489654u, 1, (uint32_t)a0); }
-int bf_48970e(int a0) { return (int)engine_retail_call(0x48970eu, 1, (uint32_t)a0); }
-int bf_489798(int a0) { return (int)engine_retail_call(0x489798u, 1, (uint32_t)a0); }
-int bf_489896(int a0) { return (int)engine_retail_call(0x489896u, 1, (uint32_t)a0); }
-int bf_489981(int a0) { return (int)engine_retail_call(0x489981u, 1, (uint32_t)a0); }
-int bf_489a62(int a0, int a1, int a2) { return (int)engine_retail_call(0x489a62u, 3, (uint32_t)a0, (uint32_t)a1, (uint32_t)a2); }
-int bf_489b8d(int a0, int a1, int a2, int a3) { return (int)engine_retail_call(0x489b8du, 4, (uint32_t)a0, (uint32_t)a1, (uint32_t)a2, (uint32_t)a3); }
-int bf_489f9d(int a0) { return (int)engine_retail_call(0x489f9du, 1, (uint32_t)a0); }
-int bf_48a1c9(int a0) { return (int)engine_retail_call(0x48a1c9u, 1, (uint32_t)a0); }
-int bf_48a38e(int a0) { return (int)engine_retail_call(0x48a38eu, 1, (uint32_t)a0); }
-int bf_47fc01(void) { return (int)engine_retail_call(0x47fc01u, 0); }
-int bf_4819cc(int a0) { return (int)engine_retail_call(0x4819ccu, 1, (uint32_t)a0); }
 int bf_48ef45(int a0, int a1, int a2) { return (int)engine_retail_call(0x48ef45u, 3, (uint32_t)a0, (uint32_t)a1, (uint32_t)a2); }
 int bf_48a9c7(void) { return (int)engine_retail_call(0x48a9c7u, 0); }
 int bf_48a9d2(void) { return (int)engine_retail_call(0x48a9d2u, 0); }
