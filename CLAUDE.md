@@ -64,7 +64,8 @@ capture (the **viewer** stays for human eyes).
 - **If a tool can't show you something, improve the tool.** Never hand-wave a diff.
 
 ## Build / run / test
-- Port: `tools/dev make -C src -j16` → `build/openlords2.exe`.
+- Port: `tools/dev make -C src -j16` → `build/openlords2.exe`. `src/gen/` (gitignored) is derived from the user's exe / the
+  IDA export: `tools/gen_mapblit.py`, `tools/extract_*_table.py`. A git worktree symlinks `vendor`, `docs/decompiled`, `src/gen`.
 - rhost: `python3 tools/rhost/rhost.py …` (auto build + stage). Results `/mnt/ephemeral/openlords2/rhost-runs/`.
 - Windows: `C:\ol2-rhost\` (separate from the siblings' `C:\orc-rhost`, `C:\oss-rhost`, `C:\de-rhost`); kill only
   our own processes by full path / PID, never by name. Interactive jobs (record, --show) go through the
