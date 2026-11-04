@@ -7,6 +7,35 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-11-04 — The battlefield ported (260 functions), render verifiable under rhost, the ledger made honest
+
+Overnight, coordinator + parallel agents in git worktrees (one partition each; merged here). Design:
+`docs/findings/battlefield-sim-port.md` — canonical `bf_<va>` names, a partition's unported functions are retail
+stubs through `engine_retail_call` (rhost runs retail's code; the standalone stops with the VA), generated
+`g_bf_<va>` globals aliased at retail VAs, record accessors by field VA (`BU8(i, 0x5544ac)`), `tools/bf/`
+(parts / gen_skeleton / status / fix_tokens).
+- **Battlefield: 260 of 260 ported** — move (26), strike (22), unit (31), action (36), group (42), stance (28), setup
+  (50), input (25); findings `bf-<part>.md`. Each shadowed by its owner over `bot3*` (14 scenarios, 0 divergences;
+  bf_48f1dd 2.6 M calls, the unit rows 21 M); **all 260 replaced at once: `corpus --check` PASS on all 51
+  scenarios** (state + every frame). ~45 never reached by the corpus (3×3 siege engines, the defender stance
+  table, orders 0 / 7 / 9 / 12–16, wall breaks): ported from the asm, many shadowed on poked state (exploration).
+  Quirks: a full projectile table writes record 101 over player 0's strategic record; FUN_004928a3 is empty;
+  FUN_0047095e clears 4096 of 6400 wait counters; stack residue as a foot unit's sprite frame; the per-unit loop
+  index clobbered by FUN_00479e90; FUN_0047ed9b counts with a stale index.
+- **Render under rhost** (`render-under-rhost.md`): the gfx layer's 69 retail globals aliased (src/gfx_globals.c),
+  the canvas = retail's back buffer, pixel-level shadow (RH_SH_MEDIA, a planted 1-pixel difference caught), 64
+  render rows verified; port bugs fixed (RLE 3-run spill, the rect's line order as state, shared measurer caches).
+- **rhost**: a stale file-static mirror no longer overwrites a port's direct write (sync_out stores only what the
+  port changed); the wine runner no longer hangs (a wineserver inherited its pipe); the hook-spec buffer (it
+  silently truncated at 8 KB); `verify --hooks RE`; RHOST_JOBS; rhbot runs its own tree's build; engine_tile linked.
+- **Ledger honesty**: FUN_ tokens in comments counted unported callees as ported — 90 demoted (audit_provenance;
+  the battlefield merges ran fix_tokens.py: ~370 callee tokens). Headline before the session 39.5% / 49.4% of
+  bytes (inflated) → after the audit 37.7% / 46.9% → now **47.2% / 60.9%**.
+- **Corpus**: +3 bot games (sieges; Jev ~$0.11), coverage 63.5% → 64.1%.
+- **In flight** at this entry: rl partitions `io` (70: loaders, WAV / music, movies, log + a platform shim through
+  retail's imports) and `glue` (76: UI actions, input sub-handlers, pre-tick), render batches `mapview` / `screens`
+  (the existing screen renderers on retail's layout, pixel-verified), the whole-corpus verify for the evidence file.
+
 ## 2026-10-24 — Hybrid batches 2–4 (218 hooks), bot v2–v3 (fights on the battlefield; coverage 63.5%)
 
 Direction: hybrid (owner). Batches by subagents, adjudicated here; findings `docs/findings/hybrid-batch2-combat.md`,

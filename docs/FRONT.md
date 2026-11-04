@@ -21,20 +21,29 @@
   (`tools/bot/battle.py`), long custom games (events roll only for odd counties) → 11 scenarios; coverage
   49.1% → **63.5%**. Its games exposed a binding gap (the AI score table) and #237 — fixed, 0 divergences.
   Pointer-table hooks (entry patch + trampoline) landed.
-- **Top blocker:** none for logic parity. Smacker movies are skipped in rhost (retail tolerates it).
+  **2026-11-04 (overnight, parallel agents):** the **battlefield ported — 260/260** (`battlefield-sim-port.md`,
+  `bf-<part>.md`): all 260 replaced at once, corpus --check PASS (51 scenarios); **render verifiable under rhost**
+  (`render-under-rhost.md`: gfx layer on retail's layout, pixel shadow, 64 rows); ledger honest (FUN_-token
+  pollution removed: 47.2% touched / 60.9% of bytes). rl partitions (io, glue) and render batches in flight.
+- **Top blocker:** none for logic parity. Smacker movies are skipped in rhost (retail tolerates it). The
+  standalone's UI is far behind the hybrid (engine_screen_dispatch: title + strategic map only) — the battlefield
+  cannot be wired into the standalone until the battle prompt / battlefield screens' dispatch is.
 <!-- status:end -->
 
 ## ★ Next micro-tasks
 
-1. **Re-verification batch 5**: the armory (needs the model / render split batch 4 did), the county rations /
-   tax inputs (`0x43a379`, `0x438ceb`), then the labor model (worker drags `0x4399b0` / `0x439df0`, unported)
-   — and the battlefield, now that bot v3 reaches 240 of its functions (`bot3-s103-t36`).
-2. **Bot v4**: the bot's own attack landing on a lord's county; a strong, friendly ally over a long game
-   (pay-for-help popup); a victory; using the labor screen (B2).
-3. **Renderers**: replace + the `fb` chain (pure ≡ hybrid in pixels, every frame).
-4. **Movies in the corpus**: scenarios with `"movies": true` (rh_smack.c is deterministic) so the movie
-   paths (intro → title, jail, victory/defeat) are exercised as a real user sees them.
-5. **Port build `-std=gnu11`** after an x87 sweep (openrecet's c11 long-double literal finding).
+1. **Merge the in-flight branches** (rl io, rl glue, render mapview / screens) with `tools/bf/fix_tokens.py` + the
+   ledger regen; cross-verify (`verify --hooks`, then all rows replaced at once: `corpus --check --hook replace:…`).
+2. **The whole-corpus `verify`** (no --only / --hooks) → `docs/rhost-evidence.json` → STATUS runtime axis (~550 rows).
+3. **Battlefield evidence for the ~45 unreached functions**: a scenario where the player assaults an AI-held castle
+   on the field (the defender stance table), siege engines (3×3 units) on the field, catapults breaking a wall, fire
+   on wood cells, orders 9 / 12–16 (human-traces §A2, or bot v4).
+4. **The remaining reached-unported code**: the render partition (the 0x40f1a0 screen arms, terrain info, the MP
+   HUD — ~34 KB, now verifiable) and engine.c's glue (106 ported functions not on retail's layout, 72 KB).
+5. **Standalone**: retail-layout ports (bf_ / rl_) replace engine.c's glue; the screen dispatch grows the battle
+   prompt + battlefield arms; then wire the combat cluster (engine.c sub-state 2 TODO: bf_478952, 0x40490d,
+   bf_488dfe, bf_4822ed, bf_485bb1, bf_489401, bf_4859e5, engine_combat_battlefield_end_tick).
+6. **Port build `-std=gnu11`** after an x87 sweep (openrecet's c11 long-double literal finding).
 
 ## Phase 0 checklist
 - [x] rhost core (fake DDraw / DSound / window / heap / handles / files), Windows + wine targets
