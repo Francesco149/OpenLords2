@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 840,
-  "ported": 167,
-  "unported": 1440,
+  "ported": 179,
+  "unported": 1428,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1007,
-  "pct_touched": 41.2,
+  "touched": 1019,
+  "pct_touched": 41.6,
   "pct_tested": 34.3,
   "bytes_total": 838629,
-  "bytes_touched": 411418,
-  "pct_bytes_touched": 49.1
+  "bytes_touched": 423183,
+  "pct_bytes_touched": 50.5
  },
  "orphan_refs": [
   "0x004148",
@@ -4135,8 +4135,10 @@
    "name": "FUN_004262cf",
    "size": 28,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x4262eb",
@@ -13574,6 +13576,7 @@
    "status": "tested",
    "src": [
     "src/engine_army_move.c",
+    "src/engine_bf_move.c",
     "src/engine_path.c",
     "src/engine_path.h"
    ]
@@ -13674,24 +13677,30 @@
    "name": "FUN_0047095e",
    "size": 1940,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x4710f2",
    "name": "FUN_004710f2",
    "size": 1574,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x471718",
    "name": "FUN_00471718",
    "size": 1287,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x471c1f",
@@ -13728,8 +13737,10 @@
    "name": "FUN_00471f45",
    "size": 738,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x472227",
@@ -13748,6 +13759,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_bf_move.c",
+    "src/engine_bf_move_globals.c",
     "src/engine_path.c",
     "src/engine_path.h",
     "src/engine_path_field.h"
@@ -13760,6 +13773,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_bf_move.c",
     "src/engine_path.h"
    ]
   },
@@ -13770,6 +13784,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_bf_move.c",
     "src/engine_path.h"
    ]
   },
@@ -14890,16 +14905,20 @@
    "name": "FUN_0048314e",
    "size": 138,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x4831d8",
    "name": "FUN_004831d8",
    "size": 274,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x4832ea",
@@ -15752,6 +15771,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_bf_move.c",
     "src/engine_tile.c",
     "src/engine_tile.h"
    ]
@@ -15795,8 +15815,10 @@
    "name": "FUN_0048f1dd",
    "size": 3704,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x49005f",
@@ -15853,32 +15875,40 @@
    "name": "FUN_00490fa2",
    "size": 411,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x491147",
    "name": "FUN_00491147",
    "size": 411,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x4912ec",
    "name": "FUN_004912ec",
    "size": 422,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x491492",
    "name": "FUN_00491492",
    "size": 838,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x4917dd",
@@ -15940,6 +15970,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/engine_bf_move.c",
     "src/engine_tile.c",
     "src/engine_tile.h"
    ]
@@ -19840,7 +19871,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_army_select.c"
+    "src/engine_army_select.c",
+    "src/engine_bf_move.c"
    ]
   },
   {

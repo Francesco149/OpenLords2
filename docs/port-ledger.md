@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1007** (41.2%) — tested 840, ported 167
-- code bytes touched: **49.1%** (411,418 / 838,629 B)
-- unported: **1440**
+- touched: **1019** (41.6%) — tested 840, ported 179
+- code bytes touched: **50.5%** (423,183 / 838,629 B)
+- unported: **1428**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (840) — ported + host unit suite
@@ -545,7 +545,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46f1dc | FUN_0046f1dc | 67 | game_init.c, game_init.h |
 | 0x46f2ae | FUN_0046f2ae | 67 | game_init.c, game_init.h |
 | 0x46f3cd | FUN_0046f3cd | 78 | engine_map_init.c, game_init.c, game_init.h |
-| 0x46f434 | FUN_0046f434 | 216 | engine_army_move.c, engine_path.c, engine_path.h |
+| 0x46f434 | FUN_0046f434 | 216 | engine_army_move.c, engine_bf_move.c, engine_path.c (+1) |
 | 0x46f68e | FUN_0046f68e | 114 | engine_army_select.c, engine_army_select.h, engine_territory.c |
 | 0x46f700 | FUN_0046f700 | 2115 | engine_army_ai.c, engine_army_move.c, engine_path_field.c (+1) |
 | 0x46ff43 | FUN_0046ff43 | 617 | engine.c, engine_strat_cost.c, engine_strat_cost.h (+1) |
@@ -555,9 +555,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4708d0 | FUN_004708d0 | 142 | engine_path_field.c, engine_path_field.h |
 | 0x471c1f | FUN_00471c1f | 273 | engine_tile.c, engine_tile.h |
 | 0x471d30 | FUN_00471d30 | 118 | engine_tile.c, engine_tile.h |
-| 0x472392 | FUN_00472392 | 715 | engine_path.c, engine_path.h, engine_path_field.h |
-| 0x47265d | FUN_0047265d | 536 | engine_path.h |
-| 0x472875 | FUN_00472875 | 151 | engine_path.h |
+| 0x472392 | FUN_00472392 | 715 | engine_bf_move.c, engine_bf_move_globals.c, engine_path.c (+2) |
+| 0x47265d | FUN_0047265d | 536 | engine_bf_move.c, engine_path.h |
+| 0x472875 | FUN_00472875 | 151 | engine_bf_move.c, engine_path.h |
 | 0x472ad0 | FUN_00472ad0 | 16 | engine_event_queue.c, engine_event_queue.h, game_init.c |
 | 0x472ae0 | FUN_00472ae0 | 96 | engine_event_queue.c, engine_event_queue.h |
 | 0x472b40 | FUN_00472b40 | 133 | engine.c, engine_event_queue.c, engine_event_queue.h |
@@ -578,9 +578,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4788c6 | FUN_004788c6 | 140 | engine_combat.c, engine_combat.h |
 | 0x47ed34 | FUN_0047ed34 | 103 | engine.c, engine_camera.c, engine_camera.h |
 | 0x47f474 | FUN_0047f474 | 761 | engine_bf_input.c, engine_combat.c, engine_combat.h |
-| 0x48ee46 | FUN_0048ee46 | 87 | engine_tile.c, engine_tile.h |
+| 0x48ee46 | FUN_0048ee46 | 87 | engine_bf_move.c, engine_tile.c, engine_tile.h |
 | 0x4917dd | FUN_004917dd | 599 | engine_tile.c, engine_tile.h, save.c |
-| 0x4921e5 | FUN_004921e5 | 451 | engine_tile.c, engine_tile.h |
+| 0x4921e5 | FUN_004921e5 | 451 | engine_bf_move.c, engine_tile.c, engine_tile.h |
 | 0x497500 | FUN_00497500 | 211 | engine_minimap.c |
 | 0x4976a1 | FUN_004976a1 | 472 | engine_load_pump.c, engine_load_pump.h, engine_map_init.c (+2) |
 | 0x49792e | FUN_0049792e | 262 | engine.c, engine.h, game_init.c (+1) |
@@ -796,7 +796,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b36c0 | FUN_004b36c0 | 84 | engine_confirm_dialog.c |
 | 0x4b3768 | FUN_004b3768 | 84 | engine.c, engine_county_panels.h |
 | 0x4b37bc | FUN_004b37bc | 388 | engine_terrain_info.c, engine_terrain_info.h |
-| 0x4b3e51 | FUN_004b3e51 | 111 | engine_army_select.c |
+| 0x4b3e51 | FUN_004b3e51 | 111 | engine_army_select.c, engine_bf_move.c |
 | 0x4b3ec0 | FUN_004b3ec0 | 74 | engine_armory.c, engine_workforce_hud.c, engine_workforce_hud.h |
 | 0x4b3f0a | FUN_004b3f0a | 74 | engine_armory.c, engine_armory.h, engine_workforce_hud.h |
 | 0x4b3f54 | FUN_004b3f54 | 38 | gfx_paint.h |
@@ -862,7 +862,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (167) — reimplemented, no host test yet
+## ported (179) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -902,6 +902,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4239d5 | FUN_004239d5 | 378 | engine_bf_input.c |
 | 0x425b10 | FUN_00425b10 | 549 | audio.c, audio.h |
 | 0x425ded | FUN_00425ded | 94 | audio.c, audio.h |
+| 0x4262cf | FUN_004262cf | 28 | engine_bf_move.c |
 | 0x426529 | FUN_00426529 | 11 | engine.c |
 | 0x427d72 | FUN_00427d72 | 340 | audio.c |
 | 0x428daf | FUN_00428daf | 801 | engine_economy_globals.c, engine_trade.c, engine_trade.h (+1) |
@@ -970,6 +971,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x46e97a | FUN_0046e97a | 174 | engine_bf_input.c |
 | 0x46eb3f | FUN_0046eb3f | 57 | engine_bf_unit.c |
 | 0x46ebe4 | FUN_0046ebe4 | 138 | engine_bf_move.c, engine_bf_unit.c |
+| 0x47095e | FUN_0047095e | 1940 | engine_bf_move.c |
+| 0x4710f2 | FUN_004710f2 | 1574 | engine_bf_move.c |
+| 0x471718 | FUN_00471718 | 1287 | engine_bf_move.c |
+| 0x471f45 | FUN_00471f45 | 738 | engine_bf_move.c |
 | 0x472227 | FUN_00472227 | 363 | engine_bf_move.c |
 | 0x472e46 | FUN_00472e46 | 595 | engine.c |
 | 0x47309e | FUN_0047309e | 10915 | engine.c |
@@ -991,14 +996,21 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x481b9a | FUN_00481b9a | 1399 | engine.c, engine_bf_input.c |
 | 0x482111 | FUN_00482111 | 476 | engine.c |
 | 0x4822ed | FUN_004822ed | 644 | engine_bf_unit.c |
+| 0x48314e | FUN_0048314e | 138 | engine_bf_move.c |
+| 0x4831d8 | FUN_004831d8 | 274 | engine_bf_move.c |
 | 0x48551d | FUN_0048551d | 344 | engine_bf_move.c |
 | 0x488dfe | FUN_00488dfe | 943 | engine_bf_input.c |
 | 0x48f079 | FUN_0048f079 | 356 | engine_bf_move.c |
+| 0x48f1dd | FUN_0048f1dd | 3704 | engine_bf_move.c |
 | 0x49005f | FUN_0049005f | 1165 | engine_bf_move.c |
 | 0x4904ec | FUN_004904ec | 298 | engine_bf_move.c |
 | 0x490616 | FUN_00490616 | 1033 | engine_bf_move.c |
 | 0x490a44 | FUN_00490a44 | 528 | engine_bf_move.c |
 | 0x490c59 | FUN_00490c59 | 804 | engine_bf_move.c |
+| 0x490fa2 | FUN_00490fa2 | 411 | engine_bf_move.c |
+| 0x491147 | FUN_00491147 | 411 | engine_bf_move.c |
+| 0x4912ec | FUN_004912ec | 422 | engine_bf_move.c |
+| 0x491492 | FUN_00491492 | 838 | engine_bf_move.c |
 | 0x491a34 | FUN_00491a34 | 235 | engine_bf_move.c |
 | 0x491b1f | FUN_00491b1f | 969 | engine_bf_move.c |
 | 0x491f17 | FUN_00491f17 | 359 | engine_bf_move.c, engine_bf_unit.c |
