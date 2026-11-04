@@ -41,26 +41,32 @@ static uint8_t *dest_origin(void)
  * by exactly 2 (1 opcode + 1 count byte).
  *
  * `top_skip == 0` is a no-op — the outer `while (rows > 0)` test means
- * no rows are walked, src returns pointing at the natural row 0. */
-static const uint8_t *rle_skip_top_rows(const uint8_t *sprite_blob)
+ * no rows are walked, src returns pointing at the natural row 0.
+ *
+ * Retail keeps the opcode in EAX across a row (`xor eax, eax` per row, then
+ * `mov al, [esi]` per opcode): a literal opcode 0xff leaves EAX = 0x100 after
+ * its `add eax, 1`, and every later opcode of that row reads as 0x100 + byte.
+ * The encoder never emits 0xff (literal runs are 1..16), but `acc` models it. */
+const uint8_t *rle_skip_top_rows(const uint8_t *sprite_blob)
 {
     const uint8_t *src = sprite_blob + gfx_glyph_glyph_offset();
 
-    int sprite_w = gfx_glyph_glyph_w();
     int rows     = gfx_dispatch_top_skip();
 
     while (rows > 0) {
         rows -= 1;
-        int pixels = sprite_w;
+        int pixels = gfx_glyph_glyph_w();   /* movsx, re-read per row */
+        uint32_t acc = 0;
         while (pixels > 0) {
-            int opcode = (int)(uint8_t)*src;   /* zero-extended */
-            if (opcode == 0) {
-                int skip_count = (int)(uint8_t)src[1];
-                pixels -= skip_count;
+            acc = (acc & ~0xffu) | *src;
+            if ((uint8_t)acc == 0) {
+                acc = (acc & ~0xffu) | src[1];
+                pixels -= (int)acc;
                 src    += 2;
             } else {
-                pixels -= opcode;
-                src    += opcode + 1;          /* opcode byte + N data bytes */
+                pixels -= (int)acc;
+                acc    += 1;
+                src    += acc;                 /* opcode byte + N data bytes */
             }
         }
     }

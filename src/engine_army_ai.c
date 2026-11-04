@@ -2102,7 +2102,7 @@ static void engine_army_ai_step1_process_inbox(int self,
  * leaves |dx|/|dy| in DAT_00591560/0058fea0, as retail does).  retail decodes
  * the winning byte offset with signed gymnastics that reduce to a plain
  * (ofs>>3)&0x3f / (ofs>>3)>>6 for the always-non-negative offset. */
-static void engine_army_ai_find_owned_cell(int occ, unsigned region)
+int engine_army_ai_find_owned_cell(int occ, unsigned region)   /* retail's EAX: the row, or region << 8 */
 {
     int ax = (int8_t)OCC_REC(occ)[OCC_COL];
     int ay = (int8_t)OCC_REC(occ)[OCC_ROW];
@@ -2119,17 +2119,18 @@ static void engine_army_ai_find_owned_cell(int occ, unsigned region)
     if (best_ofs == 0) {
         g_cell_cursor_col = (uint8_t)ARMY_REC(region)[ARMY_CAP_COL];
         g_cell_cursor_row = (uint8_t)ARMY_REC(region)[ARMY_CAP_ROW];
-    } else {
-        int idx = best_ofs >> 3;
-        g_cell_cursor_col = idx & 0x3f;
-        g_cell_cursor_row = idx >> 6;
+        return (int)(region << 8);
     }
+    int idx = best_ofs >> 3;
+    g_cell_cursor_col = idx & 0x3f;
+    g_cell_cursor_row = idx >> 6;
+    return idx >> 6;
 }
 
 /* Port of FUN_004a65a3 — like engine_army_ai_find_owned_cell but gated on flag
  * bit 0x80 AND a cropland-class terrain window (0x14 < terrain < 0x1a), with the
  * fallback anchor at ARMY +0x74/+0x75. */
-static void engine_army_ai_find_settled_cell(int occ, unsigned region)
+int engine_army_ai_find_settled_cell(int occ, unsigned region)   /* retail's EAX: the row, or region << 8 */
 {
     int ax = (int8_t)OCC_REC(occ)[OCC_COL];
     int ay = (int8_t)OCC_REC(occ)[OCC_ROW];
@@ -2148,11 +2149,12 @@ static void engine_army_ai_find_settled_cell(int occ, unsigned region)
     if (best_ofs == 0) {
         g_cell_cursor_col = (uint8_t)ARMY_REC(region)[ARMY_SETTLE_COL];
         g_cell_cursor_row = (uint8_t)ARMY_REC(region)[ARMY_SETTLE_ROW];
-    } else {
-        int idx = best_ofs >> 3;
-        g_cell_cursor_col = idx & 0x3f;
-        g_cell_cursor_row = idx >> 6;
+        return (int)(region << 8);
     }
+    int idx = best_ofs >> 3;
+    g_cell_cursor_col = idx & 0x3f;
+    g_cell_cursor_row = idx >> 6;
+    return idx >> 6;
 }
 
 /* Port of FUN_0049fda5 — stamp occupant `occ` with the campaign march order for
@@ -2412,15 +2414,17 @@ static int engine_army_ai_nearest_engageable_army(int occ, unsigned region)
  * the region holds a keep with a pending garrison, else the owned-cell finder),
  * and copy the find-nearest scratch into the destination fields.  Identical to
  * brain step 9's assign-deployment tail. */
-static void engine_army_ai_set_deploy_cell(int occ, unsigned region)
+int engine_army_ai_set_deploy_cell(int occ, unsigned region)   /* retail's EAX: the finder's, low byte = the row */
 {
+    int r;
     OCC_REC(occ)[OCC_PLACED] = 0;
     if (ARMY_REC(region)[ARMY_KEEP_LEVEL] == 0 || I32(ARMY_REC(region) + ARMY_PENDING) == 0)
-        engine_army_ai_find_owned_cell(occ, region);
+        r = engine_army_ai_find_owned_cell(occ, region);
     else
-        engine_army_ai_find_settled_cell(occ, region);
+        r = engine_army_ai_find_settled_cell(occ, region);
     OCC_REC(occ)[OCC_DEST_COL] = (uint8_t)g_cell_cursor_col;
     OCC_REC(occ)[OCC_DEST_ROW] = (uint8_t)g_cell_cursor_row;
+    return (int)(((uint32_t)r & ~0xffu) | (uint8_t)g_cell_cursor_row);
 }
 
 /* Port of FUN_00438681 — disband occupant `occ` back into a realm: pour its
@@ -2464,7 +2468,7 @@ void engine_army_ai_disband_into_realm(int occ)
  * it at the deploy cell toward its target realm (+0x151) via the combat
  * find-deploy-cell scanner and clear the placed flag.  Returns 1 when it set a
  * destination (army not held), else 0. */
-static int engine_army_ai_order_attack_march(int occ)
+int engine_army_ai_order_attack_march(int occ)
 {
     if (OCC_REC(occ)[OCC_HELD] != 0)
         return 0;
@@ -2480,7 +2484,7 @@ static int engine_army_ai_order_attack_march(int occ)
  * if a hostile army is within 6 tiles (and outranks the local advance / isn't a
  * lord's), march to intercept it; else validate or re-pick a target realm and
  * deploy toward it.  Returns 1 when it set a destination, 0 when no target. */
-static int engine_army_ai_order_advance(int occ)
+int engine_army_ai_order_advance(int occ)
 {
     if (OCC_REC(occ)[OCC_HELD] != 0)
         return 0;
@@ -2568,7 +2572,7 @@ static int engine_army_ai_order_lord_move(int occ)
  * in the secondary region (+0x11) is within 31 tiles (and outranks / isn't a
  * lord's), march to it; else deploy toward that region.  Always returns 1 unless
  * held. */
-static int engine_army_ai_order_intercept(int occ)
+int engine_army_ai_order_intercept(int occ)
 {
     if (OCC_REC(occ)[OCC_HELD] != 0)
         return 0;
@@ -2592,7 +2596,7 @@ static int engine_army_ai_order_intercept(int occ)
  * army (spare cap ≥ head, no siege, owned by us), deploy toward its settled
  * cell; otherwise find another garrison realm (retarget + deploy), or disband
  * the army back into a realm when none can hold it.  Always returns 1. */
-static int engine_army_ai_order_garrison(int occ)
+int engine_army_ai_order_garrison(int occ)
 {
     unsigned region = (uint8_t)OCC_REC(occ)[OCC_TARGET];
     int pending_head = 0;

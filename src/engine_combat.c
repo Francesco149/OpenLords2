@@ -1231,7 +1231,7 @@ int engine_combat_keep_value(int level)
 /* Port of FUN_004a9f18 (90 B) — debit the owner's just-staged garrison size
  * (muster pool row +0x70) from realm `key`'s two provision figures
  * (+0x24 / +0x38).  Pool row selected by the realm's race (+0x05). */
-static void spawn_debit_provision(int key)
+void spawn_debit_provision(int key)
 {
     uint8_t *a = REGREC(key);
     const uint8_t *pool = engine_game_init_troop_pool_row(a[A_RACE]);
@@ -1243,7 +1243,7 @@ static void spawn_debit_provision(int key)
 /* Port of FUN_004a9f72 (199 B) — pick player `slot`'s least-loaded roster
  * entry (the lowest of the 0x18-byte load array at strat +0x2d), bump it by 2,
  * and return its index.  Returns 0 for out-of-range players. */
-static int spawn_pick_roster_slot(int slot)
+int spawn_pick_roster_slot(int slot)
 {
     if (slot < 1 || slot > 5)
         return 0;
@@ -1263,7 +1263,7 @@ static int spawn_pick_roster_slot(int slot)
 /* Port of FUN_004a9eb1 (103 B) — debit the owner's muster-pool per-slot stock
  * (rows 1..6 of the pool) from its six cashflow categories (strat +0x140..),
  * then resync the cashflow total.  `slot` indexes both pool and strat. */
-static void spawn_debit_cashflow(int slot)
+void spawn_debit_cashflow(int slot)
 {
     uint8_t *strat = PREC(slot);
     const uint8_t *pool = engine_game_init_troop_pool_row(slot);
@@ -1279,7 +1279,7 @@ static void spawn_debit_cashflow(int slot)
  * unit's value into the occupant head-count (+0x168), set the back-reference,
  * charge the owner's treasury (strat +0x118) the unit cost, and clear the
  * source army's mustered-unit scratch (+0x1ad). */
-static void spawn_attach_muster_unit(int occ, int unit)
+void spawn_attach_muster_unit(int occ, int unit)
 {
     uint8_t *c = CREC(occ);
     uint8_t *u = &g_unit_table_20[unit * U_STRIDE];
@@ -1504,7 +1504,7 @@ static const int k_race_siege_unit_type[7] = { 8, 9, 7, 7, 3, 1, 3 };
  * clears the condition level and the three {count,out,stock} lane triples; on
  * the viewer-interactive path (C_CONTROL == 0) it primes lane counts by the
  * owner race's category code and runs the post-battle condition recompute. */
-static void engine_combat_siege_build_board(int occ)
+void engine_combat_siege_build_board(int occ)
 {
     uint8_t *c = CREC(occ);
     c[C_COND_LEVEL] = 0;                              /* +0x19c */
@@ -1542,7 +1542,7 @@ static void engine_combat_siege_build_board(int occ)
  * defending garrison, build the siege board, and (when the besieger belongs to
  * the viewing player) raise the siege screen.  The defender's +0x19a records the
  * besieger; the besieger's +0x199 records the region. */
-static void engine_combat_siege_setup(int occ, int region)
+void engine_combat_siege_setup(int occ, int region)
 {
     uint8_t *rg = REGREC(region);
     int defender = rd_i32(rg, A_PENDING);             /* +0x1bc */
@@ -2110,7 +2110,7 @@ void engine_combat_contest_region(int attacker, unsigned region,
  * publishing offer `value`: the first slot 1..realms whose occupant back-ref
  * (+0x00) is 0 (free) and whose published-offer byte (+0x03) equals `value`.
  * Returns its index, or 0 if no free slot is offering that value this turn. */
-static int merc_offer_holder(unsigned value)
+int merc_offer_holder(unsigned value)
 {
     for (int i = 1; i <= (int)s_slot_00554030; i++) {
         uint8_t *u = &g_unit_table_20[i * U_STRIDE];

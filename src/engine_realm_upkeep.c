@@ -268,7 +268,7 @@ void engine_unit_absorb(int rec)
 
 /* Port of FUN_004ad16c — decay each of the 7 sub-stockpiles by 10% (only when
  * above 10) and subtract the loss from the unit value. */
-static void unit_decay_substocks(int rec)
+void unit_decay_substocks(int rec)
 {
     uint8_t *r = UNIT_REC(rec);
     for (int j = 0; j < 7; j++) {
@@ -282,7 +282,7 @@ static void unit_decay_substocks(int rec)
 }
 
 /* Port of FUN_004ad0e8 — decay sub-stocks for every active unit of `owner`. */
-static void unit_decay_owner(int owner)
+void unit_decay_owner(int owner)
 {
     for (int i = 1; i < 0x97; i++) {
         uint8_t *r = UNIT_REC(i);
@@ -292,7 +292,7 @@ static void unit_decay_owner(int owner)
 }
 
 /* Port of FUN_004ad316 — disband every active unit of `owner`. */
-static void unit_disband_owner(int owner)
+void unit_disband_owner(int owner)
 {
     for (int i = 1; i < 0x97; i++) {
         uint8_t *r = UNIT_REC(i);
@@ -304,7 +304,7 @@ static void unit_disband_owner(int owner)
 /* Port of FUN_004ad230 — settle (clear) the contract of every active,
  * contracted unit of `owner`; disband any whose value then reaches 0.  Returns
  * 1 iff at least one contracted unit was found. */
-static int unit_settle_contracts(int owner)
+int unit_settle_contracts(int owner)
 {
     int found = 0;
     for (int i = 1; i < 0x97; i++) {
@@ -321,7 +321,7 @@ static int unit_settle_contracts(int owner)
 
 /* Port of FUN_004ad39a — for every active unit: run its pending absorb, then
  * disband it if its type byte exceeds 0x10. */
-static void unit_absorb_overflow_sweep(void)
+void unit_absorb_overflow_sweep(void)
 {
     for (int i = 1; i < 0x97; i++) {
         uint8_t *r = UNIT_REC(i);

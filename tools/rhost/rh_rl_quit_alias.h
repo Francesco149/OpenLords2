@@ -7,9 +7,7 @@
     BFA(g_rl_4df154,0x4df154) \
     BFA(g_rl_4df5d8,0x4df5d8) \
     BFA(g_rl_4e2a64,0x4e2a64) \
-    BFA(g_rl_4ea0f4,0x4ea0f4) \
     BFA(g_rl_4ea12c,0x4ea12c) \
-    BFA(g_rl_4ea83c,0x4ea83c) \
     BFA(g_rl_4eafac,0x4eafac) \
     BFA(g_rl_553ec8,0x553ec8) \
 

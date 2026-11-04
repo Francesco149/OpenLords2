@@ -236,3 +236,26 @@ int rl_plat_alloc_hook(uint32_t hook, int type, void *data, int size, int use, i
     if (!s_bound && hook == 0x4c4070u) return 1;   /* the standalone: retail's default _CrtDefaultAllocHook */
     return ((int (__cdecl *)(int, void *, int, int, int, const char *, int))(uintptr_t)hook)(type, data, size, use, req, file, line);
 }
+/* host */
+BOOL rl_plat_GetCursorPos(POINT *p)
+{ return IMP(GetCursorPos, BOOL (WINAPI *)(POINT *), GetCursorPos)(p); }
+char *rl_plat_getcwd(char *buf, int n)
+{ return s_bound ? CRT(getcwd, char *(__cdecl *)(char *, int))(buf, n) : _getcwd(buf, n); }
+LRESULT rl_plat_DefWindowProcA(HWND w, UINT m, WPARAM wp, LPARAM lp)
+{ return IMP(DefWindowProcA, LRESULT (WINAPI *)(HWND, UINT, WPARAM, LPARAM), DefWindowProcA)(w, m, wp, lp); }
+BOOL rl_plat_IsIconic(HWND w) { return IMP(IsIconic, BOOL (WINAPI *)(HWND), IsIconic)(w); }
+HDC rl_plat_BeginPaint(HWND w, PAINTSTRUCT *ps) { return IMP(BeginPaint, HDC (WINAPI *)(HWND, PAINTSTRUCT *), BeginPaint)(w, ps); }
+BOOL rl_plat_EndPaint(HWND w, const PAINTSTRUCT *ps)
+{ return IMP(EndPaint, BOOL (WINAPI *)(HWND, const PAINTSTRUCT *), EndPaint)(w, ps); }
+void rl_plat_PostQuitMessage(int code) { IMP(PostQuitMessage, void (WINAPI *)(int), PostQuitMessage)(code); }
+BOOL rl_plat_GetClientRect(HWND w, RECT *r) { return IMP(GetClientRect, BOOL (WINAPI *)(HWND, RECT *), GetClientRect)(w, r); }
+BOOL rl_plat_ClientToScreen(HWND w, POINT *p) { return IMP(ClientToScreen, BOOL (WINAPI *)(HWND, POINT *), ClientToScreen)(w, p); }
+BOOL rl_plat_SetRect(RECT *r, int l, int t, int rt, int b)
+{ return IMP(SetRect, BOOL (WINAPI *)(RECT *, int, int, int, int), SetRect)(r, l, t, rt, b); }
+LONG rl_plat_GetWindowLongA(HWND w, int i) { return IMP(GetWindowLongA, LONG (WINAPI *)(HWND, int), GetWindowLongA)(w, i); }
+HMENU rl_plat_GetMenu(HWND w) { return IMP(GetMenu, HMENU (WINAPI *)(HWND), GetMenu)(w); }
+BOOL rl_plat_AdjustWindowRectEx(RECT *r, DWORD st, BOOL menu, DWORD ex)
+{ return IMP(AdjustWindowRectEx, BOOL (WINAPI *)(RECT *, DWORD, BOOL, DWORD), AdjustWindowRectEx)(r, st, menu, ex); }
+BOOL rl_plat_SetWindowPos(HWND w, HWND after, int x, int y, int cx, int cy, UINT fl)
+{ return IMP(SetWindowPos, BOOL (WINAPI *)(HWND, HWND, int, int, int, int, UINT), SetWindowPos)(w, after, x, y, cx, cy, fl); }
+int rl_plat_GetSystemMetrics(int i) { return IMP(GetSystemMetrics, int (WINAPI *)(int), GetSystemMetrics)(i); }
