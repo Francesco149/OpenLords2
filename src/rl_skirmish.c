@@ -160,8 +160,8 @@ static void mark_full(void) { engine_territory_mark_full_screen_dirty(); }   /* 
 static void chdir_base(void) { engine_retail_call(0x4af502u, 0); }   /* TODO(rl-link): io_path_chdir_base */
 static void read_file_at(const void *name, const void *dst, uint32_t n, uint32_t off)   /* TODO(rl-link): io_read_file_at 0x4af8d9 */
 { engine_retail_call(0x4af8d9u, 4, (uint32_t)(uintptr_t)name, (uint32_t)(uintptr_t)dst, n, off); }
-static void load_background(const void *name, int h)   /* TODO(rl-link): gfx_load_background_image 0x408fcb */
-{ engine_retail_call(0x408fcbu, 2, (uint32_t)(uintptr_t)name, (uint32_t)h); }
+static void load_background(const void *name, int h)   /* gfx_load_background_image 0x408fcb (rl ui4) */
+{ rl_408fcb((int)(uintptr_t)name, h); }
 static void load_panel_sheet(int n) { engine_retail_call(0x4b25b0u, 1, (uint32_t)n); }   /* TODO(rl-link): gfx_load_panel_sheet */
 static void set_palette(const void *pal) { engine_retail_call(0x4b0ab5u, 1, (uint32_t)(uintptr_t)pal); }   /* TODO(rl-link): gfx.c's palette set 0x4b0ab5 */
 static void panel_box(int x, int y, int cols, int rows)   /* TODO(rl-link): 0x409397 = gfx_panel_draw_border_chrome(mode 0) + gfx_panel_fill_interior_chrome (a static in several modules) */

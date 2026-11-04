@@ -1865,7 +1865,7 @@ int rl_497a34(int fresh)
     g_rl_5aeb8c = 0;
     engine_retail_call(0x46a037u, 1, s_slot_0053f034);   /* TODO(rl-link): engine_minimap_load_grids */
     engine_retail_call(0x467770u, 1, s_slot_0053f034);   /* TODO(rl-link): engine_territory_load_strat_map */
-    engine_retail_call(0x4298c1u, 1, 0u);                /* TODO(rl-link): engine_map_init_build_cells */
+    rl_4298c1(0);                                        /* engine_map_init_build_cells (rl ui4) */
     s_slot_0053f268 = 4;
     engine_retail_call(0x4ae5e2u, 1, s_slot_0053e8a4);   /* TODO(rl-link): engine_title_render_setup_clamp_player_count */
     rl_433cc1();
@@ -1889,8 +1889,8 @@ int rl_497a34(int fresh)
         g_rl_57c940 = 0;
         g_rl_55ce74 = (int32_t)rl_plat_timeGetTime();
         g_rl_5530f0 = 4;
-        engine_retail_call(0x402009u, 4, (uint32_t)(uintptr_t)g_bf_53f1e0, 16u, 192u, 0u);   /* TODO(rl-link): text_input_init */
-        engine_retail_call(0x401f49u, 0);                                                    /* TODO(rl-link): text_input_recompute_length */
+        rl_402009((int)(uintptr_t)g_bf_53f1e0, 16, 192, 0);                                   /* text_input_init (rl ui4) */
+        rl_401f49();                                                                         /* text_input_recompute_length (rl ui4) */
     } else {
         if (rl_4af767((int)(uintptr_t)RS(g_rl_4dbc2c, 0x4dbc2cu, 0x4dbc50u)) != 0) {   /* "startXXX.pl8" */
             engine_set_current_screen(0x3a);

@@ -120,17 +120,17 @@ static int workforce_hud_render(int a)   /* TODO(rl-link): engine_workforce_hud_
 static void set_camera(int mode) { engine_retail_call(0x451fccu, 1, (uint32_t)mode); }   /* TODO(rl-link): engine_map_init_set_camera 0x451fcc */
 static int  load_season(void) { return (int)engine_retail_call(0x4984dcu, 0); }   /* TODO(rl-link): engine_pl8.c's season loader 0x4984dc */
 static int  present(int full) { return (int)engine_retail_call(0x452160u, 1, (uint32_t)full); }   /* TODO(rl-link): gfx.c's present 0x452160 */
-static int  confirm_open(int kind, int x, int y, uint32_t cb)   /* TODO(rl-link): engine_confirm_dialog_open 0x40e6f2 (retail keeps the callback VA) */
-{ return (int)engine_retail_call(0x40e6f2u, 4, (uint32_t)kind, (uint32_t)x, (uint32_t)y, cb); }
+static int  confirm_open(int kind, int x, int y, uint32_t cb)   /* engine_confirm_dialog_open 0x40e6f2 (rl ui4; retail keeps the callback VA) */
+{ return rl_40e6f2(kind, x, y, (int)cb); }
 static int  evq_post(int a, int b, int code, int d, int e, int f, int g, int h)   /* TODO(rl-link): engine_event_queue_post 0x472bc5 (posts into a port struct) */
 {
     return (int)engine_retail_call(0x472bc5u, 8, (uint32_t)a, (uint32_t)b, (uint32_t)code, (uint32_t)d, (uint32_t)e,
                                    (uint32_t)f, (uint32_t)g, (uint32_t)h);
 }
 static int  map_options_redraw(void) { return (int)engine_retail_call(0x476a5du, 0); }   /* TODO(rl-link): 0x476a5d (engine.c) */
-static void text_input_open(const void *init, int n, int x, int y)   /* TODO(rl-link): text_input_init 0x402009 */
-{ engine_retail_call(0x402009u, 4, (uint32_t)(uintptr_t)init, (uint32_t)n, (uint32_t)x, (uint32_t)y); }
-static int  text_recompute_length(void) { return (int)engine_retail_call(0x401f49u, 0); }   /* TODO(rl-link): text_input_recompute_length 0x401f49 */
+static void text_input_open(const void *init, int n, int x, int y)   /* text_input_init 0x402009 (rl ui4) */
+{ rl_402009((int)(uintptr_t)init, n, x, y); }
+static int  text_recompute_length(void) { return rl_401f49(); }   /* text_input_recompute_length 0x401f49 (rl ui4) */
 static int  smithy_panel(void) { return (int)engine_retail_call(0x413155u, 0); }   /* TODO(rl-link): labor_panel_smithy 0x413155 (engine_labor.c) */
 static int  title_filelist(int page) { return (int)engine_retail_call(0x4148e4u, 1, (uint32_t)page); }   /* TODO(rl-link): engine_title_render_filelist 0x4148e4 */
 /* unported — TODO(rl-extern) */

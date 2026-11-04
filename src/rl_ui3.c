@@ -62,8 +62,8 @@ static int evq_post(int a, int b, int code, int d, int e, int f, int g, int h)  
                                    (uint32_t)f, (uint32_t)g, (uint32_t)h);
 }
 static void editor_open(const void *buf, int max, int w, int flag)   /* text_input_init 0x402009 (a port struct) */
-{ engine_retail_call(0x402009u, 4, (uint32_t)(uintptr_t)buf, (uint32_t)max, (uint32_t)w, (uint32_t)flag); }
-static void editor_length(void) { engine_retail_call(0x401f49u, 0); }   /* text_input_recompute_length 0x401f49 */
+{ rl_402009((int)(uintptr_t)buf, max, w, flag); }
+static void editor_length(void) { rl_401f49(); }   /* text_input_recompute_length 0x401f49 (rl ui4) */
 static int  cue_release(void) { return (int)engine_retail_call(0x427d19u, 0); }   /* audio_cue_release 0x427d19 (audio.c) */
 static int  palette_full(void) { return (int)engine_retail_call(0x4b2922u, 0); }  /* gfx_set_palette_full_range 0x4b2922 (gfx.c) */
 static int  read_file_at(int name, void *buf, int n, int off)   /* io_read_file_at 0x4af8d9 (io.c) */
