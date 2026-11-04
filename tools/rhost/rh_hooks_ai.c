@@ -240,7 +240,11 @@ void rh_port_retail_leave(void)
 /* the retail side, at the caller's own stack position: esp = e0 + 4 (its pushed arguments), `call` puts the
  * return address at e0 — the frame retail would have had; the caller's return address is put back after */
 uint32_t rh_c_floor;   /* esp of the hook machinery that is running retail through rh_call_at (0: none) */
-__attribute__((naked)) uint32_t rh_call_at(uint32_t va, uint32_t e0)
+/* the retail caller's ebp at the wrapper's entry: retail's side runs with it, as in a pure run — its prologue's
+ * `push ebp` then leaves the caller's frame pointer in the slot below e0 (residue a later call may read), not the
+ * hook machinery's */
+uint32_t rh_entry_ebp;
+__attribute__((naked)) uint32_t rh_call_at(uint32_t va, uint32_t e0, uint32_t ebp0)
 {
     __asm__("pushl %ebp\n\tmovl %esp, %ebp\n\tpushl %ebx\n\tpushl %esi\n\tpushl %edi\n\t"
             "pushl _rh_c_floor\n\t"
@@ -249,7 +253,9 @@ __attribute__((naked)) uint32_t rh_call_at(uint32_t va, uint32_t e0)
             "movl %esp, %esi\n\t"
             "movl %esp, _rh_c_floor\n\t"
             "movl 8(%ebp), %ecx\n\t"
+            "movl 16(%ebp), %eax\n\t"       /* the caller's ebp */
             "leal 4(%edi), %esp\n\t"
+            "movl %eax, %ebp\n\t"
             "call *%ecx\n\t"
             "movl %esi, %esp\n\t"
             "movl %ebx, (%edi)\n\t"
@@ -260,7 +266,7 @@ __attribute__((naked)) uint32_t rh_call_at(uint32_t va, uint32_t e0)
 #define RES_N 16   /* residue window: the 16 dwords below e0 */
 #define PUT_N 8    /* residue values one port call may put */
 typedef struct port_ctx {
-    hook_t *h; uint32_t e0; uint32_t a[10]; rh_port_fn port; uint32_t ret_r, ret_p;
+    hook_t *h; uint32_t e0, ebp0; uint32_t a[10]; rh_port_fn port; uint32_t ret_r, ret_p;
     uint32_t res[RES_N]; int nput; int put_off[PUT_N]; uint32_t put_v[PUT_N]; int put_cmp[PUT_N];
     struct port_ctx *outer;
 } port_ctx_t;
@@ -282,7 +288,7 @@ void rh_res_set(int off, uint32_t v) { res_put(off, v, 0); }
 static void ctx_retail(void *c)
 {
     port_ctx_t *x = c;
-    x->ret_r = rh_call_at(x->h->entry, x->e0);
+    x->ret_r = rh_call_at(x->h->entry, x->e0, x->ebp0);
 }
 static void ctx_port(void *c)
 {
@@ -297,7 +303,7 @@ static void ctx_port(void *c)
 uint32_t rh_port_run(hook_t *h, void *self, rh_port_fn port, int has_ret, uint32_t e0)
 {
     if (h->wrapper != self) rh_fatal("rh_port: row %s is not its wrapper's — enum and table out of order", h->name);
-    port_ctx_t x = { .h = h, .e0 = e0, .port = port };
+    port_ctx_t x = { .h = h, .e0 = e0, .ebp0 = rh_entry_ebp, .port = port };   /* first: a nested hook overwrites it */
     memcpy(x.a, (const void *)(uintptr_t)(e0 + 4), 10 * 4);             /* retail may reuse its argument slots */
     memcpy(x.res, (const void *)(uintptr_t)(e0 - 4 * RES_N), sizeof x.res);
     if (h->mode == H_REPLACE) {

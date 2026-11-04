@@ -53,7 +53,9 @@ void rh_evq_store(void);
 
 typedef uint32_t (*rh_port_fn)(const uint32_t *a);
 uint32_t rh_port_run(hook_t *h, void *self, rh_port_fn port, int has_ret, uint32_t e0);
-uint32_t rh_call_at(uint32_t va, uint32_t e0);   /* call retail `va` with esp = e0 at its entry (rh_hooks_ai.c) */
+uint32_t rh_call_at(uint32_t va, uint32_t e0, uint32_t ebp0);   /* call retail `va` with esp = e0 at its entry and the
+                                                                  caller's ebp (rh_hooks_ai.c) */
+extern uint32_t rh_entry_ebp;   /* the retail caller's ebp at a wrapper's entry (RH_ENTRY stores it; rh_port_run keeps it) */
 uint32_t rh_res_get(int off);                    /* the dword at e0 - off when the hook was entered (off 4..0x40) */
 void     rh_res_put(int off, uint32_t v);        /* the port's final value for it (replace: written; shadow: compared) */
 void     rh_res_set(int off, uint32_t v);        /* … a modelled value retail's other frames may overwrite (replace: written;
@@ -66,7 +68,7 @@ extern uint32_t rh_c_floor;
 #define RH_ENTRY(W, B) \
     /* e0 → eax; edx = e0 - 256 KB, or the running machinery's floor - 1 KB if lower; save e0; b(e0); esp = e0 */ \
     static __attribute__((naked)) void W(void) \
-    { __asm__("movl %esp, %eax\n\tleal -0x40000(%eax), %edx\n\tmovl _rh_c_floor, %ecx\n\t" \
+    { __asm__("movl %ebp, _rh_entry_ebp\n\tmovl %esp, %eax\n\tleal -0x40000(%eax), %edx\n\tmovl _rh_c_floor, %ecx\n\t" \
               "testl %ecx, %ecx\n\tjz 1f\n\tsubl $0x400, %ecx\n\tcmpl %ecx, %edx\n\tjb 1f\n\tmovl %ecx, %edx\n" \
               "1:\tmovl %edx, %esp\n\tpushl %eax\n\tpushl %eax\n\t" \
               "call _" #B "\n\taddl $4, %esp\n\tpopl %esp\n\tret"); }

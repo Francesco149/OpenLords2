@@ -114,7 +114,7 @@ static uint32_t io_port_post(int row, uint32_t r)
  * RH_ENTRY with `ret $0x14` (rh_call_at runs retail's stdcall at e0 and restores esp itself) */
 #define RH_ENTRY_STD20(W, B) \
     static __attribute__((naked)) void W(void) \
-    { __asm__("movl %esp, %eax\n\tleal -0x40000(%eax), %edx\n\tmovl _rh_c_floor, %ecx\n\t" \
+    { __asm__("movl %ebp, _rh_entry_ebp\n\tmovl %esp, %eax\n\tleal -0x40000(%eax), %edx\n\tmovl _rh_c_floor, %ecx\n\t" \
               "testl %ecx, %ecx\n\tjz 1f\n\tsubl $0x400, %ecx\n\tcmpl %ecx, %edx\n\tjb 1f\n\tmovl %ecx, %edx\n" \
               "1:\tmovl %edx, %esp\n\tpushl %eax\n\tpushl %eax\n\t" \
               "call _" #B "\n\taddl $4, %esp\n\tpopl %esp\n\tret $0x14"); }
