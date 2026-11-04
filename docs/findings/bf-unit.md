@@ -59,6 +59,10 @@ through the order handlers' tail calls to FUN_004822ed, which ignores it: HOOK_V
    outside 0 / 2 / 4 / 6. Modelled as seams `bf_unit_res_*` (value in, final value out); the adapters move
    them with rh_res_get / rh_res_put. **When partition `action` ports those order handlers it must feed the
    seam** (the residue retail would have at that call: what the previous callee left there).
+   The order handlers' residue model needs their ebp, so the driver and the state handlers carry their retail e0
+   (`bf_unit_e0_4822ed` / `bf_unit_e0_state`, set by the E0 rows: driver e0 − 0x18 = state e0, state e0 − 0x18 =
+   the order handler's ebp; bf-action.md quirk 14) — a docking siege tower (0x491492 removes it inside order 10's
+   path step) gets that ebp's low byte as its dead record's frame.
 2. **Dead wrap tests.** FUN_004872ae's turn-left (`dec` then `movzx; test; jge`) and FUN_0048895e's class-9
    phase (`dec` then the same) test a zero-extended byte for < 0: never true, so 0 steps to 0xff (FUN_0048895e
    then clamps >= 0x90 to 0x8f; FUN_004872ae keeps 0xff, `& 7` in the frame).
