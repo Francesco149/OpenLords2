@@ -151,16 +151,16 @@ static void diff_total(char *why, size_t whyn, int w, long st, long px)
 }
 /* host-side state retail's code advances that is not retail memory: the allocator metadata and rhost's own
  * layers (media pool, DirectSound serials / registry / timers, the fake-handle sequence, the virtual message
- * queue + window state). File I/O is not rolled back: a shadowed call that writes a file writes it twice. Saved and rolled
+ * queue + window state, the run dir's files the call touched — rh_files.c). Saved and rolled
  * with the state: the port run starts from the host state retail's run started from (a port that calls back
  * into retail — an audio cue loads a WAV and creates a buffer, FUN_00427990 — would otherwise see it
  * advanced), and retail's post-state is put back after the comparison. */
-typedef struct { void *heap, *media, *ds, *hnd, *win; } meta_t;
+typedef struct { void *heap, *media, *ds, *hnd, *win, *files; } meta_t;
 static meta_t *meta_save(void)
 {
     meta_t *m = malloc(sizeof *m);
     m->heap = rh_heap_meta_save(); m->media = rh_media_meta_save(); m->ds = rh_ds_meta_save(); m->hnd = rh_handles_meta_save();
-    m->win = rh_win_meta_save();
+    m->win = rh_win_meta_save(); m->files = rh_files_meta_save();
     return m;
 }
 static void meta_restore(const meta_t *m)
@@ -170,8 +170,9 @@ static void meta_restore(const meta_t *m)
     if (m->ds) rh_ds_meta_restore(m->ds);
     if (m->hnd) rh_handles_meta_restore(m->hnd);
     rh_win_meta_restore(m->win);
+    rh_files_meta_restore(m->files);
 }
-static void meta_free(meta_t *m) { rh_heap_meta_free(m->heap); free(m->media); free(m->ds); free(m->hnd); free(m->win); free(m); }
+static void meta_free(meta_t *m) { rh_heap_meta_free(m->heap); free(m->media); free(m->ds); free(m->hnd); free(m->win); rh_files_meta_free(m->files); free(m); }
 
 static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn, int media)
 {

@@ -56,6 +56,73 @@ static const char *resolve(const char *path, int want_write, int keep, char *out
 }
 const char *rh_files_resolve(const char *path, int want_write, char *out, size_t n) { return resolve(path, want_write, 0, out, n); }
 
+
+/* ---- the shadow's file rollback (rh_state.c meta_save / meta_restore) ----
+ * A shadowed call runs retail, then the port on the same pre-state, then keeps retail's post-state: memory and the
+ * host layers are rolled back, and so must the run dir's files be, or a call that saves writes twice (the save
+ * rotation: 0x49a3e6's year-end save; a skirmish's score.dat). While a journal is open, the first write / delete /
+ * move that touches a run-dir path records its content (or absence) first; a meta snapshot holds the touched paths'
+ * content at that moment and the whiteout list; restoring puts every touched path back to the snapshot's content
+ * (a path the snapshot does not know: its first-touch content). Files are small (a save is 470 KB). */
+typedef struct { char path[MAX_PATH]; int existed; uint8_t *data; DWORD n; } fsnap_t;
+static fsnap_t g_jr[64]; static int g_njr, g_jopen;
+static int fread_all(const char *p, uint8_t **d, DWORD *n)
+{
+    HANDLE h = CreateFileA(p, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
+    if (h == INVALID_HANDLE_VALUE) { *d = NULL; *n = 0; return 0; }
+    DWORD sz = GetFileSize(h, NULL), got = 0;
+    *d = malloc(sz ? sz : 1); ReadFile(h, *d, sz, &got, NULL); *n = got;
+    CloseHandle(h);
+    return 1;
+}
+static void fwrite_all(const char *p, int existed, const uint8_t *d, DWORD n)
+{
+    if (!existed) { DeleteFileA(p); return; }
+    HANDLE h = CreateFileA(p, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, CREATE_ALWAYS, 0, NULL);
+    if (h == INVALID_HANDLE_VALUE) return;
+    DWORD w; WriteFile(h, d, n, &w, NULL); CloseHandle(h);
+}
+static void journal_touch(const char *rp)   /* rp: a run-dir path about to be written / deleted / replaced */
+{
+    if (!g_jopen || _strnicmp(rp, R, strlen(R))) return;
+    for (int i = 0; i < g_njr; i++) if (!_stricmp(g_jr[i].path, rp)) return;
+    if (g_njr >= 64) rh_fatal("rh_files: more than 64 files touched in one shadowed call");
+    fsnap_t *f = &g_jr[g_njr++];
+    snprintf(f->path, sizeof f->path, "%s", rp);
+    f->existed = fread_all(rp, &f->data, &f->n);
+}
+typedef struct { int opener; int nwhite; char white[256][96]; int n; fsnap_t f[64]; } fmeta_t;
+void *rh_files_meta_save(void)
+{
+    fmeta_t *m = calloc(1, sizeof *m);
+    if (!g_jopen) { g_jopen = 1; g_njr = 0; m->opener = 1; }
+    m->nwhite = g_nwhite; memcpy(m->white, g_white, sizeof g_white);
+    for (int i = 0; i < g_njr; i++) {   /* the touched paths' content now */
+        m->f[m->n] = g_jr[i];
+        m->f[m->n].existed = fread_all(g_jr[i].path, &m->f[m->n].data, &m->f[m->n].n);
+        m->n++;
+    }
+    return m;
+}
+void rh_files_meta_restore(const void *p)
+{
+    const fmeta_t *m = p;
+    for (int i = 0; i < g_njr; i++) {
+        const fsnap_t *s = &g_jr[i];
+        for (int k = 0; k < m->n; k++) if (!_stricmp(m->f[k].path, s->path)) { s = &m->f[k]; break; }
+        fwrite_all(s->path, s->existed, s->data, s->n);
+    }
+    g_nwhite = m->nwhite; memcpy(g_white, m->white, sizeof g_white);
+}
+void rh_files_meta_free(void *p)
+{
+    fmeta_t *m = p;
+    if (!m) return;
+    for (int i = 0; i < m->n; i++) free(m->f[i].data);
+    if (m->opener) { for (int i = 0; i < g_njr; i++) free(g_jr[i].data); g_njr = 0; g_jopen = 0; }
+    free(m);
+}
+
 static HANDLE WINAPI my_CreateFileA(LPCSTR p, DWORD acc, DWORD share, LPSECURITY_ATTRIBUTES sa, DWORD disp, DWORD fl, HANDLE tmpl)
 {
     int w = (acc & (GENERIC_WRITE | FILE_WRITE_DATA | FILE_APPEND_DATA)) || disp == CREATE_ALWAYS ||
@@ -63,6 +130,7 @@ static HANDLE WINAPI my_CreateFileA(LPCSTR p, DWORD acc, DWORD share, LPSECURITY
     int keep = disp == OPEN_EXISTING || disp == OPEN_ALWAYS;
     char buf[MAX_PATH];
     const char *q = resolve(p, w, keep, buf, sizeof buf);
+    if (w) journal_touch(q);
     HANDLE h = CreateFileA(q, acc, share | FILE_SHARE_READ, sa, disp, fl, tmpl);
     g_nopen++;
     if (O.log_files) rh_log("file %s %s -> %s = %s (f%u)\n", w ? "W" : "R", p, q, h == INVALID_HANDLE_VALUE ? "FAIL" : "ok", g_frame);
@@ -75,6 +143,7 @@ static BOOL WINAPI my_DeleteFileA(LPCSTR p)
     char rp[MAX_PATH], gp[MAX_PATH];
     snprintf(rp, sizeof rp, "%s\\%s", R, rel); snprintf(gp, sizeof gp, "%s\\%s", G, rel);
     BOOL had = exists(rp) || (!is_white(rel) && exists(gp));
+    journal_touch(rp);
     DeleteFileA(rp);
     white(rel);
     if (O.log_files) rh_log("delete %s = %d (f%u)\n", p, had, g_frame);
@@ -89,6 +158,7 @@ static BOOL WINAPI my_MoveFileA(LPCSTR src, LPCSTR dst)
     if (!exists(s)) { SetLastError(ERROR_FILE_NOT_FOUND); return FALSE; }
     const char *d = resolve(dst, 1, 0, b2, sizeof b2);
     if (exists(d)) { SetLastError(ERROR_ALREADY_EXISTS); return FALSE; }
+    journal_touch(s); journal_touch(d);
     BOOL r = (gs && _strnicmp(s, R, strlen(R))) ? CopyFileA(s, d, TRUE) : MoveFileA(s, d);   /* a game-dir source is never moved */
     if (r && gs) white(rs);
     if (r && gd) unwhite(rd);

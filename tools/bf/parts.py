@@ -60,10 +60,13 @@ PARTS = {
                  "417aef 417bd3 417cef 4192b1 419354 419789 4198aa 41a166 41a639 41a844 41b19d 41c996 41d299 41da2f "
                  "41e1dd 41ff75 420316 421f14 4224e7 422d22 422ff1 423241 4233f7 423530 423739 423ba4 42476b 4248a3 "
                  "424992 42e060 438e3b 44098f 4788c6"),
+    # the last reached leftovers: palette fades, the cursor, MP timeouts, empty stubs, window probes
+    "misc": _h("45242b 497879 49a3e6 4b0cb4 4b0e03 4b12fb 4b1897 4b18f8 4b1cf3 4b1dd5 4b209a 4b25fc 4b26f8 4b28cd "
+               "4b3571 4bbe51 4bbea7 4bbf15"),
     # retail seams the battlefield calls that stay out of scope (audio streams, sprite loads): stubs only
     "extern": _h("43f304 477b2f 4987b7 499d97"),
 }
-FAMILY = {"io": "rl", "glue": "rl", "render": "rl"}   # default "bf"
+FAMILY = {"io": "rl", "glue": "rl", "render": "rl", "misc": "rl"}   # default "bf"
 OWNER = {}
 for _p, _vs in PARTS.items():
     for _v in _vs:

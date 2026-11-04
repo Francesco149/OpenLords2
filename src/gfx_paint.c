@@ -64,7 +64,7 @@ void gfx_paint_2x1_under(int x, int y, uint8_t color)
  * hardcodes the 0x280 row stride; the bound canvas width is that stride
  * at runtime (640) and is used here so the op stays correct under test.
  * The lookup is retail's own table DAT_004eac60 (gfx_globals.h), shared
- * with FUN_004b1310 / FUN_004b14ff. */
+ * with 0x4b1310 / 0x4b14ff. */
 void gfx_paint_darken_rect(const uint8_t *pal_rgb, int x, int y, int w, int h)
 {
     if (!g_gfx_canvas_pixels || !pal_rgb) return;

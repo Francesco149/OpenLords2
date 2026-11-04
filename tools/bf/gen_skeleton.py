@@ -67,7 +67,8 @@ def globals_blocks(funcs=None, include_bf=False, exclude=()):
         bf[v].add("w")
         if v not in names:
             names[v] = f"dword_{v:X}"
-    vas = sorted(v for v in bf if not owned(v) and v not in G.DISPATCH and G.section_of(v) and v >= 0x4d0000)
+    vas = sorted(v for v in bf if not owned(v) and v not in G.DISPATCH and G.section_of(v) and v >= 0x4d0000
+                 and G.section_of(v)[0] != ".idata")   # imports: through retail's IAT (rl_io_plat), never data
     R = sorted(allref)
     import bisect
     import re

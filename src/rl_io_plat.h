@@ -30,7 +30,8 @@
     X(timeBeginPeriod, 0x5cf5b8u) X(timeSetEvent, 0x5cf5bcu) X(timeEndPeriod, 0x5cf5c0u) X(timeGetTime, 0x5cf5c4u) \
     X(SmackWait, 0x5cf5d8u) X(SmackSoundUseDirectSound, 0x5cf5e4u) X(SmackToBufferRect, 0x5cf5e8u)               \
     X(SmackOpen, 0x5cf5ecu) X(SmackToBuffer, 0x5cf5f0u) X(SmackClose, 0x5cf5f4u) X(SmackNextFrame, 0x5cf5f8u)    \
-    X(SmackDoFrame, 0x5cf5fcu)
+    X(SmackDoFrame, 0x5cf5fcu)                                                                                   \
+    X(PostMessageA, 0x5cf514u) X(GetForegroundWindow, 0x5cf550u) X(SetCursor, 0x5cf578u)
 
 /* X(name, retail VA) — retail's CRT functions with state */
 #define RL_PLAT_CRT(X)                                                                                           \
@@ -66,6 +67,9 @@ MMRESULT rl_plat_timeBeginPeriod(UINT p);
 MMRESULT rl_plat_timeEndPeriod(UINT p);
 MMRESULT rl_plat_timeSetEvent(UINT delay, UINT res, LPTIMECALLBACK cb, DWORD_PTR user, UINT fl);
 DWORD    rl_plat_timeGetTime(void);
+BOOL     rl_plat_PostMessageA(HWND w, UINT m, WPARAM wp, LPARAM lp);
+HWND     rl_plat_GetForegroundWindow(void);
+HCURSOR  rl_plat_SetCursor(HCURSOR c);
 /* smackw32 (__stdcall, by ordinal): the Smack struct is opaque to the shim (retail reads its fields itself) */
 uint32_t rl_plat_SmackOpen(const char *name, uint32_t flags, uint32_t extrabuf);      /* #14 */
 void     rl_plat_SmackClose(uint32_t smk);                                            /* #18 */

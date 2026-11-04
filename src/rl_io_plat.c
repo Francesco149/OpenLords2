@@ -77,6 +77,12 @@ MMRESULT rl_plat_timeSetEvent(UINT delay, UINT res, LPTIMECALLBACK cb, DWORD_PTR
 { return IMP(timeSetEvent, MMRESULT (WINAPI *)(UINT, UINT, LPTIMECALLBACK, DWORD_PTR, UINT), timeSetEvent)(delay, res, cb, user, fl); }
 DWORD rl_plat_timeGetTime(void)
 { return IMP(timeGetTime, DWORD (WINAPI *)(void), timeGetTime)(); }
+BOOL rl_plat_PostMessageA(HWND w, UINT m, WPARAM wp, LPARAM lp)
+{ return IMP(PostMessageA, BOOL (WINAPI *)(HWND, UINT, WPARAM, LPARAM), PostMessageA)(w, m, wp, lp); }
+HWND rl_plat_GetForegroundWindow(void)
+{ return IMP(GetForegroundWindow, HWND (WINAPI *)(void), GetForegroundWindow)(); }
+HCURSOR rl_plat_SetCursor(HCURSOR c)
+{ return IMP(SetCursor, HCURSOR (WINAPI *)(HCURSOR), SetCursor)(c); }
 
 /* smackw32: the standalone loads it on first use (none = every call fails / does nothing) */
 static FARPROC smack(int ord)
