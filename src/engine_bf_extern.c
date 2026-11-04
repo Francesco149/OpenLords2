@@ -30,8 +30,8 @@ int bf_477b2f(void)
     const uint8_t *tracks = g_bf_4d9228;   /* "battle1.wav" … "battle5.wav", 16 B each (0x4d9228) */
     g_combat_audio_latch = 0;
     int have = rl_4af841((int)(uintptr_t)(g_bf_4d9c90 + (0x4d9ea4u - 0x4d9c90u)));   /* "battle2.wav" */
-    engine_retail_call(0x426d11u, 1, 0u);   /* TODO(bf-extern): the stream stop */
-    engine_retail_call(0x427d19u, 0);       /* TODO(bf-link): audio_cue_release (audio.c, not linked) */
+    rl_426d11(0);   /* the stream stop (rl ui4) */
+    rl_427d19();       /* audio_cue_release (rl ui4) */
     if (have != 0 || g_sim_mp_active == 0) {
         if (s_slot_0057a0f0 != 0) {
             if ((int)++s_slot_00553540 > 1)

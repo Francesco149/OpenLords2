@@ -32,6 +32,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/rl_ui4.c",
     "src/strutil.h"
    ]
   },
@@ -42,6 +43,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/rl_ui4.c",
     "src/strutil.h"
    ]
   },
@@ -52,6 +54,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/rl_ui4.c",
     "src/strutil.c",
     "src/strutil.h"
    ]
@@ -70,6 +73,7 @@
     "src/engine_roster.c",
     "src/engine_title_render.c",
     "src/io_path.c",
+    "src/rl_ui4.c",
     "src/strutil.h"
    ]
   },
@@ -90,6 +94,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/rl_ui4.c",
     "src/strutil.h"
    ]
   },
@@ -100,6 +105,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/rl_ui4.c",
     "src/strutil.h"
    ]
   },
@@ -110,6 +116,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/rl_ui4.c",
     "src/strutil.h"
    ]
   },
@@ -120,6 +127,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/rl_ui4.c",
     "src/strutil.h"
    ]
   },
@@ -130,6 +138,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/rl_ui4.c",
     "src/strutil.h"
    ]
   },
@@ -140,6 +149,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/rl_ui4.c",
     "src/strutil.h"
    ]
   },
@@ -160,6 +170,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/rl_ui4.c",
     "src/strutil.h"
    ]
   },
@@ -181,7 +192,8 @@
    "status": "tested",
    "src": [
     "src/font_metrics.h",
-    "src/gfx_text.c"
+    "src/gfx_text.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -197,6 +209,7 @@
     "src/gfx_caret.h",
     "src/gfx_glyph_table.h",
     "src/gfx_wrap.c",
+    "src/rl_ui4.c",
     "src/text_input.h"
    ]
   },
@@ -207,6 +220,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/rl_ui4.c",
     "src/strutil.h"
    ]
   },
@@ -229,7 +243,8 @@
    "status": "tested",
    "src": [
     "src/localization.c",
-    "src/localization.h"
+    "src/localization.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -240,7 +255,8 @@
    "status": "tested",
    "src": [
     "src/localization.c",
-    "src/localization.h"
+    "src/localization.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -252,7 +268,8 @@
    "src": [
     "src/engine_hud_menubar.c",
     "src/localization.c",
-    "src/localization.h"
+    "src/localization.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -262,6 +279,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/rl_ui4.c",
     "src/text_input.c",
     "src/text_input.h"
    ]
@@ -274,6 +292,7 @@
    "status": "tested",
    "src": [
     "src/main.c",
+    "src/rl_ui4.c",
     "src/text_input.h"
    ]
   },
@@ -305,6 +324,7 @@
    "status": "tested",
    "src": [
     "src/main.c",
+    "src/rl_ui4.c",
     "src/text_input.h"
    ]
   },
@@ -316,6 +336,7 @@
    "status": "tested",
    "src": [
     "src/main.c",
+    "src/rl_ui4.c",
     "src/text_input.h"
    ]
   },
@@ -327,6 +348,7 @@
    "status": "tested",
    "src": [
     "src/main.c",
+    "src/rl_ui4.c",
     "src/text_input.h"
    ]
   },
@@ -338,6 +360,7 @@
    "status": "tested",
    "src": [
     "src/main.c",
+    "src/rl_ui4.c",
     "src/text_input.h"
    ]
   },
@@ -349,6 +372,7 @@
    "status": "tested",
    "src": [
     "src/main.c",
+    "src/rl_ui4.c",
     "src/text_input.h"
    ]
   },
@@ -360,6 +384,7 @@
    "status": "tested",
    "src": [
     "src/main.c",
+    "src/rl_ui4.c",
     "src/text_input.h"
    ]
   },
@@ -371,6 +396,7 @@
    "status": "tested",
    "src": [
     "src/main.c",
+    "src/rl_ui4.c",
     "src/text_input.h"
    ]
   },
@@ -381,6 +407,7 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
+    "src/rl_ui4.c",
     "src/text_input.h"
    ]
   },
@@ -392,6 +419,7 @@
    "status": "tested",
    "src": [
     "src/main.c",
+    "src/rl_ui4.c",
     "src/text_input.h"
    ]
   },
@@ -433,6 +461,7 @@
     "src/engine_menu_input.c",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
+    "src/rl_ui4.c",
     "src/text_input.h"
    ]
   },
@@ -445,6 +474,7 @@
    "src": [
     "src/font_metrics.c",
     "src/font_metrics.h",
+    "src/rl_ui4.c",
     "src/text_input.c",
     "src/text_input.h"
    ]
@@ -458,6 +488,7 @@
    "src": [
     "src/engine_title_render.c",
     "src/main.c",
+    "src/rl_ui4.c",
     "src/text_input.h"
    ]
   },
@@ -469,6 +500,7 @@
    "status": "tested",
    "src": [
     "src/engine_diplomacy_action_model.c",
+    "src/rl_ui4.c",
     "src/save.h",
     "src/text_input.h"
    ]
@@ -483,6 +515,7 @@
     "src/engine_menu_input.c",
     "src/engine_title_render.c",
     "src/engine_title_render.h",
+    "src/rl_ui4.c",
     "src/text_input.h"
    ]
   },
@@ -696,7 +729,8 @@
    "status": "tested",
    "src": [
     "src/font_metrics.h",
-    "src/gfx_wrap.c"
+    "src/gfx_wrap.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -707,7 +741,8 @@
    "status": "tested",
    "src": [
     "src/gfx_line.c",
-    "src/gfx_line.h"
+    "src/gfx_line.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -925,7 +960,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_tick_cadence.h"
+    "src/engine_tick_cadence.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -935,7 +971,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_tick_cadence.h"
+    "src/engine_tick_cadence.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -963,7 +1000,8 @@
    "src": [
     "src/engine.h",
     "src/engine_rng.c",
-    "src/engine_territory.c"
+    "src/engine_territory.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -988,7 +1026,8 @@
     "src/engine_math.h",
     "src/engine_territory.c",
     "src/engine_title_render.c",
-    "src/engine_trade_model.c"
+    "src/engine_trade_model.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -998,7 +1037,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_math.h"
+    "src/engine_math.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -1015,7 +1055,8 @@
     "src/engine_ranking.c",
     "src/engine_rankings.c",
     "src/engine_rankings.h",
-    "src/engine_title_render.c"
+    "src/engine_title_render.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -1026,7 +1067,8 @@
    "status": "tested",
    "src": [
     "src/engine_army_economy.c",
-    "src/engine_math.h"
+    "src/engine_math.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -1036,7 +1078,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_math.h"
+    "src/engine_math.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -1049,7 +1092,8 @@
     "src/engine_army_ai.c",
     "src/engine_combat.c",
     "src/engine_math.h",
-    "src/engine_path.h"
+    "src/engine_path.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -1061,7 +1105,8 @@
    "src": [
     "src/engine_army_ai.c",
     "src/engine_path.h",
-    "src/engine_territory.c"
+    "src/engine_territory.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -1414,7 +1459,8 @@
     "src/engine_rankings.c",
     "src/engine_trade.c",
     "src/gfx.c",
-    "src/gfx.h"
+    "src/gfx.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -1973,7 +2019,8 @@
    "src": [
     "src/engine.c",
     "src/engine_confirm_dialog.c",
-    "src/engine_confirm_dialog.h"
+    "src/engine_confirm_dialog.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2115,7 +2162,8 @@
     "src/engine_delta.c",
     "src/engine_menu_input.c",
     "src/engine_menu_input.h",
-    "src/engine_title_render.c"
+    "src/engine_title_render.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2208,7 +2256,8 @@
     "src/engine_menu_input.c",
     "src/engine_menu_input.h",
     "src/engine_sendsupplies.c",
-    "src/engine_sendsupplies.h"
+    "src/engine_sendsupplies.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2219,7 +2268,8 @@
    "status": "tested",
    "src": [
     "src/engine_menu_input.c",
-    "src/engine_menu_input.h"
+    "src/engine_menu_input.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2240,7 +2290,8 @@
     "src/engine.c",
     "src/engine_army_select.c",
     "src/engine_army_select.h",
-    "src/engine_confirm_dialog.h"
+    "src/engine_confirm_dialog.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2262,7 +2313,8 @@
    "src": [
     "src/engine.c",
     "src/engine_ingame_input.c",
-    "src/engine_ingame_input.h"
+    "src/engine_ingame_input.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2282,7 +2334,8 @@
    "src": [
     "src/engine.c",
     "src/engine.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2294,7 +2347,8 @@
    "src": [
     "src/engine.c",
     "src/engine.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2325,6 +2379,7 @@
    "src": [
     "src/config.c",
     "src/config.h",
+    "src/rl_ui4.c",
     "src/strutil.h"
    ]
   },
@@ -2354,7 +2409,8 @@
     "src/engine_screen_dispatch.h",
     "src/engine_screen_strat.h",
     "src/engine_title_render.h",
-    "src/engine_treasury.h"
+    "src/engine_treasury.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2373,7 +2429,8 @@
     "src/engine_screen_dispatch.h",
     "src/engine_screen_strat.c",
     "src/engine_screen_strat.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2491,7 +2548,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_sendsupplies.c"
+    "src/engine_sendsupplies.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2676,7 +2734,8 @@
     "src/engine.c",
     "src/engine_labor.c",
     "src/engine_labor.h",
-    "src/engine_screen_strat.c"
+    "src/engine_screen_strat.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2687,7 +2746,8 @@
    "status": "ported",
    "src": [
     "src/engine_labor.c",
-    "src/engine_labor.h"
+    "src/engine_labor.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2700,7 +2760,8 @@
     "src/engine_labor.c",
     "src/engine_labor.h",
     "src/engine_screen_strat.c",
-    "src/gfx_glyph.h"
+    "src/gfx_glyph.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2722,7 +2783,8 @@
    "src": [
     "src/engine_army_economy.h",
     "src/engine_labor.c",
-    "src/engine_labor.h"
+    "src/engine_labor.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2733,7 +2795,8 @@
    "status": "ported",
    "src": [
     "src/engine_labor.c",
-    "src/engine_labor.h"
+    "src/engine_labor.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2744,7 +2807,8 @@
    "status": "ported",
    "src": [
     "src/engine_labor.c",
-    "src/engine_labor.h"
+    "src/engine_labor.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -2755,7 +2819,8 @@
    "status": "ported",
    "src": [
     "src/engine_labor.c",
-    "src/engine_labor.h"
+    "src/engine_labor.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -3000,7 +3065,8 @@
    "src": [
     "src/engine.c",
     "src/engine_rankings.c",
-    "src/engine_rankings.h"
+    "src/engine_rankings.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -3011,7 +3077,8 @@
    "status": "ported",
    "src": [
     "src/engine_rankings.c",
-    "src/engine_rankings.h"
+    "src/engine_rankings.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -3022,7 +3089,8 @@
    "status": "ported",
    "src": [
     "src/engine_rankings.c",
-    "src/engine_rankings.h"
+    "src/engine_rankings.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -3034,7 +3102,8 @@
    "src": [
     "src/engine.c",
     "src/engine_merchant.c",
-    "src/engine_merchant.h"
+    "src/engine_merchant.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -3115,7 +3184,8 @@
    "src": [
     "src/engine.c",
     "src/engine_diplomacy_action.c",
-    "src/engine_diplomacy_action.h"
+    "src/engine_diplomacy_action.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -3127,7 +3197,8 @@
    "src": [
     "src/engine.c",
     "src/engine_diplomacy_action.c",
-    "src/engine_diplomacy_action.h"
+    "src/engine_diplomacy_action.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -3180,7 +3251,8 @@
    "status": "tested",
    "src": [
     "src/engine_armory.h",
-    "src/engine_ingame_input.c"
+    "src/engine_ingame_input.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -3215,7 +3287,8 @@
    "src": [
     "src/engine.c",
     "src/engine_armory.c",
-    "src/engine_armory.h"
+    "src/engine_armory.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -3239,7 +3312,8 @@
    "src": [
     "src/engine.c",
     "src/engine_armory.c",
-    "src/engine_armory.h"
+    "src/engine_armory.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -3330,7 +3404,8 @@
     "src/engine_labor.c",
     "src/engine_screen_strat.c",
     "src/engine_screen_strat.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -3449,7 +3524,8 @@
    "src": [
     "src/engine.c",
     "src/engine_sendsupplies.c",
-    "src/engine_sendsupplies.h"
+    "src/engine_sendsupplies.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -3461,7 +3537,8 @@
    "src": [
     "src/engine.c",
     "src/engine_sendsupplies.c",
-    "src/engine_sendsupplies.h"
+    "src/engine_sendsupplies.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -3611,7 +3688,8 @@
     "src/engine_title_render.h",
     "src/gfx.c",
     "src/gfx.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -3850,7 +3928,8 @@
    "src": [
     "src/engine_title_render.c",
     "src/engine_title_render.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4239,7 +4318,8 @@
    "status": "ported",
    "src": [
     "src/audio.c",
-    "src/audio.h"
+    "src/audio.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4260,7 +4340,8 @@
    "status": "ported",
    "src": [
     "src/audio.c",
-    "src/audio.h"
+    "src/audio.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4380,7 +4461,8 @@
    "src": [
     "src/audio.c",
     "src/engine_combat.c",
-    "src/engine_combat.h"
+    "src/engine_combat.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4425,7 +4507,8 @@
     "src/engine.c",
     "src/engine_ingame_input.c",
     "src/engine_ingame_input.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4445,7 +4528,8 @@
    "src": [
     "src/engine_territory.c",
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4497,7 +4581,8 @@
    "status": "tested",
    "src": [
     "src/engine_turn.c",
-    "src/engine_turn.h"
+    "src/engine_turn.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4508,7 +4593,8 @@
    "status": "tested",
    "src": [
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4557,7 +4643,8 @@
     "src/engine_category_buckets.c",
     "src/engine_category_buckets.h",
     "src/engine_territory.c",
-    "src/game_init.c"
+    "src/game_init.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4568,7 +4655,8 @@
    "status": "tested",
    "src": [
     "src/engine_category_buckets.h",
-    "src/engine_territory.c"
+    "src/engine_territory.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4579,7 +4667,8 @@
    "status": "tested",
    "src": [
     "src/engine_category_buckets.h",
-    "src/engine_territory.c"
+    "src/engine_territory.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4590,7 +4679,8 @@
    "status": "tested",
    "src": [
     "src/engine_category_buckets.c",
-    "src/engine_category_buckets.h"
+    "src/engine_category_buckets.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4650,7 +4740,8 @@
     "src/engine_map_init.c",
     "src/engine_map_init.h",
     "src/game_init.c",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4663,7 +4754,8 @@
     "src/engine.c",
     "src/engine_camera.c",
     "src/engine_camera.h",
-    "src/engine_territory.c"
+    "src/engine_territory.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4678,7 +4770,8 @@
     "src/engine_camera.h",
     "src/engine_map_render.h",
     "src/engine_terrain_info.c",
-    "src/engine_terrain_info.h"
+    "src/engine_terrain_info.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -4705,7 +4798,8 @@
    "status": "tested",
    "src": [
     "src/engine_camera.c",
-    "src/engine_camera.h"
+    "src/engine_camera.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -5171,7 +5265,8 @@
    "status": "ported",
    "src": [
     "src/gfx.c",
-    "src/gfx.h"
+    "src/gfx.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -5193,7 +5288,8 @@
    "status": "ported",
    "src": [
     "src/gfx.c",
-    "src/gfx.h"
+    "src/gfx.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -5207,7 +5303,8 @@
     "src/gfx.c",
     "src/gfx.h",
     "src/gfx_globals.h",
-    "src/gfx_paint.h"
+    "src/gfx_paint.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -5228,7 +5325,8 @@
    "status": "tested",
    "src": [
     "src/gfx.c",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -5239,7 +5337,8 @@
    "status": "ported",
    "src": [
     "src/gfx.c",
-    "src/gfx.h"
+    "src/gfx.h",
+    "src/rl_ui4.c"
    ]
   },
   {

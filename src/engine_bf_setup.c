@@ -1731,7 +1731,7 @@ int bf_4778a0(void)
     bf_477b2f();
     g_combat_anim_t0 = s_slot_005440c8 + 10;
     g_bf_5440a0 = g_bf_55403c;
-    engine_retail_call(0x40489eu, 0);   /* TODO(bf-link): engine_tick_cadence_reset (engine_tick_cadence.c, not linked) */
+    rl_40489e();   /* engine_tick_cadence_reset (rl ui4) */
     if (g_sim_mp_active != 0) {
         if (++S32(s_slot_0056d6b0) > 3)
             s_slot_0056d6b0 = 0;

@@ -235,7 +235,7 @@ int rl_49a3e6(void)
     if (r == 36) {
         g_rl_57c968 = 1;
         engine_retail_call(0x4984dcu, 0);
-        engine_retail_call(0x40f5fdu, 1, 3u);
+        rl_40f5fd(3);
         rl_4b14ff();
         rl_452160(1);
         engine_army_ai_set_ranking_dirty(1);

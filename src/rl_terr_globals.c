@@ -23,7 +23,6 @@ int32_t g_rl_507234;
 uint8_t g_rl_522d97[2];
 uint8_t g_rl_522f89[0x2];
 uint8_t g_rl_522f8f;
-int32_t g_rl_52afe0;
 int32_t g_rl_53e9c0;
 uint8_t g_rl_53f070[12];
 int32_t g_rl_543fd0;

@@ -16,7 +16,6 @@ int32_t g_rl_4e6594;
 int32_t g_rl_4e6598;
 uint8_t g_rl_4e65f0;
 uint8_t g_rl_4ea180[16];   /* hand: a RECT */
-int32_t g_rl_4ea838;
 uint8_t g_rl_4eabb4;
 int32_t g_rl_4eabe8;
 uint8_t g_rl_4eabf0;
@@ -55,7 +54,6 @@ int32_t g_rl_53f0a0;
 int32_t g_rl_53f0d8;
 int32_t g_rl_53f648;
 uint8_t g_rl_542cf8[4448];
-int32_t g_rl_552ff4;
 int32_t g_rl_553008;
 int32_t g_rl_5533a4;
 int32_t g_rl_5534f0;

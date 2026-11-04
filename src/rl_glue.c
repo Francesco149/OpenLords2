@@ -262,17 +262,17 @@ int rl_46c4a3(int col, int row, int w, int h)
 /* the hotspot router 0x40e3ee(x, y, table, n) / the button-record router 0x40da1e(x, y, table, n): retail tables
  * of retail action VAs (engine_menu_input.c ports both over port structs and an input snapshot: TODO(rl-link)) */
 static int hotspot_click(int x, int y, const void *table, int n)
-{ return (int)engine_retail_call(0x40e3eeu, 4, (uint32_t)x, (uint32_t)y, (uint32_t)(uintptr_t)table, (uint32_t)n); }
+{ return rl_40e3ee(x, y, (int)(uintptr_t)table, n); }
 static int button_click(int x, int y, const void *table, int n)
-{ return (int)engine_retail_call(0x40da1eu, 4, (uint32_t)x, (uint32_t)y, (uint32_t)(uintptr_t)table, (uint32_t)n); }
+{ return rl_40da1e(x, y, (int)(uintptr_t)table, n); }
 /* the panel backdrop strips 0x4b3f0a (capture) / 0x4b3ec0 (restore) (buf, height) on retail's blit globals
  * (engine_workforce_hud.c, not linked: TODO(rl-link)) */
 static int backdrop_capture(int buf, int h) { return (int)engine_retail_call(0x4b3f0au, 2, (uint32_t)buf, (uint32_t)h); }
 static int backdrop_restore(int buf, int h) { return (int)engine_retail_call(0x4b3ec0u, 2, (uint32_t)buf, (uint32_t)h); }
 /* the confirm dialog 0x40e6f2(msg, x, y, callback VA): retail keeps the callback's ADDRESS — retail's VA here
- * (engine_confirm_dialog.c takes a port function pointer instead: TODO(rl-link)) */
+ * (rl_40e6f2, rl ui4) */
 static int confirm(int msg, uint32_t cb_va)
-{ return (int)engine_retail_call(0x40e6f2u, 4, (uint32_t)msg, 160u, 160u, cb_va); }
+{ return rl_40e6f2(msg, 160, 160, (int)cb_va); }
 
 /* Port of FUN_004323fe (69 B) — the minimap press: the strategic map's (sub-state 0: 0x43253a) or the
  * battlefield's (2: 0x432443). Returns whether it consumed the press. */
@@ -607,8 +607,8 @@ static int evq_post(int a, int b, int code, int d, int e, int f, int g, int h) {
 /* the line editor 0x402009(buf, max, width px, flag) / 0x401f49() on retail's editor globals (text_input.c works on a
  * port struct: TODO(rl-link)) */
 static void editor_open(const void *buf, int max, int w, int flag)
-{ engine_retail_call(0x402009u, 4, (uint32_t)(uintptr_t)buf, (uint32_t)max, (uint32_t)w, (uint32_t)flag); }
-static void editor_length(void) { engine_retail_call(0x401f49u, 0); }
+{ rl_402009((int)(uintptr_t)buf, max, w, flag); }
+static void editor_length(void) { rl_401f49(); }
 /* unported or unlinked retail helpers */
 static int map_scene_tick(void) { return (int)engine_retail_call(0x4050c0u, 0); }   /* TODO(rl-link): engine_map_scene_tick */
 static int popup_dismiss(void) { return (int)engine_retail_call(0x476768u, 0); }    /* TODO(rl-link): engine_popup_scroll_dismiss */
@@ -796,7 +796,7 @@ int rl_436b59(void)
     }
     if (g_combat_flag_53f248 == 0)
         goto map;
-    engine_retail_call(0x426d11u, 1, 0u);   /* TODO(rl-extern): 0x426d11 (stop the music stream) */
+    rl_426d11(0);   /* 0x426d11 (stop the music stream; rl ui4) */
     {
         int r = rl_42d91b((int)(uintptr_t)(g_rl_4d5590 + 16 * g_castle_tier), 158, 20, 0, 0);
         if (r == 0) {
@@ -1511,7 +1511,7 @@ int rl_42d179(void)
         AT(int32_t, g_rl_51fd28, 0x51fd28u, 0x51fd28u + 4 * i) = 0;
     }
     for (int j = 0; j < 10; j++) {   /* TODO(rl-link): localization_seek_skip */
-        engine_retail_call(0x4018d7u, 2, 7u, (uint32_t)AT(int32_t, g_rl_4d49c8, 0x4d49c8u, 0x4d49f0u + 4 * j));
+        rl_4018d7(7, AT(int32_t, g_rl_4d49c8, 0x4d49c8u, 0x4d49f0u + 4 * j));
         strutil_bounded_copy(g_rl_51fbc0 + 32 * j, (const void *)(uintptr_t)g_rl_5c9270, 32);
     }
     return 0;

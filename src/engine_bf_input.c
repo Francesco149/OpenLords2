@@ -277,8 +277,8 @@ int bf_43c247(int p, int regroup, int col0, int row0, int x0, int y0, int x1, in
 static int mp_message(int id)  { return rl_43eda0(id, 0); }
 static int wav(const void *name) { return (int)engine_retail_call(0x427990u, 3, (uint32_t)(uintptr_t)name, 1u, 0u); }   /* TODO(bf-link) */
 /* the confirm dialog 0x40e6f2(msg, x, y, callback VA): retail keeps the callback's ADDRESS — retail's VA here
- * (engine_confirm_dialog.c takes a port function pointer instead: TODO(bf-link)) */
-static int confirm(int msg, uint32_t cb_va) { return (int)engine_retail_call(0x40e6f2u, 4, (uint32_t)msg, 160u, 160u, cb_va); }
+ * (rl_40e6f2, rl ui4) */
+static int confirm(int msg, uint32_t cb_va) { return rl_40e6f2(msg, 160, 160, (int)cb_va); }
 static int cursor_in(int x, int y, int w, int h)   /* 0x4b1deb — TODO(bf-link) */
 { return (int)engine_retail_call(0x4b1debu, 4, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h); }
 

@@ -120,14 +120,14 @@ static int workforce_hud_render(int a)   /* TODO(rl-link): engine_workforce_hud_
 static void set_camera(int mode) { rl_451fcc(mode); }   /* 0x451fcc (rl_ctl) */
 static int  load_season(void) { return (int)engine_retail_call(0x4984dcu, 0); }   /* TODO(rl-link): engine_pl8.c's season loader 0x4984dc */
 static int  present(int full) { return rl_452160(full); }   /* 0x452160 (rl_ctl) */
-static int  confirm_open(int kind, int x, int y, uint32_t cb)   /* TODO(rl-link): engine_confirm_dialog_open 0x40e6f2 (retail keeps the callback VA) */
-{ return (int)engine_retail_call(0x40e6f2u, 4, (uint32_t)kind, (uint32_t)x, (uint32_t)y, cb); }
+static int  confirm_open(int kind, int x, int y, uint32_t cb)   /* engine_confirm_dialog_open 0x40e6f2 (rl ui4; retail keeps the callback VA) */
+{ return rl_40e6f2(kind, x, y, (int)cb); }
 static int  evq_post(int a, int b, int code, int d, int e, int f, int g, int h) { return rl_472bc5(a, b, code, d, e, f, g, h); }
 static int  map_options_redraw(void) { return (int)engine_retail_call(0x476a5du, 0); }   /* TODO(rl-link): 0x476a5d (engine.c) */
-static void text_input_open(const void *init, int n, int x, int y)   /* TODO(rl-link): text_input_init 0x402009 */
-{ engine_retail_call(0x402009u, 4, (uint32_t)(uintptr_t)init, (uint32_t)n, (uint32_t)x, (uint32_t)y); }
-static int  text_recompute_length(void) { return (int)engine_retail_call(0x401f49u, 0); }   /* TODO(rl-link): text_input_recompute_length 0x401f49 */
-static int  smithy_panel(void) { return (int)engine_retail_call(0x413155u, 0); }   /* TODO(rl-link): labor_panel_smithy 0x413155 (engine_labor.c) */
+static void text_input_open(const void *init, int n, int x, int y)   /* text_input_init 0x402009 (rl ui4) */
+{ rl_402009((int)(uintptr_t)init, n, x, y); }
+static int  text_recompute_length(void) { return rl_401f49(); }   /* text_input_recompute_length 0x401f49 (rl ui4) */
+static int  smithy_panel(void) { return rl_413155(); }   /* labor_panel_smithy 0x413155 (rl ui4) */
 static int  title_filelist(int page) { return (int)engine_retail_call(0x4148e4u, 1, (uint32_t)page); }   /* TODO(rl-link): engine_title_render_filelist 0x4148e4 */
 /* unported — TODO(rl-extern) */
 static int  mp_quit_session(void) { return (int)engine_retail_call(0x4b74ceu, 0); }   /* TODO(rl-extern): 0x4b74ce */

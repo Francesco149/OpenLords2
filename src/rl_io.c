@@ -1016,8 +1016,8 @@ static volatile int32_t *sfx(int k) { return k == 0 ? &g_bf_522afc : &AT(int32_t
 /* DSBUFFERDESC (20 B): dwSize, dwFlags, dwBufferBytes, dwReserved, lpwfxFormat */
 typedef struct { uint32_t size, flags, bytes, reserved, wfx; } dsbdesc_t;
 
-/* the cue release 0x427d19 (audio.c's audio_cue_release keeps its own buffer) — TODO(rl-link): audio_cue_release */
-static void cue_release(void) { engine_retail_call(0x427d19u, 0); }
+/* the cue release 0x427d19 (rl ui4) */
+static void cue_release(void) { rl_427d19(); }
 
 /* Port of FUN_00427c9b (126 B) — is the cue playing: ppDS and the cue buffer set, GetStatus succeeds (HRESULT in
  * DAT_00522b58) and says DSBSTATUS_PLAYING alone (== 1, not & 1: a looping cue reads 5 = not playing, quirk). */
@@ -1339,7 +1339,7 @@ enum { S_WFX = 0x00, S_HMMIO = 0x04, S_DATA = 0x08, S_RIFF = 0x1c, S_BUF = 0x30,
 #define ST_TIMER(k) g_rl_522b00[20 + (k)]                                                    /* uTimerID[k] */
 #define U_RES    AT(uint32_t, g_rl_4d4754, 0x4d4754u, 0x4d4754u)   /* uResolution */
 #define U_PERIOD AT(uint32_t, g_rl_4d4754, 0x4d4754u, 0x4d4758u)   /* uPeriod */
-static int stream_stop(int k) { return (int)engine_retail_call(0x426d11u, 1, (uint32_t)k); }   /* TODO(rl-extern): 0x426d11 */
+static int stream_stop(int k) { return rl_426d11(k); }   /* 0x426d11 (rl ui4) */
 static uint16_t wfx_bits(int k) { return *(uint16_t *)(uintptr_t)(ST(k, S_WFX) + 14); }   /* wBitsPerSample */
 
 /* Port of FUN_00426534 (1630 B) — set stream `k` up: open the WAV named DAT_00522b60 + 16 k (0x4b92e0: 1), PCM only
@@ -1670,7 +1670,7 @@ int rl_42f58c(int first, int last)
 {
     (void)first; (void)last;
     if (g_rl_53f228 != 0)
-        engine_retail_call(0x42f306u, 0);   /* TODO(rl-extern) */
+        rl_42f306();   /* (rl ui4) */
     else
         engine_retail_call(0x42f449u, 0);   /* TODO(rl-extern) */
     void *e = g_rl_53f228 != 0 ? (void *)&g_rl_5165b0 : (void *)&g_rl_515d90;
@@ -1865,7 +1865,7 @@ int rl_497a34(int fresh)
     g_rl_5aeb8c = 0;
     rl_46a037((int)s_slot_0053f034);
     rl_467770((int)s_slot_0053f034);
-    engine_retail_call(0x4298c1u, 1, 0u);                /* TODO(rl-link): engine_map_init_build_cells */
+    rl_4298c1(0);                                        /* engine_map_init_build_cells (rl ui4) */
     s_slot_0053f268 = 4;
     engine_retail_call(0x4ae5e2u, 1, s_slot_0053e8a4);   /* TODO(rl-link): engine_title_render_setup_clamp_player_count */
     rl_433cc1();
@@ -1889,8 +1889,8 @@ int rl_497a34(int fresh)
         g_rl_57c940 = 0;
         g_rl_55ce74 = (int32_t)rl_plat_timeGetTime();
         g_rl_5530f0 = 4;
-        engine_retail_call(0x402009u, 4, (uint32_t)(uintptr_t)g_bf_53f1e0, 16u, 192u, 0u);   /* TODO(rl-link): text_input_init */
-        engine_retail_call(0x401f49u, 0);                                                    /* TODO(rl-link): text_input_recompute_length */
+        rl_402009((int)(uintptr_t)g_bf_53f1e0, 16, 192, 0);                                   /* text_input_init (rl ui4) */
+        rl_401f49();                                                                         /* text_input_recompute_length (rl ui4) */
     } else {
         if (rl_4af767((int)(uintptr_t)RS(g_rl_4dbc2c, 0x4dbc2cu, 0x4dbc50u)) != 0) {   /* "startXXX.pl8" */
             engine_set_current_screen(0x3a);
