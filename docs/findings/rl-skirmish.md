@@ -12,6 +12,8 @@ All 35 ported, all 35 reached by the corpus (`skirmish-tour`; the two debug insp
 `strat-tour`). `rhost.py verify --target wine -j 3 --hooks '<the 35 rows>'` over the whole corpus (54 scenarios):
 **35/35 reached with 0 divergences, 0 failed runs; hybrid PASS** — 13423 calls shadowed (state, and every surface
 pixel on the 18 RH_SH_MEDIA rows), 0 skipped. Block coverage and exploration: §Evidence.
+With every rl row of master f8fb995 (glue, io, render, misc + these 35): `verify --hooks '^rl_'` over the corpus:
+**245/245 reached with 0 divergences, 0 failed runs; hybrid PASS** (all 245 replaced at once, `corpus --check`).
 
 ## Layout
 
