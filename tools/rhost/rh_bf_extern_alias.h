@@ -3,3 +3,4 @@
 #define BFA(n, v) ".globl _" #n "\n\t.set _" #n ", " #v "\n\t"
 #define RH_BF_EXTERN_ALIASES \
     BFA(g_bf_4daec4,0x4daec4) \
+

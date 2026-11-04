@@ -45,11 +45,10 @@
    prompt + battlefield arms; then wire the combat cluster (engine.c sub-state 2 TODO: bf_478952, 0x40490d,
    bf_488dfe, bf_4822ed, bf_485bb1, bf_489401, bf_4859e5, engine_combat_battlefield_end_tick).
 6. **Port build `-std=gnu11`** after an x87 sweep (openrecet's c11 long-double literal finding).
-7. **Tooling found tonight**: the bot's battlefield "RMB attack" never gives an order (retail: LMB press + release with
-   a selection; an RMB release deselects) — fix `tools/bot/battle.py`; `corpus --bless` refuses a run that ends in a
-   game exit (File > Quit: +1.9 KB unreachable to the corpus); rhost runs out of fake handles (8192) after ~1000 frames
-   on the Battle Master ratings screen (0x2e: a per-frame handle leak — retail's or rhost's?); the shadow's movie rows
-   need rh_hook_smk.h (smackw32's heap) — a core rollback would retire it.
+7. **Tooling**: the shadow's movie rows need rh_hook_smk.h (smackw32's heap) — a core rollback would retire it.
+   (Fixed 2026-11-04: the bot's battlefield orders are LMB with a selection; a run ending in retail's ExitProcess is
+   finished — scenario game-quit; rh_handles reuses closed slots once its 8192-handle sequence is spent — the ratings
+   screen 0x2e re-reads score.pl8 + score.dat every frame, open / close, one live.)
 
 ## Phase 0 checklist
 - [x] rhost core (fake DDraw / DSound / window / heap / handles / files), Windows + wine targets

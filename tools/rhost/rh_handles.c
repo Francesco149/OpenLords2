@@ -20,8 +20,15 @@ HANDLE rh_handle_fake(HANDLE real)
 {
     if (real == NULL || real == INVALID_HANDLE_VALUE) return real;
     EnterCriticalSection(&g_lk);
-    if (g_next >= FAKE_MAX) { LeaveCriticalSection(&g_lk); rh_fatal("rh_handles: more than %d handles", FAKE_MAX); }
-    uint32_t k = g_next++;
+    uint32_t k;
+    if (g_next < FAKE_MAX)
+        k = g_next++;
+    else {   /* the sequence is spent: reuse the lowest closed slot (deterministic — the call order is). Retail opens and
+              * closes files every frame on some screens (the Battle Master ratings 0x2e re-reads score.pl8 + score.dat
+              * per frame): a long stay there issues thousands of handles with one live. */
+        for (k = 0; k < FAKE_MAX && g_real[k]; k++) {}
+        if (k == FAKE_MAX) { LeaveCriticalSection(&g_lk); rh_fatal("rh_handles: more than %d live handles", FAKE_MAX); }
+    }
     g_real[k] = real; g_live++;
     LeaveCriticalSection(&g_lk);
     return (HANDLE)(uintptr_t)(FAKE_BASE + 4u * k);
