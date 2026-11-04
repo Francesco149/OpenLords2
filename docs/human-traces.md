@@ -35,7 +35,7 @@ corpus (v1 bots auto-resolve every battle, march only on neutral counties, never
 | FUN_00437535 transfer_army | demolishing a realm that has a pending garrison; the AI's siege order FUN_004a60b9; delayed actions FUN_00447f82; the player's "leave castle" (FUN_004374c4) | **synth**: every bot2 game (the bot garrisons and leaves its castle; the AI's garrisons march out) |
 | FUN_0046d42c capital_defender | an army contesting a county another player OWNS (no castle, or no garrison) | **synth**: `bot2-s61-t28`, `bot2-s64-t28`, six bot3 games (the AI invades the bot's county; the bot's own attacks on the Knight's Taup were ordered — bot2-s64: Taup fortified first; `bot3-s106-t32`: three seasons' march, intercepted) |
 | FUN_00422c12 load_muster | the 0x13 quick-animation path: the Options battle toggle DAT_0053f284 = 0 (FUN_0043470d / FUN_00447e0b) and not both sides garrisoned | **synth**: every bot2 game (Options > Advanced > "Fight humans only?" = yes when Jev chooses quick battles) |
-| FUN_004a07f2 find_garrison_realm | AI movement planner FUN_004a6270 (an AI keep with spare garrison room) | A3 |
+| FUN_004a07f2 find_garrison_realm | AI movement planner FUN_004a6270 (an AI garrison army whose keep is already full: capacity 0x4d8a10 minus the garrison) | **synth**: `custom-garrison` (round 3; Summer 1271) |
 | FUN_0049cf20 resign_player | multiplayer resign / the resign UI | out of scope (MP) |
 | FUN_00468ae2 special_tile, FUN_0046873f region_event_lo | a march across a foreign county's untouched special tile / undeveloped resource tile | the bot (route choice) |
 

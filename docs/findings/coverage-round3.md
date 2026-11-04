@@ -4,7 +4,8 @@ Target list: the 258 unreached non-library functions with a reached caller (corp
 `20261104-173411`, 1492 functions). Per target: the condition in the caller that leads to it, then covered (by
 which scenario) or why not. Authored over rhbot on wine with a live `--coverage` probe of the unreached set
 (`drv.py` helpers in the session scratchpad: every probe hit = a function the corpus never reached). Scenarios:
-`custom-strong`, `siege-castles`, `movie-skip` (+17 functions, +5190 bytes over the corpus + `game-quit`).
+`custom-strong`, `siege-castles`, `movie-skip`, `custom-garrison` (+18 functions, +5483 bytes over the corpus +
+`game-quit`).
 
 ## Covered
 
@@ -23,6 +24,7 @@ which scenario) or why not. Authored over rhbot on wine with a live `--coverage`
 | 0x43b741 | siege preparations' "−" (button (38,210)): only does anything with a count > 0 (+3 then −1) | siege-castles |
 | castles_write 0x4ae968 | 0x4784ca, called only from 0x4782c5 = the 0x2b "Battle is won / lost" scroll **running out** (++DAT_00568470 > 5000; retreat / autocalc end through 0x43be65 instead) in a strategic siege with DAT_0057a0d8 (moats filled, 0x47dd86) or DAT_0056d648 (wall sections fallen, 0x47dfe0) ≠ 0. A wall cell (kind 4, +4 height 1..3, +3 > 2) next to a kind-5 cell falls after 16 catapult-stone hits (0x492c8b) | siege-castles |
 | castles_read 0x4aea70, 0x4917dd | the next siege battle of that county: 0x4787a4 with county +0x173 == 2 reads castles.dat; cells with +1 bit 0 (a docked siege tower's ramp, 0x491492) → 0x4917dd | siege-castles |
+| 0x4a07f2 find_garrison_realm | engine_army_ai_order_garrison 0x4a6270: the army's keep cannot take it (castle level 0, building, or capacity 0x4d8a10 — 150 / 200 / 200 / 400 / 600 men by level — minus the garrison < the army); 0x49f12f musters each garrison to the room free at muster time, so two in a row overfill. AI timing: Summer 1271 in custom-strong's France part left to run | custom-garrison (custom-strong's first 7600 frames + End turn x10) |
 | 0x489981 | the group re-target 0x48970e (every 500 ticks, every group): stance 6 (class 8, a siege tower) and DAT_00553fb0 > 6 | siege-castles |
 
 Driving notes: catapults ordered straight from the deploy row walk up to the wall and die; moved first to (target col,
@@ -42,7 +44,6 @@ castle in the same turn (poll for it; an End turn while it walks skips it and th
 | 0x4bc8fc / 0x4bcbd1 (zoom-16 battlefield passes) | hex size DAT_004e656c is 32 from its only setter (0x4bc020's callers pass 32) | dead |
 | 0x483ce1, 0x484b89, 0x4849fc, 0x484bee, 0x482f86 | unit order table 0x4d9170 entries 7 / 15 / 13 / 16 / 0: never written | dead |
 | 0x4a599d lord move | the ally's +0xe8 = our county survives validate, but its deployment needs a muster: home pop ≤ bar/2 with a ≥ 200-man unit (pick_best_unit) or weapons ≥ 100 (0x4d8ac0; the Knight had 0 → 24 in five years) | a long game / an ally with arms |
-| 0x4a07f2 find_garrison_realm | an AI garrison order whose castle is full or building (0x4a6270). Reached in a custom-strong continuation without the insults (Summer 1271, +3.4k frames on a 7.6k prefix), not in the kept branch | a cheaper branch |
 | 0x48e774 | AI siege **defender** knights (stance 4, table 0x4d91f8): the skirmish siege maps' defender armies (first 10 surveyed) have none; the Cust. page edits only the player's army | a strategic siege of an AI castle garrisoned with knights |
 | 0x4ad8cc halve_garrison | aftermath with DAT_0056d5c8 = 1, set by AI siege-attacker knights (0x48d9ce) when DAT_00553f74 ≤ DAT_0057c980 and no wall hit yet | an AI with knights besieging our castle, fought on the field |
 | 0x48c3fe, 0x48b7fc | AI defender swords (0x48e4cc) with a breach record (0x48ee46) and a target outside the walls, DAT_00553e64 < 4, not (DAT_00542cd4 && DAT_00553fb0); 0x48a9d2 with DAT_0056d89c set by another AI group | AI micro (A1) |
